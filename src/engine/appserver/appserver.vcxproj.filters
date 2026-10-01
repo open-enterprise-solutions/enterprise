@@ -1,0 +1,17 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="res">
+      <UniqueIdentifier>{9a101135-4b31-42b4-8afd-8774c24414ad}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="appServer.cpp" />
+    <ClCompile Include="main.cpp" />
+    <ClCompile Include="serverConfig.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="appServer.h" />
+    <ClInclude Include="serverConfig.h" />
+  </ItemGroup>
+</Project>

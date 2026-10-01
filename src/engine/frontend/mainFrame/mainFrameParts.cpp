@@ -6,7 +6,7 @@
 #include "mainFrame.h"
 #include "frontend/mainFrame/objinspect/objinspect.h"
 
-void ibFrontendDocMDIFrame::CreatePropertyPane()
+void ibFrontendMainFrame::CreatePropertyPane()
 {
 	if (m_mgr.GetPane(wxAUI_PANE_PROPERTY).IsOk())
 		return;
@@ -29,14 +29,14 @@ void ibFrontendDocMDIFrame::CreatePropertyPane()
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-bool ibFrontendDocMDIFrame::IsShownInspector()
+bool ibFrontendMainFrame::IsShownInspector()
 {
 	const wxAuiPaneInfo propertyPane = m_mgr.GetPane(wxAUI_PANE_PROPERTY);
 	if (!propertyPane.IsOk()) return false;
 	return propertyPane.IsShown();
 }
 
-void ibFrontendDocMDIFrame::ShowInspector()
+void ibFrontendMainFrame::ShowInspector()
 {
 	wxAuiPaneInfo& propertyPane = m_mgr.GetPane(wxAUI_PANE_PROPERTY);
 	if (!propertyPane.IsOk())
@@ -51,9 +51,9 @@ void ibFrontendDocMDIFrame::ShowInspector()
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#include "frontend/docView/docManager.h"
+#include "frontend/docView/docView.h"
 
-void ibFrontendDocMDIFrame::ActivateView(ibMetaView* view, bool activate) {
+void ibFrontendMainFrame::ActivateView(ibView* view, bool activate) {
 
 	if (m_docToolbar != nullptr) {
 
@@ -124,26 +124,21 @@ void ibFrontendDocMDIFrame::ActivateView(ibMetaView* view, bool activate) {
 #include "backend/moduleManager/moduleManager.h"
 #include "backend/metadataConfiguration.h"
 
-bool ibFrontendDocMDIFrame::Initialize(ibSession* session)
+bool ibFrontendMainFrame::EnsureRuntime()
 {
-	// Bind-only. Runtime start deferred to Show() → EnsureRuntime() so
-	// activeMetaData is guaranteed populated (LoadMetadata runs between
-	// Initialize and Show in the app flow).
-	m_session = session;
-	return m_session != nullptr;
-}
-
-bool ibFrontendDocMDIFrame::EnsureRuntime()
-{
-	if (m_session == nullptr || activeMetaData == nullptr)
+	// The session comes from the holder we were built with — no separate
+	// bind step, so there is no window in which the frame exists without
+	// knowing its session.
+	ibSession* session = GetSession();
+	if (session == nullptr || activeMetaData == nullptr)
 		return false;
 
 	// Re-entry guard — root module manager lives on the session; if it's
 	// already installed the runtime was started on a previous Show().
-	if (m_session->GetManagerModule() != nullptr)
+	if (session->GetManagerModule() != nullptr)
 		return true;
 
-	const ibSessionKind kind = m_session->GetKind();
+	const ibSessionKind kind = session->GetKind();
 	const bool wantsRuntime =
 		(kind == ibSessionKind::Enterprise) ||
 		(kind == ibSessionKind::WebClient)  ||
@@ -151,14 +146,15 @@ bool ibFrontendDocMDIFrame::EnsureRuntime()
 	if (!wantsRuntime)
 		return true;
 
-	// CreateRoot + CompileRoot already happened in OnRun after LoadMetadata
-	// — frame->Initialize is the runtime-start phase, only InitRuntime here.
-	if (auto* mm = m_session->GetManagerModule())
-		mm->AttachRuntime(m_session);
+	// CreateRoot + CompileRoot already happened during authentication
+	// (registry's NotifyAuthenticated chain) — only the runtime attach is
+	// left, and it waits until Show() so activeMetaData is populated.
+	if (auto* mm = session->GetManagerModule())
+		mm->AttachRuntime(session);
 	return true;
 }
 
-ibMetaData* ibFrontendDocMDIFrame::FindMetadataByPath(const wxString& strFileName) const
+ibMetaData* ibFrontendMainFrame::FindMetadataByPath(const wxString& strFileName) const
 {
 	ibMetaDataDocument* const foundedDoc = dynamic_cast<ibMetaDataDocument*>(docManager->FindDocumentByPath(strFileName));
 	if (foundedDoc != nullptr)
@@ -171,11 +167,11 @@ ibMetaData* ibFrontendDocMDIFrame::FindMetadataByPath(const wxString& strFileNam
 #include "frontend/visualView/visualHostClient.h"
 
 // Form support
-ibBackendValueForm* ibFrontendDocMDIFrame::ActiveWindow() const {
+ibBackendValueForm* ibFrontendMainFrame::ActiveWindow() const {
 
-	if (ibFrontendDocMDIFrame::GetFrame() != nullptr) {
-		wxDocChildFrameAnyBase* activeChild =
-			dynamic_cast<wxDocChildFrameAnyBase*>(ibFrontendDocMDIFrame::GetActiveChild());
+	if (ibFrontendMainFrame::GetFrame() != nullptr) {
+		ibDocChildFrameAnyBase* activeChild =
+			dynamic_cast<ibDocChildFrameAnyBase*>(ibFrontendMainFrame::GetActiveChild());
 		if (activeChild != nullptr) {
 			ibFormVisualDocument* const ownerFormDoc = dynamic_cast<ibFormVisualDocument*>(activeChild->GetDocument());
 			if (ownerFormDoc != nullptr) {
@@ -187,42 +183,42 @@ ibBackendValueForm* ibFrontendDocMDIFrame::ActiveWindow() const {
 	return nullptr;
 }
 
-ibBackendValueForm* ibFrontendDocMDIFrame::CreateNewForm(const ibValueMetaObjectFormBase* creator, ibBackendControlFrame* backendControl, ibSourceDataObject* srcObject, const ibUniqueKey& formGuid)
+ibBackendValueForm* ibFrontendMainFrame::CreateNewForm(const ibFormRequest& request, const ibValueMetaObjectFormBase* creator, ibBackendControlFrame* backendControl, ibSourceDataObject* srcObject)
 {
 	ibControlFrame* ownerControl = dynamic_cast<ibControlFrame*>(backendControl);
 	wxASSERT(!(backendControl == nullptr && ownerControl != nullptr));
 	// Parent descriptor wiring happens inside ibValueForm's ctor — it
 	// already receives ownerControl; for the UI path (null owner) it
 	// falls back to backend_mainFrame->GetSession()->GetManagerModule().
-	return ibValue::CreateAndPrepareValueRef<ibValueForm>(creator, ownerControl, srcObject, formGuid);
+	return new ibValueForm(request, creator, ownerControl, srcObject);
 }
 
-ibUniqueKey ibFrontendDocMDIFrame::CreateFormUniqueKey(const ibBackendControlFrame* ownerControl, const ibSourceDataObject* sourceObject, const ibUniqueKey& formGuid)
+ibUniqueKey ibFrontendMainFrame::CreateFormUniqueKey(const ibBackendControlFrame* ownerControl, const ibSourceDataObject* sourceObject, const ibUniqueKey& formGuid)
 {
 	return ibFormVisualDocument::CreateFormUniqueKey(ownerControl, sourceObject, formGuid);
 }
 
-ibBackendValueForm* ibFrontendDocMDIFrame::FindFormByUniqueKey(const ibBackendControlFrame* ownerControl, const ibSourceDataObject* sourceObject, const ibUniqueKey& formGuid)
+ibBackendValueForm* ibFrontendMainFrame::FindFormByUniqueKey(const ibBackendControlFrame* ownerControl, const ibSourceDataObject* sourceObject, const ibUniqueKey& formGuid)
 {
 	return ibFormVisualDocument::FindFormByUniqueKey(ownerControl, sourceObject, formGuid);
 }
 
-ibBackendValueForm* ibFrontendDocMDIFrame::FindFormByUniqueKey(const ibUniqueKey& guid)
+ibBackendValueForm* ibFrontendMainFrame::FindFormByUniqueKey(const ibUniqueKey& guid)
 {
 	return ibFormVisualDocument::FindFormByUniqueKey(guid);
 }
 
-ibBackendValueForm* ibFrontendDocMDIFrame::FindFormByControlUniqueKey(const ibUniqueKey& guid)
+ibBackendValueForm* ibFrontendMainFrame::FindFormByControlUniqueKey(const ibUniqueKey& guid)
 {
 	return ibFormVisualDocument::FindFormByControlUniqueKey(guid);
 }
 
-ibBackendValueForm* ibFrontendDocMDIFrame::FindFormBySourceUniqueKey(const ibUniqueKey& guid)
+ibBackendValueForm* ibFrontendMainFrame::FindFormBySourceUniqueKey(const ibUniqueKey& guid)
 {
 	return ibFormVisualDocument::FindFormBySourceUniqueKey(guid);
 }
 
-bool ibFrontendDocMDIFrame::UpdateFormUniqueKey(const ibUniqueKeyPair& guid)
+bool ibFrontendMainFrame::UpdateFormUniqueKey(const ibUniqueKeyPair& guid)
 {
 	return ibFormVisualDocument::UpdateFormUniqueKey(guid);
 }
@@ -230,7 +226,7 @@ bool ibFrontendDocMDIFrame::UpdateFormUniqueKey(const ibUniqueKeyPair& guid)
 #include "frontend/docView/templates/docViewSpreadsheet.h"
 
 // Grid support
-bool ibFrontendDocMDIFrame::ShowSpreadsheetDocument(const wxString& strTitle, wxObjectDataPtr<ibBackendSpreadsheetObject>& spreadSheetDocument)
+bool ibFrontendMainFrame::ShowSpreadsheetDocument(const wxString& strTitle, wxObjectDataPtr<ibBackendSpreadsheetObject>& spreadSheetDocument)
 {
 	class ibSpreadsheetMemoryDocument :
 		public ibSpreadsheetFileDocument {
@@ -276,9 +272,13 @@ bool ibFrontendDocMDIFrame::ShowSpreadsheetDocument(const wxString& strTitle, wx
 
 #include "frontend/win/editor/gridEditor/gridPrintout.h"
 
-bool ibFrontendDocMDIFrame::PrintSpreadsheetDocument(const wxObjectDataPtr<ibBackendSpreadsheetObject>& doc, bool showPrintDlg)
+bool ibFrontendMainFrame::PrintSpreadsheetDocument(const wxObjectDataPtr<ibBackendSpreadsheetObject>& doc, bool showPrintDlg)
 {
 	wxScopedPtr<ibGridEditorPrintout> printout(new ibGridEditorPrintout(doc));
+
+	// The page as the preview was last left, the same as File -> Print: a sheet a script prints comes out
+	// the way the person chose to see sheets printed (Max, 2026-09-22).
+	ibPrintPreviewFrame::ApplyFitToPageWidth(printout.get());
 
 	const wxPageSetupDialogData& pageSetupDialogData =
 		docManager->GetPageSetupDialogData();
@@ -289,9 +289,45 @@ bool ibFrontendDocMDIFrame::PrintSpreadsheetDocument(const wxObjectDataPtr<ibBac
 	return printer.Print(this, printout.get(), true);
 }
 
+#include "frontend/win/dlgs/jobSchedule/jobScheduleSettings.h"
+
+// Schedule support
+//
+// The backend hands over the value and gets back "did it change" — it never learns that a wxDialog
+// was involved, and this side never learns what the schedule belongs to. The dialog edits a BUFFER
+// and writes back only on OK, so Cancel really cancels; the caller therefore does not have to keep
+// a copy of its own to undo from.
+bool ibFrontendMainFrame::ShowScheduleEditor(ibJobScheduleDescription& schedule)
+{
+	ibDialogJobSchedule dialog(this, schedule);
+
+	// CANCEL IS THE ONLY "NOTHING HAPPENED". OK means the user said yes to what is in the window,
+	// and that is the whole signal — comparing the old schedule with the new one to decide whether
+	// it "really" changed is second-guessing them, and it is what every other editor here refrains
+	// from doing.
+	if (dialog.ShowModal() != wxID_OK)
+		return false;
+
+	schedule = dialog.GetSchedule();
+
+	// OK MARKS THE FORM. The edit happened in a modal window of its own, so nothing was typed into
+	// the card and nothing else would ever notice — the value would sit changed in memory and be
+	// lost on close without so much as a question.
+	//
+	// It is done HERE because this is the only place that knows. A control cannot tell "the value
+	// changed" from "somebody looked at a linked object and closed it": opening a reference shows
+	// a whole card, and the reference is the same reference afterwards. The window that did the
+	// editing holds the fact, so it is the one that reports it — through the ordinary form lookup,
+	// not through a return value nobody upstream could interpret.
+	if (ibBackendValueForm* const form = ActiveWindow())
+		form->Modify(true);
+
+	return true;
+}
+
 #pragma endregion 
 
-ibPropertyObject* ibFrontendDocMDIFrame::GetProperty() const
+ibPropertyObject* ibFrontendMainFrame::GetProperty() const
 {
 	if (m_objectInspector != nullptr)
 		return m_objectInspector->GetSelectedObject();
@@ -299,7 +335,7 @@ ibPropertyObject* ibFrontendDocMDIFrame::GetProperty() const
 	return nullptr;
 }
 
-bool ibFrontendDocMDIFrame::SetProperty(ibPropertyObject* prop)
+bool ibFrontendMainFrame::SetProperty(ibPropertyObject* prop)
 {
 	if (m_objectInspector != nullptr) {
 		m_objectInspector->SelectObject(prop);

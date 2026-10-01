@@ -6,9 +6,11 @@
 #include "mainFrameEnterprise.h"
 #include "frontend/win/theme/luna_toolbarart.h"
 
+#include <wx/wupdlock.h>   // wxWindowUpdateLocker — RAII Freeze/Thaw
+
 #include "frontend/artProvider/artProvider.h"
 
-void ibFrontendDocMDIFrameEnterprise::CreateWideGui()
+void ibFrontendMainFrameEnterprise::CreateWideGui()
 {
 	m_mainFrameToolbar = new wxAuiToolBar(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxAUI_TB_HORZ_LAYOUT);
 	m_mainFrameToolbar->SetToolBitmapSize(wxSize(16, 16));
@@ -61,12 +63,17 @@ void ibFrontendDocMDIFrameEnterprise::CreateWideGui()
 
 	SetStatusBar(new ibDocBottomStatusBar(this));
 	SetStatusText(_("Ready"));
-	GetNotebook()->GetAuiManager().GetArtProvider()->SetColour(wxAUI_DOCKART_BACKGROUND_COLOUR, wxAUI_DEFAULT_COLOUR);
+	// Note: the luna dock art (set in the base ctor) already exposes
+	// powder-blue (#B8C9D4) via wxAUI_DOCKART_BACKGROUND_COLOUR; don't
+	// override with wxAUI_DEFAULT_COLOUR — that's the legacy dark navy.
+	GetNotebook()->GetAuiManager().GetArtProvider()->SetColour(
+		wxAUI_DOCKART_BACKGROUND_COLOUR, wxColour(0xB8, 0xC9, 0xD4));
 
-	// Ensure the client window has proper background (dark blue theme)
+	// workspace background — powder blue, matches the rest of the
+	// chrome. Was hardcoded #44587B dark navy.
 	wxAuiMDIClientWindow* clientWnd = GetClientWindow();
 	if (clientWnd != nullptr) {
-		clientWnd->SetBackgroundColour(wxColour(68, 88, 123));
+		clientWnd->SetBackgroundColour(wxColour(0xB8, 0xC9, 0xD4));
 	}
 
 	SetMinSize(wxSize(400, 380));
@@ -84,7 +91,7 @@ void ibFrontendDocMDIFrameEnterprise::CreateWideGui()
 #include "frontend/win/ctrls/floatingNotebook.h"
 #include "frontend/win/theme/luna_tabart.h"
 
-void ibFrontendDocMDIFrameEnterprise::CreateBottomPane()
+void ibFrontendMainFrameEnterprise::CreateBottomPane()
 {
 	if (m_mgr.GetPane(wxAUI_PANE_BOTTOM).IsOk())
 		return;
@@ -105,12 +112,11 @@ void ibFrontendDocMDIFrameEnterprise::CreateBottomPane()
 		wxAUI_NB_BOTTOM | wxAUI_NB_TAB_MOVE | wxAUI_NB_SCROLL_BUTTONS);
 
 	auiNotebook->SetArtProvider(new wxAuiLunaTabArt());
-	auiNotebook->Freeze();
-
-	auiNotebook->AddPage(m_outputWindow, _("Messages"), false, wxArtProvider::GetBitmapBundle(wxART_MESSAGE, wxART_SERVICE, wxSize(16, 16)));
-
-	auiNotebook->SetNullSelection();
-	auiNotebook->Thaw();
+	{
+		wxWindowUpdateLocker freeze(auiNotebook);
+		auiNotebook->AddPage(m_outputWindow, _("Messages"), false, wxArtProvider::GetBitmapBundle(wxART_MESSAGE, wxART_SERVICE, wxSize(16, 16)));
+		auiNotebook->SetNullSelection();
+	}
 
 	m_mgr.AddPane(auiNotebook, paneInfo);
 }

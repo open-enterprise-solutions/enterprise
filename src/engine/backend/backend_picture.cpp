@@ -23,7 +23,9 @@ bool RegisterBackendPicture(const wxString name, const ibPictureID& id, const ch
 bool RegisterBackendPicture(const wxString name, const ibPictureID& id, const wxString& base64)
 {
 	if (!ibBackendPicture::IsRegisterPicture(id)) {
-		ibBackendPicture::RegisterPicture(name, id, ibBackendPicture::GetImageFromBase64(base64));
+		// The string is a MASTER, drawn larger than it is shown (tools/pictures/render.js); a registered picture is
+		// handed out as it is kept, and every reader of one shows it at 16 - so it is kept at 16, scaled down once here.
+		ibBackendPicture::RegisterPicture(name, id, ibBackendPicture::GetImageFromBase64(base64, wxSize(16, 16)));
 		return true;
 	}
 
@@ -158,8 +160,10 @@ void ibBackendPicture::RegisterPicture(const wxString name, const ibPictureID& i
 
 wxBitmap ibBackendPicture::GetPicture(const ibPictureID& id)
 {
+	// By reference: a list asks for a row's picture on every paint, and a copy of each entry passed over (its
+	// name and its bitmap) was the whole cost of the search.
 	auto iterator = std::find_if(s_arrayPicture.begin(), s_arrayPicture.end(),
-		[id](const auto entry) { return entry.m_id == id; });
+		[id](const auto& entry) { return entry.m_id == id; });
 
 	if (iterator != s_arrayPicture.end())
 		return iterator->m_data;

@@ -7,12 +7,21 @@
 #include <memory>
 
 // Marker interface for descriptors that terminate a runtime tree.
-// Today: ibValueModuleManagerConfiguration. Used by ibRuntimeModuleDataObject::GetRoot
+// Today: ibValueModuleManagerRuntimeConfiguration. Used by ibRuntimeModuleDataObject::GetRoot
 // parent walk to find "the root above this nested descriptor".
 class BACKEND_API ibRuntimeRoot {
 public:
 	virtual ~ibRuntimeRoot() = default;
 };
+
+// Canonical helper alias for a descriptor's script-exported names (module exports
+// + bound exports). ONE value across all descriptor classes, so the generic export
+// autobind (ibRuntimeModuleDataObject::ExportThunk) can append under it without
+// knowing each class's per-enum numbering. Distinct from the small per-class
+// aliases (eSystem/eProperty/eTable = 0/1/2); a migrated class sets its own
+// `eProcUnit = g_aliasExport` so existing dispatch (`alias == eProcUnit`) routes
+// the thunk's entries unchanged.
+constexpr long g_aliasExport = 1000;
 
 class BACKEND_API ibRuntimeModuleDataObject {
 public:
@@ -26,16 +35,36 @@ public:
 	// GetProcUnit() and pins the shared_ptr against fast-F5 UAF
 	// (project_refresh_execute_crash.md).
 	template <typename... Types>
-	void ExecAsProc(const wxString& strMethodName, Types&&... args) const {
+	void ExecAsProc(const ibString& strMethodName, Types&&... args) const {
 		ibValue* paParams[] = { &args..., nullptr };
 		ExecAsProc(strMethodName, paParams, (const long)sizeof...(args));
 	}
 
 	template <typename... Types>
-	void ExecAsFunc(const wxString& strMethodName, ibValue& pvarRetValue, Types&&... args) const {
+	void ExecAsFunc(const ibString& strMethodName, ibValue& pvarRetValue, Types&&... args) const {
 		ibValue* paParams[] = { &args..., nullptr };
 		ExecAsFunc(strMethodName, pvarRetValue, paParams, (const long)sizeof...(args));
 	}
+
+	// ⭐ AN EVENT OF THE OWNER — `BeforeWrite`, `Posting`, `OnCopy`… Its own module's procedure first,
+	// then every event handler of this event of the owner's type, the owner handed over as `Source`
+	// before the event's own arguments — the same arguments, so a `Cancel` an event handler sets is the
+	// one the caller reads. EVERY place that raises an event calls this, and that is what makes an event
+	// handler run wherever the module's procedure does: there is no second call beside it to forget. A
+	// plain call into the module (ExecAsProc) raises nothing.
+	template <typename... Types>
+	void ExecAsEvent(const ibString& strEventName, Types&&... args) const {
+		ibValue* paParams[] = { &args..., nullptr };
+		ExecAsEvent(strEventName, paParams, (const long)sizeof...(args));
+	}
+
+	// ⭐ …AND AN EVENT OF A MANAGER — `FormGetProcessing`, `ChoiceDataGetProcessing`, a job's `JobProcessing`.
+	// A manager is no module descriptor, so its module is found where the manager value finds it
+	// (EditModuleManagerFor) and its procedure called here; then every event handler of it, the manager
+	// handed over as `Source`. False — and nothing called — when the manager's module is not registered
+	// where this runs; a caller that cannot go on without it (a job) says so.
+	static bool ExecAsManagerEvent(const class ibValueMetaObjectGenericData* metaObject, const ibString& strEventName,
+		ibValue** paParams, const long lSizeArray);
 
 	// Allocate the runtime slot (ProcUnit) for this descriptor on
 	// demand. No-op in Designer mode (no script execution ever) and
@@ -49,16 +78,31 @@ public:
 	// ProcUnit at session end. No-op if already empty.
 	void ResetRuntime() { m_procUnit.reset(); }
 
-	// Bind (or rebind) a named context variable on this descriptor's
-	// compile module. The value is an ibValue that exposes its method
-	// table + attributes at compile time — both the "full object"
-	// case (ThisObject — record with data + methods, thisForm —
-	// controls + events) and the "methods-only" case (Manager — root
-	// or common-module singleton providing shared helpers). Lazy-
-	// creates m_compileModule from the descriptor's meta-object when
-	// it isn't wired yet — subclass code reads like a recipe:
-	// BindContextVariable → Compile → Run.
+	// Bind a value on this descriptor's compile module. The value is an
+	// ibValue that exposes its method table + attributes at compile time.
+	// Lazy-creates m_compileModule from the descriptor's meta-object when it
+	// isn't wired yet — subclass code reads like a recipe: Bind… → Compile → Run.
+	//
+	// Three flavours by editor-visibility / storage:
+	//   BindContextVariable — named context (m_listContextValue, name VISIBLE
+	//     in autocomplete): the "full object" self-handles ThisObject / ThisForm.
+	//   BindScopeVariable   — transparent scope container (m_listContextValue,
+	//     name NOT an identifier; only its members surface): Manager /
+	//     EnumManager / SystemManager. Replaces the old scopeContext=true flag.
+	//   BindExportVariable  — export variable (m_listExternValue, name VISIBLE):
+	//     global constants, common modules surfaced as module-valued names.
+	//   BindLocalVariable   — plain writable LOCAL (m_listLocalValue, kind=Local):
+	//     binder fills the frame slot at init, module reads/writes it as an ordinary
+	//     local — no required/type pre-flight, no member access. E.g. a constant's Value.
 	void BindContextVariable(const wxString& name, class ibValue* value);
+	void BindScopeVariable(const wxString& name, class ibValue* value);
+	void BindExportVariable(const wxString& name, class ibValue* value);
+	void BindLocalVariable(const wxString& name, class ibValue* value);
+
+	// Symmetric teardown for the Bind… family. RemoveVariable erases the name
+	// from BOTH the extern and context maps, so one Unbind undoes any flavour
+	// of bind. No-op when no compile module is wired yet.
+	void UnbindVariable(const wxString& name);
 
 	// Compile this descriptor's module. Skips in Designer mode (the
 	// designer only wants AST-level compile state for intellisense and
@@ -72,9 +116,13 @@ public:
 	// initialization entry run at object/form creation, fires handlers
 	// registered at module scope. Skips in Designer mode (no execution
 	// ever) and when either side of the pair is absent. delta matches
-	// ibProcUnit::Execute's semantics — forms / constants pass true
-	// (preserve caller's stack state); record objects default to false.
-	void Run(bool delta = false);
+	// ibProcUnit::Execute's semantics: delta=true EXECUTES the module
+	// top-level body (the default — almost every descriptor wants its
+	// body to run on init: forms, constants, record objects). Pass false
+	// to register the module's functions WITHOUT running the body — only
+	// common modules do that (moduleManager.cpp), since a common module's
+	// top-level is just declarations.
+	void Run(bool delta = true);
 
 	// Low-level execute — unconditional (no Designer guard). Prefer
 	// Run() in subclass code; Execute() remains for compatibility and
@@ -86,14 +134,22 @@ public:
 	//     filled via SetVar). Preferred — descriptors fill bindings at
 	//     execution time, not at compile-time staging.
 	//   - Execute(delta): legacy fallback — builds binder from compile-
-	//     side maps (m_listExternValue / m_listContextValue) populated
-	//     by AddContextVariable at module init. Kept for paths that
-	//     haven't migrated to per-execute binding yet.
+	//     side maps (m_listExternValue / m_listContextValue /
+	//     m_listLocalValue) populated by the Bind*Variable calls at module
+	//     init. Kept for paths that haven't migrated to per-execute binding
+	//     yet. delta semantics as in Run() above.
 	void Execute(ibByteBinder& br);
-	void Execute(bool delta = false);
+	void Execute(bool delta = true);
 
-	ibRuntimeModuleDataObject();
-	ibRuntimeModuleDataObject(ibCompileModule* compileCode);
+	// The ONLY ctor — a descriptor is always built by its owning value, which passes
+	// its already-constructed helper + itself (and, for the module manager, an eager
+	// compile module). Registering the export surface as the helper's TAIL here makes
+	// it impossible to construct a descriptor without wiring its exports "in the
+	// descriptor", and after the value's own fixed methods (stable CallAsFunc indices).
+	// No default / compile-module-only ctor: those would silently skip the export wiring.
+	ibRuntimeModuleDataObject(ibValue::ibMemberTable& helper, const ibValue* owner,
+		ibCompileModule* compileCode = nullptr)
+		: m_compileModule(compileCode) { helper.BindTail(&ExportThunk, owner); }
 	virtual ~ibRuntimeModuleDataObject();
 
 	// Module-object currently wired in m_compileModule. Thin post-
@@ -157,6 +213,32 @@ public:
 	// for orphan descriptors — no root reachable upward.
 	virtual const ibRuntimeRoot* GetRoot() const;
 
+	// Surface ONLY this descriptor's EXPORT *methods* into another value's helper,
+	// keyed by the bytecode-function index. For a delegating host (a module-backed
+	// manager) that routes CallAsProc/Func straight back through this descriptor — the
+	// method numbers line up exactly, no copy of the helper table needed. Reads the
+	// runtime ProcUnit's bytecode; AttachRuntime's split Init/Run guarantees the
+	// wrapper's ProcUnit is wired (Run(false)) before any business code resolves it.
+	// Public on purpose: the caller is a sibling value, not a subclass.
+	//
+	// ⭐⭐ AND WHERE THERE IS NO BYTECODE, THE TEXT IS ASKED INSTEAD — same question, same
+	// answer, second road. The designer never emits bytecode for a module, so everything
+	// built on this said nothing there: `Module.` offered no exports in the code editor or
+	// in script_complete, and a manager host (Catalogs.Goods., commonObject.cpp) missed its
+	// manager module's exports the same way — while the designer's own "Procedures and
+	// functions" window listed them perfectly, because IT read the text (ibParseCode).
+	//
+	// Out-of-line since: reading the text needs the parser and the module object, and this
+	// header is included nearly everywhere.
+	void ExportMethodsToHelper(ibValue::ibMemberTable* helper, long alias) const;
+
+	// Symmetric export-var (prop) half of ExportNamesToHelper. Public to keep the
+	// method/prop split parallel. A module-backed manager host surfaces only the
+	// method half (export-vars resolve through the host's own ProcUnit alias, which a
+	// manager doesn't have); descriptors that own their runtime surface both via
+	// ExportNamesToHelper. Falls back to the text for the same reason as the method half.
+	void ExportPropsToHelper(ibValue::ibMemberTable* helper, long alias) const;
+
 protected:
 	// Method call (array form). Resolves the runtime through
 	// GetProcUnit(); local shared_ptr keeps the ProcUnit alive for the
@@ -167,7 +249,7 @@ protected:
 	// public variadic forms above. External callers should use the
 	// variadic — this raw form stays protected because the array shape
 	// is a derived-class implementation detail.
-	bool ExecAsProc(const wxString& strMethodName,
+	bool ExecAsProc(const ibString& strMethodName,
 		ibValue** paParams, const long lSizeArray) const
 	{
 		if (auto pu = GetProcUnit())
@@ -175,13 +257,17 @@ protected:
 		return false;
 	}
 
-	bool ExecAsFunc(const wxString& strMethodName,
+	bool ExecAsFunc(const ibString& strMethodName,
 		ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray) const
 	{
 		if (auto pu = GetProcUnit())
 			return pu->CallAsFunc(strMethodName, pvarRetValue, paParams, lSizeArray);
 		return false;
 	}
+
+	// The event's array form — see the variadic above. Out of line: it asks the configuration for its
+	// event handlers, and this header is included nearly everywhere.
+	void ExecAsEvent(const ibString& strEventName, ibValue** paParams, const long lSizeArray) const;
 
 	// Populate a value's method-helper from this descriptor's bytecode —
 	// every kind=Export entry in m_listFunc / m_listVar is appended as
@@ -194,25 +280,54 @@ protected:
 	// not-yet-compiled descriptor). Helper is read through GetProcUnit()
 	// to pin the shared_ptr alive for the duration — same pattern as
 	// ExecAsProc / ExecAsFunc above.
-	void ExportNamesToHelper(ibValue::ibValueMethodHelper* helper, long alias) const {
-		if (helper == nullptr) return;
-		const auto pu = GetProcUnit();
-		if (!pu) return;
-		const ibByteCode* bc = pu->GetByteCode();
-		if (bc == nullptr) return;
-		for (const auto& fn : bc->m_listFunc) {
-			if (!fn.IsExport()) continue;
-			helper->AppendMethod(fn.m_strRealName,
-				bc->GetNParams(fn),
-				bc->HasRetVal(fn),
-				(long)fn,
-				alias);
-		}
-		for (const auto& v : bc->m_listVar) {
-			if (!v.IsExport()) continue;
-			helper->AppendProp(v.m_strRealName, v, alias);
+	// Free name-binder thunk: surface THIS descriptor's bytecode exports + staged
+	// context binds (ThisForm.Controls / DataSource / ...) onto the owning value's
+	// helper under g_aliasExport. A descriptor value binds it in its ctor —
+	// `m_members.Bind(&ibRuntimeModuleDataObject::ExportThunk, this)` — so NO per-class
+	// filler does this by hand ("autobind in the descriptor"). This is the ONLY place
+	// the descriptor's own names are surfaced — a form/record contributor must NOT call
+	// ExportNamesToHelper / FillHelperFromBinds itself (those make an UNGUARDED virtual
+	// GetCompileModule() on `this`; here the cross-cast to the descriptor sibling is
+	// dynamic_cast-guarded, so a half-constructed / torn-down object degrades to "no
+	// names" instead of calling through a null vtable slot). Diamond-free → ibValue is
+	// polymorphic, the sibling cross-cast is well-defined.
+	static void ExportThunk(ibValue::ibMemberTable& helper, const ibValue* ctx) {
+		if (const auto* desc = dynamic_cast<const ibRuntimeModuleDataObject*>(ctx)) {
+			desc->ExportNamesToHelper(&helper, g_aliasExport);
+			desc->FillHelperFromBinds(&helper, g_aliasExport);
 		}
 	}
+
+	// Full descriptor surface = methods + export-var props, both keyed by the
+	// canonical alias. Self-surfacing descriptors (records/forms) call this via
+	// ExportThunk; a delegating host (manager) surfaces only the method half, see
+	// the public ExportMethodsToHelper.
+	void ExportNamesToHelper(ibValue::ibMemberTable* helper, long alias) const {
+		ExportMethodsToHelper(helper, alias);
+		ExportPropsToHelper(helper, alias);
+	}
+
+	// Materialise this descriptor's EXPORT bindings (RegisterRecords / Filter /
+	// Controls / DataSource) into a value's method-helper, so member access
+	// (ThisObject.RegisterRecords / ThisForm.Controls) resolves through the same
+	// path as module exports: GetPropVal(alias=eProcUnit) → m_procUnit->
+	// GetPropVal(name) → the binder-filled frame slot. Reads the compile-module
+	// bind map (present in BOTH Designer and runtime) — unlike ExportNamesToHelper
+	// which reads bytecode (runtime only). Context binds (ThisObject / ThisForm
+	// themselves) are skipped: they're the handles, not members of themselves.
+	// Out-of-line — needs the complete ibCompileModule (only fwd-declared here).
+	void FillHelperFromBinds(ibValue::ibMemberTable* helper, long alias) const;
+
+	// Live value of an EXPORT binding by name (the m_listExternValue entry —
+	// the same stable object/proxy BindExportVariable staged). Present in BOTH
+	// Designer and runtime, so it resolves ThisForm.Controls / ThisObject.
+	// RegisterRecords without a ProcUnit. Returns nullptr if not a bound name.
+	ibValue* GetBoundValue(const wxString& name) const;
+
+	// Lazy-create m_compileModule from the descriptor's meta-object (shared by
+	// all Bind* entry points). Propagates the parent's compile scope chain.
+	// Returns nullptr when GetMetaForCompile() has nothing to compile against.
+	ibCompileModule* EnsureCompileModule();
 
 	ibCompileModule* m_compileModule;
 	// Descriptor owns its runtime slot. shared_ptr so a long-running
@@ -233,6 +348,15 @@ protected:
 	// Raw ptr; safe as long as parent outlives child (enforced by
 	// owning containers).
 	const ibRuntimeModuleDataObject* m_parent = nullptr;
+
+public:
+
+	// ⭐ THE RUNTIME VALUE THIS DESCRIPTOR IS A PART OF — what an event of it hands its handlers as `Source`.
+	// Every owner builds the descriptor with itself, so by default it is read off `this`: a CROSS-cast, the
+	// descriptor being the value's sibling base and not derived from it, which is why it cannot be a static
+	// one. Null for a descriptor that is no value's part — its events then reach no handler. An owner that
+	// knows it is one may answer `this` outright. Last in the class: an optional virtual shifts no slot.
+	virtual const ibValue* GetRuntimeOwner() const { return dynamic_cast<const ibValue*>(this); }
 };
 
 #endif

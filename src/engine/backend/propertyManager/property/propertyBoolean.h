@@ -25,24 +25,18 @@ public:
 	{
 	}
 
-	//get property for grid 
-	virtual wxObject* GetPGProperty() const {
-		if (ms_propertyBoolean != nullptr)
-			return ms_propertyBoolean(m_propLabel, m_propName, GetValueAsBoolean());
-		return nullptr;
-	}
-
 	// set/get property data
 	virtual bool SetDataValue(const ibValue& varPropVal);
 	virtual bool GetDataValue(ibValue& pvarPropVal) const;
 
-	//load & save object in control 
-	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer);
+	//load & save object in control
+
+	// readable node value (typed Bool, not opaque Binary)
+	virtual bool ReadNodeValue(const ibDataValue& value) override;
+	virtual bool WriteNodeValue(ibDataValue& value) const override;
 
 public:
 
-	static wxObject* (*ms_propertyBoolean)(const wxString&, const wxString&, const bool&);
 };
 
 #endif

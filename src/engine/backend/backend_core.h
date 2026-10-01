@@ -5,15 +5,27 @@
 
 #include <map>
 
-#include "backend.h"
+#include "backend/backend.h"
+#include "rowValues.h"
 
 extern BACKEND_API unsigned int GetBuildId();
 
+// THE BUILD, SPELLED OUT: the number above plus when it was actually compiled —
+// "3164 (Sep  2 2026 16:55:03)". The number is the VERSION and is stable across a day of rebuilds,
+// which is right for saying which engine this is and wrong for telling two of them apart; this is
+// for the second question (the bytecode cache key, a banner that has to be exact).
+extern BACKEND_API const char* GetBuildStamp();
+
 #include "guid.h"
 #include "clsid.h"
-#include "number.h"
+#include "fnumber.h"
+#include "fdatetime.h"
+#include "fstring.h"
 #include "typeconv.h"
 #include "stringUtils.h"
+
+// The UNDEFINED value type's clsid — the canonical "no concrete type"; base-level so low-level code can name it.
+constexpr ibClassID g_valueUndefinedCLSID = primitive_to_clsid("VL_UNDF");
 
 //*******************************************************************************************
 
@@ -22,30 +34,87 @@ extern BACKEND_API unsigned int GetBuildId();
 #define oes_clipboard_interface	wxT("oes_clipboard_interface")
 #define oes_clipboard_role		wxT("oes_clipboard_role")
 #define oes_clipboard_template	wxT("oes_clipboard_template")
+#define oes_clipboard_attribute	wxT("oes_clipboard_attribute")
+#define oes_clipboard_command	wxT("oes_clipboard_command")
 
 //*******************************************************************************************
 //*                                 Special structures                                      *
 //*******************************************************************************************
 
-#define emptyDate -62135604000000ll
+// ⭐⭐ THE MEMBER NUMBER THAT MEANS "NO MEMBER" — the enumeration's empty date.
+//
+// A member's number is whatever its declaration says: 0, 1, 2 — or 50, 51, 52, or any set at all.
+// What holds for EVERY enumeration is the SIGN: members are NON-NEGATIVE, and the negative range is
+// reserved for "nothing was chosen". That is the only reservation that can be made without knowing
+// which numbers a particular enumeration happens to use, so the test is the sign — never a
+// comparison against a member.
+//
+// Which is why ZERO CANNOT MEAN EMPTY: it is an ordinary member number like any other. Where an enum
+// column defaulted to it, a row nobody ever filled in came back holding whichever member is 0, as
+// though someone had chosen it. Read by the write placeholder, the DDL default, the packed form and
+// the emptiness test alike, so the four cannot drift apart.
+#define emptyEnum -1
+
+// ⭐⭐ WHAT A PARENT MAY BE — ONE declaration, and every layer asks it by name. Three MODES are offered:
+//
+//   None       — a FLAT list. No parent at all: the field is gone, not merely unused.
+//   Items      — a TREE OF PEERS: every value is an item, and any item may stand under any other; the
+//                platform drills into any of them. This is a chart of accounts — an account under an
+//                account, a class opening onto its accounts.
+//   Folders    — the same tree with a second kind of value: items live INSIDE folders, a folder is a
+//                container, an item is a leaf.
+//
+// …and one that is no longer offered: ParentOnly — a parent recorded as DATA, the list flat, nothing
+// built on it. A configuration that stored it reads back as it did; nobody chooses it any more (Max,
+// 2026-09-29: "folders, items, and no hierarchy"). The modes were Subordination / Items / FoldersAndItems,
+// and Subordination — the chart's own — was the flat one, so a chart printed as a column of codes.
+//
+// It lives HERE, at the bottom, because three different tiers need the same answers: the
+// metaobject declares it, the query tier reads it off a source, the list decides how to walk it.
+// Each of them used to be handed a BOOLEAN PROJECTION instead — `GetHierarchyColumn() != nullptr`
+// for "is there a parent", `IsItemHierarchy()` for "may an item hold items" — and a projection
+// answers one question while the caller has another. That is how a chart of accounts first lost its
+// hierarchy groupings (the accessor said "no parent") and then grew a tree in its list (the same
+// accessor, corrected, now said "yes" to a caller asking whether to DRILL). One value with named
+// states cannot be misread that way: whoever needs a distinction names the state it turns on.
+//
+// ⚠ Stored as its INTEGER — these numbers are the wire, and they keep their meaning under the new names.
+// New members APPEND.
+enum ibHierarchyType {
+	eFolders    = 0,
+	eParentOnly = 1,   // not offered — see above
+	eNone       = 2,   // the editor lists them in reading order (see CreateEnumeration), which is free
+	eItems      = 3,
+};
 
 typedef int ibRoleID;
 typedef int ibMetaID;
+// A metaId acting as a SOURCE-binding hop (an element of a control's binding
+// path: attribute id, then field / reference / column ids). A distinct name so a
+// binding chain reads as source ids, not as arbitrary metaIds.
+typedef int ibSourceId;
 typedef int ibFormID;
 typedef int ibActionID;
 
-typedef unsigned wxLongLong_t ibPictureID;
+typedef uint64_t ibPictureID;   // same base as ibClassID / u64 — see the note in clsid.h
 typedef unsigned int ibVersionID;
 
-typedef std::map<
-	ibMetaID, class BACKEND_API ibValue
-> ibMetaValueArray;
+// metaID -> ibValue set of one record object / table row.
+// ibRowValues (sorted vector) — same std::map API & sorted order, but one
+// allocation, contiguous lookup and no per-entry RB-node overhead. See rowValues.h.
+// (Alias only — ibValue is forward-declared inline; instantiated at member sites
+// where value.h is complete.)
+typedef ibRowValues<ibMetaID, class BACKEND_API ibValue> ibRowMetaValues;
 
 //*******************************************************************************************
 //*                                 Special enumeration                                     *
 //*******************************************************************************************
 
-enum ibValueTypes {
+// Underlying type fixed at 1 byte: the largest enumerator (TYPE_ITERATOR
+// = 204) fits in unsigned char, and the AOT wire format already narrows
+// m_typeClass to uint8_t (byteCodeAOT.cpp), so this is binary-compatible
+// with persisted bytecode. Shrinks the m_typeClass slot in every ibValue.
+enum ibValueTypes : unsigned char {
 
 	TYPE_EMPTY = 0,
 	TYPE_BOOLEAN = 1,
@@ -54,7 +123,10 @@ enum ibValueTypes {
 	TYPE_STRING = 4,
 	TYPE_NULL = 5,
 
-	TYPE_REFFER = 100, // object reference
+	TYPE_REFFER = 100, // object reference (owned: IncrRef/DecrRef, Reset may delete)
+	TYPE_CONST_REFFER = 101, // read-only reference to a NON-owned object (e.g. a
+	                         // const ibValueMetaObject* from the metadata tree).
+	                         // No ref-count, Reset never deletes it; mutation blocked.
 
 	TYPE_VALUE = 200, // value
 	TYPE_ENUM = 201, // enumeration
@@ -63,6 +135,26 @@ enum ibValueTypes {
 	TYPE_ITERATOR = 204, // iterator wrapper (ibValueIterator)
 
 	TYPE_LAST,
+};
+
+// WHAT KIND OF THING A REGISTERED TYPE IS, and what the registry tells it. Here, beside the value
+// types, because ibValue's registry surface names them (value.h) while the ctors that carry them
+// (compiler/typeCtor.h) are built on a complete ibValue — so they cannot live with the ctors.
+enum ibCtorObjectType {
+	ibCtorObjectType_object_primitive = 1,
+	ibCtorObjectType_object_value,
+	ibCtorObjectType_object_control,
+	ibCtorObjectType_object_system,
+	ibCtorObjectType_object_enum,
+	ibCtorObjectType_object_context,
+
+	ibCtorObjectType_object_metadata,
+	ibCtorObjectType_object_meta_value
+};
+
+enum ibCtorObjectTypeEvent {
+	ibCtorObjectTypeEvent_Register,
+	ibCtorObjectTypeEvent_UnRegister,
 };
 
 //*******************************************************************************************
@@ -80,8 +172,6 @@ enum ibValueTypes {
 #define _USE_NET_COMPRESSOR 0
 //use dynamic linking 
 #define _USE_DYNAMIC_DATABASE_LAYER_LINKING 1
-//don't use exception in db layer
-#define _USE_DATABASE_LAYER_EXCEPTIONS 0
 
 //max precision 
 #define MAX_PRECISION_NUMBER 32
@@ -112,13 +202,58 @@ enum ibProgramVersion {
 };
 
 enum ibProgramSyntax {
-	syntax_ves,    // Visual Basic-style ES + 1С/BSL mix — keyword-fenced (Then/Do/EndIf/...).
+	syntax_ves,    // Visual Basic-style ES, a legacy business-scripting dialect — keyword-fenced (Then/Do/EndIf/...).
 	syntax_ces,    // C-style ES — paren conditions, brace bodies, `;` terminators (default).
+};
+
+// ⭐⭐ WHAT KIND OF EVALUATION IS RUNNING — one value rather than a flag per capability.
+//
+// There used to be one boolean, "is this an evaluation", and everything that had to behave
+// differently asked it: the write scopes refused, `Message` stayed silent, the fill and copy
+// handlers were skipped. That is right for a WATCH — hovering a variable must not write to a base
+// or fire somebody's code — and exactly wrong for the debugger's SANDBOX, which exists to write,
+// measure and be rolled back: it wrote nothing and said nothing about it (2026-09-02).
+//
+// The difference is a KIND, not a second flag beside the first. Two booleans have four states and
+// only three mean anything; a kind cannot be set half way, and a fourth kind is one enumerator
+// rather than another flag every existing site must learn to consider.
+// ⭐⭐ AND THE FAMILY SPLITS IN TWO. The first two evaluations happen ON SOMETHING RUNNING — a watch
+// and a sandbox both answer about a program that exists and is executing, so their answers have to
+// be exact. The last one happens where NOTHING runs: an editor asking what may be written at a
+// caret. Everything the gates already do about eval mode — skipping writes, keeping the message
+// pane quiet — is true of all of them, which is why they are one family; the split matters only
+// where an ANSWER would differ.
+enum ibEvalMode : unsigned char {
+	eval_none = 0,   // ordinary execution — work the person's own actions started
+
+	// --- on something running ---------------------------------------------
+	eval_watch,      // a watch, a tooltip: reads, changes nothing, and answers about THIS run
+	eval_sandbox,    // the debugger's sandbox: writes and fires handlers, inside a rolled-back transaction
+
+	// --- on a text being written ------------------------------------------
+	// ⭐ THE SAME KIND AS A WATCH, ONE DEGREE FINER — a reading evaluation, told apart from a watch
+	// only where the two would answer differently. A watch is a question about a RUN and its answer
+	// has to be exact; this is a question about a text somebody is still typing, where a name that
+	// is not there yet is ordinary rather than wrong. So `GetCommonTemplate(<a name nobody typed>)`
+	// raises for a watch and hands back an empty template here. Everywhere else it behaves as a
+	// watch does, which is why it sits in this family rather than opening an axis of its own.
+	eval_complete,
 };
 
 //*******************************************************************************************
 
 #define COMPONENT_TYPE_ABSTRACT		 0
 #define COMPONENT_TYPE_METADATA		 COMPONENT_TYPE_ABSTRACT
+
+//*******************************************************************************************
+
+// ⭐ THE TECHNOLOGY JOURNAL, DECLARED IN THE CORE — so `ibJournalInfo(...)` is available in every file
+// of the engine without an include of its own. A diagnostic that has to be arranged for is a
+// diagnostic nobody writes at the moment they need it; this one is simply there, like `_()`.
+//
+// Included LAST, and from here rather than the other way round: journal.h includes this header for
+// BACKEND_API, and the guard above makes that re-entry a no-op, so the pair resolves whichever file
+// is reached first.
+#include "backend/diagnostics/journal.h"
 
 #endif 

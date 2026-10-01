@@ -12,28 +12,34 @@
 #include "backend/backend_type.h"
 #include "backend/backend_form.h"
 #include "backend/backend_localization.h"
+#include "backend/eventDispatcher.h"   // ibEventDispatcher — CallAsEvent dispatches the event's value through it
 
 #include "frontend/visualView/formdefs.h"
 #include "frontend/visualView/controlCtor.h"
 #include "frontend/visualView/visualHost.h"
 
-class BACKEND_API ibSourceExplorer;
 class BACKEND_API ibProcUnit;
 
 class BACKEND_API ibValueMetaObjectFormBase;
 
 class BACKEND_API ibSourceDataObject;
-class BACKEND_API ibValueListDataObject;
 class BACKEND_API ibValueRecordDataObject;
+class BACKEND_API ibDataNode;   // serialize/dataBuilder.h — universal node (control -> node)
 
 class FRONTEND_API ibValueForm;
 class FRONTEND_API ibVisualHostClient;
 
-#include "backend/actionInfo.h"
+#include "backend/standardCommand.h"
 #include "backend/moduleInfo.h"
+#include "frontend/visualView/layers/commandBar.h"   // ibValueCommandBar (command STORE the frame owns)
 
-#define wxDefaultStypeFGColour wxColour(0, 120, 215)
-#define wxDefaultStypeBGColour wxColour(235, 235, 241)
+// Default foreground / background for designer-created form controls,
+// toolbars, dataviews, dialogs. Aligned with interior palette: deep
+// dusty blue text on cream content surface. Was Windows-blue accent
+// (#0078D7) + light off-white grey (#EBEBF1) - both clashed with the
+// powder-blue + cream + terracotta palette.
+#define wxDefaultStypeFGColour wxColour(0x3F, 0x5C, 0x77)  // #3F5C77 deep dusty blue
+#define wxDefaultStypeBGColour wxColour(0xFA, 0xF7, 0xF0)  // #FAF7F0 cream content
 
 #include "backend/fileSystem/fs.h"
 
@@ -46,6 +52,13 @@ public:
 
 	//get value control and guid 
 	virtual bool GetControlValue(ibValue& pvarControlVal) const { return false; }
+	// ...AND WRITE IT BACK. The pair belongs together: the shared value-choice route
+	// (ibTypeControlFactory::ChooseValue) holds an ibControlFrame*, reads the current
+	// value through the getter above and puts the chosen one back through this. With
+	// only the getter here, everything that edited a value had to be reached through
+	// its concrete type — which is why the sequence was copied per control instead of
+	// written once. Default arg = clear (what "empty" means is the type's business).
+	virtual bool SetControlValue(const ibValue& varControlVal = ibValue()) { return false; }
 	virtual ibGuid GetControlGuid() const { return ibGuid::newGuid(); }
 
 	//get owner form 
@@ -61,11 +74,17 @@ public:
 	virtual void ChoiceProcessing(ibValue& vSelected) = 0;
 };
 
-class FRONTEND_API ibValueFrame : public ibValue,
+// CAN A VALUE OF THIS TYPE BE PICKED FROM A SHORT LIST? ONE function, and the only place the ctor kinds
+// are walked. It used to be written out at both callsites — the form control and the filter cell — and the
+// two copies disagreed about enumerations, so the same account type dropped its member list in a filter and
+// refused to on a form. Body in frame.cpp.
+FRONTEND_API bool HasQuickChoice(const class ibCtorAbstractType* typeCtor);
+
+class FRONTEND_API ibValueFrame : public ibValueDynamicMembers,
 	public ibPropertyObjectHelper<ibValueFrame>,
 	public ibControlFrame,
-	public ibActionDataObject {
-	wxDECLARE_ABSTRACT_CLASS(ibValueFrame);
+	public ibStandardCommandSource {
+	public:
 protected:
 
 	enum {
@@ -82,6 +101,19 @@ private:
 	void DoGenerateNewID(ibFormID& id, ibValueFrame* top) const;
 
 public:
+
+	// NOT transferable across sessions — and this one override covers the whole
+	// control tree, the form included (ibValueForm derives from here).
+	//
+	// Two reasons, either sufficient. A control is MUTABLE and being edited by the
+	// user right now, so a second session reading it would see a moving target.
+	// And it is bound to the wx widget behind it, which belongs to one thread:
+	// a job touching it from a worker is a cross-thread wx call, which is
+	// undefined rather than merely racy.
+	//
+	// Pass a job the DATA instead — a reference, a number, a string. Whatever the
+	// form is showing can be re-derived on the other side; the form itself cannot.
+	virtual bool IsTransferable() const override { return false; }
 
 	void SetControlName(const wxString& controlName) { SetControlNameAsString(controlName); }
 	wxString GetControlName() const {
@@ -125,14 +157,14 @@ public:
 	virtual ibFormID GetControlID() const { return m_controlId; }
 
 	// If the id was never populated (typed-factory controls, demo
-	// forms, etc.), synthesise one via GenerateNewID — analogue of
+	// forms, etc.), synthesise one via GenerateNewID - analogue of
 	// wxID_ANY on desktop. Idempotent after first call: once
 	// m_controlId is non-zero, returns it unchanged. Lets web
 	// Create() rely on a stable id without each caller repeating the
 	// if-then-generate dance.
 	//
 	// Falls back to leaving m_controlId == 0 when there is no owner
-	// form (synthetic /demo trees, detached controls) — in that case
+	// form (synthetic /demo trees, detached controls) - in that case
 	// the ibWebWindow ctor's own auto-id counter kicks in and the
 	// node is at least uniquely addressable even though it's not
 	// findable through form->FindControlByID.
@@ -199,12 +231,16 @@ public:
 	bool GetExpanded() const { return m_expanded; }
 
 	//get metaData
-	virtual ibMetaData* GetMetaData() const = 0;
+	virtual const ibMetaData* GetMetaData() const = 0;
 
 	/**
 	* Can delete object
 	*/
 	virtual bool CanDeleteControl() const = 0;
+
+	// Available by the functional options of this base — answered by an element of a form (control.h);
+	// anything else in the tree (a form, a sizer item) always is.
+	virtual bool IsAvailable() const { return true; }
 
 public:
 
@@ -220,6 +256,34 @@ public:
 		return new ibNoObject;
 	}
 
+	//*********************************************************
+	//*   Chrome — auxiliary UI around a control (unified)     *
+	//*                                                        *
+	// The visual host drives EVERY lifecycle stage through these *WithLayers wrappers
+	// instead of the plain Create/OnCreated/… below. The base just forwards to the
+	// plain method — a control with no chrome is unaffected. A control that carries
+	// chrome (ibValueControl: a command-bar toolbar today, a status bar / search box
+	// later) overrides them to build its chrome as one grouped unit and to route each
+	// stage to its OWN inner window. The plain methods stay untouched.
+	virtual wxObject* CreateWithLayers(ibFrontendWindow* wndParent, ibVisualHost* visualHost) {
+		return Create(wndParent, visualHost);
+	}
+	virtual void OnCreatedWithLayers(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost, bool firstCreated) {
+		OnCreated(wxobject, wxparent, visualHost, firstCreated);
+	}
+	virtual void OnSelectedWithLayers(wxObject* wxobject) {
+		OnSelected(wxobject);
+	}
+	virtual void UpdateWithLayers(wxObject* wxobject, ibVisualHost* visualHost) {
+		Update(wxobject, visualHost);
+	}
+	virtual void OnUpdatedWithLayers(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost) {
+		OnUpdated(wxobject, wxparent, visualHost);
+	}
+	virtual void CleanupWithLayers(wxObject* wxobject, ibVisualHost* visualHost) {
+		Cleanup(wxobject, visualHost);
+	}
+
 	/**
 	* Allows components to do something after they have been created.
 	* For example, Abstract components like NotebookPage and SizerItem can
@@ -228,7 +292,7 @@ public:
 	* @param wxobject The object which was just created.
 	* @param wxparent The wxWidgets parent - the wxObject that the created object was added to.
 	*/
-	virtual void OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost, bool firstСreated) {};
+	virtual void OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost, bool firstCreated) {};
 
 	/**
 	* Allows components to respond when selected in object tree.
@@ -258,29 +322,23 @@ public:
 
 public:
 
-	// call current event
+	// call current event — ask the event for its dispatcher (a named-event value or a lambda, both ibEventDispatcher)
+	// and Dispatch. The fire site stays agnostic: named vs lambda is pure polymorphism behind GetDispatcher()->Dispatch.
 	template <typename ...Types>
 	bool CallAsEvent(const ibEvent* event, Types&&... args) const {
 		if (event == nullptr)
 			return false;
-		const wxString& eventValue = event->GetValue();
-		std::shared_ptr<ibProcUnit> formProcUnit = GetFormProcUnit();
-		if (formProcUnit != nullptr && !eventValue.IsEmpty()) {
-			ibValue eventCancel = false;
-			try {
-				formProcUnit->CallAsProc(
-					eventValue, //event name
-					args...,
-					eventCancel
-				);
-			}
-			catch (...) {
-				return false;
-			}
-			return eventCancel.GetBoolean();
+		ibEventDispatcher* dispatcher = event->GetDispatcher();
+		if (dispatcher == nullptr || dispatcher->IsEmpty())
+			return true;   // undefined -> no-op, the event just proceeds
+		ibValue* argPtrs[] = { (&args)..., nullptr };   // trailing null keeps a 0-arg array valid (mirrors CallAsProc)
+		ibValue eventCancel = false;
+		try {
+			return dispatcher->Dispatch(GetFormProcUnit().get(), argPtrs, (long)sizeof...(args), eventCancel);
 		}
-
-		return true;
+		catch (...) {
+			return false;
+		}
 	}
 
 	//call current form
@@ -320,29 +378,40 @@ public:
 	ibFrontendVisualEditorNotebook* FindVisualEditor() const;
 #endif
 
-	//support printing 
-	virtual wxPrintout* CreatePrintout() const { return nullptr; }
+	// ⭐ A CONTROL THAT IS A DOCUMENT OF ITS OWN HANDS OVER ITS VIEW (Max, 2026-09-22: "the form is the same
+	// doc/view, redirecting to the active element… the form's doc is only a facade"). The grid box and the
+	// text box hold a document and its view; while the control is the active element, the form's view
+	// (ibFormVisualEditView) is a facade over this one: menu, toolbar, commands, PRINTING — there is no
+	// printout of a control's own any more, the view prints it — and saving. Everything else answers nothing.
+	virtual ibView* GetControlView() const { return nullptr; }
 
 public:
 
-	//support actionData 
-	virtual ibActionCollection GetActionCollection(const ibFormID& formType) override { return ibActionCollection(); }
-	virtual void ExecuteAction(const ibActionID& lNumAction, ibBackendValueForm* srcForm) override {}
+	//support actionData
+	virtual ibStandardCommandSet GetStandardCommands(const ibFormID& formType) override { return ibStandardCommandSet(); }
+	virtual void CallAsAction(const ibActionID& lNumAction, ibBackendValueForm* srcForm) override {}
 
-	class ibValueEventContainer : public ibValue {
-		wxDECLARE_DYNAMIC_CLASS(ibValueEventContainer);
+	// Command bar STORE, owned by this frame (created in the ctor of controls that
+	// carry one — form/table). HasCommandBar = it exists; the visual host reads it
+	// to form the toolbar around this control. Virtual so a control can suppress its
+	// own bar (e.g. a table that IS the form's main source — the form toolbar covers it).
+	virtual bool HasCommandBar() const { return m_commandBar != nullptr; }
+	ibValueCommandBar* GetCommandBar() const { return m_commandBar; }
+
+	// Does THIS control's binding reference the form's MAIN attribute (i.e. it IS the form's main data view)?
+	// Base: no. A view bound single-hop to the main attribute overrides (ibValueModelTableBox::IsMainSourceBound);
+	// the form's command-provider walk asks every control this base virtual — no per-type cast.
+	virtual bool IsMainSourceBound() const { return false; }
+
+	class ibValueEventContainer : public ibValueDynamicMembers {
 	public:
 
 		ibValueEventContainer();
 		ibValueEventContainer(ibValueFrame* ownerEvent);
 		virtual ~ibValueEventContainer();
 
-		virtual ibValueMethodHelper* GetPMethods() const {  // get a reference to the class helper for parsing attribute and method names
-			//PrepareNames(); 
-			return m_methodHelper;
-		}
-
-		virtual void PrepareNames() const;                         // this method is automatically called to initialize attribute and method names.
+		// DoGetPMethods (protected) + by-value m_members come from ibValueDynamicMembers.
+		void FillMembers(ibMemberTable& helper) const;   // bound in ctor (was PrepareNames)
 		virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);
 
 		virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal);
@@ -351,16 +420,15 @@ public:
 		virtual bool SetAt(const ibValue& varKeyValue, const ibValue& varValue);
 		virtual bool GetAt(const ibValue& varKeyValue, ibValue& pvarValue);
 
-		//Расширенные методы:
+		//??????????? ??????:
 		bool Property(const ibValue& varKeyValue, ibValue& cValueFound);
 		unsigned int Count() const { return m_controlEvent->GetEventCount(); }
 
-		//Работа с итераторами:
+		//?????? ? ???????????:
 		virtual std::shared_ptr<ibValueIteratorState> CreateIterator() override;
 
 	private:
 		ibValueFrame* m_controlEvent;
-		ibValueMethodHelper* m_methodHelper;
 	};
 
 	virtual bool GetControlValue(ibValue& pvarControlVal) const { return false; }
@@ -375,7 +443,9 @@ public:
 	virtual bool OnPropertyChanging(ibProperty* property, const wxVariant& newValue);
 	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue);
 
-	virtual bool OnEventChanging(ibEvent* event, const wxString& newValue);
+	// `override` on purpose: this was declared with `const wxString&`, overrode nothing, and ran for
+	// nobody — the inspector calls through ibPropertyObject, whose signature takes a wxVariant.
+	virtual bool OnEventChanging(ibEvent* event, const wxVariant& newValue) override;
 	virtual void OnEventChanged(ibEvent* event, const wxVariant& oldValue, const wxVariant& newValue);
 
 	/**
@@ -398,15 +468,12 @@ public:
 	virtual void ControlIncrRef() { ibValue::IncrRef(); }
 	virtual void ControlDecrRef() { ibValue::DecrRef(); }
 
-	//methods 
-	virtual ibValueMethodHelper* GetPMethods() const {  // get a reference to the class helper for parsing attribute and method names
-		//PrepareNames(); 
-		return m_methodHelper;
-	}
+	//methods
+	// DoGetPMethods (protected) + by-value m_members come from ibValueDynamicMembers.
+	// Derived controls bind their OWN FillMembers in their ctor (binders accumulate).
+	void FillMembers(ibMemberTable& helper) const;   // bound in ctor (was PrepareNames)
 
-	virtual void PrepareNames() const; // this method is automatically called to initialize attribute and method names.
-
-	//attributes 
+	//attributes
 	virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal);
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal);
 
@@ -423,7 +490,14 @@ public:
 
 	virtual bool IsEditable() const;
 
-	//runtime 
+	// Is this control READ-ONLY at runtime (its form in view-only mode)? Distinct from IsEditable (designer:
+	// can the STRUCTURE be changed). The form is the root frame, so a control resolves this off its owner
+	// form's IsViewOnly(); a control reads it at build time and renders classic read-only — value visible,
+	// selectable, copyable, openable, but NOT editable. NOT Enable(false): that is availability (a dead,
+	// greyed widget), which is for action BUTTONS, not data controls.
+	virtual bool IsReadOnly() const;
+
+	//runtime
 	std::shared_ptr<ibProcUnit> GetFormProcUnit() const;
 
 public:
@@ -448,30 +522,56 @@ public:
 		return arr;
 	}
 
-	//load & save object in metaObject 
+	// (de)serialize the whole control through the binary provider (form-blob entry)
 	bool LoadControl(const ibValueMetaObjectFormBase* metaForm, ibReaderMemory& dataReader);
-	bool SaveControl(const ibValueMetaObjectFormBase* metaForm, ibWriterMemory& dataWritter, bool copy_form = false);
+	bool SaveControl(const ibValueMetaObjectFormBase* metaForm, ibWriterMemory& dataWritter) const;
+
+	// Node form, mirrors the metaobject path. Load/SaveNode add the header
+	// (id / name / expanded) then delegate the per-type data to Read/WriteData — the
+	// base has none, a control overrides. (Read/Load before Write/Save in every pair.)
+	bool LoadNode(const ibDataNode& node);
+	bool SaveNode(ibDataNode& node) const;
+
+	// Copy / Paste node — the control's own clipboard serialization (routed to from Load/SaveControl while the form
+	// is marked). Header + every property/event through the Copy/PasteNodeValue pair (source hops ride guids).
+	bool PasteNode(const ibDataNode& node);
+	bool CopyNode(ibDataNode& node) const;
 
 protected:
 
 	virtual void OnChangeChildPosition(ibValueFrame* obj, unsigned int pos) {}
 	virtual void OnChoiceProcessing(ibValue& vSelected) {}
 
-	//load & save object in control 
-	virtual bool LoadData(ibReaderMemory& reader) { return true; }
-	virtual bool SaveData(ibWriterMemory& writer = ibWriterMemory()) { return true; }
+	virtual bool ReadData(const ibDataNode& node) { return true; }
+	virtual bool WriteData(ibDataNode& node) const { return true; }
+
+	// Extra per-type data carried on the COPY/PASTE blob beyond properties & events — the
+	// copy-path twin of Read/WriteData (which the copy walk bypasses to ride source hops on
+	// guids). Base has none; ibValueForm overrides to carry its attribute collection.
+	virtual bool CopyData(ibDataNode& node) const { return true; }
+	virtual bool PasteData(const ibDataNode& node) { return true; }
 
 protected:
 
 	bool m_expanded = true; // is expanded in the object tree, allows for saving to file
 
 	ibFormID	 m_controlId;
+
+	// ⭐ THE OWNER FORM'S id counter — meaningful ONLY on the form (every control asks its owner).
+	//
+	// Same rewrite, same two reasons, as ibMetaData::GenerateNewID: the id used to be max(every id
+	// in the control tree) + 1, recomputed on every new control. That is O(n) per control for a
+	// question a counter answers in O(1) — and it puts a DELETED control's id straight back into
+	// circulation, so a new control can be born holding the number something else still refers to.
+	// Less destructive than the metadata twin (a control id never becomes a column name, and does
+	// not survive the session), but wrong in the same way and for the same reason.
+	//
+	// 0 = not seeded; the first request walks the tree once to find the floor.
+	ibFormID	 m_nextControlId = 0;
 	ibGuid				 m_controlGuid;
 
 	ibValuePtr<ibValueEventContainer> m_valEventContainer;
-
-	//object of methods 
-	ibValueMethodHelper* m_methodHelper;
+	ibValuePtr<ibValueCommandBar> m_commandBar;
 };
 
 #endif // !_BASE_H_

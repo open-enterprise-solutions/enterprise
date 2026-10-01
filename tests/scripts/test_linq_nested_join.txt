@@ -1,6 +1,6 @@
 // LINQ nested-FROM-with-JOIN smoke test — 2026-05-11 PM
 // Tests per-level state correctness after the refactor that moved
-// pendingJoins / hasGroup / groupsContainer off ibLinqContextData
+// pendingJoins / hasGroup / groupsContainer off ibLinqQuery
 // into CompileLinqBlock locals.
 //
 // Topology:
@@ -47,5 +47,5 @@ var q = from o in orders
         select c.Name + ": " + item;
 
 foreach (s in q) {
-    Message(s);
+    Message(s.Field1);
 }

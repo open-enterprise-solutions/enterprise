@@ -1,6 +1,7 @@
 #include "advpropList.h"
 #include "backend/propertyManager/property/propertyList.h"
-#include "frontend/propertyManager/property/private/prop.h"
+#include "frontend/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
+#include "frontend/propertyManager/property/private/propertyRegistry.h"
 #include "frontend/propertyManager/propertyEditor.h"
 
 #define icon_size 16
@@ -17,15 +18,26 @@ class ibPropertyListLoader
 public:
 	ibPropertyListLoader()
 	{
-		ibPG_IMPLEMENT_PROPERTY_CALLBACK(ibPGListProperty, ibPropertyList::ms_propertyList);
+		ibPropertyRegistry::Register([](ibPropertyList* prop) -> wxPGProperty* {
+			ibPropertyChoiceList choices;
+			prop->GetValueList(choices);
+			return new ibPGListProperty(prop->GetLabel(), prop->GetName(), choices,
+				prop->GetValueAsInteger());
+		});
 	}
 }g_listLoader;
 
 ibPGListProperty::ibPGListProperty(const wxString& label, const wxString& strName,
-	wxPGChoices choices, int value)
+	const ibPropertyChoiceList& choices, int value)
 	: wxPGProperty(label, strName)
 {
-	m_choices.Assign(choices);
+	wxPGChoices ch;
+	for (unsigned int idx = 0; idx < choices.GetCount(); idx++) {
+		wxPGChoiceEntry item(choices.GetLabel(idx), choices.GetId(idx));
+		item.SetBitmap(choices.GetBitmap(idx));
+		ch.Add(item);
+	}
+	m_choices.Assign(ch);
 	m_value = wxVariant(0L);
 
 	m_flags |= wxPGPropertyFlags_ActiveButton; // Property button always enabled.

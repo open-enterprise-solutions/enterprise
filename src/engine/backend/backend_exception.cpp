@@ -5,15 +5,108 @@
 
 #include "backend/backend_exception.h"
 
+#include "backend/backend_diagnostic.h"   // the failure as DATA — built here, text assembled from it
 #include "backend/metadataConfiguration.h"
 #include "backend/debugger/debugServer.h"
 #include "backend/appData.h"
+#include "backend/logger/logger.h"   // a runtime failure is recorded where it can be read tomorrow
 #include "backend/compiler/procUnit.h"
 #include "backend/session/session.h"
 
 #include "backend_mainFrame.h"
 
-wxString ibBackendException::ms_strError;
+#include <mutex>
+#include <thread>
+#include <unordered_map>
+
+namespace {
+// Per-thread error history, kept in ONE process-wide registry keyed by thread
+// id — deliberately not a thread_local.
+//
+// A thread_local with a non-trivial destructor is constructed by __dyn_tls_init
+// at DLL_THREAD_ATTACH, for every thread, whether it ever raises an error or
+// not, and each one costs an 8-byte destructor-registration node. A thread that
+// is still running at process exit is killed without TLS teardown, so that node
+// is never returned: measured 2026-07-30 as six leaked blocks, one per thread
+// outliving shutdown. Per-thread state has no owner, and nothing without an
+// owner can be cleaned up.
+//
+// A static registry has one: the CRT destroys it during exit, and the whole
+// class of leak goes with it. The cost is a lock on the error path, which is by
+// definition not hot.
+//
+// The chain is bounded to keep a runaway-throw loop (compile-side runaway, an
+// FB error inside a reconnect-retry loop) from growing without limit; 64
+// entries cover any startup or login sequence we want to surface to the user.
+constexpr std::size_t kErrorChainMax = 64;
+
+// Same shape as the current-session binding in session.cpp: a namespace-scope
+// lock plus a map keyed by thread id. Trivially destructible flag declared
+// FIRST, so it outlives the map — a thread still running during shutdown reads
+// it, sees the registry is gone, and drops its error rather than touching a
+// destroyed container. That window is not hypothetical here: threads outliving
+// exit are exactly what this registry exists to survive.
+bool s_errorsAlive = false;
+
+std::mutex s_errorMutex;
+std::unordered_map<std::thread::id, std::vector<wxString>> s_errorsByThread;
+
+struct ibErrorsLifetime {
+	ibErrorsLifetime() { s_errorsAlive = true; }
+	~ibErrorsLifetime() { s_errorsAlive = false; }
+} s_errorsLifetime;
+} // namespace
+
+void ibBackendException::PushLastError(const wxString& description)
+{
+	if (description.IsEmpty() || !s_errorsAlive) return;
+
+	std::lock_guard<std::mutex> lock(s_errorMutex);
+	std::vector<wxString>& chain = s_errorsByThread[std::this_thread::get_id()];
+	if (chain.size() >= kErrorChainMax)
+		chain.erase(chain.begin());
+	chain.push_back(description);
+}
+
+wxString ibBackendException::GetLastError()
+{
+	// Drain semantics preserved for legacy callers (mainApp's
+	// appDataCreate* failure path). Returns the most recent entry and
+	// clears the chain — same one-string surface as before.
+	if (!s_errorsAlive) return wxEmptyString;
+
+	std::lock_guard<std::mutex> lock(s_errorMutex);
+	auto found = s_errorsByThread.find(std::this_thread::get_id());
+	if (found == s_errorsByThread.end() || found->second.empty()) return wxEmptyString;
+	wxString last = found->second.back();
+	// Drop the whole entry, not just its contents: the map is then bounded by
+	// threads holding a PENDING error, not by every thread ever seen.
+	s_errorsByThread.erase(found);
+	return last;
+}
+
+std::vector<wxString> ibBackendException::DrainLastErrors()
+{
+	std::vector<wxString> out;
+	if (!s_errorsAlive) return out;
+
+	std::lock_guard<std::mutex> lock(s_errorMutex);
+	auto found = s_errorsByThread.find(std::this_thread::get_id());
+	if (found != s_errorsByThread.end()) {
+		out.swap(found->second);
+		s_errorsByThread.erase(found);
+	}
+	return out;
+}
+
+std::vector<wxString> ibBackendException::PeekLastErrors()
+{
+	if (!s_errorsAlive) return {};
+
+	std::lock_guard<std::mutex> lock(s_errorMutex);
+	auto found = s_errorsByThread.find(std::this_thread::get_id());
+	return found != s_errorsByThread.end() ? found->second : std::vector<wxString>();
+}
 
 //////////////////////////////////////////////////////////////////////
 //					List of error messages							//
@@ -57,8 +150,13 @@ static wxString gs_listErrorString[] =
 	_("Procedure or function not detected (%s)"),//ERROR_CALL_FUNCTION
 	_("Variable with the specified name is already defined (%s)"),//ERROR_DEF_VARIABLE
 	_("A procedure or function with the specified name is already defined (%s)"),//ERROR_DEF_FUNCTION
-	_("Too many parameters"),//ERROR_MANY_PARAMS
-	_("Not enough parameters"),//ERROR_FEW_PARAMS
+	// ⭐ NAME THE CALL. Both of these used to say only that a count was wrong, in a module with a
+	// hundred calls in it — and the runtime callsite was ALREADY handing over the function's name,
+	// which the message then threw away because it had nowhere to put it. An author reading "Too
+	// many parameters" has to find the call themselves; measured on a live session, the first guess
+	// was the wrong construct entirely (2026-09-02).
+	_("Too many parameters passed to '%s'"),//ERROR_MANY_PARAMS
+	_("Not enough parameters passed to '%s'"),//ERROR_FEW_PARAMS
 	_("Var is not found (%s)"),//ERROR_VAR_NOT_FOUND
 	_("Unexpected program code termination"),//ERROR_END_PROGRAM
 	_("This module may contain only definitions of procedures and functions"), //ERROR_ONLY_FUNCTION
@@ -72,7 +170,7 @@ static wxString gs_listErrorString[] =
 
 	_("Constructor not found (%s)"),//ERROR_CALL_CONSTRUCTOR
 
-	_("Type error define"),//ERROR_TYPE_DEF
+	_("'%s' is not a type a declaration can name - it takes a primitive (Number), a value class (Array) or a family of references (CatalogRef, AnyRef)"),//ERROR_TYPE_DEF
 	_("Bad variable type"),//ERROR_BAD_TYPE
 	_("Bad value type"),//ERROR_BAD_TYPE_EXPRESSION
 	_("Variable must be a numeric type"),//ERROR_NUMBER_TYPE
@@ -83,6 +181,34 @@ static wxString gs_listErrorString[] =
 	_("Date value expected"),//ERROR_BAD_TYPE_EXPRESSION_D
 
 	_("Variable type does not support this operation"),//ERROR_TYPE_OPERATION
+
+	// --- runtime (the interpreting loop) — lock-step with the enum ----------
+	_("Divide by zero"),//ERROR_DIVIDE_BY_ZERO
+	_("Cannot set array value '%s'"),//ERROR_ARRAY_SET
+	_("Cannot get array value '%s'"),//ERROR_ARRAY_GET
+	_("Object field not writable (%s)"),//ERROR_PROP_NOT_WRITABLE
+	_("Object field not readable (%s)"),//ERROR_PROP_NOT_READABLE
+	_("Object field is scope-local (%s)"),//ERROR_PROP_SCOPE_LOCAL
+	// NAMING THE RECEIVER'S TYPE HERE WAS TRIED AND TAKEN BACK OUT. The type would be the
+	// interesting half, but the only honest way to ask for it is the value itself
+	// (GetClassName is virtual — a reference, a manager, a record each answer their own way),
+	// and a reference answers it by READING: ReadData walks reference fields and can recurse
+	// (see reference.cpp's cycle guard) or raise. A diagnostic that reads is a diagnostic
+	// that can fail while explaining a failure, so the receiver stays unnamed (Max, 2026-09-04).
+	_("No attribute or method found '%s' - a variable is not an aggregate object"),//ERROR_MEMBER_NOT_AGGREGATE
+	_("Aggregate object field not found '%s'"),//ERROR_MEMBER_NOT_FOUND
+	// STATES THE FACT, ADVISES NOTHING. It first read "call it directly, without the dot",
+	// which was written for `x.ValueIsFilled()` — and then it met a CORRECT call,
+	// `ValueIsFilled(Warehouse)`, that failed for a different reason, and told the person to
+	// remove a dot they had not written (Max, 2026-09-04). A diagnostic may say what it knows;
+	// it may not guess what was meant.
+	_("'%s' is a global function - it is not a member of this value"),//ERROR_MEMBER_IS_GLOBAL_FUNCTION
+
+	// --- compiler, appended after the runtime block — lock-step with the enum ----
+	// A GROUP WITHOUT A NAME IS THE ANSWER, and a clause written after it was met as "a ';' expected"
+	// on its first word - true, and no help: the author wrote a Select and was told about a semicolon.
+	_("Nothing can follow a group without a name: its answer is the groups themselves, each with Key and Values. "
+	  "To go on - Select, Where, OrderBy - name the group: '%s <name>'."),//ERROR_LINQ_AFTER_UNNAMED_GROUP
 };
 
 //////////////////////////////////////////////////////////////////////
@@ -98,17 +224,39 @@ static wxString gs_listErrorString[] =
 // Error handling
 //////////////////////////////////////////////////////////////////////
 
+const wxString ibBackendException::GetErrorDescription() const
+{
+	return wxString::FromUTF8(m_errorDescriptionUtf8);
+}
+
+const char* ibBackendException::what() const noexcept
+{
+	// The stored bytes themselves — nothing is built here, which is what lets this be noexcept.
+	return m_errorDescriptionUtf8.c_str();
+}
+
 ibBackendException::ibBackendException(const wxString& strErrorDescription)
-	: m_strErrorDescription(strErrorDescription), m_errorHandled(false)
+	: m_errorHandled(false), m_errorDescriptionUtf8(strErrorDescription.utf8_string())
 {
 #ifdef DEBUG
-	wxLogDebug(strErrorDescription);
+	// "thrown", said as such: a line per exception MADE — every level a cancel walks out of makes one — and
+	// not a line per thing a person was shown; read as the latter, it counted four messages that were one.
+	ibJournalInfo(wxT("exception"), wxT("thrown: %s"), strErrorDescription);
 #endif // !DEBUG
+
+	// EVERY refusal, in the same file as the ids and the SQL — the point of the trace is the ORDER of
+	// events, and an error that goes only to the log pane cannot be lined up against the statement
+	// that caused it. Written at CONSTRUCTION rather than at the catch site, so it records the ones
+	// that are handled and swallowed too — which is exactly the class of thing this trace exists for.
 
 	if (auto* puState = ibSession::GetPUState())
 		puState->Raise();
 
-	ms_strError = strErrorDescription;
+	// Append to the calling thread's chain so consumers can see the
+	// full sequence of failures that produced the visible one. Previous
+	// single-string ms_strError dropped every prior failure on the next
+	// throw, leaving the user with a misleading "last in wins" message.
+	PushLastError(strErrorDescription);
 }
 
 #include "backend/metaCollection/metaModuleObject.h"
@@ -130,19 +278,33 @@ void ibBackendException::ProcessError(const ibBackendException& err, const ibByt
 			if (!isEvalMode && strFileName.IsEmpty()) {
 				const ibGuid& guidDocPath = error.m_strDocPath;
 				const ibValueMetaObjectModuleBase* foundedDoc = activeMetaData->FindAnyObjectByFilter<ibValueMetaObjectModuleBase>(guidDocPath, true);
-				wxASSERT(foundedDoc);
-				strModuleData = foundedDoc->GetModuleText();
+				// 🛑⭐⭐ NOT EVERY FAILING BYTECODE BELONGS TO A MODULE, and this asserted that it
+				// did — then dereferenced. The module text is wanted for ONE thing: quoting the
+				// offending source line. A program that is not in the configuration has no line to
+				// quote, which is a smaller loss than the crash: MEASURED 2026-09-06, `code_run`
+				// sending a compiled program that calls `Raise("...")` reached here with a docPath
+				// that names no metaobject, and the run died on the assert with the actual failure
+				// never reported at all — so the caller saw a hang rather than their own error.
+				//
+				// ⚠ THE SAME SHAPE IS ONE BRANCH DOWN, for a module in an external file, and it is
+				// fixed with it: a file that has been moved or deleted is ordinary, and a reporter
+				// that crashes while reporting is the worst possible failure of a reporter.
+				if (foundedDoc != nullptr)
+					strModuleData = foundedDoc->GetModuleText();
 			}
 			else if (!isEvalMode && !strFileName.IsEmpty()) {
 				// Frame from the session's CurrentFrame() shortcut —
 				// reaches this thread's pinned session via worker scope.
 				if (auto* frame = ibSession::CurrentFrame()) {
 					const ibMetaData* metadata = frame->FindMetadataByPath(strFileName);
-					wxASSERT(metadata);
-					const ibGuid& guidDocPath = error.m_strDocPath;
-					const ibValueMetaObjectModuleBase* foundedDoc = metadata->FindAnyObjectByFilter<ibValueMetaObjectModuleBase>(guidDocPath, true);
-					wxASSERT(foundedDoc);
-					strModuleData = foundedDoc->GetModuleText();
+					// Same rule as the branch above: a source line is worth having and is not worth
+					// crashing for. An external report whose file has moved answers null here.
+					const ibValueMetaObjectModuleBase* foundedDoc = metadata != nullptr
+						? metadata->FindAnyObjectByFilter<ibValueMetaObjectModuleBase>(
+							(const ibGuid&)error.m_strDocPath, true)
+						: nullptr;
+					if (foundedDoc != nullptr)
+						strModuleData = foundedDoc->GetModuleText();
 				}
 			}
 
@@ -152,15 +314,34 @@ void ibBackendException::ProcessError(const ibBackendException& err, const ibByt
 			ibBackendException::ProcessExceptionError(strFileName,
 				strModuleName, strDocPath,
 				error.m_numString, isEvalMode ? error.m_numLine : error.m_numLine + 1,
-				strCodeError, wxNOT_FOUND, err.GetErrorDescription()
+				strCodeError, wxNOT_FOUND, err.GetErrorDescription(),
+				ibDiagnosticKind::Runtime   // reached from procUnit's catch — the code ran
 			);
+
+			// ⭐⭐ AND INTO THE REGISTRATION JOURNAL, because a failure nobody was watching is
+			// otherwise not recorded anywhere. MEASURED 2026-09-06: the journal was written from
+			// twenty places in the whole backend, none of them this one — so "scan the journal for
+			// the errors" found nothing, and a run that failed at three in the morning left no trace
+			// at all. A background or scheduled job cannot MESSAGE anybody (its session is tied to
+			// no one), which makes this its only account of having failed.
+			//
+			// ⚠ NOT IN EVAL MODE. A watch expression, a tooltip and an autocomplete probe fail
+			// constantly and by design; recording those would bury the failures that matter under
+			// the ones nobody asked about.
+			if (!isEvalMode) {
+				if (ibLogger* const logger = ibApplicationInstance::GetLogger())
+					logger->Error(wxT("script"), wxT("runtime.error"),
+						wxString::Format(wxT("%s (%s, line %d)"),
+							err.GetErrorDescription(), strModuleName, (int)error.m_numLine + 1));
+			}
 		}
 		else {
 
 			ibBackendException::ProcessExceptionError(strFileName,
 				strModuleName, strDocPath,
 				error.m_numString, error.m_numLine + 1,
-				wxEmptyString, wxNOT_FOUND, err.GetErrorDescription()
+				wxEmptyString, wxNOT_FOUND, err.GetErrorDescription(),
+				ibDiagnosticKind::Runtime
 			);
 		}
 
@@ -179,8 +360,22 @@ void ibBackendException::ProcessError(const wxString& strFileName,
 	const wxString& strCodeError, const int codeError, const wxString& strErrorDesc)
 {
 	//throw this exception
-	ibBackendCoreException::Error(
-		ibBackendException::ProcessExceptionError(strFileName, strModuleName, strDocPath, currPos, currLine, strCodeError, codeError, strErrorDesc));
+	// COMPILE side: the only caller is ibCompileCode::DoSetError, i.e. the text
+	// was refused before it ever ran.
+	//
+	// 🛑 THE ASSEMBLED MESSAGE IS DATA, AND IT WAS BEING PASSED AS A FORMAT. It embeds the offending
+	// SOURCE LINE, and `Error()` is printf-style — its first argument IS the format. So a per cent
+	// sign in the author's own text became a conversion specifier, `FormatV` read an argument that
+	// was never pushed, and the process fast-failed with 0xC0000409: no message, no dump, nothing
+	// naming the module that did it.
+	//
+	// ⚠ AND THE TRIGGER IS ORDINARY TEXT, not an edge case. `"discount 20 %"` in a string literal is
+	// enough, and a configuration written in Russian or Ukrainian hits it the same way — which is how
+	// it was found: by bisecting a whole imported configuration down to one manager module that crashed the
+	// compiler at base open (2026-08-24).
+	ibBackendCoreException::Error(wxT("%s"),
+		ibBackendException::ProcessExceptionError(strFileName, strModuleName, strDocPath, currPos, currLine, strCodeError, codeError, strErrorDesc,
+			ibDiagnosticKind::Compile));
 }
 
 ////////////////////////////////////////////////////////////////////
@@ -188,14 +383,52 @@ void ibBackendException::ProcessError(const wxString& strFileName,
 wxString ibBackendException::ProcessExceptionError(const wxString& strFileName,
 	const wxString& strModuleName, const wxString& strDocPath,
 	const unsigned int currPos, const unsigned int currLine,
-	const wxString& strCodeError, const int codeError, const wxString& strErrorDesc)
+	const wxString& strCodeError, const int codeError, const wxString& strErrorDesc,
+	const ibDiagnosticKind kind)
 {
-	wxString strErrorMessage;
-
 	const bool isEvalMode = ibBackendException::IsEvalMode();
+
+	// THE RECORD FIRST, the sentence after. Everything below — the message, the
+	// call-stack text, the line the dialog jumps to — is assembled from these
+	// fields, so a reader of the record and a reader of the message can never
+	// be told two different things.
+	ibDiagnostic diagnostic;
+	diagnostic.m_kind = kind;
+	diagnostic.m_fileName = strFileName;
+	diagnostic.m_moduleName = strModuleName;
+	diagnostic.m_docPath = strDocPath;
+	diagnostic.m_line = currLine;
+	diagnostic.m_position = currPos;
+	diagnostic.m_code = codeError;
+	diagnostic.m_message = codeError > 0 ? ibBackendException::Format(codeError, strErrorDesc) : strErrorDesc;
+	diagnostic.m_codeLine = isEvalMode ? wxString(wxEmptyString) : strCodeError;
+
+	// THE STACK IS COLLECTED WHETHER OR NOT ANYONE IS LOOKING. It used to be
+	// gathered inside the "is there a frame" branch, so a failure in a job, a
+	// background run or a headless check — precisely the ones nobody watches —
+	// reported no stack at all. Walking it costs a few string formats, and only
+	// on a path that has already failed.
+	if (!isEvalMode) {
+		auto* puState = ibSession::GetPUState();
+		const unsigned int frameCount = puState ? puState->GetCountRunContext() : 0;
+		for (unsigned int i = 0; i < frameCount; i++) {
+			const ibRunContext* stackContext = puState->GetRunContext(i);
+			wxASSERT(stackContext);
+			const ibByteCode* stackByteCode = stackContext->GetByteCode();
+			wxASSERT(stackByteCode);
+			ibDiagnostic::Frame frame;
+			frame.m_module = stackByteCode->m_strModuleName;
+			frame.m_line = stackByteCode->m_listCode[stackContext->m_lCurLine].m_numLine + 1;
+			diagnostic.m_stack.push_back(std::move(frame));
+		}
+	}
+
+	ibDiagnostics::Publish(diagnostic);
+
+	wxString strErrorMessage;
 	strErrorMessage += wxT("{") + strModuleName + wxT("(") + (isEvalMode ? wxString(wxT(" ")) : wxString::Format(wxT("%i"), currLine)) + wxT(")}: ");
-	strErrorMessage += (codeError > 0 ? ibBackendException::Format(codeError, strErrorDesc) : strErrorDesc) + wxT("\n");
-	strErrorMessage += (isEvalMode ? wxString(wxEmptyString) : strCodeError);
+	strErrorMessage += diagnostic.m_message + wxT("\n");
+	strErrorMessage += diagnostic.m_codeLine;
 
 	if (isEvalMode) strErrorMessage.Replace(wxT('\n'), wxT(' '));
 
@@ -207,20 +440,13 @@ wxString ibBackendException::ProcessExceptionError(const wxString& strFileName,
 		auto* frame = ibSession::CurrentFrame();
 
 		if (frame != nullptr) {
-			// set stack
+			// The call-stack TEXT, rendered from the record above.
 			wxString strStackMessage;
-
-			auto* puState = ibSession::GetPUState();
-			const unsigned int frameCount = puState ? puState->GetCountRunContext() : 0;
-			for (unsigned int i = 0; i < frameCount; i++) {
-				const ibRunContext* stackContext = puState->GetRunContext(i);
-				wxASSERT(stackContext);
-				const ibByteCode* stackByteCode = stackContext->GetByteCode();
-				wxASSERT(stackByteCode);
+			for (std::size_t i = 0; i < diagnostic.m_stack.size(); i++) {
 				strStackMessage += wxString::Format(wxT("\n%i: %s (#line %d)"),
-					i + 1,
-					stackByteCode->m_strModuleName,
-					stackByteCode->m_listCode[stackContext->m_lCurLine].m_numLine + 1
+					static_cast<int>(i) + 1,
+					diagnostic.m_stack[i].m_module,
+					diagnostic.m_stack[i].m_line
 				);
 			}
 
@@ -240,10 +466,14 @@ wxString ibBackendException::ProcessExceptionError(const wxString& strFileName,
 		}
 	}
 
-	ms_strError = strErrorMessage;
+	// Push the processed message (with module / line decoration) onto
+	// the per-thread chain too — ProcessExceptionError runs after the
+	// raw ctor already pushed the bare m_strErrorDescription, so the
+	// chain now carries both: the bare cause + the formatted view.
+	PushLastError(strErrorMessage);
 
 #ifdef DEBUG
-	wxLogDebug(strErrorMessage);
+	ibJournalInfo(wxT("exception"), wxT("reported: %s"), strErrorMessage);   // the formatted one, with its place
 #endif // !DEBUG
 
 	return strErrorMessage;
@@ -266,16 +496,28 @@ bool ibBackendException::IsErrorOutputProcessing()
 	return sess != nullptr && sess->IsProcessingBackendError();
 }
 
-void ibBackendException::SetEvalMode(bool mode)
+void ibBackendException::SetEvalMode(ibEvalMode mode)
 {
 	if (auto* sess = ibSession::Current())
 		sess->SetEvalMode(mode);
 }
 
-bool ibBackendException::IsEvalMode()
+ibEvalMode ibBackendException::IsEvalMode()
 {
 	auto* sess = ibSession::Current();
-	return sess != nullptr && sess->IsEvalMode();
+	return sess != nullptr ? sess->IsEvalMode() : eval_none;
+}
+
+bool ibBackendException::IsEvalSandbox()
+{
+	auto* sess = ibSession::Current();
+	return sess != nullptr && sess->IsEvalSandbox();
+}
+
+bool ibBackendException::IsEvalComplete()
+{
+	auto* sess = ibSession::Current();
+	return sess != nullptr && sess->IsEvalComplete();
 }
 
 ////////////////////////////////////////////////////////////////////
@@ -319,27 +561,76 @@ wxString ibBackendException::FindErrorCodeLine(const wxString& strBuffer, unsign
 {
 	const unsigned int sizeText = strBuffer.length();
 
+	// 🛑⭐⭐ NO TEXT, NO LINE — and this is not a tidy-up. Every scan below INDEXES the buffer at a
+	// position taken from the error, and an empty buffer with a non-zero position reads off the end:
+	// `strBuffer[45]` on a string of length 0. Nothing catches that — it is an access violation, not
+	// an exception — so the thread that was REPORTING a failure died silently, the background run it
+	// belonged to never published its completion, and `code_status` answered "still running" for
+	// ever (measured 2026-09-06, on a run whose own code raised).
+	//
+	// ⚠ AND IT WAS PUT HERE BY THE FIX ONE FILE UP. ProcessError used to dereference a null
+	// metaobject to get the module text; made tolerant, it now passes an EMPTY text instead — so the
+	// crash MOVED rather than went away. A guard against absence has to be written at every place
+	// that consumes the absent thing, not only at the one that produced it.
+	if (sizeText == 0)
+		return wxEmptyString;
+
 	unsigned int startPos = 0;
 	unsigned int endPos = sizeText;
 
-	for (unsigned int i = (currPos == sizeText ? currPos - 1 : currPos); i > 0; i--) {
-		if (strBuffer[i] == wxT('\n')) {
+	// EITHER TERMINATOR ENDS A LINE. The scans used to look for '\n' only, and the
+	// editor hands over a buffer that can be '\r'-terminated — no match, so both
+	// bounds stayed at the extremes and the "line" became the whole file: the error
+	// for `Message("Hello world!");` came back carrying two more lines glued to it.
+	const auto IsEol = [](wxUniChar c) { return c == wxT('\n') || c == wxT('\r'); };
+
+	// THE MARKER STAYS WHERE THE CALLER PUT IT; only the SEARCH steps back.
+	//
+	// An error is reported at the END of the last lexeme read — deliberately, so
+	// the excerpt reads "…this much was understood <<?>> and here it stopped". That
+	// position is very often the terminator itself, and then the two scans disagree
+	// by one: the backward one steps PAST it (startPos = 671) while the forward one
+	// stops ON it (endPos = 670). startPos > endPos, and `currPos - startPos` is
+	// UNSIGNED, so the length wrapped to 4294967295 and Mid returned the rest of the
+	// file. Measured, not guessed: currPos=670 bufLen=12683 start=671 end=670
+	// len=12019 — 285 lines of source printed as an error message.
+	// ⚠ AND IT IS CLAMPED, because `currPos` comes from a DIFFERENT text than this one whenever the
+	// two disagree — a module that was edited, or a program with no module at all. Past the end it
+	// is not a position, and both scans below dereference it.
+	const unsigned int scanPos =
+		(currPos > 0 && currPos < sizeText && IsEol(strBuffer[currPos])) ? currPos - 1
+		: (currPos >= sizeText) ? sizeText - 1
+		: currPos;
+
+	for (unsigned int i = scanPos; i > 0; i--) {
+		if (IsEol(strBuffer[i])) {
 			startPos = i + 1;
 			break;
 		};
 	}
 
 	//look for the end of the line where the translation error message is returned
-	for (unsigned int i = currPos; i < sizeText; i++) {
-		if (strBuffer[i] == wxT('\n')) {
+	for (unsigned int i = scanPos; i < sizeText; i++) {
+		if (IsEol(strBuffer[i])) {
 			endPos = i; break;
 		};
 	}
 
-	//determine the line number
-	unsigned int currLine = 1 + strBuffer.Left(startPos).Replace(wxT('\n'), wxT('\n'));
+	// The line NUMBER is not computed here. Both callers already pass their own alongside
+	// this string (compileCode's currPos/currLine pair, the handler's error.m_numLine), and
+	// theirs comes from the parser rather than from counting newlines in a buffer. This
+	// function returns the line's TEXT, marked at the offending position, and nothing else.
+	// BOUNDED BY CONSTRUCTION, not by the caller's good behaviour. Every length
+	// below is a subtraction of unsigned positions, so one out-of-order bound does
+	// not shorten the excerpt — it returns the rest of the file.
+	if (startPos > currPos) startPos = currPos;
+	if (endPos   < currPos) endPos   = currPos;
+	if (endPos   > sizeText) endPos  = sizeText;
 
-	wxString strError = wxString::Format(wxT("%s <<?>> %s"), strBuffer.Mid(startPos, currPos - startPos), strBuffer.Mid(currPos, endPos - currPos));
+	wxString strError = wxString::Format(wxT("%s <<?>> %s"),
+		strBuffer.Mid(startPos, currPos - startPos),
+		strBuffer.Mid(currPos, endPos - currPos));
+
 	strError.Replace(wxT("\r"), wxEmptyString);
 	strError.Replace(wxT("\t"), wxT(" "));
 
@@ -379,9 +670,62 @@ void ibBackendInterruptException::Error()
 	throw ibBackendInterruptException();
 }
 
-void ibBackendAccessException::Error()
+void ibBackendAccessException::Error(const wxString& subject)
 {
-	throw ibBackendAccessException();
+	throw ibBackendAccessException(subject);
 }
+
+void ibBackendFormException::Error(const wxString& subject)
+{
+	// ⚠ THE CANONICAL SENTENCE STAYS. "Context functions are not available" is what this has said for
+	// years and what people recognise, and it was the wording of every frameless refusal in the tree
+	// — the spreadsheet's Print and Show among them. Replacing it here would have left one rule
+	// speaking with two voices; instead every one of those sites now raises THIS, so the sentence is
+	// written once and they all say it.
+	//
+	// What was actually missing was never the wording. It was the REASON — a server has no forms, so
+	// the answer is about WHERE the code is running rather than about a function somebody forgot to
+	// declare — and the TYPE, which is what lets a caller recognise this refusal among all the
+	// others (Max, 2026-09-06: *"the canonical one is 'context functions are not available' - you
+	// just create a new kind so it is clear"*).
+	throw ibBackendFormException(subject.IsEmpty()
+		? _("Context functions are not available: this is a server, and a server has no forms.")
+		: wxString::Format(
+			_("Context functions are not available: this is a server, and a server has no forms "
+			  "(asked for %s)."), subject));
+}
+
+void ibBackendLockException::VersionChangedThrow(const wxString& objectSynonym,
+                                                  const wxString& expected,
+                                                  const wxString& actual)
+{
+	const wxString msg = wxString::Format(
+		_("%s: data was changed by another user. Please reload (expected version %s, found %s)."),
+		objectSynonym, expected, actual);
+	throw ibBackendLockException(Kind::VersionChanged, msg);
+}
+
+void ibBackendLockException::RowLockTimeoutThrow(const wxString& objectSynonym)
+{
+	const wxString msg = wxString::Format(
+		_("%s is currently being edited by another user. Please try again."),
+		objectSynonym);
+	throw ibBackendLockException(Kind::RowLockTimeout, msg);
+}
+
+void ibBackendLockException::LockConflictThrow(const wxString& objectName,
+                                                const wxString& blockingUser)
+{
+	const wxString msg = blockingUser.IsEmpty()
+		? wxString::Format(
+			_("%s is locked by another session."), objectName)
+		: wxString::Format(
+			_("%s is locked by user %s."), objectName, blockingUser);
+	throw ibBackendLockException(Kind::LockConflict, msg, objectName, blockingUser);
+}
+
+// ibBackendDatabaseException + ibDatabaseLayerException implementations
+// live in backend/databaseLayer/databaseLayerException.cpp, next to the
+// rest of the database layer.
 
 #pragma endregion

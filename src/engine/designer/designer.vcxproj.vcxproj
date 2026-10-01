@@ -90,7 +90,7 @@
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
-      <WarningLevel>Level3</WarningLevel>
+      <WarningLevel>Level4</WarningLevel>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;_UNICODE;WXUSINGDLL;_WINDOWS;NOPCH;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll\mswud;$(oes3rdParty)wxWidgets\include;$(oesEngine);.;$(oesEngine)\core;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
@@ -111,7 +111,7 @@
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
-      <WarningLevel>Level3</WarningLevel>
+      <WarningLevel>Level4</WarningLevel>
       <Optimization>Disabled</Optimization>
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;_UNICODE;_WINDOWS;WXUSINGDLL;NOPCH;SMALL_TRANSLATE;_SILENCE_ALL_CXX17_DEPRECATION_WARNINGS;TIXML_USE_TICPP;DONT_USE_DATABASE_LAYER_EXCEPTIONS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
@@ -192,15 +192,24 @@
     <ClCompile Include="docManager\templates\docViewDataReportFile.cpp" />
     <ClCompile Include="docManager\templates\docViewFormEditor.cpp" />
     <ClCompile Include="docManager\templates\docViewInterface.cpp" />
+    <ClCompile Include="docManager\templates\docViewCommonAttribute.cpp" />
+    <ClCompile Include="docManager\templates\docViewFunctionalOption.cpp" />
     <ClCompile Include="docManager\templates\docViewMetaFile.cpp" />
     <ClCompile Include="docManager\templates\docViewModuleEditor.cpp" />
+    <ClCompile Include="docManager\templates\docViewComposer.cpp" />
     <ClCompile Include="docManager\templates\docViewRole.cpp" />
+    <ClCompile Include="docManager\templates\docViewAssistant.cpp" />
+    <ClCompile Include="docManager\templates\docViewConfigCompare.cpp" />
     <ClCompile Include="mainApp.cpp" />
     <ClCompile Include="mainAppEvent.cpp" />
+    <ClCompile Include="mcp\mcpDesignerMessages.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolMessages.cpp" />
+    <ClCompile Include="mainFrame\configCompare\configCompareModel.cpp" />
     <ClCompile Include="mainFrame\debugger\debugClientImpl.cpp" />
     <ClCompile Include="mainFrame\local\localWindow.cpp" />
     <ClCompile Include="mainFrame\mainFrameDesigner.cpp" />
     <ClCompile Include="mainFrame\mainFrameDesignerParts.cpp" />
+    <ClCompile Include="mainFrame\vcs\gitPanel.cpp" />
     <ClCompile Include="mainFrame\mainFrameDesignerEvent.cpp" />
     <ClCompile Include="mainFrame\mainFrameDesignerMenu.cpp" />
     <ClCompile Include="mainFrame\metatree\treeConfiguration.cpp" />
@@ -219,9 +228,13 @@
     <ClCompile Include="mainFrame\watch\watchWindow.cpp" />
     <ClCompile Include="win\ctrl\menuBar.cpp" />
     <ClCompile Include="win\dlg\debugItem\debugItem.cpp" />
+    <ClCompile Include="win\dlg\homePageEditor.cpp" />
+    <ClCompile Include="win\dlg\textEditor.cpp" />
     <ClCompile Include="win\dlg\predefinedEditor.cpp" />
     <ClCompile Include="win\editor\codeEditor\codeEditorDesigner.cpp" />
     <ClCompile Include="win\editor\interfaceEditor\interfaceEditor.cpp" />
+    <ClCompile Include="win\editor\commonAttributeEditor\commonAttributeEditor.cpp" />
+    <ClCompile Include="win\editor\functionalOptionEditor\functionalOptionEditor.cpp" />
     <ClCompile Include="win\editor\roleEditor\roleEditor.cpp" />
     <ClCompile Include="win\editor\visualEditor\innerFrame.cpp" />
     <ClCompile Include="win\editor\visualEditor\titleFrame.cpp" />
@@ -229,6 +242,8 @@
     <ClCompile Include="win\editor\visualEditor\visualEditorEvent.cpp" />
     <ClCompile Include="win\editor\visualEditor\visualEditorNotebook.cpp" />
     <ClCompile Include="win\editor\visualEditor\visualEditorCmdProc.cpp" />
+    <ClCompile Include="win\editor\visualEditor\visualEditorAttributeTree.cpp" />
+    <ClCompile Include="win\editor\visualEditor\visualEditorCommandTree.cpp" />
     <ClCompile Include="win\editor\visualEditor\visualEditorObjectTree.cpp" />
     <ClCompile Include="win\editor\visualEditor\visualEditorPanel.cpp" />
   </ItemGroup>
@@ -238,13 +253,21 @@
     <ClInclude Include="docManager\templates\docViewDataReportFile.h" />
     <ClInclude Include="docManager\templates\docViewFormEditor.h" />
     <ClInclude Include="docManager\templates\docViewInterface.h" />
+    <ClInclude Include="docManager\templates\docViewCommonAttribute.h" />
+    <ClInclude Include="docManager\templates\docViewFunctionalOption.h" />
     <ClInclude Include="docManager\templates\docViewMetaFile.h" />
     <ClInclude Include="docManager\templates\docViewModuleEditor.h" />
+    <ClInclude Include="docManager\templates\docViewComposer.h" />
     <ClInclude Include="docManager\templates\docViewRole.h" />
+    <ClInclude Include="docManager\templates\docViewAssistant.h" />
+    <ClInclude Include="docManager\templates\docViewConfigCompare.h" />
     <ClInclude Include="mainApp.h" />
+    <ClInclude Include="mainFrame\configCompare\configCompareModel.h" />
     <ClInclude Include="mainFrame\debugger\debugClientImpl.h" />
     <ClInclude Include="mainFrame\local\localWindow.h" />
     <ClInclude Include="mainFrame\mainFrameDesigner.h" />
+    <ClInclude Include="mainFrame\vcs\gitPanel.h" />
+    <ClInclude Include="mainFrame\metatree\clipboardLock.h" />
     <ClInclude Include="mainFrame\metatree\treeConfiguration.h" />
     <ClInclude Include="mainFrame\metatree\treeDataProcessor.h" />
     <ClInclude Include="mainFrame\metatree\treeDataReport.h" />
@@ -256,18 +279,19 @@
     <ClInclude Include="resource.h" />
     <ClInclude Include="win\ctrl\menuBar.h" />
     <ClInclude Include="win\dlg\debugItem\debugItem.h" />
+    <ClInclude Include="win\dlg\homePageEditor.h" />
+    <ClInclude Include="win\dlg\textEditor.h" />
     <ClInclude Include="win\dlg\predefinedEditor.h" />
     <ClInclude Include="win\editor\codeEditor\codeEditorDesigner.h" />
     <ClInclude Include="win\editor\interfaceEditor\interfaceEditor.h" />
+    <ClInclude Include="win\editor\commonAttributeEditor\commonAttributeEditor.h" />
+    <ClInclude Include="win\editor\functionalOptionEditor\functionalOptionEditor.h" />
     <ClInclude Include="win\editor\roleEditor\roleEditor.h" />
     <ClInclude Include="win\editor\visualEditor\innerFrame.h" />
     <ClInclude Include="win\editor\visualEditor\printout\formPrintOut.h" />
     <ClInclude Include="win\editor\visualEditor\res\visualResource.h" />
     <ClInclude Include="win\editor\visualEditor\titleFrame.h" />
     <ClInclude Include="win\editor\visualEditor\visualEditor.h" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="resources\splashLogo.xpm" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="designer.ico" />

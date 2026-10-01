@@ -4,157 +4,27 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "constant.h"
-#include "backend/metaData.h"
-
-#define objectModule wxT("objectModule")
+#include "backend/serialize/dataBuilder.h"
 
 //***********************************************************************
-//*                         metaData                                    * 
+//*                         Attributes                                  *
 //***********************************************************************
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueMetaObjectConstant, ibValueMetaObjectAttribute)
-
-//***********************************************************************
-//*                         Attributes                                  * 
-//***********************************************************************
-
-ibValueMetaObjectConstant::ibValueMetaObjectConstant() : ibValueMetaObjectAttribute()
+bool ibValueMetaObjectConstant::ReadData(const ibDataNode& node)
 {
-	//set default proc
-	m_propertyModule->GetMetaObject()->SetDefaultProcedure(wxT("BeforeWrite"), ibContentHelper::eProcedureHelper, { wxT("Cancel") });
-	m_propertyModule->GetMetaObject()->SetDefaultProcedure(wxT("OnWrite"), ibContentHelper::eProcedureHelper, { wxT("Cancel") });
+	// The value properties are the constant's own now — the attribute base used to carry them.
+	m_propertyType->SetNodeValue(node.GetProperty(m_propertyType->GetName()));
+	m_propertyFillCheck->SetNodeValue(node.GetProperty(m_propertyFillCheck->GetName()));
+
+	return ibValueMetaObjectStoredValue::ReadData(node);
 }
 
-ibValueMetaObjectConstant::~ibValueMetaObjectConstant()
+bool ibValueMetaObjectConstant::WriteData(ibDataNode& node) const
 {
-}
+	node.SetProperty(m_propertyType->GetName(), m_propertyType->GetNodeValue());
+	node.SetProperty(m_propertyFillCheck->GetName(), m_propertyFillCheck->GetNodeValue());
 
-bool ibValueMetaObjectConstant::LoadData(ibReaderMemory& dataReader)
-{
-	//load object module
-	m_propertyModule->GetMetaObject()->LoadMeta(dataReader);
-
-	return ibValueMetaObjectAttribute::LoadData(dataReader);
-}
-
-bool ibValueMetaObjectConstant::SaveData(ibWriterMemory& dataWritter)
-{
-	//save object module
-	m_propertyModule->GetMetaObject()->SaveMeta(dataWritter);
-
-	return ibValueMetaObjectAttribute::SaveData(dataWritter);
-}
-
-bool ibValueMetaObjectConstant::DeleteData()
-{
-	return ibValueMetaObjectAttribute::DeleteData();
-}
-
-//***********************************************************************
-//*                           read & save events                        *
-//***********************************************************************
-
-#include "backend/appData.h"
-
-bool ibValueMetaObjectConstant::OnCreateMetaObject(ibMetaData* metaData, int flags)
-{
-	if (!ibValueMetaObjectAttribute::OnCreateMetaObject(metaData, flags))
-		return false;
-
-	return m_propertyModule->GetMetaObject()->OnCreateMetaObject(metaData, flags);
-}
-
-bool ibValueMetaObjectConstant::OnLoadMetaObject(ibMetaData* metaData)
-{
-
-	if (!m_propertyModule->GetMetaObject()->OnLoadMetaObject(metaData))
-		return false;
-
-	return ibValueMetaObjectAttribute::OnLoadMetaObject(metaData);
-}
-
-bool ibValueMetaObjectConstant::OnSaveMetaObject(int flags)
-{
-	if (!m_propertyModule->GetMetaObject()->OnSaveMetaObject(flags))
-		return false;
-
-	return ibValueMetaObjectAttribute::OnSaveMetaObject(flags);
-}
-
-bool ibValueMetaObjectConstant::OnDeleteMetaObject()
-{
-	if (!m_propertyModule->GetMetaObject()->OnDeleteMetaObject())
-		return false;
-
-	return ibValueMetaObjectAttribute::OnDeleteMetaObject();
-}
-
-#include "backend/constantCtor.h"
-
-bool ibValueMetaObjectConstant::OnBeforeRunMetaObject(int flags)
-{
-	if (!m_propertyModule->GetMetaObject()->OnBeforeRunMetaObject(flags))
-		return false;
-
-	registerConstObject();
-	registerConstManager();
-
-	return ibValueMetaObjectAttribute::OnBeforeRunMetaObject(flags);
-}
-
-bool ibValueMetaObjectConstant::OnAfterRunMetaObject(int flags)
-{
-	if (!m_propertyModule->GetMetaObject()->OnAfterRunMetaObject(flags))
-		return false;
-
-
-	if (auto* cc = m_metaData->GetCompileCache()) {
-
-		if (ibValueMetaObjectAttribute::OnAfterRunMetaObject(flags))
-			return cc->AddCompileModule(m_propertyModule->GetMetaObject(), CreateRecordDataObjectValue());
-
-		return false;
-	}
-
-	return ibValueMetaObjectAttribute::OnAfterRunMetaObject(flags);
-}
-
-bool ibValueMetaObjectConstant::OnBeforeCloseMetaObject()
-{
-	if (!m_propertyModule->GetMetaObject()->OnBeforeCloseMetaObject())
-		return false;
-
-
-	if (auto* cc = m_metaData->GetCompileCache()) {
-
-		if (cc->RemoveCompileModule(m_propertyModule->GetMetaObject()))
-			return ibValueMetaObjectAttribute::OnAfterCloseMetaObject();
-
-		return false;
-	}
-
-	return ibValueMetaObjectAttribute::OnBeforeCloseMetaObject();
-}
-
-bool ibValueMetaObjectConstant::OnAfterCloseMetaObject()
-{
-	if (!m_propertyModule->GetMetaObject()->OnAfterCloseMetaObject())
-		return false;
-
-	unregisterConstObject();
-	unregisterConstManager();
-
-	return ibValueMetaObjectAttribute::OnAfterCloseMetaObject();
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-ibBackendValueForm* ibValueMetaObjectConstant::GetObjectForm() const
-{
-	ibBackendValueForm* const foundedForm = ibBackendValueForm::FindFormByUniqueKey(nullptr, nullptr, m_metaGuid);
-	if (foundedForm == nullptr)
-		return ibValueMetaObjectFormBase::CreateAndBuildForm(nullptr, nullptr, CreateRecordDataObjectValue(), m_metaGuid);
-	return foundedForm;
+	return ibValueMetaObjectStoredValue::WriteData(node);
 }
 
 //***********************************************************************

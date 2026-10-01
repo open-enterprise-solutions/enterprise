@@ -2,8 +2,11 @@
 
 #include "backend/propertyManager/property/eventControl.h"
 #include "backend/stringUtils.h"
+#include "backend/backend_picture.h"      // ibBackendPicture::GetPicture
+#include "backend/picturePredefined.h"    // g_picEventCLSID — an event's picture
 
-#include "frontend/propertyManager/property/private/prop.h"
+#include "frontend/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
+#include "frontend/propertyManager/property/private/propertyRegistry.h"
 
 // -----------------------------------------------------------------------
 // ibPGEventProperty
@@ -17,7 +20,10 @@ class ibPropertyEventLoader
 public:
 	ibPropertyEventLoader()
 	{
-		ibPG_IMPLEMENT_PROPERTY_CALLBACK(ibPGEventProperty, ibEventControl::ms_propertyEvent);
+		// the ibEvent side of the tree — same registry, it is keyed on ibBackendProperty
+		ibPropertyRegistry::Register([](ibEventControl* evt) -> wxPGProperty* {
+			return new ibPGEventProperty(evt->GetLabel(), evt->GetName(), evt->GetValue());
+		});
 	}
 } g_eventLoader;
 
@@ -25,6 +31,7 @@ ibPGEventProperty::ibPGEventProperty(const wxString& label, const wxString& name
 	: wxStringProperty(label, name, value)
 {
 	m_flags |= wxPGPropertyFlags_ActiveButton; // Property button always enabled.
+	SetValueImage(ibBackendPicture::GetPicture(g_picEventCLSID));   // an event, as an event handler's Event list shows one
 }
 
 wxString ibPGEventProperty::ValueToString(wxVariant& value,

@@ -1,8 +1,8 @@
 
 #include "widgets.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "backend/compiler/procUnit.h"
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueStaticLine, ibValueWindow)
 
 //****************************************************************************
 //*                             StaticLine                                   *
@@ -23,7 +23,7 @@ wxObject* ibValueStaticLine::Create(wxWindow* wxparent, ibVisualHost* visualHost
 	return staticline;
 }
 
-void ibValueStaticLine::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool firstСreated)
+void ibValueStaticLine::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool firstCreated)
 {
 }
 
@@ -60,20 +60,20 @@ void ibValueStaticLine::Cleanup(wxObject* obj, ibVisualHost* visualHost)
 //*                             Property                            *
 //*******************************************************************
 
-bool ibValueStaticLine::LoadData(ibReaderMemory& reader)
+bool ibValueStaticLine::ReadData(const ibDataNode& node)
 {
-	m_propertyOrient->SetValue(reader.r_s32());
-	return ibValueWindow::LoadData(reader);
+	m_propertyOrient->SetNodeValue(node.GetProperty(m_propertyOrient->GetName()));
+	return ibValueWindow::ReadData(node);
 }
 
-bool ibValueStaticLine::SaveData(ibWriterMemory& writer)
+bool ibValueStaticLine::WriteData(ibDataNode& node) const
 {
-	writer.w_s32(m_propertyOrient->GetValueAsInteger());
-	return ibValueWindow::SaveData(writer);
+	node.SetProperty(m_propertyOrient->GetName(), m_propertyOrient->GetNodeValue());
+	return ibValueWindow::WriteData(node);
 }
 
 //***********************************************************************
 //*                       Register in runtime                           *
 //***********************************************************************
 
-CONTROL_TYPE_REGISTER(ibValueStaticLine, "Staticline", "Widget", string_to_clsid("CT_STLI"));
+CONTROL_TYPE_REGISTER(ibValueStaticLine, "Staticline", "Widget", control_to_clsid("CT_STLI"));

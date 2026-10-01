@@ -42,10 +42,10 @@ public:
 	virtual void SetParamInt(int nPosition, int nValue);
 	virtual void SetParamDouble(int nPosition, double dblValue);
 	virtual void SetParamNumber(int nPosition, const ibNumber& dblValue);
-	virtual void SetParamString(int nPosition, const wxString& strValue);
+	virtual void SetParamString(int nPosition, const ibString& strValue);
 	virtual void SetParamNull(int nPosition);
 	virtual void SetParamBlob(int nPosition, const void* pData, long nDataLength);
-	virtual void SetParamDate(int nPosition, const wxDateTime& dateValue);
+	virtual void SetParamDate(int nPosition, const ibDateTime& dateValue);
 	virtual void SetParamBool(int nPosition, bool bValue);
 	virtual int GetParameterCount();
 
@@ -57,7 +57,7 @@ public:
 private:
 	ibInterfacePostgres* m_pInterface;
 	int FindStatementAndAdjustPositionIndex(int* pPosition);
-	static wxString GenerateRandomStatementName();
+	static wxString GenerateStatementName();
 
 	ArrayOfPostgresPreparedStatementWrappers m_Statements;
 };

@@ -1,0 +1,1658 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "en",
+  "entries": [
+    {
+      "id": "kw.If",
+      "name_local": "If",
+      "name_en": "If",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "If <Expression> Then ... [ElsIf ... Then ...] [Else ...] EndIf",
+      "description": "Conditional execution. Evaluates the boolean expression; runs the Then branch when true, otherwise an optional ElsIf branch with its own expression, otherwise an optional Else branch.",
+      "syntax_block": "if (<Expression1>) {\n    // statements\n} elsif (<Expression2>) {\n    // statements\n} else {\n    // statements\n}",
+      "parameters": "<Expression1>, <Expression2> — boolean expressions.",
+      "return_descr": "",
+      "example": "if (userInfo.IsAdmin) {\n    EnableAdminMenu();\n} else {\n    HideAdminMenu();\n}",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Else",
+        "kw.Elseif",
+        "kw.While"
+      ],
+      "reviewed": true,
+      "syntax_block_ves": "If <Expression1> Then\n    // statements\nElsIf <Expression2> Then\n    // statements\nElse\n    // statements\nEndIf",
+      "example_ves": "If userInfo.IsAdmin Then\n    EnableAdminMenu();\nElse\n    HideAdminMenu();\nEndIf",
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Then",
+      "name_local": "Then",
+      "name_en": "Then",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Terminates the condition expression of an If / ElsIf branch. The body that follows runs only when the corresponding expression is true.",
+      "syntax_block": "If <Expr> Then\n    // body\nEndIf;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.If",
+        "kw.Else",
+        "kw.Elseif",
+        "kw.Endif"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves"
+      ]
+    },
+    {
+      "id": "kw.Else",
+      "name_local": "Else",
+      "name_en": "Else",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Branch executed when every preceding If / ElsIf condition was false.",
+      "syntax_block": "if (<Expr>) {\n    // matched\n} else {\n    // fallback\n}",
+      "syntax_block_ves": "If <Expr> Then\n    // matched\nElse\n    // fallback\nEndIf;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.If",
+        "kw.Elseif",
+        "kw.Endif"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Elseif",
+      "name_local": "Elseif",
+      "name_en": "Elseif",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Adds a chained condition to an If statement. Evaluated only if every earlier branch's condition was false.",
+      "syntax_block": "if (A) {\n    // …\n} elsif (B) {\n    // …\n} elsif (C) {\n    // …\n}",
+      "syntax_block_ves": "If A Then\n    // …\nElsIf B Then\n    // …\nElsIf C Then\n    // …\nEndIf;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.If",
+        "kw.Else",
+        "kw.Endif"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Endif",
+      "name_local": "Endif",
+      "name_en": "Endif",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Closes an If construct.",
+      "syntax_block": "If <Expr> Then\n    // body\nEndIf;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.If"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves"
+      ]
+    },
+    {
+      "id": "kw.For",
+      "name_local": "For",
+      "name_en": "For",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Counted or iterator-based loop. Two forms: indexed (For <i> = <from> To <to> Do) and for-each (Foreach <item> In <collection> Do).",
+      "syntax_block": "// indexed\nfor (i = 1 To 10) {\n    // body\n}\n\n// for-each\nforeach (Item In Collection) {\n    // body\n}",
+      "parameters": "",
+      "return_descr": "",
+      "example": "foreach (Order In Customer.Orders) {\n    Total = Total + Order.Amount;\n}",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Foreach",
+        "kw.In",
+        "kw.To",
+        "kw.Break",
+        "kw.Continue"
+      ],
+      "reviewed": true,
+      "syntax_block_ves": "// indexed\nFor i = 1 To 10 Do\n    // body\nEndDo;\n\n// for-each\nForeach Item In Collection Do\n    // body\nEndDo;",
+      "example_ves": "Foreach Order In Customer.Orders Do\n    Total = Total + Order.Amount;\nEndDo;",
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Foreach",
+      "name_local": "Foreach",
+      "name_en": "Foreach",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Loop modifier introducing for-each iteration over a collection.",
+      "syntax_block": "Foreach (<Item> In <Collection>) {\n    // body\n}",
+      "syntax_block_ves": "Foreach <Item> In <Collection> Do\n    // body\nEndDo;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.For",
+        "kw.In",
+        "kw.Do"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.To",
+      "name_local": "To",
+      "name_en": "To",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Upper bound (inclusive) of the indexed For loop.",
+      "syntax_block": "for (i = 1 To 10) {\n    // body\n}",
+      "syntax_block_ves": "For i = 1 To 10 Do … EndDo;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.For"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.In",
+      "name_local": "In",
+      "name_en": "In",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Marks the collection expression in a for-each loop.",
+      "syntax_block": "Foreach (<Item> In <Collection>) {\n    // body\n}",
+      "syntax_block_ves": "Foreach <Item> In <Collection> Do … EndDo;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.For",
+        "kw.Foreach"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Do",
+      "name_local": "Do",
+      "name_en": "Do",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Opens the body of a While or For loop.",
+      "syntax_block": "While <Cond> Do … EndDo;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.While",
+        "kw.For",
+        "kw.EndDo"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves"
+      ]
+    },
+    {
+      "id": "kw.EndDo",
+      "name_local": "EndDo",
+      "name_en": "EndDo",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Closes the body of a While or For loop.",
+      "syntax_block": "While X Do\n    // …\nEndDo;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.While",
+        "kw.For",
+        "kw.Do"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves"
+      ]
+    },
+    {
+      "id": "kw.While",
+      "name_local": "While",
+      "name_en": "While",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Pre-test loop. Evaluates the condition before each iteration; runs the body while the condition is true.",
+      "syntax_block": "while (<Condition>) {\n    // body\n}",
+      "parameters": "",
+      "return_descr": "",
+      "example": "Counter = 0;\nwhile (Counter < 10) {\n    Counter = Counter + 1;\n}",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.For",
+        "kw.Break",
+        "kw.Continue"
+      ],
+      "reviewed": true,
+      "syntax_block_ves": "While <Condition> Do\n    // body\nEndDo;",
+      "example_ves": "Counter = 0;\nWhile Counter < 10 Do\n    Counter = Counter + 1;\nEndDo;",
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.GoTo",
+      "name_local": "GoTo",
+      "name_en": "GoTo",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Unconditional jump to a labelled statement within the same scope. Use sparingly — a loop / function refactor is almost always clearer.",
+      "syntax_block": "GoTo ~<Label>;\n…\n~<Label>:",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Not",
+      "name_local": "Not",
+      "name_en": "Not",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Logical negation.",
+      "syntax_block": "Not <Expression>",
+      "parameters": "",
+      "return_descr": "",
+      "example": "If Not User.IsLoggedIn Then\n    ShowLoginForm();\nEndIf;",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.And",
+        "kw.Or"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.And",
+      "name_local": "And",
+      "name_en": "And",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Logical conjunction. Short-circuits: the right operand is not evaluated when the left is false.",
+      "syntax_block": "<LeftExpr> And <RightExpr>",
+      "parameters": "",
+      "return_descr": "",
+      "example": "If User.IsLoggedIn And User.Role = \"admin\" Then\n    ShowAdminPanel();\nEndIf;",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Or",
+        "kw.Not"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Or",
+      "name_local": "Or",
+      "name_en": "Or",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Logical disjunction. Short-circuits: the right operand is not evaluated when the left is true.",
+      "syntax_block": "<LeftExpr> Or <RightExpr>",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.And",
+        "kw.Not"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Procedure",
+      "name_local": "Procedure",
+      "name_en": "Procedure",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Declares a procedure — a callable unit that performs work but does not return a value. Use Function instead when the caller needs a result.",
+      "syntax_block": "Procedure <Name>([Val] <Param1>, [Val] <Param2>, …) [Public] {\n    // body\n}",
+      "parameters": "<Name> — identifier. Val — pass-by-value modifier. Public — make the procedure callable from other modules (written after the parameter list).",
+      "return_descr": "",
+      "example": "Procedure LogMessage(Val Text) Public {\n    Message(Text);\n}",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Function",
+        "kw.Return",
+        "kw.Public",
+        "kw.Val"
+      ],
+      "reviewed": true,
+      "syntax_block_ves": "Procedure <Name>([Val] <Param1>, [Val] <Param2>, …) [Public]\n    // body\nEndProcedure",
+      "example_ves": "Procedure LogMessage(Val Text) Public\n    Message(Text);\nEndProcedure",
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.EndProcedure",
+      "name_local": "EndProcedure",
+      "name_en": "EndProcedure",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Closes a procedure body. Execution returns to the caller when control reaches EndProcedure.",
+      "syntax_block": "Procedure Demo()\n    // …\nEndProcedure",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Procedure"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves"
+      ]
+    },
+    {
+      "id": "kw.Function",
+      "name_local": "Function",
+      "name_en": "Function",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Declares a function — a callable that returns a value via Return. Functions are interchangeable with procedures everywhere except as expression sources.",
+      "syntax_block": "Function <Name>([Val] <Param1>, …) [Public|Private|Protected] [Cached] {\n    // body\n    Return <Value>;\n}",
+      "parameters": "<Name> — identifier. Val — pass-by-value modifier. The modifiers after the parameter list are two independent axes: one access modifier (Public / Private / Protected, default Private) and, optionally, Cached, which keeps the result per combination of argument values. Their order does not matter.",
+      "return_descr": "Whatever the Return statement produces.",
+      "example": "Function Sum(Val A, Val B) Public {\n    Return A + B;\n}",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Procedure",
+        "kw.Return",
+        "kw.Public",
+        "kw.Cached"
+      ],
+      "reviewed": true,
+      "syntax_block_ves": "Function <Name>([Val] <Param1>, …) [Public|Private|Protected] [Cached]\n    // body\n    Return <Value>;\nEndFunction",
+      "example_ves": "Function Sum(Val A, Val B) Public\n    Return A + B;\nEndFunction",
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.EndFunction",
+      "name_local": "EndFunction",
+      "name_en": "EndFunction",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Closes a function body. Reaching EndFunction without an explicit Return makes the function yield Undefined.",
+      "syntax_block": "Function Demo()\n    Return 42;\nEndFunction",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Function",
+        "kw.Return",
+        "kw.Undefined"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves"
+      ]
+    },
+    {
+      "id": "kw.Public",
+      "name_local": "Public",
+      "name_en": "Public",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Access modifier: makes a procedure, function, or module-level variable visible to other modules. Written AFTER the parameter list — after the closing bracket for a procedure or function, after the name for a variable. Replaces the former Export keyword, which no longer exists.",
+      "syntax_block": "Procedure DoWork() Public {\n    // body\n}",
+      "syntax_block_ves": "Procedure DoWork() Public\n    // body\nEndProcedure",
+      "parameters": "",
+      "return_descr": "",
+      "example": "Var Counter Public;\n\nFunction Read() Public {\n    Return Counter;\n}",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Private",
+        "kw.Protected",
+        "kw.Cached",
+        "kw.Procedure",
+        "kw.Function",
+        "kw.Var"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Private",
+      "name_local": "Private",
+      "name_en": "Private",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Access modifier: the symbol is visible only inside its own module. This is the default, so Private is written to state the intent explicitly. Written AFTER the parameter list — after the closing bracket for a procedure or function, after the name for a variable — the same position as Public and Protected.",
+      "syntax_block": "Procedure Helper() Private {\n    // body\n}",
+      "syntax_block_ves": "Procedure Helper() Private\n    // body\nEndProcedure",
+      "parameters": "",
+      "return_descr": "",
+      "example": "Var cache Private;\n\nFunction Prepare() Private {\n    Return cache;\n}",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Public",
+        "kw.Protected",
+        "kw.Cached",
+        "kw.Var"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Protected",
+      "name_local": "Protected",
+      "name_en": "Protected",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Access modifier: the symbol is visible to the module's children — an object module exposes it to the forms of that object — but not to the whole configuration. Written AFTER the parameter list — after the closing bracket for a procedure or function, after the name for a variable — the same position as Public and Private.",
+      "syntax_block": "Procedure Recalculate() Protected {\n    // visible to this object's forms\n}",
+      "syntax_block_ves": "Procedure Recalculate() Protected\n    // visible to this object's forms\nEndProcedure",
+      "parameters": "",
+      "return_descr": "",
+      "example": "Var lastTotal Protected;\n\nFunction Total() Protected {\n    Return lastTotal;\n}",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Public",
+        "kw.Private",
+        "kw.Cached",
+        "kw.Var"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Cached",
+      "name_local": "Cached",
+      "name_en": "Cached",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Keeps the function's result per combination of argument values: the first call with a given combination runs the body, every later call with the same combination returns the kept result without entering the function at all. Legal on a Function only — a Procedure has no result to keep, and the modifier is refused there rather than ignored. It is a SECOND axis, not a fourth access modifier: it combines with Public, Private or Protected, and the order between them does not matter. Written in the same place as they are, after the parameter list. The kept results live on the module that runs the function and die with it — an object module's results last as long as that object, a common module's as long as the session root — so there is nothing to clear and no expiry to set. A call that raised is not kept.",
+      "syntax_block": "Function Rate(Val CurrencyCode, Val OnDate) Public Cached {\n    // read the rate once per (currency, date)\n    Return <Value>;\n}",
+      "syntax_block_ves": "Function Rate(Val CurrencyCode, Val OnDate) Public Cached\n    // read the rate once per (currency, date)\n    Return <Value>;\nEndFunction",
+      "parameters": "Argument values form the key, and they are compared BY VALUE: the number 1 and the string \"1\" are different keys. A function without arguments is computed once.",
+      "return_descr": "",
+      "example": "Function Settings() Private Cached {\n    Return ReadSettingsFromDatabase();\n}\n\n// called in a loop over 10000 rows — the database is read once\nforeach (row In rows) {\n    row.Currency = Settings().Currency;\n}",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "guide.cached",
+        "kw.Function",
+        "kw.Public",
+        "kw.Private",
+        "kw.Protected"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Val",
+      "name_local": "Val",
+      "name_en": "Val",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Pass-by-value parameter modifier. Without Val the parameter is bound by reference and assignments inside the callee mutate the caller's binding; with Val a local copy is taken.",
+      "syntax_block": "Procedure Demo(Val ReadOnlyParam, MutableParam) {\n    // ReadOnlyParam is a copy of the caller's value.\n    // MutableParam writes back into the caller's variable.\n}",
+      "syntax_block_ves": "Procedure Demo(Val ReadOnlyParam, MutableParam)\n    // ReadOnlyParam is a copy of the caller's value.\n    // MutableParam writes back into the caller's variable.\nEndProcedure",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Procedure",
+        "kw.Function"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Return",
+      "name_local": "Return",
+      "name_en": "Return",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Exits the current procedure or function. Inside a function may carry a result expression.",
+      "syntax_block": "Return;                 // exit procedure\nReturn <Expression>;    // exit function with result",
+      "parameters": "",
+      "return_descr": "",
+      "example": "Function Sign(Val X)\n    If X < 0 Then Return -1; EndIf;\n    If X > 0 Then Return 1;  EndIf;\n    Return 0;\nEndFunction",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Function",
+        "kw.Procedure"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Try",
+      "name_local": "Try",
+      "name_en": "Try",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Begins an exception-handling block. Code inside is monitored; a raised exception transfers control to the Except branch.",
+      "syntax_block": "try {\n    // protected body\n} except {\n    // handler — runs on any raised exception\n}",
+      "parameters": "",
+      "return_descr": "",
+      "example": "try {\n    Result = ParseNumber(UserInput);\n} except {\n    Message(\"Not a valid number: \" + ErrorDescription());\n}",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Except",
+        "kw.Raise"
+      ],
+      "reviewed": true,
+      "syntax_block_ves": "Try\n    // protected body\nExcept\n    // handler — runs on any raised exception\nEndTry;",
+      "example_ves": "Try\n    Result = ParseNumber(UserInput);\nExcept\n    Message(\"Not a valid number: \" + ErrorDescription());\nEndTry;",
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Except",
+      "name_local": "Except",
+      "name_en": "Except",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Opens the handler branch of a Try / Except construct. Runs when the protected body raises an exception.",
+      "syntax_block": "try {\n    // …\n} except {\n    // recovery\n}",
+      "syntax_block_ves": "Try\n    // …\nExcept\n    // recovery\nEndTry;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Try",
+        "kw.Endtry",
+        "kw.Raise"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Endtry",
+      "name_local": "Endtry",
+      "name_en": "Endtry",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Closes a Try / Except construct.",
+      "syntax_block": "Try … Except … EndTry;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Try",
+        "kw.Except"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves"
+      ]
+    },
+    {
+      "id": "kw.Continue",
+      "name_local": "Continue",
+      "name_en": "Continue",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Skips the rest of the current loop iteration; execution resumes at the loop header.",
+      "syntax_block": "Foreach (Row In Table) {\n    if (Row.IsHeader) { Continue; }\n    Process(Row);\n}",
+      "syntax_block_ves": "Foreach Row In Table Do\n    If Row.IsHeader Then Continue; EndIf;\n    Process(Row);\nEndDo;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.For",
+        "kw.While",
+        "kw.Break"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Break",
+      "name_local": "Break",
+      "name_en": "Break",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Aborts the innermost enclosing loop and continues after EndDo.",
+      "syntax_block": "while (Cond) {\n    if (StopCondition) { Break; }\n    // …\n}",
+      "syntax_block_ves": "While Cond Do\n    If StopCondition Then Break; EndIf;\n    // …\nEndDo;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.While",
+        "kw.For",
+        "kw.Continue"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Raise",
+      "name_local": "Raise",
+      "name_en": "Raise",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Raises an exception. Bare form re-throws the current exception (only valid inside Except). With an expression — raises a new exception carrying that text.",
+      "syntax_block": "Raise;                       // re-throw current exception\nRaise <ExpressionString>;    // raise a new exception",
+      "parameters": "",
+      "return_descr": "",
+      "example": "If Amount < 0 Then\n    Raise \"Negative amount is not allowed\";\nEndIf;",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Try",
+        "kw.Except"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Var",
+      "name_local": "Var",
+      "name_en": "Var",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Declares one or more local variables (inside a procedure / function body) or module-level variables (outside any callable). Initial value is Undefined.",
+      "syntax_block": "Var <Name1>, <Name2>, …;\n\nProcedure Demo() {\n    Var Counter, Sum;\n    Counter = 0;\n}",
+      "syntax_block_ves": "Var <Name1>, <Name2>, …;\n\nProcedure Demo()\n    Var Counter, Sum;\n    Counter = 0;\nEndProcedure",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Undefined",
+        "kw.Public"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.New",
+      "name_local": "New",
+      "name_en": "New",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Constructs a value of a built-in type (collections, primitive wrappers, query / stream readers). Type name follows New; constructor arguments in parentheses if required.",
+      "syntax_block": "<Var> = New <TypeName>(<Args>…);",
+      "parameters": "",
+      "return_descr": "",
+      "example": "Items = New Array;\nItems.Add(\"first\");\nItems.Add(\"second\");\n\nQuery = New Query();\nQuery.Text = \"SELECT * FROM Catalog.Items\";",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Undefined"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Undefined",
+      "name_local": "Undefined",
+      "name_en": "Undefined",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Singleton value indicating \"no value here yet\". Initial value of every declared but unassigned variable; also the natural result of methods that have nothing meaningful to return.",
+      "syntax_block": "",
+      "parameters": "",
+      "return_descr": "",
+      "example": "Var X;\nIf X = Undefined Then\n    X = ComputeDefault();\nEndIf;",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Null",
+        "kw.New",
+        "kw.Var"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Null",
+      "name_local": "Null",
+      "name_en": "Null",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Database-flavoured \"no value\" used by query result fields where a SQL NULL is returned. Distinct from Undefined; comparisons with regular values are always false.",
+      "syntax_block": "",
+      "parameters": "",
+      "return_descr": "",
+      "example": "If Selection.Manager = Null Then\n    ManagerName = \"<unassigned>\";\nEndIf;",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Undefined"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.True",
+      "name_local": "True",
+      "name_en": "True",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Boolean literal — the true value.",
+      "syntax_block": "Flag = True;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.False",
+        "kw.And",
+        "kw.Or",
+        "kw.Not"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.False",
+      "name_local": "False",
+      "name_en": "False",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Boolean literal — the false value.",
+      "syntax_block": "Flag = False;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.True",
+        "kw.And",
+        "kw.Or",
+        "kw.Not"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.PpDefine",
+      "name_local": "#Define",
+      "name_en": "#Define",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Defines a preprocessor name. The name then exists for #Ifdef, and whatever follows it on the line is substituted wherever the name appears later in the source. Preprocessing happens BEFORE compilation, so a name defined here is not a variable and holds no runtime value.",
+      "syntax_block": "",
+      "parameters": "The name, and optionally the text it stands for.",
+      "return_descr": "",
+      "example": "#Define DEBUG\n\n#Ifdef DEBUG\n    Message(\"debug build\");\n#Endif",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.PpUndef",
+        "kw.PpIfdef",
+        "kw.PpIfndef"
+      ],
+      "reviewed": true
+    },
+    {
+      "id": "kw.PpUndef",
+      "name_local": "#Undef",
+      "name_en": "#Undef",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Removes a preprocessor name defined earlier, so #Ifdef stops seeing it from this point in the source onward.",
+      "syntax_block": "",
+      "parameters": "The name to remove.",
+      "return_descr": "",
+      "example": "#Define DEBUG\n// …\n#Undef DEBUG",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.PpDefine",
+        "kw.PpIfdef"
+      ],
+      "reviewed": true
+    },
+    {
+      "id": "kw.PpIfdef",
+      "name_local": "#Ifdef",
+      "name_en": "#Ifdef",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Compiles the block that follows ONLY IF the name is defined. The code inside an unmet branch does not reach the compiler at all — it is not dead code that never runs, it is text that is never read, so it need not even be valid.",
+      "syntax_block": "",
+      "parameters": "The name to test.",
+      "return_descr": "",
+      "example": "#Ifdef SERVER\n    doc.Write();\n#Else\n    Message(\"client side\");\n#Endif",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.PpIfndef",
+        "kw.PpElse",
+        "kw.PpEndif",
+        "kw.PpDefine"
+      ],
+      "reviewed": true
+    },
+    {
+      "id": "kw.PpIfndef",
+      "name_local": "#Ifndef",
+      "name_en": "#Ifndef",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "The opposite of #Ifdef: compiles the block that follows only if the name is NOT defined.",
+      "syntax_block": "",
+      "parameters": "The name to test.",
+      "return_descr": "",
+      "example": "#Ifndef PRODUCTION\n    Message(\"not a production build\");\n#Endif",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.PpIfdef",
+        "kw.PpElse",
+        "kw.PpEndif"
+      ],
+      "reviewed": true
+    },
+    {
+      "id": "kw.PpElse",
+      "name_local": "#Else",
+      "name_en": "#Else",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "The other branch of #Ifdef / #Ifndef — compiled when the condition was not met.",
+      "syntax_block": "",
+      "parameters": "",
+      "return_descr": "",
+      "example": "#Ifdef DEBUG\n    Message(\"debug\");\n#Else\n    Message(\"release\");\n#Endif",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.PpIfdef",
+        "kw.PpIfndef",
+        "kw.PpEndif"
+      ],
+      "reviewed": true
+    },
+    {
+      "id": "kw.PpEndif",
+      "name_local": "#Endif",
+      "name_en": "#Endif",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Closes an #Ifdef or #Ifndef block. Every one of them needs its own.",
+      "syntax_block": "",
+      "parameters": "",
+      "return_descr": "",
+      "example": "#Ifdef DEBUG\n    Message(\"debug\");\n#Endif",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.PpIfdef",
+        "kw.PpIfndef",
+        "kw.PpElse"
+      ],
+      "reviewed": true
+    },
+    {
+      "id": "kw.PpRegion",
+      "name_local": "#Region",
+      "name_en": "#Region",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Opens a NAMED region — a stretch of source the editor can fold away. It changes nothing about what is compiled; it is there so a long module can be read. The name is required, and so is a matching #EndRegion.",
+      "syntax_block": "",
+      "parameters": "The region's name.",
+      "return_descr": "",
+      "example": "#Region EventHandlers\n\nProcedure OnOpen() Public\n    // …\nEndProcedure\n\n#EndRegion",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.PpEndRegion"
+      ],
+      "reviewed": true
+    },
+    {
+      "id": "kw.PpEndRegion",
+      "name_local": "#EndRegion",
+      "name_en": "#EndRegion",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Closes a #Region. It is required — a region left open is reported where it was opened, not at the end of the file.",
+      "syntax_block": "",
+      "parameters": "",
+      "return_descr": "",
+      "example": "#Region Helpers\n// …\n#EndRegion",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.PpRegion"
+      ],
+      "reviewed": true
+    },
+    {
+      "id": "kw.From",
+      "name_local": "From",
+      "name_en": "From",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "linq"
+      ],
+      "signature": "from <Item> in <Source>",
+      "description": "Opens a LINQ block-syntax query. Binds an item variable to each element of the source collection. First clause of any block-syntax LINQ query.",
+      "syntax_block": "from <Item> in <Source>\n    where <Condition>\n    select <Item>;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "guide.linq",
+        "kw.Where",
+        "kw.Select",
+        "kw.In"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
+    },
+    {
+      "id": "kw.Where",
+      "name_local": "Where",
+      "name_en": "Where",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "linq"
+      ],
+      "signature": "where <BooleanExpression>",
+      "description": "Filter clause in a LINQ query — keeps rows satisfying the boolean expression. May appear multiple times; conditions chain via implicit AND.",
+      "syntax_block": "from x in arr where x > 5 select x;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "guide.linq",
+        "kw.From",
+        "kw.Select"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
+    },
+    {
+      "id": "kw.Select",
+      "name_local": "Select",
+      "name_en": "Select",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "linq"
+      ],
+      "signature": "select <Expression> | select { Field = expr, ... }",
+      "description": "Projection clause — closes the LINQ block-syntax query by emitting one row per match. Form `select <Expr>` for a scalar, or `select { Field = expr, ... }` for an anonymous Structure row.",
+      "syntax_block": "from o in orders select o.Total;\n\nfrom o in orders select { N = o.N, Total = o.Total };",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "guide.linq",
+        "kw.From",
+        "kw.Where"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
+    },
+    {
+      "id": "kw.OrderBy",
+      "name_local": "OrderBy",
+      "name_en": "OrderBy",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "linq"
+      ],
+      "signature": "orderby <Expression> [ascending|descending][, <Expression> [ascending|descending]...]",
+      "description": "Sort clause for a LINQ query. SEVERAL KEYS, comma-separated, in the order they decide: `orderby Warehouse, Item` sorts by warehouse and, within each warehouse, by item — the second key is consulted only where the first is equal. Each key has its own direction, written after it; a key that names none runs ascending: `orderby Warehouse, Date descending, Item` sorts by warehouse, within each the latest date first, and within a date by item.",
+      "syntax_block": "orderby <Expression> [ascending|descending][, <Expression> [ascending|descending]...]",
+      "parameters": "",
+      "return_descr": "",
+      "example": "// by warehouse, and within it the latest first\nvar moves = from m in Data.AccumulationRegisters.GoodsInWarehouses\n            orderby m.Warehouse, m.Period descending\n            select { W = m.Warehouse, P = m.Period };",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "guide.linq",
+        "kw.Ascending",
+        "kw.Descending"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
+    },
+    {
+      "id": "kw.Ascending",
+      "name_local": "Ascending",
+      "name_en": "Ascending",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "linq"
+      ],
+      "signature": "ascending",
+      "description": "Direction modifier on an `orderby` clause — sorts ascending. Default when no direction is given; rarely needed explicitly.",
+      "syntax_block": "from x in arr orderby x ascending select x;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "guide.linq",
+        "kw.OrderBy",
+        "kw.Descending"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
+    },
+    {
+      "id": "kw.Descending",
+      "name_local": "Descending",
+      "name_en": "Descending",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "linq"
+      ],
+      "signature": "descending",
+      "description": "Direction modifier on an `orderby` clause — sorts descending.",
+      "syntax_block": "from x in arr orderby x descending select x;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "guide.linq",
+        "kw.OrderBy",
+        "kw.Ascending"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
+    },
+    {
+      "id": "kw.Take",
+      "name_local": "Take",
+      "name_en": "Take",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "linq"
+      ],
+      "signature": "take <Count>",
+      "description": "Limits the LINQ query result to the first N rows. Combined with `skip` for paging.",
+      "syntax_block": "from x in arr take 10 select x;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "guide.linq",
+        "kw.Skip",
+        "kw.From"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
+    },
+    {
+      "id": "kw.Skip",
+      "name_local": "Skip",
+      "name_en": "Skip",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "linq"
+      ],
+      "signature": "skip <Count>",
+      "description": "Drops the first N rows from a LINQ query. Usually combined with `take` for paging.",
+      "syntax_block": "from x in arr skip 5 take 10 select x;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "guide.linq",
+        "kw.Take",
+        "kw.From"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
+    },
+    {
+      "id": "kw.Distinct",
+      "name_local": "Distinct",
+      "name_en": "Distinct",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "linq"
+      ],
+      "signature": "distinct",
+      "description": "Removes duplicate rows from a LINQ query result. Trailing clause after `select`.",
+      "syntax_block": "from x in arr select x distinct;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "guide.linq",
+        "kw.Select"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
+    },
+    {
+      "id": "kw.Join",
+      "name_local": "Join",
+      "name_en": "Join",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "linq"
+      ],
+      "signature": "join <Var> in <Source> on <OuterKey> equals <InnerKey>",
+      "description": "Inner-joins a secondary collection into a LINQ query. Key match specified via `on outerKey equals innerKey`. Outer row pairs with each matching inner row.",
+      "syntax_block": "from c in customers\n  join s in sales on c.Id equals s.CustId\n  select { Name = c.Name, Amount = s.Amount };",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "guide.linq",
+        "kw.On",
+        "kw.Equals"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
+    },
+    {
+      "id": "kw.On",
+      "name_local": "On",
+      "name_en": "On",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "linq"
+      ],
+      "signature": "on <OuterKey> equals <InnerKey>",
+      "description": "Join key clause head. Pairs an outer-row key (left of `equals`) with an inner-row key (right). Used only inside `join` clauses.",
+      "syntax_block": "from c in customers\n  join s in sales on c.Id equals s.CustId\n  select ...;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "guide.linq",
+        "kw.Join",
+        "kw.Equals"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
+    },
+    {
+      "id": "kw.Equals",
+      "name_local": "Equals",
+      "name_en": "Equals",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "linq"
+      ],
+      "signature": "<OuterKey> equals <InnerKey>",
+      "description": "Join key match operator. Used only in `on <leftKey> equals <rightKey>` form.",
+      "syntax_block": "... on c.Id equals s.CustId ...",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "guide.linq",
+        "kw.Join",
+        "kw.On"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
+    },
+    {
+      "id": "kw.Group",
+      "name_local": "Group",
+      "name_en": "Group",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "linq"
+      ],
+      "signature": "group <Element> by <Key> [into <ContVar>]",
+      "description": "Groups rows in a LINQ query by a key. Terminal form `group X by K` produces `Array<Structure{Key, Values:Array}>`. Non-terminal `group X by K into g` opens a continuation block bound to `g`.",
+      "syntax_block": "from p in people group p.Name by p.Country;\n\nfrom p in people\n  group p.Name by p.Country into g\n  where g.Values.Count() > 1\n  select { Country = g.Key, Names = g.Values };",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "guide.linq",
+        "kw.By",
+        "kw.Into"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
+    },
+    {
+      "id": "kw.By",
+      "name_local": "By",
+      "name_en": "By",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "linq"
+      ],
+      "signature": "by <Key>",
+      "description": "Group key clause head — `group <Element> by <Key>`. Pairs the per-row element with its group key.",
+      "syntax_block": "from p in people group p.Name by p.Country;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "guide.linq",
+        "kw.Group",
+        "kw.Into"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
+    },
+    {
+      "id": "kw.Into",
+      "name_local": "Into",
+      "name_en": "Into",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "linq"
+      ],
+      "signature": "into <Var>",
+      "description": "Opens a non-terminal `group ... into <var>` continuation. Binds `<var>` to each `Structure{Key, Values}` group. Continue with `where / orderby / select` clauses.",
+      "syntax_block": "from p in people\n  group p.Name by p.Country into g\n  select { Country = g.Key, Names = g.Values };",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "guide.linq",
+        "kw.Group",
+        "kw.By"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
+    },
+    {
+      "id": "kw.Restrict",
+      "name_local": "Restrict",
+      "name_en": "Restrict",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "linq",
+        "rls"
+      ],
+      "signature": "restrict <Var> in <Source> [join <Var2> in <Table> on <Var.Key> <Op> <Var2.Key>]* [where <Condition>]",
+      "description": "The concise form of an access restriction in a Role's module: narrows a source and returns it — assign the result back to `Source` so the intent to narrow is visible.\n\nIt compiles to the same `Source.Join(…).Where(…)` chain as the explicit form: every clause folds **straight into the query** and pushes down to the database. It is **not** RAM iteration.\n\n- **join** — one `on <Var.Key> <Op> <Var2.Key>` condition; the operators `= <> < <= > >=` come from the shared expression grammar. The joined table is any expression: a `Data.*` source, a computed value table, or a source carrying its own `.Where(…)` (handy to pre-filter the joined table by the current user). The join acts as a **semi-join** — it filters without multiplying rows.\n- **where** — one condition against the source alias; every operator, `and` / `or` / `not`, dot-walk, a captured local (pushed into the query as a parameter), and `in` — `<Field> in (value, …)` or `<Field> in <Array>`.\n- **There is no `select`** — a restriction carries conditions only; it projects nothing.\n\n**Limitation:** `where` sees only the **source** alias; a condition on a joined alias (`where a.Field = …`) does not resolve — pre-filter that table instead via `join a in Table.Where(…)`.",
+      "syntax_block": "Source = restrict s in Source\n             join a in Data.Registers.WarehouseAccess.Where(Function(a) { Return a.User = CurrentUser(); })\n                 on s.Warehouse = a.Warehouse\n         where s.Code in (myCodes);",
+      "syntax_block_ves": "Source = restrict s in Source\n             join a in Data.Registers.WarehouseAccess.Where(Function(a) Return a.User = CurrentUser(); EndFunction)\n                 on s.Warehouse = a.Warehouse\n         where s.Code in (myCodes);",
+      "parameters": "",
+      "return_descr": "Returns the same source carrying the folded restriction.",
+      "example": "",
+      "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+      "see_also": [
+        "guide.rls",
+        "ev.Role.OnAccessRead",
+        "cls.QueryDecorator",
+        "kw.Join",
+        "kw.Where"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
+    }
+  ]
+}

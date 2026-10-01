@@ -1,22 +1,39 @@
 #include "propertyChartOfCharacteristicTypes.h"
+#include "backend/serialize/dataBuilder.h"
 #include "backend/propertyManager/property/variant/variantOwner.h"
 
-wxObject* (*ibPropertyChartOfCharacteristicTypes::ms_propertyChartOfCharacteristicTypes)(ibPropertyObject*, const wxString&, const wxString&, const wxVariant&) = nullptr;
 
-wxVariantData* ibPropertyChartOfCharacteristicTypes::CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc) const
+wxVariantData* ibPropertyChartOfCharacteristicTypes::CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc)
 {
-	const ibValueMetaObjectGenericData* propFactory = dynamic_cast<const ibValueMetaObjectGenericData*>(property);
-	if (propFactory == nullptr) return nullptr;
-	return new ibVariantDataOwner(propFactory, typeDesc);
+	// No cast: the variant needs the owner only to reach GetMetaData, which ibPropertyObject answers.
+	return new ibVariantDataOwner(property, typeDesc);
 }
 
 ibMetaDescription& ibPropertyChartOfCharacteristicTypes::GetValueAsMetaDesc() const {
-	return get_cell_variant<ibVariantDataOwner>()->GetMetaDesc();
+	return get_cell_variant<ibVariantDataMetaDesc>()->GetMetaDesc();
 }
 
 void ibPropertyChartOfCharacteristicTypes::SetValue(const ibMetaDescription& val)
 {
 	m_propValue = CreateVariantData(m_owner, val);
+}
+
+// The family rule - see propertyRecord.cpp.
+void ibPropertyChartOfCharacteristicTypes::DoSetValue(const wxVariant& val)
+{
+	if (const ibVariantDataMetaDesc* carried = find_cell_variant<ibVariantDataMetaDesc>(val)) {
+		SetValue(carried->GetMetaDesc());
+		return;
+	}
+
+	ibProperty::DoSetValue(val);
+}
+
+// The charts of characteristic types in this configuration. The list used to sit in
+// advpropChartOfCharacteristicTypes.cpp — where a chart of accounts could not reach it.
+ibPropertyChoiceMode ibPropertyChartOfCharacteristicTypes::GetValueList(ibPropertyChoiceList& list)
+{
+	return CreateValueList(list, ibPropertyChoiceMode::Single, { g_metaChartOfCharacteristicTypesCLSID });
 }
 
 bool ibPropertyChartOfCharacteristicTypes::SetDataValue(const ibValue& varPropVal) { return false; }
@@ -29,12 +46,13 @@ bool ibPropertyChartOfCharacteristicTypes::GetDataValue(ibValue& pvarPropVal) co
 	return true;
 }
 
-bool ibPropertyChartOfCharacteristicTypes::LoadData(ibReaderMemory& reader)
+bool ibPropertyChartOfCharacteristicTypes::ReadNodeValue(const ibDataValue& value)
 {
-	return ibMetaDescriptionMemory::LoadData(reader, GetValueAsMetaDesc());
+	return ibMetaDescriptionMemory::ReadNode(value, GetValueAsMetaDesc());
 }
 
-bool ibPropertyChartOfCharacteristicTypes::SaveData(ibWriterMemory& writer)
+bool ibPropertyChartOfCharacteristicTypes::WriteNodeValue(ibDataValue& value) const
 {
-	return ibMetaDescriptionMemory::SaveData(writer, GetValueAsMetaDesc());
+	const ibPropertyObject* owner = m_owner;   // CONST overload — the non-const one returns null (see propertyObject.h)
+	return ibMetaDescriptionMemory::WriteNode(value, GetValueAsMetaDesc(), owner->GetMetaData());
 }

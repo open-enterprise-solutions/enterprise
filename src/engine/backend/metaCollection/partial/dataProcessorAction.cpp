@@ -5,11 +5,11 @@
 
 #include "dataProcessor.h"
 
-ibValueRecordDataObjectDataProcessor::ibActionCollection ibValueRecordDataObjectDataProcessor::GetActionCollection(const ibFormID &formType)
+ibValueRecordDataObjectDataProcessor::ibStandardCommandSet ibValueRecordDataObjectDataProcessor::GetStandardCommands(const ibFormID &formType)
 {
-	return ibActionCollection(this);
+	return ibStandardCommandSet(this);
 }
 
-void ibValueRecordDataObjectDataProcessor::ExecuteAction(const ibActionID &action, ibBackendValueForm *srcForm)
+void ibValueRecordDataObjectDataProcessor::CallAsAction(const ibActionID &action, ibBackendValueForm *srcForm)
 {
 }

@@ -13,10 +13,11 @@ class ibFormVisualDocument;
 //
 // Ownership on both builds goes through the Document/View split:
 //
-//   Desktop: wxDocManager -> ibFormVisualDocument (wxDocument)
-//                         -> ibFormVisualEditView (wxView)
-//                         -> ibVisualHostClient (wxScrolledCanvas in
-//                                                a wxAuiMDIChildFrame)
+//   Desktop: ibDocManager -> ibFormVisualDocument (ibDocument)
+//                         -> ibFormVisualEditView (ibView)
+//                         -> ibVisualHostClient (the facade panel in a
+//                                                wxAuiMDIChildFrame; the
+//                                                controls scroll inside it)
 //
 //   Web: ibWebFrame::m_tabs -> unique_ptr<ibFormVisualDocument>
 //                           -> unique_ptr<ibFormVisualEditView>
@@ -25,15 +26,16 @@ class ibFormVisualDocument;
 //
 // Closing a tab drops the Document; the RAII cascade tears down view +
 // host and releases the form's ibValuePtr refcount. The web build skips
-// the wxDocument/wxView machinery but keeps the same call shape.
+// the ibDocument/ibView machinery but keeps the same call shape.
 class ibVisualHostClient : public ibVisualHost {
 public:
 #ifdef OES_USE_WEB
 	// Third arg mirrors the desktop ctor (ibFormVisualEditView::OnCreate
 	// passes m_viewFrame there). Ignored on web — the "parent window"
-	// concept is folded into the ibWebWindow tree via SetParent.
+	// concept is folded into the ibWebWindow tree via SetParent. Type-
+	// switched via ibFrontendWindow so the call site doesn't ifdef.
 	ibVisualHostClient(ibFormVisualDocument* document, ibValueForm* valueForm,
-		wxWindow* /*parent*/ = nullptr)
+		ibFrontendWindow* /*parent*/ = nullptr)
 		: m_valueForm(valueForm), m_document(document) {}
 	// Explicit dtor so tab close (ibWebDocChildFrame::m_host.reset())
 	// goes through a proper ClearVisualHost -> Cleanup walk. Default
@@ -42,7 +44,7 @@ public:
 	// Body in visualHostClient.cpp (web branch).
 	virtual ~ibVisualHostClient() override;
 #else
-	ibVisualHostClient(ibFormVisualDocument* document, ibValueForm* valueForm, wxWindow* parent);
+	ibVisualHostClient(ibFormVisualDocument* document, ibValueForm* valueForm, ibFrontendWindow* parent);
 	virtual ~ibVisualHostClient();
 #endif
 
@@ -55,20 +57,28 @@ public:
 
 	ibFormVisualDocument* GetDocument() const { return m_document; }
 
-	// Host-is-the-background-window on both builds: desktop inherits
-	// wxScrolledCanvas so `this` IS the wxWindow; web inherits
-	// ibWebWindow so `this` IS the ibWebWindow. ibFrontendWindow*
-	// resolves to the right type per build.
+	// Desktop: the host IS the facade panel, and the controls live in the scrolling window
+	// inside it — so the form's chrome, which the facade carries, does not move when the
+	// controls scroll. Web: nothing scrolls yet and the host is a node in the ibWebWindow
+	// tree, so both ends are the node itself (the same wrapping is what a web scroll window
+	// would slot into later).
 	virtual ibFrontendWindow* GetParentBackgroundWindow() const override
 	{ return const_cast<ibVisualHostClient*>(this); }
+#ifdef OES_USE_WEB
 	virtual ibFrontendWindow* GetBackgroundWindow() const override
 	{ return const_cast<ibVisualHostClient*>(this); }
+#else
+	virtual ibFrontendWindow* GetBackgroundWindow() const override
+	{ return GetContentWindow(); }
+#endif
 
-	// MDI-tab lifecycle verbs. Body is identical on both builds — forward
+	// tab lifecycle verbs. Body is identical on both builds — forward
 	// to the owned ibValueForm. The web null guard is also safe on
 	// desktop (m_valueForm is always set there, short-circuits out), so
 	// one inline covers both instead of a .cpp + header split.
-	void ShowForm()     { if (m_valueForm) m_valueForm->ShowForm(nullptr); }
+	// No argument: a bare nullptr would be ambiguous between the two ShowForm overloads
+	// (backend meta-document parent vs. document + host window).
+	void ShowForm()     { if (m_valueForm) m_valueForm->ShowForm(); }
 	void ActivateForm() { if (m_valueForm) m_valueForm->ActivateForm(); }
 	void UpdateForm()   { if (m_valueForm) m_valueForm->UpdateForm(); }
 	bool CloseForm()    { return m_valueForm ? m_valueForm->CloseForm() : true; }
@@ -78,15 +88,12 @@ public:
 #endif
 
 protected:
-	// SetCaption: desktop pushes to wxDocument->SetTitle (drives the MDI
+	// SetCaption: desktop pushes to ibDocument->SetTitle (drives the
 	// tab label); web pushes to the owning ibWebDocChildFrame (the tab
 	// node in the session's ibWebWindow tree) so /session reports the
-	// new title. SetOrientation: desktop mutates the host's root
-	// wxBoxSizer; web mutates its root ibWebBoxSizer. Same intent on
-	// both sides, different owning objects — bodies live in
-	// visualHostClient.cpp (desktop) and webClientHost.cpp (web).
+	// new title. (Orientation is the base's — every host answered it
+	// the same way.)
 	virtual void SetCaption(const wxString& strCaption) override;
-	virtual void SetOrientation(int orient) override;
 
 #ifndef OES_USE_WEB
 	void OnSize(wxSizeEvent& event);
@@ -103,14 +110,14 @@ protected:
 //********************************************************************************************
 //*                                 Document & View                                          *
 //*                                                                                          *
-//* Single declaration across both builds. wxDocument / wxView are in wxcore which the web   *
+//* Single declaration across both builds. ibDocument / ibView are in wxcore which the web   *
 //* DLL links too, so the whole doc-view pipeline (create, track, close, multi-view) is      *
 //* reused; only the rendering surface differs, and that difference is absorbed by           *
 //* ibVisualHost's base-class ifdef. Callers (scripts, OpenForm, the session's tab list)     *
 //* talk to these classes the same way regardless of build.                                   *
 //********************************************************************************************
 
-class FRONTEND_API ibFormVisualEditView : public ibMetaView {
+class FRONTEND_API ibFormVisualEditView : public ibView {
 public:
 
 	ibFormVisualEditView() : m_visualHost(nullptr) {}
@@ -118,16 +125,44 @@ public:
 
 	virtual wxPrintout* OnCreatePrintout() override;
 
-	virtual bool OnCreate(ibMetaDocument* doc, long flags) override;
-	virtual void OnUpdate(wxView* sender, wxObject* hint = nullptr) override;
+	virtual bool OnCreate(ibDocument* doc, long flags) override;
+	virtual void OnUpdate(ibView* sender, wxObject* hint = nullptr) override;
 	virtual bool OnClose(bool deleteWindow = true) override;
+
+	// ibView::OnDraw is pure; the form host paints itself (wxScrolledCanvas /
+	// ibWebWindow), the view has nothing to draw.
+	virtual void OnDraw(wxDC* WXUNUSED(dc)) override {}
 
 	virtual void OnClosingDocument() override;
 
 	ibVisualHostClient* GetVisualHost() const { return m_visualHost; }
 
+	// ⭐ THE SAME DOC/VIEW, A FACADE OVER THE FORM'S ACTIVE CONTROL (ibValueForm::GetActiveControl, which this view
+	// puts as the focus moves; docview-fork.md). When it holds a view of its own (ibValueFrame::GetControlView —
+	// the grid box, the text box), the form hands that view the menu, the toolbar, the commands, activation,
+	// printing, saving and undo, as a view that shows it would.
+#if wxUSE_MENUS
+	virtual wxMenuBar* CreateMenuBar() const override;
+#endif
+	virtual void OnCreateToolbar(wxAuiToolBar* toolbar) override;
+	virtual void OnActivateView(bool activate, ibView* activeView, ibView* deactiveView) override;
+
+	// The active control's view — null when it is a bare control, or there is none.
+	ibView* GetActiveControlView() const;
+
 private:
 	ibVisualHostClient* m_visualHost;
+
+#ifndef OES_USE_WEB
+	// The focus is watched on the view's window, which an EMBEDDED form does not own and which outlives
+	// it — so the watch is taken off in OnClose, before the view lets the window go.
+	void WatchFocus(bool watch);
+	void OnChildFocus(wxChildFocusEvent& event);
+	void OnActiveControlCommand(wxCommandEvent& event);
+	void OnUpdateActiveControlSave(wxUpdateUIEvent& event);
+
+	const ibView* m_shownControlView = nullptr;   // whose chrome is shown now — compared, never followed
+#endif
 };
 
 class FRONTEND_API ibFormVisualCommandProcessor : public wxCommandProcessor {
@@ -137,13 +172,16 @@ public:
 	virtual bool CanRedo() const { return false; }
 };
 
-class FRONTEND_API ibFormVisualDocument : public ibMetaDataDocument {
+class FRONTEND_API ibFormVisualDocument : public ibDocument {
 public:
 
 	ibFormVisualDocument(ibValueForm* valueForm);
 	virtual ~ibFormVisualDocument();
 
-	virtual class ibMetaData* GetMetaData() const;
+	// Form doc is runtime → const-meta. It is NOT a metadata-editing docView
+	// (ibMetaDataDocument), so this is its own const accessor, not an override of
+	// that non-const contract. See visualHostClientDocView.cpp.
+	virtual const class ibMetaData* GetMetaData() const;
 
 	virtual bool IsVisualDemonstrationDoc() const { return false; }
 
@@ -157,18 +195,24 @@ public:
 	virtual bool Save() override;
 	virtual bool SaveAs() override { return true; }
 
+	// The facade on the document's side: the undo the manager asks the current document for is the active
+	// control's document's while it has one; the form's own otherwise.
+	virtual wxCommandProcessor* GetCommandProcessor() const override;
+
 #ifdef OES_USE_WEB
-	// No headless dialog: default wxDocument::OnSaveModified pops a
+	// No headless dialog: default ibDocument::OnSaveModified pops a
 	// wxMessageDialog when IsModified() is true. On wenterprise-server
 	// there's no event loop to drive it, ShowModal returns garbage, and
-	// wxDocument::OnChangedViewList (reached via the last view's dtor)
+	// ibDocument::OnChangedViewList (reached via the last view's dtor)
 	// skips its `delete this` branch when OnSaveModified returns false
 	// — leaking the doc + its ibValuePtr<ibValueForm>. Returning true
 	// always lets the cascade complete cleanly.
 	virtual bool OnSaveModified() override { return true; }
 #endif
 
-	virtual void SetDocParent(ibMetaDocument* docParent) override;
+	// Base signature is SetDocParent(ibDocument*) on ibDocument after
+	// step-4 collapse; we accept the wider type and downcast inside.
+	virtual void SetDocParent(ibDocument* docParent) override;
 
 	ibFormVisualEditView* GetFirstView() const;
 	ibValueForm* GetValueForm() const;
@@ -190,7 +234,7 @@ public:
 	static bool UpdateFormUniqueKey(const ibUniqueKeyPair& guid);
 
 protected:
-	virtual ibMetaView* DoCreateView();
+	virtual ibView* DoCreateView() override;
 private:
 	ibValuePtr<ibValueForm> m_valueForm;
 };

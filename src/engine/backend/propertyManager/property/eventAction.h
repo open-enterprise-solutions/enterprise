@@ -2,24 +2,32 @@
 #define __EVENT_LIST_H__
 
 #include "backend/propertyManager/propertyObject.h"
-#include "backend/actionInfo.h"
+#include "backend/standardCommand.h"
 
 //base event for "list"
 class BACKEND_API ibEventAction : public ibEvent {
+public:
 
-	wxVariantData* CreateVariantData(const ibPropertyObject* property, const ibActionDescription& act) const;
-	wxPGChoices GetEventList() const {
-		wxPGChoices constants;
+	// Public + fires its own functor, same as ibPropertyList::GetValueList — the front
+	// builds the editor now and reads the actions from here. NOT const: the functor
+	// refills m_listPropValue, so this mutates.
+	ibPropertyChoiceList GetEventList() {
+		ibPropertyChoiceList constants;
+		if (!m_functor->Invoke(this))
+			return constants;
 		for (unsigned int idx = 0; idx < m_listPropValue.GetItemCount(); idx++) {
-			wxPGChoiceEntry item(
+			constants.Add(
 				m_listPropValue.GetItemLabel(idx),
-				m_listPropValue.GetItemId(idx)
+				m_listPropValue.GetItemId(idx),
+				m_listPropValue.GetItemBitmap(idx)
 			);
-			item.SetBitmap(m_listPropValue.GetItemBitmap(idx));
-			constants.Add(item);
 		}
 		return constants;
 	}
+
+private:
+
+	static wxVariantData* CreateVariantData(const ibPropertyObject* property, const ibStandardCommandDescription& act);
 
 	class BACKEND_API ibEventOptionList {
 
@@ -72,20 +80,11 @@ class BACKEND_API ibEventAction : public ibEvent {
 		};
 
 		ibEventOptionItem GetItemAt(const unsigned int idx) const {
-			if (idx > m_listValue.size())
+			if (idx >= m_listValue.size())
 				return ibEventOptionItem();
 			auto it = m_listValue.begin();
 			std::advance(it, idx);
 			return *it;
-		};
-
-		ibEventOptionItem GetItemById(const ibActionID& id) const {
-			auto it = std::find_if(m_listValue.begin(), m_listValue.end(),
-				[id](const ibEventOptionItem& p) { return id == p.m_id; }
-			);
-			if (it != m_listValue.end())
-				return *it;
-			return ibEventOptionItem();
 		};
 
 	public:
@@ -95,8 +94,6 @@ class BACKEND_API ibEventAction : public ibEvent {
 		void AppendItem(const wxString& name, const ibActionID& l, const wxBitmap& b, const ibValue& v) { (void)m_listValue.emplace_back(name, l, b, v); }
 		void AppendItem(const wxString& name, const wxString& label, const ibActionID& l, const wxBitmap& b, const ibValue& v) { (void)m_listValue.emplace_back(name, label, l, b, v); }
 		void AppendItem(const wxString& name, const wxString& label, const wxString& help, const ibActionID& l, const wxBitmap& b, const ibValue& v) { (void)m_listValue.emplace_back(label, help, l, b, v); }
-
-		bool HasValue(const ibActionID& l) const { return GetItemById(l); }
 
 		wxString GetItemName(const unsigned int idx) const { return GetItemAt(idx).m_strName; }
 		wxString GetItemLabel(const unsigned int idx) const { return GetItemAt(idx).m_strLabel; }
@@ -142,8 +139,8 @@ public:
 #pragma region value
 	ibActionID GetValueAsInteger() const;
 	wxString GetValueAsString() const;
-	ibActionDescription& GetValueAsActionDesc() const;
-	void SetValue(const ibActionDescription& val);
+	ibStandardCommandDescription& GetValueAsActionDesc() const;
+	void SetValue(const ibStandardCommandDescription& val);
 #pragma endregion 
 
 #pragma region item
@@ -177,26 +174,20 @@ public:
 
 	virtual bool IsEmptyProperty() const { return GetValueAsInteger() == wxNOT_FOUND; }
 
-	//get property for grid 
-	virtual wxObject* GetPGProperty() const {
-		if (!m_functor->Invoke(const_cast<ibEventAction*>(this)))
-			return nullptr;
-		if (ms_propertyEventAction != nullptr)
-			return ms_propertyEventAction(m_propLabel, m_propName, GetEventList(), m_propValue);
-		return nullptr;
-	}
+	// An action event does NOT dispatch through CallAsEvent — it runs via its own functor (Invoke). No procedure /
+	// lambda dispatcher, so the CallAsEvent path is a no-op for it (nullptr).
+	virtual ibEventDispatcher* GetDispatcher() const override { return nullptr; }
 
 	// Set/Get property data
 	virtual bool SetDataValue(const ibValue& varPropVal);
 	virtual bool GetDataValue(ibValue& pvarPropVal) const;
 
 	//load & save object in control 
-	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer);
+	virtual bool ReadNodeValue(const ibDataValue& value) override;
+	virtual bool WriteNodeValue(ibDataValue& value) const override;
 
 public:
 
-	static wxObject* (*ms_propertyEventAction)(const wxString&, const wxString&, const wxPGChoices&, const wxVariant&);
 
 private:
 

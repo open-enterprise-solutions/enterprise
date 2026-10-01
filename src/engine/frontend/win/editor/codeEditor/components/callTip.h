@@ -101,11 +101,11 @@ private:
 
 #include "helpers/popupWnd.h"
 
-class wxSTCCallTip : public ibOESPopupWindow
+class wxSTCCallTip : public ibCodeEditorPopupWindow
 {
 public:
 	wxSTCCallTip(wxWindow* parent, ibCallTip* ct) :
-		ibOESPopupWindow(parent), m_ct(ct)
+		ibCodeEditorPopupWindow(parent), m_ct(ct)
 	{
 		Bind(wxEVT_LEFT_DOWN, &wxSTCCallTip::OnLeftDown, this);
 		Bind(wxEVT_SIZE, &wxSTCCallTip::OnSize, this);
@@ -134,7 +134,7 @@ public:
 		if (rect == nullptr)
 			DrawBack(GetSize());
 
-		ibOESPopupWindow::Refresh(eraseBg, rect);
+		ibCodeEditorPopupWindow::Refresh(eraseBg, rect);
 	}
 
 	void OnLeftDown(wxMouseEvent& event)

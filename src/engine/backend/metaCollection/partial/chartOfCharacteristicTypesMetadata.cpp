@@ -1,10 +1,11 @@
 ﻿////////////////////////////////////////////////////////////////////////////
-//	Author		: Tetracode Dev
+//	Author		: Maxim Kornienko
 //	Description : chart of characteristic types metaData
 ////////////////////////////////////////////////////////////////////////////
 
 #include "chartOfCharacteristicTypes.h"
-#include "list/objectList.h"
+#include "backend/serialize/dataBuilder.h"
+#include "backend/system/value/valueDynamicList.h"   // ibValueDynamicList — the standard list migrates onto the universal dynamic list
 #include "backend/metaData.h"
 #include "backend/moduleManager/moduleManager.h"
 
@@ -12,7 +13,6 @@
 //*										 metaData											 *
 //********************************************************************************************
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueMetaObjectChartOfCharacteristicTypes, ibValueMetaObjectRecordDataHierarchyMutableRef);
 
 //********************************************************************************************
 //*                                      metaData                                            *
@@ -20,16 +20,16 @@ wxIMPLEMENT_DYNAMIC_CLASS(ibValueMetaObjectChartOfCharacteristicTypes, ibValueMe
 
 ibValueMetaObjectChartOfCharacteristicTypes::ibValueMetaObjectChartOfCharacteristicTypes() : ibValueMetaObjectRecordDataHierarchyMutableRef()
 {
-	//set default proc
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("BeforeWrite"), ibContentHelper::eProcedureHelper, { wxT("Cancel") });
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("OnWrite"), ibContentHelper::eProcedureHelper, { wxT("Cancel") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("BeforeWrite"),  ibContentHelper::eProcedureHelper, { wxT("Cancel") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("OnWrite"),      ibContentHelper::eProcedureHelper, { wxT("Cancel") });
 	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("BeforeDelete"), ibContentHelper::eProcedureHelper, { wxT("Cancel") });
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("OnDelete"), ibContentHelper::eProcedureHelper, { wxT("Cancel") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("OnDelete"),     ibContentHelper::eProcedureHelper, { wxT("Cancel") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("Filling"),      ibContentHelper::eProcedureHelper, { wxT("FillingData"), wxT("StandardProcessing") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("OnCopy"),       ibContentHelper::eProcedureHelper, { wxT("CopiedObject") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("SetNewCode"),   ibContentHelper::eProcedureHelper, { wxT("Prefix"), wxT("StandardProcessing") });
 
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("Filling"), ibContentHelper::eProcedureHelper, { wxT("Source"), wxT("StandartProcessing") });
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("OnCopy"), ibContentHelper::eProcedureHelper, { wxT("Source") });
-
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("SetNewCode"), ibContentHelper::eProcedureHelper, { wxT("Prefix"), wxT("StandartProcessing") });
+	(*m_propertyManagerModule)->SetDefaultProcedure(wxT("FormGetProcessing"), ibContentHelper::eProcedureHelper, { wxT("Form"), wxT("Cancel") });
+	(*m_propertyManagerModule)->SetDefaultProcedure(wxT("ChoiceDataGetProcessing"), ibContentHelper::eProcedureHelper, { wxT("ChoiceData"), wxT("Parameters"), wxT("StandardProcessing") });
 }
 
 ibValueMetaObjectChartOfCharacteristicTypes::~ibValueMetaObjectChartOfCharacteristicTypes()
@@ -59,152 +59,133 @@ ibValueMetaObjectFormBase* ibValueMetaObjectChartOfCharacteristicTypes::GetDefau
 
 #include "chartOfCharacteristicTypesManager.h"
 
-ibValueManagerDataObject* ibValueMetaObjectChartOfCharacteristicTypes::CreateManagerDataObjectValue() const
+ibValuePtr<ibValueManagerDataObject> ibValueMetaObjectChartOfCharacteristicTypes::CreateManagerDataObjectValue() const
 {
-	return ibValue::CreateAndPrepareValueRef<ibValueManagerDataObjectChartOfCharacteristicTypes>(this);
+	return ibValuePtr<ibValueManagerDataObject>(new ibValueManagerDataObjectChartOfCharacteristicTypes(this));
 }
 
 #include "backend/appData.h"
+#include "backend/metaCollection/partial/declaredPresentation.h"   // how a reference reads in the designer
 
-ibValueRecordDataObjectHierarchyRef* ibValueMetaObjectChartOfCharacteristicTypes::CreateObjectRefValue(ibObjectMode mode, const ibGuid& guid) const
+ibValuePtr<ibValueRecordDataObjectHierarchyRef> ibValueMetaObjectChartOfCharacteristicTypes::CreateObjectRefValue(ibObjectMode mode, const ibGuid& guid) const
 {
 	ibValueRecordDataObjectChartOfCharacteristicTypes* pDataRef = nullptr;
 	if (auto* cc = m_metaData->GetCompileCache()) {
 		if (!cc->FindCompileModule(m_propertyObjectModule->GetMetaObject(), pDataRef)) {
-			return ibValue::CreateAndPrepareValueRef<ibValueRecordDataObjectChartOfCharacteristicTypes>(this, guid, mode);
+			pDataRef = new ibValueRecordDataObjectChartOfCharacteristicTypes(this, guid, mode);
 		}
 	}
 	else {
-		pDataRef = ibValue::CreateAndPrepareValueRef<ibValueRecordDataObjectChartOfCharacteristicTypes>(this, guid, mode);
+		pDataRef = new ibValueRecordDataObjectChartOfCharacteristicTypes(this, guid, mode);
 	}
 
-	return pDataRef;
+	return ibValuePtr<ibValueRecordDataObjectHierarchyRef>(pDataRef);
 }
 
-ibSourceDataObject* ibValueMetaObjectChartOfCharacteristicTypes::CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const
+ibSourcePtr<ibSourceDataObject> ibValueMetaObjectChartOfCharacteristicTypes::CreateSourceObject(const ibCreateRequest& request, const ibFormID& form_id) const
 {
-	switch (metaObject->GetTypeForm())
+	switch (form_id)
 	{
 	case eFormObject:
-		return CreateObjectValue(ibObjectMode::OBJECT_ITEM);
+		return ibSourcePtr<ibSourceDataObject>(CreateObjectValue(ibObjectMode::OBJECT_ITEM));
 	case eFormFolder:
-		return CreateObjectValue(ibObjectMode::OBJECT_FOLDER);
+		return ibSourcePtr<ibSourceDataObject>(CreateObjectValue(ibObjectMode::OBJECT_FOLDER));
 	case eFormList:
-		return ibValue::CreateAndPrepareValueRef<ibValueModelTreeDataObjectFolderRef>(this, metaObject->GetTypeForm(), ibValueModelTreeDataObjectFolderRef::LIST_ITEM_FOLDER);
+		return ibSourcePtr<ibSourceDataObject>(ibCreateHierarchyList(request, GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn()));   // migrated onto the universal dynamic list (hierarchy via queryable)
 	case eFormSelect:
-		return ibValue::CreateAndPrepareValueRef<ibValueModelTreeDataObjectFolderRef>(this, metaObject->GetTypeForm(), ibValueModelTreeDataObjectFolderRef::LIST_ITEM_FOLDER, true);
+		return ibSourcePtr<ibSourceDataObject>(ibCreateHierarchyList(request, GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn(), ibDynamicListView_Choice));   // select front-driven — choice mode
 	case eFormFolderSelect:
-		return ibValue::CreateAndPrepareValueRef<ibValueModelTreeDataObjectFolderRef>(this, metaObject->GetTypeForm(), ibValueModelTreeDataObjectFolderRef::LIST_FOLDER, true);
+		return ibSourcePtr<ibSourceDataObject>(ibCreateFolderList(request, GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn(), ibDynamicListView_Choice));   // folder-select = choice + IsFolder = true
 	}
 
 	return nullptr;
 }
 
 #pragma region _form_builder_h_
-ibBackendValueForm* ibValueMetaObjectChartOfCharacteristicTypes::GetObjectForm(const wxString& strFormName, ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
+ibFormPtr<ibBackendValueForm> ibValueMetaObjectChartOfCharacteristicTypes::GetObjectForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
-		strFormName,
+		request,
 		ibValueMetaObjectChartOfCharacteristicTypes::eFormObject,
-		ownerControl, CreateObjectValue(ibObjectMode::OBJECT_ITEM),
-		formGuid
+		ownerControl, CreateObjectValue(ibObjectMode::OBJECT_ITEM)
 	);
 }
 
-ibBackendValueForm* ibValueMetaObjectChartOfCharacteristicTypes::GetFolderForm(const wxString& strFormName, ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
+ibFormPtr<ibBackendValueForm> ibValueMetaObjectChartOfCharacteristicTypes::GetFolderForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
-		strFormName,
+		request,
 		ibValueMetaObjectChartOfCharacteristicTypes::eFormFolder,
-		ownerControl, CreateObjectValue(ibObjectMode::OBJECT_FOLDER),
-		formGuid
+		ownerControl, CreateObjectValue(ibObjectMode::OBJECT_FOLDER)
 	);
 }
 
-ibBackendValueForm* ibValueMetaObjectChartOfCharacteristicTypes::GetListForm(const wxString& strFormName, ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
+ibFormPtr<ibBackendValueForm> ibValueMetaObjectChartOfCharacteristicTypes::GetListForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
-		strFormName,
+		request,
 		ibValueMetaObjectChartOfCharacteristicTypes::eFormList,
-		ownerControl, ibValue::CreateAndPrepareValueRef<ibValueModelTreeDataObjectFolderRef>(this, ibValueMetaObjectChartOfCharacteristicTypes::eFormList, ibValueModelTreeDataObjectFolderRef::LIST_ITEM_FOLDER),
-		formGuid
+		ownerControl, ibCreateHierarchyList(request.m_create, GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn())   // migrated onto the universal dynamic list (hierarchy via queryable)
 	);
 }
 
-ibBackendValueForm* ibValueMetaObjectChartOfCharacteristicTypes::GetSelectForm(const wxString& strFormName, ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
+ibFormPtr<ibBackendValueForm> ibValueMetaObjectChartOfCharacteristicTypes::GetSelectForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
-		strFormName,
+		request,
 		ibValueMetaObjectChartOfCharacteristicTypes::eFormSelect,
-		ownerControl, ibValue::CreateAndPrepareValueRef<ibValueModelTreeDataObjectFolderRef>(this, ibValueMetaObjectChartOfCharacteristicTypes::eFormSelect, ibValueModelTreeDataObjectFolderRef::LIST_ITEM, true),
-		formGuid
+		ownerControl, CreateSourceObject(request.m_create, eFormSelect)   // select front-driven — choice mode
 	);
 }
 
-ibBackendValueForm* ibValueMetaObjectChartOfCharacteristicTypes::GetFolderSelectForm(const wxString& strFormName, ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
+ibFormPtr<ibBackendValueForm> ibValueMetaObjectChartOfCharacteristicTypes::GetFolderSelectForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
-		strFormName,
+		request,
 		ibValueMetaObjectChartOfCharacteristicTypes::eFormFolderSelect,
-		ownerControl, ibValue::CreateAndPrepareValueRef<ibValueModelTreeDataObjectFolderRef>(this, ibValueMetaObjectChartOfCharacteristicTypes::eFormFolderSelect, ibValueModelTreeDataObjectFolderRef::LIST_FOLDER, true),
-		formGuid
+		ownerControl, CreateSourceObject(request.m_create, eFormFolderSelect)   // folder-select = choice + IsFolder = true
 	);
 }
 #pragma endregion
-
-wxString ibValueMetaObjectChartOfCharacteristicTypes::GetDataPresentation(const ibValueDataObject* objValue) const
-{
-	static ibValue vDescription;
-	if (objValue->GetValueByMetaID((*m_propertyAttributeDescription)->GetMetaID(), vDescription))
-		return vDescription.GetString();
-	return wxEmptyString;
-}
 
 //***************************************************************************
 //*                       Save & load metaData                              *
 //***************************************************************************
 
-bool ibValueMetaObjectChartOfCharacteristicTypes::LoadData(ibReaderMemory& dataReader)
+bool ibValueMetaObjectChartOfCharacteristicTypes::WriteData(ibDataNode& node) const
 {
-	//load default attributes:
-	(*m_propertyAttributeType)->LoadMeta(dataReader);
+	node.SetProperty(m_propertyAttributeType->GetName(), m_propertyAttributeType->GetNodeValue());
 
-	//Load object module
-	(*m_propertyObjectModule)->LoadMeta(dataReader);
-	(*m_propertyManagerModule)->LoadMeta(dataReader);
+	node.SetProperty(m_propertyObjectModule->GetName(), m_propertyObjectModule->GetNodeValue());
+	node.SetProperty(m_propertyManagerModule->GetName(), m_propertyManagerModule->GetNodeValue());
 
-	m_propertyTypesOfCharacteristics->LoadData(dataReader);
+	node.SetProperty(m_propertyTypesOfCharacteristics->GetName(), m_propertyTypesOfCharacteristics->GetNodeValue());
 
-	//load default form
-	m_propertyDefFormObject->SetValue(GetIdByGuid(dataReader.r_stringZ()));
-	m_propertyDefFormFolder->SetValue(GetIdByGuid(dataReader.r_stringZ()));
-	m_propertyDefFormList->SetValue(GetIdByGuid(dataReader.r_stringZ()));
-	m_propertyDefFormSelect->SetValue(GetIdByGuid(dataReader.r_stringZ()));
-	m_propertyDefFormFolderSelect->SetValue(GetIdByGuid(dataReader.r_stringZ()));
+	node.SetValue(m_propertyDefFormObject->GetName(), GetGuidByID(m_propertyDefFormObject->GetValueAsInteger()).str());
+	node.SetValue(m_propertyDefFormFolder->GetName(), GetGuidByID(m_propertyDefFormFolder->GetValueAsInteger()).str());
+	node.SetValue(m_propertyDefFormList->GetName(), GetGuidByID(m_propertyDefFormList->GetValueAsInteger()).str());
+	node.SetValue(m_propertyDefFormSelect->GetName(), GetGuidByID(m_propertyDefFormSelect->GetValueAsInteger()).str());
+	node.SetValue(m_propertyDefFormFolderSelect->GetName(), GetGuidByID(m_propertyDefFormFolderSelect->GetValueAsInteger()).str());
 
-	return ibValueMetaObjectRecordDataHierarchyMutableRef::LoadData(dataReader);
+	return ibValueMetaObjectRecordDataHierarchyMutableRef::WriteData(node);
 }
 
-bool ibValueMetaObjectChartOfCharacteristicTypes::SaveData(ibWriterMemory& dataWritter)
+bool ibValueMetaObjectChartOfCharacteristicTypes::ReadData(const ibDataNode& node)
 {
-	//save default attributes:
-	(*m_propertyAttributeType)->SaveMeta(dataWritter);
+	m_propertyAttributeType->SetNodeValue(node.GetProperty(m_propertyAttributeType->GetName()));
 
-	//Save object module
-	(*m_propertyObjectModule)->SaveMeta(dataWritter);
-	(*m_propertyManagerModule)->SaveMeta(dataWritter);
+	m_propertyObjectModule->SetNodeValue(node.GetProperty(m_propertyObjectModule->GetName()));
+	m_propertyManagerModule->SetNodeValue(node.GetProperty(m_propertyManagerModule->GetName()));
 
-	m_propertyTypesOfCharacteristics->SaveData(dataWritter);
+	m_propertyTypesOfCharacteristics->SetNodeValue(node.GetProperty(m_propertyTypesOfCharacteristics->GetName()));
 
-	//save default form
-	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormObject->GetValueAsInteger()));
-	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormFolder->GetValueAsInteger()));
-	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormList->GetValueAsInteger()));
-	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormSelect->GetValueAsInteger()));
-	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormFolderSelect->GetValueAsInteger()));
+	m_propertyDefFormObject->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormObject->GetName())));
+	m_propertyDefFormFolder->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormFolder->GetName())));
+	m_propertyDefFormList->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormList->GetName())));
+	m_propertyDefFormSelect->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormSelect->GetName())));
+	m_propertyDefFormFolderSelect->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormFolderSelect->GetName())));
 
-	//create or update table:
-	return ibValueMetaObjectRecordDataHierarchyMutableRef::SaveData(dataWritter);
+	return ibValueMetaObjectRecordDataHierarchyMutableRef::ReadData(node);
 }
 
 //***********************************************************************
@@ -321,7 +302,7 @@ bool ibValueMetaObjectChartOfCharacteristicTypes::OnAfterRunMetaObject(int flags
 	if (auto* cc = m_metaData->GetCompileCache()) {
 
 		if (ibValueMetaObjectRecordDataHierarchyMutableRef::OnAfterRunMetaObject(flags))
-			return cc->AddCompileModule(m_propertyObjectModule->GetMetaObject(), CreateObjectValue(ibObjectMode::OBJECT_ITEM));
+			return cc->AddCompileModule(m_propertyObjectModule->GetMetaObject(), [this]() -> ibValue { return CreateObjectValue(ibObjectMode::OBJECT_ITEM); });
 
 		return false;
 	}
@@ -344,7 +325,7 @@ bool ibValueMetaObjectChartOfCharacteristicTypes::OnBeforeCloseMetaObject()
 	if (auto* cc = m_metaData->GetCompileCache()) {
 
 		if (ibValueMetaObjectRecordDataHierarchyMutableRef::OnBeforeCloseMetaObject())
-			return cc->RemoveCompileModule(m_propertyObjectModule->GetMetaObject());
+			{ cc->RemoveCompileModule(m_propertyObjectModule->GetMetaObject()); return true; }
 
 		return false;
 	}
@@ -429,6 +410,36 @@ void ibValueMetaObjectChartOfCharacteristicTypes::OnRemoveMetaForm(ibValueMetaOb
 	{
 		m_propertyDefFormFolderSelect->SetValue(wxNOT_FOUND);
 	}
+}
+
+// ⭐⭐ WHAT A KIND OF THIS CHART ALLOWS — the one reading of `Type` in the whole tree, and the only place
+// that knows a characteristic has one. Every road that narrows a value by a kind comes here: a subconto
+// written into an accounting register, a field filled under a link by type, a value set by a script.
+//
+// The element stands for a record of this chart; its `Type` is read by the id the chart declares for it,
+// so nothing is searched for and no wrong attribute can be picked.
+bool ibValueMetaObjectChartOfCharacteristicTypes::AdjustOutValue(const ibValueDataObject& element,
+	const ibValue& varValue, ibValue& out) const
+{
+	// 🛑 A CHART WITH NO `Type` OF ITS OWN GOVERNS NOTHING — and it says so by handing the question BACK
+	// to the base, not by refusing: a kind is then an ordinary reference and narrows to its own class.
+	// Refusing here would leave `out` unfilled, and the caller writes what it finds there.
+	const ibValueMetaObjectAttributePredefined* type = GetDataType();
+	if (type == nullptr)
+		return ibValueMetaObjectGenericData::AdjustOutValue(element, varValue, out);
+
+	// ⭐ A KIND THAT WAS NEVER TOLD A TYPE NARROWS NOTHING — the value comes back as it came, which is a
+	// different answer from the refusal above and has to be: the field's own contour is then the only
+	// bound, and that is what a subconto with an unfilled kind has always done.
+	ibValue declared;
+	if (!element.GetValueByMetaID(type->GetMetaID(), declared) || declared.IsEmpty()) {
+		out = varValue;
+		return true;
+	}
+
+	// And that value narrows the incoming one by itself: a type description takes what it describes,
+	// qualifiers and all (valueType.h). Nothing here knows that is what it is.
+	return declared.AdjustOutValue(varValue, out);
 }
 
 //***********************************************************************

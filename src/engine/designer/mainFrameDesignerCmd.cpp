@@ -4,7 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "mainFrameDesigner.h"
-#include "theme/statusbar.h"
+#include "theme/statusBar.h"
 #include "frontend/metatree/metatreeWnd.h"
 
 #include "frontend/artProvider/artProvider.h"
@@ -61,7 +61,10 @@ void wxAuiDocDesignerMDIFrame::CreateWideGui()
 
 	SetStatusBar(new CBottomStatusBar(this));
 	SetStatusText("Ready");
-	GetNotebook()->GetAuiManager().GetArtProvider()->SetColour(wxAUI_DOCKART_BACKGROUND_COLOUR, DEFAULT_COLOUR);
+	// Keep interior palette — luna dock art already exposes powder-blue
+	// (#B8C9D4); don't reset to DEFAULT_COLOUR (legacy navy).
+	GetNotebook()->GetAuiManager().GetArtProvider()->SetColour(
+		wxAUI_DOCKART_BACKGROUND_COLOUR, wxColour(0xB8, 0xC9, 0xD4));
 	SetMinSize(wxSize(400, 380));
 
 	// tell the manager to "commit" all the changes just made

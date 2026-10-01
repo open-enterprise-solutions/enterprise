@@ -22,12 +22,12 @@ class ibDatabaseParameterPostgres : public ibDatabaseStringConverter
 public:
 	// ctor
 	ibDatabaseParameterPostgres();
-	ibDatabaseParameterPostgres(const wxString& strValue);
+	ibDatabaseParameterPostgres(const ibString& strValue);   // kept as its bytes (m_CharBufferValue), encoded once
 	ibDatabaseParameterPostgres(int nValue);
 	ibDatabaseParameterPostgres(double dblValue);
 	ibDatabaseParameterPostgres(const ibNumber &dblValue);
 	ibDatabaseParameterPostgres(bool bValue);
-	ibDatabaseParameterPostgres(const wxDateTime& dateValue);
+	ibDatabaseParameterPostgres(const ibDateTimeParts& date);   // a date by its parts (fdatetime.h)
 	ibDatabaseParameterPostgres(const void* pData, long nDataLength);
 
 	// dtor

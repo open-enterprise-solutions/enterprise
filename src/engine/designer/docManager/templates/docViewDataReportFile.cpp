@@ -1,16 +1,19 @@
 #include "docViewDataReportFile.h"
 
+#include "docViewComposer.h"   // ibCommitOpenComposers — a composer tab lands before the tree is written
+
 wxIMPLEMENT_DYNAMIC_CLASS(ibReportEditView, ibMetaView);
 
-bool ibReportEditView::OnCreate(ibMetaDocument* doc, long flags)
+bool ibReportEditView::OnCreate(ibDocument* docBase, long flags)
 {
+	ibMetaDocument* doc = GetDocument();
 	m_metaTree = new ibDataReportTree(doc, m_viewFrame);
 	m_metaTree->SetReadOnly(false);
 
-	return ibMetaView::OnCreate(doc, flags);
+	return ibView::OnCreate(docBase, flags);
 }
 
-void ibReportEditView::OnActivateView(bool activate, wxView* activeView, wxView* deactiveView)
+void ibReportEditView::OnActivateView(bool activate, ibView* activeView, ibView* deactiveView)
 {
 	if (activate) m_metaTree->ActivateTree();
 }
@@ -43,9 +46,9 @@ bool ibReportEditView::OnClose(bool deleteWindow)
 	return false;
 }
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibReportFilibDocument, ibMetaDocument);
+wxIMPLEMENT_DYNAMIC_CLASS(ibReportFileDocument, ibMetaDataDocument);
 
-bool ibReportFilibDocument::OnCreate(const wxString& path, long flags)
+bool ibReportFileDocument::OnCreate(const wxString& path, long flags)
 {
 	m_metaData = new ibMetaDataReport();
 	if (!ibMetaDocument::OnCreate(path, flags))
@@ -55,7 +58,7 @@ bool ibReportFilibDocument::OnCreate(const wxString& path, long flags)
 
 #include "frontend/mainFrame/mainFrame.h"
 
-bool ibReportFilibDocument::OnCloseDocument()
+bool ibReportFileDocument::OnCloseDocument()
 {
 	if (!m_metaData->CloseDatabase(forceCloseFlag)) {
 		return false;
@@ -67,7 +70,7 @@ bool ibReportFilibDocument::OnCloseDocument()
 
 // Since text windows have their own method for saving to/loading from files,
 // we override DoSave/OpenDocument instead of Save/LoadObject
-bool ibReportFilibDocument::DoOpenDocument(const wxString& filename)
+bool ibReportFileDocument::DoOpenDocument(const wxString& filename)
 {
 	if (!m_metaData->LoadFromFile(filename))
 		return false;
@@ -78,10 +81,20 @@ bool ibReportFilibDocument::DoOpenDocument(const wxString& filename)
 	return true;
 }
 
-bool ibReportFilibDocument::DoSaveDocument(const wxString& filename)
+bool ibReportFileDocument::DoSaveDocument(const wxString& filename)
 {
-	if (!GetMetaTree()->Save())
+	// ⭐ THE OPEN EDITORS LAND BEFORE THE TREE IS WRITTEN. A composer tab edits into a transactional
+	// buffer and used to put it onto the metaobject only when it CLOSED — so saving an external
+	// report from its tree wrote the composition as it was before the grouping was added. A panel
+	// that objects stops the save the same way it stops a close.
+	if (!ibCommitOpenComposers())
 		return false;
+
+	// The tree writes the report's own name / synonym / comment onto the metaobject, and saves the
+	// image when something changed. It answers FALSE for "there was nothing to save" — which is not
+	// a failure: reading it as one meant an unchanged report could not be written to a file at all.
+	if (ibDataReportTree* metaTree = GetMetaTree())
+		metaTree->Save();
 
 	if (!m_metaData->SaveToFile(filename))
 		return false;
@@ -89,18 +102,19 @@ bool ibReportFilibDocument::DoSaveDocument(const wxString& filename)
 	return true;
 }
 
-bool ibReportFilibDocument::IsModified() const
+bool ibReportFileDocument::IsModified() const
 {
 	return ibMetaDocument::IsModified();
 }
 
-void ibReportFilibDocument::Modify(bool modified)
+void ibReportFileDocument::Modify(bool modified)
 {
 	ibMetaDocument::Modify(modified);
 }
 
-ibDataReportTree* ibReportFilibDocument::GetMetaTree() const
+ibDataReportTree* ibReportFileDocument::GetMetaTree() const
 {
-	wxView* view = GetFirstView();
-	return view ? wxDynamicCast(view, ibReportEditView)->GetMetaTree() : nullptr;
+	// GUARD THE CAST, not the pointer that went into it — see the twin in docViewDataProcessorFile.cpp.
+	ibReportEditView* view = wxDynamicCast(GetFirstView(), ibReportEditView);
+	return view != nullptr ? view->GetMetaTree() : nullptr;
 }

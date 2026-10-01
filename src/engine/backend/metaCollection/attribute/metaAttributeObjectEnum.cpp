@@ -1,12 +1,11 @@
 #include "metaAttributeObjectEnum.h"
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueEnumItemMode, ibValue);
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueEnumSelectMode, ibValue);
 
 //***********************************************************************
 //*                       Register in runtime                           *
 //***********************************************************************
 
 //add new enumeration
-ENUM_TYPE_REGISTER(ibValueEnumItemMode, "ItemMode", string_to_clsid("EN_ITMO"));
-ENUM_TYPE_REGISTER(ibValueEnumSelectMode, "SelectMode", string_to_clsid("EN_SEMO"));
+ENUM_TYPE_REGISTER(ibValueEnumItemMode, "ItemMode", enum_to_clsid("EN_ITMO"));
+// ibValueEnumSelectMode registers in metaCollection/metaObjectEnum.cpp — it moved with its enum.
+ENUM_TYPE_REGISTER(ibValueEnumIndexingMode, "IndexingMode", enum_to_clsid("EN_INMO"));

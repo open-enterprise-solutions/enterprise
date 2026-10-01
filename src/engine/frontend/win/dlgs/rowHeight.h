@@ -18,7 +18,7 @@
 class ibGridEditor;
 
 class ibDialogRowHeight : public wxDialog {
-	wxCheckBox* m_maximumRow;
+	wxCheckBox* m_autoHeight;
 	wxSpinCtrlDouble* m_spinCtrlHeight;
 	wxStdDialogButtonSizer* m_sdbSizerBottom;
 	wxButton* m_sdbSizerBottomOK;
@@ -28,6 +28,9 @@ public:
 	int GetHeight() const {
 		return m_spinCtrlHeight->GetValue(); 
 	}
+
+	// On: the rows have no height of their own and follow their text (spreadsheetDescription.h, HasRowSize).
+	bool IsAutoHeight() const { return m_autoHeight->GetValue(); }
 
 	ibDialogRowHeight(ibGridEditor* parent, wxWindowID id = wxID_ANY, const wxString& title = _("Row height"), const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxDefaultSize, long style = wxDEFAULT_DIALOG_STYLE);
 	virtual ~ibDialogRowHeight();

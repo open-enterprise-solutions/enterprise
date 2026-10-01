@@ -6,12 +6,15 @@
 #include "mainApp.h"
 #include "backend/appData.h"
 
-bool ibAppLauncher::OnInit()
+bool ibAppLauncher::DoOnInit()
 {
 	if (m_launcher)
 		return false;
-	
-	ibApplicationData::CreateAppDataEnv(ibRunMode::eLAUNCHER_MODE);
+
+	// ibWxApp::OnInit already armed ibCrashGuard. wxApp.h is header-only,
+	// so no frontend.dll dependency was added — launcher still links
+	// only backend.lib + wxlibs.
+	ibApplicationInstance::CreateAppDataEnv(ibRunMode::eLAUNCHER_MODE);
 	m_launcher = new ibFrameLauncher(nullptr, wxID_ANY);
 
 	return wxApp::OnInit() && m_launcher->Show();
@@ -19,8 +22,12 @@ bool ibAppLauncher::OnInit()
 
 int ibAppLauncher::OnExit()
 {
-	ibApplicationData::DestroyAppDataEnv();
+	ibApplicationInstance::DestroyAppDataEnv();
 	return wxApp::OnExit();
 }
+
+#include "backend/diagnostics/leakTracker.h"
+
+IB_LEAK_TRACKER_ARM();
 
 wxIMPLEMENT_APP(ibAppLauncher);

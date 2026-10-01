@@ -2,17 +2,18 @@
 #define _MAINFRAMECHILD_H__
 
 #include <wx/aui/aui.h>
-#include <wx/docview.h>
 #include <wx/cmdproc.h>
+
+#include "frontend/docView/docView.h"   // forked ib* doc/view (replaces wx/docview.h)
 
 #include "frontend/frontend.h"
 
-class FRONTEND_API CAuiMDIChildFrame :
+class FRONTEND_API ibAuiChildFrame :
 	public wxAuiMDIChildFrame {
 public:
 
-	CAuiMDIChildFrame() : wxAuiMDIChildFrame() {}
-	CAuiMDIChildFrame(wxAuiMDIParentFrame* parent,
+	ibAuiChildFrame() : wxAuiMDIChildFrame() {}
+	ibAuiChildFrame(wxAuiMDIParentFrame* parent,
 		wxWindowID winid,
 		const wxString& title,
 		const wxPoint& pos = wxDefaultPosition,
@@ -23,7 +24,7 @@ public:
 		wxAuiMDIChildFrame(parent, winid, title, pos, size, style, name) {
 	}
 
-	virtual ~CAuiMDIChildFrame() {}
+	virtual ~ibAuiChildFrame() {}
 
 	bool Create(wxAuiMDIParentFrame* parent,
 		wxWindowID id,
@@ -71,7 +72,8 @@ public:
 					wxSystemSettings::GetMetric(wxSYS_SMALLICON_Y, this));
 
 				wxBitmap mdiChildIcon;
-				mdiChildIcon.CopyFromIcon(m_icons.GetIcon(sizeIcon));
+				if (m_icons.IsOk())
+					mdiChildIcon.CopyFromIcon(m_icons.GetIcon(sizeIcon));
 				pClientWindow->AddPage(this, m_title, m_activateOnCreate, mdiChildIcon);
 			}
 
@@ -145,16 +147,16 @@ public:
 	}
 };
 
-class FRONTEND_API CAuiDocChildFrame :
-	public wxDocChildFrameAny<CAuiMDIChildFrame, wxAuiMDIParentFrame> {
+class FRONTEND_API ibAuiDocChildFrame :
+	public ibDocChildFrameAny<ibAuiChildFrame, wxAuiMDIParentFrame> {
 public:
 
 	// default ctor, use Create after it
-	CAuiDocChildFrame() {}
+	ibAuiDocChildFrame() {}
 
 	// ctor for a valueForm showing the given view of the specified document
-	CAuiDocChildFrame(wxDocument* doc,
-		wxView* view,
+	ibAuiDocChildFrame(ibDocument* doc,
+		ibView* view,
 		wxAuiMDIParentFrame* parent,
 		wxWindowID id,
 		const wxString& title,
@@ -163,14 +165,14 @@ public:
 		long style = wxDEFAULT_FRAME_STYLE,
 		const wxString& name = wxASCII_STR(wxFrameNameStr))
 		:
-		wxDocChildFrameAny(doc, view, parent, id, title, pos, size, style, name), m_docManager(doc ? doc->GetDocumentManager() : nullptr)
+		ibDocChildFrameAny(doc, view, parent, id, title, pos, size, style, name), m_docManager(doc ? doc->GetDocumentManager() : nullptr)
 	{
 	}
 
-	virtual ~CAuiDocChildFrame();
+	virtual ~ibAuiDocChildFrame();
 
-	bool Create(wxDocument* doc,
-		wxView* view,
+	bool Create(ibDocument* doc,
+		ibView* view,
 		wxAuiMDIParentFrame* parent,
 		wxWindowID id,
 		const wxString& title,
@@ -179,7 +181,7 @@ public:
 		long style = wxDEFAULT_FRAME_STYLE,
 		const wxString& name = wxASCII_STR(wxFrameNameStr))
 	{
-		return wxDocChildFrameAny::Create
+		return ibDocChildFrameAny::Create
 		(
 			doc, view,
 			parent, id, title, pos, size, style, name
@@ -214,7 +216,7 @@ protected:
 
 		if (m_docManager != nullptr) {
 
-			wxView* view = m_docManager->GetCurrentView();
+			ibView* view = m_docManager->GetCurrentView();
 			if (view == nullptr || view == GetView() || view->GetFrame() == nullptr) {
 
 				const int page_idx = pClientWindow->GetPageIndex(this);
@@ -230,7 +232,6 @@ protected:
 					bool is_active_in_split = tabCtrl->GetPage(page_tab_idx).active;
 
 					if (is_active_in_split) {
-						const int ctrl_new_page_count = (int)tabCtrl->GetPageCount();
 						if (page_tab_idx > 0 && page_tab_idx < (int)tabCtrl->GetPageCount()) {
 							if (is_curpage) new_active = tabCtrl->GetWindowFromIdx(page_tab_idx - 1);
 						}
@@ -313,22 +314,22 @@ protected:
 
 private:
 
-	wxDocManager* m_docManager;
+	ibDocManager* m_docManager;
 
-	wxDECLARE_CLASS(CAuiDocChildFrame);
-	wxDECLARE_NO_COPY_CLASS(CAuiDocChildFrame);
+	wxDECLARE_CLASS(ibAuiDocChildFrame);
+	wxDECLARE_NO_COPY_CLASS(ibAuiDocChildFrame);
 };
 
 class FRONTEND_API ibDialogDocChildFrame :
-	public wxDocChildFrameAny<wxDialog, wxWindow> {
+	public ibDocChildFrameAny<wxDialog, wxWindow> {
 public:
 
 	ibDialogDocChildFrame()
 	{
 	}
 
-	ibDialogDocChildFrame(wxDocument* doc,
-		wxView* view,
+	ibDialogDocChildFrame(ibDocument* doc,
+		ibView* view,
 		wxWindow* parent,
 		wxWindowID id,
 		const wxString& title,
@@ -336,13 +337,13 @@ public:
 		const wxSize& size = wxDefaultSize,
 		long style = wxDEFAULT_DIALOG_STYLE,
 		const wxString& name = wxASCII_STR(wxDialogNameStr))
-		: wxDocChildFrameAny(doc, view,
+		: ibDocChildFrameAny(doc, view,
 			parent, id, title, pos, size, style, name)
 	{
 	}
 
-	bool Create(wxDocument* doc,
-		wxView* view,
+	bool Create(ibDocument* doc,
+		ibView* view,
 		wxWindow* parent,
 		wxWindowID id,
 		const wxString& title,
@@ -351,7 +352,7 @@ public:
 		long style = wxDEFAULT_DIALOG_STYLE,
 		const wxString& name = wxASCII_STR(wxDialogNameStr))
 	{
-		return wxDocChildFrameAny::Create
+		return ibDocChildFrameAny::Create
 		(
 			doc, view,
 			parent, id, title, pos, size, style, name

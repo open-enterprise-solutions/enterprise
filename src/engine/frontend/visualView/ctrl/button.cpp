@@ -1,5 +1,7 @@
 #include "widgets.h"
-#include "backend/compiler/procUnit.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
+#include "frontend/visualView/ctrl/form.h"           // ibValueForm — GetOwnerForm (the command-door gate)
+#include "frontend/visualView/layers/commandBar.h"   // GatherFormCommands — the icon/caption source the navigator uses
 #ifdef OES_USE_WEB
 #include "frontend/web/webWindow.h"
 #include "backend/backend_picture.h"
@@ -7,7 +9,6 @@
 #include "frontend/win/ctrls/controlButton.h"
 #endif
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueButton, ibValueWindow)
 
 //****************************************************************************
 //*                              Button                                      *
@@ -15,6 +16,12 @@ wxIMPLEMENT_DYNAMIC_CLASS(ibValueButton, ibValueWindow)
 
 ibValueButton::ibValueButton() : ibValueWindow()
 {
+}
+
+// The command door's gate — a button hops its command path from the form it lives on.
+ibValueForm* ibValueButton::GetCommandGateForm() const
+{
+	return GetOwnerForm();
 }
 
 wxObject* ibValueButton::Create(ibFrontendWindow* wxparent, ibVisualHost* visualHost)
@@ -35,26 +42,49 @@ wxObject* ibValueButton::Create(ibFrontendWindow* wxparent, ibVisualHost* visual
 	return button;
 }
 
-void ibValueButton::OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost, bool firstСreated)
+void ibValueButton::OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost, bool firstCreated)
 {
 }
 
 void ibValueButton::Update(wxObject* wxobject, ibVisualHost* visualHost)
 {
 	(void)visualHost;
+	// The button's OWN Title / Picture win; where it sets nothing, the bound command provides the DEFAULT look —
+	// pulled straight FROM the command through the command door (ResolveValueByPath), not gathered. So a plain
+	// button shows its own text; a command button left blank shows the command's caption + icon.
+	wxString title = m_propertyTitle->GetValueAsTranslateString();
+	wxBitmap picture = m_propertyPicture->GetValueAsBitmap();
+	const ibCommandDescription& cmdDesc = GetCommandDesc();
+	ibValueForm* const ownerForm = GetOwnerForm();
+	bool cmdModifies = false;   // only meaningful when a command is bound (used for the view-only greying below)
+	bool cmdResolved = false;   // the bound command still resolves through the door — a button with no LIVE command hides
+	bool cmdPicAndText = true;  // the bound command's DEFAULT display (a standard action like Close is picture-only)
+	if (cmdDesc.IsOk() && ownerForm != nullptr) {
+		wxString cmdCaption; wxBitmap cmdIcon;
+		// THE one resolve (ResolveCommand on the door): walk + reliable gather fallback -> existence + caption + icon
+		// + modifies + default display, decided in ONE place so the button, the command bar and the inspector cell can't drift.
+		cmdResolved = ResolveCommand(cmdDesc, cmdCaption, cmdIcon, &cmdModifies, nullptr, &cmdPicAndText);
+		// The button's OWN Title / Picture win only when actually SET — test the PROPERTY (IsEmptyProperty), not the
+		// resolved value: an unset backend-picture still yields an IsOk() bitmap, which used to mask the command icon.
+		if (m_propertyTitle->IsEmptyProperty())   title = cmdCaption;
+		if (m_propertyPicture->IsEmptyProperty()) picture = cmdIcon;
+	}
+	// The button's OWN Representation wins; left on Auto it takes the bound COMMAND's default (picture-only for
+	// Close / Update, picture+text for Add / Post), and picture+text when nothing is bound. One resolved rep, both builds.
+	ibRepresentation rep = m_propertyRepresentation->GetValueAsEnum();
+	if (rep == ibRepresentation::ibRepresentation_Auto)
+		rep = (cmdResolved && !cmdPicAndText) ? ibRepresentation::ibRepresentation_Picture
+		                                      : ibRepresentation::ibRepresentation_PictureAndText;
 #ifdef OES_USE_WEB
 	ibWebButton* button = static_cast<ibWebButton*>(wxobject);
 	// Caption + representation + picture — mirrors desktop's SetBitmap
 	// switch below. Auto resolves to PictureAndText for buttons (desktop's
 	// "else" branch at the bottom of its switch). Picture encodes to a
 	// base64 PNG data URI so the browser renders <img src=...> directly.
-	button->SetLabel(m_propertyTitle->GetValueAsTranslateString());
-	ibRepresentation rep = m_propertyRepresentation->GetValueAsEnum();
-	if (rep == ibRepresentation::ibRepresentation_Auto)
-		rep = ibRepresentation::ibRepresentation_PictureAndText;
+	button->SetLabel(title);
 	const wxBitmap bmp = (rep == ibRepresentation::ibRepresentation_Text)
 		? wxNullBitmap
-		: m_propertyPicture->GetValueAsBitmap();
+		: picture;
 	const bool hasPic = bmp.IsOk();
 	wxString pictureUri;
 	if (hasPic) {
@@ -68,17 +98,16 @@ void ibValueButton::Update(wxObject* wxobject, ibVisualHost* visualHost)
 #else
 	ibControlButton* button = static_cast<ibControlButton*>(wxobject);
 	if (button != nullptr) {
-		const auto rep = m_propertyRepresentation->GetValueAsEnum();
 		if (rep == ibRepresentation::ibRepresentation_Picture) {
 			button->SetLabel(wxEmptyString);
-			button->SetBitmap(m_propertyPicture->GetValueAsBitmap());
+			button->SetBitmap(picture);
 		} else if (rep == ibRepresentation::ibRepresentation_Text) {
-			button->SetLabel(m_propertyTitle->GetValueAsTranslateString());
+			button->SetLabel(title);
 			button->SetBitmap(wxNullBitmap);
 		} else {
 			// Auto + PictureAndText: both label and bitmap.
-			button->SetLabel(m_propertyTitle->GetValueAsTranslateString());
-			button->SetBitmap(m_propertyPicture->GetValueAsBitmap());
+			button->SetLabel(title);
+			button->SetBitmap(picture);
 		}
 	}
 #endif
@@ -87,6 +116,19 @@ void ibValueButton::Update(wxObject* wxobject, ibVisualHost* visualHost)
 	// cross-platform: on desktop it sets the full wx set; on web it
 	// just syncs Enable + Show on the ibWebWindow.
 	UpdateWindow(button);
+
+	if (button != nullptr) {
+		// A button carries ONLY a command — with none bound, OR the bound command DELETED (its path no longer resolves
+		// through the door), it has nothing to do, so it is NOT shown. The orphaned control still lives in the object
+		// tree (select it there to rebind or remove); mirrors an unbound command bar item. The button ASKS the door and
+		// hides itself on a dead path — same rule whether the binding is empty or points at a gone command.
+		if (!cmdResolved)
+			button->Show(false);
+		// A command button OBEYS the command's "modifies data" flag: a view-only form greys a data-changing command
+		// (controls aren't disabled in view-only, but command projections are — the same rule as the command bar).
+		else if (cmdModifies && ownerForm != nullptr && ownerForm->IsViewOnly())
+			button->Enable(false);
+	}
 }
 
 void ibValueButton::Cleanup(wxObject* obj, ibVisualHost* visualHost)
@@ -97,32 +139,28 @@ void ibValueButton::Cleanup(wxObject* obj, ibVisualHost* visualHost)
 //*                           Data									*
 //*******************************************************************
 
-bool ibValueButton::LoadData(ibReaderMemory& reader)
+bool ibValueButton::ReadData(const ibDataNode& node)
 {
-	m_propertyTitle->LoadData(reader);
-	m_propertyRepresentation->LoadData(reader);
-	m_propertyPicture->LoadData(reader);
+	m_propertyTitle->SetNodeValue(node.GetProperty(m_propertyTitle->GetName()));
+	m_propertyRepresentation->SetNodeValue(node.GetProperty(m_propertyRepresentation->GetName()));
+	m_propertyPicture->SetNodeValue(node.GetProperty(m_propertyPicture->GetName()));
+	m_propertyCommand->SetNodeValue(node.GetProperty(m_propertyCommand->GetName()));   // the button's ONLY binding (hop path)
 
-	//events
-	m_onButtonPressed->LoadData(reader);
-
-	return ibValueWindow::LoadData(reader);
+	return ibValueWindow::ReadData(node);
 }
 
-bool ibValueButton::SaveData(ibWriterMemory& writer)
+bool ibValueButton::WriteData(ibDataNode& node) const
 {
-	m_propertyTitle->SaveData(writer);
-	m_propertyRepresentation->SaveData(writer);
-	m_propertyPicture->SaveData(writer);
+	node.SetProperty(m_propertyTitle->GetName(), m_propertyTitle->GetNodeValue());
+	node.SetProperty(m_propertyRepresentation->GetName(), m_propertyRepresentation->GetNodeValue());
+	node.SetProperty(m_propertyPicture->GetName(), m_propertyPicture->GetNodeValue());
+	node.SetProperty(m_propertyCommand->GetName(), m_propertyCommand->GetNodeValue());   // the button's ONLY binding (hop path)
 
-	//events
-	m_onButtonPressed->SaveData(writer);
-
-	return ibValueWindow::SaveData(writer);
+	return ibValueWindow::WriteData(node);
 }
 
 //***********************************************************************
 //*                       Register in runtime                           *
 //***********************************************************************
 
-CONTROL_TYPE_REGISTER(ibValueButton, "Button", "Widget", string_to_clsid("CT_BUTN"));
+CONTROL_TYPE_REGISTER(ibValueButton, "Button", "Widget", control_to_clsid("CT_BUTN"));

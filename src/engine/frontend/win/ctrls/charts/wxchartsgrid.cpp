@@ -63,8 +63,8 @@ wxChartsGrid::wxChartsGrid(const wxPoint2DDouble &position,
       m_YAxis(new wxChartsNumericalAxis("y", minYValue, maxYValue, options.GetYAxisOptions())),
       m_mapping(size, m_XAxis, m_YAxis),
       m_needsFit(true),
-      m_origAxisLimits(minXValue,maxXValue,minYValue,maxYValue),
-      m_curAxisLimits(minXValue,maxXValue,minYValue,maxYValue)
+      m_curAxisLimits(minXValue,maxXValue,minYValue,maxYValue),
+      m_origAxisLimits(minXValue,maxXValue,minYValue,maxYValue)
 {
 }
 

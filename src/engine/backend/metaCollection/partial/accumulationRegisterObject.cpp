@@ -7,159 +7,51 @@
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-bool ibValueRecordSetObjectAccumulationRegister::WriteRecordSet(bool replace, bool clearTable)
-{
-	if (!appData->DesignerMode())
-	{
-		ibConnectionScope scope = ibSession::Current()->OpenConnectionScope();
+// WriteRecordSet / DeleteRecordSet inherited from ibValueRecordSetObject
+// (Phase B template-method) — the scaffold is in commonObject.cpp; the
+// Begin/Commit + LockByKeys helpers it calls live in commonObjectRecordSetQuery.cpp.
+// Phase A bug-fix bundle (Delete-path BeforeWrite/OnWrite + error text
+// mismatches) folded into the base scaffold; the per-type override that
+// used to carry the bugs is removed.
 
-		if (!scope || !scope->IsOpen())
-			ibBackendCoreException::Error(_("Database is not open!"));
-
-		if (!ibBackendException::IsEvalMode())
-		{
-			if (!m_metaObject->AccessRight_Write()) {
-				ibBackendAccessException::Error();
-				return false;
-			}
-
-			{
-				scope.SafeBeginTransaction();
-
-				{
-					ibValue cancel = false;
-					ExecAsProc(wxT("BeforeWrite"), cancel);
-
-					if (cancel.GetBoolean()) {
-						scope.SafeRollBackTransaction();
-						ibBackendCoreException::Error(_("Failed to write object in db!"));
-						return false;
-					}
-				}
-
-				if (!SaveData(replace, clearTable)) {
-					scope.SafeRollBackTransaction();
-					ibBackendCoreException::Error(_("Failed to write object in db!"));
-					return false;
-				}
-
-				{
-					ibValue cancel = false;
-					ExecAsProc(wxT("OnWrite"), cancel);
-					if (cancel.GetBoolean()) {
-						scope.SafeRollBackTransaction();
-						ibBackendCoreException::Error(_("Failed to write object in db!"));
-						return false;
-					}
-				}
-
-				scope.SafeCommitTransaction();
-			}
-
-			m_objModified = false;
-		}
-	}
-
-	return true;
-}
-
-bool ibValueRecordSetObjectAccumulationRegister::DeleteRecordSet()
-{
-	if (!appData->DesignerMode())
-	{
-		ibConnectionScope scope = ibSession::Current()->OpenConnectionScope();
-
-		if (!scope || !scope->IsOpen())
-			ibBackendCoreException::Error(_("Database is not open!"));
-
-		if (!ibBackendException::IsEvalMode())
-		{
-			if (!m_metaObject->AccessRight_Delete()) {
-				ibBackendAccessException::Error();
-				return false;
-			}
-
-			{
-				scope.SafeBeginTransaction();
-
-				{
-					ibValue cancel = false;
-					ExecAsProc(wxT("BeforeWrite"), cancel);
-
-					if (cancel.GetBoolean()) {
-						scope.SafeRollBackTransaction();
-						ibBackendCoreException::Error(_("Failed to write object in db!"));
-						return false;
-					}
-				}
-
-				if (!DeleteData()) {
-					scope.SafeRollBackTransaction();
-					ibBackendCoreException::Error(_("Failed to write object in db!"));
-					return false;
-				}
-
-				{
-					ibValue cancel = false;
-					ExecAsProc(wxT("OnWrite"), cancel);
-					if (cancel.GetBoolean()) {
-						scope.SafeRollBackTransaction();
-						ibBackendCoreException::Error(_("Failed to write object in db!"));
-						return false;
-					}
-				}
-
-				scope.SafeCommitTransaction();
-			}
-
-			m_objModified = false;
-		}
-	}
-
-	return true;
-}
-
+// 🛑 THIS ORDER IS THE CALL NUMBER, AND IT MUST MATCH FillMembers EXACTLY. A method is invoked by
+// its INDEX in the member table, so an enumerator out of step silently runs a different verb:
+// `Write` landed on Load, `Load` on Unload and `Unload` on Write. Posting any document crashed
+// (Write handed its bool to Load, which casts it to a table) and an Unload would have WRITTEN the
+// set. Found 2026-09-03 by posting a goods receipt from the sandbox.
 enum func
 {
 	eAdd = 0,
 	eCount,
 	eClear,
+	eWriteRecordSet,
 	eLoad,
 	eUnload,
-	eWriteRecordSet,
 	eModifiedRecordSet,
 	eReadRecordSet,
 	eSelectedRecordSet,
 	eGetMetadataRecordSet,
 };
 
-enum prop
-{
-	eThisObject,
-	eFilter
-};
-
 //****************************************************************************
 //*                              Support methods                             *
 //****************************************************************************
 
-void ibValueRecordSetObjectAccumulationRegister::PrepareNames() const
+void ibValueRecordSetObjectAccumulationRegister::FillMembers(ibMemberTable& helper) const
 {
-	m_methodHelper->ClearHelper();
+	helper.AppendFunc(wxT("Add"), wxT("Add()"));
+	helper.AppendFunc(wxT("Count"), wxT("Count()"));
+	helper.AppendFunc(wxT("Clear"), wxT("Clear()"));
+	helper.AppendFunc(wxT("Write"), 1, wxT("Write(replace : boolean)"));
+	helper.AppendFunc(wxT("Load"), 1, wxT("Load(value: table)"));
+	helper.AppendFunc(wxT("Unload"), wxT("Unload()"));
+	helper.AppendFunc(wxT("Modified"), wxT("Modified()"));
+	helper.AppendFunc(wxT("Read"), wxT("Read()"));
+	helper.AppendFunc(wxT("Selected"), wxT("Selected()"));
+	helper.AppendFunc(wxT("GetMetadata"), wxT("GetMetadata()"));
 
-	m_methodHelper->AppendFunc(wxT("Add"), wxT("Add()"));
-	m_methodHelper->AppendFunc(wxT("Count"), wxT("Count()"));
-	m_methodHelper->AppendFunc(wxT("Clear"), wxT("Clear()"));
-	m_methodHelper->AppendFunc(wxT("Write"), 1, wxT("Write(replace : boolean)"));
-	m_methodHelper->AppendFunc(wxT("Load"), 1, wxT("Load(value: table)"));
-	m_methodHelper->AppendFunc(wxT("Unload"), wxT("Unload()"));
-	m_methodHelper->AppendFunc(wxT("Modified"), wxT("Modified()"));
-	m_methodHelper->AppendFunc(wxT("Read"), wxT("Read()"));
-	m_methodHelper->AppendFunc(wxT("Selected"), wxT("Selected()"));
-	m_methodHelper->AppendFunc(wxT("GetMetadata"), wxT("GetMetadata()"));
-
-	m_methodHelper->AppendProp(wxT("ThisObject"), true, false, true, prop::eThisObject, wxNOT_FOUND);
-	m_methodHelper->AppendProp(wxT("Filter"), true, false, prop::eFilter, wxNOT_FOUND);
+	// `Filter` is NOT declared here — see informationRegisterObject.cpp: it is an export variable of
+	// the set, bound in InitializeObject, and that reaches this table on its own.
 }
 
 bool ibValueRecordSetObjectAccumulationRegister::SetPropVal(const long lPropNum, const ibValue& varPropVal)
@@ -169,17 +61,11 @@ bool ibValueRecordSetObjectAccumulationRegister::SetPropVal(const long lPropNum,
 
 bool ibValueRecordSetObjectAccumulationRegister::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
-	switch (lPropNum)
-	{
-	case prop::eThisObject:
-		pvarPropVal = this;
-		return true;
-	case prop::eFilter:
-		pvarPropVal = m_recordSetKeyValue;
-		return true;
-	}
-
-	return false;
+	// The set's own properties (Filter) live on the base — asked here first because a register may add
+	// its own later, and answered by the base when it has none of its own. Returning false outright is
+	// what kept `Filter` unreachable from outside while it was declared in this very file's member
+	// table (2026-09-05).
+	return ibValueRecordSetObject::GetPropVal(lPropNum, pvarPropVal);
 }
 
 bool ibValueRecordSetObjectAccumulationRegister::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
@@ -187,16 +73,20 @@ bool ibValueRecordSetObjectAccumulationRegister::CallAsFunc(const long lMethodNu
 	switch (lMethodNum)
 	{
 	case func::eAdd:
-		pvarRetValue = ibValue::CreateAndPrepareValueRef<ibValueRecordSetObjectRegisterReturnLine>(this, GetItem(AppendRow()));
+		pvarRetValue = new ibValueRecordSetObjectRegisterReturnLine(this, GetItem(AppendRow()));
 		return true;
 	case func::eCount:
 		pvarRetValue = (unsigned int)GetRowCount();
 		return true;
 	case func::eClear:
-		ibValueModelRamTableBase::Clear();
+		ibValueModelStorage::Clear();
+		// ⭐ CLEARING IS A CHANGE. Emptying the set is how a handler says "no movements" - and the
+		// document's final write skips a set that is not modified, so an unmarked Clear would leave
+		// yesterday's movements standing.
+		Modify(true);
 		return true;
 	case func::eLoad:
-		LoadDataFromTable(paParams[0]->ConvertToType<ibValueModelTableBase>());
+		LoadDataFromTable(paParams[0]->ConvertToType<ibValueModel>());
 		return true;
 	case func::eUnload:
 		pvarRetValue = SaveDataToTable();

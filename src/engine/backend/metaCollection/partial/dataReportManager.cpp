@@ -1,4 +1,4 @@
-﻿////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////
 //	Author		: Maxim Kornienko
 //	Description : report - manager
 ////////////////////////////////////////////////////////////////////////////
@@ -7,13 +7,11 @@
 #include "backend/metaData.h"
 #include "commonObject.h"
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueManagerDataObjectReport, ibValue);
 
 const ibValueMetaObjectCommonModule* ibValueManagerDataObjectReport::GetManagerModule() const { return m_metaObject->GetManagerModule(); }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueManagerDataObjectExternalReport, ibValue);
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -23,30 +21,28 @@ enum Func {
 	eGetTemplate,
 };
 
-void ibValueManagerDataObjectReport::PrepareNames() const
+void ibValueManagerDataObjectReport::FillManagerMethods(ibMemberTable& helper) const
 {
-	ibValueManagerDataObject::PrepareNames();
-
-	m_methodHelper->AppendFunc(wxT("Create"), wxT("Create()"));
-	m_methodHelper->AppendFunc(wxT("GetForm"), wxT("GetForm(name : string, owner : any, id : guid)"));
-	m_methodHelper->AppendFunc(wxT("GetTemplate"), 1, wxT("GetTemplate(name : string)"));
+	helper.AppendFunc(wxT("Create"), wxT("Create()"));
+	helper.AppendFunc(wxT("GetForm"), 3, wxT("GetForm(name : string, owner : any, id : guid)"));   // the COUNT, not only the text - see Data.From
+	helper.AppendFunc(wxT("GetTemplate"), 1, wxT("GetTemplate(name : string)"));
 }
 
 bool ibValueManagerDataObjectReport::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
 {
-	ibMetaData* metaData = m_metaObject->GetMetaData();
+	const ibMetaData* metaData = m_metaObject->GetMetaData();
 	wxASSERT(metaData);
 
-	switch (lMethodNum)
+	// Our own ordinal, not the table index — ibValueManagerDataObject::BuiltinMethodNum says why.
+	switch (BuiltinMethodNum(lMethodNum))
 	{
 	case eCreate:
 		pvarRetValue = m_metaObject->CreateObjectValue();
 		return true;
 	case eGetForm: {
 		ibValueGuid* guidVal = lSizeArray > 2 ? paParams[2]->ConvertToType<ibValueGuid>() : nullptr;
-		pvarRetValue = m_metaObject->GetGenericForm(paParams[0]->GetString(),
-			lSizeArray > 1 ? paParams[1]->ConvertToType<ibBackendControlFrame>() : nullptr,
-			guidVal ? ((ibGuid)*guidVal) : ibGuid());
+		pvarRetValue = m_metaObject->GetGenericForm(ibFormRequest(paParams[0]->GetString(), guidVal ? ((ibGuid)*guidVal) : ibGuid()),
+			lSizeArray > 1 ? paParams[1]->ConvertToType<ibBackendControlFrame>() : nullptr);
 		return true;
 	}
 	case eGetTemplate:
@@ -57,12 +53,9 @@ bool ibValueManagerDataObjectReport::CallAsFunc(const long lMethodNum, ibValue& 
 	return ibValueManagerDataObject::CallAsFunc(lMethodNum, pvarRetValue, paParams, lSizeArray);
 }
 
-ibValue::ibValueMethodHelper ibValueManagerDataObjectExternalReport::m_methodHelper;
-
-void ibValueManagerDataObjectExternalReport::PrepareNames() const
+void ibValueManagerDataObjectExternalReport::FillManagerMethods(ibMemberTable& helper) const
 {
-	m_methodHelper.ClearHelper();
-	m_methodHelper.AppendFunc(wxT("Create"), 1, wxT("Create(fullPath : string)"));
+	helper.AppendFunc(wxT("Create"), 1, wxT("Create(fullPath : string)"));
 }
 
 #include "backend/system/systemManager.h"
@@ -77,7 +70,7 @@ bool ibValueManagerDataObjectExternalReport::CallAsFunc(const long lMethodNum, i
 	{
 		ibMetaDataReport* metaReport = new ibMetaDataReport();
 		if (metaReport->LoadFromFile(paParams[0]->GetString())) {
-			ibValueModuleManagerExternalReport* moduleManager = metaReport->GetManagerModule();
+			ibValueModuleRuntimeManagerExternalReport* moduleManager = metaReport->GetManagerModule();
 			pvarRetValue = moduleManager->GetObjectValue();
 			return true;
 		}
@@ -92,4 +85,4 @@ bool ibValueManagerDataObjectExternalReport::CallAsFunc(const long lMethodNum, i
 //*                       Register in runtime                           *
 //***********************************************************************
 
-SYSTEM_TYPE_REGISTER(ibValueManagerDataObjectExternalReport, "ExternalManagerReport", string_to_clsid("MG_EXTR"));
+SYSTEM_TYPE_REGISTER(ibValueManagerDataObjectExternalReport, "ExternalManagerReport", system_to_clsid("MG_EXTR"));

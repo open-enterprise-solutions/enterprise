@@ -119,21 +119,35 @@ void ibDialogConnection::SaveConnectionData()
 
 #ifdef OES_USE_POSTGRESQL
 #include "backend/databaseLayer/postgres/postgresDatabaseLayer.h"
+#include <memory>   // the probe OWNS its driver — see TestConnectionOnButtonClick
 #endif
 
 void ibDialogConnection::TestConnectionOnButtonClick(wxCommandEvent& event)
 {
 #ifdef OES_USE_POSTGRESQL
-	ibDatabaseLayerPostgres* postgresDatabaseLayer = new ibDatabaseLayerPostgres;
-	bool sucess = postgresDatabaseLayer->Open(
+	// ⚠ OWNED. This was a bare `new` that was Opened, Closed and never deleted — a driver object and
+	// its connection state leaked on every click of "test". Closing is not owning: the object outlives
+	// the connection it closed. The launcher's twin already holds its probe in a shared_ptr.
+	const std::unique_ptr<ibDatabaseLayerPostgres> postgresDatabaseLayer(new ibDatabaseLayerPostgres);
+	const bool success = postgresDatabaseLayer->Open(
 		m_textCtrlServer->GetValue(),
 		m_textCtrlPort->GetValue(),
 		wxT(""),
 		m_textCtrlUser->GetValue(),
 		m_textCtrlPassword->GetValue()
 	);
+	const wxString failure = success ? wxString() : postgresDatabaseLayer->GetErrorMessage();
 
 	postgresDatabaseLayer->Close();
+
+	// ⚠ AND IT SAYS WHAT HAPPENED. The result was computed into a local and dropped: a button labelled
+	// "test the connection" that answers nothing at all, whichever way the test went. The driver's own
+	// message is read BEFORE Close, because closing clears the error state it would have reported.
+	if (success)
+		wxMessageBox(_("Connection established"), _("Test connection"), wxOK | wxICON_INFORMATION, this);
+	else
+		wxMessageBox(failure.IsEmpty() ? _("Could not connect with these settings") : failure,
+			_("Test connection"), wxOK | wxICON_ERROR, this);
 #else
 	wxMessageBox(_("PostgreSQL driver not available"));
 #endif

@@ -1,6 +1,9 @@
 #include "fs.h"
 #include "lz/lzhuf.h"
 
+#include "backend/fstring.h"          // ibString — r_stringZ(ibString&)
+#include "backend/backend_exception.h" // a read past the end of a block is refused, not asserted
+
 typedef unsigned char byte_t;
 
 //------------------------------------------------------------------------------------
@@ -82,11 +85,20 @@ void	ibWriter::w_printf(const char* format, ...)
 // memory
 ibWriterMemory::~ibWriterMemory()
 {
-	wxDELETE(m_data);
+	// ONE ROAD OUT: the release lives in ibWriterMemory::free (fs.h), which says why it is not
+	// `delete`. Repeating it here is how the buffer came to have two ways of being let go.
+	free();
 }
 
 void ibWriterMemory::w(const void* ptr, u32 count)
 {
+	// A WRITE OF NOTHING IS NOT A WRITE. memcpy forbids a null source even for zero bytes, and
+	// the writers above do hand one over for an empty payload (an empty string, a zero-length
+	// chunk) - UBSan: "null pointer passed as argument 2, which is declared to never be null".
+	// Leaving early also spares the buffer a growth it does not need.
+	if (count == 0 || ptr == nullptr)
+		return;
+
 	if (m_pos + count > m_mem_size) {
 		// reallocate
 		if (m_mem_size == 0)	
@@ -147,21 +159,24 @@ void	ibReader::close()
 
 u64 ibReader::find_chunk(u64 ID, bool* bCompressed) const
 {
-	u64	dwSize, dwType;
+	u64	dwSize = 0, dwType = 0;
 	bool success = false;
 
+	// A chunk header is 2x u64 (type + size); never read it without that many bytes left,
+	// or a malformed / truncated buffer drives r() past the end (access violation).
 	if (m_last_pos != 0) {
 		seek(m_last_pos);
-		dwType = r_u64();
-		dwSize = r_u64();
-
-		if (dwType == ID)
-			success = true;
+		if (elapsed() >= 16) {
+			dwType = r_u64();
+			dwSize = r_u64();
+			if (dwType == ID)
+				success = true;
+		}
 	}
 
 	if (!success) {
 		rewind();
-		while (!eof())
+		while (elapsed() >= 16)
 		{
 			dwType = r_u64();
 			dwSize = r_u64();
@@ -172,6 +187,13 @@ u64 ibReader::find_chunk(u64 ID, bool* bCompressed) const
 			}
 			else
 			{
+				// ⚠ A SIZE THAT DOES NOT FIT IS NOT A CHUNK TO STEP OVER. A block of another format (a base
+				// written before the configuration's layout changed) reads as a header with any number in
+				// it; stepped over, the reader landed past its own end and stayed there (advance only
+				// ASSERTS), and the next read walked off the page — the designer died opening an old base
+				// (2026-09-27). Not the chunk sought, and nothing after it can be trusted: not found.
+				if (dwSize > (u64)elapsed())
+					break;
 				advance(dwSize);
 			}
 		}
@@ -179,11 +201,18 @@ u64 ibReader::find_chunk(u64 ID, bool* bCompressed) const
 		if (!success)
 		{
 			m_last_pos = 0;
+			seek(length());   // at its end, as a search that read everything leaves it — and not past it
 			return 0;
 		}
 	}
 
-	wxASSERT((u64)tell() + dwSize <= (u64)length());
+	// The found chunk must fit in the buffer — a corrupt size would otherwise build an
+	// over-sized sub-reader that reads past the allocation.
+	if ((u64)tell() + dwSize > (u64)length())
+	{
+		m_last_pos = 0;
+		return 0;
+	}
 	if (bCompressed) *bCompressed = false;
 
 	const int dwPos = tell();
@@ -218,6 +247,18 @@ ibReader* ibReader::open_chunk_iterator(u64& ID, ibReader* _prev) const
 	ID = r_u64();
 	u64 _size = r_u64();
 
+	// 🛑 THE SIZE CAME OUT OF THE DATA, SO IT IS A CLAIM AND NOT A MEASUREMENT — and the lines below
+	// hand it to a new reader as though somebody had checked it. find_chunk, one road over, has
+	// asked this question since a corrupt size was found building a reader on memory that was never
+	// there; the two ITERATOR roads never did, and an iterator is what walks a frame that arrived
+	// over a wire. Refusing here is what keeps the difference between "declared" and "present"
+	// visible: by the time the over-read happens it reads as a crash inside memcpy, subsystems away
+	// from the frame that lied (2026-09-23, the designer, while it was debugging).
+	if (_size > (u64)elapsed())
+		ibBackendCoreException::Error(
+			_("Chunk %llu declares %llu bytes, and %i are left in the block"),
+			ID, _size, elapsed());
+
 	if (false)
 	{
 		// compressed
@@ -234,7 +275,23 @@ ibReader* ibReader::open_chunk_iterator(u64& ID, ibReader* _prev) const
  
 void	ibReader::r(void* p, int cnt) const
 {
-	wxASSERT(m_pos + cnt <= m_size);
+	// 🛑 REFUSES INSTEAD OF SAYING SO AND READING ANYWAY. This was a wxASSERT followed by the copy:
+	// the assert is a line in the journal and nothing else, so an over-read was ANNOUNCED and then
+	// performed, leaving m_pos past m_size for whoever read next. That is how the designer died on
+	// 2026-09-23 while it was debugging - two asserts from one worker thread at 01:36:38 (this line
+	// and advance's), and a second later the same thread walked off the end of the page inside
+	// memcpy: access violation, 348 MB of dump, and a stack that named nothing because the binary
+	// had been rebuilt since.
+	//
+	// Reading past the end of a block is never a legitimate thing to do, so it is an answer, not a
+	// remark. The numbers are in the message because the question a reader of it asks next is
+	// "by how much" - a frame short by four bytes is a truncated write, one short by thousands is
+	// a different format altogether.
+	if (cnt < 0 || (long long)m_pos + cnt > (long long)m_size)
+		ibBackendCoreException::Error(
+			_("Reading %i bytes at offset %i would pass the end of a %i-byte block"),
+			cnt, m_pos, m_size);
+
 	std::memcpy(p, pointer(), cnt);
 	advance(cnt);
 };
@@ -317,6 +374,13 @@ void	ibReader::r_stringZ(wxString& dest) const
 	dest = wxString::FromUTF8(destSrc);
 }
 
+void	ibReader::r_stringZ(ibString& dest) const
+{
+	std::string destSrc = (char*)(m_data + m_pos);
+	m_pos += int(destSrc.size() + 1);
+	dest.SetUtf8(destSrc.data(), destSrc.size());   // native UTF-8 → wchar, no wxString
+}
+
 void	ibReader::skip_stringZ() const
 {
 	char* src = (char*)m_data;
@@ -363,6 +427,13 @@ ibReaderMemory* ibReaderMemory::open_chunk_iterator(u64& ID, ibReaderMemory* _pr
 
 	ID = r_u64();
 	u64 _size = r_u64();
+
+	// The same question the reader's own iterator asks, and for the same reason — see the note
+	// there. This is the copy that walks a buffer held in memory, which is what a received frame is.
+	if (_size > (u64)elapsed())
+		ibBackendCoreException::Error(
+			_("Chunk %llu declares %llu bytes, and %i are left in the block"),
+			ID, _size, elapsed());
 
 	if (false) {
 		// compressed

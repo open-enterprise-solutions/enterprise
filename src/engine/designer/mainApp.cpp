@@ -5,7 +5,7 @@
 
 #include "mainApp.h"
 #include "backend/appData.h"
-#include "backend/backend_exception.h"
+#include "backend/backend_exception.h"   // DrainLastErrors for the startup-failure dialog
 #include "backend/backend_mainFrame.h"
 #include "backend/debugger/debugClientBridge.h"
 #include "frontend/session/guiSession.h"   // transitively pulls backend/session/session.h
@@ -14,73 +14,28 @@
 
 #include <wx/clipbrd.h>
 #include <wx/cmdline.h>
-#include <wx/debugrpt.h>
-#include <wx/filename.h>
 #include <wx/fs_arc.h>
 #include <wx/fs_filter.h>
 #include <wx/fs_mem.h>
 #include <wx/stdpaths.h>
 
 #ifdef __WXMSW__
-#include <windows.h>
-#include <dbghelp.h>
-#pragma comment(lib, "dbghelp.lib")
+#include <windows.h>   // DisableProcessWindowsGhosting
+#include "backend/system/value/valueOLE.h"   // ibValueOLE::ReleaseComObjects in normal OnExit
+#endif
 
-namespace {
-// See enterprise/mainApp.cpp for rationale — persists a minidump before
-// wxDebugReport wipes its temp directory on dialog close.
-static LPTOP_LEVEL_EXCEPTION_FILTER s_prevFilter = nullptr;
-
-static LONG WINAPI PersistentCrashDumpFilter(EXCEPTION_POINTERS* ep)
-{
-	wxString exePath = wxStandardPaths::Get().GetExecutablePath();
-	wxString crashDir = wxFileName(exePath).GetPath() + wxFILE_SEP_PATH + wxT("crashdumps");
-	wxFileName::Mkdir(crashDir, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
-
-	const wxString stamp = wxDateTime::Now().Format(wxT("%Y%m%dT%H%M%S"));
-	const wxString dumpPath = wxString::Format(wxT("%s%cdesigner_%u_%s.dmp"),
-		crashDir, wxFILE_SEP_PATH,
-		static_cast<unsigned>(::GetCurrentProcessId()),
-		stamp);
-
-	HANDLE hFile = ::CreateFileW(dumpPath.wc_str(), GENERIC_WRITE, 0, nullptr,
-		CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
-	if (hFile != INVALID_HANDLE_VALUE) {
-		MINIDUMP_EXCEPTION_INFORMATION mei = {};
-		mei.ThreadId = ::GetCurrentThreadId();
-		mei.ExceptionPointers = ep;
-		mei.ClientPointers = FALSE;
-
-		const MINIDUMP_TYPE type = static_cast<MINIDUMP_TYPE>(
-			MiniDumpWithDataSegs |
-			MiniDumpWithHandleData |
-			MiniDumpWithUnloadedModules |
-			MiniDumpWithThreadInfo |
-			MiniDumpWithFullMemory);
-
-		::MiniDumpWriteDump(::GetCurrentProcess(), ::GetCurrentProcessId(),
-			hFile, type, ep ? &mei : nullptr, nullptr, nullptr);
-		::CloseHandle(hFile);
-	}
-
-	return s_prevFilter ? s_prevFilter(ep) : EXCEPTION_CONTINUE_SEARCH;
-}
-
-static void InstallPersistentCrashDump()
-{
-	if (s_prevFilter == nullptr)
-		s_prevFilter = ::SetUnhandledExceptionFilter(PersistentCrashDumpFilter);
-}
-} // namespace
-#endif // __WXMSW__
-
-#include "resources/splashLogo.xpm"
+#include "backend/backend_picture.h"
+#include "frontend/artProvider/splash/splashLogo.h"   // one picture for the designer and the application
 
 #if wxVERSION_NUMBER >= 2905 && wxVERSION_NUMBER <= 3100
 #include <wx/xrc/xh_auinotbk.h>
 #elif wxVERSION_NUMBER > 3100
 #include <wx/xrc/xh_aui.h>
 #endif
+
+#include "backend/diagnostics/leakTracker.h"
+
+IB_LEAK_TRACKER_ARM();
 
 wxIMPLEMENT_APP(ibAppDesigner);
 
@@ -135,39 +90,13 @@ bool ibAppDesigner::OnCmdLineParsed(wxCmdLineParser& parser)
 
 //////////////////////////////////////////////////////////////////////////////////
 
-// ibDesignerSession — concrete GUI session for designer.exe. OnCreateSession
-// instantiates the exe-specific frame class (ibFrontendDocMDIFrameDesigner),
-// which is not exported to frontend.dll. Declared here so designer.exe owns
-// its own concrete session type.
-class ibDesignerSession : public ibGUISession {
-public:
-	using ibGUISession::ibGUISession;
+// No exe-specific session class — see enterprise/mainApp.cpp. The pair's
+// designer half lives entirely in ibFrontendMainFrameDesigner (which asks
+// about an unsaved configuration and runs no session scripts); the
+// session half is the same ibGUISession the enterprise client uses.
 
-	bool OnCreateSession() override {
-		AttachFrame(new ibFrontendDocMDIFrameDesigner);
-		return m_frame != nullptr;
-	}
-};
-
-bool ibAppDesigner::OnInit()
+int ibAppDesigner::DoOnRun()
 {
-	wxSocketBase::Initialize();
-	return wxApp::OnInit();
-}
-
-int ibAppDesigner::OnRun()
-{
-	// Abnormal Termination Handling
-#if wxUSE_ON_FATAL_EXCEPTION && wxUSE_STACKWALKER
-	::wxHandleFatalExceptions(true);
-#endif
-#ifdef __WXMSW__
-	// Install our top-level SEH filter after wx's so ours runs first and
-	// writes a persistent minidump to <exe>/crashdumps/ before wx's dialog
-	// wipes its temp folder.
-	InstallPersistentCrashDump();
-#endif
-
 	// Get the data directory
 	bool ret = false;
 
@@ -183,33 +112,73 @@ int ibAppDesigner::OnRun()
 		}
 	}
 
-	if (m_strFile.IsEmpty()) {
-		ret = appDataCreateServer(ibRunMode::eDESIGNER_MODE,
-			m_strServer, m_strPort, m_strUser, m_strPassword, m_strDatabase, m_strLocale
-		);
+	wxString thrown;   // what escaped, when it was not an ibBackendException (those record themselves)
+
+	// ⚠ THE BRING-UP CAN THROW — see enterprise/mainApp.cpp for the whole argument. A raised
+	// exception walked out past the reporting below and closed the process with no message at all.
+	try {
+		if (m_strFile.IsEmpty()) {
+			ibServerInstanceRequest request;
+			request.m_runMode  = ibRunMode::eDESIGNER_MODE;
+			request.m_server   = m_strServer;
+			request.m_port     = m_strPort;
+			request.m_user     = m_strUser;
+			request.m_password = m_strPassword;
+			request.m_database = m_strDatabase;
+			request.m_locale   = m_strLocale;
+			ret = ibApplicationInstance::CreateServerAppDataEnv(request) != nullptr;
+		}
+		else {
+			ibFileInstanceRequest request;
+			request.m_runMode   = ibRunMode::eDESIGNER_MODE;
+			request.m_directory = m_strFile;
+			request.m_locale    = m_strLocale;
+			ret = ibApplicationInstance::CreateFileAppDataEnv(request) != nullptr;
+		}
 	}
-	else {
-		ret = appDataCreateFile(ibRunMode::eDESIGNER_MODE,
-			m_strFile, m_strLocale
-		);
+	catch (const ibBackendException&) {
+		ret = false;   // already recorded in the chain, drained below
+	}
+	catch (const std::exception& e) {
+		ret = false;
+		thrown = wxString::FromUTF8(e.what());
+	}
+	catch (...) {
+		ret = false;
+		thrown = _("an unknown failure");
 	}
 
 	if (!ret) {
-		const wxString& strLastError = ibBackendException::GetLastError();
-		if (!strLastError.IsEmpty()) wxMessageBox(strLastError);
+		// Same chain-aware reporting as enterprise.exe — see there, including why this says
+		// something even when the chain is empty.
+		const std::vector<wxString> chain = ibBackendException::DrainLastErrors();
+		wxString combined;
+		for (std::size_t i = 0; i < chain.size(); ++i) {
+			if (!combined.IsEmpty()) combined += wxT("\n--\n");
+			combined += chain[i];
+		}
+		if (combined.IsEmpty())
+			combined = thrown;
+		if (combined.IsEmpty())
+			combined = _("The infobase could not be opened, and the failure carried no description.");
+		combined += wxT("\n\n") + (m_strFile.IsEmpty()
+			? m_strServer + wxT(" / ") + m_strDatabase : m_strFile);
+
+		wxMessageBox(combined, _("OES Designer - startup error"), wxOK | wxICON_ERROR);
 		return 1;
 	}
 
 	ibProcessSplashScreen* splashScreenLoader =
-		new ibProcessSplashScreen(wxBitmap(splashLogo_xpm),
+		new ibProcessSplashScreen(ibBackendPicture::GetBitmapFromBase64(s_splashLogo_png),
 			wxSPLASH_CENTRE_ON_SCREEN,
 			-1, nullptr, -1, wxDefaultPosition, wxDefaultSize,
 			wxBORDER_SIMPLE
 		);
 
-	// Init handlers
-	wxInitAllImageHandlers();
-
+	// Image handlers are already up: backend.dll registers them ALL from its picture
+	// auto-loader (picturePredefined.cpp), which runs at DLL load — before this. Calling
+	// wxInitAllImageHandlers again only produced a screenful of "Adding duplicate image
+	// handler" in the debug log (wx deletes the duplicate and logs it).
 	wxXmlResource::Get()->InitAllHandlers();
 #if wxVERSION_NUMBER >= 2905 && wxVERSION_NUMBER <= 3100
 	wxXmlResource::Get()->AddHandler(new wxAuiNotebookXmlHandler);
@@ -239,10 +208,6 @@ int ibAppDesigner::OnRun()
 	// Message output to the same as the log target
 	delete wxMessageOutput::Set(new wxMessageOutputLog);
 
-#if wxUSE_LIBPNG
-	wxImage::AddHandler(new wxPNGHandler);
-#endif
-
 	// Support loading files from memory
 	// Used to load the XRC preview, but could be useful elsewhere
 	wxFileSystem::AddHandler(new wxMemoryFSHandler);
@@ -251,41 +216,48 @@ int ibAppDesigner::OnRun()
 	wxFileSystem::AddHandler(new wxArchiveFSHandler);
 	wxFileSystem::AddHandler(new wxFilterFSHandler);
 
-#if wxUSE_LIBPNG
-	wxImage::AddHandler(new wxPNGHandler);
-#endif
 	// Flow (designer IDE):
-	//   1. CreateSession<ibDesignerSession> — registry Add plus
-	//      OnCreateSession hook that instantiates the designer frame on
-	//      the main thread (DesignerExclusivePolicy veto happens inside
-	//      the registry Connect before OnCreateSession runs).
-	//   2. Authenticate — creds, dialog fallback via session->GetFrame().
-	//   3. LoadMetadata — compile descriptors (intellisense).
-	//   4. mainFrameShow — Designer kind → EnsureRuntime no-op;
-	//                      AllowRun = true unconditionally.
+	//   1. CreateSession — registry Add (DesignerExclusivePolicy veto
+	//      happens inside the registry Connect), returns the holder.
+	//   2. Open — creds, standalone login dialog on failure.
+	//   3. new ibFrontendMainFrameDesigner(std::move(holder)) — the window
+	//      takes ownership of the session.
+	//   4. Show — Designer kind → EnsureRuntime no-op; AllowRun passes
+	//      unconditionally (no session scripts here).
 
 	// AccessMode was set by appData's ctor based on runMode. Registry
 	// listeners (wired in appData ctor) handle BindSessionToThread,
 	// LoadMetadata, CreateRoot + CompileRoot through OnFirstConnect /
 	// OnAuthenticated — nothing to compose here.
-	ibSession* session = nullptr;
+	// Holder on the stack until the designer window takes it — see
+	// enterprise/mainApp.cpp for the rationale. Dropping it closes the
+	// session, so every failure path below is complete as written.
+	ibSessionHolder holder;
 	wxString openError;
+	ibSession::OpenResult openResult = ibSession::OpenResult::Failed;
 	try {
-		session = appData->CreateSession<ibDesignerSession>();
-		if (session != nullptr && !session->Open(m_strIBUser, m_strIBPassword)) {
-			session->Close();
-			session = nullptr;
+		holder = appData->CreateSession<ibGUISession>();
+		if (holder) {
+			openResult = holder->Open(m_strIBUser, m_strIBPassword);
+			if (openResult != ibSession::OpenResult::Authenticated)
+				holder.Reset();
 		}
 	} catch (const ibBackendException& e) {
 		openError = e.GetErrorDescription();
-		session   = nullptr;
+		holder.Reset();
+		openResult = ibSession::OpenResult::Failed;
 	} catch (const std::exception& e) {
 		openError = wxString::FromUTF8(e.what());
-		session   = nullptr;
+		holder.Reset();
+		openResult = ibSession::OpenResult::Failed;
 	}
 
-	if (session == nullptr) {
+	if (!holder) {
 		if (splashScreenLoader != nullptr) splashScreenLoader->Destroy();
+		// Same Cancel-vs-Failed split as enterprise.exe — see enterprise/
+		// mainApp.cpp for the rationale.
+		if (openResult == ibSession::OpenResult::Cancelled)
+			return 0;
 		const wxString message = openError.IsEmpty()
 			? wxString(_("Authentication failed"))
 			: openError;
@@ -305,47 +277,17 @@ int ibAppDesigner::OnRun()
 		new ibDebuggerClientBridgeDesigner);
 
 	if (splashScreenLoader != nullptr) splashScreenLoader->Destroy();
-	if (!session->ShowFrame()) return 1;
+
+	// Same shape as enterprise.exe: the window takes the holder and owns
+	// the session. On a failed Show the Destroy is delayed and no event
+	// loop will ever prune it, so the session is removed by
+	// registry->Stop() in OnExit — see the comment in enterprise/mainApp.cpp.
+	auto* frame = new ibFrontendMainFrameDesigner(std::move(holder));
+	if (!frame->Show()) {
+		frame->Destroy();
+		return 1;
+	}
 	return wxApp::OnRun();
-}
-
-void ibAppDesigner::OnUnhandledException()
-{
-	// Reached when a C++ exception escapes to wxApp's event loop (not a
-	// structured exception — that goes through OnFatalException).
-	wxDebugReportCompress report;
-	report.AddAll(wxDebugReport::Context_Current);
-
-	wxDebugReportPreviewStd preview;
-	if (preview.Show(report)) report.Process();
-}
-
-#ifdef __WXMSW__
-#include "backend/system/value/valueOLE.h"
-#endif
-
-void ibAppDesigner::OnFatalException()
-{
-	// Collect everything at the exception context: XML report + minidump.
-	// AddAll(Context_Exception) captures state at the fault point (register
-	// values, stack, loaded modules), which is what a debugger needs to
-	// resolve the real crash site.
-	wxDebugReportCompress report;
-	report.AddAll(wxDebugReport::Context_Exception);
-
-	//release all created com-objects
-#ifdef __WXMSW__
-	ibValueOLE::ReleaseComObjects();
-#endif
-
-	if (wxSocketBase::IsInitialized())
-		wxSocketBase::Shutdown();
-
-	appDataDestroy();
-
-	//show error
-	wxDebugReportPreviewStd preview;
-	if (preview.Show(report)) report.Process();
 }
 
 int ibAppDesigner::OnExit()
@@ -355,24 +297,22 @@ int ibAppDesigner::OnExit()
 	ibValueOLE::ReleaseComObjects();
 #endif
 
+	bool success_exit = wxApp::OnExit();
+
+	appDataDestroy();
+
+	// The socket layer goes LAST, after everything that owns a socket — see the note in
+	// enterprise/mainApp.cpp (#155). The designer's debugger CLIENT closes its connections' sockets
+	// with appData, and on macOS Shutdown() nulls the run loop those sockets' sources are removed from.
 	if (wxSocketBase::IsInitialized())
 		wxSocketBase::Shutdown();
 
-	// Tear every session down through the session manager BEFORE
-	// wxApp::OnExit. registry->Stop() submits Remove@Urgent for each
-	// session in m_own and drains the queue — OnDisconnect listeners
-	// fire while the wx event loop is still alive, so any frame-Destroy
-	// scheduled from there gets dispatched. Without this the event
-	// loop dies first and the Destroy events stay queued. Idempotent —
-	// ~ibApplicationData calls Stop again best-effort.
-	if (appData != nullptr) {
-		auto* registry = appData->GetSessionRegistry();
-		if (registry != nullptr) registry->Stop();
-	}
+	// Why the session was closed from outside, if it was — said once everything is let go: the session,
+	// its heartbeat and the connection pool (appDataDestroy). A box shown while any of them stood held it.
+	ibFrontendMainFrame::SayExitNotice();
 
-	bool suсcess_exit = wxApp::OnExit();
-
-	appDataDestroy();
+	// The leak report used to print here. It now runs from atexit — registered where the hook is
+	// armed — so that it sees the same heap the CRT dump sees. See the note there.
 
 	// Allow clipboard data to persist after close
 	if (wxTheClipboard->Open()) {
@@ -380,5 +320,16 @@ int ibAppDesigner::OnExit()
 		wxTheClipboard->Close();
 	}
 
-	return suсcess_exit;
+	// The last two blocks in the CRT dump were a wxLogOutputBest (8 bytes) and its wxLogFormatter
+	// (4). wxEntryCleanup deletes the active log target and then deliberately LEAVES
+	// auto-vivification on — its own comment says leaking is better than losing a message logged
+	// from a static dtor. So the next log call after cleanup builds a fresh target that nothing
+	// will ever delete, and something does log that late (registrar teardown runs there).
+	//
+	// We take the other side of that trade, and it costs nothing: with auto-creation off,
+	// wxLog::GetMainThreadActiveTarget falls back to a STATIC wxLogOutputBest (log.cpp), so late
+	// messages are still printed — they just stop coming from the heap.
+	wxLog::DontCreateOnDemand();
+
+	return success_exit;
 }

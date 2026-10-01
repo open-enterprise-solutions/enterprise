@@ -81,11 +81,10 @@ void ibGridEditor::ibPropertyGridEditorSpreadsheet::OnPropertyCreated(ibProperty
 		m_propertyColourBorder->SetValue(borderLeft.m_colour);
 	}
 	else if (m_propertyFitMode == property) {
-		ibGridFitMode fitMode = m_view->GetCellFitMode(coords.GetTopRow(), coords.GetLeftCol());
-		if (fitMode.IsOverflow())
-			m_propertyFitMode->SetValue(ibFitMode_Overflow);
-		else if (fitMode.IsClip())
-			m_propertyFitMode->SetValue(ibFitMode_Clip);
+		// The two enums share their values on purpose (see ibToGridFitMode); going through the one
+		// translation is what keeps a mode added to the model from being silently unlistable here.
+		m_propertyFitMode->SetValue((ibSpreadsheetFitMode)
+			ibFromGridFitMode(m_view->GetCellFitMode(coords.GetTopRow(), coords.GetLeftCol())));
 	}
 	else if (m_propertyReadOnly == property) {
 		m_propertyReadOnly->SetValue(m_view->IsCellReadOnly(coords.GetTopRow(), coords.GetLeftCol()));
@@ -166,7 +165,8 @@ void ibGridEditor::ibPropertyGridEditorSpreadsheet::OnPropertyChanged(ibProperty
 		m_view->SetCellBorderBottom(coords, (wxPenStyle)m_propertyBottomBorder->GetValueAsEnum(), m_propertyColourBorder->GetValueAsColour());
 	}
 	else if (m_propertyFitMode == property) {
-		m_view->SetCellFitMode(coords, m_propertyFitMode->GetValueAsEnum() == ibFitMode_Overflow ? ibGridFitMode::Overflow() : ibGridFitMode::Clip());
+		m_view->SetCellFitMode(coords, ibToGridFitMode(
+			(ibSpreadsheetCellDescription::ibFitMode)m_propertyFitMode->GetValueAsEnum()));
 	}
 	else if (m_propertyReadOnly == property) {
 		m_view->SetCellReadOnly(coords, m_propertyReadOnly->GetValueAsBoolean());
@@ -194,7 +194,7 @@ void ibGridEditor::ibPropertyGridEditorSpreadsheet::OnPropertyChanged(ibProperty
 		}
 	}
 	else if (m_propertyText == property) {
-		m_view->SetCellValue(coords, m_propertyText->GetValueAsString());
+		m_view->SetCellValue(coords, m_propertyText->GetValueAsRawString());
 	}
 	else if (m_propertyParameter == property) {
 		m_view->SetCellValue(coords, m_propertyParameter->GetValueAsString());
@@ -208,7 +208,7 @@ void ibGridEditor::ibPropertyGridEditorSpreadsheet::OnPropertyChanged(ibProperty
 
 ibMetaData* ibGridEditor::ibPropertyGridEditorSpreadsheet::GetMetaData() const
 {
-	return ibMetaDataConfiguration::Get();
+	return appEnv::ActiveMetaData();
 }
 
 void ibGridEditor::ibPropertyGridEditorSpreadsheet::OnPropertyCreated(ibProperty* property)
@@ -217,22 +217,19 @@ void ibGridEditor::ibPropertyGridEditorSpreadsheet::OnPropertyCreated(ibProperty
 		ibPropertyGridEditorSpreadsheet::OnPropertyCreated(property, coords);
 }
 
-void ibGridEditor::ibPropertyGridEditorSpreadsheet::OnPropertyRefresh(wxPropertyGridManager* pg, wxPGProperty* pgProperty, ibProperty* property)
+void ibGridEditor::ibPropertyGridEditorSpreadsheet::OnPropertyRefresh()
 {
-	if (m_propertyText == property) {
-		pg->HideProperty(pgProperty, m_propertyFillType->GetValueAsEnum() == ibSpreadsheetFillType::ibSpreadsheetFillType_StrParameter);
-	}
-	else if (m_propertyParameter == property) {
-		pg->HideProperty(pgProperty, m_propertyFillType->GetValueAsEnum() != ibSpreadsheetFillType::ibSpreadsheetFillType_StrParameter);
-	}
+	ibPropertyObject::OnPropertyRefresh();
 
+	// Text and Parameter are the two faces of FillType — exactly one of them applies.
+	const bool byParameter =
+		m_propertyFillType->GetValueAsEnum() == ibSpreadsheetFillType::ibSpreadsheetFillType_StrParameter;
+	HideProperty(m_propertyText, byParameter);
+	HideProperty(m_propertyParameter, !byParameter);
 }
 
 void ibGridEditor::ibPropertyGridEditorSpreadsheet::OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue)
 {
-	const int row = m_view->GetGridCursorRow(),
-		col = m_view->GetGridCursorCol();
-
 	for (const ibGridBlockCoords& coords : m_selection)
 		ibPropertyGridEditorSpreadsheet::OnPropertyChanged(property, coords);
 

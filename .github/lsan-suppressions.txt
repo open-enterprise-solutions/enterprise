@@ -1,0 +1,31 @@
+# LeakSanitizer suppressions — third-party allocations that outlive the process on purpose.
+#
+# A line here is a CLAIM, so each one says WHOSE allocation it is and why nobody frees it. Our own
+# leaks never belong in this file: one of ours is either released by whoever created it, or it is
+# explained in the code that makes it — a suppression would hide the question instead of answering
+# it. (The picture auto-loader is the worked example: its destructor was empty, and the answer was
+# to take down the wx image handlers it had put up, not to list them here.)
+#
+# Measured on the first full sanitised run, 2026-09-22: every test process reported the same
+# ~31.7 KB in ~728 allocations at exit, and the largest single entry — 14848 bytes in 58 objects —
+# is fontconfig's. Under a GUI application GTK is never torn down either; the difference is that a
+# test binary exits while LeakSanitizer is watching.
+
+# fontconfig keeps its font set and pattern caches in process-wide statics with no teardown that
+# anyone calls; the handles die with the process by design.
+leak:libfontconfig
+
+# The GLib type system, GObject classes and the GTK singletons built from them are created once and
+# deliberately never freed — g_type_init's tables have no matching shutdown.
+leak:libglib
+leak:libgobject
+leak:libgio
+leak:libgtk
+
+# Font faces and shaping buffers held by the caches above.
+leak:libfreetype
+leak:libharfbuzz
+
+# Xlib / xcb display-side allocations held for the life of the connection.
+leak:libX11
+leak:libxcb

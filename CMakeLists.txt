@@ -12,7 +12,6 @@
 # Optional database drivers (all OFF by default except SQLite which is embedded):
 #   -DOES_USE_FIREBIRD=ON
 #   -DOES_USE_POSTGRESQL=ON
-#   -DOES_USE_MYSQL=ON
 #   -DOES_USE_ODBC=ON
 #
 # =============================================================================
@@ -61,12 +60,121 @@ endforeach()
 
 option(BUILD_TESTING       "Build unit tests (Google Test)"     OFF)
 
+# The web pair — wfrontend (the OES_USE_WEB frontend) and wenterprise-server.
+# Off by default: until the three CI toolchains have all built them, the desktop
+# suite is what `cmake -B build` is expected to produce, and a web source that
+# stops compiling somewhere must not be able to take that down with it.
+option(OES_BUILD_WEB       "Build the web runtime (wfrontend + wenterprise-server)" OFF)
+
 option(OES_USE_FIREBIRD    "Enable Firebird database driver"    OFF)
 option(OES_USE_POSTGRESQL  "Enable PostgreSQL database driver"  OFF)
-option(OES_USE_MYSQL       "Enable MySQL database driver"       OFF)
 option(OES_USE_ODBC        "Enable ODBC database driver"        OFF)
 
+# Phase-6 local FB server — required for shared-file (leader-election)
+# deployments so the leader process can expose a TCP listener that
+# followers connect to. ON by default since leader-mode is the primary
+# multi-user story for the FB driver. The `firebird.exe` binary is not
+# vendored in the repo (~5 MB, version-specific); operator drops FB 5's
+# `bin/firebird.exe` into `src/engine/backend/databaseLayer/firebird/
+# engine/dll/` and it gets copied into `_fb/` at build time. Build still
+# works without the binary, but leader-mode will degrade to embedded-
+# only single-user. Turn OFF to exclude the spawn code entirely (saves
+# ~20 KB, drops winsock dependency in the TU).
+option(OES_FB_LOCALSERVER  "Enable Firebird out-of-process local server (Phase 6)" ON)
+
 # SQLite is always available (embedded sources in the project).
+
+# ---------------------------------------------------------------------------
+# Link-time code generation (Release)
+# ---------------------------------------------------------------------------
+#
+# The interpreter's hot loop crosses translation units on nearly every opcode:
+# ibProcUnit::Execute (procUnit.cpp) calls ibNumber::Compare / operator+= /
+# operator*= (fnumber.cpp) for the arithmetic and ibByteCode::Find* /
+# ibValue::Find* for name resolution. Their fast paths are a handful of
+# instructions each — ibNumber::Compare's is TryImmInts plus one int64
+# three-way compare — but without whole-program view the compiler cannot see
+# any of those bodies, so every one costs a real call plus the register spill
+# a call forces.
+#
+# Measured 2026-08-08, Release x64 MSVC 19.42, min-of-4, quiet machine
+# (tests/bench_runtime.cpp). Ranges did not overlap on any of these four:
+#   arith loop      116.2 -> 95.0 ns   (-18%)
+#   method resolve  297.8 -> 251.1 ns  (-16%)
+#   LINQ            1029  -> 936 ns    (-9%)
+#   recursion       364.1 -> 345.2 ns  (-5%)
+# host->script and string concat landed inside their own run-to-run spread and
+# are NOT claimed. Full oes_tests suite stayed green (1102 passed / 0 failed),
+# which is the check that matters here: LTCG reorders and inlines across the
+# module boundary, so the destruction order of ibApplicationData, the inline
+# registry variables and the pointer-to-member in ibMemberTable are all
+# exercised under it.
+#
+# ON for MSVC only, because that is where the numbers above were taken. GCC and
+# Clang would use -flto, which is a different implementation with a different
+# link-time cost, and the CI budget for the Linux / macOS jobs has not been
+# measured against it — turn the option on there once it has been.
+if(MSVC)
+    option(OES_ENABLE_LTO "Link-time code generation for Release builds" ON)
+else()
+    option(OES_ENABLE_LTO "Link-time code generation for Release builds" OFF)
+endif()
+
+if(OES_ENABLE_LTO)
+    include(CheckIPOSupported)
+    check_ipo_supported(RESULT OES_IPO_SUPPORTED OUTPUT OES_IPO_MESSAGE)
+    if(OES_IPO_SUPPORTED)
+        set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
+        message(STATUS "LTO/LTCG ............ ON (Release)")
+    else()
+        message(STATUS "LTO/LTCG ............ unsupported: ${OES_IPO_MESSAGE}")
+    endif()
+endif()
+
+# ---------------------------------------------------------------------------
+# How deep a script may recurse — 8 MB of stack, as Common.props gives the Visual Studio build
+# (<StackReserveSize>, where the measurement is written down: the default 1 MB killed the process at
+# Depth(75), silently, long before the engine's own recursion guard at 200 could speak). The linker
+# decides it, so it is said here for every executable; a CMake-built Windows tree used to run on 1 MB.
+# Linux and macOS give the main thread 8 MB already.
+# ---------------------------------------------------------------------------
+if(MSVC)
+    string(APPEND CMAKE_EXE_LINKER_FLAGS " /STACK:8388608")
+endif()
+
+# ---------------------------------------------------------------------------
+# Sanitizers
+# ---------------------------------------------------------------------------
+#
+# The leak hunt on Windows leans on the MSVC debug CRT: an exit dump of every
+# surviving block, plus the opt-in tracker in backend/diagnostics/leakTracker
+# that names who allocated them. Neither exists here, and neither is worth
+# reimplementing — LeakSanitizer already reports leaks with full stacks, and it
+# rides in with AddressSanitizer.
+#
+#     cmake -B build -DCMAKE_BUILD_TYPE=Debug -DOES_SANITIZE=address
+#
+# The procedure is the same on every platform (see
+# docs/private/engineering-playbook/25-memory-leaks.md); only the instrument differs.
+# Accepts anything the toolchain does: address, undefined, thread,
+# address,undefined. OFF by default — ASan roughly doubles memory and costs
+# ~2x runtime, which is not what an ordinary debug build should pay.
+set(OES_SANITIZE "" CACHE STRING "Sanitizers to enable, e.g. address or address,undefined")
+
+if(OES_SANITIZE)
+    if(MSVC)
+        # MSVC ships ASan but not LSan — /fsanitize=address finds overflows and
+        # use-after-free, never leaks. Leaks on Windows are the debug CRT's job,
+        # so say so rather than let the flag imply cover it does not give.
+        message(WARNING
+            "OES_SANITIZE on MSVC: /fsanitize=address has no leak detector. "
+            "Use a Debug build and the CRT dump (docs/private/engineering-playbook/25-memory-leaks.md).")
+        add_compile_options(/fsanitize=${OES_SANITIZE})
+    else()
+        add_compile_options(-fsanitize=${OES_SANITIZE} -fno-omit-frame-pointer -g)
+        add_link_options(-fsanitize=${OES_SANITIZE})
+    endif()
+endif()
 
 # ---------------------------------------------------------------------------
 # Convenience paths
@@ -76,12 +184,104 @@ set(OES_SRC_DIR      "${CMAKE_SOURCE_DIR}/src")
 set(OES_ENGINE_DIR   "${OES_SRC_DIR}/engine")
 set(OES_3RDPARTY_DIR "${OES_SRC_DIR}/3rdparty")
 
+# ⭐ A SUBMODULE THE BUILD NEEDS IS FETCHED BY THE BUILD. `oes_require_submodule(<dir under 3rdparty> <a file in
+# it>)` is asked for every one of them - cpp-httplib here, Mbed TLS and wxWidgets where they are added - and a
+# missing one is fetched on the spot, with everything under it, before anything reads it.
+#
+# 🛑 IT USED TO STOP AND SAY WHAT TO RUN, and a build whose checkout fetched less than the tree now needs
+# stopped there with it: the nightly is started from the workflow file of the default branch, which still
+# fetched wxWidgets alone, so the night after the HTTP stack came in ended at configure on every platform -
+# "cpp-httplib submodule not found" (2026-09-26). The tree knows what it needs; the checkout does not.
+#
+# Tried again with a longer wait, as .github/fetch-submodules.sh does: GitHub answers a clone with 503 now and
+# then. Only a tree that cannot be fetched at all - no git, not a checkout, no network - still stops here,
+# saying where the submodule was looked for.
+function(oes_require_submodule name marker)
+    set(dir "${OES_3RDPARTY_DIR}/${name}")
+    if(EXISTS "${dir}/${marker}")
+        return()
+    endif()
+    find_package(Git QUIET)
+    if(GIT_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
+        foreach(attempt 1 2 3)
+            message(STATUS "Fetching the ${name} submodule (attempt ${attempt} of 3)")
+            execute_process(
+                COMMAND "${GIT_EXECUTABLE}" submodule update --init --recursive -- "src/3rdparty/${name}"
+                WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+                RESULT_VARIABLE fetched)
+            if(fetched EQUAL 0 AND EXISTS "${dir}/${marker}")
+                return()
+            endif()
+            if(attempt LESS 3)
+                math(EXPR wait "${attempt} * 30")
+                execute_process(COMMAND "${CMAKE_COMMAND}" -E sleep "${wait}")
+            endif()
+        endforeach()
+    endif()
+    message(FATAL_ERROR
+        "${name} submodule not found at ${dir}, and it could not be fetched.\n"
+        "Run: git submodule update --init --recursive"
+    )
+endfunction()
+
+# Said here rather than three hundred lines later, as a header that cannot be opened.
+oes_require_submodule(cpp-httplib httplib.h)
+
 # ---------------------------------------------------------------------------
 # Platform detection and global compile definitions
 # ---------------------------------------------------------------------------
 
 # Common to all platforms
 add_compile_definitions(_UNICODE UNICODE)
+
+# cpp-httplib, for every translation unit that includes it (the MCP server, the script's HTTP client,
+# the web server, the tests): its inline functions read these, and two units compiled under two values
+# of one macro are one definition too many - so the whole build says it once. ConfigurationDefs.props
+# says the same for the solution.
+#   EXPECT_100_THRESHOLD=0 - the client does not add `Expect: 100-continue` to a body of 1 KB or more by
+#   itself: a server that does not speak it (an older proxy, a cash register's firmware) answers a second
+#   late or not at all, and a script has no header it may set to stop that.
+#   SEND_FLAGS=MSG_NOSIGNAL - off Windows a write to a peer that hung up raises SIGPIPE, whose default
+#   ends the process; the flag keeps it an error the caller sees. macOS has no such flag and sets
+#   SO_NOSIGPIPE on the socket instead (backend/system/value/valueHttp.cpp).
+add_compile_definitions(CPPHTTPLIB_EXPECT_100_THRESHOLD=0)
+if(NOT WIN32 AND NOT APPLE)
+    add_compile_definitions(CPPHTTPLIB_SEND_FLAGS=MSG_NOSIGNAL)
+endif()
+
+# TLS for cpp-httplib: Mbed TLS, a submodule built here - nothing installed, nothing from the system (the tree
+# holds OpenSSL only as a run-time client of PostgreSQL, without headers). Its tests and programs stay out; the
+# generated files are in the tag, so no Python is needed. One macro for the whole build, for the reason the
+# two above give; the library reads the platform's own trust store by itself (the Windows store, the macOS
+# keychain, /etc/ssl/certs on Linux). Everything that includes httplib.h links the three libraries through
+# backend, which carries them as PUBLIC.
+oes_require_submodule(mbedtls CMakeLists.txt)
+# ⚠ A STATIC LIBRARY THAT GOES INTO A SHARED ONE HAS TO BE POSITION-INDEPENDENT. backend is a shared
+# library and Mbed TLS builds static ones, which say nothing about -fPIC; on a Linux whose gcc defaults to
+# PIE that is a link error ("relocation R_X86_64_PC32 ... recompile with -fPIC") and nowhere else. It is the
+# DIRECTORY variable rather than a target property, because the targets do not exist until the subdirectory
+# below has been read - and there are five of them, not three: mbedcrypto pulls everest and p256m, which go
+# into the same shared library. The old value is put back afterwards so that nothing else in this build
+# changes: wxWidgets and the executables are compiled exactly as they were.
+set(OES_PIC_WAS ${CMAKE_POSITION_INDEPENDENT_CODE})
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+# What this build needs on top of Mbed TLS's own configuration - threads, above all (the file says why). The
+# directory goes on the include path for the whole build because Mbed TLS's OWN sources include
+# threading_alt.h by that name (library/threading.h), and so do the two translation units of ours that hand
+# the mutexes over.
+set(MBEDTLS_USER_CONFIG_FILE "${OES_ENGINE_DIR}/backend/tls/oes_mbedtls_config.h" CACHE FILEPATH "Mbed TLS: what this build adds to its configuration" FORCE)
+include_directories("${OES_ENGINE_DIR}/backend/tls")
+set(ENABLE_TESTING OFF CACHE BOOL "Mbed TLS: its own tests" FORCE)
+set(ENABLE_PROGRAMS OFF CACHE BOOL "Mbed TLS: its sample programs" FORCE)
+set(MBEDTLS_FATAL_WARNINGS OFF CACHE BOOL "Mbed TLS: -Werror" FORCE)
+set(GEN_FILES OFF CACHE BOOL "Mbed TLS: regenerate its generated sources" FORCE)
+# Off Windows the configuration above takes Mbed TLS's own pthread mutexes, and its CMake links pthread only
+# when asked: without this its libraries use the functions and name the library for nobody, resolving by
+# accident through whatever the consumer happens to link (on glibc 2.34 and later pthread is inside libc).
+set(LINK_WITH_PTHREAD ON CACHE BOOL "Mbed TLS: link the thread library it takes its mutexes from" FORCE)
+add_subdirectory(src/3rdparty/mbedtls EXCLUDE_FROM_ALL)
+set(CMAKE_POSITION_INDEPENDENT_CODE ${OES_PIC_WAS})
+add_compile_definitions(CPPHTTPLIB_MBEDTLS_SUPPORT)
 
 if(WIN32)
     add_compile_definitions(
@@ -116,15 +316,58 @@ add_compile_definitions(
 # ---------------------------------------------------------------------------
 
 if(MSVC)
-    # Match the MSBuild settings: fast floating point, RTTI enabled, W1
-    add_compile_options(/fp:fast /GR /W1)
-    # Suppress the same warnings disabled in the .vcxproj files
-    add_compile_options(/wd4251 /wd4275 /wd4458)
+    # Match the MSBuild settings: fast floating point, RTTI enabled, W1, and
+    # /MP multi-processor compilation (the .vcxproj files already set
+    # <MultiProcessorCompilation>true</MultiProcessorCompilation>). Without /MP
+    # a single big target like backend compiles its hundreds of .cpp serially
+    # even under `cmake --build --parallel` (which only parallelises across
+    # targets) — /MP fans them across cores.
+    # /W4 matches the Debug configurations of the .vcxproj files. At /W1 this build saw
+    # less than the shipping one, which made it useless as the control against GCC: a
+    # warning the developer's own Visual Studio prints would have passed CI unnoticed.
+    add_compile_options(/fp:fast /GR /W4 /MP /bigobj)
+    # Same suppressions as Common.props, and for the same reason: they mirror what the
+    # GCC build turns off, so a warning seen on one toolchain is seen on the other.
+    add_compile_options(/wd4251 /wd4275 /wd4458 /wd4100 /wd4127 /wd4018 /wd4389 /wd4245)
 else()
     # GCC / Clang
     add_compile_options(-Wall -Wno-unused-parameter -Wno-sign-compare)
+
+    # Silence the two classes that BURY everything else. The first GCC build of the tree
+    # produced ~48,000 warnings, of which ~44,000 were unknown-pragma and ~2,800 attributes
+    # — and buried in them were three -Wreturn-local-addr lines naming the exact cause of 33
+    # crashing tests. A warning nobody can find is a warning nobody acts on.
+    #
+    #   unknown-pragmas — `#pragma region` / `endregion`, an editor folding hint MSVC
+    #                     understands and GCC does not. Nothing to fix in the code.
+    #   attributes      — BACKEND_API (dllexport/dllimport) written on elaborated type
+    #                     specifiers, e.g. `class BACKEND_API ibValue` inside a typedef,
+    #                     where the attribute is simply ignored off-Windows.
+    #
+    # Deliberately NOT silenced: -Wreorder and -Wswitch. Both were cleaned at the SOURCE
+    # on 2026-08-03 rather than switched off — the 83 -Wswitch lines became an explicit
+    # `default:` (or an explicit TYPE_LAST case where the switch really is exhaustive, so
+    # a new value still warns), and the -Wreorder ones left in our code were the three
+    # ibCompileCode ctors, whose lists now follow declaration order. What remained came
+    # from the vendored forks, which compile quiet per the rule above.
+    add_compile_options(-Wno-unknown-pragmas -Wno-attributes)
+
+    # Clang adds a third one of the same kind, and it is the loudest yet: the first
+    # macOS build produced 67,318 warning lines, of which 66,563 — 99% — were
+    # -Winconsistent-missing-override. GCC has no equivalent in -Wall, so this is
+    # new information, but not information anyone can act on in that volume: the
+    # property hierarchy marks roughly half its overrides, the headers reach most
+    # of the backend, and every unmarked one reprints in every TU that includes
+    # them. It buried the four classes that DID matter (an undefined inline, ten
+    # NULL-vs-non-pointer comparisons, 649 hidden virtuals, and the one real
+    # error). Silenced to keep the next real finding visible — marking the
+    # overrides is a separate pass over ~100 declarations in 27 headers, and is
+    # worth doing: `override` is what catches a base signature drifting.
     if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-        add_compile_options(-Wno-deprecated-declarations)
+        add_compile_options(
+            -Wno-inconsistent-missing-override
+            -Wno-deprecated-declarations
+        )
     endif()
 endif()
 
@@ -153,15 +396,42 @@ set(wxBUILD_SAMPLES  OFF CACHE BOOL "" FORCE)
 set(wxBUILD_DEMOS    OFF CACHE BOOL "" FORCE)
 set(wxBUILD_BENCHMARKS OFF CACHE BOOL "" FORCE)
 
-# Ensure the submodule directory exists
-if(NOT EXISTS "${OES_3RDPARTY_DIR}/wxWidgets/CMakeLists.txt")
-    message(FATAL_ERROR
-        "wxWidgets submodule not found at ${OES_3RDPARTY_DIR}/wxWidgets.\n"
-        "Run: git submodule update --init --recursive"
-    )
-endif()
+# Ensure the submodule directory exists (fetched when it does not - see oes_require_submodule)
+oes_require_submodule(wxWidgets CMakeLists.txt)
 
 add_subdirectory("${OES_3RDPARTY_DIR}/wxWidgets" "${CMAKE_BINARY_DIR}/wxWidgets")
+
+# ---------------------------------------------------------------------------
+# Vendored code compiles QUIET.
+#
+# wxWidgets and the C libraries it bundles (libwebp, libpng, libtiff, zlib, ...) are
+# not ours to fix, and at /W4 they DROWN the build we can act on: of the 703 MSVC
+# warnings in the 2026-08-02 CI run, 305 were a single C4244 family inside libwebp and
+# not one came from src/engine. Same story for GCC's unused-variable / reorder counts.
+#
+# Their warnings are silenced at the TARGET level, not by lowering the project-wide
+# level: our own code keeps /W4 and -Wall, so what is left in a log is ours.
+# ---------------------------------------------------------------------------
+function(oes_silence_directory_targets dir)
+    get_property(_targets DIRECTORY "${dir}" PROPERTY BUILDSYSTEM_TARGETS)
+    foreach(_t IN LISTS _targets)
+        get_target_property(_type ${_t} TYPE)
+        if(NOT _type STREQUAL "INTERFACE_LIBRARY" AND NOT _type STREQUAL "UTILITY")
+            if(MSVC)
+                target_compile_options(${_t} PRIVATE /W0)
+            else()
+                target_compile_options(${_t} PRIVATE -w)
+            endif()
+        endif()
+    endforeach()
+
+    get_property(_subdirs DIRECTORY "${dir}" PROPERTY SUBDIRECTORIES)
+    foreach(_s IN LISTS _subdirs)
+        oes_silence_directory_targets("${_s}")
+    endforeach()
+endfunction()
+
+oes_silence_directory_targets("${OES_3RDPARTY_DIR}/wxWidgets")
 
 # After add_subdirectory, wxWidgets targets (wx::core, wx::base, wx::aui, etc.)
 # are available as imported targets.
@@ -171,7 +441,11 @@ add_subdirectory("${OES_3RDPARTY_DIR}/wxWidgets" "${CMAKE_BINARY_DIR}/wxWidgets"
 # ---------------------------------------------------------------------------
 
 if(OES_USE_FIREBIRD)
-    # Firebird client library (fbclient)
+    # fbclient is loaded dynamically at runtime (firebirdInterface.cpp ->
+    # wxDynamicLibrary::Load("fbclient")) and the driver compiles against the
+    # in-tree headers under databaseLayer/firebird/engine. A system fbclient is
+    # therefore NOT required to build or link — locate it only opportunistically
+    # so packagers that prefer an explicit dependency can still find it.
     find_library(FIREBIRD_LIBRARY NAMES fbclient fbclient_ms
         HINTS
             "$ENV{FIREBIRD_HOME}/lib"
@@ -181,58 +455,69 @@ if(OES_USE_FIREBIRD)
             "/usr/local/lib"
             "/opt/firebird/lib"
     )
-    find_path(FIREBIRD_INCLUDE_DIR NAMES ibase.h
-        HINTS
-            "$ENV{FIREBIRD_HOME}/include"
-            "/Library/Frameworks/Firebird.framework/Versions/A/Headers"
-            "/usr/include"
-            "/usr/local/include"
-            "/opt/firebird/include"
-    )
-    if(FIREBIRD_LIBRARY AND FIREBIRD_INCLUDE_DIR)
-        message(STATUS "Firebird found: ${FIREBIRD_LIBRARY}")
-        add_library(Firebird::Firebird UNKNOWN IMPORTED)
-        set_target_properties(Firebird::Firebird PROPERTIES
-            IMPORTED_LOCATION "${FIREBIRD_LIBRARY}"
-            INTERFACE_INCLUDE_DIRECTORIES "${FIREBIRD_INCLUDE_DIR}"
-        )
-        add_compile_definitions(OES_USE_FIREBIRD)
+    add_compile_definitions(OES_USE_FIREBIRD)
+
+    if(APPLE)
+        # ⭐ THE FRAMEWORK CANNOT LOAD ITSELF — an rpath of ours has to stand in for the one
+        # the package forgot.
+        #
+        # The official macOS Firebird package ships
+        # `Firebird.framework/Versions/A/Resources/lib/libfbclient.dylib` linked against
+        # `@rpath/lib/libtommath.dylib` while carrying NO LC_RPATH of its own. `@rpath` is
+        # resolved against the load commands of the image that INITIATES the load — here
+        # backend's `wxDynamicLibrary::Load` (firebirdInterface.cpp) — so with nothing to
+        # substitute, dyld gives up:
+        #
+        #   Library not loaded: @rpath/lib/libtommath.dylib
+        #   Reason: no LC_RPATH's found
+        #
+        # The symptom is indistinguishable from "Firebird is not installed": Init() returns
+        # false on the failed Load and the startup dialog says the infobase could not be
+        # opened, with the framework sitting right there on disk. Naming the framework's
+        # Resources directory in OUR rpath makes `@rpath/lib/libtommath.dylib` resolve to
+        # the file that is already beside fbclient. Costs nothing when Firebird is absent —
+        # a non-existent rpath entry is simply skipped.
+        #
+        # BOTH directories are needed, for two different lookups:
+        #   Resources     — resolves `@rpath/lib/libtommath.dylib` (and fbclient's other
+        #                   siblings) once fbclient itself is in.
+        #   Resources/lib — lets the FIRST Load in ibInterfaceFirebird::Init() succeed on the
+        #                   bare name `libfbclient.dylib`. Without it that call fails, wx logs
+        #                   "Failed to load shared library" at error level, and the user is
+        #                   shown an alert about a library that the very next line loads
+        #                   successfully through the hard-coded framework path.
+        #
+        # Set before the engine's add_subdirectory() calls so every target below inherits it;
+        # wxWidgets is added earlier and is deliberately untouched.
+        foreach(_fb_rpath
+                "/Library/Frameworks/Firebird.framework/Versions/A/Resources/lib"
+                "/Library/Frameworks/Firebird.framework/Versions/A/Resources")
+            list(APPEND CMAKE_BUILD_RPATH   "${_fb_rpath}")
+            list(APPEND CMAKE_INSTALL_RPATH "${_fb_rpath}")
+        endforeach()
+        unset(_fb_rpath)
+    endif()
+    if(FIREBIRD_LIBRARY)
+        message(STATUS "Firebird client found (optional): ${FIREBIRD_LIBRARY}")
     else()
-        message(FATAL_ERROR "OES_USE_FIREBIRD is ON but Firebird client library was not found.")
+        message(STATUS "Firebird client not found — driver loads fbclient dynamically at runtime")
+    endif()
+    if(OES_FB_LOCALSERVER)
+        add_compile_definitions(OES_FB_LOCALSERVER)
+        message(STATUS "OES_FB_LOCALSERVER: ON — firebird.exe must be present in _fb/ at runtime")
     endif()
 endif()
 
 if(OES_USE_POSTGRESQL)
-    find_package(PostgreSQL REQUIRED)
+    # libpq is likewise loaded dynamically at runtime and the driver compiles
+    # against the in-tree headers under databaseLayer/postgres/engine, so a
+    # system libpq is not required to build. Locate it only opportunistically.
+    find_package(PostgreSQL QUIET)
     add_compile_definitions(OES_USE_POSTGRESQL)
-    message(STATUS "PostgreSQL found: ${PostgreSQL_LIBRARIES}")
-endif()
-
-if(OES_USE_MYSQL)
-    # CMake ships FindMySQL on some platforms; fall back to pkg-config
-    find_library(MYSQL_LIBRARY NAMES mysqlclient mariadbclient
-        HINTS
-            "$ENV{MYSQL_HOME}/lib"
-            "/usr/lib"
-            "/usr/local/lib"
-            "/usr/lib/x86_64-linux-gnu"
-    )
-    find_path(MYSQL_INCLUDE_DIR NAMES mysql.h
-        HINTS
-            "$ENV{MYSQL_HOME}/include"
-            "/usr/include/mysql"
-            "/usr/local/include/mysql"
-    )
-    if(MYSQL_LIBRARY AND MYSQL_INCLUDE_DIR)
-        message(STATUS "MySQL found: ${MYSQL_LIBRARY}")
-        add_library(MySQL::MySQL UNKNOWN IMPORTED)
-        set_target_properties(MySQL::MySQL PROPERTIES
-            IMPORTED_LOCATION "${MYSQL_LIBRARY}"
-            INTERFACE_INCLUDE_DIRECTORIES "${MYSQL_INCLUDE_DIR}"
-        )
-        add_compile_definitions(OES_USE_MYSQL)
+    if(PostgreSQL_FOUND)
+        message(STATUS "PostgreSQL client found (optional): ${PostgreSQL_LIBRARIES}")
     else()
-        message(FATAL_ERROR "OES_USE_MYSQL is ON but MySQL client library was not found.")
+        message(STATUS "PostgreSQL client not found — driver loads libpq dynamically at runtime")
     endif()
 endif()
 
@@ -276,24 +561,28 @@ endif()
 #
 #   backend       — SHARED library  (defines BACKEND_EXPORTS)
 #   frontend      — SHARED library  (defines FRONTEND_EXPORTS, links wx GUI)
-#   daemon        — executable      (console subsystem)
+#   appserver     — executable      (console subsystem; the application server — `daemon` is its alias)
 #   enterprise    — executable      (GUI subsystem)
 #   designer      — executable      (GUI subsystem)
 #   launcher      — executable      (GUI subsystem)
 #   codeRunner    — executable      (GUI subsystem)
-#   classChecker  — executable      (GUI subsystem)
 #   simplePlugin  — SHARED library  (plugin example)
+#   wfrontend     — SHARED library  (the web frontend, OES_BUILD_WEB)
+#   wenterprise-server — executable (the web HTTP server, OES_BUILD_WEB)
 # ---------------------------------------------------------------------------
 
 add_subdirectory("${OES_ENGINE_DIR}/backend")
 add_subdirectory("${OES_ENGINE_DIR}/frontend")
-add_subdirectory("${OES_ENGINE_DIR}/daemon")
+add_subdirectory("${OES_ENGINE_DIR}/appserver")
 add_subdirectory("${OES_ENGINE_DIR}/enterprise")
 add_subdirectory("${OES_ENGINE_DIR}/designer")
 add_subdirectory("${OES_ENGINE_DIR}/launcher")
 add_subdirectory("${OES_ENGINE_DIR}/codeRunner")
-add_subdirectory("${OES_ENGINE_DIR}/classChecker")
 add_subdirectory("${OES_ENGINE_DIR}/simplePlugin")
+
+if(OES_BUILD_WEB)
+    add_subdirectory("${OES_ENGINE_DIR}/wenterprise-server")
+endif()
 
 # ---------------------------------------------------------------------------
 # Unit tests (Google Test)
@@ -319,9 +608,9 @@ message(STATUS "  Install prefix .... ${CMAKE_INSTALL_PREFIX}")
 message(STATUS "  wxWidgets ......... submodule (shared)")
 message(STATUS "  Firebird .......... ${OES_USE_FIREBIRD}")
 message(STATUS "  PostgreSQL ........ ${OES_USE_POSTGRESQL}")
-message(STATUS "  MySQL ............. ${OES_USE_MYSQL}")
 message(STATUS "  ODBC .............. ${OES_USE_ODBC}")
-message(STATUS "  SQLite ............ ON (embedded)")
+message(STATUS "  SQLite ............ ON (embedded, tests + logging only)")
 message(STATUS "  Tests ............. ${BUILD_TESTING}")
+message(STATUS "  Sanitizers ........ ${OES_SANITIZE}")
 message(STATUS "=============================================")
 message(STATUS "")

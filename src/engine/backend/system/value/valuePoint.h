@@ -3,9 +3,11 @@
 
 #include "backend/compiler/value.h"
 
-class BACKEND_API ibValuePoint : public ibValue
+void ibValuePoint_BindNames(ibValue::ibMemberTable& helper, const ibValue* ctx);
+
+class BACKEND_API ibValuePoint : public ibValueStaticMembers<&ibValuePoint_BindNames>
 {
-	wxDECLARE_DYNAMIC_CLASS(ibValuePoint);
+	public:
 
 public:
 
@@ -18,7 +20,7 @@ public:
 	virtual ~ibValuePoint() {}
 
 	virtual bool Init(ibValue** paParams, const long lSizeArray);
-	virtual wxString GetString() const {
+	virtual ibString GetString() const {
 		return typeConv::PointToString(m_point); 
 	}
 
@@ -27,16 +29,9 @@ public:
 		return m_point == wxDefaultPosition;
 	}
 
-	static ibValueMethodHelper m_methodHelper;
-
 	virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal);        //setting attribute
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal);                   //attribute value
-
-	virtual ibValueMethodHelper* GetPMethods() const { // get a reference to the class helper for parsing attribute and method names
-		//PrepareNames(); 
-		return &m_methodHelper;
-	}
-	virtual void PrepareNames() const;                         // this method is automatically called to initialize attribute and method names.
+	// DoGetPMethods (protected) + Shared<&ibValuePoint_BindNames> come from the base.
 
 	operator wxPoint() const { return m_point; }
 };

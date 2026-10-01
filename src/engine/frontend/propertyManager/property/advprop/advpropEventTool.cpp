@@ -3,7 +3,8 @@
 #include "backend/propertyManager/property/eventAction.h"
 #include "backend/propertyManager/property/variant/variantAction.h"
 
-#include "frontend/propertyManager/property/private/prop.h"
+#include "frontend/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
+#include "frontend/propertyManager/property/private/propertyRegistry.h"
 #include "frontend/propertyManager/propertyEditor.h"
 
 // -----------------------------------------------------------------------
@@ -18,21 +19,30 @@ class ibPropertyToolLoader
 public:
 	ibPropertyToolLoader()
 	{
-		ibPG_IMPLEMENT_PROPERTY_CALLBACK(ibPGEventToolProperty, ibEventAction::ms_propertyEventAction);
+		ibPropertyRegistry::Register([](ibEventAction* evt) -> wxPGProperty* {
+			return new ibPGEventToolProperty(evt->GetLabel(), evt->GetName(), evt->GetEventList(),
+				evt->GetValue());
+		});
 	}
 } g_toolLoader;
 
 ibPGEventToolProperty::ibPGEventToolProperty(const wxString& label, const wxString& strName,
-	const wxPGChoices& choices,
+	const ibPropertyChoiceList& choices,
 	const wxVariant& value) : wxPGProperty(label, strName)
 {
 	ibVariantDataAction* dataAction = property_cast(value, ibVariantDataAction);
 	wxASSERT(dataAction);
 
-	m_choices.Assign(choices);
+	wxPGChoices ch;
+	for (unsigned int idx = 0; idx < choices.GetCount(); idx++) {
+		wxPGChoiceEntry item(choices.GetLabel(idx), choices.GetId(idx));
+		item.SetBitmap(choices.GetBitmap(idx));
+		ch.Add(item);
+	}
+	m_choices.Assign(ch);
 	m_value = wxVariant(0L);
 	
-	const ibActionDescription& actionDesc = dataAction->GetValueAsActionDesc();
+	const ibStandardCommandDescription& actionDesc = dataAction->GetValueAsActionDesc();
 	if (actionDesc.GetSystemAction() != wxNOT_FOUND) {
 		for (unsigned int i = 0; i < m_choices.GetCount(); i++) {
 			const int val = m_choices.GetValue(i);
@@ -63,7 +73,7 @@ wxString ibPGEventToolProperty::ValueToString( wxVariant& value, wxPGPropValForm
 {
 	ibVariantDataAction* dataAction = property_cast(value, ibVariantDataAction);
 	wxASSERT(dataAction);
-	const ibActionDescription& actionDesc = dataAction->GetValueAsActionDesc();
+	const ibStandardCommandDescription& actionDesc = dataAction->GetValueAsActionDesc();
 
 	for (unsigned int i = 0; i < m_choices.GetCount(); i++) {
 		const int sel_val = m_choices.GetValue(i);

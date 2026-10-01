@@ -1,9 +1,10 @@
 #include "widgets.h"
 #ifndef OES_USE_WEB
-#include "frontend/win/ctrls/controltextEditor.h"
+#include "frontend/win/ctrls/controlTextEditor.h"
 #endif
 #include "backend/metaCollection/partial/commonObject.h"
 #include "backend/metaData.h"
+#include "backend/formatString.h"   // ibFormatString — what the field shows its value through
 #include "frontend/visualView/ctrl/form.h"
 
 bool ibValueTextCtrl::TextProcessing(wxTextCtrl* textCtrl, const wxString& strData)
@@ -11,9 +12,12 @@ bool ibValueTextCtrl::TextProcessing(wxTextCtrl* textCtrl, const wxString& strDa
 	const ibMetaData* metaData = GetMetaData();
 	wxASSERT(metaData);
 	ibValue selValue; GetControlValue(selValue);
+	wxString text;
+	const ibTranslateString& format = m_propertyFormat->GetValueAsFormatString();
+	GetFormatFromColumn(!format.IsEmpty() ? format : GetSourceFormat(), GetTypeDesc()).Apply(selValue, text);
 	const ibValue& newValue = metaData->CreateObject(selValue.GetClassType());
 	if (newValue.GetType() == ibValueTypes::TYPE_EMPTY) {
-		textCtrl->SetValue(selValue.GetString());
+		textCtrl->SetValue(text);
 		textCtrl->SetInsertionPointEnd();
 		return false;
 	}
@@ -23,7 +27,7 @@ bool ibValueTextCtrl::TextProcessing(wxTextCtrl* textCtrl, const wxString& strDa
 			SetControlValue(listValue.at(0));
 		}
 		else {
-			textCtrl->SetValue(selValue.GetString());
+			textCtrl->SetValue(text);
 			textCtrl->SetInsertionPointEnd();
 			return false;
 		}
@@ -127,48 +131,25 @@ void ibValueTextCtrl::OnKillFocus(wxFocusEvent& event)
 
 void ibValueTextCtrl::OnSelectButtonPressed(wxCommandEvent& event)
 {
+	// The script may take the choice over entirely (StartChoice + standard
+	// processing off) — that decision belongs to the control, not to the route.
 	ibValue standartProcessing = true;
 	ibValueControl::CallAsEvent(m_eventStartChoice, GetValue(), standartProcessing);
-	if (standartProcessing.GetBoolean()) {
-		ibValue selValue; GetControlValue(selValue); bool setType = false;
-		if (selValue.GetType() == ibValueTypes::TYPE_EMPTY) {
-			const ibClassID& clsid = GetDataType();
-			if (clsid != 0) {
-				ibMetaData* metaData = GetMetaData();
-				wxASSERT(metaData);
-				if (metaData->IsRegisterCtor(clsid)) {
-					SetControlValue(
-						metaData->CreateObject(clsid)
-					);
-				}
-			}
-			setType = true;
-		}
-		if (!setType) {
-			const ibClassID& clsid = selValue.GetClassType();
-			wxWindow* textCtrl = wxDynamicCast(GetWxObject(), wxWindow);
-			if (!ibTypeControlFactory::QuickChoice(this, clsid, textCtrl)) {
-				const ibMetaData* metaData = GetMetaData();
-				wxASSERT(metaData);
-				const ibCtorMetaValueType* so = metaData->GetTypeCtor(clsid);
-				if (so != nullptr && so->GetMetaTypeCtor() == ibCtorObjectMetaType_Reference) {
-					const ibValueMetaObject* metaObject = so->GetMetaObject();
-					if (metaObject != nullptr) {
-						const ibMetaID& id = m_propertyChoiceForm->GetValueAsInteger();
-						if (id != wxNOT_FOUND) {
-							const ibMetaData* metaData = GetMetaData();
-							const ibValueMetaObject* foundedObject = metaData != nullptr
-								? metaData->FindAnyObjectByFilter(id) : nullptr;
-							metaObject->ProcessChoice(this, foundedObject != nullptr ? foundedObject->GetName() : wxString(), GetSelectMode());
-						}
-						else {
-							metaObject->ProcessChoice(this, wxEmptyString, GetSelectMode());
-						}
-					}
-				}
-			}
-		}
-	}
+	if (!standartProcessing.GetBoolean())
+		return;
+
+	// THE ONE ROUTE (ibTypeControlFactory::ChooseValue): settle the type — from the
+	// metadata, asking only when the control admits more than one — then choose the
+	// value of that type. This sequence used to be written out here, and it is the
+	// original this control lends to every other value editor; it now lives in one
+	// place so a filter cell and a table column walk exactly it, not a copy that
+	// drifts.
+	// The form the author picked in the property grid (null = the metaobject's own).
+	const ibMetaID& formId = m_propertyChoiceForm->GetValueAsInteger();
+	const ibMetaData* metaData = GetMetaData();
+	const ibValueMetaObject* choiceForm = (formId != wxNOT_FOUND && metaData != nullptr)
+		? metaData->FindAnyObjectByFilter(formId) : nullptr;
+	ibTypeControlFactory::ChooseValue(this, choiceForm, wxDynamicCast(GetWxObject(), wxWindow));
 }
 
 void ibValueTextCtrl::OnOpenButtonPressed(wxCommandEvent& event)

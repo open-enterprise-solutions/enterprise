@@ -9,7 +9,7 @@
 #include "frontend/mainFrame/mainFrame.h"
 
 ibDialogSelectTypeForm::ibDialogSelectTypeForm(ibValueMetaObject* metaValue, ibValueMetaObjectFormBase* metaObject)
-	: wxDialog(ibFrontendDocMDIFrame::GetFrame(), wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE | wxDIALOG_ADAPTATION_ANY_SIZER), m_metaObject(metaObject)
+	: wxDialog(ibFrontendMainFrame::GetFrame(), wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE | wxDIALOG_ADAPTATION_ANY_SIZER), m_metaObject(metaObject)
 {
 	SetTitle(metaValue->GetSynonym() + _(" form wizard"));
 	SetClientSize(FromDIP(wxSize(480, 320)));

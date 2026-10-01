@@ -1,16 +1,22 @@
 ﻿#include "objectSelector.h"
 #include "backend/metaCollection/partial/reference/reference.h"
-#include "backend/databaseLayer/databaseLayer.h"
 #include "backend/appData.h"
 
-ibValueSelectorDataObject::ibValueSelectorDataObject() : ibValue(ibValueTypes::TYPE_VALUE, true),
-m_methodHelper(new ibValueMethodHelper())
+ibValueSelectorDataObject::ibValueSelectorDataObject() : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, true)
 {
 }
 
 ibValueSelectorDataObject::~ibValueSelectorDataObject()
 {
-	wxDELETE(m_methodHelper);
+}
+
+bool ibValueSelectorDataObject::Next()
+{
+	// Universal cursor drive: designer mode never iterates; otherwise advance one row
+	// past the anchor through the shared keyset step.
+	if (appData->DesignerMode())
+		return false;
+	return FetchNext();
 }
 
 #include "backend/objCtor.h"
@@ -31,7 +37,7 @@ wxString ibValueSelectorDataObject::GetClassName() const
 	return clsFactory->GetClassName();
 }
 
-wxString ibValueSelectorDataObject::GetString() const
+ibString ibValueSelectorDataObject::GetString() const
 {
 	const ibCtorMetaValueType* clsFactory =
 		GetMetaObject()->GetTypeCtor(ibCtorObjectMetaType::ibCtorObjectMetaType_Selection);
@@ -46,38 +52,11 @@ ibValueSelectorRecordDataObject::ibValueSelectorRecordDataObject(const ibValueMe
 	ibValueDataObject(ibGuid(), false),
 	m_metaObject(metaObject)
 {
+	m_members.Bind(this, &ibValueSelectorRecordDataObject::FillMembers);
 	Reset();
 }
 
-bool ibValueSelectorRecordDataObject::Next()
-{
-	if (appData->DesignerMode()) {
-		return false;
-	}
-
-	if (!m_objGuid.isValid()) {
-		if (m_currentValues.size() > 0) {
-			auto itStart = m_currentValues.begin();
-			m_objGuid = *itStart;
-			return Read();
-		}
-	}
-	else {
-		auto it = std::find(m_currentValues.begin(), m_currentValues.end(), m_objGuid);
-		ptrdiff_t pos =
-			std::distance(m_currentValues.begin(), it);
-		if (pos == m_currentValues.size() - 1) {
-			return false;
-		}
-		std::advance(it, 1);
-		m_objGuid = *it;
-		return Read();
-	}
-
-	return false;
-}
-
-ibValueRecordDataObjectRef* ibValueSelectorRecordDataObject::GetObject(const ibGuid& guid) const
+ibValuePtr<ibValueRecordDataObjectRef> ibValueSelectorRecordDataObject::GetObject(const ibGuid& guid) const
 {
 	if (appData->DesignerMode()) {
 		return m_metaObject->CreateObjectValue();
@@ -96,38 +75,11 @@ ibValueSelectorRegisterDataObject::ibValueSelectorRegisterDataObject(const ibVal
 	ibValueSelectorDataObject(),
 	m_metaObject(metaObject)
 {
+	m_members.Bind(this, &ibValueSelectorRegisterDataObject::FillMembers);
 	Reset();
 }
 
-bool ibValueSelectorRegisterDataObject::Next()
-{
-	if (appData->DesignerMode()) {
-		return false;
-	}
-
-	if (m_keyValues.empty()) {
-		if (m_currentValues.size() > 0) {
-			auto itStart = m_currentValues.begin();
-			m_keyValues = *itStart;
-			return Read();
-		}
-	}
-	else {
-		auto it = std::find(m_currentValues.begin(), m_currentValues.end(), m_keyValues);
-		ptrdiff_t pos =
-			std::distance(m_currentValues.begin(), it);
-		if (pos == m_currentValues.size() - 1) {
-			return false;
-		}
-		std::advance(it, 1);
-		m_keyValues = *it;
-		return Read();
-	}
-
-	return false;
-}
-
-ibValueRecordManagerObject* ibValueSelectorRegisterDataObject::GetRecordManager(const ibMetaValueArray& keyValues) const
+ibValuePtr<ibValueRecordManagerObject> ibValueSelectorRegisterDataObject::GetRecordManager(const ibRowMetaValues& keyValues) const
 {
 	if (appData->DesignerMode()) {
 		return m_metaObject->CreateRecordManagerObjectValue();
@@ -148,15 +100,13 @@ enum Func {
 	enGetObjectRecord
 };
 
-void ibValueSelectorRecordDataObject::PrepareNames() const
+void ibValueSelectorRecordDataObject::FillMembers(ibMemberTable& helper) const
 {
-	m_methodHelper->ClearHelper();
+	helper.AppendFunc(wxT("Next"), wxT("Next()"));
+	helper.AppendFunc(wxT("Reset"), wxT("Reset()"));
+	helper.AppendFunc(wxT("GetObject"), wxT("GetObject()"));
 
-	m_methodHelper->AppendFunc(wxT("Next"), wxT("Next()"));
-	m_methodHelper->AppendFunc(wxT("Reset"), wxT("Reset()"));
-	m_methodHelper->AppendFunc(wxT("GetObject"), wxT("GetObject()"));
-
-	//set object name 
+	//set object name
 	wxString objectName;
 
 	for (const auto object : m_metaObject->GetAttributeArrayObject()) {
@@ -164,7 +114,7 @@ void ibValueSelectorRecordDataObject::PrepareNames() const
 			continue;
 		if (!object->GetObjectNameAsString(objectName))
 			continue;
-		m_methodHelper->AppendProp(
+		helper.AppendProp(
 			objectName,
 			true,
 			false,
@@ -177,7 +127,7 @@ void ibValueSelectorRecordDataObject::PrepareNames() const
 			continue;
 		if (!object->GetObjectNameAsString(objectName))
 			continue;
-		m_methodHelper->AppendProp(
+		helper.AppendProp(
 			objectName,
 			true,
 			false,
@@ -185,7 +135,7 @@ void ibValueSelectorRecordDataObject::PrepareNames() const
 		);
 	}
 
-	m_methodHelper->AppendProp(wxT("Reference"), m_metaObject->GetMetaID());
+	helper.AppendProp(wxT("Ref"), m_metaObject->GetMetaID());
 }
 
 bool ibValueSelectorRecordDataObject::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
@@ -213,7 +163,7 @@ bool ibValueSelectorRecordDataObject::SetPropVal(const long lPropNum, const ibVa
 
 bool ibValueSelectorRecordDataObject::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
-	const ibMetaID& id = m_methodHelper->GetPropData(lPropNum);
+	const ibMetaID& id = m_members.GetPropData(lPropNum);
 	if (!m_objGuid.isValid()) {
 		if (!appData->DesignerMode()) {
 			pvarPropVal = ibValue(ibValueTypes::TYPE_NULL);
@@ -228,16 +178,16 @@ bool ibValueSelectorRecordDataObject::GetPropVal(const long lPropNum, ibValue& p
 	return true;
 }
 
-void ibValueSelectorRegisterDataObject::PrepareNames() const
+void ibValueSelectorRegisterDataObject::FillMembers(ibMemberTable& helper) const
 {
-	m_methodHelper->AppendFunc(wxT("Next"), wxT("Next()"));
-	m_methodHelper->AppendFunc(wxT("Reset"), wxT("Reset()"));
+	helper.AppendFunc(wxT("Next"), wxT("Next()"));
+	helper.AppendFunc(wxT("Reset"), wxT("Reset()"));
 
 	if (m_metaObject->HasRecordManager()) {
-		m_methodHelper->AppendFunc(wxT("GetRecordManager"), wxT("GetRecordManager()"));
+		helper.AppendFunc(wxT("GetRecordManager"), wxT("GetRecordManager()"));
 	}
 
-	//set object name 
+	//set object name
 	wxString objectName;
 
 	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
@@ -245,7 +195,7 @@ void ibValueSelectorRegisterDataObject::PrepareNames() const
 			continue;
 		if (!object->GetObjectNameAsString(objectName))
 			continue;
-		m_methodHelper->AppendProp(
+		helper.AppendProp(
 			objectName,
 			true,
 			false,
@@ -279,13 +229,13 @@ bool ibValueSelectorRegisterDataObject::SetPropVal(const long lPropNum, const ib
 
 bool ibValueSelectorRegisterDataObject::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
-	const ibMetaID& id = m_methodHelper->GetPropData(lPropNum);
+	const ibMetaID& id = m_members.GetPropData(lPropNum);
 	if (m_keyValues.empty()) {
 		if (!appData->DesignerMode()) {
 			pvarPropVal = ibValue(ibValueTypes::TYPE_NULL);
 			return true;
 		}
 	}
-	pvarPropVal = m_listObjectValue[m_keyValues][id];
+	pvarPropVal = m_current[id];
 	return true;
 }

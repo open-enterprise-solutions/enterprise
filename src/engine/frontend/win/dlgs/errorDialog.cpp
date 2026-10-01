@@ -9,7 +9,7 @@
 #define DEF_LINENUMBER_ID 0
 #define DEF_IMAGE_ID 1
 
-ibDialogError::ibDialogError(ibFrontendDocMDIFrame* parent, wxWindowID id,
+ibDialogError::ibDialogError(ibFrontendMainFrame* parent, wxWindowID id,
 	const wxString& title, const wxPoint& pos, const wxSize& size, long style) :
 	wxDialog(parent, id, title, pos, size, style)
 {

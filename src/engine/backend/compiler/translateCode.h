@@ -8,11 +8,16 @@
 #include <execution>
 #include <map>
 #include <vector>
+#include <wctype.h>
 
 #include "backend/backend_exception.h"
 
 #include "codeDef.h"
 #include "value.h"
+// The lexer's name tables — keywords and #Define alike — are matched case-insensitively and consulted for
+// EVERY identifier the lexer meets, so the folding belongs in their comparator (ibCaseFoldLess): the
+// alternative is upper-casing the query into a throw-away wxString once per token, per table.
+#include "backend/stringUtils.h"
 
 //List of keywords
 struct ibKeyWords {
@@ -26,6 +31,22 @@ enum {
 	LEXEM_ADD = 0,
 	LEXEM_ADDDEF,
 	LEXEM_IGNORE,
+};
+
+// ⭐⭐ WHAT THIS PASS OVER THE TEXT IS FOR. The jobs differ as JOBS, not as a switch per behaviour:
+// a text about to become bytecode wants the language entire, a text somebody is typing into wants
+// the parts that are stable under a half-written line. Naming the job is what lets the next one —
+// a pass that only needs block structure, say — arrive as a mode rather than as another flag.
+//
+// `Editing` differs from `Compile` in exactly one thing today, and it is the whole reason the editor
+// used to carry a tokeniser of its own: the preprocessor does not run. Compiling, `#define`
+// registers a name, `#ifdef` HIDES the code it excludes and a malformed `#region` is an error —
+// while somebody is typing, they are LOOKING at the code `#ifdef` would hide, and the directive
+// under the caret is half-written by definition. So a directive line is read past as what it then
+// is: a line that is not code.
+enum class ibLexemMode {
+	Compile = 0,   // everything the language says, the preprocessor included
+	Editing,       // a text being written: a directive's line is not code
 };
 
 //definitions
@@ -220,28 +241,45 @@ class BACKEND_API ibTranslateCode {
 	// — those fields are protected, so grant friendship.
 	friend struct ibLexem;
 
-	//class for storing user definitions
+	// A module's #Define table, and one link of the scope chain: module ->
+	// parent module -> ... -> the process-wide root (ms_listDefine).
+	//
+	// READS walk the chain; WRITES never leave the local map. Defining a name an
+	// ancestor already holds SHADOWS it here rather than overwriting the ancestor's
+	// entry — the parent link is a `const` pointer, so that is enforced by the type
+	// and not by discipline. That is what makes the static root safe to share across
+	// sessions compiling concurrently: nothing reachable from a compile path can
+	// write above itself, so the shared state is immutable and needs no lock. If the
+	// platform (or a plugin) ever needs to seed defines into the root, it has to
+	// un-const it deliberately — which is the moment to answer "seeded when, by whom,
+	// before which session" rather than to discover the answer under load.
 	class ibDefineCollection {
 	public:
 		ibDefineCollection() : m_parentDefine(nullptr) {};
-		~ibDefineCollection() { Clear(); }
 
 		void Clear() { m_defineList.clear(); }
-		void SetParent(ibDefineCollection* parent) { m_parentDefine = parent; }
+		void SetParent(const ibDefineCollection* parent) { m_parentDefine = parent; }
 
+		// #Undef — local only, symmetric with SetDefine: an ancestor's define
+		// is not ours to remove.
 		void RemoveDef(const wxString& strName);
-		bool HasDefine(const wxString& strName) const;
-		ibLexemList* GetDefine(const wxString& strName);
-		void SetDefine(const wxString& strName, ibLexemList*);
+		bool HasDefine(const wxString& strName) const { return FindDefine(strName) != nullptr; }
+		// The lookup, chain-walking and read-only: nullptr when nobody defines the
+		// name. Callers expand from the returned list by COPY — it is a dictionary
+		// entry shared with every other expansion site, not scratch space.
+		const ibLexemList* FindDefine(const wxString& strName) const;
+		void SetDefine(const wxString& strName, const ibLexemList* src);
 		void SetDefine(const wxString& strName, const wxString& strValue);
 
 	private:
 
-		std::map<wxString, ibLexemList*> m_defineList;//contains arrays of lexemes	
-		ibDefineCollection* m_parentDefine;
+		std::map<wxString, ibLexemList, ibCaseFoldLess> m_defineList;//name -> its lexemes, owned by value
+		const ibDefineCollection* m_parentDefine;
 	};
 
-	static ibDefineCollection ms_listDefine;
+	// The root every module chain ends at. Empty for the whole process lifetime
+	// today; const so it stays that way by construction — see ibDefineCollection.
+	static const ibDefineCollection ms_listDefine;
 
 public:
 
@@ -267,8 +305,80 @@ public:
 
 	virtual void Clear();
 	void ClearLexem() { m_listLexem.resize(0); } // resetting and free data to reuse an object
+	size_t GetLexemCount() const { return m_listLexem.size(); } // token count after PrepareLexem (diagnostics / tests)
+	const std::vector<ibLexem>& GetLexems() const { return m_listLexem; } // read-only lexem stream (lambda expr recorder / tests)
+
+	// HAS IT BEEN LEXED. The question a caller actually asks — the editor asks it before patching,
+	// because a patch has no baseline without a full pass first. Reaching through GetLexems() to
+	// call empty() says HOW the answer is stored; this says what is being asked.
+	bool HasLexem() const { return !m_listLexem.empty(); }
+
+	// What this pass is for — see ibLexemMode. Set before lexing; a compile never touches it.
+	void SetLexemMode(ibLexemMode mode) { m_lexemMode = mode; }
 
 	bool PrepareLexem();
+
+	// WHAT AN EDIT DID TO THE TEXT, in the terms the stream is stored in. One argument rather than
+	// three-or-four, and the `#ifdef` stops travelling to every call site: whether coordinates are
+	// counted in UTF-8 as well is the STREAM's business, so it is settled here once.
+	struct ibTextEdit {
+		unsigned int m_line = 0;     // line the edit landed on
+		int m_lineOffset = 0;        // lines added (> 0) or removed (< 0)
+		int m_posOffset = 0;         // characters added (> 0) or removed (< 0)
+#ifdef UTF8_LEXEM_TRANSLATE
+		int m_posOffsetUtf8 = 0;
+#endif
+	};
+
+	// ⭐ THE PATCH — re-lex what the edit touched and SHIFT the rest, instead of re-reading the
+	// module. It lives here because m_listLexem lives here: the editor owned this walk while the
+	// data every line of it rewrites belonged to the translator.
+	//
+	// Everything from the edit onwards is re-tokenised to the end of the affected line; everything
+	// after it keeps its lexems and has its coordinates moved.
+	//
+	// Why it exists at all: a full pass over a large module is fractions of a second, which per
+	// KEYSTROKE is not slow — it is unusable.
+	void PrepareLexem(const ibTextEdit& edit);
+
+	// ⭐⭐ WHAT THE CARET IS STANDING IN — the question that decides WHICH answer a completion
+	// wants, and the only one that has to be asked of the TOKENS rather than of a value.
+	//
+	// THREE PLACES, AND A BOOL CANNOT CARRY THREE. This was a bool return (`hasKeyword`) beside a
+	// bool out-parameter (`hasPoint`) — four combinations standing for three states, with the
+	// precedence between them written out again at each of the two call sites. Naming the places
+	// puts that precedence in one place and lets a reader see the whole answer at once.
+	enum class ibCaretPlace {
+		OpenCode,    // anything in scope may be written here
+		AfterDot,    // a member access — offer what the expression to the left holds
+		InKeyword,   // completing a keyword's own domain: `New` / `Type` want type names
+	};
+
+	// The answer, whole. `m_expression` is the dotted expression to the left of the caret, `m_keyword`
+	// the keyword being completed or the call being written into, `m_word` the identifier under the
+	// caret — which is what a list filters by, not part of the question.
+	struct ibCaretText {
+		ibCaretPlace m_place = ibCaretPlace::OpenCode;
+		wxString     m_expression;
+		wxString     m_keyword;
+		wxString     m_word;
+	};
+
+	// It walks this object's lexem stream and nothing else, which is why it belongs to the stream's
+	// owner: it sat on the editor because that is where it was written, and the second reader
+	// (script_complete) had to include an editor header to reach it.
+	ibCaretText CaretAt(unsigned int caret) const;
+
+	// Was the token just emitted a `.`? Asked while classifying the NEXT word:
+	// in a property position (`sel.Where`, `q.Select`) a contextual keyword is a
+	// member NAME, and stamping it KEYWORD there breaks the parse and the
+	// editor's completion after the dot. The lexer already holds what it emitted;
+	// asking costs nothing and is decided at the one place that classifies.
+	bool PreviousLexemIsDot() const {
+		return !m_listLexem.empty()
+			&& m_listLexem.back().m_lexType == DELIMITER
+			&& m_listLexem.back().m_numData == (short)'.';
+	}
 
 protected:
 	void SetError(int codeError, unsigned int currPos, const wxString& errorDesc = wxEmptyString) const;
@@ -285,6 +395,15 @@ protected:
 public:
 
 	inline void SkipSpaces() const;
+
+	// THE REST OF THIS LINE IS NOT CODE — read past it. A preprocessor directive's effect IS its
+	// line, so while editing (ibLexemMode) the line goes as one thing rather than token by token;
+	// its argument word would otherwise arrive as a stray identifier. Same bookkeeping as the
+	// comment skip inside SkipSpaces, which is the other thing that is not code.
+	void SkipLine() const;
+
+	// The dotted expression ending at the `.` at `dotAt` — see the definition.
+	wxString ExpressionEndingAt(size_t dotAt) const;
 
 	bool IsByte(const wxUniChar& c) const;
 #pragma region get_byte
@@ -325,6 +444,15 @@ public:
 	bool IsEnd() const;
 
 	static int IsKeyWord(const wxString& sKeyWord);
+
+	// The words the preprocessor owns. Asked from the full pass and from the patch, written out
+	// once — a ninth directive must not be able to reach only one of them.
+	static bool IsDirective(short keyword) {
+		return keyword == KEY_DEFINE || keyword == KEY_UNDEF
+			|| keyword == KEY_IFDEF || keyword == KEY_IFNDEF
+			|| keyword == KEY_ELSEDEF || keyword == KEY_ENDIFDEF
+			|| keyword == KEY_REGION || keyword == KEY_ENDREGION;
+	}
 	static wxString GetKeyWord(int keyword);
 
 	wxString GetStrToEndLine() const;
@@ -343,8 +471,10 @@ public:
 
 public:
 
-	static std::map<wxString, void*> ms_listHashKeyWord;
-	static void LoadKeyWords();
+	// The keyword index used to live here as a public static map, filled by a
+	// public LoadKeyWords() that every ctor called behind an `if (empty())` check.
+	// It is derived from s_listKeyWord and nothing else, and has exactly one reader,
+	// so it is now a build-once immutable table living inside IsKeyWord itself.
 
 	// Per-keyword availability gate. Reads the active code-style and
 	// hides VES-only block-fence keywords (Then / Do / EndIf / EndDo /
@@ -414,20 +544,28 @@ protected:
 	bool m_bAutoDeleteDefList;
 	int m_nModePreparing;
 
+	// See ibLexemMode. Compile by default: everything that becomes bytecode wants the whole language.
+	ibLexemMode m_lexemMode = ibLexemMode::Compile;
+
 	//attributes:
 	wxString m_strModuleName;//name of the compiled module (to display information in case of errors)
 	wxString m_strDocPath; // unique path to the document
 	wxString m_strFileName; // path to the file (if external processing)
 
-	unsigned int m_bufferSize;//size of the original text
+	// Reading position over m_strBuffer. Clear() — reached through Load() — resets
+	// all four, so every path that loads text before parsing it is covered; the
+	// INITIALISERS are what covers a reader that runs before any text arrives.
+	// Left uninitialised, the same shape on ibCompileCode's lexem cursor made the
+	// whole eval / watch path answer "Module code expected".
+	unsigned int m_bufferSize = 0;//size of the original text
 
 	//original and upper text :
 	wxStringImpl m_strBuffer, m_strBUFFER;
 
-	mutable unsigned int m_currentPos; //current position of the processed text
-	mutable unsigned int m_currentLine; //current line of the processed text
+	mutable unsigned int m_currentPos = 0; //current position of the processed text
+	mutable unsigned int m_currentLine = 0; //current line of the processed text
 #ifdef UTF8_LEXEM_TRANSLATE
-	mutable unsigned int m_currentUtf8Pos; //current raw position of the processed text
+	mutable unsigned int m_currentUtf8Pos = 0; //current raw position of the processed text
 #endif // UTF8_LEXEM_TRANSLATE
 
 	//intermediate array with lexemes:

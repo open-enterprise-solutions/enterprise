@@ -5,11 +5,10 @@ void ibValueMetaObjectRecordDataMutableRef::OnPropertyCreated(ibProperty* proper
 	ibValueMetaObjectRecordDataRef::OnPropertyCreated(property);
 }
 
-#include <wx/propgrid/manager.h>
-
-void ibValueMetaObjectRecordDataMutableRef::OnPropertyRefresh(wxPropertyGridManager* pg, wxPGProperty* pgProperty, ibProperty* property)
+void ibValueMetaObjectRecordDataMutableRef::OnPropertyRefresh()
 {
-	if (m_propertyQuickChoice == property) { pg->HideProperty(pgProperty, true); }
+	ibValueMetaObjectRecordDataRef::OnPropertyRefresh();
+	HideProperty(m_propertyQuickChoice, true);
 }
 
 bool ibValueMetaObjectRecordDataMutableRef::OnPropertyChanging(ibProperty* property, const wxVariant& newValue)
@@ -22,8 +21,13 @@ void ibValueMetaObjectRecordDataMutableRef::OnPropertyChanged(ibProperty* proper
 	ibValueMetaObjectRecordDataRef::OnPropertyChanged(property, oldValue, newValue);
 }
 
-///////////////////////////////////////////////////////////////////////////////////////////////////
-
-void ibValueMetaObjectRecordDataHierarchyMutableRef::OnPropertyRefresh(wxPropertyGridManager* pg, wxPGProperty* pgProperty, ibProperty* property)
+// The hierarchy type decides what a Parent may point at, and the Parent field is where everyone
+// asks. Restate it the moment the declaration changes — waiting for the next configuration run
+// would leave the picker offering folders on a chart that no longer has any.
+void ibValueMetaObjectRecordDataHierarchyMutableRef::OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue)
 {
+	ibValueMetaObjectRecordDataMutableRef::OnPropertyChanged(property, oldValue, newValue);
+
+	if (property == m_propertyHierarchyType)
+		ApplyHierarchyType();
 }

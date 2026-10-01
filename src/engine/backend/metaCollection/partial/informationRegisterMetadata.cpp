@@ -1,5 +1,6 @@
-﻿#include "informationRegister.h"
-#include "list/objectList.h"
+#include "informationRegister.h"
+#include "backend/serialize/dataBuilder.h"
+#include "backend/system/value/valueDynamicList.h"   // ibValueDynamicList — the standard list migrates onto the universal dynamic list
 #include "backend/metaData.h"
 #include "backend/moduleManager/moduleManager.h"
 
@@ -7,8 +8,6 @@
 //*                         metaData                                    * 
 //***********************************************************************
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueMetaObjectInformationRegister::ibValueMetaObjectRecordManager, ibValueMetaObject);
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueMetaObjectInformationRegister, ibValueMetaObjectRegisterData);
 
 /////////////////////////////////////////////////////////////////////////
 
@@ -16,13 +15,28 @@ ibValueMetaObjectInformationRegister::ibValueMetaObjectInformationRegister() : i
 m_metaRecordManager(new ibValueMetaObjectRecordManager())
 {
 	//set default proc
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("BeforeWrite"), ibContentHelper::eProcedureHelper, { wxT("Cancel") });
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("OnWrite"), ibContentHelper::eProcedureHelper, { wxT("Cancel") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("BeforeWrite"), ibContentHelper::eProcedureHelper, { wxT("Cancel"), wxT("Replacing") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("OnWrite"), ibContentHelper::eProcedureHelper, { wxT("Cancel"), wxT("Replacing") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("BeforeDelete"), ibContentHelper::eProcedureHelper, { wxT("Cancel") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("OnDelete"), ibContentHelper::eProcedureHelper, { wxT("Cancel") });
+
+	(*m_propertyManagerModule)->SetDefaultProcedure(wxT("FormGetProcessing"), ibContentHelper::eProcedureHelper, { wxT("Form"), wxT("Cancel") });
 }
 
 ibValueMetaObjectInformationRegister::~ibValueMetaObjectInformationRegister()
 {
 	wxDELETE(m_metaRecordManager);
+}
+
+ibTotalsPeriod ibValueMetaObjectInformationRegister::GetPeriodicityUnit() const
+{
+	switch (GetPeriodicity()) {
+	case ibPeriodicity::eWithinDay:     return ibTotalsPeriod::Day;
+	case ibPeriodicity::eWithinMonth:   return ibTotalsPeriod::Month;
+	case ibPeriodicity::eWithinQuarter: return ibTotalsPeriod::Quarter;
+	case ibPeriodicity::eWithinYear:    return ibTotalsPeriod::Year;
+	default:                            return ibTotalsPeriod::Second;   // within a second, or no period: as written
+	}
 }
 
 ibValueMetaObjectFormBase* ibValueMetaObjectInformationRegister::GetDefaultFormByID(const ibFormID& id) const
@@ -38,23 +52,21 @@ ibValueMetaObjectFormBase* ibValueMetaObjectInformationRegister::GetDefaultFormB
 }
 
 #pragma region _form_builder_h_
-ibBackendValueForm* ibValueMetaObjectInformationRegister::GetRecordForm(const wxString& strFormName, ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
+ibFormPtr<ibBackendValueForm> ibValueMetaObjectInformationRegister::GetRecordForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
-		strFormName,
+		request,
 		ibValueMetaObjectInformationRegister::eFormRecord,
-		ownerControl, CreateRecordManagerObjectValue(),
-		formGuid
+		ownerControl, CreateRecordManagerObjectValue()
 	);
 }
 
-ibBackendValueForm* ibValueMetaObjectInformationRegister::GetListForm(const wxString& strFormName, ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
+ibFormPtr<ibBackendValueForm> ibValueMetaObjectInformationRegister::GetListForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
-		strFormName,
+		request,
 		ibValueMetaObjectInformationRegister::eFormList,
-		ownerControl, ibValue::CreateAndPrepareValueRef<ibValueListRegisterObject>(this, ibValueMetaObjectInformationRegister::eFormList),
-		formGuid
+		ownerControl, ibCreateList(request.m_create, GetQueryable(), HasPeriod() ? GetRegisterPeriod()->GetQueryColumn() : nullptr)   // migrated onto the universal dynamic list
 	);
 }
 #pragma endregion
@@ -63,39 +75,32 @@ ibBackendValueForm* ibValueMetaObjectInformationRegister::GetListForm(const wxSt
 //*                       Save & load metaData                              *
 //***************************************************************************
 
-bool ibValueMetaObjectInformationRegister::LoadData(ibReaderMemory& dataReader)
+bool ibValueMetaObjectInformationRegister::WriteData(ibDataNode& node) const
 {
-	//load default form 
-	m_propertyDefFormRecord->SetValue(GetIdByGuid(dataReader.r_stringZ()));
-	m_propertyDefFormList->SetValue(GetIdByGuid(dataReader.r_stringZ()));
+	node.SetValue(m_propertyDefFormRecord->GetName(), GetGuidByID(m_propertyDefFormRecord->GetValueAsInteger()).str());
+	node.SetValue(m_propertyDefFormList->GetName(), GetGuidByID(m_propertyDefFormList->GetValueAsInteger()).str());
 
-	//load data 
-	m_propertyWriteMode->SetValue(dataReader.r_u16());
-	m_propertyPeriodicity->SetValue(dataReader.r_u16());
+	node.SetProperty(m_propertyWriteMode->GetName(), m_propertyWriteMode->GetNodeValue());
+	node.SetProperty(m_propertyPeriodicity->GetName(), m_propertyPeriodicity->GetNodeValue());
 
-	//load object module
-	(*m_propertyObjectModule)->LoadMeta(dataReader);
-	(*m_propertyManagerModule)->LoadMeta(dataReader);
+	node.SetProperty(m_propertyObjectModule->GetName(), m_propertyObjectModule->GetNodeValue());
+	node.SetProperty(m_propertyManagerModule->GetName(), m_propertyManagerModule->GetNodeValue());
 
-	return ibValueMetaObjectRegisterData::LoadData(dataReader);
+	return ibValueMetaObjectRegisterData::WriteData(node);
 }
 
-bool ibValueMetaObjectInformationRegister::SaveData(ibWriterMemory& dataWritter)
+bool ibValueMetaObjectInformationRegister::ReadData(const ibDataNode& node)
 {
-	//save default form 
-	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormRecord->GetValueAsInteger()));
-	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormList->GetValueAsInteger()));
+	m_propertyDefFormRecord->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormRecord->GetName())));
+	m_propertyDefFormList->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormList->GetName())));
 
-	//save data
-	dataWritter.w_u16(m_propertyWriteMode->GetValueAsInteger());
-	dataWritter.w_u16(m_propertyPeriodicity->GetValueAsInteger());
+	m_propertyWriteMode->SetNodeValue(node.GetProperty(m_propertyWriteMode->GetName()));
+	m_propertyPeriodicity->SetNodeValue(node.GetProperty(m_propertyPeriodicity->GetName()));
 
-	//Save object module
-	(*m_propertyObjectModule)->SaveMeta(dataWritter);
-	(*m_propertyManagerModule)->SaveMeta(dataWritter);
+	m_propertyObjectModule->SetNodeValue(node.GetProperty(m_propertyObjectModule->GetName()));
+	m_propertyManagerModule->SetNodeValue(node.GetProperty(m_propertyManagerModule->GetName()));
 
-	//create or update table:
-	return ibValueMetaObjectRegisterData::SaveData(dataWritter);
+	return ibValueMetaObjectRegisterData::ReadData(node);
 }
 
 //***********************************************************************
@@ -135,7 +140,7 @@ bool ibValueMetaObjectInformationRegister::OnSaveMetaObject(int flags)
 #if _USE_SAVE_METADATA_IN_TRANSACTION == 1
 	if (GetWriteRegisterMode() == ibWriteRegisterMode::eSubordinateRecorder) {
 		if (!((*m_propertyAttributeRecorder)->GetClsidCount() > 0)) {
-			s_restructureInfo.AppendError(_("! Doesn't have any recorder ") + GetFullName());
+			RestructureError(_("! Doesn't have any recorder ") + GetFullName());
 			return false;
 		}
 	}
@@ -157,6 +162,9 @@ bool ibValueMetaObjectInformationRegister::OnDeleteMetaObject()
 
 bool ibValueMetaObjectInformationRegister::OnReloadMetaObject()
 {
+	// The periodicity may have just been switched — which decides whether this register has slices
+	// at all. Asked again here, where a designer edit lands.
+	SyncSliceSources();
 
 	if (auto* cc = m_metaData->GetCompileCache()) {
 
@@ -196,6 +204,16 @@ bool ibValueMetaObjectInformationRegister::OnAfterRunMetaObject(int flags)
 	if (!(*m_propertyManagerModule)->OnAfterRunMetaObject(flags))
 		return false;
 
+	// Custom virtual-table descriptors (slices). The base records descriptor is registered by
+	// ibValueMetaObjectRegisterData::OnAfterRunMetaObject below. Registered into the config's OWN
+	// factory — it is per-config, so a read-only DB load (onlyLoadFlag) still registers its own sources.
+	//
+	// ⚠ AND ONLY WHERE A SLICE MEANS ANYTHING. A slice is "the record in force AS OF a moment" — it
+	// is defined by the period, and a non-periodic register has none. Registering them anyway put
+	// `SliceLast` and `SliceFirst` in the catalogue of every register, including the ones where the
+	// question cannot be asked; and non-periodic is the DEFAULT, so that was most of them.
+	SyncSliceSources();
+
 	if (!(*m_propertyObjectModule)->OnAfterRunMetaObject(flags))
 		return false;
 
@@ -204,10 +222,10 @@ bool ibValueMetaObjectInformationRegister::OnAfterRunMetaObject(int flags)
 
 		if (ibValueMetaObjectRegisterData::OnAfterRunMetaObject(flags)) {
 
-			if (!cc->AddCompileModule(m_metaRecordManager, CreateRecordManagerObjectValue()))
+			if (!cc->AddCompileModule(m_metaRecordManager, [this]() -> ibValue { return CreateRecordManagerObjectValue(); }))
 				return false;
 
-			if (!cc->AddCompileModule(m_propertyObjectModule->GetMetaObject(), CreateRecordSetObjectValue()))
+			if (!cc->AddCompileModule(m_propertyObjectModule->GetMetaObject(), [this]() -> ibValue { return CreateRecordSetObjectValue(); }))
 				return false;
 
 			return true;
@@ -217,8 +235,34 @@ bool ibValueMetaObjectInformationRegister::OnAfterRunMetaObject(int flags)
 	return ibValueMetaObjectRegisterData::OnAfterRunMetaObject(flags);
 }
 
+// ⭐ WHETHER THIS REGISTER HAS SLICES AT ALL, ASKED AGAIN RATHER THAN REMEMBERED.
+//
+// The answer is its PERIODICITY, and periodicity is a property the designer can switch. Decided once
+// when the metaobject ran, a register turned periodic afterwards would offer no slices until the
+// process restarted, and one turned non-periodic would go on offering slices it cannot compute.
+//
+// So the pair is dropped and re-registered from the answer as it is NOW. Unregistering what is not
+// there is a no-op, which is what makes the same call right on run and on reload alike.
+void ibValueMetaObjectInformationRegister::SyncSliceSources()
+{
+	if (m_metaData == nullptr)
+		return;
+
+	m_metaData->UnregisterSource(&m_sliceLast);
+	m_metaData->UnregisterSource(&m_sliceFirst);
+
+	if (HasPeriod()) {
+		m_metaData->RegisterSource(&m_sliceLast);
+		m_metaData->RegisterSource(&m_sliceFirst);
+	}
+}
+
 bool ibValueMetaObjectInformationRegister::OnBeforeCloseMetaObject()
 {
+	// un-resolve — mirror of OnRun's RegisterSource (slice last / first)
+	m_metaData->UnregisterSource(&m_sliceLast);
+	m_metaData->UnregisterSource(&m_sliceFirst);
+
 	if (!(*m_propertyManagerModule)->OnBeforeCloseMetaObject())
 		return false;
 
@@ -230,11 +274,9 @@ bool ibValueMetaObjectInformationRegister::OnBeforeCloseMetaObject()
 
 		if (ibValueMetaObjectRegisterData::OnBeforeCloseMetaObject()) {
 
-			if (!cc->RemoveCompileModule(m_metaRecordManager))
-				return false;
+			cc->RemoveCompileModule(m_metaRecordManager);
 
-			if (!cc->RemoveCompileModule(m_propertyObjectModule->GetMetaObject()))
-				return false;
+			cc->RemoveCompileModule(m_propertyObjectModule->GetMetaObject());
 
 			return true;
 		}
@@ -284,50 +326,50 @@ void ibValueMetaObjectInformationRegister::OnRemoveMetaForm(ibValueMetaObjectFor
 	else if (metaForm->GetTypeForm() == ibValueMetaObjectInformationRegister::eFormList
 		&& m_propertyDefFormList->GetValueAsInteger() == metaForm->GetMetaID())
 	{
-		m_propertyDefFormList->SetValue(metaForm->GetMetaID());
+		m_propertyDefFormList->SetValue(wxNOT_FOUND);
 	}
 }
 
 #include "informationRegisterManager.h"
 
-ibValueManagerDataObject* ibValueMetaObjectInformationRegister::CreateManagerDataObjectValue() const
+ibValuePtr<ibValueManagerDataObject> ibValueMetaObjectInformationRegister::CreateManagerDataObjectValue() const
 {
-	return ibValue::CreateAndPrepareValueRef<ibValueManagerDataObjectInformationRegister>(this);
+	return ibValuePtr<ibValueManagerDataObject>(new ibValueManagerDataObjectInformationRegister(this));
 }
 
-ibValueRecordSetObject* ibValueMetaObjectInformationRegister::CreateRecordSetObjectRegValue(const ibUniqueKeyPair& uniqueKey) const
+ibValuePtr<ibValueRecordSetObject> ibValueMetaObjectInformationRegister::CreateRecordSetObjectRegValue(const ibUniqueKeyPair& uniqueKey) const
 {
 	if (auto* cc = m_metaData->GetCompileCache()) {
 		ibValueRecordSetObject* pDataRef = nullptr;
 		if (!cc->FindCompileModule(m_propertyObjectModule->GetMetaObject(), pDataRef)) {
-			return ibValue::CreateAndPrepareValueRef<ibValueRecordSetObjectInformationRegister>(this, uniqueKey);
+			return ibValuePtr<ibValueRecordSetObject>(new ibValueRecordSetObjectInformationRegister(this, uniqueKey));
 		}
-		return pDataRef;
+		return ibValuePtr<ibValueRecordSetObject>(pDataRef);
 	}
 
-	return ibValue::CreateAndPrepareValueRef<ibValueRecordSetObjectInformationRegister>(this, uniqueKey);
+	return ibValuePtr<ibValueRecordSetObject>(new ibValueRecordSetObjectInformationRegister(this, uniqueKey));
 }
 
-ibValueRecordManagerObject* ibValueMetaObjectInformationRegister::CreateRecordManagerObjectRegValue(const ibUniqueKeyPair& uniqueKey) const
+ibValuePtr<ibValueRecordManagerObject> ibValueMetaObjectInformationRegister::CreateRecordManagerObjectRegValue(const ibUniqueKeyPair& uniqueKey) const
 {
 	if (auto* cc = m_metaData->GetCompileCache()) {
 		ibValueRecordManagerObject* pDataRef = nullptr;
 		if (!cc->FindCompileModule(m_metaRecordManager, pDataRef)) {
-			return ibValue::CreateAndPrepareValueRef<ibValueRecordManagerObjectInformationRegister>(this, uniqueKey);
+			return ibValuePtr<ibValueRecordManagerObject>(new ibValueRecordManagerObjectInformationRegister(this, uniqueKey));
 		}
-		return pDataRef;
+		return ibValuePtr<ibValueRecordManagerObject>(pDataRef);
 	}
-	return ibValue::CreateAndPrepareValueRef<ibValueRecordManagerObjectInformationRegister>(this, uniqueKey);
+	return ibValuePtr<ibValueRecordManagerObject>(new ibValueRecordManagerObjectInformationRegister(this, uniqueKey));
 }
 
-ibSourceDataObject* ibValueMetaObjectInformationRegister::CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const
+ibSourcePtr<ibSourceDataObject> ibValueMetaObjectInformationRegister::CreateSourceObject(const ibCreateRequest& request, const ibFormID& form_id) const
 {
-	switch (metaObject->GetTypeForm())
+	switch (form_id)
 	{
 	case eFormRecord:
-		return CreateRecordManagerObjectValue();
+		return ibSourcePtr<ibSourceDataObject>(CreateRecordManagerObjectValue());
 	case eFormList:
-		return ibValue::CreateAndPrepareValueRef<ibValueListRegisterObject>(this, metaObject->GetTypeForm());
+		return ibSourcePtr<ibSourceDataObject>(ibCreateList(request, GetQueryable(), HasPeriod() ? GetRegisterPeriod()->GetQueryColumn() : nullptr));   // migrated onto the universal dynamic list
 	}
 
 	return nullptr;
@@ -337,5 +379,5 @@ ibSourceDataObject* ibValueMetaObjectInformationRegister::CreateSourceObject(con
 //*                       Register in runtime                           *
 //***********************************************************************
 
-SYSTEM_TYPE_REGISTER(ibValueMetaObjectInformationRegister::ibValueMetaObjectRecordManager, "InformationRecordManager", string_to_clsid("MT_RCMG"));
+SYSTEM_TYPE_REGISTER(ibValueMetaObjectInformationRegister::ibValueMetaObjectRecordManager, "InformationRecordManager", system_to_clsid("MT_RCMG"));
 METADATA_TYPE_REGISTER(ibValueMetaObjectInformationRegister, "InformationRegister", g_metaInformationRegisterCLSID);

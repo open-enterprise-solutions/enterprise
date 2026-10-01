@@ -37,7 +37,7 @@ void ibPreparedStatementFirebird::Close()
 	if (m_bManageTransaction && m_pTransaction)
 	{
 		int nReturn = m_pInterface->GetIscCommitTransaction()(m_Status, &m_pTransaction);
-		m_pTransaction = NULL;
+		m_pTransaction = 0;
 		if (nReturn != 0)
 		{
 			InterpretErrorCodes();
@@ -52,7 +52,6 @@ bool ibPreparedStatementFirebird::AddPreparedStatement(const wxString& strSQL)
 
 	if (pWrapper->Prepare())
 	{
-		pWrapper->SetEncoding(GetEncoding());
 		m_Statements.push_back(pWrapper);
 
 		return true;
@@ -61,7 +60,7 @@ bool ibPreparedStatementFirebird::AddPreparedStatement(const wxString& strSQL)
 	return false;
 }
 
-ibPreparedStatementFirebird* ibPreparedStatementFirebird::CreateStatement(ibInterfaceFirebird* pInterface, isc_db_handle pDatabase, isc_tr_handle pTransaction, const wxString& strSQL, const wxCSConv* conv)
+ibPreparedStatementFirebird* ibPreparedStatementFirebird::CreateStatement(ibInterfaceFirebird* pInterface, isc_db_handle pDatabase, isc_tr_handle pTransaction, const wxString& strSQL)
 {
 	wxArrayString Queries = ParseQueries(strSQL);
 
@@ -73,31 +72,24 @@ ibPreparedStatementFirebird* ibPreparedStatementFirebird::CreateStatement(ibInte
 	if (Queries.size() < 1)
 	{
 		pStatement = new ibPreparedStatementFirebird(pInterface, pDatabase, pTransaction);
-		pStatement->SetEncoding(conv);
 
 		pStatement->SetErrorCode(DATABASE_LAYER_ERROR);
 		pStatement->SetErrorMessage(wxT("No SQL Statements found"));
 
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-		// If we're using exceptions, then assume that the calling program won't
-		//  won't get the pStatement pointer back.  So delete is now before
-		//  throwing the exception
-		ibDatabaseLayerException error(pStatement->GetErrorCode(), pStatement->GetErrorMessage());
-		try
-		{
-			delete pStatement; //It's probably better to manually iterate over the list and close the statements, but for now just let close do it
-		}
-		catch (ibDatabaseLayerException& e)
-		{
-		}
-
-		throw error;
-#endif
+		const int      nCode = pStatement->GetErrorCode();
+		const wxString msg   = pStatement->GetErrorMessage();
+		// Swallow a possible throw from the statement dtor — original
+		// "no SQL statements" error is the user-visible one; a secondary
+		// cleanup exception would mask it.
+		try { delete pStatement; } catch (const ibBackendException&) {}
+		ibDatabaseLayerException::Throw(
+			ibBackendDatabaseException::Kind::Unknown,
+			nCode, wxEmptyString, msg);
 		return NULL;
 	}
 
 	// Start a new transaction if appropriate
-	if (pTransaction == NULL)
+	if (pTransaction == 0)
 	{
 		ISC_STATUS_ARRAY status;
 
@@ -105,29 +97,20 @@ ibPreparedStatementFirebird* ibPreparedStatementFirebird::CreateStatement(ibInte
 
 		int nReturn = pInterface->GetIscStartTransaction()(status, &pTransaction, 1, &pDatabase, 0, NULL);
 		pStatement = new ibPreparedStatementFirebird(pInterface, pDatabase, pTransaction);
-		pStatement->SetEncoding(conv);
 		if (nReturn != 0)
 		{
 			long nSqlCode = pInterface->GetIscSqlcode()(status);
 			pStatement->SetErrorCode(ibDatabaseLayerFirebird::TranslateErrorCode(nSqlCode));
 			pStatement->SetErrorMessage(ibDatabaseLayerFirebird::TranslateErrorCodeToString(pInterface, nSqlCode, status));
 
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-			// If we're using exceptions, then assume that the calling program won't
-			//  won't get the pStatement pointer back.  So delete it now before
-			//  throwing the exception
-			try
-			{
-				delete pStatement; //It's probably better to manually iterate over the list and close the statements, but for now just let close do it
-			}
-			catch (ibDatabaseLayerException& e)
-			{
-			}
-
-			ibDatabaseLayerException error(pStatement->GetErrorCode(), pStatement->GetErrorMessage());
-			throw error;
-#endif
-			return pStatement;
+			const int      nCode = pStatement->GetErrorCode();
+			const wxString msg   = pStatement->GetErrorMessage();
+			// Swallow a possible throw from the statement dtor — the
+			// isc_start_transaction failure is what we want surfaced.
+			try { delete pStatement; } catch (const ibBackendException&) {}
+			ibDatabaseLayerException::Throw(
+				ibBackendDatabaseException::Kind::Unknown,
+				nCode, wxEmptyString, msg);
 		}
 
 		pStatement->SetManageTransaction(true);
@@ -135,61 +118,40 @@ ibPreparedStatementFirebird* ibPreparedStatementFirebird::CreateStatement(ibInte
 	else
 	{
 		pStatement = new ibPreparedStatementFirebird(pInterface, pDatabase, pTransaction);
-		pStatement->SetEncoding(conv);
 		pStatement->SetManageTransaction(false);
 	}
 
 	while (start != stop)
 	{
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-		try
-		{
-#endif
+		// AddPreparedStatement can throw ibBackendException directly
+		// (driver classifies + throws in DatabaseErrorReporter); if it
+		// does, the partly-built pStatement must die before we let the
+		// exception out of this function — otherwise memory leak.
+		// Re-throw preserves the original error type for the caller.
+		try {
 			bool succesStatement = pStatement->AddPreparedStatement((*start));
 			if (!succesStatement)
 			{
 				wxDELETE(pStatement); //It's probably better to manually iterate over the list and close the statements, but for now just let close do it
 				return pStatement;
 			}
-
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
 		}
-		catch (ibDatabaseLayerException& e)
-		{
-			try
-			{
-				delete pStatement; //It's probably better to manually iterate over the list and close the statements, but for now just let close do it
-			}
-			catch (ibDatabaseLayerException& e)
-			{
-			}
+		catch (const ibBackendException&) {
+			try { delete pStatement; } catch (const ibBackendException&) {}
+			throw;
+		}
 
-			// Pass on the error
-			throw e;
-			}
-#endif
 		if (pStatement->GetErrorCode() != DATABASE_LAYER_OK)
 		{
-			// If we're using exceptions, then assume that the calling program won't
-			//  won't get the pStatement pointer back.  So delete is now before
-			//  throwing the exception
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-	  // Set the error code and message
-			ibDatabaseLayerException error(pStatement->GetErrorCode(), pStatement->GetErrorMessage());
-
-			try
-			{
-				delete pStatement; //It's probably better to manually iterate over the list and close the statements, but for now just let close do it
-			}
-			catch (ibDatabaseLayerException& e)
-			{
-	}
-
-			// Pass on the error
-			throw error;
-#endif
-
-			return pStatement;
+			const int      nCode = pStatement->GetErrorCode();
+			const wxString msg   = pStatement->GetErrorMessage();
+			// Swallow a possible throw from the statement dtor — the
+			// per-fragment AddPreparedStatement failure recorded above
+			// is the original error and must reach the caller.
+			try { delete pStatement; } catch (const ibBackendException&) {}
+			ibDatabaseLayerException::Throw(
+				ibBackendDatabaseException::Kind::Unknown,
+				nCode, wxEmptyString, msg);
 }
 		start++;
 }
@@ -225,7 +187,7 @@ void ibPreparedStatementFirebird::SetParamNumber(int nPosition, const ibNumber& 
 		SetInvalidParameterPositionError(nPosition);
 }
 
-void ibPreparedStatementFirebird::SetParamString(int nPosition, const wxString& strValue)
+void ibPreparedStatementFirebird::SetParamString(int nPosition, const ibString& strValue)
 {
 	int nIndex = FindStatementAndAdjustPositionIndex(&nPosition);
 	if (nIndex > -1)
@@ -252,11 +214,14 @@ void ibPreparedStatementFirebird::SetParamBlob(int nPosition, const void* pData,
 		SetInvalidParameterPositionError(nPosition);
 }
 
-void ibPreparedStatementFirebird::SetParamDate(int nPosition, const wxDateTime& dateValue)
+void ibPreparedStatementFirebird::SetParamDate(int nPosition, const ibDateTime& dateValue)
 {
 	int nIndex = FindStatementAndAdjustPositionIndex(&nPosition);
-	if (nIndex > -1)
-		m_Statements[nIndex]->SetParam(nPosition, dateValue);
+	if (nIndex > -1) {
+		ibDateTimeParts parts;
+		dateValue.ToParts(parts);
+		m_Statements[nIndex]->SetParam(nPosition, parts);
+	}
 	else
 		SetInvalidParameterPositionError(nPosition);
 }
@@ -286,6 +251,7 @@ int ibPreparedStatementFirebird::GetParameterCount()
 
 int ibPreparedStatementFirebird::RunQuery()
 {
+
 	FirebirdStatementVector::iterator start = m_Statements.begin();
 	FirebirdStatementVector::iterator stop = m_Statements.end();
 
@@ -303,12 +269,14 @@ int ibPreparedStatementFirebird::RunQuery()
 		start++;
 	}
 
-	// If the statement is managing the transaction then commit it now
+	// ⚠ COMMIT RETAINING KEEPS THE TRANSACTION OPEN, and that is what this statement needs: the
+	// statement handle was prepared inside it and goes on being used. Closing it here and reopening
+	// lazily was tried on 2026-08-14 (with the cursor adopting the transaction on the read path) and
+	// crashed the designer. It also did not fix what it was aimed at — the restructuring refusals
+	// survived unchanged, measured — so the retaining form stays.
 	if (m_bManageTransaction)
 	{
 		int nReturn = m_pInterface->GetIscCommitRetaining()(m_Status, &m_pTransaction);
-		//int nReturn = isc_commit_transaction(m_Status, &m_pTransaction);
-		// We're done with the transaction, so set it to NULL so that we know that a new transaction must be started if we run any queries
 		if (nReturn != 0) {
 			InterpretErrorCodes();
 			ThrowDatabaseException();
@@ -320,6 +288,7 @@ int ibPreparedStatementFirebird::RunQuery()
 
 ibDatabaseResultSet* ibPreparedStatementFirebird::RunQueryWithResults()
 {
+
 	if (m_Statements.size() > 0)
 	{
 		// Assume that only the last statement in the array returns the result set
@@ -335,19 +304,25 @@ ibDatabaseResultSet* ibPreparedStatementFirebird::RunQueryWithResults()
 		}
 
 		ibPreparedStatementFirebirdWrapper* pLastStatement = m_Statements[m_Statements.size() - 1];
-		// If the statement is managing the transaction then commit it now
+
+		// ⚠ THE STATEMENT KEEPS AN OPEN TRANSACTION BETWEEN CALLS, and that is deliberate rather than
+		// merely tolerated: a prepared statement is PREPARED inside a transaction, and the cursor it
+		// vends reads through the same one. Handing the transaction to the cursor and clearing it here
+		// was tried on 2026-08-14 and crashed the designer — the statement handle outlives the call
+		// and cannot be left pointing at a transaction it no longer has.
+		//
+		// It is not free: an open transaction holds metadata, which is a real cost for concurrent DDL.
+		// But it was NOT the cause of the restructuring refusals (measured — the refusals survived the
+		// change), so the cost stays until something makes the statement's own lifetime shorter.
 		if (m_bManageTransaction)
 		{
-			//int nReturn = isc_commit_retaining(m_Status, &m_pTransaction);
 			int nReturn = m_pInterface->GetIscCommitTransaction()(m_Status, &m_pTransaction);
-			// We're done with the transaction, so set it to NULL so that we know that a new transaction must be started if we run any queries
 			if (nReturn != 0)
 			{
 				InterpretErrorCodes();
 				ThrowDatabaseException();
 			}
 
-			// Start a new transaction
 			nReturn = m_pInterface->GetIscStartTransaction()(m_Status, &m_pTransaction, 1, &m_pDatabase, 0, NULL);
 			if (nReturn != 0)
 			{
@@ -356,35 +331,24 @@ ibDatabaseResultSet* ibPreparedStatementFirebird::RunQueryWithResults()
 				return NULL;
 			}
 
-			// Make sure to update the last statements pointer to the transaction
 			pLastStatement->SetTransaction(m_pTransaction);
 		}
 
-		// The result set will be in charge of the result set now so change flag so that we don't try to close the transaction when the statement closes
-		//m_bManageTransaction = false;
-
 		ibDatabaseResultSet* pResultSet = pLastStatement->DoRunQueryWithResults();
-		if (pResultSet)
-			pResultSet->SetEncoding(GetEncoding());
 		if (pLastStatement->GetErrorCode() != DATABASE_LAYER_OK)
 		{
 			SetErrorCode(pLastStatement->GetErrorCode());
 			SetErrorMessage(pLastStatement->GetErrorMessage());
 
-			// Wrap the result set deletion in try/catch block if using exceptions.
-			//We want to make sure the original error gets to the user
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-			try
-			{
-#endif
+			// Swallow a possible throw from ~ibDatabaseResultSet — the
+			// pLastStatement error recorded above is the one we want
+			// surfaced via SetError(Code|Message); a secondary cleanup
+			// exception would mask it.
+			try {
 				if (pResultSet)
 					delete pResultSet;
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-		}
-			catch (ibDatabaseLayerException& e)
-			{
 			}
-#endif
+			catch (const ibBackendException&) {}
 
 			return NULL;
 	}
@@ -432,10 +396,11 @@ void ibPreparedStatementFirebird::SetInvalidParameterPositionError(int nPosition
 
 void ibPreparedStatementFirebird::InterpretErrorCodes()
 {
-	wxLogError(wxT("FirebirdPreparesStatement::InterpretErrorCodes()\n"));
-
+	// "I'm in this function" — see firebirdResultSet for the same
+	// strip rationale.
 	long nSqlCode = m_pInterface->GetIscSqlcode()(m_Status);
-	SetErrorCode(ibDatabaseLayerFirebird::TranslateErrorCode(nSqlCode));
+	// A system error by its status code, as the layer records one (an interrupted statement is isc_cancelled).
+	SetErrorCode(ibDatabaseLayerFirebird::TranslateErrorCode(nSqlCode < -900 ? (int)m_Status[1] : (int)nSqlCode));
 	SetErrorMessage(ibDatabaseLayerFirebird::TranslateErrorCodeToString(m_pInterface, nSqlCode, m_Status));
 }
 

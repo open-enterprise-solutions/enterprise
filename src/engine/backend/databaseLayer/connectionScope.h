@@ -45,7 +45,7 @@
 //     harness) or is saturated, the scope is "passive" — it has no
 //     connection of its own and does not touch the TL slot. The
 //     `db_query` macro then continues to resolve via the process-
-//     wide ibApplicationData::m_db, preserving legacy behaviour
+//     wide ibApplicationInstance::m_db, preserving legacy behaviour
 //     rather than failing.
 
 #include "backend/backend.h"
@@ -109,6 +109,10 @@ public:
 	// driver calls.
 	const std::shared_ptr<ibDatabaseLayer>& shared() const { return m_conn; }
 
+	// …and whom it was taken for: a session's own holder (ibSession::Holder), or a thread's db_query
+	// channel. That is whose work a read on it is — the builder asks it whose cancel the rows hear.
+	ibDatabaseConnectionHolder* Holder() const { return m_holder; }
+
 	// Transaction API — merged into the scope. The scope tracks
 	// whether it has an unresolved Begin; the dtor rolls back any
 	// unmatched Begin so an exception between Begin and Commit cleans
@@ -120,7 +124,7 @@ public:
 	// databaseLayer.h). Multiple scopes on the same thread all call
 	// Safe* on the same shared conn; the counter collapses them onto
 	// one real driver-level TX.
-	void SafeBeginTransaction(const ibDatabaseLayer::ibTxOptions& opts = {});
+	void SafeBeginTransaction(const ibDbTxOptions& opts = ibDbTxOptions());
 	void SafeCommitTransaction();
 	void SafeRollBackTransaction();
 

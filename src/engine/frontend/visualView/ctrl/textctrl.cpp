@@ -1,4 +1,5 @@
-﻿#include "widgets.h"
+#include "widgets.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 
 #ifdef OES_USE_WEB
 #include "frontend/web/webWindow.h"
@@ -6,35 +7,35 @@
 #include "frontend/win/ctrls/controlTextEditor.h"
 #endif
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueTextCtrl, ibValueWindow)
 
 //****************************************************************************
 
 #include "form.h"
 #include "backend/metaData.h"
 #include "backend/objCtor.h"
+#include "backend/choiceLinkResolver.h"   // ibChoiceHolder — where this control's link reads its neighbours
 
 bool ibValueTextCtrl::GetChoiceForm(ibPropertyList* property)
 {
 	const ibMetaData* metaData = GetMetaData();
 	if (metaData != nullptr) {
-		ibValueMetaObjectRecordDataRef* metaObject = nullptr;
+		const ibValueMetaObjectRecordDataRef* metaObject = nullptr;
 		if (!m_propertySource->IsEmptyProperty()) {
-			const ibValueMetaObjectGenericData* metaObjectValue =
-				m_formOwner->GetMetaObject();
-			if (metaObjectValue != nullptr) {
-				const ibValueMetaObjectAttributeBase* attribute = wxDynamicCast(metaObjectValue->FindAnyObjectByFilter(m_propertySource->GetValueAsSource()), ibValueMetaObjectAttributeBase);
-				wxASSERT(attribute);
-				const ibCtorMetaValueType* so = metaData->GetTypeCtor(attribute->GetFirstClsid());
+			// Resolve the bound attribute config-wide — a dotted path's leaf lives in a
+			// referenced type, not the form's own metaobject (so the source-scoped lookup
+			// here would miss it and assert). GetSourceAttributeObject handles both.
+			const ibBackendSourceColumn* attribute = m_propertySource->GetSourceAttributeObject();
+			if (attribute != nullptr) {
+				const ibCtorMetaValueType* so = metaData->GetTypeCtor(attribute->GetTypeDesc().GetFirstClsid());
 				if (so != nullptr) {
-					metaObject = wxDynamicCast(so->GetMetaObject(), ibValueMetaObjectRecordDataRef);
+					metaObject = dynamic_cast<const ibValueMetaObjectRecordDataRef*>(so->GetMetaObject());
 				}
 			}
 		}
 		else {
 			const ibCtorMetaValueType* so = metaData->GetTypeCtor(ibTypeControlFactory::GetFirstClsid());
 			if (so != nullptr) {
-				metaObject = wxDynamicCast(so->GetMetaObject(), ibValueMetaObjectRecordDataRef);
+				metaObject = dynamic_cast<const ibValueMetaObjectRecordDataRef*>(so->GetMetaObject());
 			}
 		}
 
@@ -59,6 +60,11 @@ ibSourceObject* ibValueTextCtrl::GetSourceObject() const
 		: nullptr;
 }
 
+bool ibValueTextCtrl::GetSourceList(std::vector<ibBackendFormAttributeValue*>& out) const
+{
+	return m_formOwner != nullptr ? m_formOwner->GetSourceList(GetFilterSourceDataType(), out) : false;
+}
+
 //****************************************************************************
 //*                              TextCtrl                                    *
 //****************************************************************************
@@ -70,28 +76,27 @@ enum prop {
 ibValueTextCtrl::ibValueTextCtrl() :
 	ibValueWindow(), ibTypeControlFactory(), m_textModified(false)
 {
+	m_members.Bind(this, &ibValueTextCtrl::FillControlMembers);
 	//set default params
 	m_propertyBG->SetValue(wxColour(255, 255, 255));
 }
 
-ibMetaData* ibValueTextCtrl::GetMetaData() const
+const ibMetaData* ibValueTextCtrl::GetMetaData() const
 {
 	return m_formOwner != nullptr ?
 		m_formOwner->GetMetaData() : nullptr;
 }
 
-void ibValueTextCtrl::PrepareNames() const
+void ibValueTextCtrl::FillControlMembers(ibMemberTable& helper) const
 {
-	ibValueFrame::PrepareNames();
-
-	m_methodHelper->AppendProp(wxT("Value"), eControlValue, eControl);
+	helper.AppendProp(wxT("Value"), eControlValue, eControl);
 }
 
 bool ibValueTextCtrl::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 {
-	const long lPropAlias = m_methodHelper->GetPropAlias(lPropNum); bool refreshColumn = false;
+	const long lPropAlias = m_members.GetPropAlias(lPropNum);
 	if (lPropAlias == eControl) {
-		const long lPropData = m_methodHelper->GetPropData(lPropNum);
+		const long lPropData = m_members.GetPropData(lPropNum);
 		if (lPropData == eControlValue) {
 			SetControlValue(varPropVal);
 		}
@@ -102,9 +107,9 @@ bool ibValueTextCtrl::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 
 bool ibValueTextCtrl::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
-	const long lPropAlias = m_methodHelper->GetPropAlias(lPropNum);
+	const long lPropAlias = m_members.GetPropAlias(lPropNum);
 	if (lPropAlias == eControl) {
-		const long lPropData = m_methodHelper->GetPropData(lPropNum);
+		const long lPropData = m_members.GetPropData(lPropNum);
 		if (lPropData == eControlValue) {
 			return GetControlValue(pvarPropVal);
 		}
@@ -118,9 +123,9 @@ wxString ibValueTextCtrl::GetControlTitle() const
 		return m_propertyTitle->GetValueAsTranslateString();
 	}
 	else if (!m_propertySource->IsEmptyProperty()) {
-		const ibValueMetaObject* metaObject = m_propertySource->GetSourceAttributeObject();
-		wxASSERT(metaObject);
-		return metaObject->GetSynonym();
+		const ibBackendAbstractColumn* column = GetSourceAbstractColumn();
+		if (column != nullptr)   // null when the bound field is gone / whole-attribute binding
+			return column->GetSynonym();
 	}
 	return wxEmptyString;
 }
@@ -139,9 +144,8 @@ wxObject* ibValueTextCtrl::Create(ibFrontendWindow* wxparent, ibVisualHost* visu
 #endif
 
 	if (!m_propertySource->IsEmptyProperty()) {
-		ibSourceDataObject* srcObject = m_formOwner->GetSourceObject();
-		if (srcObject != nullptr)
-			srcObject->GetValueByMetaID(m_propertySource->GetValueAsSource(), m_selValue);
+		if (m_formOwner != nullptr)
+			m_formOwner->GetValueByAttributePath(m_propertySource->GetValueAsSourceDesc(), m_selValue);
 	} else {
 		m_selValue = ibTypeControlFactory::AdjustValue(m_selValue);
 	}
@@ -149,11 +153,24 @@ wxObject* ibValueTextCtrl::Create(ibFrontendWindow* wxparent, ibVisualHost* visu
 	return textEditor;
 }
 
-void ibValueTextCtrl::OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost, bool firstСreated)
+void ibValueTextCtrl::OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost, bool firstCreated)
 {
+	// A just-dropped textbox with no source auto-binds to a fresh attribute (control-side helper) so it
+	// renders bound, not hidden. firstCreated is set ONLY by the designer's add, never on a form open.
+	if (firstCreated)
+		AutoBindNewSource(this);   // `this` upcasts to ibTypeControlFactory* — the source-set side
 }
 
 #include "backend/appData.h"
+#include "backend/formatString.h"   // ibFormatString — what the field shows its value through
+#include "backend/metaCollection/attribute/metaAttributeObject.h"
+
+const ibTranslateString& ibValueTextCtrl::GetSourceFormat() const
+{
+	static const ibTranslateString s_none;
+	const ibValueMetaObjectAttributeBase* attribute = ibChoiceLinkResolver::FieldOf(GetChoiceHolder(), this);
+	return attribute != nullptr ? attribute->GetFormat() : s_none;
+}
 
 void ibValueTextCtrl::Update(wxObject* wxobject, ibVisualHost* visualHost)
 {
@@ -177,9 +194,7 @@ void ibValueTextCtrl::Update(wxObject* wxobject, ibVisualHost* visualHost)
 	// attribute, pull the current source value; otherwise the control
 	// carries its own m_selValue across Update passes.
 	if (!m_propertySource->IsEmptyProperty() && m_formOwner != nullptr) {
-		ibSourceDataObject* srcObject = m_formOwner->GetSourceObject();
-		if (srcObject != nullptr)
-			srcObject->GetValueByMetaID(m_propertySource->GetValueAsSource(), m_selValue);
+		m_formOwner->GetValueByAttributePath(m_propertySource->GetValueAsSourceDesc(), m_selValue);
 	}
 	else {
 		m_selValue = ibTypeControlFactory::AdjustValue(m_selValue);
@@ -189,11 +204,21 @@ void ibValueTextCtrl::Update(wxObject* wxobject, ibVisualHost* visualHost)
 	// Desktop's "if (!DesignerMode()) SetValue" guard is pointless on web
 	// (wfrontend is never in designer mode); the no-op check is cheap.
 	textEditor->SetLabel(GetControlTitle());
-	if (!appData->DesignerMode())
-		textEditor->SetValue(m_selValue.GetString());
+	if (!appData->DesignerMode()) {
+		wxString text;
+		const ibTranslateString& format = m_propertyFormat->GetValueAsFormatString();
+		GetFormatFromColumn(!format.IsEmpty() ? format : GetSourceFormat(), GetTypeDesc()).Apply(m_selValue, text);
+		textEditor->SetValue(text);
+	}
 	textEditor->SetPasswordMode(m_propertyPasswordMode->GetValueAsBoolean());
 	textEditor->SetMultilineMode(m_propertyMultilineMode->GetValueAsBoolean());
-	textEditor->SetTextEditMode(m_propertyTexteditMode->GetValueAsBoolean());
+	// A dotted reference path (Source.Ref.Field) is read-only — force edit mode off
+	// regardless of the control's TextEditMode property. Unbound = editable.
+	const bool writableBinding = m_propertySource->IsEmptyProperty()
+		|| (m_formOwner != nullptr && m_formOwner->IsWritableBinding(m_propertySource->GetValueAsSourceDesc()));
+	// A read-only binding (view-only form / read-only source / dotted reference) is just TextEditMode off — the
+	// control then greys the text AND locks Select / Clear itself (Open stays live).
+	textEditor->SetTextEditMode(m_propertyTexteditMode->GetValueAsBoolean() && writableBinding);
 	textEditor->ShowSelectButton(m_propertySelectButton->GetValueAsBoolean());
 	textEditor->ShowOpenButton(m_propertyOpenButton->GetValueAsBoolean());
 	textEditor->ShowClearButton(m_propertyClearButton->GetValueAsBoolean());
@@ -252,9 +277,9 @@ void ibValueTextCtrl::Cleanup(wxObject* wxobject, ibVisualHost* visualHost)
 
 bool ibValueTextCtrl::GetControlValue(ibValue& pvarControlVal) const
 {
-	const ibSourceDataObject* sourceObject = m_formOwner->GetSourceObject();
-	if (!m_propertySource->IsEmptyProperty() && sourceObject != nullptr) {
-		return sourceObject->GetValueByMetaID(m_propertySource->GetValueAsSource(), pvarControlVal);
+	if (!m_propertySource->IsEmptyProperty() && m_formOwner != nullptr &&
+		m_formOwner->GetValueByAttributePath(m_propertySource->GetValueAsSourceDesc(), pvarControlVal)) {
+		return true;   // attribute-table / dotted path -> read-only walk
 	}
 
 	pvarControlVal = ibTypeControlFactory::AdjustValue(m_selValue);
@@ -263,18 +288,20 @@ bool ibValueTextCtrl::GetControlValue(ibValue& pvarControlVal) const
 
 bool ibValueTextCtrl::SetControlValue(const ibValue& varControlVal)
 {
-	ibSourceDataObject* sourceObject = m_formOwner->GetSourceObject();
-	if (!m_propertySource->IsEmptyProperty() && sourceObject != nullptr) {
-		const ibValueMetaObjectAttributeBase* metaObject = m_propertySource->GetSourceAttributeObject();
-		wxASSERT(metaObject);
-		sourceObject->SetValueByMetaID(m_propertySource->GetValueAsSource(), varControlVal);
-		m_selValue = metaObject->AdjustValue(varControlVal);
-	}
-	else {
-		m_selValue = ibTypeControlFactory::AdjustValue(varControlVal);
-	}
+	// A bound DIRECT-FIELD source writes back through the form (the head selects the attribute; a
+	// dotted reference path is read-only → no-op). Adjusting the value to the bound Type is the
+	// factory's job in EVERY case (bound or not), so it is unconditional.
+	const ibBackendSourceColumn* column = !m_propertySource->IsEmptyProperty()
+		? m_propertySource->GetSourceAttributeObject() : nullptr;
+	if (column != nullptr && m_formOwner != nullptr)
+		m_formOwner->SetValueByAttributePath(m_propertySource->GetValueAsSourceDesc(), varControlVal);
+	m_selValue = ibTypeControlFactory::AdjustValue(varControlVal);
 
 	m_formOwner->RefreshForm();
+
+	wxString text;
+	const ibTranslateString& format = m_propertyFormat->GetValueAsFormatString();
+	GetFormatFromColumn(!format.IsEmpty() ? format : GetSourceFormat(), GetTypeDesc()).Apply(m_selValue, text);
 
 	// Push m_selValue into the live editor. GetWxObject() is unified —
 	// both builds return the web/wx node the walker stashed in the host's
@@ -290,11 +317,11 @@ bool ibValueTextCtrl::SetControlValue(const ibValue& varControlVal)
 	// mismatch instead.
 	auto* textEditor = dynamic_cast<ibWebTextCtrl*>(GetWxObject());
 	if (textEditor != nullptr)
-		textEditor->SetValue(m_selValue.GetString());
+		textEditor->SetValue(text);
 #else
 	ibControlTextEditor* textEditor = static_cast<ibControlTextEditor*>(GetWxObject());
 	if (textEditor != nullptr) {
-		textEditor->SetValue(m_selValue.GetString());
+		textEditor->SetValue(text);
 		if (m_selValue.IsEmpty())
 			textEditor->SetInsertionPoint(wxNOT_FOUND);
 		else textEditor->SetInsertionPointEnd();
@@ -304,69 +331,65 @@ bool ibValueTextCtrl::SetControlValue(const ibValue& varControlVal)
 	return true;
 }
 
+ibChoiceHolder ibValueTextCtrl::GetChoiceHolder() const
+{
+	return m_formOwner != nullptr ? ibChoiceHolder(m_formOwner->GetSourceObject()) : ibChoiceHolder();
+}
+
 //*******************************************************************
 //*                            Data		                            *
 //*******************************************************************
 
-bool ibValueTextCtrl::LoadData(ibReaderMemory& reader)
+bool ibValueTextCtrl::ReadData(const ibDataNode& node)
 {
-	wxString caption; reader.r_stringZ(caption);
-	m_propertyTitle->SetValue(caption);
-
-	m_propertyPasswordMode->SetValue(reader.r_u8());
-	m_propertyMultilineMode->SetValue(reader.r_u8());
-	m_propertyTexteditMode->SetValue(reader.r_u8());
-
-	m_propertySelectButton->SetValue(reader.r_u8());
-	m_propertyOpenButton->SetValue(reader.r_u8());
-	m_propertyClearButton->SetValue(reader.r_u8());
-
-	m_propertyChoiceForm->SetValue(reader.r_s32());
-
-	if (!m_propertySource->LoadData(reader))
-		return false;
+	m_propertyTitle->SetNodeValue(node.GetProperty(m_propertyTitle->GetName()));
+	m_propertyPasswordMode->SetNodeValue(node.GetProperty(m_propertyPasswordMode->GetName()));
+	m_propertyMultilineMode->SetNodeValue(node.GetProperty(m_propertyMultilineMode->GetName()));
+	m_propertyTexteditMode->SetNodeValue(node.GetProperty(m_propertyTexteditMode->GetName()));
+	m_propertyFormat->SetNodeValue(node.GetProperty(m_propertyFormat->GetName()));
+	m_propertySelectButton->SetNodeValue(node.GetProperty(m_propertySelectButton->GetName()));
+	m_propertyOpenButton->SetNodeValue(node.GetProperty(m_propertyOpenButton->GetName()));
+	m_propertyClearButton->SetNodeValue(node.GetProperty(m_propertyClearButton->GetName()));
+	m_propertyChoiceForm->SetNodeValue(node.GetProperty(m_propertyChoiceForm->GetName()));
+	m_propertySource->SetNodeValue(node.GetProperty(m_propertySource->GetName()));
 
 	//events
-	m_eventOnChange->LoadData(reader);
-	m_eventStartChoice->LoadData(reader);
-	m_eventStartListChoice->LoadData(reader);
-	m_eventClearing->LoadData(reader);
-	m_eventOpening->LoadData(reader);
-	m_eventChoiceProcessing->LoadData(reader);
+	m_eventOnChange->SetNodeValue(node.GetProperty(m_eventOnChange->GetName()));
+	m_eventStartChoice->SetNodeValue(node.GetProperty(m_eventStartChoice->GetName()));
+	m_eventStartListChoice->SetNodeValue(node.GetProperty(m_eventStartListChoice->GetName()));
+	m_eventClearing->SetNodeValue(node.GetProperty(m_eventClearing->GetName()));
+	m_eventOpening->SetNodeValue(node.GetProperty(m_eventOpening->GetName()));
+	m_eventChoiceProcessing->SetNodeValue(node.GetProperty(m_eventChoiceProcessing->GetName()));
 
-	return ibValueWindow::LoadData(reader);
+	return ibValueWindow::ReadData(node);
 }
 
-bool ibValueTextCtrl::SaveData(ibWriterMemory& writer)
+bool ibValueTextCtrl::WriteData(ibDataNode& node) const
 {
-	writer.w_stringZ(m_propertyTitle->GetValueAsString());
-
-	writer.w_u8(m_propertyPasswordMode->GetValueAsBoolean());
-	writer.w_u8(m_propertyMultilineMode->GetValueAsBoolean());
-	writer.w_u8(m_propertyTexteditMode->GetValueAsBoolean());
-
-	writer.w_u8(m_propertySelectButton->GetValueAsBoolean());
-	writer.w_u8(m_propertyOpenButton->GetValueAsBoolean());
-	writer.w_u8(m_propertyClearButton->GetValueAsBoolean());
-
-	writer.w_s32(m_propertyChoiceForm->GetValueAsInteger());
-
-	if (!m_propertySource->SaveData(writer))
-		return false;
+	node.SetProperty(m_propertyTitle->GetName(), m_propertyTitle->GetNodeValue());
+	node.SetProperty(m_propertyPasswordMode->GetName(), m_propertyPasswordMode->GetNodeValue());
+	node.SetProperty(m_propertyMultilineMode->GetName(), m_propertyMultilineMode->GetNodeValue());
+	node.SetProperty(m_propertyTexteditMode->GetName(), m_propertyTexteditMode->GetNodeValue());
+	node.SetProperty(m_propertyFormat->GetName(), m_propertyFormat->GetNodeValue());
+	node.SetProperty(m_propertySelectButton->GetName(), m_propertySelectButton->GetNodeValue());
+	node.SetProperty(m_propertyOpenButton->GetName(), m_propertyOpenButton->GetNodeValue());
+	node.SetProperty(m_propertyClearButton->GetName(), m_propertyClearButton->GetNodeValue());
+	node.SetProperty(m_propertyChoiceForm->GetName(), m_propertyChoiceForm->GetNodeValue());
+	node.SetProperty(m_propertySource->GetName(), m_propertySource->GetNodeValue());
 
 	//events
-	m_eventOnChange->SaveData(writer);
-	m_eventStartChoice->SaveData(writer);
-	m_eventStartListChoice->SaveData(writer);
-	m_eventClearing->SaveData(writer);
-	m_eventOpening->SaveData(writer);
-	m_eventChoiceProcessing->SaveData(writer);
+	node.SetProperty(m_eventOnChange->GetName(), m_eventOnChange->GetNodeValue());
+	node.SetProperty(m_eventStartChoice->GetName(), m_eventStartChoice->GetNodeValue());
+	node.SetProperty(m_eventStartListChoice->GetName(), m_eventStartListChoice->GetNodeValue());
+	node.SetProperty(m_eventClearing->GetName(), m_eventClearing->GetNodeValue());
+	node.SetProperty(m_eventOpening->GetName(), m_eventOpening->GetNodeValue());
+	node.SetProperty(m_eventChoiceProcessing->GetName(), m_eventChoiceProcessing->GetNodeValue());
 
-	return ibValueWindow::SaveData(writer);
+	return ibValueWindow::WriteData(node);
 }
 
 //***********************************************************************
 //*                       Register in runtime                           *
 //***********************************************************************
 
-CONTROL_TYPE_REGISTER(ibValueTextCtrl, "Textctrl", "Widget", string_to_clsid("CT_TXTC"));
+CONTROL_TYPE_REGISTER(ibValueTextCtrl, "Textctrl", "Widget", g_controlTextCtrlCLSID);

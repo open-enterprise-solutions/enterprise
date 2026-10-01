@@ -3,48 +3,109 @@
 //	Description : common factory module 
 ////////////////////////////////////////////////////////////////////////////
 
+#include <atomic>   // std::atomic — MSVC supplied this transitively
 #include "value.h"
 #include "backend/backend_exception.h"
+#include "backend/ctorRegistry.h"
+#include "backend/utils/debugTrace.h"
 
-static std::vector<ibCtorAbstractType*>* s_factoryCtors = nullptr;
+#ifdef DEBUG
+// OFF unless OES_TRACE_TYPES says otherwise — see utils/debugTrace.h.
+//
+// ⚠ HELD BY A FUNCTION, NOT AT FILE SCOPE, which is what that header asks of its callers and names
+// this file for. Both readers below run from the STATIC INITIALISATION of OTHER translation units —
+// a registrar is a file-scope object in its own file, and registering is the first thing it does —
+// so a file-scope flag here was read before its own initialiser had run, and answered with whatever
+// the memory held. ASan said it on the first sanitised run (2026-09-22): initialization-order-fiasco
+// on `s_traceTypes`, read in RegisterCtor from enumFactory.cpp's registrar, reported by 2076 of the
+// 2092 tests — one defect wearing the suite's whole output. A function-local static is built by its
+// first caller, whenever that is; metaObject.cpp and reference.cpp already hold their flags so.
+static bool TraceTypes()
+{
+	static const bool s_traceTypes = ibDebugTraceEnabled("OES_TRACE_TYPES");
+	return s_traceTypes;
+}
+#endif
+
+// Single owner of the registered value-ctors + the clsid / type_info / name
+// lookups. Hot keys (clsid, type_info) are O(1); name stays linear (see header).
+//
+// The registry OWNS ITS LIFETIME instead of having it inferred from its contents. It used to be
+// a raw pointer newed by whichever value_register happened to register first, and deleted again
+// the moment the map went empty — a guess about the future, and a wrong one: unregistration runs
+// from the static teardown of several modules, so one ctor that never comes back leaves the whole
+// registry alive to the end of the process, with nobody left to free it.
+//
+// A function-local static needs neither the new nor the guess. It is built by the first caller
+// and destroyed by the CRT at exit, and the ORDER is right by construction: MSVC keeps static
+// destructors in one LIFO list, so an object that registers its destructor before every registrar
+// that had to build it is destroyed after all of them. Registrars unregister first, the registry
+// dies last.
+static bool s_registryAlive = false;   // trivially destructible, so it stays readable after the
+                                       // holder below is gone — see CtorRegistry()
+
+struct ibCtorRegistryHolder {
+	ibCtorRegistry<ibCtorAbstractType> m_registry;
+	ibCtorRegistryHolder() { s_registryAlive = true; }
+	~ibCtorRegistryHolder() { s_registryAlive = false; }
+};
+
+// nullptr once teardown has passed the registry — a late query then answers "not registered"
+// rather than touching a destroyed map. The pointer form got this for free (it simply leaked
+// instead); paying for it explicitly is the price of having a destructor at all.
+static ibCtorRegistry<ibCtorAbstractType>* CtorRegistry()
+{
+	static ibCtorRegistryHolder s_holder;
+	return s_registryAlive ? &s_holder.m_registry : nullptr;
+}
+
 static std::atomic<unsigned int> s_factoryCtorCountChanges = 0;
 
 //*******************************************************************************
 //*                      Support dynamic object                                 *
 //*******************************************************************************
 
-ibValue* ibValue::CreateObjectRef(const ibClassID& clsid, ibValue** paParams, const long lSizeArray)
+ibValue ibValue::CreateObject(const ibClassID& clsid, ibValue** paParams, const long lSizeArray)
 {
 	const ibCtorAbstractType* typeCtor = GetAvailableCtor(clsid);
 
 	if (typeCtor != nullptr) {
-		ibValue* created_value = typeCtor->CreateObject();
-		wxASSERT(created_value);
+		// OWNED FROM THE MOMENT IT EXISTS — Init() below may run code that takes a reference to it and
+		// lets it go (see ibCtorAbstractType::CreateObject). A refusal throws, and the owner lets it go.
+		ibValue created = typeCtor->CreateObject();
+
+		// ⭐ WHAT THE CTOR MAKES IS THE ANSWER, EMPTY INCLUDED — the rule ibMetaData::CreateObject reads
+		// its own image by. Empty means the type has no value of its own to make: a type CONSTRAINT
+		// (`Any`, `AnyRef`, the metatype families `CatalogRef` / `DocumentRef`) or a value that exists
+		// only against its owner. That is an ordinary answer, and the caller who needs a value asks it.
+		//
+		// 🛑 IT WAS A REFUSAL, "cannot be created without arguments", and it reached the one caller that
+		// asks exactly this question: the empty value of a declared type. An attribute declared
+		// `DocumentRef` could neither start empty nor be cleared — its empty value was a throw (#157).
+		// `New` needs no refusal of its own here: the compiler emits it only for a type that builds
+		// one (compileCode.cpp), and the callers that read a value out of this door ask it for one.
+		// Init() below is asked of the held object, and a value that holds none has nothing to set up.
 		if (typeCtor->GetObjectTypeCtor() != ibCtorObjectType::ibCtorObjectType_object_system) {
 			bool succes = true;
 			if (lSizeArray > 0)
-				succes = created_value->Init(paParams, lSizeArray);
+				succes = created.Init(paParams, lSizeArray);
 			else
-				succes = created_value->Init();
-			if (!succes) {
-				wxDELETE(created_value);
+				succes = created.Init();
+			if (!succes)
 				ibBackendCoreException::Error(_("Error initializing object '%s'"), typeCtor->GetClassName());
-			}
-			created_value->PrepareNames();
+			// Name surface builds lazily on first GetPMethods() — no eager populate.
 		}
-		return created_value;
+		return created;
 	}
 	else {
 		ibBackendCoreException::Error(_("Error creating object '%llu'"), clsid);
 	}
 
-	return nullptr;
+	return wxEmptyValue;
 }
 
 void ibValue::RegisterCtor(ibCtorAbstractType* typeCtor)
 {
-	if (s_factoryCtors == nullptr) s_factoryCtors = new std::vector<ibCtorAbstractType*>;
-
 	if (typeCtor != nullptr) {
 
 		if (ibValue::IsRegisterCtor(typeCtor->GetClassType())) {
@@ -55,14 +116,15 @@ void ibValue::RegisterCtor(ibCtorAbstractType* typeCtor)
 		}
 
 #ifdef DEBUG
-		if (wxTheApp != NULL)
-			wxLogDebug(wxT("* Register class '%s' with clsid '%s:%llu' "), typeCtor->GetClassName(), clsid_to_string(typeCtor->GetClassType()), typeCtor->GetClassType());
+		if (TraceTypes() && wxTheApp != NULL)
+			ibJournalInfo(wxT("compiler"),wxT("* Register class '%s' with clsid '%s:%llu' "), typeCtor->GetClassName(), clsid_to_string(typeCtor->GetClassType()), typeCtor->GetClassType());
 #endif
 
 		s_factoryCtorCountChanges++;
 
 		typeCtor->CallEvent(ibCtorObjectTypeEvent::ibCtorObjectTypeEvent_Register);
-		s_factoryCtors->emplace_back(typeCtor);
+		if (ibCtorRegistry<ibCtorAbstractType>* registry = CtorRegistry())
+			registry->Register(typeCtor);
 	}
 }
 
@@ -73,21 +135,24 @@ void ibValue::UnRegisterCtor(ibCtorAbstractType*& typeCtor)
 		typeCtor->CallEvent(ibCtorObjectTypeEvent::ibCtorObjectTypeEvent_UnRegister);
 
 #ifdef DEBUG
-		if (wxTheApp != NULL)
-			wxLogDebug(wxT("* Unregister class '%s' with clsid '%s:%llu' "), typeCtor->GetClassName(), clsid_to_string(typeCtor->GetClassType()), typeCtor->GetClassType());
+		// The wxTheApp guard is NOT about noise: this also runs from static teardown, where a log
+		// call would ask wx to build a log target nobody can then delete (see OnExit's
+		// wxLog::DontCreateOnDemand note).
+		if (TraceTypes() && wxTheApp != NULL)
+			ibJournalInfo(wxT("compiler"),wxT("* Unregister class '%s' with clsid '%s:%llu' "), typeCtor->GetClassName(), clsid_to_string(typeCtor->GetClassType()), typeCtor->GetClassType());
 #endif
-		s_factoryCtors->erase(
-			std::remove(s_factoryCtors->begin(), s_factoryCtors->end(), typeCtor)
-		);
-
-		wxDELETE(typeCtor);
+		// Registry owns the ctor via shared_ptr — Unregister FREES it; null the caller's
+		// (by-ref) pointer so the now-dangling ctor is never dereferenced (replaces the
+		// old wxDELETE that nulled it; value_register's dtor relies on this).
+		CtorRegistry()->Unregister(typeCtor);
 		s_factoryCtorCountChanges++;
+		typeCtor = nullptr;
 	}
 	else if (typeCtor != nullptr) {
 		ibBackendCoreException::Error(_("Object '%s' is not register"), typeCtor->GetClassName());
 	}
-
-	if (s_factoryCtors->size() == 0) wxDELETE(s_factoryCtors);
+	// No "delete it once it is empty" here any more: empty is not the same as finished, and the
+	// registry's own destructor already covers the finished case.
 }
 
 void ibValue::UnRegisterCtor(const wxString& className)
@@ -95,6 +160,11 @@ void ibValue::UnRegisterCtor(const wxString& className)
 	ibCtorAbstractType* typeCtor = GetAvailableCtor(className);
 
 	if (typeCtor == nullptr) {
+		// LOUD ON PURPOSE. A name that cannot be unregistered was never registered under it, and
+		// that is always a defect upstream — a registration that did not happen, or one whose key
+		// drifted (the registry indexes by the NAME held at registration time, so a rename that
+		// does not re-register leaves the entry behind under the old string). Swallowing it here
+		// would leave the type registry quietly wrong and move the symptom somewhere unrelated.
 		ibBackendCoreException::Error(_("Object '%s' is not exist"), className);
 		return;
 	}
@@ -104,37 +174,29 @@ void ibValue::UnRegisterCtor(const wxString& className)
 
 bool ibValue::IsRegisterCtor(const wxString& className)
 {
-	if (s_factoryCtors == nullptr || className.IsEmpty())
+	if (CtorRegistry() == nullptr || className.IsEmpty())
 		return false;
-	for (auto& typeCtor : *s_factoryCtors)
-		if (stringUtils::CompareString(className, typeCtor->GetClassName()))
-			return true;
-	return false;
+	return CtorRegistry()->Find(className) != nullptr;
 }
 
 bool ibValue::IsRegisterCtor(const wxString& className, ibCtorObjectType objectType)
 {
-	if (s_factoryCtors == nullptr)
+	if (CtorRegistry() == nullptr)
 		return false;
-	for (auto& typeCtor : *s_factoryCtors)
-		if (stringUtils::CompareString(className, typeCtor->GetClassName()) && (objectType == typeCtor->GetObjectTypeCtor()))
-			return true;
-	return false;
+	// Names are unique (RegisterCtor rejects duplicates), so the single
+	// name-match is the one to check the object-type against.
+	const ibCtorAbstractType* typeCtor = CtorRegistry()->Find(className);
+	return typeCtor != nullptr && objectType == typeCtor->GetObjectTypeCtor();
 }
 
 bool ibValue::IsRegisterCtor(const ibClassID& clsid)
 {
-	if (s_factoryCtors == nullptr)
-		return false;
-	for (auto& typeCtor : *s_factoryCtors)
-		if (clsid == typeCtor->GetClassType())
-			return true;
-	return false;
+	return CtorRegistry() != nullptr && CtorRegistry()->Find(clsid) != nullptr;
 }
 
-ibClassID ibValue::GetTypeIDByRef(const wxClassInfo* classInfo)
+ibClassID ibValue::GetTypeIDByRef(const std::type_info& typeInfo)
 {
-	const ibCtorAbstractType* typeCtor = GetAvailableCtor(classInfo);
+	const ibCtorAbstractType* typeCtor = GetAvailableCtor(typeInfo);
 	wxASSERT(typeCtor);
 	return typeCtor != nullptr ?
 		typeCtor->GetClassType() : 0;
@@ -142,25 +204,30 @@ ibClassID ibValue::GetTypeIDByRef(const wxClassInfo* classInfo)
 
 ibClassID ibValue::GetTypeIDByRef(const ibValue* objectRef)
 {
-	// All "object-reference" tags resolve through wxClassInfo (the
-	// subclass's wxDECLARE_DYNAMIC_CLASS registration). Any tag NOT
-	// in this set falls through to objectRef->GetClassType() — which
-	// for primitive types returns the right id, but for unrecognized
-	// reference-shaped tags causes infinite recursion through
-	// GetClassType ↔ GetTypeIDByRef. Add new TYPE_* here when adding
-	// to ibValueTypes enum.
-	if (objectRef->m_typeClass != ibValueTypes::TYPE_VALUE &&
-		objectRef->m_typeClass != ibValueTypes::TYPE_OLE &&
-		objectRef->m_typeClass != ibValueTypes::TYPE_ENUM &&
-		objectRef->m_typeClass != ibValueTypes::TYPE_FUNCTION &&
-		objectRef->m_typeClass != ibValueTypes::TYPE_ITERATOR) {
-		return objectRef->GetClassType();
+	// The object-reference tags resolve through the C++ type-id (typeid(*objectRef),
+	// matched against the registry's type_info key — the replacement for the old
+	// wxDECLARE_DYNAMIC_CLASS / wxClassInfo path). This is the ONLY caller path: base
+	// GetClassType() reaches here exactly for a non-reference object tag (primitives
+	// went through GetIDByVT, references delegated to m_pRef, Category-B metaobjects
+	// override GetClassType and never arrive).
+	//
+	// A tag NOT in this set is a programming error — a new object-shaped ibValueTypes
+	// was added without extending this switch. We must NOT fall back to
+	// objectRef->GetClassType(): that re-enters GetTypeIDByRef and spins into infinite
+	// recursion. Fail loudly in Debug, return 0 (Release-safe) instead.
+	switch (objectRef->m_typeClass) {
+	case ibValueTypes::TYPE_VALUE:
+	case ibValueTypes::TYPE_OLE:
+	case ibValueTypes::TYPE_ENUM:
+	case ibValueTypes::TYPE_FUNCTION:
+	case ibValueTypes::TYPE_ITERATOR:
+		return GetTypeIDByRef(typeid(*objectRef));
+	default:
+		wxFAIL_MSG(wxString::Format(
+			wxT("GetTypeIDByRef: unhandled object tag %d - add it to the typeid switch"),
+			static_cast<int>(objectRef->m_typeClass)));
+		return 0;
 	}
-	const wxClassInfo* classInfo = objectRef->GetClassInfo();
-	wxASSERT(classInfo);
-	if (classInfo != nullptr)
-		return GetTypeIDByRef(classInfo);
-	return 0;
 }
 
 ibClassID ibValue::GetIDObjectFromString(const wxString& className)
@@ -179,23 +246,25 @@ wxString ibValue::GetNameObjectFromID(const ibClassID& clsid, bool upper)
 		return upper ? typeCtor->GetClassName().Upper() :
 			typeCtor->GetClassName();
 	}
+
 	ibBackendCoreException::Error(_("Object with id '%llu' is not exist"), clsid);
 	return wxEmptyString;
 }
 
 wxString ibValue::GetNameObjectFromVT(ibValueTypes valueType, bool upper)
 {
-	if (valueType > ibValueTypes::TYPE_REFFER)
+	if (valueType > ibValueTypes::TYPE_REFFER || CtorRegistry() == nullptr)
 		return wxEmptyString;
-	for (auto& typeCtor : *s_factoryCtors) {
+	wxString result;
+	CtorRegistry()->ForEach([&](ibCtorAbstractType* typeCtor) {
+		if (!result.IsEmpty())
+			return;
 		const ibCtorSingleType* simpleSingleObject = dynamic_cast<ibCtorSingleType*>(typeCtor);
 		if (simpleSingleObject != nullptr &&
-			valueType == simpleSingleObject->GetValueType()) {
-			return upper ? typeCtor->GetClassName().Upper() :
-				typeCtor->GetClassName();
-		}
-	}
-	return wxEmptyString;
+			valueType == simpleSingleObject->GetValueType())
+			result = upper ? typeCtor->GetClassName().Upper() : typeCtor->GetClassName();
+	});
+	return result;
 }
 
 ibValueTypes ibValue::GetVTByID(const ibClassID& clsid)
@@ -243,43 +312,32 @@ ibClassID ibValue::GetIDByVT(const ibValueTypes& valueType)
 
 ibCtorAbstractType* ibValue::GetAvailableCtor(const wxString& className)
 {
-	if (s_factoryCtors == nullptr)
+	// ⭐ AN EMPTY NAME IS NOT A LOOKUP. Nothing is registered under one, so asking is meaningless —
+	// and the answer to a meaningless question is the same null a missing name gets, decided HERE
+	// rather than by whatever the registry happens to do with "" (Max, 2026-09-01).
+	if (className.IsEmpty())
 		return nullptr;
-	for (auto& typeCtor : *s_factoryCtors)
-		if (stringUtils::CompareString(className, typeCtor->GetClassName()))
-			return typeCtor;
-	//ibBackendCoreException::Error("Object '%s' is not exist", className);
-	return nullptr;
+
+	return CtorRegistry() != nullptr ? CtorRegistry()->Find(className) : nullptr;
 }
 
 ibCtorAbstractType* ibValue::GetAvailableCtor(const ibClassID& clsid)
 {
-	if (s_factoryCtors == nullptr)
-		return nullptr;
-	for (auto& typeCtor : *s_factoryCtors)
-		if (clsid == typeCtor->GetClassType())
-			return typeCtor;
-	//ibBackendCoreException::Error("Object id '%llu' is not exist", clsid);
-	return nullptr;
+	return CtorRegistry() != nullptr ? CtorRegistry()->Find(clsid) : nullptr;
 }
 
-ibCtorAbstractType* ibValue::GetAvailableCtor(const wxClassInfo* classInfo)
+ibCtorAbstractType* ibValue::GetAvailableCtor(const std::type_info& typeInfo)
 {
-	if (s_factoryCtors == nullptr)
-		return nullptr;
-	for (auto& typeCtor : *s_factoryCtors)
-		if (classInfo == typeCtor->GetClassInfo())
-			return typeCtor;
-	//ibBackendCoreException::Error("Object '%s' is not exist", classInfo->GetClassName());
-	return nullptr;
+	return CtorRegistry() != nullptr ? CtorRegistry()->Find(typeInfo) : nullptr;
 }
 
 std::vector<ibCtorAbstractType*> ibValue::GetListCtorsByType(ibCtorObjectType objectType)
 {
 	std::vector<ibCtorAbstractType*> retVector;
-	std::copy_if(s_factoryCtors->begin(), s_factoryCtors->end(),
-		std::back_inserter(retVector), [objectType](ibCtorAbstractType* t) { return objectType == t->GetObjectTypeCtor(); }
-	);
+	if (CtorRegistry() != nullptr)
+		CtorRegistry()->ForEach([&](ibCtorAbstractType* t) {
+			if (objectType == t->GetObjectTypeCtor()) retVector.push_back(t);
+		});
 	std::sort(retVector.begin(), retVector.end(),
 		[](ibCtorAbstractType* a, ibCtorAbstractType* b) { return a->GetClassName() > b->GetClassName(); }
 	);

@@ -3,8 +3,7 @@
 
 #include <memory>
 
-#include "backend/compiler/byteCode.h"
-#include "backend/compiler/compileContextLinqData.h"
+#include "backend/compiler/byteCode.h"   // and with it byteCodeLINQ.h — ibLinqQuery lives in the bytecode now
 
 class BACKEND_API ibCompileCode;
 
@@ -21,6 +20,15 @@ enum {
 	RETURN_LAMBDA_PROCEDURE,   //anonymous Procedure(...) body
 	RETURN_LAMBDA_FUNCTION,    //anonymous Function(...) body
 	RETURN_BLOCK,              //block-scope (`{ }` in CES, control-structure body)
+};
+
+// Access modifier for functions / procedures / module variables. Exactly one
+// per declaration; default Private. Replaces the old boolean "export" flag —
+// Public is the export level, Protected is the new child-visible middle tier.
+enum {
+	ACCESS_PRIVATE = 0,   // default — module-local, not visible outside
+	ACCESS_PUBLIC,        // exported — visible config-wide (was `Export`)
+	ACCESS_PROTECTED,     // visible to children (object -> its forms)
 };
 
 // True when a context is any lambda boundary — Phase B compile
@@ -53,6 +61,33 @@ enum {
 	CODE_CES = ibProgramSyntax::syntax_ces
 };
 
+// ⭐⭐ WHERE A `return` GOES WHEN THERE IS NO FRAME TO LEAVE.
+//
+// A lambda folded into somebody else's loop has no frame of its own — that IS the fold — so its
+// `return <expr>` cannot become an OPER_RET: the frame that instruction would leave belongs to the
+// procedure the loop is written in, and returning from THAT is a different program. What the body
+// means is "this is the value, and the body is over", and that is two ordinary instructions: write
+// the value into the cell the fold is waiting on, and jump past the rest of the body.
+//
+// The jump is the pattern this compiler uses wherever it has to name an address it does not know
+// yet — record the position, keep going, write the answer into that position when the body closes.
+// So a folded body may be as wide as any block: an `if`, a nested block, several returns. Before
+// this, the fold demanded a body of exactly one `return <expr>` and everything else fell to the
+// road that builds state objects — which was never a statement about the loop, only about where a
+// value could be put.
+// 🛑 …AND IT HAS TO CLOSE WHAT IT JUMPS OUT OF. A block scope is a PAIR of instructions, and a jump
+// that leaves a block without running the exit leaves the runtime's scope depth one higher forever.
+// Inside a per-call frame that is invisible — the frame dies with the call. Folded into the caller's
+// loop there is no such frame: the depth would climb once a row and never come down, which is the
+// same defect that killed a 300k-row run this morning from the other side (procUnitLINQ.cpp). So the
+// capture remembers how deep the body started, and each `return` closes exactly what it is inside of
+// before it jumps.
+struct ibReturnCapture {
+	ibParamUnit      m_valueCell;   // what `return <expr>` writes into
+	std::vector<int> m_jumps;       // the OPER_GOTO positions, patched when the body closes
+	int              m_scopeDepth = 0;  // the compiler's block depth OUTSIDE the body
+};
+
 struct ibCompileContext {
 
 #pragma region __context_unit_h__
@@ -60,49 +95,45 @@ struct ibCompileContext {
 	//variable definition
 	struct ibVariable
 	{
-		ibVariable() : m_bExport(false), m_bContext(false), m_bExternal(false), m_bTempVar(false), m_bScoped(false), m_numVariable(0), m_clsid(0) {}
-		ibVariable(const wxString& strVariableName) : m_bExport(false), m_bContext(false), m_bExternal(false), m_bTempVar(false), m_bScoped(false), m_numVariable(0), m_clsid(0), m_strName(strVariableName) {}
+		ibVariable() : m_kind(ibVarKind::Local), m_bTempVar(false), m_numVariable(0), m_clsid(0) {}
+		ibVariable(const wxString& strVariableName) : m_kind(ibVarKind::Local), m_bTempVar(false), m_numVariable(0), m_clsid(0), m_strRealName(strVariableName) {}
 
 		// Construct from bytecode-side info — used by FindVariable's
 		// bytecode fallback so eval scopes (no parent compile-context
 		// chain) still produce a transient ibVariable for the caller's
 		// emission path.
 		ibVariable(const wxString& strVariableName, const ibByteCode::ibByteCodeVarInfo& info)
-			// m_bExport on compile-side = "cross-bc visible". For
-			// synth-from-bc entries that's any non-private kind:
-			// Export / External / Context / ContextProp. Plain
-			// kind=Local entries are private — never reach this ctor
-			// (FindVariable filters them).
-			: m_bExport(!info.IsLocal()),
-			  m_bContext(info.IsContext() || info.IsContextProp()),
-			  m_bExternal(info.IsExternal()),
+			// Kind copied straight from the bc entry (same ibVarKind enum).
+			// Plain kind=Local entries are private — never reach this ctor
+			// (FindVariable filters them). m_access stays Private (default):
+			// the synth var's visibility was already decided by the bc-walk
+			// that found it, and tryEmit historically read m_access (default
+			// Private) on these — preserve that.
+			: m_kind(info.m_kind),
 			  // Temps are filtered out at bc-mirror sites — synth from
 			  // bc-info is never a temp.
 			  m_bTempVar(false),
-			  m_bScoped(info.m_bScoped),
 			  m_scopeDepth(info.m_scopeDepth),
 			  m_numVariable(info.m_slotIndex),
 			  m_clsid(info.m_clsid),
-			  m_strName(strVariableName),
 			  m_strRealName(info.m_strRealName.IsEmpty() ? strVariableName : info.m_strRealName),
 			  m_strContext(info.m_strContext)
 		{
 		}
 
-		bool m_bExport;
-		bool m_bContext;
-		// Set in PrepareModuleData Pass 1 for entries declared via
-		// AddExternalValue. Distinct from m_bContext: externs are bound
-		// by the binder but expose no helper props; contexts (self-ref)
-		// expose props/methods through PrepareNames. Drives kind=External
-		// on the bc mirror so the binder treats them as required-to-bind
-		// alongside Context entries.
-		bool m_bExternal;
+		// Kind discriminator (reuses the bc-side ibVarKind). Sole "what is
+		// this entry" tag — replaces the m_bExport / m_bContext / m_bExternal
+		// booleans. Set at PushVariable from (m_strContext / context / export);
+		// PrepareModuleData Pass 1 flips an extern's kind to External, the
+		// access stamp flips a Protected decl to Protected. The bc mirror
+		// copies it verbatim.
+		ibVarKind m_kind = ibVarKind::Local;
+		// Access modifier (ibAccessModifier): Private(0) / Public / Protected,
+		// default Private. Drives the parent-chain visibility gate. Kept as a
+		// SEPARATE axis from m_kind: a system binding (External / Context /
+		// ContextProp) is Public-visible yet is NOT kind=Export.
+		int  m_access = 0;
 		bool m_bTempVar;
-		// Scope-local marker (e.g. ThisObject / ThisForm) — invisible
-		// to children through cross-bc resolution. Mirrored to
-		// ibByteCode::ibByteCodeVarInfo::m_bScoped at compile finalize.
-		bool m_bScoped;
 		// Nesting depth of the OPER_CTX_BEGIN stack at declaration site.
 		// 0 = fn-frame / module-body. Stamped at PushVariable time from
 		// m_compileModule->m_activeScopes.size(). Copied into bc-side
@@ -111,26 +142,42 @@ struct ibCompileContext {
 		// debugger Locals visibility.
 		int m_scopeDepth = 0;
 		unsigned int m_numVariable;
-		// Target class id for External / Context entries — used by the
-		// runtime pre-flight to verify the bound ibValue matches the
-		// declared type. Stamped in PrepareModuleData from the live
-		// extern / context value's GetClassType(). 0 for plain Locals
-		// (no static type).
-		ibClassID m_clsid;
-		wxString m_strName; // Variable name
-		wxString m_strType; // Value type
-		wxString m_strRealName; // Real variable name
+		// THE TYPE, as a class id — 0 when there is none.
+		//
+		// Two things that used to be told apart now share it, because they are
+		// the same fact: the type DECLARED in the source (`Number x`), and the
+		// type of the value an External / Context entry is bound to (stamped in
+		// PrepareModuleData from the live value's GetClassType(), read by the
+		// runtime pre-flight). Both answer "what is this slot".
+		ibClassID m_clsid = 0;
+		wxString m_strRealName; // Real variable name (canonical identifier)
 		wxString m_strContext; //name of the context variable
 
+		// Kind predicates — mirror the bc-side ibByteCodeVarInfo helpers.
+		// A declared private local — the family's missing member, and the one the
+		// parent-chain gate asks for: a child sees its parent entire EXCEPT these.
+		// (`var X Public` is stamped kind=Export at creation and `Protected` flips to
+		// its own kind, so an access modifier never leaves an entry Local.)
+		bool IsLocal()       const { return m_kind == ibVarKind::Local; }
+		bool IsExport()      const { return m_kind == ibVarKind::Export; }
+		bool IsContext()     const { return m_kind == ibVarKind::Context; }
+		bool IsExternal()    const { return m_kind == ibVarKind::External; }
+		bool IsContextProp() const { return m_kind == ibVarKind::ContextProp; }
+
 		// "Is this a context-related entry?" — bare context binding
-		// (Manager / ThisForm, m_bContext=true with empty m_strContext)
-		// or a Pass-3 prop of a binding (Catalogs of Manager, m_strContext
-		// set). Used by the identifier-path emitter to decide between
+		// (Manager / ThisForm) or a Pass-3 prop of a binding (Catalogs of
+		// Manager). Used by the identifier-path emitter to decide between
 		// OPER_GET (bare binding → frame slot) and OPER_GET_A (prop on
 		// parent var) — see compileCode.cpp's isContextProp gate.
 		bool IsContextRelated() const {
-			return m_bContext || !m_strContext.IsEmpty();
+			return IsContext() || IsContextProp();
 		}
+
+		// Access predicates over m_access (Private default). Mirror the
+		// bc-side ibByteCodeVarInfo names; IsPrivate == bc-side IsLocal.
+		bool IsProtected() const { return m_access == ACCESS_PROTECTED; }
+		bool IsPublic()    const { return m_access == ACCESS_PUBLIC; }
+		bool IsPrivate()   const { return m_access == ACCESS_PRIVATE; }
 	};
 
 	//function definition
@@ -138,30 +185,34 @@ struct ibCompileContext {
 	{
 		struct ibParamVariable
 		{
-			ibParamVariable() : m_bByRef(false) {
+			ibParamVariable() : m_bByValue(false) {
 				m_puValue.m_numArray = -1;
 				m_puValue.m_numIndex = -1;
 			}
 
 			// Construct from bytecode-side ibByteParam + the param's
-			// real-cased name (stored separately on ibByteFunction).
+			// real-cased name (now carried on ibByteParam::m_strName,
+			// passed in by the caller).
 			ibParamVariable(const wxString& strParamName, const ibByteCode::ibByteParam& bp)
-				: m_bByRef(bp.m_bByRef),
-				  m_strName(strParamName),
-				  m_puValue(bp.m_defaultValue)
+				: m_bByValue(bp.m_bByValue),
+				  m_strName(strParamName)
 			{
+				// The bytecode carries the descriptor, not the type name (byteCode.h):
+				// the compile side keeps its own m_clsid, which is a compile-time
+				// concern and never travelled in the bytecode to begin with.
+				m_puValue.m_numArray = bp.m_defaultValue.m_numArray;
+				m_puValue.m_numIndex = bp.m_defaultValue.m_numIndex;
 			}
 
-			bool m_bByRef;
+			bool m_bByValue;
 			wxString m_strName; // Variable name
-			wxString m_strType; // Value type
+			ibClassID m_clsid = 0;   // declared type; 0 = untyped
 			ibParamUnit m_puValue; // Default value
 		};
 
 		ibFunction(const wxString& strFuncName, ibCompileContext* compileContext = nullptr) :
-			m_bExport(false),
-			m_bContext(false),
-			m_strName(strFuncName),
+			m_kind(ibFnKind::Local),
+			m_strRealName(strFuncName),
 			m_lVarCount(0), m_nStart(0), m_nFinish(0), m_numLine(0)
 		{
 			// Wire the back-pointer (functionContext->m_functionContext = this)
@@ -177,27 +228,54 @@ struct ibCompileContext {
 		// FindFunction's bytecode fallback. No compile-context to
 		// wire (eval / synthesized path); back-pointer stays null.
 		ibFunction(const wxString& strFuncName, const ibByteCode::ibByteFunction& fn)
-			: m_bExport(fn.IsExport() || fn.IsContextMethod()),
-			  m_bContext(fn.IsContextMethod()),
-			  m_strRealName(fn.m_strRealName.IsEmpty() ? strFuncName : fn.m_strRealName),
-			  m_strName(strFuncName),
-			  m_strContext(fn.m_strContext),
+			// Listed in declaration order — that is the order they are actually
+			// constructed in, whatever this list says.
+			: m_kind(fn.m_kind),
 			  m_bCodeRet(fn.m_bCodeRet),
+			  // Same class of bug as the context-method m_bCodeRet gap:
+			  // a default-false flag the reconstruction path must restore.
+			  // A cross-module call to an exported function whose body has
+			  // an inner lambda capturing locals needs OPER_CALL_CLOSURE;
+			  // dropping this here would emit a plain OPER_CALL and dangle
+			  // the capture (compileCode.cpp:1165 reads m_needsHeapFrame).
+			  m_needsHeapFrame(fn.m_needsHeapFrame),
+			  // Same reason as the line above — and here it is not a dangling
+			  // capture but a silent loss of the modifier: a cross-module call
+			  // to a cached function would emit a plain OPER_CALL and quietly
+			  // stop memoising, with nothing to see but the time.
+			  m_valueCached(fn.m_valueCached),
+			  // And the third of the same kind — without it a built-in of negative
+			  // arity resolved through bytecode refuses every call it is given.
+			  m_valueVariadic(fn.m_valueVariadic),
+			  m_strRealName(fn.m_strRealName.IsEmpty() ? strFuncName : fn.m_strRealName),
+			  m_strContext(fn.m_strContext),
 			  m_lVarCount(fn.m_lVarCount),
 			  m_nStart(fn.m_lCodeLine), m_nFinish(0), m_numLine(0)
 		{
 			m_listParam.reserve(fn.m_listParam.size());
 			for (size_t i = 0; i < fn.m_listParam.size(); i++) {
-				const wxString& realName = (i < fn.m_listParamRealName.size())
-					? fn.m_listParamRealName[i]
-					: wxString();
-				m_listParam.emplace_back(realName, fn.m_listParam[i]);
+				m_listParam.emplace_back(fn.m_listParam[i].m_strName, fn.m_listParam[i]);
 			}
 		}
 
 		~ibFunction() = default;
 
-		bool m_bExport, m_bContext;
+		// Access predicates over m_access (Private default). Mirror the
+		// bc-side ibByteFunction names; IsPrivate == bc-side IsLocal.
+		bool IsProtected() const { return m_access == ACCESS_PROTECTED; }
+		bool IsPublic()    const { return m_access == ACCESS_PUBLIC; }
+		bool IsPrivate()   const { return m_access == ACCESS_PRIVATE; }
+
+		// Kind discriminator (reuses the bc-side ibFnKind). Replaces the
+		// m_bExport / m_bContext booleans. ContextMethod = a binding's method
+		// (m_strContext set); Export / Protected = user-declared with that
+		// access; Local = private. The bc mirror copies it directly (Lambda
+		// kind is stamped bc-side only, after the mirror).
+		ibFnKind m_kind = ibFnKind::Local;
+		// Access modifier (ibAccessModifier): Private(0) / Public / Protected,
+		// default Private. Separate axis from m_kind (a ContextMethod is
+		// cross-bc visible yet not kind=Export).
+		int  m_access = 0;
 
 		// Mirror of bytecode-side m_bCodeRet — true for FUNCTION (returns
 		// a value), false for PROCEDURE. Settled at CompileFunction
@@ -220,9 +298,27 @@ struct ibCompileContext {
 		// whose body has its own inner-lambda capture chain.
 		bool m_needsHeapFrame = false;
 
-		wxString m_strRealName; //Function name
-		wxString m_strName; //Function name in uppercase
-		wxString m_strType; //type (in English notation), if it is a typed function
+		// `Cached` — memoise the result per argument tuple. A SECOND axis
+		// beside m_access (Private Cached / Public Cached both parse), and
+		// legal only where there is a result to keep: a PROCEDURE with the
+		// modifier is refused at ParseFunctionSignature. Mirrored to
+		// ibByteFunction::m_valueCached, which is where the RUNTIME reads it —
+		// at the function's entry opcode. The call site emits an ordinary call:
+		// the modifier belongs to the callee, not to whoever names it.
+		bool m_valueCached = false;
+
+		// A built-in that takes AS MANY ARGUMENTS AS IT IS GIVEN — declared by
+		// registering it with a negative arity (`AppendFunc("Max", -1, …)`).
+		// The fact was written at registration and never read: PushFunction's
+		// `for (arg = 0; arg < argCount; ...)` builds nothing for a negative
+		// count, so m_listParam stayed empty and the "too many parameters" check
+		// below rejected the FIRST argument. `Max` and `Min` are the only two,
+		// and neither could be called at all — which is also why the infinite
+		// loop inside Max survived (systemManagerFunc.cpp).
+		bool m_valueVariadic = false;
+
+		wxString m_strRealName; //Function name (canonical)
+		ibClassID m_clsid = 0;   // declared return type; 0 = untyped
 		wxString m_strContext; //name of the context variable
 
 		unsigned int m_lVarCount;// number of local variables
@@ -237,13 +333,19 @@ struct ibCompileContext {
 
 		std::vector<ibParamVariable> m_listParam;
 
-		// "Is this a context-related entry?" — context-method (bound
-		// to a binding's helper, m_bContext=true with m_strContext set)
-		// or any function with a parent context. Used by the call-path
-		// emitter to decide OPER_CALL vs OPER_CALL_METHOD; mirrors
-		// ibVariable::IsContextRelated().
+		// Kind predicates — mirror the bc-side ibByteFunction helpers.
+		bool IsExport()         const { return m_kind == ibFnKind::Export; }
+		bool IsContextMethod()  const { return m_kind == ibFnKind::ContextMethod; }
+		// Cross-bc visible: Export or ContextMethod (privates / protected /
+		// lambdas are not). Replaces the old "m_bExport" sense at the dedup
+		// and call sites.
+		bool IsCrossBcVisible() const { return m_kind == ibFnKind::Export || m_kind == ibFnKind::ContextMethod; }
+
+		// "Is this a context-related entry?" — a context-method (bound to a
+		// binding's helper, m_strContext set). Used by the call-path emitter
+		// to decide OPER_CALL vs OPER_CALL_METHOD; mirrors ibVariable's.
 		bool IsContextRelated() const {
-			return m_bContext || !m_strContext.IsEmpty();
+			return IsContextMethod();
 		}
 	};
 
@@ -285,43 +387,66 @@ struct ibCompileContext {
 
 		//create lists for Continue and Break commands (they will store the addresses of byte codes where the corresponding commands were encountered)
 		m_numDoNumber++;
-		m_listContinue[m_numDoNumber] = new std::vector<int>();
-		m_listBreak[m_numDoNumber] = new std::vector<int>();
+		m_listContinue[m_numDoNumber] = std::make_unique<std::vector<int>>();
+		m_listBreak[m_numDoNumber] = std::make_unique<std::vector<int>>();
 	}
 
 	//Setting jump addresses for Continue and Break commands
 	void FinishLoopList(ibByteCode& cByteCode, int gotoContinue, int gotoBreak) {
-		std::vector<int>* pListC = m_listContinue[m_numDoNumber];
-		std::vector<int>* pListB = m_listBreak[m_numDoNumber];
-		if (pListC == 0 || pListB == 0) {
+		const std::unique_ptr<std::vector<int>>& pListC = m_listContinue[m_numDoNumber];
+		const std::unique_ptr<std::vector<int>>& pListB = m_listBreak[m_numDoNumber];
+		if (!pListC || !pListB) {
 #ifdef DEBUG 
-			wxLogDebug(wxT("Error (FinishLoopList) gotoContinue=%d, gotoBreak=%d\n"), gotoContinue, gotoBreak);
-			wxLogDebug(wxT("m_numDoNumber=%d\n"), m_numDoNumber);
+			ibJournalInfo(wxT("compiler"), wxT("Error (FinishLoopList) gotoContinue=%d, gotoBreak=%d\n"), gotoContinue, gotoBreak);
+			ibJournalInfo(wxT("compiler"), wxT("m_numDoNumber=%d\n"), m_numDoNumber);
 #endif 
 			m_numDoNumber--;
 			return;
 		}
+		// (*pList)[i] — NOT `*pList[i].data()`, which is pointer arithmetic on the
+		// VECTOR pointer: right for i == 0 by coincidence, a nonexistent vector
+		// object for every element after it. A loop with two Continues (or two
+		// Breaks) patched its second jump address into a garbage bytecode index.
 		for (unsigned int i = 0; i < pListC->size(); i++) {
-			cByteCode.m_listCode[*pListC[i].data()].m_param1.m_numIndex = gotoContinue;
+			cByteCode.m_listCode[(*pListC)[i]].m_param1.m_numIndex = gotoContinue;
 		}
 		for (unsigned int i = 0; i < pListB->size(); i++) {
-			cByteCode.m_listCode[*pListB[i].data()].m_param1.m_numIndex = gotoBreak;
+			cByteCode.m_listCode[(*pListB)[i]].m_param1.m_numIndex = gotoBreak;
 		}
-		m_listContinue.erase(m_numDoNumber);
-		m_listContinue.erase(m_numDoNumber);
-		delete pListC;
-		delete pListB;
+		m_listContinue.erase(m_numDoNumber);   // the erase IS the release now — pListC / pListB are gone with it
+		m_listBreak.erase(m_numDoNumber);      // was a second erase of m_listContinue — m_listBreak kept a dangling entry
 		m_numDoNumber--;
+	}
+
+	// ⭐ THE CONTEXT THAT OPENED THE INNERMOST LOOP — this one, or the nearest parent that has one.
+	//
+	// 🛑 WHY IT HAS TO CLIMB: in C-style a loop's BODY compiles in a child context
+	// (CompileFor / CompileForeach / CompileWhile hand CompileBlock a CreateLocalContext), while
+	// StartLoopList opened the loop on the context above it. Asking the context in hand therefore
+	// found no jump list at all, and `continue` / `break` were refused as "outside a loop" in EVERY
+	// loop of the braces dialect — the VES dialect compiles the body into the same context and never
+	// showed it. Return already climbs, for exactly this reason.
+	//
+	// ⚠ `find`, not `operator[]`: the subscript INSERTS a null entry for a level that was never
+	// opened, so merely asking the question would grow the map and make the next lookup find a hole
+	// that looks like a loop.
+	ibCompileContext* FindLoopContext() {
+		for (ibCompileContext* ctx = this; ctx != nullptr; ctx = ctx->m_parentContext) {
+			const auto found = ctx->m_listContinue.find(ctx->m_numDoNumber);
+			if (found != ctx->m_listContinue.end() && found->second != nullptr)
+				return ctx;
+		}
+		return nullptr;
 	}
 
 	void CreateLabels();
 
 	ibParamUnit CreateVariable(const wxString& strPrefix = wxT("@temp_"));
-	ibParamUnit AddVariable(const wxString& strVarName, const wxString& strType = wxEmptyString, bool bExport = false, bool bContext = false, bool bTempVar = false);
+	ibParamUnit AddVariable(const wxString& strVarName, const ibClassID& typeClsid = 0, bool bExport = false, bool bContext = false, bool bTempVar = false);
 	ibParamUnit GetVariable(const wxString& strVarName, bool bFindInParent = true, bool bCheckError = false, bool bContext = false, bool bTempVar = false);
 
 	void PushVariable(const wxString& strVarName, const wxString& strContextVar, unsigned int numVariable,
-		const wxString& typeVar = wxEmptyString, bool exportVar = true, bool contextVar = true, bool tempVar = false);
+		const ibClassID& typeClsid = 0, bool exportVar = true, bool contextVar = true, bool tempVar = false);
 	void PushFunction(const wxString& strFuncName, const wxString& strContextVar, const wxString& strShortDescription, unsigned int numFunction,
 		bool hasRetVal = true, int argCount = 0);
 
@@ -334,6 +459,7 @@ struct ibCompileContext {
 		m_numDoNumber = 0;
 		m_numReturn = 0;
 		m_numTempVar = 0;
+		m_returnCapture = nullptr;
 
 		m_numFindLocalInParent = 1;
 
@@ -355,32 +481,53 @@ struct ibCompileContext {
 	ibFunction* m_functionContext;
 
 	//VARIABLES
-	std::map<wxString, std::shared_ptr<ibVariable>> m_listVariable;
+	// Storage is a vector keyed by m_strRealName via case-insensitive
+	// find_if (symmetric with the bc-side m_listVar flip). Declaration
+	// order is preserved; lookups are linear scans (small N per context).
+	std::vector<std::shared_ptr<ibVariable>> m_listVariable;
 
 	int m_numTempVar;//current temporary variable number
 	int m_numFindLocalInParent;//flag for searching variables in the parent (one level up), in other cases only export variables are searched in parents)
 
 	//FUNCTIONS AND PROCEDURES
-	std::map<wxString, std::shared_ptr<ibFunction>> m_listFunction; //list of encountered function definitions
+	// Vector keyed by m_strRealName via case-insensitive find_if (see m_listVariable).
+	std::vector<std::shared_ptr<ibFunction>> m_listFunction; //list of encountered function definitions
 
 	short m_numReturn;//RETURN operator processing mode: RETURN_NONE,RETURN_PROCEDURE,RETURN_FUNCTION
 
-	// LINQ — exclusive ownership of LINQ-scope compile state. Non-null
-	// only on the RETURN_BLOCK-kind context that CompileLinqExpression
-	// allocates for the LINQ scope. Lifetime tied to the context's
-	// shared_ptr lifetime. Allocated via std::make_unique in
-	// CompileLinqExpression; freed automatically when the context dies.
-	std::unique_ptr<ibLinqContextData> m_linqData;
+	// Non-null only while a FOLDED LAMBDA BODY is being compiled — see ibReturnCapture above.
+	// Non-owning: the record is a local of the fold that installed it and dies with it.
+	ibReturnCapture* m_returnCapture = nullptr;
+
+	// ⚠ CLIMBS ONLY THROUGH BLOCKS, exactly as `return` itself does. A nested function or lambda
+	// definition inside a folded body opens a context that is not RETURN_BLOCK, and its own
+	// `return` is its own business — the walk stops there and the ordinary OPER_RET is emitted.
+	ibReturnCapture* FindReturnCapture() {
+		for (ibCompileContext* ctx = this; ctx != nullptr; ctx = ctx->m_parentContext) {
+			if (ctx->m_returnCapture != nullptr)
+				return ctx->m_returnCapture;
+			if (ctx->m_numReturn != RETURN_BLOCK)
+				break;
+		}
+		return nullptr;
+	}
+
+	// LINQ — WHICH QUERY THIS SCOPE IS INSIDE, and nothing more. The query itself lives in the
+	// bytecode's full form (ibByteExtCode::m_listLinq, byteCodeLINQ.h): the tape is the tree, so
+	// what a query is made of belongs to the tape and not to a scope that happens to be open while
+	// it is read. Non-null only on the RETURN_BLOCK-kind context CompileLinqExpression opens for the
+	// LINQ scope; a deque entry does not move, so the pointer stays good for the whole compilation.
+	ibLinqQuery* m_linqQuery = nullptr;
 
 	// LINQ-scope predicate helpers. IsLinq() — this context IS the
-	// LINQ scope (carries m_linqData itself). IsInLinq() — this
+	// LINQ scope (it names the query). IsInLinq() — this
 	// context or any ancestor is a LINQ scope; used by IntelliSense /
 	// validation hooks that need to know "are we inside a LINQ block?"
 	// without caring which level introduced the scope.
-	bool IsLinq() const { return m_linqData != nullptr; }
+	bool IsLinq() const { return m_linqQuery != nullptr; }
 	bool IsInLinq() const {
 		for (const ibCompileContext* c = this; c; c = c->m_parentContext)
-			if (c->m_linqData) return true;
+			if (c->m_linqQuery != nullptr) return true;
 		return false;
 	}
 
@@ -388,8 +535,15 @@ struct ibCompileContext {
 	//Service attributes
 	unsigned short m_numDoNumber;//nested loop number
 
-	std::map<unsigned short, std::vector<int>*> m_listContinue;//addresses of Continue operators
-	std::map<unsigned short, std::vector<int>*> m_listBreak;//addresses of Break operators
+	// ⚠ THE LIST OWNS ITSELF, because the only way out is not the one that was coded for.
+	// FinishLoopList deleted both vectors and was the sole place that did; a compilation that
+	// FAILS between StartLoopList and FinishLoopList — a refused LINQ clause, a script the corpus
+	// cannot compile — never reaches it, and the destructor of this context is empty. So a unique_ptr
+	// per entry: erase releases, Reset releases, and the context taking its leave releases.
+	// (A null entry still means "no loop opened at this level" — FindLoopContext reads it that way,
+	//  and operator[] on a level nobody opened still inserts exactly that.)
+	std::map<unsigned short, std::unique_ptr<std::vector<int>>> m_listContinue;//addresses of Continue operators
+	std::map<unsigned short, std::unique_ptr<std::vector<int>>> m_listBreak;//addresses of Break operators
 
 	//LABELS
 	std::map<wxString, unsigned int> m_listLabelDef; //declarations

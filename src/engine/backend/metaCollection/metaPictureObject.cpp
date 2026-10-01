@@ -1,10 +1,10 @@
 #include "metaPictureObject.h"
+#include "backend/serialize/dataBuilder.h"
 
 //***********************************************************************
 //*                            IntrfaceObject                           *
 //***********************************************************************
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueMetaObjectPicture, ibValueMetaObject);
 
 //***********************************************************************
 //*                           Metamodule                                *
@@ -15,14 +15,16 @@ ibValueMetaObjectPicture::ibValueMetaObjectPicture(const wxString& name, const w
 {
 }
 
-bool ibValueMetaObjectPicture::LoadData(ibReaderMemory& reader)
+bool ibValueMetaObjectPicture::ReadData(const ibDataNode& node)
 {
-	return m_propertyPicture->LoadData(reader);
+	m_propertyPicture->SetNodeValue(node.GetProperty(m_propertyPicture->GetName()));
+	return true;
 }
 
-bool ibValueMetaObjectPicture::SaveData(ibWriterMemory& writer)
+bool ibValueMetaObjectPicture::WriteData(ibDataNode& node) const
 {
-	return m_propertyPicture->SaveData(writer);
+	node.SetProperty(m_propertyPicture->GetName(), m_propertyPicture->GetNodeValue());
+	return true;
 }
 
 //***********************************************************************

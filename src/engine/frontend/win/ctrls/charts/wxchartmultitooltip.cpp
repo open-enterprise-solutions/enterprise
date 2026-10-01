@@ -42,7 +42,7 @@ wxChartMultiTooltip::wxChartMultiTooltip(const wxString &title)
 
 wxChartMultiTooltip::wxChartMultiTooltip(const wxString &title,
     const wxChartMultiTooltipOptions &options)
-    : m_title(title), m_options(options)
+    : m_options(options), m_title(title)
 {
 }
 

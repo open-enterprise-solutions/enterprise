@@ -1,7 +1,10 @@
-#pragma once
+#ifndef __STRING_UTILS_H__
+#define __STRING_UTILS_H__
 
 #include <wx/wx.h>
 #include <wx/string.h>
+
+#include "backend/fstring.h"   // ibString — the engine's own names compare here too
 
 class wxInputStream;
 class wxString;
@@ -60,7 +63,7 @@ namespace stringUtils
 		if (pos == result.Length())
 			return result;
 		result.erase(pos, result.Length() - pos);
-		return strSource;
+		return result;
 	}
 
 	inline wxString TrimRight(wxString& strSource, const wxUniChar& c = wxT(' ')) {
@@ -105,6 +108,48 @@ namespace stringUtils
 		return strRet;
 	}
 
+	// THE STRING'S OWN COMPARISON, not a hand-rolled loop over a copy of it.
+	//
+	// This used to materialise BOTH sides with ToStdWstring() — two heap copies
+	// per comparison — then index them through .at() (a bounds check per
+	// character) and fold each character with locale-aware ::towupper. The
+	// disassembly of the hot translation units shows 38 calls to this function,
+	// and it sits under name resolution in the compiler, so the copies were
+	// being paid wherever a name is matched.
+	//
+	// wxString compares against its own storage and picks the right thing per
+	// platform (wchar_t on MSW, UTF-8 elsewhere), which the hand-rolled version
+	// could not: it forced a wide copy even where the string is not wide.
+	//
+	// ⚠ Case folding past ASCII moves from ::towupper to wxWidgets' own rule.
+	// Both are locale-dependent, so neither is a fixed answer — see the note on
+	// non-ASCII folding in tests/test_valueContainer.cpp.
+	// 🛑 DO NOT "OPTIMISE" THIS — IT WAS TRIED AND MEASURED, 2026-08-15.
+	//
+	// Every part of the shape below is load-bearing, and two rewrites that each
+	// looked like an improvement made it worse:
+	//
+	//  * `wxString::CmpNoCase` instead of the loop — loses BOTH early exits: the
+	//    length check (this is an equality test, not an ordering one, so unequal
+	//    lengths end it without reading a character) and the `c1 == c2` skip
+	//    (matching characters need no case conversion, and in name resolution
+	//    matching names match exactly). CmpNoCase must walk and must fold.
+	//
+	//  * Iterating the wxString directly, to avoid "the ToStdWstring() copies" —
+	//    **+27% on ParserBench** (6224 -> 7879 us for 200 functions), +19% on
+	//    inserts and probes, controls flat. A wxString iterator hands out
+	//    wxUniChar, and building one per character costs more than what it saves.
+	//
+	// AND THERE IS NO COPY TO SAVE — the `const auto&` below is doing real work.
+	// wxString::ToStdWstring returns `const std::wstring&` straight into m_impl
+	// when the build stores wide internally (wxUSE_UNICODE_WCHAR — MSW), so the
+	// reference binds to the string's own storage and nothing is allocated. On a
+	// UTF-8 build it does convert, ONCE, which then buys O(1) indexing — the very
+	// thing indexing the wxString itself would not give there. Drop the ampersand
+	// and MSW starts copying for real.
+	//
+	// The disassembly counts 38 calls to this from the hot translation units, so
+	// it is worth optimising — but not in either of those two directions.
 	inline bool CompareString(const wxString& lhs, const wxString& rhs,
 		bool case_sensitive = false) noexcept {
 
@@ -117,19 +162,31 @@ namespace stringUtils
 		const auto& stl_rhs = rhs.ToStdWstring();
 #endif // !_WXSTRING_COMPARE_STRING_
 
+		// THE TWO BRANCHES INDEX DIFFERENT TYPES, so they want different operators
+		// — this is not an inconsistency to tidy up:
+		//
+		//   std::wstring — `[]` yields the character with no bounds check. The
+		//     index is already bounded by `length`, checked against both strings
+		//     above, so at()'s test can never fire; it only emits per character
+		//     and pulls in an exception path (_Xran in the disassembly).
+		//   wxString — `[]` hands back a wxUniCharRef, a PROXY that must be
+		//     CONSTRUCTED, where at() yields the character outright. NOT measured:
+		//     this branch is behind _WXSTRING_COMPARE_STRING_ and does not compile
+		//     in the default build, so the argument is from the wxString API, not
+		//     from a disassembly.
 		for (unsigned int idx = 0; idx < length; idx++) {
 #ifndef _WXSTRING_COMPARE_STRING_
-			const auto& c1 = stl_lhs.at(idx);
-			const auto& c2 = stl_rhs.at(idx);
+			const auto& c1 = stl_lhs[idx];
+			const auto& c2 = stl_rhs[idx];
 #else
 			const auto& c1 = lhs.at(idx);
 			const auto& c2 = rhs.at(idx);
 #endif
 			if (!case_sensitive && c1 == c2)
 				continue;
-#ifdef wxUSE_UNICODE	
+#ifdef wxUSE_UNICODE
 			if (!case_sensitive && ::towupper(c1) != ::towupper(c2))
-#else 
+#else
 			if (!case_sensitive && ::toupper(c1) != ::toupper(c2))
 #endif
 				return false;
@@ -138,6 +195,17 @@ namespace stringUtils
 		}
 
 		return true;
+	}
+
+	// …AND THE SAME QUESTION OF THE ENGINE'S OWN STRING — a member table's names. Asked of the string
+	// itself, in ONE call: the text lives behind the facade (fstring.cpp), and reading it here would be
+	// a call per buffer and per length on every comparison (measured 2026-09-26: method resolve +16%).
+	//
+	// ⚠ NO MIXED PAIR (wxString, ibString): the two convert into each other AND a literal converts into
+	// both, so a mixed overload makes every `CompareString(name, wxT("x"))` ambiguous. A wx name meeting
+	// an engine name is the engine string's own question: `name.IsSameAs(wxName, false)`.
+	inline bool CompareString(const ibString& lhs, const ibString& rhs, bool case_sensitive = false) {
+		return lhs.IsSameAs(rhs, case_sensitive);
 	}
 
 	/**
@@ -224,3 +292,53 @@ namespace stringUtils
 		return wxNOT_FOUND;
 	}
 }
+
+// ⭐ …AND THE ORDER THAT EQUALITY BELONGS TO — for a map whose names are matched case-insensitively (the
+// lexer's keywords and #Defines, a document's parameters): the folding of stringUtils::CompareString, so
+// the names it calls equal are one key, and a lookup is a find rather than a walk over every name.
+// Shaped like CompareString for the same measured reasons (see there): the wide storage by reference, and a
+// character that matches as it is needs no folding — names that share a long prefix compare at the price
+// of the one character where they part.
+//
+// ⚠ READ OFF THE BUFFERS, and a LETTER is the only thing folded. A checked build makes every `[]` of a
+// std::wstring a call, and its towupper updates the locale on every call; a composed sheet files some 400
+// thousand links in a map of this order, named `Link_<row>_<col>`, which part at a digit — a tenth of the
+// sheet's writing went here (stack samples 2026-09-12, Debug). A character below 0x80 that is no letter
+// folds to itself in every locale, so it decides as it stands, and the answer is CompareString's still.
+struct ibCaseFoldLess {
+	bool operator()(const wxString& lhs, const wxString& rhs) const noexcept {
+		const auto& stl_lhs = lhs.ToStdWstring();
+		const auto& stl_rhs = rhs.ToStdWstring();
+		const wchar_t* const l = stl_lhs.data();
+		const wchar_t* const r = stl_rhs.data();
+		const size_t length = stl_lhs.length() < stl_rhs.length() ? stl_lhs.length() : stl_rhs.length();
+		for (size_t idx = 0; idx < length; ++idx) {
+			const wchar_t& c1 = l[idx];
+			const wchar_t& c2 = r[idx];
+			if (c1 == c2)
+				continue;
+			if (c1 < 0x80 && c2 < 0x80 && !IsLatinLetter(c1) && !IsLatinLetter(c2))
+				return c1 < c2;
+			const auto f1 = ::towupper(c1);
+			const auto f2 = ::towupper(c2);
+			if (f1 != f2)
+				return f1 < f2;
+		}
+		return stl_lhs.length() < stl_rhs.length();   // one ran out first: the shorter is the lesser
+	}
+
+private:
+	static bool IsLatinLetter(wchar_t c) noexcept { return (c >= L'a' && c <= L'z') || (c >= L'A' && c <= L'Z'); }
+};
+
+// …and the same order for the ENGINE'S OWN STRING — the index of a member table. A separate order
+// rather than a transparent one, so a lookup never converts a key on every comparison; and one call
+// into the string per comparison (CmpNoCase), whose folding is the one IsSameAs has — so the names
+// this order calls one key are exactly those CompareString calls equal.
+struct ibStringCaseFoldLess {
+	bool operator()(const ibString& lhs, const ibString& rhs) const {
+		return lhs.CmpNoCase(rhs) < 0;
+	}
+};
+
+#endif

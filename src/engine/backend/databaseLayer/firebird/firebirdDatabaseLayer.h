@@ -5,6 +5,9 @@
 #include "backend/databaseLayer/databaseLayer.h"
 #include "backend/databaseLayer/firebird/engine/ibase.h"
 
+#include <functional>   // the maintenance pass's cancel — the calling session's run, asked
+#include <memory>       // std::shared_ptr — m_pInterface is ref-counted (shared with the maintenance scheduler)
+
 #if _USE_DYNAMIC_DATABASE_LAYER_LINKING == 1
 class ibInterfaceFirebird;
 #endif
@@ -47,7 +50,10 @@ public:
 	// Is the connection to the database open?
 	virtual bool IsOpen();
 
-	/// clone database  
+	// Cancel what this attachment is running — fb_cancel_operation(raise), from any thread (see the base).
+	virtual void Cancel();
+
+	/// clone database
 	virtual ibDatabaseLayer* Clone() { return new ibDatabaseLayerFirebird(*this); }
 
 	// IsActiveTransaction inherits the base-class default (m_txDepth > 0).
@@ -58,6 +64,17 @@ public:
 	//static wxString TranslateErrorCodeToString(ibInterfaceFirebird* pInterface, int nCode, ISC_STATUS_ARRAY status);
 	static wxString TranslateErrorCodeToString(ibInterfaceFirebird* pInterface, int nCode, void* status);
 	static bool IsAvailable();
+
+	// Map an isc_status[1] value (the FB "primary" gds code stashed
+	// into m_nErrorCode by every error path in this driver) to a
+	// portable Kind. FB doesn't expose SQLSTATE — the gds codes are
+	// the authoritative identifier. Common ones:
+	//   isc_lock_conflict / isc_deadlock              → Deadlock
+	//   isc_lock_timeout                              → Timeout
+	//   isc_network_error / isc_net_*                 → ConnectionLost
+	//   isc_dsql_command_err / isc_dsql_token_unk_err → Syntax
+	//   isc_unique_key_violation / isc_foreign_key    → Constraint
+	ibBackendDatabaseException::Kind ClassifyDatabaseError(int nativeCode) const override;
 
 	void SetServer(const wxString& strServer) { m_strServer = strServer; }
 	void SetDatabase(const wxString& strDatabase) { m_strDatabase = strDatabase; }
@@ -76,18 +93,67 @@ public:
 		return DATABASELAYER_FIREBIRD;
 	}
 
-	// Row-level pessimistic locks. FB implementation: the "hold" path uses
-	// the regular wait-mode TX and SELECT ... WITH LOCK on the given rows;
-	// the probe opens a separate nowait TX so contention surfaces as a lock
-	// conflict exception instead of blocking. See base declarations for the
-	// contract.
-	virtual bool HoldRowLocks(const wxString& tableName,
-	                          const wxString& pkColumn,
-	                          const std::vector<wxString>& pkValues);
-	virtual void ReleaseRowLocks();
-	virtual bool TryProbeRowLock(const wxString& tableName,
-	                             const wxString& pkColumn,
-	                             const wxString& pkValue);
+	static const ibDialectDictionary& Dialect();                       // FB dialect (no instance needed)
+	virtual const ibDialectDictionary& GetDialect() const override;    // polymorphic access for L2
+
+	// Derived-state materialisation (register totals). Firebird is the DEFAULT embedded
+	// database, so this is the dialect most installations will actually run, and it is also
+	// the one that diverges most: an accumulating upsert must be MERGE (UPDATE OR INSERT ..
+	// MATCHING can only replace), and there is no date_trunc — period truncation is built
+	// from EXTRACT + DATEADD. Both differences are absorbed here, in data.
+	// (docs/private/register-totals-strategy.md)
+	static const ibMaterializationDialect& MaterializationDialect();
+	virtual const ibMaterializationDialect* GetMaterializationDialect() const override;
+
+	// FB-specific: route to `ReconnectIfLeaderChanged()` so callers
+	// holding long-lived connections (session registry's heartbeat /
+	// snapshot jobs) can recover after a leader handoff without
+	// looping forever on the dead TCP socket to the old leader's
+	// spawned firebird.exe.
+	virtual bool ReconnectIfStale() override;
+
+
+	// Row-lock dialect now lives in the dialect dictionary (m_rowLockSuffix=" WITH LOCK",
+	// m_rowLockNoWaitSuffix=""); FB's NOWAIT rides the TPB (isc_tpb_nowait via ibTxOptions::noWait).
+
+	// Housekeeping this connection can do on its own database: sweep, and the
+	// periodic backup/restore cycle. Runs whatever is due and returns whether
+	// anything did.
+	//
+	// A METHOD rather than a service with its own copy of the parameters — the
+	// interface, the path and the credentials are already here, valid for as long
+	// as this connection is checked out of the pool. The previous shape cached
+	// them in a process-wide singleton and then had to prove the cache outlived
+	// nothing it shouldn't; a connection borrowed for the call proves that by
+	// construction.
+	//
+	// Called by the `firebird.maintenance` job on its own session's connection,
+	// so the blocking Services API calls are on a worker rather than on any
+	// thread someone is waiting on.
+	//
+	// `cancelled` — asked on every poll iteration of the Services API
+	// wait, and the ONLY way out of a pass in flight: a sweep is allowed 30
+	// minutes and a worker still inside one holds up the pool's shutdown for
+	// exactly that long. No default argument on purpose — a caller with
+	// nothing to offer here is a caller nobody can stop, and that shape is
+	// what hung shutdown until 2026-08-03. What it asks must outlive the call;
+	// the job asks its session's run, and the session outlives the task.
+	// One maintenance pass each, run unconditionally — the caller (the platform jobs
+	// firebird.sweep / firebird.backup) already decided that it is due. The cancel is the
+	// running session's: a Services API pass is minutes of polling with no interpreter boundary in
+	// it, so it is the only thing that can stop it — the pool's shutdown and an administrator's
+	// cancel both arrive through it. Returns whether the operation reported success.
+	bool RunSweepNow(const std::function<bool()>& cancelled);
+	bool RunBackupRestoreNow(const std::function<bool()>& cancelled);
+
+	// How many transactions of garbage a sweep would clear — the oldest snapshot minus the oldest
+	// interesting transaction, off MON$DATABASE: the number Firebird's own automatic sweep watched,
+	// asked by the job that owns sweeping now. False when the monitoring table cannot be read.
+	bool GetSweepBacklog(long long& transactions);
+
+	// May WE maintain this base ourselves? See m_localMaintenanceEligible below — decided here,
+	// acted on by the startup sequence once sys_job exists.
+	bool IsLocalMaintenanceEligible() const { return m_localMaintenanceEligible; }
 
 protected:
 
@@ -111,9 +177,44 @@ private:
 
 	void InterpretErrorCodes();
 
+	// Reconnect-on-leader-handoff. When `firebirdLeaderMode` reports a
+	// connect URL different from `m_currentConnectUrl` (leader died /
+	// handed off / we self-promoted), close the existing FB handle
+	// (best-effort) and re-attach against the new URL. Returns true
+	// if a reattach happened (so caller knows the previous TX / cursor
+	// state is gone), false on no-op (URL still matches or remote mode).
+	//
+	// Called from `DoBeginTransaction` — single point where we know
+	// there's no in-flight TX / prepared statement / open cursor to
+	// surprise. Mid-TX connection loss continues to surface as a
+	// regular exception; the *next* BeginTransaction picks up the
+	// reconnect.
+	bool ReconnectIfLeaderChanged();
+
+	// Hand a server-side statement handle back on a path where nobody else will. Errors are ignored
+	// BY CONTRACT: this runs while another failure is already on its way to the caller, and that one
+	// is the error worth reporting. Interpret the original status BEFORE calling — this overwrites it.
+	void FreeStatementQuietly(isc_stmt_handle& statement);
+
+	// URL that the current `isc_db_handle` was attached with. Set on
+	// successful `Open`; compared against `ibFirebirdLeaderMode::
+	// CurrentConnectUrl()` on the reconnect path. Empty when no
+	// connection / standalone mode (no leader-mode involvement).
+	wxString m_currentConnectUrl;
+
 #if _USE_DYNAMIC_DATABASE_LAYER_LINKING == 1
-	ibInterfaceFirebird* m_pInterface;
+	// Ref-counted: the maintenance scheduler (a process singleton) borrows this
+	// interface and may outlive THIS pooled connection. Shared ownership keeps
+	// the fbclient function table alive until BOTH the driver and the scheduler
+	// release it, so a reaped donor connection cannot dangle the worker's pointer.
+	std::shared_ptr<ibInterfaceFirebird> m_pInterface;
 #endif
+
+	// Is this base one WE may maintain ourselves — a local standalone file, not leader-mode, not a
+	// remote server? Decided at Open, because the driver is what knows; ACTED ON by the startup
+	// sequence after sys_job exists. Declaring a job writes a row, and Open runs before there is
+	// anywhere to write it — see the note at the assignment.
+	bool m_localMaintenanceEligible = false;
 
 	wxString m_strServer;
 	wxString m_strDatabase;
@@ -126,13 +227,27 @@ private:
 	// so there's no need for a stack.
 	isc_tr_handle m_pTransaction = 0;
 
+	// ⭐⭐ OUR TRANSACTION DIED WITHOUT THE BASE BEING TOLD.
+	//
+	// The base owns m_txDepth and drivers must not touch it, so when this driver loses the native
+	// handle on its own initiative — Close(), or ReconnectIfLeaderChanged() swapping the attachment
+	// underneath an open TX — the two books stop agreeing: IsActiveTransaction() keeps answering YES
+	// over a handle that is 0.
+	//
+	// That silence is what made a failed apply unrecoverable. A statement arriving with no handle
+	// looks exactly like a statement arriving outside a transaction, so it opened a "quickie" TX of
+	// its own AND COMMITTED IT — every ALTER after the loss went durable one by one, and the RollBack
+	// the apply ended with rolled back nothing. The schema moved ahead of the configuration, and no
+	// later apply could bring them back together.
+	//
+	// So the loss is RECORDED rather than inferred. While set, a statement refuses instead of
+	// committing on its own, and a commit refuses instead of reporting success for work that is gone.
+	// Cleared by DoBeginTransaction (a new TX is a new fact) and by DoRollBack (which is what the
+	// caller wanted anyway — there is nothing left to undo).
+	bool m_txLost = false;
+
 	isc_db_handle m_pDatabase;
 	void *m_pStatus;
-
-	// True after a successful HoldRowLocks; tells ReleaseRowLocks whether
-	// there's a TX to commit and whether a re-Hold must commit the prior
-	// one first. Reset on Release / error.
-	bool m_rowLocksHeld = false;
 };
 
 #endif // __FIREBIRD_DATABASE_LAYER_H__

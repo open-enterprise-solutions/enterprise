@@ -1,5 +1,7 @@
 #include "byteCode.h"
 
+#include "codeDef.h"        // the opcode vocabulary — FindCaret reads the declaration opcodes
+
 #include <shared_mutex>
 #include <unordered_map>
 
@@ -72,16 +74,24 @@ bool ibByteCode::ResolveAndVerifyDependencies()
 // ibByteBinder — per-execution binding session                       //
 ////////////////////////////////////////////////////////////////////////
 
-// m_slots is sized to (max m_slotIndex among External/Context entries) + 1
-// so SetVar / pre-flight indexing by slot is in-range. Local / ContextProp
-// entries are skipped — they're not "must-bind" and don't consume a slot
-// in the binder (Locals come from frame init, ContextProps go through
-// OPER_GET_A on parent).
+// m_slots is sized to (max m_slotIndex among bindable entries) + 1 so SetVar /
+// pre-flight indexing by slot is in-range. Bindable = External/Context (must-bind)
+// plus plain Local (a bound local like a constant's Value). ContextProp is skipped
+// — it goes through OPER_GET_A on parent, not a binder slot.
+//
+// Including ALL Local slots (not just bound ones) is REQUIRED, not cosmetic:
+// SetVar writes m_slots[slotIndex] with NO bounds check, and the bytecode var
+// info carries no "this local is bound" flag (the bind list lives in the compile
+// module, not the bc), so the binder cannot tell a bound local from an ordinary
+// one. Sizing to the max Local slot guarantees a bound local's SetVar is in-range.
+// The cost is a few extra null slots for ordinary locals — they are never SetVar'd
+// and the Execute pre-flight skips null. The vector is built once per Run, not per
+// call, so the frame-sized allocation is negligible.
 static size_t computeBinderSlotCount(const std::vector<ibByteCode::ibByteCodeVarInfo>& vars)
 {
 	long maxSlot = -1;
 	for (const auto& v : vars) {
-		if (!v.IsBindRequired()) continue;
+		if (!v.IsBindable()) continue;
 		if (v.m_slotIndex > maxSlot) maxSlot = v.m_slotIndex;
 	}
 	return static_cast<size_t>(maxSlot + 1);
@@ -97,13 +107,20 @@ ibByteBinder::ibByteBinder(const std::vector<ibByteCode::ibByteCodeVarInfo>& var
 void ibByteBinder::SetVar(const wxString& name, ibValue* value)
 {
 	for (const auto& v : m_vars) {
-		if (!v.IsBindRequired()) continue;
+		if (!v.IsBindable()) continue;
 		if (!stringUtils::CompareString(v.m_strRealName, name)) continue;
 		m_slots[v.m_slotIndex] = value;
 		return;
 	}
-	// Name not declared as External/Context — silently ignored. Caller
-	// may pass extras; the runtime only reads what bytecode declared.
+	// Name not declared as a bindable (External/Context/Local) — silently
+	// ignored. Caller may pass extras; the runtime only reads what bytecode
+	// declared.
+	//
+	// Matching a plain Local by name is safe despite being broader than the old
+	// External/Context-only match: var-table names are unique, and a bind name IS
+	// its table entry (Pass 1b registers "Value" as the Local), so there is no
+	// separate user local of the same name to collide with — SetVar only ever
+	// runs with controlled bind names ("Value" / "ThisObject" / "Controls" / …).
 }
 
 ////////////////////////////////////////////////////////////////////////
@@ -117,63 +134,65 @@ void ibByteBinder::SetVar(const wxString& name, ibValue* value)
 // Function vs procedure split: m_bCodeRet (true = function with return,
 // false = procedure).
 
-long ibByteCode::FindMethod(const wxString& strMethodName) const
+long ibByteCode::FindMethod(const ibString& strMethodName) const
 {
+	// The table keeps wx names and the lookup brings the engine's own: the two wide buffers are
+	// compared as they lie, nothing converted (ibString::IsSameAs).
 	auto iterator = std::find_if(m_listFunc.begin(), m_listFunc.end(),
-		[&](const auto& fn) { return stringUtils::CompareString(strMethodName, fn.m_strRealName); });
+		[&](const auto& fn) { return strMethodName.IsSameAs(fn.m_strRealName, false); });
 	if (iterator != m_listFunc.end())
 		return (long)*iterator;
 	return wxNOT_FOUND;
 }
 
-long ibByteCode::FindExportMethod(const wxString& strMethodName) const
+long ibByteCode::FindExportMethod(const ibString& strMethodName) const
 {
 	auto iterator = std::find_if(m_listFunc.begin(), m_listFunc.end(),
 		[&](const auto& fn) {
-			if (fn.IsLocal()) return false;
-			return stringUtils::CompareString(strMethodName, fn.m_strRealName);
+			if (fn.IsLocal() || fn.IsProtected()) return false; // Protected isn't a config-wide export
+			return strMethodName.IsSameAs(fn.m_strRealName, false);
 		});
 	if (iterator != m_listFunc.end())
 		return (long)*iterator;
 	return wxNOT_FOUND;
 }
 
-long ibByteCode::FindFunction(const wxString& funcName) const
+long ibByteCode::FindFunction(const ibString& funcName) const
 {
 	auto iterator = std::find_if(m_listFunc.begin(), m_listFunc.end(),
-		[&](const auto& fn) { return fn.m_bCodeRet && stringUtils::CompareString(funcName, fn.m_strRealName); });
+		[&](const auto& fn) { return fn.m_bCodeRet && funcName.IsSameAs(fn.m_strRealName, false); });
 	if (iterator != m_listFunc.end())
 		return (long)*iterator;
 	return wxNOT_FOUND;
 }
 
-long ibByteCode::FindExportFunction(const wxString& funcName) const
+long ibByteCode::FindExportFunction(const ibString& funcName) const
 {
 	auto iterator = std::find_if(m_listFunc.begin(), m_listFunc.end(),
 		[&](const auto& fn) {
-			if (fn.IsLocal()) return false;
-			return fn.m_bCodeRet && stringUtils::CompareString(funcName, fn.m_strRealName);
+			if (fn.IsLocal() || fn.IsProtected()) return false; // Protected isn't a config-wide export
+			return fn.m_bCodeRet && funcName.IsSameAs(fn.m_strRealName, false);
 		});
 	if (iterator != m_listFunc.end())
 		return (long)*iterator;
 	return wxNOT_FOUND;
 }
 
-long ibByteCode::FindProcedure(const wxString& procName) const
+long ibByteCode::FindProcedure(const ibString& procName) const
 {
 	auto iterator = std::find_if(m_listFunc.begin(), m_listFunc.end(),
-		[&](const auto& fn) { return !fn.m_bCodeRet && stringUtils::CompareString(procName, fn.m_strRealName); });
+		[&](const auto& fn) { return !fn.m_bCodeRet && procName.IsSameAs(fn.m_strRealName, false); });
 	if (iterator != m_listFunc.end())
 		return (long)*iterator;
 	return wxNOT_FOUND;
 }
 
-long ibByteCode::FindExportProcedure(const wxString& procName) const
+long ibByteCode::FindExportProcedure(const ibString& procName) const
 {
 	auto iterator = std::find_if(m_listFunc.begin(), m_listFunc.end(),
 		[&](const auto& fn) {
-			if (fn.IsLocal()) return false;
-			return !fn.m_bCodeRet && stringUtils::CompareString(procName, fn.m_strRealName);
+			if (fn.IsLocal() || fn.IsProtected()) return false; // Protected isn't a config-wide export
+			return !fn.m_bCodeRet && procName.IsSameAs(fn.m_strRealName, false);
 		});
 	if (iterator != m_listFunc.end())
 		return (long)*iterator;
@@ -216,4 +235,82 @@ ibByteCode::ResolvedFunc ResolveFunctionAt(const ibByteCode* bc, const wxString&
 ibByteCode::ResolvedFunc ibByteCode::ResolveFunction(const wxString& funcName, int fullVisDepth) const
 {
 	return ResolveFunctionAt(this, funcName, 0, fullVisDepth);
+}
+// WHERE A CARET STANDS — see the note on ibCaretPoint.
+//
+// One walk of the instruction stream, because both answers come off the same pass: the last
+// instruction at or before the position, and the function that was open when it was emitted. The
+// stream is in emission order, so "open" is a depth counter over the declaration opcodes — depth,
+// not a boolean, because a lambda body sits inside a function body and closes with its own opcode.
+//
+// ⚠ THE LAST INSTRUCTION AT OR BEFORE, not the nearest. A caret sits in TEXT, and the text between
+// two instructions is what is being typed right now; the instruction before it is the last thing
+// the compiler understood, which is exactly the context the caret inherits.
+bool ibByteCode::FindCaret(ibCaretPoint& point) const
+{
+	if (m_listCode.empty())
+		return false;
+
+	point.m_instruction = -1;
+
+	// ⭐⭐ IF THE COMPILE CLAIMED AN INSTRUCTION FOR THIS CARET, THAT IS THE ANSWER. It knew while it
+	// was standing on the dot; the scan below can only guess afterwards, and where an unfinished
+	// construct closes itself the guess is not merely uncertain but impossible — see
+	// m_numCaretInstruction.
+	if (m_numCaretInstruction >= 0 && m_numCaretInstruction < (long)m_listCode.size()) {
+		point.m_instruction = m_numCaretInstruction;
+		return true;
+	}
+
+	long best = -1;
+
+	for (size_t ip = 0; ip < m_listCode.size(); ++ip) {
+
+		const ibByteUnit& code = m_listCode[ip];
+
+		const bool boundary =
+			code.m_numOper == OPER_FUNC || code.m_numOper == OPER_LFUNC ||
+			code.m_numOper == OPER_ENDFUNC || code.m_numOper == OPER_ENDLFUNC ||
+			code.m_numOper == OPER_END;
+
+		// An instruction with no position of its own (a synthesised jump, a fixup) carries zero and
+		// must not drag the answer back to the top of the file.
+		if (code.m_numString == 0 && ip > 0)
+			continue;
+
+		// 🛑 NOT `break` — AND THAT ONE WORD COST EVERY CARET INSIDE A QUERY.
+		//
+		// Stopping at the first instruction past the caret assumes the tape is emitted in TEXT
+		// ORDER, which is true of an ordinary statement and false of everything this compiler does
+		// out of order: the LINQ block road reads its clauses by moving the cursor, the chain road
+		// parks a position and replays the span later, a join's trampoline is emitted after the loop
+		// it belongs inside. So an instruction written EARLY can carry a LATE position, the scan
+		// stopped on it, and the caret's own instruction — sitting further down the list — was never
+		// reached. Measured 2026-09-08 with the caret battery: `o.` after a dot ANYWHERE inside a
+		// query or a lambda body answered with nothing, while the same question one statement later
+		// answered correctly. That was the entire difference.
+		//
+		// The answer wanted is the LAST instruction at or before the caret, and finding it costs one
+		// pass whether or not the positions rise. The `break` was an optimisation that quietly
+		// encoded an assumption the compiler had already stopped keeping.
+		if (code.m_numString > point.m_position)
+			continue;
+
+		// ⭐⭐ A BOUNDARY IS WHERE CODE ENDS, NOT WHERE A CARET STANDS. The module's closing marker
+		// carries the END of the text as its position and has no destination at all, so answering
+		// with it says "nothing here" for every caret at the end of a text that COMPILED — while a
+		// text that refused, and so never reached the marker, answered correctly. Measured
+		// 2026-09-07: `Catalogs.` (which refuses: a bare expression is not a statement) resolved,
+		// and `x = Catalogs.` (which compiles clean) did not. That was the entire difference.
+		if (boundary)
+			continue;
+
+		// THE NEAREST ONE FROM BELOW, and among equals the LAST written: an attribute step is
+		// emitted after the receiver it reads, and both carry the position of the same token.
+		if (best < 0 || code.m_numString >= m_listCode[(size_t)best].m_numString)
+			best = (long)ip;
+	}
+
+	point.m_instruction = best;
+	return true;
 }

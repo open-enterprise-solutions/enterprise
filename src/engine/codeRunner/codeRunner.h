@@ -1,4 +1,5 @@
-#pragma once
+#ifndef __CODE_RUNNER_H__
+#define __CODE_RUNNER_H__
 
 #include <wx/intl.h>
 #include <wx/string.h>
@@ -94,3 +95,5 @@ public:
 		long style = wxDEFAULT_FRAME_STYLE | wxTAB_TRAVERSAL);
 	virtual ~ibFrameCodeRunner();
 };
+
+#endif

@@ -272,5 +272,45 @@ bool ibInterfacePostgres::Init()
 		return false;
 	}
 
+	symbol = wxT("PQgetCancel");
+	if (m_PostgresDLL.HasSymbol(symbol))
+	{
+		m_pPQgetCancel = (PQgetCancelType)m_PostgresDLL.GetSymbol(symbol);
+	}
+	else
+	{
+		return false;
+	}
+
+	symbol = wxT("PQfreeCancel");
+	if (m_PostgresDLL.HasSymbol(symbol))
+	{
+		m_pPQfreeCancel = (PQfreeCancelType)m_PostgresDLL.GetSymbol(symbol);
+	}
+	else
+	{
+		return false;
+	}
+
+	symbol = wxT("PQcancel");
+	if (m_PostgresDLL.HasSymbol(symbol))
+	{
+		m_pPQcancel = (PQcancelType)m_PostgresDLL.GetSymbol(symbol);
+	}
+	else
+	{
+		return false;
+	}
+
+	symbol = wxT("PQresultErrorField");
+	if (m_PostgresDLL.HasSymbol(symbol))
+	{
+		m_pPQresultErrorField = (PQresultErrorFieldType)m_PostgresDLL.GetSymbol(symbol);
+	}
+	else
+	{
+		return false;
+	}
+
 	return true;
 }

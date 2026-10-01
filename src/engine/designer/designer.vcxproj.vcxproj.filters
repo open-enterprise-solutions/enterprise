@@ -1,6 +1,21 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
+    <ClCompile Include="docManager\templates\docViewAssistant.cpp">
+      <Filter>docManager\templates</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\mcpDesignerMessages.cpp">
+      <Filter>mcp</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolMessages.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlg\homePageEditor.cpp">
+      <Filter>win\dlg</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlg\textEditor.cpp">
+      <Filter>win\dlg</Filter>
+    </ClCompile>
     <ClCompile Include="mainApp.cpp" />
     <ClCompile Include="mainAppEvent.cpp" />
     <ClCompile Include="mainFrame\mainFrameDesignerMenu.cpp">
@@ -15,6 +30,9 @@
     <ClCompile Include="mainFrame\mainFrameDesignerParts.cpp">
       <Filter>mainFrame</Filter>
     </ClCompile>
+    <ClCompile Include="mainFrame\vcs\gitPanel.cpp">
+      <Filter>mainFrame\vcs</Filter>
+    </ClCompile>
     <ClCompile Include="docManager\docManager.cpp">
       <Filter>docManager</Filter>
     </ClCompile>
@@ -23,12 +41,6 @@
     </ClCompile>
     <ClCompile Include="win\ctrl\menuBar.cpp">
       <Filter>win\ctrl</Filter>
-    </ClCompile>
-    <ClCompile Include="win\dlg\lineInput\lineInput.cpp">
-      <Filter>win\dlg\lineInput</Filter>
-    </ClCompile>
-    <ClCompile Include="win\dlg\functionSearcher\functionSearcher.cpp">
-      <Filter>win\dlg\functionSearcher</Filter>
     </ClCompile>
     <ClCompile Include="win\dlg\debugItem\debugItem.cpp">
       <Filter>win\dlg\debugItem</Filter>
@@ -42,26 +54,17 @@
     <ClCompile Include="mainFrame\metatree\treeConfigurationEvent.cpp">
       <Filter>mainFrame\metaTree</Filter>
     </ClCompile>
-    <ClCompile Include="win\editor\codeEditor\codeEditor.cpp">
-      <Filter>win\editor\codeEditor</Filter>
-    </ClCompile>
-    <ClCompile Include="win\editor\codeEditor\codeEditorInterpreter.cpp">
-      <Filter>win\editor\codeEditor</Filter>
-    </ClCompile>
-    <ClCompile Include="win\editor\codeEditor\codeEditorInterpreterContext.cpp">
-      <Filter>win\editor\codeEditor</Filter>
-    </ClCompile>
-    <ClCompile Include="win\editor\codeEditor\codeEditorLoader.cpp">
-      <Filter>win\editor\codeEditor</Filter>
-    </ClCompile>
-    <ClCompile Include="win\editor\codeEditor\codeEditorParser.cpp">
-      <Filter>win\editor\codeEditor</Filter>
-    </ClCompile>
-    <ClCompile Include="win\editor\codeEditor\codeEditorPrintOut.cpp">
+    <ClCompile Include="win\editor\codeEditor\codeEditorDesigner.cpp">
       <Filter>win\editor\codeEditor</Filter>
     </ClCompile>
     <ClCompile Include="win\editor\interfaceEditor\interfaceEditor.cpp">
       <Filter>win\editor\interfaceEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="win\editor\commonAttributeEditor\commonAttributeEditor.cpp">
+      <Filter>win\editor\commonAttributeEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="win\editor\functionalOptionEditor\functionalOptionEditor.cpp">
+      <Filter>win\editor\functionalOptionEditor</Filter>
     </ClCompile>
     <ClCompile Include="win\editor\roleEditor\roleEditor.cpp">
       <Filter>win\editor\roleEditor</Filter>
@@ -84,29 +87,23 @@
     <ClCompile Include="win\editor\visualEditor\visualEditorCmdProc.cpp">
       <Filter>win\editor\visualEditor</Filter>
     </ClCompile>
+    <ClCompile Include="win\editor\visualEditor\visualEditorAttributeTree.cpp">
+      <Filter>win\editor\visualEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="win\editor\visualEditor\visualEditorCommandTree.cpp">
+      <Filter>win\editor\visualEditor</Filter>
+    </ClCompile>
     <ClCompile Include="win\editor\visualEditor\visualEditorObjectTree.cpp">
       <Filter>win\editor\visualEditor</Filter>
     </ClCompile>
     <ClCompile Include="win\editor\visualEditor\visualEditorPanel.cpp">
       <Filter>win\editor\visualEditor</Filter>
     </ClCompile>
-    <ClCompile Include="win\editor\codeEditor\components\autoComplete.cpp">
-      <Filter>win\editor\codeEditor\components</Filter>
-    </ClCompile>
-    <ClCompile Include="win\editor\codeEditor\components\callTip.cpp">
-      <Filter>win\editor\codeEditor\components</Filter>
-    </ClCompile>
-    <ClCompile Include="win\editor\codeEditor\components\helpers\listBoxVisualData.cpp">
-      <Filter>win\editor\codeEditor\components\helpers</Filter>
-    </ClCompile>
-    <ClCompile Include="win\editor\codeEditor\components\helpers\listBoxWnd.cpp">
-      <Filter>win\editor\codeEditor\components\helpers</Filter>
-    </ClCompile>
-    <ClCompile Include="win\editor\codeEditor\components\helpers\popupWnd.cpp">
-      <Filter>win\editor\codeEditor\components\helpers</Filter>
-    </ClCompile>
     <ClCompile Include="mainFrame\output\outputWindow.cpp">
       <Filter>mainFrame\output</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\configCompare\configCompareModel.cpp">
+      <Filter>mainFrame\configCompare</Filter>
     </ClCompile>
     <ClCompile Include="mainFrame\local\localWindow.cpp">
       <Filter>mainFrame\local</Filter>
@@ -135,13 +132,25 @@
     <ClCompile Include="docManager\templates\docViewInterface.cpp">
       <Filter>docManager\templates</Filter>
     </ClCompile>
+    <ClCompile Include="docManager\templates\docViewCommonAttribute.cpp">
+      <Filter>docManager\templates</Filter>
+    </ClCompile>
+    <ClCompile Include="docManager\templates\docViewFunctionalOption.cpp">
+      <Filter>docManager\templates</Filter>
+    </ClCompile>
     <ClCompile Include="docManager\templates\docViewMetaFile.cpp">
       <Filter>docManager\templates</Filter>
     </ClCompile>
     <ClCompile Include="docManager\templates\docViewModuleEditor.cpp">
       <Filter>docManager\templates</Filter>
     </ClCompile>
+    <ClCompile Include="docManager\templates\docViewComposer.cpp">
+      <Filter>docManager\templates</Filter>
+    </ClCompile>
     <ClCompile Include="docManager\templates\docViewRole.cpp">
+      <Filter>docManager\templates</Filter>
+    </ClCompile>
+    <ClCompile Include="docManager\templates\docViewConfigCompare.cpp">
       <Filter>docManager\templates</Filter>
     </ClCompile>
     <ClCompile Include="mainFrame\metatree\treeDataProcessor.cpp">
@@ -167,12 +176,24 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="docManager\templates\docViewAssistant.h">
+      <Filter>docManager\templates</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlg\homePageEditor.h">
+      <Filter>win\dlg</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlg\textEditor.h">
+      <Filter>win\dlg</Filter>
+    </ClInclude>
     <ClInclude Include="mainApp.h" />
     <ClInclude Include="resource.h">
       <Filter>res</Filter>
     </ClInclude>
     <ClInclude Include="mainFrame\mainFrameDesigner.h">
       <Filter>mainFrame</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\vcs\gitPanel.h">
+      <Filter>mainFrame\vcs</Filter>
     </ClInclude>
     <ClInclude Include="docManager\docManager.h">
       <Filter>docManager</Filter>
@@ -183,32 +204,26 @@
     <ClInclude Include="win\ctrl\menuBar.h">
       <Filter>win\ctrl</Filter>
     </ClInclude>
-    <ClInclude Include="win\dlg\lineInput\lineInput.h">
-      <Filter>win\dlg\lineInput</Filter>
-    </ClInclude>
-    <ClInclude Include="win\dlg\functionSearcher\functionSearcher.h">
-      <Filter>win\dlg\functionSearcher</Filter>
-    </ClInclude>
     <ClInclude Include="win\dlg\debugItem\debugItem.h">
       <Filter>win\dlg\debugItem</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\metatree\clipboardLock.h">
+      <Filter>mainFrame\metaTree</Filter>
     </ClInclude>
     <ClInclude Include="mainFrame\metatree\treeConfiguration.h">
       <Filter>mainFrame\metaTree</Filter>
     </ClInclude>
-    <ClInclude Include="win\editor\codeEditor\codeEditor.h">
-      <Filter>win\editor\codeEditor</Filter>
-    </ClInclude>
-    <ClInclude Include="win\editor\codeEditor\codeEditorInterpreter.h">
-      <Filter>win\editor\codeEditor</Filter>
-    </ClInclude>
-    <ClInclude Include="win\editor\codeEditor\codeEditorParser.h">
-      <Filter>win\editor\codeEditor</Filter>
-    </ClInclude>
-    <ClInclude Include="win\editor\codeEditor\codeEditorPrintOut.h">
+    <ClInclude Include="win\editor\codeEditor\codeEditorDesigner.h">
       <Filter>win\editor\codeEditor</Filter>
     </ClInclude>
     <ClInclude Include="win\editor\interfaceEditor\interfaceEditor.h">
       <Filter>win\editor\interfaceEditor</Filter>
+    </ClInclude>
+    <ClInclude Include="win\editor\commonAttributeEditor\commonAttributeEditor.h">
+      <Filter>win\editor\commonAttributeEditor</Filter>
+    </ClInclude>
+    <ClInclude Include="win\editor\functionalOptionEditor\functionalOptionEditor.h">
+      <Filter>win\editor\functionalOptionEditor</Filter>
     </ClInclude>
     <ClInclude Include="win\editor\roleEditor\roleEditor.h">
       <Filter>win\editor\roleEditor</Filter>
@@ -228,26 +243,11 @@
     <ClInclude Include="win\editor\visualEditor\res\visualResource.h">
       <Filter>win\editor\visualEditor\res</Filter>
     </ClInclude>
-    <ClInclude Include="win\editor\codeEditor\components\autoComplete.h">
-      <Filter>win\editor\codeEditor\components</Filter>
-    </ClInclude>
-    <ClInclude Include="win\editor\codeEditor\components\callTip.h">
-      <Filter>win\editor\codeEditor\components</Filter>
-    </ClInclude>
-    <ClInclude Include="win\editor\codeEditor\components\helpers\fontAscent.h">
-      <Filter>win\editor\codeEditor\components\helpers</Filter>
-    </ClInclude>
-    <ClInclude Include="win\editor\codeEditor\components\helpers\listBoxVisualData.h">
-      <Filter>win\editor\codeEditor\components\helpers</Filter>
-    </ClInclude>
-    <ClInclude Include="win\editor\codeEditor\components\helpers\listBoxWnd.h">
-      <Filter>win\editor\codeEditor\components\helpers</Filter>
-    </ClInclude>
-    <ClInclude Include="win\editor\codeEditor\components\helpers\popupWnd.h">
-      <Filter>win\editor\codeEditor\components\helpers</Filter>
-    </ClInclude>
     <ClInclude Include="mainFrame\output\outputWindow.h">
       <Filter>mainFrame\output</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\configCompare\configCompareModel.h">
+      <Filter>mainFrame\configCompare</Filter>
     </ClInclude>
     <ClInclude Include="mainFrame\local\localWindow.h">
       <Filter>mainFrame\local</Filter>
@@ -276,13 +276,25 @@
     <ClInclude Include="docManager\templates\docViewInterface.h">
       <Filter>docManager\templates</Filter>
     </ClInclude>
+    <ClInclude Include="docManager\templates\docViewCommonAttribute.h">
+      <Filter>docManager\templates</Filter>
+    </ClInclude>
+    <ClInclude Include="docManager\templates\docViewFunctionalOption.h">
+      <Filter>docManager\templates</Filter>
+    </ClInclude>
     <ClInclude Include="docManager\templates\docViewMetaFile.h">
       <Filter>docManager\templates</Filter>
     </ClInclude>
     <ClInclude Include="docManager\templates\docViewModuleEditor.h">
       <Filter>docManager\templates</Filter>
     </ClInclude>
+    <ClInclude Include="docManager\templates\docViewComposer.h">
+      <Filter>docManager\templates</Filter>
+    </ClInclude>
     <ClInclude Include="docManager\templates\docViewRole.h">
+      <Filter>docManager\templates</Filter>
+    </ClInclude>
+    <ClInclude Include="docManager\templates\docViewConfigCompare.h">
       <Filter>docManager\templates</Filter>
     </ClInclude>
     <ClInclude Include="mainFrame\metatree\treeDataProcessor.h">
@@ -296,6 +308,12 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
+    <Filter Include="mcp">
+      <UniqueIdentifier>{864b57d5-e7aa-4d8e-b1cd-3e761884e653}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="mcp\tools">
+      <UniqueIdentifier>{f000b85f-7517-4a4b-8f2d-962e68dd18cb}</UniqueIdentifier>
+    </Filter>
     <Filter Include="res">
       <UniqueIdentifier>{d3f4bf29-6f86-43b3-b079-064ad3a64eb7}</UniqueIdentifier>
     </Filter>
@@ -314,17 +332,14 @@
     <Filter Include="mainFrame\debugger">
       <UniqueIdentifier>{fe3f1769-61f3-4769-a64d-92911c0f4120}</UniqueIdentifier>
     </Filter>
+    <Filter Include="mainFrame\vcs">
+      <UniqueIdentifier>{c4a7e015-8d3b-42f6-b0d1-5e93a27c6f48}</UniqueIdentifier>
+    </Filter>
     <Filter Include="win">
       <UniqueIdentifier>{eeb061da-1a61-46bf-8977-9cb8aaf2337b}</UniqueIdentifier>
     </Filter>
     <Filter Include="win\dlg">
       <UniqueIdentifier>{5ddaa2ef-2ff7-4097-9b80-5c9c0216286a}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="win\dlg\lineInput">
-      <UniqueIdentifier>{d29e56d6-c979-4241-96e7-03617fd6a0ac}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="win\dlg\functionSearcher">
-      <UniqueIdentifier>{6193570b-cda3-4822-af4e-45f8adf62eb8}</UniqueIdentifier>
     </Filter>
     <Filter Include="win\dlg\debugItem">
       <UniqueIdentifier>{5e0faed8-dfa4-403c-94e2-55fe546f844f}</UniqueIdentifier>
@@ -341,6 +356,12 @@
     <Filter Include="win\editor\interfaceEditor">
       <UniqueIdentifier>{7c154e02-e0fe-4b7c-a23a-0a9a58117ed6}</UniqueIdentifier>
     </Filter>
+    <Filter Include="win\editor\commonAttributeEditor">
+      <UniqueIdentifier>{3f6c1a84-9b52-4a37-8d1e-27c4f0b6a915}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\editor\functionalOptionEditor">
+      <UniqueIdentifier>{67ac34b8-842d-4167-bc36-84edcc78fa26}</UniqueIdentifier>
+    </Filter>
     <Filter Include="win\editor\roleEditor">
       <UniqueIdentifier>{1ad7d1dd-d4f4-4d64-b86d-649c849b6089}</UniqueIdentifier>
     </Filter>
@@ -353,17 +374,14 @@
     <Filter Include="win\editor\visualEditor\res">
       <UniqueIdentifier>{5192482e-2b7d-4a91-81d6-72579d67caef}</UniqueIdentifier>
     </Filter>
-    <Filter Include="win\editor\codeEditor\components">
-      <UniqueIdentifier>{a1eb94f4-2aa0-4296-874f-6a11da1b0a97}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="win\editor\codeEditor\components\helpers">
-      <UniqueIdentifier>{084b864c-316e-404b-9027-03e72c37fec4}</UniqueIdentifier>
-    </Filter>
     <Filter Include="mainFrame\output">
       <UniqueIdentifier>{67b44ba1-54f0-4913-b0f8-09a1f1185b79}</UniqueIdentifier>
     </Filter>
     <Filter Include="mainFrame\local">
       <UniqueIdentifier>{63e7cb2a-c403-4e3c-8808-60eba28029a1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="mainFrame\configCompare">
+      <UniqueIdentifier>{a13c2f8b-7e91-4d3e-9c44-2f0b87a5e6d1}</UniqueIdentifier>
     </Filter>
     <Filter Include="mainFrame\stack">
       <UniqueIdentifier>{a93087ef-1dcf-4f86-bc7b-4453be5e5513}</UniqueIdentifier>
@@ -374,11 +392,6 @@
     <Filter Include="mainFrame\metaTree">
       <UniqueIdentifier>{826f5b9e-e0db-4825-ba90-b3d0442b3ff5}</UniqueIdentifier>
     </Filter>
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="resources\splashLogo.xpm">
-      <Filter>res\xpm</Filter>
-    </None>
   </ItemGroup>
   <ItemGroup>
     <Image Include="designer.ico">

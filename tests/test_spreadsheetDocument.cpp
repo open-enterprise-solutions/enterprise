@@ -1,0 +1,1132 @@
+////////////////////////////////////////////////////////////////////////////
+//	Description : ibBackendSpreadsheetObject — the SERVER-SIDE spreadsheet
+//	              document. No window, no database, no wxApp: the document IS
+//	              the result, and a view is a subscriber to it.
+//
+//	              What is pinned here: cells and their growth, document
+//	              parameters and the two fill types that read them, drill-down,
+//	              merge, freeze, print breaks, outline groups, the area verbs
+//	              (Get / Put / Join) that templates are built from, and the
+//	              notifier contract a renderer relies on.
+//
+//	⚠ THE CRT LEAK DUMP ON EXIT IS EXPECTED AND IS NOT A LEAK — every cell holds
+//	  a wxFont and two wxColour members seeded from wxSystemSettings, and those
+//	  are released by wxEntryCleanup, which a console test never runs. Diagnosed
+//	  2026-08-18 down to a bare ibSpreadsheetDescription on the stack. See the
+//	  same note in test_spreadsheetCompose.cpp.
+////////////////////////////////////////////////////////////////////////////
+
+#include <gtest/gtest.h>
+
+#include "backend/backend_spreadsheet.h"
+#include "backend/backend_localization.h"
+
+namespace {
+
+// ⭐ A COMPUTED CELL IS TEXT. Until 2026-09-21 the parameter and template fills
+// came back WRAPPED (`en = '42';`) and a caption came back as written, every
+// language at once, so each test translated before comparing — and so did every
+// reader, except the printout, which put the wrapped form on paper. The door now
+// answers with the text; this helper reads a text written in every language the
+// one way the platform reads it, for the tests about that form itself.
+wxString Translated(const wxString& raw) {
+	return ibBackendLocalization::GetTranslateGetRawLocText(raw);
+}
+
+wxObjectDataPtr<ibBackendSpreadsheetObject> MakeDocument() {
+	return wxObjectDataPtr<ibBackendSpreadsheetObject>(new ibBackendSpreadsheetObject());
+}
+
+// A notifier that counts what it was told. The document's whole contract with a
+// renderer is these calls, so a test asserts the CALLS rather than any drawing.
+class ibCountingNotifier : public ibBackendSpreadsheetNotifier {
+public:
+	int m_cleared = 0, m_values = 0, m_rowFreeze = -1, m_areasPut = 0;
+
+	void ClearSpreadsheet() override { ++m_cleared; }
+	void EnableEditing(bool) override {}
+	void SetRowSize(int, int) override {}
+	void SetColSize(int, int) override {}
+	void SetRowFreeze(int row) override { m_rowFreeze = row; }
+	void SetColFreeze(int) override {}
+	void SetCellBackgroundColour(int, int, const wxColour&) override {}
+	void SetCellTextColour(int, int, const wxColour&) override {}
+	void SetCellTextOrient(int, int, const int) override {}
+	void SetCellFont(int, int, const wxFont&) override {}
+	void SetCellAlignment(int, int, const int, const int) override {}
+	void SetCellBorderLeft(int, int, const ibSpreadsheetBorderDescription&) override {}
+	void SetCellBorderRight(int, int, const ibSpreadsheetBorderDescription&) override {}
+	void SetCellBorderTop(int, int, const ibSpreadsheetBorderDescription&) override {}
+	void SetCellBorderBottom(int, int, const ibSpreadsheetBorderDescription&) override {}
+	void SetCellSize(int, int, int, int) override {}
+	void SetCellFitMode(int, int, ibSpreadsheetCellDescription::ibFitMode) override {}
+	void SetCellReadOnly(int, int, bool) override {}
+	void AddRowBrake(int) override {}
+	void AddColBrake(int) override {}
+	void DeleteRowBrake(int) override {}
+	void DeleteColBrake(int) override {}
+	void SetRowBrake(int) override {}
+	void SetColBrake(int) override {}
+	void SetCellValue(int, int, const wxString&) override { ++m_values; }
+	void PutArea(const wxObjectDataPtr<ibBackendSpreadsheetObject>&, unsigned int) override { ++m_areasPut; }
+	void JoinArea(const wxObjectDataPtr<ibBackendSpreadsheetObject>&, unsigned int) override {}
+};
+
+} // namespace
+
+// ---------------------------------------------------------------------------
+//  Cells
+// ---------------------------------------------------------------------------
+
+// A fresh document is empty and has no extent — nothing is reserved up front.
+TEST(SpreadsheetDocument, Fresh_IsEmpty)
+{
+	auto doc = MakeDocument();
+	EXPECT_TRUE(doc->IsEmptyDocument());
+	EXPECT_EQ(0, doc->GetNumberRows());
+	EXPECT_EQ(0, doc->GetNumberCols());
+}
+
+// THE EXTENT FOLLOWS THE WRITES. Writing one far cell is what makes the document
+// that big — there is no separate "resize" step to forget.
+TEST(SpreadsheetDocument, Write_GrowsTheExtent)
+{
+	auto doc = MakeDocument();
+	doc->SetCellValue(3, 2, wxT("x"));
+
+	EXPECT_FALSE(doc->IsEmptyDocument());
+	EXPECT_EQ(wxT("x"), doc->GetCellValue(3, 2));
+	EXPECT_LE(4, doc->GetNumberRows());
+	EXPECT_LE(3, doc->GetNumberCols());
+}
+
+// A cell nobody wrote reads as empty rather than as an error — the whole grid is
+// sparse, and asking about a cell that was never touched is ordinary.
+TEST(SpreadsheetDocument, UnwrittenCell_ReadsEmpty)
+{
+	auto doc = MakeDocument();
+	doc->SetCellValue(0, 0, wxT("x"));
+
+	EXPECT_TRUE(doc->GetCellValue(5, 5).IsEmpty());
+	EXPECT_TRUE(doc->IsEmptyCell(5, 5));
+	EXPECT_FALSE(doc->IsEmptyCell(0, 0));
+}
+
+TEST(SpreadsheetDocument, Clear_EmptiesTheDocument)
+{
+	auto doc = MakeDocument();
+	doc->SetCellValue(0, 0, wxT("x"));
+	doc->SetCellValue(1, 0, wxT("y"));
+
+	doc->ClearSpreadsheet();
+
+	EXPECT_TRUE(doc->IsEmptyDocument());
+	EXPECT_TRUE(doc->GetCellValue(0, 0).IsEmpty());
+}
+
+// ---------------------------------------------------------------------------
+//  Parameters — the document's own named values
+// ---------------------------------------------------------------------------
+
+TEST(SpreadsheetDocument, Parameter_RoundTrips)
+{
+	auto doc = MakeDocument();
+	doc->SetParameter(wxT("Partner"), ibValue(wxT("Alpha")));
+
+	ibValue out;
+	EXPECT_TRUE(doc->GetParameter(wxT("Partner"), out));
+	EXPECT_EQ(wxT("Alpha"), out.GetString());
+}
+
+// A MISSING PARAMETER ANSWERS FALSE, not an empty value that reads like a set one.
+// Templates rely on the difference: an unknown token renders empty, and the caller
+// still knows nobody supplied it.
+TEST(SpreadsheetDocument, MissingParameter_AnswersFalse)
+{
+	auto doc = MakeDocument();
+	ibValue out;
+	EXPECT_FALSE(doc->GetParameter(wxT("Nobody"), out));
+}
+
+// A NAME IS FOUND WITHOUT CASE — the rule this lookup always had when it walked every name with
+// CompareString, kept now that it is a find in a map ordered by the same folding (ibCaseFoldLess).
+TEST(SpreadsheetDocument, Parameter_IsFoundWithoutCase)
+{
+	auto doc = MakeDocument();
+	doc->SetParameter(wxT("Partner"), ibValue(wxT("Alpha")));
+
+	ibValue out;
+	EXPECT_TRUE(doc->GetParameter(wxT("PARTNER"), out));
+	EXPECT_EQ(wxT("Alpha"), out.GetString());
+	EXPECT_TRUE(doc->GetParameter(wxT("partner"), out));
+	EXPECT_EQ(wxT("Alpha"), out.GetString());
+}
+
+// …and so ONE NAME IN TWO CASES IS ONE PARAMETER: the second write replaces the first rather than
+// standing beside it, where a lookup would have found whichever came first.
+TEST(SpreadsheetDocument, Parameter_SameNameInAnotherCase_IsTheSameParameter)
+{
+	auto doc = MakeDocument();
+	doc->SetParameter(wxT("Partner"), ibValue(wxT("Alpha")));
+	doc->SetParameter(wxT("PARTNER"), ibValue(wxT("Beta")));
+
+	ibValue out;
+	EXPECT_TRUE(doc->GetParameter(wxT("Partner"), out));
+	EXPECT_EQ(wxT("Beta"), out.GetString());
+}
+
+// NAMES WRITTEN OUT OF ORDER ARE STILL FOUND — the write is hinted at the end for a writer that names
+// its links in increasing order (a composed table), and a name that belongs elsewhere must still land
+// where it belongs.
+TEST(SpreadsheetDocument, Parameter_WrittenOutOfOrder_AllFound)
+{
+	auto doc = MakeDocument();
+	doc->SetParameter(wxT("Link_00000002_0001"), ibValue(wxT("second")));
+	doc->SetParameter(wxT("Link_00000001_0001"), ibValue(wxT("first")));
+	doc->SetParameter(wxT("Link_00000003_0001"), ibValue(wxT("third")));
+
+	EXPECT_EQ(wxT("first"),  doc->GetParameter(wxT("Link_00000001_0001")).GetString());
+	EXPECT_EQ(wxT("second"), doc->GetParameter(wxT("Link_00000002_0001")).GetString());
+	EXPECT_EQ(wxT("third"),  doc->GetParameter(wxT("Link_00000003_0001")).GetString());
+}
+
+// FILL TYPE "PARAMETER": the cell's whole text IS the parameter name.
+TEST(SpreadsheetDocument, FillTypeParameter_ResolvesWholeText)
+{
+	auto doc = MakeDocument();
+	doc->SetParameter(wxT("Total"), ibValue(wxT("42")));
+
+	EXPECT_EQ(wxT("42"), doc->ComputeStringValueFromParameters(
+		wxT("Total"), ibSpreadsheetFillType::ibSpreadsheetFillType_StrParameter));
+	// Nobody supplied it -> empty, never the name itself: a report showing the word
+	// "Total" where a number belongs is worse than a blank.
+	EXPECT_TRUE(doc->ComputeStringValueFromParameters(
+		wxT("Missing"), ibSpreadsheetFillType::ibSpreadsheetFillType_StrParameter).IsEmpty());
+}
+
+// FILL TYPE "TEMPLATE": [tokens] inside running text are replaced in place.
+TEST(SpreadsheetDocument, FillTypeTemplate_ReplacesBracketedTokens)
+{
+	auto doc = MakeDocument();
+	doc->SetParameter(wxT("Name"), ibValue(wxT("Alpha")));
+	doc->SetParameter(wxT("Sum"), ibValue(wxT("10")));
+
+	// A template typed plainly is its own text — it used to translate to NOTHING, and
+	// the cell came out blank.
+	EXPECT_EQ(wxT("Alpha owes 10"), doc->ComputeStringValueFromParameters(
+		wxT("[Name] owes [Sum]"), ibSpreadsheetFillType::ibSpreadsheetFillType_StrTemplate));
+
+	// …and one written in every language is filled in the language asked for.
+	EXPECT_EQ(wxT("Alpha borhuie 10"), doc->ComputeStringValueFromParameters(
+		wxT("en = '[Name] owes [Sum]'; uk = '[Name] borhuie [Sum]';"),
+		ibSpreadsheetFillType::ibSpreadsheetFillType_StrTemplate, wxT("uk")));
+}
+
+// ⭐ A CAPTION IS READ IN THE LANGUAGE ASKED FOR, and a language it was not written in reads as the
+// first one written — not as the stored form, and not as nothing. This is the answer the printout
+// gets: before 2026-09-21 a caption came back exactly as written and was printed so.
+TEST(SpreadsheetDocument, FillTypeText_ACaptionIsReadInOneLanguage)
+{
+	auto doc = MakeDocument();
+	const wxString caption = wxT("en = 'Invoice'; uk = 'Rakhunok';");
+
+	EXPECT_EQ(wxT("Rakhunok"), doc->ComputeStringValueFromParameters(
+		caption, ibSpreadsheetFillType::ibSpreadsheetFillType_StrText, wxT("uk")));
+	EXPECT_EQ(wxT("Rakhunok"), doc->ComputeStringValueFromParameters(
+		wxT("uk = 'Rakhunok';"), ibSpreadsheetFillType::ibSpreadsheetFillType_StrText, wxT("de")));
+
+	// The document's own language is what it is read in when none is named.
+	doc->SetLangCode(wxT("uk"));
+	EXPECT_EQ(wxT("Rakhunok"), doc->ComputeStringValueFromParameters(
+		caption, ibSpreadsheetFillType::ibSpreadsheetFillType_StrText));
+}
+
+// A PARAMETER'S VALUE WRITTEN IN EVERY LANGUAGE is read in the document's — the same reading as a
+// caption, so a value never lands on the sheet in its stored form.
+TEST(SpreadsheetDocument, FillTypeParameter_AValueInEveryLanguageIsReadInOne)
+{
+	auto doc = MakeDocument();
+	doc->SetLangCode(wxT("uk"));
+	doc->SetParameter(wxT("Title"), ibValue(wxT("en = 'Total'; uk = 'Razom';")));
+
+	EXPECT_EQ(wxT("Razom"), doc->ComputeStringValueFromParameters(
+		wxT("Title"), ibSpreadsheetFillType::ibSpreadsheetFillType_StrParameter));
+}
+
+// ⭐ AN APOSTROPHE SURVIVES THE ENVELOPE. A computed cell travels as `en = '...';`, and the quote
+// that closes the text used to swallow every apostrophe inside it: a surname like O'Brien — and
+// every Ukrainian one written with an apostrophe — printed without it (2026-09-10). The writer
+// doubles it, the reader reads a doubled quote back as one.
+TEST(SpreadsheetDocument, FillTypeParameter_KeepsAnApostrophe)
+{
+	auto doc = MakeDocument();
+	doc->SetParameter(wxT("Name"), ibValue(wxT("O'Brien")));
+
+	EXPECT_EQ(wxT("O'Brien"), doc->ComputeStringValueFromParameters(
+		wxT("Name"), ibSpreadsheetFillType::ibSpreadsheetFillType_StrParameter));
+	EXPECT_EQ(wxT("the document's movements"), Translated(wxT("en = 'the document''s movements';")));
+}
+
+// ⭐ THE LAST LANGUAGE MAY END WITH THE STRING. `;` separates languages; written without one after
+// the last, the text was not recognised at all and a tab title read "en = 'June'; ru = ..." in full
+// (the payroll demo, 2026-09-10).
+//
+// ⚠ ASKED IN A LANGUAGE NAMED HERE, not the machine's. What is under test is the FORM, and read in the
+// language in force the answer was the machine's: on a Russian one this came back "Iyun" and was the one
+// red test of a full run (2026-09-26).
+TEST(SpreadsheetDocument, LocalisedText_WithoutTheLastSemicolon)
+{
+	EXPECT_TRUE(ibBackendLocalization::IsLocalizationString(wxT("en = 'June'; ru = 'Iyun'")));
+	EXPECT_EQ(wxT("June"), ibBackendLocalization::GetTranslateGetRawLocText(wxT("en"), wxT("en = 'June'; ru = 'Iyun'")));
+	EXPECT_EQ(wxT("Iyun"), ibBackendLocalization::GetTranslateGetRawLocText(wxT("ru"), wxT("en = 'June'; ru = 'Iyun'")));   // the last one is found
+	EXPECT_EQ(wxT("June"), ibBackendLocalization::GetTranslateGetRawLocText(wxT("en"), wxT("ru = 'Iyun'; en = 'June'")));   // …whichever it is
+	EXPECT_FALSE(ibBackendLocalization::IsLocalizationString(wxT("June")));
+}
+
+// An unknown token disappears rather than staying on the page as `[Whoever]`.
+TEST(SpreadsheetDocument, FillTypeTemplate_UnknownTokenRendersEmpty)
+{
+	auto doc = MakeDocument();
+	const wxString out = doc->ComputeStringValueFromParameters(
+		wxT("[Whoever]"), ibSpreadsheetFillType::ibSpreadsheetFillType_StrTemplate);
+	EXPECT_FALSE(out.Contains(wxT("Whoever")));
+}
+
+// Plain text is returned untouched — a caption is read, never filled.
+TEST(SpreadsheetDocument, FillTypeText_IsLeftAlone)
+{
+	auto doc = MakeDocument();
+	doc->SetParameter(wxT("Name"), ibValue(wxT("Alpha")));
+	EXPECT_EQ(wxT("[Name]"), doc->ComputeStringValueFromParameters(
+		wxT("[Name]"), ibSpreadsheetFillType::ibSpreadsheetFillType_StrText));
+}
+
+// ---------------------------------------------------------------------------
+//  Drill-down, merge, freeze, breaks, sizes
+// ---------------------------------------------------------------------------
+
+TEST(SpreadsheetDocument, DetailsParameter_RoundTrips)
+{
+	auto doc = MakeDocument();
+	doc->SetCellValue(1, 1, wxT("Alpha"));
+	doc->SetCellDetailsParameter(1, 1, wxT("Cell_1_1"));
+
+	wxString name;
+	doc->GetCellDetailsParameter(1, 1, name);
+	EXPECT_EQ(wxT("Cell_1_1"), name);
+}
+
+TEST(SpreadsheetDocument, CellSize_MergesAcrossColumns)
+{
+	auto doc = MakeDocument();
+	doc->SetCellValue(0, 0, wxT("Title"));
+	doc->SetCellSize(0, 0, 1, 3);
+
+	int rows = 0, cols = 0;
+	doc->GetCellSize(0, 0, &rows, &cols);
+	EXPECT_EQ(1, rows);
+	EXPECT_EQ(3, cols);
+}
+
+TEST(SpreadsheetDocument, Freeze_IsRememberedPerAxis)
+{
+	auto doc = MakeDocument();
+	doc->SetRowFreeze(2);
+	doc->SetColFreeze(1);
+
+	EXPECT_EQ(2, doc->GetRowFreeze());
+	EXPECT_EQ(1, doc->GetColFreeze());
+}
+
+TEST(SpreadsheetDocument, RowBreak_AddedAndRemoved)
+{
+	auto doc = MakeDocument();
+	doc->SetCellValue(5, 0, wxT("x"));
+	doc->AddRowBrake(3);
+
+	EXPECT_TRUE(doc->IsRowBrake(3));
+	EXPECT_LE(3, doc->GetMaxRowBrake());
+
+	doc->DeleteRowBrake(3);
+	EXPECT_FALSE(doc->IsRowBrake(3));
+}
+
+// REGRESSION (2026-08-18). Deleting a break that is not there used to run
+// `erase(std::remove(…))` — half the idiom — which erases end() on a miss, i.e.
+// undefined behaviour. The verb has to be a no-op instead.
+TEST(SpreadsheetDocument, DeletingAMissingBreak_IsANoOp)
+{
+	auto doc = MakeDocument();
+	doc->SetCellValue(5, 0, wxT("x"));
+	doc->AddRowBrake(3);
+
+	doc->DeleteRowBrake(999);   // never added
+	doc->DeleteColBrake(999);
+
+	EXPECT_TRUE(doc->IsRowBrake(3));   // the real one survived
+	doc->DeleteRowBrake(3);
+	doc->DeleteRowBrake(3);            // …and deleting it twice is a no-op too
+	EXPECT_FALSE(doc->IsRowBrake(3));
+}
+
+// REGRESSION (2026-08-18). Same defect on the index accessors: the bound was
+// `idx > size()`, so asking for the one-past-the-end index handed back a pointer
+// into nothing instead of null. Seven accessors carried it.
+TEST(SpreadsheetDocument, IndexAccessors_RefusePastTheEnd)
+{
+	auto doc = MakeDocument();
+	doc->SetCellValue(0, 0, wxT("x"));
+	doc->AddRowBrake(1);
+
+	const ibSpreadsheetDescription& desc = doc->GetSpreadsheetDesc();
+	EXPECT_NE(nullptr, desc.GetCellByIdx(0));
+	EXPECT_EQ(nullptr, desc.GetCellByIdx((size_t)desc.GetCellCount()));
+	EXPECT_EQ(nullptr, desc.GetRowAreaByIdx(99));
+	EXPECT_EQ(nullptr, desc.GetRowSizeByIdx(99));
+}
+
+TEST(SpreadsheetDocument, RowAndColSize_RoundTrip)
+{
+	auto doc = MakeDocument();
+	doc->SetCellValue(0, 0, wxT("x"));
+	doc->SetRowSize(0, 40);
+	doc->SetColSize(0, 120);
+
+	EXPECT_EQ(40, doc->GetRowSize(0));
+	EXPECT_EQ(120, doc->GetColSize(0));
+}
+
+// Sizes are found through an index by address (see spreadsheetDescription.h) while the vector
+// keeps them in insertion order. This pins the two staying in step: setting the same line twice
+// must REPLACE, not append, and reading by position must still see what was written.
+TEST(SpreadsheetDocument, RowAndColSize_SetTwiceReplacesRatherThanAppends)
+{
+	auto doc = MakeDocument();
+
+	doc->SetRowSize(5, 40);
+	doc->SetRowSize(2, 30);
+	doc->SetRowSize(5, 60);          // the same line again — must not become a second entry
+
+	doc->SetColSize(3, 120);
+	doc->SetColSize(3, 90);
+
+	const ibSpreadsheetDescription& desc = doc->GetSpreadsheetDesc();
+	EXPECT_EQ(2, desc.GetSizeNumberRows());
+	EXPECT_EQ(1, desc.GetSizeNumberCols());
+
+	EXPECT_EQ(60, doc->GetRowSize(5));
+	EXPECT_EQ(30, doc->GetRowSize(2));
+	EXPECT_EQ(90, doc->GetColSize(3));
+
+	// Insertion order, which the serializer reads by position: row 5 was declared first.
+	ASSERT_NE(nullptr, desc.GetRowSizeByIdx(0));
+	ASSERT_NE(nullptr, desc.GetRowSizeByIdx(1));
+	EXPECT_EQ(5u, desc.GetRowSizeByIdx(0)->m_row);
+	EXPECT_EQ(60u, desc.GetRowSizeByIdx(0)->m_height);
+	EXPECT_EQ(2u, desc.GetRowSizeByIdx(1)->m_row);
+
+	// A line nobody declared answers the default rather than the neighbour's size.
+	EXPECT_NE(60, doc->GetRowSize(4));
+}
+
+// AUTOMATIC ROW HEIGHT (2026-09-22): a row without a height of its own follows its text, and giving it
+// one by hand is what switches that off — so "has a height" and "back to automatic" have to be exact,
+// and removing one entry must leave the others findable where the serializer reads them.
+TEST(SpreadsheetDocument, RowSize_ResetGivesTheRowBackItsAutomaticHeight)
+{
+	auto doc = MakeDocument();
+	doc->SetRowSize(5, 40);
+	doc->SetRowSize(2, 30);
+	doc->SetRowSize(7, 50);
+
+	ibSpreadsheetDescription& desc = doc->GetSpreadsheetDesc();
+	EXPECT_TRUE(desc.HasRowSize(2));
+	EXPECT_FALSE(desc.HasRowSize(3));
+
+	desc.ResetRowSize(2);
+	desc.ResetRowSize(3);   // a row that has no height of its own: nothing to do
+
+	EXPECT_FALSE(desc.HasRowSize(2));
+	EXPECT_EQ(s_defaultRowHeight, doc->GetRowSize(2));
+	EXPECT_EQ(2, desc.GetSizeNumberRows());
+	EXPECT_EQ(40, doc->GetRowSize(5));
+	EXPECT_EQ(50, doc->GetRowSize(7));
+
+	// …and the one after the removed entry moved down in the order the serializer reads.
+	ASSERT_NE(nullptr, desc.GetRowSizeByIdx(1));
+	EXPECT_EQ(7u, desc.GetRowSizeByIdx(1)->m_row);
+
+	doc->SetRowSize(7, 55);   // still found through the index after the move
+	EXPECT_EQ(55, doc->GetRowSize(7));
+	EXPECT_EQ(2, desc.GetSizeNumberRows());
+}
+
+// An area put into a document takes a height only where its row has one. Copying GetRowSize's answer
+// for every row wrote the default down as a height of its own, and every line of a composed report came
+// out fixed — automatic height gone before anything was shown.
+TEST(SpreadsheetDocument, PutArea_CarriesOnlyTheHeightsThatWereSet)
+{
+	auto area = MakeDocument();
+	area->SetCellValue(0, 0, wxT("caption"));
+	area->SetCellValue(1, 0, wxT("line"));
+	area->SetRowSize(0, 40);
+
+	auto doc = MakeDocument();
+	doc->PutArea(area);
+	doc->PutArea(area);
+
+	const ibSpreadsheetDescription& desc = doc->GetSpreadsheetDesc();
+	EXPECT_TRUE(desc.HasRowSize(0));
+	EXPECT_FALSE(desc.HasRowSize(1));
+	EXPECT_TRUE(desc.HasRowSize(2));
+	EXPECT_FALSE(desc.HasRowSize(3));
+	EXPECT_EQ(40, doc->GetRowSize(2));
+}
+
+// ---------------------------------------------------------------------------
+//  Outline groups — what makes a composed report fold
+// ---------------------------------------------------------------------------
+
+// A group spans from the row count at Begin to the row count at End. The pair is a
+// STACK, so nesting is expressed by nesting the calls rather than by arithmetic.
+TEST(SpreadsheetDocument, RowGroup_SpansTheRowsBetweenBeginAndEnd)
+{
+	auto doc = MakeDocument();
+	doc->SetCellValue(0, 0, wxT("head"));
+
+	doc->BeginRowGroup();
+	doc->SetCellValue(1, 0, wxT("a"));
+	doc->SetCellValue(2, 0, wxT("b"));
+	doc->EndRowGroup();
+
+	const ibSpreadsheetDescription& desc = doc->GetSpreadsheetDesc();
+	ASSERT_EQ(1, desc.GetGroupNumberRows());
+	const ibSpreadsheetGroupDescription* group = desc.GetRowGroupByIdx(0);
+	ASSERT_NE(nullptr, group);
+	EXPECT_LE(group->m_start, group->m_end);
+}
+
+TEST(SpreadsheetDocument, NestedRowGroups_BothRecorded)
+{
+	auto doc = MakeDocument();
+	doc->SetCellValue(0, 0, wxT("head"));
+
+	doc->BeginRowGroup();
+	doc->SetCellValue(1, 0, wxT("outer"));
+	doc->BeginRowGroup();
+	doc->SetCellValue(2, 0, wxT("inner"));
+	doc->EndRowGroup();
+	doc->EndRowGroup();
+
+	EXPECT_EQ(2, doc->GetSpreadsheetDesc().GetGroupNumberRows());
+}
+
+// ---------------------------------------------------------------------------
+//  Areas — the template mechanism
+// ---------------------------------------------------------------------------
+
+// GetArea lifts a rectangle out and RE-ORIGINS it at (0,0) — an area is a document
+// in its own right, not a view onto its parent.
+TEST(SpreadsheetDocument, GetArea_ReOriginsTheRectangle)
+{
+	auto doc = MakeDocument();
+	doc->SetCellValue(1, 1, wxT("inside"));
+	doc->SetCellValue(0, 0, wxT("outside"));
+
+	const ibSpreadsheetDescription area = doc->GetArea(1, 2, 1, 2);
+	EXPECT_EQ(wxT("inside"), area.GetCellValue(0, 0));
+}
+
+// PutArea APPENDS BELOW: the area lands starting at the current row count, so the
+// caller composes by repeating "put" rather than by tracking coordinates.
+TEST(SpreadsheetDocument, PutArea_AppendsBelow)
+{
+	auto doc = MakeDocument();
+	doc->SetCellValue(0, 0, wxT("header"));
+	const int before = doc->GetNumberRows();
+
+	auto area = MakeDocument();
+	area->SetCellValue(0, 0, wxT("row"));
+
+	doc->PutArea(area);
+
+	EXPECT_LT(before, doc->GetNumberRows());
+	EXPECT_EQ(wxT("row"), doc->GetCellValue(before, 0));
+	EXPECT_EQ(wxT("header"), doc->GetCellValue(0, 0));   // what was there stays
+}
+
+// A TEMPLATE CELL IS RESOLVED AS IT LANDS, against the AREA's parameters — which is
+// what makes a template a template: fill the area's parameters, put it, repeat.
+TEST(SpreadsheetDocument, PutArea_ResolvesTemplateCellsFromTheAreaParameters)
+{
+	auto doc = MakeDocument();
+
+	auto area = MakeDocument();
+	area->SetCellValue(0, 0, wxT("[Name]"));
+	area->SetCellFillType(0, 0, ibSpreadsheetFillType::ibSpreadsheetFillType_StrTemplate);
+	area->SetParameter(wxT("Name"), ibValue(wxT("Alpha")));
+
+	doc->PutArea(area);
+
+	EXPECT_EQ(wxT("Alpha"), doc->GetCellValue(0, 0));
+	// …and it lands as TEXT: resolving it twice would look for parameters the
+	// receiving document does not have.
+	EXPECT_EQ(ibSpreadsheetFillType::ibSpreadsheetFillType_StrText, doc->GetCellFillType(0, 0));
+}
+
+// ⭐⭐ A CAPTION LANDS AS TEXT, IN THE LANGUAGE OF THE DOCUMENT IT LANDS IN. The template keeps
+// every language; the printed document keeps what they came to. Until 2026-09-21 a caption landed
+// exactly as written — `en = '…'; uk = '…';` — and the printout put that on the paper.
+TEST(SpreadsheetDocument, PutArea_ACaptionLandsAsTextInTheDocumentsLanguage)
+{
+	auto doc = MakeDocument();
+	doc->SetLangCode(wxT("uk"));
+
+	auto area = MakeDocument();
+	area->SetCellValue(0, 0, wxT("en = 'Invoice'; uk = 'Rakhunok';"));
+
+	doc->PutArea(area);
+	doc->JoinArea(area);
+
+	EXPECT_EQ(wxT("Rakhunok"), doc->GetCellValue(0, 0));
+	EXPECT_EQ(wxT("Rakhunok"), doc->GetCellValue(0, 1));
+	EXPECT_EQ(ibSpreadsheetFillType::ibSpreadsheetFillType_StrText, doc->GetCellFillType(0, 0));
+}
+
+// The same area put TWICE keeps both copies' drill-down, because the parameter name
+// is made unique per landing position — otherwise the second row would decode to the
+// first row's value.
+TEST(SpreadsheetDocument, PutAreaTwice_KeepsBothDrillDowns)
+{
+	auto doc = MakeDocument();
+
+	auto area = MakeDocument();
+	area->SetCellValue(0, 0, wxT("row"));
+	area->SetCellDetailsParameter(0, 0, wxT("Ref"));
+	area->SetParameter(wxT("Ref"), ibValue(wxT("first")));
+
+	doc->PutArea(area);
+	const int secondRow = doc->GetNumberRows();
+
+	area->SetParameter(wxT("Ref"), ibValue(wxT("second")));
+	doc->PutArea(area);
+
+	wxString firstName, secondName;
+	doc->GetCellDetailsParameter(0, 0, firstName);
+	doc->GetCellDetailsParameter(secondRow, 0, secondName);
+
+	EXPECT_FALSE(firstName.IsEmpty());
+	EXPECT_FALSE(secondName.IsEmpty());
+	EXPECT_NE(firstName, secondName);                       // one name per position
+	EXPECT_EQ(wxT("first"), doc->GetParameter(firstName).GetString());
+	EXPECT_EQ(wxT("second"), doc->GetParameter(secondName).GetString());
+}
+
+// A group level on the put wraps exactly the rows that landed.
+TEST(SpreadsheetDocument, PutArea_WithGroupLevel_RecordsAGroup)
+{
+	auto doc = MakeDocument();
+
+	auto area = MakeDocument();
+	area->SetCellValue(0, 0, wxT("a"));
+	area->SetCellValue(1, 0, wxT("b"));
+
+	doc->PutArea(area, /*groupLevel*/1);
+
+	EXPECT_EQ(1, doc->GetSpreadsheetDesc().GetGroupNumberRows());
+}
+
+// JoinArea appends to the RIGHT — the other axis of the same verb.
+TEST(SpreadsheetDocument, JoinArea_AppendsToTheRight)
+{
+	auto doc = MakeDocument();
+	doc->SetCellValue(0, 0, wxT("left"));
+	const int before = doc->GetNumberCols();
+
+	auto area = MakeDocument();
+	area->SetCellValue(0, 0, wxT("right"));
+
+	doc->JoinArea(area);
+
+	EXPECT_LT(before, doc->GetNumberCols());
+	EXPECT_EQ(wxT("left"), doc->GetCellValue(0, 0));
+	EXPECT_EQ(wxT("right"), doc->GetCellValue(0, before));
+}
+
+// ---------------------------------------------------------------------------
+//  Notifiers — the contract a renderer subscribes to
+// ---------------------------------------------------------------------------
+
+// EVERY MUTATION IS ANNOUNCED. This is what lets the grid be a reader of the
+// document rather than a second copy of it.
+TEST(SpreadsheetDocument, Notifier_HearsWritesAndClears)
+{
+	auto doc = MakeDocument();
+	auto notifier = doc->AddNotifier<ibCountingNotifier>();
+	ibCountingNotifier* counter = static_cast<ibCountingNotifier*>(notifier.get());
+
+	doc->SetCellValue(0, 0, wxT("x"));
+	doc->SetRowFreeze(1);
+	doc->ClearSpreadsheet();
+
+	EXPECT_EQ(1, counter->m_values);
+	EXPECT_EQ(1, counter->m_rowFreeze);
+	EXPECT_EQ(1, counter->m_cleared);
+}
+
+// A removed notifier hears nothing more — a view that closed must not keep being
+// told about a document that outlives it.
+TEST(SpreadsheetDocument, RemovedNotifier_HearsNothingMore)
+{
+	auto doc = MakeDocument();
+	auto notifier = doc->AddNotifier<ibCountingNotifier>();
+	ibCountingNotifier* counter = static_cast<ibCountingNotifier*>(notifier.get());
+
+	doc->SetCellValue(0, 0, wxT("x"));
+	doc->RemoveNotifier(notifier);
+	doc->SetCellValue(1, 0, wxT("y"));
+
+	EXPECT_EQ(1, counter->m_values);
+}
+
+// REGRESSION (2026-08-18). Removing a notifier twice — a view closing after it was
+// already detached — used to erase end(). It must be a no-op, and the OTHER
+// subscribers must be untouched by it.
+TEST(SpreadsheetDocument, RemovingANotifierTwice_IsANoOp)
+{
+	auto doc = MakeDocument();
+	auto first = doc->AddNotifier<ibCountingNotifier>();
+	auto second = doc->AddNotifier<ibCountingNotifier>();
+
+	doc->RemoveNotifier(first);
+	doc->RemoveNotifier(first);   // already gone
+
+	doc->SetCellValue(0, 0, wxT("x"));
+
+	EXPECT_EQ(0, static_cast<ibCountingNotifier*>(first.get())->m_values);
+	EXPECT_EQ(1, static_cast<ibCountingNotifier*>(second.get())->m_values);
+}
+
+// Two views on one document both hear it — the reason the notifier list is a list.
+TEST(SpreadsheetDocument, TwoNotifiers_BothHear)
+{
+	auto doc = MakeDocument();
+	auto first = doc->AddNotifier<ibCountingNotifier>();
+	auto second = doc->AddNotifier<ibCountingNotifier>();
+
+	doc->SetCellValue(0, 0, wxT("x"));
+
+	EXPECT_EQ(1, static_cast<ibCountingNotifier*>(first.get())->m_values);
+	EXPECT_EQ(1, static_cast<ibCountingNotifier*>(second.get())->m_values);
+}
+
+// ---------------------------------------------------------------------------
+//  Identity
+// ---------------------------------------------------------------------------
+
+// Each document is born with its own guid — two documents are never the same one.
+TEST(SpreadsheetDocument, EachDocument_HasItsOwnGuid)
+{
+	auto first = MakeDocument();
+	auto second = MakeDocument();
+	EXPECT_NE(first->GetDocGuid(), second->GetDocGuid());
+}
+
+// ---------------------------------------------------------------------------
+//  Taking an area — HOW WIDE IT IS
+//
+//  ⭐ THE FREE SIDE OF A HALF-SPECIFIED AREA IS BOUNDED BY THE CONTENT, never by
+//  the page breaks. Both doors below (by name, by coordinates) used to ask
+//  GetMaxColBrake() / GetMaxRowBrake() for it — the position of the last PAGE
+//  BREAK, which is 0 on a sheet that declares none. A break says where the PAPER
+//  ends and knows nothing about how many columns were written, so a template
+//  authored without one yielded areas exactly ONE column wide; and since every
+//  cell of a printed form lives to the right of column 0, the area came back
+//  structurally correct — the right number of rows — and completely empty.
+//
+//  The receiving side already measured the other way (PutArea walks
+//  GetNumberCols()), so one width had two roads that disagreed at the ends of a
+//  single operation. (2026-08-31, an empty print form.)
+//
+//  ⚠ THE TWO DOORS DISAGREE ON ONE THING, DELIBERATELY: GetAreaByName's declared
+//  band INCLUDES both ends, GetArea's range is EXCLUSIVE on the right
+//  (`row < rowRight`). Rows 1..10 is `AddRowArea(name, 1, 10)` there and
+//  `GetArea(1, 11)` here. Each test below respects its own convention.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+wxString CellText(int row, int col) {
+	return wxString::Format(wxT("r%dc%d"), row, col);
+}
+
+// A print form the way a real one is built: a margin row and a margin column
+// nobody writes into, content in rows 1..10 across columns 1..12, and NO page
+// break declared anywhere — a template is authored by placing cells, not by
+// saying where the paper ends. Extent: 11 rows, 13 columns.
+wxObjectDataPtr<ibBackendSpreadsheetObject> MakePrintForm() {
+	auto doc = MakeDocument();
+	for (int row = 1; row <= 10; row++)
+		for (int col = 1; col <= 12; col++)
+			doc->SetCellValue(row, col, CellText(row, col));
+	return doc;
+}
+
+// Ten written rows in column 0 — a known extent for the break verbs to clamp against.
+wxObjectDataPtr<ibBackendSpreadsheetObject> MakeSheetOfRows(int count) {
+	auto doc = MakeDocument();
+	for (int row = 0; row < count; row++)
+		doc->SetCellValue(row, 0, CellText(row, 0));
+	return doc;
+}
+
+} // namespace
+
+// THE ASSERTION THE DEFECT NEEDED: the cells, at named coordinates — not just a
+// fragment with the right number of rows.
+TEST(SpreadsheetDocument, GetAreaByName_RowAreaWithNoPageBreak_CarriesEveryColumn)
+{
+	auto doc = MakePrintForm();
+	doc->GetSpreadsheetDesc().AddRowArea(wxT("Detail"), 1, 10);
+
+	const ibSpreadsheetDescription area = doc->GetAreaByName(wxT("Detail"));
+
+	// Ten rows tall — the declaration includes both ends…
+	EXPECT_EQ(10, area.GetNumberRows());
+	// …and as wide as what is WRITTEN: thirteen columns, 0..12.
+	EXPECT_EQ(13, doc->GetNumberCols());
+	EXPECT_EQ(13, area.GetNumberCols());
+
+	EXPECT_EQ(10 * 13, area.GetCellCount());
+	EXPECT_EQ(CellText(1, 1),   area.GetCellValue(0, 1));
+	EXPECT_EQ(CellText(1, 12),  area.GetCellValue(0, 12));
+	EXPECT_EQ(CellText(10, 1),  area.GetCellValue(9, 1));
+	EXPECT_EQ(CellText(10, 12), area.GetCellValue(9, 12));
+
+	// Column 0 is the form's left margin — nobody wrote there, and lifting the
+	// area must not invent content for it either.
+	EXPECT_TRUE(area.GetCellValue(0, 0).IsEmpty());
+
+	EXPECT_FALSE(area.IsEmptySpreadsheet());
+}
+
+// The fragment marks ITS OWN edges, re-origined at (0,0). Passing the source's
+// through put the column mark at 0 on a sheet that declared no break — a page
+// break drawn before the first column.
+TEST(SpreadsheetDocument, GetAreaByName_RowArea_MarksItsOwnEdgesNotTheSources)
+{
+	auto doc = MakePrintForm();
+	doc->GetSpreadsheetDesc().AddRowArea(wxT("Detail"), 1, 10);
+
+	const ibSpreadsheetDescription area = doc->GetAreaByName(wxT("Detail"));
+
+	EXPECT_LE(0, area.GetMaxRowBrake());
+	EXPECT_LE(0, area.GetMaxColBrake());
+	EXPECT_EQ(area.GetNumberRows() - 1, area.GetMaxRowBrake());
+	EXPECT_EQ(area.GetNumberCols() - 1, area.GetMaxColBrake());
+}
+
+// …AND A DECLARED BREAK MUST NOT BECOME AUTHORITATIVE AGAIN. A sheet with a page
+// break yields exactly the area the same sheet without one does.
+TEST(SpreadsheetDocument, GetAreaByName_WithAColumnBreakDeclared_TakesTheSameFullWidth)
+{
+	auto plain = MakePrintForm();
+	plain->GetSpreadsheetDesc().AddRowArea(wxT("Detail"), 1, 10);
+
+	auto broken = MakePrintForm();
+	broken->GetSpreadsheetDesc().AddRowArea(wxT("Detail"), 1, 10);
+	broken->AddColBrake(4);                       // the PAPER ends after column 4…
+
+	const ibSpreadsheetDescription plainArea  = plain->GetAreaByName(wxT("Detail"));
+	const ibSpreadsheetDescription brokenArea = broken->GetAreaByName(wxT("Detail"));
+
+	// …and the AREA does not: a break is about paper, a width is about content.
+	EXPECT_EQ(13, brokenArea.GetNumberCols());
+	EXPECT_EQ(10 * 13, brokenArea.GetCellCount());
+	EXPECT_EQ(CellText(1, 12), brokenArea.GetCellValue(0, 12));
+
+	// The source's break is not carried either — the fragment marks its own edge.
+	EXPECT_FALSE(brokenArea.IsColBrake(4));
+	EXPECT_EQ(12, brokenArea.GetMaxColBrake());
+
+	// Declaring a break changed nothing at all about what the area IS.
+	EXPECT_TRUE(brokenArea == plainArea);
+}
+
+// The other axis of the same rule: a COLUMN area is as tall as the content.
+TEST(SpreadsheetDocument, GetAreaByName_ColumnArea_IsAsTallAsTheContent)
+{
+	auto doc = MakePrintForm();
+	doc->GetSpreadsheetDesc().AddColArea(wxT("Money"), 2, 5);
+
+	// The row name is left empty — no row area answers to it, so only the column
+	// side is narrowed.
+	const ibSpreadsheetDescription area = doc->GetAreaByName(wxT(""), wxT("Money"));
+
+	EXPECT_EQ(11, area.GetNumberRows());   // rows 0..10 — the sheet's own height
+	EXPECT_EQ(4, area.GetNumberCols());    // columns 2..5, re-origined at 0
+	EXPECT_EQ(CellText(1, 2),  area.GetCellValue(1, 0));
+	EXPECT_EQ(CellText(10, 5), area.GetCellValue(10, 3));
+
+	EXPECT_EQ(area.GetNumberRows() - 1, area.GetMaxRowBrake());
+	EXPECT_EQ(area.GetNumberCols() - 1, area.GetMaxColBrake());
+}
+
+// Both axes named: the rectangle, and nothing free to be got wrong.
+TEST(SpreadsheetDocument, GetAreaByName_BothAxesNamed_TakesTheRectangle)
+{
+	auto doc = MakePrintForm();
+	doc->GetSpreadsheetDesc().AddRowArea(wxT("Detail"), 1, 10);
+	doc->GetSpreadsheetDesc().AddColArea(wxT("Money"), 2, 5);
+
+	const ibSpreadsheetDescription area = doc->GetAreaByName(wxT("Detail"), wxT("Money"));
+
+	EXPECT_EQ(10, area.GetNumberRows());
+	EXPECT_EQ(4, area.GetNumberCols());
+	EXPECT_EQ(CellText(1, 2),  area.GetCellValue(0, 0));
+	EXPECT_EQ(CellText(10, 5), area.GetCellValue(9, 3));
+	EXPECT_EQ(9, area.GetMaxRowBrake());
+	EXPECT_EQ(3, area.GetMaxColBrake());
+}
+
+// A name nobody declared yields nothing at all — not a one-column ghost.
+TEST(SpreadsheetDocument, GetAreaByName_UnknownName_YieldsAnEmptyFragment)
+{
+	auto doc = MakePrintForm();
+	doc->GetSpreadsheetDesc().AddRowArea(wxT("Detail"), 1, 10);
+
+	const ibSpreadsheetDescription area = doc->GetAreaByName(wxT("Nobody"));
+
+	EXPECT_TRUE(area.IsEmptySpreadsheet());
+	EXPECT_EQ(0, area.GetCellCount());
+	EXPECT_EQ(0, area.GetNumberRows());
+	EXPECT_EQ(0, area.GetNumberCols());
+}
+
+// ---------------------------------------------------------------------------
+//  …and the coordinate-taking twin, which carried the same defects
+// ---------------------------------------------------------------------------
+
+TEST(SpreadsheetDocument, GetArea_RowsOnly_TakesTheFullWidthWithContent)
+{
+	auto doc = MakePrintForm();
+
+	// EXCLUSIVE on the right — rows 1..10 is written `1, 11` here.
+	const ibSpreadsheetDescription area = doc->GetArea(1, 11, -1, -1);
+
+	EXPECT_EQ(10, area.GetNumberRows());
+	EXPECT_EQ(13, area.GetNumberCols());
+	EXPECT_EQ(10 * 13, area.GetCellCount());
+
+	// ⚠ The origin on this branch is 0, NOT `-colTop`. colTop is the ABSENCE
+	// marker (-1) here, and subtracting it shifted every cell one column right —
+	// a sentinel used as an origin.
+	EXPECT_EQ(CellText(1, 1),   area.GetCellValue(0, 1));
+	EXPECT_EQ(CellText(10, 12), area.GetCellValue(9, 12));
+	EXPECT_TRUE(area.GetCellValue(0, 0).IsEmpty());
+}
+
+TEST(SpreadsheetDocument, GetArea_ColumnsOnly_TakesTheFullHeightWithContent)
+{
+	auto doc = MakePrintForm();
+
+	const ibSpreadsheetDescription area = doc->GetArea(-1, -1, 1, 5);
+
+	EXPECT_EQ(11, area.GetNumberRows());   // rows 0..10 — the sheet's own height
+	EXPECT_EQ(4, area.GetNumberCols());    // columns 1..4, exclusive right
+
+	// rowLeft is the absence marker on this branch — the same trap, other axis.
+	EXPECT_EQ(CellText(1, 1),  area.GetCellValue(1, 0));
+	EXPECT_EQ(CellText(10, 4), area.GetCellValue(10, 3));
+
+	EXPECT_EQ(area.GetNumberRows() - 1, area.GetMaxRowBrake());
+	EXPECT_EQ(area.GetNumberCols() - 1, area.GetMaxColBrake());
+}
+
+// ⚠ THE FRAGMENT'S MARK IS AN INDEX INTO THE FRAGMENT, and therefore never
+// negative. It used to be computed the other way round (`rowLeft - rowRight`),
+// so a three-row fragment shipped with a stored break at −3: inert for
+// pagination (no loop counter matches a negative), but GetMaxRowBrake() answered
+// a negative number, IsEmptySpreadsheet() could never be true for such a
+// fragment, and the value was serialised.
+TEST(SpreadsheetDocument, GetArea_FullyBounded_MarksANonNegativeEdgeOfItsOwn)
+{
+	auto doc = MakePrintForm();
+
+	const ibSpreadsheetDescription area = doc->GetArea(1, 4, 1, 5);
+
+	EXPECT_EQ(3, area.GetNumberRows());
+	EXPECT_EQ(4, area.GetNumberCols());
+	EXPECT_EQ(CellText(1, 1), area.GetCellValue(0, 0));
+	EXPECT_EQ(CellText(3, 4), area.GetCellValue(2, 3));
+
+	EXPECT_LE(0, area.GetMaxRowBrake());
+	EXPECT_LE(0, area.GetMaxColBrake());
+	EXPECT_EQ(area.GetNumberRows() - 1, area.GetMaxRowBrake());
+	EXPECT_EQ(area.GetNumberCols() - 1, area.GetMaxColBrake());
+}
+
+// ⭐ ONE BAND, TWO DOORS, ONE ANSWER. The halves of the file disagreed once; this
+// is the assertion that says they may not again.
+TEST(SpreadsheetDocument, GetArea_AndGetAreaByName_DescribeTheSameBandIdentically)
+{
+	auto doc = MakePrintForm();
+	doc->GetSpreadsheetDesc().AddRowArea(wxT("Detail"), 1, 10);
+
+	const ibSpreadsheetDescription byName   = doc->GetAreaByName(wxT("Detail"));
+	const ibSpreadsheetDescription byCoords = doc->GetArea(1, 11, -1, -1);   // exclusive right
+
+	EXPECT_EQ(byName.GetNumberRows(),  byCoords.GetNumberRows());
+	EXPECT_EQ(byName.GetNumberCols(),  byCoords.GetNumberCols());
+	EXPECT_EQ(byName.GetCellCount(),   byCoords.GetCellCount());
+	EXPECT_EQ(byName.GetMaxRowBrake(), byCoords.GetMaxRowBrake());
+	EXPECT_EQ(byName.GetMaxColBrake(), byCoords.GetMaxColBrake());
+	EXPECT_EQ(byName.GetCellValue(0, 1), byCoords.GetCellValue(0, 1));
+
+	EXPECT_TRUE(byName == byCoords);
+}
+
+// ---------------------------------------------------------------------------
+//  Print breaks — Add and Set are DIFFERENT VERBS
+//
+//  🛑 THESE TESTS STATE WHAT THE CODE DOES, not what the names suggest. A change
+//  made on a reading of the name alone nearly shipped on 2026-08-31, so the
+//  behaviour is written down plainly: SetRowBrake is an EXTENT MARKER — it
+//  OVERWRITES the list's maximum element (or appends when the list is empty),
+//  the value it writes is derived from the list's LAST element clamped to the
+//  sheet's last line, and the argument only RAISES that value. It is what
+//  GetArea / GetAreaByName call to stamp a fragment's own edge; it is not a way
+//  to place a page break at a given line — AddRowBrake is.
+// ---------------------------------------------------------------------------
+
+TEST(SpreadsheetDescription, SetRowBrake_OnAnEmptyList_AppendsTheGivenRow)
+{
+	auto doc = MakeSheetOfRows(10);
+	ibSpreadsheetDescription& desc = doc->GetSpreadsheetDesc();
+
+	desc.SetRowBrake(4);
+
+	EXPECT_EQ(1, desc.GetBrakeNumberRows());
+	EXPECT_TRUE(desc.IsRowBrake(4));
+	EXPECT_EQ(4, desc.GetMaxRowBrake());
+}
+
+TEST(SpreadsheetDescription, SetRowBrake_OnANonEmptyList_OverwritesTheMaximumInsteadOfAppending)
+{
+	auto doc = MakeSheetOfRows(10);
+	ibSpreadsheetDescription& desc = doc->GetSpreadsheetDesc();
+
+	desc.SetRowBrake(2);
+	desc.SetRowBrake(6);
+
+	EXPECT_EQ(1, desc.GetBrakeNumberRows());   // still ONE entry, not two
+	EXPECT_FALSE(desc.IsRowBrake(2));          // the previous one is gone
+	EXPECT_TRUE(desc.IsRowBrake(6));
+}
+
+TEST(SpreadsheetDescription, AddRowBrake_AndSetRowBrake_AreDifferentVerbs)
+{
+	auto doc = MakeSheetOfRows(10);
+	ibSpreadsheetDescription& desc = doc->GetSpreadsheetDesc();
+
+	desc.AddRowBrake(2);
+	desc.AddRowBrake(6);
+	EXPECT_EQ(2, desc.GetBrakeNumberRows());   // Add PLACES a break
+
+	desc.SetRowBrake(8);
+	EXPECT_EQ(2, desc.GetBrakeNumberRows());   // Set never places one
+
+	EXPECT_TRUE(desc.IsRowBrake(2));           // the lower break is untouched…
+	EXPECT_FALSE(desc.IsRowBrake(6));          // …the highest one was rewritten
+	EXPECT_TRUE(desc.IsRowBrake(8));
+}
+
+// ⚠ IT CAN DESTROY A BREAK A PERSON PLACED, and it does not necessarily write the
+// line it was handed: the value comes from the list's LAST entry, the argument
+// only raises it, and it lands on the MAXIMUM entry wherever that sits.
+TEST(SpreadsheetDescription, SetRowBrake_WhenTheMaximumIsNotTheLastEntry_DropsThatBreakAndIgnoresItsArgument)
+{
+	auto doc = MakeSheetOfRows(10);
+	ibSpreadsheetDescription& desc = doc->GetSpreadsheetDesc();
+
+	desc.AddRowBrake(8);
+	desc.AddRowBrake(3);
+
+	desc.SetRowBrake(1);
+
+	EXPECT_EQ(2, desc.GetBrakeNumberRows());
+	EXPECT_FALSE(desc.IsRowBrake(8));   // the page break a person put at row 8 — gone
+	EXPECT_FALSE(desc.IsRowBrake(1));   // …and row 1, the argument, was never written
+	EXPECT_TRUE(desc.IsRowBrake(3));
+	EXPECT_EQ(3, desc.GetMaxRowBrake());
+}
+
+// …and it is an EXTENT marker: a break beyond the last written line is pulled
+// back to it. That is the verb's actual job.
+TEST(SpreadsheetDescription, SetRowBrake_WithABreakPastTheContent_ClampsItToTheLastWrittenRow)
+{
+	auto doc = MakeSheetOfRows(5);
+	ibSpreadsheetDescription& desc = doc->GetSpreadsheetDesc();
+	ASSERT_EQ(5, desc.GetNumberRows());
+
+	desc.AddRowBrake(9);      // beyond anything written
+	desc.SetRowBrake(0);
+
+	EXPECT_EQ(1, desc.GetBrakeNumberRows());
+	EXPECT_FALSE(desc.IsRowBrake(9));
+	EXPECT_TRUE(desc.IsRowBrake(4));   // the last written row
+	EXPECT_EQ(4, desc.GetMaxRowBrake());
+}
+
+// The column twin, same shape and the same two facts in one go.
+TEST(SpreadsheetDescription, SetColBrake_OverwritesTheMaximumAndClampsToTheContent)
+{
+	auto doc = MakeDocument();
+	for (int col = 0; col < 5; col++)
+		doc->SetCellValue(0, col, CellText(0, col));
+
+	ibSpreadsheetDescription& desc = doc->GetSpreadsheetDesc();
+	ASSERT_EQ(5, desc.GetNumberCols());
+
+	desc.SetColBrake(2);
+	EXPECT_EQ(1, desc.GetBrakeNumberCols());
+	EXPECT_TRUE(desc.IsColBrake(2));
+
+	desc.AddColBrake(9);
+	desc.SetColBrake(0);
+
+	EXPECT_EQ(2, desc.GetBrakeNumberCols());
+	EXPECT_FALSE(desc.IsColBrake(9));   // clamped back to the last written column
+	EXPECT_TRUE(desc.IsColBrake(2));    // the other entry is untouched
+	EXPECT_EQ(4, desc.GetMaxColBrake());
+}
+
+// The cells live in blocks that grow (16, 32, 64, 128, then 256 at a time), and a pointer handed out
+// by GetOrCreateCell must stay good however many cells come after it — the crash the store exists to
+// rule out. Written across every block boundary, then read back by address and by position, copied
+// and compared.
+TEST(SpreadsheetDescription, Cells_KeepTheirAddressesAcrossEveryBlockBoundary)
+{
+	ibSpreadsheetDescription desc;
+	ibSpreadsheetCellDescription* first = desc.GetOrCreateCell(0, 0);
+	ASSERT_NE(first, nullptr);
+	first->m_value = wxT("first");
+
+	const int rows = 1000;                      // past 240 (the growing blocks) and several 256-blocks
+	for (int row = 1; row < rows; ++row)
+		desc.GetOrCreateCell(row, 0)->m_value = wxString::Format(wxT("r%d"), row);
+
+	EXPECT_EQ(first, desc.GetOrCreateCell(0, 0));   // the same cell, found — not a new one
+	EXPECT_EQ(first->m_value, wxT("first"));        // …and still where it was
+	EXPECT_EQ(rows, desc.GetCellCount());
+	for (int row : { 15, 16, 47, 48, 111, 112, 239, 240, 495, 496, 999 })
+		EXPECT_EQ(desc.GetCellByIdx(static_cast<size_t>(row))->m_value, wxString::Format(wxT("r%d"), row));
+
+	const ibSpreadsheetDescription copy = desc;     // a copy owns cells of its own, equal to these
+	EXPECT_TRUE(copy == desc);
+	EXPECT_NE(copy.GetCell(500, 0), desc.GetCell(500, 0));
+
+	desc.ClearSpreadsheet();
+	EXPECT_EQ(0, desc.GetCellCount());
+	EXPECT_EQ(copy.GetCellByIdx(999)->m_value, wxT("r999"));   // the copy outlives the original's cells
+}

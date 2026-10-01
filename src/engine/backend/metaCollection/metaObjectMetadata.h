@@ -1,10 +1,11 @@
-﻿#ifndef __METAOBJECT_METADATA_H__
+#ifndef __METAOBJECT_METADATA_H__
 #define __METAOBJECT_METADATA_H__
 
 #include "metaObject.h"
 #include "metaObjectMetadataEnum.h"
 
 #include "metaModuleObject.h"
+#include "backend/homePageDescription.h"   // ibHomePageDescription — the start-page workspace
 
 //*****************************************************************************************
 //*                                  metaData object                                      *
@@ -15,11 +16,11 @@
 ///////////////////////////////////////////////////////////////////////////
 
 class BACKEND_API ibValueMetaObjectConfiguration : public ibValueMetaObject {
-	wxDECLARE_DYNAMIC_CLASS(ibValueMetaObjectConfiguration);
+	public:
 
 	enum
 	{
-		ID_METATREE_OPEN_INIT_MODULE = 19000,
+		ID_METATREE_EDIT_HOME_PAGE,
 	};
 
 public:
@@ -33,14 +34,20 @@ public:
 	bool AccessRight_ModeAllFunction(const ibRoleUserInfo& roleInfo = ibRoleUserInfo()) const { return AccessRight(m_roleModeAllFunction, roleInfo.IsSetRole() ? roleInfo : GetUserRoleInfo()); }
 #pragma endregion
 
-	virtual bool FilterChild(const ibClassID& clsid) const {
-
+	virtual ibClassID ResolveChild(const ibClassID& clsid) const {
 		if (
 			clsid == g_metaCommonModuleCLSID ||
 			clsid == g_metaCommonFormCLSID ||
 			clsid == g_metaCommonTemplateCLSID ||
 			clsid == g_metaRoleCLSID ||
-			clsid == g_metaInterfaceCLSID ||
+			clsid == g_metaSectionCLSID ||
+			clsid == g_metaCommonCommandCLSID ||
+			clsid == g_metaCommandGroupCLSID ||
+			clsid == g_metaScheduledJobCLSID ||
+			clsid == g_metaEventHandlerCLSID ||
+			clsid == g_metaSessionParameterCLSID ||
+			clsid == g_metaFunctionalOptionCLSID ||
+			clsid == g_metaCommonAttributeCLSID ||
 			clsid == g_metaPictureCLSID ||
 			clsid == g_metaLanguageCLSID ||
 			clsid == g_metaConstantCLSID ||
@@ -51,13 +58,17 @@ public:
 			clsid == g_metaReportCLSID ||
 			clsid == g_metaInformationRegisterCLSID ||
 			clsid == g_metaAccumulationRegisterCLSID ||
+			clsid == g_metaParameterizedJobCLSID ||
 			clsid == g_metaChartOfCharacteristicTypesCLSID ||
 			clsid == g_metaChartOfAccountsCLSID ||
-			clsid == g_metaAccountingRegisterCLSID
+			clsid == g_metaAccountingRegisterCLSID ||
+			clsid == g_metaChartOfCalculationTypesCLSID ||
+			clsid == g_metaCalculationRegisterCLSID ||
+			clsid == g_metaSequenceCLSID
 			)
-			return true;
+			return clsid;
 
-		return false;
+		return 0;
 	}
 
 	ibProgramSyntax GetCompileSyntax() const { return m_propertySyntax->GetValueAsEnum(); }
@@ -67,6 +78,14 @@ public:
 
 	void SetLanguage(const ibMetaID& id) { m_propertyDefLanguage->SetValue(id); }
 	ibMetaID GetLanguage() const { return m_propertyDefLanguage->GetValueAsInteger(); }
+
+	// The start-page workspace — the forms every session opens FIRST, and how they are split.
+	// Read by the runtime composite (frontend ibHomePageDocument), written by the designer's
+	// workspace editor. It is plain state on the root, not a property: the inspector has no
+	// cell shape for "two ordered lists of forms", the dedicated editor has.
+	const ibHomePageDescription& GetHomePage() const { return m_homePage; }
+	ibHomePageDescription& GetHomePage() { return m_homePage; }
+	void SetHomePage(const ibHomePageDescription& homePage) { m_homePage = homePage; }
 
 	//////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -92,6 +111,7 @@ public:
 
 	//module manager is started or exit 
 	virtual bool OnBeforeRunMetaObject(int flags);
+	virtual bool OnBeforeCloseMetaObject();
 	virtual bool OnAfterCloseMetaObject();
 
 	/**
@@ -100,7 +120,7 @@ public:
 	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue);
 
 	//prepare menu for item
-	virtual bool PrepareContextMenu(wxMenu* defaultMenu);
+	virtual bool CollectContextMenu(std::vector<ibMetaMenuItem>& items);
 	virtual void ProcessCommand(unsigned int id);
 
 	//create function 
@@ -110,17 +130,27 @@ public:
 
 	virtual const ibValueMetaObjectModule* GetObjectModule() const { return m_propertyModuleConfiguration->GetMetaObject(); }
 
+	// The session module — where SetSessionParameters lives. Null-safe by the same
+	// rule as the configuration module: a configuration that declares no session
+	// parameters simply has an empty one.
+	const class ibValueMetaObjectManagerModule* GetSessionModule() const { return m_propertyModuleSession->GetMetaObject(); }
+
 protected:
 
-	//load & save metaData from DB 
-	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer);
+	//load & save metaData from DB
+
+	virtual bool ReadData(const ibDataNode& node) override;
+	virtual bool WriteData(ibDataNode& node) const override;
 
 private:
 
-	bool FillRoleList(ibPropertyList* prop) {
+	// Shared body for the property-list fill callbacks below — they differ only
+	// by the metaobject CLSID they collect. The thin FillRoleList/FillLanguageList
+	// delegates are kept because they're referenced by member-function-pointer in
+	// the ibPropertyList property declarations.
+	bool FillListByClsid(ibPropertyList* prop, const ibClassID& clsid) {
 		std::vector<ibValueMetaObject*> array;
-		if (FillArrayObjectByFilter(array, { g_metaRoleCLSID })) {
+		if (FillArrayObjectByFilter(array, { clsid })) {
 			for (const auto child : array) {
 				prop->AppendItem(
 					child->GetName(),
@@ -133,34 +163,43 @@ private:
 		return false;
 	}
 
-	bool FillLanguageList(ibPropertyList* prop) {
-		std::vector<ibValueMetaObject*> array;
-		if (FillArrayObjectByFilter(array, { g_metaLanguageCLSID })) {
-			for (const auto child : array) {
-				prop->AppendItem(
-					child->GetName(),
-					child->GetMetaID(),
-					child->GetIcon(),
-					child);
-			}
-			return true;
-		}
-		return false;
-	}
+	bool FillRoleList(ibPropertyList* prop)     { return FillListByClsid(prop, g_metaRoleCLSID); }
+	bool FillLanguageList(ibPropertyList* prop) { return FillListByClsid(prop, g_metaLanguageCLSID); }
 
-	ibPropertyInnerModule<ibValueMetaObjectModule>* m_propertyModuleConfiguration = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectModule>>(m_categoryContext, wxT("ConfigurationModule"), _("Configuration module"));
+	ibHomePageDescription m_homePage;
+
+	ibPropertyInnerModule<ibValueMetaObjectModule>* m_propertyModuleConfiguration = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectModule>>(m_categoryContext, wxT("ConfigurationModule"), _("Configuration module"), _("The interactive client's application module: BeforeStart (may refuse the login), OnStart (opens the desktop), BeforeExit / OnExit, and its exported procedures and variables, visible to every form. Not run for background jobs."));
+
+	// THE SESSION MODULE — a second module on the root, and the only place a session
+	// parameter may be written. It carries one procedure, SetSessionParameters, run
+	// once per session before anything reads data: the values it sets are what row
+	// access is filtered by, so they have to exist before the first query and stay
+	// unchanged after it.
+	//
+	// Separate from the configuration module rather than another handler inside it,
+	// because the two run at different moments and for different audiences. The
+	// configuration module speaks to an interactive client — BeforeStart can refuse
+	// a login, OnStart opens the desktop — and never runs for a background job. This
+	// one runs for EVERY session, job included, and runs earlier.
+	// A MANAGER module, not a plain one — and that is not a style choice. A plain
+	// ibValueMetaObjectModule never registers itself with the module storage, so it
+	// is never compiled into a session and its procedure can never be called: the
+	// module would exist in the tree, open in the editor, and quietly do nothing.
+	// A manager module registers (AddCommonModule) and is compiled once with the
+	// session's modules, which is exactly what a scheduled job's handler relies on.
+	ibPropertyInnerModule<ibValueMetaObjectManagerModule>* m_propertyModuleSession = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectManagerModule>>(m_categoryContext, wxT("SessionModule"), _("Session module"), _("Runs SetSessionParameters once per session - interactive or background - before anything reads data. The only place a session parameter may be written; row access is filtered by the values it sets, so they exist before the first query and do not change after it."));
 
 	ibPropertyCategory* m_propertyPresetValues = ibPropertyObject::CreatePropertyCategory(wxT("PresetValues"), _("Preset values"));
-	ibPropertyList* m_propertyDefRole = ibPropertyObject::CreateProperty<ibPropertyList>(m_propertyPresetValues, wxT("DefaultRole"), _("Default role"), _("Default configuration role"), &ibValueMetaObjectConfiguration::FillRoleList);
-	ibPropertyList* m_propertyDefLanguage = ibPropertyObject::CreateProperty<ibPropertyList>(m_propertyPresetValues, wxT("DefaultLanguage"), _("Default language"), _("Default configuration language"), &ibValueMetaObjectConfiguration::FillLanguageList);
+	ibPropertyList* m_propertyDefRole = ibPropertyObject::CreateProperty<ibPropertyList>(m_propertyPresetValues, wxT("DefaultRole"), _("Default role"), _("The role meant for users who have none of their own. Saved with the configuration, but no session reads it yet: a user without roles gets each right's own default."), &ibValueMetaObjectConfiguration::FillRoleList);
+	ibPropertyList* m_propertyDefLanguage = ibPropertyObject::CreateProperty<ibPropertyList>(m_propertyPresetValues, wxT("DefaultLanguage"), _("Default language"), _("The configuration's own language: captions written without naming a language go into it, and a user with no language of their own sees it."), &ibValueMetaObjectConfiguration::FillLanguageList);
 
 	ibPropertyCategory* m_compatibilityCategory = ibPropertyObject::CreatePropertyCategory(wxT("Compatibility"), _("Compatibility"));
-	ibPropertyEnum<ibValueEnumVersion>* m_propertyVersion = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumVersion>>(m_compatibilityCategory, wxT("Version"), _("Version"), version_oes_last);
+	ibPropertyEnum<ibValueEnumVersion>* m_propertyVersion = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumVersion>>(m_compatibilityCategory, wxT("Version"), _("Version"), _("The compatibility version: which platform behaviour the configuration asks for. Don't use compatibility (the default) runs the current behaviour. Saved with the configuration and reported by the tools; no behaviour is switched by it yet."), version_oes_last);
 	// CES is the default for new configurations. VES (Visual Basic-style
-	// ES + 1С/BSL mix) is kept available for legacy / 1С-migrated
+	// ES, a legacy business-scripting dialect) is kept available for legacy / migrated
 	// configurations and acts as a "please migrate" signal in the
 	// metadata UI.
-	ibPropertyEnum<ibValueEnumSyntax>* m_propertySyntax = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumSyntax>>(m_compatibilityCategory, wxT("Syntax"), _("Syntax"), syntax_ces);
+	ibPropertyEnum<ibValueEnumSyntax>* m_propertySyntax = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumSyntax>>(m_compatibilityCategory, wxT("Syntax"), _("Syntax"), _("The dialect the configuration's modules are written in. CES (the default for new configurations): braces and semicolons. VES: the legacy word-based dialect, kept for migrated configurations."), syntax_ces);
 
 #pragma region role 
 	ibRole* m_roleAdministration = ibValueMetaObject::CreateRole(wxT("Administration"), _("Administration"));

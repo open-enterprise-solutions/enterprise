@@ -8,17 +8,16 @@
 #include "appData.h"                 // DesignerMode() guard in Compile()
 #include "backend/compiler/cache/byteCodeCache.h"              // AOT cache Load / Save
 #include "backend/metaCollection/metaModuleObject.h"  // ibValueMetaObjectModuleBase full type for GetGuid/GetClassType
+#include "backend/metaData.h"                         // ibMetaData::GetConfigMD5 — the cache key's second half
+#include "backend/compiler/scriptParseCode.h"          // ibParseCode — the export names a TEXT declares
+// DEF_VAR_SKIP — the sentinel a parameter's default-value slot carries when there is NO default.
+// ⚠ It lives on the COMPILE side while the field it marks (ibByteParam::m_defaultValue) lives in
+// byteCode.h, which describes it in a comment and cannot see it. Included rather than duplicated;
+// the pair belongs together and moving it is wider than this change.
+#include "backend/compiler/compileContext.h"
 
-ibRuntimeModuleDataObject::ibRuntimeModuleDataObject() :
-	m_compileModule(nullptr)
-{
-}
-
-ibRuntimeModuleDataObject::ibRuntimeModuleDataObject(ibCompileModule* compileCode) :
-	m_compileModule(compileCode)
-{
-}
-
+// The single ctor is inline in moduleInfo.h (it must reference ExportThunk +
+// BindTail). Only the dtor lives out-of-line.
 ibRuntimeModuleDataObject::~ibRuntimeModuleDataObject()
 {
 	// Drop this descriptor's bytecode from the process-wide registry
@@ -37,6 +36,93 @@ ibRuntimeModuleDataObject::~ibRuntimeModuleDataObject()
 std::shared_ptr<ibProcUnit> ibRuntimeModuleDataObject::GetProcUnit() const
 {
 	return m_procUnit;
+}
+
+#include "backend/metaCollection/metaEventHandlerObject.h"        // who handles an event
+#include "backend/metaCollection/partial/commonObject.h"          // ibValueManagerDataObject — a manager event's Source
+#include "backend/session/session.h"                              // ibSession::EditModuleManagerFor — where they run
+#include "backend/moduleManager/moduleManager.h"                  // FindCommonModule — an event handler's module
+
+// Every event handler of `metaData` for this event of `source`, called with `source` and the event's
+// arguments — the second half of an owner's event (ExecAsEvent) and of a manager's (ExecAsManagerEvent).
+static void ExecEventHandlers(const ibMetaData* metaData, const ibValue* source,
+	const ibString& strEventName, ibValue** paParams, const long lSizeArray)
+{
+	if (metaData == nullptr || source == nullptr)
+		return;
+	const std::vector<ibValueMetaObjectEventHandler*> handlers =
+		metaData->GetAnyArrayObject<ibValueMetaObjectEventHandler>(g_metaEventHandlerCLSID);
+	if (handlers.empty())
+		return;
+
+	// WHO TAKES THIS EVENT, asked first: by its number (its name's hash, a UTF-8 pass over it — made once, not
+	// once per handler) and by the value's type. Nobody — the event is over here, and nothing below is paid for.
+	const long eventId = ibValueMetaObjectEventHandler::EventId(strEventName);
+	const ibClassID sourceType = source->GetClassType();
+	std::vector<const ibValueMetaObjectEventHandler*> taking;
+	for (const ibValueMetaObjectEventHandler* handler : handlers)
+		if (handler != nullptr && !handler->IsDeleted() && handler->Handles(sourceType, eventId))
+			taking.push_back(handler);
+	if (taking.empty())
+		return;
+
+	// An event handler's module is a MANAGER module, found where the manager value and a parameterized
+	// job find theirs (ibSession::EditModuleManagerFor): the modules registered for this configuration.
+	// No such manager, nothing runs and nobody is called.
+	const ibValueModuleManager* const moduleManager = ibSession::EditModuleManagerFor(metaData);
+	if (moduleManager == nullptr)
+		return;
+
+	// Source first — the value itself, referred to the way an aggregate hands itself out, and only now that
+	// somebody takes the event: a reference taken and dropped on every event would put an object nobody holds
+	// through zero. Then the event's arguments — the SAME ones, by pointer, so what a procedure writes into
+	// them (Cancel, StandardProcessing) is what the raiser reads.
+	ibValue sourceArgument = source->GetValue(true);
+	std::vector<ibValue*> params = { &sourceArgument };
+	params.insert(params.end(), paParams, paParams + lSizeArray);
+
+	for (const ibValueMetaObjectEventHandler* handler : taking) {
+		const ibRuntimeModuleDataObject* const unit = moduleManager->FindCommonModule(handler->GetHandlerModule());
+		if (unit == nullptr)
+			continue;
+		if (const std::shared_ptr<ibProcUnit> procUnit = unit->GetProcUnit())   // pinned for the call, as ExecAsProc pins it
+			procUnit->CallAsProc(strEventName, params.data(), static_cast<long>(params.size()));
+	}
+}
+
+void ibRuntimeModuleDataObject::ExecAsEvent(const ibString& strEventName, ibValue** paParams, const long lSizeArray) const
+{
+	// The owner's own procedure first — what the event always did.
+	ExecAsProc(strEventName, paParams, lSizeArray);
+
+	// …then its event handlers, the runtime value this descriptor is a part of handed over as Source. The
+	// configuration is the owner's own, asked of the module it runs.
+	if (const ibValueMetaObjectModuleBase* const module = GetMetaForCompile())
+		ExecEventHandlers(module->GetMetaData(), GetRuntimeOwner(), strEventName, paParams, lSizeArray);
+}
+
+bool ibRuntimeModuleDataObject::ExecAsManagerEvent(const ibValueMetaObjectGenericData* metaObject, const ibString& strEventName,
+	ibValue** paParams, const long lSizeArray)
+{
+	if (metaObject == nullptr)
+		return false;
+	const ibMetaData* const metaData = metaObject->GetMetaData();
+
+	// The manager module's own procedure first — found where the manager value finds it (EditModuleManagerFor),
+	// NOT in the session's runtime root. The root holds the configuration's common modules; a manager module is
+	// registered where its metaobject's metadata lives, which in the Designer is a compile-cache manager with no
+	// root at all. Asked of the root, a job "ran" and did nothing.
+	const ibValueMetaObjectCommonModule* const module = metaObject->GetManagerModule();
+	const ibValueModuleManager* const moduleManager = module != nullptr ? ibSession::EditModuleManagerFor(metaData) : nullptr;
+	const ibRuntimeModuleDataObject* const unit = moduleManager != nullptr ? moduleManager->FindCommonModule(module) : nullptr;
+	if (unit == nullptr)
+		return false;
+	unit->ExecAsProc(strEventName, paParams, lSizeArray);
+
+	// …then its event handlers, the manager itself handed over as Source.
+	const ibValuePtr<ibValueManagerDataObject> manager = metaObject->CreateManagerDataObjectValue();
+	ExecEventHandlers(metaData, manager, strEventName, paParams, lSizeArray);
+	return true;
 }
 
 const ibRuntimeRoot* ibRuntimeModuleDataObject::GetRoot() const
@@ -63,35 +149,231 @@ void ibRuntimeModuleDataObject::InitializeRuntime()
 	}
 }
 
-void ibRuntimeModuleDataObject::BindContextVariable(const wxString& name, ibValue* value)
+ibCompileModule* ibRuntimeModuleDataObject::EnsureCompileModule()
 {
-	// Lazy-create m_compileModule on first BindContextVariable —
-	// subclass provides its meta-object via GetMetaObject() override.
+	// Lazy-create m_compileModule on first Bind… — subclass provides its
+	// meta-object via GetMetaForCompile() override.
 	if (m_compileModule == nullptr) {
 		if (const ibValueMetaObjectModuleBase* meta = GetMetaForCompile()) {
 			m_compileModule = new ibCompileModule(meta);
-			// Propagate parent's compile scope chain — SetParent can
-			// be called before BindContextVariable; we pick up the
-			// parent compile on creation.
+			// Propagate parent's compile scope chain — SetParent can be
+			// called before the first Bind…; pick up parent compile here.
 			if (m_parent != nullptr) {
 				if (ibCompileModule* parentCompile = m_parent->GetCompileModule())
 					m_compileModule->SetParent(parentCompile);
 			}
 		}
 	}
-	if (m_compileModule != nullptr)
-		m_compileModule->AddContextVariable(name, value);
-	// If the runtime binder is already built (post-Compile), forward
-	// the value into its slot table too — keeps compile-time staging
-	// and runtime binder in sync without subclass plumbing.
+	return m_compileModule;
+}
+
+// See header. Append the EXPORT bindings as eProcUnit-aliased props so member
+// access (ThisForm.Controls / ThisObject.RegisterRecords) resolves them via the
+// descriptor's ProcUnit, exactly like ExportNamesToHelper does for module
+// exports. Context binds are the self-handles — skipped (no ThisForm.ThisForm).
+// THE NAMES A MODULE EXPORTS, AND THE TWO PLACES THEY COME FROM.
+//
+// ⭐⭐ THE DESIGNER HAS NO RUNTIME, so it cannot be asked for bytecode — and bytecode is the only
+// thing this used to read. Everything built on it therefore said NOTHING in the designer: a common
+// module offered no exports after its dot, a manager host (Catalogs.Goods., commonObject.cpp)
+// missed its manager module's exports, an object module's own exported procedures were invisible
+// on ThisObject — while the designer's "Procedures and functions" window listed all of them,
+// because IT read the TEXT (ibParseCode). One question, two answers, and one of them empty.
+//
+// ⚠ AND THE TEST IS "DESIGNER", NOT "NO BYTECODE" — which is the tempting one and is wrong. At
+// RUNTIME a descriptor can also be without bytecode: a module that failed to compile is exactly
+// that. Naming its exports there would advertise something nobody can call, and the failure moves
+// from an honest "method not found" to a call into an absent ProcUnit. The designer executes
+// nothing, so there a name read off the text is a promise it can keep. Asked the same way by the
+// neighbour in this class: Compile() steps aside on appData->DesignerMode().
+static void ibExportNamesFromText(const ibValueMetaObjectModuleBase* moduleObject,
+	ibValue::ibMemberTable* helper, long alias, bool methods)
+{
+	if (moduleObject == nullptr)
+		return;
+
+	ibParseCode parser;
+
+	// A refusal is ordinary and says nothing: the text is somebody's work in progress, and half a
+	// declaration is what a module looks like while it is being typed. No names, no noise.
+	if (!parser.ParseModule(moduleObject->GetModuleText()))
+		return;
+
+	for (const ibModuleElement& element : parser.GetAllContent()) {
+
+		// EXPORTED ONLY — the same line the bytecode road draws (IsExport). A private procedure is
+		// reachable from inside its module and nowhere else, and offering it here would name
+		// something the compiler then refuses.
+		if (methods) {
+			// ⭐ THE CALL FORM, NOT ONLY THE ARITY. This passed an empty helper string, so every
+			// method a configuration declares arrived at a caller as a bare name while the
+			// platform's own came with `GetTemplate(name : string)` beside them — the arity was
+			// known and the names were not shown (2026-09-09, reading a document manager's
+			// members: `Print` with nothing to say how to call it).
+			//
+			// Written here rather than at each reader: the parser is the one that saw the text.
+			const wxString signature = ibModuleCallForm(element);
+
+			if (element.m_eType == eExportFunction)
+				helper->AppendFunc(element.m_name, element.ParamCount(), signature, wxNOT_FOUND, alias);
+			else if (element.m_eType == eExportProcedure)
+				helper->AppendProc(element.m_name, element.ParamCount(), signature, wxNOT_FOUND, alias);
+		}
+		else if (element.m_eType == eExportVariable) {
+			helper->AppendProp(element.m_name, wxNOT_FOUND, alias);
+		}
+	}
+}
+
+void ibRuntimeModuleDataObject::ExportMethodsToHelper(ibValue::ibMemberTable* helper, long alias) const
+{
+	if (helper == nullptr)
+		return;
+
+	if (appData->DesignerMode()) {
+		ibExportNamesFromText(GetMetaObject(), helper, alias, /*methods*/ true);
+		return;
+	}
+
+	const auto pu = GetProcUnit();
+	if (!pu) return;
+	const ibByteCode* bc = pu->GetByteCode();
+	if (bc == nullptr) return;
+	for (const auto& fn : bc->m_listFunc) {
+		if (!fn.IsExport()) continue;
+
+		// ⭐ THE SAME CALL FORM THE TEXT ROAD WRITES, spelled from the bytecode's own parameter
+		// records — the names travel there too (ibByteParam::m_strName), and this passed an empty
+		// helper string beside them. One convention, both roads: a caller must not be able to tell
+		// which side of the designer/runtime line answered it.
+		wxString signature = fn.m_strRealName + wxT("(");
+		for (size_t index = 0; index < fn.m_listParam.size(); ++index) {
+
+			const auto& param = fn.m_listParam[index];
+			const bool optional = param.m_defaultValue.m_numArray != DEF_VAR_SKIP;
+
+			if (index > 0)
+				signature += wxT(", ");
+
+			if (optional)
+				signature += wxT("[");
+			if (param.m_bByValue)
+				signature += wxT("Val ");
+
+			signature += param.m_strName;
+
+			if (optional)
+				signature += wxT("]");
+		}
+		signature += wxT(")");
+
+		helper->AppendMethod(fn.m_strRealName,
+			signature,
+			bc->GetNParams(fn),
+			bc->HasRetVal(fn),
+			(long)fn,
+			alias);
+	}
+}
+
+void ibRuntimeModuleDataObject::ExportPropsToHelper(ibValue::ibMemberTable* helper, long alias) const
+{
+	if (helper == nullptr)
+		return;
+
+	if (appData->DesignerMode()) {
+		ibExportNamesFromText(GetMetaObject(), helper, alias, /*methods*/ false);
+		return;
+	}
+
+	const auto pu = GetProcUnit();
+	if (!pu) return;
+	const ibByteCode* bc = pu->GetByteCode();
+	if (bc == nullptr) return;
+	for (const auto& v : bc->m_listVar) {
+		if (!v.IsExport()) continue;
+		helper->AppendProp(v.m_strRealName, v, alias);
+	}
+}
+
+void ibRuntimeModuleDataObject::FillHelperFromBinds(ibValue::ibMemberTable* helper, long alias) const
+{
+	if (helper == nullptr) return;
+	const ibCompileModule* cm = GetCompileModule();
+	if (cm == nullptr) return;
+	for (const auto& kv : cm->m_listExternValue)
+		helper->AppendProp(kv.first, wxNOT_FOUND, alias);
+}
+
+ibValue* ibRuntimeModuleDataObject::GetBoundValue(const wxString& name) const
+{
+	const ibCompileModule* cm = GetCompileModule();
+	if (cm == nullptr) return nullptr;
+	auto it = cm->m_listExternValue.find(name);
+	return (it != cm->m_listExternValue.end()) ? it->second : nullptr;
+}
+
+// Named context variable — name VISIBLE in the editor (ThisObject / ThisForm).
+void ibRuntimeModuleDataObject::BindContextVariable(const wxString& name, ibValue* value)
+{
+	if (ibCompileModule* cm = EnsureCompileModule())
+		cm->AddContextVariable(name, value, /*scopeContext=*/false);
+	// If the runtime binder is already built (post-Compile), forward the
+	// value into its slot table too — keeps compile-time staging and runtime
+	// binder in sync without subclass plumbing.
 	if (m_binder != nullptr)
 		m_binder->SetVar(name, value);
+}
+
+// Transparent scope container — name NOT an identifier, members surface into
+// scope (Manager / EnumManager / SystemManager).
+void ibRuntimeModuleDataObject::BindScopeVariable(const wxString& name, ibValue* value)
+{
+	if (ibCompileModule* cm = EnsureCompileModule())
+		cm->AddContextVariable(name, value, /*scopeContext=*/true);
+	// Binder is name→value only; the scope flag is an editor-display concern
+	// with no runtime slot, so the runtime binding is identical to context.
+	if (m_binder != nullptr)
+		m_binder->SetVar(name, value);
+}
+
+// Export variable — name VISIBLE, stored in the extern map (global constants,
+// module-valued names).
+void ibRuntimeModuleDataObject::BindExportVariable(const wxString& name, ibValue* value)
+{
+	if (ibCompileModule* cm = EnsureCompileModule())
+		cm->AddVariable(name, value);
+	if (m_binder != nullptr)
+		m_binder->SetVar(name, value);
+}
+
+// Plain writable LOCAL — name resolves to an ordinary frame local (kind=Local),
+// but the binder seeds its slot with `value` at init. No required/type pre-flight,
+// no member access. E.g. a constant's Value backed by &m_constValue.
+void ibRuntimeModuleDataObject::BindLocalVariable(const wxString& name, ibValue* value)
+{
+	if (ibCompileModule* cm = EnsureCompileModule())
+		cm->AddLocalVariable(name, value);
+	if (m_binder != nullptr)
+		m_binder->SetVar(name, value);
+}
+
+// Undo any Bind… for `name`. Does NOT lazy-create the compile module — there's
+// nothing to remove from a module that was never wired.
+void ibRuntimeModuleDataObject::UnbindVariable(const wxString& name)
+{
+	if (m_compileModule != nullptr)
+		m_compileModule->RemoveVariable(name);
+	// Binder has no slot-erase; nulling the slot unbinds the live value while
+	// leaving the bytecode-declared slot in place (re-bind via SetVar later).
+	if (m_binder != nullptr)
+		m_binder->SetVar(name, nullptr);
 }
 
 void ibRuntimeModuleDataObject::Run(bool delta)
 {
 	// Designer never executes script — the editor only cares about
-	// AST / symbol table. Runtime / codeRunner / daemon all go through
+	// AST / symbol table. Runtime / codeRunner / appserver all go through
 	// here.
 	if (appData->DesignerMode())
 		return;
@@ -124,8 +406,21 @@ bool ibRuntimeModuleDataObject::Compile()
 	// (b) Cache miss → fall through to compile-from-source. Single
 	//     unified assemble path at the bottom — descriptor doesn't
 	//     care which arm produced bc.
+	// WHAT THIS BYTECODE WOULD BE COMPILED AGAINST, as one value. It is part of the cache KEY, so a
+	// row saved under any earlier state of the configuration is not found at all — see byteCodeCache.h.
+	const ibMetaData* const owner = meta != nullptr ? meta->GetMetaData() : nullptr;
+
+	// ⚠ THE KEY IS THE CONFIGURATION'S DIGEST, and it stays that. Mixing the module's own text into
+	// it was tried on 2026-09-04 and taken back out: it patches the symptom at the reader's end,
+	// while the cause is a WRITER that changes metadata without going through the save the rest of
+	// the product goes through (Max: you change a form, you change objects, and you go PAST the
+	// standard save). In the Designer, editing a module and closing the document saves the metadata —
+	// the digest moves, the cache row retires by itself. A door that skips that has to be fixed at
+	// the door.
+	const wxString configMd5 = owner != nullptr ? owner->GetConfigMD5() : wxString();
+
 	bool ready = false;
-	if (meta != nullptr && ibByteCodeCache::Load(bc, meta->GetGuid())) {
+	if (meta != nullptr && ibByteCodeCache::Load(bc, meta->GetGuid(), configMd5)) {
 		if (bc.ResolveAndVerifyDependencies()) {
 			// Restore live pointers AOT skipped on serialize. m_parent
 			// points at the parent compile module's bytecode —
@@ -136,6 +431,31 @@ bool ibRuntimeModuleDataObject::Compile()
 			// derefs nullptr.
 			if (ibCompileModule* parentCompile = m_compileModule->GetParent())
 				bc.m_parent = &parentCompile->m_cByteCode;
+
+			// ⭐⭐ AND THE NAME SURFACE, which the cache-hit path used to leave unbuilt.
+			//
+			// A name is resolved by walking, and there are two walks: the live COMPILE CONTEXTS
+			// first, the parent BYTECODE chain after. They do not count the same number of rungs,
+			// and the rung count IS the address a receiver operand carries.
+			//
+			// So the same module compiled against a freshly-compiled parent and against a parent
+			// LOADED FROM CACHE gets two different addresses for the same name — because a loaded
+			// parent skips Compile(), and with it PrepareModuleData, so its context is empty and the
+			// search falls through to the second walk. Measured 2026-09-04: the first run after an
+			// apply posts a document; the next run, with the parent coming from the cache, fails in
+			// the posting handler with "'ValueIsFilled' is a global function - it is not a member of
+			// this value". Same text, same byte code (vars=68 funcs=101 both ways), different road.
+			//
+			// Building the surface here makes the two roads agree. It is the same call the compile
+			// path makes, it is idempotent, and it costs one pass over the bound values.
+			// ⚠ AND NO COMPARISON AGAINST THE LOADED TABLE HERE. Checking the surface against
+			// bc.m_listVar on every hit was written and taken back out the same day: it turns the
+			// reader into the place that notices staleness, which is one place too late. A row that
+			// no longer matches the configuration must not be READABLE at all — it is thrown away
+			// where it goes stale (OnSaveMetaObject drops it on saveConfigFlag; the key retires
+			// every row of a previous configuration digest), and this branch may then trust what it
+			// gets (Max, 2026-09-04: a stale cache must be THROWN AWAY, not worked around).
+			m_compileModule->PrepareModuleData();
 			ready = true;
 		} else {
 			// (c) — dep registry missing the target or version drift.
@@ -172,8 +492,18 @@ bool ibRuntimeModuleDataObject::Compile()
 		// returns false on serialization rejection (e.g. non-primitive
 		// constants) or DB error; the runtime keeps the live bc and
 		// the next session pays the recompile cost again.
-		if (meta != nullptr)
-			ibByteCodeCache::Save(bc);
+		//
+		// ⭐ NOT WHAT WAS COMPILED UNDER AN EVAL. A watch or a sandbox opens a compile inside its
+		// OWN host frame, and that frame is a rung: every operand this compile stamps carries a
+		// depth counted with it. Executed later on the ordinary road — a posting, a form — the
+		// rung is not there and the address points one step past the ladder. Live, that byte code
+		// is consistent with the run that made it; SAVED, it is handed to every later run as if
+		// it were ordinary, and the failure arrives on the SECOND launch, which is why it read as
+		// "worked yesterday" (Max, 2026-09-04). A module first touched from a sandbox therefore
+		// compiles again next time — the cost of a recompile, against an address that is wrong
+		// for everybody else.
+		if (meta != nullptr && ibBackendException::IsEvalMode() == eval_none)
+			ibByteCodeCache::Save(bc, configMd5);
 	}
 
 	// Publish bc in the process-wide registry. Dependents resolving
@@ -199,11 +529,18 @@ bool ibRuntimeModuleDataObject::Compile()
 	// and covers both arms cheaply.
 	m_binder = std::make_unique<ibByteBinder>(bc.m_listVar);
 	for (auto& kv : m_compileModule->m_listExternValue) {
-		if (kv.second) kv.second->PrepareNames();
+		if (kv.second) kv.second->InvalidateNames();
 		m_binder->SetVar(kv.first, kv.second);
 	}
 	for (auto& kv : m_compileModule->m_listContextValue) {
-		if (kv.second) kv.second->PrepareNames();
+		if (kv.second.m_value) kv.second.m_value->InvalidateNames();
+		m_binder->SetVar(kv.first, kv.second.m_value);
+	}
+	// Bound locals (e.g. a constant's Value backed by &m_constValue): plain
+	// writable frame slots — no PrepareNames (they're values, not surfaced
+	// objects). To the binder a local is indistinguishable from an external:
+	// both just seed a slot; IsBindable() unifies them in SetVar / pre-flight.
+	for (auto& kv : m_compileModule->m_listLocalValue) {
 		m_binder->SetVar(kv.first, kv.second);
 	}
 	return true;

@@ -1,11 +1,11 @@
 #include "notebook.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "frontend/visualView/pageWindow.h"
 
 //***********************************************************************************
 //*                           IMPLEMENT_DYNAMIC_CLASS                               *
 //***********************************************************************************
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueNotebookPage, ibValueFrame);
 
 //***********************************************************************************
 //*                              ibValueNotebookPage                                 *
@@ -20,16 +20,25 @@ wxObject* ibValueNotebookPage::Create(wxWindow* wxparent, ibVisualHost* visualHo
     return new ibPanelPage(wxparent, wxID_ANY);
 }
 
-void ibValueNotebookPage::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool firstСreated)
+void ibValueNotebookPage::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool firstCreated)
 {
     ibPanelPage* page = dynamic_cast<ibPanelPage*>(wxobject);
     wxASSERT(page);
 
     wxAuiNotebook* notebook = dynamic_cast<wxAuiNotebook*>(wxparent);
 
-    if (notebook != nullptr && m_propertyVisible->GetValueAsBoolean()) {
+    // A page the functional options of this base make unavailable is off the notebook the way an invisible one is.
+    if (notebook != nullptr && m_propertyVisible->GetValueAsBoolean() && IsAvailable()) {
         notebook->AddPage(page, m_propertyTitle->GetValueAsTranslateString(), false, m_propertyPicture->GetValueAsBitmap());
         page->SetOrientation(m_propertyOrient->GetValueAsInteger());
+    }
+    else {
+        // ⚠ A PAGE THAT IS NOT IN THE NOTEBOOK MUST BE HIDDEN. It was built as a CHILD of the
+        // notebook, so leaving it shown does not mean "not on a tab" — it means "drawn at (0, 0)",
+        // which is where the notebook's TAB STRIP is. The page then paints its own contents over
+        // the captions and the strip reads as two words on top of each other.
+        // (Same defect, same day, in the query constructor's SyncNotebookPages.)
+        page->Hide();
     }
 
     if (visualHost->IsDesignerHost()) {
@@ -40,7 +49,8 @@ void ibValueNotebookPage::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVi
 void ibValueNotebookPage::OnUpdated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost)
 {
     ibValueFrame* parentControl = GetParent(); int pos = wxNOT_FOUND;
-    if (m_propertyVisible->GetValueAsBoolean()) {
+    const bool shown = m_propertyVisible->GetValueAsBoolean() && IsAvailable();
+    if (shown) {
         for (unsigned int i = 0; i < parentControl->GetChildCount(); i++) {
             ibValueNotebookPage* child = dynamic_cast<ibValueNotebookPage*>(parentControl->GetChild(i));
             wxASSERT(child);
@@ -54,9 +64,13 @@ void ibValueNotebookPage::OnUpdated(wxObject* wxobject, wxWindow* wxparent, ibVi
     int pos_old = notebook->FindPage((wxWindow*)wxobject);
     if (pos_old != wxNOT_FOUND && pos != pos_old)
         notebook->RemovePage(pos_old);
-   
-    if (m_propertyVisible->GetValueAsBoolean()) {
-        
+
+    // RemovePage DETACHES without hiding — see OnCreated. A page turned invisible therefore has to
+    // be hidden here too, or it goes on painting over the tab strip it was just taken off.
+    ((wxWindow*)wxobject)->Show(shown);
+
+    if (shown) {
+
         if (pos != pos_old)
             notebook->InsertPage(pos, (wxWindow*)wxobject, m_propertyTitle->GetValueAsTranslateString(), pos_old == wxNOT_FOUND, m_propertyPicture->GetValueAsBitmap());
         
@@ -119,26 +133,26 @@ bool ibValueNotebookPage::CanDeleteControl() const
 //*                              Read & save property                               *
 //***********************************************************************************
 
-bool ibValueNotebookPage::LoadData(ibReaderMemory& reader)
+bool ibValueNotebookPage::ReadData(const ibDataNode& node)
 {
-    m_propertyTitle->LoadData(reader);
-    m_propertyRepresentation->LoadData(reader);
-    m_propertyPicture->LoadData(reader);
-    m_propertyVisible->LoadData(reader);
-    m_propertyOrient->LoadData(reader);
+    m_propertyTitle->SetNodeValue(node.GetProperty(m_propertyTitle->GetName()));
+    m_propertyRepresentation->SetNodeValue(node.GetProperty(m_propertyRepresentation->GetName()));
+    m_propertyPicture->SetNodeValue(node.GetProperty(m_propertyPicture->GetName()));
+    m_propertyVisible->SetNodeValue(node.GetProperty(m_propertyVisible->GetName()));
+    m_propertyOrient->SetNodeValue(node.GetProperty(m_propertyOrient->GetName()));
 
-    return ibValueControl::LoadData(reader);
+    return ibValueControl::ReadData(node);
 }
 
-bool ibValueNotebookPage::SaveData(ibWriterMemory& writer)
+bool ibValueNotebookPage::WriteData(ibDataNode& node) const
 {
-    m_propertyTitle->SaveData(writer);
-    m_propertyRepresentation->SaveData(writer);
-    m_propertyPicture->SaveData(writer);
-    m_propertyVisible->SaveData(writer);
-    m_propertyOrient->SaveData(writer);
+    node.SetProperty(m_propertyTitle->GetName(), m_propertyTitle->GetNodeValue());
+    node.SetProperty(m_propertyRepresentation->GetName(), m_propertyRepresentation->GetNodeValue());
+    node.SetProperty(m_propertyPicture->GetName(), m_propertyPicture->GetNodeValue());
+    node.SetProperty(m_propertyVisible->GetName(), m_propertyVisible->GetNodeValue());
+    node.SetProperty(m_propertyOrient->GetName(), m_propertyOrient->GetNodeValue());
 
-    return ibValueControl::SaveData(writer);
+    return ibValueControl::WriteData(node);
 }
 
 //***********************************************************************

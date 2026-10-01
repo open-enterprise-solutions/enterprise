@@ -1,6 +1,7 @@
 #include "functionAll.h"
 #include "backend/metadataConfiguration.h"
 #include "frontend/visualView/ctrl/form.h"
+#include "backend/functionalOption/functionalOptionGate.h"   // ibFunctionalOptionGate::IsAvailable — AvailableObjects
 
 #define ICON_SIZE 16
 
@@ -53,60 +54,112 @@ wxTreeItemId ibDialogFunctionAll::AppendGroupItem(const wxTreeItemId& parent,
 	return m_treeCtrlElements->AppendItem(parent, name.IsEmpty() ? typeCtor->GetClassName() : name, imageIndex, imageIndex);
 }
 
+// The objects of a kind this base USES. A part of the system a functional option has switched off is not
+// offered here either — the list goes past the sections, so it asks the same gate they do.
+static std::vector<ibValueMetaObject*> AvailableObjects(const ibClassID& clsid)
+{
+	std::vector<ibValueMetaObject*> available;
+	for (ibValueMetaObject* object : activeMetaData->GetAnyArrayObject(clsid)) {
+		if (ibFunctionalOptionGate::IsAvailable(object))
+			available.push_back(object);
+	}
+	return available;
+}
+
 void ibDialogFunctionAll::BuildTree()
 {
 	wxImageList* imageList = m_treeCtrlElements->GetImageList();
 	wxASSERT(imageList);
 	wxTreeItemId root = m_treeCtrlElements->AddRoot(wxEmptyString);
+	// The functional options FIRST, above the constants: they decide which parts of the system are there at
+	// all, so they are the first thing a person setting a base up looks for. A stored value too, switched from
+	// its own form by whoever may write it, whether or not a section offers it.
+	wxTreeItemId functionalOptions = AppendGroupItem(root, g_metaFunctionalOptionCLSID, _("Functional options"));
+	for (auto option : AvailableObjects(g_metaFunctionalOptionCLSID)) {
+		const int imageIndex = imageList->Add(option->GetIcon());
+		m_treeCtrlElements->AppendItem(functionalOptions, option->GetSynonym(), imageIndex, imageIndex, new ibMetaDataItem(option));
+	}
 	wxTreeItemId constants = AppendGroupItem(root, g_metaConstantCLSID, _("Constants"));
-	for (auto constant : activeMetaData->GetAnyArrayObject(g_metaConstantCLSID)) {
+	for (auto constant : AvailableObjects(g_metaConstantCLSID)) {
 		const int imageIndex = imageList->Add(constant->GetIcon());
 		m_treeCtrlElements->AppendItem(constants, constant->GetSynonym(), imageIndex, imageIndex, new ibMetaDataItem(constant));
 	}
 	wxTreeItemId catalogs = AppendGroupItem(root, g_metaCatalogCLSID, _("Catalogs"));
-	for (auto catalog : activeMetaData->GetAnyArrayObject(g_metaCatalogCLSID)) {
+	for (auto catalog : AvailableObjects(g_metaCatalogCLSID)) {
 		const int imageIndex = imageList->Add(catalog->GetIcon());
 		m_treeCtrlElements->AppendItem(catalogs, catalog->GetSynonym(), imageIndex, imageIndex, new ibMetaDataItem(catalog));
 	}
 	wxTreeItemId documents = AppendGroupItem(root, g_metaDocumentCLSID, _("Documents"));
-	for (auto document : activeMetaData->GetAnyArrayObject(g_metaDocumentCLSID)) {
+	for (auto document : AvailableObjects(g_metaDocumentCLSID)) {
 		const int imageIndex = imageList->Add(document->GetIcon());
 		m_treeCtrlElements->AppendItem(documents, document->GetSynonym(), imageIndex, imageIndex, new ibMetaDataItem(document));
 	}
 	wxTreeItemId dataProcessors = AppendGroupItem(root, g_metaDataProcessorCLSID, _("Data processors"));
-	for (auto dataProcessor : activeMetaData->GetAnyArrayObject(g_metaDataProcessorCLSID)) {
+	for (auto dataProcessor : AvailableObjects(g_metaDataProcessorCLSID)) {
 		const int imageIndex = imageList->Add(dataProcessor->GetIcon());
 		m_treeCtrlElements->AppendItem(dataProcessors, dataProcessor->GetSynonym(), imageIndex, imageIndex, new ibMetaDataItem(dataProcessor));
 	}
 	wxTreeItemId reports = AppendGroupItem(root, g_metaReportCLSID, _("Reports"));
-	for (auto report : activeMetaData->GetAnyArrayObject(g_metaReportCLSID)) {
+	for (auto report : AvailableObjects(g_metaReportCLSID)) {
 		const int imageIndex = imageList->Add(report->GetIcon());
 		m_treeCtrlElements->AppendItem(reports, report->GetSynonym(), imageIndex, imageIndex, new ibMetaDataItem(report));
 	}
-	wxTreeItemId informationRegisters = AppendGroupItem(root, g_metaInformationRegisterCLSID, _("Information registers"));
-	for (auto informationRegister : activeMetaData->GetAnyArrayObject(g_metaInformationRegisterCLSID)) {
-		const int imageIndex = imageList->Add(informationRegister->GetIcon());
-		m_treeCtrlElements->AppendItem(informationRegisters, informationRegister->GetSynonym(), imageIndex, imageIndex, new ibMetaDataItem(informationRegister));
-	}
-	wxTreeItemId accumulationRegisters = AppendGroupItem(root, g_metaAccumulationRegisterCLSID, _("Accumulation registers"));
-	for (auto accumulationRegister : activeMetaData->GetAnyArrayObject(g_metaAccumulationRegisterCLSID)) {
-		const int imageIndex = imageList->Add(accumulationRegister->GetIcon());
-		m_treeCtrlElements->AppendItem(accumulationRegisters, accumulationRegister->GetSynonym(), imageIndex, imageIndex, new ibMetaDataItem(accumulationRegister));
-	}
 	wxTreeItemId chartsOfCharacteristicTypes = AppendGroupItem(root, g_metaChartOfCharacteristicTypesCLSID, _("Charts of characteristic types"));
-	for (auto chartOfCharacteristicTypes : activeMetaData->GetAnyArrayObject(g_metaChartOfCharacteristicTypesCLSID)) {
+	for (auto chartOfCharacteristicTypes : AvailableObjects(g_metaChartOfCharacteristicTypesCLSID)) {
 		const int imageIndex = imageList->Add(chartOfCharacteristicTypes->GetIcon());
 		m_treeCtrlElements->AppendItem(chartsOfCharacteristicTypes, chartOfCharacteristicTypes->GetSynonym(), imageIndex, imageIndex, new ibMetaDataItem(chartOfCharacteristicTypes));
 	}
 	wxTreeItemId chartsOfAccounts = AppendGroupItem(root, g_metaChartOfAccountsCLSID, _("Charts of accounts"));
-	for (auto chartOfAccounts : activeMetaData->GetAnyArrayObject(g_metaChartOfAccountsCLSID)) {
+	for (auto chartOfAccounts : AvailableObjects(g_metaChartOfAccountsCLSID)) {
 		const int imageIndex = imageList->Add(chartOfAccounts->GetIcon());
 		m_treeCtrlElements->AppendItem(chartsOfAccounts, chartOfAccounts->GetSynonym(), imageIndex, imageIndex, new ibMetaDataItem(chartOfAccounts));
 	}
+	wxTreeItemId chartsOfCalculationTypes = AppendGroupItem(root, g_metaChartOfCalculationTypesCLSID, _("Charts of calculation types"));
+	for (auto chartOfCalculationTypes : AvailableObjects(g_metaChartOfCalculationTypesCLSID)) {
+		const int imageIndex = imageList->Add(chartOfCalculationTypes->GetIcon());
+		m_treeCtrlElements->AppendItem(chartsOfCalculationTypes, chartOfCalculationTypes->GetSynonym(), imageIndex, imageIndex, new ibMetaDataItem(chartOfCalculationTypes));
+	}
+	// ⭐ THE REGISTERS COME LAST — same reading order as the metadata tree and the compare tree. A
+	// register is expressed in terms of what stands above it: its dimensions, and for an accounting
+	// register the chart of accounts that types the account and every analytics slot. Listing the
+	// registers first put the dependants above the things they depend on.
+	wxTreeItemId informationRegisters = AppendGroupItem(root, g_metaInformationRegisterCLSID, _("Information registers"));
+	for (auto informationRegister : AvailableObjects(g_metaInformationRegisterCLSID)) {
+		const int imageIndex = imageList->Add(informationRegister->GetIcon());
+		m_treeCtrlElements->AppendItem(informationRegisters, informationRegister->GetSynonym(), imageIndex, imageIndex, new ibMetaDataItem(informationRegister));
+	}
+	wxTreeItemId accumulationRegisters = AppendGroupItem(root, g_metaAccumulationRegisterCLSID, _("Accumulation registers"));
+	for (auto accumulationRegister : AvailableObjects(g_metaAccumulationRegisterCLSID)) {
+		const int imageIndex = imageList->Add(accumulationRegister->GetIcon());
+		m_treeCtrlElements->AppendItem(accumulationRegisters, accumulationRegister->GetSynonym(), imageIndex, imageIndex, new ibMetaDataItem(accumulationRegister));
+	}
 	wxTreeItemId accountingRegisters = AppendGroupItem(root, g_metaAccountingRegisterCLSID, _("Accounting registers"));
-	for (auto accountingRegister : activeMetaData->GetAnyArrayObject(g_metaAccountingRegisterCLSID)) {
+	for (auto accountingRegister : AvailableObjects(g_metaAccountingRegisterCLSID)) {
 		const int imageIndex = imageList->Add(accountingRegister->GetIcon());
 		m_treeCtrlElements->AppendItem(accountingRegisters, accountingRegister->GetSynonym(), imageIndex, imageIndex, new ibMetaDataItem(accountingRegister));
+	}
+	wxTreeItemId calculationRegisters = AppendGroupItem(root, g_metaCalculationRegisterCLSID, _("Calculation registers"));
+	for (auto calculationRegister : AvailableObjects(g_metaCalculationRegisterCLSID)) {
+		const int imageIndex = imageList->Add(calculationRegister->GetIcon());
+		m_treeCtrlElements->AppendItem(calculationRegisters, calculationRegister->GetSynonym(), imageIndex, imageIndex, new ibMetaDataItem(calculationRegister));
+	}
+	wxTreeItemId sequences = AppendGroupItem(root, g_metaSequenceCLSID, _("Sequences"));
+	for (auto sequence : AvailableObjects(g_metaSequenceCLSID)) {
+		const int imageIndex = imageList->Add(sequence->GetIcon());
+		m_treeCtrlElements->AppendItem(sequences, sequence->GetSynonym(), imageIndex, imageIndex, new ibMetaDataItem(sequence));
+	}
+
+	// SCHEDULED JOBS come LAST, and deliberately so. They are reachable — somebody has to be able
+	// to open the list, look at a schedule, run one by hand — but they are administration, not the
+	// work this window is opened for. Putting them under the accounting registers is what keeps
+	// them from being the first thing an operator's eye lands on.
+	//
+	// The PREDEFINED half is absent here on purpose: it has no list to open. Its settings live in
+	// the job window and in ScheduledJobs.Predefined, not behind an icon that opens nothing.
+	wxTreeItemId scheduledJobs = AppendGroupItem(root, g_metaParameterizedJobCLSID, _("Scheduled jobs"));
+	for (auto scheduledJob : AvailableObjects(g_metaParameterizedJobCLSID)) {
+		const int imageIndex = imageList->Add(scheduledJob->GetIcon());
+		m_treeCtrlElements->AppendItem(scheduledJobs, scheduledJob->GetSynonym(), imageIndex, imageIndex, new ibMetaDataItem(scheduledJob));
 	}
 
 	m_treeCtrlElements->ExpandAll();
@@ -121,7 +174,7 @@ void ibDialogFunctionAll::OnTreeCtrlElementsOnLeftDClick(wxMouseEvent& event)
 	ibMetaDataItem* itemData = dynamic_cast<ibMetaDataItem*>(m_treeCtrlElements->GetItemData(selItem));
 	if (itemData != nullptr) {
 		ibBackendCommandItem* metaObject = dynamic_cast<ibBackendCommandItem*>(itemData->GetMetaObject());
-		if (metaObject != nullptr && metaObject->ShowFormByCommandType())
+		if (metaObject != nullptr && metaObject->Execute())
 			Close(true);
 	}
 

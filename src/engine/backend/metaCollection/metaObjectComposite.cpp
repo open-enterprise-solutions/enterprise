@@ -1,7 +1,6 @@
 #include "metaObjectComposite.h"
-#include "backend/metadata.h"
+#include "backend/metaData.h"
 
-wxIMPLEMENT_ABSTRACT_CLASS(ibValueMetaObjectCompositeData, ibValueMetaObject);
 
 //***********************************************************************
 //*							ibValueMetaObjectCompositeData				        *

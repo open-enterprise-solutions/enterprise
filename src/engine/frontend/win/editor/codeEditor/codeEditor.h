@@ -12,7 +12,8 @@
 #include <array>
 #include <map>
 
-#include "codeEditorInterpreter.h"
+#include "backend/compiler/translateCode.h"   // the lexem stream, and what the caret stands in
+#include "backend/compiler/scriptComplete.h"  // ibValueAtCaret / ibNamesAtCaret - the two answers
 
 #include "frontend/mainFrame/settings/editorsettings.h"
 #include "frontend/mainFrame/settings/fontcolorsettings.h"
@@ -27,7 +28,7 @@ class ibMetaDocument;
 class ibReaderMemory;
 
 // Forwards wxCommandProcessor's undo/redo stack to the underlying
-// wxStyledTextCtrl — STC owns its own undo buffer, but wxDocument
+// wxStyledTextCtrl — STC owns its own undo buffer, but ibDocument
 // expects a wxCommandProcessor on the document side.
 class ibModuleCommandProcessor : public wxCommandProcessor {
 	wxStyledTextCtrl* m_codeEditor = nullptr;
@@ -56,8 +57,13 @@ class FRONTEND_API ibCodeEditor : public wxStyledTextCtrl {
 protected:
 	// Marker IDs — protected so designer's ibCodeEditorDesigner subclass
 	// (which manages breakpoint markers via debugClient) can reach them.
+	//
+	// ⚠ THE NUMBER IS THE DRAWING ORDER: Scintilla draws a higher-numbered marker over a lower one. The dots come
+	// first so the arrows land on top of them - a conditional dot numbered after the arrows hid the arrow of a
+	// run stopped on it.
 	enum {
 		Breakpoint = 1,
+		ConditionalBreakpoint,   // a breakpoint that stops only when its condition is true - the same dot, another colour
 		CurrentLine,
 		BreakLine,
 	};
@@ -91,7 +97,7 @@ private:
 	public:
 
 		ibFoldLevelParser(ibCodeEditor* codeEditor)
-			: m_codeEditor(codeEditor), m_update_fold(false), m_counts{} {}
+			: m_update_fold(false), m_counts{}, m_codeEditor(codeEditor) {}
 
 		void RecalcFoldLevel() const { m_update_fold = true; }
 
@@ -127,9 +133,9 @@ private:
 					m_codeEditor->SetFoldLevel(l, wxSTC_FOLDLEVELBASE_FLAG + std::max(level, 0));
 
 				if (it->delta > 0)
-					m_codeEditor->SetFoldLevel(it->line, wxSTC_FOLDLEVELBASE_FLAG + std::max(level, 0) | wxSTC_FOLDLEVELHEADER_FLAG);
+					m_codeEditor->SetFoldLevel(it->line, (wxSTC_FOLDLEVELBASE_FLAG + std::max(level, 0)) | wxSTC_FOLDLEVELHEADER_FLAG);
 				else if (it->delta < 0)
-					m_codeEditor->SetFoldLevel(it->line, wxSTC_FOLDLEVELBASE_FLAG + std::max(level, 0) | wxSTC_FOLDLEVELWHITE_FLAG);
+					m_codeEditor->SetFoldLevel(it->line, (wxSTC_FOLDLEVELBASE_FLAG + std::max(level, 0)) | wxSTC_FOLDLEVELWHITE_FLAG);
 				else
 					m_codeEditor->SetFoldLevel(it->line, wxSTC_FOLDLEVELBASE_FLAG + std::max(level, 0));
 
@@ -144,35 +150,59 @@ private:
 		}
 
 		int GetFoldMask(int line) const {
-			int level = 0; short flag = 0; int prev_line = -1;
+			// Accumulate ALL deltas up to and including `line` for the
+			// cumulative indent level, AND the per-line net for the flag.
+			// The previous version had a `prev_line != v.line` guard around
+			// `level += v.delta` which dropped every foldpoint past the
+			// first one on a given line — so a single-line `from..select`
+			// or `{ stmt; }` pair (Open +1, Close -1) contributed only +1
+			// to the running level. Across a large file with many such
+			// pairs the level drifted upward monotonically and indent ran
+			// away. Flag is decided by the NET of deltas on the queried
+			// line: net>0 = HEADER (opener), net<0 = WHITE (closer),
+			// net==0 with a mark (Else/ElseIf/Except) = ELSE, else BASE.
+			int level = 0;
+			int netHere = 0;
+			bool hasMark = false;
 			for (const auto& v : m_folding_vector) {
 
 				if (v.line > line)
 					break;
 
-				if (prev_line != v.line) {
+				level += v.delta;
 
-					if (v.line == line && v.delta > 0)
-						flag = wxSTC_FOLDLEVELHEADER_FLAG;
-					else if (v.line == line && v.delta < 0)
-						flag = wxSTC_FOLDLEVELWHITE_FLAG;
-					else if (v.line == line && v.delta == 0)
-						flag = wxSTC_FOLDLEVELELSE_FLAG;
-
-					level += v.delta;
+				if (v.line == line) {
+					netHere += v.delta;
+					if (v.delta == 0)
+						hasMark = true;
 				}
-
-				prev_line = v.line;
 			}
 
 			if (level < 0) level = 0;
 
-			if ((flag & wxSTC_FOLDLEVELHEADER_FLAG) != 0)
-				return wxSTC_FOLDLEVELBASE_FLAG + (level - 1) | flag;
-			else if ((flag & wxSTC_FOLDLEVELWHITE_FLAG) != 0)
-				return wxSTC_FOLDLEVELBASE_FLAG + (level + 1) | flag;
-
-			return wxSTC_FOLDLEVELBASE_FLAG + level | flag;
+			if (netHere > 0) {
+				// Header line sits at the outer (parent) indent; PrepareTABs
+				// adds +1 for the body that follows the header. `level`
+				// already includes this line's opens, so subtract 1 to
+				// match the existing decoder.
+				return (wxSTC_FOLDLEVELBASE_FLAG + (level - 1)) | wxSTC_FOLDLEVELHEADER_FLAG;
+			}
+			if (netHere < 0) {
+				// Closer line: PrepareTABs WHITE branch subtracts 1 to land
+				// at parent indent. `level` already retreated past the
+				// closes — add 1 so the decoder lands at the right spot.
+				return (wxSTC_FOLDLEVELBASE_FLAG + (level + 1)) | wxSTC_FOLDLEVELWHITE_FLAG;
+			}
+			if (hasMark) {
+				// Else/ElseIf/Except marker on a net-zero line. PrepareTABs
+				// ELSE branch subtracts 1 to align with the parent.
+				return (wxSTC_FOLDLEVELBASE_FLAG + level) | wxSTC_FOLDLEVELELSE_FLAG;
+			}
+			// Plain line OR balanced inline pair (Open + Close on the same
+			// source line, e.g. one-liner `from x in arr select x` or
+			// `{ stmt; }`). Net effect is zero, line sits at the surrounding
+			// scope's indent — no fold marker.
+			return wxSTC_FOLDLEVELBASE_FLAG + level;
 		}
 
 	private:
@@ -265,7 +295,7 @@ private:
 			// Mode is read from ibCompileCode (process-global).
 			const bool isCES = (ibCompileCode::GetCodeStyle() == CODE_CES);
 
-			const auto& lexems = m_codeEditor->m_precompileModule->GetLexems();
+			const auto& lexems = m_codeEditor->m_tc.GetLexems();
 			for (size_t i = 0; i < lexems.size(); ++i) {
 				const ibLexem& lex = lexems[i];
 
@@ -303,6 +333,21 @@ private:
 				}
 
 				if (FoldKind k = OpenKindFor(lex.m_numData); k != FoldKindCount) {
+					// Multi-from LINQ: `from a in X from b in Y select Z` is
+					// ONE logical query — one Open at the first `from`, one
+					// Close at the `select`. Subsequent `from`s while a Linq
+					// query is still open (count[Linq] > 0) are clause
+					// continuations, not new fold regions. Without this the
+					// parser emitted +N opens but only -1 close, leaving
+					// N-1 unbalanced opens dangling for the rest of the
+					// file — every line after a multi-from / nested-from
+					// then sat at level >= 1 in GetFoldMask, and
+					// FormatSelection re-indented subsequent code at the
+					// wrong depth. Same logic naturally covers nested LINQ
+					// in a parenthesised subexpression — inner LINQ shares
+					// the outer's fold without stair-stepping.
+					if (k == FoldLinq && m_counts[FoldLinq] > 0)
+						continue;
 					OpenFold(lex.m_numLine, k);
 					continue;
 				}
@@ -362,6 +407,55 @@ private:
 	};
 
 public:
+
+	// Resolve identifier at the caret (or current selection if non-empty).
+	// Used by syntax-helper Look-Up flow — host frame asks the focused
+	// editor for the identifier under the cursor and feeds it to
+	// ibHelpResolver. Returns wxEmptyString if the caret is not on a
+	// word boundary.
+	wxString GetIdentifierUnderCursor();
+
+	// THE STRING LITERAL THE CARET SITS IN, as a span of the document. A query written in a module
+	// lives in a literal — usually a multi-line one, quoted and with `|` continuation markers — so
+	// anything that wants to work on that query has three jobs before it can start: find the
+	// literal's bounds, take the TEXT out of its spelling, and put it back the same way.
+	//
+	// These three are that, and they are here rather than in the constructor because they are facts
+	// about the SCRIPT's spelling of a string, which is the editor's subject, not the query
+	// language's. Found() is false when the caret is not inside a literal — the same shape
+	// GetIdentifierUnderCursor has, so the menu item beside it gates the same way.
+	struct StringLiteralSpan
+	{
+		int      m_start = -1;   // document position of the opening quote
+		int      m_end   = -1;   // document position just past the closing quote
+		wxString m_text;         // the string's VALUE — quotes stripped, "" unescaped, `|` markers removed
+		bool     Found() const { return m_start >= 0 && m_end > m_start; }
+	};
+	// NOT const: reading the document and the caret goes through wxStyledTextCtrl's own non-const
+	// accessors, and casting that away to decorate this one with `const` would be lying about the
+	// object to satisfy a keyword.
+	StringLiteralSpan GetStringLiteralUnderCursor();
+
+	// Write `text` back into `span`, spelled as the script spells a multi-line string: quoted,
+	// inner quotes doubled, every line after the first opened with `|` and indented to the opening
+	// quote. Replaces exactly that literal and nothing around it.
+	void ReplaceStringLiteral(const StringLiteralSpan& span, const wxString& text);
+
+	// The same spelling, written at `position` where there was no literal at all — so a tool that
+	// AUTHORS a query can be reached from anywhere in a module, not only from inside an existing
+	// string. Without this the constructor would only ever be able to edit a query somebody had
+	// already typed by hand, which is the wrong way round.
+	void InsertStringLiteral(int position, const wxString& text);
+
+	// How the script spells `text` as one string literal, indented under `indent`. Shared by the
+	// two above so the quoting rule lives in one place.
+	static wxString SpellStringLiteral(const wxString& text, const wxString& indent);
+
+	// Custom right-click menu: standard Cut/Copy/Paste/SelectAll +
+	// "Look up in Syntax Helper". The Look-Up item posts
+	// wxID_FRONTEND_SYNTAX_HELPER_LOOKUP up the parent chain so the
+	// host frame handles it (subphase 1.3b).
+	void OnContextMenu(wxContextMenuEvent& event);
 
 	// Build a `Procedure name(args) ... End`/`{...}` template suitable for
 	// inserting at a free spot in a module — CES uses brace-fenced bodies,
@@ -428,7 +522,20 @@ public:
 	void ShowAutoComplete(
 		const ibDebugAutoCompleteData& autoCompleteData);
 
-	void ShowCallTip(const wxString& title) { m_ct.Show(GetRealPosition(), title); }
+	// ⭐ THE VALUE THE RUNTIME ANSWERED WITH, for the word the mouse is on — the one door that puts it
+	// up, so the editor also KEEPS it: the system pops a tooltip on its own schedule and shows whatever
+	// text is in place then, so the same answer is laid back down on every movement across that word
+	// (LoadToolTip). An empty value takes the hint down, which is how a step clears what it made stale.
+	// Not wxWindow::SetToolTip, which is not virtual and says nothing about where the text came from.
+	void SetDebugValue(const wxString& value);
+
+	// ⚠ THE EDITOR'S OWN POSITION, NOT THE COMPILER'S. GetRealPosition counts CHARACTERS, which is
+	// what a caret means to the compiler; a window is placed by wxSTC's document position, which is
+	// a byte offset. Any non-ASCII above the caret pulls the two apart, and the tip is drawn that
+	// much too early — measured 2026-09-07 on a module whose messages are in Russian, where it
+	// landed four lines above the call it described. This is the SECOND caller that had it; the
+	// other is LoadCallTip.
+	void ShowCallTip(const wxString& title) { m_ct.Show(GetCurrentPos(), title); }
 
 	// hook the document manager into event handling chain here
 	virtual bool TryBefore(wxEvent& event) override {
@@ -461,10 +568,7 @@ protected:
 	void OnKeyDown(wxKeyEvent& event);
 	void OnCharAdded(wxStyledTextEvent& event);
 	void OnUpdateUI(wxStyledTextEvent& event);
-	void OnMouseMove(wxMouseEvent& event) {
-		LoadToolTip(event.GetPosition());
-		event.Skip();
-	}
+	void OnMouseMove(wxMouseEvent& event);
 
 	// ---- Debugger integration hooks ----
 	// Frontend's ibCodeEditor doesn't know about backend's debugClient;
@@ -483,8 +587,10 @@ protected:
 	virtual void OnEditDebugPoint(int line) {}
 
 	// Multi-line edit (paste / cut) just shifted code by linesAdded
-	// at `line`. Override forwards the shift to debugClient->PatchModule.
-	virtual void OnPatchModule(int line, int linesAdded) {}
+	// at `line`. `atLineStart` = the edit happened at column 0 of `line`
+	// (the whole line moved), which decides whether a breakpoint sitting
+	// ON `line` shifts too. Override forwards the shift to debugClient->PatchModule.
+	virtual void OnPatchModule(int line, int linesAdded, bool atLineStart) {}
 
 	// Autocomplete / tooltip handlers want the debugger to evaluate
 	// an expression against the running session.
@@ -506,14 +612,20 @@ private:
 	// Private func
 	void AddKeywordFromObject(const ibValue& vObject);
 
-	bool PrepareExpression(unsigned int currPos, wxString& expression, wxString& keyword, wxString& currentWord, bool& hasPoint);
+	// The debugger's own answer — see the definition.
+	void LoadFromDebugger(const ibTranslateCode::ibCaretText& at);
+
 	void PrepareTooTipExpression(unsigned int currPos, wxString& expression, wxString& currentWord, bool& hasPoint);
 
 	void PrepareTABs();
 
 	void LoadSysKeyword();
 	void LoadIntelliList();
-	void LoadFromKeyWord(const wxString& keyWord);
+
+	// True when the keyword names something to offer. A caret inside ANY call reports the call it
+	// is in — deciding which calls have names worth listing is this side's knowledge, and a `false`
+	// is what lets the dropdown fall back to everything in scope.
+	bool LoadFromKeyWord(const wxString& keyWord);
 
 	void LoadAutoComplete();
 	void LoadToolTip(const wxPoint& pos);
@@ -531,10 +643,15 @@ protected:
 	ibMetaDocument*   m_document         = nullptr;
 
 private:
-	ibPrecompileCode* m_precompileModule = nullptr;
-
 	ibAutoComplete    m_ac;
 	ibCallTip         m_ct;
+
+	// ⭐⭐ THE EDITOR KEEPS A LEXER, NOT A COMPILER — and it already had one. What it needs of the
+	// text is the token stream: for syntax colouring, for folding, for brace matching, and to know
+	// what the caret is standing in. Everything the old ibPrecompileCode did BEYOND that — a second
+	// scope tree, a second set of variables, values computed by a second walker over a fake
+	// context — is answered by the compiler now, through one door each: ibValueAtCaret for what an
+	// expression arrived at, ibNamesAtCaret for what may be written.
 	ibTranslateCode   m_tc;
 	ibFoldLevelParser m_fp;
 
@@ -543,6 +660,29 @@ private:
 	bool m_enableAutoComplete = false;
 
 	int  m_lineBreakpoint     = wxNOT_FOUND;
+
+	// The hint the breakpoint margin put up (OnMouseMove) - taken down when the mouse leaves the margin,
+	// so it does not stand over the text. Empty when the margin has none up.
+	wxString m_marginHint;
+
+	// The expression the debugger was last asked the value of (LoadToolTip) - so travelling across one
+	// word does not ask again and again. Empty when nothing has been asked.
+	wxString m_askedExpression;
+
+	// …and the answer, kept because the tooltip has to be laid down again on every movement for the
+	// system to find it there when it decides to show one. Empty until the answer arrives.
+	wxString m_askedValue;
+
+protected:
+	// The context menu's debugger part, for the line it was opened on - the designer adds the
+	// breakpoint condition there; a host with no debugger adds nothing. Last in the class: a virtual
+	// added between others moves every one after it in the table, and an object built before reads
+	// the wrong slot.
+	virtual void AppendDebugMenu(wxMenu& /*menu*/, int /*line*/) {}
+
+	// What the breakpoint margin says about the line under the mouse - the designer answers with the
+	// breakpoint's condition. False: nothing to say, `hint` untouched.
+	virtual bool GetDebugPointHint(int /*line*/, wxString& /*hint*/) { return false; }
 };
 
 #endif 

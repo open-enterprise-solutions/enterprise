@@ -2,6 +2,7 @@
 #define __BACKEND_CELL_H__
 
 #include "spreadsheetDescription.h"
+#include "backend/stringUtils.h"   // ibCaseFoldLess — the parameters are matched without case
 
 class BACKEND_API ibBackendSpreadsheetNotifier {
 public:
@@ -76,6 +77,7 @@ public:
 	const ibSpreadsheetDescription& GetSpreadsheetDesc() const { return m_spreadsheetDesc; }
 
 	bool IsEmptyDocument() const { return m_spreadsheetDesc.IsEmptySpreadsheet(); }
+
 
 #pragma region __notifier_h__
 
@@ -157,13 +159,19 @@ public:
 	ibSpreadsheetBorderDescription GetCellBorderBottom(int row, int col) const { return m_spreadsheetDesc.GetCellBorderBottom(row, col); }
 	void SetCellBorderBottom(int row, int col, const ibSpreadsheetBorderDescription& desc);
 
+	// ⭐ THE WHOLE CELL IN ONE CALL, from a description of one — for a writer that sets several things about
+	// a cell at once (a composed table: its text, alignment, details link, fill, font and edges). Each
+	// setter above finds the cell again, and a sheet of 360 thousand cells made that nine lookups a cell
+	// (2026-09-12). Whoever is listening is told each thing as the single setters tell it.
+	void SetCell(int row, int col, const ibSpreadsheetCellDescription& desc);
+
 	int GetCellSize(int row, int col, int* num_rows, int* num_cols) const { return m_spreadsheetDesc.GetCellSize(row, col, num_rows, num_cols); }
 	void SetCellSize(int row, int col, int num_rows, int num_cols);
 
 	ibSpreadsheetCellDescription::ibFitMode GetCellFitMode(int row, int col) { return m_spreadsheetDesc.GetCellFitMode(row, col); }
 	void SetCellFitMode(int row, int col, ibSpreadsheetCellDescription::ibFitMode fitMode);
 
-	bool IsCellReadOnly(int row, int col, bool isReadOnly = true) { return m_spreadsheetDesc.IsCellReadOnly(row, col); }
+	bool IsCellReadOnly(int row, int col) const { return m_spreadsheetDesc.IsCellReadOnly(row, col); }
 	void SetCellReadOnly(int row, int col, bool isReadOnly = true);
 
 	// ------ cell brake accessors
@@ -221,7 +229,13 @@ public:
 	bool GetParameter(const wxString& strParameter, ibValue& valueParam) const;
 	void SetParameter(const wxString& strParameter, const ibValue& valueParam = ibValue());
 
-	wxString ComputeStringValueFromParameters(const wxString& strValue, ibSpreadsheetFillType type = ibSpreadsheetFillType::ibSpreadsheetFillType_StrParameter) const;
+	// ⭐⭐ THE TEXT A CELL SHOWS — the one door the grid, the printout, the script and the landing of an
+	// area (PutArea / JoinArea) all go through: a caption or a template in the language asked for, a
+	// parameter by its value. Without a language, the document's own (and without that, the one in force);
+	// an area landing in another document is read in THAT one's.
+	wxString ComputeStringValueFromParameters(const wxString& strValue,
+		ibSpreadsheetFillType type = ibSpreadsheetFillType::ibSpreadsheetFillType_StrParameter,
+		const wxString& strLangCode = wxEmptyString) const;
 
 	//special value return 
 	ibValue GetParameter(const wxString& strParameter) const { ibValue valueParam; GetParameter(strParameter, valueParam); return valueParam; }
@@ -231,7 +245,6 @@ public:
 	void GetCellDetailsParameter(int row, int col, wxString& s) const { m_spreadsheetDesc.GetCellDetailsParameter(row, col, s); }
 	void SetCellDetailsParameter(int row, int col, const wxString& s);
 
-	bool OpenCellDetailsParameter(int row, int col) const;
 
 #pragma region __fs_h__
 
@@ -254,8 +267,14 @@ public:
 	}
 
 	void RemoveNotifier(const wxSharedPtr<ibBackendSpreadsheetNotifier>& notify) {
+		// remove-ERASE, both halves. `std::remove` returns the new logical end — and when there is
+		// nothing to remove that end IS end(), so erasing it alone is erasing past the last element:
+		// undefined behaviour, and the debug runtime says so ("vector erase iterator outside range").
+		// Removing a notifier twice — a view detaching after the document already dropped it — is an
+		// ordinary thing to do, and it must be a no-op.
 		m_spreadsheetNotifiers.erase(
-			std::remove(m_spreadsheetNotifiers.begin(), m_spreadsheetNotifiers.end(), notify));
+			std::remove(m_spreadsheetNotifiers.begin(), m_spreadsheetNotifiers.end(), notify),
+			m_spreadsheetNotifiers.end());
 	}
 
 #pragma endregion
@@ -282,7 +301,7 @@ private:
 	std::vector<int> m_colGroupStack;
 
 	//param value
-	std::map<wxString, ibValue> m_paramVector;
+	std::map<wxString, ibValue, ibCaseFoldLess> m_paramVector;   // matched as GetParameter matches them
 
 	//grid notifier 
 	wxVector<wxSharedPtr<ibBackendSpreadsheetNotifier>> m_spreadsheetNotifiers;

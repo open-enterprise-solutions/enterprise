@@ -2,7 +2,11 @@
 #define _METAFORMOBJECT_H__
 
 #include "metaModuleObject.h"
+
 #include "backend/uniqueKey.h"
+#include "backend/backend_form.h"   // ibFormPtr — what a form is handed out by
+
+#include <functional>
 
 #define defaultFormType wxNOT_FOUND
 #define formDefaultName wxT("Form")
@@ -15,12 +19,23 @@ class BACKEND_API ibBackendCommandItem {
 public:
 
 	virtual ~ibBackendCommandItem() {}
-	virtual bool ShowFormByCommandType(ibInterfaceCommandType cmdType = ibInterfaceCommandType::ibInterfaceCommandType_Default);
+
+	// THE single execution entry (nav sites call it directly): show a form OR run the command's own code. Each
+	// metaobject PREDEFINES its behaviour by OVERRIDING this — a form/data metaobject uses the default below (opens
+	// its form via GetFormByCommandType); a command OVERRIDES Execute to run its runtime handler instead. srcForm /
+	// commandParameter are the context an override may use (the default form path ignores them), so a bare
+	// Execute(cmdType) is the common call.
+	// CONST — the metaobject is CONST (found through a const config); execution does NOT mutate it: it opens a form
+	// (a fresh form value) or, for a command, spawns a TRANSIENT runtime (ibValueCommandDataObject) that lives only
+	// for the call and vanishes. So a const command / object, resolved from the FORM's own const config, runs — no
+	// activeMetaData, no const_cast.
+	virtual bool Execute(ibInterfaceCommandType cmdType = ibInterfaceCommandType::ibInterfaceCommandType_Default,
+	                     ibBackendValueForm* srcForm = nullptr, ibValue* commandParameter = nullptr) const;
 
 protected:
 
-	//get default form 
-	virtual ibBackendValueForm* GetFormByCommandType(ibInterfaceCommandType cmdType = ibInterfaceCommandType::ibInterfaceCommandType_Default) = 0;
+	//get default form (the default Execute opens it; a command overrides Execute and returns nullptr here)
+	virtual ibFormPtr<ibBackendValueForm> GetFormByCommandType(ibInterfaceCommandType cmdType = ibInterfaceCommandType::ibInterfaceCommandType_Default) const = 0;
 };
 
 // -----------------------------------------------------------------------
@@ -30,18 +45,15 @@ protected:
 class BACKEND_API ibSourceDataObject;
 
 class BACKEND_API ibValueMetaObjectFormBase : public ibValueMetaObjectModuleBase {
-	wxDECLARE_ABSTRACT_CLASS(ibValueMetaObjectFormBase);
+	public:
 private:
 
-	enum
-	{
-		ID_METATREE_OPEN_FORM = 19000,
-	};
 
 public:
 
 #pragma region access_generic
 	virtual bool AccessRight_Show() const { return true; }
+	virtual bool AccessRight_Modify() const { return true; }
 #pragma endregion
 
 	ibValueMetaObjectFormBase(const wxString& strName = wxEmptyString, const wxString& synonym = wxEmptyString, const wxString& comment = wxEmptyString);
@@ -51,27 +63,59 @@ public:
 
 #pragma region _form_creator_h_
 
-	static ibBackendValueForm* CreateAndBuildForm(const ibValueMetaObjectFormBase* creator,
+	// ⭐⭐ WHERE THE OPENING PARAMETERS ARE FIXED ONTO THE FORM. This is the one place a form object is
+	// actually made, so it is the direct road for them: whatever the caller asked this opening for is
+	// stamped on the form here, and the form's own module reads it afterwards (Max, 2026-09-23: "a
+	// direct road to fixing the opening parameters"; "the front can pass parameters to the server which
+	// then reach the form being opened, and it can read them there").
+	//
+	// The request is FIRST, as it is on the generic builder that calls this — one function name, one
+	// place for the same argument.
+	static ibFormPtr<ibBackendValueForm> CreateAndBuildForm(const ibFormRequest& request, const ibValueMetaObjectFormBase* creator, const ibFormID& form_id,
 		ibBackendControlFrame* ownerControl = nullptr,
-		ibSourceDataObject* srcObject = nullptr, const ibUniqueKey& formGuid = wxNullGuid);
+		ibSourceDataObject* srcObject = nullptr);
 
-	static ibBackendValueForm* CreateAndBuildForm(const ibValueMetaObjectFormBase* creator, const ibFormID& form_id = defaultFormType,
+	// …and the same without naming the KIND of form, which the creator already knows. Not an overload
+	// "without the request" — every one of these takes it; this one only spares the caller a fact it
+	// would have to read off the creator to repeat back.
+	static ibFormPtr<ibBackendValueForm> CreateAndBuildForm(const ibFormRequest& request, const ibValueMetaObjectFormBase* creator,
 		ibBackendControlFrame* ownerControl = nullptr,
-		ibSourceDataObject* srcObject = nullptr, const ibUniqueKey& formGuid = wxNullGuid);
+		ibSourceDataObject* srcObject = nullptr);
 
-#pragma endregion 
+#pragma endregion
 
-	//set module code 
-	virtual void SetModuleText(const wxString& moduleText) = 0;
+#pragma region _form_builder_h_
+	// MY form value, bound to whatever source my kind implies — the one verb, answered by each
+	// kind for itself: a common form stands alone, an object form asks the object that owns it.
+	// A caller never asks "which kind are you" and then casts to say it; the access right is
+	// answered by the same call.
+	//
+	// `formGuid` is the form's IDENTITY: empty lets it fall back to the source (the ordinary
+	// open), a supplied one gives this instance an identity of its own — what an element placed
+	// on the start page needs, since it may sit there beside a twin.
+	virtual ibFormPtr<ibBackendValueForm> GetObjectForm(ibBackendControlFrame* ownerControl = nullptr,
+		const ibUniqueKey& formGuid = wxNullGuid) const = 0;
+#pragma endregion
+
+	//set module code — see the two implementations below: a form's cell holds this text AND the
+	//form data, so the write names which half is meant
 	virtual wxString GetModuleText() const = 0;
 
 	//set form data 
-	virtual void SetFormData(const wxMemoryBuffer& formData) = 0;
+	virtual void SetFormData(const wxMemoryBuffer& formData) const = 0;   // const: only mutates *m_propertyForm, not `this`
 	virtual wxMemoryBuffer GetFormData() const = 0;
 
-	// copy form data
-	wxMemoryBuffer CopyFormData() const;
+	// copy form data — the LIVE form's control tree AS a transparent node (Child), not a
+	// blob: pull the live form, save it to a node directly (no base64 round-trip).
+	ibDataValue CopyFormData() const;
 	bool PasteFormData();
+
+	// node <-> runtime-blob shim: the form blob already IS the binary-provider
+	// node format, so the adapter is ONE provider round-trip. This lets the runtime stay
+	// blob-based (SaveForm / LoadForm, the property cell, the prop-grid variant) while the
+	// metadata serializes a transparent node tree — no base64 lump on disk / in JSON.
+	static ibDataValue   FormBlobToNode(const wxMemoryBuffer& blob);
+	static wxMemoryBuffer FormNodeToBlob(const ibDataValue& formNode);
 
 	/**
 	* Get type form
@@ -79,13 +123,41 @@ public:
 	virtual ibFormID GetTypeForm() const = 0;
 
 	//prepare menu for item
-	virtual bool PrepareContextMenu(wxMenu* defaultMenu);
-	virtual void ProcessCommand(unsigned int id);
+	virtual bool CollectContextMenu(std::vector<ibMetaMenuItem>& items);
+};
 
-protected:
+// -----------------------------------------------------------------------
+// ibDeferredForm — lazy form-construction marker stored in the compile-value cache.
+// -----------------------------------------------------------------------
+// Eager form-build at OnAfterRunMetaObject time would assert on a null mm (the form's compile module must parent to
+// the session root, which isn't compiled yet). The cache registers this descriptor instead and materializes the form
+// on first FindCompileModule lookup. Lives HERE (not metaData.h): the form type is complete, so the constructor reads
+// IsPasteMode inline — recording whether the form is being pasted right now, while the mark is still live.
 
-	virtual bool LoadData(ibReaderMemory& reader) = 0;
-	virtual bool SaveData(ibWriterMemory& writer) = 0;
+class BACKEND_API ibValueMetaObjectGenericData;
+
+class BACKEND_API ibDeferredForm {
+public:
+	// `build` = how THIS form materialises its runtime value. Both form kinds are DEFERRED (the build only
+	// runs on first FindCompileModule, AFTER the whole config has run and every metaobject is registered) so
+	// a form can safely resolve its attribute types / source hops against objects that register later in the
+	// pass. The two kinds differ only in the entry: an OBJECT form goes through its owning GenericData (which
+	// binds the source object), a COMMON form builds standalone — both land on CreateAndBuildForm underneath.
+	// The form ptr is kept for the paste re-home: Construct reads its LIVE paste mark at build time.
+	ibDeferredForm(ibValueMetaObjectFormBase* form, std::function<ibFormPtr<ibBackendValueForm>()> build) noexcept
+		: m_form(form), m_build(std::move(build)) {}
+
+	// Runs `build()` and answers with the form as a value — what the compile cache keeps (out-of-line). If the
+	// form's metaobject is marked as a paste at build time, the built controls re-home (PasteNode) and the stored
+	// blob is normalized to raw. The paste completion (ibValueMetaObject::PasteObject) forces this build while the
+	// mark is still live, so there is no captured flag — the live mark is the signal.
+	ibValue Construct() const;
+
+	ibValueMetaObjectFormBase* Form() const { return m_form; }
+
+private:
+	ibValueMetaObjectFormBase*           m_form;
+	std::function<ibFormPtr<ibBackendValueForm>()> m_build;
 };
 
 // -----------------------------------------------------------------------
@@ -93,7 +165,7 @@ protected:
 // -----------------------------------------------------------------------
 
 class BACKEND_API ibValueMetaObjectForm : public ibValueMetaObjectFormBase {
-	wxDECLARE_DYNAMIC_CLASS(ibValueMetaObjectForm);
+	public:
 
 public:
 
@@ -126,12 +198,14 @@ public:
 	//get property
 	virtual ibProperty* GetModuleProperty() const { return m_propertyForm; }
 
-	//set module code 
-	virtual void SetModuleText(const wxString& moduleText) { m_propertyForm->SetValue(moduleText); }
+	//set module code — the typed setter, because this cell also holds the form data
+	virtual void SetModuleText(const wxString& moduleText) override {
+		m_propertyForm->SetValue(moduleText); InvalidateBuiltFromText();
+	}
 	virtual wxString GetModuleText() const { return m_propertyForm->GetValueAsString(); }
 
 	//set form data 
-	virtual void SetFormData(const wxMemoryBuffer& formData) { m_propertyForm->SetValue(formData); }
+	virtual void SetFormData(const wxMemoryBuffer& formData) const { m_propertyForm->SetValue(formData); }
 	virtual wxMemoryBuffer GetFormData() const { return m_propertyForm->GetValueAsMemoryBuffer(); }
 
 	/**
@@ -141,10 +215,18 @@ public:
 		return m_properyFormType->GetValueAsInteger();
 	}
 
+#pragma region _form_builder_h_
+	// An object form belongs to a business object, and THAT object knows which source my kind
+	// implies — a list form gets the list, an object form a NEW object. Body out-of-line: the
+	// owner's type must be complete.
+	virtual ibFormPtr<ibBackendValueForm> GetObjectForm(ibBackendControlFrame* ownerControl = nullptr,
+		const ibUniqueKey& formGuid = wxNullGuid) const override;
+#pragma endregion
+
 protected:
 
-	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer);
+	virtual bool ReadData(const ibDataNode& node) override;
+	virtual bool WriteData(ibDataNode& node) const override;
 
 private:
 
@@ -154,9 +236,12 @@ private:
 		return FillGenericFormType(prop);
 	}
 
-	ibPropertyForm* m_propertyForm = ibPropertyObject::CreateProperty<ibPropertyForm>(m_categoryContext, wxT("FormData"), _("Form"));
+	ibPropertyForm* m_propertyForm = ibPropertyObject::CreateProperty<ibPropertyForm>(m_categoryContext, wxT("FormData"), _("Form"),
+		_("The form itself: its layout (controls, attributes, commands) and its module code, kept together in one cell. Edited in the form designer; the code runs on the client with the form open."));
 	ibPropertyCategory* m_categoryForm = ibPropertyObject::CreatePropertyCategory(wxT("Form"), _("Form"));
-	ibPropertyList* m_properyFormType = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("FormType"), _("Type"), &ibValueMetaObjectForm::FillFormType);
+	ibPropertyList* m_properyFormType = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("FormType"), _("Type"),
+		_("Which role the form plays for its owner (object form, list form, choice form, folder form and so on). The type decides what data source the form gets when opened - a list form gets the list, an object form an object - and which default-form slot of the owner it can fill."),
+		&ibValueMetaObjectForm::FillFormType);
 };
 
 // -----------------------------------------------------------------------
@@ -165,11 +250,15 @@ private:
 
 class BACKEND_API ibValueMetaObjectCommonForm :
 	public ibValueMetaObjectFormBase, public ibBackendCommandItem {
-	wxDECLARE_DYNAMIC_CLASS(ibValueMetaObjectCommonForm);
-public:
+	public:
+
+	// A common form can be checked into a section — it opens from the navigation panel.
+	// (A form belonging to an object cannot: it is reached through that object.)
+	virtual bool IsInterfaceAllowed() const override { return true; }
 
 #pragma region access_generic
 	virtual bool AccessRight_Show() const { return AccessRight_Use(); }
+	virtual bool AccessRight_Modify() const { return AccessRight_Use(); }
 #pragma endregion
 
 #pragma region access
@@ -195,12 +284,14 @@ public:
 	//get property
 	virtual ibProperty* GetModuleProperty() const { return m_propertyForm; }
 
-	//set module code 
-	virtual void SetModuleText(const wxString& moduleText) { m_propertyForm->SetValue(moduleText); }
+	//set module code — the typed setter, because this cell also holds the form data
+	virtual void SetModuleText(const wxString& moduleText) override {
+		m_propertyForm->SetValue(moduleText); InvalidateBuiltFromText();
+	}
 	virtual wxString GetModuleText() const { return m_propertyForm->GetValueAsString(); }
 
 	//set form data 
-	virtual void SetFormData(const wxMemoryBuffer& formData) { m_propertyForm->SetValue(formData); }
+	virtual void SetFormData(const wxMemoryBuffer& formData) const { m_propertyForm->SetValue(formData); }
 	virtual wxMemoryBuffer GetFormData() const { return m_propertyForm->GetValueAsMemoryBuffer(); }
 
 	/**
@@ -209,17 +300,18 @@ public:
 	virtual ibFormID GetTypeForm() const { return defaultFormType; }
 
 #pragma region _form_builder_h_
-	//support form 
-	ibBackendValueForm* GetObjectForm(ibBackendControlFrame* ownerControl = nullptr, const ibUniqueKey& formGuid = wxNullGuid) const;
-#pragma endregion 
+	//support form
+	virtual ibFormPtr<ibBackendValueForm> GetObjectForm(ibBackendControlFrame* ownerControl = nullptr,
+		const ibUniqueKey& formGuid = wxNullGuid) const override;
+#pragma endregion
 
 protected:
 
-	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer);
+	virtual bool ReadData(const ibDataNode& node) override;
+	virtual bool WriteData(ibDataNode& node) const override;
 
-	//get default form 
-	virtual ibBackendValueForm* GetFormByCommandType(ibInterfaceCommandType cmdType = ibInterfaceCommandType::ibInterfaceCommandType_Default) {
+	//get default form
+	virtual ibFormPtr<ibBackendValueForm> GetFormByCommandType(ibInterfaceCommandType cmdType = ibInterfaceCommandType::ibInterfaceCommandType_Default) const {
 
 		if (cmdType == ibInterfaceCommandType::ibInterfaceCommandType_Default)
 			return GetObjectForm();
@@ -229,10 +321,11 @@ protected:
 
 private:
 
-	ibPropertyForm* m_propertyForm = ibPropertyObject::CreateProperty<ibPropertyForm>(m_categoryContext, wxT("FormData"), _("Form"));
+	ibPropertyForm* m_propertyForm = ibPropertyObject::CreateProperty<ibPropertyForm>(m_categoryContext, wxT("FormData"), _("Form"),
+		_("The common form itself: its layout (controls, attributes, commands) and its module code, kept together in one cell. A common form belongs to no object; it is opened by name or from a section of the navigation panel."));
 
 #pragma region role
-	ibRole* m_roleUse = ibValueMetaObject::CreateRole(wxT("Use"), _("Use"));
+	ibRole* m_roleUse = ibValueMetaObject::CreateRole(wxT("Use"), wxGETTEXT_IN_CONTEXT("access right", "Use"));
 #pragma endregion
 };
 

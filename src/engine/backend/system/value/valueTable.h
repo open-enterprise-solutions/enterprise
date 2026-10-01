@@ -4,13 +4,30 @@
 #include "valueArray.h"
 #include "valueMap.h"
 
-#include "backend/tableInfo.h"
+#include "backend/tabularModel.h"
+#include "backend/picturePredefined.h"                 // g_pic*CLSID — this model emits its own standard command icons
+#include "backend/srcDataObject.h"                    // ibSourceDataObject / ibSourceExplorer — the table IS a form data source
+#include "backend/propertyManager/propertyManager.h"  // ibPropertyObject / ibPropertyUString / ibPropertyType — columns surface / persist AND edit with the form attribute
+#include "backend/stringUtils.h"                       // stringUtils::GenerateSynonym — Caption-empty header fallback (mirror ibFormAttribute)
 
-const ibClassID g_valueTableCLSID = string_to_clsid("VL_TABL");
+#include <memory>
+#include <vector>
+
+constexpr ibClassID g_valueTableCLSID = value_to_clsid("VL_TABL");
+
+class ibValueModelTable;
+
+// NOTE: a table-of-values is a RAM model (ibValueModelStorage). It has NO source queryable — the RAM composer
+// filters/sorts ibRamValueStorage (the live nodes) in place. There is no RAM query-text / SQL door any more.
 
 //Table support
-class BACKEND_API ibValueModelTable : public ibValueModelRamTableBase {
-	wxDECLARE_DYNAMIC_CLASS(ibValueModelTable);
+// The value-table is AT ONCE a RAM runtime model (ibValueModelStorage), a form data SOURCE (ibSourceDataObject —
+// its columns feed the dropped tablebox's OWN column picker, per-row), AND a property object (ibPropertyObject —
+// its columns SERIALIZE with the form attribute, exactly like ibValueDynamicList's Source/Settings). EXACTLY
+// analogous to ibValueDynamicList. ibValue stays the FIRST base via ibValueModelStorage -> ibValueModel ->
+// ibValueDynamicMembers -> ibValue (that chain is NOT reordered).
+class BACKEND_API ibValueModelTable : public ibValueModelStorage, public ibSourceDataObject, public ibPropertyObject {
+	public:
 private:
 	// methods:
 	enum Func {
@@ -21,14 +38,26 @@ private:
 		enDelete,
 		enClear,
 		enSort,
+		// ⭐⭐ THE VERB THAT LETS A RESULT ALWAYS BE A TABLE. Max, 2026-09-07: the more shapes a
+		// pipeline can hand back, the likelier a caller guesses wrong — so a scalar, a reference and
+		// a total are all a TABLE (of one column), and the bare values come out by an EXPLICIT ask.
+		// Without this verb there is no way to make that trade, which is why it is the first half of
+		// "one return type": a table describes its columns ONCE instead of hashing every column name
+		// into every row, and it says what it holds (`Columns`) instead of being guessed at.
+		enUnloadColumn,
+		// The column-and-row verbs that code ported from a table-of-values language leans on (card MIG-61,
+		// issue #201): the total of a column, and the rows that match a filter. Appended, never inserted:
+		// the numbers are positions in the member table (FillMembers), which is listed in this order.
+		enTotal,
+		enFindRows,
 	};
 	//attributes:
 	enum Prop {
 		enColumns = 0,
 	};
 public:
-	class ibValueModelTableColumnCollection : public ibValueModelTableBase::ibValueModelColumnCollection {
-		wxDECLARE_DYNAMIC_CLASS(ibValueModelTableColumnCollection);
+	class ibValueModelTableColumnCollection : public ibValueModel::ibValueModelColumnCollection {
+	public:
 	private:
 		enum Func {
 			enAddColumn = 0,
@@ -36,32 +65,95 @@ public:
 		};
 	public:
 
-		class ibValueModelTableColumnInfo : public ibValueModelTableBase::ibValueModelColumnCollection::ibValueModelColumnInfo {
-			wxDECLARE_DYNAMIC_CLASS(ibValueModelTableColumnInfo);
-		private:
-
-			unsigned int m_columnID;
-			wxString m_columnName;
-			ibTypeDescription m_columnType;
-			wxString m_columnCaption;
-			int m_columnWidth;
-
+		// A column is an EDITABLE property object (Name + Caption + Type surface in the designer inspector
+		// when a column tree-node is selected) AND a source-column descriptor (ibBackendSourceColumn — the
+		// ABSTRACT source column, NOT a QueryColumn: a value-table pulls from RAM, it is not a DB query like
+		// the dynamic list) so the bound tablebox reads its header / type through the SAME explorer ->
+		// WalkColumns -> GetSourceAbstractColumn presentation seam a metadata field uses — the column's
+		// Caption IS its header (GetSynonym). ibValue stays the FIRST base via ibValueModelColumnInfo ->
+		// ibValueDynamicMembers -> ibValue (offset 0); ibPropertyObject + ibBackendTypeConfigFactory follow
+		// (the base order ibFormAttribute uses); the type factory is mandatory (ibPropertyType resolves its
+		// owner through it, else a null variant crash).
+		class ibValueModelTableColumnInfo :
+			public ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo,
+			public ibPropertyObject,
+			public ibBackendTypeConfigFactory,
+			public ibBackendSourceColumn {
 		public:
 
 			ibValueModelTableColumnInfo();
 			ibValueModelTableColumnInfo(unsigned int colId, const wxString& colName, const ibTypeDescription& typeDescription, const wxString& caption, int width);
 			virtual ~ibValueModelTableColumnInfo();
 
+			// --- column accessors — name / caption / type read & write THROUGH the property variant (the
+			// single source of truth); id + width are plain identity / layout members. ------------------------
 			virtual unsigned int GetColumnID() const { return m_columnID; }
 			virtual void SetColumnID(unsigned int col) { m_columnID = col; }
-			virtual wxString GetColumnName() const { return m_columnName; }
-			virtual void SetColumnName(const wxString& name) { m_columnName = name; }
-			virtual wxString GetColumnCaption() const { return m_columnCaption; }
-			virtual void SetColumnCaption(const wxString& caption) { m_columnCaption = caption; }
-			virtual const ibTypeDescription GetColumnType() const { return m_columnType; }
-			virtual void SetColumnType(const ibTypeDescription& typeDescription) { m_columnType = typeDescription; }
+			virtual wxString GetColumnName() const { return m_propertyName->GetValueAsString(); }
+			virtual void SetColumnName(const wxString& name) { m_propertyName->SetValue(name); }
+			virtual wxString GetColumnCaption() const { return m_propertyCaption->GetValueAsTranslateString(); }
+			virtual void SetColumnCaption(const wxString& caption) { m_propertyCaption->SetValue(caption); }
+			virtual const ibTypeDescription GetColumnType() const { return m_propertyType->GetValueAsTypeDesc(); }
+			virtual void SetColumnType(const ibTypeDescription& typeDescription) { m_propertyType->SetValue(typeDescription); }
 			virtual int GetColumnWidth() const { return m_columnWidth; }
 			virtual void SetColumnWidth(int width) { m_columnWidth = width; }
+
+			// ⭐⭐ AN INDEX IS DECLARED ON THE COLUMN, because the column is what it is about — the same
+			// place a catalog attribute declares `Indexing`, so the vocabulary a person already knows
+			// carries over. It is a REQUEST, not the index: the table builds one lazily on first use
+			// and drops it when the rows change, so declaring it on a table nobody searches costs an
+			// allocation that never happens.
+			virtual bool IsColumnIndexed() const { return m_propertyIndexed->GetValueAsBoolean(); }
+			virtual void SetColumnIndexed(bool on) { m_propertyIndexed->SetValue(on); }
+
+			// --- ibPropertyObject — inspector identity. GetClassName resolves through the registered clsid
+			// (VL_TVCLI) and DISAMBIGUATES the two same-name bases (ibValue + ibPropertyObject). --------------
+			virtual wxString GetClassName() const override { return ibValue::GetClassName(); }
+			virtual wxString GetObjectTypeName() const override { return GetColumnName(); }
+			virtual bool IsEditable() const override { return true; }
+
+			// --- ibBackendTypeConfigFactory — the Type property's variant resolves through this (mirror
+			// ibFormAttribute). GetTypeDesc's signature ALSO closes ibBackendSourceColumn::GetTypeDesc (one
+			// final overrider). The column carries no metaobject → GetMetaData yields the active config. ------
+			virtual ibTypeDescription& GetTypeDesc() const override { return m_propertyType->GetValueAsTypeDesc(); }
+			virtual ibSelectorDataType GetFilterDataType() const override { return ibSelectorDataType::ibSelectorDataType_reference; }
+			virtual const ibMetaData* GetMetaData() const override;
+
+			// --- ibBackendSourceColumn — SOURCE-COLUMN presentation. The value-table's explorer vends THIS as
+			// each column's descriptor, so the bound tablebox resolves the header (GetSynonym = Caption) and
+			// type through the same WalkColumns / GetSourceAbstractColumn seam a metadata field uses. GetComment
+			// stays the base default (empty) — a column carries no comment. ------------------------------------
+			virtual wxString GetName() const override { return m_propertyName->GetValueAsString(); }
+			// Header = the Caption; empty Caption falls back to the auto-generated synonym of the Name — the
+			// last priority level (Caption > metadata > auto-name), now truly mirroring ibFormAttribute::GetSynonym.
+			virtual wxString GetSynonym() const override {
+				return !m_propertyCaption->IsEmptyProperty() ? m_propertyCaption->GetValueAsTranslateString() : stringUtils::GenerateSynonym(GetColumnName());
+			}
+
+			// --- Property events (fired by the inspector on an edit) — grouped last, per convention. Nothing
+			// to sync (the property variants ARE the storage); see the .cpp. ------------------------------------
+			virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue) override;
+
+			// --- Serialization — through the UNIFIED property mechanism (each property's GetNodeValue /
+			// ReadNodeValue, exactly like ibFormAttribute), plus the non-property id / width. The value-table
+			// creates one child node per column and delegates here. ---------------------------------------------
+			virtual bool WriteProperty(ibDataNode& node) const override;
+			virtual bool ReadProperty(const ibDataNode& node) override;
+
+		private:
+
+			// SINGLE SOURCE OF TRUTH = the property variants (NOT a parallel member array): every accessor
+			// reads / writes THROUGH the property, exactly like ibFormAttribute — an inspector edit and a
+			// runtime / explorer read see the same value, nothing to mirror or drift. Only the identity
+			// (m_columnID) and the non-editable width are plain members. Members grouped last, per convention.
+			unsigned int m_columnID = 0;
+			int m_columnWidth = wxDVC_DEFAULT_WIDTH;
+
+			ibPropertyCategory* m_categoryCommon = ibPropertyObject::CreatePropertyCategory(wxT("Common"), _("General"));
+			ibPropertyUString* m_propertyName = ibPropertyObject::CreateProperty<ibPropertyUString>(m_categoryCommon, wxT("Name"), _("Name"), _("Column name"), wxT(""));
+			ibPropertyTString* m_propertyCaption = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryCommon, wxT("Caption"), _("Caption"), _("Column caption (header)"), wxT(""));
+			ibPropertyType* m_propertyType = ibPropertyObject::CreateProperty<ibPropertyType>(m_categoryCommon, wxT("Type"), _("Type"), _("Which values the column holds; a value of another type is converted to it when stored. String by default."), ibValueTypes::TYPE_STRING);
+			ibPropertyBoolean* m_propertyIndexed = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryCommon, wxT("Indexing"), _("Indexing"), _("Keep a lookup index on this column, so Find and an equality search stop scanning"), false);
 
 			friend ibValueModelTableColumnCollection;
 		};
@@ -71,10 +163,19 @@ public:
 		ibValueModelTableColumnCollection(ibValueModelTable* ownerTable = nullptr);
 		virtual ~ibValueModelTableColumnCollection();
 
+		// Called by the table as it goes: see the destructor. Afterwards this collection still
+		// ANSWERS — its columns are its own — but it no longer speaks for a table.
+		void DetachOwnerTable() { m_ownerTable = nullptr; }
+
 		ibValueModelColumnInfo* AddColumn(const wxString& colName,
 			const ibTypeDescription& typeData,
 			const wxString& caption,
 			int width = wxDVC_DEFAULT_WIDTH) override {
+
+			// Adding a column WRITES a cell into every existing row, so it needs the table. Without
+			// one there is nothing to add a column to, and saying so beats dereferencing.
+			if (m_ownerTable == nullptr)
+				return nullptr;
 
 			unsigned int max_id = 0;
 
@@ -85,28 +186,29 @@ public:
 			}
 
 			for (long row = 0; row < m_ownerTable->GetRowCount(); row++) {
-				ibValueTableRow* node = m_ownerTable->GetViewData<ibValueTableRow>(m_ownerTable->GetItem(row));
+				ibComposerNode* node = m_ownerTable->GetViewData<ibComposerNode>(m_ownerTable->GetItem(row));
 				wxASSERT(node);
 				node->SetValue(max_id + 1, ibValueTypeDescription::AdjustValue(typeData));
 			}
 
-			return m_listColumnInfo.emplace_back(
-				ibValue::CreateAndPrepareValueRef<ibValueModelTableColumnInfo>(max_id + 1, colName, typeData, caption, width));
-		}
-
-		const ibTypeDescription GetColumnType(unsigned int col) const {
-			for (auto& colInfo : m_listColumnInfo) {
-				if (col == colInfo->GetColumnID()) {
-					return colInfo->GetColumnType();
-				}
-			}
-			return ibTypeDescription();
+			ibValueModelTableColumnInfo* colInfo =
+				new ibValueModelTableColumnInfo(max_id + 1, colName, typeData, caption, width);
+			// Structural attach-owner (NOT AttachPropertyObject — we don't want the column's props to
+			// flatten into the table's inspector): the notify chain column -> value-table -> holder, so a
+			// Caption / Name / Type edit bubbles up and the bound control re-renders live.
+			colInfo->SetAttachOwner(static_cast<ibPropertyObject*>(m_ownerTable));
+			m_ownerTable->OnColumnsChanged();   // the rows' names and a new row's cells are the columns
+			return m_listColumnInfo.emplace_back(colInfo);
 		}
 
 		virtual void RemoveColumn(unsigned int col) {
 
+			// Same reason as AddColumn: dropping a column erases a cell from every row.
+			if (m_ownerTable == nullptr)
+				return;
+
 			for (long row = 0; row < m_ownerTable->GetRowCount(); row++) {
-				ibValueTableRow* node = m_ownerTable->GetViewData<ibValueTableRow>(m_ownerTable->GetItem(row));
+				ibComposerNode* node = m_ownerTable->GetViewData<ibComposerNode>(m_ownerTable->GetItem(row));
 				wxASSERT(node);
 				node->EraseValue(col);
 			}
@@ -117,11 +219,13 @@ public:
 				}
 			);
 
-			m_listColumnInfo.erase(it);
+			if (it != m_listColumnInfo.end())   // an id the collection does not hold: erase(end()) is UB
+				m_listColumnInfo.erase(it);
+			m_ownerTable->OnColumnsChanged();
 		}
 
 		virtual ibValueModelColumnInfo* GetColumnInfo(unsigned int idx) const {
-			if (m_listColumnInfo.size() < idx)
+			if (idx >= m_listColumnInfo.size())
 				return nullptr;
 			auto it = m_listColumnInfo.begin();
 			std::advance(it, idx);
@@ -130,19 +234,23 @@ public:
 
 		virtual unsigned int GetColumnCount() const { return m_listColumnInfo.size(); }
 
-		virtual ibValueMethodHelper* GetPMethods() const {
-			//PrepareNames();
-			return m_methodHelper;
+		// The column's type by id, as the column holds it — read per cell by the table, which a copy per cell
+		// (GetColumnType answers by value) made a share of reading a register into a table (MEASURED 2026-09-14).
+		const ibTypeDescription& GetColumnTypeDesc(unsigned int col) const {
+			static const ibTypeDescription none;
+			for (const auto& colInfo : m_listColumnInfo)
+				if (colInfo->GetColumnID() == col)
+					return colInfo->GetTypeDesc();
+			return none;
 		}
 
-		virtual void PrepareNames() const;
-
+		void FillMembers(ibMemberTable& helper) const;   // bound in ctor (was PrepareNames)
 
 		//WORK AS AN AGGREGATE OBJECT
 		virtual bool CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray);
 		virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);
 
-		//array support 
+		//array support
 		virtual bool SetAt(const ibValue& varKeyValue, const ibValue& varValue);
 		virtual bool GetAt(const ibValue& varKeyValue, ibValue& pvarValue);
 
@@ -152,34 +260,29 @@ public:
 
 		ibValueModelTable* m_ownerTable;
 		std::vector<ibValuePtr<ibValueModelTableColumnInfo>> m_listColumnInfo;
-		ibValueMethodHelper* m_methodHelper;
 	};
 
 	class ibValueModelTableReturnLine : public ibValueModelReturnLine {
-		wxDECLARE_DYNAMIC_CLASS(ibValueModelTableReturnLine);
 	public:
 
 		ibValueModelTableReturnLine(ibValueModelTable* ownerTable = nullptr, const ibDataViewItem& line = ibDataViewItem(nullptr));
 		virtual ~ibValueModelTableReturnLine();
 
-		virtual ibValueModelTableBase* GetOwnerModel() const { return m_ownerTable; }
-
-		virtual ibValueMethodHelper* GetPMethods() const {
-			//PrepareNames();
-			return m_methodHelper;
-		}
-
-		virtual void PrepareNames() const; // this method is automatically called to initialize attribute and method names.
+		virtual ibValueModel* GetOwnerModel() const { return m_ownerTable; }
 
 		virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal); //setting attribute
 		virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal); //attribute value
 
 	private:
 		ibValueModelTable* m_ownerTable;
-		ibValueMethodHelper* m_methodHelper;
 	};
 
 public:
+
+	// ⚠ THE INDEX ITSELF IS NOT HERE ANY MORE — it belongs to every model that holds its rows in
+	// memory, not to the value table alone (`ibValueModelStorage::ibColumnIndex`, tabularModel.h).
+	// What is left on this side is the DECISION: this column declared `Indexing`, so ask the index;
+	// that column did not, so scan.
 
 	virtual ibDataViewItem FindRowValue(const ibValue& varValue, const wxString& colName = wxEmptyString) const;
 
@@ -190,57 +293,144 @@ public:
 	virtual ibValueModelTableReturnLine* GetRowAt(const long& line) {
 		if (line > GetRowCount())
 			return nullptr;
-		return ibValue::CreateAndPrepareValueRef<ibValueModelTableReturnLine>(this, GetItem(line));
+		return new ibValueModelTableReturnLine(this, GetItem(line));
 	}
 
+	// 🛑 THE ROW IS ALREADY IN HAND — DO NOT GO LOOKING FOR IT. This used to answer by turning the
+	// ITEM into an index (`GetRow` → `IndexOf`, a linear scan of every row in the table) and the
+	// index straight back into the same item. A search, and a round trip, for something the caller
+	// had passed in.
+	//
+	// It is on the hot path: script iteration asks for one row at a time (tabularModel.cpp, the
+	// paged iterator), so the scan ran once per row and made every walk over a table quadratic.
+	// Measured on this base, 2026-09-08, with a 20 000-row answer: `foreach` over it took TWELVE
+	// SECONDS and `Count()` eleven; at 50 000 rows it was seventy. The rows were built in under a
+	// second — all of it was this.
 	virtual ibValueModelReturnLine* GetRowAt(const ibDataViewItem& line) {
 		if (!line.IsOk())
 			return nullptr;
-		return GetRowAt(GetRow(line));
+		return new ibValueModelTableReturnLine(this, line);
 	}
+
+	// ibSourceDataObject hop gate. Set: many rows, no single cell -> no-op.
+	virtual bool SetValueBySourceHop(const ibSourceHop& hop, const ibValue& value) override { return false; }
+	using ibTabularDataObject::SetValueBySourceHop;   // the ROW form, hidden by the declaration above
+
+	// THE SAME SIGNATURE LIVES ON TWO UNRELATED BASES, and this class is both of them: ibSourceObject (the
+	// scalar walk: WalkColumns, ResolvePath, GetValueByPath all hold ibSourceDataObject*) and ibTabularObject
+	// (the table). They are separate hierarchies, so they are separate virtual slots, and answering one leaves
+	// the other at its `return false` default. The BODY is the table's, written once for every kind of table;
+	// this bridges the source slot to it. Removing this line does not fail to build - it silently brings back
+	// "<not selected>" on a dotted reference column of a value table.
+	virtual bool GetValueBySourceHop(const ibSourceHop& hop, ibValue& out) const override {
+		return ibTabularDataObject::GetValueBySourceHop(hop, out);
+	}
+	using ibValueModel::GetValueBySourceHop;   // the ROW form (item, hop, out), hidden by the declaration above
 
 	//set meta/get meta
 	virtual bool SetValueByMetaID(const ibDataViewItem& item, const ibMetaID& id, const ibValue& varMetaVal) {
-		ibValueTableRow* node = GetViewData<ibValueTableRow>(item);
+		ibComposerNode* node = GetViewData<ibComposerNode>(item);
 		if (node == nullptr)
 			return false;
-		return node->SetValue(id, ibValueTypeDescription::AdjustValue(m_tableColumnCollection->GetColumnType(id), varMetaVal), true);
+		return node->SetValue(id, ibValueTypeDescription::AdjustValue(m_tableColumnCollection->GetColumnTypeDesc(id), varMetaVal), true);
 	}
 
 	virtual bool GetValueByMetaID(const ibDataViewItem& item, const ibMetaID& id, ibValue& pvarMetaVal) const {
-		ibValueTableRow* node = GetViewData<ibValueTableRow>(item);
+		ibComposerNode* node = GetViewData<ibComposerNode>(item);
 		if (node == nullptr)
 			return false;
-		return node->GetValue(id, pvarMetaVal);
+		node->GetValue(id, pvarMetaVal);
+		// Lazy retype: a column's Type may have changed AFTER a cell was written, so coerce the stored value to
+		// the column's CURRENT type ON READ instead of sweeping every row on a type edit. A stale-typed cell is
+		// converted; an absent / empty cell yields the typed empty — "nothing there" reads back cleanly.
+		pvarMetaVal = ibValueTypeDescription::AdjustValue(m_tableColumnCollection->GetColumnTypeDesc(id), pvarMetaVal);
+		return true;
 	}
 
 	ibValueModelTable();
-	ibValueModelTable(const ibValueModelTable& val);
+	// No copy constructor: the one there was built no rows and took the SAME column collection, so the only
+	// caller - Clone - answered with an empty table whose columns were the original's. A copy is Clone.
+	ibValueModelTable(const ibValueModelTable& val) = delete;
 	virtual ~ibValueModelTable();
 
-	virtual void AddValue(unsigned int before = 0) {
-		long row = GetRow(GetSelection());
-		if (row > 0)
-			AppendRow(row);
-		else AppendRow();
+	// Two different questions, and the front answers both: WHERE it goes is the selection (user on row 3 + Add
+	// → new row at 4, focus follows via the ItemInserted handler's Select); WHAT it inherits is the group the
+	// user is INSIDE — the anchor. An empty anchor (the root of a hierarchical view) inherits nothing, so the
+	// row forms an empty group of its own. (Mirrors the tabular section.)
+	void AddValue(const ibDataViewItem& row, const ibDataViewItem& anchor = ibDataViewItem()) {
+		const long idx = StorageIndexOf(row);   // displayed item is a composer copy → storage index via bridge
+		if (idx >= 0) AppendRow(idx + 1, anchor);
+		else          AppendRow(0, anchor);
 	}
 
-	virtual void CopyValue() { CopyRow(); }
-	virtual void EditValue() { EditRow(); }
-	virtual void DeleteValue() { DeleteRow(); }
+	void CopyValue(const ibDataViewItem& row) { CopyRow(row); }
+	void EditValue(const ibDataViewItem& row) { EditRow(row); }
+	void DeleteValue(const ibDataViewItem& row) { DeleteRow(row); }
+	// PHYSICAL — the rows are re-seated, and that is the order the table then IS. See the body.
+	void SortValue(const ibDataViewColumnItem& column, bool ascending);
+
+	// ⭐ THE TOTAL OF A COLUMN: its numbers added exactly (ibNumber, not a double), an empty cell adding nothing.
+	// A column that is not there raises - a wrong total that looks right is the worst answer a sum can give -
+	// and so does a cell holding something that is not a number, naming the row. An empty table totals zero.
+	ibValue TotalOf(const wxString& column) const;
+
+	// ⭐ THE ROWS THAT MATCH A FILTER, as an array of the table's own rows (change one and the table changes),
+	// in table order. The filter is a Structure of `column = value`; a row matches when EVERY term does, and an
+	// empty filter matches every row. A column the filter names that is not there raises rather than
+	// matching nothing: a typo in a filter would otherwise read as "no such rows".
+	ibValue FindRows(const ibValueContainer& filter);
+
+	// Command store (ibStandardCommandTabular): a table of values defines its OWN Add / Copy / Edit / Delete and runs
+	// them by id on the front-passed row (no shared base set — each model ships its own).
+	enum { eAddValue = 1, eCopyValue, eEditValue = 3 | eStartEditingFlag, eDeleteValue = 4,
+		eMoveUpValue = 5, eMoveDownValue, eSortAscValue, eSortDescValue };   // Edit's id carries the front-edit flag
+	virtual void GetCommandCollection(const ibFormID& formType, std::vector<ibCommandItem>& commands) const override {
+		commands.emplace_back(eAddValue,    wxT("Add"),    _("Add"),    g_picAddCLSID,    true);
+		commands.emplace_back(eCopyValue,    wxT("Copy"),   _("Copy"),   g_picCopyCLSID);
+		commands.emplace_back(eEditValue,    wxT("Edit"),   _("Edit"),   g_picEditCLSID);
+		commands.emplace_back(eDeleteValue,  wxT("Delete"), _("Delete"), g_picDeleteCLSID);
+		commands.emplace_back();   // separator — what follows is about the ORDER, not about the rows
+		commands.emplace_back(eMoveUpValue,   wxT("MoveUp"),   _("Move up"),   g_picMoveUpCLSID);
+		commands.emplace_back(eMoveDownValue, wxT("MoveDown"), _("Move down"), g_picMoveDownCLSID);
+		// …and a separator BETWEEN THE TWO PAIRS (Max, 2026-08-29): moving is done BY HAND to one row,
+		// ordering is done BY A COLUMN to all of them. Two questions, two groups — four equal buttons in
+		// a row would make a person read all four to find the one they meant.
+		commands.emplace_back();
+		// All four keep the DEFAULT modify flag (Max, 2026-08-29): in a view-only form they show and grey out.
+		commands.emplace_back(eSortAscValue,  wxT("SortAsc"),  _("Sort ascending"),  g_picSortAscCLSID);
+		commands.emplace_back(eSortDescValue, wxT("SortDesc"), _("Sort descending"), g_picSortDescCLSID);
+	}
+
+	// Flat table: no hierarchy, so only the SELECTED row matters — m_anchor (the tree-browse fallback) is ignored.
+	virtual void CallAsCommand(const ibActionID& lNumAction, const ibDataViewCommandContext& ctx, ibBackendValueForm* srcForm) override {
+		switch (lNumAction) {
+		case eAddValue:    AddValue(ctx.m_selection, ctx.m_anchor);   break;   // where it goes · what it inherits
+		case eCopyValue:   CopyValue(ctx.m_selection);   break;
+		case eEditValue:   EditValue(ctx.m_selection);   break;   // no-op on the backend; Edit's id carries eStartEditingFlag → the FRONT opens the real inline editor
+		case eDeleteValue: DeleteValue(ctx.m_selection); break;
+		// The four order verbs, run straight against the RAM base's physical calls — no dispatcher of its own.
+		case eMoveUpValue:   MoveRow(ctx.m_selection, -1); break;
+		case eMoveDownValue: MoveRow(ctx.m_selection, +1); break;
+		case eSortAscValue:  SortValue(ctx.m_column, true);  break;
+		case eSortDescValue: SortValue(ctx.m_column, false); break;
+		}
+	}
 
 	//array
 	virtual bool GetAt(const ibValue& varKeyValue, ibValue& pvarValue);
 
-	//check is empty
-	virtual bool IsEmpty() const { return GetRowCount() == 0; }
+	//check is empty (single final overrider for BOTH ibValueModel::IsEmpty and ibSourceDataObject::IsEmpty)
+	virtual bool IsEmpty() const override { return GetRowCount() == 0; }
 
-	virtual ibValueMethodHelper* GetPMethods() const {  // get a reference to the class helper for parsing attribute and method names
-		//PrepareNames();
-		return &m_methodHelper;
+	// A table-of-values is fully composer-driven (filter / sort / group live on the RAM composer), so it exposes
+	// the whole List-settings affordance — including GROUP, which folds the flat value-table into a tree "with one easy move".
+	virtual Features GetFeatures() const override {
+		Features f;
+		f.flags |= Features::Filters | Features::Sorting | Features::Grouping;
+		return f;
 	}
 
-	virtual void PrepareNames() const; // this method is automatically called to initialize attribute and method names.
+	void FillMembers(ibMemberTable& helper) const;   // bound in ctor (was PrepareNames)
 
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal); // attribute value
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);       // method call
@@ -251,23 +441,80 @@ public:
 	virtual bool SetValueByRow(const wxVariant& variant,
 		const ibDataViewItem& row, unsigned int col) override;
 
-	//support def. methods (in runtime)
-	long AppendRow(unsigned int before = 0);
-	void CopyRow();
-	void EditRow();
-	void DeleteRow();
+	// FETCH: the value-table no longer overrides Get*Fetch. The thin wrappers existed ONLY to bypass the (now
+	// removed) ibValueModelStorage::BuildVisibleView fetch override; with that gone, the value-table inherits
+	// ibValueModel::GetFirstFetch/Next/Prev → RunComposerPage directly (byte-for-byte the same routing the
+	// wrappers did). RunComposerPage runs the RAM composer over ibRamValueStorage (the live nodes) in place.
 
-	ibValueModelTable* Clone() { return ibValue::CreateAndPrepareValueRef<ibValueModelTable>(*this); }
+	//support def. methods (in runtime)
+	long AppendRow(unsigned int before = 0, const ibDataViewItem& contextRow = ibDataViewItem());
+	// …and a row whose values are given, by column id — made whole: each value adjusted to its column, as every cell
+	// of this table is, and the row appended once. What turns a reading into a table (a register's Get and GetBase,
+	// ToTable) used to add an empty row — every column's default made, a reference's through the registry — and then
+	// set each cell through a row object made and dropped for it (stack samples 2026-09-14, Debug).
+	long AppendRow(const std::vector<std::pair<ibMetaID, ibValue>>& values);
+	void CopyRow(const ibDataViewItem& row);
+	void EditRow(const ibDataViewItem& row);
+	void DeleteRow(const ibDataViewItem& row);
+	// (MoveRow / SortRows are NOT here — they live on ibValueModelStorage: ordering rows is something every
+	//  table that owns its rows can do, and the script's Sort() reaches the very same one.)
+
+	// A fresh table object built from the live one — `Clone` in the ordinary C++ sense, the same
+	// sense a database layer or a drag item uses it in. It no longer collides with anything: the
+	// root's packed-form copy is `ibValue::CloneValue`, which is a different operation and now
+	// carries a different name (see value.h). The same columns and the same rows, nothing shared.
+	ibValuePtr<ibValueModelTable> Clone() const;
 	unsigned int Count() { return GetRowCount(); }
 	void Clear();
 
 #pragma region _tabular_data_
-	//get metaData from object 
-	virtual const ibValueMetaObjectCompositeData* GetSourceMetaObject() const { return nullptr; }
+	// --- ibSourceDataObject — the value-table IS a form data SOURCE -----------------------------------------
+	// Covariant GenericData* (GenericData derives from CompositeData) is ONE final overrider that closes the
+	// pure GetSourceMetaObject on BOTH unrelated bases: ibTabularObject (via ibValueModel) AND ibSourceObject
+	// (via ibSourceDataObject). A RAM table carries no metaobject -> nullptr. (Same trick as ibValueDynamicList.)
+	virtual const ibValueMetaObjectGenericData* GetSourceMetaObject() const override { return nullptr; }
 
-	//Get ref class 
-	virtual ibClassID GetSourceClassType() const { return g_valueTableCLSID; }
-#pragma endregion 
+	//Get ref class
+	virtual ibClassID GetSourceClassType() const override { return g_valueTableCLSID; }
+
+	// A RAM table has no metaobject of its own; expose the active config so reference-typed columns still resolve.
+	virtual const ibMetaData* GetSourceMetaData() const override;
+	virtual wxString GetSourceCaption() const override { return GetClassName(); }
+
+	// The dropped tablebox's column picker reads the columns per-row through this explorer, built from the
+	// value-table's OWN column collection (a RAM table has no queryable / metaobject).
+	virtual const ibSourceExplorer* GetSourceExplorer() const override;
+
+	// The source shares the value's own refcount. GetGuid returns the guid minted once in the ctor (m_guid)
+	// — a stable unique identity per RAM-table instance (no shared null key -> no collisions).
+	virtual void SourceIncrRef() override { ibValue::IncrRef(); }
+	virtual void SourceDecrRef() override { ibValue::DecrRef(); }
+	virtual const ibUniqueKey& GetGuid() const override;
+#pragma endregion
+
+#pragma region _property_object_
+	// --- ibPropertyObject + serialization — the columns surface / persist WITH the form attribute. The
+	// attribute holder casts the held value to ibPropertyObject and calls Read/WriteProperty, knowing nothing
+	// about "a value-table" (same seam as ibValueDynamicList's Source/Settings). -----------------------------
+	// GetClassName resolves by the object's own clsid (the factory) and DISAMBIGUATES the two same-name bases
+	// (ibValue + ibPropertyObject) — mandatory (mirror ibValueDynamicList).
+	virtual wxString GetClassName() const override { return ibValue::GetClassName(); }
+	virtual wxString GetObjectTypeName() const override { return GetClassName(); }
+	virtual bool IsEditable() const override { return true; }
+	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue) override;
+	virtual void OnChildChanged() override;
+
+	// The columns changed — added, removed, or one of them edited: the rows' names and the empty row a new row copies
+	// are both the columns', so both are made again at the next question. The one door every column change goes by.
+	void OnColumnsChanged() { m_methodHelperReturnLine.Invalidate(); InvalidateNewRow(); }
+
+	// A new row's columns, each empty as its type makes it (NewRow copies the row made once).
+	virtual void DescribeNewRow(ibNewRowColumns& columns) const override;
+
+	// Serialize the column collection: one child node per column (id / name / caption / width + type-desc).
+	virtual bool ReadProperty(const ibDataNode& node) override;
+	virtual bool WriteProperty(ibDataNode& node) const override;
+#pragma endregion
 
 	//support icons
 	virtual wxIcon GetIcon() const;
@@ -277,13 +524,20 @@ public:
 	// in batches. GetEmptyRow yields the typed skeleton for the
 	// IntelliSense type hint that the iterator state surfaces.
 	virtual ibValue GetEmptyRow() override {
-		return ibValue::CreateAndPrepareValueRef<ibValueModelTableReturnLine>(this, ibDataViewItem(nullptr));
+		return new ibValueModelTableReturnLine(this, ibDataViewItem(nullptr));
 	}
+
+	// No source-hook: a RAM model has no queryable. The RAM composer reads ibRamValueStorage (the live
+	// nodes) directly — no per-table override / member here.
 
 private:
 
 	ibValuePtr<ibValueModelTableColumnCollection> m_tableColumnCollection;
-	static ibValueMethodHelper m_methodHelper;
+
+	// A RAM table has no metaobject / DB identity, so it MINTS its own guid ONCE at construction (an in-class
+	// initializer, so BOTH ctors — and a Clone copy — get a fresh, distinct key). GetGuid returns it always,
+	// so consumers keying a source by guid never collide on a shared null key.
+	ibUniqueKey m_guid = wxNewUniqueGuid;
 };
 
 #endif

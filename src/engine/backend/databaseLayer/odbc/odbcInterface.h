@@ -40,6 +40,7 @@ typedef SQLRETURN(SQL_API *SQLGetDiagRecType)(SQLSMALLINT, SQLHANDLE, SQLSMALLIN
 	SQLINTEGER*, SQLTCHAR*, SQLSMALLINT, SQLSMALLINT*);
 typedef SQLRETURN(SQL_API *SQLNumParamsType)(SQLHSTMT, SQLSMALLINT*);
 typedef SQLRETURN(SQL_API *SQLExecuteType)(SQLHSTMT);
+typedef SQLRETURN(SQL_API *SQLCancelType)(SQLHSTMT);
 typedef SQLRETURN(SQL_API *SQLParamDataType)(SQLHSTMT, SQLPOINTER*);
 typedef SQLRETURN(SQL_API *SQLPutDataType)(SQLHSTMT, SQLPOINTER, SQLLEN);
 typedef SQLRETURN(SQL_API *SQLRowCountType)(SQLHSTMT, SQLLEN*);
@@ -78,6 +79,7 @@ public:
 	SQLGetDiagRecType GetSQLGetDiagRec() { return m_pSQLGetDiagRec; }
 	SQLNumParamsType GetSQLNumParams() { return m_pSQLNumParams; }
 	SQLExecuteType GetSQLExecute() { return m_pSQLExecute; }
+	SQLCancelType GetSQLCancel() { return m_pSQLCancel; }
 	SQLParamDataType GetSQLParamData() { return m_pSQLParamData; }
 	SQLPutDataType GetSQLPutData() { return m_pSQLPutData; }
 	SQLRowCountType GetSQLRowCount() { return m_pSQLRowCount; }
@@ -109,6 +111,7 @@ private:
 	SQLGetDiagRecType m_pSQLGetDiagRec;
 	SQLNumParamsType m_pSQLNumParams;
 	SQLExecuteType m_pSQLExecute;
+	SQLCancelType m_pSQLCancel;
 	SQLParamDataType m_pSQLParamData;
 	SQLPutDataType m_pSQLPutData;
 	SQLRowCountType m_pSQLRowCount;

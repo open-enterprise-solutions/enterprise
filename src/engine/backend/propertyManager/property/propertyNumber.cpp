@@ -1,10 +1,7 @@
 #include "propertyNumber.h"
 #include "backend/propertyManager/property/variant/variantNumber.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataValue — node value (Binary, transitional)
 
-//get property for grid 
-wxObject* (*ibPropertyNumber::ms_propertyNumber)(const wxString&, const wxString&, const ibNumber&) = nullptr;
-wxObject* (*ibPropertyInteger::ms_propertyInteger)(const wxString&, const wxString&, const int&) = nullptr;
-wxObject* (*ibPropertyUInteger::ms_propertyUInteger)(const wxString&, const wxString&, const unsigned int&) = nullptr;
 
 ////////////////////////////////////////////////////////////////////////
 
@@ -38,12 +35,24 @@ bool ibPropertyNumber::GetDataValue(ibValue& pvarPropVal) const
 	return true;
 }
 
-bool ibPropertyNumber::LoadData(ibReaderMemory& reader)
+// ⭐ A NUMBER GOES IN AS A NUMBER. It used to travel as the buffer ibNumber packs
+// itself into — which is exact and unreadable, and unnecessary: the node HAS a
+// Number payload and it is ibNumber itself, so nothing is rounded, nothing is
+// narrowed, and a value with two hundred fractional digits survives intact
+// (Max, 2026-08-30: *"we do not care how it is stored — as a number, and however
+// huge it is we will still read it"*).
+//
+// What this buys is that the JSON view of a property shows the number instead of
+// base64. That is the whole of the migration onto the node, said once more.
+
+bool ibPropertyNumber::ReadNodeValue(const ibDataValue& value)
 {
-	return GetValueAsNumber().SetBuffer(reader);
+	GetValueAsNumber() = value.AsNumber();
+	return true;
 }
 
-bool ibPropertyNumber::SaveData(ibWriterMemory& writer)
+bool ibPropertyNumber::WriteNodeValue(ibDataValue& value) const
 {
-	return GetValueAsNumber().GetBuffer(writer);
-}
+	value = ibDataValue::Number(GetValueAsNumber());
+	return true;
+}

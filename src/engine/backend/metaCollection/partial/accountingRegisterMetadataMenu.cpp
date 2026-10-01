@@ -1,26 +1,15 @@
 ////////////////////////////////////////////////////////////////////////////
-//	Author		: Tetracode Dev
+//	Author		: Maxim Kornienko
 //	Description : accounting register metaData - menu
 ////////////////////////////////////////////////////////////////////////////
 
 #include "accountingRegister.h"
 #include "backend/metaData.h"
 
-bool ibValueMetaObjectAccountingRegister::PrepareContextMenu(wxMenu* defaultMenu)
+bool ibValueMetaObjectAccountingRegister::CollectContextMenu(std::vector<ibMetaMenuItem>& items)
 {
-	wxMenuItem* menuItem = nullptr;
-	menuItem = defaultMenu->Append(ID_METATREE_OPEN_MODULE, _("Open record set module"));
-	menuItem->SetBitmap((*m_propertyObjectModule)->GetIcon());
-	menuItem = defaultMenu->Append(ID_METATREE_OPEN_MANAGER, _("Open manager module"));
-	menuItem->SetBitmap((*m_propertyManagerModule)->GetIcon());
-	defaultMenu->AppendSeparator();
+	items.emplace_back(ibMetaMenuKind::Module, wxT("RecordSetModule"), _("Open record set module"), m_propertyObjectModule->GetMetaObject());
+	items.emplace_back(ibMetaMenuKind::Module, wxT("ManagerModule"), _("Open manager module"), m_propertyManagerModule->GetMetaObject());
 	return false;
 }
 
-void ibValueMetaObjectAccountingRegister::ProcessCommand(unsigned int id)
-{
-	ibBackendMetadataTree* metaTree = m_metaData->GetMetaTree();
-	wxASSERT(metaTree);
-	if (id == ID_METATREE_OPEN_MODULE) metaTree->OpenFormMDI(m_propertyObjectModule->GetMetaObject());
-	else if (id == ID_METATREE_OPEN_MANAGER) metaTree->OpenFormMDI(m_propertyManagerModule->GetMetaObject());
-}

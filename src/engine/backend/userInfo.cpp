@@ -1,7 +1,7 @@
 #include "userInfo.h"
 
-#include "appData.h"   // db_query macro, user_table
-#include "databaseLayer/databaseLayer.h"
+#include "appData.h"   // user_table macro
+#include "databaseLayer/databaseQueryBuilder.h"   // L2 door — the whole sys_user DAO rides this (no raw ibDatabaseLayer / result set)
 #include "databaseLayer/databaseErrorCodes.h"
 #include "fileSystem/fs.h"
 #include "guid.h"
@@ -18,10 +18,21 @@ constexpr unsigned int eBlockLang = 0x0234550;
 void ReadPasswordChunk(const wxMemoryBuffer& buffer, ibUserInfo& info)
 {
 	ibReaderMemory reader(buffer);
-	info.m_strUserGuid     = reader.r_stringZ();
-	info.m_strUserName     = reader.r_stringZ();
-	info.m_strUserFullName = reader.r_stringZ();
-	info.m_strUserPassword = reader.r_stringZ();
+	// Atomic-on-success: a malformed chunk (length header corrupt past
+	// field N) used to assign N-1 garbage strings into `info` before
+	// the throw — the partial state defeated FillFromRow's own
+	// chunk-level try/catch (info already had a non-empty password
+	// from chunk garbage, so Verify against the user-typed password
+	// failed even for users created without a password).  Read into
+	// locals first, commit only after all four reads succeed.
+	wxString g = reader.r_stringZ();
+	wxString n = reader.r_stringZ();
+	wxString f = reader.r_stringZ();
+	wxString p = reader.r_stringZ();
+	info.m_strUserGuid     = std::move(g);
+	info.m_strUserName     = std::move(n);
+	info.m_strUserFullName = std::move(f);
+	info.m_strUserPassword = std::move(p);
 }
 
 void ReadRoleChunk(const wxMemoryBuffer& buffer, ibUserInfo& info)
@@ -31,17 +42,38 @@ void ReadRoleChunk(const wxMemoryBuffer& buffer, ibUserInfo& info)
 	info.m_roleArray.reserve(count);
 	for (unsigned int idx = 0; idx < count; idx++) {
 		ibUserInfo::ibUserRole entry;
-		entry.m_strRoleGuid = reader.r_stringZ();
-		entry.m_miRoleId    = reader.r_s32();
-		info.m_roleArray.emplace_back(std::move(entry));
+		// Read defensively — a sys_user row written before a metadata
+		// version that removed the role's class will have stale guid /
+		// truncated payload. Catch reader exceptions per-entry so one
+		// bad role doesn't brick the whole sys_user Read (and therefore
+		// the login flow).  Subsequent loop turns try the next role;
+		// downstream code resolves roles from m_roleArray, so unknown
+		// guids just degrade to "no access" instead of throwing.
+		try {
+			entry.m_strRoleGuid = reader.r_stringZ();
+			entry.m_miRoleId    = reader.r_s32();
+			// The composition mode travels WITH the membership, exactly like the id. Rows written
+			// before it exists simply end here, and the entry keeps its Union default — which is the
+			// behaviour those rows had. Checked rather than caught so one short row does not abandon
+			// the roles that follow it.
+			if (!reader.eof())
+				entry.m_mode = static_cast<ibRoleCompositionMode>(reader.r_s32());
+			info.m_roleArray.emplace_back(std::move(entry));
+		} catch (...) {
+			// Buffer truncated or malformed past this point — stop
+			// reading roles; whatever was already collected stays.
+			break;
+		}
 	}
 }
 
 void ReadLanguageChunk(const wxMemoryBuffer& buffer, ibUserInfo& info)
 {
 	ibReaderMemory reader(buffer);
-	info.m_strLanguageGuid = reader.r_stringZ();
-	info.m_strLanguageCode = reader.r_stringZ();
+	wxString g = reader.r_stringZ();
+	wxString c = reader.r_stringZ();
+	info.m_strLanguageGuid = std::move(g);
+	info.m_strLanguageCode = std::move(c);
 }
 
 wxMemoryBuffer WritePasswordChunk(const ibUserInfo& info)
@@ -61,6 +93,7 @@ wxMemoryBuffer WriteRoleChunk(const ibUserInfo& info)
 	for (const auto& role : info.m_roleArray) {
 		writer.w_stringZ(role.m_strRoleGuid);
 		writer.w_s32(role.m_miRoleId);
+		writer.w_s32(role.m_mode);
 	}
 	return writer.buffer();
 }
@@ -76,23 +109,41 @@ wxMemoryBuffer WriteLanguageChunk(const ibUserInfo& info)
 // Common: populate identity columns from a sys_user result row, then
 // crack open the binaryData blob into the same chunks Serialize/Deserialize
 // use. Caller has already advanced the cursor onto the row of interest.
-void FillFromRow(ibDatabaseResultSet* row, ibUserInfo& info)
+void FillFromRow(ibQueryResult& row, ibUserInfo& info)
 {
-	info.m_strUserGuid     = row->GetResultString(wxT("guid"));
-	info.m_strUserName     = row->GetResultString(wxT("name"));
-	info.m_strUserFullName = row->GetResultString(wxT("fullName"));
+	info.m_strUserGuid     = row.GetResultString(wxT("guid"));
+	info.m_strUserName     = row.GetResultString(wxT("name"));
+	info.m_strUserFullName = row.GetResultString(wxT("fullName"));
 
 	wxMemoryBuffer buffer;
-	row->GetResultBlob(wxT("binaryData"), buffer);
+	row.GetResultBlob(wxT("binaryData"), buffer);
 	ibReaderMemory reader(buffer);
 
-	wxMemoryBuffer chunk;
-	if (reader.r_chunk(eBlockPswd, chunk)) ReadPasswordChunk(chunk, info);
-	if (reader.r_chunk(eBlockRole, chunk)) ReadRoleChunk    (chunk, info);
-	if (reader.r_chunk(eBlockLang, chunk)) ReadLanguageChunk(chunk, info);
+	wxMemoryBuffer chunkPswd, chunkRole, chunkLang;
+	
+	// Each chunk reader is wrapped so a malformed / version-mismatched
+	// section (e.g. role chunk for a metadata version that has moved on)
+	// doesn't bring down the whole sys_user Read — login still gets
+	// identity + password and the affected chunk's fields stay default.
+	// r_chunk APPENDS into the buffer (GetAppendBuf), so reset before each read — otherwise chunk N
+	// is prefixed with chunk N-1's bytes and its first field (e.g. the role count) reads as garbage.
+	try { if (reader.r_chunk(eBlockPswd, chunkPswd)) ReadPasswordChunk(chunkPswd, info); } catch (...) {}
+	try { if (reader.r_chunk(eBlockRole, chunkRole)) ReadRoleChunk    (chunkRole, info); } catch (...) {}
+	try { if (reader.r_chunk(eBlockLang, chunkLang)) ReadLanguageChunk(chunkLang, info); } catch (...) {}
 }
 
 } // namespace
+
+// Project exactly the columns FillFromRow consumes — guid / name / fullName / binaryData.
+static ibQueryIR SysUserRowQuery(ibQueryExprPtr where)
+{
+	return ibQueryIR(ibProject(
+		where ? ibFilter(ibScan(user_table), where) : ibScan(user_table),
+		{ { ibCol(wxT("guid")),       wxEmptyString },
+		  { ibCol(wxT("name")),       wxEmptyString },
+		  { ibCol(wxT("fullName")),   wxEmptyString },
+		  { ibCol(wxT("binaryData")), wxEmptyString } }));
+}
 
 ibUserInfo ibUserInfo::Read(const ibGuid& userGuid)
 {
@@ -100,16 +151,14 @@ ibUserInfo ibUserInfo::Read(const ibGuid& userGuid)
 	if (!userGuid.isValid())
 		return info;
 
-	ibStatementGuard stmt(db_query,
-		db_query->PrepareStatement(wxT("SELECT * FROM %s WHERE guid = ?;"), user_table));
-	if (stmt)
-		stmt->SetParamString(1, userGuid.str());
-
-	ibResultSetGuard result(db_query,
-		stmt ? stmt->RunQueryWithResults() : nullptr);
-
-	if (result && result->Next())
-		FillFromRow(result.get(), info);
+	try {
+		ibDatabaseQueryBuilder q;
+		ibQueryResult result = q.ExecuteIR(SysUserRowQuery(
+			ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("guid")), ibConst(ibValue(userGuid.str())))));
+		if (result.Next())
+			FillFromRow(result, info);
+	}
+	catch (...) { /* no table / passive scope — empty info */ }
 
 	return info;
 }
@@ -120,80 +169,90 @@ ibUserInfo ibUserInfo::Read(const wxString& userName)
 	if (userName.IsEmpty())
 		return info;
 
-	ibStatementGuard stmt(db_query,
-		db_query->PrepareStatement(wxT("SELECT * FROM %s WHERE name = ?;"), user_table));
-	if (stmt)
-		stmt->SetParamString(1, userName);
-
-	ibResultSetGuard result(db_query,
-		stmt ? stmt->RunQueryWithResults() : nullptr);
-
-	if (result && result->Next())
-		FillFromRow(result.get(), info);
+	try {
+		ibDatabaseQueryBuilder q;
+		ibQueryResult result = q.ExecuteIR(SysUserRowQuery(
+			ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("name")), ibConst(ibValue(userName)))));
+		if (result.Next())
+			FillFromRow(result, info);
+	}
+	catch (...) { /* no table / passive scope — empty info */ }
 
 	return info;
 }
 
 bool ibUserInfo::HasAny()
 {
-	ibResultSetGuard result(db_query,
-		db_query->RunQueryWithResults(wxT("SELECT name FROM %s;"), user_table));
-
-	if (!result) return false;
-	return result->Next();
+	try {
+		ibDatabaseQueryBuilder q;
+		ibQueryResult result = q.ExecuteIR(
+			ibQueryIR(ibProject(ibScan(user_table), { { ibCol(wxT("name")), wxEmptyString } })));
+		return result.Next();
+	}
+	catch (...) { return false; }
 }
 
 std::vector<ibUserInfo::Brief> ibUserInfo::ListAll()
 {
-	ibResultSetGuard result(db_query,
-		db_query->RunQueryWithResults(wxT("SELECT guid, name, fullName FROM %s;"), user_table));
-
 	std::vector<Brief> list;
-	if (!result)
-		return list;
+	try {
+		ibDatabaseQueryBuilder q;
+		ibQueryResult result = q.ExecuteIR(ibQueryIR(ibProject(ibScan(user_table),
+			{ { ibCol(wxT("guid")),     wxEmptyString },
+			  { ibCol(wxT("name")),     wxEmptyString },
+			  { ibCol(wxT("fullName")), wxEmptyString } })));
 
-	while (result->Next()) {
-		Brief entry;
-		entry.m_strUserGuid     = result->GetResultString(wxT("guid"));
-		entry.m_strUserName     = result->GetResultString(wxT("name"));
-		entry.m_strUserFullName = result->GetResultString(wxT("fullName"));
-		list.emplace_back(std::move(entry));
+		while (result.Next()) {
+			Brief entry;
+			entry.m_strUserGuid     = result.GetResultString(wxT("guid"));
+			entry.m_strUserName     = result.GetResultString(wxT("name"));
+			entry.m_strUserFullName = result.GetResultString(wxT("fullName"));
+			list.emplace_back(std::move(entry));
+		}
 	}
+	catch (...) { /* best-effort — empty list on failure */ }
 
 	return list;
 }
 
 bool ibUserInfo::Save(const ibUserInfo& info)
 {
-	// db_query routes through the process-wide singleton holder —
-	// the dedicated channel for DDL and infra-level writes that must
-	// stay out of any user session's TX.
-	ibStatementGuard stmt(db_query,
-		db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD
-			? db_query->PrepareStatement(
-				wxT("INSERT INTO %s (guid, name, fullName, changed, dataSize, binaryData) VALUES(?, ?, ?, ?, ?, ?) ON CONFLICT (guid) DO UPDATE SET guid = excluded.guid, name = excluded.name, fullName = excluded.fullName, changed = excluded.changed, dataSize = excluded.dataSize, binaryData = excluded.binaryData; "), user_table)
-			: db_query->PrepareStatement(
-				wxT("UPDATE OR INSERT INTO %s (guid, name, fullName, changed, dataSize, binaryData) VALUES(?, ?, ?, ?, ?, ?) MATCHING (guid);"), user_table)
-	);
-
-	if (!stmt)
-		return false;
-
-	stmt->SetParamString(1, info.m_strUserGuid);
-	stmt->SetParamString(2, info.m_strUserName);
-	stmt->SetParamString(3, info.m_strUserFullName);
-	stmt->SetParamDate  (4, wxDateTime::Now());
-
+	// The default-ctor builder resolves to CurrentHolder = the db_query channel's thread holder —
+	// the dedicated channel for infra-level writes that must stay out of any user session's TX
+	// (the pool never resolves a session holder here; session work passes its holder explicitly).
 	ibWriterMemory writer;
 	writer.w_chunk(eBlockPswd, WritePasswordChunk(info));
 	writer.w_chunk(eBlockRole, WriteRoleChunk    (info));
 	writer.w_chunk(eBlockLang, WriteLanguageChunk(info));
 
-	stmt->SetParamNumber(5, writer.size());
-	stmt->SetParamBlob  (6, writer.pointer(), writer.size());
+	// One UPSERT, match on guid — the door renders ON CONFLICT (PG/SQLite) vs
+	// UPDATE OR INSERT … MATCHING (FB), so the per-driver fork is gone. The blob binds via ibConstBlob.
+	try {
+		ibDatabaseQueryBuilder q;
+		q.Execute(ibUpsert(user_table, {
+			{ wxT("guid"),       ibConst(ibValue(info.m_strUserGuid)) },
+			{ wxT("name"),       ibConst(ibValue(info.m_strUserName)) },
+			{ wxT("fullName"),   ibConst(ibValue(info.m_strUserFullName)) },
+			{ wxT("changed"),    ibConst(ibValue(ibDateTime::Now())) },
+			{ wxT("dataSize"),   ibConst(ibValue(static_cast<unsigned int>(writer.size()))) },
+			{ wxT("binaryData"), ibConstBlob(writer.pointer(), writer.size()) },
+		}, { wxT("guid") }));
+		return true;   // a real failure THROWS (caught below); the affected-row count is not an error
+	}
+	catch (...) { return false; }
+}
 
-	const int result = stmt->RunQuery();
-	return result != DATABASE_LAYER_QUERY_RESULT_ERROR;
+bool ibUserInfo::Delete(const ibGuid& userGuid)
+{
+	if (!userGuid.isValid())
+		return false;
+	try {
+		ibDatabaseQueryBuilder q;
+		q.Execute(ibDelete(user_table,
+			ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("guid")), ibConst(ibValue(userGuid.str())))));
+		return true;   // deleting an absent user (0 rows) is success; a real failure THROWS
+	}
+	catch (...) { return false; }
 }
 
 void ibUserInfo::Serialize(ibWriterMemory& writer) const
@@ -214,8 +273,9 @@ ibUserInfo ibUserInfo::Deserialize(ibReaderMemory& reader)
 	info.m_strUserFullName = reader.r_stringZ();
 
 	wxMemoryBuffer chunk;
-	if (reader.r_chunk(eBlockPswd, chunk)) ReadPasswordChunk(chunk, info);
-	if (reader.r_chunk(eBlockRole, chunk)) ReadRoleChunk    (chunk, info);
-	if (reader.r_chunk(eBlockLang, chunk)) ReadLanguageChunk(chunk, info);
+	// r_chunk APPENDS into the buffer — reset before each read so chunk N is not prefixed with N-1.
+	chunk.SetDataLen(0); if (reader.r_chunk(eBlockPswd, chunk)) ReadPasswordChunk(chunk, info);
+	chunk.SetDataLen(0); if (reader.r_chunk(eBlockRole, chunk)) ReadRoleChunk    (chunk, info);
+	chunk.SetDataLen(0); if (reader.r_chunk(eBlockLang, chunk)) ReadLanguageChunk(chunk, info);
 	return info;
 }

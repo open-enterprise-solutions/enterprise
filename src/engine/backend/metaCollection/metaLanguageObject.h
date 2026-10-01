@@ -4,8 +4,7 @@
 #include "metaObject.h"
 
 class BACKEND_API ibValueMetaObjectLanguage : public ibValueMetaObject {
-	wxDECLARE_DYNAMIC_CLASS(ibValueMetaObjectLanguage);
-public:
+	public:
 
 	wxString GetLangCode() const { return m_propertyCode->GetValueAsString(); }
 	void SetLangCode(const wxString& strCode) { m_propertyCode->SetValue(strCode); }
@@ -31,13 +30,15 @@ public:
 
 protected:
 
-	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer);
+	virtual bool ReadData(const ibDataNode& node) override;
+	virtual bool WriteData(ibDataNode& node) const override;
 
 	bool IsValidCode(const wxString& strLangCode);
 
 private:
-	ibPropertyUString* m_propertyCode = ibPropertyObject::CreateProperty<ibPropertyUString>(m_categoryContext, wxT("Code"), _("Code"), wxT("en"));
+	ibPropertyUString* m_propertyCode = ibPropertyObject::CreateProperty<ibPropertyUString>(m_categoryContext, wxT("Code"), _("Code"),
+		_("The language's code (en, ru, uk and so on): the key its texts are stored under in multi-language strings (synonyms, captions, spreadsheet cells) and the code the session's interface language is set by when this language is the configuration's default. Unique among the configuration's languages - a pasted duplicate gets a number appended."),
+		wxT("en"));
 };
 
 #endif 

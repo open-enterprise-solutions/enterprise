@@ -7,12 +7,11 @@
 
 #include "backend/metaCollection/partial/commonObject.h"
 #include "backend/metaCollection/partial/reference/reference.h"
+#include "backend/metaCollection/partial/selector/objectSelector.h"   // the selector ctor below upcasts to a second base
+#include "backend/composition/dataComposer.h"   // GetModelComposer().GroupCount/GetGroupAt — grouped-add dim seeding
+#include "backend/choiceLinkResolver.h"         // a column typed by its neighbour is narrowed on write
 
 #include "backend/appData.h"
-wxIMPLEMENT_ABSTRACT_CLASS(ibValueTabularSectionDataObjectBase, ibValueModelRamTableBase);
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectReturnLine, ibValueModelRamTableBase::ibValueModelReturnLine);
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueTabularSectionDataObject, ibValueTabularSectionDataObjectBase);
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueTabularSectionDataObjectRef, ibValueTabularSectionDataObjectBase);
 
 //////////////////////////////////////////////////////////////////////
 //               ibValueTabularSectionDataObjectBase                          //
@@ -21,13 +20,24 @@ wxIMPLEMENT_DYNAMIC_CLASS(ibValueTabularSectionDataObjectRef, ibValueTabularSect
 #include "backend/metaData.h"
 #include "backend/objCtor.h"
 
+// A row's column BY ID — among the section's own column list, not the table's children. The list carries what
+// the owner puts into the table as well: the account's kinds table shows a tick-box per breakdown accounting
+// kind its chart declares, and a column the list shows is a column a row has.
+static const ibValueMetaObjectAttributeBase* ibSectionColumnById(const ibValueMetaObjectTableData* table, const ibMetaID& id)
+{
+	for (const ibValueMetaObjectAttributeBase* attribute : table->GetGenericAttributeArrayObject())
+		if (attribute != nullptr && attribute->GetMetaID() == id)
+			return attribute;
+	return nullptr;
+}
+
 ibDataViewItem ibValueTabularSectionDataObjectBase::FindRowValue(const ibValue& varValue, const wxString& colName) const
 {
 	ibValueModelColumnCollection::ibValueModelColumnInfo* colInfo = m_recordColumnCollection->GetColumnByName(colName);
 	if (colInfo != nullptr) {
 		for (long row = 0; row < GetRowCount(); row++) {
 			const ibDataViewItem& item = GetItem(row);
-			ibValueTableRow* node = GetViewData<ibValueTableRow>(item);
+			ibComposerNode* node = GetViewData<ibComposerNode>(item);
 			if (node != nullptr &&
 				varValue == node->GetTableValue(colInfo->GetColumnID())) {
 				return item;
@@ -45,7 +55,7 @@ bool ibValueTabularSectionDataObjectBase::GetAt(const ibValue& varKeyValue, ibVa
 		return false;
 	}
 
-	pvarValue = ibValue::CreateAndPrepareValueRef<ibValueTabularSectionDataObjectReturnLine>(this, GetItem(index));
+	pvarValue = new ibValueTabularSectionDataObjectReturnLine(this, GetItem(index));
 	return true;
 }
 
@@ -75,7 +85,7 @@ wxString ibValueTabularSectionDataObjectBase::GetClassName() const
 	return _("<deleted metaobject>");
 }
 
-wxString ibValueTabularSectionDataObjectBase::GetString() const
+ibString ibValueTabularSectionDataObjectBase::GetString() const
 {
 	if (m_metaTable->IsAllowed()) {
 		const ibMetaData* metaData = m_metaTable->GetMetaData();
@@ -94,16 +104,32 @@ bool ibValueTabularSectionDataObjectBase::SetValueByMetaID(const ibDataViewItem&
 		return false;
 
 	if (!appData->DesignerMode()) {
-		ibValueTableRow* node = GetViewData<ibValueTableRow>(item);
+		ibComposerNode* node = GetViewData<ibComposerNode>(item);
 		
 		if (node != nullptr) {
-			const ibValueMetaObjectAttributeBase* attribute = m_metaTable->FindAnyAttributeObjectByFilter(id);
+			const ibValueMetaObjectAttributeBase* attribute = ibSectionColumnById(m_metaTable, id);
 			wxASSERT(attribute);
 			if (attribute == nullptr) return false;
-			const bool ok = node->SetValue(
-				id, attribute->AdjustValue(varMetaVal), true
-			);
-			
+			// …narrowed by the column's link, with THIS ROW as the holder — a value column typed by the
+			// kind column beside it takes the kind of its OWN row (choiceLinkResolver.h).
+			const ibValue settled =
+				ibChoiceLinkResolver::Adjust(ibChoiceHolder(this, item), attribute, varMetaVal);
+
+			ibValue previous;
+			const bool changed = !node->GetValue(id, previous) || !(previous == settled);
+
+			const bool ok = node->SetValue(id, settled, true);
+
+			// …and the cells chosen within this one go with it — within THIS ROW. A column emptying a
+			// neighbour would otherwise reach across every other row, which is somebody else's line.
+			//
+			// ⚠ ON A CHANGE, NOT ON A WRITE, for the reason spelled out at the object's own write
+			// (commonObject.cpp): re-choosing what is already in the cell makes nothing stale.
+			if (ok && changed) {
+				ibChoiceHolder holder(this, item);
+				ibChoiceLinkResolver::ClearLinked(holder, id);
+			}
+
 			return ok;
 		}
 	}
@@ -114,18 +140,24 @@ bool ibValueTabularSectionDataObjectBase::SetValueByMetaID(const ibDataViewItem&
 bool ibValueTabularSectionDataObjectBase::GetValueByMetaID(const ibDataViewItem& item, const ibMetaID& id, ibValue& pvarMetaVal) const
 {
 	if (m_metaTable->IsNumberLine(id)) {
-		pvarMetaVal = ibValue(ibNumber(static_cast<int>(GetRow(item) + 1)));
+		// The SAME number the display reads — the row's place in what is shown (DisplayNumberOf). A group
+		// header is synthetic and carries none; a row outside the filter is shown nowhere and carries none.
+		// Both answer empty rather than a bogus "0".
+		const long number = DisplayNumberOf(item);
+		if (number <= 0) { pvarMetaVal = ibValue(); return true; }
+		pvarMetaVal = ibValue(ibNumber(static_cast<int>(number)));
 		return true;
 	}
 
 	if (appData->DesignerMode()) {
-		const ibValueMetaObjectAttributeBase* attribute = m_metaTable->FindAnyAttributeObjectByFilter(id);
-		wxASSERT(attribute);
+		const ibValueMetaObjectAttributeBase* attribute = ibSectionColumnById(m_metaTable, id);
+		if (attribute == nullptr)
+			return false;   // not found, or switched off — as SetValueByMetaID above answers it
 		pvarMetaVal = attribute->CreateValue();
 		return true;
 	}
 
-	ibValueTableRow* node = GetViewData<ibValueTableRow>(item);
+	ibComposerNode* node = GetViewData<ibComposerNode>(item);
 	if (node != nullptr)
 		return node->GetValue(id, pvarMetaVal);
 
@@ -134,15 +166,15 @@ bool ibValueTabularSectionDataObjectBase::GetValueByMetaID(const ibDataViewItem&
 
 bool ibValueTabularSectionDataObjectBase::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
 {
-	const long lMethodAlias = m_methodHelper->GetMethodAlias(lMethodNum);
+	const long lMethodAlias = m_members.GetMethodAlias(lMethodNum);
 	if (lMethodAlias != eTabularSection)
 		return false;
 
-	const long lMethodData = m_methodHelper->GetMethodData(lMethodNum);
+	const long lMethodData = m_members.GetMethodData(lMethodNum);
 	switch (lMethodData)
 	{
 	case enAddValue:
-		pvarRetValue = ibValue::CreateAndPrepareValueRef<ibValueTabularSectionDataObjectReturnLine>(this, GetItem(AppendRow()));
+		pvarRetValue = new ibValueTabularSectionDataObjectReturnLine(this, GetItem(AppendRow()));
 		return true;
 	case enFind: {
 		const ibDataViewItem& item = FindRowValue(*paParams[0], paParams[1]->GetString());
@@ -156,15 +188,15 @@ bool ibValueTabularSectionDataObjectBase::CallAsFunc(const long lMethodNum, ibVa
 	case enDelete: {
 		ibValueTabularSectionDataObjectReturnLine* retLine = nullptr;
 		if (paParams[0]->ConvertToValue(retLine)) {
-			ibValueTableRow* node = GetViewData<ibValueTableRow>(retLine->GetLineItem());
+			ibComposerNode* node = GetViewData<ibComposerNode>(retLine->GetLineItem());
 			if (node != nullptr)
-				ibValueModelRamTableBase::Remove(node);
+				ibValueModelStorage::Remove(node);
 		}
 		else {
 			const ibNumber& number = paParams[0]->GetNumber();
-			ibValueTableRow* node = GetViewData<ibValueTableRow>(GetItem(number.ToInt()));
+			ibComposerNode* node = GetViewData<ibComposerNode>(GetItem(number.ToInt()));
 			if (node != nullptr)
-				ibValueModelRamTableBase::Remove(node);
+				ibValueModelStorage::Remove(node);
 		}
 		return true;
 	}
@@ -172,7 +204,7 @@ bool ibValueTabularSectionDataObjectBase::CallAsFunc(const long lMethodNum, ibVa
 		Clear();
 		return true;
 	case enLoad:
-		ibValueTabularSectionDataObjectBase::LoadDataFromTable(paParams[0]->ConvertToType<ibValueModelTableBase>());
+		ibValueTabularSectionDataObjectBase::LoadDataFromTable(paParams[0]->ConvertToType<ibValueModel>());
 		return true;
 	case enUnload:
 		pvarRetValue = SaveDataToTable();
@@ -212,14 +244,17 @@ ibValueTabularSectionDataObjectRef::ibValueTabularSectionDataObjectRef(ibValueRe
 {
 }
 
+// A selector derives ibValueDataObject as its second base, so the pointer needs an offset. The
+// C-style cast that stood here compiled as a reinterpret_cast on an incomplete type and applied
+// none, so every call through m_objectValue landed in the wrong vtable.
 ibValueTabularSectionDataObjectRef::ibValueTabularSectionDataObjectRef(ibValueSelectorRecordDataObject* selectorObject, const ibValueMetaObjectTableData* tableObject) :
-	ibValueTabularSectionDataObjectBase((ibValueDataObject*)selectorObject, tableObject), m_readAfter(false)
+	ibValueTabularSectionDataObjectBase(selectorObject, tableObject), m_readAfter(false)
 {
 }
 
 #include "backend/system/value/valueTable.h"
 
-bool ibValueTabularSectionDataObjectBase::LoadDataFromTable(ibValueModelTableBase* srcTable)
+bool ibValueTabularSectionDataObjectBase::LoadDataFromTable(ibValueModel* srcTable)
 {
 	if (m_readOnly)
 		return false;
@@ -255,9 +290,9 @@ bool ibValueTabularSectionDataObjectBase::LoadDataFromTable(ibValueModelTableBas
 	return true;
 }
 
-ibValueModelTableBase* ibValueTabularSectionDataObjectBase::SaveDataToTable() const
+ibValuePtr<ibValueModel> ibValueTabularSectionDataObjectBase::SaveDataToTable() const
 {
-	ibValueModelTable* valueTable = ibValue::CreateAndPrepareValueRef<ibValueModelTable>();
+	const ibValuePtr<ibValueModelTable> valueTable(new ibValueModelTable());
 	ibValueModelColumnCollection* colData = valueTable->GetColumnCollection();
 	for (unsigned int idx = 0; idx < m_recordColumnCollection->GetColumnCount() - 1; idx++) {
 		ibValueModelColumnCollection::ibValueModelColumnInfo* colInfo = m_recordColumnCollection->GetColumnInfo(idx);
@@ -267,7 +302,7 @@ ibValueModelTableBase* ibValueTabularSectionDataObjectBase::SaveDataToTable() co
 		);
 		newColInfo->SetColumnID(colInfo->GetColumnID());
 	}
-	valueTable->PrepareNames();
+	valueTable->InvalidateNames();
 	for (long row = 0; row < GetRowCount(); row++) {
 		const ibDataViewItem& srcItem = GetItem(row);
 		const ibDataViewItem& dstItem = valueTable->GetItem(valueTable->AppendRow());
@@ -289,17 +324,26 @@ ibValueModelTableBase* ibValueTabularSectionDataObjectBase::SaveDataToTable() co
 
 bool ibValueTabularSectionDataObjectRef::SetValueByMetaID(const ibDataViewItem& item, const ibMetaID& id, const ibValue& varMetaVal)
 {
-	if (varMetaVal != ibValueTabularSectionDataObjectBase::GetValueByMetaID(item, id)) {
-		ibBackendValueForm* const foundedForm = ibBackendValueForm::FindFormByUniqueKey(
-			m_objectValue->GetGuid()
-		);
-		bool result = ibValueTabularSectionDataObjectBase::SetValueByMetaID(item, id, varMetaVal);
-		if (result && foundedForm != nullptr)
-			foundedForm->Modify(true);
-		return result;
-	}
+	// 🛑⭐ "DID IT CHANGE" IS ASKED OF WHAT WAS STORED, NOT OF WHAT WAS HANDED IN. This compared the RAW
+	// incoming value with the cell and returned before the write when they matched — ahead of the base,
+	// which is where the value is narrowed by its link. So a clearing that wrote Undefined into a cell
+	// already Undefined never reached the narrowing, the cell never became the empty value of the type
+	// its kind settles, and a characteristic in a NEW ROW stayed Undefined for good: the control then had
+	// no type to read typed text by and threw it away (Max, 2026-09-23: "in the tabular section the
+	// characteristics do not work at all"; the journal showed the clearing with no `choice.type` after it).
+	//
+	// The write always goes through the base; whether the OBJECT changed is read off the cell afterwards.
+	const ibValue before = ibValueTabularSectionDataObjectBase::GetValueByMetaID(item, id);
+	const bool result = ibValueTabularSectionDataObjectBase::SetValueByMetaID(item, id, varMetaVal);
 
-	return false;
+	// A LINE THAT CHANGED CHANGES ITS OBJECT — through the object, the way AppendRow does it: its own Modify
+	// tells an open window too, and its flag is what the object's write asks before writing the lines
+	// again (ibValueRecordDataObjectRef::SaveData). Telling only the window left the object believing
+	// itself unchanged.
+	if (result && !ibBackendException::IsEvalMode()
+		&& !(before == ibValueTabularSectionDataObjectBase::GetValueByMetaID(item, id)))
+		m_objectValue->Modify(true);
+	return result;
 }
 
 bool ibValueTabularSectionDataObjectRef::GetValueByMetaID(const ibDataViewItem& item, const ibMetaID& id, ibValue& pvarMetaVal) const
@@ -312,29 +356,30 @@ bool ibValueTabularSectionDataObjectRef::GetValueByMetaID(const ibDataViewItem& 
 //////////////////////////////////////////////////////////////////////
 
 ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectReturnLine::ibValueTabularSectionDataObjectReturnLine(ibValueTabularSectionDataObjectBase* ownerTable, const ibDataViewItem& line)
-	: ibValueModelReturnLine(line), m_ownerTable(ownerTable), m_methodHelper(new ibValueMethodHelper()) {
+	: ibValueModelReturnLine(line), m_ownerTable(ownerTable) {
+	HoldOwnerModel(ownerTable);   // the row speaks through the section; see the base
 }
 
 ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectReturnLine::~ibValueTabularSectionDataObjectReturnLine() {
-	wxDELETE(m_methodHelper);
 }
 
-void ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectReturnLine::PrepareNames() const
+void ibValueTabularSectionDataObjectBase::DescribeReturnLine(ibMemberTable& helper) const
 {
-	m_methodHelper->ClearHelper();
+	if (m_metaTable == nullptr)
+		return;
 
-	//set object name 
+	//set object name
 	wxString objectName;
 
-	for (const auto object : m_ownerTable->m_metaTable->GetGenericAttributeArrayObject()) {
+	for (const auto object : m_metaTable->GetGenericAttributeArrayObject()) {
 		if (object->IsDeleted())
 			continue;
 		if (!object->GetObjectNameAsString(objectName))
 			continue;
-		m_methodHelper->AppendProp(
+		helper.AppendProp(
 			objectName,
 			true,
-			!m_ownerTable->m_metaTable->IsNumberLine(object->GetMetaID()),
+			!m_metaTable->IsNumberLine(object->GetMetaID()),
 			object->GetMetaID()
 		);
 	}
@@ -342,12 +387,12 @@ void ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectReturnL
 
 bool ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectReturnLine::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 {
-	return SetValueByMetaID(m_methodHelper->GetPropData(lPropNum), varPropVal);
+	return SetValueByMetaID(m_ownerTable->m_methodHelperReturnLine.GetPropData(lPropNum), varPropVal);
 }
 
 bool ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectReturnLine::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
-	return GetValueByMetaID(m_methodHelper->GetPropData(lPropNum), pvarPropVal);
+	return GetValueByMetaID(m_ownerTable->m_methodHelperReturnLine.GetPropData(lPropNum), pvarPropVal);
 }
 
 ibClassID ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectReturnLine::GetClassType() const
@@ -372,7 +417,7 @@ wxString ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectRet
 	return clsFactory->GetClassName();
 }
 
-wxString ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectReturnLine::GetString() const
+ibString ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectReturnLine::GetString() const
 {
 	const ibValueMetaObject* metaTable = m_ownerTable->GetMetaObject();
 	const ibMetaData* metaData = metaTable->GetMetaData();
@@ -387,19 +432,16 @@ wxString ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectRet
 //               ibValueTabularSectionDataObjectColumnCollection          //
 //////////////////////////////////////////////////////////////////////
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectColumnCollection, ibValueModelRamTableBase::ibValueModelColumnCollection);
 
 ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectColumnCollection::ibValueTabularSectionDataObjectColumnCollection() :
 	ibValueModelColumnCollection(),
-	m_ownerTable(nullptr),
-	m_methodHelper(nullptr)
+	m_ownerTable(nullptr)
 {
 }
 
 ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectColumnCollection::ibValueTabularSectionDataObjectColumnCollection(ibValueTabularSectionDataObjectBase* ownerTable) :
 	ibValueModelColumnCollection(),
-	m_ownerTable(ownerTable),
-	m_methodHelper(new ibValueMethodHelper())
+	m_ownerTable(ownerTable)
 {
 	const ibValueMetaObjectTableData* metaTable = m_ownerTable->GetMetaObject();
 	wxASSERT(metaTable);
@@ -407,25 +449,27 @@ ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectColumnCollec
 		if (metaTable->IsNumberLine(object->GetMetaID()))
 			continue;
 		m_listColumnInfo.insert_or_assign(object->GetMetaID(),
-			ibValue::CreateAndPrepareValueRef<ibValueTabularSectionColumnInfo>(object)
+			new ibValueTabularSectionColumnInfo(object)
 		);
 	}
 }
 
 ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectColumnCollection::~ibValueTabularSectionDataObjectColumnCollection()
 {
-	wxDELETE(m_methodHelper);
 }
 
-bool ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectColumnCollection::SetAt(const ibValue& varKeyValue, const ibValue& varValue)//������ ������� ������ ���������� � 0
+bool ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectColumnCollection::SetAt(const ibValue& varKeyValue, const ibValue& varValue) // read-only column collection - no-op (writes are not supported)
 {
 	return false;
 }
 
-bool ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectColumnCollection::GetAt(const ibValue& varKeyValue, ibValue& pvarValue) //������ ������� ������ ���������� � 0
+bool ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectColumnCollection::GetAt(const ibValue& varKeyValue, ibValue& pvarValue) // read a column-info entry by its index
 {
 	unsigned int index = varKeyValue.GetUInteger();
-	if ((index < 0 || index >= m_listColumnInfo.size() && !appData->DesignerMode())) {
+	// `index` is unsigned, so `index < 0` was dead code, and && binds tighter than ||
+	// — the condition already meant "out of range AND not in the designer". Spelled out;
+	// the designer-mode exemption is preserved, not introduced (see docs/portability.md).
+	if (index >= m_listColumnInfo.size() && !appData->DesignerMode()) {
 		ibBackendCoreException::Error(_("Index goes beyond array"));
 		return false;
 	}
@@ -439,7 +483,6 @@ bool ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectColumnC
 //               ibValueTabularSectionColumnInfo                     //
 //////////////////////////////////////////////////////////////////////
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectColumnCollection::ibValueTabularSectionColumnInfo, ibValueModelRamTableBase::ibValueModelColumnCollection::ibValueModelColumnInfo);
 
 ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectColumnCollection::ibValueTabularSectionColumnInfo::ibValueTabularSectionColumnInfo() :
 	ibValueModelColumnInfo(), m_metaAttribute(nullptr)
@@ -455,50 +498,105 @@ ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectColumnCollec
 {
 }
 
-long ibValueTabularSectionDataObjectBase::AppendRow(unsigned int before)
+namespace {
+// A filter line DETERMINES a value only when it SAYS one: an equality, switched on, on a plain column (a
+// dotted path walks into a reference — there is no cell of this table to write it into), against a literal
+// rather than another field. `>` / `LIKE` / `IN` narrow without deciding, and an OR-group decides nothing at
+// all — so neither contributes, and an OR is not walked into.
+void ibCollectFilterDefaults(const std::vector<ibFilterNodeDescription>& nodes,
+	std::vector<std::pair<wxString, ibValue>>& out)
 {
-	ibValueTableRow* rowData = new ibValueTableRow();
-	for (const auto object : m_metaTable->GetGenericAttributeArrayObject()) {
+	for (const ibFilterNodeDescription& node : nodes) {
+		if (!node.m_use)
+			continue;
+		if (node.m_kind == ibFilterNodeKind_Group) {
+			if (node.m_groupKind == ibFilterGroupKind_And)
+				ibCollectFilterDefaults(node.m_children, out);
+			continue;
+		}
+		if (node.m_comparison != ibComparisonKind_Equal) continue;
+		if (!node.m_left.IsField() || node.m_right.IsField()) continue;
+		if (node.m_left.m_path.Find(wxT('.')) != wxNOT_FOUND) continue;
+		out.emplace_back(node.m_left.m_path, node.m_right.m_value);
+	}
+}
+}   // namespace
+
+void ibValueTabularSectionDataObjectBase::DescribeNewRow(ibNewRowColumns& columns) const
+{
+	for (const auto object : m_metaTable->GetGenericAttributeArrayObject())
 		if (!m_metaTable->IsNumberLine(object->GetMetaID()))
-			rowData->AppendTableValue(object->GetMetaID(), object->CreateValue());
+			columns.push_back({ object->GetMetaID(), [object]() { return object->CreateValue(); } });
+}
+
+long ibValueTabularSectionDataObjectBase::AppendRow(unsigned int before, const ibDataViewItem& contextRow)
+{
+	// A copy of the section's own empty line (ibValueModelStorage::NewRow) — made once, from its attributes.
+	ibComposerNode* rowData = NewRow();
+
+	// Grouped add: the new row inherits the dimension values of the group the user is INSIDE — the drilled-into
+	// folder, which the front passes as the context — so it lands in that group instead of losing the value.
+	// ⭐ AND AT THE ROOT IT INHERITS NOTHING, which is the point: standing at the top of a hierarchical view,
+	// a new row starts with its dimensions EMPTY and therefore forms a group of its own, empty, that a person
+	// can step into and fill (Max, 2026-08-29). Filling it re-folds the view on the spot, because a cell edit
+	// bumps the view generation. No context / ungrouped → no dims → no-op; a dotted dim is skipped.
+	if (ibComposerNode* ctx = GetViewData<ibComposerNode>(contextRow)) {
+		for (size_t i = 0; i < GetModelComposer().GroupCount(); ++i) {
+			wxString field; ibQueryDimUnfold kind = ibQueryDimUnfold::Elements;
+			if (!GetModelComposer().GetGroupAt(i, field, kind) || field.IsEmpty()) continue;
+			const ibMetaID col = GetColumnIDByName(field);
+			if (col != wxNOT_FOUND)
+				rowData->AppendTableValue(col, ctx->GetTableValue(col));
+		}
+	}
+
+	// ⭐⭐ …AND WHAT THE FILTER IN FORCE HAS ALREADY DECIDED. This is not a convenience: the new row is empty,
+	// the filter does not pass it, and the RAM composer drops it from the order in the same breath — the row a
+	// person just added is gone before they see it (Max, 2026-08-29: *"it has to supply the value already,
+	// because it falls out at once"*). So it is filled HERE, before the notify, and the first order computed
+	// after the insert already contains the row.
+	std::vector<std::pair<wxString, ibValue>> defaults;
+	ibCollectFilterDefaults(GetModelComposer().GetCurrentFilterDesc().m_nodes, defaults);
+	for (const std::pair<wxString, ibValue>& one : defaults) {
+		const ibMetaID col = GetColumnIDByName(one.first);
+		if (col != wxNOT_FOUND)
+			rowData->AppendTableValue(col, one.second);
 	}
 
 	if (before > 0)
-		return ibValueModelRamTableBase::Insert(rowData, before, !ibBackendException::IsEvalMode());
+		return ibValueModelStorage::Insert(rowData, before, !ibBackendException::IsEvalMode());
 
-	return ibValueModelRamTableBase::Append(rowData, !ibBackendException::IsEvalMode());
+	return ibValueModelStorage::Append(rowData, !ibBackendException::IsEvalMode());
 }
 
-long ibValueTabularSectionDataObjectRef::AppendRow(unsigned int before)
+long ibValueTabularSectionDataObjectRef::AppendRow(unsigned int before, const ibDataViewItem& contextRow)
 {
 	if (!ibBackendException::IsEvalMode())
 		m_objectValue->Modify(true);
-	return ibValueTabularSectionDataObjectBase::AppendRow(before);
+	return ibValueTabularSectionDataObjectBase::AppendRow(before, contextRow);
 }
 
 //****************************************************************************
 //*                              Support methods                             *
 //****************************************************************************
 
-void ibValueTabularSectionDataObjectBase::PrepareNames() const
+void ibValueTabularSectionDataObjectBase::FillMembers(ibMemberTable& helper) const
 {
-	m_methodHelper->ClearHelper();
-
 	if (m_readOnly) {
-		m_methodHelper->AppendFunc(wxT("Count"), wxT("Count()"), enCount, eTabularSection);
-		m_methodHelper->AppendFunc(wxT("Find"), 2, wxT("Find(value : any, columnName : string)"), enFind, eTabularSection);
-		m_methodHelper->AppendFunc(wxT("Unload"), wxT("Unload()"), enUnload, eTabularSection);
-		m_methodHelper->AppendFunc(wxT("GetMetadata"), wxT("GetMetadata()"), enGetMetadata, eTabularSection);
+		helper.AppendFunc(wxT("Count"), wxT("Count()"), enCount, eTabularSection);
+		helper.AppendFunc(wxT("Find"), 2, wxT("Find(value : any, columnName : string)"), enFind, eTabularSection);
+		helper.AppendFunc(wxT("Unload"), wxT("Unload()"), enUnload, eTabularSection);
+		helper.AppendFunc(wxT("GetMetadata"), wxT("GetMetadata()"), enGetMetadata, eTabularSection);
 	}
 	else {
-		m_methodHelper->AppendFunc(wxT("Add"), wxT("Add()"), enAddValue, eTabularSection);
-		m_methodHelper->AppendFunc(wxT("Count"), wxT("Count()"), enCount, eTabularSection);
-		m_methodHelper->AppendFunc(wxT("Find"), 2, wxT("Find(value : any, columnName : string)"), enFind, eTabularSection);
-		m_methodHelper->AppendFunc(wxT("Delete"), 1, wxT("delete(row : tabularSectionRow)"), enDelete, eTabularSection);
-		m_methodHelper->AppendFunc(wxT("Clear"), wxT("Clear()"), enClear, eTabularSection);
-		m_methodHelper->AppendFunc(wxT("Load"), 1, wxT("Load(table : any table)"), enLoad, eTabularSection);
-		m_methodHelper->AppendFunc(wxT("Unload"), wxT("Unload()"), enUnload, eTabularSection);
-		m_methodHelper->AppendFunc(wxT("GetMetadata"), wxT("GetMetadata()"), enGetMetadata, eTabularSection);
+		helper.AppendFunc(wxT("Add"), wxT("Add()"), enAddValue, eTabularSection);
+		helper.AppendFunc(wxT("Count"), wxT("Count()"), enCount, eTabularSection);
+		helper.AppendFunc(wxT("Find"), 2, wxT("Find(value : any, columnName : string)"), enFind, eTabularSection);
+		helper.AppendFunc(wxT("Delete"), 1, wxT("delete(row : tabularSectionRow)"), enDelete, eTabularSection);
+		helper.AppendFunc(wxT("Clear"), wxT("Clear()"), enClear, eTabularSection);
+		helper.AppendFunc(wxT("Load"), 1, wxT("Load(table : any table)"), enLoad, eTabularSection);
+		helper.AppendFunc(wxT("Unload"), wxT("Unload()"), enUnload, eTabularSection);
+		helper.AppendFunc(wxT("GetMetadata"), wxT("GetMetadata()"), enGetMetadata, eTabularSection);
 	}
 }
 
@@ -506,5 +604,5 @@ void ibValueTabularSectionDataObjectBase::PrepareNames() const
 //*                       Runtime register                             *
 //**********************************************************************
 
-SYSTEM_TYPE_REGISTER(ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectColumnCollection, "TabularSectionColumn", string_to_clsid("VL_TSCL"));
-SYSTEM_TYPE_REGISTER(ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectColumnCollection::ibValueTabularSectionColumnInfo, "TabularSectionColumnInfo", string_to_clsid("VL_CI"));
+SYSTEM_TYPE_REGISTER(ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectColumnCollection, "TabularSectionColumn", system_to_clsid("VL_TSCL"));
+SYSTEM_TYPE_REGISTER(ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectColumnCollection::ibValueTabularSectionColumnInfo, "TabularSectionColumnInfo", system_to_clsid("VL_CI"));

@@ -1,4 +1,5 @@
-#include "toolbar.h"
+#include "toolBar.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "frontend/visualView/visualHostClient.h"
 #ifdef OES_USE_WEB
 #include "frontend/web/webWindow.h"
@@ -10,7 +11,6 @@
 //*                           IMPLEMENT_DYNAMIC_CLASS                               *
 //***********************************************************************************
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueToolbar, ibValueWindow);
 
 //***********************************************************************************
 //*                                  Custom Aui toolbar                             *
@@ -71,16 +71,16 @@ wxObject* ibValueToolbar::Create(ibFrontendWindow* wxparent, ibVisualHost* visua
 	return toolbar;
 }
 
-void ibValueToolbar::OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost, bool firstСreated)
+void ibValueToolbar::OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost, bool firstCreated)
 {
 #ifdef OES_USE_WEB
 	(void)wxobject;
 	(void)wxparent;
 	(void)visualHost;
-	(void)firstСreated;
+	(void)firstCreated;
 #else
 	if (visualHost->IsDesignerHost() && GetChildCount() == 0
-		&& firstСreated) {
+		&& firstCreated) {
 		ibValueToolbar::AddToolItem();
 	}
 #endif
@@ -114,9 +114,9 @@ void ibValueToolbar::Update(wxObject* wxobject, ibVisualHost* visualHost)
 			? FindControlByID(id)
 			: GetOwnerForm();
 		if (sourceElement != nullptr)
-			m_actionArray = sourceElement->GetActionCollection(sourceElement->GetTypeForm());
+			m_actionArray = sourceElement->GetStandardCommands(sourceElement->GetTypeForm());
 		else
-			m_actionArray = ibActionCollection();
+			m_actionArray = ibStandardCommandSet();
 	}
 
 	UpdateWindow(toolbar);
@@ -141,16 +141,16 @@ void ibValueToolbar::Cleanup(wxObject* obj, ibVisualHost* visualHost)
 //*										 Property                                  *
 //**********************************************************************************
 
-bool ibValueToolbar::LoadData(ibReaderMemory& reader)
+bool ibValueToolbar::ReadData(const ibDataNode& node)
 {
-	m_actSource->LoadData(reader);
-	return ibValueWindow::LoadData(reader);
+	m_actSource->SetNodeValue(node.GetProperty(m_actSource->GetName()));
+	return ibValueWindow::ReadData(node);
 }
 
-bool ibValueToolbar::SaveData(ibWriterMemory& writer)
+bool ibValueToolbar::WriteData(ibDataNode& node) const
 {
-	m_actSource->SaveData(writer);
-	return ibValueWindow::SaveData(writer);
+	node.SetProperty(m_actSource->GetName(), m_actSource->GetNodeValue());
+	return ibValueWindow::WriteData(node);
 }
 
 //***********************************************************************

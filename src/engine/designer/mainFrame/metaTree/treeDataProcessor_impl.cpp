@@ -5,15 +5,11 @@
 
 #include "treeDataProcessor.h"
 #include "frontend/mainFrame/mainFrame.h"
-#include "frontend/docView/docManager.h"
+#include "frontend/docView/docView.h"
 #include "backend/appData.h"
+#include "backend/metaCollection/metaCommandObject.h"   // ibValueMetaObjectCommand::GetSubCommands
 
-#define	objectFormsName _("Forms")
-#define	objectModulesName _("Modules")
-#define	objectTemplatesName _("Templates")
-#define objectAttributesName _("Attributes")
-#define objectTablesName _("Tables")
-#define objectEnumerationsName _("Enums")
+#include <cstdint>   // intptr_t — the widening step under the client-data cast
 
 //***********************************************************************
 //*                         metaData                                    * 
@@ -26,7 +22,7 @@ void ibDataProcessorTree::ActivateItem(const wxTreeItemId& item)
 	if (currObject == nullptr)
 		return;
 
-	OpenFormMDI(currObject);
+	OpenObjectForm(currObject);
 }
 
 ibValueMetaObject* ibDataProcessorTree::NewItem(const ibClassID& clsid, ibValueMetaObject* parent, bool runObject)
@@ -44,17 +40,17 @@ ibValueMetaObject* ibDataProcessorTree::CreateItem(bool showValue)
 		GetMetaIdentifier()
 	);
 
+	// A form whose kind the person refused is taken away again — see ibConfigurationTree::CreateItem.
+	if (createdObject != nullptr && createdObject->IsDeleted())
+		createdObject = nullptr;
+
 	if (createdObject != nullptr) {
 
 		ibPropertyObject* prev_selected = objectInspector->GetSelectedObject();
 
-		if (showValue) { OpenFormMDI(createdObject); }
-		UpdateToolbar(createdObject, FillItem(createdObject, item,
-			prev_selected == objectInspector->GetSelectedObject(), false));
-		for (auto& doc : docManager->GetDocumentsVector()) {
-			ibMetaDocument* metaDoc = wxDynamicCast(doc, ibMetaDocument);
-			//if (metaDoc != nullptr) metaDoc->UpdateAllViews();
-		}
+		// ⭐ THE ROW IS NOT DRAWN HERE — see ibConfigurationTree::CreateItem. The click asks; the
+		// row appears because the metadata answered — see AddItem.
+		if (showValue) { OpenObjectForm(createdObject); }
 	}
 
 	m_metaTreeCtrl->RefreshSelectedItem();
@@ -80,18 +76,26 @@ wxTreeItemId ibDataProcessorTree::FillItem(ibValueMetaObject* metaItem, const wx
 		wxASSERT(metaItemRecord);
 
 		for (auto attribute : metaItemRecord->GetAttributeArrayObject()) {
-			if (attribute->IsDeleted())
-				continue;
-			if (attribute->GetClassType() == g_metaPredefinedAttributeCLSID)
+			if (!attribute->IsAcceptedByParent())
 				continue;
 			AppendItem(createdItem, attribute);
 		}
 	}
+	// A COMMAND HOLDS COMMANDS — a pasted group command must show what it brought with it, the
+	// same rule the configuration tree's dispatcher applies.
+	else if (metaItem->GetClassType() == g_metaCommandCLSID) {
+		for (auto sub : static_cast<ibValueMetaObjectCommand*>(metaItem)->GetSubCommands())
+			AppendCommandNode(createdItem, sub);
+	}
 
 	m_metaTreeCtrl->InvalidateBestSize();
-	m_metaTreeCtrl->SetEvtHandlerEnabled(select);
-	m_metaTreeCtrl->SelectItem(createdItem);
-	m_metaTreeCtrl->SetEvtHandlerEnabled(true);
+
+	// `select` means what it says — see the twin in treeConfiguration_impl.cpp. It used to wrap
+	// SetEvtHandlerEnabled around a SelectItem that ran either way, so a caller asking for no
+	// selection got one anyway, silently.
+	if (select)
+		m_metaTreeCtrl->SelectItem(createdItem);
+
 	m_metaTreeCtrl->Expand(createdItem);
 
 	m_metaTreeCtrl->Thaw();
@@ -102,6 +106,10 @@ wxTreeItemId ibDataProcessorTree::FillItem(ibValueMetaObject* metaItem, const wx
 	return createdItem;
 }
 
+
+// ⭐ ADDED, ANNOUNCED, HANDLED — the row is drawn where the answer arrives, not at the click. See the
+// twin in treeConfiguration_impl.cpp for why `select` is plainly true and `scroll` plainly false.
+
 void ibDataProcessorTree::EditItem()
 {
 	wxTreeItemId selection = m_metaTreeCtrl->GetSelection();
@@ -109,12 +117,12 @@ void ibDataProcessorTree::EditItem()
 	if (!selection.IsOk())
 		return;
 
-	ibValueMetaObject* m_currObject = GetMetaObject(selection);
+	ibValueMetaObject* currObject = GetMetaObject(selection);
 
-	if (!m_currObject)
+	if (!currObject)
 		return;
 
-	OpenFormMDI(m_currObject);
+	OpenObjectForm(currObject);
 }
 
 void ibDataProcessorTree::RemoveItem()
@@ -124,27 +132,15 @@ void ibDataProcessorTree::RemoveItem()
 	if (!selection.IsOk())
 		return;
 
-	wxTreeItemIdValue m_cookie;
-	wxTreeItemId hItem = m_metaTreeCtrl->GetFirstChild(selection, m_cookie);
-
-	while (hItem)
-	{
-		EraseItem(hItem);
-		hItem = m_metaTreeCtrl->GetNextChild(hItem, m_cookie);
-	}
-
 	ibValueMetaObject* metaObject = GetMetaObject(selection);
-	wxASSERT(metaObject);
-	EraseItem(selection);
+	// NOT AN ASSERT: wxASSERT is compiled out in Release, and a null here reaches RemoveMetaObject
+	// and Delete(selection) — which, on a layout group row, would free a node the group map still
+	// points at. A stale wxTreeItemId answers IsOk() == true, so every later guard would pass.
+	if (metaObject == nullptr)
+		return;
+	// ASK, and let the answer come back — the Removed stage closes the editors, the re-read
+	// takes the row. Neither is done here.
 	m_metaData->RemoveMetaObject(metaObject);
-
-	//Delete item from tree
-	m_metaTreeCtrl->Delete(selection);
-
-	for (auto& doc : docManager->GetDocumentsVector()) {
-		ibMetaDocument* metaDoc = wxDynamicCast(doc, ibMetaDocument);
-		if (metaDoc != nullptr) metaDoc->UpdateAllViews();
-	}
 
 	const wxTreeItemId& nextSelection = m_metaTreeCtrl->GetFocusedItem();
 
@@ -156,9 +152,21 @@ void ibDataProcessorTree::RemoveItem()
 	UpdateChoiceSelection();
 }
 
+// CLOSE WHAT THIS ROW STANDS FOR, AND EVERYTHING UNDER IT — see the note on the configuration
+// tree's twin. The caller walked the direct children, which are group nodes with no metaobject.
 void ibDataProcessorTree::EraseItem(const wxTreeItemId& item)
 {
+	wxTreeItemIdValue cookie;
+	for (wxTreeItemId child = m_metaTreeCtrl->GetFirstChild(item, cookie); child.IsOk();
+		child = m_metaTreeCtrl->GetNextChild(item, cookie))
+		EraseItem(child);
+
 	ibValueMetaObject* const metaObject = GetMetaObject(item);
+	// NOTHING TO ERASE FOR A GROUP NODE. Without this the comparison below is nullptr == nullptr
+	// for every document that has no metaobject either, and the loop closes unrelated editors.
+	if (metaObject == nullptr)
+		return;
+
 	for (auto& doc : docManager->GetDocumentsVector()) {
 		ibMetaDocument* metaDoc = wxDynamicCast(doc, ibMetaDocument);
 		if (metaDoc != nullptr && metaObject == metaDoc->GetMetaObject()) {
@@ -187,20 +195,26 @@ void ibDataProcessorTree::PropertyItem()
 	objectInspector->SelectObject(metaObject);
 }
 
-void ibDataProcessorTree::Collapse()
+// The row is the EVENT's, not the selection — see the twin in treeConfiguration_impl.cpp, where the
+// same pair asserted out of RestoreExpanded with nothing selected.
+void ibDataProcessorTree::Collapse(const wxTreeItemId& item)
 {
-	const wxTreeItemId& selection = m_metaTreeCtrl->GetSelection();
+	if (!item.IsOk())
+		return;
+
 	ibTreeData* data =
-		dynamic_cast<ibTreeData*>(m_metaTreeCtrl->GetItemData(selection));
+		dynamic_cast<ibTreeData*>(m_metaTreeCtrl->GetItemData(item));
 	if (data != nullptr)
 		data->m_expanded = false;
 }
 
-void ibDataProcessorTree::Expand()
+void ibDataProcessorTree::Expand(const wxTreeItemId& item)
 {
-	const wxTreeItemId& selection = m_metaTreeCtrl->GetSelection();
+	if (!item.IsOk())
+		return;
+
 	ibTreeData* data =
-		dynamic_cast<ibTreeData*>(m_metaTreeCtrl->GetItemData(selection));
+		dynamic_cast<ibTreeData*>(m_metaTreeCtrl->GetItemData(item));
 	if (data != nullptr)
 		data->m_expanded = true;
 }
@@ -214,52 +228,13 @@ void ibDataProcessorTree::UpItem()
 	const wxTreeItemId& selection = m_metaTreeCtrl->GetSelection();
 	const wxTreeItemId& nextItem = m_metaTreeCtrl->GetPrevSibling(selection);
 	ibValueMetaObject* metaObject = GetMetaObject(selection);
-	if (metaObject != nullptr && nextItem.IsOk()) {
-		const wxTreeItemId& parentItem = m_metaTreeCtrl->GetItemParent(nextItem);
-		wxTreeItemIdValue coockie; wxTreeItemId nextId = m_metaTreeCtrl->GetFirstChild(parentItem, coockie);
-		size_t pos = 0;
-		do {
-			if (nextId == nextItem)
-				break;
-			nextId = m_metaTreeCtrl->GetNextChild(nextId, coockie); pos++;
-		} while (nextId.IsOk());
+	ibValueMetaObject* nextObject = GetMetaObject(nextItem);
+	if (metaObject != nullptr && nextObject != nullptr) {
+		// The door moves it and announces `Moved`; the rows follow that (MetaObjectChanged).
 		ibValueMetaObject* parentObject = metaObject->GetParent();
-		ibValueMetaObject* nextObject = GetMetaObject(nextItem);
-		if (parentObject->ChangeChildPosition(metaObject, parentObject->GetChildPosition(nextObject))) {
-			wxTreeItemId newId = m_metaTreeCtrl->InsertItem(parentItem,
-				pos + 2,
-				m_metaTreeCtrl->GetItemText(nextItem),
-				m_metaTreeCtrl->GetItemImage(nextItem),
-				m_metaTreeCtrl->GetItemImage(nextItem),
-				m_metaTreeCtrl->GetItemData(nextItem)
-			);
-
-			auto tree = m_metaTreeCtrl;
-			std::function<void(ibDataProcessorTreeCtrl*, const wxTreeItemId&, const wxTreeItemId&)> swap = [&swap](ibDataProcessorTreeCtrl* tree, const wxTreeItemId& dst, const wxTreeItemId& src) {
-				wxTreeItemIdValue coockie; wxTreeItemId nextId = tree->GetFirstChild(dst, coockie);
-				while (nextId.IsOk()) {
-					wxTreeItemId newId = tree->AppendItem(src,
-						tree->GetItemText(nextId),
-						tree->GetItemImage(nextId),
-						tree->GetItemImage(nextId),
-						tree->GetItemData(nextId)
-					);
-					if (tree->HasChildren(nextId)) {
-						swap(tree, nextId, newId);
-					}
-					tree->SetItemData(nextId, nullptr);
-					nextId = tree->GetNextChild(nextId, coockie);
-				}
-				};
-
-			swap(tree, nextItem, newId);
-
-			m_metaTreeCtrl->SetItemData(nextItem, nullptr);
-			m_metaTreeCtrl->Delete(nextItem);
-
-			//m_metaTreeCtrl->Expand(newId);
-		}
+		parentObject->ChangeChildPosition(metaObject, parentObject->GetChildPosition(nextObject));
 	}
+
 	m_metaTreeCtrl->Thaw();
 }
 
@@ -272,52 +247,13 @@ void ibDataProcessorTree::DownItem()
 	const wxTreeItemId& selection = m_metaTreeCtrl->GetSelection();
 	const wxTreeItemId& prevItem = m_metaTreeCtrl->GetNextSibling(selection);
 	ibValueMetaObject* metaObject = GetMetaObject(selection);
-	if (metaObject != nullptr && prevItem.IsOk()) {
-		const wxTreeItemId& parentItem = m_metaTreeCtrl->GetItemParent(prevItem);
-		wxTreeItemIdValue coockie; wxTreeItemId nextId = m_metaTreeCtrl->GetFirstChild(parentItem, coockie);
-		size_t pos = 0;
-		do {
-			if (nextId == prevItem)
-				break;
-			nextId = m_metaTreeCtrl->GetNextChild(nextId, coockie); pos++;
-		} while (nextId.IsOk());
+	ibValueMetaObject* prevObject = GetMetaObject(prevItem);
+	if (metaObject != nullptr && prevObject != nullptr) {
+		// The door moves it and announces `Moved`; the rows follow that (MetaObjectChanged).
 		ibValueMetaObject* parentObject = metaObject->GetParent();
-		ibValueMetaObject* prevObject = GetMetaObject(prevItem);
-		if (parentObject->ChangeChildPosition(metaObject, parentObject->GetChildPosition(prevObject))) {
-			wxTreeItemId newId = m_metaTreeCtrl->InsertItem(parentItem,
-				pos - 1,
-				m_metaTreeCtrl->GetItemText(prevItem),
-				m_metaTreeCtrl->GetItemImage(prevItem),
-				m_metaTreeCtrl->GetItemImage(prevItem),
-				m_metaTreeCtrl->GetItemData(prevItem)
-			);
-
-			auto tree = m_metaTreeCtrl;
-			std::function<void(ibDataProcessorTreeCtrl*, const wxTreeItemId&, const wxTreeItemId&)> swap = [&swap](ibDataProcessorTreeCtrl* tree, const wxTreeItemId& dst, const wxTreeItemId& src) {
-				wxTreeItemIdValue coockie; wxTreeItemId nextId = tree->GetFirstChild(dst, coockie);
-				while (nextId.IsOk()) {
-					wxTreeItemId newId = tree->AppendItem(src,
-						tree->GetItemText(nextId),
-						tree->GetItemImage(nextId),
-						tree->GetItemImage(nextId),
-						tree->GetItemData(nextId)
-					);
-					if (tree->HasChildren(nextId)) {
-						swap(tree, nextId, newId);
-					}
-					tree->SetItemData(nextId, nullptr);
-					nextId = tree->GetNextChild(nextId, coockie);
-				}
-				};
-
-			swap(tree, prevItem, newId);
-
-			m_metaTreeCtrl->SetItemData(prevItem, nullptr);
-			m_metaTreeCtrl->Delete(prevItem);
-
-			//m_metaTreeCtrl->Expand(newId);
-		}
+		parentObject->ChangeChildPosition(metaObject, parentObject->GetChildPosition(prevObject));
 	}
+
 	m_metaTreeCtrl->Thaw();
 }
 
@@ -332,22 +268,12 @@ void ibDataProcessorTree::SortItem()
 		const wxTreeItemId& parentItem =
 			m_metaTreeCtrl->GetItemParent(selection);
 		if (parentItem.IsOk()) {
-			m_metaTreeCtrl->SortChildren(parentItem);
+			SortItemsByName(parentItem);
 		}
 	}
 	m_metaTreeCtrl->Thaw();
 }
 
-void ibDataProcessorTree::CommandItem(unsigned int id)
-{
-	if (appData->GetAppMode() != ibRunMode::eDESIGNER_MODE)
-		return;
-	wxTreeItemId sel = m_metaTreeCtrl->GetSelection();
-	ibValueMetaObject* metaObject = GetMetaObject(sel);
-	if (!metaObject)
-		return;
-	metaObject->ProcessCommand(id);
-}
 
 #include "frontend/artProvider/artProvider.h"
 
@@ -355,8 +281,7 @@ void ibDataProcessorTree::PrepareContextMenu(wxMenu* defaultMenu, const wxTreeIt
 {
 	ibValueMetaObject* metaObject = GetMetaObject(item);
 
-	if (metaObject
-		&& !metaObject->PrepareContextMenu(defaultMenu))
+	if (metaObject != nullptr && !AppendMetaMenu(defaultMenu, metaObject))
 	{
 		wxMenuItem* menuItem = defaultMenu->Append(ID_METATREE_NEW, _("New"));
 		menuItem->SetBitmap(wxArtProvider::GetBitmapBundle(wxART_ADD, wxART_FRONTEND, wxSize(16, 16)));
@@ -379,42 +304,11 @@ void ibDataProcessorTree::PrepareContextMenu(wxMenu* defaultMenu, const wxTreeIt
 
 void ibDataProcessorTree::ShowContextMenu(wxWindow* eventSrc, const wxTreeItemId& item, const wxPoint& pos)
 {
-	wxMenu* innerMenu = new wxMenu;
-	PrepareContextMenu(innerMenu, item);
+	wxMenu innerMenu;   // stack — PopupMenu does not take ownership, and it blocks until dismissed
+	PrepareContextMenu(&innerMenu, item);
 
-	std::vector<int> boundIds;
-	for (auto def_menu : innerMenu->GetMenuItems())
-	{
-		const int id = def_menu->GetId();
-		if (id == ID_METATREE_NEW
-			|| id == ID_METATREE_EDIT
-			|| id == ID_METATREE_DELETE
-			|| id == ID_METATREE_PROPERTY
-			|| id == wxID_SEPARATOR)
-		{
-			continue;
-		}
-		eventSrc->GetEventHandler()->Bind(wxEVT_MENU, &ibDataProcessorTree::ibDataProcessorTreeCtrl::OnCommandItem, m_metaTreeCtrl, id);
-		boundIds.push_back(id);
-	}
-
-	eventSrc->PopupMenu(innerMenu, pos);
-
-#ifdef __WXOSX__
-	auto* handler = eventSrc->GetEventHandler();
-	auto* treeCtrl = m_metaTreeCtrl;
-	eventSrc->CallAfter([handler, treeCtrl, boundIds]() {
-		for (int id : boundIds) {
-			handler->Unbind(wxEVT_MENU, &ibDataProcessorTree::ibDataProcessorTreeCtrl::OnCommandItem, treeCtrl, id);
-		}
-	});
-#else
-	for (int id : boundIds) {
-		eventSrc->GetEventHandler()->Unbind(wxEVT_MENU, &ibDataProcessorTree::ibDataProcessorTreeCtrl::OnCommandItem, m_metaTreeCtrl, id);
-	}
-#endif
-
-	delete innerMenu;
+	// ⭐ THE MENU'S OWN ITEMS CARRY THEIR ACTIONS — see the twin in treeConfiguration_impl.cpp.
+	eventSrc->PopupMenu(&innerMenu, pos);
 }
 
 void ibDataProcessorTree::UpdateToolbar(ibValueMetaObject* obj, const wxTreeItemId& item)
@@ -443,7 +337,12 @@ void ibDataProcessorTree::UpdateChoiceSelection()
 	for (auto metaForm : commonMetadata->GetFormArrayObject()) {
 		if (ibValueMetaObjectDataProcessor::eFormDataProcessor != metaForm->GetTypeForm())
 			continue;
-		int selection_id = m_defaultFormValue->Append(metaForm->GetName(), reinterpret_cast<void*>(metaForm->GetMetaID()));
+		// WIDEN FIRST, then reinterpret. `ibMetaID` is a 32-bit int and the client data is a
+		// pointer, so the one-step cast is MSVC C4312 / clang -Wint-to-pointer-cast on every
+		// toolchain. The value round-trips either way; the intermediate is what says so out loud.
+		// The way back already does this (static_cast<ibMetaID>(reinterpret_cast<intptr_t>(…))).
+		int selection_id = m_defaultFormValue->Append(metaForm->GetName(),
+			reinterpret_cast<void*>(static_cast<intptr_t>(metaForm->GetMetaID())));
 		if (commonMetadata->GetDefFormObject() == metaForm->GetMetaID()) {
 			defSelection = selection_id;
 		}
@@ -453,43 +352,50 @@ void ibDataProcessorTree::UpdateChoiceSelection()
 	m_defaultFormValue->SendSelectionChangedEvent(wxEVT_CHOICE);
 }
 
+// ⭐ ASK, AND LET THE ANSWER COME BACK. This used to rename through the metadata and then draw the
+// consequences itself — the row's text, the editor's tab, the default-form combo — off the SELECTED
+// row, which is not necessarily the row of the object being renamed. All three are now done by the
+// shared handler for the Renamed stage, for every tree at once and off the object rather than off
+// the selection; and a rename that reaches the metadata by any other road (a tool, a paste) draws
+// them too, which it never used to.
 bool ibDataProcessorTree::RenameMetaObject(ibValueMetaObject* obj, const wxString& sNewName)
 {
-	wxTreeItemId curItem = m_metaTreeCtrl->GetSelection();
-
-	if (!curItem.IsOk())
-		return false;
-
-	if (m_metaData->RenameMetaObject(obj, sNewName)) {
-
-		ibMetaDocument* currDocument = GetDocument(obj);
-
-		if (currDocument) {
-			currDocument->SetTitle(obj->GetClassName() + wxT(": ") + sNewName);
-			currDocument->OnChangeFilename(true);
-		}
-
-		//update choice if need
-		UpdateChoiceSelection();
-
-		m_metaTreeCtrl->SetItemText(curItem, sNewName);
-		return true;
-	}
-
-	return false;
+	return m_metaData->RenameMetaObject(obj, sNewName);
 }
+
+// HUB — the same shape the configuration tree uses: a group command holds commands, shown nested.
+
+// THE LAYOUT — one table, read top to bottom, exactly as the configuration tree does it
+// (treeConfiguration_impl.cpp). A data processor edited as a FILE shows the same groups in the same
+// order as the same object edited inside a configuration; saying that once, as data, is what keeps
+// the two from drifting apart again.
+namespace {
+
+struct ibExternalGroupDef {
+	ibClassID   m_clsid;
+	const char* m_label;   // SOURCE string, translated when the node is made (backend/fileKind.cpp rule)
+};
+
+const ibExternalGroupDef s_dataProcessorGroups[] = {
+	{ g_metaAttributeCLSID, wxTRANSLATE("Attributes") },
+	{ g_metaTableCLSID,     wxTRANSLATE("Tables")     },   // RAM tabular sections — a processor is not a reference
+	{ g_metaFormCLSID,      wxTRANSLATE("Forms")      },
+	// Commands — the object owns them here exactly as it does inside a configuration; this tree
+	// simply had no node, so they could be neither seen nor created from a file being edited.
+	{ g_metaCommandCLSID,   wxTRANSLATE("Commands")   },
+	{ g_metaTemplateCLSID,  wxTRANSLATE("Templates")  },
+};
+
+} // namespace
 
 void ibDataProcessorTree::InitTree()
 {
-	m_treeDATAPROCESSORS = AppendRootItem(g_metaDataProcessorCLSID, _("DataProcessor"));
-	//Список аттрибутов 
-	m_treeATTRIBUTES = AppendGroupItem(m_treeDATAPROCESSORS, g_metaAttributeCLSID, objectAttributesName);
-	//список табличных частей 
-	m_treeTABLES = AppendGroupItem(m_treeDATAPROCESSORS, g_metaTableCLSID, objectTablesName);
-	//Формы
-	m_treeFORM = AppendGroupItem(m_treeDATAPROCESSORS, g_metaFormCLSID, objectFormsName);
-	//Макеты
-	m_treeTEMPLATES = AppendGroupItem(m_treeDATAPROCESSORS, g_metaTemplateCLSID, objectTablesName);
+	m_treeRoot = AppendRootItem(g_metaDataProcessorCLSID, _("Data processor"));
+
+	m_groups.clear();
+	for (const ibExternalGroupDef& def : s_dataProcessorGroups)
+		m_groups[def.m_clsid] = AppendGroupItem(m_treeRoot, def.m_clsid,
+			wxGetTranslation(wxString::FromUTF8(def.m_label)));
 }
 
 void ibDataProcessorTree::ActivateTree()
@@ -498,92 +404,83 @@ void ibDataProcessorTree::ActivateTree()
 		objectInspector->SelectObject(GetMetaObject(m_metaTreeCtrl->GetSelection()));
 }
 
+// CLOSING THE EDITORS IS PART OF *LEAVING A FILE*, not of redrawing the tree — and those two used
+// to be the same call, exactly as they were in the configuration navigator. Now that a rebuild is
+// what ANY change to the metadata provokes, a clear that also closed documents would shut every
+// editor the moment a property was written in one of them.
+
 void ibDataProcessorTree::ClearTree()
 {
-	for (auto& doc : docManager->GetDocumentsVector()) {
-		const ibMetaDocument* metaDoc = wxDynamicCast(doc, ibMetaDocument);
-		const ibValueMetaObject* metaObject = metaDoc->GetMetaObject();
-		if (metaObject != nullptr && this == metaObject->GetMetaDataTree()) {
-			doc->DeleteAllViews();
-		}
-	}
+	// disable events for the whole rebuild - RAII, so a throw from InitTree cannot leave them off
+	const ibEventsOff eventsOff(m_metaTreeCtrl);
 
-	//disable event
-	m_metaTreeCtrl->SetEvtHandlerEnabled(false);
-
-	//delete all child item
-	if (m_treeATTRIBUTES.IsOk())
-		m_metaTreeCtrl->DeleteChildren(m_treeATTRIBUTES);
-	if (m_treeTABLES.IsOk())
-		m_metaTreeCtrl->DeleteChildren(m_treeTABLES);
-	if (m_treeFORM.IsOk())
-		m_metaTreeCtrl->DeleteChildren(m_treeFORM);
-	if (m_treeTEMPLATES.IsOk())
-		m_metaTreeCtrl->DeleteChildren(m_treeTEMPLATES);
-
-	//delete all items
+	// The clear is TOTAL: a per-group DeleteChildren pass stood here, immediately before
+	// DeleteAllItems, so nothing it did could survive it. InitTree re-creates the groups from
+	// the layout table, and the map goes with them.
+	m_groups.clear();
+	m_initialized = false;   // the tree is gone; a later Load must re-seed it, not resume
 	m_metaTreeCtrl->DeleteAllItems();
+	if (wxImageList* imageList = m_metaTreeCtrl->GetImageList())
+		imageList->RemoveAll();   // every Append* adds one; nothing ever removed them
 
 	//Initialize tree
 	InitTree();
 
-	//enable event
-	m_metaTreeCtrl->SetEvtHandlerEnabled(true);
 }
 
 void ibDataProcessorTree::FillData()
 {
 	ibValueMetaObjectDataProcessor* commonMetadata = m_metaData->GetDataProcessor();
 	wxASSERT(commonMetadata);
-	m_metaTreeCtrl->SetItemText(m_treeDATAPROCESSORS, commonMetadata->GetName());
-	m_metaTreeCtrl->SetItemData(m_treeDATAPROCESSORS, new wxTreeItemMetaData(commonMetadata));
+	m_metaTreeCtrl->SetItemText(m_treeRoot, commonMetadata->GetName());
+	m_metaTreeCtrl->SetItemData(m_treeRoot, new ibTreeItemObject(commonMetadata));
 
-	//set value data
-	m_nameValue->SetValue(commonMetadata->GetName());
-	m_synonymValue->SetValue(commonMetadata->GetSynonym());
-	m_commentValue->SetValue(commonMetadata->GetComment());
+	// SEED THE FIELDS, do not pretend the user typed in them. SetValue emits wxEVT_TEXT, which the
+	// constructor connected to OnEditCaptionName — and that handler REGENERATES the synonym from the
+	// name. So filling the name here overwrote a hand-written synonym, and the next line then read
+	// back what had just been destroyed. ChangeValue is the wx call that sets without notifying.
+	m_nameValue->ChangeValue(commonMetadata->GetName());
+	m_synonymValue->ChangeValue(commonMetadata->GetSynonym());
+	m_commentValue->ChangeValue(commonMetadata->GetComment());
 
-	//set default form value 
-	m_defaultFormValue->Clear();
+	// (the default-form choice is filled by UpdateChoiceSelection at the end of this function —
+	// clearing and seeding it here as well was doing the same work twice)
 
-	//append default value 
-	m_defaultFormValue->AppendString(_("<not selected>"));
-
-	//Список аттрибутов 
+	// attribute list
 	for (auto attribute : commonMetadata->GetAttributeArrayObject()) {
-		if (attribute->IsDeleted())
+		if (!attribute->IsAcceptedByParent())
 			continue;
-		if (attribute->GetClassType() == g_metaPredefinedAttributeCLSID)
-			continue;
-		AppendItem(m_treeATTRIBUTES, attribute);
+		AppendItem(Group(g_metaAttributeCLSID), attribute);
 	}
 
-	//Список табличных частей 
+	// tabular section list
 	for (auto metaTable : commonMetadata->GetTableArrayObject()) {
-		if (metaTable->IsDeleted())
+		if (!metaTable->IsAcceptedByParent())   // predefined section — same rule as the attributes above
 			continue;
-		const wxTreeItemId& hItem = AppendGroupItem(m_treeTABLES, g_metaAttributeCLSID, metaTable);
+		const wxTreeItemId& hItem = AppendGroupItem(Group(g_metaTableCLSID), g_metaAttributeCLSID, metaTable);
 		for (auto attribute : metaTable->GetAttributeArrayObject()) {
-			if (attribute->IsDeleted())
-				continue;
-			if (attribute->GetClassType() == g_metaPredefinedAttributeCLSID)
+			if (!attribute->IsAcceptedByParent())
 				continue;
 			AppendItem(hItem, attribute);
 		}
 	}
 
-	//Формы
+	// forms
 	for (auto metaForm : commonMetadata->GetFormArrayObject()) {
 		if (metaForm->IsDeleted())
 			continue;
-		AppendItem(m_treeFORM, metaForm);
+		AppendItem(Group(g_metaFormCLSID), metaForm);
 	}
 
-	//Таблицы
+	// commands — nests its sub-commands, skips deleted
+	for (auto metaCommand : commonMetadata->GetCommandArrayObject())
+		AppendCommandNode(Group(g_metaCommandCLSID), metaCommand);
+
+	// templates
 	for (auto metaTemplates : commonMetadata->GetTemplateArrayObject()) {
 		if (metaTemplates->IsDeleted())
 			continue;
-		const wxTreeItemId& hItem = AppendItem(m_treeTEMPLATES, metaTemplates);
+		AppendItem(Group(g_metaTemplateCLSID), metaTemplates);
 	}
 
 	//update choice selection
@@ -592,21 +489,32 @@ void ibDataProcessorTree::FillData()
 	//set init flag
 	m_initialized = true;
 
-	//set modify 
-	Modify(m_metaData->IsModified());
+	// 🛑 NOT FROM HERE — see the note in ibConfigurationTree::FillData. A fill is a read; the mark is
+	// said once by Load and after that only by a signal.
 
-	//update toolbar 
-	UpdateToolbar(nullptr, m_treeATTRIBUTES);
+	//update toolbar
+	UpdateToolbar(nullptr, Group(g_metaAttributeCLSID));
 }
 
 bool ibDataProcessorTree::Load(ibMetaDataDataProcessor* metaData)
 {
+	CloseDocuments();   // a file is being left — its editors go with it
 	ClearTree();
+
 	m_metaData = metaData;
+	WatchMetaData(m_metaData);   // off the old list, onto this one — one call, one place
 	m_metaTreeCtrl->Freeze();
 	FillData(); //Fill all data from metaData
-	m_metaData->SetMetaTree(this);
-	m_metaTreeCtrl->SelectItem(m_treeATTRIBUTES);
+
+	// …and the metadata learns whether this file may be edited at all. Said HERE because the view
+	// sets it on the widget before the metadata is known, and because one file has one view — so
+	// there is nobody to disagree with.
+	m_metaData->SetReadOnly(m_bReadOnly);
+
+	// ⭐ ONCE, HERE — the load half of the rule; see ibConfigurationTree::Load.
+	Modify(m_metaData->IsModified());
+
+	m_metaTreeCtrl->SelectItem(Group(g_metaAttributeCLSID));
 	m_metaTreeCtrl->ExpandAll();
 	m_metaTreeCtrl->Thaw();
 	return true;

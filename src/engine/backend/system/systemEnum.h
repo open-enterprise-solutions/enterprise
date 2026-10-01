@@ -30,6 +30,30 @@ enum ibRoundMode
 	ibRoundMode_Round15as20
 };
 
+// How the TEXT of a file is spelled in bytes - what a TextReader decodes by and a TextWriter encodes by.
+// ANSI and OEM are the two code pages Windows keeps per system; elsewhere both mean the locale's own.
+enum ibTextEncoding
+{
+	ibTextEncoding_UTF8 = 1,
+	ibTextEncoding_UTF16,
+	ibTextEncoding_ANSI,
+	ibTextEncoding_OEM,
+	ibTextEncoding_System
+};
+
+// What HTTPConnection.CallMethod is told to do - said with a member, not with a string a typo can change
+// (and a string is also how a second request gets written ahead of the real one).
+enum ibHttpMethod
+{
+	ibHttpMethod_Get = 1,
+	ibHttpMethod_Post,
+	ibHttpMethod_Put,
+	ibHttpMethod_Patch,
+	ibHttpMethod_Delete,
+	ibHttpMethod_Head,
+	ibHttpMethod_Options
+};
+
 enum ibChars {
 	eCR = 13,
 	eFF = 12,
@@ -37,6 +61,29 @@ enum ibChars {
 	eNBSp = 160,
 	eTab = 9,
 	eVTab = 11,
+};
+
+// What a JSONReader stands on after a Read(): the kind of the current token. `None` is "nothing read yet" and
+// "nothing left" - the two moments a reader has no token under it.
+enum ibJsonValueType
+{
+	ibJsonValueType_None = 1,
+	ibJsonValueType_Null,
+	ibJsonValueType_Boolean,
+	ibJsonValueType_Number,
+	ibJsonValueType_String,
+	ibJsonValueType_PropertyName,
+	ibJsonValueType_ObjectStart,
+	ibJsonValueType_ObjectEnd,
+	ibJsonValueType_ArrayStart,
+	ibJsonValueType_ArrayEnd
+};
+
+// How a JSONWriter lays its text out: in one line, or a member to a line with tab indents.
+enum ibJsonFormatting
+{
+	ibJsonFormatting_Compact = 1,
+	ibJsonFormatting_Indented
 };
 
 #endif

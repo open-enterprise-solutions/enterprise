@@ -1,4 +1,4 @@
-#include "toolbar.h"
+#include "toolBar.h"
 #include "backend/metaCollection/partial/commonObject.h"
 #include "frontend/visualView/visualHostClient.h"
 
@@ -67,7 +67,7 @@ void ibValueToolbar::OnTool(wxCommandEvent& event)
 
 #ifndef OES_USE_WEB
 	// Snapshot the visual-editor pointer BEFORE the action. Both
-	// ExecuteAction (eDefActionAndClose → CloseForm) and CallAsEvent
+	// CallAsAction (eDefActionAndClose → CloseForm) and CallAsEvent
 	// (arbitrary user script) can close the owner form, which destroys
 	// every child control including this toolbar — `this` becomes
 	// dangling. The old post-action `g_visualHostContext` check
@@ -75,7 +75,7 @@ void ibValueToolbar::OnTool(wxCommandEvent& event)
 	ibFrontendVisualEditorNotebook* const visualEditor = g_visualHostContext;
 #endif
 
-	const ibActionDescription& actionDesc = foundedToolControl->GetAction();
+	const ibStandardCommandDescription& actionDesc = foundedToolControl->GetAction();
 	const wxString& strAction = actionDesc.GetCustomAction();
 
 	// Source resolution: explicit m_actSource wins; otherwise fall back
@@ -89,7 +89,7 @@ void ibValueToolbar::OnTool(wxCommandEvent& event)
 
 	if (sourceElement != nullptr && actionDesc.GetSystemAction() != wxNOT_FOUND) {
 		try {
-			sourceElement->ExecuteAction(
+			sourceElement->CallAsAction(
 				actionDesc.GetSystemAction(),
 				GetOwnerForm()
 			);
@@ -98,12 +98,37 @@ void ibValueToolbar::OnTool(wxCommandEvent& event)
 #ifndef OES_USE_WEB
 			// Desktop surfaces access-denied as a modal Alert; web has
 			// no modal channel yet, so it silently swallows.
-			ibValueSystemFunction::Alert(err.GetErrorDescription());
+			// Already reported where it happened (ProcessExceptionError hands it to the frame) - saying it
+		// again puts one failure in the pane twice.
 #else
 			(void)err;
 #endif
 		}
-		catch (const ibBackendException&) {
+		catch (const ibBackendLockException& err) {
+#ifndef OES_USE_WEB
+			// Same pattern as access-denied — version-conflict and
+			// row-lock-timeout both need user-visible "reload and retry"
+			// feedback. Web routes the same exception through wfrontend's
+			// ExceptionToJson → OES.handleBackendError toast/alert, so
+			// here we silent-swallow on web to avoid double-surfacing.
+			// Already reported where it happened (ProcessExceptionError hands it to the frame) - saying it
+		// again puts one failure in the pane twice.
+#else
+			(void)err;
+#endif
+		}
+		catch (const ibBackendException& err) {
+			// WAS EMPTY — and this is the button bar: Post / Clear posting / Save all land here.
+			// Everything the backend says about a refused write (which register failed, which
+			// handler cancelled, which attribute is missing) died right here, and the user got a
+			// button that did nothing. The reason is shown; web keeps routing it through
+			// wfrontend's ExceptionToJson, so it is not surfaced twice there.
+#ifndef OES_USE_WEB
+			// Already reported where it happened (ProcessExceptionError hands it to the frame) - saying it
+		// again puts one failure in the pane twice.
+#else
+			(void)err;
+#endif
 		}
 	}
 	else if (strAction.Length() > 0) {

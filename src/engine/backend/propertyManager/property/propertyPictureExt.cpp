@@ -1,9 +1,10 @@
 #include "propertyPicture.h"
 #include "backend/propertyManager/property/variant/variantPicture.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataValue — node value (Binary, transitional)
 
 ////////////////////////////////////////////////////////////////////////
 
-wxVariantData* ibPropertyExternalPicture::CreateVariantData(const ibExternalPictureDescription& id) const
+wxVariantData* ibPropertyExternalPicture::CreateVariantData(const ibExternalPictureDescription& id)
 {
 	return new ibVariantDataExternalPicture(id);
 }
@@ -33,11 +34,6 @@ bool ibPropertyExternalPicture::IsEmptyProperty() const {
 
 #include "backend/system/value/valuePicture.h"
 
-// get property for grid
-wxObject* (*ibPropertyExternalPicture::ms_propertyExtPicture)(
-	const wxString&,
-	const wxString&,
-	const wxVariant&) = nullptr;
 
 //base property for "external picture"
 bool ibPropertyExternalPicture::SetDataValue(const ibValue& varPropVal)
@@ -51,12 +47,12 @@ bool ibPropertyExternalPicture::GetDataValue(ibValue& pvarPropVal) const
 	return true;
 }
 
-bool ibPropertyExternalPicture::LoadData(ibReaderMemory& reader)
+bool ibPropertyExternalPicture::ReadNodeValue(const ibDataValue& value)
 {
-	return ibExternalPictureDescriptionMemory::LoadData(reader, GetValueAsPictureDesc());
+	return ibExternalPictureDescriptionMemory::ReadNode(value, GetValueAsPictureDesc());
 }
 
-bool ibPropertyExternalPicture::SaveData(ibWriterMemory& writer)
+bool ibPropertyExternalPicture::WriteNodeValue(ibDataValue& value) const
 {
-	return ibExternalPictureDescriptionMemory::SaveData(writer, GetValueAsPictureDesc());
-}
+	return ibExternalPictureDescriptionMemory::WriteNode(value, GetValueAsPictureDesc());
+}

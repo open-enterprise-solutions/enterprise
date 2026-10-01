@@ -205,6 +205,7 @@ public:
 	{
 		return false;
 	}
+
 	virtual wxWindow* CreateEditorCtrl(wxWindow* WXUNUSED(parent),
 		wxRect WXUNUSED(labelRect),
 		const wxVariant& WXUNUSED(value))
@@ -224,6 +225,17 @@ public:
 	wxWindow* GetEditorCtrl() const { return m_editorCtrl; }
 
 	virtual bool IsCustomRenderer() const { return false; }
+
+	// ⭐ DOES A SINGLE CLICK OPEN THIS CELL? Default no — the grid's own rule is the file manager's
+	// one: the first click SELECTS, and a second click on the already-selected cell edits.
+	//
+	// That rule is wrong for a cell whose editor IS the point of clicking it: a value cell with a
+	// choice button, a field picker, an expression list. There the first click looks like nothing
+	// happened, and the report is always the same sentence — "you have to click twice".
+	//
+	// It belongs to the CELL and not to the grid, because only the renderer knows whether its editor
+	// is something one opens deliberately or something one falls into.
+	virtual bool EditOnSingleClick() const { return false; }
 
 
 	// Implementation only from now on.
@@ -263,7 +275,12 @@ protected:
 
 	// Helper of PrepareForItem() also used in StartEditing(): returns the
 	// value checking that its type matches our GetVariantType().
-	wxVariant CheckedGetValue(const ibDataViewModel* model,
+	//
+	// VIRTUAL (fork power): the per-cell value fetch is the single front-side choke point that
+	// still carries (model, item, column). A renderer overrides it to resolve a dot-path column
+	// THROUGH the column's own binding — first hop via the (dumb) model, deeper hops on the front —
+	// without the model knowing about paths and without touching the provider / notifier.
+	virtual wxVariant CheckedGetValue(const ibDataViewModel* model,
 		const ibDataViewItem& item,
 		unsigned column) const;
 
@@ -283,6 +300,14 @@ protected:
 	// internal utility, may be used anywhere the window associated with the
 	// renderer is required
 	ibDataViewCtrl* GetView() const;
+
+public:
+	// ⭐ A COLUMN'S CELLS IN ONE PAINT PASS — told before the first and after the last (DrawTableContent), so what is
+	// the same for every cell of the column is found once and not per cell: the format a value renderer writes its
+	// cells through (ibDataViewValueRenderer). A PrepareForItem outside a pass — a tooltip, a width fit — comes
+	// without them. Declared LAST: a virtual added mid-class shifts the table under objects built without it.
+	virtual void StartColumn(const ibDataViewModel* WXUNUSED(model), unsigned WXUNUSED(column)) {}
+	virtual void FinishColumn() {}
 
 private:
 	// Called from {Called,Finish}Editing() and dtor to cleanup m_editorCtrl
@@ -359,6 +384,9 @@ public:
 	// that it can be accessed using GetAttr() from Render() if needed.
 	virtual void SetAttr(const ibDataViewItemAttr& attr) wxOVERRIDE { m_attr = attr; }
 	const ibDataViewItemAttr& GetAttr() const { return m_attr; }
+	// THE ALIGNMENT IN FORCE FOR THIS CELL — the item's own horizontal one (its attribute: a conditional
+	// appearance) over the renderer's and the column's.
+	int GetEffectiveItemAlignment() const;
 
 	// Store the enabled state of the item so that it can be accessed from
 	// Render() via GetEnabled() if needed.
@@ -385,6 +413,21 @@ protected:
 	wxSize GetTextExtent(const wxString& str) const;
 
 private:
+	// ⭐⭐ THE LAST TEXT MEASURED, AND THE ANSWER. Painting one cell measured the same string twice
+	// and then a third time inside the themed draw: WXCallRender asks GetSize() to place the text,
+	// Render draws it, and DrawItemText's Ellipsize searches for a width all over again. Measuring
+	// text is not free - it crosses into the font engine - and it was 12% of the whole process on a
+	// grid scroll (measured 2026-09-06: GetSize 7.13%, of which GetTextExtent 3.83%; Ellipsize
+	// 5.12%).
+	//
+	// ⚠ KEYED ON THE FONT AS WELL AS THE STRING. The attribute carries a per-item font (bold for a
+	// group row, say), so the same characters do not always occupy the same width - remembering the
+	// string alone would hand a bold row the plain row's measurement.
+	mutable wxString m_lastMeasured;
+	mutable wxFont   m_lastMeasuredFont;
+	mutable wxSize   m_lastMeasuredSize;
+	mutable bool     m_lastMeasuredValid = false;
+
 	ibDataViewItemAttr m_attr;
 	bool m_enabled;
 

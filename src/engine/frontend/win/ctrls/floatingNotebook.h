@@ -35,6 +35,7 @@ public:
 		wxAuiNotebook(frameManager->GetManagedWindow(), id, pos, size, style), m_strPaneName(strPaneName), m_frameManager(frameManager)
 	{
 		GetMainTabCtrl()->Bind(wxEVT_LEFT_DOWN, &ibFloatingNotebook::OnLeftDown, this);
+		Bind(wxEVT_SIZE, &ibFloatingNotebook::OnSize, this);
 	}
 
 	template <class retWindow>
@@ -154,12 +155,15 @@ protected:
 
 		if (hostFrame) {
 			hostFrame->Thaw();
-			// Force a clean repaint of the frame. Without this, the thin
-			// paint ops that AUI makes during the transition (sash lines,
-			// focus rectangles on the tab bar) can leave dotted residue
-			// along the pane borders once the frame unfreezes.
-			hostFrame->Refresh(false);
-			hostFrame->Update();
+			// Refresh ONLY the strip around the notebook (where AUI
+			// draws sash/gripper/caption decorations) — not the whole
+			// frame and not the notebook's own client area. Two birds:
+			//   - clears dotted gripper residue that AUI leaves on
+			//     pane borders after the show/hide cycle
+			//   - skips repainting the notebook content + sibling panes,
+			//     which is what produced the transient "extra content"
+			//     flash when Refresh(false) was applied frame-wide
+			RefreshDecorStrip(/*immediate=*/true);
 		}
 		return result;
 	}
@@ -172,6 +176,51 @@ protected:
 	}
 
 private:
+
+	// Refresh just the AUI decor strip around this notebook on the
+	// managed frame. Clears dotted gripper residue without touching
+	// children's paint, so neither stale content nor pane decorations
+	// linger. Caller chooses immediate paint (toggle path) vs async
+	// (size events — let the system batch).
+	void RefreshDecorStrip(bool immediate)
+	{
+		wxWindow* const hostFrame =
+		    m_frameManager ? m_frameManager->GetManagedWindow() : nullptr;
+		if (hostFrame == nullptr) return;
+
+		const wxRect r = GetRect();
+		constexpr int kDecorTop    = 24;
+		constexpr int kDecorBottom = 8;
+		constexpr int kDecorSide   = 8;
+		hostFrame->RefreshRect(wxRect(r.x - kDecorSide,
+		                              r.y - kDecorTop,
+		                              r.width + 2 * kDecorSide,
+		                              kDecorTop), false);
+		hostFrame->RefreshRect(wxRect(r.x - kDecorSide,
+		                              r.y + r.height,
+		                              r.width + 2 * kDecorSide,
+		                              kDecorBottom), false);
+		hostFrame->RefreshRect(wxRect(r.x - kDecorSide,
+		                              r.y,
+		                              kDecorSide,
+		                              r.height), false);
+		hostFrame->RefreshRect(wxRect(r.x + r.width,
+		                              r.y,
+		                              kDecorSide,
+		                              r.height), false);
+		if (immediate) hostFrame->Update();
+	}
+
+	void OnSize(wxSizeEvent& event)
+	{
+		event.Skip();
+		// AUI re-renders gripper / sash decorations on every layout
+		// change (pane border drag commit, host window resize, dock
+		// shuffle). Their paint sometimes leaves dotted residue along
+		// the new pane edges. Refresh the decor strip async — the
+		// system will batch this with the existing paint pass.
+		RefreshDecorStrip(/*immediate=*/false);
+	}
 
 	void OnLeftDown(wxMouseEvent& event)
 	{

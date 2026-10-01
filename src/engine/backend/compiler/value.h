@@ -2,9 +2,21 @@
 #define __VALUE_H__
 
 #include <memory>
+#include <atomic>
+#include <cstdint>       // uint64_t — the hash mixer accumulates in it, never in size_t
+#include <type_traits>   // the pointer catch-all below (enable_if / is_base_of / is_same)
+#include <typeinfo>
+#include <unordered_map>
+#include <map>
+#include <vector>
+#include <mutex>
+#include <thread>
 
-#include "backend/backend_core.h"
-#include "backend/compiler/typeCtor.h"
+#include "backend/backend_core.h"   // + ibCtorObjectType — the registry surface below names it
+
+// The registry's ctor type — its definition (compiler/typeCtor.h) is built on a complete ibValue,
+// so it is included at the end of this file.
+class ibCtorAbstractType;
 
 // Forward declaration - full definition in value_ptr.h included at end of file
 template <class T> class ibValuePtr;
@@ -23,6 +35,12 @@ public:
 	virtual bool MoveNext(ibValue& current) = 0;
 	virtual void Reset() = 0;
 
+	// HOW MANY ARE STILL TO COME, when the state knows without walking — a cursor over a collection
+	// does. A pipeline does not: a Where has to ask its predicate, and a Select has to run its function,
+	// which may do more than answer. LINQ's Count asks this before it drains (procUnitLINQ.cpp); -1 is
+	// "walk me".
+	virtual long Remaining() const { return -1; }
+
 	// IntelliSense / editor type-hint. Writes a skeleton value of the
 	// element type into `current` so the editor's static parser knows
 	// what `x` is in `For Each x In container`. Returns false when no
@@ -33,6 +51,14 @@ public:
 };
 
 extern BACKEND_API const ibValue wxEmptyValue;
+
+// THE PACKED NODE'S TWO FIELD NAMES. Short because they repeat per element in a binary stream,
+// stable because they are what a JSON dump shows — and declared HERE, not in the serialiser, because
+// more than one place writes into that node: the value base writes the primitives, an enumeration
+// writes its member from the template that defines it. Two spellings of the same key is how a value
+// gets written under one name and read under another.
+inline const wxChar* const kValueFieldClsid = wxT("t");   // the type — written and read FIRST
+inline const wxChar* const kValueFieldData  = wxT("v");   // the payload
 
 // Forward declarations for template classes used in ConvertToEnumType/ConvertToEnumValue
 template <typename valT> class ibValueEnumerationBase;
@@ -50,74 +76,113 @@ public:
 	virtual ibValue* GetImplValueRef() const = 0;
 };
 
-const ibClassID g_valueUndefinedCLSID = string_to_clsid("VL_UNDF");
+// 🛑⭐⭐ ACCESS CONTROL CANNOT FENCE OFF THE RUNTIME'S OWNERSHIP — tried 2026-09-06, and the reason
+// it fails is worth keeping so nobody spends the day on it twice.
+//
+// The idea was to hide `operator delete` on a base of ibValue: then `delete p`, `unique_ptr<T>` and
+// `shared_ptr<T>(new T)` would all fail to compile from outside, while `delete this` inside DecrRef
+// stayed legal. It does do that. It also breaks CONSTRUCTION — a `new T` expression requires the
+// matching deallocation function to be ACCESSIBLE at the point of the new, because that is what the
+// language calls if the constructor throws. Every `new ibValueArray()`, every `new ibValue[n]` for a
+// frame's locals, stops compiling: 966 errors across 64 sites, none of them a delete anybody wrote.
+//
+// So the protection and the permission are THE SAME FUNCTION, and there is no version of this that
+// forbids one without forbidding the other. A private destructor is no better — every derived class
+// declares a public one of its own, so `delete derived*` sails past it.
+//
+// What remains is real and stands on the other side of the boundary: a query COLUMN carries its own
+// control block (ibBackendQueryColumn : enable_shared_from_this), so nobody needs to invent a second
+// owner for one, and a runtime value travels by ibValuePtr, which counts rather than deletes. The
+// rule itself lives in docs/private/ownership-authority.md; on this side it is a rule people keep, not one
+// the compiler keeps for them.
 
-const ibClassID g_valueBooleanCLSID = string_to_clsid("VL_BOOL");
-const ibClassID g_valueNumberCLSID = string_to_clsid("VL_NUMB");
-const ibClassID g_valueDateCLSID = string_to_clsid("VL_DATE");
-const ibClassID g_valueStringCLSID = string_to_clsid("VL_STRI");
+constexpr ibClassID g_valueBooleanCLSID = primitive_to_clsid("VL_BOOL");
+constexpr ibClassID g_valueNumberCLSID = primitive_to_clsid("VL_NUMB");
+constexpr ibClassID g_valueDateCLSID = primitive_to_clsid("VL_DATE");
+constexpr ibClassID g_valueStringCLSID = primitive_to_clsid("VL_STRI");
 
-const ibClassID g_valueNullCLSID = string_to_clsid("VL_NULL");
+constexpr ibClassID g_valueNullCLSID = primitive_to_clsid("VL_NULL");
 
 //simple type date
-class BACKEND_API ibValue : public wxObject {
-	wxDECLARE_DYNAMIC_CLASS(ibValue);
+class BACKEND_API ibValue {
 public:
-	bool m_bReadOnly;
 	//ATTRIBUTES:
-	ibValueTypes m_typeClass;
+	ibValueTypes m_typeClass;  // 1 byte (enum : unsigned char)
+	bool m_bReadOnly;          // 1 byte
+private:
+	// ⭐ THE COUNT FILLS THE HOLE BEFORE THE UNION. The two bytes above leave the rest of their word
+	// empty (the union is 8-aligned); declared at the end of the class the count took a word of its
+	// own there, so x64 paid 8 bytes of padding on every value: vptr 8 + 1 + 1 + 6 empty + union 8 +
+	// count 4 + 4 empty = 32. Here it is 8 + 1 + 1 + 2 + 4 + 8 = 24 (x86 stays 24 either way).
+	// std::atomic (not wxAtomicInt) — same 4 bytes, but a defined memory model. Never copied / moved:
+	// ibValue's copy/move ctors value-init it to 0, Copy/Move only touch the payload.
+	std::atomic<unsigned int> m_refCount;
+public:
+	// ⭐ ONE WORD FOR EVERY KIND. A string and a number live IN the union beside the pointers:
+	// each is one handle whose heap part (the text, a heap-tier BigImpl) counts its owners, so a
+	// copy of a value is a count and not a copy — and the number no longer takes 8 bytes of its own.
+	//
+	// 🛑 THE UNION'S EMPTY STATE IS ALL-ZERO BITS, and it is a valid value of EVERY member: a null
+	// pointer, a false, the empty date (fdatetime.h: count 0), the empty string (no text) and the number
+	// 0 (fnumber.h: tag 0 = immediate). The constructors zero the whole word (m_dData() — 8 bytes on x86
+	// as well, where a pointer is 4); Reset() ends the life of a string or a number — letting go of its text — and
+	// zeroes it again. So whatever member is written next writes over a valid empty one. Never write
+	// a string or a number member over a non-zero word of another kind: its old text would be kept.
 	union {
-		bool          m_bData;  //TYPE_BOOL
-		wxLongLong_t  m_dData;  //TYPE_DATE
-		ibValue*      m_pRef;   //TYPE_REFFER
+		bool          m_bData;  //TYPE_BOOLEAN
+		ibDateTime    m_dData;  //TYPE_DATE — one word, the count of a wall-clock reading
+		ibValue*      m_pRef;   //TYPE_REFFER (+ VALUE/ENUM/OLE/... aliased)
+		// TYPE_CONST_REFFER — read-only view of a NON-owned object (const
+		// ibValueMetaObject* from the metadata tree). Aliases m_pRef in storage
+		// (same 8 bytes), but the const type documents intent and Reset()/dtor
+		// must NEVER ref-count or delete through it — the tree owns the object.
+		const ibValue* m_pConstRef;
+		ibString      m_sData;  //TYPE_STRING — a handle on a shared text; empty = no text
+		ibNumber      m_fData;  //TYPE_NUMBER — one tagged word; a heap tier is shared
 	};
-	wxString m_sData;  //TYPE_STRING
-	// TYPE_NUMBER — outside the union. ibNumber is a conditional
-	// heap-owner (lazy-grow BigImpl), so its ctor/dtor/operator= must
-	// run on type transitions; in a union those calls are skipped and
-	// the m_pRef pointer in the lower 4 bytes gets reinterpreted as a
-	// BigImpl* on the next ibNumber::Clear(), which deletes random
-	// memory. Same rule that already keeps wxString out of the union.
-	// Costs +8 bytes per ibValue.
-	ibNumber m_fData;
 public:
 
-	class BACKEND_API ibValueMethodHelper {
+	class BACKEND_API ibMemberTable {
 
 		//List of keywords that cannot be variable and function names
-		struct ibValueMethodHelperConstructor {
+		struct ibMemberTableConstructor {
 
-			ibValueMethodHelperConstructor(const wxString& strHelper, const long paramCount, const long lPropAlias = wxNOT_FOUND, const long lData = wxNOT_FOUND)
+			ibMemberTableConstructor(const ibString& strHelper, const long paramCount, const long lPropAlias = wxNOT_FOUND, const long lData = wxNOT_FOUND)
 				: m_strHelper(strHelper), m_paramCount(paramCount), m_lAlias(lPropAlias), m_lData(lData)
 			{
 			}
 
-			wxString m_strHelper;
+			ibString m_strHelper;
 			long m_paramCount = 0;
 			long m_lAlias, m_lData;
 		};
 
 		// Bit-flags for prop visibility / mutability.
-		enum ibPropFlags : unsigned int {
+		enum ibPropFlags : unsigned char {
 			eProp_None     = 0,
 			eProp_Readable = 1u << 0,
 			eProp_Writable = 1u << 1,
-			// Scope-local prop (ThisObject / ThisForm / similar): when
-			// the host bc is mirrored to ibByteCode::m_listVar, this
-			// flag travels into ibByteCodeVarInfo::m_bScoped, and the
-			// cross-bc resolver (template FindVariable) skips the
-			// entry. Children resolving `ThisObject` therefore can't
-			// silently reach the parent's record.
+			// Scope-local prop (ThisObject / ThisForm / similar). ⭐ THE FLAG
+			// LIVES HERE AND IS ASKED FOR HERE, through IsPropScoped, by every
+			// place that cares: the runtime's OPER_GET_A, the debugger's
+			// property walk, autocomplete, the editor's interpreter, the
+			// language tool. The value owns the fact and answers for it.
+			//
+			// 🛑 It used to be COPIED onto the compile-side variable and mirrored
+			// into ibByteCodeVarInfo, on the plan that the cross-bc resolver
+			// would skip such entries. That resolver never read it: the copy was
+			// written, carried through three constructors, serialised into every
+			// AOT blob, and consulted by nobody. Removed 2026-09-05 (AOT v24).
 			eProp_Scoped   = 1u << 2,
 		};
 
-		struct ibValueMethodHelperProperty {
+		struct ibMemberTableProperty {
 
 			// Flag-based ctor — primary entry point. Use for new
 			// callsites and any prop that needs eProp_Scoped or other
 			// non-readable/writable bits.
-			ibValueMethodHelperProperty(const wxString& strPropName, unsigned int flags, const long lPropAlias = wxNOT_FOUND, const long lData = wxNOT_FOUND)
-				: m_fieldName(strPropName), m_flags(flags), m_lAlias(lPropAlias), m_lData(lData)
+			ibMemberTableProperty(const ibString& strPropName, unsigned int flags, const long lPropAlias = wxNOT_FOUND, const long lData = wxNOT_FOUND)
+				: m_fieldName(strPropName), m_lData(lData), m_lAlias((int16_t)lPropAlias), m_flags((uint8_t)flags)
 			{
 			}
 
@@ -125,20 +190,20 @@ public:
 			// into the flags word so existing AppendProp(bool, bool,
 			// ...) overloads keep working without touching every
 			// callsite. Old props default to non-scoped.
-			ibValueMethodHelperProperty(const wxString& strPropName, bool readable, bool writable, const long lPropAlias = wxNOT_FOUND, const long lData = wxNOT_FOUND)
+			ibMemberTableProperty(const ibString& strPropName, bool readable, bool writable, const long lPropAlias = wxNOT_FOUND, const long lData = wxNOT_FOUND)
 				: m_fieldName(strPropName),
-				  m_flags((readable ? eProp_Readable : 0u) | (writable ? eProp_Writable : 0u)),
-				  m_lAlias(lPropAlias), m_lData(lData)
+				  m_lData(lData), m_lAlias((int16_t)lPropAlias),
+				  m_flags((uint8_t)((readable ? eProp_Readable : 0u) | (writable ? eProp_Writable : 0u)))
 			{
 			}
 
 			// 3-bool ctor — same as legacy plus an explicit `scoped`
 			// argument. Readable for callsites that prefer bool args
 			// over OR'd flag literals (ThisObject / ThisForm / etc).
-			ibValueMethodHelperProperty(const wxString& strPropName, bool readable, bool writable, bool scoped, const long lPropAlias = wxNOT_FOUND, const long lData = wxNOT_FOUND)
+			ibMemberTableProperty(const ibString& strPropName, bool readable, bool writable, bool scoped, const long lPropAlias = wxNOT_FOUND, const long lData = wxNOT_FOUND)
 				: m_fieldName(strPropName),
-				  m_flags((readable ? eProp_Readable : 0u) | (writable ? eProp_Writable : 0u) | (scoped ? eProp_Scoped : 0u)),
-				  m_lAlias(lPropAlias), m_lData(lData)
+				  m_lData(lData), m_lAlias((int16_t)lPropAlias),
+				  m_flags((uint8_t)((readable ? eProp_Readable : 0u) | (writable ? eProp_Writable : 0u) | (scoped ? eProp_Scoped : 0u)))
 			{
 			}
 
@@ -146,108 +211,492 @@ public:
 			bool IsWritable() const { return (m_flags & eProp_Writable) != 0; }
 			bool IsScoped()   const { return (m_flags & eProp_Scoped)   != 0; }
 
-			wxString m_fieldName;
-			unsigned int m_flags = eProp_Readable | eProp_Writable;
-			long m_lAlias, m_lData;
+			// WIDTH BY WHAT THE FIELD CARRIES, not by habit. These two were both
+			// `long` and are not the same kind of thing at all:
+			//
+			//   m_lData  — a METAID (SetValueByMetaID / IsDataReference read it).
+			//              Full width, stays.
+			//   m_lAlias — a small tag: eProcUnit / eProperty / eTable, the largest
+			//              being g_aliasExport = 1000. Sixteen bits with room to
+			//              spare.
+			//
+			// One type serving both is why narrowing the flags alone bought nothing
+			// earlier: the saving vanished into the field beside it. Ordered wide to
+			// narrow, the whole tail now fits the pointer's own alignment slack —
+			// 8 + 4 + 2 + 1 = 15, so the record is 16 bytes where it was 24.
+			ibString m_fieldName;
+			long     m_lData;
+			int16_t  m_lAlias;
+			uint8_t  m_flags = eProp_Readable | eProp_Writable;
 		};
 
 		// Bit-flags for method capabilities — counterpart to ibPropFlags.
-		enum ibMethodFlags : unsigned int {
+		enum ibMethodFlags : unsigned char {
 			eMethod_None      = 0,
 			eMethod_HasReturn = 1u << 0,   // function (returns) vs procedure (no return)
 			eMethod_Scoped    = 1u << 1,   // bc-local — invisible to children
 		};
 
-		struct ibValueMethodHelperMethod {
+		struct ibMemberTableMethod {
 
-			ibValueMethodHelperMethod(const wxString& strMethodName, const wxString& strHelper, const long paramCount, unsigned int flags, const long lPropAlias = wxNOT_FOUND, const long lData = wxNOT_FOUND)
-				: m_fieldName(strMethodName), m_strHelper(strHelper), m_paramCount(paramCount), m_flags(flags), m_lAlias(lPropAlias), m_lData(lData)
+			ibMemberTableMethod(const ibString& strMethodName, const ibString& strHelper, const long paramCount, unsigned int flags, const long lPropAlias = wxNOT_FOUND, const long lData = wxNOT_FOUND)
+				: m_fieldName(strMethodName), m_strHelper(strHelper), m_lData(lData), m_lAlias((int16_t)lPropAlias), m_paramCount((int8_t)paramCount), m_flags((uint8_t)flags)
 			{
 			}
 
 			// Legacy ctor — convert hasRet bool into the flags word.
-			ibValueMethodHelperMethod(const wxString& strMethodName, const wxString& strHelper, const long paramCount, bool hasRet, const long lPropAlias = wxNOT_FOUND, const long lData = wxNOT_FOUND)
-				: m_fieldName(strMethodName), m_strHelper(strHelper), m_paramCount(paramCount),
-				  m_flags(hasRet ? eMethod_HasReturn : 0u), m_lAlias(lPropAlias), m_lData(lData)
+			ibMemberTableMethod(const ibString& strMethodName, const ibString& strHelper, const long paramCount, bool hasRet, const long lPropAlias = wxNOT_FOUND, const long lData = wxNOT_FOUND)
+				: m_fieldName(strMethodName), m_strHelper(strHelper), m_lData(lData),
+				  m_lAlias((int16_t)lPropAlias), m_paramCount((int8_t)paramCount),
+				  m_flags((uint8_t)(hasRet ? eMethod_HasReturn : 0u))
 			{
 			}
 
 			bool HasReturn() const { return (m_flags & eMethod_HasReturn) != 0; }
 			bool IsScoped()  const { return (m_flags & eMethod_Scoped)    != 0; }
 
-			wxString m_fieldName;
-			wxString m_strHelper;
-			long m_paramCount = 0;
-			unsigned int m_flags = 0;
-			long m_lAlias, m_lData;
+			// Same split as the property record above: m_lData is a metaID and keeps
+			// its width, the rest are small tags. Declared arity in this whole tree
+			// tops out at FOUR, so a byte is not tight — it is three orders of
+			// magnitude of headroom. Wide to narrow: 8 + 8 + 4 + 2 + 1 + 1 = 24,
+			// exactly two pointers plus a full 8-byte tail, no padding — where the
+			// record used to be 32.
+			ibString m_fieldName;
+			ibString m_strHelper;
+			long     m_lData  = wxNOT_FOUND;
+			int16_t  m_lAlias = wxNOT_FOUND;
+			int8_t   m_paramCount = 0;
+			uint8_t  m_flags = 0;
 		};
 
-		// constructors & props & methods
-		std::vector<ibValueMethodHelperConstructor> m_constructorHelper; // tree of constructor names
-		std::vector<ibValueMethodHelperProperty> m_propHelper; // tree of attribute names
-		std::vector<ibValueMethodHelperMethod> m_methodHelper; // tree of method names
+		// props & methods (the built surface). Constructors (a value may surface
+		// SEVERAL) hang off a lazily-allocated vector: only a few value TYPES expose
+		// ctors at all (TypeDescription / File / Array), so every per-instance helper
+		// carries just the null pointer — not an empty vector header.
+		std::unique_ptr<std::vector<ibMemberTableConstructor>> m_ctors;
+		std::vector<ibMemberTableProperty> m_props; // tree of attribute names
+		std::vector<ibMemberTableMethod> m_methods; // tree of method names
 
+		// ---- bind-based population (push) -------------------------------
+		// A contributor appends THIS owner's names into the helper. `ctx` is the
+		// owning value (the record / aggregate that holds this helper), or
+		// nullptr for type-static names. It is typed `const ibValue*`, not a raw
+		// void*, on purpose: the owner is ALWAYS at least an ibValue, and a typed
+		// pointer lets a contributor downcast with a plain static_cast that the
+		// compiler offsets correctly across multiple-inheritance bases — a void*
+		// round-trip would lose that adjustment. A plain comparable (fn, ctx)
+		// pair — the wxEvtHandler::Bind idea hand-rolled: no std::function /
+		// template instantiation in this hot, everywhere-included header, and
+		// identity comparison gives BindOnce dedup + Unbind for free.
 	public:
+		// Two contributor flavours share one binder list:
+		//  - ibNameBinder: a FREE function (type-invariant surfaces built once via
+		//    Shared<>), gets the helper + a ctx pointer.
+		//  - ibNameFiller: a const MEMBER function of the owning value (per-instance
+		//    dynamic surfaces). Build() calls it ON the value, so the contributor
+		//    runs with a fully-typed `this` — no ctx cast. Bound through the member
+		//    Bind() template below and stored type-erased as a pointer-to-member of
+		//    the ibValue base; the hierarchy is diamond-free so the derived->base
+		//    pmf cast is unambiguous. This is the ibPropertyValueFunctor /
+		//    `(handler->*m_funcHandler)()` idea without a per-binder heap functor.
+		using ibNameBinder = void(*)(ibMemberTable& helper, const ibValue* ctx);
+		using ibNameFiller = void (ibValue::*)(ibMemberTable& helper) const;
+	private:
+		struct ibBoundNames {
+			const ibValue* m_ctx = nullptr;     // free-fn ctx, or the member-fn target value
+			ibNameBinder   m_freeFn = nullptr;  // exactly one of m_freeFn / m_memberFn is set
+			ibNameFiller   m_memberFn = nullptr;
+			bool           m_tail = false;      // run AFTER all non-tail binders (module exports must
+			                                    // follow the class's fixed methods so index-based
+			                                    // CallAsFunc dispatch keeps IsNew=0…); set by BindTail.
+			bool operator==(const ibBoundNames& o) const {
+				return m_ctx == o.m_ctx && m_freeFn == o.m_freeFn && m_memberFn == o.m_memberFn && m_tail == o.m_tail;
+			}
+		};
+		// Contributors, invoked by Build() in bind order — EXCEPT tail-flagged ones,
+		// which Build() runs last (a descriptor's module exports).
+		//
+		// ONE SLOT INLINE, and the vector only past it. Measured shape of the list:
+		// every ctor binds exactly once, so a value has ONE contributor; a derived
+		// that also binds a base filler has two, and nothing in the tree binds more
+		// than that except a descriptor's module exports. The list is also
+		// write-once — `Unbind` on a member table has no callsite at all — and its
+		// contents are constant per TYPE: same function pointer, same order, only
+		// `ctx` differs, and `ctx` is always the owner.
+		//
+		// So a `std::vector` here was a heap allocation per VALUE for a single
+		// element known at compile time. Every Structure, every record object,
+		// every form paid it at construction — and a composite pipeline row is a
+		// fresh Structure per ROW. The slot costs ~32 bytes inline and removes that
+		// malloc/free pair; the vector stays for the rare second binder and
+		// allocates nothing while empty.
+		ibBoundNames m_binder0;
+		std::vector<ibBoundNames> m_binders;   // overflow only — entries 2..N
+		uint8_t m_binderCount = 0;
 
-		ibValueMethodHelper() {}
-
-		void ClearHelper() {
-			m_constructorHelper.clear();
-			m_propHelper.clear();
-			m_methodHelper.clear();
+		// The ONE place that knows the storage is split. Everything else asks.
+		void AddBinder(const ibBoundNames& b) {
+			if (m_binderCount == 0) m_binder0 = b;
+			else                    m_binders.push_back(b);
+			++m_binderCount;
+			m_buildState = kStale;
 		}
-
-		inline long AppendConstructor(const wxString& strHelper) { return AppendConstructor(0, strHelper, wxNOT_FOUND, wxNOT_FOUND); }
-		inline long AppendConstructor(const wxString& strHelper, const long lCtorNum) { return AppendConstructor(0, strHelper, wxNOT_FOUND, lCtorNum); }
-		inline long AppendConstructor(const long paramCount, const wxString& strHelper, const long lCtorNum) { return AppendConstructor(paramCount, strHelper, wxNOT_FOUND, lCtorNum); }
-		inline long AppendConstructor(const long paramCount, const wxString& strHelper) { return AppendConstructor(paramCount, strHelper, wxNOT_FOUND, wxNOT_FOUND); }
-
-		inline long AppendConstructor(const long paramCount, const wxString& strHelper, const long lCtorNum, const long lCtorAlias) {
-
-			//auto iterator = std::find_if(m_constructorHelper.begin(), m_constructorHelper.end(),
-			//	[strHelper](const auto& f) { return stringUtils::CompareString(f.m_strHelper, strHelper); });
-			//if (iterator != m_constructorHelper.end())
-			//	return std::distance(m_constructorHelper.begin(), iterator);
-
-			m_constructorHelper.emplace_back(strHelper, paramCount, lCtorAlias, lCtorNum);
-			return m_constructorHelper.size();
+		bool HasBinder(const ibBoundNames& b) const {
+			if (m_binderCount > 0 && m_binder0 == b) return true;
+			for (const auto& e : m_binders) if (e == b) return true;
+			return false;
 		}
+		// Rebuilds the list minus whatever `drop` selects. Order is preserved,
+		// which matters: Build() runs contributors in bind order.
+		template<class Pred>
+		void RemoveBinderIf(Pred drop) {
+			std::vector<ibBoundNames> kept;
+			kept.reserve(m_binderCount);
+			if (m_binderCount > 0 && !drop(m_binder0)) kept.push_back(m_binder0);
+			for (const auto& e : m_binders) if (!drop(e)) kept.push_back(e);
 
-		void CopyConstructor(const ibValueMethodHelper* src, const long lCtorNum) {
-			if (lCtorNum < src->GetNConstructors()) {
-				m_constructorHelper.push_back(src->m_constructorHelper[lCtorNum]);
+			m_binderCount = 0;
+			m_binders.clear();
+			for (const auto& e : kept) AddBinder(e);
+			m_buildState = kStale;
+		}
+		template<class F>
+		void ForEachBinder(F&& f) const {
+			if (m_binderCount > 0) f(m_binder0);
+			for (const auto& e : m_binders) f(e);
+		}
+		// Build state. Several web-session threads may reach the same shared helper.
+		// They must never rebuild it in parallel: two threads clearing and appending
+		// m_props/m_methods at once corrupt them. One atomic byte gives a lock-free
+		// claim: CAS Stale->Building wins
+		// the right to Build(); a loser just waits for the winner's cache (it must not
+		// race a second Build()). No mutex object → zero per-instance footprint, no global
+		// serialization. acquire/release: seeing Built implies all the build's writes are
+		// visible. Steady state (already Built) is a single relaxed-ish load — no cost.
+		enum BuildState : uint8_t { kStale = 0, kBuilding = 1, kBuilt = 2, kInvalidating = 3 };
+		std::atomic<uint8_t> m_buildState{ kStale };
+
+		// Lazy name->index acceleration for FindProp / FindMethod (the runtime
+		// hot path — every Obj.Attr / obj.Method() resolves a name). Keyed on
+		// the name as declared, ordered by ibStringCaseFoldLess — the folding of
+		// CompareString, so a lookup is case-insensitive and reads the two buffers
+		// in place: no upper-cased copy of the asked name on every call (a posting
+		// that resolves a few million names spent a minute there, stack samples
+		// 2026-09-14, Debug). value = the FIRST matching vector index, so the result
+		// is identical to the old linear "first wins" scan. Used only when the
+		// surface is large enough to pay (kFindIndexMin); rebuilt lazily on the
+		// first lookup after a structural change. An empty map allocates nothing,
+		// so a small or never-searched helper costs zero.
+		static constexpr size_t kFindIndexMin = 12;
+		// Both name->index maps live in ONE heap node, allocated
+		// lazily only when a surface first crosses kFindIndexMin. The common case (a
+		// small or never-searched helper) carries just this null pointer — not two
+		// inline maps. emplace = keep first (lowest index), identical to the old
+		// linear "first wins" scan. The atomic state beside it serializes cold
+		// construction without a mutex per value.
+		struct FindIndex {
+			std::map<ibString, long, ibStringCaseFoldLess> prop;
+			std::map<ibString, long, ibStringCaseFoldLess> method;
+		};
+		mutable std::shared_ptr<const FindIndex> m_findIndex;
+		enum FindIndexState : uint8_t { kFindStale = 0, kFindBuilding = 1, kFindBuilt = 2 };
+		mutable std::atomic<uint8_t> m_findIndexState{ kFindStale };
+
+		void MarkFindIndexDirty() const {
+			while (m_findIndexState.load(std::memory_order_acquire) == kFindBuilding)
+				std::this_thread::yield();
+			m_findIndexState.store(kFindStale, std::memory_order_release);
+		}
+		void MarkPropDirty()   const { MarkFindIndexDirty(); }
+		void MarkMethodDirty() const { MarkFindIndexDirty(); }
+
+		// Build both maps behind one atomic claim. Shared member tables are read by
+		// several web sessions at once, so their first lookup must not allocate or
+		// populate the same unordered_map concurrently.
+		std::shared_ptr<const FindIndex> EnsureFindIndex() const {
+			for (;;) {
+				const uint8_t state = m_findIndexState.load(std::memory_order_acquire);
+				if (state == kFindBuilt)
+					return std::atomic_load_explicit(&m_findIndex, std::memory_order_acquire);
+				if (state == kFindBuilding) {
+					std::this_thread::yield();
+					continue;
+				}
+
+				uint8_t expected = kFindStale;
+				if (!m_findIndexState.compare_exchange_strong(expected, kFindBuilding,
+						std::memory_order_acq_rel, std::memory_order_acquire))
+					continue;
+				// Invalidation changes kBuilt to kInvalidating before it waits for this
+				// builder. Recheck after claiming so it cannot mutate the vectors while
+				// this thread is indexing them.
+				//
+				// 🛑⭐⭐ WAIT ONLY FOR A BUILDER THAT IS ACTUALLY WORKING. The reason to wait is that
+				// a build in flight MUTATES m_props/m_methods under us — so kBuilding and
+				// kInvalidating are worth waiting for, and they end. kStale is not: it means nobody
+				// is building and nobody here will start one, so waiting for it yields FOREVER.
+				//
+				// Two ordinary states reach here as kStale: a table populated by hand (the mode
+				// HasBinders() is written to support — "SAFE on a helper still populated" — which
+				// EnsureBuilt leaves kStale by design), and a bound table whose reader took the raw
+				// pointer instead of going through ibValue::GetPMethods (the one place that builds).
+				//
+				// It hangs the PROCESS, not the call: `std::this_thread::yield` keeps a core busy, so
+				// the symptom is a script that never returns while the CPU burns. MEASURED 2026-09-10:
+				// the emitter was RaiseMemberNotFound — the ERROR path, which asks the shared globals
+				// table whether the missing name is a global function. So a plain "no such member"
+				// stopped being a refusal and became a hung process, on any surface past
+				// kFindIndexMin (12).
+				//
+				// Indexing a kStale table is safe: nothing is mutating it at this moment, and any
+				// later change goes through MarkFindIndexDirty, which retires this snapshot.
+				const uint8_t buildState = m_buildState.load(std::memory_order_acquire);
+				if (buildState == kBuilding || buildState == kInvalidating) {
+					m_findIndexState.store(kFindStale, std::memory_order_release);
+					std::this_thread::yield();
+					continue;
+				}
+
+				try {
+					auto index = std::make_shared<FindIndex>();
+					for (long i = 0; i < (long)m_props.size(); ++i)
+						index->prop.emplace(m_props[i].m_fieldName, i);
+					for (long i = 0; i < (long)m_methods.size(); ++i)
+						index->method.emplace(m_methods[i].m_fieldName, i);
+					std::shared_ptr<const FindIndex> published = std::move(index);
+					std::atomic_store_explicit(&m_findIndex, published, std::memory_order_release);
+					m_findIndexState.store(kFindBuilt, std::memory_order_release);
+					return published;
+				}
+				catch (...) {
+					m_findIndexState.store(kFindStale, std::memory_order_release);
+					throw;
+				}
 			}
 		}
 
-		wxString GetConstructorHelper(const long lCtorNum) const {
-			if (lCtorNum > GetNConstructors())
-				return wxEmptyString;
-			return m_constructorHelper[lCtorNum].m_strHelper;
+		// Allocate-on-demand + rebuild-if-stale; callers gate on size >= kFindIndexMin.
+	public:
+
+		ibMemberTable() {}
+
+	private:
+		// Internal — Build() resets the surface before re-running the binders. Not
+		// public: nothing outside rebuilds by hand anymore (PrepareNames is gone).
+		void ClearHelper() {
+			m_ctors.reset();
+			m_props.clear();
+			m_methods.clear();
+			MarkPropDirty(); MarkMethodDirty();
+		}
+	public:
+
+		// ---- bind API ---------------------------------------------------
+		// Free contributor (type-invariant / Shared). Idempotent BindOnce lets a
+		// base and a derived each register their own with no guard flag.
+		void Bind(ibNameBinder fn, const ibValue* ctx = nullptr) {
+			AddBinder(ibBoundNames{ ctx, fn, nullptr });
+		}
+		void BindOnce(ibNameBinder fn, const ibValue* ctx = nullptr) {
+			const ibBoundNames b{ ctx, fn, nullptr };
+			if (HasBinder(b)) return;
+			AddBinder(b);
+		}
+		void Unbind(ibNameBinder fn, const ibValue* ctx = nullptr) {
+			const ibBoundNames b{ ctx, fn, nullptr };
+			RemoveBinderIf([&b](const ibBoundNames& e) { return e == b; });
+		}
+		// Member contributor: a const method of the owning value. `obj` is the
+		// value (typically `this` in its ctor); Build() runs (obj->*fn)(helper),
+		// so the contributor sees the fully-typed instance. A class may bind several
+		// fillers — they run in bind order, accumulating the surface.
+		// The method's class M may be a BASE of the object's class C — a derived ctor
+		// binding a base-defined filler (e.g. Ext binding ibValueRecordDataObject's
+		// FillBaseMethods) deduces C=Ext, M=base; both upcast to ibValue uniformly.
+		//
+		// PROJECT INVARIANT — ibValue MUST be the FIRST base (offset 0) of any class
+		// that member-binds. Reason: the pmf is type-erased to void(ibValue::*), and on
+		// MSVC `ibValue::*` is a single-inheritance pmf (4 bytes, NO this-adjustment
+		// slot — ibValue has no bases). Casting a multiple-inheritance pmf to it DROPS
+		// the MI this-adjustment, so if ibValue sat at a non-zero offset, Build() would
+		// invoke the filler with `this` pointing at the ibValue sub-object instead of
+		// the real object → reads members at wrong offsets → garbage / crash. Keep the
+		// ibValue-holding base (ibValueDynamicMembers / ibValueStaticMembers, or
+		// ibValueFrame which carries them) FIRST in the base list. ibValueForm hit this
+		// exactly (ibBackendValueForm was first) and was reordered ibValueFrame-first.
+		// The wxASSERT below catches any future violator on its first bind.
+		template<class C, class M>
+		void Bind(const C* obj, void (M::*fn)(ibMemberTable&) const) {
+			static_assert(std::is_base_of<M, C>::value || std::is_same<M, C>::value,
+				"Bind: the filler's class must be the object's class or a base of it");
+			wxASSERT_MSG(static_cast<const void*>(static_cast<const ibValue*>(obj)) == static_cast<const void*>(obj),
+				wxT("ibValue must be the FIRST base (offset 0) of a member-binding class - see PROJECT INVARIANT above; make the ibValue-holding base first"));
+			AddBinder(ibBoundNames{ static_cast<const ibValue*>(obj), nullptr, static_cast<ibNameFiller>(fn) });
+		}
+		template<class C, class M>
+		void Unbind(const C* obj, void (M::*fn)(ibMemberTable&) const) {
+			const ibBoundNames b{ static_cast<const ibValue*>(obj), nullptr, static_cast<ibNameFiller>(fn) };
+			RemoveBinderIf([&b](const ibBoundNames& e) { return e == b; });
+		}
+		// Tail contributor — Build() runs it AFTER every non-tail binder, so its entries
+		// land at the END of the surface regardless of bind order. Used for a
+		// descriptor's module exports: they must follow the class's fixed methods
+		// (index-based CallAsFunc). Set by the ibRuntimeModuleDataObject ctor. Only one
+		// tail is expected; replace any existing one so a re-bind stays idempotent.
+		void BindTail(ibNameBinder fn, const ibValue* ctx = nullptr) {
+			RemoveBinderIf([](const ibBoundNames& b) { return b.m_tail; });
+			AddBinder(ibBoundNames{ ctx, fn, nullptr, /*tail=*/true });
+		}
+		bool HasBinders() const {
+			return m_binderCount > 0;
+		}
+		// Rebuild the name surface from the bound contributors, in bind order.
+		// No-op when nothing is bound, so it is SAFE on a helper still populated
+		// the old way (a PrepareNames() override + Append*). Defined out-of-line —
+		// a member-contributor call needs the complete ibValue.
+		void Build();
+		// Lazy trigger for GetPMethods(): no-op once built or when nothing is bound.
+		// Lock-free claim — exactly one thread builds; a concurrent caller waits for
+		// that build instead of starting a second one on the same cache.
+		void EnsureBuilt() {
+			if (!HasBinders()) return;
+			for (;;) {
+				const uint8_t state = m_buildState.load(std::memory_order_acquire);
+				if (state == kBuilt)
+					return;
+				if (state == kBuilding || state == kInvalidating) {
+					std::this_thread::yield();
+					continue;
+				}
+				uint8_t expected = kStale;
+				if (!m_buildState.compare_exchange_strong(expected, kBuilding,
+						std::memory_order_acq_rel, std::memory_order_acquire))
+					continue;
+				try {
+					Build();   // sets kBuilt (release) at its end
+					return;
+				}
+				catch (...) {
+					// Don't get stuck in kBuilding — let a later access retry the build.
+					m_buildState.store(kStale, std::memory_order_release);
+					throw;
+				}
+			}
+		}
+		// Mark the surface stale (mutating values — e.g. Map keys). Do not turn an
+		// in-progress build back into an acquirable Stale state: another session
+		// could otherwise enter Build() and clear the same vectors concurrently.
+		void Invalidate() {
+			for (;;) {
+				uint8_t state = m_buildState.load(std::memory_order_acquire);
+				if (state == kStale)
+					return;
+				if (state == kBuilding || state == kInvalidating) {
+					std::this_thread::yield();
+					continue;
+				}
+				if (m_buildState.compare_exchange_weak(state, kInvalidating,
+						std::memory_order_acq_rel, std::memory_order_acquire)) {
+					MarkFindIndexDirty();
+					m_buildState.store(kStale, std::memory_order_release);
+					return;
+				}
+			}
+		}
+		bool IsBuilt() const { return m_buildState.load(std::memory_order_acquire) == kBuilt; }
+
+		// Reusable SHARED helper for a TYPE-INVARIANT name surface: one helper
+		// per distinct contributor, built once and thread-safely (function-local
+		// static init) — no per-class static member / magic-static boilerplate.
+		// A static-shape value's DoGetPMethods() is then one line:
+		//     return ibMemberTable::Shared<&BindXxxNames>();
+		// Only for shapes that DON'T depend on the instance (ctx is nullptr);
+		// per-metaobject / mutating values keep their own per-instance helper.
+		template<ibNameBinder Binder>
+		static ibMemberTable* Shared() {
+			static ibMemberTable s;
+			static const bool once = [] { s.Bind(Binder); s.Build(); return true; }();
+			(void)once;
+			return &s;
+		}
+
+		// Tier-2: SHARED helper per OWNER (e.g. one per metaobject) — for a shape
+		// that is stable per owner but DIFFERS between owners and has MANY instances
+		// per owner (record objects: shape = metaobject). Built once per owner key,
+		// cached, thread-safe (worker pool). Contributor gets ctx = the owner key.
+		// unordered_map element refs are rehash-stable, so the returned pointer stays
+		// valid while other threads insert. Call InvalidateSharedByOwner() on config
+		// reload (metaobjects rebuilt → stale keys / address-reuse) — it bumps a
+		// generation that lazily clears every per-Binder cache.
+		static std::atomic<unsigned>& OwnerGeneration() { static std::atomic<unsigned> g{ 0 }; return g; }
+		static void InvalidateSharedByOwner() { OwnerGeneration().fetch_add(1, std::memory_order_relaxed); }
+
+		template<ibNameBinder Binder>
+		static ibMemberTable* SharedByOwner(const ibValue* owner) {
+			static std::unordered_map<const ibValue*, ibMemberTable> s_byOwner;
+			static unsigned s_gen = 0;
+			static std::mutex s_mtx;
+			std::lock_guard<std::mutex> lk(s_mtx);
+			const unsigned g = OwnerGeneration().load(std::memory_order_relaxed);
+			if (s_gen != g) { s_byOwner.clear(); s_gen = g; }
+			ibMemberTable& h = s_byOwner[owner];
+			if (!h.IsBuilt()) {       // build under the lock → no race with the NVI wrapper's EnsureBuilt
+				h.BindOnce(Binder, owner);
+				h.Build();
+			}
+			return &h;
+		}
+
+		inline long AppendConstructor(const ibString& strHelper) { return AppendConstructor(0, strHelper, wxNOT_FOUND, wxNOT_FOUND); }
+		inline long AppendConstructor(const ibString& strHelper, const long lCtorNum) { return AppendConstructor(0, strHelper, wxNOT_FOUND, lCtorNum); }
+		inline long AppendConstructor(const long paramCount, const ibString& strHelper, const long lCtorNum) { return AppendConstructor(paramCount, strHelper, wxNOT_FOUND, lCtorNum); }
+		inline long AppendConstructor(const long paramCount, const ibString& strHelper) { return AppendConstructor(paramCount, strHelper, wxNOT_FOUND, wxNOT_FOUND); }
+
+		inline long AppendConstructor(const long paramCount, const ibString& strHelper, const long lCtorNum, const long lCtorAlias) {
+			if (!m_ctors) m_ctors = std::make_unique<std::vector<ibMemberTableConstructor>>();
+			m_ctors->emplace_back(strHelper, paramCount, lCtorAlias, lCtorNum);
+			return m_ctors->size();
+		}
+
+		void CopyConstructor(const ibMemberTable* src, const long lCtorNum) {
+			if (lCtorNum < src->GetNConstructors()) {
+				if (!m_ctors) m_ctors = std::make_unique<std::vector<ibMemberTableConstructor>>();
+				m_ctors->push_back((*src->m_ctors)[lCtorNum]);
+			}
+		}
+
+		const ibString& GetConstructorHelper(const long lCtorNum) const {
+			static const ibString s_absent;   // the empty string holds no text: nothing shared, safe from any thread
+			if (lCtorNum < 0 || lCtorNum >= GetNConstructors())
+				return s_absent;
+			return (*m_ctors)[lCtorNum].m_strHelper;
 		}
 
 		long GetConstructorAlias(const long lCtorNum) const {
-			if (lCtorNum > GetNConstructors())
+			if (lCtorNum < 0 || lCtorNum >= GetNConstructors())
 				return wxNOT_FOUND;
-			return m_constructorHelper[lCtorNum].m_lAlias;
+			return (*m_ctors)[lCtorNum].m_lAlias;
 		}
 
 		long GetConstructorData(const long lCtorNum) const {
-			if (lCtorNum > GetNConstructors())
+			if (lCtorNum < 0 || lCtorNum >= GetNConstructors())
 				return wxNOT_FOUND;
-			return m_constructorHelper[lCtorNum].m_lData;
+			return (*m_ctors)[lCtorNum].m_lData;
 		}
 
-		const long int GetNConstructors() const noexcept { return m_constructorHelper.size(); }
+		// Constructor names are surfaced by only a handful of static (Shared) values
+		// (TypeDescription / File / Array); every per-instance helper leaves m_ctors null.
+		const long int GetNConstructors() const noexcept { return m_ctors ? (long)m_ctors->size() : 0; }
 
 		///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-		inline long AppendProp(const wxString& strPropName) { return AppendProp(strPropName, true, true, wxNOT_FOUND, wxNOT_FOUND); }
-		inline long AppendProp(const wxString& strPropName, const long lPropNum) { return AppendProp(strPropName, true, true, lPropNum, wxNOT_FOUND); }
-		inline long AppendProp(const wxString& strPropName, const long lPropNum, const long lPropAlias) { return AppendProp(strPropName, true, true, lPropNum, lPropAlias); }
-		inline long AppendProp(const wxString& strPropName, bool readable, const long lPropNum, const long lPropAlias) { return AppendProp(strPropName, readable, true, lPropNum, lPropAlias); }
-		inline long AppendProp(const wxString& strPropName, bool readable, bool writable, const long lPropNum) { return AppendProp(strPropName, readable, writable, lPropNum, wxNOT_FOUND); }
+		inline long AppendProp(const ibString& strPropName) { return AppendProp(strPropName, true, true, wxNOT_FOUND, wxNOT_FOUND); }
+		inline long AppendProp(const ibString& strPropName, const long lPropNum) { return AppendProp(strPropName, true, true, lPropNum, wxNOT_FOUND); }
+		inline long AppendProp(const ibString& strPropName, const long lPropNum, const long lPropAlias) { return AppendProp(strPropName, true, true, lPropNum, lPropAlias); }
+		inline long AppendProp(const ibString& strPropName, bool readable, const long lPropNum, const long lPropAlias) { return AppendProp(strPropName, readable, true, lPropNum, lPropAlias); }
+		inline long AppendProp(const ibString& strPropName, bool readable, bool writable, const long lPropNum) { return AppendProp(strPropName, readable, writable, lPropNum, wxNOT_FOUND); }
 
-		inline long AppendProp(const wxString& strPropName, bool readable, bool writable, const long lPropNum, const long lPropAlias) {
+		inline long AppendProp(const ibString& strPropName, bool readable, bool writable, const long lPropNum, const long lPropAlias) {
 			const unsigned int flags = (readable ? eProp_Readable : 0u) | (writable ? eProp_Writable : 0u);
 			return AppendProp(strPropName, flags, lPropNum, lPropAlias);
 		}
@@ -257,181 +706,203 @@ public:
 		// backend.dll for wfrontend / other consumers (otherwise MSVC
 		// in Debug emits __imp_ stubs that the inline body can't
 		// satisfy across the DLL boundary).
-		long AppendProp(const wxString& strPropName, bool readable, bool writable, bool scoped, const long lPropNum, const long lPropAlias);
+		long AppendProp(const ibString& strPropName, bool readable, bool writable, bool scoped, const long lPropNum, const long lPropAlias);
 
 		// Flag-based variant. Use eProp_Readable | eProp_Writable
 		// (or | eProp_Scoped for bc-local entries like ThisObject).
-		inline long AppendProp(const wxString& strPropName, unsigned int flags, const long lPropNum, const long lPropAlias) {
+		inline long AppendProp(const ibString& strPropName, unsigned int flags, const long lPropNum, const long lPropAlias) {
 
-			//auto iterator = std::find_if(m_propHelper.begin(), m_propHelper.end(),
+			//auto iterator = std::find_if(m_props.begin(), m_props.end(),
 			//	[strPropName](const auto& f) { return stringUtils::CompareString(f.m_fieldName, strPropName); });
-			//if (iterator != m_propHelper.end())
-			//	return std::distance(m_propHelper.begin(), iterator);
+			//if (iterator != m_props.end())
+			//	return std::distance(m_props.begin(), iterator);
 
-			m_propHelper.emplace_back(strPropName, flags, lPropAlias, lPropNum);
-			return m_propHelper.size();
+			m_props.emplace_back(strPropName, flags, lPropAlias, lPropNum);
+			MarkPropDirty();
+			return m_props.size();
 		}
 
-		void CopyProp(const ibValueMethodHelper* src, const long lPropNum) {
+		void CopyProp(const ibMemberTable* src, const long lPropNum) {
 			if (lPropNum < src->GetNProps()) {
-				m_propHelper.push_back(src->m_propHelper[lPropNum]);
+				m_props.push_back(src->m_props[lPropNum]);
+				MarkPropDirty();
 			}
 		}
 
-		void RemoveProp(const wxString& strPropName) {
-			m_methodHelper.erase(
-				std::remove_if(m_methodHelper.begin(), m_methodHelper.end(), [strPropName](const auto& f) {
-					return stringUtils::CompareString(f.m_fieldName, strPropName); }), m_methodHelper.end());
+		void RemoveProp(const ibString& strPropName) {
+			m_props.erase(
+				std::remove_if(m_props.begin(), m_props.end(), [&strPropName](const auto& f) {
+					return stringUtils::CompareString(f.m_fieldName, strPropName); }), m_props.end());
+			MarkPropDirty();
 		}
 
-		long FindProp(const wxString& strPropName) const {
-			auto iterator = std::find_if(m_propHelper.begin(), m_propHelper.end(),
-				[strPropName](const auto& f) { return stringUtils::CompareString(f.m_fieldName, strPropName); }
+		long FindProp(const ibString& strPropName) const {
+			if (m_props.size() >= kFindIndexMin) {
+				const auto snapshot = EnsureFindIndex();
+				const auto& idx = snapshot->prop;
+				const auto it = idx.find(strPropName);
+				return it != idx.end() ? it->second : wxNOT_FOUND;
+			}
+			auto iterator = std::find_if(m_props.begin(), m_props.end(),
+				[&strPropName](const auto& f) { return stringUtils::CompareString(f.m_fieldName, strPropName); }
 			);
-			if (iterator != m_propHelper.end())
-				return std::distance(m_propHelper.begin(), iterator);
+			if (iterator != m_props.end())
+				return (long)std::distance(m_props.begin(), iterator);
 			return wxNOT_FOUND;
 		}
 
-		wxString GetPropName(const long lPropNum) const {
-			if (lPropNum > GetNProps())
-				return wxEmptyString;
-			return m_propHelper[lPropNum].m_fieldName;
+		// The name WHERE IT LIES — by reference, so asking for a member's name copies nothing.
+		const ibString& GetPropName(const long lPropNum) const {
+			static const ibString s_absent;
+			if (lPropNum < 0 || lPropNum >= GetNProps())
+				return s_absent;
+			return m_props[lPropNum].m_fieldName;
 		}
 
 		long GetPropAlias(const long lPropNum) const {
-			if (lPropNum > GetNProps())
+			if (lPropNum < 0 || lPropNum >= GetNProps())
 				return wxNOT_FOUND;
-			return m_propHelper[lPropNum].m_lAlias;
+			return m_props[lPropNum].m_lAlias;
 		}
 
 		long GetPropData(const long lPropNum) const {
-			if (lPropNum > GetNProps())
+			if (lPropNum < 0 || lPropNum >= GetNProps())
 				return wxNOT_FOUND;
-			return m_propHelper[lPropNum].m_lData;
+			return m_props[lPropNum].m_lData;
 		}
 
 		virtual bool IsPropReadable(const long lPropNum) const {
-			if (lPropNum > GetNProps())
+			if (lPropNum < 0 || lPropNum >= GetNProps())
 				return false;
-			return m_propHelper[lPropNum].IsReadable();
+			return m_props[lPropNum].IsReadable();
 		}
 
 		virtual bool IsPropWritable(const long lPropNum) const {
-			if (lPropNum > GetNProps())
+			if (lPropNum < 0 || lPropNum >= GetNProps())
 				return false;
-			return m_propHelper[lPropNum].IsWritable();
+			return m_props[lPropNum].IsWritable();
 		}
 
-		// Scope-local props (ThisObject / ThisForm / similar) must
-		// not leak across bc boundaries. Pass-3 PrepareModuleData
-		// reads this and stamps ibCompileContext::ibVariable::m_bScoped
-		// on the freshly pushed entry.
+		// Scope-local props (ThisObject / ThisForm / similar) must not leak
+		// across entity boundaries. Asked of the VALUE at each place that
+		// enforces it — there is no copy of the answer anywhere else.
 		virtual bool IsPropScoped(const long lPropNum) const {
-			if (lPropNum > GetNProps())
+			if (lPropNum < 0 || lPropNum >= GetNProps())
 				return false;
-			return m_propHelper[lPropNum].IsScoped();
+			return m_props[lPropNum].IsScoped();
 		}
 
-		const long GetNProps() const noexcept { return m_propHelper.size(); }
+		const long GetNProps() const noexcept { return m_props.size(); }
 
 		///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-		inline long AppendProc(const wxString& strMethodName) { return AppendMethod(strMethodName, wxEmptyString, 0, false, wxNOT_FOUND, wxNOT_FOUND); }
-		inline long AppendProc(const wxString& strMethodName, const wxString& strHelper) { return AppendMethod(strMethodName, strHelper, 0, false, wxNOT_FOUND, wxNOT_FOUND); }
-		inline long AppendProc(const wxString& strMethodName, const wxString& strHelper, const long lMethodNum, const long lMethodAlias) { return AppendMethod(strMethodName, strHelper, 0, false, lMethodNum, lMethodAlias); }
-		inline long AppendProc(const wxString& strMethodName, const wxString& strHelper, const long paramCount, const long lMethodNum, const long lMethodAlias) { return AppendMethod(strMethodName, strHelper, paramCount, false, lMethodNum, lMethodAlias); }
-		inline long AppendProc(const wxString& strMethodName, const long paramCount, const wxString& strHelper) { return AppendMethod(strMethodName, strHelper, paramCount, false, wxNOT_FOUND, wxNOT_FOUND); }
-		inline long AppendProc(const wxString& strMethodName, const long paramCount, const wxString& strHelper, const long lMethodNum) { return AppendMethod(strMethodName, strHelper, paramCount, false, lMethodNum, wxNOT_FOUND); }
-		inline long AppendProc(const wxString& strMethodName, const long paramCount, const wxString& strHelper, const long lMethodNum, const long lMethodAlias) { return AppendMethod(strMethodName, strHelper, paramCount, false, lMethodNum, lMethodAlias); }
+		inline long AppendProc(const ibString& strMethodName) { return AppendMethod(strMethodName, wxEmptyString, 0, false, wxNOT_FOUND, wxNOT_FOUND); }
+		inline long AppendProc(const ibString& strMethodName, const ibString& strHelper) { return AppendMethod(strMethodName, strHelper, 0, false, wxNOT_FOUND, wxNOT_FOUND); }
+		inline long AppendProc(const ibString& strMethodName, const ibString& strHelper, const long lMethodNum, const long lMethodAlias) { return AppendMethod(strMethodName, strHelper, 0, false, lMethodNum, lMethodAlias); }
+		inline long AppendProc(const ibString& strMethodName, const ibString& strHelper, const long paramCount, const long lMethodNum, const long lMethodAlias) { return AppendMethod(strMethodName, strHelper, paramCount, false, lMethodNum, lMethodAlias); }
+		inline long AppendProc(const ibString& strMethodName, const long paramCount, const ibString& strHelper) { return AppendMethod(strMethodName, strHelper, paramCount, false, wxNOT_FOUND, wxNOT_FOUND); }
+		inline long AppendProc(const ibString& strMethodName, const long paramCount, const ibString& strHelper, const long lMethodNum) { return AppendMethod(strMethodName, strHelper, paramCount, false, lMethodNum, wxNOT_FOUND); }
+		inline long AppendProc(const ibString& strMethodName, const long paramCount, const ibString& strHelper, const long lMethodNum, const long lMethodAlias) { return AppendMethod(strMethodName, strHelper, paramCount, false, lMethodNum, lMethodAlias); }
 
-		inline long AppendFunc(const wxString& strMethodName) { return AppendMethod(strMethodName, wxEmptyString, 0, true, wxNOT_FOUND, wxNOT_FOUND); }
-		inline long AppendFunc(const wxString& strMethodName, const wxString& strHelper) { return AppendMethod(strMethodName, strHelper, 0, true, wxNOT_FOUND, wxNOT_FOUND); }
-		inline long AppendFunc(const wxString& strMethodName, const long paramCount, const wxString& strHelper) { return AppendMethod(strMethodName, strHelper, paramCount, true, wxNOT_FOUND, wxNOT_FOUND); }
-		inline long AppendFunc(const wxString& strMethodName, const wxString& strHelper, const long lMethodNum, const long lMethodAlias) { return AppendMethod(strMethodName, strHelper, 0, true, lMethodNum, lMethodAlias); }
-		inline long AppendFunc(const wxString& strMethodName, const wxString& strHelper, const long paramCount, const long lMethodNum, const long lMethodAlias) { return AppendMethod(strMethodName, strHelper, paramCount, true, lMethodNum, lMethodAlias); }
-		inline long AppendFunc(const wxString& strMethodName, const long paramCount, const wxString& strHelper, const long lMethodAlias) { return AppendMethod(strMethodName, strHelper, paramCount, true, wxNOT_FOUND, lMethodAlias); }
-		inline long AppendFunc(const wxString& strMethodName, const long paramCount, const wxString& strHelper, const long lMethodNum, const long lMethodAlias) { return AppendMethod(strMethodName, strHelper, paramCount, true, lMethodNum, lMethodAlias); }
+		inline long AppendFunc(const ibString& strMethodName) { return AppendMethod(strMethodName, wxEmptyString, 0, true, wxNOT_FOUND, wxNOT_FOUND); }
+		inline long AppendFunc(const ibString& strMethodName, const ibString& strHelper) { return AppendMethod(strMethodName, strHelper, 0, true, wxNOT_FOUND, wxNOT_FOUND); }
+		inline long AppendFunc(const ibString& strMethodName, const long paramCount, const ibString& strHelper) { return AppendMethod(strMethodName, strHelper, paramCount, true, wxNOT_FOUND, wxNOT_FOUND); }
+		inline long AppendFunc(const ibString& strMethodName, const ibString& strHelper, const long lMethodNum, const long lMethodAlias) { return AppendMethod(strMethodName, strHelper, 0, true, lMethodNum, lMethodAlias); }
+		inline long AppendFunc(const ibString& strMethodName, const ibString& strHelper, const long paramCount, const long lMethodNum, const long lMethodAlias) { return AppendMethod(strMethodName, strHelper, paramCount, true, lMethodNum, lMethodAlias); }
+		inline long AppendFunc(const ibString& strMethodName, const long paramCount, const ibString& strHelper, const long lMethodAlias) { return AppendMethod(strMethodName, strHelper, paramCount, true, wxNOT_FOUND, lMethodAlias); }
+		inline long AppendFunc(const ibString& strMethodName, const long paramCount, const ibString& strHelper, const long lMethodNum, const long lMethodAlias) { return AppendMethod(strMethodName, strHelper, paramCount, true, lMethodNum, lMethodAlias); }
 
-		inline long AppendMethod(const wxString& strMethodName, const long paramCount, bool hasRet, const long lMethodNum, const long lMethodAlias) { return AppendMethod(strMethodName, wxEmptyString, paramCount, hasRet, lMethodNum, lMethodAlias); }
+		inline long AppendMethod(const ibString& strMethodName, const long paramCount, bool hasRet, const long lMethodNum, const long lMethodAlias) { return AppendMethod(strMethodName, wxEmptyString, paramCount, hasRet, lMethodNum, lMethodAlias); }
 
-		inline long AppendMethod(const wxString& strMethodName, const wxString& strHelper, const long paramCount, bool hasRet, const long lMethodNum, const long lMethodAlias) {
+		inline long AppendMethod(const ibString& strMethodName, const ibString& strHelper, const long paramCount, bool hasRet, const long lMethodNum, const long lMethodAlias) {
 
-			//auto iterator = std::find_if(m_methodHelper.begin(), m_methodHelper.end(),
+			//auto iterator = std::find_if(m_methods.begin(), m_methods.end(),
 			//	[strMethodName](const auto& f) { return stringUtils::CompareString(f.m_fieldName, strMethodName); });
-			//if (iterator != m_methodHelper.end())
-			//	return std::distance(m_methodHelper.begin(), iterator);
+			//if (iterator != m_methods.end())
+			//	return std::distance(m_methods.begin(), iterator);
 
-			m_methodHelper.emplace_back(strMethodName, strHelper, paramCount, hasRet, lMethodAlias, lMethodNum);
-			return m_methodHelper.size();
+			m_methods.emplace_back(strMethodName, strHelper, paramCount, hasRet, lMethodAlias, lMethodNum);
+			MarkMethodDirty();
+			return m_methods.size();
 		}
 
-		void CopyMethod(const ibValueMethodHelper* src, const long lMethodNum) {
+		void CopyMethod(const ibMemberTable* src, const long lMethodNum) {
 			if (lMethodNum < src->GetNMethods()) {
-				m_methodHelper.push_back(src->m_methodHelper[lMethodNum]);
+				m_methods.push_back(src->m_methods[lMethodNum]);
+				MarkMethodDirty();
 			}
 		}
 
-		void RemoveMethod(const wxString& strMethodName) {
-			m_methodHelper.erase(
-				std::remove_if(m_methodHelper.begin(), m_methodHelper.end(), [strMethodName](const auto& f) {
-					return stringUtils::CompareString(f.m_fieldName, strMethodName); }), m_methodHelper.end());
+		void RemoveMethod(const ibString& strMethodName) {
+			m_methods.erase(
+				std::remove_if(m_methods.begin(), m_methods.end(), [&strMethodName](const auto& f) {
+					return stringUtils::CompareString(f.m_fieldName, strMethodName); }), m_methods.end());
+			MarkMethodDirty();
 		}
 
-		long FindMethod(const wxString& strMethodName) const {
-			auto iterator = std::find_if(m_methodHelper.begin(), m_methodHelper.end(), [strMethodName](const auto& f) {
+		long FindMethod(const ibString& strMethodName) const {
+			if (m_methods.size() >= kFindIndexMin) {
+				const auto snapshot = EnsureFindIndex();
+				const auto& idx = snapshot->method;
+				const auto it = idx.find(strMethodName);
+				return it != idx.end() ? it->second : wxNOT_FOUND;
+			}
+			auto iterator = std::find_if(m_methods.begin(), m_methods.end(), [&strMethodName](const auto& f) {
 				return stringUtils::CompareString(f.m_fieldName, strMethodName); });
 
-			if (iterator != m_methodHelper.end())
-				return std::distance(m_methodHelper.begin(), iterator);
+			if (iterator != m_methods.end())
+				return (long)std::distance(m_methods.begin(), iterator);
 			return wxNOT_FOUND;
 		}
 
-		wxString GetMethodName(const long lMethodNum) const {
-			if (lMethodNum > GetNMethods())
-				return wxEmptyString;
-			return m_methodHelper[lMethodNum].m_fieldName;
+		// The name WHERE IT LIES — by reference, like GetPropName.
+		const ibString& GetMethodName(const long lMethodNum) const {
+			static const ibString s_absent;
+			if (lMethodNum < 0 || lMethodNum >= GetNMethods())
+				return s_absent;
+			return m_methods[lMethodNum].m_fieldName;
 		}
 
-		wxString GetMethodHelper(const long lMethodNum) const {
-			if (lMethodNum > GetNMethods())
-				return wxEmptyString;
-			return m_methodHelper[lMethodNum].m_strHelper;
+		const ibString& GetMethodHelper(const long lMethodNum) const {
+			static const ibString s_absent;
+			if (lMethodNum < 0 || lMethodNum >= GetNMethods())
+				return s_absent;
+			return m_methods[lMethodNum].m_strHelper;
 		}
 
 		long GetMethodAlias(const long lMethodNum) const {
-			if (lMethodNum > GetNMethods())
+			if (lMethodNum < 0 || lMethodNum >= GetNMethods())
 				return wxNOT_FOUND;
-			return m_methodHelper[lMethodNum].m_lAlias;
+			return m_methods[lMethodNum].m_lAlias;
 		}
 
 		long GetMethodData(const long lMethodNum) const {
-			if (lMethodNum > GetNMethods())
+			if (lMethodNum < 0 || lMethodNum >= GetNMethods())
 				return wxNOT_FOUND;
-			return m_methodHelper[lMethodNum].m_lData;
+			return m_methods[lMethodNum].m_lData;
 		}
 
 		bool HasRetVal(const long lMethodNum) const {
-			if (lMethodNum > GetNMethods())
+			if (lMethodNum < 0 || lMethodNum >= GetNMethods())
 				return true;
-			return m_methodHelper[lMethodNum].HasReturn();
+			return m_methods[lMethodNum].HasReturn();
 		}
 
 		// Scope-local method (bc-local — invisible to children
 		// through cross-bc resolution). Symmetric with IsPropScoped.
 		bool IsMethodScoped(const long lMethodNum) const {
-			if (lMethodNum > GetNMethods())
+			if (lMethodNum < 0 || lMethodNum >= GetNMethods())
 				return false;
-			return m_methodHelper[lMethodNum].IsScoped();
+			return m_methods[lMethodNum].IsScoped();
 		}
 
 		long GetNParams(const long lMethodNum) const {
-			if (lMethodNum > GetNMethods())
+			if (lMethodNum < 0 || lMethodNum >= GetNMethods())
 				return wxNOT_FOUND;
-			return m_methodHelper[lMethodNum].m_paramCount;
+			return m_methods[lMethodNum].m_paramCount;
 		}
 
-		const long GetNMethods() const noexcept { return m_methodHelper.size(); }
+		const long GetNMethods() const noexcept { return m_methods.size(); }
 	};
 
 public:
@@ -451,27 +922,80 @@ public:
 	ibValue(unsigned int cParam); //number
 	ibValue(double cParam); //number
 	ibValue(const ibNumber& cParam); //number
-	ibValue(wxLongLong_t cParam); //date
-	ibValue(const wxDateTime& cParam); //date
+	ibValue(const ibDateTime& cParam); //date
 	ibValue(int nYear, int nMonth, int nDay, unsigned short nHour = 0, unsigned short nMinute = 0, unsigned short nSecond = 0); //date
 
-	ibValue(char* sParam); //string
-	ibValue(wchar_t* sParam); //string
+	// CONST char pointers, and that const is load-bearing. Declared as `char*` these
+	// did not match a `const char*` argument at all, so `ibValue v = wxEmptyString`
+	// (wxEmptyString IS a `const wxChar*`) fell through to ibValue(bool) — pointer-to-bool
+	// is a STANDARD conversion and beats the user-defined one to wxString — and the value
+	// became Boolean TRUE. Same trap, same shape, as the const ibValue* overload below.
+	ibValue(const char* sParam); //string
+	ibValue(const wchar_t* sParam); //string
 	ibValue(const wxStringImpl& sParam); //string
 	ibValue(const wxString& sParam); //string
+	ibValue(ibString&& sParam); //string — native move (runtime string functions)
 
-	//destructor:
+	// ⭐⭐ ANY OTHER POINTER IS A MISTAKE, AND IT USED TO BECOME `TRUE`.
+	//
+	// Pointer-to-bool is a STANDARD conversion, so an unrelated `Foo*` handed to anything taking an
+	// ibValue beat every user-defined overload here and arrived as Boolean TRUE — silently, and
+	// TRUE-because-non-null looks exactly like a value somebody meant. The `const char*` overloads
+	// above were half of this trap, closed when `wxEmptyString` turned out to be arriving as a
+	// boolean; this is the other half, and it is the general case rather than one more spelling.
+	//
+	// Deleted rather than defined: there is no sensible ibValue to make out of an arbitrary pointer,
+	// so the answer is a compile error naming the callsite.
+	//
+	// What still passes, and why each is exempt:
+	//   * `char*` / `wchar_t*` — a STRING, and the overloads above take them;
+	//   * anything derived from ibValue or ibBackendValue — the two pointer constructors above are
+	//     for exactly those, and a DERIVED pointer would otherwise match this template exactly and
+	//     lose the base overload it was meant for.
+	template <class T, class = typename std::enable_if<
+		!std::is_same<typename std::remove_cv<T>::type, char>::value &&
+		!std::is_same<typename std::remove_cv<T>::type, wchar_t>::value &&
+		!std::is_base_of<ibValue, T>::value &&
+		!std::is_base_of<ibBackendValue, T>::value>::type>
+	ibValue(T*) = delete;
+
 	virtual ~ibValue();
 
 	//clear values
 	void Reset();
 
 	//ref counter
-	void IncrRef() { wxAtomicInc(m_refCount); }
+	void IncrRef() { m_refCount.fetch_add(1, std::memory_order_relaxed); }
 	void DecrRef() {
-		wxASSERT_MSG(m_refCount > 0, "invalid ref data count");
-		if (!wxAtomicDec(m_refCount)) delete this;
+		wxASSERT_MSG(m_refCount.load(std::memory_order_relaxed) > 0, "invalid ref data count");
+		if (m_refCount.fetch_sub(1, std::memory_order_acq_rel) == 1) delete this;
 	}
+
+	// 🛑⭐⭐ THIS OWNERSHIP CANNOT BE FENCED OFF BY ACCESS CONTROL, and the reason is not a detail of
+	// which member to hide — it is what ibValue IS. Three attempts, 2026-09-06, kept so that nobody
+	// spends the day on them again:
+	//
+	//   * Hide `operator delete`. It does stop `delete p`, unique_ptr and shared_ptr — and it also
+	//     stops CONSTRUCTION, because a `new T` expression needs the matching deallocation function
+	//     accessible for the case where the constructor throws. 966 errors, 64 sites, every one of
+	//     them a plain `new ibValueArray()` or `new ibValue[n]` for a frame's locals.
+	//   * Hide the DESTRUCTOR — the canonical shape for a reference-counted type, and `new` does not
+	//     need it. 17969 errors: an ibValue is not a heap-only object. It is the engine's universal
+	//     VALUE — on the stack, as a member (`ibValue m_defValue;`), inside containers — and every
+	//     one of those needs the destructor.
+	//   * A trap inside `operator delete`. The legitimate release above IS a `delete this`, so the
+	//     trap would have to be told apart from it: either free by hand (`::operator delete(this)`,
+	//     wrong under multiple inheritance where ibValue is not the first base — the block address
+	//     is not `this`) or keep a re-entrant "release in progress" counter on the hottest path in
+	//     the runtime. Both cost more than a debug check is worth.
+	//
+	// ⭐ THE ROOT: ibValue wears two natures at once — a value that lives anywhere, and a
+	// reference-counted object that lives on the heap. Every protection the language offers a
+	// refcounted type assumes the second WITHOUT the first. So on this side the rule is one people
+	// keep, not one the compiler keeps for them: release with DecrRef, travel by ibValuePtr, and
+	// never hand a runtime value to another owner. The QUERY side is a different matter and is
+	// closed by construction — a column carries its own control block, so no second owner is ever
+	// needed (query/queryColumn.h). (docs/private/ownership-authority.md)
 
 	//operators:
 	void operator = (const ibValue& cParam);
@@ -485,18 +1009,28 @@ public:
 	void operator = (float cParam);
 	void operator = (double cParam);
 	void operator = (const ibNumber& cParam);
-	void operator = (const wxDateTime& cParam);
-	void operator = (wxLongLong_t cParam);
+	void operator = (const ibDateTime& cParam);
 	void operator = (const wxString& cParam);
+	// Character pointers — see the ctor note above. A string literal or wxEmptyString
+	// on the right-hand side has no wxString overload to bind to without these, and
+	// pointer-to-bool wins the resolution.
+	void operator = (const char* cParam);
+	void operator = (const wchar_t* cParam);
+	void operator = (ibString&& cParam);   // native string assign — the text taken over, no wxString round-trip
 
 	void operator = (ibValueTypes cParam);
 	void operator = (ibBackendValue* pParam);
 	void operator = (ibValue* pParam);
+	// const source (e.g. a const ibValueMetaObject* returned by GetMetaObject()):
+	// store a READ-ONLY reference — mutation through this value is blocked
+	// (m_bReadOnly). Without this overload `value = constPtr` silently picked
+	// operator=(bool) (const ptr → bool) and the object became a Boolean.
+	void operator = (const ibValue* pParam);
 
 	//Implementation of comparison operators:
-	bool operator > (const ibValue& cParam) const { return CompareValueGT(cParam); }
+	bool operator > (const ibValue& cParam) const { return CompareValueGT(cParam) > 0; }
 	bool operator >= (const ibValue& cParam) const { return CompareValueGE(cParam); }
-	bool operator < (const ibValue& cParam) const { return CompareValueLS(cParam); }
+	bool operator < (const ibValue& cParam) const { return CompareValueLS(cParam) < 0; }
 	bool operator <= (const ibValue& cParam) const { return CompareValueLE(cParam); }
 	bool operator == (const ibValue& cParam) const { return CompareValueEQ(cParam); }
 	bool operator != (const ibValue& cParam) const { return CompareValueNE(cParam); }
@@ -504,13 +1038,20 @@ public:
 	const ibValue& operator+(const ibValue& cParam);
 	const ibValue& operator-(const ibValue& cParam);
 
-	//Implementation of comparison operators:
-	virtual bool CompareValueGT(const ibValue& cParam) const;
+	// Comparison. CompareValueLS / CompareValueGT are the two three-way ordering primitives (<0 / 0 / >0,
+	// NULL = smallest, SQL-aligned — see value.cpp): one hook per direction so a class can retune `<` and
+	// `>` independently. By default GT follows LS (same total order), GE derives from GT and LE from LS, so
+	// a class normally overrides ONE method (CompareValueLS) to change the whole order, yet can still tune
+	// an individual operator. EQ/NE stay separate (type-strict equality, distinct from order-equal).
+	virtual int  CompareValueLS(const ibValue& cParam) const;
+	virtual int  CompareValueGT(const ibValue& cParam) const;
 	virtual bool CompareValueGE(const ibValue& cParam) const;
-	virtual bool CompareValueLS(const ibValue& cParam) const;
 	virtual bool CompareValueLE(const ibValue& cParam) const;
 	virtual bool CompareValueEQ(const ibValue& cParam) const;
 	virtual bool CompareValueNE(const ibValue& cParam) const;
+
+	// GetValueHash — declared with GetHashKey, near GetString: the two are the
+	// value's two IDENTITIES and belong together. See the note there.
 
 	//special converting
 	template <typename valueType> inline valueType* ConvertToType() const {
@@ -537,7 +1078,7 @@ public:
 
 	//convert to value
 	template <typename T> inline bool ConvertToValue(T*& ptr) const {
-		if (m_typeClass == ibValueTypes::TYPE_REFFER) {
+		if (IsReference()) {
 			ibValue* non_const_value = GetRef();
 			ptr = dynamic_cast<T*>(non_const_value);
 			return ptr != nullptr;
@@ -549,101 +1090,72 @@ public:
 		return false;
 	}
 
+	// True for both an owned object reference (TYPE_REFFER) and a non-owned
+	// read-only reference (TYPE_CONST_REFFER). Read paths that resolve through
+	// the referenced object (GetRef / GetPMethods / method dispatch / ConvertTo)
+	// must treat both alike; only ownership (ref-count / delete) and write paths
+	// distinguish them. m_pRef and m_pConstRef alias the same union pointer.
+	inline bool IsReference() const {
+		return m_typeClass == ibValueTypes::TYPE_REFFER
+			|| m_typeClass == ibValueTypes::TYPE_CONST_REFFER;
+	}
+
+	// True only for the non-owned, read-only reference. Use to guard object-
+	// mutating delegates (SetType / SetPropVal): a const reference must never
+	// retype or write a field of the object it does not own. The union aliases
+	// const/non-const, so the compiler can't catch this — these runtime checks
+	// (+ a Debug wxASSERT) are the only protection.
+	inline bool IsConstReference() const {
+		return m_typeClass == ibValueTypes::TYPE_CONST_REFFER;
+	}
+
 public:
 
-	//runtime support:
-	template<typename T, typename... Args>
-	static T* CreateAndPrepareValueRef(Args&&... args) {
-		T* created_value = ::new T(std::forward<Args>(args)...);
-		if (created_value == nullptr)
-			return nullptr;
-		created_value->PrepareNames();
-		return created_value;
-	}
-
+	// ⭐⭐ EVERY FACTORY HERE ANSWERS WITH THE OWNER — the ibValue that holds what it made, empty (not a
+	// reference) when nothing was made. There used to be a second family beside this one handing back a
+	// bare pointer at reference count zero (CreateObjectRef, CreateAndConvertObjectRef<T>,
+	// CreateObjectValueRef<T>), and a new object that ran code of its own before its caller wrapped it
+	// could be freed by that code (see ibCtorAbstractType::CreateObject). A caller that needs the type
+	// asks the owner for it: `ibValuePtr<T> created = ibValue::CreateObject(...)`.
 	template<typename T>
 	static ibValue CreateObject(ibValue** paParams = nullptr, const long lSizeArray = 0) {
-		return CreateObjectRef<T>(paParams, lSizeArray);
+		return CreateObject(typeid(T), paParams, lSizeArray);
 	}
-	static ibValue CreateObject(const ibClassID& clsid, ibValue** paParams = nullptr, const long lSizeArray = 0) {
-		return CreateObjectRef(clsid, paParams, lSizeArray);
-	}
-	static ibValue CreateObject(const wxClassInfo* classInfo, ibValue** paParams = nullptr, const long lSizeArray = 0) {
-		return CreateObjectRef(classInfo, paParams, lSizeArray);
+	static ibValue CreateObject(const ibClassID& clsid, ibValue** paParams = nullptr, const long lSizeArray = 0);
+	static ibValue CreateObject(const std::type_info& typeInfo, ibValue** paParams = nullptr, const long lSizeArray = 0) {
+		const ibClassID& clsid = GetTypeIDByRef(typeInfo);
+		return CreateObject(clsid, paParams, lSizeArray);
 	}
 	static ibValue CreateObject(const wxString& className, ibValue** paParams = nullptr, const long lSizeArray = 0) {
-		return CreateObjectRef(className, paParams, lSizeArray);
+		const ibClassID& clsid = GetIDObjectFromString(className);
+		return CreateObject(clsid, paParams, lSizeArray);
 	}
 	template<typename T, typename... Args>
 	static ibValue CreateObjectValue(Args&&... args) {
-		return CreateObjectValueRef<T>(std::forward<Args>(args)...);
-	}
-
-	template<typename T>
-	static ibValue* CreateObjectRef(ibValue** paParams = nullptr, const long lSizeArray = 0) {
-		return CreateObjectRef(CLASSINFO(T), paParams, lSizeArray);
-	}
-	static ibValue* CreateObjectRef(const ibClassID& clsid, ibValue** paParams = nullptr, const long lSizeArray = 0);
-	static ibValue* CreateObjectRef(const wxClassInfo* classInfo, ibValue** paParams = nullptr, const long lSizeArray = 0) {
-		const ibClassID& clsid = GetTypeIDByRef(classInfo);
-		return CreateObjectRef(clsid, paParams, lSizeArray);
-	}
-	static ibValue* CreateObjectRef(const wxString& className, ibValue** paParams = nullptr, const long lSizeArray = 0) {
-		const ibClassID& clsid = GetIDObjectFromString(className);
-		return CreateObjectRef(clsid, paParams, lSizeArray);
-	}
-	template<typename T, typename... Args>
-	static ibValue* CreateObjectValueRef(Args&&... args) {
-		return CreateAndConvertObjectValueRef<T>(std::forward<Args>(args)...);
-	}
-
-	template<typename T>
-	static T* CreateAndConvertObjectRef(ibValue** paParams = nullptr, const long lSizeArray = 0) {
-		return CastValue<T>(CreateObjectRef(CLASSINFO(T), paParams, lSizeArray));
-	}
-	template<class T = ibValue>
-	static T* CreateAndConvertObjectRef(const ibClassID& clsid, ibValue** paParams = nullptr, const long lSizeArray = 0) {
-		return CastValue<T>(CreateObjectRef(clsid, paParams, lSizeArray));
-	}
-	template<class T = ibValue>
-	static T* CreateAndConvertObjectRef(const wxClassInfo* classInfo, ibValue** paParams = nullptr, const long lSizeArray = 0) {
-		return CastValue<T>(CreateObjectRef(classInfo, paParams, lSizeArray));
-	}
-	template<class T = ibValue>
-	static T* CreateAndConvertObjectRef(const wxString& className, ibValue** paParams = nullptr, const long lSizeArray = 0) {
-		return CastValue<T>(CreateObjectRef(className, paParams, lSizeArray));
-	}
-	template<typename T, typename... Args>
-	static T* CreateAndConvertObjectValueRef(Args&&... args) {
-		const ibClassID& clsid = ibValue::GetTypeIDByRef(CLASSINFO(T));
+		const ibClassID& clsid = ibValue::GetTypeIDByRef(typeid(T));
 		if (ibValue::IsRegisterCtor(clsid))
-			return CreateAndPrepareValueRef<T>(args...);
-		wxASSERT_MSG(false, "CreateAndConvertObjectValueRef ret null!");
-		return nullptr;
+			return new T(args...);
+		wxASSERT_MSG(false, "CreateObjectValue: the type is not registered");
+		return wxEmptyValue;
 	}
 
 	template<typename T, typename valT>
-	static ibValue CreateEnumObject(const valT& v) {
-		return CreateEnumObjectRef<T>(v);
-	}
-
-	template<typename T, typename valT>
-	static ibValue* CreateEnumObjectRef(const valT& v) {
-		return CreateAndConvertEnumObjectRef<T>(v);
-	}
-
-	template<typename T, typename valT>
-	static ibValue* CreateAndConvertEnumObjectRef(const valT& v);
+	static ibValue CreateEnumObject(const valT& v);
 
 	static void RegisterCtor(ibCtorAbstractType* typeCtor);
 	static void UnRegisterCtor(ibCtorAbstractType*& typeCtor);
 	static void UnRegisterCtor(const wxString& className);
 
+	// (No unregister-by-clsid and no name invalidation here on purpose: THIS registry holds the
+	//  STATIC types, whose names are compile-time constants and cannot drift. The metaobject types
+	//  — the ones whose name is computed from a renameable object — live in the metadata's own
+	//  registry, which is where both live: ibMetaData::UnRegisterCtor / InvalidateCtorNames.)
+
 	static bool IsRegisterCtor(const wxString& className);
 	static bool IsRegisterCtor(const wxString& className, ibCtorObjectType objectType);
 	static bool IsRegisterCtor(const ibClassID& clsid);
 
-	static ibClassID GetTypeIDByRef(const wxClassInfo* classInfo);
+	static ibClassID GetTypeIDByRef(const std::type_info& typeInfo);
 	static ibClassID GetTypeIDByRef(const ibValue* objectRef);
 
 	static ibClassID GetIDObjectFromString(const wxString& className);
@@ -658,7 +1170,17 @@ public:
 
 	static ibCtorAbstractType* GetAvailableCtor(const wxString& className);
 	static ibCtorAbstractType* GetAvailableCtor(const ibClassID& clsid);
-	static ibCtorAbstractType* GetAvailableCtor(const wxClassInfo* classInfo);
+	static ibCtorAbstractType* GetAvailableCtor(const std::type_info& typeInfo);
+
+	// Static type-trait: do values of this class form a TABLE (a row source rendered as a
+	// tablebox), or a scalar attribute? Default = attribute (false). ibValueModel flips the
+	// gate to true ONCE, so every model (list / tree / table / dynamic list) inherits it via
+	// name-lookup — no per-class override. The class factory reads it through the ctor's T
+	// (ibCtorValueType<T>::IsTableValue), so the answer is known by CLSID BEFORE any instance
+	// exists (source selection time). NOT a value-representation tag (that is ibValueTypes) —
+	// this is the SOURCE ROLE. A reference is never a table; a table is never a reference.
+	static bool IsTableValue() { return false; }
+
 
 	static std::vector<ibCtorAbstractType*> GetListCtorsByType(ibCtorObjectType objectType = ibCtorObjectType::ibCtorObjectType_object_value);
 
@@ -675,13 +1197,42 @@ public:
 	inline void Copy(const ibValue& cOld);
 	inline void Move(ibValue&& cOld);
 
-	void FromDate(int& nYear, int& nMonth, int& nDay) const;
-	void FromDate(int& nYear, int& nMonth, int& nDay, unsigned short& nHour, unsigned short& nMinute, unsigned short& nSecond) const;
-	void FromDate(int& nYear, int& nMonth, int& nDay, int& DayOfWeek, int& DayOfYear, int& WeekOfYear) const;
-
 #pragma region serialization
-	bool Serialize(wxString& strValue) const { return DoSerialize(strValue); }
-	bool Deserialize(const wxString& strValue) { return DoDeserialize(strValue); }
+
+	// THE HEADER IS THE BASE'S JOB, the contents are the children's (DoSerialize,
+	// further down). Serialize writes what every value has — its type — and then
+	// asks the value to fill in what only it knows; Deserialize mirrors it.
+	//
+	// Splitting it this way is what keeps a new type honest: it overrides one
+	// method, describes only its own contents, and cannot forget to write the
+	// type or spell the header differently from everybody else.
+	//
+	// WHY A NODE. ibDataNode is the same tree metadata is written through, and it
+	// already has providers: binary for storage, JSON for a wire or a dump. One
+	// description of what a value IS, and the choice of representation stays with
+	// the provider — a text form is a rendering, not a second implementation.
+	//
+	// A value is BLIND to metadata: it packs and unpacks ITSELF and never reaches
+	// for a configuration.
+	bool Serialize(class ibDataNode& node) const;
+	bool Deserialize(const class ibDataNode& node);
+
+	// CREATING a value from a node — THE mechanism, in one place.
+	//
+	// A reader holding a node has no value yet, so the type in the header has to
+	// become an instance. That is a registry question, and this answers it from
+	// the VALUE registry: the built-in classes, the ones that exist whether or
+	// not a configuration is open.
+	//
+	// A metadata is a step in FRONT of this, not a copy of it: it creates the
+	// types only it has — a catalog reference, an enum member, whose ids come
+	// from metaIDs no static table knows — and redirects everything else here.
+	// One mechanism, reached from both doors.
+	//
+	// THROWS when the type is registered nowhere, when creation fails, or when
+	// the value cannot read its own contents. An empty would be
+	// indistinguishable from a value that legitimately IS empty.
+	static ibValue FromNode(const class ibDataNode& node);
 #pragma endregion
 
 	//Virtual methods:
@@ -690,8 +1241,51 @@ public:
 
 	virtual bool IsEmpty() const;
 
+	// SQL / explicit NULL: the `Null` literal, and a NULL DB column (the driver yields ibValue(TYPE_NULL)).
+	// Distinct from IsEmpty (TYPE_EMPTY = Undefined — a COMPOSITE value with no type chosen yet). Only
+	// this is the SQL null the query layer keys on (three-valued filter, null ordering, join-key skip);
+	// an empty reference (type chosen, no guid) and Undefined are NOT it.
+	bool IsNull() const { return GetType() == ibValueTypes::TYPE_NULL; }
+
 	virtual wxString GetClassName() const;
 	virtual ibClassID GetClassType() const;
+
+	// May this value cross into ANOTHER session?
+	//
+	// Everything the interpreter passes around within one session is fine; the
+	// question only arises at a session boundary — handing arguments to a
+	// background job, which runs on its own session and its own thread. Nothing
+	// is serialised on the way (one process, one address space), so what is being
+	// asked is about OWNERSHIP, not transport: is this value safe for a second
+	// session to hold and read?
+	//
+	// Default YES, because the overwhelming majority of values are — numbers,
+	// strings, dates, references, enumeration values: immutable, owned by nobody.
+	// A type says NO when it is either
+	//   - MUTABLE and owned by its session (a form, an open recordset, a live
+	//     object): two sessions mutating one object coordinate through nothing; or
+	//   - BOUND to its session's runtime (a lambda holds m_parentBc, a pointer
+	//     into the compiling session's bytecode — which is per-session, built by
+	//     CompileRoot; an iterator is a cursor over somebody else's collection; an
+	//     OLE handle belongs to the thread that created it).
+	//
+	// Answering here rather than switching on the tag at the boundary is what
+	// keeps the rule with the type: a new value kind states its own case, and the
+	// job layer never grows a list of what it knows about.
+	//
+	// TYPE_REFFER and TYPE_CONST_REFFER are ALIASES, not things of their own — both
+	// hop to the object they wrap and let IT answer. Without the hop the wrapper
+	// would say "yes" on behalf of whatever it points at, which is exactly the
+	// case that matters: a form, an object or a lambda is almost always reached
+	// through one. Const-ness is not the question either — a read-only alias to a
+	// mutable object still aliases a mutable object.
+	virtual bool IsTransferable() const {
+		if (m_pRef != nullptr
+		 && (m_typeClass == ibValueTypes::TYPE_REFFER
+		  || m_typeClass == ibValueTypes::TYPE_CONST_REFFER))
+			return m_pRef->IsTransferable();
+		return true;
+	}
 
 	virtual bool Init() {
 		if (m_pRef != nullptr && m_typeClass == ibValueTypes::TYPE_REFFER)
@@ -711,6 +1305,16 @@ public:
 	virtual bool SetNumber(const wxString& strValue);
 	virtual bool SetDate(const wxString& strValue);
 	virtual bool SetString(const wxString& strValue);
+	virtual bool SetString(ibString&& strValue);   // native — steals the buffer, no wxString round-trip
+	// Character pointers — the same trap the ctor note above describes, one door further along.
+	// With only the two overloads above visible, a string literal reaches EITHER of them through
+	// exactly one user-defined conversion, so `SetString(wxT("x"))` is AMBIGUOUS to GCC and Clang
+	// while MSVC ranks it and compiles — invisible to the local build by construction. The ctor
+	// and operator= closed this by declaring the pointer forms; the setter had not.
+	// Non-virtual on purpose: they forward to the virtual wxString overload, so a derived type
+	// still decides what a string assignment means.
+	bool SetString(const char* sParam) { return SetString(wxString(sParam)); }
+	bool SetString(const wchar_t* sParam) { return SetString(wxString(sParam)); }
 
 	virtual bool FindValue(const wxString& findData, std::vector<ibValue>& listValue) const;
 
@@ -718,36 +1322,78 @@ public:
 
 	virtual ibValue GetValue(bool getThis = false) const;
 
-	// Produce a fresh, independent copy of the value. For simple types
-	// (Boolean / Number / String / Date / Null / Empty) the data is
-	// value-copied — caller can mutate without touching the source.
-	// Aggregate / reference types must override to provide their own
-	// clone semantics; the base default returns an undefined value to
-	// surface "tried to clone something that doesn't support it" as
-	// an empty result rather than a silent share.
-	virtual ibValue Clone() const {
-		switch (m_typeClass) {
-		case ibValueTypes::TYPE_EMPTY:
-		case ibValueTypes::TYPE_NULL:
-		case ibValueTypes::TYPE_BOOLEAN:
-		case ibValueTypes::TYPE_NUMBER:
-		case ibValueTypes::TYPE_STRING:
-		case ibValueTypes::TYPE_DATE:
-			return *this;  // value-copy of the simple-type payload
-		default:
-			return ibValue();  // no own clone — undefined
-		}
-	}
+	// A FRESH, INDEPENDENT COPY — the verb behind `Val`.
+	//
+	// VIRTUAL, because copying is a type's own business: anything deriving from
+	// ibValue must be able to state how it duplicates itself, and some types have
+	// a cheaper or a truer answer than the default one.
+	//
+	// THE DEFAULT IS A MECHANISM, not a refusal. A primitive is its own copy.
+	// Anything else copies THE WAY IT TRAVELS: it packs itself into a node and is
+	// then CREATED from what it packed, which runs the registered constructor for
+	// its class and hands the new instance its own contents back. So a type that
+	// already describes DoSerialize / DoDeserialize gets a correct copy without
+	// writing one, a plugin's type copies exactly as a built-in one does, and
+	// "can this value be duplicated" has the same answer as "can it be stored".
+	//
+	// AND IT RAISES when there is no mechanism and the value is not a primitive —
+	// a form, a running object, a lambda. It used to return an EMPTY value there,
+	// which is worse than the share it was avoiding: indistinguishable from a
+	// value that legitimately is empty. `Val form` is a mistake and is told so at
+	// the call, rather than compiling, running and quietly aliasing until the day
+	// it matters.
+	// NOT `Clone`, and NOT virtual. `Clone` is the name a C++ class conventionally gives "make me
+	// another object like this one", and half the tree uses it that way (a database layer, a drag
+	// item, a grid attr, a table of values). A base method of that name on ibValue — the root every
+	// value derives from — turns each of those into a HIDDEN overload instead of an unrelated
+	// method, and which copy you get is then decided by the static type of the expression. So the
+	// root takes the name that says what it actually does: copy the VALUE, beside GetValue/SetValue.
+	//
+	// STILL VIRTUAL. The default road is "pack, then create from what was packed", and both halves
+	// are extension points already (DoSerialize / DoDeserialize) with IsTransferable as the refusal
+	// — so most types never touch this. But a type is allowed to state a copy of its own, and that
+	// is a declared contract with a test behind it (ValueClone.ATypeMayStateItsOwnCopy).
+	virtual ibValue CloneValue() const;
 
 	virtual bool GetBoolean() const;
 	virtual int GetInteger() const { return GetNumber().ToInt(); }
 	virtual unsigned int GetUInteger() const { return GetNumber().ToUInt(); }
 	virtual double GetDouble() const { return GetNumber().ToDouble(); }
-	virtual wxDateTime GetDateTime() const { return wxLongLong(GetDate()); }
 
 	virtual ibNumber GetNumber() const;
-	virtual wxString GetString() const;
-	virtual wxLongLong_t GetDate() const;
+	// THE VALUE AS TEXT, in the engine's own string. A string value hands its text out SHARED — one
+	// more owner of it, no characters copied (fstring.h) — so a caller has no buffer to pass in.
+	virtual ibString GetString() const;
+
+	// ============================ IDENTITY ==================================
+	// ONE OF THEM. There used to be a second — `GetHashKey()`, a wxString the
+	// grouping, hierarchy, join, index and register code all rendered a value
+	// into so they could key a std::map by the text. It is GONE (2026-08-15), and
+	// deliberately so: a value's identity is the value, and every one of those
+	// callers now keys by the value itself through GetValueHash + CompareValueLS
+	// (see ibValueHash / ibValueSeqHash below the class).
+	//
+	// Do not bring it back. Two identities mean two answers to "are these the
+	// same", and they drift — the rendered one made `1` and "1" one key, which is
+	// not what the language's own comparison says anywhere else. A composite key
+	// is a SEQUENCE of values (ibValueSeqHash), not values glued with a separator.
+	// ========================================================================
+
+	// A HASH THAT AGREES WITH CompareValueLS — the contract is one-way: values
+	// that ORDER EQUAL must hash equal. The converse is not required, so a
+	// COARSER hash is always safe (the comparison resolves the collision) and a
+	// finer one is a bug. That is why a number hashes by its integer part: 1 and
+	// 1.0 order equal and must land together, while 1.5 sharing their bucket
+	// costs one extra comparison and nothing else.
+	//
+	// Override it wherever CompareValueLS is overridden, and for the same reason
+	// — the two answer one question between them. A class that changes what
+	// counts as equal and leaves this behind puts equal values in different
+	// buckets, which no test of the comparator alone would catch.
+	virtual size_t GetValueHash() const;
+	// THE VALUE AS A DATE, in the engine's own date (fdatetime.h). A window that holds a wxDateTime
+	// crosses at its own edge: GetDate().ToWxDateTime().
+	virtual ibDateTime GetDate() const;
 
 	/////////////////////////////////////////////////////////////////////////
 
@@ -755,19 +1401,52 @@ public:
 
 	/////////////////////////////////////////////////////////////////////////
 
+	// OPEN THIS VALUE — its card, its editor, whatever window it has.
+	//
+	// It reports nothing back: whether anything CHANGED is known only to the window that did the
+	// editing, and that window is the one that says so (the schedule editor marks the form on OK).
+	// A caller here cannot tell "the value changed" from "somebody looked at a linked object and
+	// closed it" — a reference opens a whole card and is the same reference afterwards.
 	virtual void ShowValue();
 
 	/////////////////////////////////////////////////////////////////////////
 
 #pragma region attribute_support
 
-	virtual ibValueMethodHelper* GetPMethods() const {
-		return m_typeClass == ibValueTypes::TYPE_REFFER && m_pRef != nullptr ?
-			m_pRef->GetPMethods() : nullptr;
+	// NVI: the single public entry — non-virtual. Everyone calls this; it
+	// resolves the per-class helper, lazily builds it, and returns it, so a
+	// caller can never get an unbuilt helper. Replaces the per-override
+	// EnsureBuilt boilerplate — build lives in ONE place (EnsureMethods).
+	ibMemberTable* GetPMethods() const { return EnsureMethods(DoGetPMethods()); }
+
+	// Mark the name surface stale after a STRUCTURAL change (a control added to a
+	// form, a module re-registered, …). The next GetPMethods() rebuilds it from the
+	// bound contributors. No-op for values with no helper. (Replaces the old
+	// PrepareNames() forced rebuild — most creation-time calls are gone, since
+	// GetPMethods() already builds lazily on first access.)
+	void InvalidateNames() const {
+		if (ibMemberTable* helper = DoGetPMethods())
+			helper->Invalidate();
 	}
 
-	//collect 
-	virtual void PrepareNames() const;
+protected:
+	// Raw per-class helper getter — THE virtual, overridden by value subclasses
+	// (each returns its own helper; no build). For a reference, delegate to the
+	// referenced object's raw getter; GetPMethods() above does the build.
+	virtual ibMemberTable* DoGetPMethods() const {
+		return IsReference() && m_pRef != nullptr ?
+			m_pRef->DoGetPMethods() : nullptr;
+	}
+
+private:
+	// Lazy build, in ONE place. Static — no `this`, just acts on the passed
+	// helper. `h` is non-const, so EnsureBuilt() needs no const_cast.
+	static ibMemberTable* EnsureMethods(ibMemberTable* h) {
+		if (h != nullptr) h->EnsureBuilt();
+		return h;
+	}
+
+public:
 
 	/// Returns number of component properties
 	/**
@@ -780,14 +1459,14 @@ public:
 	 *  @param wsPropName - property name
 	 *  @return property index or -1, if iterator is not found
 	 */
-	virtual long FindProp(const wxString& strPropName) const;
+	virtual long FindProp(const ibString& strPropName) const;
 
 	/// Returns property name
 	/**
 	 *  @param lPropNum - property index (starting with 0)
 	 *  @return proeprty name or 0 if iterator is not found
 	 */
-	virtual wxString GetPropName(const long lPropNum) const;
+	virtual const ibString& GetPropName(const long lPropNum) const;
 
 	/// Returns property value
 	/**
@@ -833,21 +1512,21 @@ public:
 	 *  @param wsMethodName - method name
 	 *  @return - method index
 	 */
-	virtual long FindMethod(const wxString& strMethodName) const;
+	virtual long FindMethod(const ibString& strMethodName) const;
 
 	/// Returns method name
 	/**
 	 *  @param lMethodNum - method index(starting with 0)
 	 *  @return method name or 0 if method is not found
 	 */
-	virtual wxString GetMethodName(const long lMethodNum) const;
+	virtual const ibString& GetMethodName(const long lMethodNum) const;
 
 	/// Returns method helper
 	/**
 	*  @param lMethodNum - method index(starting with 0)
 	*  @return method name or 0 if method is not found
 	*/
-	virtual wxString GetMethodHelper(const long lMethodNum) const;
+	virtual const ibString& GetMethodHelper(const long lMethodNum) const;
 
 	/// Returns number of method parameters
 	/**
@@ -887,7 +1566,7 @@ public:
 	// stringization (`Where` enumerator ↔ `"Where"` script-side
 	// method name). Adding a new op = append here AND an entry in
 	// GetLinqMethodTable() + a case in the dispatch switch
-	// (procUnitLinq.cpp). Runtime arg-count validation lives inside
+	// (procUnitLINQ.cpp). Runtime arg-count validation lives inside
 	// each dispatch case.
 	enum class ibLinqMethod : long {
 		Where,
@@ -922,6 +1601,26 @@ public:
 		Aggregate,
 		WhereIndexed,
 		SelectIndexed,
+		ToTable,        // materialise into the built-in value table (data sources / Queryable)
+		SelectMany,     // flatten: fn(elem) -> a source, and its elements are yielded in turn
+
+		// ⚠ APPENDED, AND NEW ONES GO AFTER THESE. The enum value is what
+		// OPER_CALL_LINQ carries in its operand and what an AOT-compiled module
+		// has on disk, so inserting in the middle would make every stored
+		// bytecode call a different method.
+		//
+		// The aggregates were missing from the PIPELINE, though every concrete
+		// collection had them: `arr.Sum()` worked because ibValueArray declares a
+		// method of that name, while `arr.Where(...).Sum()` answered "Aggregate
+		// object field not found 'Sum'" — the receiver was a pipeline, which has
+		// no methods of its own. The workaround, `.ToArray().Sum()`, materialises
+		// the whole sequence, which is the one thing a lazy pipeline exists to
+		// avoid. Filtering and then totalling is not an exotic request; it is what
+		// a report does.
+		Sum,            // total; Sum(selector?) projects each element first
+		Min,            // smallest; Min(selector?)
+		Max,            // largest; Max(selector?)
+		Average,        // arithmetic mean; Average(selector?)
 	};
 
 	// Method-table entry — enum id + script-side name + one-line help
@@ -942,7 +1641,7 @@ public:
 	// (compileCode.cpp) to decide OPER_CALL_METHOD (per-class) vs
 	// OPER_CALL_LINQ (universal pipeline op). Case-insensitive match
 	// per OES convention. Implemented in terms of GetLinqMethodTable().
-	static long FindLinqMethodByName(const wxString& strMethodName);
+	static long FindLinqMethodByName(const ibString& strMethodName);
 
 	// LINQ dispatch entry point — virtual so subclasses can override
 	// kind-specific behavior (e.g. ibValueQuery extending an existing
@@ -1013,17 +1712,192 @@ public:
 	virtual std::shared_ptr<ibValueIteratorState> CreateIterator();
 #pragma endregion
 
+	// ⭐⭐ BRING THAT VALUE TO WHAT THIS ONE ALLOWS, AND SAY WHETHER YOU COULD — the whole of a link by
+	// type beyond "where to read it from", and a VERB rather than a question. Nobody has to learn what
+	// this value is: it takes the incoming value, brings it, and reports; which is how a subconto has
+	// always been written (accountingRegisterObject.cpp: the kind's own Type, then an adjustment).
+	//
+	// ⭐ THE SAME VERB THE TREE ALREADY USES FOR THIS OPERATION, with the `Out` in the middle for the shape
+	// it takes here: the factory's `AdjustValue` brings a value to what a FIELD declares and RETURNS it,
+	// this one brings it to what a VALUE allows and REPORTS.
+	//
+	// 🛑 AND IT CANNOT SIMPLY BE `AdjustValue`. A metaobject is BOTH an ibValue and an ibBackendTypeFactory
+	// (an attribute, a command, a constant, a chart of characteristic types), so one word in both bases is
+	// ambiguous in four classes at once — and the `using` declarations that quiet it are noise in the
+	// headers that would carry them. The factory keeps the plain name: twenty callers, and the script
+	// language offers it to configurations by it.
+	//
+	// 🛑 A BOOL AND AN OUT VALUE, NOT A RETURNED ONE, for two reasons (Max, 2026-09-24). A returned
+	// value CANNOT SAY WHICH ANSWER IT IS: "not admitted" and "admitted, and it is empty" came back
+	// identical, and the first has to empty the field while the second must not be mistaken for it. And
+	// it COPIES ONCE INSTEAD OF TWICE — `a.Adjust(b.Adjust(v))` copied the value at both hops, on a road
+	// a posting pass walks once per dimension of every line.
+	//
+	//   * true  — the narrowing went through; `out` holds the value AS IT CAME, the same reference passed
+	//             on, nothing rebuilt. A thing that narrows NOTHING answers here too, the same way.
+	//   * false — it did not fit, and `out` holds the EMPTY VALUE OF WHAT THIS ONE NARROWS TO. So `out` is
+	//             filled either way, and its type is the answer to "what does this narrow to" without a
+	//             second question being asked of anybody.
+	//
+	// 🛑 AND NOTHING ABOUT THE SCHEMA CROSSES THIS LINE. A type description is a value that
+	// SERIALISES — a thing of the schema — so handing one back from the runtime would make the schema
+	// part of the runtime's contract (Max, 2026-09-24). Here the schema stays inside whoever owns it:
+	// a kind applies its own Type, with its qualifiers, and the caller never sees either.
+	//
+	// Three answers, each from whoever knows it:
+	//   * an ordinary value narrows to ITS OWN CLASS (this default);
+	//   * a type description narrows to WHAT IT DESCRIBES, qualifiers included;
+	//   * a reference passes the question to the metaobject that governs it.
+	virtual bool AdjustOutValue(const ibValue& varValue, ibValue& out) const;
+
 protected:
 
 #pragma region serialization
-	virtual bool DoSerialize(wxString& strValue) const;
-	virtual bool DoDeserialize(const wxString& strValue);
+
+	// CONTENTS — the override point, the other half of the pair declared above.
+	//
+	// The base knows the PRIMITIVES and nothing else, which is all it can
+	// honestly claim. A composite (array, structure, reference) fills its own
+	// child nodes and asks its elements the same question, so the walk continues
+	// by itself, one class at a time.
+	//
+	// A MUTABLE value — a form, an open object, a lambda — overrides nothing and
+	// is refused by IsTransferable before any of this runs.
+	//
+	// Returns false when this value has no packed form: said out loud rather
+	// than written as something else.
+	virtual bool DoSerialize(class ibDataNode& node) const;
+	virtual bool DoDeserialize(const class ibDataNode& node);
+
 #pragma endregion
-
-private:
-
-	unsigned int m_refCount;
 };
+
+// ---------------------------------------------------------------------------
+// THE MIXER, once. Every value hash in the engine is spelled through these two and
+// nowhere else — five hand-written copies of FNV-1a is five chances for one of them
+// to be typed slightly differently, and a hash that differs by site is not a hash.
+//
+// ⚠ ACCUMULATE IN uint64_t, NARROW ONCE AT THE END. size_t is 32 bits on the x86
+// build while these constants are 64, so a size_t accumulator silently TRUNCATES
+// them and that build runs a different — and much worse — hash than the x64 one.
+// MSVC does say so (C4305/C4309), but only when the SOLUTION is built: the CMake
+// test tree is x64, so the whole family of this defect is invisible there.
+constexpr std::uint64_t kIbHashBasis = 14695981039346656037ULL;   // FNV-1a offset basis
+inline std::uint64_t ibHashCombine(std::uint64_t h, std::uint64_t v)
+{
+	return (h ^ v) * 1099511628211ULL;                            // FNV-1a prime
+}
+
+// KEY POLICY — the one way to key a hash container BY VALUE.
+//
+// Grouping, joining and de-duplicating all need the same pair: a hash, and the
+// equality it is bound to. Written per callsite, those two drift apart — and a
+// hash that disagrees with its equality does not fail loudly, it loses rows.
+// So they live here, once, and every index takes them from here.
+//
+// Equality is `CompareValueLS == 0`, deliberately NOT CompareValueEQ. The order
+// is the relation GetValueHash is contracted against (see the IDENTITY note on
+// the class), and EQ is type-strict where the order is not — keys that order
+// equal across kinds would stop matching.
+struct ibValueHash {
+	size_t operator()(const ibValue& key) const { return key.GetValueHash(); }
+};
+struct ibValueEqual {
+	bool operator()(const ibValue& a, const ibValue& b) const { return a.CompareValueLS(b) == 0; }
+};
+
+// …and the ORDER, for an index that is a tree: `CompareValueLS < 0`, with the kinds a real key is
+// — a number, a string, a date, each against its own kind — answered on the spot off the payload,
+// which is exactly what CompareValueLS answers for them. A join spent 14.5% of its whole time inside
+// the virtual call and the reference, null and rank checks that come before those lines (the sampled
+// profile, 2026-09-28). Anything else asks CompareValueLS, the one definition of the order.
+struct ibValueLess {
+	bool operator()(const ibValue& a, const ibValue& b) const {
+		if (a.m_typeClass == b.m_typeClass) {
+			switch (a.m_typeClass) {
+			case ibValueTypes::TYPE_NUMBER: return a.m_fData.Compare(b.m_fData) < 0;
+			case ibValueTypes::TYPE_STRING: return a.m_sData.Cmp(b.m_sData) < 0;
+			case ibValueTypes::TYPE_DATE:   return a.m_dData < b.m_dData;
+			default:                        break;
+			}
+		}
+		return a.CompareValueLS(b) < 0;
+	}
+};
+
+// A COMPOSITE key — a group-by prefix, a register's dimension tuple — is a
+// SEQUENCE OF VALUES, not a string of them joined by a separator.
+//
+// Joining was the old way (`key += v.GetHashKey() + "\x1f"`), and per row per
+// level it cost a text conversion (a number goes through ToString, a reference
+// through wxString::Format) plus the concatenation, and then keyed a std::map
+// that compared those strings character by character. A sequence pays none of
+// that and compares the values themselves.
+//
+// The COUNT goes into the hash: [a] and [a, Undefined] are different keys, and
+// without it they would only be told apart by the comparison.
+struct ibValueSeqHash {
+	size_t operator()(const std::vector<ibValue>& seq) const {
+		std::uint64_t h = ibHashCombine(kIbHashBasis, seq.size());
+		for (const ibValue& value : seq)
+			h = ibHashCombine(h, value.GetValueHash());
+		return (size_t)h;
+	}
+};
+struct ibValueSeqEqual {
+	bool operator()(const std::vector<ibValue>& a, const std::vector<ibValue>& b) const {
+		if (a.size() != b.size())
+			return false;
+		for (size_t i = 0, n = a.size(); i < n; ++i)
+			if (a[i].CompareValueLS(b[i]) != 0)
+				return false;
+		return true;
+	}
+};
+
+// ---------------------------------------------------------------------------
+// Aggregate-value bases (NVI). ibValue itself stays BARE for primitives
+// (Number / String / Boolean / Date / Guid — no methods/props; the inherited
+// DoGetPMethods() returns nullptr, zero helper machinery). Values that DO have
+// a name surface inherit one of the two bases below, so DoGetPMethods is
+// PROTECTED by construction (no public raw-getter override anywhere) and the
+// helper lifetime / wiring lives in one place. The hierarchy is diamond-free by
+// design — capability mixins never derive ibValue — so replacing a class's
+// `ibValue` base slot with one of these introduces ibValue exactly once.
+// ---------------------------------------------------------------------------
+
+// PER-INSTANCE dynamic values (records, Map keys, ResultSet columns, table rows):
+// own the helper BY VALUE (auto create/destroy, no new/wxDELETE), built lazily by
+// the NVI wrapper. A descendant supplies its name surface by binding one or more
+// of its own const member fillers in its ctor —
+// `m_members.Bind(this, &Class::FillXxx)` — and calls m_members.Invalidate()
+// when it mutates. Several fillers accumulate in bind order, so a class can split
+// its surface (e.g. methods + data members) and a derived class can add to or
+// replace the base's (Unbind the base filler first to replace).
+class BACKEND_API ibValueDynamicMembers : public ibValue {
+public:
+	ibValueDynamicMembers(ibValueTypes type = ibValueTypes::TYPE_VALUE, bool readOnly = false) : ibValue(type, readOnly) {}
+protected:
+	mutable ibMemberTable m_members;
+	virtual ibMemberTable* DoGetPMethods() const override { return &m_members; }
+	// Each concrete value binds its own contributor(s) in its ctor:
+	//   m_members.Bind(this, &Self::FillMembers);
+	// Binders accumulate in Build(); compose by also binding the base contributor.
+	// Module exports autobind as the helper's tail in the ibRuntimeModuleDataObject ctor.
+};
+
+// TYPE-INVARIANT values (Array, Point, File, ...): NO per-instance helper — one
+// shared helper per contributor via Shared<Binder>(), built once. Descendants
+// just inherit ibValueStaticMembers<&BindXxx> (BindXxx must be a free/static
+// function — the deriving class is incomplete in its own base clause).
+template<ibValue::ibMemberTable::ibNameBinder Binder>
+class ibValueStaticMembers : public ibValue {
+public:
+	ibValueStaticMembers(ibValueTypes type = ibValueTypes::TYPE_VALUE, bool readOnly = false) : ibValue(type, readOnly) {}
+protected:
+	virtual ibMemberTable* DoGetPMethods() const override { return ibMemberTable::Shared<Binder>(); }
+};
+
 #include "backend/value_ptr.h"
 #include "backend/value_cast.h"
 
@@ -1032,45 +1906,13 @@ private:
 /////////////////////////////////////////////////////////////////////////
 
 template<typename T, typename valT>
-ibValue* ibValue::CreateAndConvertEnumObjectRef(const valT& v) {
-	ibValuePtr<ibValueEnumeration<valT>> createdEnum(ibValue::CreateAndConvertObjectRef<T>());
+ibValue ibValue::CreateEnumObject(const valT& v) {
+	const ibValuePtr<ibValueEnumeration<valT>> createdEnum(ibValue::CreateObject<T>());
 	wxASSERT(createdEnum != nullptr);
 	return createdEnum->CreateEnumVariantValue(v);
 }
 
-/////////////////////////////////////////////////////////////////////////
-// value_register template implementations (deferred from typeCtor.h
-// because they require the complete ibValue type)
-/////////////////////////////////////////////////////////////////////////
-
-template<typename typeCtor>
-value_register<typeCtor>::value_register(typeCtor* so) : m_so(so) {
-	try {
-		if (m_so != nullptr) {
-			ibValue::RegisterCtor(m_so);
-		}
-	}
-	catch (...) {
-#ifdef DEBUG
-		wxLogDebug(wxT("! failed to register class: %s"), m_so->GetClassName());
-#endif
-		wxDELETE(m_so);
-	}
-}
-
-template<typename typeCtor>
-value_register<typeCtor>::~value_register() {
-	try {
-		if (m_so != nullptr) {
-			ibValue::UnRegisterCtor(m_so);
-		}
-	}
-	catch (...) {
-#ifdef DEBUG
-		wxLogDebug(wxT("! failed to unregister class: %s"), m_so->GetClassName());
-#endif
-		wxDELETE(m_so);
-	}
-}
+// The ctors — last, because each of them answers with a complete ibValue.
+#include "backend/compiler/typeCtor.h"
 
 #endif

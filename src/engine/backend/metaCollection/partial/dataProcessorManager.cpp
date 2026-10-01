@@ -1,4 +1,4 @@
-﻿////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////
 //	Author		: Maxim Kornienko
 //	Description : dataProcessor - manager
 ////////////////////////////////////////////////////////////////////////////
@@ -7,13 +7,11 @@
 #include "backend/metaData.h"
 #include "commonObject.h"
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueManagerDataObjectDataProcessor, ibValue);
 
 const ibValueMetaObjectCommonModule* ibValueManagerDataObjectDataProcessor::GetManagerModule() const { return m_metaObject->GetManagerModule(); }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueManagerDataObjectExternalDataProcessor, ibValue);
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -23,18 +21,17 @@ enum Func {
 	eGetTemplate,
 };
 
-void ibValueManagerDataObjectDataProcessor::PrepareNames() const
+void ibValueManagerDataObjectDataProcessor::FillManagerMethods(ibMemberTable& helper) const
 {
-	ibValueManagerDataObject::PrepareNames();
-
-	m_methodHelper->AppendFunc(wxT("Create"), wxT("Create()"));
-	m_methodHelper->AppendFunc(wxT("GetForm"), wxT("GetForm(name : string, owner : any, id : guid)"));
-	m_methodHelper->AppendFunc(wxT("GetTemplate"), 1, wxT("GetTemplate(name : string)"));
+	helper.AppendFunc(wxT("Create"), wxT("Create()"));
+	helper.AppendFunc(wxT("GetForm"), 3, wxT("GetForm(name : string, owner : any, id : guid)"));   // the COUNT, not only the text - see Data.From
+	helper.AppendFunc(wxT("GetTemplate"), 1, wxT("GetTemplate(name : string)"));
 }
 
 bool ibValueManagerDataObjectDataProcessor::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
 {
-	switch (lMethodNum)
+	// Our own ordinal, not the table index — ibValueManagerDataObject::BuiltinMethodNum says why.
+	switch (BuiltinMethodNum(lMethodNum))
 	{
 	case eCreate:
 		pvarRetValue = m_metaObject->CreateObjectValue();
@@ -42,9 +39,8 @@ bool ibValueManagerDataObjectDataProcessor::CallAsFunc(const long lMethodNum, ib
 	case eGetForm:
 	{
 		ibValueGuid* guidVal = lSizeArray > 2 ? paParams[2]->ConvertToType<ibValueGuid>() : nullptr;
-		pvarRetValue = m_metaObject->GetGenericForm(paParams[0]->GetString(),
-			lSizeArray > 1 ? paParams[1]->ConvertToType<ibBackendControlFrame>() : nullptr,
-			guidVal ? ((ibGuid)*guidVal) : ibGuid());
+		pvarRetValue = m_metaObject->GetGenericForm(ibFormRequest(paParams[0]->GetString(), guidVal ? ((ibGuid)*guidVal) : ibGuid()),
+			lSizeArray > 1 ? paParams[1]->ConvertToType<ibBackendControlFrame>() : nullptr);
 		return true;
 	}
 	case eGetTemplate:
@@ -55,12 +51,9 @@ bool ibValueManagerDataObjectDataProcessor::CallAsFunc(const long lMethodNum, ib
 	return ibValueManagerDataObject::CallAsFunc(lMethodNum, pvarRetValue, paParams, lSizeArray);
 }
 
-ibValue::ibValueMethodHelper ibValueManagerDataObjectExternalDataProcessor::m_methodHelper;
-
-void ibValueManagerDataObjectExternalDataProcessor::PrepareNames() const
+void ibValueManagerDataObjectExternalDataProcessor::FillManagerMethods(ibMemberTable& helper) const
 {
-	m_methodHelper.ClearHelper();
-	m_methodHelper.AppendFunc(wxT("Create"), 1, wxT("Create(fullPath : string)"));
+	helper.AppendFunc(wxT("Create"), 1, wxT("Create(fullPath : string)"));
 }
 
 #include "backend/system/systemManager.h"
@@ -74,7 +67,7 @@ bool ibValueManagerDataObjectExternalDataProcessor::CallAsFunc(const long lMetho
 	{
 		ibMetaDataDataProcessor* metaDataProcessor = new ibMetaDataDataProcessor();
 		if (metaDataProcessor->LoadFromFile(paParams[0]->GetString())) {
-			ibValueModuleManagerExternalDataProcessor* moduleManager = metaDataProcessor->GetManagerModule();
+			ibValueModuleRuntimeManagerExternalDataProcessor* moduleManager = metaDataProcessor->GetManagerModule();
 			pvarRetValue = moduleManager->GetObjectValue();
 			return true;
 		}
@@ -91,4 +84,4 @@ bool ibValueManagerDataObjectExternalDataProcessor::CallAsFunc(const long lMetho
 //*                       Register in runtime                           *
 //***********************************************************************
 
-SYSTEM_TYPE_REGISTER(ibValueManagerDataObjectExternalDataProcessor, "externalManagerDataProcessor", string_to_clsid("MG_EXTD"));
+SYSTEM_TYPE_REGISTER(ibValueManagerDataObjectExternalDataProcessor, "externalManagerDataProcessor", system_to_clsid("MG_EXTD"));

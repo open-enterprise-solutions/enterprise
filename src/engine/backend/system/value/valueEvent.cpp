@@ -5,9 +5,26 @@
 
 #include "valueEvent.h"
 
+#include "backend/compiler/procUnit.h"   // ibProcUnit::CallAsProc (the named dispatch)
+#include <vector>
+
 //////////////////////////////////////////////////////////////////////
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueEvent, ibValue);
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueActionEvent, ibValueEvent);
+
+// CLASSIC dispatch — run the named form-module procedure through the form's runtime. The cancel flag rides as the
+// TRAILING parameter, by reference (the procedure may set it to stop the default action), exactly as the old
+// CallAsEvent contract built CallAsProc(name, args..., cancel).
+bool ibValueEvent::Dispatch(ibProcUnit* runtime, ibValue** args, long argc, ibValue& outCancel)
+{
+	if (runtime == nullptr || m_eventName.IsEmpty())
+		return true;   // nothing bound -> no-op, the event just proceeds
+
+	std::vector<ibValue*> params(args, args + argc);
+	params.push_back(&outCancel);
+	runtime->CallAsProc(m_eventName, params.data(), (long)params.size());
+	return outCancel.GetBoolean();
+}
+
+//////////////////////////////////////////////////////////////////////
 
 ibValueEvent::ibValueEvent() :
 	ibValue(ibValueTypes::TYPE_VALUE), m_eventName(wxEmptyString)
@@ -41,5 +58,5 @@ ibValueActionEvent::ibValueActionEvent(const wxString& eventName, ibActionID eve
 //*                       Runtime register                             *
 //**********************************************************************
 
-VALUE_TYPE_REGISTER(ibValueEvent, "Event", string_to_clsid("SY_EVENT"));
-SYSTEM_TYPE_REGISTER(ibValueActionEvent, "ActionEvent", string_to_clsid("SY_ATEVT"));
+VALUE_TYPE_REGISTER(ibValueEvent, "Event", value_to_clsid("SY_EVENT"));
+SYSTEM_TYPE_REGISTER(ibValueActionEvent, "ActionEvent", system_to_clsid("SY_ATEVT"));

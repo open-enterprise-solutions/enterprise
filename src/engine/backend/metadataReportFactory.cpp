@@ -3,34 +3,8 @@
 #include "backend/objCtor.h"
 #include "backend/metadataConfiguration.h"
 
-ibValue* ibMetaDataReport::CreateObjectRef(const ibClassID& clsid, ibValue** paParams, const long lSizeArray) const
-{
-	auto it = std::find_if(m_factoryCtors.begin(), m_factoryCtors.end(), [clsid](ibCtorAbstractType* typeCtor) {
-		return clsid == typeCtor->GetClassType();
-		}
-	);
-
-	if (it != m_factoryCtors.end()) {
-		ibCtorAbstractType* typeCtor(*it);
-		wxASSERT(typeCtor);
-		ibValue* newObject = typeCtor->CreateObject();
-		wxASSERT(newObject);
-
-		bool succes = true;
-		if (lSizeArray > 0)
-			succes = newObject->Init(paParams, lSizeArray);
-		else
-			succes = newObject->Init();
-
-		if (!succes) {
-			wxDELETE(newObject);
-			ibBackendCoreException::Error(_("Error initializing object '%s'"), typeCtor->GetClassName());
-		}
-		newObject->PrepareNames();
-		return newObject;
-	}
-	return activeMetaData->CreateObjectRef(clsid, paParams, lSizeArray);
-}
+// (No CreateObject of its own: ibMetaData's asks GetTypeCtor below, which looks here first and then at
+// the configuration — the whole of what a second copy of the factory used to add.)
 
 bool ibMetaDataReport::IsRegisterCtor(const wxString& className) const
 {
@@ -62,70 +36,47 @@ bool ibMetaDataReport::IsRegisterCtor(const ibClassID& clsid) const
 
 ibClassID ibMetaDataReport::GetIDObjectFromString(const wxString& className) const
 {
-	auto it = std::find_if(m_factoryCtors.begin(), m_factoryCtors.end(), [className](ibCtorAbstractType* typeCtor) {
-		return stringUtils::CompareString(className, typeCtor->GetClassName());
-		});
-
-	if (it != m_factoryCtors.end()) {
-		ibCtorAbstractType* typeCtor = *it;
-		wxASSERT(typeCtor);
+	if (const ibCtorMetaValueType* typeCtor = (m_image ? m_image->FindCtor(className) : nullptr))
 		return typeCtor->GetClassType();
-	}
 
 	return activeMetaData->GetIDObjectFromString(className);
 }
 
 wxString ibMetaDataReport::GetNameObjectFromID(const ibClassID& clsid, bool upper) const
 {
-	auto it = std::find_if(m_factoryCtors.begin(), m_factoryCtors.end(), [clsid](ibCtorAbstractType* typeCtor) {
-		return clsid == typeCtor->GetClassType();
-		});
-
-	if (it != m_factoryCtors.end()) {
-		ibCtorAbstractType* typeCtor = *it;
-		wxASSERT(typeCtor);
+	if (const ibCtorMetaValueType* typeCtor = (m_image ? m_image->FindCtor(clsid) : nullptr))
 		return upper ? typeCtor->GetClassName().Upper() : typeCtor->GetClassName();
-	}
 
 	return activeMetaData->GetNameObjectFromID(clsid, upper);
 }
 
 ibCtorMetaValueType* ibMetaDataReport::GetTypeCtor(const ibClassID& clsid) const
 {
-	auto it = std::find_if(m_factoryCtors.begin(), m_factoryCtors.end(), [clsid](ibCtorMetaValueType* typeCtor) {
-		return clsid == typeCtor->GetClassType(); }
-	);
-	if (it != m_factoryCtors.end()) return *it;
+	if (ibCtorMetaValueType* typeCtor = (m_image ? m_image->FindCtor(clsid) : nullptr))   // hot — O(1)
+		return typeCtor;
 	return activeMetaData->GetTypeCtor(clsid);
 }
 
 ibCtorMetaValueType* ibMetaDataReport::GetTypeCtor(const ibValueMetaObject* metaValue, ibCtorObjectMetaType refType) const
 {
-	auto it = std::find_if(m_factoryCtors.begin(), m_factoryCtors.end(), [metaValue, refType](ibCtorMetaValueType* typeCtor) {
-		return refType == typeCtor->GetMetaTypeCtor() &&
-			metaValue == typeCtor->GetMetaObject();
-		}
-	);
-	if (it != m_factoryCtors.end()) return *it;
+	// The id the pair spells, in the report's own image first (ibMetaImage::FindCtor — one probe; this was a copy
+	// of the walk that stood there), then the configuration's.
+	if (ibCtorMetaValueType* typeCtor = (m_image ? m_image->FindCtor(metaValue, refType) : nullptr))
+		return typeCtor;
 	return activeMetaData->GetTypeCtor(metaValue, refType);
 }
 
 ibCtorAbstractType* ibMetaDataReport::GetAvailableCtor(const wxString& className) const
 {
-	auto it = std::find_if(m_factoryCtors.begin(), m_factoryCtors.end(), [className](ibCtorAbstractType* typeCtor) {
-		return stringUtils::CompareString(className, typeCtor->GetClassName());
-		}
-	);
-	if (it != m_factoryCtors.end()) return *it;
+	if (ibCtorMetaValueType* typeCtor = (m_image ? m_image->FindCtor(className) : nullptr))
+		return typeCtor;
 	return activeMetaData->GetAvailableCtor(className);
 }
 
 ibCtorAbstractType* ibMetaDataReport::GetAvailableCtor(const ibClassID& clsid) const
 {
-	auto it = std::find_if(m_factoryCtors.begin(), m_factoryCtors.end(), [clsid](ibCtorMetaValueType* typeCtor) {
-		return clsid == typeCtor->GetClassType(); }
-	);
-	if (it != m_factoryCtors.end()) return *it;
+	if (ibCtorMetaValueType* typeCtor = (m_image ? m_image->FindCtor(clsid) : nullptr))   // hot — O(1)
+		return typeCtor;
 	return activeMetaData->GetAvailableCtor(clsid);
 }
 

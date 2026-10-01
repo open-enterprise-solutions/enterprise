@@ -5,26 +5,22 @@
 
 class ibValueManagerDataObjectChartOfAccounts :
 	public ibValueManagerDataObjectPredefined {
-public:
-
-	ibValueReferenceDataObject* FindByCode(const ibValue& vCode) const;
-	ibValueReferenceDataObject* FindByDescription(const ibValue& cParam) const;
+	public:
 
 	ibValueReferenceDataObject* EmptyRef() const;
 
-	ibValueManagerDataObjectChartOfAccounts(const ibValueMetaObjectChartOfAccounts* metaObject = nullptr) : m_metaObject(metaObject) {}
+	ibValueManagerDataObjectChartOfAccounts(const ibValueMetaObjectChartOfAccounts* metaObject = nullptr) : m_metaObject(metaObject) { m_members.Bind(this, &ibValueManagerDataObjectChartOfAccounts::FillManagerMethods); }
 	virtual ~ibValueManagerDataObjectChartOfAccounts() {}
 
 	virtual const ibValueMetaObjectCommonModule* GetManagerModule() const;
 	virtual const ibValueMetaObjectChartOfAccounts* GetMetaObject() const { return m_metaObject; }
 
-	virtual void PrepareNames() const;
+	void FillManagerMethods(ibMemberTable& helper) const;
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);
 
 protected:
 	const ibValueMetaObjectChartOfAccounts* m_metaObject;
 private:
-	wxDECLARE_DYNAMIC_CLASS(ibValueManagerDataObjectChartOfAccounts);
 };
 
 #endif

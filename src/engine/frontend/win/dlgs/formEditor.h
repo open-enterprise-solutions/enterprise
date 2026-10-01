@@ -25,6 +25,12 @@ public:
 
 	ibFormEditorCmd() : m_executed(false) {}
 
+	// VIRTUAL: m_cmdArray holds shared_ptr<ibFormEditorCmd> built from a base-typed pointer, so the
+	// deleter is base-typed too and a non-virtual destructor would skip every derived one. MSVC says
+	// so out loud (C5205) — the same defect the designer's ibVisualEditorCmd had, where it cost a
+	// leaked control per drag-and-drop.
+	virtual ~ibFormEditorCmd() = default;
+
 	void Execute() {
 		if (!m_executed) {
 			DoExecute();
@@ -35,7 +41,7 @@ public:
 protected:
 
 	/**
-	 * Ejecuta el comando.
+	 * Executes the command.
 	 */
 	virtual void DoExecute() = 0;
 };
@@ -52,9 +58,9 @@ protected:
 	ibValueFrame* GetSelectedObject() const { return m_selectedControl; }
 
 	/**
-	* Gracias a que podemos asociar un objeto a cada item, esta clase nos va
-	* a facilitar obtener el objeto (ibValueFrame) asociado a un item para
-	* seleccionarlo pinchando en el item.
+	* Since we can associate an object with each item, this class makes it
+	* easy to get the object (ibValueFrame) associated with an item so it
+	* can be selected by clicking on the item.
 	 */
 	class ibDialogFormEditorObjectTreeItemData : public wxTreeItemData {
 	public:
@@ -65,10 +71,9 @@ protected:
 	};
 
 	/**
-	* Menu popup asociado a cada item del arbol.
+	* Popup menu associated with each tree item.
 	*
-	* Este objeto ejecuta los comandos incluidos en el menu referentes al objeto
-	* seleccionado.
+	* This object executes the menu commands related to the selected object.
 	*/
 	class ibDialogFormEditorItemPopupMenu : public wxMenu {
 	public:
@@ -90,7 +95,7 @@ protected:
 	};
 
 	/**
-	 * Crea el arbol completamente.
+	 * Builds the tree completely.
 	 */
 	void CreateTree();
 	void RebuildTree() {
@@ -125,10 +130,10 @@ protected:
 
 	void UpdateItem(const wxTreeItemId& id, ibValueFrame* obj) {
 
-		// mostramos el nombre
+		// show the name
 		const wxString& caption = obj->GetControlTitle();
 
-		// actualizamos el item
+		// update the item
 		if (caption.IsEmpty()) {
 			m_treeControl->SetItemText(id, _("<empty caption>"));
 		}

@@ -29,6 +29,7 @@
 #include <wx/gdicmn.h>   // wxPoint, wxSize
 
 class ibBackendValueForm;
+class ibView;
 class ibMetaView;
 class ibWebDocChildFrame;
 
@@ -39,35 +40,33 @@ class ibWebDocChildFrame;
 //     parent/child hierarchy as the controls it hosts and is
 //     serialisable into the JSON response alongside them.
 class ibWebApplication;
+class ibWebClientSession;   // typed Session() below
 
 class ibWebFrame : public ibBackendDocFrame, public ibWebWindow {
 public:
-	explicit ibWebFrame(ibWebApplication* app);
+	// Same shape as the desktop main window: the frame is built around an
+	// authenticated session and owns it from that moment. Closing the tab
+	// destroys this frame, which releases the holder, which ends the
+	// session — no separate logout bookkeeping.
+	ibWebFrame(ibSessionHolder&& holder, ibWebApplication* app);
 	virtual ~ibWebFrame() override;
 
 	// Back-pointer to the session's owning application. Lets
 	// arbitrary web-side code reach the per-session dispatcher /
 	// timer map via the thread_local main-frame singleton
-	// (ibBackendDocFrame::GetDocMDIFrame), without threading a
+	// without threading a
 	// second thread_local or a separate globals table.
 	ibWebApplication* GetApp() const { return m_app; }
 
-	// Per-cookie session this frame drives. Forwarded from the owning
-	// ibWebApplication which has the session pointer set at Login time
-	// (ibWebSession::Login → app->SetSessionContext(ticket->Session())).
-	// Used by UI-originated paths (script OpenForm from OnStart, sidebar
-	// clicks) where no ownerControl is available to walk a descriptor
-	// parent chain up to the session.
-	virtual ibSession* GetSession() const override;
+	// GetSession() comes from ibBackendDocFrame — it answers out of the
+	// holder this frame owns. This is the typed view of the same thing:
+	// the ONE place the web side narrows a session pointer, so callers
+	// (and the constructor's back-link) never spell a cast themselves.
+	ibWebClientSession* Session() const;
 
 	// ibWebWindow
 	virtual wxString GetControlType() const override { return wxT("frame"); }
 
-	// Back-compat surface. Desktop code reaches through this to get
-	// the wx host for parent-window resolution; web has no wx frame,
-	// so we return nullptr and expect callers that actually need a
-	// native parent to guard against it.
-	virtual wxFrame* GetFrameHandler() const override { return nullptr; }
 
 	virtual void SetTitle(const wxString& strTitle) override { m_title = strTitle; }
 	virtual void SetStatusText(const wxString& strStatus, int number = 0) override;
@@ -136,12 +135,12 @@ public:
 	// entry — closing the tab releases it.
 	virtual ibBackendValueForm* ActiveWindow() const override { return m_activeForm; }
 	virtual ibBackendValueForm* CreateNewForm(
+		const ibFormRequest& request,
 		const class ibValueMetaObjectFormBase* creator,
 		class ibBackendControlFrame* ownerControl = nullptr,
-		class ibSourceDataObject* srcObject = nullptr,
-		const ibUniqueKey& formGuid = wxNullUniqueKey) override;
+		class ibSourceDataObject* srcObject = nullptr) override;
 
-	// Override mirrors ibFrontendDocMDIFrame's — delegates to
+	// Override mirrors ibFrontendMainFrame's — delegates to
 	// ibFormVisualDocument::CreateFormUniqueKey so the form's
 	// m_formKey gets a proper unique guid. Without this override,
 	// the backend base returns wxNullUniqueKey and every form
@@ -152,13 +151,13 @@ public:
 		const class ibSourceDataObject* sourceObject,
 		const ibUniqueKey& formGuid) override;
 
-	// Web-side analogue of ibFrontendDocMDIFrame::CreateChildFrame.
+	// Web-side analogue of ibFrontendMainFrame::CreateChildFrame.
 	// Static by symmetry with the desktop factory — called from the
 	// shared doc/view pipeline (ibMetaDocument::OnCreate) right after
 	// DoCreateView. Builds an ibWebDocChildFrame, hands it to the
 	// current session's ibWebFrame via AdoptTab, and returns it as
 	// ibFrontendWindow* so the signature matches desktop.
-	static ibFrontendWindow* CreateChildFrame(ibMetaView* view,
+	static ibFrontendWindow* CreateChildFrame(ibView* view,
 		const wxPoint& pos  = wxDefaultPosition,
 		const wxSize&  size = wxDefaultSize,
 		long           style = 0);
@@ -172,7 +171,7 @@ public:
 	}
 	// Take ownership of an externally-built ibWebDocChildFrame and
 	// install it as the active tab. Used by the shared doc/view
-	// factory (ibFrontendDocMDIFrame::CreateChildFrame on web) where
+	// factory (ibFrontendMainFrame::CreateChildFrame on web) where
 	// the child frame is spawned before the form's view OnCreate
 	// attaches its host — the caller has the raw pointer it needs
 	// to wire SetHost after adoption.
@@ -217,7 +216,7 @@ private:
 
 	// One entry per open form. Each child frame owns its doc/view/host
 	// triad; closing a tab = erase from the vector = dtor chain releases
-	// host, then view, then document (mirrors CAuiDocChildFrame order).
+	// host, then view, then document (mirrors ibAuiDocChildFrame order).
 	std::vector<std::unique_ptr<ibWebDocChildFrame>> m_tabs;
 	std::size_t                                      m_activeTab = 0;
 

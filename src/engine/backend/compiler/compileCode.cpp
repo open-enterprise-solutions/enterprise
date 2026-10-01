@@ -1,13 +1,15 @@
 ////////////////////////////////////////////////////////////////////////////
-//	Author		: Maxim Kornienko, 2�-team
+//	Author		: Maxim Kornienko, 2C-team
 //	Description : compile module 
 ////////////////////////////////////////////////////////////////////////////
 
 #include "compileCode.h"
 #include "codeDef.h"
+#include "lambdaQueryAST.h"   // L4-2 — lambda body -> L4 query AST (pushdown)
 
 #include "system/systemManager.h"
 #include "backend/guid.h"  // wxNewUniqueGuid for anonymous-lambda synthetic naming
+#include "backend/diagnostics/journal.h"   // says whether a lambda recorded a query tree
 
 #pragma warning(push)
 #pragma warning(disable : 4018)
@@ -16,13 +18,63 @@
 //                           Constants
 //////////////////////////////////////////////////////////////////////
 
-// array of mathematical operation priorities
-static std::array<int, 256> gs_operPriority = { 0 };
+// Array of mathematical operation priorities, indexed by a lexem's m_numData
+// (delimiter character code, or a KEY_* id for the two word operators).
+//
+// It used to be filled by InitializeCompileModule(), which every ibCompileCode ctor
+// called behind `if (gs_operPriority[last]) return;` — the last slot doubling as an
+// "already filled" sentinel. Unguarded check-then-fill: two sessions compiling at
+// once both see the sentinel clear and both write, and a third can read a slot the
+// filler has not reached yet. A zero priority there does not crash, it silently
+// mis-associates the expression — `a + b * c` compiled with the wrong tree. Built
+// once, before main, and const from then on, that cannot happen.
+// Being a constant, it can be built by the COMPILER — constexpr rather than a
+// load-time initialiser, so there is no initialisation order to reason about either.
+static constexpr std::array<int, 256> MakeOperPriority()
+{
+	std::array<int, 256> listPriority = {};
+
+	listPriority['+'] = 10;
+	listPriority['-'] = 10;
+	listPriority['*'] = 30;
+	listPriority['/'] = 30;
+	listPriority['%'] = 30;
+	// `!` / `Not` as a PREFIX takes its operand up to the next `And` / `Or` — see the KEY_NOT branch of
+	// GetExpression. This entry is `!` met AFTER an operand, which the language refuses.
+	listPriority['!'] = 50;
+
+	listPriority[KEY_OR] = 1;
+	listPriority[KEY_AND] = 2;
+	// `Mod` binds exactly as `%` does — the same operator spelled with a word.
+	listPriority[KEY_MOD] = 30;
+
+	listPriority['>'] = 3;
+	listPriority['<'] = 3;
+	listPriority['='] = 3;
+
+	// ⭐⭐ `x in (a, b, c)` — a COMPARISON, and it binds like one. It is sugar and stays sugar: the
+	// compiler expands it into `(x = a) or (x = b) or (x = c)`, so nothing new reaches the runtime
+	// and every reader that already understands a comparison understands this.
+	//
+	// 🛑 IT HAD TO BECOME PART OF THE LANGUAGE. `in` used to be understood only by the LINQ lambda
+	// recorder — a second grammar, wider than the language, that read the tokens of a predicate and
+	// built its own tree. When the recorder went (the tree is read off the INSTRUCTIONS now), `in`
+	// went with it: `restrict s in Source where s.Code in ("A", "B")` stopped compiling, because the
+	// language itself had never known the word. Either the feature exists in the language or it does
+	// not exist; a grammar only one reader can see is how the two drift apart.
+	listPriority[KEY_IN] = 3;
+
+	listPriority[listPriority.size() - 1] = 1;//was the sentinel; kept so index 255 reads as it did
+
+	return listPriority;
+}
+
+static constexpr std::array<int, 256> gs_operPriority = MakeOperPriority();
 
 // set code style by file extension
 // CES is the default — modern brace/paren syntax with `;` terminators.
-// VES (Visual Basic-style ES + 1С/BSL mix) remains supported for legacy ES
-// configurations migrated from 1С / BSL; loading a VES module flips this
+// VES (Visual Basic-style ES, a legacy business-scripting dialect) remains supported for legacy ES
+// configurations migrated from a legacy business-scripting platform; loading a VES module flips this
 // via SetCodeStyle().
 static short gs_codeStyle = CODE_CES;
 
@@ -30,39 +82,39 @@ static short gs_codeStyle = CODE_CES;
 // Construction/Destruction ibCompileCode
 //////////////////////////////////////////////////////////////////////
 
+// The initialiser lists below follow the DECLARATION order in compileCode.h
+// (m_onlyFunction, m_cByteCode, m_rootContext, m_numCurrentCompile, m_changedCode).
+// Members are constructed in declaration order regardless of what the list says, so a
+// list in any other order reads as a promise the language does not keep — and
+// ibCompileContext's ctor takes `this`.
+
 ibCompileCode::ibCompileCode() :
 	ibTranslateCode(),
+	m_onlyFunction(false),
 	m_rootContext(new ibCompileContext(this)),
-	m_changedCode(false),
-	m_onlyFunction(false)
+	m_changedCode(false)
 {
-	InitializeCompileModule();
-
-	// we don�t look for local variables in parent contexts!
+	// we do not look for local variables in parent contexts!
 	m_rootContext->m_numFindLocalInParent = 0;
 }
 
 ibCompileCode::ibCompileCode(const wxString& strModuleName, const wxString& strDocPath, bool onlyFunction) :
 	ibTranslateCode(strModuleName, strDocPath),
+	m_onlyFunction(onlyFunction),
 	m_rootContext(new ibCompileContext(this)),
-	m_changedCode(false),
-	m_onlyFunction(onlyFunction)
+	m_changedCode(false)
 {
-	InitializeCompileModule();
-
-	// we don�t look for local variables in parent contexts!
+	// we do not look for local variables in parent contexts!
 	m_rootContext->m_numFindLocalInParent = 0;
 }
 
 ibCompileCode::ibCompileCode(const wxString& strFileName) :
 	ibTranslateCode(strFileName),
+	m_onlyFunction(false),
 	m_rootContext(new ibCompileContext(this)),
-	m_changedCode(false),
-	m_onlyFunction(false)
+	m_changedCode(false)
 {
-	InitializeCompileModule();
-
-	// we don�t look for local variables in parent contexts!
+	// we do not look for local variables in parent contexts!
 	m_rootContext->m_numFindLocalInParent = 0;
 }
 
@@ -74,28 +126,6 @@ ibCompileCode::~ibCompileCode()
 	m_listContextValue.clear();
 
 	wxDELETE(m_rootContext);
-}
-
-void ibCompileCode::InitializeCompileModule()
-{
-	if (gs_operPriority[gs_operPriority.size() - 1])
-		return;
-
-	gs_operPriority['+'] = 10;
-	gs_operPriority['-'] = 10;
-	gs_operPriority['*'] = 30;
-	gs_operPriority['/'] = 30;
-	gs_operPriority['%'] = 30;
-	gs_operPriority['!'] = 50;
-
-	gs_operPriority[KEY_OR] = 1;
-	gs_operPriority[KEY_AND] = 2;
-
-	gs_operPriority['>'] = 3;
-	gs_operPriority['<'] = 3;
-	gs_operPriority['='] = 3;
-
-	gs_operPriority[gs_operPriority.size() - 1] = 1;
 }
 
 void ibCompileCode::SetCodeStyle(short codeStyle)
@@ -142,6 +172,13 @@ void ibCompileCode::Reset()
 
 	m_listHashConst.clear();
 	m_listCallFunc.clear();
+
+	// 🛑 AND THE COMPILE-TIME SCRATCH, because this object is REUSED — Recompile, the designer
+	// rebuilding a module. A parked chain position that survived a refusal would be consumed by the
+	// next module's first `foreach`, whose verbs it does not describe. The arming itself cannot leak
+	// (ibLinqSourceScope disarms on every exit); this is the other half, and it costs one store.
+	m_numLinqSourceEnd = -1;
+	m_numLinqChainAt   = -1;
 }
 
 void ibCompileCode::PrepareModuleData()
@@ -150,20 +187,28 @@ void ibCompileCode::PrepareModuleData()
 	// to stamp post-AddVariable flags (External / clsid / scoped).
 	auto stampOnContext = [&](const wxString& name, auto&& mutate) {
 		auto it = std::find_if(m_rootContext->m_listVariable.begin(), m_rootContext->m_listVariable.end(),
-			[&](const auto& kv) { return stringUtils::CompareString(name, kv.first); });
-		if (it != m_rootContext->m_listVariable.end() && it->second)
-			mutate(*it->second);
+			[&](const auto& v) { return v && stringUtils::CompareString(name, v->m_strRealName); });
+		if (it != m_rootContext->m_listVariable.end() && *it)
+			mutate(**it);
 	};
 
 	// Pass 1: external values — kind=External on the bc mirror. Binder
 	// fills the slot at runtime; pre-flight verifies clsid match.
 	for (auto& externValue : m_listExternValue) {
-		m_rootContext->AddVariable(externValue.first, wxEmptyString, true);
+		m_rootContext->AddVariable(externValue.first, 0, true);
 		const ibClassID clsid = externValue.second ? externValue.second->GetClassType() : ibClassID(0);
 		stampOnContext(externValue.first, [&](ibCompileContext::ibVariable& v) {
-			v.m_bExternal = true;
-			v.m_clsid     = clsid;
+			v.m_kind  = ibVarKind::External;
+			v.m_clsid = clsid;
 		});
+	}
+
+	// Pass 1b: local binds — plain frame locals (bExport=false, NO m_bExternal /
+	// m_bContext stamp → kind=Local). The binder fills the slot at runtime (no
+	// required/type pre-flight); the module reads/writes it as a normal local
+	// (e.g. a constant's Value backed by &m_constValue).
+	for (auto& localValue : m_listLocalValue) {
+		m_rootContext->AddVariable(localValue.first, 0, false);
 	}
 
 	// Pass 2: context values — currently all self-referencing.
@@ -172,19 +217,14 @@ void ibCompileCode::PrepareModuleData()
 	// these into m_listVar with kind=Context so the binder treats them
 	// as required and resolve walks them visibility-aware.
 	for (auto& contextValue : m_listContextValue) {
-		m_rootContext->AddVariable(contextValue.first, wxEmptyString, true, true);
-		bool scoped = false;
+		m_rootContext->AddVariable(contextValue.first, 0, true, true);
 		ibClassID clsid = 0;
-		if (contextValue.second) {
-			contextValue.second->PrepareNames();
-			clsid = contextValue.second->GetClassType();
-			const long selfPropIdx = contextValue.second->FindProp(contextValue.first);
-			if (selfPropIdx >= 0)
-				scoped = contextValue.second->IsPropScoped(selfPropIdx);
+		if (contextValue.second.m_value) {
+			contextValue.second.m_value->InvalidateNames();
+			clsid = contextValue.second.m_value->GetClassType();
 		}
 		stampOnContext(contextValue.first, [&](ibCompileContext::ibVariable& v) {
 			v.m_clsid = clsid;
-			if (scoped) v.m_bScoped = true;
 		});
 	}
 
@@ -192,9 +232,9 @@ void ibCompileCode::PrepareModuleData()
 
 	for (auto& pair : m_listContextValue) {
 
-		ibValue* contextValue = pair.second;
+		ibValue* contextValue = pair.second.m_value;
 		wxASSERT(contextValue);
-		contextValue->PrepareNames();
+		contextValue->InvalidateNames();
 
 		// adding variables from context
 		for (unsigned int i = 0; i < contextValue->GetNProps(); i++) {
@@ -205,21 +245,17 @@ void ibCompileCode::PrepareModuleData()
 			// kind=Context with a real frame slot — pushing the
 			// self-prop here would overwrite that via PushVariable's
 			// insert_or_assign (Pass-2 entry lost → binder skips the
-			// slot at pre-flight → runtime reads garbage). Scoped
-			// semantics are already on the Pass-2 entry from the
-			// stampOnContext step above.
+			// slot at pre-flight → runtime reads garbage).
 			if (stringUtils::CompareString(propName, pair.first))
 				continue;
 			mainContext->PushVariable(propName, pair.first, i);
-			// Non-self per-instance handles (Controls / DataSource of
-			// ThisForm; RegisterRecords of ThisObject) — flag scoped
-			// from helper.
-			if (contextValue->IsPropScoped(i)) {
-				auto pushed = std::find_if(mainContext->m_listVariable.begin(), mainContext->m_listVariable.end(),
-					[&propName](const auto& kv) { return stringUtils::CompareString(propName, kv.first); });
-				if (pushed != mainContext->m_listVariable.end() && pushed->second)
-					pushed->second->m_bScoped = true;
-			}
+
+			// ⚠ AND SCOPE-LOCALITY IS NOT COPIED ONTO THE VARIABLE, because nothing ever read it
+			// back. It is asked of the VALUE, by IsPropScoped, at each of the places that care —
+			// the runtime's OPER_GET_A, the debugger's property walk, autocomplete, the editor's
+			// interpreter. A second copy on the compile entry travelled all the way into the AOT
+			// blob and was consulted by no one; see the note in value.h, which described the
+			// arrangement this replaced.
 		}
 
 		// add methods from context
@@ -291,6 +327,25 @@ void ibCompileCode::DoSetError(int codeError,
 	unsigned int currPos, unsigned int currLine,
 	const wxString& strErrorDesc) const
 {
+	// ⭐⭐ THE SENTENCE IS KEPT EITHER WAY — this is where refusals accumulate. It used to travel on
+	// the exception, so a compile that raises nothing would have lost it, and "why did that dot not
+	// resolve" is precisely the question it answers. Written before the fork, so both modes record
+	// the same line and only the CONSEQUENCE differs.
+	m_strRefusal << wxString::Format(wxT("[%u:%u] "), currLine, currPos)
+	              << ibBackendException::Format(codeError, strErrorDesc) << wxT("\n");
+
+	// ⭐⭐ A TOLERANT COMPILE STOPS FOR NOTHING. It is READING — working out what is at a caret — and
+	// a reader has nobody to raise to: no window, no subscriber, no exception. It does not raise,
+	// and then there is nothing to catch either; the ~50 refusal sites that already `return` after
+	// SetError ARE the recovery, exactly as they read.
+	//
+	// That is how the precompiler has always worked — one SetError and zero throws in 2900 lines —
+	// and it is what lets somebody edit at line one thousand of a module broken at line three
+	// (Max, 2026-09-07: *"I do not want anything going into the exception when you are computing
+	// autocomplete — what are you going to say with it, and to whom?"*).
+	if (m_compileMode == ibCompileMode::Tolerant)
+		return;
+
 	const wxString& strCodeError =
 		ibBackendException::FindErrorCodeLine(m_strBuffer, currPos);
 
@@ -386,10 +441,16 @@ const ibLexem& ibCompileCode::GETLexem()
 void ibCompileCode::GETDelimeter(const wxUniChar& c)
 {
 	const ibLexem& lex = GetLexem();
-	if (!(lex.m_lexType == DELIMITER && c == lex.m_numData)) {
-		m_numCurrentCompile--;
-		SetError(ERROR_DELIMETER, c);
-	}
+	if (lex.m_lexType == DELIMITER && c == lex.m_numData)
+		return;
+
+	// ⚠ AND IT DOES NOT GO HUNTING FOR THE TOKEN. The precompiler's twin (ExpectDelimeter) does
+	// search forward, and its own call sites document what that costs: *"whose miss-path skips
+	// lexems to EOF and would swallow the rest of the module"* — which is why that walker grew
+	// special cases for `++` / `--` / `;` / `{` / `}` rather than let the search run. It is an
+	// emergency exit there, not the mechanism, and copying it here would import the emergency.
+	m_numCurrentCompile--;
+	SetError(ERROR_DELIMETER, c);
 }
 
 /**
@@ -474,12 +535,14 @@ bool ibCompileCode::IsNextDelimeter(const wxUniChar& c)
 void ibCompileCode::GETKeyWord(int nKey)
 {
 	const ibLexem& lex = GetLexem();
-	if (!(lex.m_lexType == KEYWORD && lex.m_numData == nKey)) {
-		m_numCurrentCompile--;
-		SetError(ERROR_KEYWORD,
-			wxString::Format(wxT("%s"), s_listKeyWord[nKey].m_strKeyWord)
-		);
-	}
+	if (lex.m_lexType == KEYWORD && lex.m_numData == nKey)
+		return;
+
+	// See GETDelimeter on why this does not search forward either.
+	m_numCurrentCompile--;
+	SetError(ERROR_KEYWORD,
+		wxString::Format(wxT("%s"), s_listKeyWord[nKey].m_strKeyWord)
+	);
 }
 
 /**
@@ -501,13 +564,21 @@ wxString ibCompileCode::GETIdentifier(bool strRealName, bool acceptKeyword)
 		if (acceptKeyword && lex.m_lexType == KEYWORD) {
 			return lex.m_strData;
 		}
-		m_numCurrentCompile--;
+
+		// ⚠ THE STEP BACK IS FOR THE MESSAGE — it puts the cursor on the offending lexem so the
+		// report points at it. A tolerant compile reports nothing and keeps reading, and handing
+		// the caller back the lexem it just refused is how a loop meets it forever; the
+		// precompiler's twin CONSUMES it for the same reason (ExpectIdentifier takes what is
+		// there and moves on).
+		if (m_compileMode != ibCompileMode::Tolerant)
+			m_numCurrentCompile--;
+
 		SetError(ERROR_IDENTIFIER_DEFINE);
 		return wxEmptyString;
 	}
 
 	if (strRealName) {
-		return lex.m_valData.m_sData;
+		return lex.m_valData.GetString();
 	}
 
 	return lex.m_strData;
@@ -558,8 +629,14 @@ ibValue ibCompileCode::GETConstant()
 // getting the number with a string constant (to determine the method number)
 const int ibCompileCode::GetConstString(const wxString& strConstName)
 {
-	auto iterator = std::find_if(m_listHashConst.begin(), m_listHashConst.end(),
-		[strConstName](const auto pair) { return stringUtils::CompareString(strConstName, pair.first); });
+	// EXACT match, deliberately. The language is case-blind about NAMES, but this pool
+	// stores a SPELLING, and the runtime prints that spelling back when a member is not
+	// found. Folding case-insensitively made the pool keep whichever spelling arrived
+	// first, so `x.ValueIsFilled()` was reported as 'VALUEISFILLED' — a name nobody in
+	// the module had written, and the first thing a person doubts is their own eyes.
+	// Case-blindness belongs where a name is RESOLVED (ibValue::FindMethod / FindProp
+	// / the ctor registry, all at run time), not where its letters are stored.
+	auto iterator = m_listHashConst.find(strConstName);
 
 	if (iterator != m_listHashConst.end())
 		return iterator->second - 1;
@@ -582,7 +659,7 @@ void ibCompileCode::AddVariable(const wxString& strVarName, const ibValue& vObje
 		return;
 
 	// take into account external variables during compilation
-	m_listExternValue[strVarName] = vObject.m_typeClass == ibValueTypes::TYPE_REFFER
+	m_listExternValue[strVarName] = vObject.IsReference()
 		? vObject.GetRef() : const_cast<ibValue*>(&vObject);
 
 	//set the flag for recompilation
@@ -613,13 +690,15 @@ void ibCompileCode::AddVariable(const wxString& strVarName, ibValue* pValue)
  * Add the name and address of an external variable to a special array for later use
  */
 
-void ibCompileCode::AddContextVariable(const wxString& strVarName, const ibValue& vObject)
+void ibCompileCode::AddContextVariable(const wxString& strVarName, const ibValue& vObject, bool scopeContext)
 {
 	if (strVarName.IsEmpty())
 		return;
 
 	//adding variables from context
-	m_listContextValue[strVarName] = vObject.m_typeClass == ibValueTypes::TYPE_REFFER ? vObject.GetRef() : const_cast<ibValue*>(&vObject);
+	m_listContextValue[strVarName] = {
+		vObject.IsReference() ? vObject.GetRef() : const_cast<ibValue*>(&vObject),
+		scopeContext };  // {m_value, m_scopeContext}
 
 	//set the flag for recompilation
 	m_changedCode = true;
@@ -631,15 +710,27 @@ void ibCompileCode::AddContextVariable(const wxString& strVarName, const ibValue
  * Add the name and address of an external variable to a special array for later use
  */
 
-void ibCompileCode::AddContextVariable(const wxString& strVarName, ibValue* pValue)
+void ibCompileCode::AddContextVariable(const wxString& strVarName, ibValue* pValue, bool scopeContext)
 {
 	if (strVarName.IsEmpty())
 		return;
 
 	//adding variables from context
-	m_listContextValue[strVarName] = pValue;
+	m_listContextValue[strVarName] = { pValue, scopeContext };
 
 	//set the flag for recompilation
+	m_changedCode = true;
+}
+
+// Bound LOCAL — the name resolves to a plain frame local (kind=Local), but the
+// binder fills its slot at init with pValue. The module body reads/writes it as a
+// normal local (e.g. a constant's Value, backed by &m_constValue).
+void ibCompileCode::AddLocalVariable(const wxString& strVarName, ibValue* pValue)
+{
+	if (strVarName.IsEmpty())
+		return;
+
+	m_listLocalValue[strVarName] = pValue;
 	m_changedCode = true;
 }
 
@@ -656,6 +747,7 @@ void ibCompileCode::RemoveVariable(const wxString& strVarName)
 
 	m_listExternValue.erase(strVarName);
 	m_listContextValue.erase(strVarName);
+	m_listLocalValue.erase(strVarName);   // local binds (e.g. form attribute cells) too
 
 	//set the flag for recompilation
 	m_changedCode = true;
@@ -753,33 +845,109 @@ bool ibCompileCode::Compile(const wxString& strCode)
 	return false;
 }
 
+// LOOK AHEAD for a type name in a declaration position, WITHOUT consuming it.
+//
+// The grammar is `[modifier] Type name [= default]`, and the type may be:
+//
+//   Boolean value                      — a primitive, all this used to accept
+//   Array rows                         — any registered value / control class
+//   CatalogRef.Goods item              — a metadata type, i.e. TWO lexems and a dot
+//
+// The last form is why this exists: a reference type's registered name IS
+// "<Kind>Ref.<Name>" (objCtor.h), so once the name is assembled the ordinary
+// registry answers whether it is a type. Nothing new has to know about it.
+//
+// THE IDENTIFIER AFTER IT IS PART OF THE TEST, and that is not defensive
+// programming — it is what keeps the extension from changing the meaning of
+// existing code. `Array` alone may well be an identifier somebody uses; `Array
+// rows` cannot be anything but a declaration. Deciding on the type name alone
+// was safe while only five reserved primitives qualified, and stops being safe
+// the moment every registered class does.
+//
+// `outName` receives the assembled name; `outLexemCount` how many lexems it
+// spans (1 or 3), so the caller can consume exactly that many.
 bool ibCompileCode::IsTypeVar(const wxString& strType)
 {
-	if (!strType.IsEmpty()) {
-		if (ibValue::IsRegisterCtor(strType, ibCtorObjectType::ibCtorObjectType_object_primitive))
-			return true;
-	}
-	const ibLexem& lex = PreviewGetLexem();
-	if (ibValue::IsRegisterCtor(lex.m_strData, ibCtorObjectType::ibCtorObjectType_object_primitive))
+	// NAMED FORM — the caller already has the word and only asks whether it names
+	// a type. Any REGISTERED type counts: the narrowing to the five primitives was
+	// left from when only those could be declared, and a type that exists has as
+	// much right to be written down as `Number` has.
+	if (!strType.IsEmpty())
+		return ibValue::IsRegisterCtor(strType);
+
+	// LOOK-AHEAD FORM — "does a declaration start here?", asked before a single
+	// lexem is consumed.
+	//
+	// A DECLARATION IS TWO IDENTIFIERS: a registered type name, then the variable
+	// name. That second identifier is what keeps the widening safe — `Array rows`
+	// declares, while `Array = 5` assigns to a variable that happens to be called
+	// Array. Deciding on the type name alone was safe while five reserved words
+	// qualified, and stops being safe the moment every registered class does.
+	const int first = m_numCurrentCompile + 1;
+	const int count = static_cast<int>(m_listLexem.size());
+	if (first + 1 >= count)
+		return false;
+
+	// ⭐ THE DOTTED FORM — `CatalogRef.Goods item`, three lexems and a name. The header above promised it and the
+	// code read one lexem only, so every metadata type was refused where a declaration stood ("Var is not found
+	// (CatalogRef)", measured 2026-09-17). `A.B name` is nothing else in the language — two expressions do not
+	// stand side by side — so the shape is a declaration, and GetTypeVar names a type the registry does not know.
+	if (first + 3 < count
+	 && m_listLexem[first].m_lexType == IDENTIFIER
+	 && m_listLexem[first + 1].m_lexType == DELIMITER && m_listLexem[first + 1].m_numData == '.'
+	 && m_listLexem[first + 2].m_lexType == IDENTIFIER
+	 && m_listLexem[first + 3].m_lexType == IDENTIFIER)
 		return true;
-	return false;
+
+	if (m_listLexem[first].m_lexType != IDENTIFIER
+	 || m_listLexem[first + 1].m_lexType != IDENTIFIER)
+		return false;
+
+	// `AnyRef`, `CatalogRef`, `AnyControl` need no special case: they are
+	// REGISTERED types like any other (typeAny.cpp, metaCtor.h), differing only in
+	// that they create nothing and admit a whole family.
+	return ibValue::IsRegisterCtor(m_listLexem[first].m_strData);
 }
 
-wxString ibCompileCode::GetTypeVar(const wxString& strType)
+ibClassID ibCompileCode::GetTypeVar(const wxString& strType)
 {
+	// THE ID, NOT THE NAME. Everything downstream — the gate, the typed-opcode
+	// choice, the bytecode — speaks class ids; handing back a name would only mean
+	// resolving it again, later, somewhere else.
 	if (!strType.IsEmpty()) {
-		if (!ibValue::IsRegisterCtor(strType, ibCtorObjectType::ibCtorObjectType_object_primitive)) {
-			SetError(ERROR_TYPE_DEF);
-			return wxEmptyString;
+		// Unknown to the registry — that, and only that, is a bad type name.
+		if (!ibValue::IsRegisterCtor(strType)) {
+			SetError(ERROR_TYPE_DEF, strType);
+			return 0;
 		}
-		return strType.Upper();
+		return ibValue::GetIDObjectFromString(strType);
 	}
+
+	// The unnamed form follows IsTypeVar(), which already looked ahead and said
+	// yes — so the next lexem IS the type name. Re-deciding here would be the same
+	// question asked twice, and the two answers could drift.
 	const ibLexem& lex = GETLexem();
-	if (!ibValue::IsRegisterCtor(lex.m_strData, ibCtorObjectType::ibCtorObjectType_object_primitive)) {
-		SetError(ERROR_TYPE_DEF);
-		return wxEmptyString;
+	if (lex.m_lexType != IDENTIFIER) {
+		SetError(ERROR_TYPE_DEF, lex.m_strData);
+		return 0;
 	}
-	return stringUtils::MakeUpper(lex.m_strData);
+	wxString name = lex.m_strData;
+	wxString written = lex.m_valData.GetString();   // as the person spelled it — m_strData is folded to upper case
+	if (IsNextDelimeter('.')) {   // the dotted form — see IsTypeVar
+		GETDelimeter('.');
+		const wxString member = GETIdentifier(true);
+		name += wxT(".") + member;
+		written += wxT(".") + member;
+	}
+	// ⚠ A CONFIGURATION'S OWN TYPE (`CatalogRef.Goods`) IS NOT IN THIS REGISTRY. The configuration registers it
+	// with itself (ibMetaImage), and a compiler has no road to its module's configuration without a hook on
+	// ibCompileCode — a header under commonObject.h, so a question for Max (ROADMAP). Its FAMILY is here
+	// (`CatalogRef`, `AnyRef`), and the refusal names what a declaration takes.
+	if (!ibValue::IsRegisterCtor(name)) {
+		SetError(ERROR_TYPE_DEF, written.IsEmpty() ? name : written);
+		return 0;
+	}
+	return ibValue::GetIDObjectFromString(name);
 }
 
 /**
@@ -792,9 +960,9 @@ wxString ibCompileCode::GetTypeVar(const wxString& strType)
 
 bool ibCompileCode::CompileDeclaration(ibCompileContext* context)
 {
-	const ibLexem& lex = PreviewGetLexem(); wxString strType;
+	const ibLexem& lex = PreviewGetLexem(); ibClassID typeClsid = 0;
 	if (lex.m_lexType == IDENTIFIER) {
-		strType = GetTypeVar(); // typed setting of variables
+		typeClsid = GetTypeVar(); // typed setting of variables
 	}
 	else {
 		GETKeyWord(KEY_VAR);
@@ -822,10 +990,10 @@ bool ibCompileCode::CompileDeclaration(ibCompileContext* context)
 			// compile-context doesn't (i.e. the parent module isn't
 			// re-compiled along with this one).
 			auto existing = std::find_if(pCurContext->m_listVariable.begin(), pCurContext->m_listVariable.end(),
-				[&strName](const auto& pair) { return stringUtils::CompareString(strName, pair.first); });
+				[&strName](const auto& v) { return v && stringUtils::CompareString(strName, v->m_strRealName); });
 			if (existing != pCurContext->m_listVariable.end()) {
-				const auto& currentVariable = existing->second;
-				if (currentVariable->m_bExport ||
+				const auto& currentVariable = *existing;
+				if (currentVariable->IsPublic() ||
 					pCurContext->m_compileModule == this) {
 					SetError(ERROR_DEF_VARIABLE, strRealName);
 					return false;
@@ -850,18 +1018,39 @@ bool ibCompileCode::CompileDeclaration(ibCompileContext* context)
 			GETDelimeter(']');
 		}
 
+		// Access modifier — exactly one of Public / Private / Protected, in
+		// place of the old single Export check. All optional (none = Private);
+		// more than one is an error.
 		bool bExport = false;
-
-		if (IsNextKeyWord(KEY_EXPORT)) {
-			if (bExport) // there was an Export announcement
-				break;
-			GETKeyWord(KEY_EXPORT);
-			bExport = true;
+		int varAccess = ACCESS_PRIVATE;
+		int numModifiers = 0;
+		if (IsNextKeyWord(KEY_PUBLIC))    { GETKeyWord(KEY_PUBLIC);    bExport = true; varAccess = ACCESS_PUBLIC;    numModifiers++; }
+		if (IsNextKeyWord(KEY_PRIVATE))   { GETKeyWord(KEY_PRIVATE);                   varAccess = ACCESS_PRIVATE;   numModifiers++; }
+		if (IsNextKeyWord(KEY_PROTECTED)) { GETKeyWord(KEY_PROTECTED);                 varAccess = ACCESS_PROTECTED; numModifiers++; }
+		if (numModifiers > 1) {
+			SetError(ERROR_CODE); // only one access modifier (Public / Private / Protected) is allowed
+			return false;
 		}
 
 		// there was no variable declaration yet - add
 		ibParamUnit variable =
-			context->AddVariable(strRealName, strType, bExport);
+			context->AddVariable(strRealName, typeClsid, bExport);
+
+		// Stamp the access enum onto the just-created variable so Protected is
+		// distinguishable from Private at resolve time. The parent-chain
+		// visibility gate honours Protected (visible to children, not config-
+		// wide); Public already carries kind=Export + m_access=Public.
+		if (varAccess != ACCESS_PRIVATE) {
+			std::shared_ptr<ibCompileContext::ibVariable> declVar;
+			if (context->FindVariable(strRealName, declVar) && declVar) {
+				declVar->m_access = varAccess;
+				// Protected is also a kind (the var was created kind=Local —
+				// only Public sets bExport at AddVariable). Public already
+				// carries kind=Export from creation, so only Protected flips.
+				if (varAccess == ACCESS_PROTECTED)
+					declVar->m_kind = ibVarKind::Protected;
+			}
+		}
 
 		// Tape declarator at the natural source position of the
 		// declaration. Caller-side emission keeps ibCompileContext
@@ -922,6 +1111,7 @@ bool ibCompileCode::CompileDeclaration(ibCompileContext* context)
  * true,false
 */
 
+
 bool ibCompileCode::CompileModule()
 {
 	// set the cursor to the beginning of the token array
@@ -933,17 +1123,35 @@ bool ibCompileCode::CompileModule()
 		const ibLexem& lex = PreviewGetLexem();
 		if (lex.m_lexType == ERRORTYPE) break;
 
-		if ((KEYWORD == lex.m_lexType && lex.m_numData == KEY_VAR) || (IDENTIFIER == lex.m_lexType && IsTypeVar(lex.m_strData))) {
+		// IsTypeVar() with NO argument — the look-ahead form. Passing the lexem's
+		// text asks the cast-position question instead ("is this word a
+		// primitive"), which is what limited declarations to the five primitives:
+		// a value class or a dotted metadata type never reached CompileDeclaration
+		// and was parsed as an expression, failing on the missing '='.
+		if ((KEYWORD == lex.m_lexType && lex.m_numData == KEY_VAR) || (IDENTIFIER == lex.m_lexType && IsTypeVar())) {
 			if (!m_onlyFunction) {
 				CompileDeclaration(mainContext); // load variable declaration
 			}
 			else {
+				// ⚠ THE CURSOR IS STILL BEHIND THE WORD THAT IS WRONG. The lexem above came from
+				// PreviewGetLexem, which looks ahead WITHOUT advancing, so an unqualified SetError
+				// reports wherever the previous construct ended — and, when the module opens with
+				// the declaration, m_numCurrentCompile is still -1 and the message carries NO LINE
+				// AT ALL. Measured 2026-09-04 on a common module: `Var calls;` on line 1 was
+				// reported at line 5 (the end of the file), which reads as a broken last line and
+				// sends the reader to the wrong end of the module.
+				m_numCurrentCompile++;
 				SetError(ERROR_ONLY_FUNCTION);
 				return false;
 			}
 		}
 		else if (KEYWORD == lex.m_lexType && (KEY_PROCEDURE == lex.m_numData || KEY_FUNCTION == lex.m_numData)) {
+
 			// don't forget to restore the current module context (if necessary)...
+			//
+			// ⚠ NO GUARD HERE, AND THAT IS THE POINT. A tolerant compile does not raise
+			// (DoSetError), so there is nothing to catch and nothing to skip: a refusal is reported
+			// and the parse walks on by itself. A runtime compile raises and the caller ends.
 			CompileFunction(mainContext); // load function declaration
 		}
 		else break;
@@ -951,7 +1159,14 @@ bool ibCompileCode::CompileModule()
 
 	// load the executable body of the module
 	m_cByteCode.m_lStartModule = 0;
+
+	// The module's own span starts where its BODY does — after the declarations, which own theirs.
+	// That is what keeps the two from claiming the same caret (see NoteCaret).
+	const long bodyStart = CaretCursor();
+
 	CompileBlock(mainContext);
+
+	NoteCaret(bodyStart, kCaretAtModule);
 
 	mainContext->CreateLabels();
 
@@ -966,20 +1181,49 @@ bool ibCompileCode::CompileModule()
 	// we finish processing procedures and functions that were called before they were declared
 	// for this, at the end of the bytecode array, add new code to call such functions,
 	// and for correct operation we insert GOTO statements into places of early calls
+	// ⚠ THE CURSOR IS A REPORTING DEVICE HERE, NOT A PARSE POSITION. The whole token stream has
+	// already been read by the time this loop runs, and PushCallFunction REWINDS
+	// (`m_numCurrentCompile = callFunc->m_numError`) so a refusal points at the call rather than at
+	// the end of the module. With a raise that never mattered — nothing looked at the cursor again.
+	// Surviving the refusal, something does: the end-of-stream check below then sees a cursor
+	// standing in the middle of the text and reports "unexpected program code termination" about a
+	// module that was read to its end (measured 2026-09-07 — three unresolved calls answered with
+	// four diagnostics).
+	const int cursorAtStreamEnd = m_numCurrentCompile;
+
 	for (auto& callFunc : m_listCallFunc) {
 		m_cByteCode.m_listCode[callFunc->m_numAddLine].m_param1.m_numIndex =
 			m_cByteCode.m_listCode.size(); // go to function call
-		if (PushCallFunction(callFunc)) {
+
+		// ⭐ HERE THE UNIT OF FAILURE IS THE CALL — finer than a declaration, and the loop was
+		// already written for it: PushCallFunction returns false and the GOTO is simply not
+		// emitted. Only the throw stood in the way, so one unresolved name hid every other in the
+		// module. A tolerant compile answers about all of them; a runtime compile still stops at
+		// the first, because half a module is not worth executing.
+		if (m_compileMode == ibCompileMode::Tolerant) {
+			bool resolved = false;
+			try { resolved = PushCallFunction(callFunc); }
+			catch (const ibBackendException&) { resolved = false; }
+			if (!resolved)
+				continue;
+		}
+		else if (!PushCallFunction(callFunc)) {
+			continue;
+		}
+
+		{
 			// correcting labels
-			ibByteUnit code;
-			AddLineInfo(code);
-			code.m_numOper = OPER_GOTO;
-			code.m_numLine = callFunc->m_numLine;
-			code.m_numString = callFunc->m_numString;
-			code.m_param1.m_numIndex = callFunc->m_numAddLine + 1; // after calling the function we go back
-			m_cByteCode.m_listCode.emplace_back(std::move(code));
+			ibByteUnit gotoCode;
+			AddLineInfo(gotoCode);
+			gotoCode.m_numOper = OPER_GOTO;
+			gotoCode.m_numLine = callFunc->m_numLine;
+			gotoCode.m_numString = callFunc->m_numString;
+			gotoCode.m_param1.m_numIndex = callFunc->m_numAddLine + 1; // after calling the function we go back
+			m_cByteCode.m_listCode.emplace_back(std::move(gotoCode));
 		}
 	}
+
+	m_numCurrentCompile = cursorAtStreamEnd;   // see the note above the loop
 
 	// Mirror the compile-context symbol table into the bytecode's
 	// unified m_listVar (std::vector).
@@ -1003,15 +1247,9 @@ bool ibCompileCode::CompileModule()
 	// which is what AOT serialization needs. Frame slots
 	// (m_slotIndex) preserve declaration-order assignment from
 	// AddVariable; vector position is just iteration order.
-	for (auto it : mainContext->m_listVariable) {
-		if (it.second->m_bTempVar) continue;
-		ibByteCode::ibByteCodeVarInfo info(*it.second);
-		// m_strRealName is the canonical name on the vector entry —
-		// the historical map key. Ctor copies from compile-side
-		// m_strRealName; if that was empty for some legacy path, fall
-		// back to the map key so lookups still match by name.
-		if (info.m_strRealName.IsEmpty())
-			info.m_strRealName = it.first;
+	for (const auto& v : mainContext->m_listVariable) {
+		if (!v || v->m_bTempVar) continue;
+		ibByteCode::ibByteCodeVarInfo info(*v);
 		m_cByteCode.m_listVar.push_back(std::move(info));
 	}
 
@@ -1042,14 +1280,14 @@ bool ibCompileCode::CompileModule()
 	// "User funcs win" — skip the push if a function with the same
 	// name already exists in m_listFunc (was achieved by try_emplace
 	// when storage was a map; replicated here via find_if).
-	for (auto it : mainContext->m_listFunction) {
-		if (!it.second) continue;
-		if (it.second->m_strContext.IsEmpty()) continue;  // own user-defined func
-		const wxString& nameKey = it.first;
+	for (const auto& fnPtr : mainContext->m_listFunction) {
+		if (!fnPtr) continue;
+		if (fnPtr->m_strContext.IsEmpty()) continue;  // own user-defined func
+		const wxString& nameKey = fnPtr->m_strRealName;
 		auto existing = std::find_if(m_cByteCode.m_listFunc.begin(), m_cByteCode.m_listFunc.end(),
 			[&](const auto& fn) { return stringUtils::CompareString(nameKey, fn.m_strRealName); });
 		if (existing != m_cByteCode.m_listFunc.end()) continue;
-		m_cByteCode.m_listFunc.emplace_back(/*lAddress=*/-1, *it.second);
+		m_cByteCode.m_listFunc.emplace_back(/*lAddress=*/-1, *fnPtr);
 	}
 
 	// Second pass: resolve m_parentRef on ContextMethod entries —
@@ -1071,10 +1309,22 @@ bool ibCompileCode::CompileModule()
 
 	// Mark constants read-only — constants are immutable post-compile;
 	// runtime writes through them would corrupt the constant pool.
-	// Done once at compile finalize so Execute doesn't have to mutate
-	// bytecode (bc is a const template at runtime).
+	// MUST be a finalize sweep, NOT stamped at insertion (GetConstString /
+	// FindConst): ibValue's move ctor resets m_bReadOnly to false
+	// (value.cpp:73), so a flag set on insert is wiped when a later
+	// emplace_back grows the vector and move-constructs the earlier entries.
+	// Only after the pool stops reallocating is the flag stable. The eval
+	// path (ibProcUnit::CompileExpression) carries its own copy of this
+	// sweep for the same reason — keep them in sync.
 	for (auto& c : m_cByteCode.m_listConst)
 		c.m_bReadOnly = true;
+
+	// ⭐⭐ AND THE TREE IS NOT THROWN AWAY HERE. The slice is the BASE TYPE (byteCode.h): everything
+	// below the compiler is typed on `ibByteCode`, so what the runtime and the AOT cache hold cannot
+	// reach the LINQ section whatever this module does with it. Which leaves the question of who
+	// still WANTS it — and the answer is the third reader: IntelliSense runs on the compiler's side,
+	// on this very object, and a query's bindings are exactly what it needs to answer inside one.
+	// Max, 2026-09-08: *"you needn't clear it — IntelliSense will get it later."*
 
 	// compilation completed successfully
 	m_cByteCode.m_bCompile = true;
@@ -1134,9 +1384,15 @@ bool ibCompileCode::PushCallFunction(const std::shared_ptr<ibCallFunction>& call
 	unsigned int numRealCount = callFunction->m_listParam.size();
 	unsigned int numDefCount = foundedFunc->m_listParam.size();
 
-	if (numRealCount > numDefCount) {
+	if (foundedFunc->m_valueVariadic) {
+		// It takes what it is given. The declared list is empty BY CONSTRUCTION
+		// for a negative arity, so it can neither bound the call nor say how many
+		// slots to emit — the caller's own count is both answers.
+		numDefCount = numRealCount;
+	}
+	else if (numRealCount > numDefCount) {
 		m_numCurrentCompile = callFunction->m_numError;
-		SetError(ERROR_MANY_PARAMS);// too many parameters
+		SetError(ERROR_MANY_PARAMS, foundedFunc->m_strRealName);
 		return false;
 	}
 
@@ -1147,21 +1403,30 @@ bool ibCompileCode::PushCallFunction(const std::shared_ptr<ibCallFunction>& call
 	code.m_numLine = callFunction->m_numLine;
 	code.m_strModuleName = callFunction->m_strModuleName;
 
-	if (foundedFunc->m_bContext) { // virtual function - calling replacements with the construct Context.FunctionName(...)
+	if (foundedFunc->IsContextMethod()) { // virtual function - calling replacements with the construct Context.FunctionName(...)
 		code.m_numOper = OPER_CALL_METHOD;
 		code.m_param1 = callFunction->m_puRetValue;		// variable into which the value is returned
 		code.m_param2 = callFunction->m_puContextVal;	// variable on which the method is called
-		code.m_param3.m_numIndex = GetConstString(callFunction->m_strName);	// number of the called method from the list of encountered methods
+		// m_strRealName, not m_strName: the pair is (upper form for LOOKUP, spelling as WRITTEN),
+		// and what goes into the constant pool is read back by a person — the runtime prints it
+		// when the member is not found. The upper form leaked out that way as 'VALUEISFILLED',
+		// a spelling nobody typed. Resolution stays case-blind at run time (FindMethod).
+		code.m_param3.m_numIndex = GetConstString(callFunction->m_strRealName);	// number of the called method from the list of encountered methods
 		code.m_param3.m_numArray = numDefCount;	// number of parameters
 	}
 	else {
 		// OPER_CALL vs OPER_CALL_CLOSURE — same operand layout, different
-		// runtime path. _L variant heap-allocates the callee frame
-		// (shared_ptr<ibRunContext>) so inner lambdas materialised
-		// during the call can capture it. m_needsHeapFrame is settled
+		// runtime path. The closure variant builds the callee frame as an
+		// ibRunCaptureContext (it counts its own holders) so inner lambdas
+		// materialised during the call can take it. m_needsHeapFrame is settled
 		// by the time we get here: backward refs see the fully-compiled
 		// callee directly; forward refs land in m_listCallFunc and
 		// PushCallFunction reruns at finalize when all bodies are done.
+		// `Cached` is NOT a call opcode. The modifier is applied at the callee's
+		// entry opcode, where every road into a body arrives — a direct call, a
+		// call through a module value, a handler fired from C++ — so the caller
+		// emits the ordinary call and the callee decides. An opcode here would
+		// have covered only the calls this emitter can see.
 		code.m_numOper = foundedFunc->m_needsHeapFrame ? OPER_CALL_CLOSURE : OPER_CALL;
 		code.m_param1 = callFunction->m_puRetValue;	// variable into which the value is returned
 		code.m_param2.m_numArray = numModule;		// module number
@@ -1174,17 +1439,17 @@ bool ibCompileCode::PushCallFunction(const std::shared_ptr<ibCallFunction>& call
 	m_cByteCode.m_listCode.emplace_back(std::move(code));
 
 	for (unsigned int i = 0; i < numDefCount; i++) {
-		ibByteUnit code;
-		AddLineInfo(code);
-		code.m_numOper = OPER_SET; // parameters are being passed
+		ibByteUnit paramCode;
+		AddLineInfo(paramCode);
+		paramCode.m_numOper = OPER_SET; // parameters are being passed
 		bool defaultValue = false;
 		if (i < numRealCount) {
-			code.m_param1 = callFunction->m_listParam[i];
-			if (code.m_param1.m_numArray == DEF_VAR_SKIP) { // need to substitute the default value
+			paramCode.m_param1 = callFunction->m_listParam[i];
+			if (paramCode.m_param1.m_numArray == DEF_VAR_SKIP) { // need to substitute the default value
 				defaultValue = true;
 			}
 			else {  //��� �������� ��������
-				code.m_param2.m_numIndex = foundedFunc->m_listParam[i].m_bByRef;
+				paramCode.m_param2.m_numIndex = foundedFunc->m_listParam[i].m_bByValue;
 			}
 		}
 		else {
@@ -1193,13 +1458,13 @@ bool ibCompileCode::PushCallFunction(const std::shared_ptr<ibCallFunction>& call
 		if (defaultValue) {
 			if (foundedFunc->m_listParam[i].m_puValue.m_numArray == DEF_VAR_SKIP) {
 				m_numCurrentCompile = callFunction->m_numError;
-				SetError(ERROR_FEW_PARAMS);	// too few parameters
+				SetError(ERROR_FEW_PARAMS, foundedFunc->m_strRealName);
 				return false;
 			}
-			code.m_numOper = OPER_SETCONST;	// default values
-			code.m_param1 = foundedFunc->m_listParam[i].m_puValue;
+			paramCode.m_numOper = OPER_SETCONST;	// default values
+			paramCode.m_param1 = foundedFunc->m_listParam[i].m_puValue;
 		}
-		m_cByteCode.m_listCode.emplace_back(std::move(code));
+		m_cByteCode.m_listCode.emplace_back(std::move(paramCode));
 	}
 
 	return true;
@@ -1236,7 +1501,7 @@ bool ibCompileCode::CompileFunction(ibCompileContext* context)
 		return false;
 
 	ibCompileContext* functionContext = functionContextOwner.get();
-	const wxString& strFuncName = createdFunction->m_strName;
+	const wxString& strFuncName = createdFunction->m_strRealName;
 	const wxString& strFuncRealName = createdFunction->m_strRealName;
 
 	// Ancestor-chain dedup: declaration cannot collide with an
@@ -1257,7 +1522,7 @@ bool ibCompileCode::CompileFunction(ibCompileContext* context)
 
 		std::shared_ptr<ibCompileContext::ibFunction> foundedFunc = nullptr;
 		if (pCurContext->FindFunction(strFuncName, foundedFunc)) { // found
-			if (foundedFunc != createdFunction && foundedFunc->m_bExport) {
+			if (foundedFunc != createdFunction && foundedFunc->IsCrossBcVisible()) {
 				m_numCurrentCompile = errorPlace;
 				SetError(ERROR_DEF_FUNCTION, strFuncRealName);
 				return false;
@@ -1267,7 +1532,14 @@ bool ibCompileCode::CompileFunction(ibCompileContext* context)
 		pCurContext = pCurContext->m_parentContext;
 	}
 
-	context->m_listFunction[strFuncName] = createdFunction;
+	// Upsert into the vector (was map subscript assign): replace a same-named
+	// entry, else append.
+	auto fit = std::find_if(context->m_listFunction.begin(), context->m_listFunction.end(),
+		[&](const auto& f) { return f && stringUtils::CompareString(strFuncName, f->m_strRealName); });
+	if (fit != context->m_listFunction.end())
+		*fit = createdFunction;
+	else
+		context->m_listFunction.push_back(createdFunction);
 
 	return EmitFunctionBody(context, createdFunction, functionContext);
 }
@@ -1369,20 +1641,23 @@ bool ibCompileCode::ParseFunctionSignature(ibCompileContext* context,
 
 	while (!IsNextDelimeter(')')) {
 
-		// check for typing
-		const wxString typeVar = IsTypeVar() ?
-			GetTypeVar() : wxString(wxEmptyString);
-
+		// `[Val] [Type] name` — the passing mode first, then the type, then the name: `Val CatalogRef.Goods item`.
+		// The type was asked for first, and a type's look-ahead wants two identifiers, so with `Val` in front it
+		// never saw one, and with `Val` between it read the type as the parameter's name — neither order compiled
+		// (measured 2026-09-17, both refused with "Symbol expected ')'").
 		ibCompileContext::ibFunction::ibParamVariable cVariable;
 		if (IsNextKeyWord(KEY_VAL)) {
 			GETKeyWord(KEY_VAL);
-			cVariable.m_bByRef = true;
+			cVariable.m_bByValue = true;
 		}
+
+		// check for typing
+		const ibClassID typeVar = IsTypeVar() ? GetTypeVar() : 0;
 
 		const wxString& strRealName = GETIdentifier(true);
 
 		cVariable.m_strName = strRealName;
-		cVariable.m_strType = typeVar;
+		cVariable.m_clsid = typeVar;
 
 		std::shared_ptr<ibCompileContext::ibVariable> foundedVar = nullptr;
 
@@ -1410,17 +1685,52 @@ bool ibCompileCode::ParseFunctionSignature(ibCompileContext* context,
 		GETDelimeter(',');
 	}
 	GETDelimeter(')');
-	if (IsNextKeyWord(KEY_EXPORT)) {
-		GETKeyWord(KEY_EXPORT);
-		outFunction->m_bExport = true;
+
+	// Trailing modifiers — TWO INDEPENDENT AXES, read in one pass so neither
+	// owns a position. Access (Public / Private / Protected) answers who sees
+	// the function; Cached answers when it is evaluated. Both optional, both
+	// at most once; `Private Cached` and `Cached Private` are the same
+	// declaration. Repeating an axis is the error — two accesses, or Cached
+	// twice.
+	int numModifiers = 0;
+	for (;;) {
+		if (IsNextKeyWord(KEY_PUBLIC))         { GETKeyWord(KEY_PUBLIC);    outFunction->m_access = ACCESS_PUBLIC;    numModifiers++; }
+		else if (IsNextKeyWord(KEY_PRIVATE))   { GETKeyWord(KEY_PRIVATE);   outFunction->m_access = ACCESS_PRIVATE;   numModifiers++; }
+		else if (IsNextKeyWord(KEY_PROTECTED)) { GETKeyWord(KEY_PROTECTED); outFunction->m_access = ACCESS_PROTECTED; numModifiers++; }
+		else if (IsNextKeyWord(KEY_CACHED)) {
+			GETKeyWord(KEY_CACHED);
+			if (outFunction->m_valueCached) {
+				SetError(ERROR_CODE); // `Cached` stated twice
+				return false;
+			}
+			outFunction->m_valueCached = true;
+		}
+		else
+			break;
 	}
+	if (numModifiers > 1) {
+		SetError(ERROR_CODE); // only one access modifier (Public / Private / Protected) is allowed
+		return false;
+	}
+	// A PROCEDURE has no result to keep, so the modifier has nothing to mean
+	// there — refused rather than ignored, because a silently-dropped Cached
+	// looks exactly like a cache that never helps.
+	if (outFunction->m_valueCached && !outFunction->m_bCodeRet) {
+		SetError(ERROR_CODE); // `Cached` applies to a Function, not a Procedure
+		return false;
+	}
+	// Kind from the access modifier — user-declared functions only (a context
+	// method's kind is set by PushFunction). Public→Export, Protected→Protected.
+	outFunction->m_kind = (outFunction->m_access == ACCESS_PUBLIC)    ? ibFnKind::Export
+	                    : (outFunction->m_access == ACCESS_PROTECTED) ? ibFnKind::Protected
+	                                                                  : ibFnKind::Local;
 
 	return true;
 }
 
 bool ibCompileCode::EmitFunctionBody(ibCompileContext* /*context*/,
 	const std::shared_ptr<ibCompileContext::ibFunction>& createdFunction,
-	ibCompileContext* functionContext)
+	ibCompileContext* functionContext, bool bareExprBody)
 {
 	// Discriminator lives on the context — RETURN_LAMBDA_FUNCTION /
 	// RETURN_LAMBDA_PROCEDURE stamped by ParseFunctionSignature for
@@ -1459,21 +1769,21 @@ bool ibCompileCode::EmitFunctionBody(ibCompileContext* /*context*/,
 		AddLineInfo(declParam);
 		declParam.m_numOper = OPER_FUNC_PARAM;
 		declParam.m_param1.m_numIndex = (long)i;
-		declParam.m_param1.m_numArray = createdFunction->m_listParam[i].m_bByRef ? 1 : 0;
+		declParam.m_param1.m_numArray = createdFunction->m_listParam[i].m_bByValue ? 1 : 0;
 		declParam.m_param2 = createdFunction->m_listParam[i].m_puValue;
 		m_cByteCode.m_listCode.emplace_back(std::move(declParam));
 	}
 
 	// Type-check stamping for typed params — kept separate. The legacy
 	// OPER_SET/SETCONST decoration that used to sit between FUNC_PARAM
-	// and AddTypeSet is gone: its full payload (m_puValue, m_bByRef)
+	// and AddTypeSet is gone: its full payload (m_puValue, m_bByValue)
 	// now lives on OPER_FUNC_PARAM, and runtime never read those
 	// OPER_SETs anyway (Execute had no case for them — fall-through NOP).
 	for (unsigned int i = 0; i < createdFunction->m_listParam.size(); i++) {
 		ibParamUnit variable;
 		variable.m_numArray = 0;
 		variable.m_numIndex = i;
-		variable.m_strType = createdFunction->m_listParam[i].m_strType;
+		variable.m_clsid = createdFunction->m_listParam[i].m_clsid;
 		AddTypeSet(variable);
 	}
 
@@ -1483,15 +1793,36 @@ bool ibCompileCode::EmitFunctionBody(ibCompileContext* /*context*/,
 	// inside a function body) so plain set+clear was safe; with lambdas
 	// as expressions the inner emit can fire while outer is still open.
 	const wxString savedCurFuncName = m_strCurFuncName;
-	m_strCurFuncName                = createdFunction->m_strName;
+	m_strCurFuncName                = createdFunction->m_strRealName;
 
-	CompileBlock(functionContext);
+	if (bareExprBody) {
+		// A `restrict` clause body: a bare `Return <expr>` (no `{ … }` block, no closing keyword).
+		// The whole clause expression is read — the join ON is one `s.k <op> a.k` Compare the
+		// decorator later splits, so nothing needs to stop early.
+		ibByteUnit ret;
+		AddLineInfo(ret);
+		ret.m_numOper = OPER_RET;
+		ret.m_param1 = GetExpression(functionContext);
+		m_cByteCode.m_listCode.emplace_back(std::move(ret));
+	}
+	// ⭐⭐ A BODY THAT IS NOT FINISHED YET IS NOT A FAILED DECLARATION — it is a declaration somebody
+	// is in the middle of writing, and in a tolerant compile that is the ordinary state of the text.
+	// The refusal is still SAID (SetError publishes before it throws, so a check still lists it);
+	// what changes is that the declaration is still CLOSED and REGISTERED below. That matters
+	// because its name, its parameters and the locals it already has are exactly what a reader
+	// standing INSIDE it is asking about — and by this point they exist. Same rule as the dangling
+	// dot in GetCurrentIdentifier: keep what the compiler already has rather than unwind past it.
+	// Where this body's span begins — see NoteCaret, which closes it at the end.
+	const long bodyStart = CaretCursor();
+
+	if (!bareExprBody)
+		CompileBlock(functionContext);
 
 	functionContext->CreateLabels();
 
 	m_strCurFuncName = savedCurFuncName;
 
-	if (gs_codeStyle == CODE_VES) {
+	if (!bareExprBody && gs_codeStyle == CODE_VES) {
 		// Closer keyword matches the OPENING keyword — derived from
 		// m_bCodeRet, which IsReturnFunction(m_numReturn) populated at
 		// signature parse. Both named and anonymous bodies dispatch
@@ -1508,7 +1839,37 @@ bool ibCompileCode::EmitFunctionBody(ibCompileContext* /*context*/,
 	ibByteUnit code;
 	AddLineInfo(code);
 	code.m_numOper = isLambda ? OPER_ENDLFUNC : OPER_ENDFUNC;
+
 	m_cByteCode.m_listCode.emplace_back(std::move(code));
+
+	// ⭐⭐ THE DECLARATION THE CARET IS STANDING IN, SAID HERE. See NoteCaret: this is the moment
+	// both ends of this body's span are known, and the parser is standing on the token that closed
+	// it. Nothing about it is written into the tape.
+	NoteCaret(bodyStart, lAddress);
+
+	// ⭐⭐ …AND A BODY NOBODY CLOSED REACHES THE END OF THE TEXT. NoteCaret measures a span by the
+	// token that closed it, which is right for every body that HAS one. A body being typed into has
+	// not got there yet — `Where(Function(o) { return |` — and the caret then sat past the last
+	// token, outside every span, so the lambda's own parameter `o` went unoffered while all 170
+	// module names were listed (measured 2026-09-08).
+	//
+	// ⚠ THE BLOCK DEPTH DOES NOT ANSWER THIS, and it was the first thing tried: CompileBlock raises
+	// it for RETURN_BLOCK scopes only, while a function or lambda body lives in the OPER_FUNC frame
+	// and never moves it. What separates the two cases is the token the parse came to rest on —
+	// CompileBlock CONSUMES the `}` that closes a body, so resting anywhere else means the text ran
+	// out first.
+	const auto bodyWasClosed = [this]() {
+		if (m_numCurrentCompile < 0 || m_numCurrentCompile >= (int)m_listLexem.size())
+			return false;
+		const ibLexem& last = m_listLexem[(size_t)m_numCurrentCompile];
+		if (last.m_lexType == DELIMITER)
+			return last.m_numData == wxT('}');
+		return last.m_lexType == KEYWORD
+			&& (last.m_numData == KEY_ENDFUNCTION || last.m_numData == KEY_ENDPROCEDURE);
+	};
+
+	if (m_caretOwner == kCaretNowhere && m_caretPos >= bodyStart && !bodyWasClosed())
+		m_caretOwner = lAddress;
 
 	createdFunction->m_nFinish = m_cByteCode.m_listCode.size() - 1;
 	createdFunction->m_lVarCount = functionContext->m_listVariable.size();
@@ -1532,19 +1893,23 @@ bool ibCompileCode::EmitFunctionBody(ibCompileContext* /*context*/,
 	// Compile-side ibFunction was lazily stamped by GetVariable when
 	// an inner lambda captured a local from this frame.
 	ibByteCode::ibByteFunction byteFn(lAddress, *createdFunction);
-	for (auto it : functionContext->m_listVariable) {
-		if (it.second->m_bTempVar) continue;
-		ibByteCode::ibByteCodeVarInfo info(*it.second);
-		if (info.m_strRealName.IsEmpty())
-			info.m_strRealName = it.first;
+	for (const auto& v : functionContext->m_listVariable) {
+		if (!v || v->m_bTempVar) continue;
+		ibByteCode::ibByteCodeVarInfo info(*v);
 		byteFn.m_listLocals.push_back(std::move(info));
 	}
 	if (isLambda) {
 		byteFn.m_kind        = ibFnKind::Lambda;
 		byteFn.m_strRealName = wxString::Format(wxT("<lambda@%ld>"), lAddress);
 	} else if (byteFn.m_strRealName.IsEmpty()) {
-		byteFn.m_strRealName = createdFunction->m_strName;
+		byteFn.m_strRealName = createdFunction->m_strRealName;
 	}
+
+	// The entry's own place in m_listFunc, so a call reaches this function by index instead of walking the list
+	// for the entry line (OPER_FUNC, procUnit.cpp) — the index OPER_LFUNC carries in m_param3, where a named
+	// function's entry holds its frame shape instead.
+	if (!isLambda)
+		m_cByteCode.m_listCode[lAddress].m_param4.m_numIndex = (long)m_cByteCode.m_listFunc.size();
 
 	m_cByteCode.m_listFunc.push_back(std::move(byteFn));
 
@@ -1563,9 +1928,9 @@ ibParamUnit ibCompileCode::CompileLambdaExpression(ibCompileContext* context)
 	// same time). Previously this line nullified m_parentContext,
 	// enforcing the strict isolation discipline that has been
 	// superseded by the per-frame heap-promotion design (see
-	// docs/closure-capture.md). Runtime wiring still pending — Phase A
-	// is compile-only; running code that captures outer locals crashes
-	// until Phase B lands.
+	// docs/private/closure-capture.md). Phase B (runtime frame capture) landed
+	// alongside — see procUnit.cpp OPER_LFUNC / OPER_CALL_LAMBDA, which build the
+	// frame as an ibRunCaptureContext and hand the lambda its link to it.
 	std::shared_ptr<ibCompileContext::ibFunction> createdFunction;
 	std::unique_ptr<ibCompileContext> functionContextOwner;
 	int errorPlace = 0;
@@ -1584,6 +1949,10 @@ ibParamUnit ibCompileCode::CompileLambdaExpression(ibCompileContext* context)
 	// eager walk here: ctxs that nothing captures from stay unmarked
 	// regardless of how many lambdas they enclose.
 
+	// L4-2 pushdown — the body's lexeme span starts right after the signature
+	// (captured BEFORE EmitFunctionBody consumes it); the recorder re-reads
+	// exactly this span once the body has compiled (see below).
+	const size_t lambdaBodyFrom = m_numCurrentCompile + 1;
 
 	// Emit OPER_LFUNC + params + body + OPER_ENDLFUNC inline.
 	// EmitFunctionBody discriminates lambda vs named via
@@ -1626,6 +1995,59 @@ ibParamUnit ibCompileCode::CompileLambdaExpression(ibCompileContext* context)
 	lfuncCode.m_param2.m_numIndex = endlfuncIp;
 	lfuncCode.m_param3.m_numIndex = funcIndex;
 
+	// ⭐⭐ THE QUERY TREE, READ OFF THE INSTRUCTIONS THIS BODY JUST EMITTED.
+	//
+	// There was a second reader here until today: it re-read the LEXEMES with a recursive descent of
+	// its own, and its verdict was recorded beside this one so the two could be compared on the same
+	// lambdas. They agreed on the same TREE for every shape the language can express (32 of 32,
+	// measured 2026-09-08), and the one place they differed was the lexeme reader accepting
+	// `x.Code in (…)` — which the compiler answers with "Symbol expected ')'", because there is no
+	// `in` operator. A reader whose grammar is WIDER than the language can record predicates the
+	// program does not contain, and that is why it is gone rather than kept as a second opinion.
+	//
+	// One journal line per lambda, at COMPILE time, so "did this predicate push down" is answered
+	// without instrumenting anything — and it says WHAT the tree is, not merely that there is one.
+	if (funcIndex >= 0 && createdFunction->m_listParam.size() == 1) {
+		// ⭐ THE ONE FACT THE INSTRUCTIONS CANNOT ANSWER ON THEIR OWN is a captured outer local's
+		// NAME: it lives in a function that is still being compiled, so its symbol table is in no
+		// bytecode yet. The compile context IS that table.
+		const auto nameOfOuter = [context](long framesOut, long slot) -> wxString {
+			const ibCompileContext* ctx = context;
+			for (long hop = 1; hop < framesOut && ctx != nullptr; ++hop)
+				ctx = ctx->m_parentContext;
+			if (ctx == nullptr)
+				return wxString();
+			for (const std::shared_ptr<ibCompileContext::ibVariable>& var : ctx->m_listVariable)
+				if (var && !var->m_bTempVar && (long)var->m_numVariable == slot)
+					return var->m_strRealName;
+			return wxString();
+		};
+
+		wxString refused;
+		const std::shared_ptr<ibQueryAstExpr> tree =
+			ibBuildLambdaQueryAstFromCode(m_cByteCode, funcIndex, &refused, nameOfOuter);
+
+		// 🛑 AT INFO, NOT WARNING. A warning in this engine reaches wxLogGui and comes back as a
+		// MODAL dialog — measured: one line on a half-typed lambda put a 'Designer Warning' box on
+		// screen and every request after it was refused because the designer was waiting on it.
+		// ⚠ ASCII only in this line: a non-ASCII dash in a wxT() literal reaches the journal as
+		// mojibake, and a diagnostic nobody can read is worse than a plainer one.
+		ibJournalInfo(wxT("linq"), wxT("lambda `%s` at %d: %s"),
+			createdFunction->m_listParam[0].m_strName,
+			(int)m_listLexem[lambdaBodyFrom].m_numString,
+			tree ? wxT("query tree recorded: ") + ibDescribeQueryAst(tree)
+				: wxString::Format(wxT("runs in RAM: %s"),
+					refused.IsEmpty() ? wxString(wxT("no query tree")) : refused));
+	}
+		else if (funcIndex >= 0) {
+		// The other silent gate, said out loud: only a ONE-parameter lambda is ever recorded, so
+		// WhereIndexed / SelectIndexed / an Aggregate reducer / a Join result-selector never push
+		// down — not because they cannot be translated, but because nobody looked.
+		ibJournalInfo(wxT("linq"), wxT("lambda with %d parameters: not recorded (only one-parameter "
+			"bodies are), so this step will run in RAM"),
+			(int)createdFunction->m_listParam.size());
+	}
+
 	// NOTE: ibParamUnit::m_numIndex is wxLongLong_t (8 bytes) — cast to int
 	// for %d, otherwise variadic packs 8 bytes and the next arg (caller_ctx)
 	// reads the upper half (zero) instead of the real pointer.
@@ -1633,1310 +2055,11 @@ ibParamUnit ibCompileCode::CompileLambdaExpression(ibCompileContext* context)
 	return target;
 }
 
-// ============================================================
-// LINQ block compile path — eager inline foreach + array build.
-//
-// Recognised at the start of any assignment RHS (CompileDeclaration's
-// `=` branch hooks IsLinqBlockStart and routes here). Materialises
-// the LINQ result into a temp Array slot which the caller's OPER_LET
-// copies into the destination variable. Surface: `from <id> in <expr>`
-// + where / let / skip / take / select / distinct / orderby / group /
-// join (all extensions hang off the same shared compile-state struct).
-//
-// Diagnostics — previous LinqCompileLog/LinqLog `linq.log` streams
-// were stripped 2026-05-12 after the LINQ surface stabilised. If
-// compile-side tracing is needed again, prefer wxLogDebug at coarse
-// entry points rather than per-row writes.
-// ============================================================
-
-// === LINQ compile-state types ===
-// Definitions live in compileContextLinqData.h (included via
-// compileContext.h) so unique_ptr<ibLinqContextData> on
-// ibCompileContext can resolve to a complete type.
-
-// Outer entry — consumes KEY_FROM itself, allocates the shared LINQ
-// state on stack, sets up the RETURN_BLOCK-kind context, wires the
-// back-pointer, and dives into CompileLinqBlock. Callers step back
-// the lexem cursor (mirrors CompileLambdaExpression idiom) so this
-// function owns the KEY_FROM consumption uniformly.
-ibParamUnit ibCompileCode::CompileLinqExpression(ibCompileContext* context)
-{
-	GETKeyWord(KEY_FROM);
-
-	// Allocate the fake LINQ context — child of caller, RETURN_BLOCK
-	// kind so bindings register in this child's m_listVariable but
-	// the actual slots land in the host frame via CreateVariable's
-	// chain-delegation logic. LINQ-distinction is the non-null
-	// m_linqData on this context; no RETURN_LINQ enum tag needed.
-	auto linqCtxOwner = std::shared_ptr<ibCompileContext>(
-		context->CreateContext(RETURN_BLOCK));
-	linqCtxOwner->m_linqData = std::make_unique<ibLinqContextData>();
-	ibLinqContextData& data = *linqCtxOwner->m_linqData;
-
-
-	// Diagnostic: walk parent chain to see how far visibility reaches.
-	int chainDepth = 0;
-	for (ibCompileContext* c = linqCtxOwner->m_parentContext; c; c = c->m_parentContext) {
-		++chainDepth;
-		if (chainDepth > 10) break;
-	}
-
-	// Result accumulator + counters — allocate in CALLER's context
-	// (not the linq scope) so slot references survive after the
-	// linq context (and its m_linqData) destruct.
-	data.m_resultArray = context->CreateVariable();
-	{
-		ibByteUnit c; AddLineInfo(c);
-		c.m_numOper = OPER_NEW;
-		c.m_param1 = data.m_resultArray;
-		c.m_param2.m_numIndex = GetConstString(wxT("Array"));
-		c.m_param2.m_numArray = 0;
-		m_cByteCode.m_listCode.emplace_back(std::move(c));
-	}
-
-	data.m_skipCounter = context->CreateVariable();
-	data.m_takeCounter = context->CreateVariable();
-	data.m_constOne    = context->CreateVariable();
-	{
-		ibByteUnit c; AddLineInfo(c);
-		c.m_numOper = OPER_CONSTN; c.m_param1 = data.m_skipCounter;
-		c.m_param2.m_numIndex = 0;
-		m_cByteCode.m_listCode.emplace_back(std::move(c));
-	}
-	{
-		ibByteUnit c; AddLineInfo(c);
-		c.m_numOper = OPER_CONSTN; c.m_param1 = data.m_takeCounter;
-		c.m_param2.m_numIndex = 0;
-		m_cByteCode.m_listCode.emplace_back(std::move(c));
-	}
-	{
-		ibByteUnit c; AddLineInfo(c);
-		c.m_numOper = OPER_CONSTN; c.m_param1 = data.m_constOne;
-		c.m_param2.m_numIndex = 1;
-		m_cByteCode.m_listCode.emplace_back(std::move(c));
-	}
-
-	// Allocate orderby parallel-keys array. Empty unless ORDERBY clause
-	// fires inside CompileLinqBlock; in that case rows are pushed in
-	// lock-step with __r.Add(addValue).
-	data.m_orderKeys = context->CreateVariable();
-	{
-		ibByteUnit c; AddLineInfo(c);
-		c.m_numOper = OPER_NEW;
-		c.m_param1 = data.m_orderKeys;
-		c.m_param2.m_numIndex = GetConstString(wxT("Array"));
-		c.m_param2.m_numArray = 0;
-		m_cByteCode.m_listCode.emplace_back(std::move(c));
-	}
-
-	CompileLinqBlock(linqCtxOwner.get());
-
-	// Post-block GROUP BY expansion — runs ONCE after the outermost
-	// foreach (and all its nested levels) exhausts. data.m_groupsContainer
-	// has been populated by per-row Insert at whichever level the
-	// `group X by K` keyword appeared.
-	//
-	// Two flavours:
-	//   * Terminal `group X by K` (no `into`) — emit one
-	//     `New Structure("Key, Values", pair.Key, pair.Value)` per
-	//     pair directly into resultArray.
-	//   * Non-terminal `group X by K into g` — open a new foreach
-	//     over m_groupsContainer, bind `g` to the per-pair Structure,
-	//     and re-enter CompileLinqBlock to parse the continuation
-	//     clauses (where / select / orderby on g). The cursor is
-	//     still positioned at the continuation's first token (outer
-	//     CompileLinqBlock left it there).
-	if (data.m_hasGroup) {
-
-		const ibParamUnit expIn   = linqCtxOwner->GetVariable(wxT("@group_exp_in"),  true, false, false, true);
-		const ibParamUnit expIt   = linqCtxOwner->GetVariable(wxT("@group_exp_it"),  true, false, false, true);
-		const ibParamUnit expPair = linqCtxOwner->GetVariable(wxT("@group_exp_pair"), true, false, false, true);
-
-		// @group_exp_in := groupsContainer.
-		{
-			ibByteUnit c; AddLineInfo(c);
-			c.m_numOper = OPER_LET;
-			c.m_param1 = expIn;
-			c.m_param2 = data.m_groupsContainer;
-			m_cByteCode.m_listCode.emplace_back(std::move(c));
-		}
-
-		if (data.m_hasGroupInto) {
-			// Non-terminal: open new foreach, bind g to Structure(Key, Values),
-			// re-enter CompileLinqBlock for the continuation clauses. The
-			// continuation's leaf parser uses the same WHERE/SELECT/orderby/
-			// distinct machinery as the original LINQ body, emits Add(addValue)
-			// to data.m_resultArray, then NEXT_ITER + back-patches itself.
-
-			ibLinqBinding bg;
-			bg.name       = data.m_groupIntoName;
-			bg.origin     = ibLinqBinding::FromGroup;
-			bg.valueSlot  = linqCtxOwner->GetVariable(data.m_groupIntoName);
-			bg.iterInSlot = expIn;
-			bg.iterItSlot = expIt;
-
-			// OPER_FOREACH header — iter-var is `expPair`, NOT g. g gets
-			// derived from pair inside the body.
-			const int expForeachIp = (int)m_cByteCode.m_listCode.size();
-			{
-				ibByteUnit c; AddLineInfo(c);
-				c.m_numOper = OPER_FOREACH;
-				c.m_param1 = expPair;
-				c.m_param2 = expIn;
-				c.m_param3 = expIt;
-				m_cByteCode.m_listCode.emplace_back(std::move(c));
-			}
-			bg.foreachStartIp = expForeachIp;
-
-			// Body prefix: extract pair.Key + pair.Value, build g = Structure.
-			const ibParamUnit keySlot = context->CreateVariable();
-			{
-				ibByteUnit c; AddLineInfo(c);
-				c.m_numOper = OPER_GET_A;
-				c.m_param1 = keySlot;
-				c.m_param2 = expPair;
-				c.m_param3.m_numIndex = GetConstString(wxT("Key"));
-				m_cByteCode.m_listCode.emplace_back(std::move(c));
-			}
-			const ibParamUnit valuesSlot = context->CreateVariable();
-			{
-				ibByteUnit c; AddLineInfo(c);
-				c.m_numOper = OPER_GET_A;
-				c.m_param1 = valuesSlot;
-				c.m_param2 = expPair;
-				c.m_param3.m_numIndex = GetConstString(wxT("Value"));
-				m_cByteCode.m_listCode.emplace_back(std::move(c));
-			}
-			const ibParamUnit fieldsNameConst = FindConst(ibValue(wxT("Key, Values")));
-			{
-				ibByteUnit c; AddLineInfo(c);
-				c.m_numOper = OPER_NEW;
-				c.m_param1 = bg.valueSlot;
-				c.m_param2.m_numIndex = GetConstString(wxT("Structure"));
-				c.m_param2.m_numArray = 3;
-				m_cByteCode.m_listCode.emplace_back(std::move(c));
-			}
-			{
-				ibByteUnit c; AddLineInfo(c);
-				c.m_numOper = OPER_SET;
-				c.m_param1 = fieldsNameConst;
-				m_cByteCode.m_listCode.emplace_back(std::move(c));
-			}
-			{
-				ibByteUnit c; AddLineInfo(c);
-				c.m_numOper = OPER_SET;
-				c.m_param1 = keySlot;
-				m_cByteCode.m_listCode.emplace_back(std::move(c));
-			}
-			{
-				ibByteUnit c; AddLineInfo(c);
-				c.m_numOper = OPER_SET;
-				c.m_param1 = valuesSlot;
-				m_cByteCode.m_listCode.emplace_back(std::move(c));
-			}
-
-			// Clear the hasGroup / hasGroupInto flags BEFORE re-entering —
-			// CompileLinqBlock's leaf parser uses them to suppress SELECT /
-			// Add; for the continuation we want those to fire normally
-			// against g. m_groupsContainer slot stays valid (foreach reads
-			// it via expIn).
-			data.m_hasGroup     = false;
-			data.m_hasGroupInto = false;
-
-			// Re-enter CompileLinqBlock with the synthetic binding.
-			CompileLinqBlock(linqCtxOwner.get(), bg);
-		}
-		else {
-			// Terminal: emit one Structure{Key, Values} per pair → __r.Add.
-			const int expForeachIp = (int)m_cByteCode.m_listCode.size();
-			{
-				ibByteUnit c; AddLineInfo(c);
-				c.m_numOper = OPER_FOREACH;
-				c.m_param1 = expPair;
-				c.m_param2 = expIn;
-				c.m_param3 = expIt;
-				m_cByteCode.m_listCode.emplace_back(std::move(c));
-			}
-
-			const ibParamUnit keySlot = context->CreateVariable();
-			{
-				ibByteUnit c; AddLineInfo(c);
-				c.m_numOper = OPER_GET_A;
-				c.m_param1 = keySlot;
-				c.m_param2 = expPair;
-				c.m_param3.m_numIndex = GetConstString(wxT("Key"));
-				m_cByteCode.m_listCode.emplace_back(std::move(c));
-			}
-			const ibParamUnit valuesSlot = context->CreateVariable();
-			{
-				ibByteUnit c; AddLineInfo(c);
-				c.m_numOper = OPER_GET_A;
-				c.m_param1 = valuesSlot;
-				c.m_param2 = expPair;
-				c.m_param3.m_numIndex = GetConstString(wxT("Value"));
-				m_cByteCode.m_listCode.emplace_back(std::move(c));
-			}
-
-			const ibParamUnit groupRow         = context->CreateVariable();
-			const ibParamUnit fieldsNameConst  = FindConst(ibValue(wxT("Key, Values")));
-			{
-				ibByteUnit c; AddLineInfo(c);
-				c.m_numOper = OPER_NEW;
-				c.m_param1 = groupRow;
-				c.m_param2.m_numIndex = GetConstString(wxT("Structure"));
-				c.m_param2.m_numArray = 3;
-				m_cByteCode.m_listCode.emplace_back(std::move(c));
-			}
-			{
-				ibByteUnit c; AddLineInfo(c);
-				c.m_numOper = OPER_SET;
-				c.m_param1 = fieldsNameConst;
-				m_cByteCode.m_listCode.emplace_back(std::move(c));
-			}
-			{
-				ibByteUnit c; AddLineInfo(c);
-				c.m_numOper = OPER_SET;
-				c.m_param1 = keySlot;
-				m_cByteCode.m_listCode.emplace_back(std::move(c));
-			}
-			{
-				ibByteUnit c; AddLineInfo(c);
-				c.m_numOper = OPER_SET;
-				c.m_param1 = valuesSlot;
-				m_cByteCode.m_listCode.emplace_back(std::move(c));
-			}
-
-			{
-				ibByteUnit c; AddLineInfo(c);
-				c.m_numOper = OPER_CALL_METHOD;
-				c.m_param1 = context->CreateVariable();
-				c.m_param2 = data.m_resultArray;
-				c.m_param3.m_numIndex = GetConstString(wxT("Add"));
-				c.m_param3.m_numArray = 1;
-				m_cByteCode.m_listCode.emplace_back(std::move(c));
-			}
-			{
-				ibByteUnit c; AddLineInfo(c);
-				c.m_numOper = OPER_SET;
-				c.m_param1 = groupRow;
-				m_cByteCode.m_listCode.emplace_back(std::move(c));
-			}
-
-			{
-				ibByteUnit c; AddLineInfo(c);
-				c.m_numOper = OPER_NEXT_ITER;
-				c.m_param1 = expIt;
-				c.m_param2.m_numIndex = expForeachIp;
-				m_cByteCode.m_listCode.emplace_back(std::move(c));
-			}
-			m_cByteCode.m_listCode[expForeachIp].m_param4.m_numIndex =
-				(long)m_cByteCode.m_listCode.size();
-		}
-	}
-
-	// Post-loop ORDERBY emit — resultArray.SortByKeys(orderKeys, descending).
-	// Sits AFTER all OPER_NEXT_ITER's (CompileLinqBlock's tail) so the
-	// arrays are fully populated when sort runs.
-	if (data.m_hasOrderBy) {
-		ibParamUnit descConst = context->CreateVariable();
-		{
-			ibByteUnit c; AddLineInfo(c);
-			c.m_numOper = OPER_CONSTN;
-			c.m_param1 = descConst;
-			c.m_param2.m_numIndex = data.m_orderByDescending ? 1 : 0;
-			m_cByteCode.m_listCode.emplace_back(std::move(c));
-		}
-		// __r.SortByKeys(__keys, descending) — OPER_CALL_METHOD + 2 args.
-		{
-			ibByteUnit c; AddLineInfo(c);
-			c.m_numOper = OPER_CALL_METHOD;
-			c.m_param1 = context->CreateVariable();   // throwaway ret
-			c.m_param2 = data.m_resultArray;
-			c.m_param3.m_numIndex = GetConstString(wxT("SortByKeys"));
-			c.m_param3.m_numArray = 2;
-			m_cByteCode.m_listCode.emplace_back(std::move(c));
-		}
-		{
-			ibByteUnit c; AddLineInfo(c);
-			c.m_numOper = OPER_SET;
-			c.m_param1 = data.m_orderKeys;
-			m_cByteCode.m_listCode.emplace_back(std::move(c));
-		}
-		{
-			ibByteUnit c; AddLineInfo(c);
-			c.m_numOper = OPER_SET;
-			c.m_param1 = descConst;
-			m_cByteCode.m_listCode.emplace_back(std::move(c));
-		}
-	}
-
-	const ibParamUnit resultSlot = data.m_resultArray;   // capture before scope ends
-	return resultSlot;
-}
-
-// Recursive worker — one `from <id> in <expr>` clause plus either
-// (a) recursive call to itself for the next `from` (nested foreach),
-// or (b) tail clauses (where/skip/take/select) + Add at the deepest
-// level. Each level emits its own OPER_FOREACH header on entry and
-// matching OPER_NEXT_ITER + back-patches on unwind. Works for any
-// nesting depth — single `from`, multi-from chain, or a tree once
-// let/join/group/into bind new variables at branch points.
-//
-// Caller (CompileLinqExpression for outermost, or self-recursive
-// call) has already consumed KEY_FROM and we start with the binding
-// name.
-void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx)
-{
-	// linqCtx — the fake LINQ context (RETURN_BLOCK kind with non-null
-	// m_linqData as the LINQ marker, allocated once by
-	// CompileLinqExpression). All binding registration +
-	// expression compilation goes through it; lookups walk parent
-	// chain so outer-scope locals stay visible (closure capture).
-	// State (m_bindings, m_resultArray, counters, ...) lives on
-	// linqCtx->m_linqData — the back-pointer at the stack-allocated
-	// ibLinqContextData in CompileLinqExpression.
-	ibCompileContext* const context = linqCtx;
-
-	const wxString bindRealName = GETIdentifier(true);
-	const wxString bindUpper    = stringUtils::MakeUpper(bindRealName);
-	GETKeyWord(KEY_IN);
-
-	ibLinqBinding b;
-	b.name       = bindRealName;
-	b.origin     = ibLinqBinding::FromSource;
-	b.valueSlot  = context->GetVariable(bindRealName);
-	b.iterInSlot = context->GetVariable(bindUpper + wxT("@in_"), true, false, false, true);
-	b.iterItSlot = context->GetVariable(bindUpper + wxT("@it_"), true, false, false, true);
-
-	// OPER_LET @in_ := source-expression
-	{
-		const ibParamUnit srcSlot = GetExpression(context);
-		ibByteUnit c; AddLineInfo(c);
-		c.m_numOper = OPER_LET;
-		c.m_param1 = b.iterInSlot;
-		c.m_param2 = srcSlot;
-		m_cByteCode.m_listCode.emplace_back(std::move(c));
-	}
-
-	// OPER_FOREACH header
-	{
-		ibByteUnit c; AddLineInfo(c);
-		c.m_numOper = OPER_FOREACH;
-		c.m_param1 = b.valueSlot;
-		c.m_param2 = b.iterInSlot;
-		c.m_param3 = b.iterItSlot;
-		m_cByteCode.m_listCode.emplace_back(std::move(c));
-		b.foreachStartIp = (int)m_cByteCode.m_listCode.size() - 1;
-	}
-
-	// Delegate to the pre-bound entry (which assumes OPER_LET +
-	// OPER_FOREACH already emitted and `b` fully populated).
-	CompileLinqBlock(linqCtx, b);
-}
-
-// Pre-bound overload — caller has emitted OPER_LET / OPER_FOREACH and
-// filled `preBound` (incl. foreachStartIp). Used by `group ... into g`
-// continuation to re-enter the leaf-clause / NEXT_ITER machinery with
-// `g` as a synthetic binding over m_groupsContainer's pair rows.
-void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBinding& preBound)
-{
-	ibLinqContextData& data = *linqCtx->m_linqData;
-	ibCompileContext* const context = linqCtx;
-
-	// Per-from-level state — local to THIS CompileLinqBlock call so
-	// recursion (nested from) doesn't pollute outer levels. Each
-	// level owns its own pending join trampolines (emitted at THIS
-	// level's NEXT_ITER, absolute-ip GOTO from body requires same
-	// scope). GROUP's data.m_hasGroup + data.m_groupsContainer are linq-scope
-	// (data.m_*) — expansion fires once after the outermost
-	// CompileLinqBlock returns, in CompileLinqExpression.
-	std::vector<ibLinqPendingJoin> pendingJoins;
-
-	ibLinqBinding b = preBound;
-	data.m_bindings.push_back(b);
-	context->StartLoopList();
-
-
-	// Multiple WHERE clauses are allowed (each emits its own OPER_IF);
-	// all skip-targets back-patch to the same post-Add ip below.
-	// JOIN-miss OPER_IFs also push here — single "skip current row,
-	// continue iter" patch point for both clause kinds.
-	std::vector<int> whereSkipIps;
-
-	// JOIN clauses appear after `from`, before tail clauses (C# grammar).
-	// Each emits per-iter lookup inline in outer body + records an
-	// ibLinqPendingJoin for the trampoline (hash build) emitted after
-	// outer NEXT_ITER. Multiple joins at the same level are allowed.
-	// The "if !found, skip-to-next-iter" OPER_IF goes into whereSkipIps
-	// directly so end-of-body patches both clause kinds uniformly.
-	while (IsNextKeyWord(KEY_JOIN)) {
-		GETKeyWord(KEY_JOIN);
-		CompileLinqJoin(context, whereSkipIps, pendingJoins);
-	}
-
-	if (IsNextKeyWord(KEY_FROM)) {
-		// === Recurse — nested `from` adds another foreach depth ===
-		GETKeyWord(KEY_FROM);
-		CompileLinqBlock(context);
-	}
-	else {
-		// === Innermost level — process tail clauses + Add ===
-		// WHERE and let-clauses (`var alias = ...` or implicit
-		// `alias = ...`) can interleave freely between `from` and
-		// `select` / `skip` / `take`. Unified while-loop handles any
-		// order, matching C# LINQ grammar.
-		while (true) {
-			// WHERE clause
-			if (IsNextKeyWord(KEY_WHERE)) {
-				GETKeyWord(KEY_WHERE);
-				const ibParamUnit whereExpr = GetExpression(context);
-				ibByteUnit c; AddLineInfo(c);
-				c.m_numOper = OPER_IF;
-				c.m_param1 = whereExpr;
-				c.m_param2.m_numIndex = 0;  // back-patched below
-				m_cByteCode.m_listCode.emplace_back(std::move(c));
-				whereSkipIps.push_back((int)m_cByteCode.m_listCode.size() - 1);
-				continue;
-			}
-
-			// ORDERBY clause — compile key expression per-row, optional
-			// ASCENDING/DESCENDING. The expression's natural result slot
-			// may carry DEF_VAR_TEMP marker (for compound expressions like
-			// `o * -1`) which can interact badly with subsequent
-			// OPER_SET arg loads. Copy into a stable regular slot via
-			// OPER_LET so __keys.Add reads it as a normal variable.
-			if (IsNextKeyWord(KEY_ORDERBY)) {
-				GETKeyWord(KEY_ORDERBY);
-				const ibParamUnit rawKey = GetExpression(context);
-
-				// Stable copy — allocate regular slot, OPER_LET copies
-				// the per-iteration expression result into it. This slot
-				// is what __keys.Add reads further down.
-				data.m_orderByKeySlot = context->CreateVariable();
-				{
-					ibByteUnit c; AddLineInfo(c);
-					c.m_numOper = OPER_LET;
-					c.m_param1 = data.m_orderByKeySlot;
-					c.m_param2 = rawKey;
-					m_cByteCode.m_listCode.emplace_back(std::move(c));
-				}
-				data.m_hasOrderBy = true;
-				if (IsNextKeyWord(KEY_DESCENDING)) {
-					GETKeyWord(KEY_DESCENDING);
-					data.m_orderByDescending = true;
-				} else if (IsNextKeyWord(KEY_ASCENDING)) {
-					GETKeyWord(KEY_ASCENDING);
-					data.m_orderByDescending = false;
-				}
-				continue;
-			}
-
-			// Let-clause — `var alias = <expr>` or implicit `alias = <expr>`.
-			// Both emit OPER_LET + push FromLet binding so subsequent
-			// clauses see `alias` via standard context lookup.
-			bool hasExplicitKw = false;
-			if (IsNextKeyWord(KEY_VAR)) {
-				GETKeyWord(KEY_VAR);
-				hasExplicitKw = true;
-			}
-			else {
-				// Implicit — 2-token peek <IDENTIFIER> '='. Identifier
-				// must not be a clause-terminator keyword (those are
-				// caught by SKIP/TAKE/SELECT branches below and never
-				// reach this peek).
-				const size_t pos = (size_t)m_numCurrentCompile;
-				if (pos + 1 >= m_listLexem.size()) break;
-				const ibLexem& l0 = m_listLexem[pos];
-				const ibLexem& l1 = m_listLexem[pos + 1];
-				if (l0.m_lexType != IDENTIFIER) break;
-				if (l1.m_lexType != DELIMITER || l1.m_numData != '=') break;
-			}
-
-			const wxString aliasReal = GETIdentifier(true);
-			GETDelimeter('=');
-			const ibParamUnit aliasSlot = context->GetVariable(aliasReal);
-			{
-				ibByteUnit c; AddLineInfo(c);
-				c.m_numOper = OPER_LET;
-				c.m_param1 = aliasSlot;
-				c.m_param2 = GetExpression(context);
-				m_cByteCode.m_listCode.emplace_back(std::move(c));
-			}
-			ibLinqBinding lb;
-			lb.name      = aliasReal;
-			lb.origin    = ibLinqBinding::FromLet;
-			lb.valueSlot = aliasSlot;
-			data.m_bindings.push_back(lb);
-		}
-
-		// SKIP — counter++, if (counter <= N) goto next-iter.
-		if (IsNextKeyWord(KEY_SKIP)) {
-			GETKeyWord(KEY_SKIP);
-			const ibParamUnit skipExpr = GetExpression(context);
-			{
-				ibByteUnit c; AddLineInfo(c);
-				c.m_numOper = OPER_ADD;
-				c.m_param1 = data.m_skipCounter;
-				c.m_param2 = data.m_skipCounter;
-				c.m_param3 = data.m_constOne;
-				m_cByteCode.m_listCode.emplace_back(std::move(c));
-			}
-			const ibParamUnit tmpLE = context->CreateVariable();
-			{
-				ibByteUnit c; AddLineInfo(c);
-				c.m_numOper = OPER_LE;
-				c.m_param1 = tmpLE;
-				c.m_param2 = data.m_skipCounter;
-				c.m_param3 = skipExpr;
-				m_cByteCode.m_listCode.emplace_back(std::move(c));
-			}
-			{
-				ibByteUnit c; AddLineInfo(c);
-				c.m_numOper = OPER_IF;
-				c.m_param1 = tmpLE;
-				c.m_param2.m_numIndex = 0;
-				m_cByteCode.m_listCode.emplace_back(std::move(c));
-			}
-			const int skipIfIp = (int)m_cByteCode.m_listCode.size() - 1;
-			{
-				ibByteUnit c; AddLineInfo(c);
-				c.m_numOper = OPER_GOTO;
-				m_cByteCode.m_listCode.emplace_back(std::move(c));
-				const int gotoIp = (int)m_cByteCode.m_listCode.size() - 1;
-				auto* pList = context->m_listContinue[context->m_numDoNumber];
-				if (pList != nullptr) pList->emplace_back(gotoIp);
-			}
-			m_cByteCode.m_listCode[skipIfIp].m_param2.m_numIndex =
-				(long)m_cByteCode.m_listCode.size();
-		}
-
-		// TAKE — if (counter >= N) goto break-out; else counter++.
-		if (IsNextKeyWord(KEY_TAKE)) {
-			GETKeyWord(KEY_TAKE);
-			const ibParamUnit takeExpr = GetExpression(context);
-			const ibParamUnit tmpGE = context->CreateVariable();
-			{
-				ibByteUnit c; AddLineInfo(c);
-				c.m_numOper = OPER_GE;
-				c.m_param1 = tmpGE;
-				c.m_param2 = data.m_takeCounter;
-				c.m_param3 = takeExpr;
-				m_cByteCode.m_listCode.emplace_back(std::move(c));
-			}
-			{
-				ibByteUnit c; AddLineInfo(c);
-				c.m_numOper = OPER_IF;
-				c.m_param1 = tmpGE;
-				c.m_param2.m_numIndex = 0;
-				m_cByteCode.m_listCode.emplace_back(std::move(c));
-			}
-			const int takeIfIp = (int)m_cByteCode.m_listCode.size() - 1;
-			{
-				ibByteUnit c; AddLineInfo(c);
-				c.m_numOper = OPER_GOTO;
-				m_cByteCode.m_listCode.emplace_back(std::move(c));
-				const int gotoIp = (int)m_cByteCode.m_listCode.size() - 1;
-				auto* pList = context->m_listBreak[context->m_numDoNumber];
-				if (pList != nullptr) pList->emplace_back(gotoIp);
-			}
-			m_cByteCode.m_listCode[takeIfIp].m_param2.m_numIndex =
-				(long)m_cByteCode.m_listCode.size();
-			{
-				ibByteUnit c; AddLineInfo(c);
-				c.m_numOper = OPER_ADD;
-				c.m_param1 = data.m_takeCounter;
-				c.m_param2 = data.m_takeCounter;
-				c.m_param3 = data.m_constOne;
-				m_cByteCode.m_listCode.emplace_back(std::move(c));
-			}
-		}
-
-		// GROUP — terminal projection: `group X by K`. Mutually exclusive
-		// with SELECT at this level. Aggregates rows into a Container
-		// (key → Array bucket) via per-row lookup-or-create. Post-loop
-		// (after outer NEXT_ITER, before foreach m_param4 patch), an
-		// expansion foreach walks the Container and pushes one
-		// `New Structure("Key, Values", pair.Key, pair.Value)` into
-		// __r — result is Array<Structure{Key, Values:Array}>. WHERE /
-		// ORDERBY before group operate on raw rows (filter / sort before
-		// grouping). No `into` form yet — group is terminal, no further
-		// clauses operating on groups.
-		if (IsNextKeyWord(KEY_GROUP)) {
-			GETKeyWord(KEY_GROUP);
-			data.m_hasGroup = true;
-
-			// Allocate persistent slots (in caller's context via
-			// CreateVariable's RETURN_BLOCK chain-delegation).
-			data.m_groupsContainer = context->CreateVariable();
-
-			// First-iter init guard — mirror of JOIN's hashSlot init.
-			// `tmp_isEmpty = !data.m_groupsContainer` (untyped OPER_NOT →
-			// IsEmpty path: TYPE_EMPTY → true, TYPE_VALUE → false).
-			// OPER_IF jumps when condition is FALSE (Container non-empty);
-			// fall through emits OPER_NEW once on first iter.
-			const ibParamUnit tmpIsEmpty = context->CreateVariable();
-			{
-				ibByteUnit c; AddLineInfo(c);
-				c.m_numOper = OPER_NOT;
-				c.m_param1 = tmpIsEmpty;
-				c.m_param2 = data.m_groupsContainer;
-				m_cByteCode.m_listCode.emplace_back(std::move(c));
-			}
-			const int initSkipIfIp = (int)m_cByteCode.m_listCode.size();
-			{
-				ibByteUnit c; AddLineInfo(c);
-				c.m_numOper = OPER_IF;
-				c.m_param1 = tmpIsEmpty;
-				c.m_param2.m_numIndex = 0;  // back-patched after OPER_NEW
-				m_cByteCode.m_listCode.emplace_back(std::move(c));
-			}
-			{
-				ibByteUnit c; AddLineInfo(c);
-				c.m_numOper = OPER_NEW;
-				c.m_param1 = data.m_groupsContainer;
-				c.m_param2.m_numIndex = GetConstString(wxT("Container"));
-				c.m_param2.m_numArray = 0;
-				m_cByteCode.m_listCode.emplace_back(std::move(c));
-			}
-			m_cByteCode.m_listCode[initSkipIfIp].m_param2.m_numIndex =
-				(long)m_cByteCode.m_listCode.size();
-
-			// Parse X (value to group) — eval inline per iter.
-			const ibParamUnit groupValueSlot = GetExpression(context);
-
-			GETKeyWord(KEY_BY);
-
-			// Parse K (group key) — eval inline per iter.
-			const ibParamUnit groupKeySlot = GetExpression(context);
-
-			// Per-row lookup-or-create:
-			//   bucketSlot = (uninit)
-			//   found = data.m_groupsContainer.Property(K, bucketSlot)
-			//   OPER_IF found, skipCreate     ← jump if found
-			//   bucketSlot = New("Array")
-			//   data.m_groupsContainer.Insert(K, bucketSlot)
-			//   skipCreate:
-			//   bucketSlot.Add(X)
-			const ibParamUnit bucketSlot = context->CreateVariable();
-			const ibParamUnit foundSlot  = context->CreateVariable();
-
-			// found = data.m_groupsContainer.Property(K, bucketSlot)
-			{
-				ibByteUnit c; AddLineInfo(c);
-				c.m_numOper = OPER_CALL_METHOD;
-				c.m_param1 = foundSlot;
-				c.m_param2 = data.m_groupsContainer;
-				c.m_param3.m_numIndex = GetConstString(wxT("Property"));
-				c.m_param3.m_numArray = 2;
-				m_cByteCode.m_listCode.emplace_back(std::move(c));
-			}
-			{
-				ibByteUnit c; AddLineInfo(c);
-				c.m_numOper = OPER_SET;
-				c.m_param1 = groupKeySlot;
-				m_cByteCode.m_listCode.emplace_back(std::move(c));
-			}
-			{
-				ibByteUnit c; AddLineInfo(c);
-				c.m_numOper = OPER_SET;
-				c.m_param1 = bucketSlot;
-				m_cByteCode.m_listCode.emplace_back(std::move(c));
-			}
-			// OPER_IF jumps on EMPTY/falsy condition — natural for
-			// "if !cond, skip body" patterns. We want the inverse here:
-			// "if found, skip create". Invert via OPER_NOT so OPER_IF
-			// jumps when foundSlot is TRUE (notFound is empty/false).
-			const ibParamUnit notFoundSlot = context->CreateVariable();
-			{
-				ibByteUnit c; AddLineInfo(c);
-				c.m_numOper = OPER_NOT;
-				c.m_param1 = notFoundSlot;
-				c.m_param2 = foundSlot;
-				m_cByteCode.m_listCode.emplace_back(std::move(c));
-			}
-			const int createSkipIfIp = (int)m_cByteCode.m_listCode.size();
-			{
-				ibByteUnit c; AddLineInfo(c);
-				c.m_numOper = OPER_IF;
-				c.m_param1 = notFoundSlot;
-				c.m_param2.m_numIndex = 0;   // back-patched below
-				m_cByteCode.m_listCode.emplace_back(std::move(c));
-			}
-			// Create branch: bucketSlot = New("Array"); data.m_groupsContainer.Insert(K, bucketSlot).
-			{
-				ibByteUnit c; AddLineInfo(c);
-				c.m_numOper = OPER_NEW;
-				c.m_param1 = bucketSlot;
-				c.m_param2.m_numIndex = GetConstString(wxT("Array"));
-				c.m_param2.m_numArray = 0;
-				m_cByteCode.m_listCode.emplace_back(std::move(c));
-			}
-			{
-				ibByteUnit c; AddLineInfo(c);
-				c.m_numOper = OPER_CALL_METHOD;
-				c.m_param1 = context->CreateVariable();  // throwaway ret
-				c.m_param2 = data.m_groupsContainer;
-				c.m_param3.m_numIndex = GetConstString(wxT("Insert"));
-				c.m_param3.m_numArray = 2;
-				m_cByteCode.m_listCode.emplace_back(std::move(c));
-			}
-			{
-				ibByteUnit c; AddLineInfo(c);
-				c.m_numOper = OPER_SET;
-				c.m_param1 = groupKeySlot;
-				m_cByteCode.m_listCode.emplace_back(std::move(c));
-			}
-			{
-				ibByteUnit c; AddLineInfo(c);
-				c.m_numOper = OPER_SET;
-				c.m_param1 = bucketSlot;
-				m_cByteCode.m_listCode.emplace_back(std::move(c));
-			}
-			// skipCreate label.
-			m_cByteCode.m_listCode[createSkipIfIp].m_param2.m_numIndex =
-				(long)m_cByteCode.m_listCode.size();
-
-			// bucketSlot.Add(X) — append the per-row value to the bucket.
-			{
-				ibByteUnit c; AddLineInfo(c);
-				c.m_numOper = OPER_CALL_METHOD;
-				c.m_param1 = context->CreateVariable();   // throwaway ret
-				c.m_param2 = bucketSlot;
-				c.m_param3.m_numIndex = GetConstString(wxT("Add"));
-				c.m_param3.m_numArray = 1;
-				m_cByteCode.m_listCode.emplace_back(std::move(c));
-			}
-			{
-				ibByteUnit c; AddLineInfo(c);
-				c.m_numOper = OPER_SET;
-				c.m_param1 = groupValueSlot;
-				m_cByteCode.m_listCode.emplace_back(std::move(c));
-			}
-
-			// `... into <g>` — non-terminal group. CompileLinqExpression's
-			// post-block expansion will detect m_hasGroupInto, open a new
-			// foreach over m_groupsContainer, bind <g> to Structure{Key,
-			// Values} per pair, and re-enter CompileLinqBlock for the
-			// continuation clauses. We do NOT parse the continuation here
-			// — outer level's leaf parser falls through (hasGroup=true
-			// suppresses SELECT/Add); cursor stays at the continuation's
-			// first token, where post-block picks it up.
-			if (IsNextKeyWord(KEY_INTO)) {
-				GETKeyWord(KEY_INTO);
-				data.m_groupIntoName = GETIdentifier(true);
-				data.m_hasGroupInto  = true;
-			}
-		}
-
-		// SELECT — projection. Three forms:
-		//   select <expr>                          → single value
-		//   select { name = expr, name = expr }    → anonymous row (Structure)
-		//   <omitted>                              → implicit, addValue = binding
-		// For the `{}` form we emit New("Structure") + a chain of
-		// .Insert(name, value) calls; the structure slot becomes addValue.
-		// Skipped entirely when GROUP BY took the projection slot.
-		ibParamUnit addValue = b.valueSlot;
-		if (!data.m_hasGroup && IsNextKeyWord(KEY_SELECT)) {
-			GETKeyWord(KEY_SELECT);
-
-			if (IsNextDelimeter('{')) {
-				GETDelimeter('{');
-
-				const ibParamUnit structSlot = context->CreateVariable();
-				// structSlot := New("Structure")
-				{
-					ibByteUnit c; AddLineInfo(c);
-					c.m_numOper = OPER_NEW;
-					c.m_param1 = structSlot;
-					c.m_param2.m_numIndex = GetConstString(wxT("Structure"));
-					c.m_param2.m_numArray = 0;
-					m_cByteCode.m_listCode.emplace_back(std::move(c));
-				}
-
-				// Field list — `name = expr` pairs separated by `,`.
-				int fieldCount = 0;
-				while (!IsNextDelimeter('}')) {
-					const wxString fieldName = GETIdentifier(true);
-					GETDelimeter('=');
-					const ibParamUnit fieldValue = GetExpression(context);
-
-					// structSlot.Insert(fieldName, fieldValue)
-					// OPER_CALL_METHOD + 2 arg ops (SETCONST for name, SET for value).
-					{
-						ibByteUnit c; AddLineInfo(c);
-						c.m_numOper = OPER_CALL_METHOD;
-						c.m_param1 = context->CreateVariable();  // throwaway ret
-						c.m_param2 = structSlot;
-						c.m_param3.m_numIndex = GetConstString(wxT("Insert"));
-						c.m_param3.m_numArray = 2;
-						m_cByteCode.m_listCode.emplace_back(std::move(c));
-					}
-					// arg 1: field name as string constant
-					{
-						ibByteUnit c; AddLineInfo(c);
-						c.m_numOper = OPER_SETCONST;
-						c.m_param1.m_numIndex = GetConstString(fieldName);
-						m_cByteCode.m_listCode.emplace_back(std::move(c));
-					}
-					// arg 2: field value
-					{
-						ibByteUnit c; AddLineInfo(c);
-						c.m_numOper = OPER_SET;
-						c.m_param1 = fieldValue;
-						m_cByteCode.m_listCode.emplace_back(std::move(c));
-					}
-
-					++fieldCount;
-					if (IsNextDelimeter(',')) GETDelimeter(',');
-				}
-				GETDelimeter('}');
-
-				addValue = structSlot;
-			}
-			else {
-				addValue = GetExpression(context);
-			}
-		}
-
-		// DISTINCT modifier — `distinct` after select. Dedupes addValue
-		// against already-Added rows via __r.Contains (bool). Earlier
-		// Find/NOT approach broke when Find returned index 0 because
-		// IsEmpty(NUMBER 0) is true (treats 0 as falsy). Contains
-		// returns TYPE_BOOLEAN unambiguously: true=found, false=not.
-		// shouldAdd = NOT Contains works correctly: IsEmpty(bool true)
-		// is false → NOT true bool = false → IF FALSY → skip Add.
-		int distinctSkipIp = -1;
-		if (IsNextKeyWord(KEY_DISTINCT)) {
-			GETKeyWord(KEY_DISTINCT);
-
-			// tmpHas := __r.Contains(addValue)
-			const ibParamUnit tmpHas = context->CreateVariable();
-			{
-				ibByteUnit c; AddLineInfo(c);
-				c.m_numOper = OPER_CALL_METHOD;
-				c.m_param1 = tmpHas;
-				c.m_param2 = data.m_resultArray;
-				c.m_param3.m_numIndex = GetConstString(wxT("Contains"));
-				c.m_param3.m_numArray = 1;
-				m_cByteCode.m_listCode.emplace_back(std::move(c));
-			}
-			{
-				ibByteUnit c; AddLineInfo(c);
-				c.m_numOper = OPER_SET;
-				c.m_param1 = addValue;
-				m_cByteCode.m_listCode.emplace_back(std::move(c));
-			}
-			// shouldAdd := NOT tmpHas  (true iff not present)
-			const ibParamUnit shouldAdd = context->CreateVariable();
-			{
-				ibByteUnit c; AddLineInfo(c);
-				c.m_numOper = OPER_NOT;
-				c.m_param1 = shouldAdd;
-				c.m_param2 = tmpHas;
-				m_cByteCode.m_listCode.emplace_back(std::move(c));
-			}
-			// IF shouldAdd, skipAddIp  — jumps past Add when found.
-			{
-				ibByteUnit c; AddLineInfo(c);
-				c.m_numOper = OPER_IF;
-				c.m_param1 = shouldAdd;
-				c.m_param2.m_numIndex = 0;  // back-patch below
-				m_cByteCode.m_listCode.emplace_back(std::move(c));
-			}
-			distinctSkipIp = (int)m_cByteCode.m_listCode.size() - 1;
-		}
-
-		// Body: resultArray.Add(addValue).
-		// Suppressed when GROUP BY took over — group-by emitted its own
-		// per-row aggregation (lookup-or-create bucket + bucket.Add(X))
-		// inline above; the result array gets populated post-loop by
-		// the group expansion (foreach pair → __r.Add(New Structure)).
-		if (!data.m_hasGroup) {
-			{
-				ibByteUnit c; AddLineInfo(c);
-				c.m_numOper = OPER_CALL_METHOD;
-				c.m_param1 = context->CreateVariable();   // throwaway ret slot
-				c.m_param2 = data.m_resultArray;
-				c.m_param3.m_numIndex = GetConstString(wxT("Add"));
-				c.m_param3.m_numArray = 1;
-				m_cByteCode.m_listCode.emplace_back(std::move(c));
-			}
-			{
-				ibByteUnit c; AddLineInfo(c);
-				c.m_numOper = OPER_SET;
-				c.m_param1 = addValue;
-				m_cByteCode.m_listCode.emplace_back(std::move(c));
-			}
-		}
-
-		// Body: orderKeys.Add(orderByKeySlot) — lock-step with __r.Add.
-		// Same skip-path: distinct/where back-patches land past both.
-		if (data.m_hasOrderBy) {
-			ibByteUnit c; AddLineInfo(c);
-			c.m_numOper = OPER_CALL_METHOD;
-			c.m_param1 = context->CreateVariable();   // throwaway ret slot
-			c.m_param2 = data.m_orderKeys;
-			c.m_param3.m_numIndex = GetConstString(wxT("Add"));
-			c.m_param3.m_numArray = 1;
-			m_cByteCode.m_listCode.emplace_back(std::move(c));
-
-			ibByteUnit setC; AddLineInfo(setC);
-			setC.m_numOper = OPER_SET;
-			setC.m_param1 = data.m_orderByKeySlot;
-			m_cByteCode.m_listCode.emplace_back(std::move(setC));
-		}
-
-		// Back-patch DISTINCT skip target → past the Add (= NEXT_ITER).
-		if (distinctSkipIp >= 0) {
-			m_cByteCode.m_listCode[distinctSkipIp].m_param2.m_numIndex =
-				(long)m_cByteCode.m_listCode.size();
-		}
-
-		// Back-patch all WHERE skip targets → past the Add (= NEXT_ITER).
-		for (const int ifIp : whereSkipIps) {
-			m_cByteCode.m_listCode[ifIp].m_param2.m_numIndex =
-				(long)m_cByteCode.m_listCode.size();
-		}
-	}
-
-	// === Close this level's loop ===
-	{
-		ibByteUnit c; AddLineInfo(c);
-		c.m_numOper = OPER_NEXT_ITER;
-		c.m_param1 = b.iterItSlot;
-		c.m_param2.m_numIndex = b.foreachStartIp;
-		m_cByteCode.m_listCode.emplace_back(std::move(c));
-	}
-
-	// === JOIN trampolines (Phase 1.5) ===
-	// Live AFTER outer NEXT_ITER and BEFORE the foreach m_param4 patch
-	// (= loop-exit target). NEXT_ITER always jumps back (never falls
-	// through), so trampolines are unreachable in normal flow. On loop
-	// exhaustion, OPER_FOREACH's m_param4 = post-trampolines ip, so
-	// they're skipped on exit too. Reached only via the per-iter
-	// conditional OPER_GOTO placeholder emitted inside the body by
-	// CompileLinqJoin — fires once on first iter, the trampoline
-	// builds the hash + jumps back to that join's skip_label.
-	for (const ibLinqPendingJoin& pj : pendingJoins) {
-		const int trampolineLabel = (int)m_cByteCode.m_listCode.size();
-
-		// Patch the body-side placeholder GOTO to land here.
-		m_cByteCode.m_listCode[pj.placeholderGotoIp].m_param1.m_numIndex =
-			trampolineLabel;
-
-		// hashSlot = New("Container") — first-iter init of the dict.
-		{
-			ibByteUnit c; AddLineInfo(c);
-			c.m_numOper = OPER_NEW;
-			c.m_param1 = pj.hashSlot;
-			c.m_param2.m_numIndex = GetConstString(wxT("Container"));
-			c.m_param2.m_numArray = 0;
-			m_cByteCode.m_listCode.emplace_back(std::move(c));
-		}
-
-		// Replay T's lex range — eval inner source ONCE into a temp.
-		const int savedCursorT = m_numCurrentCompile;
-		m_numCurrentCompile = pj.tLexStart;
-		const ibParamUnit innerSrcSlot = GetExpression(linqCtx);
-		m_numCurrentCompile = savedCursorT;
-
-		// Inner foreach: foreach pj.bindSlot in innerSrcSlot.
-		// We reuse pj.bindSlot as the inner iter-var; after hash build
-		// it gets overwritten per outer-iter via Property's out-param.
-		const ibParamUnit innerInSlot =
-			linqCtx->GetVariable(wxString::Format(wxT("@join_in_%d"),
-				(int)pendingJoins.size()), true, false, false, true);
-		const ibParamUnit innerItSlot =
-			linqCtx->GetVariable(wxString::Format(wxT("@join_it_%d"),
-				(int)pendingJoins.size()), true, false, false, true);
-		{
-			ibByteUnit c; AddLineInfo(c);
-			c.m_numOper = OPER_LET;
-			c.m_param1 = innerInSlot;
-			c.m_param2 = innerSrcSlot;
-			m_cByteCode.m_listCode.emplace_back(std::move(c));
-		}
-		const int innerForeachIp = (int)m_cByteCode.m_listCode.size();
-		{
-			ibByteUnit c; AddLineInfo(c);
-			c.m_numOper = OPER_FOREACH;
-			c.m_param1 = pj.bindSlot;
-			c.m_param2 = innerInSlot;
-			c.m_param3 = innerItSlot;
-			m_cByteCode.m_listCode.emplace_back(std::move(c));
-		}
-
-		// Replay K2's lex range — emit K2 reading from pj.bindSlot
-		// (which is the inner iter var here).
-		const int savedCursorK2 = m_numCurrentCompile;
-		m_numCurrentCompile = pj.k2LexStart;
-		const ibParamUnit k2Slot = GetExpression(linqCtx);
-		m_numCurrentCompile = savedCursorK2;
-
-		// hashSlot.Insert(k2Slot, bindSlot) — OPER_CALL_METHOD with 2 args.
-		{
-			ibByteUnit c; AddLineInfo(c);
-			c.m_numOper = OPER_CALL_METHOD;
-			c.m_param1 = linqCtx->CreateVariable();   // throwaway ret
-			c.m_param2 = pj.hashSlot;
-			c.m_param3.m_numIndex = GetConstString(wxT("Insert"));
-			c.m_param3.m_numArray = 2;
-			m_cByteCode.m_listCode.emplace_back(std::move(c));
-		}
-		{
-			ibByteUnit c; AddLineInfo(c);
-			c.m_numOper = OPER_SET;
-			c.m_param1 = k2Slot;
-			m_cByteCode.m_listCode.emplace_back(std::move(c));
-		}
-		{
-			ibByteUnit c; AddLineInfo(c);
-			c.m_numOper = OPER_SET;
-			c.m_param1 = pj.bindSlot;
-			m_cByteCode.m_listCode.emplace_back(std::move(c));
-		}
-
-		// Close inner foreach.
-		{
-			ibByteUnit c; AddLineInfo(c);
-			c.m_numOper = OPER_NEXT_ITER;
-			c.m_param1 = innerItSlot;
-			c.m_param2.m_numIndex = innerForeachIp;
-			m_cByteCode.m_listCode.emplace_back(std::move(c));
-		}
-		m_cByteCode.m_listCode[innerForeachIp].m_param4.m_numIndex =
-			(long)m_cByteCode.m_listCode.size();
-
-		// GOTO back to the per-iter lookup's skip_label (return into
-		// outer body after first-iter build).
-		{
-			ibByteUnit c; AddLineInfo(c);
-			c.m_numOper = OPER_GOTO;
-			c.m_param1.m_numIndex = pj.skipLabelIp;
-			m_cByteCode.m_listCode.emplace_back(std::move(c));
-		}
-	}
-
-	m_cByteCode.m_listCode[b.foreachStartIp].m_param4.m_numIndex =
-		(long)m_cByteCode.m_listCode.size();
-
-	// GROUP BY expansion intentionally NOT emitted here — moved to
-	// CompileLinqExpression's post-block emit so it fires ONCE after
-	// the outermost foreach exhausts (not per inner-foreach exit).
-	// Per-row aggregation (Insert into data.m_groupsContainer) is
-	// emitted in the KEY_GROUP branch at whichever level the group
-	// keyword appeared.
-
-	context->FinishLoopList(m_cByteCode,
-		(long)m_cByteCode.m_listCode.size() - 1,
-		(long)m_cByteCode.m_listCode.size());
-}
-
-void ibCompileCode::CompileLinqJoin(ibCompileContext* linqCtx,
-	std::vector<int>& whereSkipIps,
-	std::vector<ibLinqPendingJoin>& pendingJoins)
-{
-	// KEY_JOIN already consumed by caller. Grammar:
-	//   join <bindName> in <T> on <K1> equals <K2>
-	//
-	// Emit per-iter lookup INLINE in outer body (current ip):
-	//   1. tmp_isEmpty = !hashSlot          (OPER_NOT)
-	//   2. OPER_IF tmp_isEmpty, skipLabel   (jump on hashSlot non-empty)
-	//   3. OPER_GOTO trampolineLabel        (placeholder, back-patched)
-	//   4. skipLabel:
-	//   5. found = hashSlot.Property(K1, bindSlot)
-	//   6. OPER_IF found, end-of-body        (back-patched via whereSkipIps)
-	//
-	// T and K2 lex ranges saved by parse-and-discard so the trampoline
-	// (emitted after outer NEXT_ITER) can replay them in the build
-	// context (T pre-loop, K2 inside inner foreach where bindSlot is
-	// the iter var).
-	ibLinqContextData& data = *linqCtx->m_linqData;
-
-	const wxString joinName = GETIdentifier(true);
-	GETKeyWord(KEY_IN);
-
-	ibLinqPendingJoin pj;
-
-	// Save T's lex range. Parse-and-discard: GetExpression advances
-	// the cursor + emits bytecode; we resize m_listCode back to drop
-	// the emit (replayed later at trampoline emit time). Side effects
-	// like constant-pool inserts and var auto-decl persist but are
-	// idempotent across the second parse.
-	pj.tLexStart = m_numCurrentCompile;
-	{
-		const size_t preSize = m_cByteCode.m_listCode.size();
-		GetExpression(linqCtx);
-		m_cByteCode.m_listCode.resize(preSize);
-	}
-	pj.tLexEnd = m_numCurrentCompile;
-
-	// Detect outer-iter-referenced T: scan T's lex range for any
-	// IDENTIFIER matching a binding name from m_bindings EXCEPT the
-	// most-recently-pushed (= current level's from). If matched, the
-	// hash dict built from T@iter-1 is stale for iter-2 — mark for
-	// per-row reset at the lookup site. Constant T (or T referencing
-	// only globals not in m_bindings) keeps one-shot rebuild.
-	if (data.m_bindings.size() > 1) {
-		// All but the last m_bindings entry are outer bindings.
-		const size_t lastIdx = data.m_bindings.size() - 1;
-		for (int pos = pj.tLexStart;
-		     pos < pj.tLexEnd && pos < (int)m_listLexem.size();
-		     ++pos)
-		{
-			const ibLexem& lex = m_listLexem[pos];
-			if (lex.m_lexType != IDENTIFIER) continue;
-			const wxString lexName = lex.m_valData.GetString();
-			for (size_t i = 0; i < lastIdx; ++i) {
-				if (stringUtils::CompareString(data.m_bindings[i].name, lexName)) {
-					pj.m_needsReset = true;
-					break;
-				}
-			}
-			if (pj.m_needsReset) break;
-		}
-	}
-
-	GETKeyWord(KEY_ON);
-
-	// Bind b in the linq scope. Slot persists across iterations; on
-	// each outer iter it's overwritten by hashSlot.Property's out-param.
-	pj.bindSlot = linqCtx->GetVariable(joinName);
-
-	// Parse K1 inline — emits at current ip (outer body, per-iter).
-	// K1 reads `o` (already bound by the enclosing FROM).
-	const ibParamUnit k1Slot = GetExpression(linqCtx);
-
-	GETKeyWord(KEY_EQUALS);
-
-	// Save K2's lex range — same parse-and-discard pattern. K2
-	// references bindSlot which is bound NOW (above), so the parse
-	// resolves the identifier; emit goes to the discarded buffer.
-	pj.k2LexStart = m_numCurrentCompile;
-	{
-		const size_t preSize = m_cByteCode.m_listCode.size();
-		GetExpression(linqCtx);
-		m_cByteCode.m_listCode.resize(preSize);
-	}
-	pj.k2LexEnd = m_numCurrentCompile;
-
-	// Persistent hash slot — survives across outer iters; first-iter
-	// trampoline allocates the Container into it.
-	pj.hashSlot = linqCtx->CreateVariable();
-
-	// Per-row reset for outer-referenced T — `hashSlot = empty` so
-	// the IsEmpty guard below falls through to trampoline rebuild on
-	// EVERY row. This sacrifices the hash amortisation (O(M²) instead
-	// of O(M+N)) for correctness when T depends on outer iter vars.
-	// Hoisting reset to outer-foreach body entry (one rebuild per
-	// outer iter) is deferred — requires lookahead through level-N's
-	// CompileLinqBlock before emitting OPER_FOREACH header.
-	if (pj.m_needsReset) {
-		// OPER_LET hashSlot = (default empty ibValue from const pool).
-		// We can't easily emit "set TYPE_EMPTY" inline; the cleanest
-		// trigger is OPER_NEW for an empty array / undefined slot —
-		// but simpler is to leverage the IsEmpty path: assign a
-		// known-empty constant. Use a const-pool empty ibValue.
-		const ibParamUnit emptyConst = FindConst(ibValue());
-		ibByteUnit c; AddLineInfo(c);
-		c.m_numOper = OPER_LET;
-		c.m_param1 = pj.hashSlot;
-		c.m_param2 = emptyConst;
-		m_cByteCode.m_listCode.emplace_back(std::move(c));
-	}
-
-	// (1) tmp_isEmpty = !hashSlot. Untyped OPER_NOT writes BOOLEAN
-	// via SetTypeBoolean(IsEmptyValue) — TYPE_EMPTY → true, otherwise
-	// false. Compile-side m_strType stays empty so no +TYPE_DELTA
-	// inference fires (kept on the untyped IsEmpty path).
-	const ibParamUnit tmpIsEmpty = linqCtx->CreateVariable();
-	{
-		ibByteUnit c; AddLineInfo(c);
-		c.m_numOper = OPER_NOT;
-		c.m_param1 = tmpIsEmpty;
-		c.m_param2 = pj.hashSlot;
-		m_cByteCode.m_listCode.emplace_back(std::move(c));
-	}
-
-	// (2) OPER_IF tmp_isEmpty, skipLabel
-	// OPER_IF jumps when condition is FALSE (per runtime: if !cond,
-	// goto). tmpIsEmpty TRUE on first iter (empty hash) → fall through
-	// to GOTO trampoline. FALSE on subsequent (built) → jump to
-	// skipLabel past the trampoline GOTO.
-	const int condIfIp = (int)m_cByteCode.m_listCode.size();
-	{
-		ibByteUnit c; AddLineInfo(c);
-		c.m_numOper = OPER_IF;
-		c.m_param1 = tmpIsEmpty;
-		c.m_param2.m_numIndex = 0;  // back-patched after the GOTO emit
-		m_cByteCode.m_listCode.emplace_back(std::move(c));
-	}
-
-	// (3) OPER_GOTO trampolineLabel (placeholder — trampoline emitted
-	// after outer NEXT_ITER patches param1 with its ip).
-	pj.placeholderGotoIp = (int)m_cByteCode.m_listCode.size();
-	{
-		ibByteUnit c; AddLineInfo(c);
-		c.m_numOper = OPER_GOTO;
-		c.m_param1.m_numIndex = 0;   // back-patched in trampoline emit loop
-		m_cByteCode.m_listCode.emplace_back(std::move(c));
-	}
-
-	// (4) skipLabel — back-patch the conditional IF to land here on
-	// subsequent iters (hashSlot non-empty path).
-	pj.skipLabelIp = (int)m_cByteCode.m_listCode.size();
-	m_cByteCode.m_listCode[condIfIp].m_param2.m_numIndex = pj.skipLabelIp;
-
-	// (5) found = hashSlot.Property(K1, bindSlot)
-	// Property writes the matched value into its 2nd-arg slot (bindSlot)
-	// on hit; returns false on miss (bindSlot left as previous content).
-	const ibParamUnit foundSlot = linqCtx->CreateVariable();
-	{
-		ibByteUnit c; AddLineInfo(c);
-		c.m_numOper = OPER_CALL_METHOD;
-		c.m_param1 = foundSlot;
-		c.m_param2 = pj.hashSlot;
-		c.m_param3.m_numIndex = GetConstString(wxT("Property"));
-		c.m_param3.m_numArray = 2;
-		m_cByteCode.m_listCode.emplace_back(std::move(c));
-	}
-	{
-		ibByteUnit c; AddLineInfo(c);
-		c.m_numOper = OPER_SET;
-		c.m_param1 = k1Slot;
-		m_cByteCode.m_listCode.emplace_back(std::move(c));
-	}
-	{
-		ibByteUnit c; AddLineInfo(c);
-		c.m_numOper = OPER_SET;
-		c.m_param1 = pj.bindSlot;
-		m_cByteCode.m_listCode.emplace_back(std::move(c));
-	}
-
-	// (6) OPER_IF found, end-of-body  — on miss (foundSlot=false),
-	// jump past the Add. End-of-body back-patches via whereSkipIps,
-	// shared with WHERE clauses at this level.
-	const int missSkipIp = (int)m_cByteCode.m_listCode.size();
-	{
-		ibByteUnit c; AddLineInfo(c);
-		c.m_numOper = OPER_IF;
-		c.m_param1 = foundSlot;
-		c.m_param2.m_numIndex = 0;   // back-patched at end of body
-		m_cByteCode.m_listCode.emplace_back(std::move(c));
-	}
-	whereSkipIps.push_back(missSkipIp);
-
-	// Push binding so subsequent clauses see `b` via standard linq
-	// context lookup. Origin FromJoin in case future clauses (e.g.
-	// `into g` group-join) need to distinguish.
-	ibLinqBinding jb;
-	jb.name      = joinName;
-	jb.origin    = ibLinqBinding::FromJoin;
-	jb.valueSlot = pj.bindSlot;
-	data.m_bindings.push_back(jb);
-
-	pendingJoins.push_back(pj);
-}
+// ⚠ THE LINQ HALF OF THIS COMPILER LIVES IN compileCodeLINQ.cpp — the block road (`from … select`),
+// the chain road (`src.Where(…)…`), the fold into a foreach somebody wrote, and `restrict`. Same
+// class, same single pass, same members; a translation unit is a unit of BUILDING and this one had
+// grown to seven and a half thousand lines. Nothing was made public to split it: the helpers that
+// went with it had no caller on this side.
 
 /**
  * record information about the type of variable
@@ -2944,42 +2067,52 @@ void ibCompileCode::CompileLinqJoin(ibCompileContext* linqCtx,
 
 void ibCompileCode::AddTypeSet(const ibParamUnit& variable)
 {
-	if (!variable.m_strType.IsEmpty()) {
+	if (variable.m_clsid != 0) {
 		ibByteUnit code;
 		AddLineInfo(code);
 		code.m_numOper = OPER_SET_TYPE;
 		code.m_param1 = variable;
-		code.m_param2.m_numArray = ibValue::GetIDObjectFromString(variable.m_strType);
+		code.m_param2.m_numArray = variable.m_clsid;
 		m_cByteCode.m_listCode.emplace_back(std::move(code));
 	}
 }
 
-// macro checking variable Var for type Str
-#define CheckTypeDef(var,type) if(wxStrlen(type) > 0)\
+// ⭐ ONLY FOUR TYPES HAVE A TIER OF INSTRUCTIONS — Number, String, Date, Boolean (`OPER_… + TYPE_DELTAn`). A declared
+// type of any other registered class (`Array rows`, `CatalogRef.Goods item`, since 2026-08-04) has no typed
+// instruction to choose and no class the compiler can know an expression by, so it is not compared here: it is
+// the runtime gate's (OPER_SET_TYPE, AllowValue) — at the declaration, at a parameter's entry, and after every
+// assignment to it. Compared here it refused every use: `Array rows; rows = New Array;` was "Bad value type".
+static inline bool HasTypedTier(const ibClassID& clsid)
+{
+	return clsid == g_valueNumberCLSID || clsid == g_valueStringCLSID
+		|| clsid == g_valueDateCLSID || clsid == g_valueBooleanCLSID;
+}
+
+// macro checking variable Var against an expected type (by CLASS ID)
+#define CheckTypeDef(var,typeClsid) if((typeClsid) != 0 && HasTypedTier(typeClsid))\
 	{\
-		if(!stringUtils::CompareString(var.m_strType, type)){\
-			if (ibValue::CompareObjectName(type, ibValueTypes::TYPE_BOOLEAN)) SetError(ERROR_BAD_TYPE_EXPRESSION_B);\
-			else if (ibValue::CompareObjectName(type, ibValueTypes::TYPE_NUMBER)) SetError(ERROR_BAD_TYPE_EXPRESSION_N);\
-			else if (ibValue::CompareObjectName(type, ibValueTypes::TYPE_STRING)) SetError(ERROR_BAD_TYPE_EXPRESSION_S);\
-			else if (ibValue::CompareObjectName(type, ibValueTypes::TYPE_DATE)) SetError(ERROR_BAD_TYPE_EXPRESSION_D);\
+		if(var.m_clsid != (typeClsid)){\
+			if ((typeClsid) == g_valueBooleanCLSID) SetError(ERROR_BAD_TYPE_EXPRESSION_B);\
+			else if ((typeClsid) == g_valueNumberCLSID) SetError(ERROR_BAD_TYPE_EXPRESSION_N);\
+			else if ((typeClsid) == g_valueStringCLSID) SetError(ERROR_BAD_TYPE_EXPRESSION_S);\
+			else if ((typeClsid) == g_valueDateCLSID) SetError(ERROR_BAD_TYPE_EXPRESSION_D);\
 			else SetError(ERROR_BAD_TYPE_EXPRESSION);\
 		}\
-		if (ibValue::CompareObjectName(type, ibValueTypes::TYPE_NUMBER)) code.m_numOper+=TYPE_DELTA1;\
-		else if (ibValue::CompareObjectName(type, ibValueTypes::TYPE_STRING)) code.m_numOper+=TYPE_DELTA2;\
-		else if (ibValue::CompareObjectName(type, ibValueTypes::TYPE_DATE)) code.m_numOper+=TYPE_DELTA3;\
-        else if (ibValue::CompareObjectName(type, ibValueTypes::TYPE_BOOLEAN)) code.m_numOper+=TYPE_DELTA4;\
+		if ((typeClsid) == g_valueNumberCLSID) code.m_numOper+=TYPE_DELTA1;\
+		else if ((typeClsid) == g_valueStringCLSID) code.m_numOper+=TYPE_DELTA2;\
+		else if ((typeClsid) == g_valueDateCLSID) code.m_numOper+=TYPE_DELTA3;\
+        else if ((typeClsid) == g_valueBooleanCLSID) code.m_numOper+=TYPE_DELTA4;\
 	}
 
 // macro for adjusting the operation by variable type
 // if it is typed, then the typed operation will be performed
 #define CorrectTypeDef(sKey)\
-if(!sKey.m_strType.IsEmpty())\
+if(sKey.m_clsid != 0 && HasTypedTier(sKey.m_clsid))\
 {\
-	if (ibValue::CompareObjectName(sKey.m_strType, ibValueTypes::TYPE_NUMBER)) code.m_numOper+=TYPE_DELTA1;\
-	else if (ibValue::CompareObjectName(sKey.m_strType, ibValueTypes::TYPE_STRING)) code.m_numOper+=TYPE_DELTA2;\
-	else if (ibValue::CompareObjectName(sKey.m_strType, ibValueTypes::TYPE_DATE)) code.m_numOper+=TYPE_DELTA3;\
-    else if (ibValue::CompareObjectName(sKey.m_strType, ibValueTypes::TYPE_BOOLEAN))  code.m_numOper+=TYPE_DELTA4;\
-	else SetError(ERROR_BAD_TYPE_EXPRESSION);\
+	if (sKey.m_clsid == g_valueNumberCLSID) code.m_numOper+=TYPE_DELTA1;\
+	else if (sKey.m_clsid == g_valueStringCLSID) code.m_numOper+=TYPE_DELTA2;\
+	else if (sKey.m_clsid == g_valueDateCLSID) code.m_numOper+=TYPE_DELTA3;\
+    else if (sKey.m_clsid == g_valueBooleanCLSID)  code.m_numOper+=TYPE_DELTA4;\
 }
 
 // macro for local context 
@@ -3039,7 +2172,13 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 
 	}
 
-	while (true) {
+	// ⭐ A BODY WITHOUT BRACES IS ONE STATEMENT — OF ANY KIND. It used to stop after an assignment or a
+	// call only: a statement opened by a keyword leaves the switch below with a `break` that ends the
+	// switch, not the loop, so `else if (c) { … } n = n + 1;` put the increment inside the else
+	// (2026-09-30: a `while` over it never ended). The loop condition says it for every kind at once.
+	const bool oneStatement = gs_codeStyle == CODE_CES && !bCompileBlock && context->m_numReturn == RETURN_BLOCK;
+
+	do {
 
 		const ibLexem& lex = PreviewGetLexem();
 
@@ -3064,6 +2203,9 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 				// RHS where the result is captured. CompileLinqExpression
 				// consumes KEY_FROM itself.
 				CompileLinqExpression(context);
+				break;
+			case KEY_RESTRICT:
+				CompileRestrictExpression(context);
 				break;
 			case KEY_IF:
 				CompileIf(context);
@@ -3104,6 +2246,39 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 			{
 				GETKeyWord(KEY_RETURN);
 
+				// ⭐⭐ A FOLDED LAMBDA BODY ANSWERS WITH A CELL, NOT BY LEAVING A FRAME. When a
+				// chain's lambda became instructions inside the caller's own loop, this `return`
+				// belongs to the BODY — the frame an OPER_RET would leave is the person's
+				// procedure. See ibReturnCapture (compileContext.h): the value goes into the cell
+				// the fold is waiting on and the jump past the body is recorded for it to patch.
+				if (ibReturnCapture* capture = context->FindReturnCapture()) {
+					if (IsNextDelimeter(';')) {
+						SetError(ERROR_EXPRESSION_REQUIRE);
+						return false;
+					}
+					const ibParamUnit value = GetExpression(context);
+					{
+						ibByteUnit let; AddLineInfo(let);
+						let.m_numOper = OPER_LET;
+						let.m_param1  = capture->m_valueCell;
+						let.m_param2  = value;
+						m_cByteCode.m_listCode.emplace_back(std::move(let));
+					}
+					// Close every block this `return` is standing inside — see ibReturnCapture.
+					for (int depth = m_compileScopeDepth; depth > capture->m_scopeDepth; --depth) {
+						ibByteUnit close; AddLineInfo(close);
+						close.m_numOper = OPER_CTX_END;
+						m_cByteCode.m_listCode.emplace_back(std::move(close));
+					}
+					{
+						ibByteUnit jump; AddLineInfo(jump);
+						jump.m_numOper = OPER_GOTO;   // target written when the body closes
+						m_cByteCode.m_listCode.emplace_back(std::move(jump));
+						capture->m_jumps.push_back((int)m_cByteCode.m_listCode.size() - 1);
+					}
+					break;
+				}
+
 				ibCompileContext* currContext = context;
 				while (currContext->m_numReturn == RETURN_BLOCK)
 					currContext = currContext->m_parentContext;
@@ -3140,13 +2315,15 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 			case KEY_CONTINUE:
 			{
 				GETKeyWord(KEY_CONTINUE);
-				if (context->m_listContinue[context->m_numDoNumber]) {
+				// THE LOOP MAY BE A CONTEXT ABOVE — see ibCompileContext::FindLoopContext.
+				ibCompileContext* loopContext = context->FindLoopContext();
+				if (loopContext != nullptr) {
 					ibByteUnit code;
 					AddLineInfo(code);
 					code.m_numOper = OPER_GOTO;
 					m_cByteCode.m_listCode.emplace_back(std::move(code));
 					const int addrLine = m_cByteCode.m_listCode.size() - 1;
-					std::vector<int>* pList = context->m_listContinue[context->m_numDoNumber];
+					const auto& pList = loopContext->m_listContinue[loopContext->m_numDoNumber];
 					pList->emplace_back(addrLine);
 				}
 				else {
@@ -3158,19 +2335,18 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 			case KEY_BREAK:
 			{
 				GETKeyWord(KEY_BREAK);
-				if (context->m_listBreak[context->m_numDoNumber] != nullptr) {
-					ibByteUnit code;
-					AddLineInfo(code);
-					code.m_numOper = OPER_GOTO;
-					m_cByteCode.m_listCode.emplace_back(std::move(code));
-					const int addrLine = m_cByteCode.m_listCode.size() - 1;
-					std::vector<int>* pList = context->m_listBreak[context->m_numDoNumber];
-					pList->emplace_back(addrLine);
-				}
-				else {
+				ibCompileContext* loopContext = context->FindLoopContext();
+				if (loopContext == nullptr || !loopContext->m_listBreak[loopContext->m_numDoNumber]) {
 					SetError(ERROR_USE_BREAK); // break operator can only be used inside a loop
 					return false;
 				}
+				const auto& pList = loopContext->m_listBreak[loopContext->m_numDoNumber];
+				ibByteUnit code;
+				AddLineInfo(code);
+				code.m_numOper = OPER_GOTO;
+				m_cByteCode.m_listCode.emplace_back(std::move(code));
+				const int addrLine = m_cByteCode.m_listCode.size() - 1;
+				pList->emplace_back(addrLine);
 				break;
 			}
 			case KEY_FUNCTION:
@@ -3187,6 +2363,18 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 		}
 		else {
 
+			// A TYPED DECLARATION INSIDE A BODY. Only `Var x` used to be caught
+			// here (the KEY_VAR case above), so `Boolean cancel;` in the middle of
+			// a procedure was parsed as an expression and failed on the missing
+			// '='. The look-ahead requires an identifier after the type, so an
+			// ordinary statement that starts with a variable of the same name is
+			// unaffected.
+			if (IDENTIFIER == lex.m_lexType && IsTypeVar()) {
+				if (!CompileDeclaration(context))
+					return false;
+				continue;
+			}
+
 			const ibLexem& nextLexem = GetLexem();
 			if (IDENTIFIER == nextLexem.m_lexType) {
 
@@ -3194,14 +2382,61 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 					context->m_numTempVar = 0;
 
 				if (IsNextDelimeter(':')) {// this is a label task encountered
-					unsigned int pLabel = context->m_listLabelDef[nextLexem.m_strData];
-					if (pLabel > 0) {
+					// PRESENCE, NOT VALUE — the same trap as in CreateLabels. Address
+					// 0 is legitimate (a label as the first statement of a body), so
+					// `> 0` would miss a genuine duplicate there, and operator[] would
+					// insert the key while asking. Ask whether it is declared.
+					if (context->m_listLabelDef.find(nextLexem.m_strData) != context->m_listLabelDef.end()) {
 						SetError(ERROR_IDENTIFIER_DUPLICATE, nextLexem.m_strData);// duplicate label definitions occurred
 						return false;
 					}
 					// write the address of the label:
 					context->m_listLabelDef[nextLexem.m_strData] = m_cByteCode.m_listCode.size() - 1;
 					GETDelimeter(':');
+				}
+				else if (IsNextDelimeter(wxT('+')) || IsNextDelimeter(wxT('-'))
+				      || IsNextDelimeter(wxT('*')) || IsNextDelimeter(wxT('/')) || IsNextDelimeter(wxT('%'))) {
+					// Compound assignment / increment on a BARE variable. Reached only when the
+					// identifier is IMMEDIATELY followed by an arithmetic op (no '.' / '[' / '('
+					// between), so a member/array GET-temp can never be silently mutated:
+					//   x++ / x--                                   -> x = x +/- 1
+					//   x += e / x -= e / x *= e / x /= e / x %= e  -> x = x <op> e
+					// At statement level the result is unused, so postfix == prefix store. All emit
+					// the in-place shape (param1 == param2 == variable) the `x = x <op> e` fold makes.
+					const wxUniChar op = IsNextDelimeter(wxT('+')) ? wxT('+')
+					                   : IsNextDelimeter(wxT('-')) ? wxT('-')
+					                   : IsNextDelimeter(wxT('*')) ? wxT('*')
+					                   : IsNextDelimeter(wxT('/')) ? wxT('/') : wxT('%');
+					const wxString strRealName = nextLexem.m_valData.GetString();
+					GETDelimeter(op); // consume the operator
+
+					ibParamUnit variable = context->GetVariable(strRealName, true, true); // must already exist
+					ibByteUnit code;
+					AddLineInfo(code);
+					code.m_param1 = variable; // dest in place
+					code.m_param2 = variable; // left operand
+
+					if ((op == wxT('+') || op == wxT('-')) && IsNextDelimeter(op)) {
+						// ++ / -- : right operand = 1
+						GETDelimeter(op);
+						code.m_numOper = (op == wxT('+')) ? OPER_ADD : OPER_SUB;
+						ibValue oneVal; oneVal.SetNumber(wxT("1"));
+						code.m_param3 = FindConst(oneVal);
+					}
+					else if (IsNextDelimeter(wxT('='))) {
+						// += / -= / *= / /= / %= : right operand = expression
+						GETDelimeter(wxT('='));
+						code.m_param3 = GetExpression(context);
+						code.m_numOper = (op == wxT('+')) ? OPER_ADD
+						               : (op == wxT('-')) ? OPER_SUB
+						               : (op == wxT('*')) ? OPER_MULT
+						               : (op == wxT('/')) ? OPER_DIV : OPER_MOD;
+					}
+					else { // a lone +/-/*// after a bare identifier — not valid here
+						SetError(ERROR_CODE);
+						return false;
+					}
+					m_cByteCode.m_listCode.emplace_back(std::move(code));
 				}
 				else { //function and method calls, expression assignments are processed here
 
@@ -3221,14 +2456,35 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 						code.m_numOper = OPER_LET;
 						AddLineInfo(code);
 
-						CheckTypeDef(expression, variable.m_strType);
-						variable.m_strType = expression.m_strType;
+						CheckTypeDef(expression, variable.m_clsid);
+						// A declared type with no typed tier is checked where the value arrives — see HasTypedTier.
+						ibParamUnit gated;
+						if (variable.m_clsid != 0 && !HasTypedTier(variable.m_clsid))
+							gated = variable;
+						variable.m_clsid = expression.m_clsid;
 
 						bool bShortLet = false; int n = 0;
 
+						// THE LAST INSTRUCTION MUST BE THE ONE THAT PRODUCED THIS TEMP.
+						//
+						// The fold rewrites that instruction's destination so it writes
+						// straight into the target, skipping a copy. It asked only two
+						// things — is the result a temp, is the last opcode arithmetic —
+						// and ASSUMED the last instruction was the one that filled the
+						// temp. When it is not, the fold redirects a write meant for
+						// somewhere else.
+						//
+						// `taken = i++` is that case: the expression's value is a temp
+						// filled by an OPER_LET, and the last instruction is the
+						// increment `ADD i, i, 1`. The fold pointed that ADD at `taken`,
+						// so `taken` got 6 (the incremented value, not the old one) and
+						// `i` was never stored at all — both halves of `x++` wrong from
+						// one missing question.
 						if (DEF_VAR_TEMP == expression.m_numArray) { //reduce only temporary variables
 							n = m_cByteCode.m_listCode.size() - 1;
-							if (n >= 0) {
+							if (n >= 0
+							 && m_cByteCode.m_listCode[n].m_param1.m_numArray == expression.m_numArray
+							 && m_cByteCode.m_listCode[n].m_param1.m_numIndex == expression.m_numIndex) {
 								int nOperation = m_cByteCode.m_listCode[n].m_numOper % TYPE_DELTA1;
 								nOperation = nOperation % TYPE_DELTA1;
 								if (OPER_MULT == nOperation ||
@@ -3257,8 +2513,34 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 							code.m_param2 = expression;
 							m_cByteCode.m_listCode.emplace_back(std::move(code));
 						}
+						AddTypeSet(gated);   // nothing when the variable's type has a tier or none was declared
+
 					}
 				}
+			}
+			else if (nextLexem.m_lexType == DELIMITER
+				&& (nextLexem.m_numData == wxT('+') || nextLexem.m_numData == wxT('-')))
+			{
+				// prefix ++ / -- (statement form): `++x;` / `--x;` is sugar for
+				// `x = x +/- 1`. The first +/- was just consumed as nextLexem;
+				// require it doubled, then a bare variable. Value is unused at
+				// statement level, so this is identical to the postfix store.
+				const wxUniChar incOp = nextLexem.m_numData;
+				if (!IsNextDelimeter(incOp)) { // a lone leading +/- — syntax error, as before
+					SetError(ERROR_CODE);
+					return false;
+				}
+				GETDelimeter(incOp); // consume the second +/-
+				const wxString strRealName = GETIdentifier(true); // target variable
+				ibParamUnit variable = context->GetVariable(strRealName, true, true); // must already exist
+				ibByteUnit code;
+				AddLineInfo(code);
+				code.m_numOper = (incOp == wxT('+')) ? OPER_ADD : OPER_SUB;
+				ibValue oneVal; oneVal.SetNumber(wxT("1"));
+				code.m_param1 = variable;
+				code.m_param2 = variable;
+				code.m_param3 = FindConst(oneVal);
+				m_cByteCode.m_listCode.emplace_back(std::move(code));
 			}
 			else if (nextLexem.m_lexType == DELIMITER
 				&& nextLexem.m_numData == wxT(';'))
@@ -3301,12 +2583,14 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 				SetError(ERROR_CODE);
 				return false;
 			}
-
-			if (gs_codeStyle == CODE_CES && !bCompileBlock && context->m_numReturn == RETURN_BLOCK)
-				break;
 		}
 
-	}//while
+	} while (!oneStatement);
+
+	// …and the `;` that closed it is stepped over, as the next statement's look-ahead did before, so
+	// `if (c) raise; else …` still finds its else.
+	if (oneStatement)
+		PreviewGetLexem();
 
 	if (gs_codeStyle == CODE_CES && bCompileBlock) {
 		GETDelimeter(wxT('}'));
@@ -3368,18 +2652,31 @@ bool ibCompileCode::CompileNewObject(ibCompileContext* context)
 	code.m_param2.m_numIndex = numConst;//number of the called method from the list of encountered methods
 	code.m_param2.m_numArray = listParam.size();// number of parameters
 
+	// ⭐⭐ THE CLASS ID, DECIDED HERE — the guard above has just PROVED this name is a registered
+	// value ctor, and that answer used to be thrown away: the instruction carried the NAME and the
+	// runtime looked it up again on every execution (`CreateObject(className, …)` is literally
+	// `GetIDObjectFromString` followed by `CreateObject(clsid, …)`). GetTypeVar's own comment states
+	// the rule this restores: *"THE ID, NOT THE NAME. Everything downstream speaks class ids;
+	// handing back a name would only mean resolving it again, later, somewhere else."*
+	//
+	// The name stays in the const pool: a refusal has to be able to say which class it was.
+	code.m_param3.m_numIndex = (wxLongLong_t)ibValue::GetIDObjectFromString(strClassName);
+
 	ibParamUnit variable = context->CreateVariable();
 	code.m_param1 = variable;// variable into which the value is returned
 	m_cByteCode.m_listCode.emplace_back(std::move(code));
 
 	for (unsigned int arg = 0; arg < listParam.size(); arg++) {
 
-		ibByteUnit code;
-		AddLineInfo(code);
-		code.m_numOper = OPER_SET;
-		code.m_param1 = listParam[arg];
+		ibByteUnit argCode;
+		AddLineInfo(argCode);
+		argCode.m_numOper = OPER_SET;
+		argCode.m_param1 = listParam[arg];
 
-		m_cByteCode.m_listCode.emplace_back(std::move(code));
+		// The ARGUMENT's instruction — `code` was moved into the list above, so pushing it again put an empty
+		// instruction where each argument belonged: `New Structure("a", 1);` as a statement reached the
+		// constructor with no arguments at all (measured 2026-09-17). The expression form below was right.
+		m_cByteCode.m_listCode.emplace_back(std::move(argCode));
 	}
 
 	return true;
@@ -3456,8 +2753,11 @@ ibParamUnit ibCompileCode::GetCurrentIdentifier(ibCompileContext* context, int& 
 				SetError(ERROR_USE_PROCEDURE_AS_FUNCTION, foundedFunc->m_strRealName);
 				return ibParamUnit();
 			}
-			if (listParam.size() > foundedFunc->m_listParam.size()) {
-				SetError(ERROR_MANY_PARAMS); // too many parameters
+			// A variadic built-in (negative declared arity) has an empty declared
+			// list, so this bound would reject its first argument. See
+			// ibFunction::m_valueVariadic.
+			if (!foundedFunc->m_valueVariadic && listParam.size() > foundedFunc->m_listParam.size()) {
+				SetError(ERROR_MANY_PARAMS, foundedFunc->m_strRealName);
 				return ibParamUnit();
 			}
 
@@ -3474,11 +2774,11 @@ ibParamUnit ibCompileCode::GetCurrentIdentifier(ibCompileContext* context, int& 
 			m_cByteCode.m_listCode.emplace_back(std::move(code));
 
 			for (unsigned int i = 0; i < listParam.size(); i++) {
-				ibByteUnit code;
-				AddLineInfo(code);
-				code.m_numOper = OPER_SET;
-				code.m_param1 = listParam[i];
-				m_cByteCode.m_listCode.emplace_back(std::move(code));
+				ibByteUnit argCode;
+				AddLineInfo(argCode);
+				argCode.m_numOper = OPER_SET;
+				argCode.m_param1 = listParam[i];
+				m_cByteCode.m_listCode.emplace_back(std::move(argCode));
 			}
 		}
 		else {
@@ -3524,8 +2824,8 @@ ibParamUnit ibCompileCode::GetCurrentIdentifier(ibCompileContext* context, int& 
 			const bool isCallableVar = foundCallable
 				&& foundedCallableVar
 				&& foundedCallableVar->m_strContext.IsEmpty()
-				&& !foundedCallableVar->m_bExternal
-				&& (!foundedCallableVar->m_bContext || foundInBlockScope);
+				&& !foundedCallableVar->IsExternal()
+				&& (!foundedCallableVar->IsContext() || foundInBlockScope);
 
 			if (isCallableVar) {
 				std::vector<ibParamUnit> listParam;
@@ -3563,11 +2863,11 @@ ibParamUnit ibCompileCode::GetCurrentIdentifier(ibCompileContext* context, int& 
 				// OPER_CALL_METHOD / OPER_CALL. Runtime walks these via
 				// lCodeLine++ inside its OPER_CALL_LAMBDA handler.
 				for (unsigned int i = 0; i < listParam.size(); i++) {
-					ibByteUnit code;
-					AddLineInfo(code);
-					code.m_numOper = OPER_SET;
-					code.m_param1 = listParam[i];
-					m_cByteCode.m_listCode.emplace_back(std::move(code));
+					ibByteUnit argCode;
+					AddLineInfo(argCode);
+					argCode.m_numOper = OPER_SET;
+					argCode.m_param1 = listParam[i];
+					m_cByteCode.m_listCode.emplace_back(std::move(argCode));
 				}
 			}
 			else {
@@ -3575,44 +2875,67 @@ ibParamUnit ibCompileCode::GetCurrentIdentifier(ibCompileContext* context, int& 
 			}
 		}
 		if (IsTypeVar(strRealName)) {
-			variable.m_strType = GetTypeVar(strRealName);	// this is a type cast
+			variable.m_clsid = GetTypeVar(strRealName);	// this is a type cast
 		}
 		numIsSet = 0;
 	}
 	else { //this is a variable call
 		std::shared_ptr<ibCompileContext::ibVariable> foundedVar = nullptr; numIsSet = 1;
 
-		// Kind-aware identifier resolve. Three outcomes:
-		//   - ContextProp (Catalogs of Manager) — m_strContext set on the
-		//     resolved entry → emit OPER_GET_A / OPER_SET_A on the parent
-		//     binding + prop name const.
-		//   - bare binding (ThisForm) or regular var — fall through to
-		//     GetVariable's frame-slot emission (handles Local / Context
-		//     bindings uniformly via the compile-context's slot table).
-		//   - not found — GetVariable also covers the auto-add path.
-		const bool isContextProp =
-			m_rootContext->FindVariable(strRealName, foundedVar, true) &&
-			foundedVar && !foundedVar->m_strContext.IsEmpty();
+		// Kind-aware identifier resolve — promote the bind-kind to a dedicated
+		// access opcode (1:1 with Bind{Context,Scope,Export}Variable):
+		//   - ContextProp (Catalogs of a Manager scope) → OPER_GET_SCOPE /
+		//     OPER_SET_SCOPE on the parent (scope-provider) binding + member const.
+		//   - External binding (RegisterRecords / Filter / Controls / DataSource)
+		//     → OPER_GET_EXTERN / OPER_SET_EXTERN on the handle's slot.
+		//   - Context binding (ThisObject / ThisForm) → OPER_GET_CONTEXT /
+		//     OPER_SET_CONTEXT on the handle's slot.
+		//   - regular var / not found → GetVariable's frame-slot emission.
+		context->FindVariable(strRealName, foundedVar, true);
+		const bool isScope   = foundedVar && foundedVar->IsContextProp();
+		const bool isExtern  = foundedVar && foundedVar->IsExternal();
+		const bool isContext = foundedVar && foundedVar->IsContext();
 
-		if (isContextProp) {
+		if (isScope) {
 			ibByteUnit code;
 			AddLineInfo(code);
 			const int numConst = GetConstString(strRealName);
 			if (IsNextDelimeter('=') && numPrevSet == 1) {
 				GETDelimeter('='); numIsSet = 0;
-				code.m_numOper = OPER_SET_A;
-				code.m_param1 = context->GetVariable(foundedVar->m_strContext, true, false, true);//variable for which the attribute is called
-				code.m_param2.m_numIndex = numConst;//number of the called method from the list of encountered attributes and methods
+				code.m_numOper = OPER_SET_SCOPE;
+				code.m_param1 = context->GetVariable(foundedVar->m_strContext, true, false, true);//scope-provider binding
+				code.m_param2.m_numIndex = numConst;//member name const index
 				code.m_param3 = GetExpression(context);
 				m_cByteCode.m_listCode.emplace_back(std::move(code));
 				return variable;
 			}
 			else {
-				code.m_numOper = OPER_GET_A;
-				code.m_param2 = context->GetVariable(foundedVar->m_strContext, true, false, true);//variable for which the attribute is called
-				code.m_param3.m_numIndex = numConst;//number of the attribute to be called from the list of attributes and methods encountered
+				code.m_numOper = OPER_GET_SCOPE;
+				code.m_param2 = context->GetVariable(foundedVar->m_strContext, true, false, true);//scope-provider binding
+				code.m_param3.m_numIndex = numConst;//member name const index
 				variable = context->CreateVariable();
-				code.m_param1 = variable;// variable into which the value is returned
+				code.m_param1 = variable;// dest temp
+				m_cByteCode.m_listCode.emplace_back(std::move(code));
+			}
+		}
+		else if (isExtern || isContext) {
+			ibByteUnit code;
+			AddLineInfo(code);
+			const long getOp = isExtern ? OPER_GET_EXTERN : OPER_GET_CONTEXT;
+			const long setOp = isExtern ? OPER_SET_EXTERN : OPER_SET_CONTEXT;
+			if (IsNextDelimeter('=') && numPrevSet == 1) {
+				GETDelimeter('='); numIsSet = 0;
+				code.m_numOper = setOp;
+				code.m_param1 = context->GetVariable(strRealName, true, false);//handle slot
+				code.m_param3 = GetExpression(context);
+				m_cByteCode.m_listCode.emplace_back(std::move(code));
+				return variable;
+			}
+			else {
+				code.m_numOper = getOp;
+				code.m_param2 = context->GetVariable(strRealName, true, false);//handle slot
+				variable = context->CreateVariable();
+				code.m_param1 = variable;// dest temp
 				m_cByteCode.m_listCode.emplace_back(std::move(code));
 			}
 		}
@@ -3673,7 +2996,67 @@ loopLabel:
 	}
 
 	if (IsNextDelimeter('.')) { // this is a method call ��� �������� ����������� �������
+
+		// ⭐⭐ A PIPELINE WRITTEN AND CONSUMED IN ONE EXPRESSION IS A LOOP, AND COMPILES AS ONE.
+		// Asked BEFORE the dot is consumed, because the answer needs the whole chain and the
+		// receiver as it stands. Refuses everything outside its slice, and then the ordinary
+		// OPER_CALL_LINQ road below takes it — which is always correct. (docs/private/linq.md §0.2g)
+		{
+			ibParamUnit inlined;
+			if (CompileLinqChain(context, variable, inlined)) {
+				variable = inlined;
+				goto loopLabel;
+			}
+			// …and the same fold with no terminal to end on: the SOURCE of a foreach. The loop
+			// belongs to the foreach, so the verbs are parked here and emitted into its body.
+			if (TryFoldLinqChainSource(context, variable))
+				goto loopLabel;
+		}
+
 		GETDelimeter('.');
+
+		// ⭐⭐ THE TEXT ENDED ON THE DOT, and refusing here would throw away the one thing that was
+		// asked about. The compiler has the RECEIVER resolved and in hand; what is missing is a name
+		// nobody has typed yet. In a runtime compile that is still an error — an unfinished module
+		// is broken — but a tolerant compile was asked "tell me what you can about this text", and
+		// what it can tell is exactly this: the chain got this far, to this value.
+		//
+		// So the step is emitted with NO attribute name, and it costs no new notion: a reader that
+		// walks the instructions finds a member step whose name is empty and answers with the
+		// parent, which is what standing on a dot means (scriptComplete.cpp). The instruction is never
+		// executed — a tolerant compile produces no runtime artefact.
+		if (m_compileMode == ibCompileMode::Tolerant && IsEndOfProgram()) {
+
+			// The refusal is still SAID — in this mode SetError reports and returns, so a check
+			// asked about a finished text still hears about the dangling dot.
+			SetError(ERROR_IDENTIFIER_DEFINE);
+
+			ibByteUnit code;
+			AddLineInfo(code);
+			code.m_numOper = OPER_GET_A;
+			code.m_param2 = variable;                                 // the receiver, still in hand
+			code.m_param3.m_numIndex = GetConstString(wxEmptyString);  // the name nobody typed yet
+			variable = context->CreateVariable();
+			code.m_param1 = variable;
+
+			// ⭐⭐ AND THE COMPILER SAYS WHICH INSTRUCTION IT IS, rather than leaving a reader to find
+			// it by position. What follows this step on the tape is the compiler CLOSING what the
+			// typist left open — a block's `OPER_CTX_END`, a query's `OPER_LINQ_RESULT`, a loop's
+			// `OPER_NEXT_ITER` — and every one of them carries this same offset, because the parser
+			// has read no further token to stamp them with. See ibByteCode::m_numCaretInstruction.
+			//
+			// Guarded by the caret's own position: the same gate fires in an ordinary tolerant check
+			// (script_check) where nobody asked about a caret, and in the full-text compile the name
+			// door does, where the caret sits BEFORE this dot and must not be dragged to it.
+			const long emittedAt = (long)code.m_numString;
+			m_cByteCode.m_listCode.emplace_back(std::move(code));
+
+			if (m_caretPos >= 0 && emittedAt <= m_caretPos)
+				m_cByteCode.m_numCaretInstruction = (long)m_cByteCode.m_listCode.size() - 1;
+
+			return variable;
+		}
+
 		// acceptKeyword=true: contextual LINQ keywords (Where/Select/...)
 		// must work as method names in property-access positions.
 		wxString strIdentifier = GETIdentifier(true, /*acceptKeyword*/true);
@@ -3722,11 +3105,11 @@ loopLabel:
 			code.m_param1 = variable;// variable into which the value is returned
 			m_cByteCode.m_listCode.emplace_back(std::move(code));
 			for (unsigned int i = 0; i < listParam.size(); i++) {
-				ibByteUnit code;
-				AddLineInfo(code);
-				code.m_numOper = OPER_SET;
-				code.m_param1 = listParam[i];
-				m_cByteCode.m_listCode.emplace_back(std::move(code));
+				ibByteUnit argCode;
+				AddLineInfo(argCode);
+				argCode.m_numOper = OPER_SET;
+				argCode.m_param1 = listParam[i];
+				m_cByteCode.m_listCode.emplace_back(std::move(argCode));
 			}
 
 			numIsSet = 0;
@@ -3851,7 +3234,20 @@ bool ibCompileCode::CompileIf(ibCompileContext* context)
 
 		//for the previous condition, set the jump address if the condition does not match
 		m_cByteCode.m_listCode[nLastIFLine].m_param2.m_numIndex = m_cByteCode.m_listCode.size();
-		nLastIFLine = 0;
+
+		// ⚠ "THERE IS NO LONGER AN OPEN CONDITION", and it must not be sayable as an
+		// ADDRESS. This was `nLastIFLine = 0`, and zero is a perfectly good instruction
+		// index — the FIRST one — so the unconditional write at the end of this function
+		// stamped the length of the bytecode into the operand of instruction 0.
+		//
+		// An `else` therefore corrupted the module's opening instruction. Silently,
+		// because what it overwrote is m_param2.m_numIndex — an operand's slot number,
+		// which stays a plausible number: `Message("x" + CommonModule.Method())` on the
+		// first line began resolving CommonModule to slot 116 of a frame holding 69, and
+		// the engine answered "a variable is not an aggregate object" about a name that
+		// is a common module. Where the first instruction's second operand happened not
+		// to matter, the corruption did nothing at all and waited.
+		nLastIFLine = wxNOT_FOUND;
 
 		GETKeyWord(KEY_ELSE);
 
@@ -3867,7 +3263,10 @@ bool ibCompileCode::CompileIf(ibCompileContext* context)
 	const int numCurCompile = m_cByteCode.m_listCode.size();
 
 	//for the last condition, set the jump address if the condition does not match
-	m_cByteCode.m_listCode[nLastIFLine].m_param2.m_numIndex = numCurCompile;
+	// — unless an `else` closed the last one already, in which case there is nothing
+	// to point anywhere and the marker says so.
+	if (nLastIFLine != wxNOT_FOUND)
+		m_cByteCode.m_listCode[nLastIFLine].m_param2.m_numIndex = numCurCompile;
 
 	//Set the parameter for the GOTO operator - exit from all local conditions
 	for (unsigned int i = 0; i < listAddrLine.size(); i++) {
@@ -3941,8 +3340,8 @@ bool ibCompileCode::CompileFor(ibCompileContext* context)
 	ibParamUnit variable = context->GetVariable(strRealName);
 
 	// check variable type
-	if (!variable.m_strType.IsEmpty()) {
-		if (!ibValue::CompareObjectName(variable.m_strType, ibValueTypes::TYPE_NUMBER)) {
+	if (variable.m_clsid != 0) {
+		if (variable.m_clsid != g_valueNumberCLSID) {
 			SetError(ERROR_NUMBER_TYPE);
 			return false;
 		}
@@ -3959,8 +3358,8 @@ bool ibCompileCode::CompileFor(ibCompileContext* context)
 	m_cByteCode.m_listCode.emplace_back(std::move(code0));
 
 	// check value type
-	if (!variable.m_strType.IsEmpty()) {
-		if (!ibValue::CompareObjectName(variable2.m_strType, ibValueTypes::TYPE_NUMBER)) {
+	if (variable.m_clsid != 0) {
+		if (variable2.m_clsid != g_valueNumberCLSID) {
 			SetError(ERROR_BAD_TYPE_EXPRESSION);
 			return false;
 		}
@@ -4015,6 +3414,43 @@ bool ibCompileCode::CompileFor(ibCompileContext* context)
 	return true;
 }
 
+// Where a `foreach` header closes, read off the tokens with brackets balanced — see the declaration.
+// A pure look: nothing is consumed and nothing is emitted, so it can be asked before the source is
+// read, which is the only moment its answer is of any use.
+int ibCompileCode::FindForeachHeaderEnd(int at) const
+{
+	// ⚠ A NEGATIVE CURSOR IS THE ORDINARY "BEFORE THE FIRST TOKEN" (m_numCurrentCompile starts at
+	// wxNOT_FOUND), and `(size_t)(-1) + 1` is 0 — a valid index. So the scan would silently start at
+	// the top of the module instead of refusing. One comparison closes that whole question.
+	if (at < 0)
+		return wxNOT_FOUND;
+
+	const auto isDelim = [&](size_t i, wxUniChar c) {
+		return i < m_listLexem.size() && m_listLexem[i].m_lexType == DELIMITER
+			&& (wxUniChar)m_listLexem[i].m_numData == c;
+	};
+
+	int depth = 0;
+	for (size_t i = (size_t)at + 1; i < m_listLexem.size(); ++i) {
+
+		if (m_listLexem[i].m_lexType == ENDPROGRAM)
+			break;
+
+		if (isDelim(i, wxT('(')) || isDelim(i, wxT('['))) { ++depth; continue; }
+		if (isDelim(i, wxT(')')) || isDelim(i, wxT(']'))) {
+			// The header's own closer is the first one the source did not open.
+			if (depth == 0)
+				return gs_codeStyle == CODE_CES ? (int)i : wxNOT_FOUND;
+			--depth;
+			continue;
+		}
+		if (depth == 0 && gs_codeStyle != CODE_CES
+			&& m_listLexem[i].m_lexType == KEYWORD && m_listLexem[i].m_numData == KEY_DO)
+			return (int)i;
+	}
+	return wxNOT_FOUND;
+}
+
 bool ibCompileCode::CompileForeach(ibCompileContext* context)
 {
 	context->StartLoopList();
@@ -4038,7 +3474,17 @@ bool ibCompileCode::CompileForeach(ibCompileContext* context)
 	AddLineInfo(code1);
 	code1.m_numOper = OPER_LET;
 	code1.m_param1 = variableIn;
-	code1.m_param2 = GetExpression(context);
+	// ⭐ `foreach (r in src.Where(λ))` — the verbs are recognised WHILE the source is read and parked
+	// (TryFoldLinqChainSource); what comes back here is the source itself, and the filters and
+	// projections are emitted into the body below.
+	//
+	// The scope says WHICH header is being read, by the position of its closer, and disarms itself on
+	// every way out — see ibLinqSourceScope. A source that is not a chain costs the scan below and
+	// nothing else.
+	{
+		const ibLinqSourceScope readingTheSource(this, FindForeachHeaderEnd(m_numCurrentCompile));
+		code1.m_param2 = GetExpression(context);
+	}
 	m_cByteCode.m_listCode.emplace_back(std::move(code1));
 
 	ibParamUnit variableIt =
@@ -4055,6 +3501,12 @@ bool ibCompileCode::CompileForeach(ibCompileContext* context)
 
 	const int numStartFOREACH = m_cByteCode.m_listCode.size() - 1;
 
+	// The folded verbs open the body: a `Where` becomes a branch to the next row, a `Select` writes
+	// the projection back into the loop variable. Emitted BEFORE the person's own body, which then
+	// runs only for rows that survived and sees exactly what the chain said it would.
+	std::vector<int> chainSkipIps;
+	EmitLinqChainClauses(context, variable, chainSkipIps);
+
 	if (gs_codeStyle == CODE_VES)
 		GETKeyWord(KEY_DO);
 	else
@@ -4068,12 +3520,17 @@ bool ibCompileCode::CompileForeach(ibCompileContext* context)
 	if (gs_codeStyle == CODE_VES)
 		GETKeyWord(KEY_ENDDO);
 
+	const int nextIterIp = (int)m_cByteCode.m_listCode.size();
 	ibByteUnit code2;
 	AddLineInfo(code2);
 	code2.m_numOper = OPER_NEXT_ITER;
 	code2.m_param1 = variableIt; // for storage iterpos;
 	code2.m_param2.m_numIndex = numStartFOREACH;
 	m_cByteCode.m_listCode.emplace_back(std::move(code2));
+
+	// A row the chain rejected goes straight to the next one — the same address `continue` uses.
+	for (const int ip : chainSkipIps)
+		m_cByteCode.m_listCode[ip].m_param2.m_numIndex = nextIterIp;
 
 	m_cByteCode.m_listCode[numStartFOREACH].m_param4.m_numIndex = m_cByteCode.m_listCode.size();
 
@@ -4166,7 +3623,15 @@ ibParamUnit ibCompileCode::GetCallFunction(ibCompileContext* context, const wxSt
 	(void)GetFunction(callFunc->m_strName, foundedFunc);
 
 
-	if (foundedFunc != nullptr && m_strCurFuncName != callFunc->m_strName) {
+	// Case-insensitive: m_strCurFuncName holds the function's source-case name
+	// ("Fact"), callFunc->m_strName is upper-cased ("FACT"). A case-sensitive
+	// `!=` mis-classifies a self-call as a non-recursive call, takes the
+	// immediate PushCallFunction path, and emits OPER_CALL with the frame size
+	// (param3 = m_lVarCount) still 0 — the count isn't known until AFTER the
+	// body compiles (it includes the temps created during it). The whole point
+	// of deferring a self-call to m_listCallFunc is to resolve it at finalize
+	// once the count is settled, so the recursive frame is sized correctly.
+	if (foundedFunc != nullptr && !stringUtils::CompareString(m_strCurFuncName, callFunc->m_strName)) {
 
 		if (!PushCallFunction(callFunc))
 			return ibParamUnit();
@@ -4212,7 +3677,7 @@ ibParamUnit ibCompileCode::FindConst(const ibValue& constData)
 		m_cByteCode.m_listConst.emplace_back(constData);
 		m_listHashConst.insert_or_assign(strConstant, variable.m_numIndex + 1);
 	}
-	variable.m_strType = GetTypeVar(constData.GetClassName());
+	variable.m_clsid = GetTypeVar(constData.GetClassName());
 	return variable;
 }
 
@@ -4233,18 +3698,31 @@ ibParamUnit ibCompileCode::GetExpression(ibCompileContext* context, int nPriorit
 	if ((lex.m_lexType == KEYWORD && lex.m_numData == KEY_NOT) || (lex.m_lexType == DELIMITER && lex.m_numData == '!')) {
 
 		variable = context->CreateVariable();
-		variable.m_strType = ibValue::GetNameObjectFromVT(ibValueTypes::TYPE_BOOLEAN, true);
+		variable.m_clsid = g_valueBooleanCLSID;
 
-		AddTypeSet(variable);
+		// ⚠ NO GATE ON THE OPERATOR'S OWN CELL. OPER_SET_TYPE used to MAKE the cell Boolean; it is a gate now (it
+		// checks the value standing there), and emitted before OPER_NOT it checked what the cell held from the
+		// previous pass. In a LINQ filter NOT over an unknown answers UNKNOWN (LINQ_THREE_VALUED_NULL), so the
+		// second row met the first row's NULL and raised "Type mismatch ... 'Boolean'" (2026-09-17). OPER_NOT
+		// types its result itself; the class id above is what the compiler reads the expression as.
 
-		ibParamUnit variable2 = GetExpression(context);// , gs_operPriority['!']);
+		// ⭐⭐ `Not` IS TIGHTER THAN `And` / `Or` AND LOOSER THAN A COMPARISON (Max, 2026-09-17): `Not x = 5` is
+		// `Not (x = 5)`, `Not a And b` is `(Not a) And b`. The operand is read at And's priority, so it takes
+		// comparisons, `In`, arithmetic, and stops at the first `And` / `Or`; what follows continues in the
+		// caller's loop with `Not a` as its left side. The query language reads NOT the same way
+		// (queryParser.cpp: OR < AND < NOT < comparison).
+		//
+		// 🛑 It used to take the WHOLE rest — `Not a And b` was `Not (a And b)` — with `gs_operPriority['!']`
+		// (50) written beside the call and commented out; uncommenting that would have made `Not x = 5` read
+		// `(Not x) = 5`. Pinned for a week by LambdaRecorderCES as a question, not an answer.
+		ibParamUnit variable2 = GetExpression(context, gs_operPriority[KEY_AND]);
 
 		ibByteUnit code;
 		code.m_numOper = OPER_NOT;
 		AddLineInfo(code);
 
-		if (!variable2.m_strType.IsEmpty()) {
-			CheckTypeDef(variable2, ibValue::GetNameObjectFromVT(ibValueTypes::TYPE_BOOLEAN));
+		if (variable2.m_clsid != 0) {
+			CheckTypeDef(variable2, g_valueBooleanCLSID);
 		}
 
 		code.m_param1 = variable;
@@ -4289,17 +3767,19 @@ ibParamUnit ibCompileCode::GetExpression(ibCompileContext* context, int nPriorit
 
 		code.m_param2.m_numIndex = numConst;//number of the called method from the list of encountered methods
 		code.m_param2.m_numArray = listParam.size();// number of parameters
+		// The id, decided here — see the twin emitter above for why.
+		code.m_param3.m_numIndex = (wxLongLong_t)ibValue::GetIDObjectFromString(strObjectName);
 
 		variable = context->CreateVariable();
 		code.m_param1 = variable;// variable into which the value is returned
 		m_cByteCode.m_listCode.emplace_back(std::move(code));
 
 		for (unsigned int arg = 0; arg < listParam.size(); arg++) {
-			ibByteUnit code;
-			AddLineInfo(code);
-			code.m_numOper = OPER_SET;
-			code.m_param1 = listParam[arg];
-			m_cByteCode.m_listCode.emplace_back(std::move(code));
+			ibByteUnit argCode;
+			AddLineInfo(argCode);
+			argCode.m_numOper = OPER_SET;
+			argCode.m_param1 = listParam[arg];
+			m_cByteCode.m_listCode.emplace_back(std::move(argCode));
 		}
 	}
 	else if (lex.m_lexType == KEYWORD && lex.m_numData == KEY_FROM) {
@@ -4311,6 +3791,14 @@ ibParamUnit ibCompileCode::GetExpression(ibCompileContext* context, int nPriorit
 		// array build).
 		m_numCurrentCompile--;
 		variable = CompileLinqExpression(context);
+	}
+	else if (lex.m_lexType == KEYWORD && lex.m_numData == KEY_RESTRICT) {
+		// Access-policy restriction — `restrict <id> in <src> [join ...] [where ...]`.
+		// Step back so CompileRestrictExpression's own GETKeyWord(KEY_RESTRICT)
+		// re-consumes the keyword via its standard path (mirrors the KEY_FROM ->
+		// CompileLinqExpression idiom above).
+		m_numCurrentCompile--;
+		variable = CompileRestrictExpression(context);
 	}
 	else if (lex.m_lexType == KEYWORD &&
 		(lex.m_numData == KEY_FUNCTION || lex.m_numData == KEY_PROCEDURE)) {
@@ -4342,14 +3830,78 @@ ibParamUnit ibCompileCode::GetExpression(ibCompileContext* context, int nPriorit
 		m_cByteCode.m_listCode.emplace_back(std::move(code));
 	}
 	else if (lex.m_lexType == IDENTIFIER) {
-		m_numCurrentCompile--;// step back
-		int numSet = 0;
-		variable = GetCurrentIdentifier(context, numSet);
+		// postfix ++ / -- in expression on a BARE variable: `x++` / `x--` yields
+		// the OLD value, then stores x = x +/- 1. Gate: the identifier is
+		// IMMEDIATELY followed by a doubled, source-ADJACENT +/- — so member /
+		// array GET-temps (`obj.a++`, `arr[i]++`) fall through to a normal read,
+		// and `a - -b` (spaced) is not mistaken for `a--`.
+		wxUniChar incOp = 0;
+		if (m_numCurrentCompile + 2 < m_listLexem.size()
+			&& m_listLexem[m_numCurrentCompile + 1].m_lexType == DELIMITER
+			&& m_listLexem[m_numCurrentCompile + 2].m_lexType == DELIMITER
+			&& (m_listLexem[m_numCurrentCompile + 1].m_numData == '+' || m_listLexem[m_numCurrentCompile + 1].m_numData == '-')
+			&& m_listLexem[m_numCurrentCompile + 1].m_numData == m_listLexem[m_numCurrentCompile + 2].m_numData
+			&& m_listLexem[m_numCurrentCompile + 2].m_numString == m_listLexem[m_numCurrentCompile + 1].m_numString + 1)
+			incOp = (wxUniChar)m_listLexem[m_numCurrentCompile + 1].m_numData;
+
+		if (incOp != 0) {
+			const wxString strRealName = lex.m_valData.GetString();
+			GETDelimeter(incOp);
+			GETDelimeter(incOp);
+			ibParamUnit target = context->GetVariable(strRealName, true, true); // lvalue, must exist
+			// expression value = a temp holding the OLD value (captured before the store)
+			variable = context->CreateVariable();
+			ibByteUnit getOld;
+			AddLineInfo(getOld);
+			getOld.m_numOper = OPER_LET;
+			getOld.m_param1 = variable;
+			getOld.m_param2 = target;
+			m_cByteCode.m_listCode.emplace_back(std::move(getOld));
+			// store target = target +/- 1
+			ibByteUnit incCode;
+			AddLineInfo(incCode);
+			incCode.m_numOper = (incOp == '+') ? OPER_ADD : OPER_SUB;
+			ibValue oneVal; oneVal.SetNumber(wxT("1"));
+			incCode.m_param1 = target;
+			incCode.m_param2 = target;
+			incCode.m_param3 = FindConst(oneVal);
+			m_cByteCode.m_listCode.emplace_back(std::move(incCode));
+		}
+		else {
+			m_numCurrentCompile--;// step back
+			int numSet = 0;
+			variable = GetCurrentIdentifier(context, numSet);
+		}
 	}
 	else if (lex.m_lexType == CONSTANT) {
 		variable = FindConst(lex.m_valData);
 	}
 	else if ((lex.m_lexType == DELIMITER && lex.m_numData == '+') || (lex.m_lexType == DELIMITER && lex.m_numData == '-')) {
+
+		// prefix ++ / -- in expression: `++x` / `--x` store x = x +/- 1, then
+		// yield x (the new value). Caught BEFORE the unary-sign logic below —
+		// else `++x` parses as `+(+x)` and silently no-ops. Require the two
+		// signs ADJACENT in source (m_numString) so `a - -b` (spaced) stays a
+		// binary minus + unary minus, not a phantom `a--`.
+		if (m_numCurrentCompile + 1 < m_listLexem.size()
+			&& m_listLexem[m_numCurrentCompile + 1].m_lexType == DELIMITER
+			&& m_listLexem[m_numCurrentCompile + 1].m_numData == lex.m_numData
+			&& m_listLexem[m_numCurrentCompile + 1].m_numString == m_listLexem[m_numCurrentCompile].m_numString + 1) {
+			const wxUniChar incOp = lex.m_numData;
+			GETDelimeter(incOp); // consume the second +/-
+			const wxString strRealName = GETIdentifier(true); // target — a bare variable
+			ibParamUnit target = context->GetVariable(strRealName, true, true); // must already exist
+			ibByteUnit incCode;
+			AddLineInfo(incCode);
+			incCode.m_numOper = (incOp == '+') ? OPER_ADD : OPER_SUB;
+			ibValue oneVal; oneVal.SetNumber(wxT("1"));
+			incCode.m_param1 = target;
+			incCode.m_param2 = target;
+			incCode.m_param3 = FindConst(oneVal);
+			m_cByteCode.m_listCode.emplace_back(std::move(incCode));
+			variable = target; // prefix yields the NEW value; rejoin the operator loop
+			goto delimOperation;
+		}
 
 		// Unary sign at expression-start position — always allowed,
 		// regardless of caller's binary-priority context. Earlier this
@@ -4366,10 +3918,10 @@ ibParamUnit ibCompileCode::GetExpression(ibCompileContext* context, int nPriorit
 		if (lex.m_numData == '+') { // do nothing (ignore)
 			ibByteUnit code;
 			variable = GetExpression(context, 100);   // super high priority!
-			if (!variable.m_strType.IsEmpty()) {
-				CheckTypeDef(variable, ibValue::GetNameObjectFromVT(ibValueTypes::TYPE_NUMBER));
+			if (variable.m_clsid != 0) {
+				CheckTypeDef(variable, g_valueNumberCLSID);
 			}
-			variable.m_strType = ibValue::GetNameObjectFromVT(ibValueTypes::TYPE_NUMBER, true);
+			variable.m_clsid = g_valueNumberCLSID;
 			return variable;
 		}
 		else {
@@ -4378,13 +3930,13 @@ ibParamUnit ibCompileCode::GetExpression(ibCompileContext* context, int nPriorit
 			AddLineInfo(code);
 			code.m_numOper = OPER_INVERT;
 
-			if (!variable.m_strType.IsEmpty()) {
-				CheckTypeDef(variable, ibValue::GetNameObjectFromVT(ibValueTypes::TYPE_NUMBER));
+			if (variable.m_clsid != 0) {
+				CheckTypeDef(variable, g_valueNumberCLSID);
 			}
 
 			code.m_param2 = variable;
 			variable = context->CreateVariable();
-			variable.m_strType = ibValue::GetNameObjectFromVT(ibValueTypes::TYPE_NUMBER, true);
+			variable.m_clsid = g_valueNumberCLSID;
 			AddTypeSet(variable);
 			code.m_param1 = variable;
 			m_cByteCode.m_listCode.emplace_back(std::move(code));
@@ -4392,7 +3944,10 @@ ibParamUnit ibCompileCode::GetExpression(ibCompileContext* context, int nPriorit
 	}
 	else {
 		m_numCurrentCompile--;
-		SetError(ERROR_EXPRESSION);
+		// …and the same here: the token that could not start an expression, named. An identifier
+		// carries its own text; a delimiter is the character itself.
+		SetError(ERROR_EXPRESSION, lex.m_strData.IsEmpty()
+			? wxString::Format(wxT("%c"), wxUniChar(lex.m_numData)) : lex.m_strData);
 		return ibParamUnit();
 	}
 
@@ -4407,7 +3962,15 @@ delimOperation:
 		return variable;
 
 	// we look to see if there are any further operators for performing actions on this variable
-	if ((prevLexem.m_lexType == DELIMITER && prevLexem.m_numData != ';') || (prevLexem.m_lexType == KEYWORD && prevLexem.m_numData == KEY_AND) || (prevLexem.m_lexType == KEYWORD && prevLexem.m_numData == KEY_OR)) {
+	// THE WORD OPERATORS ARE NAMED HERE, and this list is the gate: a KEYWORD not
+	// in it stops the expression, whatever gs_operPriority holds for its id. That
+	// is also what makes the table's shared index space (delimiter codes AND
+	// keyword ids in one 256-entry array) harmless for every other keyword.
+	if ((prevLexem.m_lexType == DELIMITER && prevLexem.m_numData != ';')
+	 || (prevLexem.m_lexType == KEYWORD && prevLexem.m_numData == KEY_AND)
+	 || (prevLexem.m_lexType == KEYWORD && prevLexem.m_numData == KEY_OR)
+	 || (prevLexem.m_lexType == KEYWORD && prevLexem.m_numData == KEY_MOD)
+	 || (prevLexem.m_lexType == KEYWORD && prevLexem.m_numData == KEY_IN)) {
 		if (prevLexem.m_numData >= 0 && prevLexem.m_numData <= 255) {
 			const int numCurPriority = gs_operPriority[prevLexem.m_numData];
 			if (nPriority < numCurPriority) { // �ompare the priorities of the left (previous operation) and the currently running operation
@@ -4415,6 +3978,66 @@ delimOperation:
 				ibByteUnit code;
 				AddLineInfo(code);
 				const ibLexem& next_lex = GetLexem();
+
+				// ⭐⭐ `x in (a, b, c)` — the one operator whose right side is a LIST, so it is read
+				// here rather than through the shared "one right operand" road below. It expands into
+				// comparisons joined by `or`: nothing new reaches the runtime, and every reader that
+				// understands `=` and `or` understands this without being taught a third thing.
+				if (next_lex.m_lexType == KEYWORD && next_lex.m_numData == KEY_IN) {
+
+					GETDelimeter('(');
+
+					ibParamUnit answer;
+					bool any = false;
+					while (!IsNextDelimeter(')')) {
+						if (any)
+							GETDelimeter(',');
+
+						const ibParamUnit item = GetExpression(context, numCurPriority);
+
+						ibParamUnit same = context->CreateVariable();
+						same.m_clsid = g_valueBooleanCLSID;
+						{
+							ibByteUnit c; AddLineInfo(c);
+							c.m_numOper = OPER_EQ;
+							c.m_param1  = same;
+							c.m_param2  = variable;
+							c.m_param3  = item;
+							m_cByteCode.m_listCode.emplace_back(std::move(c));
+						}
+
+						if (!any) {
+							answer = same;
+							any = true;
+							continue;
+						}
+
+						ibParamUnit either = context->CreateVariable();
+						either.m_clsid = g_valueBooleanCLSID;
+						{
+							ibByteUnit c; AddLineInfo(c);
+							c.m_numOper = OPER_OR;
+							c.m_param1  = either;
+							c.m_param2  = answer;
+							c.m_param3  = same;
+							m_cByteCode.m_listCode.emplace_back(std::move(c));
+						}
+						answer = either;
+					}
+					GETDelimeter(')');
+
+					// ⚠ AN EMPTY LIST IS A QUESTION WITH NO ANSWER, not `false` by default: `x in ()`
+					// is far more likely a hand slipping than an intention, and a silent `false`
+					// filters every row away without saying why.
+					if (!any) {
+						SetError(ERROR_EXPRESSION, wxString(
+							_("'in' needs something to look in - the list is empty")));
+						return ibParamUnit();
+					}
+
+					variable = answer;
+					goto delimOperation;
+				}
 
 				if (next_lex.m_numData == '*') {
 					SetOper(OPER_MULT);
@@ -4429,6 +4052,11 @@ delimOperation:
 					SetOper(OPER_SUB);
 				}
 				else if (next_lex.m_numData == '%') {
+					SetOper(OPER_MOD);
+				}
+				// The word form of the same operator, beside And / Or which are
+				// already read here as keywords rather than delimiters.
+				else if (next_lex.m_numData == KEY_MOD) {
 					SetOper(OPER_MOD);
 				}
 				else if (next_lex.m_numData == KEY_AND) {
@@ -4457,9 +4085,33 @@ delimOperation:
 				}
 				else if (next_lex.m_numData == '=') {
 					SetOper(OPER_EQ);
+
+					// ⭐⭐ `==` IS THE ONE SLIP EVERY C-TRAINED HAND MAKES HERE, and this is the only
+					// place that KNOWS it was made: the first `=` has just been read as the comparison,
+					// so a second one against it can be nothing else. Left to fall through, the doubled
+					// sign reaches the far end of the expression parser as "a token that cannot start
+					// an expression" and is reported as a bare `=` — true, and no help at all: the
+					// author is looking at the line they wrote and the message names a character that
+					// is in it twice.
+					//
+					// Braces and semicolons say C to a reader, so the assumption arrives with them; the
+					// language compares with a single `=`. Say WHICH spelling is meant, not merely that
+					// something is wrong (measured over MCP, 2026-09-02 — it cost a full round of
+					// bisecting a five-line block to find).
+					if (IsNextDelimeter('=')) {
+						SetError(ERROR_EXPRESSION, wxString(
+							_("'==' is not an operator here - comparison is written with a single '='")));
+						return ibParamUnit();
+					}
 				}
 				else {
-					SetError(ERROR_EXPRESSION);
+					// ⭐ SAY WHAT WAS FOUND. The message is "Error in expression:\n%s" and both raises
+					// of it passed nothing, so an author read a sentence that ends in a colon —
+					// promising the detail and then withholding it. Here the detail is the whole
+					// answer: `a == b` reaches this branch because comparison in this language is a
+					// single `=`, and a caller who writes the other spelling gets a compile error
+					// that names no operator, no token and nothing to change (measured 2026-09-02).
+					SetError(ERROR_EXPRESSION, wxUniChar(next_lex.m_numData));
 					return ibParamUnit();
 				}
 
@@ -4468,7 +4120,7 @@ delimOperation:
 				ibParamUnit puVariable3 = GetExpression(context, numCurPriority);
 
 				if (puVariable3.m_numArray != DEF_VAR_TEMP && puVariable3.m_numArray != DEF_VAR_CONST) { // extra. checking for prohibited operations
-					if (ibValue::CompareObjectName(puVariable2.m_strType, ibValueTypes::TYPE_STRING)) {
+					if (puVariable2.m_clsid == g_valueStringCLSID) {
 						if (OPER_DIV == code.m_numOper
 							|| OPER_MOD == code.m_numOper
 							|| OPER_MULT == code.m_numOper
@@ -4480,15 +4132,28 @@ delimOperation:
 					}
 				}
 
+				// ⭐ WHAT THIS OPERATOR ANSWERS, ASKED BEFORE THE TIER MOVES ITS NUMBER. CheckTypeDef
+				// below adds TYPE_DELTA1..4 to the opcode when the left side has a declared type, and
+				// the test for "is this a comparison" is a RANGE over the operator numbers - so asked
+				// afterwards it answered no about every typed comparison, and the answer's type came
+				// out as the operand's rather than Boolean. And / Or are asked here as well, for the
+				// same reason and with the same consequence: they sit outside that range, so `if (a And
+				// b)` over two typed Numbers read a number field nobody had written.
+				//
+				// What that cost: the If over it then took the operand's tier and read the operand's
+				// FIELD - m_fData for a number, m_bData for a boolean - which is a different field, not
+				// a different name for one (value.h: only the boolean, date, string and reference share
+				// a union; a number sits outside it). It worked only while the comparison wrote that
+				// same field and nothing else, which is exactly what the commit before this one had to
+				// stop doing to make a comparison's answer readable as a value.
+				const bool bAnswersBoolean = (code.m_numOper >= OPER_GT && code.m_numOper <= OPER_NE)
+					|| code.m_numOper == OPER_AND || code.m_numOper == OPER_OR;
+
 				if (puVariable2.m_numArray != DEF_VAR_CONST && puVariable2.m_numArray != DEF_VAR_TEMP) { // constants are not checked - because they are typified by default
-					CheckTypeDef(puVariable3, puVariable2.m_strType);
+					CheckTypeDef(puVariable3, puVariable2.m_clsid);
 				}
 
-				puVariable1.m_strType = puVariable2.m_strType;
-
-				if (code.m_numOper >= OPER_GT && code.m_numOper <= OPER_NE) {
-					puVariable1.m_strType = ibValue::GetNameObjectFromVT(ibValueTypes::TYPE_BOOLEAN, true);
-				}
+				puVariable1.m_clsid = bAnswersBoolean ? g_valueBooleanCLSID : puVariable2.m_clsid;
 
 				code.m_param1 = puVariable1;
 				code.m_param2 = puVariable2;

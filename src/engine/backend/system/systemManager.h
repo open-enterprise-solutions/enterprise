@@ -1,27 +1,43 @@
 #ifndef _SYSTEM_OBJECTS_H__
 #define _SYSTEM_OBJECTS_H__
 
+#include <limits>   // Mid's "to the end of the string" default
+
 #include "backend/backend.h"
 #include "backend/compiler/value.h"
+#include "backend/createRequest.h"   // ibFormRequest — a common form is opened with one too
 
-//--Константы:
+//-- Constants:
 #define PageBreak wxT("\n\n")
 #define LineBreak wxT("\n")
 #define TabSymbol wxT("\t")
 
 #include "backend/system/systemEnum.h"
 
-class BACKEND_API ibValueSystemFunction : public ibValue {
-	static wxDateTime ms_workDate;
+void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibValue* ctx);
+
+class BACKEND_API ibValueSystemFunction : public ibValueStaticMembers<&ibValueSystemFunction_BindNames> {
+	public:
+	static ibDateTime ms_workDate;
 public:
 
-	//--- Базовые:
+	//--- Basic:
 	static bool Boolean(const ibValue& cValue);
 	static ibNumber Number(const ibValue& cValue);
-	static wxLongLong_t Date(const ibValue& cValue);
+	static ibDateTime Date(const ibValue& cValue);
+
+	// ⭐ THE CALENDAR FORM, which is how a person writes a date they know: Date(2026, 9, 2). The
+	// help has published this signature all along and the compiler took one argument only, so
+	// every first attempt at a literal date was refused ("Too many parameters", measured
+	// 2026-09-02). The one-argument form stays what it was — a CONVERSION, of a string or of a
+	// number of seconds — because those are different questions and only one of them is a
+	// calendar.
+	static ibDateTime Date(int year, int month, int day,
+		int hour = 0, int minute = 0, int second = 0);
+
 	static wxString String(const ibValue& cValue);
 
-	//--- Математика:
+	//--- Math:
 	static ibNumber Round(const ibValue& cValue, int precision = 0, ibRoundMode mode = ibRoundMode::ibRoundMode_Round15as20);
 	static ibValue Int(const ibValue& cNumber);
 	static ibNumber Log10(const ibValue& cValue);
@@ -30,27 +46,29 @@ public:
 	static ibValue Min(ibValue** paParams, const long lSizeArray);
 	static ibValue Sqrt(const ibValue& cValue);
 
-	//--- Строки:
+	//--- Strings:
 	static int StrLen(const ibValue& cValue);
 	static bool IsBlankString(const ibValue& cValue);
-	static wxString TrimL(const ibValue& cValue);
-	static wxString TrimR(const ibValue& cValue);
-	static wxString TrimAll(const ibValue& cValue);
-	static wxString Left(const ibValue& cValue, unsigned int nCount);
-	static wxString Right(const ibValue& cValue, unsigned int nCount);
-	static wxString Mid(const ibValue& cValue, unsigned int nFirst, unsigned int nCount);
+	static ibString TrimL(const ibValue& cValue);
+	static ibString TrimR(const ibValue& cValue);
+	static ibString TrimAll(const ibValue& cValue);
+	static ibString Left(const ibValue& cValue, unsigned int nCount);
+	static ibString Right(const ibValue& cValue, unsigned int nCount);
+	// nFirst is 1-BASED, like Find's answer — see the note on the definition.
+	// nCount defaults to "to the end of the string".
+	static ibString Mid(const ibValue& cValue, size_t nFirst, size_t nCount = std::numeric_limits<size_t>::max());
 	static unsigned int Find(const ibValue& cValue, const ibValue& cValue2, unsigned int nStart);
-	static wxString StrReplace(const ibValue& cSource, const ibValue& cValue1, const ibValue& cValue2);
+	static ibString StrReplace(const ibValue& cSource, const ibValue& cValue1, const ibValue& cValue2);
 	static int StrCountOccur(const ibValue& cSource, const ibValue& cValue1);
 	static int StrLineCount(const ibValue& cSource);
 	static wxString StrGetLine(const ibValue& cValue, unsigned int nLine);
-	static wxString Upper(const ibValue& cSource);
-	static wxString Lower(const ibValue& cSource);
+	static ibString Upper(const ibValue& cSource);
+	static ibString Lower(const ibValue& cSource);
 	static wxString Chr(short nCode);
 	static short Asc(const ibValue& cSource);
 	static wxString TStr(const ibValue& cSource, const ibValue& cLanguage);
 
-	//--- Дата и время:
+	//--- Date and time:
 	static ibValue CurrentDate();
 	static ibValue WorkingDate();
 	static ibValue AddMonth(const ibValue& cData, int nMonthAdd = 1);
@@ -75,17 +93,37 @@ public:
 	static int GetDayOfWeek(const ibValue& cData);
 	static int GetQuartOfYear(const ibValue& cData);
 
-	//--- Работа с файлами:
+	//--- File operations:
 	static bool CopyFile(const wxString& src, const wxString& dst);
 	static bool DeleteFile(const wxString& file);
 	static wxString GetTempDir();
 	static wxString GetTempFileName();
 
-	//--- Работа с окнами:
+	//--- Window operations:
 	static class ibBackendValueForm* ActiveWindow();
 
-	//--- Уведомления:
+	//--- Notifications:
 	static void Message(const wxString& strMessage, ibStatusMessage status = ibStatusMessage::ibStatusMessage_Information);
+
+	// ⭐⭐ WRITE A LINE INTO THE REGISTRATION JOURNAL — the durable record, stamped with the session
+	// that wrote it, readable afterwards by anyone (journal_read, and the person's own journal).
+	//
+	// ⚠ IT IS NOT A SECOND `Message`, AND THE DIFFERENCE MATTERS MOST WHERE `Message` FAILS. A
+	// message is addressed to whoever is watching a window; a BACKGROUND session is tied to nobody,
+	// so its messages reach no one at all. Code run as a background job therefore has no way to say
+	// what it is doing except this — which is why filling code, posting code and anything else sent
+	// to run unattended reports HERE.
+	// ⚠ THE ARGUMENTS ARE THE ROW'S OWN COLUMNS, not a shape invented here: a journal line already
+	// has a level, a text, a CATEGORY (event_type) and the OBJECT it is about (ref_guid +
+	// ref_meta_id). Handing a reference in `object` is what makes a line findable later by the thing
+	// it happened to, rather than by reading messages.
+	//
+	// Message first, because it is the one a caller always has; everything else has a default, so
+	// the shortest useful call is one argument - the same shape as `Message` beside it.
+	static void WriteJournalEvent(const wxString& strMessage,
+		ibStatusMessage status = ibStatusMessage::ibStatusMessage_Information,
+		const wxString& strEvent = wxEmptyString,
+		const ibValue& objectValue = ibValue());
 	static void Alert(const wxString& strMessage);
 	static ibValue Question(const wxString& strMessage, ibQuestionMode mode = ibQuestionMode::ibQuestionMode_OK);
 	static void SetStatus(const wxString& sStatus);
@@ -94,6 +132,28 @@ public:
 	static void Raise(const wxString& strError);
 	static wxString ErrorDescription();
 	static bool IsEmptyValue(const ibValue& cData);
+	static bool IsNull(const ibValue& cData);
+	static bool ValueIsFilled(const ibValue& cData);
+
+	// ⭐⭐ A RUNTIME VALUE AS TEXT, AND BACK. The engine has packed values into an ibDataNode for a
+	// while (value.h `Serialize` / `Deserialize`, ibMetaData's door for the types only a
+	// configuration has), and a provider has been able to write that node as JSON — but nothing in
+	// the LANGUAGE could ask for either, so the whole road was reachable from C++ alone.
+	//
+	// These two open it: a script hands over any value it holds and gets text it can print, store,
+	// send or compare — and hands text back to get the value again. What it buys beyond printing:
+	// a structure survives the trip (a printed form does not), and an assistant on the other end of
+	// the debugger's sandbox can BUILD a value by writing JSON, which is the only way to construct
+	// one from outside the process (Max, 2026-09-02: *"as a bonus, with these you can create
+	// runtime values just by passing JSON"*).
+	static wxString SerializeValue(const ibValue& cData);
+	static ibValue  DeserializeValue(const wxString& strJson);
+
+	// (⛔ NO MESSAGE CAPTURE HERE. Getting the lines a run printed is not a new mechanism: the
+	//  debug channel already carries messages from a running application to whoever is attached —
+	//  `CommandId_MessageFromServer`, sent by ibDebuggerServer::SendErrorToClient. It looked like
+	//  it did not work because that sender was called from NOWHERE. A road with no writer, not a
+	//  missing road: Message hands them to it below.)
 	static ibValue Evaluate(const wxString& expression);
 	static void Execute(const wxString& sCode);
 	static wxString Format(ibValue& cData, const wxString& fmt = wxEmptyString);
@@ -118,8 +178,8 @@ public:
 	static bool AccessRight(const wxString& strRoleName, const ibValue& cData);
 	static bool IsInRole(const ibValue& cData);
 
-	static ibValue GetCommonForm(const wxString& strFormName, class ibBackendControlFrame* owner, class ibValueGuid* unique);
-	static void ShowCommonForm(const wxString& strFormName, class ibBackendControlFrame* owner, class ibValueGuid* unique);
+	static ibValue GetCommonForm(const ibFormRequest& request, class ibBackendControlFrame* owner, class ibValueGuid* unique);
+	static void ShowCommonForm(const ibFormRequest& request, class ibBackendControlFrame* owner, class ibValueGuid* unique);
 
 	static ibValue GetCommonTemplate(const wxString& strTemplateName);
 
@@ -127,26 +187,45 @@ public:
 	static void CommitTransaction();
 	static void RollBackTransaction();
 
+	//--- Jobs:
+	// The tick. Launches every job that is due and returns how many were launched;
+	// does NOT wait for any of them. A file deployment has no daemon to keep time,
+	// so the schedule advances only when something calls this — the platform timer
+	// on a desktop host, the compute server's own loop where one exists, or script
+	// that wants to force a round. See docs/private/job-manager.md § "The tick".
+	static int  RunScheduledJobs();
+
+	// Run one job now, ignoring its interval and window. False when the name is
+	// unknown or that job is already running. Without this a job could only be
+	// exercised by waiting out its schedule, which makes a misbehaving tenant
+	// impossible to tell apart from a misbehaving manager.
+	static bool RunJob(const wxString& strJobName);
+
+	// Start `procedure` on a session of its own and return a BackgroundJob value —
+	// the caller may wait on it, poll it, cancel it, or drop it and let the work
+	// finish unattended.
+	//
+	// `procedure` is `ModuleName.MethodName`: a PUBLIC method of a common module.
+	// The run adopts the CALLER's identity, so it sees exactly what the caller
+	// sees. `args` is an Array whose elements are passed positionally; every one
+	// of them must be transferable (ibValue::IsTransferable) — passing a form, an
+	// object or a record set throws here rather than failing in the background.
+	static ibValue RunBackground(const wxString& strProcedureName, ibValue* pArgs);
+
 public:
 
 	ibValueSystemFunction() :
-		ibValue(ibValueTypes::TYPE_VALUE, true), m_methodHelper(new ibValueMethodHelper) {
+		ibValueStaticMembers(ibValueTypes::TYPE_VALUE, true) {
 	}
 
 	virtual ~ibValueSystemFunction() {
-		wxDELETE(m_methodHelper);
 	}
 
 	//****************************************************************************
 	//*                              Support methods                             *
 	//****************************************************************************
 
-	virtual ibValueMethodHelper* GetPMethods() const {
-		//PrepareNames();
-		return m_methodHelper;
-	}
-
-	virtual void PrepareNames() const;
+	// DoGetPMethods (protected) + Shared<&ibValueSystemFunction_BindNames> come from the base.
 
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);
 	virtual bool CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray);
@@ -155,10 +234,6 @@ public:
 	virtual bool IsEmpty() const {
 		return false;
 	}
-
-protected:
-
-	ibValueMethodHelper* m_methodHelper;
 };
 
 #endif

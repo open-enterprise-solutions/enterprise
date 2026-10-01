@@ -4,9 +4,11 @@
 #include "backend/compiler/value.h"
 
 //Array support
-class BACKEND_API ibValueColour : public ibValue
+void ibValueColour_BindNames(ibValue::ibMemberTable& helper, const ibValue* ctx);
+
+class BACKEND_API ibValueColour : public ibValueStaticMembers<&ibValueColour_BindNames>
 {
-	wxDECLARE_DYNAMIC_CLASS(ibValueColour);
+	public:
 
 public:
 
@@ -19,7 +21,7 @@ public:
 	virtual ~ibValueColour() {}
 
 	virtual bool Init(ibValue** paParams, const long lSizeArray);
-	virtual wxString GetString() const {
+	virtual ibString GetString() const {
 		return typeConv::ColourToString(m_colour);
 	}
 
@@ -28,17 +30,14 @@ public:
 		return !m_colour.IsOk();
 	}
 
-	static ibValueMethodHelper m_methodHelper;
-
 	virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal);        //setting attribute
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal);                   //attribute value
+	// DoGetPMethods (protected) + Shared<&ibValueColour_BindNames> come from the base.
 
-	virtual ibValueMethodHelper* GetPMethods() const {
-		//PrepareNames();
-		return &m_methodHelper;
-	}
-	
-	virtual void PrepareNames() const;                         // this method is automatically called to initialize attribute and method names.
+	// ⭐ A PACKED FORM — the text a property keeps a colour in (typeConv), so a colour kept in a description
+	// (an appearance's parameter) is stored as data and read back without anything to resolve.
+	virtual bool DoSerialize(class ibDataNode& node) const override;
+	virtual bool DoDeserialize(const class ibDataNode& node) override;
 
 	operator wxColour() const { return m_colour; }
 };

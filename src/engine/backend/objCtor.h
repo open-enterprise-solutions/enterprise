@@ -1,4 +1,4 @@
-#ifndef _SINGLE_CLASS_H__
+﻿#ifndef _SINGLE_CLASS_H__
 #define _SINGLE_CLASS_H__
 
 #include "backend/compiler/typeCtor.h"
@@ -28,6 +28,34 @@ public:
 
 	virtual ibCtorObjectMetaType GetMetaTypeCtor() const = 0;
 	virtual const ibValueMetaObject* GetMetaObject() const = 0;
+
+	// THE MODULE A VALUE OF THIS TYPE HANDLES ITS EVENTS IN — an object's in its object module, a
+	// manager's in its manager module, a record set's in its record set module; null for a type that
+	// raises none (a reference, a list, a selection). What an event handler offers as the events
+	// of its source is what this module declares.
+	virtual const ibValueMetaObjectModuleBase* GetEventModule() const { return nullptr; }
+
+	// The dot-walk TARGET queryable of this metadata type — non-null only for a REFERENCE ctor (whose
+	// metaobject is a queryable holder). Lets the reference-target resolver reach the queryable by VIRTUAL
+	// dispatch, with NO cast on the dot-walk hot path (the concrete ctor already owns the typed metaobject).
+	virtual const ibBackendQueryable* GetQueryable() const { return nullptr; }
+
+	// Table trait for metadata types — derived from the meta-kind the metaobject already
+	// declares (no per-object flag): a TabularSection / RecordSet is a tabular source;
+	// a Reference / Object / Manager / Characteristic / RecordKey is a scalar (a table is
+	// never a reference). Lets the class factory answer "is this a table" by CLSID for
+	// metaobjects too, alongside the value-type ctors' T::IsTableValue.
+	virtual bool IsTableValue() const override {
+		switch (GetMetaTypeCtor()) {
+		case ibCtorObjectMetaType::ibCtorObjectMetaType_TabularSection:
+		case ibCtorObjectMetaType::ibCtorObjectMetaType_TabularSection_String:
+		case ibCtorObjectMetaType::ibCtorObjectMetaType_RecordSet:
+		case ibCtorObjectMetaType::ibCtorObjectMetaType_RecordSet_String:
+			return true;
+		default:
+			return false;
+		}
+	}
 };
 
 //reference class 
@@ -36,8 +64,7 @@ class ibCtorMetaValueTypeReference :
 public:
 
 	ibCtorMetaValueTypeReference(ibValueMetaObjectRecordDataRef* recordRef) : ibCtorMetaValueType(), m_metaObject(recordRef) {
-		m_classType = string_to_clsid(wxT("R_") +
-			stringUtils::IntToStr(m_metaObject->GetMetaID()));
+		m_classType = reference_to_clsid(m_metaObject->GetMetaID(), clsid_metaclass(m_metaObject->GetClassType()));
 	}
 
 	virtual wxString GetClassName() const {
@@ -45,10 +72,11 @@ public:
 	}
 
 	virtual ibClassID GetClassType() const { return m_classType; }
-	virtual wxClassInfo* GetClassInfo() const;
-	virtual ibValue* CreateObject() const;
+	virtual ibValue CreateObject() const;
 	virtual const ibValueMetaObject* GetMetaObject() const { return m_metaObject; }
 	virtual ibCtorObjectMetaType GetMetaTypeCtor() const { return ibCtorObjectMetaType::ibCtorObjectMetaType_Reference; }
+	// m_metaObject is the TYPED reference target (a queryable holder) — forward its queryable with no cast.
+	virtual const ibBackendQueryable* GetQueryable() const override { return m_metaObject != nullptr ? m_metaObject->GetQueryable() : nullptr; }
 
 protected:
 	ibClassID m_classType;
@@ -58,67 +86,7 @@ protected:
 #define registerReference()\
 	m_metaData->RegisterCtor(new ibCtorMetaValueTypeReference(this))
 #define unregisterReference()\
-	m_metaData->UnRegisterCtor(generate_class_name(prefixReference))
-
-//list object class 
-class ibCtorMetaValueTypeReferenceList :
-	public ibCtorMetaValueType {
-public:
-
-	ibCtorMetaValueTypeReferenceList(ibValueMetaObjectRecordDataRef* recordRef) : ibCtorMetaValueType(), m_metaObject(recordRef) {
-		m_classType = string_to_clsid(wxT("L_") +
-			stringUtils::IntToStr(m_metaObject->GetMetaID()));
-	}
-
-	virtual wxString GetClassName() const {
-		return m_metaObject->GetClassName() + prefixList + m_metaObject->GetName();
-	}
-
-	virtual ibClassID GetClassType() const { return m_classType; }
-	virtual wxClassInfo* GetClassInfo() const;
-	virtual ibValue* CreateObject() const;
-	virtual const ibValueMetaObject* GetMetaObject() const { return m_metaObject; }
-	virtual ibCtorObjectMetaType GetMetaTypeCtor() const { return ibCtorObjectMetaType::ibCtorObjectMetaType_List; }
-
-protected:
-	ibClassID m_classType;
-	ibValueMetaObjectRecordDataRef* m_metaObject;
-};
-
-#define registerRefList()\
-	m_metaData->RegisterCtor(new ibCtorMetaValueTypeReferenceList(this))
-#define unregisteRefList()\
-	m_metaData->UnRegisterCtor(generate_class_name(prefixList))
-
-//list register class
-class ibCtorMetaValueTypeRegisterList :
-	public ibCtorMetaValueType {
-public:
-
-	ibCtorMetaValueTypeRegisterList(ibValueMetaObjectRegisterData* recordRef) : ibCtorMetaValueType(), m_metaObject(recordRef) {
-		m_classType = string_to_clsid(wxT("J_") +
-			stringUtils::IntToStr(m_metaObject->GetMetaID()));
-	}
-
-	virtual wxString GetClassName() const {
-		return m_metaObject->GetClassName() + prefixList + m_metaObject->GetName();
-	}
-
-	virtual ibClassID GetClassType() const { return m_classType; }
-	virtual wxClassInfo* GetClassInfo() const;
-	virtual ibValue* CreateObject() const;
-	virtual const ibValueMetaObject* GetMetaObject() const { return m_metaObject; }
-	virtual ibCtorObjectMetaType GetMetaTypeCtor() const { return ibCtorObjectMetaType::ibCtorObjectMetaType_List; }
-
-protected:
-	ibClassID m_classType;
-	ibValueMetaObjectRegisterData* m_metaObject;
-};
-
-#define registerRegList()\
-	m_metaData->RegisterCtor(new ibCtorMetaValueTypeRegisterList(this))
-#define unregisterRegList()\
-	m_metaData->UnRegisterCtor(generate_class_name(prefixList))
+	m_metaData->UnRegisterCtor(reference_to_clsid(GetMetaID(), clsid_metaclass(GetClassType())))
 
 //object class
 class ibCtorMetaValueTypeObject :
@@ -126,8 +94,7 @@ class ibCtorMetaValueTypeObject :
 public:
 
 	ibCtorMetaValueTypeObject(ibValueMetaObjectRecordData* recordRef) : ibCtorMetaValueType(), m_metaObject(recordRef) {
-		m_classType = string_to_clsid(wxT("O_") +
-			stringUtils::IntToStr(m_metaObject->GetMetaID()));
+		m_classType = object_to_clsid(m_metaObject->GetMetaID(), clsid_metaclass(m_metaObject->GetClassType()));
 	}
 
 	virtual wxString GetClassName() const {
@@ -136,10 +103,10 @@ public:
 	}
 
 	virtual ibClassID GetClassType() const { return m_classType; }
-	virtual wxClassInfo* GetClassInfo() const;
-	virtual ibValue* CreateObject() const;
+	virtual ibValue CreateObject() const;
 	virtual const ibValueMetaObject* GetMetaObject() const { return m_metaObject; }
 	virtual ibCtorObjectMetaType GetMetaTypeCtor() const { return ibCtorObjectMetaType::ibCtorObjectMetaType_Object; }
+	virtual const ibValueMetaObjectModuleBase* GetEventModule() const override { return m_metaObject->GetObjectModule(); }
 
 protected:
 	ibClassID m_classType;
@@ -150,16 +117,13 @@ class ibCtorMetaValueTypeExternalObject :
 	public ibCtorMetaValueTypeObject {
 public:
 
+	// ONE m_classType, THE BASE'S — re-declaring it here (plus a second, never-initialised
+	// m_metaObject) shadowed the base's storage: the ctor above assigned the DERIVED copy while
+	// every inherited accessor kept reading the base's. It worked only because GetClassType() was
+	// overridden to read the shadow; anything else added here would silently see the wrong values.
 	ibCtorMetaValueTypeExternalObject(ibValueMetaObjectRecordData* recordRef) : ibCtorMetaValueTypeObject(recordRef) {
-		m_classType = string_to_clsid(wxT("EO_") +
-			stringUtils::IntToStr(recordRef->GetMetaID()));
+		m_classType = externalObject_to_clsid(recordRef->GetMetaID(), clsid_metaclass(recordRef->GetClassType()));
 	}
-
-	virtual ibClassID GetClassType() const { return m_classType; }
-
-private:
-	ibClassID m_classType;
-	ibValueMetaObjectRecordData* m_metaObject;
 };
 
 #define registerObject()\
@@ -167,7 +131,11 @@ private:
 #define registerExternalObject()\
 	m_metaData->RegisterCtor(new ibCtorMetaValueTypeExternalObject(this))
 #define unregisterObject()\
-	m_metaData->UnRegisterCtor(generate_class_name(prefixObject))
+	m_metaData->UnRegisterCtor(object_to_clsid(GetMetaID(), clsid_metaclass(GetClassType())))
+// A ctor is dropped by the identity it was FILED under, and the external pair files itself under
+// a different KIND — so it needs its own unregister, not the ordinary one.
+#define unregisterExternalObject()\
+	m_metaData->UnRegisterCtor(externalObject_to_clsid(GetMetaID(), clsid_metaclass(GetClassType())))
 
 //manager class 
 class ibCtorMetaValueTypeManager :
@@ -175,8 +143,7 @@ class ibCtorMetaValueTypeManager :
 public:
 
 	ibCtorMetaValueTypeManager(ibValueMetaObjectGenericData* recordRef) : ibCtorMetaValueType(), m_metaObject(recordRef) {
-		m_classType = string_to_clsid(wxT("M_") +
-			stringUtils::IntToStr(m_metaObject->GetMetaID()));
+		m_classType = manager_to_clsid(m_metaObject->GetMetaID(), clsid_metaclass(m_metaObject->GetClassType()));
 	}
 
 	virtual wxString GetClassName() const {
@@ -184,10 +151,10 @@ public:
 	}
 
 	virtual ibClassID GetClassType() const { return m_classType; }
-	virtual wxClassInfo* GetClassInfo() const;
-	virtual ibValue* CreateObject() const;
+	virtual ibValue CreateObject() const;
 	virtual const ibValueMetaObject* GetMetaObject() const { return m_metaObject; }
 	virtual ibCtorObjectMetaType GetMetaTypeCtor() const { return ibCtorObjectMetaType::ibCtorObjectMetaType_Manager; }
+	virtual const ibValueMetaObjectModuleBase* GetEventModule() const override { return m_metaObject->GetManagerModule(); }
 
 protected:
 	ibClassID m_classType;
@@ -198,8 +165,7 @@ class ibCtorMetaValueTypeExternalManager : public ibCtorMetaValueTypeManager {
 public:
 
 	ibCtorMetaValueTypeExternalManager(ibValueMetaObjectGenericData* recordRef) :ibCtorMetaValueTypeManager(recordRef) {
-		m_classType = string_to_clsid(wxT("EM_") +
-			stringUtils::IntToStr(recordRef->GetMetaID()));
+		m_classType = externalManager_to_clsid(recordRef->GetMetaID(), clsid_metaclass(recordRef->GetClassType()));
 	}
 
 	virtual ibClassID GetClassType() const { return m_classType; }
@@ -210,7 +176,9 @@ public:
 #define registerExternalManager()\
 	m_metaData->RegisterCtor(new ibCtorMetaValueTypeExternalManager(this))
 #define unregisterManager()\
-	m_metaData->UnRegisterCtor(generate_class_name(prefixManager))
+	m_metaData->UnRegisterCtor(manager_to_clsid(GetMetaID(), clsid_metaclass(GetClassType())))
+#define unregisterExternalManager()\
+	m_metaData->UnRegisterCtor(externalManager_to_clsid(GetMetaID(), clsid_metaclass(GetClassType())))
 
 //selection class
 class ibCtorMetaValueTypeSelection :
@@ -218,8 +186,7 @@ class ibCtorMetaValueTypeSelection :
 public:
 
 	ibCtorMetaValueTypeSelection(ibValueMetaObjectGenericData* recordRef) : ibCtorMetaValueType(), m_metaObject(recordRef) {
-		m_classType = string_to_clsid(wxT("S_") +
-			stringUtils::IntToStr(m_metaObject->GetMetaID()));
+		m_classType = selection_to_clsid(m_metaObject->GetMetaID(), clsid_metaclass(m_metaObject->GetClassType()));
 	}
 
 	virtual wxString GetClassName() const {
@@ -227,8 +194,7 @@ public:
 	}
 
 	virtual ibClassID GetClassType() const { return m_classType; }
-	virtual wxClassInfo* GetClassInfo() const { return nullptr; }
-	virtual ibValue* CreateObject() const { return nullptr; }
+	virtual ibValue CreateObject() const { return wxEmptyValue; }
 	virtual const ibValueMetaObject* GetMetaObject() const { return m_metaObject; }
 	virtual ibCtorObjectMetaType GetMetaTypeCtor() const { return ibCtorObjectMetaType::ibCtorObjectMetaType_Selection; }
 
@@ -240,16 +206,15 @@ protected:
 #define registerSelection()\
 	m_metaData->RegisterCtor(new ibCtorMetaValueTypeSelection(this))
 #define unregisterSelection()\
-	m_metaData->UnRegisterCtor(generate_class_name(prefixSelection))
+	m_metaData->UnRegisterCtor(selection_to_clsid(GetMetaID(), clsid_metaclass(GetClassType())))
 
 //tabular section class
 class ibCtorMetaValueTypeTabularSection :
 	public ibCtorMetaValueType {
 public:
 
-	ibCtorMetaValueTypeTabularSection(ibValueMetaObjectRecordData* recordRef, ibValueMetaObjectTableData* recordTable) : ibCtorMetaValueType(), m_metaObject(recordRef), m_metaTable(recordTable) {
-		m_classType = string_to_clsid(wxT("T_") +
-			stringUtils::IntToStr(m_metaTable->GetMetaID()));
+	ibCtorMetaValueTypeTabularSection(ibValueMetaObjectRecordData* recordRef, ibValueMetaObjectTableData* recordTable) : ibCtorMetaValueType(), m_metaTable(recordTable), m_metaObject(recordRef) {
+		m_classType = tabularSection_to_clsid(m_metaTable->GetMetaID(), clsid_metaclass(m_metaTable->GetClassType()));
 	}
 
 	virtual wxString GetClassName() const {
@@ -257,8 +222,7 @@ public:
 	}
 
 	virtual ibClassID GetClassType() const { return m_classType; }
-	virtual wxClassInfo* GetClassInfo() const { return nullptr; }
-	virtual ibValue* CreateObject() const { return nullptr; }
+	virtual ibValue CreateObject() const { return wxEmptyValue; }
 	virtual const ibValueMetaObject* GetMetaObject() const { return m_metaTable; }
 	virtual ibCtorObjectMetaType GetMetaTypeCtor() const { return ibCtorObjectMetaType::ibCtorObjectMetaType_TabularSection; }
 
@@ -271,16 +235,32 @@ protected:
 #define registerTabularSection()\
 	m_metaData->RegisterCtor(new ibCtorMetaValueTypeTabularSection(metaObject, this))
 #define unregisterTabularSection()\
-	m_metaData->UnRegisterCtor(generate_class_table_name(prefixTabSection))
+	m_metaData->UnRegisterCtor(tabularSection_to_clsid(GetMetaID(), clsid_metaclass(GetClassType())))
+
+//tabular section reference class — the DB-backed tabular owner (ibValueMetaObjectTableDataRef).
+//Same classType/name keying as the RAM variant (one tabular is EITHER RAM or Ref, never both,
+//so the "T_<metaID>" key never collides); kept a distinct type so reference-specific behaviour
+//(future: CreateObject / primary-key columns) has a home. GetMetaTypeCtor stays TabularSection —
+//both variants resolve through ibCtorObjectMetaType_TabularSection.
+class ibCtorMetaValueTypeTabularSectionReference :
+	public ibCtorMetaValueTypeTabularSection {
+public:
+	ibCtorMetaValueTypeTabularSectionReference(ibValueMetaObjectRecordData* recordRef, ibValueMetaObjectTableData* recordTable)
+		: ibCtorMetaValueTypeTabularSection(recordRef, recordTable) {}
+};
+
+#define registerTabularSectionReference()\
+	m_metaData->RegisterCtor(new ibCtorMetaValueTypeTabularSectionReference(metaObject, this))
 
 //tabular section string class
 class ibCtorMetaValueTypeTabularSectionString :
 	public ibCtorMetaValueType {
 public:
 
+	// Mind the order: this class declares m_metaObject before m_metaTable, the opposite of
+	// ibCtorMetaValueTypeTabularSection above. The lists differ because the declarations do.
 	ibCtorMetaValueTypeTabularSectionString(ibValueMetaObjectRecordData* recordRef, ibValueMetaObjectTableData* recordTable) : ibCtorMetaValueType(), m_metaObject(recordRef), m_metaTable(recordTable) {
-		m_classType = string_to_clsid(wxT("B_") +
-			stringUtils::IntToStr(m_metaTable->GetMetaID()));
+		m_classType = tabularSectionString_to_clsid(m_metaTable->GetMetaID(), clsid_metaclass(m_metaTable->GetClassType()));
 	}
 
 	virtual wxString GetClassName() const {
@@ -288,8 +268,7 @@ public:
 	}
 
 	virtual ibClassID GetClassType() const { return m_classType; }
-	virtual wxClassInfo* GetClassInfo() const { return nullptr; }
-	virtual ibValue* CreateObject() const { return nullptr; }
+	virtual ibValue CreateObject() const { return wxEmptyValue; }
 	virtual const ibValueMetaObject* GetMetaObject() const { return m_metaTable; }
 	virtual ibCtorObjectMetaType GetMetaTypeCtor() const { return ibCtorObjectMetaType::ibCtorObjectMetaType_TabularSection_String; }
 
@@ -302,7 +281,7 @@ protected:
 #define registerTabularSection_String()\
 	m_metaData->RegisterCtor(new ibCtorMetaValueTypeTabularSectionString(metaObject, this))
 #define unregisterTabularSection_String()\
-	m_metaData->UnRegisterCtor(generate_class_table_name(prefixTabSectionStr))
+	m_metaData->UnRegisterCtor(tabularSectionString_to_clsid(GetMetaID(), clsid_metaclass(GetClassType())))
 
 //record key class
 class ibCtorMetaValueTypeRecord :
@@ -310,8 +289,7 @@ class ibCtorMetaValueTypeRecord :
 public:
 
 	ibCtorMetaValueTypeRecord(ibValueMetaObjectRegisterData* recordRef) : ibCtorMetaValueType(), m_metaObject(recordRef) {
-		m_classType = string_to_clsid(wxT("A_") +
-			stringUtils::IntToStr(m_metaObject->GetMetaID()));
+		m_classType = recordKey_to_clsid(m_metaObject->GetMetaID(), clsid_metaclass(m_metaObject->GetClassType()));
 	}
 
 	virtual wxString GetClassName() const {
@@ -319,8 +297,7 @@ public:
 	}
 
 	virtual ibClassID GetClassType() const { return m_classType; }
-	virtual wxClassInfo* GetClassInfo() const;
-	virtual ibValue* CreateObject() const;
+	virtual ibValue CreateObject() const;
 	virtual const ibValueMetaObject* GetMetaObject() const { return m_metaObject; }
 	virtual ibCtorObjectMetaType GetMetaTypeCtor() const { return ibCtorObjectMetaType::ibCtorObjectMetaType_RecordKey; }
 
@@ -332,7 +309,7 @@ protected:
 #define registerRecordKey()\
 	m_metaData->RegisterCtor(new ibCtorMetaValueTypeRecord(this))
 #define unregisterRecordKey()\
-	m_metaData->UnRegisterCtor(generate_class_name(prefixRecordKey))
+	m_metaData->UnRegisterCtor(recordKey_to_clsid(GetMetaID(), clsid_metaclass(GetClassType())))
 
 //record manager class
 class ibCtorMetaValueTypeRecordManager :
@@ -340,8 +317,7 @@ class ibCtorMetaValueTypeRecordManager :
 public:
 
 	ibCtorMetaValueTypeRecordManager(ibValueMetaObjectRegisterData* recordRef) : ibCtorMetaValueType(), m_metaObject(recordRef) {
-		m_classType = string_to_clsid(wxT("D_") +
-			stringUtils::IntToStr(m_metaObject->GetMetaID()));
+		m_classType = recordManager_to_clsid(m_metaObject->GetMetaID(), clsid_metaclass(m_metaObject->GetClassType()));
 	}
 
 	virtual wxString GetClassName() const {
@@ -349,8 +325,7 @@ public:
 	}
 
 	virtual ibClassID GetClassType() const { return m_classType; }
-	virtual wxClassInfo* GetClassInfo() const;
-	virtual ibValue* CreateObject() const;
+	virtual ibValue CreateObject() const;
 	virtual const ibValueMetaObject* GetMetaObject() const { return m_metaObject; }
 	virtual ibCtorObjectMetaType GetMetaTypeCtor() const { return ibCtorObjectMetaType::ibCtorObjectMetaType_RecordManager; }
 
@@ -362,7 +337,7 @@ protected:
 #define registerRecordManager()\
 	m_metaData->RegisterCtor(new ibCtorMetaValueTypeRecordManager(this))
 #define unregisterRecordManager()\
-	m_metaData->UnRegisterCtor(generate_class_name(prefixRecordManager))
+	m_metaData->UnRegisterCtor(recordManager_to_clsid(GetMetaID(), clsid_metaclass(GetClassType())))
 
 //record set class
 class ibCtorMetaValueTypeRecordSet :
@@ -370,8 +345,7 @@ class ibCtorMetaValueTypeRecordSet :
 public:
 
 	ibCtorMetaValueTypeRecordSet(ibValueMetaObjectRegisterData* recordRef) : ibCtorMetaValueType(), m_metaObject(recordRef) {
-		m_classType = string_to_clsid(wxT("H_") +
-			stringUtils::IntToStr(m_metaObject->GetMetaID()));
+		m_classType = recordSet_to_clsid(m_metaObject->GetMetaID(), clsid_metaclass(m_metaObject->GetClassType()));
 	}
 
 	virtual wxString GetClassName() const {
@@ -379,10 +353,10 @@ public:
 	}
 
 	virtual ibClassID GetClassType() const { return m_classType; }
-	virtual wxClassInfo* GetClassInfo() const;
-	virtual ibValue* CreateObject() const;
+	virtual ibValue CreateObject() const;
 	virtual const ibValueMetaObject* GetMetaObject() const { return m_metaObject; }
 	virtual ibCtorObjectMetaType GetMetaTypeCtor() const { return ibCtorObjectMetaType::ibCtorObjectMetaType_RecordSet; }
+	virtual const ibValueMetaObjectModuleBase* GetEventModule() const override { return m_metaObject->GetObjectModule(); }
 
 protected:
 	ibClassID m_classType;
@@ -392,7 +366,7 @@ protected:
 #define registerRecordSet()\
 	m_metaData->RegisterCtor(new ibCtorMetaValueTypeRecordSet(this))
 #define unregisterRecordSet()\
-	m_metaData->UnRegisterCtor(generate_class_name(prefixRecordSet))
+	m_metaData->UnRegisterCtor(recordSet_to_clsid(GetMetaID(), clsid_metaclass(GetClassType())))
 
 //record set string class
 class ibCtorMetaValueTypeRecordSetString :
@@ -400,8 +374,7 @@ class ibCtorMetaValueTypeRecordSetString :
 public:
 
 	ibCtorMetaValueTypeRecordSetString(ibValueMetaObjectRegisterData* recordRef) : ibCtorMetaValueType(), m_metaObject(recordRef) {
-		m_classType = string_to_clsid(wxT("P_") +
-			stringUtils::IntToStr(m_metaObject->GetMetaID()));
+		m_classType = recordSetString_to_clsid(m_metaObject->GetMetaID(), clsid_metaclass(m_metaObject->GetClassType()));
 	}
 
 	virtual wxString GetClassName() const {
@@ -409,8 +382,7 @@ public:
 	}
 
 	virtual ibClassID GetClassType() const { return m_classType; }
-	virtual wxClassInfo* GetClassInfo() const { return nullptr; }
-	virtual ibValue* CreateObject() const { return nullptr; }
+	virtual ibValue CreateObject() const { return wxEmptyValue; }
 	virtual const ibValueMetaObject* GetMetaObject() const { return m_metaObject; }
 	virtual ibCtorObjectMetaType GetMetaTypeCtor() const { return ibCtorObjectMetaType::ibCtorObjectMetaType_RecordSet_String; }
 
@@ -422,6 +394,6 @@ protected:
 #define registerRecordSet_String()\
 	m_metaData->RegisterCtor(new ibCtorMetaValueTypeRecordSetString(this))
 #define unregisterRecordSet_String()\
-	m_metaData->UnRegisterCtor(generate_class_name(prefixRecordSetStr))
+	m_metaData->UnRegisterCtor(recordSetString_to_clsid(GetMetaID(), clsid_metaclass(GetClassType())))
 
-#endif 
+#endif

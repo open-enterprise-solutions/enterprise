@@ -14,19 +14,19 @@ enum
 	eMarkAsDelete,
 };
 
-ibValueRecordDataObjectCatalog::ibActionCollection ibValueRecordDataObjectCatalog::GetActionCollection(const ibFormID &formType)
+ibValueRecordDataObjectCatalog::ibStandardCommandSet ibValueRecordDataObjectCatalog::GetStandardCommands(const ibFormID &formType)
 {
-	ibActionCollection catalogActions(this);
+	ibStandardCommandSet catalogActions(this);
 	catalogActions.AddAction(wxT("SaveAndClose"), _("Save and close"), g_picSaveCLSID, true, eDefActionAndClose);
 	catalogActions.AddAction(wxT("Save"), _("Save"), g_picSaveCLSID, true, eSave);
 	catalogActions.AddSeparator();
-	catalogActions.AddAction(wxT("Generate"), _("Generate"), g_picGenerateCLSID, true, eGenerate);
+	catalogActions.AddAction(wxT("Generate"), _("Generate"), g_picGenerateCLSID, true, eGenerate).SetModify(false);   // creates a NEW object — doesn't modify THIS one
 	catalogActions.AddSeparator();
 	catalogActions.AddAction(wxT("Clone"), _("Clone"), g_picCloneCLSID, true, eCopy);
 	return catalogActions;
 }
 
-void ibValueRecordDataObjectCatalog::ExecuteAction(const ibActionID &action, ibBackendValueForm* srcForm)
+void ibValueRecordDataObjectCatalog::CallAsAction(const ibActionID &action, ibBackendValueForm* srcForm)
 {
 	switch (action)
 	{

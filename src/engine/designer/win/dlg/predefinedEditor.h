@@ -73,9 +73,12 @@ class ibDialogPredefinedEditor : public wxDialog {
 
 		virtual bool IsContainer(const ibDataViewItem& item) const override;
 
-		// define current parent for hierarchical view 
-		virtual unsigned int GetChildren(const ibDataViewItem& parent,
-			ibDataViewItemArray& array) const override;
+		// define current parent for hierarchical view — single-shot
+		// fetch on the new contract; non-paged, so Next/Prev stay at
+		// the base default (return 0).
+		virtual unsigned int GetFirstFetch(const ibDataViewItem& parent,
+			const ibDataViewItem& anchor, int count,
+			ibDataViewItemArray& out) const override;
 
 		// override sorting to always sort branches ascendingly
 		virtual bool HasDefaultCompare() const override { return true; }
@@ -211,7 +214,7 @@ class ibDialogPredefinedEditor : public wxDialog {
 
 			// --- Description ---
 			wxBoxSizer* sizerDescription = new wxBoxSizer(wxHORIZONTAL);
-			m_staticTextDescription = new wxStaticText(this, wxID_ANY, _("Description"), wxDefaultPosition, wxSize(kLabel, -1));
+			m_staticTextDescription = new wxStaticText(this, wxID_ANY, wxGETTEXT_IN_CONTEXT("item name", "Description"), wxDefaultPosition, wxSize(kLabel, -1));
 			sizerDescription->Add(m_staticTextDescription, 0, wxALL, kPad);
 			m_textDescription = new wxTextCtrl(this, wxID_ANY, strDescription);
 			sizerDescription->Add(m_textDescription, 1, wxALL, kPad);
@@ -357,13 +360,11 @@ public:
 			wxDefaultPosition, wxSize(500, 300), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER),
 		m_tableModelStore(nullptr)
 	{
-		// add our own reference to the new model:
+		// wxRefCounter starts at 1, so `new` IS our reference — there is nothing to add. An IncRef
+		// on top of it is a second reference nobody holds and nobody drops: AssociateModel takes
+		// its own (released by ~wxDataViewCtrl), our dtor releases this one, and the count stopped
+		// at 1. The model and its rows then outlived the dialog.
 		m_tableModelStore = new ibDataViewPredefinedTreeStore(valueMetaObjectHierarchy);
-
-		if (m_tableModelStore)
-		{
-			m_tableModelStore->IncRef();
-		}
 
 		CreateDialogView();
 	}

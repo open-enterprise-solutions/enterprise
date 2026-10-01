@@ -1,68 +1,153 @@
-﻿#ifndef __META_OBJECT_H__
+#ifndef __META_OBJECT_H__
 #define __META_OBJECT_H__
 
 #include "backend/propertyManager/propertyManager.h"
 
-#include "backend/backend_metatree.h"
+#include <vector>   // ibMetaMenuItem arrives as a vector of these — see CollectContextMenu
+
+#include "backend/backend_form.h"
+#include "backend/uniqueKey.h"   // ibUniqueKey — the metaobject's own key (m_metaGuid)
 #include "backend/metaCtor.h"
 
 #include "backend/restructureInfo.h"
 
 #include "backend/interfaceHelper.h"
+#include "backend/compositionHelper.h"
+#include "backend/functionalOptionHelper.h"
 #include "backend/roleHelper.h"
+
+#include "backend/createRequest.h"   // what ProcessChoice is asked with: mode, condition, form
 
 //*******************************************************************************
 class BACKEND_API ibMetaData;
+class BACKEND_API ibValueMetaObject;
+class BACKEND_API ibDataNode;   // serialize/dataBuilder.h — universal structure node
+class BACKEND_API ibDataValue;  // serialize/dataBuilder.h — a node value (Child for a nested object)
+//*******************************************************************************
+
 //*******************************************************************************
 //*                          define commom clsid                                *
 //*******************************************************************************
 
 //COMMON METADATA
-const ibClassID g_metaCommonMetadataCLSID = string_to_clsid("MD_MTD");
+constexpr ibClassID g_metaCommonMetadataCLSID = metadata_to_clsid("MD_MTD");
 
 //COMMON OBJECTS
-const ibClassID g_metaCommonModuleCLSID = string_to_clsid("MD_CMOD");
-const ibClassID g_metaCommonFormCLSID = string_to_clsid("MD_CFRM");
-const ibClassID g_metaCommonTemplateCLSID = string_to_clsid("MD_CTMP");
+constexpr ibClassID g_metaCommonModuleCLSID = metadata_to_clsid("MD_CMOD");
+constexpr ibClassID g_metaCommonFormCLSID = metadata_to_clsid("MD_CFRM");
+constexpr ibClassID g_metaCommonTemplateCLSID = metadata_to_clsid("MD_CTMP");
+constexpr ibClassID g_metaCommonCommandCLSID = metadata_to_clsid("MD_CMD");    // COMMON command (config-level, like CommonForm)
+// A COMMAND GROUP — a place in the command interface a command is filed under, beside the platform's own
+// (Important, Normal, Create, Reports, Service). It holds nothing; a command names it (metaCommandGroupObject.h).
+constexpr ibClassID g_metaCommandGroupCLSID = metadata_to_clsid("MD_CMDGR");
+constexpr ibClassID g_metaScheduledJobCLSID = metadata_to_clsid("MD_SJOB");   // PREDEFINED scheduled job — serves the configuration, one of it (docs/private/scheduled-jobs.md)
+constexpr ibClassID g_metaEventHandlerCLSID = metadata_to_clsid("MD_EHND");   // EVENT HANDLER — one event of the types it names, handled by its own module
+// A SESSION PARAMETER — an attribute whose owner is the session rather than a table. Declared
+// here beside the jobs because that is where it sits in the tree: configuration-level, no data
+// of its own, set once per session by the session module (docs/private/access-policy-rls.md).
+constexpr ibClassID g_metaSessionParameterCLSID = metadata_to_clsid("MD_SPRM");
+// A FUNCTIONAL OPTION — a Boolean stored value that also decides what the interface offers: one value per base,
+// and the objects and fields it governs. Switched off, they stay in the metadata and in every query, and are
+// simply not available (metaFunctionalOptionObject.h).
+constexpr ibClassID g_metaFunctionalOptionCLSID = metadata_to_clsid("MD_FOPT");
 
-const ibClassID g_metaRoleCLSID = string_to_clsid("MD_ROLE");
-const ibClassID g_metaInterfaceCLSID = string_to_clsid("MD_SSYST");
-const ibClassID g_metaPictureCLSID = string_to_clsid("MD_PICTR");
-const ibClassID g_metaLanguageCLSID = string_to_clsid("MD_LANG");
+constexpr ibClassID g_metaRoleCLSID = metadata_to_clsid("MD_ROLE");
+constexpr ibClassID g_metaSectionCLSID = metadata_to_clsid("MD_SSYST");
+constexpr ibClassID g_metaPictureCLSID = metadata_to_clsid("MD_PICTR");
+constexpr ibClassID g_metaLanguageCLSID = metadata_to_clsid("MD_LANG");
 
 //ADVANCED OBJECTS
-const ibClassID g_metaAttributeCLSID = string_to_clsid("MD_ATTR");
-const ibClassID g_metaFormCLSID = string_to_clsid("MD_FRM");
-const ibClassID g_metaTemplateCLSID = string_to_clsid("MD_TMPL");
-const ibClassID g_metaModuleCLSID = string_to_clsid("MD_MOD");
-const ibClassID g_metaManagerCLSID = string_to_clsid("MD_MNGR");
-const ibClassID g_metaTableCLSID = string_to_clsid("MD_TBL");
-const ibClassID g_metaSubcontoKindsTableCLSID = string_to_clsid("MD_SKTB");
-const ibClassID g_metaEnumCLSID = string_to_clsid("MD_ENUM");
-const ibClassID g_metaDimensionCLSID = string_to_clsid("MD_DMNT");
-const ibClassID g_metaResourceCLSID = string_to_clsid("MD_RESS");
+constexpr ibClassID g_metaAttributeCLSID = metadata_to_clsid("MD_ATTR");
+constexpr ibClassID g_metaFormCLSID = metadata_to_clsid("MD_FRM");
+constexpr ibClassID g_metaTemplateCLSID = metadata_to_clsid("MD_TMPL");
+constexpr ibClassID g_metaCommandCLSID       = metadata_to_clsid("MD_OCMD");   // OBJECT command (under a business object, like Form)
+// A COMPOSER — what a report READS and how it is LAID OUT, declared inside the report the way a
+// form, a template or a tabular section is. It is not an attribute somebody adds by hand: it lives
+// in the object, so declaring it is what makes `Object.<Name>` exist (Max, 2026-08-20). The report's
+// DEFAULT composer is what the generated form is built from — a report with one needs no form at all.
+constexpr ibClassID g_metaComposerCLSID      = metadata_to_clsid("MD_CMPS");
+constexpr ibClassID g_metaModuleCLSID = metadata_to_clsid("MD_MOD");
+constexpr ibClassID g_metaManagerCLSID = metadata_to_clsid("MD_MNGR");
+constexpr ibClassID g_metaTableCLSID = metadata_to_clsid("MD_TBL");
+constexpr ibClassID g_metaTableRefCLSID = metadata_to_clsid("MD_TBLR");   // DB-backed tabular section (reference owner); MD_TBL stays RAM-only (processors/reports)
+// The KEY stays "MD_SKTB" deliberately: it is an opaque body key that stored configurations and
+// DB rows already carry, not a name. Renaming it would change every id derived from it.
+constexpr ibClassID g_metaAccountDimensionKindsTableCLSID = metadata_to_clsid("MD_SKTB");
+// The relations of a chart of calculation types (Displacing, Base, Leading — one class, three
+// instances) — a predefined section of the same shape, declared HERE rather than beside the calculation
+// ids below, because what decides where an id must be written is the FAMILY it joins (a tabular section)
+// and not the subject it is about. The KEY stays "MD_DSTB" for the reason given for MD_SKTB just above:
+// the class began as the displacement table alone, and a stored chart already carries the key.
+constexpr ibClassID g_metaCalculationTypeRelationTableCLSID = metadata_to_clsid("MD_DSTB");
+
+// EVERY id whose class derives from ibValueMetaObjectTableData — the RAM and DB-backed variants plus
+// each PREDEFINED section registered under an id of its own. The metadata walks filter tabular
+// sections by THIS list and then static_cast, because that walk runs per child of every traversal and
+// a type test there would be RTTI on a hot path. The price is that a new predefined section has to be
+// named here — so it is named ONCE, and not spelled out at each call site (missing it is invisible:
+// the section simply stops being a table — no physical table, no node on the form, a null queryable
+// at write time, which is how the analytics-kinds table crashed the save).
+//
+// A constant and not a macro: it sits among the constexpr ids it is made of, it has a type, and it
+// cannot be redefined out from under a translation unit. It IS the walks' parameter type, so every
+// call site keeps its braces and this one passes by name — the backing array of a namespace-scope
+// initializer_list has static storage duration, so there is nothing to outlive.
+inline constexpr std::initializer_list<ibClassID> g_tabularSectionCLSIDs = {
+	g_metaTableCLSID, g_metaTableRefCLSID, g_metaAccountDimensionKindsTableCLSID,
+	g_metaCalculationTypeRelationTableCLSID
+};
+constexpr ibClassID g_metaEnumCLSID = metadata_to_clsid("MD_ENUM");
+constexpr ibClassID g_metaDimensionCLSID = metadata_to_clsid("MD_DMNT");
+constexpr ibClassID g_metaResourceCLSID = metadata_to_clsid("MD_RESS");
+
+// THE KINDS OF ACCOUNTING A CHART DECLARES — a boolean field of the ACCOUNT ("is this account kept in
+// currency"), and a tick-box column of the account's dimension-kinds table ("is it kept in currency by
+// THIS breakdown"). Two ids because a register names them apart: a resource belongs to a kind of
+// accounting AND is kept by a breakdown's kind, and the two lists must not mix.
+constexpr ibClassID g_metaAccountingKindCLSID = metadata_to_clsid("MD_ACKD");
+constexpr ibClassID g_metaAccountDimensionAccountingKindCLSID = metadata_to_clsid("MD_ADKD");
 
 //SPECIAL OBJECTS
-const ibClassID g_metaPredefinedAttributeCLSID = string_to_clsid("MD_DATT");
+constexpr ibClassID g_metaPredefinedAttributeCLSID = metadata_to_clsid("MD_DATT");
+
+// A COMMON ATTRIBUTE — declared once under Common, carried by many objects. Two ids, because
+// there are two things: the DECLARATION a person writes, and the COPY it puts inside every
+// object that is checked into its composition. The copy is a real child with its own metaID —
+// that is what gives it a column of its own (fld<metaId>) and takes it through restructuring
+// with its owner, exactly as any attribute goes.
+constexpr ibClassID g_metaCommonAttributeCLSID = metadata_to_clsid("MD_CATT");
+constexpr ibClassID g_metaCommonAttributeColumnCLSID = metadata_to_clsid("MD_CATC");
 
 //MAIN OBJECTS
-const ibClassID g_metaConstantCLSID = string_to_clsid("MD_CONS");
-const ibClassID g_metaCatalogCLSID = string_to_clsid("MD_CAT");
-const ibClassID g_metaDocumentCLSID = string_to_clsid("MD_DOC");
-const ibClassID g_metaEnumerationCLSID = string_to_clsid("MD_ENM");
-const ibClassID g_metaDataProcessorCLSID = string_to_clsid("MD_DPR");
-const ibClassID g_metaReportCLSID = string_to_clsid("MD_RPT");
-const ibClassID g_metaInformationRegisterCLSID = string_to_clsid("MD_INFR");
-const ibClassID g_metaAccumulationRegisterCLSID = string_to_clsid("MD_ACCR");
+constexpr ibClassID g_metaConstantCLSID = metadata_to_clsid("MD_CONS");
+constexpr ibClassID g_metaCatalogCLSID = metadata_to_clsid("MD_CAT");
+constexpr ibClassID g_metaDocumentCLSID = metadata_to_clsid("MD_DOC");
+constexpr ibClassID g_metaEnumerationCLSID = metadata_to_clsid("MD_ENM");
+constexpr ibClassID g_metaDataProcessorCLSID = metadata_to_clsid("MD_DPR");
+constexpr ibClassID g_metaReportCLSID = metadata_to_clsid("MD_RPT");
+constexpr ibClassID g_metaInformationRegisterCLSID = metadata_to_clsid("MD_INFR");
+constexpr ibClassID g_metaAccumulationRegisterCLSID = metadata_to_clsid("MD_ACCR");
+// PARAMETERIZED scheduled job — serves the DATA: a reference object whose ROWS are its instances,
+// beside the predefined kind above (docs/private/scheduled-jobs.md § 3). A main-branch object, not a
+// common one, precisely because it has a table, a reference and a card.
+constexpr ibClassID g_metaParameterizedJobCLSID = metadata_to_clsid("MD_PJOB");
 
 //ACCOUNTING OBJECTS
-const ibClassID g_metaChartOfCharacteristicTypesCLSID = string_to_clsid("MD_CHRC");
-const ibClassID g_metaChartOfAccountsCLSID = string_to_clsid("MD_CHOA");
-const ibClassID g_metaAccountingRegisterCLSID = string_to_clsid("MD_AREG");
+constexpr ibClassID g_metaChartOfCharacteristicTypesCLSID = metadata_to_clsid("MD_CHRC");
+constexpr ibClassID g_metaChartOfAccountsCLSID = metadata_to_clsid("MD_CHOA");
+constexpr ibClassID g_metaAccountingRegisterCLSID = metadata_to_clsid("MD_AREG");
+
+//CALCULATION OBJECTS
+constexpr ibClassID g_metaChartOfCalculationTypesCLSID = metadata_to_clsid("MD_CHCL");
+constexpr ibClassID g_metaCalculationRegisterCLSID = metadata_to_clsid("MD_CREG");
+constexpr ibClassID g_metaRecalculationCLSID = metadata_to_clsid("MD_RCLC");   // subordinate: Recalculation under a calc register
+
+// SEQUENCES — up to which point the documents of a key have been posted in order (sequence-arc.md)
+constexpr ibClassID g_metaSequenceCLSID = metadata_to_clsid("MD_SEQN");
 
 // EXTERNAL
-const ibClassID g_metaExternalDataProcessorCLSID = string_to_clsid("MD_EDPR");
-const ibClassID g_metaExternalReportCLSID = string_to_clsid("MD_ERPT");
+constexpr ibClassID g_metaExternalDataProcessorCLSID = metadata_to_clsid("MD_EDPR");
+constexpr ibClassID g_metaExternalReportCLSID = metadata_to_clsid("MD_ERPT");
 
 //*******************************************************************************
 //*                             ibValueMetaObject                                *
@@ -90,30 +175,119 @@ enum metaObjectFlags {
 	pasteObjectFlag = 0x0200,
 };
 
-#define rt_ref_chunk 0x800060
+// (rt_ref_chunk — the reference-blob wire chunk id — moved to its only user, the L3-3 wire codec
+//  in query/dataMover.cpp.)
 
-//flags metaobject 
+//flags metaobject
 #define metaDeletedFlag 0x0001000
 #define metaCanSaveFlag 0x0002000
 #define metaDisableFlag 0x0008000
+// Predefined child: created in the owner's ctor via CreateMetaObjectAndSetParent
+// (predefined attributes, inner modules). Such a child is bound to its parent for
+// life - an in-place reset of the parent (RemoveAllChildren on a reused root:
+// configuration / external report / data processor) must NOT drop it, only the
+// parent's actual destruction does. Not serialized; re-set every construction.
+#define metaPredefinedFlag 0x0010000
 
 #define metaDefaultFlag metaCanSaveFlag
 
-//flags save
-#define createMetaTable  0x0001000
-#define updateMetaTable	 0x0002000	
-#define deleteMetaTable	 0x0004000	
+// WHAT KIND OF THING AN ITEM OPENS — and the LINE between groups follows from it.
+//
+// ⭐ Max, 2026-09-01: *"the argument is a vector of these, separated by kind."* The metaobject used
+// to append a separator itself — `defaultMenu->AppendSeparator()` — which is a drawing instruction
+// living in the backend: it said WHERE TO PUT A LINE. It says what its entries ARE now, and whoever
+// draws puts a line wherever the kind changes.
+//
+// ⚠ AND THAT REPRODUCES THE OLD MENUS EXACTLY. Every internal separator in the twenty-two menus this
+// replaced fell on a kind change and nowhere else — modules, then the object, then a modal editor.
+// The trailing one was never about the items at all: it was the boundary to the tree's own
+// New / Edit / Remove block, which is the tree's to draw.
+enum class ibMetaMenuKind {
+	Module,   // a module — the code editors group together
+	Object,   // a metaobject, this one or another
+	Editor,   // a modal editor over this object, with no metaobject of its own
+};
 
-#define repairMetaTable  0x0008000
+// ONE THING A METAOBJECT OFFERS TO OPEN — see ibValueMetaObject::CollectContextMenu.
+//
+// Max, 2026-09-01, naming the unit: *"name, caption, id, metaobject."*
+struct ibMetaMenuItem {
+
+	ibMetaMenuKind     m_kind = ibMetaMenuKind::Object;
+
+	// ⭐ A NAME IS NOT A CAPTION, and both are here for the same reason they are on a select field
+	// (ibSelectDescription): the NAME is what a script or the assistant addresses — stable, English,
+	// never translated — and the CAPTION is what a person reads, which is translated and may be
+	// reworded any day. One field for both means either the assistant addresses a translation or the
+	// person reads an identifier.
+	wxString           m_name;                   // "ObjectModule"
+	wxString           m_caption;                // "Open object module"
+
+	// The remainder — see ProcessCommand. An item with an id and no metaobject stands for one of the
+	// two modal editors that have no metaobject to name. wxNOT_FOUND otherwise.
+	int                m_id = wxNOT_FOUND;
+
+	ibValueMetaObject* m_metaObject = nullptr;   // what "open" means here
+
+	// ⭐ THE PICTURE IS ASKED OF THE METAOBJECT, OR GIVEN BY HAND (Max, 2026-09-01). An item that
+	// names one has nothing to state — GetIcon() is right there and cannot go stale; an item that
+	// names none says which picture it wants, so an icon is never lost for want of somewhere to put
+	// it. Empty means "ask the metaobject", which is the ordinary case.
+	ibClassID          m_picture = 0;
+
+	ibMetaMenuItem() = default;
+
+	// The id is optional here and required on the editor form below: an item that names a
+	// metaobject is opened BY the caller and needs no number, while one that stands for a modal
+	// editor has nothing but its number. It is given anyway where a caller has to pick ONE item
+	// out of the list — a toolbar button with a single meaning — because matching the name would
+	// be matching a string.
+	ibMetaMenuItem(ibMetaMenuKind kind, const wxString& name, const wxString& caption,
+		ibValueMetaObject* metaObject, const ibClassID& picture = 0, int id = wxNOT_FOUND)
+		: m_kind(kind), m_name(name), m_caption(caption), m_id(id), m_metaObject(metaObject), m_picture(picture) {}
+	ibMetaMenuItem(const wxString& name, const wxString& caption, int id, const ibClassID& picture = 0)
+		: m_kind(ibMetaMenuKind::Editor), m_name(name), m_caption(caption), m_id(id), m_picture(picture) {}
+};
 
 class BACKEND_API ibValueMetaObject :
 
-	public ibValue,
+	public ibValueDynamicMembers,
 
 	public ibPropertyObjectHelper<ibValueMetaObject>,
-	public ibAccessObject, public ibInterfaceObject {
+	public ibAccessObject, public ibInterfaceObject, public ibCompositionObject, public ibFunctionalOptionObject {
+	public:
 
-	wxDECLARE_ABSTRACT_CLASS(ibValueMetaObject);
+	// WHAT THIS METATYPE HAS — one set of flags, declared by the class itself.
+	//
+	// A catalog has references, objects and a manager; a register has a manager
+	// and record sets; an enumeration has references and a manager and no object
+	// at all. Each of those used to be (or would have become) its own boolean
+	// constant — s_hasReference, s_hasObject, s_hasManager — every one of them a
+	// separate name a new metatype could forget to override. One set says it all,
+	// and a class that adds something ORs it onto its base's set, so "a document
+	// is a reference plus an object" is written exactly that way.
+	//
+	// It says what the metatype HAS, not what it can do — the moment it starts
+	// meaning the second thing it becomes a bag of unrelated bits.
+	//
+	// constexpr: the whole thing is answered at compile time (metaCtor.h asks it
+	// with `if constexpr`), so no byte of this reaches the running program.
+	enum ibMetaFeature : unsigned {
+		ibMetaFeature_None      = 0,
+		ibMetaFeature_Reference = 1u << 0,   // has references  → `<Name>Ref` family
+		ibMetaFeature_Object    = 1u << 1,   // has data objects
+		ibMetaFeature_Manager   = 1u << 2,   // has a manager
+		ibMetaFeature_RecordSet = 1u << 3,   // has record sets (the registers)
+		// A SELECTION — a cursor over the stored rows. Deliberately its own bit
+		// and not derived from anything: an ENUMERATION has references and yet no
+		// selection (its values are written in the configuration, not rows to walk),
+		// while a REGISTER has no reference and does have one. Either derivation
+		// would have been wrong for one of them.
+		ibMetaFeature_Selection = 1u << 4,
+	};
+
+	// Nothing by default — a form, a template, a role has none of it.
+	static constexpr unsigned s_features = ibMetaFeature_None;
 
 public:
 
@@ -122,12 +296,26 @@ public:
 		return m_propertyName->GetValueAsString(result);
 	}
 
-	//system attributes 
+	//system attributes
 	ibMetaID GetMetaID() const { return m_metaId; }
 	void SetMetaID(const ibMetaID& id) { m_metaId = id; }
 
 	wxString GetName() const { return m_propertyName->GetValueAsString(); }
-	void SetName(const wxString& strName) { m_propertyName->SetValue(strName); }
+	// THE ONE DOOR THE STORED NAME CHANGES THROUGH — so it is where the metadata registry is told
+	// its by-name cache no longer matches what the ctors compute. Out of line: it reaches into
+	// ibMetaData, which is not complete here.
+	void SetName(const wxString& strName);
+
+	// Typed parent — the parent metaobject cast to parentType through CastValue (the value cast):
+	// a dynamic_cast that, with _USE_CONTROL_VALUECAST, RAISES immediately (ThrowErrorTypeOperation)
+	// on a wrong / absent parent instead of returning null. A child writes
+	// GetParentAsType<ibValueMetaObjectRecordData>() with no dynamic_cast + assert + null-check.
+	// Distinct name (not GetParent) — it doesn't hide the inherited plain GetParent(), so no
+	// using-declaration is needed. Parallels ibValue::ConvertToType<T>().
+	template <typename parentType>
+	parentType* GetParentAsType() const {
+		return CastValue<parentType>(GetParent());
+	}
 
 	virtual wxString GetSynonym() const {
 		return !m_propertySynonym->IsEmptyProperty() ?
@@ -138,11 +326,36 @@ public:
 	wxString GetComment() const { return m_propertyComment->GetValueAsString(); }
 	void SetComment(const wxString& comment) { m_propertyComment->SetValue(comment); }
 
+	// ⭐ TWO TEXTS, TWO AUDIENCES, AND THAT IS WHY THERE ARE TWO.
+	//
+	// HELP is what the PERSON USING THE APPLICATION reads — the F1 text. It answers "what is this
+	// and what do I put in it", it is written in their words, and it ships with the product.
+	//
+	// NOTES are the ENGINEERING INTENT — why this object exists, what it was decided to be, what
+	// was tried and rejected. Markdown, written and read by whoever is building the configuration
+	// (a developer, or the assistant), and read FIRST when work resumes: without it the modelling
+	// drifts between sessions, because the reasons live only in whoever was there.
+	//
+	// Folding them into one field would force one of the two to be written wrong: user help
+	// carrying design arguments, or design notes shipped to a user who wanted to know what to type.
 	wxString GetHelpContent() const { return m_strHelpContent; }
 	void SetHelpContent(const wxString& strHelpContent) { m_strHelpContent = strHelpContent; }
 
+	wxString GetNoteContent() const { return m_strNoteContent; }
+	void SetNoteContent(const wxString& strNoteContent) { m_strNoteContent = strNoteContent; }
+
 	virtual void SetMetaData(ibMetaData* metaData) { m_metaData = metaData; }
-	virtual ibMetaData* GetMetaData() const override { return m_metaData; }
+	virtual const ibMetaData* GetMetaData() const override { return m_metaData; }
+	// Mutable accessor - metaobjects own a mutable m_metaData. Not an override:
+	// the factory root only declares the const capability (see backend_type.h).
+	virtual ibMetaData* GetMetaData() { return m_metaData; }
+
+	// Restructure-ledger facade — one short call instead of the static ledger accessor at every save /
+	// validation site. STATIC (the ledger pulls the active config), so it works in this-less contexts too
+	// (the static scaffold methods). Defined in metaObject.cpp.
+	static void RestructureInfo   (const wxString& message);
+	static void RestructureWarning(const wxString& message);
+	static void RestructureError  (const wxString& message);
 
 	void ResetGuid();
 	void ResetId();
@@ -163,20 +376,41 @@ public:
 
 	operator ibMetaID() const { return m_metaId; }
 
-	ibBackendMetadataTree* GetMetaDataTree() const;
 
 public:
 
-	bool IsAllowed() const {
+	// VIRTUAL, because a metaobject's liveness is not always its own. A common attribute's
+	// copy is allowed only while the declaration that put it there is (metaCommonAttributeObject.h),
+	// and everything that builds anything filters on this — FillArrayObjectByFilter tests it
+	// first, so it is the one gate that makes a dropped declaration drop its columns.
+	//
+	// It was non-virtual, and the override further down (ibValueMetaObjectAttributeBase, from
+	// the column base) only caught calls made THROUGH a column pointer. Every metadata walk
+	// holds ibValueMetaObject*, so those calls went to this body and the override never ran —
+	// caught by CommonAttribute.CopyStopsBeingAllowedWithItsDeclaration, and the same shape as
+	// GetName, which is still non-virtual and is why the copy has to STORE its name.
+	virtual bool IsAllowed() const {
 		return IsEnabled()
 			&& !IsDeleted();
 	}
 
-	bool IsEnabled() const {
+	// Virtual for the same reason as IsAllowed below: these three answer "does this object
+	// count right now", and for an object whose existence depends on another one the honest
+	// answer is not in its own flags. Non-virtual, an override here would be invisible to
+	// every metadata walk — they all hold ibValueMetaObject*.
+	//
+	// ⚠ HOT PATH. All three are called per child by every metadata walk
+	// (FillArrayObjectByFilter tests IsAllowed before anything else), so these are now
+	// virtual calls inside the tightest loop in the metadata layer. Measured cost: none
+	// observed — the walks allocate vectors anyway, which dwarfs a vtable hop. If a profile
+	// ever points here, the fix is to cache the derived answer on the deriving object
+	// (invalidated when its source changes) rather than to make these non-virtual again:
+	// the correctness they buy is not optional.
+	virtual bool IsEnabled() const {
 		return (m_metaFlags & metaDisableFlag) == 0;
 	}
 
-	bool IsDeleted() const {
+	virtual bool IsDeleted() const {
 		return (m_metaFlags & metaDeletedFlag) != 0;
 	}
 
@@ -214,7 +448,7 @@ public:
 	virtual wxString GetClassName() const final { return ibValue::GetClassName(); }
 	virtual wxString GetObjectTypeName() const final { return ibValue::GetClassName(); }
 
-	ibGuid GetGuid() const { return m_metaGuid; }
+	const ibUniqueKey& GetGuid() const { return m_metaGuid; }
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -245,30 +479,72 @@ public:
 
 	void SetCopyGuid(const ibGuid& guid) const { m_metaCopyGuid = guid; }
 
+	// Re-arm / disarm the paste mark. A pasted OBJECT form materialises LAZILY (ibDeferredForm) — long after
+	// PasteObject cleared the guard — so the deferred build re-stamps the SAME guid here for the duration of the
+	// load, and clears it right after; LoadControl then sees IsPasteMode and routes the controls to PasteNode.
+	void SetPasteGuid(const ibGuid& guid) const { m_metaPasteGuid = guid; }
+
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	wxString GetFileName() const;
 	wxString GetFullName() const;
 
 	wxString GetModuleName() const;
-	wxString GetDocPath() const { return m_metaGuid.str(); }
+	wxString GetDocPath() const { return m_metaGuid.GetGuid().str(); }
 
-	//filter children element
-	virtual bool FilterChild(const ibClassID& clsid) const { return false; }
+	// Resolve a child's clsid against THIS owner: returns the canonical clsid the owner hosts
+	// (possibly remapped) or 0 if it does not host this child. ibClassID is UNSIGNED, so 0 — not
+	// -1 — is the "not allowed" sentinel (a real clsid is always > 0, see CreateMetaObject's
+	// wxASSERT(clsid != 0)). This is the single "may I host this child, and as what" gate — it
+	// replaces the old bool FilterChild + a separate remap. A tabular section comes in two clsids
+	// of the same kind: RAM (MD_TBL, processors/reports) and DB-backed reference (MD_TBLR,
+	// catalogs/documents); each owner maps either input to ITS variant, so a tabular section
+	// copy/pastes across owner kinds. CreateMetaObject builds the RETURNED clsid. Owners override.
+	virtual ibClassID ResolveChild(const ibClassID& clsid) const { return 0; }
 
-	//process choice
-	virtual bool ProcessChoice(ibBackendControlFrame* ownerValue,
-		const wxString& strFormName, enum ibSelectMode selMode) const {
+	// Bool view of ResolveChild for the many filter-only call sites (copy/serialize walkers):
+	// a resolved clsid is > 0; 0 means the child is not allowed.
+	bool FilterChild(const ibClassID& clsid) const { return ResolveChild(clsid) > 0; }
+
+	// (May this object be part of a composition? — ibCompositionObject::IsCompositionAllowed,
+	// compositionHelper.h. The question lives with the mechanism that asks it.)
+
+	// MAY THIS BELONG TO A FUNCTIONAL OPTION — whatever the command interface may offer (a list, a command,
+	// a form), since what an option hides is what the interface shows. A field and a table say yes for
+	// themselves (they are what a form binds to); an option says no.
+	virtual bool IsFunctionalOptionAllowed() const override { return IsInterfaceAllowed(); }
+
+	// DOES THIS SHOW UP UNDER ITS OWNER? Not a new rule — FilterChild above already knows:
+	// a child the owner does not accept is one it never created and cannot host, so it has
+	// no business being listed under it. Predefined attributes, object modules and manager
+	// modules are exactly that set.
+	//
+	// This is only the convenience form, asked from the child's side. Before it, the
+	// designer tree spelled `GetClassType() == g_metaPredefinedAttributeCLSID` out TEN
+	// times, once per metatype branch, and configuration-compare kept a second list of
+	// clsids whose own comment admitted it was mirroring the first.
+	// DELETED IS PART OF THE SAME ANSWER. Every caller paired this with an `IsDeleted()` line of its
+	// own — four trees, the compare walker — because a child that is gone shows up under its owner
+	// exactly as little as one the owner never accepted. Two spellings of one question is how the
+	// copies drift: adding a branch, you remember the question you came for and not its neighbour.
+	bool IsAcceptedByParent() const {
+		if (IsDeleted())
+			return false;
+		const ibValueMetaObject* const owner = GetParent();
+		return owner == nullptr || owner->FilterChild(GetClassType());
+	}
+
+	// ⭐ ONE ARGUMENT, BECAUSE THIS QUESTION GROWS. The form to open and what may be picked used to
+	// stand side by side here, and what NARROWS the list would have been a third — then a fourth, as
+	// the callers (a form field, a table cell, a filter row, a script) each learn one more thing about
+	// the choice they are asking for. The request carries them, so the door stops changing shape.
+	virtual bool ProcessChoice(ibBackendControlFrame* ownerValue, const ibFormRequest& request) const {
 		return true;
 	}
 
-	//methods 
-	virtual ibValueMethodHelper* GetPMethods() const override { // get a reference to the class helper for parsing attribute and method names
-		//PrepareNames();
-		return m_methodHelper;
-	}
-
-	virtual void PrepareNames() const override; // this method is automatically called to initialize attribute and method names.
+	//methods
+	// DoGetPMethods (protected) + by-value m_members come from ibValueDynamicMembers.
+	void FillMembers(ibMemberTable& helper) const;   // bound in ctor (was PrepareNames)
 
 	//attributes
 	virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal) override;        //setting attribute
@@ -278,25 +554,52 @@ public:
 	virtual wxIcon GetIcon() const override { return wxNullIcon; }
 	static wxIcon GetIconGroup() { return wxNullIcon; }
 
-	//load & save object in metaObject 
-	bool LoadMeta(ibReaderMemory& dataReader);
-	bool SaveMeta(ibWriterMemory& dataWritter);
+	// Recursive tree (de)serialization into/from the universal ibDataNode structure
+	// (serialize/dataBuilder.h). The ibMetaData containers drive the whole tree through
+	// the top-level ibDataBuilder + ibBinaryProvider; this node owns only the
+	// metaobject<->node mapping (each node carries its own m_metaData).
+	//   ApplyDataNode - factory-create children by clsid + LoadNode(this) +
+	//                   OnLoadMetaObject; `resetId` regenerates each metaId (grafting a
+	//                   file subtree into a config). Throws ibBackendException on bad data.
+	//   BuildDataNode - SaveNode(this) + OnSaveMetaObject + children recursed.
+	//   DeleteSubtree - purge IsDeleted descendants (detach).
+	bool ApplyDataNode(const ibDataNode& node, bool resetId = false);
+	bool BuildDataNode(ibDataNode& node, int flags = defaultFlag);
+	bool DeleteSubtree();
 
-	//load & save object
-	bool LoadMetaObject(ibMetaData* metaData, ibReaderMemory& dataReader);
-	bool SaveMetaObject(ibMetaData* metaData, ibWriterMemory& dataWritter, int flags = defaultFlag);
-	bool DeleteMetaObject(ibMetaData* metaData);
+	// Node form, SEPARATE per direction (no flag): LoadNode reads a genuinely CONST node
+	// into the object; SaveNode writes the object into the node. Both handle the common
+	// header (guid/id/deleted/help -> fields, name/synonym/comment -> props, interface/
+	// roles) then delegate the per-type data to ReadData / WriteData.
+	bool LoadNode(const ibDataNode& node);
+	bool SaveNode(ibDataNode& node) const;
 
-	// save & delete object in DB 
-	bool CreateMetaTable(ibMetaDataConfiguration* srcMetaData, int flags = createMetaTable);
-	bool UpdateMetaTable(ibMetaDataConfiguration* srcMetaData, ibValueMetaObject* srcMetaObject);
-	bool DeleteMetaTable(ibMetaDataConfiguration* srcMetaData);
+	// A NESTED metaobject (module, predefined attribute, …) is embedded by its holder
+	// PROPERTY like any value — m_propertyObjectModule->WriteNodeValue/ReadNodeValue
+	// yields/consumes a Child sub-node that wraps this object's SaveNode/LoadNode.
 
-	// load & save config data 
-	virtual bool LoadTableData(const ibReaderMemory& reader) { return true; }
-	virtual bool SaveTableData(ibWriterMemory& writer) const { return true; }
+public:
 
-	//events: 
+	// Runtime lifecycle walk over THIS node + descendants. Deleted nodes (and their
+	// subtree) are skipped. The walk fires the hook on the node itself: RunSubtree is
+	// top-down (self before children), CloseSubtree is bottom-up (children before self,
+	// so the root closes last) — a caller just drives the two phases on the root, no
+	// separate root-hook firing.
+	// Lifecycle phase for RunSubtree / CloseSubtree — TWO passes over the tree.
+	//   Run  : Before = register (identity), After = resolve (cross-refs, sources / forms).
+	//   Close: Before = un-resolve, After = un-register (LIFO mirror of Run).
+	enum class ibRunPhase : unsigned char { Before, After };
+	bool RunSubtree(int flags, ibRunPhase phase);
+	bool CloseSubtree(ibRunPhase phase);
+
+	// (CreateMetaTable / UpdateMetaTable / DeleteMetaTable removed — structure DDL is the config-save
+	//  differ's job; see ContributeTables below (declares both structure and seed) + query/schemaSnapshot.h.)
+
+	// (No per-object table-data dump / restore. Row data is moved off the config's ContributeTables
+	//  SNAPSHOT directly by the orchestrator (DumpDataToBuffer / RestoreDataFromBuffer) through the L3-3
+	//  mover — one source of truth, the same structure that drives the DDL. See query/dataMover.h.)
+
+	//events:
 	virtual bool OnCreateMetaObject(ibMetaData* metaData, int flags);
 	virtual bool OnLoadMetaObject(ibMetaData* metaData);
 	virtual bool OnSaveMetaObject(int flags) { return true; }
@@ -306,16 +609,48 @@ public:
 	//for designer 
 	virtual bool OnReloadMetaObject() { return true; }
 
-	//module manager is started or exit 
-	//after and before for designer 
+	//module manager lifecycle — TWO run phases (see ibRunPhase), driven by RunSubtree:
+	//  OnBeforeRun = register (identity / type ctor),
+	//  OnAfterRun  = resolve (cross-refs, sources / forms — all identities now present).
 	virtual bool OnBeforeRunMetaObject(int flags) { return true; }
 	virtual bool OnAfterRunMetaObject(int flags) { return true; }
 
+	// close mirrors run in reverse (LIFO): OnBeforeClose = un-resolve, OnAfterClose = un-register.
 	virtual bool OnBeforeCloseMetaObject() { return true; }
 	virtual bool OnAfterCloseMetaObject();
 
-	//prepare menu for item
-	virtual bool PrepareContextMenu(wxMenu* defaultMenu) { return false; }
+	// ⭐⭐ WHAT THIS METAOBJECT OFFERS TO OPEN — SAID AS DATA, DRAWN BY WHOEVER HAS A SCREEN.
+	//
+	// Max, 2026-09-01: *"you pass it a structure — the metaobject, its caption, its picture, a
+	// separator between them — and you get data out. Opening you can do yourself, right there."*
+	//
+	// It used to be `PrepareContextMenu(wxMenu*)`: the metaobject built a WIDGET, in a header the
+	// whole backend includes, against the two-DLL rule that says backend.dll names no GUI. And the
+	// answer came back as `ProcessCommand(unsigned int id)` — a bare number whose meaning only the
+	// object that emitted it knew.
+	//
+	// 🛑 AND THE NUMBERS WERE A HAND-KEPT LIST THAT HAD ALREADY FIRED. Twenty enumerations, nearly
+	// every one of them starting at 19000, unique only WITHIN one metaobject — see ID_METATREE_LAST
+	// in treeConfiguration.h, where two appended entries landed on top of Insert and Replace and
+	// asking for Help opened the "replace report" file dialog. Two enums, no compiler on earth to
+	// notice. With the item carrying the metaobject there is no number to collide: the ids are
+	// handed out by the ONE place that draws the menu, in order, and thrown away with it.
+	//
+	// The census that decided the shape: of 39 branches across 22 metaobjects, 35 were
+	// `OpenObjectForm(<a metaobject>)` and nothing else. The remaining 4 are the two modal editors
+	// below, which have no metaobject to name — see ibMetaMenuItem.
+	//
+	// Returns TRUE when the standard tree commands — New / Edit / Remove / Properties — do NOT apply
+	// to this row (the configuration root, a common-attribute copy: neither can be created or
+	// deleted where it sits). It is not "I drew my own menu"; it never was.
+	virtual bool CollectContextMenu(std::vector<ibMetaMenuItem>& items) { return false; }
+
+	// ⚠ THE REMAINDER, AND IT IS TWO. `EditPredefinedValues` and `EditHomePage` open a MODAL DIALOG
+	// rather than a document, so there is no metaobject for an item to carry — the module in
+	// "open object module" is a real metaobject, which is exactly why it needs no verb of its own.
+	// Those two surfaces have no identity, and giving them one is a metatype decision, not a
+	// refactor. Until it is made, these four entries keep a command id, and the ids live in ONE
+	// enum on the tree instead of twenty in the backend.
 	virtual void ProcessCommand(unsigned int id) {}
 
 	//check is empty
@@ -338,14 +673,25 @@ public:
 	virtual bool OnPropertyChanging(ibProperty* property, const wxVariant& newValue) override;
 	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue) override;
 
-	/**
-	* Devuelve la posicion del hijo o GetChildCount() en caso de no encontrarlo
-	*/
+	// THE DOOR FOR THE ORDER OF THE CHILDREN — `pos` is where `obj` ends up. Refused on a read-only
+	// configuration; a move that happened marks the configuration modified and is announced as `Moved`.
 	bool ChangeChildPosition(ibValueMetaObject* obj, unsigned int pos);
 
-	//copy & paste object 
-	bool CopyObject(ibWriterMemory& writer) const;
-	bool PasteObject(ibReaderMemory& reader);
+	// ⭐⭐ COPY & PASTE ARE NOT HERE ANY MORE — they are ibMetaData::CopyMetaObject and
+	// ibMetaData::PasteMetaObject (Max, 2026-09-01: *"take them out of there altogether and move
+	// them over to the metadata"*).
+	//
+	// They were public methods of the object, and so a paste was a thing an OBJECT did to itself
+	// while reaching back for the metadata on its first line to create every child. Ten call sites
+	// each made a shell by hand, filled it, announced the result or forgot to, and removed it on
+	// failure or forgot that too. All of that is one of the five doors the metadata owns — create,
+	// rename, copy, paste, remove — each raising its own event, and there is no longer a way round
+	// them, because there is no longer a method here to call.
+	//
+	// The friendship is what the walkers need: they read m_metaGuid / m_metaCopyGuid, mark the
+	// paste, walk m_children and run the per-aspect halves (CopyProperty / PasteProperty,
+	// Save/LoadInterface, Save/LoadRole) that stay the object's own.
+	friend class ibMetaData;
 
 #pragma region __array_h__
 
@@ -366,32 +712,69 @@ public:
 		return FindObjectByFilter<_T1>(id, {});
 	}
 
-#pragma endregion 
+#pragma endregion
 
 	template<typename T, typename... Args>
 	T* CreateMetaObjectAndSetParent(Args&&... args) {
-		T* createdObject = ibValue::CreateAndConvertObjectValueRef<T>(args...);
+		const ibValuePtr<T> createdObject = ibValue::CreateObjectValue<T>(args...);
 		wxASSERT(createdObject);
-		//set child/parent
+		//set child/parent - predefined child, pinned to this parent for life
 		createdObject->SetParent(this);
+		createdObject->SetFlag(metaPredefinedFlag);
 		this->AddChild(createdObject);
-		return createdObject;
+		return createdObject;   // the child vector holds it now
 	}
+
+	// Predefined children (set in CreateMetaObjectAndSetParent) are bound to the
+	// parent's lifetime: a reload reset of the parent keeps them, only the
+	// parent's destruction drops them. See RemoveAllChildren(keepPinned).
+	virtual bool IsPinnedToParent() const override {
+		return (m_metaFlags & metaPredefinedFlag) != 0;
+	}
+
+public:
+
+	// Declare this object's physical tables INTO a structure snapshot — the declarative replacement for
+	// CreateAndUpdateTableDB. The differ (DiffSnapshots) computes create/alter/drop from two snapshots;
+	// an object only declares "what I am now". (query/schemaSnapshot.h, docs/private/query-language-arc.md)
+	//
+	// Base = the CONTAINER behaviour: recurse into children, so the tree walks itself (SnapshotOf is one
+	// call on the common object). A TABLE-bearing object overrides to Add its table(s) — including nested
+	// tabular sections — and does NOT recurse (its children are attributes/forms, not tables). A non-table
+	// container (folder / common) keeps this default and just descends.
+	//
+	// 🛑⭐ CHANGING WHAT AN EXISTING METATYPE DECLARES HERE IS INVISIBLE TO THE DIFF. Both snapshots — the
+	// baseline and the edited configuration — are projected by THIS code, so a column, an index or a
+	// condition that a new version starts declaring is in both, the diff is empty, and a base that already
+	// holds the object never gets it (schema-authority.md § 6). Two roads, and nothing else:
+	//   * a part with a SAVED id (a predefined section, a standard column) — give it an id only in the copy
+	//     that saves itself, in before-run (§ 6.1; StampIfNeverSaved, StampActionPeriodIfNeverSaved);
+	//   * anything else — a column made unconditional, an index, a key — branch on the configuration's
+	//     COMPATIBILITY VERSION (`GetMetaData()->GetVersion()`, a new rung in ibProgramVersion), here and in
+	//     the runtime together (§ 6.2, compatibility-version.md): the user raises the mode, and the next
+	//     apply is the migration. A metatype no released base holds yet needs neither.
+	virtual void ContributeTables(class ibSchemaSnapshot& out) const {
+		for (unsigned int i = 0; i < GetChildCount(); i++)
+			if (ibValueMetaObject* child = GetChild(i))
+				child->ContributeTables(out);
+	}
+
 
 protected:
 
-	//create and update table 
-	virtual bool CreateAndUpdateTableDB(ibMetaDataConfiguration* srcMetaData, ibValueMetaObject* srcMetaObject, int flags) { return true; }
-
-	//load & save metaData from DB 
-	virtual bool LoadData(ibReaderMemory& reader) { return true; }
-	virtual bool SaveData(ibWriterMemory& writer) { return true; }
-	virtual bool DeleteData() { return true; }
+	// per-type data hook: a type reads/writes its OWN data — props / fields / Child.
+	// The base has none; a type overrides. Driven only by SaveNode / LoadNode.
+	virtual bool ReadData(const ibDataNode& node);
+	virtual bool WriteData(ibDataNode& node) const;
 
 protected:
 
 #pragma region interface_h
 	virtual void DoSetInterface(const ibMetaID& id, const bool& val = true) override;
+#pragma endregion
+
+#pragma region functional_option_h
+	virtual void DoSetFunctionalOption(const ibMetaID& id, const bool& val = true) override;
 #pragma endregion
 
 #pragma region role_h
@@ -412,7 +795,7 @@ protected:
 		std::initializer_list<ibClassID> filter,
 		const bool use_child_filter = false) const
 	{
-		for (auto& child : m_children) {
+		for (ibValueMetaObject* child : m_children) {
 
 			if (!child->IsAllowed())
 				continue;
@@ -453,29 +836,41 @@ protected:
 		if (name.IsEmpty())
 			return nullptr;
 
-		for (auto& child : m_children) {
+		for (ibValueMetaObject* child : m_children) {
 
-			if (child->IsDeleted())
+			// ⭐ WHAT THE WALKS DO NOT SEE, THE FINDS DO NOT FIND — `IsAllowed`, the same gate
+			// FillArrayObjectByFilter asks first. This asked `IsDeleted` alone, so an attribute its owner
+			// had switched OFF (a catalog's Owner with no owner declared, a turnovers register's
+			// RecordType, the credit account of a one-sided accounting register) was absent from every
+			// list and still answered by name and by id — a query could select it, a filter could name
+			// it. One gate for both, in all three overloads (Max, 2026-09-16: "also exclude the elements
+			// that are switched off").
+			if (!child->IsAllowed())
 				continue;
 
 			if (stringUtils::CompareString(name, child->GetName())) {
 
-				if (filter.size() > 0) {
+				if (filter.size() == 0)
+					return dynamic_cast<_T1*>(child);
 
-					bool success = false;
-					ibClassID child_clsid = child->GetClassType();
-					for (const auto filter_clsid : filter) {
-						if (child_clsid == filter_clsid) {
-							success = true;
-							break;
-						}
-					}
-
-					return success ?
-						static_cast<_T1*>(child) : nullptr;
+				const ibClassID child_clsid = child->GetClassType();
+				for (const auto filter_clsid : filter) {
+					if (child_clsid == filter_clsid)
+						return static_cast<_T1*>(child);
 				}
 
-				return dynamic_cast<_T1*>(child);
+				// 🛑⭐ A NAMESAKE OF THE WRONG KIND DOES NOT END THE SEARCH. This used to
+				// `return nullptr` here, so the FIRST object carrying the name decided the answer
+				// for every kind at once: a Section called FixedAssets became unreachable by name
+				// because a Catalog of that name came earlier in the tree, and the refusal read
+				// "No section is called 'FixedAssets'. There is: Stock, FixedAssets" — listing the
+				// very thing it had just declined to find (2026-09-09).
+				//
+				// Names are unique WITHIN a kind and not across kinds, which is exactly why the
+				// filter exists; abandoning on the first namesake makes the filter select the
+				// search's victim rather than its subject. The ID overload keeps that shape on
+				// purpose: an id IS unique across the tree, so "that id is not one of these kinds"
+				// is a complete answer there.
 			}
 
 			if (use_child_filter) {
@@ -500,13 +895,19 @@ protected:
 		if (id <= 0)
 			return nullptr;
 
-		for (auto& child : m_children) {
+		for (ibValueMetaObject* child : m_children) {
 
-			if (child->IsDeleted())
+			if (!child->IsAllowed())   // see the by-name overload
 				continue;
 
 			if (child->CompareId(id)) {
 
+				// ⭐ AND HERE ABANDONING IS RIGHT, unlike the by-NAME overload above — do not
+				// "make them consistent". An id is an identity: it belongs to exactly one object
+				// in the tree, so "that object exists and is not one of these kinds" is a complete
+				// answer, and carrying on could only ever find a SECOND holder of a unique id,
+				// which is a defect somewhere else and must not be papered over here. A name is
+				// unique only WITHIN a kind, which is why that one had to keep looking.
 				if (filter.size() > 0) {
 
 					bool success = false;
@@ -547,13 +948,16 @@ protected:
 		if (!id.isValid())
 			return nullptr;
 
-		for (auto& child : m_children) {
+		for (ibValueMetaObject* child : m_children) {
 
-			if (child->IsDeleted())
+			if (!child->IsAllowed())   // see the by-name overload
 				continue;
 
 			if (child->CompareGuid(id)) {
 
+				// Same as the by-id overload above and for the same reason: a guid is an identity,
+				// not a label, so the first holder is the only holder and the kind check is a
+				// verdict rather than a step in a search.
 				if (filter.size() > 0) {
 
 					bool success = false;
@@ -596,22 +1000,20 @@ protected:
 
 	int m_metaFlags;
 	ibMetaID m_metaId;			//type id (default is undefined)
-	ibGuid m_metaGuid;
+	ibUniqueKey m_metaGuid;
 
 	ibMetaData* m_metaData;
-	ibValueMethodHelper* m_methodHelper;
 
 	wxString m_strHelpContent;
+	wxString m_strNoteContent;  // the engineering intent, in markdown — see the accessors above
 
 protected:
 
 	ibPropertyCategory* m_categoryCommon = ibPropertyObject::CreatePropertyCategory(wxT("Common"), _("Common"));
-	ibPropertyUString* m_propertyName = ibPropertyObject::CreateProperty<ibPropertyUString>(m_categoryCommon, wxT("Name"), _("Name"), _("Name of metadata object"), wxEmptyString);
-	ibPropertyTString* m_propertySynonym = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryCommon, wxT("Synonym"), _("Synonym"), _("Synonym of metadata object"), wxEmptyString);
-	ibPropertyString* m_propertyComment = ibPropertyObject::CreateProperty<ibPropertyString>(m_categoryCommon, wxT("Comment"), _("Comment"), _("Comment"), wxEmptyString);
+	ibPropertyUString* m_propertyName = ibPropertyObject::CreateProperty<ibPropertyUString>(m_categoryCommon, wxT("Name"), _("Name"), _("The name code and queries refer to the object by - Catalogs.<Name> in a script, Catalog.<Name> in a query. Letters, digits and underscores, starting with a letter; unique among the objects beside it. Renaming changes what code must call it."), wxEmptyString);
+	ibPropertyTString* m_propertySynonym = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryCommon, wxT("Synonym"), _("Synonym"), _("The caption people see - in the interface, form and list titles, report columns - one text per declared language. Empty: the name is shown."), wxEmptyString);
+	ibPropertyString* m_propertyComment = ibPropertyObject::CreateProperty<ibPropertyString>(m_categoryCommon, wxT("Comment"), _("Comment"), _("A note for developers; the interface never shows it. For a predefined attribute or a built-in module it is also the help its property shows."), wxEmptyString);
 	ibPropertyCategory* m_categoryContext = ibPropertyObject::CreatePropertyCategory(wxT("Context"), _("Context"));
 };
-
-extern BACKEND_API ibRestructureInfo s_restructureInfo;
 
 #endif

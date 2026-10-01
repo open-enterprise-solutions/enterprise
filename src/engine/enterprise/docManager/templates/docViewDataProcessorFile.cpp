@@ -6,9 +6,9 @@
 
 wxIMPLEMENT_DYNAMIC_CLASS(ibDataProcessorEditView, ibMetaView);
 
-bool ibDataProcessorEditView::OnCreate(ibMetaDocument *doc, long flags)
+bool ibDataProcessorEditView::OnCreate(ibDocument *doc, long flags)
 {
-	return ibMetaView::OnCreate(doc, flags);
+	return ibView::OnCreate(doc, flags);
 }
 
 void ibDataProcessorEditView::OnDraw(wxDC *WXUNUSED(dc))
@@ -29,12 +29,12 @@ bool ibDataProcessorEditView::OnClose(bool deleteWindow)
 }
 
 // ----------------------------------------------------------------------------
-// ITextDocument: ibDataProcessorFilibDocument and wxTextCtrl married
+// ibTextDocument: ibDataProcessorFileDocument and wxTextCtrl married
 // ----------------------------------------------------------------------------
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibDataProcessorFilibDocument, ibMetaDocument);
+wxIMPLEMENT_DYNAMIC_CLASS(ibDataProcessorFileDocument, ibMetaDocument);
 \
-bool ibDataProcessorFilibDocument::OnCreate(const wxString& path, long flags)
+bool ibDataProcessorFileDocument::OnCreate(const wxString& path, long flags)
 {
 	/*if (!ibMetaDocument::OnCreate(path, flags))
 		return false;*/
@@ -44,18 +44,18 @@ bool ibDataProcessorFilibDocument::OnCreate(const wxString& path, long flags)
 
 #include "frontend/mainFrame/objinspect/objinspect.h"
 
-bool ibDataProcessorFilibDocument::OnCloseDocument()
+bool ibDataProcessorFileDocument::OnCloseDocument()
 {
 	if (!m_metaData->CloseDatabase(forceCloseFlag)) {
 		return false;
 	}
 
-	return wxDocument::OnCloseDocument();
+	return ibDocument::OnCloseDocument();
 }
 
 // Since text windows have their own method for saving to/loading from files,
 // we override DoSave/OpenDocument instead of Save/LoadObject
-bool ibDataProcessorFilibDocument::DoOpenDocument(const wxString& filename)
+bool ibDataProcessorFileDocument::DoOpenDocument(const wxString& filename)
 {
 	if (!m_metaData->LoadFromFile(filename))
 		return false;
@@ -64,7 +64,7 @@ bool ibDataProcessorFilibDocument::DoOpenDocument(const wxString& filename)
 	return false;
 }
 
-bool ibDataProcessorFilibDocument::DoSaveDocument(const wxString& filename)
+bool ibDataProcessorFileDocument::DoSaveDocument(const wxString& filename)
 {
 	/*if (!m_metaData->SaveToFile(filename))
 		return false;*/
@@ -72,12 +72,12 @@ bool ibDataProcessorFilibDocument::DoSaveDocument(const wxString& filename)
 	return true;
 }
 
-bool ibDataProcessorFilibDocument::IsModified() const
+bool ibDataProcessorFileDocument::IsModified() const
 {
 	return ibMetaDocument::IsModified();
 }
 
-void ibDataProcessorFilibDocument::Modify(bool modified)
+void ibDataProcessorFileDocument::Modify(bool modified)
 {
 	ibMetaDocument::Modify(modified);
 }

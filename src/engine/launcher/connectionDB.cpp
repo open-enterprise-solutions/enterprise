@@ -47,7 +47,8 @@ ibDialogConnection::ibDialogConnection(wxWindow* parent, wxWindowID id, const wx
 	wxDialog(parent, id, title, pos, size, style)
 {
 	this->SetSizeHints(wxDefaultSize, wxDefaultSize);
-	this->SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_INACTIVECAPTION));
+	// Interior palette — powder-blue dialog frame.
+	this->SetBackgroundColour(wxColour(0xB8, 0xC9, 0xD4));  // #B8C9D4 powder blue
 
 	wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
 
@@ -132,11 +133,11 @@ ibDialogConnection::ibDialogConnection(wxWindow* parent, wxWindowID id, const wx
 	wxBoxSizer* bSizerButton = new wxBoxSizer(wxHORIZONTAL);
 
 	m_buttonTestConnection = new wxButton(this, wxID_ANY, _("Test connection"), wxDefaultPosition, wxDefaultSize, 0);
-	m_buttonTestConnection->SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_INFOBK));
+	m_buttonTestConnection->SetBackgroundColour(wxColour(0xF5, 0xE8, 0xD5));  // #F5E8D5 light cream
 	bSizerButton->Add(m_buttonTestConnection, 0, wxALL, FromDIP(5));
 
 	m_buttonSaveConnection = new wxButton(this, wxID_ANY, _("Save connection"), wxDefaultPosition, wxDefaultSize, 0);
-	m_buttonSaveConnection->SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_ACTIVECAPTION));
+	m_buttonSaveConnection->SetBackgroundColour(wxColour(0xD9, 0x77, 0x57));  // #D97757 terracotta (primary action)
 	bSizerButton->Add(m_buttonSaveConnection, 1, wxALL, FromDIP(5));
 
 	mainSizer->Add(bSizerButton, 1, wxEXPAND, FromDIP(5));

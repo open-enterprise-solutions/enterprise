@@ -1,0 +1,58 @@
+////////////////////////////////////////////////////////////////////////////
+//	Author		: Maxim Kornienko
+//	Description : constants - db
+////////////////////////////////////////////////////////////////////////////
+
+#include "metaStoredValueObject.h"
+#include "backend/databaseLayer/databaseErrorCodes.h"
+#include "backend/databaseLayer/databaseQueryBuilder.h"   // L2 door — TableExists / Execute(DDL) / IsOpen, no raw ibDatabaseLayer
+#include "backend/metaData.h"
+
+#include "backend/appData.h"
+#include "backend/query/structureBatch.h" // ibStructureBatch — the per-table DDL batch the value column fills
+#include "backend/query/schemaBuilder.h"  // ibSchemaBuilder — flushes the batch on the local channel
+#include "backend/query/schemaSnapshot.h" // ibSchemaSnapshot — ContributeTables (declarative structure)
+
+/////////////////////////////////////////////////////////////////////////////////////
+
+bool ibValueMetaObjectStoredValue::CreateConstantSQLTable()
+{
+	RestructureWarning(_("Create constant table"));   // static facade -> the active config's ledger
+
+	//create constats
+	ibDatabaseQueryBuilder q;
+	if (!q.TableExists(ibValueMetaObjectStoredValue::GetPhysicalTableName())) {
+
+		// A real failure THROWS; the DDL affected-row count (0) is not an error.
+		q.Execute(ibCreateTable(ibValueMetaObjectStoredValue::GetPhysicalTableName(), {
+				{ wxT("RECORD_KEY"), ibTypeChar(1), /*notNull*/false, /*pk*/true, wxT("'6'") },
+			}));
+		// The single '6' key row is created on demand by the data restore's UPSERT (the L3-3 mover keys
+		// sys_const on its RECORD_KEY primary key) — no up-front seed row needed.
+	}
+
+	return q.IsOpen();
+}
+
+bool ibValueMetaObjectStoredValue::DeleteConstantSQLTable()
+{
+	//create constats
+	ibDatabaseQueryBuilder q;
+	if (q.TableExists(ibValueMetaObjectStoredValue::GetPhysicalTableName())) {
+
+		// A real failure THROWS; the DDL affected-row count (0) is not an error.
+		q.Execute(ibDropTable(ibValueMetaObjectStoredValue::GetPhysicalTableName()));
+	}
+
+	return q.IsOpen();
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// (Constant dump & restore are GONE — sys_const is just another ibSchemaTable in the config snapshot;
+//  the L3-3 mover's EXTERNAL single-row mode UPDATEs its constant columns in place (the '6' key row is
+//  pre-seeded by CreateConstantSQLTable). One source of truth: ContributeTables drives DDL AND data.)
+
+#include "backend/objCtor.h"
+
+/////////////////////////////////////////////////////////////////////////////////////

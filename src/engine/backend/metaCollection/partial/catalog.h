@@ -9,12 +9,10 @@
 //********************************************************************************************
 
 class ibValueMetaObjectCatalog : public ibValueMetaObjectRecordDataHierarchyMutableRef {
-	wxDECLARE_DYNAMIC_CLASS(ibValueMetaObjectCatalog);
+	public:
 private:
 	enum
 	{
-		ID_METATREE_OPEN_MODULE = 19000,
-		ID_METATREE_OPEN_MANAGER = 19001,
 		ID_METATREE_EDIT_PREDEFINED = 19002,
 	};
 
@@ -79,15 +77,14 @@ public:
 
 #pragma region _form_builder_h_
 	//support form 
-	virtual ibBackendValueForm* GetObjectForm(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* ownerControl = nullptr, const ibUniqueKey& formGuid = wxNullGuid) const;
-	virtual ibBackendValueForm* GetFolderForm(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* ownerControl = nullptr, const ibUniqueKey& formGuid = wxNullGuid) const;
-	virtual ibBackendValueForm* GetListForm(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* ownerControl = nullptr, const ibUniqueKey& formGuid = wxNullGuid) const;
-	virtual ibBackendValueForm* GetSelectForm(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* ownerControl = nullptr, const ibUniqueKey& formGuid = wxNullGuid) const;
-	virtual ibBackendValueForm* GetFolderSelectForm(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* ownerControl = nullptr, const ibUniqueKey& formGuid = wxNullGuid) const;
+	virtual ibFormPtr<ibBackendValueForm> GetObjectForm(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr) const;
+	virtual ibFormPtr<ibBackendValueForm> GetFolderForm(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr) const;
+	virtual ibFormPtr<ibBackendValueForm> GetListForm(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr) const;
+	virtual ibFormPtr<ibBackendValueForm> GetSelectForm(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr) const;
+	virtual ibFormPtr<ibBackendValueForm> GetFolderSelectForm(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr) const;
 #pragma endregion
 
 	//descriptions...
-	wxString GetDataPresentation(const ibValueDataObject* objValue) const;
 
 	//get module object in compose object 
 	virtual const ibValueMetaObjectModule* GetObjectModule() const { return m_propertyObjectModule->GetMetaObject(); }
@@ -102,34 +99,15 @@ public:
 
 protected:
 
-	//predefined array 
-	virtual bool FillArrayObjectByPredefinedAttribute(std::vector<ibValueMetaObjectAttributeBase*>& array) const {
-
+	// Additive contract — chains to HierarchyMutableRef which chains
+	// to MutableRef which chains to Ref. Catalog appends Owner only
+	// when the owner-attribute has type definitions (otherwise the
+	// attribute is unused on this catalog).
+	virtual bool FillArrayObjectByPredefinedAttribute(std::vector<ibValueMetaObjectAttributeBase*>& array) const override {
+		ibValueMetaObjectRecordDataHierarchyMutableRef::FillArrayObjectByPredefinedAttribute(array);
 		const ibValueMetaObjectAttributePredefined* metaObjectAttributeOwner = GetCatalogOwner();
-		if (metaObjectAttributeOwner != nullptr && metaObjectAttributeOwner->GetClsidCount() > 0) {
-			array = {
-				m_propertyAttributePredefined->GetMetaObject(),
-				m_propertyAttributeCode->GetMetaObject(),
-				m_propertyAttributeDescription->GetMetaObject(),
-				m_propertyAttributeOwner->GetMetaObject(),
-				m_propertyAttributeParent->GetMetaObject(),
-				m_propertyAttributeIsFolder->GetMetaObject(),
-				m_propertyAttributeReference->GetMetaObject(),
-				m_propertyAttributeDeletionMark->GetMetaObject(),
-			};
-		}
-		else {
-			array = {
-				m_propertyAttributePredefined->GetMetaObject(),
-				m_propertyAttributeCode->GetMetaObject(),
-				m_propertyAttributeDescription->GetMetaObject(),
-				m_propertyAttributeParent->GetMetaObject(),
-				m_propertyAttributeIsFolder->GetMetaObject(),
-				m_propertyAttributeReference->GetMetaObject(),
-				m_propertyAttributeDeletionMark->GetMetaObject(),
-			};
-		};
-
+		if (metaObjectAttributeOwner != nullptr && metaObjectAttributeOwner->GetClsidCount() > 0)
+			array.push_back(m_propertyAttributeOwner->GetMetaObject());
 		return true;
 	}
 
@@ -145,20 +123,21 @@ protected:
 	}
 
 	//create manager
-	virtual ibValueManagerDataObject* CreateManagerDataObjectValue() const;
+	virtual ibValuePtr<ibValueManagerDataObject> CreateManagerDataObjectValue() const;
 
 	//create empty object
-	virtual ibValueRecordDataObjectHierarchyRef* CreateObjectRefValue(ibObjectMode mode, const ibGuid& guid = wxNullGuid) const;
+	virtual ibValuePtr<ibValueRecordDataObjectHierarchyRef> CreateObjectRefValue(ibObjectMode mode, const ibGuid& guid = wxNullGuid) const;
 
 	//create object data with meta form
-	virtual ibSourceDataObject* CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const;
+	virtual ibSourcePtr<ibSourceDataObject> CreateSourceObject(const ibCreateRequest& request, const ibFormID& form_id) const;
 
-	//load & save metaData from DB 
-	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer);
+	//load & save metaData from DB
+
+	virtual bool ReadData(const ibDataNode& node) override;
+	virtual bool WriteData(ibDataNode& node) const override;
 
 	//prepare menu for item
-	virtual bool PrepareContextMenu(wxMenu* defaultMenu);
+	virtual bool CollectContextMenu(std::vector<ibMetaMenuItem>& items);
 	virtual void ProcessCommand(unsigned int id);
 
 private:
@@ -233,22 +212,22 @@ private:
 		return true;
 	}
 
-	ibPropertyInnerModule<ibValueMetaObjectModule>* m_propertyObjectModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectModule>>(m_categoryContext, wxT("ObjectModule"), _("Object module"));
-	ibPropertyInnerModule<ibValueMetaObjectManagerModule>* m_propertyManagerModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectManagerModule>>(m_categoryContext, wxT("ManagerModule"), _("Manager module"));
+	ibPropertyInnerModule<ibValueMetaObjectModule>* m_propertyObjectModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectModule>>(m_categoryContext, wxT("ObjectModule"), _("Object module"), _("Code of one catalog item: its write handlers (BeforeWrite, OnWrite, SetNewCode, filling on generation...) and the procedures they call. Runs wherever an item is written - a form, a script or a background job."));
+	ibPropertyInnerModule<ibValueMetaObjectManagerModule>* m_propertyManagerModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectManagerModule>>(m_categoryContext, wxT("ManagerModule"), _("Manager module"), _("Code of the catalog as a whole rather than of one item: its exported procedures and functions are called on the manager, as Catalogs.<Name>.<Function>()."));
 
 	ibPropertyCategory* m_categoryForm = ibPropertyObject::CreatePropertyCategory(wxT("PresetValues"), _("Preset values"));
 
-	ibPropertyList* m_propertyDefFormObject = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormObject"), _("Default Object Form"), &ibValueMetaObjectCatalog::FillFormObject);
-	ibPropertyList* m_propertyDefFormFolder = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormFolder"), _("Default Folder Form"), &ibValueMetaObjectCatalog::FillFormFolder);
-	ibPropertyList* m_propertyDefFormList = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormList"), _("Default List Form"), &ibValueMetaObjectCatalog::FillFormList);
-	ibPropertyList* m_propertyDefFormSelect = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormSelect"), _("Default Select Form"), &ibValueMetaObjectCatalog::FillFormSelect);
-	ibPropertyList* m_propertyDefFormFolderSelect = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormFolderSelect"), _("Default Folder Select Form"), &ibValueMetaObjectCatalog::FillFormFolderSelect);
+	ibPropertyList* m_propertyDefFormObject = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormObject"), _("Default Object Form"), _("The form a catalog item opens with. Empty: the form is generated from the item's attributes and tabular sections."), &ibValueMetaObjectCatalog::FillFormObject);
+	ibPropertyList* m_propertyDefFormFolder = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormFolder"), _("Default Folder Form"), _("The form a folder of the catalog opens with. Empty: a generated form with the attributes folders use."), &ibValueMetaObjectCatalog::FillFormFolder);
+	ibPropertyList* m_propertyDefFormList = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormList"), _("Default List Form"), _("The form the catalog's list opens with. Empty: the list form is generated."), &ibValueMetaObjectCatalog::FillFormList);
+	ibPropertyList* m_propertyDefFormSelect = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormSelect"), _("Default Select Form"), _("The form used to choose an item for a field of this catalog's type. Empty: the list form opens in choice mode."), &ibValueMetaObjectCatalog::FillFormSelect);
+	ibPropertyList* m_propertyDefFormFolderSelect = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormFolderSelect"), _("Default Folder Select Form"), _("The form used to choose a folder - for an item's Parent. Empty: the list form opens showing folders only."), &ibValueMetaObjectCatalog::FillFormFolderSelect);
 
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	ibPropertyOwner* m_propertyOwner = ibPropertyObject::CreateProperty<ibPropertyOwner>(m_categoryData, wxT("ListOwner"), _("List owner"));
+	ibPropertyOwner* m_propertyOwner = ibPropertyObject::CreateProperty<ibPropertyOwner>(m_categoryData, wxT("ListOwner"), _("List owner"), _("The catalogs whose items own this catalog's items - contracts owned by counterparties, say. When set, every item has an Owner and is not written without one. The list and the choice are not narrowed to one owner by themselves yet - a query or a form filters by Owner. Empty: the catalog is not subordinate."));
 
 	//default array 
-	ibPropertyContainer<>* m_propertyAttributeOwner = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateEmptyType(wxT("Owner"), _("Owner"), wxEmptyString, true, ibItemMode::ibItemMode_Folder_Item));
+	ibPropertyContainer<>* m_propertyAttributeOwner = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateEmptyType(wxT("Owner"), _("Owner"), _("The item of an owner catalog this item belongs to; its type is set by List owner. Required when the catalog is subordinate."), true, ibItemMode::ibItemMode_Folder_Item));
 
 	friend class ibValueRecordDataObjectCatalog;
 	friend class ibMetaData;
@@ -259,6 +238,7 @@ private:
 //********************************************************************************************
 
 class ibValueRecordDataObjectCatalog : public ibValueRecordDataObjectHierarchyRef {
+	public:
 	ibValueRecordDataObjectCatalog(const ibValueMetaObjectCatalog* metaObject, const ibGuid& objGuid = wxNullGuid, ibObjectMode objMode = ibObjectMode::OBJECT_ITEM);
 	ibValueRecordDataObjectCatalog(const ibValueRecordDataObjectCatalog& source);
 public:
@@ -267,25 +247,18 @@ public:
 	//*                              Support id's                                *
 	//****************************************************************************
 
-	//save modify 
-	virtual bool SaveModify() { return WriteObject(); }
-
-	//default methods
-	virtual bool FillObject(ibValue& vFillObject) const { return Filling(vFillObject); }
-	virtual ibValueRecordDataObjectRef* CopyObject(bool showValue = false) {
-		ibValueRecordDataObjectRef* objectRef = CopyObjectValue();
-		if (objectRef != nullptr && showValue)
-			objectRef->ShowFormValue();
-		return objectRef;
-	}
-	virtual bool WriteObject();
-	virtual bool DeleteObject();
+	// SaveModify / FillObject / CopyObject / WriteObject / DeleteObject
+	// all inherited from ibValueRecordDataObjectHierarchyRef and (for
+	// the convenience pair) ibValueRecordDataObjectRef. See those bases
+	// for the canonical layouts.
 
 	//****************************************************************************
 	//*                              Support methods                             *
 	//****************************************************************************
 
-	virtual void PrepareNames() const;
+	// Catalog's own methods (the data members come from the base FillDataMembers).
+	// Bound in the ctor; run lazily by Build().
+	void FillMethods(ibMemberTable& helper) const;
 
 	//****************************************************************************
 	//*                              Override attribute                          *
@@ -296,18 +269,23 @@ public:
 
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);
 
-	//support source data 
-	virtual ibSourceExplorer GetSourceExplorer() const;
+	//support source data
+	virtual const ibSourceExplorer* GetSourceExplorer() const;
 
-#pragma region _form_builder_h_
-	//support show 
-	virtual void ShowFormValue(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* owner = nullptr);
-	virtual ibBackendValueForm* GetFormValue(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* owner = nullptr);
-#pragma endregion
+	// ShowFormValue / GetFormValue inherited from HierarchyRef.
+	// GetCurrentObjectFormID below picks Catalog's eFormObject /
+	// eFormFolder based on m_objMode.
+protected:
+	virtual ibFormID GetCurrentObjectFormID() const override {
+		return m_objMode == ibObjectMode::OBJECT_ITEM
+			? ibValueMetaObjectCatalog::eFormObject
+			: ibValueMetaObjectCatalog::eFormFolder;
+	}
+public:
 
 	//support actionData
-	virtual ibActionCollection GetActionCollection(const ibFormID& formType);
-	virtual void ExecuteAction(const ibActionID& lNumAction, ibBackendValueForm* srcForm);
+	virtual ibStandardCommandSet GetStandardCommands(const ibFormID& formType);
+	virtual void CallAsAction(const ibActionID& lNumAction, ibBackendValueForm* srcForm);
 
 protected:
 	friend class ibValue;

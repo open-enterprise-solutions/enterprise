@@ -1,0 +1,285 @@
+﻿#ifndef __GENERIC_DATA_H__
+#define __GENERIC_DATA_H__
+
+#include "backend/backend.h"                              // BACKEND_API (base header, not includer-order dependent)
+#include "backend/uniqueKey.h"                            // ibUniqueKey (form guid)
+#include "backend/standardCommand.h"                           // ibCommandItem / ibFormID / ibActionID — the metaobject's command contract
+#include "backend/metaCollection/metaObjectComposite.h"   // ibValueMetaObjectCompositeData (base) + FillArrayObjectByFilter templates
+#include "backend/metaCollection/metaFormObject.h"        // ibValueMetaObjectFormBase + ibBackendCommandItem (bases), ibBackendValueForm, defaultFormType (ibSelectorDataType comes transitively via backend_type.h)
+#include "backend/metaCollection/metaCommandObject.h"      // ibValueMetaObjectCommand — GetCommandArrayObject returns the real command type
+#include "backend/metaCollection/metaSpreadsheetObject.h" // ibValueMetaObjectSpreadsheetBase
+
+class BACKEND_API ibSourceDataObject;
+class BACKEND_API ibValueDataObject;                       // the element a metaobject is asked to limit a value by (valueInfo.h)
+
+class BACKEND_API ibBackendControlFrame;
+class BACKEND_API ibValueManagerDataObject;
+class BACKEND_API ibValueSpreadsheetDocument;
+
+template <class T> class ibSourcePtr;   // srcDataObject.h
+
+class BACKEND_API ibFormTypeList {
+
+	struct ibFormTypeItem {
+		bool m_isOk;
+		wxString m_strName;
+		wxString m_strLabel;
+		wxString m_strHelp;
+		long m_id;
+	public:
+
+		ibFormTypeItem() :
+			m_isOk(true), m_strName(), m_strLabel(), m_id(-1)
+		{
+		}
+
+		ibFormTypeItem(const wxString& name, const long& l) :
+			m_isOk(true), m_strName(name), m_strLabel(name), m_id(l)
+		{
+		}
+
+		ibFormTypeItem(const wxString& name, const wxString& label, const long& l) :
+			m_isOk(true), m_strName(name), m_strLabel(label), m_id(l)
+		{
+		}
+
+		ibFormTypeItem(const wxString& name, const wxString& label, const wxString& help, const long& l) :
+			m_isOk(true), m_strName(name), m_strLabel(label), m_strHelp(help), m_id(l)
+		{
+		}
+
+		ibFormTypeItem(const ibFormTypeItem& item) :
+			m_isOk(true), m_strName(item.m_strName), m_strLabel(item.m_strLabel), m_strHelp(item.m_strHelp), m_id(item.m_id)
+		{
+		}
+
+		ibFormTypeItem& operator = (const ibFormTypeItem& src) {
+			m_strName = src.m_strName;
+			m_strLabel = src.m_strLabel;
+			m_strHelp = src.m_strHelp;
+			m_id = src.m_id;
+			return *this;
+		}
+
+		operator const long() const { return m_id; }
+	};
+
+	ibFormTypeItem GetItemAt(const unsigned int idx) const {
+		if (idx >= m_listTypeForm.size())
+			return ibFormTypeItem();
+		auto it = m_listTypeForm.begin();
+		std::advance(it, idx);
+		return *it;
+	};
+
+public:
+
+	void ResetListItem() { m_listTypeForm.clear(); }
+
+	void AppendItem(const wxString& name, const int& l) { (void)m_listTypeForm.emplace_back(name, l); }
+	void AppendItem(const wxString& name, const wxString& label, const int& l) { (void)m_listTypeForm.emplace_back(name, label, l); }
+	void AppendItem(const wxString& name, const wxString& label, const wxString& help, const int& l) { (void)m_listTypeForm.emplace_back(label, help, l); }
+
+	wxString GetItemName(const unsigned int idx) const { return GetItemAt(idx).m_strName; }
+	wxString GetItemLabel(const unsigned int idx) const { return GetItemAt(idx).m_strLabel; }
+	wxString GetItemHelp(const unsigned int idx) const { return GetItemAt(idx).m_strHelp; }
+	long GetItemId(const unsigned int idx) const { return GetItemAt(idx).m_id; }
+
+	unsigned int GetItemCount() const { return (unsigned int)m_listTypeForm.size(); }
+
+private:
+	std::vector<ibFormTypeItem> m_listTypeForm;
+};
+
+class BACKEND_API ibValueMetaObjectGenericData
+	: public ibValueMetaObjectCompositeData, public ibBackendCommandItem {
+	public:
+	friend class ibMetaData;
+public:
+
+#pragma region access_generic
+	virtual bool AccessRight_Show() const { return true; }
+	// MODIFY right — the GENERIC "can change this" predicate, the write-side twin of AccessRight_Show (which
+	// generalises "can view": a common form maps it to Use, a catalog to Read). Each object maps Modify to its
+	// own concrete right — a record / register / constant to its Write role — so a read-only role denies it.
+	// Virtual on the base so a form reads it polymorphically off GetSourceMetaObject() (view-only mode) without
+	// knowing the concrete metaobject. Default true: a metaobject with no modify concept (data processor /
+	// report) is never view-only-gated.
+	virtual bool AccessRight_Modify() const { return true; }
+	// ERASE right — the third of the same row: the generic "can remove this". A record / register
+	// maps it to its Delete role; an object with no deletion concept (a data processor, a form)
+	// keeps the default and is never gated by it. Same shape as Show / Modify so the access policy
+	// reads all three the same way, off the metaobject, with IsFullAccess and the roles already
+	// answered inside.
+	virtual bool AccessRight_Erase() const { return true; }
+#pragma endregion
+
+	// (Source list COMMANDS live as plain virtuals on the record / register / constant metaobjects, forwarded by the
+	//  templated source descriptor — NOT here: GenericData carries no such surface, so nothing is pushed onto it.)
+
+	// (ibRefMember::EmptyRef — the name this resolver answers to — is declared just below the class,
+	//  where every caller of ResolveQueryConstant can reach it without the metaobject headers.)
+
+	// value(<Kind>.<Name>.<Member>) — the L4-1 literal-reference constant: resolve a metaobject's
+	// EmptyRef or one of its predefined items to a runtime ibValue. Reached off GetSourceMetaObject() at lowering
+	// (the queryable already vends the metaobject — nothing is added to the queryable). Returns TRUE + the value in
+	// `out` when the member resolves; FALSE otherwise (the query engine raises the exception, it owns the source
+	// span). The GENERIC base has no constants → false; the record level resolves the empty reference, the
+	// hierarchy level adds predefined items.
+	virtual bool ResolveQueryConstant(const wxString& member, ibValue& out) const;
+
+	virtual ibClassID ResolveChild(const ibClassID& clsid) const {
+		if (clsid == g_metaFormCLSID ||
+			clsid == g_metaTemplateCLSID ||
+			clsid == g_metaCommandCLSID)   // every business object owns its own commands (object scope)
+			return clsid;
+		return 0;
+	}
+
+	// ⭐⭐ NARROW A VALUE BY ONE OF MY ELEMENTS — the verb a reference passes on when it is asked to
+	// narrow one (ibValue::AdjustOutValue). A reference holds the metaobject that governs it and the
+	// element it stands for, so it hands both over and answers with what comes back.
+	//
+	// ⭐ AND WHAT COMES BACK IS A VALUE, never a description of types. A chart of characteristic types
+	// reads its own `Type` off the element and lets THAT bring the value — qualifiers and all, inside,
+	// where the schema belongs. Whoever asked never learns that such an attribute exists, and nothing
+	// that serialises crosses into the runtime's contract (Max, 2026-09-24).
+	//
+	// The element arrives as the plain data object (valueInfo.h): a thing whose values are read by
+	// metaID. That is all any override needs, so a record set line or a comparator answers here just
+	// as a reference does.
+	//
+	// 🛑 AND THE BASE ANSWERS TOO, rather than sending the caller somewhere else: a metaobject that
+	// declares no limit of its own narrows to ITS OWN CLASS, so `out` is filled on every road and the
+	// bool keeps ONE meaning — "the value is usable as it came". That is how two ordinary reference
+	// fields linked to each other work: put a counterparty in the first and the second offers
+	// counterparties. A catalogue of barcode kinds with a type attribute becomes a governing one by
+	// overriding this rather than by resembling a chart (Max, 2026-09-23: "a characteristic is simply a
+	// special case").
+	//
+	// 🛑 IT USED TO RETURN FALSE AND LET THE REFERENCE FALL BACK, and that cost a defect within the hour:
+	// a kind's `false` means "it did not fit" and comes WITH the narrowed value in `out`, so a fallback
+	// read it as "not mine", asked the base, and overwrote a correct empty goods reference with an
+	// undefined value. Two different falses in one seam (measured 2026-09-24 on the ledger base).
+	virtual bool AdjustOutValue(const ibValueDataObject& element, const ibValue& varValue, ibValue& out) const;
+
+	// THE MODULES ITS EVENTS ARE HANDLED IN — the object's (a register's record set module) and the
+	// manager's; null where it has none. Here, on the base, because an event handler asks it of
+	// whatever its source names — a catalog's manager as readily as a register's record set.
+	virtual const class ibValueMetaObjectModule* GetObjectModule() const { return nullptr; }
+	virtual const class ibValueMetaObjectCommonModule* GetManagerModule() const { return nullptr; }
+
+	//get data selector
+	virtual ibSelectorDataType GetFilterDataType() const {
+		return ibSelectorDataType::ibSelectorDataType_reference;
+	}
+
+#pragma region __array_h__
+
+	//form
+	std::vector<ibValueMetaObjectFormBase*> GetFormArrayObject(
+		std::vector<ibValueMetaObjectFormBase*> array = std::vector<ibValueMetaObjectFormBase*>()) const {
+		FillArrayObjectByFilter<ibValueMetaObjectFormBase>(array, { g_metaFormCLSID });
+		return array;
+	}
+
+	//commands (object scope) — a business object owns its own commands; returns the REAL command type (like
+	// GetFormArrayObject returns FormBase*), the clsid filter makes the finder's static_cast type-safe.
+	std::vector<ibValueMetaObjectCommand*> GetCommandArrayObject(
+		std::vector<ibValueMetaObjectCommand*> array = std::vector<ibValueMetaObjectCommand*>()) const {
+		FillArrayObjectByFilter<ibValueMetaObjectCommand>(array, { g_metaCommandCLSID });
+		return array;
+	}
+
+	//grid
+	std::vector<ibValueMetaObjectSpreadsheetBase*> GetTemplateArrayObject(
+		std::vector<ibValueMetaObjectSpreadsheetBase*> array = std::vector<ibValueMetaObjectSpreadsheetBase*>()) const {
+		FillArrayObjectByFilter<ibValueMetaObjectSpreadsheetBase>(array, { g_metaTemplateCLSID });
+		return array;
+	}
+
+#pragma endregion
+#pragma region __filter_h__
+
+	//form
+	template <typename _T1>
+	ibValueMetaObjectFormBase* FindFormObjectByFilter(const _T1& id, const ibFormID& form_id = wxNOT_FOUND) const {
+		ibValueMetaObjectFormBase* founded = FindObjectByFilter<ibValueMetaObjectFormBase>(id, { g_metaCommonFormCLSID, g_metaFormCLSID });
+		if ((founded != nullptr && form_id == founded->GetTypeForm()) || form_id == wxNOT_FOUND)
+			return founded;
+		return nullptr;
+	}
+
+	//grid
+	template <typename _T1>
+	ibValueMetaObjectSpreadsheetBase* FindTemplateObjectByFilter(const _T1& id) const {
+		return FindObjectByFilter<ibValueMetaObjectSpreadsheetBase>(id, { g_metaCommonTemplateCLSID, g_metaTemplateCLSID });
+	}
+
+#pragma endregion 
+
+	//form events 
+	virtual void OnCreateFormObject(ibValueMetaObjectFormBase* metaForm) {}
+	virtual void OnRemoveMetaForm(ibValueMetaObjectFormBase* metaForm) {}
+
+	//Get form type
+	virtual ibFormTypeList GetFormType() const = 0;
+
+	//Get metaObject by def id
+	virtual ibValueMetaObjectFormBase* GetDefaultFormByID(const ibFormID& id) const { return nullptr; }
+
+	// Build the form value of one of MY form metaobjects, bound to the source its kind implies
+	// (a list form gets the list, an object form a NEW object).
+	//
+	// `formGuid` is the FORM KEY. It defaults to EMPTY — the runtime meaning — so a plain
+	// CreateObjectForm(metaForm) does the safe thing: the key falls back to the SOURCE
+	// object's guid, which is how everything finds a live form afterwards
+	// (ibValueRecordDataObject::GetForm / Modify / the write notify all call
+	// FindFormByUniqueKey(m_objGuid)). Only the DESIGNER's compile cache passes a guid — the
+	// METAFORM's — because its value IS one per metaform and is keyed that way. Keyed by the
+	// metaform, a runtime form would be invisible to the lookups above and Save / Refresh
+	// would have nothing to act on. (Out of line: it holds the source, which is only declared here.)
+	virtual ibFormPtr<ibBackendValueForm> CreateObjectForm(const ibValueMetaObjectFormBase* metaForm,
+		const ibUniqueKey& formGuid = wxNullGuid) const;
+
+#pragma region _form_builder_h_
+	//support form 
+	ibFormPtr<ibBackendValueForm> GetGenericForm(const ibFormRequest& request = ibFormRequest(),
+		ibBackendControlFrame* ownerControl = nullptr) const;
+#pragma endregion
+
+#pragma region _form_creator_h_
+	ibFormPtr<ibBackendValueForm> CreateAndBuildForm(const ibFormRequest& request, const ibFormID& form_id = defaultFormType,
+		ibBackendControlFrame* ownerControl = nullptr,
+		ibSourceDataObject* srcObject = nullptr
+	) const;
+#pragma endregion
+
+#pragma region _template_builder_h_
+
+	class ibValueSpreadsheetDocument* GetTemplate(const wxString& strTemplateName) const;
+
+#pragma endregion
+
+	virtual ibValuePtr<ibValueManagerDataObject> CreateManagerDataObjectValue() const = 0;   // born owned, like every creator
+
+protected:
+
+	// create object data with meta form — the OWNER of a new source (a data object is born owned); empty
+	// when the form has none. (Out of line: the holder needs the source complete.)
+	virtual ibSourcePtr<ibSourceDataObject> CreateSourceObject(const ibCreateRequest& request, const ibFormID& form_id) const;
+};
+
+// THE MEMBER A REFERENCE ITSELF DECLARES. The managers DECLARE `EmptyRef` as a method, each in its
+// own AppendFunc — that is a declaration and reads fine as a literal. What does NOT is the code that
+// RECOGNISES the word: the constant resolver above compares a member name against it, the designer's
+// presentation builds `CatalogRef.Goods.EmptyRef` out of it, and the query engine asks for the empty
+// reference by it to learn what a type IS (`x REFS Catalog.Goods`). Those three have to agree letter
+// for letter, so the word is asked for rather than typed out again — the same reason ibRegFigure
+// exists. It lives HERE, beside the resolver that answers to it, so a caller needs no metaobject
+// header to say the name.
+namespace ibRefMember {
+	inline constexpr const wxChar* EmptyRef = wxT("EmptyRef");
+}
+
+#endif

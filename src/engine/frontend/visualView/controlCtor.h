@@ -8,8 +8,8 @@ class ibCtorControlTypeBase : public ibCtorValueTypeBase {
 	wxString m_classType;
 public:
 
-	ibCtorControlTypeBase(const wxString& className, const wxString& classType, wxClassInfo* classInfo, const ibClassID& clsid)
-		: ibCtorValueTypeBase(className, classInfo, clsid), m_classType(classType) {
+	ibCtorControlTypeBase(const wxString& className, const wxString& classType, const std::type_info& typeInfo, const ibClassID& clsid)
+		: ibCtorValueTypeBase(className, typeInfo, clsid), m_classType(classType) {
 	}
 
 	virtual wxString GetTypeControlName() const {
@@ -27,7 +27,7 @@ class ibCtorControlType : public ibCtorControlTypeBase {
 public:
 
 	ibCtorControlType(const wxString& className, const wxString& classType, const ibClassID& clsid)
-		: ibCtorControlTypeBase(className, classType, CLASSINFO(T), clsid) {
+		: ibCtorControlTypeBase(className, classType, typeid(T), clsid) {
 	}
 
 	virtual wxIcon GetClassIcon() const {
@@ -45,8 +45,8 @@ public:
 			T::OnUnRegisterObject(GetClassName());
 	}
 
-	virtual ibValue* CreateObject() const {
-		return new T();
+	virtual ibValue CreateObject() const {
+		return ibValuePtr<T>(new T());   // a form is also an ibBackendValue — the holder says which side answers
 	}
 };
 
@@ -61,10 +61,20 @@ public:
 	}
 };
 
-#define CONTROL_TYPE_REGISTER(class_info, class_name, class_type, clsid)\
+// 4-arg (legacy): explicit clsid.
+#define CONTROL_TYPE_REGISTER_4(class_info, class_name, class_type, clsid)\
 GENERATE_REGISTER(wxT(class_name), wxMAKE_UNIQUE_NAME(s_cs_reg_c_), new ibCtorControlType<class_info>(wxT(class_name), wxT(class_type), clsid))
+// 3-arg (new): clsid = ib_clsid_hash(class_name).
+#define CONTROL_TYPE_REGISTER_3(class_info, class_name, class_type)\
+CONTROL_TYPE_REGISTER_4(class_info, class_name, class_type, control_to_clsid(class_name))
+#define CONTROL_TYPE_REGISTER(...) IB_DISPATCH(CONTROL_TYPE_REGISTER_, __VA_ARGS__)
 
-#define S_CONTROL_TYPE_REGISTER(class_info, class_name, class_type, clsid)\
+// 4-arg (legacy): explicit clsid.
+#define S_CONTROL_TYPE_REGISTER_4(class_info, class_name, class_type, clsid)\
 GENERATE_REGISTER(wxT(class_name), wxMAKE_UNIQUE_NAME(s_cs_reg_sc_), new ibCtorSystemControlType<class_info>(wxT(class_name), wxT(class_type), clsid))
+// 3-arg (new): clsid = ib_clsid_hash(class_name).
+#define S_CONTROL_TYPE_REGISTER_3(class_info, class_name, class_type)\
+S_CONTROL_TYPE_REGISTER_4(class_info, class_name, class_type, control_to_clsid(class_name))
+#define S_CONTROL_TYPE_REGISTER(...) IB_DISPATCH(S_CONTROL_TYPE_REGISTER_, __VA_ARGS__)
 
 #endif 

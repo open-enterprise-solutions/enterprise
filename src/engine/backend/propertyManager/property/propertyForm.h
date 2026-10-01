@@ -5,7 +5,7 @@
 
 //base property for "form"
 class BACKEND_API ibPropertyForm : public ibProperty {
-	wxVariantData* CreateVariantData();
+	static wxVariantData* CreateVariantData();
 public:
 
 	wxString GetValueAsString() const;
@@ -28,28 +28,24 @@ public:
 	{
 	}
 
-	//get property for grid 
-	virtual wxObject* GetPGProperty() const {
-		if (ms_propertyForm != nullptr)
-			return ms_propertyForm(m_owner, m_propLabel, m_propName, m_propValue);
-		return nullptr;
-	}
-
 	// set/get property data
 	virtual bool SetDataValue(const ibValue& varPropVal);
 	virtual bool GetDataValue(ibValue& pvarPropVal) const;
 
 	//load & save object in control 
-	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer);
+	virtual bool ReadNodeValue(const ibDataValue& value) override;
+	virtual bool WriteNodeValue(ibDataValue& value) const override;
 
-	//copy & paste object in control 
-	virtual bool PasteData(ibReaderMemory& reader);
-	virtual bool CopyData(ibWriterMemory& writer);
+	//copy & paste — pulls the LIVE form data (not the stored buffer)
+	virtual bool CopyNodeValue(ibDataValue& value) const override;
+	virtual bool PasteNodeValue(const ibDataValue& value) override;
 
+	// 🛑 AND THE VALUE IS NEVER TAKEN OFF A BARE VARIANT HERE. This cell holds TWO things — the
+	// module text AND the form data — so "the value" has no single reading: taken as a string it
+	// would write the text and silently drop the control tree beside it. Whoever writes says which
+	// half they mean, with SetValue(wxString) or SetValue(buffer).
 public:
 
-	static wxObject* (*ms_propertyForm)(ibPropertyObject*, const wxString&, const wxString&, const wxVariant&);
 };
 
 #endif

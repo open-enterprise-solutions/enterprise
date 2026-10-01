@@ -47,10 +47,14 @@ public:
 		return m_pg->HideProperty(id, !show, flags);
 	}
 
+	// The object's push lands here (see ibPropertyObjectNotifier): resolve the ibProperty
+	// to the wxPGProperty currently rendering it and hide/reveal that one.
+	bool PropertyHidden(const ibProperty* property, bool hide);
+
 	wxPGProperty* GetProperty(ibProperty* prop) const;
 	wxPGProperty* GetEvent(ibEvent* event) const;
 
-	// Servicios para los observadores
+	// Services for the observers
 	void SelectObject(ibPropertyObject* selobj, bool force = false) {
 
 		if (IsShownInspector() && (force || m_currentSel != selobj)) {
@@ -58,12 +62,24 @@ public:
 		}
 
 		if (selobj != nullptr)
-			wxLogDebug(wxT("! <debug> activate property %s"), selobj->GetClassName());
+			ibJournalInfo(wxT("ui"), wxT("! <debug> activate property %s"), selobj->GetClassName());
 		else
-			wxLogDebug(wxT("! <debug> clear property"));
+			ibJournalInfo(wxT("ui"), wxT("! <debug> clear property"));
 	}
 
-	ibPropertyObject* GetSelectedObject() const { return m_currentSel; }
+	// The object shown — ALIVE, or none. A caller comparing it with another pointer must not be handed a
+	// corpse's address: the next object built may be given the same one.
+	ibPropertyObject* GetSelectedObject() const { return ShownObject(); }
+
+	// ⭐ THE ONE QUESTION EVERY HANDLER ASKS BEFORE TOUCHING THE OBJECT: is the one shown still alive?
+	// `m_currentSel` alone is an ADDRESS; the notifier's owner is the liveness flag (the object's dtor
+	// clears it), so the two together answer. Measured 2026-09-15 (enterprise dump, 21:09): the object
+	// shown died, the grid kept its rows, a layout update re-selected one — and the selection handler
+	// called into the freed object (its vtable read as 0xDDDDDDDD). Create asked this; the three grid
+	// handlers did not.
+	ibPropertyObject* ShownObject() const {
+		return m_currentSel != nullptr && m_notifier->GetOwner() == m_currentSel ? m_currentSel : nullptr;
+	}
 
 	bool IsShownInspector() const;
 	void ShowInspector();
@@ -170,13 +186,16 @@ private:
 				if (pg != nullptr) {
 					wxPGProperty* id = m_pg->Append(pg);
 					if (m_style != wxOES_OI_MULTIPAGE_STYLE) {
-						// Most common classes will be showed with a slightly different colour.
+						// Per-class tint — interior palette. Window props get
+						// the warm focal hue (light terracotta), common get
+						// neutral cream, sizerItem gets the cool tier (light
+						// powder). Replaces XP-era yellow/light-blue/cyan.
 						if (stringUtils::CompareString(name, wxT("window")))
-							m_pg->SetPropertyBackgroundColour(id, wxColour(255, 255, 205)); // yellow
+							m_pg->SetPropertyBackgroundColour(id, wxColour(0xF8, 0xE3, 0xD5)); // light terracotta
 						else if (stringUtils::CompareString(name, wxT("common")))
-							m_pg->SetPropertyBackgroundColour(id, wxColour(240, 240, 255)); // light blue
+							m_pg->SetPropertyBackgroundColour(id, wxColour(0xF5, 0xE8, 0xD5)); // light cream
 						else if (stringUtils::CompareString(name, wxT("sizerItem")))
-							m_pg->SetPropertyBackgroundColour(id, wxColour(220, 255, 255)); // cyan
+							m_pg->SetPropertyBackgroundColour(id, wxColour(0xE6, 0xEE, 0xF5)); // light powder
 					}
 
 					std::map< wxString, bool >::iterator it = m_isExpanded.find(strPropName);
@@ -205,6 +224,8 @@ private:
 		for (unsigned int i = 0; i < catCount; i++) {
 
 			ibPropertyCategory* nextCat = category->GetCategory(i);
+			if (nextCat == nullptr)
+				continue;
 			if (0 == nextCat->GetCategoryCount() && 0 == nextCat->GetPropertyCount()) {
 				continue;
 			}
@@ -225,7 +246,7 @@ private:
 				}
 			}
 			else {
-				wxPGProperty* catId = m_pg->Append(new wxPropertyCategory(nextCat->GetLabel(), nextCat->GetName()));
+				m_pg->Append(new wxPropertyCategory(nextCat->GetLabel(), nextCat->GetName()));   // the category is the point; the handle is not used
 				AddItems(nextCat->GetName(), obj, nextCat, properties);
 			}
 		}
@@ -248,13 +269,13 @@ private:
 					wxPGProperty* id = m_pg->Append(eg);
 					m_pg->SetPropertyHelpString(id, wxGetTranslation(event->GetHelp()));
 					if (m_style != wxOES_OI_MULTIPAGE_STYLE) {
-						// Most common classes will be showed with a slightly different colour.
+						// Per-class tint — interior palette (see above).
 						if (stringUtils::CompareString(name, wxT("window")))
-							m_pg->SetPropertyBackgroundColour(id, wxColour(255, 255, 205)); // yellow
+							m_pg->SetPropertyBackgroundColour(id, wxColour(0xF8, 0xE3, 0xD5)); // light terracotta
 						else if (stringUtils::CompareString(name, wxT("common")))
-							m_pg->SetPropertyBackgroundColour(id, wxColour(240, 240, 255)); // light blue
+							m_pg->SetPropertyBackgroundColour(id, wxColour(0xF5, 0xE8, 0xD5)); // light cream
 						else if (stringUtils::CompareString(name, wxT("sizerItem")))
-							m_pg->SetPropertyBackgroundColour(id, wxColour(220, 255, 255)); // cyan
+							m_pg->SetPropertyBackgroundColour(id, wxColour(0xE6, 0xEE, 0xF5)); // light powder
 					}
 
 					std::map< wxString, bool >::iterator it = m_isExpanded.find(eventName);
@@ -276,6 +297,8 @@ private:
 		for (unsigned int i = 0; i < catCount; i++)
 		{
 			ibPropertyCategory* nextCat = category->GetCategory(i);
+			if (nextCat == nullptr)
+				continue;
 			if (0 == nextCat->GetCategoryCount() && 0 == nextCat->GetEventCount()) {
 				continue;
 			}
@@ -295,13 +318,13 @@ private:
 				}
 			}
 			else {
-				wxPGProperty* catId = m_pg->Append(new wxPropertyCategory(nextCat->GetLabel(), nextCat->GetName()));
+				m_pg->Append(new wxPropertyCategory(nextCat->GetLabel(), nextCat->GetName()));   // the category is the point; the handle is not used
 				AddItems(nextCat->GetName(), obj, nextCat, events);
 			}
 		}
 	}
 
-	friend class ibFrontendDocMDIFrame;
+	friend class ibFrontendMainFrame;
 
 	wxPropertyGridManager* CreatePropertyGridManager(wxWindow* parent, wxWindowID id) const;
 
@@ -351,6 +374,20 @@ private:
 	std::map< wxPGProperty*, ibEvent*> m_eventMap;
 
 	ibPropertyObject* m_currentSel;
+
+	// Our end of m_currentSel's push channel, registered on it for exactly as long as we show
+	// it. Its owner doubles as the liveness flag: null means m_currentSel died under us.
+	std::unique_ptr<ibPropertyObjectNotifier> m_notifier;
+
+	// Deferred / coalesced rebuild. A child edit bubbles back here to re-Create the grid, but Create()
+	// Clear()s it — fatal if a wxPG change event is still dispatching on one of those properties, and
+	// wasteful when several selects fire in one refresh burst. m_inGridEvent marks "an event is in flight"
+	// (set by the change handlers); m_rebuildScheduled marks "a rebuild is already queued". While either
+	// holds, Create() stashes the target and posts ONE CallAfter instead of rebuilding inline.
+	bool m_inGridEvent = false;
+	bool m_rebuildScheduled = false;
+	ibPropertyObject* m_pendingObject = nullptr;
+	bool m_pendingForce = false;
 
 	int m_style;
 

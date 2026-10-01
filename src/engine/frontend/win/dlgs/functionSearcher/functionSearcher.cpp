@@ -11,13 +11,16 @@
 #include "frontend/docView/docView.h"
 
 #include "frontend/win/editor/codeEditor/codeEditor.h"
-#include "frontend/win/editor/codeEditor/codeEditorParser.h"
+#include "backend/compiler/scriptParseCode.h"
 
 #define ICON_SIZE 16
 
 ibFunctionList::ibFunctionList(ibMetaDocument* moduleDoc, ibCodeEditor* parent)
 	: wxDialog(parent, wxID_ANY, _("Procedures and functions")), m_docModule(moduleDoc), m_codeEditor(parent)
 {
+	// The window wears the picture of the button that opens it.
+	SetIcon(wxArtProvider::GetIcon(wxART_PROC_AND_FUNC, wxART_DOC_MODULE, FromDIP(wxSize(16, 16))));
+
 	m_OK = new wxButton(this, wxID_ANY, _("OK"));
 	m_OK->Connect(wxEVT_BUTTON, wxCommandEventHandler(ibFunctionList::OnButtonOk), nullptr, this);
 	m_Cancel = new wxButton(this, wxID_ANY, _("Cancel"));
@@ -34,8 +37,8 @@ ibFunctionList::ibFunctionList(ibMetaDocument* moduleDoc, ibCodeEditor* parent)
 	m_listProcedures->Connect(wxEVT_LIST_ITEM_SELECTED, wxListEventHandler(ibFunctionList::OnItemSelected), nullptr, this);
 
 	wxImageList* imageList = new wxImageList(ICON_SIZE, ICON_SIZE);
-	int procRed = imageList->Add(wxArtProvider::GetIcon(wxART_PROCEDURE_RED, wxART_AUTOCOMPLETE));
-	int funcRed = imageList->Add(wxArtProvider::GetIcon(wxART_FUNCTION_RED, wxART_AUTOCOMPLETE));
+	const int procImage = imageList->Add(wxArtProvider::GetIcon(wxART_PROCEDURE, wxART_AUTOCOMPLETE));
+	const int funcImage = imageList->Add(wxArtProvider::GetIcon(wxART_FUNCTION, wxART_AUTOCOMPLETE));
 	m_listProcedures->AssignImageList(imageList, wxIMAGE_LIST_SMALL);
 
 	// Source text + default-proc list — designer / live-module hosts
@@ -49,7 +52,7 @@ ibFunctionList::ibFunctionList(ibMetaDocument* moduleDoc, ibCodeEditor* parent)
 		? metaModule->GetModuleText()
 		: (m_codeEditor != nullptr ? m_codeEditor->GetText() : wxString());
 
-	ibParserModule moduleParser; std::vector<wxString> arrayProcedures; int maxLine = 0;
+	ibParseCode moduleParser; std::vector<wxString> arrayProcedures; int maxLine = 0;
 
 	if (moduleParser.ParseModule(moduleText)) {
 		for (auto content : moduleParser.GetAllContent()) {
@@ -66,9 +69,9 @@ ibFunctionList::ibFunctionList(ibMetaDocument* moduleDoc, ibCodeEditor* parent)
 
 				if (content.m_eType == ibContentType::eExportFunction ||
 					content.m_eType == ibContentType::eFunction)
-					info.m_image = funcRed;
+					info.m_image = funcImage;
 				else
-					info.m_image = procRed;
+					info.m_image = procImage;
 
 				long item = m_listProcedures->InsertItem(info);
 				m_listProcedures->SetItemData(item, content.m_lineStart + 1);
@@ -140,9 +143,7 @@ void ibFunctionList::OnButtonOk(wxCommandEvent& event)
 			m_codeEditor->GotoLine(line.m_line - 1);
 		}
 		else {
-			ibValueMetaObjectModuleBase* metaModule = wxDynamicCast(
-				m_docModule->GetMetaObject(), ibValueMetaObjectModuleBase
-			);
+			ibValueMetaObjectModuleBase* metaModule = dynamic_cast<ibValueMetaObjectModuleBase*>(m_docModule->GetMetaObject());
 			wxASSERT(metaModule);
 			wxString procName = m_listProcedures->GetItemText(lSelectedItem);
 			std::vector<wxString> procArgs;

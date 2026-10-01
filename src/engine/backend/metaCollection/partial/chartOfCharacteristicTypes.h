@@ -1,22 +1,21 @@
-﻿#ifndef __CHART_OF_CHARACTERISTIC_TYPES_H__
+#ifndef __CHART_OF_CHARACTERISTIC_TYPES_H__
 #define __CHART_OF_CHARACTERISTIC_TYPES_H__
 
 #include "commonObject.h"
 #include "reference/reference.h"
+#include "backend/system/value/valueType.h"   // g_valueTypeDescriptionCLSID — the characteristic's own Type
 
 //********************************************************************************************
 //*                                  Factory & metaData                                      *
 //********************************************************************************************
 
-class ibValueMetaObjectChartOfCharacteristicTypes : 
-	public ibValueMetaObjectRecordDataHierarchyMutableRef, 
+class ibValueMetaObjectChartOfCharacteristicTypes :
+	public ibValueMetaObjectRecordDataHierarchyMutableRef,
 	public ibBackendTypeConfigFactory {
-	wxDECLARE_DYNAMIC_CLASS(ibValueMetaObjectChartOfCharacteristicTypes);
+	public:
 private:
 	enum
 	{
-		ID_METATREE_OPEN_MODULE = 19000,
-		ID_METATREE_OPEN_MANAGER = 19001,
 		ID_METATREE_EDIT_PREDEFINED = 19002,
 	};
 
@@ -41,8 +40,25 @@ private:
 
 public:
 
+	// THE CONTOUR — every value a characteristic of this chart may ever take.
+	//
+	// Public because it is what the OUTSIDE asks for: an accounting register types its dimension
+	// VALUE slots by it, and an editor offers it as the permitted set. `GetTypeDesc` says the same
+	// thing but stays protected — it is the type-factory override, an internal contract, and a
+	// caller reaching for it would be borrowing a mechanism instead of asking a question.
+	ibTypeDescription& GetTypesOfCharacteristics() const { return m_propertyTypesOfCharacteristics->GetValueAsTypeDesc(); }
+
 	ibValueMetaObjectAttributePredefined* GetDataType() const { return m_propertyAttributeType->GetMetaObject(); }
 	virtual bool IsDataType(const ibMetaID& id) const { return id == (*m_propertyAttributeType)->GetMetaID(); }
+
+	// ⭐⭐ A KIND OF THIS CHART LIMITS WHAT ITS VALUE MAY BE, and here that is said to the runtime. The
+	// element is read for its own `Type` — the same reading a posting makes for a subconto
+	// (accountingRegisterObject.cpp) — and that value does the limiting itself.
+	//
+	// ⭐ SO THERE IS NO CAST AND NO SCHEMA IN SIGHT. What sits in `Type` is an ibValueTypeDescription,
+	// and asked to narrow a value it answers with what it describes, qualifiers included (valueType.h).
+	// The same verb, one step further down the chain.
+	virtual bool AdjustOutValue(const ibValueDataObject& element, const ibValue& varValue, ibValue& out) const override;
 
 	//default constructor
 	ibValueMetaObjectChartOfCharacteristicTypes();
@@ -82,15 +98,14 @@ public:
 
 #pragma region _form_builder_h_
 	//support form
-	virtual ibBackendValueForm* GetObjectForm(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* ownerControl = nullptr, const ibUniqueKey& formGuid = wxNullGuid) const;
-	virtual ibBackendValueForm* GetFolderForm(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* ownerControl = nullptr, const ibUniqueKey& formGuid = wxNullGuid) const;
-	virtual ibBackendValueForm* GetListForm(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* ownerControl = nullptr, const ibUniqueKey& formGuid = wxNullGuid) const;
-	virtual ibBackendValueForm* GetSelectForm(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* ownerControl = nullptr, const ibUniqueKey& formGuid = wxNullGuid) const;
-	virtual ibBackendValueForm* GetFolderSelectForm(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* ownerControl = nullptr, const ibUniqueKey& formGuid = wxNullGuid) const;
+	virtual ibFormPtr<ibBackendValueForm> GetObjectForm(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr) const;
+	virtual ibFormPtr<ibBackendValueForm> GetFolderForm(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr) const;
+	virtual ibFormPtr<ibBackendValueForm> GetListForm(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr) const;
+	virtual ibFormPtr<ibBackendValueForm> GetSelectForm(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr) const;
+	virtual ibFormPtr<ibBackendValueForm> GetFolderSelectForm(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr) const;
 #pragma endregion
 
 	//descriptions...
-	wxString GetDataPresentation(const ibValueDataObject* objValue) const;
 
 	//get module object in compose object
 	virtual const ibValueMetaObjectModule* GetObjectModule() const { return m_propertyObjectModule->GetMetaObject(); }
@@ -109,20 +124,14 @@ protected:
 	virtual ibTypeDescription& GetTypeDesc() const { return m_propertyTypesOfCharacteristics->GetValueAsTypeDesc(); }
 
 	//get metadata
-	virtual ibMetaData* GetMetaData() const { return m_metaData; }
+	virtual const ibMetaData* GetMetaData() const { return m_metaData; }
+	virtual ibMetaData* GetMetaData() { return m_metaData; }
 
-	//predefined array
-	virtual bool FillArrayObjectByPredefinedAttribute(std::vector<ibValueMetaObjectAttributeBase*>& array) const {
-		array = {
-			m_propertyAttributeType->GetMetaObject(),
-			m_propertyAttributePredefined->GetMetaObject(),
-			m_propertyAttributeCode->GetMetaObject(),
-			m_propertyAttributeDescription->GetMetaObject(),
-			m_propertyAttributeParent->GetMetaObject(),
-			m_propertyAttributeIsFolder->GetMetaObject(),
-			m_propertyAttributeReference->GetMetaObject(),
-			m_propertyAttributeDeletionMark->GetMetaObject(),
-		};
+	// Additive contract — chains to HierarchyMutableRef. ChartOfChar
+	// adds only its Type attribute on top of the inherited set.
+	virtual bool FillArrayObjectByPredefinedAttribute(std::vector<ibValueMetaObjectAttributeBase*>& array) const override {
+		ibValueMetaObjectRecordDataHierarchyMutableRef::FillArrayObjectByPredefinedAttribute(array);
+		array.push_back(m_propertyAttributeType->GetMetaObject());
 		return true;
 	}
 
@@ -136,20 +145,21 @@ protected:
 	}
 
 	//create manager
-	virtual ibValueManagerDataObject* CreateManagerDataObjectValue() const;
+	virtual ibValuePtr<ibValueManagerDataObject> CreateManagerDataObjectValue() const;
 
 	//create empty object
-	virtual ibValueRecordDataObjectHierarchyRef* CreateObjectRefValue(ibObjectMode mode, const ibGuid& guid = wxNullGuid) const;
+	virtual ibValuePtr<ibValueRecordDataObjectHierarchyRef> CreateObjectRefValue(ibObjectMode mode, const ibGuid& guid = wxNullGuid) const;
 
 	//create object data with meta form
-	virtual ibSourceDataObject* CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const;
+	virtual ibSourcePtr<ibSourceDataObject> CreateSourceObject(const ibCreateRequest& request, const ibFormID& form_id) const;
 
 	//load & save metaData from DB
-	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer);
+
+	virtual bool ReadData(const ibDataNode& node) override;
+	virtual bool WriteData(ibDataNode& node) const override;
 
 	//prepare menu for item
-	virtual bool PrepareContextMenu(wxMenu* defaultMenu);
+	virtual bool CollectContextMenu(std::vector<ibMetaMenuItem>& items);
 	virtual void ProcessCommand(unsigned int id);
 
 private:
@@ -204,22 +214,27 @@ private:
 		return true;
 	}
 
-	ibPropertyInnerModule<ibValueMetaObjectModule>* m_propertyObjectModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectModule>>(m_categoryContext, wxT("ObjectModule"), _("Object module"));
-	ibPropertyInnerModule<ibValueMetaObjectManagerModule>* m_propertyManagerModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectManagerModule>>(m_categoryContext, wxT("ManagerModule"), _("Manager module"));
+	ibPropertyInnerModule<ibValueMetaObjectModule>* m_propertyObjectModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectModule>>(m_categoryContext, wxT("ObjectModule"), _("Object module"), _("Code of one characteristic type: its write handlers (BeforeWrite, OnWrite, SetNewCode...) and the procedures they call."));
+	ibPropertyInnerModule<ibValueMetaObjectManagerModule>* m_propertyManagerModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectManagerModule>>(m_categoryContext, wxT("ManagerModule"), _("Manager module"), _("Code of the chart as a whole rather than of one item: its exported procedures and functions are called on the manager, as ChartsOfCharacteristicTypes.<Name>.<Function>()."));
 
 	ibPropertyCategory* m_categoryType = ibPropertyObject::CreatePropertyCategory(wxT("Data"), _("Data"));
-	ibPropertyType* m_propertyTypesOfCharacteristics = ibPropertyObject::CreateProperty<ibPropertyType>(m_categoryType, wxT("TypesOfCharacteristics"), _("Types of Characteristics"), ibValueTypes::TYPE_STRING);
+	ibPropertyType* m_propertyTypesOfCharacteristics = ibPropertyObject::CreateProperty<ibPropertyType>(m_categoryType, wxT("TypesOfCharacteristics"), _("Types of Characteristics"), _("Every type a characteristic of this chart may ever hold - the contour. Each item narrows it with its own Type; a field typed by a characteristic (an account dimension, an extra attribute) takes values of the item's type."), ibValueTypes::TYPE_STRING);
 
 	ibPropertyCategory* m_categoryForm = ibPropertyObject::CreatePropertyCategory(wxT("PresetValues"), _("Preset values"));
 
-	ibPropertyList* m_propertyDefFormObject = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormObject"), _("Default Object Form"), &ibValueMetaObjectChartOfCharacteristicTypes::FillFormObject);
-	ibPropertyList* m_propertyDefFormFolder = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormFolder"), _("Default Folder Form"), &ibValueMetaObjectChartOfCharacteristicTypes::FillFormFolder);
-	ibPropertyList* m_propertyDefFormList = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormList"), _("Default List Form"), &ibValueMetaObjectChartOfCharacteristicTypes::FillFormList);
-	ibPropertyList* m_propertyDefFormSelect = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormSelect"), _("Default Select Form"), &ibValueMetaObjectChartOfCharacteristicTypes::FillFormSelect);
-	ibPropertyList* m_propertyDefFormFolderSelect = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormFolderSelect"), _("Default Folder Select Form"), &ibValueMetaObjectChartOfCharacteristicTypes::FillFormFolderSelect);
+	ibPropertyList* m_propertyDefFormObject = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormObject"), _("Default Object Form"), _("The form a characteristic type opens with. Empty: the form is generated from its attributes."), &ibValueMetaObjectChartOfCharacteristicTypes::FillFormObject);
+	ibPropertyList* m_propertyDefFormFolder = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormFolder"), _("Default Folder Form"), _("The form a folder of characteristic types opens with. Empty: a generated form."), &ibValueMetaObjectChartOfCharacteristicTypes::FillFormFolder);
+	ibPropertyList* m_propertyDefFormList = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormList"), _("Default List Form"), _("The form the chart's list opens with. Empty: the list form is generated."), &ibValueMetaObjectChartOfCharacteristicTypes::FillFormList);
+	ibPropertyList* m_propertyDefFormSelect = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormSelect"), _("Default Select Form"), _("The form used to choose a characteristic type for a field of this type. Empty: the list form opens in choice mode."), &ibValueMetaObjectChartOfCharacteristicTypes::FillFormSelect);
+	ibPropertyList* m_propertyDefFormFolderSelect = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormFolderSelect"), _("Default Folder Select Form"), _("The form used to choose a folder - for an item's Parent. Empty: the list form opens showing folders only."), &ibValueMetaObjectChartOfCharacteristicTypes::FillFormFolderSelect);
 
-	//default array 
-	ibPropertyContainer<>* m_propertyAttributeType = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateSpecialType(wxT("Type"), _("Type"), wxEmptyString, string_to_clsid("VL_TYPED"), ibItemMode::ibItemMode_Item));
+	//default array
+	// THE CHARACTERISTIC'S OWN TYPE — a filter over what this chart declares, held as a type
+	// description rather than a value. FILL-CHECKED: a characteristic must name a concrete type,
+	// and empty is an ERROR rather than "everything the contour allows". Without that, a
+	// characteristic with no type would let a value of any kind into a slot the kind was supposed
+	// to narrow — which is the whole purpose of this second tier.
+	ibPropertyContainer<>* m_propertyAttributeType = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateSpecialType(wxT("Type"), _("Type"), _("The type of this characteristic's values - chosen from the chart's Types of characteristics. A field typed by this characteristic holds values of this type only. Required."), g_valueTypeDescriptionCLSID, /*fillCheck*/ true, ibValue(), ibItemMode::ibItemMode_Item));
 
 	friend class ibValueRecordDataObjectChartOfCharacteristicTypes;
 	friend class ibMetaData;
@@ -230,6 +245,7 @@ private:
 //********************************************************************************************
 
 class ibValueRecordDataObjectChartOfCharacteristicTypes : public ibValueRecordDataObjectHierarchyRef {
+	public:
 	ibValueRecordDataObjectChartOfCharacteristicTypes(const ibValueMetaObjectChartOfCharacteristicTypes* metaObject, const ibGuid& objGuid = wxNullGuid, ibObjectMode objMode = ibObjectMode::OBJECT_ITEM);
 	ibValueRecordDataObjectChartOfCharacteristicTypes(const ibValueRecordDataObjectChartOfCharacteristicTypes& source);
 public:
@@ -238,25 +254,16 @@ public:
 	//*                              Support id's                                *
 	//****************************************************************************
 
-	//save modify
-	virtual bool SaveModify() { return WriteObject(); }
-
-	//default methods
-	virtual bool FillObject(ibValue& vFillObject) const { return Filling(vFillObject); }
-	virtual ibValueRecordDataObjectRef* CopyObject(bool showValue = false) {
-		ibValueRecordDataObjectRef* objectRef = CopyObjectValue();
-		if (objectRef != nullptr && showValue)
-			objectRef->ShowFormValue();
-		return objectRef;
-	}
-	virtual bool WriteObject();
-	virtual bool DeleteObject();
+	// SaveModify / FillObject / CopyObject / WriteObject / DeleteObject
+	// inherited from ibValueRecordDataObjectHierarchyRef and
+	// ibValueRecordDataObjectRef.
 
 	//****************************************************************************
 	//*                              Support methods                             *
 	//****************************************************************************
 
-	virtual void PrepareNames() const;
+	// Own methods (data members come from the base FillDataMembers); bound in the ctor.
+	void FillMethods(ibMemberTable& helper) const;
 
 	//****************************************************************************
 	//*                              Override attribute                          *
@@ -268,17 +275,20 @@ public:
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);
 
 	//support source data
-	virtual ibSourceExplorer GetSourceExplorer() const;
+	virtual const ibSourceExplorer* GetSourceExplorer() const;
 
-#pragma region _form_builder_h_
-	//support show
-	virtual void ShowFormValue(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* owner = nullptr);
-	virtual ibBackendValueForm* GetFormValue(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* owner = nullptr);
-#pragma endregion
+	// ShowFormValue / GetFormValue inherited from HierarchyRef.
+protected:
+	virtual ibFormID GetCurrentObjectFormID() const override {
+		return m_objMode == ibObjectMode::OBJECT_ITEM
+			? ibValueMetaObjectChartOfCharacteristicTypes::eFormObject
+			: ibValueMetaObjectChartOfCharacteristicTypes::eFormFolder;
+	}
+public:
 
 	//support actionData
-	virtual ibActionCollection GetActionCollection(const ibFormID& formType);
-	virtual void ExecuteAction(const ibActionID& lNumAction, ibBackendValueForm* srcForm);
+	virtual ibStandardCommandSet GetStandardCommands(const ibFormID& formType);
+	virtual void CallAsAction(const ibActionID& lNumAction, ibBackendValueForm* srcForm);
 
 protected:
 	friend class ibValue;

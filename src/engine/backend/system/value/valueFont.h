@@ -4,10 +4,11 @@
 #include "backend/compiler/value.h"
 
 //Array support
-class BACKEND_API ibValueFont : public ibValue
+void ibValueFont_BindNames(ibValue::ibMemberTable& helper, const ibValue* ctx);
+
+class BACKEND_API ibValueFont : public ibValueStaticMembers<&ibValueFont_BindNames>
 {
-	wxDECLARE_DYNAMIC_CLASS(ibValueFont);
-public:
+	public:
 	wxFont m_font;
 public:
 
@@ -17,7 +18,7 @@ public:
 
 	virtual bool Init(ibValue** paParams, const long lSizeArray);
 
-	virtual wxString GetString() const {
+	virtual ibString GetString() const {
 		return typeConv::FontToString(m_font);
 	}
 
@@ -26,16 +27,13 @@ public:
 		return !m_font.IsOk();
 	}
 
-	static ibValueMethodHelper m_methodHelper;
-
 	virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal);        //setting attribute
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal);                   //attribute value
+	// DoGetPMethods (protected) + Shared<&ibValueFont_BindNames> come from the base.
 
-	virtual ibValueMethodHelper* GetPMethods() const {
-		//PrepareNames();
-		return &m_methodHelper;
-	}
-	virtual void PrepareNames() const;                         // this method is automatically called to initialize attribute and method names.
+	// ⭐ A PACKED FORM — the text a property keeps a font in (typeConv), as the colour has one.
+	virtual bool DoSerialize(class ibDataNode& node) const override;
+	virtual bool DoDeserialize(const class ibDataNode& node) override;
 
 	operator wxFont() {
 		return m_font;

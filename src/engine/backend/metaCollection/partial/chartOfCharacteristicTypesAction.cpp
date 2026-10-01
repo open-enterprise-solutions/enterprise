@@ -1,5 +1,5 @@
 ////////////////////////////////////////////////////////////////////////////
-//	Author		: Tetracode Dev
+//	Author		: Maxim Kornienko
 //	Description : chart of characteristic types action
 ////////////////////////////////////////////////////////////////////////////
 
@@ -14,19 +14,19 @@ enum
 	eMarkAsDelete,
 };
 
-ibValueRecordDataObjectChartOfCharacteristicTypes::ibActionCollection ibValueRecordDataObjectChartOfCharacteristicTypes::GetActionCollection(const ibFormID& formType)
+ibValueRecordDataObjectChartOfCharacteristicTypes::ibStandardCommandSet ibValueRecordDataObjectChartOfCharacteristicTypes::GetStandardCommands(const ibFormID& formType)
 {
-	ibActionCollection actions(this);
+	ibStandardCommandSet actions(this);
 	actions.AddAction(wxT("SaveAndClose"), _("Save and close"), g_picSaveCLSID, true, eDefActionAndClose);
 	actions.AddAction(wxT("Save"), _("Save"), g_picSaveCLSID, true, eSave);
 	actions.AddSeparator();
-	actions.AddAction(wxT("Generate"), _("Generate"), g_picGenerateCLSID, true, eGenerate);
+	actions.AddAction(wxT("Generate"), _("Generate"), g_picGenerateCLSID, true, eGenerate).SetModify(false);   // creates a NEW object — doesn't modify THIS one
 	actions.AddSeparator();
 	actions.AddAction(wxT("Clone"), _("Clone"), g_picCloneCLSID, true, eCopy);
 	return actions;
 }
 
-void ibValueRecordDataObjectChartOfCharacteristicTypes::ExecuteAction(const ibActionID& action, ibBackendValueForm* srcForm)
+void ibValueRecordDataObjectChartOfCharacteristicTypes::CallAsAction(const ibActionID& action, ibBackendValueForm* srcForm)
 {
 	switch (action)
 	{

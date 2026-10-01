@@ -1,0 +1,147 @@
+// ============================================================================
+// JSON from a script - 2026-09-20
+//
+// JSONReader / JSONWriter, and the JSONValueType / JSONFormatting enumerations.
+// The suite CHECKS ITSELF: a mismatch raises, and a corpus script that raises fails its run.
+//
+//   1. A message read WHOLE: an object is a Structure, an array an Array, null is Null - and a number
+//      is EXACT (0.1 + 0.2 = 0.3, which it is not once it has been through a double).
+//   2. The same message walked token by token, taking one member's value whole and skipping another.
+//   3. A text that is not JSON is refused when it is given.
+//   4. A document written, by the verbs and by handing over a Structure - and read back.
+//   5. The writer refuses what would not parse, and what has no JSON form.
+// ============================================================================
+
+var text = "{""number"":""A-17"",""total"":1518500.10,""paid"":true,""note"":null,
+|""meta"":{""source"":""pos"",""tags"":[1,2,3]},
+|""lines"":[{""item"":""Борщ український"",""qty"":2,""price"":0.1},{""item"":""Хліб"",""qty"":3,""price"":0.2}]}";
+
+// 1
+var reader = New JSONReader(text);
+var order = reader.ReadValue();
+reader.Close();
+
+if (order.number <> "A-17") { Raise("number: " + order.number); }
+if (order.total <> 1518500.1) { Raise("total: " + order.total); }
+if (order.paid <> True) { Raise("paid is a Boolean"); }
+if (order.note <> Null) { Raise("null is Null"); }
+if (order.lines.Count() <> 2) { Raise("lines: " + order.lines.Count()); }
+if (order.lines.Get(0).item <> "Борщ український") { Raise("item: " + order.lines.Get(0).item); }
+if (order.lines.Get(0).price + order.lines.Get(1).price <> 0.3) {
+	Raise("0.1 + 0.2 must be 0.3 exactly, got " + (order.lines.Get(0).price + order.lines.Get(1).price));
+}
+if (order.meta.tags.Get(2) <> 3) { Raise("a nested array"); }
+if (order["number"] <> "A-17") { Raise("a key that is not a name is read by index"); }
+Message("read whole: " + order.number + ", lines " + order.lines.Count());
+
+// 2
+var walker = New JSONReader(text);
+var names = 0;
+var nulls = 0;
+var lines = Undefined;
+var sawMeta = False;
+while (walker.Read()) {
+	if (walker.CurrentValueType = JSONValueType.Null) {   // after a dot even a constant's word is a member name
+		nulls = nulls + 1;
+	}
+	if (walker.CurrentValueType = JSONValueType.PropertyName) {
+		names = names + 1;
+		if (walker.CurrentValue = "lines") {
+			lines = walker.ReadValue();        // the value that FOLLOWS the name, whole
+		} elseif (walker.CurrentValue = "meta") {
+			sawMeta = True;
+			walker.Skip();                     // the member, name and value - its inner names are never seen
+		}
+	}
+}
+if (names <> 6) { Raise("top-level names: expected 6, got " + names); }
+if (nulls <> 1) { Raise("null tokens: expected 1, got " + nulls); }
+if (Not sawMeta) { Raise("meta was not met"); }
+if (lines = Undefined) { Raise("lines were not taken"); }
+if (lines.Count() <> 2) { Raise("lines taken by the walk: " + lines.Count()); }
+if (walker.CurrentValueType <> JSONValueType.None) { Raise("after the last token the reader stands on None"); }
+Message("walked: names " + names + ", lines " + lines.Count());
+
+// …and the elements of an array one at a time - ReadValue() hands over the value the reader STANDS ON, so the
+// stop sign is a token, not an exception.
+var byOne = New JSONReader("[{""q"":1},{""q"":2},{""q"":3}]");
+byOne.Read();
+var total = 0;
+while (byOne.Read() And byOne.CurrentValueType <> JSONValueType.ArrayEnd) {
+	var element = byOne.ReadValue();
+	total = total + element.q;
+}
+if (total <> 6) { Raise("elements taken one at a time: expected 6, got " + total); }
+Message("one at a time: " + total);
+
+// …and the same rule reads a key that is spelled like a constant: after a dot it names a member, anywhere
+// else `Null` / `True` are the constants they always were.
+var oddReader = New JSONReader("{""null"":1,""true"":2,""false"":3,""undefined"":4}");
+var odd = oddReader.ReadValue();
+if (odd.null + odd.true + odd.false + odd.undefined <> 10) { Raise("keys spelled like constants are read as members"); }
+var still = Null;
+if (still <> Null Or True = False) { Raise("the constants are still constants where no dot stands before them"); }
+Message("members named like constants: " + (odd.null + odd.true));
+
+// 3
+var refused = False;
+try {
+	var broken = New JSONReader("{""a"": [1, 2,]}");
+} except {
+	refused = True;
+}
+if (Not refused) { Raise("a text that is not JSON must be refused"); }
+Message("not JSON: refused");
+
+// 4
+var line = New Structure();
+line.Insert("item", "Сіль");
+line.Insert("qty", 1.25);
+var items = New Array();
+items.Add(line);
+
+var writer = New JSONWriter(JSONFormatting.Indented);
+writer.WriteStartObject();
+writer.WritePropertyName("number");  writer.WriteValue("B-2");
+writer.WritePropertyName("date");    writer.WriteValue(Date(2026, 9, 20, 21, 5, 39));
+writer.WritePropertyName("lines");   writer.WriteValue(items);
+writer.WritePropertyName("closed");  writer.WriteValue(False);
+writer.WritePropertyName("nothing"); writer.WriteValue(Undefined);
+writer.WriteEndObject();
+var written = writer.Close();
+
+var back = New JSONReader(written);
+var copy = back.ReadValue();
+if (copy.number <> "B-2") { Raise("written number: " + copy.number); }
+if (copy.date <> "2026-09-20T21:05:39") { Raise("a date goes out as ISO 8601: " + copy.date); }
+if (copy.lines.Get(0).item <> "Сіль") { Raise("written item: " + copy.lines.Get(0).item); }
+if (copy.lines.Get(0).qty <> 1.25) { Raise("written qty: " + copy.lines.Get(0).qty); }
+if (copy.closed <> False) { Raise("written Boolean"); }
+if (copy.nothing <> Null) { Raise("Undefined goes out as null"); }
+
+var compact = New JSONWriter();
+compact.WriteValue(items);
+var oneLine = compact.Close();
+
+// …and the reference system's spelling of the same two verbs.
+var viaGlobal = New JSONWriter();
+WriteJSON(viaGlobal, items);
+var sameLine = viaGlobal.Close();
+if (sameLine <> oneLine) { Raise("WriteJSON writes what WriteValue writes: " + sameLine); }
+var globalReader = New JSONReader(sameLine);
+var readBack = ReadJSON(globalReader);
+if (readBack.Get(0).item <> "Сіль") { Raise("ReadJSON reads what ReadValue reads"); }
+if (oneLine <> "[{""item"":""Сіль"",""qty"":1.25}]") { Raise("compact: " + oneLine); }
+Message("written and read back: " + oneLine);
+
+// 5
+var strict = New JSONWriter();
+strict.WriteStartObject();
+var noName = False;
+try { strict.WriteValue(1); } except { noName = True; }
+if (Not noName) { Raise("a value inside an object needs its name first"); }
+
+var noForm = False;
+try { strict.WritePropertyName("reader"); strict.WriteValue(reader); } except { noForm = True; }
+if (Not noForm) { Raise("a value with no JSON form must be refused"); }
+Message("the writer keeps the document well-formed");

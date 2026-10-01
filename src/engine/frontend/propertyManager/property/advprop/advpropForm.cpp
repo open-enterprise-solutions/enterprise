@@ -1,8 +1,8 @@
-#include "advpropForm.h"
 #include "advpropHyperLink.h"
 
 #include "backend/propertyManager/property/propertyForm.h"
-#include "frontend/propertyManager/property/private/prop.h"
+#include "frontend/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
+#include "frontend/propertyManager/property/private/propertyRegistry.h"
 
 // register frontend property 
 class ibPropertyFormLoader
@@ -10,6 +10,8 @@ class ibPropertyFormLoader
 public:
 	ibPropertyFormLoader()
 	{
-		ibPG_IMPLEMENT_PROPERTY_CALLBACK(ibPGHyperLinkProperty, ibPropertyForm::ms_propertyForm);
+		ibPropertyRegistry::Register([](ibPropertyForm* prop) -> wxPGProperty* {
+			return new ibPGHyperLinkProperty(prop->GetPropertyObject(), prop->GetLabel(), prop->GetName(), prop->GetValue());
+		});
 	}
 }s_dateLoaderForm;

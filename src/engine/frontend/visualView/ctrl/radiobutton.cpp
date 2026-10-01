@@ -1,8 +1,8 @@
 
 #include "widgets.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "backend/compiler/procUnit.h"
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueRadioButton, ibValueWindow)
 
 //****************************************************************************
 //*                             Radiobutton                                  *
@@ -22,7 +22,7 @@ wxObject* ibValueRadioButton::Create(wxWindow* wxparent, ibVisualHost *visualHos
 	return radioButton;
 }
 
-void ibValueRadioButton::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost *visualHost, bool firstСreated)
+void ibValueRadioButton::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost *visualHost, bool firstCreated)
 {
 }
 
@@ -46,18 +46,18 @@ void ibValueRadioButton::Cleanup(wxObject* obj, ibVisualHost *visualHost)
 //*                             Property                            *
 //*******************************************************************
 
-bool ibValueRadioButton::LoadData(ibReaderMemory &reader)
+bool ibValueRadioButton::ReadData(const ibDataNode& node)
 {
-	return ibValueWindow::LoadData(reader);
+	return ibValueWindow::ReadData(node);
 }
 
-bool ibValueRadioButton::SaveData(ibWriterMemory& writer)
+bool ibValueRadioButton::WriteData(ibDataNode& node) const
 {
-	return ibValueWindow::SaveData(writer);
+	return ibValueWindow::WriteData(node);
 }
 
 //***********************************************************************
 //*                       Register in runtime                           *
 //***********************************************************************
 
-CONTROL_TYPE_REGISTER(ibValueRadioButton, "Radiobutton", "Widget", string_to_clsid("CT_RDBT"));
+CONTROL_TYPE_REGISTER(ibValueRadioButton, "Radiobutton", "Widget", control_to_clsid("CT_RDBT"));

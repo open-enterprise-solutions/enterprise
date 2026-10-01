@@ -11,12 +11,12 @@
 #include <wx/fdrepdlg.h>
 
 // The view using a standard wxTextCtrl to show its contents
-class FRONTEND_API ibTextEditView : public ibMetaView {
+class FRONTEND_API ibTextEditView : public ibView {
 public:
-	
-	ibTextEditView() : ibMetaView(), m_textEditor(nullptr) {}
 
-	virtual bool OnCreate(ibMetaDocument* doc, long flags) override;
+	ibTextEditView() : ibView(), m_textEditor(nullptr) {}
+
+	virtual bool OnCreate(ibDocument* doc, long flags) override;
 	virtual void OnDraw(wxDC* dc) override;
 	virtual bool OnClose(bool deleteWindow = true) override;
 
@@ -32,6 +32,8 @@ private:
 
 	void OnFind(wxFindDialogEvent& event);
 
+protected:
+
 	ibTextEditor* m_textEditor;
 
 	wxDECLARE_EVENT_TABLE();
@@ -39,12 +41,14 @@ private:
 };
 
 // ----------------------------------------------------------------------------
-// ITextDocument: wxDocument and wxTextCtrl married
+// ibTextDocument: ibDocument and wxTextCtrl married
 // ----------------------------------------------------------------------------
 
+// metaModuleObject.h is included for g_metaCommonModuleCLSID (icon lookup
+// only — not for metadata binding; ibTextDocument is a plain file document).
 #include "backend/metaCollection/metaModuleObject.h"
 
-class FRONTEND_API ITextDocument : public ibMetaDocument
+class FRONTEND_API ibTextDocument : public ibDocument
 {
 public:
 
@@ -52,25 +56,25 @@ public:
 		return ibBackendPicture::GetPictureAsIcon(g_metaCommonModuleCLSID);
 	}
 
-	ITextDocument() : ibMetaDocument() { m_childDoc = false; }
+	ibTextDocument() : ibDocument() {}
 
 	virtual wxCommandProcessor* OnCreateCommandProcessor() override;
 	virtual ibTextEditor* GetTextCtrl() const;
 
 protected:
-	wxDECLARE_NO_COPY_CLASS(ITextDocument);
-	wxDECLARE_ABSTRACT_CLASS(ITextDocument);
+	wxDECLARE_NO_COPY_CLASS(ibTextDocument);
+	wxDECLARE_ABSTRACT_CLASS(ibTextDocument);
 };
 
 // ----------------------------------------------------------------------------
 // A very simple text document class
 // ----------------------------------------------------------------------------
 
-class FRONTEND_API ibTextFilibDocument : public ITextDocument
+class FRONTEND_API ibTextFileDocument : public ibTextDocument
 {
 public:
 	
-	ibTextFilibDocument() : ITextDocument(), m_loadFromFile(false) {}
+	ibTextFileDocument() : ibTextDocument(), m_loadFromFile(false) {}
 
 	virtual bool OnCreate(const wxString& path, long flags) override;
 	virtual bool OnNewDocument() override {
@@ -100,8 +104,43 @@ protected:
 
 	bool m_loadFromFile;
 
-	wxDECLARE_NO_COPY_CLASS(ibTextFilibDocument);
-	wxDECLARE_DYNAMIC_CLASS(ibTextFilibDocument);
+	wxDECLARE_NO_COPY_CLASS(ibTextFileDocument);
+	wxDECLARE_DYNAMIC_CLASS(ibTextFileDocument);
+};
+
+// ----------------------------------------------------------------------------
+// The document and view a form's text box holds — the grid box's arrangement (docViewSpreadsheet.h)
+// ----------------------------------------------------------------------------
+
+// A text file document in no manager's list and no tab of its own. The text is the editor's, and saving asks
+// the editor, as the text file document does.
+class FRONTEND_API ibTextBoxDocument : public ibTextFileDocument {
+public:
+
+	ibTextBoxDocument();
+
+	// The box holds this document, not its views — none of them going takes it along.
+	virtual void OnChangedViewList() override {}
+
+private:
+
+	wxDECLARE_NO_COPY_CLASS(ibTextBoxDocument);
+	wxDECLARE_DYNAMIC_CLASS(ibTextBoxDocument);
+};
+
+// Its view: created in the box's parent by the box's Create, closed and left empty by its Cleanup; its frame
+// is that parent, so there is no title to mark.
+class FRONTEND_API ibTextBoxView : public ibTextEditView {
+public:
+
+	ibTextBoxView() : ibTextEditView() {}
+
+	virtual bool OnCreate(ibDocument* doc, long flags) override;
+	virtual bool OnClose(bool deleteWindow = true) override;
+	virtual void OnChangeFilename() override {}
+
+private:
+	wxDECLARE_DYNAMIC_CLASS(ibTextBoxView);
 };
 
 #endif

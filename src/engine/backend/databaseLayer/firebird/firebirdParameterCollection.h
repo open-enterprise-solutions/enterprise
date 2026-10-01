@@ -14,6 +14,8 @@
 
 #include <wx/dynarray.h>
 
+#include <utility>
+#include <vector>
 
 
 #include "backend/databaseLayer/databaseStringConverter.h"
@@ -22,36 +24,44 @@
 
 #include "engine/ibase.h"
 
-WX_DEFINE_ARRAY_PTR(ibDatatabaseParameterFirebird*, FirebirdParameterArray);
+WX_DEFINE_ARRAY_PTR(ibDatabaseParameterFirebird*, FirebirdParameterArray);
 
-class ibDatatabaseParameterFirebirdCollection : public ibDatabaseStringConverter
+class ibDatabaseParameterFirebirdCollection : public ibDatabaseStringConverter
 {
 public:
 	// ctor
-	ibDatatabaseParameterFirebirdCollection(ibInterfaceFirebird* pInterface, XSQLDA* pParameters);
+	ibDatabaseParameterFirebirdCollection(ibInterfaceFirebird* pInterface, XSQLDA* pParameters);
 
 	// dtor
-	virtual ~ibDatatabaseParameterFirebirdCollection();
+	virtual ~ibDatabaseParameterFirebirdCollection();
 
 	// set field
 	void SetParam(int nPosition, int nValue);
 	void SetParam(int nPosition, double dblValue);
 	void SetParam(int nPosition, const ibNumber &numValue);
-	void SetParam(int nPosition, const wxString& strValue);
+	void SetParam(int nPosition, const ibString& strValue);
 	void SetParam(int nPosition);
 	void SetParam(int nPosition, const void* pData, long nDataLength);
-	void SetParam(int nPosition, const wxDateTime& dateValue);
+	void SetParam(int nPosition, const ibDateTimeParts& date);
 	void SetParam(int nPosition, bool bValue);
-	void SetParam(int nPosition, ibDatatabaseParameterFirebird* pParameter);
 
 	bool ResetBlobParameters(isc_db_handle database, isc_tr_handle transaction);
 	void AllocateParameterSpace();
 	void FreeParameterSpace();
 
 private:
+	// The slot a bind at nPosition writes into, AS THE STATEMENT DESCRIBED IT — see the .cpp.
+	XSQLVAR* DescribedSlot(int nPosition);
+	// The parameter that slot's values go through — one per position, for as long as the statement lives.
+	ibDatabaseParameterFirebird& ParameterAt(int nPosition);
+
 	FirebirdParameterArray m_Parameters;
 	XSQLDA* m_FirebirdParameters;
 	ibInterfaceFirebird* m_pInterface;
+
+	// What the describe said of each slot: its SQL type and its length (the room its buffer was made
+	// with). A string bind overwrites both in the XSQLVAR itself.
+	std::vector<std::pair<short, short>> m_described;
 };
 
 #endif // __FIREBIRD_PARAMETER_COLLECTION_H__

@@ -5,7 +5,7 @@
 #include <wx/button.h>
 #include <wx/treectrl.h>
 
-#include "keyBinder.h"
+#include "keybinder.h"
 
 //
 // Forward declarations.

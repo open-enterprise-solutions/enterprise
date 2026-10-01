@@ -1,10 +1,10 @@
-#include "htmlbox.h"
+#include "htmlBox.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 
 //***********************************************************************************
 //*                           IMPLEMENT_DYNAMIC_CLASS                               *
 //***********************************************************************************
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueHTMLBox, ibValueWindow);
 
 //***********************************************************************************
 //*                                 Value Notebook                                  *
@@ -12,6 +12,7 @@ wxIMPLEMENT_DYNAMIC_CLASS(ibValueHTMLBox, ibValueWindow);
 
 ibValueHTMLBox::ibValueHTMLBox() : ibValueWindow()
 {
+	m_members.Bind(this, &ibValueHTMLBox::FillControlMembers);
 	m_propertyMinSize->SetValue(wxSize(250, 150));
 }
 
@@ -30,9 +31,8 @@ wxObject* ibValueHTMLBox::Create(wxWindow* wxparent, ibVisualHost* visualHost)
 	return htmlBox;
 }
 
-void ibValueHTMLBox::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool firstСreated)
+void ibValueHTMLBox::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool firstCreated)
 {
-	wxHtmlWindow* htmlBox = dynamic_cast<wxHtmlWindow*>(wxobject);
 }
 
 void ibValueHTMLBox::OnSelected(wxObject* wxobject)
@@ -58,14 +58,14 @@ void ibValueHTMLBox::Cleanup(wxObject* obj, ibVisualHost* visualHost)
 //*                                   Data										   *
 //**********************************************************************************
 
-bool ibValueHTMLBox::LoadData(ibReaderMemory& reader)
+bool ibValueHTMLBox::ReadData(const ibDataNode& node)
 {
-	return ibValueWindow::LoadData(reader);
+	return ibValueWindow::ReadData(node);
 }
 
-bool ibValueHTMLBox::SaveData(ibWriterMemory& writer)
+bool ibValueHTMLBox::WriteData(ibDataNode& node) const
 {
-	return ibValueWindow::SaveData(writer);
+	return ibValueWindow::WriteData(node);
 }
 
 //**********************************************************************************
@@ -74,17 +74,15 @@ enum Func {
 	enSetPage = 0,
 };
 
-void ibValueHTMLBox::PrepareNames() const // this method is automatically called to initialize attribute and method names.
+void ibValueHTMLBox::FillControlMembers(ibMemberTable& helper) const
 {
-	ibValueFrame::PrepareNames();
-
-	m_methodHelper->AppendFunc(wxT("SetPage"), 1, wxT("SetPage(p: page)"), enSetPage, wxNOT_FOUND);
+	helper.AppendFunc(wxT("SetPage"), 1, wxT("SetPage(p: page)"), enSetPage, wxNOT_FOUND);
 }
 
 bool ibValueHTMLBox::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)       //method call
 {
 	wxHtmlWindow* htmlBox = dynamic_cast<wxHtmlWindow*>(GetWxObject());
-	switch (m_methodHelper->GetMethodData(lMethodNum))
+	switch (m_members.GetMethodData(lMethodNum))
 	{
 	case enSetPage:
 		pvarRetValue = htmlBox ?
@@ -99,4 +97,4 @@ bool ibValueHTMLBox::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ib
 //*                       Register in runtime                           *
 //***********************************************************************
 
-CONTROL_TYPE_REGISTER(ibValueHTMLBox, "Htmlbox", "Container", string_to_clsid("CT_HTML"));
+CONTROL_TYPE_REGISTER(ibValueHTMLBox, "Htmlbox", "Container", control_to_clsid("CT_HTML"));

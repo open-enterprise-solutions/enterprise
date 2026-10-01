@@ -25,7 +25,7 @@ class ibDialogSelectDataType : public wxDialog {
 	std::map<long, ibClassID> m_listTypeClass;
 public:
 	bool ShowModal(ibClassID& clsid);
-	ibDialogSelectDataType(ibMetaData* metaData, const std::vector<ibClassID>& array);
+	ibDialogSelectDataType(const ibMetaData* metaData, const std::vector<ibClassID>& array);
 	virtual ~ibDialogSelectDataType();
 
 protected:

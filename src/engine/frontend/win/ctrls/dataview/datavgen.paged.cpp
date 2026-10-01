@@ -6,15 +6,17 @@
 //              ibDataViewCtrl — class definition lives in datavgen.h —
 //              this is purely a translation-unit split, no behavioural
 //              change.
-// Methods:
+// Methods (fetch only — the busy indicator moved next to the painting it does,
+//          in datavgen.cpp beside ibDataViewMainWindow::OnPaint):
 //   GetPagedInsertParent      — drill-chain insert parent walker
 //   SchedulePagedRefresh      — debounced refresh dispatcher
-//   PagedRefresh              — wipe + capture restore-state
-//   PagedBootstrap            — initial fetch + Tree-mode auto-expand
-//                               + RAM focus-by-rawrow restore
-//   DispatchPagedFetch        — async forward / backward fetch
-//   OnPagedFetchForwardResult — append+trim path
-//   OnPagedFetchBackwardResult— prepend path
+//   PagedRefresh              — capture restore-state, arm the Reset portion
+//   OnPagedFetchResetComplete — the Reset answer: wipe + fill + auto-expand + restore
+//   ReadPagedFetchReset       — the Reset read (free function: model only, no control)
+//   DispatchPagedFetch        — THE door: one request, direction inside (Reset /
+//                               Forward / Backward), answer back on this thread
+//   OnPagedFetchForwardComplete — append+trim path
+//   OnPagedFetchBackwardComplete— prepend path
 /////////////////////////////////////////////////////////////////////////////
 
 #include <wx/wxprec.h>
@@ -22,15 +24,18 @@
 #if wxUSE_DATAVIEWCTRL
 
 #include "dataview.h"
-#include "backend/tableInfo.h"   // ibValueModel + Features for SetViewMode
-#include "datavgen.paged.private.h"   // kBufferSlack + ScopedPagedFreeze
-#ifndef WX_PRECOMP
-#include <wx/log.h>
-#include <wx/vector.h>
-#endif
+#include "backend/appData.h"               // ibApplicationInstance::GetLogger
+#include "backend/backend_exception.h"     // ibBackendException — what a failed portion throws
+#include "backend/logger/logger.h"         // a portion that failed leaves a row in the journal
+#include "datavgen.window.private.h"  // ibDataViewMainWindow — the rows area this freezes / scrolls
+#include "datavgen.paged.private.h"   // kBufferSlack + ScopedPagedFreeze + ibPagedFetch
 
 #include <wx/weakref.h>
+#include <wx/log.h>                              // a first page that failed is SAID, not only journalled
 #include <wx/generic/private/rowheightcache.h>   // HeightCache::Remove
+
+#include <algorithm>
+#include <memory>
 
 namespace {
 // Single point of tree-node child creation across all paged populate
@@ -48,16 +53,6 @@ ibDataViewTreeNode* MakeChildNode(ibDataViewTreeNode* parent,
 	if (item.IsContainer())
 		node->SetHasChildren(true);
 	return node;
-}
-
-const char* ViewModeStr(ibDataViewViewMode mode)
-{
-	switch (mode) {
-	case ibDataViewViewMode::ibDataViewList:         return "List";
-	case ibDataViewViewMode::ibDataViewTree:         return "Tree";
-	case ibDataViewViewMode::ibDataViewHierarchical: return "Hier";
-	default: return "?";
-	}
 }
 }
 
@@ -111,11 +106,26 @@ void ibDataViewCtrl::SetPagedRestoreSelection(const ibDataViewItem& item)
 		// from m_selection.IsEmpty() before Select stamped here.
 		m_pagedRestoreFocusWasSelected = true;
 	}
+
+	// A READ ALREADY OUT WAS ASKED THE OLD QUESTION. Where to position is decided
+	// at DISPATCH, so a stamp arriving after that is never read — and worse, the
+	// answer clears it on arrival. That is a row created and then not selected,
+	// which is exactly what this method exists to prevent.
+	//
+	// While the bootstrap was synchronous the window did not exist (this always
+	// landed before it ran). Now it does, so the in-flight answer is discarded by
+	// the generation bump and a fresh Reset is armed — it will be dispatched on the
+	// next idle and will position on the row just stamped.
+	if (item.IsOk() && IsFetchInFlight()) {
+		++m_pagedFetchGen;
+		m_pagedNeedsBootstrap = true;
+	}
 }
 
 void ibDataViewCtrl::SchedulePagedRefresh(const ibDataViewItem& preferSelection)
 {
-			// Latest-selection-wins: a series of ItemInserted'ов (e.g. LoadData
+
+			// Latest-selection-wins: a series of ItemInserted events (e.g. LoadData
 	// repopulating the table) produces successive items; the last one
 	// is the most reasonable focus anchor for the user.
 	if (preferSelection.IsOk())
@@ -124,52 +134,39 @@ void ibDataViewCtrl::SchedulePagedRefresh(const ibDataViewItem& preferSelection)
 	if (m_pagedRefreshScheduled) return;
 	m_pagedRefreshScheduled = true;
 
-	// Dispatch through the model's worker channel rather than a
-	// host-specific wxTheApp->CallAfter — under web that channel is
-	// the per-session worker queue (FIFO, sequential), under desktop
-	// it falls back to ibSession::Submit's inline path until a GUI
-	// worker pool is wired up.  Either way, all callers in a series
-	// land on the same handler and the m_pagedRefreshScheduled flag
-	// coalesces them into one PagedRefresh.
-	//
-	// wxWeakRef guards against the control being destroyed between
-	// submit and dispatch (model owned by ibValue, may outlive the
-	// control's lifecycle on form close / panel rebuild).
-	ibDataViewModel* model = GetModel();
-	if (model == nullptr) {
+	// Postponed on THIS thread, not dispatched: PagedRefresh is control state, so it
+	// must not go through the model's fetch door, which for a runtime table is a
+	// worker. The flag above coalesces a burst of notifier hooks into one refresh.
+	if (wxTheApp == nullptr) {
 		m_pagedRefreshScheduled = false;
 		return;
 	}
 	wxWeakRef<ibDataViewCtrl> weakSelf(this);
-	model->SubmitFetchAsync([weakSelf]{
+	wxTheApp->CallAfter([weakSelf]{
 		auto* self = weakSelf.get();
 		if (self == nullptr) return;   // control gone — drop the refresh
 		self->m_pagedRefreshScheduled = false;
 		ibDataViewItem sel = self->m_pagedRefreshSelection;
 		self->m_pagedRefreshSelection = ibDataViewItem();
 		self->PagedRefresh(sel);
-		// PagedBootstrap fires on the next idle (OnIdleEvent) so the
-		// viewport is sampled when layout has settled.  Calling it
-		// inline here would lock the batch size to whatever
-		// GetCountPerPage() returns at this moment — small under
-		// initial form-open or other early-call scenarios.
 	});
 }
 
 void ibDataViewCtrl::PagedRefresh(const ibDataViewItem& preferSelection)
 {
 		// PagedRefresh runs synchronously inline (e.g. inside OnUpdated /
-	// notifier reset).  PagedBootstrap fires later on OnInternalIdle.
+	// notifier reset). The Reset portion is dispatched later, from OnInternalIdle.
 	// We DELIBERATELY do not wipe the tree here — wiping eagerly would
 	// leave the chrome (header / footer / scrollbar) painting against
 	// an empty model between this point and the next idle, which is
 	// the visible "flicker" the user reported.  Instead this method
 	// only captures restore-state + bumps the cancellation generation
 	// + arms the bootstrap flag; the actual DestroyTree + buffer reset
-	// is folded into the start of PagedBootstrap so wipe + fill happen
-	// in a single freeze window.
+	// happens when the Reset portion ARRIVES (OnPagedFetchResetComplete), so wipe + fill
+	// land in a single freeze window.
 	const bool skipCapture = m_pagedSkipRestoreCapture;
 	m_pagedSkipRestoreCapture = false;
+
 	const ibDataViewItem topItem = skipCapture
 		? ibDataViewItem() : GetTopItem();
 	// Explicit prefer (caller asked for a specific focus target —
@@ -189,17 +186,27 @@ void ibDataViewCtrl::PagedRefresh(const ibDataViewItem& preferSelection)
 		if (preferSelection.IsOk())
 			explicitTarget = preferSelection;
 	}
-	const char* viewModeStr = ViewModeStr(m_viewMode);
-	const int  preSy = m_tableAreaWin ?
-		CalcUnscrolledPosition(wxPoint(0, 0)).y : 0;
-	const int topRow   = topItem.IsOk()      ? (int)GetRowByItem(topItem)      : -1;
-	const int focusRow = currentFocus.IsOk() ? (int)GetRowByItem(currentFocus) : -1;
-	const int totalRows = m_root != nullptr ? (int)GetRowCount() : 0;
-		if (topRow >= 0 && focusRow >= 0) {
-		const int viewport = GetCountPerPage();
-		const int dist = focusRow - topRow;
-		const bool focusVisible = (dist >= 0 && dist < viewport);
-			}
+	// WHERE THE USER WAS LOOKING, kept as a NUMBER rather than as a row. The sort
+	// path throws the anchor ITEM away on purpose — its cursor key means nothing in
+	// the new ordering — and this distance is all that is left of the viewport
+	// afterwards: put the focused row back this many rows below the top and the
+	// screen reads the same, re-ordered. Read from the live top even under
+	// skipCapture, because the ITEM is what is invalid there, not the position.
+	const int visibleTopRow = (int)GetRowByItem(GetTopItem());
+	// Which shade the row at the top is wearing right now. The rebuild puts that
+	// same business row back at the head of the buffer, and the stripe phase is set
+	// from this so it keeps it — see m_stripePhase.
+	m_stripeTopParity = (visibleTopRow >= 0) ? (visibleTopRow & 1) : -1;
+	const int focusRow      = currentFocus.IsOk() ? (int)GetRowByItem(currentFocus) : -1;
+	int focusOffset = -1;
+	if (visibleTopRow >= 0 && focusRow >= visibleTopRow) {
+		// Only when the focus was actually ON SCREEN. One scrolled out of view has
+		// no offset worth preserving — restoring it would land the sorted list
+		// where the user was not looking either.
+		const int dist = focusRow - visibleTopRow;
+		if (dist < GetCountPerPage())
+			focusOffset = dist;
+	}
 	// NB: currentFocus stays in m_pagedRestoreFocus only — we do NOT
 	// promote it to explicitTarget even when it sits outside the
 	// viewport.  Promotion forces Bootstrap into selection-cursor
@@ -229,35 +236,74 @@ void ibDataViewCtrl::PagedRefresh(const ibDataViewItem& preferSelection)
 		m_pagedRestoreAnchor    = ibDataViewItem();
 		m_pagedRestoreSelection = ibDataViewItem();
 		if (currentFocus.IsOk()) m_pagedRestoreFocus = currentFocus;
-		m_pagedRestoreFocusRow = (m_currentRow != (unsigned)-1)
-			? static_cast<long>(m_currentRow) : -1;
 		m_pagedRestoreFocusWasSelected = !m_selection.IsEmpty();
+		// The only path that needs it: no anchor survives here, so the offset is
+		// what puts the viewport back. Drill sets it too and simply never
+		// consumes it — its focus belongs to the folder we just left, so the
+		// scan below misses and the offset is dropped with it.
+		m_pagedRestoreFocusOffset = focusOffset;
 	} else {
 		if (topItem.IsOk())          m_pagedRestoreAnchor    = topItem;
 		if (explicitTarget.IsOk())   m_pagedRestoreSelection = explicitTarget;
-		if (explicitTarget.IsOk())   m_pagedRestoreFocus     = explicitTarget;
-		else if (currentFocus.IsOk()) m_pagedRestoreFocus    = currentFocus;
+		// WHAT SOMEBODY ASKED FOR BEATS WHERE THE CURSOR HAPPENS TO BE. An explicit
+		// prefer wins; then a programmatic stamp (SetPagedRestoreSelection — a row
+		// just created and told to be selected), which may have landed BEFORE this
+		// refresh, since the refresh is posted onto the event loop; and only if
+		// neither is present does the pre-refresh current row stand in.
+		//
+		// Without the middle case the second created row lost: the first one had no
+		// prior selection so the stamp survived, the second found the previous row
+		// as the current one and this line wrote it over the stamp — so the list
+		// re-selected what was there before.
+		if (explicitTarget.IsOk())            m_pagedRestoreFocus = explicitTarget;
+		else if (m_pagedRestoreSelection.IsOk()) { /* keep the stamped row */ }
+		else if (currentFocus.IsOk())         m_pagedRestoreFocus = currentFocus;
 		// Capture raw row index (pre-refresh).  Used by
 		// PagedBootstrap as the primary focus-restore for
 		// RAM-backed paged models where row order is stable.
-		m_pagedRestoreFocusRow = (m_currentRow != (unsigned)-1)
-			? static_cast<long>(m_currentRow) : -1;
 		// Was anything actually selected before refresh?  Drives whether
 		// post-bootstrap focus-restore should also re-select the matched
 		// row.  Explicit prefer (post-Save / SetViewMode) implies "select
 		// this row" regardless; for plain refresh (currentFocus path) we
 		// only re-select if user had a real selection going in.
+		// …or a programmatic Select has already stamped a row. That stamp MEANS
+		// "select it", and it can arrive before this refresh rather than after it —
+		// the refresh is posted onto the event loop, so a post-Save Select lands
+		// first. Recomputing the flag from an empty selection store then threw the
+		// intent away: the new row was positioned to, and not highlighted.
 		m_pagedRestoreFocusWasSelected = explicitTarget.IsOk()
-			|| !m_selection.IsEmpty();
+			|| !m_selection.IsEmpty()
+			|| m_pagedRestoreSelection.IsOk();
+		// The anchor survived here, and it is the stronger answer: it names the
+		// row the user had at the top, not a distance from it. Nothing to
+		// preserve by offset, and a stale one must not leak into this path.
+		m_pagedRestoreFocusOffset = -1;
 	}
 	++m_pagedFetchGen;            // discard any in-flight async results
 	m_pagedNeedsBootstrap = true; // arm wipe + fill at next idle
 	}
 
-void ibDataViewCtrl::PagedBootstrap()
+void ibDataViewCtrl::OnPagedFetchResetComplete(ibPagedFetch& req)
 {
 	ibDataViewModel* model = GetModel();
-		if (model == nullptr) return;
+	if (model == nullptr) return;
+
+	// Names the rest of this method already used, now answered by the parcel.
+	const int  batch                = req.m_batch;
+	const bool restoreFromSelection = req.m_restoreFromSelection;
+	const ibDataViewItem& restore    = req.m_cursor;
+	const ibDataViewItem& savedFocus = req.m_savedFocus;
+	ibDataViewItemArray&  items      = req.m_items;
+	ibDataViewItemArray&  treeCrumbs = req.m_treeCrumbs;
+	const unsigned int    n          = req.m_n;
+
+	// WIPE AND FILL AS ONE TRANSACTION, and only now that there is something to
+	// fill with. The rows area has been frozen since the wipe, so what is still on
+	// screen is the last finished frame; from here to EndBootstrapFreeze below the
+	// control is frozen too, and what the user sees next is the next finished frame
+	// — never the zero-row state in between, and never a paint per step of the
+	// rebuild.
+	ScopedPagedFreeze freeze(this);
 
 	// Wipe phase — runs at the start of bootstrap, NOT at the end of
 	// PagedRefresh.  Eager wipe in PagedRefresh would leave the chrome
@@ -269,8 +315,8 @@ void ibDataViewCtrl::PagedBootstrap()
 	// happens as one transaction inside the same idle pass.
 	//
 	// Idempotent: if a previous bootstrap already armed the freeze
-	// (m_pagedFrozenForBootstrap = true), skip re-Freeze; we'll Thaw
-	// once at the matching point at end of OnInternalIdle.
+	// (m_pagedFrozenForBootstrap = true), skip re-Freeze; EndBootstrapFreeze
+	// at the end of this method drops it once, whoever armed it.
 	const bool needsWipe = (m_root != nullptr && GetRowCount() > 0)
 	                       || m_selection.GetSelectedCount() > 0
 	                       || m_currentRow != (unsigned)-1;
@@ -280,9 +326,29 @@ void ibDataViewCtrl::PagedBootstrap()
 		if (m_tableAreaWin) m_tableAreaWin->Freeze();
 		m_pagedFrozenForBootstrap = true;
 	}
+	// ⭐ WHAT STOOD OPEN, READ AT THE LAST MOMENT - here, and not when the refresh was asked for. Between
+	// the asking and this point the control keeps living: the form selects its current row, which unfolds
+	// that row's parents, and a capture taken earlier holds a tree that was still flat. The tree on screen
+	// NOW is the one being thrown away, so it is the one to remember. Top-down, so a parent stands before
+	// the child under it and is reopened first - a child is only findable once its parent is open again.
+	ibDataViewItemArray openBefore;
+	if (m_root != nullptr) {
+		std::function<void(const ibDataViewTreeNode*)> gather = [&](const ibDataViewTreeNode* node) {
+			for (auto* child : node->GetChildNodes()) {
+				if (child == nullptr || !child->IsOpen()) continue;
+				// ⚠ A BREADCRUMB IS NOT A GROUP THE READER OPENED. The hierarchical view plants the folder it
+				// stands in as an OPEN node above its rows; remembered here, it came back open INSIDE the list
+				// once the reader stepped out of it — the folder shown unfolded where the view never unfolds.
+				// The drill chain is the chain's (m_topParentChain); only its contents are the reader's.
+				if (child->GetViewMode() != ibDataViewTreeNodeViewMode::ibDataViewHierarchy)
+					openBefore.Add(child->GetItem());
+				gather(child);
+			}
+		};
+		gather(m_root);
+	}
+
 	if (needsWipe) {
-		const unsigned prevSelCount = m_selection.GetSelectedCount();
-		const unsigned prevCurRow   = m_currentRow;
 		DestroyTree();
 		m_root              = ibDataViewTreeNode::CreateRootNode();
 		m_selection.Clear();
@@ -302,54 +368,13 @@ void ibDataViewCtrl::PagedBootstrap()
 		// not called mid-wipe — chrome must not see the zero-row state.
 			}
 
-	// Initial / refresh batch == visible viewport size only.  Extra
-	// rows beyond it come in via scroll-driven PagedFetchForward.
-	const int viewport = GetCountPerPage();
-	const int batch    = viewport > 0 ? viewport : 100;
-
-	const bool restoreFromSelection = m_pagedRestoreSelection.IsOk();
-	const bool isTreeMode = (m_viewMode == ibDataViewViewMode::ibDataViewTree);
-	const ibDataViewItem savedSelection = m_pagedRestoreSelection;
-	// Selection-cursor mode (post-Add to empty folder, post-SetViewMode):
-	// Select(item) stamps m_pagedRestoreSelection but not
-	// m_pagedRestoreFocus, so the focus-restore loop below would skip
-	// (savedFocus empty) even though the new row arrived in the fetch.
-	// Fall back to m_pagedRestoreSelection in that case so the new row
-	// becomes current.
-	const ibDataViewItem savedFocus     = m_pagedRestoreFocus.IsOk()
-		? m_pagedRestoreFocus
-		: m_pagedRestoreSelection;
-
-	// Tree-mode pre-walk: compute the savedFocus ancestor chain once
-	// here so (a) the bootstrap fetch can use chain[last] (topmost
-	// ancestor folder) as cursor and guarantee chain head lands in the
-	// first batch even when there are more top-level folders than fit,
-	// and (b) the walker below reuses the array without a second
-	// BuildAncestorBreadcrumb roundtrip.  Empty when not in tree mode,
-	// no savedFocus, or selection sits at the dataset root.
-	ibDataViewItemArray treeCrumbs;
-	if (isTreeMode && savedFocus.IsOk())
-		model->BuildAncestorBreadcrumb(savedFocus, treeCrumbs);
-	const ibDataViewItem treeChainHead = treeCrumbs.IsEmpty()
-		? ibDataViewItem()
-		: treeCrumbs[treeCrumbs.GetCount() - 1];
-
-	// Hierarchical-mode auto-drill on selection-restore: target row
-	// (e.g. selector form's pre-set value) sits in a subfolder.  Without
-	// this, top-level fetch returns siblings of root + target's row
-	// is never in the batch → focus-scan misses across all fetched.
-	// Same primitive (BuildAncestorBreadcrumb) as Tree mode above; the
-	// difference is the Hierarchical view consumes the chain via
-	// m_topParentChain (drill state) instead of in-tree expand walker.
-	const bool isHierarchical =
-		(m_viewMode == ibDataViewViewMode::ibDataViewHierarchical);
-	if (isHierarchical && restoreFromSelection
-	    && m_topParentChain.IsEmpty()
-	    && savedFocus.IsOk()) {
-		ibDataViewItemArray hierCrumbs;
-		model->BuildAncestorBreadcrumb(savedFocus, hierCrumbs);
-		for (size_t i = 0; i < hierCrumbs.GetCount(); ++i)
-			m_topParentChain.Add(hierCrumbs[i]);
+	// The drill chain the read walked, applied now — this is the UI half of the
+	// hierarchical auto-drill: the read only asked WHERE the row lives (and fetched
+	// the page under that folder); the chain, the frozen-rows partition and the
+	// geometry belong here.
+	if (req.m_hierAutoDrill && !req.m_hierCrumbs.IsEmpty()) {
+		for (size_t i = 0; i < req.m_hierCrumbs.GetCount(); ++i)
+			m_topParentChain.Add(req.m_hierCrumbs[i]);
 		m_countFrozenHierarchicalRows =
 			static_cast<int>(m_topParentChain.GetCount());
 		// Re-init frozen-rows window to match the new chain depth.
@@ -362,94 +387,29 @@ void ibDataViewCtrl::PagedBootstrap()
 		CalcWindowSizes();
 	}
 
-	// Cursor selection:
-	//   - Tree mode + restoreFromSelection + chain available →
-	//     cursor=chain[last] (topmost ancestor folder).  Composite
-	//     cursor predicate <= (isFolder=1, ...) includes ALL folders
-	//     plus non-folders ordered before chain[last]; chain head is
-	//     guaranteed in the batch so tree-auto-expand finds it at
-	//     depth 0.  Backward-prefetch covers folders ordered before
-	//     chain[last] when needed.
-	//   - Tree mode + restoreFromSelection + no chain (selection at
-	//     dataset root) → cursor=empty so the fetch starts from the
-	//     top (folders first per `isFolder DESC`).
-	//   - Non-tree + restoreFromSelection (post-Save / List or Hier
-	//     SetViewMode) → cursor=selection so the new row lands in
-	//     the fetched batch and can be centred via PagedFetchBackward.
-	//   - Otherwise → cursor=anchor (saved top) so plain Refresh /
-	//     sort keeps the viewport at the same row.  Selection-fallback
-	//     (currentRow) is held in m_pagedRestoreFocus and applied
-	//     only to currentRow / m_selection after the fetch — it
-	//     doesn't drive the cursor and so doesn't shift the viewport.
-	// Tree mode normally drives cursor by chain head (so chain[last]
-	// pins into first batch + auto-expand walker reaches savedFocus).
-	// When the chain is empty (selection at dataset root, or a row
-	// just-added at top level in an empty folder) the chainHead is
-	// empty → fetch starts from the top of the new ordering.  Fall
-	// back to selection-as-cursor in that case so the new row lands
-	// in the fetched batch (otherwise IsEqualTo scan misses and the
-	// row never becomes current).
-	//
-	// For non-selection path: prefer anchor (saved top) when set so
-	// plain Refresh keeps viewport on the same row.  For sort
-	// (skipCapture wiped the anchor but preserved focus), fall back
-	// to focus-as-cursor so the post-sort fetch positions the batch
-	// around the previously-selected row — otherwise a focus that
-	// resorts beyond the first batch (e.g. selected row goes from
-	// position 5 to 90 after column re-sort) drops out of items[]
-	// and the IsEqualTo scan misses, losing the selection.
-	const ibDataViewItem restore = restoreFromSelection
-		? (isTreeMode
-			? (treeChainHead.IsOk() ? treeChainHead : m_pagedRestoreSelection)
-			: m_pagedRestoreSelection)
-		: (m_pagedRestoreAnchor.IsOk()
-			? m_pagedRestoreAnchor
-			: m_pagedRestoreFocus);
-
-	const char* viewModeStr2 = ViewModeStr(m_viewMode);
-	const char* cursorMode =
-		restoreFromSelection
-			? (isTreeMode
-				? (treeChainHead.IsOk()
-					? "chainHead-cursor (tree+selection)"
-					: "empty-cursor (tree+selection no chain)")
-				: "selection-cursor (explicit prefer)")
-		: (isTreeMode ? "empty-cursor (tree top-level)" :
-		   (m_pagedRestoreAnchor.IsOk() ? "anchor-cursor (saved top)" :
-		                                  "empty-cursor (cold)"));
-	const int preBootstrapSy = m_tableAreaWin ?
-		CalcUnscrolledPosition(wxPoint(0, 0)).y : 0;
-	
-	ibDataViewItemArray items;
-	// Drill chain front in Hierarchical mode; sentinel
-	// s_constIgnoreParent in flat List of a hierarchical model;
-	// empty (= top-level) in Tree / non-hierarchical.
-	const ibDataViewItem effectiveParent = GetEffectiveFetchParent();
-	unsigned int n = model->GetFirstFetch(effectiveParent, restore, batch, items);
-		// Empty-fetch fallback: a cursor-mode fetch (selection / anchor /
-	// focus) can return 0 rows when the cursor points at a row that
-	// no longer matches the active filter — typical case is post-Add
-	// of an element whose key fields fall outside the current filter,
-	// which would otherwise leave the table fully empty.  Retry with
-	// an empty cursor so the user still sees the filtered top batch.
-	if (n == 0 && restore.IsOk()) {
-		items.Clear();
-		n = model->GetFirstFetch(effectiveParent, ibDataViewItem(), batch, items);
-			}
 	// Heuristic: model returning fewer rows than the batch size means
 	// it has nothing more to give in that direction.  Saves a wasted
 	// round-trip that would otherwise return 0 just to discover this.
-	m_pagedHasMoreFwd       = ((int)n >= batch);
+	// Counting the FORWARD part only: the backfilled rows came from above the
+	// cursor and say nothing about what is left below it. Including them made a
+	// short page look full, which cost an extra empty round-trip — and an extra
+	// portion is an extra frame.
+	m_pagedHasMoreFwd       = ((int)(n - req.m_backfilled) >= batch);
 	// Restore anchor implies "data may exist before us" only if the
 	// forward fetch actually returned rows.  An empty fetch (drill into
 	// an empty folder, filtered-out range) leaves no bwd anchor — so
 	// PagedFetchBackward would no-op and m_pagedHasMoreBwd would stay
 	// true forever, leaving a phantom scrollbar.  Tie hasBwd to n>0.
 	m_pagedHasMoreBwd       = restore.IsOk() && n > 0;
-	m_pagedNeedsBootstrap = false;
+	// UNLESS THE BACKFILL ALREADY HIT THE TOP. It asked for a fixed number of rows
+	// above the cursor and got fewer, which is the same "nothing more that way"
+	// the forward heuristic reads from a short page — and leaving the flag up
+	// costs a backward portion that comes back empty, one more frame for nothing.
+	if (req.m_backfill > 0 && (int)req.m_backfilled < req.m_backfill)
+		m_pagedHasMoreBwd = false;
 	m_pagedFwdAnchor        = (n > 0) ? items[n - 1] : ibDataViewItem();
 	m_pagedBwdAnchor        = (n > 0) ? items[0]     : ibDataViewItem();
-		m_pagedRestoreAnchor    = ibDataViewItem();
+	m_pagedRestoreAnchor    = ibDataViewItem();
 	m_pagedRestoreSelection = ibDataViewItem();
 	// m_pagedRestoreFocus is intentionally NOT cleared here.  When
 	// focus sits OUTSIDE the initial Reset batch (focus row < topRow,
@@ -491,11 +451,21 @@ void ibDataViewCtrl::PagedBootstrap()
 	if (n > 0)
 		insertParent->ChangeSubTreeCount(static_cast<int>(n));
 
+	// The row that was at the top is back at the head of the data area — give it
+	// the shade it had, or the whole list repaints in the other phase and the
+	// refresh reads as a flicker. Nothing captured (cold open) leaves the phase be.
+	if (m_stripeTopParity >= 0) {
+		const int topDataRow = static_cast<int>(m_topParentChain.GetCount());
+		m_stripePhase = (m_stripeTopParity ^ (topDataRow & 1)) & 1;
+		m_stripeTopParity = -1;
+	}
+
 	bool restoredViaTreeExpand = false;
 
 	// Tree-mode auto-expand to selection: walk the breadcrumb chain
-	// top → down, fetching each ancestor's children and toggling it
-	// open so the saved selection is reachable in the tree on first
+	// top → down, planting each ancestor's children (read with the page,
+	// never here) and toggling it open so the saved selection is
+	// reachable in the tree on first
 	// paint.  Top-level fetch above already populated m_root's
 	// children — the topmost ancestor (chain[last]) lives there
 	// because the bootstrap cursor was set to chain[last] (see
@@ -528,10 +498,14 @@ void ibDataViewCtrl::PagedBootstrap()
 										break;
 				}
 				if (!match->HasChildren()) match->SetHasChildren(true);
-				if (!match->IsOpen()) {
-					ibDataViewItemArray ancChildren;
-					unsigned int cn = model->GetFirstFetch(ancItem,
-					    ibDataViewItem(), batch, ancChildren);
+				if (!match->IsOpen()
+				    && static_cast<size_t>(i) < req.m_crumbChildren.size()) {
+					// This level's children came back with the page — the read
+					// fetched every crumb's children in one go, so the rebuild
+					// asks the model for nothing.
+					ibDataViewItemArray& ancChildren =
+						req.m_crumbChildren[static_cast<size_t>(i)];
+					const unsigned int cn = ancChildren.GetCount();
 					const unsigned int already =
 						static_cast<unsigned int>(match->GetChildNodes().size());
 					for (unsigned int k = 0; k < cn; ++k) {
@@ -552,15 +526,35 @@ void ibDataViewCtrl::PagedBootstrap()
 				if (m_pagedRestoreFocusWasSelected)
 					m_selection.SelectItem(static_cast<unsigned int>(row), true);
 				restoredViaTreeExpand = true;
-							} else {
-							}
+			}
 		}
+	}
+
+	// ⭐ AND THE GROUPS THE USER HAD OPEN GO BACK BEFORE ANYTHING IS COUNTED IN ROWS. Reopening changes
+	// what row a node sits on, so it happens here - after the tree is filled, before focus and selection
+	// are restored by row number. Parent-before-child (the capture's order) is what lets each node be
+	// found: a child only becomes visible once its parent stands open again.
+	for (size_t i = 0; i < openBefore.GetCount(); ++i) {
+		const int row = FindVisibleRowInTree(openBefore[i]);
+		if (row == wxNOT_FOUND) continue;   // that group is not in this page - nothing to open
+		ibDataViewTreeNode* node = GetTreeNodeByRow(static_cast<unsigned int>(row));
+		if (node == nullptr || node->IsOpen()) continue;
+		if (!node->HasChildren()) node->SetHasChildren(true);
+		if (node->GetChildNodes().empty()) {
+			// The children this group had are not in the page - the page is the level the list stands on.
+			// Asked for here, one read per group that was open, which is what unfolding one costs anyway.
+			ibDataViewItemArray kids;
+			const unsigned int kn = model->GetFirstFetch(openBefore[i], ibDataViewItem(), batch, kids);
+			for (unsigned int k = 0; k < kn; ++k)
+				node->InsertChild(this, MakeChildNode(node, kids[k]), k);
+		}
+		node->ToggleOpen(this);
 	}
 
 	// If the user had a focused / selected row before the refresh,
 	// find the same business row in the new ordering by data-compare
 	// (ibDataViewItem::operator== now dispatches to ibDataViewObject's
-	// IsEqualTo virtual, which ibValueTableRow overrides to compare
+	// IsEqualTo virtual, which ibComposerNode overrides to compare
 	// row values).  Restore focus + selection on the matching index.
 	// Tree-mode auto-expand above already handled deep selection; skip
 	// the top-level scan when it succeeded.
@@ -583,26 +577,31 @@ void ibDataViewCtrl::PagedBootstrap()
 		bool found = false;
 		// RAM-backed paged models preserve row order across refresh
 		// (m_nodeValues survives, save/reload writes by line number),
-		// and IsEqualTo on ibValueTableRow value-compares m_nodeValues
+		// and IsEqualTo on ibComposerNode value-compares m_nodeValues
 		// → for default-valued TabularSection rows that returns true
 		// across unrelated rows.  Restore focus by raw row index
 		// instead.  DB-backed paged keeps the value-eq scan because
 		// rows there have unique GUIDs.
-		const bool ramFetch = model->GetFeatures()
-			.Has(ibDataViewModel::Features::RamFetch);
-		if (ramFetch && m_pagedRestoreFocusRow >= 0
-		    && m_pagedRestoreFocusRow < static_cast<long>(n)) {
-			const unsigned int idx = static_cast<unsigned int>(m_pagedRestoreFocusRow);
-			const unsigned int row = crumbCount + idx;
-			ChangeCurrentRow(row);
-			if (m_pagedRestoreFocusWasSelected)
-				m_selection.SelectItem(row, true);
-			found = true;
-					}
+		const bool ramFetch = !model->HasKeyedRows();
+		if (ramFetch) {
+			// RAM: match by the live storage node's IDENTITY — its pointer IS the stable row id (RAM RunComposerPage
+			// returns the same storage nodes). Value-compare mismatches non-unique / default-valued rows (the jump);
+			// raw index breaks when the focus sits past the window. The batch was widened above to include the focus
+			// node, so it is present here — found wherever it now sits, robust to re-order.
+			for (unsigned int i = 0; i < n && !found; ++i) {
+				if (items[i].GetID() == savedFocus.GetID()) {
+					const unsigned int row = crumbCount + i;
+					ChangeCurrentRow(row);
+					if (m_pagedRestoreFocusWasSelected)
+						m_selection.SelectItem(row, true);
+					found = true;
+				}
+			}
+		}
 		else {
-						for (unsigned int i = 0; i < n && !found; ++i) {
-				const bool eq = (items[i] == savedFocus);
-								if (eq) {
+			// DB (keyed): value-compare scan — rows carry unique guids so IsEqualTo re-locates the same business row.
+			for (unsigned int i = 0; i < n && !found; ++i) {
+				if (items[i] == savedFocus) {
 					const unsigned int row = crumbCount + i;
 					ChangeCurrentRow(row);
 					if (m_pagedRestoreFocusWasSelected)
@@ -614,21 +613,18 @@ void ibDataViewCtrl::PagedBootstrap()
 		}
 				}
 
-	const int preUpdateSy = m_tableAreaWin ?
-		CalcUnscrolledPosition(wxPoint(0, 0)).y : 0;
 	InvalidateCount();
 	UpdateDisplay();
 	UpdatePagedScrollbar();
-	const int postUpdateSy = m_tableAreaWin ?
-		CalcUnscrolledPosition(wxPoint(0, 0)).y : 0;
-	const wxSize vsz = m_tableAreaWin ? m_tableAreaWin->GetVirtualSize() : wxSize(0,0);
 	
-	// Reflect the model's m_sortOrder onto column header arrows.
-	// ibValueModelTableBox::OnColumnClick consumes the column-click
-	// event without going through the fork's standard SetSortOrder
-	// on the column, so the arrow only gets updated via this Sync
-	// after the post-click refresh fires.
-	SyncColumnArrowsFromModel();
+	// Reflect the composer's active sort onto the column-header arrows after the refresh. A header CLICK sets
+	// the clicked column's arrow directly (OnColumnClick), but a SETTINGS-DIALOG Filter/Sort/Group commit reaches
+	// the columns only here (it just mutates the composer + NotifyReset). Drop every arrow, then let each column
+	// re-apply its own from the composer (matching by its bound field — no model-side sort-arrow bridge).
+	ResetAllSortColumns();
+	for (unsigned int ci = 0; ci < GetColumnCount(); ++ci)
+		if (ibDataViewColumn* c = GetColumn(ci))
+			c->SyncSortArrowFromModel();
 
 	// Backward fetch only in selection-cursor mode (post-Save new row,
 	// SetViewMode switch).  We want the explicit-prefer row in the
@@ -638,7 +634,64 @@ void ibDataViewCtrl::PagedBootstrap()
 	// scroll the viewport above the saved top and the user would see
 	// a different top row.  Cold open (no anchor, no selection)
 	// reaches here with restore=empty and skips both branches.
-	if (restoreFromSelection && m_pagedHasMoreBwd) {
+	if (restoreFromSelection) {
+		// Selection-cursor mode centres the row itself (below), which is a
+		// stronger intent than "where the user was looking" — the offset would
+		// fight it. Drop it before either branch runs.
+		m_pagedRestoreFocusOffset = -1;
+	}
+
+	// ⭐⭐ WHAT `ScrollTo` TAKES IS A ROW OF THE SCROLLING AREA, AND FROZEN ROWS ARE NOT IN IT.
+	//
+	// In Hierarchical view the breadcrumb rows are FROZEN — `m_countFrozenHierarchicalRows` is set
+	// to the chain's depth, and they are painted by their own window above the scrolling one. The
+	// four branches below all position by ABSOLUTE row (`crumbCount + …`), which was right while
+	// the crumbs scrolled with everything else and became wrong the day they were frozen: the
+	// scroll then lands `frozen` rows further down than asked.
+	//
+	// Measured, not guessed (2026-08-26, and the same lesson as the backfill jump of 08-15 — when
+	// every layer reads correctly, the numbers decide):
+	//     crumbs=1 frozen=1 backfilled=0 → ScrollTo(1) → firstVis went 1 → 2
+	//     crumbs=0 frozen=0 backfilled=0 → ScrollTo(0) → firstVis stayed 0
+	// i.e. one row of drift per level of depth, on every refresh, which is what "it jumps about"
+	// looks like inside a folder.
+	//
+	// Stated ONCE, here, rather than corrected in each branch: every one of them means "put THIS
+	// row at the top", and this is the translation from the row they name to the number the scroll
+	// speaks.
+	// ⭐ A SCROLL CAN ONLY LAND ONCE THE SIZE IS KNOWN. `UpdateDisplay` above only marks the control
+	// dirty — the recalculation happens later, on idle — so until then the scrolling area still has the
+	// dimensions of the tree that was just thrown away, and every ScrollTo below is CLAMPED against it.
+	// With a wiped buffer that clamp is zero, which is why a refresh that had positioned its read
+	// perfectly well still came back at the top, with the row the person was reading one line below the
+	// last visible one (Max, 2026-09-16: *"it is always one position lower, that is why I do not see
+	// it"*). The backward top-up already knew this and recalculates before its own scroll; the reset
+	// simply never did.
+	RecalculateDisplay();
+
+	const int frozenRows = wxMax(0, m_countFrozenHierarchicalRows);
+	const auto scrollToRow = [this, frozenRows](int absoluteRow) {
+		ScrollTo(wxMax(0, absoluteRow - frozenRows), -1);
+	};
+
+	// ALREADY CENTRED — the rows above the cursor came back with the page
+	// (m_backfill), so the row is sitting mid-viewport in this very frame. Pulling
+	// a backward portion on top of that would prepend rows a second time and slide
+	// the list again, which is the jump this fold was written to remove.
+	if (restoreFromSelection && req.m_backfilled > 0) {
+		// The cursor sits at crumbCount + backfilled: everything read above it came
+		// in front. Put HALF a viewport of that above the fold and the row lands in
+		// the middle, with context either side — which is the whole point of
+		// selection-cursor mode. Where the ordering ends at the cursor there is
+		// nothing below to scroll into, so the scroll clamps and the window fills
+		// from above instead: the same single frame, no growing afterwards.
+		const int crumbCount = static_cast<int>(m_topParentChain.GetCount());
+		const int viewport   = GetCountPerPage();
+		const int above      = static_cast<int>(req.m_backfilled);
+		const int top        = crumbCount + wxMax(0, above - (viewport > 1 ? viewport / 2 : 0));
+		scrollToRow(top);
+	}
+	else if (restoreFromSelection && m_pagedHasMoreBwd) {
 		// Reset scroll-Y to items[0]=focus position BEFORE backward
 		// fetch.  wxScroll's sy survived through the wipe (e.g.
 		// preSy=374 from before refresh), but the new buffer is
@@ -652,7 +705,7 @@ void ibDataViewCtrl::PagedBootstrap()
 		// (= focus row after prepend) and centres the viewport on
 		// focus, which is the "anchor-in-middle" UX intent.
 		const int crumbCount = static_cast<int>(m_topParentChain.GetCount());
-				ScrollTo(crumbCount, -1);
+				scrollToRow(crumbCount);
 				PagedFetchBackward(batch);
 	}
 	else if (!restoreFromSelection && restore.IsOk()) {
@@ -674,79 +727,458 @@ void ibDataViewCtrl::PagedBootstrap()
 		// Tree-auto-expand above (when savedFocus has crumbs) already
 		// called ChangeCurrentRow but did not scroll; ScrollTo here
 		// is what actually positions the viewport.
+		//
+		// ⭐ THE CURSOR SITS AT crumbCount + backfilled, NOT AT THE HEAD OF THE BUFFER.
+		//
+		// items[0] WAS the saved top back when the Reset read started there. It stopped
+		// being so when the read began pulling rows from ABOVE the cursor in the same
+		// answer (ibPagedFetch::m_backfill) — those land in front, so the saved row is
+		// now `backfilled` rows deep. Scrolling to the head therefore put the viewport
+		// exactly that many rows too high: with 19 rows above the anchor the list came
+		// back 19 rows up, which reads as "it jumped to the beginning".
+		//
+		// The selection branch above already spells this out — "the cursor sits at
+		// crumbCount + backfilled" — and computes from it. This is the same quantity
+		// the same read reports; it was simply not carried over here when the backfill
+		// was added, and the comment kept describing the world before it.
 		const int crumbCount = static_cast<int>(m_topParentChain.GetCount());
-				ScrollTo(crumbCount, -1);
+				scrollToRow(crumbCount + static_cast<int>(req.m_backfilled));
 		if (m_pagedHasMoreBwd) {
 						PagedFetchBackward(batch);
 		}
+		else {
+			// Nothing above the first fetched row, so there is nowhere to put the
+			// saved screen offset — the focus IS the top of the ordering. Dropped
+			// here rather than left standing, or the next ordinary backward fetch
+			// would consume a sort's answer and scroll for no reason.
+			m_pagedRestoreFocusOffset = -1;
+		}
 	}
 	else {
-			}
-	const int finalSy = m_tableAreaWin ?
-		CalcUnscrolledPosition(wxPoint(0, 0)).y : 0;
+		// NOTHING TO POSITION ON — no saved top, no selection to centre. The
+		// buffer was just rebuilt starting at the FIRST row of the ordering, so
+		// the viewport belongs at the top of it.
+		//
+		// Leaving the scroll alone is not "keep the user where they were":
+		// wxScroll's scroll-Y is a PIXEL and it survives DestroyTree, while the
+		// row that pixel used to name does not. A sort with nothing focused
+		// arrives here — the anchor is dropped on purpose (its cursor key means
+		// nothing in the new ordering) and there is no focus to fall back to — and
+		// the old pixel then points into the middle of a list the user has just
+		// re-ordered, or past its end. That is the jump. Cold open reaches here
+		// too and is already at zero, so this costs it nothing.
+		const int crumbCount = static_cast<int>(m_topParentChain.GetCount());
+		scrollToRow(crumbCount);
 	}
 
-void ibDataViewCtrl::DispatchPagedFetch(PagedFetchDir dir, int batch)
+	// THE BLIND STRETCH ENDS HERE. The tree stands, the focus is placed, the
+	// viewport is positioned — the frame is finished, so the rows area goes back on
+	// air. The freeze taken at the wipe drops to the ScopedPagedFreeze above, whose
+	// scope exit then releases ONE composite paint of the whole thing.
+	//
+	// Deliberately not held any longer than this. The backward top-up dispatched
+	// just above lands later and moves the viewport; hiding that under a freeze
+	// would also hide a focus landing on the wrong row, which is precisely how such
+	// defects stayed invisible while the freeze spanned the settle.
+	EndBootstrapFreeze();
+	}
+
+// THE READ, and nothing else. A free function rather than a method so it cannot
+// reach the control even by accident: everything it needs is in the parcel, and
+// every ibDataViewItem it produces is fresh — no node anybody else holds has its
+// (non-atomic) refcount touched here.
+static void ReadPagedFetchReset(ibDataViewModel* model, ibPagedFetch& req)
 {
-	const bool isForward = (dir == PagedFetchDir::Forward);
-	const char* dirS = isForward ? "Forward" : "Backward";
+	// Tree-mode pre-walk: the savedFocus ancestor chain, computed BEFORE the page
+	// so (a) the fetch can use chain[last] (the topmost ancestor folder) as its
+	// cursor and guarantee the chain head lands in the first batch even when there
+	// are more top-level folders than fit, and (b) the walker in apply reuses the
+	// array without a second BuildAncestorBreadcrumb roundtrip.
+	if (req.m_isTreeMode && req.m_savedFocus.IsOk())
+		model->BuildAncestorBreadcrumb(req.m_savedFocus, req.m_treeCrumbs);
 
-	ibDataViewModel* model = GetModel();
-	const ibDataViewItem& anchorRef = isForward ? m_pagedFwdAnchor : m_pagedBwdAnchor;
-	int& fetchingCounter = isForward ? m_pagedFetchingFwd : m_pagedFetchingBwd;
-	if (model == nullptr || m_root == nullptr || !anchorRef.IsOk()) {
-				return;
+	// Hierarchical-mode auto-drill on selection-restore: the target row (a selector
+	// form's pre-set value) sits in a subfolder, so a top-level fetch would return
+	// its siblings and the row would never be in the batch. Same primitive as Tree
+	// above; the difference is that the Hierarchical view consumes the chain as
+	// drill state (m_topParentChain, applied on the UI thread) instead of expanding
+	// in-tree — and that the page itself must be asked for UNDER the deepest crumb.
+	if (req.m_hierAutoDrill) {
+		model->BuildAncestorBreadcrumb(req.m_savedFocus, req.m_hierCrumbs);
+		if (!req.m_hierCrumbs.IsEmpty())
+			req.m_parent = req.m_hierCrumbs[0];
 	}
-	if (fetchingCounter > 0) {
-				return;
+
+	const ibDataViewItem treeChainHead = req.m_treeCrumbs.IsEmpty()
+		? ibDataViewItem()
+		: req.m_treeCrumbs[req.m_treeCrumbs.GetCount() - 1];
+
+	// Cursor selection:
+	//   - Tree mode + restoreFromSelection + chain available →
+	//     cursor=chain[last] (topmost ancestor folder).  Composite
+	//     cursor predicate <= (isFolder=1, ...) includes ALL folders
+	//     plus non-folders ordered before chain[last]; chain head is
+	//     guaranteed in the batch so tree-auto-expand finds it at
+	//     depth 0.  Backward-prefetch covers folders ordered before
+	//     chain[last] when needed.
+	//   - Tree mode + restoreFromSelection + no chain (selection at
+	//     dataset root) → cursor=empty so the fetch starts from the
+	//     top (folders first per `isFolder DESC`).
+	//   - Non-tree + restoreFromSelection (post-Save / List or Hier
+	//     SetViewMode) → cursor=selection so the new row lands in
+	//     the fetched batch and can be centred via PagedFetchBackward.
+	//   - Otherwise → cursor=anchor (saved top) so plain Refresh keeps
+	//     the viewport at the same row.  For a SORT the anchor was
+	//     dropped on purpose (its key means nothing in the new
+	//     ordering), so this falls back to focus-as-cursor: a row that
+	//     re-sorts far down (position 5 → 90) would otherwise drop out
+	//     of the batch and the IsEqualTo scan would lose the selection.
+	req.m_cursor = req.m_restoreFromSelection
+		? (req.m_isTreeMode
+			? (treeChainHead.IsOk() ? treeChainHead : req.m_restoreSelection)
+			: req.m_restoreSelection)
+		: (req.m_restoreAnchor.IsOk()
+			? req.m_restoreAnchor
+			: req.m_savedFocus);
+
+	req.m_n = model->GetFirstFetch(req.m_parent, req.m_cursor, req.m_batch, req.m_items);
+
+	// Empty-fetch fallback: a cursor-mode fetch (selection / anchor / focus) can
+	// return 0 rows when the cursor points at a row that no longer matches the
+	// active filter — typically after adding an element whose key fields fall
+	// outside it — which would otherwise leave the table blank. Retry from the top.
+	// The cursor is CLEARED with it: the page now starts at the first row of the
+	// ordering, so there is nothing before it to prefetch and nothing to scroll to.
+	if (req.m_n == 0 && req.m_cursor.IsOk()) {
+		req.m_items.Clear();
+		req.m_cursor = ibDataViewItem();
+		req.m_n = model->GetFirstFetch(req.m_parent, req.m_cursor, req.m_batch, req.m_items);
 	}
 
-	++fetchingCounter;
-	const uint64_t  gen      = m_pagedFetchGen;
-	const ibDataViewItem anchor = anchorRef;             // refcounted copy
-	const ibDataViewItem parentSnapshot = GetEffectiveFetchParent();
-	
-	struct FetchResult {
-		ibDataViewItemArray items;
-		unsigned int        n = 0;
-	};
-	auto result = std::make_shared<FetchResult>();
+	// THE ROWS ABOVE, in the same pass — see ibPagedFetch::m_backfill. The page
+	// starts AT the row the user was on, so on its own it would put that row at the
+	// very top of the viewport and a later backward portion would slide it down:
+	// two frames, and the second one reads as the list jumping. Read them here and
+	// glue them in FRONT, and the control gets one portion and paints once.
+	if (req.m_backfill > 0 && req.m_n > 0) {
+		ibDataViewItemArray before;
+		const unsigned int got = model->GetPrevFetch(req.m_parent, req.m_items[0],
+		                                             req.m_backfill, before);
+		if (got > 0) {
+			ibDataViewItemArray glued;
+			for (unsigned int i = 0; i < got; ++i)      glued.Add(before[i]);
+			for (unsigned int i = 0; i < req.m_n; ++i)  glued.Add(req.m_items[i]);
+			req.m_items      = glued;
+			req.m_n          = req.m_n + got;
+			req.m_backfilled = got;
+		}
+	}
 
-	// wxWeakRef captures both for the worker-side lambda and the
-	// CallAfter-marshalled UI-side lambda.  If the control is
-	// destroyed at any point between submit and final dispatch,
-	// both lambdas safely no-op.
-	wxWeakRef<ibDataViewCtrl> weakSelf(this);
-	model->SubmitFetchAsync([model, parentSnapshot, anchor, batch, weakSelf, gen, result, isForward]() {
-		// Worker thread: pure DB roundtrip, no UI access.
-		result->n = isForward
-			? model->GetNextFetch(parentSnapshot, anchor, batch, result->items)
-			: model->GetPrevFetch(parentSnapshot, anchor, batch, result->items);
-		const char* dirSworker = isForward ? "Forward" : "Backward";
-				// Marshal back to UI thread; gen check discards the result if
-		// the buffer has been wiped (sort / refresh) since submit.
-		auto* self = weakSelf.get();
-		if (self == nullptr) return;   // control gone before result
-		self->CallAfter([weakSelf, batch, gen, result, isForward]() {
-			auto* s = weakSelf.get();
-			if (s == nullptr) return;
-			if (isForward) --s->m_pagedFetchingFwd;
-			else           --s->m_pagedFetchingBwd;
-			const char* dirSdisp = isForward ? "Forward" : "Backward";
-			if (gen != s->m_pagedFetchGen) {
-								return;
-			}
-						if (isForward) s->OnPagedFetchForwardResult(result->items, result->n, batch);
-			else           s->OnPagedFetchBackwardResult(result->items, result->n, batch);
-		});
-	});
+	// Every tree level the auto-expand walk will need, fetched HERE. The walk used
+	// to ask per level while inserting nodes — on the UI thread, in the middle of
+	// the rebuild. The tree is wiped before apply runs, so no crumb is open and
+	// every level is genuinely needed.
+	if (req.m_isTreeMode && !req.m_treeCrumbs.IsEmpty()) {
+		req.m_crumbChildren.resize(req.m_treeCrumbs.GetCount());
+		for (size_t i = 0; i < req.m_treeCrumbs.GetCount(); ++i) {
+			model->GetFirstFetch(req.m_treeCrumbs[i], ibDataViewItem(),
+			                     req.m_batch, req.m_crumbChildren[i]);
+		}
+	}
 }
 
-void ibDataViewCtrl::OnPagedFetchForwardResult(ibDataViewItemArray& items,
+// THE ONE POINT OF DEPARTURE — one request with the direction in it (Reset = the
+// first page and every reload after a sort or a filter; Forward / Backward = what a
+// scroll asks for). Decide here, hand the work to the model's own door, take the
+// answer back here. The direction matters again only at the far end.
+void ibDataViewCtrl::DispatchPagedFetch(ibFetchDirection dir, int batch)
+{
+	ibDataViewModel* model = GetModel();
+	if (model == nullptr) {
+		// NO MODEL, NO FIRST FETCH — so disarm, or the flag stands for the life of
+		// the window naming a read that can never be dispatched. That is not
+		// hypothetical: the FORM EDITOR deliberately associates no model (a preview
+		// must not issue SQL against a metadata table still being designed), while
+		// the control's own refresh path arms the flag regardless. Left standing it
+		// reads as "waiting" — and the busy arc it raised had nothing that could
+		// ever take it off.
+		m_pagedNeedsBootstrap = false;
+		return;
+	}
+
+	const bool isReset   = (dir == ibFetchDirection::Reset);
+	const bool isForward = (dir == ibFetchDirection::Forward);
+
+	// Every item the read needs travels in the parcel, released on this thread:
+	// ibDataViewItem's refcount is NOT atomic. It also carries where the answer goes
+	// — the control plus an alive token (a wxWeakRef would write into the control as
+	// it dies, which races a copy held off-thread).
+	auto req = std::make_shared<ibPagedFetch>();
+	req->m_dir   = dir;
+	req->m_self  = this;
+	req->m_alive = m_aliveToken;
+	req->m_gen   = m_pagedFetchGen;
+
+	if (isReset) {
+		// Initial / refresh batch == the visible viewport PLUS one slack buffer, fetched in ONE go — so the buffer
+		// has room to scroll into (a viewport-exact batch leaves nothing below the fold: the wheel can't scroll, so
+		// the scroll-driven forward fetch never fires and rows "don't load until resize"). The extra beyond the
+		// buffer still comes in via scroll-driven PagedFetchForward.
+		const int viewport = GetCountPerPage();
+		req->m_batch = (batch > 0)
+			? batch
+			: (viewport > 0 ? viewport : 100) + static_cast<int>(kBufferSlack);
+
+		req->m_restoreFromSelection = m_pagedRestoreSelection.IsOk();
+		req->m_isTreeMode           = (m_viewMode == ibDataViewViewMode::ibDataViewTree);
+		req->m_restoreSelection     = m_pagedRestoreSelection;
+		req->m_restoreAnchor        = m_pagedRestoreAnchor;
+		// Selection-cursor mode (post-Add to empty folder, post-SetViewMode):
+		// Select(item) stamps m_pagedRestoreSelection but not m_pagedRestoreFocus, so
+		// the focus-restore would skip (savedFocus empty) even though the new row
+		// arrived in the fetch. Fall back to the selection so it becomes current.
+		req->m_savedFocus = m_pagedRestoreFocus.IsOk()
+			? m_pagedRestoreFocus
+			: m_pagedRestoreSelection;
+		req->m_hierAutoDrill =
+			(m_viewMode == ibDataViewViewMode::ibDataViewHierarchical)
+			&& req->m_restoreFromSelection
+			&& m_topParentChain.IsEmpty()
+			&& req->m_savedFocus.IsOk();
+
+		// The rows above the cursor come back WITH the page — see m_backfill. The
+		// saved screen offset is spent here, in one read, instead of by a second
+		// portion that would arrive later and slide the list under the user's eye.
+		req->m_backfill = (m_pagedRestoreFocusOffset > 0) ? m_pagedRestoreFocusOffset : 0;
+		m_pagedRestoreFocusOffset = -1;
+
+		// SELECTION-CURSOR MODE WANTS THE ROW IN THE MIDDLE — a record was just
+		// written, and the point of centring it is the context above and below.
+		// That context is rows BEFORE the cursor, so it is the same backfill.
+		//
+		// A WHOLE VIEWPORT of it, not half. Half is what centring needs when the
+		// ordering continues below the row; when it does not — a new record sorted
+		// LAST, which is the ordinary case after a save — the page below the cursor
+		// is one row, and half a screen of backfill leaves the other half blank.
+		// Reading a viewport's worth costs one query either way and fills the
+		// window in both cases; the scroll below decides where the row sits.
+		//
+		// Without this the centring took a second portion, and what the user saw on
+		// every save was a short list appearing and then growing under the cursor a
+		// moment later — the rows sliding, the stripes re-shading and the scrollbar
+		// jumping as the buffer changed height.
+		if (req->m_backfill == 0 && req->m_restoreFromSelection && viewport > 1)
+			req->m_backfill = viewport;
+
+		// ⚠⚠ ANY PAGE THAT STARTS AT A CURSOR MUST READ WHAT IS ABOVE IT. Not "an anchored refresh",
+		// not "a selection restore" — ANY of them, because nothing else ever will.
+		//
+		// The page begins at the cursor, so the rows before it are simply not in the buffer, and the
+		// only retry below fires when the fetch returns NOTHING — this one returns a full screen.
+		// The list then quietly lacks its beginning, refreshing does not help (keeping the position
+		// is the whole point of the cursor), and only something that rebuilds the model — a
+		// restructuring, or restarting — brings the rows back.
+		//
+		// ⚠ AND THE CURSOR IS NOT ALWAYS THE ANCHOR. It is selection, else anchor, else SAVED FOCUS
+		// (see where m_cursor is computed). Guarding on the anchor alone left the commonest case
+		// open — switching the view mode, where there is no anchor and the focus becomes the cursor:
+		// a list of ten showed seven, missing exactly the three above the focused row. The rule has
+		// to name the CONDITION (a page starting somewhere other than the top) rather than one of
+		// the reasons for it.
+		//
+		// One backward page, once, per such fetch.
+		if (req->m_backfill == 0 && viewport > 1
+		    && (req->m_restoreAnchor.IsOk() || req->m_savedFocus.IsOk() || req->m_restoreSelection.IsOk()))
+			req->m_backfill = viewport;
+
+		// ARMED, SO DISARM NOW. The flag goes down at dispatch, not when the answer
+		// lands: idle fires every pass and would otherwise start a second reset over
+		// the first. What discards an OVERTAKEN answer is the generation stamp.
+		m_pagedNeedsBootstrap = false;
+
+		// BOTH counters: a reset replaces the whole buffer, so neither end of it may
+		// be extended while the replacement is out — a backward portion dispatched
+		// from a scroll meanwhile would come back AFTER the wipe and prepend rows
+		// from an ordering that no longer exists.
+		++m_pagedFetchingFwd;
+		++m_pagedFetchingBwd;
+	}
+	else {
+		const ibDataViewItem& anchorRef = isForward ? m_pagedFwdAnchor : m_pagedBwdAnchor;
+		int& fetchingCounter = isForward ? m_pagedFetchingFwd : m_pagedFetchingBwd;
+		if (m_root == nullptr || !anchorRef.IsOk())
+			return;
+		if (fetchingCounter > 0) {
+			// One is already out, and this one would be anchored on the same row — the
+			// same portion twice. Remember the question instead; the delivery re-asks it
+			// once the anchor has moved. See m_pagedFetchAgainFwd.
+			(isForward ? m_pagedFetchAgainFwd : m_pagedFetchAgainBwd) = true;
+			return;
+		}
+		++fetchingCounter;
+
+		req->m_batch  = batch;
+		req->m_anchor = anchorRef;
+	}
+
+	// Drill chain front in Hierarchical mode; empty (= top-level) in List, Tree and
+	// non-hierarchical models. A List view passes an empty parent because the
+	// composer only scopes by parent when it groups, which a List view never does.
+	req->m_parent = GetEffectiveFetchParent();
+
+	auto readWork = [model, req]() mutable {
+		// Off this control's thread: the model calls, and nothing else.
+		//
+		// A PORTION THAT FAILED IS STILL A PORTION THAT ENDED. The read may throw —
+		// a dropped connection, a query the source cannot answer — and the form must
+		// not go down with it: it keeps the rows it already has, and the reason goes
+		// to the journal where it can be read afterwards. But the answer has to come
+		// back either way, because the counter that says "a fetch is out" is lowered
+		// on delivery; swallowing the throw here would leave that counter raised and
+		// the list would never ask for anything again.
+		try {
+			switch (req->m_dir) {
+			case ibFetchDirection::Forward:
+				req->m_n = model->GetNextFetch(req->m_parent, req->m_anchor, req->m_batch, req->m_items);
+				break;
+			case ibFetchDirection::Backward:
+				req->m_n = model->GetPrevFetch(req->m_parent, req->m_anchor, req->m_batch, req->m_items);
+				break;
+			default:
+				ReadPagedFetchReset(model, *req);   // Reset — the whole first page
+				break;
+			}
+		}
+		catch (const ibBackendException& err) {
+			req->m_ok = false;
+			req->m_error = err.GetErrorDescription();
+			if (ibLogger* const log = ibApplicationInstance::GetLogger())
+				log->Error(wxT("list"), wxT("fetch"), req->m_error);
+		}
+		catch (...) {
+			req->m_ok = false;
+			req->m_error = _("unknown exception");
+			if (ibLogger* const log = ibApplicationInstance::GetLogger())
+				log->Error(wxT("list"), wxT("fetch"), req->m_error);
+		}
+
+		// Marshal back to the UI thread. Through wxTheApp rather than the
+		// control: posting is safe from any thread, but READING the control to
+		// ask it to post is not — the object may already be gone. The app is a
+		// process singleton and outlives every form.
+		if (wxTheApp == nullptr)
+			return;
+		wxTheApp->CallAfter([req]() {
+			if (!*req->m_alive) return;   // form closed while the read was out
+			ibDataViewCtrl* const s = req->m_self;
+			const bool isReset   = (req->m_dir == ibFetchDirection::Reset);
+			const bool isForward = (req->m_dir == ibFetchDirection::Forward);
+
+			// THE VEIL COMES OFF HERE — the moment the portion is in and the rows
+			// are on screen, not on the next idle pass or timer tick, which is a
+			// frame or two later and reads as the wheel lingering over data that is
+			// already there. On the way out of EVERY exit below, including the
+			// dropped and failed ones, because "the read ended" is what it reports.
+			// If the delivery re-asks (a scroll burst), the new portion raises the
+			// counter again before this runs and the wheel simply stays up.
+			struct ibBusyOff {
+				ibDataViewCtrl* m_ctrl;
+				~ibBusyOff() { m_ctrl->UpdateBusyIndicator(); }
+			} busyOff{ s };
+			// NEVER BELOW ZERO. AssociateModel zeroes these outright, so a portion
+			// still in flight at that moment would drive them negative on arrival —
+			// and a negative counter reads as "nothing in flight": no busy badge ever
+			// again, and the de-duplication gate stops holding.
+			const auto lower = [](int& c) { if (c > 0) --c; };
+			if (isReset)        { lower(s->m_pagedFetchingFwd); lower(s->m_pagedFetchingBwd); }
+			else if (isForward) { lower(s->m_pagedFetchingFwd); }
+			else                { lower(s->m_pagedFetchingBwd); }
+
+			// A BACKWARD PORTION THAT NEVER LANDS is also the one that would have
+			// spent the sort's saved screen offset. Drop it on both exits below, or
+			// it waits — and the next ordinary scroll-up consumes a sort's answer
+			// and jumps the viewport for no reason.
+			//
+			// The generation check discards the result if the buffer has been wiped
+			// (sort / filter / refresh) since the dispatch — the answer is to a
+			// question nobody is asking any more.
+			//
+			// A RESET ANSWERS FOR BOTH DIRECTIONS, so it clears both re-asks: a
+			// scroll that latched one while the whole buffer was being replaced is
+			// asking about an ordering that no longer exists.
+			if (isReset)
+				s->m_pagedFetchAgainFwd = s->m_pagedFetchAgainBwd = false;
+			bool& again = isForward ? s->m_pagedFetchAgainFwd : s->m_pagedFetchAgainBwd;
+			if (req->m_gen != s->m_pagedFetchGen) {
+				if (!isForward) s->m_pagedRestoreFocusOffset = -1;
+				again = false;   // asked under an ordering that no longer exists
+				return;
+			}
+			// A failed read is NOT an empty one: reporting zero rows here would
+			// flip the exhaustion flag and the list would decide there is nothing
+			// further to load. Leaving the flags alone means the next scroll asks
+			// again, which is what a transient failure deserves. A failed RESET
+			// leaves the list exactly as it was — nothing was wiped, which is the
+			// whole point of wiping only on arrival.
+			if (!req->m_ok) {
+				if (!isForward) s->m_pagedRestoreFocusOffset = -1;
+				again = false;
+
+				// ⭐ A FIRST PAGE THAT FAILED IS NOT AN EMPTY LIST, AND MUST NOT LOOK LIKE ONE.
+				// Nothing was read, so the window shows exactly the blank a source with no rows
+				// shows — which is how "the query never ran" reaches a person as "there is no
+				// data here", with the reason sitting in a journal they do not have open.
+				//
+				// Only the RESET speaks. A scroll that fails keeps the rows already on screen and
+				// will be asked again on the next wheel tick, so a dialog per tick would bury the
+				// window it belongs to; that case stays with the journal line it already writes.
+				// The description is DATA, never a format string (docs/private/exceptions.md).
+				if (isReset && !req->m_error.empty())
+					ibJournalError(wxT("ui"), wxT("%s"), req->m_error);
+				return;
+			}
+
+			// THE THREE ANSWERS — the only place the direction still matters: fill
+			// from scratch, append at the tail, prepend at the head.
+			if (isReset)        { s->OnPagedFetchResetComplete(*req); return; }
+			else if (isForward) s->OnPagedFetchForwardComplete(req->m_items, req->m_n, req->m_batch);
+			else                s->OnPagedFetchBackwardComplete(req->m_items, req->m_n, req->m_batch);
+
+			// ASKED AGAIN WHILE THIS ONE WAS OUT — now the anchor has moved, so the
+			// question means a different portion. Re-ask it: a burst of three scrolls
+			// lands three portions in turn. The exhaustion flag the result just set is
+			// what ends the chain, so it cannot run away.
+			if (again) {
+				again = false;
+				const bool more = isForward ? s->m_pagedHasMoreFwd : s->m_pagedHasMoreBwd;
+				if (more)
+					s->DispatchPagedFetch(req->m_dir, req->m_batch);
+			}
+		});
+
+		// AND LET GO HERE, on this side of the hop. The delivery lambda now holds
+		// the parcel, so this drops a reference the UI thread does not need us to
+		// drop later — and "later" is the danger: the parcel pins refcounted row
+		// nodes with a NON-atomic counter, so if this copy outlived the delivery
+		// the last release would land on a worker while the tree owns the nodes.
+		req.reset();
+	};
+
+	// ONE CODE POINT, EVERY KIND OF TABLE — the same door the bootstrap uses. The
+	// MODEL answers where its read runs: a runtime model rents a background session
+	// (its own connection, the caller's policy borrowed, used up and gone), a plain
+	// in-memory one runs it here. The control never asks which kind it is holding.
+	model->SubmitFetchAsync(readWork);
+}
+
+// (There is no per-fetch handle to hold or cancel. A rented run ends by
+//  construction, and what the control still owns is the alive token — which is
+//  what makes a delivery already posted to the UI queue a no-op when it lands on a
+//  control that is gone.)
+
+void ibDataViewCtrl::OnPagedFetchForwardComplete(ibDataViewItemArray& items,
 	unsigned int n, int batch)
 {
-	const int entrySy = m_tableAreaWin ?
-		CalcUnscrolledPosition(wxPoint(0, 0)).y : 0;
 		if (n == 0) {
 				m_pagedHasMoreFwd = false;
 				UpdatePagedScrollbar();
@@ -771,7 +1203,6 @@ void ibDataViewCtrl::OnPagedFetchForwardResult(ibDataViewItemArray& items,
 	// crumb — NOT under m_root (which has only the topmost crumb as a
 	// child).  Inserting under m_root would render new rows as
 	// siblings of the breadcrumb and break the indent shape.
-	ibDataViewModel* model = GetModel();
 	ibDataViewTreeNode* const insertParent = GetPagedInsertParent();
 	if (insertParent == nullptr) return;  // freeze auto-Thaws via dtor
 	const long crumbCount = static_cast<long>(m_topParentChain.GetCount());
@@ -799,7 +1230,6 @@ void ibDataViewCtrl::OnPagedFetchForwardResult(ibDataViewItemArray& items,
 	// base offset for the data area.
 	const long target = static_cast<long>(GetCountPerPage()) + 2 * kBufferSlack;
 	const long over   = static_cast<long>(insertParent->GetChildNodes().size()) - target;
-	long trimmed = 0;
 	long restoreTopRow = -1;     // -1 = keep current scroll
 	if (over > 0) {
 		const long topRow       = static_cast<long>(GetRowByItem(GetTopItem()));
@@ -821,6 +1251,9 @@ void ibDataViewCtrl::OnPagedFetchForwardResult(ibDataViewItemArray& items,
 				actualTrim = pinMinData;
 		}
 		if (actualTrim > 0) {
+			// Dropping rows off the FRONT shifts every remaining index — move the
+			// stripe phase with them so nothing changes shade (see m_stripePhase).
+			if (actualTrim & 1) m_stripePhase ^= 1;
 			auto& kids = insertParent->GetChildNodes();
 			for (long i = 0; i < actualTrim; ++i) {
 				ibDataViewTreeNode* node = kids[0];
@@ -848,7 +1281,6 @@ void ibDataViewCtrl::OnPagedFetchForwardResult(ibDataViewItemArray& items,
 			m_pagedHasMoreBwd = true;
 			if (!kids.empty())
 				m_pagedBwdAnchor = kids.front()->GetItem();
-			trimmed = actualTrim;
 			// Same items the user was viewing are now at lower indices
 			// (every remaining row shifted by -actualTrim).  Re-scroll
 			// to keep the same item at the visible top — without this
@@ -870,8 +1302,12 @@ void ibDataViewCtrl::OnPagedFetchForwardResult(ibDataViewItemArray& items,
 		const long crumbCountFR = static_cast<long>(m_topParentChain.GetCount());
 		const long dataInsertOffset = static_cast<long>(insertParent->GetChildNodes().size())
 		                              - static_cast<long>(n);
+		// RAM matches the off-screen focus by its live node IDENTITY (pointer) — value-compare drops a selection
+		// that scrolled out of the fetched batch when rows are non-unique. Keyed DB keeps the value-eq scan.
+		const bool keyedFR = GetModel() && GetModel()->HasKeyedRows();
 		for (unsigned int i = 0; i < n; ++i) {
-			if (items[i] == m_pagedRestoreFocus) {
+			if (keyedFR ? (items[i] == m_pagedRestoreFocus)
+			            : (items[i].GetID() == m_pagedRestoreFocus.GetID())) {
 				const unsigned row =
 					static_cast<unsigned>(crumbCountFR + dataInsertOffset)
 					+ i;
@@ -886,25 +1322,20 @@ void ibDataViewCtrl::OnPagedFetchForwardResult(ibDataViewItemArray& items,
 
 	InvalidateCount();
 	RecalculateDisplay();
-	const int afterRecalcSy = m_tableAreaWin ?
-		CalcUnscrolledPosition(wxPoint(0, 0)).y : 0;
-	const wxSize afterRecalcVsz = m_tableAreaWin ?
-		m_tableAreaWin->GetVirtualSize() : wxSize(0,0);
 		if (restoreTopRow >= 0) {
 				ScrollTo(static_cast<int>(restoreTopRow), -1);
 	}
 	UpdatePagedScrollbar();
-	const int exitSy = m_tableAreaWin ?
-		CalcUnscrolledPosition(wxPoint(0, 0)).y : 0;
 	}  // ScopedPagedFreeze auto-Thaws here
 
-void ibDataViewCtrl::OnPagedFetchBackwardResult(ibDataViewItemArray& items,
+void ibDataViewCtrl::OnPagedFetchBackwardComplete(ibDataViewItemArray& items,
 	unsigned int n, int batch)
 {
-	const int entrySy = m_tableAreaWin ?
-		CalcUnscrolledPosition(wxPoint(0, 0)).y : 0;
 		if (n == 0) {
 		m_pagedHasMoreBwd = false;
+		// Nothing came back, so nothing can be scrolled into: the saved screen
+		// offset has no home and must not wait for an unrelated fetch to use it.
+		m_pagedRestoreFocusOffset = -1;
 				UpdatePagedScrollbar();
 		return;
 	}
@@ -925,7 +1356,6 @@ void ibDataViewCtrl::OnPagedFetchBackwardResult(ibDataViewItemArray& items,
 
 	// Prepend n new rows at the front of the data window — under the
 	// deepest crumb in drill mode, m_root in flat mode.
-	ibDataViewModel* model = GetModel();
 	ibDataViewTreeNode* const insertParent = GetPagedInsertParent();
 	if (insertParent == nullptr) return;  // freeze auto-Thaws via dtor
 	const long crumbCount = static_cast<long>(m_topParentChain.GetCount());
@@ -933,6 +1363,9 @@ void ibDataViewCtrl::OnPagedFetchBackwardResult(ibDataViewItemArray& items,
 		insertParent->InsertChild(this, MakeChildNode(insertParent, items[i]), i);
 	}
 	insertParent->ChangeSubTreeCount(static_cast<int>(n));   // propagates up
+	// Every row below just moved down by n — keep their stripes by moving the phase
+	// with them (see m_stripePhase).
+	if (n & 1) m_stripePhase ^= 1;
 	// Selection/currentRow are flat-tree indices.  Inserts happened at
 	// flat range [crumbCount, crumbCount + n) — rows below shift by +n.
 	if (!m_selection.IsEmpty()) {
@@ -940,7 +1373,6 @@ void ibDataViewCtrl::OnPagedFetchBackwardResult(ibDataViewItemArray& items,
 			}
 	if (m_currentRow != (unsigned)-1
 	    && static_cast<long>(m_currentRow) >= crumbCount) {
-		const unsigned oldCurr = m_currentRow;
 		m_currentRow += n;
 			}
 
@@ -953,8 +1385,12 @@ void ibDataViewCtrl::OnPagedFetchBackwardResult(ibDataViewItemArray& items,
 	// Skipped if the user already has a selection (don't override).
 	if (m_pagedRestoreFocus.IsOk() && m_currentRow == (unsigned)-1
 	    && m_selection.IsEmpty()) {
+		// RAM matches the off-screen focus by live node IDENTITY (value-compare drops a non-unique row); keyed DB
+		// keeps the value-eq scan on its unique guids.
+		const bool keyedBR = GetModel() && GetModel()->HasKeyedRows();
 		for (unsigned int i = 0; i < n; ++i) {
-			if (items[i] == m_pagedRestoreFocus) {
+			if (keyedBR ? (items[i] == m_pagedRestoreFocus)
+			            : (items[i].GetID() == m_pagedRestoreFocus.GetID())) {
 				const unsigned row = static_cast<unsigned>(crumbCount) + i;
 				ChangeCurrentRow(row);
 				if (m_pagedRestoreFocusWasSelected)
@@ -969,7 +1405,22 @@ void ibDataViewCtrl::OnPagedFetchBackwardResult(ibDataViewItemArray& items,
 	// (every existing row shifted by +n after prepend).  We re-scroll
 	// at the very end of the function — after RecalculateDisplay has
 	// updated the virtual size, otherwise ScrollTo can clamp.
-	const long restoreTopRow = topRowBeforeAdj + static_cast<long>(n);
+	long restoreTopRow = topRowBeforeAdj + static_cast<long>(n);
+
+	// THE SORT'S ONE ANSWER, and this is the first moment it can be given. The
+	// bootstrap after a sort fetches FROM the focused row, so the focus starts at
+	// the top of the buffer with nothing above it; only now, with a batch
+	// prepended, is there room to put it back where it sat on screen. Drive it off
+	// m_currentRow (already shifted by the prepend above) rather than off the saved
+	// index — if the focus-scan missed, m_currentRow is -1 and the offset is simply
+	// dropped instead of scrolling to a row nobody found.
+	if (m_pagedRestoreFocusOffset >= 0) {
+		if (m_currentRow != (unsigned)-1) {
+			restoreTopRow = std::max<long>(crumbCount,
+				static_cast<long>(m_currentRow) - m_pagedRestoreFocusOffset);
+		}
+		m_pagedRestoreFocusOffset = -1;   // one-shot
+	}
 
 	// Trim tail to keep buffer at viewport + 2*kBufferSlack — mirror
 	// of PagedFetchForward's front guard: never trim into the visible
@@ -986,7 +1437,6 @@ void ibDataViewCtrl::OnPagedFetchBackwardResult(ibDataViewItemArray& items,
 	// through crumbCount when comparing to the data-area lastIdx.
 	const long target = static_cast<long>(GetCountPerPage()) + 2 * kBufferSlack;
 	const long over   = static_cast<long>(insertParent->GetChildNodes().size()) - target;
-	long trimmed = 0;
 	if (over > 0) {
 		const long topRowAdj    = restoreTopRow;
 		const long bottomRow    = topRowAdj + GetCountPerPage();
@@ -1030,19 +1480,14 @@ void ibDataViewCtrl::OnPagedFetchBackwardResult(ibDataViewItemArray& items,
 			m_pagedHasMoreFwd = true;
 			if (!kids.empty())
 				m_pagedFwdAnchor = kids.back()->GetItem();
-			trimmed = actualTrim;
 		}
 	}
 
 	
 	InvalidateCount();
 	RecalculateDisplay();
-	const int afterRecalcSy = m_tableAreaWin ?
-		CalcUnscrolledPosition(wxPoint(0, 0)).y : 0;
 		ScrollTo(static_cast<int>(restoreTopRow), -1);
 	UpdatePagedScrollbar();
-	const int exitSy = m_tableAreaWin ?
-		CalcUnscrolledPosition(wxPoint(0, 0)).y : 0;
 	}  // ScopedPagedFreeze auto-Thaws here
 
 #endif // wxUSE_DATAVIEWCTRL

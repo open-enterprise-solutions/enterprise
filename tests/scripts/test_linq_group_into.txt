@@ -3,7 +3,7 @@
 // Structure{Key, Values}. After `into g`:
 //   - `where g.Values.Count() > 1` filters groups by size
 //   - `orderby g.Values.Count() descending` sorts groups
-//   - `select Structure(...)` projects each group
+//   - `select { Country = …, Names = … }` names the answer's columns
 //
 // Expected (after where+orderby+select):
 //   USA: 3 names
@@ -27,7 +27,7 @@ var q = from p in people
         group p.Name by p.Country into g
         where g.Values.Count() > 1
         orderby g.Values.Count() descending
-        select New Structure("Country, Names", g.Key, g.Values);
+        select { Country = g.Key, Names = g.Values };
 
 foreach (row in q) {
     Message(row.Country + ": " + row.Names.Count() + " name(s)");

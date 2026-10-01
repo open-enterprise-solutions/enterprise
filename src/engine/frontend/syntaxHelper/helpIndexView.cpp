@@ -1,0 +1,65 @@
+﻿/////////////////////////////////////////////////////////////////////////////
+// ibHelpIndexView — "Index" tab.
+/////////////////////////////////////////////////////////////////////////////
+
+#include "frontend/syntaxHelper/helpIndexView.h"
+
+#include "frontend/syntaxHelper/helpPaneView.h"
+
+#include "backend/syntaxHelper/helpCorpus.h"
+#include "backend/syntaxHelper/helpEntry.h"
+#include "backend/compiler/compileCode.h"
+
+#include <wx/sizer.h>
+
+ibHelpIndexView::ibHelpIndexView(wxWindow* parent, ibHelpPaneView* pane)
+    : wxPanel(parent, wxID_ANY), m_pane(pane) {
+	m_filter = new wxTextCtrl(this, wxID_ANY);
+	m_list   = new wxListBox(this, wxID_ANY);
+
+	auto* sizer = new wxBoxSizer(wxVERTICAL);
+	sizer->Add(m_filter, 0, wxEXPAND | wxALL, 4);
+	sizer->Add(m_list,   1, wxEXPAND | wxALL, 4);
+	SetSizer(sizer);
+
+	Bind(wxEVT_TEXT,    &ibHelpIndexView::OnFilterChanged, this);
+	Bind(wxEVT_LISTBOX, &ibHelpIndexView::OnSelection,     this);
+
+	m_drag.Bind(m_list, &m_ids, &m_corpus);
+}
+
+void ibHelpIndexView::Rebuild(const std::shared_ptr<const ibHelpCorpus>& corpus) {
+	m_corpus = corpus;
+	RefreshList(m_filter ? m_filter->GetValue() : wxString());
+}
+
+void ibHelpIndexView::RefreshList(const wxString& prefix) {
+	m_list->Clear();
+	m_ids.clear();
+	if (!m_corpus) return;
+
+	std::vector<const ibHelpEntry*> matches;
+	if (prefix.empty()) {
+		matches = m_corpus->AllEntries();
+	} else {
+		matches = m_corpus->SearchPrefix(prefix);
+	}
+
+	const short mode = ibCompileCode::GetCodeStyle();
+	for (const ibHelpEntry* e : matches) {
+		if (!e->AppliesToMode(mode)) continue;
+		m_list->Append(e->BilingualLabel());
+		m_ids.push_back(e->id);
+	}
+}
+
+void ibHelpIndexView::OnFilterChanged(wxCommandEvent& event) {
+	RefreshList(event.GetString());
+}
+
+void ibHelpIndexView::OnSelection(wxCommandEvent& event) {
+	const int idx = event.GetSelection();
+	if (idx < 0 || idx >= static_cast<int>(m_ids.size())) return;
+	if (m_pane) m_pane->OnEntryActivated(m_ids[idx]);
+}
+

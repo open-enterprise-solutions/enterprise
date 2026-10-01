@@ -1,0 +1,216 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "uk",
+  "entries": [
+    {
+      "id": "guide.syntaxHelper",
+      "name_local": "About the Syntax Helper",
+      "name_en": "About the Syntax Helper",
+      "kind": "keyword",
+      "category_keys": [
+        "guide"
+      ],
+      "signature": "",
+      "description": "Синтаксис-помічник розкриває кожне ключове слово мови, вбудовану функцію, примітивний тип та метаобʼєктний акcесор, доступні всередині конфігурації OES. Це документація лише для читання, що живе поруч із редактором — сама по собі вона не змінює конфігурацію.\n\nТри вкладки покривають три способи навігації. Зміст групує статті за категоріями. Покажчик перелічує усі імена алфавітно з префіксним пошуком. Пошук виконує токенний запит по іменах і сигнатурах.\n\nКнопки на панелі інструментів: Назад / Вперед для відстеження історії навігації, Оновити — перечитати довідкові файли без перезапуску, Синхронізація — знайти ідентифікатор під кареткою редактора, кнопки Більше / Менше — масштаб шрифту описів. Натисніть RawCtrl+F1 (Ctrl+F1 на Windows / Linux) у редакторі, щоб відкрити помічник на ідентифікаторі під курсором; RawCtrl+Alt+F1 перемикає панель.\n\nПеретягування: оберіть статтю в Покажчику або Пошуку (або в дереві Змісту) та перетягніть у редактор — відповідний шаблон синтаксису вставиться в позицію кидка. Шаблон враховує активний режим компіляції (фігурні дужки CES або термінатори End* VES).",
+      "syntax_block": "",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": true
+    },
+    {
+      "id": "guide.linq",
+      "name_local": "LINQ — запити до колекцій",
+      "name_en": "LINQ — collection queries",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "linq"
+      ],
+      "signature": "from <item> in <source> [where ...] [orderby K1 [ascending|descending][, K2 [ascending|descending]...]] [group ... by ... [into ...]] select ...",
+      "description": "LINQ — вбудовані в мову запити до колекцій у памʼяті. Два паралельні синтаксиси компілюються в одні й ті ж примітиви.\n\n**Блочний синтаксис** (eager): `from <var> in <source>` відкриває запит; далі клаузи `where / var / orderby K1 [asc|desc][, K2 [asc|desc]...] / group X by K [into g] / join b in Y on a.K equals b.K / skip N / take N / distinct`; закривається `select <expr>` або `select { F = expr, ... }`. Одразу матеріалізується в Array.\n\n**Ланцюговий синтаксис** (lazy): `arr.Where(λ).Select(λ).Distinct().Take(10).ToArray()`. Доступно 31 операція — конвеєрні (Where / Select / Distinct / OrderBy / OrderByDescending / GroupBy / Join / Skip / Take / SkipWhile / TakeWhile / Reverse / Concat / Union / Intersect / Except / WhereIndexed / SelectIndexed), термінальні (Count / ToArray / First / Last / Single / Any / ElementAt / Contains / SequenceEqual / Aggregate плюс *OrDefault варіанти), агрегації (Sum / Min / Max / Average — опційно з лямбда-селектором).\n\nЛямбди захоплюють локальні змінні зовнішнього scope: `var k = 5; arr.Where(Function(x) { return x > k; })`.\n\nLINQ-ключові слова компілюються однаково в режимах CES і VES.",
+      "syntax_block": "var q = from o in orders\n        where o.Total > 100\n        var doubled = o.Total * 2\n        orderby o.Warehouse, o.Date descending\n        select { N = o.N, V = doubled };",
+      "parameters": "",
+      "return_descr": "Масив вибраних рядків (блочний синтаксис) або лінивий ітератор (ланцюговий синтаксис).",
+      "example": "// ланцюговий синтаксис — лінивий конвеєр\nvar bigOnes = arr.Where(Function(x) { return x > 5; })\n                 .OrderByDescending(Function(x) { return x; })\n                 .Take(10)\n                 .ToArray();\n\n// агрегації з лямбда-селектором\nvar total = arr.Sum();\nvar avgK  = arr.Average(Function(x) { return x.K; });\n\n// group-into continuation\nvar pairs = from p in people\n            group p.Name by p.Country into g\n            where g.Values.Count() > 1\n            select { Country = g.Key, Names = g.Values };",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.From",
+        "kw.Where",
+        "kw.Select",
+        "kw.OrderBy",
+        "kw.Join",
+        "kw.Group",
+        "cls.Table"
+      ],
+      "reviewed": true
+    },
+    {
+      "id": "guide.lambda",
+      "name_local": "Lambdas — functions as values (callback, handler)",
+      "name_en": "Lambdas — functions as values (callback, handler)",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "var <name> = Function([<Param1>, ...]) { <body> Return <value>; };",
+      "description": "A FUNCTION CAN BE A VALUE. `Function(x) { return x * 2; }` written where a value is expected produces a callable that can be stored, passed, returned and called later. Same keyword as a declaration; what makes it a value is the position it stands in.\n\nWHAT THEY ARE FOR — three jobs, and finding yourself in one of them is how to know a lambda is wanted:\n\n1. A CALLBACK — work handed to somebody else to run: `arr.Where(Function(x) { return x > k; })`. The collection decides WHEN to call it and with what; you only say what to do with one element.\n\n2. AN EVENT HANDLER — behaviour attached to something that will happen later, without declaring a named procedure for it.\n\n3. A RULE PASSED AS AN ARGUMENT — a comparison, a filter, a projection given to a routine that would otherwise be fixed: `Function Apply(f, v) { return f(v); }`.\n\nTHEY REMEMBER WHERE THEY WERE WRITTEN (closure). A lambda reads the locals around it — of the procedure and of the module — and reads them AT CALL TIME, not when it was written:\n\n    var n = 1;\n    var f = Function(x) { return x + n; };\n    n = 100;\n    f(0)   // 100\n\nA parameter of the same name shadows the captured one, and the outer value is left untouched.\n\nCALLING ONE THAT LIVES IN A CONTAINER GOES THROUGH A VARIABLE: `s.f(1)` and `a[0](1)` do not compile, while `var g = s.f; g(1)` does.\n\n⚠ DO NOT REACH FOR A LAMBDA WHERE A CLAUSE SAYS IT SHORTER. Filtering, projecting, sorting and grouping a collection are written with KEYWORDS, and every lambda those would need is text you do not have to write:\n\n    from x in arr where x > limit select x                      // short\n    arr.Where(Function(x) { return x > limit; }).ToArray()      // the same thing, twice as long\n\nKeep lambdas for the three jobs above — a callback, a handler, a rule handed to somebody else. See guide.linq for the clause order.",
+      "syntax_block": "var <name> = Function([<Param1>, ...]) { <body> Return <value>; };",
+      "parameters": "",
+      "return_descr": "",
+      "example": "// a callback given to a pipeline\nvar limit = 3;\nvar big = arr.Where(Function(x) { return x > limit; }).ToArray();\n\n// a rule passed to a generic routine\nFunction Apply(f, v) { return f(v); }\nvar doubled = Apply(Function(x) { return x * 2; }, 21);\n\n// a function that answers with a function\nvar adder = Function(n) { return Function(x) { return x + n; }; };\nvar add10 = adder(10);\nadd10(7);   // 17",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Function",
+        "guide.linq"
+      ],
+      "reviewed": true
+    },
+    {
+      "id": "guide.json",
+      "name_local": "JSON — читання і запис (JSONReader, JSONWriter, JSONValueType, JSONFormatting)",
+      "name_en": "JSON — reading and writing (JSONReader, JSONWriter, JSONValueType, JSONFormatting)",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang"
+      ],
+      "signature": "New JSONReader([<text>])    New JSONWriter([<JSONFormatting>])",
+      "description": "JSON ЗІ СКРИПТА — обмін із касою, маркетплейсом, банком. Два типи, читання окремо від запису; види речей називаються системними переліченнями, а не числами і рядками.\n\nЧИТАННЯ ЗНАЧЕННЯ ЦІЛКОМ — `ReadValue()`. Об'єкт стає `Structure` (ключі — БУДЬ-ЯКІ рядки, порядок зберігається: `s.name` для ключа-імені, `s[\"дивний ключ\"]` для решти), масив — `Array`, `null` — це `Null`, решта — String, Number, Boolean. Ключ, що трапився двічі, зберігає ОСТАННЄ значення. ОДНОГО Structure НЕ ВМІЩУЄ: двох ключів, що різняться лише регістром, — її ключі регістру не розрізняють, а ключі JSON розрізняють, — тому `ReadValue()` ВІДХИЛЯЄ такий об'єкт, називаючи обидва ключі, а не зливає їх; по токенах через `Read()` він читається як будь-який інший.\n\nЧИСЛО ЧИТАЄТЬСЯ З ТЕКСТУ, А НЕ ЧЕРЕЗ double. `0.1` у повідомленні — це одна десята, і `0.1 + 0.2` дорівнює `0.3`: гроші, що пройшли через двійковий дріб, перестають сходитися. Кожна цифра приходить такою, як записана, — у межах, які названо заздалегідь: величина понад приблизно 1e308, число довше за тисячу символів або показник степеня понад тисячу ВІДХИЛЯЮТЬСЯ, а не округлюються. `JSONWriter` пише число так само.\n\nПО ТОКЕНАХ — `Read()` переходить до наступного токена і відповідає False, коли нічого не залишилося; `CurrentValueType` — значення `JSONValueType` (`None`, `Null`, `Boolean`, `Number`, `String`, `PropertyName`, `ObjectStart`, `ObjectEnd`, `ArrayStart`, `ArrayEnd`), `CurrentValue` — ім'я або скаляр. `ReadValue()` віддає цілком значення, НА ЯКОМУ СТОЇТЬ читач; якщо він стоїть на імені властивості — або ще до першого токена, або на вже відданому значенні, — це значення, яке ЙДЕ ДАЛІ. Тому значення властивості — це `ReadValue()` одразу після її імені, а елементи масиву беруться по одному: `Read()` до наступного токена, зупинитися на `ArrayEnd`, інакше `ReadValue()`. `Skip()` переступає контейнер або властивість разом з її значенням.\n\nТЕКСТ, ЯКИЙ НЕ Є JSON, ВІДХИЛЯЄТЬСЯ ОДРАЗУ — цілком, із рядком і колонкою, — а не після того, як скрипт обробив першу половину. Щось після значення, висяча кома, одинарні лапки — усе це відмова.\n\nЗАПИС — `WriteStartObject` / `WriteEndObject`, `WriteStartArray` / `WriteEndArray`, `WritePropertyName(name)`, `WriteValue(value)`, а `Close()` віддає текст. Глобальні функції `ReadJSON(reader)` і `WriteJSON(writer, value)` — написання еталонної системи для `ReadValue()` і `WriteValue(value)`. `WriteValue` приймає String, Number, Boolean, Date (ISO 8601, `2026-09-20T21:05:39`; порожня дата — `null`), `Null` та `Undefined` (`null`), а також Structure / Container / Array з них на будь-яку глибину. Записувач сам тримає документ коректним: значенню всередині об'єкта спершу потрібне ім'я, кінець закриває те, що відкрито, у документі ОДНЕ значення, `Close()` відмовляє, поки щось відкрито або якщо нічого не записано, — кожне порушення — помилка, що називає себе. `JSONFormatting.Indented` — по властивості на рядок; `Compact` (за замовчуванням) — в один рядок.\n\nТЕ, У ЧОГО НЕМАЄ ФОРМИ В JSON, ВІДХИЛЯЄТЬСЯ ЗА ІМЕНЕМ ТИПУ — посилання, таблиця, значення перелічення. Що стоїть за ними в чужій системі (код, найменування, Guid) — рішення обміну: це й пишіть. Відхилене значення не залишає в тексті нічого від себе.\n\nТекст — це рядок: файл — справа того, хто читає і пише файли.",
+      "syntax_block": "var <reader> = New JSONReader(<text>);\n<value> = <reader>.ReadValue();\n<reader>.Read();  <reader>.CurrentValueType;  <reader>.CurrentValue;  <reader>.Skip();  <reader>.Close();\n\nvar <writer> = New JSONWriter([JSONFormatting.Compact | JSONFormatting.Indented]);\n<writer>.WriteStartObject();  <writer>.WritePropertyName(<name>);  <writer>.WriteValue(<value>);  <writer>.WriteEndObject();\n<writer>.WriteStartArray();   <writer>.WriteEndArray();\n<text> = <writer>.Close();",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var text = \"{\"\"number\"\":\"\"A-17\"\",\"\"lines\"\":[{\"\"item\"\":\"\"x\"\",\"\"qty\"\":2}]}\";\n\n// the whole message\nvar reader = New JSONReader(text);\nvar order = reader.ReadValue();\nMessage(order.number + \": \" + order.lines.Count());\nforeach (line In order.lines) {\n    Message(line.item + \" x \" + line.qty);\n}\n\n// ...or only a part of it\nvar walker = New JSONReader(text);\nvar lines = Undefined;\nwhile (walker.Read()) {\n    if (walker.CurrentValueType = JSONValueType.PropertyName And walker.CurrentValue = \"lines\") {\n        lines = walker.ReadValue();\n    }\n}\n\n// writing\nvar writer = New JSONWriter(JSONFormatting.Indented);\nwriter.WriteStartObject();\nwriter.WritePropertyName(\"number\");  writer.WriteValue(\"A-17\");\nwriter.WritePropertyName(\"lines\");   writer.WriteValue(lines);      // an Array of Structures, whole\nwriter.WriteEndObject();\nvar result = writer.Close();",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "guide.declaredTypes",
+      "name_local": "Оголошені типи — що приймає параметр або змінна",
+      "name_en": "Declared types — say what a parameter or a variable takes",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang"
+      ],
+      "signature": "Procedure <Ім'я>(<Тип> <параметр>[ = <типово>], ...)    <Тип> <ім'я>;",
+      "description": "ТИП СТОЇТЬ ПЕРЕД ІМЕНЕМ: `Procedure OnClick(AnyControl element)`, `Array rows;`. Він необов'язковий — без типу означає «що завгодно» — і ПИШЕТЬСЯ ДЛЯ ЧИТАЧА: той, хто досліджує код, людина чи асистент, бачить, що приймає процедура, не читаючи її тіла, а неіснуюче ім'я типу — помилка компіляції, а не сюрприз під час виконання. Тож параметри всього, що пишеться для виклику іншими, варто оголошувати.\n\nЩО МОЖНА ОГОЛОСИТИ:\n\n- примітиви: `Number`, `String`, `Date`, `Boolean`;\n- клас значення за зареєстрованим ім'ям: `Array`, `Structure`, `Table` (таблиця значень)…;\n- СІМЕЙСТВО — фільтр, що нічого не створює і пропускає цілий вид, включно з тими, хто з'явиться завтра:\n    `Any` — що завгодно, сказане, а не замовчане\n    `AnyRef` — будь-яке посилання (довідник, документ, план…)\n    `AnyObject` — будь-який об'єкт даних\n    `AnyManager` — будь-який менеджер\n    `AnyControl` — будь-який елемент форми\n    `AnyValue` — будь-яке універсальне значення (масив, структура, таблиця значень)\n    `AnyEnum` — будь-яке перелічення\n    `CatalogRef`, `DocumentRef`, `ChartOfAccountsRef`… — будь-яке посилання ОДНОГО МЕТАТИПУ, будь-якого об'єкта.\n\nТІ САМІ ІМЕНА — ТИПИ РЕКВІЗИТІВ. Реквізит типу `CatalogRef` зберігає елемент будь-якого довідника, зокрема доданого згодом; `DocumentRef` — будь-який документ; `AnyRef` — взагалі будь-яке посилання. Зберігається він як посилання й у запиті розкривається як посилання (`Basis.Description`), а значення іншого виду — документ, покладений у `CatalogRef`, — лишає його порожнім. Обирайте за тим, що поле ОЗНАЧАЄ:\n- одну річ (покупець, склад) — посилання цього об'єкта, `CatalogRef.Counterparties`. За замовчуванням;\n- кілька видів, відомих зараз і закритих (покупець або постачальник) — складений тип із цих посилань: новий довідник до нього не ввійде, так і задумано;\n- елемент будь-якого об'єкта метатипу, зокрема доданих згодом (підстава, значення аналітики, те, до чого прикріплено нотатку) — сімейство, `CatalogRef`, `DocumentRef`;\n- будь-що, на що можна послатися (об'єкт, для якого ведеться історія змін, файл, прикріплений до будь-якого об'єкта) — `AnyRef`.\nTypesOfCharacteristics плану видів характеристик — те, що можуть зберігати його характеристики й типізована ними аналітика рахунків, — місце, де широкі типи потрібні найбільше: вид аналітики, що приймає елемент будь-якого довідника, там — `CatalogRef`, і план лишається відкритим для довідників, доданих згодом.\nЧим ширший тип, тим менше знає запит: сімейство читається з усіх таблиць свого виду, а через крапку доступне лише те, що є в усіх.\n\nПОРОЖНЄ ПІДХОДИТЬ ЗАВЖДИ. Непереданий параметр чи незаповнене посилання — порожнє значення: оголошення каже, чим значення Є, коли воно є, але не обіцяє, що воно є.\n\nЩО ПОКИ НЕ ПРАЦЮЄ (заміряно 2026-09-15):\n- `Val` разом із типом — `Val Number n` не компілюється. Типізований параметр пишеться без `Val`.\n- посилання одного об'єкта конфігурації, `CatalogRef.Goods item` — оголошуйте сімейство (`CatalogRef item`), а який довідник, хай скаже ім'я.\n- підказка редактора поки не читає оголошений тип; оголошення служить читачеві та компілятору.\n\n`type_list` (інструмент асистента) відповідає, які імена типів існують.",
+      "syntax_block": "Procedure <Ім'я>(<Тип> <параметр>) { }",
+      "parameters": "",
+      "return_descr": "",
+      "example": "// обробник події: будь-який елемент форми\nProcedure OnClick(AnyControl element)\n{\n    Message(element);\n}\n\n// будь-яке посилання — довідник, документ чи план\nFunction Describe(AnyRef link)\n{\n    Return String(link);\n}\n\n// будь-яке посилання на документ; прапорець зі значенням за замовчуванням\nProcedure Repost(DocumentRef doc, Boolean silent = False) Public\n{\n    If (Not silent) { Message(doc); }\n}\n\n// локальні змінні оголошуються так само\nProcedure Collect()\n{\n    Array rows;\n    Table lines;\n    Structure totals;\n    Number count = 0;\n}",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Procedure",
+        "kw.Function",
+        "kw.Val",
+        "fn.TypeOf"
+      ],
+      "reviewed": true
+    },
+    {
+      "id": "guide.cached",
+      "name_local": "Кешовані функції — відповідь, що використовується повторно (налаштування, облікова політика на період)",
+      "name_en": "Cached functions — an answer used again (settings, the policy for a period)",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang"
+      ],
+      "signature": "Function <Ім'я>(<параметри>) [Public|Private|Protected] Cached { ... }",
+      "description": "КЕШУЄТЬСЯ ТЕ, ЩО ФУНКЦІЯ ПОВЕРТАЄ. `Cached` після списку параметрів зберігає відповідь для кожної комбінації значень аргументів: перший виклик із комбінацією виконує тіло, кожен наступний із тими самими значеннями отримує збережену відповідь, не заходячи у функцію. У цьому весь сенс, тому кешованою може бути лише функція — процедура нічого не повертає, і модифікатор там відхиляється.\n\nКОЛИ ПИСАТИ — те саме значення запитується знову і знову, а відповідь залежить лише від аргументів:\n- облікова політика на період, що запитується для кожного рядка кожного документа;\n- налаштування та перемикачі;\n- курс на (валюта, дата);\n- усе, що виводиться з метаданих.\nЦикл по десяти тисячах рядків, що питає `InventoryMethod(period)`, читає регістр один раз на період, а не десять тисяч разів. Тож якщо код читає те саме налаштування чи політику більше ніж в одному місці або всередині циклу, читання йде в кешовану функцію, а всі, хто викликає, просто питають її.\n\nПОВЕРНУТИ МОЖНА ЩО ЗАВГОДНО, і відповідь живе СТІЛЬКИ, СКІЛЬКИ ЖИВЕ ВЛАСНИК — очищати нічого, таймера немає:\n- спільний модуль: увесь сеанс;\n- модуль об'єкта: доки живий об'єкт;\n- модуль форми: доки відкрита форма.\nКожен, хто викликає з тими самими аргументами, отримує ТЕ САМЕ значення — повернена структура чи таблиця одна на всіх.\n\nНЕ ДЛЯ:\n- функції з побічними ефектами: другий виклик не виконується;\n- відповіді, що залежить від чогось, окрім аргументів (поточна дата, дані, записані згодом): її знову побачать лише коли власника не стане — для спільного модуля в наступному сеансі.\n\nАргументи порівнюються ЗА ЗНАЧЕННЯМ: число 1 і рядок \"1\" — різні ключі. Виклик, що завершився винятком, не зберігається.",
+      "syntax_block": "Function <Ім'я>(<параметри>) Public Cached {\n    Return <Значення>;\n}",
+      "parameters": "",
+      "return_descr": "",
+      "example": "// політика на період: читається один раз на період, скільки б її не питали —\n// у спільному модулі на весь сеанс\nFunction InventoryMethod(Date period) Public Cached\n{\n    Return ReadPolicy(period);\n}\n\nFunction ReadPolicy(Date period) Private\n{\n    If (period < Date(2026, 1, 1)) { Return \"Average\"; }\n    Return \"FIFO\";\n}\n\n// той, хто викликає, просто питає, скільки треба\nvar method = \"\";\nfor (i = 1 To 1000) {\n    method = InventoryMethod(Date(2026, 3, 1));   // тіло виконалося один раз\n}",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Cached",
+        "kw.Function",
+        "guide.declaredTypes"
+      ],
+      "reviewed": true
+    },
+    {
+      "id": "guide.http",
+      "name_local": "HTTP — запит до іншої системи мережею (HTTPConnection, HTTPRequest, HTTPResponse, HTTPMethod)",
+      "name_en": "HTTP - asking another system over the network (HTTPConnection, HTTPRequest, HTTPResponse, HTTPMethod)",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang"
+      ],
+      "signature": "New HTTPConnection(<host> [, <port> [, <user>, <password> [, <timeout>]]])    New HTTPRequest([<resourceAddress> [, <headers>]])",
+      "description": "ЗАПИТ ДО ІНШОЇ СИСТЕМИ ЗІ СКРИПТА — до каси, банку, маркетплейсу. З'єднання створюється з ХОСТОМ, запит називає ресурс на ньому й несе заголовки та тіло, назад приходить відповідь.\n\nВІДПОВІДЬ І ВІДМОВА — РІЗНІ РЕЧІ. 404 і 500 — це відповіді: виклик повертає відповідь, її StatusCode каже яку, а що з цим робити, вирішує скрипт. Відмова — коли відповіді НЕМАЄ: ім'я не знайшлося, порт ніхто не слухає, за відведений час ніхто не відповів, з'єднання обірвалося на півдорозі. Тоді виникає ВИНЯТОК, і в його тексті є метод, адреса й причина. Ловиться через try / except.\n\nВІДВЕДЕНИЙ ЧАС — 30 СЕКУНД, якщо не сказано інакше, і ніколи не «нескінченно»: він обмежує підключення та читання відповіді загалом, а не кожне читання; 0 відкидається, а не читається як «без межі», і доба — найбільше — фонове завдання, що чекає сервер, який замовк, це завдання, про яке більше ніхто не почує. Поза межею лишаються дві речі: розв'язання імені (час самого резолвера) і надсилання великого тіла серверу, який приймає його повільно.\n\nХОСТ — ЦЕ ІМ'Я: \"api.example\", \"10.0.0.5\", \"::1\", а не адреса. Шлях і параметри йдуть у ResourceAddress запиту (він починається з '/'), а \"http://...\" чи \"host/path\" як хост відкидаються, як і міжнародне ім'я не в ASCII-формі (xn--). Символи, яким в адресі не місце — пробіл, кирилиця, — ідуть у відсотковому кодуванні UTF-8; уже закодоване (%20) не чіпається; фрагмент (#...) серверу ніколи не надсилається й відкидається.\n\nЗАГОЛОВКИ — ЦЕ Structure, і її ключі не розрізняють регістр так само, як ім'я заголовка: request.Headers[\"content-type\"] і [\"Content-Type\"] — одне й те саме. Значення — рядок або число; пробіли по краях відкидаються, не-ASCII іде байтами UTF-8. Заголовок, чиє ім'я не є токеном або чиє значення містить переведення рядка, відкидається до відправлення — за ім'ям. Так само відкидаються заголовки, що кажуть, як повідомлення оформлене й передається, — Content-Length, Transfer-Encoding, Host, Connection, Expect, Upgrade, Proxy-Authorization: вони належать рушієві. Понад них він нічого свого не додає, крім бібліотечного User-Agent, який скрипт може замінити; стисненої відповіді він не просить, а скрипт, який попросить (Accept-Encoding), дістане відмову — декодера у збірці немає. Ім'я, яке відповідь несе двічі, склеюється через \", \"; лише Set-Cookie так склеїти не можна, тому лишається останній.\n\nТІЛО — це текст у кодуванні (UTF-8, якщо не задано TextEncoding; мітка порядку байтів не пишеться) або BinaryData як є. НАЗВІТЬ ЙОГО ТИП: тіло без Content-Type іде як text/plain, а це рідко те, чого чекає API. На зворотному шляху GetBodyAsString читає UTF-8, якщо не задано TextEncoding, — charset із Content-Type не читається — і відкидає байти, що не є текстом у цьому кодуванні, замість віддати сміття, — такі беруться через GetBodyAsBinaryData, а її Write(шлях) кладе їх у файл.\n\nКористувач і пароль з'єднання йдуть як Basic-авторизація з кожним запитом, якщо в запиті немає власного заголовка Authorization. ПЕРЕНАПРАВЛЕННЯ — ЦЕ ВІДПОВІДЬ: 3xx повертається зі своїм StatusCode і Headers[\"Location\"], а чи йти туди — яким методом, з якими заголовками, на який хост — вирішує скрипт. Відповідь тримається в пам'яті цілком, до 100 МБ.\n\nЗАХИЩЕНЕ З'ЄДНАННЯ (https) — це властивість: `connection.SecureConnection = New SecureConnection()`. З ним порт, якого ніхто не задавав, стає 443, а не 80. Саме по собі воно довіряє тому, чому довіряє платформа, — сховищу сертифікатів Windows, keychain macOS, /etc/ssl/certs у Linux — і перевіряє сервер: ланцюжок І ім'я, на яке сертифікат видано. Вказати один засвідчувальний центр замість цього — TrustedCertificates (CertificateFile, файл PEM); показати серверу власний сертифікат — ClientCertificate (PEM, у якому і сертифікат, і його ключ; пароль ключа — другий аргумент CertificateFile). Файлу немає — відмова при створенні CertificateFile; файл не PEM або пароль не відкриває ключ — відмова при з'єднанні, з ім'ям файлу.\n\nVerifyServerCertificate = False лишає шифрування і знімає перевірку — обидві її частини: і ланцюжок, і ім'я. Це річ для стенда із самопідписаним сертифікатом і ніколи не для банку: відповідь будь-кого читається рівно так само, як відповідь справжнього. Краще назвати сертифікат у TrustedCertificates.\n\nЧОГО НЕМАЄ В ЦІЙ ЗБІРЦІ: сертифіката зі сховища Windows за відбитком, проксі, тіла з файлу та відповіді одразу у файл, зупинки запиту на півдорозі.",
+      "syntax_block": "var <connection> = New HTTPConnection(<host> [, <port> = 80 [, <user>, <password> [, <timeout> = 30]]]);\n<connection>.Host  <connection>.Port  <connection>.Timeout = <seconds>;\n<response> = <connection>.Get(<request>);   Post  Put  Patch  Delete  Head\n<response> = <connection>.CallMethod(HTTPMethod.<X>, <request>);   // Get Post Put Patch Delete Head Options\n\nvar <request> = New HTTPRequest([<resourceAddress> [, <headers : Structure>]]);\n<request>.ResourceAddress = \"/path?query\";   <request>.Headers.Insert(<name>, <value>);\n<request>.SetBodyFromString(<text> [, TextEncoding.<X>]);   <request>.SetBodyFromBinaryData(<data>);\n<request>.GetBodyAsString([TextEncoding.<X>])   <request>.GetBodyAsBinaryData()\n\n<response>.StatusCode   <response>.Headers\n<response>.GetBodyAsString([TextEncoding.<X>])   <response>.GetBodyAsBinaryData()\n\nvar <secure> = New SecureConnection([<clientCertificate> [, <trustedCertificates>]]);\n<secure>.ClientCertificate   <secure>.TrustedCertificates   <secure>.VerifyServerCertificate = False;\nvar <file> = New CertificateFile(<path> [, <keyPassword>]);   <file>.Path\n<connection>.SecureConnection = <secure>;   // ...= Undefined for plain http://",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var connection = New HTTPConnection(\"api.example\", 8080, \"user\", \"password\", 30);\n\nvar request = New HTTPRequest(\"/v1/sales?shift=42\");\nrequest.Headers.Insert(\"Accept\", \"application/json\");\n\nvar response;\ntry {\n    response = connection.Get(request);\n}\nexcept {\n    Message(\"no answer: \" + ErrorDescription());          // the name does not resolve, the port is closed, 30 s passed\n    return;\n}\nif (response.StatusCode <> 200) {                           // 404 and 500 are ANSWERS, not failures\n    Message(\"answered \" + response.StatusCode + \": \" + response.GetBodyAsString());\n    return;\n}\nvar text = response.GetBodyAsString();                      // UTF-8 unless said; bytes that are not text are refused\n\nvar order = New HTTPRequest(\"/v1/orders\");\norder.Headers.Insert(\"Content-Type\", \"application/json\");   // say it: a body with no type goes out as text/plain\norder.SetBodyFromString(\"{\"\"table\"\": 7}\");\nresponse = connection.Post(order);\n\nresponse = connection.CallMethod(HTTPMethod.Options, order);\nresponse.GetBodyAsBinaryData().Write(\"C:\\in\\answer.bin\");     // to a file: the bytes, as they came\n\nvar secure = New SecureConnection();                        // the platform's own trust store, and the check on\nsecure.TrustedCertificates = New CertificateFile(\"C:\\certs\\bank-ca.pem\");   // ...or this authority alone\nsecure.ClientCertificate = New CertificateFile(\"C:\\certs\\client.pem\", \"key password\");\nvar bank = New HTTPConnection(\"api.bank.example\");          // no port given: 443, once it is secure\nbank.SecureConnection = secure;\nresponse = bank.Get(New HTTPRequest(\"/v1/balance\"));",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "guide.basedOn",
+      "name_local": "Введення на підставі — один об'єкт з іншого (рахунок із замовлення)",
+      "name_en": "Entering on the basis — one object made from another (an invoice from an order)",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang"
+      ],
+      "signature": "Procedure Filling(FillingData, StandardProcessing)",
+      "description": "ОДИН ОБ'ЄКТ, ВВЕДЕНИЙ З ІНШОГО — рахунок із замовлення, оплата з рахунку, — це три частини, які в платформі вже є. Писати треба лише саме заповнення.\n\n1. ЩО З ЧОГО МОЖНА ВВЕСТИ — прив'язка на ДЖЕРЕЛІ: його властивість `ListGeneration` перелічує види, які з нього можна створити (у сітці властивостей конфігуратора або `metadata_bind` з `ListGeneration`). Порожньо — з нього нічого не вводиться.\n\n2. ЛЮДИНА натискає стандартну команду *Generate* форми джерела. Вона пропонує рівно види з цього списку, створює вибраний і відкриває його форму.\n\n3. НОВИЙ ОБ'ЄКТ ЗАПОВНЮЄ СЕБЕ САМ — у своєму модулі об'єкта, в обробнику `Filling(FillingData, StandardProcessing)`. `FillingData` — посилання, з якого він вводиться (замовлення). Той самий обробник виконується і для просто нового об'єкта, з порожнім `FillingData` — туди йдуть типові значення, — тому перші рядки обробника розрізняють ці два випадки. `StandardProcessing = False` ВІДМОВЛЯЄ у введенні: об'єкт не створюється і форма не відкривається. Це для випадку, коли з такого джерела такий об'єкт отримати не можна (замовлення вже закрите).\n\nЗ КОДУ те саме заповнення просять через `Fill`: `var doc = Documents.Invoice.CreateDocument(); doc.Fill(order); doc.Write();` — виконується власний `Filling` нового об'єкта з цим джерелом. Так правило живе в ОДНОМУ місці, вводить об'єкт людина чи процедура.\n\nЩО ПЕРЕНОСИТИ — це ремесло, а не механізм: патерн `entered-from` (pattern_read). Однойменні реквізити переносяться; курс, валюта каси і номер обчислюються заново для нового документа; рядки заповнюються з того, що в джерела ЩЕ НЕ ЗАКРИТО (`document-chains`), а не копіюються з його рядків як є.",
+      "syntax_block": "Procedure Filling(FillingData, StandardProcessing) {\n    If (Not ValueIsFilled(FillingData)) { Return; }\n    <заповнення з FillingData>\n}",
+      "parameters": "FillingData — посилання, з якого вводиться об'єкт; порожньо для просто нового об'єкта. StandardProcessing — на вході True; False відмовляє у створенні об'єкта.",
+      "return_descr": "",
+      "example": "// модуль об'єкта ДОКУМЕНТА, ЩО ВВОДИТЬСЯ (тут — надходження із замовлення)\nProcedure Filling(FillingData, StandardProcessing)\n{\n    If (Not ValueIsFilled(FillingData)) {\n        Return;                        // просто новий документ: лише типові значення\n    }\n    // шапка за іменами; рядки — з того, що за замовленням ще відкрито\n    Counterparty = FillingData.Counterparty;\n    Warehouse = FillingData.Warehouse;\n    foreach (line In FillingData.Goods) {\n        var row = Goods.Add();\n        row.Item = line.Item;\n        row.Quantity = line.Quantity;\n    }\n}\n\n// те саме з коду\nvar doc = Documents.GoodsReceipt.CreateDocument();\ndoc.Fill(order);\ndoc.Write();",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Procedure",
+        "fn.ValueIsFilled",
+        "guide.cached"
+      ],
+      "reviewed": true
+    },
+    {
+      "id": "guide.ownedCatalogs",
+      "name_local": "Підпорядковані довідники — елементи, що живуть із власником (одиниці номенклатури, договори контрагента)",
+      "name_en": "Subordinate catalogs — items that live with an owner (units of an item, contracts of a counterparty)",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang"
+      ],
+      "signature": "ListOwner = <довідник-власник>    елемент.Owner",
+      "description": "ДОВІДНИК, ЧИЇ ЕЛЕМЕНТИ НАЛЕЖАТЬ ЕЛЕМЕНТУ ІНШОГО, — одиниці виміру номенклатури, її характеристики, договори чи банківські рахунки контрагента — оголошується в МЕТАДАНИХ, а не пишеться в коді. У підпорядкованого довідника властивість `ListOwner` називає довідники-власники: сітка властивостей конфігуратора, `metadata_bind` з `ListOwner` або `ListOwner` серед властивостей `metadata_create`. Як будь-який довідник, він може бути ще й ієрархічним.\n\nЩО ЦЕ ДАЄ:\n- кожен елемент і група отримують предвизначений реквізит `Owner` із типом з цього списку — посилання на елемент власника (кілька довідників-власників дають складений тип);\n- `Owner` ОБОВ'ЯЗКОВИЙ: елемент без власника не записується;\n- `Owner` — звичайна колонка: `SELECT ... FROM Catalog.Units WHERE Owner = &Item`, а в LINQ `From u In Data.Catalogs.Units Where u.Owner = item`.\n\nКОЛИ: річ має сенс лише разом із власником — одиниці, пакування, характеристики, договори, банківські рахунки контрагента. Те, що ділять багато власників (валюта, склад), не підпорядковується.\n\nЯК ЦЕ ВИГЛЯДАЄ ДЛЯ ЛЮДИНИ. Підпорядкований список показується для ОДНОГО власника, а вибір у рядку документа пропонує лише елементи власника рядка — договір контрагента документа, одиницю номенклатури рядка. У цьому сенс підпорядкування, і робить це ПЛАТФОРМА, за власником, а не кожна конфігурація. Тож під час розробки конфігурації ПОДИВІТЬСЯ, чи звужуються список і вибір; де ні — це вимога до власника платформи, а не обхід, який треба писати в кожну форму. ЗАПИТ — інша справа: він читає те, що спитали, тому запит по елементах одного власника сам відбирає за `Owner`.",
+      "syntax_block": "var <елемент> = Catalogs.<Підпорядкований>.CreateElement();\n<елемент>.Owner = <посиланняНаВласника>;\n<елемент>.Write();",
+      "parameters": "",
+      "return_descr": "",
+      "example": "// у довідника Units ListOwner = Goods (задано в метаданих, не тут)\nvar unit = Catalogs.Units.CreateElement();\nunit.Owner = item;                 // обов'язково\nunit.Description = \"коробка 12 шт\";\nunit.Write();\n\n// одиниці однієї номенклатури\nvar units = From u In Data.Catalogs.Units Where u.Owner = item Select u;",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "guide.linq",
+        "guide.basedOn"
+      ],
+      "reviewed": true
+    },
+    {
+      "id": "guide.textFiles",
+      "name_local": "Файли — читання і запис тексту та байтів як є (TextReader, TextWriter, BinaryData, TextEncoding)",
+      "name_en": "Files — reading and writing text, and bytes as they are (TextReader, TextWriter, BinaryData, TextEncoding)",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang"
+      ],
+      "signature": "New TextReader(<path> [, <TextEncoding>])    New TextWriter(<path> [, <TextEncoding> [, <append>]])",
+      "description": "ВМІСТ ФАЙЛУ — ЗІ СКРИПТА. `File` відповідає, чи існує файл і який його розмір; ці типи читають і пишуть те, що в ньому лежить, — файл обміну іншої системи, продажі з каси, прайс-лист — на будь-якій платформі й без COM-об'єкта посередині.\n\nТЕКСТ ПОРЯДКОВО — `TextReader`. `ReadLine()` віддає наступний рядок БЕЗ переведення рядка (і CRLF, і LF); `Read()` віддає все, що залишилося, одним текстом; `Close()` відпускає файл. КІНЕЦЬ ФАЙЛУ — ЦЕ `Undefined`, А НЕ ПОРОЖНІЙ РЯДОК: порожній рядок — теж рядок, і цикл, написаний проти `\"\"`, зупиниться на першому порожньому рядку файлу — або, написаний навпаки, не зупиниться ніколи.\n\nЗА НОМЕРОМ — `LineCount()` — скільки у файлі рядків, `GetLine(n)` — рядок номер n, рахуючи З ОДИНИЦІ: це ті самі рядки, що їх віддає `ReadLine()`, розрізані так само, і жоден із двох методів не зсуває місце, де стоїть `ReadLine()`. Переведення рядка в самому кінці файлу ЗАВЕРШУЄ останній рядок, а не відкриває після нього порожній: файл `\"a\"` + LF — це ОДИН рядок, тоді як `StrLineCount`, що рахує текст, скаже два. Немає такого рядка — `Undefined`, як кінець файлу для `ReadLine()`.\n\nЗАПИС — `TextWriter`. `Write(text)` пише текст як є, `WriteLine(text)` додає ОДНЕ переведення рядка — LF, однакове на всіх платформах: файл, записаний тут, так само читається там. Третій аргумент конструктора, `True`, ДОПИСУЄ в кінець файлу замість заміни. Незакритий записувач однаково залишить текст на диску, але закривати треба: до того файл лишається відкритим.\n\nКОДУВАННЯ задається переліченням `TextEncoding` — `UTF8` (якщо не вказано), `UTF16`, `ANSI` та `OEM` (кодові сторінки тієї машини, на якій працює платформа, — запитуються в системи), `System`. Мітка порядку байтів на початку файлу UTF-8 або UTF-16 читається як мітка і текстом не віддається; мітка UTF-16 ще й каже, який байт іде першим. Під час запису UTF-16 отримує мітку, UTF-8 — ні. Байти, які не складаються в текст у вказаному кодуванні, — це ПОМИЛКА, а не текст із дірками; так само й файл, який не вдалося відкрити, — у повідомленні названо його ім'я.\n\nБАЙТИ — `BinaryData`. `Read(path)` бере вміст файлу цілком, `Write(path)` кладе вміст у файл, `Size()` — кількість байтів. Рядок, переданий у КОНСТРУКТОР, як і раніше означає base64, а не шлях, — тому читання файлу зроблено методом.\n\nФайл декодується цілком під час відкриття: це для файлів обміну, а не для журналів на гігабайти.",
+      "syntax_block": "var <reader> = New TextReader(<path> [, TextEncoding.<X>]);\n<line> = <reader>.ReadLine();   // Undefined at the end\n<rest> = <reader>.Read();\n<count> = <reader>.LineCount();  <line> = <reader>.GetLine(<n>);   // from 1, Undefined past the last\n<reader>.Close();\n\nvar <writer> = New TextWriter(<path> [, TextEncoding.<X> [, <append>]]);\n<writer>.Write(<text>);  <writer>.WriteLine(<text>);\n<writer>.Close();\n\nvar <bytes> = New BinaryData();\n<bytes>.Read(<path>);  <bytes>.Write(<path>);  <bytes>.Size();",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var reader = New TextReader(\"C:\\in\\sales.csv\", TextEncoding.UTF8);\nvar line = reader.ReadLine();\nwhile (line <> Undefined) {          // Undefined, not \"\": an empty line is a line\n    if (line <> \"\") {\n        var cut = Find(line, \";\");\n        var code = Left(line, cut - 1);   // the first field\n    }\n    line = reader.ReadLine();\n}\nreader.Close();\n\nvar writer = New TextWriter(GetTempDir() + \"out.csv\", TextEncoding.UTF8);\nwriter.WriteLine(\"code;name;qty\");\nwriter.Close();\n\nvar bytes = New BinaryData();\nbytes.Read(\"C:\\in\\logo.png\");\nMessage(bytes.Size());\nbytes.Write(\"C:\\out\\logo.png\");",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    }
+  ]
+}

@@ -26,8 +26,7 @@ ibDatabaseResultSetSQLite::ibDatabaseResultSetSQLite(ibPreparedStatementSQLite* 
 	int nFieldCount = sqlite3_column_count(m_pSqliteStatement);
 	for (int i = 0; i < nFieldCount; i++)
 	{
-		wxString strField = ConvertFromUnicodeStream(sqlite3_column_name(m_pSqliteStatement, i));
-		m_FieldLookupMap[strField] = i;
+		m_FieldLookupMap[ConvertFromUnicodeStream(sqlite3_column_name(m_pSqliteStatement, i))] = i;   // as written: the map is case-blind
 	}
 }
 
@@ -64,8 +63,9 @@ bool ibDatabaseResultSetSQLite::Next()
 
 	if ((nReturn != SQLITE_ROW) && (nReturn != SQLITE_DONE))
 	{
-		wxLogError(wxT("Error with RunQueryWithResults\n"));
 		SetErrorCode(ibDatabaseLayerSQLite::TranslateErrorCode(nReturn));
+		if (GetErrorCode() != DATABASE_LAYER_QUERY_CANCELLED)   // a cancel is no error - see firebirdResultSet.cpp
+			ibJournalError(wxT("db.sqlite"),wxT("Error with RunQueryWithResults\n"));
 #if SQLITE_VERSION_NUMBER>=3002002
 		// sqlite3_db_handle wasn't added to the SQLite3 API until version 3.2.2
 		SetErrorMessage(ConvertFromUnicodeStream(sqlite3_errmsg(sqlite3_db_handle(m_pSqliteStatement))));
@@ -91,12 +91,12 @@ int ibDatabaseResultSetSQLite::GetResultInt(int nField)
 	return nValue;
 }
 
-wxString ibDatabaseResultSetSQLite::GetResultString(int nField)
+ibString ibDatabaseResultSetSQLite::GetResultString(int nField)
 {
-	wxString strValue = wxEmptyString;
+	ibString strValue;
 	if (m_pSqliteStatement == nullptr)
 		m_pSqliteStatement = m_pStatement->GetLastStatement();
-	strValue = ConvertFromUnicodeStream((const char*)(sqlite3_column_text(m_pSqliteStatement, nField - 1)));
+	ConvertFromUnicodeStream((const char*)(sqlite3_column_text(m_pSqliteStatement, nField - 1)), strValue);
 
 	return strValue;
 }
@@ -106,7 +106,11 @@ long long ibDatabaseResultSetSQLite::GetResultLong(int nField)
 	long long nValue = -1;
 	if (m_pSqliteStatement == nullptr)
 		m_pSqliteStatement = m_pStatement->GetLastStatement();
-	nValue = sqlite3_column_int(m_pSqliteStatement, nField - 1);
+	// 🛑 THE WHOLE 64 BITS. The function answers `long long` and read through sqlite3_column_int, which is 32:
+	// a reference's table id (a kind-typed clsid, sixty bits) came back as its low word - the bare metaID -
+	// named no registered type, and the reference read EMPTY. With the binder's double on the way in, this is
+	// why a reference never survived a round trip on this driver (2026-09-20).
+	nValue = sqlite3_column_int64(m_pSqliteStatement, nField - 1);
 
 	return nValue;
 }
@@ -121,28 +125,14 @@ bool ibDatabaseResultSetSQLite::GetResultBool(int nField)
 	return (nValue != 0);
 }
 
-wxDateTime ibDatabaseResultSetSQLite::GetResultDate(int nField)
+ibDateTime ibDatabaseResultSetSQLite::GetResultDate(int nField)
 {
 	// Don't use nField-1 here since GetResultString will take care of that
-	wxString strDate = GetResultString(nField);
-	wxDateTime date;
-	// First check for the 2-digit year format
-	if (date.ParseFormat(strDate, wxT("%m/%d/%y %H:%M:%S")) != NULL)
-	{
-		return date;
-	}
-	else if (date.ParseDateTime(strDate) != NULL)
-	{
-		return date;
-	}
-	else if (date.ParseDate(strDate) != NULL)
-	{
-		return date;
-	}
-	else
-	{
-		return wxDefaultDateTime;
-	}
+	// The text is the reading, read by the date's own door (fdatetime.h, ibDateTime::FromString); NULL is
+	// an empty text, and reads as the empty date.
+	ibDateTime date;
+	date.FromString(GetResultString(nField));
+	return date;
 }
 
 double ibDatabaseResultSetSQLite::GetResultDouble(int nField)
@@ -203,19 +193,22 @@ bool ibDatabaseResultSetSQLite::IsFieldNull(int nField)
 
 int ibDatabaseResultSetSQLite::LookupField(const wxString& strField)
 {
-	StringToIntMap::iterator SearchIterator = std::find_if(m_FieldLookupMap.begin(), m_FieldLookupMap.end(),
-		[strField](const auto pair) { return stringUtils::CompareString(pair.first, strField); });
+	// Found, not walked — see firebirdResultSet.cpp.
+	StringToIntMap::iterator SearchIterator = m_FieldLookupMap.find(strField);
 
 	if (SearchIterator == m_FieldLookupMap.end())
 	{
-		wxString msg(wxT("Field '") + strField + wxT("' not found in the resultset"));
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-		ibDatabaseLayerException error(DATABASE_LAYER_FIELD_NOT_IN_RESULTSET, msg);
-		throw error;
-#else
-		wxLogError(msg);
-#endif
-		return -1;
+		// Throw rather than return -1: caller code paths in OES routinely
+		// pass LookupField's result straight into GetResultXxx with no
+		// sentinel check, so a missed field used to surface as a silent
+		// wrong-column read. With ibDatabaseLayerException unified into
+		// ibBackendException, the throw lands in the same handler chain
+		// every other DB error uses.
+		ibDatabaseLayerException::Throw(
+			ibBackendDatabaseException::Kind::Unknown,
+			DATABASE_LAYER_FIELD_NOT_IN_RESULTSET,
+			/*sqlState*/ wxEmptyString,
+			wxT("Field '") + strField + wxT("' not found in the resultset"));
 	}
 	else
 	{

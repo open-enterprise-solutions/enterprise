@@ -7,67 +7,16 @@
 #include <wx/statbox.h>
 #include <wx/statline.h>
 
+#include <map>
+
 #include "mainFrame/metaTree/treeConfiguration.h"
 #include "backend/metadataDataProcessor.h"
  
-class ibDataProcessorTree : public ibMetaDataTree {
+class ibDataProcessorTree : public ibMetaTreeBase {
 	wxDECLARE_DYNAMIC_CLASS(ibDataProcessorTree);
 
 private:
 
-	wxTreeItemId m_treeDATAPROCESSORS;
-
-	wxTreeItemId m_treeATTRIBUTES;
-	wxTreeItemId m_treeTABLES;
-	wxTreeItemId m_treeFORM;
-	wxTreeItemId m_treeTEMPLATES;
-
-private:
-
-	bool m_initialized;
-
-private:
-
-	wxTreeItemId GetSelectionIdentifier() const {
-		wxTreeItemId parentItem = m_metaTreeCtrl->GetSelection();
-		while (parentItem != nullptr) {
-			wxTreeItemData* item = m_metaTreeCtrl->GetItemData(parentItem);
-			if (item != nullptr) {
-				ibTreeDataClassIdentifier* item_clsid = dynamic_cast<ibTreeDataClassIdentifier*>(item);
-				if (item_clsid != nullptr) return parentItem;
-			}
-			parentItem = m_metaTreeCtrl->GetItemParent(parentItem);
-		}
-		return wxTreeItemId(nullptr);
-	}
-
-	ibClassID GetClassIdentifier() const {
-		wxTreeItemData* item = m_metaTreeCtrl->GetItemData(GetSelectionIdentifier());
-		if (item != nullptr) {
-			ibTreeDataClassIdentifier* item_clsid = dynamic_cast<ibTreeDataClassIdentifier*>(item);
-			if (item_clsid != nullptr) return item_clsid->m_clsid;
-		}
-		return 0;
-	}
-
-	ibValueMetaObject* GetMetaIdentifier() const {
-		wxTreeItemId parentItem = GetSelectionIdentifier();
-		wxTreeItemData* item = m_metaTreeCtrl->GetItemData(parentItem);
-		if (item != nullptr) {
-			ibTreeDataClassIdentifier* item_clsid = dynamic_cast<ibTreeDataClassIdentifier*>(item);
-			if (item_clsid != nullptr) {
-				while (parentItem != nullptr) {
-					wxTreeItemData* item = m_metaTreeCtrl->GetItemData(parentItem);
-					if (item != nullptr) {
-						ibValueMetaObject* parent = GetMetaObject(parentItem);
-						if (parent != nullptr) return parent;
-					}
-					parentItem = m_metaTreeCtrl->GetItemParent(parentItem);
-				}
-			}
-		}
-		return nullptr;
-	}
 
 protected:
 
@@ -81,19 +30,21 @@ protected:
 
 protected:
 
-	wxStaticText* m_nameCaption;
-	wxStaticText* m_synonymCaption;
-	wxStaticText* m_commentCaption;
-	wxStaticText* m_defaultForm;
-	wxTextCtrl* m_nameValue;
-	wxTextCtrl* m_synonymValue;
-	wxTextCtrl* m_commentValue;
-	wxChoice* m_defaultFormValue;
+	// Initialised HERE: the default constructor (reachable through wxDECLARE_DYNAMIC_CLASS) set
+	// none of these, and the destructor dereferences every one of them.
+	wxStaticText* m_nameCaption = nullptr;
+	wxStaticText* m_synonymCaption = nullptr;
+	wxStaticText* m_commentCaption = nullptr;
+	wxStaticText* m_defaultForm = nullptr;
+	wxTextCtrl* m_nameValue = nullptr;
+	wxTextCtrl* m_synonymValue = nullptr;
+	wxTextCtrl* m_commentValue = nullptr;
+	wxChoice* m_defaultFormValue = nullptr;
 
-	wxButton* m_buttonModule;
+	wxButton* m_buttonModule = nullptr;
 
 	class ibDataProcessorTreeCtrl : public wxTreeCtrl {
-		wxDECLARE_DYNAMIC_CLASS(ibMetadataTree);
+		wxDECLARE_DYNAMIC_CLASS(ibDataProcessorTreeCtrl);   // used to name the configuration tree — copy-paste
 	private:
 
 		ibDataProcessorTree* m_ownerTree;
@@ -119,22 +70,10 @@ protected:
 		// this function is called to compare 2 items and should return -1, 0
 		// or +1 if the first item is less than, equal to or greater than the
 		// second one. The base class version performs alphabetic comparison
-		// of item labels (GetText)
+		// of item labels (GetText). Here: the metadata's order (ibMetaTreeBase::CompareItemsByPosition).
 		virtual int OnCompareItems(const wxTreeItemId& item1,
 			const wxTreeItemId& item2) {
-			int ret = wxStrcmp(GetItemText(item1), GetItemText(item2));
-			ibTreeDataMetaItem* data1 = dynamic_cast<ibTreeDataMetaItem*>(GetItemData(item1));
-			ibTreeDataMetaItem* data2 = dynamic_cast<ibTreeDataMetaItem*>(GetItemData(item2));
-			if (data1 != nullptr && data2 != nullptr && ret > 0) {
-				ibValueMetaObject* metaObject1 = data1->m_metaObject;
-				ibValueMetaObject* metaObject2 = data2->m_metaObject;
-				ibValueMetaObject* parent = metaObject1->GetParent();
-				wxASSERT(parent);
-				return parent->ChangeChildPosition(metaObject2,
-					parent->GetChildPosition(metaObject1)
-				) ? ret : wxNOT_FOUND;
-			}
-			return ret;
+			return m_ownerTree->CompareItemsByPosition(item1, item2);
 		}
 
 		//events:
@@ -158,7 +97,6 @@ protected:
 
 		void OnSortItem(wxCommandEvent& event);
 
-		void OnCommandItem(wxCommandEvent& event);
 
 		void OnCopyItem(wxCommandEvent& event);
 		void OnPasteItem(wxCommandEvent& event);
@@ -176,104 +114,54 @@ protected:
 		wxDECLARE_EVENT_TABLE();
 	};
 
-	ibDataProcessorTreeCtrl* m_metaTreeCtrl;
-	ibMetaDataDataProcessor* m_metaData;
+	ibDataProcessorTreeCtrl* m_metaTreeCtrl = nullptr;
+	ibMetaDataDataProcessor* m_metaData = nullptr;
 
 private:
 
-	wxTreeItemId AppendRootItem(const ibClassID& clsid, const wxString& name = wxEmptyString) const {
-		const ibCtorAbstractType* typeCtor = ibValue::GetAvailableCtor(clsid);
-		wxASSERT(typeCtor);
-		wxImageList* imageList = m_metaTreeCtrl->GetImageList();
-		wxASSERT(imageList);
-		const int imageIndex = imageList->Add(typeCtor->GetClassIcon());
-		return m_metaTreeCtrl->AddRoot(name.IsEmpty() ? typeCtor->GetClassName() : name,
-			imageIndex,
-			imageIndex,
-			nullptr
-		);
-	}
-
-	wxTreeItemId AppendGroupItem(const wxTreeItemId& parent,
-		const ibClassID& clsid, const wxString& name = wxEmptyString) const {
-		const ibCtorAbstractType* typeCtor = ibValue::GetAvailableCtor(clsid);
-		wxASSERT(typeCtor);
-		wxImageList* imageList = m_metaTreeCtrl->GetImageList();
-		wxASSERT(imageList);
-		const int imageIndex = imageList->Add(typeCtor->GetClassIcon());
-		return m_metaTreeCtrl->AppendItem(parent, name.IsEmpty() ? typeCtor->GetClassName() : name,
-			imageIndex,
-			imageIndex,
-			new wxTreeItemClsidData(clsid)
-		);
-	}
-
-	wxTreeItemId AppendGroupItem(const wxTreeItemId& parent,
-		const ibClassID& clsid, ibValueMetaObject* metaObject) const {
-		wxImageList* imageList = m_metaTreeCtrl->GetImageList();
-		wxASSERT(imageList);
-		const int imageIndex = imageList->Add(metaObject->GetIcon());
-		return m_metaTreeCtrl->AppendItem(parent, metaObject->GetName(),
-			imageIndex,
-			imageIndex,
-			new wxTreeItemClsidMetaData(clsid, metaObject)
-		);
-	}
-
-	wxTreeItemId AppendItem(const wxTreeItemId& parent,
-		ibValueMetaObject* metaObject) const {
-		wxImageList* imageList = m_metaTreeCtrl->GetImageList();
-		wxASSERT(imageList);
-		const int imageIndex = imageList->Add(metaObject->GetIcon());
-		return m_metaTreeCtrl->AppendItem(parent, metaObject->GetName(),
-			imageIndex,
-			imageIndex,
-			new wxTreeItemMetaData(metaObject)
-		);
-	}
 
 	void ActivateItem(const wxTreeItemId& item);
 
 	ibValueMetaObject* NewItem(const ibClassID& clsid, ibValueMetaObject* parent, bool runObject = true);
 	ibValueMetaObject* CreateItem(bool showValue = true);
 
-	wxTreeItemId FillItem(ibValueMetaObject* metaItem, const wxTreeItemId& item, bool select = true, bool scroll = true);
 
+	wxTreeItemId FillItem(ibValueMetaObject* metaItem, const wxTreeItemId& item, bool select = true, bool scroll = true);
 	void EditItem();
 	void RemoveItem();
 	void EraseItem(const wxTreeItemId& item);
 	void SelectItem();
 	void PropertyItem();
 
-	void Collapse();
-	void Expand();
+	// The row is the EVENT's — see the note on the bodies.
+	void Collapse(const wxTreeItemId& item);
+	void Expand(const wxTreeItemId& item);
 
 	void UpItem();
 	void DownItem();
 
 	void SortItem();
 
-	void CommandItem(unsigned int id);
 	void PrepareContextMenu(wxMenu* menu, const wxTreeItemId& item);
 	void ShowContextMenu(wxWindow* eventSrc, const wxTreeItemId& item, const wxPoint& pos);
 
 	void FillData();
 
-	ibValueMetaObject* GetMetaObject(const wxTreeItemId& item) const {
-		if (!item.IsOk())
-			return nullptr;
-		ibTreeDataMetaItem* data =
-			dynamic_cast<ibTreeDataMetaItem*>(m_metaTreeCtrl->GetItemData(item));
-		if (data == nullptr)
-			return nullptr;
-		return data->m_metaObject;
-	}
 
 	void UpdateToolbar(ibValueMetaObject* obj, const wxTreeItemId& item);
 
+	// Close every editor opened from this navigator. Part of LEAVING a file — deliberately not part
+	// of ClearTree, which now runs on every change to the metadata.
+
+protected:
+
+	// Nothing forwards from here any more — see the note on ibMetaTreeBase.
+
 public:
 
-	virtual void UpdateChoiceSelection();
+	virtual void UpdateChoiceSelection() override;
+
+	// Added, announced, handled — see the implementation.
 
 public:
 
@@ -281,7 +169,9 @@ public:
 
 public:
 
-	virtual ibMetaData* GetMetaData() const { return m_metaData; }
+	// ITS OWN TYPE, not the base's — the override is covariant, so a caller that needs the data
+	// processor's own verbs gets them without a cast, and the base gets what it asks for.
+	virtual ibMetaDataDataProcessor* GetMetaData() const { return m_metaData; }
 
 	ibDataProcessorTree() { }
 	ibDataProcessorTree(ibMetaDocument* docParent, wxWindow* parent, wxWindowID id = wxID_ANY);

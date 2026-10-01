@@ -1,5 +1,5 @@
 ////////////////////////////////////////////////////////////////////////////
-//	Author		: Tetracode Dev
+//	Author		: Maxim Kornienko
 //	Description : chart of accounts action
 ////////////////////////////////////////////////////////////////////////////
 
@@ -7,19 +7,19 @@
 
 enum { eDefActionAndClose = 1, eSave, eCopy, eGenerate, eMarkAsDelete };
 
-ibValueRecordDataObjectChartOfAccounts::ibActionCollection ibValueRecordDataObjectChartOfAccounts::GetActionCollection(const ibFormID& formType)
+ibValueRecordDataObjectChartOfAccounts::ibStandardCommandSet ibValueRecordDataObjectChartOfAccounts::GetStandardCommands(const ibFormID& formType)
 {
-	ibActionCollection actions(this);
+	ibStandardCommandSet actions(this);
 	actions.AddAction(wxT("SaveAndClose"), _("Save and close"), g_picSaveCLSID, true, eDefActionAndClose);
 	actions.AddAction(wxT("Save"), _("Save"), g_picSaveCLSID, true, eSave);
 	actions.AddSeparator();
-	actions.AddAction(wxT("Generate"), _("Generate"), g_picGenerateCLSID, true, eGenerate);
+	actions.AddAction(wxT("Generate"), _("Generate"), g_picGenerateCLSID, true, eGenerate).SetModify(false);   // creates a NEW object — doesn't modify THIS one
 	actions.AddSeparator();
 	actions.AddAction(wxT("Clone"), _("Clone"), g_picCloneCLSID, true, eCopy);
 	return actions;
 }
 
-void ibValueRecordDataObjectChartOfAccounts::ExecuteAction(const ibActionID& action, ibBackendValueForm* srcForm)
+void ibValueRecordDataObjectChartOfAccounts::CallAsAction(const ibActionID& action, ibBackendValueForm* srcForm)
 {
 	switch (action) {
 	case eDefActionAndClose: if (WriteObject()) srcForm->CloseForm(); break;

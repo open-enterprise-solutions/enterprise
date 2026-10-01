@@ -1,0 +1,26 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "ru",
+  "categories": {
+    "common_lang": "Общее описание языка",
+    "control_flow": "Поток выполнения",
+    "global_context": "Глобальный контекст",
+    "global_functions": "Глобальные функции",
+    "primitive_types": "Примитивные типы",
+    "date": "Дата",
+    "linq": "LINQ — запросы к коллекциям",
+    "query": "Запросы к данным",
+    "rls": "Ограничение доступа к данным (RLS)",
+    "spreadsheet": "Табличный документ — макеты и печать",
+    "value_types": "Типы значений",
+    "collections": "Коллекции",
+    "containers": "Контейнер и структура",
+    "value_table": "Таблица значений (Table)",
+    "http": "HTTP — запросы к другой системе",
+    "json": "JSON — чтение и запись",
+    "text_files": "Текстовые файлы и байты — чтение и запись",
+    "runtime": "Рантайм",
+    "guide": "Справка"
+  }
+}

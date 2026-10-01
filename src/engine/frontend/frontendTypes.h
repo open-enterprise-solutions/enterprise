@@ -29,14 +29,15 @@ using ibFrontendWindow = wxWindow;
 using ibFrontendSizer  = wxSizer;
 #endif
 
-// Base class for `ibVisualHost`. On desktop it's wxScrolledCanvas (the
-// host IS a wxWindow that scrolls its child wxWidgets tree). On web it's
-// ibWebWindow (the host IS a node in the session's serialisable
-// ibWebWindow tree). Lets `class ibVisualHost : public ibFrontendHostBase`
-// stay one line instead of a #ifdef block.
+// Base class for `ibVisualHost`. On desktop it's wxPanel: the host is the FACADE that carries
+// the form's chrome, and the window that scrolls the form's controls lives INSIDE it
+// (ibVisualHost::ibContentWindow). On web it's ibWebWindow (the host IS a node in the session's
+// serialisable ibWebWindow tree — the same wrapping is what a web scroll window would slot
+// into later). Lets `class ibVisualHost : public ibFrontendHostBase` stay one line instead of
+// a #ifdef block.
 //
-// The ctor signatures differ (wxScrolledCanvas needs parent/id/pos/size/
-// style, ibWebWindow default-constructs), so ibVisualHost's own ctor
+// The ctor signatures differ (wxPanel needs parent/id/pos/size/style,
+// ibWebWindow default-constructs), so ibVisualHost's own ctor
 // still has a per-build body — the typedef only unifies the "which
 // class to inherit from" choice, not the construction semantics.
 #ifdef OES_USE_WEB
@@ -45,8 +46,9 @@ using ibFrontendHostBase = ibWebWindow;
 // Full include, not a forward decl — ibVisualHost inherits from
 // ibFrontendHostBase in visualHost.h and the inheritance requires a
 // complete class definition, not a mere declaration.
+#include <wx/panel.h>
 #include <wx/scrolwin.h>
-using ibFrontendHostBase = wxScrolledCanvas;
+using ibFrontendHostBase = wxPanel;
 #endif
 
 // No typedefs for concrete sizer subclasses (BoxSizer / WrapSizer /

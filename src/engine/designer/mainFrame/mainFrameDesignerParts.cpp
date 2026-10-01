@@ -5,10 +5,58 @@
 
 #include "mainFrameDesigner.h"
 #include "backend/metaData.h"
+#include "backend/appData.h"
+#include "mainFrame/vcs/gitPanel.h"
+
+#include <wx/filename.h>
 
 #include "frontend/artProvider/artProvider.h"
 
-void ibFrontendDocMDIFrameDesigner::CreateWideGui()
+// ⭐ THE BUTTONS ARE THE MENU'S COMMANDS, NOT COPIES OF THEM. Each carries the id of its Debug-menu item, so the
+// press lands in the same handler (OnStartDebug, OnRunDebugCommand...) and the button is lit or dimmed by the same
+// OnUpdateDebugCommand that lights the menu item - the frame binds those to the ids, and the toolbar's events
+// climb to the frame. Nothing here decides what a command does or when it is available.
+//
+// What is left out on purpose: the web-client starts (they are a submenu of the two starts, and a button per
+// client would double the row) - they stay in the menu.
+void ibFrontendMainFrameDesigner::CreateDebugToolbar()
+{
+	m_debugToolbar = new wxAuiToolBar(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxAUI_TB_HORZ_LAYOUT);
+	m_debugToolbar->SetToolBitmapSize(wxSize(16, 16));
+
+	const auto add = [this](int id, const wxArtID& art, const wxString& label) {
+		m_debugToolbar->AddTool(id, label,
+			wxArtProvider::GetBitmapBundle(art, wxART_DEBUG, wxSize(16, 16)), label, wxItemKind::wxITEM_NORMAL);
+	};
+
+	add(wxID_DESIGNER_DEBUG_START, wxART_DEBUG_START, _("Start debugging"));
+	add(wxID_DESIGNER_DEBUG_START_WITHOUT_DEBUGGING, wxART_DEBUG_START_WITHOUT_DEBUGGING, _("Start without debugging"));
+	add(wxID_DESIGNER_DEBUG_ATTACH_FOR_DEBUGGING, wxART_DEBUG_ATTACH, _("Attach for debugging..."));
+	m_debugToolbar->AddSeparator();
+	add(wxID_DESIGNER_DEBUG_NEXT_POINT, wxART_DEBUG_CONTINUE, _("Continue"));
+	add(wxID_DESIGNER_DEBUG_PAUSE, wxART_DEBUG_PAUSE, _("Pause"));
+	add(wxID_DESIGNER_DEBUG_STEP_INTO, wxART_DEBUG_STEP_INTO, _("Step into"));
+	add(wxID_DESIGNER_DEBUG_STEP_OVER, wxART_DEBUG_STEP_OVER, _("Step over"));
+	add(wxID_DESIGNER_DEBUG_STEP_OUT, wxART_DEBUG_STEP_OUT, _("Step out"));
+	add(wxID_DESIGNER_DEBUG_STOP_DEBUGGING, wxART_DEBUG_STOP_DEBUGGING, _("Stop debugging"));
+	add(wxID_DESIGNER_DEBUG_STOP_PROGRAM, wxART_DEBUG_STOP_PROGRAM, _("Stop debugging program"));
+	m_debugToolbar->AddSeparator();
+	add(wxID_DESIGNER_DEBUG_REMOVE_ALL_DEBUGPOINTS, wxART_DEBUG_REMOVE_ALL_BREAKPOINTS, _("Remove all breakpoints"));
+	m_debugToolbar->Realize();
+
+	wxAuiPaneInfo paneInfoDebugTool;
+	paneInfoDebugTool.Name(wxT("debugTool"));
+	paneInfoDebugTool.Caption(_("Debug"));
+	paneInfoDebugTool.ToolbarPane();
+	paneInfoDebugTool.Top();
+	paneInfoDebugTool.Row(1);
+	paneInfoDebugTool.Position(2);
+	paneInfoDebugTool.CloseButton(false);
+	paneInfoDebugTool.DestroyOnClose(false);
+	m_mgr.AddPane(m_debugToolbar, paneInfoDebugTool);
+}
+
+void ibFrontendMainFrameDesigner::CreateWideGui()
 {
 	m_mainFrameToolbar = new wxAuiToolBar(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxAUI_TB_HORZ_LAYOUT);
 	m_mainFrameToolbar->SetToolBitmapSize(wxSize(16, 16));
@@ -37,6 +85,8 @@ void ibFrontendDocMDIFrameDesigner::CreateWideGui()
 	paneInfoMainTool.DestroyOnClose(false);
 	m_mgr.AddPane(m_mainFrameToolbar, paneInfoMainTool);
 
+	CreateDebugToolbar();
+
 	m_docToolbar = new wxAuiToolBar(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxAUI_TB_HORZ_LAYOUT);
 	m_docToolbar->SetToolBitmapSize(wxSize(16, 16));
 
@@ -53,6 +103,7 @@ void ibFrontendDocMDIFrameDesigner::CreateWideGui()
 	m_mgr.AddPane(m_docToolbar, paneInfoDocTool);
 
 	CreateMetadataPane();
+	CreateGitPane();
 	CreatePropertyPane();
 	CreateBottomPane();
 
@@ -60,7 +111,10 @@ void ibFrontendDocMDIFrameDesigner::CreateWideGui()
 
 	SetStatusBar(new ibDocBottomStatusBar(this));
 	SetStatusText(_("Ready"));
-	GetNotebook()->GetAuiManager().GetArtProvider()->SetColour(wxAUI_DOCKART_BACKGROUND_COLOUR, wxAUI_DEFAULT_COLOUR);
+	// Keep interior palette — luna dock art already exposes powder-blue
+	// (#B8C9D4); don't reset it to wxAUI_DEFAULT_COLOUR (legacy navy).
+	GetNotebook()->GetAuiManager().GetArtProvider()->SetColour(
+		wxAUI_DOCKART_BACKGROUND_COLOUR, wxColour(0xB8, 0xC9, 0xD4));
 	SetMinSize(wxSize(400, 380));
 
 	// tell the manager to "commit" all the changes just made
@@ -70,7 +124,7 @@ void ibFrontendDocMDIFrameDesigner::CreateWideGui()
 #include "frontend/win/ctrls/floatingNotebook.h"
 #include "frontend/win/theme/luna_tabart.h"
 
-void ibFrontendDocMDIFrameDesigner::CreateBottomPane()
+void ibFrontendMainFrameDesigner::CreateBottomPane()
 {
 	if (m_mgr.GetPane(wxAUI_PANE_BOTTOM).IsOk())
 		return;
@@ -105,12 +159,13 @@ void ibFrontendDocMDIFrameDesigner::CreateBottomPane()
 	m_mgr.AddPane(auiNotebook, paneInfo);
 }
 
-void ibFrontendDocMDIFrameDesigner::CreateMetadataPane()
+void ibFrontendMainFrameDesigner::CreateMetadataPane()
 {
 	if (m_mgr.GetPane(wxAUI_PANE_METADATA).IsOk())
 		return;
 
-	m_metaWindow = new ibMetadataTree(this, wxID_ANY);
+	m_metaWindow = new ibConfigurationTree(this, wxID_ANY);
+
 
 	wxAuiPaneInfo paneInfo;
 	paneInfo.Name(wxAUI_PANE_METADATA);
@@ -123,10 +178,140 @@ void ibFrontendDocMDIFrameDesigner::CreateMetadataPane()
 	m_mgr.AddPane(m_metaWindow, paneInfo);
 }
 
-void ibFrontendDocMDIFrameDesigner::UpdateEditorOptions()
+void ibFrontendMainFrameDesigner::CreateGitPane()
+{
+	if (m_mgr.GetPane(wxT("gitPane")).IsOk())
+		return;
+
+	m_gitPanel = new ibGitPanel(this);
+
+	// Bind to the configuration working copy — the directory of the file-mode
+	// config/db path. In server mode there is no local working copy, so the
+	// pane simply shows "(no repository)".
+	if (appData != nullptr) {
+		const wxString file = appData->GetFile();
+		if (!file.empty())
+			m_gitPanel->SetWorkdir(wxFileName(file).GetPath());
+	}
+
+	wxAuiPaneInfo paneInfo;
+	paneInfo.Name(wxT("gitPane"));
+	paneInfo.Caption(_("Version control"));
+	paneInfo.Right();
+	paneInfo.MinSize(280, 0);
+	paneInfo.Float();
+	paneInfo.Hide();   // opens hidden; user reveals via the AUI pane list
+
+	m_mgr.AddPane(m_gitPanel, paneInfo);
+}
+
+void ibFrontendMainFrameDesigner::UpdateEditorOptions()
 {
 	for (auto& doc : m_docManager->GetDocumentsVector())
 		doc->UpdateAllViews();
 
 	m_outputWindow->SetFontColorSettings(GetFontColorSettings());
+}
+
+// ---------------------------------------------------------------------------
+// Syntax-helper sidebar — lazy AUI pane. wxAUI_PANE_HELP constant
+// lives in frontend/mainFrame/mainFrame.h alongside the other pane
+// names so the editor and other frontend widgets can address the same
+// pane without depending on this designer header.
+// ---------------------------------------------------------------------------
+
+#include "frontend/syntaxHelper/helpPaneView.h"
+#include "frontend/syntaxHelper/helpChooserDialog.h"
+#include "frontend/win/editor/codeEditor/codeEditor.h"
+#include "backend/appData.h"
+#include "backend/syntaxHelper/helpService.h"
+#include "backend/syntaxHelper/helpCorpus.h"
+#include "backend/syntaxHelper/helpResolver.h"
+#include "backend/syntaxHelper/helpEntry.h"
+
+void ibFrontendMainFrameDesigner::EnsureHelpPane()
+{
+	if (m_mgr.GetPane(wxAUI_PANE_HELP).IsOk()) return;
+
+	m_helpPane = new ibHelpPaneView(this);
+
+	wxAuiPaneInfo paneInfo;
+	paneInfo.Name(wxAUI_PANE_HELP);
+	paneInfo.Caption(_("Syntax Helper"));
+	paneInfo.Right();
+	paneInfo.Layer(1);
+	paneInfo.MinSize(320, 480);
+	paneInfo.BestSize(360, 600);
+	paneInfo.CloseButton(true);
+	paneInfo.MaximizeButton(false);
+	paneInfo.MinimizeButton(false);
+	paneInfo.Show(true);
+
+	m_mgr.AddPane(m_helpPane, paneInfo);
+	m_mgr.Update();
+
+	// XML state persistence (last entry id / active tab / detail font
+	// boost) lands as a separate cosmetic step — pane is functional
+	// without it, just doesn't remember position across sessions.
+}
+
+void ibFrontendMainFrameDesigner::ToggleHelpPane()
+{
+	const bool firstCreate = !m_mgr.GetPane(wxAUI_PANE_HELP).IsOk();
+	EnsureHelpPane();
+	wxAuiPaneInfo& pane = m_mgr.GetPane(wxAUI_PANE_HELP);
+	if (!pane.IsOk()) return;
+	// EnsureHelpPane already adds the pane visible. On the first
+	// invocation a naive "flip" would immediately hide it; only toggle
+	// on subsequent invocations.
+	if (!firstCreate) pane.Show(!pane.IsShown());
+	m_mgr.Update();
+}
+
+void ibFrontendMainFrameDesigner::OpenHelpForCursor()
+{
+	EnsureHelpPane();
+	wxAuiPaneInfo& pane = m_mgr.GetPane(wxAUI_PANE_HELP);
+	if (pane.IsOk() && !pane.IsShown()) {
+		pane.Show(true);
+		m_mgr.Update();
+	}
+
+	// Take identifier from the focused editor if it's an ibCodeEditor.
+	// Other focused widgets (metaTree, dialogs) don't carry a script-
+	// language identifier under the caret, so silently no-op — user
+	// can still type in the search tab manually.
+	wxString identifier;
+	if (auto* edit = wxDynamicCast(wxWindow::FindFocus(), ibCodeEditor))
+		identifier = edit->GetIdentifierUnderCursor();
+	if (identifier.IsEmpty()) return;
+
+	auto* helpService = appData ? appData->GetHelpService() : nullptr;
+	auto corpus = helpService ? helpService->GetCorpus() : nullptr;
+	if (!corpus) return;
+
+	std::vector<const ibHelpEntry*> hits = ResolveByName(*corpus, identifier);
+	if (hits.empty()) return;
+
+	if (hits.size() == 1) {
+		if (m_helpPane) m_helpPane->ShowEntry(hits.front()->id);
+		return;
+	}
+
+	// Multiple matches → modal section-chooser dialog. Three buttons:
+	// Show (drives the pane), Cancel (no-op), Help (opens the
+	// on-helper guide entry).
+	ibHelpChooserDialog dlg(this, hits);
+	if (dlg.ShowModal() != wxID_OK) return;
+	if (dlg.HelpRequested()) {
+		// "Help" button — open the well-known on-helper guide entry
+		// if it exists; otherwise close silently (showing an
+		// arbitrary candidate would mislead the user).
+		static const wxString kGuideId = wxT("guide.syntaxHelper");
+		if (corpus->FindById(kGuideId) && m_helpPane)
+			m_helpPane->ShowEntry(kGuideId);
+		return;
+	}
+	if (!dlg.GetSelectedId().IsEmpty() && m_helpPane)
+		m_helpPane->ShowEntry(dlg.GetSelectedId());
 }

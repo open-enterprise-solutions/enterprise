@@ -6,31 +6,29 @@
 // Construction/Destruction
 //////////////////////////////////////////////////////////////////////
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueFile, ibValue);
 
-ibValue::ibValueMethodHelper ibValueFile::m_methodHelper;
-
-void ibValueFile::PrepareNames() const
+void ibValueFile_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
 {
-	m_methodHelper.AppendConstructor(1, wxT("File(path : string)"));
+	helper.AppendConstructor(1, wxT("File(path : string)"));
 
-	m_methodHelper.AppendProp(wxT("BaseName"));
-	m_methodHelper.AppendProp(wxT("Extension"));
-	m_methodHelper.AppendProp(wxT("FullName"));
-	m_methodHelper.AppendProp(wxT("Name"));
-	m_methodHelper.AppendProp(wxT("Path"));
+	helper.AppendProp(wxT("BaseName"));
+	helper.AppendProp(wxT("Extension"));
+	helper.AppendProp(wxT("FullName"));
+	helper.AppendProp(wxT("Name"));
+	helper.AppendProp(wxT("Path"));
 
-	m_methodHelper.AppendFunc(wxT("Exist"), wxT("Exist()"));
-	//m_methodHelper.AppendMethod(wxT("GetHidden"), wxT("GetHidden()"));
-	m_methodHelper.AppendFunc(wxT("GetModificationTime"), wxT("GetModificationTime()"));
-	m_methodHelper.AppendFunc(wxT("GetReadOnly"), wxT("GetReadOnly()"));
-	m_methodHelper.AppendFunc(wxT("IsDirectory"), wxT("IsDirectory()"));
-	m_methodHelper.AppendFunc(wxT("IsFile"), wxT("IsFile()"));
-	//m_methodHelper.AppendMethod("SetHidden", "SetHidden(bool)");
-	//m_methodHelper.AppendMethod("SetModificationTime", "SetModificationTime(date)");
-	//m_methodHelper.AppendMethod("SetReadOnly", "SetReadOnly(bool)");
-	m_methodHelper.AppendFunc(wxT("Size"), wxT("Size()"));
+	helper.AppendFunc(wxT("Exist"), wxT("Exist()"));
+	//helper.AppendMethod(wxT("GetHidden"), wxT("GetHidden()"));
+	helper.AppendFunc(wxT("GetModificationTime"), wxT("GetModificationTime()"));
+	helper.AppendFunc(wxT("GetReadOnly"), wxT("GetReadOnly()"));
+	helper.AppendFunc(wxT("IsDirectory"), wxT("IsDirectory()"));
+	helper.AppendFunc(wxT("IsFile"), wxT("IsFile()"));
+	//helper.AppendMethod("SetHidden", "SetHidden(bool)");
+	//helper.AppendMethod("SetModificationTime", "SetModificationTime(date)");
+	//helper.AppendMethod("SetReadOnly", "SetReadOnly(bool)");
+	helper.AppendFunc(wxT("Size"), wxT("Size()"));
 }
+
 
 #include "backend/appData.h"
 
@@ -41,14 +39,18 @@ bool ibValueFile::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibVal
 	switch (lMethodNum)
 	{
 	case enExist:
+		// Parenthesised as intended: a name is required, AND then either the file or the
+		// directory must exist. Without the brackets && bound tighter, so the whole thing
+		// read as "(named AND file exists) OR directory exists" — the second arm answering
+		// true for an EMPTY name.
 		pvarRetValue = m_fileName.Length() > 0 &&
-			(!strFileName.IsDir() && strFileName.Exists()) || (strFileName.IsDir() && strFileName.DirExists());
+			((!strFileName.IsDir() && strFileName.Exists()) || (strFileName.IsDir() && strFileName.DirExists()));
 		return true;
 		//case enGetHidden: break;
-	case enGetModificationTime: pvarRetValue = strFileName.GetModificationTime();
+	case enGetModificationTime: pvarRetValue = ibDateTime::OfWxDateTime(strFileName.GetModificationTime());   // the file system's instant, by its local parts
 		return true;
 	case enGetReadOnly: pvarRetValue = m_fileName.Length() > 0 &&
-		(!strFileName.IsDir() && strFileName.IsFileReadable()) || (strFileName.IsDir() && strFileName.IsDirReadable());
+		((!strFileName.IsDir() && strFileName.IsFileReadable()) || (strFileName.IsDir() && strFileName.IsDirReadable()));
 		return true;
 	case enIsDirectory: pvarRetValue = strFileName.IsDir();
 		return true;
@@ -98,7 +100,7 @@ bool ibValueFile::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 	return false;
 }
 
-ibValueFile::ibValueFile() : ibValue(ibValueTypes::TYPE_VALUE)
+ibValueFile::ibValueFile() : ibValueStaticMembers(ibValueTypes::TYPE_VALUE)
 {
 }
 
@@ -118,4 +120,4 @@ bool ibValueFile::Init(ibValue** paParams, const long lSizeArray)
 //*                       Runtime register                             *
 //**********************************************************************
 
-VALUE_TYPE_REGISTER(ibValueFile, "File", string_to_clsid("VL_FILE"));
+VALUE_TYPE_REGISTER(ibValueFile, "File", value_to_clsid("VL_FILE"));

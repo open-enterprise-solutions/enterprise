@@ -4,25 +4,475 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "reference.h"
+#include "backend/system/value/valuePointInTime.h"   // the moment a reference can be asked for
+
 #include "backend/metaData.h"
+#include "backend/objCtor.h"   // ibCtorMetaValueType::GetMetaTypeCtor / ibCtorObjectMetaType_Reference — ConvertToMetaIds
 #include "backend/metaCollection/partial/commonObject.h"
 #include "backend/metaCollection/partial/tabularSection/tabularSection.h"
-#include "backend/databaseLayer/databaseLayer.h"
+#include "backend/appData.h"   // DesignerMode — a reference being WRITTEN is type + guid, not a row
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueReferenceDataObject, ibValue);
+#include <vector>
+#include <algorithm>
+#include <utility>
+
+#include "backend/session/session.h"   // ibSession::Current — the register lives on the session
+#include "backend/diagnostics/journal.h"   // a read refused across sessions is said out loud
+#include "backend/utils/debugTrace.h"      // ibDebugTraceEnabled — the register measurement is opt-in
+#include <unordered_map>
+#include <unordered_set>         // Unread — an identity filed twice is told once
+#include <mutex>                 // the table is read by a rented read on another thread
+#include <cstring>
+//////////////////////////////////////////////////////////////////////
+// ⭐⭐ ONE REFERENCE PER OBJECT, FOR AS LONG AS SOMEBODY HOLDS IT
+//////////////////////////////////////////////////////////////////////
+//
+// A reference is an IDENTITY — this catalogue, this row — so two of them naming the same object are
+// not two things, they are one thing counted twice. Before this they really were two: every cell of
+// every list built its own, and each one went to the database for its own copy of the same row. The
+// same nomenclature printed on forty lines was read forty times.
+//
+// So the creation door checks first: is this object already here? If it is, that one is returned and
+// nothing is built — the row it already read serves every later holder for free.
+//
+// LIFETIME NEEDS NO POLICY, which is the part that makes this worth doing rather than a cache. A
+// reference is reference-counted already; when the last holder lets go, its destructor runs and the
+// object strikes itself from the registry. So the table holds exactly the LIVE references and never
+// one more. A base with a billion rows does not mean a billion entries — only what a form, a report
+// or a script is holding at this moment, which is the same population that would have existed
+// anyway. The registry adds a key and a pointer per object, and nothing else.
+//
+// ⚠ HASHED, NOT SCANNED — and this is the whole difference from the attempt that stood here
+// commented out for a year. That one walked the array on every creation: a thousand live references
+// and a thousand more being made is a million comparisons, which is slower than reading the database
+// it was meant to save. Looked up by key, the cost does not depend on how many are alive.
+//
+// ⚠ PER SESSION, NOT PER PROCESS. Two sessions read two different databases: sharing objects between
+// them would hand one session another's row. Being per-session also means each thread works in its
+// own table, so nothing here takes a lock — which is what would have made a shared registry cost
+// more than it saves on the very path it exists for.
+namespace {
+
+// ⚠ THE KEY IS THE RAW IDENTITY, NOT ITS TEXT. Rendering the guid to a string would allocate on
+// EVERY lookup — and a lookup happens wherever a reference is built, which is the busiest path in
+// the engine. A register that allocates to decide whether it can save you a database read is a
+// register that costs more than it saves. Sixteen bytes and a number, compared as they lie.
+struct ibRefKey {
+	ibMetaID    m_metaId;
+	ibGuidImpl  m_guid;
+
+	bool operator==(const ibRefKey& other) const {
+		return m_metaId == other.m_metaId
+		    && m_guid.m_data1 == other.m_guid.m_data1
+		    && m_guid.m_data2 == other.m_guid.m_data2
+		    && m_guid.m_data3 == other.m_guid.m_data3
+		    && std::memcmp(m_guid.m_data4, other.m_guid.m_data4, sizeof(m_guid.m_data4)) == 0;
+	}
+};
+
+struct ibRefKeyHash {
+	std::size_t operator()(const ibRefKey& k) const {
+		// The same fields, combined the same way ibValueReferenceDataObject::GetValueHash uses — one
+		// notion of "which object is this" rather than two that could drift apart.
+		std::uint64_t h = ibHashCombine(kIbHashBasis, static_cast<std::uint64_t>(k.m_metaId));
+		h = ibHashCombine(h, k.m_guid.m_data1);
+		h = ibHashCombine(h, k.m_guid.m_data2);
+		h = ibHashCombine(h, k.m_guid.m_data3);
+		for (const unsigned char byte : k.m_guid.m_data4)
+			h = ibHashCombine(h, byte);
+		return static_cast<std::size_t>(h);
+	}
+};
+
+// Does this key name an object at all? An all-zero guid is the EMPTY reference — "a Catalogue.Goods,
+// but no particular one" — and there is nothing to share about it: it has no row, every holder wants
+// its own blank, and two of them are interchangeable anyway. So empty references never enter the
+// table, which is also why the table's population is "objects being looked at", not "references alive".
+//
+// Read off the bytes rather than through ibGuid::isValid, which builds a guid to compare against.
+// ibGuidImpl is a pinned 16-byte POD with no padding (see its static_assert), so this is exact.
+bool NamesAnObject(const ibGuidImpl& guid)
+{
+	static const ibGuidImpl s_empty = {};
+	return std::memcmp(&guid, &s_empty, sizeof(ibGuidImpl)) != 0;
+}
+
+// The table itself — one per session, created on first use and destroyed with the session.
+//
+// ⚠ THE LOCK IS NOT FOR ITS OWNER, IT IS FOR THE GUEST. Every write to a table comes from the
+// session that owns it, on that session's own thread, so an owner alone would need no lock at all —
+// and until 2026-09-07 there was none, correctly. What changed is that a RENTED READ now looks in
+// its HOST's table (TableOfCurrentSession below), so the fetch's thread and the owner's thread now
+// share one map — and a torn read of an unordered_map is not a stale answer, it is a crash. Every
+// operation takes this lock; it is uncontended except at exactly the crossing it exists for.
+struct ibReferenceTable {
+	// A live reference and the session that FILED it. A rented read files into its host's table (see
+	// TableOfCurrentSession), and a batch tells only what its own session made (Find(state)) — so a rented
+	// run and its host never write to one reference at once. Weak, so a later session can never be taken
+	// for one that has gone: its block outlives it while an entry names it.
+	struct ibFiled {
+		ibValueReferenceDataObject* m_ref;
+		std::weak_ptr<ibSession>    m_by;
+	};
+	std::mutex m_mtx;
+	std::unordered_map<ibRefKey, ibFiled, ibRefKeyHash> m_live;
+	// ⭐ THE ONES FILED SINCE A BATCH LAST ASKED (Unread) — by key, so one that has gone is simply not found
+	// again. A batch takes these instead of walking every live reference: a payroll sheet holds some 120
+	// thousand, and every in-memory result asked for the unread among all of them (audit 2026-09-12).
+	std::vector<ibRefKey> m_unread;
+};
+
+// The current session's table, made if this is the first reference it holds. Null when there is no
+// session at all — bring-up, a tool, a unit test — and then every reference is built as it always
+// was. A register that only sometimes exists is fine; a register that sometimes lies is not.
+std::shared_ptr<ibReferenceTable> TableOfCurrentSession(bool createIfMissing)
+{
+	ibSession* const session = ibSession::Current();
+	if (session == nullptr)
+		return nullptr;
+
+	// ⭐⭐ A RENTED READ USES THE TABLE OF THE SESSION IT READS FOR. It is minted to fetch one page on
+	// somebody's behalf and released, so a table of its own is empty when the page starts and gone
+	// when it ends — every page rebuilt every reference it showed and read every row again.
+	//
+	// MEASURED, and the measuring is the point: three separate attempts to fix this by LOOKING
+	// somewhere else all bought exactly nothing (24 pages, 25 identities, ~292 reads, unchanged
+	// across them), because the table they looked in was one nobody filled. A probe on the miss said
+	// so in one line — `own=yes/9 host=no/0`, on all 1056 of them: the host had no table at all,
+	// since the tenant creates AND reads the references and the host only displays them.
+	//
+	// So the tenant does not keep a register of its own; it files into the one that outlives the
+	// page. That is also the only thing that makes a NEXT page's lookup hit.
+	//
+	// ⚠ TWO THREADS NOW SHARE A TABLE, which is why ibReferenceTable carries a mutex and every
+	// operation on it takes one. Nothing else about the register changed: it still indexes what is
+	// alive and owns nothing.
+	//
+	// ⚠ THE HOST'S, NOT A GLOBAL ONE. A rented read already borrows the host's ACCESS POLICY for the
+	// same reason (ibSession::GetAccessPolicy — "no policy of its own, borrow the host's"): it reads
+	// AS that session, under its rights. And only a RENTED one asks — a web client has a Server() too
+	// and is a different person, so `IsUnlisted` is the honest question.
+	if (session->IsUnlisted()) {
+		if (const std::shared_ptr<ibSession> host = session->Server())
+			return host->Local<ibReferenceTable>(createIfMissing);
+	}
+
+	return session->Local<ibReferenceTable>(createIfMissing);
+}
+
+// Is this identity already being read further up the stack? Defined further down with the read
+// guard's own storage — the same anonymous namespace, split only by where that storage sits.
+bool IsBeingRead(const ibMetaID& metaId, const ibGuid& guid);
+
+}   // namespace
+
+ibValueReferenceDataObject* ibReferenceRegistry::Find(const ibMetaID& id, const ibGuidImpl& objGuid)
+{
+	if (!NamesAnObject(objGuid))
+		return nullptr;
+	// ⚠ NOT WHILE THIS IDENTITY IS BEING READ. A row's own attribute can name the row it belongs to —
+	// a Parent pointing at itself, or A -> B -> A, the shapes ibRefReadGuard exists for. Materialising
+	// that attribute asks here, and answering with the very object doing the reading would have it
+	// store a strong pointer to itself: the count never reaches zero, the destructor never runs, and
+	// the entry never leaves this table. The register's whole claim — it holds what is alive and not
+	// one entry more — would fail on exactly the data it was written to survive.
+	if (IsBeingRead(id, objGuid))
+		return nullptr;
+
+	// ⚠ ONE TABLE, AND IT IS THE ONE THAT OUTLIVES THE PAGE — TableOfCurrentSession sends a rented
+	// read to its host's, which is what makes a next page's lookup able to hit at all.
+	//
+	// ⚠ LOCKED, ON THE HOTTEST PATH THERE IS — one call per reference per cell. That is the price of
+	// the table being shared between the fetch's thread and the owner's, and it is the smaller half
+	// of the trade: an uncontended lock against a round trip to the database.
+	const std::shared_ptr<ibReferenceTable> own = TableOfCurrentSession(/*createIfMissing*/false);
+
+	ibValueReferenceDataObject* it = nullptr;
+	if (own) {
+		std::lock_guard<std::mutex> lock(own->m_mtx);
+		const auto found = own->m_live.find(ibRefKey{ id, objGuid });
+		if (found != own->m_live.end())
+			it = found->second.m_ref;
+	}
+
+	if (it == nullptr) {
+		// ⚠ A PROBE, NOT A DIAGNOSTIC THE PRODUCT NEEDS — behind the same gate as hit / read, and
+		// there for one question: WHY does a miss happen while the object is demonstrably alive?
+		// Three answers are possible and they want three different fixes — the guest road never
+		// fires (no host to ask), it fires against an empty table (the adoption files elsewhere), or
+		// it fires against a full one and still misses (the identity differs). The line says which,
+		// and none of them can be told apart by reasoning about the code.
+		static const bool s_traceRefs = ibDebugTraceEnabled("OES_TRACE_REFS");
+		if (s_traceRefs) {
+			std::size_t size = 0;
+			if (own) {
+				std::lock_guard<std::mutex> lock(own->m_mtx);
+				size = own->m_live.size();
+			}
+			ibJournalInfo(wxT("reference"), wxT("miss %s <%i> table=%s/%u"),
+				ibGuid(objGuid).str(), static_cast<int>(id),
+				own ? wxT("yes") : wxT("no"), static_cast<unsigned>(size));
+		}
+		return nullptr;
+	}
+
+	// ⭐ A REUSE, SAID OUT LOUD. Beside the "read" line this is the whole measurement of the register:
+	// reads are rows fetched, hits are asks answered by an object somebody already had. A burst with
+	// many reads and no hits means nothing was being shared and the register is buying nothing there —
+	// which is a fact worth having rather than an argument about how the mechanism ought to behave.
+	//
+	// ⚠ BEHIND A GATE, because this is the busiest path there is: unconditional, it renders a guid and
+	// flushes a line to disk on every hit — measuring the thing by making it slower than it was.
+	static const bool s_traceRefs = ibDebugTraceEnabled("OES_TRACE_REFS");
+	if (s_traceRefs)
+		ibJournalInfo(wxT("reference"), wxT("hit %s <%i>"), ibGuid(objGuid).str(), static_cast<int>(id));
+	return it;
+}
+
+ibValueReferenceDataObject* ibReferenceRegistry::Find(const ibValueMetaObjectRecordDataRef* metaObject,
+                                                       const ibGuidImpl& objGuid)
+{
+	if (metaObject == nullptr)
+		return nullptr;
+	return Find(static_cast<const ibValueMetaObject*>(metaObject)->GetMetaID(), objGuid);
+}
+
+// ⭐ THE REGISTER ALREADY KNOWS EVERY REFERENCE THE SESSION MADE, so a batch asks it rather than walking
+// the lists the references went into: a query's flat list was scanned cell by cell for them, three times
+// over for one payroll sheet (read, stitched, sorted), some 300 ms a time (MEASURED 2026-09-12).
+//
+// …AND IT KNOWS WHICH OF THEM ARE NEW. The batch used to walk every live reference for the raw ones, and every
+// in-memory result asks it — the cost grew with what the session had ever made, per result, inside a script's
+// loop as much as anywhere (audit 2026-09-12). Now it takes the keys filed since it last asked: each is asked
+// of a batch once, and one a batch could not tell (a read that failed, a row not there) reads itself when it
+// is asked, instead of being read again by every batch after.
+std::vector<ibValuePtr<ibValueReferenceDataObject>> ibReferenceRegistry::Unread()
+{
+	std::vector<ibValuePtr<ibValueReferenceDataObject>> found;
+	ibSession* const session = ibSession::Current();
+	const std::shared_ptr<ibReferenceTable> own = TableOfCurrentSession(/*createIfMissing*/false);
+	if (session == nullptr || !own)
+		return found;
+	// ⚠ ITS OWN, NOT THE TABLE'S. A rented run shares its host's table, and the host's thread may be asking
+	// the host's references what they are while this one runs: telling those from here would write to one
+	// object from two threads. What this session filed, only this session is working with — the others' keys
+	// stay for their own batch.
+	const std::weak_ptr<ibSession> self = session->weak_from_this();
+	std::lock_guard<std::mutex> lock(own->m_mtx);   // a guest may be reading this map — see Find above
+	std::vector<ibRefKey> others;
+	std::unordered_set<const ibValueReferenceDataObject*> taken;   // an identity filed twice is told once
+	for (const ibRefKey& key : own->m_unread) {
+		const auto live = own->m_live.find(key);
+		if (live == own->m_live.end() || live->second.m_ref->m_state != ibReferenceState::Raw)
+			continue;   // gone, or told since it was filed
+		if (live->second.m_by.owner_before(self) || self.owner_before(live->second.m_by))
+			others.push_back(key);
+		else if (taken.insert(live->second.m_ref).second)
+			found.emplace_back(live->second.m_ref);
+	}
+	own->m_unread.swap(others);
+	return found;
+}
+
+void ibReferenceRegistry::Remember(ibValueReferenceDataObject* ref)
+{
+	// ⚠ THE FIELDS, NOT THE ACCESSORS. This runs from the CONSTRUCTOR, where a virtual call answers
+	// for the class being built rather than for a derived one — so a future subclass overriding
+	// GetMetaObject / GetGuid would be filed under the base's answer and found under its own, which
+	// is a twin that never gets reused and never gets struck out. Reading the members is exact at
+	// every point in the object's life. The register is a friend for this reason.
+	if (ref == nullptr || ref->m_metaObject == nullptr)
+		return;
+
+	// The key AFTER the null check, not through a conditional producing one of two guid types: ibGuid
+	// and ibGuidImpl each convert to the other, so a ternary over both is ambiguous — MSVC picks one
+	// and GCC refuses. Checking first is what this should have said anyway.
+	const ibGuidImpl key = ref->m_objGuid;
+	if (!NamesAnObject(key))
+		return;
+	const std::shared_ptr<ibReferenceTable> table = TableOfCurrentSession(/*createIfMissing*/true);
+	if (!table)
+		return;
+	// ⚠ THE FIRST ONE KEEPS THE SLOT. A second object for one identity is rare but reachable — the
+	// cycle case above builds one deliberately — and overwriting would unregister a reference that is
+	// still alive, leaving it findable by nobody and its own Forget a no-op. The newcomer simply goes
+	// unregistered, which is the ordinary state for a reference built before there was a session.
+	{
+		// Locked because a rented read may be walking this map right now — see the note in Find.
+		// The writer is always this table's own thread, so the lock is uncontended except against
+		// a guest, which is exactly what it is for.
+		// …and WHO FILED IT — the session asking now, a rented run's own and not its host's (Find(state)).
+		ibSession* const session = ibSession::Current();
+		std::weak_ptr<ibSession> by;
+		if (session != nullptr)
+			by = session->weak_from_this();
+		std::lock_guard<std::mutex> lock(table->m_mtx);
+		const auto filed = table->m_live.emplace(ibRefKey{ ref->m_metaObject->GetMetaID(), key },
+			ibReferenceTable::ibFiled{ ref, std::move(by) });
+		if (filed.second) {
+			table->m_unread.push_back(filed.first->first);   // for the next batch (Unread)
+			// …kept no longer than what it names: a session that never asks a batch would grow it with every
+			// reference it ever made. Pruned to the live and unread once it is twice what is alive.
+			if (table->m_unread.size() > 2 * table->m_live.size() + 64) {
+				std::vector<ibRefKey>& unread = table->m_unread;
+				unread.erase(std::remove_if(unread.begin(), unread.end(), [&table](const ibRefKey& k) {
+					const auto live = table->m_live.find(k);
+					return live == table->m_live.end() || live->second.m_ref->m_state != ibReferenceState::Raw;
+				}), unread.end());
+			}
+		}
+	}
+
+	// ⭐ THE REFERENCE KEEPS ITS OWN TABLE, not a way to find one later. A value can travel — into a
+	// background job, into another session's call — and be released there; asking "which session is
+	// current?" at that moment would erase from the wrong table and leave this one pointing at freed
+	// memory. Holding the table (not the session) also means it cannot vanish underneath: the last
+	// reference out keeps it alive to be struck from.
+	ref->m_registryTable = table;
+}
+
+void ibReferenceRegistry::Forget(const ibValueReferenceDataObject* ref)
+{
+	// Fields again, and here it is not a precaution but a requirement: this runs from the DESTRUCTOR,
+	// where the derived part is already gone and a virtual call is undefined behaviour.
+	if (ref == nullptr || !ref->m_registryTable || ref->m_metaObject == nullptr)
+		return;
+	const std::shared_ptr<ibReferenceTable> table =
+		std::static_pointer_cast<ibReferenceTable>(ref->m_registryTable);
+
+	// ⚠ ONLY IF IT IS STILL MINE. A second reference to the same object can exist beside this one: one
+	// born before there was a session registered nowhere, and a later one, made once a session existed,
+	// holds the entry. Erasing by key alone would then remove the LIVING one and leave the table
+	// pointing at freed memory — the very failure the register is here to make impossible.
+	// Locked for the same reason as the insert — a guest may be reading this map.
+	std::lock_guard<std::mutex> lock(table->m_mtx);
+	const auto it = table->m_live.find(ibRefKey{ ref->m_metaObject->GetMetaID(), ref->m_objGuid });
+	if (it != table->m_live.end() && it->second.m_ref == ref)
+		table->m_live.erase(it);
+}
+// Re-entrancy guard for the eager reference read. A self / cyclic reference (a document
+// field pointing at the same record, or A -> B -> A) makes ReadData recurse: it reads a
+// reference field, whose eager PrepareRef calls ReadData again, forever -> stack overflow.
+// While a ref identity (type + guid) is already being read up the stack, the nested re-read
+// is skipped (the field keeps its key, loads lazily on demand). A self-reference is a LEGAL
+// config, so this must terminate rather than crash.
+//
+// A thread-local stack of identities (each worker reads on its own call stack): push on
+// entry, pop on exit (RAII — correct across the FB exceptions ReadData can throw). A linear
+// scan over a depth that is tiny in practice — negligible next to the DB query the read
+// itself issues.
+//
+// A FIXED array, not a vector, and the difference is not micro-optimisation: a thread-local
+// vector allocates once per thread and hands the block back only when the thread ends
+// normally. A thread still running at process exit is killed without TLS teardown, so it
+// keeps the block — measured 2026-07-30 as six leaked buffers, one per surviving thread.
+// A fixed buffer has nothing to hand back. It is also trivially destructible, so no TLS
+// destructor is registered at all.
+namespace {
+	// Depth beyond this means a reference graph nested deeper than any real config; the guard
+	// then stops tracking rather than growing. Cycle detection degrades to "not detected" for
+	// those levels, which is the same answer it gave before any of them were pushed.
+	constexpr std::size_t kRefReadDepthMax = 64;
+
+	thread_local std::pair<ibMetaID, ibGuid> g_refReadStack[kRefReadDepthMax];
+	thread_local std::size_t                 g_refReadDepth = 0;
+
+	struct ibRefReadGuard {
+		bool m_cycle = false;
+		bool m_pushed = false;
+
+		ibRefReadGuard(const ibMetaID& metaId, const ibGuid& guid) {
+			const std::pair<ibMetaID, ibGuid> key{ metaId, guid };
+			m_cycle = std::find(g_refReadStack, g_refReadStack + g_refReadDepth, key)
+				!= g_refReadStack + g_refReadDepth;
+			if (g_refReadDepth < kRefReadDepthMax) {
+				g_refReadStack[g_refReadDepth++] = key;
+				m_pushed = true;
+			}
+		}
+		~ibRefReadGuard() { if (m_pushed) --g_refReadDepth; }
+		bool Cycle() const { return m_cycle; }   // true == this identity is already being read up the stack
+	};
+
+	bool IsBeingRead(const ibMetaID& metaId, const ibGuid& guid) {
+		const std::pair<ibMetaID, ibGuid> key{ metaId, guid };
+		return std::find(g_refReadStack, g_refReadStack + g_refReadDepth, key)
+			!= g_refReadStack + g_refReadDepth;
+	}
+}
+
 
 //**********************************************************************************************
 //*                                     reference                                              *        
 //**********************************************************************************************
-//static std::vector <ibValueReferenceDataObject*> gs_references;
 //**********************************************************************************************
 
 void ibValueReferenceDataObject::PrepareRef(bool createData)
 {
 	wxASSERT(m_metaObject != nullptr);
 
-	if (m_initializedRef)
+	if (m_state == ibReferenceState::Full)
 		return;
+
+	// ⭐⭐ ONLY ITS OWN SESSION MAY READ INTO IT. There is one reference object per identity per
+	// session, and what it has read is subject to THAT user's rights: a row he may not see reads as
+	// "not found", which is deliberate and indistinguishable from a deleted one.
+	//
+	// A value can still carry the OBJECT across in-process — into a background job's closure, say —
+	// and then one object would serve two sets of rights. The session that may not see the row would
+	// read `false` into it, and the session that MAY would afterwards show "not found" for something
+	// plainly in front of it. One borrowed pointer breaks the reference for the user who is entitled
+	// to it, which is the worse of the two outcomes by far, so the read is refused rather than shared.
+	//
+	// Refusing costs the borrower nothing it is owed: the road for a reference between sessions is
+	// serialisation, where it travels as type + guid and is REBUILT on the far side as that session's
+	// own object, read under that session's rights. Only a raw pointer handed over lands here, and
+	// that is a defect at the handing-over — said out loud, with the object it happened on.
+	// ⭐⭐ NO SESSION AT ALL IS A TENANT, AND A TENANT MAY READ.
+	//
+	// A rented read (ibJobManager::StartBackground with ibJobTenancy::Tenant — a list page, a
+	// background reading) runs on its own thread and deliberately has NO session: it takes no
+	// registry row, passes no policy, starts no runtime. So `Current()` answers null there, and the
+	// absence IS the signature — nothing else needs to be asked and no flag has to be carried.
+	//
+	// 🛑 THE GUARD CONFLATED THAT WITH THE DEFECT IT WAS WRITTEN FOR. Both cases fail the same
+	// comparison, so a tenant reading a perfectly ordinary reference was refused — and refused
+	// SILENTLY, leaving the value unread. Two hundred and seven of them in one composition
+	// (measured 2026-08-31), and what a person saw was an empty report with no error anywhere.
+	//
+	// The distinction is between "nobody's turn" and "somebody else's": a tenant is entitled to the
+	// data — that is what it was minted to fetch — while a DIFFERENT live session holding this
+	// object means a raw pointer crossed a boundary, and that is still worth saying out loud.
+	const std::shared_ptr<ibReferenceTable> current = TableOfCurrentSession(false);
+
+	// 🛑⭐⭐ AN UNREAD REFERENCE CARRIES NO RIGHTS, SO IT IS ADOPTED RATHER THAN REFUSED — and the
+	// ordering above is what makes that exact rather than lenient. A Full reference returns at the
+	// top of this function, so ANY object reaching this line has read NOTHING. There is no foreign
+	// row in it, no foreign policy applied to it, nothing of the other session but the table it was
+	// filed in. Refusing it protected nobody: what it produced was an unread reference whose
+	// presentation says "Not found" about a row plainly in the base.
+	//
+	// ⚠ AND THE CASE THE REFUSAL WAS WRITTEN FOR NEVER ARRIVES HERE. An object that DID read under
+	// another session is Full and left three dozen lines above, carrying that
+	// session's answer with it - so this guard could only ever catch the harmless half. The rule it
+	// states is right; the place it stated it could not enforce it.
+	//
+	// MEASURED 2026-09-07: a list fetches its page on a worker (t21528), the values carry the
+	// reference objects, and the GUI thread asks them what they are 16 ms later (t7556). That is two
+	// sessions by construction, and it became reachable the moment the read moved from the fetch to
+	// the presentation (columnLayout.h, `createData`). One run recorded 4754 refusals and showed a
+	// screen of "Not found" against counterparties and currencies that were all there.
+	//
+	// So the object is RE-HOMED into the asking session's table and read under ITS rights, which is
+	// what the serialisation road would have produced anyway - the same identity, rebuilt on the far
+	// side - without the round trip. The first-one-keeps-the-slot rule in Remember means an identity
+	// already live in the new table simply leaves this object unregistered, which is the ordinary
+	// state of a reference built before there was a session.
+	if (m_registryTable && current && m_registryTable.get() != current.get()) {
+		ibReferenceRegistry::Forget(this);
+		m_registryTable.reset();
+		ibReferenceRegistry::Remember(this);
+	}
 
 	if (ibValueReferenceDataObject::IsEmpty()) {
 		//attrbutes can refValue 
@@ -33,145 +483,226 @@ void ibValueReferenceDataObject::PrepareRef(bool createData)
 				m_listObjectValue.insert_or_assign(object->GetMetaID(), object->CreateValue());
 			}
 		}
-		// table is collection values 
+		// table is collection values
 		for (const auto object : m_metaObject->GetTableArrayObject()) {
 			if (object->IsDeleted())
 				continue;
 			m_listObjectValue.insert_or_assign(object->GetMetaID(),
-				ibValue::CreateAndPrepareValueRef<ibValueTabularSectionDataObjectRef>(this, object));
+				new ibValueTabularSectionDataObjectRef(this, object));
 		}
 	}
-	else if (ibValueReferenceDataObject::ReadData(createData)) {
-		m_foundedRef = true; m_newObject = false;
+	else {
+		// Break self / cyclic references: read this identity only if it is not already
+		// being read up the stack (otherwise leave it lazy — no infinite recursion).
+		ibRefReadGuard guard(m_metaObject->GetMetaID(), m_objGuid);
+		if (!guard.Cycle() && ibValueReferenceDataObject::ReadData(createData)) {
+			m_foundedRef = true; m_newObject = false;
+		}
 	}
 
 	if (createData) {
-		m_initializedRef = true;
+		m_state = ibReferenceState::Full;
 	}
-
-	PrepareNames();
+	// Name surface is lazy (FillMembers built on first GetPMethods).
 }
 
-ibValueReferenceDataObject::ibValueReferenceDataObject(const ibValueMetaObjectRecordDataRef* metaObject, const ibGuid& objGuid) : ibValue(ibValueTypes::TYPE_VALUE, true), ibValueDataObject(objGuid, !objGuid.isValid()),
-m_metaObject(metaObject), m_methodHelper(new ibValueMethodHelper()), m_initializedRef(false), m_reference_impl(nullptr), m_foundedRef(false)
+ibValueReferenceDataObject::ibValueReferenceDataObject(const ibValueMetaObjectRecordDataRef* metaObject, const ibGuid& objGuid) : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, true), ibValueDataObject(objGuid, !objGuid.isValid()),
+m_metaObject(metaObject), m_metaclass(clsid_metaclass(metaObject->GetClassType())),
+m_reference_impl(nullptr), m_foundedRef(false)
 {
-	m_reference_impl = new ibReference(m_metaObject->GetMetaID(), m_objGuid);
-	//gs_references.emplace_back(this);
+	m_members.Bind(this, &ibValueReferenceDataObject::FillMembers);
+	// The stored key (_RRRef) is the pure object guid; the type is carried separately (metaObject / _RTRef).
+	// An unset reference is simply an empty guid — no normalization needed.
+	m_reference_impl = new ibReference(m_objGuid);
+
+	// ⭐ REGISTERED HERE, not in the doors. Every reference is born through this constructor —
+	// all three Create overloads, and the value-ctor registry through them — so one line covers every
+	// way of making one, and there is never a second object for an identity the register already
+	// holds. Registered per door instead, one door forgotten is a twin nobody ever finds again.
+	ibReferenceRegistry::Remember(this);
+}
+
+// GetHashKey is gone (2026-08-15). A reference's identity is carried by CompareValueLS (guid, then
+// metaID) and GetValueHash (the guid's bytes) — the same (metaID + guid) the database keys by, said
+// once, in the two methods every hash container already asks. See the note in reference.h.
+
+// ⭐⭐ THREE QUESTIONS, ASKED IN ORDER, AND ONLY ONE OF THEM MAY ANSWER "THE SAME":
+//
+//   1. is the other side a reference AT ALL      → if not, they are ordered by KIND and never equal;
+//   2. do they belong to a SEQUENCE the author declared (an enumeration's `Order`) → follow it;
+//   3. otherwise the IDENTITY order — guid, then the metaID as the tiebreak.
+//
+// ⚠ THE INVARIANT THE WHOLE FUNCTION IS WRITTEN TO: `LS == 0` exactly when the two are THE SAME
+// reference. `ibValueEqual` is literally `CompareValueLS(b) == 0` (value.h), so every hash container in
+// the house — a grouping, a join, a fold's children — takes its notion of "same" from here.
+int ibValueReferenceDataObject::CompareValueLS(const ibValue& cParam) const
+{
+	// ⭐ THE VERY SAME OBJECT IS THE SAME REFERENCE — asked before anything else, because it is the
+	// commonest comparison there is: the rows of one department all hold ONE reference object (one per
+	// identity per session), and a sort or a fold compares them with each other over and over. The
+	// pointers already say it; the kind, the metatype and the guid below would only say it again
+	// (2026-09-12, the payroll sheet's sort and fold over 120 thousand rows). Asked HERE, of the object,
+	// and not by the value that holds it — what "the same" means is the reference's to say (Max).
+	if (cParam.GetRef() == this)
+		return 0;
+
+	// ⭐⭐ THE CHEAP QUESTION FIRST, AND IT IS EXACT: the KIND is in the clsid, in its top byte, so
+	// `IsReference` is a shift and a compare — no metadata, no RTTI (clsid.h). A comparison runs once per
+	// pair in every sort, group and dedup there is, and the common mismatch is a reference against an
+	// EMPTY value, which is what every parent lookup in a hierarchy fold does.
+	//
+	// (⚠ `ibValue::IsReference()` is a different question and would not do: it asks whether the value
+	//  holds a pointer to another value, which a table, a structure and an array all answer yes to.)
+	//
+	// ⭐⭐ AND WHAT ANSWERS FOR A DIFFERENT KIND IS THE BASE — the house has ONE order across kinds
+	// (`KindRank`, value.cpp), which already ranks an empty value and a NULL below everything with a
+	// payload. Inventing a second one here would be a second answer to a settled question.
+	//
+	// 🛑 This step used to `return 0`, and 0 from an ORDER means "the same value". Every reference
+	// therefore compared EQUAL to every non-reference it was ever measured against — visible only where
+	// the two land in one hash BUCKET, which is why it hid for so long and then surfaced looking like
+	// anything but a comparison: a hierarchy fold keys children by the parent VALUE, the roots live under
+	// an EMPTY one, and `childrenOf.find(<a reference>)` found THE ROOT BUCKET. The last root then "had"
+	// every root as its children and they were re-attached a step deeper, so elements the fold had filed
+	// at the top level came out nested under an ordinary element that is nobody's folder (Max,
+	// 2026-08-29: *"00000005 somehow became a group"*). The tree was built from correct parents and
+	// wrecked by a lookup.
+	// (⚠ QUALIFIED: unqualified, `IsReference` finds this class's own inherited member — the OTHER
+	//  question — and the compiler stops at the arity rather than at the meaning.)
+	if (!::IsReference(cParam.GetClassType()))
+		return ibValue::CompareValueLS(cParam);
+
+	// ⭐ AND THEN THE CAST IS STATIC, because the question it used to answer has already been answered.
+	// A Reference-kinded clsid is produced by this class and by nothing else (`GetClassType` above builds
+	// it constructively from the metaID), so the kind byte IS the proof of type — `dynamic_cast` would
+	// walk the RTTI graph to re-derive a fact the previous line already has.
+	ibValueReferenceDataObject* const rhs =
+		static_cast<ibValueReferenceDataObject*>(cParam.GetRef());
+	// …and there is nothing to test at run time: a Reference-kinded value HAS its object. Said as an
+	// assertion because it is an invariant, not a case — a branch here would be dead code pretending to
+	// handle something that cannot happen, and the day it did happen it would hide it instead.
+	wxASSERT(rhs != nullptr);
+
+	// 2. TWO METATYPES HAVE NO COMMON ORDER — they are told apart by the TYPE, and that question belongs
+	// to nobody's metaobject. (`m_metaObject` is complete in this TU, so `GetMetaID()` resolves.)
+	const ibMetaID lm = m_metaObject      != nullptr ? m_metaObject->GetMetaID()      : 0;
+	const ibMetaID rm = rhs->m_metaObject != nullptr ? rhs->m_metaObject->GetMetaID() : 0;
+	if (lm != rm)
+		return lm < rm ? -1 : 1;
+
+	// 3. ONE METATYPE AND ONE GUID ARE ONE ROW — whatever that metatype orders by, so it is not asked.
+	// This is the commonest comparison there is: every hash lookup a fold makes ends with a key being
+	// compared to the one already in its bucket, which is itself. Asked of the metatype, an identity
+	// order built four keys by value to say so (ibCompareByIdentity, GetGuid) — and once the references
+	// of a report were read in a batch, the sort and the fold over 126 thousand rows paid for that on
+	// every comparison (MEASURED 2026-09-12: the sort before the payroll sheet's output 15 s -> 30 s, Debug).
+	if (m_objGuid.GetGuid() == rhs->m_objGuid.GetGuid())
+		return 0;
+
+	// 4. WITHIN ONE METATYPE, THE METATYPE DECIDES. Everything a comparison can know about the DATA is
+	// the metaobject's own business: an enumeration follows the sequence its author declared, a catalog
+	// says identity, and this class never learns which is which (`CompareDataValues`, commonObject.h).
+	//
+	// ⚠ THE ONE PRECONDITION THAT STAYS HERE IS THE REFERENCE'S OWN: a comparison must never become a
+	// database read — a sort would do it thousands of times — so the metatype is asked only when both
+	// rows are already in hand. Full is a fact about this object, not about its kind.
+	// Unread, the identity is all that is honestly known, and the guid is exactly that.
+	if (m_metaObject != nullptr && m_state == ibReferenceState::Full && rhs->m_state == ibReferenceState::Full)
+		return m_metaObject->CompareDataValues(this, rhs);
+
+	return m_objGuid.GetGuid() < rhs->m_objGuid.GetGuid() ? -1 : 1;   // the guids differ — step 3 settled the equal ones
 }
 
 ibValueReferenceDataObject::~ibValueReferenceDataObject()
 {
 	wxDELETE(m_reference_impl);
-	//gs_references.erase(
-	//	std::remove_if(gs_references.begin(), gs_references.end(),
-	//		[this](ibValueReferenceDataObject* ref) { return ref == this;}), gs_references.end()
-	//);
-	wxDELETE(m_methodHelper);
+	ibReferenceRegistry::Forget(this);   // the last owner let go — see the note above the registry
 }
 
-ibValueReferenceDataObject* ibValueReferenceDataObject::Create(ibMetaData* metaData, const ibMetaID& id, const ibGuid& objGuid)
+// THE UPCAST, WHERE BOTH TYPES ARE COMPLETE. In the header they are not (see the note on the
+// declaration), and a C-style cast there was a reinterpret_cast wearing a plainer suit — no base
+// adjustment, correct only while RecordData stays the FIRST base of RecordDataRef. Here the compiler
+// computes the offset, so the base order is free to change without silently returning a wrong object.
+const ibValueMetaObjectRecordData* ibValueReferenceDataObject::GetMetaObject() const
 {
-	ibValueMetaObjectRecordDataRef* metaObject = metaData->FindAnyObjectByFilter<ibValueMetaObjectRecordDataRef>(id);
-	if (metaObject != nullptr) {
-		//auto& it = std::find_if(gs_references.begin(), gs_references.end(), [metaObject, objGuid](ibValueReferenceDataObject* ref) {
-		//	return metaObject == ref->GetMetaObject() && objGuid == ref->GetGuid(); }
-		//);
-		//if (it != gs_references.end())
-		//	return *it;
-		ibValueReferenceDataObject* refData = new ibValueReferenceDataObject(metaObject, objGuid);
-		if (refData != nullptr)
-			refData->PrepareRef(true);
-		return refData;
-	}
-	return nullptr;
+	return static_cast<const ibValueMetaObjectRecordData*>(m_metaObject);
 }
 
-ibValueReferenceDataObject* ibValueReferenceDataObject::Create(const ibValueMetaObjectRecordDataRef* metaObject, const ibGuid& objGuid)
+// Read as much of the row as the caller asked for, and no more. The whole of what the three old
+// extra names encoded, now that the axis has one.
+//
+// ⚠ ON A LIVE REFERENCE THIS IS BEST-EFFORT, and correctly so. Ask for Unlatched and get one that is
+// already latched, and PrepareRef returns at once: somebody else settled it, and there is one of it.
+// That is the register working — not a mode being ignored — because "unlatched" was never a property
+// of a request, only of an object, and the object has an answer already.
+static ibValueReferenceDataObject* ReadAsAsked(ibValueReferenceDataObject* reference, ibReferenceLoad load)
 {
-	//auto& it = std::find_if(gs_references.begin(), gs_references.end(), [metaObject, objGuid](ibValueReferenceDataObject* ref) {
-	//	return metaObject == ref->GetMetaObject() && objGuid == ref->GetGuid(); }
-	//);
-	//if (it != gs_references.end())
-	//	return *it;
-	ibValueReferenceDataObject* refData = new ibValueReferenceDataObject(metaObject, objGuid);
-	if (refData != nullptr)
-		refData->PrepareRef(true);
-	return refData;
-}
-
-ibValueReferenceDataObject* ibValueReferenceDataObject::Create(ibMetaData* metaData, void* ptr)
-{
-	ibReference* reference = static_cast<ibReference*>(ptr);
 	if (reference != nullptr) {
-		ibValueMetaObjectRecordDataRef* metaObject = metaData->FindAnyObjectByFilter<ibValueMetaObjectRecordDataRef>(reference->m_id);
-		if (metaObject != nullptr) {
-			//auto& it = std::find_if(gs_references.begin(), gs_references.end(), [metaObject, reference](ibValueReferenceDataObject* ref) {
-			//	return metaObject == ref->GetMetaObject() && ref->GetGuid() == reference->m_guid; }
-			//);
-			//if (it != gs_references.end())
-			//	return *it;
-			return new ibValueReferenceDataObject(metaObject, reference->m_guid);
-		}
+		if (load == ibReferenceLoad::Unlatched)
+			reference->PrepareRef(false);
+		else if (load == ibReferenceLoad::Latched)
+			reference->PrepareRef(true);
 	}
-	return nullptr;
+	return reference;
 }
 
-ibValueReferenceDataObject* ibValueReferenceDataObject::CreateFromPtr(ibMetaData* metaData, void* ptr)
+// THE BODY. Everything else resolves a type and comes here.
+ibValueReferenceDataObject* ibValueReferenceDataObject::Create(const ibValueMetaObjectRecordDataRef* metaObject,
+                                                               const ibGuid& objGuid, ibReferenceLoad load)
 {
-	ibReference* reference = static_cast<ibReference*>(ptr);
-	if (reference != nullptr) {
-		ibValueMetaObjectRecordDataRef* metaObject = metaData->FindAnyObjectByFilter<ibValueMetaObjectRecordDataRef>(reference->m_id);
-		if (metaObject != nullptr) {
-			//auto& it = std::find_if(gs_references.begin(), gs_references.end(), [metaObject, reference](ibValueReferenceDataObject* ref) {
-			//	return metaObject == ref->GetMetaObject() && ref->GetGuid() == reference->m_guid; }
-			//);
-			//if (it != gs_references.end())
-			//	return *it;
-			ibValueReferenceDataObject* refData = new ibValueReferenceDataObject(metaObject, reference->m_guid);
-			if (refData != nullptr)
-				refData->PrepareRef(false);
-			return refData;
-		}
-	}
-	return nullptr;
+	if (metaObject == nullptr)
+		return nullptr;
+
+	// Already alive in this session? Then it IS the reference to this object, row and all.
+	if (ibValueReferenceDataObject* const live = ibReferenceRegistry::Find(metaObject, objGuid))
+		return ReadAsAsked(live, load);
+
+	// The constructor puts it in the register — see the note there.
+	return ReadAsAsked(new ibValueReferenceDataObject(metaObject, objGuid), load);
 }
 
-ibValueReferenceDataObject* ibValueReferenceDataObject::CreateFromResultSet(ibDatabaseResultSet* rs, const ibValueMetaObjectRecordDataRef* metaObject, const ibGuid& refGuid)
+ibValueReferenceDataObject* ibValueReferenceDataObject::Create(const ibMetaData* metaData, const ibMetaID& id,
+                                                               const ibGuid& objGuid, ibReferenceLoad load)
 {
-	//auto& it = std::find_if(gs_references.begin(), gs_references.end(), [metaObject, refGuid](ibValueReferenceDataObject* ref) {
-	//	return metaObject == ref->GetMetaObject() && refGuid == ref->GetGuid(); }
-	//);
-	//if (it != gs_references.end())
-	//	return *it;
+	// ⭐ ASK BEFORE RESOLVING. The table is keyed by the identifier, which is what this caller holds,
+	// so a hit answers without touching the metadata at all. Searching for the metaobject first would
+	// spend a metadata lookup to obtain something the live reference is already holding.
+	if (ibValueReferenceDataObject* const live = ibReferenceRegistry::Find(id, objGuid))
+		return ReadAsAsked(live, load);
 
-	ibValueReferenceDataObject* refData = new ibValueReferenceDataObject(metaObject, refGuid);
+	if (metaData == nullptr)
+		return nullptr;
+	return Create(metaData->FindAnyObjectByFilter<ibValueMetaObjectRecordDataRef>(id), objGuid, load);
+}
 
-	//load attributes 
-	for (const auto object : metaObject->GetGenericAttributeArrayObject()) {
-		if (object->IsDeleted())
-			continue;
-		if (metaObject->IsDataReference(object->GetMetaID()))
-			continue;
-		ibValueMetaObjectAttributeBase::GetValueAttribute(
-			object,
-			refData->m_listObjectValue[object->GetMetaID()],
-			rs,
-			false
-		);
-	}
+// clsid (the _RTRef target type) -> its reference metaObject, through the class factory. The type comes
+// from the column, never from the key bytes (the _RRRef blob is pure identity now).
+static const ibValueMetaObjectRecordDataRef* MetaObjectFromClsid(const ibMetaData* metaData, const ibClassID& clsid)
+{
+	const ibCtorMetaValueType* typeCtor = metaData != nullptr ? metaData->GetTypeCtor(clsid) : nullptr;
+	if (typeCtor == nullptr || typeCtor->GetMetaTypeCtor() != ibCtorObjectMetaType::ibCtorObjectMetaType_Reference)
+		return nullptr;
+	return dynamic_cast<const ibValueMetaObjectRecordDataRef*>(typeCtor->GetMetaObject());
+}
 
-	// table is collection values 
-	for (const auto object : metaObject->GetTableArrayObject()) {
-		if (object->IsDeleted())
-			continue;
-		refData->m_listObjectValue.insert_or_assign(
-			object->GetMetaID(),
-			ibValue::CreateAndPrepareValueRef<ibValueTabularSectionDataObjectRef>(refData, object, true)
-		);
-	}
+ibValueReferenceDataObject* ibValueReferenceDataObject::Create(const ibMetaData* metaData, const ibClassID& refClsid,
+                                                               void* ptr, ibReferenceLoad load)
+{
+	const ibReference* const reference = static_cast<const ibReference*>(ptr);
+	if (reference == nullptr)
+		return nullptr;
 
-	refData->m_foundedRef = true;
-	return refData;
+	// ⭐⭐ THE CHEAPEST QUESTION THIS DOOR CAN ASK, and it is the one that runs once per reference cell
+	// of every list and report. A reference clsid is CONSTRUCTIVE — its body IS the metaID — and the
+	// _RRRef blob IS the raw key. So both halves of the table's key are already in hand, straight off
+	// the stored row: a hash probe, with no ibMetaData search and no type-ctor lookup. Only a miss
+	// pays for resolving the metaobject, and only a miss needs one.
+	if (::IsReference(refClsid))   // the free clsid classifier — ibValue has a same-named member that hides it
+		if (ibValueReferenceDataObject* const live = ibReferenceRegistry::Find(
+				static_cast<ibMetaID>(clsid_metaID(refClsid)), reference->m_guid))
+			return ReadAsAsked(live, load);
+
+	return Create(MetaObjectFromClsid(metaData, refClsid), reference->m_guid, load);
 }
 
 bool ibValueReferenceDataObject::SetValueByMetaID(const ibMetaID& id, const ibValue& varMetaVal)
@@ -181,6 +712,8 @@ bool ibValueReferenceDataObject::SetValueByMetaID(const ibMetaID& id, const ibVa
 
 bool ibValueReferenceDataObject::GetValueByMetaID(const ibMetaID& id, ibValue& pvarMetaVal) const
 {
+	// THE REFERENCE FIELD ITSELF IS THE IDENTITY — answered from the key, with nothing read: asking a
+	// reference for its own Ref is asking for what it already is.
 	if (m_metaObject->IsDataReference(id)) {
 		if (!ibValueReferenceDataObject::IsEmpty()) {
 			pvarMetaVal = ibValueReferenceDataObject::Create(m_metaObject, m_objGuid);
@@ -189,6 +722,21 @@ bool ibValueReferenceDataObject::GetValueByMetaID(const ibMetaID& id, ibValue& p
 		pvarMetaVal = ibValueReferenceDataObject::Create(m_metaObject);
 		return true;
 	}
+
+	// A reference told what it says holds the fields its kind is said by (ReadBatch) — those answer
+	// without reading the rest, which is what lets GetString say it by the kind's own rule.
+	if (m_state == ibReferenceState::Presentation) {
+		if (const ibValue* const told = m_listObjectValue.find_value(id)) {
+			pvarMetaVal = *told;
+			return true;
+		}
+	}
+
+	// …ANY OTHER FIELD IS THE ROW, so this is the asking that resolves it — the same rule GetString
+	// follows above and GetPropVal follows below. The values live in the map PrepareRef fills; before
+	// it has run the map is empty, and "the field is not there" is not the truth about the object.
+	const_cast<ibValueReferenceDataObject*>(this)->PrepareRef();
+
 	auto it = m_listObjectValue.find(id);
 	//wxASSERT(it != m_listObjectValue.end());
 	if (it != m_listObjectValue.end()) {
@@ -198,21 +746,93 @@ bool ibValueReferenceDataObject::GetValueByMetaID(const ibMetaID& id, ibValue& p
 	return false;
 }
 
+// The reference's own hop gate — OUT-OF-LINE because it needs the referenced metaobject COMPLETE to look up the
+// field's live type. Reads the id, then validates the pin against that type via CoerceHopType — a composite
+// field's UNDEFINED resolves to the pinned twin, a field retyped away from the pin would not.
+bool ibValueReferenceDataObject::GetValueBySourceHop(const ibSourceHop& hop, ibValue& out) const
+{
+	const bool got = GetValueByMetaID(hop.m_id, out);
+	const ibValueMetaObjectAttributeBase* attribute = GetMetaObject()->FindAnyAttributeObjectByFilter(hop.m_id);
+	return CoerceHopType(hop, out, attribute != nullptr ? attribute->GetTypeDesc() : ibTypeDescription(), GetSourceMetaData()) || got;
+}
+
+// The pinned-type twin materialiser — STATIC (see the header). `metaData` comes from the CALLER's own source
+// (GetSourceMetaData), so ibSourceDataObject stays metadata-free; the reference — already metadata-bound —
+// owns the creation. A live value already of the pinned type passes through untouched.
+bool ibValueReferenceDataObject::CoerceHopType(const ibSourceHop& hop, ibValue& out, const ibTypeDescription& filter, const ibMetaData* metaData)
+{
+	if (!::IsReference(hop.m_type))
+		return false;   // no pinned reference branch — keep whatever the id primitive gave
+	// STALE-pin guard: if the field carries a type filter, the pin must be among its clsids. A value-table
+	// column RETYPED in the designer leaves an OLD pin on a bound path — do NOT fabricate the old twin (else the
+	// dead path keeps resolving as a phantom reference). An EMPTY filter (metadata-fixed field) skips the check.
+	if (filter.GetClsidCount() > 0 && !filter.ContainType(hop.m_type))
+		return false;
+	ibSourceDataObject* live = nullptr;
+	out.ConvertToValue<ibSourceDataObject>(live);
+	if (live != nullptr && live->GetSourceClassType() == hop.m_type)
+		return false;   // already the pinned type — never fabricate over a real value
+	const std::vector<ibMetaID> pin = ConvertToMetaIds({ hop.m_type }, metaData);   // metadata decode, NOT a body-mask
+	if (pin.empty())
+		return false;   // pin is not a resolvable reference (no metaData / bad pin)
+	ibValue twin = ibValueReferenceDataObject::Create(metaData, pin.front());
+	ibSourceDataObject* tw = nullptr;
+	twin.ConvertToValue<ibSourceDataObject>(tw);
+	if (tw == nullptr)
+		return false;   // couldn't build the twin
+	out = twin;
+	return true;
+}
+
+// Reference clsids → their TARGET metaobject ids, resolved through the class factory: a clsid's type ctor must
+// be a REFERENCE ctor (GetMetaTypeCtor == _Reference); its metaobject's metaID is the target. metaData-driven —
+// the kind-byte shortcut mis-classified composite branches (a clsid that is not a constructive reference id).
+// Non-reference clsids (a list / object / primitive branch) are skipped. Pickers call it to enumerate a
+// COMPOSITE reference's branches.
+//
+// ⭐ AN "ANY" IS SEEN AS ITS FACADE — `CatalogRef` as every catalog's reference, `AnyRef` as every reference —
+// the way a characteristic is seen as its chart's types: a filter, a field tree, a picker offers what can be
+// CHOSEN, and nothing is ever "a CatalogRef". Read off its bits (clsid_admits), so a catalog added later is in
+// it. A field declared with one stores the same members (ibVariantDataAttribute::DoRefreshTypeDesc); this
+// answers for a type handed in on its own.
+std::vector<ibMetaID> ibValueReferenceDataObject::ConvertToMetaIds(const std::vector<ibClassID>& clsids, const ibMetaData* metaData)
+{
+	std::vector<ibMetaID> targets;
+	if (metaData == nullptr)
+		return targets;
+	const auto add = [&targets](const ibValueMetaObject* metaObj) {
+		if (metaObj != nullptr && std::find(targets.begin(), targets.end(), metaObj->GetMetaID()) == targets.end())
+			targets.push_back(metaObj->GetMetaID());
+	};
+	for (const ibClassID& clsid : clsids) {
+		if (const ibCtorMetaValueType* typeCtor = metaData->GetTypeCtor(clsid)) {
+			if (typeCtor->GetMetaTypeCtor() == ibCtorObjectMetaType::ibCtorObjectMetaType_Reference)
+				add(typeCtor->GetMetaObject());
+			continue;
+		}
+		if (!::IsReference(clsid) || !clsid_is_any(clsid))   // the kind byte — ibValue has an IsReference() of its own
+			continue;
+		for (const ibCtorMetaValueType* member : metaData->GetListCtorsByType(ibCtorObjectMetaType::ibCtorObjectMetaType_Reference))
+			if (clsid_admits(clsid, member->GetClassType()))
+				add(member->GetMetaObject());
+	}
+	return targets;
+}
+
+
 void ibValueReferenceDataObject::ShowValue()
 {
 	ibValueMetaObjectRecordDataMutableRef* metaObject = nullptr;
 	if (m_metaObject->ConvertToValue(metaObject)) {
-		ibValueRecordDataObject* objValue = nullptr;
-		if (metaObject != nullptr && m_objGuid.isValid())
-			objValue = metaObject->CreateObjectValue(m_objGuid);
-		else
-			objValue = metaObject->CreateObjectValue();
+		const ibValuePtr<ibValueRecordDataObjectRef> objValue = metaObject != nullptr && m_objGuid.isValid()
+			? metaObject->CreateObjectValue(m_objGuid)
+			: metaObject->CreateObjectValue();
 		if (objValue != nullptr)
 			objValue->ShowFormValue();
 	}
 }
 
-ibValueRecordDataObjectRef* ibValueReferenceDataObject::GetObject() const
+ibValuePtr<ibValueRecordDataObjectRef> ibValueReferenceDataObject::GetObject() const
 {
 	ibValueMetaObjectRecordDataMutableRef* metaObject = nullptr;
 	if (m_metaObject->ConvertToValue(metaObject)) {
@@ -225,23 +845,86 @@ ibValueRecordDataObjectRef* ibValueReferenceDataObject::GetObject() const
 
 #include "backend/objCtor.h"
 
+// ⭐⭐ A DYNAMIC VALUE'S CLSID IS CONSTRUCTIVE — kind, metaclass and metaID: `reference_to_clsid(metaID,
+// metaclass)` IS the id the registry would have handed back, by the same construction that put it there
+// (`make_clsid_dynamic`, clsid.h). So it is composed here, bit by bit, from the metaobject's metaID and the
+// reference's family (m_metaclass): the one part a metaobject answers through the class registry (by its C++
+// type) is asked once, when the reference is made, and never per question (Max, 2026-09-27: keep the family,
+// compose the id).
+//
+// 🛑 It used to walk to the class registry for it — `GetTypeCtor(...)->GetClassType()` — which made the
+// cheapest question in the engine expensive. And it IS the cheapest question: the KIND lives in the top
+// byte of the id, so `IsReference(clsid)` is a shift and a compare, no metadata and no RTTI. Anything
+// that wants to know "is this a reference" before paying for a cast asks that (Max, 2026-08-29).
 ibClassID ibValueReferenceDataObject::GetClassType() const
 {
-	const ibCtorMetaValueType* clsFactory =
-		m_metaObject->GetTypeCtor(ibCtorObjectMetaType::ibCtorObjectMetaType_Reference);
-	wxASSERT(clsFactory);
-	return clsFactory->GetClassType();
+	return m_metaObject != nullptr
+		? reference_to_clsid(m_metaObject->GetMetaID(), m_metaclass)
+		: ibClassID(0);
 }
 
-wxString ibValueReferenceDataObject::GetString() const
+const ibValueMetaObjectGenericData* ibValueReferenceDataObject::GetSourceMetaObject() const
 {
+	return GetMetaObject();   // RecordData* -> GenericData* (RecordData : GenericData; complete types in this TU)
+}
+
+const ibMetaData* ibValueReferenceDataObject::GetSourceMetaData() const
+{
+	const ibValueMetaObjectRecordData* mo = GetMetaObject();
+	return mo != nullptr ? mo->GetMetaData() : nullptr;
+}
+
+// A reference vends its TARGET type's columns into the inherited owner-bound m_sourceExplorer — the
+// recursion FUEL: hop into a reference VALUE, get THIS explorer, descend by id. Built from the
+// referenced metaobject (no DB read; the referenced record's own attributes — scalar dot-walk targets).
+const ibSourceExplorer* ibValueReferenceDataObject::GetSourceExplorer() const
+{
+	const ibValueMetaObjectRecordData* metaObject = GetMetaObject();
+	if (metaObject == nullptr)
+		return nullptr;   // unresolved / empty reference — no target type to describe, so the hop stops here
+	m_sourceExplorer.Reset(wxT("Ref"), _("Ref"), metaObject->GetMetaID(), GetClassType(), false, false);
+	for (const auto object : metaObject->GetGenericAttributeArrayObject())
+		m_sourceExplorer.AppendColumn(object->GetQueryColumn());
+	return &m_sourceExplorer;
+}
+
+ibString ibValueReferenceDataObject::GetString() const
+{
+	// ⭐⭐ IN THE DESIGNER A REFERENCE IS A TYPE AND A GUID, AND NOTHING ELSE — "what matters to the
+	// designer is that the reference has a guid, and that's it" (Max, 2026-08-28). There is no row to
+	// read and none is wanted, so the metaobject is asked straight away: it turns the guid into the
+	// form the configuration declares it in. PrepareRef and the found / not-found answers below are
+	// statements about DATA, which is not what a reference stands for while one is being WRITTEN.
+	if (appData->DesignerMode()) {
+		wxString declared;
+		return m_metaObject->GenerateDataDesc(this, declared) ? std::move(declared) : wxString();
+	}
+
+	// ⭐ …UNLESS ReadBatch ALREADY TOLD IT WHAT IT SAYS — the fields its kind is said by are in its values,
+	// and the kind says them by its own rule; the object behind it stays unread: a printed list needs
+	// names, not objects.
+	if (m_state == ibReferenceState::Presentation) {
+		wxString desc;
+		return m_metaObject->GenerateDataDesc(this, desc) ? std::move(desc) : wxString();
+	}
+
+	// ⭐⭐ ASKING WHAT THIS REFERENCE IS *IS* THE ASKING — so the row is read here if nobody has read
+	// it yet. That is the whole of what OnDemand means, and since 2026-08-24 it is the default: a
+	// reference states an IDENTITY and costs no query until somebody wants the object behind it.
+	//
+	// 🛑 WITHOUT THIS the change would have made every reference print "Not found": the presentation
+	// read m_foundedRef, which is false until a read happens, and nothing on this path read. The
+	// reading side is where a lazy rule is finished — the writing side alone is half of it.
+	const_cast<ibValueReferenceDataObject*>(this)->PrepareRef();
+
 	if (m_newObject)
 		return wxEmptyString;
-	else if (!m_foundedRef)
-		return wxString::Format(wxT("%s <%i:%s>"), _("Not found"), m_metaObject->GetMetaID(), m_objGuid.str());
+	else if (!m_foundedRef)   // deleted, or refused by access policy — the same answer on purpose
+		return wxString::Format(wxT("%s <%i:%s>"), _("Not found"), m_metaObject->GetMetaID(), m_objGuid.GetGuid().str());
 
 	wxASSERT(m_metaObject);
-	return m_metaObject->GetDataPresentation(this);
+	wxString desc;
+	return m_metaObject->GenerateDataDesc(this, desc) ? std::move(desc) : wxString();
 }
 
 wxString ibValueReferenceDataObject::GetClassName() const
@@ -252,6 +935,25 @@ wxString ibValueReferenceDataObject::GetClassName() const
 	return clsFactory->GetClassName();
 }
 
+// ⭐⭐ A REFERENCE PASSES THE VERB ON, and that is the whole of its part. It holds the two things the
+// answer needs — the metaobject that GOVERNS it and the element it STANDS FOR — so it hands both over
+// and gives back whatever comes. It does not know what narrows a value, which attribute carries a type,
+// or that such a thing as a type description exists.
+//
+// 🛑 AND WHATEVER COMES BACK IS THE ANSWER — there is no second try here. The governor's `false` means
+// "the value did not fit", and it arrives WITH the narrowed value in `out`; reading it as "not mine" and
+// asking somebody else overwrote a correct empty goods reference with an undefined value, which is a
+// subconto quietly losing its type (measured 2026-09-24 on the ledger base). A metaobject that declares
+// no limit answers by its own class in its own place (genericData.h), so every road is already covered
+// before the question reaches here.
+bool ibValueReferenceDataObject::AdjustOutValue(const ibValue& varValue, ibValue& out) const
+{
+	const ibValueMetaObjectGenericData* metaObject = GetSourceMetaObject();
+	return metaObject != nullptr
+		? metaObject->AdjustOutValue(*this, varValue, out)
+		: ibValue::AdjustOutValue(varValue, out);
+}
+
 //****************************************************************************
 //*                              Support methods                             *
 //****************************************************************************
@@ -260,30 +962,34 @@ enum Func {
 	enIsEmpty = 0,
 	enGetMetadata,
 	enGetObject,
-	enGetGuid
+	enGetGuid,
+	enPointInTime
 };
 
-void ibValueReferenceDataObject::PrepareNames() const
+void ibValueReferenceDataObject::FillMembers(ibMemberTable& helper) const
 {
-	m_methodHelper->ClearHelper();
-
 	ibValueMetaObjectRecordDataMutableRef* metaObject = nullptr;
 	if (m_metaObject->ConvertToValue(metaObject)) {
 
-		m_methodHelper->AppendFunc(wxT("IsEmpty"), wxT("IsEmpty()"));
-		m_methodHelper->AppendFunc(wxT("GetMetadata"), wxT("GetMetadata()"));
-		m_methodHelper->AppendFunc(wxT("GetObject"), wxT("GetObject()"));
-		m_methodHelper->AppendFunc(wxT("GetGuid"), wxT("GetGuid()"));
+		helper.AppendFunc(wxT("IsEmpty"), wxT("IsEmpty()"));
+		helper.AppendFunc(wxT("GetMetadata"), wxT("GetMetadata()"));
+		helper.AppendFunc(wxT("GetObject"), wxT("GetObject()"));
+		helper.AppendFunc(wxT("GetGuid"), wxT("GetGuid()"));
+		// ⭐ THE MOMENT COMES WITH THE REFERENCE, for the families that can HAVE one: a catalog
+		// element, a document, a chart. It arrives already assembled, so nobody writes
+		// `New PointInTime(doc.Date, doc.Ref)` by hand and gets the pair wrong. An enumeration value
+		// is not offered it at all — it has no place in the data's history to point at.
+		helper.AppendFunc(wxT("PointInTime"), wxT("PointInTime()"));
 
 		wxString objectName;
 
-		//fill custom attributes 
+		//fill custom attributes
 		for (const auto object : metaObject->GetGenericAttributeArrayObject()) {
 			if (object->IsDeleted())
 				continue;
 			if (!object->GetObjectNameAsString(objectName))
 				continue;
-			m_methodHelper->AppendProp(
+			helper.AppendProp(
 				objectName,
 				true,
 				false,
@@ -292,13 +998,13 @@ void ibValueReferenceDataObject::PrepareNames() const
 			);
 		}
 
-		//fill custom tables 
+		//fill custom tables
 		for (const auto object : metaObject->GetTableArrayObject()) {
 			if (object->IsDeleted())
 				continue;
 			if (!object->GetObjectNameAsString(objectName))
 				continue;
-			m_methodHelper->AppendProp(
+			helper.AppendProp(
 				objectName,
 				true,
 				false,
@@ -308,8 +1014,8 @@ void ibValueReferenceDataObject::PrepareNames() const
 		}
 	}
 	else {
-		m_methodHelper->AppendFunc(wxT("IsEmpty"), wxT("IsEmpty()"));
-		m_methodHelper->AppendFunc(wxT("GetMetadata"), wxT("GetMetadata()"));
+		helper.AppendFunc(wxT("IsEmpty"), wxT("IsEmpty()"));
+		helper.AppendFunc(wxT("GetMetadata"), wxT("GetMetadata()"));
 	}
 }
 
@@ -320,18 +1026,21 @@ bool ibValueReferenceDataObject::SetPropVal(const long lPropNum, const ibValue& 
 
 bool ibValueReferenceDataObject::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
-	const long lPropAlias = m_methodHelper->GetPropAlias(lPropNum);
+	const long lPropAlias = m_members.GetPropAlias(lPropNum);
 	ibValueReferenceDataObject::PrepareRef();
-	const ibMetaID& id = m_methodHelper->GetPropData(lPropNum);
+	const ibMetaID& id = m_members.GetPropData(lPropNum);
 	if (!m_metaObject->IsDataReference(id)) {
 		if (lPropAlias == eTable && !GetValueByMetaID(id, pvarPropVal)) {
 			m_listObjectValue.insert_or_assign(id,
-				ibValue::CreateAndPrepareValueRef<ibValueTabularSectionDataObjectRef>(this, m_metaObject->FindTableObjectByFilter(id), !m_newObject)
+				new ibValueTabularSectionDataObjectRef(this, m_metaObject->FindTableObjectByFilter(id), !m_newObject)
 			);
 		}
 		if (lPropAlias == eTable && GetValueByMetaID(id, pvarPropVal)) {
 			ibValueTabularSectionDataObjectRef* tabularSection = nullptr;
 			if (pvarPropVal.ConvertToValue(tabularSection)) {
+				// ONCE, WHILE THE READ IS STILL PENDING — the flag says whether the rows are here yet, and
+				// LoadData clears it. Reading again would begin by CLEARING the model and detach every row
+				// already handed out; see the note on IsReadAfter.
 				if (tabularSection->IsReadAfter()) {
 					if (!tabularSection->LoadData(m_objGuid, true)) {
 						pvarPropVal.Reset();
@@ -369,9 +1078,114 @@ bool ibValueReferenceDataObject::CallAsFunc(const long lMethodNum, ibValue& pvar
 		pvarRetValue = GetObject();
 		return true;
 	case enGetGuid:
-		pvarRetValue = ibValue::CreateAndPrepareValueRef<ibValueGuid>(m_objGuid);
+		pvarRetValue = new ibValueGuid(m_objGuid);
 		return true;
+	case enPointInTime: {
+		// A REFERENCE'S MOMENT IS ITS IDENTITY — and, for a family that records facts, its DATE with it.
+		//
+		// 🛑 The date was meant to come from an override on the document's reference, and no such override
+		// exists: every reference is this class. So `Ref.PointInTime()` of a document came back with an unset
+		// date — a moment that is no point on the timeline — and a register reading bounded by it read the
+		// bound as absent: "up to receipt No. 2" answered with every posting there is (measured 2026-09-17).
+		// The date is the recorder's own attribute, read the way `Ref.Date` reads it; the document OBJECT
+		// answers the same way (documentObject.cpp).
+		//
+		// It carries THIS reference, not a copy: `GetValue(true)` is the verb for handing out this
+		// very value, where a second ibValueReferenceDataObject over the same (type, guid) would be
+		// a second object for one identity -- the thing a reference exists to prevent.
+		ibDateTime when;
+		const ibValueMetaObjectRecordDataRecorderRef* recorder = nullptr;
+		if (!IsEmptyRef() && m_metaObject->ConvertToValue(recorder) && recorder != nullptr) {
+			ibValue date;
+			if (GetValueByMetaID(recorder->GetDocumentDate()->GetMetaID(), date) && date.GetType() == ibValueTypes::TYPE_DATE)
+				when = date.GetDate();
+		}
+		pvarRetValue = new ibValuePointInTime(when, GetValue(true));
+		return true;
+	}
 	}
 
 	return false;
+}
+////////////////////////////////////////////////////////////////////////////
+// Serialization — a reference travels as IDENTITY
+////////////////////////////////////////////////////////////////////////////
+//
+// The header already carries the type, so the contents are just the guid. NOT
+// the object: an object belongs to a session and a connection, and the far side
+// re-reads it under its OWN rights — which is exactly why a job is handed a
+// reference rather than a loaded object.
+//
+// An empty reference writes an empty guid and comes back as an empty reference
+// OF THAT TYPE, not as an untyped nothing: a reference that has not been filled
+// in is still a reference, and the far side must be able to compare and assign
+// it without a type error.
+
+#include "backend/serialize/dataBuilder.h"
+
+bool ibValueReferenceDataObject::DoSerialize(ibDataNode& node) const
+{
+	// THE metaID, not only the class id.
+	//
+	// A reference's class id is DERIVED from the metaobject's metaID, so within
+	// one configuration either identifies the type. Across configurations they
+	// part company: the same catalog can carry a different id in a copy of the
+	// base, and a stored setting or an exchange parcel then restores a reference
+	// pointing at whatever type happens to hold that id — silently, and to the
+	// wrong table.
+	//
+	// Writing the metaID as well makes the identity say what it means: this type,
+	// of this metaobject. The class id stays in the header for the fast path;
+	// this is what a reader consults when the fast path is not enough.
+	if (m_metaObject != nullptr)
+		node.SetValue(wxT("m"), (s32)m_metaObject->GetMetaID());
+
+	node.SetValue(wxT("g"), m_reference_impl != nullptr
+		? ibGuid(m_reference_impl->m_guid).str()
+		: wxString());
+	return true;
+}
+
+bool ibValueReferenceDataObject::DoDeserialize(const ibDataNode& node)
+{
+	if (m_reference_impl == nullptr)
+		return false;
+
+	// THE metaID DECIDES, when it was written. We were created from the class id
+	// in the header, which is the fast path and is enough within one base; this
+	// is the check that the type we were created as is the type that was stored.
+	// A mismatch means the id landed on a different metaobject in this base —
+	// refuse rather than hand back a reference into the wrong table.
+	//
+	// Absent (0) is not a mismatch: it is a value written before the metaID went
+	// into the payload, and the class id is all it ever had.
+	const ibMetaID storedMetaId = (ibMetaID)node.GetValue<s32>(wxT("m"));
+	if (storedMetaId != 0 && m_metaObject != nullptr
+		&& storedMetaId != m_metaObject->GetMetaID())
+		return false;
+
+	// A malformed guid reads as the empty one rather than raising: the header
+	// was well formed, so this is data from a base that knew something we do
+	// not — degrade, do not fail the whole read.
+	const ibGuid restored(node.GetValue<wxString>(wxT("g")));
+	m_reference_impl->m_guid = restored;
+
+	// AND THE IDENTITY THE REST OF THE CLASS READS. Writing only the impl left the object
+	// still calling itself NEW (it was constructed empty, from the class id in the header,
+	// and m_newObject was decided there): the guid was right, so the reference filtered,
+	// compared and saved correctly — and presented as an EMPTY STRING, because GetString
+	// answers "" for a new object before it ever looks anything up. A stored list filter
+	// came back with its value invisible while plainly still in force.
+	//
+	// The init flags are cleared first: this object may already have "prepared" itself as the
+	// empty one it was a moment ago, and PrepareRef returns early on that flag. Then it prepares
+	// for real — the same step Create(metaObject, guid) takes, and the step that decides whether
+	// the identity is FOUND. Without it the value would read "Not found" instead of its name,
+	// which is the same defect wearing different clothes.
+	m_objGuid = restored;
+	m_newObject = !restored.isValid();
+	m_state = ibReferenceState::Raw;   // what it said was what the identity it was a moment ago says
+	m_foundedRef = false;
+	PrepareRef(true);
+	return true;
 }

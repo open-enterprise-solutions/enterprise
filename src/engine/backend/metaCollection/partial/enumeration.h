@@ -4,12 +4,8 @@
 #include "commonObject.h"
 
 class ibValueMetaObjectEnumeration : public ibValueMetaObjectRecordDataEnumRef {
-	wxDECLARE_DYNAMIC_CLASS(ibValueMetaObjectEnumeration);
+	public:
 
-	enum
-	{
-		ID_METATREE_OPEN_MANAGER = 19000,
-	};
 
 	enum
 	{
@@ -26,10 +22,10 @@ class ibValueMetaObjectEnumeration : public ibValueMetaObjectRecordDataEnumRef {
 
 public:
 
-	virtual bool FilterChild(const ibClassID& clsid) const {
+	virtual ibClassID ResolveChild(const ibClassID& clsid) const {
 		if (clsid == g_metaEnumCLSID)
-			return true;
-		return ibValueMetaObjectGenericData::FilterChild(clsid);
+			return clsid;
+		return ibValueMetaObjectGenericData::ResolveChild(clsid);
 	}
 
 	ibValueMetaObjectEnumeration();
@@ -64,29 +60,22 @@ public:
 
 #pragma region _form_builder_h_
 	//support form 
-	virtual ibBackendValueForm* GetObjectForm(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* ownerControl = nullptr, const ibUniqueKey& formGuid = wxNullGuid) const { return nullptr; }
-	virtual ibBackendValueForm* GetListForm(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* ownerControl = nullptr, const ibUniqueKey& formGuid = wxNullGuid) const;
-	virtual ibBackendValueForm* GetSelectForm(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* ownerControl = nullptr, const ibUniqueKey& formGuid = wxNullGuid) const;
+	virtual ibFormPtr<ibBackendValueForm> GetObjectForm(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr) const { return nullptr; }
+	virtual ibFormPtr<ibBackendValueForm> GetListForm(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr) const;
+	virtual ibFormPtr<ibBackendValueForm> GetSelectForm(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr) const;
 #pragma endregion
 
 	//get module object in compose object 
 	virtual const ibValueMetaObjectModule* GetObjectModule() const { return nullptr; }
 	virtual const ibValueMetaObjectCommonModule* GetManagerModule() const { return m_propertyManagerModule->GetMetaObject(); }
 
-	//descriptions...
-	wxString GetDataPresentation(const ibValueDataObject* objValue) const;
-
 	//prepare menu for item
-	virtual bool PrepareContextMenu(wxMenu* defaultMenu);
-	virtual void ProcessCommand(unsigned int id);
+	virtual bool CollectContextMenu(std::vector<ibMetaMenuItem>& items);
 
 protected:
 
-	//predefined array 
-	virtual bool FillArrayObjectByPredefinedAttribute(std::vector<ibValueMetaObjectAttributeBase*>& array) const {
-		array = { m_propertyAttributeReference->GetMetaObject() };
-		return true;
-	}
+	// FillArrayObjectByPredefinedAttribute inherited from the Ref base —
+	// Enumeration has no extra predefined attributes beyond Reference.
 
 	//searched array 
 	virtual bool FillArrayObjectBySearched(std::vector<ibValueMetaObjectAttributeBase*>& array) const {
@@ -94,14 +83,15 @@ protected:
 	}
 
 	//create manager
-	virtual ibValueManagerDataObject* CreateManagerDataObjectValue() const;
+	virtual ibValuePtr<ibValueManagerDataObject> CreateManagerDataObjectValue() const;
 
 	//create object data with meta form
-	virtual ibSourceDataObject* CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const;
+	virtual ibSourcePtr<ibSourceDataObject> CreateSourceObject(const ibCreateRequest& request, const ibFormID& form_id) const;
 
-	//load & save metaData from DB 
-	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer);
+	//load & save metaData from DB
+
+	virtual bool ReadData(const ibDataNode& node) override;
+	virtual bool WriteData(ibDataNode& node) const override;
 
 private:
 
@@ -134,11 +124,11 @@ private:
 		return true;
 	}
 
-	ibPropertyInnerModule<ibValueMetaObjectManagerModule>* m_propertyManagerModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectManagerModule>>(m_categoryContext, wxT("ManagerModule"), _("Manager module"));
+	ibPropertyInnerModule<ibValueMetaObjectManagerModule>* m_propertyManagerModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectManagerModule>>(m_categoryContext, wxT("ManagerModule"), _("Manager module"), _("Code of the enumeration: its exported procedures and functions are called on the manager, as Enumerations.<Name>.<Function>(). An enumeration has no object module - its values are declared, not written."));
 
 	ibPropertyCategory* m_categoryForm = ibPropertyObject::CreatePropertyCategory(wxT("PresetValues"), _("Preset values"));
-	ibPropertyList* m_propertyDefFormList = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormList"), _("Default List Form"), &ibValueMetaObjectEnumeration::FillFormList);
-	ibPropertyList* m_propertyDefFormSelect = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormSelect"), _("Default Select Form"), &ibValueMetaObjectEnumeration::FillFormSelect);
+	ibPropertyList* m_propertyDefFormList = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormList"), _("Default List Form"), _("The form the list of the enumeration's values opens with. Empty: the list form is generated."), &ibValueMetaObjectEnumeration::FillFormList);
+	ibPropertyList* m_propertyDefFormSelect = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormSelect"), _("Default Select Form"), _("The form used to choose a value for a field of this enumeration's type. Empty: a drop-down of the values."), &ibValueMetaObjectEnumeration::FillFormSelect);
 };
 
 #endif

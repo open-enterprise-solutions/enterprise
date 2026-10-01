@@ -1,13 +1,15 @@
 #include "firebirdParameterCollection.h"
 
-ibDatatabaseParameterFirebirdCollection::ibDatatabaseParameterFirebirdCollection(ibInterfaceFirebird* pInterface, XSQLDA* pParameters)
+#include "backend/backend_exception.h"
+
+ibDatabaseParameterFirebirdCollection::ibDatabaseParameterFirebirdCollection(ibInterfaceFirebird* pInterface, XSQLDA* pParameters)
 {
 	m_pInterface = pInterface;
 	m_FirebirdParameters = pParameters;
 	AllocateParameterSpace();
 }
 
-ibDatatabaseParameterFirebirdCollection::~ibDatatabaseParameterFirebirdCollection()
+ibDatabaseParameterFirebirdCollection::~ibDatabaseParameterFirebirdCollection()
 {
 	if (m_FirebirdParameters) FreeParameterSpace();
 
@@ -16,7 +18,7 @@ ibDatatabaseParameterFirebirdCollection::~ibDatatabaseParameterFirebirdCollectio
 
 	while (start != stop)
 	{
-		ibDatatabaseParameterFirebird* pParameter = (ibDatatabaseParameterFirebird*)(*start);
+		ibDatabaseParameterFirebird* pParameter = (ibDatabaseParameterFirebird*)(*start);
 		wxDELETE(pParameter);
 		(*start) = nullptr;
 		start++;
@@ -25,73 +27,86 @@ ibDatatabaseParameterFirebirdCollection::~ibDatatabaseParameterFirebirdCollectio
 	m_Parameters.clear();
 }
 
+// ⭐⭐ EVERY BIND STARTS FROM THE SLOT AS THE STATEMENT DESCRIBED IT.
+//
+// A string bind rewrites its XSQLVAR — the type to SQL_TEXT, the length to the value's own — and every
+// other bind reads those two fields to decide what to write and how much room there is. Bound once and
+// executed once, nobody noticed. Executed AGAIN with new values (a batch of rows through one prepared
+// INSERT — ibSqlFeatures::m_batchByReexecution), the second row's string was clamped to the FIRST row's
+// length: "E10" after "E1" went in as "E1", silently; and a date after a string met SQL_TEXT and was
+// refused. So the describe's answer is kept, and put back before each bind.
+XSQLVAR* ibDatabaseParameterFirebirdCollection::DescribedSlot(int nPosition)
+{
+	// A position the statement does not have addresses memory past its descriptor — refused, not written.
+	if (m_FirebirdParameters == nullptr || nPosition < 1 || nPosition > m_FirebirdParameters->sqld)
+		ibBackendCoreException::Error(_("Firebird: parameter %d was bound, the statement has %d"),
+			nPosition, m_FirebirdParameters != nullptr ? static_cast<int>(m_FirebirdParameters->sqld) : 0);
+	XSQLVAR* pVar = &m_FirebirdParameters->sqlvar[nPosition - 1];
+	if (nPosition >= 1 && (size_t)nPosition <= m_described.size()) {
+		pVar->sqltype = m_described[nPosition - 1].first;
+		pVar->sqllen = m_described[nPosition - 1].second;
+	}
+	return pVar;
+}
+
 // set field
-void ibDatatabaseParameterFirebirdCollection::SetParam(int nPosition, int nValue)
+void ibDatabaseParameterFirebirdCollection::SetParam(int nPosition, int nValue)
 {
-	ibDatatabaseParameterFirebird* pParameter = new ibDatatabaseParameterFirebird(m_pInterface, &m_FirebirdParameters->sqlvar[nPosition - 1], nValue);
-	SetParam(nPosition, pParameter);
+	ParameterAt(nPosition).Set(nValue);
 }
 
-void ibDatatabaseParameterFirebirdCollection::SetParam(int nPosition, double dblValue)
+void ibDatabaseParameterFirebirdCollection::SetParam(int nPosition, double dblValue)
 {
-	ibDatatabaseParameterFirebird* pParameter = new ibDatatabaseParameterFirebird(m_pInterface, &m_FirebirdParameters->sqlvar[nPosition - 1], dblValue);
-	SetParam(nPosition, pParameter);
+	ParameterAt(nPosition).Set(dblValue);
 }
 
-void ibDatatabaseParameterFirebirdCollection::SetParam(int nPosition, const ibNumber& dblValue)
+void ibDatabaseParameterFirebirdCollection::SetParam(int nPosition, const ibNumber& dblValue)
 {
-	ibDatatabaseParameterFirebird* pParameter = new ibDatatabaseParameterFirebird(m_pInterface, &m_FirebirdParameters->sqlvar[nPosition - 1], dblValue);
-	SetParam(nPosition, pParameter);
+	ParameterAt(nPosition).Set(dblValue);
 }
 
 
-void ibDatatabaseParameterFirebirdCollection::SetParam(int nPosition, const wxString& strValue)
+void ibDatabaseParameterFirebirdCollection::SetParam(int nPosition, const ibString& strValue)
 {
-	ibDatatabaseParameterFirebird* pParameter = new ibDatatabaseParameterFirebird(m_pInterface, &m_FirebirdParameters->sqlvar[nPosition - 1], strValue, GetEncoding());
-	SetParam(nPosition, pParameter);
+	ParameterAt(nPosition).Set(strValue);
 }
 
-void ibDatatabaseParameterFirebirdCollection::SetParam(int nPosition)
+void ibDatabaseParameterFirebirdCollection::SetParam(int nPosition)
 {
-	ibDatatabaseParameterFirebird* pParameter = new ibDatatabaseParameterFirebird(m_pInterface, &m_FirebirdParameters->sqlvar[nPosition - 1]);
-	SetParam(nPosition, pParameter);
+	ParameterAt(nPosition).SetNull();
 }
 
-void ibDatatabaseParameterFirebirdCollection::SetParam(int nPosition, const void* pData, long nDataLength)
+void ibDatabaseParameterFirebirdCollection::SetParam(int nPosition, const void* pData, long nDataLength)
 {
-	ibDatatabaseParameterFirebird* pParameter = new ibDatatabaseParameterFirebird(m_pInterface, &m_FirebirdParameters->sqlvar[nPosition - 1], pData, nDataLength);
-	SetParam(nPosition, pParameter);
+	ParameterAt(nPosition).Set(pData, nDataLength);
 }
 
-void ibDatatabaseParameterFirebirdCollection::SetParam(int nPosition, const wxDateTime& dateValue)
+void ibDatabaseParameterFirebirdCollection::SetParam(int nPosition, const ibDateTimeParts& date)
 {
-	ibDatatabaseParameterFirebird* pParameter = new ibDatatabaseParameterFirebird(m_pInterface, &m_FirebirdParameters->sqlvar[nPosition - 1], dateValue);
-	SetParam(nPosition, pParameter);
+	ParameterAt(nPosition).Set(date);
 }
 
-void ibDatatabaseParameterFirebirdCollection::SetParam(int nPosition, bool bValue)
+void ibDatabaseParameterFirebirdCollection::SetParam(int nPosition, bool bValue)
 {
-	ibDatatabaseParameterFirebird* pParameter = new ibDatatabaseParameterFirebird(m_pInterface, &m_FirebirdParameters->sqlvar[nPosition - 1], bValue);
-	SetParam(nPosition, pParameter);
+	ParameterAt(nPosition).Set(bValue);
 }
 
-void ibDatatabaseParameterFirebirdCollection::SetParam(int nPosition, ibDatatabaseParameterFirebird* pParameter)
+// The parameter of a position — made on its first bind and kept: every later bind gives it a value. The slot is
+// reset to what the describe said first (DescribedSlot), the bind before this one may have rewritten it.
+ibDatabaseParameterFirebird& ibDatabaseParameterFirebirdCollection::ParameterAt(int nPosition)
 {
+	XSQLVAR* pVar = DescribedSlot(nPosition);
 	// First make sure that there are enough elements in the collection
 	while (m_Parameters.size() < (unsigned int)(nPosition))
 	{
 		m_Parameters.push_back(nullptr);//EmptyParameter);
 	}
-	// Free up any data that is being replaced so the allocated memory isn't lost
-	if (m_Parameters[nPosition - 1] != nullptr)
-	{
-		delete (m_Parameters[nPosition - 1]);
-	}
-	// Now set the new data
-	m_Parameters[nPosition - 1] = pParameter;
+	if (m_Parameters[nPosition - 1] == nullptr)
+		m_Parameters[nPosition - 1] = new ibDatabaseParameterFirebird(m_pInterface, pVar);
+	return *m_Parameters[nPosition - 1];
 }
 
-bool ibDatatabaseParameterFirebirdCollection::ResetBlobParameters(isc_db_handle database, isc_tr_handle transaction)
+bool ibDatabaseParameterFirebirdCollection::ResetBlobParameters(isc_db_handle database, isc_tr_handle transaction)
 {
 	if (m_FirebirdParameters == nullptr)
 		return false;
@@ -101,7 +116,7 @@ bool ibDatatabaseParameterFirebirdCollection::ResetBlobParameters(isc_db_handle 
 
 	while (start != stop)
 	{
-		ibDatatabaseParameterFirebird* p = (ibDatatabaseParameterFirebird*)(*start);
+		ibDatabaseParameterFirebird* p = (ibDatabaseParameterFirebird*)(*start);
 		// NULL slot — caller never bound a value at this position. Skip
 		// rather than dereferencing a null pointer.
 		if (p == nullptr)
@@ -122,14 +137,16 @@ bool ibDatatabaseParameterFirebirdCollection::ResetBlobParameters(isc_db_handle 
 	return true;
 }
 
-void ibDatatabaseParameterFirebirdCollection::AllocateParameterSpace()
+void ibDatabaseParameterFirebirdCollection::AllocateParameterSpace()
 {
 	if (m_FirebirdParameters == nullptr)
 		return;
 
+	m_described.clear();
 	for (int i = 0; i < m_FirebirdParameters->sqld; i++)
 	{
 		XSQLVAR* pVar = &(m_FirebirdParameters->sqlvar[i]);
+		m_described.emplace_back(pVar->sqltype, pVar->sqllen);   // before any bind can rewrite them — see DescribedSlot
 		switch (pVar->sqltype & ~1)
 		{
 		case SQL_ARRAY:
@@ -183,13 +200,22 @@ void ibDatatabaseParameterFirebirdCollection::AllocateParameterSpace()
 			pVar->sqldata = nullptr;
 			break;
 		default:
-			wxLogError(wxT("Error allocating space for unknown parameter type\n"));
+			// ⭐ RAISES, and used to only log. Every case above DECIDES about sqldata — a buffer, or
+			// the deliberate nullptr that a setter later points at a member of its own. This one
+			// decided nothing and carried on, leaving sqldata as the describe left it, and the bind
+			// that follows writes a value through it anyway. A type this collection cannot make room
+			// for is a statement that cannot be bound, and here is the last point where that is
+			// still the plain truth: one step on it is a corrupt write or a crash inside the CRT
+			// with nothing left connecting it to its cause.
+			ibBackendCoreException::Error(
+				_("Firebird: no room can be made for a parameter of SQL type %d"),
+				(int)(pVar->sqltype & ~1));
 			break;
 		}
 	}
 }
 
-void ibDatatabaseParameterFirebirdCollection::FreeParameterSpace()
+void ibDatabaseParameterFirebirdCollection::FreeParameterSpace()
 {
 	if (m_FirebirdParameters)
 	{
@@ -223,7 +249,7 @@ void ibDatatabaseParameterFirebirdCollection::FreeParameterSpace()
 					break;
 				case SQL_SHORT:
 				case SQL_LONG:
-					// Owned by ibDatatabaseParameterFirebird (sqldata points
+					// Owned by ibDatabaseParameterFirebird (sqldata points
 					// at member fields like m_nValue / m_sValue); not freed
 					// here.
 					break;
@@ -234,7 +260,7 @@ void ibDatatabaseParameterFirebirdCollection::FreeParameterSpace()
 					//wxDELETE(pVar->sqldata);
 					break;
 				default:
-					wxLogError(wxT("Error deleting unknown parameter type\n"));
+					ibJournalError(wxT("db.firebird"),wxT("Error deleting unknown parameter type\n"));
 					break;
 				}
 			}

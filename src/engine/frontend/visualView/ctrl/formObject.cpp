@@ -1,13 +1,21 @@
-﻿////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////
 //	Author		: Maxim Kornienko
 //	Description : frame object
 ////////////////////////////////////////////////////////////////////////////
 
 #include "form.h"
+#include "formAttribute.h"
+#include "frontend/settings/formSettings.h"   // the person's own arrangement, replayed on open
 #include "backend/appData.h"
+#include "backend/system/value/valueJob.h"   // g_valueScheduleCLSID — a schedule requisite builds as static text
+#include "backend/system/value/valueDataComposition.h"   // g_valueDataCompositionCLSID — a composition builds as a gridbox
+#ifndef OES_USE_WEB
+#include "gridBox.h"   // ibValueGridBox — DESKTOP only; the web build has no grid visuals yet
+#include "backend/metaCollection/partial/dataReport.h"   // …bound to the report itself, when it has a default composer
+#endif
 #include "backend/metaData.h"
-#include "frontend/docView/docManager.h"
-#include "backend/srcExplorer.h"
+#include "frontend/docView/docView.h"
+#include "backend/srcDataObject.h"
 #include "backend/moduleManager/moduleManager.h"
 #include "backend/session/session.h"
 #include "frontend/visualView/visualHostClient.h"
@@ -16,6 +24,7 @@
 #include "frontend/web/webTimer.h"
 #else
 #include <wx/timer.h>
+#include <wx/wupdlock.h>   // wxWindowUpdateLocker — RAII Freeze/Thaw
 #endif
 
 //*************************************************************************************************
@@ -25,7 +34,6 @@
 // BuildForm now runs on both builds — both control families are needed.
 // tableBox.h compiles cleanly under OES_USE_WEB (wx-heavy includes are
 // already ifdef'd inside it).
-#include "toolBar.h"
 #include "tableBox.h"
 #ifdef OES_USE_WEB
 #include "frontend/web/webApplication.h"
@@ -42,144 +50,172 @@ void ibValueForm::BuildForm(const ibFormID& formType)
 	// tablebox/column visuals are pending.
 	m_formType = formType;
 
-	if (m_sourceObject != nullptr) {
+	ibFormAttributeValue* mainAttr = GetMainAttribute();
+	const ibSourceDataObject* sourceObject = mainAttr != nullptr ? mainAttr->GetSourceValue() : nullptr;
 
-		ibValue* prevSrcData = nullptr;
+	if (sourceObject != nullptr) {
 
-		ibValueToolbar* mainToolBar =
-			wxDynamicCast(
-				ibValueForm::CreateControl(wxT("Toolbar")), ibValueToolbar
-			);
+		// Everything binds THROUGH the main attribute (the gate): control source
+		// paths start with its id, then walk the metadata. The incoming source
+		// object is only used to lay the controls out, then copied into the main
+		// attribute (InitializeForm) and forgotten — reads go via the attribute.
+		const ibMetaID mainAttrId = mainAttr->GetId();
 
-		mainToolBar->SetControlName(wxT("MainToolbar"));
-		mainToolBar->SetActionSrc(FORM_ACTION);
-
-		const ibValueMetaObjectGenericData* metaObjectValue = m_sourceObject->GetSourceMetaObject();
-
+		// Form-level toolbar is now the form's command-bar chrome (m_commandBar,
+		// AutoFill from the same action collection) — no explicit MainToolbar.
 		ibValueModelTableBox* mainTableBox = nullptr;
 
-		const ibActionCollection& actionData = ibValueForm::GetActionCollection(formType);
-		for (unsigned int idx = 0; idx < actionData.GetCount(); idx++) {
-			const ibActionID& action_id = actionData.GetID(idx);
-			if (action_id != wxNOT_FOUND) {
-				ibValue* currSrcData = actionData.GetSourceDataByID(action_id);
-				if (currSrcData != prevSrcData
-					&& prevSrcData != nullptr) {
-					ibValueForm::CreateControl(wxT("ToolSeparator"), mainToolBar);
-				}
-				ibValueToolBarItem* toolBarItem =
-					wxDynamicCast(
-						ibValueForm::CreateControl(wxT("Tool"), mainToolBar), ibValueToolBarItem
-					);
-				toolBarItem->SetControlName(mainToolBar->GetControlName() + actionData.GetNameByID(action_id));
-				//toolBarItem->SetCaption(actionData.GetCaptionByID(action_id));
-				//toolBarItem->SetToolTip(actionData.GetCaptionByID(action_id));
-				toolBarItem->SetAction(action_id);
-				prevSrcData = currSrcData;
-			}
-			else {
-				ibValueForm::CreateControl(wxT("ToolSeparator"), mainToolBar);
-			}
-		}
+		const ibSourceExplorer* sourceExplorerPtr = sourceObject->GetSourceExplorer();
+		static const ibSourceExplorer s_emptyExplorer;
+		const ibSourceExplorer& sourceExplorer = sourceExplorerPtr != nullptr ? *sourceExplorerPtr : s_emptyExplorer;
 
-		const ibSourceExplorer& sourceExplorer = m_sourceObject->GetSourceExplorer();
-		if (sourceExplorer.IsTableSection()) {
+		// List vs object is decided by the SOURCE class via the class factory (IsTableSource —
+		// CLSID → ctor → IsTableValue), not the source explorer's flag. Every ibValueModel
+		// (list / tree / table / dynamic list) is a tabular source, a record object is not.
+		// The explorer is now only the column/field TEMPLATE — a queryable-based dynamic list,
+		// which carries no tableSection flag, renders as a tablebox just the same.
+		const bool isTableSource = sourceObject->IsTableSource();
+
+		if (isTableSource) {
 
 			mainTableBox =
-				wxDynamicCast(
-					ibValueForm::CreateControl(wxT("Tablebox")), ibValueModelTableBox
-				);
+				dynamic_cast<ibValueModelTableBox*>(ibValueForm::CreateControl(wxT("Tablebox")));
 
 			mainTableBox->SetControlName(sourceExplorer.GetSourceName());
-			mainTableBox->SetSource(sourceExplorer.GetSourceId());
+			
+			// A picker source stamps its main table node with choice mode — carry it onto the table so it shows
+			// Select first (the runtime open-as-choice path; the designer property is the alternative source).
+			mainTableBox->SetChoiceMode(sourceExplorer.IsChoiceMode());
+
+			// The MAIN attribute IS the list (its Type is CatalogList.<X>) — its source is
+			// just the attribute itself, shown as "List". The extra source-id hop (the row
+			// catalog) was redundant here and rendered "List.Catalog1".
+			mainTableBox->SetSource({ mainAttrId });
 		}
+
+#ifndef OES_USE_WEB
+		// ⭐⭐ A REPORT IS SHOWN BY A GRID (Max, 2026-08-20: "we know we are looking at a report
+		// object, so we can give it a grid by default") — but only a report that DECLARED a
+		// composer, because the box is bound to the composer and there is nothing to bind to
+		// without one. A report with no composer gets no box; declaring the first one is what
+		// makes the box appear.
+		//
+		// Bound to the object — a single hop — which is what makes this box the form's MAIN view:
+		// the form's command provider resolves to it, so the composer's verbs appear on the form's
+		// own toolbar and the box carries no second bar (IsMainSourceBound / HasCommandBar).
+		//
+		// ⚠ DESKTOP ONLY, like the rest of the grid visuals: the web build links no grid at all.
+		//
+		// ⭐ AND ITS SOURCE IS THE COMPOSER, NOT THE REPORT (Max, 2026-08-20: "a report cannot itself
+		// be the source — the composer can; you substitute it in the builder by default"). The
+		// report DECLARES what to show; what is shown is the composition, so the binding names it.
+		if (!isTableSource) {
+			const auto* report = dynamic_cast<const ibValueRecordDataObjectReport*>(sourceObject);
+			const ibValueMetaObjectReport* metaReport =
+				report != nullptr ? dynamic_cast<const ibValueMetaObjectReport*>(report->GetMetaObject()) : nullptr;
+			const ibMetaID defaultComposer = metaReport != nullptr ? metaReport->GetDefComposer() : wxNOT_FOUND;
+
+			if (defaultComposer != wxNOT_FOUND) {
+				ibValueGridBox* gridBox =
+					dynamic_cast<ibValueGridBox*>(ibValueForm::CreateControl(wxT("Gridbox")));
+				if (gridBox != nullptr) {
+					gridBox->SetControlName(sourceExplorer.GetSourceName());
+					gridBox->SetSource({ mainAttrId, defaultComposer });
+				}
+			}
+		}
+#endif
 
 		for (unsigned int idx = 0; idx < sourceExplorer.GetHelperCount(); idx++) {
 
-			const ibSourceExplorer& nextSourceExplorer = sourceExplorer.GetHelper(idx);
+			const ibSourceExplorer* nextPtr = sourceExplorer.GetHelper(idx);
+			if (nextPtr == nullptr)
+				continue;
+			const ibSourceExplorer& nextSourceExplorer = *nextPtr;
 
-			if (sourceExplorer.IsTableSection()) {
+			if (isTableSource) {
+				// The source says which of its columns are ONE FAMILY (the register's dimension
+				// slots), and such a column hangs on that family's GROUP rather than on the
+				// table — which stacks them, instead of laying twelve of them out sideways.
+				ibValueFrame* holder = mainTableBox->GetColumnGroupHolder(nextSourceExplorer.GetSourceGroup());
+
 				ibValueModelTableBoxColumn* tableBoxColumn =
-					wxDynamicCast(
-						ibValueForm::CreateControl(wxT("TableboxColumn"), mainTableBox), ibValueModelTableBoxColumn
-					);
+					dynamic_cast<ibValueModelTableBoxColumn*>(ibValueForm::CreateControl(wxT("TableboxColumn"), holder));
 				tableBoxColumn->SetControlName(mainTableBox->GetControlName() + nextSourceExplorer.GetSourceName());
 				tableBoxColumn->SetVisibleColumn(nextSourceExplorer.IsVisible() || sourceExplorer.GetHelperCount() == 1);
-				tableBoxColumn->SetSource(nextSourceExplorer.GetSourceId());
+				// Column = [mainAttr, field] → "List.Field". The row-type hop (the catalog/document)
+				// is implicit in the list-typed main attribute — no "List.Document1.Field".
+				tableBoxColumn->SetSource({ mainAttrId, nextSourceExplorer.GetSourceId() });
 			}
 			else
 			{
-				prevSrcData = nullptr;
-
 				if (nextSourceExplorer.IsTableSection()) {
 
-					ibValueToolbar* toolBar =
-						wxDynamicCast(
-							ibValueForm::CreateControl(wxT("Toolbar")), ibValueToolbar
-						);
-
-					toolBar->SetControlName(wxT("Toolbar") + nextSourceExplorer.GetSourceName());
-
 					ibValueModelTableBox* tableBox =
-						wxDynamicCast(
-							ibValueForm::CreateControl(wxT("Tablebox")), ibValueModelTableBox
-						);
+						dynamic_cast<ibValueModelTableBox*>(ibValueForm::CreateControl(wxT("Tablebox")));
 
 					tableBox->SetControlName(nextSourceExplorer.GetSourceName());
-					tableBox->SetSource(nextSourceExplorer.GetSourceId());
-
-					toolBar->SetActionSrc(tableBox->GetControlID());
-
-					ibActionCollection actionData = tableBox->GetActionCollection(formType);
-					for (unsigned int idx = 0; idx < actionData.GetCount(); idx++) {
-						const ibActionID& action_id = actionData.GetID(idx);
-						if (action_id != wxNOT_FOUND) {
-							ibValue* currSrcData = actionData.GetSourceDataByID(action_id);
-							if (currSrcData != prevSrcData
-								&& prevSrcData != nullptr) {
-								ibValueForm::CreateControl(wxT("ToolSeparator"), toolBar);
-							}
-							ibValueToolBarItem* toolBarItem =
-								wxDynamicCast(
-									ibValueForm::CreateControl(wxT("Tool"), toolBar), ibValueToolBarItem
-								);
-							toolBarItem->SetControlName(toolBar->GetControlName() + actionData.GetNameByID(action_id));
-							//toolBarItem->SetCaption(actionData.GetCaptionByID(action_id));
-							//toolBarItem->SetToolTip(actionData.GetCaptionByID(action_id));
-							toolBarItem->SetAction(action_id);
-							prevSrcData = currSrcData;
-						}
-						else {
-							ibValueForm::CreateControl(wxT("ToolSeparator"), toolBar);
-						}
-					}
+					tableBox->SetSource({ mainAttrId, nextSourceExplorer.GetSourceId() });
 
 					for (unsigned int col = 0; col < nextSourceExplorer.GetHelperCount(); col++) {
-						const ibSourceExplorer& colSourceExplorer = nextSourceExplorer.GetHelper(col);
+						const ibSourceExplorer* colExplorerPtr = nextSourceExplorer.GetHelper(col);
+						if (colExplorerPtr == nullptr)
+							continue;
+						const ibSourceExplorer& colSourceExplorer = *colExplorerPtr;
+
+						ibValueFrame* holder = tableBox->GetColumnGroupHolder(colSourceExplorer.GetSourceGroup());
 
 						ibValueModelTableBoxColumn* tableBoxColumn =
-							wxDynamicCast(
-								ibValueForm::CreateControl(wxT("TableboxColumn"), tableBox), ibValueModelTableBoxColumn
-							);
+							dynamic_cast<ibValueModelTableBoxColumn*>(ibValueForm::CreateControl(wxT("TableboxColumn"), holder));
 						tableBoxColumn->SetControlName(tableBox->GetControlName() + colSourceExplorer.GetSourceName());
 						//tableBoxColumn->SetCaption(colSourceExplorer.GetSourceSynonym());
 						tableBoxColumn->SetVisibleColumn(colSourceExplorer.IsVisible()
 							|| nextSourceExplorer.GetHelperCount() == 1);
-						tableBoxColumn->SetSource(colSourceExplorer.GetSourceId());
+						tableBoxColumn->SetSource({ mainAttrId, nextSourceExplorer.GetSourceId(), colSourceExplorer.GetSourceId() });
 					}
 				}
 				else {
 					if (nextSourceExplorer.ContainType(ibValueTypes::TYPE_BOOLEAN)
 						&& nextSourceExplorer.GetClsidList().size() == 1) {
 						ibValueCheckbox* checkbox =
-							wxDynamicCast(
-								ibValueForm::CreateControl(wxT("Checkbox")), ibValueCheckbox
-							);
+							dynamic_cast<ibValueCheckbox*>(ibValueForm::CreateControl(wxT("Checkbox")));
 						checkbox->SetControlName(nextSourceExplorer.GetSourceName());
 						//checkbox->SetCaption(nextSourceExplorer.GetSourceSynonym());
 						checkbox->EnableWindow(nextSourceExplorer.IsEnabled());
 						checkbox->VisibleWindow(nextSourceExplorer.IsVisible());
-						checkbox->SetSource(nextSourceExplorer.GetSourceId());
+						checkbox->SetSource({ mainAttrId, nextSourceExplorer.GetSourceId() });
+					}
+					// ⭐ A COMPOSITION IS SHOWN BY A GRIDBOX, and that is what makes a report need no
+					// form: the report declares a composer, the composer is a node here, and the
+					// generated form comes up with the sheet the report composes into — plus the
+					// gridbox's own Compose / Settings commands, which it carries because its
+					// source is a composition (Max, 2026-08-20: "you add a composer, save, and you
+					// do not even have to make a form").
+					// A COMPOSER IS NOT A FIELD — it is not laid out one by one here. The report
+					// itself is the grid's source (see above), and a second composer is reached by
+					// hand (`Object.Composer2`, a grid of its own).
+					else if (nextSourceExplorer.GetClsidList().size() == 1
+						&& nextSourceExplorer.ContainType(g_valueDataCompositionCLSID)) {
+						continue;
+					}
+					// (g_valueScheduleCLSID — backend/system/value/valueJob.h, included at the top)
+					// A SCHEDULE is shown, not typed. There is nothing sensible to put in an edit
+					// box — the value is fourteen fields — so the auto-built control is the static
+					// text, which renders the schedule as its own sentence ("Every 10 minutes,
+					// 02:00-05:00, Mon") and opens the four-tab editor when clicked.
+					else if (nextSourceExplorer.GetClsidList().size() == 1
+						&& nextSourceExplorer.ContainType(g_valueScheduleCLSID)) {
+						ibValueStaticText* staticText =
+							dynamic_cast<ibValueStaticText*>(ibValueForm::CreateControl(wxT("Statictext")));
+						staticText->SetControlName(nextSourceExplorer.GetSourceName());
+						// The caption comes from the METADATA — "Schedule", not the widget's own
+						// "Static text" placeholder. That placeholder exists for a decoration
+						// somebody dropped on a form; a bound control is named by what it shows,
+						// exactly as a text box is.
+						staticText->SetCaption(wxEmptyString);
+						staticText->EnableWindow(nextSourceExplorer.IsEnabled());
+						staticText->VisibleWindow(nextSourceExplorer.IsVisible());
+						staticText->SetSource({ mainAttrId, nextSourceExplorer.GetSourceId() });
 					}
 					else {
 
@@ -192,14 +228,12 @@ void ibValueForm::BuildForm(const ibFormID& formType)
 							selButton = true;
 
 						ibValueTextCtrl* textCtrl =
-							wxDynamicCast(
-								ibValueForm::CreateControl(wxT("Textctrl")), ibValueTextCtrl
-							);
+							dynamic_cast<ibValueTextCtrl*>(ibValueForm::CreateControl(wxT("Textctrl")));
 						textCtrl->SetControlName(nextSourceExplorer.GetSourceName());
 						//textCtrl->SetCaption(nextSourceExplorer.GetSourceSynonym());
 						textCtrl->EnableWindow(nextSourceExplorer.IsEnabled());
 						textCtrl->VisibleWindow(nextSourceExplorer.IsVisible());
-						textCtrl->SetSource(nextSourceExplorer.GetSourceId());
+						textCtrl->SetSource({ mainAttrId, nextSourceExplorer.GetSourceId() });
 
 						textCtrl->SetSelectButton(selButton);
 						textCtrl->SetOpenButton(false);
@@ -210,36 +244,7 @@ void ibValueForm::BuildForm(const ibFormID& formType)
 		}
 	}
 	else {
-
-		ibValueToolbar* mainToolBar =
-			wxDynamicCast(
-				ibValueForm::CreateControl(wxT("Toolbar")), ibValueToolbar
-			);
-
-		mainToolBar->SetControlName(wxT("MainToolbar"));
-		mainToolBar->SetActionSrc(FORM_ACTION);
-
-		ibValueModelTableBox* mainTableBox = nullptr;
-
-		const ibActionCollection& actionData = ibValueForm::GetActionCollection(formType);
-		for (unsigned int idx = 0; idx < actionData.GetCount(); idx++) {
-
-			const ibActionID& id = actionData.GetID(idx);
-
-			if (id != wxNOT_FOUND) {
-				ibValueToolBarItem* toolBarItem =
-					wxDynamicCast(
-						ibValueForm::CreateControl(wxT("Tool"), mainToolBar), ibValueToolBarItem
-					);
-				toolBarItem->SetControlName(mainToolBar->GetControlName() + actionData.GetNameByID(id));
-				//toolBarItem->SetCaption(actionData.GetCaptionByID(id));
-				//toolBarItem->SetToolTip(actionData.GetCaptionByID(id));
-				toolBarItem->SetAction(id);
-			}
-			else {
-				ibValueForm::CreateControl(wxT("ToolSeparator"), mainToolBar);
-			}
-		}
+		// Form-level toolbar is the form's command-bar chrome (m_commandBar).
 	}
 }
 
@@ -249,11 +254,11 @@ void ibValueForm::InitializeForm(const ibValueMetaObjectFormBase* creator,
 	if (ownerControl != nullptr) ownerControl->ControlIncrRef();
 	if (m_controlOwner != nullptr) m_controlOwner->ControlDecrRef();
 
-	if (srcObject != nullptr) srcObject->SourceIncrRef();
-	if (m_sourceObject != nullptr) m_sourceObject->SourceDecrRef();
-
+	// The source's ref lives in the MAIN attribute wrapper (SetSourceValue → SourceIncrRef, its
+	// dtor → SourceDecrRef); during the build the caller's RAII guard (CreateAndBuildForm) keeps it
+	// alive. The form holds NO separate ref — SourceIncrRef IS ibValue::IncrRef, so an IncrRef here
+	// with no matching DecrRef would just leak.
 	m_controlOwner = ownerControl;
-	m_sourceObject = srcObject;
 	m_metaFormObject = creator;
 
 	m_formKey = CreateFormUniqueKey(ownerControl, srcObject, formGuid);
@@ -270,18 +275,35 @@ void ibValueForm::InitializeForm(const ibValueMetaObjectFormBase* creator,
 	// their compile / procUnit scope chain on creation.
 	ibRuntimeModuleDataObject* sourceDesc =
 		dynamic_cast<ibRuntimeModuleDataObject*>(srcObject);
+
 	ibRuntimeModuleDataObject* descParent = sourceDesc;
+
 	if (descParent == nullptr && creator != nullptr) {
-		ibSession* session = ibSession::Current();
-		if (session != nullptr) {
-			if (ibValueModuleManager* mm = session->GetManagerModule())
-				descParent = mm;
-		}
+		// No bound data object → parent under the metadata's module manager.
+		// Through the seam so the Designer (which has no runtime root mm) parents
+		// under its lightweight designer manager, same as every other edit-path
+		// object. Null-folds for sessionless / no-cache hosts.
+		descParent = ibSession::EditModuleManagerFor(creator->GetMetaData());
 	}
+
 	if (descParent != nullptr)
 		ibRuntimeModuleDataObject::SetParent(descParent);
 
-	//SetReadOnly(readOnly);
+	// The form ALWAYS has a main attribute — declare it here (the ctor path) so
+	// GetMainAttribute() is never null. WITH a source it reflects the source (List/Object
+	// name by kind, the source Type, the seated value); WITHOUT one it is a bare default
+	// (Object / empty Type) that a later load refills from the "MainAttribute" section.
+	if (srcObject != nullptr) {
+		// Auto-generated form (no designer form): declare the MAIN attribute the
+		// source lands in. With no source the form stays generic (no list/tree
+		// view) — that's why this lives under the source gate. Empty Type accepts
+		// the incoming source; controls / source explorer work off this attribute.
+		// List vs object = the source-class table fact via the factory (IsTableSource), not the
+		// explorer flag.
+		(void)AddMainAttribute(
+			srcObject->IsTableSource() ? wxT("List") : wxT("Object"),
+			srcObject->GetSourceClassType(), srcObject);
+	}
 }
 
 #include "backend/system/systemManager.h"
@@ -295,19 +317,45 @@ const ibValueMetaObjectModuleBase* ibValueForm::GetMetaForCompile() const
 
 bool ibValueForm::InitializeFormModule()
 {
-	if (m_metaFormObject != nullptr) {
+	// ⭐⭐ THE PERSON'S OWN ARRANGEMENT GOES ON HERE — after the control tree exists and BEFORE the
+	// module runs. That order is the point: the author's form is the base, the person's arrangement
+	// is laid over it, and the module has the LAST word. A module hides a control because of a right
+	// or a value, and a preference saved months ago must not overrule that.
+	//
+	// Read from the base every time, never cached: the same person may be in another session and
+	// have changed it there (frontend/settings/formSettings.h).
+	//
+	// 🛑 AND IT STANDS OUTSIDE THE `m_metaFormObject` BLOCK, which is where it was first put and
+	// where it never ran: a form GENERATED from its source has no metaobject, so that whole block is
+	// skipped — and generated forms are exactly the ones this is for. Saving worked (the dialog
+	// calls it straight), restoring never happened, and the two are far enough apart that it read as
+	// "the setting is not being saved".
+	//
+	// ⚠ BUT AFTER THE RIGHT TO SEE THE FORM AT ALL, which is why that check is hoisted out of the
+	// block below and stands first: a person who may not open this form must not have anything
+	// rearranged for them on the way to being refused.
+	if (m_metaFormObject != nullptr && !m_metaFormObject->AccessRight_Show()) {
+		ibBackendAccessException::Error();
+		return false;
+	}
 
-		if (!m_metaFormObject->AccessRight_Show()) {
-			ibBackendAccessException::Error();
-			return false;
-		}
+	ibRestoreFormSettings(this);
+
+	if (m_metaFormObject != nullptr) {
 
 		// Parent is already wired in InitializeForm(). BindVariable +
 		// InitializeRuntime lazily create compile module / ProcUnit
 		// and pick up the parent's scope chain on creation. Run is
 		// Designer-guarded; Compile internally too. Session linkage
-		// flows through the parent chain (descriptor в†’ root в†’ session).
-		BindContextVariable(thisForm, this);
+		// flows through the parent chain (descriptor → root → session).
+		BindContextVariable(thisForm, this);                                          // contextual
+		BindExportVariable(wxT("Controls"), m_formCollectionControl);                 // exported
+		// Bind each source attribute as a form-module variable: its value cell as a LOCAL named
+		// <attrName>, and — for the MAIN — the exported DataSource. Same self-managed path that
+		// designer add / become-main reuse (BindAttributeVariable), so the wiring is one place.
+		for (const auto& av : m_attributes)
+			BindAttributeVariable(av);
+
 		InitializeRuntime();
 
 		try {
@@ -320,7 +368,7 @@ bool ibValueForm::InitializeFormModule()
 			return false;
 		}
 
-		PrepareNames();
+		InvalidateNames();
 	}
 
 #pragma region _control_guard_
@@ -351,7 +399,6 @@ void ibValueForm::NotifyCreate(const ibValue& vCreated)
 	if (ownerForm != nullptr) {
 
 		ownerForm->m_createdValue = vCreated;
-		ownerForm->m_changedValue = wxEmptyValue;
 
 		ownerForm->UpdateForm();
 	}
@@ -367,8 +414,10 @@ void ibValueForm::NotifyChange(const ibValue& vChanged)
 
 	if (ownerForm != nullptr) {
 
+		// A CHANGE ONLY MEANS "RE-READ". No position anchor travels with it any more (see tableBox's OnUpdated):
+		// the row already exists and the list re-locates its own current row by row-key. Clearing a PENDING
+		// create anchor stays — a save that follows a create must not re-fire the create's positioning.
 		ownerForm->m_createdValue = wxEmptyValue;
-		ownerForm->m_changedValue = vChanged;
 
 		ownerForm->UpdateForm();
 	}
@@ -385,7 +434,6 @@ void ibValueForm::NotifyDelete(const ibValue& vChanged)
 	if (ownerForm != nullptr) {
 
 		ownerForm->m_createdValue = wxEmptyValue;
-		ownerForm->m_changedValue = wxEmptyValue;
 
 		ownerForm->UpdateForm();
 	}
@@ -451,27 +499,85 @@ void ibValueForm::RemoveControl(const ibValue& vControl)
 //*                                              Events                                           *
 //*************************************************************************************************
 
-void ibValueForm::ShowForm(ibBackendMetaDocument* doc, bool createContext)
+bool ibValueForm::ShowForm(ibDocument* docParent, bool createContext)
 {
-	ibMetaDocument* docParent = static_cast<ibMetaDocument *>(doc);
-
 	if (ibBackendException::IsEvalMode())
-		return;
+		return false;
 
 	ibFormVisualDocument* const ownerDocForm = GetVisualDocument();
 
 	if (ownerDocForm != nullptr) {
 		ActivateForm();
-		return;
+		return true;
 	}
 
 	if (m_controlOwner != nullptr &&
-		doc == nullptr) {
+		docParent == nullptr) {
 		docParent = m_controlOwner->GetVisualDocument();
 	}
 
 	if (!createContext || !appData->DesignerMode()) {
-		CreateDocForm(docParent, createContext);
+		// Soft-lock UX (docs/private/record-locks.md Phase B.3): try to acquire
+		// the long-held sys_lock on the form's source, but DO NOT
+		// block form open on conflict. Users can view / edit
+		// in-memory even when another session holds the lock; the
+		// Write path re-attempts the acquire and fails the save with
+		// "X is locked by user Y" if conflict persists at save time.
+		// This avoids over-restrictive "form refuses to open" UX
+		// while still preventing lost updates.
+		if (ibSourceDataObject* const src = GetSourceObject()) {
+			try {
+				src->TryAcquireFormLock();
+			}
+			catch (const ibBackendLockException& lockErr) {
+				// Conflict — surface the blocking user as a caption badge
+				// so the operator knows "view-only" status without
+				// attempting to save. Form opens regardless; Write path
+				// will re-throw if conflict persists at save time.
+				if (lockErr.GetKind() == ibBackendLockException::Kind::LockConflict)
+					SetLockBadge(lockErr.GetBlockingUser());
+			}
+			catch (const ibBackendException&) {
+				// Non-conflict lock-infra error (DB transient etc.) —
+				// silent. Write path will re-check at save time.
+			}
+			catch (...) {
+				// Defensive — unknown exception, still open form.
+			}
+		}
+
+		return CreateDocForm(docParent, createContext);
+	}
+
+	// Designer preview path — the form is not opened here.
+	return false;
+}
+
+void ibValueForm::RefreshLockBadge()
+{
+	if (m_lockBadgeHolder.IsEmpty())
+		return;   // not in soft-lock view-only state — nothing to refresh
+
+	ibSourceDataObject* const src = GetSourceObject();
+	if (src == nullptr)
+		return;
+
+	try {
+		src->TryAcquireFormLock();
+		// Acquire succeeded — lock is now ours, badge clears.
+		m_lockBadgeHolder.clear();
+	}
+	catch (const ibBackendLockException& err) {
+		// Still locked. Holder may have changed (one process released,
+		// another took over) — keep the field in sync so UI surfaces
+		// the current truth.
+		if (err.GetKind() == ibBackendLockException::Kind::LockConflict
+			&& !err.GetBlockingUser().IsEmpty()) {
+			m_lockBadgeHolder = err.GetBlockingUser();
+		}
+	}
+	catch (...) {
+		// Transient DB error — leave badge as-is. Next tick re-tries.
 	}
 }
 
@@ -480,7 +586,10 @@ void ibValueForm::UpdateForm()
 	if (ibBackendException::IsEvalMode())
 		return;
 
-	
+	// Cross-user notifier tick is the natural pulse for lock-state
+	// refresh too. Cheap when badge is empty (early return).
+	RefreshLockBadge();
+
 	ibFormVisualDocument* const ownerDocForm = GetVisualDocument();
 
 	if (ownerDocForm != nullptr) {
@@ -494,12 +603,9 @@ void ibValueForm::UpdateForm()
 			// Web build serialises a fresh JSON tree on every request,
 			// so there's no mid-render flicker to hide — call the host
 			// walker directly.
-						visualView->Freeze();
+			wxWindowUpdateLocker freeze(visualView);
 #endif
-						visualView->UpdateVisualHost();
-			#ifndef OES_USE_WEB
-						visualView->Thaw();
-#endif
+			visualView->UpdateVisualHost();
 		}
 	}
 
@@ -518,9 +624,18 @@ bool ibValueForm::CloseForm(bool force)
 
 	ibFormVisualDocument* const ownerDocForm = GetVisualDocument();
 
+	// A form bound to a HOST document (a cell of the home page) cannot close: the window is
+	// the host's, not the form's. ONLY the close is suppressed — everything the command did
+	// before reaching here already happened (Save-and-close wrote the object, beforeClose /
+	// onClose ran), and the cell keeps the very same form. Nothing is asked, nothing is
+	// replaced. force=true (the teardown path) is never suppressed, or the window could not
+	// shut down.
+	if (!force && ownerDocForm != nullptr && ownerDocForm->IsEmbedded())
+		return false;
+
 	if (ownerDocForm != nullptr) {
 #ifdef OES_USE_WEB
-		// Defer the wxDocument::DeleteAllViews — it would delete the
+		// Defer the ibDocument::DeleteAllViews — it would delete the
 		// view, host, AND every control (including the toolbar that
 		// just fired the OnTool we're in). Mark the tab; the
 		// session's Dispatch epilogue drains pending closes AFTER
@@ -530,14 +645,14 @@ bool ibValueForm::CloseForm(bool force)
 		}
 		return true;
 #else
-		// Same hazard on desktop — wxDocument::DeleteAllViews deletes
+		// Same hazard on desktop — ibDocument::DeleteAllViews deletes
 		// the view (a wxEvtHandler) plus every control synchronously.
 		// If CloseForm was invoked from within the toolbar's tool
 		// event (Save-and-close command), control returns to
-		// wxAuiToolBar::OnLeftUp on freed memory в†’ UAF in
+		// wxAuiToolBar::OnLeftUp on freed memory → UAF in
 		// wxEvtHandler::TryHereOnly. Defer the deletion through
 		// CallAfter so the click event fully unwinds first.
-		ownerDocForm->CallAfter([doc = ownerDocForm]{ doc->DeleteAllViews(); });
+		ownerDocForm->CallAfter([doc = ownerDocForm] { doc->DeleteAllViews(); });
 		return true;
 #endif
 	}
@@ -545,14 +660,84 @@ bool ibValueForm::CloseForm(bool force)
 	return true;
 }
 
+#ifndef OES_USE_WEB
+#include "frontend/docView/templates/docViewHelp.h"
+#endif
+
 void ibValueForm::HelpForm()
 {
 #ifndef OES_USE_WEB
-	// Modal message box — desktop-only. Web would surface help through
-	// an HTTP response instead; wiring is deferred.
-	wxMessageBox(
-		_("Help will appear here sometime, but not today.")
-	);
+	// ⭐ THE TEXT IS THE OBJECT'S OWN. Every metaobject carries help
+	// (ibValueMetaObject::GetHelpContent), written in the designer's tree; this is the reading
+	// end of it. Asked of the object the form is FOR — "what is this document" is a question
+	// about the document, not about the form showing it.
+	const ibValueMetaObjectGenericData* metaObject = GetMetaObject();
+
+	const wxString help = metaObject != nullptr
+		? metaObject->GetHelpContent() : wxString(wxEmptyString);
+
+	// NOTHING WRITTEN IS AN ANSWER, and a better one than an empty tab: an empty window leaves a
+	// person wondering whether the help failed to load.
+	if (help.IsEmpty()) {
+		wxMessageBox(_("Nothing has been written about this yet."),
+			wxTheApp->GetAppDisplayName(), wxOK | wxCENTRE | wxICON_INFORMATION);
+		return;
+	}
+
+	ibFormVisualDocument* const ownerDocForm = GetVisualDocument();
+
+	// ⚠ NOT `docManager` — that name is a MACRO (docView.h) expanding to the singleton accessor,
+	// so a local of that name is a redefinition rather than a variable. Asked of the OWNING
+	// document anyway, which is the right question: the help belongs in the same manager as the
+	// form it is about, not in whichever one happens to be current.
+	ibDocManager* const documents = ownerDocForm != nullptr
+		? ownerDocForm->GetDocumentManager() : nullptr;
+
+	if (documents == nullptr)
+		return;
+
+	// ⭐ A TAB, AND A CHILD OF THE FORM THAT ASKED — help is read BESIDE the thing it is about,
+	// where a modal box would have to be dismissed before it could be acted on. Being a child
+	// means ibDocument's cascade closes it when that form closes, so help tabs cannot pile up
+	// behind a workspace somebody has moved on from.
+	ibHelpFileDocument* doc = documents->CreateDocument<ibHelpFileDocument>();
+	if (doc == nullptr)
+		return;
+
+	doc->SetDocParent(ownerDocForm);
+	doc->SetTitle(metaObject != nullptr
+		? wxString::Format(_("Help: %s"), metaObject->GetSynonym()) : _("Help"));
+
+	documents->AddDocument(doc);
+
+	// READ-ONLY: this is the user's copy of what a developer wrote, and the view already honours
+	// the flag (docViewHelp.cpp). Editing happens in the designer, on the object.
+	if (!doc->OnCreate(wxEmptyString, ibDOC_READONLY)) {
+		doc->DeleteAllViews();
+		return;
+	}
+
+	if (ibTextEditor* text = doc->GetTextCtrl()) {
+		// ⚠ WRITTEN WITH THE READ-ONLY LIFTED, then put back. A styled text control refuses to be
+		// filled while it is read-only, so the text would silently not arrive — the guard has to
+		// be opened by whoever is legitimately writing and closed again behind them.
+		text->SetReadOnly(false);
+		text->SetText(help);
+		text->SetReadOnly(true);
+		text->EmptyUndoBuffer();
+	}
+
+	// 🛑 NOBODY EDITED THIS, so it must not be carried as an edit. Filling the control marks the
+	// document modified — the ordinary signal, arriving here for the wrong reason — and a modified
+	// FILE document with no filename asks to be saved on close, which opens a file dialog over a
+	// tab the person only meant to read. Said after the text is in, because that is what raised it.
+	//
+	// ⚠ The read-only flag stops at the VIEW (docViewHelp.cpp: SetReadOnly(flags == ibDOC_READONLY));
+	// the DOCUMENT never learns it, so it cannot refuse the prompt on its own. Stating it here is
+	// exact rather than general — this is the only read-only file document — but the flag belongs
+	// on the document eventually, and that is a wide header.
+	doc->Modify(false);
+	doc->SetDocumentSaved(true);
 #endif
 }
 
@@ -582,16 +767,16 @@ bool ibValueForm::GenerateForm(ibValueRecordDataObjectRef* obj) const
 #else
 	const ibValueMetaObjectRecordDataMutableRef* metaObject = obj->GetMetaObject();
 	wxASSERT(metaObject);
-	ibMetaData* metaData = metaObject->GetMetaData();
+	const ibMetaData* metaData = metaObject->GetMetaData();
 	wxASSERT(metaData);
 
 	ibDialogGeneration* selectDataType = new ibDialogGeneration(metaData, metaObject->GetGenerationDescription());
 
 	ibMetaID sel_id = 0;
 	if (selectDataType->ShowModal(sel_id)) {
-		ibValueMetaObjectRecordDataMutableRef* meta = metaData->FindAnyObjectByFilter<ibValueMetaObjectRecordDataMutableRef>(sel_id);
+		const ibValueMetaObjectRecordDataMutableRef* meta = metaData->FindAnyObjectByFilter<ibValueMetaObjectRecordDataMutableRef>(sel_id);
 		if (meta != nullptr) {
-			ibValueRecordDataObjectRef* genObj = meta->CreateObjectValue(obj, true);
+			const ibValuePtr<ibValueRecordDataObjectRef> genObj = meta->CreateObjectValue(obj, true);
 			if (genObj != nullptr) {
 				genObj->ShowFormValue();
 				selectDataType->Destroy();
@@ -621,7 +806,7 @@ ibValueFrame* ibValueForm::CreateControl(const wxString& clsControl, ibValueFram
 	else
 		parentControl = this;
 
-	// ademas, el objeto se insertara a continuacion del objeto seleccionado
+	// furthermore, the object is inserted right after the selected object
 	ibValueFrame* newControl = ibValueForm::CreateObject(clsControl, parentControl);
 	wxASSERT(newControl);
 	// Live-tree insertion: feed the new ibValueFrame into the host.
@@ -637,9 +822,12 @@ ibValueFrame* ibValueForm::CreateControl(const wxString& clsControl, ibValueFram
 		}
 	}
 
-	m_formCollectionControl->PrepareNames();
+	// Control added → both the form's own attribute surface (FillMembers loops
+	// GetControlList) and the Controls collection's surface are stale.
+	InvalidateNames();
+	m_formCollectionControl->InvalidateNames();
 
-	//return value 
+	//return value
 	if (newControl->GetComponentType() == COMPONENT_TYPE_SIZERITEM)
 		return newControl->GetChild(0);
 
@@ -666,27 +854,21 @@ void ibValueForm::RemoveControl(ibValueFrame* control)
 	ibValueFrame* parentControl = currentControl->GetParent();
 
 	if (parentControl->GetComponentType() == COMPONENT_TYPE_SIZERITEM) {
+		// The sizer-item wraps currentControl; removing the wrapper from its owner
+		// releases the owning handle, cascading down to currentControl.
 		ibValueFrame* parentOwner = parentControl->GetParent();
-		if (parentOwner != nullptr) {
+		if (parentOwner != nullptr)
 			parentOwner->RemoveChild(parentControl);
-		}
-		parentControl->SetParent(nullptr);
-		parentControl->RemoveChild(currentControl);
-		parentControl->DecrRef();
-
-		currentControl->SetParent(nullptr);
-		currentControl->DecrRef();
 	}
 	else {
 		ibValueFrame* parentOwner = currentControl->GetParent();
-		if (parentOwner != nullptr) {
-			parentOwner->RemoveChild(currentControl);
-		}
-		currentControl->SetParent(nullptr);
-		currentControl->DecrRef();
+		if (parentOwner != nullptr)
+			parentOwner->RemoveChild(currentControl); // owning handle releases → destroys
 	}
 
-	m_formCollectionControl->PrepareNames();
+	// Control removed → form attribute surface + Controls collection surface stale.
+	InvalidateNames();
+	m_formCollectionControl->InvalidateNames();
 }
 
 void ibValueForm::OnIdleHandler(wxTimerEvent& event)
@@ -771,17 +953,6 @@ void ibValueForm::DetachIdleHandler(const wxString& procedureName)
 				timer->Stop();
 			if (timer)
 				timer->Unbind(wxEVT_TIMER, &ibValueForm::OnIdleHandler, this);
-		}
-	}
-}
-
-void ibValueForm::ClearRecursive(ibValueFrame* control)
-{
-	for (unsigned int idx = control->GetChildCount(); idx > 0; idx--) {
-		ibValueFrame* controlChild = control->GetChild(idx - 1);
-		ClearRecursive(controlChild);
-		if (controlChild != nullptr) {
-			controlChild->DecrRef();
 		}
 	}
 }

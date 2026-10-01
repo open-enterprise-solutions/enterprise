@@ -46,7 +46,10 @@ public:
 	// Is the connection to the database open?
 	virtual bool IsOpen();
 
-	/// clone database  
+	// Cancel what this connection is running — SQLCancel on the statement executing, from any thread (see the base).
+	virtual void Cancel();
+
+	/// clone database
 	virtual ibDatabaseLayer* Clone() { return new ibDatabaseLayerODBC(*this); }
 
 	// IsActiveTransaction inherits the base-class default
@@ -54,12 +57,11 @@ public:
 	// (DoBeginTransaction / DoCommit / DoRollBack) are protected —
 	// see below.
 
-	// Row-lock probe for ibSessionRegistry. MSSQL behind ODBC honours
-	// `SET LOCK_TIMEOUT 0` + `SELECT ... WITH (UPDLOCK, ROWLOCK)`;
-	// other ODBC backends usually ignore the timeout hint and just
-	// block — the registry avoids calling this on those.
-	virtual bool TryProbeRowLock(const wxString& tableName,
-		const wxString& pkColumn, const wxString& pkValue) override;
+	// Row-lock dialect now lives in the dialect dictionary (default m_rowLockSuffix=" FOR UPDATE").
+	// NOTE: MSSQL's true row lock is the table hint "WITH (UPDLOCK, ROWLOCK)" placed AFTER FROM,
+	// which the suffix model can't express — so MSSQL/ODBC pessimistic row-locking is a known gap
+	// (the old virtual placed it as a suffix too, i.e. it was never correct here). NOWAIT rides
+	// SET LOCK_TIMEOUT 0 (ibTxOptions::noWait). See docs/private/record-locks.md.
 
 	// Database schema API contributed by M. Szeftel (author of wxActiveRecordGenerator)
 	virtual bool TableExists(const wxString& table);
@@ -72,7 +74,38 @@ public:
 		return DATABASELAYER_ODBC;
 	}
 
+	// ODBC fronts many backends — the dialect is the default-constructed ANSI
+	// baseline (? params, LIMIT/OFFSET). This is the home of the generic default.
+	static const ibDialectDictionary& Dialect() {
+		static const ibDialectDictionary s_dialect;   // default ctor = ANSI baseline
+		return s_dialect;
+	}
+	virtual const ibDialectDictionary& GetDialect() const override { return Dialect(); }
+
+	// NO materialization dialect — the inherited nullptr is the ANSWER here, not an
+	// omission. Maintaining derived state means emitting a TRIGGER, and a trigger body is
+	// engine-specific in structure; ODBC by construction does not know which engine is
+	// underneath, so there is nothing correct it could emit. A register on ODBC therefore
+	// keeps serving Balance / Turnover from the live aggregation — the always-works floor.
+	// This stays true even after the MSSQL port: an MSSQL driver would carry the set-based
+	// dictionary, MSSQL-through-ODBC still would not. (docs/private/register-totals-strategy.md)
+
 	static bool IsAvailable();
+
+	// The native error as the code — or the cancel, when the SQLSTATE says it was the statement cancelled (HY008).
+	static int TranslateErrorCode(int nNativeCode, const wxString& strSqlState);
+
+	// SQLSTATE-based classification — ODBC's standard error identifier
+	// is the same 5-char SQLSTATE as SQL standard / PostgreSQL. Backends
+	// reachable through ODBC (MSSQL, Oracle, DB2, etc.) all funnel their
+	// errors through this format, so the class-digit dispatch is the
+	// portable choice.
+	ibBackendDatabaseException::Kind ClassifyDatabaseError(int nativeCode) const override;
+	wxString GetSqlState() const override { return m_lastSqlState; }
+
+	// Stash the most recent SQLSTATE pulled from SQLGetDiagRec so the
+	// next ThrowDatabaseException carries it.
+	void SetLastSqlState(const wxString& s) { m_lastSqlState = s; }
 
 protected:
 
@@ -111,6 +144,15 @@ private:
 
 	bool m_bIsConnected;
 	ibInterfaceODBC* m_pInterface;
+
+	// The statement executing on this connection now, or null — ODBC cancels a statement, not a connection
+	// (SQLCancel). Told by the statement around its SQLExecute (ibPreparedStatementODBC::Execute).
+	std::atomic<void*> m_executing{ nullptr };
+
+	// Stashed by SetLastSqlState() — most recent SQLSTATE pulled from
+	// SQLGetDiagRec. Travels with the next ThrowDatabaseException so
+	// admin logs see what the driver actually reported.
+	wxString m_lastSqlState;
 
 public:
 

@@ -1,6 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
+    <Filter Include="settings">
+      <UniqueIdentifier>{afaf6123-db1b-4f64-8265-a492c900161d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="visualView\layers">
+      <UniqueIdentifier>{3cbb52f2-d743-4c03-ad9b-c51e67886d1f}</UniqueIdentifier>
+    </Filter>
     <Filter Include="web">
       <UniqueIdentifier>{31A5F01C-1001-4001-8001-000000000001}</UniqueIdentifier>
     </Filter>
@@ -15,6 +21,24 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="settings\formSettings.cpp">
+      <Filter>settings</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\formAttribute.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\formCommand.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\layerObject.cpp">
+      <Filter>visualView</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\layers\commandBar.cpp">
+      <Filter>visualView\layers</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\layers\commandReceiver.cpp">
+      <Filter>visualView\layers</Filter>
+    </ClCompile>
     <ClCompile Include="wfrontend.cpp" />
     <ClCompile Include="web\webClient.cpp">      <Filter>web</Filter></ClCompile>
     <ClCompile Include="web\webSession.cpp">     <Filter>web</Filter></ClCompile>
@@ -30,10 +54,11 @@
     <ClCompile Include="visualView\visualHostClient.cpp">       <Filter>visualView</Filter></ClCompile>
     <ClCompile Include="visualView\visualHostClientDocView.cpp"><Filter>visualView</Filter></ClCompile>
     <ClCompile Include="visualView\controlEnum.cpp">            <Filter>visualView</Filter></ClCompile>
+    <ClCompile Include="docView\docManager.cpp">                <Filter>docView</Filter></ClCompile>
     <ClCompile Include="docView\docView.cpp">                   <Filter>docView</Filter></ClCompile>
-    <ClCompile Include="docView\docViewCmd.cpp">                <Filter>docView</Filter></ClCompile>
     <ClCompile Include="visualView\ctrl\control.cpp">           <Filter>visualView\ctrl</Filter></ClCompile>
     <ClCompile Include="visualView\ctrl\controlProperty.cpp">   <Filter>visualView\ctrl</Filter></ClCompile>
+    <ClCompile Include="visualView\ctrl\formAttributeProperty.cpp"> <Filter>visualView\ctrl</Filter></ClCompile>
     <ClCompile Include="visualView\ctrl\typeControl.cpp">       <Filter>visualView\ctrl</Filter></ClCompile>
     <ClCompile Include="visualView\ctrl\window.cpp">            <Filter>visualView\ctrl</Filter></ClCompile>
     <ClCompile Include="visualView\ctrl\frame.cpp">             <Filter>visualView\ctrl</Filter></ClCompile>
@@ -43,6 +68,7 @@
     <ClCompile Include="visualView\ctrl\button_res.cpp">        <Filter>visualView\ctrl</Filter></ClCompile>
     <ClCompile Include="visualView\ctrl\buttonEvent.cpp">       <Filter>visualView\ctrl</Filter></ClCompile>
     <ClCompile Include="visualView\ctrl\statictext.cpp">        <Filter>visualView\ctrl</Filter></ClCompile>
+    <ClCompile Include="visualView\ctrl\statictextEvent.cpp">        <Filter>visualView\ctrl</Filter></ClCompile>
     <ClCompile Include="visualView\ctrl\statictext_res.cpp">    <Filter>visualView\ctrl</Filter></ClCompile>
     <ClCompile Include="visualView\ctrl\textctrl.cpp">          <Filter>visualView\ctrl</Filter></ClCompile>
     <ClCompile Include="visualView\ctrl\textctrlEvent.cpp">     <Filter>visualView\ctrl</Filter></ClCompile>
@@ -79,6 +105,13 @@
     <ClCompile Include="visualView\ctrl\boxsizer_res.cpp">      <Filter>visualView\ctrl</Filter></ClCompile>
     <ClCompile Include="visualView\ctrl\gridsizer_res.cpp">     <Filter>visualView\ctrl</Filter></ClCompile>
     <ClCompile Include="visualView\ctrl\staticboxsizer_res.cpp"><Filter>visualView\ctrl</Filter></ClCompile>
+    <ClCompile Include="visualView\ctrl\wrapsizer_res.cpp">     <Filter>visualView\ctrl</Filter></ClCompile>
+    <ClCompile Include="visualView\ctrl\tableBox.cpp">          <Filter>visualView\ctrl</Filter></ClCompile>
+    <ClCompile Include="visualView\ctrl\tableBox_res.cpp">      <Filter>visualView\ctrl</Filter></ClCompile>
+    <ClCompile Include="visualView\ctrl\tableBoxColumn.cpp">    <Filter>visualView\ctrl</Filter></ClCompile>
+    <ClCompile Include="visualView\ctrl\tableBoxColumn_res.cpp"><Filter>visualView\ctrl</Filter></ClCompile>
+    <ClCompile Include="visualView\ctrl\tableBoxColumnGroup.cpp"><Filter>visualView\ctrl</Filter></ClCompile>
+    <ClCompile Include="visualView\ctrl\tableBoxColumnGroup_res.cpp"><Filter>visualView\ctrl</Filter></ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="wfrontend.h" />

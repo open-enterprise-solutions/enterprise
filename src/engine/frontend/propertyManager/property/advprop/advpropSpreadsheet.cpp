@@ -1,8 +1,8 @@
-#include "advpropSpreadsheet.h"
 #include "advpropHyperLink.h"
 
 #include "backend/propertyManager/property/propertySpreadsheet.h"
-#include "frontend/propertyManager/property/private/prop.h"
+#include "frontend/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
+#include "frontend/propertyManager/property/private/propertyRegistry.h"
 
 // register frontend property 
 class ibPropertySpreadsheetLoader
@@ -10,6 +10,8 @@ class ibPropertySpreadsheetLoader
 public:
 	ibPropertySpreadsheetLoader()
 	{
-		ibPG_IMPLEMENT_PROPERTY_CALLBACK(ibPGHyperLinkProperty, ibPropertySpreadsheet::ms_propertySpreadsheet);
+		ibPropertyRegistry::Register([](ibPropertySpreadsheet* prop) -> wxPGProperty* {
+			return new ibPGHyperLinkProperty(prop->GetPropertyObject(), prop->GetLabel(), prop->GetName(), prop->GetValue());
+		});
 	}
 }s_dateLoaderSpreadsheet;

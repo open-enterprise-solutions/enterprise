@@ -1,16 +1,15 @@
-﻿////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////
 //	Author		: Maxim Kornienko
 //	Description : report - metaData
 ////////////////////////////////////////////////////////////////////////////
 
 #include "dataReport.h"
+#include "backend/serialize/dataBuilder.h"
 #include "backend/metaData.h"
 #include "backend/metadataReport.h"
 #include "backend/moduleManager/moduleManagerExt.h"
 #include "backend/session/session.h"
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueMetaObjectReport, ibValueMetaObjectRecordDataExt)
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueMetaObjectExternalReport, ibValueMetaObjectReport)
 
 //********************************************************************************************
 //*                                      metaData                                            *
@@ -18,6 +17,12 @@ wxIMPLEMENT_DYNAMIC_CLASS(ibValueMetaObjectExternalReport, ibValueMetaObjectRepo
 
 ibValueMetaObjectReport::ibValueMetaObjectReport() : ibValueMetaObjectRecordDataExt()
 {
+	// NO HANDLER IN THE OBJECT MODULE. A report used to offer `Composing(StandartProcessing)`, back
+	// when the object itself composed; it does not — it points at the composer it declares, and the
+	// box showing that composer runs it. Declaring a handler nothing raises is worse than none: the
+	// designer would list it, an author would write into it, and it would never be called.
+
+	(*m_propertyManagerModule)->SetDefaultProcedure(wxT("FormGetProcessing"), ibContentHelper::eProcedureHelper, { wxT("Form"), wxT("Cancel") });
 }
 
 ibValueMetaObjectReport::~ibValueMetaObjectReport()
@@ -35,14 +40,14 @@ ibValueMetaObjectFormBase* ibValueMetaObjectReport::GetDefaultFormByID(const ibF
 
 #include "dataReportManager.h"
 
-ibValueManagerDataObject* ibValueMetaObjectReport::CreateManagerDataObjectValue() const
+ibValuePtr<ibValueManagerDataObject> ibValueMetaObjectReport::CreateManagerDataObjectValue() const
 {
-	return ibValue::CreateAndPrepareValueRef<ibValueManagerDataObjectReport>(this);
+	return ibValuePtr<ibValueManagerDataObject>(new ibValueManagerDataObjectReport(this));
 }
 
 #include "backend/appData.h"
 
-ibValueRecordDataObjectExt* ibValueMetaObjectReport::CreateObjectExtValue() const
+ibValuePtr<ibValueRecordDataObjectExt> ibValueMetaObjectReport::CreateObjectExtValue() const
 {
 	if (IsExternalCreate()) {
 		// External DP — m_objectValue lives on the DP's own moduleManager,
@@ -50,36 +55,35 @@ ibValueRecordDataObjectExt* ibValueMetaObjectReport::CreateObjectExtValue() cons
 		// (= ibMetaDataDataProcessor for external DPs).
 		auto* extMeta = dynamic_cast<ibMetaDataReport*>(m_metaData);
 		ibValueModuleManager* mm = extMeta ? extMeta->GetManagerModule() : nullptr;
-		return mm ? dynamic_cast<ibValueRecordDataObjectExt*>(mm->GetObjectValue()) : nullptr;
+		return ibValuePtr<ibValueRecordDataObjectExt>(mm ? dynamic_cast<ibValueRecordDataObjectExt*>(mm->GetObjectValue()) : nullptr);
 	}
 
 	ibValueRecordDataObjectReport* pDataRef = nullptr;
 	if (auto* cc = m_metaData->GetCompileCache()) {
 		if (cc->FindCompileModule(m_propertyObjectModule->GetMetaObject(), pDataRef))
-			return pDataRef;
+			return ibValuePtr<ibValueRecordDataObjectExt>(pDataRef);
 	}
-	return ibValue::CreateAndPrepareValueRef<ibValueRecordDataObjectReport>(this);
+	return ibValuePtr<ibValueRecordDataObjectExt>(new ibValueRecordDataObjectReport(this));
 }
 
-ibSourceDataObject* ibValueMetaObjectReport::CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const
+ibSourcePtr<ibSourceDataObject> ibValueMetaObjectReport::CreateSourceObject(const ibCreateRequest& request, const ibFormID& form_id) const
 {
-	switch (metaObject->GetTypeForm())
+	switch (form_id)
 	{
 	case eFormReport:
-		return CreateObjectValue();
+		return ibSourcePtr<ibSourceDataObject>(CreateObjectValue());
 	}
 
 	return nullptr;
 }
 
 #pragma region _form_builder_h_
-ibBackendValueForm* ibValueMetaObjectReport::GetObjectForm(const wxString& strFormName, ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
+ibFormPtr<ibBackendValueForm> ibValueMetaObjectReport::GetObjectForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
-		strFormName,
+		request,
 		ibValueMetaObjectReport::eFormReport,
-		ownerControl, CreateObjectValue(),
-		formGuid
+		ownerControl, CreateObjectValue()
 	);
 }
 #pragma endregion
@@ -88,28 +92,36 @@ ibBackendValueForm* ibValueMetaObjectReport::GetObjectForm(const wxString& strFo
 //*                       Save & load metaData                              *
 //***************************************************************************
 
-bool ibValueMetaObjectReport::LoadData(ibReaderMemory& dataReader)
+bool ibValueMetaObjectReport::WriteData(ibDataNode& node) const
 {
-	//Load object module
-	(*m_propertyObjectModule)->LoadMeta(dataReader);
-	(*m_propertyManagerModule)->LoadMeta(dataReader);
+	node.SetProperty(m_propertyObjectModule->GetName(), m_propertyObjectModule->GetNodeValue());
+	node.SetProperty(m_propertyManagerModule->GetName(), m_propertyManagerModule->GetNodeValue());
 
-	//Load default form
-	m_propertyDefFormObject->SetValue(GetIdByGuid(dataReader.r_stringZ()));
+	node.SetValue(m_propertyDefFormObject->GetName(), GetGuidByID(m_propertyDefFormObject->GetValueAsInteger()).str());
 
-	return ibValueMetaObjectRecordDataExt::LoadData(dataReader);
+	// 🛑 …AND THE DEFAULT COMPOSER, by the same road (Max, 2026-08-20: "you missed it when you did the
+	// main composer"). A report declares TWO things about itself — the form it opens with and the
+	// composer it composes by — and the second was given a property, a choice in the header and a
+	// first-one-wins rule, but never a line here: it was set, used, saved nowhere, and came back
+	// "<not selected>" on the next open.
+	//
+	// BY GUID, not by metaID: an id is only unique inside the container that stamped it, and an
+	// external report is carried between configurations — which is exactly why the form beside it
+	// travels this way.
+	node.SetValue(m_propertyDefComposer->GetName(), GetGuidByID(m_propertyDefComposer->GetValueAsInteger()).str());
+
+	return true;
 }
 
-bool ibValueMetaObjectReport::SaveData(ibWriterMemory& dataWritter)
+bool ibValueMetaObjectReport::ReadData(const ibDataNode& node)
 {
-	//Save object module
-	(*m_propertyObjectModule)->SaveMeta(dataWritter);
-	(*m_propertyManagerModule)->SaveMeta(dataWritter);
+	m_propertyObjectModule->SetNodeValue(node.GetProperty(m_propertyObjectModule->GetName()));
+	m_propertyManagerModule->SetNodeValue(node.GetProperty(m_propertyManagerModule->GetName()));
 
-	//Save default form
-	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormObject->GetValueAsInteger()));
+	m_propertyDefFormObject->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormObject->GetName())));
+	m_propertyDefComposer->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefComposer->GetName())));
 
-	return ibValueMetaObjectRecordDataExt::SaveData(dataWritter);
+	return true;
 }
 
 //***********************************************************************
@@ -212,7 +224,7 @@ bool ibValueMetaObjectReport::OnAfterRunMetaObject(int flags)
 
 	if (auto* cc = m_metaData->GetCompileCache()) {
 		if (ibValueMetaObjectRecordDataExt::OnAfterRunMetaObject(flags))
-			return cc->AddCompileModule(m_propertyObjectModule->GetMetaObject(), CreateObjectValue());
+			return cc->AddCompileModule(m_propertyObjectModule->GetMetaObject(), [this]() -> ibValue { return CreateObjectValue(); });
 		return false;
 	}
 
@@ -233,7 +245,7 @@ bool ibValueMetaObjectReport::OnBeforeCloseMetaObject()
 
 	if (auto* cc = m_metaData->GetCompileCache()) {
 		if (ibValueMetaObjectRecordDataExt::OnBeforeCloseMetaObject())
-			return cc->RemoveCompileModule(m_propertyObjectModule->GetMetaObject());
+			{ cc->RemoveCompileModule(m_propertyObjectModule->GetMetaObject()); return true; }
 		return false;
 	}
 
@@ -267,12 +279,27 @@ void ibValueMetaObjectReport::OnCreateFormObject(ibValueMetaObjectFormBase* meta
 	}
 }
 
+// ⭐ THE FIRST COMPOSER IS THE DEFAULT ONE. A report declares a composer because it wants a report;
+// making them then hunt for a "default composer" property to fill in would be asking a question
+// whose answer is already obvious. The same pair of hooks the default FORM has, for the same reason.
+void ibValueMetaObjectReport::OnCreateComposerObject(ibValueMetaObjectComposer* metaComposer)
+{
+	if (metaComposer != nullptr && m_propertyDefComposer->GetValueAsInteger() == wxNOT_FOUND)
+		m_propertyDefComposer->SetValue(metaComposer->GetMetaID());
+}
+
+void ibValueMetaObjectReport::OnRemoveComposerObject(ibValueMetaObjectComposer* metaComposer)
+{
+	if (metaComposer != nullptr && m_propertyDefComposer->GetValueAsInteger() == metaComposer->GetMetaID())
+		m_propertyDefComposer->SetValue(wxNOT_FOUND);
+}
+
 void ibValueMetaObjectReport::OnRemoveMetaForm(ibValueMetaObjectFormBase* metaForm)
 {
 	if (metaForm->GetTypeForm() == ibValueMetaObjectReport::eFormReport
 		&& m_propertyDefFormObject->GetValueAsInteger() == metaForm->GetMetaID())
 	{
-		m_propertyDefFormObject->SetValue(metaForm->GetMetaID());
+		m_propertyDefFormObject->SetValue(wxNOT_FOUND);
 	}
 }
 

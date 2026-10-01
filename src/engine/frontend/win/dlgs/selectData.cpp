@@ -30,8 +30,8 @@ bool ibDialogSelectDataType::ShowModal(ibClassID& clsid)
 
 #define ICON_SIZE 16
 
-ibDialogSelectDataType::ibDialogSelectDataType(ibMetaData* metaData, const std::vector<ibClassID>& array) :
-	wxDialog(ibFrontendDocMDIFrame::GetFrame(), wxID_ANY, _("Select data type"), wxDefaultPosition, wxSize(315, 300), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
+ibDialogSelectDataType::ibDialogSelectDataType(const ibMetaData* metaData, const std::vector<ibClassID>& array) :
+	wxDialog(ibFrontendMainFrame::GetFrame(), wxID_ANY, _("Select data type"), wxDefaultPosition, wxSize(315, 300), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
 {
 	wxDialog::SetSizeHints(wxDefaultSize, wxDefaultSize);
 	wxBoxSizer* mainSizer = new wxBoxSizer(wxHORIZONTAL);
@@ -46,9 +46,7 @@ ibDialogSelectDataType::ibDialogSelectDataType(ibMetaData* metaData, const std::
 	);
 
 	for (const auto clsid : array) {
-		if (metaData->IsRegisterCtor(clsid)) {
-			const ibCtorAbstractType* typeCtor = metaData->GetAvailableCtor(clsid);
-			wxASSERT(typeCtor);
+		if (const ibCtorAbstractType* typeCtor = metaData->GetAvailableCtor(clsid)) {
 			wxImageList* imageList = m_listData->GetImageList(wxIMAGE_LIST_SMALL);
 			long lSelectedItem = m_listData->InsertItem(m_listData->GetItemCount(), typeCtor->GetClassName(), imageList->Add(typeCtor->GetClassIcon()));
 			m_listTypeClass.insert_or_assign(lSelectedItem, clsid);

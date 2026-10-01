@@ -1,26 +1,26 @@
-#ifndef _GRID_H__
-#define _GRID_H__
+#ifndef _TEXTBOX_H__
+#define _TEXTBOX_H__
 
 #include "window.h"
 #include "frontend/win/editor/textEditor/textEditor.h"
 
 class ibValueTextBox : public ibValueWindow {
-	wxDECLARE_DYNAMIC_CLASS(ibValueTextBox);
-public:
+	public:
 
 	ibValueTextBox();
+	virtual ~ibValueTextBox();
 
 	virtual wxObject* Create(ibFrontendWindow* wxparent, ibVisualHost *visualHost) override;
-	virtual void OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost *visualHost, bool firstСreated) override;
+	virtual void OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost *visualHost, bool firstCreated) override;
 	virtual void OnSelected(wxObject* wxobject) override;
 	virtual void Update(wxObject* wxobject, ibVisualHost *visualHost) override;
 	virtual void Cleanup(wxObject* obj, ibVisualHost *visualHost) override;
 
-	//support printing 
-	virtual wxPrintout* CreatePrintout() const;
+	// The view of the document this box holds, as the grid box's (ibValueGridBox::GetControlView).
+	virtual ibView* GetControlView() const override;
 
 	//methods & attributes
-	virtual void PrepareNames() const;                         // this method is automatically called to initialize attribute and method names.
+	// No own name surface — the base ibValueFrame::FillMembers covers it.
 
 	virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal);        //setting attribute
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal);                   //attribute value
@@ -30,8 +30,14 @@ public:
 	static wxIcon GetIconGroup();
 
 	//load & save object in control 
-	virtual bool LoadData(ibReaderMemory &reader);
-	virtual bool SaveData(ibWriterMemory& writer = ibWriterMemory());
+	virtual bool ReadData(const ibDataNode& node);
+	virtual bool WriteData(ibDataNode& node) const;
+
+private:
+
+	// The document and its view — the grid box's arrangement (ibValueGridBox::m_gridDocument).
+	class ibTextBoxDocument* m_textDocument = nullptr;
+	class ibTextBoxView*     m_textView = nullptr;
 };
 
 #endif

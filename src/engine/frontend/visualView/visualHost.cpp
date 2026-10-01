@@ -4,6 +4,35 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "visualHost.h"
+#include "ctrl/window.h"                          // ibValueWindowComposite::BuildLayerParts
+#include "backend/backend_exception.h"            // ibBackendException — named in the control-build catches
+
+//*******************************************************************************************
+//*   WHERE THE CONTROLS ARE KEPT — one index, both builds (see ibControlIndex).             *
+//*******************************************************************************************
+
+wxObject* ibControlIndex::FindObject(const ibValueFrame* control) const
+{
+	if (control == nullptr)
+		return nullptr;
+
+	const auto it = m_objects.find(const_cast<ibValueFrame*>(control));
+	return it != m_objects.end() ? it->second : nullptr;
+}
+
+ibValueFrame* ibControlIndex::FindControl(const wxObject* wx_object) const
+{
+	if (wx_object == nullptr)
+		return nullptr;
+
+	for (const auto& pair : m_objects) {
+		if (pair.second == wx_object)
+			return pair.first;
+	}
+
+	return nullptr;
+}
+
 #ifdef OES_USE_WEB
 
 #include "ctrl/frame.h"
@@ -268,7 +297,7 @@ bool ibVisualHost::ClearVisualHost()
 	// (ibValueFrame → wxObject) index populated by the walker.
 	if (ibValueForm* form = GetValueForm())
 		CleanupChildControls(form, this);
-	m_baseObjects.clear();      // wipe after Cleanup so callbacks can still look up siblings
+	m_controls.Clear();         // wipe after Cleanup so callbacks can still look up siblings
 	while (!GetChildren().empty()) {
 		ibWebWindow* c = GetChildren().back();
 		c->SetParent(nullptr);  // detaches from our m_children
@@ -278,22 +307,15 @@ bool ibVisualHost::ClearVisualHost()
 	return true;
 }
 
+// Web keeps the controls in the host itself, so both questions go straight to its index.
 ibValueFrame* ibVisualHost::GetObjectBase(const wxObject* wxobject) const
 {
-	// Reverse index — iterate m_baseObjects; only desktop has call
-	// sites today. Kept defined on web so the virtual's symbol
-	// exists for anything that links against both.
-	for (const auto& kv : m_baseObjects) {
-		if (kv.second == wxobject)
-			return kv.first;
-	}
-	return nullptr;
+	return m_controls.FindControl(wxobject);
 }
 
 wxObject* ibVisualHost::GetWxObject(const ibValueFrame* baseobject) const
 {
-	auto it = m_baseObjects.find(const_cast<ibValueFrame*>(baseobject));
-	return it != m_baseObjects.end() ? it->second : nullptr;
+	return m_controls.FindObject(baseobject);
 }
 
 // Incremental lifecycle hooks — no-ops on web. The script-side caller
@@ -306,6 +328,15 @@ void ibVisualHost::UpdateControl(ibValueFrame*, ibValueFrame*)       {}
 void ibVisualHost::RemoveControl(ibValueFrame*, ibValueFrame*)       {}
 void ibVisualHost::ClearControl(ibValueFrame*, bool)                 {}
 
+// Mirror desktop: mutate the root BoxSizer's orientation so child layout rebuilds on the next
+// response reflect the new axis. The host owns the root sizer via SetSizer; only wxBoxSizer-
+// style sizers carry an orientation (grid sizers drop the call silently).
+void ibVisualHost::SetOrientation(int orient)
+{
+	if (auto* box = dynamic_cast<ibWebBoxSizer*>(GetSizer()))
+		box->SetOrientation(orient);
+}
+
 #else  // !OES_USE_WEB
 // Everything below is the desktop (wxScrolledCanvas-based) implementation
 // of ibVisualHost. The web build reuses the class name but with a
@@ -316,85 +347,146 @@ void ibVisualHost::ClearControl(ibValueFrame*, bool)                 {}
 
 #include "ctrl/control.h"
 #include "ctrl/form.h"
+#include "frontend/win/ctrls/toolBar.h"        // ibAuiToolBar (host-rendered command bar)
+#include "frontend/win/theme/luna_toolbarart.h"
+#include "backend/backend_picture.h"           // ibBackendPicture / ibPictureDescription
 
 #include "pageWindow.h"
 
 #include <wx/collpane.h>
+#include <wx/wupdlock.h>   // wxWindowUpdateLocker — RAII Freeze/Thaw
 
-wxIMPLEMENT_ABSTRACT_CLASS(ibVisualHost, wxScrolledWindow)
-
-#if !defined(__WXGTK__ )
-#define __FREEZE_CONTROL__
-#endif
-
-namespace {
-
-// RAII guard that freezes/thaws the parent background window for the
-// duration of a layout-changing operation. Replaces the half-dozen
-// copy-pasted #if __FREEZE_CONTROL__ blocks that used to wrap each
-// Create/Update/Remove/Clear call and made early-return impossible
-// without leaking a Thaw.
-class ScopedFreeze {
-public:
-	explicit ScopedFreeze(wxWindow* window) : m_window(window) {
-#if defined(__FREEZE_CONTROL__)
-		if (m_window != nullptr) m_window->Freeze();
-#endif
-	}
-	~ScopedFreeze() {
-#if defined(__FREEZE_CONTROL__)
-		if (m_window != nullptr) m_window->Thaw();
-#endif
-	}
-	ScopedFreeze(const ScopedFreeze&) = delete;
-	ScopedFreeze& operator=(const ScopedFreeze&) = delete;
-private:
-	wxWindow* m_window;
-};
-
-} // namespace
+wxIMPLEMENT_ABSTRACT_CLASS(ibVisualHost, wxPanel)
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////
+
+//*******************************************************************************************
+//*   THE CHROME — the facade's OWN filling: the form's command-bar toolbar today, a search   *
+//*   row / status bar later. Three verbs, one per host verb, and nothing else in this file   *
+//*   touches the layers: the facade builds them, refreshes them, drops them. They live on    *
+//*   the window that carries the main sizer, ABOVE the controls — which is the whole point.  *
+//*******************************************************************************************
+
+static void CreateFormLayers(wxSizer* mainSizer, ibValueForm* form, std::vector<ibFrontendWindow*>& outParts)
+{
+	outParts.clear();
+	if (mainSizer == nullptr || form == nullptr)
+		return;
+	wxWindow* const bgWindow = mainSizer->GetContainingWindow();   // the chrome window
+	ibValueCommandBar* cbar = form->GetCommandBar();
+	if (bgWindow == nullptr || cbar == nullptr)
+		return;
+	// Layers (toolbar, search, …) are parallel items at the TOP of the main sizer, in order,
+	// ahead of the content sub-sizer (already at the end). Remember them EXPLICITLY (outParts)
+	// so the update refreshes the SAME parts without re-deriving them from the sizer.
+	size_t pos = 0;
+	for (ibFrontendWindow* part : ibValueWindowComposite::BuildLayerParts(bgWindow, cbar, form)) {
+		mainSizer->Insert(pos++, part, 0, wxEXPAND);
+		outParts.push_back(part);
+	}
+	// Just the skeleton — the tools and the look land in UpdateFormLayers, and the layout in
+	// the single pass at the end of the update. Both always run after a create.
+}
+
+static void UpdateFormLayers(ibValueForm* form, const std::vector<ibFrontendWindow*>& parts)
+{
+	if (form == nullptr)
+		return;
+	ibValueCommandBar* cbar = form->GetCommandBar();
+	if (cbar == nullptr)
+		return;
+	// Refresh the tracked parts in place — the SAME static the composite uses, over the parts
+	// CreateFormLayers remembered (no sizer walk).
+	ibValueWindowComposite::UpdateLayerParts(parts, cbar, form);
+
+	// The form's LOOK, onto its own parts. THE place it happens: a colour edit arrives as a
+	// plain UpdateVisualHost, and the toolbar is the form's, so it is told here instead of
+	// waiting to inherit something on the next reopen.
+	for (ibFrontendWindow* part : parts) {
+		part->SetForegroundColour(form->GetForegroundColour());
+		part->SetBackgroundColour(form->GetBackgroundColour());
+	}
+}
+
+static void ClearFormLayers(std::vector<ibFrontendWindow*>& parts)
+{
+	// Deleted outright, the way DestroyChildren used to take them: a deferred Destroy() would
+	// still be pending when a host whose chrome shares the controls' window wipes that window,
+	// and the layer would be freed twice. Each one detaches itself from the main sizer as it
+	// goes, so the sizer needs no separate cleanup.
+	for (ibFrontendWindow* part : parts)
+		delete part;
+	parts.clear();
+}
+
+//*******************************************************************************************
+
+
+void ibVisualHost::InitMainSizer()
+{
+	m_mainSizer = new wxBoxSizer(wxVERTICAL);
+
+	wxWindow* const contentWindow = GetBackgroundWindow();
+	if (contentWindow == m_contentWindow) {
+		// The controls have a window of their own to scroll in, so the chrome goes on the
+		// FACADE, above it — that is what keeps the toolbar still. The inner window is the
+		// sizer's bottom item, put here once; the layers can only ever be inserted above it.
+		SetSizer(m_mainSizer);
+		m_mainSizer->Add(contentWindow, 1, wxEXPAND);
+	}
+	else {
+		// A host that puts the controls somewhere deeper (the designer's form card) wants the
+		// chrome down there with them: the card IS the form being drawn, toolbar included, and
+		// the whole card scrolls together.
+		contentWindow->SetSizer(m_mainSizer);
+	}
+}
+
+void ibVisualHost::SetOrientation(int orient)
+{
+	if (wxBoxSizer* content = dynamic_cast<wxBoxSizer*>(GetFrameSizer()))
+		content->SetOrientation(orient);
+}
+
 
 bool ibVisualHost::CreateVisualHost()
 {
 	const ibValueForm* valueForm = GetValueForm();
 
-	ScopedFreeze freeze(GetParentBackgroundWindow());
+	wxWindowUpdateLocker freeze(GetParentBackgroundWindow());
 
 	if (valueForm != nullptr && IsShownHost()) {
 
-		// --- [1] Create sizer
-		GetBackgroundWindow()->SetSizer(new wxBoxSizer(wxVERTICAL));
+		// --- [1] MAIN sizer — the ctor-owned attribute m_mainSizer, on the chrome window.
+		// It holds the chrome layers (toolbar, search, …) at the top and the controls below.
+		// Nothing to clear: ClearVisualHost took the previous layers out, and the controls'
+		// window stays in it. Recreate only defensively (a concrete host always makes one).
+		if (m_mainSizer == nullptr)
+			InitMainSizer();
 
-		// --- [2] Show form 
+		// --- [2] Show form
 		GetParentBackgroundWindow()->Show(true);
 
 		// --- [3] Set the color of the form -------------------------------
-		GetBackgroundWindow()->SetForegroundColour(valueForm->GetForegroundColour());
-		GetBackgroundWindow()->SetBackgroundColour(valueForm->GetBackgroundColour());
+		// TWO windows now carry the form: the one the chrome sits on and the one with the
+		// controls. The layers read their look off their parent, so the chrome window has to
+		// get it too — when both were one window, this was the single pair below.
+		for (wxWindow* window : { m_mainSizer->GetContainingWindow(), static_cast<wxWindow*>(GetBackgroundWindow()) }) {
+			window->SetForegroundColour(valueForm->GetForegroundColour());
+			window->SetBackgroundColour(valueForm->GetBackgroundColour());
+		}
 
 		// --- [4] Title bar Setup
 		SetCaption(valueForm->GetCaption());
 
-		// --- [5] Default sizer Setup 
-		SetOrientation(valueForm->GetOrient());
+		// --- [5] Chrome layers on the MAIN sizer, inserted as parallel items in order
+		// (toolbar, search, …). Same shared BuildLayerParts the composite controls use.
+		// THIS is the facade's own filling — everything else belongs to the controls.
+		CreateFormLayers(m_mainSizer, GetValueForm(), m_formLayerParts);
 
-		// --- [6] Create the components of the form -------------------------
-		// Used to save valueForm objects for later display
-
-		for (unsigned int i = 0; i < valueForm->GetChildCount(); i++) {
-			ibValueFrame* child = valueForm->GetChild(i);
-			// Recursively generate the ObjectTree
-			try {
-				// we have to put the content valueForm panel as parentObject in order
-				// to SetSizeHints be called.
-				GenerateControl(child, GetBackgroundWindow(), GetFrameSizer());
-			}
-			catch (std::exception& ex) {
-				wxLogError(ex.what());
-			}
-		}
+		// --- [6] Hand the CONTROLS over to the inner window: it makes their sizer, applies
+		// the form's orientation to it and builds the whole tree inside itself.
+		m_contentWindow->CreateContent(valueForm);
 	}
 	else {
 		// There is no form to display
@@ -414,7 +506,7 @@ bool ibVisualHost::UpdateVisualHost()
 	const ibValueForm* valueForm = GetValueForm();
 
 	
-	ScopedFreeze freeze(GetParentBackgroundWindow());
+	wxWindowUpdateLocker freeze(GetParentBackgroundWindow());
 	
 	if (valueForm != nullptr && IsShownHost()) {
 
@@ -422,36 +514,24 @@ bool ibVisualHost::UpdateVisualHost()
 		GetParentBackgroundWindow()->Show(true);
 
 		// --- [2] Set the color of the form -------------------------------
-		GetBackgroundWindow()->SetForegroundColour(valueForm->GetForegroundColour());
-		GetBackgroundWindow()->SetBackgroundColour(valueForm->GetBackgroundColour());
+		for (wxWindow* window : { m_mainSizer->GetContainingWindow(), static_cast<wxWindow*>(GetBackgroundWindow()) }) {
+			window->SetForegroundColour(valueForm->GetForegroundColour());
+			window->SetBackgroundColour(valueForm->GetBackgroundColour());
+		}
 
 		// --- [3] Title bar Setup
 		SetCaption(valueForm->GetCaption());
 
-		// --- [4] Default sizer Setup 
-		SetOrientation(valueForm->GetOrient());
+		// --- [4] The form's command bar was CREATED in CreateVisualHost — here we only REFRESH
+		// the existing bar in place (no rebuild), matching the control update lifecycle. The
+		// facade's own half of the update, before the controls.
+		UpdateFormLayers(GetValueForm(), m_formLayerParts);
 
-		// --- [5] Update the components of the form -------------------------
-		// Used to save valueForm objects for later display
-		for (unsigned int i = 0; i < valueForm->GetChildCount(); i++) {
+		// --- [5] Hand the CONTROLS over to the inner window — orientation, the refresh walk
+		// over the whole tree and the label alignment all happen where they live.
+		m_contentWindow->UpdateContent(valueForm);
 
-			ibValueFrame* child = valueForm->GetChild(i);
-
-			// Recursively generate the ObjectTree
-			try {
-				// we have to put the content valueForm panel as parentObject in order
-				// to SetSizeHints be called.
-				RefreshControl(child, GetBackgroundWindow(), GetFrameSizer());
-			}
-			catch (std::exception& ex) {
-				wxLogError(ex.what());
-			}
-		}
-
-		// --- [6] Calculate label size 
-		CalculateLabelSize();
-
-		// --- [7] Set sizer properties
+		// --- [6] Set sizer properties
 		UpdateHostSize();
 	}
 	else {
@@ -472,62 +552,206 @@ bool ibVisualHost::UpdateVisualHost()
 
 bool ibVisualHost::ClearVisualHost()
 {
-	ScopedFreeze freeze(GetParentBackgroundWindow());
+	wxWindowUpdateLocker freeze(GetParentBackgroundWindow());
 
-	ibValueForm* valueForm = GetValueForm();
-	if (valueForm != nullptr) ClearControl(valueForm, true);
+	// The facade's own half first: the chrome layers it built.
+	ClearFormLayers(m_formLayerParts);
 
-	GetParentBackgroundWindow()->DestroyChildren();
-	GetParentBackgroundWindow()->SetSizer(nullptr); // *!*
+	// Then the CONTROLS, in the window that holds them — that walk fires every control's
+	// Cleanup hook before any window dies under it. Both windows and the main sizer survive:
+	// they are attributes of the host.
+	m_contentWindow->ClearContent();
 
 	return true;
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 
+// The facade holds no controls — every question about one goes to the window that does.
 ibValueFrame* ibVisualHost::GetObjectBase(const wxObject* wxobject) const
 {
-	if (nullptr == wxobject) {
-		wxLogError(wxT("wxObject was nullptr!"));
-		return nullptr;
-	}
-
-	for (auto& pair : m_baseObjects) {
-		if (pair.second == wxobject)
-			return pair.first;
-	}
-
-	wxLogError(wxT("No corresponding ibValueFrame for wxObject. Name: %s"), wxobject->GetClassInfo()->GetClassName());
-	return nullptr;
+	return m_contentWindow->GetObjectBase(wxobject);
 }
 
 wxObject* ibVisualHost::GetWxObject(const ibValueFrame* baseobject) const
 {
-	if (baseobject == nullptr) {
-		wxLogError(wxT("baseobject was nullptr!"));
-		return nullptr;
-	}
+	return m_contentWindow->GetWxObject(baseobject);
+}
 
-	if (baseobject->GetComponentType() == COMPONENT_TYPE_FRAME)
-		return GetFrameSizer();
+// The facade's four control verbs: its own half — the chrome, the host size — then the
+// control itself, handed to the window that holds it.
+void ibVisualHost::CreateControl(ibValueFrame* obj, ibValueFrame* parent, bool firstCreated)
+{
+	wxWindowUpdateLocker freeze(GetParentBackgroundWindow());
 
-	// The map is keyed by ibValueFrame* — use find() instead of the linear
-	// scan this used to do. O(1) per call adds up on forms with hundreds
-	// of controls since every CreateControl/UpdateControl walks the tree
-	// and looks up each parent.
-	const auto it = m_baseObjects.find(const_cast<ibValueFrame*>(baseobject));
-	if (it != m_baseObjects.end())
-		return it->second;
+	m_contentWindow->CreateControl(obj, parent, firstCreated);
+	UpdateHostSize();
+	UpdateVirtualSize();
+}
 
-	wxLogError(wxT("No corresponding wxObject for ibValueFrame. Name: %s"), baseobject->GetClassName().c_str());
-	return nullptr;
+void ibVisualHost::UpdateControl(ibValueFrame* obj, ibValueFrame* parent)
+{
+	wxWindowUpdateLocker freeze(GetParentBackgroundWindow());
+
+	m_contentWindow->UpdateControl(obj, parent);
+
+	// The FORM's own command bar autofills from the MAIN source control's action collection, so a control
+	// property change that alters that set — e.g. a list's ChoiceMode adds the Select command — must refresh
+	// the form layers too. RefreshControl only refreshed the control's OWN (here suppressed) bar; without this
+	// the form toolbar kept the stale band until the whole host rebuilt. Cheap: BuildCommands + show/hide.
+	UpdateFormLayers(GetValueForm(), m_formLayerParts);
+	UpdateHostSize();
+	UpdateVirtualSize();
+}
+
+void ibVisualHost::RemoveControl(ibValueFrame* obj, ibValueFrame* parent)
+{
+	wxWindowUpdateLocker freeze(GetParentBackgroundWindow());
+
+	m_contentWindow->RemoveControl(obj, parent);
+	UpdateHostSize();
+	UpdateVirtualSize();
+}
+
+void ibVisualHost::ClearControl(ibValueFrame* control, bool force)
+{
+	m_contentWindow->ClearControl(control, force);
+}
+
+//*******************************************************************************************
+//*     THE INNER WINDOW — the controls live from here down: the index, the walks over it,   *
+//*     their sizer, their labels, the scrolling they do.                                    *
+//*******************************************************************************************
+
+wxObject* ibVisualHost::ibContentWindow::GetWxObject(const ibValueFrame* baseobject) const
+{
+	// The FORM itself is not in the index — it resolves to the controls' sizer, as it always
+	// did. Everything else is a plain lookup.
+	if (baseobject != nullptr && baseobject->GetComponentType() == COMPONENT_TYPE_FRAME)
+		return m_frameContentSizer;
+
+	return m_controls.FindObject(baseobject);
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void ibVisualHost::GenerateControl(ibValueFrame* obj, wxWindow* wxparent, wxObject* parent, bool firstCreated)
+// The form's CONTROLS — built, refreshed and torn down here, in the window that holds them.
+// The per-control hooks (Create / OnCreated / Update / OnUpdated / Cleanup) stay on the facade:
+// that is where the designer overrides them, so both hosts keep the behaviour they had.
+void ibVisualHost::ibContentWindow::CreateContent(const ibValueForm* valueForm)
 {
-	wxObject* createdObject = Create(obj, wxparent);
+	// The controls' sizer. When the chrome has a window of its own (the runtime facade) this
+	// window owns the sizer outright; when they share one (the designer card) it is the bottom
+	// item of the main sizer, under the chrome layers.
+	wxBoxSizer* const contentSizer = new wxBoxSizer(wxVERTICAL);
+	wxWindow* const contentWindow = m_host.GetBackgroundWindow();
+	if (m_host.m_mainSizer->GetContainingWindow() == contentWindow)
+		m_host.m_mainSizer->Add(contentSizer, 1, wxEXPAND);
+	else
+		contentWindow->SetSizer(contentSizer);
+	m_frameContentSizer = contentSizer;
+
+	// Orientation drives the CONTROLS' sizer; the main sizer stays vertical so the chrome
+	// layers always sit above them.
+	m_host.SetOrientation(valueForm->GetOrient());
+
+	// 🛑 A CONTROL THAT FAILED TO BUILD IS NOT ALLOWED TO VANISH QUIETLY (Max, 2026-08-20: "let it at
+	// least tell me there is an error"). The catch below keeps the rest of the form alive — one bad
+	// control must not cost the whole window — but until now the only trace was a line in a Messages
+	// panel that is closed by default, so what a person saw was a form with a table simply missing.
+	//
+	// Collected, then said ONCE: N failing controls used to mean N dialogs stacked over a
+	// half-built form.
+	wxString failures;
+
+	for (unsigned int i = 0; i < valueForm->GetChildCount(); i++) {
+		ibValueFrame* child = valueForm->GetChild(i);
+		// Recursively generate the ObjectTree
+		try {
+			// we have to put the content valueForm panel as parentObject in order
+			// to SetSizeHints be called.
+			GenerateControl(child, contentWindow, m_frameContentSizer);
+		}
+		// The project's exception DERIVES from std::exception now, so this handler sees it — name it
+		// first (C++ requires derived before base) and read its own description. And "%s": the
+		// message is DATA, not a format — an object name carrying a '%' made this read a vararg
+		// that was never passed.
+		catch (const ibBackendException& err) {
+			ibJournalError(wxT("ui.form"), wxT("%s"), err.GetErrorDescription());
+			failures << wxString::Format(wxT("%s: %s\n"),
+				child != nullptr ? child->GetControlName() : wxString(wxEmptyString),
+				err.GetErrorDescription());
+		}
+		catch (const std::exception& ex) {
+			const wxString what = wxString::FromUTF8(ex.what());
+			ibJournalError(wxT("ui.form"), wxT("%s"), what);
+			failures << wxString::Format(wxT("%s: %s\n"),
+				child != nullptr ? child->GetControlName() : wxString(wxEmptyString), what);
+		}
+	}
+
+	// SAID WHERE IT IS SEEN, and it names the control — "the report shows no table" is a mystery,
+	// "Ref: <the engine's words>" is a place to look.
+	if (!failures.IsEmpty()) {
+		wxMessageBox(_("Some controls of this form could not be built:") + wxT("\n\n") + failures,
+			valueForm->GetCaption(), wxOK | wxICON_ERROR);
+	}
+}
+
+void ibVisualHost::ibContentWindow::UpdateContent(const ibValueForm* valueForm)
+{
+	m_host.SetOrientation(valueForm->GetOrient());
+
+	wxWindow* const contentWindow = m_host.GetBackgroundWindow();
+	for (unsigned int i = 0; i < valueForm->GetChildCount(); i++) {
+		ibValueFrame* child = valueForm->GetChild(i);
+		try {
+			RefreshControl(child, contentWindow, m_frameContentSizer);
+		}
+		// The project's exception DERIVES from std::exception now, so this handler sees it — name it
+		// first (C++ requires derived before base) and read its own description. And "%s": the
+		// message is DATA, not a format — an object name carrying a '%' made this read a vararg
+		// that was never passed.
+		catch (const ibBackendException& err) {
+			ibJournalError(wxT("ui.form"), wxT("%s"), err.GetErrorDescription());
+		}
+		catch (const std::exception& ex) {
+			ibJournalError(wxT("ui.form"), wxT("%s"), wxString::FromUTF8(ex.what()));
+		}
+	}
+
+	CalculateLabelSize();
+	UpdateVirtualSize();
+}
+
+void ibVisualHost::ibContentWindow::ClearContent()
+{
+	if (ibValueForm* const valueForm = m_host.GetValueForm())
+		ClearControl(valueForm, true);
+
+	wxWindow* const contentWindow = m_host.GetBackgroundWindow();
+	contentWindow->DestroyChildren();
+
+	// The controls' sizer goes with the controls — and whoever owns it is the one that lets it
+	// go: this window when the sizer is its own, the main sizer when the chrome shares the
+	// window (dropping the window's sizer there would take the main sizer with it).
+	if (contentWindow->GetSizer() == m_frameContentSizer) {
+		contentWindow->SetSizer(nullptr); // *!*
+	}
+	else if (m_frameContentSizer != nullptr && m_host.m_mainSizer != nullptr) {
+		m_host.m_mainSizer->Detach(m_frameContentSizer);
+		delete m_frameContentSizer;
+	}
+
+	m_controls.Clear();
+	m_frameContentSizer = nullptr;
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void ibVisualHost::ibContentWindow::GenerateControl(ibValueFrame* obj, wxWindow* wxparent, wxObject* parent, bool firstCreated)
+{
+	wxObject* createdObject = m_host.Create(obj, wxparent);
 	wxWindow* createdWindow = nullptr;
 
 	switch (obj->GetComponentType())
@@ -567,10 +791,10 @@ void ibVisualHost::GenerateControl(ibValueFrame* obj, wxWindow* wxparent, wxObje
 	for (unsigned int i = 0; i < obj->GetChildCount(); ++i)
 		GenerateControl(obj->GetChild(i), childParent, createdObject, firstCreated);
 
-	OnCreated(obj, createdObject, wxparent, firstCreated);
+	m_host.OnCreated(obj, createdObject, wxparent, firstCreated);
 }
 
-void ibVisualHost::RefreshControl(ibValueFrame* obj, wxWindow* wxparent, wxObject* parent)
+void ibVisualHost::ibContentWindow::RefreshControl(ibValueFrame* obj, wxWindow* wxparent, wxObject* parent)
 {
 	wxObject* createdObject = GetWxObject(obj);
 	wxWindow* createdWindow = nullptr;
@@ -583,7 +807,6 @@ void ibVisualHost::RefreshControl(ibValueFrame* obj, wxWindow* wxparent, wxObjec
 		break;
 
 	case COMPONENT_TYPE_SIZER:
-	case COMPONENT_TYPE_SIZERITEM:
 		if (obj->GetClassName() == wxT("Staticboxsizer")) {
 			wxStaticBoxSizer* s = static_cast<wxStaticBoxSizer*>(createdObject);
 			createdWindow = s->GetStaticBox();
@@ -594,10 +817,18 @@ void ibVisualHost::RefreshControl(ibValueFrame* obj, wxWindow* wxparent, wxObjec
 		}
 		break;
 
+	case COMPONENT_TYPE_SIZERITEM:
+		// A SizerItem is a transparent metadata wrapper. Its Create() result is
+		// ibNoObject, not a wxSizer; OnUpdated() uses the wrapper mapping to
+		// rebind the real child's layout parameters in the parent's sizer.
+		// Treating the sentinel as wxSizer* made the notebook page adopt an
+		// invalid sizer and crashed in wxSizer::SetContainingWindow.
+		break;
+
 	default: break;
 	}
 
-	Update(obj, createdObject);
+	m_host.Update(obj, createdObject);
 
 	if (wxCollapsiblePane* collpane = wxDynamicCast(createdObject, wxCollapsiblePane)) {
 		createdWindow = collpane->GetPane();
@@ -608,7 +839,7 @@ void ibVisualHost::RefreshControl(ibValueFrame* obj, wxWindow* wxparent, wxObjec
 	for (unsigned int i = 0; i < obj->GetChildCount(); ++i)
 		RefreshControl(obj->GetChild(i), childParent, createdObject);
 
-	OnUpdated(obj, createdObject, wxparent);
+	m_host.OnUpdated(obj, createdObject, wxparent);
 
 	// If we just produced a sizer sitting directly under a window, attach
 	// it as that window's layout sizer and run the initial layout pass.
@@ -639,7 +870,7 @@ inline void RelayoutStaticBoxIfAny(ibValueFrame* objParent, wxObject* parentObj)
 
 } // namespace
 
-ibVisualHost::ControlContext ibVisualHost::ResolveControlContext(
+ibVisualHost::ibContentWindow::ControlContext ibVisualHost::ibContentWindow::ResolveControlContext(
 	ibValueFrame* obj, ibValueFrame* parent, bool resolveWindow) const
 {
 	ControlContext ctx{};
@@ -684,57 +915,45 @@ ibVisualHost::ControlContext ibVisualHost::ResolveControlContext(
 	}
 
 	if (ctx.windowObj == nullptr)
-		ctx.windowObj = GetBackgroundWindow();
+		ctx.windowObj = m_host.GetBackgroundWindow();
 
 	return ctx;
 }
 
-void ibVisualHost::CreateControl(ibValueFrame* obj, ibValueFrame* parent, bool firstCreated)
+void ibVisualHost::ibContentWindow::CreateControl(ibValueFrame* obj, ibValueFrame* parent, bool firstCreated)
 {
 	const ControlContext ctx = ResolveControlContext(obj, parent);
-
-	ScopedFreeze freeze(GetParentBackgroundWindow());
 
 	GenerateControl(ctx.objControl, ctx.windowObj, ctx.parentObj, firstCreated);
 	RefreshControl(ctx.objControl, ctx.windowObj, ctx.parentObj);
 	RelayoutStaticBoxIfAny(ctx.objParent, ctx.parentObj);
 
 	CalculateLabelSize(obj);
-	UpdateHostSize();
-	UpdateVirtualSize();
 }
 
-void ibVisualHost::UpdateControl(ibValueFrame* obj, ibValueFrame* parent)
+void ibVisualHost::ibContentWindow::UpdateControl(ibValueFrame* obj, ibValueFrame* parent)
 {
 	const ControlContext ctx = ResolveControlContext(obj, parent);
-
-	ScopedFreeze freeze(GetParentBackgroundWindow());
 
 	RefreshControl(ctx.objControl, ctx.windowObj, ctx.parentObj);
 	RelayoutStaticBoxIfAny(ctx.objParent, ctx.parentObj);
 
 	CalculateLabelSize(obj);
-	UpdateHostSize();
-	UpdateVirtualSize();
 }
 
-void ibVisualHost::RemoveControl(ibValueFrame* obj, ibValueFrame* parent)
+void ibVisualHost::ibContentWindow::RemoveControl(ibValueFrame* obj, ibValueFrame* parent)
 {
 	const ControlContext ctx = ResolveControlContext(obj, parent, /*resolveWindow*/false);
 
-	ScopedFreeze freeze(GetParentBackgroundWindow());
-
-	ClearControl(ctx.objControl);
+	ClearControl(ctx.objControl, /*force*/false);
 	RelayoutStaticBoxIfAny(ctx.objParent, ctx.parentObj);
 
 	CalculateLabelSize(obj);
-	UpdateHostSize();
-	UpdateVirtualSize();
 }
 
 #include "frontend/win/ctrls/dynamicBorder.h"
 
-void ibVisualHost::ClearControl(ibValueFrame* control, bool force)
+void ibVisualHost::ibContentWindow::ClearControl(ibValueFrame* control, bool force)
 {
 	// Post-order: tear children down before the parent so destroy callbacks
 	// see a consistent hierarchy.
@@ -746,13 +965,15 @@ void ibVisualHost::ClearControl(ibValueFrame* control, bool force)
 	case COMPONENT_TYPE_WINDOW:
 	{
 		// control's component type says WINDOW → the wxObject stored
-		// by Create is a wxWindow. static_cast is invariant-safe.
+		// by Create is a wxWindow. static_cast is invariant-safe. For a chrome-wrapped
+		// control this is the wrapper PANEL; destroying it takes the toolbar + inner
+		// control, and Cleanup routes through CleanupWithLayers to tear down the inner.
 		wxWindow* controlWnd = static_cast<wxWindow*>(GetWxObject(control));
 		if (controlWnd == nullptr)
 			return;
 
 		wxWindow* controlParent = controlWnd->GetParent();
-		Cleanup(control, controlWnd);
+		m_host.Cleanup(control, controlWnd);
 		RemoveInnerControl(control);
 		controlWnd->DeletePendingEvents();
 		controlWnd->Destroy();
@@ -768,7 +989,7 @@ void ibVisualHost::ClearControl(ibValueFrame* control, bool force)
 			return;
 
 		ibValueFrame* controlParent = control->GetParent();
-		Cleanup(control, controlSizer);
+		m_host.Cleanup(control, controlSizer);
 		RemoveInnerControl(control);
 
 		// Unwrap SIZERITEM wrapper to get to the logical parent container.
@@ -804,7 +1025,7 @@ void ibVisualHost::ClearControl(ibValueFrame* control, bool force)
 	{
 		wxObject* controlObj = GetWxObject(control);
 		if (controlObj != nullptr) {
-			Cleanup(control, controlObj);
+			m_host.Cleanup(control, controlObj);
 			RemoveInnerControl(control);
 			wxDELETE(controlObj);
 		}
@@ -815,7 +1036,7 @@ void ibVisualHost::ClearControl(ibValueFrame* control, bool force)
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 
-bool ibVisualHost::CalculateLabelSize(ibValueFrame* control)
+bool ibVisualHost::ibContentWindow::CalculateLabelSize(ibValueFrame* control)
 {
 	// Two-pass alignment of label columns across a form's layout tree.
 	//
@@ -915,20 +1136,35 @@ bool ibVisualHost::CalculateLabelSize(ibValueFrame* control)
 		}
 	};
 
-	return ibLabelAligner::CalculateAndApply(GetValueForm());
+	return ibLabelAligner::CalculateAndApply(m_host.GetValueForm());
 }
 
-void ibVisualHost::UpdateVirtualSize()
+void ibVisualHost::ibContentWindow::UpdateVirtualSize()
 {
-	int w, h, panelW, panelH;
-	GetVirtualSize(&w, &h);
-	GetBackgroundWindow()->GetSize(&panelW, &panelH);
-	panelW += 50; panelH += 50;
-	if (panelW != w || panelH != h)
-		SetVirtualSize(panelW, panelH);
+	// This window scrolls what it holds, and its virtual size is what the controls ACTUALLY
+	// need — so the scrollbars show up only when the form does not fit, instead of always, as a
+	// fixed margin over the window's own size did.
+	Layout();
 
-	//Refresh frame window
-	wxScrolledCanvas::Refresh();
+	if (GetSizer() != nullptr) {
+		// RUNTIME: the controls live in this window's sizer, so FitInside — max(client size, sizer
+		// best size) — is exactly the scroll range.
+		FitInside();
+	}
+	else {
+		// ⚠ DESIGNER: the form CARD is a free-positioned child with NO sizer, so `FitInside` finds
+		// nothing to fit and leaves the range at the client size — no scrollbars however tall the
+		// form grows, and the bottom of a long form is simply unreachable. The range comes from the
+		// children's bounding box instead. (2026-08-20).
+		int right = 0, bottom = 0;
+		for (wxWindow* child : GetChildren()) {
+			const wxRect r = child->GetRect();
+			if (r.GetRight()  > right)  right  = r.GetRight();
+			if (r.GetBottom() > bottom) bottom = r.GetBottom();
+		}
+		SetVirtualSize(right + 10, bottom + 10);   // +10 — the card's own inset margin
+	}
+	Refresh();
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////

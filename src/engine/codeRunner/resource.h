@@ -1,6 +1,6 @@
 //{{NO_DEPENDENCIES}}
-// Включаемый файл, созданный в Microsoft Visual C++.
-// Используется codeRunner.rc
+// Microsoft Visual C++ generated include file.
+// Used by codeRunner.rc
 //
 #define wxUSE_NO_MANIFEST               0
 #define SW_HIDE                         0

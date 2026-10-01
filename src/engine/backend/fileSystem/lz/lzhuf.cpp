@@ -672,7 +672,9 @@ unsigned _writeLZ(int hf, void* d, unsigned size)
 #ifdef __WXMSW__
 	if (size_out) _write(hf, fs.OutPointer(), size_out);
 #else
-	if (size_out) write(hf, fs.OutPointer(), size_out);
+	// Result named, not dropped: glibc marks write() warn_unused_result. A short write here is
+	// reported to the caller through the returned size_out, exactly as on the MSW branch.
+	if (size_out) { const ssize_t wrote = write(hf, fs.OutPointer(), size_out); (void)wrote; }
 #endif
 	fs.OutRelease();
 	return size_out;
@@ -703,7 +705,7 @@ unsigned _readLZ(int hf, void* &d, unsigned size)
 #ifdef __WXMSW__
 	_read(hf, data, size);
 #else
-	read(hf, data, size);
+	{ const ssize_t got = read(hf, data, size); (void)got; }   // see the write() note in _writeLZ
 #endif
 
 	fs.Init_Input(data, data + size);

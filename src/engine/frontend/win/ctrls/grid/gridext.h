@@ -104,6 +104,7 @@ class FRONTEND_API ibGridRowAreaWindow;
 class FRONTEND_API ibGridRowLabelWindow;
 class FRONTEND_API ibGridRowOutlineWindow;
 class FRONTEND_API ibGridColOutlineWindow;
+class FRONTEND_API ibGridOutlineCornerWindow;
 class FRONTEND_API ibGridWindow;
 class FRONTEND_API ibGridSubwindow;
 class FRONTEND_API ibGridTypeRegistry;
@@ -719,6 +720,7 @@ public:
 	// Static methods allowing to create objects actually specifying behaviour.
 	static ibGridFitMode Clip() { return ibGridFitMode(Mode_Clip); }
 	static ibGridFitMode Overflow() { return ibGridFitMode(Mode_Overflow); }
+	static ibGridFitMode Wrap() { return ibGridFitMode(Mode_Wrap); }
 	static ibGridFitMode Ellipsize(wxEllipsizeMode ellipsize = wxELLIPSIZE_END)
 	{
 		// This cast works because the enum elements are the same, see below.
@@ -729,6 +731,7 @@ public:
 	bool IsSpecified() const { return m_mode != Mode_Unset; }
 	bool IsClip() const { return m_mode == Mode_Clip; }
 	bool IsOverflow() const { return m_mode == Mode_Overflow; }
+	bool IsWrap() const { return m_mode == Mode_Wrap; }
 
 	wxEllipsizeMode GetEllipsizeMode() const
 	{
@@ -742,6 +745,7 @@ public:
 
 		case Mode_Overflow:
 		case Mode_Clip:
+		case Mode_Wrap:
 			break;
 		}
 
@@ -764,7 +768,8 @@ private:
 		Mode_EllipsizeMiddle = wxELLIPSIZE_MIDDLE,
 		Mode_EllipsizeEnd = wxELLIPSIZE_END,
 		Mode_Overflow,
-		Mode_Clip
+		Mode_Clip,
+		Mode_Wrap
 	};
 
 	explicit ibGridFitMode(Mode mode) : m_mode(mode) {}
@@ -1228,6 +1233,13 @@ struct ibGridCellGroup {
 	int  m_end   = -1;
 	int  m_level = 1;     // >= 1; 0 reserved for "not a group"
 	bool m_collapsed = false;
+	// ⭐ WHERE THE MARKER SITS — the FIRST line of the heading this group hangs off, not the last one.
+	// The two are the same thing for a row (a heading is one row), and they are not for a COLUMN: a
+	// heading there is a whole block, one column per measure, so "the line before the group" is the
+	// block's END and the button landed on its right edge (Max, 2026-08-25: "the plus belongs at the
+	// START of the grouping, not at the end"). The normaliser knows the heading it shaped a group
+	// from; nothing downstream can recover it, so it is carried.
+	int  m_head  = -1;    // -1 = not stated; the marker falls back to the line before m_start
 };
 
 // ----------------------------------------------------------------------------
@@ -1862,11 +1874,20 @@ public:
 
 	bool IsFrozen() const;
 
-	void DrawGridCellArea(wxDC& dc, const ibGridCellCoordsArray& cells, ibGridCellCacheArray& storage = ibGridCellCacheArray());
+	// The scratch cache is an out-parameter, so it cannot be defaulted to a temporary — a default
+	// argument binding a non-const reference to a prvalue is an MSVC extension. The short forms
+	// below own a local instead; callers that need the filled cache pass their own.
+	void DrawGridCellArea(wxDC& dc, const ibGridCellCoordsArray& cells, ibGridCellCacheArray& storage);
+	void DrawGridCellArea(wxDC& dc, const ibGridCellCoordsArray& cells) {
+		ibGridCellCacheArray storage; DrawGridCellArea(dc, cells, storage);
+	}
 	void DrawGridSpace(wxDC& dc, ibGridWindow* gridWindow);
 	void DrawAllGridLines();
 	void DrawAllGridWindowLines(wxDC& dc, const wxRegion& reg, ibGridWindow* gridWindow);
-	void DrawCell(wxDC& dc, const ibGridCellCoords&, ibGridCellCache& param = ibGridCellCache());
+	void DrawCell(wxDC& dc, const ibGridCellCoords& coords, ibGridCellCache& param);
+	void DrawCell(wxDC& dc, const ibGridCellCoords& coords) {
+		ibGridCellCache param; DrawCell(dc, coords, param);
+	}
 	void DrawBorder(wxDC& dc, const ibGridCellCacheArray& storage);
 	void DrawHighlight(wxDC& dc, const ibGridCellCoordsArray& cells);
 	void DrawFrozenBorder(wxDC& dc, ibGridWindow* gridWindow);
@@ -1927,6 +1948,13 @@ public:
 	// strings and return the number of lines
 	//
 	static void ParseLines(const wxString& value, wxArrayString& lines);
+
+	// ⭐ ONE WRAPPER FOR BOTH SURFACES. The screen reads the grid and the print reads the document,
+	// so a cell that wraps has to be broken up twice — and the printout already carried its own
+	// word-splitting pass, written out and then commented out because it had no way to ask whether
+	// THIS cell wanted wrapping and so wrapped everything. Breaking one line is the part that is the
+	// same either way; who asks for it is not.
+	static void WrapTextLine(wxDC& dc, const wxString& line, int maxWidth, wxArrayString& lines);
 	static void GetTextBoxSize(const wxDC& dc,
 		const wxArrayString& lines,
 		wxArrayInt* arrRow, wxArrayInt* arrCol,
@@ -2401,11 +2429,11 @@ public:
 
 	ibGridSizesInfo GetColSizes() const
 	{
-		return ibGridSizesInfo(GetDefaultColSize(), m_colWidths);
+		return ibGridSizesInfo(GetDefaultColSize(), m_colWidths.Sizes());
 	}
 	ibGridSizesInfo GetRowSizes() const
 	{
-		return ibGridSizesInfo(GetDefaultRowSize(), m_rowHeights);
+		return ibGridSizesInfo(GetDefaultRowSize(), m_rowHeights.Sizes());
 	}
 
 	void SetColSizes(const ibGridSizesInfo& sizeInfo);
@@ -2614,7 +2642,28 @@ public:
 	// Groups live in m_rowGroupAt / m_colGroupAt. level >= 1 (deeper = closer
 	// to cells). Toggle hides/shows rows inside [start, end] via HideRow/ShowRow.
 	int  AddRowGroup(int first, int last, int level = 1, bool collapsed = false);
-	int  AddColGroup(int first, int last, int level = 1, bool collapsed = false);
+
+	// ⭐ TURN A SEQUENCE OF LEVELS INTO AN OUTLINE. A producer writes rows and states how deep each
+	// one is — that is all it knows. What follows from the sequence is the shape: a row is a HEADING
+	// when the rows after it are deeper, and what it folds is that run. A row nothing deeper follows
+	// is a LEAF: it heads nothing, so it gets no marker at all (Max, 2026-08-19: "the last group,
+	// the one with no children, renders nothing"). The root — level 0 — is not drawn either: it is
+	// the sheet.
+	//
+	// Called after groups arrive (loaded with a document, or appended one by one); rebuilding from
+	// the raw list is what keeps the two roads to the same answer.
+	void NormalizeRowGroups();
+	// ⭐ THE SAME THING TURNED ON ITS SIDE. A column that heads nothing is a leaf and gets no marker;
+	// one that heads something folds the run of deeper columns that follows it. Written as its own
+	// function rather than one with an axis argument: the two lists are two members, and a function
+	// that took "which axis" would spend its body choosing between them.
+	//
+	// 🛑 IT DID NOT EXIST, and that is why a column outline only ever worked when somebody handed it
+	// exact RANGES. Groups arriving the way ROW groups arrive — one entry per heading, with its level
+	// — were left as they came: every heading folded itself and nothing else. Found while giving a
+	// cross-table's headings their folds (Max, 2026-08-25: "add the groups the way you did for rows").
+	void NormalizeColGroups();
+	int  AddColGroup(int first, int last, int level = 1, bool collapsed = false, int head = -1);
 	void DeleteRowGroup(int idx);
 	void DeleteColGroup(int idx);
 	int  GetRowGroupCount() const { return (int)m_rowGroupAt.size(); }
@@ -2637,6 +2686,17 @@ public:
 	bool GridColOutlineEnabled() const { return !m_colGroupAt.empty(); }
 	int  GetRowOutlineSize() const;
 	int  GetColOutlineSize() const;
+
+	// ⭐⭐ WHERE THE CELLS BEGIN — the width of everything left of them and the height of everything
+	// above them, in this grid's client coordinates. THREE strips, and the list of them was written
+	// out at every place that needed it: the window layout had all three, the mouse-event translation
+	// had two, and Refresh(rect) had two and a sign error besides.
+	//
+	// 🛑 THAT COST A REAL DEFECT. Missing the OUTLINE strip meant a click was translated as if the
+	// group buttons were not there — so on a report WITH groupings (and only then: the strip is zero
+	// wide without them) the coordinate landed a column or two off, and pressing one cell selected a
+	// neighbour. A list of terms repeated in three places does not stay the same list.
+	wxPoint GetGridOrigin() const;
 	void DrawRowOutline(wxDC& dc);
 	void DrawColOutline(wxDC& dc);
 	int  HitTestRowOutlineButton(const wxPoint& pt) const;
@@ -2992,21 +3052,108 @@ protected:
 	// NB: *never* access m_row/col arrays directly because they are created
 	//     on demand, *always* use accessor functions instead!
 
+	// ⭐⭐ WHERE A ROW STARTS IS A SUM, AND A SUM IS WORTH KEEPING.
+	//
+	// `GetRowTop(row)` used to add up every height from zero on every call, and CellToRect calls it
+	// (and its column twin) for EVERY cell it paints. A screenful is a thousand cells, so a report
+	// scrolled to its five-thousandth row spent millions of additions per frame — and the cost grew
+	// the further down a person went, which is exactly what "it gets heavier as I scroll" is.
+	//
+	// The prefix sums existed already (m_rowBottoms / m_colRights) and were REBUILT FROM SCRATCH on
+	// every call, so the binary search that PosToLinePos does — the one that turns a mouse position
+	// into a row, on every move — paid O(n) to set up its O(log n).
+	//
+	// 🛑 AND THE CACHE IS NOT INVALIDATED BY A LIST OF CALLERS. There are a dozen places that change
+	// a size (set one, insert, append, remove, clear, rescale on zoom) and a list of them is a list
+	// that drifts — the exact defect this file already carries elsewhere. So the SIZES AND THEIR
+	// SUMS ARE ONE OBJECT: nothing can change a size except through this type, and everything that
+	// changes one drops the sums. The scale is part of what the cache was built FOR, so a zoom
+	// invalidates it by not matching rather than by anybody remembering to say so.
+	class ibGridLineSizes
+	{
+	public:
+		// --- reading, the wxArrayInt surface the grid already speaks -------------
+		bool     IsEmpty() const { return m_sizes.IsEmpty(); }
+		bool     empty()   const { return m_sizes.empty(); }
+		size_t   Count()   const { return m_sizes.GetCount(); }
+		size_t   size()    const { return m_sizes.size(); }
+		int      operator[](size_t idx) const { return m_sizes[idx]; }
+		wxArrayInt::const_iterator begin() const { return m_sizes.begin(); }
+		wxArrayInt::const_iterator end()   const { return m_sizes.end(); }
+
+		// The sizes as a plain array — for the few callers that hand the whole set somewhere else
+		// (ibGridSizesInfo). Read-only on purpose: a caller holding a copy cannot change what this
+		// object's sums were built from.
+		const wxArrayInt& Sizes() const { return m_sizes; }
+
+		// --- writing: every door drops the sums ----------------------------------
+		void Clear()                        { m_sizes.Empty(); Drop(); }
+		void Empty()                        { Clear(); }   // the wxArrayInt spelling, kept for call sites
+		void Alloc(size_t n)                { m_sizes.Alloc(n); }
+		void Add(int value, size_t n = 1)   { m_sizes.Add(value, n); Drop(); }
+		void Insert(int v, size_t pos, size_t n = 1) { m_sizes.Insert(v, pos, n); Drop(); }
+		void RemoveAt(size_t pos, size_t n = 1)      { m_sizes.RemoveAt(pos, n); Drop(); }
+		void Set(size_t idx, int value)     { m_sizes[idx] = value; Drop(); }
+
+		// --- the sums --------------------------------------------------------------
+		// Ends()[i] is where line i finishes; the start of line i is Ends()[i-1] (0 for the first).
+		// A hidden line (negative size) adds nothing and shares its neighbour's edge, which is what
+		// the hand-written loops did.
+		const wxArrayInt& Ends(float scale) const
+		{
+			if (!m_endsValid || m_endsScale != scale)
+				Rebuild(scale);
+			return m_ends;
+		}
+
+		int StartOf(int line, float scale) const
+		{
+			if (line <= 0)
+				return 0;
+			const wxArrayInt& ends = Ends(scale);
+			const size_t at = static_cast<size_t>(line) - 1;
+			return at < ends.GetCount() ? ends[at] : (ends.IsEmpty() ? 0 : ends.Last());
+		}
+
+		int EndOf(int line, float scale) const
+		{
+			if (line < 0)
+				return 0;
+			const wxArrayInt& ends = Ends(scale);
+			const size_t at = static_cast<size_t>(line);
+			return at < ends.GetCount() ? ends[at] : (ends.IsEmpty() ? 0 : ends.Last());
+		}
+
+	private:
+		void Drop() const { m_endsValid = false; }
+		void Rebuild(float scale) const;
+
+		wxArrayInt m_sizes;
+
+		mutable wxArrayInt m_ends;
+		mutable float      m_endsScale = 0.0f;
+		mutable bool       m_endsValid = false;
+	};
+
+	// (⛔ NO "COLLAPSE THE NOTCH INTO ONE Scroll()" HERE. Tried 2026-08-26 and reverted within the
+	//  minute: wxScrollHelperBase turns one notch into LinesPerAction scroll EVENTS, and scrolling
+	//  by hand instead skips them — but ibGridEditor::OnScroll listens to exactly those events, and
+	//  that is where the endless sheet grows its rows. Scrolling worked and the sheet stopped ending
+	//  anywhere. Whatever replaces the three steps must still SEND a scroll event, not just move.)
+
 	// init the m_rowHeights/Bottoms arrays with default values
 	void InitRowHeights();
 
 	int        m_defaultRowHeight;
 	int        m_minAcceptableRowHeight;
-	wxArrayInt m_rowHeights;
-	mutable wxArrayInt m_rowBottoms;
+	ibGridLineSizes m_rowHeights;
 
 	// init the m_colWidths/Rights arrays
 	void InitColWidths();
 
 	int        m_defaultColWidth;
 	int        m_minAcceptableColWidth;
-	wxArrayInt m_colWidths;
-	mutable wxArrayInt m_colRights;
+	ibGridLineSizes m_colWidths;
 
 	int m_sortCol;
 	bool m_sortIsAscending;
@@ -3172,6 +3319,14 @@ protected:
 	// alongside the other subwindows but only shown when any group is defined.
 	ibGridRowOutlineWindow* m_rowOutlineWin = nullptr;
 	ibGridColOutlineWindow* m_colOutlineWin = nullptr;
+	// …and their FROZEN strips: the frozen rows / columns are part of the sheet and may open a
+	// group of their own, so the pane needs the same twin the labels and the areas have.
+	ibGridRowOutlineWindow* m_rowFrozenOutlineWin = nullptr;
+	ibGridColOutlineWindow* m_colFrozenOutlineWin = nullptr;
+	// …and the chrome each pane does not reach: the strip above the row pane (it starts below the
+	// column chrome) and the strip left of the column pane. Colour only, no content.
+	ibGridOutlineCornerWindow* m_rowOutlineCornerWin = nullptr;
+	ibGridOutlineCornerWindow* m_colOutlineCornerWin = nullptr;
 
 	//Row positions
 	wxArrayInt m_rowBrakeAt;

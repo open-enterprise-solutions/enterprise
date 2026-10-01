@@ -1,19 +1,90 @@
 # Open Enterprise Solutions (OES)
 
-OES is a source-available, cross-platform low-code enterprise application platform written in C++17. It provides a fully integrated environment — compiler, bytecode interpreter, visual form designer, multi-database abstraction layer, and remote debugger — that allows developers to build line-of-business applications using a built-in scripting language with two syntax modes (VBS-style and CES-style), a rich set of 88 built-in functions, and 8 first-class business-object types (Catalog, Document, Enumeration, Constant, InformationRegister, AccumulationRegister, DataProcessor, Report).
+OES is a source-available platform for building line-of-business applications — stock, accounting,
+payroll, sales, whatever a business keeps books on — written in C++17. You describe the business
+in **metadata** (catalogs, documents, registers, charts of accounts and of calculation types), write
+its rules in a built-in scripting language, and read its data with a **query language and a report
+composer**. The platform turns the description into database tables, forms and reports, and keeps
+the database in step with the description as it changes.
+
+It ships with everything that loop needs: a designer, a compiler and bytecode interpreter, a remote
+debugger, a multi-database layer, a job manager, an application server that serves several bases from
+one process, a web server — and a built-in **MCP server**, so an
+AI assistant can read, build and check a configuration alongside the developer, through the same
+doors the developer uses.
 
 ---
 
-## Key Features
+## What you build with it
 
-- **Integrated designer** — metadata tree editor, form builder, code editor with syntax highlighting and autocomplete
-- **Bytecode compiler** — two-pass compiler (lexer → parser → bytecode) producing 66-opcode bytecode; supports procedures, functions, modules, regions, and preprocessor directives (`#ifdef`/`#define`)
-- **Visual form system** — 22 controls (TableBox, TextBox, ChartBox, GridBox, Notebook, ToolBar, etc.) rendered through wxWidgets; forms are described in metadata and instantiated at runtime
-- **Multi-database back end** — Firebird (primary, embedded shipped with the distribution), PostgreSQL, SQLite, MySQL, ODBC; unified `ibDatabaseLayer` API across all drivers
-- **Remote TCP debugger** — client/server architecture over TCP (default port 1650); supports breakpoints, step-over, step-into, variable inspection, tooltips, and live code patching
-- **Session management** — multi-user sessions tracked in the system database; launcher, daemon, designer, enterprise, and codeRunner modes
-- **Role-based access control** — access rights on objects and operations defined in the metadata configuration
-- **Source-available under PolyForm Noncommercial 1.0.0** — read it, build it, change it, run it, write configurations for it, teach from it, for any noncommercial purpose. Earning from it — in a business, as a service, inside a product you are paid for — needs a licence from the copyright holders. See [LICENSE.md](LICENSE.md) and [NOTICE.md](NOTICE.md)
+| Kind | Metadata objects |
+|---|---|
+| Reference data | Catalog (flat or hierarchical, with predefined items) · Enumeration · Constant · Chart of characteristic types |
+| Operations | Document — written, posted into registers, reposted, marked for deletion |
+| Registers | **Information** (periodic, with slices) · **Accumulation** (balances and turnovers, trigger-maintained totals) · **Accounting** (chart of accounts, double entry, correspondence, analytics addressed by kind) · **Calculation** (payroll: displacement, base, recalculation) |
+| Charts | Chart of accounts · Chart of calculation types (displacing, base and leading types) |
+| Processing and reports | Data processor · Report with its own composers · external data processors and reports |
+| Configuration-wide | Common modules · common forms, templates and commands · common attributes · session parameters · roles · sections (the navigation panel) · languages · pictures · scheduled jobs |
+
+---
+
+## Key features
+
+- **Query language** — `SELECT` over the business objects and over the registers' virtual tables
+  (`Balance`, `Turnovers`, `BalanceAndTurnovers`, `SliceLast` / `SliceFirst`, `DrCrTurnovers`,
+  `RecordsWithAccountDimensions`, `ActualActionPeriod`, `ScheduleData`, `Recalculation`); nested queries, temporary
+  tables and query packages, `TOTALS BY … HIERARCHY`, `CAST`, `VALUE`, parameters that keep their
+  type. A query runs as SQL on the server wherever the engine can prove it may, and in memory
+  otherwise — with the same answer.
+- **Report composer** — groupings, totals, cross tables, drill-down from a cell to the records
+  behind it, parameters, and the user's own saved settings and variants. Output
+  to a spreadsheet document that prints, and exports to **Excel (`.xlsx`, read and write)** and
+  **Word (`.docx`, write)**.
+- **Scripting language** — two dialects over one compiler (**CES**, C-flavoured, the default; **VES**,
+  keyword-fenced), procedures and functions, lambdas with closure capture, `try … except`,
+  multi-line strings for query texts, **LINQ** (`from … where … join … group by … orderby … select`)
+  compiled into the bytecode, 94 built-in functions and 7 procedures. Bytecode of 82 opcodes, kept
+  in an ahead-of-time cache so a module compiles once per configuration version.
+- **Designer** — metadata tree, form designer (drag a field onto a form and a bound control
+  appears), code editor with IntelliSense, a query constructor that edits the query inside the
+  literal the caret is in, a spreadsheet template editor, configuration compare, and a git panel.
+  Every property carries its own help text.
+- **Debugger** — remote, over TCP (port 1650): breakpoints with conditions, stepping, watches,
+  evaluation in the stopped frame; the designer attaches to a desktop application or to the web
+  server.
+- **Access control** — rights per object and operation, folded across a user's roles. A role either
+  *permits* (adds rights) or *restricts* (subtracts them, whatever the others grant), so a data
+  separator is declared once instead of copied into every role. **Row-level security** is code in the
+  role (`OnAccessRead` / `OnAccessWrite`) that narrows what a query may read or write — fail-closed.
+- **Schema management** — the configuration is applied to the database by a diff; a rehearsal shows
+  the exact DDL before anything moves; on Firebird a two-phase apply compensates its first commit if
+  the second fails, so a refused apply leaves the database where it was.
+- **Jobs** — scheduled and background jobs in sessions of their own, with a cross-process claim so a
+  job runs once across a cluster; the platform's own housekeeping (totals folding and verification,
+  Firebird sweep and backup) runs on the same manager.
+- **AI access over MCP** — an MCP server inside the designer, 114 tools across the platform: read and
+  edit metadata, forms and modules; apply the configuration with a rehearsal; run code on the
+  application; ask the data questions and compose reports; drive the debugger; read and write the
+  registration journal. Protected by a token, listening on loopback by default; every call is
+  journalled.
+- **Application server** — `appserver` serves the bases its `server.conf` lists from one process:
+  Firebird and PostgreSQL side by side, one worker pool for all, and each base with its own
+  connections, sessions, locks, jobs and journal. Several servers may share a base; a desktop client
+  and a server may not use one at the same time. Passwords in its configuration are sealed
+  (AES-256-GCM).
+- **Databases** — Firebird (embedded, shipped with the distribution) and PostgreSQL for production;
+  ODBC; SQLite for tests and logging.
+- **Localisation** — the whole interface in English, Russian and Ukrainian; every caption of a
+  configuration can be written per language.
+- **Web client — in progress.** `wenterprise-server` serves the same forms to a browser. Layout,
+  commands, navigation, text fields, check boxes and toolbars work today; tables and reference
+  pickers are the next controls to arrive, so a full document form does not assemble in the browser
+  yet.
+
+### Measured
+
+On a copy of a 40 000-employee payroll base (Release, x86): a month's payroll reposted in about
+**20 s**, the payroll sheet report built in about **4 s**.
 
 ---
 
@@ -38,12 +109,14 @@ OES is a source-available, cross-platform low-code enterprise application platfo
    ```
 3. Open `enterprise.sln` in Visual Studio.
 4. Select configuration `Debug|Win32` or `Release|x64`.
-5. Build the solution (`Ctrl+Shift+B`). Binaries are placed in `bin\<Platform>\<Configuration>\`.
-6. Run `enterprise.exe` or `designer.exe` from that folder.
+5. Build the solution (`Ctrl+Shift+B`). Binaries are placed in `bin\<Platform>\<Configuration>\`
+   (`Win32` or `Win64`).
+6. Run `designer.exe` to build a configuration, `enterprise.exe` to work in it — or `launcher.exe`
+   to pick a base first. `appserver.exe` serves the bases of a server folder with no window.
 
 ### macOS
 
-> CMake support is under development. The steps below describe the intended workflow once `CMakeLists.txt` is provided.
+> The CMake build lives at `CMakeLists.txt` (repo root, CMake ≥ 3.20).
 
 ```bash
 # Install dependencies
@@ -61,13 +134,13 @@ cmake --build build -j$(sysctl -n hw.logicalcpu)
 
 ### Linux (Ubuntu / Debian)
 
-> CMake support is under development.
+> The CMake build lives at `CMakeLists.txt` (repo root, CMake ≥ 3.20).
 
 ```bash
 # Install dependencies
 sudo apt update
 sudo apt install -y build-essential cmake libwxgtk3.2-dev \
-    libfirebird-dev libpq-dev libsqlite3-dev libmysqlclient-dev
+    libfirebird-dev libpq-dev libsqlite3-dev
 
 # Clone and initialise submodules
 git clone https://github.com/open-enterprise-solutions/enterprise.git
@@ -94,7 +167,7 @@ Output: `bin\Win64\Release\`
 
 ### All Platforms — CMake
 
-A top-level `CMakeLists.txt` needs to be created (tracked in the backlog). Once available:
+The top-level `CMakeLists.txt` (CMake ≥ 3.20) builds every target. DB drivers opt in — `OES_USE_FIREBIRD`, `OES_USE_POSTGRESQL`, `OES_USE_ODBC` (all default OFF); SQLite is always embedded, no flag:
 
 ```bash
 cmake -B build \
@@ -102,6 +175,9 @@ cmake -B build \
       -DwxWidgets_ROOT_DIR=src/3rdparty/wxWidgets
 cmake --build build --parallel
 ```
+
+The web runtime (`wfrontend` + `wenterprise-server`) builds with `-DOES_BUILD_WEB=ON` (default OFF).
+The unit tests (Google Test) build with the same tree: `-DBUILD_TESTING=ON`.
 
 ### wxWidgets Submodule
 
@@ -117,42 +193,50 @@ git submodule update --init --recursive
 
 ```
 enterprise/
-├── enterprise.sln            # MSBuild solution (9 projects)
+├── enterprise.sln            # MSBuild solution (11 C++ projects)
+├── CMakeLists.txt            # the cross-platform build, tests included
 ├── Common.props              # Shared MSBuild properties (paths, platforms)
 ├── ConfigurationDefs.props   # Preprocessor definitions per configuration
 ├── LICENSE.md                # PolyForm Noncommercial 1.0.0 (source-available)
-├── NOTICE.md                 # third-party licences, the wx fork, the LGPL past
-├── docs/
-│   ├── ARCHITECTURE.md       # Architecture deep-dive
-│   ├── BUILD.md              # Detailed build instructions
-│   ├── devops-playbook/
-│   └── engineering-playbook/
+├── NOTICE.md                 # third-party licenses, the wx fork, the LGPL past
+├── locale/                   # interface translations (ru, uk): the template and the catalogs
+├── lang/                     # the compiled catalogs the programs read at run time
+├── tests/                    # Google Test suites (built by CMake)
+├── docs/                     # how we work, build, portability, architecture — start with docs/README.md
+│   └── private/              # PRIVATE submodule (design docs) — resolves for members of the
+│                             # organisation only and is empty for everyone else. The build never
+│                             # needs it, so links to docs/private/… will not open for you.
 └── src/
     ├── 3rdparty/
     │   └── wxWidgets/        # Git submodule — wxWidgets 3.3.2
     └── engine/
-        ├── backend/          # Core engine DLL (compiler, DB, metadata, debugger)
-        │   ├── compiler/     # Lexer, parser, bytecode, interpreter (ibCompileCode, ibProcUnit)
-        │   ├── databaseLayer/# DB abstraction + 5 drivers (Firebird, PG, SQLite, MySQL, ODBC)
+        ├── backend/          # Core engine DLL
+        │   ├── compiler/     # Lexer, parser, bytecode, interpreter, LINQ
+        │   ├── query/        # The query language: parse, lower, render to SQL, run in memory
+        │   ├── composition/  # The report composer
+        │   ├── calculation/  # The calculation register's engine (displacement, base, recalculation)
+        │   ├── databaseLayer/# DB abstraction + drivers (Firebird, PostgreSQL, SQLite, ODBC)
+        │   ├── metaCollection/  # Metadata: business objects, registers, charts, common objects
+        │   ├── mcp/          # The MCP server and its tools
+        │   ├── job/          # Scheduled and background jobs
+        │   ├── session/      # Sessions, their registry and worker pools
+        │   ├── lock/         # Record locks, cluster-wide
+        │   ├── sheetFormat/  # Spreadsheet import and export (.xlsx, .docx)
         │   ├── debugger/     # TCP debug server/client
-        │   ├── metaCollection/  # Business object metadata classes
-        │   │   └── partial/  # Catalog, Document, Enumeration, Constant, Registers, DataProcessor, Report
         │   ├── moduleManager/
         │   ├── propertyManager/
-        │   ├── system/       # System manager, built-in functions
-        │   └── utils/
+        │   └── system/       # Built-in functions and values
         ├── frontend/         # UI DLL (wxWidgets controls, form renderer)
-        │   ├── visualView/   # ibValueForm, 22 form controls
-        │   │   └── ctrl/     # Individual control implementations
-        │   ├── mainFrame/    # Main application window
+        │   ├── visualView/   # Forms and their controls
+        │   ├── web/          # The same controls for the browser (wfrontend)
         │   ├── docView/      # Document/view framework wrappers
-        │   └── win/          # Windows-specific widgets and dialogs
+        │   └── win/          # Editors, dialogs and custom widgets
         ├── enterprise/       # Enterprise runtime executable
         ├── designer/         # Designer/IDE executable
+        ├── wenterprise-server/ # Web server (wes process)
         ├── launcher/         # Launcher (connection chooser)
-        ├── daemon/           # Background service
+        ├── appserver/        # The application server
         ├── codeRunner/       # Script runner
-        ├── classChecker/     # Static metadata checker
         └── simplePlugin/     # Example plugin
 ```
 
@@ -165,32 +249,64 @@ enterprise/
 | Language | C++17 |
 | GUI framework | wxWidgets 3.3.2 |
 | Primary database | Firebird (embedded) |
-| Optional databases | PostgreSQL, SQLite, MySQL, ODBC |
+| Production alternative | PostgreSQL |
+| Other databases | ODBC; SQLite (tests + logging) |
+| AI access | Model Context Protocol (Streamable HTTP) |
 | Build (Windows) | MSBuild / Visual Studio 2019+ |
-| Build (cross-platform) | CMake (planned) |
+| Build (cross-platform) | CMake ≥ 3.20 — `CMakeLists.txt` at repo root (Windows / macOS / Linux) |
+| Tests | Google Test, run in CI (GitHub Actions) |
 | License | PolyForm Noncommercial 1.0.0 — source-available, not open source |
 
 ---
 
 ## Contributing
 
-1. Fork the repository and create a feature branch from `develop`.
-2. Follow existing naming conventions: `ib` prefix for public classes, `m_` prefix for member variables, `s_` for statics.
-3. Match the existing code style (tabs, brace placement).
-4. For new database queries use `ibPreparedStatement` instead of raw string formatting — this avoids the SQL injection patterns present in legacy code.
-5. Submit a pull request against the `develop` branch with a clear description of the change.
-6. The `master` branch is reserved for release-tagged commits.
+Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for what a change should
+look like and, more importantly, for what sending one means.
 
-Bug reports and feature requests are welcome via GitHub Issues.
+The short version: branch from `develop` and pull-request into it; match the code around you;
+say **why** in the commit message, because the diff already says what. And because this
+project is licensed commercially as well as noncommercially, opening a pull request includes a
+grant that lets us sublicense your contribution — you keep your copyright, we get the right to
+sell what contains it. That paragraph is the one worth reading in full before you send
+anything.
+
+Bug reports and feature requests are welcome as GitHub Issues.
 
 ---
 
 ## License
 
-OES is **source-available, not open source**, under the [PolyForm Noncommercial License 1.0.0](LICENSE.md). Copyright is held by Maxim Kornienko and Yurii Bulakh.
+OES is **source-available, not open source**, under the
+[PolyForm Noncommercial License 1.0.0](LICENSE.md). Copyright is held by Open Enterprise
+Solutions.
 
-**Free, and meant to be used:** clone it, build it, break it, change it, run it on your own machine, write configurations for it, teach a course from it, write a thesis about it. No notification, no permission, no explanation owed to anyone.
+**Free, and meant to be used:** clone it, build it, break it, change it, run it on your own
+machine, write configurations for it, teach a course from it, write a thesis about it, publish
+what you learned. No notification, no permission, no explanation owed to anyone.
 
-**Needs a licence from us:** earning from it — running it in a business, providing a service with it, shipping it inside something you are paid for, forking it to ship a rival platform, or lifting a piece of it into a product of your own.
+**Also free: evaluation, for a business too.** A company or an implementer may install it and
+run it to decide whether to build on it — trial configurations, test data, its own people.
+Live work is not evaluation.
 
-Two things those terms do not cover, both in [NOTICE.md](NOTICE.md): releases up to 2026-08-22 went out under the **LGPL 2.1** and stay available under it, and the wxWidgets-derived widget sources remain under the **wxWindows Library Licence**. Contributions: see [CONTRIBUTING.md](CONTRIBUTING.md).
+**Needs a license from us:** earning from it. Running it in a business, providing a service
+with it, shipping it inside something you are paid for — and, said outright because it is what
+these sources are most likely to be taken for, forking it to ship a rival platform or lifting a
+piece of it (the query engine, the composition and reporting engine, the metadata layer) into a
+product of your own.
+
+**A commercial license is for a build we release** — we answer for it, and it carries the
+license check. The platform as you build it yourself may be used for noncommercial and
+evaluation purposes: to study it, or to decide whether to use it, for example.
+
+**Under your own brand** — an implementer that takes the platform to its customers under its
+own name, builds it itself and licenses it to them on its own terms — the platform is licensed
+separately, case by case. It stays ours all the same: we develop it and release its patches,
+and the implementer decides whether and when to take them. Its own features on top — what it
+sells besides the brand — are its own, because it wrote them. We own the land; what you cook
+on it is yours.
+
+Two things the terms above do not cover, both in [NOTICE.md](NOTICE.md): releases up to
+2026-08-22 went out under the **LGPL 2.1** and stay available under it — a license already
+granted cannot be withdrawn — and the wxWidgets-derived widget sources remain under the
+**wxWindows Library Licence**.

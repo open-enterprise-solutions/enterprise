@@ -3,7 +3,7 @@
 //	Description : OLE-supporter
 ////////////////////////////////////////////////////////////////////////////
 
-#include "valueole.h"
+#include "valueOLE.h"
 #include "backend/backend_exception.h"
 #include "backend/appData.h"
 
@@ -126,7 +126,6 @@ wxString wxConvertStringFromOle(const BSTR& bStr)
 
 #endif 
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueOLE, ibValue);
 
 //*********************************************************************************************************************
 //*                                                      OLE Value                                                    *
@@ -196,7 +195,7 @@ void ibValueOLE::ReleaseComObjects()
 void ibValueOLE::AddFromArray(ibValue& pvarRetValue, long* aPos, SAFEARRAY* psa, SAFEARRAYBOUND* safeArrayBound, int nLastDim) const
 {
 	VARIANT var = { 0 }; HRESULT hr;
-	if (hr = ::SafeArrayGetElement(psa, aPos, &var))
+	if ((hr = ::SafeArrayGetElement(psa, aPos, &var)) != S_OK)
 		throw hr;
 	aPos[nLastDim]++;
 	if (aPos[nLastDim] > safeArrayBound[nLastDim].cElements) {
@@ -299,22 +298,19 @@ bool ibValueOLE::FromVariant(const VARIANT& oleVariant, ibValue& pvarRetValue) c
 	case VT_BSTR:
 	{
 		pvarRetValue.SetType(ibValueTypes::TYPE_STRING);
-		pvarRetValue.m_sData = wxConvertStringFromOle(oleVariant.bstrVal);
+		pvarRetValue.SetString(wxConvertStringFromOle(oleVariant.bstrVal));
 		return true;
 	}
 	case VT_DATE:
 	{
 		pvarRetValue.SetType(ibValueTypes::TYPE_DATE);
-#if wxUSE_DATETIME
 		{
+			// A VT_DATE is a wall-clock reading with no zone in it, exactly as the engine's date is
+			// (fdatetime.h): the parts cross over as they are, nothing asks the machine's clock.
 			SYSTEMTIME st;
 			VariantTimeToSystemTime(oleVariant.date, &st);
-			wxDateTime date;
-			date.SetFromMSWSysTime(st);
-			wxLongLong llValue = date.GetValue();
-			pvarRetValue.m_dData = llValue.GetValue();
+			pvarRetValue.m_dData = ibDateTime(st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond, st.wMilliseconds);
 		}
-#endif // wxUSE_DATETIME
 		return true;
 	}
 	case VT_DISPATCH:
@@ -350,16 +346,16 @@ ibValue ibValueOLE::FromVariantArray(SAFEARRAY* psa) const
 	SAFEARRAYBOUND* aDims = new SAFEARRAYBOUND[nDim];
 	for (int i = 0; i < nDim; i++) {
 		long nMin, nMax;
-		if (hr = SafeArrayGetLBound(psa, i + 1, &nMin))
+		if ((hr = SafeArrayGetLBound(psa, i + 1, &nMin)) != S_OK)
 			throw hr;
-		if (hr = SafeArrayGetUBound(psa, i + 1, &nMax))
+		if ((hr = SafeArrayGetUBound(psa, i + 1, &nMax)) != S_OK)
 			throw hr;
-		aPos[i] = nMin;//начальное положение
+		aPos[i] = nMin;// initial position
 		aDims[i].lLbound = nMin;
 		aDims[i].cElements = nMax;//-nMin+1;
 	}
 
-	ibValue cRet = ibValue::CreateAndPrepareValueRef<ibValueArray>();
+	ibValue cRet = new ibValueArray();
 	AddFromArray(cRet, aPos, psa, aDims, nDim - 1);
 
 	delete[]aPos;
@@ -408,13 +404,19 @@ VARIANT ibValueOLE::FromValue(const ibValue& varRetValue) const
 	}
 	case ibValueTypes::TYPE_DATE:
 	{
-#if wxUSE_DATETIME
-		wxDateTime date(wxLongLong(varRetValue.GetDate()));
+		ibDateTimeParts p;
+		varRetValue.GetDate().ToParts(p);
+		SYSTEMTIME st = {};
+		st.wYear = static_cast<WORD>(p.m_year);
+		st.wMonth = static_cast<WORD>(p.m_month);
+		st.wDay = static_cast<WORD>(p.m_day);
+		st.wDayOfWeek = static_cast<WORD>(p.m_weekDay % 7);   // SYSTEMTIME counts Sunday as 0
+		st.wHour = static_cast<WORD>(p.m_hour);
+		st.wMinute = static_cast<WORD>(p.m_minute);
+		st.wSecond = static_cast<WORD>(p.m_second);
+		st.wMilliseconds = static_cast<WORD>(p.m_millisecond);
 		oleVariant.vt = VT_DATE;
-		SYSTEMTIME st;
-		date.GetAsMSWSysTime(&st);
 		SystemTimeToVariantTime(&st, &oleVariant.date);
-#endif
 		break;
 	}
 	case ibValueTypes::TYPE_OLE: {
@@ -457,7 +459,8 @@ IDispatch* ibValueOLE::DoCreateInstance()
 		IID_IDispatch, (void**)&pDispatch);
 
 	if (FAILED(hr)) {
-		wxLogSysError(hr, _("Failed to create an instance of \"%s\""), m_objectName);
+		ibJournalSysError(wxT("ole"), hr,
+			wxString::Format(_("Failed to create an instance of \"%s\""), m_objectName));
 		return nullptr;
 	}
 
@@ -467,30 +470,31 @@ IDispatch* ibValueOLE::DoCreateInstance()
 #endif 
 
 #ifdef __WXMSW__
-ibValueOLE::ibValueOLE() : ibValue(ibValueTypes::TYPE_OLE),
+ibValueOLE::ibValueOLE() : ibValueDynamicMembers(ibValueTypes::TYPE_OLE),
 m_clsId({ 0 }), m_dispatch(nullptr), m_currentDispatch(nullptr),
-m_methodHelper(new ibValueMethodHelper()), m_objectName(wxEmptyString)
+m_objectName(wxEmptyString)
 {
+	m_members.Bind(this, &ibValueOLE::FillMembers);
 }
 
-ibValueOLE::ibValueOLE(const CLSID& clsId, IDispatch* dispatch, const wxString& objectName) : ibValue(ibValueTypes::TYPE_OLE),
+ibValueOLE::ibValueOLE(const CLSID& clsId, IDispatch* dispatch, const wxString& objectName) : ibValueDynamicMembers(ibValueTypes::TYPE_OLE),
 m_clsId(clsId), m_dispatch(dispatch), m_currentDispatch(nullptr),
-m_methodHelper(new ibValueMethodHelper()), m_objectName(objectName)
+m_objectName(objectName)
 {
+	m_members.Bind(this, &ibValueOLE::FillMembers);
 	if (m_dispatch != nullptr) {
 		m_dispatch->AddRef();
 	}
-	PrepareNames();
 	if (createStreamForDispatch) {
 		if (m_dispatch != nullptr) {
-			HRESULT hr =
+			HRESULT marshalHr =
 				::CoMarshalInterThreadInterfaceInStream(IID_IDispatch, m_dispatch, &m_streamDispatch);
-			if (FAILED(hr))
+			if (FAILED(marshalHr))
 				m_streamDispatch = nullptr;
 		}
 		if (m_streamDispatch != nullptr) {
-			HRESULT hr = ::CoGetInterfaceAndReleaseStream(m_streamDispatch, IID_IDispatch, (void**)&m_currentDispatch);
-			if (SUCCEEDED(hr)) {
+			HRESULT unmarshalHr = ::CoGetInterfaceAndReleaseStream(m_streamDispatch, IID_IDispatch, (void**)&m_currentDispatch);
+			if (SUCCEEDED(unmarshalHr)) {
 				m_streamDispatch = nullptr;
 			}
 		}
@@ -500,8 +504,10 @@ m_methodHelper(new ibValueMethodHelper()), m_objectName(objectName)
 	}
 }
 #else 
-ibValueOLE::ibValueOLE() : ibValue(ibValueTypes::TYPE_OLE), m_methodHelper(new ibValueMethodHelper()), m_objectName(wxEmptyString) {}
-#endif 
+ibValueOLE::ibValueOLE() : ibValueDynamicMembers(ibValueTypes::TYPE_OLE), m_objectName(wxEmptyString) {
+	m_members.Bind(this, &ibValueOLE::FillMembers);
+}
+#endif
 
 ibValueOLE::~ibValueOLE()
 {
@@ -511,8 +517,7 @@ ibValueOLE::~ibValueOLE()
 		m_dispatch->Release();
 		m_dispatch = nullptr;
 	}
-#endif 
-	wxDELETE(m_methodHelper);
+#endif
 }
 
 bool ibValueOLE::Init(ibValue** paParams, const long lSizeArray)
@@ -557,18 +562,18 @@ bool ibValueOLE::Create(const wxString& strOleName)
 		return false;
 	}
 	m_dispatch = DoCreateInstance();
-	PrepareNames();
+	InvalidateNames();   // COM surface depends on the freshly created dispatch
 	if (createStreamForDispatch) {
 		if (m_dispatch != nullptr) {
-			HRESULT hr =
+			HRESULT marshalHr =
 				::CoMarshalInterThreadInterfaceInStream(IID_IDispatch, m_dispatch, &m_streamDispatch);
-			if (FAILED(hr)) {
+			if (FAILED(marshalHr)) {
 				m_streamDispatch = nullptr;
 			}
 		}
 		if (m_streamDispatch != nullptr) {
-			HRESULT hr = ::CoGetInterfaceAndReleaseStream(m_streamDispatch, IID_IDispatch, (void**)&m_currentDispatch);
-			if (SUCCEEDED(hr)) {
+			HRESULT unmarshalHr = ::CoGetInterfaceAndReleaseStream(m_streamDispatch, IID_IDispatch, (void**)&m_currentDispatch);
+			if (SUCCEEDED(unmarshalHr)) {
 				m_streamDispatch = nullptr;
 			}
 		}
@@ -585,10 +590,9 @@ bool ibValueOLE::Create(const wxString& strOleName)
 #endif
 }
 
-void ibValueOLE::PrepareNames() const
+void ibValueOLE::FillMembers(ibMemberTable& helper) const
 {
 #ifdef __WXMSW__
-	m_methodHelper->ClearHelper();
 	if (m_dispatch == nullptr)
 		return;
 	unsigned int count = 0;
@@ -619,7 +623,7 @@ void ibValueOLE::PrepareNames() const
 					continue;
 
 				BSTR strName = nullptr;
-				// Получаем название метода
+				// read the method name
 				typeInfo->GetDocumentation(funcInfo->memid, &strName,
 					nullptr, nullptr, nullptr);
 
@@ -683,7 +687,7 @@ void ibValueOLE::PrepareNames() const
 				}
 				methodHelper += wxT(")");
 				if (funcInfo->invkind == INVOKE_FUNC) {
-					m_methodHelper->AppendFunc(
+					helper.AppendFunc(
 						strMethodName,
 						funcInfo->cParams,
 						methodHelper,
@@ -691,7 +695,7 @@ void ibValueOLE::PrepareNames() const
 					);
 				}
 				else if (funcInfo->invkind == INVOKE_PROPERTYGET) {
-					m_methodHelper->AppendProp(
+					helper.AppendProp(
 						strMethodName,
 						funcInfo->memid
 					);
@@ -704,7 +708,7 @@ void ibValueOLE::PrepareNames() const
 #endif 
 }
 
-long ibValueOLE::FindMethod(const wxString& strMethodName) const
+long ibValueOLE::FindMethod(const ibString& strMethodName) const
 {
 #ifdef __WXMSW__
 	if (m_currentDispatch == nullptr)
@@ -729,7 +733,7 @@ long ibValueOLE::FindMethod(const wxString& strMethodName) const
 #endif 
 }
 
-long ibValueOLE::FindProp(const wxString& strPropName) const
+long ibValueOLE::FindProp(const ibString& strPropName) const
 {
 #ifdef __WXMSW__
 	if (m_currentDispatch == nullptr)
@@ -857,7 +861,7 @@ bool ibValueOLE::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValu
 
 	VARIANT oleVariant = { 0 };
 
-	//переводим параметры в тип VARIANT
+	// convert the parameters to VARIANT
 	VARIANT* pvarArgs = new VARIANT[lSizeArray];
 	for (long arg = 0; arg < lSizeArray; arg++)
 		pvarArgs[lSizeArray - arg - 1] = FromValue(paParams[arg]);
@@ -933,4 +937,4 @@ bool ibValueOLE::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValu
 //*                       Runtime register                             *
 //**********************************************************************
 
-VALUE_TYPE_REGISTER(ibValueOLE, "ComObject", string_to_clsid("VL_OLE"));
+VALUE_TYPE_REGISTER(ibValueOLE, "ComObject", value_to_clsid("VL_OLE"));

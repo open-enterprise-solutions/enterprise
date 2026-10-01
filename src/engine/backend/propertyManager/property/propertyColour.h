@@ -5,7 +5,7 @@
 
 //base property for "colour"
 class BACKEND_API ibPropertyColour : public ibProperty {
-	wxVariant CreateVariantData(const wxColour& val) const {
+	static wxVariant CreateVariantData(const wxColour& val) {
 		wxVariant newValue;
 		newValue << val;
 		return newValue;
@@ -38,24 +38,18 @@ public:
 	{
 	}
 
-	//get property for grid 
-	virtual wxObject* GetPGProperty() const {
-		if (ms_propertyColour != nullptr)
-			return ms_propertyColour(m_propLabel, m_propName, GetValueAsColour());
-		return nullptr;
-	}
-
 	// set/get property data
 	virtual bool SetDataValue(const ibValue& varPropVal);
 	virtual bool GetDataValue(ibValue& pvarPropVal) const;
 
 	//load & save object in control 
-	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer);
+
+	// readable node value
+	virtual bool ReadNodeValue(const ibDataValue& value) override;
+	virtual bool WriteNodeValue(ibDataValue& value) const override;
 
 public:
 
-	static wxObject* (*ms_propertyColour)(const wxString&, const wxString&, const wxColour&);
 };
 
 #endif

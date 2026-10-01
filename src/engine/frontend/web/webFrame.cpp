@@ -16,20 +16,39 @@
 #include "visualView/visualHostClient.h"
 
 #include "webChildFrame.h"
-#include "webApplication.h"   // for GetSessionContext on GetSession()
+#include "webApplication.h"
+#include "webClientSession.h"   // typed Session() + its SetFrame back-link
 
-ibWebFrame::ibWebFrame(ibWebApplication* app) : m_app(app) {}
-
-ibSession* ibWebFrame::GetSession() const
+ibWebFrame::ibWebFrame(ibSessionHolder&& holder, ibWebApplication* app)
+	: ibBackendDocFrame(std::move(holder)), m_app(app)
 {
-	// Per-cookie ibWebApplication carries the ticket's session (bound
-	// at Login time via ibWebSession::Login → SetSessionContext). No
-	// app / no session set — return nullptr; callers guard.
-	return m_app != nullptr ? m_app->GetSessionContext() : nullptr;
+	// The session learns its window here, in one visible line, the same
+	// moment it becomes ours. wes has no main-window singleton to ask
+	// (many tabs at once), so unlike the desktop pair this link has to be
+	// stored — but it is set exactly where ownership is taken, not
+	// patched in by whoever happened to build the frame.
+	//
+	// Guarded: a frame built with an empty holder (tests) has no session
+	// to tell, and that is not a reason to crash.
+	if (auto* session = Session())
+		session->SetFrame(this);
+}
+
+ibWebClientSession* ibWebFrame::Session() const
+{
+	return static_cast<ibWebClientSession*>(GetSession());
 }
 
 ibWebFrame::~ibWebFrame()
 {
+	// Undo the constructor's back-link first: the session must not point
+	// at a window that is already unwinding, and a late
+	// ibSession::CurrentFrame() during teardown would otherwise hand out
+	// a freed pointer. Symmetric with the ctor — bound where ownership is
+	// taken, cleared where it ends, with nothing to remember outside.
+	if (auto* session = Session())
+		session->SetFrame(nullptr);
+
 	// The OnExit path is responsible for running DeleteAllViews on every
 	// tab's doc BEFORE deleting the frame — that must happen on the
 	// session worker thread so procUnit's per-thread state is valid.
@@ -182,14 +201,14 @@ bool ibWebFrame::ResolveModal(const std::string& id, int result)
 }
 
 ibBackendValueForm* ibWebFrame::CreateNewForm(
+	const ibFormRequest& request,
 	const ibValueMetaObjectFormBase* creator,
 	ibBackendControlFrame* backendControl,
-	ibSourceDataObject*    srcObject,
-	const ibUniqueKey&     formGuid)
+	ibSourceDataObject*    srcObject)
 {
 	std::cerr << "[tabs] CreateNewForm creator=" << (void*)creator
 		<< " tabs_before=" << m_tabs.size() << std::endl;
-	// Low-level factory, mirror of desktop ibFrontendDocMDIFrame::
+	// Low-level factory, mirror of desktop ibFrontendMainFrame::
 	// CreateNewForm: just allocates the ibValueForm ref, no LoadFormData
 	// / BuildForm. ibValueMetaObjectFormBase::CreateAndBuildForm calls
 	// ibBackendValueForm::CreateNewForm which lands here — if we
@@ -201,8 +220,8 @@ ibBackendValueForm* ibWebFrame::CreateNewForm(
 	// Parent descriptor wiring happens inside ibValueForm — it has
 	// ownerControl + access to backend_mainFrame for the UI fallback.
 	ibControlFrame* ownerControl = dynamic_cast<ibControlFrame*>(backendControl);
-	return ibValue::CreateAndPrepareValueRef<ibValueForm>(
-		creator, ownerControl, srcObject, formGuid);
+	return new ibValueForm(
+		request, creator, ownerControl, srcObject);
 }
 
 ibUniqueKey ibWebFrame::CreateFormUniqueKey(
@@ -228,18 +247,20 @@ void ibWebFrame::AdoptTab(std::unique_ptr<ibWebDocChildFrame> tab, ibValueForm* 
 }
 
 ibFrontendWindow* ibWebFrame::CreateChildFrame(
-	ibMetaView* view,
+	ibView* view,
 	const wxPoint& /*pos*/,
 	const wxSize&  /*size*/,
 	long           /*style*/)
 {
 	// Web-side static factory — mirror of the desktop
-	// ibFrontendDocMDIFrame::CreateChildFrame. Works with any
-	// ibMetaDocument subclass (form, tabular, text, report …),
-	// not just ibFormVisualDocument. Title comes from the doc's
-	// GetTitle(); any per-type-specific wiring (e.g. ibValueForm
-	// tracking for ActiveWindow() on form tabs) happens in a
-	// narrow downcast below, leaving non-form docs untouched.
+	// ibFrontendMainFrame::CreateChildFrame. Works with any ibDocument
+	// subclass (form, tabular, text, report, audit log …), not just
+	// ibFormVisualDocument. Title comes from the doc's GetTitle(); any
+	// per-type-specific wiring (e.g. ibValueForm tracking for
+	// ActiveWindow() on form tabs) happens in a narrow downcast below,
+	// leaving non-form docs untouched. Param type relaxed from
+	// ibMetaView*/ibMetaDocument* to ibView*/ibDocument* after AuditLog /
+	// Text / Help were rebased off the meta hierarchy.
 	if (view == nullptr) return nullptr;
 
 	// Per-tab session is pinned by the worker loop's ibSessionScope; its
@@ -249,7 +270,7 @@ ibFrontendWindow* ibWebFrame::CreateChildFrame(
 		? dynamic_cast<ibWebFrame*>(session->GetFrame()) : nullptr;
 	if (webFrame == nullptr) return nullptr;
 
-	ibMetaDocument* doc = view->GetDocument();
+	ibDocument* doc = view->GetDocument();
 	// doc->GetTitle() is still empty at this stage — the doc was just
 	// constructed and its title is set by ibFormVisualDocument::OnCreate,
 	// which the caller invokes AFTER CreateChildFrame. Pull the title
@@ -270,7 +291,7 @@ ibFrontendWindow* ibWebFrame::CreateChildFrame(
 
 	// Wire the view's web-frame back-pointer so ibMetaView::ShowFrame
 	// can reach this tab and flip its shown/active state. Desktop gets
-	// the same effect via wxView::SetFrame (done by wxDocChildFrame
+	// the same effect via ibView::SetFrame (done by ibDocChildFrame
 	// ctor); web plumbs it explicitly here.
 	view->SetWebFrame(raw);
 
@@ -331,7 +352,7 @@ void ibWebFrame::DrainPendingCloses()
 				<< " doc=" << (void*)visualDoc << std::endl;
 			// Now — outside any control's event handler — we can safely
 			// destroy the view, which cascades into host and all its
-			// child controls (toolbar, tools, textctrl etc.). wxDocument's
+			// child controls (toolbar, tools, textctrl etc.). ibDocument's
 			// DeleteAllViews contract also deletes the doc itself when
 			// the last view goes, so m_tabs[i]->m_doc becomes dangling
 			// (tab dtor nulls it, doesn't delete).

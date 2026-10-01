@@ -9,6 +9,11 @@
 // drawn inside ibControlTextEditor. Drop it into the same sizer row as a
 // text editor and the captions line up on the same baseline for identical
 // font / text.
+//
+// A LABEL, and only that: it draws one string and answers no input. The control that shows a
+// VALUE as text — caption on one side, clickable value on the other — is ibControlStaticTextValue
+// (controlStaticTextValue.h), which uses one of these as its value half, exactly as the checkbox
+// composite uses a real wxCheckBox as its box half.
 class FRONTEND_API ibControlStaticText : public wxControl {
 public:
 

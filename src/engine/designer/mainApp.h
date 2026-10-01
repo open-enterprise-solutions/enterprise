@@ -7,7 +7,9 @@
 
 #include <memory>
 
-class ibAppDesigner : public wxApp {
+#include "frontend/diagnostics/oesApp.h"
+
+class ibAppDesigner : public ibWxApp {
 
 	// FILE ENTRY
 	wxString m_strFile;
@@ -33,15 +35,15 @@ class ibAppDesigner : public wxApp {
 
 public:
 
-	virtual bool OnInit();
-#if wxUSE_ON_FATAL_EXCEPTION
-	virtual void OnUnhandledException() override;
-#endif
-#if wxUSE_ON_FATAL_EXCEPTION && wxUSE_STACKWALKER
-	virtual void OnFatalException() override;
-#endif
-	virtual int OnRun() override;
-	virtual int OnExit() override;
+	// ibWxApp pre-wires Install / WrapStartup / 3 exception overrides.
+	wxString GetExeName() const override { return wxT("designer"); }
+
+	// DoOnInit defaulted on the base (wxSocketBase::Initialize + wxApp::OnInit).
+	int DoOnRun() override;
+
+	int OnExit() override;
+
+public:
 
 #if wxUSE_CMDLINE_PARSER
 	// this one is called from OnInit() to add all supported options

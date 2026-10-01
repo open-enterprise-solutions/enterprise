@@ -9,7 +9,6 @@
 #include "commonObject.h"
 #include "reference/reference.h"
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueManagerDataObjectEnumeration, ibValue);
 
 const ibValueMetaObjectCommonModule* ibValueManagerDataObjectEnumeration::GetManagerModule() const { return m_metaObject->GetManagerModule(); }
 
@@ -20,19 +19,17 @@ enum Func {
 	eGetTemplate,
 };
 
-void ibValueManagerDataObjectEnumeration::PrepareNames() const
+void ibValueManagerDataObjectEnumeration::FillManagerMethods(ibMemberTable& helper) const
 {
-	ibValueManagerDataObject::PrepareNames();
+	helper.AppendFunc(wxT("GetForm"), 3, wxT("GetForm(name : string, owner : any, id : guid)"));
+	helper.AppendFunc(wxT("GetListForm"), 3, wxT("GetListForm(name : string, owner : any, id : guid)"));
+	helper.AppendFunc(wxT("GetSelectForm"), 3, wxT("GetSelectForm(name : string, owner : any, id : guid)"));
+	helper.AppendFunc(wxT("GetTemplate"), 1, wxT("GetTemplate(name : string)"));
 
-	m_methodHelper->AppendFunc(wxT("GetForm"), 3, wxT("GetForm(name : string, owner : any, id : guid)"));
-	m_methodHelper->AppendFunc(wxT("GetListForm"), 3, wxT("GetListForm(name : string, owner : any, id : guid)"));
-	m_methodHelper->AppendFunc(wxT("GetSelectForm"), 3, wxT("GetSelectForm(name : string, owner : any, id : guid)"));
-	m_methodHelper->AppendFunc(wxT("GetTemplate"), 1, wxT("GetTemplate(name : string)"));
-
-	//fill custom attributes 
+	//fill custom attributes
 	for (auto object : m_metaObject->GetEnumObjectArray()) {
 
-		m_methodHelper->AppendProp(
+		helper.AppendProp(
 			object->GetName(),
 			true, false,
 			object->GetMetaID(),
@@ -44,7 +41,7 @@ void ibValueManagerDataObjectEnumeration::PrepareNames() const
 //****************************************************************************
 //*                              Override attribute                          *
 //****************************************************************************
-bool ibValueManagerDataObjectEnumeration::SetPropVal(const long lPropNum, ibValue& cValue)
+bool ibValueManagerDataObjectEnumeration::SetPropVal(const long lPropNum, const ibValue& cValue)
 {
 	return false;
 }
@@ -52,7 +49,7 @@ bool ibValueManagerDataObjectEnumeration::SetPropVal(const long lPropNum, ibValu
 bool ibValueManagerDataObjectEnumeration::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
 	const ibValueMetaObject* valueObject =
-		m_metaObject->FindEnumObjectByFilter<ibMetaID>(m_methodHelper->GetPropData(lPropNum));
+		m_metaObject->FindEnumObjectByFilter<ibMetaID>(m_members.GetPropData(lPropNum));
 
 	if (valueObject == nullptr)
 		return false;
@@ -63,30 +60,28 @@ bool ibValueManagerDataObjectEnumeration::GetPropVal(const long lPropNum, ibValu
 
 bool ibValueManagerDataObjectEnumeration::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
 {
-	switch (lMethodNum)
+	// Our own ordinal, not the table index — ibValueManagerDataObject::BuiltinMethodNum says why.
+	switch (BuiltinMethodNum(lMethodNum))
 	{
 	case eGetForm:
 	{
 		ibValueGuid* guidVal = lSizeArray > 2 ? paParams[2]->ConvertToType<ibValueGuid>() : nullptr;
-		pvarRetValue = m_metaObject->GetGenericForm(paParams[0]->GetString(),
-			lSizeArray > 1 ? paParams[1]->ConvertToType<ibBackendControlFrame>() : nullptr,
-			guidVal ? ((ibGuid)*guidVal) : ibGuid());
+		pvarRetValue = m_metaObject->GetGenericForm(ibFormRequest(paParams[0]->GetString(), guidVal ? ((ibGuid)*guidVal) : ibGuid()),
+			lSizeArray > 1 ? paParams[1]->ConvertToType<ibBackendControlFrame>() : nullptr);
 		return true;
 	}
 	case eGetListForm:
 	{
 		ibValueGuid* guidVal = lSizeArray > 2 ? paParams[2]->ConvertToType<ibValueGuid>() : nullptr;
-		pvarRetValue = m_metaObject->GetListForm(paParams[0]->GetString(),
-			lSizeArray > 1 ? paParams[1]->ConvertToType<ibBackendControlFrame>() : nullptr,
-			guidVal ? ((ibGuid)*guidVal) : ibGuid());
+		pvarRetValue = m_metaObject->GetListForm(ibFormRequest(paParams[0]->GetString(), guidVal ? ((ibGuid)*guidVal) : ibGuid()),
+			lSizeArray > 1 ? paParams[1]->ConvertToType<ibBackendControlFrame>() : nullptr);
 		return true;
 	}
 	case eGetSelectForm:
 	{
 		ibValueGuid* guidVal = lSizeArray > 2 ? paParams[2]->ConvertToType<ibValueGuid>() : nullptr;
-		pvarRetValue = m_metaObject->GetSelectForm(paParams[0]->GetString(),
-			lSizeArray > 1 ? paParams[1]->ConvertToType<ibBackendControlFrame>() : nullptr,
-			guidVal ? ((ibGuid)*guidVal) : ibGuid());
+		pvarRetValue = m_metaObject->GetSelectForm(ibFormRequest(paParams[0]->GetString(), guidVal ? ((ibGuid)*guidVal) : ibGuid()),
+			lSizeArray > 1 ? paParams[1]->ConvertToType<ibBackendControlFrame>() : nullptr);
 		return true;
 	}
 	case eGetTemplate:

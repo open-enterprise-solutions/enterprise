@@ -5,30 +5,45 @@
 
 //base property for "list"
 class BACKEND_API ibPropertyList : public ibProperty {
+public:
 
-	wxPGChoices GetValueList() const {
-		wxPGChoices constants;
-		if (m_functor->Invoke(const_cast<ibPropertyList*>(this))) {
-			for (unsigned int idx = 0; idx < m_listPropValue.GetItemCount(); idx++) {
-				wxPGChoiceEntry item(
-					m_listPropValue.GetItemLabel(idx),
-					m_listPropValue.GetItemId(idx)
-				);
-				item.SetBitmap(m_listPropValue.GetItemBitmap(idx));
-				constants.Add(item);
-			}
+	// The choices this list offers. Public because the FRONT builds the editor now and
+	// reads them there; it fires the functor itself, since that is what fills the list —
+	// this used to sit in GetPGProperty, which is the one caller it had.
+	//
+	// NOT const: the functor REFILLS m_listPropValue, so this mutates. The const here was
+	// a lie the old code paid for with a const_cast on `this`.
+	// ⭐ THE ONE THAT GAVE THE BASE ITS SHAPE. This worked, and it worked here alone — an enumeration
+	// answered the same question under another name, and a relationship could not be asked at all.
+	// Now it is the family's own verb and this is one member of it.
+	virtual ibPropertyChoiceMode GetValueList(ibPropertyChoiceList& list) override {
+		if (!m_functor->Invoke(this))
+			return ibPropertyChoiceMode::None;
+		for (unsigned int idx = 0; idx < m_listPropValue.GetItemCount(); idx++) {
+			list.Add(
+				m_listPropValue.GetItemLabel(idx),
+				m_listPropValue.GetItemId(idx),
+				m_listPropValue.GetItemBitmap(idx)
+			);
 		}
-		return constants;
+		return ibPropertyChoiceMode::Single;
 	}
+
+private:
 
 	class BACKEND_API ibPropertyOptionValue {
 		enum eValType {
 			eValType_pointer,
 			eValType_value,
 		} m_valType;
-		struct {
-			ibValue* m_pValue, m_cValue;
-		};
+		// Two plain members. They used to sit inside an ANONYMOUS struct, which is an MSVC
+		// extension and illegal here anyway: an anonymous aggregate may not hold a member
+		// with a constructor, and `ibValue* m_pValue, m_cValue;` declares m_cValue as an
+		// ibValue BY VALUE (the comma binds the `*` to the first name only). The wrapper
+		// carried no meaning — it was not a union, and every constructor below initialises
+		// both members — so it is gone and the declarations are spelled out.
+		ibValue* m_pValue;
+		ibValue  m_cValue;
 	public:
 
 		operator ibValue* () { return GetOptionValue(); }
@@ -107,20 +122,11 @@ class BACKEND_API ibPropertyList : public ibProperty {
 		};
 
 		ibPropertyOptionItem GetItemAt(const unsigned int idx) const {
-			if (idx > m_listValue.size())
+			if (idx >= m_listValue.size())
 				return ibPropertyOptionItem();
 			auto it = m_listValue.begin();
 			std::advance(it, idx);
 			return *it;
-		};
-
-		ibPropertyOptionItem GetItemById(const long& id) const {
-			auto it = std::find_if(m_listValue.begin(), m_listValue.end(),
-				[id](const ibPropertyOptionItem& p) { return id == p.m_id; }
-			);
-			if (it != m_listValue.end())
-				return *it;
-			return ibPropertyOptionItem();
 		};
 
 	public:
@@ -130,8 +136,6 @@ class BACKEND_API ibPropertyList : public ibProperty {
 		void AppendItem(const wxString& name, const int& l, const wxBitmap& b, const ibPropertyOptionValue& v) { (void)m_listValue.emplace_back(name, name, l, b, v); }
 		void AppendItem(const wxString& name, const wxString& label, const int& l, const wxBitmap& b, const ibPropertyOptionValue& v) { (void)m_listValue.emplace_back(name, label, l, b, v); }
 		void AppendItem(const wxString& name, const wxString& label, const wxString& help, const int& l, const wxBitmap& b, const ibPropertyOptionValue& v) { (void)m_listValue.emplace_back(name, label, help, l, b, v); }
-
-		bool HasValue(const long& l) const { return GetItemById(l); }
 
 		wxString GetItemName(const unsigned int idx) const { return GetItemAt(idx).m_strName; }
 		wxString GetItemLabel(const unsigned int idx) const { return GetItemAt(idx).m_strLabel; }
@@ -215,26 +219,18 @@ public:
 
 	virtual bool IsEmptyProperty() const { return GetValueAsInteger() == wxNOT_FOUND; }
 
-	//get property for grid 
-	virtual wxObject* GetPGProperty() const {
-		if (!m_functor->Invoke(const_cast<ibPropertyList*>(this)))
-			return nullptr;
-		if (ms_propertyList != nullptr)
-			return ms_propertyList(m_propLabel, m_propName, GetValueList(), GetValueAsInteger());
-		return nullptr;
-	}
-
 	// Set/Get property data
 	virtual bool SetDataValue(const ibValue& varPropVal);
 	virtual bool GetDataValue(ibValue& pvarPropVal) const;
 
 	//load & save object in control 
-	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer);
+
+	// readable node value
+	virtual bool ReadNodeValue(const ibDataValue& value) override;
+	virtual bool WriteNodeValue(ibDataValue& value) const override;
 
 public:
 
-	static wxObject* (*ms_propertyList)(const wxString&, const wxString&, const wxPGChoices&, const int&);
 
 protected:
 

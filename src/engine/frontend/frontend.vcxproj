@@ -22,17 +22,28 @@
     <ClCompile Include="artProvider\artProvider.cpp" />
     <ClCompile Include="docView\docManager.cpp" />
     <ClCompile Include="docView\docView.cpp" />
-    <ClCompile Include="docView\docViewCmd.cpp" />
+    <ClCompile Include="docView\print\printPreview.cpp" />
+    <ClCompile Include="docView\templates\docViewAuditLog.cpp" />
+    <ClCompile Include="docView\templates\docViewHomePage.cpp" />
     <ClCompile Include="docView\templates\docViewHelp.cpp" />
     <ClCompile Include="docView\templates\docViewSpreadsheet.cpp" />
     <ClCompile Include="docView\templates\docViewText.cpp" />
     <ClCompile Include="frontend.cpp" />
+    <ClCompile Include="syntaxHelper\helpChooserDialog.cpp" />
+    <ClCompile Include="syntaxHelper\helpDetailView.cpp" />
+    <ClCompile Include="syntaxHelper\helpDragSource.cpp" />
+    <ClCompile Include="syntaxHelper\helpIndexView.cpp" />
+    <ClCompile Include="syntaxHelper\helpPaneView.cpp" />
+    <ClCompile Include="syntaxHelper\helpSearchView.cpp" />
+    <ClCompile Include="syntaxHelper\helpTreeView.cpp" />
     <ClCompile Include="mainFrame\mainFrame.cpp" />
     <ClCompile Include="mainFrame\mainFrameChild.cpp" />
     <ClCompile Include="mainFrame\mainFrameParts.cpp" />
     <ClCompile Include="mainFrame\objinspect\objinspect.cpp" />
     <ClCompile Include="mainFrame\settings\editorsettings.cpp" />
     <ClCompile Include="mainFrame\settings\editorsettingspanel.cpp" />
+    <ClCompile Include="mainFrame\settings\mcpsettingspanel.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolForms.cpp" />
     <ClCompile Include="mainFrame\settings\fontcolorsettings.cpp" />
     <ClCompile Include="mainFrame\settings\fontcolorsettingspanel.cpp" />
     <ClCompile Include="mainFrame\settings\keybinder.cpp" />
@@ -44,6 +55,7 @@
     <ClCompile Include="mainFrame\settings\stlutility.cpp" />
     <ClCompile Include="mainFrame\settings\xmlutility.cpp" />
     <ClCompile Include="propertyManager\propertyEditor.cpp" />
+    <ClCompile Include="propertyManager\property\private\propertyRegistry.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropBoolean.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropColour.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropDate.cpp" />
@@ -53,17 +65,22 @@
     <ClCompile Include="propertyManager\property\advprop\advpropFont.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropForm.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropGeneration.cpp" />
+    <ClCompile Include="propertyManager\property\advprop\advpropDataComposition.cpp" />
+    <ClCompile Include="propertyManager\property\advprop\advpropSchedule.cpp" />
+    <ClCompile Include="propertyManager\property\advprop\advpropDynamicSource.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropHyperLink.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropList.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropModule.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropNumber.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropOwner.cpp" />
-    <ClCompile Include="propertyManager\property\advprop\advpropChartOfCharacteristicTypes.cpp" />
-    <ClCompile Include="propertyManager\property\advprop\advpropChartOfAccounts.cpp" />
+    <ClCompile Include="propertyManager\property\advprop\advpropChartBinding.cpp" />
+    <ClCompile Include="propertyManager\property\advprop\advpropCalcSchedule.cpp" />
+    <ClCompile Include="propertyManager\property\advprop\advpropChoiceLink.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropPicture.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropPoint.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropRecord.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropSize.cpp" />
+    <ClCompile Include="propertyManager\property\advprop\advpropCommandSource.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropSource.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropSpreadsheet.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropString.cpp" />
@@ -85,6 +102,9 @@
     <ClCompile Include="visualView\ctrl\control.cpp" />
     <ClCompile Include="visualView\ctrl\controlProperty.cpp" />
     <ClCompile Include="visualView\ctrl\form.cpp" />
+    <ClCompile Include="visualView\ctrl\formAttribute.cpp" />
+    <ClCompile Include="visualView\ctrl\formAttributeProperty.cpp" />
+    <ClCompile Include="visualView\ctrl\formCommand.cpp" />
     <ClCompile Include="visualView\ctrl\formAction.cpp" />
     <ClCompile Include="visualView\ctrl\formControl.cpp" />
     <ClCompile Include="visualView\ctrl\formVisualHost.cpp" />
@@ -99,6 +119,11 @@
     <ClCompile Include="visualView\ctrl\gauge.cpp" />
     <ClCompile Include="visualView\ctrl\gauge_res.cpp" />
     <ClCompile Include="visualView\ctrl\gridBox.cpp" />
+    <ClCompile Include="visualView\ctrl\gridBoxAction.cpp" />
+    <ClCompile Include="visualView\ctrl\gridBoxDetail.cpp" />
+    <ClCompile Include="visualView\ctrl\gridBoxEvent.cpp" />
+    <ClCompile Include="visualView\ctrl\gridBoxProperty.cpp" />
+    <ClCompile Include="visualView\ctrl\gridBoxSource.cpp" />
     <ClCompile Include="visualView\ctrl\gridBox_res.cpp" />
     <ClCompile Include="visualView\ctrl\gridsizer.cpp" />
     <ClCompile Include="visualView\ctrl\gridsizer_res.cpp" />
@@ -122,12 +147,15 @@
     <ClCompile Include="visualView\ctrl\staticline.cpp" />
     <ClCompile Include="visualView\ctrl\staticline_res.cpp" />
     <ClCompile Include="visualView\ctrl\statictext.cpp" />
+    <ClCompile Include="visualView\ctrl\statictextEvent.cpp" />
     <ClCompile Include="visualView\ctrl\statictext_res.cpp" />
     <ClCompile Include="visualView\ctrl\tableBox.cpp" />
     <ClCompile Include="visualView\ctrl\tableBoxAction.cpp" />
     <ClCompile Include="visualView\ctrl\tableBoxColumn.cpp" />
     <ClCompile Include="visualView\ctrl\tableBoxColumnEvent.cpp" />
     <ClCompile Include="visualView\ctrl\tableBoxColumnProperty.cpp" />
+    <ClCompile Include="visualView\ctrl\tableBoxColumnGroup.cpp" />
+    <ClCompile Include="visualView\ctrl\tableBoxColumnGroup_res.cpp" />
     <ClCompile Include="visualView\ctrl\tableBoxColumnRenderer.cpp" />
     <ClCompile Include="visualView\ctrl\tableBoxColumn_res.cpp" />
     <ClCompile Include="visualView\ctrl\tableBoxEvent.cpp" />
@@ -140,6 +168,10 @@
     <ClCompile Include="visualView\ctrl\textctrlEvent.cpp" />
     <ClCompile Include="visualView\ctrl\textctrlProperty.cpp" />
     <ClCompile Include="visualView\ctrl\textctrl_res.cpp" />
+    <ClCompile Include="visualView\layers\commandBar.cpp" />
+    <ClCompile Include="visualView\layers\commandReceiver.cpp" />
+    <ClCompile Include="visualView\layerObject.cpp" />
+    <ClCompile Include="visualView\canvasWindow.cpp" />
     <ClCompile Include="visualView\ctrl\toolBar.cpp" />
     <ClCompile Include="visualView\ctrl\toolBarAction.cpp" />
     <ClCompile Include="visualView\ctrl\toolBarEvent.cpp" />
@@ -152,6 +184,7 @@
     <ClCompile Include="visualView\ctrl\typeControl.cpp" />
     <ClCompile Include="visualView\ctrl\window.cpp" />
     <ClCompile Include="visualView\ctrl\wrapsizer.cpp" />
+    <ClCompile Include="visualView\ctrl\wrapsizer_res.cpp" />
     <ClCompile Include="visualView\pageWindow.cpp" />
     <ClCompile Include="visualView\visualHostClient.cpp" />
     <ClCompile Include="visualView\visualHostClientDocView.cpp" />
@@ -291,6 +324,7 @@
     <ClCompile Include="win\ctrls\dataview\datavgen.cpp" />
     <ClCompile Include="win\ctrls\dataview\datavgen.paged.cpp" />
     <ClCompile Include="win\ctrls\dataview\datavgen.scrollbar.cpp" />
+    <ClCompile Include="win\ctrls\dataview\datavlayout.cpp" />
     <ClCompile Include="win\ctrls\dynamicBorder.cpp" />
     <ClCompile Include="win\ctrls\grid\gridext.cpp" />
     <ClCompile Include="win\ctrls\grid\gridextctrl.cpp" />
@@ -300,6 +334,32 @@
     <ClCompile Include="win\dlgs\about.cpp" />
     <ClCompile Include="win\dlgs\activeUser.cpp" />
     <ClCompile Include="win\dlgs\applyChange.cpp" />
+    <ClCompile Include="win\dlgs\settings\composer\composerSettings.cpp" />
+    <ClCompile Include="win\dlgs\settings\filterTreeModel.cpp" />
+    <ClCompile Include="win\dlgs\settings\list\listSettings.cpp" />
+    <ClCompile Include="win\dlgs\settings\settingsFieldTree.cpp" />
+    <ClCompile Include="settings\formSettings.cpp" />
+    <ClCompile Include="win\dlgs\settings\savedSettings.cpp" />
+    <ClCompile Include="win\dlgs\settings\settingsFilterEditor.cpp" />
+    <ClCompile Include="win\dlgs\settings\settingsSortEditor.cpp" />
+    <ClCompile Include="win\dlgs\settings\settingsAppearanceEditor.cpp" />
+    <ClCompile Include="win\dlgs\settings\settingsOutputParametersEditor.cpp" />
+    <ClCompile Include="win\dlgs\settings\settingsConditionalAppearanceEditor.cpp" />
+    <ClCompile Include="win\dlgs\queryConstructor\queryConstructor.cpp" />
+    <ClCompile Include="win\dlgs\queryConstructor\queryConstructorFill.cpp" />
+    <ClCompile Include="win\dlgs\queryConstructor\queryConstructorEdit.cpp" />
+    <ClCompile Include="win\dlgs\queryConstructor\queryConstructorText.cpp" />
+    <ClCompile Include="win\dlgs\queryConstructor\queryJoinDiagram.cpp" />
+    <ClCompile Include="win\dlgs\queryConstructor\queryLinkModel.cpp" />
+    <ClCompile Include="win\dlgs\queryConstructor\querySelectionLinkModel.cpp" />
+    <ClCompile Include="win\dlgs\queryConstructor\queryConditionModel.cpp" />
+    <ClCompile Include="win\dlgs\queryConstructor\queryUnionModel.cpp" />
+    <ClCompile Include="win\dlgs\queryConstructor\queryExpressionDialog.cpp" />
+    <ClCompile Include="win\dlgs\queryConstructor\queryCaseDialog.cpp" />
+    <ClCompile Include="win\dlgs\queryConstructor\queryTempTableDialog.cpp" />
+    <ClCompile Include="win\dlgs\choiceLink\choiceLink.cpp" />
+    <ClCompile Include="win\dlgs\choiceParameters\choiceParameters.cpp" />
+    <ClCompile Include="win\dlgs\jobSchedule\jobScheduleSettings.cpp" />
     <ClCompile Include="session\guiSession.cpp" />
     <ClCompile Include="session\workerPoolGUI.cpp" />
     <ClCompile Include="win\dlgs\authorization.cpp" />
@@ -311,6 +371,8 @@
     <ClCompile Include="win\dlgs\generation.cpp" />
     <ClCompile Include="win\dlgs\rowHeight.cpp" />
     <ClCompile Include="win\dlgs\selectData.cpp" />
+    <ClCompile Include="win\dlgs\selectPredefined.cpp" />
+    <ClCompile Include="win\dlgs\typeSelector.cpp" />
     <ClCompile Include="win\dlgs\userList.cpp" />
     <ClCompile Include="win\dlgs\userItem.cpp" />
     <ClCompile Include="win\editor\gridEditor\gridCellEditor.cpp" />
@@ -322,10 +384,7 @@
     <ClCompile Include="win\editor\textEditor\textEditor.cpp" />
     <ClCompile Include="win\editor\textEditor\textEditorPrintOut.cpp" />
     <ClCompile Include="win\editor\codeEditor\codeEditor.cpp" />
-    <ClCompile Include="win\editor\codeEditor\codeEditorInterpreter.cpp" />
-    <ClCompile Include="win\editor\codeEditor\codeEditorInterpreterContext.cpp" />
     <ClCompile Include="win\editor\codeEditor\codeEditorLoader.cpp" />
-    <ClCompile Include="win\editor\codeEditor\codeEditorParser.cpp" />
     <ClCompile Include="win\editor\codeEditor\codeEditorPrintOut.cpp" />
     <ClCompile Include="win\editor\codeEditor\components\autoComplete.cpp" />
     <ClCompile Include="win\editor\codeEditor\components\callTip.cpp" />
@@ -334,24 +393,143 @@
     <ClCompile Include="win\editor\codeEditor\components\helpers\popupWnd.cpp" />
     <ClCompile Include="win\dlgs\functionSearcher\functionSearcher.cpp" />
     <ClCompile Include="win\dlgs\lineInput\lineInput.cpp" />
+    <ClCompile Include="win\dlgs\translateConstructor\translateConstructor.cpp" />
+    <ClCompile Include="win\dlgs\formatConstructor\formatConstructor.cpp" />
+    <ClCompile Include="win\dlgs\linqConstructor\linqConstructor.cpp" />
     <ClCompile Include="win\theme\luna_dockart.cpp" />
     <ClCompile Include="win\theme\luna_tabart.cpp" />
     <ClCompile Include="win\theme\luna_toolbarart.cpp" />
+    <ClCompile Include="uikit\theme.cpp">
+      <ObjectFileName>$(IntDir)uikit_theme.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\inputConsumer.cpp">
+      <ObjectFileName>$(IntDir)uikit_inputConsumer.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\inputHandler.cpp">
+      <ObjectFileName>$(IntDir)uikit_inputHandler.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\controlRenderer.cpp">
+      <ObjectFileName>$(IntDir)uikit_controlRenderer.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\window.cpp">
+      <ObjectFileName>$(IntDir)uikit_window.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\theme\themeRenderer.cpp">
+      <ObjectFileName>$(IntDir)uikit_themeRenderer.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\theme\lunaTheme.cpp">
+      <ObjectFileName>$(IntDir)uikit_lunaTheme.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\control.cpp">
+      <ObjectFileName>$(IntDir)uikit_control.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\scrollBar.cpp">
+      <ObjectFileName>$(IntDir)uikit_scrollBar.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\scrollArrow.cpp">
+      <ObjectFileName>$(IntDir)uikit_scrollArrow.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\scrollThumb.cpp">
+      <ObjectFileName>$(IntDir)uikit_scrollThumb.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\anyButton.cpp">
+      <ObjectFileName>$(IntDir)uikit_anyButton.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\button.cpp">
+      <ObjectFileName>$(IntDir)uikit_button.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\staticText.cpp">
+      <ObjectFileName>$(IntDir)uikit_staticText.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\staticLine.cpp">
+      <ObjectFileName>$(IntDir)uikit_staticLine.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\checkBox.cpp">
+      <ObjectFileName>$(IntDir)uikit_checkBox.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\radioButton.cpp">
+      <ObjectFileName>$(IntDir)uikit_radioButton.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\gauge.cpp">
+      <ObjectFileName>$(IntDir)uikit_gauge.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\toggleButton.cpp">
+      <ObjectFileName>$(IntDir)uikit_toggleButton.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\textCtrl.cpp">
+      <ObjectFileName>$(IntDir)uikit_textCtrl.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\listBox.cpp">
+      <ObjectFileName>$(IntDir)uikit_listBox.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\choice.cpp">
+      <ObjectFileName>$(IntDir)uikit_choice.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\notebook.cpp">
+      <ObjectFileName>$(IntDir)uikit_notebook.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\toolBar.cpp">
+      <ObjectFileName>$(IntDir)uikit_toolBar.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\comboBox.cpp">
+      <ObjectFileName>$(IntDir)uikit_comboBox.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\spinButton.cpp">
+      <ObjectFileName>$(IntDir)uikit_spinButton.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\slider.cpp">
+      <ObjectFileName>$(IntDir)uikit_slider.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\menu.cpp">
+      <ObjectFileName>$(IntDir)uikit_menu.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\staticBox.cpp">
+      <ObjectFileName>$(IntDir)uikit_staticBox.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\staticBitmap.cpp">
+      <ObjectFileName>$(IntDir)uikit_staticBitmap.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\bmpButton.cpp">
+      <ObjectFileName>$(IntDir)uikit_bmpButton.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\checkListBox.cpp">
+      <ObjectFileName>$(IntDir)uikit_checkListBox.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\radioBox.cpp">
+      <ObjectFileName>$(IntDir)uikit_radioBox.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\treeCtrl.cpp">
+      <ObjectFileName>$(IntDir)uikit_treeCtrl.obj</ObjectFileName>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="artProvider\artProvider.h" />
     <ClInclude Include="artProvider\private\picturePredefined.h" />
+    <ClInclude Include="artProvider\splash\splashLogo.h" />
     <ClInclude Include="docView\docManager.h" />
     <ClInclude Include="docView\docView.h" />
+    <ClInclude Include="docView\print\printPreview.h" />
+    <ClInclude Include="docView\templates\docViewAuditLog.h" />
+    <ClInclude Include="docView\templates\docViewHomePage.h" />
     <ClInclude Include="docView\templates\docViewHelp.h" />
     <ClInclude Include="docView\templates\docViewSpreadsheet.h" />
     <ClInclude Include="docView\templates\docViewText.h" />
+    <ClInclude Include="diagnostics\oesApp.h" />
+    <ClInclude Include="diagnostics\oesConsole.h" />
     <ClInclude Include="frontend.h" />
+    <ClInclude Include="syntaxHelper\helpChooserDialog.h" />
+    <ClInclude Include="syntaxHelper\helpDetailView.h" />
+    <ClInclude Include="syntaxHelper\helpDragSource.h" />
+    <ClInclude Include="syntaxHelper\helpIndexView.h" />
+    <ClInclude Include="syntaxHelper\helpPaneView.h" />
+    <ClInclude Include="syntaxHelper\helpSearchView.h" />
+    <ClInclude Include="syntaxHelper\helpTreeView.h" />
     <ClInclude Include="mainFrame\mainFrame.h" />
     <ClInclude Include="mainFrame\mainFrameChild.h" />
     <ClInclude Include="mainFrame\objinspect\objinspect.h" />
     <ClInclude Include="mainFrame\settings\editorsettings.h" />
     <ClInclude Include="mainFrame\settings\editorsettingspanel.h" />
+    <ClInclude Include="mainFrame\settings\mcpsettingspanel.h" />
     <ClInclude Include="mainFrame\settings\fontcolorsettings.h" />
     <ClInclude Include="mainFrame\settings\fontcolorsettingspanel.h" />
     <ClInclude Include="mainFrame\settings\keybinder.h" />
@@ -363,37 +541,38 @@
     <ClInclude Include="mainFrame\settings\stlutility.h" />
     <ClInclude Include="mainFrame\settings\xmlutility.h" />
     <ClInclude Include="propertyManager\propertyEditor.h" />
-    <ClInclude Include="propertyManager\property\advprop\advpropBoolean.h" />
-    <ClInclude Include="propertyManager\property\advprop\advpropColour.h" />
-    <ClInclude Include="propertyManager\property\advprop\advpropDate.h" />
-    <ClInclude Include="propertyManager\property\advprop\advpropEnum.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropEvent.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropEventTool.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropFont.h" />
-    <ClInclude Include="propertyManager\property\advprop\advpropForm.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropGeneration.h" />
+    <ClInclude Include="propertyManager\property\advprop\advpropDataComposition.h" />
+    <ClInclude Include="propertyManager\property\advprop\advpropSchedule.h" />
+    <ClInclude Include="propertyManager\property\advprop\advpropDynamicSource.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropHyperLink.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropList.h" />
-    <ClInclude Include="propertyManager\property\advprop\advpropModule.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropNumber.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropOwner.h" />
-    <ClInclude Include="propertyManager\property\advprop\advpropChartOfCharacteristicTypes.h" />
-    <ClInclude Include="propertyManager\property\advprop\advpropChartOfAccounts.h" />
+    <ClInclude Include="propertyManager\property\advprop\advpropChartBinding.h" />
+    <ClInclude Include="propertyManager\property\advprop\advpropCalcSchedule.h" />
+    <ClInclude Include="propertyManager\property\advprop\advpropChoiceLink.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropPicture.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropPoint.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropRecord.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropSize.h" />
+    <ClInclude Include="propertyManager\property\advprop\advpropCommandSource.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropSource.h" />
-    <ClInclude Include="propertyManager\property\advprop\advpropSpreadsheet.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropString.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropType.h" />
     <ClInclude Include="propertyManager\property\private\prop.h" />
+    <ClInclude Include="propertyManager\property\private\propertyRegistry.h" />
     <ClInclude Include="res\resource.h" />
     <ClInclude Include="visualView\controlCtor.h" />
     <ClInclude Include="visualView\controlEnum.h" />
     <ClInclude Include="visualView\ctrl\chartBox.h" />
     <ClInclude Include="visualView\ctrl\control.h" />
     <ClInclude Include="visualView\ctrl\form.h" />
+    <ClInclude Include="visualView\ctrl\formAttribute.h" />
+    <ClInclude Include="visualView\ctrl\formCommand.h" />
     <ClInclude Include="visualView\ctrl\frame.h" />
     <ClInclude Include="visualView\ctrl\gridBox.h" />
     <ClInclude Include="visualView\ctrl\htmlBox.h" />
@@ -402,6 +581,10 @@
     <ClInclude Include="visualView\ctrl\tableBox.h" />
     <ClInclude Include="visualView\ctrl\tableBoxColumnRenderer.h" />
     <ClInclude Include="visualView\ctrl\textBox.h" />
+    <ClInclude Include="visualView\layers\commandBar.h" />
+    <ClInclude Include="visualView\layers\commandReceiver.h" />
+    <ClInclude Include="visualView\layerObject.h" />
+    <ClInclude Include="visualView\canvasWindow.h" />
     <ClInclude Include="visualView\ctrl\toolBar.h" />
     <ClInclude Include="visualView\ctrl\typeControl.h" />
     <ClInclude Include="visualView\ctrl\widgets.h" />
@@ -539,11 +722,14 @@
     <ClInclude Include="win\ctrls\controlButton.h" />
     <ClInclude Include="win\ctrls\controlCheckboxEditor.h" />
     <ClInclude Include="win\ctrls\controlStaticText.h" />
+    <ClInclude Include="win\ctrls\controlStaticTextValue.h" />
     <ClInclude Include="win\ctrls\controlTextEditor.h" />
     <ClInclude Include="win\ctrls\dataview\headerctrlg.h" />
     <ClInclude Include="win\ctrls\tableView.h" />
     <ClInclude Include="win\ctrls\dataview\datavgen.h" />
+    <ClInclude Include="win\ctrls\dataview\datavlayout.h" />
     <ClInclude Include="win\ctrls\dataview\dataview.h" />
+    <ClInclude Include="win\ctrls\dataview\dataviewEditOnActivate.h" />
     <ClInclude Include="win\ctrls\dataview\dvrenderers.h" />
     <ClInclude Include="win\ctrls\dynamicBorder.h" />
     <ClInclude Include="win\ctrls\floatingNotebook.h" />
@@ -557,6 +743,36 @@
     <ClInclude Include="win\dlgs\about.h" />
     <ClInclude Include="win\dlgs\activeUser.h" />
     <ClInclude Include="win\dlgs\applyChange.h" />
+    <ClInclude Include="win\dlgs\settings\composer\composerSettings.h" />
+    <ClInclude Include="win\dlgs\settings\filterTreeModel.h" />
+    <ClInclude Include="win\dlgs\settings\list\listSettings.h" />
+    <ClInclude Include="win\dlgs\settings\settingsFieldTree.h" />
+    <ClInclude Include="settings\formSettings.h" />
+    <ClInclude Include="win\dlgs\settings\savedSettings.h" />
+    <ClInclude Include="win\dlgs\settings\settingsFilterEditor.h" />
+    <ClInclude Include="win\dlgs\settings\settingsSortEditor.h" />
+    <ClInclude Include="win\dlgs\settings\settingsAppearanceEditor.h" />
+    <ClInclude Include="win\dlgs\settings\settingsOutputParametersEditor.h" />
+    <ClInclude Include="win\dlgs\settings\settingsConditionalAppearanceEditor.h" />
+    <ClInclude Include="win\dlgs\settings\settingsStyle.h" />
+    <ClInclude Include="win\dlgs\queryConstructor\queryConstructor.h" />
+    <ClInclude Include="win\dlgs\queryConstructor\queryJoinDiagram.h" />
+    <ClInclude Include="win\dlgs\queryConstructor\queryLinkModel.h" />
+    <ClInclude Include="win\dlgs\queryConstructor\querySelectionLinkModel.h" />
+    <ClInclude Include="win\dlgs\queryConstructor\queryConditionModel.h" />
+    <ClInclude Include="win\dlgs\queryConstructor\queryUnionModel.h" />
+    <ClInclude Include="win\dlgs\queryConstructor\queryGridModel.h" />
+    <ClInclude Include="win\dlgs\queryConstructor\queryFieldTree.h" />
+    <ClInclude Include="win\dlgs\queryConstructor\queryConstructorInternal.h" />
+    <ClInclude Include="win\dlgs\callbackDropTarget.h" />
+    <ClInclude Include="win\dlgs\rowValueCell.h" />
+    <ClInclude Include="win\dlgs\textWithDotsCell.h" />
+    <ClInclude Include="win\dlgs\queryConstructor\queryExpressionDialog.h" />
+    <ClInclude Include="win\dlgs\queryConstructor\queryCaseDialog.h" />
+    <ClInclude Include="win\dlgs\queryConstructor\queryTempTableDialog.h" />
+    <ClInclude Include="win\dlgs\choiceLink\choiceLink.h" />
+    <ClInclude Include="win\dlgs\choiceParameters\choiceParameters.h" />
+    <ClInclude Include="win\dlgs\jobSchedule\jobScheduleSettings.h" />
     <ClInclude Include="session\guiSession.h" />
     <ClInclude Include="session\workerPoolGUI.h" />
     <ClInclude Include="win\dlgs\authorization.h" />
@@ -570,6 +786,8 @@
     <ClInclude Include="win\dlgs\generation.h" />
     <ClInclude Include="win\dlgs\rowHeight.h" />
     <ClInclude Include="win\dlgs\selectData.h" />
+    <ClInclude Include="win\dlgs\selectPredefined.h" />
+    <ClInclude Include="win\dlgs\typeSelector.h" />
     <ClInclude Include="win\dlgs\userList.h" />
     <ClInclude Include="win\dlgs\userItem.h" />
     <ClInclude Include="win\editor\gridEditor\gridEditor.h" />
@@ -577,8 +795,6 @@
     <ClInclude Include="win\editor\textEditor\textEditor.h" />
     <ClInclude Include="win\editor\textEditor\textEditorPrintOut.h" />
     <ClInclude Include="win\editor\codeEditor\codeEditor.h" />
-    <ClInclude Include="win\editor\codeEditor\codeEditorInterpreter.h" />
-    <ClInclude Include="win\editor\codeEditor\codeEditorParser.h" />
     <ClInclude Include="win\editor\codeEditor\codeEditorPrintOut.h" />
     <ClInclude Include="win\editor\codeEditor\components\autoComplete.h" />
     <ClInclude Include="win\editor\codeEditor\components\callTip.h" />
@@ -589,19 +805,12 @@
     <ClInclude Include="win\editor\codeEditor\res\bitmaps_res.h" />
     <ClInclude Include="win\dlgs\functionSearcher\functionSearcher.h" />
     <ClInclude Include="win\dlgs\lineInput\lineInput.h" />
+    <ClInclude Include="win\dlgs\translateConstructor\translateConstructor.h" />
+    <ClInclude Include="win\dlgs\formatConstructor\formatConstructor.h" />
+    <ClInclude Include="win\dlgs\linqConstructor\linqConstructor.h" />
     <ClInclude Include="win\theme\luna_dockart.h" />
     <ClInclude Include="win\theme\luna_tabart.h" />
     <ClInclude Include="win\theme\luna_toolbarart.h" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="win\ctrls\res\checked2.xpm" />
-    <None Include="win\ctrls\res\checked_d.xpm" />
-    <None Include="win\ctrls\res\checked_ld.xpm" />
-    <None Include="win\ctrls\res\checked_mo.xpm" />
-    <None Include="win\ctrls\res\unchecked2.xpm" />
-    <None Include="win\ctrls\res\unchecked_d.xpm" />
-    <None Include="win\ctrls\res\unchecked_ld.xpm" />
-    <None Include="win\ctrls\res\unchecked_mo.xpm" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="res\frontend.rc" />
@@ -673,7 +882,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" />
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
-      <WarningLevel>Level3</WarningLevel>
+      <WarningLevel>Level4</WarningLevel>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;_UNICODE;WXUSINGDLL;_CONSOLE;%(PreprocessorDefinitions);FRONTEND_EXPORTS</PreprocessorDefinitions>
       <ConformanceMode>false</ConformanceMode>
@@ -692,7 +901,7 @@
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
-      <WarningLevel>Level3</WarningLevel>
+      <WarningLevel>Level4</WarningLevel>
       <Optimization>Disabled</Optimization>
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;_UNICODE;WXUSINGDLL;_CONSOLE;%(PreprocessorDefinitions);FRONTEND_EXPORTS</PreprocessorDefinitions>
@@ -716,7 +925,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;NDEBUG;_UNICODE;WXUSINGDLL;_CONSOLE;FRONTEND_EXPORTS</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;NDEBUG;_UNICODE;WXUSINGDLL;_CONSOLE;%(PreprocessorDefinitions);FRONTEND_EXPORTS</PreprocessorDefinitions>
       <ConformanceMode>false</ConformanceMode>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll\mswu;$(oes3rdParty)wxWidgets\include;$(oesEngine);.;$(oesEngine)\core;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
@@ -742,7 +951,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;NDEBUG;_UNICODE;WXUSINGDLL;_CONSOLE;FRONTEND_EXPORTS</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;NDEBUG;_UNICODE;WXUSINGDLL;_CONSOLE;%(PreprocessorDefinitions);FRONTEND_EXPORTS</PreprocessorDefinitions>
       <ConformanceMode>false</ConformanceMode>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll\mswu;$(oes3rdParty)wxWidgets\include;$(oesEngine);.;$(oesEngine)/core;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
@@ -764,4 +973,43 @@
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
+  <ItemGroup>
+    <ClInclude Include="uikit\colourScheme.h" />
+    <ClInclude Include="uikit\inputConsumer.h" />
+    <ClInclude Include="uikit\inputHandler.h" />
+    <ClInclude Include="uikit\menu.h" />
+    <ClInclude Include="uikit\menuItem.h" />
+    <ClInclude Include="uikit\renderer.h" />
+    <ClInclude Include="uikit\scrollTimer.h" />
+    <ClInclude Include="uikit\theme.h" />
+    <ClInclude Include="uikit\uikit.h" />
+    <ClInclude Include="uikit\window.h" />
+    <ClInclude Include="uikit\theme\themeRenderer.h" />
+    <ClInclude Include="uikit\ctrl\anyButton.h" />
+    <ClInclude Include="uikit\ctrl\bmpButton.h" />
+    <ClInclude Include="uikit\ctrl\button.h" />
+    <ClInclude Include="uikit\ctrl\checkBox.h" />
+    <ClInclude Include="uikit\ctrl\checkListBox.h" />
+    <ClInclude Include="uikit\ctrl\choice.h" />
+    <ClInclude Include="uikit\ctrl\comboBox.h" />
+    <ClInclude Include="uikit\ctrl\control.h" />
+    <ClInclude Include="uikit\ctrl\gauge.h" />
+    <ClInclude Include="uikit\ctrl\listBox.h" />
+    <ClInclude Include="uikit\ctrl\notebook.h" />
+    <ClInclude Include="uikit\ctrl\radioBox.h" />
+    <ClInclude Include="uikit\ctrl\radioButton.h" />
+    <ClInclude Include="uikit\ctrl\scrollArrow.h" />
+    <ClInclude Include="uikit\ctrl\scrollBar.h" />
+    <ClInclude Include="uikit\ctrl\scrollThumb.h" />
+    <ClInclude Include="uikit\ctrl\slider.h" />
+    <ClInclude Include="uikit\ctrl\spinButton.h" />
+    <ClInclude Include="uikit\ctrl\staticBitmap.h" />
+    <ClInclude Include="uikit\ctrl\staticBox.h" />
+    <ClInclude Include="uikit\ctrl\staticLine.h" />
+    <ClInclude Include="uikit\ctrl\staticText.h" />
+    <ClInclude Include="uikit\ctrl\textCtrl.h" />
+    <ClInclude Include="uikit\ctrl\toggleButton.h" />
+    <ClInclude Include="uikit\ctrl\toolBar.h" />
+    <ClInclude Include="uikit\ctrl\treeCtrl.h" />
+  </ItemGroup>
 </Project>

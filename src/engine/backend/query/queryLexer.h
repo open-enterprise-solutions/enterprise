@@ -1,0 +1,101 @@
+#ifndef __QUERY_LEXER_H__
+#define __QUERY_LEXER_H__
+
+// L4-1 — text query language lexer.
+//
+// REUSES ibTranslateCode's UTF-8-aware character primitives (SkipSpaces /
+// GetWord / GetNumber / GetString / GetDate / GetByte) — "a tokenizer on the OES
+// lexer idioms" — but classifies words against the QUERY keyword table
+// (queryKeywords.h), not the script one. Because the primitives are already
+// UTF-8 / Unicode aware, Cyrillic metaobject / attribute identifiers
+// (Goods, Warehouse) tokenize for free.
+//
+// On a malformed literal the primitives signal through SetError -> DoSetError
+// (whose base body is a no-op the script path overrides); we override DoSetError
+// to THROW ibBackendCoreException with line / position, so a lex error aborts
+// loudly. Throw-by-value, catch-by-const-ref.
+//
+// See docs/private/query-language-arc.md §14 / §23.
+
+#include "backend/compiler/translateCode.h"   // ibTranslateCode (char primitives) + ibValue
+#include "queryKeywords.h"
+
+#include <vector>
+
+// What a token IS. (Op = a comparison / arithmetic operator carrying its text;
+// Punct = a structural delimiter — comma / paren / dot / star.)
+enum class ibQueryTokenKind
+{
+	Keyword, Ident, Number, String, Date, Param, Op, Punct, End
+};
+
+// One lexer token. Identifiers carry their ORIGINAL case in m_text (metaobject /
+// attribute name resolution is case-insensitive but the original is preserved);
+// literals carry a ready ibValue in m_literal.
+struct ibQueryToken
+{
+	ibQueryTokenKind m_kind    = ibQueryTokenKind::End;
+	ibQueryKeyword   m_keyword = ibQueryKeyword::None;   // kind == Keyword
+	wxString         m_text;        // Ident / Param name (original case); Op / Punct text
+	ibValue          m_literal;     // Number / String / Date constant
+	unsigned int     m_line    = 0; // 1-based source line (diagnostics)
+	unsigned int     m_col     = 0; // character offset of the token start (diagnostics)
+
+	bool IsKeyword(ibQueryKeyword kw) const {
+		return m_kind == ibQueryTokenKind::Keyword && m_keyword == kw;
+	}
+	bool IsPunct(wxChar c) const {
+		return m_kind == ibQueryTokenKind::Punct && m_text.length() == 1 && m_text[0] == c;
+	}
+	bool IsOp(const wxChar* op) const {
+		return m_kind == ibQueryTokenKind::Op && m_text == op;
+	}
+	bool IsEnd() const { return m_kind == ibQueryTokenKind::End; }
+};
+
+class BACKEND_API ibQueryLexer : protected ibTranslateCode
+{
+public:
+	ibQueryLexer() = default;
+
+	// Tokenize the whole query text into a token vector terminated by one
+	// End token. Throws ibBackendCoreException (line / position) on a lex error.
+	std::vector<ibQueryToken> Tokenize(const wxString& queryText);
+
+	// IS THIS A NAME THE LANGUAGE CAN CARRY? Asked of the LEXER, because what an identifier is is
+	// the lexer's definition and nobody else's — a second set of rules written in a dialog would
+	// disagree with it the day either changed, and the disagreement would surface as a query the
+	// constructor accepted and the engine then refused.
+	//
+	// True only for text that lexes as EXACTLY ONE identifier: no spaces, no punctuation, not a
+	// keyword, not empty. This is what every place that accepts a NAME asks — a projection alias, a
+	// table alias, a totals level's name, a temporary table's name.
+	static bool IsIdentifier(const wxString& text);
+
+	// WHICH &PARAMETERS THIS TEXT MENTIONS, in first-appearance order and without repeats.
+	//
+	// Asked of the LEXER for the same reason IsIdentifier is: what a parameter looks like is the
+	// lexer's definition, and a settings window scanning for ampersands itself would be a second
+	// set of rules that disagrees the day either changes. A host needs this BEFORE running
+	// anything — a parameters page has to show what to fill in, and the lowering only reports a
+	// missing parameter at execute time, which is far too late to ask a person for it.
+	//
+	// Text that does not lex (half-typed, being edited) yields an EMPTY list rather than throwing:
+	// a window asking "what would I need here" is not the place a syntax error is reported.
+	static std::vector<wxString> ParamNames(const wxString& queryText);
+
+protected:
+	// The base body is a no-op (the script compiler overrides it). We THROW so a
+	// malformed numeric / string / date literal does not silently return false.
+	void DoSetError(int codeError,
+		const wxString& strFileName, const wxString& strModuleName, const wxString& strDocPath,
+		unsigned int currPos, unsigned int currLine,
+		const wxString& errorDesc = wxEmptyString) const override;
+
+private:
+	// Immediate next char WITHOUT skipping whitespace — so multi-char operators
+	// (<=, >=, <>, !=) only glue when contiguous. 0 at end of buffer.
+	wxChar PeekRawByte() const;
+};
+
+#endif

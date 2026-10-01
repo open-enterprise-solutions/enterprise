@@ -1,4 +1,4 @@
-#include "controltextEditor.h"
+#include "controlTextEditor.h"
 
 #include <wx/dcbuffer.h>
 #include <wx/dcscreen.h>
@@ -371,6 +371,36 @@ void ibControlTextEditor::EnsureSlotMetrics() const
 	m_cachedSlotH = hFromFont > hMin ? hFromFont : hMin;
 }
 
+int ibControlTextEditor::ComputeMinUsableWidth() const
+{
+	int labelW = 0;
+	if (!m_dvcMode) {
+		wxSize label = ComputeLabelBestSize();
+		if (m_labelMinSize.x > 0) label.x = m_labelMinSize.x;
+		labelW = label.x;
+	}
+	const int labelGap = labelW > 0 ? FromDIP(4) : 0;
+	// the frame's own two border pixels, the visible buttons, and a text area of a few characters
+	return labelW + labelGap + 2 + VisibleButtonCount() * BtnSlotWidth() + FromDIP(kMinimumTextWidth);
+}
+
+wxSize ibControlTextEditor::GetMinSize() const
+{
+	wxSize size = wxWindow::GetMinSize();
+	if (size.x > 0)
+		size.x = std::max(size.x, ComputeMinUsableWidth());
+	return size;
+}
+
+wxSize ibControlTextEditor::GetMaxSize() const
+{
+	// the same floor: a maximum below the minimum would undo it
+	wxSize size = wxWindow::GetMaxSize();
+	if (size.x > 0)
+		size.x = std::max(size.x, ComputeMinUsableWidth());
+	return size;
+}
+
 wxSize ibControlTextEditor::DoGetBestClientSize() const
 {
 	wxSize size = m_text != nullptr ? m_text->GetBestSize() : wxSize(0, 0);
@@ -571,15 +601,19 @@ void ibControlTextEditor::DrawButton(wxDC& dc, const ButtonSlot& b)
 	if (!b.visible || b.rect.IsEmpty())
 		return;
 
+	// A button reads enabled only when the CONTROL is enabled AND the slot itself is — a per-button disabled
+	// slot (Select / Clear on a read-only binding) greys out just like the whole-control disabled state.
+	const bool on = m_enabledIntent && b.enabled;
+
 	// flat embedded style: no bevel, just a subtle fill on hover/pressed so the
 	// buttons read as inline affordances inside the text field, not standalone
 	// push buttons.
-	const wxColour base = m_enabledIntent
+	const wxColour base = on
 		? wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW)
 		: wxSystemSettings::GetColour(wxSYS_COLOUR_BTNFACE);
 
 	wxColour fill = base;
-	if (m_enabledIntent) {
+	if (on) {
 		if (b.pressed && b.hovered) fill = base.ChangeLightness(85);
 		else if (b.hovered)         fill = base.ChangeLightness(93);
 	}
@@ -589,13 +623,13 @@ void ibControlTextEditor::DrawButton(wxDC& dc, const ButtonSlot& b)
 	dc.DrawRectangle(b.rect);
 
 	// thin vertical separator on the left of the button to visually group them
-	const wxColour sepCol = m_enabledIntent
+	const wxColour sepCol = on
 		? wxSystemSettings::GetColour(wxSYS_COLOUR_ACTIVEBORDER)
 		: wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT);
 	dc.SetPen(wxPen(sepCol));
 	dc.DrawLine(b.rect.x, b.rect.y + 2, b.rect.x, b.rect.y + b.rect.height - 2);
 
-	dc.SetTextForeground(m_enabledIntent
+	dc.SetTextForeground(on
 		? GetForegroundColour()
 		: wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
 
@@ -611,9 +645,10 @@ void ibControlTextEditor::DrawButton(wxDC& dc, const ButtonSlot& b)
 
 ibControlTextEditor::ButtonSlot* ibControlTextEditor::HitTestButton(const wxPoint& p)
 {
-	if (m_btnSelect.visible && m_btnSelect.rect.Contains(p)) return &m_btnSelect;
-	if (m_btnClear.visible  && m_btnClear.rect.Contains(p))  return &m_btnClear;
-	if (m_btnOpen.visible   && m_btnOpen.rect.Contains(p))   return &m_btnOpen;
+	// A disabled slot is inert — skip it so it takes no hover / press / click (greyed but dead).
+	if (m_btnSelect.visible && m_btnSelect.enabled && m_btnSelect.rect.Contains(p)) return &m_btnSelect;
+	if (m_btnClear.visible  && m_btnClear.enabled  && m_btnClear.rect.Contains(p))  return &m_btnClear;
+	if (m_btnOpen.visible   && m_btnOpen.enabled   && m_btnOpen.rect.Contains(p))   return &m_btnOpen;
 	return nullptr;
 }
 
@@ -672,6 +707,12 @@ void ibControlTextEditor::OnLeftUp(wxMouseEvent& event)
 	const wxPoint p = event.GetPosition();
 	ButtonSlot* hit = HitTestButton(p);
 
+	// Reset the pressed state synchronously (while `this` is alive), but DEFER
+	// firing the button command via QueueEvent. The handler (Select/Open) can
+	// open a modal dialog and rebuild the form, destroying this control;
+	// dispatching synchronously here and then touching `this` again (the next
+	// fire() calls, Refresh) is a use-after-free. Queueing runs the command
+	// after OnLeftUp has fully unwound and `this` is off the stack.
 	auto fire = [&](ButtonSlot& b) {
 		if (!b.pressed) return;
 		const bool clicked = (hit == &b);
@@ -682,7 +723,7 @@ void ibControlTextEditor::OnLeftUp(wxMouseEvent& event)
 			if (b.eventType != wxEVT_CONTROL_BUTTON_CLEAR && m_text != nullptr)
 				ev.SetString(GetValue());
 			if (m_text != nullptr) m_text->SetFocus();
-			GetEventHandler()->ProcessEvent(ev);
+			GetEventHandler()->QueueEvent(ev.Clone());
 		}
 	};
 	fire(m_btnSelect);

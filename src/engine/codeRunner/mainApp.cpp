@@ -7,12 +7,13 @@
 
 #include "backend/appData.h"
 
-bool ibAppCodeRunner::OnInit()
+bool ibAppCodeRunner::DoOnInit()
 {
 	if (m_codeRunner)
-		return false; 
+		return false;
 
-	ibApplicationData::CreateAppDataEnv(ibRunMode::eENTERPRISE_MODE);
+	// Crash plumbing is wired by ibWxApp::OnInit before this runs.
+	ibApplicationInstance::CreateAppDataEnv(ibRunMode::eRUNTIME_MODE);
 	m_codeRunner = new ibFrameCodeRunner(nullptr, wxID_ANY);
 
 	return wxApp::OnInit() && m_codeRunner->Show();
@@ -20,7 +21,7 @@ bool ibAppCodeRunner::OnInit()
 
 int ibAppCodeRunner::OnExit()
 {
-	ibApplicationData::DestroyAppDataEnv();
+	ibApplicationInstance::DestroyAppDataEnv();
 	return wxApp::OnExit();
 }
 
@@ -29,5 +30,9 @@ void ibAppCodeRunner::AppendOutput(const wxString& str)
 	if (m_codeRunner)
 		m_codeRunner->AppendOutput(str);
 }
+
+#include "backend/diagnostics/leakTracker.h"
+
+IB_LEAK_TRACKER_ARM();
 
 wxIMPLEMENT_APP(ibAppCodeRunner);

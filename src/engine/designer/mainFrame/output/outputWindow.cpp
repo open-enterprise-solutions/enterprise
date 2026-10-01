@@ -5,6 +5,7 @@
 
 #include "outputWindow.h"
 #include "frontend/mainFrame/settings/fontcolorsettings.h"
+#include "frontend/artProvider/artProvider.h"
 
 /** Enumeration of commands and child windows. */
 enum
@@ -32,7 +33,7 @@ wxEND_EVENT_TABLE()
 
 #include "mainFrame/mainFrameDesigner.h"
 
-ibOutputWindow::ibOutputWindow(ibFrontendDocMDIFrame* parent, wxWindowID winid)
+ibOutputWindow::ibOutputWindow(ibFrontendMainFrame* parent, wxWindowID winid)
 	: wxStyledTextCtrl(parent, winid, wxDefaultPosition, wxDefaultSize)
 {
 	// initialize styles
@@ -45,9 +46,11 @@ ibOutputWindow::ibOutputWindow(ibFrontendDocMDIFrame* parent, wxWindowID winid)
 	for (int margin = 0; margin < GetMarginCount(); margin++)
 		SetMarginCursor(margin, wxSTC_CURSORARROW);
 
-	MarkerDefine(ibStatusMessage_Information, wxSTC_MARK_SHORTARROW, *wxWHITE, *wxBLACK);
-	MarkerDefine(ibStatusMessage_Warning, wxSTC_MARK_SHORTARROW, *wxWHITE, *wxYELLOW);
-	MarkerDefine(ibStatusMessage_Error, wxSTC_MARK_SHORTARROW, *wxWHITE, *wxRED);
+	// The level of a message is the picture in the margin - the provider's (artProvider/service/output*.svg).
+	const wxSize markerSize = FromDIP(wxSize(12, 12));
+	MarkerDefineBitmap(ibStatusMessage_Information, wxArtProvider::GetBitmap(wxART_OUTPUT_INFORMATION, wxART_SERVICE, markerSize));
+	MarkerDefineBitmap(ibStatusMessage_Warning, wxArtProvider::GetBitmap(wxART_OUTPUT_WARNING, wxART_SERVICE, markerSize));
+	MarkerDefineBitmap(ibStatusMessage_Error, wxArtProvider::GetBitmap(wxART_OUTPUT_ERROR, wxART_SERVICE, markerSize));
 
 	wxAcceleratorEntry entries[2];
 	entries[0].Set(wxACCEL_CTRL, (int)'A', idcmdSelectAll);
@@ -64,7 +67,7 @@ ibOutputWindow::ibOutputWindow(ibFrontendDocMDIFrame* parent, wxWindowID winid)
 
 ibOutputWindow* ibOutputWindow::GetOutputWindow()
 {
-	if (ibFrontendDocMDIFrameDesigner::GetFrame())
+	if (ibFrontendMainFrameDesigner::GetFrame())
 		return mainFrame->GetOutputWindow();
 	return nullptr; 
 }
@@ -132,6 +135,18 @@ void ibOutputWindow::SharedOutput(const wxString& strMessage, ibStatusMessage st
 	const wxString& strFileName, const wxString& strDocPath,
 	int currLine)
 {
+	// ⭐⭐ SHOWN AND RECORDED IN ONE PLACE — because they are one act.
+	//
+	// Every caller used to spell both: `ibDesignerMessages::Report({…})` and then the output call,
+	// side by side, four times over in the designer's frame. Two roads to one event means each new
+	// message site has to remember both, and the half that gets forgotten fails quietly — a message
+	// on the pane that no listener ever hears, or a message delivered to a listener that the person
+	// in front of the screen never sees.
+	//
+	// It belongs HERE because this is the narrow point every visible message already passes through
+	// (OutputError delegates to it, so nothing is recorded twice).
+	ibDesignerMessages::Report({ strMessage, status, strDocPath, currLine, false });
+
 	int beforeAppendPosition = GetInsertionPoint();
 	int beforeAppendLastPosition = GetLastPosition();
 
@@ -185,7 +200,7 @@ int ibOutputWindow::GetCurrentLine() const
 	return y;
 }
 
-#include "frontend/docView/docManager.h"
+#include "frontend/docView/docView.h"
 #include "backend/metadataConfiguration.h"
 
 void ibOutputWindow::OnDoubleClick(wxMouseEvent& event)
@@ -199,30 +214,26 @@ void ibOutputWindow::OnDoubleClick(wxMouseEvent& event)
 
 			auto code = pair.second;
 
+			// ⭐ A LINE IN THE OUTPUT NAMES A MODULE and the container it belongs to. Which tree
+			// shows that container is the DOCUMENT's answer for a file, and the main form's
+			// navigator for the open configuration; the tree does the rest.
+			//
+			// 🛑 IT USED TO GO `metaData->GetMetaTree()` — the engine handing a viewer back to the
+			// UI that asked for it. That door is gone.
 			if (code.m_fileName.IsEmpty()) {
-				ibBackendMetadataTree* metaTree = activeMetaData->GetMetaTree();
-				wxASSERT(metaTree);
-				metaTree->EditModule(code.m_docPath, code.m_currLine, false);
+				if (mainFrame != nullptr && mainFrame->GetMetaWindow() != nullptr)
+					mainFrame->GetMetaWindow()->EditModule(code.m_docPath, code.m_currLine, false);
 			}
+			else if (docManager != nullptr) {
+				ibDocument* fileDoc = docManager->FindDocumentByPath(code.m_fileName);
+				// The error names a place, so the place has to be reachable even if nobody had that
+				// file open.
+				if (fileDoc == nullptr)
+					fileDoc = docManager->CreateDocument(code.m_fileName, ibDOC_SILENT);
 
-			if (!code.m_fileName.IsEmpty()) {
-				ibMetaDataDocument* foundedDoc = dynamic_cast<ibMetaDataDocument*>(
-					docManager->FindDocumentByPath(code.m_fileName)
-					);
-
-				if (foundedDoc == nullptr) {
-					foundedDoc = dynamic_cast<ibMetaDataDocument*>(
-						docManager->CreateDocument(code.m_fileName, wxDOC_SILENT)
-						);
-				}
-
-				if (foundedDoc != nullptr) {
-					ibMetaData* metadata = foundedDoc->GetMetaData();
-					wxASSERT(metadata);
-					ibBackendMetadataTree* metaTree = metadata->GetMetaTree();
-					wxASSERT(metaTree);
-					metaTree->EditModule(code.m_docPath, code.m_currLine, false);
-				}
+				if (const ibMetaDataDocument* metaDoc = dynamic_cast<ibMetaDataDocument*>(fileDoc))
+					if (ibMetaTreeAbstract* metaTree = metaDoc->GetMetaTree())
+						metaTree->EditModule(code.m_docPath, code.m_currLine, false);
 			}
 			break;
 		}
@@ -245,24 +256,33 @@ void ibOutputWindow::OnContextMenu(wxContextMenuEvent& event)
 		pt = this->PointFromPosition(this->GetCurrentPos());
 	}
 
-	wxMenu* popupMenu = new wxMenu;
+	// On the stack — PopupMenu does not take ownership and blocks until dismissed.
+	wxMenu popupMenu;
 
-	wxMenuItem* menuItemCopy = popupMenu->Append(idcmdCopy, _("Copy"));
+	wxMenuItem* menuItemCopy = popupMenu.Append(idcmdCopy, _("Copy"));
 	menuItemCopy->Enable(wxStyledTextCtrl::CanCopy());
-	wxMenuItem* menuItemClear = popupMenu->Append(idcmdClear, _("Clear"));
+	wxMenuItem* menuItemClear = popupMenu.Append(idcmdClear, _("Clear"));
 
-	wxStyledTextCtrl::PopupMenu(popupMenu, pt);
+	wxStyledTextCtrl::PopupMenu(&popupMenu, pt);
 	//event.Skip();
 }
 
-void ibOutputWindow::OnClearOutput(wxCommandEvent& event)
+void ibOutputWindow::ClearOutput()
 {
+	// The record goes with the pane — see the note in the header. Whoever clears what is shown means
+	// the messages, not the pixels.
+	ibDesignerMessages::Clear();
+
 	m_listCodeInfo.clear();
 
 	SetEditable(true);
 	wxStyledTextCtrl::ClearAll();
 	SetEditable(false);
+}
 
+void ibOutputWindow::OnClearOutput(wxCommandEvent& event)
+{
+	ClearOutput();
 	event.Skip();
 }
 

@@ -1,4 +1,4 @@
-#include "toolbar.h"
+#include "toolBar.h"
 #include "form.h"
 
 // Populates the designer's property-grid drop-down with candidate

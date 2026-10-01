@@ -6,7 +6,8 @@
 // nullptr or zero — these tests don't exercise the SQL layer.
 // =============================================================================
 
-#pragma once
+#ifndef __MOCK_DATABASE_LAYER_H__
+#define __MOCK_DATABASE_LAYER_H__
 
 #include "backend/databaseLayer/databaseLayer.h"
 
@@ -18,6 +19,7 @@ public:
     bool Open(const wxString&) override { m_open = true; return true; }
     bool Close() override                { m_open = false; return true; }
     bool IsOpen() override               { return m_open; }
+    void Cancel() override               {}   // no DBMS to tell
     ibDatabaseLayer* Clone() override    { auto* c = new MockDatabaseLayer(); c->m_open = true; return c; }
 
     bool TableExists(const wxString&) override { return false; }
@@ -26,6 +28,10 @@ public:
     wxArrayString GetViews() override                       { return {}; }
     wxArrayString GetColumns(const wxString&) override      { return {}; }
     int  GetDatabaseLayerType() const override              { return 0; }
+    const ibDialectDictionary& GetDialect() const override {
+        static const ibDialectDictionary s_dialect;   // default ctor = ANSI baseline
+        return s_dialect;
+    }
 
     int                  DoRunQuery(const wxString&, bool) override            { return 0; }
     ibDatabaseResultSet* DoRunQueryWithResults(const wxString&) override       { return nullptr; }
@@ -37,3 +43,5 @@ public:
 private:
     bool m_open = true;
 };
+
+#endif

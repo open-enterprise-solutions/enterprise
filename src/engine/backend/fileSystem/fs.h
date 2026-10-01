@@ -9,6 +9,8 @@
 #include "backend/backend.h"
 #include "backend/fileSystem/types.h"
 
+class ibString;   // backend/fstring.h — r_stringZ(ibString&) overload
+
 //------------------------------------------------------------------------------------
 // Write
 //------------------------------------------------------------------------------------
@@ -104,7 +106,18 @@ public:
 #pragma warning(push)
 #pragma warning(disable:4995)
 #endif
-	inline void			free() { m_file_size = 0; m_pos = 0; m_mem_size = 0; wxDELETE(m_data); }
+	// 🛑 FREED THE WAY IT WAS ALLOCATED, and this is the ONE place that does it — the destructor
+	// calls here rather than repeating the two lines, because the buffer had two ways of being
+	// released and only one of them was ever corrected. `w()` grows it with malloc / realloc, so
+	// `wxDELETE` was `delete` over a malloc'd block: undefined behaviour, invisible on MSVC where
+	// both roads end in one heap, and reported 37 times as alloc-dealloc-mismatch on the first
+	// sanitised run (2026-09-22).
+	// ⚠ `::free` with the scope, not `free` — this class has a member of that name (you are reading
+	// it), and inside it the bare word is the member, which takes no arguments.
+	inline void			free() {
+		m_file_size = 0; m_pos = 0; m_mem_size = 0;
+		if (m_data != nullptr) { ::free(m_data); m_data = nullptr; }
+	}
 #ifdef _MSC_VER
 #pragma warning(pop)
 #endif
@@ -233,6 +246,7 @@ public:
 	void			r_stringZ(char* dest, u32 tgt_sz) const;
 	void			r_stringZ(std::string& dest) const;
 	void			r_stringZ(wxString& dest) const;
+	void			r_stringZ(ibString& dest) const;
 
 public:
 
@@ -256,6 +270,16 @@ public:
 		ibReader(buf.GetData(), buf.GetDataLen(), _iterpos)
 	{
 	}
+
+	// A READER BORROWS ITS BYTES — it keeps the buffer's pointer and never owns a
+	// copy. Handing it a temporary therefore leaves it reading freed memory the
+	// moment the full expression ends, and the damage surfaces far away: the
+	// length fields come back as garbage and the first sized read walks off the
+	// heap (an access violation inside memcpy, with nothing on the stack pointing
+	// here). ibWriterMemory::buffer() returns BY VALUE, so `ibReaderMemory
+	// reader(writer.buffer())` is exactly that mistake — and it is the reason this
+	// deletion exists rather than a comment asking people not to.
+	ibReaderMemory(wxMemoryBuffer&&, int = 0) = delete;
 
 	ibReaderMemory(void* _data, int _size, int _iterpos = 0) :
 		ibReader(_data, _size, _iterpos)

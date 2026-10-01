@@ -18,7 +18,7 @@ void ibValueFrame::OnPropertyChanged(ibProperty* property, const wxVariant& oldV
 #endif
 }
 
-bool ibValueFrame::OnEventChanging(ibEvent* event, const wxString& newValue)
+bool ibValueFrame::OnEventChanging(ibEvent* event, const wxVariant& newValue)
 {
 	return true;
 }

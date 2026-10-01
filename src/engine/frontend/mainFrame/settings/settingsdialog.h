@@ -11,6 +11,7 @@
 class ibDialogKeyBinder;
 class ibPanelFontColorSettings;
 class ibPanelEditorSettings;
+class ibPanelMcpSettings;
 
 #include "frontend/frontend.h"
 
@@ -53,6 +54,11 @@ public:
      */
     ibPanelEditorSettings* GetEditorSettingsPanel() const;
 
+    /**
+     * Returns the assistant-access (MCP) part of the settings dialog.
+     */
+    ibPanelMcpSettings* GetMcpSettingsPanel() const;
+
     wxDECLARE_EVENT_TABLE();
 
 private:
@@ -60,6 +66,7 @@ private:
     ibDialogKeyBinder*            m_keyBinderDialog;
     ibPanelFontColorSettings*     m_fontColorSettingsPanel;
     ibPanelEditorSettings*        m_editorSettingsPanel;
+    ibPanelMcpSettings*           m_mcpSettingsPanel;
 
 };
 

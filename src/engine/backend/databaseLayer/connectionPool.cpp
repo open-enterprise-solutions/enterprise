@@ -1,9 +1,12 @@
 #include "connectionPool.h"
 
 #include "backend/appData.h"
+#include "backend/appHost.h"             // Holds — is a holder's pool still standing
+#include "backend/backend_exception.h"   // ibBackendCoreException on pool-exhaustion timeout
 #include "connectionHolder.h"
 #include "connectionScope.h"
 #include "databaseLayer.h"
+#include "backend/diagnostics/journal.h"   // ibJournalInfo — what an interruption found to interrupt
 
 ibDatabaseConnectionHolder* ibConnectionPool::ThreadHolder()
 {
@@ -28,30 +31,56 @@ ibDatabaseConnectionHolder* ibConnectionPool::CurrentHolder()
 	return ThreadHolder();
 }
 
-std::shared_ptr<ibDatabaseLayer> ibConnectionPool::GetActiveTxConnection()
-{
-	auto* pool = ibApplicationData::GetConnectionPool();
-	if (pool == nullptr) return nullptr;
-	auto* holder = CurrentHolder();
-	if (holder == nullptr) return nullptr;
-	return pool->GetReservedTx(holder);
-}
-
 void ibConnectionPool::SetActiveTxConnection(std::shared_ptr<ibDatabaseLayer> conn)
 {
 	if (!conn) return;
-	auto* pool = ibApplicationData::GetConnectionPool();
+	// ⭐ PINNED IN THE BASE THE TRANSACTION RUNS IN — the layer's own pool: one layer, one pool, one base, one
+	// DBMS. Not "the current base": that is the thread's, another base's or none — a registry thread ending a
+	// session works for none, and asking it threw on every session close (2026-10-01, appserver on Ctrl+C).
+	auto* pool = conn->GetPool();
 	if (pool == nullptr) return;
-	// Resolve the holder for the TX pin, in priority:
-	//   1. CurrentHolder() — session if bound, else db_query singleton.
-	//   2. The conn's already-pinned holder (set by an earlier ReserveTx
-	//      on a different thread).
-	//   3. The conn's scope-binding — lets an ad-hoc holder that
-	//      opened a scope still pin its TX correctly.
+	// ⭐⭐ A TRANSACTION TAKES THE CALLING THREAD'S db_query CHANNEL — UNLESS SOMEBODY IS ALREADY IN IT.
+	//
+	// Capturing the channel is the point of the pin, and it is what makes a session's transaction
+	// mean what a person expects: `db_query` reads inside it — the AOT cache, an information
+	// register's slice, anything through the L2/L3 door — see the rows that transaction has written
+	// and not the rows it replaced. Pin it elsewhere and a run stops seeing its own writes.
+	//
+	// 🛑⭐⭐ BUT THE CHANNEL IS NOT FREE FOR THE TAKING, AND THAT IS THE WHOLE DEFECT THIS CARRIES.
+	// `CurrentHolder()` is a thread_local singleton and therefore NEVER null, so this used to pin
+	// EVERY transaction on EVERY connection to the calling thread — including a subsystem with a
+	// private holder of its own. The lock manager writes `sys_lock` on a dedicated connection,
+	// deliberately, so its rows are visible to other sessions; its short transaction reserved the
+	// thread's channel on the way in and RELEASED IT on the way out, taking with it the pin of the
+	// long-running transaction that was already there.
+	//
+	// ⭐ MEASURED 2026-09-07, and it deadlocked a run against itself. A background job posting
+	// documents holds ONE transaction for the whole run (jobRunByteCode.cpp). Posting the first
+	// document takes a pessimistic lock; that lock's own commit cleared the run's pin, so every later
+	// `db_query` left the run's transaction for a fresh pooled connection. The bytecode cache is such
+	// a caller: on the second document it could no longer see the row it had written itself, called
+	// that a miss, and re-inserted the same primary key — which Firebird made wait for the
+	// uncommitted row held by the run's own transaction, which was waiting on that insert. Nothing
+	// failed, nothing was logged; the job simply stopped, one document in.
+	//
+	// ⚠ THE FIRST FIX WENT TOO FAR — it put the connection's own holder FIRST, which stopped the
+	// theft and also stopped a session's transaction from ever capturing the channel, since a session
+	// connection is scope-bound to the session's holder. Measured within the hour, the same way: a
+	// run wrote a rate into an information register and the slice read back the previous one, while a
+	// plain query in the same run saw the new row. Two readers of one transaction disagreeing is
+	// worse than the deadlock, because it answers.
+	//
+	// So the rule is OCCUPANCY, not ownership: take the thread's channel when it is free, and step
+	// aside onto your own holder when another connection is already in it.
 	ibDatabaseConnectionHolder* holder = CurrentHolder();
+	if (holder != nullptr) {
+		const std::shared_ptr<ibDatabaseLayer> taken = pool->GetReservedTx(holder);
+		if (taken && taken.get() != conn.get())
+			holder = nullptr;   // somebody else's transaction owns this channel — do not evict it
+	}
 	if (holder == nullptr) {
-		if (auto* h = conn->GetHolder()) holder = h;
-		else                             holder = pool->FindBoundHolder(conn.get());
+		if (auto* own = conn->GetHolder()) holder = own;
+		else                               holder = pool->FindBoundHolder(conn.get());
 	}
 	if (holder == nullptr) return;
 	pool->ReserveTx(holder, std::move(conn));
@@ -60,7 +89,7 @@ void ibConnectionPool::SetActiveTxConnection(std::shared_ptr<ibDatabaseLayer> co
 void ibConnectionPool::ClearActiveTxConnection(ibDatabaseLayer* conn)
 {
 	if (conn == nullptr) return;
-	auto* pool = ibApplicationData::GetConnectionPool();
+	auto* pool = conn->GetPool();   // the one it was pinned in
 	if (pool == nullptr) return;
 	// The holder that pinned this layer is the source of truth — set
 	// by ReserveTx, cleared by ReleaseTx. Read it before calling
@@ -103,16 +132,7 @@ void ibConnectionPool::ReserveTx(ibDatabaseConnectionHolder* holder,
 			return;
 		}
 	}
-	// Conn isn't in our registry — register as a reserved entry.
-	// Happens when a holder begins a TX on a layer the pool didn't hand
-	// out (Designer single-conn mode, externally-supplied conn).
-	conn->m_holder = holder;
-	ibConnectionEntry e;
-	e.conn      = std::move(conn);
-	e.txHolder  = holder;
-	e.startedAt = now;
-	e.lastUsed  = now;
-	m_entries.push_back(std::move(e));
+	// Nothing else comes here: a layer names this pool (m_pool) only while its entry is in it.
 }
 
 void ibConnectionPool::ReleaseTx(ibDatabaseConnectionHolder* holder)
@@ -170,8 +190,18 @@ void ibConnectionPool::ReleaseAll(ibDatabaseConnectionHolder* holder)
 	// pending statements from the previous user.
 	for (auto& c : conns) {
 		if (!c) continue;
-		try { c->CloseResultSets(); } catch (...) {}
-		try { c->CloseStatements(); } catch (...) {}
+		try { c->CloseResultSets(); } catch (...) { /* swallowed: cleanup before reparking conn — driver error here would otherwise leak into the next checkout */ }
+		try { c->CloseStatements(); } catch (...) { /* swallowed: same as above */ }
+
+		// ⚠ AND THE TRANSACTION IS LEFT ALONE. Rolling it back here was tried on 2026-08-14 and
+		// REVERTED the same hour: releasing a holder is not the same event as finishing the work.
+		// A writer that hands its connection back before its own commit — an ordinary object write —
+		// had its transaction rolled out from under it, so the value went in and came back empty on
+		// the next read, with nothing reported anywhere.
+		//
+		// The inherited-transaction problem this was aimed at is answered where it actually belongs:
+		// Checkout refuses to hand out a connection that still has one (see there). That keeps the
+		// next owner safe without deciding, from here, that somebody else's work is unwanted.
 	}
 }
 
@@ -182,8 +212,22 @@ ibSingleConnectionHolder::~ibSingleConnectionHolder()
 	// Self-clean on dtor — covers static instance teardown at process
 	// exit and stack-local scope unwind. ReleaseAll is idempotent:
 	// no-op if this holder never reserved anything.
-	if (auto* pool = ibApplicationData::GetConnectionPool())
+	//
+	// ⚠ ITS OWN POOL ONLY WHILE ITS BASE STANDS — a session can outlive its base on the way out (a window
+	// destroyed late), and then there is nothing to release into; the process is asked, the pool is not
+	// touched.
+	ibConnectionPool* const pool = m_pool != nullptr
+		? (ibApplicationHost::HasPool(m_pool) ? m_pool : nullptr)
+		: GetPool();
+	if (pool != nullptr)
 		pool->ReleaseAll(this);
+}
+
+ibConnectionPool* ibDatabaseConnectionHolder::GetPool() const
+{
+	// The unnamed holder asks the way that cannot throw (not `required`): it is asked from destructors and
+	// from a scope's unwinding too. The db_query door itself still refuses a thread that named no base.
+	return m_pool != nullptr ? m_pool : ibApplicationInstance::GetConnectionPool(ibApplicationInstance::Get(false));
 }
 
 ibConnectionScope ibDatabaseConnectionHolder::OpenConnectionScope()
@@ -197,13 +241,14 @@ std::shared_ptr<ibDatabaseLayer> ibDatabaseConnectionHolder::AcquireFreeConnecti
 	// deleter parks the entry back in the pool when the caller drops
 	// the last reference. Side-channel for work that must NOT join
 	// the holder's current TX (parallel side query, async refresh).
-	auto* pool = ibApplicationData::GetConnectionPool();
+	auto* pool = GetPool();
 	return pool != nullptr ? pool->Checkout() : nullptr;
 }
 
-std::shared_ptr<ibDatabaseLayer> ibDatabaseConnectionHolder::EnsureConnection()
+std::shared_ptr<ibDatabaseLayer> ibDatabaseConnectionHolder::EnsureConnection(
+	std::chrono::milliseconds wait)
 {
-	auto* pool = ibApplicationData::GetConnectionPool();
+	auto* pool = GetPool();
 	if (pool == nullptr) return nullptr;
 	// 1. TX-pinned > 2. scope-bound > 3. fresh Checkout + bind as scope.
 	// Single entry point — replaced the old read-only GetConnection.
@@ -211,11 +256,30 @@ std::shared_ptr<ibDatabaseLayer> ibDatabaseConnectionHolder::EnsureConnection()
 	// without it, every call would Checkout a new conn and live result
 	// sets on a previously-Acquired conn would leak (entry returned to
 	// pool while busy → next Checkout skips → grows pool → deadlocks).
+	//
+	// `wait` reaches only the third step — the first two answer from what this
+	// holder already holds, where there is nothing to wait for.
 	if (auto tx = pool->GetReservedTx(this)) return tx;
 	if (auto scope = pool->GetScopeConn(this)) return scope;
-	auto conn = pool->Checkout();
+	auto conn = pool->Checkout(wait > std::chrono::milliseconds::zero()
+		? wait : std::chrono::milliseconds(ibConnectionPool::kCheckoutTimeout));
 	if (conn) pool->BindScopeHolder(this, conn);
 	return conn;
+}
+
+void ibDatabaseConnectionHolder::Cancel()
+{
+	auto* pool = GetPool();
+	if (pool == nullptr) return;
+	// Read under the pool's lock, cancelled outside it — a driver call never runs under m_mutex.
+	const std::shared_ptr<ibDatabaseLayer> tx    = pool->GetReservedTx(this);
+	const std::shared_ptr<ibDatabaseLayer> scope = pool->GetScopeConn(this);
+	ibJournalInfo(wxT("cancel"), wxT("cancelling the holder's connections: transaction %s, scope %s"),
+		tx ? wxT("bound") : wxT("none"), scope ? (scope == tx ? wxT("(the same)") : wxT("bound")) : wxT("none"));
+	if (tx)
+		tx->Cancel();
+	if (scope && scope != tx)
+		scope->Cancel();
 }
 
 void ibConnectionPool::BindScopeHolder(ibDatabaseConnectionHolder* holder,
@@ -261,12 +325,6 @@ std::shared_ptr<ibDatabaseLayer> ibConnectionPool::GetScopeConn(
 	return nullptr;
 }
 
-std::shared_ptr<ibDatabaseLayer> ibConnectionPool::GetPrimaryConnection()
-{
-	auto* pool = ibApplicationData::GetConnectionPool();
-	return pool != nullptr ? pool->m_source : nullptr;
-}
-
 std::shared_ptr<ibDatabaseLayer> ibConnectionPool::GetDatabaseLayer()
 {
 	// `db_query` macro target — always ThreadHolder. Resolution is fixed to
@@ -276,7 +334,7 @@ std::shared_ptr<ibDatabaseLayer> ibConnectionPool::GetDatabaseLayer()
 	//   3. Primary fallback (m_source)
 	// Session-aware work uses session->Holder() directly (ses_query) and
 	// never goes through CurrentHolder — pool stays holder-agnostic.
-	auto* pool = ibApplicationData::GetConnectionPool();
+	auto* pool = ibApplicationInstance::GetConnectionPool();
 	if (pool == nullptr) return nullptr;
 	auto* holder = ThreadHolder();
 	if (auto txConn = pool->GetReservedTx(holder))
@@ -298,7 +356,8 @@ ibConnectionScope ibConnectionPool::GetFreeConnection()
 }
 
 
-ibConnectionPool::ibConnectionPool() = default;
+ibConnectionPool::ibConnectionPool(ib::AppDataCtorToken owner)
+	: m_applicationInstance(owner.GetApplicationInstance()) {}
 
 ibConnectionPool::~ibConnectionPool()
 {
@@ -311,7 +370,7 @@ void ibConnectionPool::Init(std::shared_ptr<ibDatabaseLayer> primary, std::size_
 {
 	std::lock_guard<std::mutex> lock(m_mutex);
 	for (auto& e : m_entries) {
-		if (e.conn) e.conn->m_holder = nullptr;
+		if (e.conn) { e.conn->m_holder = nullptr; e.conn->m_pool = nullptr; }
 	}
 	m_entries.clear();
 	m_source   = primary;
@@ -322,6 +381,7 @@ void ibConnectionPool::Init(std::shared_ptr<ibDatabaseLayer> primary, std::size_
 		// Master is the first entry and the seed for Clone(). Marked
 		// idle (no holder, not in-use) so the earliest Checkout hands
 		// it out directly rather than paying a Clone() cost.
+		primary->m_pool = this;
 		ibConnectionEntry e;
 		e.conn     = primary;
 		e.lastUsed = now;
@@ -329,12 +389,13 @@ void ibConnectionPool::Init(std::shared_ptr<ibDatabaseLayer> primary, std::size_
 	}
 	// Pre-warm — Clone() up to minIdle additional conns so light bursts
 	// don't pay the Open cost. Server modes (wes, future oes-server)
-	// pass minIdle high enough to absorb typical concurrency;
-	// single-session GUI hosts use minIdle=1, which means the loop
-	// below is a no-op.
+	// pass minIdle high enough to absorb typical concurrency; GUI hosts
+	// use minIdle=2 (registry write conn + script thread), so the loop
+	// below clones exactly one extra connection at Init.
 	while (m_entries.size() < m_minIdle && m_entries.size() < m_maxSize) {
 		ibDatabaseLayer* raw = primary ? primary->Clone() : nullptr;
 		if (raw == nullptr) break;
+		raw->m_pool = this;
 		ibConnectionEntry e;
 		e.conn     = std::shared_ptr<ibDatabaseLayer>(raw);
 		e.lastUsed = now;
@@ -358,22 +419,26 @@ void ibConnectionPool::Shutdown()
 	for (auto& e : m_entries) {
 		if (e.conn) {
 			e.conn->m_holder = nullptr;
-			if (e.conn->IsOpen())
-				e.conn->Close();
+			e.conn->m_pool   = nullptr;   // a hand-out still alive must not reach a pool that is going away
+			try { if (e.conn->IsOpen()) e.conn->Close(); }
+			catch (...) { /* swallowed: shutdown-time Close failures (e.g. Firebird isc_io_error on already-disconnected DB) must not propagate from this destructor-style path — see ~ibApplicationInstance → Shutdown chain; an unhandled throw here lands in std::terminate during process exit. */ }
 		}
 	}
 	m_entries.clear();
 
-	if (m_source && m_source->IsOpen())
-		m_source->Close();
+	if (m_source && m_source->IsOpen()) {
+		try { m_source->Close(); }
+		catch (...) { /* swallowed: same rationale as the pool loop above — source close failure on shutdown is unrecoverable and never worth aborting the process for. */ }
+	}
 	m_source.reset();
 
 	m_cv.notify_all();
 }
 
-std::shared_ptr<ibDatabaseLayer> ibConnectionPool::Checkout()
+std::shared_ptr<ibDatabaseLayer> ibConnectionPool::Checkout(std::chrono::milliseconds wait)
 {
 	std::unique_lock<std::mutex> lock(m_mutex);
+	const auto deadline = std::chrono::steady_clock::now() + wait;
 	while (true) {
 		if (m_shutdown || !m_source)
 			return nullptr;
@@ -391,9 +456,20 @@ std::shared_ptr<ibDatabaseLayer> ibConnectionPool::Checkout()
 		// then created a stmt / result set: while those live, no
 		// other thread can take the conn — driver-side cursors would
 		// race otherwise.
+		// ⭐⭐ AND NOT ONE THAT STILL HAS A TRANSACTION OPEN. `txHolder` says the pool KNOWS about a
+		// transaction; it says nothing about one opened straight on the layer (bare db_query, a path
+		// that returned without closing, a refused commit before it was made to roll back). Handing
+		// such a conn out gives the next caller somebody else's transaction: its own BeginTransaction
+		// merely nests (depth 2), its Commit only decrements, and its DDL is never made durable —
+		// which is exactly the shape the restructuring trace showed on 2026-08-14, where a deferred
+		// phase could not see tables its own apply had just created ("Table unknown").
+		//
+		// A conn in that state is not idle, whatever the bookkeeping says. Leave it where it is: the
+		// owner will finish it, or the reaper will drop it — but nobody else gets to inherit it.
 		for (auto it = m_entries.rbegin(); it != m_entries.rend(); ++it) {
 			if (it->txHolder == nullptr && it->scopeHolder == nullptr
-			    && !it->inUse && it->conn && !it->conn->IsBusy()) {
+			    && !it->inUse && it->conn && !it->conn->IsBusy()
+			    && !it->conn->IsActiveTransaction()) {
 				it->inUse    = true;
 				it->lastUsed = std::chrono::steady_clock::now();
 				return WrapHandout(it->conn);
@@ -404,6 +480,7 @@ std::shared_ptr<ibDatabaseLayer> ibConnectionPool::Checkout()
 			ibDatabaseLayer* raw = m_source->Clone();
 			if (raw == nullptr)
 				return nullptr;
+			raw->m_pool = this;
 			// FIRST shared_ptr wrapping `raw` — initialises the weak_ptr
 			// inside std::enable_shared_from_this so future
 			// shared_from_this() calls route through this control block.
@@ -415,8 +492,19 @@ std::shared_ptr<ibDatabaseLayer> ibConnectionPool::Checkout()
 			m_entries.push_back(std::move(e));
 			return WrapHandout(std::move(sp));
 		}
-		// Saturated — wait for a Return / ReleaseTx / Unbind / Shutdown.
-		m_cv.wait(lock);
+		// Saturated — every connection is busy and the pool is at m_maxSize.
+		// Wait BOUNDED for a Return / ReleaseTx / Unbind / Shutdown. If the
+		// deadline passes with the pool still full, fail loudly instead of
+		// blocking the worker thread forever (the old wait() had no timeout —
+		// a leaked or stuck borrower would hang the caller indefinitely).
+		if (std::chrono::steady_clock::now() >= deadline) {
+			// The wait is the CALLER'S (see Checkout's declaration), so the message
+			// names the bound that actually expired rather than the default one.
+			ibBackendCoreException::Error(
+				_("Database connection pool exhausted: all %d connections are busy and none became free within %d ms. Try again later or raise the pool size."),
+				(int)m_maxSize, (int)wait.count());
+		}
+		m_cv.wait_until(lock, deadline);
 	}
 }
 
@@ -438,6 +526,7 @@ void ibConnectionPool::ReapStaleLocked()
 			&& (now - it->lastUsed >= kIdleTimeout);
 		if (!reapable) { ++it; continue; }
 		if (it->conn->IsOpen()) it->conn->Close();
+		it->conn->m_pool = nullptr;
 		it = m_entries.erase(it);
 		--idleCount;
 	}

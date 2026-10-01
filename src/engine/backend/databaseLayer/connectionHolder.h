@@ -18,13 +18,24 @@
 
 #include "backend/backend.h"
 
+#include <chrono>
 #include <memory>
+#include <set>
+#include <vector>
+#include <functional>
 
 class ibDatabaseLayer;
 
 class BACKEND_API ibDatabaseConnectionHolder {
 public:
 	virtual ~ibDatabaseConnectionHolder() = default;
+
+	// ⭐ THE POOL THIS HOLDER TAKES ITS CONNECTIONS FROM — its base's, reached once down the chain and kept
+	// (docs/private/multi-base-process.md): a session's is bound by the registry that makes it (session →
+	// registry → base → pool), the registry's own by the registry. A holder nobody names — the db_query
+	// channel's per-thread one — takes the current base's pool, through the session.
+	void SetPool(class ibConnectionPool* pool) { m_pool = pool; }
+	class ibConnectionPool* GetPool() const;   // defined in connectionPool.cpp
 
 	// Single entry point: returns a usable conn for this holder.
 	// Resolution chain:
@@ -42,7 +53,16 @@ public:
 	// Defined out-of-line in connectionPool.cpp where the pool's
 	// header is in scope. Returns nullptr only if the pool is not
 	// initialised.
-	std::shared_ptr<ibDatabaseLayer> EnsureConnection();
+	//
+	// `wait` bounds step 3 only — the first two answer from what this holder
+	// already reserved, where there is nothing to wait for. Zero means the pool's
+	// own default (ibConnectionPool::kCheckoutTimeout), which is the right answer
+	// for work somebody started and is waiting on. Work that merely SERVES
+	// somebody names a shorter one: a rented run reads one portion for a form that
+	// already has rows on screen, and a half-minute stall there is worse than an
+	// answer of "not now" (the pool throws its "exhausted" error instead).
+	std::shared_ptr<ibDatabaseLayer> EnsureConnection(
+		std::chrono::milliseconds wait = std::chrono::milliseconds::zero());
 
 	// Fresh conn from the pool — wrapped Checkout, NOT bound to this
 	// holder. The returned shared_ptr's deleter releases the entry
@@ -63,6 +83,45 @@ public:
 	// short — `auto scope = ibSession::Current()->OpenConnectionScope();`
 	// (via session façade).
 	class ibConnectionScope OpenConnectionScope();
+
+	// The session's cancel (ibSession::Cancel), passed to its connections — its transaction pin and its scope
+	// binding — from any thread (ibDatabaseLayer::Cancel): a cancelled session stops the statement it is
+	// waiting on instead of waiting for it to end. Nothing bound, nothing to do; nothing is checked out.
+	// Defined in connectionPool.cpp beside EnsureConnection.
+	void Cancel();
+
+	// --- DDL/DML barrier state (the current restructuring save) -----------------------------------
+	// The state lives here, not in process-wide statics, because the barrier is tied to THIS holder's
+	// connection / transaction — so the SEVERAL ibSchemaBuilder instances of one save (Reset /
+	// per-table Execute / Flush) share one home through the holder they run on. ibSchemaBuilder owns
+	// the logic; the holder only stores. (query/schemaBuilder.h)
+	//
+	// ⭐⭐ TWO SETS, BECAUSE TWO DIFFERENT QUESTIONS ARE ASKED — and answering both from one set is
+	// how the compensation came to DROP live tables. The barrier's DEFERRAL asks "did this save
+	// change what the table LOOKS like" (created, or given / dropped / retyped a column — a rebuild
+	// reading a column added three statements earlier is refused exactly like a write into a
+	// just-created table, so the wide set is the right answer there). The COMPENSATION asks the
+	// narrower "did this save CREATE it" — those are the only tables it may drop wholesale. When the
+	// shape question widened the single set, the compensation kept reading it as the created list,
+	// and a failed second phase dropped a table that had merely gained a column — with its data.
+	std::set<wxString>&                 DdlCreatedTables()  { return m_ddlCreated; }   // created by THIS save
+	std::set<wxString>&                 DdlShapedTables()   { return m_ddlShaped; }    // shape changed (deferral)
+	std::vector<std::function<bool()>>& DdlDeferredWrites() { return m_ddlDeferred; }
+
+	// The compensation ledger: for every DDL the first commit ran on a PRE-EXISTING object, the
+	// INVERSE action (drop the added column, re-add the dropped one from its recorded shape, restore
+	// the altered type), appended in execution order and replayed in REVERSE when the second phase
+	// fails. Built from the statements this save itself issued — never from reading the database.
+	std::vector<std::function<void(ibDatabaseLayer*)>>& DdlUndoActions() { return m_ddlUndo; }
+
+protected:
+	class ibConnectionPool* m_pool = nullptr;
+
+private:
+	std::set<wxString>                 m_ddlCreated;
+	std::set<wxString>                 m_ddlShaped;
+	std::vector<std::function<bool()>> m_ddlDeferred;
+	std::vector<std::function<void(ibDatabaseLayer*)>> m_ddlUndo;
 };
 
 // ibSingleConnectionHolder — generic empty holder. The OES runtime

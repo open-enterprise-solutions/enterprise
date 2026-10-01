@@ -2,7 +2,7 @@
 #define __PROPERTY_STRING_H__
 
 #include "backend/propertyManager/propertyObject.h"
-#include "backend/backend_localization.h"
+#include "backend/backend_localization.h"   // ibTranslateString — what a caption holds
 
 class BACKEND_API ibPropertyStringBase : public ibProperty {
 public:
@@ -42,17 +42,14 @@ public:
 	virtual bool SetDataValue(const ibValue& varPropVal);
 	virtual bool GetDataValue(ibValue& pvarPropVal) const;
 
-	//load & save object in control 
-	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer);
+	//load & save object in control
+
+	// readable node value (typed String) — name / synonym / comment, etc.
+	virtual bool ReadNodeValue(const ibDataValue& value) override;
+	virtual bool WriteNodeValue(ibDataValue& value) const override;
 
 public:
 
-	static wxObject* (*ms_propertyString)(const wxString&, const wxString&, const wxString&);
-	static wxObject* (*ms_propertyUString)(const wxString&, const wxString&, const wxString&);
-	static wxObject* (*ms_propertyUEString)(const wxString&, const wxString&, const wxString&);
-	static wxObject* (*ms_propertyTString)(const ibPropertyObject*, const wxString&, const wxString&, const wxString&);
-	static wxObject* (*ms_propertyMString)(const wxString&, const wxString&, const wxString&);
 };
 
 //base property for "string"
@@ -74,12 +71,6 @@ public:
 	{
 	}
 
-	//get property for grid 
-	virtual wxObject* GetPGProperty() const {
-		if (ms_propertyString != nullptr)
-			return ms_propertyString(m_propLabel, m_propName, GetValueAsString());
-		return nullptr;
-	}
 };
 
 //base property for "general" - unique name 
@@ -101,12 +92,6 @@ public:
 	{
 	}
 
-	//get property for grid 
-	virtual wxObject* GetPGProperty() const {
-		if (ms_propertyUString != nullptr)
-			return ms_propertyUString(m_propLabel, m_propName, GetValueAsString());
-		return nullptr;
-	}
 };
 
 //base property for "general" - unique name or empty value 
@@ -128,57 +113,69 @@ public:
 	{
 	}
 
-	//get property for grid 
-	virtual wxObject* GetPGProperty() const {
-		if (ms_propertyUEString != nullptr)
-			return ms_propertyUEString(m_propLabel, m_propName, GetValueAsString());
-		return nullptr;
-	}
 };
 
-//base property for "caption" - for translate 
-class BACKEND_API ibPropertyTString : public ibPropertyStringBase {
+//base property for "caption" - for translate
+// ⭐ IT HOLDS AN ibTranslateString, the way the number property holds an ibNumber — so it stands on
+// ibProperty and not on the string base. A string property stores a string and its setter replaces
+// it, which is exactly how every other language used to be lost.
+class BACKEND_API ibPropertyTString : public ibProperty {
+	// 🛑 STATIC, BECAUSE EVERY CALLER IS A MEMBER-INITIALISER. The three constructors below pass its
+	// result to the base, which means it runs BEFORE this object's lifetime has begun; as a non-static
+	// member that is a call on an object that does not exist yet, and UBSan says so in those words -
+	// "member call on address which does not point to an object of type 'ibPropertyTString'", 98 times
+	// in one run (2026-09-22). It never needed `this`: it builds a variant out of its argument.
+	// ⚠ The same shape lives in the other property headers of this family - they are not converted
+	// here, because only the one the tests exercise has been measured.
+	static wxVariantData* CreateVariantData(const ibTranslateString& translate);
 public:
 
-	wxString GetValueAsTranslateString() const {
-		static thread_local wxString result;
-		GetValueAsTranslateString(result);
-		return std::move(result);
-	}
+	ibTranslateString& GetValueAsTranslate() const;
+	void SetValue(const ibTranslateString& translate);
 
-	bool GetValueAsTranslateString(wxString& result) const {
-		if (GetValueAsString(result))
-			return ibBackendLocalization::GetTranslateGetRawLocText(result, result);
-		return false;
-	}
+	// THE ACTIVE SYNONYM — the text, in the language in force. It is the translation converting
+	// itself, and it is the one question a label, a tooltip or a page header ever asks.
+	wxString GetValueAsTranslateString() const { return GetValueAsTranslate().GetString(); }
 
+	// …AND THE RAW TEMPLATE — `en = 'Goods'; ru = 'Товары';`, every language at once, as it is
+	// written down. What a template cell keeps, and what a file is written with.
+	//
+	// ⚠ NAMED "RAW", not "String". Called GetValueAsString it is indistinguishable from the reader
+	// every other string property has, and two callers asked for it while meaning the text — so a
+	// person was shown `en = 'Title';` in a notebook page header, and the rename gate compared a
+	// synonym against a template.
+	wxString GetValueAsRawString() const { return GetValueAsTranslate().GetRawText(); }
+
+	// ⚠ NO DEFAULT FOR THE VALUE. The three differ only by how many STRINGS precede it, so a default
+	// makes `(cat, name, text)` fit the second one as well — `C2668: ambiguous call` at every
+	// declaration (measured on the first build). The number property can afford one; this cannot.
 	ibPropertyTString(ibPropertyCategory* cat, const wxString& name,
-		const wxString& value) : ibPropertyStringBase(cat, name, ibBackendLocalization::CreateLocalizationRawLocText(value))
+		const ibTranslateString& value) : ibProperty(cat, name, CreateVariantData(value))
 	{
 	}
 
 	ibPropertyTString(ibPropertyCategory* cat, const wxString& name, const wxString& label,
-		const wxString& value) : ibPropertyStringBase(cat, name, label, ibBackendLocalization::CreateLocalizationRawLocText(value))
+		const ibTranslateString& value) : ibProperty(cat, name, label, CreateVariantData(value))
 	{
 	}
 
 	ibPropertyTString(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString,
-		const wxString& value) : ibPropertyStringBase(cat, name, label, helpString, ibBackendLocalization::CreateLocalizationRawLocText(value))
+		const ibTranslateString& value) : ibProperty(cat, name, label, helpString, CreateVariantData(value))
 	{
 	}
 
-	virtual bool IsEmptyProperty() const { return GetValueAsTranslateString().IsEmpty(); }
-
-	//get property for grid 
-	virtual wxObject* GetPGProperty() const {
-		if (ms_propertyTString != nullptr)
-			return ms_propertyTString(m_owner, m_propLabel, m_propName, GetValueAsString());
-		return nullptr;
-	}
+	virtual bool IsEmptyProperty() const { return GetValueAsTranslate().IsEmpty(); }
 
 	// set/get property data
 	virtual bool SetDataValue(const ibValue& varPropVal);
 	virtual bool GetDataValue(ibValue& pvarPropVal) const;
+
+	//per-type node value
+	virtual bool ReadNodeValue(const ibDataValue& value) override;
+	virtual bool WriteNodeValue(ibDataValue& value) const override;
+
+public:
+
 };
 
 //base property for "text"
@@ -200,12 +197,6 @@ public:
 	{
 	}
 
-	//get property for grid 
-	virtual wxObject* GetPGProperty() const {
-		if (ms_propertyMString != nullptr)
-			return ms_propertyMString(m_propLabel, m_propName, GetValueAsString());
-		return nullptr;
-	}
 };
 
 #endif

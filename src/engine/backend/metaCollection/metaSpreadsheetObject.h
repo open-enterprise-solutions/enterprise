@@ -4,12 +4,8 @@
 #include "metaObject.h"
 
 class BACKEND_API ibValueMetaObjectSpreadsheetBase : public ibValueMetaObject {
-	wxDECLARE_ABSTRACT_CLASS(ibValueMetaObjectSpreadsheetBase);
+	public:
 protected:
-	enum
-	{
-		ID_METATREE_OPEN_TEMPLATE = 19000,
-	};
 
 public:
 
@@ -26,36 +22,37 @@ public:
 	virtual bool OnAfterCloseMetaObject();
 
 	//prepare menu for item
-	virtual bool PrepareContextMenu(wxMenu* defaultMenu);
-	virtual void ProcessCommand(unsigned int id);
+	virtual bool CollectContextMenu(std::vector<ibMetaMenuItem>& items);
 };
 
 class BACKEND_API ibValueMetaObjectSpreadsheet : public ibValueMetaObjectSpreadsheetBase {
-	wxDECLARE_DYNAMIC_CLASS(ibValueMetaObjectCommonSpreadsheet);
-public:
+	public:
 	//set spreadsheet code 
 	virtual void SetSpreadsheetDesc(const ibSpreadsheetDescription& spreadsheetDescription) { m_propertyTemplate->SetValue(spreadsheetDescription); }
 	virtual ibSpreadsheetDescription& GetSpreadsheetDesc() const { return m_propertyTemplate->GetValueAsSpreadsheetDesc(); }
+
+	virtual bool ReadData(const ibDataNode& node) override;
+	virtual bool WriteData(ibDataNode& node) const override;
 protected:
-	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer);
 private:
 	ibPropertyCategory* m_categoryTemplate = ibPropertyObject::CreatePropertyCategory(wxT("Template"), _("Template"));
-	ibPropertySpreadsheet* m_propertyTemplate = ibPropertyObject::CreateProperty<ibPropertySpreadsheet>(m_categoryTemplate, wxT("TemplateData"), _("Template data"));
+	ibPropertySpreadsheet* m_propertyTemplate = ibPropertyObject::CreateProperty<ibPropertySpreadsheet>(m_categoryTemplate, wxT("TemplateData"), _("Template data"),
+		_("The template's spreadsheet: cells, named areas and parameters a print form is assembled from. Code gets it with the owner's GetTemplate(name), takes areas by name, fills their parameters and puts them into an output spreadsheet."));
 };
 
 class BACKEND_API ibValueMetaObjectCommonSpreadsheet : public ibValueMetaObjectSpreadsheetBase {
-	wxDECLARE_DYNAMIC_CLASS(ibValueMetaObjectCommonSpreadsheet);
-public:
+	public:
 	//set spreadsheet code 
 	virtual void SetSpreadsheetDesc(const ibSpreadsheetDescription& spreadsheetDescription) { m_propertyTemplate->SetValue(spreadsheetDescription); }
 	virtual ibSpreadsheetDescription& GetSpreadsheetDesc() const { return m_propertyTemplate->GetValueAsSpreadsheetDesc(); }
+
+	virtual bool ReadData(const ibDataNode& node) override;
+	virtual bool WriteData(ibDataNode& node) const override;
 protected:
-	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer);
 private:
 	ibPropertyCategory* m_categoryTemplate = ibPropertyObject::CreatePropertyCategory(wxT("CommonTemplate"), _("Common template"));
-	ibPropertySpreadsheet* m_propertyTemplate = ibPropertyObject::CreateProperty<ibPropertySpreadsheet>(m_categoryTemplate, wxT("TemplateData"), _("Template data"));
+	ibPropertySpreadsheet* m_propertyTemplate = ibPropertyObject::CreateProperty<ibPropertySpreadsheet>(m_categoryTemplate, wxT("TemplateData"), _("Template data"),
+		_("The common template's spreadsheet: cells, named areas and parameters shared by the whole configuration. Code gets it with GetCommonTemplate(name), takes areas by name, fills their parameters and puts them into an output spreadsheet."));
 };
 
 #endif 

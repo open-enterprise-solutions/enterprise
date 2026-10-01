@@ -1,8 +1,8 @@
 
 #include "widgets.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "backend/compiler/procUnit.h"
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueGauge, ibValueWindow)
 
 //****************************************************************************
 //*                             Gauge                                        *
@@ -22,7 +22,7 @@ wxObject* ibValueGauge::Create(wxWindow* wxparent, ibVisualHost* visualHost)
 	);
 }
 
-void ibValueGauge::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool firstСreated)
+void ibValueGauge::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool firstCreated)
 {
 }
 
@@ -61,24 +61,24 @@ void ibValueGauge::Cleanup(wxObject* obj, ibVisualHost* visualHost)
 //*								Data                                *
 //*******************************************************************
 
-bool ibValueGauge::LoadData(ibReaderMemory& reader)
+bool ibValueGauge::ReadData(const ibDataNode& node)
 {
-	m_propertyRange->SetValue(reader.r_s32());
-	m_propertyValue->SetValue(reader.r_s32());
-	m_propertyOrient->SetValue(reader.r_s32());
-	return ibValueWindow::LoadData(reader);
+	m_propertyRange->SetNodeValue(node.GetProperty(m_propertyRange->GetName()));
+	m_propertyValue->SetNodeValue(node.GetProperty(m_propertyValue->GetName()));
+	m_propertyOrient->SetNodeValue(node.GetProperty(m_propertyOrient->GetName()));
+	return ibValueWindow::ReadData(node);
 }
 
-bool ibValueGauge::SaveData(ibWriterMemory& writer)
+bool ibValueGauge::WriteData(ibDataNode& node) const
 {
-	writer.w_s32(m_propertyRange->GetValueAsInteger());
-	writer.w_s32(m_propertyValue->GetValueAsInteger());
-	writer.w_s32(m_propertyOrient->GetValueAsInteger());
-	return ibValueWindow::SaveData(writer);
+	node.SetProperty(m_propertyRange->GetName(), m_propertyRange->GetNodeValue());
+	node.SetProperty(m_propertyValue->GetName(), m_propertyValue->GetNodeValue());
+	node.SetProperty(m_propertyOrient->GetName(), m_propertyOrient->GetNodeValue());
+	return ibValueWindow::WriteData(node);
 }
 
 //***********************************************************************
 //*                       Register in runtime                           *
 //***********************************************************************
 
-CONTROL_TYPE_REGISTER(ibValueGauge, "Gauge", "Widget", string_to_clsid("CT_GAUG"));
+CONTROL_TYPE_REGISTER(ibValueGauge, "Gauge", "Widget", control_to_clsid("CT_GAUG"));

@@ -1,0 +1,165 @@
+// ============================================================================
+// HTTP from a script - what needs no server
+//
+// HTTPConnection / HTTPRequest / HTTPResponse and the HTTPMethod enumeration. Everything that goes over the
+// wire is asked in tests/test_valueHttp.cpp, which brings a server up inside the test; a corpus script is given
+// System and EnumManager and nothing else, so this file asks what can be asked without one.
+// The suite CHECKS ITSELF: a mismatch raises, and a corpus script that raises fails its run.
+//
+//   1. HTTPMethod's members are themselves and nothing else.
+//   2. A request keeps its address, its headers (whose names fold case, as a header's do) and its body.
+//   3. A host that is an address, and a time allowed of zero, are refused when the connection is made.
+//   4. A string where an object is expected - headers, a body, a request - is refused with a sentence.
+//   5. The example the help gives compiles.
+//   6. A fragment in an address is refused.
+//   7. A certificate file, a secure connection and what the port becomes with one. (That `New HTTPResponse()` does not compile is the registry's
+//      word, asked in tests/test_valueHttp.cpp: a script that does not compile cannot be in a corpus.)
+// ============================================================================
+
+// The example the help shows under guide.http, word for word - compiled with the corpus so that a name it
+// uses cannot quietly stop existing, and never called: it would go out to the network.
+Procedure TheHelpsExample() {
+    var connection = New HTTPConnection("api.example", 8080, "user", "password", 30);
+
+    var request = New HTTPRequest("/v1/sales?shift=42");
+    request.Headers.Insert("Accept", "application/json");
+
+    var response;
+    try {
+        response = connection.Get(request);
+    }
+    except {
+        Message("no answer: " + ErrorDescription());          // the name does not resolve, the port is closed, 30 s passed
+        return;
+    }
+    if (response.StatusCode <> 200) {                           // 404 and 500 are ANSWERS, not failures
+        Message("answered " + response.StatusCode + ": " + response.GetBodyAsString());
+        return;
+    }
+    var text = response.GetBodyAsString();                      // UTF-8 unless said; bytes that are not text are refused
+
+    var order = New HTTPRequest("/v1/orders");
+    order.Headers.Insert("Content-Type", "application/json");   // say it: a body with no type goes out as text/plain
+    order.SetBodyFromString("{""table"": 7}");
+    response = connection.Post(order);
+
+    response = connection.CallMethod(HTTPMethod.Options, order);
+    response.GetBodyAsBinaryData().Write("C:\in\answer.bin");     // to a file: the bytes, as they came
+
+    var secure = New SecureConnection();                        // the platform's own trust store, and the check on
+    secure.TrustedCertificates = New CertificateFile("C:\certs\bank-ca.pem");   // ...or this authority alone
+    secure.ClientCertificate = New CertificateFile("C:\certs\client.pem", "key password");
+    var bank = New HTTPConnection("api.bank.example");          // no port given: 443, once it is secure
+    bank.SecureConnection = secure;
+    response = bank.Get(New HTTPRequest("/v1/balance"));
+}
+
+var same = HTTPMethod.Get;
+if (same <> HTTPMethod.Get) { Raise("HTTPMethod: a member is not equal to itself"); }
+if (HTTPMethod.Patch = HTTPMethod.Post) { Raise("HTTPMethod: two members are one"); }
+Message("HTTPMethod: ok");
+
+var request = New HTTPRequest("/v1/sales?shift=42");
+if (request.ResourceAddress <> "/v1/sales?shift=42") { Raise("HTTPRequest: the address does not come back"); }
+request.Headers.Insert("Content-Type", "application/json");
+if (request.Headers["content-type"] <> "application/json") { Raise("HTTPRequest: a header name does not fold case"); }
+request.SetBodyFromString("{}");
+if (request.GetBodyAsString() <> "{}") { Raise("HTTPRequest: the body does not come back"); }
+if (request.GetBodyAsBinaryData().Size() <> 2) { Raise("HTTPRequest: two characters are two bytes in UTF-8"); }
+request.SetBodyFromString("ab", TextEncoding.UTF16);
+if (request.GetBodyAsBinaryData().Size() <> 4) { Raise("HTTPRequest: UTF-16 is two bytes a letter, and no mark in front"); }
+if (request.GetBodyAsString(TextEncoding.UTF16) <> "ab") { Raise("HTTPRequest: the body does not come back in its encoding"); }
+Message("HTTPRequest: ok");
+
+var connection = New HTTPConnection("api.example", 8080, "user", "password", 15);
+if (connection.Host <> "api.example" Or connection.Port <> 8080 Or connection.Timeout <> 15) { Raise("HTTPConnection: what it was made with does not come back"); }
+var plain = New HTTPConnection("api.example");
+if (plain.Port <> 80 Or plain.Timeout <> 30) { Raise("HTTPConnection: the port is 80 and the time allowed 30 seconds unless said"); }
+
+var refused = False;
+try { var bad = New HTTPConnection("https://api.example"); } except { refused = True; }
+if (Not refused) { Raise("HTTPConnection: an address was taken for a host"); }
+
+refused = False;
+try { var quiet = New HTTPConnection("api.example", 80, "", "", 0); } except { refused = True; }
+if (Not refused) { Raise("HTTPConnection: a time allowed of zero was taken"); }
+
+refused = False;
+try { plain.Timeout = 0; } except { refused = True; }
+if (Not refused Or plain.Timeout <> 30) { Raise("HTTPConnection: a refused time allowed replaced the one that stood"); }
+
+refused = False;
+try { var text = plain.CallMethod("GET", request); } except { refused = True; }
+if (Not refused) { Raise("HTTPConnection: a string was taken for an HTTPMethod"); }
+
+refused = False;
+try { var nowhere = New HTTPConnection("api.example", 0); } except { refused = True; }
+if (Not refused) { Raise("HTTPConnection: a port of zero was taken - it is given, not left out"); }
+
+// A string where an object is expected is a sentence, not a crash.
+refused = False;
+try { request.Headers = "Accept: x"; } except { refused = True; }
+if (Not refused Or request.Headers["Content-Type"] <> "application/json") { Raise("HTTPRequest: a string was taken for the headers, or replaced them"); }
+
+refused = False;
+try { request.SetBodyFromBinaryData("bytes"); } except { refused = True; }
+if (Not refused) { Raise("HTTPRequest: a string was taken for a BinaryData"); }
+
+refused = False;
+try { var answer = plain.Get("/v1/sales"); } except { refused = True; }
+if (Not refused) { Raise("HTTPConnection: a string was taken for an HTTPRequest"); }
+
+// ...and a request left out altogether is the same sentence, not an Undefined handed back in silence.
+refused = False;
+try { var nothing = plain.Get(); } except { refused = True; }
+if (Not refused) { Raise("HTTPConnection: a request left out was not refused"); }
+
+// A fragment is never sent to a server.
+refused = False;
+try { request.ResourceAddress = "/v1/sales#top"; } except { refused = True; }
+if (Not refused) { Raise("HTTPRequest: a fragment was taken into an address"); }
+Message("HTTPConnection: ok");
+
+// A secure connection: what can be asked without a server. A CertificateFile needs a file that is there, so
+// one is made - what is in it is the library's business, at the first request.
+var pemPath = GetTempFileName();
+var pem = New TextWriter(pemPath, TextEncoding.UTF8);
+pem.WriteLine("-----BEGIN CERTIFICATE-----");
+pem.WriteLine("-----END CERTIFICATE-----");
+pem.Close();
+
+var trust = New CertificateFile(pemPath);
+if (trust.Path <> pemPath) { Raise("CertificateFile: the path does not come back"); }
+
+refused = False;
+try { var missing = New CertificateFile("C:\no\such\file.pem"); } except { refused = True; }
+if (Not refused) { Raise("CertificateFile: a file that is not there was taken"); }
+
+var secure = New SecureConnection();
+if (Not secure.VerifyServerCertificate) { Raise("SecureConnection: the check is on unless said"); }
+if (secure.TrustedCertificates <> Undefined Or secure.ClientCertificate <> Undefined) { Raise("SecureConnection: something is named when nothing was"); }
+secure.TrustedCertificates = trust;
+secure.VerifyServerCertificate = False;
+if (secure.TrustedCertificates.Path <> pemPath) { Raise("SecureConnection: the trusted certificates do not come back"); }
+
+refused = False;
+try { secure.ClientCertificate = "client.pem"; } except { refused = True; }
+if (Not refused) { Raise("SecureConnection: a string was taken for a certificate"); }
+
+refused = False;
+try { secure.VerifyServerCertificate = 1; } except { refused = True; }
+if (Not refused Or secure.VerifyServerCertificate) { Raise("SecureConnection: a number was taken for the switch"); }
+
+var site = New HTTPConnection("api.example");
+if (site.Port <> 80) { Raise("HTTPConnection: a port nobody gave is 80 without a secure connection"); }
+site.SecureConnection = secure;
+if (site.Port <> 443) { Raise("HTTPConnection: a port nobody gave is 443 with one"); }
+site.SecureConnection = Undefined;
+if (site.Port <> 80) { Raise("HTTPConnection: and 80 again when it is taken away"); }
+
+refused = False;
+try { site.SecureConnection = "yes"; } except { refused = True; }
+if (Not refused) { Raise("HTTPConnection: a string was taken for a SecureConnection"); }
+
+FileDelete(pemPath);
+Message("SecureConnection: ok");

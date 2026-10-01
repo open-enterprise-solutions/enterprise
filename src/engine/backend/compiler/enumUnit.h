@@ -2,20 +2,19 @@
 #define __ENUM_UNIT_H__
 
 #include "value.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataNode - the enum writes its member into one
 
-class BACKEND_API ibValueEnumerationWrapper : public ibValue {
-	ibValueMethodHelper* m_methodHelper;
+class BACKEND_API ibValueEnumerationWrapper : public ibValueDynamicMembers {
 public:
 
 	ibValueEnumerationWrapper(bool createInstance = false);
 	virtual ~ibValueEnumerationWrapper();
 
-	virtual ibValueMethodHelper* GetPMethods() const { return m_methodHelper; }
-	virtual void PrepareNames() const;
+	void FillMembers(ibMemberTable& helper) const;   // bound in ctor (was PrepareNames)
 
 	virtual ibValue* GetEnumVariantValue() const = 0;
 	virtual wxString GetClassName() const = 0;
-	virtual wxString GetString() const = 0;
+	virtual ibString GetString() const = 0;
 
 protected:
 	std::vector<wxString> m_listEnumStr;
@@ -27,12 +26,27 @@ protected:
 
 template <typename valT>
 class ibValueEnumerationVariantBase : public ibValue {
-public:
+	public:
 
 	ibValueEnumerationVariantBase() : ibValue(ibValueTypes::TYPE_ENUM, true) {}
 
 	virtual valT GetEnumValue() const = 0;
 	virtual void SetEnumValue(const valT& v) = 0;
+
+	// PACKING AN ENUM IS PACKING ITS MEMBER — the header already carries the type, so the member
+	// number is the whole of the contents. Without this the base's switch fell through to "a type
+	// with contents of its own that did not override this" and answered NO, which means an
+	// enumeration could not be stored ANYWHERE: a saved list filter on an enum column came back
+	// empty (the copy is made by packing, and a refusal left the buffer cleared), and so did every
+	// other setting that happened to hold one. It read as "the filter will not display".
+	virtual bool DoSerialize(class ibDataNode& node) const override {
+		node.SetValue(kValueFieldData, (s32)GetEnumValue());
+		return true;
+	}
+	virtual bool DoDeserialize(const class ibDataNode& node) override {
+		SetEnumValue(static_cast<valT>(node.GetValue<s32>(kValueFieldData)));
+		return true;
+	}
 };
 
 //***************************************************************************************************
@@ -41,7 +55,7 @@ public:
 
 template <typename valT>
 class ibValueEnumerationBase : public ibValueEnumerationWrapper {
-public:
+	public:
 
 	ibValueEnumerationBase(bool createInstance = false) :
 		ibValueEnumerationWrapper(createInstance)
@@ -66,6 +80,7 @@ public:
 //default base class for all enumerations
 template <typename valT>
 class ibValueEnumeration : public ibValueEnumerationBase<valT> {
+	public:
 	std::map<valT, wxString> m_listEnumData, m_listEnumDesc;
 protected:
 
@@ -87,7 +102,7 @@ protected:
 		virtual void SetEnumValue(const valT& v) override { m_value = v; }
 
 		virtual bool FindValue(const wxString& findData, std::vector<ibValue>& listValue) const override {
-			ibValuePtr<ibValueEnumeration<valType>> enumOwner(ibValue::CreateAndConvertObjectRef<ibValueEnumeration<valType>>(m_clsid));
+			const ibValuePtr<ibValueEnumeration<valType>> enumOwner(ibValue::CreateObject(m_clsid));
 			for (auto& e : enumOwner->m_listEnumData) {
 				if (e.second.Contains(findData)) {
 					ibValueEnumerationVariant<valType>* enumValue = new ibValueEnumerationVariant<valType>(e.first, m_clsid);
@@ -123,24 +138,76 @@ protected:
 			return true;
 		}
 
+		// ⭐⭐ ORDERED BY THE MEMBER, NOT BY ITS TEXT (Max, 2026-08-29). Sorting a column of an enumeration
+		// must follow the order the enumeration DECLARES — "Wholesale, Retail" is the author's sequence and
+		// it carries meaning, while the alphabet of the presentations is an accident of the words and moves
+		// the moment they are translated.
+		//
+		// 🛑 Only the ORDER was still text. The `==` family above has always answered by the member, so a
+		// filter on an enum column agreed with the data while a SORT of the same column did not — one value,
+		// two orders. `<` is the primitive the rest of the family is stated over (see value.h), so this one
+		// override turns `>`, `<=` and `>=` with it.
+		//
+		// ⚠ NOTHING CHOSEN SORTS FIRST, and by the same rule rather than by an exception: the empty
+		// enumeration is written in the NEGATIVE range (see IsEmpty below), so it simply is the smallest
+		// member. A cell holding no enumeration AT ALL is not this — it is TYPE_EMPTY and the base answers
+		// for it, also first.
+		//
+		// A comparand that is not an enumeration of this kind is left to the base: what orders a mixed
+		// column is its kind ranking, and this override has nothing truer to say about it.
+		virtual int CompareValueLS(const ibValue& cParam) const override {
+			ibValueEnumerationVariant<valType>* compareEnumeration = dynamic_cast<ibValueEnumerationVariant<valType> *>(cParam.GetRef());
+			if (compareEnumeration)
+				return m_value < compareEnumeration->m_value ? -1 : (compareEnumeration->m_value < m_value ? 1 : 0);
+			ibValueEnumeration<valType>* compareEnumerationOwner = dynamic_cast<ibValueEnumeration<valType> *>(cParam.GetRef());
+			if (compareEnumerationOwner) {
+				const valType there = compareEnumerationOwner->GetEnumValue();
+				return m_value < there ? -1 : (there < m_value ? 1 : 0);
+			}
+			return ibValue::CompareValueLS(cParam);
+		}
+
 		//get type id
 		virtual ibClassID GetClassType() const override { return m_clsid; }
 
-		//check is empty
-		virtual bool IsEmpty() const override { return false; }
+		// ⭐ BY THE SIGN, not by a member: a member number is non-negative whatever the declaration
+		// chose (backend_core.h), and the negative range is what "nothing chosen" is written in — the
+		// same number the write binds into a column carrying no value and the DDL defaults it to. So
+		// a variant built from it is the empty enumeration in its OTHER shape: same state, different
+		// carrier. Answering "not empty" here let it walk past every fill-check the owner now stops.
+		virtual bool IsEmpty() const override { return static_cast<long>(m_value) <= emptyEnum; }
 
 		//type info
 		virtual wxString GetClassName() const override { return ibValue::GetNameObjectFromID(m_clsid); }
 
 		//type conversion
-		virtual wxString GetString() const override { return m_name; }
-		virtual ibNumber GetNumber() const override { return m_value; }
+		// THE DESCRIPTION IS WHAT A PERSON READS — the caption in their own
+		// language, translated, not the identifier behind it. The NAME is
+		// the identifier a script writes (`ComparisonKind.Equal`) and what a saved
+		// setting round-trips; presenting it in a picker or a cell makes the form
+		// speak in identifiers. Falls back to the name when a member was declared
+		// without a description, so nothing is ever blank.
+		virtual ibString GetString() const override {
+			return m_description.IsEmpty() ? m_name : m_description;
+		}
+		// The identifier, for whoever needs it as such.
+		const wxString& GetEnumMemberName() const { return m_name; }
+		// ⚠ CAST, NOT AN IMPLICIT CONVERSION — the same one IsEmpty above already writes. A member
+		// number is a number, but only an UNSCOPED enum says so on its own: a scoped one
+		// (`enum class`) converts to nothing implicitly, so this line was what refused to register a
+		// scoped enumeration in the runtime at all — and refused it in the template, where the
+		// enumeration itself is fine.
+		virtual ibNumber GetNumber() const override { return static_cast<long>(m_value); }
 
 	private:
 		wxString m_name;
 		wxString m_description;
-		ibClassID m_clsid;
-		valType m_value;
+		// ⭐ THE DEFAULT STATE IS "NO MEMBER", SPELLED — not whatever the memory happened to hold.
+		// Every member number is valid, so an uninitialised field is indistinguishable from a
+		// choice, and the one thing it can never be is caught. Starting at emptyEnum means the
+		// only way to hold a member is to have been given one.
+		ibClassID m_clsid = 0;
+		valType m_value = static_cast<valType>(emptyEnum);
 	};
 
 	virtual wxString GetEnumName(const valT& v) const { return m_listEnumData.at(v); }
@@ -195,17 +262,54 @@ public:
 		if (m_value != nullptr) {
 			return m_value->GetEnumValue();
 		}
-		return valT();
+		// NOT valT() — that is ZERO, and zero is an ordinary member number. An enumeration with no
+		// member answered as though that member had been chosen, the same mistake the column default
+		// made one layer up.
+		return static_cast<valT>(emptyEnum);
 	}
 
+	// ⭐ SETTING A MEMBER ON AN ENUMERATION THAT HAS NONE MUST CREATE IT. The guard read as "keep the
+	// carrier in step", but an owner with no member yet is exactly the state a value arrives in —
+	// from AdjustValue, from a cleared field — so the assignment it was meant to protect was the one
+	// that mattered, and it did nothing at all, silently. The field stayed blank and the write
+	// carried nothing.
 	virtual void SetEnumValue(const valT& v) override {
-		if (m_value != nullptr) {
-			m_value->CreateEnumeration(
-				GetEnumName(v),
-				GetEnumDescription(v),
-				v
-			);
+		if (m_value == nullptr) {
+			InitializeEnumeration(v);
+			return;
 		}
+		m_value->CreateEnumeration(
+			GetEnumName(v),
+			GetEnumDescription(v),
+			v
+		);
+	}
+
+	// ⭐⭐ AN ENUMERATION WITH NO MEMBER STILL HAS A PACKED FORM — "no member".
+	//
+	// The VARIANT got these long ago (see the note on ibValueEnumerationVariantBase), and the reason
+	// given there applies to this shape word for word: without them the base's switch falls through
+	// to "a type with contents of its own that did not override this" and answers NO — which is not
+	// "empty", it is a REFUSAL, and the refusal surfaces as "Failed to read the contents of a value
+	// of type 'AccountType'" the moment anything holding one is read back. A list filter over an
+	// enum column holds exactly that: the row is created with the column's empty value, and the
+	// dialog could not be opened again afterwards.
+	//
+	// emptyEnum is the member number that means "none" — the same one the enum column binds when the
+	// cell carries no value, so the packed form and the stored column agree.
+	virtual bool DoSerialize(class ibDataNode& node) const override {
+		node.SetValue(kValueFieldData, m_value != nullptr ? (s32)m_value->GetEnumValue() : (s32)emptyEnum);
+		return true;
+	}
+
+	virtual bool DoDeserialize(const class ibDataNode& node) override {
+		const s32 member = node.GetValue<s32>(kValueFieldData);
+		if (member <= emptyEnum) {
+			m_value = decltype(m_value)();   // read back as written: an enumeration with no member
+			return true;
+		}
+		InitializeEnumeration(static_cast<valT>(member));
+		return true;
 	}
 
 	//create enumeration 
@@ -226,9 +330,11 @@ public:
 		return nullptr;
 	}
 
-	//initialize enumeration 
+	//initialize enumeration
 	void InitializeEnumeration() {
-		this->PrepareNames();
+		// Names surface lazily from FillMembers (Build on first GetPMethods);
+		// m_listEnumStr is already populated by AddEnumeration above.
+		this->m_members.Invalidate();
 	}
 
 	void InitializeEnumeration(const valT& v) {
@@ -264,22 +370,20 @@ public:
 
 	unsigned int GetEnumCount() const { return m_listEnumData.size(); }
 
+	// ⚠ THE PROPERTY NUMBER COUNTS IN DECLARATION ORDER (FillMembers lists m_listEnumStr), and the
+	// member table is a map ordered by VALUE. Stepping through the map by that number agreed only while
+	// an enumeration happened to be declared in ascending order: `Chars` is not (CR = 13 first, Tab = 9
+	// fifth), so `Chars.LF` came back as VTab (measured 2026-09-10). The name at that position is the
+	// one fact both orders share.
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal) override { //attribute value
-		auto itEnums = m_listEnumData.begin();
-		std::advance(itEnums, lPropNum);
-		if (itEnums != m_listEnumData.end()) {
-			ibValueEnumerationVariant<valT>* enumValue =
-				new ibValueEnumerationVariant<valT>(itEnums->first, ibValue::GetClassType());
-			if (enumValue != nullptr) {
-				enumValue->CreateEnumeration(
-					GetEnumName(itEnums->first),
-					GetEnumDescription(itEnums->first),
-					itEnums->first
-				);
-				pvarPropVal = enumValue;
-				return true;
-			}
+		if (lPropNum < 0 || static_cast<size_t>(lPropNum) >= this->m_listEnumStr.size())
 			return false;
+		const wxString& name = this->m_listEnumStr[lPropNum];
+		for (const auto& e : m_listEnumData) {
+			if (e.second != name)
+				continue;
+			pvarPropVal = CreateEnumVariantValue(e.first);
+			return true;
 		}
 		return false;
 	}
@@ -318,8 +422,12 @@ public:
 		return ibValue::CompareValueNE(cParam);
 	}
 
-	//check is empty
-	virtual bool IsEmpty() const override { return false; }
+	// ⭐ NO MEMBER CHOSEN IS EMPTY. This answered NO unconditionally, while the two methods right
+	// below already tell the truth about the same state — GetString returns "" and GetNumber returns
+	// wxNOT_FOUND when m_value is null. Fill-check asks exactly this question (SaveData), so a
+	// required enumeration left unset was saved as if it had been filled in, and the refusal the
+	// attribute's flag promised never came. The VARIANT stays non-empty: a chosen member is a value.
+	virtual bool IsEmpty() const override { return m_value == nullptr; }
 
 	//type info
 	virtual wxString GetClassName() const final {
@@ -328,14 +436,14 @@ public:
 	};
 
 	//type conversion
-	virtual wxString GetString() const final {
+	virtual ibString GetString() const final {
 		return m_value ? m_value->GetString() :
-			wxString(wxEmptyString);
+			ibString();
 	}
 
 	virtual ibNumber GetNumber() const final {
 		return m_value ? m_value->GetNumber() :
-			wxNOT_FOUND;
+			emptyEnum;
 	}
 
 protected:

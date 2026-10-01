@@ -5,12 +5,18 @@
 
 #include "gridEditor.h"
 
+#include <wx/activityindicator.h>   // the "composing..." spinner — see ShowComposeProgress
+#include <wx/stattext.h>
+
 #include "frontend/docView/docView.h"
+
+#include <wx/wupdlock.h>   // wxWindowUpdateLocker — the Freeze/Thaw pair taken as a guard
 
 enum
 {
 	wxID_ROW_HEIGHT = wxID_HIGHEST + 1,
 	wxID_COL_WIDTH,
+	wxID_FIT_COL_WIDTH,
 
 	wxID_HIDE_CELL,
 	wxID_SHOW_CELL
@@ -49,6 +55,7 @@ EVT_MENU(wxID_PASTE, ibGridEditor::OnPaste)
 EVT_MENU(wxID_DELETE, ibGridEditor::OnDelete)
 EVT_MENU(wxID_ROW_HEIGHT, ibGridEditor::OnRowHeight)
 EVT_MENU(wxID_COL_WIDTH, ibGridEditor::OnColWidth)
+EVT_MENU(wxID_FIT_COL_WIDTH, ibGridEditor::OnFitColWidth)
 EVT_MENU(wxID_HIDE_CELL, ibGridEditor::OnHideCell)
 EVT_MENU(wxID_SHOW_CELL, ibGridEditor::OnShowCell)
 EVT_MENU(wxID_PROPERTIES, ibGridEditor::OnProperties)
@@ -67,7 +74,7 @@ void ibGridEditor::ActivateEditor()
 
 // ctor and Create() create the grid window, as with the other controls
 ibGridEditor::ibGridEditor() : ibGrid(),
-m_propertySpreadsheet(nullptr), m_document(nullptr), m_spreadsheetObject(nullptr), m_enableProperty(true)
+m_document(nullptr), m_propertySpreadsheet(nullptr), m_spreadsheetObject(nullptr), m_enableProperty(true)
 {
 }
 
@@ -75,12 +82,28 @@ ibGridEditor::ibGridEditor(ibMetaDocument* document,
 	wxWindow* parent,
 	wxWindowID id, const wxPoint& pos,
 	const wxSize& size) : ibGrid(parent, id, pos, size),
-	m_propertySpreadsheet(nullptr), m_document(document), m_spreadsheetObject(nullptr), m_enableProperty(true)
+	m_document(document), m_propertySpreadsheet(nullptr), m_spreadsheetObject(nullptr), m_enableProperty(true)
 {
 	m_rowLabelWidth = s_rowLabelWidth;
 	m_colLabelHeight = s_colLabelHeight;
 	m_defaultColWidth = s_defaultColWidth;
 	m_defaultRowHeight = s_defaultRowHeight;
+
+	// 🛑⭐⭐ A DOCUMENT'S SIZES ARE DATA, NOT A GESTURE — so the grid's minimum does not apply to
+	// them. `SetColSize` SILENTLY RETURNS below GetColMinimalAcceptableWidth (15 px, from the
+	// widget's own defaults), which is right for a person dragging an edge — nobody means to make a
+	// column two pixels wide with the mouse — and wrong for a layout that says two pixels because
+	// it means them.
+	//
+	// ⭐ MEASURED on an imported invoice (2026-09-02): the blank is drawn on a FINE GRID, columns of
+	// two to four characters, and five of them landed under the threshold. Each was dropped in
+	// silence and kept the default 70 px, so the page came out 1232 px wide where the workbook says
+	// 943 — a third too wide, with no error anywhere. Half-columns are ordinary in a printed form
+	// (Max: *"a legitimate situation - the grid itself is what blocks it"*).
+	//
+	// Zero stays special: it is how a hidden row or column is expressed, here and in xlsx alike.
+	ibGrid::SetColMinimalAcceptableWidth(1);
+	ibGrid::SetRowMinimalAcceptableHeight(1);
 
 	// Grid
 	ibGrid::EnableEditing(true);
@@ -164,6 +187,27 @@ void ibGridEditor::MergeCells()
 	ibGrid::ForceRefresh();
 }
 
+// ⭐ WHERE THE CONTENT ENDS — asked before the endless sheet trims itself, so it can
+// take back the rows it grew and nothing else. See the header for what it cost not to
+// ask: a workbook opened from disk was cut down to the visible window the first time
+// somebody scrolled back up.
+//
+// ⭐ THE TABLE ANSWERS IT, not this walk. Trimming happens on every scroll EVENT — three
+// per wheel notch — and a walk over twenty thousand rows three times a notch is a visible
+// stall. The table is where the content is and where every door that changes it lives, so
+// it keeps the answer instead of the sheet re-deriving it (see ibGridEditorStringTable).
+int ibGridEditor::GetLastContentRow()
+{
+	ibGridEditorStringTable* table = GetEditorTable();
+	return table != nullptr ? table->GetLastContentRow() : -1;
+}
+
+int ibGridEditor::GetLastContentCol()
+{
+	ibGridEditorStringTable* table = GetEditorTable();
+	return table != nullptr ? table->GetLastContentCol() : -1;
+}
+
 void ibGridEditor::DockTable()
 {
 	if (!ibGrid::IsEditable())
@@ -173,6 +217,43 @@ void ibGridEditor::DockTable()
 	ibGridEditor::FreezeTo(cellRange.GetBottomRow(), cellRange.GetRightCol());
 
 	ibGrid::ForceRefresh();
+}
+
+// See the header. Built on first use and kept: a spinner that is created and destroyed per compose
+// flickers, and the second compose is the common case.
+void ibGridEditor::ShowComposeProgress(bool busy)
+{
+	if (m_composeProgress == nullptr) {
+		if (!busy)
+			return;   // nothing built, nothing to hide
+
+		wxWindow* const panel = new wxPanel(this, wxID_ANY);
+		panel->SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNFACE));
+
+		wxBoxSizer* const sizer = new wxBoxSizer(wxHORIZONTAL);
+		wxActivityIndicator* const spinner = new wxActivityIndicator(panel);
+		spinner->Start();
+		sizer->Add(spinner, 0, wxALL | wxALIGN_CENTER_VERTICAL, FromDIP(6));
+		sizer->Add(new wxStaticText(panel, wxID_ANY, _("Composing...")),
+			0, wxALL | wxALIGN_CENTER_VERTICAL, FromDIP(6));
+		panel->SetSizerAndFit(sizer);
+
+		m_composeProgress = panel;
+	}
+
+	if (!busy) {
+		m_composeProgress->Hide();
+		return;
+	}
+
+	// Centred over the sheet — it belongs to the thing that is filling, and it must not cover the
+	// toolbar the person still uses while it fills.
+	const wxSize client = GetClientSize();
+	const wxSize own    = m_composeProgress->GetSize();
+	m_composeProgress->Move((client.x - own.x) / 2, (client.y - own.y) / 3);
+	m_composeProgress->Show();
+	m_composeProgress->Raise();
+	m_composeProgress->Update();
 }
 
 #pragma endregion
@@ -228,8 +309,15 @@ void ibGridEditor::SetCellDetailsParameter(const ibGridBlockCoords& coords, cons
 
 void ibGridEditor::OnMouseLeftDown(ibGridEvent& event)
 {
-	if (m_spreadsheetObject != nullptr && !IsEditable())
-		m_spreadsheetObject->OpenCellDetailsParameter(event.GetRow(), event.GetCol());
+	// A CELL BOUND TO A VALUE OPENS IT — asked of the sheet, opened by the runtime. Which window a
+	// value has is the value's own business, so there is nothing here to decide.
+	if (m_spreadsheetObject != nullptr && !IsEditable()) {
+		wxString bound;
+		m_spreadsheetObject->GetCellDetailsParameter(event.GetRow(), event.GetCol(), bound);
+		ibValue boundValue;
+		if (!bound.IsEmpty() && m_spreadsheetObject->GetParameter(bound, boundValue))
+			boundValue.ShowValue();
+	}
 
 	event.Skip();
 }
@@ -289,6 +377,8 @@ void ibGridEditor::OnMouseRightDown(ibGridEvent& event)
 			item = menuPopup.Append(wxID_SHOW_CELL, _("Display"));
 			item->SetBitmap(wxArtProvider::GetBitmapBundle(wxART_PLUS, wxART_MENU));
 			item = menuPopup.Append(wxID_COL_WIDTH, _("Column width..."));
+			item->SetBitmap(wxArtProvider::GetBitmapBundle(wxART_FULL_SCREEN, wxART_MENU));
+			item = menuPopup.Append(wxID_FIT_COL_WIDTH, _("Fit width to content"));
 			item->SetBitmap(wxArtProvider::GetBitmapBundle(wxART_FULL_SCREEN, wxART_MENU));
 		}
 		else if (event.GetRow() != wxNOT_FOUND &&
@@ -361,10 +451,14 @@ void ibGridEditor::OnKeyDown(wxKeyEvent& event)
 			}
 		}
 		else if (scroll < 0 && code == WXK_UP) {
-			if (y0 > GetMaxRowBrake() && y0 != 0) ibGrid::DeleteRows(ibGrid::GetNumberRows() - 1);
+			// …and the same floor when the trim comes from the keyboard: what the view
+			// grew may be taken back, what the document brought may not.
+			if (y0 > wxMax(GetMaxRowBrake(), GetLastContentRow()) && y0 != 0)
+				ibGrid::DeleteRows(ibGrid::GetNumberRows() - 1);
 		}
 		else if (scroll < 0 && code == WXK_LEFT) {
-			if (x0 > GetMaxColBrake() && x0 != 0) ibGrid::DeleteCols(ibGrid::GetNumberCols() - 1);
+			if (x0 > wxMax(GetMaxColBrake(), GetLastContentCol()) && x0 != 0)
+				ibGrid::DeleteCols(ibGrid::GetNumberCols() - 1);
 		}
 	}
 
@@ -373,26 +467,58 @@ void ibGridEditor::OnKeyDown(wxKeyEvent& event)
 
 void ibGridEditor::OnGridRowSize(ibGridSizeEvent& event)
 {
+	// A row the editor has just fitted to its text keeps no height of its own — see m_quietSizing.
+	if (m_quietSizing) {
+		event.Skip();
+		return;
+	}
+
+	const int row = event.GetRowOrCol();
+	const int height = GetRowSize(row);
+
+	// ⭐ A HEIGHT EQUAL TO THE WORKED-OUT ONE IS NO HEIGHT AT ALL. Dragging a row back to the size it would
+	// take by itself — and UNDOING a drag, which is the same road — gives the row its automatic height back
+	// instead of freezing that number; otherwise a row could be made automatic again only through the
+	// dialog, and an undone drag left the row fixed at what it had always shown (Max, 2026-09-22).
+	bool own = true;
+	if (m_spreadsheetObject != nullptr) {
+
+		ibSpreadsheetDescription& spreadsheetDescription = m_spreadsheetObject->GetSpreadsheetDesc();
+		spreadsheetDescription.ResetRowSize(row);
+
+		wxClientDC dc(GetGridWindow());
+		own = height != ibSpreadsheetRowHeight(*m_spreadsheetObject, row, dc, m_spreadsheetObject->GetLangCode());
+
+		if (own)
+			spreadsheetDescription.SetRowSize(row, height);
+	}
+
 	if (m_document != nullptr) {
 
 		ibValueMetaObjectSpreadsheetBase* creator = m_document->ConvertMetaObjectToType<ibValueMetaObjectSpreadsheetBase>();
 
 		if (creator != nullptr) {
 			ibSpreadsheetDescription& spreadsheetDescription = creator->GetSpreadsheetDesc();
-			spreadsheetDescription.SetRowSize(event.GetRowOrCol(), GetRowSize(event.GetRowOrCol()));
+			if (own)
+				spreadsheetDescription.SetRowSize(row, height);
+			else
+				spreadsheetDescription.ResetRowSize(row);
 		}
 
 		m_document->Modify(true);
 	}
-
-	ibSpreadsheetDescription& spreadsheetDescription = m_spreadsheetObject->GetSpreadsheetDesc();
-	spreadsheetDescription.SetRowSize(event.GetRowOrCol(), GetRowSize(event.GetRowOrCol()));
 
 	event.Skip();
 }
 
 void ibGridEditor::OnGridColSize(ibGridSizeEvent& event)
 {
+	// A column put back to the default width keeps no width of its own — see m_quietSizing.
+	if (m_quietSizing) {
+		event.Skip();
+		return;
+	}
+
 	if (m_document != nullptr) {
 
 		ibValueMetaObjectSpreadsheetBase* creator = m_document->ConvertMetaObjectToType<ibValueMetaObjectSpreadsheetBase>();
@@ -409,6 +535,9 @@ void ibGridEditor::OnGridColSize(ibGridSizeEvent& event)
 		ibSpreadsheetDescription& spreadsheetDescription = m_spreadsheetObject->GetSpreadsheetDesc();
 		spreadsheetDescription.SetColSize(event.GetRowOrCol(), GetColSize(event.GetRowOrCol()));
 	}
+
+	// A wrapped caption in this column takes more lines, or fewer, at the new width.
+	FitAutoRowHeights();
 
 	event.Skip();
 }
@@ -638,6 +767,9 @@ void ibGridEditor::OnGridTableModified(ibGridEvent& event)
 		spreadsheetDescription.SetCellValue(event.GetRow(), event.GetCol(), *value);
 	}
 
+	// The text changed, and with it the height it needs (a row without a height of its own follows it).
+	FitAutoRowHeights(event.GetRow(), event.GetRow());
+
 	event.Skip();
 }
 
@@ -666,21 +798,21 @@ void ibGridEditor::OnGridTableAttrModified(ibGridEvent& event)
 			//border 
 			const ibGridCellBorder& borderLeft = GetCellBorderLeft(event.GetRow(), event.GetCol());
 			spreadsheetDescription.SetCellBorderLeft(event.GetRow(), event.GetCol(), { borderLeft.m_style, borderLeft.m_colour, borderLeft.m_width });
-			const ibGridCellBorder& borderRight = GetCellBorderLeft(event.GetRow(), event.GetCol());
+			const ibGridCellBorder& borderRight = GetCellBorderRight(event.GetRow(), event.GetCol());
 			spreadsheetDescription.SetCellBorderRight(event.GetRow(), event.GetCol(), { borderRight.m_style, borderRight.m_colour, borderRight.m_width });
-			const ibGridCellBorder& borderTop = GetCellBorderLeft(event.GetRow(), event.GetCol());
+			const ibGridCellBorder& borderTop = GetCellBorderTop(event.GetRow(), event.GetCol());
 			spreadsheetDescription.SetCellBorderTop(event.GetRow(), event.GetCol(), { borderTop.m_style, borderTop.m_colour, borderTop.m_width });
-			const ibGridCellBorder& borderBottom = GetCellBorderLeft(event.GetRow(), event.GetCol());
+			const ibGridCellBorder& borderBottom = GetCellBorderBottom(event.GetRow(), event.GetCol());
 			spreadsheetDescription.SetCellBorderBottom(event.GetRow(), event.GetCol(), { borderBottom.m_style, borderBottom.m_colour, borderBottom.m_width });
 
 			//size 
 			spreadsheetDescription.SetCellSize(event.GetRow(), event.GetCol(), num_rows, num_cols);
 
-			//cell
+			//cell — through the one translation (gridEditor.h): the ternary here stored Wrap as Clip
 			ibGridFitMode fitMode =
 				GetCellFitMode(event.GetRow(), event.GetCol());
 
-			spreadsheetDescription.SetCellFitMode(event.GetRow(), event.GetCol(), fitMode.IsOverflow() ? ibSpreadsheetCellDescription::ibFitMode::Mode_Overflow : ibSpreadsheetCellDescription::ibFitMode::Mode_Clip);
+			spreadsheetDescription.SetCellFitMode(event.GetRow(), event.GetCol(), ibFromGridFitMode(fitMode));
 			spreadsheetDescription.SetCellReadOnly(event.GetRow(), event.GetCol(), IsCellReadOnly(event.GetRow(), event.GetCol()));
 		}
 
@@ -700,23 +832,26 @@ void ibGridEditor::OnGridTableAttrModified(ibGridEvent& event)
 		//border 
 		const ibGridCellBorder& borderLeft = GetCellBorderLeft(event.GetRow(), event.GetCol());
 		spreadsheetDescription.SetCellBorderLeft(event.GetRow(), event.GetCol(), { borderLeft.m_style, borderLeft.m_colour, borderLeft.m_width });
-		const ibGridCellBorder& borderRight = GetCellBorderLeft(event.GetRow(), event.GetCol());
+		const ibGridCellBorder& borderRight = GetCellBorderRight(event.GetRow(), event.GetCol());
 		spreadsheetDescription.SetCellBorderRight(event.GetRow(), event.GetCol(), { borderRight.m_style, borderRight.m_colour, borderRight.m_width });
-		const ibGridCellBorder& borderTop = GetCellBorderLeft(event.GetRow(), event.GetCol());
+		const ibGridCellBorder& borderTop = GetCellBorderTop(event.GetRow(), event.GetCol());
 		spreadsheetDescription.SetCellBorderTop(event.GetRow(), event.GetCol(), { borderTop.m_style, borderTop.m_colour, borderTop.m_width });
-		const ibGridCellBorder& borderBottom = GetCellBorderLeft(event.GetRow(), event.GetCol());
+		const ibGridCellBorder& borderBottom = GetCellBorderBottom(event.GetRow(), event.GetCol());
 		spreadsheetDescription.SetCellBorderBottom(event.GetRow(), event.GetCol(), { borderBottom.m_style, borderBottom.m_colour, borderBottom.m_width });
 
 		//size 
 		spreadsheetDescription.SetCellSize(event.GetRow(), event.GetCol(), num_rows, num_cols);
 
-		//cell
+		//cell — through the one translation (gridEditor.h): the ternary here stored Wrap as Clip
 		ibGridFitMode fitMode =
 			GetCellFitMode(event.GetRow(), event.GetCol());
 
-		spreadsheetDescription.SetCellFitMode(event.GetRow(), event.GetCol(), fitMode.IsOverflow() ? ibSpreadsheetCellDescription::ibFitMode::Mode_Overflow : ibSpreadsheetCellDescription::ibFitMode::Mode_Clip);
+		spreadsheetDescription.SetCellFitMode(event.GetRow(), event.GetCol(), ibFromGridFitMode(fitMode));
 		spreadsheetDescription.SetCellReadOnly(event.GetRow(), event.GetCol(), IsCellReadOnly(event.GetRow(), event.GetCol()));
 	}
+
+	// A font, a placement, a merge — each changes the height the row's text needs; the document has it now.
+	FitAutoRowHeights(event.GetRow(), event.GetRow() + wxMax(num_rows, 1) - 1);
 
 	event.Skip();
 }
@@ -820,19 +955,37 @@ void ibGridEditor::OnScroll(wxScrollWinEvent& event)
 			ibGrid::SetScrollPos(wxOrientation::wxHORIZONTAL, (sx + scroll) / ux);
 		}
 	}
+	// ⭐⭐ TRIMMED IN ONE CALL, NOT ONE ROW AT A TIME — the same lesson the append side
+	//    (…and never below the content — see GetLastContentRow.)
+	// above already learned ("a single AppendRows() per scroll produced visible jerks"),
+	// and the delete side had kept the loop.
+	//
+	// 🛑 WHAT THE LOOP COST. Every DeleteRows() is a table message: the grid redimensions,
+	// rebuilds its whole cell-attribute map (the map is keyed by coordinates, so a shift
+	// re-keys every entry into a fresh copy) and recomputes the scrollbars. That is
+	// per-sheet work paid per ROW — open a file with tens of thousands of rows, scroll up
+	// once, and the trim runs it thirty thousand times over (Max, 2026-08-26: the profiler
+	// caught it inside UpdateAttrRowsOrCols and AdjustScrollbars, reached from here).
 	else if (scroll < 0 && event.GetOrientation() == wxOrientation::wxVERTICAL) {
-		const int y = ibGrid::YToRow(sy + h + scroll, true) + 1;
-		if (y0 > GetMaxRowBrake() && y0 != 0) {
-			for (int row = ibGrid::GetNumberRows(); row > y; row--)
-				ibGrid::DeleteRows(row - 1);
+		// NEVER ABOVE WHAT IS FILLED IN — the page break is a floor for the printed
+		// layout, the content is a floor for the DATA, and a file that brought its own
+		// rows has no breaks at all.
+		const int floor = wxMax(GetMaxRowBrake(), GetLastContentRow());
+		const int y = wxMax(ibGrid::YToRow(sy + h + scroll, true) + 1, floor + 1);
+		if (y0 > floor && y0 != 0) {
+			const int extraRows = ibGrid::GetNumberRows() - y;
+			if (extraRows > 0)
+				ibGrid::DeleteRows(y, extraRows);
 			ibGrid::SetScrollPos(wxOrientation::wxVERTICAL, (sy + scroll) / uy);
 		}
 	}
 	else if (scroll < 0 && event.GetOrientation() == wxOrientation::wxHORIZONTAL) {
-		const int x = ibGrid::XToCol(sx + w + scroll, true);
-		if (x0 > GetMaxColBrake() && x0 != 0) {
-			for (int col = ibGrid::GetNumberCols(); col > x; col--)
-				ibGrid::DeleteCols(col - 1);
+		const int floor = wxMax(GetMaxColBrake(), GetLastContentCol());
+		const int x = wxMax(ibGrid::XToCol(sx + w + scroll, true), floor + 1);
+		if (x0 > floor && x0 != 0) {
+			const int extraCols = ibGrid::GetNumberCols() - x;
+			if (extraCols > 0)
+				ibGrid::DeleteCols(x, extraCols);
 			ibGrid::SetScrollPos(wxOrientation::wxHORIZONTAL, (sx + scroll) / ux);
 		}
 	}
@@ -842,6 +995,13 @@ void ibGridEditor::OnScroll(wxScrollWinEvent& event)
 
 void ibGridEditor::OnIdle(wxIdleEvent& event)
 {
+	// The rows a notifier marked (RequestAutoRowHeights) — the document holds what it was told by now.
+	if (m_autoHeightFrom >= 0) {
+		const int fromRow = m_autoHeightFrom, toRow = m_autoHeightTo;
+		m_autoHeightFrom = m_autoHeightTo = -1;
+		FitAutoRowHeights(fromRow, toRow);
+	}
+
 	event.Skip();
 }
 
@@ -869,6 +1029,36 @@ void ibGridEditor::OnSize(wxSizeEvent& event)
 		+ GetColOutlineSize();
 	const int w = wxMax(0, event.m_size.x - chromeX);
 	const int h = wxMax(0, event.m_size.y - chromeY);
+
+	FillVisibleArea(w, h);
+	event.Skip();
+}
+
+// See the header: grow the table until it covers the visible area, so the sheet looks like a sheet
+// wherever the window ends. Sizes are the gridWin-visible ones; passing -1 measures them here (the
+// caller that rebuilt a document has no size event to take them from).
+void ibGridEditor::FillVisibleArea(int width, int height)
+{
+	int ux, uy, sx, sy;
+	ibGrid::GetScrollPixelsPerUnit(&ux, &uy);
+	ibGrid::GetViewStart(&sx, &sy);
+	sx *= ux; sy *= uy;
+
+	int w = width;
+	int h = height;
+	if (w < 0 || h < 0) {
+		const wxSize client = ibGrid::GetClientSize();
+		const int chromeX = ibCalcGridScale(m_rowLabelWidth, GetGridZoom())
+			+ (GridRowAreaEnabled() ? ibCalcGridScale(m_rowAreaWidth, GetGridZoom()) : 0)
+			+ GetRowOutlineSize();
+		const int chromeY = ibCalcGridScale(m_colLabelHeight, GetGridZoom())
+			+ (GridColAreaEnabled() ? ibCalcGridScale(m_colAreaHeight, GetGridZoom()) : 0)
+			+ GetColOutlineSize();
+		w = wxMax(0, client.x - chromeX);
+		h = wxMax(0, client.y - chromeY);
+	}
+	if (w <= 0 || h <= 0)
+		return;
 
 	int x0 = ibGrid::XToCol(sx);
 	int y0 = ibGrid::YToRow(sy);
@@ -904,8 +1094,6 @@ void ibGridEditor::OnSize(wxSizeEvent& event)
 			m_table->AppendRows(row + 1);
 		}
 	}
-
-	event.Skip();
 }
 
 void ibGridEditor::OnGridZoom(ibGridEvent& event)
@@ -1017,12 +1205,38 @@ void ibGridEditor::OnRowHeight(wxCommandEvent& event)
 	std::shared_ptr <ibDialogRowHeight> rowHeight(new ibDialogRowHeight(this));
 	const int result = rowHeight->ShowModal();
 	if (result == wxID_OK) {
+
+		// The window stands still while the rows are set: each one moves everything below it, and the
+		// repaints in between are the flicker (see FitAutoRowHeights).
+		wxWindowUpdateLocker freeze(this);
+		ibGrid::BeginBatch();
+
+		// A height typed here reaches the document the way a drag does — through the size event
+		// (OnGridRowSize). Only GIVING one UP has to be said here, because there is no event for it.
+		ibValueMetaObjectSpreadsheetBase* creator = m_document != nullptr ?
+			m_document->ConvertMetaObjectToType<ibValueMetaObjectSpreadsheetBase>() : nullptr;
+
 		for (auto cell : ibGrid::GetSelectedBlocks()) {
-			for (int row = cell.GetTopRow(); row <= cell.GetBottomRow(); row++) {
-				const int size = ibGrid::GetRowSize(row);
-				ibGrid::SetRowSize(row, rowHeight->GetHeight());
+			if (rowHeight->IsAutoHeight()) {
+				for (int row = cell.GetTopRow(); row <= cell.GetBottomRow(); row++) {
+					if (creator != nullptr)
+						creator->GetSpreadsheetDesc().ResetRowSize(row);
+					if (m_spreadsheetObject != nullptr)
+						m_spreadsheetObject->GetSpreadsheetDesc().ResetRowSize(row);
+				}
+				// …and the rows follow their text again, from this height on.
+				FitAutoRowHeights(cell.GetTopRow(), cell.GetBottomRow());
+
+				if (m_document != nullptr)
+					m_document->Modify(true);
+			}
+			else {
+				for (int row = cell.GetTopRow(); row <= cell.GetBottomRow(); row++)
+					ibGrid::SetRowSize(row, rowHeight->GetHeight());
 			}
 		}
+
+		ibGrid::EndBatch();
 	}
 }
 
@@ -1033,13 +1247,65 @@ void ibGridEditor::OnColWidth(wxCommandEvent& event)
 	std::shared_ptr<ibDialogColWidth> colWidth(new ibDialogColWidth(this));
 	const int result = colWidth->ShowModal();
 	if (result == wxID_OK) {
+
+		// Held still while the columns are set — see OnRowHeight.
+		wxWindowUpdateLocker freeze(this);
+		ibGrid::BeginBatch();
+
+		// As with a row's height: a width typed here reaches the document through the size event
+		// (OnGridColSize), and only GIVING one UP has to be said here.
+		ibValueMetaObjectSpreadsheetBase* creator = m_document != nullptr ?
+			m_document->ConvertMetaObjectToType<ibValueMetaObjectSpreadsheetBase>() : nullptr;
+
 		for (auto cell : ibGrid::GetSelectedBlocks()) {
-			for (int col = cell.GetLeftCol(); col <= cell.GetRightCol(); col++) {
-				const int size = ibGrid::GetColSize(col);
-				ibGrid::SetColSize(col, colWidth->GetWidth());
+			if (colWidth->IsDefaultWidth()) {
+				m_quietSizing = true;
+				for (int col = cell.GetLeftCol(); col <= cell.GetRightCol(); col++) {
+					ibGrid::SetColSize(col, s_defaultColWidth);
+					if (creator != nullptr)
+						creator->GetSpreadsheetDesc().ResetColSize(col);
+					if (m_spreadsheetObject != nullptr)
+						m_spreadsheetObject->GetSpreadsheetDesc().ResetColSize(col);
+				}
+				m_quietSizing = false;
+
+				if (m_document != nullptr)
+					m_document->Modify(true);
+			}
+			else {
+				for (int col = cell.GetLeftCol(); col <= cell.GetRightCol(); col++)
+					ibGrid::SetColSize(col, colWidth->GetWidth());
 			}
 		}
+
+		// A wrapped caption takes more lines, or fewer, at the new width — the same as after a drag.
+		FitAutoRowHeights();
+
+		ibGrid::EndBatch();
 	}
+}
+
+// ⭐ FITTING A COLUMN TO WHAT IS WRITTEN IN IT IS AN ACT, NOT A RULE (Max, 2026-09-22). A row follows its
+// text because it has no choice — text that does not fit its height is lost — while a column has the cell's
+// placement to answer with, so its width is worked out only when somebody asks for it, and is then WRITTEN
+// DOWN as a width of the column's own (through the size event, as a drag is).
+void ibGridEditor::OnFitColWidth(wxCommandEvent& event)
+{
+	if (m_spreadsheetObject == nullptr)
+		return;
+
+	wxClientDC dc(GetGridWindow());
+	const wxString langCode = m_spreadsheetObject->GetLangCode();
+
+	wxWindowUpdateLocker freeze(this);   // …and no repaint between the columns — see OnRowHeight
+	ibGrid::BeginBatch();
+	for (auto cell : ibGrid::GetSelectedBlocks()) {
+		for (int col = cell.GetLeftCol(); col <= wxMin(cell.GetRightCol(), ibGrid::GetNumberCols() - 1); col++)
+			ibGrid::SetColSize(col, ibSpreadsheetColWidth(*m_spreadsheetObject, col, dc, langCode));
+	}
+	ibGrid::EndBatch();
+
+	FitAutoRowHeights();
 }
 
 void ibGridEditor::OnHideCell(wxCommandEvent& event)
@@ -1048,14 +1314,12 @@ void ibGridEditor::OnHideCell(wxCommandEvent& event)
 		if (cell.GetLeftCol() > 0 &&
 			cell.GetTopRow() == 0) {
 			for (int col = cell.GetLeftCol(); col <= cell.GetRightCol(); col++) {
-				const int size = ibGrid::GetColSize(col);
 				ibGrid::SetColSize(col, 0);
 			}
 		}
 		else if (cell.GetTopRow() > 0 &&
 			cell.GetLeftCol() == 0) {
 			for (int row = cell.GetTopRow(); row <= cell.GetBottomRow(); row++) {
-				const int size = ibGrid::GetRowSize(row);
 				ibGrid::SetRowSize(row, 0);
 			}
 		}
@@ -1063,13 +1327,11 @@ void ibGridEditor::OnHideCell(wxCommandEvent& event)
 			cell.GetTopRow() == 0) {
 			if (cell.GetBottomRow() == m_numRows - 1) {
 				for (int col = cell.GetLeftCol(); col <= cell.GetRightCol(); col++) {
-					const int size = ibGrid::GetColSize(col);
-					ibGrid::SetColSize(col, 0);
+						ibGrid::SetColSize(col, 0);
 				}
 			}
 			else if (cell.GetRightCol() == m_numCols - 1) {
 				for (int row = cell.GetTopRow(); row <= cell.GetBottomRow(); row++) {
-					const int size = ibGrid::GetRowSize(row);
 					ibGrid::SetRowSize(row, 0);
 				}
 			}
@@ -1088,7 +1350,6 @@ void ibGridEditor::OnShowCell(wxCommandEvent& event)
 				hiddenCol = size == 0;
 			}
 			for (int col = hiddenCol ? 0 : cell.GetLeftCol(); col <= cell.GetRightCol(); col++) {
-				const int size = ibGrid::GetColSize(col);
 				ibGrid::SetColSize(col, wxNOT_FOUND);
 			}
 		}
@@ -1100,7 +1361,6 @@ void ibGridEditor::OnShowCell(wxCommandEvent& event)
 				hiddenRow = size == 0;
 			}
 			for (int row = hiddenRow ? 0 : cell.GetTopRow(); row <= cell.GetBottomRow(); row++) {
-				const int size = ibGrid::GetRowSize(row);
 				ibGrid::SetRowSize(row, wxNOT_FOUND);
 			}
 		}
@@ -1108,13 +1368,11 @@ void ibGridEditor::OnShowCell(wxCommandEvent& event)
 			cell.GetTopRow() == 0) {
 			if (cell.GetBottomRow() == m_numRows - 1) {
 				for (int col = cell.GetLeftCol(); col <= cell.GetRightCol(); col++) {
-					const int size = ibGrid::GetColSize(col);
 					ibGrid::SetColSize(col, wxNOT_FOUND);
 				}
 			}
 			else if (cell.GetRightCol() == m_numCols - 1) {
 				for (int row = cell.GetTopRow(); row <= cell.GetBottomRow(); row++) {
-					const int size = ibGrid::GetRowSize(row);
 					ibGrid::SetRowSize(row, wxNOT_FOUND);
 				}
 			}

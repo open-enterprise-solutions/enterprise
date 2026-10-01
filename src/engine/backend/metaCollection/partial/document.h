@@ -9,14 +9,13 @@
 //*                                  Factory & metaData                                      *
 //********************************************************************************************
 
-class ibValueMetaObjectDocument : public ibValueMetaObjectRecordDataMutableRef {
-	wxDECLARE_DYNAMIC_CLASS(ibValueMetaObjectDocument);
+// A DOCUMENT IS A RECORDER PLUS ONE FACT: whether it is posted. Everything else that made a document
+// a document — the number, the date, the moment it sits at, the registers it writes into — is what
+// RECORDING means, and lives on ibValueMetaObjectRecordDataRecorderRef with the value-side twin that
+// has always been there (ibValueRecordDataObjectRecorderRef).
+class ibValueMetaObjectDocument : public ibValueMetaObjectRecordDataRecorderRef {
+	public:
 private:
-	enum
-	{
-		ID_METATREE_OPEN_MODULE = 19000,
-		ID_METATREE_OPEN_MANAGER = 19001,
-	};
 
 	enum
 	{
@@ -35,15 +34,25 @@ private:
 
 public:
 
-	ibMetaDescription& GetRecordDescription() const { return m_propertyRegisterRecord->GetValueAsMetaDesc(); }
-
-	ibValueMetaObjectAttributePredefined* GetDocumentNumber() const { return m_propertyAttributeNumber->GetMetaObject(); }
-	ibValueMetaObjectAttributePredefined* GetDocumentDate() const { return m_propertyAttributeDate->GetMetaObject(); }
+	// (The record description, the number and the date live on the RECORDER base — see it for why.)
 	ibValueMetaObjectAttributePredefined* GetDocumentPosted() const { return m_propertyAttributePosted->GetMetaObject(); }
 
-	//default constructor 
+
+	//default constructor
 	ibValueMetaObjectDocument();
 	virtual ~ibValueMetaObjectDocument();
+
+	enum {                          // this document's OWN posting commands (add to the inherited writeable set)
+		ePostValue = 5,             // WriteObject Posting
+		eClearPostingValue = 6,     // WriteObject UndoPosting
+	};
+
+	// source COMMANDS — the writeable-ref base set PLUS Post / ClearPosting. CallAsCommand loads the document by
+	// key and writes it in the posting / undo-posting mode; the rest delegates to the base. Bodies in documentAction.cpp.
+	virtual void GetCommandCollection(const ibFormID& formType, std::vector<ibCommandItem>& commands) const override;
+	// The row's state picture: the document marked for deletion, posted, or neither (documentAction.cpp).
+	virtual ibPictureID GetRowPicture(const ibRowMetaValues& rowValues) const override;
+	virtual void CallAsCommand(ibActionID id, const ibUniqueKey& anchor, const ibUniqueKey& key, ibBackendValueForm* srcForm) const override;
 
 	//support icons
 	virtual wxIcon GetIcon() const;
@@ -76,68 +85,47 @@ public:
 	virtual void OnCreateFormObject(ibValueMetaObjectFormBase* metaForm);
 	virtual void OnRemoveMetaForm(ibValueMetaObjectFormBase* metaForm);
 
-	//get attribute code 
-	virtual ibValueMetaObjectAttributeBase* GetAttributeForCode() const { return m_propertyAttributeNumber->GetMetaObject(); }
+	// (the attribute a "code" means here — the NUMBER — is answered by the recorder base)
 
 	//create associate value 
 	virtual ibValueMetaObjectFormBase* GetDefaultFormByID(const ibFormID& id) const;
 
 #pragma region _form_builder_h_
 	//support form 
-	virtual ibBackendValueForm* GetObjectForm(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* ownerControl = nullptr, const ibUniqueKey& formGuid = wxNullGuid) const;
-	virtual ibBackendValueForm* GetListForm(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* ownerControl = nullptr, const ibUniqueKey& formGuid = wxNullGuid) const;
-	virtual ibBackendValueForm* GetSelectForm(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* ownerControl = nullptr, const ibUniqueKey& formGuid = wxNullGuid) const;
+	virtual ibFormPtr<ibBackendValueForm> GetObjectForm(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr) const;
+	virtual ibFormPtr<ibBackendValueForm> GetListForm(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr) const;
+	virtual ibFormPtr<ibBackendValueForm> GetSelectForm(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr) const;
 #pragma endregion
-	//descriptions...
-	wxString GetDataPresentation(const ibValueDataObject* objValue) const;
-
-	//get module object in compose object 
+	//get module object in compose object
 	virtual const ibValueMetaObjectModule* GetObjectModule() const { return m_propertyObjectModule->GetMetaObject(); }
 	virtual const ibValueMetaObjectCommonModule* GetManagerModule() const { return m_propertyManagerModule->GetMetaObject(); }
 
 	//prepare menu for item
-	virtual bool PrepareContextMenu(wxMenu* defaultMenu);
-	virtual void ProcessCommand(unsigned int id);
+	virtual bool CollectContextMenu(std::vector<ibMetaMenuItem>& items);
 
 protected:
 
-	//predefined array 
-	virtual bool FillArrayObjectByPredefinedAttribute(std::vector<ibValueMetaObjectAttributeBase*>& array) const {
-
-		array = {
-			m_propertyAttributeNumber->GetMetaObject(),
-			m_propertyAttributeDate->GetMetaObject(),
-			m_propertyAttributePosted->GetMetaObject(),
-			m_propertyAttributeReference->GetMetaObject(),
-			m_propertyAttributeDeletionMark->GetMetaObject()
-		};
-
-		return true;
-	}
-
-	//searched array 
-	virtual bool FillArrayObjectBySearched(std::vector<ibValueMetaObjectAttributeBase*>& array) const {
-
-		array = {
-			m_propertyAttributeNumber->GetMetaObject(),
-			m_propertyAttributeDate->GetMetaObject()
-		};
-
+	// Additive contract — chains to the RECORDER, which already contributed the number and the date.
+	// A document adds the one fact that is its own: whether it is posted.
+	virtual bool FillArrayObjectByPredefinedAttribute(std::vector<ibValueMetaObjectAttributeBase*>& array) const override {
+		ibValueMetaObjectRecordDataRecorderRef::FillArrayObjectByPredefinedAttribute(array);
+		array.push_back(m_propertyAttributePosted->GetMetaObject());
 		return true;
 	}
 
 	//create manager
-	virtual ibValueManagerDataObject* CreateManagerDataObjectValue() const;
+	virtual ibValuePtr<ibValueManagerDataObject> CreateManagerDataObjectValue() const;
 
 	//create empty object
-	virtual ibValueRecordDataObjectRef* CreateObjectRefValue(const ibGuid& objGuid = wxNullGuid) const;
+	virtual ibValuePtr<ibValueRecordDataObjectRef> CreateObjectRefValue(const ibGuid& objGuid = wxNullGuid) const;
 
 	//create object data with meta form
-	virtual ibSourceDataObject* CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const;
+	virtual ibSourcePtr<ibSourceDataObject> CreateSourceObject(const ibCreateRequest& request, const ibFormID& form_id) const;
 
-	//load & save metaData from DB 
-	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer);
+	//load & save metaData from DB
+
+	virtual bool ReadData(const ibDataNode& node) override;
+	virtual bool WriteData(ibDataNode& node) const override;
 
 private:
 
@@ -183,21 +171,19 @@ private:
 		return true;
 	}
 
-	ibPropertyInnerModule<ibValueMetaObjectModule>* m_propertyObjectModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectModule>>(m_categoryContext, wxT("ObjectModule"), _("Object module"));
-	ibPropertyInnerModule<ibValueMetaObjectManagerModule>* m_propertyManagerModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectManagerModule>>(m_categoryContext, wxT("ManagerModule"), _("Manager module"));
+	ibPropertyInnerModule<ibValueMetaObjectModule>* m_propertyObjectModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectModule>>(m_categoryContext, wxT("ObjectModule"), _("Object module"), _("Code of one document: its handlers - BeforeWrite, OnWrite, Posting (forms the movements in RegisterRecords), UndoPosting, SetNewNumber, filling on generation - and the procedures they call. Runs wherever the document is written or posted: a form, a script or a background job."));
+	ibPropertyInnerModule<ibValueMetaObjectManagerModule>* m_propertyManagerModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectManagerModule>>(m_categoryContext, wxT("ManagerModule"), _("Manager module"), _("Code of the document kind as a whole rather than of one document: its exported procedures and functions are called on the manager, as Documents.<Name>.<Function>()."));
 
 	ibPropertyCategory* m_categoryForm = ibPropertyObject::CreatePropertyCategory(wxT("PresetValues"), _("Preset values"));
 
-	ibPropertyList* m_propertyDefFormObject = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormObject"), _("Default Object Form"), &ibValueMetaObjectDocument::FillFormObject);
-	ibPropertyList* m_propertyDefFormList = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormList"), _("Default List Form"), &ibValueMetaObjectDocument::FillFormList);
-	ibPropertyList* m_propertyDefFormSelect = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormSelect"), _("Default Select Form"), &ibValueMetaObjectDocument::FillFormSelect);
+	ibPropertyList* m_propertyDefFormObject = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormObject"), _("Default Object Form"), _("The form a document opens with. Empty: the form is generated from the document's attributes and tabular sections."), &ibValueMetaObjectDocument::FillFormObject);
+	ibPropertyList* m_propertyDefFormList = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormList"), _("Default List Form"), _("The form the document list opens with. Empty: the list form is generated."), &ibValueMetaObjectDocument::FillFormList);
+	ibPropertyList* m_propertyDefFormSelect = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormSelect"), _("Default Select Form"), _("The form used to choose a document for a field of this type. Empty: the list form opens in choice mode."), &ibValueMetaObjectDocument::FillFormSelect);
 
-	ibPropertyRecord* m_propertyRegisterRecord = ibPropertyObject::CreateProperty<ibPropertyRecord>(m_categoryData, wxT("ListRegisterRecord"), _("List register record"));
+	// (the record description, the number and the date are the RECORDER's — see the base class)
 
 	//create default attributes
-	ibPropertyContainer<>* m_propertyAttributeNumber = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateString(wxT("Number"), _("Number"), wxEmptyString, 11, true));
-	ibPropertyContainer<>* m_propertyAttributeDate = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateDate(wxT("Date"), _("Date"), wxEmptyString, ibDateFractions::ibDateFractions_DateTime, true));
-	ibPropertyContainer<>* m_propertyAttributePosted = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateBoolean(wxT("Posted"), _("Posted"), wxEmptyString));
+	ibPropertyContainer<>* m_propertyAttributePosted = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateBoolean(wxT("Posted"), _("Posted"), _("Set by the platform while the document is posted - its movements stand in the registers. Written by posting and by undoing it, never by hand.")));
 
 	friend class ibValueRecordDataObjectDocument;
 	friend class ibMetaData;
@@ -207,99 +193,31 @@ private:
 //*                                      Object                                              *
 //********************************************************************************************
 
-class ibValueRecordDataObjectDocument : public ibValueRecordDataObjectRef {
-public:
-	class ibRecorderRegisterDocument : public ibValue {
-		wxDECLARE_DYNAMIC_CLASS(ibRecorderRegisterDocument);
+class ibValueRecordDataObjectDocument : public ibValueRecordDataObjectRecorderRef {
 	public:
-
-		void CreateRecordSet();
-		bool WriteRecordSet();
-		bool DeleteRecordSet();
-		void ClearRecordSet();
-
-		void RefreshRecordSet();
-
-		ibRecorderRegisterDocument(ibValueRecordDataObjectDocument* currentDoc = nullptr);
-		virtual ~ibRecorderRegisterDocument();
-
-		//standart override 
-		virtual ibValueMethodHelper* GetPMethods() const {
-			//PrepareNames();
-			return m_methodHelper;
-		}
-
-		virtual void PrepareNames() const;
-		virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);
-
-		virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal);
-		virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal);
-
-		//check is empty
-		virtual bool IsEmpty() const { return false; }
-
-	private:
-		ibValueRecordDataObjectDocument* m_document;
-		std::map<ibMetaID, ibValuePtr<ibValueRecordSetObject>> m_records;
-		ibValueMethodHelper* m_methodHelper;
-	};
-protected:
 	ibValueRecordDataObjectDocument(const ibValueMetaObjectDocument* metaObject = nullptr, const ibGuid& guid = wxNullGuid);
 	ibValueRecordDataObjectDocument(const ibValueRecordDataObjectDocument& source);
-public:
 	virtual ~ibValueRecordDataObjectDocument();
 
-	bool IsPosted() const;
+	// ibRecorderRegister + m_registerRecords + ClearRecordSet /
+	// UpdateRecordSet + WriteObject / DeleteObject / SaveModify
+	// scaffold all live on ibValueRecordDataObjectRecorderRef.
+	// Document only contributes leaf-specific hook overrides below.
 
-	void ClearRecordSet() {
-		wxASSERT(m_registerRecords);
-		m_registerRecords->ClearRecordSet();
-	}
-
-	void UpdateRecordSet() {
-		wxASSERT(m_registerRecords);
-		m_registerRecords->ClearRecordSet();
-		m_registerRecords->CreateRecordSet();
-	}
-
-	//****************************************************************************
-	//*                              Support id's                                *
-	//****************************************************************************
-
-	//save modify 
-	virtual bool SaveModify() {
-		return WriteObject(
-			IsPosted() ? ibDocumentWriteMode::ibDocumentWriteMode_Posting : ibDocumentWriteMode::ibDocumentWriteMode_Write,
-			ibDocumentPostingMode::ibDocumentPostingMode_Regular
-		);
-	}
-
-	//default methods
-	virtual bool FillObject(ibValue& vFillObject) const {
-		return Filling(vFillObject);
-	}
-
-	virtual ibValueRecordDataObjectRef* CopyObject(bool showValue = false) {
-		ibValueRecordDataObjectRef* objectRef = CopyObjectValue();
-		if (objectRef != nullptr && showValue)
-			objectRef->ShowFormValue();
-		return objectRef;
-	}
-
-	virtual bool WriteObject() {
-		return WriteObject(
-			IsPosted() ? ibDocumentWriteMode::ibDocumentWriteMode_Posting : ibDocumentWriteMode::ibDocumentWriteMode_Write,
-			ibDocumentPostingMode::ibDocumentPostingMode_Regular
-		);
-	}
-	virtual bool WriteObject(ibDocumentWriteMode writeMode, ibDocumentPostingMode postingMode);
-	virtual bool DeleteObject();
+	// Hook overrides for Document-specific posting semantics. See
+	// ibValueRecordDataObjectRecorderRef in commonObject.h.
+	virtual bool IsPosted() const override;
+	virtual void SetPosted(bool posted) override;
+	virtual const ibMetaDescription* GetRecordDescription(ibRecorderWrites of) const override;
 
 	//****************************************************************************
 	//*                              Support methods                             *
 	//****************************************************************************
 
-	virtual void PrepareNames() const;
+	// Document's own methods (bound in the ctor). Data members come from the base
+	// FillDataMembers. ThisObject.RegisterRecords is surfaced by the descriptor's
+	// ExportThunk tail-bind (moduleInfo.h), not by a contributor here.
+	void FillMethods(ibMemberTable& helper) const;
 
 	//****************************************************************************
 	//*                              Override attribute                          *
@@ -310,23 +228,26 @@ public:
 
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);
 
-	//support source data 
-	virtual ibSourceExplorer GetSourceExplorer() const;
+	//support source data
+	virtual const ibSourceExplorer* GetSourceExplorer() const;
 
-#pragma region _form_builder_h_
-	//support show 
-	virtual void ShowFormValue(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* ownerControl = nullptr);
-	virtual ibBackendValueForm* GetFormValue(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* ownerControl = nullptr);
-#pragma endregion
+	// ShowFormValue / GetFormValue inherited from base. Document has
+	// a single form-id (no folder/item branching) — hook below.
+protected:
+	virtual ibFormID GetCurrentObjectFormID() const override {
+		return ibValueMetaObjectDocument::eFormObject;
+	}
+public:
 
 	//support actionData
-	virtual ibActionCollection GetActionCollection(const ibFormID& formType);
-	virtual void ExecuteAction(const ibActionID& lNumAction, ibBackendValueForm* srcForm);
+	virtual ibStandardCommandSet GetStandardCommands(const ibFormID& formType);
+	virtual void CallAsAction(const ibActionID& lNumAction, ibBackendValueForm* srcForm);
 
-public:
-	virtual void SetDeletionMark(bool deletionMark = true);
+	// SetDeletionMark inherited from ibValueRecordDataObjectRecorderRef
+	// (un-post then base SetDeletionMark) — common algorithm across
+	// recorder-flavour ref-objects.
+
 private:
-	ibValuePtr<ibRecorderRegisterDocument> m_registerRecords;
 	friend class ibValue;
 };
 

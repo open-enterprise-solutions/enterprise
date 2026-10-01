@@ -1,7 +1,7 @@
 #include "propertyFont.h"
+#include "backend/serialize/dataBuilder.h"
 #include "backend/system/value/valueFont.h"
 
-wxObject* (*ibPropertyFont::ms_propertyFont)(const wxString&, const wxString&, const wxFont&) = nullptr;
 
 //base property for "colour"
 bool ibPropertyFont::SetDataValue(const ibValue& varPropVal)
@@ -19,14 +19,14 @@ bool ibPropertyFont::GetDataValue(ibValue& pvarPropVal) const
 	return true;
 }
 
-bool ibPropertyFont::LoadData(ibReaderMemory& reader)
+bool ibPropertyFont::ReadNodeValue(const ibDataValue& value)
 {
-	ibPropertyFont::SetValue(reader.r_stringZ());
+	ibPropertyFont::SetValue(value.AsString());
 	return true;
 }
 
-bool ibPropertyFont::SaveData(ibWriterMemory& writer)
+bool ibPropertyFont::WriteNodeValue(ibDataValue& value) const
 {
-	writer.w_stringZ(ibPropertyFont::GetValueAsString());
+	value = ibDataValue::String(ibPropertyFont::GetValueAsString());
 	return true;
 }

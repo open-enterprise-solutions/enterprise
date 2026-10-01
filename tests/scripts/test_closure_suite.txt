@@ -80,24 +80,24 @@ var threshold  = 2
 var multiplier = 10
 var result = arr.Where(Function(x) Return x > threshold EndFunction).Select(Function(x) Return x * multiplier EndFunction).ToArray()
 Message("count=" + result.Count())
-For Each v In result Do
+Foreach v In result Do
     Message(v)   // 30, 40, 50
 EndDo
 
-// === T05 iterator dispatch (For Each + LINQ tail) ===
+// === T05 iterator dispatch (Foreach + LINQ tail) ===
 Message("=== T05 ===")
 var arr2 = New Array
 arr2.Add(10)
 arr2.Add(20)
 arr2.Add(30)
 var sum = 0
-For Each x In arr2 Do
+Foreach x In arr2 Do
     sum = sum + x
 EndDo
 Message(sum)   // 60
 var filtered = arr2.Where(Function(x) Return x >= 20 EndFunction).ToArray()
 Message("filtered count=" + filtered.Count())
-For Each v In filtered Do
+Foreach v In filtered Do
     Message(v)   // 20, 30
 EndDo
 

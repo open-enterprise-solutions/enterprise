@@ -1,22 +1,38 @@
 #include "propertyChartOfAccounts.h"
+#include "backend/serialize/dataBuilder.h"
 #include "backend/propertyManager/property/variant/variantOwner.h"
 
-wxObject* (*ibPropertyChartOfAccounts::ms_propertyChartOfAccounts)(ibPropertyObject*, const wxString&, const wxString&, const wxVariant&) = nullptr;
 
-wxVariantData* ibPropertyChartOfAccounts::CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc) const
+wxVariantData* ibPropertyChartOfAccounts::CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc)
 {
-	const ibValueMetaObjectGenericData* propFactory = dynamic_cast<const ibValueMetaObjectGenericData*>(property);
-	if (propFactory == nullptr) return nullptr;
-	return new ibVariantDataOwner(propFactory, typeDesc);
+	// No cast: the variant needs the owner only to reach GetMetaData, which ibPropertyObject answers.
+	return new ibVariantDataOwner(property, typeDesc);
 }
 
 ibMetaDescription& ibPropertyChartOfAccounts::GetValueAsMetaDesc() const {
-	return get_cell_variant<ibVariantDataOwner>()->GetMetaDesc();
+	return get_cell_variant<ibVariantDataMetaDesc>()->GetMetaDesc();
 }
 
 void ibPropertyChartOfAccounts::SetValue(const ibMetaDescription& val)
 {
 	m_propValue = CreateVariantData(m_owner, val);
+}
+
+// The family rule - see propertyRecord.cpp.
+void ibPropertyChartOfAccounts::DoSetValue(const wxVariant& val)
+{
+	if (const ibVariantDataMetaDesc* carried = find_cell_variant<ibVariantDataMetaDesc>(val)) {
+		SetValue(carried->GetMetaDesc());
+		return;
+	}
+
+	ibProperty::DoSetValue(val);
+}
+
+// The charts of accounts in this configuration. The list used to sit in advpropChartOfAccounts.cpp.
+ibPropertyChoiceMode ibPropertyChartOfAccounts::GetValueList(ibPropertyChoiceList& list)
+{
+	return CreateValueList(list, ibPropertyChoiceMode::Single, { g_metaChartOfAccountsCLSID });
 }
 
 bool ibPropertyChartOfAccounts::SetDataValue(const ibValue& varPropVal) { return false; }
@@ -29,12 +45,14 @@ bool ibPropertyChartOfAccounts::GetDataValue(ibValue& pvarPropVal) const
 	return true;
 }
 
-bool ibPropertyChartOfAccounts::LoadData(ibReaderMemory& reader)
+bool ibPropertyChartOfAccounts::ReadNodeValue(const ibDataValue& value)
 {
-	return ibMetaDescriptionMemory::LoadData(reader, GetValueAsMetaDesc());
+	ibMetaDescriptionMemory::ReadNode(value, GetValueAsMetaDesc());
+	return true;
 }
 
-bool ibPropertyChartOfAccounts::SaveData(ibWriterMemory& writer)
+bool ibPropertyChartOfAccounts::WriteNodeValue(ibDataValue& value) const
 {
-	return ibMetaDescriptionMemory::SaveData(writer, GetValueAsMetaDesc());
+	const ibPropertyObject* owner = m_owner;   // CONST overload — the non-const one returns null (see propertyObject.h)
+	return ibMetaDescriptionMemory::WriteNode(value, GetValueAsMetaDesc(), owner->GetMetaData());
 }

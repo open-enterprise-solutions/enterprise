@@ -6,15 +6,12 @@
 #include "valuePoint.h"
 
 //////////////////////////////////////////////////////////////////////
-wxIMPLEMENT_DYNAMIC_CLASS(ibValuePoint, ibValue);
 
-ibValue::ibValueMethodHelper ibValuePoint::m_methodHelper;
-
-ibValuePoint::ibValuePoint() : ibValue(ibValueTypes::TYPE_VALUE), m_point(wxDefaultPosition)
+ibValuePoint::ibValuePoint() : ibValueStaticMembers(ibValueTypes::TYPE_VALUE), m_point(wxDefaultPosition)
 {
 }
 
-ibValuePoint::ibValuePoint(const wxPoint& point) : ibValue(ibValueTypes::TYPE_VALUE), m_point(point)
+ibValuePoint::ibValuePoint(const wxPoint& point) : ibValueStaticMembers(ibValueTypes::TYPE_VALUE), m_point(point)
 {
 }
 
@@ -37,12 +34,10 @@ enum
 	eTop
 };
 
-void ibValuePoint::PrepareNames() const
+void ibValuePoint_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
 {
-	m_methodHelper.ClearHelper();
-
-	m_methodHelper.AppendProp(wxT("Left"));
-	m_methodHelper.AppendProp(wxT("Top"));
+	helper.AppendProp(wxT("Left"));
+	helper.AppendProp(wxT("Top"));
 }
 
 bool ibValuePoint::SetPropVal(const long lPropNum, const ibValue& varPropVal)
@@ -79,4 +74,4 @@ bool ibValuePoint::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 //*                       Runtime register                             *
 //**********************************************************************
 
-VALUE_TYPE_REGISTER(ibValuePoint, "Point", string_to_clsid("VL_PONT"));
+VALUE_TYPE_REGISTER(ibValuePoint, "Point", value_to_clsid("VL_PONT"));

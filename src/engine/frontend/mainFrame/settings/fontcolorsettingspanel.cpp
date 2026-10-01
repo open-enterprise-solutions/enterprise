@@ -5,7 +5,7 @@
 #include <wx/colordlg.h>
 
 #include "fontcolorsettingspanel.h"
-#include "staticTextEx.h"
+#include "statictextex.h"
 
 BEGIN_EVENT_TABLE(ibPanelFontColorSettings, wxPanel)
 EVT_BUTTON(ibPanelFontColorSettings::ID_SelectFont, ibPanelFontColorSettings::OnSelectFont)

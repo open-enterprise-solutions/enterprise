@@ -23,17 +23,17 @@ wxPGProperty* ibObjectInspector::GetProperty(ibProperty*) const { return nullptr
 wxPGProperty* ibObjectInspector::GetEvent(ibEvent*) const { return nullptr; }
 
 // -----------------------------------------------------------------------------
-// ibFrontendDocMDIFrame — desktop main frame, touched by doc/view glue.
+// ibFrontendMainFrame — desktop main frame, touched by doc/view glue.
 // s_instance stays null so every null-check path is taken on web.
 // -----------------------------------------------------------------------------
 
-ibFrontendDocMDIFrame* ibFrontendDocMDIFrame::s_instance = nullptr;
-void ibFrontendDocMDIFrame::UpdateFrameManager() {}
+ibFrontendMainFrame* ibFrontendMainFrame::s_instance = nullptr;
+void ibFrontendMainFrame::UpdateFrameManager() {}
 
 // Web build has its own wxWebFrame / ibWebFrame plumbing; the desktop
 // frame's lazy-runtime hook is never reached. Stub keeps the inline
 // Show() in mainFrame.h link-clean inside wfrontend.dll.
-bool ibFrontendDocMDIFrame::EnsureRuntime() { return true; }
+bool ibFrontendMainFrame::EnsureRuntime() { return true; }
 
 // -----------------------------------------------------------------------------
 // ibKeyBinder — key-binding registry for the designer menus.
@@ -52,7 +52,35 @@ wxSize ibDynamicStaticText::DoGetBestClientSize() const { return wxDefaultSize; 
 // typeControl.cpp's ShowSelectType spawns it; never reached on web.
 // -----------------------------------------------------------------------------
 
-ibDialogSelectDataType::ibDialogSelectDataType(ibMetaData*, const std::vector<ibClassID>&) {}
+ibDialogSelectDataType::ibDialogSelectDataType(const ibMetaData*, const std::vector<ibClassID>&) {}
 ibDialogSelectDataType::~ibDialogSelectDataType() {}
 bool ibDialogSelectDataType::ShowModal(ibClassID&) { return false; }
 void ibDialogSelectDataType::OnListItemSelected(wxListEvent&) {}
+
+// -----------------------------------------------------------------------------
+// ibShowTypeSelector — the shared type picker (win/dlgs/typeSelector), reached from
+// typeControl.cpp when a cell holds a type description. A modal wx dialog, so it has no web port;
+// refusing is the honest answer — the caller reads false as "the user did not choose" and leaves
+// the value alone, which is exactly what happens on Cancel.
+// -----------------------------------------------------------------------------
+
+#include "frontend/win/dlgs/typeSelector.h"
+
+bool ibShowTypeSelector(wxWindow*, ibSelectorDataType, const std::vector<ibClassID>&,
+	ibTypeDescription&, const ibMetaData*, bool, bool)
+{
+	return false;
+}
+
+// -----------------------------------------------------------------------------
+// ibShowPredefinedSelector — the DESIGNER's window for choosing a value a configuration declares
+// (win/dlgs/selectPredefined). There is no designer on the web, and it is a modal wx dialog besides;
+// refusing is the honest answer, and the caller reads false the same way it reads a Cancel.
+// -----------------------------------------------------------------------------
+
+#include "frontend/win/dlgs/selectPredefined.h"
+
+bool ibShowPredefinedSelector(ibControlFrame*, const ibTypeDescription&, const ibMetaData*, wxWindow*)
+{
+	return false;
+}

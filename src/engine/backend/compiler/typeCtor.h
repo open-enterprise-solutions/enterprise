@@ -1,25 +1,12 @@
 #ifndef _TYPE_CTOR_H__
 #define _TYPE_CTOR_H__
 
-class ibValue;
+#include "backend/backend_core.h"   // ibClassID, ib_clsid_hash, g_valueUndefinedCLSID, ibCtorObjectType
+#include "backend/compiler/value.h"  // every ctor answers with the owner of what it made — a complete ibValue
+#include <typeinfo>             // std::type_info — Phase 3 pilot (typeid registry)
+#include <type_traits>          // std::is_default_constructible_v — does this type HAVE an empty form
+
 class ibCtorAbstractType;
-
-enum ibCtorObjectType {
-	ibCtorObjectType_object_primitive = 1,
-	ibCtorObjectType_object_value,
-	ibCtorObjectType_object_control,
-	ibCtorObjectType_object_system,
-	ibCtorObjectType_object_enum,
-	ibCtorObjectType_object_context,
-
-	ibCtorObjectType_object_metadata,
-	ibCtorObjectType_object_meta_value
-};
-
-enum ibCtorObjectTypeEvent {
-	ibCtorObjectTypeEvent_Register,
-	ibCtorObjectTypeEvent_UnRegister,
-};
 
 /////////////////////////////////////////////////////////////////////////
 
@@ -37,6 +24,19 @@ public:
 	const value_register class_type = class_so;
 
 /////////////////////////////////////////////////////////////////////////
+// Variadic-macro plumbing for *_TYPE_REGISTER overload-by-arity.
+// Lets the same macro name accept either an explicit CLSID
+// (legacy 3-arg / 4-arg form) or auto-hash from class_name
+// (new 2-arg / 3-arg form, CLSID = ib_clsid_hash(class_name)).
+
+#define IB_EXPAND(x) x
+#define IB_CONCAT2(a, b) a##b
+#define IB_CONCAT(a, b) IB_CONCAT2(a, b)
+#define IB_VA_PICK5(_1, _2, _3, _4, _5, N, ...) N
+#define IB_VA_COUNT(...) IB_EXPAND(IB_VA_PICK5(__VA_ARGS__, 5, 4, 3, 2, 1))
+#define IB_DISPATCH(prefix, ...) IB_EXPAND(IB_CONCAT(prefix, IB_VA_COUNT(__VA_ARGS__))(__VA_ARGS__))
+
+/////////////////////////////////////////////////////////////////////////
 
 class ibCtorAbstractType {
 public:
@@ -44,41 +44,125 @@ public:
 	virtual ~ibCtorAbstractType() {}
 
 	virtual wxString GetClassName() const = 0;
-	virtual wxClassInfo* GetClassInfo() const = 0;
+	// std::type_info replaces the former wxClassInfo* GetClassInfo() — it is the
+	// registry's runtime type key (matched against typeid(*liveValue)).
+	// Default = typeid(void) for ctors that carry no concrete C++ type
+	// (meta/control ctors that derive this base directly); their objects
+	// override GetClassType() and never reach the typeid resolution path.
+	// See docs/private/value-audit.md Phase 3.
+	virtual const std::type_info& GetTypeInfo() const { return typeid(void); }
 	virtual ibClassID GetClassType() const = 0;
 
 	virtual wxIcon GetClassIcon() const { return wxNullIcon; }
 
 	virtual ibCtorObjectType GetObjectTypeCtor() const = 0;
+
 	virtual void CallEvent(ibCtorObjectTypeEvent event) {}
-	virtual ibValue* CreateObject() const = 0;
+
+	// ⭐⭐ A NEW VALUE IS BORN OWNED — the ibValue that holds it, never a bare pointer.
+	//
+	// 🛑 A BARE POINTER STARTS AT REFERENCE COUNT ZERO, and anything that took a reference and let it go
+	// before the caller wrapped it deleted it. A new object runs code of its own on the way out of here —
+	// Init(), a data object's InitializeObject with the module's Filling in it — and `ThisObject.A = 0`
+	// there loads the object into a temporary ibValue: zero, one, zero, and the object was freed in the
+	// middle of its own initialisation (issue #154, a document with a Filling handler). Every factory
+	// above this one handed the pointer on the same way, so the owner is created HERE and passed up.
+	// Empty (not a reference) means nothing was created.
+	virtual ibValue CreateObject() const = 0;
+
+	// Class-factory table trait (see ibValue::IsTableValue): does this TYPE create tabular
+	// sources? Answered by CLSID, no instance needed. Default = false; value-type ctors
+	// forward to their T, metadata ctors derive it from their meta-kind (List / TabularSection
+	// / RecordSet). Lets selection / form-build ask the factory instead of a source explorer.
+	virtual bool IsTableValue() const { return false; }
+
+	// THE GATE, and the ONLY question asked when a declared type meets a value:
+	// may a value of this class pass as this type?
+	//
+	//   true  — IT PASSES, exactly as it is. No conversion, no type description,
+	//           no metadata: the value was already what the declaration asks for.
+	//   false — TYPE MISMATCH. The caller raises; it does not go looking for a
+	//           conversion that might make it fit, because a declaration is a
+	//           statement about what the value IS, not a request to change it.
+	//
+	// The default is the plain comparison plus ABSENCE (see the .cpp): an unset
+	// variable is every type and none, and refusing it would make `Number x;`
+	// an error. A type overrides only when its rule is genuinely wider — a
+	// barrier (`AnyRef`, `CatalogRef`) admits a whole family.
+	//
+	// Why the TYPE answers rather than a switch somewhere: the list of types is
+	// open — a plugin can register one. A central switch would have to be edited
+	// for every new type and would be silently incomplete for the ones it never
+	// heard of.
+	// UNDEFINED PASSES: an unset variable, a parameter nobody passed. The
+	// declaration says what the value IS when there is one; it does not promise
+	// there is one (script-language.md §4a) — refusing it would make `Number x;`
+	// a type error.
+	virtual bool AllowValue(const ibClassID& clsid) const {
+		return clsid == g_valueUndefinedCLSID || clsid == GetClassType();
+	}
 };
+
+/////////////////////////////////////////////////////////////////////////
+// value_register — after the ctor it registers is complete (the refusal names it)
+
+template<typename typeCtor>
+value_register<typeCtor>::value_register(typeCtor* so) : m_so(so) {
+	try {
+		if (m_so != nullptr) {
+			ibValue::RegisterCtor(m_so);
+		}
+	}
+	catch (...) {
+#ifdef DEBUG
+		ibJournalError(wxT("value"), wxT("failed to register class: %s"), m_so->GetClassName());
+#endif
+		wxDELETE(m_so);
+	}
+}
+
+template<typename typeCtor>
+value_register<typeCtor>::~value_register() {
+	try {
+		if (m_so != nullptr) {
+			ibValue::UnRegisterCtor(m_so);
+		}
+	}
+	catch (...) {
+#ifdef DEBUG
+		ibJournalError(wxT("value"), wxT("failed to unregister class: %s"), m_so->GetClassName());
+#endif
+		wxDELETE(m_so);
+	}
+}
+
+/////////////////////////////////////////////////////////////////////////
 
 class ibCtorValueTypeBase : public ibCtorAbstractType {
 	wxString m_className;
-	wxClassInfo* m_classInfo;
+	const std::type_info* m_typeInfo;   // typeid(T) — registry runtime type key
 	ibClassID m_clsid;
 public:
 
 	virtual ~ibCtorValueTypeBase() {}
 
 	virtual wxString GetClassName() const { return m_className; }
-	virtual wxClassInfo* GetClassInfo() const { return m_classInfo; }
+	virtual const std::type_info& GetTypeInfo() const { return *m_typeInfo; }
 	virtual ibClassID GetClassType() const { return m_clsid; }
 
-	ibCtorValueTypeBase(const wxString& className, wxClassInfo* classInfo, const ibClassID& clsid)
-		: m_className(className), m_classInfo(classInfo), m_clsid(clsid) {
+	ibCtorValueTypeBase(const wxString& className, const std::type_info& typeInfo, const ibClassID& clsid)
+		: m_className(className), m_typeInfo(&typeInfo), m_clsid(clsid) {
 	}
 
 	virtual ibCtorObjectType GetObjectTypeCtor() const = 0;
-	virtual ibValue* CreateObject() const = 0;
+	virtual ibValue CreateObject() const = 0;
 };
 
 class ibCtorSingleType : public ibCtorValueTypeBase {
 public:
 
-	ibCtorSingleType(const wxString& className, wxClassInfo* classInfo, const ibClassID& clsid)
-		: ibCtorValueTypeBase(className, classInfo, clsid)
+	ibCtorSingleType(const wxString& className, const std::type_info& typeInfo, const ibClassID& clsid)
+		: ibCtorValueTypeBase(className, typeInfo, clsid)
 	{
 	}
 
@@ -93,7 +177,7 @@ class ibCtorPrimitiveType : public ibCtorSingleType {
 public:
 
 	ibCtorPrimitiveType(const wxString& className, ibValueTypes valType, const ibClassID& clsid) :
-		ibCtorSingleType(className, CLASSINFO(T), clsid), m_valType(valType) {
+		ibCtorSingleType(className, typeid(T), clsid), m_valType(valType) {
 	}
 
 	virtual wxIcon GetClassIcon() const { return T::GetIconGroup(); }
@@ -106,11 +190,16 @@ public:
 			T::OnUnRegisterObject(GetClassName());
 	}
 
-	virtual ibValue* CreateObject() const { return new T(m_valType); }
+	virtual ibValue CreateObject() const { return new T(m_valType); }
 };
 
-#define PRIMITIVE_TYPE_REGISTER(class_info, class_name, class_type, clsid)\
+// 4-arg (legacy): explicit clsid.
+#define PRIMITIVE_TYPE_REGISTER_4(class_info, class_name, class_type, clsid)\
 GENERATE_REGISTER(wxT(class_name), wxMAKE_UNIQUE_NAME(s_cs_reg_s_), new ibCtorPrimitiveType<class_info>(wxT(class_name), class_type, clsid))
+// 3-arg (new): clsid = ib_clsid_hash(class_name).
+#define PRIMITIVE_TYPE_REGISTER_3(class_info, class_name, class_type)\
+PRIMITIVE_TYPE_REGISTER_4(class_info, class_name, class_type, primitive_to_clsid(class_name))
+#define PRIMITIVE_TYPE_REGISTER(...) IB_DISPATCH(PRIMITIVE_TYPE_REGISTER_, __VA_ARGS__)
 
 // object value register - array, struct, etc.. 
 template <class T>
@@ -119,11 +208,15 @@ class ibCtorValueType : public ibCtorValueTypeBase {
 public:
 
 	ibCtorValueType(const wxString& className, const ibClassID& clsid) :
-		ibCtorValueTypeBase(className, CLASSINFO(T), clsid) {
+		ibCtorValueTypeBase(className, typeid(T), clsid) {
 	}
 
 	virtual wxIcon GetClassIcon() const { return T::GetIconGroup(); }
 	virtual ibCtorObjectType GetObjectTypeCtor() const { return ibCtorObjectType::ibCtorObjectType_object_value; }
+	// Forward the table trait to the concrete type — T::IsTableValue() resolves (via name
+	// lookup) to ibValueModel's gate for models, to ibValue's default otherwise. Pure
+	// compile-time: a non-model T never needs ibValueModel visible in its TU.
+	virtual bool IsTableValue() const override { return T::IsTableValue(); }
 	virtual void CallEvent(ibCtorObjectTypeEvent event) {
 		if (event == ibCtorObjectTypeEvent::ibCtorObjectTypeEvent_Register)
 			T::OnRegisterObject(GetClassName(), this);
@@ -131,11 +224,16 @@ public:
 			T::OnUnRegisterObject(GetClassName());
 	}
 
-	virtual ibValue* CreateObject() const { return new T(); }
+	virtual ibValue CreateObject() const { return new T(); }
 };
 
-#define VALUE_TYPE_REGISTER(class_info, class_name, clsid)\
+// 3-arg (legacy): explicit clsid.
+#define VALUE_TYPE_REGISTER_3(class_info, class_name, clsid)\
 GENERATE_REGISTER(wxT(class_name), wxMAKE_UNIQUE_NAME(s_cs_reg_val_), new ibCtorValueType<class_info>(wxT(class_name), clsid))
+// 2-arg (new): clsid = ib_clsid_hash(class_name).
+#define VALUE_TYPE_REGISTER_2(class_info, class_name)\
+VALUE_TYPE_REGISTER_3(class_info, class_name, value_to_clsid(class_name))
+#define VALUE_TYPE_REGISTER(...) IB_DISPATCH(VALUE_TYPE_REGISTER_, __VA_ARGS__)
 
 // object with non-create object
 template <class T>
@@ -144,7 +242,7 @@ class ibCtorSystemType : public ibCtorValueTypeBase {
 public:
 
 	ibCtorSystemType(const wxString& className, const ibClassID& clsid) :
-		ibCtorValueTypeBase(className, CLASSINFO(T), clsid) {
+		ibCtorValueTypeBase(className, typeid(T), clsid) {
 	}
 
 	virtual wxIcon GetClassIcon() const { return T::GetIconGroup(); }
@@ -156,11 +254,42 @@ public:
 			T::OnUnRegisterObject(GetClassName());
 	}
 
-	virtual ibValue* CreateObject() const { return nullptr; }
+	// ⭐⭐ AN EMPTY ONE IS STILL ONE. This answered `nullptr` for every system type — and that was
+	// never a decision that a system type MAY NOT BE BUILT, only the fact that the base class
+	// could not build one. The difference matters, because the nullptr was doing a second job by
+	// accident: it was the whole of what stopped `New SpreadsheetArea()` in a script. That rule
+	// is stated properly elsewhere and earlier — compileCode.cpp refuses to emit OPER_NEW unless
+	// the name is registered as an `object_value` — so a script still cannot write one, and this
+	// was a duplicate enforcement whose cost fell somewhere else entirely.
+	//
+	// 🛑 THE COST FELL ON THE ONE VERB THAT ASKS WHAT A TYPE OFFERS. type_members builds a value
+	// and reads its member table, so a whole family answered "cannot be built without arguments"
+	// — no members, no call forms, nothing. A caller HOLDING a SpreadsheetArea, handed to them by
+	// the platform, could not ask what it was made of and guessed member names instead
+	// (2026-09-09, reading a printout back cell by cell).
+	//
+	// ⭐ AND THE GUARD IS NOT A COMPROMISE, IT IS THE FACT. Of the 56 system types, 52 already
+	// carry an empty form — deliberately, and some say so in their own comment. The four that do
+	// not are one family: a value that exists only against its owner (a module unit, a list row,
+	// a runtime configuration manager), and ibValueModuleUnit states the reason in writing —
+	// a managerless one "can only fail to resolve every name outside itself", and the variant
+	// that allowed it was REMOVED. Forcing a constructor on those would undo a decision; asking
+	// the type whether it HAS an empty form asks exactly the right question.
+	virtual ibValue CreateObject() const {
+		if constexpr (std::is_default_constructible_v<T>)
+			return new T();
+		else
+			return wxEmptyValue;
+	}
 };
 
-#define SYSTEM_TYPE_REGISTER(class_info, class_name, clsid)\
+// 3-arg (legacy): explicit clsid.
+#define SYSTEM_TYPE_REGISTER_3(class_info, class_name, clsid)\
 GENERATE_REGISTER(wxT(class_name), wxMAKE_UNIQUE_NAME(s_cs_reg_so_), new ibCtorSystemType<class_info>(wxT(class_name), clsid))
+// 2-arg (new): clsid = ib_clsid_hash(class_name).
+#define SYSTEM_TYPE_REGISTER_2(class_info, class_name)\
+SYSTEM_TYPE_REGISTER_3(class_info, class_name, system_to_clsid(class_name))
+#define SYSTEM_TYPE_REGISTER(...) IB_DISPATCH(SYSTEM_TYPE_REGISTER_, __VA_ARGS__)
 
 //enumeration register - windowOrient, etc...
 template <class T>
@@ -168,7 +297,7 @@ class ibCtorEnumType : public ibCtorSingleType {
 
 public:
 	ibCtorEnumType(const wxString& className, const ibClassID& clsid) :
-		ibCtorSingleType(className, CLASSINFO(T), clsid) {
+		ibCtorSingleType(className, typeid(T), clsid) {
 	}
 
 	virtual wxIcon GetClassIcon() const { return T::GetIconGroup(); }
@@ -181,22 +310,27 @@ public:
 			T::OnUnRegisterObject(GetClassName());
 	}
 
-	virtual ibValue* CreateObject() const {
-		T* _ptr = new T();
-		_ptr->CreateEnumeration();
-		return _ptr;
-	};
+	virtual ibValue CreateObject() const {
+		const ibValuePtr<T> created(new T());   // owned before CreateEnumeration runs — see the base
+		created->CreateEnumeration();
+		return created;
+	}
 };
 
-#define ENUM_TYPE_REGISTER(class_info, class_name, clsid)\
+// 3-arg (legacy): explicit clsid.
+#define ENUM_TYPE_REGISTER_3(class_info, class_name, clsid)\
 GENERATE_REGISTER(wxT(class_name), wxMAKE_UNIQUE_NAME(s_cs_reg_e_), new ibCtorEnumType<class_info>(wxT(class_name), clsid))
+// 2-arg (new): clsid = ib_clsid_hash(class_name).
+#define ENUM_TYPE_REGISTER_2(class_info, class_name)\
+ENUM_TYPE_REGISTER_3(class_info, class_name, enum_to_clsid(class_name))
+#define ENUM_TYPE_REGISTER(...) IB_DISPATCH(ENUM_TYPE_REGISTER_, __VA_ARGS__)
 
 template <class T>
 class ibCtorContextType : public ibCtorSingleType {
 	T* m_innerObject = nullptr;
 public:
 	ibCtorContextType(const wxString& className, const ibClassID& clsid) :
-		ibCtorSingleType(className, CLASSINFO(T), clsid) {
+		ibCtorSingleType(className, typeid(T), clsid) {
 	}
 
 	virtual wxIcon GetClassIcon() const { return T::GetIconGroup(); }
@@ -217,10 +351,15 @@ public:
 		}
 	}
 
-	virtual ibValue* CreateObject() const { return m_innerObject; }
+	virtual ibValue CreateObject() const { return m_innerObject; }
 };
 
-#define CONTEXT_TYPE_REGISTER(class_info, class_name, clsid)\
+// 3-arg (legacy): explicit clsid.
+#define CONTEXT_TYPE_REGISTER_3(class_info, class_name, clsid)\
 GENERATE_REGISTER(wxT(class_name), wxMAKE_UNIQUE_NAME(s_cs_reg_ctx_), new ibCtorContextType<class_info>(wxT(class_name), clsid))
+// 2-arg (new): clsid = ib_clsid_hash(class_name).
+#define CONTEXT_TYPE_REGISTER_2(class_info, class_name)\
+CONTEXT_TYPE_REGISTER_3(class_info, class_name, context_to_clsid(class_name))
+#define CONTEXT_TYPE_REGISTER(...) IB_DISPATCH(CONTEXT_TYPE_REGISTER_, __VA_ARGS__)
 
 #endif // !_SINGLE_OBJECT_H__

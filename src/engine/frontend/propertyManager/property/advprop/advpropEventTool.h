@@ -3,6 +3,7 @@
 
 #include <wx/propgrid/propgrid.h>
 #include "backend/backend_core.h"
+#include "backend/propertyManager/propertyObject.h"   // ibPropertyChoiceList — the backend list this ctor converts
 
 class BACKEND_API ibPropertyObject;
 
@@ -41,8 +42,9 @@ public:
 	long GetNumber() const { return m_actionData.GetNumber(); }
 	wxString GetString() const { return m_actionData.GetString(); }
 
+	// Backend's choice list in, wxPGChoices built here — see ibPropertyChoiceList.
 	ibPGEventToolProperty(const wxString& label = wxPG_LABEL,
-		const wxString& name = wxPG_LABEL, const wxPGChoices& choices = wxPGChoices(),
+		const wxString& name = wxPG_LABEL, const ibPropertyChoiceList& choices = ibPropertyChoiceList(),
 		const wxVariant& value = wxNullVariant);
 
 	virtual ~ibPGEventToolProperty();

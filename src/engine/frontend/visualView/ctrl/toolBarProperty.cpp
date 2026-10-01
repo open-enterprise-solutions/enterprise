@@ -32,7 +32,7 @@ void ibValueToolbar::OnPropertyChanged(ibProperty* property, const wxVariant& ol
 				g_visualHostContext->CutControl(GetChild(0), true);
 			}
 
-			const ibActionCollection& actionData = GetActionArray();
+			const ibStandardCommandSet& actionData = GetActionArray();
 			for (unsigned int i = 0; i < actionData.GetCount(); i++) {
 				const ibActionID& id = actionData.GetID(i);
 				if (id != wxNOT_FOUND) {

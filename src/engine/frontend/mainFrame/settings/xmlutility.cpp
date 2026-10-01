@@ -12,16 +12,26 @@ void Unescape(const wxString& src, wxString& dst)
     {       
         if (src[i] == '&' && (i + 1 < src.Length()) && src[i + 1] == '#')
         {
+            // Numeric entity "&#<digits>;". Scanned with wxString rather than sscanf: the
+            // format-string route needs an exact argument type (an "%x"/"%d" into a wider
+            // variable writes only part of it on LP64), and c_str() into a vararg has no
+            // fixed narrow/wide answer.
+            size_t j = i + 2;
+            wxString digits;
 
-            int code = 0;
-            int length = 0;
-
-            if (sscanf(src.c_str() + i + 2, "%d;%n", &code, &length) == 1)
-            {
-                dst += (char)code;
-                i += length + 1; 
+            while (j < src.Length() && wxIsdigit(src[j])) {
+                digits += src[j];
+                ++j;
             }
 
+            unsigned long code = 0;
+            if (!digits.empty() && j < src.Length() && src[j] == ';' && digits.ToULong(&code)) {
+                dst += static_cast<wxChar>(code);
+                i = j;              // the loop's ++i steps past the ';'
+                continue;
+            }
+
+            dst += src[i];          // not an entity after all — keep the '&' verbatim
         }
         else
         {
@@ -137,15 +147,20 @@ bool ReadXmlNode(wxXmlNode* node, const wxString& tag, wxColour& color)
 {
     
     wxString text;
-    unsigned long temp;
-    
-    if (ReadXmlNode(node, tag, text) && sscanf(text, " #%x ", &temp) == 1)
-    {
-        color = wxColour((temp & 0xFF0000) >> 16, (temp & 0x00FF00) >> 8, temp & 0x0000FF);
-        return true;
-    }
 
-    return false;
+    if (!ReadXmlNode(node, tag, text))
+        return false;
+
+    // "#RRGGBB" parsed through wxString: "%x" writes an unsigned INT, so scanning it into
+    // an unsigned long left the top four bytes uninitialised wherever long is 64-bit.
+    wxString hex;
+    unsigned long temp = 0;
+
+    if (!text.Trim(true).Trim(false).StartsWith(wxT("#"), &hex) || !hex.ToULong(&temp, 16))
+        return false;
+
+    color = wxColour((temp & 0xFF0000) >> 16, (temp & 0x00FF00) >> 8, temp & 0x0000FF);
+    return true;
 
 }
 

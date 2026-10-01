@@ -1,0 +1,26 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "uk",
+  "categories": {
+    "common_lang": "Загальний опис мови",
+    "control_flow": "Потік виконання",
+    "global_context": "Глобальний контекст",
+    "global_functions": "Глобальні функції",
+    "primitive_types": "Примітивні типи",
+    "date": "Дата",
+    "linq": "LINQ — запити до колекцій",
+    "query": "Запити до даних",
+    "rls": "Обмеження доступу до даних (RLS)",
+    "spreadsheet": "Табличний документ — макети та друк",
+    "value_types": "Типи значень",
+    "collections": "Колекції",
+    "containers": "Контейнер і структура",
+    "value_table": "Таблиця значень (Table)",
+    "http": "HTTP — запити до іншої системи",
+    "json": "JSON — читання і запис",
+    "text_files": "Текстові файли та байти — читання і запис",
+    "runtime": "Рантайм",
+    "guide": "Довідка"
+  }
+}

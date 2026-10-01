@@ -1,7 +1,6 @@
 #include "propertyDate.h"
+#include "backend/serialize/dataBuilder.h"
 
-// get property for grid	
-wxObject* (*ibPropertyDate::ms_propertyDate)(const wxString&, const wxString&, const wxDateTime&) = nullptr;
 
 //base property for "date"
 bool ibPropertyDate::SetDataValue(const ibValue& varPropVal)
@@ -16,14 +15,14 @@ bool ibPropertyDate::GetDataValue(ibValue& pvarPropVal) const
 	return true;
 }
 
-bool ibPropertyDate::LoadData(ibReaderMemory& reader)
+bool ibPropertyDate::ReadNodeValue(const ibDataValue& value)
 {
-	ibPropertyDate::SetValue((wxLongLong_t)reader.r_u64());
+	ibPropertyDate::SetValue(value.AsDate());
 	return true;
 }
 
-bool ibPropertyDate::SaveData(ibWriterMemory& writer)
+bool ibPropertyDate::WriteNodeValue(ibDataValue& value) const
 {
-	writer.w_u64(ibPropertyDate::GetValueAsDateTime());
+	value = ibDataValue::Date(ibPropertyDate::GetValueAsDateTime());
 	return true;
 }

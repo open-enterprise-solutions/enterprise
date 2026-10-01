@@ -22,17 +22,24 @@
 
 class ibWebWindow;
 
+// Per-child layout hints. Mirrors wxSizer::Add(proportion, flag,
+// border). "flag" is a bitmask of wxEXPAND / wxLEFT / wxRIGHT /
+// wxUP / wxDOWN / wxStretch (wxSHRINK, wxGROW, wxALIGN_*).
+// Populated from ibValueSizerItem for each added child.
+//
+// It sits outside ibWebSizer because Add() below defaults its parameter to
+// `{}`: a default argument is parsed inside the class, where a nested type's
+// own default member initializers are not yet usable. MSVC accepts it, Clang
+// does not.
+struct ibWebSizerAddParams {
+	int proportion = 0;
+	int flag       = 0;
+	int border     = 0;
+};
+
 class ibWebSizer : public wxObject {
 public:
-	// Per-child layout hints. Mirrors wxSizer::Add(proportion, flag,
-	// border). "flag" is a bitmask of wxEXPAND / wxLEFT / wxRIGHT /
-	// wxUP / wxDOWN / wxStretch (wxSHRINK, wxGROW, wxALIGN_*).
-	// Populated from ibValueSizerItem for each added child.
-	struct AddParams {
-		int proportion = 0;
-		int flag       = 0;
-		int border     = 0;
-	};
+	using AddParams = ibWebSizerAddParams;
 
 	struct Item {
 		wxObject* child = nullptr;  // ibWebWindow* or ibWebSizer*

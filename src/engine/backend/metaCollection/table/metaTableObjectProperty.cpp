@@ -6,12 +6,12 @@
 #include "metaTableObject.h"
 #include "backend/metaData.h"
 
-#include <wx/propgrid/manager.h>
-
-void ibValueMetaObjectTableData::OnPropertyRefresh(wxPropertyGridManager* pg, wxPGProperty* pgProperty, ibProperty* property)
+void ibValueMetaObjectTableData::OnPropertyRefresh()
 {
-	if (m_propertyUse == property) {
-		ibValueMetaObjectRecordDataHierarchyMutableRef* metaObject = dynamic_cast<ibValueMetaObjectRecordDataHierarchyMutableRef*>(m_parent);
-		pg->HideProperty(pgProperty, metaObject == nullptr);
-	}
+	ibValueMetaObjectCompositeData::OnPropertyRefresh();
+
+	// Use is the OWNER's question — only a hierarchical owner can restrict a tabular
+	// section to folders or to items.
+	HideProperty(m_propertyUse,
+		dynamic_cast<ibValueMetaObjectRecordDataHierarchyMutableRef*>(m_parent) == nullptr);
 }

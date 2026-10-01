@@ -1,8 +1,36 @@
 #include "firebirdInterface.h"
+#include "firebirdBootstrap.h"
 
 bool ibInterfaceFirebird::Init()
 {
-	bool bLoaded = m_FirebirdDLL.Load(wxDynamicLibrary::CanonicalizeName(wxT("fbclient")));
+	// Locate _fb/ subfolder next to the executable + set DLL search
+	// path + FIREBIRD env var, so subsequent fbclient.dll load resolves
+	// from there and engine13.dll / firebird.conf / firebird.msg / intl
+	// / ICU all chain together correctly. Idempotent — repeat ctors
+	// only re-check cached state.
+	ibFirebirdBootstrap::Init();
+
+	bool bLoaded = false;
+#ifndef __WXMSW__
+	// ⭐ THE FIREBIRD BESIDE THE PROGRAM, BY ITS FULL PATH. Windows reaches _fb/ through SetDllDirectory; a
+	// POSIX loader has no such door and looks a bare name up in the system alone, so the kit a package
+	// carries (_fb/lib, laid out as Firebird's own tree: lib/, plugins/, intl/) was never loaded. The kit's
+	// libraries find each other from there — `$ORIGIN/../lib` on Linux, `@rpath/lib/…` through the program's
+	// rpath on macOS — and the engine reads plugins/, intl/ and firebird.msg through FIREBIRD, which the
+	// bootstrap has just pointed at the same folder. No kit beside the program: the system's, as before.
+	const wxString& fbDir = ibFirebirdBootstrap::GetFbRuntimeDir();
+	if (!fbDir.IsEmpty()) {
+#if defined(__WXOSX__) || defined(__APPLE__)
+		const wxString kitClient = fbDir + wxT("/lib/libfbclient.dylib");
+#else
+		const wxString kitClient = fbDir + wxT("/lib/libfbclient.so.2");
+#endif
+		if (wxFileExists(kitClient))
+			bLoaded = m_FirebirdDLL.Load(kitClient);
+	}
+#endif
+	if (!bLoaded)
+		bLoaded = m_FirebirdDLL.Load(wxDynamicLibrary::CanonicalizeName(wxT("fbclient")));
 #if defined(__WXOSX__) || defined(__APPLE__)
 	if (!bLoaded) {
 		bLoaded = m_FirebirdDLL.Load(wxT("/Library/Frameworks/Firebird.framework/Versions/A/Libraries/libfbclient.dylib"));
@@ -332,6 +360,32 @@ bool ibInterfaceFirebird::Init()
 	{
 		return false;
 	}
+
+	// Services API — best-effort load. Missing symbols leave the
+	// member pointers as null; ibFirebirdMaintenance handles that
+	// by reporting "Services API unavailable" instead of crashing.
+	// Every FB client from 2.5 onwards exports these, so the null
+	// path is effectively unreachable in practice — guard exists
+	// for defensive layering.
+	symbol = wxT("isc_service_attach");
+	if (m_FirebirdDLL.HasSymbol(symbol))
+		m_pIscServiceAttach = (isc_service_attachType)m_FirebirdDLL.GetSymbol(symbol);
+
+	symbol = wxT("isc_service_detach");
+	if (m_FirebirdDLL.HasSymbol(symbol))
+		m_pIscServiceDetach = (isc_service_detachType)m_FirebirdDLL.GetSymbol(symbol);
+
+	symbol = wxT("isc_service_start");
+	if (m_FirebirdDLL.HasSymbol(symbol))
+		m_pIscServiceStart = (isc_service_startType)m_FirebirdDLL.GetSymbol(symbol);
+
+	symbol = wxT("isc_service_query");
+	if (m_FirebirdDLL.HasSymbol(symbol))
+		m_pIscServiceQuery = (isc_service_queryType)m_FirebirdDLL.GetSymbol(symbol);
+
+	symbol = wxT("fb_cancel_operation");
+	if (m_FirebirdDLL.HasSymbol(symbol))
+		m_pFbCancelOperation = (fb_cancel_operationType)m_FirebirdDLL.GetSymbol(symbol);
 
 	return true;
 }

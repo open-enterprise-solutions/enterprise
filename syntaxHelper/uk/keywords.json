@@ -1,0 +1,1658 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "uk",
+  "entries": [
+    {
+      "id": "kw.If",
+      "name_local": "If",
+      "name_en": "If",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "Якщо <Вираз> Тоді ... [ІнакшеЯкщо ... Тоді ...] [Інакше ...] КінецьЯкщо",
+      "description": "Умовне виконання. Обчислює логічний вираз; за значення True виконує гілку Then, інакше — необовʼязкову гілку ElsIf з власним виразом, інакше — необовʼязкову гілку Else.",
+      "syntax_block": "if (<Expression1>) {\n    // statements\n} elsif (<Expression2>) {\n    // statements\n} else {\n    // statements\n}",
+      "parameters": "<Expression1>, <Expression2> — логічні вирази.",
+      "return_descr": "",
+      "example": "if (userInfo.IsAdmin) {\n    EnableAdminMenu();\n} else {\n    HideAdminMenu();\n}",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Else",
+        "kw.Elseif",
+        "kw.While"
+      ],
+      "reviewed": true,
+      "syntax_block_ves": "If <Expression1> Then\n    // statements\nElsIf <Expression2> Then\n    // statements\nElse\n    // statements\nEndIf",
+      "example_ves": "If userInfo.IsAdmin Then\n    EnableAdminMenu();\nElse\n    HideAdminMenu();\nEndIf",
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Then",
+      "name_local": "Then",
+      "name_en": "Then",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Завершує умову гілки If / ElsIf. Тіло після Then виконується лише за істинної умови.",
+      "syntax_block": "If <Expr> Then\n    // body\nEndIf;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.If",
+        "kw.Else",
+        "kw.Elseif",
+        "kw.Endif"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves"
+      ]
+    },
+    {
+      "id": "kw.Else",
+      "name_local": "Else",
+      "name_en": "Else",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Гілка, що виконується, коли всі умови If / ElsIf виявилися хибними.",
+      "syntax_block": "if (<Expr>) {\n    // matched\n} else {\n    // fallback\n}",
+      "syntax_block_ves": "If <Expr> Then\n    // matched\nElse\n    // fallback\nEndIf;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.If",
+        "kw.Elseif",
+        "kw.Endif"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Elseif",
+      "name_local": "Elseif",
+      "name_en": "Elseif",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Додає ланцюгову умову до If. Перевіряється, лише якщо кожна попередня гілка дала False.",
+      "syntax_block": "if (A) {\n    // …\n} elsif (B) {\n    // …\n} elsif (C) {\n    // …\n}",
+      "syntax_block_ves": "If A Then\n    // …\nElsIf B Then\n    // …\nElsIf C Then\n    // …\nEndIf;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.If",
+        "kw.Else",
+        "kw.Endif"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Endif",
+      "name_local": "Endif",
+      "name_en": "Endif",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Закриває конструкцію If.",
+      "syntax_block": "If <Expr> Then\n    // body\nEndIf;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.If"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves"
+      ]
+    },
+    {
+      "id": "kw.For",
+      "name_local": "For",
+      "name_en": "For",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Лічильниковий або ітераторний цикл. Дві форми: індексна (For <i> = <від> To <до> Do) і поелементна (Foreach <Елемент> In <Колекція> Do).",
+      "syntax_block": "// indexed\nfor (i = 1 To 10) {\n    // body\n}\n\n// for-each\nforeach (Item In Collection) {\n    // body\n}",
+      "parameters": "",
+      "return_descr": "",
+      "example": "foreach (Order In Customer.Orders) {\n    Total = Total + Order.Amount;\n}",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Foreach",
+        "kw.In",
+        "kw.To",
+        "kw.Break",
+        "kw.Continue"
+      ],
+      "reviewed": true,
+      "syntax_block_ves": "// indexed\nFor i = 1 To 10 Do\n    // body\nEndDo;\n\n// for-each\nForeach Item In Collection Do\n    // body\nEndDo;",
+      "example_ves": "Foreach Order In Customer.Orders Do\n    Total = Total + Order.Amount;\nEndDo;",
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Foreach",
+      "name_local": "Foreach",
+      "name_en": "Foreach",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Модифікатор циклу, що вводить поелементну ітерацію по колекції.",
+      "syntax_block": "Foreach (<Item> In <Collection>) {\n    // body\n}",
+      "syntax_block_ves": "Foreach <Item> In <Collection> Do\n    // body\nEndDo;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.For",
+        "kw.In",
+        "kw.Do"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.To",
+      "name_local": "To",
+      "name_en": "To",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Верхня межа (включно) лічильникового циклу For.",
+      "syntax_block": "for (i = 1 To 10) {\n    // body\n}",
+      "syntax_block_ves": "For i = 1 To 10 Do … EndDo;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.For"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.In",
+      "name_local": "In",
+      "name_en": "In",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Позначає колекцію-джерело в циклі For Each.",
+      "syntax_block": "Foreach (<Item> In <Collection>) {\n    // body\n}",
+      "syntax_block_ves": "Foreach <Item> In <Collection> Do … EndDo;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.For",
+        "kw.Foreach"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Do",
+      "name_local": "Do",
+      "name_en": "Do",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Відкриває тіло циклу While або For.",
+      "syntax_block": "While <Cond> Do … EndDo;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.While",
+        "kw.For",
+        "kw.EndDo"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves"
+      ]
+    },
+    {
+      "id": "kw.EndDo",
+      "name_local": "EndDo",
+      "name_en": "EndDo",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Закриває тіло циклу While або For.",
+      "syntax_block": "While X Do\n    // …\nEndDo;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.While",
+        "kw.For",
+        "kw.Do"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves"
+      ]
+    },
+    {
+      "id": "kw.While",
+      "name_local": "While",
+      "name_en": "While",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Цикл з передумовою. Перед кожною ітерацією перевіряє умову; виконує тіло, поки умова істинна.",
+      "syntax_block": "while (<Condition>) {\n    // body\n}",
+      "parameters": "",
+      "return_descr": "",
+      "example": "Counter = 0;\nwhile (Counter < 10) {\n    Counter = Counter + 1;\n}",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.For",
+        "kw.Break",
+        "kw.Continue"
+      ],
+      "reviewed": true,
+      "syntax_block_ves": "While <Condition> Do\n    // body\nEndDo;",
+      "example_ves": "Counter = 0;\nWhile Counter < 10 Do\n    Counter = Counter + 1;\nEndDo;",
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.GoTo",
+      "name_local": "GoTo",
+      "name_en": "GoTo",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Безумовний перехід до позначеного оператора в межах того ж блоку. Використовуйте помірно — майже завжди чистіше переписати через цикл або функцію.",
+      "syntax_block": "GoTo ~<Label>;\n…\n~<Label>:",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Not",
+      "name_local": "Not",
+      "name_en": "Not",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Логічне заперечення.",
+      "syntax_block": "Not <Expression>",
+      "parameters": "",
+      "return_descr": "",
+      "example": "If Not User.IsLoggedIn Then\n    ShowLoginForm();\nEndIf;",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.And",
+        "kw.Or"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.And",
+      "name_local": "And",
+      "name_en": "And",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Логічне І. Коротке замикання: правий операнд не обчислюється, якщо лівий — False.",
+      "syntax_block": "<LeftExpr> And <RightExpr>",
+      "parameters": "",
+      "return_descr": "",
+      "example": "If User.IsLoggedIn And User.Role = \"admin\" Then\n    ShowAdminPanel();\nEndIf;",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Or",
+        "kw.Not"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Or",
+      "name_local": "Or",
+      "name_en": "Or",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Логічне АБО. Коротке замикання: правий операнд не обчислюється, якщо лівий — True.",
+      "syntax_block": "<LeftExpr> Or <RightExpr>",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.And",
+        "kw.Not"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Procedure",
+      "name_local": "Procedure",
+      "name_en": "Procedure",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Оголошує процедуру — викликаний блок коду, що виконує дії, але не повертає значення. Якщо викликачу потрібен результат — використовуйте Function.",
+      "syntax_block": "Procedure <Name>([Val] <Param1>, [Val] <Param2>, …) [Public] {\n    // body\n}",
+      "parameters": "<Name> — ідентифікатор. Val — модифікатор «за значенням». Public — робить процедуру доступною з інших модулів (пишеться після списку параметрів).",
+      "return_descr": "",
+      "example": "Procedure LogMessage(Val Text) Public {\n    Message(Text);\n}",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Function",
+        "kw.Return",
+        "kw.Public",
+        "kw.Val"
+      ],
+      "reviewed": true,
+      "syntax_block_ves": "Procedure <Name>([Val] <Param1>, [Val] <Param2>, …) [Public]\n    // body\nEndProcedure",
+      "example_ves": "Procedure LogMessage(Val Text) Public\n    Message(Text);\nEndProcedure",
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.EndProcedure",
+      "name_local": "EndProcedure",
+      "name_en": "EndProcedure",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Закриває тіло процедури. Керування повертається викликачу при досягненні EndProcedure.",
+      "syntax_block": "Procedure Demo()\n    // …\nEndProcedure",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Procedure"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves"
+      ]
+    },
+    {
+      "id": "kw.Function",
+      "name_local": "Function",
+      "name_en": "Function",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Оголошує функцію — викликаний блок коду, що повертає значення через Return. Функції взаємозамінні з процедурами скрізь, окрім використання як джерело виразу.",
+      "syntax_block": "Function <Name>([Val] <Param1>, …) [Public|Private|Protected] [Cached] {\n    // body\n    Return <Value>;\n}",
+      "parameters": "<Name> — ідентифікатор. Val — модифікатор «за значенням». Модифікатори після списку параметрів — це дві незалежні осі: один модифікатор доступу (Public / Private / Protected, за замовчуванням Private) і, необов'язково, Cached, який зберігає результат для кожної комбінації значень аргументів. Порядок між ними значення не має.",
+      "return_descr": "Значення, передане оператору Return.",
+      "example": "Function Sum(Val A, Val B) Public {\n    Return A + B;\n}",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Procedure",
+        "kw.Return",
+        "kw.Public",
+        "kw.Cached"
+      ],
+      "reviewed": true,
+      "syntax_block_ves": "Function <Name>([Val] <Param1>, …) [Public|Private|Protected] [Cached]\n    // body\n    Return <Value>;\nEndFunction",
+      "example_ves": "Function Sum(Val A, Val B) Public\n    Return A + B;\nEndFunction",
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.EndFunction",
+      "name_local": "EndFunction",
+      "name_en": "EndFunction",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Закриває тіло функції. Досягнення EndFunction без оператора Return дає Undefined.",
+      "syntax_block": "Function Demo()\n    Return 42;\nEndFunction",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Function",
+        "kw.Return",
+        "kw.Undefined"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves"
+      ]
+    },
+    {
+      "id": "kw.Public",
+      "name_local": "Public",
+      "name_en": "Public",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Модифікатор доступу: робить процедуру, функцію або модульну змінну видимою з інших модулів. Пишеться ПІСЛЯ списку параметрів — за дужкою процедури чи функції, за іменем змінної. Замінює колишнє ключове слово Export, якого більше немає.",
+      "syntax_block": "Procedure DoWork() Public {\n    // body\n}",
+      "syntax_block_ves": "Procedure DoWork() Public\n    // body\nEndProcedure",
+      "parameters": "",
+      "return_descr": "",
+      "example": "Var Counter Public;\n\nFunction Read() Public {\n    Return Counter;\n}",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Private",
+        "kw.Protected",
+        "kw.Cached",
+        "kw.Procedure",
+        "kw.Function",
+        "kw.Var"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Private",
+      "name_local": "Private",
+      "name_en": "Private",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Модифікатор доступу: символ видно лише всередині власного модуля. Це поведінка за замовчуванням, тому Private пишуть, щоб явно позначити намір. Пишеться ПІСЛЯ списку параметрів — за закривною дужкою процедури чи функції, за іменем змінної, — там само, де Public і Protected.",
+      "syntax_block": "Procedure Helper() Private {\n    // body\n}",
+      "syntax_block_ves": "Procedure Helper() Private\n    // body\nEndProcedure",
+      "parameters": "",
+      "return_descr": "",
+      "example": "Var cache Private;\n\nFunction Prepare() Private {\n    Return cache;\n}",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Public",
+        "kw.Protected",
+        "kw.Cached",
+        "kw.Var"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Protected",
+      "name_local": "Protected",
+      "name_en": "Protected",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Модифікатор доступу: символ видно нащадкам модуля — модуль об'єкта віддає його формам цього об'єкта, — але не всій конфігурації. Пишеться ПІСЛЯ списку параметрів — за закривною дужкою процедури чи функції, за іменем змінної, — там само, де Public і Private.",
+      "syntax_block": "Procedure Recalculate() Protected {\n    // видно формам цього об'єкта\n}",
+      "syntax_block_ves": "Procedure Recalculate() Protected\n    // видно формам цього об'єкта\nEndProcedure",
+      "parameters": "",
+      "return_descr": "",
+      "example": "Var lastTotal Protected;\n\nFunction Total() Protected {\n    Return lastTotal;\n}",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Public",
+        "kw.Private",
+        "kw.Cached",
+        "kw.Var"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Cached",
+      "name_local": "Cached",
+      "name_en": "Cached",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Зберігає результат функції для кожної комбінації значень аргументів: перший виклик із даною комбінацією виконує тіло, кожен наступний із тією самою комбінацією повертає збережений результат, взагалі не заходячи у функцію. Дозволений лише для функції — процедурі нічого зберігати, і модифікатор там відхиляється, а не ігнорується. Це ДРУГА вісь, а не четвертий модифікатор доступу: поєднується з Public, Private або Protected, і порядок між ними значення не має. Пишеться там само, де вони, — після списку параметрів. Збережені значення живуть на модулі, який виконує функцію, і вмирають разом із ним: у модуля об'єкта — доки живий об'єкт, у спільного модуля — доки живий кореневий модуль сеансу, — тому очищати нічого і строк життя задавати не потрібно. Виклик, що завершився винятком, не зберігається.",
+      "syntax_block": "Function Rate(Val CurrencyCode, Val OnDate) Public Cached {\n    // курс читається один раз на пару (валюта, дата)\n    Return <Значення>;\n}",
+      "syntax_block_ves": "Function Rate(Val CurrencyCode, Val OnDate) Public Cached\n    // курс читається один раз на пару (валюта, дата)\n    Return <Значення>;\nEndFunction",
+      "parameters": "Ключем слугують значення аргументів, і порівнюються вони ЗА ЗНАЧЕННЯМ: число 1 і рядок \"1\" — різні ключі. Функція без аргументів обчислюється один раз.",
+      "return_descr": "",
+      "example": "Function Settings() Private Cached {\n    Return ReadSettingsFromDatabase();\n}\n\n// викликається у циклі по 10000 рядків — база читається один раз\nforeach (row In rows) {\n    row.Currency = Settings().Currency;\n}",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "guide.cached",
+        "kw.Function",
+        "kw.Public",
+        "kw.Private",
+        "kw.Protected"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Val",
+      "name_local": "Val",
+      "name_en": "Val",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Модифікатор параметра «за значенням». Без Val параметр звʼязаний за посиланням, і присвоєння всередині викликаного коду змінюють змінну викликача; зі Val береться локальна копія.",
+      "syntax_block": "Procedure Demo(Val ReadOnlyParam, MutableParam) {\n    // ReadOnlyParam is a copy of the caller's value.\n    // MutableParam writes back into the caller's variable.\n}",
+      "syntax_block_ves": "Procedure Demo(Val ReadOnlyParam, MutableParam)\n    // ReadOnlyParam is a copy of the caller's value.\n    // MutableParam writes back into the caller's variable.\nEndProcedure",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Procedure",
+        "kw.Function"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Return",
+      "name_local": "Return",
+      "name_en": "Return",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Виходить з поточної процедури або функції. Усередині функції може містити вираз-результат.",
+      "syntax_block": "Return;                 // exit procedure\nReturn <Expression>;    // exit function with result",
+      "parameters": "",
+      "return_descr": "",
+      "example": "Function Sign(Val X)\n    If X < 0 Then Return -1; EndIf;\n    If X > 0 Then Return 1;  EndIf;\n    Return 0;\nEndFunction",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Function",
+        "kw.Procedure"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Try",
+      "name_local": "Try",
+      "name_en": "Try",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Починає блок обробки виключень. Код всередині відстежується; виникле виключення передає керування в гілку Except.",
+      "syntax_block": "try {\n    // protected body\n} except {\n    // handler — runs on any raised exception\n}",
+      "parameters": "",
+      "return_descr": "",
+      "example": "try {\n    Result = ParseNumber(UserInput);\n} except {\n    Message(\"Not a valid number: \" + ErrorDescription());\n}",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Except",
+        "kw.Raise"
+      ],
+      "reviewed": true,
+      "syntax_block_ves": "Try\n    // protected body\nExcept\n    // handler — runs on any raised exception\nEndTry;",
+      "example_ves": "Try\n    Result = ParseNumber(UserInput);\nExcept\n    Message(\"Not a valid number: \" + ErrorDescription());\nEndTry;",
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Except",
+      "name_local": "Except",
+      "name_en": "Except",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Відкриває гілку обробника конструкції Try / Except. Виконується, якщо захищений блок породив виключення.",
+      "syntax_block": "try {\n    // …\n} except {\n    // recovery\n}",
+      "syntax_block_ves": "Try\n    // …\nExcept\n    // recovery\nEndTry;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Try",
+        "kw.Endtry",
+        "kw.Raise"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Endtry",
+      "name_local": "Endtry",
+      "name_en": "Endtry",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Закриває конструкцію Try / Except.",
+      "syntax_block": "Try … Except … EndTry;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Try",
+        "kw.Except"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves"
+      ]
+    },
+    {
+      "id": "kw.Continue",
+      "name_local": "Continue",
+      "name_en": "Continue",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Пропускає решту поточної ітерації; керування переходить на заголовок циклу.",
+      "syntax_block": "Foreach (Row In Table) {\n    if (Row.IsHeader) { Continue; }\n    Process(Row);\n}",
+      "syntax_block_ves": "Foreach Row In Table Do\n    If Row.IsHeader Then Continue; EndIf;\n    Process(Row);\nEndDo;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.For",
+        "kw.While",
+        "kw.Break"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Break",
+      "name_local": "Break",
+      "name_en": "Break",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Перериває найближчий охоплюючий цикл; керування переходить за EndDo.",
+      "syntax_block": "while (Cond) {\n    if (StopCondition) { Break; }\n    // …\n}",
+      "syntax_block_ves": "While Cond Do\n    If StopCondition Then Break; EndIf;\n    // …\nEndDo;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.While",
+        "kw.For",
+        "kw.Continue"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Raise",
+      "name_local": "Raise",
+      "name_en": "Raise",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Викликає виключення. Без аргументу — перепороджує поточне (лише всередині Except). З виразом — створює нове виключення з цим текстом.",
+      "syntax_block": "Raise;                       // re-throw current exception\nRaise <ExpressionString>;    // raise a new exception",
+      "parameters": "",
+      "return_descr": "",
+      "example": "If Amount < 0 Then\n    Raise \"Negative amount is not allowed\";\nEndIf;",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Try",
+        "kw.Except"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Var",
+      "name_local": "Var",
+      "name_en": "Var",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Оголошує одну або декілька локальних змінних (усередині тіла процедури / функції) або модульних змінних. Початкове значення — Undefined.",
+      "syntax_block": "Var <Name1>, <Name2>, …;\n\nProcedure Demo() {\n    Var Counter, Sum;\n    Counter = 0;\n}",
+      "syntax_block_ves": "Var <Name1>, <Name2>, …;\n\nProcedure Demo()\n    Var Counter, Sum;\n    Counter = 0;\nEndProcedure",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Undefined",
+        "kw.Public"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.New",
+      "name_local": "New",
+      "name_en": "New",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Створює значення вбудованого типу (колекції, обгортки примітивів, читачі запитів / потоків). Імʼя типу йде після New; аргументи конструктора в дужках, якщо потрібні.",
+      "syntax_block": "<Var> = New <TypeName>(<Args>…);",
+      "parameters": "",
+      "return_descr": "",
+      "example": "Items = New Array;\nItems.Add(\"first\");\nItems.Add(\"second\");\n\nQuery = New Query();\nQuery.Text = \"SELECT * FROM Catalog.Items\";",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Undefined"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Undefined",
+      "name_local": "Undefined",
+      "name_en": "Undefined",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Сингл-значення «ще немає значення». Початкове значення будь-якої оголошеної, але не ініціалізованої змінної; природний результат методів, яким немає що повернути.",
+      "syntax_block": "",
+      "parameters": "",
+      "return_descr": "",
+      "example": "Var X;\nIf X = Undefined Then\n    X = ComputeDefault();\nEndIf;",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Null",
+        "kw.New",
+        "kw.Var"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Null",
+      "name_local": "Null",
+      "name_en": "Null",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Значення «немає» з результатів запиту до БД (SQL NULL). Відрізняється від Undefined; порівняння зі звичайними значеннями завжди дають False.",
+      "syntax_block": "",
+      "parameters": "",
+      "return_descr": "",
+      "example": "If Selection.Manager = Null Then\n    ManagerName = \"<unassigned>\";\nEndIf;",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Undefined"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.True",
+      "name_local": "True",
+      "name_en": "True",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Логічний літерал — істина.",
+      "syntax_block": "Flag = True;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.False",
+        "kw.And",
+        "kw.Or",
+        "kw.Not"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.False",
+      "name_local": "False",
+      "name_en": "False",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Логічний літерал — хибність.",
+      "syntax_block": "Flag = False;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.True",
+        "kw.And",
+        "kw.Or",
+        "kw.Not"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.PpDefine",
+      "name_local": "#Define",
+      "name_en": "#Define",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Визначає ім'я препроцесора. Після цього ім'я існує для #Ifdef, а те, що записано за ним у рядку, підставляється всюди, де ім'я трапиться далі у вихідному тексті. Препроцесування йде ДО компіляції, тому визначене тут ім'я не є змінною і не зберігає значення часу виконання.",
+      "syntax_block": "",
+      "parameters": "Ім'я і, необов'язково, текст, який воно позначає.",
+      "return_descr": "",
+      "example": "#Define DEBUG\n\n#Ifdef DEBUG\n    Message(\"debug build\");\n#Endif",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.PpUndef",
+        "kw.PpIfdef",
+        "kw.PpIfndef"
+      ],
+      "reviewed": true
+    },
+    {
+      "id": "kw.PpUndef",
+      "name_local": "#Undef",
+      "name_en": "#Undef",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Знімає раніше визначене ім'я препроцесора, тож #Ifdef перестає його бачити починаючи з цього місця у вихідному тексті.",
+      "syntax_block": "",
+      "parameters": "Ім'я, яке знімається.",
+      "return_descr": "",
+      "example": "#Define DEBUG\n// …\n#Undef DEBUG",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.PpDefine",
+        "kw.PpIfdef"
+      ],
+      "reviewed": true
+    },
+    {
+      "id": "kw.PpIfdef",
+      "name_local": "#Ifdef",
+      "name_en": "#Ifdef",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Компілює наступний блок ЛИШЕ ЯКЩО ім'я визначено. Код усередині невиконаної гілки взагалі не доходить до компілятора: це не мертвий код, який не виконується, а текст, який не читається, — він може бути навіть невалідним.",
+      "syntax_block": "",
+      "parameters": "Ім'я, що перевіряється.",
+      "return_descr": "",
+      "example": "#Ifdef SERVER\n    doc.Write();\n#Else\n    Message(\"client side\");\n#Endif",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.PpIfndef",
+        "kw.PpElse",
+        "kw.PpEndif",
+        "kw.PpDefine"
+      ],
+      "reviewed": true
+    },
+    {
+      "id": "kw.PpIfndef",
+      "name_local": "#Ifndef",
+      "name_en": "#Ifndef",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Протилежність #Ifdef: компілює наступний блок лише якщо ім'я НЕ визначено.",
+      "syntax_block": "",
+      "parameters": "Ім'я, що перевіряється.",
+      "return_descr": "",
+      "example": "#Ifndef PRODUCTION\n    Message(\"not a production build\");\n#Endif",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.PpIfdef",
+        "kw.PpElse",
+        "kw.PpEndif"
+      ],
+      "reviewed": true
+    },
+    {
+      "id": "kw.PpElse",
+      "name_local": "#Else",
+      "name_en": "#Else",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Друга гілка #Ifdef / #Ifndef — компілюється, коли умова не виконалася.",
+      "syntax_block": "",
+      "parameters": "",
+      "return_descr": "",
+      "example": "#Ifdef DEBUG\n    Message(\"debug\");\n#Else\n    Message(\"release\");\n#Endif",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.PpIfdef",
+        "kw.PpIfndef",
+        "kw.PpEndif"
+      ],
+      "reviewed": true
+    },
+    {
+      "id": "kw.PpEndif",
+      "name_local": "#Endif",
+      "name_en": "#Endif",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Закриває блок #Ifdef або #Ifndef. Кожному з них потрібен свій.",
+      "syntax_block": "",
+      "parameters": "",
+      "return_descr": "",
+      "example": "#Ifdef DEBUG\n    Message(\"debug\");\n#Endif",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.PpIfdef",
+        "kw.PpIfndef",
+        "kw.PpElse"
+      ],
+      "reviewed": true
+    },
+    {
+      "id": "kw.PpRegion",
+      "name_local": "#Region",
+      "name_en": "#Region",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Відкриває ІМЕНОВАНУ область — ділянку вихідного тексту, яку редактор уміє згортати. На те, що компілюється, не впливає ніяк; існує, щоб довгий модуль можна було читати. Ім'я обов'язкове, як і парний #EndRegion.",
+      "syntax_block": "",
+      "parameters": "Ім'я області.",
+      "return_descr": "",
+      "example": "#Region EventHandlers\n\nProcedure OnOpen() Public\n    // …\nEndProcedure\n\n#EndRegion",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.PpEndRegion"
+      ],
+      "reviewed": true
+    },
+    {
+      "id": "kw.PpEndRegion",
+      "name_local": "#EndRegion",
+      "name_en": "#EndRegion",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Закриває #Region. Обов'язковий: незакрита область повідомляється там, де її було відкрито, а не в кінці файлу.",
+      "syntax_block": "",
+      "parameters": "",
+      "return_descr": "",
+      "example": "#Region Helpers\n// …\n#EndRegion",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.PpRegion"
+      ],
+      "reviewed": true
+    },
+    {
+      "id": "kw.From",
+      "name_local": "From",
+      "name_en": "From",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "linq"
+      ],
+      "signature": "from <Item> in <Source>",
+      "description": "Відкриває блочний LINQ-запит. Прив'язує змінну елемента до кожного елемента вихідної колекції. Перша клауза будь-якого block-syntax LINQ-запиту.",
+      "syntax_block": "from <Item> in <Source>\n    where <Condition>\n    select <Item>;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "guide.linq",
+        "kw.Where",
+        "kw.Select",
+        "kw.In"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
+    },
+    {
+      "id": "kw.Where",
+      "name_local": "Where",
+      "name_en": "Where",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "linq"
+      ],
+      "signature": "where <BooleanExpression>",
+      "description": "Клауза фільтра в LINQ-запиті — залишає рядки, що задовольняють булевий вираз. Може з'являтися кілька разів; умови об'єднуються неявним AND.",
+      "syntax_block": "from x in arr where x > 5 select x;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "guide.linq",
+        "kw.From",
+        "kw.Select"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
+    },
+    {
+      "id": "kw.Select",
+      "name_local": "Select",
+      "name_en": "Select",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "linq"
+      ],
+      "signature": "select <Expression> | select { Field = expr, ... }",
+      "description": "Клауза проекції — закриває блочний LINQ-запит, видаючи один рядок на кожне співпадіння. Форма `select <Expr>` для скаляра, або `select { Field = expr, ... }` для анонімного рядка-Structure.",
+      "syntax_block": "from o in orders select o.Total;\n\nfrom o in orders select { N = o.N, Total = o.Total };",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "guide.linq",
+        "kw.From",
+        "kw.Where"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
+    },
+    {
+      "id": "kw.OrderBy",
+      "name_local": "OrderBy",
+      "name_en": "OrderBy",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "linq"
+      ],
+      "signature": "orderby <Expression> [ascending|descending][, <Expression> [ascending|descending]...]",
+      "description": "Sort clause for a LINQ query. SEVERAL KEYS, comma-separated, in the order they decide: `orderby Warehouse, Item` sorts by warehouse and, within each warehouse, by item — the second key is consulted only where the first is equal. Each key has its own direction, written after it; a key that names none runs ascending: `orderby Warehouse, Date descending, Item` sorts by warehouse, within each the latest date first, and within a date by item.",
+      "syntax_block": "orderby <Expression> [ascending|descending][, <Expression> [ascending|descending]...]",
+      "parameters": "",
+      "return_descr": "",
+      "example": "// by warehouse, and within it the latest first\nvar moves = from m in Data.AccumulationRegisters.GoodsInWarehouses\n            orderby m.Warehouse, m.Period descending\n            select { W = m.Warehouse, P = m.Period };",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "guide.linq",
+        "kw.Ascending",
+        "kw.Descending"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
+    },
+    {
+      "id": "kw.Ascending",
+      "name_local": "Ascending",
+      "name_en": "Ascending",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "linq"
+      ],
+      "signature": "ascending",
+      "description": "Модифікатор напрямку для клаузи `orderby` — сортує за зростанням. За замовчуванням коли напрямок не вказано; рідко потрібен явно.",
+      "syntax_block": "from x in arr orderby x ascending select x;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "guide.linq",
+        "kw.OrderBy",
+        "kw.Descending"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
+    },
+    {
+      "id": "kw.Descending",
+      "name_local": "Descending",
+      "name_en": "Descending",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "linq"
+      ],
+      "signature": "descending",
+      "description": "Модифікатор напрямку для клаузи `orderby` — сортує за спаданням.",
+      "syntax_block": "from x in arr orderby x descending select x;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "guide.linq",
+        "kw.OrderBy",
+        "kw.Ascending"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
+    },
+    {
+      "id": "kw.Take",
+      "name_local": "Take",
+      "name_en": "Take",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "linq"
+      ],
+      "signature": "take <Count>",
+      "description": "Обмежує результат LINQ-запиту першими N рядками. Комбінується зі `skip` для пагінації.",
+      "syntax_block": "from x in arr take 10 select x;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "guide.linq",
+        "kw.Skip",
+        "kw.From"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
+    },
+    {
+      "id": "kw.Skip",
+      "name_local": "Skip",
+      "name_en": "Skip",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "linq"
+      ],
+      "signature": "skip <Count>",
+      "description": "Відкидає перші N рядків LINQ-запиту. Зазвичай комбінується зі `take` для пагінації.",
+      "syntax_block": "from x in arr skip 5 take 10 select x;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "guide.linq",
+        "kw.Take",
+        "kw.From"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
+    },
+    {
+      "id": "kw.Distinct",
+      "name_local": "Distinct",
+      "name_en": "Distinct",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "linq"
+      ],
+      "signature": "distinct",
+      "description": "Видаляє дублікати рядків з результату LINQ-запиту. Завершальна клауза після `select`.",
+      "syntax_block": "from x in arr select x distinct;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "guide.linq",
+        "kw.Select"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
+    },
+    {
+      "id": "kw.Join",
+      "name_local": "Join",
+      "name_en": "Join",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "linq"
+      ],
+      "signature": "join <Var> in <Source> on <OuterKey> equals <InnerKey>",
+      "description": "Внутрішньо приєднує вторинну колекцію до LINQ-запиту. Збіг ключа задається через `on outerKey equals innerKey`. Зовнішній рядок поєднується з кожним відповідним внутрішнім.",
+      "syntax_block": "from c in customers\n  join s in sales on c.Id equals s.CustId\n  select { Name = c.Name, Amount = s.Amount };",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "guide.linq",
+        "kw.On",
+        "kw.Equals"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
+    },
+    {
+      "id": "kw.On",
+      "name_local": "On",
+      "name_en": "On",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "linq"
+      ],
+      "signature": "on <OuterKey> equals <InnerKey>",
+      "description": "Заголовок клаузи ключа join'у. Поєднує ключ зовнішнього рядка (зліва від `equals`) з ключем внутрішнього рядка (справа). Використовується лише всередині клауз `join`.",
+      "syntax_block": "from c in customers\n  join s in sales on c.Id equals s.CustId\n  select ...;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "guide.linq",
+        "kw.Join",
+        "kw.Equals"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
+    },
+    {
+      "id": "kw.Equals",
+      "name_local": "Equals",
+      "name_en": "Equals",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "linq"
+      ],
+      "signature": "<OuterKey> equals <InnerKey>",
+      "description": "Оператор зіставлення ключів join'у. Використовується лише у формі `on <leftKey> equals <rightKey>`.",
+      "syntax_block": "... on c.Id equals s.CustId ...",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "guide.linq",
+        "kw.Join",
+        "kw.On"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
+    },
+    {
+      "id": "kw.Group",
+      "name_local": "Group",
+      "name_en": "Group",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "linq"
+      ],
+      "signature": "group <Element> by <Key> [into <ContVar>]",
+      "description": "Групує рядки LINQ-запиту за ключем. Термінальна форма `group X by K` створює `Array<Structure{Key, Values:Array}>`. Нетермінальна `group X by K into g` відкриває продовжуючий блок, прив'язаний до `g`.",
+      "syntax_block": "from p in people group p.Name by p.Country;\n\nfrom p in people\n  group p.Name by p.Country into g\n  where g.Values.Count() > 1\n  select { Country = g.Key, Names = g.Values };",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "guide.linq",
+        "kw.By",
+        "kw.Into"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
+    },
+    {
+      "id": "kw.By",
+      "name_local": "By",
+      "name_en": "By",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "linq"
+      ],
+      "signature": "by <Key>",
+      "description": "Заголовок клаузи ключа групування — `group <Element> by <Key>`. Пов'язує елемент рядка з його ключем групи.",
+      "syntax_block": "from p in people group p.Name by p.Country;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "guide.linq",
+        "kw.Group",
+        "kw.Into"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
+    },
+    {
+      "id": "kw.Into",
+      "name_local": "Into",
+      "name_en": "Into",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "linq"
+      ],
+      "signature": "into <Var>",
+      "description": "Відкриває нетермінальне продовження `group ... into <var>`. Прив'язує `<var>` до кожної групи `Structure{Key, Values}`. Продовжуйте клаузами `where / orderby / select`.",
+      "syntax_block": "from p in people\n  group p.Name by p.Country into g\n  select { Country = g.Key, Names = g.Values };",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "guide.linq",
+        "kw.Group",
+        "kw.By"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
+    },
+    {
+      "id": "kw.Restrict",
+      "name_local": "Restrict",
+      "name_en": "Restrict",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "linq",
+        "rls"
+      ],
+      "signature": "restrict <Var> in <Source> [join <Var2> in <Table> on <Var.Key> <Op> <Var2.Key>]* [where <Condition>]",
+      "description": "Стислий запис обмеження доступу в модулі ролі: звужує джерело й повертає його ж — присвойте результат назад у `Source`, щоб намір звузити було видно.\n\nКомпілюється в той самий ланцюг `Source.Join(…).Where(…)`, що й явний запис: кожна клауза вкладається **просто в запит** і йде на сервер СУБД. Це **не** перебір у пам'яті.\n\n- **join** — одна умова `on <Var.Key> <Op> <Var2.Key>`; оператори `= <> < <= > >=` беруться зі спільної граматики виразів. Приєднувана таблиця — будь-який вираз: джерело `Data.*`, обчислена таблиця значень або джерело зі своїм `.Where(…)` (так зручно заздалегідь відібрати приєднувану таблицю за поточним користувачем). Приєднання працює як **напівз'єднання** — фільтрує, але не розмножує рядки.\n- **where** — одна умова за аліасом джерела; доступні всі оператори, `and` / `or` / `not`, розіменування через крапку, захоплена локальна змінна (їде в запит параметром) та `in` — `<Поле> in (значення, …)` або `<Поле> in <Масив>`.\n- **`select` відсутній** — обмеження несе лише умови, нічого не проєктує.\n\n**Обмеження:** `where` бачить лише аліас **джерела**; умова за аліасом приєднаної таблиці (`where a.Поле = …`) не розв'язується — відбирайте її заздалегідь через `join a in Таблиця.Where(…)`.",
+      "syntax_block": "Source = restrict s in Source\n             join a in Data.Registers.ДоступДоСкладів.Where(Function(a) { Return a.Користувач = CurrentUser(); })\n                 on s.Склад = a.Склад\n         where s.Код in (МоїКоди);",
+      "syntax_block_ves": "Source = restrict s in Source\n             join a in Data.Registers.ДоступДоСкладів.Where(Function(a) Return a.Користувач = CurrentUser(); EndFunction)\n                 on s.Склад = a.Склад\n         where s.Код in (МоїКоди);",
+      "parameters": "",
+      "return_descr": "Повертає те саме джерело зі вкладеним обмеженням.",
+      "example": "",
+      "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+      "see_also": [
+        "guide.rls",
+        "ev.Role.OnAccessRead",
+        "cls.QueryDecorator",
+        "kw.Join",
+        "kw.Where"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
+    }
+  ]
+}

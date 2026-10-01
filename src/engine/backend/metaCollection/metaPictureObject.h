@@ -4,8 +4,7 @@
 #include "metaObject.h"
 
 class BACKEND_API ibValueMetaObjectPicture : public ibValueMetaObject {
-	wxDECLARE_DYNAMIC_CLASS(ibValueMetaObjectPicture);
-public:
+	public:
 
 	wxBitmap GetValueAsBitmap() const { return m_propertyPicture->GetValueAsBitmap(); }
 
@@ -17,11 +16,12 @@ public:
 
 protected:
 
-	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer);
+	virtual bool ReadData(const ibDataNode& node) override;
+	virtual bool WriteData(ibDataNode& node) const override;
 
 private:
-	ibPropertyExternalPicture* m_propertyPicture = ibPropertyObject::CreateProperty<ibPropertyExternalPicture>(m_categoryContext, wxT("Picture"), _("Picture"));
+	ibPropertyExternalPicture* m_propertyPicture = ibPropertyObject::CreateProperty<ibPropertyExternalPicture>(m_categoryContext, wxT("Picture"), _("Picture"),
+		_("The image this common picture holds, stored in the configuration. Commands, sections and form controls can take it as their picture by reference, so one image is kept in one place."));
 };
 
 #endif 

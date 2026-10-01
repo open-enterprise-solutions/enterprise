@@ -10,11 +10,29 @@
 
 #include "backend/backend_exception.h"
 
+#include <wx/weakref.h>
+
 void ibAppEnterprise::OnKeyEvent(wxKeyEvent& event)
 {
 	if (!ibBackendException::IsErrorOutputProcessing() && event.GetEventType() == wxEVT_KEY_DOWN && event.GetKeyCode() == WXK_ESCAPE) {
+		// ⭐⭐ ESCAPE CLOSES THE FORM IT WAS PRESSED IN, AND NOTHING ELSE. It is caught for the whole
+		// application (FilterEvent), so an Escape meant for a window standing OVER the form - the list
+		// settings, a picker, any modal dialog - closed the form underneath instead: the form destroyed
+		// its children on the way out, the dialog still running its modal loop on the stack among them,
+		// and the debug heap stopped the application (enterprise.dmp, 2026-09-16). A key pressed in
+		// another top-level window is that window's to answer.
+		wxWindow* const pressedIn = wxDynamicCast(event.GetEventObject(), wxWindow);
+		if (pressedIn != nullptr && wxGetTopLevelParent(pressedIn) != mainFrame) {
+			event.Skip();
+			return;
+		}
 		wxAuiMDIChildFrame* childFrame = mainFrame->GetActiveChild();
-		if (childFrame != nullptr) CallAfter([childFrame]() {childFrame->Close(); });
+		if (childFrame != nullptr) {
+			// …and the frame is held WEAKLY: closed some other way before the call comes round, it is
+			// gone - not a pointer into freed memory.
+			wxWeakRef<wxAuiMDIChildFrame> frame(childFrame);
+			CallAfter([frame]() { if (frame) frame->Close(); });
+		}
 	}
 
 	event.Skip();

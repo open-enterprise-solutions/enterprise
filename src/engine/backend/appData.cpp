@@ -1,37 +1,131 @@
-////////////////////////////////////////////////////////////////////////////
+﻿////////////////////////////////////////////////////////////////////////////
 //	Author		: Maxim Kornienko, wxFormBuider
 //	Description : app info
 ////////////////////////////////////////////////////////////////////////////
 
 #include "backend/appData.h"
-
-#include <thread>
-
-#include <wx/filename.h>
-
-#include "backend/utils/passwordHash.hpp"
-#include "backend/plugin/pluginManager.h"
-#include "backend/session/session.h"
-#include "backend/session/sessionRegistry.h"
+#include "backend/appHost.h"
 
 #include <thread>
 #include <algorithm>
+#include <sstream>
+
+#include <wx/ffile.h>      // infobase.conf — written for a new base
+#include <wx/fileconf.h>   // infobase.conf — a base's own settings
+#include <wx/filename.h>
+#include <wx/stdpaths.h>
+
+#include "backend/session/session.h"
+#include "backend/session/sessionRegistry.h"
+#include "backend/session/serviceExclusivePolicy.h"   // CanOpen — a base another process holds is refused at open
+#include "backend/logger/logger.h"
+#include "backend/logger/loggerSweep.h"
+#include "backend/lock/lockManager.h"
+#include "backend/job/jobManager.h"           // ibJobManager (owned via GetJobManager)
+#include "backend/mcp/mcpServer.h"            // ibMcpServer (owned via GetMcpServer)
+#include "backend/job/platformJobs.h"         // the engine's own jobs, declared when a database opens
+#include "backend/settings/settingsStorage.h" // ibSettingsStorage (owned via GetSettingsStorage)
+
+#include "backend/backend_exception.h"        // ibBackendCoreException — a build with no driver says so
+#include "backend/utils/passwordHash.hpp"
+
 #include "backend/moduleManager/moduleManager.h"
 
-//databases
+// databases. The driver headers are INCLUDED UNDER THE SAME GUARD as the code using them,
+// and that is load-bearing on MSVC rather than tidiness: these classes are BACKEND_API, i.e.
+// __declspec(dllexport) while backend.dll is being built, and an exported class is
+// instantiated in FULL by every translation unit that merely sees its definition. So an
+// unguarded #include makes this object file demand the driver's whole vtable, constructor and
+// destructor even when every use of it is compiled out — which is exactly how a build with
+// OES_USE_POSTGRESQL=OFF failed to link (CI, 2026-08-02). SQLite is always embedded, so it
+// needs no guard.
+#ifdef OES_USE_FIREBIRD
 #include "backend/databaseLayer/firebird/firebirdDatabaseLayer.h"
+#include "backend/databaseLayer/firebird/firebirdMaintenanceScheduler.h"   // registered by the startup sequence, not by Open
+#endif
+#ifdef OES_USE_POSTGRESQL
 #include "backend/databaseLayer/postgres/postgresDatabaseLayer.h"
+#endif
 #include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
 #include "backend/databaseLayer/connectionPool.h"
+
+#include "backend/query/queryableFactory.h"   // ibQueryableFactory (owned via GetQueryableFactory)
 
 // GetDatabaseLayer — trivial delegate. The actual priority chain
 // lives inside ibConnectionPool (TX > scope TL > primary). Kept here
 // so the db_query macro's target stays stable; legacy call sites
-// continue to see ibApplicationData::GetDatabaseLayer as the entry
+// continue to see ibApplicationInstance::GetDatabaseLayer as the entry
 // point even as the pool grows more responsibilities.
-std::shared_ptr<ibDatabaseLayer> ibApplicationData::GetDatabaseLayer()
+std::shared_ptr<ibDatabaseLayer> ibApplicationInstance::GetDatabaseLayer()
 {
 	return ibConnectionPool::GetDatabaseLayer();
+}
+
+wxString ibApplicationInstance::ResolveLogDir() const
+{
+	const wxString sep = wxFileName::GetPathSeparator();
+	if (m_dbMode == ibDatabaseMode::eFILE) {
+		// Lives next to sys.fdb — admins see logs alongside the base.
+		return m_strFile + sep + wxT("oeslog");
+	}
+	if (m_dbMode == ibDatabaseMode::eSERVER) {
+		// A server keeps each base in a folder of its own — the journal lives there, beside nothing else
+		// (a file base's folder holds the database as well).
+		if (!m_strDirLocal.IsEmpty())
+			return m_strDirLocal + sep + wxT("oeslog");
+
+		// Per-user persistent location. %TEMP% would be wiped by
+		// Windows disk cleanup; %LOCALAPPDATA% survives reboots and
+		// "temp-file cleanup". Until compute-server arrives
+		// this is the only place a client's journal lives.
+		//
+		// ⚠ KEYED BY THE SERVER AND THE BASE. The base's name alone collided: two bases called the same on
+		// two servers — which one process of several bases may hold at once — wrote one journal.
+		const auto sanitised = [](wxString tag) {
+			// Path separators in db names would break Mkdir.
+			tag.Replace(wxT("\\"), wxT("_"));
+			tag.Replace(wxT("/"),  wxT("_"));
+			tag.Replace(wxT(":"),  wxT("_"));
+			return tag;
+		};
+		wxString legacy = m_strDatabase;
+		if (legacy.IsEmpty()) legacy = m_strServer;
+		if (legacy.IsEmpty()) legacy = wxT("default");
+		const wxString tag = (!m_strServer.IsEmpty() && !m_strDatabase.IsEmpty())
+			? sanitised(m_strServer + wxT("_") + m_strDatabase)
+			: sanitised(legacy);
+
+		const wxString root = wxStandardPaths::Get().GetUserLocalDataDir() + sep + wxT("OES") + sep;
+		// …and a journal kept under the name alone is MOVED to the new key once, so its history stays
+		// readable instead of starting over beside it. A move that fails (the folder in use) costs only that.
+		const wxString old = root + sanitised(legacy);
+		if (tag != sanitised(legacy) && !wxDirExists(root + tag) && wxDirExists(old))
+			wxRenameFile(old, root + tag);
+
+		return root + tag + sep + wxT("logs");
+	}
+	return wxEmptyString;
+}
+
+void ibApplicationInstance::CreateLogger()
+{
+	if (m_runMode == ibRunMode::eLAUNCHER_MODE) return;
+	const wxString dir = ResolveLogDir();
+	if (dir.IsEmpty()) return;
+	try {
+		m_logger = std::make_unique<ibLogger>(dir);
+	} catch (...) {
+		// Best-effort — logger init must not break appData bring-up.
+		m_logger.reset();
+	}
+	// Retention — kick off the daily-sweep thread. Default 90 days.
+	// StartDailySweep also runs RunOnce once immediately on entry, so
+	// .olg files older than the cutoff are removed before the first
+	// 24h tick. Thread is joined inside ~ibLogger.
+	if (m_logger) {
+		const int retentionDays = 90;
+		m_logger->StartDailySweep(retentionDays);
+	}
 }
 
 //sandbox
@@ -40,24 +134,79 @@ std::shared_ptr<ibDatabaseLayer> ibApplicationData::GetDatabaseLayer()
 // ibSessionSnapshot moved to backend/session/sessionSnapshot.{h,cpp}
 // — implementation lives next to ibSessionRegistry that produces it.
 
-///////////////////////////////////////////////////////////////////////////////
-//								ibApplicationData
-///////////////////////////////////////////////////////////////////////////////
+namespace {
 
-ibApplicationData* ibApplicationData::s_instance = nullptr;
-
-///////////////////////////////////////////////////////////////////////////////
-
-// Pick the worker-pool cap based on run mode. Single-session GUI hosts
-// (designer/enterprise/launcher) don't need a pool at all — return 0
-// and the registry leaves m_workerPool nullptr. Headless multi-session
-// hosts (wes, future oes-server) get 4 × CPU cores up to 32.
-static std::size_t PickWorkerCount(ibRunMode runMode)
-{
-	if (runMode != eWEB_ENTERPRISE_MODE) return 0;
-	const std::size_t hw = std::thread::hardware_concurrency();
-	return std::min<std::size_t>(32, std::max<std::size_t>(4, hw * 4));
+// Short label for session.opened / session.closed audit rows. Mirrors
+// ibSessionKind values; kept local to appData.cpp because the only
+// consumer is the listener wiring below.
+wxString DescribeSessionKind(ibSessionKind k) {
+	switch (k) {
+	case ibSessionKind::Launcher:   return wxT("Launcher");
+	case ibSessionKind::Designer:   return wxT("Designer");
+	case ibSessionKind::Enterprise: return wxT("Enterprise");
+	case ibSessionKind::Service:    return wxT("Service");
+	case ibSessionKind::WebServer:  return wxT("WebServer");
+	case ibSessionKind::WebClient:  return wxT("WebClient");
+	case ibSessionKind::BackgroundJob: return wxT("BackgroundJob");
+	case ibSessionKind::ScheduledJob:  return wxT("ScheduledJob");
+	case ibSessionKind::SystemJob:     return wxT("SystemJob");
+	}
+	return wxT("Unknown");
 }
+
+}   // namespace
+
+///////////////////////////////////////////////////////////////////////////////
+//								ibApplicationInstance
+///////////////////////////////////////////////////////////////////////////////
+
+ibApplicationInstance* ibApplicationInstance::Get(bool required)
+{
+	// ⭐⭐ THROUGH THE SESSION (Max, 2026-09-30: `appData = GetSession()->GetAppData()`, `activeMetaData =
+	// … ->GetMetaData()`). There is no global current base and no global current configuration: `appData`
+	// and `activeMetaData` are those of the session this thread works for — session → its registry → base.
+	if (ibSession* const session = ibSession::Current())
+		if (ibApplicationInstance* const applicationInstance = session->GetApplicationInstance())
+			return applicationInstance;
+
+	// …a thread with NO session: the base it is bound to — the one it opened (ibApplicationInstanceScope).
+	// Thread-local, never global.
+	if (ibApplicationInstance* const applicationInstance = ibApplicationInstanceScope::Current())
+		return applicationInstance;
+
+	// …and neither: before the first base opens and after the last one closes, nothing. Otherwise this
+	// thread named no base, and that is said, not guessed — handing it "the only one" or "the first one" is
+	// how a line of one base would land in another.
+	if (!required || ibApplicationHost::IsEmpty())
+		return nullptr;
+	std::ostringstream thread;
+	thread << std::this_thread::get_id();
+	ibBackendCoreException::Error(_("Thread %s works for no base: it has no session and no base bound to it."),
+		wxString(thread.str()));
+	return nullptr;
+}
+
+ibHelpService* ibApplicationInstance::GetHelpService()
+{
+	ibApplicationHost* const host = ibApplicationHost::Get();
+	return host != nullptr ? host->GetHelpService() : nullptr;
+}
+
+wxString ibApplicationInstance::GetLocale() const
+{
+	ibApplicationHost* const host = ibApplicationHost::Get();
+	return host != nullptr ? host->GetLocale() : wxString();
+}
+
+ibPluginManager* ibApplicationInstance::GetPluginManager() const
+{
+	ibApplicationHost* const host = ibApplicationHost::Get();
+	return host != nullptr ? host->GetPluginManager() : nullptr;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+// (The worker pool is the process's — ibApplicationHost, sized by its run mode there.)
 
 // Pick the connection-pool idle floor based on run mode. Sets two
 // things at once: how many conns get pre-warmed at Init (so first
@@ -65,44 +214,87 @@ static std::size_t PickWorkerCount(ibRunMode runMode)
 // shrinking won't go.
 //
 // Baseline = 2 for GUI: one for the session manager's persistent
-// bookkeeping connections (write / probe — registry checks them out
-// at Start and never returns), one for the script thread's actual
+// write connection (the registry checks it out at Start and never
+// returns it), one for the script thread's actual
 // UI work. Server modes scale higher because tab counts amplify both
 // concurrency and burst rate; pool grows past minIdle up to maxSize
 // under load and shrinks back here on idle timeout.
 static std::size_t PickConnectionMinIdle(ibRunMode runMode)
 {
 	switch (runMode) {
-	case eWEB_ENTERPRISE_MODE: return 4;
+	case eWEB_RUNTIME_MODE: return 4;
 	case eSERVICE_MODE:        return 2;
-	default:                   return 2;   // designer / enterprise / launcher / classChecker
+	default:                   return 2;   // designer / enterprise / launcher
 	}
 }
 
-ibApplicationData::ibApplicationData(ibRunMode runMode) :
+// A NEW BASE GETS ITS OWN SETTINGS FILE — infobase.conf in its folder, every key written with its default, so a
+// person finds them where the base is and changes them there. Written when the base is created; one that is there
+// is never touched. (A note above each key, not after it: an INI value runs to the end of its line.)
+static void WriteInfobaseConf(const wxString& folder)
+{
+	const wxString path = folder + wxFileName::GetPathSeparator() + wxT("infobase.conf");
+	if (folder.IsEmpty() || wxFileName::FileExists(path))
+		return;
+	wxFFile file(path, wxT("w"));
+	if (!file.IsOpened() || !file.Write(
+			wxT("; This base's own settings - read when the base is opened.\n")
+			wxT("; Connections - connections to its DBMS at most; 0 - the default (backend.conf, else 32).\n")
+			wxT("Connections = 0\n"))) {
+		ibTechJournal::Print(ibJournalMark::Warning, wxT("appdata"),
+			wxT("%s cannot be written - the base runs on the defaults"), path);
+	}
+}
+
+// HOW MANY CONNECTIONS TO ITS DBMS THIS BASE MAY HOLD — the base's own word, infobase.conf in its folder
+// (Connections), over the process's default (backend.conf). A base's connections are its own: a PostgreSQL
+// base and an MS SQL one are two worlds, so the number lives with each base. A value that cannot be used is
+// said, not quietly replaced. Two at least: the registry holds one for its writes, a session needs another.
+static std::size_t ReadInfobaseConnections(const wxString& folder, std::size_t byDefault)
+{
+	const wxString path = folder + wxFileName::GetPathSeparator() + wxT("infobase.conf");
+	if (folder.IsEmpty() || !wxFileName::FileExists(path))
+		return byDefault;
+
+	const wxFileConfig conf(wxT(""), wxT(""), path, wxT(""), wxCONFIG_USE_LOCAL_FILE | wxCONFIG_USE_NO_ESCAPE_CHARACTERS);
+	return ibApplicationHost::ReadCount(conf, path, wxT("Connections"), 2, byDefault);
+}
+
+ibApplicationInstance::ibApplicationInstance(ibApplicationHost* host, ibRunMode runMode) :
+	m_host(host),
 	m_runMode(runMode),
 	m_strComputer(wxGetHostName()),
-	m_pluginManager(std::make_unique<ibPluginManager>()),
-	m_connectionPool(std::make_unique<ibConnectionPool>()),
-	m_sessionRegistry(std::make_unique<ibSessionRegistry>(PickWorkerCount(runMode))),
-	m_dbMode(ibDatabaseMode::eNONE),
-	m_locale_lang(wxLanguage::wxLANGUAGE_UNKNOWN)
+	// `unique_ptr(new X(...))` rather than `make_unique` — every
+	// subsystem ctor takes an `ib::AppDataCtorToken` and `make_unique`
+	// isn't a friend of the token. Direct `new X(...)` works because
+	// this TU is `ibApplicationInstance`'s and can mint the token.
+	//
+	// Init order matches the declaration order in appData.h —
+	// connectionPool first, activeMetaData last. See the ownership
+	// block in the header for the destruction contract that this
+	// order encodes.
+	//
+	// Every token is minted with `this`: the base that makes a subsystem is its owner, and the token says so.
+	m_connectionPool(std::unique_ptr<ibConnectionPool>(new ibConnectionPool(ib::AppDataCtorToken{ this }))),
+	m_lockManager(std::unique_ptr<ibLockManager>(new ibLockManager(ib::AppDataCtorToken{ this }))),
+	m_queryableFactory(std::unique_ptr<ibQueryableFactory>(new ibQueryableFactory(ib::AppDataCtorToken{ this }))),
+	m_sessionRegistry(std::unique_ptr<ibSessionRegistry>(new ibSessionRegistry(ib::AppDataCtorToken{ this }))),
+	m_jobManager(std::unique_ptr<ibJobManager>(new ibJobManager(ib::AppDataCtorToken{ this }))),
+	m_mcpServer(std::unique_ptr<ibMcpServer>(new ibMcpServer(ib::AppDataCtorToken{ this }))),
+	m_settingsStorage(std::unique_ptr<ibSettingsStorage>(new ibSettingsStorage(ib::AppDataCtorToken{ this }))),
+	m_dbMode(ibDatabaseMode::eNONE)
 {
 	// Pick the session access mode from runMode — every Single-session
-	// app (enterprise/designer/daemon/codeRunner/classChecker) gets
+	// app (enterprise/designer/appserver/codeRunner) gets
 	// Single, the web server (wes) gets Server (per-tab + system fallback).
 	// Apps no longer need to call SetAccessMode themselves.
 	//
-	// Drive the registry directly here — the global `appData` pointer is
-	// assigned only after this ctor returns, so going through
-	// ibSession::SetAccessMode (which routes through ibSessionRegistry::
-	// Instance() and asserts on the global) would fire wxASSERT mid-ctor.
+	// Drive THIS base's registry directly — ibSession::SetAccessMode asks the
+	// current base's, and this base is not yet anybody's current one.
 	switch (runMode) {
-	case eWEB_ENTERPRISE_MODE:
+	case eWEB_RUNTIME_MODE:
 		m_sessionRegistry->SetAccessMode(ibSession::AccessMode::Shared);
-		// Worker pool was allocated by the registry ctor (PickWorkerCount
-		// returned a positive cap for this mode) — registry owns its own
-		// pool lifecycle, no further setup here.
+		// (The worker pool is the process's, sized for this mode by ibApplicationHost.)
 		break;
 	case eLAUNCHER_MODE:
 		// Launcher has no session — leave default; Current() returns
@@ -113,11 +305,7 @@ ibApplicationData::ibApplicationData(ibRunMode runMode) :
 		break;
 	}
 
-	// Load everything under <exe-dir>/plugins that exports the OES plugin ABI.
-	// Launcher has no script/metadata subsystem so plugins have nothing to hook —
-	// skip it there to avoid paying the scan cost on every connection chooser.
-	if (runMode != eLAUNCHER_MODE)
-		m_pluginManager->LoadAll();
+	// (Plugins are the PROCESS's — loaded once by ibApplicationHost, not per base.)
 
 	// Wire session-lifecycle event listeners — drives metadata load on
 	// first auth + per-session runtime bring-up + last-auth-out cleanup.
@@ -125,18 +313,66 @@ ibApplicationData::ibApplicationData(ibRunMode runMode) :
 		WireSessionEvents();
 }
 
-void ibApplicationData::WireSessionEvents()
+// Fabric — replaces ibMetaDataConfigurationBase::Initialize. Picks the
+// subclass by runMode (the same switch the legacy static used) and
+// stashes it under `m_activeMetaData`. Single ownership, polymorphic
+// dtor chain on reset.
+bool ibApplicationInstance::CreateActiveMetaData(ibRunMode mode, int flags)
+{
+	return CreateActiveMetaData(Get(), mode, flags);
+}
+
+// …on the application data NAMED — the session listeners below pass their own rather than let the registry
+// thread resolve one.
+bool ibApplicationInstance::CreateActiveMetaData(ibApplicationInstance* applicationInstance, ibRunMode mode, int flags)
+{
+	if (applicationInstance == nullptr)
+		return false;
+	if (applicationInstance->m_activeMetaData)
+		return false;   // already initialised — caller passes a fresh appData
+
+	// Same dispatch the historical Initialize() did. The metadata
+	// subclass ctors are gated on ib::AppDataCtorToken — this TU is
+	// ibApplicationInstance's, so it can mint the token; nobody outside
+	// can. Launcher mode has no metadata at all — that's a successful
+	// no-op so callers can branch uniformly.
+	switch (mode) {
+	case eLAUNCHER_MODE:
+		return true;
+	case eDESIGNER_MODE:
+		applicationInstance->m_activeMetaData.reset(new ibMetaDataConfigurationStorage(ib::AppDataCtorToken{ applicationInstance }));
+		break;
+	default:
+		applicationInstance->m_activeMetaData.reset(new ibMetaDataConfiguration(ib::AppDataCtorToken{ applicationInstance }));
+		break;
+	}
+
+	return applicationInstance->m_activeMetaData
+		? applicationInstance->m_activeMetaData->OnInitialize(flags)
+		: false;
+}
+
+void ibApplicationInstance::WireSessionEvents()
 {
 	auto* registry = m_sessionRegistry.get();
 	if (registry == nullptr) return;
 
 	// First authenticated session in the process → load metadata skeleton
 	// only. CreateRoot / RunDatabase / CompileRoot live in OnAuthenticated
-	// (and the designer's manual RunDatabase after mainFrameShow) — this
+	// (and the designer's manual RunDatabase after the window shows) — this
 	// listener is just the one-shot metadata bootstrap.
+	//
+	// Direct CreateActiveMetaData call — we are inside ibApplicationInstance
+	// already, so the legacy `metaDataCreate(...)` macro indirection
+	// (which expands to `ibApplicationInstance::CreateActiveMetaData(...)`)
+	// just adds a step. The macro stays for outside callers.
+	//
+	// ⚠ EVERY LISTENER HERE WORKS ON ITS OWN BASE — `this`, its members — and never through `appData`,
+	// `activeMetaData` or `ibLog`: those answer the base of the thread that fires the listener, and with
+	// several bases in the process the registry thread of one base must not be asked which base it is.
 	registry->OnFirstConnect([this](ibSession* /*s*/) {
 		if (m_created_metadata) return;
-		if (!metaDataCreate(m_runMode, m_loadMetadataFlags)) return;
+		if (!CreateActiveMetaData(this, m_runMode, m_loadMetadataFlags)) return;
 		m_created_metadata = true;
 	});
 
@@ -145,35 +381,55 @@ void ibApplicationData::WireSessionEvents()
 	// for runtime-enabled modes.
 	registry->OnAuthenticated([this](ibSession* s) {
 		if (s == nullptr) return;
+		// session.opened goes through Audit BEFORE we bind so the row
+		// already has session_id resolved from the freshly-attached
+		// ibSession::Current() once BindSessionToThread runs below.
+		try {
+			if (m_logger) {
+				m_logger->Audit(wxT("session"), wxT("opened"),
+				             wxString::Format(wxT("kind=%s id=%s"),
+				                              DescribeSessionKind(s->GetKind()),
+				                              s->GetId()));
+			}
+		} catch (...) {}
 		ibSession::BindSessionToThread(s, std::this_thread::get_id());
 		auto* registry = m_sessionRegistry.get();
-		if (registry && registry->GetAccessMode() == ibSession::AccessMode::Shared
-		    && registry->GetFallback() == nullptr)
-		{
-			// First Shared-mode auth establishes the system fallback.
+		if (registry && registry->GetFallback() == nullptr) {
+			// The first authenticated session becomes what an UNBOUND thread
+			// resolves to. No longer gated on Shared mode: identity resolution is
+			// now one rule everywhere (ibSession::Current), and a desktop process
+			// stopped having a single session the moment jobs and readers took
+			// their own. On the desktop this fallback IS the window's session —
+			// the same answer the old "hand back the lone map entry" gave, minus
+			// the part where it stopped being lone.
 			registry->SetFallback(s);
 		}
+		// A PERSON'S OWN MCP SERVER, read the moment they are let in — the
+		// settings are keyed by user, so opening the designer is when "whose
+		// server is this" gets its answer. Nothing saved yet is a cold start,
+		// not a failure: the defaults stand, and the defaults are off.
+		if (m_mcpServer) m_mcpServer->LoadSettings(s);
+
 		// Enable per-session debug context iff this process was started
 		// with --debug. Marks the session as debugged so ibProcUnit's
 		// breakpoint dispatch + DoDebugLoop's CV wait route through the
 		// session's own state instead of the legacy server-singleton.
 		if ((m_loadMetadataFlags & _app_start_create_debug_server_flag) != 0)
 			registry->EnableDebugForSession(s);
-		if (activeMetaData != nullptr) {
-			// Root mm is already allocated by ibSession::EnsureRoot — the
-			// registry calls it between OnFirstConnect (metadataCreate) and
-			// this listener. Here we drive cross-process metadata bring-up
-			// (RunDatabase once per process — fires OnBefore/After
-			// RunMetaObject which read session->mm and populate
-			// ibCompileValueCache + ibModuleStorage) and per-session
-			// compile + runtime start.
+		if (m_activeMetaData != nullptr) {
+			// Root mm is allocated by ibSession::EnsureRoot (called by the
+			// registry between OnFirstConnect and this listener) for runtime
+			// sessions; the Designer has no root mm (it uses the lightweight
+			// designer manager in the compile cache). Here we drive cross-process
+			// metadata bring-up (RunDatabase once per process — fires OnBefore/
+			// After RunMetaObject which populate ibCompileValueCache +
+			// ibModuleStorage) and per-session compile + runtime start.
 			if (!m_run_metadata) {
-				m_run_metadata = activeMetaData->RunDatabase();
+				m_run_metadata = m_activeMetaData->RunDatabase();
 			}
-			// CompileRoot folds compile + AttachRuntime + lambda
-			// runtime wire-up. AttachRuntime self-gates by session
-			// kind (Enterprise / WebClient / Service execute; others
-			// no-op), so no explicit runMode check needed here.
+			// CompileRoot folds compile + AttachRuntime + lambda runtime wire-up.
+			// No-op when there's no root mm (Designer). AttachRuntime self-gates by
+			// session kind, so no explicit runMode check needed here.
 			s->CompileRoot();
 		}
 	});
@@ -184,6 +440,18 @@ void ibApplicationData::WireSessionEvents()
 	// thread originally pinned them.
 	registry->OnDisconnect([this](ibSession* s) {
 		if (s == nullptr) return;
+		// Capture session.closed BEFORE UnbindSession + DestroyRoot —
+		// ibSession::Current() still resolves to `s` so the audit row
+		// carries the right session_id / user_name. After UnbindSession
+		// the user identity is gone.
+		try {
+			if (m_logger) {
+				m_logger->Audit(wxT("session"), wxT("closed"),
+				             wxString::Format(wxT("kind=%s id=%s"),
+				                              DescribeSessionKind(s->GetKind()),
+				                              s->GetId()));
+			}
+		} catch (...) {}
 		if (auto* mm = s->GetManagerModule())
 			mm->DetachRuntime(s);
 		s->DestroyRoot();
@@ -198,9 +466,9 @@ void ibApplicationData::WireSessionEvents()
 	// exit; the keep-alive predicate (web tabs, etc.) can decline.
 	registry->OnLastDisconnect([this]() {
 		if (m_run_metadata) {
-			const bool isConfigOpen = activeMetaData != nullptr && activeMetaData->IsConfigOpen();
+			const bool isConfigOpen = m_activeMetaData != nullptr && m_activeMetaData->IsConfigOpen();
 			if (isConfigOpen)
-				activeMetaData->CloseDatabase(forceCloseFlag);
+				m_activeMetaData->CloseDatabase(forceCloseFlag);
 		}
 		m_created_metadata = false;
 		m_run_metadata = false;
@@ -208,34 +476,103 @@ void ibApplicationData::WireSessionEvents()
 		// goes through ProcessExitHook (wes' main → svr->stop()) or
 		// wxTheApp->Exit (desktop), with ShouldKeepAlive declining when
 		// non-debug clients are still live.
-		if (!ibSessionRegistry::Instance().ShouldKeepAlive())
-			ibSessionRegistry::Instance().CloseAll(true);
+		if (auto* reg = m_sessionRegistry.get()) {
+			if (!reg->ShouldKeepAlive())
+				reg->CloseAll(true);
+		}
 	});
 }
 
-ibApplicationData::~ibApplicationData()
+ibApplicationInstance::~ibApplicationInstance()
 {
-	// Stop is the kill-switch: it submits Remove@Urgent for every session
-	// still in m_own (technical wes session, stranded per-tab sessions),
-	// then drains the queue before joining the worker — so every
-	// sys_session row DELETEs and OnDisconnect listeners fire before any
-	// other member of appData dies. m_sessionRegistry itself is destroyed
-	// at the end of this dtor; its own dtor calls Stop again best-effort.
+	// Closed already by its owner (ibApplicationHost::Close) — then every step finds its field gone.
+	Close();
+}
+
+void ibApplicationInstance::Close()
+{
+	// Business-action sequence — every subsystem with a pre-dtor hook
+	// (Stop / UnloadAll / OnDestroy / Shutdown) gets it called here in
+	// the order that matches the declaration-order destruction below.
+	//
+	// The fields are then released in reverse declaration order — the
+	// order was chosen (see appData.h ownership block) so that every
+	// field's dtor finds its dependencies still alive — explicitly, at
+	// the end of this body, so each one reads null before it dies.
+	//
+	// 0. JOBS FIRST — everything this process started on its own goes down before
+	//    anything it depends on. Stop() ends the tick, waits out every scheduled
+	//    run and cancels every background run, so by the time the metadata, the
+	//    registry and the connection pool come down below, nothing of ours is
+	//    still executing against them.
+	//
+	//    This ordering is the whole reason the subsystems underneath need no
+	//    "is it still there?" guards: a job cannot be mid-Services-API-call while
+	//    the driver is freed, because it is already finished. History — an earlier
+	//    shape let a detached maintenance worker outlive the pool shutdown and
+	//    dereference the freed interface (EIP=0xdddddddd in
+	//    WaitForServiceCompletion, 2026-05-26 and -05-29); that thread is gone,
+	//    and this order is what keeps its replacement honest.
+	if (m_jobManager) m_jobManager->Stop();
+
+	// Same reasoning one line up: the listener works in the name of a session and
+	// touches metadata on every exchange, so it is joined BEFORE anything it can
+	// reach starts going away.
+	if (m_mcpServer) m_mcpServer->Stop();
+
+	// 1. Stop the registry — submits Remove@Urgent for every session
+	//    still in m_own, drains the queue, joins the worker. sys_session
+	//    DELETEs + OnDisconnect listeners fire before pool dies. Right after
+	//    what runs on the sessions — a job's session is cancelled by its
+	//    manager, not by the registry — and before the metadata goes.
 	if (m_sessionRegistry) m_sessionRegistry->Stop();
 
-	// Worker pool is stopped inside the registry's own Stop() above —
-	// pool lives on the registry. No separate teardown needed here.
+	// 2. activeMetaData — OnDestroy may save state, close compile
+	//    caches, run cascading detach; those paths still want db_query.
+	if (m_activeMetaData) m_activeMetaData->OnDestroy();
 
-	// Explicit early unload so plugins see Destroy() while the host is still
-	// alive; also clears the vector before appData's other members die.
-	if (m_pluginManager) m_pluginManager->UnloadAll();
+	// (Plugins are the process's: they are unloaded by ibApplicationHost once
+	//  every base is gone, not by each base.)
 
-	// Pool shutdown — close every connection it owns (master + clones),
-	// invalidate outstanding hand-outs via m_shutdown so their deleters
-	// drop the captured ref instead of re-parking. Run AFTER the
-	// session registry's Stop so any session-bound DB work has
-	// completed; before m_connectionPool's own destruction below.
+	// 3. Pool — close master + clones, invalidate outstanding hand-outs.
+	//    Runs AFTER the registry's Stop so any session-bound DB work
+	//    has already completed.
 	if (m_connectionPool) m_connectionPool->Shutdown();
+
+	// 4. The fields, in reverse declaration order: m_activeMetaData → m_settingsStorage → m_mcpServer →
+	//    m_jobManager → m_sessionRegistry → m_logger → m_queryableFactory → m_lockManager →
+	//    m_connectionPool. (The job manager's own dtor calls Stop() again; it is idempotent, so the
+	//    explicit step above only fixes the ORDER.)
+	//
+	//    ⚠ EACH ONE NULL BEFORE IT DIES — reset(), not the default unwinding. The closing thread works for
+	//    this base (ibApplicationHost::Close), and what a field's destructor asks — a connection holder its
+	//    pool, the pool the current session, the session its registry — is answered down the chain through
+	//    THESE pointers. A unique_ptr left to its own destructor keeps pointing at what it has deleted: the
+	//    chain read the freed registry and every process crashed on exit (2026-10-01). Each field is emptied
+	//    first, so a question asked after it is gone reads "none" — emptied UNDER THE PROCESS'S LOCK, which
+	//    HasRegistry / HasPool read the fields under from any thread, and deleted outside it, where its own
+	//    destructor may ask them.
+	const auto release = [](auto& field) {
+		std::remove_reference_t<decltype(field)> gone;
+		{
+			std::lock_guard<std::mutex> lk(ibApplicationHost::s_mutex);
+			gone = std::move(field);
+		}
+	};
+	release(m_activeMetaData);
+	release(m_settingsStorage);
+	release(m_mcpServer);
+	release(m_jobManager);
+	release(m_sessionRegistry);
+	release(m_logger);
+	release(m_queryableFactory);
+	release(m_lockManager);
+	release(m_connectionPool);
+
+	// Nothing reports "what survived" from inside the teardown: the live-object report sits in
+	// DestroyAppDataEnv, past the delete, where everything this base owned has had its chance to go.
+	// (Measured 2026-07-30: reporting before the fields were released printed 510 live property objects
+	// that their release then destroyed to zero.)
 }
 
 
@@ -247,7 +584,7 @@ ibApplicationData::~ibApplicationData()
 // that depend on a real user must arrange a session scope first.
 // ---------------------------------------------------------------------------
 
-const ibUserInfo& ibApplicationData::GetUserInfo() const
+const ibUserInfo& ibApplicationInstance::GetUserInfo() const
 {
 	if (auto* ctx = ibSession::Current())
 		return ctx->GetUserInfo();
@@ -255,7 +592,7 @@ const ibUserInfo& ibApplicationData::GetUserInfo() const
 	return s_empty;
 }
 
-bool ibApplicationData::ExclusiveMode() const
+bool ibApplicationInstance::ExclusiveMode() const
 {
 	// Process-wide query through the registry — answers "is anyone in
 	// exclusive mode right now?". Cluster-aware variant adds the
@@ -263,12 +600,12 @@ bool ibApplicationData::ExclusiveMode() const
 	return m_sessionRegistry != nullptr && m_sessionRegistry->HasExclusiveSession();
 }
 
-const wxString& ibApplicationData::GetUserName() const
+const wxString& ibApplicationInstance::GetUserName() const
 {
 	return GetUserInfo().m_strUserName;
 }
 
-const wxString& ibApplicationData::GetUserPassword() const
+const wxString& ibApplicationInstance::GetUserPassword() const
 {
 	// Historical quirk: GetUserPassword returned fullName — kept for
 	// source compat with call sites that still use the alias.
@@ -276,192 +613,265 @@ const wxString& ibApplicationData::GetUserPassword() const
 }
 
 const std::vector<ibUserInfo::ibUserRole>&
-ibApplicationData::GetUserRoleArray() const
+ibApplicationInstance::GetUserRoleArray() const
 {
 	return GetUserInfo().m_roleArray;
 }
 
-ibGuid ibApplicationData::GetUserLanguageGuid() const
-{
-	return GetUserInfo().m_strLanguageGuid;
-}
-
-wxString ibApplicationData::GetUserLanguageCode() const
+wxString ibApplicationInstance::GetUserLanguageCode() const
 {
 	return GetUserInfo().m_strLanguageCode;
 }
 
-wxString ibApplicationData::ComputeMd5() const
+wxString ibApplicationInstance::ComputeMd5() const
 {
 	return ComputeMd5(GetUserInfo().m_strUserPassword);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 
-bool ibApplicationData::CreateAppDataEnv(ibRunMode runMode)
+// ⭐ OPENING ADDS A BASE — to the process's set (ibApplicationHost), and a host that opens once holds a set
+// of one. It used to REPLACE: every Create began by destroying the instance there was, which is exactly what
+// a process of several bases cannot do. Every host of today opens once and destroys on exit, so for them
+// nothing changes.
+bool ibApplicationInstance::CreateAppDataEnv(ibRunMode runMode)
 {
-	if (s_instance != nullptr) s_instance->DestroyAppDataEnv();
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-	try {
-#endif
-		s_instance = new ibApplicationData(runMode);
-		s_instance->ReadEngineConfig();
-
-		if (!SetLocaleAppDataEnv())
-			return false;
-		return true;
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-	}
-	catch (const ibDatabaseLayerException* err) {
-		return false;
-	}
-#endif
-	return false;
+	ibApplicationInstance* const applicationInstance = ibApplicationHost::Adopt(
+		std::unique_ptr<ibApplicationInstance>(new ibApplicationInstance(ibApplicationHost::Ensure(runMode), runMode)));
+	ibApplicationHost::SetThreadInstance(applicationInstance);   // the thread that opens a base works for it
+	return SetLocaleAppDataEnv();
 }
 
 #define sys_db wxT("sys.fdb")
 
-bool ibApplicationData::CreateFileAppDataEnv(ibRunMode runMode, const wxString& strDirDatabase, const wxString& strLocale)
+ibApplicationInstance* ibApplicationInstance::CreateFileAppDataEnv(const ibFileInstanceRequest& request)
 {
-	if (s_instance != nullptr) s_instance->DestroyAppDataEnv();
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
+#ifndef OES_USE_FIREBIRD
+	// ⭐⭐ A BUILD WITHOUT THE DRIVER MUST SAY SO — this used to be a bare `return false`.
+	//
+	// A file base IS a Firebird base (sys.fdb), so with the driver left out there is nothing to
+	// open. But the caller reports what it is GIVEN, and it was given nothing: no exception, no
+	// error chain, no code. The startup dialog then said "the failure carried no description" —
+	// which is true and useless, because the reason is not a runtime failure at all. It is a
+	// property OF THE BUILD, known before the program ran.
+	//
+	// It cost a day. Release binaries were shipped for months with every OES_USE_* macro dropped
+	// (the Release ItemDefinitionGroups had lost `%(PreprocessorDefinitions)`, so nothing was
+	// inherited from ConfigurationDefs.props) — and the only symptom anyone could see was an
+	// infobase that would not open, with no reason given, in Release but never in Debug.
+	ibBackendCoreException::Error(
+		_("This build has no Firebird driver (OES_USE_FIREBIRD is not defined), and a file infobase is a Firebird one."));
+	return nullptr;
+#else
+	// The process first — it refuses a base it has no room for before the database is touched.
+	ibApplicationHost* const host = ibApplicationHost::Ensure(request.m_runMode);
+
+	std::shared_ptr<ibDatabaseLayerFirebird> db(new ibDatabaseLayerFirebird());
+	if (!db->Open(request.m_directory + wxFileName::GetPathSeparator() + sys_db))
+		return nullptr;
+
+	std::unique_ptr<ibApplicationInstance> opening(new ibApplicationInstance(host, request.m_runMode));
+	opening->m_dbMode  = ibDatabaseMode::eFILE;
+	opening->m_strFile = request.m_directory;
+	const wxArrayString dirs = wxFileName::DirName(request.m_directory).GetDirs();
+	opening->m_strInstance = !request.m_name.IsEmpty() ? request.m_name
+		: dirs.IsEmpty() ? request.m_directory : dirs.Last();
+
+	ibApplicationInstance* const applicationInstance = Open(std::move(opening), db, request.m_directory, request.m_locale);
+
+	// …and the Firebird driver's OWN maintenance, declared by the startup sequence like the platform's jobs and
+	// one layer deeper: it used to declare itself from inside ibDatabaseLayerFirebird::Open — before this object
+	// existed, before the pool was up, before sys_job was created. WHETHER this base is ours to maintain is the
+	// driver's answer; WHEN to act on it is this sequence's.
+	if (applicationInstance != nullptr && db->IsLocalMaintenanceEligible())
+		ibFirebirdMaintenanceJob::Register();
+	return applicationInstance;
+#endif
+}
+
+// ⭐ THE ONE ROAD A BASE COMES UP BY, once its database is open — a file base and a server base alike: listed in
+// the process, the opening thread working for it, then its pool, its tables, its locale, its journal and its jobs.
+// A base that does not come up — refused or thrown — is closed again, alone, and the thread gets back what it had.
+ibApplicationInstance* ibApplicationInstance::Open(std::unique_ptr<ibApplicationInstance> opening,
+	std::shared_ptr<ibDatabaseLayer> db, const wxString& folder, const wxString& locale)
+{
+	const ibRunMode runMode = opening->m_runMode;
+	ibApplicationInstance* const applicationInstance = ibApplicationHost::Adopt(std::move(opening));
+
+	// THE THREAD THAT OPENS A BASE WORKS FOR IT — while it comes up (the pool, the tables, the journal and the
+	// platform's jobs reach it through `db_query` and the accessors, and there is no session yet) and afterwards:
+	// the host goes on to log into it from this thread.
+	ibApplicationInstance* const previous = ibApplicationInstanceScope::Current();
+	ibApplicationHost::SetThreadInstance(applicationInstance);
+	// ⚠ …AND NOT THROUGH ANOTHER BASE'S SESSION. A login leaves its session bound to the thread that made it
+	// (NotifyAuthenticated), and a session outranks the base a thread is bound to — so the application server,
+	// opening its second base on the thread that had logged into the first, brought the second one up IN THE FIRST
+	// (2026-10-01, "serving 2 of 2: trade1, trade1"). The bring-up puts that binding aside and gives it back.
+	const ibSessionScope bringingUp(nullptr);
+	const auto refuse = [&]() -> ibApplicationInstance* {
+		ibApplicationHost::Close(applicationInstance);
+		ibApplicationHost::SetThreadInstance(previous);
+		return nullptr;
+	};
+
 	try {
-#endif
-		std::shared_ptr<ibDatabaseLayerFirebird> db(new ibDatabaseLayerFirebird());
+		// ⭐ THE APPLICATION SAYS WHAT IT IS, into the journal that has been waiting for it since
+		// the process began. The journal's own banner can only greet — the binary, the build, the
+		// machine — because at that moment nothing has been decided yet. WHICH base, opened HOW,
+		// under WHICH run mode is the first fact worth knowing about a session, and this is the
+		// first moment it exists.
+		ibJournalInfo(wxT("appdata"), wxT("connected: %s (run mode %d)"),
+			applicationInstance->GetDatabaseDescription(), static_cast<int>(runMode));
 
-		wxString pathSep = wxFileName::GetPathSeparator();
-		if (db->Open(strDirDatabase + pathSep + sys_db)) {
-			s_instance = new ibApplicationData(runMode);
-			s_instance->m_strFile = strDirDatabase;
+		// The pool is the single owner of every connection of the base.
+		// `db` is the master — the pool holds it as m_source for Clone()
+		// and also as the first idle entry so the earliest Checkout hands
+		// it out directly. Size — the base's infobase.conf, else the
+		// process's default (backend.conf, 32 unless said). minIdle picked
+		// per runMode (server pre-warms; GUI doesn't), never above the size.
+		// Beyond minIdle clones grow lazily and shrink on idle timeout.
+		const std::size_t connections = ReadInfobaseConnections(folder, applicationInstance->m_host->GetDefaultConnections());
+		applicationInstance->m_connectionPool->Init(db, connections,
+			std::min(PickConnectionMinIdle(runMode), connections));
 
-			s_instance->ReadEngineConfig();
+		// ⭐ HELD BY ANOTHER PROCESS? Asked before this one writes anything into the base — its tables, its jobs,
+		// its sweep of sys_session — and refused out loud (ibServiceExclusivePolicy::CanOpen). It used to be
+		// asked only at the first session, after the bring-up below had written into a base somebody held.
+		wxString heldBy;
+		if (TableAlreadyCreated() && !ibServiceExclusivePolicy::CanOpen(runMode, heldBy))
+			ibBackendCoreException::Error(wxT("%s"), heldBy);
 
-			s_instance->m_dbMode = ibDatabaseMode::eFILE;
-
-			// The pool is the single owner of every connection in the
-			// process. `db` here is the master — the pool holds it as
-			// m_source for Clone() and also as the first idle entry so
-			// the earliest Checkout hands it out directly. Size=32 —
-			// slack over ~20 concurrent User sessions. minIdle picked
-			// per runMode (server pre-warms; GUI doesn't). Beyond
-			// minIdle clones grow lazily and shrink on idle timeout.
-			s_instance->m_connectionPool->Init(db, 32, PickConnectionMinIdle(runMode));
-
-			if (runMode == ibRunMode::eDESIGNER_MODE && !ibApplicationData::TableAlreadyCreated()) {
-				ibApplicationData::CreateTableSession();
-				ibApplicationData::CreateTableUser();
-				ibApplicationData::CreateTableEvent();
-			}
-			else if (!ibApplicationData::TableAlreadyCreated()) {
-				DestroyAppDataEnv();
-				return false;
-			}
-
-			// Additive migration for pre-2026-04-20 schemas — registry's
-			// INSERT / snapshot SELECT assume pid / address / currentActivity.
-			ibApplicationData::MigrateTableSession();
-			ibApplicationData::MigrateTableBytecodeCache();
-
-			if (!SetLocaleAppDataEnv(strLocale))
-				return false;
-
-			return true;
+		if (runMode == ibRunMode::eDESIGNER_MODE && !TableAlreadyCreated()) {
+			CreateTableSession();
+			CreateTableUser();
+			CreateTableEvent();
+			CreateTableLock();
+			WriteInfobaseConf(folder);   // a new base — its own settings file, with the defaults
 		}
-		return false;
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
+		else if (!TableAlreadyCreated())
+			return refuse();
+
+		// Additive and idempotent — a base made before any of these picks them up at its next open.
+		MigrateTableSession();         // pid / address / currentActivity, which the registry's INSERT assumes
+		MigrateTableBytecodeCache();
+		CreateTableLock();             // sys_lock — long-held pessimistic locks
+		CreateTableJob();              // sys_job — the shared last-run clock…
+		MigrateTableJob();             // …and its settings columns
+		CreateTableSettings();         // sys_settings — what people saved on their forms and their lists
+
+		if (!SetLocaleAppDataEnv(locale))
+			return refuse();
+
+		// Audit + trace logger — built after pool + tables so the
+		// first Audit row (session.opened) can fire on the next
+		// Authenticate.
+		applicationInstance->CreateLogger();
+
+		// ⚠⚠ DECLARED AFTER ITS TABLE EXISTS, and that is the whole point of the position.
+		//
+		// The platform's own scheduled work is declared HERE, not by each host: a database is
+		// open, so the jobs have something to be about, and every host that opens one gets the
+		// same list without repeating it in its own main. Declaring is cheap — no session, no
+		// metadata; a job builds those on its first run.
+		//
+		// But declaring is NOT read-free: Register() asks sys_job for a stored schedule so a
+		// setting made in the Designer survives, and seeds a row when there is none. This call
+		// used to stand ~25 lines ABOVE, before CreateTableJob — while the comment there claimed
+		// the table was "created before the platform's jobs are declared below". The comment
+		// described the INTENDED order and the code did the other one.
+		//
+		// It was not an old-database problem. A base created from scratch has no sys_job at this
+		// point either, so EVERY first run of enterprise.exe raised "Table unknown SYS_JOB" out
+		// of CreateFileAppDataEnv and never reached a window.
+		ibRegisterPlatformJobs();
+
+		return applicationInstance;
 	}
-	catch (const ibDatabaseLayerException* err) {
-		return false;
+	catch (...) {
+		// …and thrown — held by another process, a table that would not be made: not left listed and half up.
+		refuse();
+		throw;
 	}
-#endif
-	return false;
 }
 
-bool ibApplicationData::CreateServerAppDataEnv(ibRunMode runMode, const wxString& strServer, const wxString& strPort,
-	const wxString& strUser, const wxString& strPassword, const wxString& strDatabase, const wxString& strLocale)
+ibApplicationInstance* ibApplicationInstance::CreateServerAppDataEnv(const ibServerInstanceRequest& request)
 {
-	if (s_instance != nullptr) s_instance->DestroyAppDataEnv();
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-	try {
+#ifndef OES_USE_POSTGRESQL
+	// The server base is PostgreSQL — same silence, same reason, same cure as the file base above.
+	// A build missing this driver would otherwise refuse every server connection with no cause
+	// given, and the search would go to the network and the credentials, where nothing is wrong.
+	ibBackendCoreException::Error(
+		_("This build has no PostgreSQL driver (OES_USE_POSTGRESQL is not defined), and a server infobase is a PostgreSQL one."));
+	return nullptr;
+#else
+	// The process first — see the file base above.
+	ibApplicationHost* const host = ibApplicationHost::Ensure(request.m_runMode);
+
+	std::shared_ptr<ibDatabaseLayerPostgres> db(new ibDatabaseLayerPostgres());
+	if (!db->Open(request.m_server, request.m_port, request.m_database, request.m_user, request.m_password))
+		return nullptr;
+
+	std::unique_ptr<ibApplicationInstance> opening(new ibApplicationInstance(host, request.m_runMode));
+	opening->m_dbMode      = ibDatabaseMode::eSERVER;
+	opening->m_strServer   = request.m_server;
+	opening->m_strPort     = request.m_port;
+	opening->m_strUser     = request.m_user;
+	opening->m_strPassword = request.m_password;
+	opening->m_strDatabase = request.m_database;
+	opening->m_strDirLocal = request.m_dirLocal;
+	opening->m_strInstance = !request.m_name.IsEmpty() ? request.m_name : request.m_database;
+
+	// A server base has no directory of its own: its settings and its journal are kept in its local folder.
+	return Open(std::move(opening), db, request.m_dirLocal, request.m_locale);
 #endif
-		std::shared_ptr<ibDatabaseLayerPostgres> db(new ibDatabaseLayerPostgres());
-		if (db->Open(strServer, strPort, strDatabase, strUser, strPassword)) {
-
-			s_instance = new ibApplicationData(runMode);
-
-			s_instance->m_strServer = strServer;
-			s_instance->m_strPort = strPort;
-			s_instance->m_strUser = strUser;
-			s_instance->m_strPassword = strPassword;
-			s_instance->m_strDatabase = strDatabase;
-
-			s_instance->ReadEngineConfig();
-
-			s_instance->m_dbMode = ibDatabaseMode::eSERVER;
-
-			// Pool owns every connection. `db` becomes the master (source
-			// for Clone + first hand-out). maxSize=32 covers heartbeat +
-			// metadata watcher + ~20 concurrent sessions/SSE + slack.
-			// minIdle picked per runMode (server pre-warms; GUI doesn't).
-			// Beyond minIdle clones grow lazily and shrink on idle timeout.
-			s_instance->m_connectionPool->Init(db, 32, PickConnectionMinIdle(runMode));
-
-			if (!SetLocaleAppDataEnv(strLocale))
-				return false;
-
-			if (runMode == ibRunMode::eDESIGNER_MODE && !ibApplicationData::TableAlreadyCreated()) {
-				ibApplicationData::CreateTableSession();
-				ibApplicationData::CreateTableUser();
-				ibApplicationData::CreateTableEvent();
-			}
-			else if (!ibApplicationData::TableAlreadyCreated()) {
-				DestroyAppDataEnv();
-				return false;
-			}
-
-			ibApplicationData::MigrateTableSession();
-			ibApplicationData::MigrateTableBytecodeCache();
-
-			return true;
-		}
-		return false;
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-	}
-	catch (const ibDatabaseLayerException* err) {
-		return false;
-	}
-#endif
-	return false;
 }
 
-bool ibApplicationData::SetLocaleAppDataEnv(const wxString& strLocale)
+bool ibApplicationInstance::DestroyAppDataEnv(ibApplicationInstance* applicationInstance)
 {
-	if (s_instance == nullptr)
+	if (applicationInstance == nullptr || ibApplicationHost::Get() == nullptr)
 		return false;
-
-	return s_instance->InitLocale(strLocale);
+	ibApplicationHost::Close(applicationInstance);
+	return true;
 }
 
-bool ibApplicationData::DestroyAppDataEnv()
+bool ibApplicationInstance::SetLocaleAppDataEnv(const wxString& strLocale)
 {
-	if (s_instance != nullptr && s_instance->m_connectionPool != nullptr &&
-	    s_instance->m_connectionPool->IsInitialised()) {
+	// The locale is the PROCESS's — settled by the first base, answered as settled to the rest.
+	ibApplicationHost* const host = ibApplicationHost::Get();
+	return host != nullptr && host->InitLocale(strLocale);
+}
+
+bool ibApplicationInstance::DestroyAppDataEnv()
+{
+	if (ibApplicationHost::Get() != nullptr) {
 
 		// The active session itself is closed by its holder
-		// (mainApp/webSession) via ibSession::Close(), which clears the
-		// session's own cached creds; ~ibApplicationData runs Stop() to
-		// drain pending Removes when s_instance is destroyed below.
-		s_instance->m_connected_to_db = false;
+		// (mainApp/webSession) via ibSession::Close(); each base's Close()
+		// stops its registry, which drains the pending Removes.
+		//
+		// EVERY base, newest first, and the process with them. This used to
+		// delete the instance only when its pool had been initialised, so a
+		// base opened without a database (launcher, codeRunner) was never
+		// destroyed at all — the next Create simply replaced the pointer.
+		// Pool shutdown is driven by ibApplicationInstance::Close — see it
+		// for the ordering rationale.
+		ibApplicationHost::CloseAll();
 
-		s_instance->m_strServer = wxEmptyString;
-		s_instance->m_strPort = wxEmptyString;
-		s_instance->m_strUser = wxEmptyString;
-		s_instance->m_strPassword = wxEmptyString;
-		s_instance->m_strDatabase = wxEmptyString;
+		// The ibPropertyObject live-register used to be printed here. It answered its question —
+		// "none alive, clean teardown" — and the answer is now kept by something cheaper and
+		// wider: the CRT exit dump is empty (docs/private/engineering-playbook/25-memory-leaks.md), so a
+		// property object that outlives teardown shows up there by itself, named, with the
+		// tracker able to produce its stack. A mutex and a set on every construction, in every
+		// Debug run, to re-answer a settled question was the wrong trade.
 
-		// Pool shutdown is now driven by ~ibApplicationData (RAII) —
-		// see the dtor for the ordering rationale.
-		wxDELETE(s_instance);
+		// Last: hand the string pool's free list back. It is a cache, but the CRT cannot tell a
+		// cache from a leak — every cached block sits in the exit dump holding its old contents,
+		// which is where the "leaked" fragments of metadata names came from. Draining here, past
+		// the metadata tree and every session, leaves the dump saying only what actually leaked.
+		// Per-module and per-thread (see the note on Drain), so this covers the backend's main
+		// thread — the one that churns strings.
+		ibFStringPool::Drain();
+
 		return true;
 	}
 
@@ -470,125 +880,23 @@ bool ibApplicationData::DestroyAppDataEnv()
 
 ///////////////////////////////////////////////////////////////////////////////
 
-#include <wx/fileconf.h>
-#include <wx/stdpaths.h>
-
-bool ibApplicationData::InitLocale(const wxString& locale)
-{
-	if (m_locale_lang == wxLanguage::wxLANGUAGE_UNKNOWN) {
-
-#ifdef DEBUG_TRANSLATE
-		wxLog::AddTraceMask(wxS("i18n"));
-#endif // WXDEBUG
-
-		m_locale_lang = wxLocale::GetSystemLanguage();
-		if (m_locale_lang == wxLanguage::wxLANGUAGE_UNKNOWN)
-			m_locale_lang = wxLanguage::wxLANGUAGE_DEFAULT;
-
-		if (!locale.IsEmpty()) {
-			const wxLanguageInfo* foundedLocale = wxLocale::FindLanguageInfo(locale);
-			if (foundedLocale != nullptr)
-				m_locale_lang = foundedLocale->Language;
-		}
-		else if (m_configInfo.IsSetLocale()) {
-			const wxLanguageInfo* foundedLocale = wxLocale::FindLanguageInfo(m_configInfo.m_strLocale);
-			if (foundedLocale != nullptr)
-				m_locale_lang = foundedLocale->Language;
-		}
-
-		// Independently of whether we succeeded to set the locale or not, try
-		// to load the translations (for the default system language) here.
-
-		const wxString& workingDir = wxGetCwd();
-
-		// normally this wouldn't be necessary as the catalog files would be found
-		// in the default locations, but when the program is not installed the
-		// catalogs are in the build directory where we wouldn't find them by
-		// default
-
-		wxFileName fn(wxStandardPaths::Get().GetExecutablePath());
-
-		wxLocale::AddCatalogLookupPathPrefix(workingDir + wxFILE_SEP_PATH + wxT("lang"));
-		wxLocale::AddCatalogLookupPathPrefix(fn.GetPath() + wxFILE_SEP_PATH + wxT("lang"));
-#if defined(__WXOSX__) || defined(__APPLE__)
-		// On macOS, also check outside .app bundle
-		wxFileName bundleLang(fn.GetPath());
-		bundleLang.RemoveLastDir(); bundleLang.RemoveLastDir(); bundleLang.RemoveLastDir();
-		wxLocale::AddCatalogLookupPathPrefix(bundleLang.GetPath() + wxFILE_SEP_PATH + wxT("lang"));
-#endif
-
-		if (!m_locale.Init(m_locale_lang)) {
-			if (!m_locale.Init(wxLanguage::wxLANGUAGE_ENGLISH))
-				return false;
-			m_locale_lang = wxLanguage::wxLANGUAGE_ENGLISH;
-		}
-
-		// Initialize the catalogs we'll be using.
-		m_locale.AddCatalog(wxT("open_es"));
-
-		// Initialize localization engine
-		ibBackendLocalization::SetUserLanguage(m_locale.GetName());
-
-		//Set default time 
-		wxDateTime::SetCountry(wxDateTime::Country::Country_Default);
-		return true;
-	}
-
-	return false;
-}
+// (The platform locale and backend.conf are the PROCESS's — ibApplicationHost::InitLocale /
+//  ReadBackendConf, appHost.cpp.)
 
 // ---------------------------------------------------------------------------
 // Phased startup (split of legacy Connect). Apps compose the phases;
 // runtime start is NOT here — it's driven from the session owned by the
-// app's main frame (frame->Initialize(session) wires it). Connect() stays
+// app's main frame (the window is built around the holder). Connect() stays
 // as a convenience wrapper for callers without inter-phase hooks
-// (codeRunner, daemon, tests).
+// (codeRunner, appserver, tests).
 // ---------------------------------------------------------------------------
 
-
-#pragma region config
-
-#define BACKEND_CONF wxT("backend.conf")
-
-void ibApplicationData::ReadEngineConfig()
-{
-	const wxString& workingDir = wxGetCwd(); wxString strConfigFile;
-	if (wxFileName::FileExists(workingDir + wxFILE_SEP_PATH + BACKEND_CONF)) {
-		strConfigFile = workingDir +
-			wxFILE_SEP_PATH + BACKEND_CONF;
-	}
-	else {
-		wxFileName fn(wxStandardPaths::Get().GetExecutablePath());
-		wxString exeDir = fn.GetPath();
-		if (wxFileName::FileExists(exeDir + wxFILE_SEP_PATH + BACKEND_CONF)) {
-			strConfigFile = exeDir + wxFILE_SEP_PATH + BACKEND_CONF;
-		}
-#if defined(__WXOSX__) || defined(__APPLE__)
-		// On macOS, exe is inside .app/Contents/MacOS/ — check 3 levels up
-		else {
-			wxFileName bundlePath(exeDir);
-			bundlePath.RemoveLastDir(); // MacOS
-			bundlePath.RemoveLastDir(); // Contents
-			bundlePath.RemoveLastDir(); // .app
-			wxString bundleDir = bundlePath.GetPath();
-			if (wxFileName::FileExists(bundleDir + wxFILE_SEP_PATH + BACKEND_CONF)) {
-				strConfigFile = bundleDir + wxFILE_SEP_PATH + BACKEND_CONF;
-			}
-		}
-#endif
-	}
-
-	wxFileConfig fc(wxT(""), wxT(""), wxT(""), strConfigFile);
-	fc.Read(wxT("Locale"), &m_configInfo.m_strLocale);
-}
-
-#pragma endregion 
 
 ///////////////////////////////////////////////////////////////////////////////
 #include "backend/debugger/debugClient.h"
 
 #pragma region execute 
-long ibApplicationData::RunApplication(const wxString& strAppName, bool searchDebug, bool useManifest) const
+long ibApplicationInstance::RunApplication(const wxString& strAppName, bool searchDebug, bool useManifest) const
 {
 	// Hand the child process the raw password captured at login, not the stored hash.
 	// Otherwise enterprise.exe authenticates with the hash itself — which only worked
@@ -608,14 +916,53 @@ long ibApplicationData::RunApplication(const wxString& strAppName, bool searchDe
 	return RunApplication(strAppName, userName, rawPassword, searchDebug, useManifest);
 }
 
-long ibApplicationData::RunApplication(const wxString& strAppName, const wxString& strUserName, const wxString& strUserPassword, bool searchDebug, bool useManifest) const
+long ibApplicationInstance::RunApplication(const wxString& strAppName, const wxString& strUserName, const wxString& strUserPassword, bool searchDebug, bool useManifest) const
 {
 	// All OES binaries spawn with unified `--flag=value` syntax using
 	// wenterprise-server's long-name set (server/dbport/db/user/password/
 	// file/ibuser/ibpwd/locale/debug). enterprise.exe / designer.exe /
-	// daemon.exe declare these as the long name of their legacy short
+	// appserver.exe declare these as the long name of their legacy short
 	// options, so one builder feeds every parser.
-	wxString executeCmd = strAppName + wxT(' ');
+
+	// Resolve the binary next to this one. A bare "enterprise" is looked up on PATH and in the
+	// working directory, and it is in neither; on macOS it is not even a plain file, since the
+	// sibling is enterprise.app and the executable sits inside it. Without this the fork succeeds,
+	// the exec fails, and wxExecute still returns a pid — so the caller is told the application
+	// started while nothing runs.
+	wxFileName home = wxFileName::DirName(
+		wxFileName(wxStandardPaths::Get().GetExecutablePath()).GetPath());
+
+#ifdef __WXOSX__
+	// This binary is itself inside a bundle, so its siblings are three levels up.
+	if (home.GetDirCount() >= 2
+		&& home.GetDirs().Last().IsSameAs(wxT("MacOS"))
+		&& home.GetDirs()[home.GetDirCount() - 2].IsSameAs(wxT("Contents"))) {
+		home.RemoveLastDir();
+		home.RemoveLastDir();
+		home.RemoveLastDir();
+	}
+#endif
+
+	wxFileName binary(home);
+	binary.SetFullName(strAppName);
+
+#ifdef __WXOSX__
+	if (!binary.FileExists()) {
+		wxFileName bundled(home);
+		bundled.AppendDir(strAppName + wxT(".app"));
+		bundled.AppendDir(wxT("Contents"));
+		bundled.AppendDir(wxT("MacOS"));
+		bundled.SetFullName(strAppName);
+		if (bundled.FileExists())
+			binary = bundled;
+	}
+#endif
+
+	// The bare name stays the fallback, so a layout this does not recognise behaves as before.
+	// Quoted because a resolved path can contain a space and wxExecute splits on those.
+	wxString executeCmd = binary.FileExists()
+		? (wxT('"') + binary.GetFullPath() + wxT("\" "))
+		: (strAppName + wxT(' '));
 
 	if (m_strFile.IsEmpty()) {
 
@@ -631,7 +978,11 @@ long ibApplicationData::RunApplication(const wxString& strAppName, const wxStrin
 			executeCmd += wxString::Format(wxT(" --password=%s"), m_strPassword);
 	}
 	else {
-		executeCmd += wxString::Format(wxT(" --file=%s"), m_strFile);
+		// QUOTED, for the same reason the binary above is: wxExecute splits the command on spaces, so
+		// a base under "C:\My Bases\…" reached the child as two arguments and the second one was not a
+		// flag anything declared. The path is the one thing here a person chooses, so it is the one
+		// most likely to carry a space (2026-08-20).
+		executeCmd += wxString::Format(wxT(" --file=\"%s\""), m_strFile);
 	}
 
 	if (searchDebug)
@@ -643,7 +994,8 @@ long ibApplicationData::RunApplication(const wxString& strAppName, const wxStrin
 	if (!strUserPassword.IsEmpty())
 		executeCmd += wxString::Format(wxT(" --ibpwd=%s"), strUserPassword);
 
-	executeCmd += wxString::Format(wxT(" --locale=%s"), m_locale.GetName());
+	ibApplicationHost* const host = ibApplicationHost::Get();
+	executeCmd += wxString::Format(wxT(" --locale=%s"), host != nullptr ? host->GetLocaleName() : wxString());
 
 	// Manifest-mode: wes-style spawn. Skip the debug-client handshake —
 	// that's enterprise.exe's in-process debugger attach, not relevant
@@ -654,27 +1006,33 @@ long ibApplicationData::RunApplication(const wxString& strAppName, const wxStrin
 	const long execute = wxExecute(executeCmd);
 
 	if (searchDebug) {
+		// Scan in rounds, the same way the manifest path below does, and for the same
+		// reason: one sweep races the process that was just started. Its debug server
+		// is created near the end of bootstrap, after the database is open, so the
+		// first sweep finds nothing listening and its threads exit on connect-refused
+		// with the counter spent - which is what lets the next SearchServer call make
+		// fresh ones. A single sweep followed by a 1.5-second wait, which is what stood
+		// here, could only ever succeed on a fast warm start.
+		const int kRounds       = 60;   // 60 rounds * 250ms = ~15s, and it stops on success
+		const int kRoundSleepMs = 250;
 
-		unsigned short num_attempts = 0;
+		for (int round = 0; round < kRounds; ++round) {
 
-		debugClient->SearchServer(true);
-		while (debugClient != nullptr) {
+			if (debugClient == nullptr)
+				break;
+
+			debugClient->SearchServer(true);
+			wxMilliSleep(kRoundSleepMs);
 
 			if (debugClient->GetConnectionSuccess())
 				break;
-
-			if (num_attempts > 300)
-				break;
-
-			num_attempts++;
-			wxMilliSleep(5);
 		}
 	}
 
 	return execute;
 }
 
-long ibApplicationData::SpawnWebServerWithManifest(wxString cmd, bool searchDebug)
+long ibApplicationInstance::SpawnWebServerWithManifest(wxString cmd, bool searchDebug)
 {
 	// --port=0 → OS picks an ephemeral port. --manifest=<file> → wes writes
 	// host/port/prefix/url there once it is actually accepting connections.
@@ -757,7 +1115,7 @@ long ibApplicationData::SpawnWebServerWithManifest(wxString cmd, bool searchDebu
 
 ///////////////////////////////////////////////////////////////////////////////
 
-bool ibApplicationData::AuthenticateUser(const wxString& strUserName,
+bool ibApplicationInstance::AuthenticateUser(const wxString& strUserName,
                                           const wxString& strUserPassword,
                                           ibUserInfo& outInfo)
 {
@@ -768,11 +1126,22 @@ bool ibApplicationData::AuthenticateUser(const wxString& strUserName,
 		return true;
 
 	outInfo = ibUserInfo::Read(strUserName);
-	if (!outInfo.IsOk())
+	if (!outInfo.IsOk()) {
+		try {
+			if (ibLog) ibLog->Audit(wxT("auth"), wxT("login_failed"),
+			                        wxString::Format(wxT("user=%s reason=unknown"), strUserName));
+		} catch (...) {}
 		return false;
+	}
 
-	if (!ibPasswordHash::Verify(strUserPassword, outInfo.m_strUserPassword))
+	if (!ibPasswordHash::Verify(strUserPassword, outInfo.m_strUserPassword)) {
+		try {
+			if (ibLog) ibLog->Audit(wxT("auth"), wxT("login_failed"),
+			                        wxString::Format(wxT("user=%s reason=bad_password"), strUserName),
+			                        outInfo.m_strUserGuid, /*refMetaId=*/0);
+		} catch (...) {}
 		return false;
+	}
 
 	// Lazy upgrade: if we just verified a legacy MD5 hash or a PBKDF2 hash
 	// with a below-policy iteration count, re-store the password using the
@@ -782,6 +1151,9 @@ bool ibApplicationData::AuthenticateUser(const wxString& strUserName,
 		try {
 			outInfo.m_strUserPassword = ibPasswordHash::Hash(strUserPassword);
 			(void)ibUserInfo::Save(outInfo);
+			if (ibLog) ibLog->Audit(wxT("auth"), wxT("password_rehash"),
+			                        wxString::Format(wxT("user=%s"), strUserName),
+			                        outInfo.m_strUserGuid, /*refMetaId=*/0);
 		} catch (...) {
 			// ignore — login already succeeded
 		}
@@ -790,7 +1162,7 @@ bool ibApplicationData::AuthenticateUser(const wxString& strUserName,
 	return true;
 }
 
-void ibApplicationData::InstallUser(const ibUserInfo& info,
+void ibApplicationInstance::InstallUser(const ibUserInfo& info,
                                      const wxString& rawPassword)
 {
 	// User identity now lives only on the ibSession. The registry thread
@@ -800,12 +1172,12 @@ void ibApplicationData::InstallUser(const ibUserInfo& info,
 	// session there is nowhere to install — the caller is in a pre-auth
 	// path that has no business calling this.
 	if (auto* ctx = ibSession::Current()) {
-		if (auto* registry = GetSessionRegistry())
+		if (auto* registry = ibApplicationInstance::GetSessionRegistry())
 			registry->InstallUser(ctx, info, rawPassword);
 	}
 }
 
-bool ibApplicationData::Login(const wxString& strUserName,
+bool ibApplicationInstance::Login(const wxString& strUserName,
                               const wxString& strUserPassword,
                               ibUserInfo& outInfo)
 {
@@ -815,8 +1187,19 @@ bool ibApplicationData::Login(const wxString& strUserName,
 	// Open-access pass-through: verification succeeded but no real user
 	// was resolved (sys_user empty + caller supplied no creds). Caller
 	// treats this as "auth settled"; nothing to install.
-	if (outInfo.IsOk())
+	if (outInfo.IsOk()) {
 		InstallUser(outInfo, strUserPassword);
+		try {
+			if (ibLog) {
+				// ref_meta_id = 0 marks a system-table (sys_user) ref —
+				// viewer recognises 0 as "not a metadata object, drill via
+				// the User Admin form keyed by m_strUserGuid instead".
+				ibLog->Audit(wxT("auth"), wxT("login"),
+				             wxString::Format(wxT("user=%s"), strUserName),
+				             outInfo.m_strUserGuid, /*refMetaId=*/0);
+			}
+		} catch (...) {}
+	}
 
 	return true;
 }
@@ -828,11 +1211,11 @@ bool ibApplicationData::Login(const wxString& strUserName,
 #include <wx/mstream.h>
 #include <wx/filename.h>
 
-bool ibApplicationData::LoadDatabase(const wxString& strFullPath)
+bool ibApplicationInstance::LoadDatabase(const wxString& strFullPath)
 {
 	wxFileInputStream fis(strFullPath);
 	if (!fis.IsOk()) {
-		wxLogError("Couldn't open the file '%s'.", strFullPath);
+		ibJournalError(wxT("appdata"),"Couldn't open the file '%s'.", strFullPath);
 		return false;
 	}
 
@@ -841,6 +1224,12 @@ bool ibApplicationData::LoadDatabase(const wxString& strFullPath)
 
 	wxZipInputStream zis(fis);
 	std::unique_ptr<wxZipEntry> entry;
+
+	// The entries are READ IN FILE ORDER, and the order carries meaning: rows can only be written once
+	// the structure holding them exists. Our own writer emits config before data, so this is a guard
+	// against a file that says otherwise — answered with a refusal rather than with rows quietly
+	// landing in whatever structure the database happened to have.
+	bool configLoaded = false;
 
 	// Iterate through all entries in the zip file
 	while (entry.reset(zis.GetNextEntry()), entry) {
@@ -862,11 +1251,25 @@ bool ibApplicationData::LoadDatabase(const wxString& strFullPath)
 				fos.CopyTo(buffer.GetAppendBuf(fos.GetSize()), fos.GetSize());
 				buffer.SetDataLen(fos.GetSize());
 
+				// LoadConfigFromBuffer already RUNs the loaded tree (the
+				// ibMetaDataConfiguration override) — no separate RunDatabase
+				// here, that would be a double-run (asserts !m_configOpened).
 				if (!activeMetaData->LoadConfigFromBuffer(buffer))
 					return false;
 
-				activeMetaData->RunDatabase();
-				activeMetaData->SaveDatabase(saveConfigFlag);
+				// ⭐⭐ THE STRUCTURE IS BUILT FIRST, AND THE LOAD STOPS IF IT WAS NOT.
+				//
+				// This is the whole shape of a load: the file carries the configuration and the rows, so
+				// the configuration is applied — creating the very tables, with the very column ids, the
+				// rows are about to be written into — and only then does `data` arrive. The answer used
+				// to be discarded. A failed apply therefore went unnoticed and the load carried on,
+				// pouring rows into tables that were not there or were still the shape of the database
+				// being overwritten: no rows restored, no word said, and a base left half-replaced.
+				if (!activeMetaData->SaveDatabase(saveConfigFlag)) {
+					ibJournalError(wxT("appdata"),_("The configuration from the file could not be applied - the data was not loaded"));
+					return false;
+				}
+				configLoaded = true;
 			}
 		}
 		else if (!entry->IsDir() && entry->GetName() == wxT("user")) {
@@ -907,7 +1310,12 @@ bool ibApplicationData::LoadDatabase(const wxString& strFullPath)
 				fos.CopyTo(buffer.GetAppendBuf(fos.GetSize()), fos.GetSize());
 				buffer.SetDataLen(fos.GetSize());
 
-				if (!activeMetaData->LoadDataFromBuffer(buffer))
+				if (!configLoaded) {
+					ibJournalError(wxT("appdata"),_("The file carries data before the configuration - it cannot be loaded"));
+					return false;
+				}
+
+				if (!activeMetaData->RestoreDataFromBuffer(buffer))
 					return false;
 			}
 		}
@@ -916,13 +1324,13 @@ bool ibApplicationData::LoadDatabase(const wxString& strFullPath)
 	return true;
 }
 
-bool ibApplicationData::SaveDatabase(const wxString& strFullPath)
+bool ibApplicationInstance::SaveDatabase(const wxString& strFullPath)
 {
 	// 1. Create the physical file output stream
 	wxFFileOutputStream out(strFullPath);
 	if (!out.IsOk())
 	{
-		wxLogError("Cannot create output file %s", strFullPath);
+		ibJournalError(wxT("appdata"),"Cannot create output file %s", strFullPath);
 		return false;
 	}
 
@@ -953,7 +1361,7 @@ bool ibApplicationData::SaveDatabase(const wxString& strFullPath)
 	if (zip.PutNextEntry(wxT("data"))) {
 		//save data
 		wxMemoryBuffer bufferData;
-		if (!activeMetaData->SaveDataToBuffer(bufferData))
+		if (!activeMetaData->DumpDataToBuffer(bufferData))
 			return false;
 		// Wrap the content in an input stream to write it easily
 		wxMemoryInputStream contentStream(bufferData.GetData(), bufferData.GetDataLen());
@@ -966,7 +1374,7 @@ bool ibApplicationData::SaveDatabase(const wxString& strFullPath)
 	return zip.Close();
 }
 
-bool ibApplicationData::ClearDatabase()
+bool ibApplicationInstance::ClearDatabase()
 {
 	if (!m_created_metadata)
 		return false;
@@ -977,7 +1385,7 @@ bool ibApplicationData::ClearDatabase()
 	return true;
 }
 
-wxString ibApplicationData::GetDatabaseDescription()
+wxString ibApplicationInstance::GetDatabaseDescription()
 {
 	if (m_dbMode == ibDatabaseMode::eFILE)
 		return m_strFile;
@@ -992,7 +1400,7 @@ wxString ibApplicationData::GetDatabaseDescription()
 
 #include "backend/utils/md5.hpp"
 
-wxString ibApplicationData::ComputeMd5(const wxString& userPassword) const
+wxString ibApplicationInstance::ComputeMd5(const wxString& userPassword) const
 {
 	if (userPassword.Length() > 0)
 		return ibMD5::ComputeMd5(userPassword);
@@ -1001,3 +1409,5 @@ wxString ibApplicationData::ComputeMd5(const wxString& userPassword) const
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+
+

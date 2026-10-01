@@ -1,8 +1,8 @@
 
 #include "widgets.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "backend/compiler/procUnit.h"
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueSlider, ibValueWindow)
 
 //****************************************************************************
 //*                             Slider                                       *
@@ -26,7 +26,7 @@ wxObject* ibValueSlider::Create(wxWindow* wxparent, ibVisualHost* visualHost)
 	return slider;
 }
 
-void ibValueSlider::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool firstСreated)
+void ibValueSlider::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool firstCreated)
 {
 }
 
@@ -67,26 +67,26 @@ void ibValueSlider::Cleanup(wxObject* obj, ibVisualHost* visualHost)
 //*                           Property                              *
 //*******************************************************************
 
-bool ibValueSlider::LoadData(ibReaderMemory& reader)
+bool ibValueSlider::ReadData(const ibDataNode& node)
 {
-	m_propertyMinValue->SetValue(reader.r_s32());
-	m_propertyMaxValue->SetValue(reader.r_s32());
-	m_propertyValue->SetValue(reader.r_s32());
-	m_propertyOrient->SetValue(reader.r_s32());
-	return ibValueWindow::LoadData(reader);
+	m_propertyMinValue->SetNodeValue(node.GetProperty(m_propertyMinValue->GetName()));
+	m_propertyMaxValue->SetNodeValue(node.GetProperty(m_propertyMaxValue->GetName()));
+	m_propertyValue->SetNodeValue(node.GetProperty(m_propertyValue->GetName()));
+	m_propertyOrient->SetNodeValue(node.GetProperty(m_propertyOrient->GetName()));
+	return ibValueWindow::ReadData(node);
 }
 
-bool ibValueSlider::SaveData(ibWriterMemory& writer)
+bool ibValueSlider::WriteData(ibDataNode& node) const
 {
-	writer.w_s32(m_propertyMinValue->GetValueAsInteger());
-	writer.w_s32(m_propertyMaxValue->GetValueAsInteger());
-	writer.w_s32(m_propertyValue->GetValueAsInteger());
-	writer.w_s32(m_propertyOrient->GetValueAsInteger());
-	return ibValueWindow::SaveData(writer);
+	node.SetProperty(m_propertyMinValue->GetName(), m_propertyMinValue->GetNodeValue());
+	node.SetProperty(m_propertyMaxValue->GetName(), m_propertyMaxValue->GetNodeValue());
+	node.SetProperty(m_propertyValue->GetName(), m_propertyValue->GetNodeValue());
+	node.SetProperty(m_propertyOrient->GetName(), m_propertyOrient->GetNodeValue());
+	return ibValueWindow::WriteData(node);
 }
 
 //***********************************************************************
 //*                       Register in runtime                           *
 //***********************************************************************
 
-CONTROL_TYPE_REGISTER(ibValueSlider, "Slider", "Widget", string_to_clsid("CT_SLID"));
+CONTROL_TYPE_REGISTER(ibValueSlider, "Slider", "Widget", control_to_clsid("CT_SLID"));

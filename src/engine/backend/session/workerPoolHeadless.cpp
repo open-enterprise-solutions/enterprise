@@ -1,4 +1,4 @@
-#include "workerPoolHeadless.h"
+﻿#include "workerPoolHeadless.h"
 
 #include "backend/session/session.h"   // ibSessionScope
 #include "backend/backend_exception.h" // ibBackendException
@@ -21,6 +21,10 @@ thread_local ibSession* tl_currentLease = nullptr;
 constexpr auto       kIdleTimeout = std::chrono::seconds(30);
 constexpr std::size_t kMinIdle    = 1;
 
+// How often Stop() says out loud that it is still waiting. Not a
+// deadline — the wait is unbounded by design; see Stop().
+constexpr auto       kStopWaitReport = std::chrono::seconds(5);
+
 void LogWorkerException(const wxString& location)
 {
 	// Reraise to identify the type without losing the original exception_ptr —
@@ -28,15 +32,15 @@ void LogWorkerException(const wxString& location)
 	// rethrow, so set_exception below still gets the same one.
 	try { throw; }
 	catch (const ibBackendException& e) {
-		wxLogWarning(wxT("%s: ibBackendException: %s"),
+		ibJournalWarning(wxT("session.worker"),wxT("%s: ibBackendException: %s"),
 		             location, e.GetErrorDescription());
 	}
 	catch (const std::exception& e) {
-		wxLogWarning(wxT("%s: std::exception: %s"),
+		ibJournalWarning(wxT("session.worker"),wxT("%s: std::exception: %s"),
 		             location, wxString::FromUTF8(e.what()));
 	}
 	catch (...) {
-		wxLogWarning(wxT("%s: unknown exception"), location);
+		ibJournalWarning(wxT("session.worker"),wxT("%s: unknown exception"), location);
 	}
 }
 
@@ -103,6 +107,13 @@ std::future<void> ibWorkerPoolHeadless::Submit(ibSession* session, Task task)
 		std::unique_lock<std::mutex> lk(m_mtx);
 		auto& slot = m_sessions[session];
 		if (!slot) slot = std::make_unique<ibSessionQueue>();
+		// Taken on every submit, not only on the first: a queue outlives the drop that retired it
+		// (the identity comes back, see ThePoolStaysUsableAfterADeferredErase), and what we want is
+		// a hold on the session THIS task belongs to. Empty for a session nobody holds by
+		// shared_ptr — a test's own, a stack one — and empty is the right answer there too: such a
+		// session cannot be cancelled by us, and must not be reached for.
+		if (session != nullptr)
+			slot->owner = session->weak_from_this();
 		slot->tasks.push_back({ std::move(task), std::move(promise) });
 	}
 	m_cv.notify_one();
@@ -122,19 +133,17 @@ std::future<void> ibWorkerPoolHeadless::Submit(ibSession* session, Task task)
 void ibWorkerPoolHeadless::DropSession(ibSession* session)
 {
 	std::unique_lock<std::mutex> lk(m_mtx);
-	m_sessions.erase(session);
-}
-
-void ibWorkerPoolHeadless::CancelSession(ibSession* session)
-{
-	if (session == nullptr) return;
-	session->RequestCancel();
-	// Notify in case a worker is parked on the CV (no work for any
-	// session) — wake-up gives the interpreter a chance to observe the
-	// flag immediately if a script in this session is running on the
-	// hot loop. The flag itself is the actual cancel signal; the notify
-	// is just to shorten the latency.
-	m_cv.notify_all();
+	auto it = m_sessions.find(session);
+	if (it == m_sessions.end())
+		return;
+	// A LEASED QUEUE IS NOT OURS TO ERASE — a worker is standing on it right now,
+	// and the teardown that called us usually runs from inside one of its tasks.
+	// Record the drop; the worker erases it when it releases the lease.
+	if (it->second && it->second->leased.load(std::memory_order_acquire)) {
+		it->second->dropped = true;
+		return;
+	}
+	m_sessions.erase(it);
 }
 
 std::pair<ibSession*, ibWorkerPoolHeadless::ibSessionQueue*>
@@ -152,10 +161,29 @@ ibWorkerPoolHeadless::ClaimSessionLocked()
 
 void ibWorkerPoolHeadless::WorkerLoop()
 {
+	// RAII-guard for the m_aliveWorkers decrement + Stop-cv notify.
+	// Pre-2026-05-26 this bookkeeping lived at function tail; an
+	// exception escaping the inner try (set_exception OOM, predicate
+	// fault, ibSessionScope ctor throwing) bypassed it, the worker
+	// died alive-counted, and Stop() blocked forever on the cv. Tying
+	// it to a local dtor closes that hole: any path out of WorkerLoop
+	// (clean exit, exception, std::terminate after std::set_terminate
+	// transforms it back) walks past this and decrements once.
+	struct BookkeepingOnExit {
+		ibWorkerPoolHeadless* self;
+		~BookkeepingOnExit() {
+			self->m_aliveWorkers.fetch_sub(1, std::memory_order_acq_rel);
+			std::lock_guard<std::mutex> lk(self->m_stopMtx);
+			self->m_stopCv.notify_all();
+		}
+	} bookkeeping{ this };
+
+	try {
 	for (;;) {
 		ibSession*       session = nullptr;
 		ibSessionQueue*  q       = nullptr;
 		bool             gotWork = false;
+
 
 		{
 			std::unique_lock<std::mutex> lk(m_mtx);
@@ -173,6 +201,7 @@ void ibWorkerPoolHeadless::WorkerLoop()
 		if (m_stop.load(std::memory_order_acquire))
 			break;
 
+
 		if (!gotWork || q == nullptr) {
 			// Idle timeout fired with no work waiting. Self-exit unless
 			// we're among the last kMinIdle survivors — keep at least
@@ -188,6 +217,13 @@ void ibWorkerPoolHeadless::WorkerLoop()
 		ibSessionScope scope(session);
 		tl_currentLease = session;
 
+		// A task's closure can own the very session this worker is leasing (a
+		// background run holds its own session holder), so destroying it here tears
+		// that session down from inside its own lease. That is DELIBERATE and it is
+		// why the task is destroyed while `tl_currentLease` still names this
+		// session: Teardown's drain-Submit then takes the reentrant inline path
+		// instead of queueing behind itself, and the DropSession it ends with finds
+		// this queue leased and defers the erase to us (see ibSessionQueue::dropped).
 		while (true) {
 			ibSessionTask item;
 			{
@@ -209,27 +245,38 @@ void ibWorkerPoolHeadless::WorkerLoop()
 				LogWorkerException(wxT("worker pool task"));
 				item.promise->set_exception(std::current_exception());
 			}
+			// item dies HERE, inside the lease — see above.
 		}
 
 		tl_currentLease = nullptr;
 
-		// Release lease; another worker may claim this session if new
-		// tasks arrived while we were draining.
-		q->leased.store(false);
+		// Release the lease; another worker may claim this session if new tasks
+		// arrived while we were draining. And if the session was dropped while we
+		// held it, WE are the one that erases the queue — the dropper could not.
+		{
+			std::unique_lock<std::mutex> lk(m_mtx);
+			q->leased.store(false);
+			auto it = m_sessions.find(session);
+			if (it != m_sessions.end() && it->second.get() == q
+			    && it->second->dropped && it->second->tasks.empty())
+				m_sessions.erase(it);
+		}
 		m_cv.notify_one();
 	}
+	}
+	catch (...) {
+		// Last-chance log of an unexpected escape from the inner loop —
+		// every individual task is already wrapped above, so reaching
+		// here implies a fault in the worker scaffolding itself
+		// (ibSessionScope ctor, mutex lock, set_exception OOM). Log,
+		// then fall through to BookkeepingOnExit. Without this catch,
+		// std::terminate would fire and skip the bookkeeping dtor.
+		LogWorkerException(wxT("worker pool loop"));
+	}
 
-	// Detached exit — bookkeeping for Stop()'s wait.
-	if (m_aliveWorkers.fetch_sub(1, std::memory_order_acq_rel) == 1) {
-		// We were the last worker — wake any Stop() waiter.
-		std::lock_guard<std::mutex> lk(m_stopMtx);
-		m_stopCv.notify_all();
-	}
-	else {
-		// Notify anyway; Stop's predicate will re-check the count.
-		std::lock_guard<std::mutex> lk(m_stopMtx);
-		m_stopCv.notify_all();
-	}
+	// m_aliveWorkers decrement + Stop-cv notify happen in BookkeepingOnExit's
+	// dtor — guarantees one notify per WorkerLoop entry regardless of how
+	// we leave.
 }
 
 void ibWorkerPoolHeadless::Stop()
@@ -237,13 +284,51 @@ void ibWorkerPoolHeadless::Stop()
 	{
 		std::unique_lock<std::mutex> lk(m_mtx);
 		m_stop.store(true);
+		// CANCEL EVERY KNOWN SESSION. m_stop alone is only read
+		// between tasks — a task already running reads nothing, and a task
+		// that blocks for minutes (the Firebird maintenance poll) turns
+		// this wait into a hang with no way out. The session's cancel
+		// is what such a task hears, so shutdown sends it here, before
+		// waiting for anyone. Under m_mtx because the queue entry pins
+		// nothing beyond the pointer we hold; Cancel takes the connection
+		// pool's lock and the job manager's, and neither ever calls back
+		// into this pool.
+		// 🛑 AN ENTRY NAMES A SESSION THAT MAY ALREADY BE GONE, and the key cannot say so. It is
+		// legal to look a freed address up (a map compares addresses) and a use-after-free to call
+		// through one. Two ways a session leaves without us: it DROPS while leased — `dropped` is
+		// set and the worker erases later, the case answered on 2026-09-22 — or it simply ENDS,
+		// telling nobody, which is what a pool declared before its sessions meets at scope exit
+		// (ThePoolStaysUsableAfterADeferredErase, AddressSanitizer, 2026-09-24).
+		//
+		// ⭐ So the question is not "was it dropped" but "is it still there", and only the holder
+		// can answer: the queue keeps a weak hold on its session and Cancel goes through a lock.
+		// A session nobody holds by shared_ptr answers empty, and is left alone — we do not own it
+		// and cannot cancel what is already gone.
+		for (auto& kv : m_sessions) {
+			if (kv.second == nullptr || kv.second->dropped) continue;
+			const std::shared_ptr<ibSession> alive = kv.second->owner.lock();
+			if (!alive) continue;
+			alive->Cancel();
+		}
 	}
 	m_cv.notify_all();
 
 	// Wait for every detached worker to exit. m_aliveWorkers decrements
 	// at the end of each WorkerLoop and notifies m_stopCv.
+	//
+	// Timed, and it keeps waiting — leaving early would let a detached
+	// worker run on into session teardown, which is the use-after-free
+	// this drain exists to prevent. What the deadline buys is a VOICE:
+	// a wait that says nothing is indistinguishable from a deadlock, and
+	// reading that difference cost a full-memory dump (2026-08-03: main
+	// parked here while a worker sat in the Firebird sweep poll, which
+	// was passing nullptr for its cancel token).
 	std::unique_lock<std::mutex> lk(m_stopMtx);
-	m_stopCv.wait(lk, [this]() {
+	while (!m_stopCv.wait_for(lk, kStopWaitReport, [this]() {
 		return m_aliveWorkers.load(std::memory_order_acquire) == 0;
-	});
+	})) {
+		ibJournalWarning(wxT("session.worker"),wxT("worker pool: still waiting on %lu worker(s) after stop"),
+		             (unsigned long)m_aliveWorkers.load(std::memory_order_acquire));
+	}
 }
+

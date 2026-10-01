@@ -10,9 +10,11 @@ ibPanelTitle::ibPanelTitle(wxWindow *parent, const wxString &title) : wxPanel(pa
 	wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
 
 	wxStaticText *text = new wxStaticText(this, wxID_ANY, title);
-	SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_ACTIVECAPTION));
-	text->SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_ACTIVECAPTION));
-	text->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_CAPTIONTEXT));
+	// Interior palette caption — deep dusty blue + white text. Was
+	// system ACTIVECAPTION (Windows-blue) which clashed with palette.
+	SetBackgroundColour(wxColour(0x3F, 0x5C, 0x77));   // #3F5C77 deep dusty blue
+	text->SetBackgroundColour(wxColour(0x3F, 0x5C, 0x77));
+	text->SetForegroundColour(*wxWHITE);
 	text->SetFont(
 		wxFont(8, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, wxString()));
 

@@ -7,19 +7,41 @@
 // refactor will swap the contents in/out at session boundaries to
 // allow N sessions to share M workers. This struct is the swap target.
 //
-// See docs/worker-pool-tls-audit.md for the migration plan. Step 1 is
+// See docs/private/worker-pool-tls-audit.md for the migration plan. Step 1 is
 // to provide this struct on ibSession with no behaviour change — the
 // interpreter still reads/writes its TLS, the swap helpers come later.
 
+#include <atomic>
+#include <cstdint>     // uint8_t — ibRunState's width, which the opaque declarations repeat
 #include <map>
 #include <utility>
 #include <vector>
 
 #include <wx/defs.h>   // wxNOT_FOUND
 
+#include <memory>
+
+#include "value.h"     // ibValue — m_cacheProbe holds them by value, m_runStack by block
+
 class ibProcUnit;
 struct ibRunContext;
 struct ibByteCode;
+
+// ⭐ WHERE A SESSION'S RUN STANDS, as the one who cancels it and those who listen see it — ONE value, so every
+// change is one atomic step and no reader can catch two flags half-way (ibProcUnitState::m_runState).
+// Declared opaque (`enum class ibRunState : uint8_t;`) by the headers that only hand its address on.
+enum class ibRunState : uint8_t {
+	Idle,        // nothing running — a cancel that finds this on a host session is for nothing
+	Running,     // a script is on the stack, there to hear a cancel
+	Cancelled,   // …and it has been told: every level throws the interruption until the run is out
+};
+
+// The one question every listener asks — the interpreter between opcodes, the engine's long loops between
+// rows and lines, a Services API poll — asked one way. No state to watch (a read nobody can cancel) is never
+// cancelled.
+inline bool ibRunCancelled(const std::atomic<ibRunState>* run) noexcept {
+	return run != nullptr && run->load(std::memory_order_relaxed) == ibRunState::Cancelled;
+}
 
 // Where the most recently-raised script exception originated. Mirrored
 // from procUnit.cpp where the file-static `s_errorPlace` lives; the
@@ -43,6 +65,80 @@ struct ibErrorPlace {
 // (parentBc, funcIndex) and resolves shape/names/defaults via
 // parentBc->m_listFunc[funcIndex]. No separate descriptor struct.
 
+// THE LOCALS OF EVERY FRAME ON THE CALL STACK, in one place instead of inside each
+// frame. A frame reserves a run of slots on entry and releases it on exit, so the
+// runs nest exactly as the calls do.
+//
+// A frame used to carry `ibValue m_cLocStorage[MAX_STATIC_VAR]` inline — ten slots
+// on x86, twenty-five on x64. Measured against real code, that reserve fitted
+// neither kind of frame: argument frames never needed more than five, while a real
+// application procedure needs sixteen to ninety and so reached `new ibValue[]` on
+// every call anyway. Reserving here removes that allocation rather than adding one,
+// and takes ~1.2 KB out of every frame on x64 — which is what makes the recursion
+// guard reachable, since ibProcUnit::Execute reserves 9 376 bytes of stack per
+// interpreted level there. docs/private/runtime-perf.md §10.
+//
+// ⚠ THE DISCIPLINE IS LIFO, AND IT IS THE CALLERS' PROPERTY, not a hope: only a
+// frame whose life IS one call reserves here. A frame that can outlive its call is
+// the case the compiler already marks (ibByteFunction::m_needsHeapFrame → the frame
+// is built as an ibRunCaptureContext for a lambda to take), and so is the context
+// embedded in an ibProcUnit; both own their slots instead.
+struct ibRunStack {
+
+	// Where a frame's slots are, and where the top stood before it took them.
+	// `m_mark == kNoRun` is what a frame that owns its slots carries.
+	static const unsigned int kNoRun = 0xFFFFFFFFu;
+
+	struct ibRun {
+		ibValue*     m_vals = nullptr;
+		ibValue**    m_refs = nullptr;
+		unsigned int m_block = 0;
+		unsigned int m_mark = kNoRun;
+	};
+
+	// Hands out `count` slots, empty and with the pointer row filled. FALSE when the
+	// request is wider than one block — a function with hundreds of locals gets the
+	// heap, which is the honest answer rather than a reason to grow a block nobody
+	// else can use.
+	bool Reserve(const long count, ibRun& outRun);
+
+	// Returns the newest run, emptying its slots on the way out: a slot holding a
+	// reference lets go of it HERE, when the frame ends, rather than whenever some
+	// later call happens to reuse the memory.
+	void Release(const ibRun& run, const long count);
+
+	// Blocks are kept — a session allocates its stack once and lives on it.
+	void Rewind() { m_currentBlock = 0; m_top = 0; m_curVals = nullptr; m_curRefs = nullptr; }
+
+private:
+	// Makes `block` the one being filled, creating the blocks up to it.
+	void EnterBlock(unsigned int block);
+
+	// Wide enough that ordinary nesting never leaves a block half-used, small enough
+	// that a session running one shallow script does not pay for much.
+	static const long kBlockSlots = 256;
+
+	// Constructed ONCE per block and reused by every run that lands there. Held
+	// behind pointers so a block never moves while a frame points into it.
+	struct ibBlock {
+		ibBlock() : m_vals(new ibValue[kBlockSlots]), m_refs(new ibValue * [kBlockSlots]) {}
+		std::unique_ptr<ibValue[]>    m_vals;
+		std::unique_ptr<ibValue * []> m_refs;
+	};
+
+	std::vector<std::unique_ptr<ibBlock>> m_blocks;
+	unsigned int                          m_currentBlock = 0;
+	long                                  m_top = 0;
+
+	// ⭐ WHERE THE BLOCK BEING FILLED STARTS, kept beside its number. Every call reserves here, and
+	// reaching the slots through the number was a chain of loads each waiting for the one before —
+	// the vector, the pointer in it, the block, the array — before the first store (the sampled
+	// profile's hottest instructions in Reserve, 2026-09-28). Null until a block is entered, and
+	// again whenever the number changes to a block not yet looked up.
+	ibValue*                              m_curVals = nullptr;
+	ibValue**                             m_curRefs = nullptr;
+};
+
 struct ibProcUnitState {
 	// Currently-executing module. Read by every opcode dispatch site
 	// to resolve "which module's bytecode are we in".
@@ -52,6 +148,12 @@ struct ibProcUnitState {
 	// frame entry, popped by dtor.
 	std::vector<ibRunContext*>  m_runContext;
 
+	// The locals of every frame on that stack. Beside the stack it mirrors, and a
+	// MEMBER rather than a thread_local for the reason the whole struct exists: the
+	// worker boundary will run N sessions on M threads, and a session that moves to
+	// another thread must find its own values, not that thread's.
+	ibRunStack                  m_runStack;
+
 	// Site of the last raised exception; used by ProcessError to
 	// format the rethrow.
 	ibErrorPlace                m_errorPlace;
@@ -59,6 +161,25 @@ struct ibProcUnitState {
 	// Recursion-depth counter — gates against runaway scripts via
 	// MAX_REC_COUNT in procUnit.cpp.
 	short                       m_recCount = 0;
+
+	// ⭐ THE RUN AND ITS CANCEL, one value (ibRunState). The guard of the stack at empty makes it Running as a
+	// script starts and Idle as the last frame leaves (ibProcStackGuard); ibSession::Cancel, from any thread,
+	// makes a Running one Cancelled — and a job's session Cancelled whatever it finds, a job's session being its
+	// run. Heard by the interpreter between opcodes and by the engine's long loops (ibRunCancelled), all of
+	// which throw the interruption; hearing it changes nothing, so every level that meets it throws again
+	// until the run is out.
+	std::atomic<ibRunState>     m_runState { ibRunState::Idle };
+
+	// Scratch buffer the OPER_FUNC entry builds a `Cached` call's argument tuple
+	// in before looking it up. It belongs HERE, beside the call stack, for the
+	// same reason the call stack does: it is interpreter state, so when the
+	// worker boundary swaps a session's state in and out it travels with the
+	// rest rather than staying behind on whichever thread happened to run.
+	// Reused rather than built per call — a cache hit is meant to cost a hash
+	// and a compare, not a heap allocation. Filled and read inside a single
+	// instruction, so a nested cached call refills it after the outer one is
+	// finished with it.
+	std::vector<ibValue>        m_cacheProbe;
 
 	// Resolves the lambda executor for this state. Primary path:
 	// session's m_lambdaRuntime (allocated alongside m_root, parent =

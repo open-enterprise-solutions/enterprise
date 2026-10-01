@@ -4,19 +4,23 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "metaFormObject.h"
-#include "backend/databaseLayer/databaseLayer.h"
+#include "backend/serialize/dataBuilder.h"
 #include "backend/metaData.h"
 #include "backend/metaCollection/partial/commonObject.h"
 #include "backend/appData.h"
-#include "backend/backend_metatree.h"
+#include "backend/system/systemManager.h"
 
 // ibDeferredForm impl — defined here where ibValueMetaObjectGenericData
 // (parent's CreateObjectForm) and formWrapper are fully visible.
-ibValue* ibDeferredForm::Construct() const
+ibValue ibDeferredForm::Construct() const
 {
-	if (m_parent == nullptr || m_form == nullptr)
-		return nullptr;
-	return formWrapper::inl::cast_value(m_parent->CreateObjectForm(m_form));
+	if (m_form == nullptr || !m_build)
+		return ibValue();
+	// PURE lazy build — no metadata side effect. The re-home is automatic: m_build() reads the control blob through
+	// LoadControl, which routes to PasteNode by the blob's OWN self-describing tag (PasteFormat, stamped by SaveControl
+	// at copy time), independent of any live paste mark → each guid source hop re-homes onto the pasted object via
+	// GetIdByGuid. A raw blob (no tag) reads plainly via LoadNode. The holder hands its form over as the value.
+	return m_build();
 }
 
 // -----------------------------------------------------------------------
@@ -25,26 +29,24 @@ ibValue* ibDeferredForm::Construct() const
 
 #include "backend/system/systemManager.h"
 
-bool ibBackendCommandItem::ShowFormByCommandType(ibInterfaceCommandType cmdType)
+bool ibBackendCommandItem::Execute(ibInterfaceCommandType cmdType, ibBackendValueForm* /*srcForm*/, ibValue* /*commandParameter*/) const
 {
-	ibBackendValueForm* valueForm = nullptr;
-
+	// A form that failed to show goes with its holder — nobody else took it.
 	try {
 
-		valueForm = GetFormByCommandType(cmdType);
+		const ibFormPtr<ibBackendValueForm> valueForm = GetFormByCommandType(cmdType);
 
-		if (valueForm == nullptr)
-			return false;
+		if (!valueForm)
+			return false;   // default (form) behaviour; a command OVERRIDES Execute to run its handler
 
 		valueForm->ShowForm();
 	}
 	catch (const ibBackendAccessException& err) {
-		wxDELETE(valueForm);
-		ibValueSystemFunction::Alert(err.GetErrorDescription());
+		// Already reported where it happened (ProcessExceptionError hands it to the frame) - saying it
+		// again puts one failure in the pane twice.
 		return false;
 	}
 	catch (const ibBackendException&) {
-		wxDELETE(valueForm);
 		return false;
 	}
 
@@ -55,7 +57,6 @@ bool ibBackendCommandItem::ShowFormByCommandType(ibInterfaceCommandType cmdType)
 // ibValueMetaObjectFormBase
 // -----------------------------------------------------------------------
 
-wxIMPLEMENT_ABSTRACT_CLASS(ibValueMetaObjectFormBase, ibValueMetaObjectModule);
 
 //***********************************************************************
 //*                          common value object                        *
@@ -66,68 +67,94 @@ bool ibValueMetaObjectFormBase::LoadFormData(ibBackendValueForm* valueForm) cons
 }
 
 bool ibValueMetaObjectFormBase::SaveFormData(ibBackendValueForm* valueForm) {
-	const wxMemoryBuffer& memoryBuffer = valueForm->SaveForm();
-	SetFormData(memoryBuffer);
-	// Designer's form-edit commit — invalidate this form's compile-cache
-	// entry so the next FindCompileModule rebuilds the form value via the
-	// stored ibDeferredForm rebuilder. Caller is always the visual form
-	// editor; runtime never reaches here.
-	if (auto* cc = m_metaData ? m_metaData->GetCompileCache() : nullptr)
-		cc->InvalidateCompileModule(this);
-	return !memoryBuffer.IsEmpty();
+	wxMemoryBuffer memoryBuffer;
+	if (valueForm->SaveForm(memoryBuffer)) {
+		SetFormData(memoryBuffer);
+		// Designer's form-edit commit — invalidate this form's compile-cache
+		// entry so the next FindCompileModule rebuilds the form value via the
+		// stored ibDeferredForm rebuilder. Caller is always the visual form
+		// editor; runtime never reaches here.
+		if (auto* cc = m_metaData ? m_metaData->GetCompileCache() : nullptr)
+			cc->InvalidateCompileModule(this);
+		return !memoryBuffer.IsEmpty();
+	}
+	return false;   // form refused to serialize (e.g. a dynamic list with no queryable source) — don't commit
 }
 
 //***********************************************************************
 
 #pragma region _form_creator_h_
 
-ibBackendValueForm* ibValueMetaObjectFormBase::CreateAndBuildForm(const ibValueMetaObjectFormBase* creator,
-	ibBackendControlFrame* ownerControl, ibSourceDataObject* srcObject, const ibUniqueKey& formGuid)
+ibFormPtr<ibBackendValueForm> ibValueMetaObjectFormBase::CreateAndBuildForm(const ibFormRequest& request, const ibValueMetaObjectFormBase* creator,
+	ibBackendControlFrame* ownerControl, ibSourceDataObject* srcObject)
 {
-	return CreateAndBuildForm(creator,
-		creator != nullptr ? creator->GetTypeForm() : defaultFormType, ownerControl, srcObject, formGuid);
+	return CreateAndBuildForm(request, creator,
+		creator != nullptr ? creator->GetTypeForm() : defaultFormType, ownerControl, srcObject);
 }
 
-ibBackendValueForm* ibValueMetaObjectFormBase::CreateAndBuildForm(const ibValueMetaObjectFormBase* creator, const ibFormID& form_id,
-	ibBackendControlFrame* ownerControl, ibSourceDataObject* srcObject, const ibUniqueKey& formGuid)
+ibFormPtr<ibBackendValueForm> ibValueMetaObjectFormBase::CreateAndBuildForm(const ibFormRequest& request, const ibValueMetaObjectFormBase* creator, const ibFormID& form_id,
+	ibBackendControlFrame* ownerControl, ibSourceDataObject* srcObject)
 {
-	ibBackendValueForm* result = nullptr;
+	// HELD FROM THE START — the designer cache's form, or a new one born owned. A form that fails below goes with
+	// this holder (a cached one only loses this reference; the cache keeps its own).
+	ibFormPtr<ibBackendValueForm> result;
 
 	if (creator != nullptr) {
 		const ibMetaData* metaData = creator->GetMetaData();
 		wxASSERT(metaData);
 		auto* cc = metaData->GetCompileCache();
-		const bool foundCached = cc && cc->FindCompileModule(creator, result);
-		if (!foundCached) {
-			result = ibBackendValueForm::CreateNewForm(creator, ownerControl, srcObject, formGuid);
-			if (!creator->GetFormData().IsEmpty() && !creator->LoadFormData(result)) {
-				wxDELETE(result);
-				return nullptr;
-			}
-			else if (creator->GetFormData().IsEmpty()) {
+		ibBackendValueForm* cached = nullptr;
+		if (cc && cc->FindCompileModule(creator, cached)) {
+			result = ibFormPtr<ibBackendValueForm>(cached);
+		}
+		else {
+			result = ibBackendValueForm::CreateNewForm(request, creator, ownerControl, srcObject);
+			if (creator->GetFormData().IsEmpty())
 				result->BuildForm(form_id);
-			}
+			else if (!creator->LoadFormData(result.Get()))
+				return nullptr;
 		}
 	}
 	else {
-		result = ibBackendValueForm::CreateNewForm(nullptr, ownerControl, srcObject, formGuid);
+		result = ibBackendValueForm::CreateNewForm(request, nullptr, ownerControl, srcObject);
 		result->BuildForm(form_id);
 	}
 
-	if (result != nullptr) {
+	if (result) {
 
 		bool success = true;
 
 		try {
 			success = result->InitializeFormModule();
 		}
+		catch (const ibBackendException& err) {
+			// Surface it — don't let a form-module compile/run error or a missing
+			// required binding vanish (the old catch(...) made the form silently
+			// fail to open with no clue why).
+			ibValueSystemFunction::Message(err.GetErrorDescription(),
+				ibStatusMessage::ibStatusMessage_Error);
+			success = false;
+		}
 		catch (...) {
 			success = false;
 		}
 
-		if (!success) {
-			wxDELETE(result);
+		if (!success)
 			return nullptr;
+
+		// ⭐ THE FORM IS GOT — FormGetProcessing(Form, Cancel) of its object's manager, in its module and in its event
+		// handlers: the form just made, its rights passed and its runtime initialised above, nothing of it shown yet.
+		// Every form of an object is made here, whatever shows it (a desktop, a web page), so a configuration catches
+		// them all in one place — of one object, or of every one of a kind (`CatalogManager`). The owner is the one
+		// its source names; a common form has none, and no manager. Cancel: the form is not handed out.
+		const ibSourceDataObject* const source = result->GetSourceObject();
+		if (const ibValueMetaObjectGenericData* const owner = source != nullptr ? source->GetSourceMetaObject() : nullptr) {
+			ibValue form = result;
+			ibValue cancel = false;
+			ibValue* params[] = { &form, &cancel };
+			ibRuntimeModuleDataObject::ExecAsManagerEvent(owner, wxT("FormGetProcessing"), params, 2);
+			if (cancel.GetBoolean())
+				return nullptr;
 		}
 
 		if (srcObject != nullptr) result->Modify(srcObject->IsModified());
@@ -140,15 +167,49 @@ ibBackendValueForm* ibValueMetaObjectFormBase::CreateAndBuildForm(const ibValueM
 
 ///////////////////////////////////////////////////////////////////////////
 
-wxMemoryBuffer ibValueMetaObjectFormBase::CopyFormData() const
+// node <-> runtime-blob shim. The form blob IS the binary-provider node format (each
+// control's SaveNode subtree), so the adapter is a straight provider round-trip.
+ibDataValue ibValueMetaObjectFormBase::FormBlobToNode(const wxMemoryBuffer& blob)
+{
+	if (blob.GetDataLen() == 0)
+		return ibDataValue();
+	auto node = std::make_shared<ibDataNode>();
+	ibReaderMemory reader(blob);
+	ibBinaryProvider().Read(reader, *node);
+	return ibDataValue::Child(node);
+}
+
+wxMemoryBuffer ibValueMetaObjectFormBase::FormNodeToBlob(const ibDataValue& formNode)
+{
+	if (formNode.Kind() != ibDataKind::Child)
+		return wxMemoryBuffer();
+	const std::shared_ptr<ibDataNode>& node = formNode.AsChild();
+	if (!node)
+		return wxMemoryBuffer();
+	ibWriterMemory writer;
+	ibBinaryProvider().Write(*node, writer);
+	return writer.buffer();
+}
+
+// The LIVE form's control tree AS a transparent node (Child) — the blob never hits disk. The form metaobject (this)
+// is in COPY mode here (ibControlCopyGuard stamped it), so SaveForm routes SaveControl → CopyNode: the source hops
+// ride their metaobject copy-guids (the copy/paste binary), so a paste re-homes them onto the pasted objects.
+ibDataValue ibValueMetaObjectFormBase::CopyFormData() const
 {
 	ibBackendValueForm* valueForm = nullptr;
 	auto* cc = m_metaData->GetCompileCache();
-	if (cc && cc->FindCompileModule(this, valueForm))
-		return valueForm->SaveForm();
-	return wxMemoryBuffer();
+	if (cc && cc->FindCompileModule(this, valueForm)) {
+		wxMemoryBuffer blob;
+		if (valueForm->SaveForm(blob))
+			return FormBlobToNode(blob);
+	}
+	return ibDataValue();
 }
 
+// Intentional no-op. The paste's own work — storing the copy/paste blob — is done by ibPropertyForm::PasteNodeValue
+// (it materialises the node into the form-data cell). The RE-HOMING happens later, on first form access: the form
+// object does not exist yet here, so ibDeferredForm re-arms the paste mark and the deferred build reads the blob via
+// PasteNode. Kept as the symmetric hook to CopyFormData / an extension point.
 bool ibValueMetaObjectFormBase::PasteFormData()
 {
 	return true;
@@ -170,7 +231,6 @@ ibValueMetaObjectFormBase::ibValueMetaObjectFormBase(const wxString& name, const
 	SetDefaultProcedure(wxT("RefreshDisplay"), ibContentHelper::eProcedureHelper);
 }
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueMetaObjectForm, ibValueMetaObjectFormBase)
 
 //***********************************************************************
 //*                            Metaform                                 *
@@ -180,16 +240,18 @@ ibValueMetaObjectForm::ibValueMetaObjectForm(const wxString& name, const wxStrin
 {
 }
 
-bool ibValueMetaObjectForm::LoadData(ibReaderMemory& reader)
+bool ibValueMetaObjectForm::ReadData(const ibDataNode& node)
 {
-	m_properyFormType->SetValue(reader.r_s32());
-	return m_propertyForm->LoadData(reader);
+	m_properyFormType->SetNodeValue(node.GetProperty(m_properyFormType->GetName()));
+	m_propertyForm->SetNodeValue(node.GetProperty(m_propertyForm->GetName()));
+	return true;
 }
 
-bool ibValueMetaObjectForm::SaveData(ibWriterMemory& writer)
+bool ibValueMetaObjectForm::WriteData(ibDataNode& node) const
 {
-	writer.w_s32(m_properyFormType->GetValueAsInteger());
-	return m_propertyForm->SaveData(writer);
+	node.SetProperty(m_properyFormType->GetName(), m_properyFormType->GetNodeValue());
+	node.SetProperty(m_propertyForm->GetName(), m_propertyForm->GetNodeValue());
+	return true;
 }
 
 //***********************************************************************
@@ -230,32 +292,17 @@ bool ibValueMetaObjectForm::OnCreateMetaObject(ibMetaData* metaData, int flags)
 
 	if ((flags & newObjectFlag) != 0) {
 
-		ibValueMetaObjectGenericData* metaObject = wxDynamicCast(
-			m_parent, ibValueMetaObjectGenericData
-		);
-
-		wxASSERT(metaObject);
-
-		ibFormID res = wxNOT_FOUND;
-		if (metaData != nullptr) {
-			ibBackendMetadataTree* metaTree = metaData->GetMetaTree();
-			if (metaTree != nullptr) {
-				res = metaTree->SelectFormType(this);
-			}
-		}
-		if (res != wxNOT_FOUND) {
-			m_properyFormType->SetValue(res);
-		}
-		else {
-			return false;
-		}
-		metaObject->OnCreateFormObject(this);
-		if (metaData != nullptr) {
-			ibBackendMetadataTree* metaTree = metaData->GetMetaTree();
-			if (metaTree != nullptr) {
-				metaTree->UpdateChoiceSelection();
-			}
-		}
+		// ⭐⭐ IT NO LONGER ASKS ANYBODY. This used to call SelectFormType — the engine putting a
+		// DIALOG in the middle of a create and waiting on a person, so a host with nobody to ask
+		// could not make a form at all, and a create could be undone by somebody closing a window.
+		//
+		// The form is made, and its KIND is set afterwards by whoever knows it: a tool passes it in
+		// `properties`, and the designer's tree hears the creation notice, asks the person, and
+		// writes the answer in through the ordinary property door. One road, two ways of arriving
+		// at the value.
+		//
+		// ⚠ The layout is laid out by the OWNER once the kind is known, so that moved with it —
+		// building it here would build it against a kind nobody had chosen yet.
 	}
 
 	return true;
@@ -273,11 +320,22 @@ bool ibValueMetaObjectForm::OnSaveMetaObject(int flags)
 
 bool ibValueMetaObjectForm::OnDeleteMetaObject()
 {
-	ibValueMetaObjectGenericData* metaObject = wxDynamicCast(m_parent, ibValueMetaObjectGenericData);
+	ibValueMetaObjectGenericData* metaObject = dynamic_cast<ibValueMetaObjectGenericData*>(m_parent);
 	wxASSERT(metaObject);
 	metaObject->OnRemoveMetaForm(this);
 
 	return ibValueMetaObjectFormBase::OnDeleteMetaObject();
+}
+
+ibFormPtr<ibBackendValueForm> ibValueMetaObjectForm::GetObjectForm(ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
+{
+	// The owner is what knows the source a form of this kind must be bound to (and it checks
+	// the access right on the way, exactly as the common form's own answer does). A form with
+	// no owning object cannot be materialised at all.
+	const ibValueMetaObjectGenericData* const owner =
+		dynamic_cast<const ibValueMetaObjectGenericData*>(GetParent());
+
+	return owner != nullptr ? owner->CreateObjectForm(this, formGuid) : nullptr;
 }
 
 bool ibValueMetaObjectForm::OnBeforeRunMetaObject(int flags)
@@ -289,15 +347,22 @@ bool ibValueMetaObjectForm::OnAfterRunMetaObject(int flags)
 {
 	if (auto* cc = m_metaData->GetCompileCache()) {
 
-		ibValueMetaObjectGenericData* metaObject = wxDynamicCast(m_parent, ibValueMetaObjectGenericData);
+		ibValueMetaObjectGenericData* metaObject = dynamic_cast<ibValueMetaObjectGenericData*>(m_parent);
 		wxASSERT(metaObject);
 
 		// Defer the actual form build — passing an eager CreateObjectForm
 		// result here would need session->m_root compiled, but CompileRoot
-		// only fires after RunDatabase finishes. The cache's overloaded
-		// AddCompileModule accepts an ibDeferredForm and materializes
-		// it on first FindCompileModule lookup.
-		return cc->AddCompileModule(this, ibDeferredForm(metaObject, this));
+		// only fires after RunDatabase finishes. The cache stores a builder
+		// and materializes it on first FindCompileModule lookup.
+		// The build is DEFERRED but the paste RE-HOME is not: ibValueMetaObject::PasteObject forces this build at the
+		// end of the paste, while the metaobject's paste mark is still live, so Construct re-homes the form's source
+		// hops onto the pasted objects and normalizes the stored blob. A later lazy build just reads the raw blob.
+		return cc->AddCompileModule(this, [deferred = ibDeferredForm(this, [metaObject, this]() -> ibFormPtr<ibBackendValueForm> {
+				// Keyed by the METAFORM: this value IS the compile cache's, one per metaform.
+				return metaObject->CreateObjectForm(this);
+			})]() -> ibValue {
+			return deferred.Construct();
+			});
 	}
 
 	return ibValueMetaObjectFormBase::OnAfterRunMetaObject(flags);
@@ -307,8 +372,7 @@ bool ibValueMetaObjectForm::OnBeforeCloseMetaObject()
 {
 
 	if (auto* cc = m_metaData->GetCompileCache()) {
-		if (!cc->RemoveCompileModule(this))
-			return false;
+		cc->RemoveCompileModule(this);
 	}
 
 	return ibValueMetaObjectFormBase::OnBeforeCloseMetaObject();
@@ -323,34 +387,35 @@ bool ibValueMetaObjectForm::OnAfterCloseMetaObject()
 //*                           CommonFormObject metaData                 *
 //***********************************************************************
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueMetaObjectCommonForm, ibValueMetaObjectFormBase)
 
 ibValueMetaObjectCommonForm::ibValueMetaObjectCommonForm(const wxString& name, const wxString& synonym, const wxString& comment) : ibValueMetaObjectFormBase(name, synonym, comment) {}
 
-bool ibValueMetaObjectCommonForm::LoadData(ibReaderMemory& reader)
+bool ibValueMetaObjectCommonForm::ReadData(const ibDataNode& node)
 {
-	return m_propertyForm->LoadData(reader);
+	m_propertyForm->SetNodeValue(node.GetProperty(m_propertyForm->GetName()));
+	return true;
 }
 
-bool ibValueMetaObjectCommonForm::SaveData(ibWriterMemory& writer)
+bool ibValueMetaObjectCommonForm::WriteData(ibDataNode& node) const
 {
-	return m_propertyForm->SaveData(writer);
+	node.SetProperty(m_propertyForm->GetName(), m_propertyForm->GetNodeValue());
+	return true;
 }
 
 #include "backend/system/systemManager.h"
 
-ibBackendValueForm* ibValueMetaObjectCommonForm::GetObjectForm(ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
+ibFormPtr<ibBackendValueForm> ibValueMetaObjectCommonForm::GetObjectForm(ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
 {
 	if (!AccessRight_Use()) {
-		ibBackendAccessException::Error();
+		ibBackendAccessException::Error(wxString::Format(_("opening form '%s'"), GetSynonym()));
 		return nullptr;
 	}
 
 	return ibValueMetaObjectFormBase::CreateAndBuildForm(
+		ibFormRequest(wxString(), formGuid),
 		this,
 		ownerControl,
-		nullptr,
-		formGuid
+		nullptr
 	);
 }
 
@@ -371,7 +436,17 @@ bool ibValueMetaObjectCommonForm::OnBeforeRunMetaObject(int flags)
 bool ibValueMetaObjectCommonForm::OnAfterRunMetaObject(int flags)
 {
 	if (auto* cc = m_metaData->GetCompileCache()) {
-		if (cc->AddCompileModule(this, formWrapper::inl::cast_value(ibValueMetaObjectFormBase::CreateAndBuildForm(this, defaultFormType)))) {
+		// DEFER the build (same as an object form) — do NOT build eagerly here. OnAfterRun fires per-object mid-run,
+		// so an eager build would resolve the form's attribute types / source hops while metaobjects that register
+		// LATER in the pass are still invisible → an object-typed attribute silently collapsed to String. The deferred
+		// builder runs on first FindCompileModule, after the whole config has run and everything is registered. A
+		// common form is standalone (no owning GenericData / source object), so it builds through CreateAndBuildForm
+		// directly; the paste RE-HOME is forced by ibValueMetaObject::PasteObject at paste end (mark still live).
+		if (cc->AddCompileModule(this, [deferred = ibDeferredForm(this, [this]() -> ibFormPtr<ibBackendValueForm> {
+				return ibValueMetaObjectFormBase::CreateAndBuildForm(ibFormRequest(), this, defaultFormType);
+			})]() -> ibValue {
+			return deferred.Construct();
+			})) {
 			return ibValueMetaObjectModuleBase::OnAfterRunMetaObject(flags);
 		}
 		return false;

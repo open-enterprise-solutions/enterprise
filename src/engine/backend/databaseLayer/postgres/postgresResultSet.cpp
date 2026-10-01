@@ -30,9 +30,7 @@ ibDatabaseResultSetPostgres::ibDatabaseResultSetPostgres(ibInterfacePostgres* pI
 	int nFields = m_pInterface->GetPQnfields()(m_pResult);
 	for (int i = 0; i < nFields; i++)
 	{
-		wxString strField = ConvertFromUnicodeStream(m_pInterface->GetPQfname()(pResult, i));
-		strField.MakeUpper();
-		m_FieldLookupMap[strField] = i;
+		m_FieldLookupMap[ConvertFromUnicodeStream(m_pInterface->GetPQfname()(pResult, i))] = i;   // as written: the map is case-blind
 	}
 }
 
@@ -70,12 +68,24 @@ int ibDatabaseResultSetPostgres::GetResultInt(int nField)
 	return GetResultLong(nField);
 }
 
-wxString ibDatabaseResultSetPostgres::GetResultString(int nField)
+ibString ibDatabaseResultSetPostgres::GetResultString(int nField)
 {
-	wxString strValue = wxEmptyString;
+	ibString strValue;
 	if (m_bBinaryResults)
 	{
-		wxLogError(wxT("Not implemented\n"));
+		// BINARY RESULTS ARE NOT DECODED HERE — and this must be an exception,
+		// not a log line. Logging and returning an empty value hands the caller a
+		// plausible answer for a column it never read: an empty string, a zero, a
+		// false. On PostgreSQL — the production engine — that is a wrong number in
+		// a report nobody traces back to a driver that quietly declined.
+		//
+		// Nothing turns binary mode on today (m_bBinaryResults is never set), so
+		// this raises only if somebody enables it before implementing the decode.
+		ibDatabaseLayerException::Throw(
+			ibBackendDatabaseException::Kind::Unknown,
+			DATABASE_LAYER_ERROR,
+			/*sqlState*/ wxEmptyString,
+			wxT("PostgreSQL: binary result decoding is not implemented"));
 	}
 	else
 	{
@@ -83,7 +93,7 @@ wxString ibDatabaseResultSetPostgres::GetResultString(int nField)
 		{
 			if (m_pInterface->GetPQgetisnull()(m_pResult, m_nCurrentRow, nField - 1) != 1)
 			{
-				strValue = ConvertFromUnicodeStream(m_pInterface->GetPQgetvalue()(m_pResult, m_nCurrentRow, nField - 1));
+				ConvertFromUnicodeStream(m_pInterface->GetPQgetvalue()(m_pResult, m_nCurrentRow, nField - 1), strValue);
 			}
 		}
 	}
@@ -96,7 +106,19 @@ long long ibDatabaseResultSetPostgres::GetResultLong(int nField)
 	long long nValue = 0;
 	if (m_bBinaryResults)
 	{
-		wxLogError(wxT("Not implemented\n"));
+		// BINARY RESULTS ARE NOT DECODED HERE — and this must be an exception,
+		// not a log line. Logging and returning an empty value hands the caller a
+		// plausible answer for a column it never read: an empty string, a zero, a
+		// false. On PostgreSQL — the production engine — that is a wrong number in
+		// a report nobody traces back to a driver that quietly declined.
+		//
+		// Nothing turns binary mode on today (m_bBinaryResults is never set), so
+		// this raises only if somebody enables it before implementing the decode.
+		ibDatabaseLayerException::Throw(
+			ibBackendDatabaseException::Kind::Unknown,
+			DATABASE_LAYER_ERROR,
+			/*sqlState*/ wxEmptyString,
+			wxT("PostgreSQL: binary result decoding is not implemented"));
 	}
 	else
 	{
@@ -118,7 +140,19 @@ bool ibDatabaseResultSetPostgres::GetResultBool(int nField)
 	bool bValue = false;
 	if (m_bBinaryResults)
 	{
-		wxLogError(wxT("Not implemented\n"));
+		// BINARY RESULTS ARE NOT DECODED HERE — and this must be an exception,
+		// not a log line. Logging and returning an empty value hands the caller a
+		// plausible answer for a column it never read: an empty string, a zero, a
+		// false. On PostgreSQL — the production engine — that is a wrong number in
+		// a report nobody traces back to a driver that quietly declined.
+		//
+		// Nothing turns binary mode on today (m_bBinaryResults is never set), so
+		// this raises only if somebody enables it before implementing the decode.
+		ibDatabaseLayerException::Throw(
+			ibBackendDatabaseException::Kind::Unknown,
+			DATABASE_LAYER_ERROR,
+			/*sqlState*/ wxEmptyString,
+			wxT("PostgreSQL: binary result decoding is not implemented"));
 	}
 	else
 	{
@@ -135,54 +169,18 @@ bool ibDatabaseResultSetPostgres::GetResultBool(int nField)
 	return bValue;
 }
 
-wxDateTime ibDatabaseResultSetPostgres::GetResultDate(int nField)
+ibDateTime ibDatabaseResultSetPostgres::GetResultDate(int nField)
 {
-	wxDateTime dateValue = wxDefaultDateTime;
-	// TIMESTAMP results should be the same in binary or text results
-	if (m_bBinaryResults)
-	{
-		if (m_pInterface->GetPQgetisnull()(m_pResult, m_nCurrentRow, nField - 1) != 1)
-		{
-			wxString strDateValue = ConvertFromUnicodeStream(m_pInterface->GetPQgetvalue()(m_pResult, m_nCurrentRow, nField - 1));
-			if (dateValue.ParseDateTime(strDateValue) == NULL)
-			{
-				if (dateValue.ParseDate(strDateValue) != NULL)
-				{
-					dateValue.SetHour(0);
-					dateValue.SetMinute(0);
-					dateValue.SetSecond(0);
-					dateValue.SetMillisecond(0);
-				}
-				else
-				{
-					dateValue = wxDefaultDateTime;
-				}
-			}
-		}
-	}
-	else
-	{
-		if (m_pInterface->GetPQgetisnull()(m_pResult, m_nCurrentRow, nField - 1) != 1)
-		{
-			wxString strDateValue = ConvertFromUnicodeStream(m_pInterface->GetPQgetvalue()(m_pResult, m_nCurrentRow, nField - 1));
-			if (dateValue.ParseDateTime(strDateValue) == NULL)
-			{
-				if (dateValue.ParseDate(strDateValue) != NULL)
-				{
-					dateValue.SetHour(0);
-					dateValue.SetMinute(0);
-					dateValue.SetSecond(0);
-					dateValue.SetMillisecond(0);
-				}
-				else
-				{
-					dateValue = wxDefaultDateTime;
-				}
-			}
-		}
-	}
-
-	return dateValue;
+	// TIMESTAMP results are text in binary and text mode alike: the ISO spelling of the parts, which is
+	// the reading - read by the date's own door (fdatetime.h, ibDateTime::FromString; a fraction of a
+	// second beyond the millisecond is finer than the reading and dropped). NULL is the empty date.
+	ibDateTime date;
+	if (m_pInterface->GetPQgetisnull()(m_pResult, m_nCurrentRow, nField - 1) == 1)
+		return date;
+	ibString text;
+	ConvertFromUnicodeStream(m_pInterface->GetPQgetvalue()(m_pResult, m_nCurrentRow, nField - 1), text);
+	date.FromString(text);
+	return date;
 }
 
 void* ibDatabaseResultSetPostgres::GetResultBlob(int nField, wxMemoryBuffer& buffer)
@@ -219,7 +217,19 @@ double ibDatabaseResultSetPostgres::GetResultDouble(int nField)
 	double dblValue = 0;
 	if (m_bBinaryResults)
 	{
-		wxLogError(wxT("Not implemented\n"));
+		// BINARY RESULTS ARE NOT DECODED HERE — and this must be an exception,
+		// not a log line. Logging and returning an empty value hands the caller a
+		// plausible answer for a column it never read: an empty string, a zero, a
+		// false. On PostgreSQL — the production engine — that is a wrong number in
+		// a report nobody traces back to a driver that quietly declined.
+		//
+		// Nothing turns binary mode on today (m_bBinaryResults is never set), so
+		// this raises only if somebody enables it before implementing the decode.
+		ibDatabaseLayerException::Throw(
+			ibBackendDatabaseException::Kind::Unknown,
+			DATABASE_LAYER_ERROR,
+			/*sqlState*/ wxEmptyString,
+			wxT("PostgreSQL: binary result decoding is not implemented"));
 	}
 	else
 	{
@@ -238,7 +248,19 @@ ibNumber ibDatabaseResultSetPostgres::GetResultNumber(int nField)
 	ibNumber dblValue = 0;
 	if (m_bBinaryResults)
 	{
-		wxLogError(wxT("Not implemented\n"));
+		// BINARY RESULTS ARE NOT DECODED HERE — and this must be an exception,
+		// not a log line. Logging and returning an empty value hands the caller a
+		// plausible answer for a column it never read: an empty string, a zero, a
+		// false. On PostgreSQL — the production engine — that is a wrong number in
+		// a report nobody traces back to a driver that quietly declined.
+		//
+		// Nothing turns binary mode on today (m_bBinaryResults is never set), so
+		// this raises only if somebody enables it before implementing the decode.
+		ibDatabaseLayerException::Throw(
+			ibBackendDatabaseException::Kind::Unknown,
+			DATABASE_LAYER_ERROR,
+			/*sqlState*/ wxEmptyString,
+			wxT("PostgreSQL: binary result decoding is not implemented"));
 	}
 	else
 	{
@@ -259,19 +281,19 @@ bool ibDatabaseResultSetPostgres::IsFieldNull(int nField)
 
 int ibDatabaseResultSetPostgres::LookupField(const wxString& strField)
 {
-	StringToIntMap::iterator SearchIterator = std::find_if(m_FieldLookupMap.begin(), m_FieldLookupMap.end(),
-		[strField](const auto pair) { return stringUtils::CompareString(pair.first, strField); });
+	// Found, not walked — the names are kept as written (constructor) and the map ignores case; see firebirdResultSet.cpp.
+	StringToIntMap::iterator SearchIterator = m_FieldLookupMap.find(strField);
 
 	if (SearchIterator == m_FieldLookupMap.end())
 	{
-		wxString msg(wxT("Field '") + strField + wxT("' not found in the resultset"));
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-		ibDatabaseLayerException error(DATABASE_LAYER_FIELD_NOT_IN_RESULTSET, msg);
-		throw error;
-#else
-		wxLogError(msg);
-#endif
-		return -1;
+		// See sqliteResultSet.cpp for the rationale — caller code rarely
+		// checks the -1 sentinel, so we throw to land in the unified
+		// ibBackendException handler chain instead.
+		ibDatabaseLayerException::Throw(
+			ibBackendDatabaseException::Kind::Unknown,
+			DATABASE_LAYER_FIELD_NOT_IN_RESULTSET,
+			/*sqlState*/ wxEmptyString,
+			wxT("Field '") + strField + wxT("' not found in the resultset"));
 	}
 	else
 	{

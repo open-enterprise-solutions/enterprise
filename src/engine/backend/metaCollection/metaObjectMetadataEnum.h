@@ -3,8 +3,7 @@
 
 #include "backend/compiler/enumUnit.h"
 class ibValueEnumVersion : public ibValueEnumeration<ibProgramVersion> {
-	wxDECLARE_DYNAMIC_CLASS(ibValueEnumVersion);
-public:
+	public:
 
 	ibValueEnumVersion() : ibValueEnumeration<ibProgramVersion>() {}
 
@@ -15,15 +14,14 @@ public:
 };
 
 class ibValueEnumSyntax : public ibValueEnumeration<ibProgramSyntax> {
-	wxDECLARE_DYNAMIC_CLASS(ibValueEnumSyntax);
-public:
+	public:
 
 	ibValueEnumSyntax() : ibValueEnumeration<ibProgramSyntax>() {}
 
 	virtual void CreateEnumeration() {
 		// Wire string stays "vbs" for back-compat with existing serialised
 		// configs; the user-visible label is "ves" — Visual Basic-style
-		// ES + 1С/BSL mix. Renaming the wire token would force migration
+		// ES, a legacy business-scripting dialect. Renaming the wire token would force migration
 		// of every stored module's syntax property.
 		this->AddEnumeration(syntax_ves, wxT("vbs"), _("ves"));
 		this->AddEnumeration(syntax_ces, wxT("ces"), _("ces"));

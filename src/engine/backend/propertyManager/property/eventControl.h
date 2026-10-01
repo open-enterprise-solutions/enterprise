@@ -2,6 +2,9 @@
 #define __EVENT_CONTROL_H__
 
 #include "backend/propertyManager/propertyObject.h"
+#include "backend/compiler/value.h"   // ibValue — ibEventControl HOLDS its dispatcher value (a named event / a lambda)
+
+class ibEventDispatcher;   // backend/eventDispatcher.h — the facet GetDispatcher vends
 
 //base property for "event"
 class BACKEND_API ibEventControl : public ibEvent {
@@ -24,24 +27,26 @@ public:
 
 	virtual bool IsEmptyProperty() const { return m_propValue.GetString().IsEmpty(); }
 
-	//get property for grid 
-	virtual wxObject* GetPGProperty() const {
-		if (ms_propertyEvent != nullptr)
-			return ms_propertyEvent(m_propLabel, m_propName, m_propValue);
-		return nullptr;
-	}
-
 	// set/get property data
 	virtual bool SetDataValue(const ibValue& varPropVal);
 	virtual bool GetDataValue(ibValue& pvarPropVal) const;
 
-	//load & save object in control 
-	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer);
+	//load & save object in control
+	virtual bool ReadNodeValue(const ibDataValue& value) override;
+	virtual bool WriteNodeValue(ibDataValue& value) const override;
 
-public:
+	// THE dispatcher this control event fires through — the HELD value as its ibEventDispatcher facet: a lambda if one
+	// was assigned from script, else a named-event value materialised from the stored name. Implicit upcast (both value
+	// types inherit the interface) -> no cast at the fire site.
+	virtual ibEventDispatcher* GetDispatcher() const override;
 
-	static wxObject* (*ms_propertyEvent)(const wxString&, const wxString&, const wxString&);
+protected:
+	// A value (name) edit drops the cached dispatcher so GetDispatcher rebuilds the named one from the new name.
+	virtual void DoSetValue(const wxVariant& val) override;
+
+	// The held dispatcher value: an ibValueEvent (named, materialised from the name) or an ibValueFunction (a lambda
+	// assigned from script). Mutable — GetDispatcher materialises the named one lazily. Kept alive here for its facet.
+	mutable ibValue m_dispatcherValue;
 };
 
 #endif

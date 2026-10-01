@@ -14,12 +14,19 @@
 #include <random>
 #include <vector>
 
-#ifdef __WXMSW__
+// THREE platforms, not two. The old #else covered "everything that is not Windows"
+// and reached for getrandom(), which is a LINUX (glibc) call: macOS ships
+// <sys/random.h> too, but it declares getentropy / arc4random, never getrandom —
+// so this did not compile there at all. A platform API needs a branch per platform
+// that actually has it (portability.md § 1.4).
+#if defined(__WXMSW__)
   #include <windows.h>
   #include <bcrypt.h>
   #pragma comment(lib, "bcrypt.lib")
+#elif defined(__APPLE__)
+  #include <cstdlib>          // arc4random_buf
 #else
-  #include <sys/random.h>
+  #include <sys/random.h>     // getrandom
 #endif
 
 namespace {
@@ -39,9 +46,15 @@ const char* kPrefix = "$pbkdf2-sha256$";
 
 void FillRandom(uint8_t* buf, size_t len)
 {
-#ifdef __WXMSW__
+#if defined(__WXMSW__)
 	if (BCryptGenRandom(nullptr, buf, (ULONG)len, BCRYPT_USE_SYSTEM_PREFERRED_RNG) == 0)
 		return;
+#elif defined(__APPLE__)
+	// arc4random_buf is the system CSPRNG on Apple platforms and cannot fail —
+	// it returns void and never reports an error, so there is no fallback path
+	// to take here.
+	arc4random_buf(buf, len);
+	return;
 #else
 	if (getrandom(buf, len, 0) == (ssize_t)len)
 		return;

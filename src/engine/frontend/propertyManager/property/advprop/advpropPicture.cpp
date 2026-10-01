@@ -3,7 +3,8 @@
 #include "backend/propertyManager/property/propertyPicture.h"
 #include "backend/propertyManager/property/variant/variantPicture.h"
 
-#include "frontend/propertyManager/property/private/prop.h"
+#include "frontend/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
+#include "frontend/propertyManager/property/private/propertyRegistry.h"
 
 // -----------------------------------------------------------------------
 // wxPGPictureProperty
@@ -21,8 +22,12 @@ class ibPropertyPictureLoader
 public:
 	ibPropertyPictureLoader()
 	{
-		ibPG_IMPLEMENT_PROPERTY_CALLBACK(wxPGPictureProperty, ibPropertyPicture::ms_propertyPicture);
-		ibPG_IMPLEMENT_PROPERTY_CALLBACK(ibPGExternalImageProperty, ibPropertyExternalPicture::ms_propertyExtPicture);
+		ibPropertyRegistry::Register([](ibPropertyPicture* prop) -> wxPGProperty* {
+			return new wxPGPictureProperty(prop->GetLabel(), prop->GetName(), prop->GetValue());
+		});
+		ibPropertyRegistry::Register([](ibPropertyExternalPicture* prop) -> wxPGProperty* {
+			return new ibPGExternalImageProperty(prop->GetLabel(), prop->GetName(), prop->GetValue());
+		});
 	}
 }g_pictureLoader;
 

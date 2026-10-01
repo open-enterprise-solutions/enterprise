@@ -1,11 +1,11 @@
 #include "widgets.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #ifdef OES_USE_WEB
 #include "frontend/web/webWindow.h"
 #else
 #include "frontend/win/ctrls/controlCheckboxEditor.h"
 #endif
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueCheckbox, ibValueWindow)
 
 //****************************************************************************
 
@@ -18,6 +18,11 @@ ibSourceObject* ibValueCheckbox::GetSourceObject() const
 		m_formOwner->GetSourceObject() : nullptr;
 }
 
+bool ibValueCheckbox::GetSourceList(std::vector<ibBackendFormAttributeValue*>& out) const
+{
+	return m_formOwner != nullptr ? m_formOwner->GetSourceList(GetFilterSourceDataType(), out) : false;
+}
+
 //****************************************************************************
 //*                              Checkbox                                    *
 //****************************************************************************
@@ -28,26 +33,25 @@ enum prop {
 
 ibValueCheckbox::ibValueCheckbox() : ibValueWindow(), ibTypeControlFactory()//(ibValueTypes::TYPE_BOOLEAN)
 {
+	m_members.Bind(this, &ibValueCheckbox::FillControlMembers);
 }
 
-ibMetaData* ibValueCheckbox::GetMetaData() const
+const ibMetaData* ibValueCheckbox::GetMetaData() const
 {
 	return m_formOwner != nullptr ?
 		m_formOwner->GetMetaData() : nullptr;
 }
 
-void ibValueCheckbox::PrepareNames() const
+void ibValueCheckbox::FillControlMembers(ibMemberTable& helper) const
 {
-	ibValueFrame::PrepareNames();
-
-	m_methodHelper->AppendProp(wxT("Value"), eControlValue, eControl);
+	helper.AppendProp(wxT("Value"), eControlValue, eControl);
 }
 
 bool ibValueCheckbox::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 {
-	const long lPropAlias = m_methodHelper->GetPropAlias(lPropNum); bool refreshColumn = false;
+	const long lPropAlias = m_members.GetPropAlias(lPropNum);
 	if (lPropAlias == eControl) {
-		const long lPropData = m_methodHelper->GetPropData(lPropNum);
+		const long lPropData = m_members.GetPropData(lPropNum);
 		if (lPropData == eControlValue) {
 			SetControlValue(varPropVal);
 		}
@@ -58,9 +62,9 @@ bool ibValueCheckbox::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 
 bool ibValueCheckbox::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
-	const long lPropAlias = m_methodHelper->GetPropAlias(lPropNum);
+	const long lPropAlias = m_members.GetPropAlias(lPropNum);
 	if (lPropAlias == eControl) {
-		const long lPropData = m_methodHelper->GetPropData(lPropNum);
+		const long lPropData = m_members.GetPropData(lPropNum);
 		if (lPropData == eControlValue) {
 			return GetControlValue(pvarPropVal);
 		}
@@ -74,9 +78,9 @@ wxString ibValueCheckbox::GetControlTitle() const
 		return m_propertyTitle->GetValueAsTranslateString();
 	}
 	else if (!m_propertySource->IsEmptyProperty()) {
-		const ibValueMetaObject* metaObject = m_propertySource->GetSourceAttributeObject();
-		wxASSERT(metaObject);
-		return metaObject->GetSynonym();
+		const ibBackendAbstractColumn* column = GetSourceAbstractColumn();
+		if (column != nullptr)   // null when the bound field is gone / whole-attribute binding
+			return column->GetSynonym();
 	}
 	return wxEmptyString;
 }
@@ -95,8 +99,12 @@ wxObject* ibValueCheckbox::Create(ibFrontendWindow* wxparent, ibVisualHost* visu
 	return checkbox;
 }
 
-void ibValueCheckbox::OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost, bool firstСreated)
+void ibValueCheckbox::OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost, bool firstCreated)
 {
+	// A just-dropped checkbox with no source auto-binds to a fresh attribute (control-side helper) so it
+	// renders bound, not hidden. firstCreated is set ONLY by the designer's add, never on a form open.
+	if (firstCreated)
+		AutoBindNewSource(this);   // `this` upcasts to ibTypeControlFactory* — the source-set side
 }
 
 #include "backend/appData.h"
@@ -111,14 +119,19 @@ void ibValueCheckbox::Update(wxObject* wxobject, ibVisualHost* visualHost)
 #endif
 
 	if (checkbox != nullptr) {
-		// Source-backed value refresh — shared metadata work.
+		// Source-backed value refresh: hand the source the binding path; it walks it.
 		if (!m_propertySource->IsEmptyProperty() && m_formOwner != nullptr) {
-			ibSourceDataObject* srcObject = m_formOwner->GetSourceObject();
-			if (srcObject != nullptr)
-				srcObject->GetValueByMetaID(m_propertySource->GetValueAsSource(), m_selValue);
+			m_formOwner->GetValueByAttributePath(m_propertySource->GetValueAsSourceDesc(), m_selValue);
 		}
 
 		checkbox->SetLabel(GetControlTitle());
+		// A read-only binding (a dotted reference, a view-only form, or a read-only source) makes the box
+		// READ-ONLY: value shown and focusable, but a click / space can't toggle it. The custom control blocks
+		// the change itself (SetReadOnly reverts the toggle in its own guard) — NOT Enable(false), which would
+		// grey it out (availability, for action buttons, not data controls).
+		const bool writableBinding = m_propertySource->IsEmptyProperty()
+			|| (m_formOwner != nullptr && m_formOwner->IsWritableBinding(m_propertySource->GetValueAsSourceDesc()));
+		checkbox->SetReadOnly(!writableBinding);
 #ifdef OES_USE_WEB
 		checkbox->SetValue(m_selValue.GetBoolean());
 #else
@@ -152,10 +165,9 @@ void ibValueCheckbox::Cleanup(wxObject* obj, ibVisualHost* visualHost)
 
 bool ibValueCheckbox::GetControlValue(ibValue& pvarControlVal) const
 {
-	if (!m_propertySource->IsEmptyProperty() && m_formOwner->GetSourceObject()) {
-		ibSourceDataObject* srcObject = m_formOwner->GetSourceObject();
-		if (srcObject != nullptr)
-			return srcObject->GetValueByMetaID(m_propertySource->GetValueAsSource(), pvarControlVal);
+	if (!m_propertySource->IsEmptyProperty() && m_formOwner != nullptr &&
+		m_formOwner->GetValueByAttributePath(m_propertySource->GetValueAsSourceDesc(), pvarControlVal)) {
+		return true;   // attribute-table / dotted path -> read-only walk
 	}
 
 	pvarControlVal = ibTypeControlFactory::AdjustValue(m_selValue);
@@ -166,10 +178,10 @@ bool ibValueCheckbox::GetControlValue(ibValue& pvarControlVal) const
 
 bool ibValueCheckbox::SetControlValue(const ibValue& varControlVal)
 {
-	if (!m_propertySource->IsEmptyProperty() && m_formOwner->GetSourceObject()) {
-		ibSourceDataObject* srcObject = m_formOwner->GetSourceObject();
-		if (srcObject != nullptr)
-			srcObject->SetValueByMetaID(m_propertySource->GetValueAsSource(), varControlVal);
+	if (!m_propertySource->IsEmptyProperty() && m_formOwner != nullptr) {
+		// Form writes only a direct-field binding (head selects the attribute); a
+		// dotted reference path is read-only → no-op.
+		m_formOwner->SetValueByAttributePath(m_propertySource->GetValueAsSourceDesc(), varControlVal);
 	}
 
 	m_selValue = varControlVal.GetBoolean();
@@ -192,33 +204,30 @@ bool ibValueCheckbox::SetControlValue(const ibValue& varControlVal)
 //*							 Data	                                *
 //*******************************************************************
 
-bool ibValueCheckbox::LoadData(ibReaderMemory& reader)
+bool ibValueCheckbox::ReadData(const ibDataNode& node)
 {
-	wxString title; reader.r_stringZ(title);
-	m_propertyTitle->SetValue(title);
-	m_propertyTitleLocation->SetValue(reader.r_s32());
-	if (!m_propertySource->LoadData(reader))
-		return false;
+	m_propertyTitle->SetNodeValue(node.GetProperty(m_propertyTitle->GetName()));
+	m_propertyTitleLocation->SetNodeValue(node.GetProperty(m_propertyTitleLocation->GetName()));
+	m_propertySource->SetNodeValue(node.GetProperty(m_propertySource->GetName()));
 
 	//events
-	m_onCheckboxClicked->LoadData(reader);
-	return ibValueWindow::LoadData(reader);
+	m_onCheckboxClicked->SetNodeValue(node.GetProperty(m_onCheckboxClicked->GetName()));
+	return ibValueWindow::ReadData(node);
 }
 
-bool ibValueCheckbox::SaveData(ibWriterMemory& writer)
+bool ibValueCheckbox::WriteData(ibDataNode& node) const
 {
-	writer.w_stringZ(m_propertyTitle->GetValueAsString());
-	writer.w_s32(m_propertyTitleLocation->GetValueAsInteger());
-	if (!m_propertySource->SaveData(writer))
-		return false;
+	node.SetProperty(m_propertyTitle->GetName(), m_propertyTitle->GetNodeValue());
+	node.SetProperty(m_propertyTitleLocation->GetName(), m_propertyTitleLocation->GetNodeValue());
+	node.SetProperty(m_propertySource->GetName(), m_propertySource->GetNodeValue());
 
 	//events
-	m_onCheckboxClicked->SaveData(writer);
-	return ibValueWindow::SaveData(writer);
+	node.SetProperty(m_onCheckboxClicked->GetName(), m_onCheckboxClicked->GetNodeValue());
+	return ibValueWindow::WriteData(node);
 }
 
 //***********************************************************************
 //*                       Register in runtime                           *
 //***********************************************************************
 
-CONTROL_TYPE_REGISTER(ibValueCheckbox, "Checkbox", "Widget", string_to_clsid("CT_CHKB"));
+CONTROL_TYPE_REGISTER(ibValueCheckbox, "Checkbox", "Widget", g_controlCheckboxCLSID);

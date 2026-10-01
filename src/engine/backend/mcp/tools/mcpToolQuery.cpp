@@ -1,0 +1,515 @@
+﻿////////////////////////////////////////////////////////////////////////////
+//	Description : the query tools — what can be asked, and of what
+////////////////////////////////////////////////////////////////////////////
+//
+// ⭐ THIS IS A DOOR ONTO WORK ALREADY DONE. query/queryConstructorModel.h is the
+// constructor's BACKEND half — built so the window above it knows nothing about
+// metadata, and therefore built exactly right for a caller that is not a window
+// at all. Two rules are written into that file and both are why these tools are
+// three lines each instead of a walk of their own:
+//
+//   the catalogue of sources is a WALK over the factory, never a list — so a
+//   metatype registered tomorrow is queryable here the day it registers;
+//   the fields are ASKED OF THE SOURCE — a register's balance answers with its
+//   own columns, a nested query with its projections.
+//
+// WHY IT MATTERS FOR SOMETHING WRITING QUERIES. Knowing the grammar is not the
+// hard part; knowing what exists is. `Catalog.Goods` versus
+// `AccumulationRegister.StockBalance.Balance`, which of them takes parameters,
+// which field can be walked through a reference — none of that is guessable,
+// all of it is answerable.
+//
+////////////////////////////////////////////////////////////////////////////
+
+#include "backend/mcp/mcpTool.h"
+
+#include "backend/metadataConfiguration.h"
+#include "backend/query/queryConstructorModel.h"
+#include "backend/query/queryableFactory.h"      // ibQuerySourceParameter — what a virtual table takes
+#include "backend/query/queryException.h"
+#include "backend/query/queryLowering.h"
+#include "backend/query/queryParser.h"
+#include "backend/query/queryable.h"
+
+#include <wx/tokenzr.h>
+
+namespace {
+
+ibDataValue FieldEntry(const ibQueryConstructorField& field)
+{
+	std::shared_ptr<ibDataNode> node = std::make_shared<ibDataNode>();
+
+	// The technical name is what a query writes; the presentation is what a
+	// person reads. Both, and named apart — putting a synonym into a query is
+	// the mistake this distinction exists to prevent.
+	node->SetValue(wxT("name"), field.m_name);
+	if (!field.m_presentation.IsEmpty() && field.m_presentation != field.m_name)
+		node->SetValue(wxT("title"), field.m_presentation);
+	if (!field.m_source.IsEmpty())
+		node->SetValue(wxT("source"), field.m_source);
+
+	// A reference can be walked one level further — a COMPOSITE one too: the query branches per
+	// alternative and coalesces the leaf, so what is offered here is what the walk can then do.
+	if (field.m_reference)
+		node->AddField(wxT("reference"), ibDataValue::Bool(true));
+
+	return ibDataValue::Child(node);
+}
+
+using ibArg = ibMcpTool::ibMcpArgument;
+
+// The arguments this file's tools take — declared once, and read through the same
+// objects in Call, so the name a caller is told cannot drift from the name looked for.
+const ibArg& ArgContains()
+{
+	static const ibArg s_a(wxT("contains"), ibArg::Kind::Text,
+		ibMcpText("Narrow to paths containing this text. Omit for all of them."));
+	return s_a;
+}
+
+const ibArg& ArgPath()
+{
+	static const ibArg s_a(wxT("path"), ibArg::Kind::Text,
+		ibMcpText("The source's dotted path, as query_sources gives it - optionally followed by "
+			"reference fields to step through, exactly as a query would write them "
+			"(`AccumulationRegister.GoodsInWarehouses.Recorder`)."), /*required*/ true);
+	return s_a;
+}
+
+const ibArg& ArgText()
+{
+	static const ibArg s_a(wxT("text"), ibArg::Kind::Text,
+		ibMcpText("The query text, exactly as it would be written in the module - the whole package "
+			  "if it is one."), /*required*/ true);
+	return s_a;
+}
+
+} // namespace
+
+//---------------------------------------------------------------------------
+// query_sources
+//---------------------------------------------------------------------------
+class ibMcpToolQuerySources : public ibMcpTool {
+public:
+
+	wxString GetName() const override { return wxT("query_sources"); }
+
+	wxString GetActivity(const ibDataNode& params) const override
+	{
+		return ibMcpText("looking at what a query can read from");
+	}
+
+	wxString GetDescription() const override
+	{
+		return ibMcpText("Everything a query may read from in this configuration, by the dotted path a "
+			"query names it with - Catalog.Goods, AccumulationRegister.StockBalance.Balance and "
+			"the rest. Ask this before writing a FROM: the names are this configuration's, and "
+			"a virtual table is not guessable from the register's name.");
+	}
+
+	const std::vector<ibMcpArgument>& Arguments() const override
+	{
+		static const std::vector<ibMcpArgument> s_arguments = {  };
+		return s_arguments;
+	}
+
+	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	{
+		if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen()) {
+			refusal = ibMcpText("No configuration is open.");
+			return false;
+		}
+
+		const wxString contains = ArgContains().Text(params);
+
+		ibQueryConstructorModel model(activeMetaData);
+
+		std::vector<ibDataValue> sources;
+		for (const ibQueryConstructorSource& source : model.GetSources()) {
+
+			const wxString path = source.Text();
+			if (!contains.IsEmpty() && path.Lower().Find(contains.Lower()) == wxNOT_FOUND)
+				continue;
+
+			std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
+			entry->SetValue(wxT("path"), path);
+			if (!source.m_presentation.IsEmpty() && source.m_presentation != path)
+				entry->SetValue(wxT("title"), source.m_presentation);
+
+			sources.push_back(ibDataValue::Child(entry));
+		}
+
+		result.AddField(wxT("sources"), ibDataValue::Array(sources));
+		return true;
+	}
+};
+
+MCP_TOOL_REGISTER(ibMcpToolQuerySources);
+
+//---------------------------------------------------------------------------
+// query_fields
+//---------------------------------------------------------------------------
+class ibMcpToolQueryFields : public ibMcpTool {
+public:
+
+	wxString GetName() const override { return wxT("query_fields"); }
+
+	wxString GetActivity(const ibDataNode& params) const override
+	{
+		return wxString::Format(ibMcpText("looking at the fields of %s"),
+			ArgPath().Text(params));
+	}
+
+	wxString GetDescription() const override
+	{
+		return ibMcpText("The fields of one query source, with the name a query writes and the words a "
+			"person reads. A field marked as a reference can be walked further with a dot - and "
+			"ASKING WHAT IS BEHIND IT IS THIS SAME VERB: name the source and then the reference "
+			"fields to step through, as a query would write them. A reference to several types is "
+			"walked too, and answers with what all of them offer, the same names merged - which is "
+			"what the query does with them, one column whichever type a row turns out to hold.");
+	}
+
+	const std::vector<ibMcpArgument>& Arguments() const override
+	{
+		static const std::vector<ibMcpArgument> s_arguments = { ArgPath() };
+		return s_arguments;
+	}
+
+	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	{
+		if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen()) {
+			refusal = ibMcpText("No configuration is open.");
+			return false;
+		}
+
+		const wxString path = ArgPath().Text(params);
+		if (path.IsEmpty()) {
+			refusal = ibMcpText("No source named.");
+			return false;
+		}
+
+		ibQueryConstructorModel model(activeMetaData);
+
+		// The source is named the way a query names it, so it is built the way a
+		// query builds it — one AST node, not a lookup of our own. The path is a
+		// SEQUENCE of segments, which is why the dots are split rather than kept:
+		// "AccumulationRegister.StockBalance.Balance" is three answers to three
+		// questions, not one string.
+		ibQuerySource source;
+		wxStringTokenizer segments(path, wxT("."));
+		while (segments.HasMoreTokens())
+			source.m_name.push_back(segments.GetNextToken());
+
+		const ibQueryPackage empty;
+		std::vector<ibQueryConstructorField> fields = model.GetFields(source, empty, 0);
+
+		// ⭐⭐ AND IF THAT IS NOT A SOURCE, THE TAIL IS A WALK. A path names a source, then possibly
+		// fields to step THROUGH — which is the same [+] the designer's field tree makes, and the
+		// only way to ask what is behind a reference. Asked here by shortening the source until it
+		// resolves, because a source is itself two or three segments (a register and its virtual
+		// table), so where the source ends cannot be assumed — it has to be found.
+		//
+		// Until this, a caller was told a field was a reference and then refused when asking what
+		// was behind it.
+		if (fields.empty() && source.m_name.size() > 1) {
+
+			for (size_t tail = 1; tail < source.m_name.size() && fields.empty(); ++tail) {
+
+				ibQuerySource head;
+				head.m_name.assign(source.m_name.begin(), source.m_name.end() - tail);
+
+				std::vector<ibQueryConstructorField> level = model.GetFields(head, empty, 0);
+				if (level.empty())
+					continue;
+
+				// Step through the remaining segments, each of which must name a reference field of
+				// the level above it.
+				for (size_t i = source.m_name.size() - tail; i < source.m_name.size(); ++i) {
+
+					const ibQueryConstructorField* found = nullptr;
+					for (const ibQueryConstructorField& field : level)
+						if (field.m_name.IsSameAs(source.m_name[i], false)) { found = &field; break; }
+
+					if (found == nullptr || !found->m_reference) {
+						level.clear();
+						break;   // not a name of this level, or a leaf — nothing is behind it
+					}
+
+					// ⭐ ONE TYPE, ONE SET OF FIELDS — and a composite is answered per type rather
+					// than merged. Two documents both have a `Date`, and one merged line would hide
+					// that they are two; `source` says which type each came out of, the same way
+					// the query constructor draws a level per type. What the query DOES with them
+					// is the other question — there they are one column, coalesced.
+					const std::vector<ibQueryConstructorField> branches =
+						model.GetReferenceBranches(found->m_type);
+
+					level.clear();
+					for (const ibQueryConstructorField& branch : branches)
+						for (ibQueryConstructorField& behind
+						     : model.GetReferenceFields(branch.m_referenceClsid, branch.m_name))
+							level.push_back(std::move(behind));
+				}
+
+				fields = std::move(level);
+			}
+		}
+
+		if (fields.empty()) {
+			refusal = wxString::Format(
+				ibMcpText("'%s' answers with no fields - check the path with query_sources."), path);
+			return false;
+		}
+
+		std::vector<ibDataValue> out;
+		for (const ibQueryConstructorField& field : fields)
+			out.push_back(FieldEntry(field));
+
+		std::vector<ibDataValue> parameters;
+		for (const ibQuerySourceParameter& parameter : model.GetSourceParameters(source)) {
+
+			std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
+			entry->SetValue(wxT("name"), parameter.m_name);
+			entry->AddField(wxT("required"), ibDataValue::Bool(parameter.m_required));
+			entry->AddField(wxT("condition"), ibDataValue::Bool(parameter.m_condition));
+
+			// ⭐ A CLOSED SET, WHEN THE SOURCE DECLARES ONE — the periodicity a
+			// turnover rolls up to, and its like. Declared by the source because
+			// only the source knows what it accepts; passed on for the same
+			// reason, so a caller writes one of these instead of inventing a word
+			// that parses and means nothing.
+			if (!parameter.m_choices.empty()) {
+				std::vector<ibDataValue> choices;
+				for (const wxString& choice : parameter.m_choices)
+					choices.push_back(ibDataValue::String(choice));
+				entry->AddField(wxT("choices"), ibDataValue::Array(choices));
+			}
+
+			// ⭐ …AND WHAT IT DECIDES, where the source says so. A list of words answers "which may
+			// I write" and not "what will happen", and for `Periodicity` the two are a whole
+			// storey apart from the property of the same name.
+			if (!parameter.m_description.IsEmpty())
+				entry->SetValue(wxT("description"), parameter.m_description);
+
+			parameters.push_back(ibDataValue::Child(entry));
+		}
+
+		result.SetValue(wxT("path"), path);
+		result.AddField(wxT("fields"), ibDataValue::Array(out));
+
+		// A VIRTUAL TABLE TAKES ARGUMENTS, and a caller that does not know which
+		// writes a balance with no date and gets today's by accident.
+		if (!parameters.empty())
+			result.AddField(wxT("parameters"), ibDataValue::Array(parameters));
+
+		return true;
+	}
+};
+
+MCP_TOOL_REGISTER(ibMcpToolQueryFields);
+
+//---------------------------------------------------------------------------
+// query_check — folded in from mcpToolQueryCheck.cpp on 2026-09-01: one subject,
+// one file. What it checks and why it had to exist is the block below.
+//
+//
+// THE HOLE THIS FILLS, and it was a real one. A query written into a module
+// lives inside a STRING, and a string is opaque to the compiler: script_check
+// answers "ok" for a module whose query names a table that does not exist,
+// because as far as the grammar is concerned the module contains a piece of
+// text. So everything else could be verified in place and the query - the part
+// most likely to be wrong, and the part hardest to get right from memory -
+// could only be verified by running it in front of somebody.
+//
+// THE CHECK ALREADY EXISTED. It is the gate the constructor passes before it
+// opens a stored query: parse, then resolve the names against the configuration.
+// Two calls. Nothing here is new work; what was missing was a door.
+//
+// TWO FAILURES, AND THEY ARE DIFFERENT. A query may not PARSE - a comma in the
+// wrong place - and the engine says where, to the character. Or it may parse
+// perfectly and NAME something that is not there: a field renamed, a table
+// deleted, a virtual table asked for a column it does not have. The second is
+// the one a writer working from memory actually makes, and the one no grammar
+// can catch.
+//
+
+
+//---------------------------------------------------------------------------
+// query_check
+//---------------------------------------------------------------------------
+class ibMcpToolQueryCheck : public ibMcpTool {
+public:
+
+	wxString GetName() const override { return wxT("query_check"); }
+
+	wxString GetActivity(const ibDataNode& params) const override
+	{
+		return ibMcpText("checking a query against the configuration");
+	}
+
+	wxString GetDescription() const override
+	{
+		return ibMcpText("Read a query the way the engine will: parse it, then resolve every name in it "
+			"against this configuration. ALWAYS ASK THIS BEFORE PUTTING A QUERY IN A MODULE - "
+			"a query lives inside a string, so script_check answers 'ok' for a module whose "
+			"query names a table that does not exist.\n"
+			"It also answers `composer`: whether a COMPOSER could read this query. That is a "
+			"narrower question than `ok`, because a composer reads its query as a nested source "
+			"rather than running it as a statement, and a nested source does not carry every word "
+			"a statement does - TOTALS is the composer's own to place, with report_level and "
+			"report_resource. A JOIN is fine.\n"
+			"And `tableParameters`: each WHERE condition that filters a VIRTUAL TABLE (a balance, "
+			"turnovers, a slice) by fields its own parameters take. Move it INSIDE the table's "
+			"brackets - Balance(&At, Warehouse = &W), BalanceAndTurnovers(&From, &To, , , "
+			"NOT Account.OffBalance) - so the rows are selected before the fold instead of the whole "
+			"register being read and thrown away. Any predicate is taken there: NOT, OR, IN, "
+			"IN (SELECT ...), a walk through a reference.");
+	}
+
+	const std::vector<ibMcpArgument>& Arguments() const override
+	{
+		static const std::vector<ibMcpArgument> s_arguments = { ArgText() };
+		return s_arguments;
+	}
+
+	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	{
+		if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen()) {
+			refusal = ibMcpText("No configuration is open.");
+			return false;
+		}
+
+		wxString text = ArgText().Text(params);
+		if (wxString(text).Trim(true).Trim(false).IsEmpty()) {
+			refusal = ibMcpText("Nothing to check - pass the query text.");
+			return false;
+		}
+
+		wxString complaint;
+		wxString stage;
+		s32      line = 0;
+		s32      column = 0;
+
+		// Kept beyond the try: the composer verdict below is read off the AST that was just
+		// parsed, rather than off the text — a JOIN inside a string literal is not a join.
+		ibQueryPackage package;
+
+		try {
+			ibQueryParser parser;
+			package = parser.ParsePackage(text);
+
+			// AGAINST THIS CONFIGURATION, and said so explicitly. A query in a
+			// module sets no scope of its own and still means the tree it lives in;
+			// here the tree is named, because a tool is not standing inside one.
+			const ibSourceMetaDataScope resolveAgainst(activeMetaData);
+			ibQueryLowering::CheckNames(package, std::map<wxString, ibValue>());
+
+			// ⭐ A SOUND QUERY CAN STILL READ THE WHOLE REGISTER TO ANSWER ABOUT ONE WAREHOUSE. Said beside
+			// the verdict, in the engine's words: which condition stands in the WHERE and which parameter
+			// of the table takes it.
+			std::vector<ibDataValue> advice;
+			for (const wxString& sentence : ibQueryLowering::FiltersAroundVirtualTables(package))
+				advice.push_back(ibDataValue::String(sentence));
+			if (!advice.empty())
+				result.AddField(wxT("tableParameters"), ibDataValue::Array(advice));
+		}
+		// ⚠ TWO DIFFERENT FAILURES, TWO VARIETIES, TOLD APART BY WHICH ARRIVED. The
+		// lowering raises a NAME refusal (the text reads and asks for something that is
+		// not there); the lexer and parser raise a SYNTAX one. Both carry the span,
+		// which is the whole value of this branch of the family existing.
+		//
+		// 🛑 IT USED TO GUESS FROM THE POSITION: 0:0 meant a name, anything else a typo.
+		// That held only while an unresolved source had nowhere to point, and the moment
+		// the parser began recording a source's span (2026-09-02) the guess inverted —
+		// telling an author to hunt for a typo in a query that parses perfectly. The
+		// repair the old comment here asked for is the one that was made.
+		catch (const ibBackendQueryNameException& e) {
+			stage = wxT("names");
+			complaint = e.GetErrorDescription();
+			line = (s32)e.GetLine();
+			column = (s32)e.GetColumn();
+		}
+		catch (const ibBackendQuerySourceException& e) {
+			stage = wxT("syntax");
+			complaint = e.GetErrorDescription();
+			line = (s32)e.GetLine();
+			column = (s32)e.GetColumn();
+		}
+		catch (const ibBackendQueryException& e) {
+			// Parsed, but names something that is not there. query_sources and
+			// query_fields are where the right names come from.
+			stage = wxT("names");
+			complaint = e.GetErrorDescription();
+		}
+		catch (const ibBackendException& e) {
+			stage = wxT("engine");
+			complaint = e.GetErrorDescription();
+		}
+
+		result.AddField(wxT("ok"), ibDataValue::Bool(complaint.IsEmpty()));
+
+		if (complaint.IsEmpty()) {
+
+			// ⭐ CAN A COMPOSER READ THIS? A narrower question than `ok`, because a composer reads
+			// its author's query as a NESTED SOURCE rather than running it as a statement, and a
+			// nested source does not carry every word a statement does.
+			//
+			// 🛑 JOIN IS NOT ONE OF THEM ANY MORE, and the day it was is worth remembering: a
+			// report joining two virtual tables saved, applied, and refused at RUN time with a
+			// message about a subquery and a UNION its author had never written (2026-09-09). The
+			// query was legitimate; the nested-source road simply built its FROM on one table by
+			// hand and had nowhere to put the second. It uses BuildSourceTree now — the statement
+			// road's own — so a join in a composer's query is an ordinary query.
+			//
+			// TOTALS is still the composer's own to place, so it stays here. Asked of the AST, not
+			// of the text: the word TOTALS inside a string literal is not one.
+			wxString cannot;
+
+			for (const ibQueryAstStatement& statement : package.m_statements) {
+
+				const ibQuerySelectPtr select = statement.m_select;
+				if (!select)
+					continue;
+
+				if (select->m_hasTotals) {
+					cannot = ibMcpText("it carries TOTALS");
+					break;
+				}
+			}
+
+			result.AddField(wxT("composer"), ibDataValue::Bool(cannot.IsEmpty()));
+
+			if (!cannot.IsEmpty()) {
+				result.SetValue(wxT("composerNote"), wxString::Format(
+					ibMcpText("Good as a query in a MODULE, but a composer cannot read it: %s, and a "
+					  "composer reads its query as a nested source, which does not carry that yet. "
+					  "Subtotals over a composer are the composer's own to place - report_level "
+					  "groups the rows and report_resource says what each level folds."), cannot));
+			}
+
+			return true;
+		}
+
+		result.SetValue(wxT("stage"), stage);
+		result.SetValue(wxT("problem"), complaint);
+
+		// Only when there is one: 0:0 means the engine had nowhere to point, and
+		// reporting it as a position sends a reader to the first character.
+		if (line > 0 || column > 0) {
+			result.AddField(wxT("line"), ibDataValue::Int((s64)line));
+			result.AddField(wxT("column"), ibDataValue::Int((s64)column));
+		}
+
+		// WHICH QUESTION TO ASK NEXT, said rather than left to be guessed. The two
+		// failures have different remedies and pointing at the wrong one costs a
+		// round trip every time.
+		result.SetValue(wxT("nextStep"), stage == wxT("names")
+			? ibMcpText("A name in the query does not resolve. query_sources lists what can be read "
+			    "from, query_fields what a source has.")
+			: ibMcpText("The engine could not read the text at that position."));
+
+		return true;
+	}
+};
+
+MCP_TOOL_REGISTER(ibMcpToolQueryCheck);

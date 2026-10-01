@@ -38,7 +38,7 @@ public:
 
 	static bool ShowApplyChange(const ibRestructureInfo& info, wxWindow* parent) {
 
-		if (!info.HasRestructureInfo())
+		if (info.IsEmpty())
 			return true;
 
 		ibDialogApplyChange dlg(info, parent);

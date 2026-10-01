@@ -13,7 +13,7 @@ ibPanelMenuBar::ibPanelMenuBar(wxWindow* parent, int id, const wxPoint& pos, con
 	m_sizer->Add(new wxStaticText(this, wxID_ANY, wxT(" ")), 0, wxRIGHT | wxLEFT, 0);
 	mainSizer->Add(m_sizer, 1, wxTOP | wxBOTTOM, 3);
 	SetSizer(mainSizer);
-	SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNFACE));
+	SetBackgroundColour(wxColour(0xB8, 0xC9, 0xD4));  // #B8C9D4 powder blue (was system BTNFACE)
 }
 
 ibPanelMenuBar::~ibPanelMenuBar()

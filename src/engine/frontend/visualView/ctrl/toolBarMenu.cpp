@@ -1,4 +1,4 @@
-#include "toolbar.h"
+#include "toolBar.h"
 
 // Designer-only context menu (right-click on a toolbar in the form
 // editor): offers "Add tool" / "Add separator". Web has no designer

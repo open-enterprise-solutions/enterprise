@@ -1,9 +1,9 @@
-#include "advpropDate.h"
 
 #include <wx/propgrid/advprops.h>
 
 #include "backend/propertyManager/property/propertyDate.h"
-#include "frontend/propertyManager/property/private/prop.h"
+#include "frontend/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
+#include "frontend/propertyManager/property/private/propertyRegistry.h"
 
 // register frontend property 
 class ibPropertyDateLoader
@@ -11,6 +11,9 @@ class ibPropertyDateLoader
 public:
 	ibPropertyDateLoader()
 	{
-		ibPG_IMPLEMENT_PROPERTY_CALLBACK(wxDateProperty, ibPropertyDate::ms_propertyDate);
+		ibPropertyRegistry::Register([](ibPropertyDate* prop) -> wxPGProperty* {
+			// The empty date crosses as an invalid wxDateTime: a picker with no date.
+			return new wxDateProperty(prop->GetLabel(), prop->GetName(), prop->GetValueAsDateTime().ToWxDateTime());
+		});
 	}
 }s_dateLoaderDate;

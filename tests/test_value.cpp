@@ -8,6 +8,72 @@
 
 #include <gtest/gtest.h>
 #include "backend/compiler/value.h"
+#include "backend/compiler/procUnitLambda.h"   // CopyValue — the LET road a script's `r = …` takes
+#include "backend/system/value/valueArray.h"   // ValueHashContract — composite keys
+#include "backend/system/systemManager.h"      // ibValueSystemFunction::Date — the script's door to a date
+#include "backend/serialize/dataBuilder.h"     // ibDataNode — a date packed and unpacked
+
+#include <tuple>     // std::make_tuple — a date's place in its week and year, asked at once
+#include <utility>   // std::move — the ValueMove cases
+
+// ===========================================================================
+// Footprint probe — reports the real sizeof on this build/platform.
+// Not an assertion (the number is informational); run the suite and read
+// the printed line. Used to measure the ibValue memory-reduction arc
+// (Phase 0 baseline → after each phase). See docs/private/value-audit.md.
+// ===========================================================================
+
+TEST(ValueTest, SizeofReport) {
+    RecordProperty("sizeof_ibValue", (int)sizeof(ibValue));
+    RecordProperty("sizeof_ibNumber", (int)sizeof(ibNumber));
+    RecordProperty("sizeof_wxString", (int)sizeof(wxString));
+    std::cout << "[ footprint ] sizeof(ibValue)="  << sizeof(ibValue)
+              << "  sizeof(ibNumber)=" << sizeof(ibNumber)
+              << "  sizeof(wxString)=" << sizeof(wxString) << std::endl;
+    SUCCEED();
+}
+
+// THE COUNT SITS IN THE HOLE BEFORE THE UNION: vptr 8 + two bytes + 2 empty + the count 4 + the union 8.
+// Declared at the end of the class it took a word of its own and a value was 32 bytes on x64. Only the
+// 64-bit layout is pinned: a 32-bit one depends on how the ABI aligns the union's 8-byte member.
+TEST(ValueTest, TheCountSitsInThePaddingBeforeTheUnion) {
+    if (sizeof(void*) == 8)
+        EXPECT_EQ(sizeof(ibValue), 24u);
+}
+
+// ===========================================================================
+// One word for every kind — a string and a number live in the union
+// ===========================================================================
+
+TEST(ValueUnion, ACopyOfAStringSharesItsText) {
+    const ibValue original(wxT("a text longer than the short-string buffer"));
+    const ibValue copy(original);
+    EXPECT_EQ(original.GetString().wc_str(), copy.GetString().wc_str());   // the same characters
+}
+
+TEST(ValueUnion, EveryKindStartsFromAnEmptyWord) {
+    ibValue v(true);
+    v.SetType(ibValueTypes::TYPE_NUMBER);       // a boolean's byte is not read as a number
+    EXPECT_TRUE(v.GetNumber().IsZero());
+    v = wxT("text");
+    v.SetType(ibValueTypes::TYPE_NUMBER);       // nor a string's text
+    EXPECT_TRUE(v.GetNumber().IsZero());
+    v = ibNumber(wxString(wxT("765.3456754567765443343")));
+    v.SetType(ibValueTypes::TYPE_STRING);       // nor a heap-tier number
+    EXPECT_TRUE(v.GetString().IsEmpty());
+}
+
+TEST(ValueUnion, KindChangesOnTheLetRoad) {
+    const ibValue number(ibNumber(wxString(wxT("765.3456754567765443343"))));
+    const ibValue text(wxT("text"));
+    const ibValue flag(true);
+    ibValue slot;
+    for (const ibValue* source : { &number, &text, &flag, &number, &flag, &text }) {
+        CopyValue(slot, *source);
+        EXPECT_EQ(slot.GetType(), source->GetType());
+        EXPECT_TRUE(slot.GetString() == source->GetString());
+    }
+}
 
 // ===========================================================================
 // TYPE_BOOLEAN
@@ -84,6 +150,54 @@ TEST(ValueTest, EmptyString) {
     EXPECT_TRUE(v.GetString().IsEmpty());
 }
 
+// ---------------------------------------------------------------------------
+// Character POINTERS must land as strings, not as Boolean.
+//
+// Every test above hands ibValue a wxString, which is exactly why none of them
+// caught this: a raw `const char*` / `const wchar_t*` has a STANDARD conversion
+// to bool, which outranks the user-defined one to wxString. With the string
+// ctors declared `char*` (non-const), `ibValue v = wxEmptyString` — and
+// wxEmptyString IS a `const wxChar*` — silently produced Boolean TRUE, and
+// GetString() then answered "True" instead of "". That reached a user as a
+// document numbered "True0000001" (2026-08-03).
+//
+// The same trap had already been found once for `const ibValue*` and closed
+// with an overload there; these pin the character-pointer half of the family.
+// ---------------------------------------------------------------------------
+
+TEST(ValueTest, EmptyStringPointerIsStringNotBoolean) {
+    ibValue v = wxEmptyString;
+    EXPECT_EQ(v.GetType(), ibValueTypes::TYPE_STRING);
+    EXPECT_TRUE(v.GetString().IsEmpty());
+    EXPECT_NE(v.GetString(), wxT("True"));
+}
+
+TEST(ValueTest, WideLiteralIsStringNotBoolean) {
+    ibValue v = wxT("text");
+    EXPECT_EQ(v.GetType(), ibValueTypes::TYPE_STRING);
+    EXPECT_EQ(v.GetString(), wxT("text"));
+}
+
+TEST(ValueTest, NarrowLiteralIsStringNotBoolean) {
+    ibValue v = "narrow";
+    EXPECT_EQ(v.GetType(), ibValueTypes::TYPE_STRING);
+    EXPECT_EQ(v.GetString(), wxT("narrow"));
+}
+
+TEST(ValueTest, AssignEmptyStringPointerIsStringNotBoolean) {
+    ibValue v(ibNumber(1));
+    v = wxEmptyString;
+    EXPECT_EQ(v.GetType(), ibValueTypes::TYPE_STRING);
+    EXPECT_TRUE(v.GetString().IsEmpty());
+}
+
+TEST(ValueTest, AssignWideLiteralIsStringNotBoolean) {
+    ibValue v(ibNumber(1));
+    v = wxT("assigned");
+    EXPECT_EQ(v.GetType(), ibValueTypes::TYPE_STRING);
+    EXPECT_EQ(v.GetString(), wxT("assigned"));
+}
+
 // ===========================================================================
 // TYPE_DATE
 // ===========================================================================
@@ -91,21 +205,165 @@ TEST(ValueTest, EmptyString) {
 TEST(ValueTest, DateFromComponents) {
     ibValue v(2025, 1, 15, 10, 30, 0);
     EXPECT_EQ(v.GetType(), ibValueTypes::TYPE_DATE);
-    int y, m, d;
-    v.FromDate(y, m, d);
-    EXPECT_EQ(y, 2025);
-    EXPECT_EQ(m, 1);
-    EXPECT_EQ(d, 15);
+    EXPECT_EQ(ibDateTime(2025, 1, 15, 10, 30), v.GetDate());
+    EXPECT_EQ(2025, ibValueSystemFunction::GetYear(v));
+    EXPECT_EQ(1, ibValueSystemFunction::GetMonth(v));
+    EXPECT_EQ(15, ibValueSystemFunction::GetDay(v));
 }
 
 TEST(ValueTest, DateFromDateTime) {
     wxDateTime dt(15, wxDateTime::Jan, 2025, 10, 30, 0);
-    ibValue v(dt);
+    ibValue v(ibDateTime::OfWxDateTime(dt));
     EXPECT_EQ(v.GetType(), ibValueTypes::TYPE_DATE);
-    wxDateTime recovered = v.GetDateTime();
+    wxDateTime recovered = v.GetDate().ToWxDateTime();
     EXPECT_EQ(recovered.GetYear(), 2025);
     EXPECT_EQ(recovered.GetMonth(), wxDateTime::Jan);
     EXPECT_EQ(recovered.GetDay(), 15);
+}
+
+// ⭐⭐ A DATE IS A WALL-CLOCK READING (fdatetime.h) - the number a date holds is what a calendar and a
+// clock show, and it is the same number wherever it is computed. Nothing below consults the
+// machine's clock or zone: every expected value is written out as parts.
+
+// The empty date is one value on every clock: Date(1, 1, 1) IS it, whichever zone the process
+// stands in. (It used to be the instant of that midnight on a UTC+2 machine, and a UTC runner built
+// a different number for the same parts - so `d = Date(1, 1, 1)` for "no date" held on one machine
+// and not on the next.)
+TEST(ValueTest, TheEmptyDateIsOneValueOnEveryClock) {
+    EXPECT_TRUE(ibValue(1, 1, 1, 0, 0, 0).IsEmpty());
+    EXPECT_TRUE(ibValue(1, 1, 1).GetDate().IsEmpty());
+    EXPECT_FALSE(ibValue(1, 1, 1, 0, 0, 1).IsEmpty());   // a second past the empty date is a date
+    EXPECT_FALSE(ibValue(1, 1, 2).IsEmpty());
+    EXPECT_FALSE(ibValue(1, 2, 1).IsEmpty());
+    EXPECT_TRUE(ibValue(ibValueTypes::TYPE_DATE).IsEmpty());
+    EXPECT_TRUE(ibValue(ibDateTime()).IsEmpty());
+
+    // The script's Date(), a text read as a date and the wxDateTime bridge all give the same reading.
+    EXPECT_TRUE(ibValueSystemFunction::Date(1, 1, 1, 0, 0, 0).IsEmpty());
+    EXPECT_FALSE(ibValueSystemFunction::Date(1, 1, 1, 0, 0, 1).IsEmpty());
+    ibValue text;
+    EXPECT_TRUE(text.SetDate(wxT("01.01.0001 00:00:00")));
+    EXPECT_TRUE(text.IsEmpty());
+    EXPECT_TRUE(text.SetDate(wxT("00010101")));
+    EXPECT_TRUE(text.IsEmpty());
+    EXPECT_TRUE(text.SetDate(wxT("00010101000001")));
+    EXPECT_FALSE(text.IsEmpty());
+    EXPECT_TRUE(ibValue(ibDateTime::OfWxDateTime(wxDateTime())).IsEmpty());   // an invalid wxDateTime crosses as the empty date
+    EXPECT_FALSE(ibValue(ibValueTypes::TYPE_DATE).GetDate().ToWxDateTime().IsValid());   // ...and back
+    EXPECT_EQ(wxT("01.01.0001 00:00:00"), ibValue(ibValueTypes::TYPE_DATE).GetString());
+}
+
+// The reading holds the parts exactly - including a time that does not exist on the machine's own
+// clock. 02:30 on 2026-03-29 is the hour the clocks skip in most of Europe; a date that was an instant
+// could not hold it there, and a wxDateTime still cannot. The value can.
+TEST(ValueTest, ADateHoldsItsPartsWhateverTheMachineClockDoes) {
+    const ibValue gap(2026, 3, 29, 2, 30, 0);
+    EXPECT_EQ(ibDateTime(2026, 3, 29, 2, 30), gap.GetDate());
+    EXPECT_EQ(wxT("29.03.2026 02:30:00"), gap.GetString());
+    EXPECT_EQ(2, ibValueSystemFunction::GetHour(gap));
+    EXPECT_EQ(30, ibValueSystemFunction::GetMinute(gap));
+    EXPECT_EQ(0, ibValueSystemFunction::GetSecond(gap));
+
+    // An hour of seconds added is an hour on the wall; a day is 86 400 seconds, the morning the
+    // clocks go forward included; the difference of two dates is counted the same way.
+    EXPECT_EQ(ibDateTime(2026, 3, 29, 3, 30), gap.GetDate().AddMilliseconds(3600 * 1000));
+    EXPECT_EQ(ibDateTime(2026, 3, 30), ibDateTime(2026, 3, 29).AddMilliseconds(86400 * 1000));
+    EXPECT_EQ(86400 * 1000, ibDateTime(2026, 3, 30) - ibDateTime(2026, 3, 29));
+    EXPECT_EQ(ibDateTime(2026, 3, 28, 23, 0), ibDateTime(2026, 3, 29).AddMilliseconds(-3600 * 1000));
+
+    // The text of the reading reads back as the same reading - by digits, not through a clock.
+    ibValue read;
+    EXPECT_TRUE(read.SetDate(gap.GetString()));
+    EXPECT_EQ(gap.GetDate(), read.GetDate());
+    EXPECT_EQ(gap.GetDate(), ibValue(wxT("29.03.2026 02:30:00")).GetDate());   // the string branch of GetDate
+
+    // Two readings compare by the calendar, and a date hashes as its reading.
+    EXPECT_TRUE(ibValue(2026, 3, 29, 2, 30, 0).CompareValueLS(ibValue(2026, 3, 29, 3, 30, 0)) < 0);
+    EXPECT_EQ(ibValue(2026, 3, 29, 2, 30, 0).GetValueHash(), gap.GetValueHash());
+}
+
+// The doors a text comes through: the reference system's forms by digits, the free-form reader for
+// the rest, and a day the calendar does not have refused at every one of them.
+TEST(ValueTest, ATextBecomesADateByItsDigits) {
+    ibValue v;
+    EXPECT_TRUE(v.SetDate(wxT("15.03.2026")));            EXPECT_EQ(ibDateTime(2026, 3, 15), v.GetDate());
+    EXPECT_TRUE(v.SetDate(wxT("5.3.2026 9:5:7")));         EXPECT_EQ(ibDateTime(2026, 3, 5, 9, 5, 7), v.GetDate());
+    EXPECT_TRUE(v.SetDate(wxT("15.03.2026 23:59:59")));   EXPECT_EQ(ibDateTime(2026, 3, 15, 23, 59, 59), v.GetDate());
+    EXPECT_TRUE(v.SetDate(wxT("20260315")));              EXPECT_EQ(ibDateTime(2026, 3, 15), v.GetDate());
+    EXPECT_TRUE(v.SetDate(wxT("20260315235959")));        EXPECT_EQ(ibDateTime(2026, 3, 15, 23, 59, 59), v.GetDate());
+    EXPECT_TRUE(v.SetDate(wxT("29.02.2024")));            EXPECT_EQ(ibDateTime(2024, 2, 29), v.GetDate());
+    EXPECT_TRUE(v.SetDate(wxEmptyString));                EXPECT_TRUE(v.IsEmpty());
+    EXPECT_FALSE(v.SetDate(wxT("29.02.2023")));   // not a leap year
+    EXPECT_FALSE(v.SetDate(wxT("31.04.2026")));
+    EXPECT_FALSE(v.SetDate(wxT("15.13.2026")));
+    EXPECT_FALSE(v.SetDate(wxT("15.03.2026 24:00:00")));
+    EXPECT_FALSE(v.SetDate(wxT("20260231")));
+    EXPECT_FALSE(v.SetDate(wxT("not a date at all")));
+    // The same text through the string branch of GetDate - one reading, not two.
+    EXPECT_EQ(ibDateTime(2026, 3, 15), ibValue(wxT("20260315")).GetDate());
+    EXPECT_TRUE(ibValue(wxT("31.04.2026")).GetDate().IsEmpty());
+    // Parts that are no date are the empty date, not a rolled-over one.
+    EXPECT_TRUE(ibValue(2026, 2, 30).IsEmpty());
+    EXPECT_TRUE(ibValue(2026, 13, 1).IsEmpty());
+    EXPECT_TRUE(ibValue(2026, 3, 15, 24, 0, 0).IsEmpty());
+}
+
+// The day's place in the week and the year, ISO-numbered, off the same reading as the date - asked the
+// way a script asks it.
+TEST(ValueTest, ADateKnowsItsWeekAndItsDayOfTheYear) {
+    const auto place = [](const ibValue& date) {
+        return std::make_tuple(ibValueSystemFunction::GetDayOfWeek(date), ibValueSystemFunction::GetDayOfYear(date),
+            ibValueSystemFunction::GetWeekOfYear(date));
+    };
+    EXPECT_EQ(std::make_tuple(1, 1, 1), place(ibValue(2024, 1, 1)));        // a Monday, week 1
+    EXPECT_EQ(std::make_tuple(7, 3, 53), place(ibValue(2021, 1, 3)));       // a Sunday, still week 53 of 2020
+    EXPECT_EQ(std::make_tuple(1, 365, 1), place(ibValue(2024, 12, 30)));    // a Monday, already week 1 of 2025
+    EXPECT_EQ(std::make_tuple(2, 366, 1), place(ibValue(2024, 12, 31)));
+    EXPECT_EQ(4, ibValueSystemFunction::GetQuartOfYear(ibValue(2024, 12, 31)));
+    // BegOfWeek / EndOfWeek stand on it: the Monday of the week and the last second of its Sunday.
+    EXPECT_EQ(ibDateTime(2026, 3, 23), ibValueSystemFunction::BegOfWeek(ibValue(2026, 3, 29, 2, 30, 0)).GetDate());
+    EXPECT_EQ(ibDateTime(2026, 3, 29, 23, 59, 59), ibValueSystemFunction::EndOfWeek(ibValue(2026, 3, 23, 10, 0, 0)).GetDate());
+}
+
+// The script's period functions ask the date, and answer what the query's BEGINOFPERIOD / ENDOFPERIOD
+// answer: an end is the last second of its period, and a month after the 31st is the last day of the
+// next, at the same time of day.
+TEST(ValueTest, TheScriptsPeriodsAreTheDatesOwn) {
+    const ibValue d(2024, 8, 17, 14, 5, 9);
+    EXPECT_EQ(ibDateTime(2024, 8, 1), ibValueSystemFunction::BegOfMonth(d).GetDate());
+    EXPECT_EQ(ibDateTime(2024, 8, 31, 23, 59, 59), ibValueSystemFunction::EndOfMonth(d).GetDate());
+    EXPECT_EQ(ibDateTime(2024, 7, 1), ibValueSystemFunction::BegOfQuart(d).GetDate());
+    EXPECT_EQ(ibDateTime(2024, 9, 30, 23, 59, 59), ibValueSystemFunction::EndOfQuart(d).GetDate());
+    EXPECT_EQ(ibDateTime(2024, 1, 1), ibValueSystemFunction::BegOfYear(d).GetDate());
+    EXPECT_EQ(ibDateTime(2024, 12, 31, 23, 59, 59), ibValueSystemFunction::EndOfYear(d).GetDate());
+    EXPECT_EQ(ibDateTime(2024, 8, 17), ibValueSystemFunction::BegOfDay(d).GetDate());
+    EXPECT_EQ(ibDateTime(2024, 8, 17, 23, 59, 59), ibValueSystemFunction::EndOfDay(d).GetDate());
+    EXPECT_EQ(ibDateTime(2024, 2, 29, 10, 30), ibValueSystemFunction::AddMonth(ibValue(2024, 1, 31, 10, 30, 0), 1).GetDate());
+    EXPECT_EQ(ibDateTime(2023, 11, 30), ibValueSystemFunction::AddMonth(ibValue(2024, 1, 31), -2).GetDate());
+    // The working date is a day: its midnight, with no time of day (and no milliseconds) left over.
+    const ibDateTime working = ibValueSystemFunction::WorkingDate().GetDate();
+    EXPECT_EQ(working.GetDayStart(), working);
+}
+
+// A date packed into a node and unpacked is the same reading: the number travels, no zone with it.
+TEST(ValueTest, ADatePackedIntoANodeComesBackAsTheSameReading) {
+    const ibValue written(2026, 3, 29, 2, 30, 0);
+    ibDataNode node;
+    ASSERT_TRUE(written.Serialize(node));
+    ibValue read(ibValueTypes::TYPE_DATE);   // Deserialize fills a value whose type the node's creator already resolved
+    ASSERT_TRUE(read.Deserialize(node));
+    EXPECT_EQ(ibValueTypes::TYPE_DATE, read.GetType());
+    EXPECT_EQ(written.GetDate(), read.GetDate());
+    const ibDataValue* stored = node.FindField(kValueFieldData);
+    ASSERT_TRUE(stored != nullptr && stored->Kind() == ibDataKind::Date);
+    EXPECT_EQ(ibDateTime(2026, 3, 29, 2, 30), stored->AsDate());
+
+    const ibValue none(ibValueTypes::TYPE_DATE);
+    ibDataNode empty;
+    ASSERT_TRUE(none.Serialize(empty));
+    ibValue readEmpty(ibValueTypes::TYPE_DATE);
+    ASSERT_TRUE(readEmpty.Deserialize(empty));
+    EXPECT_TRUE(readEmpty.IsEmpty());
 }
 
 // ===========================================================================
@@ -188,4 +446,430 @@ TEST(ValueTest, SetTypeChangesType) {
     EXPECT_EQ(v.GetType(), ibValueTypes::TYPE_NUMBER);
     v.SetType(ibValueTypes::TYPE_STRING);
     EXPECT_EQ(v.GetType(), ibValueTypes::TYPE_STRING);
+}
+
+// ===========================================================================
+// TYPE_CONST_REFFER — non-owning, read-only reference (const-meta refactor).
+//
+// Guards the trap where `value = someConstPtr` (e.g. a const ibValueMetaObject*
+// from GetMetaObject()) silently bound to operator=(bool) — const ptr -> bool —
+// and turned the object into a Boolean. The new operator=(const ibValue*) stores
+// it as TYPE_CONST_REFFER: weak (no ref-count, Reset never deletes), read-only,
+// but read paths delegate to the object. See docs/private/value-const-reffer.md.
+// ===========================================================================
+
+namespace {
+// Minimal aggregate used as a const-ref target. Tracks its own destruction so a
+// test can assert the const-ref never deletes a non-owned object, and overrides
+// GetString so we can verify read delegation reaches the object.
+class ConstRefProbe : public ibValue {
+public:
+    explicit ConstRefProbe(bool* deletedFlag)
+        : ibValue(ibValueTypes::TYPE_VALUE, false), m_deleted(deletedFlag) {}
+    ~ConstRefProbe() override { if (m_deleted) *m_deleted = true; }
+    ibString GetString() const override { return wxT("PROBE"); }
+private:
+    bool* m_deleted;
+};
+} // namespace
+
+TEST(ValueConstRef, AssignConstPtrBindsReferenceNotBoolean) {
+    bool deleted = false;
+    ConstRefProbe probe(&deleted);
+    const ibValue* cp = &probe;
+    ibValue v;
+    v = cp;  // must pick operator=(const ibValue*), NOT operator=(bool)
+    // GetType() delegates through the reference, so check the slot's own kind.
+    EXPECT_TRUE(v.IsConstReference());
+    EXPECT_EQ(v.GetRef(), &probe);   // resolves to the object, not a Boolean
+}
+
+TEST(ValueConstRef, Predicates) {
+    bool deleted = false;
+    ConstRefProbe probe(&deleted);
+    ibValue v; v = static_cast<const ibValue*>(&probe);
+    EXPECT_TRUE(v.IsReference());
+    EXPECT_TRUE(v.IsConstReference());
+}
+
+TEST(ValueConstRef, ReadDelegatesToObject) {
+    bool deleted = false;
+    ConstRefProbe probe(&deleted);
+    ibValue v; v = static_cast<const ibValue*>(&probe);
+    EXPECT_EQ(v.GetRef(), &probe);                  // resolve reaches the object
+    EXPECT_TRUE(v.GetString() == wxT("PROBE"));     // read delegates through union
+}
+
+TEST(ValueConstRef, ResetDoesNotDeleteNonOwned) {
+    bool deleted = false;
+    ConstRefProbe* probe = new ConstRefProbe(&deleted);
+    {
+        ibValue v;
+        v = static_cast<const ibValue*>(probe);
+        v.Reset();                 // must NOT DecrRef/delete the non-owned object
+        EXPECT_FALSE(deleted);
+    }                              // ibValue dtor — also must not delete
+    EXPECT_FALSE(deleted);
+    delete probe;                  // we own it
+    EXPECT_TRUE(deleted);
+}
+
+TEST(ValueConstRef, SlotStaysReassignable) {
+    // Reset excludes TYPE_CONST_REFFER from the write-denied throw, so a slot
+    // holding a const-ref can be reassigned (unlike a true const literal).
+    bool deleted = false;
+    ConstRefProbe probe(&deleted);
+    ibValue v; v = static_cast<const ibValue*>(&probe);
+    ibValue n(42);
+    EXPECT_NO_THROW(v = n);
+    EXPECT_EQ(v.GetType(), ibValueTypes::TYPE_NUMBER);
+    EXPECT_FALSE(deleted);          // reassign didn't delete the non-owned object
+}
+
+TEST(ValueConstRef, CopyIsWeakAndReadOnly) {
+    bool deleted = false;
+    ConstRefProbe probe(&deleted);
+    ibValue v; v = static_cast<const ibValue*>(&probe);
+    ibValue copy(v);                // copy ctor → weak, no IncrRef
+    EXPECT_TRUE(copy.IsConstReference());
+    EXPECT_EQ(copy.GetRef(), &probe);
+    EXPECT_FALSE(deleted);
+}
+
+// ===========================================================================
+// THE LET ROAD RELEASES WHAT THE VARIABLE HELD — CopyValue(ibValue&, const ibValue&), the one a
+// script's `r = …` takes (OPER_LET reads its source const). It overwrote an object reference without
+// the DecrRef the mutable overload and the destructor both make, so an object a variable held before
+// an assignment outlived it for ever: a record set line kept its set and the set its rows, ~5 KB per
+// register row a posting wrote (measured 2026-09-10, a data breakpoint on the line's count).
+// ===========================================================================
+
+TEST(ValueLet, AssigningOverAnObjectReleasesIt) {
+    bool deleted = false;
+    ibValue slot;
+    slot = static_cast<ibValue*>(new ConstRefProbe(&deleted));   // the slot holds the only reference
+    const ibValue undefined;
+    CopyValue(slot, undefined);                                  // `r = Undefined`
+    EXPECT_TRUE(deleted);
+    EXPECT_EQ(slot.GetType(), ibValueTypes::TYPE_EMPTY);
+}
+
+TEST(ValueLet, AssigningAnotherObjectReleasesTheFirst) {
+    bool firstDeleted = false, secondDeleted = false;
+    ibValue slot; slot = static_cast<ibValue*>(new ConstRefProbe(&firstDeleted));
+    ibValue other; other = static_cast<ibValue*>(new ConstRefProbe(&secondDeleted));
+    CopyValue(slot, static_cast<const ibValue&>(other));         // `r = other`
+    EXPECT_TRUE(firstDeleted);
+    EXPECT_FALSE(secondDeleted);                                 // held twice now
+    slot.Reset();
+    other.Reset();
+    EXPECT_TRUE(secondDeleted);
+}
+
+TEST(ValueLet, AssigningAVariableToItselfKeepsItsObject) {
+    bool deleted = false;
+    ibValue slot; slot = static_cast<ibValue*>(new ConstRefProbe(&deleted));
+    CopyValue(slot, static_cast<const ibValue&>(slot));          // `x = x` — the copy comes first
+    EXPECT_FALSE(deleted);
+    slot.Reset();
+    EXPECT_TRUE(deleted);
+}
+
+// The move road the same way: MoveValue stamped the moved value over the destination's own object
+// and never let it go — the LET defect, on a function no caller had reached yet.
+TEST(ValueMove, MovingOverAnObjectReleasesIt) {
+    bool deleted = false;
+    ibValue slot; slot = static_cast<ibValue*>(new ConstRefProbe(&deleted));
+    MoveValue(std::move(slot), ibValue(42));
+    EXPECT_TRUE(deleted);
+    EXPECT_EQ(slot.GetType(), ibValueTypes::TYPE_NUMBER);
+}
+
+TEST(ValueMove, MovingAReferenceLeavesOneHolder) {
+    bool deleted = false;
+    ibValue source; source = static_cast<ibValue*>(new ConstRefProbe(&deleted));
+    ibValue slot;
+    MoveValue(std::move(slot), std::move(source));
+    EXPECT_FALSE(deleted);                                       // the destination holds it now
+    EXPECT_EQ(source.GetType(), ibValueTypes::TYPE_EMPTY);
+    slot.Reset();
+    EXPECT_TRUE(deleted);
+}
+
+// ===========================================================================
+// NULL vs EMPTY — TYPE_NULL is a SQL null (the driver yields it); TYPE_EMPTY is
+// Undefined (a composite with no type chosen yet). They are DISTINCT, and the
+// query NULL semantics (test_queryParity) rely on the distinction.
+// ===========================================================================
+
+TEST(ValueNull, EmptyIsNotNull) {
+    ibValue v;
+    EXPECT_EQ(v.GetType(), ibValueTypes::TYPE_EMPTY);
+    EXPECT_TRUE(v.IsEmpty());
+    EXPECT_FALSE(v.IsNull());
+}
+
+TEST(ValueNull, SqlNullIsNull) {
+    ibValue v(ibValueTypes::TYPE_NULL);
+    EXPECT_EQ(v.GetType(), ibValueTypes::TYPE_NULL);
+    EXPECT_TRUE(v.IsNull());
+}
+
+TEST(ValueNull, EmptyAndNullAreDistinctTypes) {
+    EXPECT_NE(ibValue().GetType(), ibValue(ibValueTypes::TYPE_NULL).GetType());
+}
+
+// ===========================================================================
+// Primitive value accessors (typed reads)
+// ===========================================================================
+
+TEST(ValueAccess, NumberReadsBack) {
+    ibValue v(ibNumber(42));
+    EXPECT_EQ(v.GetType(), ibValueTypes::TYPE_NUMBER);
+    EXPECT_EQ(v.GetInteger(), 42);
+    EXPECT_EQ(v.GetNumber(), ibNumber(42));
+}
+
+TEST(ValueAccess, BooleanReadsBack) {
+    EXPECT_TRUE(ibValue(true).GetBoolean());
+    EXPECT_FALSE(ibValue(false).GetBoolean());
+}
+
+TEST(ValueAccess, StringReadsBack) {
+    EXPECT_EQ(ibValue(wxString(wxT("hi"))).GetString(), wxT("hi"));
+}
+
+// ===========================================================================
+// GetValueHash — deterministic per value (it keys every hash index in the
+// engine); distinct values must not collide on the obvious cases.
+//
+// These used to test GetHashKey, the rendered wxString identity. That one was
+// removed on 2026-08-15 — a value's identity is the value, and the hash is
+// bound to CompareValueLS instead (see ValueHashContract below for the rule
+// that binding has to satisfy).
+// ===========================================================================
+
+TEST(ValueHash, DeterministicForSameValue) {
+    EXPECT_EQ(ibValue(ibNumber(7)).GetValueHash(), ibValue(ibNumber(7)).GetValueHash());
+    EXPECT_EQ(ibValue(wxString(wxT("k"))).GetValueHash(),
+              ibValue(wxString(wxT("k"))).GetValueHash());
+}
+
+TEST(ValueHash, DiffersForDifferentNumbers) {
+    EXPECT_NE(ibValue(ibNumber(1)).GetValueHash(), ibValue(ibNumber(2)).GetValueHash());
+}
+
+// ===========================================================================
+// Ordering ACROSS kinds — a scalar and a string are separated, not compared.
+//
+// Neither coercion states a fact about such a pair: "abc" read as a number is
+// 0, and 1 read as text is "1". So the order places the two kinds in different
+// stretches (numeric-ish first, text after) and only compares payloads within a
+// kind. Totality is the point — std::map keys and std::sort need every pair
+// placed — and these tests are what says the placement was chosen, not stumbled
+// into by whichever coercion the left-hand tag happened to trigger.
+//
+// Coercion survives WITHIN the numeric-ish kinds, where it is a fact: True is 1.
+// ===========================================================================
+
+TEST(ValueOrderAcrossKinds, NumberOrdersBeforeString) {
+    EXPECT_TRUE (ibValue(1) < ibValue(wxString(wxT("abc"))));
+    EXPECT_FALSE(ibValue(wxString(wxT("abc"))) < ibValue(1));
+}
+
+// The case that pins the rule down: with coercion, "0" would become 0 and this
+// would read false. The kinds are apart, so the digits in the string are not
+// consulted at all.
+TEST(ValueOrderAcrossKinds, NumberOrdersBeforeStringThatLooksSmaller) {
+    EXPECT_TRUE (ibValue(1) < ibValue(wxString(wxT("0"))));
+    EXPECT_FALSE(ibValue(wxString(wxT("0"))) < ibValue(1));
+}
+
+TEST(ValueOrderAcrossKinds, BooleanOrdersBeforeString) {
+    EXPECT_TRUE (ibValue(true) < ibValue(wxString(wxT("True"))));
+    EXPECT_FALSE(ibValue(wxString(wxT("True"))) < ibValue(true));
+}
+
+// A BOOLEAN AND A NUMBER NO LONGER MEET ON VALUE, and that is a fix rather than
+// a loss. The old rule read both sides as whatever the LEFT tag said, so any
+// non-zero number was equal to True — which makes the order NON-TRANSITIVE
+// (True == 2, True == 3, 2 != 3) and a non-transitive comparator is undefined
+// behaviour under std::sort, not merely surprising. Booleans occupy their own
+// stretch of the order now; every boolean sorts before every number.
+//
+// Arithmetic is untouched: `True + 1` still coerces. This is about ORDER only.
+TEST(ValueOrderAcrossKinds, BooleanAndNumberAreSeparatedNotCoerced) {
+    EXPECT_TRUE (ibValue(true)  < ibValue(2));    // by rank: boolean before number
+    EXPECT_TRUE (ibValue(false) < ibValue(0));    // even against zero
+    EXPECT_FALSE(ibValue(2) < ibValue(true));
+    // ...and inside the boolean rank the value still decides.
+    EXPECT_TRUE (ibValue(false) < ibValue(true));
+    EXPECT_FALSE(ibValue(true)  < ibValue(false));
+}
+
+// The transitivity the separation buys, stated as the property it is: nothing
+// may compare equal to two values that differ from each other.
+TEST(ValueOrderAcrossKinds, EqualityUnderOrderIsTransitive) {
+    const ibValue samples[] = {
+        ibValue(), ibValue(true), ibValue(false), ibValue(0), ibValue(1), ibValue(2),
+        ibValue(ibNumber(1.0)), ibValue(wxString(wxT("1"))), ibValue(wxString(wxT("abc"))),
+    };
+    for (const ibValue& a : samples)
+        for (const ibValue& b : samples)
+            for (const ibValue& c : samples)
+                if (a.CompareValueLS(b) == 0 && b.CompareValueLS(c) == 0)
+                    EXPECT_EQ(a.CompareValueLS(c), 0)
+                        << "'" << a.GetString().ToStdString() << "' == '"
+                        << b.GetString().ToStdString() << "' == '"
+                        << c.GetString().ToStdString() << "', but not the first and last";
+}
+
+TEST(ValueOrderAcrossKinds, EmptySortsBelowEverything) {
+    EXPECT_TRUE(ibValue() < ibValue(1));
+    EXPECT_TRUE(ibValue() < ibValue(wxString(wxT("a"))));
+}
+
+// Equality is type-strict and stays so: it never had the coercion the order is
+// giving up here, and `1` was never equal to "1".
+TEST(ValueOrderAcrossKinds, EqualityRemainsTypeStrict) {
+    EXPECT_FALSE(ibValue(1) == ibValue(wxString(wxT("1"))));
+    EXPECT_TRUE (ibValue(1) != ibValue(wxString(wxT("1"))));
+}
+
+// '<>' is '=' negated now, so the two can no longer answer differently about
+// one pair — which is what they could do while each carried its own switch.
+TEST(ValueOrderAcrossKinds, NotEqualIsExactlyTheNegationOfEqual) {
+    const ibValue samples[] = {
+        ibValue(), ibValue(1), ibValue(true), ibValue(wxString(wxT("1"))), ibValue(wxString(wxT("x"))),
+    };
+    for (const ibValue& a : samples)
+        for (const ibValue& b : samples)
+            EXPECT_NE(a.CompareValueEQ(b), a.CompareValueNE(b));
+}
+
+// ===========================================================================
+// Comparison THROUGH A REFERENCE.
+//
+// A value that arrives by reffer must answer exactly as the value itself: `=`
+// cannot depend on how the operand was passed. Two accessors keep that true and
+// they are NOT interchangeable — GetType() follows the reffer chain to what the
+// value IS, while the raw m_typeClass tag says only where the bytes are, and is
+// consulted purely to decide whether a payload can be read off the field.
+//
+// These are the tests that catch a "read the field directly" optimisation that
+// forgot the distinction: swap one GetType() for the raw tag and the equalities
+// below turn false while everything else in the suite stays green.
+//
+// Ownership: the reffer holds the only count on its target and drops it on
+// scope exit (ibValue::DecrRef), so `ibValue(new ibValue(...))` leaks nothing.
+// ===========================================================================
+
+TEST(ValueThroughReference, NumberEqualsAReferenceToTheSameNumber) {
+    const ibValue direct(7);
+    const ibValue viaRef(new ibValue(7));
+    EXPECT_TRUE (direct.CompareValueEQ(viaRef));
+    EXPECT_TRUE (viaRef.CompareValueEQ(direct));
+    EXPECT_FALSE(direct.CompareValueNE(viaRef));
+}
+
+TEST(ValueThroughReference, StringEqualsAReferenceToTheSameString) {
+    const ibValue direct(wxString(wxT("abc")));
+    const ibValue viaRef(new ibValue(wxString(wxT("abc"))));
+    EXPECT_TRUE(direct.CompareValueEQ(viaRef));
+    EXPECT_TRUE(viaRef.CompareValueEQ(direct));
+}
+
+TEST(ValueThroughReference, OrderingIsTheSameThroughAReference) {
+    const ibValue five(5);
+    const ibValue nineViaRef(new ibValue(9));
+    EXPECT_EQ(five.CompareValueLS(nineViaRef), -1);
+    EXPECT_EQ(nineViaRef.CompareValueLS(five),  1);
+}
+
+// The rank rule has to read through the reffer too, or a number would sort
+// before a bare string and against a referenced one by a different rule.
+TEST(ValueThroughReference, RankRuleReadsThroughAReference) {
+    const ibValue number(1);
+    const ibValue textViaRef(new ibValue(wxString(wxT("0"))));
+    EXPECT_EQ(number.CompareValueLS(textViaRef), -1);
+    EXPECT_EQ(textViaRef.CompareValueLS(number),  1);
+}
+
+TEST(ValueThroughReference, ReferenceToNumberIsNotEqualToItsSpelling) {
+    const ibValue numberViaRef(new ibValue(1));
+    EXPECT_FALSE(numberViaRef.CompareValueEQ(ibValue(wxString(wxT("1")))));
+}
+
+// ===========================================================================
+// THE HASH CONTRACT — order-equal implies hash-equal.
+//
+// GetValueHash exists so a hashed index can replace an ordered one (the LINQ
+// join, procUnitLINQ.cpp). That substitution is only sound while every pair the
+// ORDER calls equal lands in the same bucket; the converse is free, since a
+// collision costs one comparison and nothing else.
+//
+// So this is not a test of a hash function, it is a test of AGREEMENT between
+// two methods that are edited in different files by different people. It walks
+// every pair of a deliberately awkward sample set — the kinds that coerce into
+// each other (True is 1, a date is its instant), the ones that must NOT (a
+// number and its spelling), a reference standing in for its target, and the
+// composites that hash by their contents.
+//
+// A failure here does not mean "the hash is weak". It means an index built on
+// it will silently lose rows.
+// ===========================================================================
+
+TEST(ValueHashContract, OrderEqualImpliesHashEqual) {
+    ibValueArray* arrayA = new ibValueArray();
+    ibValueArray* arrayB = new ibValueArray();
+    for (int i = 1; i <= 3; ++i) { arrayA->Add(ibValue(i)); arrayB->Add(ibValue(i)); }
+
+    const ibValue samples[] = {
+        ibValue(),                                   // Undefined
+        ibValue(0), ibValue(1), ibValue(2),
+        ibValue(ibNumber(1.0)),                      // the same number as 1
+        ibValue(ibNumber(1.5)),                      // shares 1's bucket, differs in order
+        ibValue(true), ibValue(false),               // True coerces to 1
+        ibValue(wxString(wxT("1"))),                 // NOT the number 1
+        ibValue(wxString(wxT("abc"))),
+        ibValue(new ibValue(1)),                     // a reference to 1
+        ibValue(new ibValue(wxString(wxT("abc")))),  // a reference to "abc"
+        ibValue(static_cast<ibValue*>(arrayA)),
+        ibValue(static_cast<ibValue*>(arrayB)),      // equal contents, separate object
+    };
+
+    for (const ibValue& a : samples) {
+        for (const ibValue& b : samples) {
+            if (a.CompareValueLS(b) != 0)
+                continue;
+            EXPECT_EQ(a.GetValueHash(), b.GetValueHash())
+                << "order-equal values hash apart: '" << a.GetString().ToStdString()
+                << "' vs '" << b.GetString().ToStdString() << "'";
+        }
+    }
+}
+
+// The two the join actually leans on, stated on their own so a failure names
+// itself instead of arriving as one line of the sweep above.
+TEST(ValueHashContract, TrailingZeroHashesWithTheInteger) {
+    EXPECT_EQ(ibValue(1).GetValueHash(), ibValue(ibNumber(1.0)).GetValueHash());
+}
+
+TEST(ValueHashContract, ReferenceHashesAsItsTarget) {
+    EXPECT_EQ(ibValue(7).GetValueHash(), ibValue(new ibValue(7)).GetValueHash());
+    EXPECT_EQ(ibValue(wxString(wxT("k"))).GetValueHash(),
+              ibValue(new ibValue(wxString(wxT("k")))).GetValueHash());
+}
+
+TEST(ValueHashContract, ArraysWithEqualContentsHashAlike) {
+    ibValueArray* a = new ibValueArray();
+    ibValueArray* b = new ibValueArray();
+    for (int i = 0; i < 4; ++i) { a->Add(ibValue(i)); b->Add(ibValue(i)); }
+    const ibValue va(static_cast<ibValue*>(a));
+    const ibValue vb(static_cast<ibValue*>(b));
+    ASSERT_EQ(va.CompareValueLS(vb), 0);
+    EXPECT_EQ(va.GetValueHash(), vb.GetValueHash());
+
+    b->Add(ibValue(99));                       // now longer -> not equal any more
+    EXPECT_NE(va.CompareValueLS(vb), 0);
 }

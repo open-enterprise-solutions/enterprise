@@ -4,21 +4,19 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "valueColour.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataNode — the packed form
 
 
 
 //////////////////////////////////////////////////////////////////////
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueColour, ibValue);
-
-ibValue::ibValueMethodHelper ibValueColour::m_methodHelper;
 
 ibValueColour::ibValueColour() :
-	ibValue(ibValueTypes::TYPE_VALUE), m_colour()
+	ibValueStaticMembers(ibValueTypes::TYPE_VALUE), m_colour()
 {
 }
 
 ibValueColour::ibValueColour(const wxColour& colour) :
-	ibValue(ibValueTypes::TYPE_VALUE), m_colour(colour)
+	ibValueStaticMembers(ibValueTypes::TYPE_VALUE), m_colour(colour)
 {
 }
 
@@ -46,13 +44,11 @@ enum
 	enColorBlue
 };
 
-void ibValueColour::PrepareNames() const
+void ibValueColour_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
 {
-	m_methodHelper.ClearHelper();
-
-	m_methodHelper.AppendProp(wxT("Red"));
-	m_methodHelper.AppendProp(wxT("Green"));
-	m_methodHelper.AppendProp(wxT("Blue"));
+	helper.AppendProp(wxT("Red"));
+	helper.AppendProp(wxT("Green"));
+	helper.AppendProp(wxT("Blue"));
 }
 
 bool ibValueColour::SetPropVal(const long lPropNum, const ibValue& varPropVal)
@@ -89,8 +85,24 @@ bool ibValueColour::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 	return false;
 }
 
+namespace {
+const wxString kColourText = wxT("v");
+}
+
+bool ibValueColour::DoSerialize(ibDataNode& node) const
+{
+	node.SetValue(kColourText, typeConv::ColourToString(m_colour));
+	return true;
+}
+
+bool ibValueColour::DoDeserialize(const ibDataNode& node)
+{
+	m_colour = typeConv::StringToColour(node.GetValue<wxString>(kColourText));
+	return true;
+}
+
 //**********************************************************************
 //*                       Runtime register                             *
 //**********************************************************************
 
-VALUE_TYPE_REGISTER(ibValueColour, "Colour", string_to_clsid("VL_COLOR"));
+VALUE_TYPE_REGISTER(ibValueColour, "Colour", value_to_clsid("VL_COLOR"));

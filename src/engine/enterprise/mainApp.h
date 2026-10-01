@@ -7,7 +7,9 @@
 
 #include <memory>
 
-class ibAppEnterprise : public wxApp {
+#include "frontend/diagnostics/oesApp.h"
+
+class ibAppEnterprise : public ibWxApp {
 
 	bool m_debugEnable;
 
@@ -35,15 +37,16 @@ class ibAppEnterprise : public wxApp {
 
 public:
 
-	virtual bool OnInit();
-#if wxUSE_ON_FATAL_EXCEPTION
-	virtual void OnUnhandledException() override;
-#endif
-#if wxUSE_ON_FATAL_EXCEPTION && wxUSE_STACKWALKER
-	virtual void OnFatalException() override;
-#endif
-	virtual int OnRun() override;
-	virtual int OnExit() override;
+	// ibWxApp pre-wires Install / WrapStartup / 3 exception overrides.
+	// We only fill in the exe-specific name + boot bodies.
+	wxString GetExeName() const override { return wxT("enterprise"); }
+
+	// DoOnInit defaulted on the base (wxSocketBase::Initialize + wxApp::OnInit).
+	int DoOnRun() override;
+
+	int OnExit() override;
+
+public:
 
 #if wxUSE_CMDLINE_PARSER
     // this one is called from OnInit() to add all supported options

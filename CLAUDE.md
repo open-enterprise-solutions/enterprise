@@ -6,7 +6,26 @@ This file gives an AI assistant (Claude Code or similar) the context needed to w
 
 ## What This Project Is
 
-**Open Enterprise Solutions (OES)** is a C++17 cross-platform low-code enterprise application platform, conceptually similar to 1C:Enterprise. It lets developers define business applications through metadata (object types, forms, modules) and a built-in scripting language, without writing low-level code.
+**Open Enterprise Solutions (OES)** is a C++17 cross-platform low-code enterprise application platform. It lets developers define business applications through metadata (object types, forms, modules) and a built-in scripting language, without writing low-level code.
+
+**"Cross-platform" here is measured, not aspirational.** The platform core — metadata, the
+language and its compiler, the bytecode interpreter, the query engine, the database layer and the
+form layer — builds from one code base and runs an **identical suite** under three toolchains on
+two architectures: MSVC on Windows x64, GCC on Linux x64, and Apple Clang on macOS 14 **arm64**.
+Every application (`enterprise`, `designer`, `appserver`, `launcher`, `codeRunner`, `simplePlugin`)
+links on every platform.
+
+The suite GROWS, so the number here is a reading and not a property: **919** on 2026-08-03 when
+the three jobs first agreed, **1166** on 2026-08-07 (1197 `TEST` cases live in `tests/`; CI's
+`ctest -E` holds back the two targets that need a display or a live PostgreSQL, and runs them in
+jobs of their own — the GUI suite is 38). Locally, with nothing excluded, `ctest` reports 1208.
+Read the current figure off the last run rather than from here.
+
+Two boundaries, so the claim is not read wider than it is: the **web** targets
+(`wenterprise-server`, `wfrontend`) build under the MSBuild solution only and are absent from
+CMake, so they are Windows-only in practice; and of the five drivers, all compile everywhere but
+only **SQLite executes** in CI — Firebird and PostgreSQL load their clients at run time, which
+the runners do not have. Details and the day's findings: [docs/portability.md](docs/portability.md).
 
 The runtime executes compiled bytecode, renders forms through wxWidgets, and stores all application data in a relational database (Firebird by default).
 
@@ -21,8 +40,8 @@ The runtime executes compiled bytecode, renders forms through wxWidgets, and sto
 | Build (Windows) | MSBuild — `enterprise.sln` (Visual Studio 2019/2022) |
 | Build (cross-platform) | CMake — `CMakeLists.txt` at repo root; macOS / Linux build supported, Windows uses MSBuild |
 | Primary database | Firebird (embedded) |
-| Optional databases | PostgreSQL, SQLite, MySQL, ODBC |
-| License | LGPL 2.1 |
+| Other databases | PostgreSQL (production), ODBC (CMake `OES_USE_*` opt-in, and the base an MSSQL layer derives from); SQLite is always embedded but is for **tests and logging only, never production** |
+| License | PolyForm Noncommercial 1.0.0 — source-available, **not** open source (LICENSE.md). Noncommercial use and evaluation (a business trying it before deciding) are free; commercial use needs a license from the licensor, and that license covers the licensor's own builds only. Releases up to 2026-08-22 stay under the LGPL 2.1 they were published with. The wxWidgets-derived widget sources keep the wxWindows Library Licence — see NOTICE.md |
 
 ---
 
@@ -30,24 +49,87 @@ The runtime executes compiled bytecode, renders forms through wxWidgets, and sto
 
 ```
 enterprise/
-├── enterprise.sln           # 9-project MSBuild solution
+├── enterprise.sln           # MSBuild solution (10 C++ projects in 4 folders: services / exec / plugins / Solution Items)
 ├── Common.props             # Shared output paths and macros
 ├── ConfigurationDefs.props  # Per-configuration preprocessor defines
 ├── CLAUDE.md                # This file
-├── docs/
+├── docs/                     # PUBLIC documentation — start with README.md
+│   ├── README.md             # map of the public documents
+│   ├── development.md        # HOW WE WORK — pull requests, commits, code and design rules, tests
+│   ├── ai-context.md         # READ FIRST if you are an AI generating metadata / scripts
 │   ├── ARCHITECTURE.md
-│   └── BUILD.md
+│   ├── BUILD.md
+│   ├── portability.md        # rules for code that must compile on MSVC and GCC/Clang
+│   ├── release-notes/
+│   └── private/              # ⚠ PRIVATE SUBMODULE (open-enterprise-solutions/enterprise-docs):
+│       │                     # design docs, arcs, plans. It resolves for members of the organisation
+│       │                     # and is simply EMPTY for everyone else — the build never needs it, and
+│       │                     # CI fetches every submodule .gitmodules names but this one. The map below is inside it.
+│       ├── ui-palette.md         # Interior-design palette — source of truth for UI colours
+│       ├── uikit.md              # Custom-drawn UI engine (wxUniversal fork + Luna theme)
+│       ├── query-engine-layers.md # THE FLOOR PLAN — L1–L5 taxonomy, one house (read first for the query arc)
+│       ├── data-composer.md      # L5 — declarative composition over the query language
+│       ├── table-model.md        # tables/lists/trees — ibDataViewModel + ibValueModel + RunComposerPage (fetch = web road)
+│       ├── column-groups.md      # a row is N bands — column groups (stack/row/in-cell), width law, resize drag
+│       ├── report-engine.md      # Report metaobject + spreadsheet document (runtime shape)
+│       ├── command-interface.md  # Interface metaobject = subsystem + command bar
+│       ├── job-manager.md        # scheduled + background work — the engine (built)
+│       ├── session-parameters.md # values that exist once per session — metatype, module, write window
+│       ├── common-attributes.md  # one declaration, many objects — composition, the copy, propagation
+│       ├── query-constructor.md  # the shell over the AST: nine tabs, package, temp tables, ALLOWED (BUILT)
+│       ├── scheduled-jobs.md     # the metadata over it: two metatypes, one verb (BUILT)
+│       ├── plugins.md            # plugin ABI 2 — capability boundary (diagnostics / script / metadata)
+│       ├── script-language.md    # THE LANGUAGE REFERENCE — dialects, keywords, LINQ, global API
+│       ├── form-engine.md        # RUNTIME forms — build, identity (the form key), open, close
+│       ├── home-page.md          # the start page — one tab, N runtime forms (composite doc/view)
+│       ├── event-dispatcher.md   # events hold a named handler OR a lambda — one CallAsEvent door, polymorphic dispatch
+│       ├── view-only.md          # read-only forms — rights matryoshka, control read-only, command greying
+│       ├── user-form-editor.md   # "Change form" — the USER re-arranges an open form (whitelisted props, queued commands)
+│       ├── property-system.md    # ibPropertyObject + object inspector — the skeleton (5 surfaces)
+│       ├── metadata-tree.md      # Designer navigator + external reports/processors
+│       ├── compatibility-version.md # the version a configuration declares — the USER's step up, gating code AND schema
+│       ├── metadata-lifecycle.md # load/run/save/close — the metaobject events in order + external DP/Report
+│       ├── metadata-containers.md # the ibMetaData family — mechanism + varieties (config vs external DP/Report)
+│       ├── form-editor.md        # visual designer — panels, undo/redo, drag-to-create
+│       ├── spreadsheet-document.md # the SERVER-side document — cells, parameters, areas, notifiers
+│       ├── spreadsheet-editor.md # the grid behind templates and report output
+│       ├── sheet-formats.md      # reading/writing foreign tables — xlsx in and out, docx out, the registry
+│       ├── printing.md           # Print / Print Preview — the two roads, pagination, what is NOT built
+│       ├── system-functions.md   # the global script API — 94 functions + 6 procedures
+│       ├── database-modes.md     # file vs server base — where each puts its artefacts
+│       ├── debugger-architecture.md # TCP transport, why the debuggee is the server
+│       ├── technology-journal.md # ibJournal — the engine's running commentary (wxLog* lives in one file)
+│       ├── database-layer.md     # driver abstraction — lineage, what's ours, adding a driver
+│       ├── script-value-types.md # every script type — creatable vs vended
+│       ├── fnumber.md            # ibNumber — exact-decimal number in 8 bytes (tagged word + bignum tier)
+│       ├── compiler-pipeline.md  # the spine: translate → compile → execute, runtime assembly
+│       ├── factories.md          # ctor registries + the two-phase Init idiom
+│       ├── enumerations.md       # the enum template system + RECIPE to add one
+│       ├── descriptions.md       # the ibXxxDescription storage-shape pattern
+│       ├── source-object.md      # what a form binds to — the metadata-free source node
+│       ├── reference-registry.md # one reference object per identity, per session — the live table
+│       ├── main-frame.md         # one base, Designer/Enterprise windows, startup phases
+│       ├── session-ownership.md  # the window owns the session — holder/watch, open & close paths
+│       ├── designer-editors.md   # code / role / interface editors
+│       ├── wx-fork.md            # forked + vendored widget layer (dataview, grid, charts)
+│       ├── pictures.md           # three picture kinds, one description
+│       ├── serialization-io.md   # ibWriter/ibReader, chunks, compression (⚠ licensing)
+│       ├── ROADMAP.md            # state of the platform — landed / in flight / not built
+│       ├── naming-plan.md        # PLAN — file/folder renames (nothing applied)
+│       ├── metaobject-naming.md  # PLAN — user-visible taxonomy: designer labels, script names, tree order
+│       ├── restructure-plan.md   # PLAN — grouping, declaration order, naming (nothing applied)
+│       └── configuration-compare.md  # Compare/Merge feature — walker, model, Apply paths
 └── src/
-    ├── 3rdparty/wxWidgets/  # Submodule
+    ├── 3rdparty/wxWidgets/  # Submodule (wxWidgets 3.3.2)
     └── engine/
         ├── backend/         # backend.dll  — engine, compiler, DB, metadata, debugger
-        ├── frontend/        # frontend.dll — wxWidgets UI, form renderer
-        ├── enterprise/      # enterprise.exe
+        ├── frontend/        # frontend.dll (desktop UI) + wfrontend.dll (web) projects
+        ├── enterprise/      # enterprise.exe (thick client)
+        ├── wenterprise-server/ # web server (wes process)
         ├── designer/        # designer.exe  (IDE)
         ├── launcher/        # launcher.exe  (connection chooser)
-        ├── daemon/          # daemon.exe    (background service)
+        ├── appserver/       # appserver.exe (the application server)
         ├── codeRunner/      # codeRunner.exe
-        ├── classChecker/    # classChecker.exe
         └── simplePlugin/    # simplePlugin.dll (example)
 ```
 
@@ -57,25 +139,28 @@ enterprise/
 
 ### 1. ibDatabaseLayer Abstraction
 
-All database access goes through the abstract `ibDatabaseLayer` interface (`src/engine/backend/databaseLayer/databaseLayer.h`). The five concrete drivers (Firebird, PostgreSQL, SQLite, MySQL, ODBC) implement this interface. Code everywhere uses `db_query->RunQuery(...)` or `db_query->PrepareStatement(...)`. Never access driver classes directly.
+All database access goes through the abstract `ibDatabaseLayer` interface (`src/engine/backend/databaseLayer/databaseLayer.h`). The four concrete drivers (Firebird, PostgreSQL, SQLite, ODBC) implement this interface. Code everywhere uses `db_query->RunQuery(...)` or `db_query->PrepareStatement(...)`. Never access driver classes directly.
 
 ### 2. ibValue Universal Type
 
-`ibValue` (`src/engine/backend/compiler/value.h`) is the single value type used for all script variables. It is a tagged union covering: `TYPE_UNDEFINED`, `TYPE_BOOLEAN`, `TYPE_NUMBER`, `TYPE_DATE`, `TYPE_STRING`, `TYPE_REFFER` (reference/object). Arithmetic and comparison operations have type-dispatched variants (the `TYPE_DELTA*` opcode offset scheme in `codeDef.h`).
+`ibValue` (`src/engine/backend/compiler/value.h`) is the single value type used for all script variables. The tag is the `ibValueTypes` enum (`backend_core.h`, `: unsigned char`): primitives `TYPE_EMPTY` (=0, the "undefined" value), `TYPE_BOOLEAN`, `TYPE_NUMBER`, `TYPE_DATE`, `TYPE_STRING`, `TYPE_NULL`; references `TYPE_REFFER` (owned, ref-counted) / `TYPE_CONST_REFFER` (non-owned, read-only); object kinds `TYPE_VALUE`, `TYPE_ENUM`, `TYPE_OLE`, `TYPE_FUNCTION` (lambda), `TYPE_ITERATOR`. Arithmetic and comparison operations have type-dispatched variants (the `TYPE_DELTA*` opcode offset scheme in `codeDef.h`).
 
 `ibValueMetaObject` extends `ibValue`, meaning metadata objects (Catalog definitions, Document definitions, etc.) can be stored in and returned from script variables.
 
+The payload is ONE union word: `bool` / date / reference / `ibString m_sData` / `ibNumber m_fData`. The string and the number are each a pointer-sized handle to a shared, counted block (copy = atomic `+1`, a write detaches), so `sizeof(ibValue)` is 24 on x64 (2026-09-29: the reference count sits in the padding before the union; pinned by `tests/test_value.cpp`, the 32-bit layout is not). The union's empty state is all-zero bits, valid as an empty string and as the number 0 at once; every change of kind destroys the old one and zeroes the word. `GetString()` returns `ibString` by value; `wxString` is a conversion at the widget edge (`ToWxString()`).
+
 ### 2a. ibNumber — exact-decimal lazy-grow
 
-`ibNumber` (`src/engine/backend/number.h`) is the numeric storage type used by `ibValue::m_fData`. It is **not** a typedef for ttmath::Big — that dependency was removed; the class is self-contained.
+`ibNumber` (`src/engine/backend/fnumber.h`) is the numeric storage type used by `ibValue::m_fData`. It is **not** a typedef for ttmath::Big — that dependency was removed; the class is self-contained.
 
-- `sizeof(ibNumber) == 8` always. Single tagged `uint64_t`: bit 0 = tag, bits [16:1] = exp10, bits [63:17] = 47-bit signed mantissa. Most values stay inline (immediate tier).
-- Heap tier: `BigImpl { std::vector<uint32_t> limbs; bool negative; int32_t exp; }` — exact decimal, magnitude grows by demand. Supports 200+ fractional digits (1С-style precision).
-- Self-contained: no ttmath dependency. Schoolbook Add/Sub/Mul + base-2 long-division Div live in `number.cpp`. MSVC x86/x64 use `_addcarry_u32`/`_subborrow_u32` intrinsics; portable fallback elsewhere.
+- `sizeof(ibNumber) == 8` always. Single tagged `uint64_t`: bit 0 = tag (0 = immediate, so all-zero bits are the number 0), bits [16:1] = exp10, bits [63:17] = 47-bit signed mantissa. Most values stay inline (immediate tier).
+- Heap tier: `BigImpl { std::vector<uint32_t> limbs; bool negative; int32_t exp; }` — exact decimal, magnitude grows by demand. Supports 200+ fractional digits (high-precision decimal). It lives in a counted `SharedBig` block: copies share it, and a write goes in place only when the number holds it alone.
+- Self-contained: no ttmath dependency. Schoolbook Add/Sub/Mul + base-2 long-division Div live in `fnumber.cpp`. MSVC x86/x64 use `_addcarry_u32`/`_subborrow_u32` intrinsics; portable fallback elsewhere.
+- **Immediate fast paths.** `*` / `/` and `Compare` short-circuit two immediate-INTEGER operands (`exp10 == 0`) through a single `int64` op — no `BigImpl`, no `10^30` inflate, no long division — via the private `TryImmInts` gate. `+` / `-` (`+=` / `-=`) go further, through `TryImmAligned`: two immediate operands are aligned to the smaller exponent (integers are the case where it is 0) and added as `int64`, so money arithmetic — `SUM(Amount)` over a register, `1518500.00 + 17000.00` — no longer drops to `BigImpl` either (2026-09-12). Every fast path fires only when the result fits immediate (and, for `/`, the division is exact), so the value is exactly the one the `BigImpl` path computes; exactness is preserved. Common arithmetic / comparison is a few ns; non-exact decimal division still pays the full exact long-division cost (inherent, not a regression). ⚠ Build a zero with the default constructor, not `0.00`: `ibNumber(double)` prints the double and parses the text back to be exact about it, which on a per-cell path is the whole cost of the read (the Firebird `GetResultNumber` did exactly that until 2026-09-12).
 - Buffer / wire: `wxMemoryBuffer GetBuffer()` plus `bool GetBuffer(ibWriterMemory&)` / `bool SetBuffer(const ibReaderMemory&)` — chunk-encapsulated I/O with internal `kIbNumberChunk` ID. Compact-zero encoding: zero produces 0-byte buffer, no allocation.
 - 128-bit raw: `To128Bytes(uint8_t[16])` / `From128Bytes` for Firebird SQL_INT128 columns.
-- Tests: `enterprise/tests/test_number.cpp` (gtest). 111/111 pass at landing.
-- See `docs/next-session-plan.md` for the landing summary and known-risks list.
+- Tests: `enterprise/tests/test_number.cpp` (gtest). Micro-benchmarks (DISABLED by default) live in `enterprise/tests/bench_runtime.cpp` — `RuntimeBench` (interpreter) / `NumberBench` (ibNumber) / `ParserBench` (compile), each printed next to a native-C++ baseline. Build Release and run:
+  `oes_tests --gtest_also_run_disabled_tests --gtest_filter=*Bench*`.
 
 ### 3. ibProcUnit Bytecode Interpreter
 
@@ -90,9 +175,17 @@ The compiler is a single-pass recursive descent parser with a deferred-call-reso
 ### 5. Throw-By-Value Exception Pattern
 
 Backend exceptions are thrown by value and caught by const reference, standard
-C++ style. `ibBackendException` has a virtual destructor so catching by the
-base class preserves the dynamic type for `dynamic_cast` and downstream
-re-catches.
+C++ style. `ibBackendException` **derives from `std::exception`** (2026-08-12) —
+before that it did not, and every generic boundary (`catch (const std::exception&)`)
+let it fall through to `catch (...)`, where the message it carries was thrown away
+at the exact moment something decided to stop. `what()` returns the description as
+**UTF-8 bytes** held once in the exception; `GetErrorDescription()` returns the
+`wxString`. It has a virtual destructor so catching by the base class preserves the
+dynamic type for `dynamic_cast` and downstream re-catches.
+
+Since it derives, **handler order is required, not preferred**: `ibBackendException`
+before `std::exception`, always. And the description is DATA — `wxLogError(wxT("%s"), …)`,
+never as the format string. Full rules: [docs/private/exceptions.md](docs/private/exceptions.md).
 
 ```cpp
 // throw (usually through a static Error() helper that formats the message)
@@ -117,7 +210,17 @@ propagate the same exception object.
 
 ### 6. Metadata CLSID System
 
-Every class in the metadata and value system is identified by a 7-character string CLSID encoded into a `ibClassID` integer via `string_to_clsid()`. Examples: `"VL_NUMB"` (number value), `"MD_CAT"` (Catalog), `"MD_DOC"` (Document). These appear in serialised configuration files and the database.
+Every class in the metadata and value system is identified by an `ibClassID` (`unsigned wxLongLong_t`, 64-bit). It is **KIND-TYPED**: the high byte is a class KIND (`ibClassKind` enum in `clsid.h`), the low 56 bits are the body. This lets stateless helpers — `IsReference(clsid)` / `IsObject` / `IsManager` / `IsEnum` / `IsControl` / `IsMetadata` / … — read a class's kind straight from the id, with **no `ibMetaData` lookup** (used heavily by L3 to classify columns by bit instead of pulling the metadata).
+
+- **Static types**: body = `ib_clsid_hash(name)` (FNV-1a 64) masked to 56 bits; kind = the **registrar** (the `*_TYPE_REGISTER` macro family — `metadata_to_clsid` / `value_to_clsid` / `control_to_clsid` / `system_to_clsid` / `enum_to_clsid` / `context_to_clsid` / `primitive_to_clsid` / `picture_to_clsid`). The kind comes from WHERE a type is registered, **never** from the string prefix (a `"VL_TVROW"` registered via `SYSTEM_TYPE_REGISTER` is System-kinded). The legacy `"XX_YYY"` string is kept only as an opaque unique KEY for the body; PascalCase names (`"Catalog"`, `"Number"`, `"Button"`) feed the 2-arg macro form (clsid = `<kind>_to_clsid(hash(name))`).
+- **Dynamic metaobject values**: body = the **metaID itself** (constructive, no hash → `(kind, metaID)` unique BY CONSTRUCTION); kind = the metatype (`reference_to_clsid(metaID)` / `object_to_clsid` / `manager_to_clsid` / `list_to_clsid` / … / `externalObject_to_clsid`, mirroring `ibCtorObjectMetaType`). The old `"R_42"` name-hash grammar is gone.
+- `string_to_clsid()` is **removed** — every callsite uses a per-kind generator. `make_clsid(name, kind)` is the common entry; `make_clsid(name, ibClassKind_None)` is the escape for synthetic, unregistered ids (config-compare umbrellas, tool ids).
+
+CLSIDs appear in serialised configuration files and the DB; the kind-typing changed every value, so the AOT cache version was bumped to `kAOTFormatVersion` = 16 (now 21 — 17 for the `restrict`-pushdown-AST fix, 18 for the shortLet-peephole codegen fix, 19 for a parameter default losing its type name, 20 for the session-parameter context member, 21 for two function-record flags: `m_needsHeapFrame`, which was never written at all, and `m_valueCached`, see `docs/private/compiler-pipeline.md` §3.1) and persisted CLSID blobs regenerate. Uniqueness: dynamic is constructive (impossible to collide); static is hash-bodied but collision is only possible WITHIN a kind among the tens of names there (negligible) and is caught by the registry's duplicate-clsid check. Tests: `tests/test_clsid.cpp`.
+
+### 7. Metadata open/close — `ibMetaImage`
+
+`ibMetaData` (`src/engine/backend/metaData.h`) holds an open configuration as a single runtime image: `std::shared_ptr<ibMetaImage> m_image`. **Its presence is the open state** — `IsConfigOpen()` is just `m_image != nullptr`. A `LoadGuard` RAII transaction creates the image at the start of a run and drops it (rolling the load back) if the run does not complete. The image owns the type-ctor registry (`ibCtorRegistry<ibCtorMetaValueType> m_factoryCtors`, which owns ctors via `shared_ptr`), the module storage, and the compile-value cache built by `CreateDesignerCache()` (designer kinds only; `nullptr` otherwise). Subclass accessors (`GetModuleStorage`, `GetCompileCache`, …) all guard `m_image`.
 
 ---
 
@@ -126,7 +229,7 @@ Every class in the metadata and value system is identified by a 7-character stri
 ### Accessing the Database
 
 ```cpp
-// Global macro — returns ibDatabaseLayer*
+// Global macro — std::shared_ptr<ibDatabaseLayer>
 db_query->RunQuery(wxT("INSERT INTO %s ..."), tableName);
 
 ibPreparedStatement* stmt = db_query->PrepareStatement(wxT("SELECT * FROM %s WHERE id = ?"), table);
@@ -136,12 +239,19 @@ ibDatabaseResultSet* rs = stmt->RunQueryWithResults();
 
 ### Accessing Application State
 
+A process holds one base or several (`ibApplicationHost` → `ibApplicationInstance`); there is no global
+current base. `appData` is the base of the session the calling thread works for — a thread with no session
+and no bound base gets an exception (`ibApplicationInstance::Get(false)` answers null instead, for teardown).
+
 ```cpp
-appData->GetRunMode();           // ibRunMode enum
-appData->GetDatabaseLayer();     // ibDatabaseLayer*
-appData->GetUserInfo();          // current logged-in user
-activeMetaData->GetCommonMetaObject();  // root of the metadata tree
+appData->GetAppMode();           // ibRunMode enum (static GetAppMode())
+db_query;                        // std::shared_ptr<ibDatabaseLayer> (macro = GetDatabaseLayer()), the thread's base
+appData->GetUserInfo();          // const ibUserInfo& — current logged-in user
+activeMetaData->GetCommonMetaObject();  // root of the metadata tree (ibValueMetaObjectConfiguration*)
 ```
+
+A base's own service (the registry, the job manager, the MCP server) holds its base — it is built with
+`ib::AppDataCtorToken{ this }` and asks `GetApplicationInstance()` — and never reaches for "the current" one.
 
 ### Calling a Script Function from C++
 
@@ -156,7 +266,8 @@ unit.CallAsFunc(wxT("FunctionName"), result, arg1, arg2);
 
 ```cpp
 ibBackendValueForm* form = ibBackendValueForm::CreateNewForm(
-    metaFormObject,     // ibValueMetaObjectFormBase*
+    ibFormRequest(),    // name, window key (m_formGuid — empty to auto-generate), choice condition
+    metaFormObject,     // const ibValueMetaObjectFormBase* (creator), or nullptr
     ownerControl,       // ibBackendControlFrame* or nullptr
     sourceObject        // ibSourceDataObject* or nullptr
 );
@@ -168,13 +279,13 @@ ibBackendValueForm* form = ibBackendValueForm::CreateNewForm(
 
 ### Password Hashing — PBKDF2-HMAC-SHA256
 
-New passwords are hashed via `ibPasswordHash::Hash` (`src/engine/backend/utils/passwordHash.{hpp,cpp}`) using PBKDF2-HMAC-SHA256 at 600k iterations (OWASP 2023) with a 16-byte system-RNG salt, stored in PHC-style format `$pbkdf2-sha256$<iter>$<saltB64>$<hashB64>`. `Verify` additionally accepts legacy 32-hex MD5 hashes from pre-migration databases; callers use `NeedsRehash` + `Hash` to upgrade silently on successful login (see `ibApplicationData::AuthenticationAndSetUser`). MD5 stays in-tree for metadata integrity (`ibMD5::ComputeMd5`) — **never** reuse it for passwords.
+New passwords are hashed via `ibPasswordHash::Hash` (`src/engine/backend/utils/passwordHash.{hpp,cpp}`) using PBKDF2-HMAC-SHA256 at 600k iterations (OWASP 2023) with a 16-byte system-RNG salt, stored in PHC-style format `$pbkdf2-sha256$<iter>$<saltB64>$<hashB64>`. `Verify` additionally accepts legacy 32-hex MD5 hashes from pre-migration databases; callers use `NeedsRehash` + `Hash` to upgrade silently on successful login (see `ibApplicationInstance::AuthenticateUser`). MD5 stays in-tree for metadata integrity (`ibMD5::ComputeMd5`) — **never** reuse it for passwords.
 
 Argon2id (OWASP #1, memory-hard) would be the stronger option but requires vendoring an external library; revisit when the threat model calls for it.
 
 ### Empty Catch Blocks
 
-About 24 `catch (...) {}` sites exist in `backend.dll` — they live in
+About 30 `catch (...) {}` sites exist in `backend.dll` — they live in
 RAII destructors, Firebird driver rollback paths, and connection-pool
 cleanup. The pattern is intentional: a destructor that throws is
 worse than a swallowed error during cleanup, and a rollback that
@@ -199,7 +310,8 @@ msbuild enterprise.sln /p:Configuration=Release /p:Platform=x64 /m
 msbuild enterprise.sln /p:Configuration=Debug /p:Platform=x64 /m
 ```
 
-Output lands in `bin\Win64\Release\` or `bin\Win64\Debug\`.
+Output lands in `bin\<Platform>\<Configuration>\` — `Platform` is `Win32` (x86)
+or `Win64` (x64), e.g. `bin\Win64\Release\`, `bin\Win32\Debug\`.
 
 ### CMake (macOS / Linux)
 
@@ -208,8 +320,52 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --parallel 3   # cap parallelism on 16 GB RAM
 ```
 
-See `docs/BUILD.md` for per-platform requirements and the
-`OES_USE_FIREBIRD / POSTGRESQL / MYSQL / ODBC / TBB` options.
+DB driver options (all default OFF; SQLite is always embedded, no flag):
+`OES_USE_FIREBIRD`, `OES_USE_POSTGRESQL`, `OES_USE_ODBC`.
+See `docs/BUILD.md` for per-platform requirements.
+
+---
+
+## Running It — and the door an assistant comes in through
+
+**Nothing here should have to be guessed.** This section exists because it was: an assistant lost a
+turn on 2026-09-04 inventing `/F"…"` for the database folder, and the exe answered by vanishing —
+no window, no dump, six lines in the journal and a stop. The options are below; a wrong one is now
+also written into the technology journal with the accepted list beside it.
+
+### Start a client on a folder base
+
+```cmd
+bin\Win32\Debug\designer.exe   --file=F:\projects\oes-bin\examples\fb_test301
+bin\Win32\Debug\enterprise.exe --file=F:\projects\oes-bin\examples\fb_test301
+```
+
+`--file=` is the **folder**, not a `.fdb`. Started with no `--file` and no `--srv`, the designer asks
+for the folder with a picker. Server bases take `--srv` / `--db` / `--usr` / `--pwd` instead; the
+full list is `OnInitCmdLine` in each `mainApp.cpp` (`file`, `srv`, `dbport`, `db`, `user`,
+`password`, `ibuser`, `ibpwd`, `locale`).
+
+### The MCP server — how an assistant reaches the platform
+
+**It lives INSIDE `designer.exe`.** Nothing answers until the designer is running with a
+configuration open — a refused connection means the process is not up, not that the feature is
+missing. It listens on `http://127.0.0.1:3737/` (default; the address, the port and the token are
+in the designer's own MCP settings, kept per user in the base). The token is minted once, on first
+enable, and never regenerated behind anyone's back.
+
+**The first call must be `chat_say`.** Every other verb is refused until an assistant has said who
+it is, what it sees and what it means to do — because the person at that designer is watching a
+window that would otherwise stay silent while their configuration is read and changed. The refusal
+text says exactly this, so the rule teaches itself.
+
+Then the ones worth knowing before starting: `platform_state` (what is open, which dialect),
+`metadata_tree` (the map), `app_run` (start the application; **`restart: true`** after changing a
+module — a running client keeps the bytecode it came up with), `debug_sandbox` (run statements
+inside a stopped runtime, always rolled back; answers with `microseconds`), and the two journals —
+`journal_read` for what the INSTALLATION did (logins, writes, postings: the accountant's record)
+and `trace_read` for what the ENGINE did (the SQL as sent, query roads, driver traffic, and the
+crash dump matched to the run that ended). `trace_read` reads files, so it answers for the process
+under the debugger as well as for the designer itself.
 
 ---
 
@@ -220,7 +376,7 @@ See `docs/BUILD.md` for per-platform requirements and the
 | `master` | Release-tagged commits; stable |
 | `develop` | Active development; target branch for all PRs |
 
-All feature work happens on branches cut from `develop`. Pull requests target `develop`. Releases are merged from `develop` to `master` and tagged.
+All feature work happens on branches cut from `develop`. Pull requests target `develop`. Releases are merged from `develop` to `master` and tagged. How a pull request is taken, and the rules a change is reviewed against: [docs/development.md](docs/development.md).
 
 ---
 
@@ -235,13 +391,31 @@ All feature work happens on branches cut from `develop`. Pull requests target `d
 | Compile-time constants | `g_` prefix | `g_metaCatalogCLSID` |
 | Macros (singletons) | lower camelCase | `appData`, `db_query`, `activeMetaData`, `debugServer` |
 | File names | camelCase or lowerCamelCase | `compileCode.cpp`, `databaseLayer.h` |
+| Metaobject aspect files | `<metatype>Metadata<Aspect>.cpp` | `chartOfAccountsMetadataSchema.cpp` |
 | CLSID strings | `XX_YYY` pattern | `"MD_CAT"`, `"VL_NUMB"` |
+
+**Per-metatype file split.** A metatype's implementation is one translation unit per ASPECT, all
+beside its header in `metaCollection/partial/` and named after the metatype rather than the C++
+class: `catalogMetadata.cpp` (the metaobject: ctor, lifecycle events, `ReadData` / `WriteData`),
+`catalogMetadataProperty.cpp`, `catalogMetadataMenu.cpp`, `catalogMetadata_res.cpp`. The runtime
+value, its manager and its commands carry no `Metadata` infix (`catalogObject.cpp`,
+`catalogManager.cpp`, `catalogAction.cpp`); a base FAMILY takes its base header's name
+(`commonObjectSchema.cpp`, `commonObjectProperty.cpp`).
+
+**Everything a metaobject contributes to the database SCHEMA goes in
+`<metatype>MetadataSchema.cpp`** — `ContributeTables` plus the `m_beforeChange` / `m_afterChange`
+rules attached to the tables it declares — so the schema story for a metatype is one file, not a
+section of a large one. Four today, and a metatype has one only when it declares something of its
+own: `commonObjectSchema.cpp` (the record / enum / register / hierarchy families — where a catalog's
+and a document's tables come from), `accumulationRegisterMetadataSchema.cpp`,
+`chartOfAccountsMetadataSchema.cpp`, `constantMetadataSchema.cpp`. Full aspect table:
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) § `src/engine/backend/metaCollection/`.
 
 ---
 
 ## Metadata Object Types
 
-The 11 business object types and their C++ classes:
+The 13 business object types and their C++ classes (the registered set is `METADATA_TYPE_REGISTER`):
 
 | Type | Class | Header |
 |---|---|---|
@@ -256,79 +430,165 @@ The 11 business object types and their C++ classes:
 | ChartOfCharacteristicTypes | `ibValueMetaObjectChartOfCharacteristicTypes` | `metaCollection/partial/chartOfCharacteristicTypes.h` |
 | ChartOfAccounts | `ibValueMetaObjectChartOfAccounts` | `metaCollection/partial/chartOfAccounts.h` |
 | AccountingRegister | `ibValueMetaObjectAccountingRegister` | `metaCollection/partial/accountingRegister.h` |
+| ChartOfCalculationTypes | `ibValueMetaObjectChartOfCalculationTypes` | `metaCollection/partial/chartOfCalculationTypes.h` |
+| CalculationRegister | `ibValueMetaObjectCalculationRegister` | `metaCollection/partial/calculationRegister.h` |
+
+A **`CommonAttribute`** is declared once under Common and then exists as a real attribute inside
+every object checked into its **composition** — its own metaID, its own column, its own place in
+restructuring. The copy (`CommonAttributeColumn`) delegates its type to the declaration and cannot
+be edited where it sits. Membership rides `ibCompositionObject` (`backend/compositionHelper.h`) — a
+mechanism of its own, deliberately not the section one ([docs/private/common-attributes.md](docs/private/common-attributes.md)).
+
+One further metatype is neither a business object nor stored anywhere: **`SessionParameter`** — an
+`ibValueMetaObjectAttribute` whose owner is the SESSION rather than a table. Declared under Common
+beside the jobs, set once per session by the **session module** (a second module property on the
+configuration root, `SetSessionParameters`), and writable nowhere else — a write outside that module
+raises, which is what row-level access can be filtered by safely. Reached as `SessionParameters.<Name>`
+([docs/private/session-parameters.md](docs/private/session-parameters.md)).
+
+**`FunctionalOption`** (Common, `MD_FOPT`) is a stored value like a constant — both derive
+`ibValueMetaObjectStoredValue` (`metaCollection/metaStoredValueObject.h`; the constant adds `Type` and
+`FillCheck`) — Boolean, one value per base, kept in `sys_const`, that also decides what the interface
+SHOWS. Membership lives on the MEMBER, like a section's (`ibFunctionalOptionObject`,
+`functionalOptionHelper.h`); opening an option shows them as a check tree, as a section or a common
+attribute does (MCP: `option_include`). Switched off, its members are **not available** — a third state
+beside deleted and disabled, and deliberately NOT `IsAllowed`: the metadata, the schema and every query
+stay as they are. ONE VERB everywhere: `IsAvailable()` — the gate `ibFunctionalOptionGate`
+(`functionalOption/functionalOptionGate.h`), a column (`ibBackendSourceColumn`; a model's column in its family's
+words, `ibValueModelColumnInfo::IsColumnAvailable`),
+a binding (asked of the columns it walks through, never of a path's numbers: the first hop is a form-local id),
+a form element (its own *User visibility → Functional options* AND its parent's answer; "no source picked"
+is the other question, `IsUnbound`), a settings path (`ibSettingsFieldTree::IsAvailable`; a quick filter
+asks the composer) and the composers' own (`ibDataComposer::IsAvailable` — L5-1 over its source's fields,
+L5-2 over its storage's columns) — the path laid out as hops by `ibQueryColumnFromPath`, walked by
+`ibQueryConstructorModel::WalkPath` (the longest prefix a field is named, then `WalkFrom` by type).
+Synthetic columns carry it (AND over what they are made of, `ibIsWalkAvailable` for a walk): a register
+view's column `StandsFor` its attribute, an alias forwards, a nested query's and a computed output's take
+it when made. A user's setting on an unavailable field STAYS: a grouping or a selected field on it is not
+printed (`ApplyAvailableStructure`, `GetAvailableGroupDesc`, `SelectedFor`), a filter or a sort still applies. The
+designer sees everything it EDITS; a composer answers as the application wherever it runs (it opens
+`ibFunctionalOptionGate::AsApplication` itself — in the designer the outermost scope reads the values afresh). An option may `Require` another (off above = off here); `InitialValue` answers while nothing
+was ever written (read from the value column's raw type tag — the decoded value of an untagged cell is
+its type's empty, a False). Reached as `FunctionalOptions.<Name>.Get()` ([docs/public/functional-options.md](docs/public/functional-options.md)).
+
+Six further registered metatypes are **not** top-level business objects: `ExternalDataProcessor`,
+`ExternalReport`, `Composer` (2026-08-20, `MD_CMPS` — a **data composer declared inside a report**,
+beside its forms and templates: what to read and how to fold it. The report names one of them
+`DefaultComposer`, and a report that declares one needs no form — the generated form is a gridbox
+bound to that composer. Embedded and external reports both have them, being the same metaobject.
+See [docs/private/report-engine.md](docs/private/report-engine.md) §4f),
+`AccountDimensionKindsTable` (renamed from `SubcontoKindsTable` on 2026-08-12 —
+*subconto* was a calque; the concept is an **account dimension**, «аналитика», and its KIND is a
+characteristic. The CLSID key `MD_SKTB` stayed, being an opaque body key rather than a name),
+`AccumulationRegisterTotals` (the totals table became a
+metaobject in its own right on 2026-07-29, rather than a bit on the register's id), and
+`ConstantValueColumn` (same day: a constant stopped BEING a column of `sys_const` and now HAS one —
+it derives `ibValueMetaObjectGenericData`, so the form layer no longer casts it into a class it does
+not derive from).
 
 ---
 
-## Configuration Text Format
+## Configuration Serialization
 
-OES supports exporting and importing configuration metadata in text formats (XML and JSON), enabling Git VCS, AI-powered configuration generation, and human-readable editing.
+Metadata is serialized through the format-agnostic **`ibDataNode`** tree
+(`src/engine/backend/serialize/dataBuilder.h`). A metaobject contributes its
+state into an `ibDataNode` tree; a pluggable **`ibFormatProvider`** then writes
+that tree to bytes (and reads it back).
 
-### XML (OES-XML-2.0)
-
-- **File:** `src/engine/backend/metadataConfigurationXML.cpp`
-- **Export:** `ibMetaDataConfigurationBase::SaveConfigToXML(const wxString& fileName)`
-- **Import:** `ibMetaDataConfigurationBase::LoadConfigFromXML(const wxString& fileName)`
-- **Designer menu:** Configuration → Export/Import configuration to/from XML
-- **Full round-trip:** Export → Import preserves all metadata
-
-### JSON (OES-JSON-1.0)
-
-- **File:** `src/engine/backend/metadataConfigurationJSON.cpp`
-- **Library:** nlohmann/json v3.11.3 (`src/3rdparty/nlohmann/json.hpp`, MIT, header-only)
-- **Export:** `ibMetaDataConfigurationBase::SaveConfigToJSON(const wxString& fileName)`
-- **Import:** `ibMetaDataConfigurationBase::LoadConfigFromJSON(const wxString& fileName)`
-- **Designer menu:** Configuration → Export/Import configuration to/from JSON
+- **Entry points:** `ibMetaDataConfigurationBase::LoadConfigFromFile(fileName)` /
+  `SaveConfigToFile(fileName)` (`metadataConfiguration.h`).
+- **`ibBinaryProvider`** (`dataBuilder.{h,cpp}`) — the internal, owned binary
+  format. This is the round-trip path (Write + Read).
+- **`ibJsonProvider`** (`serialize/jsonProvider.{h,cpp}`) — JSON. `Write` emits JSON for
+  diff/inspection; `Read` is a full parser but is **wired to nothing on purpose**. The view
+  is lossy by design (Fields + Properties flatten into one key set, Date → ISO string,
+  synthetic `TypeDesc`), so Write→Read is not a round trip — use `ibBinaryProvider` for that.
+  `SetTypeLookup` supplies the name→clsid inverse. Tests: `tests/test_jsonProvider.cpp`.
+- The old XML/JSON config layer is **gone**: `metadataConfigurationXML.cpp` /
+  `metadataConfigurationJSON.cpp` and the `SaveConfigToXML` / `LoadConfigFromXML`
+  / `SaveConfigToJSON` / `LoadConfigFromJSON` methods no longer exist.
 
 ### What is serialized
 
-All 11 business object types with: attributes (full type qualifiers), tabular sections, forms (base64 + module code), object/manager modules, predefined values, default form assignments, MetaDescription bindings (Owner, Generation, RegisterRecord, ChartOfCharacteristicTypes, ChartOfAccounts), QuickChoice, WriteMode, Periodicity, RegisterType, dimensions, resources, enum values. CLSID stored as u64 numeric values.
+All 13 business object types with: attributes (full type qualifiers), tabular
+sections, forms (control tree + module code), object/manager modules, predefined
+values, default form assignments, MetaDescription bindings (Owner, Generation,
+RegisterRecord, ChartOfCharacteristicTypes, ChartOfAccounts), QuickChoice,
+WriteMode, Periodicity, RegisterType, dimensions, resources, enum values. CLSID
+stored as the 64-bit `ibClassID` hash.
 
 ### ibValue Serialization
 
-`src/engine/backend/compiler/valueSerialization.cpp` — `DoSerialize`/`DoDeserialize` for primitive types (Boolean, Number, String, Date). Used for client-server data exchange.
+A value packs itself into an **`ibDataNode`** — the same tree metadata is written through, so every provider (binary, JSON) comes for free and a text form is a rendering rather than a second implementation. The old `S: OES Serialize;;;…` string envelope is **gone** (2026-08-04).
 
-`src/engine/backend/metadataSerialization.cpp` — `ibMetaData::Serialize`/`Deserialize` wraps values in OES Serialize format: `S: OES Serialize;;;C:<classType>;;;L:<length>;;;D:<data>;;;E: OES Serialize;;;`
+- `compiler/value.h` — `Serialize(node)` / `Deserialize(node)` write and read the HEADER (the `IsTransferable` gate, then the type); the virtual `DoSerialize` / `DoDeserialize` are the CHILD's contents. The default knows the primitives only; composites override and ask their elements the same question.
+- `compiler/valueSerialization.cpp` — `ibValue::FromNode(node)`, THE mechanism for turning a node into a value: read the type, create through the value registry, hand over the whole node.
+- `metadataSerialization.cpp` — `ibMetaData::Serialize(value, node)` / `Deserialize(node)`, the DOOR. It creates the types only a configuration has (references, enum members — ids derived from metaIDs) and redirects everything else to `ibValue::FromNode`. A value is blind to metadata.
+- **Failure raises** (`ibBackendCoreException`): a type nobody has, a value that cannot be created or read, a value with no packed form. Never a quiet empty — that is indistinguishable from a legitimately empty value.
+- Bytes are the provider's choice at the callsite (`ibBinaryProvider` / `ibJsonProvider`), not a second pair of methods.
+
+See `docs/private/serialization-io.md` §4a.
 
 ---
 
 ## Compiler Quick Reference
 
-- **Opcodes:** defined in `src/engine/backend/compiler/codeDef.h` as `OPER_*` enumerators. Call-family: `OPER_CALL` (stack-frame named call), `OPER_CALL_CLOSURE` (named call with heap-promoted frame — callee has an inner lambda capturing locals), `OPER_CALL_METHOD` (per-class method dispatched by name string), `OPER_CALL_LINQ` (universal pipeline op dispatched by `ibLinqMethod` enum id, no string lookup), `OPER_CALL_LAMBDA` (dynamic call — target read from a slot at runtime, must wrap an `ibValueFunction`). Lambda body fences `OPER_LFUNC` / `OPER_ENDLFUNC`; materialise via `OPER_FUNC_PTR`
-- **Keywords:** 43, defined as `KEY_*` enumerators in the same file
-- **Built-in functions:** 91, registered in `ibSystemManager` (`src/engine/backend/system/systemManager.cpp`)
-- **Syntax modes:** VES (`If…Then…EndIf`, Visual-Basic-style with 1С/BSL mix) and CES (`if (…) { … }`, C-flavoured); both compile to the same bytecode. Mode is process-global on `ibCompileCode::SetCodeStyle()` / `GetCodeStyle()`. **CES is the default** for new configurations (2026-05-10); existing serialised configs preserve their stored Syntax. Wire token in metadata enum still reads `vbs` for back-compat — user-visible label is `ves`.
-- **Anonymous functions:** `Function(args) ... EndFunction` and `Procedure(args) ... EndProcedure` (or CES `Function(args) { … }`) work as expressions — assignable to slots, callable through variables. Backed by `ibValueFunction` (inline class in `procUnit.cpp` near `ibValueIterator`, CLSID `VL_FUNC`). Lambda's compile-context kind is `RETURN_LAMBDA`. Eval-in-lambda resolves outer frames via splice in `CompileExpression` (lambda-shim's `m_pppArrayList[1..]` → eval's `[2..]`). No closure capture yet — outer-function locals fail with "undefined identifier" at compile. See `docs/lambda.md`.
+- **Opcodes:** defined in `src/engine/backend/compiler/codeDef.h` as `OPER_*` enumerators. Call-family: `OPER_CALL` (stack-frame named call), `OPER_CALL_CLOSURE` (named call with heap-promoted frame — callee has an inner lambda capturing locals), `OPER_CALL_METHOD` (per-class method dispatched by name string), `OPER_CALL_LINQ` (universal pipeline op dispatched by `ibLinqMethod` enum id, no string lookup), `OPER_CALL_LAMBDA` (dynamic call — target read from a slot at runtime, must wrap an `ibValueFunction`). Lambda body fences `OPER_LFUNC` (the active materialiser) / `OPER_ENDLFUNC`. (`OPER_FUNC_PTR` is retired — `OPER_LFUNC` materialises the lambda value.)
+- **Keywords:** 63, defined as `KEY_*` enumerators (`KEY_IF`=0 … `KEY_RESTRICT`) in the same file — includes access modifiers (`Public`/`Private`/`Protected`), the memoisation modifier (`Cached` — a SECOND axis that combines with an access one, legal on a Function only), preprocessor (`#Define`/`#Ifdef`/…), the LINQ block (`From`/`Where`/`Select`/`Join`/`Group`/…) and the access-policy filter (`Restrict`). The matching token strings are `s_listKeyWord[]` in `translateCode.cpp`, in lock-step index order with the enum.
+- **Built-in globals:** 94 functions + 6 procedures = 100 as of 2026-09-04, registered in `ibSystemManager` (`src/engine/backend/system/systemManager.cpp`); count drifts as features land — grep `AppendFunc\|AppendProc` for the live total
+- **Syntax modes:** VES (`If…Then…EndIf`, Visual-Basic-style, a legacy business-scripting dialect) and CES (`if (…) { … }`, C-flavoured); both compile to the same bytecode. Mode is process-global on `ibCompileCode::SetCodeStyle()` / `GetCodeStyle()`. **CES is the default** for new configurations (2026-05-10); existing serialised configs preserve their stored Syntax. Wire token in metadata enum still reads `vbs` for back-compat — user-visible label is `ves`.
+- **Anonymous functions:** `Function(args) ... EndFunction` and `Procedure(args) ... EndProcedure` (or CES `Function(args) { … }`) work as expressions — assignable to slots, callable through variables. Backed by `ibValueFunction` (inline class in `procUnit.cpp` near `ibValueIterator`, CLSID `VL_FUNC`). Lambda's compile-context return kind is `RETURN_LAMBDA_FUNCTION` / `RETURN_LAMBDA_PROCEDURE` (`compileCode.h`). Eval-in-lambda resolves outer frames via splice in `CompileExpression` (lambda-shim's `m_pppArrayList[1..]` → eval's `[2..]`). **Closure capture landed 2026-05-11..12** (per-frame heap promotion): the compiler marks the enclosing function `m_needsHeapFrame` and emits `OPER_CALL_CLOSURE`; at runtime the lambda holds `std::vector<std::shared_ptr<ibRunContext>> m_capturedFrames` and outer-function locals resolve at depth ≥ 1. See `docs/private/lambda.md`, `docs/private/closure-capture.md`.
 - **Debugger port:** 1650 (`defaultDebuggerPort` in `src/engine/backend/debugger/debugDefs.h`)
 
 ### Bytecode resolver (kind-driven, AOT-ready)
 
 `ibByteCode` carries everything needed for cross-bc resolve, with no runtime dependency on the compile-context.
 
-- `m_listVar`: `std::vector<ibByteCodeVarInfo>` — `ibVarKind` enum: `Local / Export / External / Context / ContextProp`.
-- `m_listFunc`: `std::vector<ibByteFunction>` — `ibFnKind` enum: `Local / Export / ContextMethod / Lambda` (the `Lambda` kind landed with the anonymous-function feature; cross-bc invisible, name-keyed lookups filter via `IsLambda()`).
+- `m_listVar`: `std::vector<ibByteCodeVarInfo>` — `ibVarKind` enum (`byteCode.h`): `Local / Export / External / Context / ContextProp / Protected`.
+- `m_listFunc`: `std::vector<ibByteFunction>` — `ibFnKind` enum: `Local / Export / ContextMethod / Lambda / Protected` (the `Lambda` kind landed with the anonymous-function feature; cross-bc invisible, name-keyed lookups filter via `IsLambda()`).
 - `m_listLocals` (per-function): same vector shape as `m_listVar`.
 - Cross-table refs: `ContextProp / ContextMethod` carry `m_parentRef` indexing back into `m_listVar`.
 - `ibByteBinder` reads `m_listVar` directly and binds slots whose kind ∈ `{External, Context}` (`IsBindRequired()`).
 - Eval / watch expressions use `ibCompileEval` (in `procUnit.cpp`); `ibCompileCode::IsExpressionOnly()` and `GetEvalHostFunction()` are virtual hooks the eval class overrides.
 - Descriptors expose `ExportNamesToHelper(helper, alias)` on `ibRuntimeModuleDataObject` to populate a value's helper from the bc's export entries.
 
-See `docs/eval-scope-refactor.md` for the full architecture and `docs/next-session-aot.md` for the persistence-layer plan that builds on this state.
+See `docs/private/eval-scope-refactor.md` for the full architecture.
 
 ### Runtime infrastructure (landed)
 
-- **Worker pool** — `ibWorkerPool` (`src/engine/backend/session/workerPool.h`) + headless implementation (`workerPoolHeadless.{h,cpp}`). Per-thread session lease via `tl_currentLease`; sessionless callers get a `thread_local` fallback `ibProcUnitState` in `session.cpp`.
-- **AOT bytecode cache** — `byteCodeAOT.cpp` serialises a compiled `ibByteCode` to a memory stream; deserialisation reverses the compile step without re-running the parser. Intended target: `sys_bytecode_cache.blob` keyed by descriptor + source hash + metadata version.
-- **Per-session module manager** — each `ibSession` owns `m_moduleManager : ibValueModuleManager*` and `m_lambdaRuntime : ibProcUnit*`. The configuration-level `m_moduleManager` singleton is accessed only by Designer / codeRunner sandbox.
+- **Worker pool** — `ibWorkerPool` (`src/engine/backend/session/workerPool.h`) + headless implementation (`workerPoolHeadless.{h,cpp}`). Each session has a queue + an atomic "leased" flag (`workerPoolHeadless.h`); sessionless callers fall back to a `thread_local ibProcUnitState ts_fallbackPUState` in `session.cpp` (`ibSession::GetPUState`).
+- **AOT bytecode cache** — `byteCodeAOT.cpp` serialises a compiled `ibByteCode` to a memory stream; deserialisation reverses the compile step without re-running the parser. Persisted in `sys_bytecode_cache`, looked up by **`(descriptor_id, config_md5)`** — the configuration's own digest (`ibMetaData::GetConfigMD5()`), so a save makes every row written under the previous configuration unreachable and `Invalidate()` is hygiene rather than correctness. Written by the RUNTIME lazily on first call to a descriptor; the Designer never writes it. See [docs/private/compiler-pipeline.md](docs/private/compiler-pipeline.md) §4a.
+- **Per-session runtime image** — each `ibSession` owns `m_root : ibValuePtr<ibValueModuleManagerRuntimeConfiguration>` (built in `CreateRoot`; `GetManagerModule()`) and `m_lambdaRuntime : std::unique_ptr<ibProcUnit>` (wired to `m_root`'s procUnit on first `GetLambdaRuntime()`). Designer / codeRunner edit-time managers come from `GetEditModuleManager(metaData)` / `EditModuleManagerFor(metaData)`, kept separate from the per-session runtime root.
 
 ---
 
 ## What Not To Do
 
 - Do not add `#include` for wxWidgets headers in `backend.dll` source files — the backend must remain GUI-free
+- **Do not raise a MODAL from the engine.** `backend.dll` has no modal boxes of its own (verified
+  2026-09-02; the last two were leftovers from when the designer and the engine were one binary —
+  a `wxMessageBox` about a breakpoint, and a `ShowModalMessage` that showed a person a C++ function
+  signature). A modal blocks the window until somebody clicks it, so a caller that is not a person —
+  an assistant over MCP, a background job, the web server — is simply frozen, while the sentence
+  that would explain it stands on somebody else's screen. Instead: state it with
+  `ibValueSystemFunction::Message` (it asks the SESSION for its frame, so desktop shows and web
+  queues), and where a caller can act on the reason, hand it back — `bool Verb(…, wxString* refusal)`.
+  The only modals left in the backend are `Alert` / `Question`, which exist because a SCRIPT asked
+  for one.
 - Do not use raw `RunQueryWithResults(wxT("...%s..."), userInput)` for user-supplied values — use `ibPreparedStatement`
 - Do not commit changes to `enterprise.sln` project GUIDs or global section entries unless you are adding/removing a project
 - Do not define `NDEBUG` in Debug configurations
+- **Do not add an AI agent as a git co-author.** No `Co-Authored-By:` trailer for Claude / Cursor / Codex / Copilot / etc., and no “Generated with …” footer in commit messages or pull-request bodies. The human who asked for the change is the only author — [docs/development.md](docs/development.md) §1; `.github/lint.sh` refuses it.
 - Do not catch `const ibBackendException*` and swallow it silently
+- **Do not wave off a slow Debug build with "Release will be fast".** Speed is accepted in the DEBUG
+  build (Max, 2026-09-12: *"if debug works at a normal level, release will work fine — the debug
+  build is the most serious examiner"*). What a checked build (MSVC, `_ITERATOR_DEBUG_LEVEL=2`) makes
+  expensive is a real fault it magnifies. Every iterator is registered under ONE global lock, so
+  count iterators, not comparisons. Every allocation fills its memory, so count allocations, not
+  bytes. Every container, even an empty one, allocates a proxy, so a node full of empty containers
+  pays for each. On a hot path: look values up by position (`ibRowValues::find_value`), keep a row in
+  one `ibRowMetaValues` rather than a `std::map`, and move or swap what a stitch hands on. The payroll
+  sheet at 40 000 employees ([docs/private/payroll-arc.md § 11.9](docs/private/payroll-arc.md)) is the worked example.
 
 ---
 
@@ -343,7 +603,7 @@ Checks code for vulnerabilities: SQL injection (string concatenation in queries 
 Reviews code against C++17 standards and OES architecture rules: RAII, const-correctness, explicit constructors, cross-platform compatibility (MSVC/Clang/GCC), naming conventions (`ib` prefix, `m_` members), no GUI headers in backend.
 
 ### Test Writer (`oes-test-writer`)
-Generates Google Test tests. Naming: `TEST(ClassName, Method_Condition_Expected)`. Uses MockDatabaseLayer for unit tests, real SQLite for integration tests. Handles throw-by-pointer exceptions.
+Generates Google Test tests. Naming: `TEST(ClassName, Method_Condition_Expected)`. Uses MockDatabaseLayer for unit tests, real SQLite for integration tests. Handles throw-by-value / catch-by-const-ref exceptions (see decision #5).
 
 ### CMake Writer (`oes-cmake-writer`)
 Generates and fixes CMakeLists.txt. Target-based approach, C++17, compatible with MSVC 2019+/Clang/GCC 9+. Handles wxWidgets submodule, optional DB drivers (OES_USE_FIREBIRD, etc.).
@@ -358,7 +618,7 @@ Optimizes DB queries, bytecode interpreter (ibProcUnit), form rendering, memory 
 Diagnoses build errors (MSVC vs Clang), runtime crashes, logic bugs. Knows common OES pitfalls: circular includes, ibGuid conversion, empty catch blocks.
 
 ### Database Expert (`oes-database-expert`)
-Schema design, query optimization, cross-DB compatibility (Firebird/PostgreSQL/SQLite/MySQL). All queries through ibPreparedStatement.
+Schema design, query optimization, cross-DB compatibility (Firebird/PostgreSQL, plus SQLite for tests). All queries through ibPreparedStatement.
 
 ### Deployment Wizard (`oes-deployment-wizard`)
 CI/CD, cross-platform builds (MSBuild + CMake), release management. PRs → develop, releases → master with tag.

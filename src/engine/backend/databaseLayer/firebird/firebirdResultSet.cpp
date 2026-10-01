@@ -1,6 +1,7 @@
 #include "firebirdResultSet.h"
 #include "firebirdResultSetMetaData.h"
 #include "firebirdDatabaseLayer.h"
+#include "firebirdBlobCompression.h"
 #include "backend/databaseLayer/databaseErrorCodes.h"
 #include "backend/databaseLayer/databaseLayerException.h"
 
@@ -9,8 +10,8 @@ ibDatabaseResultSetFirebird::ibDatabaseResultSetFirebird(ibInterfaceFirebird* pI
 {
 	m_pInterface = pInterface;
 	m_pDatabase = 0;
-	m_pTransaction = NULL;
-	m_pStatement = NULL;
+	m_pTransaction = 0;
+	m_pStatement = 0;
 	m_pFields = NULL;
 	m_bManageStatement = false;
 	m_bManageTransaction = false;
@@ -52,8 +53,12 @@ bool ibDatabaseResultSetFirebird::Next()
 	}
 	else  // Errors!!!
 	{
-		wxLogError(wxT("Error retrieving Next record\n"));
 		InterpretErrorCodes();
+		// ⚠ READ BEFORE IT IS REPORTED. An interrupted fetch is a cancel, not a failure (ThrowDatabaseException
+		// throws it as one); written first as an error, it put an error window in front of the person who had
+		// just closed the report (a debug build shows its error lines) and a crash dump beside it (2026-09-11).
+		if (GetErrorCode() != DATABASE_LAYER_QUERY_CANCELLED)
+			ibJournalError(wxT("db.firebird"),wxT("Error retrieving Next record\n"));
 		ThrowDatabaseException();
 		return false;
 	}
@@ -67,7 +72,7 @@ void ibDatabaseResultSetFirebird::Close()
 	{
 		int nReturn = m_pInterface->GetIscCommitTransaction()(m_Status, &m_pTransaction);
 		// We're done with the transaction, so set it to NULL so that we know that a new transaction must be started if we run any queries
-		m_pTransaction = NULL;
+		m_pTransaction = 0;
 		if (nReturn != 0)
 		{
 			InterpretErrorCodes();
@@ -79,12 +84,22 @@ void ibDatabaseResultSetFirebird::Close()
 	if (m_bManageStatement && m_pStatement)
 	{
 		int nReturn = m_pInterface->GetIscDsqlFreeStatement()(m_Status, &m_pStatement, DSQL_drop);
-		m_pStatement = NULL;
+		m_pStatement = 0;
 		if (nReturn != 0)
 		{
 			InterpretErrorCodes();
 			ThrowDatabaseException();
 		}
+	}
+	// …and if the statement is somebody else's, CLOSE THE CURSOR on it, so it can be run again. Firebird keeps
+	// a cursor open even after the last row (a fetch that answers 100 leaves it so), and running the statement
+	// once more was refused while it was — the runs of one prepared statement need exactly that
+	// (ibQueryResult::Next). A cursor that was never opened answers with an error here, and it means nothing:
+	// its own status, and nothing is raised from a destructor's road.
+	else if (m_pStatement)
+	{
+		ISC_STATUS_ARRAY status;
+		m_pInterface->GetIscDsqlFreeStatement()(status, &m_pStatement, DSQL_close);
 	}
 
 	// Free the output fields structure
@@ -106,44 +121,39 @@ int ibDatabaseResultSetFirebird::GetResultInt(int nField)
 	return GetResultLong(nField);
 }
 
-wxString ibDatabaseResultSetFirebird::GetResultString(int nField)
+ibString ibDatabaseResultSetFirebird::GetResultString(int nField)
 {
 	ResetErrorCodes();
 
-	wxString strReturn = wxEmptyString;
+	// Each road returns its own string — made once, where it is known, decoded straight into the value's
+	// text — rather than a wxString made first and copied out of (for every text field of every row).
 	XSQLVAR* pVar = &(m_pFields->sqlvar[nField - 1]);
 	if (IsNull(pVar))
+		return ibString();   // the column is NULL
+
+	short nType = pVar->sqltype & ~1;
+	if (nType == SQL_TEXT)
 	{
-		// The column is NULL
-		strReturn = wxEmptyString;
+		ibString strValue;
+		ConvertFromUnicodeStream(pVar->sqldata, strValue);
+		return strValue;
 	}
-	else
+	if (nType == SQL_VARYING)
 	{
-		short nType = pVar->sqltype & ~1;
-		if (nType == SQL_TEXT)
-		{
-			strReturn = ConvertFromUnicodeStream(pVar->sqldata);
-		}
-		else if (nType == SQL_VARYING)
-		{
-			PARAMVARY* pVary = (PARAMVARY*)pVar->sqldata;
-			pVary->vary_string[pVary->vary_length] = '\0';
-			strReturn = ConvertFromUnicodeStream((const char*)pVary->vary_string);
-		}
-		else
-		{
-			// Incompatible field type
-			// Set error codes and throw an exception here
-			strReturn = wxT("");
-
-			SetErrorMessage(wxT("Invalid field type"));
-			SetErrorCode(DATABASE_LAYER_INCOMPATIBLE_FIELD_TYPE);
-
-			ThrowDatabaseException();
-		}
+		PARAMVARY* pVary = (PARAMVARY*)pVar->sqldata;
+		pVary->vary_string[pVary->vary_length] = '\0';
+		ibString strValue;
+		ConvertFromUnicodeStream((const char*)pVary->vary_string, strValue);
+		return strValue;
 	}
 
-	return strReturn;
+	// Incompatible field type
+	// Set error codes and throw an exception here
+	SetErrorMessage(wxT("Invalid field type"));
+	SetErrorCode(DATABASE_LAYER_INCOMPATIBLE_FIELD_TYPE);
+
+	ThrowDatabaseException();
+	return ibString();
 }
 
 long long ibDatabaseResultSetFirebird::GetResultLong(int nField)
@@ -233,43 +243,54 @@ bool ibDatabaseResultSetFirebird::GetResultBool(int nField)
 	return (nValue != 0);
 }
 
-wxDateTime ibDatabaseResultSetFirebird::GetResultDate(int nField)
+ibDateTime ibDatabaseResultSetFirebird::GetResultDate(int nField)
 {
 	ResetErrorCodes();
 
-	wxDateTime dateReturn = wxDefaultDateTime;
+	// The parts the column holds, as the reading they are (fdatetime.h): what isc_decode_* hands back is
+	// a calendar reading with no zone, and it becomes the value's date without a clock in between.
+	const auto readingOf = [](const struct tm& t) {
+		return ibDateTime(t.tm_year + 1900, static_cast<unsigned>(t.tm_mon + 1), static_cast<unsigned>(t.tm_mday),
+			static_cast<unsigned>(t.tm_hour), static_cast<unsigned>(t.tm_min), static_cast<unsigned>(t.tm_sec));
+	};
+
+	ibDateTime dateReturn;
 	XSQLVAR* pVar = &(m_pFields->sqlvar[nField - 1]);
 	if (IsNull(pVar))
 	{
 		// The column is NULL
-		dateReturn = wxDefaultDateTime;
+		dateReturn = ibDateTime();
 	}
 	else
 	{
 		short nType = pVar->sqltype & ~1;
 		if (nType == SQL_TIMESTAMP)
 		{
-			struct tm timeInTm;
+			struct tm timeInTm = {};
 			m_pInterface->GetIscDecodeTimestamp()((ISC_TIMESTAMP*)pVar->sqldata, &timeInTm);
-			SetDateTimeFromTm(dateReturn, timeInTm);
+			dateReturn = readingOf(timeInTm);
 		}
 		else if (nType == SQL_TYPE_DATE)
 		{
-			struct tm timeInTm;
+			struct tm timeInTm = {};
 			m_pInterface->GetIscDecodeSqlDate()((ISC_DATE*)pVar->sqldata, &timeInTm);
-			SetDateTimeFromTm(dateReturn, timeInTm);
+			dateReturn = readingOf(timeInTm);
 		}
 		else if (nType == SQL_TYPE_TIME)
 		{
-			struct tm timeInTm;
+			// A time of day alone: that time on the empty date's day (0001-01-01), the reading the
+			// reference system keeps for a time with no date - filled, and nothing but the time in it.
+			// (isc_decode_sql_time leaves the day fields as it found them: a day 0, which is no day.)
+			struct tm timeInTm = {};
 			m_pInterface->GetIscDecodeSqlTime()((ISC_TIME*)pVar->sqldata, &timeInTm);
-			SetDateTimeFromTm(dateReturn, timeInTm);
+			dateReturn = ibDateTime(1, 1, 1, static_cast<unsigned>(timeInTm.tm_hour),
+				static_cast<unsigned>(timeInTm.tm_min), static_cast<unsigned>(timeInTm.tm_sec));
 		}
 		else
 		{
 			// Incompatible field type
 			// Set error codes and throw an exception here
-			dateReturn = wxDefaultDateTime;
+			dateReturn = ibDateTime();
 
 			SetErrorMessage(wxT("Invalid field type"));
 			SetErrorCode(DATABASE_LAYER_INCOMPATIBLE_FIELD_TYPE);
@@ -279,11 +300,6 @@ wxDateTime ibDatabaseResultSetFirebird::GetResultDate(int nField)
 	}
 
 	return dateReturn;
-}
-
-void ibDatabaseResultSetFirebird::SetDateTimeFromTm(wxDateTime& dateReturn, struct tm& timeInTm)
-{
-	dateReturn.Set(timeInTm.tm_mday, wxDateTime::Month(timeInTm.tm_mon), timeInTm.tm_year + 1900, timeInTm.tm_hour, timeInTm.tm_min, timeInTm.tm_sec);
 }
 
 double ibDatabaseResultSetFirebird::GetResultDouble(int nField)
@@ -350,13 +366,17 @@ double ibDatabaseResultSetFirebird::GetResultDouble(int nField)
 
 ibNumber ibDatabaseResultSetFirebird::GetResultNumber(int nField)
 {
-	ibNumber dblReturn = 0.00;
+	// ⚠ ZERO IS THE DEFAULT CONSTRUCTOR, NOT `0.00`. A double literal goes through ibNumber(double),
+	// which prints the double with `%.17g` and parses the text back into a big decimal to be exact about
+	// it — and this line ran that for every number of every row read, before the field was even looked
+	// at: it stood in the stack samples of the payroll sheet's reads (2026-09-12, Debug).
+	ibNumber dblReturn;
 
 	XSQLVAR* pVar = &(m_pFields->sqlvar[nField - 1]);
 	if (IsNull(pVar))
 	{
 		// The column is NULL
-		dblReturn = 0.00;
+		dblReturn = ibNumber();
 	}
 	else
 	{
@@ -373,39 +393,40 @@ ibNumber ibDatabaseResultSetFirebird::GetResultNumber(int nField)
 			memcpy(&v, pVar->sqldata, sizeof(v));
 			dblReturn = v;
 		}
+		// ⭐ A SCALED INTEGER IS ITS DIGITS AND ITS SCALE — the decimal point is moved (ShiftDecimal), not
+		// divided for scale times over. Only a scale that lowers the value is the column's own; a
+		// positive one never came from a NUMERIC and is left as it was read.
 		else if (nType == SQL_LONG)
 		{
 			int32_t v = 0;
 			memcpy(&v, pVar->sqldata, sizeof(v));
 			dblReturn = v;
-			for (int i = 0; i < -pVar->sqlscale; i++) dblReturn /= 10;
+			if (pVar->sqlscale < 0) dblReturn.ShiftDecimal(pVar->sqlscale);
 		}
 		else if (nType == SQL_INT64)
 		{
 			int64_t int64val = 0;
 			memcpy(&int64val, pVar->sqldata, sizeof(int64val));
 			dblReturn = ibNumber(int64val);
-			for (int i = 0; i < -pVar->sqlscale; i++)
-				dblReturn /= 10;
+			if (pVar->sqlscale < 0) dblReturn.ShiftDecimal(pVar->sqlscale);
 		}
 		else if (nType == SQL_INT128)
 		{
 			dblReturn.From128Bytes(reinterpret_cast<const uint8_t*>(pVar->sqldata));
-			for (int i = 0; i < -pVar->sqlscale; i++)
-				dblReturn /= 10;
+			if (pVar->sqlscale < 0) dblReturn.ShiftDecimal(pVar->sqlscale);
 		}
 		else if (nType == SQL_SHORT)
 		{
 			short v = 0;
 			memcpy(&v, pVar->sqldata, sizeof(v));
 			dblReturn = v;
-			for (int i = 0; i < -pVar->sqlscale; i++) dblReturn /= 10;
+			if (pVar->sqlscale < 0) dblReturn.ShiftDecimal(pVar->sqlscale);
 		}
 		else
 		{
 			// Incompatible field type
 			// Set error codes and throw an exception here
-			dblReturn = 0.00;
+			dblReturn = ibNumber();
 
 			SetErrorMessage(wxT("Invalid field type"));
 			SetErrorCode(DATABASE_LAYER_INCOMPATIBLE_FIELD_TYPE);
@@ -437,32 +458,70 @@ void* ibDatabaseResultSetFirebird::GetResultBlob(int nField, wxMemoryBuffer& buf
 		if (nType == SQL_BLOB)
 		{
 			ISC_QUAD blobId = *(ISC_QUAD*)pVar->sqldata;
-			isc_blob_handle pBlob = NULL;
+			isc_blob_handle pBlob = 0;
 			char szSegment[128];
-			unsigned short nSegmentLength;
-			m_pInterface->GetIscOpenBlob2()(m_Status, &m_pDatabase, &m_pTransaction, &pBlob, &blobId, 0, NULL);
+			// Initialised, because a failed read leaves it untouched and it was being used as a
+			// LENGTH regardless — the buffer below was sized from whatever happened to be on the
+			// stack, and the loop appended that many bytes of it.
+			unsigned short nSegmentLength = 0;
 
-			ISC_STATUS blobStatus = m_pInterface->GetIscGetSegment()(m_Status, &pBlob, &nSegmentLength, sizeof(szSegment), szSegment);
-			wxMemoryBuffer tempBuffer(nSegmentLength);
-			unsigned int bufferSize = 0;
-			while (blobStatus == 0 || m_Status[1] == isc_segment)
+			// ⭐ ASK WHETHER IT OPENED. The status of isc_open_blob2 was dropped, and everything after
+			// it read as if the blob were open: isc_get_segment on a null handle fails, but the loop's
+			// second condition consults m_Status[1] — which, on that path, still holds the code from
+			// whatever ran BEFORE this call. When that leftover happens to be isc_segment the loop
+			// never ends, appending the same uninitialised segment forever. A blob that cannot be
+			// opened has to say so, not hang.
+			if (m_pInterface->GetIscOpenBlob2()(m_Status, &m_pDatabase, &m_pTransaction, &pBlob, &blobId, 0, NULL) != 0)
 			{
+				InterpretErrorCodes();
+				ThrowDatabaseException();
+				return NULL;
+			}
+
+			wxMemoryBuffer tempBuffer;
+			unsigned int bufferSize = 0;
+			for (;;)
+			{
+				const ISC_STATUS blobStatus =
+					m_pInterface->GetIscGetSegment()(m_Status, &pBlob, &nSegmentLength, sizeof(szSegment), szSegment);
+
+				// A segment arrived: either the whole one (0) or a partial one that continues
+				// (isc_segment). Both carry data; anything else ends the read.
+				if (blobStatus != 0 && m_Status[1] != isc_segment)
+				{
+					// isc_segstr_eof is the ORDINARY end of a blob, not a failure. Any other code is,
+					// and it must not be returned as a short buffer that reads like a valid blob.
+					const bool atEnd = (m_Status[1] == isc_segstr_eof);
+					// READ THE FAILURE BEFORE CLOSING. isc_close_blob writes its own outcome into the
+					// same status vector, so interpreting after it reports how the CLOSE went and
+					// loses why the read stopped.
+					if (!atEnd)
+						InterpretErrorCodes();
+					m_pInterface->GetIscCloseBlob()(m_Status, &pBlob);
+					if (!atEnd)
+					{
+						ThrowDatabaseException();
+						return NULL;
+					}
+					break;
+				}
+
 				tempBuffer.AppendData(szSegment, nSegmentLength);
 				bufferSize += nSegmentLength;
-				blobStatus = m_pInterface->GetIscGetSegment()(m_Status, &pBlob, &nSegmentLength, sizeof(szSegment), szSegment);
 			}
-			m_pInterface->GetIscCloseBlob()(m_Status, &pBlob);
 
-			// Some memory buffer juggling to make sure there's no extra space allocated
 			tempBuffer.SetDataLen(bufferSize);
 			tempBuffer.SetBufSize(bufferSize);
-			wxMemoryBuffer tempBufferExactSize(bufferSize);
-			void* pBuffer = tempBufferExactSize.GetWriteBuf(bufferSize);
-			memcpy(pBuffer, tempBuffer.GetData(), bufferSize);
-			tempBufferExactSize.UngetWriteBuf(bufferSize);
-			tempBufferExactSize.SetDataLen(bufferSize);
-			tempBufferExactSize.SetBufSize(bufferSize);
-			buffer = tempBufferExactSize;
+
+			// Unwrap the OESC magic-header envelope. Three cases:
+			//   1. Magic present, flag = zlib → decompress.
+			//   2. Magic present, flag = raw  → strip the 6-byte header.
+			//   3. No magic (legacy BLOB written before this code path) →
+			//      return the bytes verbatim.
+			// The decision lives entirely in Unwrap; the read path never
+			// branches on type-of-payload.
+			buffer = ibFirebirdBlobCompression::Unwrap(tempBuffer.GetData(),
+			                                           bufferSize);
 		}
 		else if (nType == SQL_TEXT)
 		{
@@ -614,26 +673,29 @@ void ibDatabaseResultSetFirebird::PopulateFieldLookupMap()
 	XSQLVAR* pVar = m_pFields->sqlvar;
 	for (int i = 0; i < m_pFields->sqld; i++, pVar++)
 	{
-		wxString strField = ConvertFromUnicodeStream(pVar->synonymname);
-		m_FieldLookupMap[strField] = i;
+		m_FieldLookupMap[ConvertFromUnicodeStream(pVar->synonymname)] = i;   // as written: the map itself is case-blind (StringToIntMap)
 	}
 }
 
+// ⭐ FOUND, NOT WALKED. A field is asked for by name once per CELL — the column codec reads every value by
+// its field's name — and this was a walk over every field of the row with a case-insensitive compare per
+// field: 17 % of a forty-thousand-employee payroll's posting sat here (MEASURED 2026-09-11, Release, stack
+// samples). One lookup instead — and of the name AS ASKED: an upper-cased copy per lookup was the next
+// cost down the same path, so the map ignores case itself (StringToIntMap, databaseResultSet.h).
 int ibDatabaseResultSetFirebird::LookupField(const wxString& strField)
 {
-	StringToIntMap::iterator SearchIterator = std::find_if(m_FieldLookupMap.begin(), m_FieldLookupMap.end(),
-		[strField](const auto pair) { return stringUtils::CompareString(pair.first, strField); });
+	StringToIntMap::iterator SearchIterator = m_FieldLookupMap.find(strField);
 
 	if (SearchIterator == m_FieldLookupMap.end())
 	{
-		wxString msg(wxT("Field '") + strField + wxT("' not found in the resultset"));
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-		ibDatabaseLayerException error(DATABASE_LAYER_FIELD_NOT_IN_RESULTSET, msg);
-		throw error;
-#else
-		wxLogError(msg);
-#endif
-		return -1;
+		// See sqliteResultSet.cpp for the rationale — caller code rarely
+		// checks the -1 sentinel, so we throw to land in the unified
+		// ibBackendException handler chain instead.
+		ibDatabaseLayerException::Throw(
+			ibBackendDatabaseException::Kind::Unknown,
+			DATABASE_LAYER_FIELD_NOT_IN_RESULTSET,
+			/*sqlState*/ wxEmptyString,
+			wxT("Field '") + strField + wxT("' not found in the resultset"));
 	}
 	else
 	{
@@ -643,10 +705,13 @@ int ibDatabaseResultSetFirebird::LookupField(const wxString& strField)
 
 void ibDatabaseResultSetFirebird::InterpretErrorCodes()
 {
-	wxLogError(wxT("ibDatabaseResultSetFirebird::InterpretErrorCodes()\n"));
-
+	// Diagnostic-only — the real error is decoded below and surfaced
+	// via SetErrorMessage. Was wxLogError previously, but that just
+	// printed "I'm in this function" on every fbclient failure
+	// without adding context.
 	long nSqlCode = m_pInterface->GetIscSqlcode()(m_Status);
-	SetErrorCode(ibDatabaseLayerFirebird::TranslateErrorCode(nSqlCode));
+	// A system error by its status code, as the layer records one (an interrupted fetch is isc_cancelled).
+	SetErrorCode(ibDatabaseLayerFirebird::TranslateErrorCode(nSqlCode < -900 ? (int)m_Status[1] : (int)nSqlCode));
 	SetErrorMessage(ibDatabaseLayerFirebird::TranslateErrorCodeToString(m_pInterface, nSqlCode, m_Status));
 }
 

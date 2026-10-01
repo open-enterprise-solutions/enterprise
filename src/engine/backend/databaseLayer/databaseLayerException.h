@@ -1,26 +1,129 @@
 #ifndef __DATABASE_LAYER_EXCEPTION_H__
 #define __DATABASE_LAYER_EXCEPTION_H__
 
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
+// Database-tier exception types. Both inherit from ibBackendException
+// so a single catch site can pick the level of specificity it needs:
+//
+//   catch (const ibDatabaseLayerException&)    // driver native code + sqlstate
+//   catch (const ibBackendDatabaseException&)  // any DB-tier failure
+//   catch (const ibBackendException&)          // catch-all
+//
+// Direct callers (business logic that wants to say "this is a DB
+// failure" without knowing the driver details) can throw the category
+// base; drivers throw the more specific ibDatabaseLayerException with
+// native_code + sqlstate populated by the per-driver error reporter.
 
-class ibDatabaseLayerException
-{
+#include "backend/backend_exception.h"
+#include "databaseLayerDef.h"
+
+// ibBackendDatabaseException — category exception for "something went
+// wrong at the DB tier". Bridges driver-internal failures into the
+// shared ibBackendException hierarchy.
+class BACKEND_API ibBackendDatabaseException : public ibBackendException {
 public:
-	ibDatabaseLayerException(int nCode, const wxString& strError)
-	{
-		m_nErrorCode = nCode;
-		m_strErrorMessage = strError;
-	}
+	enum class Kind {
+		// Connection failed or was dropped mid-call. Includes initial
+		// open failures (wrong host/port, refused, timeout) and lost
+		// connections during a running session. Caller may attempt a
+		// reconnect; the DB pool's lazy clone path normally handles
+		// this transparently.
+		ConnectionLost,
 
-	const wxString& GetErrorMessage() const { return m_strErrorMessage; }
-	const int GetErrorCode() const { return m_nErrorCode; }
+		// SQL parse / type / column-not-found errors. Not retryable —
+		// indicates broken schema or wrong query. Caller surfaces as
+		// "Bug, please report".
+		Syntax,
 
-	// Add functions for stack traces ??
+		// Primary key, foreign key, unique, NOT NULL, CHECK violation.
+		// Business-level — caller often translates into a user-facing
+		// validation message ("Already exists", "Required field empty").
+		Constraint,
+
+		// Database-side deadlock (FB isc_lock_conflict, PG SQLSTATE
+		// 40P01, MSSQL 1205). Always safe to retry — the
+		// engine has already rolled back our TX.
+		Deadlock,
+
+		// Statement / lock timeout — distinct from Deadlock because
+		// the engine didn't pick us as a victim, our request just took
+		// too long against contended state. Usually retryable with
+		// backoff.
+		Timeout,
+
+		// A Commit over a transaction an inner level had already rolled back (a write that failed and
+		// whose error somebody caught). Nothing was touched: the transaction is still open and its
+		// owner rolls it back. Not retryable as it stands — the failure that matters is the one that
+		// was caught.
+		RolledBack,
+
+		// A RollBack with no transaction open — a second rollback, or one after the owner had already
+		// closed its transaction. The books disagree somewhere; not retryable.
+		NoTransaction,
+
+		// Could not classify from native code. Caller treats as
+		// non-retryable by default; rich-text Kind classification can
+		// be added per-driver over time without changing the catch
+		// signature.
+		Unknown,
+	};
+
+	Kind GetKind() const { return m_kind; }
+	// Out-of-line — same reason as ibBackendException::GetErrorDescription:
+	// inline body on a BACKEND_API class becomes dllimport-only in
+	// consuming TUs, and MSVC may decline to inline (e.g. when the call
+	// happens inside a lambda the linker can't see), then the symbol
+	// isn't exported from backend.dll either → LNK2019. Out-of-line in
+	// .cpp guarantees the export.
+	bool IsRetryable() const;
+
+	// Throw a categorised DB exception without native-code detail —
+	// for business-level callers that know the category but don't have
+	// a driver error to pass. Driver code should prefer
+	// ibDatabaseLayerException::Throw below.
+	[[noreturn]] static void Throw(Kind kind, const wxString& msg);
+
+protected:
+	ibBackendDatabaseException(Kind kind, const wxString& msg)
+		: ibBackendException(msg), m_kind(kind) {}
+
 private:
-	wxString m_strErrorMessage;
-	int m_nErrorCode;
+	Kind m_kind;
 };
 
-#endif // _USE_DATABASE_LAYER_EXCEPTIONS
+// ibDatabaseLayerException — concrete driver-tier failure with the
+// native error metadata preserved. Thrown ONLY from
+// ibDatabaseErrorReporter::ThrowDatabaseException(). The reporter sets
+// the native code + sqlstate that the driver collected before
+// classifying into Kind and raising this.
+//
+// Per-driver classification lives in ClassifyError* free functions next
+// to each driver — they map native codes to Kind. Until those mappings
+// exist this class is still useful: the native code + sqlstate travel
+// with the exception so admin logs and ops dashboards see something
+// more useful than just a message string.
+class BACKEND_API ibDatabaseLayerException : public ibBackendDatabaseException {
+public:
+	// Out-of-line — see IsRetryable comment above for the BACKEND_API
+	// + inline + lambda export issue.
+	int             GetDriverErrorCode() const;
+	const wxString& GetSqlState()         const;
+
+	[[noreturn]] static void Throw(Kind kind, int nativeCode,
+	                                const wxString& sqlState,
+	                                const wxString& msg);
+
+private:
+	ibDatabaseLayerException(Kind kind, int nativeCode,
+	                          const wxString& sqlState, const wxString& msg)
+		: ibBackendDatabaseException(kind, msg)
+		, m_nativeCode(nativeCode)
+		, m_sqlState(sqlState) {}
+
+	int      m_nativeCode = 0;
+	wxString m_sqlState;
+};
+
+// (The QUERY-layer varieties moved to query/queryException.h — they are raised on L3-L5 and had no
+// business living in the database tier's header. See that file for the division of labour.)
 
 #endif // __DATABASE_LAYER_EXCEPTION_H__

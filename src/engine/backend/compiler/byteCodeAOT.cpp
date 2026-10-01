@@ -1,5 +1,5 @@
 // Ahead-Of-Time (AOT) bytecode persistence — Step 1 of the AOT cache
-// (docs/next-session-aot.md). Writes a compiled ibByteCode into a flat
+// (docs/private/next-session-aot.md). Writes a compiled ibByteCode into a flat
 // memory blob (later persisted as sys_bytecode_cache.blob) and reads
 // it back. Cold sessions then skip recompilation by Deserialize-ing
 // the blob whose source-hash + metadata-version + compiler-version
@@ -95,8 +95,153 @@ constexpr uint32_t kAOTMagic         = 0x31434250u; // 'PBC1' little-endian
 // integers, so a v9 reader loading a v10-written blob (or vice versa)
 // would dispatch the wrong handler on every post-shift opcode. Bump
 // rejects v9 → safe recompile + repopulate. Payload layout unchanged.
-constexpr uint16_t kAOTFormatVersion = 10;
-constexpr uint16_t kAOTFlagPortable  = 0x0001;       // unused — host-endian today
+// v13 (2026-06-02): bind-kind access opcodes added before OPER_END
+// (OPER_GET/SET_EXTERN, OPER_GET/SET_SCOPE, OPER_GET/SET_CONTEXT). OPER_END
+// shifts +6, so TYPE_DELTA1 (= OPER_END+1) and every typed-op opcode
+// (oper + k*DELTA) shift in numeric value; ContextProp also now emits
+// OPER_GET_SCOPE/SET_SCOPE instead of OPER_GET_A/SET_A. v12 blobs persist raw
+// m_numOper integers → a v12 reader would dispatch the wrong handler on every
+// shifted opcode. Bump rejects v12 → safe recompile + repopulate.
+// v14 (2026-06-11): ibByteFunction gained m_lambdaExprAst — the recorded lambda
+// body as the L4 query AST (the LINQ-pushdown input). It IS serialised: AOT
+// hits are the production norm, so an unserialised AST would silently kill the
+// pushdown on every cached module. v13 blobs lack the trailing presence byte →
+// bump rejects them → safe recompile + repopulate.
+// v15 (2026-06-22): ibByteFunction shed two redundant fields — m_lCodeParamCount
+// (a pure mirror of m_listParam.size()) and the parallel m_listParamRealName
+// vector (folded into ibByteParam::m_strName). The function record no longer
+// writes the leading param-count s32 nor the separate name block; each param's
+// name now rides inline in WriteParam/ReadParam. v14 blobs mis-align on the
+// dropped fields → bump rejects them → safe recompile + repopulate.
+// v16 (2026-06-28): ibClassID now carries a KIND in its high byte (clsid.h). Dynamic
+// metaobject ids changed from FNV("R_<metaID>"/…) to constructive (kind<<56 | metaID),
+// so every persisted/cached CLSID differs from v15. Bump rejects v15 → safe recompile +
+// repopulate (DB/config blobs holding old CLSIDs regenerate too).
+// v17 (2026-07-10): the `restrict` clause (KEY_RESTRICT) now records a pushdown AST for its
+// where / join-ON lambda (EmitRestrictBody span fix). This is a COMPILER-OUTPUT change, not a
+// format change — the payload layout is identical to v16 — but Load() keys only on descriptor_id
+// and ignores bytecode_version, so a v16 blob compiled by the pre-fix compiler (restrict lambda
+// with an ABSENT AST → hasAst = 0) is served unchanged and the cached restrict silently loses the
+// pushdown (Where/Join throws "cannot be lowered", swallowed by the module's try/except → no
+// restriction). Bump rejects those v16 blobs → recompile records the AST → the filter applies.
+// v18 (2026-07-19): the shortLet peephole (compileCode.cpp) was resurrected. A
+// macro-precedence bug — `x % TYPE_DELTA1` expanded to `(x % 1) * N == 0` — had
+// left it dead, so every compound assignment `x = a op b` emitted a redundant
+// `OP tmp,a,b; LET x,tmp`. With TYPE_DELTAn parenthesised it fuses to `OP x,a,b`
+// (one fewer opcode + one fewer ibValue copy; the string case additionally does an
+// in-place append, O(n^2) -> O(n)). COMPILER-OUTPUT change, payload layout identical
+// — bump so cached blobs recompile to the fused form (old blobs still execute
+// correctly, just without the optimisation).
+// v19 (2026-08-05): a parameter's default-value descriptor lost its type NAME —
+// the bytecode already carries the type as a class id, and a name is spelled from
+// that id only when a message needs one.
+// v20 (2026-08-05): the global context gained a member — `SessionParameters` — and
+// the configuration root gained a second module property, the session module. A blob
+// compiled before either existed resolved its names against the smaller context, and
+// a cached one is served without ever asking whether that context still holds. Bump
+// so every module recompiles against the context as it is now.
+// v21 (2026-09-04): a function record gained two bytes after m_kind —
+// `m_needsHeapFrame`, which was never written and came back false on every
+// cached module (see WriteFunction), and `m_valueCached`, the `Cached` modifier.
+// A v20 blob read as v21 would take the parent ref two bytes late and every
+// field after it with it, so a stale reader does not fail cleanly — the strict
+// version check is what stops it.
+// v22 (2026-09-05): NOT A LAYOUT CHANGE — the bytes are identical to v21. What moved is
+// what the operands MEAN: the parent-chain visibility rule became one sentence ("a child
+// sees its parent entire except the parent's own private locals", ibByteCodeVarInfo::
+// IsLocal on both sides), and the compile side stopped answering it with a list that left
+// Context / ContextProp out. Names that used to be found further up the chain are now
+// found where they live, so their (depth, index) differs — and a v21 blob carries the
+// old addresses. Served to this engine, it resolves a name against a frame that is not
+// there ("Outer frame not bound at depth 3 / idx 69"), which is exactly what happened
+// while this was being tested.
+//
+// ⭐ THE VERSION IS ABOUT WHETHER THIS ENGINE MAY USE THIS BLOB, not about byte layout.
+// The cache key (byteCodeCache.cpp) is build-stamp + configuration digest, and the stamp
+// only moves when backend_core.cpp is recompiled — a compiler-rule change in another file
+// leaves it untouched. The strict check below is what makes a rule change safe.
+// v23 (2026-09-05): a function record gained one byte after m_valueCached —
+// `m_valueVariadic`, THE THIRD default-false flag this record has lost on the way back.
+// A built-in registered with a negative arity (`AppendFunc(wxT("Max"), -1, …)`) declares
+// no parameters, so the compiler's two arity checks refuse the caller's first argument
+// unless this says "takes what it is given". The compile-context registration set it; the
+// bytecode never carried it; so the moment a name resolved through bytecode instead of a
+// live context — which is what a cache hit IS — `Max(3, 9)` answered "Too many parameters
+// passed to 'Max'". For ANY count, including one, while the help published the signature
+// it always had.
+//
+// ⭐ The same shape as m_needsHeapFrame (v21) and m_valueCached (v21) before it, and the
+// question to ask of the NEXT field added here is theirs: not "does it compile" but "who
+// writes it back, and what does its absence look like". Absence looks like a feature that
+// was never reachable — and a feature nobody can call has no symptoms to report.
+// v25 (2026-09-08): the lambda AST carries `In`. The recorder has always produced that kind and the
+// serialiser did not accept it — and an unserialisable tree is stored as ABSENT, so
+// `.Where(x => x.Status in (…))` pushed down on a fresh compile and silently reverted to a full scan
+// on every cache hit. The absence looked exactly like "this predicate cannot be translated", which
+// is the same lesson the block above states: ask what the FIELD'S ABSENCE looks like, because that
+// is what a cache hit actually delivers.
+// v26 (2026-09-08): a Param node of a LAMBDA tree carries the CAPTURE'S ADDRESS — the frame and the
+// cell the compiler had already worked out — beside the name. The fold used to re-derive it at run
+// time by walking every captured frame and comparing every local's name; now it reads the value
+// where the invoked lambda itself would read it. Two s32 after the name, on Param only.
+// ⚠ Ask this field the question the block above asks: its ABSENCE reads as "no coordinate", which
+// falls back to the name search — correct, only slower — so a stale blob degrades rather than lies.
+// The version still moves, because a v25 blob mis-aligns on the two new numbers.
+// v27 (2026-09-08): the lambda query TREE is no longer part of the format at all. It was a second
+// representation of a body the instructions already hold, and it is derived from them now
+// (compiler/lambdaQueryAST.h) — so the blob carries what the runtime executes and nothing beside
+// it. LINQ's own instruction set landed with it — NARROW, SEEN, KEEP, RESULT, BUCKET, BUCKET_GET,
+// ROW, FIELD — and every added opcode moves TYPE_DELTA1, which renumbers every TYPED opcode: a v26
+// blob would execute different instructions, not merely misread a field.
+//
+// ⭐⭐ AND THIS IS WHERE THE SLICE HAPPENS. Max, 2026-09-08: *"when you take the bytecode and throw
+// it into the cache, THAT is when it gets sliced."* Every door here is typed on `ibByteCode` — the
+// BASE — so handing it the compiler's `ibByteExtCode` writes the instructions, the constants and the
+// symbol tables, and the LINQ section that object also carries is simply not part of what a base is.
+// Nothing filters it out: the type does. The compiler keeps its tree (IntelliSense reads it there);
+// the blob never had one.
+// ⚠ 27 → 28 (2026-09-08): `orderby a, b` compiles to SEVERAL `OPER_LINQ_KEEP` — the first carrying
+// the row with key 0, each further one carrying only its key, numbered in the fourth operand. The
+// instructions are the same width and a cached blob from before this change is still readable, but
+// it was written by a compiler that could not express a second key: a row kept from it would order
+// by one key while the source text says two. The layout did not move; the MEANING did, which is
+// exactly what this number is for.
+// 🛑 28 → 29 (2026-09-09): `OPER_NEW` now carries the CLASS ID in `m_param3.m_numIndex`, decided at
+// compile time, and the runtime creates from it instead of reading the class NAME back out of the
+// const pool and resolving it again on every execution. A v28 blob has a ZERO there, and zero is
+// not a class — it would raise on the first `New` rather than misbehave quietly, but a cache that
+// cannot run is still a cache that must not be loaded. The layout did not move; a previously unused
+// operand acquired a meaning, which is the same kind of change as the one above.
+// 🛑 29 → 30 (2026-09-15): a function's parameter or local called like a binding of the module's object
+// resolves to the parameter (compileCode.cpp, "A NAME DECLARED NEARER WINS"). A v29 blob was compiled
+// with the binding reading it — the layout is the same and the blob loads, and it would go on counting
+// the days of the document's month where the source says the argument's. A cache that answers
+// differently from its source must not be loaded.
+// 🛑 30 → 31 (2026-09-17): three compilations changed their answer. `New T(args);` written as a statement
+// kept its arguments' instructions (a v30 blob built the object with none); a variable declared with a value
+// class (`Array rows`) is gated on every assignment (OPER_SET_TYPE after the LET, which a v30 blob does not
+// have); and a LINQ filter's comparisons and NOT / AND / OR carry LINQ_THREE_VALUED_NULL in m_param4, so NULL
+// is not kept by `where` — a v30 blob's zero there keeps it; and `Not` no longer gates its own result cell
+// before computing it (a v30 blob does, and raises on the second row of a filter); and `Not` reads its operand
+// only up to the next And / Or (a v30 blob compiled `Not a And b` as `Not (a And b)`). The layout did not move.
+// 🛑 31 → 32 (2026-09-21): an ordering key's WAY rides its own `OPER_LINQ_KEEP` (m_param4.m_numArray, 1 =
+// descending), and `OPER_LINQ_RESULT` says only "by the keys" (2). A v31 blob wrote the way once, as 1 in the
+// RESULT, and a zero in every KEEP - read now, a descending query would come back ascending, quietly.
+// 🛑 32 -> 33 (2026-09-24): a COMPARISON'S RESULT IS BOOLEAN AGAIN, so the instruction above it
+//    changes. "Is this a comparison" is a range over the operator numbers and it was asked after a
+//    declared type had already moved the opcode by a tier, so a typed comparison answered no and
+//    its result carried the OPERAND'S class - which made the If over it take the operand's tier and
+//    read the operand's field. Cached bytecode written by the old compiler holds that If; the new
+//    interpreter writes the comparison's answer with its tag, into another field, and the old If
+//    would read the one nobody wrote. And / Or answer a boolean by the same rule and move with it.
+// 🛑 33 -> 34 (2026-09-27): A DYNAMIC CLASS ID CARRIES ITS METACLASS (clsid.h: kind | metaclass | metaID), and
+//    `AnyRef` / `CatalogRef` are spelled in those bits (any metaID) instead of a name hash. A blob keeps the
+//    class ids its code was compiled against — a declared type, a `New` — and a v33 one names classes that
+//    are registered under other ids now.
+// 🛑 34 -> 35 (2026-09-30): A DATE CONSTANT IS AN ibDateTime (fdatetime.h) - a wall-clock reading counted from the
+//    empty date - where a v34 blob holds an instant of the compiling machine's clock.
+constexpr uint16_t kAOTFormatVersion = 35;
+[[maybe_unused]] constexpr uint16_t kAOTFlagPortable = 0x0001;   // reserved — host-endian today, no reader yet
 
 // Sentinel for an over-large collection — guards Deserialize against
 // reading garbage that pre-allocates GB. Bytecodes have hundreds of
@@ -182,10 +327,10 @@ bool WriteConstValue(ibWriterMemory& w, const ibValue& v) {
 		return true;
 	}
 	case ibValueTypes::TYPE_DATE:
-		w.w_s64((int64_t)v.m_dData);
+		w.w_s64(v.m_dData.GetValue());
 		return true;
 	case ibValueTypes::TYPE_STRING:
-		w.w_stringZ(v.m_sData);
+		w.w_stringZ(v.GetString());
 		return true;
 	default:
 		return false; // TYPE_REFFER / TYPE_VALUE / TYPE_ENUM / TYPE_OLE
@@ -195,46 +340,58 @@ bool WriteConstValue(ibWriterMemory& w, const ibValue& v) {
 bool ReadConstValue(const ibReaderMemory& r, ibValue& v) {
 	const uint8_t tc = r.r_u8();
 	v.SetType((ibValueTypes)tc);
-	// Const-pool entries are compile-time literals — readonly by
-	// definition. Without this flag, runtime arg-binding on a literal
-	// arg falls through to the ref-binding branch (procUnit.cpp:828)
-	// and triggers "Attempt to write to a constant value" when the
-	// callee writes through the slot. Fresh-compile path sets this on
-	// every const it pushes; AOT format doesn't carry the bit (it's
-	// implicit for the whole list).
-	v.m_bReadOnly = true;
+
+	// Write the payload while the value is still mutable, THEN mark it
+	// readonly. Order matters since Phase 2: the string payload moved into
+	// the union and SetString() now Resets the value first to free the old
+	// ibString — and Reset() rejects writes to a readonly value. Setting the
+	// flag before SetString() therefore threw "Attempt to assign a value to a
+	// write-denied variable" for every string const (AOT cache load of any
+	// module with a string literal). The non-string cases write members
+	// directly and were unaffected, which is why only strings tripped it.
+	bool ok = true;
 	switch ((ibValueTypes)tc) {
 	case ibValueTypes::TYPE_EMPTY:
 	case ibValueTypes::TYPE_NULL:
-		return true;
+		break;
 	case ibValueTypes::TYPE_BOOLEAN:
 		v.m_bData = (r.r_u8() != 0);
-		return true;
+		break;
 	case ibValueTypes::TYPE_NUMBER: {
 		const uint32_t len = r.r_u32();
-		if (len > kAOTSanityMax) return false;
+		if (len > kAOTSanityMax) { ok = false; break; }
 		wxMemoryBuffer buf;
 		if (len > 0) {
 			r.r(buf.GetAppendBuf(len), (int)len);
 			buf.UngetAppendBuf(len);
 		}
-		return v.m_fData.SetBuffer(buf);
+		ok = v.m_fData.SetBuffer(buf);
+		break;
 	}
 	case ibValueTypes::TYPE_DATE:
-		v.m_dData = (wxLongLong_t)r.r_s64();
-		return true;
+		v.m_dData = ibDateTime(r.r_s64());
+		break;
 	case ibValueTypes::TYPE_STRING:
-		r.r_stringZ(v.m_sData);
-		return true;
+		v.SetString(r.r_stringZ());
+		break;
 	default:
-		return false;
+		ok = false;
+		break;
 	}
+
+	// Const-pool entries are compile-time literals — readonly by definition.
+	// Without this flag, runtime arg-binding on a literal arg falls through to
+	// the ref-binding branch (procUnit.cpp:828) and triggers "Attempt to write
+	// to a constant value" when the callee writes through the slot. Fresh-
+	// compile path sets this on every const it pushes; the AOT format doesn't
+	// carry the bit (it's implicit for the whole list).
+	v.m_bReadOnly = true;
+	return ok;
 }
 
 bool WriteVarInfo(ibWriterMemory& w, const ibByteCode::ibByteCodeVarInfo& v) {
 	w.w_s32((int32_t)v.m_slotIndex);
 	w.w_u64((uint64_t)v.m_clsid);
-	w.w_u8(v.m_bScoped ? 1 : 0);
 	w.w_u8((uint8_t)v.m_kind);
 	w.w_s32((int32_t)v.m_parentRef);
 	w.w_stringZ(v.m_strRealName);
@@ -246,7 +403,6 @@ bool WriteVarInfo(ibWriterMemory& w, const ibByteCode::ibByteCodeVarInfo& v) {
 void ReadVarInfo(const ibReaderMemory& r, ibByteCode::ibByteCodeVarInfo& v) {
 	v.m_slotIndex = (long)r.r_s32();
 	v.m_clsid     = (ibClassID)r.r_u64();
-	v.m_bScoped   = (r.r_u8() != 0);
 	v.m_kind      = (ibVarKind)r.r_u8();
 	v.m_parentRef = (long)r.r_s32();
 	r.r_stringZ(v.m_strRealName);
@@ -255,57 +411,78 @@ void ReadVarInfo(const ibReaderMemory& r, ibByteCode::ibByteCodeVarInfo& v) {
 }
 
 bool WriteParam(ibWriterMemory& w, const ibByteCode::ibByteParam& p) {
-	w.w_u8(p.m_bByRef ? 1 : 0);
+	w.w_u8(p.m_bByValue ? 1 : 0);
 	w.w_u64((uint64_t)p.m_clsid);
 	WriteParamRun(w, p.m_defaultValue);
-	w.w_stringZ(p.m_defaultValue.m_strType);
+	w.w_stringZ(p.m_strName);
 	return true;
 }
 
 void ReadParam(const ibReaderMemory& r, ibByteCode::ibByteParam& p) {
-	p.m_bByRef = (r.r_u8() != 0);
+	p.m_bByValue = (r.r_u8() != 0);
 	p.m_clsid  = (ibClassID)r.r_u64();
 	ReadParamRun(r, p.m_defaultValue);
-	r.r_stringZ(p.m_defaultValue.m_strType);
+	r.r_stringZ(p.m_strName);
 }
 
+// ⭐⭐ THE QUERY-TREE SERIALISER IS GONE, and with it a whole class of defect.
+//
+// It was a whitelist (AstSerializable) deciding which node kinds could travel, plus a recursive
+// writer and reader. A kind the whitelist did not know made the tree UNSERIALISABLE, and an
+// unserialisable tree was stored as ABSENT — which downstream reads as "this predicate cannot be
+// translated". So a filter using such a kind pushed down on a fresh compile and silently reverted
+// to a full scan on every cache hit, and a cache hit is the normal case.
+//
+// Nothing replaces it: the tree is DERIVED from the instructions wherever it is wanted
+// (compiler/lambdaQueryAST.h), so there is no second representation to keep, to gate or to version.
+
 bool WriteFunction(ibWriterMemory& w, const ibByteCode::ibByteFunction& f) {
-	w.w_s32((int32_t)f.m_lCodeParamCount);
 	w.w_s32((int32_t)f.m_lCodeLine);
 	w.w_u8(f.m_bCodeRet ? 1 : 0);
 	w.w_s32((int32_t)f.m_lVarCount);
 	w.w_u64((uint64_t)f.m_returnClsid);
 	w.w_u8((uint8_t)f.m_kind);
+	// m_needsHeapFrame was NOT written before v21, and a default-false bool that
+	// the reconstruction path has to restore is exactly the shape of a silent
+	// defect: a module served from the cache came back with the flag cleared on
+	// every function, so a cross-module call to an exported function holding an
+	// inner lambda emitted OPER_CALL instead of OPER_CALL_CLOSURE and the capture
+	// dangled — only on the runs that hit the cache.
+	w.w_u8(f.m_needsHeapFrame ? 1 : 0);
+	w.w_u8(f.m_valueCached ? 1 : 0);
+	w.w_u8(f.m_valueVariadic ? 1 : 0);   // v23 - see the note on the constant
 	w.w_s32((int32_t)f.m_parentRef);
 	w.w_stringZ(f.m_strRealName);
 	w.w_stringZ(f.m_strContext);
 
-	// m_listParam — count must equal m_lCodeParamCount, but writer
-	// doesn't enforce: reader rebuilds from the count it sees.
+	// m_listParam — count is the single source of truth (m_lCodeParamCount
+	// is gone). Each entry carries its own name via WriteParam.
 	w.w_u32((uint32_t)f.m_listParam.size());
 	for (const auto& p : f.m_listParam)
 		WriteParam(w, p);
-
-	// m_listParamRealName — parallel to m_listParam.
-	w.w_u32((uint32_t)f.m_listParamRealName.size());
-	for (const auto& s : f.m_listParamRealName)
-		w.w_stringZ(s);
 
 	// m_listLocals — function-frame symbol table.
 	w.w_u32((uint32_t)f.m_listLocals.size());
 	for (const auto& v : f.m_listLocals)
 		WriteVarInfo(w, v);
 
+	// ⭐ NOTHING IS WRITTEN FOR THE QUERY TREE. It used to travel here as a presence byte plus a
+	// recursive dump, gated by a whitelist — and an unserialisable tree was stored as ABSENT, which
+	// read downstream as "this predicate cannot be translated". It is derived from the instructions
+	// now, so the cache carries what the runtime executes and nothing beside it.
+
 	return true;
 }
 
 bool ReadFunction(const ibReaderMemory& r, ibByteCode::ibByteFunction& f) {
-	f.m_lCodeParamCount = (long)r.r_s32();
 	f.m_lCodeLine       = (long)r.r_s32();
 	f.m_bCodeRet        = (r.r_u8() != 0);
 	f.m_lVarCount       = (long)r.r_s32();
 	f.m_returnClsid     = (ibClassID)r.r_u64();
 	f.m_kind            = (ibFnKind)r.r_u8();
+	f.m_needsHeapFrame  = (r.r_u8() != 0);
+	f.m_valueCached     = (r.r_u8() != 0);
+	f.m_valueVariadic   = (r.r_u8() != 0);   // v23
 	f.m_parentRef       = (long)r.r_s32();
 	r.r_stringZ(f.m_strRealName);
 	r.r_stringZ(f.m_strContext);
@@ -316,17 +493,12 @@ bool ReadFunction(const ibReaderMemory& r, ibByteCode::ibByteFunction& f) {
 	for (uint32_t i = 0; i < paramCount; ++i)
 		ReadParam(r, f.m_listParam[i]);
 
-	uint32_t paramNameCount = r.r_u32();
-	if (paramNameCount > kAOTSanityMax) return false;
-	f.m_listParamRealName.resize(paramNameCount);
-	for (uint32_t i = 0; i < paramNameCount; ++i)
-		r.r_stringZ(f.m_listParamRealName[i]);
-
 	uint32_t localsCount = r.r_u32();
 	if (localsCount > kAOTSanityMax) return false;
 	f.m_listLocals.resize(localsCount);
 	for (uint32_t i = 0; i < localsCount; ++i)
 		ReadVarInfo(r, f.m_listLocals[i]);
+
 
 	return true;
 }

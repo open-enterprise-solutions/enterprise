@@ -1,0 +1,720 @@
+#include "backend/query/columnLayout.h"
+#include "backend/query/columnSpread.h"   // ibColumnSpread::DriveSpread — shared role-spread binding (value + wire codecs)
+
+#include "backend/backend_core.h"    // ibDateTime
+#include "backend/metaData.h"        // ibMetaData::GetTypeCtor / GetAvailableCtor / CreateObject
+#include "backend/objCtor.h"         // ibCtorMetaValueType / ibCtorObjectMetaType / ibCtorAbstractType
+#include "backend/valueInfo.h"       // reference_size_t (= sizeof(ibReference)), ibReference
+#include "backend/compiler/value.h"  // ibValue accessors + ibValuePtr
+#include "backend/compiler/enumUnit.h"                              // ibValueEnumerationWrapper (enum read)
+#include "backend/system/value/valueType.h"                        // ibValueTypeDescription::AdjustValue (typed-empty)
+#include "backend/system/value/valuePointInTime.h"                 // g_valuePointInTimeCLSID — computed, never a column
+#include "backend/metaCollection/partial/reference/reference.h"    // ibValueReferenceDataObject (reference assembly)
+#include "backend/metaCollection/metaObject.h"                     // ibValueMetaObject (reference reconstruction)
+#include "backend/databaseLayer/databaseLayerException.h"          // ibDatabaseLayerException — the "no such field" verdict
+#include "backend/databaseLayer/databaseErrorCodes.h"              // DATABASE_LAYER_FIELD_NOT_IN_RESULTSET
+// ibFieldTypes (the wire tag) now comes from query/queryColumn.h — the codec no longer depends on
+// the attribute header (metaAttributeObject.h), only on the shared L3 column vocabulary.
+
+
+#include <algorithm>  // std::max — the longest field suffix a bounded label leaves room for
+#include <map>
+#include <optional>   // ibColumnCodec::WriteValue — a blob buffer only for the value that has one
+
+// The single role -> suffix table (see columnLayout.h). Built once; an unknown role
+// (only Raw) yields the empty suffix.
+// ⚠ A SWITCH, NOT A MAP: every field of every cell is spelled through here, and a tree lookup per
+// spelling stood in the stack samples of a report's read (2026-09-12).
+const wxString& ibFieldSuffix(ibColumnRole role)
+{
+	static const wxString s_empty;
+	static const wxString s_type(wxT("_TYPE")), s_bool(wxT("_B")), s_number(wxT("_N")), s_date(wxT("_D")),
+		s_string(wxT("_S")), s_enum(wxT("_E")), s_refType(wxT("_RTRef")), s_refId(wxT("_RRRef")),
+		s_schedule(wxT("_SCH")), s_typeDesc(wxT("_TD"));
+	switch (role) {
+	case ibColumnRole::Discriminator:   return s_type;
+	case ibColumnRole::Boolean:         return s_bool;
+	case ibColumnRole::Number:          return s_number;
+	case ibColumnRole::Date:            return s_date;
+	case ibColumnRole::String:          return s_string;
+	case ibColumnRole::Enum:            return s_enum;
+	case ibColumnRole::ReferenceType:   return s_refType;
+	case ibColumnRole::ReferenceId:     return s_refId;
+	case ibColumnRole::Schedule:        return s_schedule;
+	case ibColumnRole::TypeDescription: return s_typeDesc;
+	default:                            return s_empty;   // Raw — the column is its own field
+	}
+}
+
+wxString ibSqlAliasOf(const wxString& outputName)
+{
+	// THE PREFIX IS A NAMESPACE, NOT AN ESCAPE.
+	//
+	// These names are written INSIDE a projection of ours — a nested select, a declared query's body
+	// — so they are ours to spell, all of them, and they are spelled in that projection's own
+	// namespace. The prefix says where the name lives. That a prefixed word can no longer collide
+	// with SQL's vocabulary is a CONSEQUENCE of saying so, not the purpose.
+	//
+	// 🛑 THE FIRST VERSION TESTED A WORD LIST and prefixed only on a hit. Two things were wrong with
+	// it, and the second is the serious one:
+	//   · the list is a guess — it has to be right for four dialects and stay right as each adds
+	//     keywords, and nothing tells you it is incomplete;
+	//   · a name that changed only for `Date` meant the writer/reader split was exercised almost
+	//     never, so a reader that forgot to ask here would work for every query but one and fail
+	//     SILENTLY there — an empty value, not a refusal. Prefixing everything makes the same
+	//     mistake break loudly, on the first query anyone runs.
+	//
+	// ⭐ INJECTIVE, so distinct outputs stay distinct: `Date` -> `out_Date`, and an output actually
+	// named `out_Date` -> `out_out_Date`. Stable, so the writer and the reader agree by computing it
+	// rather than by passing the spelling between them.
+	// An unnamed output has nothing to qualify — it is read by position, not by name.
+	if (outputName.IsEmpty())
+		return outputName;
+
+	// 🛑 …AND IT HAS TO COME BACK. A result is read by its labels, and the Firebird driver keeps 31 characters
+	// of a label (XSQLDA): `out_CurrencyAmountCorrTurnoverCr` is 32, came back cut, was found by no reader and
+	// read as an EMPTY sum — while `out_QuantityCorrTurnoverCr`, the same figure of a shorter resource, was
+	// right (measured 2026-09-16, the corresponding turnovers of the ledger). Bounded here, where writer and
+	// reader both ask, the label stays one spelling (ibDialectDictionary::BoundedName).
+	//
+	// ⚠ …WITH ROOM FOR A FIELD SUFFIX. An object-valued output is spread under this name as a PREFIX
+	// (`<label>_RTRef`, `<label>_RRRef` — dbTableProvider, the grouped walk), so the name is bounded short of
+	// the driver's limit by the longest suffix the role table spells, and every field of it fits too.
+	static const size_t kResultLabelLimit = 31;   // the Firebird driver's XSQLDA label
+	static const std::initializer_list<ibColumnRole> kFieldRoles = {
+		ibColumnRole::Discriminator, ibColumnRole::Boolean, ibColumnRole::Number,
+		ibColumnRole::Date, ibColumnRole::String, ibColumnRole::Enum,
+		ibColumnRole::ReferenceType, ibColumnRole::ReferenceId,
+		ibColumnRole::Schedule, ibColumnRole::TypeDescription };
+	static const size_t kLongestSuffix = [] {
+		size_t longest = 0;
+		for (const ibColumnRole role : kFieldRoles)
+			longest = std::max(longest, ibFieldSuffix(role).length());
+		return longest;
+	}();
+
+	// ⚠ A FIELD NAMED ON ITS OWN IS STILL ITS OUTPUT'S FIELD. A value is read back as the prefix's label plus
+	// the suffix (dbTableProvider, `Column(prefix, col)`), and a writer that spells each field as an output of
+	// its own — the breakdown by kind, `AccountDimension1_TYPE` — has to land on that same label. Bounded
+	// whole, `out_AccountDimension1_TYPE` became a hash no reader asked for, every breakdown value read empty
+	// and a balance by kind folded into one row (2026-09-17).
+	for (const ibColumnRole role : kFieldRoles) {
+		const wxString& suffix = ibFieldSuffix(role);
+		if (!suffix.IsEmpty() && outputName.length() > suffix.length() && outputName.EndsWith(suffix))
+			return ibSqlAliasOf(outputName.Left(outputName.length() - suffix.length())) + suffix;
+	}
+
+	return ibDialectDictionary::BoundedName(wxT("out_") + outputName, kResultLabelLimit - kLongestSuffix);
+}
+
+bool ibIsPlainScalarType(const ibTypeDescription& type)
+{
+	return type.GetClsidCount() == 1
+		&& (type.ContainType(ibValueTypes::TYPE_NUMBER) || type.ContainType(ibValueTypes::TYPE_STRING)
+		    || type.ContainType(ibValueTypes::TYPE_DATE) || type.ContainType(ibValueTypes::TYPE_BOOLEAN));
+}
+
+bool ibReadsBackAsItself(const ibTypeDescription& type)
+{
+	return ibIsPlainScalarType(type) && !type.ContainType(ibValueTypes::TYPE_BOOLEAN);
+}
+
+const wxString& ibOwnerRefField()
+{
+	// Built from the ONE suffix table rather than written out: this column and a reference key hold
+	// the same sixteen bytes, and they stay spelled alike because they are spelled from one place.
+	static const wxString s_field = wxT("Row") + ibFieldSuffix(ibColumnRole::ReferenceId);
+	return s_field;
+}
+
+ibBackendColumnRawDB ibOwnerRefColumn()
+{
+	return ibBackendColumnRawDB::Guid(ibOwnerRefField());
+}
+
+
+int ibPersistedTypeTag(ibColumnRole role)
+{
+	switch (role) {
+	case ibColumnRole::Boolean:       return ibFieldTypes_Boolean;
+	case ibColumnRole::Number:        return ibFieldTypes_Number;
+	case ibColumnRole::Date:          return ibFieldTypes_Date;
+	case ibColumnRole::String:        return ibFieldTypes_String;
+	case ibColumnRole::Enum:          return ibFieldTypes_Enum;
+	case ibColumnRole::ReferenceType: return ibFieldTypes_Reference;
+	case ibColumnRole::ReferenceId:   return ibFieldTypes_Reference;
+	case ibColumnRole::Schedule:      return ibFieldTypes_Schedule;
+	case ibColumnRole::TypeDescription: return ibFieldTypes_TypeDescription;
+	default:                          return ibFieldTypes_Empty;   // Raw / Discriminator carry no tag
+	}
+}
+
+
+// Kept here because this is where the layout decides what a column BECOMES physically — so the
+// storage fact and the "can it be compared" fact cannot drift apart.
+//
+//   STORED WHOLE — a schedule, a type description: one BLOB field, and SQL compares no blobs.
+//   NOT STORED AT ALL — the MOMENT (PointInTime): computed from the date and the reference, with no
+//   field of its own, so there is nothing to compare either. It is in the field tree so a QUERY can
+//   address it, and a query that WRITES its fields asks the column instead (Kind::Synthetic).
+bool ibIsComparableType(const ibTypeDescription& typeDesc)
+{
+	return !typeDesc.ContainType(g_valueScheduleCLSID)
+	    && !typeDesc.ContainType(g_valueTypeDescriptionCLSID)
+	    && !typeDesc.ContainType(g_valuePointInTimeCLSID);
+}
+
+// THE AUTHORITY, and it now asks the COLUMN — which answers with the derivation below unless it has
+// a reason not to. Kept as a free function because that is how every tier already spells the
+// question; what changed is who owns the answer.
+std::vector<ibColumnSlot> DescribeColumnLayout(const ibBackendQueryColumn* col)
+{
+	return col->DescribeLayout();
+}
+
+// (THE DEFAULT DERIVATION lives in queryColumn.cpp, with the other things a column DOES — together
+//  with the two helpers only it used (the primitive slot's canonical type, and a raw column's carried
+//  type). This file keeps the layout VOCABULARY and the value codec.)
+
+// A column's VALUE fields — its layout's value-role slots (every role EXCEPT the _TYPE discriminator
+// and the reference TYPE id). The ONE metadata-free authority for "which fields carry this column's
+// value", derived over DescribeColumnLayout — it replaces the former per-class GetValueFields
+// overrides (raw -> its one field; an attribute / temp column -> its composite spread): the role
+// model already encodes each column's storage shape. A free TIER helper, not a column method — only
+// the DB provider asks it (sort / group-by / key field expansion); the column stays a pure descriptor.
+bool ibIsValueRole(ibColumnRole role)
+{
+	return role != ibColumnRole::Discriminator && role != ibColumnRole::ReferenceType;
+}
+
+std::vector<ibColumnSlot> ColumnValueSlots(const ibBackendQueryColumn* col)
+{
+	std::vector<ibColumnSlot> out;
+	for (ibColumnSlot& slot : DescribeColumnLayout(col))
+		if (ibIsValueRole(slot.m_role))
+			out.push_back(std::move(slot));
+	return out;
+}
+
+ibColumnSlot FirstValueSlot(const ibBackendQueryColumn* col)
+{
+	std::vector<ibColumnSlot> slots = ColumnValueSlots(col);
+	return slots.empty() ? ibColumnSlot() : std::move(slots.front());
+}
+
+std::vector<wxString> ColumnValueFields(const ibBackendQueryColumn* col)
+{
+	std::vector<wxString> out;
+	for (const ibColumnSlot& slot : ColumnValueSlots(col))
+		out.push_back(slot.m_name);
+	return out;
+}
+
+// ==========================================================================
+// ibColumnCodec — the value <-> physical-fields codec (was ibDbTableProvider::Set/GetValueColumn).
+// Lives here, next to the layout, so the field SHAPE (DescribeColumnLayout) and the field VALUES
+// (this codec) share one home. The persisted variant tag (ibFieldTypes) stays local to this TU.
+// ==========================================================================
+
+ibValue ReadSingleTargetReference(const ibMetaData* metaData, const ibClassID& target,
+                                  const wxMemoryBuffer& keyBytes)
+{
+	if (metaData == nullptr || target == 0 || keyBytes.GetDataLen() < sizeof(ibReference))
+		return ibValue();
+
+	// The key is all a query column carries; whoever asks the reference what it IS pays for the read.
+	ibValuePtr<ibValueReferenceDataObject> reference(
+		ibValueReferenceDataObject::Create(metaData, target, const_cast<void*>(keyBytes.GetData()),
+			ibReferenceLoad::OnDemand));
+	return reference != nullptr ? ibValue(reference) : ibValue();
+}
+
+bool ibColumnCodec::HasReference(const ibBackendQueryColumn* col)
+{
+	for (const auto& clsid : col->GetTypeValueDesc().GetClsidList())
+		if (IsReference(clsid))
+			return true;
+	return false;
+}
+
+void ibColumnCodec::WriteValue(const ibBackendQueryColumn* col, const ibMetaData* /*metaData*/,
+	const ibValue& cValue, ibQueryStatement* statement, int& position)
+{
+	// (the codec's variant tags are the global ibFieldTypes_* names — query/queryColumn.h)
+	// WRITE needs NO metadata: the reference slot is gated by the clsid KIND (IsReference) and the
+	// blob comes off the value itself. metaData stays on the signature only to mirror ReadValue.
+	const int tag = ibColumnSpread::TagForValue(cValue);
+
+	// Schedule payload — serialised once, bound at the _SCH slot. Read off the value itself, like
+	// the reference blob below: no metadata, no session. The buffer exists only for a schedule: made for
+	// every value, it was a kilobyte allocated and freed per cell written (wxMemoryBuffer's default size).
+	std::optional<wxMemoryBuffer> scheduleBlob;
+	if (tag == ibFieldTypes_Schedule) {
+		scheduleBlob.emplace();
+		ibValueSchedule* schedule = nullptr;
+		if (cValue.ConvertToValue(schedule) && schedule != nullptr)
+			ibJobScheduleDescriptionMemory::WriteBuffer(*scheduleBlob, schedule->GetSchedule());
+	}
+
+	// Type-description payload — the same arrangement one line up: serialised once here, bound at
+	// the _TD slot below. The value knows its own description; the codec only moves bytes.
+	std::optional<wxMemoryBuffer> typeDescBlob;
+	if (tag == ibFieldTypes_TypeDescription) {
+		typeDescBlob.emplace();
+		ibValueTypeDescription* typeValue = nullptr;
+		if (cValue.ConvertToValue(typeValue) && typeValue != nullptr)
+			ibTypeDescriptionMemory::WriteBuffer(*typeDescBlob, typeValue->m_typeDesc);
+	}
+
+	// Reference payload — resolved once, bound at the _RTRef/_RRRef slots. A non-reference value
+	// (or an unconvertible reffer) leaves it empty, so the pair binds 0 / NULL.
+	ibClassID   refClsid = 0;
+	const void* refBlob  = nullptr;
+	if (tag == ibFieldTypes_Reference) {
+		const ibClassID& clsid = cValue.GetClassType();
+		wxASSERT(clsid > 0);
+		// Kind read straight from the clsid — no metadata lookup on this per-value hot path.
+		ibValueReferenceDataObject* refData = nullptr;
+		if (IsReference(clsid) && cValue.ConvertToValue(refData)) {
+			refClsid = clsid;
+			refBlob  = refData->GetReferenceData();
+		}
+	}
+
+	ibColumnSpread::DriveSpread(col, tag, statement, position,
+		[&](ibColumnRole role, int& p) {   // ACTIVE primitive — the real value off the ibValue
+			switch (role) {
+			case ibColumnRole::Boolean: statement->SetParamBool(p++, cValue.GetBoolean()); break;
+			case ibColumnRole::Number:  statement->SetParamNumber(p++, cValue.GetNumber()); break;
+			case ibColumnRole::Date:    statement->SetParamDate(p++, cValue.GetDate()); break;
+			case ibColumnRole::String:  statement->SetParamString(p++, cValue.GetString()); break;
+			case ibColumnRole::Enum:    statement->SetParamInt(p++, cValue.GetInteger()); break;
+			case ibColumnRole::Schedule:   // active only under the schedule's tag, which made the buffer
+				statement->SetParamBlob(p++, scheduleBlob->GetData(), scheduleBlob->GetDataLen());
+				break;
+			case ibColumnRole::TypeDescription:
+				statement->SetParamBlob(p++, typeDescBlob->GetData(), typeDescBlob->GetDataLen());
+				break;
+			default:                                                                        break;
+			}
+		},
+		[&](ibColumnRole role, int& p) {   // reference pair (_RTRef clsid, _RRRef blob)
+			if (role == ibColumnRole::ReferenceType)      statement->SetParamNumber(p++, refClsid);
+			else if (refBlob != nullptr)                  statement->SetParamBlob(p++, refBlob, sizeof(ibReference));
+			else                                          statement->SetParamNull(p++);
+		});
+}
+
+void ibColumnCodec::WriteValue(const ibBackendQueryColumn* col, const ibMetaData* metaData, const ibValue& cValue, ibQueryStatement* statement)
+{
+	int position = 1;
+	WriteValue(col, metaData, cValue, statement, position);
+}
+
+static bool TagFitsColumn(const ibBackendQueryColumn* col, ibFieldTypes tag);   // below, beside the read it guards
+
+namespace {
+
+// ⭐⭐ ONE CELL'S FIELDS — a base and a role name each of them, and the result finds each one ONCE.
+//
+// Every read below used to spell `base + suffix` and hand the result that name to look up: a string
+// built and hashed per field per cell, three or four of them for a reference, on every row of every
+// read — most of what reading a cell cost (MEASURED 2026-09-12, Debug stack samples of the payroll
+// sheet). The result now keeps the index each (base, role) resolved to (ibQueryResult::FieldIndex), so
+// a cell costs one lookup of its base and the fields are read by number.
+//
+// ⚠ THE RAW ROLE IS THE BASE ITSELF — `ibFieldSuffix(Raw)` is empty. That is what lets a caller that
+// names a field WHOLE (ReadField below: `fld12_D`, or a computed output's bare name) go through the
+// same reads as the tag switch, which names a base and the role it wants.
+class ibCellFields
+{
+public:
+	ibCellFields(ibQueryResult& result, const wxString& base)
+		: m_result(result), m_base(base), m_slots(result.FieldsOf(base)) {}
+
+	int Field(ibColumnRole role) {
+		return m_result.FieldIndex(m_slots, m_base, static_cast<unsigned>(role), ibFieldSuffix(role));
+	}
+	ibQueryResult& Result() const { return m_result; }
+
+	// DOES THE STORED TAG NAME A FIELD THIS COLUMN HAS — TagFitsColumn's answer, asked of the column
+	// once per tag per result and kept beside the fields (FieldSlots::m_fits): the column's type does
+	// not change while a result is read, and every row asked it again.
+	bool TagFits(const ibBackendQueryColumn* col, ibFieldTypes tag) {
+		const unsigned t = static_cast<unsigned>(tag);
+		if (t >= ibQueryResult::kFieldSlots)
+			return TagFitsColumn(col, tag);
+		if (m_slots.m_fitsFor != col) {
+			for (signed char& fits : m_slots.m_fits)
+				fits = 0;
+			m_slots.m_fitsFor = col;
+		}
+		signed char& known = m_slots.m_fits[t];
+		if (known == 0)
+			known = TagFitsColumn(col, tag) ? 1 : -1;
+		return known > 0;
+	}
+
+private:
+	ibQueryResult&             m_result;
+	const wxString&            m_base;
+	ibQueryResult::FieldSlots& m_slots;
+};
+
+// Read ONE physical field of a known variant type into the value — the leaf of the read codec. The
+// value's field is `valueRole` of the cell (Raw when the caller named the field whole); a reference is
+// its type and key, whatever the role says.
+bool ReadFieldOf(ibCellFields& cell, ibColumnRole valueRole, int fieldType,
+	const ibBackendQueryColumn* col, const ibMetaData* metaData, ibValue& retValue, bool createData)
+{
+	ibQueryResult& result = cell.Result();
+	switch (fieldType)
+	{
+	case ibFieldTypes_Boolean:
+		retValue = result.GetResultBool(cell.Field(valueRole));
+		return true;
+	case ibFieldTypes_Number:
+		retValue = result.GetResultNumber(cell.Field(valueRole));
+		return true;
+	case ibFieldTypes_Date:
+		retValue = result.GetResultDate(cell.Field(valueRole));
+		return true;
+	case ibFieldTypes_String:
+		retValue = result.GetResultString(cell.Field(valueRole));
+		return true;
+	case ibFieldTypes_Null:
+		retValue = ibValue(ibValueTypes::TYPE_NULL);   // fresh NULL — releases any prior reffer/string in the slot (operator=(ibValueTypes) would leak it)
+		return true;
+	case ibFieldTypes_Schedule:
+	{
+		// The blob IS the value. An empty or unreadable one yields a DEFAULT schedule rather than
+		// an empty value: a row whose cell was never written must still answer "when am I due",
+		// and the description's own defaults are that answer (every one of them = "not restricted").
+		wxMemoryBuffer bufferData;
+		result.GetResultBlob(cell.Field(valueRole), bufferData);
+
+		ibJobScheduleDescription schedule;
+		ibJobScheduleDescriptionMemory::ReadBuffer(bufferData.GetData(), bufferData.GetDataLen(), schedule);
+
+		ibValuePtr<ibValueSchedule> created(new ibValueSchedule(schedule));
+		retValue = created;
+		return true;
+	}
+	case ibFieldTypes_TypeDescription:
+	{
+		// The blob IS the value, exactly as above. An empty or unreadable cell yields an EMPTY
+		// description rather than the column's own type: a characteristic that names no type is a
+		// defect the write refuses, so reading one back must not manufacture a plausible answer —
+		// it would look like the narrowing worked while admitting everything.
+		wxMemoryBuffer bufferData;
+		result.GetResultBlob(cell.Field(valueRole), bufferData);
+
+		ibTypeDescription typeDesc;
+		ibTypeDescriptionMemory::ReadBuffer(bufferData.GetData(), bufferData.GetDataLen(), typeDesc);
+
+		ibValuePtr<ibValueTypeDescription> created(new ibValueTypeDescription(typeDesc));
+		retValue = created;
+		return true;
+	}
+	case ibFieldTypes_Enum:
+	{
+		wxASSERT(metaData);
+		// The enum ctor is keyed by the ENUM clsid — taken from the column's type descriptor. The
+		// error fallback yields an empty value (an unreadable enum degrades to empty).
+		const ibClassID enumClsid = col->GetTypeDesc().GetFirstClsid();
+		const ibCtorAbstractType* so = metaData != nullptr ? metaData->GetAvailableCtor(enumClsid) : nullptr;
+
+		if (so != nullptr) {
+
+			ibValue enumVariant(result.GetResultInt(cell.Field(valueRole)));
+			ibValue* ppParams[] = { &enumVariant };
+
+			try {
+				const ibValuePtr<ibValueEnumerationWrapper> creator(
+					metaData->CreateObject(so->GetClassName(), ppParams, 1));
+				retValue = creator->GetEnumVariantValue();
+			}
+			catch (...) {
+				retValue = ibValue();
+				return false;
+			}
+
+			return true;
+		}
+
+		retValue = ibValue();
+		return false;
+	}
+	case ibFieldTypes_Reference:
+	{
+		wxASSERT(metaData);
+		if (metaData == nullptr)
+			return false;
+		const ibClassID refType = static_cast<ibClassID>(result.GetResultLong(cell.Field(ibColumnRole::ReferenceType)));
+
+		// EMPTY, NOT DEFAULT: the driver hands its bytes over by assignment, and a default buffer
+		// allocates a kilobyte first only to drop it — once per reference cell of every row read.
+		wxMemoryBuffer bufferData(0);
+		result.GetResultBlob(cell.Field(ibColumnRole::ReferenceId), bufferData);
+		if (!bufferData.IsEmpty()) {
+
+			// Reading the row is what `createData` asks for here — it never meant "settle it", which is
+			// why the reference stays unlatched and a later use may read it again. This used to be an
+			// if/else over two differently NAMED creation functions, and neither name said anything
+			// about reading; the branch is the argument now.
+			ibValuePtr<ibValueReferenceDataObject> created_reference(
+				ibValueReferenceDataObject::Create(metaData, refType, bufferData.GetData(),
+					createData ? ibReferenceLoad::Unlatched : ibReferenceLoad::OnDemand));
+
+			retValue = created_reference;
+			return created_reference != nullptr;
+		}
+		else if (refType > 0) {
+
+			const ibCtorMetaValueType* typeCtor = metaData->GetTypeCtor(refType);
+			if (typeCtor != nullptr) {
+
+				const ibValueMetaObject* metaObject = typeCtor->GetMetaObject();
+				wxASSERT(metaObject);
+
+				ibValuePtr<ibValueReferenceDataObject> created_reference(
+					ibValueReferenceDataObject::Create(metaData, metaObject->GetMetaID()));
+
+				retValue = created_reference;
+				return created_reference != nullptr;
+			}
+
+			return false;
+		}
+
+		// Empty _RRRef and no refType — the reference is empty / its dot-walk join did not match: the
+		// column's TYPED EMPTY value, not UNDEFINED.
+		retValue = (col != nullptr) ? ibValueTypeDescription::AdjustValue(col->GetTypeDesc(), metaData) : ibValue();
+		return true;
+	}
+	}
+
+	return false;
+}
+
+} // namespace
+
+// The leaf, for a caller that names the field WHOLE (a primitive's `fld12_D`) or, for a reference, the
+// base its type and key hang off — the Raw role is the name as given.
+bool ibColumnCodec::ReadField(const wxString& fieldName, int fieldType,
+	const ibBackendQueryColumn* col, const ibMetaData* metaData, ibValue& retValue, ibQueryResult& result, bool createData)
+{
+	ibCellFields cell(result, fieldName);
+	return ReadFieldOf(cell, ibColumnRole::Raw, fieldType, col, metaData, retValue, createData);
+}
+
+// ⭐⭐ DOES THE STORED TAG NAME A FIELD THIS COLUMN ACTUALLY HAS?
+//
+// The _TYPE tag decides which sub-field the read then asks the driver for BY NAME, and the sub-fields
+// that exist are decided by the column's TYPE — two facts that must agree and, once a row is written,
+// no longer can be made to. A row carrying a tag the column cannot spread to (the Reference tag on an
+// enum column, written by the shape bug in TagForValue) sent the read after `fld<n>_RTRef`, the driver
+// raised "field not found in the resultset", and the LIST FETCH that swallows it showed an empty page:
+// one bad row, and nothing at all is displayed.
+//
+// So the tag is checked against the layout before it is believed. A tag that does not fit reads as the
+// column's TYPED EMPTY value — the same answer an untagged cell gets — which keeps rows already in the
+// database readable instead of requiring them to be rewritten. Asked through the same ContainType /
+// HasReference gates DescribeColumnLayout builds the slots from, so the two cannot drift apart.
+static bool TagFitsColumn(const ibBackendQueryColumn* col, ibFieldTypes tag)
+{
+	const ibTypeDescription& td = col->GetTypeValueDesc();
+	switch (tag) {
+	case ibFieldTypes_Boolean:         return td.ContainType(ibValueTypes::TYPE_BOOLEAN);
+	case ibFieldTypes_Number:          return td.ContainType(ibValueTypes::TYPE_NUMBER);
+	case ibFieldTypes_Date:            return td.ContainType(ibValueTypes::TYPE_DATE);
+	case ibFieldTypes_String:          return td.ContainType(ibValueTypes::TYPE_STRING);
+	case ibFieldTypes_Enum:            return td.ContainType(ibValueTypes::TYPE_ENUM);
+	case ibFieldTypes_Schedule:        return td.ContainType(g_valueScheduleCLSID);
+	case ibFieldTypes_TypeDescription: return td.ContainType(g_valueTypeDescriptionCLSID);
+	case ibFieldTypes_Reference:       return ibColumnCodec::HasReference(col);
+	default:                           return true;   // Empty / Null read no sub-field at all
+	}
+}
+
+// ⭐ "I HAVE NO SUCH VALUE" IS AN ANSWER, NOT A CATASTROPHE.
+//
+// The result set not carrying a field this column needs is a fact about ONE cell — the codec says so
+// the way it already says everything else, by returning false with the column's typed empty in hand,
+// and the CALLER decides: a portion read swallows it and keeps the other rows, a write or a targeted
+// read lets it travel. Before, it propagated no matter who asked, so a single unreadable cell took a
+// whole list page with it.
+//
+// Costs nothing on the normal path — the guard is an exception handler, entered only when the fault
+// actually happens — and the ordinary form of this fault does not even reach it: TagFitsColumn above
+// answers from the column's own type before any sub-field is named.
+//
+// ONLY this fault. A dropped connection or a driver failure is a fault of the READ, not of the cell,
+// and still travels: degrading those would paint blank rows over a database that stopped answering.
+bool ibColumnCodec::ReadValue(const wxString& fieldName,
+	const ibBackendQueryColumn* col, const ibMetaData* metaData, ibValue& retValue, ibQueryResult& result, bool createData)
+{
+	try {
+		return ReadTaggedValue(fieldName, col, metaData, retValue, result, createData);
+	}
+	catch (const ibDatabaseLayerException& err) {
+		if (err.GetDriverErrorCode() != DATABASE_LAYER_FIELD_NOT_IN_RESULTSET)
+			throw;
+		retValue = (col != nullptr) ? ibValueTypeDescription::AdjustValue(col->GetTypeDesc(), metaData) : ibValue();
+		return false;
+	}
+}
+
+bool ibColumnCodec::ReadTaggedValue(const wxString& fieldName,
+	const ibBackendQueryColumn* col, const ibMetaData* metaData, ibValue& retValue, ibQueryResult& result, bool createData)
+{
+	// ⭐ A COMPUTED OUTPUT HAS ONE FIELD AND NO TAG BESIDE IT.
+	//
+	// `15 AS x`, `a * b AS y` — the expression is projected under its alias and nothing declares a
+	// `_TYPE` next to it (DescribeLayout emits the single slot, queryColumn.cpp). So the tag cannot be
+	// READ here; it comes from what the output IS — the type the lowering gave the schema when it
+	// resolved the expression.
+	//
+	// Without this the read asked for a discriminator that was never projected, the driver answered
+	// "field not found", and ReadValue below turned that into an empty cell — silently, 496 times in
+	// one report (Max, 2026-08-24: a computed field is a legitimate grouping key).
+	//
+	// Gated on the type being KNOWN: an output the lowering could not type yet keeps the old road
+	// rather than being read as a type nobody vouched for.
+	ibCellFields cell(result, fieldName);   // every field below is this cell's — see ibCellFields
+	if (col != nullptr && col->GetColumnKind() == ibBackendQueryColumn::Kind::Computed
+	    && col->GetTypeDesc().GetClsidCount() == 1) {
+		// ⭐ …AND A COMPUTED OUTPUT THAT CAME BACK NULL IS NULL — the rule the tagged read below states for
+		// a composite cell, and the answer the RAM road gives for the same expression (RamNullValue). Read
+		// through its declared type it came back as that type's empty, so an accounting figure the account
+		// keeps no accounting for — a CASE with no ELSE on the server — read as 0 on this road and as empty
+		// on the other (measured 2026-09-16: a quantity on a supplier account).
+		if (result.IsResultNull(cell.Field(ibColumnRole::Raw))) {
+			retValue = ibValue(ibValueTypes::TYPE_NULL);
+			return true;
+		}
+		const ibFieldTypes tag = ibColumnSpread::TagForValueType(ibValue::GetVTByID(col->GetTypeDesc().GetByIdx(0)));
+		return ReadFieldOf(cell, ibColumnRole::Raw, tag, col, metaData, retValue, createData);
+	}
+
+	// ⭐⭐ NOTHING THERE AT ALL IS *NULL* — and it is a different fact from an untagged value.
+	//
+	// The tag field answers `0` for both: a row whose column was never written (a fresh row, a
+	// dot-walk through an empty reference) stores a real zero, while a row that DID NOT MATCH an
+	// outer join has no row on that side at all and the whole spread comes back as SQL NULL.
+	// `GetResultInt` flattens the two into 0, and the `default` arm below then yields the column's
+	// TYPED EMPTY — which is right for the first and wrong for the second.
+	//
+	// 🛑 Wrong VISIBLY: `B.Period` of an unmatched LEFT JOIN read as **01.01.0001**, a date that looks
+	// like data (measured 2026-09-06, the hour a self-join began folding on the server). And wrong
+	// where it counts: an empty value answers FALSE to `IS NULL`, so `ISNULL(B.Period, &Till)` — the
+	// guard every outer join obliges — could not fire. The RAM stitch was taught this the day before
+	// (RamNullValue); this is the same answer on the other road, told apart by the one question a
+	// typed read cannot express.
+	const int tagField = cell.Field(ibColumnRole::Discriminator);
+	if (result.IsResultNull(tagField)) {
+		retValue = ibValue(ibValueTypes::TYPE_NULL);
+		return true;
+	}
+	ibFieldTypes fieldType = static_cast<ibFieldTypes>(result.GetResultInt(tagField));
+
+	if (col != nullptr && !cell.TagFits(col, fieldType)) {
+		retValue = ibValueTypeDescription::AdjustValue(col->GetTypeDesc(), metaData);
+		return true;
+	}
+
+	switch (fieldType)
+	{
+	case ibFieldTypes_Boolean:
+		return ReadFieldOf(cell, ibColumnRole::Boolean, ibFieldTypes_Boolean, col, metaData, retValue, createData);
+	case ibFieldTypes_Number:
+		return ReadFieldOf(cell, ibColumnRole::Number, ibFieldTypes_Number, col, metaData, retValue, createData);
+	case ibFieldTypes_Date:
+		return ReadFieldOf(cell, ibColumnRole::Date, ibFieldTypes_Date, col, metaData, retValue, createData);
+	case ibFieldTypes_String:
+		return ReadFieldOf(cell, ibColumnRole::String, ibFieldTypes_String, col, metaData, retValue, createData);
+	case ibFieldTypes_Null:
+		retValue = ibValue(ibValueTypes::TYPE_NULL);   // fresh NULL — releases any prior reffer/string in the slot (operator=(ibValueTypes) would leak it)
+		return true;
+	case ibFieldTypes_Schedule:
+		return ReadFieldOf(cell, ibColumnRole::Schedule, ibFieldTypes_Schedule, col, metaData, retValue, createData);
+	case ibFieldTypes_TypeDescription:
+		return ReadFieldOf(cell, ibColumnRole::TypeDescription, ibFieldTypes_TypeDescription, col, metaData, retValue, createData);
+	case ibFieldTypes_Enum:
+		return ReadFieldOf(cell, ibColumnRole::Enum, ibFieldTypes_Enum, col, metaData, retValue, createData);
+	case ibFieldTypes_Reference:
+		return ReadFieldOf(cell, ibColumnRole::Raw, ibFieldTypes_Reference, col, metaData, retValue, createData);
+	default:
+		// The stored TYPE tag is NULL / untagged (0): no value in this cell — a fresh row, or a dot-walk
+		// through an empty / broken reference whose LEFT JOIN did not match. Yield the COLUMN'S TYPED EMPTY
+		// empty value, never UNDEFINED, and NEVER read a sub-field the column lacks (a number column has no
+		// _RRRef). A real reference value tags _TYPE = Reference and takes the case above.
+		// (docs/private/query-language-arc.md §22.4b — typed-empty dot-walk)
+		retValue = (col != nullptr) ? ibValueTypeDescription::AdjustValue(col->GetTypeDesc(), metaData) : ibValue();
+		return true;
+	}
+	// (No tail return: the `default` above answers every tag there is, so one here is unreachable —
+	//  and an unreachable `return false` reads as a failure mode this function does not have.)
+}
+
+bool ibColumnCodec::ReadValue(const ibBackendQueryColumn* col, const ibMetaData* metaData, ibValue& retValue, ibQueryResult& result, bool createData)
+{
+	return ReadValue(col->GetPhysicalName(), col, metaData, retValue, result, createData);
+}
+
+// (THE DEFAULT READ / BIND live in queryColumn.cpp — what a column DOES is kept apart from the layout
+//  it HAS. Both forward to the codec above; a column that is not stored the ordinary way overrides
+//  them there.)
+
+// ==========================================================================
+// SQL fragment builders — the field spellings the hand-written query / upsert SQL used to
+// assemble per-attribute, now derived once from the layout (same field SET + ORDER as the codec).
+// ==========================================================================
+
+bool ibSameFieldType(const ibColumnType& a, const ibColumnType& b)
+{
+	return a.m_kind == b.m_kind && a.m_length == b.m_length && a.m_precision == b.m_precision
+	    && a.m_scale == b.m_scale && a.m_datePrec == b.m_datePrec && a.m_fixed == b.m_fixed;
+}
+
+std::vector<wxString> ColumnFieldNames(const ibBackendQueryColumn* col)
+{
+	std::vector<wxString> out;
+	for (const ibColumnSlot& slot : DescribeColumnLayout(col))
+		out.push_back(slot.m_name);
+	return out;
+}
+
+wxString ColumnFieldList(const ibBackendQueryColumn* col, const wxString& aggr)
+{
+	wxString out;
+	for (const ibColumnSlot& slot : DescribeColumnLayout(col)) {
+		// The numeric / date MEASURES carry the aggregate wrapper (SUM(f_N) AS f_N); the tag /
+		// dimension fields stay bare — mirrors the former GetSQLFieldName.
+		const bool measure = (slot.m_role == ibColumnRole::Number || slot.m_role == ibColumnRole::Date);
+		const wxString f = (!aggr.empty() && measure)
+		                 ? aggr + wxT("(") + slot.m_name + wxT(") AS ") + slot.m_name
+		                 : slot.m_name;
+		out += out.empty() ? f : (wxT(",") + f);
+	}
+	return out;
+}
+
+wxString ColumnComparePredicate(const ibBackendQueryColumn* col, const wxString& cmp)
+{
+	wxString out;
+	for (const ibColumnSlot& slot : DescribeColumnLayout(col)) {
+		// The discriminator and the reference TYPE id always match by equality; the value fields
+		// (and the reference blob) use the caller's comparator — mirrors GetCompositeSQLFieldName.
+		const bool eq = (slot.m_role == ibColumnRole::Discriminator || slot.m_role == ibColumnRole::ReferenceType);
+		const wxString term = slot.m_name + wxT(" ") + (eq ? wxString(wxT("=")) : cmp) + wxT(" ?");
+		out += out.empty() ? term : (wxT(" AND ") + term);
+	}
+	return out;
+}
+
+
+// (The binary-wire codec — BinaryToStatement / BinaryFromResult — moved to the L3-3 data mover
+//  (query/dataMover.{h,cpp}): it is the dump / restore PRIMITIVE, and its only consumers are the
+//  mover and the constant's single-cell dump. It still drives ibColumnSpread::DriveSpread + this
+//  codec's HasReference, so the value codec and the wire codec stay byte-identical.)

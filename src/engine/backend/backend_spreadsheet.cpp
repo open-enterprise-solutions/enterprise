@@ -1,5 +1,6 @@
 #include "backend_spreadsheet.h"
 #include "backend/fileSystem/fs.h"
+#include "backend/sheetFormat/sheetFormat.h"   // a table that came from somewhere else (Excel today)
 
 #define spreadsheetNotify \
 	for (auto notify : m_spreadsheetNotifiers) notify
@@ -23,6 +24,13 @@ ibSpreadsheetDescription ibBackendSpreadsheetObject::GetArea(int rowLeft, int ro
 {
 	ibSpreadsheetDescription spreadsheetDesc;
 
+	// ⭐ THE SAME RULE AS GetAreaByName BELOW, and for the same reason: the free side of a
+	// half-specified range is bounded by the sheet's CONTENT, never by its page breaks. See the
+	// long note there — this is the coordinate-taking twin of that function and carried the same
+	// defect, so both are fixed together rather than one being left to be found again.
+	const int lastRow = wxMax(0, m_spreadsheetDesc.GetNumberRows() - 1);
+	const int lastCol = wxMax(0, m_spreadsheetDesc.GetNumberCols() - 1);
+
 	if (rowLeft >= 0 && colTop >= 0 && rowRight > 0 && colBottom > 0) {
 		for (int row = rowLeft; row < rowRight; row++) {
 			for (int col = colTop; col < colBottom; col++) {
@@ -32,51 +40,70 @@ ibSpreadsheetDescription ibBackendSpreadsheetObject::GetArea(int rowLeft, int ro
 			}
 		}
 
+		// A height only where the row has one — a row without keeps its automatic height (HasRowSize).
 		for (int row = rowLeft; row < rowRight; row++)
-			spreadsheetDesc.SetRowSize(row - rowLeft, m_spreadsheetDesc.GetRowSize(row));
+			if (m_spreadsheetDesc.HasRowSize(row))
+				spreadsheetDesc.SetRowSize(row - rowLeft, m_spreadsheetDesc.GetRowSize(row));
 
 		for (int col = colTop; col < colBottom; col++)
 			spreadsheetDesc.SetColSize(col - colTop, m_spreadsheetDesc.GetColSize(col));
 
-		spreadsheetDesc.SetRowBrake(rowLeft - rowRight);
-		spreadsheetDesc.SetColBrake(colTop - colBottom);
+		// ⚠ THE FRAGMENT'S OWN LAST INDEX — subtracted the right way round, and −1 because this
+		// function's range is EXCLUSIVE (`row < rowRight`) while the marker is an index.
+		// It used to read `rowLeft - rowRight`, which is NEGATIVE whenever the range is non-empty:
+		// the fragment shipped with a stored break at, say, −3. Inert for pagination, since no loop
+		// counter matches a negative, but it made GetMaxRowBrake() answer a negative number, kept
+		// IsEmptySpreadsheet() from ever being true for such a fragment, and was serialised.
+		// GetAreaByName states the same fact correctly (`m_end - m_start`), so the two halves of
+		// one file disagreed.
+		spreadsheetDesc.SetRowBrake(wxMax(0, rowRight - rowLeft - 1));
+		spreadsheetDesc.SetColBrake(wxMax(0, colBottom - colTop - 1));
 	}
 	else if (rowLeft >= 0 && colTop < 0 && rowRight > 0 && colBottom < 0)
 	{
+		// Rows given, columns not: the whole width of what is written.
 		for (int row = rowLeft; row < rowRight; row++) {
-			for (int col = 0; col < GetMaxColBrake(); col++) {
+			for (int col = 0; col <= lastCol; col++) {
+				// ⚠ NOT `col - colTop`. colTop is the ABSENCE marker (-1) on this branch, so
+				// subtracting it shifted every cell one column to the right — a sentinel used as
+				// an origin. The origin is 0 here, because the columns were not narrowed.
 				ibSpreadsheetCellDescription* cell =
-					spreadsheetDesc.GetOrCreateCell(row - rowLeft, col - colTop);
+					spreadsheetDesc.GetOrCreateCell(row - rowLeft, col);
 				cell->SetCell(m_spreadsheetDesc.GetCell(row, col));
 			}
 		}
 
 		for (int row = rowLeft; row < rowRight; row++)
-			spreadsheetDesc.SetRowSize(row - rowLeft, m_spreadsheetDesc.GetRowSize(row));
+			if (m_spreadsheetDesc.HasRowSize(row))
+				spreadsheetDesc.SetRowSize(row - rowLeft, m_spreadsheetDesc.GetRowSize(row));
 
-		for (int col = 0; col < GetMaxColBrake(); col++)
+		for (int col = 0; col <= lastCol; col++)
 			spreadsheetDesc.SetColSize(col, m_spreadsheetDesc.GetColSize(col));
 
-		spreadsheetDesc.SetRowBrake(rowLeft - rowRight);
-		spreadsheetDesc.SetColBrake(GetMaxColBrake());
+		// Its own last row (exclusive range → −1); the column side is the sheet's, unnarrowed.
+		spreadsheetDesc.SetRowBrake(wxMax(0, rowRight - rowLeft - 1));
+		spreadsheetDesc.SetColBrake(lastCol);
 	}
 	else if (rowLeft < 0 && colTop >= 0 && rowRight < 0 && colBottom > 0) {
-		for (int row = 0; row < GetMaxRowBrake(); row++) {
+		// Columns given, rows not: the whole height of what is written.
+		for (int row = 0; row <= lastRow; row++) {
 			for (int col = colTop; col < colBottom; col++) {
+				// ⚠ NOT `row - rowLeft` — rowLeft is the absence marker here, same trap, other axis.
 				ibSpreadsheetCellDescription* cell =
-					spreadsheetDesc.GetOrCreateCell(row - rowLeft, col - colTop);
+					spreadsheetDesc.GetOrCreateCell(row, col - colTop);
 				cell->SetCell(m_spreadsheetDesc.GetCell(row, col));
 			}
 		}
 
-		for (int row = 0; row < GetMaxRowBrake(); row++)
-			spreadsheetDesc.SetRowSize(row, m_spreadsheetDesc.GetRowSize(row));
+		for (int row = 0; row <= lastRow; row++)
+			if (m_spreadsheetDesc.HasRowSize(row))
+				spreadsheetDesc.SetRowSize(row, m_spreadsheetDesc.GetRowSize(row));
 
 		for (int col = colTop; col < colBottom; col++)
 			spreadsheetDesc.SetColSize(col - colTop, m_spreadsheetDesc.GetColSize(col));
 
-		spreadsheetDesc.SetRowBrake(GetMaxRowBrake());
-		spreadsheetDesc.SetColBrake(colTop - colBottom);
+		spreadsheetDesc.SetRowBrake(lastRow);
+		spreadsheetDesc.SetColBrake(wxMax(0, colBottom - colTop - 1));
 	}
 
 	return spreadsheetDesc;
@@ -89,6 +116,21 @@ ibSpreadsheetDescription ibBackendSpreadsheetObject::GetAreaByName(const wxStrin
 
 	ibSpreadsheetDescription spreadsheetDesc;
 
+	// ⭐ HOW WIDE (AND HOW TALL) THE SHEET IS — asked of its CONTENT, not of its page breaks.
+	//
+	// The two asymmetric branches below used to bound the free side by GetMaxColBrake() /
+	// GetMaxRowBrake(), which is the position of the last PAGE BREAK and returns 0 when the sheet
+	// declares none. A break says where the PAPER ends; it knows nothing about how many columns
+	// were written. So a template built without one yielded areas exactly ONE column wide, and
+	// since every cell of a printed form lives to the right of column 0, every area came out
+	// structurally right and completely empty — the correct number of rows, no content.
+	//
+	// The giveaway was that the receiving side already measures the other way: PutArea walks
+	// doc->GetNumberCols(), the real extent. One width, two roads, disagreeing at the ends of a
+	// single operation. (2026-08-31, an empty print form.)
+	const int lastRow = wxMax(0, m_spreadsheetDesc.GetNumberRows() - 1);
+	const int lastCol = wxMax(0, m_spreadsheetDesc.GetNumberCols() - 1);
+
 	if (r != nullptr && c != nullptr) {
 		for (int row = r->m_start; row <= (int)r->m_end; row++) {
 			for (int col = c->m_start; col <= (int)c->m_end; col++) {
@@ -98,8 +140,10 @@ ibSpreadsheetDescription ibBackendSpreadsheetObject::GetAreaByName(const wxStrin
 			}
 		}
 
+		// A height only where the row has one — see GetArea.
 		for (int row = r->m_start; row <= (int)r->m_end; row++)
-			spreadsheetDesc.SetRowSize(row - r->m_start, m_spreadsheetDesc.GetRowSize(row));
+			if (m_spreadsheetDesc.HasRowSize(row))
+				spreadsheetDesc.SetRowSize(row - r->m_start, m_spreadsheetDesc.GetRowSize(row));
 
 		for (int col = c->m_start; col <= (int)c->m_end; col++)
 			spreadsheetDesc.SetColSize(col - c->m_start, m_spreadsheetDesc.GetColSize(col));
@@ -108,8 +152,9 @@ ibSpreadsheetDescription ibBackendSpreadsheetObject::GetAreaByName(const wxStrin
 		spreadsheetDesc.SetColBrake(c->m_end - c->m_start);
 	}
 	else if (r != nullptr) {
+		// A ROW AREA IS AS WIDE AS THE SHEET. Nothing bounds it on the free side but the content.
 		for (int row = r->m_start; row <= (int)r->m_end; row++) {
-			for (int col = 0; col <= GetMaxColBrake(); col++) {
+			for (int col = 0; col <= lastCol; col++) {
 				ibSpreadsheetCellDescription* cell =
 					spreadsheetDesc.GetOrCreateCell(row - r->m_start, col);
 				cell->SetCell(m_spreadsheetDesc.GetCell(row, col));
@@ -117,16 +162,21 @@ ibSpreadsheetDescription ibBackendSpreadsheetObject::GetAreaByName(const wxStrin
 		}
 
 		for (int row = r->m_start; row <= (int)r->m_end; row++)
-			spreadsheetDesc.SetRowSize(row - r->m_start, m_spreadsheetDesc.GetRowSize(row));
+			if (m_spreadsheetDesc.HasRowSize(row))
+				spreadsheetDesc.SetRowSize(row - r->m_start, m_spreadsheetDesc.GetRowSize(row));
 
-		for (int col = 0; col <= GetMaxColBrake(); col++)
+		for (int col = 0; col <= lastCol; col++)
 			spreadsheetDesc.SetColSize(col, m_spreadsheetDesc.GetColSize(col));
 
+		// The fragment's own edges, the way the symmetric branch above states them — its last row
+		// and its last column. Passing the SOURCE's break through put the mark at column 0 on a
+		// sheet that declared none, which is a page break drawn before the first column.
 		spreadsheetDesc.SetRowBrake(r->m_end - r->m_start);
-		spreadsheetDesc.SetColBrake(GetMaxColBrake());
+		spreadsheetDesc.SetColBrake(lastCol);
 	}
 	else if (c != nullptr) {
-		for (int row = 0; row <= GetMaxRowBrake(); row++) {
+		// …and a COLUMN area is as tall as the sheet. Same rule, other axis.
+		for (int row = 0; row <= lastRow; row++) {
 			for (int col = c->m_start; col <= (int)c->m_end; col++) {
 				ibSpreadsheetCellDescription* cell =
 					spreadsheetDesc.GetOrCreateCell(row, col - c->m_start);
@@ -134,13 +184,14 @@ ibSpreadsheetDescription ibBackendSpreadsheetObject::GetAreaByName(const wxStrin
 			}
 		}
 
-		for (int row = 0; row <= GetMaxRowBrake(); row++)
-			spreadsheetDesc.SetRowSize(row, m_spreadsheetDesc.GetRowSize(row));
+		for (int row = 0; row <= lastRow; row++)
+			if (m_spreadsheetDesc.HasRowSize(row))
+				spreadsheetDesc.SetRowSize(row, m_spreadsheetDesc.GetRowSize(row));
 
 		for (int col = c->m_start; col <= (int)c->m_end; col++)
 			spreadsheetDesc.SetColSize(col - c->m_start, m_spreadsheetDesc.GetColSize(col));
 
-		spreadsheetDesc.SetRowBrake(GetMaxRowBrake());
+		spreadsheetDesc.SetRowBrake(lastRow);
 		spreadsheetDesc.SetColBrake(c->m_end - c->m_start);
 	}
 
@@ -162,27 +213,35 @@ void ibBackendSpreadsheetObject::PutArea(const wxObjectDataPtr<ibBackendSpreadsh
 
 			cell->SetCell(doc->GetSpreadsheetDesc().GetCell(row, col));
 
-			if (cell->m_fillSetType == ibSpreadsheetFillType::ibSpreadsheetFillType_StrTemplate || cell->m_fillSetType == ibSpreadsheetFillType::ibSpreadsheetFillType_StrParameter) {
-				cell->m_value = doc->ComputeStringValueFromParameters(cell->m_value, cell->m_fillSetType);
-				cell->m_fillSetType = ibSpreadsheetFillType::ibSpreadsheetFillType_StrText;
-			}
+			// ⭐⭐ WHAT LANDS IS THE TEXT, in THIS document's language. The template keeps every language
+			// and its fill instructions; the document it is put into keeps what they came to — a caption
+			// included, which used to arrive as it was written down, every language at once, and was
+			// printed that way. Rendered once here, so the grid, the printout, a script and an export all
+			// read the same text and none of them has to take a stored form apart.
+			cell->m_value = doc->ComputeStringValueFromParameters(cell->m_value, cell->m_fillSetType, m_docLangCode);
+			cell->m_fillSetType = ibSpreadsheetFillType::ibSpreadsheetFillType_StrText;
 
 			const wxString& detailsParameter =
 				cell->m_detailsParameter;
 
 			if (!detailsParameter.IsEmpty()) {
-	
-				wxString detailsComputeParameter;	
-				detailsComputeParameter << detailsParameter << maxRowBrake + row << col;
-				
-				SetParameter(detailsComputeParameter, doc->GetParameter(detailsParameter));	
+
+				// 🛑 SEPARATED, so the name is one per cell. Glued without anything between them, `Cell_1` at
+				// row 121 column 1 and `Cell_11` at row 2 column 11 both came out `Cell_11211`: past ten
+				// columns and a hundred rows one cell's details replaced another's (found 2026-09-12).
+				wxString detailsComputeParameter;
+				detailsComputeParameter << detailsParameter << wxT('_') << maxRowBrake + row << wxT('_') << col;
+
+				SetParameter(detailsComputeParameter, doc->GetParameter(detailsParameter));
 				cell->m_detailsParameter = detailsComputeParameter;
 			}
 		}
 	}
 
+	// A height only where the area's row has one — a row without keeps its automatic height (HasRowSize).
 	for (int row = 0; row < doc->GetNumberRows(); row++)
-		SetRowSize(maxRowBrake + row, doc->GetRowSize(row));
+		if (doc->GetSpreadsheetDesc().HasRowSize(row))
+			SetRowSize(maxRowBrake + row, doc->GetRowSize(row));
 
 	for (int col = 0; col < doc->GetNumberCols(); col++)
 		SetColSize(col, doc->GetColSize(col));
@@ -213,18 +272,17 @@ void ibBackendSpreadsheetObject::JoinArea(const wxObjectDataPtr<ibBackendSpreads
 
 			cell->SetCell(doc->GetSpreadsheetDesc().GetCell(row, col));
 
-			if (cell->m_fillSetType == ibSpreadsheetFillType::ibSpreadsheetFillType_StrTemplate || cell->m_fillSetType == ibSpreadsheetFillType::ibSpreadsheetFillType_StrParameter) {
-				cell->m_value = doc->ComputeStringValueFromParameters(cell->m_value, cell->m_fillSetType);
-				cell->m_fillSetType = ibSpreadsheetFillType::ibSpreadsheetFillType_StrText;
-			}
+			// what lands is the text, in this document's language — see PutArea
+			cell->m_value = doc->ComputeStringValueFromParameters(cell->m_value, cell->m_fillSetType, m_docLangCode);
+			cell->m_fillSetType = ibSpreadsheetFillType::ibSpreadsheetFillType_StrText;
 
 			const wxString& detailsParameter =
 				cell->m_detailsParameter;
 
 			if (!detailsParameter.IsEmpty()) {
 
-				wxString detailsComputeParameter;
-				detailsComputeParameter << detailsParameter << row << maxColBrake + col;
+				wxString detailsComputeParameter;   // separated, one name per cell — see PutArea
+				detailsComputeParameter << detailsParameter << wxT('_') << row << wxT('_') << maxColBrake + col;
 
 				SetParameter(detailsComputeParameter, doc->GetParameter(detailsParameter));
 				cell->m_detailsParameter = detailsComputeParameter;
@@ -232,8 +290,10 @@ void ibBackendSpreadsheetObject::JoinArea(const wxObjectDataPtr<ibBackendSpreads
 		}
 	}
 
+	// a height only where the area's row has one — see PutArea
 	for (int row = 0; row < doc->GetNumberRows(); row++)
-		SetRowSize(row, doc->GetRowSize(row));
+		if (doc->GetSpreadsheetDesc().HasRowSize(row))
+			SetRowSize(row, doc->GetRowSize(row));
 
 	for (int col = 0; col < doc->GetNumberCols(); col++)
 		SetColSize(maxColBrake + col, doc->GetColSize(col));
@@ -371,6 +431,30 @@ void ibBackendSpreadsheetObject::SetCellBorderBottom(int row, int col, const ibS
 	m_spreadsheetDesc.SetCellBorderBottom(row, col, desc);
 }
 
+void ibBackendSpreadsheetObject::SetCell(int row, int col, const ibSpreadsheetCellDescription& desc)
+{
+	// The listeners in the single setters' order, so a view sees what it would have seen (the details name
+	// is not announced — SetCellDetailsParameter does not announce it either).
+	// ⚠ ASKED ONCE WHETHER ANYBODY LISTENS: a document composed from code has no view at all, and each
+	// announcement walked the empty list anyway — a pair of iterators made and dropped under a checked
+	// build's global lock, for every cell of a 400-thousand-cell sheet.
+	if (!m_spreadsheetNotifiers.empty()) {
+		spreadsheetNotify->SetCellValue(row, col, desc.m_value);
+		spreadsheetNotify->SetCellAlignment(row, col, desc.m_alignHorz, desc.m_alignVert);
+		spreadsheetNotify->SetCellBackgroundColour(row, col, desc.m_backgroundColour);
+		spreadsheetNotify->SetCellTextColour(row, col, desc.m_textColour);
+		spreadsheetNotify->SetCellTextOrient(row, col, desc.m_textOrient);
+		spreadsheetNotify->SetCellFont(row, col, desc.m_font);
+		spreadsheetNotify->SetCellBorderLeft(row, col, desc.m_borderAt[0]);
+		spreadsheetNotify->SetCellBorderRight(row, col, desc.m_borderAt[1]);
+		spreadsheetNotify->SetCellBorderTop(row, col, desc.m_borderAt[2]);
+		spreadsheetNotify->SetCellBorderBottom(row, col, desc.m_borderAt[3]);
+		spreadsheetNotify->SetCellFitMode(row, col, desc.m_fitMode);
+		spreadsheetNotify->SetCellReadOnly(row, col, desc.m_isReadOnly);
+	}
+	m_spreadsheetDesc.SetCell(row, col, desc);
+}
+
 void ibBackendSpreadsheetObject::SetCellSize(int row, int col, int num_rows, int num_cols)
 {
 	spreadsheetNotify->SetCellSize(row, col, num_rows, num_cols);
@@ -444,9 +528,11 @@ void ibBackendSpreadsheetObject::SetCellValue(int row, int col, const wxString& 
 
 bool ibBackendSpreadsheetObject::GetParameter(const wxString& strParameter, ibValue& valueParam) const
 {
-	auto iterator = std::find_if(m_paramVector.begin(), m_paramVector.end(),
-		[strParameter](const auto& pair) { return stringUtils::CompareString(strParameter, pair.first); });
-
+	// FOUND, NOT WALKED — the map folds case in its comparator (ibCaseFoldLess), the rule this lookup always
+	// had. It ran CompareString over every name instead: 90 reads from script on a composed sheet of 400
+	// thousand links took some 375 s (Debug, 2026-09-12), and a cell's drill-down asks here too. Two names
+	// that differ only in case are one parameter now, which is what this lookup always took them for.
+	const auto iterator = m_paramVector.find(strParameter);
 	if (iterator == m_paramVector.end())
 		return false;
 
@@ -456,19 +542,37 @@ bool ibBackendSpreadsheetObject::GetParameter(const wxString& strParameter, ibVa
 
 void ibBackendSpreadsheetObject::SetParameter(const wxString& strParameter, const ibValue& valueParam)
 {
-	m_paramVector.insert_or_assign(strParameter, valueParam);
+	// ⚠ HINTED AT THE END — a writer that names its parameters in increasing order (a composed table
+	// numbers every cell's link, row by row) lands each one there at once, where an unhinted insert walked
+	// a tree of hundreds of thousands of names for every cell (2026-09-12). A name that belongs elsewhere
+	// is placed where it belongs; the hint only ever saves a search.
+	m_paramVector.insert_or_assign(m_paramVector.end(), strParameter, valueParam);
 }
 
 #include "backend_localization.h"
 
-wxString ibBackendSpreadsheetObject::ComputeStringValueFromParameters(const wxString& strValue, ibSpreadsheetFillType type) const
+// 🛑 IT HANDED BACK THE STORED FORM. A caption came out as it was written down — every language at once,
+// `en = '…'; ru = '…';` — and a filled template or parameter came out WRAPPED into that form again, so
+// each reader had to take it apart itself: the grid did, the printout did not and put every language on
+// the paper (2026-09-21), a script's Value did with a fallback of its own. Now the door answers with
+// the text, and every value read through it — a caption, a template, a parameter's value — is read the
+// one way a translated text is read (GetTranslateGetRawLocText).
+wxString ibBackendSpreadsheetObject::ComputeStringValueFromParameters(const wxString& strValue, ibSpreadsheetFillType type, const wxString& strAskedLangCode) const
 {
+	const wxString& strLangCode = strAskedLangCode.IsEmpty() ? m_docLangCode : strAskedLangCode;
+
+	if (type == ibSpreadsheetFillType::ibSpreadsheetFillType_StrParameter) {
+		ibValue cVal;//scratch for one call — see the template below
+		if (!strValue.IsEmpty() && GetParameter(strValue, cVal))
+			return ibBackendLocalization::GetTranslateGetRawLocText(strLangCode, cVal.GetString());
+		return wxT("");
+	}
+
 	if (type == ibSpreadsheetFillType::ibSpreadsheetFillType_StrTemplate) {
 
 		if (!strValue.IsEmpty()) {
 
-			wxString strTemplateValue;
-			ibBackendLocalization::GetTranslateGetRawLocText(m_docLangCode, strValue, strTemplateValue);
+			wxString strTemplateValue = ibBackendLocalization::GetTranslateGetRawLocText(strLangCode, strValue);
 
 			size_t start_pos = 0, end_pos = 0;
 
@@ -487,9 +591,14 @@ wxString ibBackendSpreadsheetObject::ComputeStringValueFromParameters(const wxSt
 						strTemplateValue.substr(start_pos + 1, end_pos - start_pos - 1);
 					if (!token.empty()) {
 
-						static ibValue cVal;
+						// NOT static — this is scratch for one call. Shared, an ibValue
+						// holding a TYPE_REFFER makes concurrent renders race on its
+						// refcount, and even one thread clobbers it if GetParameter
+						// re-enters. Constructing one is cheap; the static was not a win.
+						ibValue cVal;
 						if (GetParameter(token, cVal))
-							strTemplateValue.replace(start_pos, end_pos - start_pos + 1, cVal.GetString());
+							strTemplateValue.replace(start_pos, end_pos - start_pos + 1,
+								ibBackendLocalization::GetTranslateGetRawLocText(strLangCode, cVal.GetString()));
 						else
 							strTemplateValue.replace(start_pos, end_pos - start_pos + 1, wxT(""));
 					}
@@ -509,19 +618,13 @@ wxString ibBackendSpreadsheetObject::ComputeStringValueFromParameters(const wxSt
 				start_pos = strTemplateValue.find_first_of(wxT("[]"), start_pos);
 			}
 
-			return ibBackendLocalization::CreateLocalizationRawLocText(strTemplateValue);
+			return strTemplateValue;
 		}
-	}
-	else if (type == ibSpreadsheetFillType::ibSpreadsheetFillType_StrParameter) {
-
-		static ibValue cVal;
-		if (!strValue.IsEmpty() && GetParameter(strValue, cVal))
-			return ibBackendLocalization::CreateLocalizationRawLocText(cVal.GetString());
 
 		return wxT("");
 	}
 
-	return strValue;
+	return ibBackendLocalization::GetTranslateGetRawLocText(strLangCode, strValue);
 }
 
 #pragma endregion 
@@ -532,68 +635,45 @@ void ibBackendSpreadsheetObject::SetCellDetailsParameter(int row, int col, const
 	m_spreadsheetDesc.SetCellDetailsParameter(row, col, s);
 }
 
-bool ibBackendSpreadsheetObject::OpenCellDetailsParameter(int row, int col) const
-{
-	const ibSpreadsheetCellDescription* cellDesc = m_spreadsheetDesc.GetCell(row, col);
-	if (cellDesc == nullptr)
-		return false;
-
-	const wxString& detailsParameter = cellDesc->m_detailsParameter;
-
-	ibValue valueParam;
-	if (!detailsParameter.IsEmpty() && GetParameter(detailsParameter, valueParam)) {
-		valueParam.ShowValue();
-		return true;
-	}
-
-	return false;
-}
+// (⚠ NO `OpenCellDetailsParameter` HERE ANY MORE. Opening a value is the RUNTIME's — a caller asks
+//  the cell what it is bound to and shows that value, which is the two lines this verb wrapped. A
+//  sheet that also knew how to open things was a door in front of a door, and the door belonged to
+//  the value: `ibValue::ShowValue` resolves through references and wrappers on its own.)
 
 #pragma region __fs_h__
 
 #include <fstream>
 
+// ⭐⭐ WHICH FORMAT READS THIS NAME — one question, and OUR OWN LAYOUT IS ONE OF THE
+// ANSWERS (backend/sheetFormat/). There is no "ours or theirs" branch here, and that
+// is the point: `.oxl` and an Excel workbook are two entries in one registry, so a
+// third format changes neither this function nor the file dialog that offers them.
+//
+// ⚠ THE READER FILLS A COPY and this document is replaced only once it succeeded: a
+// caller told `false` must be free to keep the document it had.
 bool ibBackendSpreadsheetObject::LoadFromFile(const wxString& strFileName)
 {
-	std::ifstream in(strFileName.ToStdString(), std::ios::in | std::ios::binary);
+	const ibSheetFormat* format = ibSheetFormatFor(strFileName);
+	if (format == nullptr)
+		return false;   // a name nothing here reads — said plainly, not guessed at
 
-	if (!in.is_open())
+	ibSpreadsheetDescription read;
+	if (!format->Read(strFileName, read))
 		return false;
 
-	//go to end
-	in.seekg(0, in.end);
-	//get size of file
-	std::streamsize fsize = in.tellg();
-	//go to beginning
-	in.seekg(0, in.beg);
-
-	wxMemoryBuffer tempBuffer(fsize);
-	in.read((char*)tempBuffer.GetWriteBuf(fsize), fsize);
-
-	ibReaderMemory readerData(tempBuffer.GetData(), tempBuffer.GetBufSize());
-
-	if (readerData.eof())
-		return false;
-
-	in.close();
-
-	return ibSpreadsheetDescriptionMemory::LoadData(readerData, m_spreadsheetDesc);
+	m_spreadsheetDesc = read;
+	return true;
 }
 
 bool ibBackendSpreadsheetObject::SaveToFile(const wxString& strFileName)
 {
-	//common data
-	ibWriterMemory writerData;
-
-	if (!ibSpreadsheetDescriptionMemory::SaveData(writerData, m_spreadsheetDesc))
+	// …and the same question on the way out: the name a person chose in the Save
+	// dialog is what says which format they meant.
+	const ibSheetFormat* format = ibSheetFormatFor(strFileName);
+	if (format == nullptr)
 		return false;
 
-	std::ofstream datafile;
-	datafile.open(strFileName.ToStdWstring(), std::ios::binary);
-	datafile.write(reinterpret_cast <char*> (writerData.pointer()), writerData.size());
-	datafile.close();
-
-	return true;
+	return format->Write(strFileName, m_spreadsheetDesc);
 }
 
 #pragma endregion 

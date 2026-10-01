@@ -5,16 +5,16 @@
 
 #include "mainFrameChild.h"
 
-wxIMPLEMENT_CLASS(CAuiDocChildFrame, wxAuiMDIChildFrame);
+wxIMPLEMENT_CLASS(ibAuiDocChildFrame, wxAuiMDIChildFrame);
 wxIMPLEMENT_CLASS(ibDialogDocChildFrame, wxDialog);
 
 #include "mainFrame.h"
 
-CAuiDocChildFrame::~CAuiDocChildFrame()
+ibAuiDocChildFrame::~ibAuiDocChildFrame()
 {
 	wxAuiMDIParentFrame* pParentFrame = GetMDIParentFrame();
 
-	if (pParentFrame && ibFrontendDocMDIFrame::GetFrame()) {
+	if (pParentFrame && ibFrontendMainFrame::GetFrame()) {
 		if (pParentFrame->GetActiveChild() == this) {
 			pParentFrame->SetActiveChild(nullptr);
 			pParentFrame->SetChildMenuBar(nullptr);
@@ -29,7 +29,7 @@ CAuiDocChildFrame::~CAuiDocChildFrame()
 }
 
 #if wxUSE_MENUS
-void CAuiDocChildFrame::SetMenuBar(wxMenuBar* menuBar)
+void ibAuiDocChildFrame::SetMenuBar(wxMenuBar* menuBar)
 {
 	wxMenuBar* pOldMenuBar = m_pMenuBar;
 	m_pMenuBar = menuBar;
@@ -150,13 +150,13 @@ void CAuiDocChildFrame::SetMenuBar(wxMenuBar* menuBar)
 	wxDELETE(pOldMenuBar);
 }
 
-wxMenuBar* CAuiDocChildFrame::GetMenuBar() const
+wxMenuBar* ibAuiDocChildFrame::GetMenuBar() const
 {
 	return m_pMenuBar;
 }
 #endif
 
-void CAuiDocChildFrame::SetLabel(const wxString& label)
+void ibAuiDocChildFrame::SetLabel(const wxString& label)
 {
 	if (label != GetLabel()) {
 		wxAuiMDIChildFrame::SetLabel(label);

@@ -62,7 +62,6 @@ ibByteCode::ibByteCodeVarInfo MakeVar(const wxString& name, ibVarKind kind, long
 	ibByteCode::ibByteCodeVarInfo v;
 	v.m_slotIndex   = slot;
 	v.m_clsid       = 0;
-	v.m_bScoped     = false;
 	v.m_kind        = kind;
 	v.m_parentRef   = -1;
 	v.m_strRealName = name;
@@ -184,7 +183,7 @@ TEST(ByteCodeAOT, ListConstAllPrimitives) {
 	{ ibValue v(wxString(wxT("")));          src.m_listConst.push_back(v); }
 	{
 		ibValue v(ibValueTypes::TYPE_DATE);
-		v.m_dData = (wxLongLong_t)1714639200; // arbitrary epoch seconds
+		v.m_dData = ibDateTime(1714639200ll); // an arbitrary raw count - the cache stores the number
 		src.m_listConst.push_back(v);
 	}
 
@@ -203,11 +202,11 @@ TEST(ByteCodeAOT, ListConstAllPrimitives) {
 	EXPECT_EQ(dst.m_listConst[5].m_typeClass, ibValueTypes::TYPE_NUMBER);
 	EXPECT_EQ(dst.m_listConst[5].m_fData, ibNumber(-1234567));
 	EXPECT_EQ(dst.m_listConst[6].m_typeClass, ibValueTypes::TYPE_STRING);
-	EXPECT_EQ(dst.m_listConst[6].m_sData,    wxT("hello"));
+	EXPECT_EQ(dst.m_listConst[6].GetString(), wxT("hello"));   // m_sData removed in Phase 2 (ibString)
 	EXPECT_EQ(dst.m_listConst[7].m_typeClass, ibValueTypes::TYPE_STRING);
-	EXPECT_TRUE(dst.m_listConst[7].m_sData.IsEmpty());
+	EXPECT_TRUE(dst.m_listConst[7].GetString().IsEmpty());
 	EXPECT_EQ(dst.m_listConst[8].m_typeClass, ibValueTypes::TYPE_DATE);
-	EXPECT_EQ(dst.m_listConst[8].m_dData,     (wxLongLong_t)1714639200);
+	EXPECT_EQ(dst.m_listConst[8].m_dData.GetValue(), 1714639200ll);
 }
 
 // Number with > 14 digits forces ibNumber's heap tier — round-trip must
@@ -230,6 +229,86 @@ TEST(ByteCodeAOT, ListConstHighPrecisionNumber) {
 }
 
 // ===========================================================================
+// ibValueTypes narrowed to `enum : unsigned char` (backend_core.h). The AOT
+// const-value format stores the type tag as ONE byte —
+//   writer: w.w_u8((uint8_t)v.m_typeClass)
+//   reader: v.SetType((ibValueTypes)r.r_u8())
+// (byteCodeAOT.cpp). These tests guard that the narrowing stayed
+// binary-compatible with bytecode persisted BEFORE the change: the wire is
+// still a single byte and every enumerator's integer value is frozen, so an
+// old cache's type bytes still decode to the same types.
+// ===========================================================================
+
+TEST(ByteCodeAOT, ValueTypeTagIsFrozenSingleByte) {
+	// The tag occupies one byte on the wire regardless of the enum's
+	// underlying type; the narrowing makes the in-memory slot match.
+	static_assert(sizeof(ibValueTypes) == 1,
+	              "ibValueTypes must stay 1 byte to match the AOT uint8_t wire tag");
+
+	// Frozen wire values. Changing any of these is a breaking AOT format
+	// change and MUST bump the format version — old caches encode these bytes.
+	static_assert((uint8_t)ibValueTypes::TYPE_EMPTY    == 0,   "wire tag drift");
+	static_assert((uint8_t)ibValueTypes::TYPE_BOOLEAN  == 1,   "wire tag drift");
+	static_assert((uint8_t)ibValueTypes::TYPE_NUMBER   == 2,   "wire tag drift");
+	static_assert((uint8_t)ibValueTypes::TYPE_DATE     == 3,   "wire tag drift");
+	static_assert((uint8_t)ibValueTypes::TYPE_STRING   == 4,   "wire tag drift");
+	static_assert((uint8_t)ibValueTypes::TYPE_NULL     == 5,   "wire tag drift");
+	static_assert((uint8_t)ibValueTypes::TYPE_REFFER   == 100, "wire tag drift");
+	static_assert((uint8_t)ibValueTypes::TYPE_VALUE    == 200, "wire tag drift");
+	static_assert((uint8_t)ibValueTypes::TYPE_ENUM     == 201, "wire tag drift");
+	static_assert((uint8_t)ibValueTypes::TYPE_OLE      == 202, "wire tag drift");
+	static_assert((uint8_t)ibValueTypes::TYPE_FUNCTION == 203, "wire tag drift");
+	static_assert((uint8_t)ibValueTypes::TYPE_ITERATOR == 204, "wire tag drift");
+
+	// Every enumerator survives the exact uint8_t encode/decode that the AOT
+	// writer/reader perform — including the high ones (>127), where a signed
+	// char would have wrapped to a negative and decoded to the wrong type.
+	const ibValueTypes all[] = {
+		ibValueTypes::TYPE_EMPTY,  ibValueTypes::TYPE_BOOLEAN,  ibValueTypes::TYPE_NUMBER,
+		ibValueTypes::TYPE_DATE,   ibValueTypes::TYPE_STRING,   ibValueTypes::TYPE_NULL,
+		ibValueTypes::TYPE_REFFER, ibValueTypes::TYPE_VALUE,    ibValueTypes::TYPE_ENUM,
+		ibValueTypes::TYPE_OLE,    ibValueTypes::TYPE_FUNCTION, ibValueTypes::TYPE_ITERATOR,
+	};
+	for (ibValueTypes t : all) {
+		const uint8_t       wire = (uint8_t)t;          // writer side
+		const ibValueTypes  back = (ibValueTypes)wire;  // reader side
+		EXPECT_EQ(back, t) << "tag byte " << (int)wire << " did not round-trip";
+	}
+}
+
+// Full SerializeAOT -> blob -> DeserializeAOT round-trip asserting the type
+// tag of every const-eligible value survives the single-byte encoding. This
+// is the end-to-end check behind the static guards above: it drives the real
+// WriteConstValue/ReadConstValue path, not just the cast.
+TEST(ByteCodeAOT, ConstTypeTagRoundTripsThroughAOT) {
+	ibByteCode src;
+	src.m_id      = MakeGuid(11);
+	src.m_version = MakeGuid(12);
+
+	// One const of each type that reaches the const pool, in tag order.
+	src.m_listConst.push_back(ibValue(ibValueTypes::TYPE_EMPTY));
+	src.m_listConst.push_back(ibValue(ibValueTypes::TYPE_NULL));
+	src.m_listConst.push_back(ibValue(true));
+	src.m_listConst.push_back(ibValue(7));
+	{
+		ibValue v(ibValueTypes::TYPE_DATE);
+		v.m_dData = ibDateTime(1700000000ll);
+		src.m_listConst.push_back(v);
+	}
+	src.m_listConst.push_back(ibValue(wxString(wxT("ünïcödé"))));   // multibyte string payload
+
+	ibByteCode dst;
+	ASSERT_TRUE(RoundTrip(src, dst));
+	ASSERT_EQ(dst.m_listConst.size(), src.m_listConst.size());
+
+	for (size_t i = 0; i < src.m_listConst.size(); ++i)
+		EXPECT_EQ(dst.m_listConst[i].GetType(), src.m_listConst[i].GetType())
+			<< "const #" << i << " type tag changed across AOT round-trip";
+
+	EXPECT_EQ(dst.m_listConst[5].GetString(), wxString(wxT("ünïcödé")));
+}
+
+// ===========================================================================
 // m_listVar round-trip — every ibVarKind, with parent refs and scoped flag
 // ===========================================================================
 
@@ -246,7 +325,6 @@ TEST(ByteCodeAOT, ListVarAllKinds) {
 	auto prop = MakeVar(wxT("Catalogs"), ibVarKind::ContextProp, 0);
 	prop.m_strContext = wxT("Manager");
 	prop.m_parentRef  = 3; // index of "Manager" above
-	prop.m_bScoped    = true;
 	prop.m_clsid      = 0x12345;
 	src.m_listVar.push_back(prop);
 
@@ -263,7 +341,6 @@ TEST(ByteCodeAOT, ListVarAllKinds) {
 	EXPECT_EQ(dst.m_listVar[4].m_strRealName, wxT("Catalogs"));
 	EXPECT_EQ(dst.m_listVar[4].m_strContext,  wxT("Manager"));
 	EXPECT_EQ(dst.m_listVar[4].m_parentRef,    3);
-	EXPECT_TRUE(dst.m_listVar[4].m_bScoped);
 	EXPECT_EQ(dst.m_listVar[4].m_clsid, (ibClassID)0x12345);
 }
 
@@ -278,34 +355,41 @@ TEST(ByteCodeAOT, ListFuncWithLocalsAndParams) {
 	src.m_version = MakeGuid(13);
 
 	ibByteCode::ibByteFunction fn;
-	fn.m_lCodeParamCount = 2;
 	fn.m_lCodeLine       = 100;
 	fn.m_bCodeRet        = true;
 	fn.m_lVarCount       = 5;
 	fn.m_returnClsid     = 0xABCDEF;
 	fn.m_kind            = ibFnKind::Export;
+	// THREE flags that default FALSE and have to be RESTORED rather than derived —
+	// exactly the shape that goes missing without a symptom, and all three went
+	// missing in turn. m_needsHeapFrame was never written until v21, so a module
+	// served from the cache came back with it cleared on every function; m_valueCached
+	// went the same way; m_valueVariadic was not carried at all until v23, which made
+	// every built-in of negative arity — Max, Min — REFUSE EVERY CALL it was given
+	// the moment a name resolved through bytecode instead of a live compile context.
+	fn.m_needsHeapFrame  = true;
+	fn.m_valueCached     = true;
+	fn.m_valueVariadic   = true;
 	fn.m_strRealName     = wxT("Calculate");
 	fn.m_strContext      = wxEmptyString;
 
 	{
 		ibByteCode::ibByteParam p;
-		p.m_bByRef = false;
+		p.m_bByValue = false;
 		p.m_clsid  = 0x111;
 		p.m_defaultValue.m_numArray = -1;
 		p.m_defaultValue.m_numIndex = -1;
-		p.m_defaultValue.m_strType  = wxT("Number");
+		p.m_strName = wxT("a");
 		fn.m_listParam.push_back(p);
-		fn.m_listParamRealName.push_back(wxT("a"));
 	}
 	{
 		ibByteCode::ibByteParam p;
-		p.m_bByRef = true;
+		p.m_bByValue = true;
 		p.m_clsid  = 0;
 		p.m_defaultValue.m_numArray = 5;
 		p.m_defaultValue.m_numIndex = 7;
-		p.m_defaultValue.m_strType  = wxT("String");
+		p.m_strName = wxT("b");
 		fn.m_listParam.push_back(p);
-		fn.m_listParamRealName.push_back(wxT("b"));
 	}
 
 	fn.m_listLocals.push_back(MakeVar(wxT("temp"), ibVarKind::Local, 0));
@@ -314,7 +398,6 @@ TEST(ByteCodeAOT, ListFuncWithLocalsAndParams) {
 
 	// Context-method entry — different kind, with parent reference.
 	ibByteCode::ibByteFunction ctxFn;
-	ctxFn.m_lCodeParamCount = 0;
 	ctxFn.m_lCodeLine       = -1;
 	ctxFn.m_bCodeRet        = true;
 	ctxFn.m_kind            = ibFnKind::ContextMethod;
@@ -328,24 +411,26 @@ TEST(ByteCodeAOT, ListFuncWithLocalsAndParams) {
 	ASSERT_EQ(dst.m_listFunc.size(), 2u);
 
 	const auto& a = dst.m_listFunc[0];
-	EXPECT_EQ(a.m_lCodeParamCount, 2);
+	EXPECT_EQ(a.m_listParam.size(), 2u);
 	EXPECT_EQ(a.m_lCodeLine,       100);
 	EXPECT_TRUE(a.m_bCodeRet);
 	EXPECT_EQ(a.m_lVarCount,       5);
 	EXPECT_EQ(a.m_returnClsid,     (ibClassID)0xABCDEF);
 	EXPECT_EQ(a.m_kind,            ibFnKind::Export);
+	EXPECT_TRUE(a.m_needsHeapFrame) << "the heap-frame flag did not survive the round trip";
+	EXPECT_TRUE(a.m_valueCached)    << "the Cached modifier did not survive the round trip";
+	EXPECT_TRUE(a.m_valueVariadic)  << "the variadic flag did not survive the round trip - a negative-arity "
+	                                   "built-in resolved through bytecode then refuses every call it is given";
 	EXPECT_EQ(a.m_strRealName,     wxT("Calculate"));
 
 	ASSERT_EQ(a.m_listParam.size(),         2u);
-	ASSERT_EQ(a.m_listParamRealName.size(), 2u);
-	EXPECT_FALSE(a.m_listParam[0].m_bByRef);
-	EXPECT_TRUE(a.m_listParam[1].m_bByRef);
+	EXPECT_FALSE(a.m_listParam[0].m_bByValue);
+	EXPECT_TRUE(a.m_listParam[1].m_bByValue);
 	EXPECT_EQ(a.m_listParam[0].m_clsid, (ibClassID)0x111);
-	EXPECT_EQ(a.m_listParam[0].m_defaultValue.m_strType, wxT("Number"));
 	EXPECT_EQ(a.m_listParam[1].m_defaultValue.m_numArray, 5);
 	EXPECT_EQ(a.m_listParam[1].m_defaultValue.m_numIndex, 7);
-	EXPECT_EQ(a.m_listParamRealName[0], wxT("a"));
-	EXPECT_EQ(a.m_listParamRealName[1], wxT("b"));
+	EXPECT_EQ(a.m_listParam[0].m_strName, wxT("a"));
+	EXPECT_EQ(a.m_listParam[1].m_strName, wxT("b"));
 
 	ASSERT_EQ(a.m_listLocals.size(), 2u);
 	EXPECT_EQ(a.m_listLocals[0].m_strRealName, wxT("temp"));
@@ -494,4 +579,32 @@ TEST(ByteCodeAOT, LargeButRealisticBytecode) {
 	EXPECT_EQ(dst.m_listVar[42].m_strRealName, wxT("v42"));
 	EXPECT_EQ(dst.m_listFunc[7].m_strRealName, wxT("Fn7"));
 	EXPECT_EQ(dst.m_listCode[1234].m_numLine,  1235u);
+}
+
+// ===========================================================================
+// THE VISIBILITY RULE, asked of every kind
+//
+// "A child sees its parent entire except the parent's own private locals."
+// On the bytecode side access IS the kind: Private is Local, Public is Export,
+// Protected is its own kind. The compile side used to answer the same question
+// with a LIST of permitted kinds, which left Context / ContextProp out — so one
+// name resolved differently depending on which road found it.
+// ===========================================================================
+
+TEST(ByteCodeAOT, AChildSeesEverythingButPrivateLocals) {
+	// The one thing a child must not see. `var X` with no modifier is kind=Local,
+	// and on this side that IS "private".
+	EXPECT_TRUE(MakeVar(wxT("hidden"), ibVarKind::Local, 0).IsLocal());
+
+	// Declared for others to see: `var X Public` is stamped kind=Export at
+	// creation, `var X Protected` flips to kind=Protected (compileCode.cpp).
+	EXPECT_FALSE(MakeVar(wxT("shared"),  ibVarKind::Export,    1).IsLocal());
+	EXPECT_FALSE(MakeVar(wxT("guarded"), ibVarKind::Protected, 2).IsLocal());
+
+	// System bindings — for children by construction, and the ones the compile
+	// side's list forgot: a common module reaching a document's object module is
+	// External, and Catalogs / Documents / Manager are Context / ContextProp.
+	EXPECT_FALSE(MakeVar(wxT("StockManagement"), ibVarKind::External,    3).IsLocal());
+	EXPECT_FALSE(MakeVar(wxT("Manager"),         ibVarKind::Context,     4).IsLocal());
+	EXPECT_FALSE(MakeVar(wxT("Catalogs"),        ibVarKind::ContextProp, 5).IsLocal());
 }

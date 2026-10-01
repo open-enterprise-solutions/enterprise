@@ -6,34 +6,43 @@
 
 //base property for "chart of accounts" selection
 class BACKEND_API ibPropertyChartOfAccounts : public ibProperty {
-	wxVariantData* CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc = ibMetaDescription()) const;
+	static wxVariantData* CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc = ibMetaDescription());
 public:
 
 	ibMetaDescription& GetValueAsMetaDesc() const;
 	void SetValue(const ibMetaDescription& val);
 
+	// WHICH CHART OF ACCOUNTS. Exactly one — said as a value now, not only in prose.
+	virtual ibPropertyChoiceMode GetValueList(ibPropertyChoiceList& list) override;
+
 	ibPropertyChartOfAccounts(ibPropertyCategory* cat, const wxString& name) : ibProperty(cat, name, CreateVariantData(cat->GetPropertyObject())) {}
 	ibPropertyChartOfAccounts(ibPropertyCategory* cat, const wxString& name, const wxString& label) : ibProperty(cat, name, label, CreateVariantData(cat->GetPropertyObject())) {}
 	ibPropertyChartOfAccounts(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString) : ibProperty(cat, name, label, helpString, CreateVariantData(cat->GetPropertyObject())) {}
 
-	//get property for grid
-	virtual wxObject* GetPGProperty() const {
-		if (ms_propertyChartOfAccounts != nullptr)
-			return ms_propertyChartOfAccounts(m_owner, m_propLabel, m_propName, m_propValue);
-		return nullptr;
-	}
+	// NOTHING CHOSEN — asked of the property itself, the same way the characteristic-chart binding
+	// answers it, so a rule reads "is this binding empty" rather than reaching for a type count.
+	virtual bool IsEmptyProperty() const override { return GetValueAsMetaDesc().GetTypeCount() == 0; }
 
 	// set/get property data
 	virtual bool SetDataValue(const ibValue& varPropVal);
 	virtual bool GetDataValue(ibValue& pvarPropVal) const;
 
 	//load & save object in control
-	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer);
+protected:
+
+	// The family rule, kept here too: a relationship arrives in whichever wrapper the caller was
+	// handed - CreateValueList builds every candidate as ibVariantDataOwner - and a property that
+	// stores a neighbour's wrapper raises on every later read. See propertyRecord.h.
+	virtual void DoSetValue(const wxVariant& val) override;
 
 public:
 
-	static wxObject* (*ms_propertyChartOfAccounts)(ibPropertyObject*, const wxString&, const wxString&, const wxVariant&);
+	// readable node value
+	virtual bool ReadNodeValue(const ibDataValue& value) override;
+	virtual bool WriteNodeValue(ibDataValue& value) const override;
+
+public:
+
 };
 
 #endif

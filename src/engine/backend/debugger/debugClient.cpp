@@ -4,10 +4,24 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "debugClient.h"
+
+// Socket-option constants (IPPROTO_TCP / TCP_NODELAY / SOL_SOCKET / SO_KEEPALIVE) used by the
+// SetOption calls below. On Windows they arrive with winsock through wx; POSIX keeps them in
+// its own headers and wx does not re-export them.
+#ifndef __WXMSW__
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+#endif
+
 #include "backend/metadataConfiguration.h"
 #include "backend/session/session.h"
+#include "backend/system/systemManager.h"   // Message — the standard door to whoever is watching
 
 #include "backend/fileSystem/fs.h"
+#include "backend/job/jobRunByteCode.h"      // the request and the state that cross this wire whole
+#include "backend/backend_exception.h"       // a frame that cannot be read is caught, not escaped
+#include "backend/diagnostics/journal.h"     // …and the reason is written down before the socket goes
 #if _USE_NET_COMPRESSOR == 1
 #include "utils/fs/lz/lzhuf.h"
 #endif 
@@ -22,22 +36,77 @@ wxCriticalSection ibDebuggerClient::ms_criticalSectionConnection2;
 wxCriticalSection ibDebuggerClient::ms_criticalSectionConnection3;
 ///////////////////////////////////////////////////////////////////////
 
-bool ibDebuggerClient::Initialize()
+namespace {
+
+// The offset in either map's entry: the offset map holds it bare, the breakpoint map beside a condition.
+static int& OffsetOf(int& entry) { return entry; }
+static int& OffsetOf(ibDebuggerClient::ibBreakpoint& entry) { return entry.m_offset; }
+
+// Module maps (m_listBreakpoint / m_listOffsetBreakpoint) are keyed by module GUID, matched
+// case-insensitively via stringUtils::CompareString — so map::find can't be used. This is the
+// one lookup the methods here kept inlining. Returns the inner (line -> entry) map, or null.
+template <typename Entry>
+static std::map<unsigned int, Entry>* FindModuleLines(
+	std::map<wxString, std::map<unsigned int, Entry>>& modules, const wxString& guid)
 {
-	if (!ibDebuggerClient::TableAlreadyCreated()) {
-		ibDebuggerClient::CreateBreakpointDatabase();
-	}
-
-	if (ms_debugClient != nullptr)
-		ms_debugClient->Destroy();
-
-	ms_debugClient = new ibDebuggerClient();
-	return true;
+	auto it = std::find_if(modules.begin(), modules.end(),
+		[&guid](const auto& pair) { return stringUtils::CompareString(pair.first, guid); });
+	return it != modules.end() ? &it->second : nullptr;
 }
 
-void ibDebuggerClient::Destroy()
+// Shift one module's (committedLine -> entry) map by `line_offset` lines for an edit at editor
+// `line`. Each entry's CURRENT editor line is its committed line + its offset. A breakpoint's
+// condition rides in the entry, so it moves with the line and needs nothing of its own.
+//   atLineStart        — the edit was at column 0 of `line` (the whole line moved), so an entry
+//                        sitting ON `line` shifts too; an edit later in the line leaves it in place.
+//   collapseCollisions — on insert, when a following entry now lands on the same editor line as the
+//                        one just shifted: true ERASES it (two breakpoints on one line collapse to
+//                        one), false shifts it too (two committed lines must both keep moving).
+template <typename Entry>
+static void ShiftLineMap(std::map<unsigned int, Entry>& lines, unsigned int line, int line_offset,
+                         bool atLineStart, bool collapseCollisions)
 {
-	wxDELETE(ms_debugClient);
+	auto it = lines.begin();
+	while (it != lines.end()) {
+
+		const unsigned int calc_line = it->first + OffsetOf(it->second);
+
+		if (calc_line > line || (atLineStart && calc_line == line))
+			OffsetOf(it->second) += line_offset;
+
+		it = std::next(it);
+
+		while (line_offset > 0 && it != lines.end() && (it->first + OffsetOf(it->second)) == calc_line) {
+			if (collapseCollisions)
+				it = lines.erase(it);
+			else { OffsetOf(it->second) += line_offset; it = std::next(it); }
+		}
+	}
+}
+
+} // namespace
+///////////////////////////////////////////////////////////////////////
+
+ibDebuggerClient::ibDebuggerClient(ibMetaDataConfigurationBase* metaData) :
+	m_metaData(metaData),
+	m_activeSocket(nullptr),
+	m_adapter(new ibDebuggerClientAdapter),
+	m_enterLoop(false), m_connectionSuccess(false)
+{
+	// Always: it creates the table when it is missing and adds the condition column to one from before it.
+	ibDebuggerClient::CreateBreakpointDatabase();
+	ms_debugClient = this;
+}
+
+ibDebuggerClient::~ibDebuggerClient()
+{
+	while (m_listConnection.size()) {
+		m_listConnection[m_listConnection.size() - 1]->Delete();
+	}
+	wxDELETE(m_adapter);
+
+	if (ms_debugClient == this)
+		ms_debugClient = nullptr;
 }
 
 //special functions:
@@ -65,12 +134,45 @@ void ibDebuggerClient::StepInto()
 	SendCommand(commandChannel.pointer(), commandChannel.size());
 }
 
+void ibDebuggerClient::StepOut()
+{
+	ibWriterMemory commandChannel;
+	commandChannel.w_u16(CommandId_StepOut);
+	commandChannel.w_stringZ(m_currentSessionGuid);
+	SendCommand(commandChannel.pointer(), commandChannel.size());
+}
+
 void ibDebuggerClient::Pause()
 {
 	ibWriterMemory commandChannel;
 	commandChannel.w_u16(CommandId_Pause);
 	commandChannel.w_stringZ(m_currentSessionGuid);
 	SendCommand(commandChannel.pointer(), commandChannel.size());
+}
+
+std::map<wxString, std::map<unsigned int, wxString>> ibDebuggerClient::GetBreakpoints() const
+{
+	std::map<wxString, std::map<unsigned int, wxString>> out;
+
+	for (const auto& module : m_listBreakpoint) {
+
+		std::map<unsigned int, wxString>& lines = out[module.first];
+
+		// THE SUM IS THE ADDRESS. A row is (committed line -> offset the edits since have moved it
+		// by); either half alone points at a line nobody is looking at. Same arithmetic ShiftLineMap
+		// does when it decides which rows an edit moves.
+		for (const auto& line : module.second)
+			lines[line.first + line.second.m_offset] = line.second.m_condition;
+	}
+
+	// A module whose last breakpoint was taken off keeps an empty row in the map, and reporting it
+	// would read as "something is set here" — which is the one thing this must never say wrongly.
+	for (auto it = out.begin(); it != out.end(); ) {
+		if (it->second.empty()) it = out.erase(it);
+		else ++it;
+	}
+
+	return out;
 }
 
 void ibDebuggerClient::Stop(bool kill)
@@ -89,77 +191,17 @@ void ibDebuggerClient::InitializeModule(const wxString& strModuleName, unsigned 
 	LoadBreakpointCollection(strModuleName);
 }
 
-void ibDebuggerClient::PatchModule(const wxString& strModuleName, unsigned int line, int line_offset)
+void ibDebuggerClient::PatchModule(const wxString& strModuleName, unsigned int line, int line_offset, bool atLineStart)
 {
-	auto breakpoint_iterator = std::find_if(m_listBreakpoint.begin(), m_listBreakpoint.end(),
-		[&strModuleName](const auto& pair) { return stringUtils::CompareString(pair.first, strModuleName); });
+	// Two maps shift the same way for this edit, differing only in collision handling:
+	// breakpoints collapse onto one line; the dense committed<->editor offset map keeps all lines.
+	if (auto* breakpoints = FindModuleLines(m_listBreakpoint, strModuleName))
+		ShiftLineMap(*breakpoints, line, line_offset, atLineStart, /*collapseCollisions*/ true);
 
-	if (breakpoint_iterator != m_listBreakpoint.end()) {
+	if (auto* offsets = FindModuleLines(m_listOffsetBreakpoint, strModuleName))
+		ShiftLineMap(*offsets, line, line_offset, atLineStart, /*collapseCollisions*/ false);
 
-		auto& list_breakpoint = breakpoint_iterator->second;
-		{
-			auto list_breakpoint_iterator = list_breakpoint.begin();
-			while (list_breakpoint_iterator != list_breakpoint.end()) {
-
-				const unsigned int calc_line = list_breakpoint_iterator->first + list_breakpoint_iterator->second;
-
-				if (calc_line > line)
-					list_breakpoint_iterator->second += line_offset;
-
-				list_breakpoint_iterator = std::next(list_breakpoint_iterator);
-
-				while (line_offset > 0 && list_breakpoint_iterator != list_breakpoint.end()) {
-					const unsigned int next_calc_line = list_breakpoint_iterator->first + list_breakpoint_iterator->second;
-					if (calc_line != next_calc_line)
-						break;
-					list_breakpoint_iterator = list_breakpoint.erase(list_breakpoint_iterator);
-				}
-			}
-		}
-	}
-
-	auto module_offset_iterator = std::find_if(m_listOffsetBreakpoint.begin(), m_listOffsetBreakpoint.end(),
-		[&strModuleName](const auto& pair) { return stringUtils::CompareString(pair.first, strModuleName); });
-
-	if (module_offset_iterator != m_listOffsetBreakpoint.end()) {
-
-		auto& list_module_offset = module_offset_iterator->second;
-		{
-			auto list_module_offset_iterator = list_module_offset.begin(); bool set_offset_value = false;
-			while (list_module_offset_iterator != list_module_offset.end()) {
-
-				const unsigned int calc_line = list_module_offset_iterator->first + list_module_offset_iterator->second;
-
-				if (calc_line > line || list_module_offset.size() == 1) {
-					list_module_offset_iterator->second += line_offset;
-					set_offset_value = true;
-				}
-
-				auto list_module_offset_iterator_start = list_module_offset_iterator;
-				auto list_module_offset_iterator_end = list_module_offset_iterator;
-
-				list_module_offset_iterator = std::next(list_module_offset_iterator);
-
-				while (line_offset > 0 && list_module_offset_iterator != list_module_offset.end()) {
-
-					const unsigned int next_calc_line = list_module_offset_iterator->first + list_module_offset_iterator->second;
-					if (calc_line != next_calc_line)
-						break;
-
-					list_module_offset_iterator->second += line_offset;
-
-					list_module_offset_iterator_end = list_module_offset_iterator;
-					list_module_offset_iterator = std::next(list_module_offset_iterator);
-				}
-			}
-
-			if (!set_offset_value && list_module_offset.size() > 0) {
-				list_module_offset_iterator = std::prev(list_module_offset.end());
-				list_module_offset_iterator->second += line_offset;
-			}
-		}
-	}
-
+	// Patch notification to the server — kept as-is (server-side handling lives there).
 	ibWriterMemory commandChannel;
 
 	commandChannel.w_u16(line_offset > 0 ? CommandId_PatchInsertLine : CommandId_PatchDeleteLine);
@@ -178,18 +220,14 @@ bool ibDebuggerClient::SaveModule(const wxString& strModuleName, unsigned int li
 
 	if (breakpoint_iterator != m_listBreakpoint.end()) {
 
-		std::map<unsigned int, int>& list_breakpoint = breakpoint_iterator->second, moduleBreakpointsNew;
+		std::map<unsigned int, ibBreakpoint>& list_breakpoint = breakpoint_iterator->second, moduleBreakpointsNew;
 		for (auto it = list_breakpoint.begin(); it != list_breakpoint.end(); it++) {
-			if (!OffsetBreakpointInDB(breakpoint_iterator->first, it->first, it->second))
+			if (!OffsetBreakpointInDB(breakpoint_iterator->first, it->first, it->second.m_offset, it->second.m_condition))
 				return false;
-			moduleBreakpointsNew.emplace(it->first + it->second, 0);
+			moduleBreakpointsNew.emplace(it->first + it->second.m_offset, ibBreakpoint{ 0, it->second.m_condition });
 		}
 
-		list_breakpoint.clear();
-
-		for (auto it = moduleBreakpointsNew.begin(); it != moduleBreakpointsNew.end(); it++) {
-			list_breakpoint.emplace(it->first, it->second);
-		}
+		list_breakpoint = std::move(moduleBreakpointsNew);
 	}
 
 	//initialize offsets 
@@ -243,16 +281,13 @@ bool ibDebuggerClient::SaveAllBreakpoints()
 {
 	//initialize breakpoint 
 	for (auto breakpoint_iterator = m_listBreakpoint.begin(); breakpoint_iterator != m_listBreakpoint.end(); breakpoint_iterator++) {
-		std::map<unsigned int, int>& list_breakpoint = breakpoint_iterator->second, moduleBreakpointsNew;
+		std::map<unsigned int, ibBreakpoint>& list_breakpoint = breakpoint_iterator->second, moduleBreakpointsNew;
 		for (auto it = list_breakpoint.begin(); it != list_breakpoint.end(); it++) {
-			if (!OffsetBreakpointInDB(breakpoint_iterator->first, it->first, it->second))
+			if (!OffsetBreakpointInDB(breakpoint_iterator->first, it->first, it->second.m_offset, it->second.m_condition))
 				return false;
-			moduleBreakpointsNew.emplace(it->first + it->second, 0);
+			moduleBreakpointsNew.emplace(it->first + it->second.m_offset, ibBreakpoint{ 0, it->second.m_condition });
 		}
-		list_breakpoint.clear();
-		for (auto it = moduleBreakpointsNew.begin(); it != moduleBreakpointsNew.end(); it++) {
-			list_breakpoint.emplace(it->first, it->second);
-		}
+		list_breakpoint = std::move(moduleBreakpointsNew);
 	}
 
 	//initialize offsets 
@@ -278,68 +313,91 @@ bool ibDebuggerClient::SaveAllBreakpoints()
 	return true;
 }
 
-bool ibDebuggerClient::ToggleBreakpoint(const wxString& strModuleName, unsigned int line)
+std::map<unsigned int, int>::iterator ibDebuggerClient::ResolveOriginalLine(
+	std::map<unsigned int, int>& list_module_offset, unsigned int line) const
 {
 	unsigned int startLine = line; int locOffsetPrev = 0, locOffsetCurr = 0;
-	std::map<unsigned int, int>& list_module_offset = m_listOffsetBreakpoint[strModuleName];
-
 	for (auto it = list_module_offset.begin(); it != list_module_offset.end(); it++) {
 		if (it->second < 0 && (int)it->first < -it->second) { locOffsetPrev = it->second; continue; }
 		locOffsetCurr = it->second;
 		if ((it->first + locOffsetPrev) <= line && (it->first + locOffsetCurr) >= line) { startLine = it->first; break; }
 		locOffsetPrev = it->second;
 	}
-	std::map<unsigned int, int>::iterator itOffset = list_module_offset.find(startLine);
-	if (itOffset != list_module_offset.end()) {
-		if (line != (itOffset->first + itOffset->second)) {
-			wxMessageBox(_("Cannot set breakpoint in unsaved copy!"));
-			return false;
-		}
-	}
-	else {
-		wxMessageBox(_("Cannot set breakpoint in unsaved copy!"));
+	return list_module_offset.find(startLine);
+}
+
+// 🛑⭐⭐ THE REASON GOES TO WHOEVER ASKED, and it used to go to a MODAL BOX instead.
+//
+// A breakpoint on a line the running application does not have is a refusal with a real cause —
+// the module was edited and not applied, so the runtime's copy has different lines. That cause was
+// shown as `wxMessageBox` from inside the engine, which is wrong three times over: backend.dll is
+// GUI-free by rule; a modal blocks the designer until a person clicks it; and a caller that is not
+// a person — an assistant over MCP — got back a bare `false` and had to guess, while the sentence
+// explaining it stood on somebody else's screen (measured 2026-09-02: the box appeared in front of
+// Max, the tool answered "the debugger did not accept it", and the two never met).
+//
+// Now the sentence travels with the answer and the caller decides what to do with it: the code
+// editor shows it, the tool returns it.
+bool ibDebuggerClient::ToggleBreakpoint(const wxString& strModuleName, unsigned int line,
+	wxString* refusal, const wxString& condition)
+{
+	std::map<unsigned int, int>& list_module_offset = m_listOffsetBreakpoint[strModuleName];
+	std::map<unsigned int, int>::iterator itOffset = ResolveOriginalLine(list_module_offset, line);
+	if (itOffset == list_module_offset.end() || line != (itOffset->first + itOffset->second)) {
+
+		const wxString said =
+			_("The running application does not have this line: the module has been edited "
+			  "and not applied, so its copy is a different text. Apply the configuration, "
+			  "or set the breakpoint on a line both copies share.");
+
+		// ⭐ AND WHEN NOBODY ASKED FOR THE REASON, IT GOES OUT THE STANDARD DOOR — the platform's own
+		// `Message`, which already knows how to reach whoever is on the other side: it asks the
+		// SESSION for its frame, and a web client's frame queues while a desktop one shows
+		// (systemManagerFunc.cpp). Reaching for the frame here would be that same code written a
+		// second time, minus the eval-mode guard that keeps autocomplete from talking out loud
+		// (Max, 2026-09-02: *"the standard message function knows how to deliver to the client"*).
+		if (refusal != nullptr)
+			*refusal = said;
+		else
+			ibValueSystemFunction::Message(said, ibStatusMessage::ibStatusMessage_Error);
+
 		return false;
 	}
-	std::map<unsigned int, int>& list_breakpoint = m_listBreakpoint[strModuleName];
-	std::map<unsigned int, int>::iterator breakpoint_iterator = list_breakpoint.find(itOffset->first);
-	unsigned int currLine = itOffset->first; int offset = itOffset->second;
-	if (breakpoint_iterator == list_breakpoint.end()) {
-		if (ToggleBreakpointInDB(strModuleName, currLine)) {
-			list_breakpoint.emplace(currLine, offset);
-			ibWriterMemory commandChannel;
-			commandChannel.w_u16(CommandId_ToggleBreakpoint);
-			commandChannel.w_stringZ(strModuleName);
-			commandChannel.w_u32(currLine);
-			commandChannel.w_s32(offset);
-			SendCommand(commandChannel.pointer(), commandChannel.size());
-		}
-		else {
-			return false;
-		}
-	}
+	std::map<unsigned int, ibBreakpoint>& list_breakpoint = m_listBreakpoint[strModuleName];
+	auto breakpoint_iterator = list_breakpoint.find(itOffset->first);
+	const unsigned int currLine = itOffset->first;
+	const int offset = breakpoint_iterator != list_breakpoint.end() ? breakpoint_iterator->second.m_offset : itOffset->second;
+
+	// Already there, with this very condition: nothing to write and nothing to tell the runtime.
+	if (breakpoint_iterator != list_breakpoint.end() && breakpoint_iterator->second.m_condition == condition)
+		return true;
+
+	// A NEW BREAKPOINT, OR THE SAME ONE WITH ANOTHER CONDITION - one row and one message either way: the
+	// store upserts by (module, line), and the runtime keeps one condition per line, the last it was sent.
+	if (!ToggleBreakpointInDB(strModuleName, currLine, condition))
+		return false;
+
+	list_breakpoint[currLine] = ibBreakpoint{ offset, condition };
+
+	ibWriterMemory commandChannel;
+	commandChannel.w_u16(CommandId_ToggleBreakpoint);
+	commandChannel.w_stringZ(strModuleName);
+	commandChannel.w_u32(currLine);
+	commandChannel.w_s32(offset);
+	commandChannel.w_stringZ(condition);
+	SendCommand(commandChannel.pointer(), commandChannel.size());
 
 	return true;
 }
 
 bool ibDebuggerClient::RemoveBreakpoint(const wxString& strModuleName, unsigned int line)
 {
-	unsigned int startLine = line; int locOffsetPrev = 0, locOffsetCurr = 0;
 	std::map<unsigned int, int>& list_module_offset = m_listOffsetBreakpoint[strModuleName];
-	for (auto it = list_module_offset.begin(); it != list_module_offset.end(); it++) {
-		if (it->second < 0 && (int)it->first < -it->second) {
-			locOffsetPrev = it->second; continue;
-		}
-		locOffsetCurr = it->second;
-		if ((it->first + locOffsetPrev) <= line && (it->first + locOffsetCurr) >= line) {
-			startLine = it->first; break;
-		}
-		locOffsetPrev = it->second;
-	}
-	std::map<unsigned int, int>::iterator itOffset = list_module_offset.find(startLine);
+	std::map<unsigned int, int>::iterator itOffset = ResolveOriginalLine(list_module_offset, line);
 	if (itOffset == list_module_offset.end())
 		return false;
-	std::map<unsigned int, int>& list_breakpoint = m_listBreakpoint[strModuleName];
-	std::map<unsigned int, int>::iterator breakpoint_iterator = list_breakpoint.find(itOffset->first);
+	std::map<unsigned int, ibBreakpoint>& list_breakpoint = m_listBreakpoint[strModuleName];
+	auto breakpoint_iterator = list_breakpoint.find(itOffset->first);
 	unsigned int currLine = itOffset->first;
 	if (breakpoint_iterator != list_breakpoint.end()) {
 		if (RemoveBreakpointInDB(strModuleName, currLine)) {
@@ -359,31 +417,54 @@ bool ibDebuggerClient::RemoveBreakpoint(const wxString& strModuleName, unsigned 
 
 #include "backend/backend_mainFrame.h"
 
-void ibDebuggerClient::RemoveAllBreakpoint()
+// 🛑 THE SAME LEFTOVER, ONE FLOOR ALONG — and this one showed a person a C++ SIGNATURE. "Error in :
+// void ibDebuggerClient::RemoveAllBreakpoint()", in a modal box: untranslatable, telling the reader
+// nothing they can act on, and blocking the window until it is clicked. Whoever it was written for
+// was reading a debugger's own source, not using the product.
+//
+// It says what failed and what that means for them, through the standard door, and the outcome
+// comes back to the caller instead of only to a screen.
+bool ibDebuggerClient::RemoveAllBreakpoint(wxString* refusal)
 {
 	ibWriterMemory commandChannel;
 	commandChannel.w_u16(CommandId_DeleteAllBreakpoints);
 	SendCommand(commandChannel.pointer(), commandChannel.size());
+
 	if (RemoveAllBreakpointInDB()) {
 		m_listBreakpoint.clear();
 		if (auto* frame = ibSession::CurrentFrame())
 			frame->RefreshFrame();
+		return true;
 	}
-	else {
-		if (auto* frame = ibSession::CurrentFrame())
-			frame->ShowModalMessage("Error in : void ibDebuggerClient::RemoveAllBreakpoint()", wxT("RemoveAllBreakpoint"), wxOK | wxCENTRE);
-	}
+
+	const wxString said =
+		_("The breakpoints could not be cleared: the store they are kept in did not accept the "
+		  "change. They are still set, and the running application still has them.");
+
+	if (refusal != nullptr)
+		*refusal = said;
+	else
+		ibValueSystemFunction::Message(said, ibStatusMessage::ibStatusMessage_Error);
+
+	return false;
 }
 
 #if _USE_64_BIT_POINT_IN_DEBUGGER == 1
-void ibDebuggerClient::AddExpression(const wxString& strExpression, unsigned long long id)
-#else 
-void ibDebuggerClient::AddExpression(const wxString& strExpression, unsigned int id)
-#endif 
+void ibDebuggerClient::AddExpression(const wxString& strExpression, unsigned long long id, const wxString& asker)
+#else
+void ibDebuggerClient::AddExpression(const wxString& strExpression, unsigned int id, const wxString& asker)
+#endif
 {
 	ibWriterMemory commandChannel;
 
 	commandChannel.w_u16(CommandId_AddExpression);
+	// ⭐⭐ WHICH STOP THIS IS ABOUT — the session that parked, as the loop-entry packet named it and this
+	// end has kept it since. Every step already says it (Continue / StepInto / …); an evaluation is a
+	// question about the same stop and has to say it too, or the far end works the answer out in whichever
+	// session happens to be first in its queue. See ParkedSession in debugServer.cpp.
+	commandChannel.w_stringZ(m_currentSessionGuid);
+	// WHO ASKED — written here, echoed back with the answer, read by nobody in between.
+	commandChannel.w_stringZ(asker);
 	commandChannel.w_stringZ(strExpression);
 #if _USE_64_BIT_POINT_IN_DEBUGGER == 1
 	commandChannel.w_u64(id);
@@ -393,19 +474,21 @@ void ibDebuggerClient::AddExpression(const wxString& strExpression, unsigned int
 
 	SendCommand(commandChannel.pointer(), commandChannel.size());
 
-	//set expression in map 
-	m_listExpression.insert_or_assign(id, strExpression);
+	//set expression in map
+	m_listExpression.insert_or_assign(id, ibWatchedExpression{ asker, strExpression });
 }
 
 #if _USE_64_BIT_POINT_IN_DEBUGGER == 1
-void ibDebuggerClient::ExpandExpression(const wxString& strExpression, unsigned long long id)
+void ibDebuggerClient::ExpandExpression(const wxString& strExpression, unsigned long long id, const wxString& asker)
 #else
-void ibDebuggerClient::ExpandExpression(const wxString& strExpression, unsigned int id)
-#endif 
+void ibDebuggerClient::ExpandExpression(const wxString& strExpression, unsigned int id, const wxString& asker)
+#endif
 {
 	ibWriterMemory commandChannel;
 
 	commandChannel.w_u16(CommandId_ExpandExpression);
+	commandChannel.w_stringZ(m_currentSessionGuid);   // which stop — see AddExpression
+	commandChannel.w_stringZ(asker);   // see AddExpression
 	commandChannel.w_stringZ(strExpression);
 #if _USE_64_BIT_POINT_IN_DEBUGGER == 1
 	commandChannel.w_u64(id);
@@ -442,6 +525,7 @@ void ibDebuggerClient::SetLevelStack(unsigned int level)
 	if (ibDebuggerClient::IsEnterLoop()) {
 		ibWriterMemory commandChannel;
 		commandChannel.w_u16(CommandId_SetStack);
+		commandChannel.w_stringZ(m_currentSessionGuid);   // which stop — see AddExpression
 		commandChannel.w_u32(level);
 		SendCommand(commandChannel.pointer(), commandChannel.size());
 	}
@@ -452,6 +536,7 @@ void ibDebuggerClient::EvaluateToolTip(const wxString& strFileName, const wxStri
 	if (ibDebuggerClient::IsEnterLoop()) {
 		ibWriterMemory commandChannel;
 		commandChannel.w_u16(CommandId_EvalToolTip);
+		commandChannel.w_stringZ(m_currentSessionGuid);   // which stop — see AddExpression
 		commandChannel.w_stringZ(strFileName);
 		commandChannel.w_stringZ(strModuleName);
 		commandChannel.w_stringZ(strExpression);
@@ -459,11 +544,88 @@ void ibDebuggerClient::EvaluateToolTip(const wxString& strFileName, const wxStri
 	}
 }
 
+// ⭐⭐ AND IT RUNS AS THE PERSON WHO GAVE ACCESS — their session, their rights, their data, their
+// open forms (Max, 2026-09-02). That is the whole advantage: the situation being investigated is
+// reproduced where it actually happens, not in a copy that behaves nearly the same. What makes it
+// safe to do that in somebody's live session is the other half — the transaction the far end wraps
+// it in, which is rolled back whatever the code does.
+void ibDebuggerClient::RunSandbox(const wxString& code)
+{
+	if (ibDebuggerClient::IsEnterLoop()) {
+		ibWriterMemory commandChannel;
+		commandChannel.w_u16(CommandId_RunSandbox);
+		commandChannel.w_stringZ(m_currentSessionGuid);   // which stop — see AddExpression
+		commandChannel.w_stringZ(code);
+		SendCommand(commandChannel.pointer(), commandChannel.size());
+	}
+}
+
+// ⭐⭐ AND THIS ONE IS NOT GUARDED BY IsEnterLoop, which every command above it is. Those speak to a
+// PARKED runtime — there is no stack to read and no session to evaluate in while it runs. A window,
+// though, can draw itself at any moment, and that is exactly when it is worth asking: the person is
+// looking at the wrong list NOW, not at a breakpoint (Max, 2026-09-04: *"it can also send it while
+// debugging is active — what is the problem with photographing a screen"*).
+void ibDebuggerClient::RequestScreenshot(const wxString& reason, const wxString& area, const wxString& format)
+{
+	ibWriterMemory commandChannel;
+	commandChannel.w_u16(CommandId_Screenshot);
+	commandChannel.w_stringZ(reason);
+	commandChannel.w_stringZ(area);
+	commandChannel.w_stringZ(format);
+	SendCommand(commandChannel.pointer(), commandChannel.size());
+}
+
+// ⭐⭐ PUTTING DATA IN, AND NOT GUARDED BY IsEnterLoop EITHER — for the same reason the screenshot is
+// not. A sandbox needs the stop because it borrows the parked session's frame and connection; a fill
+// asks for a background job in a session of its own, which a running application can start whenever.
+//
+// ⭐ AND IT TRAVELS THIS WAY BECAUSE THE RUNTIME IS OVER THERE. The MCP server is in the designer,
+// and a designer builds no runtime for any session (ibSession::EnsureRoot returns early on
+// DesignerMode) — so the work cannot be done on this side at all, only asked for.
+void ibDebuggerClient::StartJob(const ibJobRunRequest& request)
+{
+	ibWriterMemory commandChannel;
+	commandChannel.w_u16(CommandId_JobStart);
+	request.Write(commandChannel);
+	SendCommand(commandChannel.pointer(), commandChannel.size());
+}
+
+void ibDebuggerClient::AskJobStatus(const wxString& token)
+{
+	ibWriterMemory commandChannel;
+	commandChannel.w_u16(CommandId_JobStatus);
+	commandChannel.w_stringZ(token);
+	SendCommand(commandChannel.pointer(), commandChannel.size());
+}
+
+void ibDebuggerClient::CancelJob(const wxString& token)
+{
+	ibWriterMemory commandChannel;
+	commandChannel.w_u16(CommandId_JobCancel);
+	commandChannel.w_stringZ(token);
+	SendCommand(commandChannel.pointer(), commandChannel.size());
+}
+
+// ⭐⭐ AND READING A REPORT GOES THE SAME WAY, for a reason of rights rather than of plumbing: the
+// designer does not work with data. What is sent is a SCHEMA — which is why the caller may send one
+// that exists nowhere — and no breakpoint is needed, because what happens over there is a rented
+// read on a connection of its own.
+void ibDebuggerClient::RequestCompose(const wxMemoryBuffer& request)
+{
+	ibWriterMemory commandChannel;
+	commandChannel.w_u16(CommandId_Compose);
+	commandChannel.w_u32((unsigned int)request.GetDataLen());
+	if (request.GetDataLen() > 0)
+		commandChannel.w(request.GetData(), (u32)request.GetDataLen());
+	SendCommand(commandChannel.pointer(), commandChannel.size());
+}
+
 void ibDebuggerClient::EvaluateAutocomplete(const wxString& strFileName, const wxString& strModuleName, const wxString& strExpression, const wxString& keyWord, int currline)
 {
 	if (ibDebuggerClient::IsEnterLoop()) {
 		ibWriterMemory commandChannel;
 		commandChannel.w_u16(CommandId_EvalAutocomplete);
+		commandChannel.w_stringZ(m_currentSessionGuid);   // which stop — see AddExpression
 		commandChannel.w_stringZ(strFileName);
 		commandChannel.w_stringZ(strModuleName);
 		commandChannel.w_stringZ(strExpression);
@@ -473,17 +635,12 @@ void ibDebuggerClient::EvaluateAutocomplete(const wxString& strFileName, const w
 	}
 }
 
-std::vector<unsigned int> ibDebuggerClient::GetDebugList(const wxString& strModuleName)
+std::map<unsigned int, wxString> ibDebuggerClient::GetDebugList(const wxString& strModuleName)
 {
-	auto breakpoint_iterator = std::find_if(m_listBreakpoint.begin(), m_listBreakpoint.end(),
-		[&strModuleName](const auto& pair) { return stringUtils::CompareString(pair.first, strModuleName); });
-
-	if (breakpoint_iterator == m_listBreakpoint.end())
-		return std::vector<unsigned int>();
-
-	std::vector<unsigned int> listBreakpoint;
-	for (auto& breakpoint : breakpoint_iterator->second)
-		listBreakpoint.push_back(breakpoint.first + breakpoint.second);
+	std::map<unsigned int, wxString> listBreakpoint;
+	if (auto* breakpoints = FindModuleLines(m_listBreakpoint, strModuleName))
+		for (const auto& breakpoint : *breakpoints)
+			listBreakpoint[breakpoint.first + breakpoint.second.m_offset] = breakpoint.second.m_condition;
 	return listBreakpoint;
 }
 
@@ -512,8 +669,13 @@ void ibDebuggerClient::ibDebuggerClientConnection::DetachConnection(bool kill)
 {
 	if (m_connectionType == ConnectionType::ConnectionType_Debugger) {
 
-		// Send the exit event message to the UI.
-		ms_debugClient->CallAfter(&ibDebuggerClient::ibDebuggerClientAdapter::OnSessionEnd, m_socketClient);
+		// 🔎 THIS END ASKED FOR IT — the only detach that is somebody's decision rather than a loop
+		// running out of reasons to go on. Written down so the journal can tell the two apart: a line
+		// here means the Debug menu, `app_run restart` or an apply of the configuration ended the
+		// session; no line here, and the session ended by itself.
+		ibJournalInfo(wxT("debugger"),
+			wxT("debug client: detaching because this process asked to (%s)"),
+			kill ? wxT("stop the program") : wxT("stop debugging"));
 
 		m_connectionType = ConnectionType::ConnectionType_Scanner;
 
@@ -521,10 +683,13 @@ void ibDebuggerClient::ibDebuggerClientConnection::DetachConnection(bool kill)
 		commandChannel.w_u16(kill ? CommandId_Destroy : CommandId_Detach);
 		SendCommand(commandChannel.pointer(), commandChannel.size());
 
-		if (m_socketClient != nullptr)
-			m_socketClient->Close();
+		// From the caller's thread, while the connection's own thread may be closing it too.
+		m_socketLock.Close(m_socketClient);
 
 		m_verifiedConnection = false;
+
+		// Told last, once this connection no longer counts as one - see the bottom of EntryClient.
+		ms_debugClient->CallAfter(&ibDebuggerClient::ibDebuggerClientAdapter::OnSessionEnd, m_socketClient);
 	}
 }
 
@@ -546,6 +711,11 @@ void ibDebuggerClient::ibDebuggerClientConnection::OnKill()
 {
 	if (ms_debugClient != nullptr && m_connectionType == ConnectionType::ConnectionType_Debugger) {
 
+		// 🔎 The third way a session can end — the connection's thread being killed outright, which
+		// nothing above it announces.
+		ibJournalInfo(wxT("debugger"),
+			wxT("debug client: the connection thread was killed while debugging"));
+
 		// Send the exit event message to the UI.
 		ms_debugClient->CallAfter(&ibDebuggerClient::ibDebuggerClientAdapter::OnSessionEnd, m_socketClient);
 
@@ -555,23 +725,19 @@ void ibDebuggerClient::ibDebuggerClientConnection::OnKill()
 
 	m_number_connection_attempts = -1;
 
-	if (m_socketClient != nullptr)
-		m_socketClient->Destroy();
-
-	m_socketClient = nullptr;
+	m_socketLock.Destroy(m_socketClient);
 }
 
 void ibDebuggerClient::ibDebuggerClientConnection::EntryClient()
 {
-	if (m_socketClient != nullptr)
-		m_socketClient->Destroy();
+	m_socketLock.Destroy(m_socketClient);
 
 	wxIPV4address addr;
 	addr.Hostname(m_hostName);
 	addr.Service(m_port);
 
 	// set the appropriate flags for the socket
-	m_socketClient = new wxSocketClient(wxSOCKET_BLOCK | wxSOCKET_WAITALL);
+	m_socketLock.Assign(m_socketClient, new wxSocketClient(wxSOCKET_BLOCK | wxSOCKET_WAITALL));
 
 	// step wait connect  
 	m_number_connection_attempts = 0;
@@ -586,6 +752,8 @@ void ibDebuggerClient::ibDebuggerClientConnection::EntryClient()
 		bool connected = m_socketClient->Connect(addr, false);
 		if (!connected && m_socketClient->Wait())
 			connected = m_socketClient->IsConnected();
+
+		bool sessionEnded = false;   // said to the UI at the bottom of this pass, see there
 
 		if (!TestDestroy() && connected) {
 
@@ -629,9 +797,9 @@ void ibDebuggerClient::ibDebuggerClientConnection::EntryClient()
 			}
 
 			if (m_verifiedConnection && m_connectionType == ConnectionType::ConnectionType_Debugger) {
-				ibWriterMemory commandChannel;
-				commandChannel.w_u16(CommandId_StartSession);
-				SendCommand(commandChannel.pointer(), commandChannel.size());
+				ibWriterMemory startSessionChannel;
+				startSessionChannel.w_u16(CommandId_StartSession);
+				SendCommand(startSessionChannel.pointer(), startSessionChannel.size());
 			}
 
 			if (m_verifiedConnection) {
@@ -643,58 +811,135 @@ void ibDebuggerClient::ibDebuggerClientConnection::EntryClient()
 					ms_debugClient->CallAfter(&ibDebuggerClient::ibDebuggerClientAdapter::OnSessionStart, m_socketClient);
 				}
 
+				// 🔎 WHY THE SESSION ENDED — the word this loop leaves by, printed once below.
+				//
+				// Every exit here is a detach the person at the designer sees as "the debugger fell off",
+				// and from outside they all looked the same: the loop ended, the socket was closed, the
+				// Debug menu went dark, and nothing said which of the six doors it left by. That is the
+				// one question a log could answer and did not (Max, 2026-09-25: *"the connection is not
+				// being killed — it detaches by itself"*), so the answer travels in a word and is
+				// reported with the state the doors are judged on.
+				const wxChar* leftBy = wxT("the loop's own condition - IsConnected() answered no");
+
 				while (ibDebuggerClientConnection::IsConnected()) {
 
 					if (m_socketClient != nullptr && m_socketClient->WaitForRead(0, waitDebuggerTimeout)) {
-						m_socketClient->ReadMsg(&length, sizeof(unsigned int));
-						// short read on the length header — treat as disconnect
-						if (m_socketClient->LastCount() != sizeof(unsigned int))
-							break;
-						// guard against hostile/garbled server sending an absurd size
-						static const unsigned int kMaxDebugPacket = 16u * 1024u * 1024u;
-						if (length > kMaxDebugPacket)
-							break;
-						if (m_socketClient == nullptr)
-							break;
-						// No second WaitForRead before the payload —
-						// the socket was created with wxSOCKET_BLOCK |
-						// wxSOCKET_WAITALL so ReadMsg blocks until
-						// every requested byte arrives. The previous
-						// WaitForRead(0, 50ms) gate timed out under
-						// network jitter / multi-tab debug traffic
-						// and skipped the payload while the length
-						// had already been consumed; the next outer
-						// iteration read the payload's first bytes
-						// as a fresh length header (huge value),
-						// tripped the kMaxDebugPacket guard, and
-						// detached. Symmetric fix to the server side.
-						wxMemoryBuffer bufferData(length);
-						m_socketClient->ReadMsg(bufferData.GetData(), length);
-						if (m_socketClient->LastCount() != length)
-							break;
+						wxMemoryBuffer bufferData;
+						{
+							// 🛑⭐⭐ ONE THREAD AT A TIME MAY USE THIS SOCKET — and this end had nothing of
+							// the kind, while the far end had half of it (debugServer.h, m_socketMutex).
+							// wxSocketBase keeps its blocking FLAGS on the object: a read raises WAITALL
+							// for the length of its read and a write does the same for its write, each
+							// restoring what it found. Overlap them — the window's thread sending a step
+							// while this thread reads the answer to the last one — and one restores the
+							// other's flags mid-frame, so a read obliged to wait for every byte comes back
+							// SHORT, on a socket that is connected, healthy and not closed.
+							//
+							// The wait stays outside the lock: a reader must not hold the socket while
+							// nothing is arriving. Inside is one whole frame, and the dispatch below stays
+							// outside — it answers, and answering takes this same lock.
+							std::lock_guard<std::mutex> lk(m_socketMutex);
+
+							m_socketClient->ReadMsg(&length, sizeof(unsigned int));
+							// short read on the length header — treat as disconnect
+							if (m_socketClient->LastCount() != sizeof(unsigned int)) {
+								leftBy = wxT("a short read on the length header");
+								break;
+							}
+							// guard against hostile/garbled server sending an absurd size
+							static const unsigned int kMaxDebugPacket = 16u * 1024u * 1024u;
+							if (length > kMaxDebugPacket) {
+								leftBy = wxT("a declared frame size past the 16 MiB ceiling");
+								break;
+							}
+							if (m_socketClient == nullptr) {
+								leftBy = wxT("the socket was taken out of its slot by another thread");
+								break;
+							}
+							// No second WaitForRead before the payload —
+							// the socket was created with wxSOCKET_BLOCK |
+							// wxSOCKET_WAITALL so ReadMsg blocks until
+							// every requested byte arrives. The previous
+							// WaitForRead(0, 50ms) gate timed out under
+							// network jitter / multi-tab debug traffic
+							// and skipped the payload while the length
+							// had already been consumed; the next outer
+							// iteration read the payload's first bytes
+							// as a fresh length header (huge value),
+							// tripped the kMaxDebugPacket guard, and
+							// detached. Symmetric fix to the server side.
+							bufferData.SetBufSize(length);
+							m_socketClient->ReadMsg(bufferData.GetData(), length);
+							if (m_socketClient->LastCount() != length) {
+								leftBy = wxT("a short read on the payload");
+								break;
+							}
+						}
 						if (m_connectionType == ConnectionType::ConnectionType_Debugger && length > 0) {
+							// 🛑 A FRAME THIS END CANNOT READ ENDS THE CONNECTION, NOT THE PROCESS. The reader
+							// refuses a chunk whose declared size is larger than what arrived (fileSystem/fs.cpp),
+							// and that refusal travels up here - on a worker thread, where an escaping exception
+							// takes the whole designer down with it. It did, on 2026-09-23, while the designer
+							// was debugging: two asserts in the journal and an access violation inside memcpy a
+							// second later, from a thread whose entire record was those two lines.
+							//
+							// What a bad frame means is that this end and the far end no longer agree about the
+							// wire, and the only honest thing left is to stop reading it. The loop above already
+							// treats a short read that way (`LastCount() != length`).
+							try {
 #if _USE_NET_COMPRESSOR == 1
-							BYTE* dest = nullptr; unsigned int dest_sz = 0;
-							_decompressLZ(&dest, &dest_sz, bufferData.GetData(), length);
-							RecvCommand(dest, dest_sz); free(dest);
+								BYTE* dest = nullptr; unsigned int dest_sz = 0;
+								_decompressLZ(&dest, &dest_sz, bufferData.GetData(), length);
+								RecvCommand(dest, dest_sz); free(dest);
 #else
-							RecvCommand(bufferData.GetData(), length);
+								RecvCommand(bufferData.GetData(), length);
 #endif
+							}
+							catch (const ibBackendException& err) {
+								ibJournalError(wxT("debugger"),
+									wxT("debug client: a frame of %u bytes could not be read, closing the connection: %s"),
+									length, err.GetErrorDescription());
+								leftBy = wxT("a frame this end could not read");
+								break;
+							}
 							length = 0;
 						}
 					}
 
-					if (TestDestroy()) break;
+					if (TestDestroy()) {
+						leftBy = wxT("this thread was told to stop");
+						break;
+					}
 				}
 
-				if (ms_debugClient != nullptr && m_connectionType == ConnectionType::ConnectionType_Debugger) {
-					// Send the exit event message to the UI.
-					ms_debugClient->CallAfter(&ibDebuggerClient::ibDebuggerClientAdapter::OnSessionEnd, m_socketClient);
+				// 🔎 THE ONE LINE THAT NAMES THE DOOR. The state comes with it because that is what the
+				// doors are judged on and what tells a connection that DIED from one this end walked away
+				// from: `closed` is the far end having gone, and connected=1 ok=1 closed=0 with a reason of
+				// "the loop's own condition" means the socket was alive and something else in IsConnected()
+				// said otherwise. Read it against the enterprise journal's own line for the same moment —
+				// whichever end printed first is the end that ended the session.
+				ibJournalIf {
+					const auto hold = m_socketLock.Hold();
+					const wxSocketClient* sock = m_socketClient;
+					ibJournalInfo(wxT("debugger"),
+						wxT("debug client: the read loop gave up on %s - socket %s, connected=%d, ok=%d, closed=%d, lastError=%d, lastCount=%u, type=%d"),
+						leftBy,
+						sock != nullptr ? wxT("held") : wxT("gone"),
+						sock != nullptr ? static_cast<int>(sock->IsConnected()) : -1,
+						sock != nullptr ? static_cast<int>(sock->IsOk()) : -1,
+						sock != nullptr ? static_cast<int>(sock->IsClosed()) : -1,
+						sock != nullptr ? static_cast<int>(sock->LastError()) : -1,
+						sock != nullptr ? static_cast<unsigned int>(sock->LastCount()) : 0u,
+						static_cast<int>(m_connectionType));
 				}
+
+				if (ms_debugClient != nullptr && m_connectionType == ConnectionType::ConnectionType_Debugger)
+					sessionEnded = true;
 			}
 
-			if (m_socketClient != nullptr)
-				m_socketClient->Close();
+			// The far end has gone (or this thread was told to stop) — and DetachConnection may be closing
+			// the same socket right now, from another thread.
+			m_socketLock.Close(m_socketClient);
 
 			m_number_connection_attempts = 0;
 		}
@@ -705,14 +950,18 @@ void ibDebuggerClient::ibDebuggerClientConnection::EntryClient()
 			m_connectionType = ConnectionType::ConnectionType_Scanner;
 
 		m_verifiedConnection = false;
+
+		// ⭐ THE UI HEARS "THE SESSION ENDED" ONLY NOW - with the socket closed and this connection a scanner
+		// again. It used to be told from inside the read loop, before either, so the window asked
+		// HasConnections while this one still answered "connected" and left the Debug menu lit with
+		// nothing attached (2026-09-11).
+		if (sessionEnded && ms_debugClient != nullptr)
+			ms_debugClient->CallAfter(&ibDebuggerClient::ibDebuggerClientAdapter::OnSessionEnd, m_socketClient);
 	}
 
 	m_number_connection_attempts = -1;
 
-	if (m_socketClient != nullptr)
-		m_socketClient->Destroy();
-
-	m_socketClient = nullptr;
+	m_socketLock.Destroy(m_socketClient);
 }
 
 void ibDebuggerClient::ibDebuggerClientConnection::RecvCommand(void* pointer, unsigned int length)
@@ -721,6 +970,12 @@ void ibDebuggerClient::ibDebuggerClientConnection::RecvCommand(void* pointer, un
 	wxASSERT(ms_debugClient != nullptr);
 	u16 commandFromServer = commandReader.r_u16();
 
+	// 🔎 WHAT ARRIVED, IN ORDER — the last frames before a detach are the ones worth seeing, and the
+	// chain of `if`s below drops a command it does not know without a word.
+	ibJournalInfo(wxT("debugger.wire"),
+		wxT("debug client <- command %d of %u bytes, type=%d"),
+		static_cast<int>(commandFromServer), length, static_cast<int>(m_connectionType));
+
 	if (commandFromServer == CommandId_VerifyConnection) {
 
 		commandReader.r_stringZ(m_confGuid);
@@ -728,14 +983,28 @@ void ibDebuggerClient::ibDebuggerClientConnection::RecvCommand(void* pointer, un
 		commandReader.r_stringZ(m_userName);
 		commandReader.r_stringZ(m_compName);
 
-		m_verifiedConnection = activeMetaData->GetConfigGuid() == ibGuid(m_confGuid);
+		// Against the configuration that owns this debugger — down the chain: this is a connection's own
+		// thread, with no session to ask "the current one" through.
+		const ibMetaDataConfigurationBase* const ours = debugClient->GetMetaData();
+		m_verifiedConnection = ours->GetConfigGuid() == ibGuid(m_confGuid);
 
 		if (m_verifiedConnection && m_connectionType == ConnectionType::ConnectionType_Waiter)
 			m_connectionType = ConnectionType::ConnectionType_Debugger;
 		else if (m_verifiedConnection && m_connectionType == ConnectionType::ConnectionType_Scanner)
 			m_connectionType = ConnectionType::ConnectionType_Scanner;
-		else
+		else {
+			// 🔎 ANSWERING "UNKNOWN" IS ITSELF A DETACH — the far end disconnects on purpose when it
+			// reads this (debugServer.cpp, CommandId_SetConnectionType), so the reason it is being
+			// said belongs in the journal next to it.
+			ibJournalWarning(wxT("debugger"),
+				wxT("debug client: answering 'unknown' to %s - %s (configuration over there %s, ours %s)"),
+				m_hostName, m_verifiedConnection
+					? wxT("this connection is neither a waiter nor a scanner")
+					: wxT("it runs a different configuration"),
+				m_confGuid, ours->GetConfigGuid().str());
+
 			m_connectionType = ConnectionType::ConnectionType_Unknown;
+		}
 
 		ibWriterMemory commandChannel;
 		commandChannel.w_u16(CommandId_SetConnectionType);
@@ -747,16 +1016,23 @@ void ibDebuggerClient::ibDebuggerClientConnection::RecvCommand(void* pointer, un
 		m_connectionType = static_cast<ConnectionType>(commandReader.r_u16());
 	}
 	else if (commandFromServer == CommandId_GetArrayBreakpoint) {
-		//send expression 
-		for (auto& expression : ms_debugClient->m_listExpression) {
+		// EVERYTHING WATCHED, REGISTERED AGAIN — and in the same words AddExpression uses, the asker
+		// first. 🛑 The name was left out here, so the runtime read the expression's text as the asker
+		// and the id's bytes as the expression, then asked for an id past the end of the frame: an
+		// exception on its connection thread, which is the thread the whole debug session lives on.
+		for (const auto& watched : ms_debugClient->m_listExpression) {
 			ibWriterMemory commandChannel;
 			commandChannel.w_u16(CommandId_AddExpression);
-			commandChannel.w_stringZ(expression.second);
+			// Re-registering is about no stop in particular — the name is empty here, and an empty name
+			// means "whoever is parked", which is what a registration wants.
+			commandChannel.w_stringZ(wxEmptyString);
+			commandChannel.w_stringZ(watched.second.m_asker);
+			commandChannel.w_stringZ(watched.second.m_expression);
 #if _USE_64_BIT_POINT_IN_DEBUGGER == 1
-			commandChannel.w_u64(expression.first);
-#else 
-			commandChannel.w_u32(expression.first);
-#endif 
+			commandChannel.w_u64(watched.first);
+#else
+			commandChannel.w_u32(watched.first);
+#endif
 			SendCommand(commandChannel.pointer(), commandChannel.size());
 		}
 
@@ -772,6 +1048,7 @@ void ibDebuggerClient::ibDebuggerClientConnection::RecvCommand(void* pointer, un
 
 			for (const auto& line : breakpoint.second) {
 				commandChannel.w_u32(line.first);
+				commandChannel.w_stringZ(line.second.m_condition);
 			}
 		}
 
@@ -839,6 +1116,89 @@ void ibDebuggerClient::ibDebuggerClientConnection::RecvCommand(void* pointer, un
 			);
 		}
 	}
+	else if (commandFromServer == CommandId_Screenshot) {
+
+		// LENGTH FIRST, THEN THE BYTES — and a length of zero is the person having said no. That is
+		// an answer, not a truncated packet, so it travels the same road and is read as one.
+		wxString focus;
+		commandReader.r_stringZ(focus);
+
+		const unsigned int length = commandReader.r_u32();
+
+		wxMemoryBuffer png;
+		if (length > 0) {
+			png.SetBufSize(length);
+			commandReader.r(png.GetWriteBuf(length), length);
+			png.SetDataLen(length);
+		}
+
+		ms_debugClient->CallAfter(
+			&ibDebuggerClient::ibDebuggerClientAdapter::OnScreenshot, png, focus
+		);
+	}
+	else if (commandFromServer == CommandId_EvalMessage) {
+
+		wxString message;
+		commandReader.r_stringZ(message);
+
+		const MessageType type = (MessageType)commandReader.r_u16();
+
+		ms_debugClient->CallAfter(
+			&ibDebuggerClient::ibDebuggerClientAdapter::OnEvalMessage, message, type
+		);
+	}
+	else if (commandFromServer == CommandId_RunSandbox) {
+
+		const bool ran = commandReader.r_u8() != 0;
+
+		wxString answer, json;
+		commandReader.r_stringZ(answer);
+		commandReader.r_stringZ(json);
+
+		const wxLongLong_t microseconds = commandReader.r_u64();
+
+		ms_debugClient->CallAfter(
+			&ibDebuggerClient::ibDebuggerClientAdapter::OnSandboxResult, ran, answer, json, microseconds
+		);
+	}
+	// The three fill requests answer with one shape — see debugDefs.h. `commandFromServer` is
+	// carried through as `which` so a waiter can tell an answer to its own request from an answer
+	// to somebody else's.
+	else if (commandFromServer == CommandId_JobStart ||
+	         commandFromServer == CommandId_JobStatus ||
+	         commandFromServer == CommandId_JobCancel) {
+
+		ibJobRunByteCodeState state;
+		state.Read(commandReader);
+
+		ms_debugClient->CallAfter(
+			&ibDebuggerClient::ibDebuggerClientAdapter::OnJobState,
+			(unsigned int)commandFromServer, state
+		);
+	}
+	else if (commandFromServer == CommandId_Compose) {
+
+		const bool answered = commandReader.r_u8() != 0;
+
+		wxString refusal;
+		commandReader.r_stringZ(refusal);
+
+		// LENGTH FIRST, THEN THE BYTES — the same shape the screenshot uses, and for the same reason:
+		// what comes back is a blob whose size only the sender knows. (Named apart from the enclosing
+		// `length` parameter: a shadow here would be read as the packet's length by anybody skimming.)
+		const unsigned int payloadLength = commandReader.r_u32();
+
+		wxMemoryBuffer answer;
+		if (payloadLength > 0) {
+			answer.SetBufSize(payloadLength);
+			commandReader.r(answer.GetWriteBuf(payloadLength), payloadLength);
+			answer.SetDataLen(payloadLength);
+		}
+
+		ms_debugClient->CallAfter(
+			&ibDebuggerClient::ibDebuggerClientAdapter::OnComposed, answered, refusal, answer
+		);
+	}
 	else if (commandFromServer == CommandId_EvalAutocomplete) {
 
 		wxString strFileName, strModuleName, strExpression, strKeyWord;
@@ -881,7 +1241,9 @@ void ibDebuggerClient::ibDebuggerClientConnection::RecvCommand(void* pointer, un
 		);
 	}
 	else if (commandFromServer == CommandId_SetExpressions) {
+		wxString strAsker; commandReader.r_stringZ(strAsker);
 		unsigned int countExpression = commandReader.r_u32(); ibWatchWindowData watchData;
+		watchData.SetBridgeId(ibGuid(strAsker));
 		for (unsigned int i = 0; i < countExpression; i++) {
 #if _USE_64_BIT_POINT_IN_DEBUGGER == 1
 			const wxTreeItemId& item = reinterpret_cast<void*>(commandReader.r_u64());
@@ -907,12 +1269,15 @@ void ibDebuggerClient::ibDebuggerClientConnection::RecvCommand(void* pointer, un
 		);
 	}
 	else if (commandFromServer == CommandId_ExpandExpression) {
+		wxString strAsker; commandReader.r_stringZ(strAsker);
 #if _USE_64_BIT_POINT_IN_DEBUGGER == 1
 		ibWatchWindowData watchData(wxTreeItemId(reinterpret_cast<void*>(commandReader.r_u64())));
 #else
 		ibWatchWindowData watchData(wxTreeItemId(reinterpret_cast<void*>(commandReader.r_u32())));
 #endif
-		//generate event 
+		watchData.SetBridgeId(ibGuid(strAsker));
+
+		//generate event
 		unsigned int attributeCount = commandReader.r_u32();
 		for (unsigned int i = 0; i < attributeCount; i++) {
 			wxString strName, strValue, strType;
@@ -987,18 +1352,48 @@ void ibDebuggerClient::ibDebuggerClientConnection::RecvCommand(void* pointer, un
 
 void ibDebuggerClient::ibDebuggerClientConnection::SendCommand(void* pointer, unsigned int length)
 {
+	bool sent = false;
+
+	// ⭐⭐ THE SOCKET IS USED BY ONE THREAD AT A TIME. Two calls go out here, a header and then its
+	// payload, and they must not be split — by another sender, nor by the READER on the connection's own
+	// thread. The far end has held this lock for its writes all along (debugServer.h); this end held
+	// nothing, and the window's thread sending a step while the connection's thread read the answer to
+	// the last one is what left a read short on a live socket. See the read loop in EntryClient.
+	std::lock_guard<std::mutex> lk(m_socketMutex);
+
 #if _USE_NET_COMPRESSOR == 1
 	BYTE* dest = nullptr; unsigned int dest_sz = 0;
 	_compressLZ(&dest, &dest_sz, pointer, length);
 	if (m_socketClient && m_socketClient->IsOk()) {
 		m_socketClient->WriteMsg(&dest_sz, sizeof(unsigned int));
 		m_socketClient->WriteMsg(dest, dest_sz);
+		sent = true;
 	}
 	free(dest);
 #else
 	if (m_socketClient && ibDebuggerClientConnection::IsConnected()) {
 		m_socketClient->WriteMsg(&length, sizeof(unsigned int));
 		m_socketClient->WriteMsg(pointer, length);
+		sent = true;
 	}
 #endif
+
+	// 🔎 WHO WROTE, AND WHETHER IT WENT OUT — the wire as this end sees it, one line per command.
+	//
+	// Two facts are worth having and neither was recorded. WHICH THREAD — the journal's own column says
+	// that, and it is worth reading here: the pair of WriteMsg calls above is a header and then its
+	// payload, and the lock that keeps them together is young (see above). AND WHETHER IT WENT AT ALL: a
+	// command dropped because IsConnected() said no leaves the person pressing a key that does nothing —
+	// which is what "the debugger fell off" looks like from the outside, before anything is closed.
+	ibJournalIf {
+		const u16 command = length >= sizeof(u16) ? *static_cast<const u16*>(pointer) : 0;
+		const auto hold = m_socketLock.Hold();
+		const wxSocketClient* sock = m_socketClient;
+		ibJournalInfo(wxT("debugger.wire"),
+			wxT("debug client -> command %d of %u bytes %s (wrote=%u, lastError=%d)"),
+			static_cast<int>(command), length,
+			sent ? wxT("sent") : wxT("DROPPED - the connection did not answer to being connected"),
+			sock != nullptr ? static_cast<unsigned int>(sock->LastCount()) : 0u,
+			sock != nullptr ? static_cast<int>(sock->LastError()) : -1);
+	}
 }

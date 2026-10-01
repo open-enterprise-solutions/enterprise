@@ -8,7 +8,6 @@
 
 #include "commonObject.h"
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueManagerDataObjectInformationRegister, ibValue);
 
 const ibValueMetaObjectCommonModule* ibValueManagerDataObjectInformationRegister::GetManagerModule() const {
 	return m_metaObject->GetManagerModule();
@@ -30,30 +29,32 @@ enum {
 	eGetTemplate,
 };
 
-void ibValueManagerDataObjectInformationRegister::PrepareNames() const
+void ibValueManagerDataObjectInformationRegister::FillManagerMethods(ibMemberTable& helper) const
 {
-	ibValueManagerDataObject::PrepareNames();
-
-	m_methodHelper->AppendFunc(wxT("CreateRecordSet"), wxT("CreateRecordSet()"));
-	m_methodHelper->AppendFunc(wxT("CreateRecordManager"), wxT("CreateRecordManager()"));
-	m_methodHelper->AppendFunc(wxT("CreateRecordKey"), wxT("CreateRecordKey()"));
-	m_methodHelper->AppendFunc(wxT("Get"), 1, wxT("Get(Filter...)"));
-	m_methodHelper->AppendFunc(wxT("GetFirst"), 3, wxT("GetFirst(beginOfPeriod, filter...)"));
-	m_methodHelper->AppendFunc(wxT("GetLast"), 2, wxT("GetLast(endOfPeriod, filter...)"));
-	m_methodHelper->AppendFunc(wxT("SliceFirst"), 2, wxT("SliceFirst(beginOfPeriod, filter...)"));
-	m_methodHelper->AppendFunc(wxT("SliceLast"), 2, wxT("SliceLast(endOfPeriod, filter...)"));
-	m_methodHelper->AppendFunc(wxT("Select"), wxT("Select()"));
-	m_methodHelper->AppendFunc(wxT("GetForm"), 3, wxT("GetForm(string, owner, guid)"));
-	m_methodHelper->AppendFunc(wxT("GetRecordForm"), 3, wxT("GetRecordForm(string, owner, guid)"));
-	m_methodHelper->AppendFunc(wxT("GetListForm"), 3, wxT("GetListForm(string, owner, guid)"));
-	m_methodHelper->AppendFunc(wxT("GetTemplate"), 1, wxT("GetTemplate(string)"));
+	helper.AppendFunc(wxT("CreateRecordSet"), wxT("CreateRecordSet()"));
+	helper.AppendFunc(wxT("CreateRecordManager"), wxT("CreateRecordManager()"));
+	helper.AppendFunc(wxT("CreateRecordKey"), wxT("CreateRecordKey()"));
+	// TWO ARGUMENTS, because there are two forms: Get(filter) and Get(period, filter). Declared as
+	// one, the periodic form was unreachable — the interpreter refuses a call with more arguments
+	// than the helper declares, so the branch existed and could not be entered.
+	helper.AppendFunc(wxT("Get"), 2, wxT("Get(Period, Filter...)"));
+	helper.AppendFunc(wxT("GetFirst"), 3, wxT("GetFirst(beginOfPeriod, filter...)"));
+	helper.AppendFunc(wxT("GetLast"), 2, wxT("GetLast(endOfPeriod, filter...)"));
+	helper.AppendFunc(wxT("SliceFirst"), 2, wxT("SliceFirst(beginOfPeriod, filter...)"));
+	helper.AppendFunc(wxT("SliceLast"), 2, wxT("SliceLast(endOfPeriod, filter...)"));
+	helper.AppendFunc(wxT("Select"), wxT("Select()"));
+	helper.AppendFunc(wxT("GetForm"), 3, wxT("GetForm(string, owner, guid)"));
+	helper.AppendFunc(wxT("GetRecordForm"), 3, wxT("GetRecordForm(string, owner, guid)"));
+	helper.AppendFunc(wxT("GetListForm"), 3, wxT("GetListForm(string, owner, guid)"));
+	helper.AppendFunc(wxT("GetTemplate"), 1, wxT("GetTemplate(string)"));
 }
 
 #include "selector/objectSelector.h"
 
 bool ibValueManagerDataObjectInformationRegister::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
 {
-	switch (lMethodNum)
+	// Our own ordinal, not the table index — ibValueManagerDataObject::BuiltinMethodNum says why.
+	switch (BuiltinMethodNum(lMethodNum))
 	{
 	case eCreateRecordSet:
 		pvarRetValue = m_metaObject->CreateRecordSetObjectValue();
@@ -62,7 +63,7 @@ bool ibValueManagerDataObjectInformationRegister::CallAsFunc(const long lMethodN
 		pvarRetValue = m_metaObject->CreateRecordManagerObjectValue();
 		return true;
 	case eCreateRecordKey:
-		pvarRetValue = ibValue::CreateAndPrepareValueRef<ibValueRecordKeyObject>(m_metaObject);
+		pvarRetValue = new ibValueRecordKeyObject(m_metaObject);
 		return true;
 	case eGet:
 		pvarRetValue = lSizeArray > 1 ?
@@ -85,36 +86,35 @@ bool ibValueManagerDataObjectInformationRegister::CallAsFunc(const long lMethodN
 		pvarRetValue = lSizeArray > 1 ?
 			ibValueManagerDataObjectInformationRegister::SliceFirst(*paParams[0], *paParams[1])
 			: ibValueManagerDataObjectInformationRegister::SliceFirst(*paParams[0]);
+		return true;
 	case eSliceLast:
 		pvarRetValue = lSizeArray > 1 ?
 			ibValueManagerDataObjectInformationRegister::SliceLast(*paParams[0], *paParams[1])
 			: ibValueManagerDataObjectInformationRegister::SliceLast(*paParams[0]);
 		return true;
 	case eSelect:
-		pvarRetValue = ibValue::CreateAndPrepareValueRef<ibValueSelectorRegisterDataObject>(m_metaObject);
+		pvarRetValue = new ibValueSelectorRegisterDataObject(m_metaObject);
 		return true;
 	case eGetForm:
 	{
 		ibValueGuid* guidVal = lSizeArray > 2 ? paParams[2]->ConvertToType<ibValueGuid>() : nullptr;
-		pvarRetValue = m_metaObject->GetGenericForm(paParams[0]->GetString(),
-			lSizeArray > 1 ? paParams[1]->ConvertToType<ibBackendControlFrame>() : nullptr,
-			guidVal ? ((ibGuid)*guidVal) : ibGuid());
+		pvarRetValue = m_metaObject->GetGenericForm(ibFormRequest(paParams[0]->GetString(), guidVal ? ((ibGuid)*guidVal) : ibGuid()),
+			lSizeArray > 1 ? paParams[1]->ConvertToType<ibBackendControlFrame>() : nullptr);
 		return true;
 	}
 	case eGetRecordForm:
 	{
 		ibValueRecordKeyObject* keyVal = lSizeArray > 2 ? paParams[2]->ConvertToType<ibValueRecordKeyObject>() : nullptr;
-		pvarRetValue = m_metaObject->GetRecordForm(paParams[0]->GetString(),
-			lSizeArray > 1 ? paParams[1]->ConvertToType<ibBackendControlFrame>() : nullptr,
-			keyVal ? keyVal->GetUniqueKey() : wxNullUniquePairKey);
+		pvarRetValue = m_metaObject->GetRecordForm(
+			ibFormRequest(paParams[0]->GetString(), keyVal ? keyVal->GetUniqueKey() : wxNullUniquePairKey),
+			lSizeArray > 1 ? paParams[1]->ConvertToType<ibBackendControlFrame>() : nullptr);
 		return true;
 	}
 	case eGetListForm:
 	{
 		ibValueGuid* guidVal = lSizeArray > 2 ? paParams[2]->ConvertToType<ibValueGuid>() : nullptr;
-		pvarRetValue = m_metaObject->GetListForm(paParams[0]->GetString(),
-			lSizeArray > 1 ? paParams[1]->ConvertToType<ibBackendControlFrame>() : nullptr,
-			guidVal ? ((ibGuid)*guidVal) : ibGuid());
+		pvarRetValue = m_metaObject->GetListForm(ibFormRequest(paParams[0]->GetString(), guidVal ? ((ibGuid)*guidVal) : ibGuid()),
+			lSizeArray > 1 ? paParams[1]->ConvertToType<ibBackendControlFrame>() : nullptr);
 		return true;
 	}
 	case eGetTemplate:

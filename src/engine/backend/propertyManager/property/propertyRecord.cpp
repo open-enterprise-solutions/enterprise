@@ -1,29 +1,78 @@
 #include "propertyRecord.h"
+#include "backend/serialize/dataBuilder.h"
 #include "backend/propertyManager/property/variant/variantRecord.h"
 
-wxObject* (*ibPropertyRecord::ms_propertyRecord)(ibPropertyObject*, const wxString&, const wxString&, const wxVariant&) = nullptr;
 
 ////////////////////////////////////////////////////////////////////
 
-wxVariantData* ibPropertyRecord::CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc) const
+wxVariantData* ibPropertyRecord::CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc)
 {
-	const ibValueMetaObjectGenericData* propFactory = dynamic_cast<const ibValueMetaObjectGenericData*>(property);
-	if (propFactory == nullptr)
-		return nullptr;
-	return new ibVariantDataRecord(propFactory, typeDesc);
+	// No cast: the variant needs the owner only to reach GetMetaData, which ibPropertyObject answers.
+	return new ibVariantDataRecord(property, typeDesc);
 }
 
 ibMetaDescription& ibPropertyRecord::GetValueAsMetaDesc() const {
-	return get_cell_variant<ibVariantDataRecord>()->GetMetaDesc();
+	return get_cell_variant<ibVariantDataMetaDesc>()->GetMetaDesc();
 }
 
 ibMetaDescription& ibPropertyRecord::GetValueAsMetaDesc(const wxVariant& val) const {
-	return get_cell_variant<ibVariantDataRecord>(val)->GetMetaDesc();
+	return get_cell_variant<ibVariantDataMetaDesc>(val)->GetMetaDesc();
 }
 
 void ibPropertyRecord::SetValue(const ibMetaDescription& val)
 {
 	m_propValue = CreateVariantData(m_owner, val);
+}
+
+// See the header for why this exists: a value from a NEIGHBOUR of the relationship family carries
+// the right description in the wrong wrapper, and storing it as it comes makes every later read
+// raise. Taken apart and re-wrapped here, where the class this property holds is known.
+void ibPropertyRecord::DoSetValue(const wxVariant& val)
+{
+	// Unconditionally, and that is the point: "is this already mine" is a question worth not
+	// asking. A relationship IS its description, so taking it out and wrapping it in this
+	// property's own class is right whichever wrapper it arrived in - and costs one copy of a
+	// short list of ids.
+	if (const ibVariantDataMetaDesc* carried = find_cell_variant<ibVariantDataMetaDesc>(val)) {
+		SetValue(carried->GetMetaDesc());
+		return;
+	}
+
+	ibProperty::DoSetValue(val);
+}
+
+// Every kind of register a document can post to. The list used to sit in advpropRecord.cpp.
+ibPropertyChoiceMode ibPropertyRecord::GetValueList(ibPropertyChoiceList& list)
+{
+	return CreateValueList(list, ibPropertyChoiceMode::Mult, {
+			g_metaInformationRegisterCLSID,
+			g_metaAccumulationRegisterCLSID,
+			g_metaAccountingRegisterCLSID,
+			// A calculation register is posted into exactly like the others, and more strictly: it is
+			// ALWAYS subordinate to a recorder, so it can never be the case that one does not qualify
+			// under the rule below. Left out of this list it was invisible to every document, which
+			// made the metatype unreachable — a register nothing could ever write to.
+			g_metaCalculationRegisterCLSID },
+		// ONLY A REGISTER WITH A RECORDER. A document posts by recording itself as the recorder; a
+		// register that has none cannot hold its movements, so offering it would be offering an
+		// impossible binding. This rule was inside the front editor's fill loop and would have been
+		// lost by moving only the classes down.
+		[](const ibPropertyObject* object) {
+			const ibValueMetaObjectRegisterData* reg = dynamic_cast<const ibValueMetaObjectRegisterData*>(object);
+			return reg != nullptr && reg->HasRecorder();
+		});
+}
+
+// The sequences a document registers in — the same shape, its own kinds. The rule below is the
+// registers' one, and it holds for the same reason: a sequence is registered in by a document
+// recording itself as the recorder, so one that has no recorder could never take the registration.
+ibPropertyChoiceMode ibPropertySequenceRecord::GetValueList(ibPropertyChoiceList& list)
+{
+	return CreateValueList(list, ibPropertyChoiceMode::Mult, { g_metaSequenceCLSID },
+		[](const ibPropertyObject* object) {
+			const ibValueMetaObjectRegisterData* reg = dynamic_cast<const ibValueMetaObjectRegisterData*>(object);
+			return reg != nullptr && reg->HasRecorder();
+		});
 }
 
 //base property for "record"
@@ -40,12 +89,13 @@ bool ibPropertyRecord::GetDataValue(ibValue& pvarPropVal) const
 	return true;
 }
 
-bool ibPropertyRecord::LoadData(ibReaderMemory& reader)
+bool ibPropertyRecord::ReadNodeValue(const ibDataValue& value)
 {
-	return ibMetaDescriptionMemory::LoadData(reader, GetValueAsMetaDesc());
+	return ibMetaDescriptionMemory::ReadNode(value, GetValueAsMetaDesc());
 }
 
-bool ibPropertyRecord::SaveData(ibWriterMemory& writer)
+bool ibPropertyRecord::WriteNodeValue(ibDataValue& value) const
 {
-	return ibMetaDescriptionMemory::SaveData(writer, GetValueAsMetaDesc());
+	const ibPropertyObject* owner = m_owner;   // CONST overload — the non-const one returns null (see propertyObject.h)
+	return ibMetaDescriptionMemory::WriteNode(value, GetValueAsMetaDesc(), owner->GetMetaData());
 }

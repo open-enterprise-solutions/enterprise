@@ -4,154 +4,134 @@
 #include "backend/metaCollection/metaObject.h"
 #include "backend/backend_type.h"
 #include "backend/objCtorDefs.h"
+#include "backend/query/queryColumn.h"   // ibBackendSourceColumn (the attribute's own face) + ibBackendQueryColumn (the face it HOLDS)
+
+#include <memory>   // the query face is held, not inherited — see ibMetaAttributeColumn below
 
 #include "metaAttributeObjectEnum.h"
+#include "backend/metaCollection/metaObjectEnum.h"   // ibValueEnumSelectMode — the SelectMode property's enum face.
+                                                     // Named here rather than arriving through metaObject.h: that
+                                                     // header carries the select mode's TYPE (createRequest.h), and
+                                                     // the script face is a different subject that lives apart.
 
+class ibQueryResult;         // L2 cursor — GetBinaryData reads through it (dump)
+class ibQueryStatement;      // L2 statement — SetBinaryData binds through it (restore); no raw L1 here
+class ibStructureBatch;      // per-table DDL/seed batch — ProcessAttribute pours its column DDL into it
+
+// "fld<id>" — the physical name of a metadata column, written without a format string. It is asked for
+// once per CELL of every read (the column codec reads each value by its field's name), and a Format
+// parsing "fld%i" there stood in the stack samples of every read of a report (MEASURED 2026-09-12).
+// ⭐ THE LENGTH FIRST, THEN THE NAME IN ONE PASS: the prefix is three characters and the digits are
+// counted before anything is written, so the name is laid down at exactly its length, the digits from
+// the last one back, and handed to the string whole: one allocation, nothing appended (Max, 2026-09-12).
+// ⚠ A FIELD NAME HAS NO MINUS. A negative id is written by its unsigned 32-bit representation — it looks
+// positive, and it is only the spelling of the same value (Max, 2026-09-12: "-23456 -> fld + u32") —
+// so a name is at most ten digits long. One spelling for every column that is named by its metaID.
+inline wxString ibPhysicalFieldName(int metaId)
+{
+	unsigned int v = static_cast<unsigned int>(metaId);
+	size_t digits = 1;
+	for (unsigned int rest = v; rest >= 10u; rest /= 10u)
+		++digits;
+	const size_t length = 3 + digits;
+
+	wxChar text[3 + 10];   // "fld" and the ten digits a u32 can have
+	text[0] = wxT('f');
+	text[1] = wxT('l');
+	text[2] = wxT('d');
+	for (size_t at = length; at > 3; v /= 10u)
+		text[--at] = static_cast<wxChar>(wxT('0') + v % 10u);
+	return wxString(text, length);
+}
+
+// ⭐⭐ AN ATTRIBUTE IS A DESCRIPTIVE COLUMN AND *HOLDS* A QUERY ONE.
+//
+// It stays an ibBackendSourceColumn — a name, a synonym, a type, an icon — because that is what the
+// form binding walks to (ibBackendTypeSourceFactory::WalkSource returns exactly this) and what the
+// composer's own metaobject already models the same way. What it no longer IS is a QUERY column.
+//
+// The reason is ownership, and it is written down once in docs/private/ownership-authority.md: this object
+// lives under the runtime's own reference count (ibValueMetaObject -> ibValue, whose DecrRef does
+// `delete this` at zero), while the query tier holds columns by std::shared_ptr, whose count lives
+// in a control block outside the object. Neither count can see the other and BOTH delete. Fused by
+// inheritance the two do not touch, they overlap — and an overlap has no safe outcome. Held as a
+// member they have exactly one point of contact: when the attribute dies, its destructor destroys
+// the member, which is one `-1` in the control block. Nobody sweeps and nobody is notified.
 class BACKEND_API ibValueMetaObjectAttributeBase :
-	public ibValueMetaObject, public ibBackendTypeConfigFactory {
-	wxDECLARE_ABSTRACT_CLASS(ibValueMetaObjectAttributeBase);
-public:
+	public ibValueMetaObject, public ibBackendTypeConfigFactory, public ibBackendSourceColumn {
+	public:
 
-	enum ibFieldTypes {
-		ibFieldTypes_Empty = 0,
-		ibFieldTypes_Boolean,
-		ibFieldTypes_Number,
-		ibFieldTypes_Date,
-		ibFieldTypes_String,
-		ibFieldTypes_Null,
-		ibFieldTypes_Enum,
-		ibFieldTypes_Reference,
+	// ⭐ THE QUERY FACE OF THIS ATTRIBUTE — and nothing else. It IS an ibBackendQueryColumn, so the
+	// query tiers meet what they always met; they are not touched by any of this. It STORES no
+	// answer of its own: every one is read through the way back, because two objects each holding a
+	// name and a type would be two truths about one thing, disagreeing the first time the attribute
+	// is renamed.
+	//
+	// The way back is NON-OWNING and the attribute CLEARS it as it dies. An attribute lives as long
+	// as the metadata does, so for every ordinary read this pointer is exactly as good as the
+	// attribute's own address; but a query RESULT may outlive the configuration it was read from,
+	// and it holds this facade by shared_ptr. Detached, the facade answers as a column with nothing
+	// behind it rather than reading freed memory. It must never keep the attribute alive: that would
+	// put the runtime's count under the shared_ptr's, one indirection away from the very mixture
+	// this arrangement exists to prevent.
+	class BACKEND_API ibMetaAttributeColumn : public ibBackendQueryColumn {
+	public:
+		explicit ibMetaAttributeColumn(const ibValueMetaObjectAttributeBase* owner) : m_owner(owner) {}
+
+		// Said by the owner, in its destructor — the only one who knows it is going.
+		void Detach() { m_owner = nullptr; }
+		const ibValueMetaObjectAttributeBase* Owner() const { return m_owner; }
+
+		wxString GetName() const override         { return m_owner != nullptr ? m_owner->GetName() : wxString(); }
+		wxString GetSynonym() const override      { return m_owner != nullptr ? m_owner->GetSynonym() : wxString(); }
+		wxString GetComment() const override      { return m_owner != nullptr ? m_owner->GetComment() : wxString(); }
+		bool     IsAllowed() const override       { return m_owner != nullptr && m_owner->IsAllowed(); }
+		bool     IsAvailable() const override     { return m_owner == nullptr || m_owner->IsAvailable(); }
+		wxIcon   GetColumnIcon() const override   { return m_owner != nullptr ? m_owner->GetColumnIcon() : wxIcon(); }
+		wxString GetPhysicalName() const override { return m_owner != nullptr ? m_owner->GetPhysicalName() : wxString(); }
+		ibMetaID GetColumnId() const override     { return m_owner != nullptr ? m_owner->GetColumnId() : 0; }
+		// ⚠ A DETACHED COLUMN HAS NO TYPE, and the interface returns a REFERENCE — so it answers with
+		// a shared empty description rather than with a dangling one. Nothing may write through it,
+		// which is already true of every type description a column hands out.
+		ibTypeDescription& GetTypeDesc() const override;
+		ibTypeDescription& GetTypeValueDesc() const override;
+
+	private:
+		const ibValueMetaObjectAttributeBase* m_owner;   // NON-OWNING; cleared on the owner's death
 	};
 
-	struct ibSQLField {
+	// The face to hand to anything that reads, joins or projects. Never `this` — see above.
+	const ibBackendQueryColumn* GetQueryColumn() const { return m_column.get(); }
+	// …and the same face as a co-owned handle, for a result that outlives the query that made it.
+	std::shared_ptr<ibBackendQueryColumn> ShareQueryColumn() const { return m_column; }
 
-		wxString m_fieldTypeName;
-		struct ibSQLData {
-			ibFieldTypes m_type;
-			struct ibData {
-				wxString m_fieldName;
-				struct ibRefData {
-					wxString m_fieldRefType;
-					wxString m_fieldRefName;
-					ibRefData() {
-					}
-					ibRefData(const wxString& fieldRefType, const wxString& fieldRefName)
-						: m_fieldRefType(fieldRefType), m_fieldRefName(fieldRefName) {
-					}
-					~ibRefData() {
-					}
-				} m_fieldRefName;
+	~ibValueMetaObjectAttributeBase() override {
+		if (m_column) m_column->Detach();   // the whole interaction between the two ownerships
+	}
 
-				ibData()
-					: m_fieldName(wxEmptyString)
-				{
-				}
+	// A METAOBJECT COLUMN WEARS ITS OWN PICTURE. The column face asks (queryColumn.h), the
+	// metaobject answers with the icon its class registered — so a dimension, a resource and a
+	// plain attribute are told apart by whoever draws them, and neither the drawer nor this class
+	// holds a list of kinds: each level already overrides GetIcon() for its own tree.
+	wxIcon GetColumnIcon() const override { return GetIcon(); }
 
-				ibData(const wxString& fieldName)
-					: m_fieldName(fieldName) {
-				}
+	// (The whole SQL-field façade — GetSQLFieldName / GetCompositeSQLFieldName / GetExcludeSQLFieldName /
+	//  GetSQLFieldCount / GetSQLFieldData, plus the ibFieldTypes / ibSQLField re-exports — is GONE. An
+	//  attribute is just an ibBackendQueryColumn; its physical fields come from the column-layout tier
+	//  (columnLayout.h: ColumnFieldList / ColumnFieldNames / ColumnComparePredicate / ibColumnCodec).
+	//  Register lowering uses the ibReg* helpers in registerQueryLowering.h.)
 
-				ibData(const wxString& fieldRefType, const wxString& fieldRefNam)
-					: m_fieldRefName(fieldRefType, fieldRefNam) {
-				}
+	// (Column DDL — the type-set diff — moved OFF the attribute to the structure tier's free function
+	// DiffColumnInto(batch, srcCol, dstCol). An attribute is just a column; it does not own its DDL.)
 
-				~ibData() {
-				}
-
-			} m_field;
-
-			ibSQLData() : m_type(ibFieldTypes::ibFieldTypes_Empty)
-			{
-			}
-			ibSQLData(ibFieldTypes type) : m_type(type)
-			{
-			}
-			ibSQLData(ibFieldTypes type, const wxString& fieldName) : m_type(type), m_field(fieldName)
-			{
-			}
-			ibSQLData(ibFieldTypes type, const wxString& fieldRefType, const wxString& fieldRefName) : m_type(type), m_field(fieldRefType, fieldRefName)
-			{
-			}
-			ibSQLData(const ibSQLData& rhs) : m_type(rhs.m_type)
-			{
-				if (rhs.m_type != ibFieldTypes::ibFieldTypes_Reference) {
-					m_field.m_fieldName = rhs.m_field.m_fieldName;
-				}
-				else {
-					m_field.m_fieldRefName.m_fieldRefType = rhs.m_field.m_fieldRefName.m_fieldRefType;
-					m_field.m_fieldRefName.m_fieldRefName = rhs.m_field.m_fieldRefName.m_fieldRefName;
-				}
-			}
-			ibSQLData& operator=(const ibSQLData& rhs) {
-				m_type = rhs.m_type;
-				if (rhs.m_type != ibFieldTypes::ibFieldTypes_Reference) {
-					m_field.m_fieldName = rhs.m_field.m_fieldName;
-				}
-				else {
-					m_field.m_fieldRefName.m_fieldRefType = rhs.m_field.m_fieldRefName.m_fieldRefType;
-					m_field.m_fieldRefName.m_fieldRefName = rhs.m_field.m_fieldRefName.m_fieldRefName;
-				}
-				return *this;
-			}
-			~ibSQLData() {}
-		};
-
-		std::vector< ibSQLData> m_types;
-
-		ibSQLField(const wxString& fieldTypeName) : m_fieldTypeName(fieldTypeName) {
-		}
-
-		void AppendType(ibFieldTypes type) {
-			m_types.emplace_back(type);
-		}
-
-		void AppendType(ibFieldTypes type, const wxString& fieldName) {
-			m_types.emplace_back(type, fieldName);
-		}
-
-		void AppendType(ibFieldTypes type, const wxString& fieldRefType, const wxString& fieldRefName) {
-			m_types.emplace_back(type, fieldRefType, fieldRefName);
-		}
-
-		///////////////////////////////////////////////////////
-		auto begin() { return m_types.begin(); }
-		auto end() { return m_types.end(); }
-		///////////////////////////////////////////////////////
-	};
-
-	//get special filed data
-	static unsigned short GetSQLFieldCount(const ibValueMetaObjectAttributeBase* metaAttr);
-	static wxString GetSQLFieldName(const ibValueMetaObjectAttributeBase* metaAttr, const wxString& aggr = wxEmptyString);
-	static wxString GetCompositeSQLFieldName(const ibValueMetaObjectAttributeBase* metaAttr, const wxString& cmp = wxT("="));
-	static wxString GetExcludeSQLFieldName(const ibValueMetaObjectAttributeBase* metaAttr);
-
-	//get data sql
-	static ibSQLField GetSQLFieldData(const ibValueMetaObjectAttributeBase* metaAttr);
-
-	//process default query
-	static int ProcessAttribute(const wxString& tableName, const ibValueMetaObjectAttributeBase* srcAttr, const ibValueMetaObjectAttributeBase* dstAttr);
-
-	//set value attribute 
-	static void SetValueAttribute(const ibValueMetaObjectAttributeBase* attribute, const ibValue& cValue, class ibPreparedStatement* statement, int& position);
-	static void SetValueAttribute(const ibValueMetaObjectAttributeBase* attribute, const ibValue& cValue, class ibPreparedStatement* statement);
-
-	//get value from attribute
-	static bool GetValueAttribute(const wxString& fieldName, const ibFieldTypes& fldType, const ibValueMetaObjectAttributeBase* metaAttr, ibValue& retValue, class ibDatabaseResultSet* resultSet, bool createData = true);
-	static bool GetValueAttribute(const wxString& fieldName, const ibValueMetaObjectAttributeBase* attribute, ibValue& retValue, class ibDatabaseResultSet* resultSet, bool createData = true);
-	static bool GetValueAttribute(const ibValueMetaObjectAttributeBase* attribute, ibValue& retValue, class ibDatabaseResultSet* resultSet, bool createData = true);
-
-	//store value 
-	static void SetBinaryData(const ibValueMetaObjectAttributeBase* metaAttr, const ibReaderMemory& reader, ibPreparedStatement* statement,
-		int& position);
-	static void SetBinaryData(const ibValueMetaObjectAttributeBase* metaAttr, const ibReaderMemory& reader, ibPreparedStatement* statement);
-	static void GetBinaryData(const ibValueMetaObjectAttributeBase* metaAttr, ibWriterMemory& writer, ibDatabaseResultSet* resultSet);
+	// (Value assembly from / binding to a DB row moved to ibDbTableProvider::GetValueAttribute /
+	// ::SetValueAttribute — it is a DB provider concern, not the metadata attribute's. See
+	// query/dbTableProvider.h. The binary dump/restore codec is ibDataMover::BinaryToStatement /
+	// ::BinaryFromResult (L3-3) — callers use the tier directly, no attribute forwarder.)
 
 	//contain type
 	bool ContainType(const ibValueTypes& valType) const;
 	bool ContainType(const ibClassID& clsid) const;
-
-	//contain meta type
-	bool ContainMetaType(ibCtorObjectMetaType type) const;
 
 	//equal type 
 	bool EqualType(const ibClassID& clsid, const ibTypeDescription& rhs) const;
@@ -169,23 +149,77 @@ public:
 
 	//Create value by selected type
 	virtual ibValue CreateValue() const;
-	virtual ibValue* CreateValueRef() const;
 
 #pragma endregion
 
-	virtual wxString GetFieldNameDB() const { return wxString::Format(wxT("fld%i"), m_metaId); }
+	// --- ibBackendQueryColumn: an attribute IS a query column ------------
+	// GetTypeDesc() is the column's typed accessor — but it is ALSO declared by the
+	// other base (ibBackendTypeFactory). Re-declaring it here as one pure virtual
+	// makes a single overrider for BOTH bases and resolves the otherwise-ambiguous
+	// name (C2385); each concrete attribute supplies the body, reused as-is.
+	// GetName likewise resolves the ambiguity between ibValueMetaObject::GetName and
+	// the column's.
+	virtual ibTypeDescription& GetTypeDesc() const override = 0;
 
-	//get sql type for db 
-	virtual wxString GetSQLTypeObject(const ibClassID& clsid) const;
+	// The type factory's answer — a characteristic stands for its chart's types (backend_type.cpp). Declared
+	// here only to be the one overrider for both bases, each of which declares the question.
+	virtual ibTypeDescription& GetTypeValueDesc() const override;
 
-	//check if attribute is fill 
+	// ⭐ WHAT THIS FIELD IS CHOSEN WITHIN — asked of EVERY attribute, answered by the one kind that can
+	// carry it. A walk over an object's fields gets back `ibValueMetaObjectAttributeBase*`, and asking
+	// each of them what governs it by casting to the kind that holds the properties is the tree telling
+	// a caller to go and find out for itself (Max, 2026-09-23: "a pile of dynamic casts").
+	//
+	// The empty answers below are the honest ones for a predefined field and a common attribute: they
+	// are not chosen within anything.
+	virtual const ibChoiceTypeLinkDescription& GetTypeLink() const;
+	virtual const ibChoiceParametersDescription& GetChoiceParameters() const;
+
+	// ⭐ HOW THE FIELD IS SHOWN — its format strings, one per language (docs/private/format-property.md),
+	// asked the same way: of every attribute, answered by the kind that carries the property. Empty for
+	// a predefined field — its values are shown as its type has them.
+	virtual const ibTranslateString& GetFormat() const;
+
+	// (IsEmptyTypeDesc lives on ibBackendTypeConfigFactory's base — backend_type.h — because that is
+	//  where the type description itself is declared, and therefore the only place that can answer
+	//  for every holder of one rather than for attributes alone.)
+
+	virtual wxString GetName() const override         { return ibValueMetaObject::GetName(); }
+	// GetSynonym is now ALSO declared by ibBackendSourceColumn (the column base) — same single-
+	// overrider trick as GetName: the column synonym IS the metaobject synonym (the UI caption).
+	virtual wxString GetSynonym() const override      { return ibValueMetaObject::GetSynonym(); }
+	// …and GetComment the same way. It was ambiguous all along (ibValueMetaObject declares one and
+	// ibBackendAbstractColumn declares another); nothing had called it THROUGH the attribute until
+	// the query facade began forwarding to it, and an ambiguity nobody exercises is silent.
+	virtual wxString GetComment() const override      { return ibValueMetaObject::GetComment(); }
+	// IsAllowed (column base) routes to the metaobject's (IsEnabled && !IsDeleted) — so the source
+	// explorer skips deleted / disabled fields without touching the metaobject.
+	virtual bool IsAllowed() const override           { return ibValueMetaObject::IsAllowed(); }
+	// IsAvailable (column base) routes to the functional options of this base — the field, or the object it
+	// stands in, may belong to a part of the system the base does not use (metaAttributeObject.cpp).
+	virtual bool IsAvailable() const override;
+	// ⚠ NOT `override` ANY MORE, and deliberately still HERE. These two are the query face's
+	// questions, but the schema tier asks them of the ATTRIBUTE directly (an index name, a column
+	// being renamed) and it is right to: both are derived from the metaID, which is the attribute's
+	// own. The facade forwards to them, so there is still exactly one answer.
+	virtual wxString GetPhysicalName() const { return ibPhysicalFieldName(m_metaId); }
+	// The column's model/read id — for a DB attribute it IS the metaID (RAM tables key
+	// their rows by it; the DB path keys its fields off the same id via GetPhysicalName).
+	virtual ibMetaID GetColumnId() const      { return GetMetaID(); }
+
+	// (No GetValueFields here — the attribute is just a column; its value-field split is the tier free
+	//  function ColumnValueFields(col) over DescribeColumnLayout, metadata-free, asked by the provider.)
+
+	//check if attribute is fill
 	virtual bool FillCheck() const = 0;
 
 	virtual ibItemMode GetItemMode() const { return ibItemMode::ibItemMode_Item; }
 	virtual ibSelectMode GetSelectMode() const { return ibSelectMode::ibSelectMode_Items; }
+	virtual ibIndexingMode GetIndexingMode() const { return ibIndexingMode::ibIndexingMode_DontIndex; }
 
 	//get metaData
-	virtual ibMetaData* GetMetaData() const { return m_metaData; }
+	virtual const ibMetaData* GetMetaData() const { return m_metaData; }
+	virtual ibMetaData* GetMetaData() { return m_metaData; }
 
 	//events:
 	virtual bool OnCreateMetaObject(ibMetaData* metaData, int flags);
@@ -201,11 +235,16 @@ public:
 
 protected:
 	ibValue m_defValue;
+
+private:
+	// ⭐ MADE ONCE, HERE, SO EVERY CONSTRUCTOR GETS IT — there are eight of them across this family
+	// and none has to remember. Its life is exactly this attribute's, and this attribute's is the
+	// metadata's; a result that outlives the query keeps it alive on its own account.
+	std::shared_ptr<ibMetaAttributeColumn> m_column = std::make_shared<ibMetaAttributeColumn>(this);
 };
 
 class BACKEND_API ibValueMetaObjectAttribute : public ibValueMetaObjectAttributeBase {
-	wxDECLARE_DYNAMIC_CLASS(ibValueMetaObjectAttribute);
-public:
+	public:
 
 	ibValueMetaObjectAttribute(const ibValueTypes& valType = ibValueTypes::TYPE_STRING) :
 		ibValueMetaObjectAttributeBase()
@@ -213,100 +252,136 @@ public:
 		m_propertyType->SetValue(ibValue::GetIDByVT(valType));
 	}
 
+	// A field a form binds to may belong to a functional option (the predefined ones are the object's
+	// identity, and do not).
+	virtual bool IsFunctionalOptionAllowed() const override { return true; }
+
 	//support icons
 	virtual wxIcon GetIcon() const;
 	static wxIcon GetIconGroup();
 
-	//check if attribute is fill 
+	//check if attribute is fill
 	virtual bool FillCheck() const { return m_propertyFillCheck->GetValueAsBoolean() && GetClsidCount() > 0; }
 
 	virtual ibItemMode GetItemMode() const;
 	virtual ibSelectMode GetSelectMode() const;
+	virtual ibIndexingMode GetIndexingMode() const { return m_propertyIndexingMode->GetValueAsEnum(); }
 
-	//get type description 
+	//get type description
 	virtual ibTypeDescription& GetTypeDesc() const { return m_propertyType->GetValueAsTypeDesc(); }
+	virtual ibTypeDescription& GetTypeValueDesc() const override;
 
 	/**
 	* Property events
 	*/
 	virtual void OnPropertyCreated(ibProperty* property);
-	virtual void OnPropertyRefresh(class wxPropertyGridManager* pg, class wxPGProperty* pgProperty, ibProperty* property);
+	virtual void OnPropertyRefresh() override;
 	virtual bool OnPropertyChanging(ibProperty* property, const wxVariant& newValue);
 	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue);
 
 protected:
 
-	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer);
+
+	// per-type values: FillCheck/ItemMode/Select readable, Type (composite) binary
+	// for now → becomes a Child sub-node later. Separate save/load (const on read).
+	virtual bool ReadData(const ibDataNode& node) override;
+	virtual bool WriteData(ibDataNode& node) const override;
+
+public:
+
+	// ⭐ WHAT NARROWS THIS FIELD, ASKED OF THE FIELD ITSELF — the kind of attribute that can carry a
+	// link answering the question its base declares. The two are read wherever a choice is about to be
+	// offered — the control opening a list, the quick choice, a value adjusted on write — and the
+	// reader has the attribute in hand, not its property grid. Held by reference: they are
+	// descriptions, and a copy per read on a path that runs once per click is a copy nobody needed.
+	virtual const ibChoiceTypeLinkDescription& GetTypeLink() const override { return m_propertyTypeLink->GetValueAsLinkDesc(); }
+	virtual const ibChoiceParametersDescription& GetChoiceParameters() const override { return m_propertyChoiceParameters->GetValueAsParametersDesc(); }
+
+	// HOW THE FIELD IS SHOWN — its own property, which every control bound to it follows unless it
+	// has a format of its own.
+	virtual const ibTranslateString& GetFormat() const override { return m_propertyFormat->GetValueAsFormatString(); }
 
 private:
 
 	ibPropertyCategory* m_categoryType = ibPropertyObject::CreatePropertyCategory(wxT("Data"), _("Data"));
-	ibPropertyType* m_propertyType = ibPropertyObject::CreateProperty<ibPropertyType>(m_categoryType, wxT("Type"), _("Type"), ibValueTypes::TYPE_STRING);
+	ibPropertyType* m_propertyType = ibPropertyObject::CreateProperty<ibPropertyType>(m_categoryType, wxT("Type"), _("Type"), _("What the field may hold: one or several types - primitives (string with a length, number with precision and scale, date, boolean) and references. It decides the database columns: a composite type is stored as a type tag plus one column per kind, so adding a type changes the table."), ibValueTypes::TYPE_STRING);
 	ibPropertyCategory* m_categoryAttribute = ibPropertyObject::CreatePropertyCategory(wxT("Attribute"), _("Attribute"));
-	ibPropertyBoolean* m_propertyFillCheck = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryAttribute, wxT("FillCheck"), _("Fill check"));
+	ibPropertyBoolean* m_propertyFillCheck = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryAttribute, wxT("FillCheck"), _("Fill check"), _("The field must be filled: a write that leaves it empty is refused with a message naming the field (and the line, in a tabular section or a record set), and the form shows it as required."));
+	ibPropertyEnum<ibValueEnumIndexingMode>* m_propertyIndexingMode = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumIndexingMode>>(m_categoryAttribute, wxT("Indexing"), _("Indexing"), _("Whether the database keeps an index on the field. Index: searches and filters by it stop scanning the table. Index with additional ordering: the index also carries the object's main order, so a list filtered by the field pages without sorting. Don't index (the default): no index - cheaper writes."), ibIndexingMode::ibIndexingMode_DontIndex);
 	ibPropertyCategory* m_categoryPresentation = ibPropertyObject::CreatePropertyCategory(wxT("Presentation"), _("Presentation"));
-	ibPropertyEnum<ibValueEnumSelectMode>* m_propertySelectMode = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumSelectMode>>(m_categoryPresentation, wxT("Select"), _("Select group and items"), ibSelectMode::ibSelectMode_Items);
+	ibPropertyEnum<ibValueEnumSelectMode>* m_propertySelectMode = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumSelectMode>>(m_categoryPresentation, wxT("Select"), _("Select group and items"), _("For a field referring to a hierarchical catalog: what may be chosen into it - items only (the default), folders only, or both."), ibSelectMode::ibSelectMode_Items);
+	ibPropertyFormat* m_propertyFormat = ibPropertyObject::CreateProperty<ibPropertyFormat>(m_categoryPresentation, wxT("Format"), _("Format"), _("How the field's value is shown, written per language: digits after the point, separators, a date pattern, the words for True and False. Every input field and table column bound to the field shows it this way unless it has a format of its own. Empty: a number is shown with as many digits after the point as its type keeps, a date as its type has it."), wxT(""));
 	ibPropertyCategory* m_categoryGroup = ibPropertyObject::CreatePropertyCategory(wxT("Group"), _("Group"));
-	ibPropertyEnum<ibValueEnumItemMode>* m_propertyItemMode = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumItemMode>>(m_categoryGroup, wxT("ItemMode"), _("Item mode"), ibItemMode::ibItemMode_Item);
+	ibPropertyEnum<ibValueEnumItemMode>* m_propertyItemMode = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumItemMode>>(m_categoryGroup, wxT("ItemMode"), _("Item mode"), _("In a catalog with folders: which nodes carry the attribute - items (the default), folders, or both. A folder's form and its record show only the attributes that folders use; the column is shared, the value is just not asked of the other kind."), ibItemMode::ibItemMode_Item);
+
+	// WHAT NARROWS THE CHOICE OF THIS FIELD. Its own category, because the choice parameters join it here
+	// (docs/private/choice-links.md): this one answers WHICH LIST OPENS, they answer what is shown in it.
+	ibPropertyCategory* m_categoryChoice = ibPropertyObject::CreatePropertyCategory(wxT("Choice"), _("Choice"));
+	ibPropertyChoiceLink* m_propertyTypeLink = ibPropertyObject::CreateProperty<ibPropertyChoiceLink>(m_categoryChoice, wxT("TypeLink"), _("Link by type"), _("The field whose value decides the TYPE of this one: a characteristic gives the type it declares, a field holding a type description gives that, and any other field gives the type of the value standing in it. Every field beside this one that holds anything is offered - what is pulled is that field's own answer. Empty: the field opens the list its own type declares."));
+	ibPropertyChoiceParameters* m_propertyChoiceParameters = ibPropertyObject::CreateProperty<ibPropertyChoiceParameters>(m_categoryChoice, wxT("ChoiceParameters"), _("Choice parameters"), _("What is shown in the list: a row per parameter - which field of the chosen object it filters, where its value comes from, and what becomes of an already chosen value when that source changes (cleared by default, because the old value belonged to the old source). A catalog with an owner gets its row written here by the designer."));
 };
 
 class BACKEND_API ibValueMetaObjectAttributePredefined : public ibValueMetaObjectAttributeBase {
-	wxDECLARE_DYNAMIC_CLASS(ibValueMetaObjectAttributePredefined);
+	public:
+
+	// (NOT SHOWN under its owner, and it needs no flag saying so: no owner ACCEPTS this
+	// clsid as a child — ResolveChild lists attribute, tabular section, form, template,
+	// command — so FilterChild already answers no. A predefined attribute is part of the
+	// metatype's definition, not of the configuration.)
 private:
 
-	ibValueMetaObjectAttributePredefined(const wxString& name, const wxString& synonym, const wxString& comment, bool fillCheck, const ibValue& defValue, ibItemMode itemMode, ibSelectMode selectMode)
+	ibValueMetaObjectAttributePredefined(const wxString& name, const wxString& synonym, const wxString& comment, bool fillCheck, const ibValue& defValue, ibItemMode itemMode, ibSelectMode selectMode, ibIndexingMode indexingMode = ibIndexingMode::ibIndexingMode_DontIndex)
 		: ibValueMetaObjectAttributeBase(name, wxT(""), comment), m_itemMode(itemMode), m_selectMode(selectMode), m_strSynonym(synonym)
 	{
 		m_typeDesc.SetDefaultMetaType(ibValueTypes::TYPE_BOOLEAN);
-		m_fillCheck = fillCheck; m_defValue = defValue;
+		m_fillCheck = fillCheck; m_indexingMode = indexingMode; m_defValue = defValue;
 	}
 
-	ibValueMetaObjectAttributePredefined(const wxString& name, const wxString& synonym, const wxString& comment, const ibQualifierNumber& qNumber, bool fillCheck, const ibValue& defValue, ibItemMode itemMode, ibSelectMode selectMode)
+	ibValueMetaObjectAttributePredefined(const wxString& name, const wxString& synonym, const wxString& comment, const ibQualifierNumber& qNumber, bool fillCheck, const ibValue& defValue, ibItemMode itemMode, ibSelectMode selectMode, ibIndexingMode indexingMode = ibIndexingMode::ibIndexingMode_DontIndex)
 		: ibValueMetaObjectAttributeBase(name, wxT(""), comment), m_itemMode(itemMode), m_selectMode(selectMode), m_strSynonym(synonym)
 	{
 		m_typeDesc.SetDefaultMetaType(ibValueTypes::TYPE_NUMBER);
 		m_typeDesc.SetNumber(qNumber.m_precision, qNumber.m_scale);
-		m_fillCheck = fillCheck; m_defValue = defValue;
+		m_fillCheck = fillCheck; m_indexingMode = indexingMode; m_defValue = defValue;
 	}
 
-	ibValueMetaObjectAttributePredefined(const wxString& name, const wxString& synonym, const wxString& comment, const ibQualifierDate& qDate, bool fillCheck, const ibValue& defValue, ibItemMode itemMode, ibSelectMode selectMode)
+	ibValueMetaObjectAttributePredefined(const wxString& name, const wxString& synonym, const wxString& comment, const ibQualifierDate& qDate, bool fillCheck, const ibValue& defValue, ibItemMode itemMode, ibSelectMode selectMode, ibIndexingMode indexingMode = ibIndexingMode::ibIndexingMode_DontIndex)
 		: ibValueMetaObjectAttributeBase(name, wxT(""), comment), m_itemMode(itemMode), m_selectMode(selectMode), m_strSynonym(synonym)
 	{
 		m_typeDesc.SetDefaultMetaType(ibValueTypes::TYPE_DATE);
 		m_typeDesc.SetDate(qDate.m_dateTime);
-		m_fillCheck = fillCheck; m_defValue = defValue;
+		m_fillCheck = fillCheck; m_indexingMode = indexingMode; m_defValue = defValue;
 	}
 
-	ibValueMetaObjectAttributePredefined(const wxString& name, const wxString& synonym, const wxString& comment, const ibQualifierString& qString, bool fillCheck, const ibValue& defValue, ibItemMode itemMode, ibSelectMode selectMode)
+	ibValueMetaObjectAttributePredefined(const wxString& name, const wxString& synonym, const wxString& comment, const ibQualifierString& qString, bool fillCheck, const ibValue& defValue, ibItemMode itemMode, ibSelectMode selectMode, ibIndexingMode indexingMode = ibIndexingMode::ibIndexingMode_DontIndex)
 		: ibValueMetaObjectAttributeBase(name, wxT(""), comment), m_itemMode(itemMode), m_selectMode(selectMode), m_strSynonym(synonym)
 	{
 		m_typeDesc.SetDefaultMetaType(ibValueTypes::TYPE_STRING);
 		m_typeDesc.SetString(qString.m_length);
-		m_fillCheck = fillCheck; m_defValue = defValue;
+		m_fillCheck = fillCheck; m_indexingMode = indexingMode; m_defValue = defValue;
 	}
 
 	ibValueMetaObjectAttributePredefined(const wxString& name, const wxString& synonym, const wxString& comment,
-		const ibClassID& clsid, bool fillCheck, const ibValue& defValue, ibItemMode itemMode, ibSelectMode selectMode)
+		const ibClassID& clsid, bool fillCheck, const ibValue& defValue, ibItemMode itemMode, ibSelectMode selectMode, ibIndexingMode indexingMode = ibIndexingMode::ibIndexingMode_DontIndex)
 		: ibValueMetaObjectAttributeBase(name, wxT(""), comment), m_itemMode(itemMode), m_selectMode(selectMode), m_strSynonym(synonym)
 	{
 		m_typeDesc.SetDefaultMetaType(clsid);
-		m_fillCheck = fillCheck; m_defValue = defValue;
+		m_fillCheck = fillCheck; m_indexingMode = indexingMode; m_defValue = defValue;
 	}
 
 	ibValueMetaObjectAttributePredefined(const wxString& name, const wxString& synonym, const wxString& comment,
-		const ibClassID& clsid, const ibTypeDescription::ibTypeData& descr, bool fillCheck, const ibValue& defValue, ibItemMode itemMode, ibSelectMode selectMode)
+		const ibClassID& clsid, const ibTypeDescription::ibTypeData& descr, bool fillCheck, const ibValue& defValue, ibItemMode itemMode, ibSelectMode selectMode, ibIndexingMode indexingMode = ibIndexingMode::ibIndexingMode_DontIndex)
 		: ibValueMetaObjectAttributeBase(name, wxT(""), comment), m_itemMode(itemMode), m_selectMode(selectMode), m_strSynonym(synonym)
 	{
 		m_typeDesc.SetDefaultMetaType(clsid, descr);
-		m_fillCheck = fillCheck; m_defValue = defValue;
+		m_fillCheck = fillCheck; m_indexingMode = indexingMode; m_defValue = defValue;
 	}
 
-	ibValueMetaObjectAttributePredefined(const wxString& name, const wxString& synonym, const wxString& comment, bool fillCheck, ibItemMode itemMode, ibSelectMode selectMode)
+	ibValueMetaObjectAttributePredefined(const wxString& name, const wxString& synonym, const wxString& comment, bool fillCheck, ibItemMode itemMode, ibSelectMode selectMode, ibIndexingMode indexingMode = ibIndexingMode::ibIndexingMode_DontIndex)
 		: ibValueMetaObjectAttributeBase(name, wxT(""), comment), m_itemMode(itemMode), m_selectMode(selectMode), m_strSynonym(synonym)
 	{
 		m_typeDesc.ClearMetaType();
-		m_fillCheck = fillCheck;
+		m_fillCheck = fillCheck; m_indexingMode = indexingMode;
 	}
 
 public:
@@ -322,20 +397,44 @@ public:
 	virtual wxString GetSynonym() const { return m_strSynonym; }
 	virtual void SetSynonym(const wxString& strSynonym) {}
 
-	//check if attribute is fill 
+	//check if attribute is fill
 	virtual bool FillCheck() const { return m_fillCheck && m_typeDesc.GetClsidCount() > 0; }
 	virtual ibItemMode GetItemMode() const { return m_itemMode; }
 	virtual ibSelectMode GetSelectMode() const { return m_selectMode; }
+	virtual ibIndexingMode GetIndexingMode() const { return m_indexingMode; }
 
-	//get type description 
+	//get type description
 	virtual ibTypeDescription& GetTypeDesc() const { return m_typeDesc; }
+
+
+	// A predefined attribute is part of the metatype's definition, so its shape is fixed by the
+	// constructor — with ONE exception. What a Parent field accepts follows the hierarchy the
+	// OWNER declares (folders, or items subordinated to items), and that is a property the user
+	// sets. The owner restates it whenever the declaration changes; nobody else may.
+	void SetSelectMode(ibSelectMode selectMode) { m_selectMode = selectMode; }
+
+	// The SECOND such exception, and for the same reason. A predefined attribute whose meaning
+	// depends on a setting of its owner — an accounting register's debit account, which is `Account`
+	// in a one-sided register and `AccountDr` beside `AccountCr` in a correspondence one — must
+	// carry the caption that goes with the name it currently answers to, or the two say different
+	// things about the same field. The owner restates both when the setting changes; SetSynonym
+	// stays inert, so the object inspector still cannot edit what the metatype declares.
+	void SetOwnerSynonym(const wxString& strSynonym) { m_strSynonym = strSynonym; }
+
+	// …and the picture, for the same reason: a predefined attribute that STANDS FOR a field of its owner — a
+	// side of an accounting register's dimension or resource kept per side (`CurrencyDr`, `QuantityCr`) — is
+	// drawn as that field in a field list, a dimension as a dimension and a figure as a figure, not as one
+	// more plain attribute. Restated by the owner with the name and the caption; unset, the class's own.
+	void SetOwnerIcon(const wxIcon& icon) { m_ownerIcon = icon; }
+	wxIcon GetColumnIcon() const override { return m_ownerIcon.IsOk() ? m_ownerIcon : ibValueMetaObjectAttributeBase::GetColumnIcon(); }
 
 	friend class ibValue;
 
 protected:
 
-	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer);
+
+	virtual bool ReadData(const ibDataNode& node) override;
+	virtual bool WriteData(ibDataNode& node) const override;
 
 private:
 
@@ -344,8 +443,10 @@ private:
 	bool m_fillCheck;
 	ibItemMode m_itemMode;
 	ibSelectMode m_selectMode;
+	ibIndexingMode m_indexingMode = ibIndexingMode::ibIndexingMode_DontIndex;
 
 	wxString m_strSynonym;
+	wxIcon   m_ownerIcon;   // see SetOwnerIcon
 };
 
 #endif

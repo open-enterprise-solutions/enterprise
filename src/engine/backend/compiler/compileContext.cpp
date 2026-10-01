@@ -31,7 +31,7 @@ ibParamUnit ibCompileContext::CreateVariable(const wxString& strPrefix)
 */
 
 ibParamUnit ibCompileContext::AddVariable(const wxString& strVarName,
-	const wxString& typeVar, bool exportVar, bool contextVar, bool tempVar)
+	const ibClassID& typeVar, bool exportVar, bool contextVar, bool tempVar)
 {
 
 	// Dup-check is OWN-scope only — direct find_if on m_listVariable.
@@ -39,7 +39,7 @@ ibParamUnit ibCompileContext::AddVariable(const wxString& strVarName,
 	// (parent module entries), which is wrong: declaring `Var X` here
 	// is allowed even if a parent module exports an X.
 	auto existing = std::find_if(m_listVariable.begin(), m_listVariable.end(),
-		[&strVarName](const auto& pair) { return stringUtils::CompareString(strVarName, pair.first); });
+		[&strVarName](const auto& v) { return v && stringUtils::CompareString(strVarName, v->m_strRealName); });
 	if (existing != m_listVariable.end()) {
 		m_compileModule->SetError(ERROR_IDENTIFIER_DUPLICATE, strVarName);
 		return ibParamUnit();
@@ -69,7 +69,7 @@ ibParamUnit ibCompileContext::AddVariable(const wxString& strVarName,
 
 	//determine the number and type of the variable
 	variable.m_numArray = 0;
-	variable.m_strType = typeVar;
+	variable.m_clsid = typeVar;
 	variable.m_numIndex = numVariable;
 
 
@@ -121,11 +121,50 @@ ibParamUnit ibCompileContext::GetVariable(const wxString& strVarName, bool bFind
 		// "one level up" default. Triple-nested lambdas (inner →
 		// outer through middle) decrement past 0 otherwise.
 		auto tryEmit = [&](const std::shared_ptr<ibVariable>& cur, int depth, bool blockReturn, ibParamUnit& out) {
-			if (!(m_numReturn == RETURN_BLOCK || numCanUseLocalInParent > 0 || cur->m_bExport || crossedLambda))
+			// Public and Protected are both visible up the parent chain (children
+			// see them). The difference is the cross-module export registry:
+			// Public is in it (config-wide); Protected is NOT.
+			// ⭐⭐ AN EXTERNAL NAME IS VISIBLE FROM ANYWHERE — that is what makes it external. Common
+			// modules are bound onto the configuration root with BindExportVariable (kind=External),
+			// and `StockManagement.CheckFreeBalance(…)` inside a document's object module is the
+			// ordinary way to call one.
+			//
+			// 🛑 IT ONLY SURFACED WHEN THE AOT CACHE STARTED WORKING (2026-09-04). With a live
+			// compile context on the configuration root, the name resolved on the FIRST walk — the
+			// compile-context chain — which does not ask this question. A cache HIT skips Compile()
+			// entirely, so there is no live context and the search falls through to the BYTECODE
+			// chain, where the visibility budget is asked about instead. `numCanUseLocalInParent`
+			// is a rule about reaching somebody's LOCALS one level up; it was never meant to gate a
+			// name that is global by construction, and until the cache worked nothing ever asked it
+			// to. Probes: the name was in the parent bytecode ("externs: … StockManagement") and
+			// still reported "Var is not found".
+			// ⭐ THE LADDER (Max, 2026-09-04): root (code, global vars, contexts) → common modules,
+			// which see the root ENTIRE and register themselves back on it as exports → an object
+			// module, which sees the root and everything registered on it and adds its own exports
+			// and contexts → a form, adding its own on top. Each step sees its parent WHOLE and
+			// builds a lean-to over it.
+			//
+			// ⭐ THE RULE, SAID AS A RULE: a child sees its parent entire EXCEPT the parent's own
+			// locals and privates. Enumerating what MAY pass (Public / Protected / External / …)
+			// leaves the list short by whatever nobody thought of that day — which is how
+			// `StockManagement` became invisible from a document's object module.
+			//
+			// ⭐ AND IT IS SAID THAT WAY NOW, 2026-09-05 — what made it sayable was finding the
+			// SECOND ROAD. The list was this walk's answer; the bytecode walk
+			// (ibByteCode::FindVariable) had its own, `if (v.IsLocal()) return false`, which IS
+			// the rule — on that side access is carried by the kind. So one name got two
+			// answers depending on which road found it: the list left Context / ContextProp
+			// out, so `Catalogs` / `Documents` / `Manager` passed here only on the
+			// one-level-up budget while sailing through there. Widening either road alone then
+			// moved names between depths on that road only — which is what "fixed one road and
+			// broke another" was. Both now ask `IsLocal()`, which is the same question in the
+			// same words, and needs no third name to say it.
+			if (!(m_numReturn == RETURN_BLOCK || numCanUseLocalInParent > 0 || crossedLambda
+			      || !cur->IsLocal()))
 				return false;
 			out.m_numArray = blockReturn ? (long long)DEF_VAR_TEMP : (long long)depth;
 			out.m_numIndex = cur->m_numVariable;
-			out.m_strType = cur->m_strType;
+			out.m_clsid = cur->m_clsid;
 			return true;
 		};
 
@@ -151,7 +190,9 @@ ibParamUnit ibCompileContext::GetVariable(const wxString& strVarName, bool bFind
 				if (pCurContext->m_numReturn == RETURN_BLOCK)
 					numContext++;
 
-					guardRecursion();
+				// Indented as if it belonged to the `if` above, but it never did — the guard
+				// runs on every iteration, which is what a recursion guard has to do.
+				guardRecursion();
 
 				if (pCurContext->FindVariable(strVarName, currentVariable)) {
 					ibParamUnit variable;
@@ -252,12 +293,12 @@ ibParamUnit ibCompileContext::GetVariable(const wxString& strVarName, bool bFind
 				if (rootCtx != nullptr && rootCtx != this) {
 					std::shared_ptr<ibVariable> rootVar = nullptr;
 					if (rootCtx->FindVariable(strVarName, rootVar)
-						&& rootVar && rootVar->m_bContext)
+						&& rootVar && rootVar->IsContextRelated())
 					{
 						ibParamUnit variable;
 						variable.m_numArray = 1;
 						variable.m_numIndex = rootVar->m_numVariable;
-						variable.m_strType  = rootVar->m_strType;
+						variable.m_clsid  = rootVar->m_clsid;
 						currentVariable = rootVar;
 						return variable;
 					}
@@ -274,7 +315,7 @@ ibParamUnit ibCompileContext::GetVariable(const wxString& strVarName, bool bFind
 		// itself delegates RETURN_BLOCK -> parent (mirroring CreateVariable),
 		// so implicit `name = expr` inside `{ }` lands in the enclosing
 		// fn/module ctx automatically — no walk-target gymnastics here.
-		return AddVariable(strVarName, wxEmptyString, contextVar, contextVar, tempVar);
+		return AddVariable(strVarName, 0, contextVar, contextVar, tempVar);
 	}
 
 	wxASSERT(currentVariable);
@@ -293,29 +334,39 @@ ibParamUnit ibCompileContext::GetVariable(const wxString& strVarName, bool bFind
 		variable.m_numArray = 0;
 
 	variable.m_numIndex = currentVariable->m_numVariable;
-	variable.m_strType = currentVariable->m_strType;
+	variable.m_clsid = currentVariable->m_clsid;
 
 	return variable;
 }
 
 void ibCompileContext::PushVariable(const wxString& strVarName, const wxString& strContextVar, unsigned int numVariable,
-	const wxString& typeVar, bool exportVar, bool contextVar, bool tempVar)
+	const ibClassID& typeVar, bool exportVar, bool contextVar, bool tempVar)
 {
-	// Map key is the original-cased name — lookups go through
-	// std::find_if + stringUtils::CompareString (case-insensitive),
-	// so there's no need to upper-normalize storage. Renderers
-	// (debugger / catalog object PrepareNames) read the key directly
-	// and now show the user's source casing instead of UPPERCASE.
+	// Entries are keyed by m_strRealName via case-insensitive find_if (no
+	// upper-normalization). Renderers (debugger / PrepareNames) show the
+	// user's source casing.
 	std::shared_ptr<ibVariable> currentVariable(new ibVariable(strVarName));
 
 	currentVariable->m_strRealName = strVarName;
-	currentVariable->m_bExport = exportVar;
-	currentVariable->m_bContext = contextVar;
+	// Kind from the declaration shape: a prop of a binding (strContextVar set)
+	// is ContextProp; a self-ref binding is Context; an exported name is Export;
+	// otherwise a plain Local. PrepareModuleData Pass 1 overrides Export→External
+	// for externs; CompileDeclaration's access stamp overrides →Protected.
+	currentVariable->m_kind =
+		  !strContextVar.IsEmpty() ? ibVarKind::ContextProp
+		: contextVar               ? ibVarKind::Context
+		: exportVar                ? ibVarKind::Export
+		                           : ibVarKind::Local;
+	// m_access stays in lock-step with the export flag for the parent-chain
+	// visibility gate: every exported var — user Public AND system extern /
+	// context bindings — reads as Public. Protected is stamped separately by
+	// CompileDeclaration after the variable is created.
+	currentVariable->m_access = exportVar ? ACCESS_PUBLIC : ACCESS_PRIVATE;
 
 	currentVariable->m_strContext = strContextVar;  //variable for which the attribute is called
 
 	currentVariable->m_bTempVar = tempVar;
-	currentVariable->m_strType = typeVar;
+	currentVariable->m_clsid = typeVar;
 	currentVariable->m_numVariable = numVariable;
 	// Stamp the scope-nesting depth at the call site. Runtime
 	// debugger Locals filter compares this against an ibRunContext-side
@@ -325,22 +376,42 @@ void ibCompileContext::PushVariable(const wxString& strVarName, const wxString& 
 		? m_compileModule->m_compileScopeDepth
 		: 0;
 
-	m_listVariable.insert_or_assign(
-		currentVariable->m_strName, std::move(currentVariable)
-	);
+	// Vector storage with map-like upsert semantics: replace an existing
+	// same-named entry (was insert_or_assign's last-wins), else append.
+	auto itVar = std::find_if(m_listVariable.begin(), m_listVariable.end(),
+		[&](const auto& v) { return v && stringUtils::CompareString(currentVariable->m_strRealName, v->m_strRealName); });
+	if (itVar != m_listVariable.end())
+		*itVar = std::move(currentVariable);
+	else
+		m_listVariable.push_back(std::move(currentVariable));
 }
 
 void ibCompileContext::PushFunction(const wxString& strFuncName, const wxString& strContextVar, const wxString& strShortDescription, unsigned int numFunction, bool hasRetVal, int argCount)
 {
-	std::shared_ptr<ibCompileContext::ibFunction> contextFunction(
-		new ibFunction(strFuncName, CreateContext(hasRetVal ? RETURN_FUNCTION : RETURN_PROCEDURE))
-	);
+	// No compile-context here. A context method has no body to compile, so the only thing the
+	// (name, context) ctor would do is wire the back-pointer on a context nobody then keeps:
+	// ibFunction stopped owning contexts (see its ctor comment), this call site never stored
+	// the pointer, and CreateContext hands out a raw one. The result was one 116-byte context
+	// leaked per registered context method, per compile — and PrepareModuleData registers the
+	// whole system API, so closing an editor (SyntaxControl recompiles) leaked another set.
+	std::shared_ptr<ibCompileContext::ibFunction> contextFunction(new ibFunction(strFuncName));
 
 	contextFunction->m_nStart = numFunction;
-	contextFunction->m_bContext = true;
-	contextFunction->m_bExport = true;
+	contextFunction->m_kind = ibFnKind::ContextMethod;
+	// m_bCodeRet defaults false and context methods have no compile finalize to run
+	// IsReturnFunction(m_numReturn) — set it straight from hasRetVal, otherwise every built-in
+	// function (TrimAll, Left, Right, ...) resolves as a procedure and using its result throws
+	// ERROR_USE_PROCEDURE_AS_FUNCTION.
+	contextFunction->m_bCodeRet = hasRetVal;
 
 	contextFunction->m_strContext = strContextVar; //variable for which the attribute is called
+
+	// A negative declared arity means "as many as it is given" — the registration
+	// convention the runtime already honours (procUnit.cpp sizes such a frame by
+	// MAX_STATIC_VAR, "arity unknown"). Carry it across; without this the loop
+	// below simply builds an empty list and the caller's first argument reads as
+	// one too many.
+	contextFunction->m_valueVariadic = (argCount < 0);
 
 	if (argCount > 0) contextFunction->m_listParam.reserve(argCount);
 
@@ -354,9 +425,13 @@ void ibCompileContext::PushFunction(const wxString& strFuncName, const wxString&
 	contextFunction->m_strRealName = strFuncName;
 	contextFunction->m_strShortDescription = strShortDescription;
 
-	m_listFunction.insert_or_assign(
-		contextFunction->m_strName, std::move(contextFunction)
-	);
+	// Vector storage with map-like upsert semantics (see PushVariable).
+	auto itFunc = std::find_if(m_listFunction.begin(), m_listFunction.end(),
+		[&](const auto& f) { return f && stringUtils::CompareString(contextFunction->m_strRealName, f->m_strRealName); });
+	if (itFunc != m_listFunction.end())
+		*itFunc = std::move(contextFunction);
+	else
+		m_listFunction.push_back(std::move(contextFunction));
 }
 
 /**
@@ -367,13 +442,13 @@ void ibCompileContext::PushFunction(const wxString& strFuncName, const wxString&
 bool ibCompileContext::FindVariable(const wxString& strVarName, std::shared_ptr<ibVariable>& foundedVar, bool contextVar)
 {
 	auto it = std::find_if(m_listVariable.begin(), m_listVariable.end(),
-		[strVarName](const auto pair) {return stringUtils::CompareString(strVarName, pair.first); });
+		[strVarName](const auto& v) {return v && stringUtils::CompareString(strVarName, v->m_strRealName); });
 
 	if (contextVar) {
 
 		if (it != m_listVariable.end()) {
-			foundedVar = it->second;
-			return it->second->m_bContext;
+			foundedVar = *it;
+			return (*it)->IsContextRelated();
 		}
 
 		if (m_parentContext && m_parentContext->FindVariable(strVarName, foundedVar, contextVar))
@@ -398,7 +473,7 @@ bool ibCompileContext::FindVariable(const wxString& strVarName, std::shared_ptr<
 		return false;
 	}
 	else if (it != m_listVariable.end()) {
-		foundedVar = it->second;
+		foundedVar = *it;
 		return true;
 	}
 
@@ -418,12 +493,12 @@ bool ibCompileContext::FindVariable(const wxString& strVarName, std::shared_ptr<
 bool ibCompileContext::FindFunction(const wxString& strFuncName, std::shared_ptr<ibFunction>& foundedFunc, bool contextVar)
 {
 	auto it = std::find_if(m_listFunction.begin(), m_listFunction.end(),
-		[strFuncName](const auto pair) { return stringUtils::CompareString(strFuncName, pair.first); });
+		[strFuncName](const auto& f) { return f && stringUtils::CompareString(strFuncName, f->m_strRealName); });
 
 	if (contextVar) {
-		if (it != m_listFunction.end() && it->second) {
-			foundedFunc = it->second;
-			return it->second->m_bContext;
+		if (it != m_listFunction.end() && *it) {
+			foundedFunc = *it;
+			return (*it)->IsContextMethod();
 		}
 
 		if (m_parentContext && m_parentContext->FindFunction(strFuncName, foundedFunc, contextVar))
@@ -444,8 +519,8 @@ bool ibCompileContext::FindFunction(const wxString& strFuncName, std::shared_ptr
 		foundedFunc = nullptr;
 		return false;
 	}
-	else if (it != m_listFunction.end() && it->second) {
-		foundedFunc = it->second;
+	else if (it != m_listFunction.end() && *it) {
+		foundedFunc = *it;
 		return true;
 	}
 
@@ -464,12 +539,24 @@ void ibCompileContext::CreateLabels()
 		const wxString& strName = m_listLabel[i]->m_strName;
 		const int oldLine = m_listLabel[i]->m_numLine;
 
-		//look for such a label in the list of declared labels
-		unsigned int currLine = m_listLabelDef[strName];
-		if (!currLine) {
+		// PRESENCE, NOT VALUE. Zero was doing two jobs here: it is a legitimate
+		// address (a label as the FIRST statement of a body registers
+		// `m_listCode.size() - 1`, which is 0 right after the frame opcode) and it
+		// was also the "not declared" answer, because operator[] default-builds a
+		// zero for a key nobody put there. So a label at the top of a procedure
+		// was never found — `Goto ~again` reported "Label not defined" about a
+		// label defined two lines above it, and the report blamed the jump.
+		//
+		// find() also stops the lookup from INSERTING the missing key, which is
+		// what operator[] did on every unresolved use.
+		const auto itLabel = m_listLabelDef.find(strName);
+		if (itLabel == m_listLabelDef.end()) {
 			m_compileModule->m_numCurrentCompile = m_listLabel[i]->m_numError;
-			m_compileModule->SetError(ERROR_LABEL_DEFINE, strName); // duplicate label definitions occurred
+			m_compileModule->SetError(ERROR_LABEL_DEFINE, strName); // the label was never declared
+			continue;
 		}
+
+		const unsigned int currLine = itLabel->second;
 
 		// write the address of the label:
 		m_compileModule->m_cByteCode.m_listCode[oldLine].m_param1.m_numIndex = currLine + 1;

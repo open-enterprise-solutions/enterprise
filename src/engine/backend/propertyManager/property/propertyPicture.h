@@ -6,7 +6,7 @@
 
 //base property for "picture"
 class BACKEND_API ibPropertyPicture : public ibProperty {
-	wxVariantData* CreateVariantData(ibPropertyObject* property, const ibPictureDescription& id) const;
+	static wxVariantData* CreateVariantData(ibPropertyObject* property, const ibPictureDescription& id);
 public:
 
 #pragma region _value_
@@ -32,29 +32,21 @@ public:
 
 	virtual bool IsEmptyProperty() const;
 
-	//get property for grid 
-	virtual wxObject* GetPGProperty() const {
-		if (ms_propertyPicture != nullptr)
-			return ms_propertyPicture(m_propLabel, m_propName, m_propValue);
-		return nullptr;
-	}
-
 	//set/Get property data
 	virtual bool SetDataValue(const ibValue& varPropVal);
 	virtual bool GetDataValue(ibValue& pvarPropVal) const;
 
 	//load & save object in control 
-	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer);
+	virtual bool ReadNodeValue(const ibDataValue& value) override;
+	virtual bool WriteNodeValue(ibDataValue& value) const override;
 
 public:
 
-	static wxObject* (*ms_propertyPicture)(const wxString&, const wxString&, const wxVariant&);
 };
 
 //base property for "external picture"
 class BACKEND_API ibPropertyExternalPicture : public ibProperty {
-	wxVariantData* CreateVariantData(const ibExternalPictureDescription& pictureDesc) const;
+	static wxVariantData* CreateVariantData(const ibExternalPictureDescription& pictureDesc);
 public:
 
 #pragma region _value_
@@ -80,24 +72,16 @@ public:
 
 	virtual bool IsEmptyProperty() const;
 
-	//get property for grid 
-	virtual wxObject* GetPGProperty() const {
-		if (ms_propertyExtPicture != nullptr)
-			return ms_propertyExtPicture(m_propLabel, m_propName, m_propValue);
-		return nullptr;
-	}
-
 	//set/Get property data
 	virtual bool SetDataValue(const ibValue& varPropVal);
 	virtual bool GetDataValue(ibValue& pvarPropVal) const;
 
 	//load & save object in control 
-	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer);
+	virtual bool ReadNodeValue(const ibDataValue& value) override;
+	virtual bool WriteNodeValue(ibDataValue& value) const override;
 
 public:
 
-	static wxObject* (*ms_propertyExtPicture)(const wxString&, const wxString&, const wxVariant&);
 };
 
 #endif

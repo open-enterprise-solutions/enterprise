@@ -61,3 +61,6 @@
 #*.PDF   diff=astextplain
 #*.rtf   diff=astextplain
 #*.RTF   diff=astextplain
+
+# Test certificates and keys: PEM is read as bytes by a TLS library - no line-ending translation.
+tests/certs/* -text

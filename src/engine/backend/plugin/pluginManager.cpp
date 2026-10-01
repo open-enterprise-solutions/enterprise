@@ -3,6 +3,7 @@
 /////////////////////////////////////////////////////////////////////////////
 
 #include "pluginManager.h"
+#include "pluginHost.h"   // ibPluginHostInstance — what initialize() receives
 
 #include <wx/filename.h>
 #include <wx/stdpaths.h>
@@ -52,13 +53,23 @@ size_t ibPluginManager::LoadAll()
 	wxArrayString files;
 	wxDir::GetAllFiles(dir, &files, pattern, wxDIR_FILES);
 
-	ScopedSilenceLoadErrors silence;
+	// RAII, not a value: it silences the loader for its whole scope and restores on the way out.
+	// Named only so it HAS a scope — hence maybe_unused rather than a deletion.
+	[[maybe_unused]] ScopedSilenceLoadErrors silence;
 
 	for (const wxString& path : files) {
 
 		auto lib = std::make_unique<wxDynamicLibrary>();
-		if (!lib->Load(path, wxDL_DEFAULT | wxDL_QUIET))
+		if (!lib->Load(path, wxDL_DEFAULT | wxDL_QUIET)) {
+			// Quiet in the UI, never quiet altogether. A stray DLL in the folder
+			// legitimately fails to load and must not disturb anyone — but so does
+			// OUR plugin when a dependency is missing or a symbol went unresolved,
+			// and that one used to vanish without a trace. Same file, same branch;
+			// only the log tells them apart afterwards.
+			ibJournalInfo(wxT("plugin"),"Plugin candidate '%s' did not load - missing dependency or "
+				"unresolved symbol; skipped.", path);
 			continue;
+		}
 
 		// Suppress wx's error log when GetSymbol misses — every unrelated DLL
 		// in the folder will legitimately not export our plugin entry point
@@ -74,7 +85,7 @@ size_t ibPluginManager::LoadAll()
 
 		const ibPluginInfo* info = info_fn();
 		if (info == nullptr || info->abi_version != IB_PLUGIN_ABI_VERSION) {
-			wxLogDebug("Skipping plugin '%s': ABI mismatch (got %d, expected %d)",
+			ibJournalInfo(wxT("plugin"),"Skipping plugin '%s': ABI mismatch (got %d, expected %d)",
 				path, info ? info->abi_version : -1, IB_PLUGIN_ABI_VERSION);
 			continue;
 		}
@@ -86,8 +97,13 @@ size_t ibPluginManager::LoadAll()
 			init_fn = reinterpret_cast<ibPluginInitializeFn>(
 				lib->GetSymbol(wxT("oes_plugin_initialize")));
 		}
-		if (init_fn && init_fn(/*hostContext*/ nullptr) != 0) {
-			wxLogDebug("Plugin '%s' initialize() failed", path);
+		// THE HOST, not NULL (ABI 2). One C struct with a `query` function; the
+		// plugin asks it for the capabilities it needs — see pluginHost.h. A
+		// plugin that wanted something the host does not offer is expected to
+		// return non-zero here, and it is then unloaded without shutdown being
+		// called: it never finished starting, so it has nothing to tear down.
+		if (init_fn && init_fn(ibPluginHostInstance()) != 0) {
+			ibJournalInfo(wxT("plugin"),"Plugin '%s' initialize() failed", path);
 			continue;
 		}
 
@@ -100,7 +116,7 @@ size_t ibPluginManager::LoadAll()
 			p.m_shutdown = reinterpret_cast<ibPluginShutdownFn>(
 				p.m_lib->GetSymbol(wxT("oes_plugin_shutdown")));
 		}
-		wxLogDebug("Loaded plugin: %s %s", info->name ? info->name : "<unnamed>",
+		ibJournalInfo(wxT("plugin"),"Loaded plugin: %s %s", info->name ? info->name : "<unnamed>",
 			info->version ? info->version : "");
 
 		m_plugins.push_back(std::move(p));

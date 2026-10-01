@@ -31,14 +31,25 @@ public:
 	virtual bool Next();
 	virtual void Close();
 
+	// ⭐ GIVE THE TRANSACTION BACK. Close() COMMITS the transaction it manages, which is right on the
+	// success path and wrong on every failure one: the caller wants that work gone, not durable.
+	//
+	// The result set holds a COPY of the handle, so a caller that rolls the transaction back itself
+	// and then deletes the result set has it committing an already-closed handle — two owners, one
+	// transaction, and the second call operating on a handle Firebird has already invalidated. This
+	// is how the ownership is handed over instead: the caller takes the transaction back FIRST, then
+	// closes it however it needs to, and the result set stops knowing about it.
+	void DetachTransaction() { m_pTransaction = 0; m_bManageTransaction = false; }
+
+
 	virtual int LookupField(const wxString& strField);
 
 	// get field
 	virtual int GetResultInt(int nField);
-	virtual wxString GetResultString(int nField);
+	virtual ibString GetResultString(int nField);
 	virtual long long GetResultLong(int nField);
 	virtual bool GetResultBool(int nField);
-	virtual wxDateTime GetResultDate(int nField);
+	virtual ibDateTime GetResultDate(int nField);
 	virtual void* GetResultBlob(int nField, wxMemoryBuffer& buffer);
 	virtual double GetResultDouble(int nField);
 	virtual ibNumber GetResultNumber(int nField);
@@ -49,7 +60,6 @@ public:
 
 private:
 	bool IsNull(XSQLVAR* pVar);
-	void SetDateTimeFromTm(wxDateTime& dateReturn, struct tm& timeInTm);
 
 	void AllocateFieldSpace();
 	void FreeFieldSpace();

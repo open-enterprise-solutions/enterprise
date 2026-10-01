@@ -14,226 +14,292 @@
 #include "backend/appData.h"
 #include "backend/session/session.h"
 #include "backend/databaseLayer/connectionPool.h"
+#include "backend/databaseLayer/connectionScope.h"
 #include "backend/databaseLayer/databaseErrorCodes.h"
 
 #include "backend/metaCollection/attribute/metaAttributeObject.h"
+#include "backend/query/dataQueryBuilder.h"   // L3 write/read door (From/SetValue/Where/Upsert/Delete) + ibBackendColumnRawDB
+#include "backend/metaCollection/partial/registerQueryLowering.h"   // ibRegWhereKeyValue — a key value as a condition
 
 #include "backend/system/systemManager.h"
+#include "backend/backend_exception.h"
+
+#include <algorithm>
+
+// A line's attributes in the order of their ids — the order its cells are kept in (ibRowValues), so a line read
+// in that order lays each cell at the end rather than into the middle, where the cells after it move over.
+// Inserting the cells, a search and a move each, was half of reading a register set back (stack samples
+// 2026-09-14, Debug); in id order the move is gone.
+static std::vector<ibValueMetaObjectAttributeBase*> ibInIdOrder(std::vector<ibValueMetaObjectAttributeBase*> attributes)
+{
+	std::sort(attributes.begin(), attributes.end(),
+		[](const ibValueMetaObjectAttributeBase* a, const ibValueMetaObjectAttributeBase* b) { return a->GetMetaID() < b->GetMetaID(); });
+	return attributes;
+}
+
+bool ibValueRecordSetObject::LockByKeys()
+{
+	if (m_metaObject == nullptr || m_keyValues.empty())
+		return true;
+
+	// Lock the existing lines of this composite key for the open write TX. Mirrors ExistData()
+	// — only the BOUND dimensions constrain (FindKeyValue filter; GetGenericDimensionArrayObject
+	// = {recorder} for AR/AcR, {period, dim...} for non-recorder IR), each decomposed inside L3.
+	// The pessimistic row lock rides as page.m_lockForUpdate: the dialect appends its row-lock
+	// clause (FB "WITH LOCK", PG "FOR UPDATE"; SQLite no-op — whole-DB TX lock). Draining
+	// the selection holds the lock. No statement, no SetValueAttribute. (docs/private/record-locks.md)
+	try {
+		ibDataQueryBuilder q;
+		q.WithAccessPolicy(nullptr);   // a row LOCK is a physical concurrency op, NOT a user read: it must see
+		q.From(m_metaObject->GetQueryable());   // and lock the RAW rows regardless of RLS visibility (like ExistData).
+		                                        // RLS is enforced at the write itself (guarded DELETE/UPDATE + Allowed).
+		bool anyKey = false;
+		for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {
+			if (!ibValueRecordSetObject::FindKeyValue(object->GetMetaID()))
+				continue;
+			ibRegWhereKeyValue(q, m_metaObject, object, m_keyValues.at(object->GetMetaID()));
+			anyKey = true;
+		}
+		// No key fields populated — nothing to scope the lock to; the UPSERT path catches any
+		// unique-key conflict via the DB constraint instead.
+		if (!anyKey)
+			return true;
+
+		ibReadPageRequest page;
+		page.m_count = 0;              // every matching line
+		page.m_lockForUpdate = true;   // pessimistic row lock (FOR UPDATE / WITH LOCK)
+		ibDataQueryResult selection = q.Execute(page);
+		while (selection.Next()) {}
+	}
+	catch (...) {
+		ibBackendCoreException::Error(_("Failed to acquire register lock"));
+	}
+	return true;
+}
+
+//----------------------------------------------------------------------
+// Phase A scaffold helpers — register-side counterpart of
+// ibValueRecordDataObjectRef's Begin*/Commit*. Lives next to the
+// LockByKeys query method it calls into. See commonObject.h docs.
+//----------------------------------------------------------------------
+
+bool ibValueRecordSetObject::BeginRecordSetWriteScope(ibConnectionScope& scope)
+{
+	if (appData->DesignerMode())          return false;
+	if (!scope || !scope->IsOpen())
+		ibBackendCoreException::Error(_("Database is not open!"));
+
+	// ⭐ THE QUESTION IS NOT "is this an evaluation" BUT "may this evaluation write". A watch may
+	// not — that is what eval mode is for. The debugger's sandbox may, and must: it exists to write,
+	// measure and be undone, and it runs inside a transaction that is always rolled back
+	// (backend_exception.h). Under the old, wider test it wrote nothing and said nothing.
+	if (ibBackendException::IsEvalMode()
+		&& !ibBackendException::IsEvalSandbox()) return false;
+
+	if (!m_metaObject->AccessRight_Write()) {
+		// Name the register AND the right: during a posting cascade several objects are gated in a
+		// row, and "not enough access rights" alone does not say which one closed the door.
+		ibBackendAccessException::Error(wxString::Format(_("writing to register '%s'"),
+			m_metaObject->GetSynonym()));
+		return false;
+	}
+
+	scope.SafeBeginTransaction();
+	LockByKeys();
+	return true;
+}
+
+bool ibValueRecordSetObject::BeginRecordSetDeleteScope(ibConnectionScope& scope)
+{
+	if (appData->DesignerMode())          return false;
+	if (!scope || !scope->IsOpen())
+		ibBackendCoreException::Error(_("Database is not open!"));
+
+	// …and the same for a delete: see the note on the write scope above.
+	if (ibBackendException::IsEvalMode()
+		&& !ibBackendException::IsEvalSandbox()) return false;
+
+	if (!m_metaObject->AccessRight_Delete()) {
+		ibBackendAccessException::Error(wxString::Format(_("clearing register '%s'"),
+			m_metaObject->GetSynonym()));
+		return false;
+	}
+
+	scope.SafeBeginTransaction();
+	LockByKeys();
+	return true;
+}
+
+void ibValueRecordSetObject::CommitRecordSetScope(ibConnectionScope& scope)
+{
+	scope.SafeCommitTransaction();
+	m_objModified = false;
+}
 
 bool ibValueRecordSetObject::ExistData()
 {
-	const auto db = ses_query;
-	const bool isFB = (db->GetDatabaseLayerType() == DATABASELAYER_FIREBIRD);
-
-	const wxString tableName = m_metaObject->GetTableNameDB(); int position = 1;
-	wxString queryText = isFB ? "SELECT FIRST 1 1 FROM " + tableName
-	                          : "SELECT 1 FROM " + tableName;
-	bool firstWhere = true;
-
-	for (const auto object : m_metaObject->GetGenericDimentionArrayObject()) {
-		if (!ibValueRecordSetObject::FindKeyValue(object->GetMetaID()))
-			continue;
-		queryText += (firstWhere ? " WHERE " : " AND ")
-		           + ibValueMetaObjectAttributeBase::GetCompositeSQLFieldName(object);
-		firstWhere = false;
+	// Composite-key existence probe through the L3 door: only the BOUND dimensions
+	// constrain (FindKeyValue filter), each decomposed inside L3 across its physical fields.
+	// UNGUARDED (WithAccessPolicy(nullptr)): this decides whether a replace must DELETE the old set, so it
+	// must see the RAW physical rows, not the RLS-filtered view. Otherwise records the role cannot read are
+	// invisible here -> DeleteData is skipped -> the insert DUPLICATES them (or hits a unique key). Seeing
+	// them raw lets DeleteData run over the whole set. Note what the delete does NOT do any more: its row
+	// count is not read as a verdict on rights. A set is addressed by its recorder, so an empty one is a
+	// normal state — the permission question was answered before the statement, by this register's own
+	// Write / Delete right and by the policy refusing outright. (docs: access-policy-rls, write-deny)
+	try {
+		ibDataQueryBuilder q;
+		q.WithAccessPolicy(nullptr);
+		q.From(m_metaObject->GetQueryable());
+		for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {
+			if (!ibValueRecordSetObject::FindKeyValue(object->GetMetaID()))
+				continue;
+			ibRegWhereKeyValue(q, m_metaObject, object, m_keyValues.at(object->GetMetaID()));
+		}
+		ibReadPageRequest page;
+		page.m_count = 1;
+		ibDataQueryResult selection = q.Execute(page);
+		return selection.Next();
 	}
-	if (!isFB)
-		queryText += " LIMIT 1";
-	queryText += ";";
-
-	ibStatementGuard statement(db, db->PrepareStatement(queryText));
-	if (!statement)
-		return false;
-
-	for (const auto object : m_metaObject->GetGenericDimentionArrayObject()) {
-		if (!ibValueRecordSetObject::FindKeyValue(object->GetMetaID()))
-			continue;
-		ibValueMetaObjectAttributeBase::SetValueAttribute(
-			object,
-			m_keyValues.at(object->GetMetaID()),
-			statement.get(),
-			position
-		);
-	}
-
-	ibDatabaseResultSet* resultSet = statement->RunQueryWithResults();
-	if (resultSet == nullptr)
-		return false;
-	bool founded = resultSet->Next();
-	db->CloseResultSet(resultSet);
-	return founded;
+	catch (...) {}
+	return false;
 }
 
 bool ibValueRecordSetObject::ExistData(ibNumber& lastNum)
 {
-	const auto db = ses_query;
-
-	const wxString tableName = m_metaObject->GetTableNameDB(); int position = 1;
-	// MAX aggregation in SQL — DB uses any index on (recorder, line_number)
-	// instead of streaming the whole rowset client-side.
-	const wxString lineNumField = m_metaObject->GetRegisterLineNumber()->GetFieldNameDB() + wxT("_N");
-	wxString queryText = "SELECT MAX(" + lineNumField + ") FROM " + tableName;
-	bool firstWhere = true;
-
-	for (const auto object : m_metaObject->GetGenericDimentionArrayObject()) {
-		if (!ibValueRecordSetObject::FindKeyValue(object->GetMetaID()))
-			continue;
-		queryText += (firstWhere ? " WHERE " : " AND ")
-		           + ibValueMetaObjectAttributeBase::GetCompositeSQLFieldName(object);
-		firstWhere = false;
+	// MAX(line number) over the bound composite key, through the L3 door's aggregate terminal —
+	// the DB uses any index on (recorder, line_number) instead of streaming the rowset. Only the
+	// BOUND dimensions constrain (FindKeyValue filter), each decomposed inside L3. No statement.
+	// UNGUARDED (raw physical rows, whatever RLS would hide), because the number it answers has to
+	// clear EVERY stored line, not only the readable ones.
+	//
+	// It no longer decides whether the old set is deleted — a replace deletes unconditionally now
+	// — so its only consumer is the numbering of an APPEND. That is why the swallow below is
+	// narrowed: an engine failure answering "there is nothing stored" would restart the numbering
+	// at 1 and collide with rows that are still there, which surfaces as a unique-key violation
+	// with nothing pointing back here.
+	lastNum = 1;
+	try {
+		ibDataQueryBuilder q;
+		q.WithAccessPolicy(nullptr);
+		q.From(m_metaObject->GetQueryable());
+		for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {
+			if (!ibValueRecordSetObject::FindKeyValue(object->GetMetaID()))
+				continue;
+			ibRegWhereKeyValue(q, m_metaObject, object, m_keyValues.at(object->GetMetaID()));
+		}
+		q.Max(m_metaObject->GetRegisterLineNumber()->GetQueryColumn(), wxT("maxLine"));
+		ibDataQueryResult selection = q.SelectAggregate();
+		if (selection.Next()) {
+			const ibValue maxLine = selection.GetColumn(wxT("maxLine"));
+			if (!maxLine.IsEmpty()) {
+				lastNum = maxLine.GetNumber();
+				return true;
+			}
+		}
 	}
-	queryText += ";";
-
-	ibStatementGuard statement(db, db->PrepareStatement(queryText));
-	if (!statement)
-		return false;
-
-	for (const auto object : m_metaObject->GetGenericDimentionArrayObject()) {
-		if (!ibValueRecordSetObject::FindKeyValue(object->GetMetaID()))
-			continue;
-		ibValueMetaObjectAttributeBase::SetValueAttribute(
-			object,
-			m_keyValues.at(object->GetMetaID()),
-			statement.get(),
-			position
-		);
-	}
-
-	ibDatabaseResultSet* resultSet = statement->RunQueryWithResults();
-	if (resultSet == nullptr)
-		return false;
-	bool founded = false; lastNum = 1;
-	if (resultSet->Next() && !resultSet->IsFieldNull(1)) {
-		lastNum = resultSet->GetResultNumber(1);
-		founded = true;
-	}
-	db->CloseResultSet(resultSet);
-	return founded;
+	catch (const ibBackendException&) { throw; }   // the engine's own reason — it names the table and the column
+	catch (...) {}
+	return false;
 }
 
 bool ibValueRecordSetObject::ReadData(const ibUniqueKeyPair& key)
 {
-	const auto db = ses_query;
+	ibValueModelStorage::Clear();
 
-	ibValueModelRamTableBase::Clear(); int position = 1;
-
-	wxString tableName = m_metaObject->GetTableNameDB();
-	wxString queryText = "SELECT * FROM " + tableName; bool firstWhere = true;
-
-	for (const auto object : m_metaObject->GetGenericDimentionArrayObject()) {
-		if (!key.FindKey(object->GetMetaID()))
-			continue;
-		if (firstWhere) {
-			queryText = queryText + " WHERE ";
+	// Composite-key read through the L3 door — only the bound dimensions (key.FindKey)
+	// constrain, decomposed inside L3. Each row's dimensions AND resources come from
+	// the L3 selection (GetValue) — no raw result set, no statement here.
+	try {
+		ibDataQueryBuilder q;
+		q.From(m_metaObject->GetQueryable());
+		for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {
+			if (!key.FindKey(object->GetMetaID()))
+				continue;
+			ibRegWhereKeyValue(q, m_metaObject, object, key.GetKey(object->GetMetaID()));
 		}
-		queryText = queryText +
-			(firstWhere ? " " : " AND ") + ibValueMetaObjectAttributeBase::GetCompositeSQLFieldName(object);
-		if (firstWhere) {
-			firstWhere = false;
+		ibReadPageRequest page;
+		page.m_count = 0;   // every matching line
+		ibDataQueryResult selection = q.Execute(page);
+		// Every attribute of a line, the dimensions among them — each read once (they used to be read first on
+		// their own and then again with the rest, a reference made twice a line).
+		const auto attributes = ibInIdOrder(m_metaObject->GetGenericAttributeArrayObject());   // once, not once a line
+		while (selection.Next()) {
+			ibComposerNode* rowData = new ibComposerNode();
+			for (const auto object : attributes)
+				rowData->AppendTableValue(object->GetMetaID()) = selection.GetValue(object->GetQueryColumn());
+			ibValueModelStorage::Append(rowData, !ibBackendException::IsEvalMode());
+			m_selected = true;
 		}
 	}
-	ibStatementGuard statement(db, db->PrepareStatement(queryText));
-	if (!statement)
-		return false;
-	for (const auto object : m_metaObject->GetGenericDimentionArrayObject()) {
-		if (!key.FindKey(object->GetMetaID()))
-			continue;
-		ibValueMetaObjectAttributeBase::SetValueAttribute(
-			object,
-			key.GetKey(object->GetMetaID()),
-			statement.get(),
-			position
-		);
-	}
-	ibDatabaseResultSet* resultSet = statement->RunQueryWithResults();
-	if (resultSet == nullptr)
-		return false;
-	while (resultSet->Next()) {
-		ibValueTableRow* rowData = new ibValueTableRow();
-		for (const auto object : m_metaObject->GetGenericDimentionArrayObject()) {
-			ibValueMetaObjectAttributeBase::GetValueAttribute(object, rowData->AppendTableValue(object->GetMetaID()), resultSet);
-		}
-		for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
-			ibValueMetaObjectAttributeBase::GetValueAttribute(object, rowData->AppendTableValue(object->GetMetaID()), resultSet);
-		}
-		ibValueModelRamTableBase::Append(rowData, !ibBackendException::IsEvalMode());
-		m_selected = true;
-	}
-
-	db->CloseResultSet(resultSet);
+	catch (...) { return false; }
 
 	return GetRowCount() > 0;
 }
 
 bool ibValueRecordSetObject::ReadData()
 {
-	const auto db = ses_query;
+	ibValueModelStorage::Clear();
 
-	ibValueModelRamTableBase::Clear(); int position = 1;
-
-	wxString tableName = m_metaObject->GetTableNameDB();
-	wxString queryText = "SELECT * FROM " + tableName; bool firstWhere = true;
-
-	for (const auto object : m_metaObject->GetGenericDimentionArrayObject()) {
-		if (!ibValueRecordSetObject::FindKeyValue(object->GetMetaID()))
-			continue;
-		if (firstWhere) {
-			queryText = queryText + " WHERE ";
+	// As ReadData(key) but scoped by the current m_keyValues (FindKeyValue filter).
+	try {
+		ibDataQueryBuilder q;
+		q.From(m_metaObject->GetQueryable());
+		for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {
+			if (!ibValueRecordSetObject::FindKeyValue(object->GetMetaID()))
+				continue;
+			ibRegWhereKeyValue(q, m_metaObject, object, m_keyValues.at(object->GetMetaID()));
 		}
-		queryText = queryText +
-			(firstWhere ? " " : " AND ") + ibValueMetaObjectAttributeBase::GetCompositeSQLFieldName(object);
-		if (firstWhere) {
-			firstWhere = false;
+		ibReadPageRequest page;
+		page.m_count = 0;   // every matching line
+		ibDataQueryResult selection = q.Execute(page);
+		// Asked once: the list is a walk of the metaobject, and asked per line it was a walk for every one of a
+		// payroll's 72 234 movements read back (MEASURED 2026-09-14, Debug). The dimensions are among the
+		// attributes, and read with them once.
+		const auto attributes = ibInIdOrder(m_metaObject->GetGenericAttributeArrayObject());
+		while (selection.Next()) {
+			ibComposerNode* rowData = new ibComposerNode();
+			for (const auto object : attributes)
+				rowData->AppendTableValue(object->GetMetaID()) = selection.GetValue(object->GetQueryColumn());
+			ibValueModelStorage::Append(rowData, !ibBackendException::IsEvalMode());
+			m_selected = true;
 		}
 	}
-	ibStatementGuard statement(db, db->PrepareStatement(queryText));
-	if (!statement)
-		return false;
-	for (const auto object : m_metaObject->GetGenericDimentionArrayObject()) {
-		if (!ibValueRecordSetObject::FindKeyValue(object->GetMetaID()))
-			continue;
-		ibValueMetaObjectAttributeBase::SetValueAttribute(
-			object,
-			m_keyValues.at(object->GetMetaID()),
-			statement.get(),
-			position
-		);
-	}
-	ibDatabaseResultSet* resultSet = statement->RunQueryWithResults();
-	if (resultSet == nullptr)
-		return false;
-	while (resultSet->Next()) {
-		ibValueTableRow* rowData = new ibValueTableRow();
-		for (const auto object : m_metaObject->GetGenericDimentionArrayObject()) {
-			ibValueMetaObjectAttributeBase::GetValueAttribute(object, rowData->AppendTableValue(object->GetMetaID()), resultSet);
-		}
-		for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
-			ibValueMetaObjectAttributeBase::GetValueAttribute(object, rowData->AppendTableValue(object->GetMetaID()), resultSet);
-		}
-		ibValueModelRamTableBase::Append(rowData, !ibBackendException::IsEvalMode());
-		m_selected = true;
-	}
-
-	db->CloseResultSet(resultSet);
+	catch (...) { return false; }
 
 	return GetRowCount() > 0;
 }
 
 bool ibValueRecordSetObject::SaveData(bool replace, bool clearTable)
 {
-	const auto db = ses_query;
-
-	//check fill attributes 
+	//check fill attributes
+	//
+	// 🛑⭐⭐ A FAILED FILL CHECK RAISES, AND IT SAYS WHICH FIELD — the same decision the delete below
+	// made for the same reason. Each missing field is still posted as a Message (an interactive session
+	// shows them against the form), but a Message has nowhere to go in a BACKGROUND JOB or on a server,
+	// and the bool this used to return reached WriteRecordSet as its one sentence for every ending,
+	// "failed to store the records". MEASURED 2026-09-10 on a calculation register written from a
+	// background run: the reason was lost entirely — the refusal named the register and nothing else,
+	// while the actual cause was an empty required field. Payroll is exactly the work that runs as a
+	// background job, so this is where a person would have met a refusal with no reason in it.
+	//
+	// The attributes are asked for once: the list is built by a walk of the metaobject each time it is asked, and
+	// asked per line it was a pass over the register's attributes for every one of a payroll's 72 234 movements.
+	const auto attributes = m_metaObject->GetGenericAttributeArrayObject();
 	bool fillCheck = true; long currLine = 1;
+	wxString fillErrors;
 	for (long row = 0; row < GetRowCount(); row++) {
-		for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
+		const ibComposerNode* node = GetViewData<ibComposerNode>(GetItem(row));
+		wxASSERT(node);
+		for (const auto object : attributes) {
 			if (object->FillCheck()) {
-				ibValueTableRow* node = GetViewData<ibValueTableRow>(GetItem(row));
-				wxASSERT(node);
 				if (node->IsEmptyValue(object->GetMetaID())) {
 					wxString fillError =
 						wxString::Format(_("The %s is required on line %i of the %s"), object->GetSynonym(), currLine, m_metaObject->GetSynonym());
 					ibValueSystemFunction::Message(fillError, ibStatusMessage::ibStatusMessage_Information);
+					if (!fillErrors.IsEmpty())
+						fillErrors += wxT("; ");
+					fillErrors += fillError;
 					fillCheck = false;
 				}
 			}
@@ -242,170 +308,155 @@ bool ibValueRecordSetObject::SaveData(bool replace, bool clearTable)
 	}
 
 	if (!fillCheck)
-		return false;
+		ibBackendCoreException::Error(wxT("%s"), fillErrors);   // an assembled sentence is DATA, not a format
 
 	ibNumber numberLine = 1, oldNumberLine = 1;
 
-	if (m_metaObject->HasRecorder() &&
-		ibValueRecordSetObject::ExistData(oldNumberLine)) {
-		if (replace && !ibValueRecordSetObject::DeleteData())
+	// REPLACE DELETES; IT DOES NOT ASK FIRST.
+	//
+	// Both branches used to probe with ExistData() and only then delete — an extra round trip on
+	// every posting, to answer a question the DELETE answers by itself: removing no rows is the
+	// ordinary state of a set addressed by its key, not a failure. Worse, the probe decided
+	// whether the old rows were cleared at all, and it reports "nothing there" for a failure as
+	// well as for an empty set (it catches everything and returns false) — so a probe that fell
+	// over skipped the delete and the new lines were written ON TOP of the old ones.
+	//
+	// The existence question survives only where it is genuinely needed: appending to a stored set
+	// continues the stored numbering, and that needs MAX(line number), not existence.
+	if (replace) {
+		if (!ibValueRecordSetObject::DeleteData())
 			return false;
-		if (!replace) {
-			numberLine = oldNumberLine;
-		}
 	}
-	else if (ibValueRecordSetObject::ExistData()) {
-		if (replace && !ibValueRecordSetObject::DeleteData())
-			return false;
-		if (!replace) {
-			numberLine = oldNumberLine;
-		}
+	else if (m_metaObject->HasRecorder()) {
+		ibValueRecordSetObject::ExistData(oldNumberLine);
+		numberLine = oldNumberLine;
 	}
-
-	wxString tableName = m_metaObject->GetTableNameDB(); wxString queryText; bool firstUpdate = true;
-	if (db->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD) {
-		queryText = "INSERT INTO " + tableName + " (";
-	}
-	else {
-		queryText = "UPDATE OR INSERT INTO " + tableName + " (";
-	}
-	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
-		queryText += (firstUpdate ? "" : ",") + ibValueMetaObjectAttributeBase::GetSQLFieldName(object);
-		if (firstUpdate) {
-			firstUpdate = false;
-		}
-	}
-	queryText += ") VALUES ("; bool firstInsert = true;
-	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
-		unsigned int fieldCount = ibValueMetaObjectAttributeBase::GetSQLFieldCount(object);
-		for (unsigned int i = 0; i < fieldCount; i++) {
-			queryText += (firstInsert ? "?" : ",?");
-			if (firstInsert) {
-				firstInsert = false;
-			}
-		}
-	}
-
-	if (db->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD) {
-		queryText += ")";
-	}
-	else {
-		queryText += ") MATCHING (";
-		if (m_metaObject->HasRecorder()) {
-			ibValueMetaObjectAttributePredefined* attributeRecorder = m_metaObject->GetRegisterRecorder();
-			wxASSERT(attributeRecorder);
-			queryText += ibValueMetaObjectAttributeBase::GetSQLFieldName(attributeRecorder);
-			ibValueMetaObjectAttributePredefined* attributeNumberLine = m_metaObject->GetRegisterLineNumber();
-			wxASSERT(attributeNumberLine);
-			queryText += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(attributeNumberLine);
-		}
-		else
-		{
-			bool firstMatching = true;
-			for (const auto object : m_metaObject->GetGenericDimentionArrayObject()) {
-				queryText += (firstMatching ? "" : ",") + ibValueMetaObjectAttributeBase::GetSQLFieldName(object);
-				if (firstMatching) {
-					firstMatching = false;
-				}
-			}
-		}
-		queryText += ");";
-	}
-
-	ibPreparedStatement* statement = db->PrepareStatement(queryText);
-	if (statement == nullptr)
-		return false;
 
 	bool hasError = false;
 
-	for (long row = 0; row < GetRowCount(); row++) {
-		if (hasError)
-			break;
-		int position = 1;
-		for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
+	// Each line's assignments BY COLUMN: a key value, the auto line number, or the row's
+	// value. No fields, no positions — the door / provider owns those.
+	auto stageRow = [&](ibDataQueryBuilder& q, long row) {
+		ibComposerNode* node = GetViewData<ibComposerNode>(GetItem(row));   // the line, once — not once an attribute
+		wxASSERT(node);
+		for (const auto object : attributes) {
+			// ⭐ A KEY THAT IS IN THE FILTER IS USED — whatever it holds. The filter's `Use` IS its
+			// presence here (setting Use = True inserts the key, False erases it), so an entry with an
+			// empty value is a deliberate "records whose dimension is blank" and gets written as such.
+			// The question of WHICH keys are in the filter belongs to whoever built the set, not here.
 			auto foundedKey = m_keyValues.find(object->GetMetaID());
-			if (foundedKey != m_keyValues.end()) {
-				ibValueMetaObjectAttributeBase::SetValueAttribute(
-					object,
-					foundedKey->second,
-					statement,
-					position
-				);
-			}
-			else if (m_metaObject->IsRegisterLineNumber(object->GetMetaID())) {
-				ibValueMetaObjectAttributeBase::SetValueAttribute(
-					object,
-					numberLine++,
-					statement,
-					position
-				);
-			}
+			if (foundedKey != m_keyValues.end())
+				q.SetValue(object->GetQueryColumn(), foundedKey->second);
+			else if (m_metaObject->IsRegisterLineNumber(object->GetMetaID()))
+				q.SetValue(object->GetQueryColumn(), ibValue(numberLine++));
 			else {
-				ibValueTableRow* node = GetViewData< ibValueTableRow>(GetItem(row));
-				wxASSERT(node);
-				ibValueMetaObjectAttributeBase::SetValueAttribute(
-					object,
-					node->GetTableValue(object->GetMetaID()),
-					statement,
-					position
-				);
+				q.SetValue(object->GetQueryColumn(), node->GetTableValue(object->GetMetaID()));
 			}
 		}
+	};
 
-		hasError = statement->RunQuery() == DATABASE_LAYER_QUERY_RESULT_ERROR;
+	if (m_selected && !replace) {
+		// APPENDED TO A SET THAT CAME FROM THE DATABASE: a line may already exist, so the write is an UPSERT,
+		// and the match is the dialect's own per-statement form — Firebird's UPDATE OR INSERT takes no SELECT
+		// source. Batching this needs a MERGE the L2 IR does not carry yet.
+		for (long row = 0; row < GetRowCount() && !hasError; row++) {
+			ibDataQueryBuilder q;
+			q.From(m_metaObject->GetQueryable());
+			stageRow(q, row);
+			hasError = !q.Upsert();
+		}
+	}
+	else {
+		// THE WHOLE SET IN ONE BATCH, ONE STATEMENT PER CHUNK, NOT ONE PER LINE. Nothing here can already exist —
+		// under `replace` the DELETE above has emptied what the key holds, and appended lines continue past what
+		// is stored — so the write is a plain INSERT, and the door stages every line before the provider emits it.
+		// A thousand lines cost a thousand statements and a thousand round trips before this. A set rewritten
+		// under `replace` is therefore asked what a create is asked — the same right (Modify) as a rewrite.
+		ibDataQueryBuilder q;
+		q.From(m_metaObject->GetQueryable());
+		for (long row = 0; row < GetRowCount(); row++) {
+			if (row > 0) q.NextRow();
+			stageRow(q, row);
+		}
+		// An empty set writes nothing — the door always carries one (empty) row, so this must be
+		// asked rather than left to the INSERT, which would otherwise emit a row of nulls.
+		hasError = GetRowCount() > 0 && !q.Insert();
 	}
 
-	db->CloseStatement(statement);
+	// (No totals write here. Derived state is maintained by the DATABASE trigger the schema
+	//  installs on this table, inside this same transaction — so it cannot be bypassed by any
+	//  other writer and cannot drift. Updating it from here would restore exactly the
+	//  managed-code pattern the trigger replaced. See docs/private/register-totals-strategy.md.)
 
-	if (!hasError && !SaveVirtualTable())
-		return false;
-
-	if (!hasError && clearTable)
-		ibValueModelRamTableBase::Clear();
-	else if (!clearTable)
-		m_selected = true;
+	if (!hasError) {
+		// m_selected drives IsEmpty()/IsNewObject(); it must reflect the persisted
+		// DB state, not whether the RAM table is currently populated. The old code
+		// only set it on the !clearTable branch, so a normal write-with-clear left a
+		// freshly-written set reporting empty/new. replace → exactly the rows just
+		// written; append → those plus whatever already existed.
+		const long savedRows = GetRowCount();
+		if (clearTable)
+			ibValueModelStorage::Clear();
+		m_selected = (savedRows > 0) || (!replace && m_selected);
+	}
 
 	return !hasError;
 }
 
 bool ibValueRecordSetObject::DeleteData()
 {
-	const auto db = ses_query;
+	// DELETE the record set by its key — WHERE the register's identity columns present in
+	// m_keyValues (recorder / period + dimensions) = value, through the L3 write door. It
+	// expands each column to its physical fields and binds. No fields, no positions here.
+	ibDataQueryBuilder q;
+	q.From(m_metaObject->GetQueryable());
 
-	wxString tableName = m_metaObject->GetTableNameDB();
-	wxString queryText = "DELETE FROM " + tableName; bool firstWhere = true;
-	for (const auto object : m_metaObject->GetGenericDimentionArrayObject()) {
+	bool keyed = false;
+	for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {
 		if (!ibValueRecordSetObject::FindKeyValue(object->GetMetaID()))
 			continue;
-		if (firstWhere) {
-			queryText = queryText + " WHERE ";
-		}
-		queryText = queryText +
-			(firstWhere ? " " : " AND ") + ibValueMetaObjectAttributeBase::GetCompositeSQLFieldName(object);
-		if (firstWhere) {
-			firstWhere = false;
-		}
+		ibRegWhereKeyValue(q, m_metaObject, object, m_keyValues.at(object->GetMetaID()));
+		keyed = true;
 	}
 
-	ibPreparedStatement* statement = db->PrepareStatement(queryText); int position = 1;
+	// A SET WITH NO KEY ADDRESSES THE WHOLE REGISTER, AND THAT IS SAID HERE RATHER THAN LEFT TO
+	// AN EMPTY LOOP. Writing a set whose key was never assigned is a legitimate way to clear a
+	// register outright — but until now the difference between "clear these movements" and "clear
+	// every movement there is" was that the loop above happened to add no condition, which is a
+	// distinction nothing in the code could see and nobody reviewing it could notice. The
+	// behaviour is unchanged; what changes is that the wide case now leaves a trace.
+	//
+	// ⚠ A TRACE, NOT A DIALOG. A warning line also puts a modal box in front of whoever runs the application, and
+	// a clearing written from code in the background put two of them at once (the second a pile of six) in front
+	// of somebody who had asked for nothing (2026-09-17). Clearing a register is a thing code is allowed to do; the
+	// journal is where it is found afterwards. The accident it used to follow — a record manager deleting with no
+	// key — is closed where it happened (ibValueRecordManagerObject::DeleteData).
+	if (!keyed)
+		ibJournalInfo(wxT("register"), wxT("Register '%s': the record set carries no key, so writing it clears every record"),
+			m_metaObject->GetSynonym());
 
-	if (statement == nullptr)
-		return false;
+	// A FAILED DELETE RAISES, AND IT SAYS THAT IT WAS THE DELETE.
+	//
+	// This used to discard what Delete() answers and report `true` unconditionally, so the caller's
+	// `if (replace && !DeleteData())` was unreachable: a DELETE that failed was followed by the
+	// INSERT of the new lines, ON TOP of rows that were still there — duplicated movements, or a
+	// unique-key violation far from the cause.
+	//
+	// Returning `false` would not be enough either. The bool travels up to WriteRecordSet, which
+	// has one sentence for every way SaveData can end — "failed to store the records" — so a
+	// failure to CLEAR would be reported as a failure to WRITE, and the reader would look in the
+	// wrong half. An engine error already arrives here as an exception (ExecuteWrite rethrows
+	// ibBackendException and only degrades an alien one to -1); this names the remaining case
+	// rather than flattening it.
+	//
+	// Deleting NOTHING stays success — Delete() answers `affected >= 0`, and a set addressed by its
+	// key may legitimately have no stored rows.
+	if (!q.Delete())
+		ibBackendCoreException::Error(_("Register '%s': failed to clear the stored records"),
+			m_metaObject->GetSynonym());
 
-	for (const auto object : m_metaObject->GetGenericDimentionArrayObject()) {
-		if (!ibValueRecordSetObject::FindKeyValue(object->GetMetaID()))
-			continue;
-		ibValueMetaObjectAttributeBase::SetValueAttribute(
-			object,
-			m_keyValues.at(object->GetMetaID()),
-			statement,
-			position
-		);
-	}
-
-	statement->RunQuery();
-	db->CloseStatement(statement);
-	return DeleteVirtualTable();
+	m_selected = false; // the record set no longer exists in the DB
+	return true;        // the delete trigger reversed the totals in this same transaction
 }
 
 //**********************************************************************************************************

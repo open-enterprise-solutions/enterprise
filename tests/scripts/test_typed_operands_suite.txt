@@ -1,0 +1,161 @@
+// Typed operands - 2026-09-24
+//
+// A DECLARED TYPE MAKES THE COMPILER PICK ANOTHER INSTRUCTION for the same operator (TYPE_DELTA1..4,
+// CorrectTypeDef / CheckTypeDef in compileCode.cpp), and this suite checks that the instruction still
+// does the thing, still says what it produced, and produces the same thing the general road does.
+// Every case runs through TYPED parameters, because that is what makes the compiler choose a tier;
+// the untyped spellings at the end are the control. The suite CHECKS ITSELF: a mismatch raises, and
+// a corpus script that raises fails its run.
+//
+//   1. Two typed Strings compare as strings; two typed Booleans answer And, Or and Not.
+//   2. A branch over a typed comparison is taken when it should be - number, date, boolean, string.
+//   3. A typed Boolean, and the literal True, read and write an entry of a Container.
+//   4. Arithmetic a kind has no meaning for RAISES rather than doing nothing quietly.
+//   5. A comparison is a VALUE: stored in a variable it reads as True or False, never as nothing.
+//   6. A typed local keeps what is assigned to it, and two typed Dates subtract the way two
+//      untyped ones do - to seconds, not to the milliseconds a date field holds.
+//
+// Written without `Not (expression)` on purpose: the parser does not take one (it takes `Not name`),
+// so every check here compares against True or False instead.
+
+Procedure CheckStrings(String a, String b, String c) {
+	var equal = (a = b);
+	if (equal <> True) { Raise("typed strings: a = b is [" + equal + "]"); }
+	if (a <> b) { Raise("typed strings: a <> b was not expected"); }
+	var less = (a < c);
+	if (less <> True) { Raise("typed strings: a < c is [" + less + "]"); }
+	if (a >= c) { Raise("typed strings: a >= c was not expected"); }
+	var unequal = (a = c);
+	if (unequal <> False) { Raise("typed strings: a = c is [" + unequal + "]"); }
+	if (a = c) { Raise("typed strings: a = c took the branch"); }
+}
+
+Procedure CheckBooleans(Boolean t, Boolean f) {
+	var both = t And t;
+	if (both <> True) { Raise("typed booleans: t And t is [" + both + "]"); }
+	var either = f Or t;
+	if (either <> True) { Raise("typed booleans: f Or t is [" + either + "]"); }
+	var neither = f Or f;
+	if (neither <> False) { Raise("typed booleans: f Or f is [" + neither + "]"); }
+	var negated = Not f;
+	if (negated <> True) { Raise("typed booleans: Not f is [" + negated + "]"); }
+	if (t And f) { Raise("typed booleans: t And f took the branch"); }
+}
+
+// THE BRANCH, which is the form a comparison is written in most of the time. It reads the answer
+// through the tier the compiler gave the result, so a change to what a comparison WRITES has to keep
+// this true - and one that does not shows here first.
+Procedure CheckBranches(Number n, Date d, Boolean t, String s) {
+	if (n = n) { } else { Raise("a branch over a typed Number comparison was not taken"); }
+	if (d = d) { } else { Raise("a branch over a typed Date comparison was not taken"); }
+	if (t = t) { } else { Raise("a branch over a typed Boolean comparison was not taken"); }
+	if (s = s) { } else { Raise("a branch over a typed String comparison was not taken"); }
+	if (n <> n) { Raise("a branch over a typed Number inequality was taken"); }
+}
+
+// AND AND OR ANSWER A BOOLEAN TOO, which is a thing the compiler has to know: their result carried
+// the left operand's type, and a branch over `a And b` then read a field the operator never wrote.
+Procedure CheckAndOrAnswerBoolean(Number a, Number b) {
+	if (a And b) { } else { Raise("And of two typed Numbers: the branch was not taken"); }
+	if (a Or b) { } else { Raise("Or of two typed Numbers: the branch was not taken"); }
+	var both = a And b;
+	if (both <> True) { Raise("And of two typed Numbers is [" + both + "]"); }
+}
+
+// A TYPED DESTINATION is the other half of the same fact, and the only way to pin it without
+// depending on what a slot last held: a Boolean variable takes a comparison of any tier.
+Procedure CheckTypedDestination(Number a, Number b, String s, Date d) {
+	Boolean stored;
+	stored = (a = b);
+	if (stored <> False) { Raise("a Boolean variable took a typed comparison as [" + stored + "]"); }
+	stored = (s = s);
+	if (stored <> True) { Raise("a Boolean variable took a typed String comparison as [" + stored + "]"); }
+	stored = (d = d);
+	if (stored <> True) { Raise("a Boolean variable took a typed Date comparison as [" + stored + "]"); }
+}
+
+// AND WHAT THE GENERAL ROAD ANSWERS IS WHAT THE TIER ANSWERS, even where the answer is odd: two
+// booleans added JOIN as text there, and the typed tier says the same thing now rather than its own.
+Procedure CheckBooleanPlus(Boolean t) {
+	var joined = t + t;
+	if (joined <> "TrueTrue") { Raise("two typed Booleans added give [" + joined + "]"); }
+}
+
+Procedure CheckSubscript(Boolean t) {
+	var c = New Container;
+	c.Insert(True, "inserted");
+	if (c[t] <> "inserted") { Raise("typed boolean key: c[t] is [" + c[t] + "]"); }
+	if (c[True] <> "inserted") { Raise("boolean literal key: c[True] is [" + c[True] + "]"); }
+	c[t] = "written";
+	if (c.Count() <> 1) { Raise("a write by a boolean key made a second entry: " + c.Count()); }
+	if (c[True] <> "written") { Raise("a write by a boolean key did not land: [" + c[True] + "]"); }
+}
+
+Procedure CheckNonsenseRaises(String s, Boolean t) {
+	var raised = False;
+	try {
+		var bad = t - t;
+	} except {
+		raised = True;
+	}
+	if (raised <> True) { Raise("subtracting a boolean from a boolean was expected to raise"); }
+	raised = False;
+	try {
+		var bad2 = s - s;
+	} except {
+		raised = True;
+	}
+	if (raised <> True) { Raise("subtracting a string from a string was expected to raise"); }
+}
+
+// A COMPARISON IS A VALUE, not only a branch. Stored, passed on or joined to a string, it has to
+// read as True or False - and for a typed operand it read as nothing at all.
+Procedure CheckStoredComparisons(Number n, Number m, Date d1, Date d2, Boolean t, Boolean f) {
+	var eq = (n = n);
+	if (eq <> True) { Raise("typed numbers: n = n is [" + eq + "]"); }
+	var lt = (n < m);
+	if (lt <> True) { Raise("typed numbers: n < m is [" + lt + "]"); }
+	var gt = (n > m);
+	if (gt <> False) { Raise("typed numbers: n > m is [" + gt + "]"); }
+	var dEq = (d1 = d1);
+	if (dEq <> True) { Raise("typed dates: d1 = d1 is [" + dEq + "]"); }
+	var dLt = (d1 < d2);
+	if (dLt <> True) { Raise("typed dates: d1 < d2 is [" + dLt + "]"); }
+	var same = (t = f);
+	if (same <> False) { Raise("typed booleans: t = f is [" + same + "]"); }
+}
+
+// A TYPED LOCAL KEEPS WHAT IS PUT IN IT, and typed arithmetic means what the general road means.
+Procedure CheckTypedLocals(Date src, Date other, Boolean b) {
+	Date dst;
+	dst = src;
+	if (dst <> src) { Raise("a typed Date local lost the value: [" + dst + "]"); }
+	Boolean flag;
+	flag = b;
+	if (flag <> True) { Raise("a typed Boolean local lost the value: [" + flag + "]"); }
+	var span = other - src;
+	if (span <> 86400) { Raise("two typed Dates one day apart subtract to [" + span + "], not to seconds"); }
+}
+
+CheckStrings("k", "k", "z");
+CheckBooleans(True, False);
+CheckBranches(3, Date(2026, 1, 1), True, "k");
+CheckAndOrAnswerBoolean(3, 5);
+CheckTypedDestination(3, 5, "k", Date(2026, 1, 1));
+CheckBooleanPlus(True);
+CheckSubscript(True);
+CheckNonsenseRaises("k", True);
+CheckStoredComparisons(2, 5, Date(2026, 1, 1), Date(2026, 6, 1), True, False);
+CheckTypedLocals(Date(2026, 1, 1), Date(2026, 1, 2), True);
+
+// The control: the same operators with nothing declared take the untyped instruction and were never
+// in question. They are here so a change that fixes a tier by breaking the general road shows.
+var ua = "k";
+var ub = "k";
+var uEqual = (ua = ub);
+if (uEqual <> True) { Raise("untyped strings stopped comparing: [" + uEqual + "]"); }
+var ut = True;
+var uf = False;
+var uAnd = ut And ut;
+if (uAnd <> True) { Raise("untyped booleans stopped answering: [" + uAnd + "]"); }
+Message("typed operands: every tier answered");

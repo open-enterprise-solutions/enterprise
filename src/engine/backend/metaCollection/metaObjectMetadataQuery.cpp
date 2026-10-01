@@ -7,20 +7,19 @@
 
 bool ibValueMetaObjectConfiguration::ExecuteSystemSQLCommand()
 {
-	s_restructureInfo.AppendWarning("Execute system sql command");
+	RestructureWarning("Execute system sql command");   // static facade -> the active config's ledger
 
-	int retCode = DATABASE_LAYER_QUERY_RESULT_ERROR;
-	if (db_query->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL) {
-		//create max
-		retCode = db_query->RunQuery("CREATE OR REPLACE FUNCTION max_uuid(uuid, uuid) RETURNS uuid AS $$ BEGIN IF $2 IS NULL OR $1 < $2 THEN RETURN $2; END IF; RETURN $1; END; $$ LANGUAGE plpgsql; ");
-		if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR) return false;
-		retCode = db_query->RunQuery("CREATE OR REPLACE AGGREGATE max(uuid) (sfunc = max_uuid, stype = uuid, combinefunc = max_uuid, parallel = safe, sortop = operator ( > ));");
-		if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR) return false;
-		//create min 
-		retCode = db_query->RunQuery("CREATE OR REPLACE FUNCTION min_uuid(uuid, uuid) RETURNS uuid AS $$ BEGIN IF $2 IS NULL OR $1 > $2 THEN RETURN $2; END IF; RETURN $1; END; $$ LANGUAGE plpgsql; ");
-		if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR) return false;
-		retCode = db_query->RunQuery("CREATE OR REPLACE AGGREGATE min(uuid) (sfunc = min_uuid, stype = uuid, combinefunc = min_uuid, parallel = safe, sortop = operator ( < ));");
-		if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR) return false;
+	// ⭐⭐ WHICH ROUTINES AN ENGINE IS MISSING IS THE ENGINE'S OWN BUSINESS. This asked
+	// `GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL` and then wrote four PostgreSQL statements
+	// out by hand — the last engine-specific DDL anywhere outside `databaseLayer/`, in a file whose
+	// whole subject is metadata. The driver vends it now (`CreateMissingRoutines`), so this decides
+	// only WHEN — a database is being created — which is the one half that genuinely belongs here.
+	//
+	// A driver missing nothing inherits a no-op, so there is no branch on the engine left.
+	try {
+		return db_query->CreateMissingRoutines();
 	}
-	return true;
+	catch (const ibBackendException&) {
+		return false;
+	}
 }

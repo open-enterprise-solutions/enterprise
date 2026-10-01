@@ -6,7 +6,7 @@
 // Owns everything that must be isolated between concurrent sessions:
 // the session-scoped module manager (with its own compiled bytecode,
 // ibProcUnit, common modules and context variables) and — in future
-// steps — the logical MDI frame with open documents.
+// steps — the logical main frame with open documents.
 //
 // Lifecycle mirrors wxApp: OnInit() stands the per-session runtime up
 // (think BeforeRun + RunDatabase in desktop mode), OnExit() tears it
@@ -32,8 +32,9 @@
 // the complete ibValue base for ibValuePtr<T> instantiation below.
 #include "backend/compiler/value.h"
 #include "backend/value_ptr.h"
+#include "backend/session/sessionHolder.h"
 
-class ibValueModuleManagerConfiguration;
+class ibValueModuleManagerRuntimeConfiguration;
 class ibWebFrame;
 class ibSession;
 class ibWebClientSession;
@@ -43,12 +44,16 @@ public:
 	ibWebApplication();
 	virtual ~ibWebApplication();
 
-	// Startup. Runs AFTER user authentication succeeded: build the
-	// web frame first (scripts fired from CreateMainModule — OnStart
+	// Startup. Runs AFTER user authentication succeeded: build the web
+	// frame first (scripts fired from CreateMainModule — OnStart
 	// handlers, load-page code, early OpenForm calls — already need a
 	// frame to attach to), then compile + execute the session's main
 	// module.
-	virtual bool OnInit();
+	//
+	// The holder passes straight through into the frame's constructor:
+	// the web main window owns its session exactly as the desktop one
+	// does. This object only borrows it.
+	virtual bool OnInit(ibSessionHolder&& holder);
 	virtual void OnExit();
 
 	// Out-of-line: the ibValuePtr<T> → T* conversion static_casts via
@@ -56,18 +61,14 @@ public:
 	// webApplication.cpp (with moduleManager.h already included there)
 	// lets TUs that only need the class identity (formObject.cpp,
 	// webTimer.cpp) stop at a forward decl.
-	ibValueModuleManagerConfiguration* GetManagerModule() const;
+	ibValueModuleManagerRuntimeConfiguration* GetManagerModule() const;
 	ibWebFrame*                        GetFrame()         const { return m_frame; }
 
-	// Session context for this application. Set by the owning
-	// ibWebSession right after construction; worker loop installs it
-	// onto its thread via ibSessionScope so any descriptor-level
-	// GetProcUnit call delegates through the session. nullptr until
-	// the session wires it up. Stored typed so SetFrame can dispatch
-	// to ibWebClientSession's typed setter without a cast.
-	ibSession*           GetSessionContext()       const;   // upcast from m_sessionContext
-	ibWebClientSession*  GetClientSessionContext() const { return m_sessionContext; }
-	void                 SetSessionContext(ibWebClientSession* ctx) { m_sessionContext = ctx; }
+	// Session context for this application. Not stored — read out of the
+	// frame, which is the thing that actually owns the session. Keeping a
+	// second pointer here would be the same fact written twice, and the
+	// two would have to be kept in step through teardown.
+	ibSession* GetSessionContext() const;   // == m_frame->Session()
 
 	// Active tab's visual host, or nullptr if no tab is open. The HTTP
 	// layer uses this to serialise the current tree into the response
@@ -96,7 +97,7 @@ public:
 	// (frame → wxObject) map, and calls HandleRequest(kind, value) on
 	// it — polymorphic, no subclass-specific branches here. Each
 	// ibWebXxx handles the kinds it understands. Drains on this
-	// thread, rebuilds the visual tree. See docs/web/event-dispatcher.md.
+	// thread, rebuilds the visual tree. See docs/private/web/event-dispatcher.md.
 	bool Dispatch(int controlId, const wxString& kind, const wxString& value);
 
 	// Legacy kind-specific entry points. Thin shims over Dispatch —
@@ -119,7 +120,7 @@ public:
 	//                       result; HTTP handlers .get() it to
 	//                       synchronously return the JSON response.
 	//
-	// Both eventually call ibWorkerPool::Submit(m_sessionContext, ...).
+	// Both eventually call ibWorkerPool::Submit(session, ...).
 	// Reentrant submit on the same session runs inline (the pool worker
 	// already holds this session's lease). Submission on a stopped pool
 	// or with no session context is a no-op for PostWork; RunOnWorker
@@ -144,10 +145,6 @@ private:
 	// m_moduleManager field removed — moduleManager is shared process-
 	// wide and lives on metadata; GetManagerModule() pulls from there.
 	bool                                          m_initialized   = false;
-	// Borrowed — owned by ibSessionRegistry keyed by cookie. Survives this
-	// app because Destroy is driven by the session teardown that runs
-	// after OnExit joins the worker thread.
-	ibWebClientSession*                    m_sessionContext = nullptr;
 
 	// Live-update state. See MarkDirty/WaitForChange docs above.
 	std::atomic<uint64_t>                         m_seq { 1 };

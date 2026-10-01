@@ -5,11 +5,11 @@
 #include "backend/backend_type.h"
 
 class BACKEND_API ibValueType : public ibValue {
-	wxDECLARE_DYNAMIC_CLASS(ibValueType);
-public:
+	public:
 
 	ibClassID GetOwnerTypeClass() const { return m_clsid; }
-	ibTypeDescription GetOwnerTypeDescription() const { return ibTypeDescription(GetOwnerTypeClass()); }
+	// The type as a description with NO qualifier, which limits nothing (ibValueTypeDescription::Unqualified).
+	ibTypeDescription GetOwnerTypeDescription() const;
 
 	ibValueType(const ibClassID& clsid = 0);
 	ibValueType(const ibValue& cObject);
@@ -32,15 +32,14 @@ public:
 		return m_clsid != rValue->m_clsid;
 	}
 
-	virtual wxString GetString() const;
+	virtual ibString GetString() const;
 
 private:
 	ibClassID m_clsid;
 };
 
 class BACKEND_API ibValueQualifierNumber : public ibValue {
-	wxDECLARE_DYNAMIC_CLASS(ibValueQualifierNumber);
-public:
+	public:
 	ibQualifierNumber m_qNumber;
 public:
 
@@ -50,12 +49,15 @@ public:
 	{
 	}
 
+	// `New QualifierNumber(precision, scale, nonNegative)` — see the definitions for why these exist at all.
+	virtual bool Init() override;
+	virtual bool Init(ibValue** paParams, const long lSizeArray) override;
+
 	operator ibQualifierNumber() const { return m_qNumber; }
 };
 
 class BACKEND_API ibValueQualifierDate : public ibValue {
-	wxDECLARE_DYNAMIC_CLASS(ibValueQualifierDate);
-public:
+	public:
 	ibQualifierDate m_qDate;
 public:
 
@@ -65,12 +67,15 @@ public:
 	{
 	}
 
+	// `New QualifierDate(DateFractions.Date)`.
+	virtual bool Init() override;
+	virtual bool Init(ibValue** paParams, const long lSizeArray) override;
+
 	operator ibQualifierDate() const { return m_qDate; }
 };
 
 class BACKEND_API ibValueQualifierString : public ibValue {
-	wxDECLARE_DYNAMIC_CLASS(ibValueQualifierString);
-public:
+	public:
 	ibQualifierString m_qString;
 public:
 
@@ -80,32 +85,47 @@ public:
 	{
 	}
 
+	// `New QualifierString(length, AllowedLength.Fixed)`.
+	virtual bool Init() override;
+	virtual bool Init(ibValue** paParams, const long lSizeArray) override;
+
 	operator ibQualifierString() const { return m_qString; }
 };
 
-class BACKEND_API ibValueTypeDescription : public ibValue {
-	wxDECLARE_DYNAMIC_CLASS_NO_COPY(ibValueTypeDescription);
-private:
-	ibValueMethodHelper* m_methodHelper;
+void ibValueTypeDescription_BindNames(ibValue::ibMemberTable& helper, const ibValue* ctx);
+
+// The clsid the column layout gates its blob slot on — declared next to the value so the tier does
+// not have to spell the string (the same arrangement as g_valueScheduleCLSID in valueJob.h). A
+// second place that knows the spelling is a second place to get it wrong.
+constexpr ibClassID g_valueTypeDescriptionCLSID = value_to_clsid("VL_TYPED");
+
+class BACKEND_API ibValueTypeDescription : public ibValueStaticMembers<&ibValueTypeDescription_BindNames> {
 public:
 	ibTypeDescription m_typeDesc;
 public:
 
-	// these methods need to be overridden in your aggregate objects:
-	virtual ibValueMethodHelper* GetPMethods() const { // get a reference to the class helper for parsing attribute and method names
-		//PrepareNames(); 
-		return m_methodHelper;
-	}
-	virtual void PrepareNames() const;
+	// DoGetPMethods (protected) + Shared<&ibValueTypeDescription_BindNames> come from the base.
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);
 
 public:
 
 	static ibValue AdjustValue(const ibTypeDescription& typeDescription,
-		class ibMetaData* metaData = nullptr);
+		const class ibMetaData* metaData = nullptr);
 
 	static ibValue AdjustValue(const ibTypeDescription& typeDescription, const ibValue& varValue,
-		class ibMetaData* metaData = nullptr);
+		const class ibMetaData* metaData = nullptr);
+	// …a value its caller is done with: where the description says nothing, it is handed back MOVED.
+	static ibValue AdjustValue(const ibTypeDescription& typeDescription, ibValue&& varValue,
+		const class ibMetaData* metaData = nullptr);
+
+	// ⭐ DOES THE DESCRIPTION ADMIT A VALUE OF THIS CLASS — the question AdjustValue asks, and an event
+	// handler asks of its source. See the definition.
+	static bool AllowValue(const ibTypeDescription& typeDescription, const ibClassID& clsid,
+		const class ibMetaData* source = nullptr);
+
+	// ⭐ WHAT A TYPE NAMED AT RUN TIME WITHOUT A QUALIFIER HOLDS: anything of that type — a number unrounded
+	// (precision 0), a date with its time, a string of any length (0). See the definition.
+	static ibTypeDescription::ibTypeData Unqualified();
 
 	ibValueTypeDescription();
 
@@ -121,7 +141,15 @@ public:
 
 	virtual ~ibValueTypeDescription();
 
-	virtual bool Init() { return false; }
+	// AN EMPTY DESCRIPTION IS A LEGITIMATE START, not a failed construction. Refusing here meant the
+	// value could only ever be born from arguments (`New TypeDescription(...)` in a script) — so a
+	// FIELD holding one had nothing to create when the user first clicked it, and the editor died
+	// with "Error initializing object" before any type could be chosen.
+	//
+	// Empty is still not a valid SAVE: the characteristic's Type attribute is fill-checked, and the
+	// write refuses. Creation and completeness are different questions, and only the second one is
+	// the attribute's.
+	virtual bool Init() { return true; }
 	virtual bool Init(ibValue** paParams, const long lSizeArray);
 
 public:
@@ -131,8 +159,30 @@ public:
 	const std::vector<ibClassID>& GetClsidList() { return m_typeDesc.GetClsidList(); }
 	const ibTypeDescription& GetTypeDesc() const { return m_typeDesc; }
 
-public:
+	// WHAT IT IS MADE OF — the types it admits, by name, comma-separated. A description shown as
+	// "TypeDescription" tells the reader the CLASS of the cell, which they can see from the field
+	// anyway; what they need is the content, and for a composite that is the whole point of it
+	// being composite. Empty stays empty — a field that has not been given a type says nothing
+	// rather than inventing a word for it.
+	virtual ibString GetString() const override;
 
+	// EMPTY MEANS "NAMES NO TYPE". The base answers `false` for every value object — an object
+	// exists, therefore it is not empty — which is right for a schedule (its defaults mean
+	// something) and wrong here: a description with no types admits nothing and describes nothing.
+	//
+	// Without this the fill check could not see the difference between a characteristic whose type
+	// was chosen and one whose editor was merely opened, so a required Type was satisfied by the
+	// bare act of clicking the field.
+	virtual bool IsEmpty() const override { return m_typeDesc.GetClsidCount() == 0; }
+
+	// ⭐⭐ THE VERB THE RUNTIME ASKS OF EVERY VALUE, answered here by `AdjustValue` above, which this class
+	// has always had: a description narrows an incoming value to what it describes, qualifiers included.
+	// An ordinary value narrows to its own class (ibValue::AdjustOutValue), a reference passes the question
+	// on. One verb, three answers.
+	virtual bool AdjustOutValue(const ibValue& varValue, ibValue& out) const override;
+
+public:
+ 
 	bool ContainType(const ibValue& cType) const;
 	ibValue AdjustValue() const;
 	ibValue AdjustValue(const ibValue& varValue) const;

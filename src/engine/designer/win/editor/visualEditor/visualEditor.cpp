@@ -6,10 +6,80 @@
 #include "visualEditor.h"
 
 #include "backend/propertyManager/propertyManager.h"
+#include "visualEditorDragItem.h"        // ibFormDragItem / ibSourceDragItem / ibCommandDragItem — the polymorphic drop kinds
+#include "frontend/win/ctrls/toolBar.h"  // ibAuiToolBar — a command-bar toolbar right-click is served by the bar's own menu
+#include "frontend/visualView/layers/commandBar.h"  // ibCommandBarFromToolBar — route a command dropped on a toolbar to its bar
+
+#include <wx/dnd.h>       // wxDropTarget / wxCustomDataObject — form-canvas accepts a dragged attribute node
+#include <wx/dataobj.h>   // wxDataObjectComposite — accept every registered drag kind on one target
+#include <wx/utils.h>     // wxFindWindowAtPoint (point -> widget hit-test)
+#include <wx/app.h>       // wxTheApp->CallAfter (deferred apply for tablebox-grid drops)
 
 static const int ID_TIMER_SCAN = wxScrolledWindow::NewControlId();
 
-wxBEGIN_EVENT_TABLE(ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost, wxScrolledWindow)
+// Form-editor drop target: receives a node dragged from a form-editor tree and enacts it on the form. It registers
+// the draggable KINDS (ibFormDragItem — a source path → a bound control, a command → a command button); OnData
+// matches the received wire format to a kind, decodes it and hands it to the surface's applier. Shared by the form
+// CANVAS, the OBJECT TREE and each tablebox grid — each supplies only its point→frame resolver and its editor-bound
+// applier. Adding a draggable is a new ibFormDragItem subclass registered below; OnData never changes.
+ibSourceDragDropTarget::ibSourceDragDropTarget(PointResolver resolver, DropApply apply, bool deferred)
+	: m_resolver(std::move(resolver)), m_apply(std::move(apply)), m_deferred(deferred)
+{
+	// The registered kinds — the ONE place they are listed. A composite carries one sub-object per kind so OnData
+	// can read the received kind's bytes back (the composite owns them; m_data keeps non-owning, index-parallel refs).
+	m_items.push_back(std::make_unique<ibSourceDragItem>());    // oes_source_drag — the preferred (common) format
+	m_items.push_back(std::make_unique<ibCommandDragItem>());   // oes_command_drag
+
+	wxDataObjectComposite* composite = new wxDataObjectComposite();
+	bool preferred = true;
+	for (const std::unique_ptr<ibFormDragItem>& item : m_items) {
+		wxCustomDataObject* data = new wxCustomDataObject(item->GetFormat());
+		composite->Add(data, preferred);
+		m_data.push_back(data);
+		preferred = false;
+	}
+	SetDataObject(composite);
+}
+
+ibSourceDragDropTarget::~ibSourceDragDropTarget() = default;
+
+wxDragResult ibSourceDragDropTarget::OnData(wxCoord x, wxCoord y, wxDragResult def)
+{
+	if (!GetData())
+		return wxDragNone;
+	wxDataObjectComposite* composite = static_cast<wxDataObjectComposite*>(GetDataObject());
+	if (composite == nullptr)
+		return wxDragNone;
+
+	const wxDataFormat fmt = composite->GetReceivedFormat();
+	for (size_t i = 0; i < m_items.size(); ++i) {
+		ibFormDragItem* item = m_items[i].get();
+		if (item->GetFormat() != fmt)
+			continue;
+		wxCustomDataObject* data = m_data[i];
+		if (data != nullptr && data->GetSize() > 0) {
+			ibReaderMemory reader(data->GetData(), (int)data->GetSize());
+			if (item->LoadPayload(reader) && m_apply) {
+				ibValueFrame* target = m_resolver ? m_resolver(x, y) : nullptr;
+				if (m_deferred) {
+					// DEFER out of the OS drop callback: a target on a tablebox grid re-wires (frees) itself when
+					// the apply rebuilds the editor → use-after-free. Clone the DECODED item so it outlives THIS
+					// target, and run the apply after the drag unwinds.
+					DropApply apply = m_apply;
+					std::shared_ptr<ibFormDragItem> clone(item->Clone());
+					wxTheApp->CallAfter([apply, clone, target]() { apply(*clone, target); });
+				}
+				else {
+					m_apply(*item, target);
+				}
+			}
+		}
+		return def;
+	}
+	return def;
+}
+
+wxBEGIN_EVENT_TABLE(ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost, wxPanel)
 EVT_INNER_FRAME_RESIZED(wxID_ANY, ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::OnResizeBackPanel)
 wxEND_EVENT_TABLE()
 
@@ -21,10 +91,35 @@ ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::ibVisualEditorHost(i
 {
 	ibVisualHost::SetExtraStyle(wxWS_EX_BLOCK_EVENTS);
 
-	SetOwnBackgroundColour(wxColour(192, 192, 192));
+	// The canvas the card sits on IS the host's inner scrolling window now — the host itself
+	// is the facade panel around it.
+	GetContentWindow()->SetOwnBackgroundColour(wxColour(0xD8, 0xE2, 0xEB));  // #D8E2EB palest powder — light background so form card pops
 
-	m_back = new ibDesignerWindow(this, wxID_ANY, wxPoint(10, 10));
+	m_back = new ibDesignerWindow(GetContentWindow(), wxID_ANY, wxPoint(10, 10));
 	m_back->GetEventHandler()->Connect(wxID_ANY, wxEVT_LEFT_DOWN, wxMouseEventHandler(ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::OnClickBackPanel), nullptr, this);
+
+	// The form canvas accepts any registered drag KIND: a source path → a bound control, a command → a bound
+	// command button. It supplies only the RESOLVER (map the OS drop point to the ibValueFrame under it, by
+	// walking wx parents to the owning object — the same resolution a click uses) and the APPLIER (run the decoded
+	// item's ApplyDrop with THIS editor). A null resolve is fine: a source falls back to the form root, a command
+	// climbs to the nearest command bar. Same shared target the object tree and tablebox grids use.
+	m_back->GetFrameContentPanel()->SetDropTarget(
+		new ibSourceDragDropTarget(
+			[this](wxCoord x, wxCoord y) -> ibValueFrame* {
+				const wxPoint screenPt = m_back->GetFrameContentPanel()->ClientToScreen(wxPoint(x, y));
+				// A command dropped on a command-bar TOOLBAR (the form's or a tablebox's) joins THAT bar — a new item,
+				// not a free button. Detect the tagged toolbar under the point and hand its bar to CreateCommandButton;
+				// cleared when the drop is elsewhere. Set BEFORE the object walk (which returns the frame, not the bar).
+				ibValueCommandBar* dropBar = nullptr;
+				for (wxWindow* w = wxFindWindowAtPoint(screenPt); w != nullptr && dropBar == nullptr; w = w->GetParent())
+					dropBar = ibCommandBarFromToolBar(w);
+				m_formHandler->SetPendingDropBar(dropBar);
+				ibValueFrame* target = nullptr;
+				for (wxWindow* w = wxFindWindowAtPoint(screenPt); w != nullptr && target == nullptr; w = w->GetParent())
+					target = GetObjectBase(w);
+				return target;
+			},
+			[this](const ibFormDragItem& item, ibValueFrame* target) { item.ApplyDrop(m_formHandler, target); }));
 }
 
 ibValueForm* ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::GetValueForm() const
@@ -39,12 +134,9 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::SetValueForm(ib
 
 ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::~ibVisualEditorHost()
 {
-	ibValueForm* valueForm = m_formHandler->GetValueForm();
-	if (valueForm != nullptr)
-		ClearControl(valueForm, true);
-
-	m_back->GetFrameContentPanel()->DestroyChildren();
-	m_back->GetFrameContentPanel()->SetSizer(nullptr); // *!*
+	// The same teardown a rebuild does — chrome first, then the controls — so nothing is left
+	// for wx to free a second time when the windows below go.
+	ClearVisualHost();
 
 	DestroyChildren();
 }
@@ -111,6 +203,14 @@ bool ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::OnLeftClickFrom
 
 bool ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::OnRightClickFromApp(wxWindow* currentWindow, wxMouseEvent& event)
 {
+	// A right-click on a control's command-bar TOOLBAR is served by the toolbar's OWN handler
+	// (BuildCommandBarToolBar binds wxEVT_RIGHT_DOWN -> the bar's "Add command" menu). Don't pop the
+	// owning control's menu (e.g. a table's "Add column") over it — return so the app filter's Skip lets
+	// that handler run. Body of the table -> the control's own menu (Add column); toolbar -> Add command.
+	for (wxWindow* w = currentWindow; w != nullptr && !w->IsKindOf(CLASSINFO(ibVisualHost)); w = w->GetParent())
+		if (dynamic_cast<ibAuiToolBar*>(w) != nullptr)
+			return true;
+
 	wxWindow* wnd = currentWindow;
 	while (wnd != nullptr) {
 		ibValueFrame* founded = GetObjectBase(wnd);
@@ -118,9 +218,12 @@ bool ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::OnRightClickFro
 			if (founded != m_formHandler->GetSelectedObject()) {
 				m_formHandler->SelectObject(founded);
 			}
-			ibVisualEditorItemPopupMenu* menu = new ibVisualEditorItemPopupMenu(m_formHandler, currentWindow, founded);
-			menu->UpdateUI(menu);
-			currentWindow->PopupMenu(menu, event.GetPosition());
+			// On the stack: PopupMenu does NOT take ownership, and it blocks until the menu is
+			// dismissed, so the selection is fully handled before the scope ends. Same shape as
+			// every other popup here (userList, activeUser, codeEditor) — no delete to forget.
+			ibVisualEditorItemPopupMenu menu(m_formHandler, currentWindow, founded);
+			menu.UpdateUI(&menu);
+			currentWindow->PopupMenu(&menu, event.GetPosition());
 			break;
 		}
 		wnd = wnd->GetParent();
@@ -128,12 +231,23 @@ bool ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::OnRightClickFro
 	return true;
 }
 
+void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::ClearObjectSelect()
+{
+	// Drop the canvas control highlight — a non-control element (an attribute / command) is now the selection, so a
+	// lingering control box would read as a SECOND selection. Mirrors the "not a visible object" clear below.
+	m_back->SetSelectedSizer(nullptr);
+	m_back->SetSelectedItem(nullptr);
+	m_back->SetSelectedObject(nullptr);
+	m_back->SetSelectedPanel(nullptr);
+	m_back->Refresh();
+}
+
 void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::SetObjectSelect(ibValueFrame* obj)
 {
 	// Get the ibValueFrame from the event
 	if (obj == nullptr) {
 		// Strange...
-		wxLogDebug(wxT("The event object is nullptr - why?"));
+		ibJournalInfo(wxT("designer"), wxT("The event object is nullptr - why?"));
 		return;
 	}
 
@@ -143,8 +257,8 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::SetObjectSelect
 		obj = toolbar;
 
 	// Make sure this is a visible object
-	auto it = m_baseObjects.find(obj);
-	if (it == m_baseObjects.end()) {
+	wxObject* item = GetWxObject(obj);
+	if (item == nullptr) {
 		m_back->SetSelectedSizer(nullptr);
 		m_back->SetSelectedItem(nullptr);
 		m_back->SetSelectedObject(nullptr);
@@ -152,9 +266,6 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::SetObjectSelect
 		m_back->Refresh();
 		return;
 	}
-
-	// Save wxobject
-	wxObject* item = it->second;
 
 	int componentType = obj->GetComponentType();
 
@@ -166,24 +277,19 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::SetObjectSelect
 		item = nullptr;
 	}
 	else if (obj->GetClassName() == wxT("NotebookPage")) {
-		ibValueFrame* parent = obj->GetParent();
-		item = m_baseObjects.at(parent);
+		item = GetWxObject(obj->GetParent());
 	}
 	else if (obj->GetClassName() == wxT("TableboxColumn")) {
-		ibValueFrame* parent = obj->GetParent();
-		item = m_baseObjects.at(parent);
+		item = GetWxObject(obj->GetParent());
 	}
 
 	// Fire selection event in plugin for all parents
 	if (!m_stopSelectedEvent) {
 		ibValueFrame* parent = obj->GetParent();
 		while (parent != nullptr) {
-			auto parentIt = m_baseObjects.find(parent);
-			if (parentIt != m_baseObjects.end()) {
-				if (obj->GetClassName() != wxT("NotebookPage")) {
-					OnSelected(parent, parentIt->second);
-				}
-			}
+			wxObject* parentObj = GetWxObject(parent);
+			if (parentObj != nullptr && obj->GetClassName() != wxT("NotebookPage"))
+				OnSelected(parent, parentObj);
 			parent = parent->GetParent();
 		}
 	}
@@ -212,31 +318,22 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::SetObjectSelect
 	}
 
 	// Get the panel to draw on
-	wxWindow* selPanel = nullptr;
-	if (nextParent != nullptr) {
-		it = m_baseObjects.find(nextParent);
-		if (it != m_baseObjects.end()) {
-			if (nextParent->GetClassName() == wxT("Staticboxsizer")) {
-				wxStaticBoxSizer* staticBoxSizer = wxDynamicCast(it->second, wxStaticBoxSizer);
-				wxASSERT(staticBoxSizer);
-				selPanel = staticBoxSizer->GetStaticBox();
-			}
-			else if (nextParent->GetClassName() == wxT("Notebook") ||
-				nextParent->GetClassName() == wxT("Tablebox")) {
-				wxWindow* notebook = wxDynamicCast(it->second, wxWindow);
-				wxASSERT(notebook);
-				selPanel = notebook->GetParent();
-			}
-			else {
-				selPanel = wxDynamicCast(it->second, wxWindow);
-			}
+	wxWindow* selPanel = m_back->GetFrameContentPanel();
+	if (wxObject* parentObj = nextParent != nullptr ? GetWxObject(nextParent) : nullptr) {
+		if (nextParent->GetClassName() == wxT("Staticboxsizer")) {
+			wxStaticBoxSizer* staticBoxSizer = wxDynamicCast(parentObj, wxStaticBoxSizer);
+			wxASSERT(staticBoxSizer);
+			selPanel = staticBoxSizer->GetStaticBox();
+		}
+		else if (nextParent->GetClassName() == wxT("Notebook") ||
+			nextParent->GetClassName() == wxT("Tablebox")) {
+			wxWindow* notebook = wxDynamicCast(parentObj, wxWindow);
+			wxASSERT(notebook);
+			selPanel = notebook->GetParent();
 		}
 		else {
-			selPanel = m_back->GetFrameContentPanel();
+			selPanel = wxDynamicCast(parentObj, wxWindow);
 		}
-	}
-	else {
-		selPanel = m_back->GetFrameContentPanel();
 	}
 
 	// Find the first COMPONENT_TYPE_WINDOW or COMPONENT_TYPE_SIZER
@@ -246,10 +343,8 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::SetObjectSelect
 	while (nextObj != nullptr) {
 		if (nextObj->GetComponentType() == COMPONENT_TYPE_SIZER ||
 			nextObj->GetComponentType() == COMPONENT_TYPE_SIZERITEM) {
-			it = m_baseObjects.find(nextObj);
-			if (it != m_baseObjects.end()) {
-				sizer = wxDynamicCast(it->second, wxSizer);
-			} break;
+			sizer = wxDynamicCast(GetWxObject(nextObj), wxSizer);
+			break;
 		}
 		else if (nextObj->GetComponentType() == COMPONENT_TYPE_WINDOW)
 			break;
@@ -267,15 +362,16 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::SetObjectSelect
 void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::ScrollToObject(ibValueFrame* obj)
 {
 	// Make sure this is a visible object
-	auto it = m_baseObjects.find(obj);
-	if (it != m_baseObjects.end()) {
+	wxObject* const item = GetWxObject(obj);
+	if (item != nullptr) {
 
-		// Save wxobject
-		wxObject* item = it->second;
+		// Scrolling belongs to the host's inner window now — the host itself is the facade.
+		ibContentWindow* const scrollWindow = GetContentWindow();
+		wxWindow* const targetWindow = scrollWindow->GetTargetWindow();
 
 		if (obj->GetComponentType() == COMPONENT_TYPE_WINDOW) {
 
-			const wxRect viewRect(m_targetWindow->GetClientRect());
+			const wxRect viewRect(targetWindow->GetClientRect());
 
 			// For composite controls such as wxComboCtrl we should try to fit the
 			// entire control inside the visible area of the target window, not just
@@ -290,7 +386,7 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::ScrollToObject(
 			const wxWindow* win = dynamic_cast<wxWindow*>(item);
 			wxASSERT(win);
 
-			if (win->GetParent() != m_targetWindow)
+			if (win->GetParent() != targetWindow)
 			{
 				wxWindow* parent = win->GetParent();
 				wxSize parent_size = parent->GetSize();
@@ -300,10 +396,10 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::ScrollToObject(
 					win = parent;
 			}
 
-			// make win position relative to the m_targetWindow viewing area instead of
+			// make win position relative to the target window viewing area instead of
 			// its parent
 			const wxRect
-				winRect(m_targetWindow->ScreenToClient(win->GetScreenPosition()),
+				winRect(targetWindow->ScreenToClient(win->GetScreenPosition()),
 					win->GetSize());
 
 			// check if it's fully visible
@@ -315,10 +411,10 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::ScrollToObject(
 
 			// do make the window fit inside the view area by scrolling to it
 			int stepx, stepy;
-			GetScrollPixelsPerUnit(&stepx, &stepy);
+			scrollWindow->GetScrollPixelsPerUnit(&stepx, &stepy);
 
 			int startx, starty;
-			GetViewStart(&startx, &starty);
+			scrollWindow->GetViewStart(&startx, &starty);
 
 			// first in vertical direction:
 			if (stepy > 0)
@@ -360,9 +456,9 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::ScrollToObject(
 				startx = (startx * stepx + diff) / stepx;
 			}
 
-			wxScrolledCanvas::Freeze();
-			wxScrolledCanvas::Scroll(startx, starty);
-			wxScrolledCanvas::Thaw();
+			scrollWindow->Freeze();
+			scrollWindow->Scroll(startx, starty);
+			scrollWindow->Thaw();
 		}
 		else if (obj != nullptr) {
 			ScrollToObject(obj->GetParent()); 
@@ -379,6 +475,9 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::UpdateHostSize(
 		m_back->Layout();
 		m_back->SetClientSize(m_back->GetBestSize());
 	}
+
+	// The card sized itself; the canvas around it still needs the base's pass.
+	ibVisualHost::UpdateHostSize();
 }
 
 #include "backend/metaCollection/partial/commonObject.h"
@@ -411,15 +510,6 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::SetCaption(cons
 	m_back->ShowTitleBar(true);
 }
 
-void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::SetOrientation(int orient)
-{
-	const wxWindow* backgroundWindow = GetBackgroundWindow();
-	wxASSERT(backgroundWindow);
-	wxBoxSizer* createdBoxSizer = dynamic_cast<wxBoxSizer*>(backgroundWindow->GetSizer());
-	if (createdBoxSizer != nullptr) createdBoxSizer->SetOrientation(orient);
-	wxASSERT(createdBoxSizer);
-}
-
 /////////////////////////////////////////////////////////////////////////////////
 
 wxIMPLEMENT_CLASS(ibDesignerWindow, ibInnerFrame);
@@ -438,7 +528,7 @@ ibDesignerWindow::ibDesignerWindow(wxWindow* parent, int id, const wxPoint& pos,
 	m_selItem = nullptr;
 	m_actPanel = nullptr;
 
-	SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNFACE));
+	SetBackgroundColour(wxColour(0xD8, 0xE2, 0xEB));  // #D8E2EB palest powder — light background so form card pops
 	GetFrameContentPanel()->PushEventHandler(
 		new ibHighlightPaintHandler(GetFrameContentPanel())
 	);
@@ -477,7 +567,7 @@ void ibDesignerWindow::DrawRectangle(wxDC& dc, const wxPoint& point, const wxSiz
 	int border = 0, flag = 0;
 
 	if (object->IsSubclassOf(wxT("sizerItem"))) {
-		ibValueSizerItem* sizerItem = wxDynamicCast(object->GetParent(), ibValueSizerItem);
+		ibValueSizerItem* sizerItem = dynamic_cast<ibValueSizerItem*>(object->GetParent());
 		if (sizerItem != nullptr) {
 			border = sizerItem->GetBorder(); flag = sizerItem->GetFlagBorder();
 		}

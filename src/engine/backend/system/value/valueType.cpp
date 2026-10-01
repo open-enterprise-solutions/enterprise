@@ -8,11 +8,6 @@
 
 //////////////////////////////////////////////////////////////////////
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueType, ibValue);
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueQualifierNumber, ibValue);
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueQualifierDate, ibValue);
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueQualifierString, ibValue);
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueTypeDescription, ibValue);
 
 //////////////////////////////////////////////////////////////////////
 
@@ -42,39 +37,105 @@ ibValueType::ibValueType(const ibValueType& cType) :
 	m_clsid = cType.m_clsid;
 }
 
-wxString ibValueType::GetString() const
+ibString ibValueType::GetString() const
 {
 	return activeMetaData->GetNameObjectFromID(m_clsid);
+}
+
+// The same naming door a single type uses, once per admitted type. Asked of the METADATA, so a
+// configuration-specific reference reads as "CatalogRef.Goods" rather than a number.
+ibString ibValueTypeDescription::GetString() const
+{
+	wxString presentation;
+	for (const ibClassID& clsid : m_typeDesc.GetClsidList()) {
+		if (!presentation.IsEmpty())
+			presentation << wxT(", ");
+		presentation << activeMetaData->GetNameObjectFromID(clsid);
+	}
+	return presentation;
 }
 
 //////////////////////////////////////////////////////////////////////
 
 #include "backend/system/systemManager.h"
 
+// A DESCRIPTION ALLOWS WHAT ONE OF ITS TYPES ALLOWS — each asked by its own gate
+// (ibCtorAbstractType::AllowValue), so a family answers for its members and a characteristic for the
+// types of its chart.
+//
+// ⭐ A DYNAMIC TYPE ANSWERS FROM ITS ID, its gate not looked up. Each admits its own class, and a barrier
+// (`CatalogRef`, `AnyRef`) the classes its bits spell — clsid_admits, the comparison those gates make
+// themselves; the lookup was paid on every write of a reference and every event raised. A characteristic
+// admits the types of its chart, which no bit says: its gate is asked.
+bool ibValueTypeDescription::AllowValue(const ibTypeDescription& typeDescription, const ibClassID& clsid, const ibMetaData* source)
+{
+	for (const ibClassID& declared : typeDescription.GetClsidList()) {
+		if (IsMetaValue(declared) && !IsCharacteristic(declared)) {
+			if (clsid_admits(declared, clsid))
+				return true;
+			continue;
+		}
+		const ibCtorAbstractType* gate = source != nullptr
+			? source->GetAvailableCtor(declared) : ibValue::GetAvailableCtor(declared);
+		if (gate != nullptr && gate->AllowValue(clsid))
+			return true;
+	}
+	return false;
+}
+
 ibValue ibValueTypeDescription::AdjustValue(const ibTypeDescription& typeDescription,
-	ibMetaData* metaData)
+	const ibMetaData* metaData)
 {
 	if (!typeDescription.IsOk())
 		return wxEmptyValue;
 
 	if (typeDescription.GetClsidCount() == 1) {
 
-		if (metaData != nullptr) {
-			return metaData->CreateObject(
-				typeDescription.GetFirstClsid()
-			);
-		}
+		const ibClassID& clsid = typeDescription.GetFirstClsid();
 
-		return activeMetaData->CreateObject(
-			typeDescription.GetFirstClsid()
-		);
+		// 🛑 THE PROCESS MAY HAVE NO ACTIVE CONFIGURATION AT ALL - a headless tool before it opens one, a test.
+		// This went to `activeMetaData->` unasked, and the column codec reached here with the metadata it had
+		// been handed left behind (columnLayout.cpp), so reading a cell whose tag the result does not carry was
+		// an access violation instead of the typed empty value it is documented to answer (2026-09-20). What
+		// the value registry can make by itself - a primitive - it makes; anything that needs a configuration
+		// and has none is the empty value.
+		//
+		// ⭐ AND THE QUESTION IS ASKED ON EVERY ROAD, not only that one. A class the registry does not know
+		// cannot be made by any of the three, and asking for it anyway is a refusal thrown at a caller that
+		// only wanted to know what an empty cell of this column looks like: a configuration whose metaobjects
+		// were built without runtime objects has the type DESCRIBED and not REGISTERED, and the IN-set fold
+		// met exactly that (ComputedServerFix.In_AnEmptyReferenceAmongTheValuesGoesPairByPair, 2026-09-24).
+		//
+		// 🛑 …ASKED OF THE ONE THAT WILL MAKE IT, as the overload below already asks. A configuration's own
+		// types - a catalog's reference, an enumeration's member - are registered in ITS image, and the value
+		// registry has never heard of them: asked there, every reference column's typed empty came back
+		// untyped, and a ledger balance split one item into two rows over a currency stored empty in two ways
+		// (TypedEmpty tests, 2026-09-26). The metadata answers for its own image and falls through to the
+		// value registry itself.
+		const ibMetaData* const owner = (metaData != nullptr) ? metaData : activeMetaData;
+		if (!(owner != nullptr ? owner->IsRegisterCtor(clsid) : ibValue::IsRegisterCtor(clsid)))
+			return ibValue();
+
+		return (owner != nullptr) ? owner->CreateObject(clsid) : ibValue::CreateObject(clsid);
 	}
 
 	return wxEmptyValue;
 }
 
+// A description that says nothing hands the value back untouched (below), so a value its caller is done
+// with goes back without a copy: a table loaded from rows that die with it (ibQueryRamTable::ToValueTable)
+// moves every cell of an untyped column — a LINQ answer's columns are all untyped. Anything the description
+// does say is answered by the overload below, as for any other value.
+ibValue ibValueTypeDescription::AdjustValue(const ibTypeDescription& typeDescription, ibValue&& varValue,
+	const ibMetaData* metaData)
+{
+	if (!typeDescription.IsOk())
+		return std::move(varValue);
+	return AdjustValue(typeDescription, static_cast<const ibValue&>(varValue), metaData);
+}
+
 ibValue ibValueTypeDescription::AdjustValue(const ibTypeDescription& typeDescription, const ibValue& varValue,
-	ibMetaData* metaData)
+	const ibMetaData* metaData)
 {
 	if (!typeDescription.IsOk())
 		return varValue;
@@ -84,6 +145,9 @@ ibValue ibValueTypeDescription::AdjustValue(const ibTypeDescription& typeDescrip
 		ibValueTypes vt = ibValue::GetVTByID(varValue.GetClassType());
 		if (vt < ibValueTypes::TYPE_REFFER) {
 			if (vt == ibValueTypes::TYPE_NUMBER) {
+				// Precision 0 is "no limit", as a string's length 0 is (Unqualified) — no rounding.
+				if (typeDescription.m_typeData.m_number.m_precision == 0)
+					return varValue;
 				return ibValueSystemFunction::Round(varValue, typeDescription.m_typeData.m_number.m_scale);
 			}
 			else if (vt == ibValueTypes::TYPE_DATE) {
@@ -94,19 +158,51 @@ ibValue ibValueTypeDescription::AdjustValue(const ibTypeDescription& typeDescrip
 				return varValue;
 			}
 			else if (vt == ibValueTypes::TYPE_STRING) {
+				// ⚠ ZERO LENGTH IS "UNLIMITED", NOT "TRUNCATE TO NOTHING". A string qualifier left at
+				// its default carries 0, and `Left(value, 0)` returns an EMPTY string — so adjusting a
+				// value to such a type WIPED it. Typed in, saved, blank on the next read, with the
+				// write reporting success all the way down.
+				//
+				// The same two-facts-one-number confusion as the driver's parameter clamp: only clamp
+				// where a limit was actually declared.
+				if (typeDescription.m_typeData.m_string.m_length == 0)
+					return varValue;
 				return ibValueSystemFunction::Left(varValue, typeDescription.m_typeData.m_string.m_length);
 			}
 		}
 		return varValue;
 	}
 
+	// The same rule as the overload above: the metadata handed in, else the active one - and with neither
+	// (a headless tool before it opens a base, a test) what the value registry can make by itself.
+	const ibMetaData* const source = metaData != nullptr ? metaData : activeMetaData;
+
+	// ⭐ NOT NAMED IS NOT REFUSED. A declared type may admit a class that is not its own — a family
+	// (`AnyRef`, `DocumentRef`) its members, a characteristic the types of its chart — and the type's own
+	// gate says so: AllowValue, the question the interpreter asks a typed variable (OPER_SET_TYPE). A value
+	// a declared type admits passes as it is.
+	//
+	// 🛑 IT WAS NOT ASKED HERE (#157). A reference written into an attribute declared `DocumentRef` is a
+	// `DocumentRef.Other`, not the family's own id, so the search above missed and the branch below built
+	// the family's empty value in its place. A value the declared types do not admit — a catalog's
+	// reference there — still becomes empty, as it does in a composite declaration.
+	//
+	// The empty value is not put to the gates — every one lets it through — and becomes below the empty
+	// value of what is declared (0, an empty date, an empty reference).
+	const ibClassID clsid = varValue.GetClassType();
+	if (clsid != g_valueUndefinedCLSID && AllowValue(typeDescription, clsid, source))
+		return varValue;
+
 	if (typeDescription.GetClsidCount() == 1) {
 
-		if (metaData != nullptr ? metaData->IsRegisterCtor(typeDescription.GetFirstClsid()) : activeMetaData->IsRegisterCtor(typeDescription.GetFirstClsid())) {
+		if (source != nullptr ? source->IsRegisterCtor(typeDescription.GetFirstClsid())
+			: ibValue::IsRegisterCtor(typeDescription.GetFirstClsid())) {
 
 			ibValueTypes vt = ibValue::GetVTByID(typeDescription.GetFirstClsid());
 			if (vt < ibValueTypes::TYPE_REFFER) {
 				if (vt == ibValueTypes::TYPE_NUMBER) {
+					if (typeDescription.m_typeData.m_number.m_precision == 0)
+						return ibValue(varValue.GetNumber());   // no limit: the number as it is (the value may be of another type)
 					return ibValueSystemFunction::Round(varValue, typeDescription.m_typeData.m_number.m_scale);
 				}
 				else if (vt == ibValueTypes::TYPE_DATE) {
@@ -117,18 +213,29 @@ ibValue ibValueTypeDescription::AdjustValue(const ibTypeDescription& typeDescrip
 					return varValue.GetDate();
 				}
 				else if (vt == ibValueTypes::TYPE_STRING) {
+					// Same rule as the branch above: 0 is "no declared limit", not "empty".
+					//
+					// 🛑 BUT THIS BRANCH IS REACHED BY A VALUE THAT IS *NOT* A STRING, and "no limit" is no reason
+					// to leave it one. It returned the value as it came — so an Undefined adjusted to an unlimited
+					// string stayed Undefined, where its siblings above hand back a number and a date. The field
+					// then held no type at all: a characteristic whose kind says "string" was cleared to Undefined
+					// instead of "", and the cell threw away whatever was typed into it, having nothing to read it
+					// by (2026-09-23: under a string kind the cell stayed Undefined, while a boolean kind made it
+					// `False` and a date kind an empty date).
+					if (typeDescription.m_typeData.m_string.m_length == 0)
+						return ibValue(varValue.GetString());
 					return ibValueSystemFunction::Left(varValue, typeDescription.m_typeData.m_string.m_length);
+				}
+				// …and a Boolean reads the value as one, as its three siblings do. It fell through to the empty
+				// Boolean below, so a 1 written into a Boolean field — or `CAST(1 AS Boolean)` — was `False`.
+				else if (vt == ibValueTypes::TYPE_BOOLEAN) {
+					return ibValue(varValue.GetBoolean());
 				}
 			}
 
-			if (metaData != nullptr)
-				return metaData->CreateObject(
-					typeDescription.GetFirstClsid()
-				);
-
-			return activeMetaData->CreateObject(
-				typeDescription.GetFirstClsid()
-			);
+			return source != nullptr
+				? source->CreateObject(typeDescription.GetFirstClsid())
+				: ibValue::CreateObject(typeDescription.GetFirstClsid());
 		}
 	}
 	return wxEmptyValue;
@@ -138,45 +245,63 @@ ibValue ibValueTypeDescription::AdjustValue(const ibTypeDescription& typeDescrip
 // Construction/Destruction
 //////////////////////////////////////////////////////////////////////
 
-ibValueTypeDescription::ibValueTypeDescription() :
-	ibValue(ibValueTypes::TYPE_VALUE, true), m_methodHelper(new ibValueMethodHelper())
+// ⭐⭐ A TYPE NAMED AT RUN TIME WITHOUT A QUALIFIER LIMITS NOTHING. `ibTypeData`'s own defaults — ten digits
+// and no fraction, ten characters, a date without its time — are what the designer gives a NEW ATTRIBUTE,
+// and they reached every description a script built: `New TypeDescription("String")` cut a text to ten
+// characters, "Number" rounded to a whole number, "Date" dropped the time, and a value table's column added
+// without a type kept the first ten characters of whatever was written into it (measured 2026-09-21).
+//
+// No qualifier means no limit: precision 0 (AdjustValue does not round), a date with its time, length 0
+// (already "unlimited" to AdjustValue). The designer's defaults stay where they belong — on a new attribute,
+// whose type becomes a column in the database and has to say how wide it is.
+ibTypeDescription::ibTypeData ibValueTypeDescription::Unqualified()
 {
+	return ibTypeDescription::ibTypeData(ibQualifierNumber(0, 0),
+		ibQualifierDate(ibDateFractions::ibDateFractions_DateTime), ibQualifierString(0));
+}
+
+ibTypeDescription ibValueType::GetOwnerTypeDescription() const
+{
+	return ibTypeDescription(GetOwnerTypeClass(), ibValueTypeDescription::Unqualified());
+}
+
+ibValueTypeDescription::ibValueTypeDescription() :
+	ibValueStaticMembers(ibValueTypes::TYPE_VALUE, true){
 }
 
 ibValueTypeDescription::ibValueTypeDescription(ibValueType* valueType) :
-	ibValue(ibValueTypes::TYPE_VALUE, true), m_typeDesc({ valueType ? valueType->GetOwnerTypeClass() : 0 }), m_methodHelper(new ibValueMethodHelper())
-{
+	ibValueStaticMembers(ibValueTypes::TYPE_VALUE, true), m_typeDesc({ valueType ? valueType->GetOwnerTypeClass() : 0 }, Unqualified()){
 }
 
 ibValueTypeDescription::ibValueTypeDescription(ibValueType* valueType, ibValueQualifierNumber* qNumber, ibValueQualifierDate* qDate, ibValueQualifierString* qString) :
-	ibValue(ibValueTypes::TYPE_VALUE, true), m_typeDesc({ valueType ? valueType->GetOwnerTypeClass() : 0 }, (qNumber ? *qNumber : ibQualifierNumber()), (qDate ? *qDate : ibQualifierDate()), (qString ? *qString : ibQualifierString())), m_methodHelper(new ibValueMethodHelper())
-{
+	ibValueStaticMembers(ibValueTypes::TYPE_VALUE, true), m_typeDesc({ valueType ? valueType->GetOwnerTypeClass() : 0 },
+		(qNumber ? *qNumber : Unqualified().m_number), (qDate ? *qDate : Unqualified().m_date), (qString ? *qString : Unqualified().m_string)){
 }
 
 ibValueTypeDescription::ibValueTypeDescription(const ibTypeDescription& typeDescription)
-	: ibValue(ibValueTypes::TYPE_VALUE, true), m_typeDesc(typeDescription), m_methodHelper(new ibValueMethodHelper())
-{
+	: ibValueStaticMembers(ibValueTypes::TYPE_VALUE, true), m_typeDesc(typeDescription){
 }
 
 ibValueTypeDescription::ibValueTypeDescription(const std::vector<ibClassID>& array) :
-	ibValue(ibValueTypes::TYPE_VALUE, true), m_typeDesc(array), m_methodHelper(new ibValueMethodHelper())
-{
+	ibValueStaticMembers(ibValueTypes::TYPE_VALUE, true), m_typeDesc(array, Unqualified()){
 }
 
 ibValueTypeDescription::ibValueTypeDescription(const std::vector<ibClassID>& array, ibValueQualifierNumber* qNumber, ibValueQualifierDate* qDate, ibValueQualifierString* qString) :
-	ibValue(ibValueTypes::TYPE_VALUE, true), m_typeDesc(array, (qNumber ? *qNumber : ibQualifierNumber()), (qDate ? *qDate : ibQualifierDate()), (qString ? *qString : ibQualifierString())), m_methodHelper(new ibValueMethodHelper())
-{
+	ibValueStaticMembers(ibValueTypes::TYPE_VALUE, true), m_typeDesc(array,
+		(qNumber ? *qNumber : Unqualified().m_number), (qDate ? *qDate : Unqualified().m_date), (qString ? *qString : Unqualified().m_string)){
 }
 
 ibValueTypeDescription::~ibValueTypeDescription()
 {
-	wxDELETE(m_methodHelper);
 }
 
 bool ibValueTypeDescription::Init(ibValue** paParams, const long lSizeArray)
 {
 	if (lSizeArray < 1)
 		return false;
+
+	// A qualifier not given limits nothing (Unqualified); the ones given override it below.
+	m_typeDesc.m_typeData = Unqualified();
 
 	if (paParams[0]->GetType() == ibValueTypes::TYPE_STRING) {
 		wxString classType = paParams[0]->GetString();
@@ -242,11 +367,36 @@ bool ibValueTypeDescription::Init(ibValue** paParams, const long lSizeArray)
 	return false;
 }
 
+bool ibValueTypeDescription::AdjustOutValue(const ibValue& varValue, ibValue& out) const
+{
+	// A DESCRIPTION OF NOTHING NARROWS NOTHING, and the value passes as it came — the same answer the
+	// two-argument form above gives for it.
+	if (!m_typeDesc.IsOk()) {
+		out = varValue;
+		return true;
+	}
+
+	// ⚠ AND A VALUE THE DESCRIPTION DOES NOT NAME COMES BACK AS THE EMPTY VALUE OF WHAT IT DOES —
+	// `false` with a value of the right type in hand, never nothing. The narrowing is what the field
+	// then holds, and its TYPE is what a caller asking "what does this narrow to" reads off it, so the
+	// question is asked once (Max, 2026-09-24). The place that watches for a value going in and not
+	// coming out is ibChoiceLinkResolver::Adjust, which says so in the journal.
+	//
+	// A value one of the declared types ADMITS came out as it went in, and says so — the same gate
+	// AdjustValue passed it by.
+	out = AdjustValue(m_typeDesc, varValue);
+	const ibClassID clsid = varValue.GetClassType();
+	return m_typeDesc.ContainType(clsid)
+		|| (clsid != g_valueUndefinedCLSID && AllowValue(m_typeDesc, clsid, activeMetaData));
+}
+
 bool ibValueTypeDescription::ContainType(const ibValue& cType) const
 {
 	ibValueType* valueType = CastValue<ibValueType>(cType);
 	wxASSERT(valueType);
-	auto it = std::find(m_typeDesc.m_listTypeClass.begin(), m_typeDesc.m_listTypeClass.begin(), valueType->GetOwnerTypeClass());
+	// The range ended at begin(), so the search was over NOTHING: find always answered begin(), and
+	// comparing that with end() made the result "yes" for every type whenever the list was not empty.
+	auto it = std::find(m_typeDesc.m_listTypeClass.begin(), m_typeDesc.m_listTypeClass.end(), valueType->GetOwnerTypeClass());
 	return it != m_typeDesc.m_listTypeClass.end();
 }
 
@@ -262,9 +412,9 @@ ibValue ibValueTypeDescription::AdjustValue(const ibValue& varValue) const
 
 ibValue ibValueTypeDescription::Types() const
 {
-	ibValueArray* arr = ibValue::CreateAndPrepareValueRef<ibValueArray>();
+	ibValueArray* arr = new ibValueArray();
 	for (auto clsid : m_typeDesc.m_listTypeClass)
-		arr->Add(ibValue::CreateAndPrepareValueRef<ibValueType>(clsid));
+		arr->Add(new ibValueType(clsid));
 	return arr;
 }
 
@@ -274,16 +424,20 @@ enum Func {
 	enTypes
 };
 
-void ibValueTypeDescription::PrepareNames() const
+// Bound contributor (push). Build() Clear()s before running this, so no
+// ClearHelper() here. Type-invariant — ctx unused.
+void ibValueTypeDescription_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
 {
-	m_methodHelper->ClearHelper();
+	helper.AppendConstructor(4, wxT("typeDescription(type, qNumber, qDate, qString)"));
 
-	m_methodHelper->AppendConstructor(4, wxT("typeDescription(type, qNumber, qDate, qString)"));
-
-	m_methodHelper->AppendFunc(wxT("ContainType"), 1, wxT("containsType(type : type)"));
-	m_methodHelper->AppendFunc(wxT("AdjustValue"), 1, wxT("AdjustValue(value = undefined : any"));
-	m_methodHelper->AppendFunc(wxT("Types"), wxT("Types()"));
+	helper.AppendFunc(wxT("ContainType"), 1, wxT("containsType(type : type)"));
+	helper.AppendFunc(wxT("AdjustValue"), 1, wxT("AdjustValue(value = undefined : any"));
+	helper.AppendFunc(wxT("Types"), wxT("Types()"));
 }
+
+// Population lives in ibValueTypeDescription_BindNames above, run lazily by
+// ibValue::EnsureBuilt() on first GetPMethods() — a per-instance member table
+// built once on first access (thread-safe lazy build). PrepareNames() is gone.
 
 bool ibValueTypeDescription::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
 {
@@ -293,9 +447,14 @@ bool ibValueTypeDescription::CallAsFunc(const long lMethodNum, ibValue& pvarRetV
 		pvarRetValue = ContainType(*paParams[0]);
 		return true;
 	case enAdjustValue: {
-		if (lSizeArray > 0)
-			pvarRetValue = AdjustValue(*paParams[0]);
-		pvarRetValue = AdjustValue();
+		// TWO CALLS, TWO MEANINGS: with a value it CONVERTS that value, without one it BUILDS an empty
+		// one of this type. The no-argument line used to run unconditionally right after the other, so
+		// the converted result was computed and then thrown away — `Type.AdjustValue("45.2")` answered
+		// an empty number instead of 45.2, and every caller filling characteristics from raw text got
+		// blanks that looked like an unfilled source rather than a lost conversion.
+		pvarRetValue = lSizeArray > 0 && paParams != nullptr
+			? AdjustValue(*paParams[0])
+			: AdjustValue();
 		return true;
 	}
 	case enTypes:
@@ -307,12 +466,97 @@ bool ibValueTypeDescription::CallAsFunc(const long lMethodNum, ibValue& pvarRetV
 }
 
 //**********************************************************************
+//*                            Qualifiers                              *
+//**********************************************************************
+
+#include "backend/compiler/enumUnit.h"
+#include "backend/backend_exception.h"
+
+// The two closed sets a qualifier is written with — so `QualifierDate` has something to be given at all.
+class ibValueEnumDateFractions : public ibValueEnumeration<ibDateFractions> {
+public:
+	ibValueEnumDateFractions() : ibValueEnumeration() {}
+	virtual void CreateEnumeration() override {
+		AddEnumeration(ibDateFractions::ibDateFractions_Date,     wxT("Date"),     _("Date"));
+		AddEnumeration(ibDateFractions::ibDateFractions_Time,     wxT("Time"),     _("Time"));
+		AddEnumeration(ibDateFractions::ibDateFractions_DateTime, wxT("DateTime"), _("Date and time"));
+	}
+};
+
+class ibValueEnumAllowedLength : public ibValueEnumeration<ibAllowedLength> {
+public:
+	ibValueEnumAllowedLength() : ibValueEnumeration() {}
+	virtual void CreateEnumeration() override {
+		AddEnumeration(ibAllowedLength::ibAllowedLength_Variable, wxT("Variable"), _("Variable"));
+		AddEnumeration(ibAllowedLength::ibAllowedLength_Fixed,    wxT("Fixed"),    _("Fixed"));
+	}
+};
+
+// 🛑 A QUALIFIER TAKES ITS ARGUMENTS. The three had no Init of their own, so the base answered every
+// `New QualifierNumber(15, 2)` by ignoring what was given: the qualifier kept the default ten digits and
+// no fraction, and `New TypeDescription("Number", New QualifierNumber(15, 2))` rounded 0.25 to 0 — no
+// fraction could be declared from a script at all (measured 2026-09-21). Given nothing, a qualifier
+// limits nothing, the same as a description that names none (ibValueTypeDescription::Unqualified).
+bool ibValueQualifierNumber::Init()
+{
+	m_qNumber = ibValueTypeDescription::Unqualified().m_number;
+	return true;
+}
+
+bool ibValueQualifierNumber::Init(ibValue** paParams, const long lSizeArray)
+{
+	const long precision = lSizeArray > 0 ? paParams[0]->GetInteger() : 0;
+	const long scale     = lSizeArray > 1 ? paParams[1]->GetInteger() : 0;
+	if (precision < 0 || precision > 38)
+		ibBackendCoreException::Error(_("QualifierNumber: the number of digits is from 0 (no limit) to 38, not %d"), (int)precision);
+	if (scale < 0 || (precision > 0 && scale > precision))
+		ibBackendCoreException::Error(_("QualifierNumber: the digits after the point are from 0 to the number of digits, not %d"), (int)scale);
+	m_qNumber = ibQualifierNumber(static_cast<unsigned char>(precision), static_cast<char>(scale),
+		lSizeArray > 2 && paParams[2]->GetBoolean());
+	return true;
+}
+
+bool ibValueQualifierDate::Init()
+{
+	m_qDate = ibValueTypeDescription::Unqualified().m_date;
+	return true;
+}
+
+bool ibValueQualifierDate::Init(ibValue** paParams, const long lSizeArray)
+{
+	m_qDate = ibValueTypeDescription::Unqualified().m_date;
+	if (lSizeArray > 0 && !paParams[0]->IsEmpty())
+		m_qDate = ibQualifierDate(paParams[0]->ConvertToEnumValue<ibDateFractions>());
+	return true;
+}
+
+bool ibValueQualifierString::Init()
+{
+	m_qString = ibValueTypeDescription::Unqualified().m_string;
+	return true;
+}
+
+bool ibValueQualifierString::Init(ibValue** paParams, const long lSizeArray)
+{
+	const long length = lSizeArray > 0 ? paParams[0]->GetInteger() : 0;
+	if (length < 0 || length > 65535)
+		ibBackendCoreException::Error(_("QualifierString: the length is from 0 (no limit) to 65535, not %d"), (int)length);
+	m_qString = ibQualifierString(static_cast<unsigned short>(length),
+		lSizeArray > 1 && !paParams[1]->IsEmpty() ? paParams[1]->ConvertToEnumValue<ibAllowedLength>()
+		                                          : ibAllowedLength::ibAllowedLength_Variable);
+	return true;
+}
+
+//**********************************************************************
 //*                       Runtime register                             *
 //**********************************************************************
 
-VALUE_TYPE_REGISTER(ibValueType, "Type", string_to_clsid("VL_TYPE"));
-VALUE_TYPE_REGISTER(ibValueTypeDescription, "TypeDescription", string_to_clsid("VL_TYPED"));
+VALUE_TYPE_REGISTER(ibValueType, "Type", value_to_clsid("VL_TYPE"));
+VALUE_TYPE_REGISTER(ibValueTypeDescription, "TypeDescription", value_to_clsid("VL_TYPED"));
 
-VALUE_TYPE_REGISTER(ibValueQualifierNumber, "QualifierNumber", string_to_clsid("VL_QNUM"));
-VALUE_TYPE_REGISTER(ibValueQualifierDate, "QualifierDate", string_to_clsid("VL_QDAT"));
-VALUE_TYPE_REGISTER(ibValueQualifierString, "QualifierString", string_to_clsid("VL_QSTR"));
+VALUE_TYPE_REGISTER(ibValueQualifierNumber, "QualifierNumber", value_to_clsid("VL_QNUM"));
+VALUE_TYPE_REGISTER(ibValueQualifierDate, "QualifierDate", value_to_clsid("VL_QDAT"));
+VALUE_TYPE_REGISTER(ibValueQualifierString, "QualifierString", value_to_clsid("VL_QSTR"));
+
+ENUM_TYPE_REGISTER(ibValueEnumDateFractions, "DateFractions", enum_to_clsid("EN_DFRAC"));
+ENUM_TYPE_REGISTER(ibValueEnumAllowedLength, "AllowedLength", enum_to_clsid("EN_ALLEN"));

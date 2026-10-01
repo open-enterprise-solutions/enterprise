@@ -3,14 +3,15 @@
 #include "frontend/win/theme/luna_tabart.h"
 
 #include "frontend/win/editor/codeEditor/codeEditor.h"
-#include "frontend/win/editor/codeEditor/codeEditorParser.h"
+#include "backend/compiler/scriptParseCode.h"
+#include "frontend/visualView/layers/commandBar.h"       // ibValueCommandBarItem (tree reveal)
 
 void ibVisualEditorNotebook::CreateVisualEditor(ibMetaDocument* document, wxWindow* parent, wxWindowID id, long flags)
 {
 	wxAuiNotebook::AddPage(m_visualEditor, _("Designer"), false, wxArtProvider::GetBitmapBundle(wxART_DESIGNER_PAGE, wxART_DOC_FORM));
 	wxAuiNotebook::AddPage(m_codeEditor, _("Code"), false, wxArtProvider::GetBitmapBundle(wxART_CODE_PAGE, wxART_DOC_FORM));
-	m_visualEditor->SetReadOnly(flags == wxDOC_READONLY);
-	m_codeEditor->SetReadOnly(flags == wxDOC_READONLY);
+	m_visualEditor->SetReadOnly(flags == ibDOC_READONLY);
+	m_codeEditor->SetReadOnly(flags == ibDOC_READONLY);
 	wxAuiNotebook::SetSelection(wxNOTEBOOK_PAGE_DESIGNER);
 
 	wxAuiNotebook::Bind(wxEVT_AUINOTEBOOK_PAGE_CHANGED, &ibVisualEditorNotebook::OnPageChanged, this);
@@ -60,7 +61,7 @@ bool ibVisualEditorNotebook::CanRedo() const
 
 void ibVisualEditorNotebook::ModifyEvent(ibEvent* event, const wxVariant& oldValue, const wxVariant& newValue)
 {
-	ibParserModule parser; bool procFounded = false;
+	ibParseCode parser; bool procFounded = false;
 
 	const wxString& strEvent = newValue.GetString();
 
@@ -140,6 +141,25 @@ void ibVisualEditorNotebook::ModifyEvent(ibEvent* event, const wxVariant& oldVal
 	}
 
 	m_visualEditor->ModifyEvent(event, oldValue, newValue);
+}
+
+void ibVisualEditorNotebook::SelectPropertyObject(ibPropertyObject* obj)
+{
+	if (obj == nullptr || m_visualEditor == nullptr)
+		return;
+	// Route through the editor's SINGLE selector, NOT a second door into the inspector: the live surface (a rendered
+	// toolbar click, an add / move / paste from the bar menu) makes `obj` the editor's current element AND force-opens
+	// the inspector on it in ONE call. This keeps GetCurrentElement in sync, so a later rebuild reveals THIS element,
+	// not a stale one — the "must reselect" bug. forceOpen: an explicit live click deserves the panel raised.
+	m_visualEditor->SetCurrentElement(obj, true);
+	// The live surface ALSO reveals the command in the object tree (EnsureVisible + SelectItem) and brings the designer
+	// page forward — the two extras a plain tree-select doesn't need. Bar nodes / plain property objects no-op the reveal.
+	if (m_visualEditor->GetObjectTree() != nullptr) {
+		if (ibValueCommandBarItem* citem = dynamic_cast<ibValueCommandBarItem*>(obj))
+			m_visualEditor->GetObjectTree()->SelectCommandItem(citem);
+	}
+	if (wxAuiNotebook::GetSelection() != wxNOTEBOOK_PAGE_DESIGNER)
+		wxAuiNotebook::SetSelection(wxNOTEBOOK_PAGE_DESIGNER);
 }
 
 void ibVisualEditorNotebook::ActivateEditor()

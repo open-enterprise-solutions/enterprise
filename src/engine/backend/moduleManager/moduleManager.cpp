@@ -13,152 +13,27 @@
 
 #define objectManager wxT("Manager")
 #define objectMetadataManager wxT("Metadata")
+#define objectDataManager wxT("Data")
 
 //*********************************************************************************************************
-//*                                   Singleton class "moduleManager"                                     *
+//*                          ibValueModuleManager — lightweight base                                    *
 //*********************************************************************************************************
 
 ibValueModuleManager::ibValueModuleManager(ibMetaData* metadata, const ibValueMetaObjectModule* obj) :
-	ibValue(ibValueTypes::TYPE_VALUE), ibRuntimeModuleDataObject(new ibCompileModule(obj)),
+	ibValueDynamicMembers(ibValueTypes::TYPE_VALUE),
+	ibRuntimeModuleDataObject(m_members, this, new ibCompileModule(obj)),
 	m_objectManager(new ibValueGlobalContextManager(metadata)),
 	m_metaManager(new ibValueMetadataUnit(metadata)),
-	m_methodHelper(new ibValueMethodHelper()),
-	m_initialized(false)
+	m_dataManager(new ibValueDataUnit(metadata))
 {
-	//add global variables 
-	m_listGlConstValue.insert_or_assign(objectMetadataManager, m_metaManager);
-}
-
-void ibValueModuleManager::Clear()
-{
-	m_listCommonModuleManager.clear();
+	// (The "Metadata" / "Data" globals are bound by the CONFIGURATION's managers only — see
+	// ibValueModuleManagerRuntimeConfiguration's ctor. Bound here, they became exports of every
+	// module a manager is built on: an external data processor's object module among them, and
+	// the object shares that module, so `ThisObject.Metadata` / `ThisObject.Data` showed up.)
 }
 
 ibValueModuleManager::~ibValueModuleManager()
 {
-	Clear();
-	wxDELETE(m_methodHelper);
-}
-
-//*************************************************************************************************************************
-//************************************************  support common module *************************************************
-//*************************************************************************************************************************
-
-bool ibValueModuleManager::RuntimeRegisterCommonModule(ibValueMetaObjectCommonModule* commonModule, bool compileNow)
-{
-	ibValuePtr<ibValueModuleUnit> moduleValue(
-		new ibValueModuleUnit(this, commonModule, commonModule->IsManagerModule()));
-
-	if (auto* cc = m_metaManager->GetMetaData()->GetCompileCache()) {
-		if (!cc->AddCompileModule(commonModule, moduleValue))
-			return false;
-	}
-
-	m_listCommonModuleManager.emplace_back(moduleValue);
-
-	if (!commonModule->IsGlobalModule()) {
-		const wxString& strModuleName = commonModule->GetName();
-		m_listGlConstValue.insert_or_assign(strModuleName, moduleValue);
-		m_compileModule->AddVariable(strModuleName, moduleValue);
-	}
-	else {
-		const wxString& strModuleName = commonModule->GetName();
-		m_compileModule->RemoveVariable(strModuleName);
-		m_compileModule->AppendModule(moduleValue->GetCompileModule());
-	}
-
-	if (compileNow) {
-		if (!commonModule->IsGlobalModule()) {
-			try {
-				Compile();
-			}
-			catch (const ibBackendException& err) {
-				wxLogWarning(_("Common module '%s' failed to compile: %s"),
-					commonModule->GetName(), err.GetErrorDescription());
-			};
-		}
-		return moduleValue->CreateCommonModule();
-	}
-
-	return true;
-}
-
-ibValueModuleManager::ibValueModuleUnit* ibValueModuleManager::FindCommonModule(const ibValueMetaObjectCommonModule* commonModule) const
-{
-	auto moduleObjectIt = std::find_if(m_listCommonModuleManager.begin(), m_listCommonModuleManager.end(),
-		[commonModule](ibValueModuleUnit* valueModule) {
-			return commonModule == valueModule->GetObjectModule();
-		}
-	);
-
-	if (moduleObjectIt != m_listCommonModuleManager.end())
-		return *moduleObjectIt;
-
-	return nullptr;
-}
-
-bool ibValueModuleManager::RuntimeRenameCommonModule(ibValueMetaObjectCommonModule* commonModule, const wxString& newName)
-{
-	ibValue* moduleValue = FindCommonModule(commonModule);
-	wxASSERT(moduleValue);
-
-	if (!commonModule->IsGlobalModule()) {
-		try {
-			m_compileModule->AddVariable(newName, moduleValue);
-			m_compileModule->RemoveVariable(commonModule->GetName());
-			Compile();
-		}
-		catch (const ibBackendException& err) {
-			wxLogWarning(_("Rename of common module '%s' to '%s' left compile in failed state: %s"),
-				commonModule->GetName(), newName, err.GetErrorDescription());
-		};
-
-		m_listGlConstValue.insert_or_assign(newName, moduleValue);
-		m_listGlConstValue.erase(commonModule->GetName());
-	}
-
-	return true;
-}
-
-bool ibValueModuleManager::RuntimeUnregisterCommonModule(ibValueMetaObjectCommonModule* commonModule)
-{
-	ibValuePtr<ibValueModuleManager::ibValueModuleUnit> moduleValue(FindCommonModule(commonModule));
-	wxASSERT(moduleValue);
-
-	if (auto* cc = m_metaManager->GetMetaData()->GetCompileCache()) {
-		if (!cc->RemoveCompileModule(commonModule))
-			return false;
-	}
-
-	auto iterator = std::find(m_listCommonModuleManager.begin(), m_listCommonModuleManager.end(), moduleValue);
-
-	if (iterator == m_listCommonModuleManager.end())
-		return false;
-
-	if (!commonModule->IsGlobalModule()) {
-		m_listGlConstValue.erase(commonModule->GetName());
-	}
-
-	m_listCommonModuleManager.erase(iterator);
-
-	if (commonModule->IsGlobalModule()) {
-		m_compileModule->RemoveModule(moduleValue->GetCompileModule());
-	}
-
-	return true;
-}
-
-void ibValueModuleManager::PrepareNames() const
-{
-	m_methodHelper->ClearHelper();
-	ExportNamesToHelper(m_methodHelper, eProcUnit);
-
-	m_objectManager->PrepareNames();
-	m_metaManager->PrepareNames();
-
-	for (auto& module : m_listCommonModuleManager) {
-		module->PrepareNames();
-	}
 }
 
 bool ibValueModuleManager::CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray)
@@ -189,7 +64,7 @@ bool ibValueModuleManager::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 	return false;
 }
 
-long ibValueModuleManager::FindProp(const wxString& strName) const
+long ibValueModuleManager::FindProp(const ibString& strName) const
 {
 	if (m_procUnit != nullptr) {
 		return m_procUnit->FindProp(strName);
@@ -198,19 +73,282 @@ long ibValueModuleManager::FindProp(const wxString& strName) const
 	return ibValue::FindProp(strName);
 }
 
-//////////////////////////////////////////////////////////////////////////////////
-//  ibValueModuleManagerConfiguration
-//////////////////////////////////////////////////////////////////////////////////
+//*********************************************************************************************************
+//*                          ibValueModuleRuntimeManager — heavy runtime part                           *
+//*********************************************************************************************************
 
-ibValueModuleManagerConfiguration::ibValueModuleManagerConfiguration(
-	ibMetaData* metadata,
-	ibValueMetaObjectConfiguration* metaObject)
-	: ibValueModuleManager(metadata, metaObject ? metaObject->GetObjectModule() : nullptr)
+ibValueModuleRuntimeManager::ibValueModuleRuntimeManager(ibMetaData* metadata, const ibValueMetaObjectModule* obj) :
+	ibValueModuleManager(metadata, obj),
+	m_initialized(false)
 {
 }
 
+void ibValueModuleRuntimeManager::Clear()
+{
+	m_listCommonModuleManager.clear();
+}
+
+ibValueModuleRuntimeManager::~ibValueModuleRuntimeManager()
+{
+	Clear();
+}
+
+//*************************************************************************************************************************
+//************************************************  support common module *************************************************
+//*************************************************************************************************************************
+
+bool ibValueModuleRuntimeManager::RuntimeRegisterCommonModule(ibValueMetaObjectCommonModule* commonModule, bool compileNow)
+{
+	ibValuePtr<ibValueRuntimeModuleUnit> moduleValue(
+		new ibValueRuntimeModuleUnit(this, commonModule, commonModule->IsManagerModule()));
+
+	m_listCommonModuleManager.emplace_back(moduleValue);
+
+	if (!commonModule->IsGlobalModule()) {
+		const wxString& strModuleName = commonModule->GetName();
+		BindExportVariable(strModuleName, moduleValue);
+	}
+	else {
+		const wxString& strModuleName = commonModule->GetName();
+		UnbindVariable(strModuleName);
+		m_compileModule->AppendModule(moduleValue->GetCompileModule());
+	}
+
+	if (compileNow) {
+		if (!commonModule->IsGlobalModule()) {
+			try {
+				Compile();
+			}
+			catch (const ibBackendException& err) {
+				// ⚠ INFO, NOT WARNING — a warning is ECHOED THROUGH wxLog, and in a GUI application
+				// that opens a MODAL. A module that does not compile then stops the whole client on a
+				// dialog captioned "Warning", in front of somebody who merely opened a list; and for
+				// a caller who is not a person there is nobody to close it at all. Same correction as
+				// the one in metaData.cpp's paste path, for the same reason (2026-09-04).
+				//
+				// The failure is not lost: it is in the journal, and the compile diagnostic reaches
+				// the message pane through the ordinary error road.
+				ibJournalInfo(wxT("module"),_("Common module '%s' failed to compile: %s"),
+					commonModule->GetName(), err.GetErrorDescription());
+			};
+		}
+		return moduleValue->CreateCommonModule();
+	}
+
+	return true;
+}
+
+ibValueModuleManager::ibValueModuleUnit* ibValueModuleRuntimeManager::FindCommonModule(const ibValueMetaObjectCommonModule* commonModule) const
+{
+	auto moduleObjectIt = std::find_if(m_listCommonModuleManager.begin(), m_listCommonModuleManager.end(),
+		[commonModule](ibValueModuleUnit* valueModule) {
+			return commonModule == valueModule->GetObjectModule();
+		}
+	);
+
+	if (moduleObjectIt != m_listCommonModuleManager.end())
+		return *moduleObjectIt;
+
+	return nullptr;
+}
+
+bool ibValueModuleRuntimeManager::RuntimeRenameCommonModule(ibValueMetaObjectCommonModule* commonModule, const wxString& newName)
+{
+	ibValue* moduleValue = FindCommonModule(commonModule);
+	wxASSERT(moduleValue);
+
+	if (!commonModule->IsGlobalModule()) {
+		try {
+			BindExportVariable(newName, moduleValue);
+			UnbindVariable(commonModule->GetName());
+			Compile();
+		}
+		catch (const ibBackendException& err) {
+			ibJournalWarning(wxT("module"),_("Rename of common module '%s' to '%s' left compile in failed state: %s"),
+				commonModule->GetName(), newName, err.GetErrorDescription());
+		};
+	}
+
+	return true;
+}
+
+bool ibValueModuleRuntimeManager::RuntimeUnregisterCommonModule(ibValueMetaObjectCommonModule* commonModule)
+{
+	ibValuePtr<ibValueModuleManager::ibValueModuleUnit> moduleValue(FindCommonModule(commonModule));
+	wxASSERT(moduleValue);
+
+	auto iterator = std::find(m_listCommonModuleManager.begin(), m_listCommonModuleManager.end(), moduleValue);
+
+	if (iterator == m_listCommonModuleManager.end())
+		return false;
+
+	if (!commonModule->IsGlobalModule()) {
+		UnbindVariable(commonModule->GetName());
+	}
+
+	m_listCommonModuleManager.erase(iterator);
+
+	if (commonModule->IsGlobalModule()) {
+		m_compileModule->RemoveModule(moduleValue->GetCompileModule());
+	}
+
+	return true;
+}
+
+//**********************************************************************
+//*          Per-session runtime (compile / runtime split)             *
+//**********************************************************************
+
+bool ibValueModuleRuntimeManager::AttachRuntime(ibSession* session)
+{
+	if (session == nullptr)
+		return false;
+	// Serialize against other sessions' Init/Exit — the Execute of
+	// top-level module init + per-session parent ProcUnit chain isn't
+	// thread-safe against concurrent Execute on the same compileModule.
+	// Rapid F5 reliably hit this as an OOB operator[] inside Execute.
+	std::lock_guard<std::mutex> lock(m_runtimeMutex);
+	// WHICH SESSIONS DO NOT GET A RUNTIME — the short list, and the question is
+	// asked that way round on purpose:
+	//   Launcher   — no metadata to compile.
+	//   Designer   — compile-only; it runs off the edit-time module manager in the
+	//                metadata's compile cache, never a per-session runtime root.
+	//   WebServer  — the wes process's own technical row; it serves tabs, it does
+	//                not execute a configuration.
+	// Everything else executes script and therefore needs one. Naming the
+	// EXCEPTIONS rather than the members is what makes a new session kind default
+	// to working: the list used to be positive (Enterprise / WebClient / Service),
+	// and every kind added after it — a background run, a scheduled job — silently
+	// got no root module at all, so a job declared as `Module.Method` could not
+	// run and said nothing about why. userInfo-empty is NOT a valid discriminator
+	// either: open-access configurations (empty sys_user) have empty userInfo for
+	// legitimate user sessions.
+	//
+	// A RENTED run never arrives here — it is not authenticated and asks for no
+	// runtime (see ibJobTenancy) — so this gate is not what keeps it cheap.
+	const ibSessionKind kind = session->GetKind();
+	const bool noRuntime =
+		(kind == ibSessionKind::Launcher)  ||
+		(kind == ibSessionKind::Designer)  ||
+		(kind == ibSessionKind::WebServer);
+	if (noRuntime)
+		return true;
+	// Imperative pipeline — each descriptor owns its m_procUnit.
+	// CreateMainModule already compiled m_compileModule.
+	//
+	// SPLIT init from execution: create EVERY module's runtime first, run the
+	// main body only after. Otherwise the main module's top-level would execute
+	// (Run(true)) while common / manager modules still have no ProcUnit — and a
+	// manager-module export reached from the top-level (e.g.
+	// `Catalogs.X.BeforeWrite(...)` from ConfigurationModule) would resolve
+	// against an empty ProcUnit ("'<method>' - not an aggregate object").
+	//
+	// Phase 1a — root: allocate the ProcUnit and register its functions WITHOUT
+	// running the body (Run(false)).
+	if (!appData->DesignerMode() && m_compileModule != nullptr) {
+		try {
+			InitializeRuntime();     // ensure root's ProcUnit exists
+			Run(false);              // register functions; do NOT run the top-level yet
+		}
+		catch (const ibBackendException& err) {
+			ibJournalWarning(wxT("module"),_("AttachRuntime main prepare: %s"), err.GetErrorDescription());
+			return false;
+		}
+	}
+	// Phase 1b — common / manager modules: each has its own compile + m_procUnit.
+	// Parent is wired in ibValueModuleUnit's ctor (SetParent(moduleManager)),
+	// which cascades procUnit->SetParent on creation inside InitializeRuntime().
+	// Run(false) registers their functions (a common module's top-level is just
+	// declarations — there's no body to run).
+	for (auto& moduleValue : m_listCommonModuleManager) {
+		if (!moduleValue)
+			continue;
+		if (moduleValue->GetCompileModule() == nullptr)
+			continue;
+		if (moduleValue->IsGlobalModule())
+			// Global modules are *inlined* into the main module at
+			// translation time — the translator splices their lexemes
+			// into the main compile unit and emits debugger hints
+			// noting the origin. There's no separate bytecode to run,
+			// so no separate ProcUnit either. Main's ProcUnit executes
+			// the spliced code as part of its own top-level.
+			continue;
+		try {
+			moduleValue->InitializeRuntime();
+			moduleValue->Run(false);
+		}
+		catch (const ibBackendException& err) {
+			ibJournalWarning(wxT("module"),_("AttachRuntime common: %s"), err.GetErrorDescription());
+			return false;
+		}
+	}
+	// LOAD-BEARING — invalidate BEFORE Phase 2, do not drop. The compile-time
+	// helper build (inside CreateCommonModule) ran with no per-session ProcUnit,
+	// so each module's method-helper exported an empty/partial name set. Phase 1
+	// above wired every module's ProcUnit; invalidate this manager AND every
+	// common / manager module NOW, so that when the main body runs (Phase 2) and
+	// reaches a module export (e.g. Catalogs.X.BeforeWrite from ConfigurationModule)
+	// the name resolution rebuilds the surface against the LIVE ProcUnit.
+	// Invalidating AFTER Phase 2 is too late — the body already resolved against
+	// the empty cache ("'<method>' - a variable is not an aggregate object").
+	m_members.Invalidate();
+	for (auto& module : m_listCommonModuleManager) {
+		module->InvalidateNames();
+	}
+
+	// Phase 2 — every module's ProcUnit now exists and surfaces are invalidated;
+	// run the main body. The top-level can now reach any manager / common module
+	// export and resolve it against the live runtime.
+	if (!appData->DesignerMode() && m_compileModule != nullptr) {
+		try {
+			Run(true);               // execute main module top-level
+		}
+		catch (const ibBackendException& err) {
+			ibJournalWarning(wxT("module"),_("AttachRuntime main run: %s"), err.GetErrorDescription());
+			return false;
+		}
+	}
+	return true;
+}
+
+void ibValueModuleRuntimeManager::DetachRuntime(ibSession* session)
+{
+	if (session == nullptr)
+		return;
+	// Pairs with AttachRuntime's lock — concurrent Init + Exit
+	// would race on m_listCommonModuleManager iteration + common-module
+	// ProcUnit drop. Hot code path but brief.
+	std::lock_guard<std::mutex> lock(m_runtimeMutex);
+	// Drop common modules first — procUnit parent chain breaks cleanly
+	// when children release before the root (leaf → root order).
+	for (auto& moduleValue : m_listCommonModuleManager) {
+		if (moduleValue)
+			moduleValue->ResetRuntime();
+	}
+	ResetRuntime();
+}
+
+//////////////////////////////////////////////////////////////////////////////////
+//  ibValueModuleManagerRuntimeConfiguration
+//////////////////////////////////////////////////////////////////////////////////
+
+ibValueModuleManagerRuntimeConfiguration::ibValueModuleManagerRuntimeConfiguration(
+	ibMetaData* metadata,
+	ibValueMetaObjectConfiguration* metaObject)
+	: ibValueModuleRuntimeManager(metadata, metaObject ? metaObject->GetObjectModule() : nullptr)
+{
+	// ⭐ THE CONFIGURATION'S GLOBALS ARE THE EXPORTS OF ITS MODULE — and only of its module. "Metadata" is
+	// bound straight into the compile module's extern map (the single source for globals; m_metaManager
+	// owns the value); "Data" is its queryable-source mirror (L4-2): same kind-namespace shape, leaves
+	// vend ibValueQueryable (lazy, inert — reading the value reads no data). An external data processor's
+	// or report's manager does NOT bind them: its module is the object's, and it reads globals from the
+	// configuration root (GetGlobalVariables). The designer's configuration manager binds the same two.
+	BindExportVariable(objectMetadataManager, m_metaManager);
+	BindExportVariable(objectDataManager, m_dataManager);
+}
+
 //main module - initialize
-bool ibValueModuleManagerConfiguration::CreateMainModule()
+bool ibValueModuleManagerRuntimeConfiguration::CreateMainModule()
 {
 	if (m_initialized)
 		return true;
@@ -222,7 +360,7 @@ bool ibValueModuleManagerConfiguration::CreateMainModule()
 	// own runtime objects.
 	if (auto* metaData = m_metaManager ? m_metaManager->GetMetaData() : nullptr) {
 		if (auto* storage = metaData->GetModuleStorage()) {
-			for (auto* commonModule : storage->GetInitModules()) {
+			for (auto* commonModule : storage->GetCompileModules()) {
 				if (commonModule == nullptr || commonModule->IsDeleted())
 					continue;
 				if (!RuntimeRegisterCommonModule(commonModule, /*compileNow=*/false))
@@ -231,16 +369,23 @@ bool ibValueModuleManagerConfiguration::CreateMainModule()
 		}
 	}
 
-	//Добавление глобальных констант
-	for (auto variable : m_listGlConstValue) {
-		m_compileModule->AddVariable(variable.first, variable.second);
-	}
+	// Global constants (Metadata + common modules) are already in the compile
+	// module's extern map — bound at registration (ctor / RuntimeRegisterCommonModule)
+	// and persistent across Reset. No materialization pass needed here.
 
-	//create singleton "manager"
-	m_compileModule->AddContextVariable(objectManager, m_objectManager);
+	// ⚠ THE ORDER HERE IS LOAD-BEARING, and reordering it is not a cleanup. Moving these binds
+	// ABOVE the common-module loop was tried on 2026-09-04 and made things worse — posting broke
+	// on runs that had worked, because a name's slot number falls out of the order it was
+	// registered in, and bytecode already in the AOT cache still carries the old numbers.
+
+	//create singleton "manager" — scope-context: its name isn't an editor
+	// identifier, only its props/methods (Catalogs / Documents / …) surface.
+	BindScopeVariable(objectManager, m_objectManager);
 
 	for (auto ctor : ibValue::GetListCtorsByType(ibCtorObjectType_object_context)) {
-		m_compileModule->AddContextVariable(ctor->GetClassName(), ctor->CreateObject());
+		// EnumManager / SystemManager — transparent scope containers too.
+		const ibValue created = ctor->CreateObject();
+		BindScopeVariable(ctor->GetClassName(), created.GetRef());
 	}
 
 	// Compile only — runtime (ibProcUnit) is created per session by
@@ -251,7 +396,7 @@ bool ibValueModuleManagerConfiguration::CreateMainModule()
 			Compile();
 		}
 		catch (const ibBackendException& err) {
-			wxLogWarning(_("Global module init failed: %s"), err.GetErrorDescription());
+			ibJournalWarning(wxT("module"),_("Global module init failed: %s"), err.GetErrorDescription());
 			return false;
 		};
 	}
@@ -270,27 +415,28 @@ bool ibValueModuleManagerConfiguration::CreateMainModule()
 	// reverse lookup (m_own scan, match by root mm pointer) so the
 	// fire site doesn't depend on ibSession::Current()'s thread-binding
 	// state at compile time.
-	if (auto* session = ibSessionRegistry::Instance().FindSessionByRoot(this))
-		ibSessionRegistry::Instance().NotifyAfterCompile(session);
+	if (auto* reg = ibApplicationInstance::GetSessionRegistry()) {
+		if (auto s = reg->FindSessionByRoot(this).Share())
+			reg->NotifyAfterCompile(s.get());
+	}
 
 	return true;
 }
 
-bool ibValueModuleManagerConfiguration::DestroyMainModule()
+bool ibValueModuleManagerRuntimeConfiguration::DestroyMainModule()
 {
 	if (!m_initialized)
 		return true;
 
-	//Добавление глобальных констант
-	for (auto& variable : m_listGlConstValue) {
-		m_compileModule->RemoveVariable(variable.first);
-	}
+	// Global constants stay in the extern map across the runtime lifecycle —
+	// they're owned by m_metaManager / m_listCommonModuleManager and unbound only
+	// at unregister. Here we only tear down the per-bring-up scope bindings.
 
 	//create singleton "manager"
-	m_compileModule->RemoveVariable(objectManager);
+	UnbindVariable(objectManager);
 
 	for (auto ctor : ibValue::GetListCtorsByType(ibCtorObjectType_object_context)) {
-		m_compileModule->RemoveVariable(ctor->GetClassName());
+		UnbindVariable(ctor->GetClassName());
 	}
 
 	//reset global module
@@ -312,7 +458,7 @@ bool ibValueModuleManagerConfiguration::DestroyMainModule()
 }
 
 //main module - initialize
-bool ibValueModuleManagerConfiguration::StartMainModule(bool force)
+bool ibValueModuleManagerRuntimeConfiguration::StartMainModule(bool force)
 {
 	if (force)
 		return true;
@@ -333,7 +479,7 @@ bool ibValueModuleManagerConfiguration::StartMainModule(bool force)
 }
 
 //main module - destroy
-bool ibValueModuleManagerConfiguration::ExitMainModule(bool force)
+bool ibValueModuleManagerRuntimeConfiguration::ExitMainModule(bool force)
 {
 	if (force)
 		return true;
@@ -352,98 +498,238 @@ bool ibValueModuleManagerConfiguration::ExitMainModule(bool force)
 	return result;
 }
 
+//*********************************************************************************************************
+//*                          ibValueModuleManagerDesigner — lightweight designer holder                 *
+//*********************************************************************************************************
+
+ibValueModuleManagerDesigner::ibValueModuleManagerDesigner(
+	ibMetaData* metaData,
+	ibValueMetaObjectConfiguration* metaObject)
+	: ibValueModuleManager(metaData, metaObject ? metaObject->GetObjectModule() : nullptr)
+{
+	// The configuration's globals — see ibValueModuleManagerRuntimeConfiguration's ctor.
+	BindExportVariable(objectMetadataManager, m_metaManager);
+	BindExportVariable(objectDataManager, m_dataManager);
+}
+
+ibValueModuleManagerDesigner::ibValueModuleManagerDesigner(
+	ibMetaData* metaData,
+	const ibValueMetaObjectModule* objectModule)
+	: ibValueModuleManager(metaData, objectModule)
+{
+	// Object-module ctor == external DP/Report holder (no configuration common
+	// object). Mark it so GetGlobalVariables delegates to the configuration root.
+	m_external = true;
+}
+
+std::map<wxString, ibValue*>& ibValueModuleManagerDesigner::GetGlobalVariables()
+{
+	// Config-root holder: own globals (compile module's extern map). External
+	// DP/Report holder: delegate to the configuration root so its editor sees the
+	// root's globals (Metadata + common modules surfaced as names), which aren't
+	// seeded into this holder's own extern map.
+	if (!m_external)
+		return ibValueModuleManager::GetGlobalVariables();
+
+	ibValueModuleManager* root = ibSession::EditModuleManagerFor(appEnv::ActiveMetaData());
+	if (root == nullptr || root == this)
+		return ibValueModuleManager::GetGlobalVariables();
+	return root->GetGlobalVariables();
+}
+
+// Compile-side context only — see header. NO Compile(), NO runtime, and NOT the
+// common-module registry (the editor surfaces common modules from the metadata
+// storage + live text parsing). Gives the editor the "Manager" singleton +
+// ctor-context (Catalogs / Documents / Enums) + global consts. Used by BOTH the
+// configuration (ctor-from-ibValueMetaObjectConfiguration) and external data
+// processors / reports (ctor-from-object-module) — same editor context everywhere.
+bool ibValueModuleManagerDesigner::CreateMainModule()
+{
+	if (m_populated)
+		return true;
+
+	// Global constants (Metadata + common modules) already live in the compile
+	// module's extern map — bound at registration, persistent across Reset.
+
+	//singleton "manager" — scope-context (transparent container, name not an
+	// editor identifier; its props Catalogs / Documents / Enums surface).
+	BindScopeVariable(objectManager, m_objectManager);
+
+	//ctor-context objects (EnumManager / SystemManager) — transparent too.
+	for (auto ctor : ibValue::GetListCtorsByType(ibCtorObjectType_object_context)) {
+		const ibValue created = ctor->CreateObject();
+		BindScopeVariable(ctor->GetClassName(), created.GetRef());
+	}
+
+	// No unit compilation here — see AddCommonModule. The editor parses common
+	// modules' text for exports; the designer never executes script.
+
+	// Invalidate the manager's name surface now that the context is seeded, so the
+	// very first autocomplete after load rebuilds it (descriptor export tail). The
+	// child holders (m_objectManager / m_metaManager) build lazily on their own access.
+	m_members.Invalidate();
+
+	m_populated = true;
+	return true;
+}
+
+bool ibValueModuleManagerDesigner::DestroyMainModule()
+{
+	if (!m_populated)
+		return true;
+
+	// Globals stay in the extern map (unbound only at common-module remove);
+	// tear down just the per-bring-up scope bindings here.
+	UnbindVariable(objectManager);
+
+	for (auto ctor : ibValue::GetListCtorsByType(ibCtorObjectType_object_context)) {
+		UnbindVariable(ctor->GetClassName());
+	}
+
+	m_compileModule->Reset();
+
+	m_populated = false;
+	return true;
+}
+
+// Independent common-module registry — see header. Builds a compiled lightweight
+// unit (NO ProcUnit) per common module and indexes it in the compile cache so the
+// editor resolves the module to a real compiled value. Mirrors the historical
+// IValueModuleManager::AddCommonModule, but designer-only and ProcUnit-free.
+bool ibValueModuleManagerDesigner::AddCommonModule(ibValueMetaObjectCommonModule* commonModule, bool managerModule, bool runModule)
+{
+	ibValuePtr<ibValueModuleUnit> moduleValue(
+		new ibValueModuleUnit(this, commonModule, managerModule));
+
+	// Index by meta-object in the compile cache (editor lookups go here).
+	if (auto* cc = m_metaManager->GetMetaData()->GetCompileCache()) {
+		if (!cc->AddCompileModule(commonModule, moduleValue))
+			return false;
+	}
+
+	m_listCommonModule.emplace_back(moduleValue);
+
+	if (!commonModule->IsGlobalModule()) {
+		const wxString& strModuleName = commonModule->GetName();
+		BindExportVariable(strModuleName, moduleValue);
+	}
+
+	// ⭐⭐ AND THE SURFACE IS TOLD, because a bind is not only a map entry: FillHelperFromBinds
+	// writes every extern binding into this manager's OWN member table, and that table is built
+	// once and then cached. Changing the map under a built table changes nothing anybody can see —
+	// which is how a module registered here stayed invisible, and, the other way round, how a name
+	// UNBOUND in RemoveCommonModule went on being offered by every completion for the rest of the
+	// session (2026-09-07, script_complete's scratch `JobCode`: the metadata tree had never heard
+	// of it and the map no longer held it, but the built table still did).
+	InvalidateNames();
+
+	// NB: the designer does NOT compile/execute the unit. A common module's exports are read from
+	// its live TEXT there (ibParseCode, reached through ExportMethodsToHelper /
+	// ExportPropsToHelper, which take that road on DesignerMode). Driving ibCompileModule::Compile()
+	// here would enter the
+	// Designer-mode parent-recompile walk and deref a stale meta-object (AV in
+	// GetFullName). The unit just needs to exist in the cache so FindCompileModule
+	// resolves the module being edited. runModule is unused for the designer.
+	(void)runModule;
+
+	return true;
+}
+
+ibValueModuleManager::ibValueModuleUnit* ibValueModuleManagerDesigner::FindCommonModule(const ibValueMetaObjectCommonModule* commonModule) const
+{
+	auto it = std::find_if(m_listCommonModule.begin(), m_listCommonModule.end(),
+		[commonModule](ibValueModuleUnit* valueModule) {
+			return commonModule == valueModule->GetObjectModule();
+		}
+	);
+
+	if (it != m_listCommonModule.end())
+		return *it;
+
+	return nullptr;
+}
+
+bool ibValueModuleManagerDesigner::RenameCommonModule(ibValueMetaObjectCommonModule* commonModule, const wxString& newName)
+{
+	ibValue* moduleValue = FindCommonModule(commonModule);
+
+	// 🛑 A MODULE THIS MANAGER NEVER TOOK IN IS NOT A PROGRAMMING ERROR. A metaobject is created
+	// first and RUN afterwards, and only the run hands its module here — so anything that renames
+	// one between those two moments (the designer's own Add, which names what it just created, and
+	// every server-side create that passes a name) arrives with nothing bound yet. The assert made
+	// that ordinary sequence a debug break, and the rename it was asked about had already happened.
+	//
+	// Nothing to rebind, and nothing to complain about: the run will bind the new name.
+	if (moduleValue == nullptr)
+		return true;
+
+	if (!commonModule->IsGlobalModule()) {
+		BindExportVariable(newName, moduleValue);
+		UnbindVariable(commonModule->GetName());
+		InvalidateNames();   // both halves of a rename change the surface — see AddCommonModule
+	}
+
+	return true;
+}
+
+bool ibValueModuleManagerDesigner::RemoveCommonModule(ibValueMetaObjectCommonModule* commonModule)
+{
+	ibValuePtr<ibValueModuleUnit> moduleValue(FindCommonModule(commonModule));
+
+	// The compile cache is cleared either way — an entry may stand for a module this manager never
+	// took in, and leaving it behind is what makes the NEXT object of the same name resolve to a
+	// module that no longer exists.
+	if (auto* cc = m_metaManager->GetMetaData()->GetCompileCache())
+		cc->RemoveCompileModule(commonModule);
+
+	// 🛑⭐ AND SO IS THE NAME, FOR THE SAME REASON AND ONE MORE. Unbinding used to sit past two
+	// early returns, so whenever the unit could not be found the NAME stayed bound — and a name in
+	// the manager's extern map is offered by every completion in every module for the rest of the
+	// session, resolving to nothing when it is asked what it holds.
+	//
+	// Found 2026-09-07 with script_complete's scratch module: when the first completion of a
+	// process was one that builds a `JobCode` module for the duration, `JobCode` was still in the
+	// name list afterwards, though the metadata tree had never heard of it. Unbinding a name that
+	// was never bound is a no-op, so there is nothing to guard against by doing it late.
+	if (!commonModule->IsGlobalModule())
+		UnbindVariable(commonModule->GetName());
+
+	// The other half of the pair in AddCommonModule — see the note there for why unbinding alone
+	// is not enough.
+	InvalidateNames();
+
+	// SAME ORDINARY CASE AS THE RENAME ABOVE: a module that was created but never run was never
+	// taken in here, and deleting it is a perfectly normal thing to do. The assert this replaced
+	// turned that into a debug break — twice over, because the delete then continued into
+	// OnBeforeCloseMetaObject and asserted again on the half-torn-down object.
+	if (!moduleValue)
+		return false;
+
+	auto iterator = std::find(m_listCommonModule.begin(), m_listCommonModule.end(), moduleValue);
+	if (iterator == m_listCommonModule.end())
+		return false;
+
+	m_listCommonModule.erase(iterator);
+
+	if (commonModule->IsGlobalModule()) {
+		m_compileModule->RemoveModule(moduleValue->GetCompileModule());
+	}
+
+	return true;
+}
+
 //**********************************************************************
 //*                       Runtime register                             *
 //**********************************************************************
 
-SYSTEM_TYPE_REGISTER(ibValueModuleManagerConfiguration, "ConfigModuleManager", string_to_clsid("SO_COMM"));
+SYSTEM_TYPE_REGISTER(ibValueModuleManagerRuntimeConfiguration, "ConfigModuleManager", system_to_clsid("SO_COMM"));
 
-//**********************************************************************
-//*          Per-session runtime (compile / runtime split)             *
-//**********************************************************************
-
-bool ibValueModuleManager::AttachRuntime(ibSession* session)
-{
-	if (session == nullptr)
-		return false;
-	// Serialize against other sessions' Init/Exit — the Execute of
-	// top-level module init + per-session parent ProcUnit chain isn't
-	// thread-safe against concurrent Execute on the same compileModule.
-	// Rapid F5 reliably hit this as an OOB operator[] inside Execute.
-	std::lock_guard<std::mutex> lock(m_runtimeMutex);
-	// Runtime only for sessions that represent user work:
-	//   Enterprise — desktop thick client's single user.
-	//   WebClient  — one per browser tab through wes.
-	//   Service    — daemon / codeRunner batch runs.
-	// Skip WebServer (wes process's technical row), Designer (compile-
-	// only) and Launcher (no metadata). userInfo-empty is NOT a valid
-	// discriminator: open-access configurations (empty sys_user) have
-	// empty userInfo even for legitimate user sessions.
-	const ibSessionKind kind = session->GetKind();
-	const bool wantsRuntime =
-		(kind == ibSessionKind::Enterprise) ||
-		(kind == ibSessionKind::WebClient)  ||
-		(kind == ibSessionKind::Service);
-	if (!wantsRuntime)
-		return true;
-	// Imperative pipeline — each descriptor owns its m_procUnit.
-	// CreateMainModule already compiled m_compileModule; now we just
-	// allocate the runtime slot and execute the top-level.
-	if (!appData->DesignerMode() && m_compileModule != nullptr) {
-		try {
-			InitializeRuntime();     // ensure root's ProcUnit exists
-			Run();                    // execute main module top-level
-		}
-		catch (const ibBackendException& err) {
-			wxLogWarning(_("AttachRuntime main: %s"), err.GetErrorDescription());
-			return false;
-		}
-	}
-	// Common modules — each has its own compile + m_procUnit. Parent
-	// is wired in ibValueModuleUnit's ctor (SetParent(moduleManager)),
-	// which cascades procUnit->SetParent on creation inside
-	// InitializeRuntime() below.
-	for (auto& moduleValue : m_listCommonModuleManager) {
-		if (!moduleValue)
-			continue;
-		if (moduleValue->GetCompileModule() == nullptr)
-			continue;
-		if (moduleValue->IsGlobalModule())
-			// Global modules are *inlined* into the main module at
-			// translation time — the translator splices their lexemes
-			// into the main compile unit and emits debugger hints
-			// noting the origin. There's no separate bytecode to run,
-			// so no separate ProcUnit either. Main's ProcUnit executes
-			// the spliced code as part of its own top-level.
-			continue;
-		try {
-			moduleValue->InitializeRuntime();
-			moduleValue->Run(false);
-		}
-		catch (const ibBackendException& err) {
-			wxLogWarning(_("AttachRuntime common: %s"), err.GetErrorDescription());
-			return false;
-		}
-	}
-	return true;
-}
-
-void ibValueModuleManager::DetachRuntime(ibSession* session)
-{
-	if (session == nullptr)
-		return;
-	// Pairs with AttachRuntime's lock — concurrent Init + Exit
-	// would race on m_listCommonModuleManager iteration + common-module
-	// ProcUnit drop. Hot code path but brief.
-	std::lock_guard<std::mutex> lock(m_runtimeMutex);
-	// Drop common modules first — procUnit parent chain breaks cleanly
-	// when children release before the root (leaf → root order).
-	for (auto& moduleValue : m_listCommonModuleManager) {
-		if (moduleValue)
-			moduleValue->ResetRuntime();
-	}
-	ResetRuntime();
-}
-
-SYSTEM_TYPE_REGISTER(ibValueModuleManager::ibValueModuleUnit, "ModuleManager", string_to_clsid("SO_MODL"));
-SYSTEM_TYPE_REGISTER(ibValueModuleManager::ibValueMetadataUnit, "Metadata", string_to_clsid("SO_METD"));
+// The lightweight base unit (designer's compiled common-module value) needs its
+// OWN factory registration: the designer puts it into the compile module's
+// context, and PrepareModuleData calls GetClassType() on it → GetTypeIDByRef
+// asserts on an unregistered wxClassInfo. The runtime unit (SO_MODL) derives from
+// it but is a distinct type.
+SYSTEM_TYPE_REGISTER(ibValueModuleManager::ibValueModuleUnit, "ModuleUnit", system_to_clsid("SO_MODB"));
+SYSTEM_TYPE_REGISTER(ibValueModuleRuntimeManager::ibValueRuntimeModuleUnit, "ModuleManager", system_to_clsid("SO_MODL"));
+SYSTEM_TYPE_REGISTER(ibValueModuleManager::ibValueMetadataUnit, "Metadata", system_to_clsid("SO_METD"));
+SYSTEM_TYPE_REGISTER(ibValueModuleManager::ibValueDataUnit, "Data", system_to_clsid("SO_DATA"));

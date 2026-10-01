@@ -1,10 +1,10 @@
 #ifndef _SINGLE_CLASS_DEFS_H__
 #define _SINGLE_CLASS_DEFS_H__
 
+// A kind byte is 0x0F + this (metatype_to_kind, clsid.h), so the numbers stay put: 2 was a per-metaobject list.
 enum ibCtorObjectMetaType {
 	ibCtorObjectMetaType_Reference = 1,
-	ibCtorObjectMetaType_List,
-	ibCtorObjectMetaType_Object,
+	ibCtorObjectMetaType_Object = 3,
 	ibCtorObjectMetaType_Manager,
 	ibCtorObjectMetaType_Selection,
 	ibCtorObjectMetaType_TabularSection,
@@ -22,7 +22,6 @@ enum ibCtorObjectMetaType {
 
 //record
 #define prefixReference			wxT("Ref.")
-#define prefixList				wxT("List.")
 #define prefixObject			wxT("Object.")
 #define prefixManager			wxT("Manager.")
 #define prefixSelection			wxT("Selection.")

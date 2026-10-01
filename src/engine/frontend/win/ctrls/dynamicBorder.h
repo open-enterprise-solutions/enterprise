@@ -8,7 +8,9 @@
 
 class FRONTEND_API ibDynamicStaticText : public wxStaticText {
 
-	mutable struct {
+	// Named on purpose: an anonymous aggregate may not hold members with constructors
+	// (wxString, wxFont do), so the unnamed form only ever compiled as an MSVC extension.
+	struct LabelCache {
 
 		wxString m_strLabel;
 		wxFont m_fontLabel;
@@ -17,10 +19,9 @@ class FRONTEND_API ibDynamicStaticText : public wxStaticText {
 		inline bool IsSameAs(const wxString& label, const wxFont& font) const {
 			return m_strLabel.IsSameAs(label) && m_fontLabel.IsSameAs(font);
 		}
+	};
 
-	} m_staticTextCache;
-
-	static wxScreenDC ms_calcLabelDC;
+	mutable LabelCache m_staticTextCache;
 
 public:
 

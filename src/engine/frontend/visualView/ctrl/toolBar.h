@@ -4,8 +4,8 @@
 #include "window.h"
 #ifndef OES_USE_WEB
 // Pulls in <wx/aui/auibar.h> (ibAuiToolBar / wxAuiToolBarEvent) —
-// designer + desktop-runtime only. Web keeps a stub Create path and
-// doesn't need AUI machinery.
+// designer + desktop-runtime only. Web builds its own ibWebToolbar render
+// node (web/webWindow.h) and doesn't need AUI machinery.
 #include "frontend/win/ctrls/toolBar.h"
 #endif
 
@@ -17,17 +17,16 @@ class ibValueToolBarSeparator;
 //********************************************************************************************
 
 //COMMON FORM
-const ibClassID g_controlToolBarCLSID = string_to_clsid("CT_TLBR");
-const ibClassID g_controlToolBarItemCLSID = string_to_clsid("CT_TLIT");
-const ibClassID g_controlToolBarSeparatorCLSID = string_to_clsid("CT_TLIS");
+constexpr ibClassID g_controlToolBarCLSID = control_to_clsid("CT_TLBR");
+constexpr ibClassID g_controlToolBarItemCLSID = control_to_clsid("CT_TLIT");
+constexpr ibClassID g_controlToolBarSeparatorCLSID = control_to_clsid("CT_TLIS");
 
 //********************************************************************************************
 //*                                 Value Toolbar                                            *
 //********************************************************************************************
 
 class ibValueToolbar : public ibValueWindow {
-	wxDECLARE_DYNAMIC_CLASS(ibValueToolbar);
-public:
+	public:
 
 	void SetActionSrc(const ibFormID& action) { return m_actSource->SetValue(action); }
 	ibFormID GetActionSrc() const { return m_actSource->GetValueAsInteger(); }
@@ -48,7 +47,7 @@ public:
 
 	//control factory 
 	virtual wxObject* Create(ibFrontendWindow* wxparent, ibVisualHost* visualHost) override;
-	virtual void OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost, bool firstСreated) override;
+	virtual void OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost, bool firstCreated) override;
 	virtual void Update(wxObject* wxobject, ibVisualHost* visualHost) override;
 	virtual void OnUpdated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost) override;
 	virtual void Cleanup(wxObject* obj, ibVisualHost* visualHost) override;
@@ -65,8 +64,8 @@ public:
 	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue);
 
 	//load & save object in control 
-	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer = ibWriterMemory());
+	virtual bool ReadData(const ibDataNode& node);
+	virtual bool WriteData(ibDataNode& node) const;
 
 	/**
 	* Support default menu
@@ -79,7 +78,7 @@ public:
 	void AddToolSeparator();
 
 	//array of the commands 
-	const ibActionCollection& GetActionArray() const { return m_actionArray; }
+	const ibStandardCommandSet& GetActionArray() const { return m_actionArray; }
 
 protected:
 
@@ -97,18 +96,20 @@ private:
 	bool GetActionSource(ibPropertyList*);
 
 	//storage for action array 
-	ibActionCollection m_actionArray;
+	ibStandardCommandSet m_actionArray;
 
 	ibPropertyCategory* m_categoryAction = ibPropertyObject::CreatePropertyCategory(wxT("Action"), _("Toolbar"));
-	ibPropertyList* m_actSource = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryAction, wxT("ActionSource"), _("Source"), &ibValueToolbar::GetActionSource, wxNOT_FOUND);
+	ibPropertyList* m_actSource = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryAction, wxT("ActionSource"), _("Source"),
+		_("Whose standard commands the toolbar's items can run: the form itself (Write, Close and so on) or one of the form's tables (Add, Copy, Delete and so on). An item picks its command from this source's list."),
+		&ibValueToolbar::GetActionSource, wxNOT_FOUND);
 
 	friend class ibValueForm;
 };
 
-#include "frontend/artProvider/null/null.xpm"
+#include "frontend/artProvider/artProvider.h"
 
 class ibValueToolBarItem : public ibValueControl {
-	wxDECLARE_DYNAMIC_CLASS(ibValueToolBarItem);
+	public:
 
 public:
 
@@ -118,22 +119,22 @@ public:
 	void SetToolTip(const wxString& caption) { return m_properyTooltip->SetValue(caption); }
 	wxString GetToolTip() const { return m_properyTooltip->GetValueAsTranslateString(); }
 
-	void SetAction(const ibActionDescription& action) { return m_eventAction->SetValue(action); }
-	const ibActionDescription& GetAction() const { return m_eventAction->GetValueAsActionDesc(); }
+	void SetAction(const ibStandardCommandDescription& action) { return m_eventAction->SetValue(action); }
+	const ibStandardCommandDescription& GetAction() const { return m_eventAction->GetValueAsActionDesc(); }
 
 	///////////////////////////////////////////////////////////////////////
 
 	ibValueToolbar* GetOwner() const { return m_parent->ConvertToType<ibValueToolbar>(); }
 
 #pragma region __tool_item_desc_h__
-	wxBitmap GetItemPicture(const ibActionCollection& collection) const {
-		const ibActionDescription& actionDesc = m_eventAction->GetValueAsActionDesc();
+	wxBitmap GetItemPicture(const ibStandardCommandSet& collection) const {
+		const ibStandardCommandDescription& actionDesc = m_eventAction->GetValueAsActionDesc();
 		if (m_propertyPicture->IsEmptyProperty()) {
 			const ibActionID selected = actionDesc.GetSystemAction();
 			if (selected != wxNOT_FOUND) {
 				for (unsigned int i = 0; i < collection.GetCount(); i++) {
-					const ibActionID& id = collection.GetID(i);
-					if (selected == collection.GetID(i)) {
+					const ibActionID& id = collection.GetID(i);   // read once, compared below
+					if (selected == id) {
 						const ibPictureDescription& pictureDesc = collection.GetPictureByID(actionDesc.GetSystemAction());
 						if (pictureDesc.IsEmptyPicture())
 							return wxNullBitmap;
@@ -142,21 +143,21 @@ public:
 				}
 			}
 			else if (m_propertyTitle->IsEmptyProperty()) {
-				return wxBitmap(s_null_xpm);
+				return wxArtProvider::GetBitmap(wxART_NO_PICTURE, wxART_VISUALHOST, wxSize(16, 16));
 			}
 		}
 
 		return m_propertyPicture->GetValueAsBitmap();
 	}
 
-	wxString GetItemCaption(const ibActionCollection& collection) const {
-		const ibActionDescription& actionDesc = m_eventAction->GetValueAsActionDesc();
+	wxString GetItemCaption(const ibStandardCommandSet& collection) const {
+		const ibStandardCommandDescription& actionDesc = m_eventAction->GetValueAsActionDesc();
 		if (m_propertyTitle->IsEmptyProperty()) {
 			const ibActionID selected = actionDesc.GetSystemAction();
 			if (selected != wxNOT_FOUND) {
 				for (unsigned int i = 0; i < collection.GetCount(); i++) {
-					const ibActionID& id = collection.GetID(i);
-					if (selected == collection.GetID(i)) {
+					const ibActionID& id = collection.GetID(i);   // read once, compared below
+					if (selected == id) {
 						return collection.GetCaptionByID(selected);
 					}
 				}
@@ -165,14 +166,14 @@ public:
 		return m_propertyTitle->GetValueAsTranslateString();
 	}
 
-	wxString GetItemToolTip(const ibActionCollection& collection) const {
-		const ibActionDescription& actionDesc = m_eventAction->GetValueAsActionDesc();
+	wxString GetItemToolTip(const ibStandardCommandSet& collection) const {
+		const ibStandardCommandDescription& actionDesc = m_eventAction->GetValueAsActionDesc();
 		if (m_properyTooltip->IsEmptyProperty()) {
 			const ibActionID selected = actionDesc.GetSystemAction();
 			if (selected != wxNOT_FOUND) {
 				for (unsigned int i = 0; i < collection.GetCount(); i++) {
-					const ibActionID& id = collection.GetID(i);
-					if (selected == collection.GetID(i)) {
+					const ibActionID& id = collection.GetID(i);   // read once, compared below
+					if (selected == id) {
 						return collection.GetCaptionByID(selected);
 					}
 				}
@@ -181,14 +182,14 @@ public:
 		return m_properyTooltip->GetValueAsTranslateString();
 	}
 
-	ibRepresentation GetItemRepresentation(const ibActionCollection& collection) const {
-		const ibActionDescription& actionDesc = m_eventAction->GetValueAsActionDesc();
+	ibRepresentation GetItemRepresentation(const ibStandardCommandSet& collection) const {
+		const ibStandardCommandDescription& actionDesc = m_eventAction->GetValueAsActionDesc();
 		if (m_propertyPicture->IsEmptyProperty()) {
 			const ibActionID selected = actionDesc.GetSystemAction();
 			if (selected != wxNOT_FOUND) {
 				for (unsigned int i = 0; i < collection.GetCount(); i++) {
-					const ibActionID& id = collection.GetID(i);
-					if (selected == collection.GetID(i)) {
+					const ibActionID& id = collection.GetID(i);   // read once, compared below
+					if (selected == id) {
 						const ibPictureDescription& pictureDesc = collection.GetPictureByID(actionDesc.GetSystemAction());
 						if (pictureDesc.IsEmptyPicture())
 							return ibRepresentation::ibRepresentation_PictureAndText;
@@ -216,7 +217,7 @@ public:
 
 	//control factory
 	virtual wxObject* Create(ibFrontendWindow* wxparent, ibVisualHost* visualHost) override;
-	virtual void OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost, bool firstСreated) override;
+	virtual void OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost, bool firstCreated) override;
 	virtual void Update(wxObject* wxobject, ibVisualHost* visualHost) override;
 	virtual void OnUpdated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost) override;
 	virtual void Cleanup(wxObject* obj, ibVisualHost* visualHost) override;
@@ -229,8 +230,8 @@ public:
 	static wxIcon GetIconGroup();
 
 	//load & save object in control
-	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer = ibWriterMemory());
+	virtual bool ReadData(const ibDataNode& node);
+	virtual bool WriteData(ibDataNode& node) const;
 
 private:
 	bool GetToolAction(ibEventAction* evtList);
@@ -238,12 +239,19 @@ private:
 
 	ibPropertyCategory* m_categoryToolbar = ibPropertyObject::CreatePropertyCategory(wxT("ToolBarItem"), _("Item"));
 
-	ibPropertyTString* m_propertyTitle = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryToolbar, wxT("Title"), _("Title"), wxT(""));
-	ibPropertyEnum<ibValueEnumRepresentation>* m_propertyRepresentation = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumRepresentation>>(m_categoryToolbar, wxT("Representation"), _("Representation"), ibRepresentation::ibRepresentation_Auto);
-	ibPropertyPicture* m_propertyPicture = ibPropertyObject::CreateProperty<ibPropertyPicture>(m_categoryToolbar, wxT("Picture"), _("Picture"));
-	ibPropertyBoolean* m_propertyContextMenu = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryToolbar, wxT("ContextMenu"), _("Context menu"), false);
-	ibPropertyTString* m_properyTooltip = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryToolbar, wxT("Tooltip"), _("Tooltip"), wxEmptyString);
-	ibPropertyBoolean* m_propertyEnabled = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryToolbar, wxT("Enabled"), _("Enabled"), true);
+	ibPropertyTString* m_propertyTitle = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryToolbar, wxT("Title"), _("Title"),
+		_("The item's caption. Empty: the caption of the standard command it runs. Can be written per language."), wxT(""));
+	ibPropertyEnum<ibValueEnumRepresentation>* m_propertyRepresentation = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumRepresentation>>(m_categoryToolbar, wxT("Representation"), _("Representation"),
+		_("What the item shows: text, picture, or both. Auto: what its standard command prefers (Close is a picture alone, Add a picture with text); picture and text when it runs no standard command."),
+		ibRepresentation::ibRepresentation_Auto);
+	ibPropertyPicture* m_propertyPicture = ibPropertyObject::CreateProperty<ibPropertyPicture>(m_categoryToolbar, wxT("Picture"), _("Picture"),
+		_("The item's icon. Empty: the picture of the standard command it runs."));
+	ibPropertyBoolean* m_propertyContextMenu = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryToolbar, wxT("ContextMenu"), _("Context menu"),
+		_("Whether the item gets a drop-down arrow beside it. The menu the arrow opens is a placeholder for now, with no items of its own."), false);
+	ibPropertyTString* m_properyTooltip = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryToolbar, wxT("Tooltip"), _("Tooltip"),
+		_("Text shown when the mouse pointer rests over the item. Empty: the caption of the standard command it runs."), wxEmptyString);
+	ibPropertyBoolean* m_propertyEnabled = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryToolbar, wxT("Enabled"), _("Enabled"),
+		_("Whether the item can be pressed. Off: it is shown greyed out."), true);
 
 	ibEventAction* m_eventAction = ibPropertyObject::CreateEvent<ibEventAction>(m_categoryToolbar, wxT("Action"), _("Action"), wxArrayString{ wxT("Control") }, &ibValueToolBarItem::GetToolAction, wxNOT_FOUND);
 
@@ -252,8 +260,7 @@ private:
 };
 
 class ibValueToolBarSeparator : public ibValueControl {
-	wxDECLARE_DYNAMIC_CLASS(ibValueToolBarSeparator);
-public:
+	public:
 
 	///////////////////////////////////////////////////////////////////////
 
@@ -272,7 +279,7 @@ public:
 
 	//control factory
 	virtual wxObject* Create(ibFrontendWindow* wxparent, ibVisualHost* visualHost) override;
-	virtual void OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost, bool firstСreated) override;
+	virtual void OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost, bool firstCreated) override;
 	virtual void OnUpdated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost) override;
 	virtual void Cleanup(wxObject* obj, ibVisualHost* visualHost) override;
 
@@ -285,8 +292,8 @@ public:
 	static wxIcon GetIconGroup();
 
 	//load & save object in control 
-	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer = ibWriterMemory());
+	virtual bool ReadData(const ibDataNode& node);
+	virtual bool WriteData(ibDataNode& node) const;
 
 	friend class ibValueForm;
 	friend class ibValueToolbar;

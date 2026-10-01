@@ -2,15 +2,16 @@
 
 wxIMPLEMENT_DYNAMIC_CLASS(ibDataProcessorEditView, ibMetaView);
 
-bool ibDataProcessorEditView::OnCreate(ibMetaDocument* doc, long flags)
+bool ibDataProcessorEditView::OnCreate(ibDocument* docBase, long flags)
 {
+	ibMetaDocument* doc = GetDocument();
 	m_metaTree = new ibDataProcessorTree(doc, m_viewFrame);
 	m_metaTree->SetReadOnly(false);
 
-	return ibMetaView::OnCreate(doc, flags);
+	return ibView::OnCreate(docBase, flags);
 }
 
-void ibDataProcessorEditView::OnActivateView(bool activate, wxView* activeView, wxView* deactiveView)
+void ibDataProcessorEditView::OnActivateView(bool activate, ibView* activeView, ibView* deactiveView)
 {
 	if (activate) m_metaTree->ActivateTree();
 }
@@ -42,9 +43,9 @@ bool ibDataProcessorEditView::OnClose(bool deleteWindow)
 	return false;
 }
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibDataProcessorFilibDocument, ibMetaDocument);
+wxIMPLEMENT_DYNAMIC_CLASS(ibDataProcessorFileDocument, ibMetaDataDocument);
 
-bool ibDataProcessorFilibDocument::OnCreate(const wxString& path, long flags)
+bool ibDataProcessorFileDocument::OnCreate(const wxString& path, long flags)
 {
 	m_metaData = new ibMetaDataDataProcessor();
 	if (!ibMetaDocument::OnCreate(path, flags))
@@ -54,7 +55,7 @@ bool ibDataProcessorFilibDocument::OnCreate(const wxString& path, long flags)
 
 #include "frontend/mainFrame/mainFrame.h"
 
-bool ibDataProcessorFilibDocument::OnCloseDocument()
+bool ibDataProcessorFileDocument::OnCloseDocument()
 {
 	if (!m_metaData->CloseDatabase(forceCloseFlag)) {
 		return false;
@@ -65,7 +66,7 @@ bool ibDataProcessorFilibDocument::OnCloseDocument()
 
 // Since text windows have their own method for saving to/loading from files,
 // we override DoSave/OpenDocument instead of Save/LoadObject
-bool ibDataProcessorFilibDocument::DoOpenDocument(const wxString& filename)
+bool ibDataProcessorFileDocument::DoOpenDocument(const wxString& filename)
 {
 	if (!m_metaData->LoadFromFile(filename))
 		return false;
@@ -76,10 +77,12 @@ bool ibDataProcessorFilibDocument::DoOpenDocument(const wxString& filename)
 	return true;
 }
 
-bool ibDataProcessorFilibDocument::DoSaveDocument(const wxString& filename)
+bool ibDataProcessorFileDocument::DoSaveDocument(const wxString& filename)
 {
-	if (!GetMetaTree()->Save())
-		return false;
+	// The twin of the report's save — the tree answers FALSE for "there was nothing to save", and
+	// reading that as a failure meant an unchanged data processor could not be written to a file.
+	if (ibDataProcessorTree* metaTree = GetMetaTree())
+		metaTree->Save();
 
 	if (!m_metaData->SaveToFile(filename))
 		return false;
@@ -87,18 +90,20 @@ bool ibDataProcessorFilibDocument::DoSaveDocument(const wxString& filename)
 	return true;
 }
 
-bool ibDataProcessorFilibDocument::IsModified() const
+bool ibDataProcessorFileDocument::IsModified() const
 {
 	return ibMetaDocument::IsModified();
 }
 
-void ibDataProcessorFilibDocument::Modify(bool modified)
+void ibDataProcessorFileDocument::Modify(bool modified)
 {
 	ibMetaDocument::Modify(modified);
 }
 
-ibDataProcessorTree* ibDataProcessorFilibDocument::GetMetaTree() const
+ibDataProcessorTree* ibDataProcessorFileDocument::GetMetaTree() const
 {
-	wxView* view = GetFirstView();
-	return view ? wxDynamicCast(view, ibDataProcessorEditView)->GetMetaTree() : nullptr;
+	// GUARD THE CAST, not the pointer that went into it: a first view of another kind makes
+	// wxDynamicCast yield null, and the arrow was applied to it regardless.
+	ibDataProcessorEditView* view = wxDynamicCast(GetFirstView(), ibDataProcessorEditView);
+	return view != nullptr ? view->GetMetaTree() : nullptr;
 }

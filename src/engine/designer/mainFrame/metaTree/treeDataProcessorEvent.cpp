@@ -4,6 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "treeDataProcessor.h"
+#include <wx/wupdlock.h>   // wxWindowUpdateLocker - RAII Freeze/Thaw (a throwing paste must not leave the tree frozen)
 
 void ibDataProcessorTree::ibDataProcessorTreeCtrl::OnLeftDClick(wxMouseEvent& event)
 {
@@ -111,12 +112,9 @@ void ibDataProcessorTree::ibDataProcessorTreeCtrl::OnSortItem(wxCommandEvent& ev
 	m_ownerTree->SortItem(); event.Skip();
 }
 
-void ibDataProcessorTree::ibDataProcessorTreeCtrl::OnCommandItem(wxCommandEvent& event)
-{
-	m_ownerTree->CommandItem(event.GetId()); event.Skip();
-}
 
 #include <wx/clipbrd.h>
+#include "clipboardLock.h"   // the Open/Close pair, taken as a guard — one mechanism, all three trees
 
 void ibDataProcessorTree::ibDataProcessorTreeCtrl::OnCopyItem(wxCommandEvent& event)
 {
@@ -125,26 +123,27 @@ void ibDataProcessorTree::ibDataProcessorTreeCtrl::OnCopyItem(wxCommandEvent& ev
 		return;
 
 	// Write some text to the clipboard
-	if (wxTheClipboard->Open()) {
+	const ibClipboardLock clipboard;   // closes on every path out — see clipboardLock.h
+	if (clipboard.IsOpen()) {
 
 		ibValueMetaObject* metaObject = m_ownerTree->GetMetaObject(item);
-		if (metaObject != nullptr) {
+		ibMetaData* const metaData = m_ownerTree->GetMetaData();
+
+		if (metaObject != nullptr && metaData != nullptr) {
 
 			ibWriterMemory dataWritter;
-			if (metaObject->CopyObject(dataWritter)) {
+			if (metaData->CopyMetaObject(metaObject, dataWritter)) {
 
 				wxDataObjectComposite* composite_object = new wxDataObjectComposite;
 				wxCustomDataObject* custom_object = new wxCustomDataObject(oes_clipboard_metadata);
-				custom_object->SetData(dataWritter.size(), dataWritter.pointer()); // the +1 is used to force copy of the \0 character		
+				custom_object->SetData(dataWritter.size(), dataWritter.pointer());
 
 				composite_object->Add(custom_object);
 				composite_object->Add(new wxTextDataObject(metaObject->GetName()), true);
 
-				// tell clipboard 
+				// tell clipboard
 				wxTheClipboard->SetData(composite_object);
 			}
-
-			wxTheClipboard->Close();
 		}
 	}
 
@@ -160,37 +159,36 @@ void ibDataProcessorTree::ibDataProcessorTreeCtrl::OnPasteItem(wxCommandEvent& e
 	if (!item.IsOk())
 		return;
 
-	m_ownerTree->Freeze();
+	// RAII Freeze/Thaw: a throw out of PasteObject (or of the cleanup that follows it) used to
+	// fly past the paired Thaw() and leave the tree frozen and unresponsive for the rest of the
+	// session - the error dialog appeared over a navigator that never came back.
+	wxWindowUpdateLocker freeze(m_ownerTree);
 
-	if (wxTheClipboard->Open()
+	const ibClipboardLock clipboard;
+	if (clipboard.IsOpen()
 		&& wxTheClipboard->IsSupported(oes_clipboard_metadata)) {
 		wxCustomDataObject data(oes_clipboard_metadata);
 		if (wxTheClipboard->GetData(data)) {
 
-			ibValueMetaObject* metaObject = m_ownerTree->NewItem(
-				m_ownerTree->GetClassIdentifier(),
-				m_ownerTree->GetMetaIdentifier(),
-				false
-			);
-
-			if (metaObject != nullptr) {
+			// ⭐ WHERE IT GOES AND WHAT GOES THERE — see the twin in treeConfigurationEvent.cpp.
+			// The shell, the read, the announcement that draws the row and the cleanup after a bad
+			// payload are the paste's, not the caller's.
+			if (ibMetaData* metaData = m_ownerTree->GetMetaData()) {
 				ibReaderMemory reader(data.GetData(), data.GetDataSize());
-				if (metaObject->PasteObject(reader)) {
-					objectInspector->SelectObject(metaObject);
-				}
-				m_ownerTree->FillItem(metaObject, item);
+				metaData->PasteMetaObject(
+					m_ownerTree->GetClassIdentifier(),
+					m_ownerTree->GetMetaIdentifier(),
+					reader);
 			}
 		}
-		wxTheClipboard->Close();
 	}
 
-	m_ownerTree->Thaw();
 	RefreshSelectedItem();
 
 	event.Skip();
 }
 
-#include "frontend/docView/docManager.h"
+#include "frontend/docView/docView.h"
 #include "frontend/mainFrame/mainFrameChild.h"
 
 void ibDataProcessorTree::ibDataProcessorTreeCtrl::OnSetFocus(wxFocusEvent& event)
@@ -199,9 +197,9 @@ void ibDataProcessorTree::ibDataProcessorTreeCtrl::OnSetFocus(wxFocusEvent& even
 		docManager->ActivateView(m_metaView);
 	}
 	else if (event.GetEventType() == wxEVT_KILL_FOCUS) {
-		const CAuiDocChildFrame* child =
-			static_cast<CAuiDocChildFrame*>(mainFrame->GetActiveChild());
-		wxView* view = child ? child->GetView() : docManager->GetAnyUsableView();
+		const ibAuiDocChildFrame* child =
+			static_cast<ibAuiDocChildFrame*>(mainFrame->GetActiveChild());
+		ibView* view = child ? child->GetView() : docManager->GetAnyUsableView();
 		if (view != nullptr && view != docManager->GetCurrentView())
 			view->Activate(true);
 		docManager->ActivateView(view);
@@ -223,7 +221,7 @@ void ibDataProcessorTree::ibDataProcessorTreeCtrl::OnSelected(wxTreeEvent& event
 void ibDataProcessorTree::ibDataProcessorTreeCtrl::OnCollapsing(wxTreeEvent& event)
 {
 	if (GetRootItem() != event.GetItem()) {
-		m_ownerTree->Collapse(); event.Skip();
+		m_ownerTree->Collapse(event.GetItem()); event.Skip();
 	}
 	else {
 		event.Veto();
@@ -232,5 +230,5 @@ void ibDataProcessorTree::ibDataProcessorTreeCtrl::OnCollapsing(wxTreeEvent& eve
 
 void ibDataProcessorTree::ibDataProcessorTreeCtrl::OnExpanding(wxTreeEvent& event)
 {
-	m_ownerTree->Expand(); event.Skip();
+	m_ownerTree->Expand(event.GetItem()); event.Skip();
 }

@@ -1,8 +1,19 @@
 #ifndef __BYTE_CODE_H__
 #define __BYTE_CODE_H__
 
-#include "backend/compiler/value.h"
+#include "backend/compiler/value.h"     // ibValue::GetIDObjectFromString — the type registry
 #include "backend/guid.h"
+
+// A TYPE NAME AS WRITTEN → its class id; nothing declared → no id.
+//
+// One vocabulary: `Array`, `AnyRef` and `CatalogRef` resolve the same way,
+// because a barrier IS a registered type. The registry RAISES on a name nobody
+// has, and that raise is the point — a declared type that does not exist must
+// fail at compile time rather than become an empty value at run time.
+inline ibClassID ib_type_clsid(const wxString& typeName)
+{
+	return typeName.IsEmpty() ? 0 : ibValue::GetIDObjectFromString(typeName);
+}
 
 //*******************************************************************************
 
@@ -24,7 +35,8 @@
 //                    extern-slot semantics as External; the distinction
 //                    is that Context exposes a self-ref helper whose
 //                    props/methods become bare-callable (Catalogs,
-//                    GetForm) and may carry m_bScoped.
+//                    GetForm), and whose scope-local ones answer
+//                    IsPropScoped on the VALUE.
 //   - ContextProp  — prop of a Context binding (`Catalogs` of Manager).
 //                    m_slotIndex = prop-index in the parent's helper;
 //                    m_parentRef points at the Context entry. Emit goes
@@ -36,6 +48,7 @@ enum class ibVarKind : uint8_t {
 	External,
 	Context,
 	ContextProp,
+	Protected,   // appended (AOT-stable) — visible to children, not config-wide
 };
 
 // Function-side discriminator. Three categories — matches the
@@ -61,6 +74,7 @@ enum class ibFnKind : uint8_t {
 	// safe even if the filter is missed (no valid identifier starts
 	// with it). Cross-bc invisible by definition (anonymous).
 	Lambda,
+	Protected,   // appended (AOT-stable) — visible to children, not config-wide
 };
 
 // Forward decl — full definition lives after ibByteCode so the
@@ -82,8 +96,21 @@ struct ibParamRunUnit {
 };
 
 struct ibParamUnit : ibParamRunUnit {
-	wxString	 m_strType;			//variable type in English notation (in case of explicit typing)
+	// THE DECLARED TYPE, as a class id — 0 when nothing was declared.
+	//
+	// It used to be the type's NAME. A name is a second currency: it has to be
+	// compared case-insensitively, it has to be resolved before it can be used
+	// for anything, and two spellings of the same type are two different strings.
+	// The id is what every consumer actually wants — the gate, the typed-opcode
+	// choice, the bytecode mirrors — and the name is spelled back from it
+	// (ibValue::GetNameObjectFromID) only when a human has to read it.
+	ibClassID    m_clsid = 0;
 };
+
+// ⭐⭐ THE LINQ SECTION OF THE COMPILER'S BYTECODE — included HERE because it is built out of
+// ibParamUnit above and is a member of ibByteExtCode below. What it holds, and why it lives in
+// the bytecode rather than in a compile scope, is written at the top of the file itself.
+#include "backend/compiler/byteCodeLINQ.h"
 
 //storing one program step
 struct ibByteUnit {
@@ -114,9 +141,25 @@ struct ibByteCode {
 	// — caller must supply an arg or fail. Other values feed
 	// OPER_SETCONST when caller omits the arg.
 	struct ibByteParam {
-		bool        m_bByRef       = false;
+		// Declared `Val` — the argument is COPIED into the callee's slot.
+		// Parameters are by reference by default, so this bit is set only by the
+		// keyword. It was called `m_bByRef` and meant the exact opposite of its
+		// name: the compiler wrote it at `Val` and the runtime copied on 1.
+		// Wire format is unchanged (one u8), so no AOT version moves.
+		bool        m_bByValue     = false;
 		ibClassID   m_clsid        = 0;        // 0 = dynamic; for CHECK_TYPE
-		ibParamUnit m_defaultValue;             // m_numArray = DEF_VAR_SKIP if none
+		// The default-value DESCRIPTOR — slot coordinates only. It used to be an
+		// ibParamUnit, which drags a TYPE NAME along; the bytecode already has the
+		// type as m_clsid above, and the runtime reads nothing but m_numArray /
+		// m_numIndex here. A name is for a message to a human, and that one is
+		// spelled from the id (ibValue::GetNameObjectFromID) at the moment it is
+		// needed — not carried in every parameter of every compiled function.
+		ibParamRunUnit m_defaultValue;          // m_numArray = DEF_VAR_SKIP if none
+		// Original-cased parameter name. Folded in from the former
+		// parallel ibByteFunction::m_listParamRealName vector — the name
+		// now travels with the param's own data (debugger SendStack +
+		// lambda missing-arg diagnostics read it).
+		wxString    m_strName;
 	};
 
 	// Symbol entry in m_listVar / ibByteFunction::m_listLocals (both
@@ -127,13 +170,6 @@ struct ibByteCode {
 	struct ibByteCodeVarInfo {
 		long      m_slotIndex = 0;
 		ibClassID m_clsid     = 0;       // 0 = dynamic, no CHECK_TYPE needed
-		// Scope-local entry (ThisObject / ThisForm / similar) — must
-		// NOT be visible to children through the bytecode parent walk.
-		// Cross-bc resolve (template FindVariable) skips entries with
-		// this flag set. PrepareModuleData stamps it on context-props
-		// representing per-instance "self" handles.
-		bool      m_bScoped    = false;
-
 		// Discriminator — see ibVarKind header comment. Sole "what is
 		// this entry" tag; legacy m_bContext / m_bExport mirrors are
 		// gone — readers that need them derive via IsContext() /
@@ -148,8 +184,15 @@ struct ibByteCode {
 		bool IsExternal()    const { return m_kind == ibVarKind::External; }
 		bool IsContext()     const { return m_kind == ibVarKind::Context; }
 		bool IsContextProp() const { return m_kind == ibVarKind::ContextProp; }
+		bool IsProtected()   const { return m_kind == ibVarKind::Protected; }
+		bool IsPublic()      const { return IsExport(); }  // access-named alias
+		bool IsPrivate()     const { return IsLocal(); }   // access-named alias
 		// "Required to bind" — runtime binder fills these slots.
 		bool IsBindRequired() const { return m_kind == ibVarKind::External || m_kind == ibVarKind::Context; }
+		// "Bindable" — the binder MAY seed this slot. Adds plain Local (a bound
+		// local like a constant's Value): not must-bind, no pre-flight checks,
+		// filled only when the binder actually carries a value for it.
+		bool IsBindable() const { return IsBindRequired() || m_kind == ibVarKind::Local; }
 		// "User frame var" — visible to debugger's locals view.
 		bool IsUserLocal()    const { return m_kind == ibVarKind::Local || m_kind == ibVarKind::Export; }
 
@@ -191,45 +234,31 @@ struct ibByteCode {
 		// Construct from compile-side ibVariable. Templated to keep
 		// byteCode.h free of compileContext.h — instantiated at the
 		// mirror site (compileCode.cpp, which includes both headers).
-		// CompileVar must expose: m_numVariable, m_strType, m_bExport,
-		// m_bContext, m_bExternal, m_bScoped, m_strRealName, m_strContext.
+		// CompileVar must expose: m_numVariable, m_clsid, m_kind,
+		// m_strRealName, m_strContext, m_scopeDepth, m_clsid.
 		// Temps are filtered out at the mirror site — they never reach
 		// bc-level structs.
 		template<typename CompileVar>
 		explicit ibByteCodeVarInfo(const CompileVar& v)
 			: m_slotIndex(v.m_numVariable),
-			  m_clsid(v.m_clsid != 0
-			          ? v.m_clsid
-			          : (v.m_strType.IsEmpty() ? 0 : ibValue::GetIDObjectFromString(v.m_strType))),
-			  m_bScoped(v.m_bScoped),
+			  m_clsid(v.m_clsid),
 			  m_strRealName(v.m_strRealName),
-			  m_strContext(v.m_strContext),
-			  m_scopeDepth(v.m_scopeDepth)
+			  m_scopeDepth(v.m_scopeDepth),
+			  m_strContext(v.m_strContext)
 		{
-			// Derive m_kind from the compile-side flags:
-			//   m_strContext non-empty  → ContextProp  (prop of binding)
-			//   m_bExternal             → External     (bound by binder, no helper)
-			//   m_bContext              → Context      (bound by binder, exposes helper)
-			//   m_bExport               → Export       (user-declared cross-bc export)
-			//   else                    → Local        (user-declared private)
-			if (!v.m_strContext.IsEmpty())
-				m_kind = ibVarKind::ContextProp;
-			else if (v.m_bExternal)
-				m_kind = ibVarKind::External;
-			else if (v.m_bContext)
-				m_kind = ibVarKind::Context;
-			else if (v.m_bExport)
-				m_kind = ibVarKind::Export;
-			else
-				m_kind = ibVarKind::Local;
+			// Compile-side ibVariable now carries the authoritative kind in
+			// the SAME ibVarKind enum (set at PushVariable + the extern /
+			// access stamps), so the mirror is a straight copy — no more
+			// boolean-cascade derivation here.
+			m_kind = v.m_kind;
 		}
+
 	};
 
 	struct ibByteFunction {
 
 		operator long() const { return m_lCodeLine; }
 
-		long m_lCodeParamCount = 0;
 		long m_lCodeLine = -1;       // entry IP into m_listCode
 		bool m_bCodeRet = false;     // true → function (returns); false → procedure
 
@@ -240,7 +269,7 @@ struct ibByteCode {
 		// PushCallFunction's null/size checks still cover that case.
 		long      m_lVarCount    = 0;          // # of locals; for frame allocation
 		ibClassID m_returnClsid  = 0;          // 0 = dynamic; for return-value CHECK_TYPE
-		std::vector<ibByteParam> m_listParam;   // size == m_lCodeParamCount
+		std::vector<ibByteParam> m_listParam;   // params (count = size(); name on each ibByteParam)
 
 		// Discriminator — sole "what is this entry" tag. m_bContext /
 		// m_bExport legacy mirrors are gone; readers derive via the
@@ -256,12 +285,38 @@ struct ibByteCode {
 		// marker (Phase A is compile-only).
 		bool      m_needsHeapFrame = false;
 
+		// `Cached` — the result is kept per argument tuple, on the ProcUnit
+		// that owns this function. THE LIFETIME IS OWNERSHIP, not a clock:
+		// the store dies with its ProcUnit, so an object module's cache
+		// lasts as long as that object and a common module's lasts as long
+		// as the root it hangs from. That is why there is no invalidation
+		// call anywhere — nothing can go stale that outlives its holder.
+		bool      m_valueCached = false;
+
+		// "TAKES WHAT IT IS GIVEN" — a built-in registered with a NEGATIVE declared
+		// arity (`AppendFunc(wxT("Max"), -1, …)`). Its parameter list is empty by
+		// construction, so a caller's first argument reads as one too many unless
+		// this says otherwise (compileCode.cpp's two arity checks read it).
+		//
+		// ⚠ THE THIRD FLAG ON THIS RECORD TO BE FORGOTTEN BY THE RECONSTRUCTION PATH,
+		// after m_needsHeapFrame and m_valueCached above — and the symptom is the
+		// same shape every time: the compile-context registration set it, the
+		// bytecode did not carry it, and everything worked until a build resolved
+		// the name through bytecode instead. Here that made `Max(3, 9)` answer
+		// "Too many parameters passed to 'Max'" — for ANY number of arguments,
+		// including one — while `Max` sat in the help with the signature it has
+		// always published.
+		bool      m_valueVariadic = false;
+
 		// Convenience predicates — preferred over inline `m_kind == X`
 		// at callsites. Symmetric with ibByteCodeVarInfo's helpers.
 		bool IsLocal()         const { return m_kind == ibFnKind::Local; }
 		bool IsExport()        const { return m_kind == ibFnKind::Export; }
 		bool IsContextMethod() const { return m_kind == ibFnKind::ContextMethod; }
 		bool IsLambda()        const { return m_kind == ibFnKind::Lambda; }
+		bool IsProtected()     const { return m_kind == ibFnKind::Protected; }
+		bool IsPublic()        const { return IsExport(); }  // access-named alias
+		bool IsPrivate()       const { return IsLocal(); }   // access-named alias
 		// Visible cross-bc — Export and ContextMethod (privates + lambdas filtered).
 		bool IsCrossBcVisible() const { return m_kind == ibFnKind::Export || m_kind == ibFnKind::ContextMethod; }
 
@@ -281,10 +336,6 @@ struct ibByteCode {
 		// caller emits OPER_CALL_METHOD on the parent context — analogous
 		// to ibByteCodeVarInfo::m_strContext for context-props.
 		wxString  m_strContext;
-		// Param-name list parallel to m_listParam — separate vector
-		// so the runtime ibByteParam struct stays POD-light. Used by
-		// debugger SendStack to render `Foo(arg1 = 42, arg2 = "x")`.
-		std::vector<wxString> m_listParamRealName;
 
 		// Function-scope symbol table — all named variables visible
 		// inside this function's frame (params + locals + temps).
@@ -306,55 +357,60 @@ struct ibByteCode {
 		// at depth=1 from an eval expression.
 		std::vector<ibByteCodeVarInfo> m_listLocals;
 
+		// ⭐⭐ THE QUERY TREE IS NOT KEPT HERE, and that is the point. It was: a second representation
+		// of a body the instructions already hold in full, written at compile time, carried through
+		// the AOT cache, gated by a whitelist that silently dropped kinds it did not know, and
+		// versioned whenever its shape moved.
+		//
+		// It is DERIVED where it is wanted instead — off these very instructions
+		// (compiler/lambdaQueryAST.h) — which is what lets the runtime hold the SLICED bytecode:
+		// instructions and nothing else.
+
 		ibByteFunction() = default;
 
 		// Construct from compile-side ibFunction. Templated to keep
 		// byteCode.h free of compileContext.h — instantiated at the
 		// CompileFunction finalize site (compileCode.cpp). CompileFn
-		// must expose: m_listParam (each with .m_bByRef, .m_strType,
-		// .m_puValue, .m_strName), m_lVarCount, m_bExport, m_bContext,
-		// m_bCodeRet, m_strType, m_strRealName, m_strContext.
+		// must expose: m_listParam (each with .m_bByValue, .m_clsid,
+		// .m_puValue, .m_strName), m_lVarCount, m_kind,
+		// m_bCodeRet, m_clsid, m_strRealName, m_strContext.
 		template<typename CompileFn>
 		ibByteFunction(long lAddress, const CompileFn& src)
-			: m_lCodeParamCount((long)src.m_listParam.size()),
-			  m_lCodeLine(lAddress),
+			: m_lCodeLine(lAddress),
 			  m_bCodeRet(src.m_bCodeRet),
 			  m_lVarCount(src.m_lVarCount),
-			  m_returnClsid(src.m_strType.IsEmpty()
-				? 0
-				: ibValue::GetIDObjectFromString(src.m_strType)),
-			  m_kind(!src.m_strContext.IsEmpty() ? ibFnKind::ContextMethod
-			        : src.m_bExport              ? ibFnKind::Export
-			                                     : ibFnKind::Local),
+			  m_returnClsid(src.m_clsid),
+			  m_kind(src.m_kind),
 			  m_needsHeapFrame(src.m_needsHeapFrame),
+			  m_valueCached(src.m_valueCached),
+			  m_valueVariadic(src.m_valueVariadic),
 			  m_strRealName(src.m_strRealName),
 			  m_strContext(src.m_strContext)
 		{
 			m_listParam.reserve(src.m_listParam.size());
-			m_listParamRealName.reserve(src.m_listParam.size());
 			for (const auto& p : src.m_listParam) {
 				ibByteParam bp;
-				bp.m_bByRef       = p.m_bByRef;
-				bp.m_clsid        = p.m_strType.IsEmpty()
-					? 0
-					: ibValue::GetIDObjectFromString(p.m_strType);
-				bp.m_defaultValue = p.m_puValue;
+				bp.m_bByValue       = p.m_bByValue;
+				bp.m_clsid        = p.m_clsid;
+				// Slot coordinates only — the type came across as m_clsid above.
+				bp.m_defaultValue.m_numArray = p.m_puValue.m_numArray;
+				bp.m_defaultValue.m_numIndex = p.m_puValue.m_numIndex;
+				bp.m_strName      = p.m_strName;
 				m_listParam.push_back(bp);
-				m_listParamRealName.push_back(p.m_strName);
 			}
 		}
 	};
 
 public:
 
-	long FindMethod(const wxString& strMethodName) const;
-	long FindExportMethod(const wxString& strMethodName) const;
+	long FindMethod(const ibString& strMethodName) const;
+	long FindExportMethod(const ibString& strMethodName) const;
 
-	long FindFunction(const wxString& funcName) const;
-	long FindExportFunction(const wxString& funcName) const;
+	long FindFunction(const ibString& funcName) const;
+	long FindExportFunction(const ibString& funcName) const;
 
-	long FindProcedure(const wxString& procName) const;
-	long FindExportProcedure(const wxString& procName) const;
+	long FindProcedure(const ibString& procName) const;
+	long FindExportProcedure(const ibString& procName) const;
 
 	// Bytecode-driven cross-module symbol resolution.
 	//
@@ -402,12 +458,24 @@ public:
 	// reachable iff they live on a real ancestor — exactly the legit
 	// case. Cross-entity isolation through value chain access
 	// (`Catalogs.X.CreateElement().ThisObject`) is enforced at the
-	// runtime OPER_GET_A handler / autocomplete / debugger via the
-	// m_bScoped flag on the prop entry, NOT here.
+	// runtime OPER_GET_A handler / autocomplete / debugger, each of which asks
+	// the VALUE through IsPropScoped - NOT here, and not from a copy on the
+	// variable: that copy existed, rode into the AOT blob, and was read by no one.
 	template<typename CompileVar>
 	bool FindVariable(const wxString& strVarName, std::shared_ptr<CompileVar>& foundedVar) const {
 		auto it = std::find_if(m_listVar.begin(), m_listVar.end(),
 			[&](const auto& v) {
+				// A CHILD SEES ITS PARENT ENTIRE EXCEPT THE PARENT'S OWN PRIVATE
+				// LOCALS — and here a private local IS kind=Local, because on this
+				// side access is carried by the kind (Public is Export, Protected is
+				// its own kind; see the aliases above).
+				//
+				// The compile-context walk asks the same thing, the same way
+				// (ibCompileContext::ibVariable::IsLocal, compileContext.cpp's
+				// tryEmit). It used to ask a LIST there — Public, Protected,
+				// External — which left Context / ContextProp out, so one name got
+				// two answers depending on which road found it, and widening either
+				// road alone moved names between depths on that road only.
 				if (v.IsLocal()) return false;
 				return stringUtils::CompareString(strVarName, v.m_strRealName);
 			});
@@ -452,7 +520,7 @@ public:
 		auto iterator = std::find_if(m_listFunc.begin(), m_listFunc.end(),
 			[lCodeLine](const auto& fn) { return lCodeLine == (long)fn; });
 		if (iterator != m_listFunc.end())
-			return iterator->m_lCodeParamCount;
+			return (long)iterator->m_listParam.size();
 		return 0;
 	}
 
@@ -475,6 +543,57 @@ public:
 		return iterator != m_listFunc.end() ? &(*iterator) : nullptr;
 	}
 
+	// ⭐⭐ A CARET, AS DATA — one place a text position and everything it implies travel together.
+	//
+	// The editor's question is always the same shape ("I am HERE — what is true here?"), and the
+	// answers to it are not independent: the frame decides which locals are visible, the instruction
+	// decides what was being written. Passing them as loose arguments is how two callers end up
+	// asking with a position and a frame that do not belong to each other.
+	//
+	// ⚠ IT ADDS NOTHING TO THE BYTECODE. The struct is a query, not a field: every answer is READ
+	// from what the compile already emitted, so the base object stays exactly what the runtime
+	// executes and what the AOT writer stores. `m_numString` is on every instruction (AddLineInfo)
+	// and is an absolute text offset — the same unit the editor measures a caret in.
+	struct ibCaretPoint {
+
+		unsigned int m_position = 0;   // IN — the caret, as an offset into the compiled text
+
+		// ⚠ WHICH DECLARATION THE CARET STANDS IN IS NOT ASKED HERE, and the attempt is instructive:
+		// it was answered by walking the tape and comparing the caret against the source position on
+		// each FUNC / ENDFUNC. That position was never a boundary — AddLineInfo stamps the token the
+		// parser was standing on, which after a body is the token AFTER it, and for the last
+		// declaration in a module that is the end of the text. The body then claimed to close where
+		// the text ends and a caret on the last line read as inside it. The compile knows the answer
+		// while it still holds both ends of the span; it says so there (compileCode.h, SetCaret).
+
+		// OUT — the last instruction emitted at or before the caret, as an index into m_listCode.
+		// -1 = the caret precedes everything this text emitted (an empty module, a comment header).
+		long m_instruction = -1;
+	};
+
+	// Fill in what the compile knows about a caret. False = the bytecode is empty, so there is
+	// nothing to be said; the point is left as it was.
+	BACKEND_API bool FindCaret(ibCaretPoint& point) const;
+
+	// ⭐⭐ THE INSTRUCTION THE COMPILER WROTE FOR THE CARET ITSELF, when it wrote one. -1 = nobody
+	// claimed it and the position scan in FindCaret decides.
+	//
+	// A caret standing on a dot is the one case where the answer is not a matter of looking: the
+	// tolerant compile EMITS a step for it (compileCode.cpp, the dangling-dot gate) and knows, at
+	// that instant, that this instruction and no other is what was asked about. Everything after it
+	// on the tape is the compiler finishing a construct the typist has not finished — the closing
+	// `OPER_CTX_END` of an unclosed block, a query's `OPER_LINQ_RESULT`, the loop's
+	// `OPER_NEXT_ITER` — and all of them carry the SAME source position, because the parser never
+	// moved past the last token it read. Measured 2026-09-08: `foreach (o in Catalogs.Goods) { o.`
+	// emitted the dangling step at index 5 and four more instructions at the same offset after it,
+	// so a scan for "the last instruction at or before the caret" answered with `OPER_NEXT_ITER`
+	// and the caret resolved to nothing. No tie-break over positions can separate those — they are
+	// genuinely equal — which is why this is recorded rather than searched for.
+	//
+	// ⚠ NOT PERSISTED, and it must not be: it belongs to one tolerant compile of one text with one
+	// caret in it. A runtime compile never sets it, and Reset() clears it.
+	long m_numCaretInstruction = -1;
+
 	// AOT persistence — see byteCodeAOT.cpp. Writes / reads the
 	// fields needed to reconstruct a compiled bytecode in a fresh
 	// session: identity (m_id, m_version, m_descriptorClsid),
@@ -493,8 +612,10 @@ public:
 	// Format constants live in byteCodeAOT.cpp; bump
 	// kAOTFormatVersion when the layout changes — readers reject
 	// older blobs and fall back to recompile.
-	bool SerializeAOT(ibWriterMemory& writer) const;
-	bool DeserializeAOT(const ibReaderMemory& reader);
+	// Exported individually (the struct itself isn't BACKEND_API): the AOT
+	// cache API is the public seam tools / tests call across the DLL boundary.
+	BACKEND_API bool SerializeAOT(ibWriterMemory& writer) const;
+	BACKEND_API bool DeserializeAOT(const ibReaderMemory& reader);
 
 	// ----------------------------------------------------------------
 	// Process-wide bytecode registry — keyed by descriptor GUID
@@ -536,6 +657,7 @@ public:
 		m_dependencyIds.clear();
 		m_dependencyVersions.clear();
 		m_version = ibGuid();
+		m_numCaretInstruction = -1;
 	}
 
 	//Attributes:
@@ -555,7 +677,7 @@ public:
 	// those triggers cache miss → recompile → write a new row
 	// under the same key.
 	//
-	// Why GUID, not name: user renames in Designer (e.g. "Утилиты"
+	// Why GUID, not name: user renames in Designer (e.g. "Utilities"
 	// → "Tools") don't touch the descriptor's GUID, so dependent
 	// bytecodes' references stay valid. Same way `metadataReader`
 	// already references metadata objects through their own
@@ -725,6 +847,36 @@ public:
 	// helper). ContextMethod entries reference their parent Context
 	// binding (a variable in m_listVar) via m_parentRef.
 	std::vector<ibByteFunction>    m_listFunc;
+};
+
+// ⭐⭐ THE SAME BYTECODE, WITH MORE INFORMATION ON IT — not a second kind of bytecode.
+//
+// Max, 2026-09-08: *"ibByteCode — for the runtime. The extended one — for the compiler, for
+// IntelliSense, for LINQ; it inherits from ibByteCode, and it is the extended one the compiler
+// drives, while the runtime drives the ordinary bytecode, the one the AOT cache holds."* And: *"it
+// must be clear that it is THE SAME one that gets generated — it simply carries extended
+// information, and when it goes into the cache it is sliced."*
+//
+// This is the tape the compiler generates, entire: every instruction, constant and symbol here is
+// the one that will run. What the extension adds is what only the COMPILER needs while it reads
+// that tape as a tree.
+//
+// The slice is then not an operation at all — it is the BASE. The runtime, the AOT cache and the
+// binder are typed on ibByteCode, so the tree is not merely unused there, it is unreachable; and
+// the compiler, the only one who builds it, is the only one who can name it. Nothing has to
+// remember to cut anything away, which is the difference between a rule and a habit.
+//
+// It stays a plain struct with no virtuals: nobody deletes a bytecode through a base pointer (the
+// compiler owns its own by value), and a copy INTO the base type is exactly the slicing this
+// arrangement is for.
+struct ibByteExtCode : ibByteCode {
+
+	// One entry per LINQ query, added when compilation reaches it — a std::deque because the compile
+	// scope inside a query holds a POINTER to its entry, and a nested query must not move the one
+	// that contains it. It is NOT cleared when compilation ends: the compiler keeps its tree, and
+	// IntelliSense — which runs on this side, on this very object — is the reader that still wants
+	// it. What the runtime and the cache hold is the BASE, where it does not exist.
+	std::deque<ibLinqQuery> m_listLinq;
 };
 
 // Runtime binding session — slot table for a bytecode's required

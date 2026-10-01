@@ -1,9 +1,10 @@
 ﻿////////////////////////////////////////////////////////////////////////////
-//	Author		: Tetracode Dev
+//	Author		: Maxim Kornienko
 //	Description : chart of accounts object
 ////////////////////////////////////////////////////////////////////////////
 
 #include "chartOfAccounts.h"
+#include "backend/system/value/valuePointInTime.h"   // the moment an object can be asked for
 #include "backend/metaData.h"
 #include "backend/appData.h"
 #include "backend/session/session.h"
@@ -13,32 +14,143 @@
 #include "backend/fileSystem/fs.h"
 
 ibValueRecordDataObjectChartOfAccounts::ibValueRecordDataObjectChartOfAccounts(const ibValueMetaObjectChartOfAccounts* metaObject, const ibGuid& objGuid, ibObjectMode objMode) :
-	ibValueRecordDataObjectHierarchyRef(metaObject, objGuid, objMode) {}
+	ibValueRecordDataObjectHierarchyRef(metaObject, objGuid, objMode) {
+	m_members.Bind(this, &ibValueRecordDataObjectChartOfAccounts::FillMethods);
+}
 
 ibValueRecordDataObjectChartOfAccounts::ibValueRecordDataObjectChartOfAccounts(const ibValueRecordDataObjectChartOfAccounts& source) :
-	ibValueRecordDataObjectHierarchyRef(source) {}
+	ibValueRecordDataObjectHierarchyRef(source) {
+	m_members.Bind(this, &ibValueRecordDataObjectChartOfAccounts::FillMethods);
+}
 
-ibSourceExplorer ibValueRecordDataObjectChartOfAccounts::GetSourceExplorer() const
+bool ibValueRecordDataObjectChartOfAccounts::SaveData()
 {
-	ibSourceExplorer srcHelper(m_metaObject, GetClassType(), false);
 	ibValueMetaObjectChartOfAccounts* metaRef = nullptr;
-	
+	if (m_metaObject->ConvertToValue(metaRef) && metaRef != nullptr) {
+
+		ibValueMetaObjectTableData* kindsTable = metaRef->GetAccountDimensionKindsTable();
+		if (kindsTable != nullptr && !kindsTable->IsDeleted()) {
+
+			ibValue tableValue;
+			if (GetValueByMetaID(kindsTable->GetMetaID(), tableValue)) {
+
+				ibValueModel* rows = nullptr;
+				if (tableValue.ConvertToValue(rows) && rows != nullptr) {
+
+					// The ceiling is SCHEMA — declared by this chart, and the register builds that
+					// many columns from it. Refusing here is the only place that cannot be walked
+					// around, and saying the number keeps the message actionable: what the author
+					// has to change is either this table or the declaration.
+					const unsigned int maxCount = metaRef->GetMaxAccountDimensionCount();
+					if (rows->GetRowCount() > static_cast<long>(maxCount))
+						ibBackendCoreException::Error(
+							_("Account \"%s\" declares %i analytics, but the chart of accounts allows %i"),
+							GetString(), (int)rows->GetRowCount(), (int)maxCount);
+
+					// A KIND MAY BE NAMED ONCE. Two rows with the same kind are not two analytics —
+					// they are one, declared twice, and nothing downstream can tell which of them a
+					// movement meant: the register addresses a slot BY ITS KIND, so a repeat makes
+					// the address ambiguous and one of the two silently unreachable. Cheapest here,
+					// where the rows are already in hand and an import cannot go round it.
+					ibValueMetaObjectAttributeBase* kindAttr =
+						metaRef->GetAccountDimensionKindsTable()->GetAccountDimensionKind();
+					if (kindAttr != nullptr) {
+						std::vector<ibValue> seen;
+						for (long line = 0; line < rows->GetRowCount(); line++) {
+							ibValue kind;
+							if (!rows->GetValueByMetaID(rows->GetItem(line), kindAttr->GetMetaID(), kind))
+								continue;
+							if (kind.IsEmpty())
+								continue;   // emptiness is the FILL check's complaint, not this one
+							for (const ibValue& earlier : seen) {
+								if (earlier.CompareValueEQ(kind))
+									ibBackendCoreException::Error(
+										_("Account \"%s\": the analytics kind \"%s\" is declared more than once"),
+										GetString(), kind.GetString());
+							}
+							seen.push_back(kind);
+						}
+
+						// ⭐ THE SECTION, UNFOLDED INTO THE ACCOUNT'S OWN COLUMNS — written here, where
+						// the rows are already in hand and already checked.
+						//
+						// Column N takes row N: the position IS the correspondence, the same rule the
+						// register's slots follow. Filled on every save rather than maintained
+						// incrementally, because the section is small and a rewrite cannot drift —
+						// rows removed leave their columns EMPTY rather than holding a stale kind.
+						for (unsigned int idx = 0; idx < metaRef->GetAccountDimensionKindColumnCount(); idx++) {
+							ibValueMetaObjectAttributePredefined* column = metaRef->GetAccountDimensionKindColumn(idx);
+							if (column == nullptr || column->IsDeleted())
+								continue;
+
+							ibValue kind;
+							if (static_cast<long>(idx) < rows->GetRowCount())
+								rows->GetValueByMetaID(rows->GetItem(idx), kindAttr->GetMetaID(), kind);
+
+							SetValueByMetaID(column->GetMetaID(), kind);
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return ibValueRecordDataObjectHierarchyRef::SaveData();
+}
+
+const ibSourceExplorer* ibValueRecordDataObjectChartOfAccounts::GetSourceExplorer() const
+{
+	m_sourceExplorer.Reset(wxT("Ref"), _("Ref"), m_metaObject->GetMetaID(), GetClassType(), false);
+	ibValueMetaObjectChartOfAccounts* metaRef = nullptr;
+
 	if (m_metaObject->ConvertToValue(metaRef)) {
-		srcHelper.AppendSource(metaRef->GetDataCode(), false);
-		srcHelper.AppendSource(metaRef->GetDataDescription());
-		srcHelper.AppendSource(metaRef->GetDataParent());
-		srcHelper.AppendSource(metaRef->GetSubcontoKindsTable());
+		// THE CODE IS TYPED IN, not handed out. In a catalog the code is a serial number the system
+		// mints, so it is shown and not edited; in a chart of accounts the code IS the account — "51",
+		// "60.01" — and it is the first thing a person writes when adding one. Locking it made an
+		// account impossible to name at all.
+		m_sourceExplorer.AppendColumn(metaRef->GetDataCode()->GetQueryColumn());
+		m_sourceExplorer.AppendColumn(metaRef->GetDataDescription()->GetQueryColumn());
+		m_sourceExplorer.AppendColumn(metaRef->GetDataParent()->GetQueryColumn());
+		// WHAT KIND OF ACCOUNT THIS IS. It was missing here, so a generated form showed an account as
+		// if it were a plain catalog item — code, description, parent — with no way to say whether it
+		// is active, passive or both. It is a declared TYPE (the AccountType enumeration), so the form
+		// builds the editor from the attribute itself; nothing here spells the three members out.
+		m_sourceExplorer.AppendColumn(metaRef->GetAccountType()->GetQueryColumn());
+		// Off-balance belongs beside it: it is not a way of KEEPING the account, it is a statement
+		// about the account itself — this one stands outside the balance — and it is answered once,
+		// per account, like the kind is.
+		m_sourceExplorer.AppendColumn(metaRef->GetOffBalance()->GetQueryColumn());
+
+		// ⭐⭐ …AND EVERY KIND OF ACCOUNTING THE CHART DECLARES, as a tick-box of its own. What stood here
+		// said that Quantitative and Currency were not attributes of an account and must not be drawn as
+		// two checkboxes "before that mechanism exists" — and it was right, twice over: those two were
+		// hardcoded, and how an account is KEPT is the author's vocabulary, not the engine's.
+		//
+		// The mechanism exists now. A kind is declared once on the chart and answered per account, which
+		// IS a boolean field of the account — so the form shows one box per kind, beside Off-balance,
+		// with nothing spelled out here: what they are called and how many there are is the chart's.
+		// (A BREAKDOWN's kind is not here — its answer is given per row of the analytics section, so it
+		//  is a column of that table and arrives with it.)
+		for (const ibValueMetaObjectAccountingKind* kind : metaRef->GetAccountingKindArrayObject())
+			if (kind != nullptr && !kind->IsDeleted())
+				m_sourceExplorer.AppendColumn(kind->GetQueryColumn());
+
+		// (The analytics-kinds section is NOT appended by hand here. It used to be, because it was the
+		//  only way to reach it: its clsid was missing from the tabular-section filter, so the general
+		//  loop below walked straight past it. Now that the filter knows it, adding it here as well
+		//  put the section into the source TWICE — and a generated form grew two identical tableboxes.
+		//  A special case that outlives the gap it patched becomes a duplicate.)
 	}
 	
 	for (const auto object : m_metaObject->GetAttributeArrayObject()) {
 		ibItemMode attrUse = object->GetItemMode();
 		if (m_objMode == ibObjectMode::OBJECT_ITEM) {
 			if (attrUse == ibItemMode::ibItemMode_Item || attrUse == ibItemMode::ibItemMode_Folder_Item) {
-				if (!m_metaObject->IsDataReference(object->GetMetaID())) srcHelper.AppendSource(object);
+				if (!m_metaObject->IsDataReference(object->GetMetaID())) m_sourceExplorer.AppendColumn(object->GetQueryColumn());
 			}
 		} else {
 			if (attrUse == ibItemMode::ibItemMode_Folder || attrUse == ibItemMode::ibItemMode_Folder_Item) {
-				if (!m_metaObject->IsDataReference(object->GetMetaID())) srcHelper.AppendSource(object);
+				if (!m_metaObject->IsDataReference(object->GetMetaID())) m_sourceExplorer.AppendColumn(object->GetQueryColumn());
 			}
 		}
 	}
@@ -46,153 +158,72 @@ ibSourceExplorer ibValueRecordDataObjectChartOfAccounts::GetSourceExplorer() con
 	for (const auto object : m_metaObject->GetTableArrayObject()) {
 		ibItemMode tableUse = object->GetTableUse();
 		if (m_objMode == ibObjectMode::OBJECT_ITEM) {
-			if (tableUse == ibItemMode::ibItemMode_Item || tableUse == ibItemMode::ibItemMode_Folder_Item) srcHelper.AppendSource(object);
+			if (tableUse == ibItemMode::ibItemMode_Item || tableUse == ibItemMode::ibItemMode_Folder_Item) {
+				if (object != nullptr && !object->IsDeleted()) {
+					ibSourceExplorer& tblNode = m_sourceExplorer.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
+					for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject()) tblNode.AppendColumn(tblCol->GetQueryColumn());
+				}
+			}
 		} else {
-			if (tableUse == ibItemMode::ibItemMode_Folder || tableUse == ibItemMode::ibItemMode_Folder_Item) srcHelper.AppendSource(object);
+			if (tableUse == ibItemMode::ibItemMode_Folder || tableUse == ibItemMode::ibItemMode_Folder_Item) {
+				if (object != nullptr && !object->IsDeleted()) {
+					ibSourceExplorer& tblNode = m_sourceExplorer.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
+					for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject()) tblNode.AppendColumn(tblCol->GetQueryColumn());
+				}
+			}
 		}
 	}
 	
-	return srcHelper;
+	return &m_sourceExplorer;
 }
 
-#pragma region _form_builder_h_
-void ibValueRecordDataObjectChartOfAccounts::ShowFormValue(const wxString& strFormName, ibBackendControlFrame* ownerControl)
-{
-	ibBackendValueForm* const foundedForm = GetForm();
-	if (foundedForm && foundedForm->IsShown()) { foundedForm->ActivateForm(); return; }
-	ibBackendValueForm* const valueForm = GetFormValue(strFormName, ownerControl);
-	if (valueForm != nullptr) { valueForm->Modify(m_objModified); valueForm->ShowForm(); }
-}
+// ShowFormValue / GetFormValue moved up to HierarchyRef.
 
-ibBackendValueForm* ibValueRecordDataObjectChartOfAccounts::GetFormValue(const wxString& strFormName, ibBackendControlFrame* ownerControl)
-{
-	ibBackendValueForm* const foundedForm = GetForm();
-	if (foundedForm == nullptr) {
-		ibBackendValueForm* createdForm = m_metaObject->CreateAndBuildForm(strFormName,
-			m_objMode == ibObjectMode::OBJECT_ITEM ? ibValueMetaObjectChartOfAccounts::eFormObject : ibValueMetaObjectChartOfAccounts::eFormFolder,
-			ownerControl, this, m_objGuid);
-		if (createdForm != nullptr) createdForm->CloseOnOwnerClose(false);
-		return createdForm;
-	}
-	return foundedForm;
-}
-#pragma endregion
+// WriteObject / DeleteObject inherited from
+// ibValueRecordDataObjectHierarchyRef — see commonObjectRefQuery.cpp.
 
-bool ibValueRecordDataObjectChartOfAccounts::WriteObject()
-{
-	if (!appData->DesignerMode()) {
-		ibConnectionScope scope = ibSession::Current()->OpenConnectionScope();
-		if (!scope || !scope->IsOpen()) ibBackendCoreException::Error(_("Database is not open!"));
-		if (!ibBackendException::IsEvalMode()) {
-			if (!m_metaObject->AccessRight_Write()) { ibBackendAccessException::Error(); return false; }
-			{
-				ibBackendValueForm* const valueForm = GetForm();
-				{
-					scope.SafeBeginTransaction();
-					{ ibValue cancel = false; ExecAsProc(wxT("BeforeWrite"), cancel);
-						if (cancel.GetBoolean()) { scope.SafeRollBackTransaction(); ibBackendCoreException::Error(_("Failed to write object in db!")); return false; } }
-					bool newObject = IsNewObject();
-					bool generateUniqueIdentifier = false;
-					if (!IsSetUniqueIdentifier()) {
-						ibValue prefix = "", standartProcessing = true;
-						ExecAsProc(wxT("SetNewCode"), prefix, standartProcessing);
-						if (standartProcessing.GetBoolean()) generateUniqueIdentifier = GenerateUniqueIdentifier(prefix.GetString());
-					}
-					if (!SaveData()) {
-						if (generateUniqueIdentifier) ResetUniqueIdentifier();
-						scope.SafeRollBackTransaction(); ibBackendCoreException::Error(_("Failed to write object in db!")); return false;
-					}
-					{ ibValue cancel = false; ExecAsProc(wxT("OnWrite"), cancel);
-						if (cancel.GetBoolean()) { if (generateUniqueIdentifier) ResetUniqueIdentifier();
-							scope.SafeRollBackTransaction(); ibBackendCoreException::Error(_("Failed to write object in db!")); return false; } }
-					scope.SafeCommitTransaction();
-					if (newObject && valueForm != nullptr) valueForm->NotifyCreate(GetReference());
-					else if (valueForm != nullptr) valueForm->NotifyChange(GetReference());
-				}
-				m_objModified = false;
-			}
-		}
-	}
-	return true;
-}
+enum Func { enPointInTime, enIsNew, enCopy, enFill, enWrite, enDelete, enModified, enGetForm, enGetTemplate, enGetMetadata, enLock, enUnlock };
 
-bool ibValueRecordDataObjectChartOfAccounts::DeleteObject()
+void ibValueRecordDataObjectChartOfAccounts::FillMethods(ibMemberTable& helper) const
 {
-	if (!appData->DesignerMode()) {
-		ibConnectionScope scope = ibSession::Current()->OpenConnectionScope();
-		if (!scope || !scope->IsOpen()) ibBackendCoreException::Error(_("Database is not open!"));
-		if (!ibBackendException::IsEvalMode()) {
-			if (!m_metaObject->AccessRight_Delete()) { ibBackendAccessException::Error(); return false; }
-			const ibValueMetaObjectRecordDataHierarchyMutableRef* valueMetaObject = GetMetaObject();
-			wxASSERT(valueMetaObject);
-			const ibGuid& objGuid = GetGuid();
-			const auto predefinedValue = valueMetaObject->FindPredefinedValue(objGuid);
-			if (predefinedValue != nullptr) { ibBackendCoreException::Error(_("Attempting to delete a predefined element!")); return false; }
-			{
-				ibBackendValueForm* const valueForm = GetForm();
-				{
-					scope.SafeBeginTransaction();
-					{ ibValue cancel = false; ExecAsProc(wxT("BeforeDelete"), cancel);
-						if (cancel.GetBoolean()) { scope.SafeRollBackTransaction(); ibBackendCoreException::Error(_("Failed to delete object in db!")); return false; } }
-					if (!DeleteData()) { scope.SafeRollBackTransaction(); ibBackendCoreException::Error(_("Failed to delete object in db!")); return false; }
-					{ ibValue cancel = false; ExecAsProc(wxT("OnDelete"), cancel);
-						if (cancel.GetBoolean()) { scope.SafeRollBackTransaction(); ibBackendCoreException::Error(_("Failed to delete object in db!")); return false; } }
-					scope.SafeCommitTransaction();
-					if (valueForm != nullptr) valueForm->NotifyDelete(GetReference());
-				}
-			}
-		}
-	}
-	return true;
-}
-
-enum Func { enIsNew = 0, enCopy, enFill, enWrite, enDelete, enModified, enGetForm, enGetTemplate, enGetMetadata };
-
-void ibValueRecordDataObjectChartOfAccounts::PrepareNames() const
-{
-	m_methodHelper->ClearHelper();
-	m_methodHelper->AppendFunc(wxT("IsNew"), wxT("IsNew()"));
-	m_methodHelper->AppendFunc(wxT("Copy"), wxT("Copy()"));
-	m_methodHelper->AppendFunc(wxT("Fill"), 1, wxT("Fill(object)"));
-	m_methodHelper->AppendFunc(wxT("Write"), wxT("Write()"));
-	m_methodHelper->AppendFunc(wxT("Delete"), wxT("Delete()"));
-	m_methodHelper->AppendFunc(wxT("Modified"), wxT("Modified()"));
-	m_methodHelper->AppendFunc(wxT("GetFormObject"), 3, wxT("GetFormObject(name : string, owner : any , id : guid)"));
-	m_methodHelper->AppendFunc(wxT("GetTemplate"), 1, wxT("GetTemplate(name : string)"));
-	m_methodHelper->AppendFunc(wxT("GetMetadata"), wxT("GetMetadata()"));
-	m_methodHelper->AppendProp(wxT("ThisObject"), true, false, true, eThisObject, eSystem);
-	wxString objectName;
-	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
-		if (object->IsDeleted()) continue;
-		if (!object->GetObjectNameAsString(objectName)) continue;
-		m_methodHelper->AppendProp(objectName, true, !m_metaObject->IsDataReference(object->GetMetaID()), object->GetMetaID(), eProperty);
-	}
-	for (const auto object : m_metaObject->GetGenericTableArrayObject()) {
-		if (object->IsDeleted()) continue;
-		if (!object->GetObjectNameAsString(objectName)) continue;
-		m_methodHelper->AppendProp(objectName, true, false, object->GetMetaID(), eTable);
-	}
-	ExportNamesToHelper(m_methodHelper, eProcUnit);
+	// Own methods; the data members come from the base FillDataMembers. Order is
+	// load-bearing — CallAsFunc switches on the method index (enIsNew = 0 …).
+	// ⭐ THE MOMENT, ON EVERY REFERENCE-BASED FAMILY. Being addressed by a reference is the whole
+	// qualification: an element of this kind has a place in the data's history, so it can be named
+	// as a moment -- for a period boundary, for an ordering, for "everything up to THIS one". The
+	// families with a date of their own add it; the rest carry the reference alone, which is an
+	// identity with no point on a timeline rather than a date invented to fill the slot.
+	helper.AppendFunc(wxT("PointInTime"), wxT("PointInTime()"));
+	helper.AppendFunc(wxT("IsNew"), wxT("IsNew()"));
+	helper.AppendFunc(wxT("Copy"), wxT("Copy()"));
+	helper.AppendFunc(wxT("Fill"), 1, wxT("Fill(object)"));
+	helper.AppendFunc(wxT("Write"), wxT("Write()"));
+	helper.AppendFunc(wxT("Delete"), wxT("Delete()"));
+	helper.AppendFunc(wxT("Modified"), wxT("Modified()"));
+	helper.AppendFunc(wxT("GetFormObject"), 3, wxT("GetFormObject(name : string, owner : any , id : guid)"));
+	helper.AppendFunc(wxT("GetTemplate"), 1, wxT("GetTemplate(name : string)"));
+	helper.AppendFunc(wxT("GetMetadata"), wxT("GetMetadata()"));
+	helper.AppendProc(wxT("Lock"),   wxT("Lock()"));
+	helper.AppendProc(wxT("Unlock"), wxT("Unlock()"));
 }
 
 bool ibValueRecordDataObjectChartOfAccounts::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 {
-	const long lPropAlias = m_methodHelper->GetPropAlias(lPropNum);
+	const long lPropAlias = m_members.GetPropAlias(lPropNum);
 	if (lPropAlias == eProcUnit) { if (m_procUnit != nullptr) return m_procUnit->SetPropVal(GetPropName(lPropNum), varPropVal); }
-	else if (lPropAlias == eProperty) return SetValueByMetaID(m_methodHelper->GetPropData(lPropNum), varPropVal);
+	else if (lPropAlias == eProperty) return SetValueByMetaID(m_members.GetPropData(lPropNum), varPropVal);
 	return false;
 }
 
 bool ibValueRecordDataObjectChartOfAccounts::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
-	const long lPropAlias = m_methodHelper->GetPropAlias(lPropNum);
+	const long lPropAlias = m_members.GetPropAlias(lPropNum);
 	if (lPropAlias == eProcUnit) { if (m_procUnit != nullptr) return m_procUnit->GetPropVal(GetPropName(lPropNum), pvarPropVal); }
 	else if (lPropAlias == eProperty || lPropAlias == eTable) {
-		const long lPropData = m_methodHelper->GetPropData(lPropNum);
+		const long lPropData = m_members.GetPropData(lPropNum);
 		if (m_metaObject->IsDataReference(lPropData)) { pvarPropVal = GetReference(); return true; }
 		return GetValueByMetaID(lPropData, pvarPropVal);
 	}
-	else if (lPropAlias == eSystem) { switch (m_methodHelper->GetPropData(lPropNum)) { case eThisObject: pvarPropVal = GetValue(); return true; } }
 	return false;
 }
 
@@ -204,10 +235,15 @@ bool ibValueRecordDataObjectChartOfAccounts::CallAsFunc(const long lMethodNum, i
 	case enFill: FillObject(*paParams[0]); return true;
 	case enWrite: WriteObject(); return true;
 	case enDelete: DeleteObject(); return true;
+	case enPointInTime:
+		pvarRetValue = new ibValuePointInTime(ibDateTime(), GetReference());   // a moment with no date: the empty date, the smallest there is
+		return true;
 	case enModified: pvarRetValue = m_objModified; return true;
-	case Func::enGetForm: pvarRetValue = GetFormValue(lSizeArray > 0 ? paParams[0]->GetString() : wxString(wxEmptyString), lSizeArray > 1 ? paParams[1]->ConvertToType<ibBackendControlFrame>() : nullptr); return true;
+	case Func::enGetForm: pvarRetValue = GetFormValue(lSizeArray > 0 ? ibFormRequest(paParams[0]->GetString()) : ibFormRequest(), lSizeArray > 1 ? paParams[1]->ConvertToType<ibBackendControlFrame>() : nullptr); return true;
 	case Func::enGetTemplate: pvarRetValue = m_metaObject->GetTemplate(paParams[0]->GetString()); return true;
 	case Func::enGetMetadata: pvarRetValue = m_metaObject; return true;
+	case Func::enLock:   TryAcquireFormLock(); return true;
+	case Func::enUnlock: ReleaseFormLock();    return true;
 	}
 	return ibRuntimeModuleDataObject::ExecAsFunc(GetMethodName(lMethodNum), pvarRetValue, paParams, lSizeArray);
 }

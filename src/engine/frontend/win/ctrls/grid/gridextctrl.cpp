@@ -15,6 +15,7 @@
 
 #include "gridextctrl.h"
 #include "gridexteditors.h"
+#include "backend/diagnostics/journal.h"   // ibJournal* — this TU does not pull in backend_core.h
 
 #ifndef WX_PRECOMP
 #include <wx/textctrl.h>
@@ -401,7 +402,12 @@ ibGridCellAutoWrapStringRenderer::GetTextLines(ibGrid& grid,
 	const wxRect& rect,
 	int row, int col)
 {
-	dc.SetFont(attr.GetFont());
+	// ⚠ THE FONT THE WRAPPING IS MEASURED WITH HAS TO BE THE FONT IT WILL BE DRAWN WITH. This read
+	// the unscaled one while measuring against `rect`, which IS scaled — so at 200% twice as many
+	// words were fitted onto a line as would actually fit, and at 50% the text broke early. The two
+	// sides of the same renderer already pass the zoom (Draw and GetBestSize); this was the one that
+	// did not.
+	dc.SetFont(attr.GetFont(grid.GetGridZoom()));
 	const wxCoord maxWidth = rect.GetWidth();
 
 	// Transform logical lines into physical ones, wrapping the longer ones.
@@ -633,8 +639,14 @@ void ibGridCellStringRenderer::Draw(ibGrid& grid,
 	int row, int col,
 	bool isSelected)
 {
+	// 🛑 IN FROM THE SIDES ONLY. Taken in by one on all four, the text lost two pixels of the height, and
+	// DrawTextRectangle starts it a margin down besides: out of a row of 15 (one line of the 8 pt default
+	// font, 13 high) the text kept 11, so every default row cut its descenders - "by" read "bv", and a line
+	// of underscores to sign on was not there at all. The printout gives the same row its whole height, so
+	// paper and screen disagreed on every line, and a row fitted to its text (ibSpreadsheetRowHeight) came
+	// out cut on the screen alone (2026-09-22).
 	wxRect rect = rectCell;
-	rect.Inflate(-1);
+	rect.Inflate(-1, 0);
 
 	// erase only this cells background, overflow cells should have been erased
 	ibGridCellRenderer::Draw(grid, attr, dc, rectCell, row, col, isSelected);
@@ -690,8 +702,12 @@ void ibGridCellStringRenderer::Draw(ibGrid& grid,
 		if (overflowCols > 0) // redraw overflow cells w/ proper hilight
 		{
 			hAlign = wxALIGN_LEFT; // if oveflowed then it's left aligned
+			// 🛑 THE SEGMENTS START AT THE NEIGHBOUR'S OWN EDGE. `rect` is the TEXT rect — inflated by
+			// one at the top of this method — so `rect.x + rectCell.width` lands one pixel INSIDE the
+			// first overflow column, and that pixel's worth of text is never drawn: the same hole as
+			// the `- 1`s below, at the first boundary.
 			wxRect clip = rect;
-			clip.x += rectCell.width;
+			clip.x = rectCell.x + rectCell.width;
 			// draw each overflow cell individually
 			int col_end = col + cell_cols + overflowCols;
 			if (col_end >= grid.GetNumberCols())
@@ -702,7 +718,20 @@ void ibGridCellStringRenderer::Draw(ibGrid& grid,
 				ibGridCellCoords coords(row, i);
 				grid.DrawCell(dc, coords);
 
-				clip.width = grid.GetColSize(i, grid.GetGridZoom()) - 1;
+				// 🛑⭐ THE WHOLE COLUMN, NOT ONE PIXEL SHORT OF IT. Overflowing text is drawn in
+				// SEGMENTS, one per column it runs across, each clipped to that column — so the
+				// segments have to TILE. Clipped to `size - 1` they do not: one pixel of text at every
+				// column boundary was never painted, and the background showing through it reads as a
+				// thin white line lying across the text (Max, 2026-08-28: "the line is still there,
+				// where the letter is"). It is not a line at all — it is a hole.
+				//
+				// ⚠ AND THE ADVANCE HAD THE SAME `- 1`, so every following segment started a pixel
+				// early: the holes were the visible half, a creeping misalignment the other.
+				//
+				// (The pixel was being left for the grid LINE at the boundary — which the line does not
+				//  need: it is drawn AFTER the cells and paints that pixel itself. All the gap did was
+				//  take a slice out of the text.)
+				clip.width = grid.GetColSize(i, grid.GetGridZoom());
 				wxDCClipper clipper(dc, clip);
 
 				SetTextColoursAndFont(grid, attr, dc,
@@ -711,11 +740,11 @@ void ibGridCellStringRenderer::Draw(ibGrid& grid,
 				grid.GetCellValue(row, col, m_cacheString);
 				grid.DrawTextRectangle(dc, m_cacheString,
 					rect, hAlign, vAlign);
-				clip.x += grid.GetColSize(i, grid.GetGridZoom()) - 1;
+				clip.x += grid.GetColSize(i, grid.GetGridZoom());
 			}
 
 			rect = rectCell;
-			rect.Inflate(-1);
+			rect.Inflate(-1, 0);   // from the sides only - see the top of this method
 			rect.width++;
 		}
 	}
@@ -799,7 +828,7 @@ void ibGridCellNumberRenderer::SetParameters(const wxString& params)
 
 	if (!minStr.ToLong(&m_minValue) || !maxStr.ToLong(&m_maxValue))
 	{
-		wxLogDebug("Invalid ibGridCellNumberRenderer parameters \"%s\"", params);
+		ibJournalInfo(wxT("ui"), "Invalid ibGridCellNumberRenderer parameters \"%s\"", params);
 	}
 }
 
@@ -926,7 +955,7 @@ void ibGridCellFloatRenderer::SetParameters(const wxString& params)
 			}
 			else
 			{
-				wxLogDebug(wxT("Invalid ibGridCellFloatRenderer width parameter string '%s ignored"), params);
+				ibJournalInfo(wxT("ui"), wxT("Invalid ibGridCellFloatRenderer width parameter string '%s ignored"), params);
 			}
 		}
 
@@ -940,7 +969,7 @@ void ibGridCellFloatRenderer::SetParameters(const wxString& params)
 			}
 			else
 			{
-				wxLogDebug(wxT("Invalid ibGridCellFloatRenderer precision parameter string '%s ignored"), params);
+				ibJournalInfo(wxT("ui"), wxT("Invalid ibGridCellFloatRenderer precision parameter string '%s ignored"), params);
 			}
 		}
 
@@ -976,7 +1005,7 @@ void ibGridCellFloatRenderer::SetParameters(const wxString& params)
 			}
 			else
 			{
-				wxLogDebug("Invalid ibGridCellFloatRenderer format "
+				ibJournalInfo(wxT("ui"), "Invalid ibGridCellFloatRenderer format "
 					"parameter string '%s ignored", params);
 			}
 		}

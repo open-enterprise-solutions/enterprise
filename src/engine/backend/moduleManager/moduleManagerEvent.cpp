@@ -27,7 +27,7 @@
 // startup is cheap (login is rare) and eliminates the race class without
 // the full bytecode↔compileModule decoupling
 // (project_bytecode_compile_decoupling.md).
-bool ibValueModuleManagerConfiguration::BeforeStart()
+bool ibValueModuleManagerRuntimeConfiguration::BeforeStart()
 {
 	if (appData->DesignerMode())
 		return true;
@@ -39,21 +39,27 @@ bool ibValueModuleManagerConfiguration::BeforeStart()
 			pu->CallAsProc(wxT("beforeStart"), bCancel);
 		return !bCancel.GetBoolean();
 	}
+	catch (const ibBackendInterruptException&) {
+		// Stopped, not failed — a forced close of an application still in BeforeStart (stopped in the debugger
+		// there, say) cancels its run. The runtime has said so in the messages; a warning window on top of that
+		// was one for nothing (2026-09-11). Not started, as with any BeforeStart that did not finish.
+		return false;
+	}
 	catch (const ibBackendException& err) {
-		wxLogWarning(_("BeforeStart: %s"), err.GetErrorDescription());
+		ibJournalWarning(wxT("module.event"),_("BeforeStart: %s"), err.GetErrorDescription());
 		return false;
 	}
 	catch (const std::exception& err) {
-		wxLogWarning(wxT("BeforeStart: %s"), err.what());
+		ibJournalWarning(wxT("module.event"),wxT("BeforeStart: %s"), err.what());
 		return false;
 	}
 	catch (...) {
-		wxLogWarning(wxT("BeforeStart: unknown exception"));
+		ibJournalWarning(wxT("module.event"),wxT("BeforeStart: unknown exception"));
 		return false;
 	}
 }
 
-void ibValueModuleManagerConfiguration::OnStart()
+void ibValueModuleManagerRuntimeConfiguration::OnStart()
 {
 	if (appData->DesignerMode())
 		return;
@@ -68,7 +74,7 @@ void ibValueModuleManagerConfiguration::OnStart()
 	}
 }
 
-bool ibValueModuleManagerConfiguration::BeforeExit()
+bool ibValueModuleManagerRuntimeConfiguration::BeforeExit()
 {
 	if (appData->DesignerMode())
 		return true;
@@ -86,7 +92,7 @@ bool ibValueModuleManagerConfiguration::BeforeExit()
 	}
 }
 
-void ibValueModuleManagerConfiguration::OnExit()
+void ibValueModuleManagerRuntimeConfiguration::OnExit()
 {
 	if (appData->DesignerMode())
 		return;

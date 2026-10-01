@@ -19,18 +19,67 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="actionInfo.h" />
+    <ClInclude Include="standardCommand.h" />
     <ClInclude Include="appData.h" />
+    <ClInclude Include="appDataCtorToken.h" />
+    <ClInclude Include="appHost.h" />
+    <ClInclude Include="cipher\fieldCipher.h" />
+    <ClInclude Include="appEnv.h" />
     <ClInclude Include="backend.h" />
+    <ClInclude Include="syntaxHelper\helpCategory.h" />
+    <ClInclude Include="syntaxHelper\helpCorpus.h" />
+    <ClInclude Include="syntaxHelper\helpEntry.h" />
+    <ClInclude Include="syntaxHelper\helpLoader.h" />
+    <ClInclude Include="syntaxHelper\helpLoadError.h" />
+    <ClInclude Include="syntaxHelper\helpResolver.h" />
+    <ClInclude Include="syntaxHelper\helpService.h" />
+    <ClInclude Include="logger\logger.h" />
+    <ClInclude Include="logger\loggerEntry.h" />
+    <ClInclude Include="logger\loggerQueue.h" />
+    <ClInclude Include="logger\loggerDiagnosticSink.h" />
+    <ClInclude Include="logger\loggerReader.h" />
+    <ClInclude Include="logger\loggerSink.h" />
+    <ClInclude Include="logger\loggerSinkSqlite.h" />
+    <ClInclude Include="logger\loggerSweep.h" />
+    <ClInclude Include="logger\loggerWriter.h" />
     <ClInclude Include="backend_spreadsheet.h" />
     <ClInclude Include="backend_exception.h" />
+    <ClInclude Include="backend_diagnostic.h" />
+    <ClInclude Include="fileKind.h" />
+    <ClInclude Include="diagnostics\crashGuard.h" />
+    <ClInclude Include="diagnostics\journal.h" />
+    <ClInclude Include="diagnostics\leakTracker.h" />
     <ClInclude Include="session\designerExclusivePolicy.h" />
+    <ClInclude Include="session\serviceExclusivePolicy.h" />
+    <ClInclude Include="session\sessionException.h" />
     <ClInclude Include="session\session.h" />
+    <ClInclude Include="session\sessionHolder.h" />
     <ClInclude Include="session\sessionPolicy.h" />
     <ClInclude Include="session\sessionRegistry.h" />
     <ClInclude Include="session\sessionSnapshot.h" />
     <ClInclude Include="session\workerPool.h" />
     <ClInclude Include="session\workerPoolHeadless.h" />
+    <ClInclude Include="lock\lockTypes.h" />
+    <ClInclude Include="lock\lockHandle.h" />
+    <ClInclude Include="lock\lockHolder.h" />
+    <ClInclude Include="lock\lockKeyHash.h" />
+    <ClInclude Include="lock\lockManager.h" />
+    <ClInclude Include="job\jobManager.h" />
+    <ClInclude Include="job\jobRunByteCode.h" />
+    <ClInclude Include="mcp\mcpClipboard.h" />
+    <ClInclude Include="mcp\mcpMessage.h" />
+    <ClInclude Include="mcp\mcpServer.h" />
+    <ClInclude Include="mcp\mcpDebugBridge.h" />
+    <ClInclude Include="mcp\mcpTool.h" />
+    <ClInclude Include="job\platformJobs.h" />
+    <ClInclude Include="job\jobSchedule.h" />
+    <ClInclude Include="settings\settingsStorage.h" />
+    <ClInclude Include="settings\settingsComposer.h" />
+    <ClInclude Include="sheetFormat\sheetFormat.h" />
+    <ClInclude Include="sheetFormat\sheetFormatXlsx.h" />
+    <ClInclude Include="sheetFormat\sheetFormatNative.h" />
+    <ClInclude Include="sheetFormat\sheetFormatDocx.h" />
+    <ClInclude Include="system\value\valueBackgroundJob.h" />
     <ClInclude Include="backend_core.h" />
     <ClInclude Include="backend_mainFrame.h" />
     <ClInclude Include="backend_picture.h" />
@@ -40,26 +89,35 @@
     <ClInclude Include="moduleManager\globalContextManager.h" />
     <ClInclude Include="restructureInfo.h" />
     <ClInclude Include="spreadsheetDescription.h" />
+    <ClInclude Include="spreadsheetModel.h" />
     <ClInclude Include="clsid.h" />
     <ClInclude Include="compiler\cache\byteCodeCache.h" />
     <ClInclude Include="compiler\byteCode.h" />
     <ClInclude Include="compiler\codeDef.h" />
     <ClInclude Include="compiler\compileCode.h" />
     <ClInclude Include="compiler\compileContext.h" />
-    <ClInclude Include="compiler\compileContextLinqData.h" />
+    <ClInclude Include="compiler\byteCodeLINQ.h" />
     <ClInclude Include="compiler\compileModule.h" />
+    <ClInclude Include="compiler\scriptComplete.h" />
+    <ClInclude Include="compiler\blockSyntaxLINQ.h" />
+    <ClInclude Include="compiler\scriptParseCode.h" />
+    <ClInclude Include="compiler\scriptCheck.h" />
     <ClInclude Include="compiler\enumFactory.h" />
     <ClInclude Include="compiler\enumUnit.h" />
     <ClInclude Include="compiler\procContext.h" />
     <ClInclude Include="compiler\procUnit.h" />
-    <ClInclude Include="compiler\procUnitValues.h" />
+    <ClInclude Include="compiler\procUnitLambda.h" />
     <ClInclude Include="compiler\translateCode.h" />
     <ClInclude Include="compiler\typeCtor.h" />
     <ClInclude Include="compiler\value.h" />
+    <ClInclude Include="compiler\valueSerialization.h" />
     <ClInclude Include="databaseLayer\databaseErrorCodes.h" />
     <ClInclude Include="databaseLayer\databaseErrorReporter.h" />
     <ClInclude Include="databaseLayer\connectionPool.h" />
     <ClInclude Include="databaseLayer\connectionScope.h" />
+    <ClInclude Include="databaseLayer\columnType.h" />
+    <ClInclude Include="databaseLayer\databaseQueryBuilder.h" />
+    <ClInclude Include="databaseLayer\databaseMaterializeBuilder.h" />
     <ClInclude Include="databaseLayer\databaseLayer.h" />
     <ClInclude Include="databaseLayer\databaseLayerDef.h" />
     <ClInclude Include="databaseLayer\databaseLayerException.h" />
@@ -76,23 +134,24 @@
     <ClInclude Include="databaseLayer\firebird\engine\ibase.h" />
     <ClInclude Include="databaseLayer\firebird\engine\iberror.h" />
     <ClInclude Include="databaseLayer\firebird\engine\ib_util.h" />
+    <ClInclude Include="databaseLayer\firebird\firebirdBlobCompression.h" />
+    <ClInclude Include="databaseLayer\firebird\firebirdBootstrap.h" />
+    <ClInclude Include="databaseLayer\firebird\firebirdCommon.h" />
     <ClInclude Include="databaseLayer\firebird\firebirdDatabaseLayer.h" />
+    <ClInclude Include="databaseLayer\firebird\firebirdHlc.h" />
     <ClInclude Include="databaseLayer\firebird\firebirdInterface.h" />
+    <ClInclude Include="databaseLayer\firebird\firebirdLeaderMode.h" />
+    <ClInclude Include="databaseLayer\firebird\firebirdLease.h" />
+    <ClInclude Include="databaseLayer\firebird\firebirdLocalServer.h" />
+    <ClInclude Include="databaseLayer\firebird\firebirdMaintenance.h" />
+    <ClInclude Include="databaseLayer\firebird\firebirdMaintenanceScheduler.h" />
+    <ClInclude Include="databaseLayer\firebird\firebirdReplicationConfig.h" />
     <ClInclude Include="databaseLayer\firebird\firebirdParameter.h" />
     <ClInclude Include="databaseLayer\firebird\firebirdParameterCollection.h" />
     <ClInclude Include="databaseLayer\firebird\firebirdPreparedStatement.h" />
     <ClInclude Include="databaseLayer\firebird\firebirdPreparedStatementWrapper.h" />
     <ClInclude Include="databaseLayer\firebird\firebirdResultSet.h" />
     <ClInclude Include="databaseLayer\firebird\firebirdResultSetMetaData.h" />
-    <ClInclude Include="databaseLayer\mysql\mysqlDatabaseLayer.h" />
-    <ClInclude Include="databaseLayer\mysql\mysqlInterface.h" />
-    <ClInclude Include="databaseLayer\mysql\mysqlParameter.h" />
-    <ClInclude Include="databaseLayer\mysql\mysqlPreparedStatement.h" />
-    <ClInclude Include="databaseLayer\mysql\mysqlPreparedStatementParameter.h" />
-    <ClInclude Include="databaseLayer\mysql\mysqlPreparedStatementParameterCollection.h" />
-    <ClInclude Include="databaseLayer\mysql\mysqlPreparedStatementResultSet.h" />
-    <ClInclude Include="databaseLayer\mysql\mysqlPreparedStatementWrapper.h" />
-    <ClInclude Include="databaseLayer\mysql\mysqlResultSetMetaData.h" />
     <ClInclude Include="databaseLayer\odbc\odbcDatabaseLayer.h" />
     <ClInclude Include="databaseLayer\odbc\odbcInterface.h" />
     <ClInclude Include="databaseLayer\odbc\odbcParameter.h" />
@@ -126,25 +185,48 @@
     <ClInclude Include="debugger\debugServer.h" />
     <ClInclude Include="backend_form.h" />
     <ClInclude Include="fileSystem\fs.h" />
+    <ClInclude Include="serialize\dataBuilder.h" />
+    <ClInclude Include="serialize\jsonProvider.h" />
+    <ClInclude Include="serialize\jsonText.h" />
     <ClInclude Include="fileSystem\lz\lzhuf.h" />
     <ClInclude Include="fileSystem\quicklz\quicklz.h" />
     <ClInclude Include="fileSystem\types.h" />
+    <ClInclude Include="eventDispatcher.h" />
     <ClInclude Include="guid.h" />
     <ClInclude Include="backend_localization.h" />
+    <ClInclude Include="formatString.h" />
     <ClInclude Include="metaCollection\metaLanguageObject.h" />
     <ClInclude Include="metaCollection\metaPictureObject.h" />
+    <ClInclude Include="homePageDescription.h" />
     <ClInclude Include="pictureDescription.h" />
     <ClInclude Include="metaCollection\attribute\metaAttributeObject.h" />
     <ClInclude Include="metaCollection\attribute\metaAttributeObjectEnum.h" />
+    <ClInclude Include="metaCollection\accountingKind\metaAccountingKindObject.h" />
     <ClInclude Include="metaCollection\dimension\metaDimensionObject.h" />
     <ClInclude Include="metaCollection\enumeration\metaEnumObject.h" />
-    <ClInclude Include="metaCollection\metaInterfaceObject.h" />
+    <ClInclude Include="metaCollection\metaSectionObject.h" />
+    <ClInclude Include="metaCollection\metaCommandObject.h" />
+    <ClInclude Include="metaCollection\metaCommandGroupObject.h" />
+    <ClInclude Include="metaCollection\metaScheduledJobObject.h" />
+    <ClInclude Include="metaCollection\metaEventHandlerObject.h" />
+    <ClInclude Include="metaCollection\metaSessionParameterObject.h" />
+    <ClInclude Include="metaCollection\metaFunctionalOptionObject.h" />
+    <ClInclude Include="functionalOption\functionalOptionGate.h" />
+    <ClInclude Include="metaCollection\metaStoredValueObject.h" />
+    <ClInclude Include="metaCollection\metaQueryDescriptor.h" />
+    <ClInclude Include="metaCollection\metaCommonAttributeObject.h" />
     <ClInclude Include="metaCollection\metaObjectComposite.h" />
     <ClInclude Include="metaCollection\metaFormObject.h" />
+    <ClInclude Include="metaCollection\metaComposerObject.h" />
     <ClInclude Include="metaCollection\metaSpreadsheetObject.h" />
     <ClInclude Include="metaCollection\metaModuleObject.h" />
+    <ClInclude Include="metaCollection\metaDiff.h" />
+    <ClInclude Include="metaCollection\metaGroups.h" />
+    <ClInclude Include="metaCollection\metaIntrospect.h" />
     <ClInclude Include="metaCollection\metaObject.h" />
     <ClInclude Include="metaCollection\metaObjectMetadata.h" />
+    <ClInclude Include="metaCollection\createRequest.h" />
+    <ClInclude Include="metaCollection\metaObjectEnum.h" />
     <ClInclude Include="metaCollection\metaObjectMetadataEnum.h" />
     <ClInclude Include="metaCollection\metaRoleObject.h" />
     <ClInclude Include="metaCollection\partial\accumulationRegister.h" />
@@ -153,11 +235,23 @@
     <ClInclude Include="metaCollection\partial\accountingRegister.h" />
     <ClInclude Include="metaCollection\partial\accountingRegisterEnum.h" />
     <ClInclude Include="metaCollection\partial\accountingRegisterManager.h" />
+    <ClInclude Include="calculation\calculation.h" />
+    <ClInclude Include="metaCollection\partial\calculationRegister.h" />
+    <ClInclude Include="metaCollection\partial\sequence.h" />
+    <ClInclude Include="metaCollection\partial\sequenceManager.h" />
+    <ClInclude Include="metaCollection\partial\calculationRegisterManager.h" />
+    <ClInclude Include="metaCollection\partial\chartOfCalculationTypes.h" />
+    <ClInclude Include="metaCollection\partial\chartOfCalculationTypesEnum.h" />
+    <ClInclude Include="metaCollection\partial\chartOfCalculationTypesRelationTable.h" />
+    <ClInclude Include="metaCollection\partial\chartOfCalculationTypesManager.h" />
     <ClInclude Include="metaCollection\partial\catalog.h" />
     <ClInclude Include="metaCollection\partial\catalogManager.h" />
+    <ClInclude Include="metaCollection\partial\parameterizedJob.h" />
+    <ClInclude Include="metaCollection\partial\parameterizedJobManager.h" />
     <ClInclude Include="metaCollection\partial\chartOfAccounts.h" />
-    <ClInclude Include="metaCollection\partial\chartOfAccountsSubcontoTable.h" />
+    <ClInclude Include="metaCollection\partial\chartOfAccountsDimensionKindsTable.h" />
     <ClInclude Include="metaCollection\partial\chartOfAccountsEnum.h" />
+    <ClInclude Include="metaCollection\partial\commonObjectEnum.h" />
     <ClInclude Include="metaCollection\partial\chartOfAccountsManager.h" />
     <ClInclude Include="metaCollection\partial\chartOfCharacteristicTypes.h" />
     <ClInclude Include="metaCollection\partial\chartOfCharacteristicTypesManager.h" />
@@ -175,25 +269,74 @@
     <ClInclude Include="metaCollection\partial\informationRegister.h" />
     <ClInclude Include="metaCollection\partial\informationRegisterEnum.h" />
     <ClInclude Include="metaCollection\partial\informationRegisterManager.h" />
-    <ClInclude Include="metaCollection\partial\list\listSqlBuilder.h" />
-    <ClInclude Include="metaCollection\partial\list\registerSqlBuilder.h" />
-    <ClInclude Include="metaCollection\partial\list\objectList.h" />
+    <ClInclude Include="query\queryable.h" />
+    <ClInclude Include="query\rolePolicyFold.h" />
+    <ClInclude Include="query\dataQueryBuilder.h" />
+    <ClInclude Include="query\queryProvider.h" />
+    <ClInclude Include="query\queryReadState.h" />
+    <ClInclude Include="query\dbTableProvider.h" />
+    <ClInclude Include="query\columnLayout.h" />
+    <ClInclude Include="query\columnSpread.h" />
+    <ClInclude Include="query\dataMover.h" />
+    <ClInclude Include="query\schemaBuilder.h" />
+    <ClInclude Include="query\derivedStateBuilder.h" />
+    <ClInclude Include="query\schemaSnapshot.h" />
+    <ClInclude Include="query\structureBatch.h" />
+    <ClInclude Include="query\structureBuilder.h" />
+    <ClInclude Include="query\tempTableManager.h" />
+    <ClInclude Include="query\queryRamTable.h" />
+    <ClInclude Include="query\queryRowCursor.h" />
+    <ClInclude Include="query\queryKeywords.h" />
+    <ClInclude Include="query\queryLexer.h" />
+    <ClInclude Include="query\queryAST.h" />
+    <ClInclude Include="query\queryRender.h" />
+    <ClInclude Include="query\queryConstructorModel.h" />
+    <ClInclude Include="query\queryTempStore.h" />
+    <ClInclude Include="query\queryParser.h" />
+    <ClInclude Include="query\queryLowering.h" />
+    <ClInclude Include="query\queryException.h" />
+    <ClInclude Include="query\queryHierarchy.h" />
+    <ClInclude Include="query\queryUnfold.h" />
+    <ClInclude Include="query\queryBalanceRole.h" />
+    <ClInclude Include="query\queryRewrite.h" />
+    <ClInclude Include="compiler\lambdaQueryAST.h" />
+    <ClInclude Include="query\queryableFactory.h" />
+    <ClInclude Include="composition\dataComposer.h" />
+    <ClInclude Include="composition\drivers\compositionDriver.h" />
+    <ClInclude Include="composition\dataComposerInternal.h" />
+    <ClInclude Include="composition\drivers\spreadsheetComposeDriver.h" />
+    <ClInclude Include="composition\drivers\listFetchDriver.h" />
+    <ClInclude Include="composition\drivers\tableComposeDriver.h" />
+    <ClInclude Include="composition\composeEvaluate.h" />
+    <ClInclude Include="composition\composeRunSchema.h" />
+    <ClInclude Include="composition\compositionCondition.h" />
+    <ClInclude Include="composition\compositionTheme.h" />
+    <ClInclude Include="compositionDescription.h" />
+    <ClInclude Include="system\value\composition\valueComposerField.h" />
+    <ClInclude Include="system\value\composition\valueComposerSettings.h" />
+    <ClInclude Include="system\value\valueComposer.h" />
+    <ClInclude Include="system\value\valueQuery.h" />
+    <ClInclude Include="system\value\valueQueryable.h" />
+    <ClInclude Include="system\value\valueDataComposition.h" />
+    <ClInclude Include="system\value\valueDynamicList.h" />
     <ClInclude Include="metaCollection\partial\commonObject.h" />
+    <ClInclude Include="metaCollection\partial\declaredPresentation.h" />
     <ClInclude Include="metaCollection\partial\reference\reference.h" />
     <ClInclude Include="metaCollection\partial\selector\objectSelector.h" />
     <ClInclude Include="metaCollection\partial\tabularSection\tabularSection.h" />
     <ClInclude Include="metaCollection\resource\metaResourceObject.h" />
     <ClInclude Include="metaCollection\table\metaTableObject.h" />
     <ClInclude Include="metaCtor.h" />
-    <ClInclude Include="metadata.h" />
+    <ClInclude Include="metaData.h" />
     <ClInclude Include="metadataConfiguration.h" />
     <ClInclude Include="metadataDataProcessor.h" />
     <ClInclude Include="metadataReport.h" />
-    <ClInclude Include="backend_metatree.h" />
     <ClInclude Include="moduleInfo.h" />
     <ClInclude Include="moduleManager\moduleManager.h" />
     <ClInclude Include="moduleManager\moduleManagerExt.h" />
-    <ClInclude Include="number.h" />
+    <ClInclude Include="fdatetime.h" />
+    <ClInclude Include="fnumber.h" />
+    <ClInclude Include="fstring.h" />
     <ClInclude Include="objCtor.h" />
     <ClInclude Include="picturePredefined.h" />
     <ClInclude Include="propertyManager\propertyManager.h" />
@@ -206,92 +349,216 @@
     <ClInclude Include="propertyManager\property\propertyEnum.h" />
     <ClInclude Include="propertyManager\property\propertyFont.h" />
     <ClInclude Include="propertyManager\property\propertyForm.h" />
+    <ClInclude Include="propertyManager\property\propertyComposition.h" />
+    <ClInclude Include="propertyManager\property\propertyDataComposition.h" />
+    <ClInclude Include="propertyManager\property\propertyDynamicList.h" />
+    <ClInclude Include="propertyManager\property\propertyDynamicSource.h" />
     <ClInclude Include="propertyManager\property\propertyGeneration.h" />
+    <ClInclude Include="propertyManager\property\propertySchedule.h" />
+    <ClInclude Include="propertyManager\property\variant\variantSchedule.h" />
     <ClInclude Include="propertyManager\property\propertyModule.h" />
     <ClInclude Include="propertyManager\property\propertyNumber.h" />
     <ClInclude Include="propertyManager\property\propertyList.h" />
     <ClInclude Include="propertyManager\property\propertyOwner.h" />
     <ClInclude Include="propertyManager\property\propertyChartOfCharacteristicTypes.h" />
+    <ClInclude Include="propertyManager\property\propertyAccountingKind.h" />
     <ClInclude Include="propertyManager\property\propertyChartOfAccounts.h" />
+    <ClInclude Include="propertyManager\property\propertyChartOfCalculationTypes.h" />
+    <ClInclude Include="propertyManager\property\propertyFunctionalOptions.h" />
+    <ClInclude Include="propertyManager\property\propertyCalcSchedule.h" />
+    <ClInclude Include="propertyManager\property\propertyChoiceLink.h" />
     <ClInclude Include="propertyManager\property\propertyPicture.h" />
     <ClInclude Include="propertyManager\property\propertyPoint.h" />
     <ClInclude Include="propertyManager\property\propertyRecord.h" />
     <ClInclude Include="propertyManager\property\propertySize.h" />
+    <ClInclude Include="propertyManager\property\propertyCommandSource.h" />
     <ClInclude Include="propertyManager\property\propertySource.h" />
     <ClInclude Include="propertyManager\property\propertyString.h" />
+    <ClInclude Include="propertyManager\property\propertyFormat.h" />
     <ClInclude Include="propertyManager\property\propertySpreadsheet.h" />
     <ClInclude Include="propertyManager\property\propertyType.h" />
     <ClInclude Include="propertyManager\property\variant\variantAction.h" />
+    <ClInclude Include="propertyManager\property\variant\variantComposition.h" />
+    <ClInclude Include="propertyManager\property\variant\variantDynamicSource.h" />
     <ClInclude Include="propertyManager\property\variant\variantForm.h" />
     <ClInclude Include="propertyManager\property\variant\variantGen.h" />
     <ClInclude Include="propertyManager\property\variant\variantModule.h" />
     <ClInclude Include="propertyManager\property\variant\variantNumber.h" />
     <ClInclude Include="propertyManager\property\variant\variantOwner.h" />
+    <ClInclude Include="propertyManager\property\variant\variantCalcSchedule.h" />
+    <ClInclude Include="propertyManager\property\variant\variantChoiceLink.h" />
     <ClInclude Include="propertyManager\property\variant\variantPicture.h" />
+    <ClInclude Include="propertyManager\property\variant\variantPoint.h" />
+    <ClInclude Include="propertyManager\property\variant\variantSize.h" />
     <ClInclude Include="propertyManager\property\variant\variantRecord.h" />
+    <ClInclude Include="propertyManager\property\variant\variantCommandSource.h" />
     <ClInclude Include="propertyManager\property\variant\variantSource.h" />
     <ClInclude Include="propertyManager\property\variant\variantSpreadsheet.h" />
+    <ClInclude Include="propertyManager\property\variant\variantTranslate.h" />
     <ClInclude Include="propertyManager\property\variant\variantType.h" />
     <ClInclude Include="res\resource.h" />
     <ClInclude Include="roleHelper.h" />
-    <ClInclude Include="srcExplorer.h" />
     <ClInclude Include="srcObject.h" />
+    <ClInclude Include="srcDataObject.h" />
+    <ClInclude Include="tabularDataObject.h" />
     <ClInclude Include="stringUtils.h" />
     <ClInclude Include="interfaceHelper.h" />
+    <ClInclude Include="compositionHelper.h" />
+    <ClInclude Include="functionalOptionHelper.h" />
     <ClInclude Include="system\systemEnum.h" />
     <ClInclude Include="system\systemManager.h" />
     <ClInclude Include="system\systemManagerEnum.h" />
     <ClInclude Include="system\value\valueArray.h" />
     <ClInclude Include="system\value\valueColour.h" />
     <ClInclude Include="system\value\valueEvent.h" />
+    <ClInclude Include="system\value\valueBinaryData.h" />
+    <ClInclude Include="system\value\valueTextFile.h" />
+    <ClInclude Include="system\value\valueHttp.h" />
+    <ClInclude Include="system\value\valueSecureConnection.h" />
     <ClInclude Include="system\value\valueFile.h" />
     <ClInclude Include="system\value\valueFont.h" />
     <ClInclude Include="system\value\valueGuid.h" />
+    <ClInclude Include="system\value\valueJson.h" />
+    <ClInclude Include="system\value\valueJob.h" />
     <ClInclude Include="system\value\valueMap.h" />
     <ClInclude Include="system\value\valueOLE.h" />
     <ClInclude Include="system\value\valuePicture.h" />
     <ClInclude Include="system\value\valuePoint.h" />
+    <ClInclude Include="system\value\valuePointInTime.h" />
+    <ClInclude Include="system\value\valueBoundary.h" />
     <ClInclude Include="system\value\valueSize.h" />
     <ClInclude Include="system\value\valueSpreadsheet.h" />
+    <ClInclude Include="system\value\valueSpreadsheetDetails.h" />
     <ClInclude Include="system\value\valueDatabase.h" />
     <ClInclude Include="system\value\valueTable.h" />
     <ClInclude Include="system\value\valueType.h" />
-    <ClInclude Include="tableInfo.h" />
-    <ClInclude Include="tableView.h" />
+    <ClInclude Include="tabularModel.h" />
+    <ClInclude Include="tabularModelView.h" />
+    <ClInclude Include="commandDescription.h" />
+    <ClInclude Include="sourceDescription.h" />
+    <ClInclude Include="calcScheduleDescription.h" />
+    <ClInclude Include="choiceLinkDescription.h" />
+    <ClInclude Include="choiceLinkResolver.h" />
     <ClInclude Include="typeconv.h" />
     <ClInclude Include="typeDescription.h" />
     <ClInclude Include="uniqueKey.h" />
+    <ClInclude Include="vcs\gitService.h" />
     <ClInclude Include="plugin\pluginApi.h" />
+    <ClInclude Include="plugin\pluginHost.h" />
     <ClInclude Include="plugin\pluginManager.h" />
     <ClInclude Include="utils\md5.hpp" />
     <ClInclude Include="utils\sha256.hpp" />
+    <ClInclude Include="utils\debugTrace.h" />
     <ClInclude Include="utils\passwordHash.hpp" />
+    <ClInclude Include="utils\dataVersion.hpp" />
     <ClInclude Include="valueInfo.h" />
     <ClInclude Include="value_cast.h" />
     <ClInclude Include="value_ptr.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="appData.cpp" />
+    <ClCompile Include="appHost.cpp" />
+    <ClCompile Include="cipher\fieldCipher.cpp" />
     <ClCompile Include="appDataQuery.cpp" />
+    <ClCompile Include="appEnv.cpp" />
+    <ClCompile Include="syntaxHelper\helpCorpus.cpp" />
+    <ClCompile Include="syntaxHelper\helpLoader.cpp" />
+    <ClCompile Include="syntaxHelper\helpResolver.cpp" />
+    <ClCompile Include="syntaxHelper\helpService.cpp" />
+    <ClCompile Include="logger\logger.cpp" />
+    <ClCompile Include="logger\loggerDiagnosticSink.cpp" />
+    <ClCompile Include="logger\loggerQueue.cpp" />
+    <ClCompile Include="logger\loggerReader.cpp" />
+    <ClCompile Include="logger\loggerSinkSqlite.cpp" />
+    <ClCompile Include="logger\loggerSweep.cpp" />
+    <ClCompile Include="logger\loggerWriter.cpp" />
     <ClCompile Include="userInfo.cpp" />
     <ClCompile Include="backend.cpp" />
     <ClCompile Include="backend_spreadsheet.cpp" />
     <ClCompile Include="backend_exception.cpp" />
+    <ClCompile Include="backend_diagnostic.cpp" />
+    <ClCompile Include="fileKind.cpp" />
+    <ClCompile Include="diagnostics\crashGuard.cpp" />
+    <ClCompile Include="diagnostics\journal.cpp" />
+    <ClCompile Include="diagnostics\leakTracker.cpp" />
     <ClCompile Include="session\designerExclusivePolicy.cpp" />
+    <ClCompile Include="session\serviceExclusivePolicy.cpp" />
     <ClCompile Include="session\session.cpp" />
+    <ClCompile Include="session\sessionException.cpp" />
+    <ClCompile Include="session\sessionParameters.cpp" />
+    <ClCompile Include="session\sessionHolder.cpp" />
     <ClCompile Include="session\sessionRegistry.cpp" />
     <ClCompile Include="session\sessionSnapshot.cpp" />
     <ClCompile Include="session\workerPoolHeadless.cpp" />
+    <ClCompile Include="lock\lockHandle.cpp" />
+    <ClCompile Include="lock\lockHolder.cpp" />
+    <ClCompile Include="lock\lockKeyHash.cpp" />
+    <ClCompile Include="lock\lockManager.cpp" />
+    <ClCompile Include="job\jobManager.cpp" />
+    <ClCompile Include="mcp\mcpClipboard.cpp" />
+    <ClCompile Include="mcp\mcpMessage.cpp" />
+    <ClCompile Include="mcp\mcpServer.cpp" />
+    <ClCompile Include="mcp\mcpTool.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolChat.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolComplete.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolCompose.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolRunCode.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolSchema.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolValue.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolFormat.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolClipboard.cpp" />
+    <ClCompile Include="mcp\mcpDebugBridge.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolDebug.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolApp.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolLocks.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolModule.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolHelp.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolJournal.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolScreen.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolSession.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolMetadata.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolNotes.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolPatterns.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolPicture.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolEnvelope.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolPredefined.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolQuery.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolReport.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolSheet.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolRoles.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolDatabase.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolComposition.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolFunctionalOption.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolSection.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolPlatform.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolBind.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolScript.cpp" />
+    <ClCompile Include="mcp\tools\mcpToolLanguage.cpp" />
+    <ClCompile Include="job\jobBackground.cpp" />
+    <ClCompile Include="job\jobRunByteCode.cpp" />
+    <ClCompile Include="job\jobRegister.cpp" />
+    <ClCompile Include="job\platformJobs.cpp" />
+    <ClCompile Include="job\jobSchedule.cpp" />
+    <ClCompile Include="job\jobScheduleRules.cpp" />
+    <ClCompile Include="query\queryable.cpp" />
+    <ClCompile Include="settings\settingsStorage.cpp" />
+    <ClCompile Include="settings\settingsComposer.cpp" />
+    <ClCompile Include="sheetFormat\sheetFormat.cpp" />
+    <ClCompile Include="sheetFormat\sheetFormatNative.cpp" />
+    <ClCompile Include="sheetFormat\sheetFormatDocx.cpp" />
+    <ClCompile Include="sheetFormat\sheetFormatXlsxRead.cpp" />
+    <ClCompile Include="sheetFormat\sheetFormatXlsxWrite.cpp" />
+    <ClCompile Include="system\value\valueBackgroundJob.cpp" />
     <ClCompile Include="backend_core.cpp" />
     <ClCompile Include="backend_mainFrame.cpp" />
     <ClCompile Include="backend_picture.cpp" />
     <ClCompile Include="backend_localization.cpp" />
+    <ClCompile Include="formatString.cpp" />
     <ClCompile Include="characteristicCtor.cpp" />
     <ClCompile Include="compiler\cache\byteCodeCache.cpp" />
     <ClCompile Include="compiler\byteCodeAOT.cpp" />
     <ClCompile Include="compiler\valueSerialization.cpp" />
     <ClCompile Include="constantCtor.cpp" />
-    <ClCompile Include="metaCollection\partial\chartOfAccountsMetadataQuery.cpp" />
     <ClCompile Include="metadataSerialization.cpp" />
     <ClCompile Include="moduleManager\globalContextManager.cpp" />
     <ClCompile Include="spreadsheetDescription.cpp" />
@@ -301,45 +568,55 @@
     <ClCompile Include="metaCollection\metaObjectMetadataProperty.cpp" />
     <ClCompile Include="metaCollection\metaPictureObject.cpp" />
     <ClCompile Include="metaCollection\metaPictureObject_res.cpp" />
+    <ClCompile Include="homePageDescription.cpp" />
     <ClCompile Include="pictureDescription.cpp" />
     <ClCompile Include="backend_type.cpp" />
     <ClCompile Include="compiler\byteCode.cpp" />
     <ClCompile Include="compiler\compileCode.cpp" />
+    <ClCompile Include="compiler\compileCodeLINQ.cpp" />
     <ClCompile Include="compiler\compileContext.cpp" />
     <ClCompile Include="compiler\compileModule.cpp" />
+    <ClCompile Include="compiler\scriptComplete.cpp" />
+    <ClCompile Include="compiler\blockSyntaxLINQ.cpp" />
+    <ClCompile Include="compiler\scriptParseCode.cpp" />
+    <ClCompile Include="compiler\scriptCheck.cpp" />
     <ClCompile Include="compiler\enumUnit.cpp" />
     <ClCompile Include="compiler\enumFactory.cpp" />
     <ClCompile Include="compiler\procContext.cpp" />
     <ClCompile Include="compiler\procUnit.cpp" />
-    <ClCompile Include="compiler\procUnitLinq.cpp" />
+    <ClCompile Include="compiler\procUnitLINQ.cpp" />
     <ClCompile Include="compiler\translateCode.cpp" />
     <ClCompile Include="compiler\value.cpp" />
     <ClCompile Include="compiler\valueFactory.cpp" />
     <ClCompile Include="compiler\value_res.cpp" />
     <ClCompile Include="databaseLayer\connectionPool.cpp" />
     <ClCompile Include="databaseLayer\connectionScope.cpp" />
+    <ClCompile Include="databaseLayer\databaseQueryBuilder.cpp" />
+    <ClCompile Include="databaseLayer\databaseMaterializeBuilder.cpp" />
     <ClCompile Include="databaseLayer\databaseErrorReporter.cpp" />
     <ClCompile Include="databaseLayer\databaseLayer.cpp" />
+    <ClCompile Include="databaseLayer\databaseLayerException.cpp" />
     <ClCompile Include="databaseLayer\databaseQueryParser.cpp" />
     <ClCompile Include="databaseLayer\databaseResultSet.cpp" />
+    <ClCompile Include="databaseLayer\preparedStatement.cpp" />
     <ClCompile Include="databaseLayer\databaseStringConverter.cpp" />
+    <ClCompile Include="databaseLayer\firebird\firebirdBlobCompression.cpp" />
+    <ClCompile Include="databaseLayer\firebird\firebirdBootstrap.cpp" />
     <ClCompile Include="databaseLayer\firebird\firebirdDatabaseLayer.cpp" />
+    <ClCompile Include="databaseLayer\firebird\firebirdHlc.cpp" />
     <ClCompile Include="databaseLayer\firebird\firebirdInterface.cpp" />
+    <ClCompile Include="databaseLayer\firebird\firebirdLeaderMode.cpp" />
+    <ClCompile Include="databaseLayer\firebird\firebirdLease.cpp" />
+    <ClCompile Include="databaseLayer\firebird\firebirdLocalServer.cpp" />
+    <ClCompile Include="databaseLayer\firebird\firebirdMaintenance.cpp" />
+    <ClCompile Include="databaseLayer\firebird\firebirdMaintenanceScheduler.cpp" />
+    <ClCompile Include="databaseLayer\firebird\firebirdReplicationConfig.cpp" />
     <ClCompile Include="databaseLayer\firebird\firebirdParameter.cpp" />
     <ClCompile Include="databaseLayer\firebird\firebirdParameterCollection.cpp" />
     <ClCompile Include="databaseLayer\firebird\firebirdPreparedStatement.cpp" />
     <ClCompile Include="databaseLayer\firebird\firebirdPreparedStatementWrapper.cpp" />
     <ClCompile Include="databaseLayer\firebird\firebirdResultSet.cpp" />
     <ClCompile Include="databaseLayer\firebird\firebirdResultSetMetaData.cpp" />
-    <ClCompile Include="databaseLayer\mysql\mysqlDatabaseLayer.cpp" />
-    <ClCompile Include="databaseLayer\mysql\mysqlInterface.cpp" />
-    <ClCompile Include="databaseLayer\mysql\mysqlParameter.cpp" />
-    <ClCompile Include="databaseLayer\mysql\mysqlPreparedStatement.cpp" />
-    <ClCompile Include="databaseLayer\mysql\mysqlPreparedStatementParameter.cpp" />
-    <ClCompile Include="databaseLayer\mysql\mysqlPreparedStatementParameterCollection.cpp" />
-    <ClCompile Include="databaseLayer\mysql\mysqlPreparedStatementResultSet.cpp" />
-    <ClCompile Include="databaseLayer\mysql\mysqlPreparedStatementWrapper.cpp" />
-    <ClCompile Include="databaseLayer\mysql\mysqlResultSetMetaData.cpp" />
     <ClCompile Include="databaseLayer\odbc\odbcDatabaseLayer.cpp" />
     <ClCompile Include="databaseLayer\odbc\odbcInterface.cpp" />
     <ClCompile Include="databaseLayer\odbc\odbcParameter.cpp" />
@@ -367,15 +644,21 @@
     <ClCompile Include="debugger\debugServer.cpp" />
     <ClCompile Include="backend_form.cpp" />
     <ClCompile Include="fileSystem\fs.cpp" />
+    <ClCompile Include="serialize\dataBuilder.cpp" />
+    <ClCompile Include="serialize\jsonProvider.cpp" />
+    <ClCompile Include="serialize\jsonText.cpp" />
     <ClCompile Include="fileSystem\lz\lzhuf.cpp" />
     <ClCompile Include="fileSystem\quicklz\quicklz.c" />
+    <ClCompile Include="eventDispatcher.cpp" />
     <ClCompile Include="guid.cpp" />
     <ClCompile Include="metaCollection\attribute\metaAttributeObject.cpp" />
     <ClCompile Include="metaCollection\attribute\metaAttributeObjectEnum.cpp" />
     <ClCompile Include="metaCollection\attribute\metaAttributeObjectProperty.cpp" />
-    <ClCompile Include="metaCollection\attribute\metaAttributeObjectQuery.cpp" />
     <ClCompile Include="metaCollection\attribute\metaAttributeObject_res.cpp" />
+    <ClCompile Include="metaCollection\accountingKind\metaAccountingKindObject.cpp" />
+    <ClCompile Include="metaCollection\accountingKind\metaAccountingKindObjectProperty.cpp" />
     <ClCompile Include="metaCollection\dimension\metaDimensionObject.cpp" />
+    <ClCompile Include="metaCollection\dimension\metaDimensionObjectProperty.cpp" />
     <ClCompile Include="metaCollection\dimension\metaDimensionObject_res.cpp" />
     <ClCompile Include="metaCollection\enumeration\metaEnumObject.cpp" />
     <ClCompile Include="metaCollection\enumeration\metaEnumObject_res.cpp" />
@@ -383,18 +666,52 @@
     <ClCompile Include="metaCollection\metaFormObjectMenu.cpp" />
     <ClCompile Include="metaCollection\metaFormObjectProperty.cpp" />
     <ClCompile Include="metaCollection\metaFormObject_res.cpp" />
+    <ClCompile Include="metaCollection\metaComposerObject.cpp" />
+    <ClCompile Include="metaCollection\metaComposerObjectMenu.cpp" />
+    <ClCompile Include="metaCollection\metaComposerObject_res.cpp" />
     <ClCompile Include="metaCollection\metaSpreadsheetObject.cpp" />
     <ClCompile Include="metaCollection\metaSpreadsheetObjectMenu.cpp" />
     <ClCompile Include="metaCollection\metaSpreadsheetObject_res.cpp" />
-    <ClCompile Include="metaCollection\metaInterfaceObject.cpp" />
-    <ClCompile Include="metaCollection\metaInterfaceObjectMenu.cpp" />
-    <ClCompile Include="metaCollection\metaInterfaceObject_res.cpp" />
+    <ClCompile Include="metaCollection\metaSectionObject.cpp" />
+    <ClCompile Include="metaCollection\metaCommandObject.cpp" />
+    <ClCompile Include="metaCollection\metaCommandObjectMenu.cpp" />
+    <ClCompile Include="metaCollection\metaCommandObject_res.cpp" />
+    <ClCompile Include="metaCollection\metaCommandGroupObject.cpp" />
+    <ClCompile Include="metaCollection\metaCommandGroupObject_res.cpp" />
+    <ClCompile Include="metaCollection\metaScheduledJobObject.cpp" />
+    <ClCompile Include="metaCollection\metaSessionParameterObject.cpp" />
+    <ClCompile Include="metaCollection\metaSessionParameterObject_res.cpp" />
+    <ClCompile Include="metaCollection\metaFunctionalOptionObject.cpp" />
+    <ClCompile Include="metaCollection\metaFunctionalOptionObjectMenu.cpp" />
+    <ClCompile Include="metaCollection\metaFunctionalOptionObject_res.cpp" />
+    <ClCompile Include="functionalOption\functionalOptionGate.cpp" />
+    <ClCompile Include="metaCollection\metaStoredValueObject.cpp" />
+    <ClCompile Include="metaCollection\metaStoredValueObjectAction.cpp" />
+    <ClCompile Include="metaCollection\metaStoredValueObjectMenu.cpp" />
+    <ClCompile Include="metaCollection\metaStoredValueObjectQuery.cpp" />
+    <ClCompile Include="metaCollection\metaStoredValueObjectRecord.cpp" />
+    <ClCompile Include="metaCollection\metaStoredValueObjectSchema.cpp" />
+    <ClCompile Include="metaCollection\metaCommonAttributeObject.cpp" />
+    <ClCompile Include="metaCollection\metaCommonAttributeObjectMenu.cpp" />
+    <ClCompile Include="metaCollection\metaCommonAttributeObject_res.cpp" />
+    <ClCompile Include="metaCollection\metaScheduledJobObjectMenu.cpp" />
+    <ClCompile Include="metaCollection\metaScheduledJobObject_res.cpp" />
+    <ClCompile Include="metaCollection\metaEventHandlerObject.cpp" />
+    <ClCompile Include="metaCollection\metaEventHandlerObjectMenu.cpp" />
+    <ClCompile Include="metaCollection\metaEventHandlerObject_res.cpp" />
+    <ClCompile Include="metaCollection\metaSectionObjectMenu.cpp" />
+    <ClCompile Include="metaCollection\metaSectionObject_res.cpp" />
     <ClCompile Include="metaCollection\metaModuleObject.cpp" />
     <ClCompile Include="metaCollection\metaModuleObjectMenu.cpp" />
     <ClCompile Include="metaCollection\metaModuleObjectProperty.cpp" />
     <ClCompile Include="metaCollection\metaModuleObject_res.cpp" />
+    <ClCompile Include="metaCollection\metaDiff.cpp" />
+    <ClCompile Include="metaCollection\metaGroups.cpp" />
+    <ClCompile Include="metaCollection\metaIntrospect.cpp" />
     <ClCompile Include="metaCollection\metaObject.cpp" />
+    <ClCompile Include="metaCollection\metaObjectSerialize.cpp" />
     <ClCompile Include="metaCollection\metaObjectMetadata.cpp" />
+    <ClCompile Include="metaCollection\metaObjectEnum.cpp" />
     <ClCompile Include="metaCollection\metaObjectMetadataEnum.cpp" />
     <ClCompile Include="metaCollection\metaObjectMetadataMenu.cpp" />
     <ClCompile Include="metaCollection\metaObjectMetadataQuery.cpp" />
@@ -407,60 +724,90 @@
     <ClCompile Include="metaCollection\partial\accumulationRegisterEnum.cpp" />
     <ClCompile Include="metaCollection\partial\accumulationRegisterManager.cpp" />
     <ClCompile Include="metaCollection\partial\accumulationRegisterManager_impl.cpp" />
+    <ClCompile Include="metaCollection\partial\accumulationRegisterMetadataTotals.cpp" />
     <ClCompile Include="metaCollection\partial\accumulationRegisterMetadata.cpp" />
     <ClCompile Include="metaCollection\partial\accumulationRegisterMetadataMenu.cpp" />
     <ClCompile Include="metaCollection\partial\accumulationRegisterMetadataProperty.cpp" />
     <ClCompile Include="metaCollection\partial\accumulationRegisterMetadata_res.cpp" />
     <ClCompile Include="metaCollection\partial\accumulationRegisterObject.cpp" />
-    <ClCompile Include="metaCollection\partial\accumulationRegisterQuery.cpp" />
     <ClCompile Include="metaCollection\partial\accountingRegisterEnum.cpp" />
     <ClCompile Include="metaCollection\partial\accountingRegisterManager.cpp" />
     <ClCompile Include="metaCollection\partial\accountingRegisterManager_impl.cpp" />
     <ClCompile Include="metaCollection\partial\accountingRegisterMetadata.cpp" />
+    <ClCompile Include="metaCollection\partial\accountingRegisterMetadataSchema.cpp" />
+    <ClCompile Include="metaCollection\partial\accountingRegisterMetadataTotals.cpp" />
     <ClCompile Include="metaCollection\partial\accountingRegisterMetadataMenu.cpp" />
     <ClCompile Include="metaCollection\partial\accountingRegisterMetadataProperty.cpp" />
     <ClCompile Include="metaCollection\partial\accountingRegisterMetadata_res.cpp" />
     <ClCompile Include="metaCollection\partial\accountingRegisterObject.cpp" />
+    <ClCompile Include="calculation\calculation.cpp" />
+    <ClCompile Include="metaCollection\partial\calculationRegisterManager.cpp" />
+    <ClCompile Include="metaCollection\partial\calculationRegisterManager_impl.cpp" />
+    <ClCompile Include="metaCollection\partial\calculationRegisterMetadata.cpp" />
+    <ClCompile Include="metaCollection\partial\calculationRegisterMetadataSchema.cpp" />
+    <ClCompile Include="metaCollection\partial\calculationRegisterMetadataTotals.cpp" />
+    <ClCompile Include="metaCollection\partial\calculationRegisterMetadataMenu.cpp" />
+    <ClCompile Include="metaCollection\partial\calculationRegisterMetadataProperty.cpp" />
+    <ClCompile Include="metaCollection\partial\calculationRegisterMetadata_res.cpp" />
+    <ClCompile Include="metaCollection\partial\sequenceBorderRules.cpp" />
+    <ClCompile Include="metaCollection\partial\sequenceManager.cpp" />
+    <ClCompile Include="metaCollection\partial\sequenceMetadataBorders.cpp" />
+    <ClCompile Include="metaCollection\partial\sequenceMetadata.cpp" />
+    <ClCompile Include="metaCollection\partial\sequenceMetadataMenu.cpp" />
+    <ClCompile Include="metaCollection\partial\sequenceObject.cpp" />
+    <ClCompile Include="metaCollection\partial\sequenceMetadata_res.cpp" />
+    <ClCompile Include="metaCollection\partial\calculationRegisterObject.cpp" />
+    <ClCompile Include="metaCollection\partial\chartOfCalculationTypesAction.cpp" />
+    <ClCompile Include="metaCollection\partial\chartOfCalculationTypesEnum.cpp" />
+    <ClCompile Include="metaCollection\partial\chartOfCalculationTypesRelationTable.cpp" />
+    <ClCompile Include="metaCollection\partial\chartOfCalculationTypesManager.cpp" />
+    <ClCompile Include="metaCollection\partial\chartOfCalculationTypesMetadata.cpp" />
+    <ClCompile Include="metaCollection\partial\chartOfCalculationTypesMetadataMenu.cpp" />
+    <ClCompile Include="metaCollection\partial\chartOfCalculationTypesMetadataProperty.cpp" />
+    <ClCompile Include="metaCollection\partial\chartOfCalculationTypesMetadata_res.cpp" />
+    <ClCompile Include="metaCollection\partial\chartOfCalculationTypesObject.cpp" />
+    <ClCompile Include="metaCollection\partial\calculationRegisterRecalculationMetadata.cpp" />
+    <ClCompile Include="metaCollection\partial\calculationRegisterRecalculationMetadata_res.cpp" />
     <ClCompile Include="metaCollection\partial\catalogAction.cpp" />
     <ClCompile Include="metaCollection\partial\catalogManager.cpp" />
-    <ClCompile Include="metaCollection\partial\catalogManager_impl.cpp" />
     <ClCompile Include="metaCollection\partial\catalogMetadata.cpp" />
     <ClCompile Include="metaCollection\partial\catalogMetadataMenu.cpp" />
     <ClCompile Include="metaCollection\partial\catalogMetadataProperty.cpp" />
     <ClCompile Include="metaCollection\partial\catalogMetadata_res.cpp" />
+    <ClCompile Include="metaCollection\partial\parameterizedJobAction.cpp" />
+    <ClCompile Include="metaCollection\partial\parameterizedJobManager.cpp" />
+    <ClCompile Include="metaCollection\partial\parameterizedJobMetadata.cpp" />
+    <ClCompile Include="metaCollection\partial\parameterizedJobMetadata_res.cpp" />
+    <ClCompile Include="metaCollection\partial\parameterizedJobRegistration.cpp" />
+    <ClCompile Include="metaCollection\partial\parameterizedJobMetadataMenu.cpp" />
+    <ClCompile Include="metaCollection\partial\parameterizedJobObject.cpp" />
     <ClCompile Include="metaCollection\partial\catalogObject.cpp" />
     <ClCompile Include="metaCollection\partial\chartOfAccountsAction.cpp" />
     <ClCompile Include="metaCollection\partial\chartOfAccountsEnum.cpp" />
     <ClCompile Include="metaCollection\partial\chartOfAccountsManager.cpp" />
-    <ClCompile Include="metaCollection\partial\chartOfAccountsManager_impl.cpp" />
     <ClCompile Include="metaCollection\partial\chartOfAccountsMetadata.cpp" />
-    <ClCompile Include="metaCollection\partial\chartOfAccountsSubcontoTable.cpp" />
+    <ClCompile Include="metaCollection\partial\chartOfAccountsDimensionKindsTable.cpp" />
+    <ClCompile Include="metaCollection\partial\chartOfAccountsMetadataSchema.cpp" />
     <ClCompile Include="metaCollection\partial\chartOfAccountsMetadataMenu.cpp" />
     <ClCompile Include="metaCollection\partial\chartOfAccountsMetadataProperty.cpp" />
     <ClCompile Include="metaCollection\partial\chartOfAccountsMetadata_res.cpp" />
     <ClCompile Include="metaCollection\partial\chartOfAccountsObject.cpp" />
     <ClCompile Include="metaCollection\partial\chartOfCharacteristicTypesAction.cpp" />
     <ClCompile Include="metaCollection\partial\chartOfCharacteristicTypesManager.cpp" />
-    <ClCompile Include="metaCollection\partial\chartOfCharacteristicTypesManager_impl.cpp" />
     <ClCompile Include="metaCollection\partial\chartOfCharacteristicTypesMetadata.cpp" />
     <ClCompile Include="metaCollection\partial\chartOfCharacteristicTypesMetadataMenu.cpp" />
     <ClCompile Include="metaCollection\partial\chartOfCharacteristicTypesMetadataProperty.cpp" />
     <ClCompile Include="metaCollection\partial\chartOfCharacteristicTypesMetadata_res.cpp" />
     <ClCompile Include="metaCollection\partial\chartOfCharacteristicTypesObject.cpp" />
-    <ClCompile Include="metaCollection\partial\constantAction.cpp" />
     <ClCompile Include="metaCollection\partial\constantManager.cpp" />
-    <ClCompile Include="metaCollection\partial\constantMetadataMenu.cpp" />
     <ClCompile Include="metaCollection\partial\constantMetadata.cpp" />
-    <ClCompile Include="metaCollection\partial\constantMetadataQuery.cpp" />
     <ClCompile Include="metaCollection\partial\constantMetadata_res.cpp" />
-    <ClCompile Include="metaCollection\partial\constantObject.cpp" />
     <ClCompile Include="metaCollection\partial\dataProcessorAction.cpp" />
     <ClCompile Include="metaCollection\partial\dataProcessorManager.cpp" />
     <ClCompile Include="metaCollection\partial\dataProcessorMetadata.cpp" />
     <ClCompile Include="metaCollection\partial\dataProcessorMetadataMenu.cpp" />
     <ClCompile Include="metaCollection\partial\dataProcessorMetadata_res.cpp" />
     <ClCompile Include="metaCollection\partial\dataProcessorObject.cpp" />
-    <ClCompile Include="metaCollection\partial\dataReportAction.cpp" />
     <ClCompile Include="metaCollection\partial\dataReportManager.cpp" />
     <ClCompile Include="metaCollection\partial\dataReportMetadata.cpp" />
     <ClCompile Include="metaCollection\partial\dataReportMetadataMenu.cpp" />
@@ -475,7 +822,6 @@
     <ClCompile Include="metaCollection\partial\documentMetadataProperty.cpp" />
     <ClCompile Include="metaCollection\partial\documentMetadata_res.cpp" />
     <ClCompile Include="metaCollection\partial\documentObject.cpp" />
-    <ClCompile Include="metaCollection\partial\enumerationAction.cpp" />
     <ClCompile Include="metaCollection\partial\enumerationManager.cpp" />
     <ClCompile Include="metaCollection\partial\enumerationMetadata.cpp" />
     <ClCompile Include="metaCollection\partial\enumerationMetadataMenu.cpp" />
@@ -484,22 +830,61 @@
     <ClCompile Include="metaCollection\partial\informationRegisterEnum.cpp" />
     <ClCompile Include="metaCollection\partial\informationRegisterManager.cpp" />
     <ClCompile Include="metaCollection\partial\informationRegisterManager_impl.cpp" />
+    <ClCompile Include="metaCollection\partial\informationRegisterMetadataSlice.cpp" />
     <ClCompile Include="metaCollection\partial\informationRegisterMetadata.cpp" />
     <ClCompile Include="metaCollection\partial\informationRegisterMetadataMenu.cpp" />
     <ClCompile Include="metaCollection\partial\informationRegisterMetadataProperty.cpp" />
     <ClCompile Include="metaCollection\partial\informationRegisterMetadata_res.cpp" />
     <ClCompile Include="metaCollection\partial\informationRegisterObject.cpp" />
-    <ClCompile Include="metaCollection\partial\informationRegisterQuery.cpp" />
-    <ClCompile Include="metaCollection\partial\list\listSqlBuilder.cpp" />
-    <ClCompile Include="metaCollection\partial\list\registerSqlBuilder.cpp" />
-    <ClCompile Include="metaCollection\partial\list\objectList.cpp" />
-    <ClCompile Include="metaCollection\partial\list\objectListAction.cpp" />
-    <ClCompile Include="metaCollection\partial\list\objectListModel.cpp" />
-    <ClCompile Include="metaCollection\partial\list\objectListQuery.cpp" />
+    <ClCompile Include="query\queryColumn.cpp" />
+    <ClCompile Include="query\dataQueryBuilder.cpp" />
+    <ClCompile Include="query\queryLexer.cpp" />
+    <ClCompile Include="query\queryRender.cpp" />
+    <ClCompile Include="query\queryConstructorModel.cpp" />
+    <ClCompile Include="query\queryTempStore.cpp" />
+    <ClCompile Include="query\queryParser.cpp" />
+    <ClCompile Include="query\queryLowering.cpp" />
+    <ClCompile Include="query\queryException.cpp" />
+    <ClCompile Include="query\queryHierarchy.cpp" />
+    <ClCompile Include="query\queryRewrite.cpp" />
+    <ClCompile Include="compiler\lambdaQueryAST.cpp" />
+    <ClCompile Include="query\queryableFactory.cpp" />
+    <ClCompile Include="composition\dataComposer.cpp" />
+    <ClCompile Include="composition\dataComposerRun.cpp" />
+    <ClCompile Include="composition\drivers\spreadsheetComposeDriver.cpp" />
+    <ClCompile Include="composition\ramComposer.cpp" />
+    <ClCompile Include="composition\composeEvaluate.cpp" />
+    <ClCompile Include="composition\composeRunSchema.cpp" />
+    <ClCompile Include="composition\compositionCondition.cpp" />
+    <ClCompile Include="composition\compositionTheme.cpp" />
+    <ClCompile Include="compositionDescription.cpp" />
+    <ClCompile Include="system\value\composition\valueComposerField.cpp" />
+    <ClCompile Include="system\value\composition\valueComposerSettings.cpp" />
+    <ClCompile Include="system\value\valueComposer.cpp" />
+    <ClCompile Include="system\value\valueQuery.cpp" />
+    <ClCompile Include="system\value\valueQueryable.cpp" />
+    <ClCompile Include="query\queryProvider.cpp" />
+    <ClCompile Include="query\queryReadState.cpp" />
+    <ClCompile Include="query\dbTableProvider.cpp" />
+    <ClCompile Include="query\columnLayout.cpp" />
+    <ClCompile Include="query\dataMover.cpp" />
+    <ClCompile Include="query\schemaBuilder.cpp" />
+    <ClCompile Include="metaCollection\partial\accumulationRegisterMetadataSchema.cpp" />
+    <ClCompile Include="query\derivedStateBuilder.cpp" />
+    <ClCompile Include="query\queryRamTable.cpp" />
+    <ClCompile Include="query\schemaSnapshot.cpp" />
+    <ClCompile Include="query\structureBatch.cpp" />
+    <ClCompile Include="query\structureBuilder.cpp" />
+    <ClCompile Include="query\tempTableManager.cpp" />
+    <ClCompile Include="system\value\valueDataComposition.cpp" />
+    <ClCompile Include="system\value\valueDynamicList.cpp" />
     <ClCompile Include="metaCollection\partial\commonObject.cpp" />
+    <ClCompile Include="metaCollection\partial\commonObjectEnum.cpp" />
+    <ClCompile Include="metaCollection\partial\commonObjectAction.cpp" />
     <ClCompile Include="metaCollection\partial\commonObjectModel.cpp" />
     <ClCompile Include="metaCollection\partial\commonObjectProperty.cpp" />
     <ClCompile Include="metaCollection\partial\commonObjectMetaQuery.cpp" />
+    <ClCompile Include="metaCollection\partial\commonObjectSchema.cpp" />
     <ClCompile Include="metaCollection\partial\commonObjectRefQuery.cpp" />
     <ClCompile Include="metaCollection\partial\commonObjectManagerQuery.cpp" />
     <ClCompile Include="metaCollection\partial\commonObjectRecordSetQuery.cpp" />
@@ -511,11 +896,12 @@
     <ClCompile Include="metaCollection\partial\tabularSection\tabularSectionModel.cpp" />
     <ClCompile Include="metaCollection\partial\tabularSection\tabularSectionQuery.cpp" />
     <ClCompile Include="metaCollection\resource\metaResourceObject.cpp" />
+    <ClCompile Include="metaCollection\resource\metaResourceObjectProperty.cpp" />
     <ClCompile Include="metaCollection\resource\metaResourceObject_res.cpp" />
     <ClCompile Include="metaCollection\table\metaTableObject.cpp" />
     <ClCompile Include="metaCollection\table\metaTableObjectProperty.cpp" />
     <ClCompile Include="metaCollection\table\metaTableObject_res.cpp" />
-    <ClCompile Include="metadata.cpp" />
+    <ClCompile Include="metaData.cpp" />
     <ClCompile Include="metadataConfiguration.cpp" />
     <ClCompile Include="metadataConfigurationQuery.cpp" />
     <ClCompile Include="metadataDataProcessor.cpp" />
@@ -524,13 +910,18 @@
     <ClCompile Include="metadataReport.cpp" />
     <ClCompile Include="metadataReportFactory.cpp" />
     <ClCompile Include="moduleInfo.cpp" />
-    <ClCompile Include="number.cpp" />
+    <ClCompile Include="fdatetime.cpp" />
+    <ClCompile Include="fnumber.cpp" />
+    <ClCompile Include="fstring.cpp" />
     <ClCompile Include="moduleManager\moduleManager.cpp" />
     <ClCompile Include="moduleManager\moduleManagerEvent.cpp" />
     <ClCompile Include="moduleManager\moduleManagerExt.cpp" />
     <ClCompile Include="moduleManager\moduleManagerMetadataUnit.cpp" />
+    <ClCompile Include="moduleManager\moduleManagerDataUnit.cpp" />
     <ClCompile Include="moduleManager\moduleManagerUnit.cpp" />
     <ClCompile Include="objCtor.cpp" />
+    <ClCompile Include="srcDataObject.cpp" />
+    <ClCompile Include="tabularDataObject.cpp" />
     <ClCompile Include="picturePredefined.cpp" />
     <ClCompile Include="propertyManager\propertyObject.cpp" />
     <ClCompile Include="propertyManager\property\eventControl.cpp" />
@@ -541,36 +932,55 @@
     <ClCompile Include="propertyManager\property\propertyEnum.cpp" />
     <ClCompile Include="propertyManager\property\propertyFont.cpp" />
     <ClCompile Include="propertyManager\property\propertyForm.cpp" />
+    <ClCompile Include="propertyManager\property\propertyComposition.cpp" />
+    <ClCompile Include="propertyManager\property\propertyDataComposition.cpp" />
+    <ClCompile Include="propertyManager\property\propertyDynamicList.cpp" />
+    <ClCompile Include="propertyManager\property\propertyDynamicSource.cpp" />
     <ClCompile Include="propertyManager\property\propertyGeneration.cpp" />
+    <ClCompile Include="propertyManager\property\propertySchedule.cpp" />
     <ClCompile Include="propertyManager\property\propertyModule.cpp" />
     <ClCompile Include="propertyManager\property\propertyNumber.cpp" />
     <ClCompile Include="propertyManager\property\propertyList.cpp" />
     <ClCompile Include="propertyManager\property\propertyOwner.cpp" />
     <ClCompile Include="propertyManager\property\propertyChartOfCharacteristicTypes.cpp" />
+    <ClCompile Include="propertyManager\property\propertyAccountingKind.cpp" />
     <ClCompile Include="propertyManager\property\propertyChartOfAccounts.cpp" />
+    <ClCompile Include="propertyManager\property\propertyChartOfCalculationTypes.cpp" />
+    <ClCompile Include="propertyManager\property\propertyFunctionalOptions.cpp" />
+    <ClCompile Include="propertyManager\property\propertyCalcSchedule.cpp" />
+    <ClCompile Include="propertyManager\property\propertyChoiceLink.cpp" />
     <ClCompile Include="propertyManager\property\propertyPicture.cpp" />
     <ClCompile Include="propertyManager\property\propertyPictureExt.cpp" />
     <ClCompile Include="propertyManager\property\propertyPoint.cpp" />
     <ClCompile Include="propertyManager\property\propertyRecord.cpp" />
     <ClCompile Include="propertyManager\property\propertySize.cpp" />
+    <ClCompile Include="propertyManager\property\propertyCommandSource.cpp" />
     <ClCompile Include="propertyManager\property\propertySource.cpp" />
     <ClCompile Include="propertyManager\property\propertyString.cpp" />
     <ClCompile Include="propertyManager\property\propertyStringExt.cpp" />
     <ClCompile Include="propertyManager\property\propertySpreadsheet.cpp" />
     <ClCompile Include="propertyManager\property\propertyType.cpp" />
     <ClCompile Include="propertyManager\property\variant\variantAction.cpp" />
+    <ClCompile Include="propertyManager\property\variant\variantDynamicSource.cpp" />
     <ClCompile Include="propertyManager\property\variant\variantForm.cpp" />
     <ClCompile Include="propertyManager\property\variant\variantGen.cpp" />
+    <ClCompile Include="propertyManager\property\variant\variantSchedule.cpp" />
     <ClCompile Include="propertyManager\property\variant\variantModule.cpp" />
     <ClCompile Include="propertyManager\property\variant\variantNumber.cpp" />
     <ClCompile Include="propertyManager\property\variant\variantOwner.cpp" />
+    <ClCompile Include="propertyManager\property\variant\variantCalcSchedule.cpp" />
+    <ClCompile Include="propertyManager\property\variant\variantChoiceLink.cpp" />
     <ClCompile Include="propertyManager\property\variant\variantPicture.cpp" />
+    <ClCompile Include="propertyManager\property\variant\variantPoint.cpp" />
+    <ClCompile Include="propertyManager\property\variant\variantSize.cpp" />
     <ClCompile Include="propertyManager\property\variant\variantRecord.cpp" />
     <ClCompile Include="propertyManager\property\variant\variantSource.cpp" />
     <ClCompile Include="propertyManager\property\variant\variantSpreadsheet.cpp" />
     <ClCompile Include="propertyManager\property\variant\variantType.cpp" />
     <ClCompile Include="roleHelper.cpp" />
     <ClCompile Include="interfaceHelper.cpp" />
+    <ClCompile Include="compositionHelper.cpp" />
+    <ClCompile Include="functionalOptionHelper.cpp" />
     <ClCompile Include="system\systemManager.cpp" />
     <ClCompile Include="system\systemManagerEnum.cpp" />
     <ClCompile Include="system\systemManagerFunc.cpp" />
@@ -579,29 +989,49 @@
     <ClCompile Include="system\value\valueDatabasePrepareStatement.cpp" />
     <ClCompile Include="system\value\valueDatabaseResultSet.cpp" />
     <ClCompile Include="system\value\valueEvent.cpp" />
+    <ClCompile Include="system\value\valueBinaryData.cpp" />
+    <ClCompile Include="system\value\valueTextFile.cpp" />
+    <ClCompile Include="system\value\valueHttp.cpp" />
+    <ClCompile Include="system\value\valueSecureConnection.cpp" />
     <ClCompile Include="system\value\valueFile.cpp" />
     <ClCompile Include="system\value\valueFont.cpp" />
     <ClCompile Include="system\value\valueGuid.cpp" />
+    <ClCompile Include="system\value\valueJson.cpp" />
+    <ClCompile Include="system\value\valueJob.cpp" />
     <ClCompile Include="system\value\valueMap.cpp" />
     <ClCompile Include="system\value\valueOLE.cpp" />
     <ClCompile Include="system\value\valuePicture.cpp" />
     <ClCompile Include="system\value\valuePoint.cpp" />
+    <ClCompile Include="system\value\valuePointInTime.cpp" />
+    <ClCompile Include="system\value\valueBoundary.cpp" />
     <ClCompile Include="system\value\valueSize.cpp" />
     <ClCompile Include="system\value\valueSpreadsheet.cpp" />
+    <ClCompile Include="system\value\valueSpreadsheetDetails.cpp" />
     <ClCompile Include="system\value\valueDatabaseLayer.cpp" />
     <ClCompile Include="system\value\valueSpreadsheetCell.cpp" />
     <ClCompile Include="system\value\valueTable.cpp" />
     <ClCompile Include="system\value\valueTableModel.cpp" />
     <ClCompile Include="system\value\valueTable_res.cpp" />
     <ClCompile Include="system\value\valueType.cpp" />
-    <ClCompile Include="tableInfo.cpp" />
-    <ClCompile Include="tableView.cpp" />
+    <ClCompile Include="tabularModel.cpp" />
+    <ClCompile Include="tabularModelDb.cpp" />
+    <ClCompile Include="tabularModelRam.cpp" />
+    <ClCompile Include="commandDescription.cpp" />
+    <ClCompile Include="sourceDescription.cpp" />
+    <ClCompile Include="calcScheduleDescription.cpp" />
+    <ClCompile Include="choiceLinkDescription.cpp" />
+    <ClCompile Include="choiceLinkResolver.cpp" />
+    <ClCompile Include="tabularModelView.cpp" />
     <ClCompile Include="typeDescription.cpp" />
     <ClCompile Include="uniqueKey.cpp" />
+    <ClCompile Include="compiler\typeAny.cpp" />
+    <ClCompile Include="vcs\gitService.cpp" />
     <ClCompile Include="plugin\pluginManager.cpp" />
+    <ClCompile Include="plugin\pluginHost.cpp" />
     <ClCompile Include="utils\md5.cpp" />
     <ClCompile Include="utils\sha256.cpp" />
     <ClCompile Include="utils\passwordHash.cpp" />
+    <ClCompile Include="utils\dataVersion.cpp" />
     <ClCompile Include="value_cast.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -667,22 +1097,67 @@
   <ItemGroup>
     <CopyFileToFolders Include="databaseLayer\firebird\engine\dll\firebird.conf">
       <FileType>Document</FileType>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(OutDir)\_fb</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(OutDir)\_fb</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)\_fb</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)\_fb</DestinationFolders>
+    </CopyFileToFolders>
+    <!-- Phase 6 — security5.fdb is FB's user-credentials store. The spawned
+         firebird.exe authenticates incoming TCP connects against it; without
+         it every attach fails with isc_login_error (335545106). Pre-baked
+         file from FB 5 ZIP comes with the standard SYSDBA/masterkey identity.
+         Same file for both x86 and x64 (it's just a .fdb format database). -->
+    <CopyFileToFolders Include="databaseLayer\firebird\engine\dll\security5.fdb" Condition="Exists('$(MSBuildThisFileDirectory)databaseLayer\firebird\engine\dll\security5.fdb')">
+      <FileType>Document</FileType>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(OutDir)\_fb</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(OutDir)\_fb</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)\_fb</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)\_fb</DestinationFolders>
+    </CopyFileToFolders>
+    <!-- Phase 6 — local FB server (firebird.exe) for leader-mode TCP listener.
+         Vendored per-platform as firebird_x86.exe / firebird_x64.exe alongside
+         fbclient_x86/_x64.dll; each platform's build copies the matching exe
+         into _fb/ and renames to plain firebird.exe so firebirdLocalServer
+         finds it under one stable name. Items skipped when the binary isn't
+         present so the build still works without it (degrades to embedded-
+         only single-user mode). -->
+    <CopyFileToFolders Include="databaseLayer\firebird\engine\dll\firebird_x86.exe" Condition="Exists('$(MSBuildThisFileDirectory)databaseLayer\firebird\engine\dll\firebird_x86.exe')">
+      <FileType>Document</FileType>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(OutDir)\_fb</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(OutDir)\_fb</DestinationFolders>
+      <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">firebird%(Extension)</DestinationFileName>
+      <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">firebird%(Extension)</DestinationFileName>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="databaseLayer\firebird\engine\dll\firebird_x64.exe" Condition="Exists('$(MSBuildThisFileDirectory)databaseLayer\firebird\engine\dll\firebird_x64.exe')">
+      <FileType>Document</FileType>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)\_fb</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)\_fb</DestinationFolders>
+      <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">firebird%(Extension)</DestinationFileName>
+      <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">firebird%(Extension)</DestinationFileName>
     </CopyFileToFolders>
     <CopyFileToFolders Include="databaseLayer\firebird\engine\dll\firebird.msg">
       <FileType>Document</FileType>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(OutDir)\_fb</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(OutDir)\_fb</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)\_fb</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)\_fb</DestinationFolders>
     </CopyFileToFolders>
     <CopyFileToFolders Include="databaseLayer\firebird\engine\dll\plugins\engine13_x64.dll">
       <FileType>Document</FileType>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
-      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)\plugins</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)\_fb\plugins</DestinationFolders>
       <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">engine13%(Extension)</DestinationFileName>
-      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)\plugins</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)\_fb\plugins</DestinationFolders>
       <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">engine13%(Extension)</DestinationFileName>
       <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">engine13%(Extension)</DestinationFileName>
       <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">engine13%(Extension)</DestinationFileName>
-      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(OutDir)\plugins</DestinationFolders>
-      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(OutDir)\plugins</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(OutDir)\_fb\plugins</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(OutDir)\_fb\plugins</DestinationFolders>
     </CopyFileToFolders>
     <CopyFileToFolders Include="databaseLayer\firebird\engine\dll\plugins\engine13_x86.dll">
       <FileType>Document</FileType>
@@ -690,19 +1165,100 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">false</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)\plugins</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)\_fb\plugins</DestinationFolders>
       <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">engine13%(Extension)</DestinationFileName>
-      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)\plugins</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)\_fb\plugins</DestinationFolders>
       <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">engine13%(Extension)</DestinationFileName>
-      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(OutDir)\plugins</DestinationFolders>
-      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(OutDir)\plugins</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(OutDir)\_fb\plugins</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(OutDir)\_fb\plugins</DestinationFolders>
       <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">engine13%(Extension)</DestinationFileName>
       <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">engine13%(Extension)</DestinationFileName>
+    </CopyFileToFolders>
+    <!-- Auth + wire-encryption + tracing plugins for spawned firebird.exe
+         server (Phase 6). Without srp/legacy_auth no SYSDBA login works;
+         without chacha wire-encryption handshake fails. Each plugin
+         vendored per-platform (x86 + x64), copied + renamed to plain
+         <name>.dll in _fb/plugins/. -->
+    <CopyFileToFolders Include="databaseLayer\firebird\engine\dll\plugins\srp_x86.dll" Condition="Exists('$(MSBuildThisFileDirectory)databaseLayer\firebird\engine\dll\plugins\srp_x86.dll')">
+      <FileType>Document</FileType>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(OutDir)\_fb\plugins</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(OutDir)\_fb\plugins</DestinationFolders>
+      <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">srp%(Extension)</DestinationFileName>
+      <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">srp%(Extension)</DestinationFileName>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="databaseLayer\firebird\engine\dll\plugins\srp_x64.dll" Condition="Exists('$(MSBuildThisFileDirectory)databaseLayer\firebird\engine\dll\plugins\srp_x64.dll')">
+      <FileType>Document</FileType>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)\_fb\plugins</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)\_fb\plugins</DestinationFolders>
+      <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">srp%(Extension)</DestinationFileName>
+      <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">srp%(Extension)</DestinationFileName>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="databaseLayer\firebird\engine\dll\plugins\chacha_x86.dll" Condition="Exists('$(MSBuildThisFileDirectory)databaseLayer\firebird\engine\dll\plugins\chacha_x86.dll')">
+      <FileType>Document</FileType>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(OutDir)\_fb\plugins</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(OutDir)\_fb\plugins</DestinationFolders>
+      <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">chacha%(Extension)</DestinationFileName>
+      <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">chacha%(Extension)</DestinationFileName>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="databaseLayer\firebird\engine\dll\plugins\chacha_x64.dll" Condition="Exists('$(MSBuildThisFileDirectory)databaseLayer\firebird\engine\dll\plugins\chacha_x64.dll')">
+      <FileType>Document</FileType>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)\_fb\plugins</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)\_fb\plugins</DestinationFolders>
+      <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">chacha%(Extension)</DestinationFileName>
+      <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">chacha%(Extension)</DestinationFileName>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="databaseLayer\firebird\engine\dll\plugins\legacy_auth_x86.dll" Condition="Exists('$(MSBuildThisFileDirectory)databaseLayer\firebird\engine\dll\plugins\legacy_auth_x86.dll')">
+      <FileType>Document</FileType>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(OutDir)\_fb\plugins</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(OutDir)\_fb\plugins</DestinationFolders>
+      <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">legacy_auth%(Extension)</DestinationFileName>
+      <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">legacy_auth%(Extension)</DestinationFileName>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="databaseLayer\firebird\engine\dll\plugins\legacy_auth_x64.dll" Condition="Exists('$(MSBuildThisFileDirectory)databaseLayer\firebird\engine\dll\plugins\legacy_auth_x64.dll')">
+      <FileType>Document</FileType>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)\_fb\plugins</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)\_fb\plugins</DestinationFolders>
+      <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">legacy_auth%(Extension)</DestinationFileName>
+      <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">legacy_auth%(Extension)</DestinationFileName>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="databaseLayer\firebird\engine\dll\plugins\legacy_usermanager_x86.dll" Condition="Exists('$(MSBuildThisFileDirectory)databaseLayer\firebird\engine\dll\plugins\legacy_usermanager_x86.dll')">
+      <FileType>Document</FileType>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(OutDir)\_fb\plugins</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(OutDir)\_fb\plugins</DestinationFolders>
+      <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">legacy_usermanager%(Extension)</DestinationFileName>
+      <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">legacy_usermanager%(Extension)</DestinationFileName>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="databaseLayer\firebird\engine\dll\plugins\legacy_usermanager_x64.dll" Condition="Exists('$(MSBuildThisFileDirectory)databaseLayer\firebird\engine\dll\plugins\legacy_usermanager_x64.dll')">
+      <FileType>Document</FileType>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)\_fb\plugins</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)\_fb\plugins</DestinationFolders>
+      <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">legacy_usermanager%(Extension)</DestinationFileName>
+      <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">legacy_usermanager%(Extension)</DestinationFileName>
     </CopyFileToFolders>
     <CopyFileToFolders Include="databaseLayer\firebird\engine\dll\fbclient_x64.dll">
       <FileType>Document</FileType>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)\_fb</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)\_fb</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(OutDir)\_fb</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(OutDir)\_fb</DestinationFolders>
       <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">fbclient%(Extension)</DestinationFileName>
       <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">fbclient%(Extension)</DestinationFileName>
       <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">fbclient%(Extension)</DestinationFileName>
@@ -714,6 +1270,10 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">false</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)\_fb</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)\_fb</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(OutDir)\_fb</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(OutDir)\_fb</DestinationFolders>
       <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">fbclient%(Extension)</DestinationFileName>
       <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">fbclient%(Extension)</DestinationFileName>
       <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">fbclient%(Extension)</DestinationFileName>
@@ -723,6 +1283,10 @@
       <FileType>Document</FileType>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)\_fb</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)\_fb</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(OutDir)\_fb</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(OutDir)\_fb</DestinationFolders>
       <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">ib_util%(Extension)</DestinationFileName>
       <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">ib_util%(Extension)</DestinationFileName>
       <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">ib_util%(Extension)</DestinationFileName>
@@ -734,6 +1298,10 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">false</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)\_fb</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)\_fb</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(OutDir)\_fb</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(OutDir)\_fb</DestinationFolders>
       <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">ib_util%(Extension)</DestinationFileName>
       <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">ib_util%(Extension)</DestinationFileName>
       <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">ib_util%(Extension)</DestinationFileName>
@@ -741,44 +1309,52 @@
     </CopyFileToFolders>
     <CopyFileToFolders Include="databaseLayer\firebird\engine\dll\intl\fbintl.conf">
       <FileType>Document</FileType>
-      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(OutDir)\intl</DestinationFolders>
-      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(OutDir)\intl</DestinationFolders>
-      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)\intl</DestinationFolders>
-      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)\intl</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(OutDir)\_fb\intl</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(OutDir)\_fb\intl</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)\_fb\intl</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)\_fb\intl</DestinationFolders>
     </CopyFileToFolders>
     <CopyFileToFolders Include="databaseLayer\firebird\engine\dll\intl\fbintl_x64.dll">
       <FileType>Document</FileType>
-      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(OutDir)\intl</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(OutDir)\_fb\intl</DestinationFolders>
       <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">fbintl%(Extension)</DestinationFileName>
       <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">fbintl%(Extension)</DestinationFileName>
       <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">fbintl%(Extension)</DestinationFileName>
       <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">fbintl%(Extension)</DestinationFileName>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
-      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(OutDir)\intl</DestinationFolders>
-      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)\intl</DestinationFolders>
-      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)\intl</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(OutDir)\_fb\intl</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)\_fb\intl</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)\_fb\intl</DestinationFolders>
     </CopyFileToFolders>
     <CopyFileToFolders Include="databaseLayer\firebird\engine\dll\intl\fbintl_x86.dll">
       <FileType>Document</FileType>
-      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(OutDir)\intl</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(OutDir)\_fb\intl</DestinationFolders>
       <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">fbintl%(Extension)</DestinationFileName>
       <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">fbintl%(Extension)</DestinationFileName>
       <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">fbintl%(Extension)</DestinationFileName>
       <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">fbintl%(Extension)</DestinationFileName>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(OutDir)\intl</DestinationFolders>
-      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)\intl</DestinationFolders>
-      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)\intl</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(OutDir)\_fb\intl</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)\_fb\intl</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)\_fb\intl</DestinationFolders>
     </CopyFileToFolders>
     <CopyFileToFolders Include="databaseLayer\firebird\engine\dll\icudt63l.dat">
       <FileType>Document</FileType>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(OutDir)\_fb</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(OutDir)\_fb</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)\_fb</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)\_fb</DestinationFolders>
     </CopyFileToFolders>
     <CopyFileToFolders Include="databaseLayer\firebird\engine\dll\icudt63_x64.dll">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
       <FileType>Document</FileType>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(OutDir)\_fb</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(OutDir)\_fb</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)\_fb</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)\_fb</DestinationFolders>
       <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">icudt63%(Extension)</DestinationFileName>
       <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">icudt63%(Extension)</DestinationFileName>
       <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">icudt63%(Extension)</DestinationFileName>
@@ -788,6 +1364,10 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
       <FileType>Document</FileType>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(OutDir)\_fb</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(OutDir)\_fb</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)\_fb</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)\_fb</DestinationFolders>
       <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">icudt63%(Extension)</DestinationFileName>
       <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">icudt63%(Extension)</DestinationFileName>
       <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">icudt63%(Extension)</DestinationFileName>
@@ -797,6 +1377,10 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
       <FileType>Document</FileType>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(OutDir)\_fb</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(OutDir)\_fb</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)\_fb</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)\_fb</DestinationFolders>
       <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">icuin63%(Extension)</DestinationFileName>
       <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">icuin63%(Extension)</DestinationFileName>
       <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">icuin63%(Extension)</DestinationFileName>
@@ -806,6 +1390,10 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
       <FileType>Document</FileType>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(OutDir)\_fb</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(OutDir)\_fb</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)\_fb</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)\_fb</DestinationFolders>
       <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">icuin63%(Extension)</DestinationFileName>
       <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">icuin63%(Extension)</DestinationFileName>
       <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">icuin63%(Extension)</DestinationFileName>
@@ -815,6 +1403,10 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
       <FileType>Document</FileType>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(OutDir)\_fb</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(OutDir)\_fb</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)\_fb</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)\_fb</DestinationFolders>
       <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">icuuc63%(Extension)</DestinationFileName>
       <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">icuuc63%(Extension)</DestinationFileName>
       <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">icuuc63%(Extension)</DestinationFileName>
@@ -824,6 +1416,10 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
       <FileType>Document</FileType>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(OutDir)\_fb</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(OutDir)\_fb</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)\_fb</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)\_fb</DestinationFolders>
       <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">icuuc63%(Extension)</DestinationFileName>
       <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">icuuc63%(Extension)</DestinationFileName>
       <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">icuuc63%(Extension)</DestinationFileName>
@@ -906,12 +1502,12 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" />
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
-      <WarningLevel>Level3</WarningLevel>
+      <WarningLevel>Level4</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>WIN32;_DEBUG;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;_UNICODE;WXUSINGDLL;_CONSOLE;%(PreprocessorDefinitions);BACKEND_EXPORTS</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;_UNICODE;WXUSINGDLL;_CONSOLE;%(PreprocessorDefinitions);BACKEND_EXPORTS;OES_FB_LOCALSERVER</PreprocessorDefinitions>
       <ConformanceMode>false</ConformanceMode>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
-      <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll\mswud;$(oes3rdParty)wxWidgets\include;$(oesEngine);$(oesSrcDir)include;.;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(oes3rdParty)cpp-httplib;$(oes3rdParty)mbedtls\include;$(oesEngine)backend\tls;$(oes3rdParty)wxWidgets\lib\vc_dll\mswud;$(oes3rdParty)wxWidgets\include;$(oesEngine);$(oesSrcDir)include;.;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
@@ -921,18 +1517,18 @@
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll;$(oesLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>wxmsw33ud_aui.lib;wxmsw33ud_qa.lib;wxmsw33ud_html.lib;wxmsw33ud_propgrid.lib;wxmsw33ud_adv.lib;wxmsw33ud_core.lib;wxbase33ud_xml.lib;wxbase33ud_net.lib;wxmsw33ud_stc.lib;wxmsw33ud_xrc.lib;wxbase33ud.lib;wxtiffd.lib;wxjpegd.lib;wxpngd.lib;wxzlibd.lib;wxscintillad.lib;wxregexud.lib;wxexpatd.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>mbedtls.lib;bcrypt.lib;wxmsw33ud_aui.lib;wxmsw33ud_qa.lib;wxmsw33ud_html.lib;wxmsw33ud_propgrid.lib;wxmsw33ud_adv.lib;wxmsw33ud_core.lib;wxbase33ud_xml.lib;wxbase33ud_net.lib;wxmsw33ud_stc.lib;wxmsw33ud_xrc.lib;wxbase33ud.lib;wxtiffd.lib;wxjpegd.lib;wxpngd.lib;wxzlibd.lib;wxscintillad.lib;wxregexud.lib;wxexpatd.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
-      <WarningLevel>Level3</WarningLevel>
+      <WarningLevel>Level4</WarningLevel>
       <Optimization>Disabled</Optimization>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32;_DEBUG;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;_UNICODE;WXUSINGDLL;_CONSOLE;%(PreprocessorDefinitions);BACKEND_EXPORTS</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;_UNICODE;WXUSINGDLL;_CONSOLE;%(PreprocessorDefinitions);BACKEND_EXPORTS;OES_FB_LOCALSERVER</PreprocessorDefinitions>
       <ConformanceMode>false</ConformanceMode>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
-      <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll\mswud;$(oes3rdParty)wxWidgets\include;$(oesEngine);.;$(oesEngine)/core;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(oes3rdParty)cpp-httplib;$(oes3rdParty)mbedtls\include;$(oesEngine)backend\tls;$(oes3rdParty)wxWidgets\lib\vc_dll\mswud;$(oes3rdParty)wxWidgets\include;$(oesEngine);.;$(oesEngine)/core;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <AdditionalOptions>/Gw /bigobj %(AdditionalOptions)</AdditionalOptions>
@@ -941,7 +1537,7 @@
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_x64_dll;$(oesLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>wxmsw33ud_aui.lib;wxmsw33ud_qa.lib;wxmsw33ud_html.lib;wxmsw33ud_propgrid.lib;wxmsw33ud_adv.lib;wxmsw33ud_core.lib;wxbase33ud_xml.lib;wxbase33ud_net.lib;wxmsw33ud_stc.lib;wxmsw33ud_xrc.lib;wxbase33ud.lib;wxtiffd.lib;wxjpegd.lib;wxpngd.lib;wxzlibd.lib;wxscintillad.lib;wxregexud.lib;wxexpatd.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>mbedtls.lib;bcrypt.lib;wxmsw33ud_aui.lib;wxmsw33ud_qa.lib;wxmsw33ud_html.lib;wxmsw33ud_propgrid.lib;wxmsw33ud_adv.lib;wxmsw33ud_core.lib;wxbase33ud_xml.lib;wxbase33ud_net.lib;wxmsw33ud_stc.lib;wxmsw33ud_xrc.lib;wxbase33ud.lib;wxtiffd.lib;wxjpegd.lib;wxpngd.lib;wxzlibd.lib;wxscintillad.lib;wxregexud.lib;wxexpatd.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <Profile>true</Profile>
     </Link>
   </ItemDefinitionGroup>
@@ -952,10 +1548,10 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;NDEBUG;_UNICODE;WXUSINGDLL;_CONSOLE;BACKEND_EXPORTS</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;NDEBUG;_UNICODE;WXUSINGDLL;_CONSOLE;%(PreprocessorDefinitions);BACKEND_EXPORTS;OES_FB_LOCALSERVER</PreprocessorDefinitions>
       <ConformanceMode>false</ConformanceMode>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
-      <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll\mswu;$(oes3rdParty)wxWidgets\include;$(oesEngine);.;$(oesEngine)core;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(oes3rdParty)cpp-httplib;$(oes3rdParty)mbedtls\include;$(oesEngine)backend\tls;$(oes3rdParty)wxWidgets\lib\vc_dll\mswu;$(oes3rdParty)wxWidgets\include;$(oesEngine);.;$(oesEngine)core;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
@@ -969,7 +1565,7 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>DebugFastLink</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll;$(oesLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>wxmsw33u_aui.lib;wxmsw33u_qa.lib;wxmsw33u_html.lib;wxmsw33u_propgrid.lib;wxmsw33u_adv.lib;wxmsw33u_core.lib;wxbase33u_xml.lib;wxbase33u_net.lib;wxmsw33u_stc.lib;wxmsw33u_xrc.lib;wxbase33u.lib;wxtiffd.lib;wxjpegd.lib;wxpngd.lib;wxzlibd.lib;wxscintillad.lib;wxregexud.lib;wxexpatd.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>mbedtls.lib;bcrypt.lib;wxmsw33u_aui.lib;wxmsw33u_qa.lib;wxmsw33u_html.lib;wxmsw33u_propgrid.lib;wxmsw33u_adv.lib;wxmsw33u_core.lib;wxbase33u_xml.lib;wxbase33u_net.lib;wxmsw33u_stc.lib;wxmsw33u_xrc.lib;wxbase33u.lib;wxtiffd.lib;wxjpegd.lib;wxpngd.lib;wxzlibd.lib;wxscintillad.lib;wxregexud.lib;wxexpatd.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -979,10 +1575,10 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;NDEBUG;_UNICODE;WXUSINGDLL;_CONSOLE;BACKEND_EXPORTS</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;NDEBUG;_UNICODE;WXUSINGDLL;_CONSOLE;%(PreprocessorDefinitions);BACKEND_EXPORTS;OES_FB_LOCALSERVER</PreprocessorDefinitions>
       <ConformanceMode>false</ConformanceMode>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
-      <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll\mswu;$(oes3rdParty)wxWidgets\include;$(oesEngine);.;$(oesEngine)/core;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(oes3rdParty)cpp-httplib;$(oes3rdParty)mbedtls\include;$(oesEngine)backend\tls;$(oes3rdParty)wxWidgets\lib\vc_dll\mswu;$(oes3rdParty)wxWidgets\include;$(oesEngine);.;$(oesEngine)/core;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
@@ -997,11 +1593,39 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>DebugFastLink</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_x64_dll;$(oesLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>wxmsw33u_aui.lib;wxmsw33u_qa.lib;wxmsw33u_html.lib;wxmsw33u_propgrid.lib;wxmsw33u_adv.lib;wxmsw33u_core.lib;wxbase33u_xml.lib;wxbase33u_net.lib;wxmsw33u_stc.lib;wxmsw33u_xrc.lib;wxbase33u.lib;wxtiffd.lib;wxjpegd.lib;wxpngd.lib;wxzlibd.lib;wxscintillad.lib;wxregexud.lib;wxexpatd.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>mbedtls.lib;bcrypt.lib;wxmsw33u_aui.lib;wxmsw33u_qa.lib;wxmsw33u_html.lib;wxmsw33u_propgrid.lib;wxmsw33u_adv.lib;wxmsw33u_core.lib;wxbase33u_xml.lib;wxbase33u_net.lib;wxmsw33u_stc.lib;wxmsw33u_xrc.lib;wxbase33u.lib;wxtiffd.lib;wxjpegd.lib;wxpngd.lib;wxzlibd.lib;wxscintillad.lib;wxregexud.lib;wxexpatd.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
     <Import Project="$(VCTargetsPath)\BuildCustomizations\masm.targets" />
   </ImportGroup>
+  <!--
+    Syntax-helper content stage. Pack syntaxHelper\(locale)\*.json into
+    $(OutDir)help\(locale).hlk (zip, DEFLATE) so the runtime locator
+    finds one file per locale next to the exe in production. Source-of-
+    truth is $(SolutionDir)syntaxHelper; dev runs read from there
+    directly via the walk-up fallback in ibHelpService::ResolvePlatformDir
+    (loader's ResolveSource picks zip when present, dir otherwise).
+
+    PowerShell Compress-Archive is preferred over tar.exe because tar
+    with the "-C dir ." form prefixes every entry with "./", which the
+    wxZipInputStream-side parser handles non-trivially (asserts on
+    debug builds for the bare "./" dir marker). Compress-Archive
+    writes entries as bare leaf names without that prefix and without
+    a directory entry. -Force overwrites; the .pack-stamp.txt sentinel
+    drives MSBuild Inputs/Outputs so the Target re-runs only when
+    source JSON or build-tree state changed.
+  -->
+  <Target Name="StageSyntaxHelperContent" AfterTargets="Build"
+          Inputs="$(SolutionDir)syntaxHelper\**\*.json"
+          Outputs="$(OutDir)help\.pack-stamp.txt">
+    <MakeDir Directories="$(OutDir)help" />
+    <ItemGroup>
+      <SyntaxHelperLocales Include="$([System.IO.Directory]::GetDirectories('$(SolutionDir)syntaxHelper'))" />
+    </ItemGroup>
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -Command &quot;Add-Type -A 'System.IO.Compression.FileSystem'; if (Test-Path '$(OutDir)help\%(SyntaxHelperLocales.Filename).hlk') { Remove-Item '$(OutDir)help\%(SyntaxHelperLocales.Filename).hlk' -Force }; [IO.Compression.ZipFile]::CreateFromDirectory('%(SyntaxHelperLocales.FullPath)', '$(OutDir)help\%(SyntaxHelperLocales.Filename).hlk', 'Optimal', 0)&quot;"
+          WorkingDirectory="$(SolutionDir)" />
+    <Touch Files="$(OutDir)help\.pack-stamp.txt" AlwaysCreate="true" />
+  </Target>
 </Project>

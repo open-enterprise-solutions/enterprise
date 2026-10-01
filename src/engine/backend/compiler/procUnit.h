@@ -10,30 +10,97 @@ struct ibProcUnitState;   // procUnitState.h — forward decl; full type via ibS
 // access to ibProcUnit::m_pByteCode for the swap-and-restore pattern
 // in its Execute() implementation.
 class ibValueFunction;
-class ibSession;
 
-// Invoke a lambda value with one argument from host (C++) code.
-// `callable` must wrap (directly or through TYPE_REFFER) an
-// ibValueFunction value; returns true on success, false if the
-// value is not a lambda. Used by host-side aggregation helpers
-// (ibValueArray::Sum/Min/Max/Average with selector λ) and other
-// callsites that need to fire a script lambda from C++ without
-// going through OPER_CALL_LAMBDA bytecode.
+// Invoke a lambda value with N positional arguments from host (C++) code.
+// `callable` must wrap (directly or through TYPE_REFFER) an ibValueFunction;
+// argPtrs[0..n) are the arguments. Returns true on success, false if the value
+// is not a lambda. The one place the arity matters is the call site: aggregation
+// selectors pass one (ibValueArray::Sum/Min/Max/Average), the L4-2 Queryable.Join
+// push-down passes two (the outer,inner result-selector). One entry, not a family
+// of arity-specific wrappers — fire a script lambda from C++ without going through
+// OPER_CALL_LAMBDA bytecode.
+BACKEND_API bool InvokeLambda(ibValue& callable, ibValue** argPtrs, long n, ibValue& retVal);
+
+// Convenience over InvokeLambda for the common single-argument call (argPtrs = { &arg }).
 BACKEND_API bool InvokeLambdaWithArg(ibValue& callable, ibValue& arg, ibValue& retVal);
+
+// ⭐⭐ WHAT A COMPILED PIPELINE DOES TO ITS OWN COLLECTION — the three verbs behind OPER_LINQ_SEEN /
+// KEEP / RESULT (codeDef.h). The collection is LINQ's OWN runtime class, not a script `Array`: a
+// user-visible Array is heavy, is built by NAME through the object factory, and answers "seen this
+// before?" in linear time where a set answers in log n. It lives beside the pipeline's other state
+// classes, in procUnitLINQ.cpp, and reaches script in exactly one place — `ibLinqResult` building an
+// Array when the person asked for a collection.
+//
+// `scratch` is a frame slot: the collection is created there on first use and lives as long as the
+// loop does, which is what a frame slot means.
+BACKEND_API bool ibLinqSeen(ibValue& scratch, const ibValue& value);
+// `row` null = this instruction carries only a further ordering key for the row already kept;
+// `keyAt` is that key's position among the clause's keys, `descending` the way it runs. See the definition.
+BACKEND_API void ibLinqKeep(ibValue& scratch, const ibValue* row, const ibValue* key, long keyAt, bool descending);
+// `ordering`: 0 leave as they came · 2 by the keys, each the way it was kept with · 3 simply reversed.
+// `wantFirst` asks for the first row instead of all of them (an empty value when there are none).
+//
+// What the rest becomes is READ OFF THE ROWS: a table when they carry named columns — which after a
+// projection they always do — and an Array when they do not, which is what `ToArray` over plain
+// values means. `ToTable` does not come through here at all: on a data source the queryable builds
+// the table from the SCHEMA, and on a collection the dispatcher builds it from the rows.
+BACKEND_API void ibLinqResult(ibValue& out, ibValue& scratch, int ordering, bool wantFirst);
+
+// Grouping and joining, in the same collection: a row goes under its key, and the rows under a key
+// come back as one value — as a VIEW, so a join's per-row lookup builds nothing. `ibLinqGroups`
+// turns the buckets into the answer, one light group per key, in the order the keys first appeared.
+BACKEND_API void ibLinqBucket(ibValue& scratch, const ibValue& key, const ibValue& row);
+BACKEND_API void ibLinqBucketGet(ibValue& out, ibValue& scratch, const ibValue& key);
+BACKEND_API void ibLinqGroups(ibValue& out, ibValue& scratch);
+
+// The projection — `select { a = …, b = … }`. `names` is the field list as ONE constant (separated
+// by `\n`), read only when the shape is made: once per query, in `shapeSlot`. Every row after that
+// is an allocation of `count` values, filled BY POSITION — `ibLinqField` is handed the ordinal the
+// compiler assigned while it was compiling, so no name is looked up per row or per field.
+BACKEND_API void ibLinqRow(ibValue& out, ibValue& shapeSlot, const ibString& names, long count);
+BACKEND_API void ibLinqField(ibValue& row, const ibValue& value, long ordinal);
+
+// ⭐⭐ DOES THIS ROW NAME ITS COLUMNS? — the one question that decides whether a query answers with a
+// TABLE or with an Array, and it is exported because TWO readers ask it. The runtime asks it of a
+// real row on its way to building the answer; the editor asks it of a SAMPLE row, standing after the
+// dot, to say what the answer will be. Asked in two places it would be two rules, and the reader
+// would eventually describe an Array as a table.
+//
+// True with the names filled for a projected row (`select { … }`) and for a group (Key / Values);
+// false for a plain value, an object, a reference — anything whose columns nobody named.
+BACKEND_API bool ibLinqNamedColumns(const ibValue& row, std::vector<ibString>& outNames);
+
+// ⭐ AND A SAMPLE OF WHAT A GROUPING ANSWERS WITH — the collection a grouped query hands back, with
+// one group in it. Exported for the same reason as the rule above: the editor has to say what a query
+// will look like WITHOUT running it, and a grouping's shape is settled before a single row is seen —
+// one group per key, and a group is Key and Values whatever the rows were.
+//
+// ⭐⭐ THE GROUP CARRIES WHAT THE TAPE PUTS INTO IT when the reader could resolve it: `key` is what the
+// bucket instruction keys by and `row` what it keeps, so `g.Key.` names the key's fields (several keys
+// made into one Structure name themselves) and `g.Values` holds a row of the right kind. An empty
+// group was all a reader got before, and after `g.Key.` it could offer nothing.
+BACKEND_API void ibLinqGroupedSample(ibValue& out, const ibValue& key = ibValue(), const ibValue* row = nullptr);
 
 class BACKEND_API ibProcUnit {
 public:
 
 	friend class ibValueFunction;
-	// ibSession::CompileRoot wires the per-session lambda runtime
-	// shim's frame array directly — needs access to m_pppArrayList /
-	// m_ppArrayCode / m_cCurContext.
+
+	// ⭐⭐ AND THE SESSION, FOR ITS ROOT'S FRAME AND NOTHING ELSE. A run context is deliberately not
+	// public: it is a live frame, and a pointer to one held past its moment is a dangling frame. But
+	// an expression evaluated "against the root" needs precisely that frame — it carries BOTH halves
+	// the eval needs, the module's BYTECODE to compile the names against (ibCompileEval reads it
+	// straight off the context) and the SLOTS those names resolve into at depth 1.
+	//
+	// So the one who owns the root is the one who may hand it over: ibSession::EvaluateInRoot does
+	// the evaluation and answers with a VALUE. The frame never leaves (Max, 2026-09-07: *"the context
+	// does not go outside its bounds here"*).
 	friend class ibSession;
 
 	//Constructors/destructors
 	ibProcUnit() : m_numAutoDeleteParent(0),
 		m_pByteCode(nullptr),
-		m_pppArrayList(nullptr),
+		m_ppArrayContext(nullptr),
 		m_ppArrayCode(nullptr) {
 	}
 
@@ -72,6 +139,15 @@ public:
 	unsigned int GetParentCount() const { return m_procParent.size(); }
 	const ibByteCode* GetByteCode() const { return m_pByteCode; }
 
+	// Parent onto `donor` and run in ITS scope rather than one of our own: slots
+	// [0] and [1], which a normal unit fills with its own locals, point at the
+	// donor's bound frame instead. For a unit that hosts no module — the session's
+	// lambda runtime, whose per-call frame is the caller's ibRunContext — that is
+	// what makes depth=1 resolution land directly on the donor's slots (Catalogs /
+	// Documents / Manager / system functions) with no offset hack.
+	// compiler-pipeline.md §6.
+	void BorrowScopeFrom(ibProcUnit* donor);
+
 	// Execute(bytecode, binder, retVal). Bytecode is a pure template
 	// (m_listVar entries with kind ∈ {External, Context} declare the
 	// binding contract); binder carries the live ibValue* slots filled
@@ -81,7 +157,7 @@ public:
 
 	// Internal ibByteCode-only overloads — used by eval / nested call
 	// paths that don't need a real binding session (extern frames
-	// inherited via m_pppArrayList from a parent procunit). Construct
+	// inherited via m_ppArrayContext from a parent procunit). Construct
 	// an empty binder internally bound to bc's m_listVar.
 	void Execute(const ibByteCode& bc) { ibByteBinder br(bc.m_listVar, /*delta=*/true); Execute(bc, br, nullptr); }
 	void Execute(const ibByteCode& bc, bool delta) { ibByteBinder br(bc.m_listVar, delta); Execute(bc, br, nullptr); }
@@ -92,42 +168,95 @@ private:
 	void Execute(ibRunContext* pContext, ibValue* pvarRetValue, bool bDelta); // bDelta=true - flag for executing module operators that come at the end of functions and procedures
 public:
 
-	static bool Evaluate(const wxString& strExpression, ibRunContext* pRunContext, ibValue& pvarRetValue, bool bCompileBlock);
+	// `evalMode` says WHAT this evaluation is, and everything else follows from it (backend_core.h):
+	// a WATCH by default — a tooltip, an autocomplete probe, the expression somebody hovered, which
+	// must change nothing — or `eval_sandbox`, the debugger's, which writes and fires handlers
+	// inside a transaction that is always rolled back.
+	//
+	// ⭐ THE KIND RATHER THAN ITS CONSEQUENCE. An earlier version took `bAllowWrites`, which named
+	// what the caller WANTS PERMITTED instead of what they ARE — so every gate downstream would
+	// have had to be told separately about the next thing a sandbox may do. Ask what it is; derive
+	// what it may.
+	// 🛑⭐⭐ THE CONTEXT YOU PASS **IS** DEPTH 1 — and it has to be a REAL frame, not a descriptor you
+	// filled in. The eval unit is laid out as own = depth 0, HOST = depth 1, the host's parents
+	// above (see the comment at CompileExpression's call site), and the host is exactly this
+	// argument. It must carry BOTH halves:
+	//
+	//   * the module's BYTECODE — `ibCompileEval` reads it straight off the context and the
+	//     expression's names are compiled against it. Without it nothing resolves: `compile failed`.
+	//   * the module's SLOTS — where those names land at run time. Without them every global raises
+	//     "Outer frame not bound at depth 1 / idx N (the frame holds 0 slots)".
+	//
+	// ⚠ TWO THINGS THAT LOOK RIGHT AND ARE NOT, both tried on the composition road (2026-09-07,
+	// composition/composeEvaluate.cpp) and both failing at opposite ends:
+	//
+	//   ibRunContext frame; frame.SetProcUnit(root);        // bytecode, NO slots  → depth-1 raise
+	//   ibRunContext frame; frame.SetProcUnit(lambdaUnit);  // slots, NO bytecode  → compile failed
+	//
+	// The lambda runtime borrows the root's scope (`BorrowScopeFrom`) and hosts no module of its
+	// own, which is right for running a lambda BODY and wrong for compiling an expression.
+	//
+	// ⭐ SO PASS A FRAME THAT IS ACTUALLY RUNNING: `GetPUState()->GetCurrentRunContext()` inside
+	// running code, and outside it the ROOT's own — which the session hands over, because the frame
+	// is not a thing to publish: `ibSession::EvaluateInRoot` does the evaluation and answers with a
+	// value (session.h).
+	static bool Evaluate(const ibString& strExpression, ibRunContext* pRunContext, ibValue& pvarRetValue,
+		bool bCompileBlock, ibEvalMode evalMode = eval_watch);
 	bool CompileExpression(ibRunContext* pRunContext, ibValue& pvarRetValue, ibCompileCode& cModule, bool bCompileBlock);
 
 	//call an arbitrary function of the executable module
-	long FindExportMethod(const wxString& strMethodName) const { return FindMethod(strMethodName, false, 2); }
+	long FindExportMethod(const ibString& strMethodName) const { return FindMethod(strMethodName, false, 2); }
 
 	//Search for export functions
-	long FindMethod(const wxString& strMethodName, bool bError = false, int bExportOnly = 0) const;
+	long FindMethod(const ibString& strMethodName, bool bError = false, int bExportOnly = 0) const;
 
-	long FindFunction(const wxString& strMethodName, bool bError = false, int bExportOnly = 0) const;
-	long FindProcedure(const wxString& strMethodName, bool bError = false, int bExportOnly = 0) const;
+	long FindFunction(const ibString& strMethodName, bool bError = false, int bExportOnly = 0) const;
+	long FindProcedure(const ibString& strMethodName, bool bError = false, int bExportOnly = 0) const;
 
+	// Comma-separated-args wrappers over the ppParams array forms below. Return TRUE if the named method
+	// was found and run, FALSE if there is no such method (nothing ran) — same contract as the array forms.
 	template <typename ...Types>
-	inline void CallAsProc(const wxString& funcName, Types&&... args) {
+	inline bool CallAsProc(const ibString& funcName, Types&&... args) {
 		ibValue* ppParams[] = { &args..., nullptr };
-		CallAsProc(funcName, ppParams, (const long)sizeof ...(args));
+		return CallAsProc(funcName, ppParams, (const long)sizeof ...(args));
 	}
 
 	template <typename ...Types>
-	inline void CallAsFunc(const wxString& funcName, ibValue& pvarRetValue, Types&&... args) {
+	inline bool CallAsFunc(const ibString& funcName, ibValue& pvarRetValue, Types&&... args) {
 		ibValue* ppParams[] = { &args..., nullptr };
-		CallAsFunc(funcName, pvarRetValue, ppParams, (const long)sizeof ...(args));
+		return CallAsFunc(funcName, pvarRetValue, ppParams, (const long)sizeof ...(args));
 	}
 
-	bool CallAsProc(const wxString& funcName, ibValue** ppParams, const long lSizeArray);
-	bool CallAsFunc(const wxString& funcName, ibValue& pvarRetValue, ibValue** ppParams, const long lSizeArray);
+	bool CallAsProc(const ibString& funcName, ibValue** ppParams, const long lSizeArray);
+	bool CallAsFunc(const ibString& funcName, ibValue& pvarRetValue, ibValue** ppParams, const long lSizeArray);
 
 	void CallAsProc(const long lCodeLine, ibValue** ppParams, const long lSizeArray);
 	void CallAsFunc(const long lCodeLine, ibValue& pvarRetValue, ibValue** ppParams, const long lSizeArray);
 
-	long FindProp(const wxString& strPropName) const;
+	// 🛑⭐ BY NAME MEANS **EXPORT** — and a plain `var` is not one. FindProp walks the bytecode's
+	// variables and skips everything that is not `kind = Export`, correctly: an export is a property
+	// of the module's VALUE, while a local is private to its frame and External / Context /
+	// ContextProp do not even index a frame slot.
+	//
+	// ⚠ SO A BODY'S OWN VARIABLE IS NOT FINDABLE THIS WAY, and the miss is silent — `false`, which
+	// reads exactly like "there is no such thing" (measured 2026-09-07: a run that assigns `Result`
+	// came back with nothing, twice, because a few loose statements declare a LOCAL and that is the
+	// natural thing to write).
+	//
+	// ⭐ TO READ ONE ANYWAY, take the slot from the bytecode you compiled and use the NUMERIC
+	// overload — accepting Local and Export and nothing else:
+	//
+	//     for (const auto& v : bc.m_listVar)
+	//         if ((v.IsLocal() || v.IsExport()) && stringUtils::CompareString(name, v.m_strRealName))
+	//             unit.GetPropVal((long)v, value);
+	//
+	// (job/jobRunByteCode.cpp does exactly this to carry a run's `Result` back.)
+	long FindProp(const ibString& strPropName) const;
 
-	bool SetPropVal(const wxString& strPropName, const ibValue& varPropVal);
+	bool SetPropVal(const ibString& strPropName, const ibValue& varPropVal);
 	bool SetPropVal(const long lPropNum, const ibValue& varPropVal); //setting attribute
 
-	bool GetPropVal(const wxString& strPropName, ibValue& pvarPropVal);
+	bool GetPropVal(const ibString& strPropName, ibValue& pvarPropVal);
 	bool GetPropVal(const long lPropNum, ibValue& pvarPropVal);//attribute value
 
 	// Interpreter state (currentRunModule, runContext stack, errorPlace,
@@ -140,12 +269,75 @@ public:
 
 protected:
 
+	// Flatten the parent chain into the indexable scope chain this unit runs on
+	// (§5 of compiler-pipeline.md): m_ppArrayCode = the modules, m_ppArrayContext =
+	// their frames. `localScope` fills the two local-context slots — own frame on
+	// the normal path, the donor's on the borrowed one (BorrowScopeFrom). The only
+	// difference between the two.
+	void BuildScopeChain(ibRunContext* localScope);
+
 	//attributes:
 	int m_numAutoDeleteParent; //flag for deleting the parent module
+
+	// 🛑 NO SCRATCH BUFFER LIVES HERE, and the two that briefly did are worth a line
+	// so nobody adds them back. They were the runtime's copy of the buffer the
+	// (since removed) `ibValue::GetString(ibString&)` wanted, hoisted here because a local is built
+	// per call and `Execute` is RE-ENTERED. Both true, and both beside the point: a
+	// STRING value is already holding its text (`m_sData`), so the
+	// scratch was only ever for an operand with no text yet — and that one now builds
+	// its text straight into the destination. The parameter went away with the need
+	// for it; see AddStringValue in procUnit.cpp.
+
 	const ibByteCode* m_pByteCode = nullptr;
-	ibValue*** m_pppArrayList = {}; //pointers to arrays of variable pointers (0 - local variables, 1 - variables of the current module, 2 and higher - variables of parent modules)
+	// THE FRAMES THEMSELVES, not their innards. (0 - local variables, 1 - variables
+	// of the current module, 2 and higher - variables of parent modules.)
+	//
+	// This used to be `ibValue***` — a copy of each frame's `m_pRefLocVars`. Two
+	// defects lived in that copy, and both are gone by asking the frame instead:
+	//
+	// 1. THE COPY WENT STALE. `SetLocalCount` reallocates the slot row, so any
+	//    frame resized after the chain was built (SetPropVal does exactly that)
+	//    left this array pointing at freed memory. It survived for years only
+	//    because a frame under the old inline capacity kept its slots INSIDE
+	//    itself, at a fixed address — the dangling pointer was real, but it
+	//    happened to point at the same place.
+	// 2. THERE WAS NO LENGTH, so nothing could tell an index past the end from a
+	//    valid one. `ResolveReadOuter` checked the slot for null and read whatever
+	//    was there — with the old inline buffer that was ten spare slots of the
+	//    frame's own storage, which is why an out-of-range index read plausible
+	//    rubbish instead of faulting. A frame knows its own width; the copy did not.
+	ibRunContext** m_ppArrayContext = {};
 	ibProcUnit** m_ppArrayCode = {}; //pointers to arrays of executable modules (0 - current module, 1 and higher - parent modules)
+	// "Body already executed" flag — set when Execute runs the module body
+	// (bDelta), cleared in Reset(). Marks the frame DIRTY so a repeat Execute on
+	// the same bytecode rebuilds instead of reusing locals left live by the prior
+	// run. A Run(false) prepare pass never sets it, so the paired Run(true) reuses
+	// the frame Run(false) built.
+	bool m_bExecuted = false;
 	std::vector <ibProcUnit*> m_procParent;
+
+	// `Cached` results — the memoisation store for the functions THIS unit
+	// runs. Outer key is the function's entry address (what the call opcode
+	// already carries, so nothing has to be looked up to find the bucket);
+	// inner key is the argument tuple, through the one key policy in value.h
+	// rather than a private hash of its own.
+	//
+	// THERE IS NO INVALIDATION, AND THAT IS THE DESIGN. The store is a member,
+	// so its lifetime IS the unit's: an object module's results last exactly as
+	// long as that object, a common module's as long as the root it hangs from.
+	// Nothing can go stale that cannot outlive its holder, so there is no clock
+	// to tune and no "drop the cache" call for a caller to forget.
+	//
+	// ⚠ HELD BEHIND A POINTER, AND MADE ONLY WHEN SOMETHING IS KEPT. The map
+	// itself is 40 bytes on x86, and a ProcUnit exists per module — object,
+	// manager, form, common — so a configuration carries hundreds of them. Every
+	// one of those was paying for a store that the great majority never open:
+	// `Cached` is a modifier a few functions carry, not a property of running
+	// code. Measured off the layout of ibProcUnit (528 bytes: 448 of them the
+	// embedded run context, 40 this map); a pointer is four.
+	typedef std::unordered_map<std::vector<ibValue>, ibValue, ibValueSeqHash, ibValueSeqEqual> ibCachedByArguments;
+	std::unique_ptr<std::unordered_map<long, ibCachedByArguments>> m_cachedResults;
+
 
 	// Per-thread state (m_currentRunModule, ms_runContext, s_nRecCount,
 	// s_errorPlace) lives as thread_local in procUnit.cpp. The storage

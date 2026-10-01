@@ -1,0 +1,1300 @@
+////////////////////////////////////////////////////////////////////////////
+//	L4 — optimizer rewrite pass: negation normalization + FROM-subquery
+//	flattening (queryRewrite.h). Pure AST -> AST; runs on a deep clone.
+////////////////////////////////////////////////////////////////////////////
+
+#include "queryRewrite.h"
+#include "queryRender.h"   // ibQueryOutputName - the one answer to "what is this column called"
+
+#include <algorithm>
+#include <functional>
+#include <map>
+
+// DOES THIS EXPRESSION FOLD ROWS — is there an aggregate call anywhere inside it?
+//
+// ⭐ ONE QUESTION, TWO READERS, AND THEY MUST NOT DRIFT. The pass below asks it of a CONDITION, to
+// decide whether it filters rows or groups; the lowering asks it of a PROJECTION, to decide whether
+// a computed column is a group KEY (`ISNULL(Balance, 0)`) or something that exists only after the
+// fold (`ISNULL(SUM(Qty), 0)`). Two decisions, but "what counts as an aggregate" is a single fact
+// about the tree — and the note on ibQueryFlattenAnd is what happens when such a fact gets written
+// out once per caller.
+//
+// ⚠ NOT INTO A NESTED SELECT: an aggregate in a subquery folds THAT query's rows, so it says
+// nothing about this one. Both readers need that exception, and only one of them would have
+// remembered to write it.
+bool ibQueryMentionsAggregate(const ibQueryAstExprPtr& e)
+{
+	if (!e)
+		return false;
+	// ⭐⭐ …AND A WINDOWED CALL FOLDS NOTHING. `SUM(x)` collapses its rows into one; `SUM(x) OVER (…)`
+	// returns a value on EVERY row and leaves the row count exactly as it was. Same word, opposite
+	// answer to the only question this function asks — so the OVER is part of the test, not a detail
+	// of the call. (A ranking call — ROW_NUMBER, RANK — is not an aggregate keyword and never reached
+	// here; this is the half that looked like one.)
+	if (e->m_kind == ibQueryAstExprKind::Func && ibIsAggregateKeyword(e->m_func) && !e->m_over)
+		return true;
+	if (e->m_subquery)
+		return false;
+	bool found = false;
+	ibQueryForEachChild(*e, [&found](const ibQueryAstExprPtr& child) {
+		if (!found && ibQueryMentionsAggregate(child)) found = true;
+	});
+	return found;
+}
+
+namespace {
+
+ibQuerySelectPtr CloneSelect(const ibQuerySelect& s);
+
+// Deep-clone an expression tree (the shallow struct copy shares children via
+// shared_ptr — every child slot is re-cloned so the rewrite may mutate freely).
+ibQueryAstExprPtr CloneExpr(const ibQueryAstExprPtr& e)
+{
+	if (!e) return nullptr;
+	// The struct copy brings every scalar field AND a copy of each child POINTER — so the clone starts
+	// out sharing the whole subtree. Replacing each child in place with its own clone is what makes it
+	// a deep copy, and doing it through the one child walk is what keeps a field added tomorrow from
+	// staying shared in silence.
+	auto c = std::make_shared<ibQueryAstExpr>(*e);
+	ibQueryForEachChild(*c, [](ibQueryAstExprPtr& child) { child = CloneExpr(child); });
+	if (e->m_subquery)
+		c->m_subquery = CloneSelect(*e->m_subquery);
+	// …AND THE WINDOW, which is no child (the walk leaves it to whoever reads a window) and so stayed SHARED: a rule
+	// moving a field inside `OVER (PARTITION BY …)` would have moved it in the caller's own tree.
+	if (e->m_over) {
+		c->m_over = std::make_shared<ibQueryAstWindow>(*e->m_over);
+		for (ibQueryAstExprPtr& p : c->m_over->m_partitionBy)
+			p = CloneExpr(p);
+		for (ibQueryOrderItem& o : c->m_over->m_orderBy)
+			o.m_expr = CloneExpr(o.m_expr);
+	}
+	return c;
+}
+
+void CloneSourceInPlace(ibQuerySource& src)
+{
+	if (src.m_subquery)
+		src.m_subquery = CloneSelect(*src.m_subquery);
+	for (ibQueryAstExprPtr& a : src.m_args)
+		a = CloneExpr(a);
+}
+
+ibQuerySelectPtr CloneSelect(const ibQuerySelect& s)
+{
+	auto c = std::make_shared<ibQuerySelect>(s);
+	for (ibQueryProjection& p : c->m_projections)
+		p.m_expr = CloneExpr(p.m_expr);
+	CloneSourceInPlace(c->m_from);
+	for (ibQueryAstJoin& j : c->m_joins) {
+		CloneSourceInPlace(j.m_source);
+		j.m_on = CloneExpr(j.m_on);
+	}
+	c->m_where  = CloneExpr(c->m_where);
+	for (ibQueryAstExprPtr& g : c->m_groupBy)
+		g = CloneExpr(g);
+	c->m_having = CloneExpr(c->m_having);
+	for (ibQueryAstExprPtr& index : c->m_indexBy)
+		index = CloneExpr(index);
+	for (ibQueryOrderItem& o : c->m_orderBy)
+		o.m_expr = CloneExpr(o.m_expr);
+	for (ibQueryTotalAggregate& t : c->m_totalsAggregates)
+		t.m_expr = CloneExpr(t.m_expr);
+	for (ibQueryTotalDim& d : c->m_totalsBy)
+		for (ibQueryTotalField& f : d.m_fields)
+			f.m_expr = CloneExpr(f.m_expr);
+	for (std::shared_ptr<ibQuerySelect>& u : c->m_unions)
+		u = CloneSelect(*u);
+	return c;
+}
+
+//////////////////////////////////////////////////////////////////////
+// Rule 1 — negation normalization
+//////////////////////////////////////////////////////////////////////
+
+ibQueryCompareOp InvertCompare(ibQueryCompareOp op)
+{
+	switch (op) {
+	case ibQueryCompareOp::Eq: return ibQueryCompareOp::Ne;
+	case ibQueryCompareOp::Ne: return ibQueryCompareOp::Eq;
+	case ibQueryCompareOp::Lt: return ibQueryCompareOp::Ge;
+	case ibQueryCompareOp::Ge: return ibQueryCompareOp::Lt;
+	case ibQueryCompareOp::Le: return ibQueryCompareOp::Gt;
+	case ibQueryCompareOp::Gt: return ibQueryCompareOp::Le;
+	}
+	return op;
+}
+
+// Push NOT down until absorbed. Returns the (possibly replaced) node; mutates the
+// cloned tree in place. After this pass a WHERE coming out of the grammar carries
+// no Not nodes at all — every form below absorbs it.
+ibQueryAstExprPtr NormalizeNeg(const ibQueryAstExprPtr& e)
+{
+	if (!e) return nullptr;
+
+	if (e->m_kind == ibQueryAstExprKind::Logical) {
+		e->m_lhs = NormalizeNeg(e->m_lhs);
+		e->m_rhs = NormalizeNeg(e->m_rhs);
+		return e;
+	}
+	if (e->m_kind != ibQueryAstExprKind::Not)
+		return e;
+
+	const ibQueryAstExprPtr inner = e->m_lhs;
+	switch (inner->m_kind) {
+	case ibQueryAstExprKind::Not:                       // NOT NOT p -> p
+		return NormalizeNeg(inner->m_lhs);
+
+	case ibQueryAstExprKind::Logical: {                 // De Morgan, then recurse
+		auto out = ibQueryAstExpr::Make(ibQueryAstExprKind::Logical);
+		out->m_isOr = !inner->m_isOr;
+		out->m_line = e->m_line; out->m_col = e->m_col;
+		auto mkNot = [](const ibQueryAstExprPtr& c) {
+			auto n = ibQueryAstExpr::Make(ibQueryAstExprKind::Not);
+			n->m_lhs = c; n->m_line = c->m_line; n->m_col = c->m_col;
+			return n;
+		};
+		out->m_lhs = NormalizeNeg(mkNot(inner->m_lhs));
+		out->m_rhs = NormalizeNeg(mkNot(inner->m_rhs));
+		return out;
+	}
+
+	case ibQueryAstExprKind::Compare:                   // NOT (a < b) -> a >= b
+		inner->m_cmp = InvertCompare(inner->m_cmp);
+		return inner;
+
+	case ibQueryAstExprKind::Like:                      // toggle the node's own negation
+	case ibQueryAstExprKind::In:
+	case ibQueryAstExprKind::IsNull:
+	case ibQueryAstExprKind::Between:
+		inner->m_negated = !inner->m_negated;
+		return inner;
+
+	case ibQueryAstExprKind::Column: {                  // NOT col (truthy) -> col = FALSE
+		// Exact under OES semantics: an attribute holds a typed empty, never SQL NULL,
+		// so a boolean column is always TRUE or FALSE (mirrors the truthy form col = TRUE).
+		auto cmp = ibQueryAstExpr::Make(ibQueryAstExprKind::Compare);
+		cmp->m_cmp = ibQueryCompareOp::Eq;
+		cmp->m_lhs = inner;
+		cmp->m_rhs = ibQueryAstExpr::Make(ibQueryAstExprKind::Literal);
+		cmp->m_rhs->m_literal = ibValue(false);
+		cmp->m_line = e->m_line; cmp->m_col = e->m_col;
+		cmp->m_rhs->m_line = e->m_line; cmp->m_rhs->m_col = e->m_col;
+		return cmp;
+	}
+
+	default:                                            // unknown inner — keep the Not,
+		return e;                                       // the lowering reports it precisely
+	}
+}
+
+//////////////////////////////////////////////////////////////////////
+// Rule 2 — FROM-subquery flattening
+//////////////////////////////////////////////////////////////////////
+
+// Visit every Column node of an expression tree. Does NOT descend into a nested
+// SELECT (IN (subquery)) — that is its own name scope.
+void WalkColumns(const ibQueryAstExprPtr& e, const std::function<void(ibQueryAstExpr&)>& fn)
+{
+	if (!e) return;
+	// ⚠ A COLUMN ROOTED ON A CAST IS NOT THIS SOURCE'S COLUMN. `CAST(x AS T).A` walks the fields of
+	// T, so its path names nothing the flattening could substitute an inner projection for — mapping
+	// `A` onto an output name of the subquery would rewrite it into a column of the wrong table.
+	// The cast's own argument IS this source's, so the walk descends into it instead.
+	if (e->m_kind == ibQueryAstExprKind::Column && e->m_arg
+	    && e->m_arg->m_kind == ibQueryAstExprKind::Cast) {
+		WalkColumns(e->m_arg->m_arg, fn);
+		return;
+	}
+	if (e->m_kind == ibQueryAstExprKind::Column) { fn(*e); return; }
+	// ⭐ THROUGH THE ONE WALK (ibQueryForEachOperand). The children were spelled out here, and the list missed a
+	// scalar call's arguments: `YEAR(T.Period)` over a flattened `(SELECT S.Period AS Period …) AS T` kept its
+	// `T.Period` while T was spliced away — "'T.Period' is left over from a table this query does not read"
+	// (2026-09-29). The operand walk also leaves out the WORDS a call holds as columns (`Day`, a type's name).
+	ibQueryForEachOperand(*e, [&fn](const ibQueryAstExprPtr& child) { WalkColumns(child, fn); });
+	// …and a window's fields, which no walk of children reaches.
+	if (e->m_over) {
+		for (const ibQueryAstExprPtr& p : e->m_over->m_partitionBy)
+			WalkColumns(p, fn);
+		for (const ibQueryOrderItem& o : e->m_over->m_orderBy)
+			WalkColumns(o.m_expr, fn);
+	}
+}
+
+// Visit every nested SELECT hanging off an expression tree (IN (subquery)).
+void WalkInSubqueries(const ibQueryAstExprPtr& e, const std::function<void(ibQuerySelect&)>& fn)
+{
+	if (!e) return;
+	if (e->m_subquery) fn(*e->m_subquery);
+	ibQueryForEachChild(*e, [&fn](const ibQueryAstExprPtr& child) { WalkInSubqueries(child, fn); });   // the one walk — see WalkColumns
+}
+
+struct NoCaseLess
+{
+	bool operator()(const wxString& a, const wxString& b) const { return a.CmpNoCase(b) < 0; }
+};
+
+// The inner SELECT is mergeable when it is a pure projection over its source:
+// no aggregates / grouping / having, no DISTINCT (distinct over a projection is
+// not distinct over the outer's), no JOIN / UNION / TOTALS, no ORDER BY (kept
+// conservative — the old wrapped path still serves those).
+// ⭐ WHY A NESTED SELECT STAYED NESTED. The flattening is the FIRST of the two roads out of a nested
+// source (the second is declaring it to the server as a CTE — queryLowering ResolveFrom), so what it
+// refuses decides what the next tier is even asked. Said where the refusal is made, with what it is
+// about; in Release the whole line is `((void)0)` and this is the `return false` it always was.
+#define FlattenDecline(fmt, ...) \
+	do { ibJournalInfo(wxT("query.rewrite"), wxT("nested FROM not flattened: ") fmt, ##__VA_ARGS__); \
+	     return false; } while (false)
+
+bool InnerIsFlattenable(const ibQuerySelect& inner)
+{
+	if (!inner.m_joins.empty())    FlattenDecline(wxT("the inner query has a JOIN"));
+	if (!inner.m_unions.empty())   FlattenDecline(wxT("the inner query has a UNION"));
+	if (inner.m_hasTotals)         FlattenDecline(wxT("the inner query has TOTALS"));
+	if (inner.m_distinct)          FlattenDecline(wxT("the inner query is DISTINCT"));
+	if (!inner.m_groupBy.empty())  FlattenDecline(wxT("the inner query has a GROUP BY"));
+	if (inner.m_having)            FlattenDecline(wxT("the inner query has a HAVING"));
+	// ⭐ A NESTED QUERY HAS NO ORDER, so an inner `ORDER BY` neither blocks the flattening nor
+	// survives it (Max: "a nested query does not support order or totals — they are not there by
+	// definition, and the constructor does not offer them either"). SQL agrees: nothing is promised
+	// about the order of a derived table's rows. The one shape where it would decide WHICH rows
+	// survive is TOP, and that is refused on the next line.
+	//
+	// This is what kept the whole read in RAM: an author's query carries an ORDER BY of its own, the
+	// composition wrapped it as a nested source, and the wrapper then refused to collapse — so the
+	// source stayed an ibSubqueryQueryable, which computes its rows in memory by construction, and no
+	// totals push-down could ever fire above it.
+	if (inner.m_top > 0)           FlattenDecline(wxT("the inner query has TOP, whose limit merging would lose"));
+	// The statement words the inner may carry. Merging them away is the SILENT kind of wrong:
+	// ALLOWED would become a refusal the author asked not to have, FOR UPDATE would stop holding
+	// the rows, INTO would stop materialising anything — and the query would still run.
+	if (inner.m_allowed)           FlattenDecline(wxT("the inner query is SELECT ALLOWED"));
+	if (inner.m_forUpdate)         FlattenDecline(wxT("the inner query is FOR UPDATE"));
+	if (!inner.m_intoTemp.IsEmpty()) FlattenDecline(wxT("the inner query has INTO"));
+	if (inner.m_selectAll) return true;
+	for (const ibQueryProjection& p : inner.m_projections) {
+		if (p.m_star)  FlattenDecline(wxT("the inner query projects a qualified star"));
+		if (!p.m_expr || p.m_expr->m_kind != ibQueryAstExprKind::Column)
+			FlattenDecline(wxT("the inner query projects an expression, not a plain column"));
+	}
+	return true;
+}
+
+// FROM (SELECT … FROM X WHERE p) AS s  +  outer clauses  ->  FROM X, outer names
+// substituted to the inner paths, WHEREs AND-merged. Children are already rewritten
+// (the caller recurses bottom-up), so a still-nested FROM here means the child was
+// NOT flattenable — merging onto it is still valid (one level fewer).
+void FlattenFrom(ibQuerySelect& s)
+{
+	if (!s.m_from.m_subquery) return;
+	if (!s.m_joins.empty() || !s.m_unions.empty()) return;   // conservative: single-source outer
+
+	// Keep the inner select alive through the splice — `s.m_from = inner.m_from` below
+	// destroys s.m_from.m_subquery, which owns it.
+	const std::shared_ptr<ibQuerySelect> innerKeep = s.m_from.m_subquery;
+	const ibQuerySelect& inner = *innerKeep;
+	if (!InnerIsFlattenable(inner)) return;
+	// A nested query that says a ROLE of a field keeps its wrapper: the wrapper publishes the role with the
+	// field (StampDeclaredRoles), and merged into the outer select the word would have no output to stand on.
+	for (const ibQueryProjection& p : inner.m_projections)
+		if (p.m_roleSaid) return;
+
+
+	// Output-name -> inner column path. Empty for SELECT * (pass-through names).
+	std::map<wxString, std::vector<wxString>, NoCaseLess> aliasMap;
+	if (!inner.m_selectAll) {
+		for (const ibQueryProjection& p : inner.m_projections) {
+			const wxString name = ibQueryOutputName(p);   // the file even says so at its include
+			if (!name.empty() && p.m_expr) aliasMap[name] = p.m_expr->m_path;
+		}
+	}
+
+	// A dot-walk behind an output name would turn an outer aggregate / TOTALS reference
+	// into a dot-walk input. Single-source dot-walk aggregates exist, but the totals /
+	// having paths still validate columns differently — stay conservative and keep the
+	// wrapped subquery for those shapes.
+	bool outerAggregate = !s.m_groupBy.empty() || s.m_hasTotals || !s.m_totalsAggregates.empty();
+	for (const ibQueryProjection& p : s.m_projections)
+		if (p.m_expr && p.m_expr->m_kind == ibQueryAstExprKind::Func) outerAggregate = true;
+	if (outerAggregate)
+		for (const auto& kv : aliasMap)
+			if (kv.second.size() > 1) return;
+
+	// Scope check — a subquery exposes ONLY its projections. An outer reference that
+	// names anything else must KEEP failing against the wrapped subquery, not silently
+	// start resolving against the real table after the merge. Pre-scan; bail on a miss.
+	const wxString outerAliasName = s.m_from.m_alias;
+	if (!inner.m_selectAll) {
+		bool outOfScope = false;
+		auto checkRef = [&aliasMap, &outerAliasName, &outOfScope](ibQueryAstExpr& col) {
+			const std::vector<wxString>& p = col.m_path;
+			if (p.empty()) return;
+			size_t head = 0;
+			if (!outerAliasName.empty() && p.size() > 1 && p[0].CmpNoCase(outerAliasName) == 0)
+				head = 1;
+			if (aliasMap.find(p[head]) == aliasMap.end()) outOfScope = true;
+		};
+		for (ibQueryProjection& p : s.m_projections) WalkColumns(p.m_expr, checkRef);
+		WalkColumns(s.m_where, checkRef);
+		for (ibQueryAstExprPtr& g : s.m_groupBy)          WalkColumns(g, checkRef);
+		WalkColumns(s.m_having, checkRef);
+		for (ibQueryOrderItem& o : s.m_orderBy)           WalkColumns(o.m_expr, checkRef);
+		for (ibQueryTotalAggregate& t : s.m_totalsAggregates) WalkColumns(t.m_expr, checkRef);
+		for (ibQueryTotalDim& d : s.m_totalsBy)
+			for (ibQueryTotalField& f : d.m_fields)       WalkColumns(f.m_expr, checkRef);
+		if (outOfScope) return;
+	}
+
+	// A bare-Column projection's output name must survive the substitution (SELECT pn
+	// would otherwise be re-derived from the substituted path's leaf). Stamp it first.
+	for (ibQueryProjection& p : s.m_projections)
+		if (p.m_alias.empty())
+			p.m_alias = ibQueryOutputName(p);   // its NATURAL name, written down before the path moves
+
+	// Substitute an outer column reference: strip the subquery alias qualifier, then
+	// replace an output name with its inner path (the tail of a dot-walk rides along).
+	const wxString& outerAlias = outerAliasName;
+	auto subst = [&aliasMap, &outerAlias](ibQueryAstExpr& col) {
+		std::vector<wxString>& p = col.m_path;
+		if (p.empty()) return;
+		if (!outerAlias.empty() && p.size() > 1 && p[0].CmpNoCase(outerAlias) == 0)
+			p.erase(p.begin());
+		auto it = aliasMap.find(p[0]);
+		if (it != aliasMap.end()) {
+			std::vector<wxString> np = it->second;
+			np.insert(np.end(), p.begin() + 1, p.end());
+			p = std::move(np);
+		}
+	};
+	for (ibQueryProjection& p : s.m_projections) WalkColumns(p.m_expr, subst);
+	WalkColumns(s.m_where, subst);
+	for (ibQueryAstExprPtr& g : s.m_groupBy)        WalkColumns(g, subst);
+	WalkColumns(s.m_having, subst);
+	for (ibQueryOrderItem& o : s.m_orderBy)         WalkColumns(o.m_expr, subst);
+	for (ibQueryTotalAggregate& t : s.m_totalsAggregates) WalkColumns(t.m_expr, subst);
+	for (ibQueryTotalDim& d : s.m_totalsBy)
+		for (ibQueryTotalField& f : d.m_fields)      WalkColumns(f.m_expr, subst);
+
+	// The inner's ORDER BY is simply gone with the wrapper, and that is correct: a nested query has
+	// no order (see InnerIsFlattenable). The order a report shows is the OUTER one — the composition's
+	// own sort setting — which is the only place it is stated.
+
+	// Outer SELECT * over an explicit inner projection = exactly the subquery's output.
+	if (s.m_selectAll && !inner.m_selectAll) {
+		s.m_selectAll   = false;
+		s.m_projections = inner.m_projections;
+	}
+
+	// Merge the filters: outer AND inner (inner is already normalized by the child pass).
+	if (s.m_where && inner.m_where) {
+		auto andNode = ibQueryAstExpr::Make(ibQueryAstExprKind::Logical);
+		andNode->m_isOr = false;
+		andNode->m_lhs  = s.m_where;
+		andNode->m_rhs  = inner.m_where;
+		andNode->m_line = s.m_where->m_line; andNode->m_col = s.m_where->m_col;
+		s.m_where = andNode;
+	}
+	else if (inner.m_where) {
+		s.m_where = inner.m_where;
+	}
+
+	// The splice. The inner FROM alias is kept — aliasMap paths may carry it as a
+	// qualifier (SELECT i.Code AS c FROM Catalog.X AS i).
+	s.m_from = inner.m_from;
+
+	// Said on this side too: a nested source that COLLAPSED never reaches the declaration road below
+	// it, so without this line its absence there reads as a refusal nobody made.
+	ibJournalInfo(wxT("query.rewrite"), wxT("nested FROM flattened into the outer select"));
+}
+
+#undef FlattenDecline   // the rule's own word — it ends with the rule
+
+//////////////////////////////////////////////////////////////////////
+// Rule 3 — a condition the rows answer reads them one level down
+//////////////////////////////////////////////////////////////////////
+
+// ⭐⭐ A CONDITION THE WHERE ROAD CANNOT PLACE WHERE IT STANDS IS APPLIED OVER THE ROWS, ONE LEVEL UP.
+//
+// Two kinds of term, one answer. A question put to the VALUE — PRESENTATION, VALUETYPE, a CAST — is answered over
+// the row that came back and never by an engine, so `WHERE CAST(C.Code AS Number(10)) > 5` could not be sent to the
+// database. And a field operator — IN, IN HIERARCHY, LIKE, BETWEEN, IS NULL, REFS — put to something that is not a
+// field had no road at all: `WHERE CAST(V.Item AS Catalog.Goods) IN HIERARCHY (&G)`, which is how an untyped column
+// is given its catalog, was refused with "expected a column" (2026-09-29). The way out was the refusal's own advice —
+// select the value in a nested query and filter in a query around it — and the engine takes it itself now (Max).
+//
+// So the statement reads its ROWS one level down: its sources, its joins and every condition that CAN be placed go
+// into a nested query, which publishes each field the statement reads — the value such a term asks about among
+// them — and the statement stands over those rows as written, the term reading that value as a field. Grouping,
+// DISTINCT, TOP, ORDER BY, TOTALS, INTO and a UNION stay where they were — over the rows, after the filter — so
+// nothing about what they mean moves. What the server can still filter, it filters, one level down.
+//
+// ⚠ PER AND-TERM, as the fold rule above: a term that can be placed stays placed; an OR holding one that cannot goes
+// up whole.
+#define LiftDecline(fmt, ...) \
+	do { ibJournalInfo(wxT("query.rewrite"), wxT("a condition over the rows stays where it was written: ") fmt, \
+	                   ##__VA_ARGS__); return; } while (false)
+
+// A question put to the VALUE rather than read off a field — what the lowering answers over the finished row
+// (ibQueryColumnExprKind::ValueAsk).
+bool AsksTheValue(const ibQueryAstExpr& e)
+{
+	return e.m_kind == ibQueryAstExprKind::Cast
+	    || (e.m_kind == ibQueryAstExprKind::ScalarCall
+	        && (e.m_scalar == ibQueryScalarFn::Presentation || e.m_scalar == ibQueryScalarFn::RefPresentation
+	            || e.m_scalar == ibQueryScalarFn::ValueType));
+}
+
+// …anywhere inside an operand. A column rooted on a CAST (`CAST(x AS T).A`) is a walk through the fields of T, which
+// the engine joins — a field, not a question.
+bool MentionsTheValueAsked(const ibQueryAstExprPtr& e)
+{
+	if (!e || e->m_kind == ibQueryAstExprKind::Column)
+		return false;
+	if (AsksTheValue(*e))
+		return true;
+	bool found = false;
+	ibQueryForEachOperand(*e, [&found](const ibQueryAstExprPtr& child) {
+		if (!found && MentionsTheValueAsked(child)) found = true;
+	});
+	return found;
+}
+
+bool IsValueTypeCall(const ibQueryAstExprPtr& e)
+{
+	return e && e->m_kind == ibQueryAstExprKind::ScalarCall && e->m_scalar == ibQueryScalarFn::ValueType;
+}
+
+bool IsKnownBeforeRows(const ibQueryAstExprPtr& e)
+{
+	return e && (e->m_kind == ibQueryAstExprKind::Param || e->m_kind == ibQueryAstExprKind::Literal
+	             || e->m_kind == ibQueryAstExprKind::Value);
+}
+
+// Would the WHERE road have to refuse this term where it stands?
+bool NeedsTheRows(const ibQueryAstExprPtr& term)
+{
+	if (!term)
+		return false;
+	switch (term->m_kind) {
+	case ibQueryAstExprKind::Logical:
+		return NeedsTheRows(term->m_lhs) || NeedsTheRows(term->m_rhs);
+	case ibQueryAstExprKind::Not:
+		return NeedsTheRows(term->m_lhs);
+	case ibQueryAstExprKind::Compare:
+		// `VALUETYPE(x) = <a type>` is REFS, and the WHERE road places it (BuildWherePredicate) — over a field.
+		if ((term->m_cmp == ibQueryCompareOp::Eq || term->m_cmp == ibQueryCompareOp::Ne)
+		    && IsValueTypeCall(term->m_lhs) != IsValueTypeCall(term->m_rhs)) {
+			const ibQueryAstExprPtr& asked = IsValueTypeCall(term->m_lhs) ? term->m_lhs : term->m_rhs;
+			return !asked->m_args.empty() && asked->m_args.front()->m_kind != ibQueryAstExprKind::Column;
+		}
+		return MentionsTheValueAsked(term->m_lhs) || MentionsTheValueAsked(term->m_rhs);
+	case ibQueryAstExprKind::In:
+	case ibQueryAstExprKind::Like:
+	case ibQueryAstExprKind::Between:
+	case ibQueryAstExprKind::IsNull:
+	case ibQueryAstExprKind::Refs:
+		return term->m_lhs && term->m_lhs->m_kind != ibQueryAstExprKind::Column && !IsKnownBeforeRows(term->m_lhs);
+	default:
+		return false;
+	}
+}
+
+// ⭐⭐ …AND AN EXPRESSION THE ROW ROAD CANNOT COMPUTE WHERE IT STANDS (2026-09-29, Max: "the gaps of the language").
+// Arithmetic, a CASE, a scalar call is computed over the row it reads, of plain fields, and two shapes had no such
+// row. One reads a field THROUGH a reference — `T.Qty * T.Item.Price`: the walk is a join, and no expression carries
+// one ("a computed expression takes plain columns"). The other folds or filters an expression over a JOIN —
+// `SUM(B.Qty * G.Price)`: the stitched rows of a join carry columns, not expressions ("not yet supported over a
+// JOIN"). Both are the same sentence one level up: the walk is a plain field of the rows below, and the join is ONE
+// source above them, over which every expression is computed. So they read their rows one level down too.
+bool NamesASource(const ibQuerySelect& select, const wxString& segment);   // below, with the naming
+
+// A field reached THROUGH a reference: past the source the path names (when it names one) more than one step — or a
+// field of a CAST (`CAST(x AS T).A`), which walks the fields of T.
+bool IsWalk(const ibQuerySelect& s, const ibQueryAstExpr& e)
+{
+	if (e.m_kind != ibQueryAstExprKind::Column)
+		return false;
+	if (e.m_arg && e.m_arg->m_kind == ibQueryAstExprKind::Cast)
+		return true;
+	const bool qualified = e.m_path.size() > 1 && NamesASource(s, e.m_path.front());
+	return e.m_path.size() > (qualified ? 2u : 1u);
+}
+
+// Computed where it stands — arithmetic, a CASE's values, a scalar call — with a WALK among its operands. A walk
+// standing alone is a field the engine joins, one folded alone (`SUM(Producer.Weight)`) is too, one handed to a
+// question put to the value is answered over the finished row, and a condition's fields are the WHERE road's: none of
+// them is this.
+bool ComputesThroughAWalk(const ibQuerySelect& s, const ibQueryAstExprPtr& e)
+{
+	if (!e)
+		return false;
+	switch (e->m_kind) {
+	case ibQueryAstExprKind::Func:
+		return !e->m_over && e->m_arg && e->m_arg->m_kind != ibQueryAstExprKind::Column
+		    && ComputesThroughAWalk(s, e->m_arg);
+	case ibQueryAstExprKind::Arith:
+	case ibQueryAstExprKind::Case:
+		break;
+	case ibQueryAstExprKind::ScalarCall:
+		if (AsksTheValue(*e))
+			return false;
+		break;
+	default:
+		return false;
+	}
+	bool found = false;
+	ibQueryForEachOperand(*e, [&s, &found](const ibQueryAstExprPtr& operand) {
+		if (!found && operand)
+			found = IsWalk(s, *operand) || ComputesThroughAWalk(s, operand);
+	});
+	return found;
+}
+
+bool ReadsAWalk(const ibQuerySelect& s, const ibQueryAstExprPtr& e)
+{
+	return e && (IsWalk(s, *e) || ComputesThroughAWalk(s, e));
+}
+
+// A fold whose argument is neither a field nor a constant — what the stitched rows of a JOIN cannot fold.
+bool FoldsAnExpression(const ibQueryAstExprPtr& e)
+{
+	if (!e)
+		return false;
+	if (e->m_kind == ibQueryAstExprKind::Func && !e->m_over && ibIsAggregateKeyword(e->m_func))
+		return e->m_arg && e->m_arg->m_kind != ibQueryAstExprKind::Column && !IsKnownBeforeRows(e->m_arg);
+	bool found = false;
+	ibQueryForEachOperand(*e, [&found](const ibQueryAstExprPtr& child) {
+		if (!found)
+			found = FoldsAnExpression(child);
+	});
+	return found;
+}
+
+// Computed where it stands, the lowering's IsComputedExprAst said of the text: arithmetic, a CASE, a scalar call, a
+// CAST standing as a value, a condition asked for its value.
+bool IsComputedAst(const ibQueryAstExpr& e)
+{
+	switch (e.m_kind) {
+	case ibQueryAstExprKind::Arith:   case ibQueryAstExprKind::Case:    case ibQueryAstExprKind::ScalarCall:
+	case ibQueryAstExprKind::Cast:    case ibQueryAstExprKind::Compare: case ibQueryAstExprKind::Logical:
+	case ibQueryAstExprKind::Not:     case ibQueryAstExprKind::Like:    case ibQueryAstExprKind::In:
+	case ibQueryAstExprKind::Between: case ibQueryAstExprKind::IsNull:  case ibQueryAstExprKind::Refs:
+		return true;
+	default:
+		return false;
+	}
+}
+
+bool ReadsAField(const ibQueryAstExprPtr& e)
+{
+	if (!e)
+		return false;
+	if (e->m_kind == ibQueryAstExprKind::Column)
+		return true;
+	bool found = false;
+	ibQueryForEachOperand(*e, [&found](const ibQueryAstExprPtr& child) {
+		if (!found)
+			found = ReadsAField(child);
+	});
+	return found;
+}
+
+// A WHERE term the road would refuse for its expression: a comparison it computes where it stands (a computed left
+// side, or a field on the right — the lowering's ComparesComputed) over a JOIN, or reading a walk.
+bool ComputesWhereItCannot(const ibQuerySelect& s, const ibQueryAstExprPtr& term)
+{
+	if (!term)
+		return false;
+	switch (term->m_kind) {
+	case ibQueryAstExprKind::Logical:
+		return ComputesWhereItCannot(s, term->m_lhs) || ComputesWhereItCannot(s, term->m_rhs);
+	case ibQueryAstExprKind::Not:
+		return ComputesWhereItCannot(s, term->m_lhs);
+	case ibQueryAstExprKind::Compare:
+		if (!term->m_lhs || !term->m_rhs || IsValueTypeCall(term->m_lhs) != IsValueTypeCall(term->m_rhs))
+			return false;   // `VALUETYPE(x) = <a type>` is REFS, placed over a field (NeedsTheRows)
+		if (!IsComputedAst(*term->m_lhs) && !ReadsAField(term->m_rhs))
+			return false;
+		return !s.m_joins.empty() || ReadsAWalk(s, term->m_lhs) || ReadsAWalk(s, term->m_rhs);
+	default:
+		return false;
+	}
+}
+
+// Does the statement hold an expression — outside its WHERE — that only its rows one level down can compute?
+bool ComputesOverItsRows(const ibQuerySelect& s)
+{
+	const bool joined = !s.m_joins.empty();
+	for (const ibQueryProjection& p : s.m_projections)
+		if (ComputesThroughAWalk(s, p.m_expr) || (joined && FoldsAnExpression(p.m_expr)))
+			return true;
+	for (const ibQueryAstExprPtr& g : s.m_groupBy)
+		if (ComputesThroughAWalk(s, g))
+			return true;
+	if (ComputesThroughAWalk(s, s.m_having) || (joined && FoldsAnExpression(s.m_having)))
+		return true;
+	for (const ibQueryOrderItem& o : s.m_orderBy)
+		if (ComputesThroughAWalk(s, o.m_expr)
+		    || (joined && o.m_expr && IsComputedAst(*o.m_expr) && !ibQueryMentionsAggregate(o.m_expr)))
+			return true;
+	return false;
+}
+
+// The rows one level down, and what they publish: each field the statement reads, once, under the name the
+// statement gives it where it gives one.
+struct ibRowsOneLevelDown
+{
+	ibQuerySelect&                             m_rows;
+	wxString                                   m_alias;     // what the statement calls them
+	std::vector<std::pair<wxString, wxString>> m_carried;   // (the expression as written, the name it is read by)
+	int                                        m_seq = 0;
+
+	// Carries `e` down WHOLE and turns it, where it stands, into the field of the rows it is read back as.
+	void Carry(ibQueryAstExpr& e, const wxString& named = wxString())
+	{
+		const wxString spelled = ibRenderQueryExpr(e);
+		wxString name;
+		for (const auto& carried : m_carried)
+			if (carried.first == spelled) { name = carried.second; break; }
+		if (name.IsEmpty()) {
+			name = !named.IsEmpty() ? named : wxString::Format(wxT("q_carried%d"), m_seq++);
+			ibQueryProjection down;
+			down.m_expr  = std::make_shared<ibQueryAstExpr>(e);   // the node as written; its children go with it
+			down.m_alias = name;
+			m_rows.m_projections.push_back(down);
+			m_carried.emplace_back(spelled, name);
+		}
+		ibQueryAstExpr read;
+		read.m_kind = ibQueryAstExprKind::Column;
+		read.m_path = { m_alias, name };
+		read.m_line = e.m_line;   // the diagnostics point at what was WRITTEN
+		read.m_col  = e.m_col;
+		e = read;
+	}
+};
+
+// Every field a clause of the statement reads becomes the field of the rows it was carried as. `outputs` are the
+// statement's own output names, which GROUP BY, HAVING, ORDER BY and TOTALS may name: those stay, read as the
+// statement's outputs as they were.
+void OntoRows(ibRowsOneLevelDown& rows, const ibQueryAstExprPtr& e, const std::vector<wxString>* outputs)
+{
+	if (!e)
+		return;
+	if (e->m_kind == ibQueryAstExprKind::Column) {
+		const bool anOutput = outputs != nullptr && !e->m_path.empty()
+			&& std::any_of(outputs->begin(), outputs->end(),
+			               [&e](const wxString& output) { return output.CmpNoCase(e->m_path.front()) == 0; });
+		if (!anOutput)
+			rows.Carry(*e);
+		return;
+	}
+	ibQueryForEachOperand(*e, [&rows, outputs](const ibQueryAstExprPtr& child) { OntoRows(rows, child, outputs); });
+	if (e->m_over) {   // a window's fields, which no walk of children reaches (a clone owns its window — CloneExpr)
+		for (const ibQueryAstExprPtr& p : e->m_over->m_partitionBy)
+			OntoRows(rows, p, outputs);
+		for (const ibQueryOrderItem& o : e->m_over->m_orderBy)
+			OntoRows(rows, o.m_expr, outputs);
+	}
+}
+
+// A term that goes up: each operand the WHERE road could not place is carried down WHOLE and read as a field; the
+// rest reads its fields off the rows like any other clause.
+void LiftOntoRows(ibRowsOneLevelDown& rows, const ibQueryAstExprPtr& term)
+{
+	if (!term)
+		return;
+	if (term->m_kind == ibQueryAstExprKind::Logical) {
+		LiftOntoRows(rows, term->m_lhs);
+		LiftOntoRows(rows, term->m_rhs);
+		return;
+	}
+	if (term->m_kind == ibQueryAstExprKind::Not) {
+		LiftOntoRows(rows, term->m_lhs);
+		return;
+	}
+	if (!NeedsTheRows(term)) {   // a branch of an OR that went up whole — its fields only
+		OntoRows(rows, term, nullptr);
+		return;
+	}
+	const bool fieldOperator = term->m_kind != ibQueryAstExprKind::Compare;
+	ibQueryForEachOperand(*term, [&rows, &term, fieldOperator](const ibQueryAstExprPtr& operand) {
+		if (!operand)
+			return;
+		const bool notAField = fieldOperator && operand == term->m_lhs
+		                       && operand->m_kind != ibQueryAstExprKind::Column && !IsKnownBeforeRows(operand);
+		if (notAField || MentionsTheValueAsked(operand))
+			rows.Carry(*operand);
+		else
+			OntoRows(rows, operand, nullptr);
+	});
+}
+
+// Does an expression read one of the statement's OUTPUTS rather than a field of its sources?
+bool ReadsAnOutput(const ibQueryAstExprPtr& e, const std::vector<wxString>& outputs)
+{
+	if (!e)
+		return false;
+	if (e->m_kind == ibQueryAstExprKind::Column)
+		return e->m_path.size() == 1 && std::any_of(outputs.begin(), outputs.end(),
+			[&e](const wxString& output) { return output.CmpNoCase(e->m_path.front()) == 0; });
+	bool found = false;
+	ibQueryForEachOperand(*e, [&found, &outputs](const ibQueryAstExprPtr& child) {
+		if (!found)
+			found = ReadsAnOutput(child, outputs);
+	});
+	return found;
+}
+
+void ReadRowsOneLevelDown(ibQuerySelect& s)
+{
+	std::vector<ibQueryAstExprPtr> terms;
+	ibQueryFlattenAnd(s.m_where, terms);
+	std::vector<ibQueryAstExprPtr> kept, lifted;
+	for (const ibQueryAstExprPtr& term : terms)
+		(NeedsTheRows(term) || ComputesWhereItCannot(s, term) ? lifted : kept).push_back(term);
+	const bool computes = ComputesOverItsRows(s);
+	if (lifted.empty() && !computes)
+		return;
+
+	// ⚠ TWO SHAPES STAY WHERE THEY WERE WRITTEN, and the lowering refuses them in its own words: a lock taken by a
+	// nested read is not the lock on the table's rows, and a star would show the carried value beside the fields.
+	if (s.m_forUpdate)
+		LiftDecline(wxT("FOR UPDATE locks the table's own rows, which a nested read does not take"));
+	if (s.m_selectAll || std::any_of(s.m_projections.begin(), s.m_projections.end(),
+	                                 [](const ibQueryProjection& p) { return p.m_star; }))
+		LiftDecline(wxT("SELECT * would show the value the condition reads beside the fields - name them"));
+
+	wxString said;
+	for (const ibQueryAstExprPtr& term : lifted)
+		said += (said.IsEmpty() ? wxString() : wxString(wxT(" AND "))) + ibRenderQueryExpr(*term);
+	if (computes)
+		said += (said.IsEmpty() ? wxString() : wxString(wxT("; "))) + wxString(wxT("an expression through a walk or over a join"));
+
+	auto inner = std::make_shared<ibQuerySelect>();
+	inner->m_allowed = s.m_allowed;   // SELECT ALLOWED travels DOWN, to the door that reads the restricted source
+	inner->m_from    = s.m_from;
+	inner->m_joins   = s.m_joins;
+	inner->m_where   = ibQueryFoldAnd(kept);
+	ibRowsOneLevelDown rows{ *inner, wxT("q_rows") };
+
+	// The outputs keep their names — written down before the fields under them move — and a plain field goes down
+	// under that very name, so a clause naming it either way reads the same field.
+	std::vector<wxString> outputs;
+	for (ibQueryProjection& p : s.m_projections) {
+		if (p.m_alias.empty())
+			p.m_alias = ibQueryOutputName(p);
+		outputs.push_back(p.m_alias);
+	}
+	for (ibQueryProjection& p : s.m_projections) {
+		if (p.m_expr && p.m_expr->m_kind == ibQueryAstExprKind::Column)
+			rows.Carry(*p.m_expr, p.m_alias);
+		else
+			OntoRows(rows, p.m_expr, nullptr);
+	}
+	for (const ibQueryAstExprPtr& term : lifted)
+		LiftOntoRows(rows, term);
+	for (const ibQueryAstExprPtr& g : s.m_groupBy)
+		OntoRows(rows, g, &outputs);
+	OntoRows(rows, s.m_having, &outputs);
+	// A SORT BY AN EXPRESSION goes down WHOLE where the rows are not grouped: read back as a field it is sorted by one,
+	// and a computed source is sorted by fields only — its fields carried apart, the expression over them was refused.
+	const bool groups = s.m_distinct || !s.m_groupBy.empty()
+		|| std::any_of(s.m_projections.begin(), s.m_projections.end(),
+		               [](const ibQueryProjection& p) { return ibQueryMentionsAggregate(p.m_expr); });
+	for (const ibQueryOrderItem& o : s.m_orderBy) {
+		if (!groups && o.m_expr && IsComputedAst(*o.m_expr) && !ReadsAnOutput(o.m_expr, outputs))
+			rows.Carry(*o.m_expr);
+		else
+			OntoRows(rows, o.m_expr, &outputs);
+	}
+	for (const ibQueryTotalAggregate& a : s.m_totalsAggregates)
+		OntoRows(rows, a.m_expr, &outputs);
+	for (const ibQueryTotalDim& d : s.m_totalsBy)
+		for (const ibQueryTotalField& f : d.m_fields)
+			OntoRows(rows, f.m_expr, &outputs);
+	for (const ibQueryTotalSplit& split : s.m_totalsSplits)
+		for (const ibQueryTotalDim& d : split.m_levels)
+			for (const ibQueryTotalField& f : d.m_fields)
+				OntoRows(rows, f.m_expr, &outputs);
+
+	// …and the rows are asked the same question: a sort carried down whole may itself read through a walk, and is then
+	// computed one level further down. Below that only fields are carried, so it asks once more at most.
+	ReadRowsOneLevelDown(*inner);
+
+	s.m_where   = ibQueryFoldAnd(lifted);
+	s.m_from    = ibQuerySource();
+	s.m_from.m_subquery = inner;
+	s.m_from.m_alias    = rows.m_alias;
+	s.m_joins.clear();
+	s.m_allowed = false;
+	ibJournalInfo(wxT("query.rewrite"), wxT("the rows are read one level down for: %s"), said);
+}
+
+#undef LiftDecline
+
+//////////////////////////////////////////////////////////////////////
+// The pass — bottom-up over every SELECT scope
+//////////////////////////////////////////////////////////////////////
+
+// The question itself is ibQueryMentionsAggregate, above the pass — a PROJECTION asks it too.
+
+// ⭐ RULE: A CONDITION RUNS WHERE THE VALUE IT NAMES EXISTS, WHEREVER IT WAS WRITTEN.
+//
+// One over a FOLDED value is a HAVING; one over a GROUP KEY is a WHERE. Both readings are the same
+// sentence, which is why they are one rule and not two passes that could disagree.
+//
+// `WHERE` filters ROWS and `HAVING` filters GROUPS — a real distinction, and one the author of a
+// query should not have to carry. The constructor's Conditions tab offers the aggregate fields
+// beside the plain ones (they are all fields of the result), so a condition over `SUM(Qty)` gets
+// written where every other condition is written. Left there it reached the row filter, which has
+// no aggregates to filter by, and came back as an error about a query the window itself composed.
+//
+// The move is per AND-TERM, because that is the granularity at which the two filters compose:
+// `WHERE Warehouse = &W AND SUM(Qty) > 100` is a row filter and a group filter written together,
+// and splitting it is not a change of meaning — a group filter applied after a row filter is what
+// the query says either way.
+//
+// ⚠ AN `OR` ACROSS THE TWO MOVES WHOLE, AND IS NEVER SPLIT. `WHERE A = 1 OR SUM(x) > 5` is one
+// term: splitting it into a row filter and a group filter would change which rows survive, and
+// leaving it behind is not an option either — anything naming an aggregate can only be evaluated
+// after the fold. So the whole term goes, and `A` must be a group key for it to resolve there,
+// which is the engine's own check to make.
+void SortConditionsByFold(ibQuerySelect& s)
+{
+	if (!s.m_where && !s.m_having)
+		return;
+
+	// ⭐ AND IT SORTS IN BOTH DIRECTIONS. The rule is "a condition runs where the value it names
+	// exists", and that reads the same from either side: a term over `SUM(Qty)` written in WHERE has
+	// to wait for the fold, and a term over a GROUP KEY written in HAVING never needed it. The
+	// second half was missing, so `HAVING ISNULL(Balance, 0) < 0` — a plain condition on a key, which
+	// is what a stock control writes — came back as "HAVING must compare an aggregate function to a
+	// value", about a query that names one two columns to the left.
+	//
+	// Filtering on a group key BEFORE the fold instead of after removes exactly the same groups: the
+	// key cannot vary inside its group, so no group is ever split by it. Same answer, one floor lower.
+	//
+	// So both filters are flattened into ONE list of terms and dealt back by what each term NEEDS.
+	// Where the author happened to write a term is not what decides where it runs — which is the
+	// whole point of the rule, and was already true of one direction.
+	std::vector<ibQueryAstExprPtr> terms;
+	ibQueryFlattenAnd(s.m_having, terms);   // first, so an existing HAVING keeps its place in the fold
+	ibQueryFlattenAnd(s.m_where, terms);
+
+	std::vector<ibQueryAstExprPtr> rows, groups;
+	for (const ibQueryAstExprPtr& term : terms)
+		(ibQueryMentionsAggregate(term) ? groups : rows).push_back(term);
+
+	// Null when a side ends up empty, which is correct: no row filter / no group filter at all.
+	s.m_where  = ibQueryFoldAnd(rows);
+	s.m_having = ibQueryFoldAnd(groups);
+}
+
+// ⭐⭐ A LINK WRITTEN AS A CONDITION IS STILL A LINK.
+//
+// Two tables with nothing said about how they meet are MULTIPLIED — every row of one against every
+// row of the other — and the way that product is narrowed is a condition: `FROM A, B WHERE A.x =
+// B.y`, which is how a join was written before anyone spelled JOIN. It is also what the constructor
+// produces when the author leaves the Links tab alone and writes the relation on the Conditions tab.
+//
+// The door underneath takes a join key as TWO COLUMNS and a filter as COLUMN <op> VALUE, so such a
+// term could not go down the WHERE road at all: the engine answered "expected a literal or a
+// parameter as the comparison value" about a perfectly ordinary sentence. Here it is moved to where
+// the engine can read it — the ON of the join it relates — and the query means exactly what it said.
+//
+// TWO GUARDS, and both are about not changing what was written:
+//   * ONLY A JOIN THAT HAS NO LINK YET. One that already carries an ON is the author's, untouched.
+//   * ONLY AN INNER JOIN. In an OUTER one, ON and WHERE are genuinely different: ON pre-filters the
+//     null-padded side, WHERE removes the padded rows afterwards. Moving the term there would give
+//     a different answer, so it stays where it was written.
+//
+// And it never GUESSES: only a term that names both sides by their table (`A.x = B.y`) is moved. A
+// bare column says nothing about which table it stands on, and this pass does not resolve names —
+// that is the lowering's job, further down, with the metadata in hand.
+void LiftJoinConditions(ibQuerySelect& s)
+{
+	if (s.m_joins.empty() || !s.m_where)
+		return;
+
+	const auto nameOf = [](const ibQuerySource& source) -> wxString {
+		if (!source.m_alias.IsEmpty())
+			return source.m_alias;
+		return source.m_name.empty() ? wxString() : source.m_name.back();
+	};
+
+	std::vector<wxString> names;   // 0 = the FROM, i + 1 = joins[i]
+	names.push_back(nameOf(s.m_from));
+	for (const ibQueryAstJoin& join : s.m_joins)
+		names.push_back(nameOf(join.m_source));
+
+	const auto sourceOf = [&names](const ibQueryAstExpr& e) -> int {
+		if (e.m_kind != ibQueryAstExprKind::Column || e.m_path.size() < 2)
+			return -1;
+		for (size_t i = 0; i < names.size(); ++i)
+			if (!names[i].IsEmpty() && names[i].IsSameAs(e.m_path[0], false))
+				return static_cast<int>(i);
+		return -1;
+	};
+
+	std::vector<ibQueryAstExprPtr> terms;
+	ibQueryFlattenAnd(s.m_where, terms);
+
+	std::vector<ibQueryAstExprPtr> kept;
+	for (const ibQueryAstExprPtr& term : terms) {
+		bool lifted = false;
+		if (term && term->m_kind == ibQueryAstExprKind::Compare && term->m_lhs && term->m_rhs) {
+			const int left  = sourceOf(*term->m_lhs);
+			const int right = sourceOf(*term->m_rhs);
+			if (left >= 0 && right >= 0 && left != right) {
+				// The LATER of the two is the one whose ON can hold it: a join relates its own source
+				// to something already in the tree, and the tree is built left to right.
+				const size_t later = static_cast<size_t>(left > right ? left : right);
+				if (later > 0 && later <= s.m_joins.size()) {
+					ibQueryAstJoin& join = s.m_joins[later - 1];
+					if (!join.m_on && join.m_kind == ibQueryJoinKindAst::Inner) {
+						join.m_on = term;
+						lifted = true;
+					}
+				}
+			}
+		}
+		if (!lifted)
+			kept.push_back(term);
+	}
+	s.m_where = ibQueryFoldAnd(kept);
+}
+
+// ⭐⭐ THE ORDER OF THE TABLES IS THE ENGINE'S BUSINESS, NOT THE AUTHOR'S.
+//
+// Sources are joined left to right, so a link may only relate tables already read. Add a table and
+// then link it to one added AFTER it and the query is refused — correctly, but for a reason the
+// author has no way to see: both are tables of the same query, and nothing on the screen says one
+// of them is "later". Ordering them by hand is bookkeeping the engine can do.
+//
+// So a RUN of INNER joins is reordered until every link stands on tables already in scope.
+//
+// TWO THINGS IT WILL NOT DO, and both are about not changing what was written:
+//   * AN OUTER JOIN NEVER MOVES, and it ends the run. Position IS meaning there: which side gets
+//     null-padded, and what a later link sees of the padded rows, both depend on where it sits.
+//     Only INNER commutes.
+//   * A CYCLE IS LEFT ALONE. If no remaining join can be satisfied, the rest keep their order and
+//     the consistency check says so in its own words — inventing an order for a query that has no
+//     valid one would replace a clear complaint with a silent wrong answer.
+//
+// Names, not positions: a link mentions tables BY NAME, so what matters is which names are in scope
+// when it is made. That also makes the pass safe to run twice (it is idempotent on a sound query).
+void ReorderInnerJoins(ibQuerySelect& s)
+{
+	if (s.m_joins.size() < 2)
+		return;
+
+	const auto nameOf = [](const ibQuerySource& source) -> wxString {
+		if (!source.m_alias.IsEmpty())
+			return source.m_alias;
+		return source.m_name.empty() ? wxString() : source.m_name.back();
+	};
+
+	// The names a link mentions — qualified paths only, for the same reason LiftJoinConditions reads
+	// only those: a bare column says nothing about which table it stands on, and this pass does not
+	// resolve names. Walks the whole predicate, so `a.x = b.y AND a.z = c.w` names all three.
+	std::function<void(const ibQueryAstExprPtr&, std::vector<wxString>&)> mentions =
+		[&mentions](const ibQueryAstExprPtr& e, std::vector<wxString>& out) {
+		if (!e)
+			return;
+		if (e->m_kind == ibQueryAstExprKind::Column && e->m_path.size() >= 2)
+			out.push_back(e->m_path.front());
+		mentions(e->m_arg, out);  mentions(e->m_lhs, out);  mentions(e->m_rhs, out);
+		mentions(e->m_low, out);  mentions(e->m_high, out); mentions(e->m_else, out);
+		for (const ibQueryAstExprPtr& item : e->m_list) mentions(item, out);
+		for (const auto& branch : e->m_cases) { mentions(branch.first, out); mentions(branch.second, out); }
+		// A nested SELECT has its own scope — the names inside it say nothing about THIS query's order.
+	};
+
+	std::vector<ibQueryAstJoin> out;
+	out.reserve(s.m_joins.size());
+
+	std::vector<wxString> inScope;
+	inScope.push_back(nameOf(s.m_from));
+
+	size_t i = 0;
+	while (i < s.m_joins.size()) {
+		// An OUTER join is a fence: everything before it is settled, it stays where it is.
+		if (s.m_joins[i].m_kind != ibQueryJoinKindAst::Inner) {
+			inScope.push_back(nameOf(s.m_joins[i].m_source));
+			out.push_back(s.m_joins[i]);
+			++i;
+			continue;
+		}
+
+		// The run of consecutive INNER joins starting here.
+		size_t end = i;
+		while (end < s.m_joins.size() && s.m_joins[end].m_kind == ibQueryJoinKindAst::Inner)
+			++end;
+
+		std::vector<ibQueryAstJoin> pending(s.m_joins.begin() + i, s.m_joins.begin() + end);
+		while (!pending.empty()) {
+			size_t pick = pending.size();   // none
+			for (size_t k = 0; k < pending.size(); ++k) {
+				std::vector<wxString> named;
+				mentions(pending[k].m_on, named);
+				const wxString own = nameOf(pending[k].m_source);
+				bool satisfied = true;
+				for (const wxString& n : named) {
+					if (n.IsSameAs(own, false))
+						continue;
+					bool known = false;
+					for (const wxString& have : inScope)
+						if (have.IsSameAs(n, false)) { known = true; break; }
+					if (!known) { satisfied = false; break; }
+				}
+				if (satisfied) { pick = k; break; }
+			}
+			if (pick == pending.size()) {
+				// A cycle, or a link naming something outside this query. Leave the remainder as
+				// written — the complaint belongs to the check, with the author's own order in it.
+				for (const ibQueryAstJoin& rest : pending) {
+					inScope.push_back(nameOf(rest.m_source));
+					out.push_back(rest);
+				}
+				break;
+			}
+			inScope.push_back(nameOf(pending[pick].m_source));
+			out.push_back(pending[pick]);
+			pending.erase(pending.begin() + pick);
+		}
+		i = end;
+	}
+
+	s.m_joins.swap(out);
+}
+
+void RewriteSelectInPlace(ibQuerySelect& s)
+{
+	// Children first: a flattenable child collapses before the parent looks at it.
+	if (s.m_from.m_subquery) RewriteSelectInPlace(*s.m_from.m_subquery);
+	for (ibQueryAstJoin& j : s.m_joins)
+		if (j.m_source.m_subquery) RewriteSelectInPlace(*j.m_source.m_subquery);
+	for (const std::shared_ptr<ibQuerySelect>& u : s.m_unions)
+		RewriteSelectInPlace(*u);
+
+	if (s.m_where) {
+		s.m_where = NormalizeNeg(s.m_where);
+		WalkInSubqueries(s.m_where, RewriteSelectInPlace);   // IN (SELECT …) — own scope
+	}
+	// A HAVING is a condition tree like any other and gets the same normalization — it can now be
+	// MOVED into WHERE, and arriving there un-normalized would deny it the flat-AND road.
+	if (s.m_having) {
+		s.m_having = NormalizeNeg(s.m_having);
+		WalkInSubqueries(s.m_having, RewriteSelectInPlace);
+	}
+
+	// ⭐ OUTSIDE THE WHERE BRANCH, because the rule is about BOTH filters. Standing inside it, a
+	// query carrying only a HAVING was never sorted at all — so `GROUP BY Goods HAVING Goods = &G`
+	// still reached the lowering as a HAVING and came back as "HAVING must compare an aggregate
+	// function to a value". The rule read both clauses; its caller only asked when one of them
+	// existed, which is the same defect one level up.
+	SortConditionsByFold(s);
+
+	// AFTER the sort (a fold belongs in HAVING and is nobody's join key; a key condition that just
+	// arrived from HAVING may well BE a link) and BEFORE FlattenFrom, which may bring a subquery's
+	// own joins up into this list.
+	if (s.m_where)
+		LiftJoinConditions(s);
+
+	// AFTER the lift, because a term moved into an empty ON changes which tables that link names —
+	// and therefore where it may stand.
+	ReorderInnerJoins(s);
+
+	FlattenFrom(s);
+
+	// LAST: over the WHERE as it finally stands — a flattened nested query brought its own conditions up with it.
+	ReadRowsOneLevelDown(s);
+}
+
+} // namespace
+
+//////////////////////////////////////////////////////////////////////
+// ibQueryRewrite
+//////////////////////////////////////////////////////////////////////
+
+ibQuerySelectPtr ibQueryRewrite::Rewrite(const ibQuerySelect& ast)
+{
+	ibQuerySelectPtr clone = CloneSelect(ast);
+	RewriteSelectInPlace(*clone);
+	return clone;
+}
+
+// The clone WITHOUT the rules — see the header. Same walker, so a copy can never drift from what
+// the pass considers a complete tree.
+ibQuerySelectPtr ibQueryRewrite::Clone(const ibQuerySelect& ast)
+{
+	return CloneSelect(ast);
+}
+
+ibQuerySelectPtr ibQueryRewrite::ReorderJoins(const ibQuerySelect& ast)
+{
+	ibQuerySelectPtr clone = CloneSelect(ast);
+	ReorderInnerJoins(*clone);
+	return clone;
+}
+
+bool ibQueryIsTrueLiteral(const ibQueryAstExprPtr& expr)
+{
+	return expr && expr->m_kind == ibQueryAstExprKind::Literal && expr->m_literal.GetBoolean();
+}
+
+void ibQueryFlattenAnd(const ibQueryAstExprPtr& expr, std::vector<ibQueryAstExprPtr>& out)
+{
+	if (!expr)
+		return;
+	// Anything that is not an AND is ONE condition — including an OR, which is a condition and not
+	// a list of them. That is why an OR row shows in the constructor as a single (arbitrary) line.
+	if (expr->m_kind == ibQueryAstExprKind::Logical && !expr->m_isOr) {
+		ibQueryFlattenAnd(expr->m_lhs, out);
+		ibQueryFlattenAnd(expr->m_rhs, out);
+		return;
+	}
+	out.push_back(expr);
+}
+
+void ibQuerySortConditionsByFold(ibQuerySelect& select)
+{
+	SortConditionsByFold(select);
+}
+
+ibQueryAstExprPtr ibQueryFoldAnd(const std::vector<ibQueryAstExprPtr>& rows)
+{
+	ibQueryAstExprPtr folded;
+	for (const ibQueryAstExprPtr& row : rows) {
+		if (!row) continue;
+		if (!folded) { folded = row; continue; }
+		auto node = ibQueryAstExpr::Make(ibQueryAstExprKind::Logical);
+		node->m_isOr = false;
+		node->m_lhs = folded;
+		node->m_rhs = row;
+		folded = node;
+	}
+	return folded;
+}
+
+// ===========================================================================
+//  NAMING — what the host calls when it ADDS, so CheckNames never has to refuse
+// ===========================================================================
+
+namespace {
+
+// (The name a source answers to is ibQuerySourceName — queryRender.h, one answer for the whole
+// product. It used to be written out here as well, and in six other places.)
+
+// Does this segment name a SOURCE of the select, rather than open a walk?
+bool NamesASource(const ibQuerySelect& select, const wxString& segment)
+{
+	if (ibQuerySourceName(select.m_from).IsSameAs(segment, false))
+		return true;
+	for (const ibQueryAstJoin& join : select.m_joins)
+		if (ibQuerySourceName(join.m_source).IsSameAs(segment, false))
+			return true;
+	return false;
+}
+
+} // namespace
+
+wxString ibQueryProposedName(const ibQuerySelect& select, const ibQueryProjection& projection)
+{
+	if (!projection.m_alias.IsEmpty())
+		return projection.m_alias;
+	if (!projection.m_expr || projection.m_expr->m_kind != ibQueryAstExprKind::Column)
+		return wxEmptyString;
+
+	const std::vector<wxString>& path = projection.m_expr->m_path;
+	if (path.empty())
+		return wxEmptyString;
+
+	// The qualifier goes; the walk stays. `Catalog1.Reference.PredefinedName` -> `ReferencePredefinedName`.
+	const size_t first = (path.size() > 1 && NamesASource(select, path[0])) ? 1 : 0;
+
+	// A legal identifier by construction: every segment already is one.
+	wxString name;
+	for (size_t i = first; i < path.size(); ++i)
+		name += path[i];
+	return name;
+}
+
+void ibQueryEnsureUniqueName(ibQuerySelect& select, ibQueryProjection& projection)
+{
+	auto taken = [&select, &projection](const wxString& name) {
+		for (const ibQueryProjection& other : select.m_projections)
+			if (&other != &projection && ibQueryProposedName(select, other).IsSameAs(name, false))
+				return true;
+		return false;
+	};
+
+	const wxString wanted = ibQueryProposedName(select, projection);
+	if (wanted.IsEmpty()) {
+		// The default NAME, not a default suffix: `Field` numbered from 1. The counter runs over
+		// what is already there, exactly as the duplicate numbering below does, so the two cannot
+		// hand out the same name.
+		for (unsigned int n = 1; ; ++n) {
+			const wxString candidate = wxString::Format(_("Field%u"), n);
+			if (!taken(candidate)) {
+				projection.m_alias = candidate;
+				return;
+			}
+		}
+	}
+
+	// ⚠ A NAME THAT IS NOT THE NATURAL ONE HAS TO BE WRITTEN DOWN.
+	//
+	// The natural name of a projection is the LEAF of its path (ibQueryOutputName) — that is what
+	// the language reads it back by when no alias is given. For a WALK the leaf is the wrong word:
+	// `Reference.PredefinedName` and `PredefinedName` are two different columns whose leaf is the
+	// same, and leaving both unaliased makes the engine refuse the query for duplicate output names.
+	//
+	// So the walk's name is stored AS AN ALIAS even when nothing collides yet. Computing a name and
+	// then not writing it was the whole defect: the query still said `Catalog1.Reference.PredefinedName`
+	// with no alias, so everything downstream — the field map, the check, the result — went on calling
+	// it `PredefinedName`.
+	if (projection.m_alias.IsEmpty() && !ibQueryOutputName(projection).IsSameAs(wanted, false))
+		projection.m_alias = wanted;
+
+	if (!taken(wanted))
+		return;
+
+	for (unsigned int n = 1; ; ++n) {
+		const wxString candidate = wanted + wxString::Format(wxT("%u"), n);
+		if (!taken(candidate)) {
+			projection.m_alias = candidate;
+			return;
+		}
+	}
+}
+
+wxString ibQueryUniqueSourceAlias(const ibQuerySelect& select, const wxString& wanted,
+                                  const ibQuerySource* except)
+{
+	if (wanted.IsEmpty())
+		return wanted;
+
+	std::vector<const ibQuerySource*> sources;
+	sources.push_back(&select.m_from);
+	for (const ibQueryAstJoin& join : select.m_joins)
+		sources.push_back(&join.m_source);
+
+	// THE NAME A SOURCE ANSWERS TO — its alias when it has one, else the last segment of its path.
+	auto taken = [&sources, except](const wxString& name) {
+		for (const ibQuerySource* source : sources) {
+			if (source == nullptr || source == except)
+				continue;
+			if (ibQuerySourceName(*source).IsSameAs(name, false))
+				return true;
+		}
+		return false;
+	};
+
+	if (!taken(wanted))
+		return wanted;
+	for (unsigned int n = 1; ; ++n) {
+		const wxString candidate = wanted + wxString::Format(wxT("%u"), n);
+		if (!taken(candidate))
+			return candidate;
+	}
+}

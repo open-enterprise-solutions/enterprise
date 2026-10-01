@@ -271,6 +271,16 @@ void ibDatabaseLayerODBC::DoBeginTransaction(const ibTxOptions& opts)
 		ThrowDatabaseException();
 	}
 
+	// ONE COMMITTED STATE FOR THE WHOLE TRANSACTION — see ibDbTxOptions::snapshot. Set through the
+	// ODBC attribute rather than a dialect statement, so it holds for whatever backend is behind the
+	// driver instead of only the ones that speak the MSSQL spelling. Best-effort like the lock knob
+	// below: a driver that refuses the level leaves the transaction at its default, which is the
+	// behaviour there was before the flag existed.
+	if (opts.snapshot) {
+		m_pInterface->GetSQLSetConnectAttr()((SQLHDBC)m_sqlHDBC, SQL_ATTR_TXN_ISOLATION,
+			(SQLPOINTER)SQL_TXN_REPEATABLE_READ, 0);
+	}
+
 	// MSSQL's session-level lock-wait is set via `SET LOCK_TIMEOUT 0`.
 	// Works for any ODBC-linked MSSQL backend; other DBMSes behind ODBC
 	// ignore the statement (some error-out). Wrapped so a failing
@@ -321,39 +331,6 @@ void ibDatabaseLayerODBC::DoRollBack()
 
 // IsActiveTransaction inherits the base-class default (m_txDepth > 0).
 
-bool ibDatabaseLayerODBC::TryProbeRowLock(const wxString& tableName,
-                                           const wxString& pkColumn,
-                                           const wxString& pkValue)
-{
-	// Targets MSSQL (the common ODBC-reached backend). `SET LOCK_TIMEOUT 0`
-	// on the session turns blocking locks into immediate errors;
-	// `WITH (UPDLOCK, ROWLOCK)` asks MSSQL to take a row-level update
-	// lock for the SELECT. Combined, a held row surfaces as an
-	// exception instead of a blocked probe.
-	try { BeginTransaction({ /*.noWait=*/true }); }
-	catch (...) { return false; }
-
-	const wxString sql = wxT("SELECT ") + pkColumn + wxT(" FROM ")
-		+ tableName + wxT(" WITH (UPDLOCK, ROWLOCK) WHERE ")
-		+ pkColumn + wxT(" = ?");
-	ibPreparedStatement* stmt = DoPrepareStatement(sql);
-	bool gotLock = false;
-	if (stmt) {
-		stmt->SetParamString(1, pkValue);
-		try {
-			ibDatabaseResultSet* rs = stmt->RunQueryWithResults();
-			if (rs) {
-				if (rs->Next()) gotLock = true;
-				rs->Close();
-				CloseResultSet(rs);
-			}
-		}
-		catch (...) { gotLock = false; }
-		CloseStatement(stmt);
-	}
-	try { RollBack(); } catch (...) {}
-	return gotLock;
-}
 
 int ibDatabaseLayerODBC::DoRunQuery(const wxString& strQuery, bool bParseQuery)
 {
@@ -443,10 +420,7 @@ ibPreparedStatement* ibDatabaseLayerODBC::DoPrepareStatement(const wxString& str
 	else
 		QueryArray.push_back(strQuery);
 
-	ibPreparedStatementODBC* pReturnStatement = new ibPreparedStatementODBC(m_pInterface, (SQLHENV)m_sqlEnvHandle, (SQLHDBC)m_sqlHDBC);
-
-	if (pReturnStatement)
-		pReturnStatement->SetEncoding(GetEncoding());
+	ibPreparedStatementODBC* pReturnStatement = new ibPreparedStatementODBC(m_pInterface, (SQLHENV)m_sqlEnvHandle, (SQLHDBC)m_sqlHDBC, &m_executing);
 
 	for (unsigned int i = 0; i < (QueryArray.size()); i++)
 	{
@@ -708,7 +682,7 @@ wxArrayString ibDatabaseLayerODBC::GetColumns(const wxString& table)
 //void ibDatabaseLayerODBC::InterpretErrorCodes( long nCode, SQLHSTMT stmth_ptr )
 void ibDatabaseLayerODBC::InterpretErrorCodes(long nCode, void* stmth_ptr)
 {
-	wxLogDebug(wxT("ibDatabaseLayerODBC::InterpretErrorCodes()\n"));
+	ibJournalInfo(wxT("db.odbc"),wxT("ibDatabaseLayerODBC::InterpretErrorCodes()\n"));
 
 	//if ((nCode != SQL_SUCCESS) ) // && (nCode != SQL_SUCCESS_WITH_INFO))
 	{
@@ -727,10 +701,65 @@ void ibDatabaseLayerODBC::InterpretErrorCodes(long nCode, void* stmth_ptr)
 			m_pInterface->GetSQLGetDiagRec()(SQL_HANDLE_DBC, (SQLHDBC)m_sqlHDBC, 1, strState, &iNativeCode,
 				strBuffer, ERR_BUFFER_LEN, &iMsgLen);
 
-		SetErrorCode((int)iNativeCode);
+		const wxString strSqlState = ConvertFromUnicodeStream((char*)strState);
+		SetErrorCode(TranslateErrorCode((int)iNativeCode, strSqlState));
 		//SetErrorMessage(wxString((wxChar*)strBuffer));
 		SetErrorMessage(ConvertFromUnicodeStream((char*)strBuffer));
+		// Stash the 5-char SQLSTATE for ClassifyDatabaseError + the
+		// exception's GetSqlState() — without this the override
+		// returns empty and class-digit dispatch can't fire.
+		SetLastSqlState(strSqlState);
 	}
+}
+
+int ibDatabaseLayerODBC::TranslateErrorCode(int nNativeCode, const wxString& strSqlState)
+{
+	// An interrupted statement (Cancel -> SQLCancel) is the cancel, recorded as the platform's.
+	if (strSqlState == wxT("HY008"))   // operation canceled
+		return DATABASE_LAYER_QUERY_CANCELLED;
+	return nNativeCode;
+}
+
+// The one call ODBC takes from another thread on a busy connection — on the statement handle that is executing:
+// SQLExecute returns HY008 to its own caller. Nothing executing, nothing to stop.
+void ibDatabaseLayerODBC::Cancel()
+{
+	void* const hstmt = m_executing.load();
+	if (hstmt != nullptr)
+		m_pInterface->GetSQLCancel()((SQLHSTMT)hstmt);
+}
+
+ibBackendDatabaseException::Kind ibDatabaseLayerODBC::ClassifyDatabaseError(int nativeCode) const
+{
+	// Same SQLSTATE class-digit dispatch as PostgreSQL — ODBC standardises
+	// on the SQL-spec SQLSTATE format, so the classification is portable.
+	// See https://learn.microsoft.com/en-us/sql/odbc/reference/appendixes/appendix-a-odbc-error-codes
+	using Kind = ibBackendDatabaseException::Kind;
+	if (m_lastSqlState.length() >= 2) {
+		const wxString cls = m_lastSqlState.Left(2);
+		if (cls == wxT("08")) return Kind::ConnectionLost;
+		if (cls == wxT("23")) return Kind::Constraint;
+		if (cls == wxT("42")) return Kind::Syntax;
+		if (cls == wxT("57")) return Kind::ConnectionLost;
+		if (cls == wxT("HY")) {
+			// HYT00 = ODBC timeout expired; HYT01 = connection timeout
+			if (m_lastSqlState == wxT("HYT00") || m_lastSqlState == wxT("HYT01"))
+				return Kind::Timeout;
+		}
+		if (cls == wxT("40")) {
+			// MSSQL surfaces deadlock as native error 1205 with SQLSTATE
+			// 40001 (serialization failure) — we treat both as Deadlock
+			// since the engine already rolled the TX back.
+			if (m_lastSqlState == wxT("40001") || m_lastSqlState == wxT("40P01"))
+				return Kind::Deadlock;
+			return Kind::Timeout;
+		}
+	}
+
+	// MSSQL native code fallback — deadlock victim signal arrives even
+	// when SQLSTATE 40001 isn't surfaced by the driver.
+	if (nativeCode == 1205) return Kind::Deadlock;
+	return Kind::Unknown;
 }
 
 bool ibDatabaseLayerODBC::IsAvailable()

@@ -1,4 +1,5 @@
 #include "tableBox.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #ifndef OES_USE_WEB
 // Renderer pulls in dataview.h (wxDataView heavy). Web stubs don't
 // touch the renderer at all.
@@ -10,15 +11,18 @@
 #include "frontend/visualView/visualHostClient.h"
 #include "backend/system/value/valueTable.h"
 #include "backend/metaCollection/partial/commonObject.h"
+#include "backend/metaData.h"                 // FindAnyObjectByFilter (dot-path metaID -> name)
+#include "backend/functionalOption/functionalOptionGate.h"   // ibFunctionalOptionGate::IsAvailable — a tabular section this base does not use
+#include "frontend/win/dlgs/settings/savedSettings.h"   // the setting marked "restore on open" goes on here
+#include "backend/settings/settingsComposer.h"          // ibSettingsCategory — which shelf these settings sit on
+#include "formAttribute.h"                              // the attribute this box is bound to — its source IS the address
+#include "backend/srcDataObject.h"                      // …and the source answers with the guid of what it reads
 #include "backend/appData.h"
 //***********************************************************************************
 //*                           IMPLEMENT_DYNAMIC_CLASS                               *
 //***********************************************************************************
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueModelTableBox, ibValueWindow);
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueEnumTableBoxSelectionMode, ibValue);
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueEnumTableBoxViewMode, ibValue);
 
 #ifdef OES_USE_WEB
 #include "frontend/web/webWindow.h"
@@ -28,20 +32,75 @@ wxIMPLEMENT_DYNAMIC_CLASS(ibValueEnumTableBoxViewMode, ibValue);
 //*                                 Special tablebox func                           *
 //***********************************************************************************
 
+// Single point: resolve a dot-path column's value for ONE row (called per visible cell from the
+// column renderer's CheckedGetValue). The model stays a plain id->value source: the FIRST hop is
+// a real row column it resolves; the deeper hops walk the reference on the front by attribute name.
+// A plain column (row-relative tail <= 1) returns false — the renderer falls through to the model.
+// A dot-path column reaches past the tablebox prefix + one row column (>= 2 row-relative hops).
+bool ibValueModelTableBox::IsPathColumn(const ibValueModelTableBoxColumn* column) const
+{
+	return column != nullptr && column->GetSourcePath().size() > GetSourcePath().size() + 1;
+}
+
+// A column whose path does NOT lie under this tablebox's own bound prefix is rooted at a DIFFERENT
+// form source — the object ABOVE the table (its header). A normal column shares the tablebox's whole
+// prefix, then diverges into its own column id / dot-walk; a foreign column diverges WITHIN the
+// prefix (or is shorter than it). (Mode 2 — column from the header object.)
+bool ibValueModelTableBox::IsForeignColumn(const ibValueModelTableBoxColumn* column) const
+{
+	if (column == nullptr)
+		return false;
+	const std::vector<ibSourceHop>& colPath = column->GetSourcePath();
+	const std::vector<ibSourceHop>& myPath = GetSourcePath();
+	if (colPath.empty())
+		return false;
+	for (size_t i = 0; i < myPath.size(); ++i) {
+		if (i >= colPath.size() || colPath[i].m_id != myPath[i].m_id)
+			return true;   // diverges from (or is shorter than) the tablebox prefix -> foreign root (structural, by id)
+	}
+	return false;
+}
+
+bool ibValueModelTableBox::ResolveCellValue(const ibDataViewItem& item,
+	const ibValueModelTableBoxColumn* column, wxVariant& out) const
+{
+	// FOREIGN-root column (Mode 2): pulls from a form source ABOVE this tablebox (the header object),
+	// not from a row of the bound table. Resolve it ONCE through the form — the value is the same for
+	// every row of the tabular section (the header is constant across the lines). Read-only. The
+	// primitive is the same the designer/web read uses (GetControlValue's dotted-path branch).
+	if (IsForeignColumn(column)) {
+		ibValue current;
+		if (m_formOwner == nullptr || !m_formOwner->GetValueByAttributePath(column->GetSourceDesc(), current))
+			return false;
+		ibValueModel::ValueToVariant(out, current);
+		return true;
+	}
+
+	// One hop past the prefix = a plain row column (the dumb model has it) — not ours.
+	if (m_tableModel == nullptr || !IsPathColumn(column))
+		return false;
+
+	const std::vector<ibSourceHop>& colPath = column->GetSourcePath();
+	const size_t prefix = GetSourcePath().size();   // row-relative tail starts here
+
+	// The table STARTS the walk at the row (the first row-relative hop yields a source cell) and TRANSFERS the
+	// deeper hops to that source object — ONE entry, like a control resolving an attribute path off the form.
+	ibValue current;
+	if (!m_tableModel->GetValueByPath(item, colPath, prefix, current))
+		return false;
+
+	ibValueModel::ValueToVariant(out, current);
+	return true;
+}
+
 bool ibValueModelTableBox::GetControlValue(ibValue& pvarControlVal) const
 {
 	if (m_tableModel == nullptr) {
 		if (appData->DesignerMode()) {
 			if (!m_propertySource->IsEmptyProperty()) {
-				ibSourceDataObject* srcObject = m_formOwner->GetSourceObject();
-				if (srcObject != nullptr) {
-					ibValueModel* tableModel = nullptr;
-					if (srcObject->GetModel(tableModel, m_propertySource->GetValueAsSource())) {
-						if (tableModel != m_tableModel) {
-							pvarControlVal = tableModel;
-							return true;
-						}
-					}
+				if (!m_propertySource->IsEmptyProperty() && m_formOwner != nullptr &&
+					m_formOwner->GetValueByAttributePath(m_propertySource->GetValueAsSourceDesc(), pvarControlVal)) {
+					return true;   // attribute-table / dotted path -> read-only walk
 				}
 			}
 		}
@@ -54,7 +113,106 @@ bool ibValueModelTableBox::GetControlValue(ibValue& pvarControlVal) const
 bool ibValueModelTableBox::SetControlValue(const ibValue& varControlVal)
 {
 	m_tableModel = varControlVal.ConvertToType<ibValueModel>();
+
 	return true;
+}
+
+#ifndef OES_USE_WEB
+ibDataViewColumnGroup* ibValueModelTableBox::GetRootColumnGroup() const
+{
+	ibDataViewCtrl* dataViewCtrl = dynamic_cast<ibDataViewCtrl*>(GetInnerWx());
+	return dataViewCtrl != nullptr ? dataViewCtrl->GetRootColumnGroup() : nullptr;
+}
+
+
+// ONE QUESTION, ASKED OF THE PARENT — and both possible answers are the parent's own,
+// so nothing here reaches past it: a GROUP is a column store already, and the TABLE has
+// the hidden root one. The root is never a designer control; it is only what the first
+// level is given, everything deeper being held by the group it was created in.
+ibDataViewColumnGroup* ibFindColumnHolder(const ibValueFrame* parent)
+{
+	if (const ibValueModelTableBoxColumnGroup* group =
+		dynamic_cast<const ibValueModelTableBoxColumnGroup*>(parent))
+		return group->GetColumnGroup();
+
+	const ibValueModelTableBox* table = dynamic_cast<const ibValueModelTableBox*>(parent);
+	return table != nullptr ? table->GetRootColumnGroup() : nullptr;
+}
+#endif // !OES_USE_WEB
+
+
+
+// Depth-first through the control tree, columns in the order they will be shown in.
+// A column is no longer always a direct child — it may sit inside a column GROUP, and
+// groups nest — so the table walks the tree instead of looping over its children,
+// which would silently see none of the grouped ones.
+static void CollectColumns(const ibValueFrame* parent,
+	std::vector<ibValueModelTableBoxColumn*>& out)
+{
+	if (parent == nullptr)
+		return;
+
+	for (unsigned int idx = 0; idx < parent->GetChildCount(); idx++) {
+
+		ibValueFrame* child = parent->GetChild(idx);
+		if (child == nullptr)
+			continue;
+
+		// dynamic_cast, NOT ConvertToType: the latter goes through CastValue, which
+		// answers null for a value whose m_typeClass is TYPE_EMPTY — and a control is
+		// such a value. Asking it here silently returned "no columns" for every table
+		// in the product, which is what the original code avoided by casting plainly.
+		ibValueModelTableBoxColumn* column = dynamic_cast<ibValueModelTableBoxColumn*>(child);
+		if (column != nullptr) {
+			out.push_back(column);
+			continue;
+		}
+
+		// A group holds columns (and groups) — walk into it.
+		if (dynamic_cast<ibValueModelTableBoxColumnGroup*>(child) != nullptr)
+			CollectColumns(child, out);
+	}
+}
+
+
+// A COLUMN THE SOURCE PUT IN A GROUP GOES INTO THAT GROUP. The name comes from the source
+// (ibSourceExplorer::GetSourceGroup) — the columns of one family say the same thing there,
+// and the register's dimension slots are the case this exists for: twelve of them in one
+// row is a journal nobody can read, the same twelve in two stacks fit the screen.
+ibValueFrame* ibValueModelTableBox::GetColumnGroupHolder(const wxString& group, bool* created)
+{
+	if (created != nullptr)
+		*created = false;
+
+	if (group.IsEmpty())
+		return this;
+
+	// The group's control name is the table's plus the family name, which is what makes it
+	// findable — so a second column of the family lands in the SAME group, whether or not
+	// it came right after the first.
+	const wxString groupName = GetControlName() + group;
+
+	for (unsigned int idx = 0; idx < GetChildCount(); idx++) {
+		ibValueFrame* child = GetChild(idx);
+		if (dynamic_cast<ibValueModelTableBoxColumnGroup*>(child) != nullptr
+			&& child->GetControlName() == groupName)
+			return child;
+	}
+
+	wxASSERT(m_formOwner);
+	ibValueModelTableBoxColumnGroup* newGroup =
+		dynamic_cast<ibValueModelTableBoxColumnGroup*>(
+			m_formOwner->CreateControl(wxT("TableboxColumnGroup"), this));
+	if (newGroup == nullptr)
+		return this;
+
+	newGroup->SetControlName(groupName);
+	newGroup->SetCaption(group);
+
+	if (created != nullptr)
+		*created = true;
+
+	return newGroup;
 }
 
 void ibValueModelTableBox::AddColumn()
@@ -62,20 +220,26 @@ void ibValueModelTableBox::AddColumn()
 #ifndef OES_USE_WEB
 	wxASSERT(m_formOwner);
 
-	ibValueModelTableBoxColumn* columnTable = wxDynamicCast(m_formOwner->NewObject(g_controlTableBoxColumnCLSID, this), ibValueModelTableBoxColumn);
-	g_visualHostContext->InsertControl(columnTable, this);
-	if (m_tableModel != nullptr) {
-		ibValueModel::ibValueModelColumnCollection* columnData = m_tableModel->GetColumnCollection();
-		wxASSERT(columnData);
-		ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo* column_info = columnData->AddColumn(
-			columnTable->GetControlName(),
-			columnTable->GetTypeDesc(),
-			columnTable->GetCaption(),
-			columnTable->GetWidthColumn()
-		);
-		if (column_info != nullptr) column_info->SetColumnID(columnTable->GetControlID());
-	}
+	// A BARE view column — NO source, and NO storage column injected into the bound value-table.
+	// A tablebox column on the form is a VIEW that BINDS (through its Source, which may be a dotted path to
+	// another / composite field) to a field the user picks; it must not silently add a fourth column to the
+	// value-table's schema (that schema is edited via the attribute's own "Add column"). Auto-adding one both
+	// duplicated the schema and froze the value-table column id to the CONTROL id (a different id space) — a
+	// serialization hazard. Source-less, the new column stays hidden until the user binds it (visibility gate
+	// in ibValueModelTableBoxColumn::OnUpdated), exactly like any other unbound source control.
+	ibValueFrame* newColumn = m_formOwner->NewObject(g_controlTableBoxColumnCLSID, this);
+	g_visualHostContext->InsertControl(newColumn, this);
+	g_visualHostContext->RefreshEditor();
+#endif
+}
 
+void ibValueModelTableBox::AddColumnGroup()
+{
+#ifndef OES_USE_WEB
+	wxASSERT(m_formOwner);
+
+	ibValueFrame* newColumnGroup = m_formOwner->NewObject(g_controlTableBoxColumnGroupCLSID, this);
+	g_visualHostContext->InsertControl(newColumnGroup, this);
 	g_visualHostContext->RefreshEditor();
 #endif
 }
@@ -87,11 +251,11 @@ void ibValueModelTableBox::CreateColumnCollection(ibDataViewCtrl* dataViewCtrl)
 		return;
 
 	ibDataViewCtrl* tc = dataViewCtrl ?
-		dataViewCtrl : dynamic_cast<ibDataViewCtrl*>(GetWxObject());
+		dataViewCtrl : dynamic_cast<ibDataViewCtrl*>(GetInnerWx());
 	wxASSERT(tc);
 
 	ibFormVisualDocument* visualDocument = m_formOwner->GetVisualDocument();
-	//clear all controls 
+	//detach wx widgets first (while the column controls are still alive)
 	for (unsigned int idx = 0; idx < GetChildCount(); idx++) {
 		ibValueFrame* childColumn = GetChild(idx);
 		wxASSERT(childColumn);
@@ -101,18 +265,14 @@ void ibValueModelTableBox::CreateColumnCollection(ibDataViewCtrl* dataViewCtrl)
 			wxASSERT(visualView);
 			visualView->RemoveControl(childColumn, this);
 		}
-
-		RemoveChild(childColumn);
-
-		childColumn->SetParent(nullptr);
-		childColumn->DecrRef();
 	}
 
-	//clear all children
+	//clear all children — owning handles release the column controls (cascade)
 	RemoveAllChildren();
 
-	//clear all old columns
-	tc->ClearColumns();
+	//clear all old columns — said to the STORE, the root group (the column controls
+	//themselves were just destroyed by the host above, which detached each one)
+	tc->GetRootColumnGroup()->ClearColumns();
 
 	//create new columns
 	ibValueModel::ibValueModelColumnCollection* tableColumns = m_tableModel->GetColumnCollection();
@@ -164,38 +324,60 @@ void ibValueModelTableBox::CreateTable(bool recreateModel) {
 
 	if (m_tableModel == nullptr) {
 
-		m_tableModel = ibTypeControlFactory::CreateAndConvertValueRef<ibValueModel>();
+		m_tableModel = ibTypeControlFactory::CreateValue();
 
 		if (m_tableModel != nullptr) {
-			for (unsigned int idx = 0; idx < GetChildCount(); idx++) {
-				ibValueModelTableBoxColumn* columnTable = wxDynamicCast(GetChild(idx), ibValueModelTableBoxColumn);
-				if (columnTable != nullptr) {
-					ibValueModel::ibValueModelColumnCollection* columnData = m_tableModel->GetColumnCollection();
-					wxASSERT(columnData);
-					ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo* column_info = columnData->AddColumn(
-						columnTable->GetControlName(),
-						columnTable->GetTypeDesc(),
-						columnTable->GetCaption(),
-						columnTable->GetWidthColumn()
-					);
+			// Through the WALK, not the children: a column inside a group is still a
+			// column of this table and must reach the model like any other.
+			std::vector<ibValueModelTableBoxColumn*> columns;
+			CollectColumns(this, columns);
+			for (ibValueModelTableBoxColumn* columnTable : columns) {
+				ibValueModel::ibValueModelColumnCollection* columnData = m_tableModel->GetColumnCollection();
+				if (columnData == nullptr) continue;
+				ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo* column_info = columnData->AddColumn(
+					columnTable->GetControlName(),
+					columnTable->GetTypeDesc(),
+					columnTable->GetCaption(),
+					columnTable->GetWidthColumn()
+				);
 
-					if (column_info != nullptr) column_info->SetColumnID(columnTable->GetControlID());
-				}
+				if (column_info != nullptr) column_info->SetColumnID(columnTable->GetControlID());
 			}
 		}
 	}
 }
 
+// ⭐ THE ADDRESS OF THIS LIST'S SAVED SETTINGS — asked of the ATTRIBUTE this box is bound to, through
+// its own source. The source object answers with the guid of the metaobject it reads
+// (ibBackendQueryable::GetQueryTableGuid), so "my settings for the Products list" is one address
+// wherever that list is opened, and redrawing the control does not lose them.
+ibGuid ibValueModelTableBox::SettingsObjectKey() const
+{
+	if (m_formOwner == nullptr || m_propertySource->IsEmptyProperty())
+		return wxNullGuid;
+
+	// The HEAD of the binding is the form's attribute — the deeper hops are how it walked from there.
+	const ibFormAttributeValue* attribute = m_formOwner->FindAttributeById(GetSourceDesc().GetFirst());
+	if (attribute == nullptr)
+		return wxNullGuid;
+
+	const ibSourceDataObject* source = attribute->GetSourceValue();
+	if (source == nullptr)
+		return wxNullGuid;   // an attribute holding no source shows nothing to configure
+
+	// THE SOURCE'S OWN IDENTITY — for anything that reads a table it IS the metaobject's guid, which
+	// is what the queryable answers with (ibBackendQueryable::GetQueryTableGuid).
+	return source->GetGuid();
+}
+
 void ibValueModelTableBox::CreateModel(bool recreateModel)
 {
 	if (!m_propertySource->IsEmptyProperty()) {
-		ibSourceDataObject* srcObject = m_formOwner->GetSourceObject();
-		if (srcObject != nullptr) {
-			ibValueModel* tableModel = nullptr;
-			if (srcObject->GetModel(tableModel, m_propertySource->GetValueAsSource())) {
-				if (tableModel != m_tableModel) m_tableModel = tableModel;
-			}
+
+		if (!m_propertySource->IsEmptyProperty() && m_formOwner != nullptr &&
+			m_formOwner->GetValueByAttributePath(m_propertySource->GetValueAsSourceDesc(), m_tableModel)) {
 		}
+
 		CreateTable(false);
 	}
 	else if (m_tableModel != nullptr && m_propertySource->GetValueAsTypeDesc() != m_tableModel->GetSourceClassType()) {
@@ -217,7 +399,7 @@ void ibValueModelTableBox::ApplyCurrentLine(
 	m_tableCurrentLine = line;
 
 #ifndef OES_USE_WEB
-	auto* dataViewCtrl = dynamic_cast<ibTableViewCtrl*>(GetWxObject());
+	auto* dataViewCtrl = dynamic_cast<ibTableViewCtrl*>(GetInnerWx());
 	if (dataViewCtrl != nullptr) {
 		if (line == nullptr) {
 			dataViewCtrl->UnselectAllRows();
@@ -225,16 +407,23 @@ void ibValueModelTableBox::ApplyCurrentLine(
 		else {
 			const ibDataViewItem item = line->GetLineItem();
 			if (item.IsOk()) {
-				// Select() itself routes to the bootstrap-restore
-				// channel for paged models when the row isn't yet
-				// in the tree (stub case) — see ibDataViewCtrl::Select.
-				dataViewCtrl->UnselectAllRows();
+				// NOTHING IS UNSELECTED AHEAD OF THE FRAME THAT REPLACES IT. Select() itself
+				// drops the old highlight (single-sel) in the same call that puts the new one
+				// up — but ONLY when the row is already in the buffer. For a paged model the
+				// row usually is NOT: Select routes the item into the bootstrap-restore channel
+				// and the highlight lands when the fetch answers, a whole query later. Clearing
+				// here first left that interval with no current row at all — the cursor
+				// vanishing and then reappearing elsewhere, which is the flicker the rest of
+				// the paged path (wipe + fill under one freeze, see PagedRefresh) already
+				// avoids. The old row now keeps its highlight until OnPagedFetchResetComplete
+				// swaps both inside the same frozen frame.
 				dataViewCtrl->Select(item);
 				if (focus) {
-					// SetCurrentItem moves keyboard focus / edit-on-Enter
-					// anchor; EnsureVisible scrolls the viewport.  Both
-					// skipped on `focus=false` — selection highlight only.
-					dataViewCtrl->SetCurrentItem(item);
+					// Select already moved the keyboard focus / edit-on-Enter anchor
+					// (ChangeCurrentRow) — under single-sel SetCurrentItem IS Select, so calling
+					// it here was the same work twice, and on a paged model a second stamp into
+					// the restore channel can bump the fetch generation and cost an extra
+					// round-trip. Only the viewport scroll is left to do.
 					dataViewCtrl->EnsureVisible(item);
 				}
 			}
@@ -259,6 +448,47 @@ ibSourceObject* ibValueModelTableBox::GetSourceObject() const
 	return m_formOwner ? m_formOwner->GetSourceObject() : nullptr;
 }
 
+bool ibValueModelTableBox::IsMainSourceBound() const
+{
+	// This table IS the form's main source when its WHOLE binding path is the main attribute (a single hop).
+	// A NESTED source (a tabular section — path [mainAttr, section]) only has the main attribute as its HEAD,
+	// not as its own source; it is a distinct list.
+	const ibSourceDescription& desc = m_propertySource->GetValueAsSourceDesc();
+	if (desc.GetHopCount() != 1)
+		return false;
+	ibBackendFormAttributeValue* holder = FindSourceHolder(desc.GetFirst());
+	return holder != nullptr && holder->IsMain();
+}
+
+bool ibValueModelTableBox::HasCommandBar() const
+{
+	// No bar when this table is the form's main source — the form toolbar already serves those commands (its
+	// command provider resolves to this view) and a table bar would duplicate. A nested source keeps its own
+	// bar (Add/Copy/Edit/Delete).
+	if (IsMainSourceBound())
+		return false;
+	return ibValueFrame::HasCommandBar();
+}
+
+bool ibValueModelTableBox::GetSourceList(std::vector<ibBackendFormAttributeValue*>& out) const
+{
+	return m_formOwner != nullptr ? m_formOwner->GetSourceList(GetFilterSourceDataType(), out) : false;
+}
+
+// The binding answers for a field, but a tabular section is no column — its node in the source carries none —
+// so for it the SECTION the table shows answers. Only for a NESTED source (the table stands on a field of the
+// form's object, [head, section]): the form's own list is always available, since a list form of an object
+// the base does not use may still be opened from a reference to it, and must not come up empty. (Unbound is
+// the other question — IsUnbound.)
+bool ibValueModelTableBox::IsAvailable() const
+{
+	if (!m_propertySource->IsAvailable() || !ibValueWindowComposite::IsAvailable())
+		return false;
+	if (m_tableModel == nullptr || m_propertySource->GetValueAsSourceDesc().GetHopCount() < 2)
+		return true;
+	return ibFunctionalOptionGate::IsAvailable(m_tableModel->GetSourceMetaObject());
+}
+
 const ibValueMetaObjectCompositeData* ibValueModelTableBox::GetSourceMetaObject() const
 {
 	wxASSERT(m_tableModel);
@@ -273,20 +503,19 @@ ibClassID ibValueModelTableBox::GetSourceClassType() const
 	return m_tableModel->GetSourceClassType();
 }
 
-bool ibValueModelTableBox::FilterSource(const ibSourceExplorer& src, const ibMetaID& id) const
-{
-	return src.IsTableSection();
-}
-
 //***********************************************************************************
 //*                              ibValueModelTableBox                                     *
 //***********************************************************************************
 
-ibValueModelTableBox::ibValueModelTableBox() : ibValueWindow(), ibTypeControlFactory(),
-m_tableModel(nullptr), m_tableCurrentLine(nullptr),
+ibValueModelTableBox::ibValueModelTableBox() : ibValueWindowComposite(), ibTypeControlFactory(),
 m_dataViewCreated(false), m_dataViewSelected(false),
-m_need_calculate_pos(false)
+m_needExpanderColumn(false),
+m_tableModel(nullptr), m_tableCurrentLine(nullptr)
 {
+	m_members.Bind(this, &ibValueModelTableBox::FillControlMembers);
+
+	// Command bar is created by the ibValueWindowComposite base ctor.
+
 	m_propertySource->SetValue(ibTypeDescription(g_valueTableCLSID));
 
 	//set default params
@@ -309,67 +538,27 @@ ResolveLineByValue(ibValueModel* model, const ibValue& value)
 }
 #endif
 
-void ibValueModelTableBox::CalculateColumnPos()
+// THE TREE-EXPANDER COLUMN — the first SHOWN one, which is all that is left to decide
+// here. (This used to be CalculateColumnPos and used to re-insert every column to match
+// its position on the form: a workaround for the native, pre-generic header. Order is the
+// column TREE's now, so nothing has any positions to calculate.)
+void ibValueModelTableBox::UpdateExpanderColumn()
 {
 #ifndef OES_USE_WEB
-	ibTableViewCtrl* dataViewCtrl = dynamic_cast<ibTableViewCtrl*>(GetWxObject());
-	if (dataViewCtrl != nullptr) {
+	ibDataViewColumnGroup* columns = GetRootColumnGroup();
+	if (columns == nullptr)
+		return;
 
-		dataViewCtrl->SetExpanderColumn(nullptr);
-
-		ibHeaderGenericCtrl* headerCtrl = dataViewCtrl->GenericGetHeader();
-		if (headerCtrl != nullptr) {
-
-			bool need_reset_columns_order = false;
-
-			for (unsigned int idx = 0; idx < GetChildCount(); idx++) {
-
-				const ibValueFrame* valueFrame = GetChild(idx);
-				wxASSERT(valueFrame);
-
-				ibDataViewColumn* column = dynamic_cast<ibDataViewColumn*>(valueFrame->GetWxObject());
-
-				const unsigned int column_model_index = dataViewCtrl->GetColumnIndex(column);
-				const unsigned int column_index = headerCtrl->GetColumnPos(column_model_index);
-
-				const unsigned int real_column_index = valueFrame->GetParentPosition();
-
-				if (column_index != real_column_index) {
-					dataViewCtrl->DeleteColumn(column);
-					dataViewCtrl->InsertColumn(real_column_index, column);
-					need_reset_columns_order = true;
-				}
-
-				if (column->IsShown() && dataViewCtrl->GetExpanderColumn() == nullptr) {
-					dataViewCtrl->SetExpanderColumn(column);
-				}
-			}
-
-			if (need_reset_columns_order) headerCtrl->ResetColumnsOrder();
-		}
-		else
-		{
-			for (unsigned int idx = 0; idx < GetChildCount(); idx++) {
-
-				const ibValueFrame* valueFrame = GetChild(idx);
-				wxASSERT(valueFrame);
-
-				ibDataViewColumn* column = dynamic_cast<ibDataViewColumn*>(valueFrame->GetWxObject());
-
-				const unsigned int column_model_index = dataViewCtrl->GetColumnIndex(column);
-				const unsigned int real_column_index = valueFrame->GetParentPosition();
-
-				if (column_model_index != real_column_index) {
-					dataViewCtrl->DeleteColumn(column);
-					dataViewCtrl->InsertColumn(real_column_index, column);
-				}
-
-				if (column->IsShown() && dataViewCtrl->GetExpanderColumn() == nullptr) {
-					dataViewCtrl->SetExpanderColumn(column);
-				}
-			}
-		}
+	// Asked of the TREE, in the order it draws them — not of the form's children, which
+	// would be a second answer to "which column comes first".
+	ibDataViewColumn* first = nullptr;
+	for (unsigned int idx = 0; first == nullptr && idx < columns->GetColumnCount(); idx++) {
+		ibDataViewColumn* column = columns->GetColumn(idx);
+		if (column != nullptr && column->IsShown())
+			first = column;
 	}
+
+	columns->GetOwner()->SetExpanderColumn(first);
 #endif // !OES_USE_WEB
 }
 
@@ -439,17 +628,35 @@ wxObject* ibValueModelTableBox::Create(ibFrontendWindow* wxparent, ibVisualHost*
 #endif // OES_USE_WEB
 }
 
-void ibValueModelTableBox::OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost, bool firstСreated)
+void ibValueModelTableBox::OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost, bool firstCreated)
 {
 #ifndef OES_USE_WEB
 	ibTableViewCtrl* dataViewCtrl = dynamic_cast<ibTableViewCtrl*>(wxobject);
 
+	// Bind the source FIRST (a just-dropped tablebox auto-binds a fresh value-table attribute — control-side
+	// helper — so it renders bound, not hidden; its type comes from the source-type generator, _table ->
+	// value table). Then CreateModel reads that bound value-table into m_tableModel. The value-table starts
+	// with NO columns — they come from the bound source or the user's explicit "Add column", never auto-added.
+	if (firstCreated)
+		AutoBindNewSource(this);
+
 	if (dataViewCtrl != nullptr) ibValueModelTableBox::CreateModel();
 
-	if (visualHost->IsDesignerHost() && GetChildCount() == 0
-		&& firstСreated) {
-		ibValueModelTableBox::AddColumn();
-	}
+	// ⭐⭐ AND THE SETTING MARKED "restore on open" GOES ON — right after the model is in place, which
+	// is the one moment that happens once per opened window (Max, 2026-08-26). Addressed by the
+	// BINDING's leaf, under the list's own category — the settings belong to what is shown, so the
+	// box may be redrawn without losing them.
+	//
+	// ⚠ NOT IN THE DESIGNER: there the box is a picture of itself, and the person drawing the form
+	// is not the reader whose settings these are.
+	if (visualHost != nullptr && !visualHost->IsDesignerHost() && m_tableModel != nullptr)
+		ibDialogSavedSettings::ApplyDefault(m_tableModel->GetModelComposer(), ibSettingsCategory::List,
+			SettingsObjectKey(), GetMetaData());
+
+	// NO auto-first-column here. AddColumn() injects a column INTO the bound value-table (m_tableModel's
+	// collection), so auto-calling it on every designer create/drop polluted the value-table attribute with a
+	// spurious column each time (Column, Column1, Column2, …). Columns now come only from the bound source or
+	// the user's explicit "Add column".
 #endif
 }
 
@@ -474,13 +681,22 @@ void ibValueModelTableBox::OnUpdated(wxObject* wxobject, ibFrontendWindow* wxpar
 #ifndef OES_USE_WEB
 	ibTableViewCtrl* dataViewCtrl = dynamic_cast<ibTableViewCtrl*>(wxobject);
 
-
-
 	if (dataViewCtrl != nullptr) {
 
 		ibDataViewModel* dataViewOldModel = dataViewCtrl->GetModel();
-		ibDataViewModel* dataViewNewModel = m_tableModel != nullptr ?
-			m_tableModel->GetDataViewModel() : nullptr;
+		// Designer = compile + intellisense only.  Form-editor preview
+		// must not associate the runtime data model with the control —
+		// AssociateModel arms PagedBootstrap, which would issue SQL
+		// against a metadata table that doesn't exist yet (new Catalog /
+		// Document being designed) or that the Designer session has no
+		// runtime to query against.  Columns in designer are rendered
+		// from child ibValueModelTableBoxColumn controls (see
+		// CreateColumnCollection's own DesignerMode gate); header /
+		// footer dimensions below operate on dataViewCtrl directly, no
+		// model needed.
+		ibDataViewModel* dataViewNewModel =
+			(m_tableModel != nullptr && !appData->DesignerMode())
+			? m_tableModel->GetDataViewModel() : nullptr;
 
 		if (dataViewNewModel != dataViewOldModel) {
 			// Fresh control attaching to an existing model (form rebuild
@@ -537,6 +753,7 @@ void ibValueModelTableBox::OnUpdated(wxObject* wxobject, ibFrontendWindow* wxpar
 		dataViewCtrl->SetHeaderAttr(attr);
 
 		if (!appData->DesignerMode()) {
+			
 			m_dataViewCreated = true;
 
 			// Force-refetch flag on the control.  All UpdateForm
@@ -559,7 +776,6 @@ void ibValueModelTableBox::OnUpdated(wxObject* wxobject, ibFrontendWindow* wxpar
 			// If the row no longer exists, selection drops silently.
 			if (m_tableModel != nullptr && m_formOwner != nullptr) {
 
-
 				dataViewCtrl->SchedulePagedRefresh();
 
 				ibValueModel::ibValueModelReturnLine* line = nullptr;
@@ -573,7 +789,7 @@ void ibValueModelTableBox::OnUpdated(wxObject* wxobject, ibFrontendWindow* wxpar
 					line = ResolveLineByValue(m_tableModel, createdValue);
 				}
 				else if (!m_dataViewSelected) {
-					ibValueFrame* ownerControl = m_formOwner->GetOwnerControl();
+					ibControlFrame* ownerControl = m_formOwner->GetOwnerControl();
 					if (ownerControl != nullptr && m_tableCurrentLine == nullptr) {
 						ibValue retValue; ownerControl->GetControlValue(retValue);
 						line = ResolveLineByValue(m_tableModel, retValue);
@@ -581,20 +797,32 @@ void ibValueModelTableBox::OnUpdated(wxObject* wxobject, ibFrontendWindow* wxpar
 					m_dataViewSelected = true;
 				}
 
-				if (line == nullptr) {
-					// Always consume changedValue when no createdValue /
-					// ownerControl line was resolved.  Post-edit save on a
-					// row already selected (m_tableCurrentLine != nullptr)
-					// needs this path: NotifyChange from manager-save
-					// fires `ownerForm->m_changedValue` with the row's
-					// fresh identity, and we replace the stale current
-					// line with a stub matching the new identity.
-					// ConsumeChangedValue clears the field, so the next
-					// OnUpdated cycle won't re-position uninitialized.
-					const ibValue changedValue = m_formOwner->ConsumeChangedValue();
-					if (!changedValue.IsEmpty()) {
-						line = ResolveLineByValue(m_tableModel, changedValue);
-					}
+				// NO changedValue BRANCH. Re-writing an EXISTING element used to re-position the list on it,
+				// which yanked the user off the row they were standing on whenever an object form was saved
+				// while the list was browsed elsewhere. It is gone rather than gated, because the knowledge it
+				// carried is no longer needed anywhere: the current row is a REFCOUNTED node that survives the
+				// wipe, and it re-locates itself in the new batch by its own row-key (PagedRefresh stamps it
+				// into m_pagedRestoreFocus, OnPagedFetchResetComplete matches it via IsEqualTo). The channel
+				// dates from when a row had to be SEARCHED for after a refresh. A CREATE still earns its
+				// branch above — that row did not exist, so there was nothing to stand on and nothing to
+				// re-locate. Known edge left open deliberately: editing a register record's KEY changes the
+				// row's identity, so the old row-key no longer matches and focus drops — by then it is a
+				// different row, and "stay on it" is a fiction.
+
+				// Initial-open sync. On first populate the ctrl highlights the top row VISUALLY, but that
+				// programmatic selection fires no wxEVT_DATAVIEW_SELECTION_CHANGED, so m_tableCurrentLine
+				// stays null and the engine is out of sync with the row the user sees active. Downstream a
+				// cell choice ("…") then finds no current row, cannot read the cell's real (reference) type,
+				// falls back to a primitive (string is treated as a leaf), and silently skips the choice
+				// form. When nothing above resolved a line and we have none, adopt whatever the ctrl actually
+				// has active: its selection if any, else the top visible row.
+				if (line == nullptr && m_tableCurrentLine == nullptr) {
+					ibDataViewItemArray sel;
+					const int selCount = dataViewCtrl->GetSelections(sel);
+					const ibDataViewItem active =
+						(selCount > 0 && sel[0].IsOk()) ? sel[0] : dataViewCtrl->GetTopItem();
+					if (active.IsOk())
+						line = m_tableModel->GetRowAt(active);
 				}
 
 				if (line != nullptr) {
@@ -603,9 +831,9 @@ void ibValueModelTableBox::OnUpdated(wxObject* wxobject, ibFrontendWindow* wxpar
 			}
 		}
 
-		if (m_need_calculate_pos) {
-			CalculateColumnPos();
-			m_need_calculate_pos = false;
+		if (m_needExpanderColumn) {
+			UpdateExpanderColumn();
+			m_needExpanderColumn = false;
 		}
 	}
 #endif // !OES_USE_WEB
@@ -624,56 +852,64 @@ void ibValueModelTableBox::Cleanup(wxObject* obj, ibVisualHost* visualHost)
 //*                                  Property                                       *
 //***********************************************************************************
 
-bool ibValueModelTableBox::LoadData(ibReaderMemory& reader)
+bool ibValueModelTableBox::ReadData(const ibDataNode& node)
 {
-	if (!m_propertySource->LoadData(reader))
-		return false;
+	m_propertySource->SetNodeValue(node.GetProperty(m_propertySource->GetName()));
 
-	m_propertyHeader->LoadData(reader);
-	m_propertyHeaderHeight->LoadData(reader);
-	m_propertyFooter->LoadData(reader);
-	m_propertyFooterHeight->LoadData(reader);
+	m_propertyHeader->SetNodeValue(node.GetProperty(m_propertyHeader->GetName()));
+	m_propertyHeaderHeight->SetNodeValue(node.GetProperty(m_propertyHeaderHeight->GetName()));
+	m_propertyFooter->SetNodeValue(node.GetProperty(m_propertyFooter->GetName()));
+	m_propertyFooterHeight->SetNodeValue(node.GetProperty(m_propertyFooterHeight->GetName()));
 
-	m_propertyFreezeRow->LoadData(reader);
-	m_propertyFreezeCol->LoadData(reader);
+	m_propertyFreezeRow->SetNodeValue(node.GetProperty(m_propertyFreezeRow->GetName()));
+	m_propertyFreezeCol->SetNodeValue(node.GetProperty(m_propertyFreezeCol->GetName()));
 
-	m_propertyRowSelectionMode->LoadData(reader);
+	m_propertyRowSelectionMode->SetNodeValue(node.GetProperty(m_propertyRowSelectionMode->GetName()));
+	m_propertyChoiceMode->SetNodeValue(node.GetProperty(m_propertyChoiceMode->GetName()));
+	// 🛑 THE VIEW MODE WAS MISSING FROM BOTH LISTS. It is read at build time and written back when the
+	// user switches list/tree at runtime — and then had no road to the file, so a designer's choice
+	// came back as the default on the next open (audit, 2026-08-24). Both halves are explicit lists
+	// here, so a property added to the class and not to them is silently not saved.
+	m_propertyViewMode->SetNodeValue(node.GetProperty(m_propertyViewMode->GetName()));
 
 	//events
-	m_eventSelection->LoadData(reader);
-	m_eventBeforeAddRow->LoadData(reader);
-	m_eventBeforeDeleteRow->LoadData(reader);
-	m_eventOnActivateRow->LoadData(reader);
-	m_eventOnAddRow->LoadData(reader);
-	m_eventOnDeleteRow->LoadData(reader);
+	m_eventSelection->SetNodeValue(node.GetProperty(m_eventSelection->GetName()));
+	m_eventBeforeAddRow->SetNodeValue(node.GetProperty(m_eventBeforeAddRow->GetName()));
+	m_eventBeforeDeleteRow->SetNodeValue(node.GetProperty(m_eventBeforeDeleteRow->GetName()));
+	m_eventOnActivateRow->SetNodeValue(node.GetProperty(m_eventOnActivateRow->GetName()));
+	m_eventOnAddRow->SetNodeValue(node.GetProperty(m_eventOnAddRow->GetName()));
+	m_eventOnDeleteRow->SetNodeValue(node.GetProperty(m_eventOnDeleteRow->GetName()));
 
-	return ibValueWindow::LoadData(reader);
+	// Chain to the composite base (reads the "Layers" block) → ibValueWindow.
+	return ibValueWindowComposite::ReadData(node);
 }
 
-bool ibValueModelTableBox::SaveData(ibWriterMemory& writer)
+bool ibValueModelTableBox::WriteData(ibDataNode& node) const
 {
-	if (!m_propertySource->SaveData(writer))
-		return false;
+	node.SetProperty(m_propertySource->GetName(), m_propertySource->GetNodeValue());
 
-	m_propertyHeader->SaveData(writer);
-	m_propertyHeaderHeight->SaveData(writer);
-	m_propertyFooter->SaveData(writer);
-	m_propertyFooterHeight->SaveData(writer);
+	node.SetProperty(m_propertyHeader->GetName(), m_propertyHeader->GetNodeValue());
+	node.SetProperty(m_propertyHeaderHeight->GetName(), m_propertyHeaderHeight->GetNodeValue());
+	node.SetProperty(m_propertyFooter->GetName(), m_propertyFooter->GetNodeValue());
+	node.SetProperty(m_propertyFooterHeight->GetName(), m_propertyFooterHeight->GetNodeValue());
 
-	m_propertyFreezeRow->SaveData(writer);
-	m_propertyFreezeCol->SaveData(writer);
+	node.SetProperty(m_propertyFreezeRow->GetName(), m_propertyFreezeRow->GetNodeValue());
+	node.SetProperty(m_propertyFreezeCol->GetName(), m_propertyFreezeCol->GetNodeValue());
 
-	m_propertyRowSelectionMode->SaveData(writer);
+	node.SetProperty(m_propertyRowSelectionMode->GetName(), m_propertyRowSelectionMode->GetNodeValue());
+	node.SetProperty(m_propertyChoiceMode->GetName(), m_propertyChoiceMode->GetNodeValue());
+	node.SetProperty(m_propertyViewMode->GetName(), m_propertyViewMode->GetNodeValue());   // see ReadData
 
 	//events
-	m_eventSelection->SaveData(writer);
-	m_eventBeforeAddRow->SaveData(writer);
-	m_eventBeforeDeleteRow->SaveData(writer);
-	m_eventOnActivateRow->SaveData(writer);
-	m_eventOnAddRow->SaveData(writer);
-	m_eventOnDeleteRow->SaveData(writer);
+	node.SetProperty(m_eventSelection->GetName(), m_eventSelection->GetNodeValue());
+	node.SetProperty(m_eventBeforeAddRow->GetName(), m_eventBeforeAddRow->GetNodeValue());
+	node.SetProperty(m_eventBeforeDeleteRow->GetName(), m_eventBeforeDeleteRow->GetNodeValue());
+	node.SetProperty(m_eventOnActivateRow->GetName(), m_eventOnActivateRow->GetNodeValue());
+	node.SetProperty(m_eventOnAddRow->GetName(), m_eventOnAddRow->GetNodeValue());
+	node.SetProperty(m_eventOnDeleteRow->GetName(), m_eventOnDeleteRow->GetNodeValue());
 
-	return ibValueWindow::SaveData(writer);
+	// Chain to the composite base (writes the "Layers" block) → ibValueWindow.
+	return ibValueWindowComposite::WriteData(node);
 }
 
 //***********************************************************************************
@@ -683,34 +919,32 @@ enum prop {
 	eCurrentRow,
 };
 
-ibMetaData* ibValueModelTableBox::GetMetaData() const
+const ibMetaData* ibValueModelTableBox::GetMetaData() const
 {
 	return m_formOwner != nullptr ?
 		m_formOwner->GetMetaData() : nullptr;
 }
 
-void ibValueModelTableBox::PrepareNames() const
+void ibValueModelTableBox::FillControlMembers(ibMemberTable& helper) const
 {
-	ibValueFrame::PrepareNames();
-
-	m_methodHelper->AppendProp(wxT("Value"), eTableValue, eControl);
-	m_methodHelper->AppendProp(wxT("CurrentRow"), eCurrentRow, eControl);
+	helper.AppendProp(wxT("Value"), eTableValue, eControl);
+	helper.AppendProp(wxT("CurrentRow"), eCurrentRow, eControl);
 }
 
 bool ibValueModelTableBox::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 {
-	const long lPropAlias = m_methodHelper->GetPropAlias(lPropNum); bool refreshColumn = false;
+	const long lPropAlias = m_members.GetPropAlias(lPropNum); bool refreshColumn = false;
 	if (lPropAlias == eControl) {
-		const long lPropData = m_methodHelper->GetPropData(lPropNum);
+		const long lPropData = m_members.GetPropData(lPropNum);
 		if (lPropData == eTableValue) {
-			m_tableModel = varPropVal.ConvertToType<ibValueModelTableBase>();
+			m_tableModel = varPropVal.ConvertToType<ibValueModel>();
 			m_tableCurrentLine.Reset();
 			refreshColumn = true;
 		}
 		else if (lPropData == eCurrentRow) {
-			ibValueModelTableBase::ibValueModelReturnLine* tableReturnLine = nullptr;
+			ibValueModel::ibValueModelReturnLine* tableReturnLine = nullptr;
 			if (varPropVal.ConvertToValue(tableReturnLine)
-			    && m_tableModel == tableReturnLine->GetOwnerModel()) {
+				&& m_tableModel == tableReturnLine->GetOwnerModel()) {
 				ApplyCurrentLine(tableReturnLine);
 			}
 			else {
@@ -732,9 +966,9 @@ bool ibValueModelTableBox::SetPropVal(const long lPropNum, const ibValue& varPro
 
 bool ibValueModelTableBox::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
-	const long lPropAlias = m_methodHelper->GetPropAlias(lPropNum);
+	const long lPropAlias = m_members.GetPropAlias(lPropNum);
 	if (lPropAlias == eControl) {
-		const long lPropData = m_methodHelper->GetPropData(lPropNum);
+		const long lPropData = m_members.GetPropData(lPropNum);
 		if (lPropData == eTableValue) {
 			pvarPropVal = m_tableModel;
 			return true;
@@ -756,20 +990,24 @@ void ibValueModelTableBox::OnPropertyCreated(ibProperty* /*property*/) {}
 bool ibValueModelTableBox::OnPropertyChanging(ibProperty* /*property*/, const wxVariant& /*newValue*/) { return true; }
 void ibValueModelTableBox::OnPropertyChanged(ibProperty* /*property*/, const wxVariant& /*oldValue*/, const wxVariant& /*newValue*/) {}
 
-ibValueModelTableBox::ibActionCollection ibValueModelTableBox::GetActionCollection(const ibFormID& /*formType*/)
+ibValueModelTableBox::ibStandardCommandSet ibValueModelTableBox::GetStandardCommands(const ibFormID& /*formType*/)
 {
-	return ibActionCollection();
+	return ibStandardCommandSet();
 }
-void ibValueModelTableBox::ExecuteAction(const ibActionID& /*lNumAction*/, ibBackendValueForm* /*srcForm*/) {}
+void ibValueModelTableBox::CallAsAction(const ibActionID& /*lNumAction*/, ibBackendValueForm* /*srcForm*/) {}
 
 void ibValueModelTableBox::PrepareDefaultMenu(wxMenu* /*m_menu*/) {}
 void ibValueModelTableBox::ExecuteMenu(ibVisualHost* /*visualHost*/, int /*id*/) {}
+
+// Column refill lives in the desktop-only tableBoxProperty.cpp. Web still needs the vtable symbol:
+// RefillFromSource is a no-op (web rebuilds columns through its own stateless pass).
+void ibValueModelTableBox::RefillFromSource() {}
 #endif // OES_USE_WEB
 
 //***********************************************************************
 //*                       Register in runtime                           *
 //***********************************************************************
 
-ENUM_TYPE_REGISTER(ibValueEnumTableBoxSelectionMode, "TableboxRowSelectionMode", string_to_clsid("EN_TBXSL"));
-ENUM_TYPE_REGISTER(ibValueEnumTableBoxViewMode, "TableboxViewMode", string_to_clsid("EN_TBXVM"));
+ENUM_TYPE_REGISTER(ibValueEnumTableBoxSelectionMode, "TableboxRowSelectionMode", enum_to_clsid("EN_TBXSL"));
+ENUM_TYPE_REGISTER(ibValueEnumTableBoxViewMode, "TableboxViewMode", enum_to_clsid("EN_TBXVM"));
 CONTROL_TYPE_REGISTER(ibValueModelTableBox, "Tablebox", "Container", g_controlTableBoxCLSID);

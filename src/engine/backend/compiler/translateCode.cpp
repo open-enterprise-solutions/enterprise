@@ -1,5 +1,5 @@
 ﻿////////////////////////////////////////////////////////////////////////////
-//	Author		: Maxim Kornienko, 2С-team
+//	Author		: Maxim Kornienko, 2C-team
 //	Description : translate module 
 ////////////////////////////////////////////////////////////////////////////
 
@@ -12,12 +12,10 @@
 //empty lexem  
 const ibLexem gs_nullLexem = {};
 
-//keywords 
-static std::map<wxString, void*> s_listHelpDescription; //description of keywords and system functions
-static std::map<wxString, void*> s_listHashKeyword;
+const ibTranslateCode::ibDefineCollection ibTranslateCode::ms_listDefine; //root of every module's define chain — immutable, see translateCode.h
 
-ibTranslateCode::ibDefineCollection ibTranslateCode::ms_listDefine; //global array of definitions
-std::map<wxString, void*> ibTranslateCode::ms_listHashKeyWord; //list of keywords
+// (s_listHelpDescription / s_listHashKeyword lived here too — two more process-wide
+// maps that LoadKeyWords filled and nothing ever read. Removed.)
 
 //////////////////////////////////////////////////////////////////////
 // Global array
@@ -40,11 +38,15 @@ struct ibKeyWords s_listKeyWord[] =
 	{"Not"},
 	{"And"},
 	{"Or"},
+	{"Mod"},
 	{"Procedure"},
 	{"EndProcedure"},
 	{"Function"},
 	{"EndFunction"},
-	{"Export"},
+	{"Public"},      // KEY_PUBLIC    — was "Export"; a TRAILING access modifier: after a routine's signature, after a variable's name
+	{"Private"},     // KEY_PRIVATE
+	{"Protected"},   // KEY_PROTECTED
+	{"Cached"},      // KEY_CACHED    — memoisation; combines with the three above
 	{"Val"},
 	{"Return"},
 	{"Try"},
@@ -79,7 +81,7 @@ struct ibKeyWords s_listKeyWord[] =
 	{"#EndRegion"},
 
 	// === LINQ keywords ===
-	// Order MUST match codeDef.h's KEY_FROM..KEY_INTO enum block —
+	// Order MUST match codeDef.h's KEY_FROM..KEY_RESTRICT enum block —
 	// translator lookup is by index into s_listKeyWord.
 	{"From"},
 	{"Where"},
@@ -96,67 +98,58 @@ struct ibKeyWords s_listKeyWord[] =
 	{"Group"},
 	{"By"},
 	{"Into"},
+	{"Restrict"},
 };
+
+// THIS TABLE AND THE KEY_* ENUM ARE ONE THING IN TWO PLACES, and the translator
+// looks a keyword up by INDEX — s_listKeyWord[KEY_MOD]. A comment asking the next
+// person to keep them in step is not a guard: adding an enumerator without its
+// string shifts every name after it by one, so `Mod` starts spelling `Procedure`
+// and the failure surfaces as a mis-parsed module, nowhere near the edit.
+static_assert(WXSIZEOF(s_listKeyWord) == LastKeyWord,
+	"s_listKeyWord and the KEY_* enum (codeDef.h) must stay in lock-step: "
+	"one entry per enumerator, in the same order.");
 
 //////////////////////////////////////////////////////////////////////
 // Construction/Destruction
 //////////////////////////////////////////////////////////////////////
 
+// The map folds case in its comparator (ibCaseFoldLess), so these are plain
+// O(log n) lookups by the name as written — where the old code ran a linear
+// std::find_if over the whole map, calling CompareString on each entry, for
+// every identifier in every module.
+
 void ibTranslateCode::ibDefineCollection::RemoveDef(const wxString& strName)
 {
-	auto iterator = std::find_if(m_defineList.begin(), m_defineList.end(),
-		[strName](const auto& pair) { return stringUtils::CompareString(pair.first, strName); }
-	);
-
-	if (iterator != m_defineList.end()) m_defineList.erase(iterator);
+	m_defineList.erase(strName);
 }
 
-bool ibTranslateCode::ibDefineCollection::HasDefine(const wxString& strName) const
+const ibLexemList* ibTranslateCode::ibDefineCollection::FindDefine(const wxString& strName) const
 {
-	auto iterator = std::find_if(m_defineList.begin(), m_defineList.end(),
-		[strName](const auto& pair) { return stringUtils::CompareString(pair.first, strName); }
-	);
-
-	if (iterator != m_defineList.end()) return true;
-
-	static int nLevel = 0;
-
-	nLevel++;
-
-	if (nLevel > MAX_OBJECTS_LEVEL) ibBackendCoreException::Error(_("Recursive module call (#3)"));
-
-	//find in parent
-	bool result = false;
-	if (m_parentDefine != nullptr)
-		result = m_parentDefine->HasDefine(strName);
-	nLevel--;
-	return result;
-}
-
-ibLexemList* ibTranslateCode::ibDefineCollection::GetDefine(const wxString& strName)
-{
-	auto iterator = std::find_if(m_defineList.begin(), m_defineList.end(),
-		[strName](const auto& pair) { return stringUtils::CompareString(pair.first, strName); }
-	);
-
-	if (iterator != m_defineList.end()) return iterator->second;
-
-	//find in parent
-	if (m_parentDefine != nullptr && m_parentDefine->HasDefine(strName))
-		return m_parentDefine->GetDefine(strName);
-
-	ibLexemList* lexList = new ibLexemList();
-	m_defineList[stringUtils::MakeUpper(strName)] = lexList;
-	return lexList;
-}
-
-void ibTranslateCode::ibDefineCollection::SetDefine(const wxString& strName, ibLexemList* src)
-{
-	ibLexemList* dst = GetDefine(strName);
-	dst->clear();
-	if (src != nullptr) {
-		for (unsigned int i = 0; i < src->size(); i++) dst->push_back(*src[i].data());
+	// Iterative walk — the chain is a parent list, not a tree, so recursion bought
+	// nothing and its depth guard was a function-local `static` counter: shared by
+	// every thread, and left incremented when the throw below unwound past it.
+	int nLevel = 0;
+	for (const ibDefineCollection* scope = this; scope != nullptr; scope = scope->m_parentDefine) {
+		if (++nLevel > MAX_OBJECTS_LEVEL) ibBackendCoreException::Error(_("Recursive module call (#3)"));
+		auto iterator = scope->m_defineList.find(strName);
+		if (iterator != scope->m_defineList.end()) return &iterator->second;
 	}
+
+	return nullptr;
+}
+
+void ibTranslateCode::ibDefineCollection::SetDefine(const wxString& strName, const ibLexemList* src)
+{
+	// Always OUR map. The previous version resolved the destination through the
+	// chain-walking lookup, so redefining a name an ancestor held overwrote the
+	// ANCESTOR's entry — a module rewriting its parent's #Define, and, the moment
+	// anything seeded the static root, one session rewriting every other's.
+	ibLexemList& dst = m_defineList[strName];
+	if (src != nullptr)
+		dst = *src;
+	else
+		dst.clear();
 }
 
 void ibTranslateCode::ibDefineCollection::SetDefine(const wxString& strName, const wxString& strValue)
@@ -182,69 +175,59 @@ void ibTranslateCode::ibDefineCollection::SetDefine(const wxString& strName, con
 // ibLexem — out-of-line accessors (need ibTranslateCode definition)
 //////////////////////////////////////////////////////////////////////
 
+// These return a REFERENCE, so the fallback must be an object that outlives the call.
+//
+// They used to spell it `… ? m_translateCode->m_strX : wxString()`, which returns a
+// reference to a DEAD TEMPORARY — and on every call, not just the null one: a conditional
+// whose second operand is an lvalue and whose third is a prvalue yields a prvalue, so even
+// the non-null branch was copied into a temporary first. The caller then read freed stack.
+//
+// MSVC survived it by accident (the temporary's stack slot happened to stay intact long
+// enough for AddLineInfo to copy out of it); GCC reuses the memory immediately and every
+// test that compiles a script segfaulted. A file-scope empty string keeps both operands
+// lvalues, so the conditional stays an lvalue and the reference is real.
+static const wxString s_emptyLexemString;
+
 const wxString& ibLexem::GetModuleName() const {
-	return m_translateCode ? m_translateCode->m_strModuleName : wxEmptyString;
+	return m_translateCode ? m_translateCode->m_strModuleName : s_emptyLexemString;
 }
 const wxString& ibLexem::GetDocPath() const {
-	return m_translateCode ? m_translateCode->m_strDocPath : wxEmptyString;
+	return m_translateCode ? m_translateCode->m_strDocPath : s_emptyLexemString;
 }
 const wxString& ibLexem::GetFileName() const {
-	return m_translateCode ? m_translateCode->m_strFileName : wxEmptyString;
+	return m_translateCode ? m_translateCode->m_strFileName : s_emptyLexemString;
 }
 
 //////////////////////////////////////////////////////////////////////
 // Construction/Destruction
 //////////////////////////////////////////////////////////////////////
 
-ibTranslateCode::ibTranslateCode() : m_defineList(nullptr),
-m_current_lex(this),
+ibTranslateCode::ibTranslateCode() : m_current_lex(this),
+m_defineList(nullptr),
 m_bAutoDeleteDefList(false),
 m_nModePreparing(LEXEM_ADD)
 {
-	//prepare keyword buffer
-	if (ms_listHashKeyWord.size() == 0) LoadKeyWords(); //only once
 }
 
-ibTranslateCode::ibTranslateCode(const wxString& strModuleName, const wxString& strDocPath) : m_defineList(nullptr),
-m_strModuleName(strModuleName), m_strDocPath(strDocPath),
-m_current_lex(this),
+ibTranslateCode::ibTranslateCode(const wxString& strModuleName, const wxString& strDocPath) : m_current_lex(this),
+m_defineList(nullptr),
 m_bAutoDeleteDefList(false),
-m_nModePreparing(LEXEM_ADD)
+m_nModePreparing(LEXEM_ADD),
+m_strModuleName(strModuleName), m_strDocPath(strDocPath)
 {
-	if (ms_listHashKeyWord.size() == 0) LoadKeyWords();
 }
 
-ibTranslateCode::ibTranslateCode(const wxString& strFileName) : m_defineList(nullptr),
-m_strFileName(strFileName),
-m_current_lex(this),
+ibTranslateCode::ibTranslateCode(const wxString& strFileName) : m_current_lex(this),
+m_defineList(nullptr),
 m_bAutoDeleteDefList(false),
-m_nModePreparing(LEXEM_ADD)
+m_nModePreparing(LEXEM_ADD),
+m_strFileName(strFileName)
 {
-	if (ms_listHashKeyWord.size() == 0) LoadKeyWords();
 }
 
 ibTranslateCode::~ibTranslateCode()
 {
 	if (m_bAutoDeleteDefList) wxDELETE(m_defineList);
-}
-
-/**
-* prepare keyword buffer
-*/
-
-void ibTranslateCode::LoadKeyWords()
-{
-	ms_listHashKeyWord.clear();
-
-	for (unsigned int i = 0; i < sizeof(s_listKeyWord) / sizeof(s_listKeyWord[0]); i++)
-	{
-		const wxString& strEng = stringUtils::MakeUpper(s_listKeyWord[i].m_strKeyWord);
-		ms_listHashKeyWord[strEng] = (void*)(i + 1);
-
-		//add to array for parser
-		s_listHashKeyword[strEng] = (void*)1;
-		s_listHelpDescription[strEng] = &s_listKeyWord[i].m_strShortDescription;
-	}
 }
 
 // `IsAllowedKey` is declared on ibTranslateCode but its body lives in
@@ -384,6 +367,12 @@ void ibTranslateCode::SkipSpaces() const
 						unsigned int j_utf8 = i_utf8;
 						unsigned int j_utf8_offset = j_utf8;
 #endif	
+						// ⭐ A COMMENT ENDS AT ITS LINE END, AND THE WALK THEN CONTINUES FROM THERE - IN THIS LOOP. It used to
+						// CALL ITSELF for the next line, so n comment lines in a row were n frames deep: a module with a
+						// big block of commented-out code overflowed the stack of the thread compiling it (enterprise died
+						// on 2026-09-21 with 511+ frames of SkipSpaces, one per line). Nothing here needs a new call: the
+						// outer `for` already walks the buffer, and the line end is just the next character it meets.
+						bool commentEnded = false;
 						for (unsigned int j = i; j < m_bufferSize; j++) {
 
 							const auto& w = m_strBuffer[j];
@@ -399,11 +388,18 @@ void ibTranslateCode::SkipSpaces() const
 							m_currentUtf8Pos = j_utf8;
 #endif
 							if (w == wxT('\n') || w == wxT('\r')) {
-								//process next line
-								SkipSpaces();
-								return;
+								// Resume the outer walk AT the line end: `i++` lands on it, where it is whitespace like
+								// any other and counts the line (m_currentLine) exactly as the recursive call did.
+								i = j - 1;   // j > i here (the comment starts with '/', which is not a line end)
+#ifdef UTF8_LEXEM_TRANSLATE
+								i_utf8_offset = j_utf8;   // ... and the UTF-8 offset of that same character
+#endif
+								commentEnded = true;
+								break;
 							}
 						}
+						if (commentEnded)
+							continue;
 						i = m_currentPos + 1;
 #ifdef UTF8_LEXEM_TRANSLATE
 						i_utf8 = m_currentUtf8Pos + i_utf8_step;
@@ -483,6 +479,36 @@ bool ibTranslateCode::GetByte(wxUniChar* c) const
 * Return value:
 * true,false
 */
+
+void ibTranslateCode::SkipLine() const
+{
+#ifdef UTF8_LEXEM_TRANSLATE
+	unsigned int i_utf8 = m_currentUtf8Pos, i_utf8_offset = i_utf8;
+#endif
+	for (unsigned int i = m_currentPos; i < m_bufferSize; i++) {
+
+		const auto& c = m_strBuffer[i];
+#ifdef UTF8_LEXEM_TRANSLATE
+		i_utf8 = i_utf8_offset;
+		unsigned int i_utf8_step = 0;
+		(void)SetUtf8CharOffset(c, i_utf8_step);
+		i_utf8_offset = i_utf8 + i_utf8_step;
+#endif
+		m_currentPos = i;
+#ifdef UTF8_LEXEM_TRANSLATE
+		m_currentUtf8Pos = i_utf8;
+#endif
+		if (c == wxT('\n') || c == wxT('\r')) {
+			SkipSpaces();   // steps over the break itself and counts the line
+			return;
+		}
+	}
+
+	m_currentPos = m_bufferSize;
+#ifdef UTF8_LEXEM_TRANSLATE
+	m_currentUtf8Pos = i_utf8_offset;
+#endif
+}
 
 bool ibTranslateCode::IsWord() const
 {
@@ -649,14 +675,19 @@ bool ibTranslateCode::IsNumber() const
 
 bool ibTranslateCode::GetNumber(wxString* strNumber) const
 {
+	// 🛑 `return false`, NOT `return wxEmptyString` — this returned a POINTER from a bool function,
+	// left over from when the signature was `wxString GetNumber()`. It compiles, and a non-null
+	// pointer is TRUE, so both of these error paths were reporting SUCCESS. Every sibling Get* in
+	// this file returns false here. (It went unnoticed because SetError above already records the
+	// failure, so the compile still refused — but a caller reading the RESULT was told it worked.)
 	if (!IsNumber()) {
 		SetError(ERROR_TRANSLATE_NUMBER, m_currentPos);
-		return wxEmptyString;
+		return false;
 	}
 	SkipSpaces();
 	if (m_currentPos >= m_bufferSize) {
 		SetError(ERROR_TRANSLATE_NUMBER, m_currentPos);
-		return wxEmptyString;
+		return false;
 	}
 	unsigned int next_pos = m_currentPos, error_pos = m_currentPos, point_pos = 0;
 #ifdef UTF8_LEXEM_TRANSLATE
@@ -772,6 +803,21 @@ bool ibTranslateCode::GetString(wxString* strString) const
 		i_utf8_offset += i_utf8_step;
 #endif	
 		if (c == wxT('\n')) {
+			// ⚠⚠ A CLOSED STRING ENDS AT ITS QUOTE. This branch exists for the CONTINUED string —
+			//     "line one
+			//     |line two"
+			// — where the newline is part of the literal and the next line opens with `|`. When the
+			// string has already closed (count_char == 2), the newline after it belongs to whatever
+			// follows, and running this branch clobbered `next_pos` back to the string's own start,
+			// leaving the lexer to resume INSIDE the literal it had just read. Everything after that
+			// point tokenised as garbage and surfaced as a lexical error some lines later.
+			//
+			// It survived because it needs a string to be the LAST TOKEN ON A LINE: in script text a
+			// quote is nearly always followed by `;` or `)`, and query text was only ever tested on
+			// ONE line. The renderer prints a clause per line, so `WHERE\n\tCode = "A"\nGROUP BY …`
+			// — an entirely ordinary query — could not be read back.
+			if (count_char >= 2)
+				break;
 			if (strString != nullptr) strString->Append(wxT('\n'));
 			next_pos = m_currentPos + 1;
 #ifdef UTF8_LEXEM_TRANSLATE
@@ -806,7 +852,12 @@ bool ibTranslateCode::GetString(wxString* strString) const
 						i++;
 						next_pos = i + 1;
 #ifdef UTF8_LEXEM_TRANSLATE
+						// ⚠ BOTH counters step over the second quote. Moving only `i_utf8` left
+						// `i_utf8_offset` - where the next character is read from - one byte behind,
+						// so every `""` pulled each later UTF-8 position in the module one byte short:
+						// the colouring after it, and the literal the editor hands the query constructor.
 						i_utf8++;
+						i_utf8_offset = i_utf8 + 1;
 						next_utf8_pos = i_utf8 + 1;
 #endif
 						continue;
@@ -974,13 +1025,26 @@ bool ibTranslateCode::IsEnd() const
 
 int ibTranslateCode::IsKeyWord(const wxString& strKeyWord)
 {
-	// Keys in ms_listHashKeyWord are stored uppercase at load time
-	// (see LoadKeyWords — stringUtils::MakeUpper on every entry). Looking the
-	// query up by the same normalisation lets us use std::map::find's
-	// O(log N) instead of a full linear scan on every lexer token.
-	auto it = ms_listHashKeyWord.find(stringUtils::MakeUpper(strKeyWord));
-	if (it != ms_listHashKeyWord.end()) {
-		const int idx = static_cast<int>(reinterpret_cast<intptr_t>(it->second)) - 1;
+	// The inverse of s_listKeyWord: spelling -> the number this returns. Built ONCE,
+	// on first use, and const from then on.
+	//
+	// It used to be a mutable static that every ibTranslateCode ctor topped up
+	// behind `if (ms_listHashKeyWord.size() == 0) LoadKeyWords()` — an unguarded
+	// check-then-fill, where LoadKeyWords opens with clear(). Two sessions compiling
+	// at once could both see it empty, and a third could be reading the map while
+	// one of them wiped it. A function-local static gets the one-time, thread-safe
+	// initialisation from the language itself (C++11 [stmt.dcl]/4) — and, sitting
+	// in its one caller, needs no accessor to reach it.
+	static const std::map<wxString, int, ibCaseFoldLess> s_keyWordNumber = [] {
+		std::map<wxString, int, ibCaseFoldLess> listNumber;
+		for (int i = 0; i < static_cast<int>(WXSIZEOF(s_listKeyWord)); i++)
+			listNumber[s_listKeyWord[i].m_strKeyWord] = i;
+		return listNumber;
+	}();
+
+	auto it = s_keyWordNumber.find(strKeyWord);//case-folded by the map's comparator
+	if (it != s_keyWordNumber.end()) {
+		const int idx = it->second;
 		// Code-style gate: hides VES-only block-fence keywords (Then /
 		// Do / End*) when CES is active. Body lives in compileCode.cpp
 		// so the gate reads gs_codeStyle without flipping the include
@@ -997,16 +1061,15 @@ int ibTranslateCode::IsKeyWord(const wxString& strKeyWord)
 
 wxString ibTranslateCode::GetKeyWord(int k)
 {
-	auto it = std::find_if(ms_listHashKeyWord.begin(), ms_listHashKeyWord.end(),
-		[k](const std::pair<const wxString, void*>& pair) -> bool {
-			return k == static_cast<int>(reinterpret_cast<intptr_t>(pair.second)) - 1;
-		}
-	);
+	// s_listKeyWord IS the inverse — index straight into it instead of scanning the
+	// map for the entry pointing back at k. It also spells the keyword the way the
+	// language does (PascalCase), where the map used to be keyed upper-cased and
+	// this returned "ENDPROCEDURE"; compileCode.cpp already reads the array
+	// directly for the same reason when it names a keyword in an error.
+	if (k < 0 || k >= static_cast<int>(WXSIZEOF(s_listKeyWord)))
+		return wxEmptyString;
 
-	if (it != ms_listHashKeyWord.end())
-		return it->first;
-
-	return wxEmptyString;
+	return s_listKeyWord[k].m_strKeyWord;
 }
 
 /**
@@ -1031,6 +1094,7 @@ bool ibTranslateCode::PrepareLexem()
 		m_defineList->SetParent(&ms_listDefine);
 		m_bAutoDeleteDefList = true;//indication that the array with definitions was created by us (and not passed as a definition translation)
 	}
+
 
 #ifdef UTF8_LEXEM_TRANSLATE
 	unsigned int total_line = 0,
@@ -1075,44 +1139,68 @@ bool ibTranslateCode::PrepareLexem()
 			if (GetWord(s, strOrig)) {
 
 				//processing user definitions (#define)
-				if (m_defineList->HasDefine(s)) {
-					ibLexemList* pDef = m_defineList->GetDefine(s);
-					for (unsigned int i = 0; i < pDef->size(); i++) {
-						ibLexem* m_current_lex = pDef[i].data();
-						m_current_lex->m_numString = m_currentPos;
-						m_current_lex->m_numLine = m_currentLine;//for breakpoints
+				// One chain walk, not the HasDefine-then-GetDefine pair.
+				if (const ibLexemList* pDef = m_defineList->FindDefine(s)) {
+					for (const ibLexem& lexDef : *pDef) {
+						// COPY first, stamp the copy. The old code stamped position and
+						// back-pointer into the STORED definition and copied afterwards,
+						// so every expansion rewrote the dictionary entry it was reading
+						// — shared with each later use of the name and, up the chain,
+						// with the defining module itself.
+						//
+						// (It also indexed as `pDef[i].data()`, pointer arithmetic on the
+						// LIST pointer rather than into the list: correct for the first
+						// lexem by coincidence, reading a nonexistent vector object for
+						// every one after it — so any define longer than a single lexem,
+						// `#Define MAX 10 + 5`, was undefined behaviour.)
+						m_listLexem.push_back(lexDef);
+						ibLexem& lexUse = m_listLexem.back();
+						lexUse.m_numString = m_currentPos;
+						lexUse.m_numLine = m_currentLine;//for breakpoints
 #ifdef UTF8_LEXEM_TRANSLATE
-						m_current_lex->m_numUtf8String = m_currentUtf8Pos;
+						lexUse.m_numUtf8String = m_currentUtf8Pos;
 #endif
 						// Rebind to consumer's translate so source attribution
 						// follows the expansion site (consumer's module name /
 						// doc path), not the original definition's.
-						m_current_lex->m_translateCode = this;
-						m_listLexem.push_back(*m_current_lex);
+						lexUse.m_translateCode = this;
 					}
 					continue;
 				}
 
 				const int k = IsKeyWord(s);
 
+				// ⭐ AFTER A DOT EVEN A CONSTANT'S WORD IS A MEMBER NAME. `Null`, `Undefined`, `True` and `False` were
+				// classified here, BEFORE the "after a dot a keyword is a member name" rule below was reached - so
+				// an enumeration could not have a member called Null (`JSONValueType.Null` did not compile:
+				// "Identifier expected"), and a Structure read from `{"null": 1}` could not be asked `s.null`.
+				// Nothing is a constant in a property position: what stands after a dot names a member.
+				const bool member = PreviousLexemIsDot();
+
 				//undefined
-				if (k == KEY_UNDEFINED) {
+				if (k == KEY_UNDEFINED && !member) {
 					m_current_lex.m_lexType = CONSTANT;
 					m_current_lex.m_valData.SetType(ibValueTypes::TYPE_EMPTY);
 				}
 				//boolean
-				else if (k == KEY_TRUE || k == KEY_FALSE) {
+				else if ((k == KEY_TRUE || k == KEY_FALSE) && !member) {
 					m_current_lex.m_lexType = CONSTANT;
 					m_current_lex.m_valData.SetBoolean(s);
 				}
 				//null
-				else if (k == KEY_NULL) {
+				else if (k == KEY_NULL && !member) {
 					m_current_lex.m_lexType = CONSTANT;
 					m_current_lex.m_valData.SetType(ibValueTypes::TYPE_NULL);
 				}
 				else {
 
-					if (k >= 0) {
+					// AFTER A DOT, A KEYWORD IS A MEMBER NAME. `sel.Where(...)`,
+					// `q.Select(...)` — the contextual LINQ words are ordinary
+					// method names in a property position, and classifying them
+					// as KEYWORD there breaks both the parse and the editor's
+					// completion after `sel.`. The lexer already knows what came
+					// before it; asking is cheaper than reclassifying later.
+					if (k >= 0 && !PreviousLexemIsDot()) {
 						m_current_lex.m_lexType = KEYWORD;
 						m_current_lex.m_numData = k;
 					}
@@ -1197,6 +1285,14 @@ bool ibTranslateCode::PrepareLexem()
 		}
 		m_current_lex.m_strData = s;
 		if (m_current_lex.m_lexType == KEYWORD) {
+			// ⭐⭐ EDITING: A DIRECTIVE IS A LINE THAT IS NOT CODE. Every branch below ACTS on one —
+			// registers a name, hides an excluded region, demands an `#endregion` — and raises when
+			// the line is malformed. See ibLexemMode for why none of that is wanted about a text
+			// being typed into. A directive's effect IS its line, so the line is what is read past.
+			if (m_lexemMode == ibLexemMode::Editing && IsDirective(m_current_lex.m_numData)) {
+				SkipLine();
+				continue;
+			}
 			if (m_current_lex.m_numData == KEY_DEFINE && m_nModePreparing != LEXEM_ADDDEF) { //setting an arbitrary identifier
 				if (!IsWord()) {
 					SetError(ERROR_IDENTIFIER_DEFINE, m_currentPos);
@@ -1323,6 +1419,367 @@ bool ibTranslateCode::PrepareLexem()
 	return true;
 }
 
+// ⭐ THE PATCH — see the declaration. Moved here from the editor's own copy of this class, which is
+// where it was written and not where its data lives: every line of it rewrites m_listLexem.
+void ibTranslateCode::PrepareLexem(const ibTextEdit& edit)
+{
+	// A patch has no baseline: without a prior full pass the index math below has not even the
+	// trailing ENDPROGRAM marker to stand on.
+	if (!HasLexem())
+		return;
+
+	const unsigned int line = edit.m_line;
+	const int line_offset = edit.m_lineOffset;
+	const int pos_offset = edit.m_posOffset;
+#ifdef UTF8_LEXEM_TRANSLATE
+	const int pos_offset_utf8 = edit.m_posOffsetUtf8;
+#endif
+
+	m_currentLine = m_currentPos = 0;
+
+	// Rewind the tokenizer to one lexem BEFORE the first lexem at or past `line` (or before the
+	// ENDPROGRAM marker if the edit is past the last real lexem). Re-tokenization restarts at that
+	// lexem's start position — the erase pass below drops it together with the edited region, and
+	// the tokenizer then re-emits it as the first new lexem. This minimises the rewind to a single
+	// lexem of replay.
+	unsigned int lexem_idx = 0;
+	bool insert_after = false;
+	auto hint = m_listLexem.begin();
+
+	for (size_t i = 0; i < m_listLexem.size(); ++i) {
+
+		const bool atTriggerLine = m_listLexem[i].m_numLine >= line;
+		const bool atEndProgram = m_listLexem[i].m_lexType == ENDPROGRAM;
+
+		if (!atTriggerLine && !atEndProgram)
+			continue;
+
+		if (i > 0) {
+			m_currentLine = m_listLexem[i - 1].m_numLine;
+			m_currentPos = m_listLexem[i - 1].m_numString;
+#ifdef UTF8_LEXEM_TRANSLATE
+			m_currentUtf8Pos = m_listLexem[i - 1].m_numUtf8String;
+#endif
+			lexem_idx = (unsigned int)(i - 1);
+			if (lexem_idx > 0) std::advance(hint, lexem_idx - 1);
+			insert_after = atEndProgram ? true : (lexem_idx > 0);
+		}
+		break;
+	}
+
+	wxString s;
+
+	const bool insert_text = pos_offset > 0;
+	const bool delete_text = pos_offset < 0;
+
+	m_listLexem.erase(
+		std::remove_if(m_listLexem.begin() + lexem_idx, m_listLexem.end() - 1,
+			[&](const auto& e) {
+				if (insert_text) return e.m_numLine <= line;
+				if (delete_text) return e.m_numLine <= (line - line_offset);
+				return false;
+			}),
+		m_listLexem.end() - 1
+	);
+
+	if (m_listLexem.size() <= 1) {
+		hint = m_listLexem.begin();
+		insert_after = false;
+	}
+
+	while (!IsEnd()) {
+
+		if (insert_text && m_currentLine > (line + line_offset)) break;
+		else if (delete_text && (m_currentLine > line)) break;
+
+		m_current_lex.m_numLine = m_currentLine;
+		m_current_lex.m_numString = m_currentPos;
+#ifdef UTF8_LEXEM_TRANSLATE
+		m_current_lex.m_numUtf8String = m_currentUtf8Pos;
+#endif // UTF8_LEXEM_TRANSLATE
+
+		if (IsWord()) {
+
+			wxString strOrig;
+
+			if (GetWord(s, strOrig)) {
+
+				const int k = IsKeyWord(s);
+
+				// ⭐ AFTER A DOT EVEN A CONSTANT'S WORD IS A MEMBER NAME. `Null`, `Undefined`, `True` and `False` were
+				// classified here, BEFORE the "after a dot a keyword is a member name" rule below was reached - so
+				// an enumeration could not have a member called Null (`JSONValueType.Null` did not compile:
+				// "Identifier expected"), and a Structure read from `{"null": 1}` could not be asked `s.null`.
+				// Nothing is a constant in a property position: what stands after a dot names a member.
+				const bool member = PreviousLexemIsDot();
+
+				//undefined
+				if (k == KEY_UNDEFINED && !member) {
+					m_current_lex.m_lexType = CONSTANT;
+					m_current_lex.m_valData.SetType(ibValueTypes::TYPE_EMPTY);
+				}
+				//boolean
+				else if ((k == KEY_TRUE || k == KEY_FALSE) && !member) {
+					m_current_lex.m_lexType = CONSTANT;
+					m_current_lex.m_valData.SetBoolean(s);
+				}
+				//null
+				else if (k == KEY_NULL && !member) {
+					m_current_lex.m_lexType = CONSTANT;
+					m_current_lex.m_valData.SetType(ibValueTypes::TYPE_NULL);
+				}
+				else {
+
+					// After a `.` a keyword is a MEMBER NAME — `sel.Where(...)`. Asked here, at
+					// classification time, exactly as the full pass asks it; that is what makes a
+					// second sweep over the whole list unnecessary — and a sweep would have undone
+					// this walk's entire reason for existing.
+					if (k >= 0 && !PreviousLexemIsDot()) {
+						m_current_lex.m_lexType = KEYWORD;
+						m_current_lex.m_numData = k;
+					}
+					else {
+						m_current_lex.m_lexType = IDENTIFIER;
+					}
+
+					m_current_lex.m_valData = strOrig;
+				}
+			}
+
+			m_current_lex.m_strData = s;
+		}
+		else if (IsNumber() || IsString() || IsDate()) {
+			m_current_lex.m_lexType = CONSTANT;
+			if (IsNumber()) {
+
+				GetNumber(s); m_current_lex.m_valData.SetNumber(s);
+
+				if (hint != m_listLexem.begin() && hint->m_lexType == DELIMITER && (hint->m_numData == '-' || hint->m_numData == '+')) {
+					auto prev = std::prev(hint, 1);
+					if (prev != m_listLexem.begin() && prev->m_lexType == DELIMITER && (prev->m_numData == '[' || prev->m_numData == '(' || prev->m_numData == ',' || prev->m_numData == '<' || prev->m_numData == '>' || prev->m_numData == '=')) {
+						if (hint->m_numData == '-')
+							m_current_lex.m_valData.m_fData = -m_current_lex.m_valData.m_fData;
+						*hint = std::move(m_current_lex);
+						continue;
+					}
+				}
+			}
+			else {
+				if (IsString()) {
+					GetString(s); m_current_lex.m_valData.SetString(s);
+				}
+				else if (IsDate()) {
+					GetDate(s); m_current_lex.m_valData.SetDate(s);
+				}
+			}
+
+			if (insert_after) {
+				hint = m_listLexem.emplace(
+					std::next(hint, 1), std::move(m_current_lex));
+			}
+			else {
+				hint = m_listLexem.emplace(
+					hint, std::move(m_current_lex));
+				insert_after = true;
+			}
+
+			continue;
+		}
+		else if (IsByte('~')) {
+			s.clear();
+			GetByte();
+			continue;
+		}
+		else {
+
+			s.clear();
+
+			m_current_lex.m_lexType = DELIMITER;
+			wxUniChar byte; GetByte(byte);
+			m_current_lex.m_numData = byte;
+
+			if (m_current_lex.m_numData <= 13) continue;
+		}
+		m_current_lex.m_strData = s;
+		// The same rule the full pass makes, and it has to be here too: this walk re-lexes the
+		// edited lines, which is exactly where a half-written directive lives. See ibLexemMode.
+		if (m_current_lex.m_lexType == KEYWORD
+			&& m_lexemMode == ibLexemMode::Editing && IsDirective(m_current_lex.m_numData)) {
+			SkipLine();
+			continue;
+		}
+
+		if (insert_after) {
+			hint = m_listLexem.emplace(
+				std::next(hint, 1), std::move(m_current_lex));
+		}
+		else {
+			hint = m_listLexem.emplace(
+				hint, std::move(m_current_lex));
+			insert_after = true;
+		}
+	}
+
+	const size_t lex_size = m_listLexem.size() - 1;
+
+	if (lex_size > 0) {
+
+		const size_t lex_distance = std::distance(m_listLexem.begin(), insert_after ? hint + 1 : hint);
+
+		for (unsigned int i = (unsigned int)lex_distance; i < lex_size; i++) {
+			m_listLexem[i].m_numLine += line_offset;
+			m_listLexem[i].m_numString += pos_offset;
+#ifdef UTF8_LEXEM_TRANSLATE
+			m_listLexem[i].m_numUtf8String += pos_offset_utf8;
+#endif // UTF8_LEXEM_TRANSLATE
+		}
+	}
+
+	m_listLexem[lex_size].m_numString += pos_offset;
+#ifdef UTF8_LEXEM_TRANSLATE
+	m_listLexem[lex_size].m_numUtf8String += pos_offset_utf8;
+#endif
+}
+
+// ⭐⭐ WHAT THE CARET IS STANDING IN — see the declaration.
+//
+// IT ASKS ABOUT THE TOKENS AT THE CARET, NOT ABOUT THE ONES IT PASSED. The version this replaces
+// replayed the stream from the first token, carrying `expression` / `hasPoint` / `hasKeyword`
+// forward and resetting them on anything unrelated — so the answer was "the last interesting thing
+// I saw", and it had to defend itself against its own memory (a string literal earlier in the
+// module poisoning the filter, and a hardcoded list of three platform functions to decide when a
+// literal counted). A completion is about what is being written HERE; three tokens back is the
+// whole of what that needs.
+ibTranslateCode::ibCaretText ibTranslateCode::CaretAt(unsigned int caret) const
+{
+	ibCaretText answer;
+
+	if (m_listLexem.empty())
+		return answer;
+
+	// The last token that begins before the caret — the one being typed, or the one just closed.
+	size_t at = 0;
+	bool found = false;
+	for (size_t i = 0; i < m_listLexem.size(); i++) {
+		if (m_listLexem[i].m_numString >= caret)
+			break;
+		if (m_listLexem[i].m_lexType == ENDPROGRAM)
+			break;
+		at = i; found = true;
+	}
+
+	if (!found)
+		return answer;   // the caret is before any code: open, and nothing typed yet
+
+	const ibLexem& here = m_listLexem[at];
+
+	// WHAT A LIST FILTERS BY. The word under the caret, whatever kind it is — an identifier being
+	// typed, or the contents of a string literal being typed inside a call. It is not part of the
+	// question, which is why it is filled the same way in every branch below.
+	// …and only while the caret is still in it: a word the caret has walked past is not what a list
+	// filters by — see the note below on `stillInside`.
+	if ((here.m_lexType == IDENTIFIER || here.m_lexType == CONSTANT) && caret <= here.EndPos())
+		answer.m_word = here.m_valData.GetString();
+
+	// ⭐⭐ A TOKEN THE CARET HAS LEFT IS NOT THE TOKEN BEING TYPED. Everything below asks what the
+	// caret is standing IN, and the search above found the last token that BEGAN before it — which
+	// is the same token whether the caret sits inside it, right at its end, or a space further on.
+	// The gap decides: with whitespace between them the word is finished and what is being written
+	// is the NEXT one. Measured 2026-09-08: `from o in Data.Catalogs.Goods |` was answered as a
+	// member access on `Goods`, so the clause keywords that may be written there were never
+	// offered and the walk was sent looking for a value nobody asked about.
+	const bool stillInside = caret <= here.EndPos();
+
+	// A MEMBER ACCESS: the caret is on the dot, or on the name being typed after one.
+	const bool onDot = stillInside && here.m_lexType == DELIMITER && here.m_numData == '.';
+	const bool afterDot = stillInside && here.m_lexType == IDENTIFIER && at > 0
+		&& m_listLexem[at - 1].m_lexType == DELIMITER && m_listLexem[at - 1].m_numData == '.';
+
+	if (onDot || afterDot) {
+		answer.m_place = ibCaretPlace::AfterDot;
+		answer.m_expression = ExpressionEndingAt(onDot ? at : at - 1);
+		return answer;
+	}
+
+	// `New <name>` — the keyword names what may follow it, and what follows is the path so far.
+	{
+		const size_t nameAt = (here.m_lexType == IDENTIFIER && at > 0) ? at - 1 : at;
+		if (m_listLexem[nameAt].m_lexType == KEYWORD && m_listLexem[nameAt].m_numData == KEY_NEW) {
+			answer.m_place = ibCaretPlace::InKeyword;
+			answer.m_keyword = m_listLexem[nameAt].m_valData.GetString();
+			answer.m_expression = (nameAt == at) ? wxString() : answer.m_word;
+			return answer;
+		}
+	}
+
+	// ⭐ INSIDE A CALL'S ARGUMENTS, AND THE CALL IS ALL THIS SAYS. Which calls have names worth
+	// offering — `Type`, `GetCommonForm`, `ShowCommonForm` — is the CALLER's knowledge, and the
+	// caller already holds that list; carrying a second copy here made the lexer know about
+	// platform functions, and made every OTHER call's argument answer with nothing at all.
+	{
+		int depth = 0;
+		for (size_t i = at + 1; i-- > 0; ) {
+			const ibLexem& lex = m_listLexem[i];
+			if (lex.m_lexType != DELIMITER)
+				continue;
+
+			// 🛑 A CALL DOES NOT SPAN STATEMENTS. Without this the search for an unmatched `(` runs
+			// to the top of the module and finds one left open by a line somebody is still writing —
+			// so a caret several statements below reported itself as being inside THAT call, and the
+			// list it wanted (the members after a dot) never came. Measured 2026-09-07: an unclosed
+			// `Catalogs.Property(` four lines up silenced `TitleLocation.` completely.
+			if (lex.m_numData == ';' || lex.m_numData == '{' || lex.m_numData == '}')
+				break;
+
+			if (lex.m_numData == ')') { depth++; continue; }
+			if (lex.m_numData != '(') continue;
+			if (depth > 0) { depth--; continue; }
+
+			// An unmatched `(` — the caret is inside its arguments. Named by whatever it opened on.
+			if (i > 0 && m_listLexem[i - 1].m_lexType == IDENTIFIER) {
+				answer.m_place = ibCaretPlace::InKeyword;
+				answer.m_keyword = m_listLexem[i - 1].m_valData.GetString();
+			}
+			break;
+		}
+	}
+
+	return answer;
+}
+
+// The dotted path ENDING at `dotAt` — `Catalogs.Goods` for a caret in `Catalogs.Goods.`. Walked
+// backwards over `name . name . name`, which is the only shape a path has.
+wxString ibTranslateCode::ExpressionEndingAt(size_t dotAt) const
+{
+	std::vector<wxString> parts;
+
+	for (size_t i = dotAt + 1; i-- > 0; ) {
+
+		const ibLexem& lex = m_listLexem[i];
+
+		if (lex.m_lexType == DELIMITER && lex.m_numData == '.')
+			continue;
+
+		if (lex.m_lexType != IDENTIFIER)
+			break;
+
+		parts.push_back(lex.m_valData.GetString());
+
+		// A name reached through a call (`f().x`) is not a path anyone can spell back.
+		if (i > 0 && m_listLexem[i - 1].m_lexType == DELIMITER && m_listLexem[i - 1].m_numData == ')')
+			break;
+		if (i == 0 || m_listLexem[i - 1].m_lexType != DELIMITER || m_listLexem[i - 1].m_numData != '.')
+			break;
+	}
+
+	wxString path;
+	for (size_t i = parts.size(); i-- > 0; ) {
+		if (!path.IsEmpty()) path += wxT('.');
+		path += parts[i];
+	}
+	return path;
+}
+
 /**
 * create lexemes starting from the current position
 */
@@ -1353,6 +1810,13 @@ void ibTranslateCode::PrepareFromCurrent(int nMode, const wxString& strName)
 	translate.PrepareLexem();
 
 	if (nMode == LEXEM_ADDDEF) {
+		// Re-anchor BEFORE storing, for the same reason LEXEM_ADD does below: the
+		// local `translate` dies with this call, so the stored definition would sit
+		// in the table holding back-pointers into a dead object. It used to be
+		// papered over at expansion, which stamped `this` into the stored lexems —
+		// that write is gone now (expansion stamps its own copy), so the entry has
+		// to go in clean. translate.m_strModuleName was set to ours above.
+		for (ibLexem& lex : translate.m_listLexem) lex.m_translateCode = this;
 		m_defineList->SetDefine(strName, &translate.m_listLexem);
 		m_currentLine = translate.m_currentLine;
 	}
@@ -1369,6 +1833,12 @@ void ibTranslateCode::PrepareFromCurrent(int nMode, const wxString& strName)
 		m_currentLine = translate.m_currentLine;
 		m_currentPos = translate.m_currentPos;
 #ifdef UTF8_LEXEM_TRANSLATE
+		// ⚠ WRITES INTO `translate`, AND THAT IS NOT THE TYPO IT LOOKS LIKE. The two lines above
+		// read OUT of it and the else-branch below does too, so an audit reads this as reversed —
+		// it was "fixed" that way on 2026-09-08 and the sweep over real modules fell from 224/285
+		// to 146/285 in one run. This branch has taken lexems from a DIFFERENT buffer, whose
+		// character count is its own; carrying it back would corrupt the caret's own count, which
+		// is measured in characters. Byte position re-anchors, character position does not.
 		translate.m_currentUtf8Pos = m_currentUtf8Pos;
 #endif
 	}
@@ -1430,19 +1900,11 @@ size_t ibTranslateCode::CalcAllocSize() const {
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#include <wx/module.h>
+// A wxModule subclass used to sit here to preload the keyword table at startup.
+// It declared neither wxDECLARE_DYNAMIC_CLASS nor wxIMPLEMENT_DYNAMIC_CLASS —
+// wxModule::RegisterModules finds candidates through wxClassInfo, so without them
+// the class was never instantiated and OnInit never ran (compare wxFrontendModule
+// in frontend/artProvider/artProvider.cpp, which has both). The table was in fact
+// being built by whichever ibTranslateCode ctor got there first. IsKeyWord's own
+// static now does the same job on first use, once, without a module to register.
 
-class wxOESKeywordModule : public wxModule
-{
-public:
-	wxOESKeywordModule() : wxModule() {}
-	virtual bool OnInit() {
-		ibTranslateCode::LoadKeyWords();
-		return true;
-	}
-	virtual void OnExit() {}
-private:
-	wxDECLARE_DYNAMIC_CLASS(wxOESKeywordModule);
-};
-
-wxIMPLEMENT_DYNAMIC_CLASS(wxOESKeywordModule, wxModule)

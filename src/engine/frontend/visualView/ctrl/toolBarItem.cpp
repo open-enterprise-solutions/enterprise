@@ -1,4 +1,5 @@
-#include "toolbar.h"
+#include "toolBar.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "backend/appData.h"
 #ifdef OES_USE_WEB
 #include "frontend/web/webWindow.h"
@@ -9,8 +10,23 @@
 //*                           IMPLEMENT_DYNAMIC_CLASS                               *
 //***********************************************************************************
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueToolBarItem, ibValueControl);
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueToolBarSeparator, ibValueControl);
+#ifndef OES_USE_WEB
+// Where a child goes on its bar: the siblings before it that the bar holds. A tool the functional options
+// make unavailable is not on the bar, so its place among the form's children can run past the bar's end.
+static int ibToolBarPosition(ibAuiToolBar* toolbar, const ibValueFrame* child)
+{
+	const ibValueFrame* parent = child->GetParent();
+	int position = 0;
+	for (unsigned int i = 0; i < parent->GetChildCount(); i++) {
+		const ibValueFrame* sibling = parent->GetChild(i);
+		if (sibling->GetControlID() == child->GetControlID())
+			break;
+		if (toolbar->FindTool(sibling->GetControlID()) != nullptr)
+			position++;
+	}
+	return position;
+}
+#endif
 
 //***********************************************************************************
 //*                           ibValueToolBarItem                               *
@@ -41,6 +57,7 @@ wxObject* ibValueToolBarItem::Create(ibFrontendWindow* /*wxparent*/, ibVisualHos
 
 	ibWebToolBarItem* item = new ibWebToolBarItem(caption, GetControlID());
 	item->Enable(m_propertyEnabled->GetValueAsBoolean());
+	item->Show(IsAvailable());
 	return item;
 #else
 	// Desktop: wxAuiToolBar::AddTool fires in OnCreated below with
@@ -50,14 +67,19 @@ wxObject* ibValueToolBarItem::Create(ibFrontendWindow* /*wxparent*/, ibVisualHos
 #endif
 }
 
-void ibValueToolBarItem::OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost, bool firstСreated)
+void ibValueToolBarItem::OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost, bool firstCreated)
 {
 #ifdef OES_USE_WEB
-	(void)wxobject; (void)wxparent; (void)visualHost; (void)firstСreated;
+	(void)wxobject; (void)wxparent; (void)visualHost; (void)firstCreated;
 	// Web: Create already built the shim; nothing live to poke.
 #else
 	ibAuiToolBar* toolbar = dynamic_cast<ibAuiToolBar*>(wxparent);
 	wxASSERT(toolbar);
+
+	// A tool the functional options make unavailable is not put on its bar at all.
+	if (!IsAvailable())
+		return;
+
 	wxAuiToolBarItem* toolItem = toolbar->AddTool(GetControlID(),
 		m_propertyTitle->GetValueAsTranslateString(),
 		m_propertyPicture->GetValueAsBitmap(),
@@ -101,8 +123,8 @@ void ibValueToolBarItem::Update(wxObject* wxobject, ibVisualHost* visualHost)
 	ibWebToolBarItem* item = static_cast<ibWebToolBarItem*>(wxobject);
 
 	ibValueToolbar* owner = GetOwner();
-	const ibActionCollection& coll = owner ? owner->GetActionArray()
-	                                       : ibActionCollection();
+	const ibStandardCommandSet& coll = owner ? owner->GetActionArray()
+	                                       : ibStandardCommandSet();
 
 	// Effective representation — Auto resolves through collection.
 	ibRepresentation rep = m_propertyRepresentation->GetValueAsEnum();
@@ -140,6 +162,7 @@ void ibValueToolBarItem::Update(wxObject* wxobject, ibVisualHost* visualHost)
 	item->SetHasPicture(hasPic);
 	item->SetPictureDataUri(pictureUri);
 	item->Enable(m_propertyEnabled->GetValueAsBoolean());
+	item->Show(IsAvailable());
 #else
 	(void)wxobject;
 	(void)visualHost;
@@ -155,21 +178,20 @@ void ibValueToolBarItem::OnUpdated(wxObject* wxobject, ibFrontendWindow* wxparen
 	wxASSERT(toolbar);
 
 	wxAuiToolBarItem* toolItem = toolbar->FindTool(GetControlID());
-	ibValueFrame* parentControl = GetParent(); int idx = wxNOT_FOUND;
-
-	for (unsigned int i = 0; i < parentControl->GetChildCount(); i++) {
-		ibValueFrame* child = parentControl->GetChild(i);
-		if (m_controlId == child->GetControlID()) {
-			idx = i;
-			break;
-		}
-	}
+	const int idx = ibToolBarPosition(toolbar, this);
 
 	if (toolItem != nullptr)
 		toolbar->DestroyTool(GetControlID());
 
+	if (!IsAvailable()) {
+		toolbar->Realize();
+		toolbar->Refresh();
+		toolbar->Update();
+		return;
+	}
+
 	if (m_propertyRepresentation->GetValueAsEnum() == ibRepresentation::ibRepresentation_Auto) {
-		const ibActionCollection& collection = GetOwner()->GetActionArray();
+		const ibStandardCommandSet& collection = GetOwner()->GetActionArray();
 		if (GetItemRepresentation(collection) == ibRepresentation::ibRepresentation_PictureAndText) {
 			toolItem = toolbar->InsertTool(idx, GetControlID(),
 				GetItemCaption(collection),
@@ -205,7 +227,7 @@ void ibValueToolBarItem::OnUpdated(wxObject* wxobject, ibFrontendWindow* wxparen
 		}
 	}
 	else if (m_propertyRepresentation->GetValueAsEnum() == ibRepresentation::ibRepresentation_PictureAndText) {
-		const ibActionCollection& collection = GetOwner()->GetActionArray();
+		const ibStandardCommandSet& collection = GetOwner()->GetActionArray();
 		toolItem = toolbar->InsertTool(idx, GetControlID(),
 			GetItemCaption(collection),
 			GetItemPicture(collection),
@@ -217,7 +239,7 @@ void ibValueToolBarItem::OnUpdated(wxObject* wxobject, ibFrontendWindow* wxparen
 		);
 	}
 	else if (m_propertyRepresentation->GetValueAsEnum() == ibRepresentation::ibRepresentation_Picture) {
-		const ibActionCollection& collection = GetOwner()->GetActionArray();
+		const ibStandardCommandSet& collection = GetOwner()->GetActionArray();
 		toolItem = toolbar->InsertTool(idx, GetControlID(),
 			wxEmptyString,
 			GetItemPicture(collection),
@@ -229,7 +251,7 @@ void ibValueToolBarItem::OnUpdated(wxObject* wxobject, ibFrontendWindow* wxparen
 		);
 	}
 	else if (m_propertyRepresentation->GetValueAsEnum() == ibRepresentation::ibRepresentation_Text) {
-		const ibActionCollection& collection = GetOwner()->GetActionArray();
+		const ibStandardCommandSet& collection = GetOwner()->GetActionArray();
 		toolItem = toolbar->InsertTool(idx, GetControlID(),
 			GetItemCaption(collection),
 			wxNullBitmap,
@@ -305,19 +327,26 @@ ibValueToolBarSeparator::ibValueToolBarSeparator() : ibValueControl()
 wxObject* ibValueToolBarSeparator::Create(ibFrontendWindow* /*wxparent*/, ibVisualHost* /*visualHost*/)
 {
 #ifdef OES_USE_WEB
-	return new ibWebToolBarSeparator(GetControlID());
+	ibWebToolBarSeparator* separator = new ibWebToolBarSeparator(GetControlID());
+	separator->Show(IsAvailable());
+	return separator;
 #else
 	return new ibNoObject;
 #endif
 }
 
-void ibValueToolBarSeparator::OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost, bool firstСreated)
+void ibValueToolBarSeparator::OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost, bool firstCreated)
 {
 #ifdef OES_USE_WEB
-	(void)wxobject; (void)wxparent; (void)visualHost; (void)firstСreated;
+	(void)wxobject; (void)wxparent; (void)visualHost; (void)firstCreated;
 #else
 	ibAuiToolBar* toolbar = dynamic_cast<ibAuiToolBar*>(visualHost->GetWxObject(GetParent()));
 	wxASSERT(toolbar);
+
+	// Not available: not put on the bar, the way an unavailable tool is not.
+	if (!IsAvailable())
+		return;
+
 	wxAuiToolBarItem* toolItem = toolbar->AddSeparator();
 	toolItem->SetId(GetControlID());
 
@@ -338,16 +367,11 @@ void ibValueToolBarSeparator::OnUpdated(wxObject* wxobject, ibFrontendWindow* wx
 	wxASSERT(toolbar);
 
 	wxAuiToolBarItem* toolItem = toolbar->FindTool(GetControlID());
-	ibValueFrame* m_parentControl = GetParent(); int idx = wxNOT_FOUND;
-
-	for (unsigned int i = 0; i < m_parentControl->GetChildCount(); i++)
-	{
-		ibValueFrame* child = m_parentControl->GetChild(i);
-		if (m_controlId == child->GetControlID()) { idx = i; break; }
-	}
+	const int idx = ibToolBarPosition(toolbar, this);
 
 	if (toolItem) { toolbar->DestroyTool(GetControlID()); }
-	toolbar->InsertSeparator(idx, GetControlID());
+	if (IsAvailable())
+		toolbar->InsertSeparator(idx, GetControlID());
 
 	toolbar->Realize();
 	if (!appData->DesignerMode() || !visualHost->IsDesignerHost())
@@ -376,44 +400,44 @@ bool ibValueToolBarSeparator::CanDeleteControl() const
 //*                                  Data	                                       *
 //**********************************************************************************
 
-bool ibValueToolBarItem::LoadData(ibReaderMemory& reader)
+bool ibValueToolBarItem::ReadData(const ibDataNode& node)
 {
-	m_propertyTitle->LoadData(reader);
-	m_propertyPicture->LoadData(reader);
-	m_propertyRepresentation->LoadData(reader);
-	m_propertyContextMenu->LoadData(reader);
-	m_properyTooltip->LoadData(reader);
-	m_propertyEnabled->LoadData(reader);
-	m_eventAction->LoadData(reader);
+	m_propertyTitle->SetNodeValue(node.GetProperty(m_propertyTitle->GetName()));
+	m_propertyPicture->SetNodeValue(node.GetProperty(m_propertyPicture->GetName()));
+	m_propertyRepresentation->SetNodeValue(node.GetProperty(m_propertyRepresentation->GetName()));
+	m_propertyContextMenu->SetNodeValue(node.GetProperty(m_propertyContextMenu->GetName()));
+	m_properyTooltip->SetNodeValue(node.GetProperty(m_properyTooltip->GetName()));
+	m_propertyEnabled->SetNodeValue(node.GetProperty(m_propertyEnabled->GetName()));
+	m_eventAction->SetNodeValue(node.GetProperty(m_eventAction->GetName()));
 
-	//events 
-	m_eventAction->LoadData(reader);
-	return ibValueControl::LoadData(reader);
+	//events
+	m_eventAction->SetNodeValue(node.GetProperty(m_eventAction->GetName()));
+	return ibValueControl::ReadData(node);
 }
 
-bool ibValueToolBarItem::SaveData(ibWriterMemory& writer)
+bool ibValueToolBarItem::WriteData(ibDataNode& node) const
 {
-	m_propertyTitle->SaveData(writer);
-	m_propertyPicture->SaveData(writer);
-	m_propertyRepresentation->SaveData(writer);
-	m_propertyContextMenu->SaveData(writer);
-	m_properyTooltip->SaveData(writer);
-	m_propertyEnabled->SaveData(writer);
-	m_eventAction->SaveData(writer);
+	node.SetProperty(m_propertyTitle->GetName(), m_propertyTitle->GetNodeValue());
+	node.SetProperty(m_propertyPicture->GetName(), m_propertyPicture->GetNodeValue());
+	node.SetProperty(m_propertyRepresentation->GetName(), m_propertyRepresentation->GetNodeValue());
+	node.SetProperty(m_propertyContextMenu->GetName(), m_propertyContextMenu->GetNodeValue());
+	node.SetProperty(m_properyTooltip->GetName(), m_properyTooltip->GetNodeValue());
+	node.SetProperty(m_propertyEnabled->GetName(), m_propertyEnabled->GetNodeValue());
+	node.SetProperty(m_eventAction->GetName(), m_eventAction->GetNodeValue());
 
-	//events 
-	m_eventAction->SaveData(writer);
-	return ibValueControl::SaveData(writer);
+	//events
+	node.SetProperty(m_eventAction->GetName(), m_eventAction->GetNodeValue());
+	return ibValueControl::WriteData(node);
 }
 
-bool ibValueToolBarSeparator::LoadData(ibReaderMemory& reader)
+bool ibValueToolBarSeparator::ReadData(const ibDataNode& node)
 {
-	return ibValueControl::LoadData(reader);
+	return ibValueControl::ReadData(node);
 }
 
-bool ibValueToolBarSeparator::SaveData(ibWriterMemory& writer)
+bool ibValueToolBarSeparator::WriteData(ibDataNode& node) const
 {
-	return ibValueControl::SaveData(writer);
+	return ibValueControl::WriteData(node);
 }
 
 //***********************************************************************

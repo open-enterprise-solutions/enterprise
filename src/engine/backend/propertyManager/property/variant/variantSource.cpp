@@ -1,45 +1,55 @@
 #include "variantSource.h"
 #include "backend/metaData.h"
+#include "backend/metaCollection/partial/commonObject.h"        // ibValueMetaObjectCompositeData
+#include "backend/metaCollection/attribute/metaAttributeObject.h" // ibValueMetaObjectAttributeBase
+#include "backend/objCtor.h"                                       // ibCtorMetaValueType (DoRefreshTypeDesc tabular-section check)
+
+// Defined further down; forward-declared so the type refresh (above them) can use it.
+static const ibValueMetaObject* ResolveGateMeta(const ibBackendTypeSourceFactory* owner, const ibSourceDescription& srcDesc);
 
 ////////////////////////////////////////////////////////////////////////////
 
 void ibVariantDataAttributeSource::DoSetFromMetaId(const ibMetaID& id)
 {
+	// The binding head is a FORM attribute (the gate): its Type IS the attribute's own Type, not a metadata
+	// field lookup. A whole-attribute binding's leaf id equals the attribute id (a form-local id). A deeper
+	// leaf falls through to the base as a SEED; the source-type getter (GetSourceTypeDesc -> RefreshTypeFromSource)
+	// re-resolves the leaf type through the explorer, so the seed is corrected on read.
 	if (m_ownerSrcProperty != nullptr && id != wxNOT_FOUND) {
-		const ibSourceObject* srcData = m_ownerSrcProperty->GetSourceObject();
-		if (srcData != nullptr) {
-			const ibValueMetaObjectCompositeData* metaObject = srcData->GetSourceMetaObject();
-			if (metaObject != nullptr && metaObject->IsAllowed() && id == metaObject->GetMetaID()) {
-				m_typeDesc.SetDefaultMetaType(srcData->GetSourceClassType());
-				return;
-			}
+		ibBackendFormAttributeValue* holder = m_ownerSrcProperty->FindSourceHolder(id);
+		if (holder != nullptr) {
+			m_typeDesc = holder->GetTypeDesc();
+			return;
 		}
 	}
 
 	ibVariantDataAttribute::DoSetFromMetaId(id);
 }
 
-#include "backend/objCtor.h"
-
 void ibVariantDataAttributeSource::DoRefreshTypeDesc()
 {
 	if (m_ownerSrcProperty != nullptr) {
 
-		std::set<ibClassID> clear_list;
-
 		const ibMetaData* metaData = m_ownerSrcProperty->GetMetaData();
 		wxASSERT(metaData);
-		const ibSourceObject* srcObject = m_ownerSrcProperty->GetSourceObject();
 
-		for (auto clsid : m_typeDesc.GetClsidList()) {
-			const ibCtorMetaValueType* typeCtor = metaData->GetTypeCtor(clsid);
-			if (typeCtor != nullptr && typeCtor->GetMetaTypeCtor() == ibCtorObjectMetaType_TabularSection) {
-				if (srcObject != nullptr) {
+		// Validate tabular-section types against the binding's GATE metaobject: the START attribute's
+		// type (from the control's own source path) walked to the table — NOT a single runtime source
+		// object (null at designer, blind to custom object attributes). On copy / section deletion the
+		// gate no longer owns the stale section → it is cleared. Gate unknown → keep (can't validate).
+		const ibValueMetaObject* gateMeta = ResolveGateMeta(m_ownerSrcProperty, m_ownerSrcProperty->GetSourceDesc());
+
+		std::set<ibClassID> clear_list;
+		if (gateMeta != nullptr) {
+			for (auto clsid : m_typeDesc.GetClsidList()) {
+				if (!::IsTabularSection(clsid))
+					continue;   // the kind off the id first: only a tabular section is looked up
+				const ibCtorMetaValueType* typeCtor = metaData->GetTypeCtor(clsid);
+				if (typeCtor != nullptr) {
 					const ibValueMetaObject* metaTable = typeCtor->GetMetaObject();
-					if (metaTable == nullptr) clear_list.insert(clsid);
-					else if (metaTable->GetParent() != srcObject->GetSourceMetaObject()) clear_list.insert(clsid);
+					if (metaTable == nullptr || metaTable->GetParent() != gateMeta)
+						clear_list.insert(clsid);
 				}
-				else if (srcObject == nullptr)clear_list.insert(clsid);
 			}
 		}
 
@@ -52,117 +62,137 @@ void ibVariantDataAttributeSource::DoRefreshTypeDesc()
 
 ////////////////////////////////////////////////////////////////////////////
 
+// Resolve a column id / guid CONFIG-WIDE through the metadata's own recursive search
+// (use_child_filter = true) — a dotted reference path's leaf (and its intermediate
+// references) live in OTHER metaobjects, so a source-scoped lookup would miss them and
+// the binding would read back as "<not selected>".
+template <typename TKey>
+static const ibValueMetaObject* ResolveMetaWide(const ibBackendTypeSourceFactory* owner, const TKey& key)
+{
+	const ibMetaData* metaData = owner != nullptr ? owner->GetMetaData() : nullptr;
+	return metaData != nullptr ? metaData->FindAnyObjectByFilter(key, true) : nullptr;
+}
+
+// Each binding starts at a form ATTRIBUTE (the GATE), then resolves its deeper
+// hops in the metadata. The canonical split: path[0] is gated to the FORM's own
+// attribute table (a form-local id — scoped so a COPIED form binds its OWN
+// attribute, never config-wide); path[i>0] are real config field / reference
+// metaIds resolved CONFIG-WIDE. The ids are config-unique and stored copy-aware
+// (copy-guids), so a metaobject COPY remaps the deeper hops here WITHOUT relying
+// on the attribute's stored Type (which a copy does not remap).
+
+// The binding's GATE metaobject = the START attribute's TYPE metaobject (the object whose tabular
+// sections a section-binding references). Used to validate section types per BINDING attribute
+// (main OR custom object) rather than a single runtime source object — and it resolves at designer
+// (no runtime source) since it comes from the attribute's Type, not a live object.
+static const ibValueMetaObject* ResolveGateMeta(const ibBackendTypeSourceFactory* owner,
+	const ibSourceDescription& srcDesc)
+{
+	if (owner == nullptr || !srcDesc.IsOk()) return nullptr;
+	// FAMILY-BLIND gate: the head attribute's LIVE source value hands out its metaobject directly —
+	// a metaobject source (catalog / document list) yields its composite, a queryable dynamic list
+	// yields null (no metaobject → no tabular section to validate). Replaces the old
+	// clsid → GetTypeCtor → ConvertToMetaValue gate, which assumed every source IS a metaobject.
+	ibBackendFormAttributeValue* holder = owner->FindSourceHolder(srcDesc.GetFirst());
+	ibSourceDataObject* source = holder != nullptr ? holder->GetSourceValue() : nullptr;
+	return source != nullptr ? source->GetSourceMetaObject() : nullptr;
+}
+
+// The dot-walk lives on the OWNER factory (ibBackendTypeSourceFactory::WalkSource) — it owns the
+// source list + metadata. These accessors just hand it the source-id path.
+
 wxString ibVariantDataSource::MakeString() const
 {
-	if (!m_dataSource.isValid()) return _("<not selected>");
-	if (m_ownerProperty != nullptr) {
-		const ibSourceObject* sourceObject = m_ownerProperty->GetSourceObject();
-		if (sourceObject != nullptr) {
-			const ibValueMetaObjectCompositeData* genericObject = sourceObject->GetSourceMetaObject();
-			//wxASSERT(genericObject);
-			const ibValueMetaObject* metaObject = genericObject != nullptr && genericObject->IsAllowed() ?
-				genericObject->FindAnyObjectByFilter(m_dataSource) : nullptr;
-			if (metaObject != nullptr && !metaObject->IsAllowed()) return _("<not selected>");
-			else if (metaObject == nullptr) return _("<not selected>");
-			return metaObject->GetName();
-		}
-	}
-	return _("<not selected>");
+	bool valid = false;
+	wxString text;
+	if (m_ownerProperty != nullptr)
+		m_ownerProperty->WalkSource(m_sourceDesc, &valid, &text);
+	return valid ? text : _("<not selected>");
 }
 
 ////////////////////////////////////////////////////////////////////////////
 
 ibMetaID ibVariantDataSource::GetIdByGuid(const ibGuid& guid) const
 {
-	const ibSourceObject* sourceObject = m_ownerProperty->GetSourceObject();
-	if (guid.isValid() && sourceObject != nullptr) {
-		const ibValueMetaObjectCompositeData* genericObject = sourceObject->GetSourceMetaObject();
-		//wxASSERT(genericObject);
-		const ibValueMetaObject* metaObject = genericObject != nullptr && genericObject->IsAllowed() ?
-			genericObject->FindAnyObjectByFilter(guid) : nullptr;
-		//wxASSERT(metaObject);
-		return metaObject != nullptr &&
-			metaObject->IsAllowed() ? metaObject->GetMetaID() : wxNOT_FOUND;
-	}
-	return wxNOT_FOUND;
+	if (!guid.isValid()) return wxNOT_FOUND;
+	const ibValueMetaObject* metaObject = ResolveMetaWide(m_ownerProperty, guid);
+	return metaObject != nullptr && metaObject->IsAllowed() ? metaObject->GetMetaID() : wxNOT_FOUND;
 }
 
 ibGuid ibVariantDataSource::GetGuidByID(const ibMetaID& id) const
 {
-	const ibSourceObject* sourceObject = m_ownerProperty->GetSourceObject();
-	if (id != wxNOT_FOUND && sourceObject != nullptr) {
-		const ibValueMetaObjectCompositeData* genericObject = sourceObject->GetSourceMetaObject();
-		//wxASSERT(objMetaValue);
-		const ibValueMetaObject* metaObject = genericObject != nullptr && genericObject->IsAllowed() ?
-			genericObject->FindAnyObjectByFilter(id) : nullptr;
-		//wxASSERT(metaObject);
-		return metaObject != nullptr && metaObject->IsAllowed() ? metaObject->GetCommonGuid() : wxNullGuid;
-
-	}
-	return wxNullGuid;
+	if (id == wxNOT_FOUND) return wxNullGuid;
+	const ibValueMetaObject* metaObject = ResolveMetaWide(m_ownerProperty, id);
+	// GetCommonGuid auto-selects the right guid: the copy-guid while the metaobject is in copy mode, its plain guid
+	// otherwise — so a hop keyed on it round-trips on a normal reopen and re-homes to the copy after a paste.
+	return metaObject != nullptr && metaObject->IsAllowed() ? metaObject->GetCommonGuid() : wxNullGuid;
 }
 
 ////////////////////////////////////////////////////////////////////////////
 
-ibValueMetaObjectAttributeBase* ibVariantDataSource::GetSourceAttributeObject() const
+bool ibVariantDataSource::IsEmptySource() const
 {
-	const ibSourceObject* sourceObject = m_ownerProperty->GetSourceObject();
-	if (m_dataSource.isValid() && sourceObject != nullptr) {
-		const ibValueMetaObjectCompositeData* genericObject = sourceObject->GetSourceMetaObject();
-		//wxASSERT(genericObject);
-		return genericObject != nullptr && genericObject->IsAllowed() ?
-			wxDynamicCast(genericObject->FindAnyObjectByFilter(m_dataSource), ibValueMetaObjectAttributeBase) : nullptr;
-	}
+	bool valid = false;
+	if (m_ownerProperty != nullptr)
+		m_ownerProperty->WalkSource(m_sourceDesc, &valid, nullptr);
+	return !valid;
+}
 
-	return nullptr;
+const ibBackendSourceColumn* ibVariantDataSource::GetSourceAttributeObject() const
+{
+	// Just hand the source-id path to the OWNER factory's dot — it resolves the leaf column
+	// (null for a whole-attribute binding or a broken path).
+	return m_ownerProperty != nullptr ? m_ownerProperty->WalkSource(m_sourceDesc) : nullptr;
+}
+
+// The same walk the dot makes (WalkSource: the head gates to the form's attribute, the hops walk its explorer),
+// asked the one question more it answers on the way.
+bool ibVariantDataSource::IsSourceAvailable() const
+{
+	const std::vector<ibSourceHop>& path = m_sourceDesc.GetPath();
+	if (m_ownerProperty == nullptr || path.size() < 2)
+		return true;
+	ibBackendFormAttributeValue* holder = m_ownerProperty->FindSourceHolder(m_sourceDesc.GetFirst());
+	const ibSourceDataObject* source = holder != nullptr ? holder->GetSourceValue() : nullptr;
+	const ibBackendSourceColumn* leaf = nullptr;
+	bool available = true;
+	return source == nullptr || !source->WalkColumns(path, 1, leaf, nullptr, nullptr, nullptr, &available) || available;
 }
 
 ////////////////////////////////////////////////////////////////////////////
+
+void ibVariantDataSource::RefreshTypeFromSource() const
+{
+	// Type FOLLOWS the source through the explorer walk (metadata-agnostic). WalkSource gates path[0] to the
+	// holder and walks the explorer to the leaf column, whose GetTypeDesc() is authoritative — so a value-table
+	// / dynamic-list column (no metaobject) gets its REAL type, never a config-wide FindAnyObjectByFilter
+	// collision. A whole-attribute binding (path size 1) has NO explorer leaf → the gate attribute's OWN Type
+	// via the holder (SetFromMetaDesc(path[0]) resolves it in DoSetFromMetaId); an empty path clears the helper.
+	const ibBackendSourceColumn* leaf = m_ownerProperty != nullptr
+		? m_ownerProperty->WalkSource(m_sourceDesc) : nullptr;
+	if (leaf != nullptr)
+		m_attributeSource->SetFromTypeDesc(leaf->GetTypeDesc());
+	else
+		m_attributeSource->SetFromMetaDesc(m_sourceDesc.GetFirst());
+}
 
 void ibVariantDataSource::SetSource(const ibMetaID& id, bool fillTypeDesc)
 {
-	const ibSourceObject* sourceObject = m_ownerProperty->GetSourceObject();
-	if (id != wxNOT_FOUND && sourceObject != nullptr) {
-		const ibValueMetaObjectCompositeData* genericObject = sourceObject->GetSourceMetaObject();
-		//wxASSERT(genericObject);
-		const ibValueMetaObject* metaObject = genericObject->FindAnyObjectByFilter(id);
-		//wxASSERT(metaObject);
-		m_dataSource = metaObject != nullptr && metaObject->IsAllowed() ?
-			metaObject->GetGuid() : wxNullGuid;
-	}
-	else {
-		m_dataSource.reset();
-	}
+	// Selecting a direct source resets the path to a single leaf.
+	if (id != wxNOT_FOUND)
+		m_sourceDesc.SetDefaultSource(id);
+	else
+		m_sourceDesc.ClearSource();
 
-	if (fillTypeDesc) m_attributeSource->SetFromMetaDesc(id);
-}
-
-ibMetaID ibVariantDataSource::GetSource() const
-{
-	return GetIdByGuid(m_dataSource);
+	if (fillTypeDesc)
+		RefreshTypeFromSource();
 }
 
 ////////////////////////////////////////////////////////////////////////////
 
 void ibVariantDataSource::SetSourceGuid(const ibGuid& guid, bool fillTypeDesc)
 {
-	const ibMetaID& id = GetIdByGuid(guid);
-	m_dataSource = guid;
-	if (fillTypeDesc) m_attributeSource->SetFromMetaDesc(id);
-}
-
-ibGuid ibVariantDataSource::GetSourceGuid() const
-{
-	const ibSourceObject* sourceObject = m_ownerProperty->GetSourceObject();
-	if (m_dataSource.isValid() && sourceObject != nullptr) {
-		const ibValueMetaObjectCompositeData* genericObject = sourceObject->GetSourceMetaObject();
-		if (genericObject == nullptr) return wxNullGuid;
-		const ibValueMetaObject* metaObject = genericObject ? genericObject->FindAnyObjectByFilter(m_dataSource) : nullptr;
-		//wxASSERT(metaObject);
-		return metaObject != nullptr && metaObject->IsAllowed() ?
-			metaObject->GetCommonGuid() : wxNullGuid;
-	}
-	return wxNullGuid;
+	SetSource(GetIdByGuid(guid), fillTypeDesc);
 }
 
 ////////////////////////////////////////////////////////////////////////////
@@ -175,6 +205,13 @@ void ibVariantDataSource::SetSourceTypeDesc(const ibTypeDescription& td)
 
 ibTypeDescription& ibVariantDataSource::GetSourceTypeDesc(bool fillTypeDesc) const
 {
+	// Refresh INSIDE the getter (mirrors ibVariantDataAttribute::GetTypeDesc -> DoRefreshTypeDesc): the leaf's
+	// type can change in place (a value-table column retyped keeps the same leaf id), so re-resolve through the
+	// source explorer on every access. This variant HOLDS the path (m_sourceDesc), so the resolution is correct
+	// for the control's own variant AND a picker temp/clone (each carries its own path). WalkSource on a small
+	// RAM source is cheap; correctness over the micro-optimisation.
+	if (fillTypeDesc)
+		RefreshTypeFromSource();
 	return m_attributeSource->GetTypeDesc();
 }
 
@@ -183,26 +220,16 @@ ibTypeDescription& ibVariantDataSource::GetSourceTypeDesc(bool fillTypeDesc) con
 void ibVariantDataSource::ResetSource()
 {
 	m_attributeSource->SetFromMetaDesc(wxNOT_FOUND);
-
-	if (m_dataSource.isValid()) {
-		wxASSERT(m_attributeSource->GetTypeDesc().GetClsidCount() > 0);
-		m_dataSource.reset();
-	}
+	m_sourceDesc.ClearSource();
 }
 
 ////////////////////////////////////////////////////////////////////////////
 
 bool ibVariantDataSource::IsPropAllowed() const
 {
-	const ibSourceObject* sourceObject = m_ownerProperty->GetSourceObject();
-	if (m_dataSource.isValid() && sourceObject != nullptr) {
-		const ibValueMetaObjectCompositeData* genericObject = sourceObject->GetSourceMetaObject();
-		if (genericObject == nullptr) return true;
-		const ibValueMetaObject* metaObject = genericObject ? genericObject->FindAnyObjectByFilter(m_dataSource) : nullptr;
-		//wxASSERT(metaObject);
-		if (metaObject != nullptr)
-			return !metaObject->IsAllowed();
-		return true;
-	}
-	return true;
+	// The Type is editable ONLY while NO source is chosen — asked through the SAME source-backend dot
+	// (WalkSource) the rest of this variant resolves through. Richer than a raw leaf peek: it also
+	// reports a leaf that no longer resolves (a DELETED source) as empty, so the Type frees up again.
+	// A resolvable source locks the Type selector (RefreshChildren sets ReadOnly = !IsPropAllowed).
+	return IsEmptySource();
 }

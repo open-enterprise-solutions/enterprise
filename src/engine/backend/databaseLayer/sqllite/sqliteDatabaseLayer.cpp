@@ -11,21 +11,226 @@
 #include <wx/tokenzr.h>
 #include <wx/filename.h>
 
+// SQLite SQL dialect — owned by the driver (static definition + virtual access).
+const ibDialectDictionary& ibDatabaseLayerSQLite::Dialect()
+{
+	static const ibDialectDictionary s_dialect = [] {
+		ibDialectDictionary d;
+		d.m_paramStyle = ibParamStyle::QuestionMark;
+		d.m_pagination = ibPagination::LimitOffset;  // LIMIT n OFFSET m
+		d.m_boolForm   = ibBoolForm::OneZero;
+		d.m_groupByPosition = true;                   // GROUP BY 2 — a key that binds a value is named by its position
+		d.m_features.m_window = true;                 // SQLite 3.25+
+		d.m_features.m_cte    = true;                 // WITH … AS (…) — SQLite 3.8.3+
+		d.m_features.m_recursiveCte      = true;      // WITH RECURSIVE — SQLite 3.8.3+
+		d.m_features.m_recursiveCteUnion = true;      // UNION in the recursive part — a loop in a parent chain ends
+		d.m_features.m_multiRowValues = true;         // INSERT … VALUES (…), (…) — SQLite 3.7.11+
+		d.m_alterColumnTemplate = wxEmptyString;      // no in-place type change -> renderer throws
+		d.m_alterTableMultiClause = false;            // one ADD/DROP per ALTER — the structure builder splits batches
+		d.m_rowLockSuffix = wxEmptyString;            // SQLite locks the whole DB per TX — no row FOR UPDATE
+		d.m_rowLockNoWaitSuffix = wxEmptyString;      // (no row lock at all -> nothing to make non-blocking)
+		d.m_rowIdColumn    = wxT("rowid");            // physical row id for the pre-UNIQUE dedup (keep one row per key)
+		d.m_returningClause = wxT("RETURNING");       // SQLite 3.35+; the embedded engine here is 3.48
+		// type map (SQLite is dynamically typed; these set column affinity)
+		d.m_typeBoolean       = wxT("INTEGER");
+		d.m_typeBigInt        = wxT("INTEGER");   // SQLite INTEGER is 64-bit
+		d.m_typeDate          = wxT("TEXT");
+		d.m_typeDateOnly      = wxT("TEXT");
+		d.m_typeTime          = wxT("TEXT");
+		d.m_typeBlob          = wxT("BLOB");
+		d.m_typeBinaryPattern = wxT("BLOB");      // SQLite has no fixed-width binary
+		d.m_typeGuid          = wxT("TEXT");
+		d.m_analyzePrefix     = wxT("ANALYZE");   // ANALYZE <t> — refresh planner stats (SQLite has no auto-analyze)
+		// Period truncation. strftime handles the units that are a literal format mask; the four
+		// that are not — Week, TenDays, Quarter, HalfYear — are date() arithmetic off the start of
+		// the enclosing unit, expressed through SQLite's modifier strings:
+		//   Week    — step back 6 days, then forward to the next Monday. Lands on this week's
+		//             Monday for every day including Monday itself (ISO, as on the other engines).
+		//   TenDays — 1st / 11th / 21st, offset CAPPED at 2 so a 31-day month cannot floor to 3
+		//             and open a fourth one-day bucket; the last period runs 8-11 days.
+		// Integer division on INTEGER operands is integer division here, and min() with two
+		// arguments is the scalar function, not the aggregate.
+		d.m_periodTrunc = {
+			{ ibTotalsPeriod::Second,   wxT("strftime('%Y-%m-%d %H:%M:%S', {expr})")  },
+			{ ibTotalsPeriod::Minute,   wxT("strftime('%Y-%m-%d %H:%M:00', {expr})")  },
+			{ ibTotalsPeriod::Hour,     wxT("strftime('%Y-%m-%d %H:00:00', {expr})")  },
+			{ ibTotalsPeriod::Day,      wxT("strftime('%Y-%m-%d 00:00:00', {expr})")  },
+			{ ibTotalsPeriod::Week,     wxT("strftime('%Y-%m-%d 00:00:00', {expr}, '-6 days', 'weekday 1')") },
+			{ ibTotalsPeriod::TenDays,  wxT("strftime('%Y-%m-%d 00:00:00', date(strftime('%Y-%m-01', {expr}), '+' || (min((CAST(strftime('%d', {expr}) AS INTEGER) - 1) / 10, 2) * 10) || ' days'))") },
+			{ ibTotalsPeriod::Month,    wxT("strftime('%Y-%m-01 00:00:00', {expr})")  },
+			{ ibTotalsPeriod::Quarter,  wxT("strftime('%Y-%m-%d 00:00:00', date(strftime('%Y-01-01', {expr}), '+' || (((CAST(strftime('%m', {expr}) AS INTEGER) - 1) / 3) * 3) || ' months'))") },
+			{ ibTotalsPeriod::HalfYear, wxT("strftime('%Y-%m-%d 00:00:00', date(strftime('%Y-01-01', {expr}), '+' || (((CAST(strftime('%m', {expr}) AS INTEGER) - 1) / 6) * 6) || ' months'))") },
+			{ ibTotalsPeriod::Year,     wxT("strftime('%Y-01-01 00:00:00', {expr})")  },
+		};
+
+		// The end of a period is the start of the next one less a second — said the same way on every
+		// engine, so the boundary belongs to its period wherever the query runs. SQLite spells the
+		// step as a datetime() modifier; the truncation above supplies the start.
+		auto endOf = [&d](ibTotalsPeriod unit, const wxString& step) {
+			return wxT("strftime('%Y-%m-%d %H:%M:%S', datetime(") + d.m_periodTrunc[unit]
+			     + wxT(", '+1 ") + step + wxT("', '-1 second'))");
+		};
+		d.m_periodEnd = {
+			{ ibTotalsPeriod::Second,   endOf(ibTotalsPeriod::Second,   wxT("second")) },
+			{ ibTotalsPeriod::Minute,   endOf(ibTotalsPeriod::Minute,   wxT("minute")) },
+			{ ibTotalsPeriod::Hour,     endOf(ibTotalsPeriod::Hour,     wxT("hour"))   },
+			{ ibTotalsPeriod::Day,      endOf(ibTotalsPeriod::Day,      wxT("day"))    },
+			{ ibTotalsPeriod::Week,     endOf(ibTotalsPeriod::Week,     wxT("day"))    },   // +7 days below
+			{ ibTotalsPeriod::Month,    endOf(ibTotalsPeriod::Month,    wxT("month"))  },
+			{ ibTotalsPeriod::Quarter,  endOf(ibTotalsPeriod::Quarter,  wxT("month"))  },   // +3 months below
+			{ ibTotalsPeriod::HalfYear, endOf(ibTotalsPeriod::HalfYear, wxT("month"))  },   // +6 months below
+			{ ibTotalsPeriod::Year,     endOf(ibTotalsPeriod::Year,     wxT("year"))   },
+		};
+		// The three whose step is more than one of its unit, spelled out rather than folded into the
+		// helper: a lambda that took a count as well would be harder to read than the three lines it
+		// saved.
+		d.m_periodEnd[ibTotalsPeriod::Week]     = wxT("strftime('%Y-%m-%d %H:%M:%S', datetime(") + d.m_periodTrunc[ibTotalsPeriod::Week]     + wxT(", '+7 days', '-1 second'))");
+		d.m_periodEnd[ibTotalsPeriod::Quarter]  = wxT("strftime('%Y-%m-%d %H:%M:%S', datetime(") + d.m_periodTrunc[ibTotalsPeriod::Quarter]  + wxT(", '+3 months', '-1 second'))");
+		d.m_periodEnd[ibTotalsPeriod::HalfYear] = wxT("strftime('%Y-%m-%d %H:%M:%S', datetime(") + d.m_periodTrunc[ibTotalsPeriod::HalfYear] + wxT(", '+6 months', '-1 second'))");
+
+		// datetime(x, '<n> months') takes the sign with the number, so one template serves both
+		// directions — `|| ' months'` on a negative count reads as '-3 months', which is what it means.
+		auto addOf = [](const wxString& step, const wxString& factor) {
+			return wxT("strftime('%Y-%m-%d %H:%M:%S', datetime({expr}, (") + factor + wxT(") || ' ") + step + wxT("'))");
+		};
+		d.m_dateAdd = {
+			{ ibTotalsPeriod::Second,   addOf(wxT("seconds"), wxT("{count}")) },
+			{ ibTotalsPeriod::Minute,   addOf(wxT("minutes"), wxT("{count}")) },
+			{ ibTotalsPeriod::Hour,     addOf(wxT("hours"),   wxT("{count}")) },
+			{ ibTotalsPeriod::Day,      addOf(wxT("days"),    wxT("{count}")) },
+			{ ibTotalsPeriod::Week,     addOf(wxT("days"),    wxT("({count}) * 7")) },
+			{ ibTotalsPeriod::Month,    addOf(wxT("months"),  wxT("{count}")) },
+			{ ibTotalsPeriod::Quarter,  addOf(wxT("months"),  wxT("({count}) * 3")) },
+			{ ibTotalsPeriod::HalfYear, addOf(wxT("months"),  wxT("({count}) * 6")) },
+			{ ibTotalsPeriod::Year,     addOf(wxT("years"),   wxT("{count}")) },
+		};
+
+		const wxString months = wxT("((CAST(strftime('%Y', {to}) AS INTEGER) * 12 + CAST(strftime('%m', {to}) AS INTEGER))"
+		                            " - (CAST(strftime('%Y', {from}) AS INTEGER) * 12 + CAST(strftime('%m', {from}) AS INTEGER)))");
+		auto secondsOver = [](const wxString& divisor) {
+			return wxT("CAST((CAST(strftime('%s', {to}) AS INTEGER) - CAST(strftime('%s', {from}) AS INTEGER)) / ") + divisor + wxT(" AS INTEGER)");
+		};
+		d.m_dateDiff = {
+			{ ibTotalsPeriod::Second,   secondsOver(wxT("1"))    },
+			{ ibTotalsPeriod::Minute,   secondsOver(wxT("60"))   },
+			{ ibTotalsPeriod::Hour,     secondsOver(wxT("3600")) },
+			{ ibTotalsPeriod::Day,      wxT("CAST(julianday(date({to})) - julianday(date({from})) AS INTEGER)") },
+			{ ibTotalsPeriod::Week,     wxT("CAST((julianday(date({to}, '-6 days', 'weekday 1')) - julianday(date({from}, '-6 days', 'weekday 1'))) / 7 AS INTEGER)") },
+			{ ibTotalsPeriod::Month,    months },
+			{ ibTotalsPeriod::Quarter,  wxT("(") + months + wxT(" / 3)") },
+			{ ibTotalsPeriod::HalfYear, wxT("(") + months + wxT(" / 6)") },
+			{ ibTotalsPeriod::Year,     wxT("(CAST(strftime('%Y', {to}) AS INTEGER) - CAST(strftime('%Y', {from}) AS INTEGER))") },
+		};
+
+		// strftime('%w') is Sunday = 0; this language pins Monday = 1 (ISO), so the shift is applied
+		// here rather than left to whoever reads the number.
+		d.m_datePart = {
+			{ ibDatePart::Year,      wxT("CAST(strftime('%Y', {expr}) AS INTEGER)") },
+			{ ibDatePart::Quarter,   wxT("((CAST(strftime('%m', {expr}) AS INTEGER) - 1) / 3 + 1)") },
+			{ ibDatePart::Month,     wxT("CAST(strftime('%m', {expr}) AS INTEGER)") },
+			{ ibDatePart::DayOfYear, wxT("(CAST(strftime('%j', {expr}) AS INTEGER))") },
+			{ ibDatePart::Day,       wxT("CAST(strftime('%d', {expr}) AS INTEGER)") },
+			// %V is the ISO week (SQLite 3.46+; the vendored one is 3.48) - what the script's GetWeekOfYear
+			// and the other dialects' WEEK count. %W counted from the year's first Monday and had a week 0.
+			{ ibDatePart::Week,      wxT("CAST(strftime('%V', {expr}) AS INTEGER)") },
+			{ ibDatePart::WeekDay,   wxT("(((CAST(strftime('%w', {expr}) AS INTEGER) + 6) % 7) + 1)") },
+			{ ibDatePart::Hour,      wxT("CAST(strftime('%H', {expr}) AS INTEGER)") },
+			{ ibDatePart::Minute,    wxT("CAST(strftime('%M', {expr}) AS INTEGER)") },
+			{ ibDatePart::Second,    wxT("CAST(strftime('%S', {expr}) AS INTEGER)") },
+		};
+
+		d.m_substring = wxT("substr({expr}, {from}, {len})");
+		return d;
+	}();
+	return s_dialect;
+}
+
+const ibDialectDictionary& ibDatabaseLayerSQLite::GetDialect() const
+{
+	return Dialect();
+}
+
+// SQLite temp tables: ad-hoc `CREATE TEMPORARY TABLE` of any shape, connection-scoped
+// (auto-dropped on disconnect). Like PostgreSQL we DROP explicitly via the manager's
+// pinning scope rather than lean on disconnect — a pooled connection is long-lived and
+// reused, so explicit DROP keeps it tidy and deterministic (m_autoDrops=false). Its mere
+// PRESENCE flips SQLite off the RAM floor onto the server-side temp path. (docs/private/temp-db.md)
+const ibTempTableDialect& ibDatabaseLayerSQLite::TempDialect()
+{
+	static const ibTempTableDialect s_temp = [] {
+		ibTempTableDialect t;
+		t.m_strategy       = ibTempTableDialect::Strategy::AdHocCreate;
+		t.m_createPrefix   = wxT("CREATE TEMPORARY TABLE");
+		t.m_onCommitClause = wxEmptyString;     // session-scoped; the manager drops it explicitly
+		t.m_autoDrops      = false;             // explicit DROP via the pinning scope (RAII, leak-free)
+		t.m_dropPrefix     = wxT("DROP TABLE");
+		return t;
+	}();
+	return s_temp;
+}
+
+const ibTempTableDialect* ibDatabaseLayerSQLite::GetTempTableDialect() const
+{
+	return &TempDialect();
+}
+
+// SQLite materialisation: the per-row FLOOR. Its trigger body may contain only plain SQL
+// statements — no variables, no IF, no procedural block — which is exactly why the family
+// is designed here first: whatever expresses a totals delta in SQLite expresses it
+// everywhere else, and the richer engines simply do not need their extra syntax.
+// Period truncation goes through strftime, whose output is TEXT — consistent with this
+// dialect storing dates as TEXT (m_typeDate above), so the totals key column and the
+// movement's period column compare like for like.
+const ibMaterializationDialect& ibDatabaseLayerSQLite::MaterializationDialect()
+{
+	static const ibMaterializationDialect s_mat = [] {
+		ibMaterializationDialect m;
+		m.m_family = ibTriggerFamily::PerRow;
+		// SQLite names the trigger's timing before the table and takes no FOR EACH ROW
+		// keyword requirement (it is the only mode it has), but accepts it — kept explicit
+		// so the four per-row shells read alike.
+		m.m_triggerShellTemplate = wxT("CREATE TRIGGER {name} {timing} ON {table} FOR EACH ROW BEGIN {body} END");
+		m.m_functionShellTemplate = wxEmptyString;   // body inlines — no separate function object
+		// The SELECT form (not VALUES) is also what SQLite itself prefers here: with
+		// INSERT..SELECT the parser needs a WHERE before ON CONFLICT to disambiguate, so the
+		// shape the conditional-delta case requires is the shape SQLite documents anyway.
+		m.m_deltaUpsertTemplate =
+			wxT("INSERT INTO {table} ({columns}) SELECT {values}{from}{where} ON CONFLICT ({keys}) DO UPDATE SET {update}");
+		m.m_deltaTargetAlias  = wxT("{table}");     // ON CONFLICT names the target by table name
+		m.m_deltaSourceAlias  = wxT("excluded");
+		m.m_deltaUpdateItem   = wxT("{col} = COALESCE({target}.{col}, 0) + {source}.{col}");   // NULL-safe — see the default
+		// NULL-safe like the default — SQLite spells it `IS`, which is the same operator under
+		// another name. Unused by ON CONFLICT, kept true so it is not a trap. See databaseLayer.h.
+		m.m_deltaKeyMatchItem = wxT("{target}.{col} IS {source}.{col}");   // unused by ON CONFLICT — rendered, not spent
+		m.m_totalsTableSuffix = wxEmptyString;       // no fillfactor concept (single writer anyway)
+		m.m_connectionIdExpr  = wxEmptyString;       // single writer => no contention to split; shards are meaningless, not missing
+		// WHAT IS STANDING, asked of the catalogue — not only to guard a drop (SQLite's cannot hurt), but
+		// because "is the bundle installed?" is answered by these (ibMaterializeSql::IsInstalled), and
+		// with none it answered "yes" for triggers an apply had just dropped. Names compare without case,
+		// as SQLite's identifiers do.
+		m.m_viewExistsQuery    = wxT("SELECT 1 FROM sqlite_master WHERE type = 'view' AND name = '{name}' COLLATE NOCASE");
+		m.m_triggerExistsQuery = wxT("SELECT 1 FROM sqlite_master WHERE type = 'trigger' AND name = '{name}' COLLATE NOCASE");
+		return m;
+	}();
+	return s_mat;
+}
+
+const ibMaterializationDialect* ibDatabaseLayerSQLite::GetMaterializationDialect() const
+{
+	return &MaterializationDialect();
+}
+
 // ctor()
 ibDatabaseLayerSQLite::ibDatabaseLayerSQLite()
 	: ibDatabaseLayer()
 {
 	m_pDatabase = nullptr; //&m_Database; //new sqlite3;
-	wxCSConv conv(wxT("UTF-8"));
-	SetEncoding(&conv);
 }
 
 ibDatabaseLayerSQLite::ibDatabaseLayerSQLite(const wxString& strDatabase, bool mustExist /*= false*/)
 	: ibDatabaseLayer()
 {
 	m_pDatabase = nullptr; //new sqlite3;
-	wxCSConv conv(wxT("UTF-8"));
-	SetEncoding(&conv);
 	Open(strDatabase, mustExist);
 }
 
@@ -33,8 +238,6 @@ ibDatabaseLayerSQLite::ibDatabaseLayerSQLite(const ibDatabaseLayerSQLite& src)
 	: ibDatabaseLayer()
 {
 	m_pDatabase = nullptr;
-	wxCSConv conv(wxT("UTF-8"));
-	SetEncoding(&conv);
 	if (!src.m_strDatabasePath.IsEmpty())
 		Open(src.m_strDatabasePath);
 	else
@@ -72,7 +275,10 @@ bool ibDatabaseLayerSQLite::Open(const wxString& strDatabase)
 	wxCharBuffer databaseNameBuffer = ConvertToUnicodeStream(strDatabase);
 	sqlite3* pDbPtr = (sqlite3*)m_pDatabase;
 	int nReturn = sqlite3_open(databaseNameBuffer, &pDbPtr);
-	m_pDatabase = pDbPtr;
+	{
+		std::lock_guard<std::mutex> guard(m_cancelGuard);   // what Cancel reads
+		m_pDatabase = pDbPtr;
+	}
 
 	if (nReturn != SQLITE_OK)
 	{
@@ -99,6 +305,7 @@ bool ibDatabaseLayerSQLite::Close()
 
 	if (m_pDatabase != nullptr)
 	{
+		std::lock_guard<std::mutex> guard(m_cancelGuard);   // not under a Cancel still using it
 		int nReturn = sqlite3_close((sqlite3*)m_pDatabase);
 		if (nReturn != SQLITE_OK)
 		{
@@ -118,24 +325,38 @@ bool ibDatabaseLayerSQLite::IsOpen()
 	return (m_pDatabase != nullptr);
 }
 
+// The one call SQLite takes from another thread on a busy connection: the statement running there returns
+// SQLITE_INTERRUPT to its own caller. Nothing running, nothing to stop.
+void ibDatabaseLayerSQLite::Cancel()
+{
+	// Held for the call: the owner closing meanwhile waits for it rather than closing under it (m_cancelGuard).
+	std::lock_guard<std::mutex> guard(m_cancelGuard);
+	if (m_pDatabase != nullptr)
+		sqlite3_interrupt((sqlite3*)m_pDatabase);
+}
+
 void ibDatabaseLayerSQLite::DoBeginTransaction(const ibTxOptions& opts)
 {
 	// SQLite is single-writer, file-level locked — no per-TX wait/nowait
 	// knob to honour. Options parameter accepted for interface conformance.
+	//
+	// `snapshot` needs nothing either, and that is a property rather than an omission: a deferred
+	// transaction takes its read lock at the first read and holds it to the end, so every statement
+	// in it already sees one committed state. SQLite gives for free what the others must be asked for.
 	(void)opts;
-	wxLogDebug(wxT("Beginning transaction"));
+	ibJournalInfo(wxT("db.sqlite"),wxT("Beginning transaction"));
 	DoRunQuery(wxT("begin deferred transaction;"), false);
 }
 
 void ibDatabaseLayerSQLite::DoCommit()
 {
-	wxLogDebug(wxT("Commiting transaction"));
+	ibJournalInfo(wxT("db.sqlite"),wxT("Commiting transaction"));
 	DoRunQuery(wxT("commit transaction;"), false);
 }
 
 void ibDatabaseLayerSQLite::DoRollBack()
 {
-	wxLogDebug(wxT("Rolling back transaction"));
+	ibJournalInfo(wxT("db.sqlite"),wxT("Rolling back transaction"));
 	DoRunQuery(wxT("rollback transaction;"), false);
 }
 
@@ -219,8 +440,6 @@ ibDatabaseResultSet* ibDatabaseLayerSQLite::DoRunQueryWithResults(const wxString
 		// Create a Prepared statement for the last SQL statement and get a result set from it
 		ibPreparedStatementSQLite* pStatement = (ibPreparedStatementSQLite*)DoPrepareStatement(QueryArray[QueryArray.size() - 1], false);
 		ibDatabaseResultSetSQLite* pResultSet = new ibDatabaseResultSetSQLite(pStatement, true);
-		if (pResultSet)
-			pResultSet->SetEncoding(GetEncoding());
 
 		LogResultSetForCleanup(pResultSet);
 		return pResultSet;
@@ -243,8 +462,6 @@ ibPreparedStatement* ibDatabaseLayerSQLite::DoPrepareStatement(const wxString& s
 	if (m_pDatabase != nullptr)
 	{
 		ibPreparedStatementSQLite* pReturnStatement = new ibPreparedStatementSQLite((sqlite3*)m_pDatabase);
-		if (pReturnStatement)
-			pReturnStatement->SetEncoding(GetEncoding());
 
 		wxArrayString QueryArray = ParseQueries(strQuery);
 
@@ -314,10 +531,13 @@ bool ibDatabaseLayerSQLite::TableExists(const wxString& table)
 	ibPreparedStatement* pStatement = nullptr;
 	ibDatabaseResultSet* pResult = nullptr;
 
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-	try
-	{
-#endif
+	// Probe via sqlite_master — if the prepared statement or query
+	// throws a structured DB exception (ThrowDatabaseException path),
+	// treat the table as "not present" and let the cleanup below
+	// release whatever we managed to allocate. Callers that need the
+	// distinct error path use a raw ibPreparedStatement themselves;
+	// TableExists is the convenience predicate.
+	try {
 		wxString attach = wxT("sqlite_master"), t = table;
 		size_t pos_attach = table.find('.');
 		if (pos_attach > 0) {
@@ -342,25 +562,10 @@ bool ibDatabaseLayerSQLite::TableExists(const wxString& table)
 				}
 			}
 		}
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
 	}
-	catch (ibDatabaseLayerException& e)
-	{
-		if (pResult != nullptr)
-		{
-			CloseResultSet(pResult);
-			pResult = nullptr;
-		}
-
-		if (pStatement != nullptr)
-		{
-			CloseStatement(pStatement);
-			pStatement = nullptr;
-		}
-
-		throw e;
+	catch (const ibBackendDatabaseException&) {
+		bReturn = false;
 	}
-#endif
 
 	if (pResult != nullptr)
 	{
@@ -386,10 +591,7 @@ bool ibDatabaseLayerSQLite::ViewExists(const wxString& view)
 	ibPreparedStatement* pStatement = nullptr;
 	ibDatabaseResultSet* pResult = nullptr;
 
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-	try
-	{
-#endif
+	try {
 		wxString attach = wxT("sqlite_master"), v = view;
 		size_t pos_attach = view.find('.');
 		if (pos_attach > 0) {
@@ -414,25 +616,10 @@ bool ibDatabaseLayerSQLite::ViewExists(const wxString& view)
 				}
 			}
 		}
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
 	}
-	catch (ibDatabaseLayerException& e)
-	{
-		if (pResult != nullptr)
-		{
-			CloseResultSet(pResult);
-			pResult = nullptr;
-		}
-
-		if (pStatement != nullptr)
-		{
-			CloseStatement(pStatement);
-			pStatement = nullptr;
-		}
-
-		throw e;
+	catch (const ibBackendDatabaseException&) {
+		bReturn = false;
 	}
-#endif
 
 	if (pResult != nullptr)
 	{
@@ -454,10 +641,7 @@ wxArrayString ibDatabaseLayerSQLite::GetTables()
 	wxArrayString returnArray;
 
 	ibDatabaseResultSet* pResult = nullptr;
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-	try
-	{
-#endif
+	try {
 		wxString query = wxT("SELECT name FROM sqlite_master WHERE type='table';");
 		pResult = ExecuteQuery(query);
 
@@ -465,19 +649,10 @@ wxArrayString ibDatabaseLayerSQLite::GetTables()
 		{
 			returnArray.Add(pResult->GetResultString(1));
 		}
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
 	}
-	catch (ibDatabaseLayerException& e)
-	{
-		if (pResult != nullptr)
-		{
-			CloseResultSet(pResult);
-			pResult = nullptr;
-		}
-
-		throw e;
+	catch (const ibBackendDatabaseException&) {
+		// Best-effort enumeration — partial results stay in the array.
 	}
-#endif
 
 	if (pResult != nullptr)
 	{
@@ -493,10 +668,7 @@ wxArrayString ibDatabaseLayerSQLite::GetViews()
 	wxArrayString returnArray;
 
 	ibDatabaseResultSet* pResult = nullptr;
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-	try
-	{
-#endif
+	try {
 		wxString query = wxT("SELECT name FROM sqlite_master WHERE type='view';");
 		pResult = ExecuteQuery(query);
 
@@ -504,19 +676,10 @@ wxArrayString ibDatabaseLayerSQLite::GetViews()
 		{
 			returnArray.Add(pResult->GetResultString(1));
 		}
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
 	}
-	catch (ibDatabaseLayerException& e)
-	{
-		if (pResult != nullptr)
-		{
-			CloseResultSet(pResult);
-			pResult = nullptr;
-		}
-
-		throw e;
+	catch (const ibBackendDatabaseException&) {
+		// Best-effort enumeration — partial results stay in the array.
 	}
-#endif
 
 	if (pResult != nullptr)
 	{
@@ -536,10 +699,7 @@ wxArrayString ibDatabaseLayerSQLite::GetColumns(const wxString& table)
 	ibDatabaseResultSet* pResult = nullptr;
 	ibResultSetMetaData* pMetaData = nullptr;
 
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-	try
-	{
-#endif
+	try {
 		wxCharBuffer tableNameBuffer = ConvertToUnicodeStream(table);
 		wxString query = wxString::Format(wxT("SELECT * FROM '%s' LIMIT 0;"), table.c_str());
 		pResult = ExecuteQuery(query);
@@ -551,26 +711,11 @@ wxArrayString ibDatabaseLayerSQLite::GetColumns(const wxString& table)
 		{
 			returnArray.Add(pMetaData->GetColumnName(i));
 		}
-
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
 	}
-	catch (ibDatabaseLayerException& e)
-	{
-		if (pMetaData != nullptr)
-		{
-			pResult->CloseMetaData(pMetaData);
-			pMetaData = nullptr;
-		}
-
-		if (pResult != nullptr)
-		{
-			CloseResultSet(pResult);
-			pResult = nullptr;
-		}
-
-		throw e;
+	catch (const ibBackendDatabaseException&) {
+		// Missing table / bad name → empty column list, cleanup below
+		// still runs.
 	}
-#endif
 
 	if (pMetaData != nullptr)
 	{
@@ -589,6 +734,10 @@ wxArrayString ibDatabaseLayerSQLite::GetColumns(const wxString& table)
 
 int ibDatabaseLayerSQLite::TranslateErrorCode(int nCode)
 {
+	// An interrupted statement (Cancel -> sqlite3_interrupt) is the cancel, recorded as the platform's.
+	if ((nCode & 0xFF) == SQLITE_INTERRUPT)
+		return DATABASE_LAYER_QUERY_CANCELLED;
+
 	// Ultimately, this will probably be a map of SQLite database error code values to ibDatabaseLayer values
 	// For now though, we'll just return error
 	int nReturn = nCode;
@@ -667,5 +816,28 @@ int ibDatabaseLayerSQLite::TranslateErrorCode(int nCode)
 	}
 	*/
 	return nReturn;
+}
+
+ibBackendDatabaseException::Kind ibDatabaseLayerSQLite::ClassifyDatabaseError(int nativeCode) const
+{
+	// SQLite returns a single-int result code via sqlite3_errcode().
+	// The values are part of SQLite's stable ABI (sqlite3.h SQLITE_*
+	// macros) so the integer literals are safe.
+	using Kind = ibBackendDatabaseException::Kind;
+	switch (nativeCode) {
+		case 5:  // SQLITE_BUSY  — database file locked by another process / writer
+		case 6:  // SQLITE_LOCKED — table locked by a concurrent connection
+			return Kind::Timeout;
+
+		case 19: // SQLITE_CONSTRAINT
+			return Kind::Constraint;
+
+		case 1:  // SQLITE_ERROR  — catch-all for SQL errors / missing table
+		case 21: // SQLITE_MISUSE — library used incorrectly (usually a bad prepared statement)
+			return Kind::Syntax;
+
+		default:
+			return Kind::Unknown;
+	}
 }
 

@@ -4,44 +4,38 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "document.h"
-#include "list/objectList.h"
+#include "backend/serialize/dataBuilder.h"
+#include "backend/system/value/valueDynamicList.h"   // ibValueDynamicList — the document list migrates onto the universal dynamic list
 #include "backend/metaData.h"
 #include "backend/moduleManager/moduleManager.h"
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueMetaObjectDocument, ibValueMetaObjectRecordDataMutableRef);
 
-//********************************************************************************************
-
-class ibValueListDataObjectRefDocument : public ibValueListDataObjectRef {
-public:
-	ibValueListDataObjectRefDocument(const ibValueMetaObjectDocument* metaObject = nullptr, const ibFormID& formType = wxNOT_FOUND, bool choiceMode = false) :
-		ibValueListDataObjectRef(metaObject, formType, choiceMode)
-	{
-		ibValueListDataObject::AppendSort(metaObject->GetDocumentNumber(), true, false);
-		ibValueListDataObject::AppendSort(metaObject->GetDocumentDate(), true, true);
-		ibValueListDataObject::AppendSort(metaObject->GetDataReference(), true, true, true);
-	}
-};
+// (ibValueListDataObjectRefDocument REMOVED — the document list IS the dynamic list now; its default sort by number
+//  is a creation-time setting (ibCreateList + GetDocumentNumber), serialized and user-removable. Lists-as-a-class abolished.)
 
 //********************************************************************************************
 //*                                      metaData                                            *
 //********************************************************************************************
 
-ibValueMetaObjectDocument::ibValueMetaObjectDocument() : ibValueMetaObjectRecordDataMutableRef()
+ibValueMetaObjectDocument::ibValueMetaObjectDocument() : ibValueMetaObjectRecordDataRecorderRef()
 {
-	//set default proc
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("BeforeWrite"), ibContentHelper::eProcedureHelper, { wxT("Cancel"), wxT("WriteMode"), wxT("PostingMode") });
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("OnWrite"), ibContentHelper::eProcedureHelper, { wxT("Cancel") });
+	// BeforeWrite — 3-arg Document-specific signature (writeMode/
+	// postingMode). The other 5 common hooks are duplicated from the
+	// other MutableRef leaves; m_propertyObjectModule lives on each
+	// leaf so we register here instead of in the (no-field) base ctor.
+	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("BeforeWrite"),  ibContentHelper::eProcedureHelper, { wxT("Cancel"), wxT("WriteMode"), wxT("PostingMode") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("OnWrite"),      ibContentHelper::eProcedureHelper, { wxT("Cancel") });
 	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("BeforeDelete"), ibContentHelper::eProcedureHelper, { wxT("Cancel") });
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("OnDelete"), ibContentHelper::eProcedureHelper, { wxT("Cancel") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("OnDelete"),     ibContentHelper::eProcedureHelper, { wxT("Cancel") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("Filling"),      ibContentHelper::eProcedureHelper, { wxT("FillingData"), wxT("StandardProcessing") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("OnCopy"),       ibContentHelper::eProcedureHelper, { wxT("CopiedObject") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("Posting"),      ibContentHelper::eProcedureHelper, { wxT("Cancel"), wxT("PostingMode") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("UndoPosting"),  ibContentHelper::eProcedureHelper, { wxT("Cancel") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("SetNewNumber"), ibContentHelper::eProcedureHelper, { wxT("Prefix"), wxT("StandardProcessing") });
+	
+	(*m_propertyManagerModule)->SetDefaultProcedure(wxT("FormGetProcessing"), ibContentHelper::eProcedureHelper, { wxT("Form"), wxT("Cancel") });
+	(*m_propertyManagerModule)->SetDefaultProcedure(wxT("ChoiceDataGetProcessing"), ibContentHelper::eProcedureHelper, { wxT("ChoiceData"), wxT("Parameters"), wxT("StandardProcessing") });
 
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("Posting"), ibContentHelper::eProcedureHelper, { wxT("Cancel"), wxT("PostingMode") });
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("UndoPosting"), ibContentHelper::eProcedureHelper, { wxT("Cancel") });
-
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("Filling"), ibContentHelper::eProcedureHelper, { wxT("Source"), wxT("StandartProcessing") });
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("OnCopy"), ibContentHelper::eProcedureHelper, { wxT("Source") });
-
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("SetNewNumber"), ibContentHelper::eProcedureHelper, { wxT("Prefix"), wxT("StandartProcessing") });
 }
 
 ibValueMetaObjectDocument::~ibValueMetaObjectDocument()
@@ -68,37 +62,38 @@ ibValueMetaObjectFormBase* ibValueMetaObjectDocument::GetDefaultFormByID(const i
 
 #include "documentManager.h"
 
-ibValueManagerDataObject* ibValueMetaObjectDocument::CreateManagerDataObjectValue() const
+ibValuePtr<ibValueManagerDataObject> ibValueMetaObjectDocument::CreateManagerDataObjectValue() const
 {
-	return ibValue::CreateAndPrepareValueRef<ibValueManagerDataObjectDocument>(this);
+	return ibValuePtr<ibValueManagerDataObject>(new ibValueManagerDataObjectDocument(this));
 }
 
 #include "backend/appData.h"
+#include "backend/metaCollection/partial/declaredPresentation.h"   // how a reference reads in the designer
 
-ibValueRecordDataObjectRef* ibValueMetaObjectDocument::CreateObjectRefValue(const ibGuid& objGuid) const
+ibValuePtr<ibValueRecordDataObjectRef> ibValueMetaObjectDocument::CreateObjectRefValue(const ibGuid& objGuid) const
 {
 	ibValueRecordDataObjectDocument* pDataRef = nullptr;
 	if (auto* cc = m_metaData->GetCompileCache()) {
 		if (!cc->FindCompileModule(m_propertyObjectModule->GetMetaObject(), pDataRef))
-			return ibValue::CreateAndPrepareValueRef<ibValueRecordDataObjectDocument>(this, objGuid);
+			pDataRef = new ibValueRecordDataObjectDocument(this, objGuid);
 	}
 	else {
-		pDataRef = ibValue::CreateAndPrepareValueRef<ibValueRecordDataObjectDocument>(this, objGuid);
+		pDataRef = new ibValueRecordDataObjectDocument(this, objGuid);
 	}
 
-	return pDataRef;
+	return ibValuePtr<ibValueRecordDataObjectRef>(pDataRef);
 }
 
-ibSourceDataObject* ibValueMetaObjectDocument::CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const
+ibSourcePtr<ibSourceDataObject> ibValueMetaObjectDocument::CreateSourceObject(const ibCreateRequest& request, const ibFormID& form_id) const
 {
-	switch (metaObject->GetTypeForm())
+	switch (form_id)
 	{
-	case eFormObject: return CreateObjectValue(); break;
+	case eFormObject: return ibSourcePtr<ibSourceDataObject>(CreateObjectValue()); break;
 	case eFormList:
-		return ibValue::CreateAndPrepareValueRef<ibValueListDataObjectRefDocument>(this, metaObject->GetTypeForm());
+		return ibSourcePtr<ibSourceDataObject>(ibCreateList(request, GetQueryable(), GetDocumentNumber()->GetQueryColumn()));   // migrated onto the universal dynamic list
 		break;
 	case eFormSelect:
-		return ibValue::CreateAndPrepareValueRef<ibValueListDataObjectRefDocument>(this, metaObject->GetTypeForm(), true);
+		return ibSourcePtr<ibSourceDataObject>(ibCreateList(request, GetQueryable(), GetDocumentNumber()->GetQueryColumn(), ibDynamicListView_Choice));   // select front-driven — choice mode
 		break;
 	}
 
@@ -106,94 +101,65 @@ ibSourceDataObject* ibValueMetaObjectDocument::CreateSourceObject(const ibValueM
 }
 
 #pragma region _form_builder_h_
-ibBackendValueForm* ibValueMetaObjectDocument::GetObjectForm(const wxString& strFormName, ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
+ibFormPtr<ibBackendValueForm> ibValueMetaObjectDocument::GetObjectForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
-		strFormName,
+		request,
 		ibValueMetaObjectDocument::eFormObject,
-		ownerControl, CreateObjectValue(),
-		formGuid
+		ownerControl, CreateObjectValue()
 	);
 }
 
-ibBackendValueForm* ibValueMetaObjectDocument::GetListForm(const wxString& strFormName, ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
+ibFormPtr<ibBackendValueForm> ibValueMetaObjectDocument::GetListForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
-		strFormName,
+		request,
 		ibValueMetaObjectDocument::eFormList,
-		ownerControl, ibValue::CreateAndPrepareValueRef<ibValueListDataObjectRefDocument>(this, ibValueMetaObjectDocument::eFormList),
-		formGuid
+		ownerControl, ibCreateList(request.m_create, GetQueryable(), GetDocumentNumber()->GetQueryColumn())   // migrated onto the universal dynamic list
 	);
 }
 
-ibBackendValueForm* ibValueMetaObjectDocument::GetSelectForm(const wxString& strFormName, ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
+ibFormPtr<ibBackendValueForm> ibValueMetaObjectDocument::GetSelectForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
-		strFormName,
+		request,
 		ibValueMetaObjectDocument::eFormSelect,
-		ownerControl, ibValue::CreateAndPrepareValueRef<ibValueListDataObjectRefDocument>(this, ibValueMetaObjectDocument::eFormSelect, true),
-		formGuid
+		ownerControl, CreateSourceObject(request.m_create, eFormSelect)   // select front-driven — choice mode
 	);
 }
 #pragma endregion
-
-wxString ibValueMetaObjectDocument::GetDataPresentation(const ibValueDataObject* objValue) const
-{
-	static ibValue vDate, vNumber;
-	if (!objValue->GetValueByMetaID((*m_propertyAttributeDate)->GetMetaID(), vDate))
-		return wxEmptyString;
-	if (!objValue->GetValueByMetaID((*m_propertyAttributeNumber)->GetMetaID(), vNumber))
-		return wxEmptyString;
-	return GetSynonym() << wxT(" ") << vNumber.GetString() << wxT(" ") << vDate.GetString();
-}
 
 //***************************************************************************
 //*                       Save & load metaData                              *
 //***************************************************************************
 
-bool ibValueMetaObjectDocument::LoadData(ibReaderMemory& dataReader)
+bool ibValueMetaObjectDocument::WriteData(ibDataNode& node) const
 {
-	//load default attributes:
-	(*m_propertyAttributeNumber)->LoadMeta(dataReader);
-	(*m_propertyAttributeDate)->LoadMeta(dataReader);
-	(*m_propertyAttributePosted)->LoadMeta(dataReader);
+	node.SetProperty(m_propertyAttributePosted->GetName(), m_propertyAttributePosted->GetNodeValue());
 
-	//load object module
-	(*m_propertyObjectModule)->LoadMeta(dataReader);
-	(*m_propertyManagerModule)->LoadMeta(dataReader);
+	node.SetProperty(m_propertyObjectModule->GetName(), m_propertyObjectModule->GetNodeValue());
+	node.SetProperty(m_propertyManagerModule->GetName(), m_propertyManagerModule->GetNodeValue());
 
-	//load default form 
-	m_propertyDefFormObject->SetValue(GetIdByGuid(dataReader.r_stringZ()));
-	m_propertyDefFormList->SetValue(GetIdByGuid(dataReader.r_stringZ()));
-	m_propertyDefFormSelect->SetValue(GetIdByGuid(dataReader.r_stringZ()));
+	node.SetValue(m_propertyDefFormObject->GetName(), GetGuidByID(m_propertyDefFormObject->GetValueAsInteger()).str());
+	node.SetValue(m_propertyDefFormList->GetName(), GetGuidByID(m_propertyDefFormList->GetValueAsInteger()).str());
+	node.SetValue(m_propertyDefFormSelect->GetName(), GetGuidByID(m_propertyDefFormSelect->GetValueAsInteger()).str());
 
-	if (!m_propertyRegisterRecord->LoadData(dataReader))
-		return false;
-
-	return ibValueMetaObjectRecordDataMutableRef::LoadData(dataReader);
+	return ibValueMetaObjectRecordDataRecorderRef::WriteData(node);
 }
 
-bool ibValueMetaObjectDocument::SaveData(ibWriterMemory& dataWritter)
+bool ibValueMetaObjectDocument::ReadData(const ibDataNode& node)
 {
-	//save default attributes:
-	(*m_propertyAttributeNumber)->SaveMeta(dataWritter);
-	(*m_propertyAttributeDate)->SaveMeta(dataWritter);
-	(*m_propertyAttributePosted)->SaveMeta(dataWritter);
+	m_propertyAttributePosted->SetNodeValue(node.GetProperty(m_propertyAttributePosted->GetName()));
 
-	//save object module
-	(*m_propertyObjectModule)->SaveMeta(dataWritter);
-	(*m_propertyManagerModule)->SaveMeta(dataWritter);
+	m_propertyObjectModule->SetNodeValue(node.GetProperty(m_propertyObjectModule->GetName()));
+	m_propertyManagerModule->SetNodeValue(node.GetProperty(m_propertyManagerModule->GetName()));
 
-	//save default form 
-	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormObject->GetValueAsInteger()));
-	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormList->GetValueAsInteger()));
-	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormSelect->GetValueAsInteger()));
+	m_propertyDefFormObject->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormObject->GetName())));
+	m_propertyDefFormList->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormList->GetName())));
+	m_propertyDefFormSelect->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormSelect->GetName())));
 
-	if (!m_propertyRegisterRecord->SaveData(dataWritter))
-		return false;
 
-	//create or update table:
-	return ibValueMetaObjectRecordDataMutableRef::SaveData(dataWritter);
+	return ibValueMetaObjectRecordDataRecorderRef::ReadData(node);
 }
 
 //***********************************************************************
@@ -202,24 +168,16 @@ bool ibValueMetaObjectDocument::SaveData(ibWriterMemory& dataWritter)
 
 bool ibValueMetaObjectDocument::OnCreateMetaObject(ibMetaData* metaData, int flags)
 {
-	if (!ibValueMetaObjectRecordDataMutableRef::OnCreateMetaObject(metaData, flags))
+	if (!ibValueMetaObjectRecordDataRecorderRef::OnCreateMetaObject(metaData, flags))
 		return false;
 
-	return (*m_propertyAttributeNumber)->OnCreateMetaObject(metaData, flags) &&
-		(*m_propertyAttributeDate)->OnCreateMetaObject(metaData, flags) &&
-		(*m_propertyAttributePosted)->OnCreateMetaObject(metaData, flags) &&
+	return (*m_propertyAttributePosted)->OnCreateMetaObject(metaData, flags) &&
 		(*m_propertyObjectModule)->OnCreateMetaObject(metaData, flags) &&
 		(*m_propertyManagerModule)->OnCreateMetaObject(metaData, flags);
 }
 
 bool ibValueMetaObjectDocument::OnLoadMetaObject(ibMetaData* metaData)
 {
-	if (!(*m_propertyAttributeNumber)->OnLoadMetaObject(metaData))
-		return false;
-
-	if (!(*m_propertyAttributeDate)->OnLoadMetaObject(metaData))
-		return false;
-
 	if (!(*m_propertyAttributePosted)->OnLoadMetaObject(metaData))
 		return false;
 
@@ -229,17 +187,11 @@ bool ibValueMetaObjectDocument::OnLoadMetaObject(ibMetaData* metaData)
 	if (!(*m_propertyManagerModule)->OnLoadMetaObject(metaData))
 		return false;
 
-	return ibValueMetaObjectRecordDataMutableRef::OnLoadMetaObject(metaData);
+	return ibValueMetaObjectRecordDataRecorderRef::OnLoadMetaObject(metaData);
 }
 
 bool ibValueMetaObjectDocument::OnSaveMetaObject(int flags)
 {
-	if (!(*m_propertyAttributeNumber)->OnSaveMetaObject(flags))
-		return false;
-
-	if (!(*m_propertyAttributeDate)->OnSaveMetaObject(flags))
-		return false;
-
 	if (!(*m_propertyAttributePosted)->OnSaveMetaObject(flags))
 		return false;
 
@@ -249,17 +201,11 @@ bool ibValueMetaObjectDocument::OnSaveMetaObject(int flags)
 	if (!(*m_propertyManagerModule)->OnSaveMetaObject(flags))
 		return false;
 
-	return ibValueMetaObjectRecordDataMutableRef::OnSaveMetaObject(flags);
+	return ibValueMetaObjectRecordDataRecorderRef::OnSaveMetaObject(flags);
 }
 
 bool ibValueMetaObjectDocument::OnDeleteMetaObject()
 {
-	if (!(*m_propertyAttributeNumber)->OnDeleteMetaObject())
-		return false;
-
-	if (!(*m_propertyAttributeDate)->OnDeleteMetaObject())
-		return false;
-
 	if (!(*m_propertyAttributePosted)->OnDeleteMetaObject())
 		return false;
 
@@ -269,7 +215,7 @@ bool ibValueMetaObjectDocument::OnDeleteMetaObject()
 	if (!(*m_propertyManagerModule)->OnDeleteMetaObject())
 		return false;
 
-	return ibValueMetaObjectRecordDataMutableRef::OnDeleteMetaObject();
+	return ibValueMetaObjectRecordDataRecorderRef::OnDeleteMetaObject();
 }
 
 bool ibValueMetaObjectDocument::OnReloadMetaObject()
@@ -298,12 +244,6 @@ bool ibValueMetaObjectDocument::OnReloadMetaObject()
 bool ibValueMetaObjectDocument::OnBeforeRunMetaObject(int flags)
 {
 
-	if (!(*m_propertyAttributeNumber)->OnBeforeRunMetaObject(flags))
-		return false;
-
-	if (!(*m_propertyAttributeDate)->OnBeforeRunMetaObject(flags))
-		return false;
-
 	if (!(*m_propertyAttributePosted)->OnBeforeRunMetaObject(flags))
 		return false;
 
@@ -314,17 +254,11 @@ bool ibValueMetaObjectDocument::OnBeforeRunMetaObject(int flags)
 		return false;
 
 	registerSelection();
-	return ibValueMetaObjectRecordDataMutableRef::OnBeforeRunMetaObject(flags);
+	return ibValueMetaObjectRecordDataRecorderRef::OnBeforeRunMetaObject(flags);
 }
 
 bool ibValueMetaObjectDocument::OnAfterRunMetaObject(int flags)
 {
-	if (!(*m_propertyAttributeNumber)->OnAfterRunMetaObject(flags))
-		return false;
-
-	if (!(*m_propertyAttributeDate)->OnAfterRunMetaObject(flags))
-		return false;
-
 	if (!(*m_propertyAttributePosted)->OnAfterRunMetaObject(flags))
 		return false;
 
@@ -335,36 +269,20 @@ bool ibValueMetaObjectDocument::OnAfterRunMetaObject(int flags)
 		return false;
 
 
-	const ibMetaDescription& metaDesc = m_propertyRegisterRecord->GetValueAsMetaDesc();
-	for (unsigned int idx = 0; idx < metaDesc.GetTypeCount(); idx++) {
-		const ibValueMetaObjectRegisterData* registerData = m_metaData->FindAnyObjectByFilter<ibValueMetaObjectRegisterData>(metaDesc.GetByIdx(idx));
-		if (registerData != nullptr) {
-			ibValueMetaObjectAttributePredefined* infoRecorder = registerData->GetRegisterRecorder();
-			wxASSERT(infoRecorder);
-			infoRecorder->GetTypeDesc().AppendMetaType((*m_propertyAttributeReference)->GetTypeDesc());
-		}
-	}
-
 	if (auto* cc = m_metaData->GetCompileCache()) {
 
-		if (ibValueMetaObjectRecordDataMutableRef::OnAfterRunMetaObject(flags)) {
-			return cc->AddCompileModule(m_propertyObjectModule->GetMetaObject(), CreateObjectValue());
+		if (ibValueMetaObjectRecordDataRecorderRef::OnAfterRunMetaObject(flags)) {
+			return cc->AddCompileModule(m_propertyObjectModule->GetMetaObject(), [this]() -> ibValue { return CreateObjectValue(); });
 		}
 
 		return false;
 	}
 
-	return ibValueMetaObjectRecordDataMutableRef::OnAfterRunMetaObject(flags);
+	return ibValueMetaObjectRecordDataRecorderRef::OnAfterRunMetaObject(flags);
 }
 
 bool ibValueMetaObjectDocument::OnBeforeCloseMetaObject()
 {
-	if (!(*m_propertyAttributeNumber)->OnBeforeCloseMetaObject())
-		return false;
-
-	if (!(*m_propertyAttributeDate)->OnBeforeCloseMetaObject())
-		return false;
-
 	if (!(*m_propertyAttributePosted)->OnBeforeCloseMetaObject())
 		return false;
 
@@ -375,36 +293,20 @@ bool ibValueMetaObjectDocument::OnBeforeCloseMetaObject()
 		return false;
 
 
-	const ibMetaDescription& metaDesc = m_propertyRegisterRecord->GetValueAsMetaDesc();
-	for (unsigned int idx = 0; idx < metaDesc.GetTypeCount(); idx++) {
-		const ibValueMetaObjectRegisterData* registerData = m_metaData->FindAnyObjectByFilter<ibValueMetaObjectRegisterData>(metaDesc.GetByIdx(idx));
-		if (registerData != nullptr) {
-			ibValueMetaObjectAttributePredefined* infoRecorder = registerData->GetRegisterRecorder();
-			wxASSERT(infoRecorder);
-			infoRecorder->GetTypeDesc().ClearMetaType((*m_propertyAttributeReference)->GetTypeDesc());
-		}
-	}
-
 	if (auto* cc = m_metaData->GetCompileCache()) {
 
-		if (ibValueMetaObjectRecordDataMutableRef::OnBeforeCloseMetaObject()) {
-			return cc->RemoveCompileModule(m_propertyObjectModule->GetMetaObject());
+		if (ibValueMetaObjectRecordDataRecorderRef::OnBeforeCloseMetaObject()) {
+			{ cc->RemoveCompileModule(m_propertyObjectModule->GetMetaObject()); return true; }
 		}
 
 		return false;
 	}
 
-	return ibValueMetaObjectRecordDataMutableRef::OnBeforeCloseMetaObject();
+	return ibValueMetaObjectRecordDataRecorderRef::OnBeforeCloseMetaObject();
 }
 
 bool ibValueMetaObjectDocument::OnAfterCloseMetaObject()
 {
-	if (!(*m_propertyAttributeNumber)->OnAfterCloseMetaObject())
-		return false;
-
-	if (!(*m_propertyAttributeDate)->OnAfterCloseMetaObject())
-		return false;
-
 	if (!(*m_propertyAttributePosted)->OnAfterCloseMetaObject())
 		return false;
 
@@ -416,7 +318,7 @@ bool ibValueMetaObjectDocument::OnAfterCloseMetaObject()
 
 	unregisterSelection();
 
-	return ibValueMetaObjectRecordDataMutableRef::OnAfterCloseMetaObject();
+	return ibValueMetaObjectRecordDataRecorderRef::OnAfterCloseMetaObject();
 }
 
 //***********************************************************************
@@ -447,17 +349,17 @@ void ibValueMetaObjectDocument::OnRemoveMetaForm(ibValueMetaObjectFormBase* meta
 	if (metaForm->GetTypeForm() == ibValueMetaObjectDocument::eFormObject
 		&& m_propertyDefFormObject->GetValueAsInteger() == metaForm->GetMetaID())
 	{
-		m_propertyDefFormObject->SetValue(metaForm->GetMetaID());
+		m_propertyDefFormObject->SetValue(wxNOT_FOUND);
 	}
 	else if (metaForm->GetTypeForm() == ibValueMetaObjectDocument::eFormList
 		&& m_propertyDefFormList->GetValueAsInteger() == metaForm->GetMetaID())
 	{
-		m_propertyDefFormList->SetValue(metaForm->GetMetaID());
+		m_propertyDefFormList->SetValue(wxNOT_FOUND);
 	}
 	else if (metaForm->GetTypeForm() == ibValueMetaObjectDocument::eFormSelect
 		&& m_propertyDefFormSelect->GetValueAsInteger() == metaForm->GetMetaID())
 	{
-		m_propertyDefFormSelect->SetValue(metaForm->GetMetaID());
+		m_propertyDefFormSelect->SetValue(wxNOT_FOUND);
 	}
 }
 
@@ -466,4 +368,3 @@ void ibValueMetaObjectDocument::OnRemoveMetaForm(ibValueMetaObjectFormBase* meta
 //***********************************************************************
 
 METADATA_TYPE_REGISTER(ibValueMetaObjectDocument, "Document", g_metaDocumentCLSID);
-SYSTEM_TYPE_REGISTER(ibValueRecordDataObjectDocument::ibRecorderRegisterDocument, "RecordRegister", string_to_clsid("VL_RECR"));

@@ -12,7 +12,7 @@
 void ibValueRecordSetObject::GetValueByRow(wxVariant& variant,
 	const ibDataViewItem& row, unsigned int col) const
 {
-	ibValueTableRow* node = GetViewData<ibValueTableRow>(row);
+	ibComposerNode* node = GetViewData<ibComposerNode>(row);
 	if (node == nullptr)
 		return;
 	node->GetValue(col, variant);
@@ -24,14 +24,15 @@ bool ibValueRecordSetObject::SetValueByRow(const wxVariant& variant,
 	const ibDataViewItem& row, unsigned int col)
 {
 	const wxString &strData = variant.GetString();
-	ibValueTableRow* node = GetViewData<ibValueTableRow>(row);
+	ibComposerNode* node = GetViewData<ibComposerNode>(row);
 	if (node == nullptr)
 		return false;
 
 	const ibValueMetaObjectRegisterData* metaObject = GetMetaObject();
 	wxASSERT(metaObject);
 	ibValueMetaObjectAttributeBase* metaObjectAttribute = metaObject->FindAnyAttributeObjectByFilter(col);
-	wxASSERT(metaObject);
+	if (metaObjectAttribute == nullptr)
+		return false;   // not a field of the line, or one its register has switched off
 	ibValue newValue = metaObjectAttribute->CreateValue();
 	if (strData.Length() > 0) {
 		std::vector<ibValue> listValue;

@@ -1,13 +1,17 @@
 #ifndef __PROP_PRIVATE_H__
 #define __PROP_PRIVATE_H__
 
-template <typename T1, typename T2> 
-static inline void AssocProperty(T2&& callback) { 
-	callback = [](auto ...arg) -> wxObject* { return new T1(arg...); }; 
-}
+// wxPGFlags and friends. This used to arrive from the BACKEND — typeconv.h included
+// propgrid and backend_core.h included typeconv.h — so the frontend's own grid header
+// leaned on the core to hand it the grid library. The backend is propgrid-free now, so
+// the dependency is declared where it actually lives.
+#include <wx/propgrid/propgrid.h>
 
-#define ibPG_IMPLEMENT_PROPERTY_CALLBACK(name, value) \
-	AssocProperty<name>(value); \
+// AssocProperty / ibPG_IMPLEMENT_PROPERTY_CALLBACK lived here: they filled the backend's
+// ms_property* slots by unpacking whatever arguments a slot happened to declare. Both are
+// gone with the slots — a maker now takes the property itself and reads what it needs
+// (private/propertyRegistry.h). What remains is what this header was always about: the
+// grid flags below.
 
 // Flags used only internally
 

@@ -36,19 +36,20 @@ EVT_MENU(wxID_DECREASE_INDENT, ibModuleEditView::OnMenuEvent)
 
 wxEND_EVENT_TABLE()
 
-bool ibModuleEditView::OnCreate(ibMetaDocument* doc, long flags)
+bool ibModuleEditView::OnCreate(ibDocument* docBase, long flags)
 {
+	ibMetaDocument* doc = GetDocument();
 	m_codeEditor = new ibCodeEditorDesigner(doc, m_viewFrame, wxID_ANY,
 		wxDefaultPosition, wxDefaultSize, wxBORDER_THEME);
 
-	m_codeEditor->SetReadOnly(flags == wxDOC_READONLY);
+	m_codeEditor->SetReadOnly(flags == ibDOC_READONLY);
 	m_codeEditor->SetSTCFocus(true);
 
-	return ibMetaView::OnCreate(doc, flags)
+	return ibView::OnCreate(docBase, flags)
 		&& m_codeEditor->LoadModule();
 }
 
-void ibModuleEditView::OnActivateView(bool activate, wxView* activeView, wxView* deactiveView)
+void ibModuleEditView::OnActivateView(bool activate, ibView* activeView, ibView* deactiveView)
 {
 	if (activate) m_codeEditor->ActivateEditor();
 }
@@ -58,7 +59,7 @@ void ibModuleEditView::OnDraw(wxDC* WXUNUSED(dc))
 	// nothing to do here, wxTextCtrl draws itself
 }
 
-void ibModuleEditView::OnUpdate(wxView* sender, wxObject* hint)
+void ibModuleEditView::OnUpdate(ibView* sender, wxObject* hint)
 {
 	if (m_codeEditor != nullptr)
 		m_codeEditor->RefreshEditor();
@@ -114,9 +115,9 @@ void ibModuleEditView::OnCreateToolbar(wxAuiToolBar* toolbar)
 		toolbar->AddSeparator();
 		toolbar->AddTool(wxID_FORMAT_CODE, _("Format selection"), wxArtProvider::GetBitmapBundle(wxART_FORMAT_CODE, wxART_DOC_MODULE), _("Format"), wxItemKind::wxITEM_NORMAL);
 		toolbar->EnableTool(wxID_FORMAT_CODE, m_codeEditor->IsEditable());
-		toolbar->AddTool(wxID_INCREASE_INDENT, _("Increase indent"), wxArtProvider::GetBitmapBundle(wxART_GO_FORWARD, wxART_TOOLBAR, wxSize(16, 16)), _("Indent"), wxItemKind::wxITEM_NORMAL);
+		toolbar->AddTool(wxID_INCREASE_INDENT, _("Increase indent"), wxArtProvider::GetBitmapBundle(wxART_INCREASE_INDENT, wxART_DOC_MODULE), _("Indent"), wxItemKind::wxITEM_NORMAL);
 		toolbar->EnableTool(wxID_INCREASE_INDENT, m_codeEditor->IsEditable());
-		toolbar->AddTool(wxID_DECREASE_INDENT, _("Decrease indent"), wxArtProvider::GetBitmapBundle(wxART_GO_BACK, wxART_TOOLBAR, wxSize(16, 16)), _("Unindent"), wxItemKind::wxITEM_NORMAL);
+		toolbar->AddTool(wxID_DECREASE_INDENT, _("Decrease indent"), wxArtProvider::GetBitmapBundle(wxART_DECREASE_INDENT, wxART_DOC_MODULE), _("Unindent"), wxItemKind::wxITEM_NORMAL);
 		toolbar->EnableTool(wxID_DECREASE_INDENT, m_codeEditor->IsEditable());
 	}
 }
@@ -168,12 +169,17 @@ void ibModuleEditView::OnMenuEvent(wxCommandEvent& event)
 }
 
 // ----------------------------------------------------------------------------
-// ibModulibDocument: wxDocument and wxTextCtrl married
+// ibModuleDocument: ibDocument and wxTextCtrl married
 // ----------------------------------------------------------------------------
 
-wxIMPLEMENT_CLASS(ibModulibDocument, ibMetaDocument);
+// THE SECOND ARGUMENT IS THE HIERARCHY wx BELIEVES IN — it is not documentation. wxDynamicCast /
+// IsKindOf walk THIS chain, not the C++ one, so naming a grandparent here (this line said
+// ibMetaDocument, skipping the real base) makes the skipped class answer "not a kind of" for
+// every instance. That is how the debugger's current-line arrow went missing: the tree asked
+// wxDynamicCast(doc, ibValueModuleDocument) and got null for a module editor.
+wxIMPLEMENT_CLASS(ibModuleDocument, ibValueModuleDocument);
 
-bool ibModulibDocument::OnCreate(const wxString& path, long flags)
+bool ibModuleDocument::OnCreate(const wxString& path, long flags)
 {
 	if (!ibMetaDocument::OnCreate(path, flags))
 		return false;
@@ -181,22 +187,22 @@ bool ibModulibDocument::OnCreate(const wxString& path, long flags)
 	return true;
 }
 
-bool ibModulibDocument::OnOpenDocument(const wxString& filename)
+bool ibModuleDocument::OnOpenDocument(const wxString& filename)
 {
 	return ibMetaDocument::OnOpenDocument(filename);
 }
 
-bool ibModulibDocument::OnSaveDocument(const wxString& filename)
+bool ibModuleDocument::OnSaveDocument(const wxString& filename)
 {
 	return GetCodeEditor()->SaveModule();
 }
 
-bool ibModulibDocument::OnSaveModified()
+bool ibModuleDocument::OnSaveModified()
 {
 	return ibMetaDocument::OnSaveModified();
 }
 
-bool ibModulibDocument::OnCloseDocument()
+bool ibModuleDocument::OnCloseDocument()
 {
 	ibCodeEditor* codeEditor = GetCodeEditor();
 	if (codeEditor != nullptr &&
@@ -207,7 +213,7 @@ bool ibModulibDocument::OnCloseDocument()
 	return ibMetaDocument::OnCloseDocument();
 }
 
-wxCommandProcessor* ibModulibDocument::OnCreateCommandProcessor()
+wxCommandProcessor* ibModuleDocument::OnCreateCommandProcessor()
 {
 	ibModuleCommandProcessor* commandProcessor = new ibModuleCommandProcessor(GetCodeEditor());
 	commandProcessor->SetEditMenu(mainFrame->GetDefaultMenu(wxID_EDIT));
@@ -217,12 +223,12 @@ wxCommandProcessor* ibModulibDocument::OnCreateCommandProcessor()
 
 // Since text windows have their own method for saving to/loading from files,
 // we override DoSave/OpenDocument instead of Save/LoadObject
-bool ibModulibDocument::DoSaveDocument(const wxString& filename)
+bool ibModuleDocument::DoSaveDocument(const wxString& filename)
 {
 	return GetCodeEditor()->SaveFile(filename);
 }
 
-bool ibModulibDocument::DoOpenDocument(const wxString& filename)
+bool ibModuleDocument::DoOpenDocument(const wxString& filename)
 {
 	if (!GetCodeEditor()->LoadFile(filename))
 		return false;
@@ -230,18 +236,18 @@ bool ibModulibDocument::DoOpenDocument(const wxString& filename)
 	return true;
 }
 
-bool ibModulibDocument::IsModified() const
+bool ibModuleDocument::IsModified() const
 {
 	//wxStyledTextCtrl* wnd = GetCodeEditor();
 	return ibMetaDocument::IsModified();// || (wnd && wnd->IsModified());
 }
 
-void ibModulibDocument::Modify(bool modified)
+void ibModuleDocument::Modify(bool modified)
 {
 	ibMetaDocument::Modify(modified);
 }
 
-bool ibModulibDocument::Save()
+bool ibModuleDocument::Save()
 {
 	ibCodeEditor* codeEditor = GetCodeEditor();
 	if (codeEditor != nullptr &&
@@ -253,14 +259,14 @@ bool ibModulibDocument::Save()
 }
 
 // ----------------------------------------------------------------------------
-// ibTextFilibDocument implementation
+// ibTextFileDocument implementation
 // ----------------------------------------------------------------------------
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibModuleEditDocument, ibModulibDocument);
+wxIMPLEMENT_DYNAMIC_CLASS(ibModuleEditDocument, ibModuleDocument);
 
 ibCodeEditor* ibModuleEditDocument::GetCodeEditor() const
 {
-	wxView* view = GetFirstView();
+	ibView* view = GetFirstView();
 	return view ? wxDynamicCast(view, ibModuleEditView)->GetCodeEditor() : nullptr;
 }
 
@@ -275,7 +281,8 @@ void ibModuleEditDocument::SetToolTip(const wxString& resultStr) {
 	ibCodeEditor* codeEditor = GetCodeEditor();
 	wxASSERT(codeEditor);
 	if (codeEditor != nullptr) {
-		codeEditor->SetToolTip(resultStr);
+		// The editor's own door, not the window's: it keeps the answer as well as showing it.
+		codeEditor->SetDebugValue(resultStr);
 	}
 }
 

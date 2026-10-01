@@ -38,7 +38,7 @@ void wxAuiDocDesignerMDIFrame::SetDefaultHotKeys()
 //*                                Default menu                                  *
 //********************************************************************************
 
-enum MDI_MENU_ID
+enum WINDOW_MENU_ID
 {
 	wxWINDOWCLOSE = 4001,
 	wxWINDOWCLOSEALL,

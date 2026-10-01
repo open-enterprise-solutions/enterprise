@@ -374,11 +374,13 @@ public:
 
 	bool ContainType(const ibValueTypes& valType) const {
 		if (valType == ibValueTypes::TYPE_ENUM) {
+			// An enumeration is registered under a clsid of its own kind (ENUM_TYPE_REGISTER), so the kind byte
+			// answers for every other class without the registry — which this question used to ask twice for
+			// each class of the type, a reference's included, on every value a column writes (the largest share
+			// of a register line's write, stack samples 2026-09-14, Debug).
 			for (auto clsid : m_listTypeClass) {
-				if (ibValue::IsRegisterCtor(clsid)) {
-					if (ibValue::GetVTByID(clsid) == ibValueTypes::TYPE_ENUM)
-						return true;
-				}
+				if (IsEnum(clsid) && ibValue::IsRegisterCtor(clsid))
+					return true;
 			}
 			return false;
 		}
@@ -481,11 +483,35 @@ public:
 	}
 };
 
+class BACKEND_API ibDataValue;   // serialize/dataBuilder.h — node value (Child / Array)
+class BACKEND_API ibMetaData;    // resolves a reference-type clsid <-> its portable type name
+
 class BACKEND_API ibTypeDescriptionMemory {
 public:
-	//load & save object in control 
-	static bool LoadData(class ibReaderMemory& reader, ibTypeDescription& typeDesc);
-	static bool SaveData(class ibWriterMemory& writer, ibTypeDescription& typeDesc);
+	// node form: a Child (struct) — a "types" Array + the number / date / string qualifier
+	// fields. Each type entry carries its raw clsid (TypeId) AND, when metaData is given, a
+	// copy-aware TypeName (e.g. "CatalogRef.Catalog1"): a reference type's clsid is
+	// config-specific, so on load the NAME is resolved back to THIS config's live clsid —
+	// the clsid is only the same-config fallback. Shared by ibPropertyType and predefined
+	// attributes — same readable shape everywhere.
+	static bool ReadNode(const ibDataValue& value, ibTypeDescription& typeDesc, const ibMetaData* metaData = nullptr);
+	static bool WriteNode(ibDataValue& value, const ibTypeDescription& typeDesc, const ibMetaData* metaData = nullptr);
+
+	// THE COLUMN form of the same description — a flat blob, because a type description that lives
+	// in a ROW (a characteristic's own Type requisite) is written by the column codec, which binds a
+	// blob, not a node tree. Same door, second spelling: the node form stays the metadata format,
+	// this is the data one, and both live here so neither can be written twice.
+	//
+	// Layout: version u8, then the clsid list (count u32 + u64 each) and the three qualifiers
+	// (number precision/scale, date fractions, string length) as fixed integers. VERSIONED because
+	// a row outlives a release — a reader older than the blob stops at the fields it knows, and what
+	// it did not read keeps its default.
+	//
+	// The clsid is written RAW here, unlike the node form, which also carries a portable type name:
+	// a row belongs to the configuration it was written in, and the name exists for travel between
+	// configurations, which a data column never does.
+	static void WriteBuffer(wxMemoryBuffer& out, const ibTypeDescription& typeDesc);
+	static bool ReadBuffer(const void* data, size_t length, ibTypeDescription& typeDesc);
 };
 
 struct ibMetaDescription {
@@ -528,9 +554,15 @@ public:
 
 class BACKEND_API ibMetaDescriptionMemory {
 public:
-	//load & save object in control 
-	static bool LoadData(class ibReaderMemory& reader, ibMetaDescription& metaDesc);
-	static bool SaveData(class ibWriterMemory& writer, ibMetaDescription& metaDesc);
+	// node form: an Array of raw metaIds. Every property holding an ibMetaDescription
+	// (Owner, Generation, Record, ChartOfAccounts, ChartOfCharacteristicTypes) calls this.
+	// metaId, NOT guid (unlike ibSourceDescription / ibTypeDescription): a meta-desc lives
+	// INSIDE the metadata tree, so a guid->id resolve at load time hits refs not yet loaded
+	// → NOT_FOUND → broken init. metaId is config-local but consistent across a same-config
+	// save/load. Copy-awareness here would need a DEFERRED (post-tree) pass, not load-time.
+	static bool ReadNode(const ibDataValue& value, ibMetaDescription& metaDesc);
+	// `metaData` given, an id naming no object of it — or one marked deleted — is left out (see the body).
+	static bool WriteNode(ibDataValue& value, const ibMetaDescription& metaDesc, const ibMetaData* metaData = nullptr);
 };
 
 #endif

@@ -5,6 +5,7 @@
 #include <wx/fileconf.h>
 #include <wx/filename.h>
 #include <wx/log.h>
+#include <wx/msgdlg.h>   // wxMessageBox — a start that failed is said
 #include <wx/stdpaths.h>
 #include <wx/xml/xml.h>
 
@@ -26,7 +27,13 @@ wxString FindSiblingExecutable(const wxString& exeName) {
 
 	// Try sibling .app bundle: go up 3 levels from Contents/MacOS/launcher
 	// to reach the directory containing launcher.app, then look for exeName.app
-	wxFileName bundlePath(dir);
+	//
+	// ⚠ DirName, NOT the plain constructor. `dir` carries no trailing separator, and wxFileName(dir) reads its
+	// last component as a FILE name: "MacOS" became the name, the three RemoveLastDir() below stripped Contents,
+	// launcher.app and the folder above it, and the path came out as <two levels too high>/MacOSdesigner.app —
+	// found nowhere, so the flat fallback was run, which does not exist inside a bundle. That is the designer
+	// that would not start from the launcher on a Mac (a colleague's report, 2026-09-22).
+	wxFileName bundlePath = wxFileName::DirName(dir);
 	bundlePath.RemoveLastDir(); // MacOS -> Contents
 	bundlePath.RemoveLastDir(); // Contents -> launcher.app
 	bundlePath.RemoveLastDir(); // launcher.app -> parent dir
@@ -190,7 +197,9 @@ void ibFrameLauncher::SaveListIB() {
 ibFrameLauncher::ibFrameLauncher(wxWindow* parent, wxWindowID id, const wxString& title, const wxPoint& pos, const wxSize& size, long style) : wxFrame(parent, id, title, pos, size, style)
 {
 	this->SetSizeHints(wxDefaultSize, wxDefaultSize);
-	this->SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNFACE));
+	// Interior palette — powder-blue frame (matches enterprise / designer
+	// chrome). Was system BTNFACE (Win98 light grey).
+	this->SetBackgroundColour(wxColour(0xB8, 0xC9, 0xD4));  // #B8C9D4 powder blue
 
 	wxBoxSizer* mainSizer = new wxBoxSizer(wxHORIZONTAL);
 	wxBoxSizer* sizerLeft = new wxBoxSizer(wxVERTICAL);
@@ -213,40 +222,40 @@ ibFrameLauncher::ibFrameLauncher(wxWindow* parent, wxWindowID id, const wxString
 	wxBoxSizer* sizerRight = new wxBoxSizer(wxVERTICAL);
 
 	m_buttonEnterprise = new wxButton(this, wxID_ANY, _("Enterprise"), wxDefaultPosition, wxDefaultSize, 0);
-	m_buttonEnterprise->SetBitmap(wxArtProvider::GetBitmapBundle(wxART_GO_FORWARD, wxART_BUTTON));
+	m_buttonEnterprise->SetBitmap(ibGetLauncherPicture(ibLauncherPicture::Enterprise));
 	m_buttonEnterprise->Bind(wxEVT_BUTTON, &ibFrameLauncher::OnButtonEnterprise, this);
 
 	sizerRight->Add(m_buttonEnterprise, 0, wxALL | wxEXPAND, FromDIP(5));
 
 	m_buttonDesigner = new wxButton(this, wxID_ANY, _("Designer"), wxDefaultPosition, wxDefaultSize, 0);
-	m_buttonDesigner->SetBitmap(wxArtProvider::GetBitmapBundle(wxART_GO_FORWARD, wxART_BUTTON));
+	m_buttonDesigner->SetBitmap(ibGetLauncherPicture(ibLauncherPicture::Designer));
 	m_buttonDesigner->Bind(wxEVT_BUTTON, &ibFrameLauncher::OnButtonDesigner, this);
 
 	sizerRight->Add(m_buttonDesigner, 0, wxALL | wxEXPAND, FromDIP(5));
 
 	m_buttonWeb = new wxButton(this, wxID_ANY, _("Web"), wxDefaultPosition, wxDefaultSize, 0);
-	m_buttonWeb->SetBitmap(wxArtProvider::GetBitmapBundle(wxART_HELP_BOOK, wxART_BUTTON));
+	m_buttonWeb->SetBitmap(ibGetLauncherPicture(ibLauncherPicture::Web));
 	m_buttonWeb->Bind(wxEVT_BUTTON, &ibFrameLauncher::OnButtonWeb, this);
 
 	sizerRight->Add(m_buttonWeb, 0, wxALL | wxEXPAND, FromDIP(5));
 	sizerRight->Add(0, 0, 1, wxEXPAND, FromDIP(5));
 
 	m_buttonAdd = new wxButton(this, wxID_ANY, _("Add"), wxDefaultPosition, wxDefaultSize, 0);
-	m_buttonAdd->SetBitmap(wxArtProvider::GetBitmapBundle(wxART_NEW, wxART_BUTTON));
+	m_buttonAdd->SetBitmap(ibGetLauncherPicture(ibLauncherPicture::Add));
 	sizerRight->Add(m_buttonAdd, 0, wxALL | wxEXPAND, FromDIP(5));
 
 	m_buttonAdd->Bind(wxEVT_BUTTON, &ibFrameLauncher::OnButtonAdd, this);
 
 	m_buttonEdit = new wxButton(this, wxID_ANY, _("Edit"), wxDefaultPosition, wxDefaultSize, 0);
 
-	m_buttonEdit->SetBitmap(wxArtProvider::GetBitmapBundle(wxART_PASTE, wxART_BUTTON));
+	m_buttonEdit->SetBitmap(ibGetLauncherPicture(ibLauncherPicture::Edit));
 	sizerRight->Add(m_buttonEdit, 0, wxALL | wxEXPAND, FromDIP(5));
 
 	m_buttonEdit->Bind(wxEVT_BUTTON, &ibFrameLauncher::OnButtonEdit, this);
 
 	m_buttonDelete = new wxButton(this, wxID_ANY, _("Delete"), wxDefaultPosition, wxDefaultSize, 0);
 
-	m_buttonDelete->SetBitmap(wxArtProvider::GetBitmapBundle(wxART_DELETE, wxART_BUTTON));
+	m_buttonDelete->SetBitmap(ibGetLauncherPicture(ibLauncherPicture::Delete));
 	sizerRight->Add(m_buttonDelete, 0, wxALL | wxEXPAND, FromDIP(5));
 
 	m_buttonDelete->Bind(wxEVT_BUTTON, &ibFrameLauncher::OnButtonDelete, this);
@@ -255,7 +264,7 @@ ibFrameLauncher::ibFrameLauncher(wxWindow* parent, wxWindowID id, const wxString
 
 	m_buttonExit = new wxButton(this, wxID_EXIT, _("Exit"), wxDefaultPosition, wxDefaultSize, 0);
 
-	m_buttonExit->SetBitmap(wxArtProvider::GetBitmapBundle(wxART_QUIT, wxART_BUTTON));
+	m_buttonExit->SetBitmap(ibGetLauncherPicture(ibLauncherPicture::Exit));
 	sizerRight->Add(m_buttonExit, 0, wxALL | wxEXPAND, FromDIP(5));
 
 	m_buttonExit->Bind(wxEVT_BUTTON, &ibFrameLauncher::OnButtonClose, this);
@@ -289,31 +298,34 @@ void ibFrameLauncher::OnSelectedList(wxCommandEvent& event) {
 	m_staticDBName->SetLabel(FormatInfoLabel(itSelection->second));
 }
 
-void ibFrameLauncher::OnSelectedDClickList(wxCommandEvent& event) {
+// ONE ROAD TO START AN APPLICATION — the double click, Enterprise and Designer were three copies of it.
+void ibFrameLauncher::StartApplication(const wxString& appName) {
 	int selection = m_listIBwnd->GetSelection();
 	if (selection == wxNOT_FOUND) return;
 	auto itSelection = m_listInfoBase.begin() + selection;
-	wxString executeCmd = BuildLaunchCommand("enterprise", itSelection->second);
-	wxExecute(executeCmd);
+	const wxString executeCmd = BuildLaunchCommand(appName, itSelection->second);
+
+	// ⭐ A START THAT FAILED IS SAID, AND THE LAUNCHER STAYS. wxExecute answers 0 when nothing was started; the
+	// launcher used to close regardless, so a missing executable looked exactly like a click that did nothing —
+	// which is how the designer "would not start" on a Mac with nothing on screen to say why.
+	if (wxExecute(executeCmd) == 0) {
+		wxMessageBox(wxString::Format(_("Could not start %s.\n\n%s"), appName, executeCmd),
+			_("Launch OES"), wxOK | wxICON_ERROR, this);
+		return;
+	}
 	Close(true);
+}
+
+void ibFrameLauncher::OnSelectedDClickList(wxCommandEvent& event) {
+	StartApplication(wxT("enterprise"));
 }
 
 void ibFrameLauncher::OnButtonEnterprise(wxCommandEvent& event) {
-	int selection = m_listIBwnd->GetSelection();
-	if (selection == wxNOT_FOUND) return;
-	auto itSelection = m_listInfoBase.begin() + selection;
-	wxString executeCmd = BuildLaunchCommand("enterprise", itSelection->second);
-	wxExecute(executeCmd);
-	Close(true);
+	StartApplication(wxT("enterprise"));
 }
 
 void ibFrameLauncher::OnButtonDesigner(wxCommandEvent& event) {
-	int selection = m_listIBwnd->GetSelection();
-	if (selection == wxNOT_FOUND) return;
-	auto itSelection = m_listInfoBase.begin() + selection;
-	wxString executeCmd = BuildLaunchCommand("designer", itSelection->second);
-	wxExecute(executeCmd);
-	Close(true);
+	StartApplication(wxT("designer"));
 }
 
 void ibFrameLauncher::OnButtonWeb(wxCommandEvent& event) {
@@ -362,9 +374,9 @@ void ibFrameLauncher::OnButtonWeb(wxCommandEvent& event) {
 	// Shared helper adds --port=0 --manifest=<tempfile>, spawns wes,
 	// polls the manifest and opens the browser at the reported URL.
 	// Any change to the spawn/handshake protocol lives in one place.
-	const long pid = ibApplicationData::SpawnWebServerWithManifest(cmd);
+	const long pid = ibApplicationInstance::SpawnWebServerWithManifest(cmd);
 	if (pid == 0) {
-		wxLogError(_("Failed to start wenterprise-server: %s"), cmd);
+		ibJournalError(wxT("launcher"), _("Failed to start wenterprise-server: %s"), cmd);
 		return;
 	}
 	Close(true);

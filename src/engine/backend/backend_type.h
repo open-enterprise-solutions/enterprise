@@ -1,7 +1,11 @@
 #ifndef __BACKEND_TYPE_H__
 #define __BACKEND_TYPE_H__
 
+#include <vector>
+
 #include "backend/typeDescription.h"
+#include "backend/query/queryColumn.h"     // ibBackendAbstractColumn (name/synonym/comment) + ibBackendSourceColumn
+#include "backend/sourceDescription.h"     // ibSourceDescription — control's bound source path (GetSourceDesc / SetDefaultSourceType)
 
 //////////////////////////////////////////////////////////////
 
@@ -30,25 +34,53 @@ public:
 
 #pragma endregion
 
-	//Create value by selected type
+	//Create value by selected type — the owner of a new value (born owned)
 	virtual ibValue CreateValue() const;
-	virtual ibValue* CreateValueRef() const;
-
-	//convert value
-	template<class retType = ibValue>
-	retType* CreateAndConvertValueRef() {
-		ibValue* retVal = CreateValueRef();
-		if (retVal != nullptr)
-			return CastValue<retType>(retVal);
-		return (retType*)nullptr;
-	}
 
 	//Adjust value
 	virtual ibValue AdjustValue() const;
 	virtual ibValue AdjustValue(const ibValue& varValue) const;
+	// Same, kept inside what `limit` admits — the column's own set narrowed by the types handed in.
+	virtual ibValue AdjustValue(const ibValue& varValue, const ibTypeDescription& limit) const;
 
-	//get type description 
+	//get type description
 	virtual ibTypeDescription& GetTypeDesc() const = 0;
+
+	// ⭐ WHAT A VALUE HERE MAY ACTUALLY BE — the same object as the declaration for everyone except one
+	// case, which is why it lives on the FACTORY and not on some particular holder: whoever owns a type
+	// description (an attribute, a column, a control) answers both questions the same way by default.
+	//
+	// The exception is a declaration that stands for other types — a characteristic
+	// («Characteristic.<chart>») names a class no value ever carries, so what a value may BE is the
+	// chart's own list. The holder that can redirect overrides this; nothing changes for the rest.
+	//
+	//   GetTypeDesc()       what is DECLARED — the author's choice, shown in the inspector, written to
+	//                       the file.
+	//   GetTypeValueDesc()  what may be STORED, compared, offered and adjusted.
+	//
+	// Same signature as its twin: they are two answers to one question, so a caller swaps one for the
+	// other without the type changing under it — and the redirected answer is handed back as it is
+	// held, with no cast anywhere.
+	virtual ibTypeDescription& GetTypeValueDesc() const { return GetTypeDesc(); }
+
+	// ⭐⭐ IS THE TYPE FILLED IN — asked HERE, of whoever owns a type description, and never counted
+	// at a callsite.
+	//
+	// It belongs on this factory and nowhere else: the type description is declared here (above), so
+	// this is the one place that can answer for every holder of one — an attribute, a control's
+	// source, a filter's field. Put on a subclass it would answer for that subclass alone, and the
+	// next holder would spell the same question its own way (`GetClsidCount() == 0`,
+	// `!GetTypeDesc().IsOk()`, `GetClsidList().empty()`) — three spellings of one fact, drifting.
+	//
+	// An empty type description is a column no value can ever enter, and every rule that refuses such
+	// a state asks exactly this: a register with no recorder, a chart of accounts with no
+	// characteristic chart, an analytics slot the chart never typed.
+	// NOT virtual: the answer is a function of the type description alone, and GetTypeDesc() — which
+	// IS virtual — already supplies whatever each holder keeps. A virtual here would only offer
+	// subclasses a chance to disagree about what "empty" means, which is the drift this exists to
+	// prevent (and, being inline on a BACKEND_API class, it would demand an out-of-line definition
+	// every DLL that sees the header must link against).
+	bool IsEmptyTypeDesc() const { return !GetTypeDesc().IsOk(); }
 };
 
 //////////////////////////////////////////////////////////////
@@ -59,6 +91,9 @@ enum ibSelectorDataType {
 	ibSelectorDataType_reference,
 	ibSelectorDataType_table,
 	ibSelectorDataType_resource,
+	// WHAT RAISES AN EVENT — an object, a manager, a record set, of one metaobject or of every one of a
+	// metatype: what an event handler names as its source.
+	ibSelectorDataType_eventSource,
 };
 
 //////////////////////////////////////////////////////////////
@@ -71,16 +106,65 @@ public:
 		return ibSelectorDataType::ibSelectorDataType_reference;
 	}
 
+	// The default value type (clsid) for a filter kind: _boolean -> Boolean, _resource -> Number,
+	// _table -> value-table, _reference / else -> String. Static, keyed on the kind — the ONE mapping both
+	// ibVariantDataAttribute::DoSetDefaultMetaType and ibValueControl::AutoBindNewSource use, so they cannot drift.
+	static ibClassID GetDefaultTypeByFilter(ibSelectorDataType filterDataType);
+
+	// ⭐⭐ AND EVERY TYPE THAT KIND MAY TAKE — the same question as the default above, asked in full.
+	// What a field may hold is a fact about the FIELD, so it is answered here, beside the registry that
+	// knows which metatypes exist, and not by whichever window happens to be asking.
+	//
+	// 🛑 IT LIVED IN THE TYPE PICKER, a static function inside a frontend dialog, and so the designer
+	// was the only door that knew it. The MCP server, which is in this library and cannot see that
+	// function, therefore accepted types the picker would never have offered — `TypeDescription` set on
+	// an ordinary attribute, a state the editor cannot produce and the platform does not mean to have
+	// (Max, 2026-09-23: "it accepted it because the filter that works for me does not fire for you —
+	// the column type throws the wrong types out while the list is still being built").
+	//
+	// Two doors, one rule, and the rule was on the side that could not be asked from the other.
+	static void GetTypesByFilter(ibSelectorDataType filterDataType, const class ibMetaData* metaData,
+		std::vector<ibClassID>& out);
+
+	// ⭐ THE FORMAT A TYPE DESCRIPTION GIVES — for a number `NFD=2` from Number(15,2), as many digits after the
+	// point as the type keeps, so the figures of a column line up; for a date the pattern its fractions keep
+	// (date, time, both). False for a type that gives none: nothing is written into `formatString`
+	// (docs/private/format-property.md).
+	static bool GetFormatFromTypeDesc(const ibTypeDescription& type, class ibFormatString& formatString);
+
+	// …AND THE FORMAT A VALUE IS SHOWN WITH: `format` when written, else the one `type` gives — for a table's
+	// column and an input field alike. A table is painted a column at a time, top to bottom, so the answer is
+	// kept per thread and read again only when the column asked is another one.
+	static const class ibFormatString& GetFormatFromColumn(const class ibTranslateString& format, const ibTypeDescription& type);
+
+	// ⭐⭐ A CHARACTERISTIC STANDS FOR ITS CHART'S TYPES — answered here, for EVERY holder of such a
+	// declaration: an attribute, a control bound to one, a filter cell, a form's own attribute. Body in
+	// backend_type.cpp.
+	virtual ibTypeDescription& GetTypeValueDesc() const override;
+
 	//Create value by selected type
 	virtual ibValue CreateValue() const;
-	virtual ibValue* CreateValueRef() const;
 
 	//Adjust value
 	virtual ibValue AdjustValue() const;
 	virtual ibValue AdjustValue(const ibValue& varValue) const;
+	virtual ibValue AdjustValue(const ibValue& varValue, const ibTypeDescription& limit) const;
 
 	//get metadata
-	virtual class ibMetaData* GetMetaData() const = 0;
+	// The universal factory capability is READ-only: every type-factory can hand
+	// out a const ibMetaData*, so the container mutators (CreateMetaObject /
+	// RemoveMetaObject / RenameMetaObject / RegisterCtor) are a compile error
+	// from any base-factory path — runtime included.
+	//
+	// Mutable access is NOT universal: it is added (as a non-const overload) only
+	// by classes that genuinely own a mutable ibMetaData — the metaobjects
+	// (metaObject.h, metaAttributeObject.h, ...). Runtime classes such as forms /
+	// controls take their metadata from a const source (GetSourceMetaObject() is
+	// const) and therefore CANNOT produce a mutable pointer without a const_cast,
+	// so they must not be forced to implement a non-const overload here.
+	// Designer holds the metaobject non-const and resolves to its mutable overload
+	// automatically.
+	virtual const class ibMetaData* GetMetaData() const = 0;
 };
 
 //////////////////////////////////////////////////////////////
@@ -93,6 +177,34 @@ enum ibSourceDataType {
 
 //////////////////////////////////////////////////////////////
 
+// The form's per-attribute HOLDER as a backend interface — it pairs an attribute
+// (its DEFINITION, name/type/id) with the VALUE/source that attribute manages. Inherits
+// nothing; implemented on the frontend (ibFormAttributeValue), where all the logic lives.
+// GetSourceList vends THESE — attribute + value together — not bare attributes: a source
+// picker reads the columns through GetSourceValue()->GetSourceExplorer(), never the concrete
+// value type. The source is produced by the holder (it materialises the value from the
+// attribute's Type), so the attribute itself stays value-free.
+class BACKEND_API ibBackendFormAttributeValue : public ibBackendAbstractColumn {
+public:
+	virtual ~ibBackendFormAttributeValue() = default;
+	// FAÇADE — the holder answers for its (private, internal) attribute directly; the concrete
+	// description is NEVER handed out. Outside code reads name / id / type / source through here.
+
+	// ibBackendAbstractColumn — the attribute answers Name / Synonym / Comment like a metadata
+	// column, so ONE resolver returns either. The class IS an attribute, so the accessors carry no
+	// "Attribute" noise: GetName / GetId / IsMain. GetName IS the attribute's name (the abstract
+	// column's); GetSynonym / GetComment are overridden by the concrete holder from its properties.
+	virtual wxString GetName() const override = 0;
+	virtual ibMetaID GetId() const = 0;
+
+	virtual bool IsMain() const = 0;
+
+	virtual const ibTypeDescription& GetTypeDesc() const = 0;
+	virtual class ibSourceDataObject* GetSourceValue() const = 0;
+};
+
+//////////////////////////////////////////////////////////////
+
 class BACKEND_API ibBackendTypeSourceFactory :
 	public ibBackendTypeConfigFactory {
 public:
@@ -101,11 +213,40 @@ public:
 		return ibSourceDataType::ibSourceDataType_attribute;
 	}
 
-	//Get source object 
+	//Get source object
 	virtual class ibSourceObject* GetSourceObject() const = 0;
 
-	// filter data 
-	virtual bool FilterSource(const class ibSourceExplorer& src, const ibMetaID& id) const;
+	// This control's OWN bound source path (head attribute id + deeper hops). A column reads its PARENT
+	// table's path through this to compose its own (parent path + column id). Pure MUTABLE ref — the getter
+	// AND (via the SetDefaultSourceType / ClearSourceType helpers below) the setter, exactly like GetTypeDesc.
+	virtual ibSourceDescription& GetSourceDesc() const = 0;
+
+	// Source-path setter family — the twin of ibBackendTypeFactory's SetDefaultMetaType / ClearMetaType over
+	// GetTypeDesc: bind THROUGH the mutable getter. Overloads for one hop or a ready DESCRIPTION (the wrapper
+	// carries the whole path). Non-virtual — shared via each control's GetSourceDesc.
+	void SetDefaultSourceType(const ibSourceId& id) { GetSourceDesc() = ibSourceDescription(id); }
+	void SetDefaultSourceType(const ibSourceDescription& desc) { GetSourceDesc() = desc; }
+
+	void ClearSourceType() { GetSourceDesc() = ibSourceDescription(); }
+
+	// Available source HOLDERS of the owning context (default: none — filled via the out-param).
+	// Each holder pairs the attribute (definition) with its value/source, so the picker reads
+	// columns through GetSourceValue()->GetSourceExplorer() without the concrete value type.
+	virtual bool GetSourceList(std::vector<ibBackendFormAttributeValue*>& out) const { return false; }
+
+	// The "dot": feed a source DESCRIPTION (the binding path wrapper), get back the leaf COLUMN. Its head
+	// (path[0]) gates to one of THIS context's source attributes (GetSourceList); deeper hops resolve as its
+	// fields. The result is the neutral ibBackendSourceColumn (a metaobject attribute OR a queryable column),
+	// so the caller never sees the concrete class. Null = a whole-attribute binding (length 1) or a BROKEN
+	// path (a hop no longer resolves). `valid`/`outText` (optional) report resolvability and the dotted
+	// display "Attr.Field.Sub". Takes the wrapper (not a bare vector) — resolution is source-explorer-driven.
+	const ibBackendSourceColumn* WalkSource(const ibSourceDescription& desc,
+		bool* valid = nullptr, wxString* outText = nullptr) const;
+
+	// The source HOLDER whose attribute id matches — the ONE lookup shared by the dot-walk and the
+	// path / type resolvers (instead of re-scanning GetSourceList at every site). Null = no such
+	// attribute in this context.
+	ibBackendFormAttributeValue* FindSourceHolder(const ibMetaID& id) const;
 };
 
 #endif

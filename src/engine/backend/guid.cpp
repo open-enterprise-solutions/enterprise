@@ -21,7 +21,10 @@ THE SOFTWARE.
 #include "guid.h"
 
 #ifdef GUID_LIBUUID
-#include <guid/guid.h>
+// libuuid — the header is <uuid/uuid.h> (package uuid-dev / libuuid-devel). It was written
+// as <guid/guid.h>, a path that exists nowhere; nothing caught it because this branch is
+// selected only under __WXGTK__, and the GTK build had not been compiled in a long time.
+#include <uuid/uuid.h>
 #endif
 
 #ifdef GUID_CFUUID
@@ -307,24 +310,42 @@ void ibGuid::zeroify()
 	std::fill(_bytes.begin(), _bytes.end(), static_cast<unsigned char>(0));
 }
 
+namespace {
+// Compare two guids by their VALUE order — "is this guid greater or smaller". A GUID's first three fields
+// (Data1 / Data2 / Data3) are stored little-endian, so a plain memcmp weighs their LOW byte first and gives a
+// meaningless order. Compare byte-wise in the field-normalized (big-endian) sequence [3,2,1,0, 5,4, 7,6, 8..15]
+// — the SAME byte order the stored _RRRef reference blob uses (identical field-swap), so an in-memory
+// guid/reference sort matches server-side ORDER BY _RRRef. Fast: no copies/allocation, early-out on the first
+// differing byte (Data1 usually decides in the first compare); the fixed Data4 tail rides one memcmp.
+inline int guidValueCompare(const std::array<unsigned char, 16>& x, const std::array<unsigned char, 16>& y)
+{
+	static const unsigned char idx[8] = { 3, 2, 1, 0, 5, 4, 7, 6 };
+	for (int i = 0; i < 8; ++i) {
+		const unsigned char a = x[idx[i]], b = y[idx[i]];
+		if (a != b) return a < b ? -1 : 1;
+	}
+	return std::memcmp(&x[8], &y[8], 8);   // Data4 (node) is already in byte order
+}
+}
+
 bool ibGuid::operator > (const ibGuid& other) const
 {
-	return _bytes > other._bytes;
+	return guidValueCompare(_bytes, other._bytes) > 0;
 }
 
 bool ibGuid::operator >= (const ibGuid& other) const
 {
-	return _bytes >= other._bytes;
+	return guidValueCompare(_bytes, other._bytes) >= 0;
 }
 
 bool ibGuid::operator < (const ibGuid& other) const
 {
-	return _bytes < other._bytes;
+	return guidValueCompare(_bytes, other._bytes) < 0;
 }
 
 bool ibGuid::operator <= (const ibGuid& other) const
 {
-	return _bytes <= other._bytes;
+	return guidValueCompare(_bytes, other._bytes) <= 0;
 }
 
 // overload equality operator
@@ -345,10 +366,14 @@ void ibGuid::swap(ibGuid& other)
 	_bytes.swap(other._bytes);
 }
 
-// This is the linux friendly implementation, but it could work on other
-// systems that have libuuid available
+// Platform entropy source. newGuid returns the STORAGE form (ibGuidImpl): it flows implicitly into an
+// ibGuid. Each body builds the canonical big-endian byte array and lets ibGuid -> ibGuidImpl (the
+// field-swap in operator ibGuidImpl) produce native-endian fields. ibGuid stays a primitive: it mints
+// guids, it does not know metaIDs — a reference key is a pure guid, its type is the _RTRef column.
+
 #ifdef GUID_LIBUUID
-ibGuid ibGuid::newGuid(short version)
+// linux (libuuid); works anywhere libuuid is available
+ibGuidImpl ibGuid::newGuid(short /*version*/)
 {
 	std::array<unsigned char, 16> data;
 	static_assert(std::is_same<unsigned char[16], uuid_t>::value, "Wrong type!");
@@ -357,9 +382,9 @@ ibGuid ibGuid::newGuid(short version)
 }
 #endif
 
-// this is the mac and ios version
 #ifdef GUID_CFUUID
-ibGuid ibGuid::newGuid(short version)
+// mac / ios
+ibGuidImpl ibGuid::newGuid(short /*version*/)
 {
 	auto newId = CFUUIDCreate(nullptr);
 	auto bytes = CFUUIDGetUUIDBytes(newId);
@@ -388,11 +413,9 @@ ibGuid ibGuid::newGuid(short version)
 }
 #endif
 
-// obviously this is the windows version
 #ifdef GUID_WINDOWS
-#pragma comment( lib, "rpcrt4.lib" )
-
-ibGuid ibGuid::newGuid(short version)
+// windows
+ibGuidImpl ibGuid::newGuid(short version)
 {
 	GUID newId = { 0 };
 	if (version == GUID_TIME_BASED)
@@ -422,7 +445,11 @@ ibGuid ibGuid::newGuid(short version)
 		(unsigned char)newId.Data4[6],
 		(unsigned char)newId.Data4[7]
 	};
-
-	return ibGuid{ std::move(bytes) };
+	ibGuid guid(std::move(bytes));       // explicit array ctor
+	return guid;                          // ibGuid -> ibGuidImpl via operator ibGuidImpl (field-swap)
 }
+#endif
+
+#ifdef GUID_WINDOWS
+#pragma comment( lib, "rpcrt4.lib" )
 #endif

@@ -22,8 +22,8 @@ ibDialogApplyChange::ibDialogApplyChange(const ibRestructureInfo& info, wxWindow
 	//m_resultBox->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_INFOBK));
 	m_resultBox->SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNHIGHLIGHT));
 
-	for (unsigned int idx = 0; idx < info.GetCount(); idx++) {
-		m_resultBox->Append(info.GetDescription(idx));
+	for (size_t idx = 0; idx < info.Count(); idx++) {
+		m_resultBox->Append(info.At(idx).descr);
 	}
 
 	windowSizer->Add(m_resultBox, 1, wxALL | wxEXPAND, FromDIP(5));
@@ -32,6 +32,17 @@ ibDialogApplyChange::ibDialogApplyChange(const ibRestructureInfo& info, wxWindow
 	wxBoxSizer* buttonSizer = new wxBoxSizer(wxVERTICAL);
 
 	m_buttonApply = new wxButton(this, wxID_OK, _("Apply"), wxDefaultPosition, wxDefaultSize, 0);
+	// AN ERROR IN THE LEDGER BLOCKS THE APPLY. The ledger has carried AppendError / HasErrors all along
+	// and nobody read them, so a change the platform knows it cannot carry out was still offered as if it
+	// could — the user pressed Apply and met the failure halfway through the restructuring instead of
+	// before it. An error entry says what has to be put right first; until it is, there is nothing to press.
+	if (info.HasErrors()) {
+		m_buttonApply->Enable(false);
+		// ASCII ONLY in this literal: the file compiles as ANSI, so a typographic dash arrives as its
+		// UTF-8 bytes shown one per character. (Same note as in mainFrameDesignerEvent.cpp.)
+		m_staticInformation->SetLabel(_("The changes cannot be applied - see the errors below:"));
+		m_staticInformation->SetForegroundColour(wxColour(200, 0, 0));
+	}
 	buttonSizer->Add(m_buttonApply, 0, wxALL, FromDIP(5));
 	m_buttonCancel = new wxButton(this, wxID_CANCEL, _("Cancel"), wxDefaultPosition, wxDefaultSize, 0);
 	

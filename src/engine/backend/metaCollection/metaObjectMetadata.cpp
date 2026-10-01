@@ -4,6 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "metaObjectMetadata.h"
+#include "backend/serialize/dataBuilder.h"
 #include "metaModuleObject.h"
 #include "backend/appData.h"
 #include "backend/session/session.h"
@@ -12,7 +13,6 @@
 //*                         metaData													  * 
 //*****************************************************************************************
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueMetaObjectConfiguration, ibValueMetaObject);
 
 //*****************************************************************************************
 //*                                  MetadataObject                                       *
@@ -39,6 +39,12 @@ ibValueMetaObjectConfiguration::ibValueMetaObjectConfiguration() : ibValueMetaOb
 	(*m_propertyModuleConfiguration)->SetDefaultProcedure(wxT("BeforeExit"), ibContentHelper::eProcedureHelper, { wxT("Cancel") });
 	(*m_propertyModuleConfiguration)->SetDefaultProcedure(wxT("OnExit"), ibContentHelper::eProcedureHelper);
 
+	// ONE procedure, and it is the module's whole purpose: fill the session
+	// parameters. It runs for every session — client, web and background job alike —
+	// before the first read, which is why row access can be written against what it
+	// sets.
+	(*m_propertyModuleSession)->SetDefaultProcedure(wxT("SetSessionParameters"), ibContentHelper::eProcedureHelper);
+
 	//set def metaid
 	m_metaId = defaultMetaID;
 }
@@ -47,26 +53,34 @@ ibValueMetaObjectConfiguration::~ibValueMetaObjectConfiguration()
 {
 }
 
-bool ibValueMetaObjectConfiguration::LoadData(ibReaderMemory& dataReader)
+bool ibValueMetaObjectConfiguration::ReadData(const ibDataNode& node)
 {
-	m_propertyVersion->SetValue(dataReader.r_s32());
+	m_propertyVersion->SetNodeValue(node.GetProperty(m_propertyVersion->GetName()));
 
-	m_propertyDefRole->LoadData(dataReader);
-	m_propertyDefLanguage->LoadData(dataReader);
-	(*m_propertyModuleConfiguration)->LoadMeta(dataReader);
-	m_propertySyntax->LoadData(dataReader);
+	m_propertyDefRole->SetNodeValue(node.GetProperty(m_propertyDefRole->GetName()));
+	m_propertyDefLanguage->SetNodeValue(node.GetProperty(m_propertyDefLanguage->GetName()));
+	m_propertyModuleConfiguration->SetNodeValue(node.GetProperty(m_propertyModuleConfiguration->GetName()));
+	m_propertyModuleSession->SetNodeValue(node.GetProperty(m_propertyModuleSession->GetName()));
+	m_propertySyntax->SetNodeValue(node.GetProperty(m_propertySyntax->GetName()));
+
+	m_homePage.ReadNode(node.GetProperty(wxT("HomePage")));
 
 	return true;
 }
 
-bool ibValueMetaObjectConfiguration::SaveData(ibWriterMemory& dataWritter)
+bool ibValueMetaObjectConfiguration::WriteData(ibDataNode& node) const
 {
-	dataWritter.w_s32(m_propertyVersion->GetValueAsInteger());
+	node.SetProperty(m_propertyVersion->GetName(), m_propertyVersion->GetNodeValue());
 
-	m_propertyDefRole->SaveData(dataWritter);
-	m_propertyDefLanguage->SaveData(dataWritter);
-	(*m_propertyModuleConfiguration)->SaveMeta(dataWritter);
-	m_propertySyntax->SaveData(dataWritter);
+	node.SetProperty(m_propertyDefRole->GetName(), m_propertyDefRole->GetNodeValue());
+	node.SetProperty(m_propertyDefLanguage->GetName(), m_propertyDefLanguage->GetNodeValue());
+	node.SetProperty(m_propertyModuleConfiguration->GetName(), m_propertyModuleConfiguration->GetNodeValue());
+	node.SetProperty(m_propertyModuleSession->GetName(), m_propertyModuleSession->GetNodeValue());
+	node.SetProperty(m_propertySyntax->GetName(), m_propertySyntax->GetNodeValue());
+
+	ibDataValue homePageValue;
+	if (m_homePage.WriteNode(homePageValue))
+		node.SetProperty(wxT("HomePage"), homePageValue);
 
 	return true;
 }
@@ -83,12 +97,20 @@ bool ibValueMetaObjectConfiguration::OnCreateMetaObject(ibMetaData* metaData, in
 		return false;
 	}
 
+	if (!(*m_propertyModuleSession)->OnCreateMetaObject(metaData, flags)) {
+		return false;
+	}
+
 	return ibValueMetaObject::OnCreateMetaObject(metaData, flags);
 }
 
 bool ibValueMetaObjectConfiguration::OnLoadMetaObject(ibMetaData* metaData)
 {
 	if (!(*m_propertyModuleConfiguration)->OnLoadMetaObject(metaData)) {
+		return false;
+	}
+
+	if (!(*m_propertyModuleSession)->OnLoadMetaObject(metaData)) {
 		return false;
 	}
 
@@ -101,8 +123,12 @@ bool ibValueMetaObjectConfiguration::OnSaveMetaObject(int flags)
 		return false;
 	}
 
+	if (!(*m_propertyModuleSession)->OnSaveMetaObject(flags)) {
+		return false;
+	}
+
 	if (m_propertyDefLanguage->IsEmptyProperty()) {
-		s_restructureInfo.AppendError(_("! Doesn't have default language ") + GetFullName());
+		RestructureError(_("! Doesn't have default language ") + GetFullName());
 		return false;
 	}
 
@@ -115,6 +141,10 @@ bool ibValueMetaObjectConfiguration::OnDeleteMetaObject()
 		return false;
 	}
 
+	if (!(*m_propertyModuleSession)->OnDeleteMetaObject()) {
+		return false;
+	}
+
 	return ibValueMetaObject::OnDeleteMetaObject();
 }
 
@@ -123,31 +153,56 @@ bool ibValueMetaObjectConfiguration::OnBeforeRunMetaObject(int flags)
 	if (!(*m_propertyModuleConfiguration)->OnBeforeRunMetaObject(flags))
 		return false;
 
-	ibSession* session = ibSession::Current();
-	ibValueModuleManager* moduleManager = session ? session->GetManagerModule() : nullptr;
-	wxASSERT(moduleManager);
-
-	// Designer's compile-cache only exists on the edit configuration
-	// (ibMetaDataConfigurationStorage). Runtime configurations have null cache
-	// — skip silently; runtime mm holds modules elsewhere.
+	// Designer's compile-cache holds its OWN module manager (the mm the Designer lost
+	// when runtime moved into per-session managers). Register THAT under the config
+	// module — not the per-session runtime mm — so the editor reads common-module
+	// units + named context from a manager that tracks the current designer state,
+	// decoupled from session timing. Runtime configs have null cache → skip.
 	if (auto* cc = m_metaData->GetCompileCache()) {
-		if (!cc->AddCompileModule(m_propertyModuleConfiguration->GetMetaObject(), moduleManager))
+		// Register the designer holder under the config module so the editor reads
+		// the "Manager" singleton + named context from it. The holder is STARTED
+		// (CreateMainModule) by ibMetaDataConfigurationFile::RunDatabase, as the
+		// common module did historically — not here.
+		if (!cc->AddCompileModule(m_propertyModuleConfiguration->GetMetaObject(), cc->GetModuleManager()))
 			return false;
 	}
+
+	// AFTER the main module is in the cache, and the order is the whole point. The
+	// session module is an ordinary common module — its one peculiarity is that it
+	// starts EARLIER than the before-start events, and registering it above put it
+	// into a manager that had no main module yet, so the editor's syntax check found
+	// no global name in it: `SessionParameters`, `ScheduledJobs`, `Catalogs` alike
+	// answered "Var is not found" while the very same text compiled and ran.
+	if (!(*m_propertyModuleSession)->OnBeforeRunMetaObject(flags))
+		return false;
 
 	ibCompileCode::SetCodeStyle(m_propertySyntax->GetValueAsEnum());
 	return ibValueMetaObject::OnBeforeRunMetaObject(flags);
 }
 
+bool ibValueMetaObjectConfiguration::OnBeforeCloseMetaObject()
+{
+	// CLOSE-BEFORE unloads forms and MODULES — the configuration module goes here,
+	// alongside the form's RemoveCompileModule and the common module's
+	// RemoveCommonModule. It used to run in CLOSE-AFTER, which dropped the module
+	// before the un-register phase could still reach it.
+	if (auto* cc = m_metaData->GetCompileCache()) {
+		cc->RemoveCompileModule(m_propertyModuleConfiguration->GetMetaObject());
+		// Holder teardown (DestroyMainModule) is driven by CloseDatabase, symmetric
+		// with the RunDatabase start — not here.
+	}
+
+	return ibValueMetaObject::OnBeforeCloseMetaObject();
+}
+
 bool ibValueMetaObjectConfiguration::OnAfterCloseMetaObject()
 {
+	// CLOSE-AFTER un-registers the runtime only.
 	if (!(*m_propertyModuleConfiguration)->OnAfterCloseMetaObject())
 		return false;
 
-	if (auto* cc = m_metaData->GetCompileCache()) {
-		if (!cc->RemoveCompileModule(m_propertyModuleConfiguration->GetMetaObject()))
-			return false;
-	}
+	if (!(*m_propertyModuleSession)->OnAfterCloseMetaObject())
+		return false;
 
 	return ibValueMetaObject::OnAfterCloseMetaObject();
 }

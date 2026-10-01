@@ -1,11 +1,37 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
+    <ClInclude Include="compiler\scriptCheck.h">
+      <Filter>compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="logger\loggerDiagnosticSink.h">
+      <Filter>logger</Filter>
+    </ClInclude>
+    <ClInclude Include="mcp\mcpClipboard.h">
+      <Filter>mcp</Filter>
+    </ClInclude>
+    <ClInclude Include="mcp\mcpDebugBridge.h">
+      <Filter>mcp</Filter>
+    </ClInclude>
+    <ClInclude Include="mcp\mcpMessage.h">
+      <Filter>mcp</Filter>
+    </ClInclude>
+    <ClInclude Include="mcp\mcpServer.h">
+      <Filter>mcp</Filter>
+    </ClInclude>
+    <ClInclude Include="mcp\mcpTool.h">
+      <Filter>mcp</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\metaIntrospect.h">
+      <Filter>metaCollection</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\partial\declaredPresentation.h">
+      <Filter>metaCollection\partial</Filter>
+    </ClInclude>
     <ClInclude Include="backend.h" />
     <ClInclude Include="backend_form.h" />
     <ClInclude Include="metaCtor.h" />
-    <ClInclude Include="metadata.h" />
-    <ClInclude Include="backend_metatree.h" />
+    <ClInclude Include="metaData.h" />
     <ClInclude Include="objCtor.h" />
     <ClInclude Include="debugger\debugClient.h">
       <Filter>debugger</Filter>
@@ -28,9 +54,67 @@
     <ClInclude Include="compiler\compileModule.h">
       <Filter>compiler</Filter>
     </ClInclude>
+    <ClInclude Include="compiler\scriptComplete.h">
+      <Filter>compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\blockSyntaxLINQ.h">
+      <Filter>compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\scriptParseCode.h">
+      <Filter>compiler</Filter>
+    </ClInclude>
     <ClInclude Include="appData.h" />
+    <ClInclude Include="appDataCtorToken.h" />
+    <ClInclude Include="appHost.h" />
+    <ClInclude Include="cipher\fieldCipher.h">
+      <Filter>cipher</Filter>
+    </ClInclude>
     <ClInclude Include="uniqueKey.h" />
-    <ClInclude Include="srcExplorer.h" />
+    <ClInclude Include="syntaxHelper\helpCategory.h">
+      <Filter>syntaxHelper</Filter>
+    </ClInclude>
+    <ClInclude Include="syntaxHelper\helpCorpus.h">
+      <Filter>syntaxHelper</Filter>
+    </ClInclude>
+    <ClInclude Include="syntaxHelper\helpEntry.h">
+      <Filter>syntaxHelper</Filter>
+    </ClInclude>
+    <ClInclude Include="syntaxHelper\helpLoader.h">
+      <Filter>syntaxHelper</Filter>
+    </ClInclude>
+    <ClInclude Include="syntaxHelper\helpLoadError.h">
+      <Filter>syntaxHelper</Filter>
+    </ClInclude>
+    <ClInclude Include="syntaxHelper\helpResolver.h">
+      <Filter>syntaxHelper</Filter>
+    </ClInclude>
+    <ClInclude Include="syntaxHelper\helpService.h">
+      <Filter>syntaxHelper</Filter>
+    </ClInclude>
+    <ClInclude Include="logger\logger.h">
+      <Filter>logger</Filter>
+    </ClInclude>
+    <ClInclude Include="logger\loggerEntry.h">
+      <Filter>logger</Filter>
+    </ClInclude>
+    <ClInclude Include="logger\loggerQueue.h">
+      <Filter>logger</Filter>
+    </ClInclude>
+    <ClInclude Include="logger\loggerReader.h">
+      <Filter>logger</Filter>
+    </ClInclude>
+    <ClInclude Include="logger\loggerSink.h">
+      <Filter>logger</Filter>
+    </ClInclude>
+    <ClInclude Include="logger\loggerSinkSqlite.h">
+      <Filter>logger</Filter>
+    </ClInclude>
+    <ClInclude Include="logger\loggerSweep.h">
+      <Filter>logger</Filter>
+    </ClInclude>
+    <ClInclude Include="logger\loggerWriter.h">
+      <Filter>logger</Filter>
+    </ClInclude>
     <ClInclude Include="databaseLayer\databaseErrorCodes.h">
       <Filter>databaseLayer</Filter>
     </ClInclude>
@@ -95,7 +179,7 @@
     <ClInclude Include="compiler\compileContext.h">
       <Filter>compiler</Filter>
     </ClInclude>
-    <ClInclude Include="compiler\compileContextLinqData.h">
+    <ClInclude Include="compiler\byteCodeLINQ.h">
       <Filter>compiler</Filter>
     </ClInclude>
     <ClInclude Include="compiler\enumFactory.h">
@@ -110,7 +194,7 @@
     <ClInclude Include="compiler\procUnit.h">
       <Filter>compiler</Filter>
     </ClInclude>
-    <ClInclude Include="compiler\procUnitValues.h">
+    <ClInclude Include="compiler\procUnitLambda.h">
       <Filter>compiler</Filter>
     </ClInclude>
     <ClInclude Include="compiler\translateCode.h">
@@ -129,10 +213,37 @@
       <Filter>compiler</Filter>
     </ClInclude>
     <ClInclude Include="backend_core.h" />
+    <ClInclude Include="databaseLayer\firebird\firebirdBlobCompression.h">
+      <Filter>databaseLayer\firebird</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\firebird\firebirdBootstrap.h">
+      <Filter>databaseLayer\firebird</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\firebird\firebirdCommon.h">
+      <Filter>databaseLayer\firebird</Filter>
+    </ClInclude>
     <ClInclude Include="databaseLayer\firebird\firebirdDatabaseLayer.h">
       <Filter>databaseLayer\firebird</Filter>
     </ClInclude>
+    <ClInclude Include="databaseLayer\firebird\firebirdHlc.h">
+      <Filter>databaseLayer\firebird</Filter>
+    </ClInclude>
     <ClInclude Include="databaseLayer\firebird\firebirdInterface.h">
+      <Filter>databaseLayer\firebird</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\firebird\firebirdLeaderMode.h">
+      <Filter>databaseLayer\firebird</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\firebird\firebirdLease.h">
+      <Filter>databaseLayer\firebird</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\firebird\firebirdLocalServer.h">
+      <Filter>databaseLayer\firebird</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\firebird\firebirdMaintenance.h">
+      <Filter>databaseLayer\firebird</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\firebird\firebirdMaintenanceScheduler.h">
       <Filter>databaseLayer\firebird</Filter>
     </ClInclude>
     <ClInclude Include="databaseLayer\firebird\firebirdParameter.h">
@@ -147,38 +258,14 @@
     <ClInclude Include="databaseLayer\firebird\firebirdPreparedStatementWrapper.h">
       <Filter>databaseLayer\firebird</Filter>
     </ClInclude>
+    <ClInclude Include="databaseLayer\firebird\firebirdReplicationConfig.h">
+      <Filter>databaseLayer\firebird</Filter>
+    </ClInclude>
     <ClInclude Include="databaseLayer\firebird\firebirdResultSet.h">
       <Filter>databaseLayer\firebird</Filter>
     </ClInclude>
     <ClInclude Include="databaseLayer\firebird\firebirdResultSetMetaData.h">
       <Filter>databaseLayer\firebird</Filter>
-    </ClInclude>
-    <ClInclude Include="databaseLayer\mysql\mysqlDatabaseLayer.h">
-      <Filter>databaseLayer\mysql</Filter>
-    </ClInclude>
-    <ClInclude Include="databaseLayer\mysql\mysqlInterface.h">
-      <Filter>databaseLayer\mysql</Filter>
-    </ClInclude>
-    <ClInclude Include="databaseLayer\mysql\mysqlParameter.h">
-      <Filter>databaseLayer\mysql</Filter>
-    </ClInclude>
-    <ClInclude Include="databaseLayer\mysql\mysqlPreparedStatement.h">
-      <Filter>databaseLayer\mysql</Filter>
-    </ClInclude>
-    <ClInclude Include="databaseLayer\mysql\mysqlPreparedStatementParameter.h">
-      <Filter>databaseLayer\mysql</Filter>
-    </ClInclude>
-    <ClInclude Include="databaseLayer\mysql\mysqlPreparedStatementParameterCollection.h">
-      <Filter>databaseLayer\mysql</Filter>
-    </ClInclude>
-    <ClInclude Include="databaseLayer\mysql\mysqlPreparedStatementResultSet.h">
-      <Filter>databaseLayer\mysql</Filter>
-    </ClInclude>
-    <ClInclude Include="databaseLayer\mysql\mysqlPreparedStatementWrapper.h">
-      <Filter>databaseLayer\mysql</Filter>
-    </ClInclude>
-    <ClInclude Include="databaseLayer\mysql\mysqlResultSetMetaData.h">
-      <Filter>databaseLayer\mysql</Filter>
     </ClInclude>
     <ClInclude Include="databaseLayer\odbc\odbcDatabaseLayer.h">
       <Filter>databaseLayer\odbc</Filter>
@@ -224,12 +311,28 @@
     </ClInclude>
     <ClInclude Include="backend_mainFrame.h" />
     <ClInclude Include="backend_exception.h" />
+    <ClInclude Include="backend_diagnostic.h" />
+    <ClInclude Include="fileKind.h" />
+    <ClInclude Include="diagnostics\crashGuard.h">
+      <Filter>diagnostics</Filter>
+    </ClInclude>
     <ClInclude Include="stringUtils.h" />
     <ClInclude Include="typeconv.h" />
     <ClInclude Include="clsid.h" />
-    <ClInclude Include="number.h" />
+    <ClInclude Include="fdatetime.h" />
+    <ClInclude Include="fnumber.h" />
+    <ClInclude Include="fstring.h" />
     <ClInclude Include="fileSystem\fs.h">
       <Filter>fileSystem</Filter>
+    </ClInclude>
+    <ClInclude Include="serialize\dataBuilder.h">
+      <Filter>serialize</Filter>
+    </ClInclude>
+    <ClInclude Include="serialize\jsonProvider.h">
+      <Filter>serialize</Filter>
+    </ClInclude>
+    <ClInclude Include="serialize\jsonText.h">
+      <Filter>serialize</Filter>
     </ClInclude>
     <ClInclude Include="fileSystem\types.h">
       <Filter>fileSystem</Filter>
@@ -260,10 +363,19 @@
     <ClInclude Include="metaCollection\metaFormObject.h">
       <Filter>metaCollection</Filter>
     </ClInclude>
+    <ClInclude Include="metaCollection\metaComposerObject.h">
+      <Filter>metaCollection</Filter>
+    </ClInclude>
     <ClInclude Include="metaCollection\metaSpreadsheetObject.h">
       <Filter>metaCollection</Filter>
     </ClInclude>
     <ClInclude Include="metaCollection\metaModuleObject.h">
+      <Filter>metaCollection</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\metaDiff.h">
+      <Filter>metaCollection</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\metaGroups.h">
       <Filter>metaCollection</Filter>
     </ClInclude>
     <ClInclude Include="metaCollection\metaObject.h">
@@ -274,6 +386,9 @@
     </ClInclude>
     <ClInclude Include="metaCollection\attribute\metaAttributeObject.h">
       <Filter>metaCollection\attribute</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\accountingKind\metaAccountingKindObject.h">
+      <Filter>metaCollection\accountingKind</Filter>
     </ClInclude>
     <ClInclude Include="metaCollection\dimension\metaDimensionObject.h">
       <Filter>metaCollection\dimension</Filter>
@@ -305,16 +420,52 @@
     <ClInclude Include="metaCollection\partial\catalog.h">
       <Filter>metaCollection\partial</Filter>
     </ClInclude>
+    <ClInclude Include="metaCollection\partial\parameterizedJob.h">
+      <Filter>metaCollection\partial</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\partial\parameterizedJobManager.h">
+      <Filter>metaCollection\partial</Filter>
+    </ClInclude>
     <ClInclude Include="metaCollection\partial\catalogManager.h">
       <Filter>metaCollection\partial</Filter>
     </ClInclude>
     <ClInclude Include="metaCollection\partial\chartOfAccounts.h">
       <Filter>metaCollection\partial</Filter>
     </ClInclude>
-    <ClInclude Include="metaCollection\partial\chartOfAccountsSubcontoTable.h">
+    <ClInclude Include="metaCollection\partial\chartOfAccountsDimensionKindsTable.h">
       <Filter>metaCollection\partial</Filter>
     </ClInclude>
     <ClInclude Include="metaCollection\partial\chartOfAccountsEnum.h">
+      <Filter>metaCollection\partial</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\partial\chartOfCalculationTypesEnum.h">
+      <Filter>metaCollection\partial</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\partial\chartOfCalculationTypes.h">
+      <Filter>metaCollection\partial</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\partial\chartOfCalculationTypesManager.h">
+      <Filter>metaCollection\partial</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\partial\chartOfCalculationTypesRelationTable.h">
+      <Filter>metaCollection\partial</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\partial\calculationRegister.h">
+      <Filter>metaCollection\partial</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\partial\sequence.h">
+      <Filter>metaCollection\partial</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\partial\sequenceManager.h">
+      <Filter>metaCollection\partial</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\partial\calculationRegisterManager.h">
+      <Filter>metaCollection\partial</Filter>
+    </ClInclude>
+    <ClInclude Include="calculation\calculation.h">
+      <Filter>calculation</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\partial\commonObjectEnum.h">
       <Filter>metaCollection\partial</Filter>
     </ClInclude>
     <ClInclude Include="metaCollection\partial\chartOfAccountsManager.h">
@@ -374,15 +525,6 @@
     <ClInclude Include="metaCollection\table\metaTableObject.h">
       <Filter>metaCollection\table</Filter>
     </ClInclude>
-    <ClInclude Include="metaCollection\partial\list\objectList.h">
-      <Filter>metaCollection\partial\list</Filter>
-    </ClInclude>
-    <ClInclude Include="metaCollection\partial\list\listSqlBuilder.h">
-      <Filter>metaCollection\partial\list</Filter>
-    </ClInclude>
-    <ClInclude Include="metaCollection\partial\list\registerSqlBuilder.h">
-      <Filter>metaCollection\partial\list</Filter>
-    </ClInclude>
     <ClInclude Include="metaCollection\partial\reference\reference.h">
       <Filter>metaCollection\partial\reference</Filter>
     </ClInclude>
@@ -419,6 +561,15 @@
     <ClInclude Include="propertyManager\property\propertyString.h">
       <Filter>propertyManager\property</Filter>
     </ClInclude>
+    <ClInclude Include="propertyManager\property\propertyFormat.h">
+      <Filter>propertyManager\property</Filter>
+    </ClInclude>
+    <ClInclude Include="propertyManager\property\propertyDataComposition.h">
+      <Filter>propertyManager\property</Filter>
+    </ClInclude>
+    <ClInclude Include="propertyManager\property\propertyComposition.h">
+      <Filter>propertyManager\property</Filter>
+    </ClInclude>
     <ClInclude Include="propertyManager\property\propertyEnum.h">
       <Filter>propertyManager\property</Filter>
     </ClInclude>
@@ -432,6 +583,12 @@
       <Filter>propertyManager\property</Filter>
     </ClInclude>
     <ClInclude Include="propertyManager\property\propertyGeneration.h">
+      <Filter>propertyManager\property</Filter>
+    </ClInclude>
+    <ClInclude Include="propertyManager\property\propertySchedule.h">
+      <Filter>propertyManager\property</Filter>
+    </ClInclude>
+    <ClInclude Include="propertyManager\property\propertyCommandSource.h">
       <Filter>propertyManager\property</Filter>
     </ClInclude>
     <ClInclude Include="propertyManager\property\propertySource.h">
@@ -459,6 +616,11 @@
       <Filter>propertyManager\property</Filter>
     </ClInclude>
     <ClInclude Include="backend_type.h" />
+    <ClInclude Include="commandDescription.h" />
+    <ClInclude Include="sourceDescription.h" />
+    <ClInclude Include="calcScheduleDescription.h" />
+    <ClInclude Include="choiceLinkDescription.h" />
+    <ClInclude Include="choiceLinkResolver.h" />
     <ClInclude Include="typeDescription.h" />
     <ClInclude Include="propertyManager\property\eventAction.h">
       <Filter>propertyManager\property</Filter>
@@ -468,10 +630,13 @@
     </ClInclude>
     <ClInclude Include="srcObject.h" />
     <ClInclude Include="moduleInfo.h" />
-    <ClInclude Include="tableInfo.h" />
+    <ClInclude Include="tabularModel.h" />
     <ClInclude Include="valueInfo.h" />
-    <ClInclude Include="actionInfo.h" />
+    <ClInclude Include="standardCommand.h" />
     <ClInclude Include="compiler\value.h">
+      <Filter>compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\valueSerialization.h">
       <Filter>compiler</Filter>
     </ClInclude>
     <ClInclude Include="system\systemEnum.h">
@@ -492,7 +657,25 @@
     <ClInclude Include="system\value\valueFont.h">
       <Filter>system\value</Filter>
     </ClInclude>
+    <ClInclude Include="system\value\valueBinaryData.h">
+      <Filter>system\value</Filter>
+    </ClInclude>
+    <ClInclude Include="system\value\valueTextFile.h">
+      <Filter>system\value</Filter>
+    </ClInclude>
+    <ClInclude Include="system\value\valueHttp.h">
+      <Filter>system\value</Filter>
+    </ClInclude>
+    <ClInclude Include="system\value\valueSecureConnection.h">
+      <Filter>system\value</Filter>
+    </ClInclude>
     <ClInclude Include="system\value\valueGuid.h">
+      <Filter>system\value</Filter>
+    </ClInclude>
+    <ClInclude Include="system\value\valueJson.h">
+      <Filter>system\value</Filter>
+    </ClInclude>
+    <ClInclude Include="system\value\valueJob.h">
       <Filter>system\value</Filter>
     </ClInclude>
     <ClInclude Include="system\value\valueMap.h">
@@ -502,6 +685,12 @@
       <Filter>system\value</Filter>
     </ClInclude>
     <ClInclude Include="system\value\valuePoint.h">
+      <Filter>system\value</Filter>
+    </ClInclude>
+    <ClInclude Include="system\value\valuePointInTime.h">
+      <Filter>system\value</Filter>
+    </ClInclude>
+    <ClInclude Include="system\value\valueBoundary.h">
       <Filter>system\value</Filter>
     </ClInclude>
     <ClInclude Include="system\value\valueSize.h">
@@ -560,7 +749,39 @@
     </ClInclude>
     <ClInclude Include="value_cast.h" />
     <ClInclude Include="interfaceHelper.h" />
-    <ClInclude Include="metaCollection\metaInterfaceObject.h">
+    <ClInclude Include="compositionHelper.h" />
+    <ClInclude Include="functionalOptionHelper.h" />
+    <ClInclude Include="metaCollection\metaSectionObject.h">
+      <Filter>metaCollection</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\metaCommandObject.h">
+      <Filter>metaCollection</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\metaCommandGroupObject.h">
+      <Filter>metaCollection</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\metaScheduledJobObject.h">
+      <Filter>metaCollection</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\metaEventHandlerObject.h">
+      <Filter>metaCollection</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\metaSessionParameterObject.h">
+      <Filter>metaCollection</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\metaFunctionalOptionObject.h">
+      <Filter>metaCollection</Filter>
+    </ClInclude>
+    <ClInclude Include="functionalOption\functionalOptionGate.h">
+      <Filter>functionalOption</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\metaStoredValueObject.h">
+      <Filter>metaCollection</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\metaQueryDescriptor.h">
+      <Filter>metaCollection</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\metaCommonAttributeObject.h">
       <Filter>metaCollection</Filter>
     </ClInclude>
     <ClInclude Include="metadataDataProcessor.h" />
@@ -570,6 +791,9 @@
       <Filter>propertyManager\property\variant</Filter>
     </ClInclude>
     <ClInclude Include="propertyManager\property\variant\variantForm.h">
+      <Filter>propertyManager\property\variant</Filter>
+    </ClInclude>
+    <ClInclude Include="propertyManager\property\variant\variantSchedule.h">
       <Filter>propertyManager\property\variant</Filter>
     </ClInclude>
     <ClInclude Include="propertyManager\property\variant\variantGen.h">
@@ -584,13 +808,31 @@
     <ClInclude Include="propertyManager\property\variant\variantOwner.h">
       <Filter>propertyManager\property\variant</Filter>
     </ClInclude>
+    <ClInclude Include="propertyManager\property\variant\variantCalcSchedule.h">
+      <Filter>propertyManager\property\variant</Filter>
+    </ClInclude>
+    <ClInclude Include="propertyManager\property\variant\variantChoiceLink.h">
+      <Filter>propertyManager\property\variant</Filter>
+    </ClInclude>
     <ClInclude Include="propertyManager\property\variant\variantPicture.h">
+      <Filter>propertyManager\property\variant</Filter>
+    </ClInclude>
+    <ClInclude Include="propertyManager\property\variant\variantPoint.h">
+      <Filter>propertyManager\property\variant</Filter>
+    </ClInclude>
+    <ClInclude Include="propertyManager\property\variant\variantSize.h">
       <Filter>propertyManager\property\variant</Filter>
     </ClInclude>
     <ClInclude Include="propertyManager\property\variant\variantRecord.h">
       <Filter>propertyManager\property\variant</Filter>
     </ClInclude>
+    <ClInclude Include="propertyManager\property\variant\variantCommandSource.h">
+      <Filter>propertyManager\property\variant</Filter>
+    </ClInclude>
     <ClInclude Include="propertyManager\property\variant\variantSource.h">
+      <Filter>propertyManager\property\variant</Filter>
+    </ClInclude>
+    <ClInclude Include="propertyManager\property\variant\variantTranslate.h">
       <Filter>propertyManager\property\variant</Filter>
     </ClInclude>
     <ClInclude Include="propertyManager\property\variant\variantType.h">
@@ -608,6 +850,7 @@
       <Filter>metaCollection</Filter>
     </ClInclude>
     <ClInclude Include="backend_localization.h" />
+    <ClInclude Include="formatString.h" />
     <ClInclude Include="res\resource.h">
       <Filter>res</Filter>
     </ClInclude>
@@ -615,7 +858,11 @@
     <ClInclude Include="system\value\valueSpreadsheet.h">
       <Filter>system\value</Filter>
     </ClInclude>
+    <ClInclude Include="system\value\valueSpreadsheetDetails.h">
+      <Filter>system\value</Filter>
+    </ClInclude>
     <ClInclude Include="spreadsheetDescription.h" />
+    <ClInclude Include="spreadsheetModel.h" />
     <ClInclude Include="propertyManager\property\variant\variantSpreadsheet.h">
       <Filter>propertyManager\property\variant</Filter>
     </ClInclude>
@@ -628,19 +875,254 @@
     </ClInclude>
     <ClInclude Include="value_ptr.h" />
     <ClInclude Include="restructureInfo.h" />
-    <ClInclude Include="tableView.h" />
+    <ClInclude Include="tabularModelView.h" />
     <ClInclude Include="propertyManager\property\propertyChartOfCharacteristicTypes.h">
+      <Filter>propertyManager\property</Filter>
+    </ClInclude>
+    <ClInclude Include="propertyManager\property\propertyAccountingKind.h">
       <Filter>propertyManager\property</Filter>
     </ClInclude>
     <ClInclude Include="propertyManager\property\propertyChartOfAccounts.h">
       <Filter>propertyManager\property</Filter>
     </ClInclude>
+    <ClInclude Include="propertyManager\property\propertyChartOfCalculationTypes.h">
+      <Filter>propertyManager\property</Filter>
+    </ClInclude>
+    <ClInclude Include="propertyManager\property\propertyFunctionalOptions.h">
+      <Filter>propertyManager\property</Filter>
+    </ClInclude>
+    <ClInclude Include="propertyManager\property\propertyCalcSchedule.h">
+      <Filter>propertyManager\property</Filter>
+    </ClInclude>
+    <ClInclude Include="propertyManager\property\propertyChoiceLink.h">
+      <Filter>propertyManager\property</Filter>
+    </ClInclude>
     <ClInclude Include="characteristicCtor.h" />
+    <ClInclude Include="vcs\gitService.h">
+      <Filter>vcs</Filter>
+    </ClInclude>
+    <ClInclude Include="plugin\pluginApi.h" />
+    <ClInclude Include="plugin\pluginHost.h">
+      <Filter>plugin</Filter>
+    </ClInclude>
+    <ClInclude Include="plugin\pluginManager.h">
+      <Filter>plugin</Filter>
+    </ClInclude>
+    <ClInclude Include="session\session.h">
+      <Filter>session</Filter>
+    </ClInclude>
+    <ClInclude Include="session\sessionHolder.h">
+      <Filter>session</Filter>
+    </ClInclude>
+    <ClInclude Include="session\sessionPolicy.h">
+      <Filter>session</Filter>
+    </ClInclude>
+    <ClInclude Include="session\sessionException.h">
+      <Filter>session</Filter>
+    </ClInclude>
+    <ClInclude Include="session\sessionRegistry.h">
+      <Filter>session</Filter>
+    </ClInclude>
+    <ClInclude Include="session\sessionSnapshot.h">
+      <Filter>session</Filter>
+    </ClInclude>
+    <ClInclude Include="session\designerExclusivePolicy.h">
+      <Filter>session</Filter>
+    </ClInclude>
+    <ClInclude Include="session\serviceExclusivePolicy.h">
+      <Filter>session</Filter>
+    </ClInclude>
+    <ClInclude Include="session\workerPool.h">
+      <Filter>session</Filter>
+    </ClInclude>
+    <ClInclude Include="session\workerPoolHeadless.h">
+      <Filter>session</Filter>
+    </ClInclude>
+    <ClInclude Include="lock\lockTypes.h">
+      <Filter>lock</Filter>
+    </ClInclude>
+    <ClInclude Include="lock\lockHandle.h">
+      <Filter>lock</Filter>
+    </ClInclude>
+    <ClInclude Include="lock\lockHolder.h">
+      <Filter>lock</Filter>
+    </ClInclude>
+    <ClInclude Include="lock\lockKeyHash.h">
+      <Filter>lock</Filter>
+    </ClInclude>
+    <ClInclude Include="lock\lockManager.h">
+      <Filter>lock</Filter>
+    </ClInclude>
+    <ClInclude Include="job\jobManager.h">
+      <Filter>job</Filter>
+    </ClInclude>
+    <ClInclude Include="job\jobRunByteCode.h">
+      <Filter>job</Filter>
+    </ClInclude>
+    <ClInclude Include="job\platformJobs.h">
+      <Filter>job</Filter>
+    </ClInclude>
+    <ClInclude Include="job\jobSchedule.h">
+      <Filter>job</Filter>
+    </ClInclude>
+    <ClInclude Include="settings\settingsStorage.h">
+      <Filter>settings</Filter>
+    </ClInclude>
+    <ClInclude Include="settings\settingsComposer.h">
+      <Filter>settings</Filter>
+    </ClInclude>
+    <ClInclude Include="sheetFormat\sheetFormat.h">
+      <Filter>sheetFormat</Filter>
+    </ClInclude>
+    <ClInclude Include="sheetFormat\sheetFormatXlsx.h">
+      <Filter>sheetFormat</Filter>
+    </ClInclude>
+    <ClInclude Include="sheetFormat\sheetFormatNative.h">
+      <Filter>sheetFormat</Filter>
+    </ClInclude>
+    <ClInclude Include="sheetFormat\sheetFormatDocx.h">
+      <Filter>sheetFormat</Filter>
+    </ClInclude>
+    <ClInclude Include="utils\passwordHash.hpp">
+      <Filter>utils</Filter>
+    </ClInclude>
+    <ClInclude Include="utils\dataVersion.hpp">
+      <Filter>utils</Filter>
+    </ClInclude>
+    <ClInclude Include="utils\sha256.hpp">
+      <Filter>utils</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="compiler\scriptCheck.cpp">
+      <Filter>compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="logger\loggerDiagnosticSink.cpp">
+      <Filter>logger</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\mcpClipboard.cpp">
+      <Filter>mcp</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\mcpDebugBridge.cpp">
+      <Filter>mcp</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\mcpMessage.cpp">
+      <Filter>mcp</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\mcpServer.cpp">
+      <Filter>mcp</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\mcpTool.cpp">
+      <Filter>mcp</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolApp.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolBind.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolChat.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolComplete.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolClipboard.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolCompose.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolDatabase.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolDebug.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolEnvelope.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolHelp.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolJournal.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolLanguage.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolLocks.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolMetadata.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolModule.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolNotes.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolPatterns.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolPicture.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolPlatform.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolPredefined.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolQuery.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolReport.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolRoles.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolRunCode.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolSchema.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolScreen.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolScript.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolComposition.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolFunctionalOption.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolSection.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolSession.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolSheet.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolValue.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolFormat.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaIntrospect.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
     <ClCompile Include="backend.cpp" />
     <ClCompile Include="backend_form.cpp" />
-    <ClCompile Include="metadata.cpp" />
+    <ClCompile Include="metaData.cpp" />
     <ClCompile Include="metadataFactory.cpp" />
     <ClCompile Include="objCtor.cpp" />
     <ClCompile Include="debugger\debugClient.cpp">
@@ -673,8 +1155,51 @@
     <ClCompile Include="compiler\compileModule.cpp">
       <Filter>compiler</Filter>
     </ClCompile>
+    <ClCompile Include="compiler\scriptComplete.cpp">
+      <Filter>compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\blockSyntaxLINQ.cpp">
+      <Filter>compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\scriptParseCode.cpp">
+      <Filter>compiler</Filter>
+    </ClCompile>
     <ClCompile Include="appData.cpp" />
+    <ClCompile Include="appHost.cpp" />
+    <ClCompile Include="cipher\fieldCipher.cpp">
+      <Filter>cipher</Filter>
+    </ClCompile>
     <ClCompile Include="uniqueKey.cpp" />
+    <ClCompile Include="syntaxHelper\helpCorpus.cpp">
+      <Filter>syntaxHelper</Filter>
+    </ClCompile>
+    <ClCompile Include="syntaxHelper\helpLoader.cpp">
+      <Filter>syntaxHelper</Filter>
+    </ClCompile>
+    <ClCompile Include="syntaxHelper\helpResolver.cpp">
+      <Filter>syntaxHelper</Filter>
+    </ClCompile>
+    <ClCompile Include="syntaxHelper\helpService.cpp">
+      <Filter>syntaxHelper</Filter>
+    </ClCompile>
+    <ClCompile Include="logger\logger.cpp">
+      <Filter>logger</Filter>
+    </ClCompile>
+    <ClCompile Include="logger\loggerQueue.cpp">
+      <Filter>logger</Filter>
+    </ClCompile>
+    <ClCompile Include="logger\loggerReader.cpp">
+      <Filter>logger</Filter>
+    </ClCompile>
+    <ClCompile Include="logger\loggerSinkSqlite.cpp">
+      <Filter>logger</Filter>
+    </ClCompile>
+    <ClCompile Include="logger\loggerSweep.cpp">
+      <Filter>logger</Filter>
+    </ClCompile>
+    <ClCompile Include="logger\loggerWriter.cpp">
+      <Filter>logger</Filter>
+    </ClCompile>
     <ClCompile Include="databaseLayer\connectionPool.cpp">
       <Filter>databaseLayer</Filter>
     </ClCompile>
@@ -685,6 +1210,9 @@
       <Filter>databaseLayer</Filter>
     </ClCompile>
     <ClCompile Include="databaseLayer\databaseLayer.cpp">
+      <Filter>databaseLayer</Filter>
+    </ClCompile>
+    <ClCompile Include="databaseLayer\databaseLayerException.cpp">
       <Filter>databaseLayer</Filter>
     </ClCompile>
     <ClCompile Include="databaseLayer\databaseQueryParser.cpp">
@@ -727,10 +1255,13 @@
     <ClCompile Include="compiler\procContext.cpp">
       <Filter>compiler</Filter>
     </ClCompile>
+    <ClCompile Include="compiler\typeAny.cpp">
+      <Filter>compiler</Filter>
+    </ClCompile>
     <ClCompile Include="compiler\procUnit.cpp">
       <Filter>compiler</Filter>
     </ClCompile>
-    <ClCompile Include="compiler\procUnitLinq.cpp">
+    <ClCompile Include="compiler\procUnitLINQ.cpp">
       <Filter>compiler</Filter>
     </ClCompile>
     <ClCompile Include="compiler\translateCode.cpp">
@@ -742,14 +1273,41 @@
     <ClCompile Include="compiler\compileCode.cpp">
       <Filter>compiler</Filter>
     </ClCompile>
+    <ClCompile Include="compiler\compileCodeLINQ.cpp">
+      <Filter>compiler</Filter>
+    </ClCompile>
     <ClCompile Include="compiler\compileContext.cpp">
       <Filter>compiler</Filter>
     </ClCompile>
     <ClCompile Include="backend_core.cpp" />
+    <ClCompile Include="databaseLayer\firebird\firebirdBlobCompression.cpp">
+      <Filter>databaseLayer\firebird</Filter>
+    </ClCompile>
+    <ClCompile Include="databaseLayer\firebird\firebirdBootstrap.cpp">
+      <Filter>databaseLayer\firebird</Filter>
+    </ClCompile>
     <ClCompile Include="databaseLayer\firebird\firebirdDatabaseLayer.cpp">
       <Filter>databaseLayer\firebird</Filter>
     </ClCompile>
+    <ClCompile Include="databaseLayer\firebird\firebirdHlc.cpp">
+      <Filter>databaseLayer\firebird</Filter>
+    </ClCompile>
     <ClCompile Include="databaseLayer\firebird\firebirdInterface.cpp">
+      <Filter>databaseLayer\firebird</Filter>
+    </ClCompile>
+    <ClCompile Include="databaseLayer\firebird\firebirdLeaderMode.cpp">
+      <Filter>databaseLayer\firebird</Filter>
+    </ClCompile>
+    <ClCompile Include="databaseLayer\firebird\firebirdLease.cpp">
+      <Filter>databaseLayer\firebird</Filter>
+    </ClCompile>
+    <ClCompile Include="databaseLayer\firebird\firebirdLocalServer.cpp">
+      <Filter>databaseLayer\firebird</Filter>
+    </ClCompile>
+    <ClCompile Include="databaseLayer\firebird\firebirdMaintenance.cpp">
+      <Filter>databaseLayer\firebird</Filter>
+    </ClCompile>
+    <ClCompile Include="databaseLayer\firebird\firebirdMaintenanceScheduler.cpp">
       <Filter>databaseLayer\firebird</Filter>
     </ClCompile>
     <ClCompile Include="databaseLayer\firebird\firebirdParameter.cpp">
@@ -764,38 +1322,14 @@
     <ClCompile Include="databaseLayer\firebird\firebirdPreparedStatementWrapper.cpp">
       <Filter>databaseLayer\firebird</Filter>
     </ClCompile>
+    <ClCompile Include="databaseLayer\firebird\firebirdReplicationConfig.cpp">
+      <Filter>databaseLayer\firebird</Filter>
+    </ClCompile>
     <ClCompile Include="databaseLayer\firebird\firebirdResultSet.cpp">
       <Filter>databaseLayer\firebird</Filter>
     </ClCompile>
     <ClCompile Include="databaseLayer\firebird\firebirdResultSetMetaData.cpp">
       <Filter>databaseLayer\firebird</Filter>
-    </ClCompile>
-    <ClCompile Include="databaseLayer\mysql\mysqlDatabaseLayer.cpp">
-      <Filter>databaseLayer\mysql</Filter>
-    </ClCompile>
-    <ClCompile Include="databaseLayer\mysql\mysqlInterface.cpp">
-      <Filter>databaseLayer\mysql</Filter>
-    </ClCompile>
-    <ClCompile Include="databaseLayer\mysql\mysqlParameter.cpp">
-      <Filter>databaseLayer\mysql</Filter>
-    </ClCompile>
-    <ClCompile Include="databaseLayer\mysql\mysqlPreparedStatement.cpp">
-      <Filter>databaseLayer\mysql</Filter>
-    </ClCompile>
-    <ClCompile Include="databaseLayer\mysql\mysqlPreparedStatementParameter.cpp">
-      <Filter>databaseLayer\mysql</Filter>
-    </ClCompile>
-    <ClCompile Include="databaseLayer\mysql\mysqlPreparedStatementParameterCollection.cpp">
-      <Filter>databaseLayer\mysql</Filter>
-    </ClCompile>
-    <ClCompile Include="databaseLayer\mysql\mysqlPreparedStatementResultSet.cpp">
-      <Filter>databaseLayer\mysql</Filter>
-    </ClCompile>
-    <ClCompile Include="databaseLayer\mysql\mysqlPreparedStatementWrapper.cpp">
-      <Filter>databaseLayer\mysql</Filter>
-    </ClCompile>
-    <ClCompile Include="databaseLayer\mysql\mysqlResultSetMetaData.cpp">
-      <Filter>databaseLayer\mysql</Filter>
     </ClCompile>
     <ClCompile Include="databaseLayer\odbc\odbcDatabaseLayer.cpp">
       <Filter>databaseLayer\odbc</Filter>
@@ -841,6 +1375,11 @@
     </ClCompile>
     <ClCompile Include="backend_mainFrame.cpp" />
     <ClCompile Include="backend_exception.cpp" />
+    <ClCompile Include="backend_diagnostic.cpp" />
+    <ClCompile Include="fileKind.cpp" />
+    <ClCompile Include="diagnostics\crashGuard.cpp">
+      <Filter>diagnostics</Filter>
+    </ClCompile>
     <ClCompile Include="fileSystem\lz\lzhuf.cpp">
       <Filter>fileSystem\lz</Filter>
     </ClCompile>
@@ -849,6 +1388,15 @@
     </ClCompile>
     <ClCompile Include="fileSystem\fs.cpp">
       <Filter>fileSystem</Filter>
+    </ClCompile>
+    <ClCompile Include="serialize\dataBuilder.cpp">
+      <Filter>serialize</Filter>
+    </ClCompile>
+    <ClCompile Include="serialize\jsonProvider.cpp">
+      <Filter>serialize</Filter>
+    </ClCompile>
+    <ClCompile Include="serialize\jsonText.cpp">
+      <Filter>serialize</Filter>
     </ClCompile>
     <ClCompile Include="metadataConfiguration.cpp" />
     <ClCompile Include="roleHelper.cpp" />
@@ -882,6 +1430,15 @@
     <ClCompile Include="metaCollection\metaFormObjectProperty.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>
+    <ClCompile Include="metaCollection\metaComposerObject.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaComposerObjectMenu.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaComposerObject_res.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
     <ClCompile Include="metaCollection\metaSpreadsheetObject.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>
@@ -900,7 +1457,16 @@
     <ClCompile Include="metaCollection\metaModuleObjectMenu.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>
+    <ClCompile Include="metaCollection\metaDiff.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaGroups.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
     <ClCompile Include="metaCollection\metaObject.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaObjectSerialize.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\metaObjectMetadata.cpp">
@@ -911,9 +1477,6 @@
     </ClCompile>
     <ClCompile Include="metaCollection\metaObjectMetadataMenu.cpp">
       <Filter>metaCollection</Filter>
-    </ClCompile>
-    <ClCompile Include="metaCollection\attribute\metaAttributeObjectQuery.cpp">
-      <Filter>metaCollection\attribute</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\attribute\metaAttributeObject.cpp">
       <Filter>metaCollection\attribute</Filter>
@@ -927,7 +1490,16 @@
     <ClCompile Include="metaCollection\dimension\metaDimensionObject_res.cpp">
       <Filter>metaCollection\dimension</Filter>
     </ClCompile>
+    <ClCompile Include="metaCollection\accountingKind\metaAccountingKindObject.cpp">
+      <Filter>metaCollection\accountingKind</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\accountingKind\metaAccountingKindObjectProperty.cpp">
+      <Filter>metaCollection\accountingKind</Filter>
+    </ClCompile>
     <ClCompile Include="metaCollection\dimension\metaDimensionObject.cpp">
+      <Filter>metaCollection\dimension</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\dimension\metaDimensionObjectProperty.cpp">
       <Filter>metaCollection\dimension</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\enumeration\metaEnumObject.cpp">
@@ -936,10 +1508,10 @@
     <ClCompile Include="metaCollection\enumeration\metaEnumObject_res.cpp">
       <Filter>metaCollection\enumeration</Filter>
     </ClCompile>
-    <ClCompile Include="metaCollection\partial\informationRegisterQuery.cpp">
+    <ClCompile Include="metaCollection\partial\commonObject.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
-    <ClCompile Include="metaCollection\partial\commonObject.cpp">
+    <ClCompile Include="metaCollection\partial\commonObjectAction.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\partial\commonObjectModel.cpp">
@@ -949,6 +1521,9 @@
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\partial\commonObjectMetaQuery.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\commonObjectSchema.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\partial\commonObjectRefQuery.cpp">
@@ -969,6 +1544,9 @@
     <ClCompile Include="metaCollection\partial\accumulationRegisterManager_impl.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
+    <ClCompile Include="metaCollection\partial\accumulationRegisterMetadataTotals.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
     <ClCompile Include="metaCollection\partial\accumulationRegisterMetadata.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
@@ -984,7 +1562,7 @@
     <ClCompile Include="metaCollection\partial\accumulationRegisterObject.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
-    <ClCompile Include="metaCollection\partial\accumulationRegisterQuery.cpp">
+    <ClCompile Include="metaCollection\partial\accumulationRegisterMetadataSchema.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\partial\accountingRegisterEnum.cpp">
@@ -997,6 +1575,12 @@
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\partial\accountingRegisterMetadata.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\accountingRegisterMetadataSchema.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\accountingRegisterMetadataTotals.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\partial\accountingRegisterMetadata_res.cpp">
@@ -1017,10 +1601,28 @@
     <ClCompile Include="metaCollection\partial\catalogManager.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
-    <ClCompile Include="metaCollection\partial\catalogManager_impl.cpp">
+    <ClCompile Include="metaCollection\partial\catalogMetadata.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
-    <ClCompile Include="metaCollection\partial\catalogMetadata.cpp">
+    <ClCompile Include="metaCollection\partial\parameterizedJobAction.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\parameterizedJobManager.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\parameterizedJobMetadata.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\parameterizedJobMetadata_res.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\parameterizedJobRegistration.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\parameterizedJobMetadataMenu.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\parameterizedJobObject.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\partial\catalogMetadata_res.cpp">
@@ -1041,13 +1643,100 @@
     <ClCompile Include="metaCollection\partial\chartOfAccountsEnum.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
+    <ClCompile Include="metaCollection\partial\chartOfCalculationTypesEnum.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\chartOfCalculationTypesAction.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\chartOfCalculationTypesManager.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\chartOfCalculationTypesMetadata.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\chartOfCalculationTypesMetadataMenu.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\chartOfCalculationTypesMetadataProperty.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\chartOfCalculationTypesMetadata_res.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\chartOfCalculationTypesObject.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\chartOfCalculationTypesRelationTable.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\calculationRegisterManager.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\calculationRegisterManager_impl.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\calculationRegisterMetadata.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\sequenceBorderRules.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\sequenceManager.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\sequenceMetadataBorders.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\sequenceMetadata.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\sequenceMetadataMenu.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\sequenceObject.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\sequenceMetadata_res.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\calculationRegisterMetadataMenu.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\calculationRegisterMetadataProperty.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\calculationRegisterMetadataSchema.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\calculationRegisterMetadataTotals.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\calculationRegisterMetadata_res.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\calculationRegisterObject.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\calculationRegisterRecalculationMetadata.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\calculationRegisterRecalculationMetadata_res.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="calculation\calculation.cpp">
+      <Filter>calculation</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\commonObjectEnum.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
     <ClCompile Include="metaCollection\partial\chartOfAccountsManager.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
-    <ClCompile Include="metaCollection\partial\chartOfAccountsManager_impl.cpp">
+    <ClCompile Include="metaCollection\partial\chartOfAccountsMetadata.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
-    <ClCompile Include="metaCollection\partial\chartOfAccountsMetadata.cpp">
+    <ClCompile Include="metaCollection\partial\chartOfAccountsMetadataSchema.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\partial\chartOfAccountsMetadata_res.cpp">
@@ -1059,7 +1748,7 @@
     <ClCompile Include="metaCollection\partial\chartOfAccountsMetadataProperty.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
-    <ClCompile Include="metaCollection\partial\chartOfAccountsSubcontoTable.cpp">
+    <ClCompile Include="metaCollection\partial\chartOfAccountsDimensionKindsTable.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\partial\chartOfAccountsObject.cpp">
@@ -1069,9 +1758,6 @@
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\partial\chartOfCharacteristicTypesManager.cpp">
-      <Filter>metaCollection\partial</Filter>
-    </ClCompile>
-    <ClCompile Include="metaCollection\partial\chartOfCharacteristicTypesManager_impl.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\partial\chartOfCharacteristicTypesMetadata.cpp">
@@ -1089,25 +1775,13 @@
     <ClCompile Include="metaCollection\partial\chartOfCharacteristicTypesObject.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
-    <ClCompile Include="metaCollection\partial\constantAction.cpp">
-      <Filter>metaCollection\partial</Filter>
-    </ClCompile>
     <ClCompile Include="metaCollection\partial\constantManager.cpp">
-      <Filter>metaCollection\partial</Filter>
-    </ClCompile>
-    <ClCompile Include="metaCollection\partial\constantMetadataMenu.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\partial\constantMetadata.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\partial\constantMetadata_res.cpp">
-      <Filter>metaCollection\partial</Filter>
-    </ClCompile>
-    <ClCompile Include="metaCollection\partial\constantMetadataQuery.cpp">
-      <Filter>metaCollection\partial</Filter>
-    </ClCompile>
-    <ClCompile Include="metaCollection\partial\constantObject.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\partial\dataProcessorAction.cpp">
@@ -1123,9 +1797,6 @@
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\partial\dataProcessorObject.cpp">
-      <Filter>metaCollection\partial</Filter>
-    </ClCompile>
-    <ClCompile Include="metaCollection\partial\dataReportAction.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\partial\dataReportManager.cpp">
@@ -1170,9 +1841,6 @@
     <ClCompile Include="metaCollection\partial\documentObject.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
-    <ClCompile Include="metaCollection\partial\enumerationAction.cpp">
-      <Filter>metaCollection\partial</Filter>
-    </ClCompile>
     <ClCompile Include="metaCollection\partial\enumerationManager.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
@@ -1189,6 +1857,9 @@
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\partial\informationRegisterManager.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\informationRegisterMetadataSlice.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\partial\informationRegisterManager_impl.cpp">
@@ -1215,6 +1886,9 @@
     <ClCompile Include="metaCollection\resource\metaResourceObject.cpp">
       <Filter>metaCollection\resource</Filter>
     </ClCompile>
+    <ClCompile Include="metaCollection\resource\metaResourceObjectProperty.cpp">
+      <Filter>metaCollection\resource</Filter>
+    </ClCompile>
     <ClCompile Include="metaCollection\table\metaTableObject_res.cpp">
       <Filter>metaCollection\table</Filter>
     </ClCompile>
@@ -1223,24 +1897,6 @@
     </ClCompile>
     <ClCompile Include="metaCollection\table\metaTableObject.cpp">
       <Filter>metaCollection\table</Filter>
-    </ClCompile>
-    <ClCompile Include="metaCollection\partial\list\objectList.cpp">
-      <Filter>metaCollection\partial\list</Filter>
-    </ClCompile>
-    <ClCompile Include="metaCollection\partial\list\listSqlBuilder.cpp">
-      <Filter>metaCollection\partial\list</Filter>
-    </ClCompile>
-    <ClCompile Include="metaCollection\partial\list\registerSqlBuilder.cpp">
-      <Filter>metaCollection\partial\list</Filter>
-    </ClCompile>
-    <ClCompile Include="metaCollection\partial\list\objectListAction.cpp">
-      <Filter>metaCollection\partial\list</Filter>
-    </ClCompile>
-    <ClCompile Include="metaCollection\partial\list\objectListModel.cpp">
-      <Filter>metaCollection\partial\list</Filter>
-    </ClCompile>
-    <ClCompile Include="metaCollection\partial\list\objectListQuery.cpp">
-      <Filter>metaCollection\partial\list</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\partial\reference\referenceQuery.cpp">
       <Filter>metaCollection\partial\reference</Filter>
@@ -1281,6 +1937,12 @@
     <ClCompile Include="propertyManager\property\propertyBoolean.cpp">
       <Filter>propertyManager\property</Filter>
     </ClCompile>
+    <ClCompile Include="propertyManager\property\propertyDataComposition.cpp">
+      <Filter>propertyManager\property</Filter>
+    </ClCompile>
+    <ClCompile Include="propertyManager\property\propertyComposition.cpp">
+      <Filter>propertyManager\property</Filter>
+    </ClCompile>
     <ClCompile Include="propertyManager\property\propertyNumber.cpp">
       <Filter>propertyManager\property</Filter>
     </ClCompile>
@@ -1303,6 +1965,12 @@
       <Filter>propertyManager\property</Filter>
     </ClCompile>
     <ClCompile Include="propertyManager\property\propertyGeneration.cpp">
+      <Filter>propertyManager\property</Filter>
+    </ClCompile>
+    <ClCompile Include="propertyManager\property\propertySchedule.cpp">
+      <Filter>propertyManager\property</Filter>
+    </ClCompile>
+    <ClCompile Include="propertyManager\property\propertyCommandSource.cpp">
       <Filter>propertyManager\property</Filter>
     </ClCompile>
     <ClCompile Include="propertyManager\property\propertySource.cpp">
@@ -1336,9 +2004,13 @@
     <ClCompile Include="metaCollection\metaObjectComposite.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>
-    <ClCompile Include="tableInfo.cpp" />
+    <ClCompile Include="tabularModel.cpp" />
+    <ClCompile Include="tabularModelDb.cpp" />
+    <ClCompile Include="tabularModelRam.cpp" />
     <ClCompile Include="moduleInfo.cpp" />
-    <ClCompile Include="number.cpp" />
+    <ClCompile Include="fdatetime.cpp" />
+    <ClCompile Include="fnumber.cpp" />
+    <ClCompile Include="fstring.cpp" />
     <ClCompile Include="compiler\value_res.cpp">
       <Filter>compiler</Filter>
     </ClCompile>
@@ -1348,6 +2020,11 @@
     <ClCompile Include="compiler\valueFactory.cpp">
       <Filter>compiler</Filter>
     </ClCompile>
+    <ClCompile Include="commandDescription.cpp" />
+    <ClCompile Include="sourceDescription.cpp" />
+    <ClCompile Include="calcScheduleDescription.cpp" />
+    <ClCompile Include="choiceLinkDescription.cpp" />
+    <ClCompile Include="choiceLinkResolver.cpp" />
     <ClCompile Include="typeDescription.cpp" />
     <ClCompile Include="system\systemManager.cpp">
       <Filter>system</Filter>
@@ -1367,7 +2044,25 @@
     <ClCompile Include="system\value\valueFont.cpp">
       <Filter>system\value</Filter>
     </ClCompile>
+    <ClCompile Include="system\value\valueBinaryData.cpp">
+      <Filter>system\value</Filter>
+    </ClCompile>
+    <ClCompile Include="system\value\valueTextFile.cpp">
+      <Filter>system\value</Filter>
+    </ClCompile>
+    <ClCompile Include="system\value\valueHttp.cpp">
+      <Filter>system\value</Filter>
+    </ClCompile>
+    <ClCompile Include="system\value\valueSecureConnection.cpp">
+      <Filter>system\value</Filter>
+    </ClCompile>
     <ClCompile Include="system\value\valueGuid.cpp">
+      <Filter>system\value</Filter>
+    </ClCompile>
+    <ClCompile Include="system\value\valueJson.cpp">
+      <Filter>system\value</Filter>
+    </ClCompile>
+    <ClCompile Include="system\value\valueJob.cpp">
       <Filter>system\value</Filter>
     </ClCompile>
     <ClCompile Include="system\value\valueMap.cpp">
@@ -1377,6 +2072,12 @@
       <Filter>system\value</Filter>
     </ClCompile>
     <ClCompile Include="system\value\valuePoint.cpp">
+      <Filter>system\value</Filter>
+    </ClCompile>
+    <ClCompile Include="system\value\valuePointInTime.cpp">
+      <Filter>system\value</Filter>
+    </ClCompile>
+    <ClCompile Include="system\value\valueBoundary.cpp">
       <Filter>system\value</Filter>
     </ClCompile>
     <ClCompile Include="system\value\valueSize.cpp">
@@ -1414,13 +2115,93 @@
     </ClCompile>
     <ClCompile Include="value_cast.cpp" />
     <ClCompile Include="interfaceHelper.cpp" />
-    <ClCompile Include="metaCollection\metaInterfaceObject_res.cpp">
+    <ClCompile Include="compositionHelper.cpp" />
+    <ClCompile Include="functionalOptionHelper.cpp" />
+    <ClCompile Include="metaCollection\metaSectionObject_res.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>
-    <ClCompile Include="metaCollection\metaInterfaceObjectMenu.cpp">
+    <ClCompile Include="metaCollection\metaSectionObjectMenu.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>
-    <ClCompile Include="metaCollection\metaInterfaceObject.cpp">
+    <ClCompile Include="metaCollection\metaSectionObject.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaCommandObject.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaCommandObjectMenu.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaCommandObject_res.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaCommandGroupObject.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaCommandGroupObject_res.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaScheduledJobObject.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaSessionParameterObject.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaFunctionalOptionObject.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaFunctionalOptionObjectMenu.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaFunctionalOptionObject_res.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="functionalOption\functionalOptionGate.cpp">
+      <Filter>functionalOption</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaStoredValueObject.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaStoredValueObjectAction.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaStoredValueObjectMenu.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaStoredValueObjectQuery.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaStoredValueObjectRecord.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaStoredValueObjectSchema.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaSessionParameterObject_res.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaCommonAttributeObject.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaCommonAttributeObjectMenu.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaCommonAttributeObject_res.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaScheduledJobObjectMenu.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaScheduledJobObject_res.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaEventHandlerObject.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaEventHandlerObjectMenu.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaEventHandlerObject_res.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\metaModuleObjectProperty.cpp">
@@ -1439,6 +2220,9 @@
     <ClCompile Include="propertyManager\property\variant\variantGen.cpp">
       <Filter>propertyManager\property\variant</Filter>
     </ClCompile>
+    <ClCompile Include="propertyManager\property\variant\variantSchedule.cpp">
+      <Filter>propertyManager\property\variant</Filter>
+    </ClCompile>
     <ClCompile Include="propertyManager\property\variant\variantModule.cpp">
       <Filter>propertyManager\property\variant</Filter>
     </ClCompile>
@@ -1448,7 +2232,19 @@
     <ClCompile Include="propertyManager\property\variant\variantOwner.cpp">
       <Filter>propertyManager\property\variant</Filter>
     </ClCompile>
+    <ClCompile Include="propertyManager\property\variant\variantCalcSchedule.cpp">
+      <Filter>propertyManager\property\variant</Filter>
+    </ClCompile>
+    <ClCompile Include="propertyManager\property\variant\variantChoiceLink.cpp">
+      <Filter>propertyManager\property\variant</Filter>
+    </ClCompile>
     <ClCompile Include="propertyManager\property\variant\variantPicture.cpp">
+      <Filter>propertyManager\property\variant</Filter>
+    </ClCompile>
+    <ClCompile Include="propertyManager\property\variant\variantPoint.cpp">
+      <Filter>propertyManager\property\variant</Filter>
+    </ClCompile>
+    <ClCompile Include="propertyManager\property\variant\variantSize.cpp">
       <Filter>propertyManager\property\variant</Filter>
     </ClCompile>
     <ClCompile Include="propertyManager\property\variant\variantRecord.cpp">
@@ -1485,6 +2281,7 @@
       <Filter>metaCollection</Filter>
     </ClCompile>
     <ClCompile Include="backend_localization.cpp" />
+    <ClCompile Include="formatString.cpp" />
     <ClCompile Include="metaCollection\metaObjectMetadataProperty.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>
@@ -1492,6 +2289,9 @@
       <Filter>propertyManager\property</Filter>
     </ClCompile>
     <ClCompile Include="system\value\valueSpreadsheet.cpp">
+      <Filter>system\value</Filter>
+    </ClCompile>
+    <ClCompile Include="system\value\valueSpreadsheetDetails.cpp">
       <Filter>system\value</Filter>
     </ClCompile>
     <ClCompile Include="backend_spreadsheet.cpp" />
@@ -1525,21 +2325,151 @@
     <ClCompile Include="system\value\valueSpreadsheetCell.cpp">
       <Filter>system\value</Filter>
     </ClCompile>
-    <ClCompile Include="tableView.cpp" />
+    <ClCompile Include="tabularModelView.cpp" />
+    <ClCompile Include="propertyManager\property\propertyAccountingKind.cpp">
+      <Filter>propertyManager\property</Filter>
+    </ClCompile>
     <ClCompile Include="propertyManager\property\propertyChartOfAccounts.cpp">
       <Filter>propertyManager\property</Filter>
     </ClCompile>
     <ClCompile Include="propertyManager\property\propertyChartOfCharacteristicTypes.cpp">
       <Filter>propertyManager\property</Filter>
     </ClCompile>
-    <ClCompile Include="metaCollection\partial\chartOfAccountsMetadataQuery.cpp">
-      <Filter>metaCollection\partial</Filter>
+    <ClCompile Include="propertyManager\property\propertyChartOfCalculationTypes.cpp">
+      <Filter>propertyManager\property</Filter>
+    </ClCompile>
+    <ClCompile Include="propertyManager\property\propertyFunctionalOptions.cpp">
+      <Filter>propertyManager\property</Filter>
+    </ClCompile>
+    <ClCompile Include="propertyManager\property\propertyCalcSchedule.cpp">
+      <Filter>propertyManager\property</Filter>
+    </ClCompile>
+    <ClCompile Include="propertyManager\property\propertyChoiceLink.cpp">
+      <Filter>propertyManager\property</Filter>
     </ClCompile>
     <ClCompile Include="characteristicCtor.cpp" />
+    <ClCompile Include="vcs\gitService.cpp">
+      <Filter>vcs</Filter>
+    </ClCompile>
+    <ClCompile Include="plugin\pluginManager.cpp" />
+    <ClCompile Include="plugin\pluginHost.cpp">
+      <Filter>plugin</Filter>
+    </ClCompile>
+    <ClCompile Include="session\session.cpp">
+      <Filter>session</Filter>
+    </ClCompile>
+    <ClCompile Include="session\sessionParameters.cpp">
+      <Filter>session</Filter>
+    </ClCompile>
+    <ClCompile Include="session\sessionHolder.cpp">
+      <Filter>session</Filter>
+    </ClCompile>
+    <ClCompile Include="session\sessionException.cpp">
+      <Filter>session</Filter>
+    </ClCompile>
+    <ClCompile Include="session\sessionRegistry.cpp">
+      <Filter>session</Filter>
+    </ClCompile>
+    <ClCompile Include="session\sessionSnapshot.cpp">
+      <Filter>session</Filter>
+    </ClCompile>
+    <ClCompile Include="session\designerExclusivePolicy.cpp">
+      <Filter>session</Filter>
+    </ClCompile>
+    <ClCompile Include="session\serviceExclusivePolicy.cpp">
+      <Filter>session</Filter>
+    </ClCompile>
+    <ClCompile Include="session\workerPoolHeadless.cpp">
+      <Filter>session</Filter>
+    </ClCompile>
+    <ClCompile Include="lock\lockHandle.cpp">
+      <Filter>lock</Filter>
+    </ClCompile>
+    <ClCompile Include="lock\lockHolder.cpp">
+      <Filter>lock</Filter>
+    </ClCompile>
+    <ClCompile Include="lock\lockKeyHash.cpp">
+      <Filter>lock</Filter>
+    </ClCompile>
+    <ClCompile Include="lock\lockManager.cpp">
+      <Filter>lock</Filter>
+    </ClCompile>
+    <ClCompile Include="job\jobManager.cpp">
+      <Filter>job</Filter>
+    </ClCompile>
+    <ClCompile Include="job\jobBackground.cpp">
+      <Filter>job</Filter>
+    </ClCompile>
+    <ClCompile Include="job\jobRunByteCode.cpp">
+      <Filter>job</Filter>
+    </ClCompile>
+    <ClCompile Include="job\jobRegister.cpp">
+      <Filter>job</Filter>
+    </ClCompile>
+    <ClCompile Include="job\platformJobs.cpp">
+      <Filter>job</Filter>
+    </ClCompile>
+    <ClCompile Include="job\jobSchedule.cpp">
+      <Filter>job</Filter>
+    </ClCompile>
+    <ClCompile Include="job\jobScheduleRules.cpp">
+      <Filter>job</Filter>
+    </ClCompile>
+    <ClCompile Include="settings\settingsStorage.cpp">
+      <Filter>settings</Filter>
+    </ClCompile>
+    <ClCompile Include="settings\settingsComposer.cpp">
+      <Filter>settings</Filter>
+    </ClCompile>
+    <ClCompile Include="sheetFormat\sheetFormat.cpp">
+      <Filter>sheetFormat</Filter>
+    </ClCompile>
+    <ClCompile Include="sheetFormat\sheetFormatNative.cpp">
+      <Filter>sheetFormat</Filter>
+    </ClCompile>
+    <ClCompile Include="sheetFormat\sheetFormatDocx.cpp">
+      <Filter>sheetFormat</Filter>
+    </ClCompile>
+    <ClCompile Include="sheetFormat\sheetFormatXlsxRead.cpp">
+      <Filter>sheetFormat</Filter>
+    </ClCompile>
+    <ClCompile Include="sheetFormat\sheetFormatXlsxWrite.cpp">
+      <Filter>sheetFormat</Filter>
+    </ClCompile>
+    <ClCompile Include="utils\passwordHash.cpp">
+      <Filter>utils</Filter>
+    </ClCompile>
+    <ClCompile Include="utils\dataVersion.cpp">
+      <Filter>utils</Filter>
+    </ClCompile>
+    <ClCompile Include="utils\sha256.cpp">
+      <Filter>utils</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <Filter Include="mcp">
+      <UniqueIdentifier>{519ca79a-6240-43ae-9637-76d4703e2a93}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="mcp\tools">
+      <UniqueIdentifier>{47f007aa-54f8-4d79-81ac-462ac7fbcd79}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="query">
+      <UniqueIdentifier>{c2e2b453-0a2b-4f32-8d6b-1b22c4b9e201}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="composition">
+      <UniqueIdentifier>{8f4d2a17-6c3e-4b9a-a52d-7e90c41f55b2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="functionalOption">
+      <UniqueIdentifier>{dde010a6-35dc-4fb6-8c21-ccae9a9c760d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="composition\drivers">
+      <UniqueIdentifier>{3b6a91d4-52c7-4e18-9f0a-2d84e6b71c39}</UniqueIdentifier>
+    </Filter>
     <Filter Include="debugger">
       <UniqueIdentifier>{e7188396-0035-47b0-b863-be1ec229b525}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="diagnostics">
+      <UniqueIdentifier>{a1b2c3d4-5e6f-7a8b-9c0d-1e2f3a4b5c6d}</UniqueIdentifier>
     </Filter>
     <Filter Include="moduleManager">
       <UniqueIdentifier>{ac49a1b3-bb42-4b4f-9b17-a6ec169f254f}</UniqueIdentifier>
@@ -1562,11 +2492,14 @@
     <Filter Include="utils">
       <UniqueIdentifier>{bc892a4b-bcaa-4561-8a79-069a784639b3}</UniqueIdentifier>
     </Filter>
+    <Filter Include="logger">
+      <UniqueIdentifier>{7c4a5d12-9b3e-4f88-a2e1-3d6c4f1a5b27}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="syntaxHelper">
+      <UniqueIdentifier>{1a4f8e02-7b66-4f9b-9d3a-6c2e8b1d5f04}</UniqueIdentifier>
+    </Filter>
     <Filter Include="databaseLayer\firebird">
       <UniqueIdentifier>{30f3747a-6465-49ff-8cf7-9d11d34be44e}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="databaseLayer\mysql">
-      <UniqueIdentifier>{204db032-98ae-4033-89f0-20216a95904f}</UniqueIdentifier>
     </Filter>
     <Filter Include="databaseLayer\odbc">
       <UniqueIdentifier>{b49afbd4-405d-43a6-9819-a18723fab8ec}</UniqueIdentifier>
@@ -1576,6 +2509,9 @@
     </Filter>
     <Filter Include="fileSystem">
       <UniqueIdentifier>{abe9471e-5391-4bba-a9f7-6f050759d4b2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="serialize">
+      <UniqueIdentifier>{3f1c8a64-2d7e-4b19-9c0a-7e5b1a2f6d40}</UniqueIdentifier>
     </Filter>
     <Filter Include="fileSystem\lz">
       <UniqueIdentifier>{b90ba678-9672-4d50-aebb-fac2355d5f67}</UniqueIdentifier>
@@ -1591,6 +2527,9 @@
     </Filter>
     <Filter Include="metaCollection">
       <UniqueIdentifier>{9bb88d5f-8ec9-4280-a591-9d5ce4472e70}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="metaCollection\accountingKind">
+      <UniqueIdentifier>{0d4b1c8a-2f41-4a63-9b7e-6c2f1d84a501}</UniqueIdentifier>
     </Filter>
     <Filter Include="metaCollection\dimension">
       <UniqueIdentifier>{33239027-ee04-4fe5-9c06-558dc0996576}</UniqueIdentifier>
@@ -1664,6 +2603,33 @@
     <Filter Include="res">
       <UniqueIdentifier>{a0483170-54a9-48af-976d-9a8f5c30d00b}</UniqueIdentifier>
     </Filter>
+    <Filter Include="plugin">
+      <UniqueIdentifier>{6b3a8c2e-1f5d-4f4d-9c2a-9f5b1a3d4e6f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="vcs">
+      <UniqueIdentifier>{7b1f4d92-3c65-4a18-9d4e-8f2a6c07b311}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="session">
+      <UniqueIdentifier>{d4f2a1b8-3e9c-4b5a-8d7f-1c2e3a4b5c6d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="cipher">
+      <UniqueIdentifier>{7c3e9a41-5b2d-4f8e-9a61-2d4c8b7e1f35}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="lock">
+      <UniqueIdentifier>{6c0f1d2a-7b3e-4d8a-9f1c-2e3b5a6c7d8e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="job">
+      <UniqueIdentifier>{9a1e4c7b-2d6f-4a3e-b8c5-7d1f2a4e6b9c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="settings">
+      <UniqueIdentifier>{3f7b2c5d-8e14-4a6b-9c02-5d8e7a1b3c4f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="sheetFormat">
+      <UniqueIdentifier>{8c1d4a92-6f30-4b7e-a58d-2e94c07b6a15}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="calculation">
+      <UniqueIdentifier>{4b6e1d93-7a25-4c8f-b31e-9d0a5c2f7e64}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <CopyFileToFolders Include="databaseLayer\postgres\engine\dll\libcrypto-3-x64.dll">
@@ -1686,6 +2652,39 @@
     </CopyFileToFolders>
     <CopyFileToFolders Include="databaseLayer\firebird\engine\dll\firebird.msg">
       <Filter>databaseLayer\firebird\engine\dll</Filter>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="databaseLayer\firebird\engine\dll\firebird_x86.exe">
+      <Filter>databaseLayer\firebird\engine\dll</Filter>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="databaseLayer\firebird\engine\dll\firebird_x64.exe">
+      <Filter>databaseLayer\firebird\engine\dll</Filter>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="databaseLayer\firebird\engine\dll\security5.fdb">
+      <Filter>databaseLayer\firebird\engine\dll</Filter>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="databaseLayer\firebird\engine\dll\plugins\srp_x86.dll">
+      <Filter>databaseLayer\firebird\engine\dll\plugins</Filter>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="databaseLayer\firebird\engine\dll\plugins\srp_x64.dll">
+      <Filter>databaseLayer\firebird\engine\dll\plugins</Filter>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="databaseLayer\firebird\engine\dll\plugins\chacha_x86.dll">
+      <Filter>databaseLayer\firebird\engine\dll\plugins</Filter>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="databaseLayer\firebird\engine\dll\plugins\chacha_x64.dll">
+      <Filter>databaseLayer\firebird\engine\dll\plugins</Filter>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="databaseLayer\firebird\engine\dll\plugins\legacy_auth_x86.dll">
+      <Filter>databaseLayer\firebird\engine\dll\plugins</Filter>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="databaseLayer\firebird\engine\dll\plugins\legacy_auth_x64.dll">
+      <Filter>databaseLayer\firebird\engine\dll\plugins</Filter>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="databaseLayer\firebird\engine\dll\plugins\legacy_usermanager_x86.dll">
+      <Filter>databaseLayer\firebird\engine\dll\plugins</Filter>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="databaseLayer\firebird\engine\dll\plugins\legacy_usermanager_x64.dll">
+      <Filter>databaseLayer\firebird\engine\dll\plugins</Filter>
     </CopyFileToFolders>
     <CopyFileToFolders Include="databaseLayer\firebird\engine\dll\firebird.conf">
       <Filter>databaseLayer\firebird\engine\dll</Filter>
@@ -1744,5 +2743,361 @@
     <ResourceCompile Include="res\backend.rc">
       <Filter>res</Filter>
     </ResourceCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="databaseLayer\databaseQueryBuilder.cpp">
+      <Filter>databaseLayer</Filter>
+    </ClCompile>
+    <ClCompile Include="query\queryColumn.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
+    <ClCompile Include="query\dataQueryBuilder.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
+    <ClCompile Include="query\queryLexer.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
+    <ClCompile Include="query\queryRender.cpp" />
+    <ClCompile Include="query\queryConstructorModel.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
+    <ClCompile Include="query\queryTempStore.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
+    <ClCompile Include="query\queryParser.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
+    <ClCompile Include="query\queryLowering.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
+    <ClCompile Include="query\queryException.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
+    <ClCompile Include="query\queryHierarchy.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
+    <ClCompile Include="query\queryRewrite.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\lambdaQueryAST.cpp">
+      <Filter>compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="query\queryableFactory.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
+    <ClCompile Include="composition\dataComposer.cpp">
+      <Filter>composition</Filter>
+    </ClCompile>
+    <ClCompile Include="composition\dataComposerRun.cpp">
+      <Filter>composition</Filter>
+    </ClCompile>
+    <ClCompile Include="composition\drivers\spreadsheetComposeDriver.cpp">
+      <Filter>composition\drivers</Filter>
+    </ClCompile>
+    <ClCompile Include="composition\ramComposer.cpp">
+      <Filter>composition</Filter>
+    </ClCompile>
+    <ClCompile Include="composition\composeEvaluate.cpp">
+      <Filter>composition</Filter>
+    </ClCompile>
+    <ClCompile Include="composition\composeRunSchema.cpp">
+      <Filter>composition</Filter>
+    </ClCompile>
+    <ClCompile Include="composition\compositionCondition.cpp">
+      <Filter>composition</Filter>
+    </ClCompile>
+    <ClCompile Include="composition\compositionTheme.cpp">
+      <Filter>composition</Filter>
+    </ClCompile>
+    <ClCompile Include="system\value\valueComposer.cpp">
+      <Filter>system\value</Filter>
+    </ClCompile>
+    <ClCompile Include="system\value\valueQuery.cpp">
+      <Filter>system\value</Filter>
+    </ClCompile>
+    <ClCompile Include="system\value\valueQueryable.cpp">
+      <Filter>system\value</Filter>
+    </ClCompile>
+    <ClCompile Include="system\value\valueDataComposition.cpp">
+      <Filter>system\value</Filter>
+    </ClCompile>
+    <ClCompile Include="system\value\valueDynamicList.cpp">
+      <Filter>system\value</Filter>
+    </ClCompile>
+    <ClCompile Include="query\queryProvider.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
+    <ClCompile Include="query\queryable.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
+    <ClCompile Include="query\dbTableProvider.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
+    <ClCompile Include="query\columnLayout.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
+    <ClCompile Include="query\dataMover.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
+    <ClCompile Include="query\schemaBuilder.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
+    <ClCompile Include="query\structureBatch.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
+    <ClCompile Include="databaseLayer\databaseMaterializeBuilder.cpp">
+      <Filter>databaseLayer</Filter>
+    </ClCompile>
+    <ClCompile Include="query\derivedStateBuilder.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
+    <ClCompile Include="query\queryRamTable.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
+    <ClCompile Include="query\schemaSnapshot.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
+    <ClCompile Include="query\structureBuilder.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
+    <ClCompile Include="query\tempTableManager.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
+    <ClCompile Include="moduleManager\moduleManagerDataUnit.cpp">
+      <Filter>moduleManager</Filter>
+    </ClCompile>
+    <ClInclude Include="databaseLayer\columnType.h">
+      <Filter>databaseLayer</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\databaseQueryBuilder.h">
+      <Filter>databaseLayer</Filter>
+    </ClInclude>
+    <ClInclude Include="query\queryable.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\rolePolicyFold.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\dataQueryBuilder.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\queryProvider.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\dbTableProvider.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\columnLayout.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\columnSpread.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\dataMover.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\schemaBuilder.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\structureBatch.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\databaseMaterializeBuilder.h">
+      <Filter>databaseLayer</Filter>
+    </ClInclude>
+    <ClInclude Include="query\derivedStateBuilder.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\schemaSnapshot.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\structureBuilder.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\tempTableManager.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\queryRamTable.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\queryRowCursor.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\queryKeywords.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\queryLexer.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\queryAST.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\queryRender.h" />
+    <ClInclude Include="query\queryConstructorModel.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\queryTempStore.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\queryParser.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\queryLowering.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\queryException.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\queryHierarchy.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\queryUnfold.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\queryBalanceRole.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\queryRewrite.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\lambdaQueryAST.h">
+      <Filter>compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="query\queryableFactory.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="composition\dataComposer.h">
+      <Filter>composition</Filter>
+    </ClInclude>
+    <ClInclude Include="composition\dataComposerInternal.h">
+      <Filter>composition</Filter>
+    </ClInclude>
+    <ClInclude Include="composition\drivers\compositionDriver.h">
+      <Filter>composition\drivers</Filter>
+    </ClInclude>
+    <ClInclude Include="composition\drivers\spreadsheetComposeDriver.h">
+      <Filter>composition\drivers</Filter>
+    </ClInclude>
+    <ClInclude Include="composition\drivers\listFetchDriver.h">
+      <Filter>composition\drivers</Filter>
+    </ClInclude>
+    <ClInclude Include="composition\drivers\tableComposeDriver.h">
+      <Filter>composition\drivers</Filter>
+    </ClInclude>
+    <ClInclude Include="composition\composeEvaluate.h">
+      <Filter>composition</Filter>
+    </ClInclude>
+    <ClInclude Include="composition\composeRunSchema.h">
+      <Filter>composition</Filter>
+    </ClInclude>
+    <ClInclude Include="composition\compositionCondition.h">
+      <Filter>composition</Filter>
+    </ClInclude>
+    <ClInclude Include="composition\compositionTheme.h">
+      <Filter>composition</Filter>
+    </ClInclude>
+    <ClInclude Include="system\value\valueComposer.h">
+      <Filter>system\value</Filter>
+    </ClInclude>
+    <ClInclude Include="system\value\valueQuery.h">
+      <Filter>system\value</Filter>
+    </ClInclude>
+    <ClInclude Include="system\value\valueQueryable.h">
+      <Filter>system\value</Filter>
+    </ClInclude>
+    <ClInclude Include="system\value\valueDataComposition.h">
+      <Filter>system\value</Filter>
+    </ClInclude>
+    <ClInclude Include="system\value\valueDynamicList.h">
+      <Filter>system\value</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="appEnv.cpp" />
+    <ClCompile Include="compositionDescription.cpp" />
+    <ClCompile Include="databaseLayer\preparedStatement.cpp">
+      <Filter>databaseLayer</Filter>
+    </ClCompile>
+    <ClCompile Include="diagnostics\journal.cpp">
+      <Filter>diagnostics</Filter>
+    </ClCompile>
+    <ClCompile Include="diagnostics\leakTracker.cpp">
+      <Filter>diagnostics</Filter>
+    </ClCompile>
+    <ClCompile Include="eventDispatcher.cpp" />
+    <ClCompile Include="homePageDescription.cpp" />
+    <ClCompile Include="metaCollection\metaObjectEnum.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="propertyManager\property\propertyDynamicList.cpp">
+      <Filter>propertyManager\property</Filter>
+    </ClCompile>
+    <ClCompile Include="propertyManager\property\propertyDynamicSource.cpp">
+      <Filter>propertyManager\property</Filter>
+    </ClCompile>
+    <ClCompile Include="propertyManager\property\variant\variantDynamicSource.cpp">
+      <Filter>propertyManager\property\variant</Filter>
+    </ClCompile>
+    <ClCompile Include="query\queryReadState.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
+    <ClCompile Include="srcDataObject.cpp" />
+    <ClCompile Include="system\value\composition\valueComposerField.cpp">
+      <Filter>system\value\composition</Filter>
+    </ClCompile>
+    <ClCompile Include="system\value\composition\valueComposerSettings.cpp">
+      <Filter>system\value\composition</Filter>
+    </ClCompile>
+    <ClCompile Include="system\value\valueBackgroundJob.cpp">
+      <Filter>system\value</Filter>
+    </ClCompile>
+    <ClCompile Include="tabularDataObject.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="appEnv.h" />
+    <ClInclude Include="compositionDescription.h" />
+    <ClInclude Include="diagnostics\journal.h">
+      <Filter>diagnostics</Filter>
+    </ClInclude>
+    <ClInclude Include="diagnostics\leakTracker.h">
+      <Filter>diagnostics</Filter>
+    </ClInclude>
+    <ClInclude Include="eventDispatcher.h" />
+    <ClInclude Include="homePageDescription.h" />
+    <ClInclude Include="metaCollection\createRequest.h">
+      <Filter>metaCollection</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\metaObjectEnum.h">
+      <Filter>metaCollection</Filter>
+    </ClInclude>
+    <ClInclude Include="propertyManager\property\propertyDynamicList.h">
+      <Filter>propertyManager\property</Filter>
+    </ClInclude>
+    <ClInclude Include="propertyManager\property\propertyDynamicSource.h">
+      <Filter>propertyManager\property</Filter>
+    </ClInclude>
+    <ClInclude Include="propertyManager\property\variant\variantComposition.h">
+      <Filter>propertyManager\property\variant</Filter>
+    </ClInclude>
+    <ClInclude Include="propertyManager\property\variant\variantDynamicSource.h">
+      <Filter>propertyManager\property\variant</Filter>
+    </ClInclude>
+    <ClInclude Include="query\queryReadState.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="srcDataObject.h" />
+    <ClInclude Include="system\value\composition\valueComposerField.h">
+      <Filter>system\value\composition</Filter>
+    </ClInclude>
+    <ClInclude Include="system\value\composition\valueComposerSettings.h">
+      <Filter>system\value\composition</Filter>
+    </ClInclude>
+    <ClInclude Include="system\value\valueBackgroundJob.h">
+      <Filter>system\value</Filter>
+    </ClInclude>
+    <ClInclude Include="tabularDataObject.h" />
+    <ClInclude Include="utils\debugTrace.h">
+      <Filter>utils</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

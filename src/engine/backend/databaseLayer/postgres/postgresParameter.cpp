@@ -1,12 +1,15 @@
 #include "postgresParameter.h"
 #include "backend/databaseLayer/databaseLayer.h"
+#include "backend/backend_exception.h"
 
 // ctor
 ibDatabaseParameterPostgres::ibDatabaseParameterPostgres() : m_nParameterType(ibDatabaseParameterPostgres::PARAM_NULL)
 {
 }
 
-ibDatabaseParameterPostgres::ibDatabaseParameterPostgres(const wxString& strValue) : m_nParameterType(ibDatabaseParameterPostgres::PARAM_STRING), m_strValue(strValue), m_nBufferLength(strValue.Length())
+// A value's text goes to the wire as it came: encoded here, straight from its own characters, and the bytes
+// kept — no wxString made to hold it until GetDataPtr.
+ibDatabaseParameterPostgres::ibDatabaseParameterPostgres(const ibString& strValue) : m_nParameterType(ibDatabaseParameterPostgres::PARAM_STRING), m_CharBufferValue(ConvertToUnicodeStream(strValue)), m_nBufferLength(strValue.Length())
 {
 }
 
@@ -30,9 +33,10 @@ ibDatabaseParameterPostgres::ibDatabaseParameterPostgres(bool bValue) : m_nParam
 	m_strValue = wxString::Format(wxT("%d"), bValue);
 }
 
-ibDatabaseParameterPostgres::ibDatabaseParameterPostgres(const wxDateTime& dateValue) : m_nParameterType(ibDatabaseParameterPostgres::PARAM_DATETIME)
+ibDatabaseParameterPostgres::ibDatabaseParameterPostgres(const ibDateTimeParts& date) : m_nParameterType(ibDatabaseParameterPostgres::PARAM_DATETIME)
 {
-	m_strDateValue = dateValue.Format(wxT("%Y-%m-%d %H:%M:%S"));
+	m_strDateValue = wxString::Format(wxT("%04d-%02u-%02u %02u:%02u:%02u"),
+		date.m_year, date.m_month, date.m_day, date.m_hour, date.m_minute, date.m_second);
 	m_nBufferLength = m_strDateValue.Length();
 }
 
@@ -60,8 +64,7 @@ const void* ibDatabaseParameterPostgres::GetDataPtr()
 	switch (m_nParameterType)
 	{
 	case ibDatabaseParameterPostgres::PARAM_STRING:
-		m_CharBufferValue = ConvertToUnicodeStream(m_strValue);
-		pReturn = m_CharBufferValue;
+		pReturn = m_CharBufferValue;   // encoded when the value was given (the constructor)
 		break;
 	case ibDatabaseParameterPostgres::PARAM_INT:
 		m_CharBufferValue = ConvertToUnicodeStream(m_strValue);
@@ -90,10 +93,21 @@ const void* ibDatabaseParameterPostgres::GetDataPtr()
 		pReturn = nullptr;
 		break;
 	default:
-		pReturn = nullptr;
+		// ⭐ RAISES rather than returning nullptr. PARAM_NULL above returns nullptr because a NULL is
+		// what it MEANS; falling here means the kind is one this parameter cannot render, and
+		// answering with the same nullptr makes "I do not know what this is" indistinguishable from
+		// "this is deliberately empty" — a value silently becomes a NULL column, which reads back as
+		// a legitimately absent one forever after.
+		//
+		// Unreachable today: every constructor sets a known kind. It is written anyway because the
+		// Firebird driver's equivalent default was unreachable too, right up until a caller reached
+		// it, and it cost a day of looking for a phantom (docs/private/query-engine-layers.md).
+		ibBackendCoreException::Error(
+			_("PostgreSQL: a parameter of kind %d cannot be rendered for binding"),
+			(int)m_nParameterType);
 		break;
 	};
-	
+
 	return pReturn;
 }
 

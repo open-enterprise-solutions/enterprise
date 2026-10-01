@@ -42,8 +42,9 @@ wxEND_EVENT_TABLE()
 
 static wxWindowID control_id = wxID_HIGHEST + 3000;
 
-bool ibFormEditView::OnCreate(ibMetaDocument* doc, long flags)
+bool ibFormEditView::OnCreate(ibDocument* docBase, long flags)
 {
+	ibMetaDocument* doc = GetDocument();
 	m_visualNotebook = new ibVisualEditorNotebook(doc, m_viewFrame, wxID_ANY, flags);
 
 	wxWindowID id = control_id;
@@ -65,7 +66,7 @@ bool ibFormEditView::OnCreate(ibMetaDocument* doc, long flags)
 		return false;
 
 	m_visualNotebook->RefreshEditor();
-	return ibMetaView::OnCreate(doc, flags);
+	return ibView::OnCreate(docBase, flags);
 }
 
 #if wxUSE_MENUS	
@@ -99,12 +100,12 @@ wxMenuBar* ibFormEditView::CreateMenuBar() const
 }
 #endif 
 
-void ibFormEditView::OnActivateView(bool activate, wxView* activeView, wxView* deactiveView)
+void ibFormEditView::OnActivateView(bool activate, ibView* activeView, ibView* deactiveView)
 {
 	if (activate) m_visualNotebook->ActivateEditor();
 }
 
-void ibFormEditView::OnUpdate(wxView* sender, wxObject* hint)
+void ibFormEditView::OnUpdate(ibView* sender, wxObject* hint)
 {
 	if (m_visualNotebook != nullptr)
 		m_visualNotebook->RefreshEditor();
@@ -166,9 +167,9 @@ void ibFormEditView::OnCreateToolbar(wxAuiToolBar* toolbar)
 			toolbar->AddSeparator();
 			toolbar->AddTool(wxID_FORMAT_CODE, _("Format selection"), wxArtProvider::GetBitmapBundle(wxART_FORMAT_CODE, wxART_DOC_MODULE), _("Format"), wxItemKind::wxITEM_NORMAL);
 			toolbar->EnableTool(wxID_FORMAT_CODE, m_visualNotebook->IsEditable());
-			toolbar->AddTool(wxID_INCREASE_INDENT, _("Increase indent"), wxArtProvider::GetBitmapBundle(wxART_GO_FORWARD, wxART_TOOLBAR), _("Indent"), wxItemKind::wxITEM_NORMAL);
+			toolbar->AddTool(wxID_INCREASE_INDENT, _("Increase indent"), wxArtProvider::GetBitmapBundle(wxART_INCREASE_INDENT, wxART_DOC_MODULE), _("Indent"), wxItemKind::wxITEM_NORMAL);
 			toolbar->EnableTool(wxID_INCREASE_INDENT, m_visualNotebook->IsEditable());
-			toolbar->AddTool(wxID_DECREASE_INDENT, _("Decrease indent"), wxArtProvider::GetBitmapBundle(wxART_GO_BACK, wxART_TOOLBAR), _("Unindent"), wxItemKind::wxITEM_NORMAL);
+			toolbar->AddTool(wxID_DECREASE_INDENT, _("Decrease indent"), wxArtProvider::GetBitmapBundle(wxART_DECREASE_INDENT, wxART_DOC_MODULE), _("Unindent"), wxItemKind::wxITEM_NORMAL);
 			toolbar->EnableTool(wxID_DECREASE_INDENT, m_visualNotebook->IsEditable());
 		}
 	}
@@ -240,10 +241,10 @@ void ibFormEditView::OnMenuEvent(wxCommandEvent& event)
 }
 
 // ----------------------------------------------------------------------------
-// ibModulibDocument: wxDocument and wxTextCtrl married
+// ibModuleDocument: ibDocument and wxTextCtrl married
 // ----------------------------------------------------------------------------
 
-wxIMPLEMENT_CLASS(ibFormDocument, ibMetaDocument);
+wxIMPLEMENT_CLASS(ibFormDocument, ibValueModuleDocument);
 
 bool ibFormDocument::OnCreate(const wxString& path, long flags)
 {
@@ -309,13 +310,13 @@ bool ibFormDocument::Save()
 }
 
 // ----------------------------------------------------------------------------
-// ibTextFilibDocument implementation
+// ibTextFileDocument implementation
 // ----------------------------------------------------------------------------
 
 wxIMPLEMENT_DYNAMIC_CLASS(ibFormEditDocument, ibFormDocument);
 
 ibVisualEditorNotebook* ibFormEditDocument::GetVisualNotebook() const
 {
-	wxView* view = GetFirstView();
+	ibView* view = GetFirstView();
 	return view ? wxDynamicCast(view, ibFormEditView)->GetVisualNotebook() : nullptr;
 }

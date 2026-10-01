@@ -29,33 +29,24 @@ ibVisualHostClient::~ibVisualHostClient()
 // Push the form's caption to the owning tab (ibWebDocChildFrame) so
 // /session reports the new title. The host is parented under the tab
 // via SetParent; cast-and-SetTitle is the web analogue of desktop's
-// wxDocument::SetTitle chain.
+// ibDocument::SetTitle chain.
 void ibVisualHostClient::SetCaption(const wxString& strCaption)
 {
 	if (auto* tab = dynamic_cast<ibWebDocChildFrame*>(GetParent()))
 		tab->SetTitle(strCaption);
 }
 
-// Mirror desktop: mutate the root BoxSizer's orientation so child
-// layout rebuilds on the next response reflect the new axis. The
-// host owns the root sizer via SetSizer; only wxBoxSizer-style
-// sizers carry an orientation (grid sizers drop the call silently).
-void ibVisualHostClient::SetOrientation(int orient)
-{
-	if (auto* box = dynamic_cast<ibWebBoxSizer*>(GetSizer()))
-		box->SetOrientation(orient);
-}
-
 #else  // !OES_USE_WEB
-// Desktop-only implementation: wxScrolledCanvas-hosted form, MDI tab,
-// wxDocView Doc/View machinery.
+// Desktop-only implementation: the facade panel that carries the form's chrome, with the
+// scrolling window holding its controls inside; tab, wxDocView Doc/View machinery.
 
-ibVisualHostClient::ibVisualHostClient(ibFormVisualDocument* document, ibValueForm* valueForm, wxWindow* parent) :
+ibVisualHostClient::ibVisualHostClient(ibFormVisualDocument* document, ibValueForm* valueForm, ibFrontendWindow* parent) :
+	// On desktop ibFrontendWindow == wxWindow, so this just forwards.
 	ibVisualHost(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize),
-	m_document(document),
-	m_valueForm(valueForm),
+	m_dataViewSizeChanged(false),
 	m_dataViewSize(wxDefaultSize),
-	m_dataViewSizeChanged(false)
+	m_valueForm(valueForm),
+	m_document(document)
 {
 	ibVisualHostClient::Bind(wxEVT_SIZE, &ibVisualHostClient::OnSize, this);
 	ibVisualHostClient::Bind(wxEVT_IDLE, &ibVisualHostClient::OnIdle, this);
@@ -144,7 +135,12 @@ void ibVisualHostClient::SetCaption(const wxString& strCaption)
 		if (srcObject != nullptr && !m_document->IsVisualDemonstrationDoc()) {
 			m_document->SetTitle(srcObject->GetSourceCaption());
 			const ibValueMetaObjectGenericData* genericObject = srcObject->GetSourceMetaObject();
-			m_document->SetFilename(genericObject->GetFileName(), true);
+			if (genericObject != nullptr) {
+				m_document->SetFilename(genericObject->GetFileName(), true);
+			}
+			else {
+				m_document->SetFilename(srcObject->GetSourceCaption(), true);
+			}
 		}
 		else {
 			const ibValueMetaObjectFormBase* creator = handler->GetFormMetaObject();
@@ -158,15 +154,6 @@ void ibVisualHostClient::SetCaption(const wxString& strCaption)
 		m_document->SetTitle(strCaption);
 		m_document->SetFilename(wxEmptyString, true);
 	}
-}
-
-void ibVisualHostClient::SetOrientation(int orient)
-{
-	const wxWindow* backgroundWindow = GetBackgroundWindow();
-	wxASSERT(backgroundWindow);
-	wxBoxSizer* createdBoxSizer = dynamic_cast<wxBoxSizer*>(backgroundWindow->GetSizer());
-	if (createdBoxSizer != nullptr) createdBoxSizer->SetOrientation(orient);
-	wxASSERT(createdBoxSizer);
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////

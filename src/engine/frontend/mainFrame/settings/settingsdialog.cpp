@@ -3,6 +3,7 @@
 #include "keybinderdialog.h"
 #include "fontcolorsettingspanel.h"
 #include "editorsettingspanel.h"
+#include "mcpsettingspanel.h"
 #include "showhelpevent.h"
 
 #include <wx/bookctrl.h>
@@ -28,6 +29,9 @@ ibDialogSettings::ibDialogSettings(wxWindow* parent)
     m_fontColorSettingsPanel = new ibPanelFontColorSettings(GetBookCtrl());
     GetBookCtrl()->AddPage(m_fontColorSettingsPanel, _("Font and Colors"));
 
+    m_mcpSettingsPanel = new ibPanelMcpSettings(GetBookCtrl());
+    GetBookCtrl()->AddPage(m_mcpSettingsPanel, _("Assistant access"));
+
     LayoutDialog();
 
 }
@@ -37,6 +41,7 @@ void ibDialogSettings::OnInitDialog(wxInitDialogEvent& event)
     m_keyBinderDialog->Initialize();
     m_fontColorSettingsPanel->Initialize();
     m_editorSettingsPanel->Initialize();
+    m_mcpSettingsPanel->Initialize();
 }
 
 ibDialogKeyBinder* ibDialogSettings::GetKeyBinderDialog() const
@@ -52,6 +57,11 @@ ibPanelFontColorSettings* ibDialogSettings::GetFontColorSettingsPanel() const
 ibPanelEditorSettings* ibDialogSettings::GetEditorSettingsPanel() const
 {
     return m_editorSettingsPanel;
+}
+
+ibPanelMcpSettings* ibDialogSettings::GetMcpSettingsPanel() const
+{
+    return m_mcpSettingsPanel;
 }
 
 void ibDialogSettings::OnHelp(wxHelpEvent&)

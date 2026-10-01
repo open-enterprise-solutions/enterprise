@@ -2,7 +2,8 @@
 
 #include "backend/propertyManager/property/variant/variantOwner.h"
 
-#include "frontend/propertyManager/property/private/prop.h"
+#include "frontend/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
+#include "frontend/propertyManager/property/private/propertyRegistry.h"
 #include "frontend/propertyManager/propertyEditor.h"
 
 #define icon_size 16
@@ -19,28 +20,22 @@ class ibPropertyOwnerLoader
 public:
 	ibPropertyOwnerLoader()
 	{
-		ibPG_IMPLEMENT_PROPERTY_CALLBACK(ibPGOwnerProperty, ibPropertyOwner::ms_propertyOwner);
+		ibPropertyRegistry::Register([](ibPropertyOwner* prop) -> wxPGProperty* {
+			ibPropertyChoiceList choices;
+			prop->GetValueList(choices);
+			return new ibPGOwnerProperty(prop->GetPropertyObject(), prop->GetLabel(), prop->GetName(), prop->GetValue(), choices);
+		});
 	}
 }g_ownerLoader;
 
-#include "backend/metadata.h"
+#include "backend/metaData.h"
 
-void ibPGOwnerProperty::FillByClsid(const ibClassID& clsid)
-{
-	const ibValueMetaObjectGenericData* metaGenericData = dynamic_cast<const ibValueMetaObjectGenericData*>(m_ownerProperty);
-	if (metaGenericData != nullptr) {
-		const ibMetaData* metaData = metaGenericData->GetMetaData();
-		wxASSERT(metaData);
-		for (auto metaOwner : metaData->GetAnyArrayObject(clsid)) {
-			m_choices.Add(metaOwner->GetName(), metaOwner->GetIcon(), metaOwner->GetMetaID());
-		}
-	}
-}
-
-ibPGOwnerProperty::ibPGOwnerProperty(const ibPropertyObject* property, const wxString& label, const wxString& strName, const wxVariant& value)
+ibPGOwnerProperty::ibPGOwnerProperty(const ibPropertyObject* property, const wxString& label, const wxString& strName, const wxVariant& value,
+	const ibPropertyChoiceList& choices)
 	: wxPGProperty(label, strName), m_ownerProperty(property)
 {
-	FillByClsid(g_metaCatalogCLSID);
+	for (unsigned int idx = 0; idx < choices.GetCount(); idx++)
+		m_choices.Add(choices.GetLabel(idx), choices.GetBitmap(idx), choices.GetId(idx));
 
 	//m_flags |= wxPGFlags::ReadOnly;
 	m_flags |= wxPGPropertyFlags_ActiveButton; // Property button always enabled.
@@ -87,7 +82,7 @@ wxPGEditorDialogAdapter* ibPGOwnerProperty::GetEditorDialog() const
 			ibMetaID GetMetaID() const { return m_metaObject->GetMetaID(); }
 		};
 
-		void FillByClsid(ibMetaData* metaData, const ibClassID& clsid,
+		void FillByClsid(const ibMetaData* metaData, const ibClassID& clsid,
 			ibCheckTree* tc, ibVariantDataOwner* data) {
 
 			wxImageList* imageList = tc->GetImageList();
@@ -146,7 +141,7 @@ wxPGEditorDialogAdapter* ibPGOwnerProperty::GetEditorDialog() const
 			ibCheckTree* tc = new ibCheckTree(dlg, wxID_ANY,
 				wxDefaultPosition, wxDefaultSize, wxTR_HAS_BUTTONS | wxTR_LINES_AT_ROOT | wxTR_NO_LINES | wxTR_HIDE_ROOT | wxCR_MULTIPLE_CHECK | wxCR_EMPTY_CHECK | wxSUNKEN_BORDER | wxTR_TWIST_BUTTONS);
 
-			wxTreeItemId rootItem = tc->AddRoot(wxEmptyString);
+			tc->AddRoot(wxEmptyString);   // the root is hidden (wxTR_HIDE_ROOT); only its existence matters
 
 			rowsizer->Add(tc, wxSizerFlags(1).Expand().Border(wxALL, spacing));
 			topsizer->Add(rowsizer, wxSizerFlags(1).Expand());
@@ -172,7 +167,7 @@ wxPGEditorDialogAdapter* ibPGOwnerProperty::GetEditorDialog() const
 				new wxImageList(icon_size, icon_size)
 			);
 
-			ibMetaData* metaData = metaGenericData->GetMetaData();
+			const ibMetaData* metaData = metaGenericData->GetMetaData();
 			wxASSERT(metaData);
 			if (metaData != nullptr) {
 				FillByClsid(metaData, g_metaCatalogCLSID, tc, data);
@@ -184,8 +179,9 @@ wxPGEditorDialogAdapter* ibPGOwnerProperty::GetEditorDialog() const
 			{
 				ibMetaDescription& metaDesc = clone->GetMetaDesc(); metaDesc.ClearMetaType();
 				wxArrayTreeItemIds ids;
-				unsigned int selCount = tc->GetSelections(ids);
-				for (const wxTreeItemId& selItem : ids) {
+				tc->GetSelections(ids);   // the count is in ids itself
+				// BY VALUE: wxArrayTreeItemIds stores void*, so a reference binds to a per-iteration temporary.
+				for (const wxTreeItemId selItem : ids) {
 					if (selItem.IsOk()) {
 						wxTreeItemData* dataItem = tc->GetItemData(selItem);
 						if (dataItem && res == wxID_OK) {

@@ -10,8 +10,7 @@ enum ibAccountType {
 #pragma region enumeration
 #include "backend/compiler/enumUnit.h"
 class ibValueEnumAccountType : public ibValueEnumeration<ibAccountType> {
-	wxDECLARE_DYNAMIC_CLASS(ibValueEnumAccountType);
-public:
+	public:
 	static ibValue CreateDefEnumValue() {
 		return ibValue::CreateEnumObject<ibValueEnumAccountType>(ibAccountType::eActive);
 	}
@@ -24,7 +23,7 @@ public:
 		AddEnumeration(ibAccountType::eActivePassive, wxT("ActivePassive"), _("Active/Passive"));
 	}
 };
-const ibClassID g_enumAccountTypeCLSID = string_to_clsid("EN_ACTP");
+constexpr ibClassID g_enumAccountTypeCLSID = enum_to_clsid("EN_ACTP");
 #pragma endregion
 
 #endif

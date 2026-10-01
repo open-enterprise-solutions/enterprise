@@ -1,0 +1,2391 @@
+// =============================================================================
+// OES Enterprise — runtime / number / parser micro-benchmarks
+//
+// DISABLED by default (benchmarks are noisy / machine-dependent — keep the
+// normal suite fast). Build in RELEASE for relevant figures, then run:
+//
+//   cmake --build build --config Release --target oes_tests
+//   build/bin/Release/oes_tests --gtest_also_run_disabled_tests
+//       --gtest_filter=*Bench*
+//   (the two lines are one shell command; the continuation backslash is left out
+//    because a trailing \ inside a // comment splices the next line into it)
+//
+// The main groups:
+//   RuntimeBench  — the ibProcUnit bytecode interpreter (dispatch, calls,
+//                   branches, strings, LINQ). The "runtime" number.
+//   NumberBench   — ibNumber arithmetic directly (immediate vs heap tier,
+//                   ToString / FromString), with an int64 / double baseline.
+//   DateBench     — ibDateTime directly (shift, order, span, parts, periods,
+//                   text), next to the wxDateTime it replaced.
+//   ParserBench   — ibCompileCode::Compile throughput (ns/compile, lines/s).
+//   JsonBench     — JSONReader / JSONWriter over a document, next to nlohmann's own
+//                   parse / dump of the same text.
+//
+// Every OES figure is printed next to a native-C++ baseline and the ratio
+// (oes/base) so the numbers read as an *overhead factor*, not raw nanoseconds
+// that only mean something on this exact CPU/build.
+// =============================================================================
+
+#include <gtest/gtest.h>
+
+#include <algorithm>
+#include <atomic>
+#include <chrono>
+#include <cstdint>
+#include <fstream>
+#include <functional>
+#include <iomanip>
+#include <iostream>
+#include <map>
+#include <memory>
+#include <new>
+#include <sstream>
+#include <string>
+#include <thread>
+#include <vector>
+
+#include <wx/datetime.h>  // DateBench — the wxDateTime the value's date replaced
+#include <wx/init.h>   // SessionBench — wxBase before application data
+#include <wx/image.h>  // wxInitAllImageHandlers — the configuration loads icons
+#include <wx/log.h>    // wxLogStderr — a warning must not become a modal box
+
+// Resident-set probe for the million-row bench. NOMINMAX because this file uses
+// std::min and windows.h would macro it away.
+#ifdef _WIN32
+#  define NOMINMAX
+#  define WIN32_LEAN_AND_MEAN
+#  include <windows.h>
+#  include <psapi.h>
+#  ifdef _MSC_VER
+#    pragma comment(lib, "psapi.lib")
+#  endif
+#elif defined(__linux__)
+#  include <unistd.h>
+#endif
+
+#include "backend/compiler/compileCode.h"
+#include "backend/compiler/procUnit.h"
+#include "backend/compiler/byteCode.h"
+#include "backend/compiler/codeDef.h"
+#include "backend/compiler/value.h"
+#include "backend/fnumber.h"
+#include "backend/fdatetime.h"                 // DateBench / DISABLED_DateLoop
+#include "backend/appData.h"                   // SessionBench — the application's road
+#include "backend/session/session.h"           // DISABLED_CallCost — what a frame asks for
+#include "backend/system/value/valueArray.h"   // DISABLED_TypeCheckCost
+#include "backend/system/value/valueJson.h"    // JsonBench
+#include "3rdparty/nlohmann/json.hpp"          // JsonBench - the native baseline
+
+namespace {
+
+// Written through volatile so the optimizer can't elide the timed loops.
+volatile uint64_t g_sink = 0;
+
+using Clock = std::chrono::steady_clock;
+
+// Per-op timing for cheap, uniform operations (number ops, host->script calls):
+// warmup, then time `iters` calls, return ns/op.
+template <class F>
+double TimeNsPerOp(long iters, F&& f) {
+    for (long i = 0; i < iters / 10 + 1; ++i) f(i);                 // warmup
+    const auto t0 = Clock::now();
+    for (long i = 0; i < iters; ++i) f(i);
+    const auto t1 = Clock::now();
+    return std::chrono::duration<double, std::nano>(t1 - t0).count() / double(iters);
+}
+
+// Best (min) total ns over `repeats` runs of a single heavy unit of work
+// (a whole-script call that loops/recurses internally). Min discards
+// scheduler noise far better than mean for this shape.
+template <class F>
+double BestTotalNs(int repeats, F&& f) {
+    f();                                                            // warmup
+    double best = 1e300;
+    for (int r = 0; r < repeats; ++r) {
+        const auto t0 = Clock::now();
+        f();
+        const auto t1 = Clock::now();
+        best = std::min(best, std::chrono::duration<double, std::nano>(t1 - t0).count());
+    }
+    return best;
+}
+
+// Format a nanosecond duration in human units (ns / us / ms / s).
+std::string FmtWall(double ns) {
+    std::ostringstream o; o << std::fixed << std::setprecision(2);
+    if (ns < 1e3)      o << ns       << "ns";
+    else if (ns < 1e6) o << ns / 1e3 << "us";
+    else if (ns < 1e9) o << ns / 1e6 << "ms";
+    else               o << ns / 1e9 << "s";
+    return o.str();
+}
+
+// One labelled row: OES figure, native baseline, ratio (oes/base). When wall
+// totals are given (>0), also print how long one full run of the scenario
+// actually took — the "in seconds" view next to the per-op overhead factor.
+void Row(const char* name, double oes, double base, const char* unit,
+         double oesWallNs = 0, double baseWallNs = 0) {
+    std::cout << "  " << std::left << std::setw(26) << name << std::right
+              << "  oes=" << std::setw(10) << std::fixed << std::setprecision(1) << oes << unit
+              << "  native=" << std::setw(10) << base << unit;
+    if (base > 0)
+        std::cout << "  x" << std::setprecision(1) << (oes / base);
+    if (oesWallNs > 0)
+        std::cout << "   [run: oes=" << FmtWall(oesWallNs)
+                  << (baseWallNs > 0 ? "  native=" + FmtWall(baseWallNs) : std::string()) << "]";
+    std::cout << "\n";
+}
+
+// Resident set of THIS process, in bytes. Returns 0 where the platform has no
+// cheap probe, and the caller prints "n/a" rather than a zero that would read as
+// "used no memory" — an unmeasurable reading is named, never silently folded in.
+size_t ResidentBytes() {
+#if defined(_WIN32)
+    PROCESS_MEMORY_COUNTERS pmc{};
+    if (::GetProcessMemoryInfo(::GetCurrentProcess(), &pmc, sizeof(pmc)))
+        return (size_t)pmc.WorkingSetSize;
+    return 0;
+#elif defined(__linux__)
+    std::ifstream statm("/proc/self/statm");            // field 2 = resident pages
+    size_t totalPages = 0, residentPages = 0;
+    if (statm >> totalPages >> residentPages)
+        return residentPages * (size_t)sysconf(_SC_PAGESIZE);
+    return 0;
+#else
+    return 0;   // macOS would need mach task_info — not worth the dependency here
+#endif
+}
+
+std::string FmtBytes(size_t bytes) {
+    if (bytes == 0) return "n/a";
+    std::ostringstream o; o << std::fixed << std::setprecision(1);
+    if (bytes < (size_t(1) << 20)) o << double(bytes) / 1024.0 << "KB";
+    else                           o << double(bytes) / (1024.0 * 1024.0) << "MB";
+    return o.str();
+}
+
+// OES-only row (no meaningful native equivalent, e.g. 200-digit decimal).
+void RowOes(const char* name, double oes, const char* unit, double oesWallNs = 0) {
+    std::cout << "  " << std::left << std::setw(26) << name << std::right
+              << "  oes=" << std::setw(10) << std::fixed << std::setprecision(1) << oes << unit;
+    if (oesWallNs > 0)
+        std::cout << "   [run: oes=" << FmtWall(oesWallNs) << "]";
+    std::cout << "\n";
+}
+
+// NAMES ITS FAILURE. A benchmark that will not compile printed "Actual: false"
+// and nothing else — which is how DISABLED_LinqJoin sat red in CI while the
+// numbers around it were read as fine. The compiler knows why; keep the message.
+::testing::AssertionResult Build(ibCompileCode& cc, const wxString& src) {
+    try {
+        if (cc.Compile(src))
+            return ::testing::AssertionSuccess();
+        return ::testing::AssertionFailure() << "Compile() returned false without raising";
+    } catch (const ibBackendException& err) {
+        return ::testing::AssertionFailure() << err.GetErrorDescription().ToStdString();
+    } catch (...) {
+        return ::testing::AssertionFailure() << "unknown exception";
+    }
+}
+
+} // namespace
+
+// ===========================================================================
+// RuntimeBench — the bytecode interpreter
+// ===========================================================================
+
+// Split into one test per scenario so a crash in one (SEH AV is not catchable
+// by C++ try/catch) is isolated to that scenario and can be located by running
+// a single --gtest_filter, instead of taking the whole group down.
+
+// --- tight arithmetic loop: ns per loop-iteration -------------------------
+// SumTo(n): While i<n { s += i; i += 1 } — per iter ~ compare + 2 adds +
+// 2 stores + branch. Sum to 1e6 (~5e11) stays in ibNumber's immediate tier.
+TEST(RuntimeBench, DISABLED_ArithLoop) {
+    const long n = 1000000;
+    ibCompileCode cc(wxT("test"), wxT("memory"), false);
+    ASSERT_TRUE(Build(cc,
+        wxT("Function SumTo(n) Public\n")
+        wxT("  var s; var i; s = 0; i = 0;\n")
+        wxT("  While i < n Do\n")
+        wxT("    s = s + i; i = i + 1;\n")
+        wxT("  EndDo;\n")
+        wxT("  Return s;\n")
+        wxT("EndFunction\n")));
+    ibProcUnit pu; ASSERT_TRUE([&]{ try { pu.Execute(cc.m_cByteCode); return true; } catch (...) { return false; } }());
+    ibValue argN((int)n), ret;
+    const double oesTot = BestTotalNs(5, [&]{ pu.CallAsFunc(wxT("SumTo"), ret, argN); g_sink += (uint64_t)ret.GetInteger(); });
+
+    volatile int64_t s = 0;
+    const double baseTot = BestTotalNs(5, [&]{ s = 0; for (long i = 0; i < n; ++i) s += i; g_sink += (uint64_t)s; });
+    Row("arith loop (ns/iter)", oesTot / double(n), baseTot / double(n), "ns", oesTot, baseTot);
+    SUCCEED();
+}
+
+// --- call-heavy recursion: ns per script call -----------------------------
+// Fib(28): ~1.03M calls; the canonical interpreter call-overhead probe.
+TEST(RuntimeBench, DISABLED_Recursion) {
+    const int N = 28;
+    const long calls = 1028457; // 2*Fib(29)-1
+    ibCompileCode cc(wxT("test"), wxT("memory"), false);
+    ASSERT_TRUE(Build(cc,
+        wxT("Function Fib(n) Public\n")
+        wxT("  If n < 2 Then Return n; EndIf;\n")
+        wxT("  Return Fib(n - 1) + Fib(n - 2);\n")
+        wxT("EndFunction\n")));
+    ibProcUnit pu; ASSERT_TRUE([&]{ try { pu.Execute(cc.m_cByteCode); return true; } catch (...) { return false; } }());
+    ibValue argN(N), ret;
+    const double oesTot = BestTotalNs(5, [&]{ pu.CallAsFunc(wxT("Fib"), ret, argN); g_sink += (uint64_t)ret.GetInteger(); });
+
+    std::function<int64_t(int)> fib = [&](int n) -> int64_t { return n < 2 ? n : fib(n - 1) + fib(n - 2); };
+    const double baseTot = BestTotalNs(5, [&]{ g_sink += (uint64_t)fib(N); });
+    Row("recursion (ns/call)", oesTot / double(calls), baseTot / double(calls), "ns", oesTot, baseTot);
+    SUCCEED();
+}
+
+// --- THE CALL, apart from what the body does ------------------------------
+// `recursion` prices a call together with Fib's own compare, two subtractions
+// and an addition, so it cannot say how much of its figure is the call. Each
+// row here is one loop with and without a call in it, and the difference is the
+// call: an empty procedure, a function passing one argument back, the same with
+// eight locals (what a wider frame costs to reserve and release), and the same
+// callee placed after a hundred other functions in its module (the entry of a
+// called function is found by a linear walk over the module's functions).
+// `ibSession::Current()` is timed directly — a frame asks for it.
+namespace {
+
+wxString CallCostModule() {
+    return
+        wxT("Procedure Empty() Public\n")
+        wxT("EndProcedure\n")
+        wxT("Function Ident(x) Public\n")
+        wxT("  Return x;\n")
+        wxT("EndFunction\n")
+        wxT("Function Wide(x) Public\n")
+        wxT("  var a; var b; var c; var d; var e; var f; var g; var h;\n")
+        wxT("  a = x;\n")
+        wxT("  Return a;\n")
+        wxT("EndFunction\n")
+        wxT("Function LoopOnly(n) Public\n")
+        wxT("  var i; var s; i = 0;\n")
+        wxT("  While i < n Do s = i; i = i + 1; EndDo;\n")
+        wxT("  Return i;\n")
+        wxT("EndFunction\n")
+        wxT("Function LoopEmpty(n) Public\n")
+        wxT("  var i; var s; i = 0;\n")
+        wxT("  While i < n Do Empty(); s = i; i = i + 1; EndDo;\n")
+        wxT("  Return i;\n")
+        wxT("EndFunction\n")
+        wxT("Function LoopIdent(n) Public\n")
+        wxT("  var i; var s; i = 0;\n")
+        wxT("  While i < n Do s = Ident(i); i = i + 1; EndDo;\n")
+        wxT("  Return i;\n")
+        wxT("EndFunction\n")
+        wxT("Function LoopWide(n) Public\n")
+        wxT("  var i; var s; i = 0;\n")
+        wxT("  While i < n Do s = Wide(i); i = i + 1; EndDo;\n")
+        wxT("  Return i;\n")
+        wxT("EndFunction\n");
+}
+
+// ns per loop iteration of one of the module's Loop* functions.
+double CallCostPerIter(ibProcUnit& unit, const wxChar* fn, long n) {
+    ibValue argN((int)n), ret;
+    return BestTotalNs(5, [&]{ unit.CallAsFunc(fn, ret, argN); g_sink += (uint64_t)ret.GetInteger(); }) / double(n);
+}
+
+} // namespace
+
+TEST(RuntimeBench, DISABLED_CallCost) {
+    const long n = 200000;
+    ibCompileCode cc(wxT("test"), wxT("memory"), false);
+    ASSERT_TRUE(Build(cc, CallCostModule()));
+    ibProcUnit pu; ASSERT_TRUE([&]{ try { pu.Execute(cc.m_cByteCode); return true; } catch (...) { return false; } }());
+
+    // The same module behind a hundred procedures declared first.
+    wxString padded;
+    for (int k = 0; k < 100; ++k)
+        padded << wxT("Procedure Pad") << k << wxT("() Public\nEndProcedure\n");
+    padded << CallCostModule();
+    ibCompileCode ccPadded(wxT("test"), wxT("memory"), false);
+    ASSERT_TRUE(Build(ccPadded, padded));
+    ibProcUnit puPadded; ASSERT_TRUE([&]{ try { puPadded.Execute(ccPadded.m_cByteCode); return true; } catch (...) { return false; } }());
+
+    const double loop     = CallCostPerIter(pu, wxT("LoopOnly"), n);
+    const double empty    = CallCostPerIter(pu, wxT("LoopEmpty"), n);
+    const double ident    = CallCostPerIter(pu, wxT("LoopIdent"), n);
+    const double wide     = CallCostPerIter(pu, wxT("LoopWide"), n);
+    const double padLoop  = CallCostPerIter(puPadded, wxT("LoopOnly"), n);
+    const double padIdent = CallCostPerIter(puPadded, wxT("LoopIdent"), n);
+
+    const double current = TimeNsPerOp(1000000, [&](long){ g_sink += (uint64_t)(uintptr_t)ibSession::Current(); });
+
+    RowOes("loop alone (ns/iter)", loop, "ns");
+    RowOes("call: empty procedure", empty - loop, "ns");
+    RowOes("call: Ident(x), 1 arg", ident - loop, "ns");
+    RowOes("call: Wide(x), 8 locals", wide - loop, "ns");
+    RowOes("call: after 100 funcs", padIdent - padLoop, "ns");
+    RowOes("Current(), no session", current, "ns");
+    SUCCEED();
+}
+
+// --- THE SAME CALLS ON THE APPLICATION'S ROAD -----------------------------
+// Every RuntimeBench row runs SESSIONLESS: no application data, no registry, and
+// ibSession::Current() answers at its first line. The application never runs that
+// way — a script runs on a thread bound to its session — so what a call pays for
+// finding its session never showed in any of them. Here application data is up and
+// the thread is bound, and Current() is timed with 1–8 threads asking at once, each
+// bound to a session of its own: the load a server with several sessions puts on it.
+struct SessionBench : ::testing::Test {
+    wxInitializer                   m_wxInit;
+    std::shared_ptr<ibSession>      m_session;
+    std::unique_ptr<ibSessionScope> m_bound;
+    bool                            m_ownsAppData = false;
+
+    void SetUp() override {
+        if (!m_wxInit.IsOk())
+            GTEST_SKIP() << "wxBase init failed (no wxApp host)";
+        // As BuiltInRuntime (test_runtime.cpp): image handlers for the icons the
+        // configuration loads, and no modal log box in a headless run.
+        wxInitAllImageHandlers();
+        if (wxLog::GetActiveTarget() != nullptr)
+            delete wxLog::SetActiveTarget(new wxLogStderr());
+        if (ibApplicationInstance::Get() == nullptr) {
+            if (!ibApplicationInstance::CreateAppDataEnv(ibRunMode::eRUNTIME_MODE))
+                GTEST_SKIP() << "appData env unavailable headless";
+            m_ownsAppData = true;
+        }
+        if (ibApplicationInstance::GetSessionRegistry() == nullptr)
+            GTEST_SKIP() << "no session registry after CreateAppDataEnv";
+        m_session = std::make_shared<ibSession>(wxString(wxT("bench")), ibSessionKind::Enterprise);
+        m_bound   = std::make_unique<ibSessionScope>(m_session.get());
+    }
+
+    // Put back as found, so the benches that run after this one stay sessionless.
+    void TearDown() override {
+        m_bound.reset();
+        m_session.reset();
+        if (m_ownsAppData && ibApplicationInstance::Get() != nullptr)
+            ibApplicationInstance::DestroyAppDataEnv();
+    }
+};
+
+TEST_F(SessionBench, DISABLED_CallCost) {
+    const long n = 200000;
+    ibCompileCode cc(wxT("test"), wxT("memory"), false);
+    ASSERT_TRUE(Build(cc, CallCostModule()));
+    ibProcUnit pu; ASSERT_TRUE([&]{ try { pu.Execute(cc.m_cByteCode); return true; } catch (...) { return false; } }());
+
+    const double loop  = CallCostPerIter(pu, wxT("LoopOnly"), n);
+    const double empty = CallCostPerIter(pu, wxT("LoopEmpty"), n);
+    const double ident = CallCostPerIter(pu, wxT("LoopIdent"), n);
+    RowOes("bound: loop (ns/iter)", loop, "ns");
+    RowOes("bound: call empty proc", empty - loop, "ns");
+    RowOes("bound: call Ident(x)", ident - loop, "ns");
+
+    // Current() with `threads` threads asking at once, each bound to a session of its
+    // own; the slowest thread's figure, since that is the one a caller waits for.
+    const auto currentUnderLoad = [](int threads) {
+        const long perThread = 1000000;
+        std::vector<double> ns(threads, 0.0);
+        std::atomic<int> ready{ 0 };
+        std::atomic<bool> go{ false };
+        std::vector<std::thread> pool;
+        for (int t = 0; t < threads; ++t) {
+            pool.emplace_back([&, t] {
+                const auto session = std::make_shared<ibSession>(wxString::Format(wxT("bench-%d"), t), ibSessionKind::Enterprise);
+                const ibSessionScope bound(session.get());
+                ++ready;
+                while (!go) std::this_thread::yield();
+                uint64_t sink = 0;
+                const auto t0 = Clock::now();
+                for (long i = 0; i < perThread; ++i) sink += (uint64_t)(uintptr_t)ibSession::Current();
+                const auto t1 = Clock::now();
+                ns[t] = std::chrono::duration<double, std::nano>(t1 - t0).count() / double(perThread);
+                g_sink += sink;
+            });
+        }
+        while (ready < threads) std::this_thread::yield();
+        go = true;
+        for (std::thread& th : pool) th.join();
+        return *std::max_element(ns.begin(), ns.end());
+    };
+    RowOes("Current(), bound", TimeNsPerOp(1000000, [&](long){ g_sink += (uint64_t)(uintptr_t)ibSession::Current(); }), "ns");
+    for (int threads : { 2, 4, 8 }) {
+        double best = 1e300;
+        for (int r = 0; r < 3; ++r) best = std::min(best, currentUnderLoad(threads));
+        const std::string label = "Current(), " + std::to_string(threads) + " threads";
+        RowOes(label.c_str(), best, "ns");
+    }
+    SUCCEED();
+}
+
+// --- host->script call marshalling: ns per CallAsFunc ---------------------
+// Trivial body so the figure is dominated by name lookup + frame setup +
+// arg/return marshalling on the C++ <-> script boundary.
+TEST(RuntimeBench, DISABLED_HostCall) {
+    ibCompileCode cc(wxT("test"), wxT("memory"), false);
+    ASSERT_TRUE(Build(cc,
+        wxT("Function Inc(x) Public\n")
+        wxT("  Return x + 1;\n")
+        wxT("EndFunction\n")));
+    ibProcUnit pu; ASSERT_TRUE([&]{ try { pu.Execute(cc.m_cByteCode); return true; } catch (...) { return false; } }());
+    ibValue arg(0), ret;
+    const long iters = 200000;
+    const double oes = TimeNsPerOp(iters, [&](long i){ arg = ibValue((int)i); pu.CallAsFunc(wxT("Inc"), ret, arg); g_sink += (uint64_t)ret.GetInteger(); });
+
+    auto inc = [](int64_t x){ return x + 1; };
+    const double base = TimeNsPerOp(iters, [&](long i){ g_sink += (uint64_t)inc(i); });
+    Row("host->script (ns/call)", oes, base, "ns", oes * double(iters), base * double(iters));
+    SUCCEED();
+}
+
+// --- string concat in a loop: ns per append -------------------------------
+// `s = s + "x"` is O(n^2) (the whole string is copied each append), so n stays
+// modest — measures per-append cost. This loop also pinned a runtime AV: AddValue
+// pre-stamped the result type to STRING before SetString, so SetString's Reset()
+// freed a stale union member when the result slot was a reused loop temp. Fixed
+// in procUnit.cpp's AddValue; this stays as the regression guard.
+TEST(RuntimeBench, DISABLED_StringConcat) {
+    const long n = 2000;
+    ibCompileCode cc(wxT("test"), wxT("memory"), false);
+    ASSERT_TRUE(Build(cc,
+        wxT("Function Cat(n) Public\n")
+        wxT("  var s; var i; s = \"\"; i = 0;\n")
+        wxT("  While i < n Do\n")
+        wxT("    s = s + \"x\"; i = i + 1;\n")
+        wxT("  EndDo;\n")
+        wxT("  Return s;\n")
+        wxT("EndFunction\n")));
+    ibProcUnit pu; ASSERT_TRUE([&]{ try { pu.Execute(cc.m_cByteCode); return true; } catch (...) { return false; } }());
+    ibValue argN((int)n), ret;
+    const double oesTot = BestTotalNs(5, [&]{ pu.CallAsFunc(wxT("Cat"), ret, argN); g_sink += (uint64_t)ret.GetString().length(); });
+    EXPECT_EQ((long)ret.GetString().length(), n);   // "" + n*"x"
+
+    const double baseTot = BestTotalNs(5, [&]{ std::string s; for (long i = 0; i < n; ++i) s += 'x'; g_sink += s.size(); });
+    Row("string concat (ns/app)", oesTot / double(n), baseTot / double(n), "ns", oesTot, baseTot);
+    SUCCEED();
+}
+
+// --- a date shifted in a loop: ns per loop-iteration -----------------------
+// `t = t + 60` over a date is the script's date arithmetic - the operand read, a span in seconds, a
+// new reading - on top of the loop itself (`loop alone` in CallCost prices that part). The date comes
+// in as the argument: this unit runs with no session, so it asks no system function for one.
+TEST(RuntimeBench, DISABLED_DateLoop) {
+    const long n = 1000000;
+    ibCompileCode cc(wxT("test"), wxT("memory"), false);
+    ASSERT_TRUE(Build(cc, wxString::Format(
+        wxT("Function Shift(d) Public\n")
+        wxT("  var t; var i; t = d; i = 0;\n")
+        wxT("  While i < %ld Do\n")
+        wxT("    t = t + 60; i = i + 1;\n")
+        wxT("  EndDo;\n")
+        wxT("  Return t;\n")
+        wxT("EndFunction\n"), n)));
+    ibProcUnit pu; ASSERT_TRUE([&]{ try { pu.Execute(cc.m_cByteCode); return true; } catch (...) { return false; } }());
+    const ibDateTime start(2026, 1, 1);
+    ibValue argD(start), ret;
+    const double oesTot = BestTotalNs(5, [&]{ pu.CallAsFunc(wxT("Shift"), ret, argD); g_sink += (uint64_t)ret.GetDate().GetValue(); });
+    EXPECT_EQ(ret.GetDate(), start.AddMilliseconds(n * 60000ll));
+
+    volatile int64_t u = 0;
+    const double baseTot = BestTotalNs(5, [&]{ u = start.GetValue(); for (long i = 0; i < n; ++i) u += 60000; g_sink += (uint64_t)u; });
+    Row("date shift (ns/iter)", oesTot / double(n), baseTot / double(n), "ns", oesTot, baseTot);
+    SUCCEED();
+}
+
+// --- bytecode dump: SEE what `s = s + "x"` actually compiled to -------------
+static const char* OpName(int base) {
+    switch (base) {
+        case OPER_NOP: return "NOP";     case OPER_ADD: return "ADD";
+        case OPER_SUB: return "SUB";     case OPER_MULT: return "MULT";
+        case OPER_DIV: return "DIV";     case OPER_MOD: return "MOD";
+        case OPER_LET: return "LET";     case OPER_CONST: return "CONST";
+        case OPER_CONSTN: return "CONSTN"; case OPER_IF: return "IF";
+        case OPER_GOTO: return "GOTO";   case OPER_NEXT: return "NEXT";
+        case OPER_FOR: return "FOR";     case OPER_FOREACH: return "FOREACH";
+        case OPER_RET: return "RET";     case OPER_FUNC: return "FUNC";
+        case OPER_ENDFUNC: return "ENDFUNC";
+        case OPER_FUNC_PARAM: return "FUNC_PARAM";
+        case OPER_FUNC_LOCAL: return "FUNC_LOCAL";
+        case OPER_CTX_BEGIN: return "CTX_BEGIN"; case OPER_CTX_END: return "CTX_END";
+        case OPER_CALL: return "CALL";
+        case OPER_GT: return "GT"; case OPER_EQ: return "EQ"; case OPER_LS: return "LS";
+        case OPER_GE: return "GE"; case OPER_LE: return "LE"; case OPER_NE: return "NE";
+        case OPER_NOT: return "NOT"; case OPER_AND: return "AND"; case OPER_OR: return "OR";
+        default: return "?";
+    }
+}
+
+// A LAMBDA INSIDE A PIPELINE LAMBDA, on the tape.
+//
+// The runtime side of the capture was fixed by making a heap-promoted frame OWN
+// its arguments; a green test alone does not prove the two halves agree, because
+// the right answer can come out of the wrong layout. This dump is the other half:
+// it says whether the compiler flagged the OUTER lambda `m_needsHeapFrame`, and
+// at what DEPTH the inner body reads the outer parameter — the depth has to line
+// up with where ibValueFunction::Execute installs m_capturedFrames (layers
+// [1..N], everything pre-existing shifted to [N+1..]).
+//
+//   oes_tests --gtest_also_run_disabled_tests --gtest_filter=*DumpNestedLambda*
+TEST(RuntimeBench, DISABLED_DumpNestedLambda) {
+    ibCompileCode cc(wxT("test"), wxT("memory"), false);
+    ASSERT_TRUE(Build(cc,
+        wxT("var a public; var r public;\n")
+        wxT("a = New Array;\n")
+        wxT("a.Add(10); a.Add(20);\n")
+        wxT("r = a.SelectMany(Function(x)\n")
+        wxT("      Return a.Where(Function(y) Return y > x EndFunction);\n")
+        wxT("    EndFunction).Count();\n")));
+
+    const auto& bc = cc.m_cByteCode;
+
+    std::cout << "=== functions (" << bc.m_listFunc.size() << ") ===\n";
+    for (size_t i = 0; i < bc.m_listFunc.size(); ++i) {
+        const auto& fn = bc.m_listFunc[i];
+        std::cout << std::right << std::setw(3) << i
+                  << "  name='" << (const char*)fn.m_strRealName.ToUTF8() << "'"
+                  << "  params=" << fn.m_listParam.size()
+                  << "  vars=" << fn.m_lVarCount
+                  << "  line=" << fn.m_lCodeLine
+                  << "  heapFrame=" << (fn.m_needsHeapFrame ? "YES" : "no")
+                  << "  lambda=" << (fn.IsLambda() ? "yes" : "no")
+                  << "\n";
+    }
+
+    const auto& code = bc.m_listCode;
+    std::cout << "=== bytecode (" << code.size() << " ops)  "
+                 "[p1(array,index) — array is the FRAME DEPTH for a variable read] ===\n";
+    for (size_t ip = 0; ip < code.size(); ++ip) {
+        const auto& c = code[ip];
+        const int raw  = (int)c.m_numOper;
+        const int base = ((raw % TYPE_DELTA1) + TYPE_DELTA1) % TYPE_DELTA1;
+        std::cout << std::right << std::setw(3) << ip << "  " << std::left << std::setw(12) << OpName(base)
+                  << "p1(" << (long long)c.m_param1.m_numArray << "," << (long long)c.m_param1.m_numIndex << ") "
+                  << "p2(" << (long long)c.m_param2.m_numArray << "," << (long long)c.m_param2.m_numIndex << ") "
+                  << "p3(" << (long long)c.m_param3.m_numArray << "," << (long long)c.m_param3.m_numIndex << ") "
+                  << "p4(" << (long long)c.m_param4.m_numArray << "," << (long long)c.m_param4.m_numIndex << ")"
+                  << std::right << "\n";
+    }
+    std::cout.flush();
+    SUCCEED();
+}
+
+// THE THIN LAMBDA, on the tape — the exact source DISABLED_LinqOneLambda runs.
+//
+// A profile of that bench put `operator new` at 11.7% of the run with 96% of the
+// calls coming from CallLambdaWithArgs, i.e. the FRAME is reaching the heap on
+// every invocation. Two things there can allocate and they are told apart by two
+// printed numbers, not by reading:
+//   vars > 256 (one pool block) -> SetLocalCount falls back to `new ibValue[]`
+//   heapFrame = YES             -> make_shared, one per call
+// A lambda with no inner lambda must show neither.
+//
+// The first line used to read `vars > MAX_STATIC_VAR`, back when a frame carried its
+// locals inline and anything wider went to the heap. Local slots now come from the
+// session's slot stack (frameSlots.h), so the width that matters is a pool block, and
+// the ordinary case allocates nothing at all rather than "nothing up to 25".
+TEST(RuntimeBench, DISABLED_DumpThinLambda) {
+    ibCompileCode cc(wxT("test"), wxT("memory"), false);
+    ASSERT_TRUE(Build(cc,
+        wxT("var arr public;\n")
+        wxT("Procedure Fill(n) Public\n")
+        wxT("  arr = New Array; var i; i = 0;\n")
+        wxT("  While i < n Do arr.Add(i); i = i + 1; EndDo;\n")
+        wxT("EndProcedure\n")
+        wxT("Function Pipe() Public\n")
+        wxT("  Return arr.Where(Function(x) Return x > 100 EndFunction).Count();\n")
+        wxT("EndFunction\n")));
+
+    const auto& bc = cc.m_cByteCode;
+    // A frame no longer carries any slots inline — it reserves a run on ibRunStack sized by the
+    // arity the compiler counted (procContext.h). So there is no inline width left to print, and
+    // the header names what this dump is actually about.
+    std::cout << "=== compiled functions (" << bc.m_listFunc.size() << ") ===\n";
+    for (size_t i = 0; i < bc.m_listFunc.size(); ++i) {
+        const auto& fn = bc.m_listFunc[i];
+        std::cout << std::right << std::setw(3) << i
+                  << "  name='" << (const char*)fn.m_strRealName.ToUTF8() << "'"
+                  << "  params=" << fn.m_listParam.size()
+                  << "  vars=" << fn.m_lVarCount
+                  << "  heapFrame=" << (fn.m_needsHeapFrame ? "YES" : "no")
+                  << "  lambda=" << (fn.IsLambda() ? "yes" : "no")
+                  << "  spills=" << (fn.m_lVarCount > 256 ? "YES" : "no")
+                  << "\n";
+    }
+    std::cout.flush();
+    SUCCEED();
+}
+
+TEST(RuntimeBench, DISABLED_DumpBytecode) {
+    ibCompileCode cc(wxT("test"), wxT("memory"), false);
+    ASSERT_TRUE(Build(cc,
+        wxT("Function Cat(n) Public\n")
+        wxT("  var s; var i; s = \"\"; i = 0;\n")
+        wxT("  While i < n Do\n")
+        wxT("    s = s + \"x\"; i = i + 1;\n")
+        wxT("  EndDo;\n")
+        wxT("  Return s;\n")
+        wxT("EndFunction\n")));
+    const auto& code = cc.m_cByteCode.m_listCode;
+    std::cout << "=== bytecode dump (" << code.size() << " ops)  TYPE_DELTA1=" << (int)TYPE_DELTA1
+              << "  OPER_ADD=" << (int)OPER_ADD << " OPER_LET=" << (int)OPER_LET
+              << "  [p=(array,index)] ===\n";
+    for (size_t ip = 0; ip < code.size(); ++ip) {
+        const auto& c = code[ip];
+        const int raw  = (int)c.m_numOper;
+        const int base = ((raw % TYPE_DELTA1) + TYPE_DELTA1) % TYPE_DELTA1;
+        const int tier = (int)(c.m_numOper / TYPE_DELTA1);
+        std::cout << std::right << std::setw(3) << ip << "  raw" << std::setw(5) << raw << "  "
+                  << std::left << std::setw(10) << OpName(base)
+                  << (tier == 0 ? "   " : tier == 1 ? "+n " : tier == 2 ? "+s " : tier == 3 ? "+d " : "+b ")
+                  << "p1(" << (long long)c.m_param1.m_numArray << "," << (long long)c.m_param1.m_numIndex << ") "
+                  << "p2(" << (long long)c.m_param2.m_numArray << "," << (long long)c.m_param2.m_numIndex << ") "
+                  << "p3(" << (long long)c.m_param3.m_numArray << "," << (long long)c.m_param3.m_numIndex << ") "
+                  << "p4(" << (long long)c.m_param4.m_numArray << "," << (long long)c.m_param4.m_numIndex << ")"
+                  << std::right << "\n";
+    }
+    std::cout.flush();
+    SUCCEED();
+}
+
+// --- LINQ pipeline: ns per element through Where+Select+Count -------------
+TEST(RuntimeBench, DISABLED_LinqPipe) {
+    const long n = 10000;
+    ibCompileCode cc(wxT("test"), wxT("memory"), false);
+    ASSERT_TRUE(Build(cc,
+        wxT("Function Pipe(n) Public\n")
+        wxT("  var arr; arr = New Array; var i; i = 0;\n")
+        wxT("  While i < n Do arr.Add(i); i = i + 1; EndDo;\n")
+        wxT("  Return arr.Where(Function(x) Return x > 100 EndFunction)")
+        wxT(".Select(Function(x) Return x * 2 EndFunction).Count();\n")
+        wxT("EndFunction\n")));
+    ibProcUnit pu; ASSERT_TRUE([&]{ try { pu.Execute(cc.m_cByteCode); return true; } catch (...) { return false; } }());
+    ibValue argN((int)n), ret;
+    const double oesTot = BestTotalNs(5, [&]{ pu.CallAsFunc(wxT("Pipe"), ret, argN); g_sink += (uint64_t)ret.GetInteger(); });
+    RowOes("LINQ build+pipe (ns/el)", oesTot / double(n), "ns", oesTot);
+    SUCCEED();
+}
+
+// --- the PIPELINE alone: ns per element, with the source already built ----
+//
+// The row above is a BLEND — building the array costs one `arr.Add()` per
+// element (a method call on a wide surface, ~230 ns by the row below) plus the
+// loop's own arithmetic, and that is most of it. A blended number cannot say
+// whether the pipeline is slow, so it cannot say what to optimise: the answer
+// came out as "two lambda invocations", and only a split row shows that.
+//
+// The array is built ONCE, into a module-level export, and the timed function
+// only pipes over it.
+TEST(RuntimeBench, DISABLED_LinqPipeOnly) {
+    const long n = 10000;
+    ibCompileCode cc(wxT("test"), wxT("memory"), false);
+    ASSERT_TRUE(Build(cc,
+        wxT("var arr public;\n")
+        wxT("Procedure Fill(n) Public\n")
+        wxT("  arr = New Array; var i; i = 0;\n")
+        wxT("  While i < n Do arr.Add(i); i = i + 1; EndDo;\n")
+        wxT("EndProcedure\n")
+        wxT("Function Pipe() Public\n")
+        wxT("  Return arr.Where(Function(x) Return x > 100 EndFunction)")
+        wxT(".Select(Function(x) Return x * 2 EndFunction).Count();\n")
+        wxT("EndFunction\n")));
+    ibProcUnit pu; ASSERT_TRUE([&]{ try { pu.Execute(cc.m_cByteCode); return true; } catch (...) { return false; } }());
+
+    ibValue argN((int)n), ret;
+    pu.CallAsProc(wxT("Fill"), argN);
+
+    const double oesTot = BestTotalNs(5, [&]{ pu.CallAsFunc(wxT("Pipe"), ret); g_sink += (uint64_t)ret.GetInteger(); });
+    // TWO lambdas — Where AND Select. The old label said only "pipe only", and it
+    // gets quoted as "what a pipeline costs"; at 198.8 against 100.8 for the
+    // one-lambda row it is exactly twice, which is the whole point.
+    RowOes("LINQ pipe 2 lambdas (ns/el)", oesTot / double(n), "ns", oesTot);
+    SUCCEED();
+}
+
+// --- ONE lambda over the same source: the unit the row above is made of ---
+//
+// Where+Select is two invocations per element; this is one. The difference
+// between the two rows is the price of a lambda call inside a pipeline, which
+// is the thing to attack — the pipeline states themselves are lazy and hold a
+// couple of shared_ptrs.
+TEST(RuntimeBench, DISABLED_LinqOneLambda) {
+    const long n = 10000;
+    ibCompileCode cc(wxT("test"), wxT("memory"), false);
+    ASSERT_TRUE(Build(cc,
+        wxT("var arr public;\n")
+        wxT("Procedure Fill(n) Public\n")
+        wxT("  arr = New Array; var i; i = 0;\n")
+        wxT("  While i < n Do arr.Add(i); i = i + 1; EndDo;\n")
+        wxT("EndProcedure\n")
+        wxT("Function Pipe() Public\n")
+        wxT("  Return arr.Where(Function(x) Return x > 100 EndFunction).Count();\n")
+        wxT("EndFunction\n")));
+    ibProcUnit pu; ASSERT_TRUE([&]{ try { pu.Execute(cc.m_cByteCode); return true; } catch (...) { return false; } }());
+
+    ibValue argN((int)n), ret;
+    pu.CallAsProc(wxT("Fill"), argN);
+
+    const double oesTot = BestTotalNs(5, [&]{ pu.CallAsFunc(wxT("Pipe"), ret); g_sink += (uint64_t)ret.GetInteger(); });
+    RowOes("LINQ one lambda (ns/el)", oesTot / double(n), "ns", oesTot);
+    SUCCEED();
+}
+
+// --- a query-block JOIN: ns per output row --------------------------------
+//
+// There was no row for this because a query-block join did not EXECUTE: the
+// compiler emitted `Join(inner, onCond)` and the runtime wants
+// `(inner, leftKey, rightKey, projection)`, so it raised at the first row. It
+// runs as of 2026-08-09, and what it costs is now a question that can be asked.
+//
+// What to expect from the parts already measured: three lambda invocations per
+// row (leftKey, rightKey, projection) at ~150 ns each, plus one ibValueStructure
+// built per row — whose fields live in a std::map whose comparator uppercases
+// BOTH sides into fresh strings on every comparison. That comparator was
+// theoretical while nothing put a Structure on the pipeline; the composite row
+// puts it there.
+TEST(RuntimeBench, DISABLED_LinqJoin) {
+    const long n = 2000;
+    ibCompileCode cc(wxT("test"), wxT("memory"), false);
+    ASSERT_TRUE(Build(cc,
+        wxT("var outer public; var inner public;\n")
+        wxT("Procedure Fill(n) Public\n")
+        wxT("  outer = New Array; inner = New Array; var i; i = 0;\n")
+        wxT("  While i < n Do outer.Add(i); inner.Add(i); i = i + 1; EndDo;\n")
+        wxT("EndProcedure\n")
+        // THROUGH A VARIABLE, because a method call on a PARENTHESISED expression
+        // is not part of this language: `(expr).Method()` fails to parse whatever
+        // the expression is — `(1 + 2).ToString()` and `(a).Count()` die the same
+        // way ("Keyword or identifier expected"). Postfix applies to an
+        // identifier, not to an arbitrary primary. The query itself is fine; only
+        // the shorthand was, and it came from a compiler that is no longer here.
+        wxT("Function Pipe() Public\n")
+        wxT("  var q; q = from a in outer join b in inner on a equals b select a;\n")
+        wxT("  Return q.Count();\n")
+        wxT("EndFunction\n")));
+    ibProcUnit pu; ASSERT_TRUE([&]{ try { pu.Execute(cc.m_cByteCode); return true; } catch (...) { return false; } }());
+
+    ibValue argN((int)n), ret;
+    pu.CallAsProc(wxT("Fill"), argN);
+
+    const double oesTot = BestTotalNs(5, [&]{ pu.CallAsFunc(wxT("Pipe"), ret); g_sink += (uint64_t)ret.GetInteger(); });
+    RowOes("LINQ join (ns/row)", oesTot / double(n), "ns", oesTot);
+
+    // THE SHAPE OF THE COST, not another guess about it.
+    //
+    // Decomposition by arithmetic left ~2900 of the 3973 ns/row unexplained, and
+    // three explanations fit that number equally well: the index is a
+    // std::map (a red-black tree, despite the name `m_hash`), so lookups are
+    // O(log N) ibValue comparisons; or the per-row constant work dominates
+    // (three lambda calls + one composite Structure + the ibValue copies); or
+    // something in the path is worse than logarithmic.
+    //
+    // n tells them apart, and nothing else has to be true for the reading to
+    // mean something:
+    //   flat            -> per-row constant work; the container is innocent
+    //   +~log N         -> the tree comparisons are real and unordered_map pays
+    //   linear in n     -> something is O(N) per row and THAT is the bug
+    for (long rows : { 250L, 1000L, 4000L, 16000L }) {
+        ibValue argRows((int)rows), retScale;
+        pu.CallAsProc(wxT("Fill"), argRows);
+        const double tot = BestTotalNs(3, [&]{
+            pu.CallAsFunc(wxT("Pipe"), retScale); g_sink += (uint64_t)retScale.GetInteger(); });
+        std::ostringstream label;
+        label << "LINQ join n=" << rows << " (ns/row)";
+        RowOes(label.str().c_str(), tot / double(rows), "ns", tot);
+    }
+    SUCCEED();
+}
+
+// --- a query block with NO join, at scale — isolates the base pipeline ------
+//
+// `from a in outer select a` — one foreach over the source, one Add per row,
+// no index, no probe, no bucket. If THIS is linear-in-n per row too, the
+// quadratic the join bench shows is NOT the join: it is the block's own
+// per-row machinery (the source iterator or the result Array.Add), and the
+// join is innocent. If this is flat, the join adds the quadratic. The cut the
+// join scale bench above could not make on its own.
+TEST(RuntimeBench, DISABLED_LinqBlockSelectScale) {
+    ibCompileCode cc(wxT("test"), wxT("memory"), false);
+    ASSERT_TRUE(Build(cc,
+        wxT("var outer public;\n")
+        wxT("Procedure Fill(n) Public\n")
+        wxT("  outer = New Array; var i; i = 0;\n")
+        wxT("  While i < n Do outer.Add(i); i = i + 1; EndDo;\n")
+        wxT("EndProcedure\n")
+        wxT("Function Pipe() Public\n")
+        wxT("  var q; q = from a in outer select a;\n")
+        wxT("  Return q.Count();\n")
+        wxT("EndFunction\n")));
+    ibProcUnit pu; ASSERT_TRUE([&]{ try { pu.Execute(cc.m_cByteCode); return true; } catch (...) { return false; } }());
+    ibValue ret;
+    for (long rows : { 250L, 1000L, 4000L, 16000L }) {
+        ibValue argRows((int)rows), retScale;
+        pu.CallAsProc(wxT("Fill"), argRows);
+        const double tot = BestTotalNs(3, [&]{
+            pu.CallAsFunc(wxT("Pipe"), retScale); g_sink += (uint64_t)retScale.GetInteger(); });
+        std::ostringstream label;
+        label << "block select n=" << rows << " (ns/row)";
+        RowOes(label.str().c_str(), tot / double(rows), "ns", tot);
+    }
+    SUCCEED();
+}
+
+// --- join with a FIXED inner, varying outer — build-once vs rebuild ---------
+//
+// The base pipeline is flat and the map probe is ~log N, so a build-once index
+// makes the join O(n log n); the join scale bench measures O(n^2). The missing
+// O(N) per row can only be a per-outer-row REBUILD of the index. This isolates
+// it: inner is fixed at 2000, only outer grows, and the row is per OUTER row.
+//   build once  -> the 2000-row build amortises over more outer rows as outer
+//                  grows, so ns/outer-row FALLS.
+//   rebuild     -> every outer row pays the whole 2000-row build, so
+//                  ns/outer-row stays FLAT and high, independent of outer.
+TEST(RuntimeBench, DISABLED_LinqJoinFixedInner) {
+    ibCompileCode cc(wxT("test"), wxT("memory"), false);
+    ASSERT_TRUE(Build(cc,
+        wxT("var outer public; var inner public;\n")
+        wxT("Procedure FillInner(n) Public\n")
+        wxT("  inner = New Array; var i; i = 0;\n")
+        wxT("  While i < n Do inner.Add(i); i = i + 1; EndDo;\n")
+        wxT("EndProcedure\n")
+        wxT("Procedure FillOuter(n) Public\n")
+        wxT("  outer = New Array; var i; i = 0;\n")
+        wxT("  While i < n Do outer.Add(i); i = i + 1; EndDo;\n")
+        wxT("EndProcedure\n")
+        wxT("Function Pipe() Public\n")
+        wxT("  var q; q = from a in outer join b in inner on a equals b select a;\n")
+        wxT("  Return q.Count();\n")
+        wxT("EndFunction\n")));
+    ibProcUnit pu; ASSERT_TRUE([&]{ try { pu.Execute(cc.m_cByteCode); return true; } catch (...) { return false; } }());
+    ibValue argInner((int)2000), ret;
+    pu.CallAsProc(wxT("FillInner"), argInner);
+    for (long outerN : { 250L, 1000L, 4000L, 16000L }) {
+        ibValue argOuter((int)outerN), retScale;
+        pu.CallAsProc(wxT("FillOuter"), argOuter);
+        const double tot = BestTotalNs(3, [&]{
+            pu.CallAsFunc(wxT("Pipe"), retScale); g_sink += (uint64_t)retScale.GetInteger(); });
+        std::ostringstream label;
+        label << "join inner=2000 outer=" << outerN << " (ns/outer-row)";
+        RowOes(label.str().c_str(), tot / double(outerN), "ns", tot);
+    }
+    SUCCEED();
+}
+
+// --- a query block GROUP BY at high cardinality — the same index, verified --
+//
+// group-by builds the SAME kind of key->bucket hash the join does (per-row
+// Property + Insert), so it carried the same O(N^2) member-table thrash. One
+// distinct group per row is the worst case (every row inserts, every insert
+// invalidates the surface, every next row rebuilds it). If the @Index fix took,
+// this is flat per row; a plain Container makes it grow linearly with n.
+TEST(RuntimeBench, DISABLED_LinqGroupByScale) {
+    ibCompileCode cc(wxT("test"), wxT("memory"), false);
+    ASSERT_TRUE(Build(cc,
+        wxT("var src public;\n")
+        wxT("Procedure Fill(n) Public\n")
+        wxT("  src = New Array; var i; i = 0;\n")
+        wxT("  While i < n Do src.Add(i); i = i + 1; EndDo;\n")
+        wxT("EndProcedure\n")
+        wxT("Function Pipe() Public\n")
+        wxT("  var q; q = from a in src group a by a into g select g;\n")
+        wxT("  Return q.Count();\n")
+        wxT("EndFunction\n")));
+    ibProcUnit pu; ASSERT_TRUE([&]{ try { pu.Execute(cc.m_cByteCode); return true; } catch (...) { return false; } }());
+    ibValue ret;
+    for (long rows : { 250L, 1000L, 4000L, 16000L }) {
+        ibValue argRows((int)rows), retScale;
+        pu.CallAsProc(wxT("Fill"), argRows);
+        const double tot = BestTotalNs(3, [&]{
+            pu.CallAsFunc(wxT("Pipe"), retScale); g_sink += (uint64_t)retScale.GetInteger(); });
+        std::ostringstream label;
+        label << "group by n=" << rows << " (ns/row)";
+        RowOes(label.str().c_str(), tot / double(rows), "ns", tot);
+    }
+    SUCCEED();
+}
+
+// --- orderby: one key, and what a SECOND one costs -------------------------
+//
+// ⚠ THERE WAS NO ORDERING ROW IN THIS FILE AT ALL. `orderby` learned to take
+// several keys on 2026-09-09 and its cost went unmeasured, which is a hole in
+// the reading rather than a good result: the whole point of a bench beside a
+// feature is that "it works" and "it is affordable" are different claims.
+//
+// The two rows are read TOGETHER and only their difference means anything. A
+// second key adds one more `OPER_LINQ_KEEP` per row (the row operand marked
+// DEF_VAR_SKIP, the key index in p4) and turns the comparison lexicographic —
+// `m_keys` is a vector per row rather than one value. So the difference is what
+// a key costs, and the single-key row is the control that says the vector did
+// not make the ordinary case pay for the new one.
+//
+// One distinct value per row, so the sort never short-circuits and the second
+// key is REACHED on every comparison the first cannot settle — which for
+// `i % 7` it frequently cannot.
+TEST(RuntimeBench, DISABLED_LinqOrderByKeys) {
+    ibCompileCode cc(wxT("test"), wxT("memory"), false);
+    ASSERT_TRUE(Build(cc,
+        wxT("var src public;\n")
+        wxT("Procedure Fill(n) Public\n")
+        wxT("  src = New Array; var i; i = 0;\n")
+        wxT("  While i < n Do src.Add(New Structure(\"A, B\", i % 7, n - i)); i = i + 1; EndDo;\n")
+        wxT("EndProcedure\n")
+        wxT("Function One() Public\n")
+        wxT("  var q; q = from r in src orderby r.A select { V = r.B };\n")
+        wxT("  Return q.Count();\n")
+        wxT("EndFunction\n")
+        wxT("Function Two() Public\n")
+        wxT("  var q; q = from r in src orderby r.A, r.B select { V = r.B };\n")
+        wxT("  Return q.Count();\n")
+        wxT("EndFunction\n")));
+    ibProcUnit pu; ASSERT_TRUE([&]{ try { pu.Execute(cc.m_cByteCode); return true; } catch (...) { return false; } }());
+
+    for (long rows : { 1000L, 16000L }) {
+        ibValue argRows((int)rows), ret;
+        pu.CallAsProc(wxT("Fill"), argRows);
+
+        const double one = BestTotalNs(3, [&]{
+            pu.CallAsFunc(wxT("One"), ret); g_sink += (uint64_t)ret.GetInteger(); });
+        const double two = BestTotalNs(3, [&]{
+            pu.CallAsFunc(wxT("Two"), ret); g_sink += (uint64_t)ret.GetInteger(); });
+
+        std::ostringstream l1, l2;
+        l1 << "orderby 1 key n=" << rows << " (ns/row)";
+        l2 << "orderby 2 keys n=" << rows << " (ns/row)";
+        RowOes(l1.str().c_str(), one / double(rows), "ns", one);
+        RowOes(l2.str().c_str(), two / double(rows), "ns", two);
+    }
+    SUCCEED();
+}
+
+// --- what one more PROJECTED FIELD costs -----------------------------------
+//
+// The two rows differ by nothing but the width of the `select`, so their
+// difference is the per-field price of building a projected row and nothing
+// else. It is asked because that path pays a `dynamic_cast` PER FIELD
+// (`ibLinqField`, procUnitLINQ.cpp) to reach the record the instruction before
+// it just created — a cast whose own comment says it "cannot fail", since the
+// compiler emits OPER_LINQ_ROW and every OPER_LINQ_FIELD after it into the same
+// cell from one lambda. A check of something already guaranteed, once per field
+// per row, is the kind of cost that is invisible until it is divided out.
+TEST(RuntimeBench, DISABLED_LinqProjectionWidth) {
+    ibCompileCode cc(wxT("test"), wxT("memory"), false);
+    ASSERT_TRUE(Build(cc,
+        wxT("var src public;\n")
+        wxT("Procedure Fill(n) Public\n")
+        wxT("  src = New Array; var i; i = 0;\n")
+        wxT("  While i < n Do src.Add(New Structure(\"A, B, C\", i, i, i)); i = i + 1; EndDo;\n")
+        wxT("EndProcedure\n")
+        wxT("Function One() Public\n")
+        wxT("  var q; q = from r in src select { X = r.A };\n")
+        wxT("  Return q.Count();\n")
+        wxT("EndFunction\n")
+        wxT("Function Three() Public\n")
+        wxT("  var q; q = from r in src select { X = r.A, Y = r.B, Z = r.C };\n")
+        wxT("  Return q.Count();\n")
+        wxT("EndFunction\n")));
+    ibProcUnit pu; ASSERT_TRUE([&]{ try { pu.Execute(cc.m_cByteCode); return true; } catch (...) { return false; } }());
+
+    const long rows = 16000;
+    ibValue argRows((int)rows), ret;
+    pu.CallAsProc(wxT("Fill"), argRows);
+
+    const double one = BestTotalNs(3, [&]{
+        pu.CallAsFunc(wxT("One"), ret); g_sink += (uint64_t)ret.GetInteger(); });
+    const double three = BestTotalNs(3, [&]{
+        pu.CallAsFunc(wxT("Three"), ret); g_sink += (uint64_t)ret.GetInteger(); });
+
+    RowOes("project 1 field (ns/row)", one   / double(rows), "ns", one);
+    RowOes("project 3 fields (ns/row)", three / double(rows), "ns", three);
+    SUCCEED();
+}
+
+// --- what a STRING costs to move through the runtime ------------------------
+//
+// WHY THIS ROW EXISTS. A value is copied through TWO doors and they were not the
+// same code. `ibValue::Copy` (value.cpp, what `operator=` calls) copies the
+// buffer straight — `new ibString(*src)` — and that is the door
+// DISABLED_IbValueCopyCost measures. The OTHER door is the inline
+// CopyValue/MoveValue pair in procUnitLambda.h, which is what the interpreter
+// and the LINQ pipeline call (89 sites, 32 of them in procUnitLINQ.cpp), and it
+// went ibString -> wxString -> ibString: two conversions and two allocations per
+// copied string, both across the backend.dll import boundary. Nothing in this
+// file exercised that door with a STRING — every projection bench above fills
+// its rows with numbers — so the wxString round trip sat on the interpreter's
+// per-instruction path unmeasured.
+//
+// Each shape is measured against its NUMBER twin under identical conditions, so
+// the reading is the string's surcharge over a value that never touches the
+// string path, rather than a nanosecond count on this CPU.
+TEST(RuntimeBench, DISABLED_StringValueCopy) {
+    ibCompileCode cc(wxT("test"), wxT("memory"), false);
+    ASSERT_TRUE(Build(cc,
+        wxT("var src public;\n")
+        wxT("Procedure Fill(n) Public\n")
+        wxT("  src = New Array; var i; i = 0;\n")
+        wxT("  While i < n Do\n")
+        wxT("    src.Add(New Structure(\"A, B\", \"a moderately ordinary string\", i));\n")
+        wxT("    i = i + 1;\n")
+        wxT("  EndDo;\n")
+        wxT("EndProcedure\n")
+        // Assignment through the interpreter: the LET road into CopyValue.
+        wxT("Function LetString(n) Public\n")
+        wxT("  var a; var b; var i; a = \"a moderately ordinary string\"; b = \"\"; i = 0;\n")
+        wxT("  While i < n Do b = a; i = i + 1; EndDo;\n")
+        wxT("  Return b;\n")
+        wxT("EndFunction\n")
+        wxT("Function LetNumber(n) Public\n")
+        wxT("  var a; var b; var i; a = 12345; b = 0; i = 0;\n")
+        wxT("  While i < n Do b = a; i = i + 1; EndDo;\n")
+        wxT("  Return b;\n")
+        wxT("EndFunction\n")
+        // Projection: the LINQ road into CopyValue, one field either way so the
+        // only difference between the two runs is the type of the field.
+        wxT("Function ProjectString() Public\n")
+        wxT("  var q; q = from r in src select { X = r.A };\n")
+        wxT("  Return q.Count();\n")
+        wxT("EndFunction\n")
+        wxT("Function ProjectNumber() Public\n")
+        wxT("  var q; q = from r in src select { X = r.B };\n")
+        wxT("  Return q.Count();\n")
+        wxT("EndFunction\n")));
+    ibProcUnit pu; ASSERT_TRUE([&]{ try { pu.Execute(cc.m_cByteCode); return true; } catch (...) { return false; } }());
+
+    const long iters = 200000;
+    ibValue argIters((int)iters), ret;
+    const double letString = BestTotalNs(3, [&]{
+        pu.CallAsFunc(wxT("LetString"), ret, argIters); g_sink += ret.GetString().length(); });
+    const double letNumber = BestTotalNs(3, [&]{
+        pu.CallAsFunc(wxT("LetNumber"), ret, argIters); g_sink += (uint64_t)ret.GetInteger(); });
+
+    const long rows = 16000;
+    ibValue argRows((int)rows);
+    pu.CallAsProc(wxT("Fill"), argRows);
+    const double projString = BestTotalNs(3, [&]{
+        pu.CallAsFunc(wxT("ProjectString"), ret); g_sink += (uint64_t)ret.GetInteger(); });
+    const double projNumber = BestTotalNs(3, [&]{
+        pu.CallAsFunc(wxT("ProjectNumber"), ret); g_sink += (uint64_t)ret.GetInteger(); });
+
+    RowOes("let string (ns/assign)", letString / double(iters), "ns", letString);
+    RowOes("let number (ns/assign)", letNumber / double(iters), "ns", letNumber);
+    RowOes("project string field (ns/row)", projString / double(rows), "ns", projString);
+    RowOes("project number field (ns/row)", projNumber / double(rows), "ns", projNumber);
+    SUCCEED();
+}
+
+// --- does the flat per-row cost survive a MILLION rows? --------------------
+//
+// Every scale bench above stops at 16 000, and "flat up to 16k" is a different
+// statement from "flat at a million". Three mechanisms cannot bend the curve at
+// 16k BY CONSTRUCTION and come into range 62x further out:
+//
+//   * the member table rebuilds a wxString per row, so a million records lean on
+//     the allocator rather than on the pipeline;
+//   * the join index is a red-black tree (see JoinIndexContainer below), and a
+//     million ibValue keys stop fitting the cache the probe was measured inside;
+//   * a million live ibValue is a million refcount pairs.
+//
+// So carrying the 16k number out to 1M is arithmetic, not a reading. This makes
+// it a reading. n=16000 is repeated here ON PURPOSE: it re-measures what
+// LinqBlockSelectScale / LinqJoin / LinqGroupByScale / RecordWalk already print,
+// in the same process on the same machine, so the million-row figures compare
+// against an anchor from THIS run instead of a number remembered from another
+// one — the lesson the join arc already cost us once.
+//
+// Resident set is sampled beside the time because memory is the mechanism most
+// likely to break the flatness; a time-only answer would leave exactly the half
+// in question unmeasured. It is the process working set, so it reads as a
+// high-water mark — allocators keep freed pages rather than returning them.
+//
+// Heavy by construction (tens of seconds). Best-of-1-after-warmup at n >= 250000,
+// so the two largest points carry more scheduler noise than the small ones. A
+// scale that runs out of memory NAMES itself and stops the escalation instead of
+// taking the bench job down — where it stops is the answer too.
+TEST(RuntimeBench, DISABLED_MillionRowScale) {
+    ibCompileCode cc(wxT("test"), wxT("memory"), false);
+    ASSERT_TRUE(Build(cc,
+        wxT("var src public; var inner public;\n")
+        wxT("Procedure Fill(n) Public\n")
+        wxT("  src = New Array; inner = New Array; var i; i = 0;\n")
+        wxT("  While i < n Do src.Add(i); inner.Add(i); i = i + 1; EndDo;\n")
+        wxT("EndProcedure\n")
+        // Hands the arrays back before the process reports its last reading, so
+        // the tail figure is not one scale's rows sitting on the next one's.
+        wxT("Procedure Drop() Public\n")
+        wxT("  src = New Array; inner = New Array;\n")
+        wxT("EndProcedure\n")
+        wxT("Function SelectOnly() Public\n")
+        wxT("  var q; q = from a in src select a;\n")
+        wxT("  Return q.Count();\n")
+        wxT("EndFunction\n")
+        wxT("Function JoinKeys() Public\n")
+        wxT("  var q; q = from a in src join b in inner on a equals b select a;\n")
+        wxT("  Return q.Count();\n")
+        wxT("EndFunction\n")
+        wxT("Function GroupKeys() Public\n")
+        wxT("  var q; q = from a in src group a by a into g select g;\n")
+        wxT("  Return q.Count();\n")
+        wxT("EndFunction\n")
+        // Verbatim the RecordWalk body, so its 2500..20000 series and this one
+        // are the same measurement carried further out.
+        wxT("Function Walk(n) Public\n")
+        wxT("  var rows; rows = New Array;\n")
+        wxT("  var i; i = 0;\n")
+        wxT("  While i < n Do\n")
+        wxT("    var row; row = New Structure;\n")
+        wxT("    row.Insert(\"Qty\", i);\n")
+        wxT("    row.Insert(\"Price\", 2);\n")
+        wxT("    rows.Add(row);\n")
+        wxT("    i = i + 1;\n")
+        wxT("  EndDo;\n")
+        wxT("  var total; total = 0; var j; j = 0;\n")
+        wxT("  While j < n Do\n")
+        wxT("    var r; r = rows.Get(j);\n")
+        wxT("    total = total + r.Qty * r.Price;\n")
+        wxT("    j = j + 1;\n")
+        wxT("  EndDo;\n")
+        wxT("  Return total;\n")
+        wxT("EndFunction\n")));
+    ibProcUnit pu; ASSERT_TRUE([&]{ try { pu.Execute(cc.m_cByteCode); return true; } catch (...) { return false; } }());
+
+    struct Shape { const char* label; const wxChar* fn; bool takesRows; };
+    static const Shape shapes[] = {
+        { "select",            wxT("SelectOnly"), false },
+        { "join",              wxT("JoinKeys"),   false },
+        { "group by",          wxT("GroupKeys"),  false },
+        { "record build+walk", wxT("Walk"),       true  },
+    };
+    static const long scales[] = { 16000L, 64000L, 250000L, 1000000L };
+    constexpr size_t kShapes = sizeof(shapes) / sizeof(shapes[0]);
+    constexpr size_t kScales = sizeof(scales) / sizeof(scales[0]);
+
+    double nsPerRow[kShapes][kScales] = {};   // 0 == this point was never reached
+    double wallNs[kShapes][kScales] = {};
+    size_t residentAt[kScales] = {};
+
+    const size_t residentBase = ResidentBytes();
+    for (size_t s = 0; s < kScales; ++s) {
+        const long rows = scales[s];
+        const int repeats = rows <= 64000L ? 3 : 1;
+        ibValue argRows((int)rows), ret;
+        pu.CallAsProc(wxT("Fill"), argRows);
+
+        bool scaleCompleted = true;
+        for (size_t k = 0; k < kShapes && scaleCompleted; ++k) {
+            try {
+                const double tot = BestTotalNs(repeats, [&] {
+                    if (shapes[k].takesRows) pu.CallAsFunc(shapes[k].fn, ret, argRows);
+                    else                     pu.CallAsFunc(shapes[k].fn, ret);
+                    g_sink += (uint64_t)ret.GetInteger();
+                });
+                nsPerRow[k][s] = tot / double(rows);
+                wallNs[k][s] = tot;
+            }
+            catch (const std::bad_alloc&) {
+                std::cout << "  !! " << shapes[k].label << " n=" << rows
+                          << " -- out of memory; larger scales skipped\n";
+                scaleCompleted = false;
+            }
+            catch (const ibBackendException& err) {
+                std::cout << "  !! " << shapes[k].label << " n=" << rows << " raised: "
+                          << err.GetErrorDescription().ToStdString()
+                          << "; larger scales skipped\n";
+                scaleCompleted = false;
+            }
+        }
+        residentAt[s] = ResidentBytes();
+        if (!scaleCompleted)
+            break;
+    }
+    pu.CallAsProc(wxT("Drop"));
+
+    std::cout << "\n[ million-row scale | n=16000 is the anchor, re-measured in THIS process ]\n";
+    for (size_t k = 0; k < kShapes; ++k) {
+        for (size_t s = 0; s < kScales; ++s) {
+            if (nsPerRow[k][s] == 0.0)
+                continue;
+            std::ostringstream label;
+            label << shapes[k].label << " n=" << scales[s] << " (ns/row)";
+            RowOes(label.str().c_str(), nsPerRow[k][s], "ns", wallNs[k][s]);
+        }
+    }
+
+    // THE READING, spelled out: flat means this ratio is ~1. Anything else is
+    // the per-row cost growing with the data, and the shape names which one.
+    std::cout << "\n  [ per-row drift, anchor 16000 -> largest scale reached ]\n";
+    for (size_t k = 0; k < kShapes; ++k) {
+        size_t last = kScales;
+        while (last > 0 && nsPerRow[k][last - 1] == 0.0) --last;
+        if (last == 0 || nsPerRow[k][0] == 0.0)
+            continue;
+        std::ostringstream label;
+        label << shapes[k].label << " 16000->" << scales[last - 1];
+        std::cout << "  " << std::left << std::setw(30) << label.str() << std::right
+                  << "  x" << std::fixed << std::setprecision(2)
+                  << (nsPerRow[k][last - 1] / nsPerRow[k][0]) << " per row\n";
+    }
+
+    std::cout << "\n  [ resident set, process working set -- high-water, not live bytes ]\n";
+    std::cout << "  " << std::left << std::setw(30) << "before any fill" << std::right
+              << "  " << FmtBytes(residentBase) << "\n";
+    for (size_t s = 0; s < kScales; ++s) {
+        if (residentAt[s] == 0)
+            continue;
+        std::ostringstream label;
+        label << "after n=" << scales[s];
+        std::cout << "  " << std::left << std::setw(30) << label.str() << std::right
+                  << "  " << FmtBytes(residentAt[s]);
+        if (residentAt[s] > residentBase)
+            std::cout << "  (+" << FmtBytes(residentAt[s] - residentBase) << ")";
+        std::cout << "\n";
+    }
+    if (ResidentBytes() == 0)
+        std::cout << "  (no cheap resident-set probe on this platform -- time only)\n";
+    SUCCEED();
+}
+
+// --- the join INDEX on its own, with no interpreter above it --------------
+//
+// ibValueJoinState calls its index `m_hash`, but it is a
+// `std::map<ibValue, std::vector<ibValue>, KeyCmp>` — a red-black tree. Every
+// probe is O(log N) virtual `CompareValueLS` calls, and every distinct key
+// allocates a map node AND a vector.
+//
+// Reading that off the script-level number is impossible: three lambda calls, a
+// composite Structure and the pipeline machinery sit on top of it. So the
+// container is measured ALONE here, in the exact shape the join builds, against
+// the same container keyed by a plain long. The subtraction is the answer:
+//
+//   long map          -> what a red-black tree of this size costs, full stop
+//   ibValue map       -> the same tree paying ibValue construction, copying and
+//                        virtual three-way comparison
+//
+// If the two are close, the key type is innocent and the tree is the cost (swap
+// in unordered_map). If ibValue is several times the long, the comparison and
+// the copies are the cost and the container choice is secondary.
+TEST(RuntimeBench, DISABLED_JoinIndexContainer) {
+    struct KeyCmp {   // byte-for-byte the comparator ibValueJoinState uses
+        bool operator()(const ibValue& a, const ibValue& b) const { return a < b; }
+    };
+
+    for (long n : { 2000L, 16000L }) {
+
+        std::map<ibValue, std::vector<ibValue>, KeyCmp> mapValue;
+        const double buildValue = BestTotalNs(3, [&]{
+            mapValue.clear();
+            for (long i = 0; i < n; ++i) {
+                ibValue key((int)i);
+                mapValue[key].push_back(key);
+            }
+            g_sink += mapValue.size();
+        });
+
+        // Two probe rows, because the first version of this measured BOTH the
+        // lookup and the construction of the key it looks up with, then reported
+        // the sum as "the comparison". The join pays both — its leftKey lambda
+        // hands over a fresh ibValue every row — but they are fixed in different
+        // places, so they are separated here.
+        std::vector<ibValue> listKey;
+        listKey.reserve((size_t)n);
+        for (long i = 0; i < n; ++i) listKey.emplace_back((int)i);
+
+        const double probeValue = BestTotalNs(5, [&]{
+            for (long i = 0; i < n; ++i) {
+                auto it = mapValue.find(listKey[(size_t)i]);   // key already built
+                if (it != mapValue.end()) g_sink += it->second.size();
+            }
+        });
+
+        const double makeKey = BestTotalNs(5, [&]{
+            for (long i = 0; i < n; ++i) {
+                const ibValue key((int)i);
+                g_sink += (uint64_t)key.GetInteger();
+            }
+        });
+
+        std::map<long, std::vector<long>> mapLong;
+        const double buildLong = BestTotalNs(3, [&]{
+            mapLong.clear();
+            for (long i = 0; i < n; ++i) mapLong[i].push_back(i);
+            g_sink += mapLong.size();
+        });
+
+        const double probeLong = BestTotalNs(5, [&]{
+            for (long i = 0; i < n; ++i) {
+                auto it = mapLong.find(i);
+                if (it != mapLong.end()) g_sink += it->second.size();
+            }
+        });
+
+        std::ostringstream l1, l2, l3, l4, l5;
+        l1 << "index build  ibValue n=" << n << " (ns/key)";
+        l2 << "index probe   ibValue n=" << n << " (ns/probe)";
+        l3 << "index build  long    n=" << n << " (ns/key)";
+        l4 << "index probe   long    n=" << n << " (ns/probe)";
+        l5 << "make one ibValue key n=" << n << " (ns)";
+        RowOes(l1.str().c_str(), buildValue / double(n), "ns", buildValue);
+        RowOes(l2.str().c_str(), probeValue / double(n), "ns", probeValue);
+        RowOes(l3.str().c_str(), buildLong  / double(n), "ns", buildLong);
+        RowOes(l4.str().c_str(), probeLong  / double(n), "ns", probeLong);
+        RowOes(l5.str().c_str(), makeKey    / double(n), "ns", makeKey);
+    }
+    SUCCEED();
+}
+
+// --- THE ATOM: what one ibValue costs to copy -----------------------------
+//
+// ⚠ NOTHING IN THIS FILE MEASURED IT, and every row above is built out of it.
+// A projected field, a probe of an index, a row kept by a query, a cell written
+// into a table — each is a handful of ibValue copies wearing different names, so
+// "the copy is the cost" was an argument nobody could check and "it is not" was
+// equally unfalsifiable. Three rounds of 2026-09-09 ended pointing here (the
+// tree was innocent, the dynamic_cast was innocent, removing a virtual call and
+// a temporary bought nothing), which is what a missing atom looks like from the
+// outside.
+//
+// The three shapes are separate because `ibValue::Copy` treats them differently
+// and only the disassembly says so today: a NUMBER copies its payload, a STRING
+// runs `new ibString(*other)` — a heap allocation per copy — and an OBJECT
+// becomes a REFERENCE to the source with an atomic increment (value.cpp, Copy).
+// One number would have hidden the other two.
+TEST(RuntimeBench, DISABLED_IbValueCopyCost) {
+    const long n = 200000;
+
+    // Sources built once, outside the timing: this asks what a COPY costs, not
+    // what making the original costs.
+    const ibValue srcNumber((int)12345);
+    const ibValue srcString(wxT("a moderately ordinary string"));
+    ibValue srcObject(new ibValueArray());
+
+    // 🛑 NOTHING IS CONSUMED INSIDE THE LOOP, and the first version of this row was
+    // wrong for exactly that. It sank each copy through a different reader —
+    // `GetInteger()` on the number (a decimal conversion), `GetString()` on the
+    // string (which returns a wxString BY VALUE, so an allocation), `IsEmpty()`
+    // on the object (a cheap call) — and reported the result as the cost of
+    // COPYING. The ordering it produced was the ordering of the READERS.
+    //
+    // Nothing is needed: `ibValue::operator=` is out of line and imported from
+    // backend.dll, so the call cannot be elided and the loop cannot be folded
+    // away. The sink is taken once, after the timing, purely to keep `dst` live.
+    ibValue dst;
+    const double copyNumber = BestTotalNs(5, [&]{
+        for (long i = 0; i < n; ++i) dst = srcNumber;
+    });
+    g_sink += (uint64_t)dst.GetInteger();
+
+    const double copyString = BestTotalNs(5, [&]{
+        for (long i = 0; i < n; ++i) dst = srcString;
+    });
+    g_sink += dst.GetString().length();
+
+    const double copyObject = BestTotalNs(5, [&]{
+        for (long i = 0; i < n; ++i) dst = srcObject;
+    });
+    g_sink += (uint64_t)dst.IsEmpty();
+
+    // Construct + destruct, with nothing to release — the floor under every row
+    // that says "a temporary was removed".
+    const double emptyPair = BestTotalNs(5, [&]{
+        for (long i = 0; i < n; ++i) { ibValue tmp; g_sink += (uint64_t)tmp.IsEmpty(); }
+    });
+
+    // ⭐⭐ WHAT A NON-NUMBER USED TO PAY FOR THE NUMBER. `ibNumber m_fData` was a member
+    // OUTSIDE the union, default-constructed by every ibValue and destroyed on every
+    // destruction — a string value carried a number; so did an object; so did an
+    // empty. (Max, 2026-09-09: *"the string always comes packaged with a number"*.)
+    //
+    // Since 2026-09-26 it lives IN the union beside the string (one word each, a
+    // heap tier shared and counted), the tag owning both lifetimes, and a
+    // non-number value no longer constructs one. The pair below stays as the
+    // control: what a number costs when one IS made.
+    const double numberPair = BestTotalNs(5, [&]{
+        // The ADDRESS, not a reader: taking it stops the object being elided
+        // without pulling a conversion into the timing (which is the mistake the
+        // note above records).
+        for (long i = 0; i < n; ++i) { ibNumber tmp; g_sink += (uint64_t)(uintptr_t)&tmp; }
+    });
+
+    // The same three against a native baseline, so the numbers read as a factor
+    // rather than as nanoseconds on this CPU.
+    long nativeDst = 0; const long nativeSrc = 12345;
+    const double copyLong = BestTotalNs(5, [&]{
+        for (long i = 0; i < n; ++i) { nativeDst = nativeSrc; g_sink += (uint64_t)nativeDst; }
+    });
+
+    RowOes("ibValue copy: number (ns)", copyNumber / double(n), "ns", copyNumber);
+    RowOes("ibValue copy: string (ns)", copyString / double(n), "ns", copyString);
+    RowOes("ibValue copy: object (ns)", copyObject / double(n), "ns", copyObject);
+    RowOes("ibValue empty ctor+dtor (ns)", emptyPair / double(n), "ns", emptyPair);
+    RowOes("ibNumber ctor+dtor alone (ns)", numberPair / double(n), "ns", numberPair);
+    RowOes("long copy - control (ns)", copyLong / double(n), "ns", copyLong);
+
+    // The footprint the union question is about, said once rather than argued.
+    std::cout << "  sizeof(ibValue) = " << sizeof(ibValue)
+              << "   sizeof(ibNumber) = " << sizeof(ibNumber) << "\n";
+    SUCCEED();
+}
+
+// --- Structure: reading a field by name ----------------------------------
+//
+// A Structure is what a LINQ row IS on the database side (valueQueryable's
+// RowValue builds one per row) and what a composite pipeline row WOULD be. Its
+// fields live in a std::map keyed by ibValue, and the comparator uppercases BOTH
+// sides into fresh wxStrings on every comparison — so one field read is
+// O(log n) comparisons x two allocations. This row is what says whether that
+// costs anything worth removing.
+TEST(RuntimeBench, DISABLED_StructFieldRead) {
+    const long n = 200000;
+    ibCompileCode cc(wxT("test"), wxT("memory"), false);
+    ASSERT_TRUE(Build(cc,
+        wxT("Function Read(n) Public\n")
+        wxT("  var s; s = New Structure(\"Alpha, Beta, Gamma\", 1, 2, 3);\n")
+        wxT("  var i; var t; i = 0; t = 0;\n")
+        wxT("  While i < n Do t = t + s.Beta; i = i + 1; EndDo;\n")
+        wxT("  Return t;\n")
+        wxT("EndFunction\n")));
+    ibProcUnit pu; ASSERT_TRUE([&]{ try { pu.Execute(cc.m_cByteCode); return true; } catch (...) { return false; } }());
+    ibValue argN((int)n), ret;
+    const double oesTot = BestTotalNs(5, [&]{ pu.CallAsFunc(wxT("Read"), ret, argN); g_sink += (uint64_t)ret.GetInteger(); });
+    RowOes("struct field read (ns)", oesTot / double(n), "ns", oesTot);
+    SUCCEED();
+}
+
+// --- Structure: building one ---------------------------------------------
+// Every Insert calls m_members.Invalidate(), so a 3-field structure rebuilds
+// its member table three times before anyone reads it.
+TEST(RuntimeBench, DISABLED_StructBuild) {
+    const long n = 100000;
+    ibCompileCode cc(wxT("test"), wxT("memory"), false);
+    ASSERT_TRUE(Build(cc,
+        wxT("Function Make(n) Public\n")
+        wxT("  var i; var s; i = 0;\n")
+        wxT("  While i < n Do s = New Structure(\"Alpha, Beta, Gamma\", i, i, i); i = i + 1; EndDo;\n")
+        wxT("  Return i;\n")
+        wxT("EndFunction\n")));
+    ibProcUnit pu; ASSERT_TRUE([&]{ try { pu.Execute(cc.m_cByteCode); return true; } catch (...) { return false; } }());
+    ibValue argN((int)n), ret;
+    const double oesTot = BestTotalNs(5, [&]{ pu.CallAsFunc(wxT("Make"), ret, argN); g_sink += (uint64_t)ret.GetInteger(); });
+    RowOes("struct build 3 fields (ns)", oesTot / double(n), "ns", oesTot);
+    SUCCEED();
+}
+
+// --- Array: append and index ---------------------------------------------
+// `arr.Add(i)` is the other half of the LINQ blend row. Splitting it from the
+// loop's arithmetic says whether the cost is the STORAGE or the method
+// DISPATCH — the surface has 15 methods, above the hash-index threshold.
+TEST(RuntimeBench, DISABLED_ArrayAdd) {
+    const long n = 200000;
+    ibCompileCode cc(wxT("test"), wxT("memory"), false);
+    ASSERT_TRUE(Build(cc,
+        wxT("Function Fill(n) Public\n")
+        wxT("  var arr; arr = New Array; var i; i = 0;\n")
+        wxT("  While i < n Do arr.Add(i); i = i + 1; EndDo;\n")
+        wxT("  Return arr.Count();\n")
+        wxT("EndFunction\n")));
+    ibProcUnit pu; ASSERT_TRUE([&]{ try { pu.Execute(cc.m_cByteCode); return true; } catch (...) { return false; } }());
+    ibValue argN((int)n), ret;
+    const double oesTot = BestTotalNs(5, [&]{ pu.CallAsFunc(wxT("Fill"), ret, argN); g_sink += (uint64_t)ret.GetInteger(); });
+    RowOes("array Add (ns)", oesTot / double(n), "ns", oesTot);
+    SUCCEED();
+}
+
+TEST(RuntimeBench, DISABLED_ArrayIndex) {
+    const long n = 200000;
+    ibCompileCode cc(wxT("test"), wxT("memory"), false);
+    ASSERT_TRUE(Build(cc,
+        wxT("Function Walk(n) Public\n")
+        wxT("  var arr; arr = New Array; var i; i = 0;\n")
+        wxT("  While i < 1000 Do arr.Add(i); i = i + 1; EndDo;\n")
+        // NO `%` IN THE TIMED LOOP. `i % 1000` looked like a harmless way to stay
+        // in range, but ibNumber's immediate fast path covers + - * / and compare
+        // and NOT the remainder, so the modulo goes through exact long division
+        // and dominates the row — the measurement would have been named "array
+        // index" and have reported the cost of `%`. A counter reset costs a
+        // compare and an assignment, both already priced elsewhere.
+        wxT("  var t; var k; t = 0; i = 0; k = 0;\n")
+        wxT("  While i < n Do\n")
+        wxT("    t = t + arr[k]; k = k + 1;\n")
+        wxT("    If k > 999 Then k = 0; EndIf;\n")
+        wxT("    i = i + 1;\n")
+        wxT("  EndDo;\n")
+        wxT("  Return t;\n")
+        wxT("EndFunction\n")));
+    ibProcUnit pu; ASSERT_TRUE([&]{ try { pu.Execute(cc.m_cByteCode); return true; } catch (...) { return false; } }());
+    ibValue argN((int)n), ret;
+    const double oesTot = BestTotalNs(5, [&]{ pu.CallAsFunc(wxT("Walk"), ret, argN); g_sink += (uint64_t)ret.GetInteger(); });
+    RowOes("array [i] read (ns)", oesTot / double(n), "ns", oesTot);
+    SUCCEED();
+}
+
+// --- the SOURCE walked with no lambda at all: the pipeline's own floor ----
+//
+// `arr.Count()` after a `Take` that keeps everything: iterator machinery, no
+// user code. Whatever this costs is what a pipeline charges before the first
+// script line runs, and it is the number that says whether the states are worth
+// touching at all.
+TEST(RuntimeBench, DISABLED_LinqNoLambda) {
+    const long n = 10000;
+    ibCompileCode cc(wxT("test"), wxT("memory"), false);
+    ASSERT_TRUE(Build(cc,
+        wxT("var arr public;\n")
+        wxT("Procedure Fill(n) Public\n")
+        wxT("  arr = New Array; var i; i = 0;\n")
+        wxT("  While i < n Do arr.Add(i); i = i + 1; EndDo;\n")
+        wxT("EndProcedure\n")
+        wxT("Function Pipe() Public\n")
+        // The count comes FROM n. It used to be the literal 10000 in the script
+        // while the row divided by `n` — equal today, and silently wrong for
+        // everyone the moment somebody edits one of the two. Same shape as the
+        // row that was called "call frame" and measured no frame.
+        + wxString::Format(wxT("  Return arr.Take(%ld).Count();\n"), n) +
+        wxT("EndFunction\n")));
+    ibProcUnit pu; ASSERT_TRUE([&]{ try { pu.Execute(cc.m_cByteCode); return true; } catch (...) { return false; } }());
+
+    ibValue argN((int)n), ret;
+    pu.CallAsProc(wxT("Fill"), argN);
+
+    const double oesTot = BestTotalNs(5, [&]{ pu.CallAsFunc(wxT("Pipe"), ret); g_sink += (uint64_t)ret.GetInteger(); });
+    RowOes("LINQ no lambda (ns/el)", oesTot / double(n), "ns", oesTot);
+    SUCCEED();
+}
+
+// --- method resolve on a WIDE surface: ns per obj.Method() ----------------
+// Every scenario above resolves names against a tiny surface (host->script
+// looks one function up in a table of one), so all of them take
+// ibMemberTable's linear path. Array surfaces 15 methods — above
+// kFindIndexMin (12) — so this one goes through the INDEX instead, which
+// is where a lookup used to pay `name.Upper().ToStdWstring()`. Without this
+// row the suite cannot see a change to name resolution at all.
+TEST(RuntimeBench, DISABLED_MethodResolve) {
+    const long n = 200000;
+    ibCompileCode cc(wxT("test"), wxT("memory"), false);
+    ASSERT_TRUE(Build(cc,
+        wxT("Function Resolve(n) Public\n")
+        // Get, NOT Count: Count is an ibLinqMethod, so the compiler emits
+        // OPER_CALL_LINQ for it and the runtime dispatches on an enum id with
+        // no name lookup at all — the opposite of what this bench is for. Get
+        // is an ordinary method, so it goes OPER_CALL_METHOD -> FindMethod ->
+        // the index (Array surfaces 15 methods, above kFindIndexMin).
+        wxT("  var arr; arr = New Array; arr.Add(1);\n")
+        wxT("  var i; i = 0; var s; s = 0;\n")
+        wxT("  While i < n Do s = arr.Get(0); i = i + 1; EndDo;\n")
+        wxT("  Return i;\n")
+        wxT("EndFunction\n")));
+    ibProcUnit pu; ASSERT_TRUE([&]{ try { pu.Execute(cc.m_cByteCode); return true; } catch (...) { return false; } }());
+    ibValue argN((int)n), ret;
+    const double oesTot = BestTotalNs(5, [&]{ pu.CallAsFunc(wxT("Resolve"), ret, argN); g_sink += (uint64_t)ret.GetInteger(); });
+    RowOes("method resolve (ns/call)", oesTot / double(n), "ns", oesTot);
+    SUCCEED();
+}
+
+// --- a shape closer to GENERATED code -------------------------------------
+// The five scenarios above are microbenchmarks: a tight arithmetic loop, a
+// recursion, a concatenation. They were chosen for what stresses the
+// interpreter, not for what real configuration code looks like — and least of
+// all for what a model writes.
+//
+// Generated code has a different profile: it builds records rather than
+// querying them, walks collections in memory rather than grouping in SQL, and
+// reaches fields through the dot far more often than it does arithmetic. This
+// row is that shape — build N structures, then walk them summing two fields —
+// so the mix is New + method calls + OPER_GET_A + arithmetic, in the
+// proportions generated code actually produces.
+//
+// Reported per ROW, so the number is "what one record costs to build and
+// process", which is the unit a configuration author thinks in.
+TEST(RuntimeBench, DISABLED_RecordWalk) {
+    // No single n here: the scaling probe below drives its own series.
+    ibCompileCode cc(wxT("test"), wxT("memory"), false);
+    ASSERT_TRUE(Build(cc,
+        wxT("Function Walk(n) Public\n")
+        wxT("  var rows; rows = New Array;\n")
+        wxT("  var i; i = 0;\n")
+        wxT("  While i < n Do\n")
+        wxT("    var row; row = New Structure;\n")
+        wxT("    row.Insert(\"Qty\", i);\n")
+        wxT("    row.Insert(\"Price\", 2);\n")
+        wxT("    rows.Add(row);\n")
+        wxT("    i = i + 1;\n")
+        wxT("  EndDo;\n")
+        wxT("  var total; total = 0; var j; j = 0;\n")
+        wxT("  While j < n Do\n")
+        wxT("    var r; r = rows.Get(j);\n")
+        wxT("    total = total + r.Qty * r.Price;\n")
+        wxT("    j = j + 1;\n")
+        wxT("  EndDo;\n")
+        wxT("  Return total;\n")
+        wxT("EndFunction\n")));
+    ibProcUnit pu; ASSERT_TRUE([&]{ try { pu.Execute(cc.m_cByteCode); return true; } catch (...) { return false; } }());
+    // Scaling probe: per-row cost must stay FLAT as n grows. If it climbs with
+    // n, something in the path is quadratic — a growing collection copied per
+    // append, or a linear lookup per access.
+    for (long rows : { 2500L, 5000L, 10000L, 20000L }) {
+        ibValue argN((int)rows), ret;
+        const double tot = BestTotalNs(3, [&]{ pu.CallAsFunc(wxT("Walk"), ret, argN); g_sink += (uint64_t)ret.GetInteger(); });
+        std::ostringstream label;
+        label << "record build+walk n=" << rows << " (ns/row)";
+        RowOes(label.str().c_str(), tot / double(rows), "ns", tot);
+    }
+    SUCCEED();
+}
+
+// --- breaking the record walk into its parts ------------------------------
+// RecordWalk came out at ~35 us per row while each of its ~8 operations
+// measures ~200 ns elsewhere — an 18x discrepancy that no single opcode
+// explains. Rather than guess, each step is timed on its own here, at the same
+// n, so the expensive one names itself.
+TEST(RuntimeBench, DISABLED_RecordParts) {
+    const long n = 5000;
+    struct Part { const char* name; const wxChar* body; };
+    const Part parts[] = {
+        { "New Structure only",
+          wxT("Function P(n) Public\n var i; i = 0;\n While i < n Do var s; s = New Structure; i = i + 1; EndDo;\n Return i;\nEndFunction\n") },
+        { "New + 2 Insert",
+          wxT("Function P(n) Public\n var i; i = 0;\n While i < n Do var s; s = New Structure; s.Insert(\"Qty\", i); s.Insert(\"Price\", 2); i = i + 1; EndDo;\n Return i;\nEndFunction\n") },
+        { "Array.Add only",
+          wxT("Function P(n) Public\n var a; a = New Array; var i; i = 0;\n While i < n Do a.Add(i); i = i + 1; EndDo;\n Return i;\nEndFunction\n") },
+        { "Array.Get only",
+          wxT("Function P(n) Public\n var a; a = New Array; a.Add(1); var i; i = 0; var v;\n While i < n Do v = a.Get(0); i = i + 1; EndDo;\n Return i;\nEndFunction\n") },
+        { "dot access on Structure",
+          wxT("Function P(n) Public\n var s; s = New Structure; s.Insert(\"Qty\", 3); var i; i = 0; var v;\n While i < n Do v = s.Qty; i = i + 1; EndDo;\n Return i;\nEndFunction\n") },
+    };
+    for (const Part& p : parts) {
+        ibCompileCode cc(wxT("test"), wxT("memory"), false);
+        if (!Build(cc, p.body)) { std::cout << "  (compile failed: " << p.name << ")\n"; continue; }
+        ibProcUnit pu;
+        if (![&]{ try { pu.Execute(cc.m_cByteCode); return true; } catch (...) { return false; } }()) {
+            std::cout << "  (execute failed: " << p.name << ")\n"; continue;
+        }
+        ibValue argN((int)n), ret;
+        const double tot = BestTotalNs(3, [&]{ pu.CallAsFunc(wxT("P"), ret, argN); g_sink += (uint64_t)ret.GetInteger(); });
+        RowOes(p.name, tot / double(n), "ns", tot);
+    }
+    SUCCEED();
+}
+
+// --- where a field's cost goes as a structure gets wider -------------------
+// `struct build 3 fields` read 1603 ns on 2026-08-11 (§8) and 2321 today, and
+// the suspect is the commit that turned ibValueContainer into a hash index
+// (675b04db, 23:19 THAT DAY — the baseline predates it by hours). A hash pays a
+// fixed price the tree did not: the first insert allocates a bucket array, and
+// the key is then stored TWICE, in m_entries and in m_index.
+//
+// If that is the cause the shape is a STEP, not a slope: field one carries the
+// allocation and the rest are cheap. If instead the per-field cost is flat, the
+// hypothesis is wrong and the regression is somewhere else entirely.
+//
+// Values are omitted on purpose (the ctor allows it) so this measures the
+// INSERT machinery and not the copying of what goes in.
+TEST(RuntimeBench, DISABLED_StructBuildWidth) {
+    struct Shape { const char* label; const wxChar* names; double fields; };
+    static const Shape shapes[] = {
+        { "empty",     wxT(""),                     0 },
+        { "1 field",   wxT("A"),                    1 },
+        { "2 fields",  wxT("A,B"),                  2 },
+        { "3 fields",  wxT("A,B,C"),                3 },
+        { "5 fields",  wxT("A,B,C,D,E"),            5 },
+        { "10 fields", wxT("A,B,C,D,E,F,G,H,I,J"), 10 },
+    };
+
+    std::cout << "\n[ Structure ctor by width | ns per CALL, and per field ]\n";
+    for (const Shape& shape : shapes) {
+        const long n = 100000;
+        ibCompileCode cc(wxT("test"), wxT("memory"), false);
+        wxString body;
+        body << wxT("Function Make(n) Public\n")
+             << wxT("  var i; var s; i = 0;\n")
+             << wxT("  While i < n Do s = New Structure(\"") << shape.names << wxT("\"); i = i + 1; EndDo;\n")
+             << wxT("  Return i;\n")
+             << wxT("EndFunction\n");
+        if (!Build(cc, body.wc_str())) { std::cout << "  (compile failed: " << shape.label << ")\n"; continue; }
+        ibProcUnit pu;
+        if (![&]{ try { pu.Execute(cc.m_cByteCode); return true; } catch (...) { return false; } }()) {
+            std::cout << "  (execute failed: " << shape.label << ")\n"; continue;
+        }
+        ibValue argN((int)n), ret;
+        const double tot = BestTotalNs(5, [&]{ pu.CallAsFunc(wxT("Make"), ret, argN); g_sink += (uint64_t)ret.GetInteger(); });
+        const double perCall = tot / double(n);
+        std::cout << "  " << std::left << std::setw(12) << shape.label << std::right
+                  << "  " << std::setw(8) << std::fixed << std::setprecision(1) << perCall << "ns/call";
+        if (shape.fields > 0)
+            std::cout << "  " << std::setw(7) << (perCall / shape.fields) << "ns/field";
+        std::cout << "\n";
+    }
+    SUCCEED();
+}
+
+// --- how to ask "is the other side one of me" ------------------------------
+// Array and container comparison ask that once per compared PAIR, and once per
+// ELEMENT when the elements are themselves composite — so it sits on the same
+// per-row path the comparison itself does.
+//
+// Two ways to ask, and the choice is not obvious from reading them. A
+// dynamic_cast walks RTTI. The class id looks like the cheap one — an integer
+// compare — but getting it is a virtual call that, for an object kind, ends in
+// GetTypeIDByRef, and what THAT costs decides the matter. Measured side by side
+// on the same values rather than argued: x < 1 means the id is the cheaper ask
+// and the code as written is right; x > 1 means the cast should come back.
+TEST(RuntimeBench, DISABLED_TypeCheckCost) {
+    ibValueArray lhs;                            // stack — never wrapped, so never ref-counted
+    ibValueArray* rhsRaw = new ibValueArray();
+    for (int i = 0; i < 4; ++i) { lhs.Add(ibValue(i)); rhsRaw->Add(ibValue(i)); }
+    const ibValue rhs(static_cast<ibValue*>(rhsRaw));   // the reffer owns rhsRaw from here
+
+    const long n = 200000;
+
+    const double byId = BestTotalNs(5, [&]{
+        for (long i = 0; i < n; ++i) {
+            const ibValue* ref = rhs.GetRef();
+            g_sink += (ref->GetClassType() == lhs.GetClassType()) ? 1u : 0u;
+        }
+    }) / double(n);
+
+    const double byCast = BestTotalNs(5, [&]{
+        for (long i = 0; i < n; ++i)
+            g_sink += (dynamic_cast<const ibValueArray*>(rhs.GetRef()) != nullptr) ? 1u : 0u;
+    }) / double(n);
+
+    // "native" column = the dynamic_cast this replaced, so the ratio reads as
+    // id/cast directly.
+    Row("type check: id vs cast", byId, byCast, "ns");
+    SUCCEED();
+}
+
+// --- what a row costs in BYTES, not in nanoseconds -------------------------
+// MillionRowScale reports ~7.5 KB of resident set per row at n=1000000, for a
+// row that holds two numbers. Something per-row weighs far more than its data,
+// and no timing bench can say which part: they all measure the same row.
+//
+// So the shapes are separated here. An EMPTY Structure has no fields at all, so
+// whatever it costs is the object plus its member table; the two-field shape
+// adds only the fields on top of that. If an empty row already costs kilobytes,
+// the weight is the member table and the fields are noise — and that is the
+// question any fix depends on, which is why this is measured BEFORE one is made.
+//
+// EVERY SHAPE LANDS IN FRESH MEMORY, and nothing is freed until the end. The
+// probe reads the resident set, and a fill that lands in memory freed earlier in
+// the process does not move it: on 2026-09-11 both rows read 0 ("n/a"). Before
+// 43e7cdd9 that could not happen — an assignment never released the object it
+// replaced, so `keep = New Array` in Drop() freed nothing and every fill grew the
+// process. Once Drop() really freed, the measured fill landed in the rows the
+// warm-up had just released. So each shape now has a holder of its own and all
+// of them stay alive to the end: each reading is a WHOLE row of its shape, and
+// what two fields add is the difference of two whole readings — not an increment
+// over reused pages.
+//
+// ⚠ RUN IT IN A PROCESS OF ITS OWN (CI does — ci.yml, benchmarks-linux). In a
+// full *Bench* run MillionRowScale releases ~2.4 GB just before it, glibc keeps
+// small freed blocks, and the rows here would land in those instead.
+TEST(RuntimeBench, DISABLED_StructureFootprint) {
+    if (ResidentBytes() == 0) {
+        std::cout << "\n  (no resident-set probe on this platform -- footprint not measured)\n";
+        SUCCEED();
+        return;
+    }
+
+    ibCompileCode cc(wxT("test"), wxT("memory"), false);
+    ASSERT_TRUE(Build(cc,
+        wxT("var warm public; var keepEmpty public; var keepFields public;\n")
+        // Rows are HELD, not built and dropped — a footprint needs them alive
+        // at the moment the process is asked how much it is holding. And each
+        // shape has a holder of its own, so filling one never releases another.
+        wxT("Function Warm(n) Public\n")
+        wxT("  warm = New Array; var i; i = 0;\n")
+        wxT("  While i < n Do\n")
+        wxT("    var row; row = New Structure;\n")
+        wxT("    row.Insert(\"Qty\", i);\n")
+        wxT("    row.Insert(\"Price\", 2);\n")
+        wxT("    warm.Add(row);\n")
+        wxT("    i = i + 1;\n")
+        wxT("  EndDo;\n")
+        wxT("  Return warm.Count();\n")
+        wxT("EndFunction\n")
+        wxT("Function Empty(n) Public\n")
+        wxT("  keepEmpty = New Array; var i; i = 0;\n")
+        wxT("  While i < n Do var row; row = New Structure; keepEmpty.Add(row); i = i + 1; EndDo;\n")
+        wxT("  Return keepEmpty.Count();\n")
+        wxT("EndFunction\n")
+        wxT("Function TwoFields(n) Public\n")
+        wxT("  keepFields = New Array; var i; i = 0;\n")
+        wxT("  While i < n Do\n")
+        wxT("    var row; row = New Structure;\n")
+        wxT("    row.Insert(\"Qty\", i);\n")
+        wxT("    row.Insert(\"Price\", 2);\n")
+        wxT("    keepFields.Add(row);\n")
+        wxT("    i = i + 1;\n")
+        wxT("  EndDo;\n")
+        wxT("  Return keepFields.Count();\n")
+        wxT("EndFunction\n")
+        wxT("Procedure Drop() Public\n")
+        wxT("  warm = New Array; keepEmpty = New Array; keepFields = New Array;\n")
+        wxT("EndProcedure\n")));
+    ibProcUnit pu; ASSERT_TRUE([&]{ try { pu.Execute(cc.m_cByteCode); return true; } catch (...) { return false; } }());
+
+    const long n = 200000;
+    ibValue argN((int)n), ret;
+
+    // Warm-up primes what a first fill pays ONCE — the code paths, the keys
+    // "Qty" and "Price", the tables a Structure's members bind through — and is
+    // HELD like everything below. It is small on purpose: a full-size warm-up that
+    // was then freed is exactly the memory the measured fill used to land in.
+    ibValue argWarm((int)(n / 100));
+    pu.CallAsFunc(wxT("Warm"), ret, argWarm);
+
+    const size_t base = ResidentBytes();
+    pu.CallAsFunc(wxT("Empty"), ret, argN);
+    const size_t afterEmpty = ResidentBytes();
+    pu.CallAsFunc(wxT("TwoFields"), ret, argN);      // the empty rows are still held
+    const size_t afterFields = ResidentBytes();
+    pu.CallAsProc(wxT("Drop"));
+
+    const size_t emptyCost  = afterEmpty  > base       ? afterEmpty  - base       : 0;
+    const size_t fieldsCost = afterFields > afterEmpty ? afterFields - afterEmpty : 0;
+
+    // A zero is not a free row, it is a probe that saw nothing — say which.
+    const bool blind = emptyCost == 0 || fieldsCost == 0;
+
+    std::cout << "\n[ Structure footprint | n=" << n << " rows held live | resident-set growth per fill ]\n";
+    std::cout << std::fixed << std::setprecision(0);
+    std::cout << "  empty Structure             " << std::setw(9) << FmtBytes(emptyCost)
+              << "  " << std::setw(7) << double(emptyCost) / double(n) << " bytes/row\n";
+    std::cout << "  Structure + two fields      " << std::setw(9) << FmtBytes(fieldsCost)
+              << "  " << std::setw(7) << double(fieldsCost) / double(n) << " bytes/row\n";
+    if (!blind)
+        std::cout << "  what the two fields add     " << std::setw(9) << " "
+                  << "  " << std::setw(7) << (double(fieldsCost) - double(emptyCost)) / double(n)
+                  << " bytes/row (difference of the two)\n";
+    std::cout << "  two ibValue, for scale      " << std::setw(9) << " "
+              << "  " << std::setw(7) << double(2 * sizeof(ibValue)) << " bytes — what the DATA is\n";
+    if (blind)
+        std::cout << "  (!) BLIND: the resident set did not grow, so the rows landed in memory freed\n"
+                  << "      earlier in this process. Run this bench in a process of its own:\n"
+                  << "      --gtest_also_run_disabled_tests --gtest_filter=*StructureFootprint*\n";
+    SUCCEED();
+}
+
+// --- what a call frame costs, on its own ----------------------------------
+// recursion measures 318 ns/call while an arithmetic opcode is ~15 ns, so the
+// call is worth ~21 opcodes and nothing in the suite says why. ibRunContextSmall
+// used to carry `ibValue m_cLocVars[MAX_STATIC_VAR]` (25) plus a pointer row of
+// the same length, and ibValue has a virtual destructor — so entering ANY function
+// value-initialised 25 objects and leaving it ran 25 destructors, whether the
+// function declared three locals or twenty-five.
+//
+// Both halves of that have since been answered, and the row is kept because it is
+// the arithmetic that drove them: slots are built to the frame's real width, and
+// the width itself is now measured rather than assumed — argument frames keep a
+// small inline buffer (kInlineArgSlots), local-variable frames lease from a shared
+// stack (frameSlots.h).
+//
+// The baseline column is the honest counterfactual: the same work if only the
+// slots actually used were built. The gap between the two IS the upper bound on
+// what a zero-cost-frame rewrite (raw storage + placement new, the CPython 3.11
+// move) could return — measured, not argued.
+TEST(RuntimeBench, DISABLED_FrameCost) {
+    const long n = 500000;
+
+    // ⚠ THIS ROW DOES NOT MEASURE A CALL FRAME, and it used to say it did.
+    //
+    // `ibRunContextSmall`'s dtor is not exported from backend.dll, so a frame
+    // cannot be built from a test TU. What runs below is 25 `ibValue` constructed
+    // and destroyed in a local array against 3 — the SLOT COST alone, with no
+    // frame, no call, no interpreter.
+    //
+    // It was named "call frame" and captioned "what every call builds today", and
+    // both stopped being true on 2026-08-09 when the frame started sizing itself
+    // to the function's real local count. The name then actively misled: on
+    // 2026-08-10 removing a per-frame `std::map` dropped `recursion` −20% and
+    // `host->script` −15% while this row did not move at all — correctly, because
+    // it exercises none of that. A benchmark whose name promises more than it
+    // measures costs an hour the first time someone trusts it.
+    //
+    // The real cost of a call is `recursion` and `host->script`; this row is only
+    // the slot arithmetic that motivated sizing frames exactly.
+    const double slots25 = TimeNsPerOp(n, [&](long i){
+        ibValue slots[MAX_STATIC_VAR];             // the frame's inline capacity
+        g_sink += (uint64_t)(i & 1);
+        (void)slots;
+    });
+
+    const double slots3 = TimeNsPerOp(n, [&](long i){
+        ibValue slots[3];                          // what a typical function declares
+        g_sink += (uint64_t)(i & 1);
+        (void)slots;
+    });
+
+    Row("25 vs 3 ibValue slots (ns)", slots25, slots3, "ns",
+        slots25 * double(n), slots3 * double(n));
+    SUCCEED();
+}
+
+// ===========================================================================
+// NumberBench — ibNumber directly, vs int64 / double baselines
+// ===========================================================================
+
+TEST(NumberBench, DISABLED_Arithmetic) {
+    std::cout << "\n[ NumberBench | ibNumber | x = oes/native overhead ]\n";
+    const long N = 1000000;
+
+    // --- immediate tier (stays inline, no heap) ---------------------------
+    {
+        const ibNumber a(123456), b(789);
+        const double oes = TimeNsPerOp(N, [&](long){ ibNumber c = a; c += b; g_sink += (uint64_t)c.IsHeap(); });
+        volatile int64_t x = 123456, y = 789;
+        const double base = TimeNsPerOp(N, [&](long){ volatile int64_t c = x + y; g_sink += (uint64_t)c; });
+        Row("add immediate", oes, base, "ns");
+    }
+    {
+        const ibNumber a(123456), b(789);
+        const double oes = TimeNsPerOp(N, [&](long){ ibNumber c = a; c *= b; g_sink += (uint64_t)c.IsHeap(); });
+        volatile int64_t x = 123456, y = 789;
+        const double base = TimeNsPerOp(N, [&](long){ volatile int64_t c = x * y; g_sink += (uint64_t)c; });
+        Row("mul immediate", oes, base, "ns");
+    }
+    {
+        const ibNumber a(123456), b(123457);
+        const double oes = TimeNsPerOp(N, [&](long){ g_sink += (uint64_t)(a < b); });
+        volatile int64_t x = 123456, y = 123457;
+        const double base = TimeNsPerOp(N, [&](long){ g_sink += (uint64_t)(x < y); });
+        Row("compare immediate", oes, base, "ns");
+    }
+    {
+        // Non-exact: 10^6 / 7 is non-terminating -> full exact-decimal long division.
+        const ibNumber a(1000000), b(7);
+        const double oes = TimeNsPerOp(N / 2, [&](long){ ibNumber c = a; c /= b; g_sink += (uint64_t)c.IsHeap(); });
+        volatile double x = 1000000.0, y = 7.0;
+        const double base = TimeNsPerOp(N / 2, [&](long){ volatile double c = x / y; g_sink += (uint64_t)c; });
+        Row("div non-exact (10^6/7)", oes, base, "ns");
+    }
+    {
+        // Exact integer divide: 10^6 / 8 = 125000 -> immediate fast path.
+        const ibNumber a(1000000), b(8);
+        const double oes = TimeNsPerOp(N, [&](long){ ibNumber c = a; c /= b; g_sink += (uint64_t)c.IsHeap(); });
+        volatile int64_t x = 1000000, y = 8;
+        const double base = TimeNsPerOp(N, [&](long){ volatile int64_t c = x / y; g_sink += (uint64_t)c; });
+        Row("div exact int (fast)", oes, base, "ns");
+    }
+
+    // --- heap / big-decimal tier (no native equivalent) -------------------
+    {
+        const ibNumber a(wxString(wxT("123456789012345678901234567890")));
+        const ibNumber b(wxString(wxT("987654321098765432109876543210")));
+        const double oes = TimeNsPerOp(N / 10, [&](long){ ibNumber c = a; c *= b; g_sink += (uint64_t)c.IsHeap(); });
+        RowOes("mul 30x30 digits (heap)", oes, "ns");
+    }
+    {
+        // 200 fractional digits — the high-precision tier accounting work needs.
+        wxString big(wxT("0.")); for (int i = 0; i < 200; ++i) big += wxChar(wxT('0') + (i % 9) + 1);
+        const ibNumber a(big), b(wxString(wxT("3")));
+        const double oes = TimeNsPerOp(N / 20, [&](long){ ibNumber c = a; c *= b; g_sink += (uint64_t)c.IsHeap(); });
+        RowOes("mul 200-frac-digit", oes, "ns");
+    }
+
+    // --- ToString / FromString round-trip ---------------------------------
+    {
+        const ibNumber a(wxString(wxT("1234567.89")));
+        const double oes = TimeNsPerOp(N / 5, [&](long){ g_sink += (uint64_t)a.ToString().length(); });
+        volatile double x = 1234567.89;
+        const double base = TimeNsPerOp(N / 5, [&](long){ g_sink += std::to_string((double)x).length(); });
+        Row("ToString", oes, base, "ns");
+    }
+    {
+        const double oes = TimeNsPerOp(N / 5, [&](long){ ibNumber n; n.FromString(wxT("1234567.89")); g_sink += (uint64_t)n.IsHeap(); });
+        const double base = TimeNsPerOp(N / 5, [&](long){ volatile double d = std::stod("1234567.89"); g_sink += (uint64_t)d; });
+        Row("FromString (parse)", oes, base, "ns");
+    }
+
+    EXPECT_NE(g_sink, 0xFFFFFFFFFFFFFFFFull);
+    SUCCEED();
+}
+
+// ===========================================================================
+// DateBench — ibDateTime directly, vs the wxDateTime it replaced in the value
+// ===========================================================================
+//
+// The same operations on both, so the ratio says what the engine's own date bought: a shift, an order
+// and a span are one integer operation on the count; the calendar (parts, periods) is integer day
+// arithmetic with no clock asked; text is written digit by digit. wxDateTime keeps an instant and asks
+// the machine's zone for every part. 10:30 on an ordinary day, so no clock change is on the path.
+
+TEST(DateBench, DISABLED_Calendar) {
+    std::cout << "\n[ DateBench | ibDateTime vs wxDateTime | x = ib/wx, <1 = ibDateTime faster ]\n";
+    const long N = 1000000;
+    const ibDateTime d(2026, 3, 15, 10, 30, 0), e(2026, 9, 30, 17, 0, 0);
+    const wxDateTime w(15, wxDateTime::Mar, 2026, 10, 30, 0), we(30, wxDateTime::Sep, 2026, 17, 0, 0);
+
+    {
+        const double ib = TimeNsPerOp(N, [&](long){ g_sink += (uint64_t)d.AddMilliseconds(86400000).GetValue(); });
+        const double wx = TimeNsPerOp(N, [&](long){ wxDateTime c = w; c += wxTimeSpan::Day(); g_sink += (uint64_t)c.GetTicks(); });
+        Row("shift +1 day", ib, wx, "ns");
+    }
+    {
+        const double ib = TimeNsPerOp(N, [&](long){ g_sink += (uint64_t)(d < e); });
+        const double wx = TimeNsPerOp(N, [&](long){ g_sink += (uint64_t)(w < we); });
+        Row("compare", ib, wx, "ns");
+    }
+    {
+        const double ib = TimeNsPerOp(N, [&](long){ g_sink += (uint64_t)(e - d); });
+        const double wx = TimeNsPerOp(N, [&](long){ g_sink += (uint64_t)(we - w).GetMilliseconds().GetValue(); });
+        Row("span (ms)", ib, wx, "ns");
+    }
+    {
+        const double ib = TimeNsPerOp(N, [&](long){ ibDateTimeParts p; d.ToParts(p); g_sink += p.m_day + p.m_hour; });
+        const double wx = TimeNsPerOp(N, [&](long){ const wxDateTime::Tm tm = w.GetTm(); g_sink += tm.mday + tm.hour; });
+        Row("parts", ib, wx, "ns");
+    }
+    {
+        const double ib = TimeNsPerOp(N, [&](long){ g_sink += (uint64_t)d.BeginOfPeriod(ibTotalsPeriod::Month).GetValue(); });
+        const double wx = TimeNsPerOp(N, [&](long){ wxDateTime c = w; c.SetDay(1); c.ResetTime(); g_sink += (uint64_t)c.GetTicks(); });
+        Row("begin of month", ib, wx, "ns");
+    }
+    {
+        const double ib = TimeNsPerOp(N, [&](long){ g_sink += (uint64_t)d.AddPeriods(ibTotalsPeriod::Month, 1).GetValue(); });
+        const double wx = TimeNsPerOp(N, [&](long){ wxDateTime c = w; c += wxDateSpan::Month(); g_sink += (uint64_t)c.GetTicks(); });
+        Row("add a month", ib, wx, "ns");
+    }
+    {
+        const double ib = TimeNsPerOp(N / 5, [&](long){ g_sink += (uint64_t)d.ToString().length(); });
+        const double wx = TimeNsPerOp(N / 5, [&](long){ g_sink += (uint64_t)w.Format(wxT("%d.%m.%Y %H:%M:%S")).length(); });
+        Row("ToString", ib, wx, "ns");
+    }
+    {
+        const ibString text(wxT("15.03.2026 10:30:00"));
+        const wxString wxText(wxT("15.03.2026 10:30:00"));
+        const double ib = TimeNsPerOp(N / 5, [&](long){ ibDateTime p; p.FromString(text); g_sink += (uint64_t)p.GetValue(); });
+        const double wx = TimeNsPerOp(N / 5, [&](long){
+            wxDateTime p; wxString::const_iterator end;
+            p.ParseFormat(wxText, wxT("%d.%m.%Y %H:%M:%S"), &end);
+            g_sink += (uint64_t)p.GetTicks();
+        });
+        Row("FromString (parse)", ib, wx, "ns");
+    }
+
+    EXPECT_NE(g_sink, 0xFFFFFFFFFFFFFFFFull);
+    SUCCEED();
+}
+
+// ===========================================================================
+// JsonBench — JSONReader / JSONWriter, vs nlohmann's own DOM on the same text
+// ===========================================================================
+
+TEST(JsonBench, DISABLED_ReadAndWrite) {
+    std::cout << "\n[ JsonBench | JSONReader / JSONWriter | x = oes/nlohmann ]\n";
+
+    // An exchange's shape: many small objects of short strings and a few numbers - every key and every
+    // string a value of its own, which is where a conversion per string shows.
+    std::string lines = "[";
+    for (int i = 0; i < 5000; ++i) {
+        if (i != 0) lines += ",";
+        lines += "{\"code\":\"C" + std::to_string(100000 + i) + "\",\"name\":\"Item number " + std::to_string(i)
+            + "\",\"unit\":\"pcs\",\"group\":\"Kitchen goods\",\"barcode\":\"48200" + std::to_string(1000000 + i)
+            + "\",\"price\":" + std::to_string(10 + i % 900) + ".50,\"quantity\":" + std::to_string(i % 37)
+            + ",\"vat\":\"20%\",\"supplier\":\"Supplier " + std::to_string(i % 40) + "\",\"note\":\"\",\"active\":true}";
+    }
+    lines += "]";
+    // The same shape in Cyrillic: two bytes of UTF-8 to a character, so what a string keeps is the room its
+    // characters take or the room its bytes did.
+    std::string cyrillic = "[";
+    for (int i = 0; i < 5000; ++i) {
+        if (i != 0) cyrillic += ",";
+        cyrillic += "{\"code\":\"C" + std::to_string(100000 + i) + "\",\"name\":\"\xD0\x9F\xD0\xBE\xD0\xB7\xD0\xB8\xD1\x86\xD1\x96\xD1\x8F "
+            + std::to_string(i) + "\",\"group\":\"\xD0\x9A\xD1\x83\xD1\x85\xD0\xBE\xD0\xBD\xD0\xBD\xD1\x96 \xD1\x82\xD0\xBE\xD0\xB2\xD0\xB0\xD1\x80\xD0\xB8\","
+            "\"supplier\":\"\xD0\x9F\xD0\xBE\xD1\x81\xD1\x82\xD0\xB0\xD1\x87\xD0\xB0\xD0\xBB\xD1\x8C\xD0\xBD\xD0\xB8\xD0\xBA "
+            + std::to_string(i % 40) + "\",\"price\":" + std::to_string(10 + i % 900) + ".50}";
+    }
+    cyrillic += "]";
+    // A message that is one long string (a file sent as base64).
+    const std::string blob = "{\"data\":\"" + std::string(8 * 1024 * 1024, 'A') + "\"}";
+
+    auto bench = [](const char* label, const std::string& utf8) {
+        // The text as a script hands it over - a runtime string (JSONReader.SetString gets the argument's
+        // GetString()) - so what is timed is the script's road, not a conversion only this test would make.
+        const ibString text = ibString::FromUTF8(utf8.data(), utf8.size());
+        ibValue built;
+        const double read = BestTotalNs(5, [&]{
+            ibValueJsonReader reader;
+            reader.SetText(text);
+            built = reader.ReadValue();
+            g_sink += (uint64_t)built.GetType();
+        });
+        const double readBase = BestTotalNs(5, [&]{
+            const nlohmann::json doc = nlohmann::json::parse(utf8);
+            g_sink += (uint64_t)doc.size();
+        });
+        const double write = BestTotalNs(5, [&]{
+            ibValueJsonWriter writer;
+            writer.WriteValue(built);
+            const ibValue result(writer.Close());   // what the script's Close() hands back
+            g_sink += (uint64_t)result.GetType();
+        });
+        const nlohmann::json doc = nlohmann::json::parse(utf8);
+        const double writeBase = BestTotalNs(5, [&]{ g_sink += (uint64_t)doc.dump().size(); });
+        std::cout << "  " << label << " (" << utf8.size() / 1024 << " KB)\n";
+        Row("  read  (ms)", read / 1e6, readBase / 1e6, "ms");
+        Row("  write (ms)", write / 1e6, writeBase / 1e6, "ms");
+    };
+    bench("5000 objects x 11 members", lines);
+    bench("the same in Cyrillic, 5 members", cyrillic);
+    bench("one 8 MB string", blob);
+
+    EXPECT_NE(g_sink, 0xFFFFFFFFFFFFFFFFull);
+    SUCCEED();
+}
+
+// ===========================================================================
+// ParserBench — ibCompileCode::Compile throughput
+// ===========================================================================
+
+TEST(ParserBench, DISABLED_CompileThroughput) {
+    std::cout << "\n[ ParserBench | ibCompileCode::Compile ]\n";
+
+    auto benchModule = [](const char* label, const wxString& src) {
+        long lines = 1; for (size_t i = 0; i < src.length(); ++i) if (src[i] == wxT('\n')) ++lines;
+        const double bytes = double(src.length());
+        const double nsPer = BestTotalNs(20, [&]{
+            ibCompileCode cc(wxT("test"), wxT("memory"), false);
+            try { g_sink += cc.Compile(src) ? 1u : 0u; } catch (...) {}
+        });
+        std::cout << "  " << std::left << std::setw(26) << label << std::right
+                  << "  " << std::setw(8) << std::fixed << std::setprecision(1) << (nsPer / 1000.0) << "us"
+                  << "   " << std::setw(8) << std::setprecision(0) << (lines * 1e9 / nsPer) << " lines/s"
+                  << "   " << std::setw(8) << (bytes * 1e9 / nsPer / 1024.0) << " KB/s\n";
+    };
+
+    // small — a handful of declarations + control flow (typical handler size).
+    benchModule("small (~15 lines)",
+        wxT("var total public;\n")
+        wxT("Function Square(x) Public Return x * x; EndFunction\n")
+        wxT("Function Clamp(v, lo, hi) Public\n")
+        wxT("  If v < lo Then Return lo; EndIf;\n")
+        wxT("  If v > hi Then Return hi; EndIf;\n")
+        wxT("  Return v;\n")
+        wxT("EndFunction\n")
+        wxT("total = 0;\n")
+        wxT("var i; i = 0;\n")
+        wxT("While i < 10 Do total = total + Square(i); i = i + 1; EndDo;\n"));
+
+    // large — a synthetic module of repeated functions (parser/codegen scaling).
+    {
+        wxString big;
+        for (int k = 0; k < 200; ++k) {
+            big += wxString::Format(
+                wxT("Function F%d(a, b, c) Public\n")
+                wxT("  var r; r = a + b * c;\n")
+                wxT("  If r > 100 Then r = r - 100; Else r = r + 1; EndIf;\n")
+                wxT("  Return r;\n")
+                wxT("EndFunction\n"), k);
+        }
+        benchModule("large (200 funcs)", big);
+    }
+
+    EXPECT_NE(g_sink, 0xFFFFFFFFFFFFFFFFull);
+    SUCCEED();
+}
+
+// ===========================================================================
+// SampledProfile — WHERE the time goes, not only how much
+// ===========================================================================
+//
+// The benches above say how long a row takes; they cannot say which function
+// the row's time is in, and ETW sampling (wpr, xperf, the VS profiler) needs an
+// elevated prompt that is not always at hand (2026-09-28). A thread can be
+// sampled from inside its own process without one: another thread suspends it
+// about once a millisecond, reads its registers, walks its stack with the
+// unwind tables the image already carries (RtlLookupFunctionEntry +
+// RtlVirtualUnwind — no allocation while the target is stopped, so a target
+// holding the heap lock cannot deadlock the sampler), and resumes it. The
+// addresses are named afterwards through dbghelp and the PDBs beside the
+// binaries. A couple of seconds of a scenario is a thousand-odd stacks.
+//
+// "self" is where the instruction pointer was; "total" is every function on the
+// stack at that moment, counted once per sample. Windows x64 only.
+#if defined(_WIN32) && defined(_M_X64)
+#include <dbghelp.h>
+#pragma comment(lib, "dbghelp.lib")
+
+namespace {
+
+class SampledStacks {
+public:
+    template <class F>
+    void Run(F&& scenario, double seconds) {
+        HANDLE target = nullptr;
+        ::DuplicateHandle(::GetCurrentProcess(), ::GetCurrentThread(), ::GetCurrentProcess(), &target,
+                          THREAD_SUSPEND_RESUME | THREAD_GET_CONTEXT | THREAD_QUERY_INFORMATION, FALSE, 0);
+        std::atomic<bool> done{ false };
+        std::thread sampler([&] {
+            constexpr int kDepth = 64;
+            DWORD64 frames[kDepth];
+            while (!done.load(std::memory_order_relaxed)) {
+                const auto next = Clock::now() + std::chrono::microseconds(1000);
+                while (Clock::now() < next && !done.load(std::memory_order_relaxed)) std::this_thread::yield();
+                if (::SuspendThread(target) == (DWORD)-1)
+                    continue;
+                int depth = 0;
+                CONTEXT ctx{};
+                ctx.ContextFlags = CONTEXT_FULL;
+                if (::GetThreadContext(target, &ctx)) {
+                    // Nothing that allocates until the thread is resumed: the frames go into the array.
+                    while (depth < kDepth && ctx.Rip != 0) {
+                        frames[depth++] = ctx.Rip;
+                        DWORD64 imageBase = 0;
+                        PRUNTIME_FUNCTION fn = ::RtlLookupFunctionEntry(ctx.Rip, &imageBase, nullptr);
+                        if (fn == nullptr) {   // a leaf: its return address is at the top of the stack
+                            ctx.Rip = *reinterpret_cast<const DWORD64*>(ctx.Rsp);
+                            ctx.Rsp += 8;
+                        } else {
+                            PVOID handlerData = nullptr;
+                            DWORD64 establisher = 0;
+                            ::RtlVirtualUnwind(UNW_FLAG_NHANDLER, imageBase, ctx.Rip, fn, &ctx, &handlerData,
+                                               &establisher, nullptr);
+                        }
+                    }
+                }
+                ::ResumeThread(target);
+                if (depth > 0)
+                    m_stacks.emplace_back(frames, frames + depth);
+            }
+        });
+        const auto until = Clock::now() + std::chrono::duration<double>(seconds);
+        while (Clock::now() < until)
+            scenario();
+        done = true;
+        sampler.join();
+        ::CloseHandle(target);
+    }
+
+    void Print(const char* title, size_t top) const {
+        static bool symbolsLoaded = false;
+        const HANDLE process = ::GetCurrentProcess();
+        if (!symbolsLoaded) {
+            ::SymSetOptions(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS);
+            symbolsLoaded = ::SymInitialize(process, nullptr, TRUE) != FALSE;
+        }
+        std::map<DWORD64, std::string> names;
+        std::map<DWORD64, DWORD64> offsets;   // an address's distance from the start of its function
+        const auto nameOf = [&](DWORD64 address) -> const std::string& {
+            auto it = names.find(address);
+            if (it != names.end())
+                return it->second;
+            alignas(SYMBOL_INFO) char buffer[sizeof(SYMBOL_INFO) + 512];
+            SYMBOL_INFO* const symbol = reinterpret_cast<SYMBOL_INFO*>(buffer);
+            symbol->SizeOfStruct = sizeof(SYMBOL_INFO);
+            symbol->MaxNameLen = 511;
+            DWORD64 displacement = 0;
+            std::string name = ::SymFromAddr(process, address, &displacement, symbol) ? std::string(symbol->Name)
+                                                                                        : std::string("?");
+            offsets[address] = displacement;
+            return names.emplace(address, std::move(name)).first->second;
+        };
+
+        std::map<std::string, size_t> self, total;
+        for (const std::vector<DWORD64>& stack : m_stacks) {
+            self[nameOf(stack.front())]++;
+            std::vector<std::string> seen;
+            for (DWORD64 address : stack) {
+                const std::string& name = nameOf(address);
+                if (std::find(seen.begin(), seen.end(), name) == seen.end()) {
+                    seen.push_back(name);
+                    total[name]++;
+                }
+            }
+        }
+        const auto sortedOf = [](const std::map<std::string, size_t>& counts) {
+            std::vector<std::pair<size_t, std::string>> sorted;
+            for (const auto& kv : counts) sorted.emplace_back(kv.second, kv.first);
+            std::sort(sorted.begin(), sorted.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
+            return sorted;
+        };
+        const auto percent = [&](size_t hits) { return 100.0 * double(hits) / double(m_stacks.size()); };
+        std::cout << "\n[ sampled profile | " << title << " | " << m_stacks.size() << " stacks ]\n";
+
+        // SELF, each with the callers it was reached through most often — the name alone of an allocator
+        // or a hash says nothing about which of ours asked for it.
+        std::cout << "  -- self (and its commonest callers) --\n";
+        const auto selfSorted = sortedOf(self);
+        for (size_t i = 0; i < selfSorted.size() && i < top; ++i) {
+            std::cout << "  " << std::setw(5) << std::fixed << std::setprecision(1) << percent(selfSorted[i].first)
+                      << "%  " << selfSorted[i].second.substr(0, 110) << "\n";
+            if (i >= 10)
+                continue;
+            std::map<std::string, size_t> chains;
+            for (const std::vector<DWORD64>& stack : m_stacks) {
+                if (nameOf(stack.front()) != selfSorted[i].second)
+                    continue;
+                std::string chain;
+                for (size_t k = 1; k < stack.size() && k <= 3; ++k)
+                    chain += (k > 1 ? " <- " : "") + nameOf(stack[k]).substr(0, 48);
+                chains[chain]++;
+            }
+            const auto chainSorted = sortedOf(chains);
+            for (size_t c = 0; c < chainSorted.size() && c < 2; ++c)
+                std::cout << "           " << std::setw(5) << percent(chainSorted[c].first) << "%  <- "
+                          << chainSorted[c].second << "\n";
+
+            // …and WHICH INSTRUCTIONS in it, as offsets from its start, to be read against the dumpbin
+            // listing: a function's self time is a question about its code only once it has an address.
+            if (i >= 5)
+                continue;
+            std::map<std::string, size_t> hot;
+            for (const std::vector<DWORD64>& stack : m_stacks)
+                if (nameOf(stack.front()) == selfSorted[i].second) {
+                    std::ostringstream at;
+                    at << "+0x" << std::hex << offsets[stack.front()];
+                    hot[at.str()]++;
+                }
+            std::cout << "           at:";
+            const auto hotSorted = sortedOf(hot);
+            for (size_t h = 0; h < hotSorted.size() && h < 6; ++h)
+                std::cout << " " << hotSorted[h].second << " " << std::setprecision(1) << percent(hotSorted[h].first) << "%";
+            std::cout << "\n";
+        }
+
+        // TOTAL, without the frames every stack has (the test harness, main, the thread start).
+        std::cout << "  -- total --\n";
+        size_t shown = 0;
+        for (const auto& entry : sortedOf(total)) {
+            if (entry.first >= m_stacks.size())
+                continue;
+            if (shown++ >= top)
+                break;
+            std::cout << "  " << std::setw(5) << percent(entry.first) << "%  " << entry.second.substr(0, 110) << "\n";
+        }
+    }
+
+private:
+    std::vector<std::vector<DWORD64>> m_stacks;
+};
+
+} // namespace
+
+TEST(SampledProfile, DISABLED_Linq) {
+    ibCompileCode cc(wxT("test"), wxT("memory"), false);
+    ASSERT_TRUE(Build(cc,
+        wxT("var src public; var inner public;\n")
+        wxT("Procedure Fill(n) Public\n")
+        wxT("  src = New Array; inner = New Array; var i; i = 0;\n")
+        wxT("  While i < n Do src.Add(i); inner.Add(i); i = i + 1; EndDo;\n")
+        wxT("EndProcedure\n")
+        wxT("Function WhereLambda() Public\n")
+        wxT("  Return src.Where(Function(x) Return x > 100 EndFunction).Count();\n")
+        wxT("EndFunction\n")
+        wxT("Function SelectBlock() Public\n")
+        wxT("  var q; q = from a in src select a;\n")
+        wxT("  Return q.Count();\n")
+        wxT("EndFunction\n")
+        wxT("Function JoinBlock() Public\n")
+        wxT("  var q; q = from a in src join b in inner on a equals b select a;\n")
+        wxT("  Return q.Count();\n")
+        wxT("EndFunction\n")));
+    ibProcUnit pu; ASSERT_TRUE([&]{ try { pu.Execute(cc.m_cByteCode); return true; } catch (...) { return false; } }());
+    ibValue argN((int)16000), ret;
+    pu.CallAsProc(wxT("Fill"), argN);
+
+    for (const wxChar* scenario : { wxT("WhereLambda"), wxT("SelectBlock"), wxT("JoinBlock") }) {
+        SampledStacks profile;
+        profile.Run([&]{ pu.CallAsFunc(scenario, ret); g_sink += (uint64_t)ret.GetInteger(); }, 2.0);
+        profile.Print(wxString(scenario).ToStdString().c_str(), 22);
+    }
+    SUCCEED();
+}
+#endif

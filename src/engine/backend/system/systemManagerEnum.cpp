@@ -5,16 +5,16 @@
 
 #include "systemManagerEnum.h"
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValuibStatusMessage, ibValue);
-wxIMPLEMENT_DYNAMIC_CLASS(ibValuibQuestionMode, ibValue);
-wxIMPLEMENT_DYNAMIC_CLASS(ibValuibQuestionReturnCode, ibValue);
-wxIMPLEMENT_DYNAMIC_CLASS(ibValuibRoundMode, ibValue);
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueChars, ibValue);
 
 //add new enumeration
-ENUM_TYPE_REGISTER(ibValuibStatusMessage, "StatusMessage", string_to_clsid("EN_STMS"));
-ENUM_TYPE_REGISTER(ibValuibQuestionMode, "QuestionMode", string_to_clsid("EN_QSMD"));
-ENUM_TYPE_REGISTER(ibValuibQuestionReturnCode, "QuestionReturnCode", string_to_clsid("EN_QSRC"));
-ENUM_TYPE_REGISTER(ibValuibRoundMode, "RoundMode", string_to_clsid("EN_ROMO"));
+ENUM_TYPE_REGISTER(ibValueEnumStatusMessage, "StatusMessage", enum_to_clsid("EN_STMS"));
+ENUM_TYPE_REGISTER(ibValueEnumQuestionMode, "QuestionMode", enum_to_clsid("EN_QSMD"));
+ENUM_TYPE_REGISTER(ibValueEnumQuestionReturnCode, "QuestionReturnCode", enum_to_clsid("EN_QSRC"));
+ENUM_TYPE_REGISTER(ibValueEnumRoundMode, "RoundMode", enum_to_clsid("EN_ROMO"));
+ENUM_TYPE_REGISTER(ibValueEnumTextEncoding, "TextEncoding", enum_to_clsid("EN_TXEN"));
+ENUM_TYPE_REGISTER(ibValueEnumHttpMethod, "HTTPMethod", enum_to_clsid("EN_HTMT"));
 
-ENUM_TYPE_REGISTER(ibValueChars, "Chars", string_to_clsid("EN_CHAR"));
+ENUM_TYPE_REGISTER(ibValueChars, "Chars", enum_to_clsid("EN_CHAR"));
+
+ENUM_TYPE_REGISTER(ibValueEnumJsonValueType, "JSONValueType", enum_to_clsid("EN_JSVT"));
+ENUM_TYPE_REGISTER(ibValueEnumJsonFormatting, "JSONFormatting", enum_to_clsid("EN_JSFM"));

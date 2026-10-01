@@ -5,15 +5,18 @@
 
 #include "metaObject.h"
 #include "backend/appData.h"
+#include "backend/metadataConfiguration.h"   // ibMetaDataConfigurationBase::GetRestructureInfo (the static ledger accessor)
 
 #include "backend/metaData.h"
-#include "backend/databaseLayer/databaseLayer.h"
+#include "backend/utils/debugTrace.h"   // ibDebugTraceEnabled — per-object id tracing is opt-in
 #include "backend/databaseLayer/databaseErrorCodes.h"
 
-wxIMPLEMENT_ABSTRACT_CLASS(ibValueMetaObject, ibValue);
+#include <wx/log.h>
 
-#define metaBlock 0x200222
-#define helpBlock 0x200224
+// Restructure-ledger facade — one call onto the active config's ledger (the static accessor).
+void ibValueMetaObject::RestructureInfo   (const wxString& message) { ibMetaDataConfigurationBase::GetRestructureInfo().AppendInfo(message);    }
+void ibValueMetaObject::RestructureWarning(const wxString& message) { ibMetaDataConfigurationBase::GetRestructureInfo().AppendWarning(message); }
+void ibValueMetaObject::RestructureError  (const wxString& message) { ibMetaDataConfigurationBase::GetRestructureInfo().AppendError(message);   }
 
 //*****************************************************************************************
 //*                                  MetaObject                                           *
@@ -33,48 +36,23 @@ void ibValueMetaObject::ResetId()
 
 /////////////////////////////////////////////////////////////////////////////////////////
 
-ibBackendMetadataTree* ibValueMetaObject::GetMetaDataTree() const
-{
-	return m_metaData ? m_metaData->GetMetaTree() : nullptr;
-}
-
-/////////////////////////////////////////////////////////////////////////////////////////
-
 bool ibValueMetaObject::BuildNewName()
 {
-	const wxString& strName = GetName(); bool foundedName = false;
-	std::vector<ibValueMetaObject*> array;
-	if (m_parent != nullptr && m_parent->FillArrayObjectByFilter(array, { GetClassType() })) {
-		for (const auto object : array) {
-			if (object->GetParent() != GetParent())
-				continue;
-			if (object != this &&
-				stringUtils::CompareString(strName, object->GetName())) {
-				foundedName = true;
-				break;
-			}
-		}
-	}
-
-	if (foundedName) {
-		const wxString& metaPrevName = m_propertyName->GetValueAsString();
-		size_t length = metaPrevName.length();
-		while (length >= 0 && stringUtils::IsDigit(metaPrevName[--length]));
-		const wxString& metaName = m_metaData->GetNewName(GetClassType(), GetParent(), metaPrevName.Left(length + 1));
-		SetName(metaName);
-		const wxString& metaPrevSynonym = m_propertySynonym->GetValueAsString();
-		const wxString& metaSynonym = metaPrevSynonym.Length() > 0 ? stringUtils::GenerateSynonym(metaName) : wxString(wxEmptyString);
-		SetSynonym(metaSynonym);
-	}
-
-	return !foundedName;
+	// Both halves are the metadata's: GetNewName hands the name back while nobody else carries it (the
+	// bare name is its first candidate) and the next free one otherwise; RenameMetaObject takes it.
+	const wxString newName = m_metaData->GetNewName(GetClassType(), GetParent(), GetName(), /*forConstructor*/ true);
+	if (newName == GetName())
+		return true;
+	m_metaData->RenameMetaObject(this, newName);
+	return false;
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////
 
-ibValueMetaObject::ibValueMetaObject(const wxString& strName, const wxString& synonym, const wxString& comment) : ibValue(ibValueTypes::TYPE_VALUE, true),
-m_methodHelper(new ibValueMethodHelper()), m_metaData(nullptr), m_metaFlags(metaDefaultFlag), m_metaId(0)
+ibValueMetaObject::ibValueMetaObject(const wxString& strName, const wxString& synonym, const wxString& comment) : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, true),
+m_metaFlags(metaDefaultFlag), m_metaId(0), m_metaData(nullptr)
 {
+	m_members.Bind(this, &ibValueMetaObject::FillMembers);
 	m_propertyName->SetValue(strName);
 	m_propertySynonym->SetValue(synonym);
 	m_propertyComment->SetValue(comment);
@@ -82,155 +60,14 @@ m_methodHelper(new ibValueMethodHelper()), m_metaData(nullptr), m_metaFlags(meta
 
 ibValueMetaObject::~ibValueMetaObject()
 {
-	wxDELETE(m_methodHelper);
+	// Children are released by the ibPropertyObjectHelper base destructor (owning
+	// handles cascade down the subtree). The delete event (OnDeleteMetaObject) is
+	// a separate, preceding step.
 }
 
-bool ibValueMetaObject::LoadMeta(ibReaderMemory& dataReader)
-{
-	//Save meta version 
-	(void)dataReader.r_u32(); //reserved 
-
-	//Load unique guid 
-	wxString strGuid;
-	dataReader.r_stringZ(strGuid);
-	m_metaGuid = strGuid;
-
-	//Load meta id
-	m_metaId = dataReader.r_u32();
-
-	//Load standart fields
-	m_propertyName->LoadData(dataReader);
-	m_propertySynonym->LoadData(dataReader);
-	m_propertyComment->LoadData(dataReader);
-
-	//special info deleted 
-	if (dataReader.r_u8()) {
-		MarkAsDeleted();
-	}
-
-	//load interface 
-	if (!LoadInterface(dataReader))
-		return false;
-
-	//load roles 
-	if (!LoadRole(dataReader))
-		return false;
-
-	//load meta 
-	wxMemoryBuffer meta_buffer;
-	if (!dataReader.r_chunk(metaBlock, meta_buffer))
-		return false;
-
-	ibReaderMemory metaObjectReader(meta_buffer);
-	metaObjectReader.r_u32(); //reserved flags
-	if (!LoadData(metaObjectReader))
-		return false;
-
-	//load help 
-	wxMemoryBuffer help_buffer;
-	if (!dataReader.r_chunk(helpBlock, help_buffer))
-		return false;
-	
-	ibReaderMemory helpReader(help_buffer);
-	m_strHelpContent = helpReader.r_stringZ();
-	return true;
-}
-
-bool ibValueMetaObject::SaveMeta(ibWriterMemory& dataWritter)
-{
-	//save meta version 
-	dataWritter.w_u32(version_oes_last); //reserved 
-
-	//save unique guid
-	dataWritter.w_stringZ(m_metaGuid);
-
-	//save meta id 
-	dataWritter.w_u32(m_metaId);
-
-	//save standart fields
-	m_propertyName->SaveData(dataWritter);
-	m_propertySynonym->SaveData(dataWritter);
-	m_propertyComment->SaveData(dataWritter);
-
-	//special info deleted
-	dataWritter.w_u8(IsDeleted());
-
-	//save interface 
-	if (!SaveInterface(dataWritter))
-		return false;
-
-	//save roles 
-	if (!SaveRole(dataWritter))
-		return false;
-
-	//save meta 
-	ibWriterMemory metaObjectWritter;
-	metaObjectWritter.w_u32(0); //reserved flags
-	if (!SaveData(metaObjectWritter))
-		return false;
-
-	dataWritter.w_chunk(metaBlock, metaObjectWritter.buffer());
-
-	//save help 
-	ibWriterMemory helpWritter;
-	helpWritter.w_stringZ(m_strHelpContent);
-	dataWritter.w_chunk(helpBlock, helpWritter.buffer());
-	return true;
-}
-
-bool ibValueMetaObject::LoadMetaObject(ibMetaData* metaData, ibReaderMemory& dataReader)
-{
-	m_metaData = metaData;
-
-	if (!LoadMeta(dataReader))
-		return false;
-
-	if (!OnLoadMetaObject(metaData))
-		return false;
-
-	return true;
-}
-
-bool ibValueMetaObject::SaveMetaObject(ibMetaData* metaData, ibWriterMemory& dataWritter, int flags)
-{
-	bool saveToFile = (flags & saveToFileFlag) != 0;
-
-	if (m_metaData != metaData)
-		return false;
-
-	if (!SaveMeta(dataWritter))
-		return false;
-
-	if (!saveToFile &&
-		!OnSaveMetaObject(flags)) {
-		return false;
-	}
-
-	return true;
-}
-
-bool ibValueMetaObject::DeleteMetaObject(ibMetaData* metaData)
-{
-	if (m_metaData != metaData)
-		return false;
-
-	return DeleteData();
-}
-
-bool ibValueMetaObject::CreateMetaTable(ibMetaDataConfiguration* srcMetaData, int flags)
-{
-	return CreateAndUpdateTableDB(srcMetaData, nullptr, flags);
-}
-
-bool ibValueMetaObject::UpdateMetaTable(ibMetaDataConfiguration* srcMetaData, ibValueMetaObject* srcMetaObject)
-{
-	return CreateAndUpdateTableDB(srcMetaData, srcMetaObject, updateMetaTable);
-}
-
-bool ibValueMetaObject::DeleteMetaTable(ibMetaDataConfiguration* srcMetaData)
-{
-	return CreateAndUpdateTableDB(srcMetaData, this, deleteMetaTable);
-}
+// (CreateMetaTable / UpdateMetaTable / DeleteMetaTable + CreateAndUpdateTableDB removed: structure DDL
+//  is now the config-save differ's job — a metaobject DECLARES its tables AND their seed rows via
+//  ContributeTables; ibStructureBuilder snapshots + diffs both structure and data. query/schemaSnapshot.h.)
 
 bool ibValueMetaObject::OnCreateMetaObject(ibMetaData* metaData, int flags)
 {
@@ -238,11 +75,17 @@ bool ibValueMetaObject::OnCreateMetaObject(ibMetaData* metaData, int flags)
 	wxASSERT(metaData);
 	m_metaId = metaData->GenerateNewID();
 	m_metaData = metaData;
-#ifdef DEBUG  
-	wxLogDebug(wxT("* Create metaData object %s with id %i"),
-		GetClassName(), GetMetaID()
-	);
-#endif
+
+	// WHO got which number, and under whom. The owner is the half that identifies a slot: six
+	// analytics slots and a dimension are indistinguishable by class alone, and it is precisely a
+	// slot and a dimension that were seen holding the same id.
+	// ⚠ OFF UNLESS ASKED FOR (`OES_TRACE_METAIDS=1`). This fires for EVERY object of every
+	// configuration load — two hundred lines before the first window appears — and a journal whose
+	// first half is a list of things that always happen is a journal whose second half nobody
+	// reaches. The counter it exists for is still one variable away when it is needed.
+	static const bool s_traceIds = ibDebugTraceEnabled("OES_TRACE_METAIDS");
+	if (s_traceIds)
+		ibJournalInfo(wxT("metadata"), wxT("id %i -> %s"), GetMetaID(), GetClassName());
 	return true;
 }
 
@@ -259,14 +102,23 @@ bool ibValueMetaObject::OnDeleteMetaObject()
 
 bool ibValueMetaObject::OnAfterCloseMetaObject()
 {
-	ibBackendMetadataTree* const metaTree = m_metaData->GetMetaTree();
-	if (metaTree != nullptr)
-		metaTree->CloseMetaObject(this);
+	// 🛑 THE EDITORS ARE NOT CLOSED HERE ANY MORE, and they never needed to be. This hook runs on
+	// two roads, and BOTH of them already say so: a deleted object broadcasts `Removed` one call
+	// earlier (ibMetaData::RemoveMetaObject) and a watcher shuts what it was showing of it; a whole
+	// container being let go broadcasts `Closed` before the teardown starts. Closing per NODE was a
+	// third road to the same state — it ran once for every object in a configuration on the way out,
+	// to do what one signal does once.
 	return true;
 }
 
 #pragma region interface_h
 void ibValueMetaObject::DoSetInterface(const ibMetaID& id, const bool& val)
+{
+	m_metaData->Modify(true);
+}
+#pragma endregion
+#pragma region functional_option_h
+void ibValueMetaObject::DoSetFunctionalOption(const ibMetaID& id, const bool& val)
 {
 	m_metaData->Modify(true);
 }
@@ -288,15 +140,13 @@ bool ibValueMetaObject::IsFullAccess() const
 
 ibRoleUserInfo ibValueMetaObject::GetUserRoleInfo() const
 {
+	// Each role arrives carrying WHAT IT IS — the id and how to combine it, stamped once when the
+	// session compiled its root. Nothing to look up here.
 	ibRoleUserInfo roleInfo;
-	for (auto role : appData->GetUserRoleArray())
-		roleInfo.m_arrayRole.emplace_back(role.m_miRoleId);
+	for (const auto& role : appData->GetUserRoleArray())
+		roleInfo.m_arrayRole.emplace_back(role.m_miRoleId, role.m_mode);
 	return roleInfo;
 }
-
-#define	headerBlock 0x002330
-#define	dataBlock 0x002350
-#define	childBlock 0x002370
 
 bool ibValueMetaObject::Init()
 {
@@ -311,13 +161,16 @@ bool ibValueMetaObject::Init(ibValue** paParams, const long lSizeArray)
 
 	ibValueMetaObject* parent = nullptr;
 	if (paParams[0]->ConvertToValue(parent)) {
-		const ibClassID& clsid = GetClassType();
-		if (parent != nullptr) {
-			SetParent(parent);
-			parent->AddChild(this);
-		}
-		return parent != nullptr ?
-			parent->FilterChild(clsid) : true;
+		if (parent == nullptr)
+			return true;
+		// Check acceptance BEFORE attaching: with owning children a rejected node
+		// would already sit in the parent's vector when Init reports the failure —
+		// kept alive there, a child nobody asked for. Reject first, attach only if accepted.
+		if (!parent->FilterChild(GetClassType()))
+			return false;
+		SetParent(parent);
+		parent->AddChild(this);
+		return true;
 	}
 
 	return false;
@@ -328,12 +181,10 @@ bool ibValueMetaObject::IsEditable() const
 	if (!IsEnabled() || IsDeleted())
 		return false;
 
-	ibBackendMetadataTree* const metaTree = m_metaData->GetMetaTree();
-	if (metaTree != nullptr)
-		return metaTree->IsEditable();
-
-	return m_parent != nullptr ?
-		m_parent->IsEditable() : true;
+	// Asked of the metadata, which asks everyone watching — any one that can edit is enough, and
+	// nobody watching means nothing restricts it. The walk up to the parent is gone with the same
+	// change: it was the fallback for "no tree installed", and an empty list already answers that.
+	return m_metaData != nullptr ? m_metaData->IsEditable() : true;
 }
 
 bool ibValueMetaObject::CompareObject(const ibValueMetaObject* compareObject) const
@@ -380,204 +231,44 @@ bool ibValueMetaObject::CompareObject(const ibValueMetaObject* compareObject) co
 	return ibControlComparator::CompareObject(this, compareObject);
 }
 
-bool ibValueMetaObject::CopyObject(ibWriterMemory& writer) const
+void ibValueMetaObject::SetName(const wxString& strName)
 {
-#pragma region _copy_guard_h_
+	m_propertyName->SetValue(strName);
 
-	class ibControlCopyGuard {
-
-		static void Generate(const ibValueMetaObject* copyObject) {
-			for (unsigned int idx = 0; idx < copyObject->GetChildCount(); idx++)
-				Generate(copyObject->GetChild(idx));
-			copyObject->m_metaCopyGuid = wxNewUniqueGuid;
-		}
-
-		static void Erase(const ibValueMetaObject* copyObject) {
-			for (unsigned int idx = 0; idx < copyObject->GetChildCount(); idx++)
-				Erase(copyObject->GetChild(idx));
-			copyObject->m_metaCopyGuid = wxNullGuid;
-		}
-
-	public:
-
-		ibControlCopyGuard(const ibValueMetaObject* copyObject) : m_copyObject(copyObject) { Generate(m_copyObject); }
-		~ibControlCopyGuard() { Erase(m_copyObject); }
-
-	protected:
-		const ibValueMetaObject* m_copyObject = nullptr;
-	};
-
-	ibControlCopyGuard controlCopyGuard(this);
-
-#pragma endregion 
-
-	wxASSERT(m_metaCopyGuid.isValid());
-
-#pragma region _copy_fill_h_
-
-	class ibControlMemoryWriter {
-	public:
-
-		static bool CopyObject(const ibValueMetaObject* copyObject, ibWriterMemory& writer)
-		{
-			ibWriterMemory writerHeaderMemory;
-			writerHeaderMemory.w_s32(copyObject->m_metaData->GetVersion());
-			writerHeaderMemory.w_stringZ(copyObject->m_metaCopyGuid);
-			writer.w_chunk(headerBlock, writerHeaderMemory.pointer(), writerHeaderMemory.size());
-
-			ibWriterMemory writerChildMemory;
-
-			for (const auto object : copyObject->m_children) {
-
-				if (!copyObject->FilterChild(object->GetClassType()))
-					continue;
-				if (object->IsDeleted())
-					continue;
-				ibWriterMemory writerMemory;
-				if (!CopyObject(object, writerMemory))
-					return false;
-
-				writerChildMemory.w_chunk(object->GetClassType(), writerMemory.pointer(), writerMemory.size());
-			}
-
-			writer.w_chunk(childBlock, writerChildMemory.pointer(), writerChildMemory.size());
-
-			ibWriterMemory writerDataMemory;
-			
-			if (!copyObject->CopyProperty(writerDataMemory))
-				return false;
-
-			if (!copyObject->SaveInterface(writerDataMemory))
-				return false;
-
-			if (!copyObject->SaveRole(writerDataMemory))
-				return false;
-
-			writer.w_chunk(dataBlock, writerDataMemory.pointer(), writerDataMemory.size());
-			return true;
-		}
-	};
-
-#pragma endregion 
-
-	return ibControlMemoryWriter::CopyObject(this, writer);
+	// EVERY ctor of this metaobject now computes a different name than the one it is filed under.
+	// Say so and nothing more — the registry recomputes the whole view on the next lookup by name.
+	// The object inspector's rename does not come through here (it writes the property and then
+	// calls OnPropertyChanged, which says the same thing); this covers the PROGRAMMATIC renames —
+	// BuildNewName on paste, GetNewName on create, the tree's Save — which previously left the
+	// cache pointing a stale name at a live ctor.
+	if (m_metaData != nullptr)
+		m_metaData->InvalidateCtorNames();
 }
 
-bool ibValueMetaObject::PasteObject(ibReaderMemory& reader)
-{
-#pragma region _paste_fill_h_
-
-	class ibControlMemoryReader {
-
-		static bool PasteObject(ibValueMetaObject* pasteObject, ibReaderMemory& reader)
-		{
-			ibMetaData* metaData = pasteObject->GetMetaData();
-
-			std::shared_ptr <ibReaderMemory>readerHeaderMemory(reader.open_chunk(headerBlock));
-
-			/*const ibVersionID& version =*/ readerHeaderMemory->r_s32();
-			pasteObject->m_metaGuid = readerHeaderMemory->r_stringZ();
-
-			//and running initialization
-			if (!pasteObject->OnBeforeRunMetaObject(onlyLoadFlag))
-				return false;
-
-
-			std::shared_ptr <ibReaderMemory>readerDataMemory(reader.open_chunk(dataBlock));
-
-			if (!pasteObject->PasteProperty(*readerDataMemory))
-				return false;
-
-			pasteObject->BuildNewName();
-
-			pasteObject->LoadInterface(*readerDataMemory);
-			pasteObject->LoadRole(*readerDataMemory);
-
-			if (!pasteObject->OnAfterRunMetaObject(onlyLoadFlag))
-				return false;
-
-			std::shared_ptr <ibReaderMemory> readerChildMemory(reader.open_chunk(childBlock));
-			if (readerChildMemory != nullptr) {
-				ibReaderMemory* prevReaderMemory = nullptr;
-				do {
-					ibClassID clsid = 0;
-					ibReaderMemory* readerMemory = readerChildMemory->open_chunk_iterator(clsid, &*prevReaderMemory);
-					if (readerMemory == nullptr)
-						break;
-					if (clsid > 0) {
-						ibValueMetaObject* metaObject = metaData->CreateMetaObject(clsid, pasteObject, false);
-						if (metaObject != nullptr && !PasteObject(metaObject, *readerMemory)) {
-							wxDELETE(metaObject);
-							return false;
-						}
-					}
-					prevReaderMemory = readerMemory;
-				} while (true);
-			}
-
-			return true;
-		}
-
-	public:
-
-		static bool PasteAndRunObject(ibValueMetaObject* pasteObject, ibReaderMemory& reader)
-		{
-			ibMetaData* metaData = pasteObject->GetMetaData();
-
-			std::shared_ptr <ibReaderMemory>readerHeaderMemory(reader.open_chunk(headerBlock));
-
-			/*const ibVersionID& version =*/ readerHeaderMemory->r_s32();
-			/*pasteObject->m_metaGuid =*/ readerHeaderMemory->r_stringZ();
-
-			//and running initialization
-			if (!pasteObject->OnBeforeRunMetaObject(onlyLoadFlag))
-				return false;
-
-			std::shared_ptr <ibReaderMemory>readerDataMemory(reader.open_chunk(dataBlock));
-
-			if (!pasteObject->PasteProperty(*readerDataMemory))
-				return false;
-
-			pasteObject->BuildNewName();
-
-			pasteObject->LoadInterface(*readerDataMemory);
-			pasteObject->LoadRole(*readerDataMemory);
-
-			if (!pasteObject->OnAfterRunMetaObject(onlyLoadFlag))
-				return false;
-
-			std::shared_ptr <ibReaderMemory> readerChildMemory(reader.open_chunk(childBlock));
-			if (readerChildMemory != nullptr) {
-				ibReaderMemory* prevReaderMemory = nullptr;
-				do {
-					ibClassID clsid = 0;
-					ibReaderMemory* readerMemory = readerChildMemory->open_chunk_iterator(clsid, &*prevReaderMemory);
-					if (readerMemory == nullptr)
-						break;
-					if (clsid > 0) {
-						ibValueMetaObject* metaObject = metaData->CreateMetaObject(clsid, pasteObject, false);
-						if (metaObject != nullptr && !PasteObject(metaObject, *readerMemory)) {
-							wxDELETE(metaObject);
-							return false;
-						}
-					}
-					prevReaderMemory = readerMemory;
-				} while (true);
-			}
-
-			return pasteObject->OnReloadMetaObject();
-		}
-	};
-
-#pragma endregion 
-
-	return ibControlMemoryReader::PasteAndRunObject(this, reader);
-}
-
+// ⭐⭐ THE DOOR FOR THE ORDER OF A METAOBJECT'S CHILDREN — the designer's up/down and sort, the MCP
+// verb metadata_move, anything that reorders. The order is data: the sections in the navigation panel,
+// the forms under an object, what a person reads down the tree. `pos` is where the child ENDS UP.
+//
+// 🛑 IT MARKED THE CONFIGURATION MODIFIED BEFORE ASKING, and said nothing: a refused move and a move to
+// where the child already stood both left "modified" behind, while a move nobody announced left every
+// watcher's picture of the order stale — the designer's tree shuffled its own rows by hand, and a move
+// from anywhere else was not drawn at all. Now a move that happened is marked and announced (`Moved`),
+// once, here, and the rows follow the announcement.
 bool ibValueMetaObject::ChangeChildPosition(ibValueMetaObject* object, unsigned int pos)
 {
+	if (m_metaData == nullptr || !m_metaData->IsEditable())   // the rule lives in the door, as for Create
+		return false;
+
+	const unsigned int from = GetChildPosition(object);
+	if (!ibPropertyObjectHelper::ChangeChildPosition(object, pos))
+		return false;
+
+	if (pos == from)
+		return true;   // it already stands there — nothing moved, so nothing is said
+
 	m_metaData->Modify(true);
-	return ibPropertyObjectHelper::ChangeChildPosition(object, pos);
+	m_metaData->MetaObjectStage(ibMetaDataNotifier::ibMetaStage::Moved, object);
+	return true;
 }
 
 wxString ibValueMetaObject::GetModuleName() const
@@ -622,14 +313,12 @@ wxString ibValueMetaObject::GetFileName() const
 //*                              Support methods                             *
 //****************************************************************************
 
-void ibValueMetaObject::PrepareNames() const
+void ibValueMetaObject::FillMembers(ibMemberTable& helper) const
 {
-	m_methodHelper->ClearHelper();
-
 	for (unsigned idx = 0; idx < ibPropertyObject::GetPropertyCount(); idx++) {
 		ibProperty* property = ibPropertyObject::GetProperty(idx);
 		if (property == nullptr) continue;
-		m_methodHelper->AppendProp(property->GetName(), true, false, idx);
+		helper.AppendProp(property->GetName(), true, false, idx);
 	}
 }
 
@@ -646,8 +335,6 @@ bool ibValueMetaObject::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 	if (property != nullptr) return property->GetDataValue(pvarPropVal);
 	return false;
 }
-
-ibRestructureInfo s_restructureInfo;
 
 #include "backend/backend_exception.h"
 #include "backend/session/session.h"
@@ -672,7 +359,7 @@ void ibRestructureInfo::RequireExclusiveForDDL()
 	// session is attached). Nobody else can be connected at this stage, so
 	// skip the gate entirely.
 	auto* session  = ibSession::Current();
-	auto* registry = appData != nullptr ? appData->GetSessionRegistry() : nullptr;
+	auto* registry = ibApplicationInstance::GetSessionRegistry();
 	if (session == nullptr || registry == nullptr) return;
 
 	// Normal apply — try to acquire exclusive. Succeeds only if we are the
@@ -684,10 +371,15 @@ void ibRestructureInfo::RequireExclusiveForDDL()
 		return;
 	}
 
-	ibBackendCoreException::Error(
-		_("Structure (DDL) changes require exclusive mode. Other sessions "
-		  "are connected — disconnect them and try again. "
-		  "Code-only changes (modules, forms) can be saved without it."));
+	// Each verdict says what it is: "not answered" read as "others connected" sent the person looking for
+	// a session that did not exist (2026-09-15).
+	const wxString why =
+		verdict == ibSession::ibExclusiveResult::HeldByOther ? _("Another session holds exclusive mode.")
+		: verdict == ibSession::ibExclusiveResult::Pending   ? _("The session registry did not answer in time.")
+		:                                                      _("Other sessions are connected - disconnect them and try again.");
+	ibBackendCoreException::Error(wxString::Format(
+		_("Structure (DDL) changes require exclusive mode. %s "
+		  "Code-only changes (modules, forms) can be saved without it."), why));
 }
 
 void ibRestructureInfo::ReleaseAutoExclusive()
@@ -695,7 +387,7 @@ void ibRestructureInfo::ReleaseAutoExclusive()
 	if (!ts_acquiredByGate) return;
 	ts_acquiredByGate = false;
 	auto* session  = ibSession::Current();
-	auto* registry = appData != nullptr ? appData->GetSessionRegistry() : nullptr;
+	auto* registry = ibApplicationInstance::GetSessionRegistry();
 	if (session != nullptr && registry != nullptr) {
 		registry->SetExclusive(session, false);
 	}

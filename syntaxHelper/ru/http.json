@@ -1,0 +1,766 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "ru",
+  "entries": [
+    {
+      "id": "cls.HTTPConnection",
+      "name_local": "HTTPConnection",
+      "name_en": "HTTPConnection",
+      "kind": "collection",
+      "class_id": 158798361530298929,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "New HTTPConnection(host : string [, port : number = 80 [, user : string, password : string [, timeout : number = 30]]])",
+      "description": "Линия к ОДНОЙ машине, открываемая на первом запросе и сохраняемая для следующего: хост и порт — соединения, путь — каждого запроса. Get, Post, Put, Patch, Delete и Head отправляют по ней HTTPRequest; CallMethod отправляет его любым членом HTTPMethod, в том числе Options. Каждый из них возвращает HTTPResponse.\n\nОТВЕТ И ОТКАЗ — ЭТО РАЗНОЕ. 404, 500 и 3xx — это ОТВЕТЫ: ответ приходит, StatusCode говорит какой, а что с ним делать — решает скрипт. Отказ — это когда ответа НЕТ: имя не разрешается, на порту никто не слушает, никто не ответил за отведённое время, линия оборвалась на полпути, — и тогда ВОЗБУЖДАЕТСЯ ИСКЛЮЧЕНИЕ, в тексте которого метод, адрес и причина. Ловится через try / except.\n\nХОСТ — ЭТО ИМЯ: \"api.example\", \"10.0.0.5\", \"::1\", — а не адрес. Отвергаются: \"http://api.example\" и всё прочее со схемой, косой чертой, обратной косой, '@', '?', '#' или пробелом; имя, несущее порт (\"api.example:8080\" — порт это второй аргумент); IPv6-адрес в скобках (\"[::1]\" — он даётся голым); имя не в ASCII-форме punycode (xn--). Порт — от 1 до 65535, а если не указан — 80, и 443, как только задано SecureConnection; 0 отвергается, а не читается как «не указан». `New HTTPConnection()` вовсе без хоста тоже отвергается: соединение в никуда — не соединение.\n\nПользователь и пароль уходят как Basic-авторизация с КАЖДЫМ запросом, если сам запрос не несёт заголовок Authorization. Имя пользователя не может содержать ':' — именно он отделяет его от пароля. Ответ держится в памяти целиком, до 100 МБ.",
+      "syntax_block": "Connection = New HTTPConnection(host, port, user, password, timeout);\nConnection.Host   Connection.Port   Connection.Timeout = seconds;\n\ntry {\n    Response = Connection.Get(Request);          // Post  Put  Patch  Delete  Head\n    Response = Connection.CallMethod(HTTPMethod.Options, Request);\n} except {\n    Message(ErrorDescription());                 // no answer at all\n}",
+      "syntax_block_ves": "Connection = New HTTPConnection(host, port, user, password, timeout);\nConnection.Host   Connection.Port   Connection.Timeout = seconds;\n\nTry\n    Response = Connection.Get(Request);          // Post  Put  Patch  Delete  Head\n    Response = Connection.CallMethod(HTTPMethod.Options, Request);\nExcept\n    Message(ErrorDescription());                 // no answer at all\nEndTry;",
+      "parameters": "host — имя машины, никогда не адрес: \"api.example\", \"10.0.0.5\", \"::1\".\nport — от 1 до 65535; если не указан — 80, а с заданным SecureConnection 443.\nuser, password — уходят как Basic-авторизация с каждым запросом, если запрос не говорит о себе сам.\ntimeout — секунды, от 1 до 86400 (сутки); 30, если не указан.",
+      "return_descr": "HTTPConnection.",
+      "example": "Connection = New HTTPConnection(\"api.example\", 8080, \"user\", \"password\", 30);\nRequest = New HTTPRequest(\"/v1/sales?shift=42\");\nRequest.Headers.Insert(\"Accept\", \"application/json\");\n\ntry {\n    Response = Connection.Get(Request);\n    if (Response.StatusCode = 200) {            // 404 и 500 — ОТВЕТЫ, а не отказы\n        Message(Response.GetBodyAsString());\n    } else {\n        Message(\"ответил \" + Response.StatusCode);\n    }\n} except {\n    Message(\"ответа нет: \" + ErrorDescription());   // имя не разрешилось, порт закрыт или прошло 30 с\n}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.HTTPConnection.SecureConnection",
+        "cls.HTTPRequest",
+        "cls.HTTPResponse",
+        "cls.HTTPConnection.CallMethod",
+        "cls.HTTPConnection.Timeout",
+        "guide.http"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPConnection.Host",
+      "name_local": "Host",
+      "name_en": "Host",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Connection.Host : string",
+      "description": "Имя, с которым соединение было создано, ровно как его передали. Только чтение: соединение говорит с одной машиной, а другая машина — это другое соединение.",
+      "syntax_block": "Connection.Host",
+      "parameters": "",
+      "return_descr": "Строка.",
+      "example": "Message(Connection.Host);   // api.example",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.HTTPConnection",
+        "cls.HTTPConnection.Port"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPConnection.Port",
+      "name_local": "Port",
+      "name_en": "Port",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Connection.Port : number",
+      "description": "Порт, на котором это соединение говорит: тот, что дали конструктору, а если не дали — 80 для http и 443, как только задано SecureConnection. Читается в момент запроса, поэтому установка или снятие SecureConnection его меняет. Только чтение, по той же причине, что и Host.",
+      "syntax_block": "Connection.Port",
+      "parameters": "",
+      "return_descr": "Число.",
+      "example": "Message(Connection.Port);   // 80, если не указан; 443, когда защищено",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.HTTPConnection",
+        "cls.HTTPConnection.Host"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPConnection.Timeout",
+      "name_local": "Timeout",
+      "name_en": "Timeout",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Connection.Timeout : number",
+      "description": "Время, отведённое ОДНОМУ запросу, в секундах — 30, если конструктор не сказал иначе. Оно ограничивает установление соединения, отправку запроса и чтение ответа ЦЕЛИКОМ, а не каждое чтение по отдельности. Два дела остаются вне его: разрешение имени (это время резолвера) и запись большого тела серверу, который принимает его медленно, — там каждая запись ограничена своим сроком.\n\n1 — минимум, 86400 (сутки) — максимум, а 0 отвергается, а не читается как «без ограничения»: фоновое задание, ждущее замолчавший сервер, — это задание, о котором никто больше не услышит. Отвергнутое значение оставляет стоять прежнее. Запись сбрасывает сохранённый сокет, поэтому с новым сроком уйдёт СЛЕДУЮЩИЙ запрос.",
+      "syntax_block": "Connection.Timeout\nConnection.Timeout = seconds;",
+      "parameters": "",
+      "return_descr": "Число.",
+      "example": "Connection.Timeout = 5;    // 0 вызовет исключение, а 30 так и останется",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.HTTPConnection"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPConnection.Get",
+      "name_local": "Get",
+      "name_en": "Get",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Connection.Get(request : HTTPRequest) : HTTPResponse",
+      "description": "Отправляет запрос методом GET и возвращает пришедший HTTPResponse. Отправляется HTTPRequest: строка — или вовсе ничего — отвергается с сообщением, а не возвращается как Undefined. 404 и 500 — это ответы, и 3xx тоже ответ: за ним не идут; отсутствие ответа возбуждает исключение.\n\nGET спрашивает и обычно не несёт тела — тело, заданное запросу, всё равно уйдёт: движок ничего не отнимает.",
+      "syntax_block": "Response = Connection.Get(Request);",
+      "parameters": "request — HTTPRequest. Его можно отправить ещё раз и по другому соединению: отправка в нём ничего не меняет.",
+      "return_descr": "HTTPResponse.",
+      "example": "Request = New HTTPRequest(\"/v1/sales?shift=42\");\nResponse = Connection.Get(Request);",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.HTTPConnection",
+        "cls.HTTPRequest",
+        "cls.HTTPResponse",
+        "cls.HTTPConnection.CallMethod"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPConnection.Post",
+      "name_local": "Post",
+      "name_en": "Post",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Connection.Post(request : HTTPRequest) : HTTPResponse",
+      "description": "Отправляет запрос методом POST и возвращает пришедший HTTPResponse. Отправляется HTTPRequest: строка — или вовсе ничего — отвергается с сообщением, а не возвращается как Undefined. 404 и 500 — это ответы, и 3xx тоже ответ: за ним не идут; отсутствие ответа возбуждает исключение.\n\nPOST передаёт: задайте тело через SetBodyFromString или SetBodyFromBinaryData и СКАЖИТЕ, ЧТО ЭТО, — тело без Content-Type уходит как text/plain, а этого API ждёт редко.",
+      "syntax_block": "Response = Connection.Post(Request);",
+      "parameters": "request — HTTPRequest. Его можно отправить ещё раз и по другому соединению: отправка в нём ничего не меняет.",
+      "return_descr": "HTTPResponse.",
+      "example": "Request = New HTTPRequest(\"/v1/orders\");\nRequest.Headers.Insert(\"Content-Type\", \"application/json\");\nRequest.SetBodyFromString(\"{\"\"table\"\": 7}\");\nResponse = Connection.Post(Request);",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.HTTPConnection",
+        "cls.HTTPRequest",
+        "cls.HTTPResponse",
+        "cls.HTTPConnection.CallMethod"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPConnection.Put",
+      "name_local": "Put",
+      "name_en": "Put",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Connection.Put(request : HTTPRequest) : HTTPResponse",
+      "description": "Отправляет запрос методом PUT и возвращает пришедший HTTPResponse. Отправляется HTTPRequest: строка — или вовсе ничего — отвергается с сообщением, а не возвращается как Undefined. 404 и 500 — это ответы, и 3xx тоже ответ: за ним не идут; отсутствие ответа возбуждает исключение.\n\nPUT передаёт то, чем ресурс должен стать целиком; тело задаётся как для Post, и его Content-Type называется.",
+      "syntax_block": "Response = Connection.Put(Request);",
+      "parameters": "request — HTTPRequest. Его можно отправить ещё раз и по другому соединению: отправка в нём ничего не меняет.",
+      "return_descr": "HTTPResponse.",
+      "example": "Request = New HTTPRequest(\"/v1/orders/17\");\nRequest.Headers.Insert(\"Content-Type\", \"application/json\");\nRequest.SetBodyFromString(\"{\"\"table\"\": 9}\");\nResponse = Connection.Put(Request);",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.HTTPConnection",
+        "cls.HTTPRequest",
+        "cls.HTTPResponse",
+        "cls.HTTPConnection.CallMethod"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPConnection.Patch",
+      "name_local": "Patch",
+      "name_en": "Patch",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Connection.Patch(request : HTTPRequest) : HTTPResponse",
+      "description": "Отправляет запрос методом PATCH и возвращает пришедший HTTPResponse. Отправляется HTTPRequest: строка — или вовсе ничего — отвергается с сообщением, а не возвращается как Undefined. 404 и 500 — это ответы, и 3xx тоже ответ: за ним не идут; отсутствие ответа возбуждает исключение.\n\nPATCH передаёт изменение того, что есть; тело задаётся как для Post, и его Content-Type называется.",
+      "syntax_block": "Response = Connection.Patch(Request);",
+      "parameters": "request — HTTPRequest. Его можно отправить ещё раз и по другому соединению: отправка в нём ничего не меняет.",
+      "return_descr": "HTTPResponse.",
+      "example": "Request = New HTTPRequest(\"/v1/orders/17\");\nRequest.Headers.Insert(\"Content-Type\", \"application/json\");\nRequest.SetBodyFromString(\"{\"\"table\"\": 9}\");\nResponse = Connection.Patch(Request);",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.HTTPConnection",
+        "cls.HTTPRequest",
+        "cls.HTTPResponse",
+        "cls.HTTPConnection.CallMethod"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPConnection.Delete",
+      "name_local": "Delete",
+      "name_en": "Delete",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Connection.Delete(request : HTTPRequest) : HTTPResponse",
+      "description": "Отправляет запрос методом DELETE и возвращает пришедший HTTPResponse. Отправляется HTTPRequest: строка — или вовсе ничего — отвергается с сообщением, а не возвращается как Undefined. 404 и 500 — это ответы, и 3xx тоже ответ: за ним не идут; отсутствие ответа возбуждает исключение.\n\nHTTP-метод DELETE — просьба к ДРУГОЙ системе. В этой платформе им ничего не удаляется.",
+      "syntax_block": "Response = Connection.Delete(Request);",
+      "parameters": "request — HTTPRequest. Его можно отправить ещё раз и по другому соединению: отправка в нём ничего не меняет.",
+      "return_descr": "HTTPResponse.",
+      "example": "Request = New HTTPRequest(\"/v1/orders/17\");\nResponse = Connection.Delete(Request);",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.HTTPConnection",
+        "cls.HTTPRequest",
+        "cls.HTTPResponse",
+        "cls.HTTPConnection.CallMethod"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPConnection.Head",
+      "name_local": "Head",
+      "name_en": "Head",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Connection.Head(request : HTTPRequest) : HTTPResponse",
+      "description": "Отправляет запрос методом HEAD и возвращает пришедший HTTPResponse. Отправляется HTTPRequest: строка — или вовсе ничего — отвергается с сообщением, а не возвращается как Undefined. 404 и 500 — это ответы, и 3xx тоже ответ: за ним не идут; отсутствие ответа возбуждает исключение.\n\nHEAD спрашивает заголовки того, чем ответил бы GET, и не просит тела: у ответа есть StatusCode и Headers, а тело пустое.",
+      "syntax_block": "Response = Connection.Head(Request);",
+      "parameters": "request — HTTPRequest. Его можно отправить ещё раз и по другому соединению: отправка в нём ничего не меняет.",
+      "return_descr": "HTTPResponse.",
+      "example": "Request = New HTTPRequest(\"/v1/report.pdf\");\nResponse = Connection.Head(Request);\nMessage(Response.Headers[\"Content-Length\"]);",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.HTTPConnection",
+        "cls.HTTPRequest",
+        "cls.HTTPResponse",
+        "cls.HTTPConnection.CallMethod"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPConnection.CallMethod",
+      "name_local": "CallMethod",
+      "name_en": "CallMethod",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Connection.CallMethod(method : HTTPMethod, request : HTTPRequest) : HTTPResponse",
+      "description": "Отправляет запрос названным методом. У HTTPMethod семь членов — Get, Post, Put, Patch, Delete, Head и Options, — и Options достижим ТОЛЬКО ЗДЕСЬ: своего метода Options у соединения нет.\n\nЗначение HTTPMethod и ничего другого: строка \"GET\" отвергается — перечисление существует как раз вместо неё. Отправляется HTTPRequest, как и у именованных методов.",
+      "syntax_block": "Connection.CallMethod(HTTPMethod.Options, Request);",
+      "parameters": "method — HTTPMethod.Get, .Post, .Put, .Patch, .Delete, .Head или .Options.\nrequest — HTTPRequest.",
+      "return_descr": "HTTPResponse.",
+      "example": "Request = New HTTPRequest(\"/v1/orders\");\nResponse = Connection.CallMethod(HTTPMethod.Options, Request);\nMessage(Response.Headers[\"Allow\"]);",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.HTTPConnection",
+        "cls.HTTPConnection.Get",
+        "cls.HTTPRequest",
+        "cls.HTTPResponse",
+        "enum.HTTPMethod"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPRequest",
+      "name_local": "HTTPRequest",
+      "name_en": "HTTPRequest",
+      "kind": "collection",
+      "class_id": 173159082903524425,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "New HTTPRequest([resourceAddress : string [, headers : Structure]])",
+      "description": "То, что отправляет соединение: адрес на хосте, заголовки и тело. Его создаёт скрипт, и один и тот же запрос можно отправить ещё раз и по другому соединению — отправка в нём ничего не меняет.\n\nАДРЕС — ЭТО ПУТЬ, и он начинается с '/': хост и порт принадлежат соединению. Если не указан — \"/\", и \"\" читается как \"/\". Перевод строки или управляющий символ отвергается, и так же отвергается фрагмент (#...), который серверу никогда не отправляется: '#' внутри запроса пишется как %23. То, что не может стоять в строке запроса — пробел, кириллица, — уходит процентным кодированием своего UTF-8; уже закодированное (%20) не трогается, как и '?' и '&', разделяющие запрос.\n\nЗАГОЛОВКИ — ЭТО Structure, и та, что передана конструктору, ОБЩАЯ с тем, кто её передал, как и любое присвоенное значение: добавленное в неё позже видит каждый запрос, который её держит.",
+      "syntax_block": "Request = New HTTPRequest(resourceAddress, headers);\nRequest.ResourceAddress = \"/v1/orders\";\nRequest.Headers.Insert(\"Content-Type\", \"application/json\");\nRequest.SetBodyFromString(text, TextEncoding.UTF8);\nRequest.SetBodyFromBinaryData(data);\nRequest.GetBodyAsString()   Request.GetBodyAsBinaryData()",
+      "parameters": "resourceAddress — путь и запрос, начиная с '/'; если не указан — \"/\".\nheaders — Structure вида имя = значение; если не указана — пустая.",
+      "return_descr": "HTTPRequest.",
+      "example": "Request = New HTTPRequest(\"/v1/orders\");\nRequest.Headers.Insert(\"Content-Type\", \"application/json\");\nRequest.Headers.Insert(\"Accept\", \"application/json\");\nRequest.SetBodyFromString(\"{\"\"table\"\": 7}\");",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.HTTPConnection",
+        "cls.HTTPResponse",
+        "cls.HTTPRequest.Headers",
+        "cls.HTTPRequest.SetBodyFromString",
+        "guide.http"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPRequest.ResourceAddress",
+      "name_local": "ResourceAddress",
+      "name_en": "ResourceAddress",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Request.ResourceAddress : string",
+      "description": "Путь и запрос, которые спрашивает запрос. Начинается с '/'; \"\" читается как \"/\". Перевод строки, управляющий символ и фрагмент (#...) отвергаются — и отвергнутое оставляет стоять прежний адрес.",
+      "syntax_block": "Request.ResourceAddress\nRequest.ResourceAddress = \"/v1/orders\";",
+      "parameters": "",
+      "return_descr": "Строка.",
+      "example": "Request.ResourceAddress = \"/v1/sales?shift=42\";",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.HTTPRequest",
+        "cls.HTTPConnection"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPRequest.Headers",
+      "name_local": "Headers",
+      "name_en": "Headers",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Request.Headers : Structure",
+      "description": "Заголовки, которые несёт запрос, — Structure, ключи которой НЕЧУВСТВИТЕЛЬНЫ К РЕГИСТРУ, как и имя заголовка: Headers[\"content-type\"] и Headers[\"Content-Type\"] — один элемент. Значение — строка или число; пробелы по краям срезаются, поэтому \"Bearer t0ken \", вставленный с хвостовым пробелом, уходит как сам токен.\n\nОНИ ЧИТАЮТСЯ В МОМЕНТ ОТПРАВКИ, и неверное отвергается там же, ПО ИМЕНИ, до того как уйдёт первый байт: имя, не являющееся именем заголовка; значение, которое не строка и не число; значение с переводом строки или управляющим символом; и семь тех, что говорят, как сообщение упаковано и доставлено, — Content-Length, Transfer-Encoding, Host, Connection, Expect, Proxy-Authorization, Upgrade: они принадлежат движку. Кроме них и библиотечного User-Agent, который скрипт может заменить, движок ничего своего не добавляет; сжатый ответ он не просит, и скрипт, который просит (Accept-Encoding), получит отказ — декодера в сборке нет.\n\nПрисвоение не-Structure отвергается и оставляет стоять прежние заголовки.",
+      "syntax_block": "Request.Headers.Insert(name, value);\nRequest.Headers = New Structure(\"Accept\", \"application/json\");",
+      "parameters": "",
+      "return_descr": "Structure.",
+      "example": "Request.Headers.Insert(\"Authorization\", \"Bearer t0ken\");\nMessage(Request.Headers[\"authorization\"]);   // один элемент: имя не чувствительно к регистру",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.HTTPRequest",
+        "cls.HTTPResponse.Headers",
+        "cls.HTTPConnection"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPRequest.SetBodyFromString",
+      "name_local": "SetBodyFromString",
+      "name_en": "SetBodyFromString",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Request.SetBodyFromString(text : string, encoding : TextEncoding = UTF8)",
+      "description": "Кладёт в тело текст — байтами в названной кодировке: UTF-8, если TextEncoding не задан, и БЕЗ метки порядка байтов: тело — не файл, а метка перед JSON на том конце это ошибка разбора. Пустой текст — пустое тело. Текст, который в этой кодировке записать нельзя, отвергается.\n\nЗадание тела ничего не говорит о том, ЧТО это: скажите это заголовком, иначе оно уйдёт как text/plain.",
+      "syntax_block": "Request.SetBodyFromString(text);\nRequest.SetBodyFromString(text, TextEncoding.UTF16);",
+      "parameters": "text — что отправить.\nencoding — TextEncoding: UTF8 (по умолчанию), UTF16, ANSI, OEM, System.",
+      "return_descr": "",
+      "example": "Request.Headers.Insert(\"Content-Type\", \"application/json\");\nRequest.SetBodyFromString(\"{\"\"shift\"\": 42}\");",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.HTTPRequest.GetBodyAsString",
+        "cls.HTTPRequest.SetBodyFromBinaryData",
+        "cls.HTTPRequest.Headers",
+        "guide.textFiles"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPRequest.SetBodyFromBinaryData",
+      "name_local": "SetBodyFromBinaryData",
+      "name_en": "SetBodyFromBinaryData",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Request.SetBodyFromBinaryData(data : BinaryData)",
+      "description": "Кладёт в тело байты ровно как есть — файл, прочитанный в BinaryData, картинку, подписанный конверт. Всё, что не BinaryData, отвергается с сообщением.",
+      "syntax_block": "Request.SetBodyFromBinaryData(data);",
+      "parameters": "data — BinaryData.",
+      "return_descr": "",
+      "example": "Data = New BinaryData();\nData.Read(\"C:\\out\\receipt.pdf\");\nRequest.Headers.Insert(\"Content-Type\", \"application/pdf\");\nRequest.SetBodyFromBinaryData(Data);",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.HTTPRequest.SetBodyFromString",
+        "cls.HTTPRequest.GetBodyAsBinaryData",
+        "guide.textFiles"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPRequest.GetBodyAsString",
+      "name_local": "GetBodyAsString",
+      "name_en": "GetBodyAsString",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Request.GetBodyAsString(encoding : TextEncoding = UTF8) : string",
+      "description": "Тело, прочитанное обратно как текст в названной кодировке: UTF-8, если TextEncoding не задан. Байты, которые в этой кодировке текстом не являются, ОТВЕРГАЮТСЯ, а не выдаются как что-то другое: берите их через GetBodyAsBinaryData(). Тело, которого никто не задавал, читается как \"\".",
+      "syntax_block": "Request.GetBodyAsString()\nRequest.GetBodyAsString(TextEncoding.UTF16)",
+      "parameters": "encoding — TextEncoding: UTF8 (по умолчанию), UTF16, ANSI, OEM, System.",
+      "return_descr": "Строка.",
+      "example": "Message(Request.GetBodyAsString());",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.HTTPRequest.SetBodyFromString",
+        "cls.HTTPRequest.GetBodyAsBinaryData"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPRequest.GetBodyAsBinaryData",
+      "name_local": "GetBodyAsBinaryData",
+      "name_en": "GetBodyAsBinaryData",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Request.GetBodyAsBinaryData() : BinaryData",
+      "description": "Тело как байты, какими бы они ни были, — способ прочитать обратно то, что положил SetBodyFromBinaryData.",
+      "syntax_block": "Request.GetBodyAsBinaryData()",
+      "parameters": "Нет.",
+      "return_descr": "BinaryData.",
+      "example": "Message(Request.GetBodyAsBinaryData().Size());",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.HTTPRequest.SetBodyFromBinaryData",
+        "cls.HTTPRequest.GetBodyAsString"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPResponse",
+      "name_local": "HTTPResponse",
+      "name_en": "HTTPResponse",
+      "kind": "collection",
+      "class_id": 317272071956123875,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Connection.Get(request : HTTPRequest) : HTTPResponse",
+      "description": "То, что пришло. СКРИПТ ЕГО НЕ СОЗДАЁТ — `New HTTPResponse()` не компилируется, — его выдаёт Get, Post, Put, Patch, Delete, Head или CallMethod соединения.\n\nОтвет — это любой ответ: и 200, и 404, и 500, и 3xx. StatusCode говорит какой, Headers — те, что пришли, а тело читается как текст или как байты. Отказ — когда ответа нет вовсе — это совсем другое: он возбуждает исключение, а не выдаёт такой объект.\n\nТело держится в памяти целиком, до 100 МБ; ответ больше этого завершает запрос отказом.",
+      "syntax_block": "Response = Connection.Get(Request);\nResponse.StatusCode   Response.Headers[\"Location\"]\nResponse.GetBodyAsString(TextEncoding.UTF8)   Response.GetBodyAsBinaryData()",
+      "parameters": "",
+      "return_descr": "",
+      "example": "Response = Connection.Get(Request);\nif (Response.StatusCode = 200) {\n    Message(Response.GetBodyAsString());\n} elseif (Response.StatusCode = 302) {\n    Message(\"переехало на \" + Response.Headers[\"Location\"]);\n} else {\n    Message(\"ответил \" + Response.StatusCode);\n}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.HTTPConnection",
+        "cls.HTTPRequest",
+        "cls.HTTPResponse.StatusCode",
+        "cls.HTTPResponse.Headers",
+        "guide.http"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPResponse.StatusCode",
+      "name_local": "StatusCode",
+      "name_en": "StatusCode",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Response.StatusCode : number",
+      "description": "Статус, которым ответил сервер, — 200, 404, 500, 302. Только чтение. Это число, поэтому и сравнивается как число: `if (Response.StatusCode = 200)`.",
+      "syntax_block": "Response.StatusCode",
+      "parameters": "",
+      "return_descr": "Число.",
+      "example": "if (Response.StatusCode <> 200) { Message(\"ответил \" + Response.StatusCode); }",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.HTTPResponse",
+        "cls.HTTPResponse.Headers",
+        "cls.HTTPConnection"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPResponse.Headers",
+      "name_local": "Headers",
+      "name_en": "Headers",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Response.Headers : Structure",
+      "description": "Заголовки, которые нёс ответ, — Structure, ключи которой НЕЧУВСТВИТЕЛЬНЫ К РЕГИСТРУ, как и имя заголовка. Как свойство — только чтение: ответ таков, каков он есть.\n\nИмя, которое ответ несёт ДВАЖДЫ, склеивается через \", \", как говорит протокол, — кроме Set-Cookie, в значениях которого есть собственные запятые: там остаётся ПОСЛЕДНИЙ.\n\nПосле 3xx здесь лежит Location: перенаправление — это ответ, и за ним не идут, поэтому куда идти, каким методом и с какими заголовками — решает скрипт.",
+      "syntax_block": "Response.Headers[\"Location\"]\nResponse.Headers[\"Content-Type\"]",
+      "parameters": "",
+      "return_descr": "Structure.",
+      "example": "Message(Response.Headers[\"content-type\"]);   // имя не чувствительно к регистру\nMessage(Response.Headers[\"Location\"]);       // после 3xx",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.HTTPResponse",
+        "cls.HTTPRequest.Headers",
+        "cls.HTTPResponse.StatusCode"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPResponse.GetBodyAsString",
+      "name_local": "GetBodyAsString",
+      "name_en": "GetBodyAsString",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Response.GetBodyAsString(encoding : TextEncoding = UTF8) : string",
+      "description": "Тело ответа, прочитанное как текст в названной кодировке: UTF-8, если TextEncoding не задан. Charset, который может нести Content-Type, НЕ читается: кодировку называет скрипт. Байты, которые в этой кодировке текстом не являются, ОТВЕРГАЮТСЯ, а не выдаются как что-то другое — берите их через GetBodyAsBinaryData(). 204 или HEAD читаются как \"\".",
+      "syntax_block": "Response.GetBodyAsString()\nResponse.GetBodyAsString(TextEncoding.ANSI)",
+      "parameters": "encoding — TextEncoding: UTF8 (по умолчанию), UTF16, ANSI, OEM, System.",
+      "return_descr": "Строка.",
+      "example": "Text = Response.GetBodyAsString();             // UTF-8, если не сказано иначе",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.HTTPResponse",
+        "cls.HTTPResponse.GetBodyAsBinaryData",
+        "guide.textFiles"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPResponse.GetBodyAsBinaryData",
+      "name_local": "GetBodyAsBinaryData",
+      "name_en": "GetBodyAsBinaryData",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Response.GetBodyAsBinaryData() : BinaryData",
+      "description": "Байты ответа, какими бы они ни были: картинка, PDF, zip или текст в кодировке, которую эта сборка прочитать не может. Write(path) кладёт их в файл такими, какими они пришли.",
+      "syntax_block": "Response.GetBodyAsBinaryData()",
+      "parameters": "Нет.",
+      "return_descr": "BinaryData.",
+      "example": "Response.GetBodyAsBinaryData().Write(\"C:\\in\\answer.bin\");",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.HTTPResponse",
+        "cls.HTTPResponse.GetBodyAsString",
+        "guide.textFiles"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.HTTPMethod",
+      "name_local": "HTTPMethod",
+      "name_en": "HTTPMethod",
+      "kind": "enum_type",
+      "class_id": 382927474864707642,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "HTTPMethod.Get, .Post, .Put, .Patch, .Delete, .Head, .Options",
+      "description": "Метод, которым отправляется запрос, — значение этого перечисления: у HTTPMethod семь членов — Get, Post, Put, Patch, Delete, Head и Options, — и член пишется HTTPMethod.<Имя>. Скрипт его не создаёт: `New HTTPMethod()` не компилируется, и строка \"GET\" тоже не член — перечисление существует как раз вместо неё.\n\nЧИТАЕТСЯ В ОДНОМ МЕСТЕ — первым аргументом HTTPConnection.CallMethod. У шести членов из семи есть ещё и именованный метод соединения, и обе дороги — один и тот же запрос: `Connection.Get(Request)` отправляет то же, что `Connection.CallMethod(HTTPMethod.Get, Request)`. У Options именованного метода НЕТ — он достижим только через CallMethod.\n\nМЕТОД — ЭТО СЛОВО, и больше не меняется ничего: одна дорога строит одно сообщение для любого члена и ставит в него имя метода. Движок не отнимает тела и не добавляет его — тело, заданное запросу, уйдёт с GET или DELETE ровно так же, как с POST, — и ни для какого метода не идёт за 3xx. Что нести методу, решает скрипт.",
+      "syntax_block": "Response = Connection.CallMethod(HTTPMethod.Options, Request);\nResponse = Connection.CallMethod(HTTPMethod.Get, Request);   // тот же запрос, что Connection.Get(Request)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "Request = New HTTPRequest(\"/v1/orders\");\nResponse = Connection.CallMethod(HTTPMethod.Options, Request);\nMessage(Response.Headers[\"Allow\"]);",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.HTTPConnection.CallMethod",
+        "cls.HTTPConnection",
+        "enum.HTTPMethod.Options",
+        "guide.http"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.HTTPMethod.Get",
+      "name_local": "Get",
+      "name_en": "Get",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "HTTPMethod.Get",
+      "description": "GET — спрашивает то, что лежит по адресу, и обычно не несёт ничего своего. У соединения есть именованный метод для него, так что `Connection.Get(Request)` и `Connection.CallMethod(HTTPMethod.Get, Request)` — один и тот же запрос.\n\nТело, заданное запросу, ВСЁ РАВНО УЙДЁТ с ним: движок не отнимает тела у метода, которому его нести не полагается.",
+      "syntax_block": "Connection.CallMethod(HTTPMethod.Get, Request);",
+      "parameters": "",
+      "return_descr": "HTTPMethod.",
+      "example": "Response = Connection.CallMethod(HTTPMethod.Get, Request);   // то же, что Connection.Get(Request)",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.HTTPMethod",
+        "cls.HTTPConnection.Get",
+        "cls.HTTPConnection.CallMethod"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.HTTPMethod.Post",
+      "name_local": "Post",
+      "name_en": "Post",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "HTTPMethod.Post",
+      "description": "POST — передаёт что-то по адресу. У соединения есть именованный метод для него: `Connection.Post(Request)` — это `Connection.CallMethod(HTTPMethod.Post, Request)`.\n\nТело — запроса — SetBodyFromString или SetBodyFromBinaryData, а СКАЗАТЬ, ЧТО ЭТО, — дело скрипта: тело, отправленное без своего Content-Type, уходит как text/plain, а этого API ждёт редко.",
+      "syntax_block": "Connection.CallMethod(HTTPMethod.Post, Request);",
+      "parameters": "",
+      "return_descr": "HTTPMethod.",
+      "example": "Request.Headers.Insert(\"Content-Type\", \"application/json\");\nRequest.SetBodyFromString(\"{\"\"table\"\": 7}\");\nResponse = Connection.CallMethod(HTTPMethod.Post, Request);",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.HTTPMethod",
+        "cls.HTTPConnection.Post",
+        "cls.HTTPConnection.CallMethod"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.HTTPMethod.Put",
+      "name_local": "Put",
+      "name_en": "Put",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "HTTPMethod.Put",
+      "description": "PUT — передаёт целиком то, чем ресурс должен стать. У соединения есть именованный метод для него: `Connection.Put(Request)` — это `Connection.CallMethod(HTTPMethod.Put, Request)`.\n\nТело задаётся так же, как для Post, и его Content-Type называется.",
+      "syntax_block": "Connection.CallMethod(HTTPMethod.Put, Request);",
+      "parameters": "",
+      "return_descr": "HTTPMethod.",
+      "example": "Response = Connection.CallMethod(HTTPMethod.Put, Request);   // то же, что Connection.Put(Request)",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.HTTPMethod",
+        "cls.HTTPConnection.Put",
+        "cls.HTTPConnection.CallMethod"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.HTTPMethod.Patch",
+      "name_local": "Patch",
+      "name_en": "Patch",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "HTTPMethod.Patch",
+      "description": "PATCH — передаёт изменение того, что уже есть, а не всё целиком. У соединения есть именованный метод для него: `Connection.Patch(Request)` — это `Connection.CallMethod(HTTPMethod.Patch, Request)`.\n\nТело задаётся так же, как для Post, и его Content-Type называется.",
+      "syntax_block": "Connection.CallMethod(HTTPMethod.Patch, Request);",
+      "parameters": "",
+      "return_descr": "HTTPMethod.",
+      "example": "Response = Connection.CallMethod(HTTPMethod.Patch, Request);   // то же, что Connection.Patch(Request)",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.HTTPMethod",
+        "cls.HTTPConnection.Patch",
+        "cls.HTTPConnection.CallMethod"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.HTTPMethod.Delete",
+      "name_local": "Delete",
+      "name_en": "Delete",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "HTTPMethod.Delete",
+      "description": "DELETE — просит ДРУГУЮ систему убрать то, что лежит по адресу. В этой платформе им ничего не удаляется. У соединения есть именованный метод для него: `Connection.Delete(Request)` — это `Connection.CallMethod(HTTPMethod.Delete, Request)`.\n\nDELETE обычно не несёт тела, и заданное запросу всё равно уйдёт: движок тела не отнимает.",
+      "syntax_block": "Connection.CallMethod(HTTPMethod.Delete, Request);",
+      "parameters": "",
+      "return_descr": "HTTPMethod.",
+      "example": "Request = New HTTPRequest(\"/v1/orders/17\");\nResponse = Connection.CallMethod(HTTPMethod.Delete, Request);",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.HTTPMethod",
+        "cls.HTTPConnection.Delete",
+        "cls.HTTPConnection.CallMethod"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.HTTPMethod.Head",
+      "name_local": "Head",
+      "name_en": "Head",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "HTTPMethod.Head",
+      "description": "HEAD — спрашивает заголовки того, чем ответил бы GET, и не просит тела: у ответа есть StatusCode и Headers, а тело пустое. Так читают Content-Length или Last-Modified, не вытягивая самого содержимого. У соединения есть именованный метод для него: `Connection.Head(Request)` — это `Connection.CallMethod(HTTPMethod.Head, Request)`.\n\nТело, заданное запросу, всё равно уйдёт: движок тела не отнимает.",
+      "syntax_block": "Connection.CallMethod(HTTPMethod.Head, Request);",
+      "parameters": "",
+      "return_descr": "HTTPMethod.",
+      "example": "Request = New HTTPRequest(\"/v1/report.pdf\");\nResponse = Connection.CallMethod(HTTPMethod.Head, Request);\nMessage(Response.Headers[\"Content-Length\"]);",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.HTTPMethod",
+        "cls.HTTPConnection.Head",
+        "cls.HTTPConnection.CallMethod"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.HTTPMethod.Options",
+      "name_local": "Options",
+      "name_en": "Options",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "HTTPMethod.Options",
+      "description": "OPTIONS — спрашивает, что можно делать по адресу; заголовок Allow в ответе называет методы.\n\nЕДИНСТВЕННЫЙ ЧЛЕН БЕЗ ИМЕНОВАННОГО МЕТОДА у соединения — `Connection.Options(...)` не существует, — поэтому он отправляется через CallMethod и больше никак. Для этого CallMethod и есть.\n\nТело, заданное запросу, всё равно уйдёт: движок тела не отнимает.",
+      "syntax_block": "Connection.CallMethod(HTTPMethod.Options, Request);",
+      "parameters": "",
+      "return_descr": "HTTPMethod.",
+      "example": "Request = New HTTPRequest(\"/v1/orders\");\nResponse = Connection.CallMethod(HTTPMethod.Options, Request);\nMessage(Response.Headers[\"Allow\"]);",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.HTTPMethod",
+        "cls.HTTPConnection.CallMethod",
+        "cls.HTTPResponse.Headers"
+      ],
+      "reviewed": false
+    }
+  ]
+}

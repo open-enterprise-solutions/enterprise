@@ -1,0 +1,463 @@
+////////////////////////////////////////////////////////////////////////////
+//	Author		: Maxim Kornienko
+//	Description : common object source-command interface (record / register base)
+////////////////////////////////////////////////////////////////////////////
+
+// The source-command SURFACE of the base record / register metaobjects — the command set + execution + column
+// fill + select value that the templated source descriptor (queryableFactory.h) forwards to. Lives HERE, with the
+// metaobjects it implements (commonObject.h), NOT in the legacy list TU it was lifted from — the object lists get
+// deleted once the dynamic list fully replaces them; this stays. Document adds Post in documentAction.cpp.
+
+#include "commonObject.h"
+#include "backend/backend_form.h"             // ibBackendControlFrame COMPLETE — the dynamic_cast target in ShowFormValue
+#include "backend/choiceLinkResolver.h"      // a row added in a narrowed list is born matching it
+#include "backend/srcDataObject.h"            // ibSourceDataObject::ibSourceExplorer — FillSourceExplorer's out-param
+#include "backend/system/systemManager.h"     // ibValueSystemFunction::Alert
+#include "backend/picturePredefined.h"        // g_picAdd/Copy/Edit/Delete/MarkAsDelete/AddFolderCLSID — the command band
+#include "backend/rowValues.h"                // ibRowMetaValues::find — reading the reference cell for GetSelectValue
+#include "backend/metaCollection/partial/reference/reference.h"   // ibValueReferenceDataObject::GetGuid — GetItemKey's row guid
+
+// ---------------------------------------------------------------------------------------------------------
+// Reference-record BASE — column fill + the reference select value (shared by catalog / document / enum / charts).
+// ---------------------------------------------------------------------------------------------------------
+
+// The default-column fill has FOUR variants, one per metatype, each spelling out its OWN visible set directly by
+// its OWN predicates (no shared "system column" abstraction — the rule genuinely differs: an enum SHOWS its
+// reference, a catalog HIDES it). Three record chains (enum / document / catalog) below + register further down.
+
+// ENUM variant (reference-record base) — an enum's value IS its reference, so the reference column is the ONLY one
+// shown; everything else (order …) is hidden. The writeable / hierarchy metatypes override with their own set.
+void ibValueMetaObjectRecordDataRef::FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const
+{
+	for (const ibValueMetaObjectAttributeBase* a : GetGenericAttributeArrayObject())
+		if (a != nullptr)
+			// 🛑⭐⭐ THE FACADE, NOT THE ATTRIBUTE — and the difference is a SILENT OVERLOAD SHIFT. An
+			// attribute stopped being an `ibBackendQueryColumn` when it began HOLDING one, so this
+			// call stopped binding to `AppendColumn(const ibBackendQueryColumn*, bool, bool, …)` and
+			// began binding to `AppendColumn(const ibBackendSourceColumn*, const ibMetaID& id, bool,
+			// bool, …)` — whose SECOND parameter is the id. `true` converted to 1, every column was
+			// appended under the same id, and the flags shifted one place along.
+			//
+			// ⚠ IT COMPILED, because bool converts to an integer without a word. What it produced was
+			// a list whose every column header read the same and whose values could not be found at
+			// all — an assert deep in GetValueByMetaID, three tiers from here (Max, 2026-09-06,
+			// pointing straight at this line: "the id is lost here").
+			explorer.AppendColumn(a->GetQueryColumn(), /*enabled*/true,
+				/*visible*/ IsDataReference(a->GetMetaID()));
+}
+
+// DOCUMENT variant — reference / deletion mark / data version hidden; number / date / posted / attributes visible.
+void ibValueMetaObjectRecordDataMutableRef::FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const
+{
+	for (const ibValueMetaObjectAttributeBase* a : GetGenericAttributeArrayObject()) {
+		if (a == nullptr) continue;
+		const ibMetaID id = a->GetMetaID();
+		const bool hidden = IsDataReference(id) || IsDataDeletionMark(id) || IsDataVersion(id);
+		explorer.AppendColumn(a->GetQueryColumn(), /*enabled*/true, /*visible*/ !hidden);
+	}
+
+}
+
+// A RECORDER adds one field to that: the MOMENT — appended by hand, and that is the whole point of
+// it. It is deliberately absent from the generic list (the list that becomes columns, object members
+// and form fields), so this is the ONE place it surfaces: the field tree a query is written against.
+//
+// What is appended is the moment AS A COLUMN — constructed from the date and the reference, which is
+// what the layout describes, the sort orders by and the codec reads. NOT VISIBLE: `visible` is what
+// makes a field a DEFAULT COLUMN, and the moment is not something anyone wants to read in a list —
+// it is an addressable point for a query to compare against, the same standing the reference and the
+// deletion mark have.
+void ibValueMetaObjectRecordDataRecorderRef::FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const
+{
+	ibValueMetaObjectRecordDataMutableRef::FillSourceExplorer(explorer);
+	// Taken from the QUERYABLE, which is where a constructed column lives — the field tree then offers
+	// exactly what a query can resolve, because both come from one place.
+	if (const ibBackendQueryable* queryable = GetQueryable())
+		explorer.AppendColumn(queryable->ResolveColumnByName(GetPointInTime()->GetName()), /*enabled*/true, /*visible*/false);
+}
+
+// CATALOG variant — reference / deletion mark / data version / predefined name / parent / is-folder hidden;
+// code / description / attributes visible.
+void ibValueMetaObjectRecordDataHierarchyMutableRef::FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const
+{
+	// THE PARENT HIDES ONLY WHERE IT IS THE TREE. In a real hierarchy the list SHOWS the structure by
+	// being a tree, so a Parent column beside it repeats what the indentation already says — folders, and
+	// items (a chart of accounts). Where a parent is only recorded (ParentOnly, no longer offered) it is an
+	// ordinary fact, and hiding it would leave the one thing that arrangement exists for invisible.
+	//
+	// ⏳ Left as the DECLARED question on purpose (2026-08-13). `GetHierarchyColumn()` now answers
+	// `HasParentLink()`, so a ParentOnly source CAN be shown as a tree — but only in a tree view,
+	// and whether the list is one is the FRONTEND's answer (`flatView`), which no metaobject can give.
+	// Asking `HasParentLink()` here would hide the column in a flat view too, taking the structure
+	// away exactly where nothing else shows it. So the two questions stay apart until the visibility
+	// is decided where the view is.
+	const bool parentIsTheTree = IsHierarchical();
+
+	for (const ibValueMetaObjectAttributeBase* a : GetGenericAttributeArrayObject()) {
+		if (a == nullptr) continue;
+		const ibMetaID id = a->GetMetaID();
+		const bool hidden = IsDataReference(id) || IsDataDeletionMark(id) || IsDataVersion(id)
+		                 || IsDataPredefinedName(id) || IsDataFolder(id)
+		                 || (IsDataParent(id) && parentIsTheTree);
+		explorer.AppendColumn(a->GetQueryColumn(), /*enabled*/true, /*visible*/ !hidden);
+	}
+
+	// ⭐ AND NO MOMENT HERE. A moment is a DATE plus the record standing at it, and a catalogue has no
+	// date — there is nothing to build one from (Max, 2026-08-23: "catalogues have no point in time").
+	// It belongs to what registers movements: a document is written AT a moment, and "everything up to
+	// this document" is the question the whole of accounting is asked in. Offering the field on a
+	// source that cannot answer it is a name that reads as empty forever.
+}
+
+// SELECT value — a record's picker value = its REFERENCE cell, read from the row's DEFAULT columns by the
+// reference attribute's metaID (the metaobject knows it; the reference is always among the default columns). On the
+// ref base, so catalog / document / enum / charts all get it. Lifted from the list models' GetItemSelectValue.
+ibValue ibValueMetaObjectRecordDataRef::GetSelectValue(const ibRowMetaValues& rowValues) const
+{
+	ibValue refVal;
+	if (const ibValueMetaObjectAttributePredefined* ref = GetDataReference()) {
+		const ibRowMetaValues::const_iterator it = rowValues.find(ref->GetMetaID());
+		if (it != rowValues.end())
+			refVal = it->second;
+	}
+	return refVal;
+}
+
+// ITEM KEY — a record's identity = its REFERENCE guid, read from the same reference cell GetSelectValue reads. On
+// the ref base, so catalog / document / enum / charts all share it. A register overrides with the composite key.
+ibUniqueKey ibValueMetaObjectRecordDataRef::GetItemKey(const ibRowMetaValues& rowValues) const
+{
+	if (const ibValueMetaObjectAttributePredefined* ref = GetDataReference()) {
+		const ibRowMetaValues::const_iterator it = rowValues.find(ref->GetMetaID());
+		if (it != rowValues.end()) {
+			ibValueReferenceDataObject* refObj = nullptr;
+			if (it->second.ConvertToValue(refObj) && refObj != nullptr)
+				return ibUniqueKey(refObj->GetGuid());
+		}
+	}
+	return ibUniqueKey();
+}
+
+// ---------------------------------------------------------------------------------------------------------
+// THE ROW'S STATE PICTURE — what a list's first column shows at its left. Read off the row's cells by the kind
+// that owns them, as the key is: the list knows no metadata and asks through the source descriptor.
+// ---------------------------------------------------------------------------------------------------------
+
+// A flag of the row, by the attribute that holds it. A row that does not carry the cell (an arrangement without
+// groups has no folder column) answers false - the ordinary state, not an error.
+static bool ibRowFlag(const ibRowMetaValues& rowValues, const ibValueMetaObjectAttributePredefined* attribute)
+{
+	if (attribute == nullptr)
+		return false;
+	const ibRowMetaValues::const_iterator it = rowValues.find(attribute->GetMetaID());
+	return it != rowValues.end() && it->second.GetBoolean();
+}
+
+ibPictureID ibValueMetaObjectRecordDataMutableRef::GetRowPicture(const ibRowMetaValues& rowValues) const
+{
+	return ibRowFlag(rowValues, GetDataDeletionMark()) ? g_picRowItemDeletedCLSID : g_picRowItemCLSID;
+}
+
+ibPictureID ibValueMetaObjectRecordDataHierarchyMutableRef::GetRowPicture(const ibRowMetaValues& rowValues) const
+{
+	if (ibRowFlag(rowValues, GetDataIsFolder()))
+		return ibRowFlag(rowValues, GetDataDeletionMark()) ? g_picRowFolderDeletedCLSID : g_picRowFolderCLSID;
+	return ibValueMetaObjectRecordDataMutableRef::GetRowPicture(rowValues);
+}
+
+// ---------------------------------------------------------------------------------------------------------
+// Writeable-record BASE (MutableRef) — the command set + execution of the ref list models, lifted onto the
+// metaobject so a metadata-blind dynamic list reaches it through the source descriptor. Execute is BY KEY (the
+// front-owned row's handle) + srcForm (parent / to refresh). Hierarchy adds AddFolder, Document adds Post.
+// ---------------------------------------------------------------------------------------------------------
+void ibValueMetaObjectRecordDataMutableRef::GetCommandCollection(const ibFormID& /*formType*/, std::vector<ibCommandItem>& commands) const
+{
+	commands.emplace_back(eAddValue,     wxT("Add"),          _("Add"),           g_picAddCLSID,          true);
+	commands.emplace_back(eCopyValue,    wxT("Copy"),         _("Copy"),          g_picCopyCLSID);
+	commands.emplace_back(eEditValue,    wxT("Edit"),         _("Edit"),          g_picEditCLSID);
+	commands.emplace_back(eDeleteValue,  wxT("Delete"),       _("Delete"),        g_picDeleteCLSID);
+	commands.emplace_back(eMarkAsDeleteValue, wxT("MarkAsDelete"), _("Mark as delete"), g_picMarkAsDeleteCLSID, true);
+}
+
+// ⭐⭐ BORN MATCHING THE LIST IT WAS ADDED TO — see ibChoiceLinkResolver::Fill. ONE place, because a record is
+// added from three handlers below (a flat record, a hierarchical one, a register's) and the rule is the same for
+// all of them. Written into two of them, the one left out was the HIERARCHICAL catalog — contracts kept in
+// folders, which is exactly the list a choice narrows by owner — so a contract added there was never born with
+// its counterparty, and the journal never once showed `choice.fill 'Contracts'` (2026-09-23).
+static void ibFillFromTheList(ibSourceDataObject* obj, const ibBackendValueForm* srcForm)
+{
+	if (obj == nullptr || srcForm == nullptr)
+		return;
+	ibChoiceHolder holder(obj);
+	ibChoiceLinkResolver::Fill(holder, srcForm->GetFormRequest().m_create);
+}
+
+void ibValueMetaObjectRecordDataMutableRef::CallAsCommand(ibActionID id, const ibUniqueKey& /*anchor*/, const ibUniqueKey& key, ibBackendValueForm* srcForm) const
+{
+	try {
+		switch (id)
+		{
+		case eAddValue: {
+			ibValuePtr<ibValueRecordDataObjectRef> obj(CreateObjectValue());
+			if (obj != nullptr) {
+				ibFillFromTheList(obj, srcForm);
+				obj->ShowFormValue(ibFormRequest(), dynamic_cast<ibBackendControlFrame*>(srcForm));
+			}
+			break;
+		}
+		case eCopyValue: {
+			if (!key.IsOk()) return;
+			ibValuePtr<ibValueRecordDataObjectRef> obj(CopyObjectValue(key));
+			if (obj != nullptr) obj->ShowFormValue(ibFormRequest(), dynamic_cast<ibBackendControlFrame*>(srcForm));
+			break;
+		}
+		case eEditValue:
+			ShowValueByKey(key, srcForm);
+			break;
+		case eDeleteValue: {
+			if (!key.IsOk()) return;
+			ibValuePtr<ibValueRecordDataObjectRef> obj(CreateObjectValue(key));
+			if (obj != nullptr) obj->DeleteObject();
+			if (srcForm != nullptr) srcForm->UpdateForm();
+			break;
+		}
+		case eMarkAsDeleteValue: {
+			if (!key.IsOk()) return;
+			ibValuePtr<ibValueRecordDataObjectRef> obj(CreateObjectValue(key));
+			if (obj != nullptr) obj->SetDeletionMark(true);
+			if (srcForm != nullptr) srcForm->UpdateForm();
+			break;
+		}
+		}
+	}
+	// The BASE, not ibBackendCoreException — an access deny / lock conflict is an ibBackendException
+	// as well, and catching only Core sent those into the catch(...) below: the command failed and
+	// the user was told nothing. (Same fix in every command / show entry point in this file.)
+	//
+	// 🛑⭐⭐ AND IT IS `Message`, NOT `Alert` — the engine does not raise modals, and this was sixteen
+	// places where it did. The platform's own rule says so (CLAUDE.md): the only modals left in the
+	// backend are Alert / Question, and they exist because a SCRIPT asked for one. Nobody asked for
+	// this one: it is the engine reporting that a command failed.
+	//
+	// The cost was not theoretical. A module that does not compile — `Var is not found` — stopped
+	// the whole application on a dialog captioned "Warning", in front of somebody who had merely
+	// opened a list (Max, 2026-09-04: *"the warning is unnecessary"*). Worse, a modal answers to
+	// nobody when the caller is not a person: an assistant, a job or the web server simply hangs
+	// there. The pane says the same sentence, in red, and the run carries on.
+	//
+	// ⚠ Level Error, not the default Information: a failed command IS an error, and a reader
+	// filtering the pane for problems must find it there.
+	catch (const ibBackendInterruptException&) {}   // the user stopped it — nothing to report
+	catch (const ibBackendException&) {}   // already reported where it happened - see ProcessExceptionError
+	catch (...) { ibJournalError(wxT("metadata.action"),wxT("ibValueMetaObjectRecordDataMutableRef::CallAsCommand: unhandled non-ibBackend exception swallowed")); }
+}
+
+void ibValueMetaObjectRecordDataMutableRef::ShowValueByKey(const ibUniqueKey& key, ibBackendValueForm* srcForm) const
+{
+	if (!key.IsOk()) return;
+	try {
+		const ibValuePtr<ibValueRecordDataObjectRef> obj(CreateObjectValue(key));
+		if (obj != nullptr) obj->ShowFormValue(ibFormRequest(), dynamic_cast<ibBackendControlFrame*>(srcForm));
+	}
+	catch (const ibBackendInterruptException&) {}
+	catch (const ibBackendException&) {}   // already reported where it happened - see ProcessExceptionError
+	catch (...) { ibJournalError(wxT("metadata.action"),wxT("ibValueMetaObjectRecordDataMutableRef::ShowValueByKey: unhandled non-ibBackend exception swallowed")); }
+}
+
+// Hierarchy override — the writeable base set PLUS AddFolder, gated by the source actually having folders (a folder
+// column), so a flat catalog reaching here shows none. eAddFolder opens a NEW folder form; the rest goes to the
+// base. NOTE: parent-nesting (create inside the selected folder) is model-side (ResolveParentForNew reads the
+// node) — the key-only command interface creates at root for now; the opened form lets the user set parent.
+void ibValueMetaObjectRecordDataHierarchyMutableRef::GetCommandCollection(const ibFormID& formType, std::vector<ibCommandItem>& commands) const
+{
+	// AddFolder goes FIRST (as in the legacy folder list), then the writeable base set. Only the
+	// folders-and-items arrangement offers it: an ITEM hierarchy (a chart of accounts) is a flat list plus
+	// an attribute saying which account this one sits under, and a FLAT list has neither part — in both
+	// there is no second kind of node to create. The DECLARATION is what is asked; the IsFolder attribute
+	// follows it (ApplyHierarchyType disables it where there are no folders).
+	if (HasFolders() && GetDataIsFolder() != nullptr)
+		commands.emplace_back(eAddFolder, wxT("AddFolder"), _("Add folder"), g_picAddFolderCLSID, true);
+	ibValueMetaObjectRecordDataMutableRef::GetCommandCollection(formType, commands);   // Add/Copy/Edit/Delete/MarkAsDelete
+}
+
+void ibValueMetaObjectRecordDataHierarchyMutableRef::CallAsCommand(ibActionID id, const ibUniqueKey& anchor, const ibUniqueKey& key, ibBackendValueForm* srcForm) const
+{
+	if (id == eAddFolder || id == eAddValue) {
+		// CREATE always anchors on the ANCHOR (never the selected row): the front computed it per view mode — a
+		// hierarchy list gives the top element, a tree gives the folder the user is standing in, a flat list gives
+		// none. A folder anchor → the new value lands INSIDE it (parent = the folder itself); an item anchor → the
+		// new value is its SIBLING (parent = the item's own parent); an empty anchor → the catalog root. The command
+		// interface is by-KEY, so the anchor's own IsFolder / Parent / Reference come from one point load of it.
+		const ibUniqueKey& ctxKey = anchor;
+		try {
+			ibValue parent;   // empty → root
+			if (ctxKey.IsOk()) {
+				ibValuePtr<ibValueRecordDataObjectHierarchyRef> sel(CreateObjectValue(ibObjectMode::OBJECT_ITEM, ctxKey.GetGuid()));
+				if (sel != nullptr) {
+					// WHERE THE NEW NODE LANDS depends on what a parent is allowed to be here.
+					//
+					// Folders+items: a folder anchor nests INSIDE it, an item anchor produces a SIBLING —
+					// because an item cannot be a parent at all.
+					// Items: every node may hold children, so the anchor itself is the parent. Falling back
+					// to the anchor's parent here would make "create inside this account" silently create a
+					// neighbour, which is the one outcome that looks like it worked.
+					bool nestInsideAnchor = IsItemHierarchy();
+					if (!nestInsideAnchor && HasFolders()) {   // …and only folders have an IsFolder to ask
+						ibValue isFolder;
+						sel->GetValueByMetaID(GetDataIsFolder()->GetMetaID(), isFolder);
+						nestInsideAnchor = isFolder.GetBoolean();
+					}
+					sel->GetValueByMetaID(nestInsideAnchor ? GetDataReference()->GetMetaID() : GetDataParent()->GetMetaID(), parent);
+				}
+			}
+			const ibObjectMode mode = (id == eAddFolder) ? ibObjectMode::OBJECT_FOLDER : ibObjectMode::OBJECT_ITEM;
+			ibValuePtr<ibValueRecordDataObjectHierarchyRef> obj(CreateObjectValue(mode));
+			if (obj != nullptr) {
+				if (!parent.IsEmpty())
+					obj->SetValueByMetaID(GetDataParent()->GetMetaID(), parent);   // pre-fill the parent from the browsed folder
+				ibFillFromTheList(obj, srcForm);
+				obj->ShowFormValue(ibFormRequest(), dynamic_cast<ibBackendControlFrame*>(srcForm));
+			}
+		}
+		catch (const ibBackendInterruptException&) {}
+		catch (const ibBackendException&) {}   // already reported where it happened - see ProcessExceptionError
+		catch (...) { ibJournalError(wxT("metadata.action"),wxT("ibValueMetaObjectRecordDataHierarchyMutableRef::CallAsCommand: unhandled non-ibBackend exception swallowed")); }
+		return;
+	}
+	ibValueMetaObjectRecordDataMutableRef::CallAsCommand(id, anchor, key, srcForm);   // Copy/Edit/Delete/MarkAsDelete
+}
+
+// ---------------------------------------------------------------------------------------------------------
+// Register BASE — Add/Copy/Edit/Delete for an INDEPENDENT register (no recorder); a recorder-based register
+// (document movements) shows none. Execute / open run through the RECORD MANAGER (by the row's key-pair). Select =
+// the composite record key. Lifted from ibValueListRegisterObject.
+// ---------------------------------------------------------------------------------------------------------
+void ibValueMetaObjectRegisterData::GetCommandCollection(const ibFormID& /*formType*/, std::vector<ibCommandItem>& commands) const
+{
+	if (HasRecorder())   // recorder-based register (document movements) — no independent commands
+		return;
+	commands.emplace_back(eAddValue,    wxT("Add"),    _("Add"),    g_picAddCLSID,    true);
+	commands.emplace_back(eCopyValue,   wxT("Copy"),   _("Copy"),   g_picCopyCLSID);
+	commands.emplace_back(eEditValue,   wxT("Edit"),   _("Edit"),   g_picEditCLSID);
+	commands.emplace_back(eDeleteValue, wxT("Delete"), _("Delete"), g_picDeleteCLSID);
+}
+
+void ibValueMetaObjectRegisterData::CallAsCommand(ibActionID id, const ibUniqueKey& /*anchor*/, const ibUniqueKey& key, ibBackendValueForm* srcForm) const
+{
+	if (!HasRecordManager())
+		return;
+	try {
+		switch (id)
+		{
+		case eAddValue: {
+			ibValuePtr<ibValueRecordManagerObject> obj(CreateRecordManagerObjectValue());
+			if (obj != nullptr) {
+				ibFillFromTheList(obj, srcForm);   // a register record: the slice it was added in is what it belongs to
+				obj->ShowFormValue(ibFormRequest(), dynamic_cast<ibBackendControlFrame*>(srcForm));
+			}
+			break;
+		}
+		case eCopyValue: {
+			if (!key.IsOk()) return;
+			ibValuePtr<ibValueRecordManagerObject> obj(CopyRecordManagerObjectValue(ibUniqueKeyPair(key.GetKeyValues())));
+			if (obj != nullptr) obj->ShowFormValue(ibFormRequest(), dynamic_cast<ibBackendControlFrame*>(srcForm));
+			break;
+		}
+		case eEditValue: {
+			if (!key.IsOk()) return;
+			ibValuePtr<ibValueRecordManagerObject> obj(CreateRecordManagerObjectValue(ibUniqueKeyPair(key.GetKeyValues())));
+			if (obj != nullptr) obj->ShowFormValue(ibFormRequest(), dynamic_cast<ibBackendControlFrame*>(srcForm));
+			break;
+		}
+		case eDeleteValue: {
+			if (!key.IsOk()) return;
+			ibValuePtr<ibValueRecordManagerObject> obj(CreateRecordManagerObjectValue(ibUniqueKeyPair(key.GetKeyValues())));
+			if (obj != nullptr) obj->DeleteRegister();
+			if (srcForm != nullptr) srcForm->UpdateForm();
+			break;
+		}
+		}
+	}
+	catch (const ibBackendInterruptException&) {}
+	catch (const ibBackendException&) {}   // already reported where it happened - see ProcessExceptionError
+	catch (...) { ibJournalError(wxT("metadata.action"),wxT("ibValueMetaObjectRegisterData::CallAsCommand: unhandled non-ibBackend exception swallowed")); }
+}
+
+// OPEN a register record by key (double-click) — through the record manager, mirroring the eEditValue command.
+//
+// A RECORDER-BASED REGISTER OPENS ITS RECORDER. Its rows are not editable on their own — they belong to the document
+// that wrote them, which is why there is no record manager to raise a form from. What the user is pointing at in that
+// case is the document, and the recorder reference is PART of the row's identity, so it is already in the key: no
+// second lookup, no row node to reach back for.
+void ibValueMetaObjectRegisterData::ShowValueByKey(const ibUniqueKey& key, ibBackendValueForm* srcForm) const
+{
+	if (!key.IsOk())
+		return;
+
+	if (!HasRecordManager()) {
+		if (!HasRecorder())
+			return;                       // neither a record of its own nor a recorder — nothing to open
+		try {
+			const ibValueMetaObjectAttributePredefined* metaRecorder = GetRegisterRecorder();
+			if (metaRecorder == nullptr)
+				return;
+			const ibRowMetaValues& keyValues = key.GetKeyValues();
+			auto it = keyValues.find(metaRecorder->GetMetaID());
+			if (it != keyValues.end()) {
+				ibValue recorderVal = it->second;
+				recorderVal.ShowValue();
+			}
+		}
+		catch (const ibBackendInterruptException&) {}
+		catch (const ibBackendException&) {}   // already reported where it happened - see ProcessExceptionError
+		catch (...) { ibJournalError(wxT("metadata.action"),wxT("ibValueMetaObjectRegisterData::ShowValueByKey: unhandled non-ibBackend exception swallowed")); }
+		return;
+	}
+
+	try {
+		ibValuePtr<ibValueRecordManagerObject> obj(CreateRecordManagerObjectValue(ibUniqueKeyPair(key.GetKeyValues())));
+		if (obj != nullptr) obj->ShowFormValue(ibFormRequest(), dynamic_cast<ibBackendControlFrame*>(srcForm));
+	}
+	catch (const ibBackendInterruptException&) {}
+	catch (const ibBackendException&) {}   // already reported where it happened - see ProcessExceptionError
+	catch (...) { ibJournalError(wxT("metadata.action"),wxT("ibValueMetaObjectRegisterData::ShowValueByKey: unhandled non-ibBackend exception swallowed")); }
+}
+
+// SELECT value for a register — no single reference; the picker value IS the composite RECORD KEY built from the
+// row's dimension cells (the whole value map). Lifted from ibValueListRegisterObject::GetItemSelectValue.
+ibValue ibValueMetaObjectRegisterData::GetSelectValue(const ibRowMetaValues& rowValues) const
+{
+	return CreateRecordKeyObjectValue(rowValues);
+}
+
+// ITEM KEY for a register — no single reference; a register has SEVERAL key columns, so the identity is the
+// COMPOSITE record key built from the row's dimension cells. CreateUniqueKeyPair filters the row to this register's
+// dimensions and seeds the pair (ibUniqueKeyPair IS-A ibUniqueKey — the composite lives in the base, survives by value).
+ibUniqueKey ibValueMetaObjectRegisterData::GetItemKey(const ibRowMetaValues& rowValues) const
+{
+	return CreateUniqueKeyPair(rowValues);
+}
+
+// The record, or the same shaded when it is switched off. A register whose rows carry no activity cell (one
+// written without a recorder) has only active records.
+ibPictureID ibValueMetaObjectRegisterData::GetRowPicture(const ibRowMetaValues& rowValues) const
+{
+	const ibValueMetaObjectAttributePredefined* const active = GetRegisterActive();
+	if (active != nullptr) {
+		const ibRowMetaValues::const_iterator it = rowValues.find(active->GetMetaID());
+		if (it != rowValues.end() && !it->second.IsEmpty() && !it->second.GetBoolean())
+			return g_picRowRecordInactiveCLSID;
+	}
+	return g_picRowRecordCLSID;
+}
+
+// REGISTER variant — all columns (dimensions / resources / period / recorder …) visible by default.
+void ibValueMetaObjectRegisterData::FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const
+{
+	for (const ibValueMetaObjectAttributeBase* a : GetGenericAttributeArrayObject())
+		if (a != nullptr)
+			explorer.AppendColumn(a->GetQueryColumn(), /*enabled*/true, /*visible*/ true);
+}
+
+// (Default presentation sort REMOVED from here — it is now set at LIST CREATION (CreateSourceObject / GetListForm)
+//  as an ordinary serialised, user-editable sort, not a runtime method that re-applies every fetch. — Max 2026-07-11)

@@ -11,7 +11,7 @@ ibPreparedStatementFirebirdWrapper::ibPreparedStatementFirebirdWrapper(ibInterfa
 	m_pDatabase = pDatabase;
 	m_pTransaction = pTransaction;
 
-	m_pStatement = NULL;
+	m_pStatement = 0;
 	m_pParameters = NULL;
 	m_pParameterCollection = NULL;
 	m_bManageStatement = true;
@@ -31,9 +31,15 @@ ibPreparedStatementFirebirdWrapper::~ibPreparedStatementFirebirdWrapper()
 		int nReturn = m_pInterface->GetIscDsqlFreeStatement()(m_Status, &m_pStatement, DSQL_drop);
 		if (nReturn != 0)
 		{
-			wxLogError(wxT("Error calling isc_dsql_free_statement"));
+			// ⭐ DOES NOT RAISE, and it used to — the one site in this driver where the audit ran the
+			// other way. This is a DESTRUCTOR: a statement is most often destroyed while an
+			// exception is already travelling (a bind refused, a query failed), and a throw during
+			// unwinding is std::terminate, not an error report. The whole point of raising a failed
+			// bind is lost if the statement's own cleanup then kills the process instead of letting
+			// the reason reach the caller. Freeing a server-side handle is cleanup and follows the
+			// project's cleanup rule: report, never throw.
 			InterpretErrorCodes();
-			ThrowDatabaseException();
+			ibJournalError(wxT("db.firebird"),wxT("Firebird: isc_dsql_free_statement failed (%s)"), GetErrorMessage());
 		}
 	}
 }
@@ -91,6 +97,15 @@ bool ibPreparedStatementFirebirdWrapper::Prepare()
 		int nParameters = m_pParameters->sqld;
 		free(m_pParameters);
 		m_pParameters = (XSQLDA*)malloc(XSQLDA_LENGTH(nParameters));
+		// Checked like the first allocation above: the old block is already freed, so a failure here
+		// leaves the member NULL and the very next line would write through it.
+		if (m_pParameters == NULL)
+		{
+			SetErrorCode(DATABASE_LAYER_QUERY_RESULT_ERROR);
+			SetErrorMessage(wxT("Out of memory allocating the parameter descriptor"));
+			ThrowDatabaseException();
+			return false;
+		}
 		m_pParameters->version = SQLDA_VERSION1;
 		m_pParameters->sqln = nParameters;
 		nReturn = m_pInterface->GetIscDsqlDescribeBind()(m_Status, &m_pStatement, SQL_DIALECT_CURRENT, m_pParameters);
@@ -102,8 +117,7 @@ bool ibPreparedStatementFirebirdWrapper::Prepare()
 		}
 	}
 
-	m_pParameterCollection = new ibDatatabaseParameterFirebirdCollection(m_pInterface, m_pParameters);
-	m_pParameterCollection->SetEncoding(GetEncoding());
+	m_pParameterCollection = new ibDatabaseParameterFirebirdCollection(m_pInterface, m_pParameters);
 
 	return true;
 }
@@ -124,7 +138,7 @@ void ibPreparedStatementFirebirdWrapper::SetParam(int nPosition, const ibNumber&
 	m_pParameterCollection->SetParam(nPosition, dblValue);
 }
 
-void ibPreparedStatementFirebirdWrapper::SetParam(int nPosition, const wxString& strValue)
+void ibPreparedStatementFirebirdWrapper::SetParam(int nPosition, const ibString& strValue)
 {
 	m_pParameterCollection->SetParam(nPosition, strValue);
 }
@@ -139,9 +153,9 @@ void ibPreparedStatementFirebirdWrapper::SetParam(int nPosition, const void* pDa
 	m_pParameterCollection->SetParam(nPosition, pData, nDataLength);
 }
 
-void ibPreparedStatementFirebirdWrapper::SetParam(int nPosition, const wxDateTime& dateValue)
+void ibPreparedStatementFirebirdWrapper::SetParam(int nPosition, const ibDateTimeParts& date)
 {
-	m_pParameterCollection->SetParam(nPosition, dateValue);
+	m_pParameterCollection->SetParam(nPosition, date);
 }
 
 void ibPreparedStatementFirebirdWrapper::SetParam(int nPosition, bool bValue)
@@ -215,6 +229,13 @@ ibDatabaseResultSet* ibPreparedStatementFirebirdWrapper::DoRunQueryWithResults()
 	ResetErrorCodes();
 
 	XSQLDA* pOutputSqlda = (XSQLDA*)malloc(XSQLDA_LENGTH(1));
+	if (pOutputSqlda == NULL)
+	{
+		SetErrorCode(DATABASE_LAYER_QUERY_RESULT_ERROR);
+		SetErrorMessage(wxT("Out of memory allocating the result descriptor"));
+		ThrowDatabaseException();
+		return NULL;
+	}
 	pOutputSqlda->sqln = 1;
 	pOutputSqlda->version = SQLDA_VERSION1;
 
@@ -232,6 +253,13 @@ ibDatabaseResultSet* ibPreparedStatementFirebirdWrapper::DoRunQueryWithResults()
 		int nColumns = pOutputSqlda->sqld;
 		free(pOutputSqlda);
 		pOutputSqlda = (XSQLDA*)malloc(XSQLDA_LENGTH(nColumns));
+		if (pOutputSqlda == NULL)
+		{
+			SetErrorCode(DATABASE_LAYER_QUERY_RESULT_ERROR);
+			SetErrorMessage(wxT("Out of memory allocating the result descriptor"));
+			ThrowDatabaseException();
+			return NULL;
+		}
 		pOutputSqlda->sqln = nColumns;
 		pOutputSqlda->version = SQLDA_VERSION1;
 		nReturn = m_pInterface->GetIscDsqlDescribe()(m_Status, &m_pStatement, SQL_DIALECT_CURRENT, pOutputSqlda);
@@ -246,26 +274,15 @@ ibDatabaseResultSet* ibPreparedStatementFirebirdWrapper::DoRunQueryWithResults()
 
 	// Create the result set object
 	ibDatabaseResultSetFirebird* pResultSet = new ibDatabaseResultSetFirebird(m_pInterface, m_pDatabase, m_pTransaction, m_pStatement, pOutputSqlda);
-	if (pResultSet)
-		pResultSet->SetEncoding(GetEncoding());
 	if (pResultSet->GetErrorCode() != DATABASE_LAYER_OK)
 	{
 		SetErrorCode(pResultSet->GetErrorCode());
 		SetErrorMessage(pResultSet->GetErrorMessage());
 
-		// Wrap the result set deletion in try/catch block if using exceptions.
-		// We want to make sure the original error gets to the user
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-		try
-		{
-#endif
-			delete pResultSet;
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-		}
-		catch (ibDatabaseLayerException& e)
-		{
-		}
-#endif
+		// Swallow a possible throw from ~ibDatabaseResultSet — the
+		// original isc_dsql_* error must reach the caller via
+		// ThrowDatabaseException; secondary cleanup throw would mask it.
+		try { delete pResultSet; } catch (const ibBackendException&) {}
 
 		ThrowDatabaseException();
 	}
@@ -285,19 +302,10 @@ ibDatabaseResultSet* ibPreparedStatementFirebirdWrapper::DoRunQueryWithResults()
 	{
 		InterpretErrorCodes();
 
-		// Wrap the result set deletion in try/catch block if using exceptions.
-		//We want to make sure the isc_dsql_execute2 error gets to the user
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-		try
-		{
-#endif
-			delete pResultSet;
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-		}
-		catch (ibDatabaseLayerException& e)
-		{
-		}
-#endif
+		// Swallow on cleanup — isc_dsql_execute2 error above is the
+		// user-visible one (ThrowDatabaseException below); a secondary
+		// throw from the result-set dtor would mask it.
+		try { delete pResultSet; } catch (const ibBackendException&) {}
 		ThrowDatabaseException();
 		return NULL;
 	}
@@ -308,20 +316,30 @@ ibDatabaseResultSet* ibPreparedStatementFirebirdWrapper::DoRunQueryWithResults()
 	return pResultSet;
 }
 
+// Asked on every execution (DoRunQuery), of a text that never changes — so the first word is read where it
+// lies: no copy of the statement, and not the whole of it upper-cased to look at seven characters. Every row a
+// batched write runs through a prepared INSERT paid that (4 of 56 samples of a 40-thousand-employee posting,
+// 2026-09-12, Debug). Same answer: leading white space skipped, then "SELECT " in any case.
 bool ibPreparedStatementFirebirdWrapper::IsSelectQuery()
 {
-	wxString strLocalCopy = m_strSQL;
-	strLocalCopy.Trim(false);
-	strLocalCopy.MakeUpper();
-	return strLocalCopy.StartsWith(wxT("SELECT "));
+	static const wchar_t kSelect[] = L"SELECT ";
+	const std::wstring& text = m_strSQL.ToStdWstring();
+	size_t at = 0;
+	while (at < text.size() && wxIsspace(text[at]))
+		++at;
+	for (size_t i = 0; kSelect[i] != L'\0'; ++i, ++at)
+		if (at >= text.size() || static_cast<wchar_t>(wxToupper(text[at])) != kSelect[i])
+			return false;
+	return true;
 }
 
 void ibPreparedStatementFirebirdWrapper::InterpretErrorCodes()
 {
-	wxLogDebug(wxT("FirebirdPreparesStatementWrapper::InterpretErrorCodes()\n"));
+	ibJournalInfo(wxT("db.firebird"),wxT("FirebirdPreparesStatementWrapper::InterpretErrorCodes()\n"));
 
 	long nSqlCode = m_pInterface->GetIscSqlcode()(m_Status);
-	SetErrorCode(ibDatabaseLayerFirebird::TranslateErrorCode(nSqlCode));
+	// A system error by its status code, as the layer records one (an interrupted statement is isc_cancelled).
+	SetErrorCode(ibDatabaseLayerFirebird::TranslateErrorCode(nSqlCode < -900 ? (int)m_Status[1] : (int)nSqlCode));
 	SetErrorMessage(ibDatabaseLayerFirebird::TranslateErrorCodeToString(m_pInterface, nSqlCode, m_Status));
 }
 

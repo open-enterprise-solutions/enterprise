@@ -1,5 +1,6 @@
 #include "odbcParameter.h"
 #include "backend/databaseLayer/databaseLayer.h"
+#include "backend/backend_exception.h"
 
 #include <sqlext.h>
 
@@ -9,7 +10,7 @@ ibDatabaseParameterODBC::ibDatabaseParameterODBC() : m_nParameterType(ibDatabase
 	m_nBufferLength = SQL_NULL_DATA;
 }
 
-ibDatabaseParameterODBC::ibDatabaseParameterODBC(const wxString& strValue) : m_nParameterType(ibDatabaseParameterODBC::PARAM_STRING), m_strValue(strValue)
+ibDatabaseParameterODBC::ibDatabaseParameterODBC(const ibString& strValue) : m_nParameterType(ibDatabaseParameterODBC::PARAM_STRING), m_strValue(strValue)
 {
 	m_nBufferLength = GetEncodedStreamLength(m_strValue);
 }
@@ -34,16 +35,19 @@ ibDatabaseParameterODBC::ibDatabaseParameterODBC(bool bValue) : m_nParameterType
 	m_nBufferLength = 0;
 }
 
-ibDatabaseParameterODBC::ibDatabaseParameterODBC(const wxDateTime& dateValue) : m_nParameterType(ibDatabaseParameterODBC::PARAM_DATETIME)
+ibDatabaseParameterODBC::ibDatabaseParameterODBC(const ibDateTimeParts& date) : m_nParameterType(ibDatabaseParameterODBC::PARAM_DATETIME)
 {
-	m_DateValue.year = dateValue.GetYear();
-	m_DateValue.month = dateValue.GetMonth() + 1;
-	m_DateValue.day = dateValue.GetDay();
+	m_DateValue.year = static_cast<SQLSMALLINT>(date.m_year);
+	m_DateValue.month = static_cast<SQLUSMALLINT>(date.m_month);
+	m_DateValue.day = static_cast<SQLUSMALLINT>(date.m_day);
 
-	m_DateValue.hour = dateValue.GetHour();
-	m_DateValue.minute = dateValue.GetMinute();
-	m_DateValue.second = dateValue.GetSecond();
-	m_DateValue.fraction = dateValue.GetMillisecond();
+	m_DateValue.hour = static_cast<SQLUSMALLINT>(date.m_hour);
+	m_DateValue.minute = static_cast<SQLUSMALLINT>(date.m_minute);
+	m_DateValue.second = static_cast<SQLUSMALLINT>(date.m_second);
+	// TIMESTAMP_STRUCT::fraction counts NANOSECONDS (ODBC); it used to be handed the milliseconds as they
+	// were, a thousandth of the value, and read back the same way - which cancelled out only between two
+	// copies of this driver.
+	m_DateValue.fraction = static_cast<SQLUINTEGER>(date.m_millisecond) * 1000000u;
 
 	m_nBufferLength = 0;
 }
@@ -76,6 +80,18 @@ long* ibDatabaseParameterODBC::GetDataLengthPointer()
 	else return nullptr;
 }
 #endif
+
+void ibDatabaseParameterODBC::RequireDescribable() const
+{
+	switch (m_nParameterType)
+	{
+	case PARAM_STRING: case PARAM_INT:  case PARAM_DOUBLE: case PARAM_NUMBER:
+	case PARAM_DATETIME: case PARAM_BOOL: case PARAM_BLOB: case PARAM_NULL:
+		return;
+	}
+	ibBackendCoreException::Error(
+		_("ODBC: a parameter of kind %d cannot be described for binding"), m_nParameterType);
+}
 
 void* ibDatabaseParameterODBC::GetDataPtr()
 {

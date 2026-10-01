@@ -3,9 +3,6 @@
 #include "backend/appData.h"
 #include "backend/session/session.h"
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValuePreparedStatement, ibValue);
-
-ibValue::ibValueMethodHelper ibValuePreparedStatement::m_methodHelper;
 
 enum
 {
@@ -15,7 +12,7 @@ enum
 };
 
 ibValuePreparedStatement::ibValuePreparedStatement(ibPreparedStatement* preparedStatement) :
-	ibValue(ibValueTypes::TYPE_VALUE), m_preparedStatement(preparedStatement)
+	ibValueStaticMembers(ibValueTypes::TYPE_VALUE), m_preparedStatement(preparedStatement)
 {
 }
 
@@ -25,13 +22,12 @@ ibValuePreparedStatement::~ibValuePreparedStatement()
 		ses_query->CloseStatement(m_preparedStatement);
 }
 
-void ibValuePreparedStatement::PrepareNames() const
+void ibValuePreparedStatement_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
 {
-	m_methodHelper.ClearHelper();
-	m_methodHelper.AppendProc(wxT("SetParam"), 2, wxT("SetParam(number: position, any: value)"));
+	helper.AppendProc(wxT("SetParam"), 2, wxT("SetParam(number: position, any: value)"));
 
-	m_methodHelper.AppendFunc(wxT("RunQuery"), 1, wxT("RunQuery()"));
-	m_methodHelper.AppendFunc(wxT("RunQueryWithResults"), 1, wxT("RunQueryWithResults()"));
+	helper.AppendFunc(wxT("RunQuery"), 1, wxT("RunQuery()"));
+	helper.AppendFunc(wxT("RunQueryWithResults"), 1, wxT("RunQueryWithResults()"));
 }
 
 #include "backend/backend_exception.h"
@@ -52,11 +48,11 @@ bool ibValuePreparedStatement::CallAsFunc(const long lMethodNum, ibValue& pvarRe
 				ibBackendCoreException::Error(ibBackendCoreException::GetLastError());
 				return false;
 			}
-			pvarRetValue = ibValue::CreateAndPrepareValueRef<ibValueResultSet>(resultSet);
+			pvarRetValue = new ibValueResultSet(resultSet);
 			return true;
 		}
 
-		pvarRetValue = ibValue::CreateAndPrepareValueRef<ibValueResultSet>();
+		pvarRetValue = new ibValueResultSet();
 		return true;
 	}
 
@@ -78,7 +74,7 @@ bool ibValuePreparedStatement::CallAsProc(const long lMethodNum, ibValue** paPar
 		else if (paParams[1]->GetType() == ibValueTypes::TYPE_NUMBER)
 			m_preparedStatement->SetParamNumber(position, paParams[1]->GetNumber());
 		else if (paParams[1]->GetType() == ibValueTypes::TYPE_DATE)
-			m_preparedStatement->SetParamDate(position, paParams[1]->GetDateTime());
+			m_preparedStatement->SetParamDate(position, paParams[1]->GetDate());
 		else if (paParams[1]->GetType() == ibValueTypes::TYPE_STRING)
 			m_preparedStatement->SetParamString(position, paParams[1]->GetString());
 		else
@@ -94,4 +90,4 @@ bool ibValuePreparedStatement::CallAsProc(const long lMethodNum, ibValue** paPar
 //*                       Runtime register                             *
 //**********************************************************************
 
-SYSTEM_TYPE_REGISTER(ibValuePreparedStatement, "DatabasePreparedStatement", string_to_clsid("VL_DBPS"));
+SYSTEM_TYPE_REGISTER(ibValuePreparedStatement, "DatabasePreparedStatement", system_to_clsid("VL_DBPS"));

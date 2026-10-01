@@ -8,11 +8,11 @@
 
 ///////////////////////////////////////////////////////////////////
 
-ibFrontendDocMDIFrameEnterprise* ibFrontendDocMDIFrameEnterprise::GetFrame() {
-	ibFrontendDocMDIFrame* instance = ibFrontendDocMDIFrame::GetFrame();
+ibFrontendMainFrameEnterprise* ibFrontendMainFrameEnterprise::GetFrame() {
+	ibFrontendMainFrame* instance = ibFrontendMainFrame::GetFrame();
 	if (instance != nullptr) {
-		ibFrontendDocMDIFrameEnterprise* enterprise_instance =
-			dynamic_cast<ibFrontendDocMDIFrameEnterprise*>(instance);
+		ibFrontendMainFrameEnterprise* enterprise_instance =
+			dynamic_cast<ibFrontendMainFrameEnterprise*>(instance);
 		wxASSERT(enterprise_instance);
 		return enterprise_instance;
 	}
@@ -21,16 +21,17 @@ ibFrontendDocMDIFrameEnterprise* ibFrontendDocMDIFrameEnterprise::GetFrame() {
 
 ///////////////////////////////////////////////////////////////////
 
-ibFrontendDocMDIFrameEnterprise::ibFrontendDocMDIFrameEnterprise(const wxString& title,
+ibFrontendMainFrameEnterprise::ibFrontendMainFrameEnterprise(ibSessionHolder&& holder,
+	const wxString& title,
 	const wxPoint& pos,
 	const wxSize& size) :
-	ibFrontendDocMDIFrame(title, pos, size),
+	ibFrontendMainFrame(std::move(holder), title, pos, size),
 	m_outputWindow(new ibOutputWindow(this, wxID_ANY))
 {
-	m_docManager = new ibMetaDocManagerEnterprise;
+	m_docManager = new ibDocManagerEnterprise;
 }
 
-ibFrontendDocMDIFrameEnterprise::~ibFrontendDocMDIFrameEnterprise()
+ibFrontendMainFrameEnterprise::~ibFrontendMainFrameEnterprise()
 {
 	wxDELETE(m_docManager);
 }
@@ -41,7 +42,7 @@ ibFrontendDocMDIFrameEnterprise::~ibFrontendDocMDIFrameEnterprise()
 #include "backend/appData.h"
 #include "backend/session/sessionRegistry.h"
 
-void ibFrontendDocMDIFrameEnterprise::BackendError(const wxString& strFileName, const wxString& strDocPath, const long currLine, const wxString& strErrorMessage) const
+void ibFrontendMainFrameEnterprise::BackendError(const wxString& strFileName, const wxString& strDocPath, const long currLine, const wxString& strErrorMessage) const
 {
 	//open error dialog
 	std::shared_ptr<ibDialogError> errDlg(new ibDialogError(mainFrame, wxID_ANY));
@@ -52,13 +53,15 @@ void ibFrontendDocMDIFrameEnterprise::BackendError(const wxString& strFileName, 
 	//get error code
 	const int retCode = errDlg->ShowModal();
 
-	//send message to enterprise
-	if (retCode == 1) {
-		outputWindow->OutputError(strErrorMessage);
-	}
+	// ⭐ THE THREE ANSWERS ARE CUMULATIVE, and the code read them as exclusive. "Close window" keeps
+	// the error in the pane below; "Go to designer" does that AND sends the line to whoever is
+	// editing it; "Close program" does both AND ends the run. Read as a switch, the second answer
+	// silently dropped the notice and the third dropped everything but the exit — so choosing to
+	// leave was also choosing to lose the reason for leaving.
+	outputWindow->OutputError(strErrorMessage);
 
 	//send error to designer
-	if (retCode == 2) {
+	if (debugServer != nullptr && (retCode == 2 || retCode == 3)) {
 		debugServer->SendErrorToClient(
 			strFileName,
 			strDocPath,
@@ -67,24 +70,24 @@ void ibFrontendDocMDIFrameEnterprise::BackendError(const wxString& strFileName, 
 		);
 	}
 
-	//close window — force-close every session the registry owns:
-	// each session's m_forceExit flag interrupts any running script,
-	// OnForceExit (overridden on ibGUISession) schedules wxTheApp::Exit
-	// once, Remove submitted for each session row. GUI ends with the
-	// app exiting through wx's normal teardown.
+	//close window — force-close every session the registry owns: the
+	// force flag interrupts any running script and each session closes
+	// its own window without asking. The app then ends through wx's
+	// normal teardown, and each window's holder release removes its row.
 	if (retCode == 3) {
-		ibSessionRegistry::Instance().CloseAll(true);
+		if (auto* reg = ibApplicationInstance::GetSessionRegistry())
+			reg->CloseAll(true);
 	}
 }
 
-void ibFrontendDocMDIFrameEnterprise::CreateGUI()
+void ibFrontendMainFrameEnterprise::CreateGUI()
 {
 	CreateWideGui();
 }
 
-bool ibFrontendDocMDIFrameEnterprise::Show(bool show)
+bool ibFrontendMainFrameEnterprise::Show(bool show)
 {
-	bool ret = ibFrontendDocMDIFrame::Show(show);
+	bool ret = ibFrontendMainFrame::Show(show);
 	if (ret) {
 		if (!outputWindow->IsEmpty()) {
 			outputWindow->SetFocus();
@@ -101,26 +104,46 @@ bool ibFrontendDocMDIFrameEnterprise::Show(bool show)
 #include "backend/session/session.h"
 #include "backend/moduleManager/moduleManager.h"
 
-bool ibFrontendDocMDIFrameEnterprise::AllowRun() const
+// The enterprise window is the one with a full runtime behind it, so
+// both of its boundaries fire script events on the session's root.
+
+#include "frontend/docView/templates/docViewHomePage.h"
+
+void ibFrontendMainFrameEnterprise::CreateStartupPage()
 {
-	// StartMainModule fires BeforeStart / OnStart on the session's
-	// root. BeforeStart veto returns false → frame show blocked.
-	if (ibSession* s = GetSession()) {
-		if (auto* root = s->GetManagerModule())
-			return root->StartMainModule();
-	}
-	return false;
+	// The start page — a composite tab of the forms the configuration attached to it. Opens
+	// nothing when the configuration attached none. Created AFTER BeforeStart / OnStart; its
+	// tab is locked, so it takes the head of the notebook regardless of what the script
+	// opened before it.
+	ibHomePageDocument::ShowHomePage();
 }
 
-bool ibFrontendDocMDIFrameEnterprise::AllowClose() const
+bool ibFrontendMainFrameEnterprise::AllowRun()
 {
-	// ExitMainModule fires BeforeExit / OnExit. BeforeExit veto blocks
-	// close (user sees "cancelled by script" banner / modal).
-	if (ibSession* s = GetSession()) {
-		if (auto* root = s->GetManagerModule())
-			return root->ExitMainModule();
-	}
-	return false;
+	// StartMainModule fires BeforeStart / OnStart. A BeforeStart veto —
+	// or no runtime at all — would leave a half-alive client, so refuse.
+	ibSession* s = GetSession();
+	auto* root = s != nullptr ? s->GetManagerModule() : nullptr;
+	return root != nullptr && root->StartMainModule();
+}
+
+bool ibFrontendMainFrameEnterprise::AllowClose()
+{
+	// Documents first (base), script second: a document that refuses
+	// stops us before BeforeExit runs — no point asking the script about
+	// an exit that is not going to happen.
+	if (!ibFrontendMainFrame::AllowClose())
+		return false;
+
+	// ExitMainModule fires BeforeExit / OnExit. It runs HERE — window,
+	// runtime and session all alive — so the script can still save,
+	// message and query, and BeforeExit can still cancel.
+	//
+	// No runtime ⇒ allow. Refusing on a missing root (startup failed
+	// before compile) would trap the user in an unclosable window.
+	ibSession* const s = GetSession();
+	auto* root = s != nullptr ? s->GetManagerModule() : nullptr;
+	return root == nullptr || root->ExitMainModule();
 }
 
 ///////////////////////////////////////////////////////////////////////////

@@ -1,16 +1,18 @@
-﻿#ifndef __DATA_PROCESSOR_H__
+#ifndef __DATA_PROCESSOR_H__
 #define __DATA_PROCESSOR_H__
 
 #include "commonObject.h"
 
 class ibValueMetaObjectDataProcessor : public ibValueMetaObjectRecordDataExt {
-	wxDECLARE_DYNAMIC_CLASS(ibValueMetaObjectDataProcessor);
-public:
+	public:
 
+	// Its own menu ids — the same numbering every metatype uses (from 19000, unique only within
+	// one metaobject). Public because the external processor's own toolbar has a button for the
+	// object module and has to say WHICH item of the menu it means.
 	enum
 	{
 		ID_METATREE_OPEN_MODULE = 19000,
-		ID_METATREE_OPEN_MANAGER = 19001,
+		ID_METATREE_OPEN_MANAGER,
 	};
 
 	enum
@@ -41,32 +43,32 @@ public:
 	virtual wxIcon GetIcon() const;
 	static wxIcon GetIconGroup();
 
-	//events: 
+	//events:
 	virtual bool OnCreateMetaObject(ibMetaData* metaData, int flags);
 	virtual bool OnLoadMetaObject(ibMetaData* metaData);
 	virtual bool OnSaveMetaObject(int flags);
 	virtual bool OnDeleteMetaObject();
 
-	//for designer 
+	//for designer
 	virtual bool OnReloadMetaObject();
 
-	//module manager is started or exit 
+	//module manager is started or exit
 	virtual bool OnBeforeRunMetaObject(int flags);
 	virtual bool OnAfterRunMetaObject(int flags);
 
 	virtual bool OnBeforeCloseMetaObject();
 	virtual bool OnAfterCloseMetaObject();
 
-	//form events 
+	//form events
 	virtual void OnCreateFormObject(ibValueMetaObjectFormBase* metaForm);
 	virtual void OnRemoveMetaForm(ibValueMetaObjectFormBase* metaForm);
 
-	//create associate value 
+	//create associate value
 	virtual ibValueMetaObjectFormBase* GetDefaultFormByID(const ibFormID& id) const;
 
 #pragma region _form_builder_h_
 	//suppot form
-	virtual ibBackendValueForm* GetObjectForm(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* ownerControl = nullptr, const ibUniqueKey& formGuid = wxNullGuid) const;
+	virtual ibFormPtr<ibBackendValueForm> GetObjectForm(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr) const;
 #pragma endregion
 
 	//get module object in compose object
@@ -74,23 +76,23 @@ public:
 	virtual const ibValueMetaObjectCommonModule* GetManagerModule() const { return m_propertyManagerModule->GetMetaObject(); }
 
 	//prepare menu for item
-	virtual bool PrepareContextMenu(wxMenu* defaultMenu);
-	virtual void ProcessCommand(unsigned int id);
+	virtual bool CollectContextMenu(std::vector<ibMetaMenuItem>& items);
 
 protected:
 
 	//create manager
-	virtual ibValueManagerDataObject* CreateManagerDataObjectValue() const;
+	virtual ibValuePtr<ibValueManagerDataObject> CreateManagerDataObjectValue() const;
 
 	//create empty object
-	virtual ibValueRecordDataObjectExt* CreateObjectExtValue() const;  //create object
+	virtual ibValuePtr<ibValueRecordDataObjectExt> CreateObjectExtValue() const;  //create object
 
 	//create object data with meta form
-	virtual ibSourceDataObject* CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const;
+	virtual ibSourcePtr<ibSourceDataObject> CreateSourceObject(const ibCreateRequest& request, const ibFormID& form_id) const;
 
-	//load & save metaData from DB 
-	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer);
+	//load & save metaData from DB
+
+	virtual bool ReadData(const ibDataNode& node) override;
+	virtual bool WriteData(ibDataNode& node) const override;
 
 private:
 
@@ -108,11 +110,11 @@ private:
 		return true;
 	}
 
-	ibPropertyInnerModule<ibValueMetaObjectModule>* m_propertyObjectModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectModule>>(m_categoryContext, wxT("ObjectModule"), _("Object module"));
-	ibPropertyInnerModule<ibValueMetaObjectManagerModule>* m_propertyManagerModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectManagerModule>>(m_categoryContext, wxT("ManagerModule"), _("Manager module"));
+	ibPropertyInnerModule<ibValueMetaObjectModule>* m_propertyObjectModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectModule>>(m_categoryContext, wxT("ObjectModule"), _("Object module"), _("Code of one data processor object: the procedures that do its work over its attributes and tabular sections, called from its form or from other code."));
+	ibPropertyInnerModule<ibValueMetaObjectManagerModule>* m_propertyManagerModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectManagerModule>>(m_categoryContext, wxT("ManagerModule"), _("Manager module"), _("Code of the data processor kind as a whole: its exported procedures and functions are called on the manager, as DataProcessors.<Name>.<Function>()."));
 
 	ibPropertyCategory* m_categoryForm = ibPropertyObject::CreatePropertyCategory(wxT("PresetValues"), _("Preset values"));
-	ibPropertyList* m_propertyDefFormObject = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormObject"), _("Default Object Form"), &ibValueMetaObjectDataProcessor::FillFormObject);
+	ibPropertyList* m_propertyDefFormObject = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormObject"), _("Default Object Form"), _("The form the data processor opens with. Empty: a form generated from its attributes."), &ibValueMetaObjectDataProcessor::FillFormObject);
 
 	friend class ibValueRecordDataObjectDataProcessor;
 	friend class ibMetaData;
@@ -121,13 +123,12 @@ private:
 #define default_meta_id 10 //for dataProcessors
 
 class ibValueMetaObjectExternalDataProcessor : public ibValueMetaObjectDataProcessor {
-	wxDECLARE_DYNAMIC_CLASS(ibValueMetaObjectExternalDataProcessor);
-public:
+	public:
 	ibValueMetaObjectExternalDataProcessor() : ibValueMetaObjectDataProcessor() {
 		m_metaId = default_meta_id;
 	}
 
-	//СЃreate from file?
+	//create from file?
 	virtual bool IsExternalCreate() const { return true; }
 };
 
@@ -136,25 +137,40 @@ public:
 //********************************************************************************************
 
 class ibValueRecordDataObjectDataProcessor : public ibValueRecordDataObjectExt {
+	public:
 	ibValueRecordDataObjectDataProcessor(const ibValueMetaObjectDataProcessor* metaObject);
 	ibValueRecordDataObjectDataProcessor(const ibValueRecordDataObjectDataProcessor& source);
 public:
 
-#pragma region _form_builder_h_
-	//support show 
-	virtual void ShowFormValue(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* ownerControl = nullptr);
-	virtual ibBackendValueForm* GetFormValue(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* ownerControl = nullptr);
-#pragma endregion
+	// ShowFormValue / GetFormValue inherited from base. DataProcessor
+	// has a single form-id (eFormDataProcessor) and no CloseOnOwnerClose
+	// behaviour (Ext branch keeps the default OnFormCreated no-op).
+protected:
+	virtual ibFormID GetCurrentObjectFormID() const override {
+		return ibValueMetaObjectDataProcessor::eFormDataProcessor;
+	}
+public:
 
 	//support actionData
-	virtual ibActionCollection GetActionCollection(const ibFormID& formType);
-	virtual void ExecuteAction(const ibActionID& lNumAction, ibBackendValueForm* srcForm);
+	virtual ibStandardCommandSet GetStandardCommands(const ibFormID& formType);
+	virtual void CallAsAction(const ibActionID& lNumAction, ibBackendValueForm* srcForm);
 
 protected:
 
 	friend class ibValue;
 	friend class ibValueMetaObjectDataProcessor;
-	friend class ibValueModuleManagerExternalDataProcessor;
+	friend class ibValueModuleRuntimeManagerExternalDataProcessor;
+};
+
+// External DP value object: regular DP behaviour + RAII ownership of the transient
+// external metadata container, dropped in ibExternalOwnerHelper's dtor. Embedded /
+// config DPs use the plain ibValueRecordDataObjectDataProcessor and never own meta.
+class ibValueRecordDataObjectExternalDataProcessor :
+	public ibValueRecordDataObjectDataProcessor,
+	public ibExternalOwnerHelper {
+public:
+	ibValueRecordDataObjectExternalDataProcessor(const ibValueMetaObjectDataProcessor* metaObject, ibMetaData* ownedMeta = nullptr)
+		: ibValueRecordDataObjectDataProcessor(metaObject), ibExternalOwnerHelper(ownedMeta) {}
 };
 
 #endif

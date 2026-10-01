@@ -4,15 +4,16 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "enumeration.h"
+#include "backend/serialize/dataBuilder.h"
 #include "backend/metaData.h"
-#include "list/objectList.h"
+#include "backend/system/value/valueDynamicList.h"   // ibValueDynamicList — the standard list migrates onto the universal dynamic list
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueMetaObjectEnumeration, ibValueMetaObjectRecordDataEnumRef)
 
 //********************************************************************************************
 
 #include "databaseLayer/databaseLayer.h"
 #include "backend/appData.h"
+#include "backend/metaCollection/partial/declaredPresentation.h"   // how a reference reads in the designer
 
 //********************************************************************************************
 //*                                      metaData                                            *
@@ -21,6 +22,9 @@ wxIMPLEMENT_DYNAMIC_CLASS(ibValueMetaObjectEnumeration, ibValueMetaObjectRecordD
 ibValueMetaObjectEnumeration::ibValueMetaObjectEnumeration() : ibValueMetaObjectRecordDataEnumRef()
 {
 	m_propertyQuickChoice->SetValue(true);
+	
+	(*m_propertyManagerModule)->SetDefaultProcedure(wxT("FormGetProcessing"), ibContentHelper::eProcedureHelper, { wxT("Form"), wxT("Cancel") });
+	(*m_propertyManagerModule)->SetDefaultProcedure(wxT("ChoiceDataGetProcessing"), ibContentHelper::eProcedureHelper, { wxT("ChoiceData"), wxT("Parameters"), wxT("StandardProcessing") });
 }
 
 ibValueMetaObjectEnumeration::~ibValueMetaObjectEnumeration()
@@ -41,83 +45,67 @@ ibValueMetaObjectFormBase* ibValueMetaObjectEnumeration::GetDefaultFormByID(cons
 
 #include "enumerationManager.h"
 
-ibValueManagerDataObject* ibValueMetaObjectEnumeration::CreateManagerDataObjectValue() const
+ibValuePtr<ibValueManagerDataObject> ibValueMetaObjectEnumeration::CreateManagerDataObjectValue() const
 {
-	return ibValue::CreateAndPrepareValueRef<ibValueManagerDataObjectEnumeration>(this);
+	return ibValuePtr<ibValueManagerDataObject>(new ibValueManagerDataObjectEnumeration(this));
 }
 
-ibSourceDataObject* ibValueMetaObjectEnumeration::CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const
+ibSourcePtr<ibSourceDataObject> ibValueMetaObjectEnumeration::CreateSourceObject(const ibCreateRequest& request, const ibFormID& form_id) const
 {
-	switch (metaObject->GetTypeForm())
+	switch (form_id)
 	{
 	case eFormList:
-		return ibValue::CreateAndPrepareValueRef<ibValueListDataObjectEnumRef>(this, metaObject->GetTypeForm());
+		return ibSourcePtr<ibSourceDataObject>(ibCreateList(request, GetQueryable(), GetDataOrder()->GetQueryColumn()));   // migrated onto the universal dynamic list
 	case eFormSelect:
-		return ibValue::CreateAndPrepareValueRef<ibValueListDataObjectEnumRef>(this, metaObject->GetTypeForm(), true);
+		return ibSourcePtr<ibSourceDataObject>(ibCreateList(request, GetQueryable(), GetDataOrder()->GetQueryColumn(), ibDynamicListView_Choice));   // select front-driven — choice mode
 	}
 
 	return nullptr;
 }
 
 #pragma region _form_builder_h_
-ibBackendValueForm* ibValueMetaObjectEnumeration::GetListForm(const wxString& strFormName, ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
+ibFormPtr<ibBackendValueForm> ibValueMetaObjectEnumeration::GetListForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
-		strFormName,
+		request,
 		ibValueMetaObjectEnumeration::eFormList,
-		ownerControl, ibValue::CreateAndPrepareValueRef<ibValueListDataObjectEnumRef>(this, ibValueMetaObjectEnumeration::eFormList),
-		formGuid
+		ownerControl, ibCreateList(request.m_create, GetQueryable(), GetDataOrder()->GetQueryColumn())   // migrated onto the universal dynamic list
 	);
 }
 
-ibBackendValueForm* ibValueMetaObjectEnumeration::GetSelectForm(const wxString& strFormName, ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
+ibFormPtr<ibBackendValueForm> ibValueMetaObjectEnumeration::GetSelectForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
-		strFormName,
+		request,
 		ibValueMetaObjectEnumeration::eFormSelect,
-		ownerControl, ibValue::CreateAndPrepareValueRef<ibValueListDataObjectEnumRef>(this, ibValueMetaObjectEnumeration::eFormSelect, true),
-		formGuid
+		ownerControl, CreateSourceObject(request.m_create, eFormSelect)   // select front-driven — choice mode
 	);
 }
 #pragma endregion
 
-wxString ibValueMetaObjectEnumeration::GetDataPresentation(const ibValueDataObject* objValue) const
-{
-	for (auto obj : GetEnumObjectArray()) {
-		if (objValue->GetGuid() == obj->GetGuid()) {
-			return obj->GetSynonym();
-		}
-	}
-	return wxEmptyString;
-}
 
 //***************************************************************************
 //*                       Save & load metaData                              *
 //***************************************************************************
 
-bool ibValueMetaObjectEnumeration::LoadData(ibReaderMemory& dataReader)
+bool ibValueMetaObjectEnumeration::WriteData(ibDataNode& node) const
 {
-	//Load object module
-	(*m_propertyManagerModule)->LoadMeta(dataReader);
+	node.SetProperty(m_propertyManagerModule->GetName(), m_propertyManagerModule->GetNodeValue());
 
-	//save default form 
-	m_propertyDefFormList->SetValue(GetIdByGuid(dataReader.r_stringZ()));
-	m_propertyDefFormSelect->SetValue(GetIdByGuid(dataReader.r_stringZ()));
+	node.SetValue(m_propertyDefFormList->GetName(), GetGuidByID(m_propertyDefFormList->GetValueAsInteger()).str());
+	node.SetValue(m_propertyDefFormSelect->GetName(), GetGuidByID(m_propertyDefFormSelect->GetValueAsInteger()).str());
 
-	return ibValueMetaObjectRecordDataEnumRef::LoadData(dataReader);
+	return ibValueMetaObjectRecordDataEnumRef::WriteData(node);
 }
 
-bool ibValueMetaObjectEnumeration::SaveData(ibWriterMemory& dataWritter)
+bool ibValueMetaObjectEnumeration::ReadData(const ibDataNode& node)
 {
-	//Save object module
-	(*m_propertyManagerModule)->SaveMeta(dataWritter);
+	m_propertyManagerModule->SetNodeValue(node.GetProperty(m_propertyManagerModule->GetName()));
 
-	//save default form 
-	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormList->GetValueAsInteger()));
-	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormSelect->GetValueAsInteger()));
+	m_propertyDefFormList->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormList->GetName())));
+	m_propertyDefFormSelect->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormSelect->GetName())));
 
-	//create or update table:
-	return ibValueMetaObjectRecordDataEnumRef::SaveData(dataWritter);
+	return ibValueMetaObjectRecordDataEnumRef::ReadData(node);
 }
 
 //***********************************************************************
@@ -147,7 +135,7 @@ bool ibValueMetaObjectEnumeration::OnSaveMetaObject(int flags)
 
 #if _USE_SAVE_METADATA_IN_TRANSACTION == 1
 	if (GetEnumObjectArray().size() == 0) {
-		s_restructureInfo.AppendError(_("! Doesn't have any enumeration ") + GetFullName());
+		RestructureError(_("! Doesn't have any enumeration ") + GetFullName());
 		return false;
 	}
 #endif 
@@ -223,12 +211,12 @@ void ibValueMetaObjectEnumeration::OnRemoveMetaForm(ibValueMetaObjectFormBase* m
 	if (metaForm->GetTypeForm() == ibValueMetaObjectEnumeration::eFormList
 		&& m_propertyDefFormList->GetValueAsInteger() == metaForm->GetMetaID())
 	{
-		m_propertyDefFormList->SetValue(metaForm->GetMetaID());
+		m_propertyDefFormList->SetValue(wxNOT_FOUND);
 	}
 	else if (metaForm->GetTypeForm() == ibValueMetaObjectEnumeration::eFormSelect
 		&& m_propertyDefFormSelect->GetValueAsInteger() == metaForm->GetMetaID())
 	{
-		m_propertyDefFormSelect->SetValue(metaForm->GetMetaID());
+		m_propertyDefFormSelect->SetValue(wxNOT_FOUND);
 	}
 }
 

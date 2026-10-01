@@ -17,13 +17,14 @@
 //     │
 //   wfrontendShutdown()                         // at process exit
 //
-// Real per-session state (appData-scoped module manager, MDI frame,
+// Real per-session state (appData-scoped module manager, main frame,
 // ibProcUnit, etc.) will be plugged in in follow-up steps. For now
 // the session id is just a random token and the manager keeps
 // bookkeeping in memory.
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <string>
 
 #if defined(_WIN32)
@@ -50,8 +51,8 @@ extern "C" WFRONTEND_API const char* wfrontendClientHTML();
 //
 // Two flavours:
 //
-//   * wfrontendInitFile()   — appDataCreateFile  (single-file DB path)
-//   * wfrontendInitServer() — appDataCreateServer (host/port/db)
+//   * wfrontendInitFile()   — CreateFileAppDataEnv   (single-file DB path)
+//   * wfrontendInitServer() — CreateServerAppDataEnv (host/port/db)
 //
 // Both then bring up the wes process's own system session via
 // CreateSession + session->Open(ibUser, ibPassword) — that's the
@@ -78,6 +79,12 @@ WFRONTEND_API bool wfrontendInitServer(
 
 WFRONTEND_API void        wfrontendShutdown();
 WFRONTEND_API std::string wfrontendLastError();
+
+// Run `work` on the calling thread for the base the web server serves — its own session's base; the session
+// itself answers through that base's registry. The host's HTTP threads have no session of their own
+// (docs/private/multi-base-process.md); a handler that works for a tab binds the tab's session on top. Before
+// init and after shutdown the work runs unbound.
+WFRONTEND_API void        wfrontendServe(const std::function<void()>& work);
 
 // Record the HTTP host:port the container is about to bind on. Host
 // process (wenterprise-server main) calls this right after arg parse,
@@ -127,7 +134,7 @@ WFRONTEND_API std::string wfrontendMenuJSON();
 //                          the oes_session cookie.
 //   Login(id, user, pw)  — authenticate the given session. On success
 //                          the session spins up its ibWebApplication
-//                          (MDI frame + CreateMainModule) and is ready
+//                          (main frame + CreateMainModule) and is ready
 //                          to serve form requests.
 //   SessionExists/Destroy/Count — bookkeeping.
 WFRONTEND_API std::string wfrontendCreateSession();
@@ -143,6 +150,13 @@ WFRONTEND_API bool        wfrontendLogin(const std::string& sessionId,
 WFRONTEND_API bool        wfrontendSessionExists(const std::string& sessionId);
 WFRONTEND_API void        wfrontendDestroySession(const std::string& sessionId);
 WFRONTEND_API std::size_t wfrontendSessionCount();
+
+// ⭐ MAY THIS SESSION ADMINISTER — the gate on every /admin endpoint. The same right the designer puts
+// on its administration menu (Active Users and its neighbours): DataAdministration, asked ON THE
+// SESSION'S OWN WORKER so the roles folded are that session's user's, not whatever the HTTP thread
+// happens to carry. A base with no accounts answers with the right's declared default, as it does
+// everywhere. False when the session does not exist.
+WFRONTEND_API bool wfrontendSessionMayAdminister(const std::string& sessionId);
 
 // Write "kick" into sys_session.signal for the given session guid.
 // Any wes process owning that row picks it up on its next
@@ -173,6 +187,23 @@ WFRONTEND_API bool wfrontendReloadSessionByGuid(const std::string& sessionGuid);
 // Cheap to call — just reads atomic counters and the registry's
 // last-refreshed snapshot. Returns "{}" on any internal failure.
 WFRONTEND_API std::string wfrontendDiagJSON();
+
+// sys_lock snapshot — JSON array of cluster-wide held locks for
+// /admin/locks and the designer's Active Users → Locks sub-pane. Shape:
+//   [ { "lockGuid":"<uuid>", "sessionGuid":"<uuid>",
+//       "namespace":"Catalog.Goods", "key":"Ref=<uuid>",
+//       "mode":"Exclusive", "acquiredAt":"2026-05-24T10:11:12",
+//       "user":"ivanov", "computer":"WS-42" }, ... ]
+// Reads the same snapshot ibLockManager::GetSnapshot returns; one row
+// per held sys_lock entry. Returns "[]" on internal failure.
+WFRONTEND_API std::string wfrontendLocksJSON();
+
+// Force-release one sys_lock row by its lockGuid. Owner is not asked —
+// admin override (e.g. session went zombie, user can't release through
+// the UI). Returns true iff the DELETE ran without error (row may
+// already have been released by the natural path; that's still "ok"
+// from the admin's view). Used by DELETE /admin/locks/<lockGuid>.
+WFRONTEND_API bool wfrontendForceReleaseLockByGuid(const std::string& lockGuid);
 
 // Current tab count for the session (0 if the session doesn't exist or
 // isn't authenticated yet). Used by GET / to decide whether F5 should
@@ -251,11 +282,11 @@ WFRONTEND_API bool wfrontendModalReply(const std::string& sessionId,
 // ibDialogFunctionAll content. Gated by AccessRight_ModeAllFunction
 // — returns {"allowed":false} when the user lacks the role, otherwise
 // {"allowed":true, "groups":[{clsid,name,items:[{id,name,synonym}]},…]}.
-WFRONTEND_API std::string wfrontendAllFunctionsJSON();
+WFRONTEND_API std::string wfrontendAllFunctionsJSON(const std::string& sessionId);
 
 // Open the form for a metadata object by its metaID. `cmdType` is the
 // raw ibInterfaceCommandType integer (100=Default, 150=Create,
-// 151=List, 152=Select) — passed through to ShowFormByCommandType so
+// 151=List, 152=Select) — passed through to Execute so
 // Create-section clicks land in the new-record flow, List in the list
 // flow, etc. Returns the updated active host JSON; "{}" on access
 // denied / unknown id / failure.

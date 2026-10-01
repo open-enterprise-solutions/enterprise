@@ -4,7 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "watchdroptarget.h"    
-#include "watchwindow.h"
+#include "watchWindow.h"
 
 ibWatchDropTarget::ibWatchDropTarget(ibWatchWindow* watch)
 {

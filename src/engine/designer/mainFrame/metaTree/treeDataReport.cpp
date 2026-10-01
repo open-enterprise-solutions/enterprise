@@ -10,12 +10,15 @@
 
 #include "docManager/templates/docViewDataReportFile.h"
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibDataReportTree, wxPanel);
+// ITS REAL BASE. This said wxPanel — true only two steps up, so wx's own class chain did not know
+// this tree IS a metadata tree, and a wxDynamicCast to the base would have come back null. Nothing
+// asks that today; the configuration tree has always declared its base correctly.
+wxIMPLEMENT_DYNAMIC_CLASS(ibDataReportTree, ibMetaTreeBase);
 
 #define ICON_SIZE 16
 
 ibDataReportTree::ibDataReportTree(ibMetaDocument* docParent, wxWindow* parent, wxWindowID id)
-	: ibMetaDataTree(docParent, parent, id), m_metaData(nullptr), m_initialized(false)
+	: ibMetaTreeBase(docParent, parent, id)
 {
 	this->SetSizeHints(wxDefaultSize, wxDefaultSize);
 
@@ -43,6 +46,14 @@ ibDataReportTree::ibDataReportTree(ibMetaDocument* docParent, wxWindow* parent, 
 	m_defaultForm->Wrap(-1);
 
 	bSizerCaption->Add(m_defaultForm, 0, wxALL, FromDIP(5));
+
+	// ⭐ THE REPORT'S OTHER DECLARATION, beside its default form: WHICH COMPOSER IS THE MAIN ONE.
+	// That is what a generated form is built from, so a person opening an external report needs to
+	// see it — and to change it — exactly where they see the default form (Max, 2026-08-20).
+	m_defaultComposer = new wxStaticText(this, wxID_ANY, _("Default composer:"), wxDefaultPosition, wxDefaultSize, 0);
+	m_defaultComposer->Wrap(-1);
+
+	bSizerCaption->Add(m_defaultComposer, 0, wxALL, FromDIP(5));
 	bSizerHeader->Add(bSizerCaption, 0, wxEXPAND, FromDIP(5));
 
 	wxBoxSizer* bSizerValue = new wxBoxSizer(wxVERTICAL);
@@ -59,35 +70,35 @@ ibDataReportTree::ibDataReportTree(ibMetaDocument* docParent, wxWindow* parent, 
 	bSizerValue->Add(m_commentValue, 1, wxALL | wxEXPAND, 1);
 	m_commentValue->Connect(wxEVT_TEXT, wxCommandEventHandler(ibDataReportTree::OnEditCaptionComment), nullptr, this);
 
-	m_defaultFormValue = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, NULL, 0);
+	m_defaultFormValue = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxDefaultSize);
 	m_defaultFormValue->AppendString(_("<not selected>"));
 	m_defaultFormValue->SetSelection(0);
 
 	m_defaultFormValue->Connect(wxEVT_CHOICE, wxCommandEventHandler(ibDataReportTree::OnChoiceDefForm), nullptr, this);
 
 	bSizerValue->Add(m_defaultFormValue, 1, wxALL | wxEXPAND, 1);
+
+	m_defaultComposerValue = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxDefaultSize);
+	m_defaultComposerValue->AppendString(_("<not selected>"));
+	m_defaultComposerValue->SetSelection(0);
+
+	m_defaultComposerValue->Connect(wxEVT_CHOICE, wxCommandEventHandler(ibDataReportTree::OnChoiceDefComposer), nullptr, this);
+
+	bSizerValue->Add(m_defaultComposerValue, 1, wxALL | wxEXPAND, 1);
 	bSizerHeader->Add(bSizerValue, 1, 0, FromDIP(5));
 	bSizerMain->Add(bSizerHeader, 0, wxEXPAND, FromDIP(5));
 
 	wxStaticBoxSizer* sbSizerTree = new wxStaticBoxSizer(new wxStaticBox(this, wxID_ANY, wxT("")), wxVERTICAL);
 
-	m_metaTreeToolbar = new wxAuiToolBar(sbSizerTree->GetStaticBox(), wxID_ANY, wxDefaultPosition, wxDefaultSize, wxAUI_TB_HORZ_LAYOUT);
-	m_metaTreeToolbar->AddTool(ID_METATREE_NEW, _("New"), wxArtProvider::GetBitmapBundle(wxART_ADD, wxART_FRONTEND, wxSize(16, 16)), _("New item"));
-	m_metaTreeToolbar->AddTool(ID_METATREE_EDIT, _("Edit"), wxArtProvider::GetBitmapBundle(wxART_EDIT, wxART_FRONTEND, wxSize(16, 16)), _("Edit item"));
-	m_metaTreeToolbar->AddTool(ID_METATREE_DELETE, _("Delete"), wxArtProvider::GetBitmapBundle(wxART_DELETE, wxART_FRONTEND, wxSize(16, 16)), _("Delete item"));
-	m_metaTreeToolbar->AddSeparator();
-	m_metaTreeToolbar->AddTool(ID_METATREE_UP, _("Up"), wxArtProvider::GetBitmapBundle(wxART_UP, wxART_FRONTEND, wxSize(16, 16)), _("Up item"));
-	m_metaTreeToolbar->AddTool(ID_METATREE_DOWM, _("Down"), wxArtProvider::GetBitmapBundle(wxART_DOWN, wxART_FRONTEND, wxSize(16, 16)), _("Down item"));
-	m_metaTreeToolbar->AddSeparator();
-	m_metaTreeToolbar->AddTool(ID_METATREE_SORT, _("Sort"), wxArtProvider::GetBitmapBundle(wxART_SORT, wxART_FRONTEND, wxSize(16, 16)), _("Sort item"));
-	m_metaTreeToolbar->Realize();
-
-	m_metaTreeToolbar->SetArtProvider(new wxAuiLunaToolBarArt());
+	CreateToolBar(sbSizerTree->GetStaticBox());   // the base builds it — this was a fifth copy
 
 	sbSizerTree->Add(m_metaTreeToolbar, 0, wxALL | wxEXPAND, 0);
 
+	// Card-style depth — panel powder-blue, tree cream (matches editor).
+	this->SetBackgroundColour(wxColour(184, 201, 212));   // #B8C9D4 powder-blue panel
 	m_metaTreeCtrl = new ibDataReportTreeCtrl(sbSizerTree->GetStaticBox(), this);
-	m_metaTreeCtrl->SetBackgroundColour(wxColour(250, 250, 250));
+	m_treeCtrl = m_metaTreeCtrl;   // the base holds the control — see ibMetaTreeBase
+	m_metaTreeCtrl->SetBackgroundColour(wxColour(250, 247, 240));  // #FAF7F0 cream tree
 
 	//set image list
 	m_metaTreeCtrl->AssignImageList(
@@ -106,15 +117,21 @@ ibDataReportTree::ibDataReportTree(ibMetaDocument* docParent, wxWindow* parent, 
 
 	bSizerMain->Add(sbSizerTree, 1, wxEXPAND, FromDIP(5));
 
-	ibMetaDataReport* metaData = ((ibReportFilibDocument*)docParent)->GetMetaData();
-	ibValueMetaObjectReport* commonMeta = metaData->GetReport();
-	const ibValueMetaObjectModule* moduleMeta = commonMeta->GetObjectModule();
-
 	m_buttonModule = new wxButton(this, wxID_ANY, _("Open module"));
 	m_buttonModule->Connect(wxEVT_BUTTON, wxCommandEventHandler(ibDataReportTree::OnButtonModuleClicked), nullptr, this);
-	m_buttonModule->SetBitmap(moduleMeta->GetIcon());
 
-	bSizerMain->Add(m_buttonModule, 0, wxALL);
+	// THE BUTTON'S PICTURE — every step asked rather than assumed; see the twin note in
+	// treeDataProcessor.cpp for why the C-style downcast that stood here was worse than useless.
+	if (const ibReportFileDocument* fileDoc = wxDynamicCast(docParent, ibReportFileDocument)) {
+		if (ibMetaDataReport* metaData = fileDoc->GetMetaData()) {
+			if (ibValueMetaObjectReport* commonMeta = metaData->GetReport()) {
+				if (const ibValueMetaObjectModule* moduleMeta = commonMeta->GetObjectModule())
+					m_buttonModule->SetBitmap(moduleMeta->GetIcon());
+			}
+		}
+	}
+
+	bSizerMain->Add(m_buttonModule, 0, wxALL, 0);
 
 	this->SetSizer(bSizerMain);
 	this->Layout();
@@ -127,6 +144,12 @@ ibDataReportTree::ibDataReportTree(ibMetaDocument* docParent, wxWindow* parent, 
 
 ibDataReportTree::~ibDataReportTree()
 {
+
+	// ASK BEFORE TEARING DOWN. The default constructor is reachable through wxCreateDynamicObject
+	// and leaves every control null; the configuration tree guards exactly this, the twins did not.
+	if (m_nameValue == nullptr || m_metaTreeToolbar == nullptr || m_metaTreeCtrl == nullptr)
+		return;
+
 	m_nameValue->Disconnect(wxEVT_TEXT, wxCommandEventHandler(ibDataReportTree::OnEditCaptionName), nullptr, this);
 	m_synonymValue->Disconnect(wxEVT_TEXT, wxCommandEventHandler(ibDataReportTree::OnEditCaptionSynonym), nullptr, this);
 	m_commentValue->Disconnect(wxEVT_TEXT, wxCommandEventHandler(ibDataReportTree::OnEditCaptionComment), nullptr, this);
@@ -212,11 +235,38 @@ void ibDataReportTree::OnChoiceDefForm(wxCommandEvent& event)
 	}
 }
 
+// The twin of OnChoiceDefForm: the row carries the composer's metaID as its client data, so the
+// choice hands back an identity and nothing is matched by label.
+void ibDataReportTree::OnChoiceDefComposer(wxCommandEvent& event)
+{
+	ibValueMetaObjectReport* report = m_metaData->GetReport();
+	wxASSERT(report);
+
+	const ibMetaID id = static_cast<ibMetaID>(reinterpret_cast<intptr_t>(event.GetClientData()));
+	report->SetDefComposer(id > 0 ? id : wxNOT_FOUND);
+
+	if (m_initialized) {
+		m_metaData->Modify(true);
+	}
+}
+
 void ibDataReportTree::OnButtonModuleClicked(wxCommandEvent& event)
 {
 	ibValueMetaObjectReport* report = m_metaData->GetReport();
 	wxASSERT(report);
-	report->ProcessCommand(ibValueMetaObjectReport::ID_METATREE_OPEN_MODULE);
+
+	// ⭐ TAKEN FROM THE STRUCTURE — see the twin in treeDataProcessor.cpp. The item names itself and
+	// carries the metaobject; no getter to reach past and no const to cast away.
+	std::vector<ibMetaMenuItem> items;
+	report->CollectContextMenu(items);
+
+	for (const ibMetaMenuItem& item : items) {
+		if (item.m_id == ibValueMetaObjectReport::ID_METATREE_OPEN_MODULE
+			&& item.m_metaObject != nullptr) {
+			OpenObjectForm(item.m_metaObject);
+			break;
+		}
+	}
 }
 
 wxIMPLEMENT_DYNAMIC_CLASS(ibDataReportTree::ibDataReportTreeCtrl, wxTreeCtrl);
@@ -259,12 +309,8 @@ wxEND_EVENT_TABLE()
 ibDataReportTree::ibDataReportTreeCtrl::ibDataReportTreeCtrl()
 	: wxTreeCtrl(), m_ownerTree(nullptr), m_metaView(new ibMetaView)
 {
-	wxAcceleratorEntry entries[2];
-	entries[0].Set(wxACCEL_CTRL, (int)'C', wxID_COPY);
-	entries[1].Set(wxACCEL_CTRL, (int)'V', wxID_PASTE);
-
-	wxAcceleratorTable accel(2, entries);
-	SetAcceleratorTable(accel);
+	// (the accelerator table is set in the real constructor below — it stood here as well, in this
+	// copy only, which is the sort of thing that makes two files stop being the same file)
 
 	//set double buffered
 	SetDoubleBuffered(true);
@@ -284,7 +330,7 @@ ibDataReportTree::ibDataReportTreeCtrl::ibDataReportTreeCtrl(wxWindow* parentWnd
 	SetDoubleBuffered(true);
 }
 
-#include "frontend/docView/docManager.h"
+#include "frontend/docView/docView.h"
 
 ibDataReportTree::ibDataReportTreeCtrl::~ibDataReportTreeCtrl()
 {

@@ -1,9 +1,9 @@
-#include "advpropColour.h"
 
 #include <wx/propgrid/advprops.h>
 
 #include "backend/propertyManager/property/propertyColour.h"
-#include "frontend/propertyManager/property/private/prop.h"
+#include "frontend/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
+#include "frontend/propertyManager/property/private/propertyRegistry.h"
 
 // register frontend property 
 class ibPropertyColourLoader
@@ -11,6 +11,8 @@ class ibPropertyColourLoader
 public:
 	ibPropertyColourLoader()
 	{
-		ibPG_IMPLEMENT_PROPERTY_CALLBACK(wxColourProperty, ibPropertyColour::ms_propertyColour);
+		ibPropertyRegistry::Register([](ibPropertyColour* prop) -> wxPGProperty* {
+			return new wxColourProperty(prop->GetLabel(), prop->GetName(), prop->GetValueAsColour());
+		});
 	}
 }s_enumLoader;

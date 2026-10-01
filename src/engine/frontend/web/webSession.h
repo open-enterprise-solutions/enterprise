@@ -5,7 +5,7 @@
 //
 // Owns everything that must be isolated between concurrent web users:
 // the module manager's main-module instance, the ibProcUnit bytecode
-// interpreter, the logical MDI frame holding "open" documents, and any
+// interpreter, the logical main frame holding "open" documents, and any
 // session-scoped variables. The metadata itself (compiled modules,
 // form descriptors, catalog schemas, ...) lives on the singleton
 // activeMetaData and is shared across sessions.
@@ -26,6 +26,8 @@
 
 #include <wx/string.h>
 
+#include "backend/session/sessionHolder.h"
+
 class ibWebApplication;
 class ibSession;
 
@@ -41,7 +43,7 @@ public:
 	//   Login()   — called after the user authenticates (POST /login or
 	//               auto-login when sys_user is empty). Sets the user
 	//               identity, then spins up the ibWebApplication which
-	//               builds the MDI frame and calls CreateMainModule.
+	//               builds the main frame and calls CreateMainModule.
 	//   OnExit()  — tears the runtime down.
 	bool OnInit();
 	bool Login(const wxString& user, const wxString& password);
@@ -78,7 +80,7 @@ private:
 	// keeper) on the same ibWebSession; without this the two ran
 	// concurrently and Destroy's m_session.reset() freed the ibSession
 	// while Login's worker thread was still about to start with
-	// m_sessionContext pointing at it. Recursive in case future code
+	// the app still pointing at it. Recursive in case future code
 	// calls OnExit re-entrantly from the same thread (dtor → OnExit →
 	// internal teardown). Distinct from m_mutex which only guards the
 	// activity timestamp accessors.
@@ -89,14 +91,12 @@ private:
 	// leave a half-initialised app behind.
 	std::unique_ptr<ibWebApplication> m_app;
 
-	// Session pointer — registry's m_own owns one shared_ptr; we keep our
-	// own strong ref so a concurrent refresh-cycle that overwrites
-	// m_own[presetGuid] (same tabSid lands in ProcessAdd while we are
-	// mid-OnExit) cannot drop the last reference and free the session
-	// while OnExit is still calling methods on it. Set by Login() right
-	// after CreateSession via shared_from_this(); cleared on OnExit / dtor
-	// AFTER the final ibSession::Close call returns.
-	std::shared_ptr<class ibSession> m_session;
+	// Watch, not ownership. The web main window (ibWebFrame) owns this
+	// tab's session, exactly as the desktop main window owns its own —
+	// so tearing down m_app destroys the frame, which releases the
+	// holder, which ends the session. This watch just lets us observe it
+	// in between, and answers empty once the frame is gone.
+	ibSessionWatch m_session;
 };
 
 #endif

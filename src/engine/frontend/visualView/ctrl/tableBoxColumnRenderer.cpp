@@ -39,7 +39,10 @@ wxWindow* ibDataViewValueRenderer::CreateEditorCtrl(wxWindow* dv,
 
 	textEditor->SetPasswordMode(m_tableBoxColumn->GetPasswordMode());
 	textEditor->SetMultilineMode(m_tableBoxColumn->GetMultilineMode());
-	textEditor->SetTextEditMode(m_tableBoxColumn->GetTextEditMode());
+	// View-only form → the inline cell editor is read-only: the value shows and can be opened / copied, the
+	// row can be selected, but the cell can't be edited. The column is a frame, so it reads view-only off its
+	// owner form (IsReadOnly). Row-add / delete / copy are gated separately as data-modifying commands.
+	textEditor->SetTextEditMode(m_tableBoxColumn->GetTextEditMode() && !m_tableBoxColumn->IsReadOnly());
 
 	if (!appData->DesignerMode()) {
 		

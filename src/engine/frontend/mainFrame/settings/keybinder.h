@@ -35,6 +35,9 @@ public:
         wxString            group;
         wxString            help;
         std::vector<Key>    keys;
+        // What the code binds it to (SetShortcut). Kept beside `keys` so the saved profile holds only what
+        // the person CHANGED - see Save.
+        std::vector<Key>    defaultKeys;
     };
 
     /**
@@ -107,24 +110,35 @@ public:
     bool GetMenuItemText(wxMenuItem* item, wxString& label) const;
 
     /**
-     * Sets the shortcut for the specified id.
+     * Sets the DEFAULT shortcut for the specified id - the binding the code
+     * gives the command, which a loaded profile may then change.
      */
     void SetShortcut(int id, int flags, int key);
 
     /**
-     * Sets the shortcut for the specified id. The shortcut should have a form
-     * like "Ctrl+F3".
+     * Sets the default shortcut for the specified id. The shortcut should have
+     * a form like "Ctrl+F3".
      */
     void SetShortcut(int id, const wxString& shortcut);
 
     /**
      * Saves the key bindings in XML format. The tag is the name that is given
      * to the root node.
+     *
+     * Only the commands whose keys differ from their defaults are written. A
+     * command is saved under its numeric id, and ids move whenever a command is
+     * added before another one; a profile that held EVERY binding carried the
+     * old numbering forward for good - F10 landed on "Attach for debugging"
+     * after two start commands were added ahead of the steps (2026-09-11). The
+     * defaults now always come from the code; the profile holds what a person
+     * chose, and nothing else.
      */
     wxXmlNode* Save(const wxString& tag) const;
 
     /**
-     * Loads the key bindings from XML format.
+     * Loads the key bindings from XML format, over the defaults: a command in
+     * the profile takes the keys saved for it (none, if the person removed
+     * them), every other command keeps its default.
      */
     void Load(wxXmlNode* root);
 

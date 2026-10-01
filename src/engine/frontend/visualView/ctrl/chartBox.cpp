@@ -1,11 +1,11 @@
 #include "chartBox.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "frontend/win/ctrls/charts/wxcharts.h"
 
 //***********************************************************************************
 //*                           IMPLEMENT_DYNAMIC_CLASS                               *
 //***********************************************************************************
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueChartBox, ibValueWindow);
 
 //***********************************************************************************
 //*                                 Value Notebook                                  *
@@ -127,9 +127,8 @@ wxObject* ibValueChartBox::Create(wxWindow* wxparent, ibVisualHost *visualHost)
 	return m_chartBox;
 }
 
-void ibValueChartBox::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost *visualHost, bool firstСreated)
+void ibValueChartBox::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost *visualHost, bool firstCreated)
 {
-	wxWindow *m_chartBox = dynamic_cast<wxWindow *>(wxobject);
 }
 
 void ibValueChartBox::OnSelected(wxObject* wxobject)
@@ -155,18 +154,18 @@ void ibValueChartBox::Cleanup(wxObject* obj, ibVisualHost *visualHost)
 //*                                   Data		                                   *
 //**********************************************************************************
 
-bool ibValueChartBox::LoadData(ibReaderMemory &reader)
+bool ibValueChartBox::ReadData(const ibDataNode& node)
 {
-	return ibValueWindow::LoadData(reader);
+	return ibValueWindow::ReadData(node);
 }
 
-bool ibValueChartBox::SaveData(ibWriterMemory& writer)
+bool ibValueChartBox::WriteData(ibDataNode& node) const
 {
-	return ibValueWindow::SaveData(writer);
+	return ibValueWindow::WriteData(node);
 }
 
 //***********************************************************************
 //*                       Register in runtime                           *
 //***********************************************************************
 
-CONTROL_TYPE_REGISTER(ibValueChartBox, "Chartbox", "Container", string_to_clsid("CT_CHRB"));
+CONTROL_TYPE_REGISTER(ibValueChartBox, "Chartbox", "Container", control_to_clsid("CT_CHRB"));

@@ -4,18 +4,16 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "metaModuleObject.h"
+#include "backend/serialize/dataBuilder.h"
 #include "backend/appData.h"
+#include "backend/metaData.h" // ibCompileValueCache::GetModuleManager (designer compile-cache)
 #include "backend/compiler/cache/byteCodeCache.h"
 
 //***********************************************************************
 //*                           ModuleObject                              *
 //***********************************************************************
 
-wxIMPLEMENT_ABSTRACT_CLASS(ibValueMetaObjectModuleBase, ibValueMetaObject);
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueMetaObjectModule, ibValueMetaObjectModuleBase);
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueMetaObjectCommonModule, ibValueMetaObjectModuleBase);
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueMetaObjectManagerModule, ibValueMetaObjectCommonModule);
 
 //***********************************************************************
 //*                           System metaData                           *
@@ -35,6 +33,12 @@ bool ibValueMetaObjectModuleBase::OnLoadMetaObject(ibMetaData* metaData)
 
 bool ibValueMetaObjectModuleBase::OnSaveMetaObject(int flags)
 {
+	// ⚠ ON THE DATABASE APPLY, AND DELIBERATELY NOT ON A PLAIN SAVE. A working variant is stored
+	// for the designer's own sake; the running application never reads it, so the cached blob has
+	// not diverged from anything and dropping it would discard a row that is still true. The
+	// configuration the runtime reads changes at the APPLY — restructuring and all — and that is
+	// the moment the two can disagree.
+	//
 	//save debugger client offset
 	if ((flags & saveConfigFlag) != 0 && appData->DesignerMode()) {
 		const wxString& strBuffer = GetModuleText();
@@ -44,8 +48,7 @@ bool ibValueMetaObjectModuleBase::OnSaveMetaObject(int flags)
 		// just persisted new source text. Drop the row so the next
 		// runtime session that compiles this module refreshes the
 		// blob via the cache-miss path in
-		// ibRuntimeModuleDataObject::Compile. Best-effort; if the
-		// table doesn't exist yet the call is a no-op.
+		// ibRuntimeModuleDataObject::Compile.
 		ibByteCodeCache::Invalidate(GetGuid());
 	}
 
@@ -84,6 +87,21 @@ bool ibValueMetaObjectModuleBase::OnAfterCloseMetaObject()
 	return ibValueMetaObject::OnAfterCloseMetaObject();
 }
 
+// ⭐ WHAT WAS BUILT FROM THIS TEXT IS NOW STALE, and in the designer that is not a detail: a
+// module's exports are READ FROM THE TEXT there (ibRuntimeModuleDataObject::ExportMethodsToHelper
+// — nothing compiles a module in the designer, so there is no bytecode to read them from), and a
+// name surface is built once and then cached. Nobody would notice the missing word until an export
+// added five minutes ago failed to appear after the dot for the rest of the session.
+//
+// Said through the verb that already means it: InvalidateCompileModule is what the form editor
+// calls on a form-edit commit (metaFormObject.cpp). It is a no-op for a module nothing has asked
+// about yet, and it never CONSTRUCTS anything — an entry that is only a rebuilder stays one.
+void ibValueMetaObjectModuleBase::InvalidateBuiltFromText()
+{
+	if (ibCompileValueCache* compileCache = m_metaData != nullptr ? m_metaData->GetCompileCache() : nullptr)
+		compileCache->InvalidateCompileModule(this);
+}
+
 //***********************************************************************
 //*                          default procedures						    *
 //***********************************************************************
@@ -93,20 +111,25 @@ void ibValueMetaObjectModuleBase::SetDefaultProcedure(const wxString& procname, 
 	m_contentHelper.insert_or_assign(procname, CContentData{ contentHelper , args });
 }
 
+void ibValueMetaObjectModuleBase::SetDefaultFunction(const wxString& funcname, std::vector<wxString> args)
+{
+	m_contentHelper.insert_or_assign(funcname, CContentData{ eFunctionHelper, args });
+}
+
 //***********************************************************************
 //*                           Metamodule                                *
 //***********************************************************************
 
-bool ibValueMetaObjectModule::LoadData(ibReaderMemory& reader)
+bool ibValueMetaObjectModule::ReadData(const ibDataNode& node)
 {
-	//reader.r_stringZ(m_moduleData);
-	return m_propertyModule->LoadData(reader);
+	m_propertyModule->SetNodeValue(node.GetProperty(m_propertyModule->GetName()));
+	return true;
 }
 
-bool ibValueMetaObjectModule::SaveData(ibWriterMemory& writer)
+bool ibValueMetaObjectModule::WriteData(ibDataNode& node) const
 {
-	//writer.w_stringZ(m_moduleData);
-	return m_propertyModule->SaveData(writer);
+	node.SetProperty(m_propertyModule->GetName(), m_propertyModule->GetNodeValue());
+	return true;
 }
 
 //***********************************************************************
@@ -118,18 +141,17 @@ ibValueMetaObjectCommonModule::ibValueMetaObjectCommonModule(const wxString& nam
 {
 }
 
-bool ibValueMetaObjectCommonModule::LoadData(ibReaderMemory& reader)
+bool ibValueMetaObjectCommonModule::ReadData(const ibDataNode& node)
 {
-	m_propertyModule->LoadData(reader); //reader.r_stringZ(m_moduleData);
-	m_propertyGlobalModule->SetValue(reader.r_u8());
+	m_propertyModule->SetNodeValue(node.GetProperty(m_propertyModule->GetName()));
+	m_propertyGlobalModule->SetNodeValue(node.GetProperty(m_propertyGlobalModule->GetName()));
 	return true;
 }
 
-bool ibValueMetaObjectCommonModule::SaveData(ibWriterMemory& writer)
+bool ibValueMetaObjectCommonModule::WriteData(ibDataNode& node) const
 {
-	//writer.w_stringZ(m_moduleData);
-	m_propertyModule->SaveData(writer);
-	writer.w_u8(m_propertyGlobalModule->GetValueAsBoolean());
+	node.SetProperty(m_propertyModule->GetName(), m_propertyModule->GetNodeValue());
+	node.SetProperty(m_propertyGlobalModule->GetName(), m_propertyGlobalModule->GetNodeValue());
 	return true;
 }
 
@@ -161,9 +183,16 @@ bool ibValueMetaObjectCommonModule::OnDeleteMetaObject()
 
 bool ibValueMetaObjectCommonModule::OnRenameMetaObject(const wxString& newName)
 {
+	// Runtime registry (metadata storage) — read by per-session managers.
 	if (auto* storage = m_metaData->GetModuleStorage()) {
 		if (!storage->RenameCommonModule(this, newName))
 			return false;
+	}
+
+	// Designer registry — the editor's own compiled-unit holder.
+	if (auto* cc = m_metaData->GetCompileCache()) {
+		if (auto* mgr = cc->GetModuleManager())
+			mgr->RenameCommonModule(this, newName);
 	}
 
 	return ibValueMetaObjectModuleBase::OnRenameMetaObject(newName);
@@ -174,6 +203,15 @@ bool ibValueMetaObjectCommonModule::OnBeforeRunMetaObject(int flags)
 	if (auto* storage = m_metaData->GetModuleStorage()) {
 		if (!storage->AddCommonModule(this))
 			return false;
+	}
+
+	// Designer registry: register a compiled lightweight unit. newObjectFlag = a
+	// module just created in the designer → compile now; bulk load defers to
+	// the manager's CreateMainModule.
+	if (auto* cc = m_metaData->GetCompileCache()) {
+		if (auto* mgr = cc->GetModuleManager())
+			if (!mgr->AddCommonModule(this, /*managerModule=*/false, (flags & newObjectFlag) != 0))
+				return false;
 	}
 
 	return ibValueMetaObjectModuleBase::OnBeforeRunMetaObject(flags);
@@ -191,7 +229,15 @@ bool ibValueMetaObjectCommonModule::OnBeforeCloseMetaObject()
 			return false;
 	}
 
-	return ibValueMetaObjectModuleBase::OnAfterCloseMetaObject();
+	if (auto* cc = m_metaData->GetCompileCache()) {
+		if (auto* mgr = cc->GetModuleManager())
+			mgr->RemoveCommonModule(this);
+	}
+
+	// Was OnAfterCloseMetaObject — a long-standing copy/paste that fired the
+	// after-hook from the before phase (and skipped the real before-hook).
+	// ibValueMetaObjectManagerModule (the sibling) already does this correctly.
+	return ibValueMetaObjectModuleBase::OnBeforeCloseMetaObject();
 }
 
 bool ibValueMetaObjectCommonModule::OnAfterCloseMetaObject()
@@ -210,6 +256,13 @@ bool ibValueMetaObjectManagerModule::OnBeforeRunMetaObject(int flags)
 			return false;
 	}
 
+	// Designer registry — a manager module registers as managerModule=true.
+	if (auto* cc = m_metaData->GetCompileCache()) {
+		if (auto* mgr = cc->GetModuleManager())
+			if (!mgr->AddCommonModule(this, /*managerModule=*/true, (flags & newObjectFlag) != 0))
+				return false;
+	}
+
 	return ibValueMetaObjectModuleBase::OnBeforeRunMetaObject(flags);
 }
 
@@ -223,6 +276,11 @@ bool ibValueMetaObjectManagerModule::OnBeforeCloseMetaObject()
 	if (auto* storage = m_metaData->GetModuleStorage()) {
 		if (!storage->RemoveCommonModule(this))
 			return false;
+	}
+
+	if (auto* cc = m_metaData->GetCompileCache()) {
+		if (auto* mgr = cc->GetModuleManager())
+			mgr->RemoveCommonModule(this);
 	}
 
 	return ibValueMetaObjectModuleBase::OnBeforeCloseMetaObject();

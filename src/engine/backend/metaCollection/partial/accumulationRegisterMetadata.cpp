@@ -1,26 +1,38 @@
 ﻿#include "accumulationRegister.h"
-#include "list/objectList.h"
+#include "backend/serialize/dataBuilder.h"
+#include "backend/system/value/valueDynamicList.h"   // ibValueDynamicList — the standard list migrates onto the universal dynamic list
 #include "backend/metadataConfiguration.h"
 #include "backend/moduleManager/moduleManager.h"
+#include "backend/metaData.h"   // ibMetaData::RegisterSource — the register registers its balance / turnover into its OWN config
 
 //***********************************************************************
 //*                         metaData                                    * 
 //***********************************************************************
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueMetaObjectAccumulationRegister, ibValueMetaObjectRegisterData);
 
 /////////////////////////////////////////////////////////////////////////
 
 ibValueMetaObjectAccumulationRegister::ibValueMetaObjectAccumulationRegister() : ibValueMetaObjectRegisterData()
 {
+	// The two totals tables. Created HERE, as predefined children — which is what reserves their ids:
+	// GenerateNewID walks every child in the tree, so from this point on nothing else can be handed
+	// the same number. They carry no state beyond that identity, so there is no property to hang them
+	// on; the reference is the whole of what the register needs.
+	m_totalsBalances = CreateMetaObjectAndSetParent<ibValueMetaObjectTotals>(wxT("BalanceTotals"), _("Balance totals"));
+	m_totalsTurnovers = CreateMetaObjectAndSetParent<ibValueMetaObjectTotals>(wxT("TurnoverTotals"), _("Turnover totals"));
+
 	//set default proc
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("BeforeWrite"), ibContentHelper::eProcedureHelper, { wxT("Cancel") });
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("OnWrite"), ibContentHelper::eProcedureHelper, { wxT("Cancel") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("BeforeWrite"), ibContentHelper::eProcedureHelper, { wxT("Cancel"), wxT("Replacing") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("OnWrite"), ibContentHelper::eProcedureHelper, { wxT("Cancel"), wxT("Replacing") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("BeforeDelete"), ibContentHelper::eProcedureHelper, { wxT("Cancel") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("OnDelete"), ibContentHelper::eProcedureHelper, { wxT("Cancel") });
+	
+	(*m_propertyManagerModule)->SetDefaultProcedure(wxT("FormGetProcessing"), ibContentHelper::eProcedureHelper, { wxT("Form"), wxT("Cancel") });
 }
 
 ibValueMetaObjectAccumulationRegister::~ibValueMetaObjectAccumulationRegister()
 {
-	//wxDELETE((*m_propertyAttributibRecordType));
+	//wxDELETE((*m_propertyAttributeRecordType));
 }
 
 ibValueMetaObjectFormBase* ibValueMetaObjectAccumulationRegister::GetDefaultFormByID(const ibFormID& id) const 
@@ -33,13 +45,12 @@ ibValueMetaObjectFormBase* ibValueMetaObjectAccumulationRegister::GetDefaultForm
 }
 
 #pragma region _form_builder_h_
-ibBackendValueForm* ibValueMetaObjectAccumulationRegister::GetListForm(const wxString& strFormName, ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
+ibFormPtr<ibBackendValueForm> ibValueMetaObjectAccumulationRegister::GetListForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
-		strFormName,
+		request,
 		ibValueMetaObjectAccumulationRegister::eFormList,
-		ownerControl, ibValue::CreateAndPrepareValueRef<ibValueListRegisterObject>(this, ibValueMetaObjectAccumulationRegister::eFormList),
-		formGuid
+		ownerControl, ibCreateList(request.m_create, GetQueryable(), GetRegisterPeriod()->GetQueryColumn())   // migrated onto the universal dynamic list
 	);
 }
 #pragma endregion
@@ -48,41 +59,50 @@ ibBackendValueForm* ibValueMetaObjectAccumulationRegister::GetListForm(const wxS
 //*                       Save & load metaData                              *
 //***************************************************************************
 
-bool ibValueMetaObjectAccumulationRegister::LoadData(ibReaderMemory& dataReader)
+bool ibValueMetaObjectAccumulationRegister::WriteData(ibDataNode& node) const
 {
-	//load default attributes:
-	(*m_propertyAttributibRecordType)->LoadMeta(dataReader);
+	node.SetProperty(m_propertyAttributeRecordType->GetName(), m_propertyAttributeRecordType->GetNodeValue());
 
-	//load default form 
-	m_propertyDefFormList->SetValue(GetIdByGuid(dataReader.r_stringZ()));
+	node.SetValue(m_propertyDefFormList->GetName(), GetGuidByID(m_propertyDefFormList->GetValueAsInteger()).str());
 
-	//load data 
-	m_propertyRegisterType->SetValue(dataReader.r_u16());
+	node.SetProperty(m_propertyRegisterType->GetName(), m_propertyRegisterType->GetNodeValue());
 
-	//load object module
-	(*m_propertyObjectModule)->LoadMeta(dataReader);
-	(*m_propertyManagerModule)->LoadMeta(dataReader);
+	node.SetProperty(m_propertySplitTotals->GetName(), m_propertySplitTotals->GetNodeValue());
 
-	return ibValueMetaObjectRegisterData::LoadData(dataReader);
+	// The two totals tables are written for their IDENTITY alone: the sub-node carries each object's
+	// metaID, which is what makes the id survive a save and what the schema differ matches the
+	// physical table by. Losing them here would hand every register the same (zero) id on the next
+	// load, and ibSchemaSnapshot::Shared would then pour one register's columns into another's table.
+	m_totalsBalances->SaveNode(node.Child(wxT("BalanceTotals")));
+	m_totalsTurnovers->SaveNode(node.Child(wxT("TurnoverTotals")));
+
+	node.SetProperty(m_propertyObjectModule->GetName(), m_propertyObjectModule->GetNodeValue());
+	node.SetProperty(m_propertyManagerModule->GetName(), m_propertyManagerModule->GetNodeValue());
+
+	return ibValueMetaObjectRegisterData::WriteData(node);
 }
 
-bool ibValueMetaObjectAccumulationRegister::SaveData(ibWriterMemory& dataWritter)
+bool ibValueMetaObjectAccumulationRegister::ReadData(const ibDataNode& node)
 {
-	//save default attributes:
-	(*m_propertyAttributibRecordType)->SaveMeta(dataWritter);
+	m_propertyAttributeRecordType->SetNodeValue(node.GetProperty(m_propertyAttributeRecordType->GetName()));
 
-	//save default form 
-	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormList->GetValueAsInteger()));
+	m_propertyDefFormList->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormList->GetName())));
 
-	//save data
-	dataWritter.w_u16(m_propertyRegisterType->GetValueAsInteger());
+	m_propertyRegisterType->SetNodeValue(node.GetProperty(m_propertyRegisterType->GetName()));
 
-	//Save object module
-	(*m_propertyObjectModule)->SaveMeta(dataWritter);
-	(*m_propertyManagerModule)->SaveMeta(dataWritter);
+	m_propertySplitTotals->SetNodeValue(node.GetProperty(m_propertySplitTotals->GetName()));
 
-	//create or update table:
-	return ibValueMetaObjectRegisterData::SaveData(dataWritter);
+	// Absent sub-node = a configuration written before the totals tables existed. The object keeps
+	// the id it was given at construction rather than being left at zero.
+	if (const ibDataNode* totals = node.FindChild(wxT("BalanceTotals")))
+		m_totalsBalances->LoadNode(*totals);
+	if (const ibDataNode* totals = node.FindChild(wxT("TurnoverTotals")))
+		m_totalsTurnovers->LoadNode(*totals);
+
+	m_propertyObjectModule->SetNodeValue(node.GetProperty(m_propertyObjectModule->GetName()));
+	m_propertyManagerModule->SetNodeValue(node.GetProperty(m_propertyManagerModule->GetName()));
+
+	return ibValueMetaObjectRegisterData::ReadData(node);
 }
 
 //***********************************************************************
@@ -96,14 +116,26 @@ bool ibValueMetaObjectAccumulationRegister::OnCreateMetaObject(ibMetaData* metaD
 	if (!ibValueMetaObjectRegisterData::OnCreateMetaObject(metaData, flags))
 		return false;
 
-	return (*m_propertyAttributibRecordType)->OnCreateMetaObject(metaData, flags) &&
+	// The totals tables are stamped HERE and only here: this is where a predefined child takes its
+	// metaID from the configuration's counter, which is also what reserves it against every later
+	// GenerateNewID. On a load the id comes from the saved sub-node instead, which is why both
+	// directions of WriteData / ReadData carry them.
+	return (*m_propertyAttributeRecordType)->OnCreateMetaObject(metaData, flags) &&
+		m_totalsBalances->OnCreateMetaObject(metaData, flags) &&
+		m_totalsTurnovers->OnCreateMetaObject(metaData, flags) &&
 		(*m_propertyManagerModule)->OnCreateMetaObject(metaData, flags) &&
 		(*m_propertyObjectModule)->OnCreateMetaObject(metaData, flags);
 }
 
 bool ibValueMetaObjectAccumulationRegister::OnLoadMetaObject(ibMetaData* metaData)
 {
-	if (!(*m_propertyAttributibRecordType)->OnLoadMetaObject(metaData))
+	if (!(*m_propertyAttributeRecordType)->OnLoadMetaObject(metaData))
+		return false;
+
+	if (!m_totalsBalances->OnLoadMetaObject(metaData))
+		return false;
+
+	if (!m_totalsTurnovers->OnLoadMetaObject(metaData))
 		return false;
 
 	if (!(*m_propertyManagerModule)->OnLoadMetaObject(metaData))
@@ -117,7 +149,13 @@ bool ibValueMetaObjectAccumulationRegister::OnLoadMetaObject(ibMetaData* metaDat
 
 bool ibValueMetaObjectAccumulationRegister::OnSaveMetaObject(int flags)
 {
-	if (!(*m_propertyAttributibRecordType)->OnSaveMetaObject(flags))
+	if (!(*m_propertyAttributeRecordType)->OnSaveMetaObject(flags))
+		return false;
+
+	if (!m_totalsBalances->OnSaveMetaObject(flags))
+		return false;
+
+	if (!m_totalsTurnovers->OnSaveMetaObject(flags))
 		return false;
 
 	if (!(*m_propertyManagerModule)->OnSaveMetaObject(flags))
@@ -128,7 +166,7 @@ bool ibValueMetaObjectAccumulationRegister::OnSaveMetaObject(int flags)
 
 #if _USE_SAVE_METADATA_IN_TRANSACTION == 1
 	if (!((*m_propertyAttributeRecorder)->GetClsidCount() > 0)) {
-		s_restructureInfo.AppendError(_("! Doesn't have any recorder ") + GetFullName());
+		RestructureError(_("! Doesn't have any recorder ") + GetFullName());
 		return false;
 	}
 #endif 
@@ -138,7 +176,13 @@ bool ibValueMetaObjectAccumulationRegister::OnSaveMetaObject(int flags)
 
 bool ibValueMetaObjectAccumulationRegister::OnDeleteMetaObject()
 {
-	if (!(*m_propertyAttributibRecordType)->OnDeleteMetaObject())
+	if (!(*m_propertyAttributeRecordType)->OnDeleteMetaObject())
+		return false;
+
+	if (!m_totalsBalances->OnDeleteMetaObject())
+		return false;
+
+	if (!m_totalsTurnovers->OnDeleteMetaObject())
 		return false;
 
 	if (!(*m_propertyManagerModule)->OnDeleteMetaObject())
@@ -152,6 +196,25 @@ bool ibValueMetaObjectAccumulationRegister::OnDeleteMetaObject()
 
 bool ibValueMetaObjectAccumulationRegister::OnReloadMetaObject()
 {
+	// ⭐⭐ WHICH TABLES THIS REGISTER OFFERS IS DECIDED BY ITS TYPE, AND THE TYPE CAN CHANGE.
+	//
+	// The registration below (OnAfterRunMetaObject) already asks — `.Balance` and
+	// `.BalanceAndTurnovers` only for a register that keeps balances. But it asks ONCE, when the
+	// metaobject runs. Switch the register to turnovers afterwards and the two tables stay
+	// registered: the catalogue goes on offering a balance the register no longer has, and the
+	// property panel and the query constructor say different things about the same object.
+	//
+	// So the answer is re-taken on reload, which is what a designer edit ends in. Unregistering is
+	// unconditional (removing what is not there is a no-op) and registering follows the type as it
+	// is NOW — same rule, asked again rather than remembered.
+	if (m_metaData != nullptr) {
+		m_metaData->UnregisterSource(&m_balance);
+		m_metaData->UnregisterSource(&m_balanceAndTurnover);
+		if (GetRegisterType() == ibRegisterType::eBalances) {
+			m_metaData->RegisterSource(&m_balance);
+			m_metaData->RegisterSource(&m_balanceAndTurnover);
+		}
+	}
 
 	if (auto* cc = m_metaData->GetCompileCache()) {
 		ibValueRecordSetObjectAccumulationRegister* recordSet = nullptr;
@@ -168,7 +231,7 @@ bool ibValueMetaObjectAccumulationRegister::OnReloadMetaObject()
 
 bool ibValueMetaObjectAccumulationRegister::OnBeforeRunMetaObject(int flags)
 {
-	if (!(*m_propertyAttributibRecordType)->OnBeforeRunMetaObject(flags))
+	if (!(*m_propertyAttributeRecordType)->OnBeforeRunMetaObject(flags))
 		return false;
 
 	if (!(*m_propertyManagerModule)->OnBeforeRunMetaObject(flags))
@@ -184,7 +247,7 @@ bool ibValueMetaObjectAccumulationRegister::OnBeforeRunMetaObject(int flags)
 
 bool ibValueMetaObjectAccumulationRegister::OnAfterRunMetaObject(int flags)
 {
-	if (!(*m_propertyAttributibRecordType)->OnAfterRunMetaObject(flags))
+	if (!(*m_propertyAttributeRecordType)->OnAfterRunMetaObject(flags))
 		return false;
 
 	if (!(*m_propertyManagerModule)->OnAfterRunMetaObject(flags))
@@ -193,12 +256,26 @@ bool ibValueMetaObjectAccumulationRegister::OnAfterRunMetaObject(int flags)
 	if (!(*m_propertyObjectModule)->OnAfterRunMetaObject(flags))
 		return false;
 
+	// Custom virtual-table descriptors (balances / turnovers). The base records descriptor is registered by
+	// ibValueMetaObjectRegisterData::OnAfterRunMetaObject below. Registered into the config's OWN factory —
+	// it is per-config, so a read-only DB load (onlyLoadFlag) still registers its own sources.
+	//
+	// ⚠ ONLY THE TABLES THIS REGISTER ACTUALLY HAS. A turnover-only register keeps no balance: its
+	// view carries no opening / closing / expense column at all (accumulationRegisterSchema.cpp gates
+	// them on eBalances). Registering `.Balance` and `.BalanceAndTurnovers` for it anyway put two
+	// tables in every catalogue that answered with dimensions and not one resource column — a source
+	// a person can pick, join and select nothing from. What a register does not have, it does not offer.
+	m_metaData->RegisterSource(&m_turnover);
+	if (GetRegisterType() == ibRegisterType::eBalances) {
+		m_metaData->RegisterSource(&m_balance);
+		m_metaData->RegisterSource(&m_balanceAndTurnover);
+	}
 
 	if (auto* cc = m_metaData->GetCompileCache()) {
 
 		if (ibValueMetaObjectRegisterData::OnAfterRunMetaObject(flags)) {
 
-			if (!cc->AddCompileModule(m_propertyObjectModule->GetMetaObject(), CreateRecordSetObjectValue()))
+			if (!cc->AddCompileModule(m_propertyObjectModule->GetMetaObject(), [this]() -> ibValue { return CreateRecordSetObjectValue(); }))
 				return false;
 
 			return true;
@@ -210,7 +287,16 @@ bool ibValueMetaObjectAccumulationRegister::OnAfterRunMetaObject(int flags)
 
 bool ibValueMetaObjectAccumulationRegister::OnBeforeCloseMetaObject()
 {
-	if (!(*m_propertyAttributibRecordType)->OnBeforeCloseMetaObject())
+	// ⚠ ALL THREE, UNCONDITIONALLY — deliberately not mirroring the registration's condition. The
+	// register type can be changed while the configuration is open, and a close that asked the
+	// CURRENT type would leave behind whatever was registered under the previous one. Unregistering
+	// something never registered is a no-op (the factory just does not find it), so the asymmetry
+	// costs nothing and removes a whole class of dangling descriptor.
+	m_metaData->UnregisterSource(&m_balance);
+	m_metaData->UnregisterSource(&m_turnover);
+	m_metaData->UnregisterSource(&m_balanceAndTurnover);
+
+	if (!(*m_propertyAttributeRecordType)->OnBeforeCloseMetaObject())
 		return false;
 
 	if (!(*m_propertyManagerModule)->OnBeforeCloseMetaObject())
@@ -224,8 +310,7 @@ bool ibValueMetaObjectAccumulationRegister::OnBeforeCloseMetaObject()
 
 		if (ibValueMetaObjectRegisterData::OnBeforeCloseMetaObject()) {
 
-			if (!cc->RemoveCompileModule(m_propertyObjectModule->GetMetaObject()))
-				return false;
+			cc->RemoveCompileModule(m_propertyObjectModule->GetMetaObject());
 
 			return true;
 		}
@@ -236,7 +321,7 @@ bool ibValueMetaObjectAccumulationRegister::OnBeforeCloseMetaObject()
 
 bool ibValueMetaObjectAccumulationRegister::OnAfterCloseMetaObject()
 {
-	if (!(*m_propertyAttributibRecordType)->OnAfterCloseMetaObject())
+	if (!(*m_propertyAttributeRecordType)->OnAfterCloseMetaObject())
 		return false;
 
 	if (!(*m_propertyManagerModule)->OnAfterCloseMetaObject())
@@ -268,34 +353,34 @@ void ibValueMetaObjectAccumulationRegister::OnRemoveMetaForm(ibValueMetaObjectFo
 	if (metaForm->GetTypeForm() == ibValueMetaObjectAccumulationRegister::eFormList
 		&& m_propertyDefFormList->GetValueAsInteger() == metaForm->GetMetaID())
 	{
-		m_propertyDefFormList->SetValue(metaForm->GetMetaID());
+		m_propertyDefFormList->SetValue(wxNOT_FOUND);
 	}
 }
 #include "accumulationRegisterManager.h"
 
-ibValueManagerDataObject* ibValueMetaObjectAccumulationRegister::CreateManagerDataObjectValue() const
+ibValuePtr<ibValueManagerDataObject> ibValueMetaObjectAccumulationRegister::CreateManagerDataObjectValue() const
 {
-	return ibValue::CreateAndPrepareValueRef<ibValueManagerDataObjectAccumulationRegister>(this);
+	return ibValuePtr<ibValueManagerDataObject>(new ibValueManagerDataObjectAccumulationRegister(this));
 }
 
-ibValueRecordSetObject* ibValueMetaObjectAccumulationRegister::CreateRecordSetObjectRegValue(const ibUniqueKeyPair& uniqueKey) const
+ibValuePtr<ibValueRecordSetObject> ibValueMetaObjectAccumulationRegister::CreateRecordSetObjectRegValue(const ibUniqueKeyPair& uniqueKey) const
 {
 	if (auto* cc = m_metaData->GetCompileCache()) {
 		ibValueRecordSetObject* pDataRef = nullptr;
 		if (!cc->FindCompileModule(m_propertyObjectModule->GetMetaObject(), pDataRef)) {
-			return ibValue::CreateAndPrepareValueRef<ibValueRecordSetObjectAccumulationRegister>(this, uniqueKey);
+			return ibValuePtr<ibValueRecordSetObject>(new ibValueRecordSetObjectAccumulationRegister(this, uniqueKey));
 		}
-		return pDataRef;
+		return ibValuePtr<ibValueRecordSetObject>(pDataRef);
 	}
-	return ibValue::CreateAndPrepareValueRef<ibValueRecordSetObjectAccumulationRegister>(this, uniqueKey);
+	return ibValuePtr<ibValueRecordSetObject>(new ibValueRecordSetObjectAccumulationRegister(this, uniqueKey));
 }
 
-ibSourceDataObject* ibValueMetaObjectAccumulationRegister::CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const
+ibSourcePtr<ibSourceDataObject> ibValueMetaObjectAccumulationRegister::CreateSourceObject(const ibCreateRequest& request, const ibFormID& form_id) const
 {
-	switch (metaObject->GetTypeForm())
+	switch (form_id)
 	{
 	case eFormList:
-		return ibValue::CreateAndPrepareValueRef<ibValueListRegisterObject>(this, metaObject->GetTypeForm());
+		return ibSourcePtr<ibSourceDataObject>(ibCreateList(request, GetQueryable(), GetRegisterPeriod()->GetQueryColumn()));   // migrated onto the universal dynamic list
 	}
 
 	return nullptr;
@@ -306,3 +391,10 @@ ibSourceDataObject* ibValueMetaObjectAccumulationRegister::CreateSourceObject(co
 //***********************************************************************
 
 METADATA_TYPE_REGISTER(ibValueMetaObjectAccumulationRegister, "AccumulationRegister", g_metaAccumulationRegisterCLSID);
+
+// The totals table's own type. Registered because every metaobject is built through the factory —
+// CreateMetaObjectAndSetParent goes through it too — not because anything ever asks for one by name:
+// it is nested in the register, absent from ResolveChild, and therefore unreachable from the
+// metadata tree, from copy/paste and from script. Hence no named clsid constant either: the id is
+// the hash of the name right here, and there is no second place that needs to spell it.
+METADATA_TYPE_REGISTER(ibValueMetaObjectAccumulationRegister::ibValueMetaObjectTotals, "AccumulationRegisterTotals");

@@ -4,7 +4,7 @@
 #include <wx/wx.h>
 #include <wx/radiobut.h>
 
-#include "editorSettings.h"
+#include "editorsettings.h"
 
 /**
  * This class handles the UI for modifying the editor settings page of the

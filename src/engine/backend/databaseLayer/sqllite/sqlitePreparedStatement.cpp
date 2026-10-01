@@ -104,7 +104,28 @@ void ibPreparedStatementSQLite::SetParamNumber(int nPosition, const ibNumber &db
 	if (nIndex > -1)
 	{
 		sqlite3_reset(m_Statements[nIndex]);
-		int nReturn = sqlite3_bind_double(m_Statements[nIndex], nPosition, dblValue.ToDouble());
+		// 🛑 A WHOLE NUMBER A DOUBLE CANNOT CARRY IS BOUND AS AN INTEGER. Everything went in as a double, and a
+		// double keeps 53 bits: a reference's table id is a kind-typed clsid - sixty bits of it - so on this
+		// driver a reference written through the codec read back naming a type nobody registered, and came out
+		// EMPTY (which is why no test here ever read a reference out of a table: 2026-09-20, a sequence's border
+		// lost its recorder).
+		//
+		// ONLY such a number. Everything a double does carry goes the way it always did, for two reasons: an
+		// INTEGER parameter would turn `Amount / &Count` into SQLite's integer division where it was a real one,
+		// and the exactness test below walks the bignum tier - not something to pay on every bind of a journal
+		// row.
+		//
+		// ⚠ Past int64 is NOT a reference left out. `_RTRef` holds a reference kind (0x10..0x1D, clsid.h), which
+		// fits; the 0x80.. range is a reserved seam nobody registers; and Firebird REFUSES such a value for a
+		// BIGINT outright (firebirdParameter.cpp). Spelling it here as an unsigned int64 would make this driver
+		// accept what the default one refuses - a second road - so a number past int64 goes in as a double.
+		const double approximate = dblValue.ToDouble();
+		long long whole = 0;
+		const bool exact = (approximate >= 9007199254740992.0 || approximate <= -9007199254740992.0)   // 2^53
+			&& dblValue.ToInt(whole) == 0 && ibNumber(whole) == dblValue;
+		int nReturn = exact
+			? sqlite3_bind_int64(m_Statements[nIndex], nPosition, static_cast<sqlite3_int64>(whole))
+			: sqlite3_bind_double(m_Statements[nIndex], nPosition, approximate);
 		if (nReturn != SQLITE_OK)
 		{
 			SetErrorCode(ibDatabaseLayerSQLite::TranslateErrorCode(nReturn));
@@ -114,7 +135,7 @@ void ibPreparedStatementSQLite::SetParamNumber(int nPosition, const ibNumber &db
 	}
 }
 
-void ibPreparedStatementSQLite::SetParamString(int nPosition, const wxString& strValue)
+void ibPreparedStatementSQLite::SetParamString(int nPosition, const ibString& strValue)
 {
 	ResetErrorCodes();
 
@@ -169,39 +190,26 @@ void ibPreparedStatementSQLite::SetParamBlob(int nPosition, const void* pData, l
 	}
 }
 
-void ibPreparedStatementSQLite::SetParamDate(int nPosition, const wxDateTime& dateValue)
+void ibPreparedStatementSQLite::SetParamDate(int nPosition, const ibDateTime& dateValue)
 {
 	ResetErrorCodes();
 
-	if (dateValue.IsValid())
+	// SQLite keeps a date as text, and the text is the reading's parts spelled the ISO way (fdatetime.h) -
+	// what ibDateTime::FromString reads back, and what the reference `strftime` forms in the dialect expect.
+	int nIndex = FindStatementAndAdjustPositionIndex(&nPosition);
+	if (nIndex > -1)
 	{
-		int nIndex = FindStatementAndAdjustPositionIndex(&nPosition);
-		if (nIndex > -1)
+		sqlite3_reset(m_Statements[nIndex]);
+		ibDateTimeParts p;
+		dateValue.ToParts(p);
+		wxCharBuffer valueBuffer = ConvertToUnicodeStream(wxString::Format(wxT("%04d-%02u-%02u %02u:%02u:%02u"),
+			p.m_year, p.m_month, p.m_day, p.m_hour, p.m_minute, p.m_second));
+		int nReturn = sqlite3_bind_text(m_Statements[nIndex], nPosition, valueBuffer, -1, SQLITE_TRANSIENT);
+		if (nReturn != SQLITE_OK)
 		{
-			sqlite3_reset(m_Statements[nIndex]);
-			wxCharBuffer valueBuffer = ConvertToUnicodeStream(dateValue.Format(wxT("%Y-%m-%d %H:%M:%S")));
-			int nReturn = sqlite3_bind_text(m_Statements[nIndex], nPosition, valueBuffer, -1, SQLITE_TRANSIENT);
-			if (nReturn != SQLITE_OK)
-			{
-				SetErrorCode(ibDatabaseLayerSQLite::TranslateErrorCode(nReturn));
-				SetErrorMessage(ConvertFromUnicodeStream(sqlite3_errmsg(m_pDatabase)));
-				ThrowDatabaseException();
-			}
-		}
-	}
-	else
-	{
-		int nIndex = FindStatementAndAdjustPositionIndex(&nPosition);
-		if (nIndex > -1)
-		{
-			sqlite3_reset(m_Statements[nIndex]);
-			int nReturn = sqlite3_bind_null(m_Statements[nIndex], nPosition);
-			if (nReturn != SQLITE_OK)
-			{
-				SetErrorCode(ibDatabaseLayerSQLite::TranslateErrorCode(nReturn));
-				SetErrorMessage(ConvertFromUnicodeStream(sqlite3_errmsg(m_pDatabase)));
-				ThrowDatabaseException();
-			}
+			SetErrorCode(ibDatabaseLayerSQLite::TranslateErrorCode(nReturn));
+			SetErrorMessage(ConvertFromUnicodeStream(sqlite3_errmsg(m_pDatabase)));
+			ThrowDatabaseException();
 		}
 	}
 }
@@ -280,7 +288,7 @@ ibDatabaseResultSet* ibPreparedStatementSQLite::RunQueryWithResults()
 
 			if ((nReturn != SQLITE_ROW) && (nReturn != SQLITE_DONE))
 			{
-				wxLogError(wxT("Error with RunQueryWithResults\n"));
+				ibJournalError(wxT("db.sqlite"),wxT("Error with RunQueryWithResults\n"));
 				SetErrorCode(ibDatabaseLayerSQLite::TranslateErrorCode(nReturn));
 				SetErrorMessage(ConvertFromUnicodeStream(sqlite3_errmsg(m_pDatabase)));
 				ThrowDatabaseException();
@@ -291,8 +299,6 @@ ibDatabaseResultSet* ibPreparedStatementSQLite::RunQueryWithResults()
 	// Work off the assumption that only the last statement will return result
 
 	ibDatabaseResultSetSQLite* pResultSet = new ibDatabaseResultSetSQLite(this);
-	if (pResultSet)
-		pResultSet->SetEncoding(GetEncoding());
 
 	LogResultSetForCleanup(pResultSet);
 	return pResultSet;

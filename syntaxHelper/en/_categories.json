@@ -1,0 +1,26 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "en",
+  "categories": {
+    "common_lang": "Common Language Description",
+    "control_flow": "Control Flow",
+    "global_context": "Global Context",
+    "global_functions": "Global Functions",
+    "primitive_types": "Primitive Types",
+    "date": "Date",
+    "linq": "LINQ — collection queries",
+    "query": "Data queries",
+    "rls": "Row-level security (RLS)",
+    "spreadsheet": "Spreadsheet document — templates and printing",
+    "value_types": "Value types",
+    "collections": "Collections",
+    "containers": "Container and Structure",
+    "value_table": "Value table (Table)",
+    "http": "HTTP — requests to another system",
+    "json": "JSON — reading and writing",
+    "text_files": "Text files and bytes — reading and writing",
+    "runtime": "Runtime",
+    "guide": "Guide"
+  }
+}

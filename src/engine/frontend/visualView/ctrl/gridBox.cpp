@@ -1,40 +1,159 @@
-#include "gridbox.h"
+#include "gridBox.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
+#include "backend/system/value/valueDataComposition.h"   // the source that turns this box into a report
+#include "frontend/win/dlgs/settings/savedSettings.h"    // the setting marked "restore on open" goes on here
+#include "frontend/docView/templates/docViewSpreadsheet.h"   // the document it holds, and its view
 
 //***********************************************************************************
 //*                           IMPLEMENT_DYNAMIC_CLASS                               *
 //***********************************************************************************
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueGridBox, ibValueWindow);
+// ⭐⭐ THE MODEL INSTALLS ITSELF HERE. Anything that IS a spreadsheet model — a hand-filled document,
+// a composer — is handed in and the box shows the sheet THAT model holds. Nothing else is accepted,
+// and the box keeps what it had rather than half-taking a value it cannot show.
+//
+// 🛑 THE MODEL, never a bare document description: the drill-down parameters and the edit mode live
+// on the OBJECT, so installing a description alone leaves every cell bound to a name nothing answers
+// to — the sheet looks right and stops opening anything.
+bool ibValueGridBox::SetControlValue(const ibValue& varControlVal)
+{
+	ibValueSpreadsheetModel* model = varControlVal.ConvertToType<ibValueSpreadsheetModel>();
+	if (model == nullptr)
+		return false;
+
+	m_spreadsheetModel = model;
+
+	// The window follows the model it was given — the sheet is the model's, and a run filling it
+	// reaches the screen through the notifiers the window subscribes to here.
+	m_gridDocument->SetSpreadsheetDocument(model->GetSpreadsheetDocument());
+
+	return true;
+}
+
+bool ibValueGridBox::GetControlValue(ibValue& pvarControlVal) const
+{
+	pvarControlVal = m_spreadsheetModel;
+	return true;
+}
 
 //***********************************************************************************
 //*                                 Value Notebook                                  *
 //***********************************************************************************
 
-ibValueGridBox::ibValueGridBox() : ibValueWindow(), 
-m_valueSpreadsheet(ibValue::CreateAndPrepareValueRef<ibValueSpreadsheetDocument>())
+ibValueGridBox::ibValueGridBox() : ibValueWindowComposite(),
+m_spreadsheetModel(new ibValueSpreadsheetDocument()),   // nothing bound yet — a sheet of its own IS a model
+m_gridDocument(new ibSpreadsheetGridBoxDocument()),
+m_gridView(new ibSpreadsheetGridBoxView())                // empty until Create
 {
+	m_gridView->SetDocument(m_gridDocument);
+
+	m_members.Bind(this, &ibValueGridBox::FillControlMembers);
 	//set default params
 	m_propertyMinSize->SetValue(wxSize(150, 50));
+	// ⭐ THE SOURCE TAKES EXACTLY TWO TYPES (Max, 2026-08-19): a **spreadsheet document** — the
+	// hand-filled sheet, a printable form — and a **composition** — the report, which builds its own
+	// document and brings the two verbs with it. Declared here so the picker offers those and
+	// nothing else; the control then behaves by what it was actually given (see ResolveComposition).
+	ibTypeDescription allowedSources;
+	allowedSources.AppendMetaType(g_valueSpreadsheetCLSID);
+	allowedSources.AppendMetaType(g_valueDataCompositionCLSID);
+	m_propertySource->SetValue(allowedSources);
 }
 
 #include "frontend/visualView/ctrl/form.h"
 
+ibValueGridBox::~ibValueGridBox()
+{
+	*m_aliveToken = false;
+
+	wxDELETE(m_gridView);   // the view first: it is the document's
+	wxDELETE(m_gridDocument);
+}
+
+ibView* ibValueGridBox::GetControlView() const
+{
+	// An empty view (cleaned up, not created again) has nothing to hand on.
+	return m_gridView->GetGridCtrl() != nullptr ? m_gridView : nullptr;
+}
+
 wxObject* ibValueGridBox::Create(wxWindow* wxparent, ibVisualHost* visualHost)
 {
-	ibGridEditor* gridWindow = new ibGridEditor(nullptr, wxparent, wxID_ANY, wxDefaultPosition, wxDefaultSize);
+	// The box's view is created the way a document's view is — its frame is this box's parent, and its
+	// OnCreate makes the editor, which is what the form engine is handed.
+	m_gridView->SetFrame(wxparent);
+	
+	if (!m_gridView->OnCreate(m_gridDocument, 0))
+		return nullptr;
+	
+	ibGridEditor* gridWindow = m_gridView->GetGridCtrl();
 
 	gridWindow->EnableProperty(!visualHost->IsDesignerHost());
 	gridWindow->EnableGridArea(false);
 	gridWindow->EnableGridLines(false);
 
-	gridWindow->LoadDocument(m_valueSpreadsheet->GetSpreadsheetDocument());
+	// THE BINDING IS HONOURED HERE TOO — the same moment every other source control takes its value
+	// (a checkbox, a textbox, a table all read the bound attribute as their window appears). The form
+	// may already have handed it over at InitializeControl; taking it again is idempotent, and it is
+	// what makes a window rebuilt on its own — a re-render, a designer preview — come back bound.
+	RefreshModel();
+
+	// WHAT IT SHOWS: the sheet the MODEL holds. The model is what fills it — a composer on Compose,
+	// a hand-filled document simply by being one — and the window subscribes to that very object, so
+	// data arriving there reaches the screen without anybody re-pointing the control.
+	if (m_spreadsheetModel)
+		m_gridDocument->SetSpreadsheetDocument(m_spreadsheetModel->GetSpreadsheetDocument());
+
+	// ⭐⭐ THE CELL CLICKS, BROUGHT OUT TO THE RUNTIME. The editor window has always caught them — a
+	// DOUBLE left click opens the cell's value, a right click raises the popup — but it handled them
+	// INSIDE itself, so a report could not say anything about its own figures (Max, 2026-08-26:
+	// "the editor knows how to catch all this; you need to bring it out to the runtime").
+	//
+	// ⚠ THE SAME EVENTS THE EDITOR TAKES, not neighbouring ones: left is DCLICK, because that is
+	// what "open the value" is bound to and what a person means by clicking a figure twice. Bound
+	// dynamically, which wx searches BEFORE the static table — so this control is asked first and
+	// `event.Skip()` is what lets the editor do the rest.
+	//
+	// Bound where the window is MADE, so a window rebuilt on its own (a re-render, a designer
+	// preview) comes back listening.
+	gridWindow->Bind(wxEVT_GRID_CELL_LEFT_DCLICK, &ibValueGridBox::OnCellLeftClick, this);
 
 	return gridWindow;
 }
 
-void ibValueGridBox::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool firstСreated)
+void ibValueGridBox::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool firstCreated)
 {
-	ibGridEditor* gridWindow = dynamic_cast<ibGridEditor*>(wxobject);
+	// A JUST-DROPPED BOX PROVISIONS ITS OWN ATTRIBUTE — the same door every source control uses. Its
+	// TYPE is the first type this box DECLARES it accepts (spreadsheet document), so there is nothing
+	// to state twice.
+	if (firstCreated)
+		AutoBindNewSource(this);
+
+	// ⭐⭐ AND THE SETTING MARKED "restore on open" IS PUT ON — HERE, BEFORE THE COMPOSE, because the
+	// compose below must read by it. This is the moment a control has been handed its model (Max,
+	// 2026-08-26: *"it fires when you assign the model, or on the created event — it happens once
+	// anyway"*), and it is the FRONT's job: the back has no idea a window opened.
+	//
+	// ⚠ NOT IN THE DESIGNER, for the same reason the compose is not: there the box is a picture of
+	// itself, and a person drawing a form is not a reader whose settings these are.
+	// ⭐ THE ADDRESS COMES FROM THE BINDING — the leaf of this box's source path, which for a report is
+	// the COMPOSER's metaID. What a person arranged belongs to what is shown, not to the widget: the
+	// box can be deleted and drawn again and the shelf is still theirs.
+	if (visualHost != nullptr && !visualHost->IsDesignerHost() && m_spreadsheetModel)
+		ibDialogSavedSettings::ApplyDefault(m_spreadsheetModel->GetModelComposer(),
+			ibSettingsCategory::Composer, SettingsObjectKey(), GetMetaData());
+
+	// ⭐⭐ COMPOSE ON OPEN — here, at CREATION, and nowhere else. This is the one moment that happens
+	// once per opened window: `Update` runs again for every re-render, property edit and resize, and
+	// a report re-reading the database because a window moved is not a feature.
+	//
+	// ⚠ NOT IN THE DESIGNER. There the box is a picture of itself — running the report while
+	// somebody is drawing the form would read live data into an editor, and slowly.
+	//
+	// Through the control's own command rather than the model's verb, so it takes exactly the road
+	// the button takes: the progress indicator, the background read, the failure message.
+	if (visualHost != nullptr && !visualHost->IsDesignerHost()
+	    && m_propertyComposeOnOpen->GetValueAsBoolean())
+		CallAsAction(ibSpreadsheetModelCommand_Compose, GetOwnerForm());
 }
 
 void ibValueGridBox::OnSelected(wxObject* wxobject)
@@ -49,64 +168,79 @@ void ibValueGridBox::Update(wxObject* wxobject, ibVisualHost* visualHost)
 	}
 
 	UpdateWindow(gridWindow);
+
+	m_gridDocument->UpdateAllViews();
 }
 
 void ibValueGridBox::Cleanup(wxObject* wxobject, ibVisualHost* visualHost)
 {
-}
+	// ⭐ THE WINDOW IS GOING — TELL THE READ TO STOP. A report composes on a rented background run,
+	// and a form closing is not the same moment as the composition dying: the run holds references
+	// of its own, so without this it keeps reading against a session nobody is watching, on a
+	// connection somebody else is waiting for (Max, 2026-08-19: "sorry, break off, we changed our
+	// mind"). CancelFetch raises the same cooperative flag the interpreter obeys and waits the run
+	// out — the walk polls it per row, so it stops at the next one.
+	//
+	// ASKED OF THE MODEL, not of a composition: whatever is bound answers, and a sheet that reads
+	// nothing has nothing to stop.
+	if (m_spreadsheetModel)
+		m_spreadsheetModel->CancelFetch();
 
-//**********************************************************************************
-
-#include "frontend/win/editor/gridEditor/gridPrintout.h"
-
-wxPrintout* ibValueGridBox::CreatePrintout() const
-{
-	ibGridEditor* gridWindow = dynamic_cast<ibGridEditor*>(GetWxObject());
-	if (gridWindow != nullptr)
-		return gridWindow->CreatePrintout();
-
-	return nullptr;
+	// …and the view is closed, left empty: the visual host destroys the editor right after this, and the
+	// document stays with the box.
+	m_gridView->Close(false);
 }
 
 //**********************************************************************************
 //*                                   Data										   *
 //**********************************************************************************
 
-bool ibValueGridBox::LoadData(ibReaderMemory& reader)
+bool ibValueGridBox::ReadData(const ibDataNode& node)
 {
-	ibSpreadsheetDescriptionMemory::LoadData(reader, m_valueSpreadsheet->GetSpreadsheetDesc());
-	return ibValueWindow::LoadData(reader);
-}
+	// ⭐ THE SOURCE IS PART OF THE CONTROL (Max, 2026-08-19: "you forgot the serialisation that
+	// stores the source"). Everything else about a gridbox survived a save and the binding did not,
+	// so a form reopened with the box pointing at nothing — and the report it was built for looked
+	// like it had lost its composition.
+	m_propertySource->SetNodeValue(node.GetProperty(m_propertySource->GetName()));
 
-bool ibValueGridBox::SaveData(ibWriterMemory& writer)
+	// The sheet a designer typed into travels with the control — read into the sheet the MODEL holds,
+	// which with no source bound is the box's own document.
+	if (m_spreadsheetModel) {
+		ibSpreadsheetDescriptionMemory::ReadNode(node.GetProperty(wxT("Spreadsheet")),
+			m_spreadsheetModel->GetSpreadsheetDocument()->GetSpreadsheetDesc());
+	}
+	return ibValueWindowComposite::ReadData(node);
+}
+bool ibValueGridBox::WriteData(ibDataNode& node) const
 {
-	ibSpreadsheetDescriptionMemory::SaveData(writer, m_valueSpreadsheet->GetSpreadsheetDesc());
-	return ibValueWindow::SaveData(writer);
+	node.SetProperty(m_propertySource->GetName(), m_propertySource->GetNodeValue());
+
+	if (m_spreadsheetModel) {
+		ibDataValue spreadsheet;
+		ibSpreadsheetDescriptionMemory::WriteNode(spreadsheet,
+			m_spreadsheetModel->GetSpreadsheetDocument()->GetSpreadsheetDesc());
+		node.SetProperty(wxT("Spreadsheet"), spreadsheet);
+	}
+	return ibValueWindowComposite::WriteData(node);
 }
 
 //***********************************************************************************
-
 enum prop {
 	eGridValue,
 };
 
-void ibValueGridBox::PrepareNames() const
+void ibValueGridBox::FillControlMembers(ibMemberTable& helper) const
 {
-	ibValueFrame::PrepareNames();
-
-	m_methodHelper->AppendProp(wxT("Value"), eGridValue, eControl);
+	helper.AppendProp(wxT("Value"), eGridValue, eControl);
 }
 
 bool ibValueGridBox::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 {
-	const long lPropAlias = m_methodHelper->GetPropAlias(lPropNum); bool refreshColumn = false;
+	const long lPropAlias = m_members.GetPropAlias(lPropNum);
 	if (lPropAlias == eControl) {
-		const long lPropData = m_methodHelper->GetPropData(lPropNum);
-		if (lPropData == eGridValue) {
-			ibGridEditor* gridWindow = dynamic_cast<ibGridEditor*>(GetWxObject());
-			m_valueSpreadsheet = varPropVal.ConvertToType<ibValueSpreadsheetDocument>();
-			if (gridWindow != nullptr) gridWindow->LoadDocument(m_valueSpreadsheet->GetSpreadsheetDesc());
-		}
+		const long lPropData = m_members.GetPropData(lPropNum);
+		if (lPropData == eGridValue)
+			return SetControlValue(varPropVal);   // ONE door: a script assigns what the form binds
 	}
 
 	return ibValueFrame::SetPropVal(lPropNum, varPropVal);
@@ -114,13 +248,11 @@ bool ibValueGridBox::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 
 bool ibValueGridBox::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
-	const long lPropAlias = m_methodHelper->GetPropAlias(lPropNum);
+	const long lPropAlias = m_members.GetPropAlias(lPropNum);
 	if (lPropAlias == eControl) {
-		const long lPropData = m_methodHelper->GetPropData(lPropNum);
-		if (lPropData == eGridValue) {
-			pvarPropVal = m_valueSpreadsheet;
-			return true;
-		}
+		const long lPropData = m_members.GetPropData(lPropNum);
+		if (lPropData == eGridValue)
+			return GetControlValue(pvarPropVal);
 	}
 	return ibValueFrame::GetPropVal(lPropNum, pvarPropVal);
 }
@@ -129,4 +261,4 @@ bool ibValueGridBox::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 //*                       Register in runtime                           *
 //***********************************************************************
 
-CONTROL_TYPE_REGISTER(ibValueGridBox, "Gridbox", "Container", string_to_clsid("CT_GRID"));
+CONTROL_TYPE_REGISTER(ibValueGridBox, "Gridbox", "Container", g_controlGridBoxCLSID);

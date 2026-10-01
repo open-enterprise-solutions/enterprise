@@ -1,6 +1,5 @@
 #include "appData.h"
-#include "backend/databaseLayer/databaseLayer.h"
-#include "backend/databaseLayer/databaseErrorCodes.h"
+#include "backend/databaseLayer/databaseQueryBuilder.h"   // L2 door — DDL/DML + TableExists/GetColumns/IsOpen + typed row reads (no raw L1)
 #include "backend/databaseLayer/connectionPool.h"
 
 #include "backend/backend_exception.h"
@@ -9,108 +8,232 @@
 
 
 ///////////////////////////////////////////////////////////////////////////////
-//								ibApplicationData
+//								ibApplicationInstance
 ///////////////////////////////////////////////////////////////////////////////
 
-bool ibApplicationData::TableAlreadyCreated()
+bool ibApplicationInstance::TableAlreadyCreated()
 {
-	return db_query->TableExists(user_table) &&
-		db_query->TableExists(session_table);
+	ibDatabaseQueryBuilder q;
+	return q.TableExists(user_table) &&
+		q.TableExists(session_table);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 
-void ibApplicationData::CreateTableUser()
+void ibApplicationInstance::CreateTableUser()
 {
-	if (!db_query->TableExists(user_table)) {
-		if (db_query->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL) {
-			db_query->RunQuery("create table %s ("
-				"guid              VARCHAR(36)   NOT NULL PRIMARY KEY,"
-				"name              VARCHAR(64)  NOT NULL,"
-				"fullName          VARCHAR(128)  NOT NULL,"
-				"changed		   TIMESTAMP  NOT NULL,"
-				"dataSize          INTEGER       NOT NULL,"
-				"binaryData        BYTEA      NOT NULL);", user_table);
-		}
-		else {
-			db_query->RunQuery("create table %s ("
-				"guid              VARCHAR(36)   NOT NULL PRIMARY KEY,"
-				"name              VARCHAR(64)  NOT NULL,"
-				"fullName          VARCHAR(128)  NOT NULL,"
-				"changed		   TIMESTAMP  NOT NULL,"
-				"dataSize          INTEGER       NOT NULL,"
-				"binaryData        BLOB      NOT NULL);", user_table);
-		}
-		db_query->RunQuery("create index if not exists user_index on %s (guid, name);", user_table);
+	ibDatabaseQueryBuilder q;
+	if (!q.TableExists(user_table)) {
+		// One CreateTable for every driver — the dialect TYPE-MAP renders binaryData's BLOB as
+		// BYTEA on PostgreSQL and BLOB everywhere else, so the old per-driver fork is gone.
+		q.Execute(ibCreateTable(user_table, {
+			{ wxT("guid"),       ibTypeString(36),  /*notNull*/false, /*pk*/true,  wxEmptyString },
+			{ wxT("name"),       ibTypeString(64),  /*notNull*/true,  /*pk*/false, wxEmptyString },
+			{ wxT("fullName"),   ibTypeString(128), /*notNull*/true,  /*pk*/false, wxEmptyString },
+			{ wxT("changed"),    ibTypeDate(),      /*notNull*/true,  /*pk*/false, wxEmptyString },
+			{ wxT("dataSize"),   ibTypeInteger(),   /*notNull*/true,  /*pk*/false, wxEmptyString },
+			{ wxT("binaryData"), ibTypeBlob(),      /*notNull*/true,  /*pk*/false, wxEmptyString },
+		}));
+		// The index rides with the just-created table, so the old "if not exists" was redundant
+		// (and let Firebird choke on that syntax) — a plain CREATE INDEX is correct here.
+		q.Execute(ibCreateIndex(user_table, wxT("user_index"), { wxT("guid"), wxT("name") }));
 	}
 }
 
-void ibApplicationData::CreateTableSession()
+void ibApplicationInstance::CreateTableSession()
 {
-	if (!db_query->TableExists(session_table)) {
+	ibDatabaseQueryBuilder q;
+	if (!q.TableExists(session_table)) {
 
-		db_query->RunQuery(wxT("create table %s ("
-			"session              VARCHAR(36) NOT NULL PRIMARY KEY,"
-			"userName             VARCHAR(64) NOT NULL,"
-			"application	   INTEGER  NOT NULL,"
-			"started		   TIMESTAMP  NOT NULL,"
-			"lastActive		   TIMESTAMP  NOT NULL,"
-			"computer          VARCHAR(128) NOT NULL,"
-			// --- session-registry extensions (2026-04-20) ---
-			// pid             = owner process id (for admin / kick / debugger attach)
-			// address         = "host:port" for web processes; "" for desktop
-			// currentActivity = last scripted/engine label ("idle", "running:OnStart", "reload", ...)
-			// exclusive       = 1 when this session holds process-wide monopoly mode; 0 otherwise.
-			//                   Cluster-aware exclusive gate reads this column from peer rows
-			//                   to block new Connects when another process is exclusive.
-			"pid               INTEGER,"
-			"address           VARCHAR(256),"
-			"currentActivity   VARCHAR(128),"
-			"exclusive         INTEGER);"),
-			session_table
-		);
-
-		if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD) {
-
-			db_query->RunQuery(
-				wxT("create index if not exists session_index_1 on %s (session, userName);"),
-				session_table
-			);
-
-			db_query->RunQuery(
-				wxT("create index if not exists session_index_2 on %s (session);"),
-				session_table
-			);
-
-			db_query->RunQuery(
-				wxT("create index if not exists session_index_3 on %s (lastActive);"),
-				session_table
-			);
-		}
-		else
-		{
-			db_query->RunQuery(
-				wxT("create index session_index_1 on %s (session, userName);"),
-				session_table
-			);
-
-			db_query->RunQuery(
-				wxT("create index session_index_2 on %s (session);"),
-				session_table
-			);
-
-			db_query->RunQuery(
-				wxT("create index session_index_3 on %s (lastActive);"),
-				session_table
-			);
-		}
+		// session-registry extensions (2026-04-20) are nullable so legacy rows stay valid:
+		//   pid             = owner process id (admin / kick / debugger attach)
+		//   address         = "host:port" for web processes; "" for desktop
+		//   currentActivity = last scripted/engine label ("idle", "running:OnStart", "reload", ...)
+		//   exclusive       = 1 when this session holds process-wide monopoly mode; 0 otherwise.
+		//                     Cluster-aware exclusive gate reads this column from peer rows to block
+		//                     new Connects when another process is exclusive.
+		q.Execute(ibCreateTable(session_table, {
+			{ wxT("session"),         ibTypeString(36),  false, true,  wxEmptyString },
+			{ wxT("userName"),        ibTypeString(64),  true,  false, wxEmptyString },
+			{ wxT("application"),     ibTypeInteger(),   true,  false, wxEmptyString },
+			{ wxT("started"),         ibTypeDate(),      true,  false, wxEmptyString },
+			{ wxT("lastActive"),      ibTypeDate(),      true,  false, wxEmptyString },
+			{ wxT("computer"),        ibTypeString(128), true,  false, wxEmptyString },
+			{ wxT("pid"),             ibTypeInteger(),   false, false, wxEmptyString },
+			{ wxT("address"),         ibTypeString(256), false, false, wxEmptyString },
+			{ wxT("currentActivity"), ibTypeString(ibSessionRegistry::kActivityWidth), false, false, wxEmptyString },
+			// NOT NULL with a default: "not exclusive" gets ONE spelling, decided by the column rather
+			// than by whoever wrote the row. A nullable flag has two (NULL and 0) and they agree only
+			// as long as every reader remembers to make them agree.
+			{ wxT("exclusive"),       ibTypeInteger(),   true,  false, wxT("0") },
+		}));
+		// Indexes ride with the just-created table — no "if not exists" (redundant here, and
+		// unsupported by Firebird), so the per-driver fork collapses to three plain CREATE INDEX.
+		q.Execute(ibCreateIndex(session_table, wxT("session_index_1"), { wxT("session"), wxT("userName") }));
+		q.Execute(ibCreateIndex(session_table, wxT("session_index_2"), { wxT("session") }));
+		q.Execute(ibCreateIndex(session_table, wxT("session_index_3"), { wxT("lastActive") }));
 	}
 }
 
-void ibApplicationData::CreateTableEvent()
+void ibApplicationInstance::CreateTableEvent()
 {
-	if (!db_query->TableExists(event_table)) {
+	ibDatabaseQueryBuilder q;
+	if (!q.TableExists(event_table)) {
 	}
+}
+
+// sys_lock — long-held pessimistic-lock coordination table (see
+// docs/private/record-locks.md "Planned upgrade path"). One row per held
+// lock. ibLockManager INSERTs on Acquire, DELETEs on Release / on
+// session end / on zombie sweep. Index on (namespace, keyHash) drives
+// the per-acquire conflict-check; index on sessionGuid drives the
+// session-end cascade.
+void ibApplicationInstance::CreateTableLock()
+{
+	ibDatabaseQueryBuilder q;
+	if (!q.TableExists(lock_table)) {
+
+		q.Execute(ibCreateTable(lock_table, {
+			{ wxT("lockGuid"),    ibTypeString(36),   false, true,  wxEmptyString },
+			{ wxT("sessionGuid"), ibTypeString(36),   true,  false, wxEmptyString },   // owner identity (session.GUID or custom holder)
+			{ wxT("namespace"),   ibTypeString(128),  true,  false, wxEmptyString },   // e.g. "Catalog.Products"
+			{ wxT("keyHash"),     ibTypeString(64),   true,  false, wxEmptyString },   // SHA-256 hex of canonical key bytes
+			{ wxT("keyData"),     ibTypeString(1024), false, false, wxEmptyString },   // canonical human-readable key for conflict messages
+			{ wxT("lockMode"),    ibTypeInteger(),    true,  false, wxEmptyString },   // 0=Shared, 1=Exclusive
+			{ wxT("acquiredAt"),  ibTypeDate(),       true,  false, wxEmptyString },
+			{ wxT("userName"),    ibTypeString(128),  false, false, wxEmptyString },   // holder's display name (snapshot at acquire)
+			{ wxT("computer"),    ibTypeString(128),  false, false, wxEmptyString },
+		}));
+		// Index on (namespace, keyHash) drives the per-acquire conflict-check; index on
+		// sessionGuid drives the session-end cascade. No per-driver fork — see CreateTableSession.
+		q.Execute(ibCreateIndex(lock_table, wxT("lock_index_1"), { wxT("namespace"), wxT("keyHash") }));
+		q.Execute(ibCreateIndex(lock_table, wxT("lock_index_2"), { wxT("sessionGuid") }));
+	}
+}
+
+// sys_job — the SHARED clock for scheduled jobs. One row per job name,
+// carrying when it last ran as every process on this base sees it.
+//
+// Why it exists: the cross-process claim (sys_lock, Job.<name>) answers
+// "is somebody running it RIGHT NOW", which is not the same question as
+// "has it already run recently". Without a shared last-run, two clients
+// open on one file base each keep their own in-memory clock and the job
+// fires once per process per interval — twice the work, and for anything
+// that is not idempotent, twice the effect.
+//
+// Deliberately minimal. No history, no status, no next-run: those are
+// per-process observations (ibJobState) and belong in memory. What has to
+// be shared is exactly the one fact that decides whether to start.
+void ibApplicationInstance::CreateTableJob()
+{
+	ibDatabaseQueryBuilder q;
+	if (!q.TableExists(job_table)) {
+
+		q.Execute(ibCreateTable(job_table, {
+			// PRIMARY KEY — the job's GUID, not its name. A configuration's job carries its
+			// metaobject's guid (which survives a rename, an unload / reload and a copy onto
+			// another base); a platform job carries a fixed one minted once in platformJobs.cpp.
+			// One kind of value in the column, so no reader has to ask which sort of key it is
+			// looking at — and keying by the display name would orphan a renamed job's settings
+			// and its clock, leaving a row that still says "switched off" pointing at nothing.
+			// Native UUID on PostgreSQL, CHAR(36) elsewhere — the dialect TYPE-MAP picks.
+			{ wxT("jobKey"),   ibTypeGuid(),      false, true,  wxEmptyString },
+			{ wxT("jobName"),  ibTypeString(128), true,  false, wxEmptyString },   // display name, for a person reading the table
+			// ⚠⚠ THE THIRD FLAG IS `m_notNull`, NOT "nullable" — and the four columns below were
+			// written as though it were the latter. Every one of them describes something a job
+			// that has NEVER RUN does not have, so every one of them must ACCEPT NULL:
+			//
+			//   lastRun  — there is no clock reading before the first run;
+			//   active   — its own comment says "NULL = on (a row older than the column)";
+			//   schedule — a row written before the column existed carries none.
+			//
+			// Declared NOT NULL, the seed INSERT that Register() writes for a job it has never seen
+			// died on the first one: "validation error for column SYS_JOB.LASTRUN, value *** null
+			// ***". Which is to say enterprise.exe could not open a database at all — the flags said
+			// the opposite of what the comments beside them promised.
+			{ wxT("lastRun"),  ibTypeDate(),      false, false, wxEmptyString },   // wall clock, shared across processes
+			{ wxT("computer"), ibTypeString(128), false, false, wxEmptyString },   // who ran it last, for diagnostics
+			// The two SETTINGS a base holds — what the enterprise may change without opening the
+			// Designer. They are here and not in the metadata because switching a misbehaving job
+			// off at 3 a.m. must not mean editing the configuration on a production base; and for
+			// the engine's OWN jobs there is no configuration to edit at all.
+			{ wxT("active"),   ibTypeBoolean(),   false, false, wxEmptyString },   // NULL = on (a row older than the column)
+			{ wxT("schedule"), ibTypeBlob(),      false, false, wxEmptyString },   // ibJobScheduleDescriptionMemory blob
+		}));
+	}
+}
+
+// sys_settings — ONE ROW PER SAVED SETTING: a packed runtime value under an address of
+// category + object + name + user. What a person arranged on a form or on a list stops
+// dying with the window that arranged it.
+//
+// ⚠ THE PRIMARY KEY IS A HASH OF THE ADDRESS, not the address itself, and that is a fact
+// about the DDL renderer rather than about settings: PRIMARY KEY is spelled per COLUMN, so
+// four key columns would emit four of them and no driver would take the CREATE. sys_lock
+// answered the same question the same way — keyHash for the lookup, the readable parts
+// beside it. Here they also carry the "everything this user saved for that object" query,
+// which is what the index is for.
+//
+// The payload's format is NOT this table's business: binaryData is a NODE written through
+// ibBinaryProvider, and it changes when what it carries changes without a word of DDL.
+// Deliberately no "version" column for the same reason — the node format carries its own,
+// and a second one here would be a version of nothing.
+//
+// 🛑 AND WHEN THIS SCHEMA CHANGES, IT MAY NOT BE DROPPED AND REBUILT. sys_job and
+// sys_bytecode_cache are migrated that way and are right to be: a job's settings re-seed from
+// its declaration and a cache recomputes, so nothing a person did is in them. THIS table is the
+// opposite — every row is something somebody arranged and asked to keep, and it exists nowhere
+// else. A schema change here is ADD COLUMN (nullable, read as absent by an older row), never a
+// DROP. That is not an alpha-vs-release distinction; it is what the table holds.
+void ibApplicationInstance::CreateTableSettings()
+{
+	ibDatabaseQueryBuilder q;
+	if (!q.TableExists(settings_table)) {
+
+		q.Execute(ibCreateTable(settings_table, {
+			{ wxT("entryKey"),   ibTypeString(64),  false, true,  wxEmptyString },   // SHA-256 hex of the four parts below
+			{ wxT("category"),   ibTypeInteger(),   true,  false, wxEmptyString },   // ibSettingsCategory, BY NUMBER
+			{ wxT("objectKey"),  ibTypeString(128), true,  false, wxEmptyString },   // metaobject guid, or a name of the caller's own
+			// NOT NULL with a default: "this object has only one setting" and "this row is
+			// everybody's" get ONE spelling each, decided by the column rather than by whoever
+			// wrote the row. A nullable key column has two (NULL and ''), and they agree only as
+			// long as every reader remembers to make them agree — while the hash above already
+			// took the empty string as its input.
+			{ wxT("settingKey"), ibTypeString(128), true,  false, wxT("''") },       // which setting of that object; '' = the only one
+			{ wxT("userKey"),    ibTypeString(36),  true,  false, wxT("''") },       // whose; '' = shared by everybody
+			{ wxT("changed"),    ibTypeDate(),      true,  false, wxEmptyString },
+			{ wxT("dataSize"),   ibTypeInteger(),   true,  false, wxEmptyString },
+			{ wxT("binaryData"), ibTypeBlob(),      true,  false, wxEmptyString },   // the packed value; BYTEA on PostgreSQL via the TYPE-MAP
+		}));
+		// The readable address, for "everything this user saved about that object" — the query an
+		// administrator's "reset this person's settings" and a form's own cleanup both make. The
+		// index rides with the just-created table, so no "if not exists" (which Firebird rejects).
+		q.Execute(ibCreateIndex(settings_table, wxT("settings_index_1"),
+			{ wxT("category"), wxT("objectKey"), wxT("userKey") }));
+	}
+}
+
+// sys_job schema move — the key went from the display NAME to the job's stable key, and the table
+// gained its settings columns (active / schedule) on 2026-08-04.
+//
+// The old rows are DROPPED rather than converted, and deliberately: everything sys_job holds is
+// re-derivable — the settings are re-seeded from the declaration on the next Register, and the
+// clock's only loss is that each job may run once more than it strictly had to. A conversion would
+// have to guess which metaobject an old name meant, and a wrong guess silently applies one job's
+// "switched off" to another. (Alpha: there is no installed base to migrate.)
+void ibApplicationInstance::MigrateTableJob()
+{
+	ibDatabaseQueryBuilder qi;
+	if (!qi.TableExists(job_table))
+		return;
+
+	wxArrayString cols = qi.GetColumns(job_table);
+	for (const wxString& c : cols)
+		if (c.IsSameAs(wxT("jobKey"), false))
+			return;   // already on the keyed schema
+
+	qi.Execute(ibDropTable(job_table));
+	CreateTableJob();
 }
 
 // Additive column migration for sys_session. Existing databases created
@@ -119,52 +242,44 @@ void ibApplicationData::CreateTableEvent()
 // writes / reads assume these columns exist, so an old schema would
 // trip INSERT and snapshot SELECT otherwise. Columns are nullable, so
 // legacy rows stay valid until the next heartbeat rewrite.
-void ibApplicationData::MigrateTableSession()
+void ibApplicationInstance::MigrateTableSession()
 {
-	if (!db_query->TableExists(session_table))
+	ibDatabaseQueryBuilder qi;
+	if (!qi.TableExists(session_table))
 		return;
 
-	wxArrayString cols = db_query->GetColumns(session_table);
+	wxArrayString cols = qi.GetColumns(session_table);
 	auto has = [&](const wxString& col) {
 		for (std::size_t i = 0; i < cols.GetCount(); ++i)
 			if (cols[i].CmpNoCase(col) == 0) return true;
 		return false;
 	};
 
-	if (!has(wxT("pid"))) {
-		try { db_query->RunQuery(wxT("ALTER TABLE %s ADD pid INTEGER"), session_table); }
-		catch (...) { /* best-effort — driver may not support this DDL */ }
-	}
-	if (!has(wxT("address"))) {
-		try { db_query->RunQuery(wxT("ALTER TABLE %s ADD address VARCHAR(256)"), session_table); }
-		catch (...) {}
-	}
-	if (!has(wxT("currentActivity"))) {
-		try { db_query->RunQuery(wxT("ALTER TABLE %s ADD currentActivity VARCHAR(128)"), session_table); }
-		catch (...) {}
-	}
-	if (!has(wxT("kind"))) {
-		// ibSessionKind — session-level role (WebServer=5, WebClient=100,
-		// desktop kinds share numeric values with ibRunMode). Distinct
-		// from `application` which stores process-level ibRunMode.
-		try { db_query->RunQuery(wxT("ALTER TABLE %s ADD kind INTEGER"), session_table); }
-		catch (...) {}
-	}
-	if (!has(wxT("signal"))) {
-		// Admin → registry control channel. A non-empty value is picked
-		// up by the session's owning process on its next JobCheckSignal
-		// tick; the handler acts and clears the signal. "kick" is the
-		// first supported value — more (reload, refresh) may follow.
-		try { db_query->RunQuery(wxT("ALTER TABLE %s ADD signal VARCHAR(32)"), session_table); }
-		catch (...) {}
-	}
-	if (!has(wxT("exclusive"))) {
-		// Process-wide monopoly mode marker. 1 = this session holds
-		// exclusive; cluster-aware gate in ProcessAdd / ProcessSetExclusive
-		// reads peer rows to detect another process holding it.
-		try { db_query->RunQuery(wxT("ALTER TABLE %s ADD exclusive INTEGER"), session_table); }
-		catch (...) {}
-	}
+	// Each ADD is best-effort and independent — a fresh builder per column so one driver's
+	// rejection (caught below) never poisons the next column's statement.
+	auto addColumn = [&](const wxString& name, ibColumnType type) {
+		try { ibDatabaseQueryBuilder q; q.Execute(ibAddColumn(session_table, { name, type, false, false, wxEmptyString })); }
+		catch (...) { /* swallowed: best-effort migration; driver may not support this DDL */ }
+	};
+
+	if (!has(wxT("pid")))             addColumn(wxT("pid"),             ibTypeInteger());
+	if (!has(wxT("address")))         addColumn(wxT("address"),         ibTypeString(256));
+	if (!has(wxT("currentActivity"))) addColumn(wxT("currentActivity"), ibTypeString(ibSessionRegistry::kActivityWidth));
+	// kind — ibSessionKind session-level role (WebServer=5, WebClient=100; desktop kinds share
+	// numeric values with ibRunMode). Distinct from `application` (process-level ibRunMode).
+	if (!has(wxT("kind")))            addColumn(wxT("kind"),            ibTypeInteger());
+	// signal — admin → registry control channel; picked up on the next JobCheckSignal tick, then
+	// cleared by the handler. "kick" is the first supported value (reload / refresh may follow).
+	if (!has(wxT("signal")))          addColumn(wxT("signal"),          ibTypeString(32));
+	// exclusive — process-wide monopoly marker; cluster-aware gate in ProcessAdd /
+	// ProcessSetExclusive reads peer rows to detect another process holding it.
+	if (!has(wxT("exclusive")))       addColumn(wxT("exclusive"),       ibTypeInteger());
+
+	// NO BACK-FILL FOR THE ROWS. A column added to a populated table arrives NULL everywhere, which
+	// normally means an old base carries two spellings of one fact for good — but not this table: every
+	// row here belongs to a LIVE session and is deleted when that session ends (or swept when its
+	// heartbeat stops). The NULLs empty themselves within seconds of a restart, and the writer states
+	// the value from birth, so there is nothing left for a migration to repair.
 }
 
 // Bring up sys_bytecode_cache. Independent of the user/session/event
@@ -174,25 +289,39 @@ void ibApplicationData::MigrateTableSession()
 // table exists.
 //
 // Per-driver column types: PostgreSQL uses BYTEA for the binary blob,
-// every other driver (Firebird embedded, SQLite, MySQL, ODBC) takes
+// every other driver (Firebird embedded, SQLite, ODBC) takes
 // plain BLOB. Firebird's BLOB SUB_TYPE 0 is implicit when no sub-type
 // is named.
-void ibApplicationData::MigrateTableBytecodeCache()
+void ibApplicationInstance::MigrateTableBytecodeCache()
 {
-	if (db_query->TableExists(bytecode_cache_table))
-		return;
-
-	const bool isPG =
-		db_query->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL;
-	const wxString blobType = isPG ? wxT("BYTEA") : wxT("BLOB");
+	ibDatabaseQueryBuilder q;
+	if (q.TableExists(bytecode_cache_table)) {
+		// …UNLESS IT IS THE OLD SHAPE. A cache has no history worth migrating: every row can be
+		// recomputed from the source it was derived from, so a table that predates `config_md5` is
+		// DROPPED and rebuilt rather than ALTERed. One statement, no back-fill, and no base can carry
+		// rows whose validity nothing can judge.
+		wxArrayString cols = q.GetColumns(bytecode_cache_table);
+		bool hasFingerprint = false;
+		for (std::size_t i = 0; i < cols.GetCount(); ++i)
+			if (cols[i].CmpNoCase(wxT("config_md5")) == 0) { hasFingerprint = true; break; }
+		if (hasFingerprint)
+			return;
+		try { q.Execute(ibDropTable(bytecode_cache_table)); }
+		catch (...) { return; }   // cannot drop → leave the old table; Load/Save degrade to a miss
+	}
 
 	try {
-		db_query->RunQuery(
-			wxT("CREATE TABLE %s ("
-			    "descriptor_id     VARCHAR(36) NOT NULL PRIMARY KEY,"
-			    "bytecode_version  VARCHAR(36) NOT NULL,"
-			    "bc_blob           ") + blobType + wxT(" NOT NULL);"),
-			bytecode_cache_table);
+		// bc_blob's BLOB renders as BYTEA on PostgreSQL and BLOB on every other driver
+		// (Firebird embedded, SQLite, ODBC) via the dialect TYPE-MAP — no fork here.
+		q.Execute(ibCreateTable(bytecode_cache_table, {
+			{ wxT("descriptor_id"),    ibTypeString(36), false, true,  wxEmptyString },
+			{ wxT("bytecode_version"), ibTypeString(36), true,  false, wxEmptyString },
+			// WHAT THE BYTECODE WAS COMPILED AGAINST — the configuration's own digest, recomputed on
+			// every save. It is part of the LOOKUP, not a field somebody has to remember to compare:
+			// a row written under an earlier configuration is simply not found. See byteCodeCache.h.
+			{ wxT("config_md5"),       ibTypeString(32), true,  false, wxEmptyString },
+			{ wxT("bc_blob"),          ibTypeBlob(),     true,  false, wxEmptyString },
+		}));
 	}
 	catch (...) {
 		// Best-effort — DDL failure leaves Save / Load in their
@@ -200,12 +329,13 @@ void ibApplicationData::MigrateTableBytecodeCache()
 	}
 }
 
-bool ibApplicationData::ClearTableUser()
+bool ibApplicationInstance::ClearTableUser()
 {
-	if (!db_query->TableExists(user_table))
+	ibDatabaseQueryBuilder q;
+	if (!q.TableExists(user_table))
 		return false;
 
-	db_query->RunQuery(wxT("DELETE FROM %s;"), user_table);
+	q.Execute(ibDelete(user_table));   // no WHERE = all rows
 	return true;
 }
 
@@ -214,13 +344,13 @@ bool ibApplicationData::ClearTableUser()
 #include "fileSystem/fs.h"
 
 // User-record DB I/O moved onto ibUserInfo as static factories; see
-// backend/userInfo.{h,cpp}. ibApplicationData no longer mediates the
+// backend/userInfo.{h,cpp}. ibApplicationInstance no longer mediates the
 // sys_user round-trip — call sites use ibUserInfo::Read / Save / Serialize
 // / Deserialize directly.
 
 ///////////////////////////////////////////////////////////////////////////////
 
-bool ibApplicationData::LoadUserInfoFromBuffer(wxMemoryBuffer& buffer)
+bool ibApplicationInstance::LoadUserInfoFromBuffer(wxMemoryBuffer& buffer)
 {
 	ibReaderMemory reader = buffer;
 
@@ -240,24 +370,26 @@ bool ibApplicationData::LoadUserInfoFromBuffer(wxMemoryBuffer& buffer)
 	return true;
 }
 
-bool ibApplicationData::SaveUserInfoToBuffer(wxMemoryBuffer& buffer) const
+bool ibApplicationInstance::SaveUserInfoToBuffer(wxMemoryBuffer& buffer) const
 {
-	ibResultSetGuard result(db_query,
-		db_query->RunQueryWithResults(wxT("SELECT guid FROM %s;"), user_table));
+	// SELECT guid FROM sys_user
+	try {
+		ibDatabaseQueryBuilder q;
+		ibQueryIR ir(ibProject(ibScan(user_table), { { ibCol(wxT("guid")), wxEmptyString } }));
+		ibQueryResult result = q.ExecuteIR(ir);
 
-	if (!result)
-		return false;
+		ibWriterMemory writer; unsigned int idx = 0;
 
-	ibWriterMemory writer; unsigned int idx = 0;
+		while (result.Next()) {
+			ibWriterMemory userWriter;
+			ibUserInfo::Read(ibGuid(result.GetResultString(wxT("guid"))))
+				.Serialize(userWriter);
+			writer.w_chunk(idx++, userWriter.buffer());
+		}
 
-	while (result->Next()) {
-		ibWriterMemory userWriter;
-		ibUserInfo::Read(ibGuid(result->GetResultString(wxT("guid"))))
-			.Serialize(userWriter);
-		writer.w_chunk(idx++, userWriter.buffer());
+		buffer = writer.buffer();
 	}
-
-	buffer = writer.buffer();
+	catch (...) { return false; }
 	return true;
 }
 
@@ -269,16 +401,17 @@ bool ibApplicationData::SaveUserInfoToBuffer(wxMemoryBuffer& buffer) const
 
 // -----------------------------------------------------------------------
 // Phased session lifecycle — apps compose CreateSession (or the typed
-// CreateSession<T>) with session->Open() so the registry ticket
-// stays visible during login-retry loops. There is no one-shot
-// "Connect/StartSession" anymore; failed Open keeps the anonymous row
-// in sys_session until the caller drops the ticket explicitly.
+// CreateSession<T>) with holder->Open() so the anonymous row stays
+// visible during login-retry loops. There is no one-shot
+// "Connect/StartSession" anymore; a failed Open keeps the row in
+// sys_session until the caller drops the holder, and dropping it is
+// what removes the row.
 // -----------------------------------------------------------------------
 
-ibSession* ibApplicationData::CreateSession()
+ibSessionHolder ibApplicationInstance::CreateSession()
 {
 	// Default-factory passthrough — registry builds a plain ibSession.
-	// Used by codeRunner / daemon / headless callers and by the wes
+	// Used by codeRunner / appserver / headless callers and by the wes
 	// process's own system session bring-up. GUI apps go through the
 	// typed CreateSession<T>() template overload (defined in
 	// sessionRegistry.h after the registry class).

@@ -6,11 +6,15 @@
 
 //base property for "generation"
 class BACKEND_API ibPropertyGeneration : public ibProperty {
-	wxVariantData* CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc = ibMetaDescription()) const;
+	static wxVariantData* CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc = ibMetaDescription());
 public:
 
 	ibMetaDescription& GetValueAsMetaDesc() const;
 	void SetValue(const ibMetaDescription& val);
+
+	// WHAT THIS ONE MAY BE GENERATED INTO — catalogs, documents and the three kinds of chart. The one
+	// list: the editor's dialog groups what this answers rather than keeping a list of its own.
+	virtual ibPropertyChoiceMode GetValueList(ibPropertyChoiceList& list) override;
 
 
 	ibPropertyGeneration(ibPropertyCategory* cat, const wxString& name)
@@ -28,24 +32,23 @@ public:
 	{
 	}
 
-	//get property for grid 
-	virtual wxObject* GetPGProperty() const {
-		if (ms_propertyGeneration != nullptr)
-			return ms_propertyGeneration(m_owner, m_propLabel, m_propName, m_propValue);
-		return nullptr;
-	}
-
 	// set/get property data
 	virtual bool SetDataValue(const ibValue& varPropVal);
 	virtual bool GetDataValue(ibValue& pvarPropVal) const;
 
+	// The same acceptance ibPropertyRecord makes, and for the same reason: CreateValueList wraps
+	// every candidate as ibVariantDataOwner whatever family asked for the list, so a property that
+	// stores the neighbour's wrapper raises on every later read. See propertyRecord.h.
+	virtual void DoSetValue(const wxVariant& val) override;
+
 	//load & save object in control 
-	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer);
+
+	// readable node value
+	virtual bool ReadNodeValue(const ibDataValue& value) override;
+	virtual bool WriteNodeValue(ibDataValue& value) const override;
 
 public:
 
-	static wxObject* (*ms_propertyGeneration)(ibPropertyObject*, const wxString&, const wxString&, const wxVariant&);
 };
 
 #endif

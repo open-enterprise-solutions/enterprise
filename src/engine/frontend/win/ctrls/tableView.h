@@ -16,8 +16,7 @@ public:
 	{
 	}
 
-	//show data filter
-	virtual bool ShowFilter(struct ibFilterRow& filter);
+	// Open the List-Settings window (Filter / Sort / Group) for the model.
 	virtual bool ShowViewMode();
 
 private:

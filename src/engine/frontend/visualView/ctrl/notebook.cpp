@@ -1,11 +1,11 @@
 #include "notebook.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "form.h"
 
 //***********************************************************************************
 //*                           IMPLEMENT_DYNAMIC_CLASS                               *
 //***********************************************************************************
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueNotebook, ibValueWindow);
 
 //***********************************************************************************
 //*                                 Special Notebook func                           *
@@ -26,6 +26,7 @@ void ibValueNotebook::AddNotebookPage()
 
 ibValueNotebook::ibValueNotebook() : ibValueWindow(), m_activePage(nullptr)
 {
+	m_members.Bind(this, &ibValueNotebook::FillControlMembers);
 	//set default params
 	//m_minimum_size = wxSize(300, 100);
 }
@@ -46,10 +47,10 @@ wxObject* ibValueNotebook::Create(wxWindow* wxparent, ibVisualHost* visualHost)
 	return notebook;
 }
 
-void ibValueNotebook::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool firstСreated)
+void ibValueNotebook::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool firstCreated)
 {
 	if (visualHost->IsDesignerHost() && GetChildCount() == 0
-		&& firstСreated) {
+		&& firstCreated) {
 		ibValueNotebook::AddNotebookPage();
 	}
 
@@ -101,22 +102,22 @@ void ibValueNotebook::Cleanup(wxObject* wxobject, ibVisualHost* visualHost)
 //*                                   Data		                                   *
 //**********************************************************************************
 
-bool ibValueNotebook::LoadData(ibReaderMemory& reader)
+bool ibValueNotebook::ReadData(const ibDataNode& node)
 {
-	m_propertyOrient->SetValue(reader.r_s32());
+	m_propertyOrient->SetNodeValue(node.GetProperty(m_propertyOrient->GetName()));
 
 	//events
-	m_eventOnPageChanged->LoadData(reader);
-	return ibValueWindow::LoadData(reader);
+	m_eventOnPageChanged->SetNodeValue(node.GetProperty(m_eventOnPageChanged->GetName()));
+	return ibValueWindow::ReadData(node);
 }
 
-bool ibValueNotebook::SaveData(ibWriterMemory& writer)
+bool ibValueNotebook::WriteData(ibDataNode& node) const
 {
-	writer.w_s32(m_propertyOrient->GetValueAsInteger());
+	node.SetProperty(m_propertyOrient->GetName(), m_propertyOrient->GetNodeValue());
 
 	//events
-	m_eventOnPageChanged->SaveData(writer);
-	return ibValueWindow::SaveData(writer);
+	node.SetProperty(m_eventOnPageChanged->GetName(), m_eventOnPageChanged->GetNodeValue());
+	return ibValueWindow::WriteData(node);
 }
 
 //**********************************************************************************
@@ -126,12 +127,10 @@ enum Func {
 	enActivePage
 };
 
-void ibValueNotebook::PrepareNames() const // this method is automatically called to initialize attribute and method names.
+void ibValueNotebook::FillControlMembers(ibMemberTable& helper) const
 {
-	ibValueFrame::PrepareNames();
-
-	m_methodHelper->AppendFunc(wxT("Pages"), wxT("Pages()"));
-	m_methodHelper->AppendFunc(wxT("ActivePage"), wxT("ActivePage()"));
+	helper.AppendFunc(wxT("Pages"), wxT("Pages()"));
+	helper.AppendFunc(wxT("ActivePage"), wxT("ActivePage()"));
 }
 
 #include "backend/system/value/valueMap.h"
@@ -142,14 +141,14 @@ bool ibValueNotebook::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, i
 	{
 	case enPages:
 	{
-		ibValueStructure* structurePage = ibValue::CreateAndPrepareValueRef<ibValueStructure>(true);
+		ibValueStructure* structurePage = new ibValueStructure(true);
 		for (unsigned int i = 0; i < GetChildCount(); i++) {
 			ibValueNotebookPage* notebookPage = dynamic_cast<ibValueNotebookPage*>(GetChild(i));
 			if (notebookPage) {
 				structurePage->Insert(notebookPage->GetControlName(), ibValue(notebookPage));
 			}
 		}
-#pragma message("nouverbe to nouverbe: необходимо доработать!")
+#pragma message("nouverbe to nouverbe: needs more work!")
 		pvarRetValue = structurePage;
 		return true; 
 	}

@@ -5,6 +5,7 @@
 #include <wx/containr.h>
 #include <wx/stattext.h>
 #include <wx/textctrl.h>
+#include <wx/tooltip.h>   // DoSetToolTip() calls into wxToolTip, so it needs the full type
 
 #include "dynamicBorder.h"
 
@@ -214,6 +215,7 @@ class FRONTEND_API ibControlTextEditor :
 
 	struct ButtonSlot {
 		bool        visible = false;
+		bool        enabled = true;   // false = greyed & inert (a read-only binding disables Select / Clear)
 		wxString    text;
 		wxEventType eventType = wxEVT_NULL;
 		wxRect      rect;
@@ -263,8 +265,7 @@ private:
 public:
 
 	ibControlTextEditor() :
-		m_passwordMode(false), m_multilineMode(false), m_textEditMode(true),
-		m_dvcMode(false)
+		m_dvcMode(false), m_passwordMode(false), m_multilineMode(false), m_textEditMode(true)
 	{
 		InitButtonSlots();
 	}
@@ -274,8 +275,7 @@ public:
 		const wxString& val = wxEmptyString,
 		const wxPoint& pos = wxDefaultPosition,
 		const wxSize& size = wxDefaultSize, long style = wxBORDER_NONE) :
-		m_passwordMode(false), m_multilineMode(false), m_textEditMode(true),
-		m_dvcMode(false)
+		m_dvcMode(false), m_passwordMode(false), m_multilineMode(false), m_textEditMode(true)
 	{
 		InitButtonSlots();
 		Create(parent, id, val, pos, size, style);
@@ -346,20 +346,19 @@ public:
 
 	bool GetPasswordMode() const { return m_passwordMode; }
 
+	// TextEditMode IS the read-only policy: mode == false makes the inner text inert AND locks the value-
+	// changing side buttons (Select / Clear); Open (a read-only navigation) stays live. One flag — a read-only
+	// binding is just SetTextEditMode(false), no separate read-only setter.
 	void SetTextEditMode(bool mode) {
-		if (m_text != nullptr && m_textEditMode != mode) {
+		m_textEditMode = mode;
+		if (m_text != nullptr) {
 			const long style = m_text->GetWindowStyleFlag();
-			if (mode) {
-				m_text->SetWindowStyle(style & (~wxTE_READONLY));
-			}
-			else {
-				m_text->SetWindowStyleFlag(style | wxTE_READONLY);
-			}
+			m_text->SetWindowStyleFlag(mode ? (style & ~wxTE_READONLY) : (style | wxTE_READONLY));
 			m_text->Update();
 		}
-		m_textEditMode = mode;
+		EnableSelectButton(mode);
+		EnableClearButton(mode);
 	}
-
 	bool GetTextEditMode() const { return m_textEditMode; }
 
 	virtual void SetLabel(const wxString& label) {
@@ -391,6 +390,11 @@ public:
 	void ShowClearButton(bool select = true) { ShowButton(m_btnClear, select); }
 	bool IsClearButtonVisible() const { return m_btnClear.visible; }
 
+	// Grey Select / Clear without hiding them (they stay visible but inert). SetTextEditMode(false) calls these
+	// — a read-only text box keeps its value-changing buttons visible but locked; Open (read) stays live.
+	void EnableSelectButton(bool enable) { EnableButton(m_btnSelect, enable); }
+	void EnableClearButton(bool enable)  { EnableButton(m_btnClear, enable); }
+
 	// overridden base class virtuals
 	virtual bool SetBackgroundColour(const wxColour& colour) {
 		if (m_text != nullptr) m_text->SetBackgroundColour(colour);
@@ -413,6 +417,16 @@ public:
 		Refresh();
 		return wxWindow::SetFont(font);
 	}
+
+	// A WIDTH THAT IS SET IS ANSWERED NO NARROWER THAN THE CONTROL CAN BE TYPED IN. A form author gives a
+	// field a width (a sum: 72 pixels), and the caption and the "..." / "x" buttons are drawn inside that
+	// same width, so on a narrow field they used up all of it and left the text area none - a field with
+	// nowhere to enter the value. Asked here, of the control, a sizer never lays it out narrower whoever
+	// set the width, and the answer follows the caption and the buttons as they change. A width that is
+	// not set stays unset: the best size already leaves room.
+	static constexpr int kMinimumTextWidth = 56;   // the text area, in DIP
+	virtual wxSize GetMinSize() const override;
+	virtual wxSize GetMaxSize() const override;
 
 	virtual bool Enable(bool enable = true);
 
@@ -605,8 +619,17 @@ private:
 		Refresh();
 	}
 
+	// Enable/disable a slot in place — same size (stays visible), just greyed & inert. No relayout.
+	void EnableButton(ButtonSlot& slot, bool enable) {
+		if (slot.enabled == enable) return;
+		slot.enabled = enable;
+		if (!enable) { slot.hovered = false; slot.pressed = false; }
+		Refresh();
+	}
+
 	wxSize ComputeLabelBestSize() const;
 	wxSize ComputeButtonAreaSize() const;
+	int    ComputeMinUsableWidth() const;
 	void   EnsureSlotMetrics() const;
 	int    BtnSlotWidth() const { EnsureSlotMetrics(); return m_cachedSlotW; }
 	int    BtnSlotHeight() const { EnsureSlotMetrics(); return m_cachedSlotH; }

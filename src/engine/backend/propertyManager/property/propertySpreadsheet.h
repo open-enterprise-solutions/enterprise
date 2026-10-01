@@ -6,7 +6,7 @@
 
 //base property for "spreadsheet"
 class BACKEND_API ibPropertySpreadsheet : public ibProperty {
-	wxVariantData* CreateVariantData(const ibSpreadsheetDescription& val = ibSpreadsheetDescription());
+	static wxVariantData* CreateVariantData(const ibSpreadsheetDescription& val = ibSpreadsheetDescription());
 public:
 
 #pragma region _value_
@@ -31,24 +31,16 @@ public:
 
 	virtual bool IsEmptyProperty() const;
 
-	//get property for grid 
-	virtual wxObject* GetPGProperty() const {
-		if (ms_propertySpreadsheet != nullptr)
-			return ms_propertySpreadsheet(m_owner, m_propLabel, m_propName, m_propValue);
-		return nullptr;
-	}
-
 	// set/get property data
 	virtual bool SetDataValue(const ibValue& varPropVal);
 	virtual bool GetDataValue(ibValue& pvarPropVal) const;
 
 	//load & save object in control 
-	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer);
+	virtual bool ReadNodeValue(const ibDataValue& value) override;
+	virtual bool WriteNodeValue(ibDataValue& value) const override;
 
 public:
 
-	static wxObject* (*ms_propertySpreadsheet)(ibPropertyObject*, const wxString&, const wxString&, const wxVariant&);
 };
 
 #endif

@@ -25,6 +25,10 @@
 
 #include "../../3rdparty/cpp-httplib/httplib.h"
 #include "wfrontend.h"
+#include "../../3rdparty/nlohmann/json.hpp"
+#include "backend/backend_exception.h"
+#include "backend/databaseLayer/databaseLayerException.h"
+#include "frontend/diagnostics/oesConsole.h"
 
 #if defined(_WIN32)
 #	include <winsock2.h>
@@ -32,6 +36,11 @@
 #	include <windows.h>
 #else
 #	include <csignal>
+// The POSIX half of what winsock2/ws2tcpip provide above: setsockopt itself plus the
+// SOL_SOCKET / SO_* / TCP_NODELAY constants the socket tuning below uses.
+#	include <sys/socket.h>
+#	include <netinet/in.h>
+#	include <netinet/tcp.h>
 #endif
 
 namespace {
@@ -60,7 +69,7 @@ BOOL WINAPI ConsoleCtrlHandler(DWORD dwCtrlType) {
 	case CTRL_BREAK_EVENT:
 		// Console still live — main has time to clean up after
 		// listen_after_bind returns. Just break the listener.
-		LogShutdownLine("[ctrl] Ctrl+C/Break — svr.stop() + let main cleanup");
+		LogShutdownLine("[ctrl] Ctrl+C/Break - svr.stop() + let main cleanup");
 		if (g_svr) g_svr->stop();
 		return TRUE;
 
@@ -73,7 +82,7 @@ BOOL WINAPI ConsoleCtrlHandler(DWORD dwCtrlType) {
 		// always return quickly). Run the cleanup synchronously inside
 		// the handler so the sys_session DELETE reaches the DB before
 		// Windows kills us, then ExitProcess instead of returning.
-		LogShutdownLine("[ctrl] close event — direct in-handler shutdown");
+		LogShutdownLine("[ctrl] close event - direct in-handler shutdown");
 		if (g_svr) g_svr->stop();
 		wfrontendShutdown();
 		LogShutdownLine("[ctrl] shutdown complete, ExitProcess(0)");
@@ -258,6 +267,24 @@ bool RequireSessionId(const httplib::Request& req, httplib::Response& res, std::
 	return false;
 }
 
+// ⭐ THE /admin GATE. These endpoints kick sessions, evict a whole process and force-release other
+// people's locks — and they answered ANYONE who could reach the port. The right asked is the one the
+// designer puts on its own administration menu (DataAdministration), in the caller's session: no
+// session is 401, a session without the right is 403. Nothing in the platform calls these over HTTP
+// (the designer's Active Users reads the same data in-process), so a monitor that wants them logs in
+// like a person does.
+bool RequireAdministrator(const httplib::Request& req, httplib::Response& res)
+{
+	std::string id;
+	if (!RequireSessionId(req, res, id))
+		return false;
+	if (wfrontendSessionMayAdminister(id))
+		return true;
+	res.status = 403;
+	res.set_content("administration right required\n", "text/plain");
+	return false;
+}
+
 // Probe: is someone already accepting connections on host:port? cpp-httplib
 // binds with SO_REUSEADDR on Windows, so a second wenterprise-server on the
 // same port won't fail to bind — Windows happily round-robins incoming
@@ -309,6 +336,23 @@ bool InitBackend(const CmdArgs& args)
 	return false;
 }
 
+// httplib's own pool, with every connection served for the web server's session (wfrontendServe): the
+// pool's threads have no session of their own, and the base this server serves is that session's.
+class ServedTaskQueue final : public httplib::TaskQueue {
+public:
+	ServedTaskQueue()
+		: m_pool(CPPHTTPLIB_THREAD_POOL_COUNT, CPPHTTPLIB_THREAD_POOL_MAX_COUNT) {}
+
+	bool enqueue(std::function<void()> fn) override {
+		return m_pool.enqueue([fn = std::move(fn)]() { wfrontendServe(fn); });
+	}
+	void shutdown() override { m_pool.shutdown(); }
+	void on_idle() override { m_pool.on_idle(); }
+
+private:
+	httplib::ThreadPool m_pool;
+};
+
 } // namespace
 
 #ifdef _WIN32
@@ -350,6 +394,10 @@ static void BuildUtf8Argv(int& argc, char**& argv)
 }
 #endif
 
+#include "backend/diagnostics/leakTracker.h"
+
+IB_LEAK_TRACKER_ARM();
+
 int main(int argc, char** argv)
 {
 #ifdef _WIN32
@@ -357,15 +405,15 @@ int main(int argc, char** argv)
 #endif
 	const CmdArgs args = ParseArgs(argc, argv);
 
-	// wx needs bootstrapping for appData's internals (wxString, wxSocket,
-	// wxLog, wxLocale, image handlers, ...). Wrap the whole runtime in a
-	// wxInitializer so Cleanup runs even on early exit.
-	wxInitializer wxInit(argc, argv);
-	if (!wxInit.IsOk()) {
+	// wxInitializer + wxSocketBase::Initialize + ibCrashGuard::Install
+	// in one shot. wes is headless — no wxApp, faults need the persistent
+	// minidump + std::set_terminate + signal handlers from crashGuard so
+	// they don't disappear silently with the process.
+	ibOesConsoleBoot boot(wxT("wenterprise-server"), argc, argv);
+	if (!boot.IsOk()) {
 		std::cerr << "wxWidgets failed to initialise" << std::endl;
 		return 1;
 	}
-	wxSocketBase::Initialize();
 
 	// Bind the HTTP server FIRST so we know the real port before the
 	// backend comes up — InitBackend's call chain creates the
@@ -383,6 +431,7 @@ int main(int argc, char** argv)
 
 	httplib::Server svr;
 	g_svr = &svr;
+	svr.new_task_queue = [] { return new ServedTaskQueue(); };
 #if defined(_WIN32)
 	SetConsoleCtrlHandler(ConsoleCtrlHandler, TRUE);
 #else
@@ -405,6 +454,53 @@ int main(int argc, char** argv)
 	// doesn't exist.
 	svr.set_read_timeout(5);
 	svr.set_write_timeout(5);
+
+	// Top-level exception handler — catches anything that escapes one
+	// of the per-route lambdas below. Pre-2026-05-26 the lambdas had
+	// no defensive wrap and an ibBackendException unwinding from a
+	// session-bound script handler crashed the wes process (cpp-httplib
+	// swallows raw escapes but our session state is left half-torn).
+	// With ThrowDatabaseException now actually throwing, the surface
+	// of paths that can reach here grew — every DB call inside a
+	// handler can now produce a structured exception. We surface a
+	// JSON 500 with the most-specific kind/code we can extract so
+	// client diagnostics (and admin dashboards) see something useful
+	// instead of the generic empty cpp-httplib body.
+	svr.set_exception_handler([](const httplib::Request& /*req*/,
+	                              httplib::Response& res,
+	                              std::exception_ptr ep) {
+		std::string body;
+		try { std::rethrow_exception(ep); }
+		catch (const ibDatabaseLayerException& e) {
+			body = std::string("{\"error\":\"database\",\"code\":")
+				+ std::to_string(e.GetDriverErrorCode())
+				+ ",\"sqlstate\":\"" + e.GetSqlState().ToUTF8().data()
+				+ "\",\"retryable\":" + (e.IsRetryable() ? "true" : "false")
+				+ ",\"message\":" + nlohmann::json(e.GetErrorDescription().ToUTF8().data()).dump()
+				+ "}";
+		}
+		catch (const ibBackendDatabaseException& e) {
+			body = std::string("{\"error\":\"database\",\"retryable\":")
+				+ (e.IsRetryable() ? "true" : "false")
+				+ ",\"message\":" + nlohmann::json(e.GetErrorDescription().ToUTF8().data()).dump()
+				+ "}";
+		}
+		catch (const ibBackendException& e) {
+			body = std::string("{\"error\":\"backend\",\"message\":")
+				+ nlohmann::json(e.GetErrorDescription().ToUTF8().data()).dump()
+				+ "}";
+		}
+		catch (const std::exception& e) {
+			body = std::string("{\"error\":\"internal\",\"message\":")
+				+ nlohmann::json(e.what()).dump()
+				+ "}";
+		}
+		catch (...) {
+			body = "{\"error\":\"unknown\"}";
+		}
+		res.status = 500;
+		res.set_content(body, "application/json; charset=utf-8");
+	});
 
 	svr.Get(prefix + "/", [prefix](const httplib::Request& req, httplib::Response& res) {
 		// Windows IPv6-first "localhost" fallback adds ~200ms cold
@@ -454,7 +550,7 @@ int main(int argc, char** argv)
 			}
 		}
 		else {
-			std::cerr << "[GET /] session id=" << id << " unknown — creating" << std::endl;
+			std::cerr << "[GET /] session id=" << id << " unknown - creating" << std::endl;
 			id = wfrontendCreateSessionWithId(id);
 		}
 
@@ -575,7 +671,7 @@ int main(int argc, char** argv)
 	svr.Get(prefix + "/functions", [](const httplib::Request& req, httplib::Response& res) {
 		std::string id;
 		if (!RequireSessionId(req, res, id)) return;
-		res.set_content(wfrontendAllFunctionsJSON(),
+		res.set_content(wfrontendAllFunctionsJSON(id),
 			"application/json; charset=utf-8");
 	});
 
@@ -734,7 +830,7 @@ int main(int argc, char** argv)
 		const std::string id = SessionIdFromReq(req);
 		if (id.empty()) {
 			res.status = 401;
-			res.set_content("no session — GET / first\n", "text/plain");
+			res.set_content("no session - GET / first\n", "text/plain");
 			return;
 		}
 		const int metaID = std::atoi(req.matches[1].str().c_str());
@@ -784,7 +880,7 @@ int main(int argc, char** argv)
 		std::string id = SessionIdFromReq(req);
 		if (id.empty()) {
 			res.status = 401;
-			res.set_content("no session — GET / first to obtain one\n", "text/plain");
+			res.set_content("no session - GET / first to obtain one\n", "text/plain");
 			return;
 		}
 		// Tab's sessionStorage id (X-OES-Session header) is generated by
@@ -816,7 +912,8 @@ int main(int argc, char** argv)
 	// snapshot. Designed for monitoring agents and the Active Users
 	// dialog; callable freely without rate-limiting at typical loads.
 	svr.Get(prefix + "/admin/diag",
-		[](const httplib::Request&, httplib::Response& res) {
+		[](const httplib::Request& req, httplib::Response& res) {
+			if (!RequireAdministrator(req, res)) return;
 			res.set_content(wfrontendDiagJSON(), "application/json");
 		});
 
@@ -828,6 +925,7 @@ int main(int argc, char** argv)
 	// is the cross-process control channel.
 	svr.Post(prefix + R"(/admin/sessions/([0-9a-fA-F\-]+)/kick)",
 		[](const httplib::Request& req, httplib::Response& res) {
+			if (!RequireAdministrator(req, res)) return;
 			const std::string guid = req.matches[1].str();
 			const bool ok = wfrontendKickSessionByGuid(guid);
 			res.status = ok ? 202 : 500;
@@ -841,10 +939,33 @@ int main(int argc, char** argv)
 	// triggers the same fan-out.
 	svr.Post(prefix + R"(/admin/sessions/([0-9a-fA-F\-]+)/reload)",
 		[](const httplib::Request& req, httplib::Response& res) {
+			if (!RequireAdministrator(req, res)) return;
 			const std::string guid = req.matches[1].str();
 			const bool ok = wfrontendReloadSessionByGuid(guid);
 			res.status = ok ? 202 : 500;
 			res.set_content(ok ? "queued\n" : "failed\n", "text/plain");
+		});
+
+	// GET /admin/locks — JSON array of held sys_lock rows cluster-wide.
+	// One entry per held lock; see wfrontendLocksJSON shape. Cheap to
+	// call (single SELECT, no joins).
+	svr.Get(prefix + "/admin/locks",
+		[](const httplib::Request& req, httplib::Response& res) {
+			if (!RequireAdministrator(req, res)) return;
+			res.set_content(wfrontendLocksJSON(), "application/json");
+		});
+
+	// DELETE /admin/locks/<lockGuid> — admin force-release for the
+	// named row. Use when a session went zombie before releasing, or
+	// the user can't unblock through the normal UI. Returns 200 on
+	// success, 500 on error (already-gone is success — best-effort).
+	svr.Delete(prefix + R"(/admin/locks/([0-9a-fA-F\-]+))",
+		[](const httplib::Request& req, httplib::Response& res) {
+			if (!RequireAdministrator(req, res)) return;
+			const std::string guid = req.matches[1].str();
+			const bool ok = wfrontendForceReleaseLockByGuid(guid);
+			res.status = ok ? 200 : 500;
+			res.set_content(ok ? "released\n" : "failed\n", "text/plain");
 		});
 
 	std::cout << wfrontendVersion() << std::endl;
@@ -884,7 +1005,7 @@ int main(int argc, char** argv)
 	wfrontendSetServerAddress(args.host, boundPort);
 
 	// AccessMode (Server) is set by appData's ctor inside InitBackend
-	// based on the eWEB_ENTERPRISE_MODE runMode.
+	// based on the eWEB_RUNTIME_MODE runMode.
 	if (!InitBackend(args)) {
 		const std::string err = wfrontendLastError();
 		std::cerr << "Failed to open the database";

@@ -23,11 +23,7 @@
 #if wxUSE_DATAVIEWCTRL
 
 #include "dataview.h"
-#include "backend/tableInfo.h"
-#include "datavgen.paged.private.h"
-#ifndef WX_PRECOMP
-#include <wx/log.h>
-#endif
+#include "datavgen.window.private.h"
 
 bool ibDataViewCtrl::IsPagedScrollbarMode() const
 {
@@ -94,9 +90,6 @@ ibDataViewCtrl::ibPagedThumb ibDataViewCtrl::DerivePagedThumb() const
 	else if (dataAhead && dataBehind) result = ibPagedThumb::Middle;
 	else result = ibPagedThumb::Top;            // both false: empty / fits in buffer
 
-	const char* label =
-		(result == ibPagedThumb::Top)    ? "Top" :
-		(result == ibPagedThumb::Bottom) ? "Bottom" : "Middle";
 		return result;
 }
 
@@ -133,10 +126,6 @@ void ibDataViewCtrl::GetPagedPinRange(long& minRow, long& maxRow) const
 		if (maxRow < 0 || i > maxRow) maxRow = i;
 	}
 }
-
-// GetPagedInsertParent / SchedulePagedRefresh / PagedRefresh /
-// PagedBootstrap / DispatchPagedFetch / OnPagedFetch{Forward,Backward}Result
-// — extracted to datavgen.paged.cpp on 2026-05-08.
 
 void ibDataViewCtrl::UpdatePagedScrollbar()
 {
@@ -187,8 +176,8 @@ void ibDataViewCtrl::SetScrollbar(int orient, int pos, int thumbSize, int range,
 			// the rows area itself is shorter than 19 row-heights —
 			// wheel-scroll still moves the contents because virtual
 			// size > actual rows-area client size, but the lying
-			// scrollbar is hidden ("элементы дальше есть, скролла нет,
-			// прокрутка идёт").
+			// scrollbar is hidden ("there are more items, no scrollbar,
+			// yet it still scrolls").
 			//
 			// Subtract crumbCount: in Hierarchical drill mode crumbs
 			// are FROZEN at top in a separate window and don't take

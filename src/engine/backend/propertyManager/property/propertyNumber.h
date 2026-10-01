@@ -2,10 +2,11 @@
 #define __PROPERTY_NUMBER_H__
 
 #include "backend/propertyManager/propertyObject.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataValue — node value (inline Int for integers)
 
 //base property for "number"
 class BACKEND_API ibPropertyNumber : public ibProperty {
-	wxVariantData* CreateVariantData(const ibNumber& val);
+	static wxVariantData* CreateVariantData(const ibNumber& val);
 public:
 
 	ibNumber& GetValueAsNumber() const;
@@ -28,29 +29,22 @@ public:
 
 	virtual bool IsEmptyProperty() const { return GetValueAsNumber().IsZero(); }
 
-	//get property for grid 
-	virtual wxObject* GetPGProperty() const {
-		if (ms_propertyNumber != nullptr)
-			return ms_propertyNumber(m_propLabel, m_propName, GetValueAsNumber());
-		return nullptr;
-	};
 
 	// set/get property data
 	virtual bool SetDataValue(const ibValue& varPropVal);
 	virtual bool GetDataValue(ibValue& pvarPropVal) const;
 
-	//load & save object in control 
-	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer);
+	//per-type node value
+	virtual bool ReadNodeValue(const ibDataValue& value) override;
+	virtual bool WriteNodeValue(ibDataValue& value) const override;
 
 public:
 
-	static wxObject* (*ms_propertyNumber)(const wxString&, const wxString&, const ibNumber&);
 };
 
 //base property for "integer"
 class BACKEND_API ibPropertyInteger : public ibProperty {
-	wxVariant CreateVariantData(const int& val) const { return WXVARIANT(val); }
+	static wxVariant CreateVariantData(const int& val) { return wxVariant((long)val); }   // WXVARIANT<int> IS wxVariant((long)v) — propgriddefs.h
 public:
 
 	void SetValue(const int& val) { m_propValue = CreateVariantData(val); }
@@ -73,12 +67,6 @@ public:
 
 	virtual bool IsEmptyProperty() const { return GetValueAsInteger() == 0; }
 
-	//get property for grid 
-	virtual wxObject* GetPGProperty() const {
-		if (ms_propertyInteger != nullptr)
-			return ms_propertyInteger(m_propLabel, m_propName, GetValueAsInteger());
-		return nullptr;
-	};
 
 	// set/get property data
 	virtual bool SetDataValue(const ibValue& varPropVal) {
@@ -90,25 +78,23 @@ public:
 		return true;
 	}
 
-	//load & save object in control 
-	virtual bool LoadData(ibReaderMemory& reader) {
-		SetValue(reader.r_s32());
+	//per-type node value
+	virtual bool ReadNodeValue(const ibDataValue& value) override {
+		SetValue((int)value.AsInt());
 		return true;
 	}
-
-	virtual bool SaveData(ibWriterMemory& writer) {
-		writer.w_s32(GetValueAsInteger());
+	virtual bool WriteNodeValue(ibDataValue& value) const override {
+		value = ibDataValue::Int(GetValueAsInteger());
 		return true;
 	}
 
 public:
 
-	static wxObject* (*ms_propertyInteger)(const wxString&, const wxString&, const int&);
 };
 
 //base property for "unsigned integer"
 class BACKEND_API ibPropertyUInteger : public ibProperty {
-	wxVariant CreateVariantData(const unsigned int& val) const { return WXVARIANT((long)val); }
+	static wxVariant CreateVariantData(const unsigned int& val) { return wxVariant((long)val); }
 public:
 
 	void SetValue(const unsigned int& val) { m_propValue = CreateVariantData(val); }
@@ -131,12 +117,6 @@ public:
 
 	virtual bool IsEmptyProperty() const { return GetValueAsUInteger() == 0; }
 
-	//get property for grid 
-	virtual wxObject* GetPGProperty() const {
-		if (ms_propertyUInteger != nullptr)
-			return ms_propertyUInteger(m_propLabel, m_propName, GetValueAsUInteger());
-		return nullptr;
-	};
 
 	// set/get property data
 	virtual bool SetDataValue(const ibValue& varPropVal) {
@@ -149,20 +129,18 @@ public:
 		return true;
 	}
 
-	//load & save object in control 
-	virtual bool LoadData(ibReaderMemory& reader) {
-		SetValue(reader.r_u32());
+	//per-type node value
+	virtual bool ReadNodeValue(const ibDataValue& value) override {
+		SetValue((unsigned int)value.AsInt());
 		return true;
 	}
-
-	virtual bool SaveData(ibWriterMemory& writer) {
-		writer.w_u32(GetValueAsUInteger());
+	virtual bool WriteNodeValue(ibDataValue& value) const override {
+		value = ibDataValue::Int(GetValueAsUInteger());
 		return true;
 	}
 
 public:
 
-	static wxObject* (*ms_propertyUInteger)(const wxString&, const wxString&, const unsigned int&);
 };
 
 #endif

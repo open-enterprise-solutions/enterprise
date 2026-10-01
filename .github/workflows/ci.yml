@@ -1,0 +1,1034 @@
+# OES Enterprise — continuous integration
+#
+# Both platforms build through the CMake PRESETS, not MSBuild. The solution
+# carries 14 projects and none of them is wxWidgets: enterprise.sln expects wx
+# libraries to already exist, so it cannot bootstrap itself on a clean runner.
+# The CMake path builds wx from the submodule (docs/BUILD.md — "CMake also works
+# on Windows, and that is the path the Google Test targets are built through").
+#
+# NO BUILD-DIRECTORY CACHE. The obvious optimisation — cache build/ keyed on the
+# wxWidgets submodule commit — is wrong with Ninja: actions/cache restores files
+# with the CURRENT time, so every restored .obj looks newer than the sources and
+# Ninja skips work that genuinely needed doing. It cost a full debugging round on
+# 2026-08-02: the Windows job kept failing to link symbols that the committed code
+# no longer referenced, because it was linking a stale appData.cpp.obj.
+#
+# So these jobs build from scratch. That is slow (wxWidgets dominates), and the
+# right fix is a COMPILER cache — ccache / sccache key on preprocessed input, not
+# on timestamps — but a correct slow signal beats a fast lying one.
+#
+# ⭐ THE COMPILER CACHE IS WIRED (2026-09-28) on the Linux and macOS jobs. ccache
+# answers an object by the hash of the preprocessed source and the command line,
+# so a file that changed is a miss whatever its time says — the property the
+# build-directory cache lacked. Each job sets CMAKE_{C,CXX}_COMPILER_LAUNCHER
+# (which reaches the wxWidgets submodule too), restores its own cache before
+# configuring and saves it at the end even when a test failed — a green build
+# under a red test is still a warm cache for the next push. Every job keys its
+# own: the objects differ with the preset and the flags. `ccache -s -v` after the
+# build prints the hit rate and why the rest missed. backend_core.cpp takes
+# __DATE__/__TIME__ and is a miss every time, which is what a build stamp should be.
+#
+# ⚠ NO CCACHE_BASEDIR. It rewrites the absolute paths of a compile into paths
+# relative to the build directory — and `__FILE__` with them, and two suites find
+# their data beside their own source (`tests/scripts`, `metaCollection/partial`):
+# from the test's working directory the relative path led nowhere, and they failed
+# on the first cached run (2026-09-28). A runner's workspace path is the same on
+# every run, so the cache needs no rewriting to hit.
+#
+# ⚠ wxWidgets WITHOUT PRECOMPILED HEADERS here (-DwxBUILD_PRECOMP=OFF). ccache does
+# not cache a compile that reads a precompiled header unless it is configured
+# around it, so wx's ~1300 translation units were rebuilt on every run (1324
+# "uncacheable" on the first cached one). Without the header each one costs more
+# once, and nothing afterwards.
+#
+# A run cancelled by a newer push (concurrency, below) still saves what it
+# compiled — so the run after it starts from that part, not from nothing.
+#
+# ⭐ AND ON WINDOWS (2026-09-29), where it was never on: MSVC's Debug writes debug info into
+# a shared PDB (/Zi, CMake's default), and ccache caches only objects that carry their own
+# (/Z7) — so the job configures with /Z7, for itself only (see the note at its Configure).
+
+name: CI
+
+on:
+  push:
+    branches: [develop, master]
+  pull_request:
+    branches: [develop]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # The review remarks a script can make (.github/lint.sh): header guards, attribution lines, XPM, ASCII
+  # message ids. Seconds and no build, so a pull request hears them before anyone reads it.
+  # ---------------------------------------------------------------------------
+  review-rules:
+    name: Review rules
+    runs-on: ubuntu-22.04
+    steps:
+      # The whole history is needed to find the merge base and walk the commits, but not the contents of
+      # every file ever written: blob:none fetches commits and trees, and git fetches the few blobs the
+      # rules read on demand.
+      - uses: actions/checkout@v5
+        with:
+          submodules: false
+          fetch-depth: 0
+          filter: blob:none
+
+      - name: Check the change
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          # A new branch or a manual run has no "before"; the last commit is then the change.
+          if [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            BASE="$HEAD_SHA~1"
+          fi
+          bash .github/lint.sh "$BASE" "$HEAD_SHA"
+
+  # ---------------------------------------------------------------------------
+  # The primary signal: the backend suite (~850 tests), no GUI, no display.
+  # ---------------------------------------------------------------------------
+  tests-linux:
+    name: Tests (Linux, Debug)
+    runs-on: ubuntu-22.04
+    # The compiler cache — see the note at the top of this file. The same five lines on every job that has it.
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 1500M
+      CMAKE_C_COMPILER_LAUNCHER: ccache
+      CMAKE_CXX_COMPILER_LAUNCHER: ccache
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: false
+          fetch-depth: 1
+
+      # ⚠ NOT `submodules: recursive`. docs/private/ is a PRIVATE submodule, and the workflow token cannot
+      # read it — a recursive checkout would fail before anything is built. Nothing here needs the
+      # documentation, and it takes itself out with `update = none` - so the script below names no
+      # submodule at all, and needs no editing when one is added to the tree.
+      - run: bash .github/fetch-submodules.sh
+        shell: bash
+
+      # libgtk-3-dev: the CMake build defines __WXGTK__ and pkg-checks gtk+-3.0, so wx
+      # will not configure without it. uuid-dev: under GTK, guid.cpp generates guids with
+      # libuuid's uuid_generate. Neither was in BUILD.md's apt list.
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake ninja-build ccache pkg-config \
+            libgtk-3-dev libsqlite3-dev uuid-dev
+
+      - name: Compiler cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .ccache
+          key: ccache-${{ github.job }}-${{ github.sha }}
+          restore-keys: ccache-${{ github.job }}-
+
+      - name: Configure
+        run: cmake --preset linux-debug -DBUILD_TESTING=ON -DOES_USE_FIREBIRD=ON -DOES_USE_POSTGRESQL=ON -DwxBUILD_PRECOMP=OFF
+
+      # Every non-GUI test target, not just oes_tests: ctest registers them all, so
+      # building one leaves the others reported as "<name>_NOT_BUILT" failures.
+      #
+      # TWO targets have jobs of their own and are therefore EXCLUDED from the run
+      # below rather than built here: the GUI suite (needs Xvfb) and the PostgreSQL
+      # dialect suite (needs a server container). A target that is registered but
+      # neither built nor excluded fails the whole run without ever executing —
+      # which is what the dialect target did the day it was added, on all three
+      # general jobs at once.
+      - name: Build the test targets
+        run: >
+          cmake --build --preset linux-debug
+          --target oes_tests oes_string_tests oes_query_totals_test
+          oes_query_parity_test oes_query_join_parity_test
+          oes_temp_db_sqlite_test oes_job_tenancy_test oes_multi_base_test
+
+      - name: Run
+        working-directory: build/linux-debug
+        run: ctest --output-on-failure --timeout 300 -E "oes_frontend_runtime_test|oes_pg_dialect_test"
+
+      # ⭐ THE TECHNOLOGY JOURNAL OF THE FAILING RUN. ctest tells you WHICH test failed and what it
+      # expected; the journal tells you what the engine was doing while it did — which query it ran,
+      # which road the fold took, what a source refused to read. Without this the file dies with the
+      # container and the next step is guessing across a forty-minute round trip.
+      #
+      # Only on failure, because a green run's journal is nobody's business and it is not small.
+      - name: Journal on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: journal-linux-debug
+          path: build/linux-debug/bin/Debug/journal/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      # The APPLICATIONS, which no test target pulls in: enterprise / designer / appserver /
+      # launcher / codeRunner / simplePlugin. Without this step nothing in CI ever compiled
+      # them, so a break in an .exe's own sources reached a developer's machine first.
+      # It is cheap here — backend and frontend are already built by the steps above, so
+      # this only adds the executables' own translation units and their link.
+      - name: Build the applications
+        run: cmake --build --preset linux-debug
+
+      # A SEGFAULT tells ctest nothing beyond the exit signal, so on failure take one
+      # backtrace here rather than guessing across a 40-minute round trip. Two cases:
+      # the smallest compile test and the smallest runtime one — if the crash is shared
+      # they show the same frames, and if it is not, that is worth knowing too.
+      # …and only where there is a test binary to run: a job that failed before building (a submodule fetch
+      # answered 503) has no build directory, and this step then failed too, on a missing working directory —
+      # a second error over the first that pointed nowhere near it (2026-09-17, the macOS job).
+      - name: Backtrace on failure
+        if: failure() && hashFiles('build/linux-debug/bin/Debug/oes_tests') != ''
+        working-directory: build/linux-debug
+        run: |
+          sudo apt-get install -y gdb
+          for t in CompilerTest.SimpleAssignmentEmitsBytecode RuntimeTest.ConstantAssignment; do
+            echo "=============== $t ==============="
+            gdb -batch -ex run -ex "bt 40" --args ./bin/Debug/oes_tests --gtest_filter=$t || true
+          done
+
+      # Saved whatever the tests said: the objects are as good after a red test as after a green one.
+      - name: Compiler cache statistics
+        if: always()
+        run: ccache -s -v || true
+      - name: Save the compiler cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .ccache
+          key: ccache-${{ github.job }}-${{ github.sha }}
+
+  # ---------------------------------------------------------------------------
+  # The shipping platform. Building is the signal here — Windows runners are the
+  # slow ones, so the suite runs on Linux and this job guards the MSVC build.
+  # ---------------------------------------------------------------------------
+  build-windows:
+    name: Build (Windows, x64 Debug)
+    runs-on: windows-2022
+    # The compiler cache — see the note at the top of this file. The same five lines on every job that has it.
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 1500M
+      CMAKE_C_COMPILER_LAUNCHER: ccache
+      CMAKE_CXX_COMPILER_LAUNCHER: ccache
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: false
+          fetch-depth: 1
+
+      # ⚠ NOT `submodules: recursive`. docs/private/ is a PRIVATE submodule, and the workflow token cannot
+      # read it — a recursive checkout would fail before anything is built. Nothing here needs the
+      # documentation, and it takes itself out with `update = none` - so the script below names no
+      # submodule at all, and needs no editing when one is added to the tree.
+      - run: bash .github/fetch-submodules.sh
+        shell: bash
+
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      # The runner image has no ccache; Chocolatey does, and puts it on the PATH the launcher above names.
+      - name: Install ccache
+        run: choco install ccache --no-progress -y
+
+      - name: Compiler cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .ccache
+          key: ccache-${{ github.job }}-${{ github.sha }}
+          restore-keys: ccache-${{ github.job }}-
+
+      # Same driver set as the Linux jobs — see the note there. Firebird belongs ON here
+      # in particular: it is the DEFAULT driver on the shipping platform, so leaving it
+      # off meant the MSVC build never compiled the driver this product actually runs.
+      #
+      # ⚠ THE DEBUG INFO IN EACH OBJECT (/Z7), not in one PDB the compiles share (/Zi, CMake's own Debug default):
+      # ccache refuses /Zi as an unsupported option (argprocessing.cpp — "/Zi and /ZI are unsupported, but /Z7 is
+      # fine"), so every compile of this job was a miss by construction. Said for this job only: the flags are
+      # CMake's Debug defaults with the one letter changed, and a developer's own build keeps its /Zi.
+      # And wxWidgets without precompiled headers, as on Linux (the note at the top).
+      - name: Configure
+        run: >
+          cmake --preset windows-x64-debug -DBUILD_TESTING=ON -DOES_USE_FIREBIRD=ON -DOES_USE_POSTGRESQL=ON
+          -DwxBUILD_PRECOMP=OFF "-DCMAKE_C_FLAGS_DEBUG=/Z7 /Ob0 /Od /RTC1" "-DCMAKE_CXX_FLAGS_DEBUG=/Z7 /Ob0 /Od /RTC1"
+
+      # Same target set as Linux — see the note there.
+      - name: Build the test targets
+        run: >
+          cmake --build --preset windows-x64-debug
+          --target oes_tests oes_string_tests oes_query_totals_test
+          oes_query_parity_test oes_query_join_parity_test
+          oes_temp_db_sqlite_test oes_job_tenancy_test oes_multi_base_test
+
+      - name: Run
+        # No -C: every preset here uses Ninja, which is single-config.
+        working-directory: build/windows-x64-debug
+        run: ctest --output-on-failure --timeout 300 -E "oes_frontend_runtime_test|oes_pg_dialect_test"
+
+      # See the note in the Linux job — the journal of the run that failed.
+      - name: Journal on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: journal-windows-x64-debug
+          path: build/windows-x64-debug/bin/Debug/journal/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      # The applications — see the note in the Linux job. This is the SHIPPING platform,
+      # so if they only ever compile in one place, it has to be this one.
+      - name: Build the applications
+        run: cmake --build --preset windows-x64-debug
+
+      # Saved whatever the tests said, as on Linux.
+      - name: Compiler cache statistics
+        if: always()
+        run: ccache -s -v; exit 0
+      - name: Save the compiler cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .ccache
+          key: ccache-${{ github.job }}-${{ github.sha }}
+
+  # ---------------------------------------------------------------------------
+  # PostgreSQL — the only job that talks to a REAL server.
+  #
+  # Every other job runs the suite on SQLite, which pins semantics but cannot pin
+  # the half that belongs to the server: numeric precision, timestamps, blob
+  # escaping, the dialect's own upsert spelling. PostgreSQL is what production
+  # runs on and SQLite is kept for tests and the log, so that half was unchecked.
+  #
+  # The service container supplies the connection through the environment; the
+  # target skips itself when OES_PG_USER is unset, which is what makes the same
+  # binary a no-op on a developer machine.
+  # ---------------------------------------------------------------------------
+  tests-postgres:
+    name: Dialect (PostgreSQL, Debug)
+    runs-on: ubuntu-22.04
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 1500M
+      CMAKE_C_COMPILER_LAUNCHER: ccache
+      CMAKE_CXX_COMPILER_LAUNCHER: ccache
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: oes_test
+        ports:
+          - 5432:5432
+        # Without the health check the build can reach the test before the server
+        # finishes its first start, and the failure reads as a driver bug.
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: false
+          fetch-depth: 1
+
+      # ⚠ NOT `submodules: recursive`. docs/private/ is a PRIVATE submodule, and the workflow token cannot
+      # read it — a recursive checkout would fail before anything is built. Nothing here needs the
+      # documentation, and it takes itself out with `update = none` - so the script below names no
+      # submodule at all, and needs no editing when one is added to the tree.
+      - run: bash .github/fetch-submodules.sh
+        shell: bash
+
+      # libpq-dev on top of the usual set: the driver loads libpq at run time, so
+      # the client library has to be present for the test to connect at all.
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake ninja-build ccache pkg-config \
+            libgtk-3-dev libsqlite3-dev uuid-dev libpq-dev
+
+      - name: Compiler cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .ccache
+          key: ccache-${{ github.job }}-${{ github.sha }}
+          restore-keys: ccache-${{ github.job }}-
+
+      - name: Configure
+        run: cmake --preset linux-debug -DBUILD_TESTING=ON -DOES_USE_POSTGRESQL=ON -DwxBUILD_PRECOMP=OFF
+
+      - name: Build the dialect target
+        run: cmake --build --preset linux-debug --target oes_pg_dialect_test
+
+      - name: Run
+        working-directory: build/linux-debug
+        env:
+          OES_PG_HOST: 127.0.0.1
+          OES_PG_PORT: 5432
+          OES_PG_DB: oes_test
+          OES_PG_USER: postgres
+          OES_PG_PASSWORD: postgres
+        run: ./bin/Debug/oes_pg_dialect_test --gtest_color=no
+
+      - name: Compiler cache statistics
+        if: always()
+        run: ccache -s -v || true
+      - name: Save the compiler cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .ccache
+          key: ccache-${{ github.job }}-${{ github.sha }}
+
+  # ---------------------------------------------------------------------------
+  # Firebird — EXECUTED, on the kit the package ships.
+  #
+  # The general jobs compile the Firebird driver but cannot run it: it loads
+  # fbclient at run time and a runner has none, so every test that needs a live
+  # Firebird SKIPS there (FirebirdBatchInsert says so at its top). This job lays
+  # the pinned Firebird 5 kit out as `_fb/` beside the test binary — the kit and
+  # the place the nightly package uses (.github/firebird-kit-linux.sh) — and runs
+  # the Firebird tests. A file base opens through the embedded engine, so no
+  # server container is needed.
+  #
+  # ⚠ A SKIP HERE IS A FAILURE. The tests skip where no client loads, which is
+  # right on a developer's machine and wrong in the one job that exists to load
+  # it: a kit that stopped loading would otherwise leave the job green.
+  # ---------------------------------------------------------------------------
+  tests-firebird:
+    name: Firebird (Linux, Debug)
+    runs-on: ubuntu-22.04
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 1500M
+      CMAKE_C_COMPILER_LAUNCHER: ccache
+      CMAKE_CXX_COMPILER_LAUNCHER: ccache
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: false
+          fetch-depth: 1
+
+      # docs/private/ takes itself out (`update = none`), every other submodule is fetched — see tests-linux.
+      - run: bash .github/fetch-submodules.sh
+        shell: bash
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake ninja-build ccache pkg-config \
+            libgtk-3-dev libsqlite3-dev uuid-dev
+
+      - name: Compiler cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .ccache
+          key: ccache-${{ github.job }}-${{ github.sha }}
+          restore-keys: ccache-${{ github.job }}-
+
+      # ⚠ POSTGRES IS ON HERE TOO, as in every other job. This one is ABOUT Firebird, so it was configured
+      # with that driver alone — and the test tree does not build without the other: three query tests
+      # name `ibDatabaseLayerPostgres::Dialect()` outright, so the link failed before a single Firebird
+      # test ran (first run of this job, 2026-09-22). What a job is about is which tests it RUNS, not
+      # which drivers exist in the binary.
+      - name: Configure
+        run: cmake --preset linux-debug -DBUILD_TESTING=ON -DOES_USE_FIREBIRD=ON -DOES_USE_POSTGRESQL=ON -DwxBUILD_PRECOMP=OFF
+
+      - name: Build the test target
+        run: cmake --build --preset linux-debug --target oes_tests
+
+      - name: Firebird 5 kit
+        run: |
+          bash .github/firebird-kit-linux.sh
+          cp -a fbkit build/linux-debug/bin/Debug/_fb
+
+      - name: Run
+        working-directory: build/linux-debug
+        run: |
+          set -o pipefail
+          ./bin/Debug/oes_tests --gtest_filter='Firebird*' --gtest_color=no | tee firebird.txt
+          if grep -q '\[  SKIPPED \]' firebird.txt; then
+            echo "::error::a Firebird test skipped - the kit did not load"
+            exit 1
+          fi
+
+      - name: Firebird log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: firebird-log
+          path: build/linux-debug/bin/Debug/_fb/firebird.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Compiler cache statistics
+        if: always()
+        run: ccache -s -v || true
+      - name: Save the compiler cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .ccache
+          key: ccache-${{ github.job }}-${{ github.sha }}
+
+  # ---------------------------------------------------------------------------
+  # The backend suite under AddressSanitizer + UndefinedBehaviorSanitizer
+  # (OES_SANITIZE, CMakeLists.txt). The general jobs prove the tests PASS; this
+  # one proves they pass without touching memory they do not own (use after
+  # free, overflow) and without undefined behaviour. On Linux LeakSanitizer rides
+  # in with ASan, so a leak at exit is reported with the stack that allocated it
+  # (docs/private/engineering-playbook/25-memory-leaks.md).
+  #
+  # ⚠ NOT BLOCKING YET. The suite has never run under a sanitizer, so the first
+  # runs are a harvest, not a verdict; the job is made blocking once the harvest
+  # is fixed. A finding is in the output of the test that failed, with its stack.
+  # ---------------------------------------------------------------------------
+  tests-sanitize:
+    name: Tests (Linux, ASan + UBSan)
+    runs-on: ubuntu-22.04
+    continue-on-error: true
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 1500M
+      CMAKE_C_COMPILER_LAUNCHER: ccache
+      CMAKE_CXX_COMPILER_LAUNCHER: ccache
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: false
+          fetch-depth: 1
+
+      # docs/private/ takes itself out (`update = none`), every other submodule is fetched — see tests-linux.
+      - run: bash .github/fetch-submodules.sh
+        shell: bash
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake ninja-build ccache pkg-config \
+            libgtk-3-dev libsqlite3-dev uuid-dev
+
+      - name: Compiler cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .ccache
+          key: ccache-${{ github.job }}-${{ github.sha }}
+          restore-keys: ccache-${{ github.job }}-
+
+      - name: Configure
+        run: >
+          cmake --preset linux-debug -DBUILD_TESTING=ON -DOES_USE_FIREBIRD=ON -DOES_USE_POSTGRESQL=ON
+          -DOES_SANITIZE=address,undefined -DwxBUILD_PRECOMP=OFF
+
+      # The same targets as tests-linux. ⚠ NO LEAK CHECK WHILE BUILDING: gtest_discover_tests RUNS each test
+      # binary to list its tests, and a leak reported at that exit would fail the build before a single
+      # test ran.
+      - name: Build the test targets
+        env:
+          ASAN_OPTIONS: detect_leaks=0
+        run: >
+          cmake --build --preset linux-debug
+          --target oes_tests oes_string_tests oes_query_totals_test
+          oes_query_parity_test oes_query_join_parity_test
+          oes_temp_db_sqlite_test oes_job_tenancy_test oes_multi_base_test
+
+      # Twice the timeout of tests-linux: ASan costs about 2x.
+      #
+      # ⭐ check_initialization_order EARNED ITS PLACE ON THE FIRST RUN (2026-09-22): 2076 failed of
+      # 2092, and every one of them the SAME report - initialization-order-fiasco on `s_traceTypes`,
+      # a file-scope flag in compiler/valueFactory.cpp read from the static initialisation of a
+      # registrar one translation unit away. One defect at startup, and since ASan cannot recover
+      # from it (not without -fsanitize-recover=address, so halt_on_error would change nothing), it
+      # wore the whole suite's output: no leak, no overflow and no undefined behaviour underneath it
+      # was ever reached. Both flags are function-local statics now, which is what utils/debugTrace.h
+      # asks of its callers and names those two files for; the check stays ON so the next one is
+      # caught the same way rather than silently allowed.
+      - name: Run
+        working-directory: build/linux-debug
+        env:
+          ASAN_OPTIONS: detect_leaks=1:detect_stack_use_after_return=1:check_initialization_order=1
+          UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+          # THE LEAKS THAT ARE NOT OURS, and only those — each line of the file says whose they are
+          # and why nobody frees them. Without it every test process ends red on fontconfig and the
+          # GTK singletons, and a run where everything is red says nothing about anything.
+          LSAN_OPTIONS: suppressions=${{ github.workspace }}/.github/lsan-suppressions.txt
+        run: ctest --output-on-failure --timeout 600 -E "oes_frontend_runtime_test|oes_pg_dialect_test"
+
+      - name: Journal on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: journal-linux-sanitize
+          path: build/linux-debug/bin/Debug/journal/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Compiler cache statistics
+        if: always()
+        run: ccache -s -v || true
+      - name: Save the compiler cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .ccache
+          key: ccache-${{ github.job }}-${{ github.sha }}
+
+  # ---------------------------------------------------------------------------
+  # The GUI harness is a SEPARATE job, and separate on purpose: it links
+  # frontend.dll, needs a live wxApp, and runs headless under Xvfb. Its failure
+  # mode (a hung modal on an assert) is different in kind from a backend test's,
+  # so it gets its own timeout and does not take the primary signal down with it
+  # when the toolkit itself is the problem.
+  # ---------------------------------------------------------------------------
+  tests-gui-linux:
+    name: GUI tests (Linux, Xvfb)
+    runs-on: ubuntu-22.04
+    # 90, matching the sibling job below. These jobs build wxWidgets from scratch every time (see
+    # the note at the top of this file — the obvious build-directory cache LIES with Ninja), so the
+    # wall clock is dominated by a constant that has nothing to do with our tree.
+    #
+    # ⚠ The raise itself was a MISREADING, kept only because the sibling has the same number. The
+    # job was not running out of compile time: the build finishes in ~26 minutes and every test
+    # passes three seconds later — the rest was the run step hanging in cleanup with no bound on it.
+    # Raising 60 to 90 bought the hang thirty more minutes to sit in. The bound now lives on the run
+    # step, where the hang is; THIS number is only the outer envelope.
+    #
+    # The real build-time fix is the COMPILER cache, keyed on preprocessed input rather than
+    # timestamps, so it cannot serve the stale object a directory cache can — wired since
+    # 2026-09-28 (the note at the top of this file).
+    timeout-minutes: 90
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 1500M
+      CMAKE_C_COMPILER_LAUNCHER: ccache
+      CMAKE_CXX_COMPILER_LAUNCHER: ccache
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: false
+          fetch-depth: 1
+
+      # ⚠ NOT `submodules: recursive`. docs/private/ is a PRIVATE submodule, and the workflow token cannot
+      # read it — a recursive checkout would fail before anything is built. Nothing here needs the
+      # documentation, and it takes itself out with `update = none` - so the script below names no
+      # submodule at all, and needs no editing when one is added to the tree.
+      - run: bash .github/fetch-submodules.sh
+        shell: bash
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake ninja-build ccache pkg-config gdb \
+            libgtk-3-dev libsqlite3-dev uuid-dev xvfb
+
+      - name: Compiler cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .ccache
+          key: ccache-${{ github.job }}-${{ github.sha }}
+          restore-keys: ccache-${{ github.job }}-
+
+      - name: Configure
+        run: cmake --preset linux-debug -DBUILD_TESTING=ON -DOES_USE_FIREBIRD=ON -DOES_USE_POSTGRESQL=ON -DwxBUILD_PRECOMP=OFF
+
+      # -k 0 keeps ninja going after a failed compile instead of stopping at the first
+      # one. The frontend is being compiled by GCC for the first time, so errors come in
+      # families; stopping at the first turns one CI round into one fix. With keep-going
+      # a round returns every independent failure at once and they get fixed as a batch.
+      - name: Build the GUI test target
+        run: cmake --build --preset linux-debug --target oes_frontend_runtime_test -- -k 0
+
+      # The harness SKIPs every test when the toolkit cannot come up, so a
+      # display-less runner reports skips, not failures — Xvfb is what turns
+      # those skips back into real assertions.
+      #
+      # ⚠ BOUNDED — and when it is not, it says WHY before it dies.
+      #
+      # This was the one unbounded run in the file. Its siblings go through
+      # `ctest --timeout 300`, which fails the test that hangs; this step exec'd the
+      # binary directly, so a process that never exits ate the entire job. It did,
+      # twice: all 38 tests passed in three seconds, `Global test environment
+      # tear-down` printed, and then nothing for an hour. The red said "timed out",
+      # which reads as "too slow to compile" and is not what happened — the hang is
+      # in wxEntryCleanup, AFTER every assertion has already passed.
+      #
+      # Ten minutes is not a performance budget; three seconds is the honest runtime.
+      # It is the line past which the process is STUCK, and crossing it prints every
+      # thread's stack — the one thing a hang on someone else's machine cannot
+      # otherwise tell us — and then fails the job in minutes instead of ninety.
+      #
+      # ⚠ AND IT MUST BE THE RIGHT PROCESS. The first two bounded runs printed a stack
+      # of ONE frame — `wait4`, in a thread named "xvfb-run" — because the watchdog
+      # found its pid with `pgrep -f '[o]es_frontend_runtime_test' | head -n1`, and
+      # BOTH processes match that: `-f` reads the whole command line, and the wrapper's
+      # command line is `xvfb-run -a ./bin/Debug/oes_frontend_runtime_test`. `head -n1`
+      # then takes the lower pid, which is always the parent — so it picked the wrapper
+      # every single time, deterministically. It also killed the wrapper and left the
+      # real process alive, for the runner to reap as an orphan two lines later.
+      #
+      # The wrapper is gone rather than the match tightened: with Xvfb started here,
+      # `$!` IS the process under test and nothing has to be guessed. `bt full` because
+      # a hang in someone else's teardown is worth its locals.
+      - name: Run under Xvfb
+        working-directory: build/linux-debug
+        run: |
+          set -uo pipefail
+          Xvfb :99 -screen 0 1280x1024x24 &
+          xvfb=$!
+          # Wait for the display SOCKET, not for a guess at how long Xvfb takes: starting
+          # the suite early makes the harness skip every test, and a suite that asserted
+          # nothing must never read as a pass (checked again after the run).
+          for _ in $(seq 1 100); do [ -e /tmp/.X11-unix/X99 ] && break; sleep 0.1; done
+          export DISPLAY=:99
+
+          # One bounded run. $1 = log, $2 = seconds to wait, rest = extra gtest arguments.
+          run_suite() {
+            local log="$1" bound="$2"; shift 2
+            ./bin/Debug/oes_frontend_runtime_test "$@" > "$log" 2>&1 &
+            local runner=$!
+            (
+              sleep "$bound"
+              if kill -0 "$runner" 2>/dev/null; then
+                echo "=== alive after ${bound}s (3s is the honest runtime) — every thread, pid $runner ==="
+                sudo gdb -p "$runner" -batch -ex 'thread apply all bt full' 2>&1 || true
+                sudo kill -9 "$runner" || true
+              fi
+            ) &
+            local watchdog=$!
+            # `|| status=$?`, not `; status=$?`: the step's shell is `bash -e`, so a
+            # non-zero `wait` (137 when the watchdog kills a hung run) aborts the whole
+            # script THERE — which is why the first stack came with no gui.log and no
+            # control run. The bare `$?` never got read.
+            local status=0
+            wait "$runner" || status=$?
+            kill "$watchdog" 2>/dev/null || true
+            cat "$log"
+            return $status
+          }
+
+          status=0
+          run_suite gui.log 600 || status=$?
+
+          # THE CONTROL RUN — and only when there is something to explain.
+          #
+          # A hang that appears after a batch is a question about WHAT the batch added, and
+          # the cheapest instrument that answers it is the same binary with the new sets
+          # taken out. Reading the code first produced two confident theories that both
+          # died on inspection (the job manager's tick thread — stopped by
+          # DestroyAppDataEnv; queued window deletion — wx deletes directly when no event
+          # loop runs, see wx/app.h), which is the argument for measuring rather than a
+          # third theory. The bound is short here: three seconds is the honest runtime,
+          # so anything past three minutes is already stuck and the job has a ceiling.
+          if [ $status -ne 0 ]; then
+            echo "=== control run: the same binary WITHOUT the sets 3e453bf2 added ==="
+            if run_suite gui-control.log 180 \
+                 --gtest_filter=-CodeEditorFix.*:QueryCaseFix.*:QueryConstructorReadOnly.*; then
+              echo "::error::Exits cleanly without CodeEditorFix / QueryCaseFix / QueryConstructorReadOnly — the hang belongs to what those tests build."
+            else
+              echo "::error::Hangs without them too — the cause sits below the new tests; read the stack above."
+            fi
+          fi
+
+          kill "$xvfb" 2>/dev/null || true
+          # A display that never came up SKIPS the whole suite and exits 0. Green with
+          # nothing asserted is the failure mode this job exists to prevent.
+          if grep -q 'GUI wxApp unavailable' gui.log; then
+            echo "::error::Xvfb never came up — the suite skipped instead of running." >&2
+            exit 1
+          fi
+          exit $status
+
+      - name: Compiler cache statistics
+        if: always()
+        run: ccache -s -v || true
+      - name: Save the compiler cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .ccache
+          key: ccache-${{ github.job }}-${{ github.sha }}
+
+  # ---------------------------------------------------------------------------
+  # macOS on ARM — the third toolchain, and the one that is a different CPU as
+  # well as a different compiler.
+  #
+  # Why it earns a job. Linux gave us Clang-family strictness and LP64; Apple
+  # Silicon adds what neither of the other two can catch:
+  #   * AArch64 — no x86 memory model to hide a missing atomic ordering, and
+  #     `char` is UNSIGNED, which quietly changes any `char` used as a small
+  #     signed number.
+  #   * Alignment and struct layout differ where a type's natural alignment
+  #     drove the padding.
+  #   * Apple's libc++ instead of libstdc++ — a third standard library that
+  #     does not share MSVC's or libstdc++'s transitive includes.
+  #   * wx builds against Cocoa here, not GTK, so the frontend's toolkit
+  #     assumptions get a second reading. guid.cpp already takes an APPLE
+  #     branch (CFUUID via CoreFoundation) that nothing has been compiling.
+  #
+  # No GUI job for macOS yet: the harness needs a window server, and the
+  # headless story there is not Xvfb. Backend suite + a full application build
+  # is the signal for now.
+  #
+  # This is NOT a first compile — a colleague builds the tree on a Mac locally
+  # (portability.md § 3 listed macOS as "not in CI" for exactly that reason), and
+  # the CMake files carry worked-out APPLE branches in launcher / enterprise /
+  # designer, not placeholders. So the expectation here is green or close to it,
+  # and what the job actually buys is the thing a local build cannot give: the
+  # platform stops depending on one machine and one person remembering to try it.
+  # Anything it does surface is a portability rule for docs/portability.md.
+  # ---------------------------------------------------------------------------
+  tests-macos-arm:
+    name: Tests (macOS 14, arm64, Debug)
+    runs-on: macos-14
+    timeout-minutes: 90
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 1500M
+      CMAKE_C_COMPILER_LAUNCHER: ccache
+      CMAKE_CXX_COMPILER_LAUNCHER: ccache
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: false
+          fetch-depth: 1
+
+      # ⚠ NOT `submodules: recursive`. docs/private/ is a PRIVATE submodule, and the workflow token cannot
+      # read it — a recursive checkout would fail before anything is built. Nothing here needs the
+      # documentation, and it takes itself out with `update = none` - so the script below names no
+      # submodule at all, and needs no editing when one is added to the tree.
+      - run: bash .github/fetch-submodules.sh
+        shell: bash
+
+      # cmake ships on the runner image; ninja and ccache do not. No GTK, no uuid-dev —
+      # wx uses Cocoa here and the guid path is CoreFoundation's CFUUID.
+      - name: Install build dependencies
+        run: brew install ninja ccache
+
+      - name: Compiler cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .ccache
+          key: ccache-${{ github.job }}-${{ github.sha }}
+          restore-keys: ccache-${{ github.job }}-
+
+      # Same driver set as the other jobs: both clients are dlopen'd at RUNTIME
+      # (firebirdInterface / postgresInterface), so enabling them costs no brew
+      # package — it only compiles the driver sources, which is the point.
+      - name: Configure
+        run: cmake --preset macos-debug -DBUILD_TESTING=ON -DOES_USE_FIREBIRD=ON -DOES_USE_POSTGRESQL=ON -DwxBUILD_PRECOMP=OFF
+
+      # -k 0 for the same reason the GUI job uses it: a first-time toolchain
+      # returns errors in families, and one round should surface all of them.
+      - name: Build the test targets
+        run: >
+          cmake --build --preset macos-debug
+          --target oes_tests oes_string_tests oes_query_totals_test
+          oes_query_parity_test oes_query_join_parity_test
+          oes_temp_db_sqlite_test oes_job_tenancy_test oes_multi_base_test
+          -- -k 0
+
+      - name: Run
+        working-directory: build/macos-debug
+        run: ctest --output-on-failure --timeout 300 -E "oes_frontend_runtime_test|oes_pg_dialect_test"
+
+      # See the note in the Linux job — the journal of the run that failed.
+      - name: Journal on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: journal-macos-debug
+          path: build/macos-debug/bin/Debug/journal/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Build the applications
+        run: cmake --build --preset macos-debug -- -k 0
+
+      # lldb, not gdb — same intent as the Linux backtrace step, and the same guard: no binary, no backtrace.
+      - name: Backtrace on failure
+        if: failure() && hashFiles('build/macos-debug/bin/Debug/oes_tests') != ''
+        working-directory: build/macos-debug
+        run: |
+          for t in CompilerTest.SimpleAssignmentEmitsBytecode RuntimeTest.ConstantAssignment; do
+            echo "=============== $t ==============="
+            lldb -b -o run -o "bt 40" -- ./bin/Debug/oes_tests --gtest_filter=$t || true
+          done
+
+      - name: Compiler cache statistics
+        if: always()
+        run: ccache -s -v || true
+      - name: Save the compiler cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .ccache
+          key: ccache-${{ github.job }}-${{ github.sha }}
+
+  # ---------------------------------------------------------------------------
+  # Runtime benchmarks — a RECORD, not a gate.
+  #
+  # The suite jobs above build Debug, where these numbers are meaningless (checked
+  # iterators tax value-heavy code), so this one builds Release purely to run the
+  # DISABLED-by-default benches and keep their output where it can be read later:
+  # in the job log and as an artifact.
+  #
+  # READ IT AS AN ORDER OF MAGNITUDE. A GitHub runner is a shared VM: locally, on
+  # a quiet desktop, host->script alone swung 228 -> 468 ns inside ONE series
+  # (docs/private/runtime-perf.md §5.8). So this catches a catastrophic regression - a
+  # figure that doubles and stays doubled across runs - and nothing finer. Do not
+  # quote these numbers as the platform's performance; measure on real hardware
+  # for that.
+  #
+  # It never fails the build: `|| true` on the run, and no threshold. A benchmark
+  # that gates CI on a shared runner turns into a flaky test nobody trusts.
+  benchmarks-linux:
+    name: Benchmarks (Linux, Release) — record only
+    runs-on: ubuntu-22.04
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 1500M
+      CMAKE_C_COMPILER_LAUNCHER: ccache
+      CMAKE_CXX_COMPILER_LAUNCHER: ccache
+    # Runs on the BRANCH THE WORK HAPPENS ON. This is the only job that builds
+    # Release — wxWidgets from scratch, ~16 minutes before the benches even start —
+    # and it was held back to master for that reason, which meant the numbers only
+    # ever appeared long after the change that moved them. A performance figure is
+    # worth what it is worth NEXT TO the commit it belongs to, so develop pays the
+    # minutes. It still gates nothing (`|| true` on the run, no threshold), so a
+    # slow or noisy bench cannot fail anything; it only records.
+    #
+    # Pull requests are deliberately NOT included: a PR would run it a second time
+    # for the same commits already measured on develop.
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/master'
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: false
+          fetch-depth: 1
+
+      # ⚠ NOT `submodules: recursive`. docs/private/ is a PRIVATE submodule, and the workflow token cannot
+      # read it — a recursive checkout would fail before anything is built. Nothing here needs the
+      # documentation, and it takes itself out with `update = none` - so the script below names no
+      # submodule at all, and needs no editing when one is added to the tree.
+      - run: bash .github/fetch-submodules.sh
+        shell: bash
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake ninja-build ccache pkg-config \
+            libgtk-3-dev libsqlite3-dev uuid-dev
+
+      - name: Compiler cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .ccache
+          key: ccache-${{ github.job }}-${{ github.sha }}
+          restore-keys: ccache-${{ github.job }}-
+
+      # Same driver flags as the Debug suite job. They are not optional: the test
+      # target links tests that call into the drivers directly (test_queryRenderer
+      # uses ibDatabaseLayerPostgres::Dialect()), so without them the link fails
+      # on undefined references after ~16 minutes of compiling.
+      - name: Configure
+        run: cmake --preset linux-release -DBUILD_TESTING=ON -DOES_USE_FIREBIRD=ON -DOES_USE_POSTGRESQL=ON -DwxBUILD_PRECOMP=OFF
+
+      - name: Build the bench target
+        run: cmake --build --preset linux-release --target oes_tests
+
+      # Bench cases are DISABLED_ so the normal suite never pays for them; they
+      # only run with --gtest_also_run_disabled_tests. StructureFootprint is held
+      # out of this run and given a process of its own in the next step.
+      - name: Run benchmarks
+        working-directory: build/linux-release
+        run: |
+          ./bin/Release/oes_tests \
+            --gtest_also_run_disabled_tests \
+            --gtest_filter='*Bench*-*StructureFootprint*' \
+            --gtest_color=no 2>&1 | tee benchmarks.txt || true
+
+      # A FOOTPRINT IS MEASURED IN A PROCESS OF ITS OWN.
+      #
+      # It reads the resident set, and a fill that lands in memory the process
+      # freed earlier does not move it. In the shared run it came right after
+      # MillionRowScale, which releases ~2.4 GB, and glibc keeps small freed
+      # blocks — so on 2026-09-11 both of its rows read 0 and printed "n/a": a
+      # blind probe that looked like a free structure. A fresh process has nothing
+      # freed before it. Appended to the same file, so the summary and the
+      # artifact carry it like every other row.
+      - name: Run the footprint bench alone
+        working-directory: build/linux-release
+        run: |
+          ./bin/Release/oes_tests \
+            --gtest_also_run_disabled_tests \
+            --gtest_filter='*StructureFootprint*' \
+            --gtest_color=no 2>&1 | tee -a benchmarks.txt || true
+
+      # The summary DROPS THE SCAFFOLDING, it does not pick the rows.
+      #
+      # It used to select by unit — 'ns/iter|ns/call|ns/app|ns/el|ns/row' — and a
+      # unit is not a property of a measurement, it is a property of how the line
+      # happened to be worded. Every bench that prints a table with its units in
+      # the header (ibString, ibNumber, the parser) fell out whole; so did
+      # ns/key and ns/probe, which is the join index — the one measurement the
+      # open question about key types is decided by. Half the run was missing
+      # from the record, and nothing said so.
+      #
+      # A new bench should not have to know about this filter to be seen. So it
+      # subtracts what is NOT a result — gtest's own lines, and the bytecode
+      # dumps (every op carries `p1(`) — and prints the rest. The file is a few
+      # KB; the 1 MB summary limit is not a constraint here.
+      #
+      # Note what this restores for free: the benches already PRINT their own
+      # per-row drift and resident-set blocks. Those are ratios taken inside one
+      # process, which is the only comparison a shared runner supports — and they
+      # were being thrown away by a filter looking for the word "ns".
+      - name: Summary
+        working-directory: build/linux-release
+        run: |
+          {
+            echo '### Runtime benchmarks (Release, shared runner)'
+            echo
+            echo 'Order-of-magnitude only — a shared VM swings by 2x on some scenarios.'
+            echo 'The ratios (per-row drift, oes/native) hold up better than the absolute figures:'
+            echo 'both sides of a ratio were measured in the same process on the same VM.'
+            echo
+            echo '```'
+            grep -Ev '^\[[=-]|^\[[[:space:]]*(RUN|OK|PASSED|FAILED)|^(Running main|Note:)|p1\(|params=|^===' benchmarks.txt \
+              || echo '(no rows captured)'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload benchmark output
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmarks-linux-release
+          path: build/linux-release/benchmarks.txt
+          if-no-files-found: warn
+
+      - name: Compiler cache statistics
+        if: always()
+        run: ccache -s -v || true
+      - name: Save the compiler cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .ccache
+          key: ccache-${{ github.job }}-${{ github.sha }}

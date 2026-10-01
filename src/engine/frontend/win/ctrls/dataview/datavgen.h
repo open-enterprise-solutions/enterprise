@@ -10,6 +10,15 @@
 #ifndef __GENERICDATAVIEWCTRLH__
 #define __GENERICDATAVIEWCTRLH__
 
+// VENDORED (wxWidgets generic dataview, wxWindows licence). Marked a system header so
+// its diagnostics stay out of OUR logs: the classes here are defined inline, so every
+// warning reprinted in every TU that includes it -- 160 lines in one CI run, all from
+// upstream code we do not correct. Per-file -w does NOT cover this; that flag applies
+// to the .cpp being compiled, and these come from the header itself.
+#if defined(__GNUC__) || defined(__clang__)
+#  pragma GCC system_header
+#endif
+
 #include <wx/defs.h>
 #include <wx/object.h>
 #include <wx/compositewin.h>
@@ -18,14 +27,24 @@
 #include <wx/selstore.h>
 #include <wx/icon.h>
 #include <wx/vector.h>
+#include <wx/timer.h>    // the busy indicator's tick
 #include <functional>
+#include <map>           // the row pictures, by id
+#include <memory>        // the alive token + the background-run handles
+#include <vector>
 #if wxUSE_ACCESSIBILITY
 #include <wx/access.h>
 #endif // wxUSE_ACCESSIBILITY
 
+// Column groups + the (x, band) geometry every painter / hit-test asks for.
+#include "frontend/win/ctrls/dataview/datavlayout.h"
+
 class ibDataViewMainWindow;
 class ibDataViewHeaderWindow;
 class ibDataViewFooterWindow;
+// One bootstrap, carried between the three steps it takes (decide → read → apply).
+// Defined in datavgen.paged.private.h — the control only names it.
+struct ibPagedFetch;
 
 #if wxUSE_ACCESSIBILITY
 class FRONTEND_API ibDataViewCtrlAccessible;
@@ -201,6 +220,12 @@ public:
 		UpdateWidth();
 	}
 
+	// Set when a group takes this column in (GetParent / GetOwner are on the base).
+	// A PLAIN SETTER: the group announces the change once it is complete — see the
+	// definition for why announcing it from here was a notification ahead of the fact.
+	void SetParent(ibDataViewColumnGroup* group);
+
+
 	// implement footer methods
 	void SetFooterTitle(const wxString& title) { m_footer_column.SetTitle(title); }
 	wxString GetFooterTitle() const { return m_footer_column.GetTitle(); }
@@ -227,7 +252,32 @@ public:
 	// user interactively.
 	void WXOnResize(int width);
 
+	// THE WIDTH AS ASKED FOR, RECORDED QUIETLY. Same effect as WXOnResize minus the
+	// announcement: an interactive drag rewrites SEVERAL columns at once (a range and its
+	// neighbour, stacks included) and the control re-derives the display once, at the end,
+	// instead of once per column with half-applied widths in between.
+	void WXSetSpecifiedWidth(int width) { m_width = m_manuallySetWidth = width; }
+
+	// THE WIDTH IT IS SHOWN AT — the automatic fit's own result, and nothing else: it does
+	// not touch what the column ASKS for, and it says nothing to the control. The fit sets
+	// all the columns and then announces ONCE. Announcing per column ran the layout rebuild
+	// and a header repaint thirteen times per mouse-move, over half-applied widths — the
+	// header filled with leftover dividers and the drag crawled.
+	void WXSetShownWidth(int width) { m_width = width; }
+
 	virtual int WXGetSpecifiedWidth() const wxOVERRIDE;
+
+	// ---- THE WIDTH ITS CONTENTS WANT ----------------------------------------
+	//
+	// Measured by the control (it has the rows), cached HERE — on the column being
+	// measured. It used to be an array in the control, one entry per column POSITION,
+	// which had to be resized and re-based every time the column order changed; the
+	// cache belongs to the thing it describes, and then no order can invalidate it.
+	// 0 = not measured yet; `dirty` = the header still shows the old width.
+	int WXBestWidth() const { return m_bestWidth; }
+	void WXSetBestWidth(int width) const { m_bestWidth = width; }
+	bool WXIsBestWidthDirty() const { return m_bestWidthDirty; }
+	void WXSetBestWidthDirty(bool dirty = true) { m_bestWidthDirty = dirty; if (dirty) m_bestWidth = 0; }
 
 private:
 	// common part of all ctors
@@ -247,6 +297,9 @@ private:
 	int m_width,
 		m_manuallySetWidth,
 		m_minWidth;
+	// Measured lazily by a const getter, hence mutable — see WXBestWidth.
+	mutable int m_bestWidth = 0;
+	bool m_bestWidthDirty = true;
 	wxAlignment m_align;
 
 	int m_flags;
@@ -365,14 +418,14 @@ public:
 	ibDataViewTreeNode(ibDataViewTreeNode* parent, const ibDataViewItem& item)
 		: m_parent(parent),
 		m_item(item),
-		m_branchData(NULL), m_viewMode(ibDataViewCell)
+		m_viewMode(ibDataViewCell), m_branchData(NULL)
 	{
 	}
 
 	ibDataViewTreeNode(ibDataViewTreeNode* parent, const ibDataViewItem& item, ibDataViewTreeNodeViewMode nodeType)
 		: m_parent(parent),
 		m_item(item),
-		m_branchData(NULL), m_viewMode(nodeType)
+		m_viewMode(nodeType), m_branchData(NULL)
 	{
 	}
 
@@ -684,18 +737,13 @@ public:
 
 	virtual bool AssociateModel(ibDataViewModel* model) wxOVERRIDE;
 
-	virtual bool AppendColumn(ibDataViewColumn* col) wxOVERRIDE;
-	virtual bool PrependColumn(ibDataViewColumn* col) wxOVERRIDE;
-	virtual bool InsertColumn(unsigned int pos, ibDataViewColumn* col) wxOVERRIDE;
+	// THE COLUMN STORE — and the only thing about columns this control says. Adding,
+	// counting, moving and removing are the GROUP's (ibDataViewColumnGroup in dataview.h);
+	// the root is handed out and the caller says it to whichever group it meant.
+	virtual ibDataViewColumnGroup* GetRootColumnGroup() const wxOVERRIDE { return m_rootGroup; }
 
 	virtual void DoSetExpanderColumn() wxOVERRIDE;
 	virtual void DoSetIndent() wxOVERRIDE;
-
-	virtual unsigned int GetColumnCount() const wxOVERRIDE;
-	virtual ibDataViewColumn* GetColumn(unsigned int pos) const wxOVERRIDE;
-	virtual bool DeleteColumn(ibDataViewColumn* column) wxOVERRIDE;
-	virtual bool ClearColumns() wxOVERRIDE;
-	virtual int GetColumnPosition(const ibDataViewColumn* column) const wxOVERRIDE;
 
 	virtual ibDataViewColumn* GetSortingColumn() const wxOVERRIDE;
 	virtual wxVector<ibDataViewColumn*> GetSortingColumns() const wxOVERRIDE;
@@ -755,8 +803,9 @@ public:
 	// and may be overridden by the user
 	virtual void DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindow);
 
-	//show data filter
-	virtual bool ShowFilter(struct ibFilterRow& filter) { return false; }
+	// Open the List-Settings window (Filter / Sort / Group) for the model. Default
+	// returns false; ibTableViewCtrl overrides it to open ibDialogListSettings.
+	// (ShowListSettings removed — a control does not carry the settings road; see ibDialogListSettings.)
 	virtual bool ShowViewMode() { return false; }
 
 	virtual bool AllowMultiColumnSort(bool allow) wxOVERRIDE;
@@ -848,8 +897,11 @@ protected:
 	// Return true if the given column is sorted
 	bool IsColumnSorted(int idx) const;
 
-	// Reset all columns currently used for sorting.
+	// Reset all columns currently used for sorting. PUBLIC: the OES tablebox (ibValueModelTableBox::OnColumnClick)
+	// clears the header arrows before setting the clicked column's, committing the sort straight on the composer.
+public:
 	void ResetAllSortColumns();
+protected:
 
 	virtual void DoEnableSystemTheme(bool enable, wxWindow* window) wxOVERRIDE;
 
@@ -860,32 +912,26 @@ protected:
 	// Backend stays a stateless fetch service.
 	void OnScrollEvent(wxScrollWinEvent& event);
 	// OnIdleEvent removed — body collapsed into OnInternalIdle for a
-	// single idle entry point.  External callers register via SetIdleHook.
+	// single idle entry point.
 
-	// Paged-mode tree manipulation — called from the prefetch flow.
-	// PagedBootstrap kicks the very first GetFirstFetch once layout
-	// has settled.  PagedFetchForward / Backward extend the loaded
-	// window when scroll approaches an edge and the side is not
-	// exhausted.
-	void PagedBootstrap();
+	// THE FIRST PAGE is a Reset portion through the one dispatcher below — the same
+	// door the scrolled portions use, with the direction in the request. Kept as a
+	// name because that is what the idle pass and the drill paths ask for.
+	//
+	// It DISPATCHES; the answer comes back on this thread and lands in
+	// OnPagedFetchResetComplete, which does the wipe, the rebuild and the scroll in one
+	// frozen transaction. The OLD rows stay on screen meanwhile, with the busy badge
+	// over them: nothing is destroyed until there is something to put in its place.
+	void PagedBootstrap() { DispatchPagedFetch(ibFetchDirection::Reset, 0); }
+	void OnPagedFetchResetComplete(ibPagedFetch& req);
 
-	// Toggle the model's folder-first system-sort entry to match
-	// m_viewMode (Tree / Hierarchical → enabled, List → disabled).
-	// Invoked from SetViewMode (always, even on no-op same-mode) and
-	// AssociateModel so a fresh model picks up the right sort layout.
-	void ApplyFolderSortForViewMode();
-
-	// Reflect the model's m_sortOrder onto column-header sort arrows.
-	// Walks enabled non-system entries and toggles each matching
-	// ibDataViewColumn's sort state.  Run after AssociateModel and on
-	// each PagedBootstrap so the visible UI matches what BuildOrderBy
-	// will actually emit (system folder / reference sorts stay hidden).
-	void SyncColumnArrowsFromModel();
+	// (SyncColumnArrowsFromModel removed — header arrows are set on the front per column: the tablebox sets the
+	//  clicked column's arrow in OnColumnClick and re-reads the composer's active sort on column rebuild.)
 public:
 	// Hierarchical drill context (control-owned, model-stateless).
 	// Empty in List / Tree mode; non-empty when the user has drilled
 	// into a folder via SetTopParent.
-	ibDataViewItem GetTopParentItem() const {
+	ibDataViewItem GetDrillHierarchyItem() const {
 		// Front of the chain (the deepest folder we're currently inside);
 		// empty in List / Tree mode.
 		return m_topParentChain.IsEmpty() ? ibDataViewItem() : m_topParentChain[0];
@@ -894,9 +940,9 @@ public:
 	// Parent item passed to the model on fetch dispatch.  Three cases:
 	//   * Hierarchical drill — front of m_topParentChain (the folder
 	//     the user is currently inside).
-	//   * List view of a hierarchical model (Folders feature) —
-	//     s_constIgnoreParent sentinel: model drops the parent filter
-	//     and walks the whole table flat.
+	//   * List view of a hierarchical model — empty item: a List view
+	//     never groups, so the composer ignores the parent and walks
+	//     the whole table flat.
 	//   * Otherwise (Tree, or non-hierarchical model) — empty item:
 	//     model returns top-level rows.
 	ibDataViewItem GetEffectiveFetchParent() const;
@@ -907,7 +953,7 @@ public:
 	// freshly-fetched row via ibDataViewObject::IsEqualTo and restore
 	// focus.  Public-but-internal: do NOT call with a non-default
 	// preferSelection from outside the ctrl until the post-Save focus path
-	// teardown AV (latent in wxDocChildFrameAny m_childView/m_childDocument)
+	// teardown AV (latent in ibDocChildFrameAny m_childView/m_childDocument)
 	// is closed.
 	void SchedulePagedRefresh(const ibDataViewItem& preferSelection = ibDataViewItem());
 
@@ -920,29 +966,21 @@ public:
 	// instead would start another wipe cycle which is visible flicker.
 	void SetPagedRestoreSelection(const ibDataViewItem& item);
 
-	// Idle hook — fires from OnInternalIdle (every idle pass, runs
-	// always, not gated on wx idle-throttle) AFTER the control's own
-	// col-widths / dirty pass.  TableBox registers its seed chain here
-	// instead of competing on wxEVT_IDLE chain order: when the hook
-	// fires, control's bootstrap (which runs from OnIdleEvent earlier
-	// in the same idle cycle) has already settled buffer state.
-	using IdleHook = std::function<void()>;
-	void SetIdleHook(IdleHook hook) { m_idleHook = std::move(hook); }
 private:
-	// Direction discriminator for the shared paged-fetch dispatch helper.
-	enum class PagedFetchDir : uint8_t { Forward, Backward };
-	// Common submit-side: pre-checks + counter inc + SubmitFetchAsync +
-	// worker-side model fetch + UI-side CallAfter + gen-token guard +
-	// dispatch to the matching result handler.  Forward / Backward
-	// differ only in which model method fires, which counter and anchor
-	// they use, and which result handler runs.
-	void DispatchPagedFetch(PagedFetchDir dir, int batch);
-	void PagedFetchForward(int batch)  { DispatchPagedFetch(PagedFetchDir::Forward,  batch); }
-	void PagedFetchBackward(int batch) { DispatchPagedFetch(PagedFetchDir::Backward, batch); }
+	// THE ONE POINT OF DEPARTURE — one request with the DIRECTION in it, one
+	// answer. Reset is the first page (and every reload after a sort or a filter);
+	// Forward / Backward are what a scroll asks for. Same shape for all three:
+	// decide here, hand the work to the model's own fetch door (SubmitFetchAsync —
+	// its thread, or a background job for a runtime table), take the answer back on
+	// this thread. The direction matters again only at the far end, where the three
+	// result handlers say what to do with the portion.
+	void DispatchPagedFetch(ibFetchDirection dir, int batch);
+	void PagedFetchForward(int batch)  { DispatchPagedFetch(ibFetchDirection::Forward,  batch); }
+	void PagedFetchBackward(int batch) { DispatchPagedFetch(ibFetchDirection::Backward, batch); }
 	// UI-thread result processors invoked by CallAfter after the
 	// async DB roundtrip completes on the worker.
-	void OnPagedFetchForwardResult(ibDataViewItemArray& items, unsigned int n, int batch);
-	void OnPagedFetchBackwardResult(ibDataViewItemArray& items, unsigned int n, int batch);
+	void OnPagedFetchForwardComplete(ibDataViewItemArray& items, unsigned int n, int batch);
+	void OnPagedFetchBackwardComplete(ibDataViewItemArray& items, unsigned int n, int batch);
 	// Wipe loaded window and queue a fresh GetFirstFetch on next idle.
 	// Used as the universal "model said something changed" handler
 	// (ItemInserted / ItemDeleted / DoItemChanged in paged mode).
@@ -974,17 +1012,28 @@ private:
 
 public:     // utility functions not part of the API
 
-	// returns the "best" width for the idx-th column
-	unsigned int GetBestColumnWidth(int idx) const;
+	// the width the CONTENTS of a column want (cached on the column itself)
+	unsigned int GetBestColumnWidth(ibDataViewColumn* column) const;
 
-	// called by header window after reorder
-	void ColumnMoved(ibDataViewColumn* col, unsigned int new_pos);
+	// MOVE A COLUMN TO `holder`, AT `at` — what a header drag ends in. The header decides
+	// the holder (it has the drop point; see ibDataViewHeaderWindow::EndReordering), this
+	// moves the member and announces it, and the form mirrors the move by asking the
+	// column which group it is in now.
+	void WXMoveColumn(ibDataViewColumn* column, ibDataViewColumnGroup* holder, unsigned int at);
 
 	// update the display after a change to an individual column
 	void OnColumnChange(unsigned int idx);
 
 	// update after the column width changes due to interactive resizing
 	void OnColumnResized();
+
+	// Re-derive the horizontal scrollbar from the published virtual width (it needs a
+	// non-zero scroll rate to exist at all — see the definition).
+	void SyncHorizontalScrollbar();
+
+	// The same, ASKED FOR rather than done: served on the next idle, at most once per frame.
+	// This is what a drag uses — see OnColumnResized.
+	void RequestScrollbarSync();
 
 	// update after the column width changes because of e.g. title or bitmap
 	// change, invalidates the column best width and calls OnColumnChange()
@@ -993,20 +1042,193 @@ public:     // utility functions not part of the API
 	// update after a change to the number of columns
 	void OnColumnsCountChanged();
 
+	// Everything that follows from a fresh set of column widths, said ONCE — the automatic
+	// fit sets every width quietly and then calls this (see the definition).
+	void WXColumnWidthsApplied();
+
 	wxWindow* GetMainWindow() { return (wxWindow*)m_tableAreaWin; }
 
-	// return the index of the given column in m_cols
-	int GetColumnIndex(const ibDataViewColumn* column) const;
+	// ---- THE COLUMNS, AS THE PAINTERS SEE THEM ------------------------------
+	//
+	// wx addresses columns by position, and that position MEANS "the nth column of the
+	// tree" — these three are the root group asked, not a list kept here. There is no
+	// list kept here: the tree is where columns live, so the order drawn and the order
+	// stored cannot drift apart.
+	// (There used to be a GetColumnAt beside GetColumn for the DISPLAY position, mapped
+	// through the header's own order array. The tree IS the display order now, so the
+	// two asked the same question and one of them is gone.)
+	unsigned int GetColumnCount() const { return m_rootGroup->GetColumnCount(); }
+	ibDataViewColumn* GetColumn(unsigned int pos) const { return m_rootGroup->GetColumn(pos); }
+	int GetColumnIndex(const ibDataViewColumn* column) const { return m_rootGroup->GetColumnPosition(column); }
 
 	// Return the index of the column having the given model index.
 	int GetModelColumnIndex(unsigned int model_column) const;
 
-	// return the column displayed at the given position in the control
-	ibDataViewColumn* GetColumnAt(unsigned int pos) const;
+	// ---- COLUMN GROUPS (datavlayout.h) --------------------------------------
+	//
+	// A group is a header that holds columns and carries an orientation. Vertical
+	// puts its columns one under another inside one width — the row is drawn as
+	// several BANDS (sub-rows) instead of growing sideways, which is what lets a
+	// register with twelve dimension columns fit a screen.
+	//
+	// WHERE each column sits is the groups' own business — see ibDataViewColumnGroup in
+	// dataview.h. WHAT the table owns is the same fact: MEMBERSHIP IS OWNERSHIP. Whatever
+	// hangs on the root group, at any depth, this control frees when it dies; taking a
+	// member OUT hands it back to whoever detached it (which is what the visual host
+	// wants — it deletes the object right after). One fact, so there is no second list to
+	// disagree with the tree and nothing can be freed twice or not at all.
+
+	// THE TREE CHANGED — a group took a member in, moved it or let it go. Called by the
+	// group itself: the caches that are keyed by position (best widths, the geometry) are
+	// dropped here, because position means "the nth column of the tree".
+	void WXColumnTreeChanged();
+
+	// DETACHES the group (does not free it — whoever detached it does); columns under it,
+	// and nested groups, fall back to its holder.
+	void RemoveColumnGroup(ibDataViewColumnGroup* group);
+	// The groups under one group, freed depth first (its columns are the caller's to
+	// place). What the destructor lets go of; ungrouping without freeing is the group's
+	// own ClearColumns.
+	void FreeGroupsUnder(ibDataViewColumnGroup* group);
+
+	// THE geometry — every painter, hit-test and editor asks this and nothing else,
+	// so header, cells and editor line up by construction. Rebuilt on demand.
+	const ibDataViewColumnLayout& GetColumnLayout() const;
+
+	// Sub-rows a row is drawn as (1 = the flat grid).
+	int GetRowBandCount() const { return GetColumnLayout().GetRowBandCount(); }
+
+	// The rectangle a COLUMN occupies inside the row that starts at `rowTop` and is
+	// `lineHeight` tall. false when the column is not laid out (hidden, or under a
+	// hidden group).
+	// WHICH COLUMN A POINT IN THE ROWS AREA BELONGS TO — the ONE answer, and both the hit
+	// test and the click handler ask it. Coordinates are UNSCROLLED table coordinates.
+	//
+	// It reads the BAND, which is the whole point: columns stacked under a vertical group
+	// share an x range, so x alone can only ever name the first of them. Answering by x
+	// meant a click could not reach any member of a group but the topmost, and (because
+	// summing widths counts a stack once per member) columns to the RIGHT of a stack
+	// answered with the wrong column too.
+	//
+	// nullptr when the point is past the last column or over nothing; callers decide what
+	// that means for them.
+	ibDataViewColumn* WXColumnAtRowPoint(int x, int y) const;
+
+	bool GetColumnCellRect(const ibDataViewColumn* column,
+		int rowTop, int lineHeight, wxRect& rect) const;
+
+	// Drop the cached geometry (a column changed width / visibility / group, or the
+	// column set itself changed) and re-apply the row + header heights it decides.
+	void InvalidateColumnLayout();
+
+	// A DRAG STARTS HERE, and what it remembers is the widths as they were at that moment.
+	//
+	// Every mouse-move that follows is measured against THAT, not against the previous move.
+	// A move is often a single pixel, and one pixel cannot be shared among twelve columns —
+	// whoever came first in the list took it, so a drag of 200px arrived as 200 separate
+	// pixels each paid by one column, and the proportion Max asked for never appeared.
+	void WXBeginColumnDrag(ibDataViewColumn* column);
+	void WXEndColumnDrag();
+
+	// Is a border being dragged right now? While it is, the widths are re-applied on every
+	// mouse-move and the SCROLLBAR is left alone: re-deriving it per move drags a whole
+	// window-geometry cascade behind it (AdjustScrollbars → size → layout), which is what
+	// made the drag feel sticky. It is re-derived once, when the drag ends.
+	bool WXIsColumnDragActive() const { return m_dragColumn != nullptr; }
+
+	// Interactive resize: `width` is what the user dragged the border to, ON SCREEN.
+	// A column stacked under a vertical group shares its width with the rest of that
+	// stack, and the screen width is converted back into an ASKED-FOR width — see the
+	// definition, and ibWidthRange below for why the two are not the same number.
+	void WXApplyColumnWidth(ibDataViewColumn* column, int width);
+
+	// ---- WIDTHS: ASKED FOR vs ON SCREEN -------------------------------------
+	//
+	// A column asks for a width; what it gets is that width times the room-to-asking
+	// ratio, so a table wider than its columns shows them stretched in proportion
+	// rather than with a gap on the right (UpdateColumnSizes). The asked-for widths are
+	// never overwritten by that, which is what makes the stretch a VIEW and not a state
+	// to keep in step — and what keeps a drag from compounding: writing the stretched
+	// width back as the asked-for one made every drag multiply itself.
+	//
+	// ONE RANGE = ONE WIDTH. A stack of three columns is one range: they are drawn one
+	// under another and their edges have to agree.
+	struct ibWidthRange {
+		std::vector<ibDataViewColumn*> columns;
+		int specified = 0;   // the widest thing any of them asked for
+		// ONE FLOOR: a sliver, enough to keep the column on screen and its border grabbable.
+		//
+		// There was a second, higher floor for a while — a column paying for its neighbour
+		// could not be squeezed past its own TITLE — because the AUTOMATIC fit used to squeeze
+		// too, and it produced unreadable rows on its own. The fit no longer squeezes at all
+		// (it stretches or it scrolls), so the only thing that narrows a column now is the
+		// user dragging one, and they may narrow the rest as far as they like: a column pared
+		// down to a single truncated glyph is a choice, and platforms of this kind allow it.
+		int minimum = 0;
+	};
+	// The ranges, left to right, with what each asks for.
+	void CollectWidthRanges(std::vector<ibWidthRange>& out);
+
+	// The room the columns are stretched into: the ROWS area, not this control — the
+	// vertical scrollbar and the frozen panes are not theirs to fill. Out-of-line
+	// because the rows window is a private type (datavgen.window.private.h).
+	int GetTableAreaWidth() const;
+
+
+
+
+	// THE columns that share a width with this one — itself alone in a flat grid, the
+	// whole stack (at any depth) when it sits under a vertical group. One description
+	// of "who moves together", so an interactive drag and the automatic stretch of the
+	// last column cannot disagree about it.
+	void ForEachWidthPeer(ibDataViewColumn* column,
+		const std::function<void(ibDataViewColumn*)>& apply);
 
 	virtual ibDataViewColumn* GetCurrentColumn() const wxOVERRIDE;
 
 	virtual void OnInternalIdle() wxOVERRIDE;
+
+	// ---- "the data is on its way" ------------------------------------------
+	//
+	// Read off THIS control's own state at idle — the fetch counters it already
+	// keeps. The model is not asked and holds no such flag: the control is the
+	// one that dispatched the read, so it is the one that knows a read is out,
+	// and a second copy of that fact on the model could only ever disagree.
+	//
+	// Two timings, and both matter. The indicator only APPEARS after a short
+	// delay, so a read that answers in 100 ms never flashes one — a spinner that
+	// blinks on every keystroke is more irritating than the wait it reports.
+	// Once shown it re-paints on a tick, which is also where the animation
+	// advances: one timer, two jobs.
+	void UpdateBusyIndicator();
+
+	// The arc lives in a WINDOW OF ITS OWN — a small badge centred over the rows,
+	// child of the control rather than of the rows area.
+	//
+	// It used to be painted at the tail of the rows' own OnPaint, which is simpler
+	// and was wrong for one reason: `Freeze()` silences a WINDOW, and the rows area
+	// is deliberately frozen while the tree is rebuilt. Everything painted inside it
+	// went silent with it, so the whole wait showed as a blank rectangle with no way
+	// to say anything on it — freeze OR spinner, pick one. A sibling window is
+	// frozen by nobody, so both hold: the rebuild stays invisible and the wait does
+	// not.
+	//
+	// Kept small, transparent to the mouse and never focused: the list stays fully
+	// usable while it shows.
+	void PositionBusyWindow();
+	void ShowBusyWindow(bool show);
+
+	// End the blind stretch: recalc, drop the flag, thaw the rows area. Called by
+	// the Reset delivery once the new tree stands, and by OnInternalIdle as a
+	// watchdog for the delivery that never comes. Idempotent — whoever gets there
+	// first ends it.
+	void EndBootstrapFreeze();
+
+	// Is a page read out right now? The two counters are incremented at dispatch
+	// and decremented when the result lands (or is discarded as stale), so this
+	// is true for exactly as long as somebody is waiting.
+	bool IsFetchInFlight() const { return m_pagedFetchingFwd > 0 || m_pagedFetchingBwd > 0; }
+
 
 #if wxUSE_ACCESSIBILITY
 	virtual wxAccessible* CreateAccessible() wxOVERRIDE;
@@ -1023,14 +1245,19 @@ private:
 	virtual void DoExpand(const ibDataViewItem& item, bool expandChildren) wxOVERRIDE;
 
 	void InvalidateColBestWidths();
-	void InvalidateColBestWidth(int idx);
+	void InvalidateColBestWidth(ibDataViewColumn* column);
 	void UpdateColWidths();
 
+	// Frees everything hanging on the root group — MEMBERSHIP IS OWNERSHIP, so this is
+	// the whole of what the control owns. Called from the destructor.
 	void DoClearColumns();
 
 public:
 
-	bool IsList() const { return GetModel()->IsListModel(); }
+	// A DESIGN-TIME control can carry columns with NO associated model yet (e.g. a just-dropped tablebox
+	// whose columns are added before any data model is bound). Guard the null model so a column-width
+	// auto-fit (header separator double-click → GetBestColumnWidth) can't NULL-deref here.
+	bool IsList() const { const ibDataViewModel* model = GetModel(); return model != NULL && model->IsListModel(); }
 	bool IsVirtualList() const { return m_root == NULL; }
 
 	// notifications from ibDataViewModel
@@ -1163,6 +1390,9 @@ public:
 	int GetLineHeight(unsigned int row) const; // m_lineHeight in fixed mode
 	int GetLineAt(unsigned int y) const;       // y / m_lineHeight in fixed mode
 	int QueryAndCacheLineHeight(unsigned int row, ibDataViewItem item) const;
+
+	// The bitmap of a row's state picture (ibDataViewModel::GetRowPicture), from m_rowPictures; null for 0.
+	const wxBitmap& RowPictureBitmap(const ibPictureID& picture);
 
 	ibDataViewTreeNode* GetTreeNodeByRow(unsigned int row) const;
 
@@ -1302,7 +1532,7 @@ private:
 		for (unsigned int i = 0; i < cols; i++)
 		{
 			if (model->HasValue(item, i))
-				return GetColumnAt(i);
+				return GetColumn(i);
 		}
 
 		return NULL;
@@ -1331,6 +1561,10 @@ private:
 	bool                        m_currentColSetByKeyboard;
 
 	class HeightCache* m_rowHeightCache;
+
+	// THE ROW'S STATE PICTURES, one bitmap per picture id: made the first time a row shows it and reused for every
+	// row after — a list shows a handful of them down its whole length. See RowPictureBitmap.
+	std::map<ibPictureID, wxBitmap>  m_rowPictures;
 
 #if wxUSE_DRAG_AND_DROP
 	int                         m_dragCount;
@@ -1370,20 +1604,43 @@ private:
 	// Id m_editorCtrl is non-NULL, pointer to the associated renderer.
 	ibDataViewRenderer* m_editorRenderer;
 
-	wxVector<ibDataViewColumn*> m_cols;
-	// cached column best widths information, values are for
-	// respective columns from m_cols and the arrays have same size
-	struct CachedColWidthInfo
-	{
-		CachedColWidthInfo() : width(0), dirty(true) {}
-		int width;  // cached width or 0 if not computed
-		bool dirty; // column was invalidated, header needs updating
-	};
-	wxVector<CachedColWidthInfo> m_colsBestWidths;
-	// This indicates that at least one entry in m_colsBestWidths has 'dirty'
-	// flag set. It's cheaper to check one flag in OnInternalIdle() than to
-	// iterate over m_colsBestWidths to check if anything needs to be done.
+	// At least one column has an invalidated best width. Cheaper to check one flag in
+	// OnInternalIdle() than to walk the columns asking each (the widths themselves are
+	// cached on the columns — see ibDataViewColumn::WXBestWidth).
 	bool                      m_colsDirty;
+
+	// THE WIDTHS AS THEY WERE WHEN THE CURRENT DRAG STARTED, and the range being dragged.
+	// Empty when no drag is in progress. See WXBeginColumnDrag.
+	std::vector<int> m_dragWidths;
+	ibDataViewColumn* m_dragColumn = nullptr;
+
+	// A scrollbar re-derivation was ASKED FOR and not served yet (RequestScrollbarSync).
+	bool m_scrollSyncPending = false;
+
+	// THE COLUMN STORE — created with the control and living as long as it, so every
+	// reader can take it without a null check. A column, and a group, is only ever a
+	// member of it or of something under it: that is both where it SITS and what says
+	// the control owns it.
+	ibDataViewColumnGroup* m_rootGroup = nullptr;
+	// The geometry the tree decides — derived, so it is cached rather than maintained:
+	// any change to the columns drops it and the next reader rebuilds it.
+	mutable ibDataViewColumnLayout m_columnLayout;
+	mutable bool m_columnLayoutDirty = true;
+	// Height of ONE band. The ROW height is this times the band count — which is
+	// why the two are kept apart: SetRowHeight sets the band, the layout decides
+	// how many of them a row is made of.
+	int m_bandHeight = 0;
+	// Header height ASKED FOR (the form's "Header height" property). The header is
+	// drawn at whichever is deeper, this or the group titles the layout needs — the
+	// property may not shrink the header below what its own content occupies.
+	int m_userHeaderHeight = 1;
+	// The same for the FOOTER, measured against the body's bands: it draws a cell per
+	// column, each in that column's band, so a stack needs a band each.
+	int m_userFooterHeight = 1;
+
+	void ApplyHeaderHeight();
+	// Height of ONE sub-row, in pixels (the row height when nothing is grouped).
+	int GetBandHeight() const;
 
 	ibDataViewModelNotifier* m_notifier;
 
@@ -1410,16 +1667,13 @@ private:
 	// scroll past an edge fetches the next batch and trims the far side
 	// to keep the buffer at target.
 	bool m_pagedNeedsBootstrap = false;  // first fetch pending after AssociateModel
-	// Refresh-anti-flicker: PagedRefresh's wipe destroys m_root
-	// synchronously, then PagedBootstrap fires later from OnIdle
-	// and re-fills.  Without freeze the user sees the empty tree
-	// for one paint cycle.  Set in PagedRefresh, cleared by the
-	// matching Thaw inside OnIdleEvent after bootstrap completes.
+	// Rows-area freeze held ACROSS an idle boundary, which is why it is a flag and
+	// not a scope guard. Set by AssociateModel (hide the first empty frame before
+	// the control's first paint) and by OnPagedFetchResetComplete (the rebuild sets
+	// m_dirty but the virtual size is only recomputed at the next idle — thawing
+	// before that shows the new rows against the stale size, then repaints).
+	// Cleared in OnInternalIdle, after the recalc, so one composite paint lands.
 	bool m_pagedFrozenForBootstrap = false;
-	// External idle callback — see SetIdleHook (public).  Owned by the
-	// caller; cleared on AssociateModel(nullptr) is left to caller as
-	// the registration is per-form, not per-model.
-	IdleHook m_idleHook;
 	bool m_pagedHasMoreFwd     = false;  // last forward fetch reported more rows behind it
 	bool m_pagedHasMoreBwd     = false;  // ditto backward
 	// Per-direction in-flight fetch counters.  Forward and backward
@@ -1427,6 +1681,15 @@ private:
 	// (rare) can dispatch to each side without serialising.
 	int  m_pagedFetchingFwd    = 0;
 	int  m_pagedFetchingBwd    = 0;
+	// "ASKED AGAIN WHILE ONE WAS OUT." A scroll burst is three questions, and the
+	// answer to each is a different portion — but they cannot all be asked at once,
+	// because every one of them is anchored on the LAST ROW LOADED, and that only
+	// moves when a portion lands. So a request that arrives mid-flight is remembered
+	// here and re-asked by the delivery, with the anchor by then advanced: scroll
+	// three times and three portions arrive, one after another, instead of one
+	// portion and two dropped questions.
+	bool m_pagedFetchAgainFwd  = false;
+	bool m_pagedFetchAgainBwd  = false;
 	// Generation token bumped on every full reset (PagedRefresh /
 	// Cleared / AssociateModel).  Async fetch results captured at
 	// submit time carry the token they were dispatched under and are
@@ -1472,13 +1735,25 @@ private:
 	ibDataViewItem m_pagedRestoreAnchor;
 	ibDataViewItem m_pagedRestoreSelection;
 	ibDataViewItem m_pagedRestoreFocus;
-	// Raw row index of the focus at refresh time.  RAM-backed paged
-	// models (TabularSection, ibValueTable, register record sets)
-	// preserve row order across refresh — we restore focus by index
-	// directly there instead of running the IsEqualTo value-eq
-	// focus-scan, which produces false-positives for default-valued
-	// rows.  -1 = no focus to restore.
-	long m_pagedRestoreFocusRow = -1;
+
+	// ⭐ WHAT STOOD OPEN IS RESTORE-STATE TOO — but it is read at the WIPE, not here. Between the asking
+	// of a refresh and its arrival the control keeps living: the form selects its current row, which
+	// unfolds that row's parents, so a set captured when the refresh was asked for is already out of
+	// date when the tree is thrown away (2026-09-16, found with the "dataview.tree" probes). See
+	// OnPagedFetchResetComplete, where the capture and the reopening sit together.
+
+	// WHERE ON SCREEN the focus sat — its distance from the visible top, in rows.
+	// Captured only where the scroll ANCHOR is deliberately dropped (a sort: the
+	// anchor's cursor key means nothing in the new ordering), because that is the
+	// only path with no other way to answer "where was the user looking". Without
+	// it the sorted list re-opens with the focused row pinned to the very top, so
+	// everything the user was reading around it slides up by this many rows — the
+	// row survives, the view jumps.
+	//
+	// Consumed ONCE, by the backward fill that follows the bootstrap: only then do
+	// rows exist ABOVE the focus to scroll into. -1 = nothing to restore (no focus,
+	// focus off-screen, or already consumed).
+	long m_pagedRestoreFocusOffset = -1;
 
 	// Pre-refresh selection state — guards SelectItem in post-bootstrap
 	// focus-restore.  When focus exists (m_currentRow != -1) but selection
@@ -1493,7 +1768,7 @@ private:
 	// ibDataViewMainWindow::OnSetFocus to skip the default
 	// "ChangeCurrentRow(0) on focus-in" — without this, clicking the
 	// empty space below the rows gives the control focus → wx upstream
-	// auto-set currentRow=0 → focus-rect (dotted "гриппер") paints on
+	// auto-set currentRow=0 → focus-rect (dotted "gripper") paints on
 	// row 0 and the user thinks the click selected something.
 	bool m_skipFocusRowOnNextSetFocus = false;
 
@@ -1502,10 +1777,10 @@ private:
 	// Cleared) all collapse to "wipe the deque + GetFirstFetch" under
 	// paged semantics, so a series of mutations from script (e.g.
 	// LoadData appending N rows) would otherwise trigger N synchronous
-	// resets.  Dispatched through model->SubmitFetchAsync (the model's
-	// worker channel — per-session FIFO worker on web, inline on
-	// desktop until a GUI worker pool is wired up), so the same
-	// debounce path works on both hosts.  First hook in a series
+	// resets.  Posted onto the event loop (wxTheApp->CallAfter) — a
+	// re-entry on THIS thread, not a read: PagedRefresh is all control
+	// state, so it must not go through the model's fetch door, which
+	// for a runtime model means a worker.  First hook in a series
 	// schedules a one-shot lambda that runs PagedRefresh; subsequent
 	// hooks just update the latest selection-hint and no-op while
 	// the lambda is in flight.
@@ -1516,6 +1791,41 @@ private:
 	// restore anchors — they don't belong in the NEW folder context.
 	// Cleared once PagedRefresh consumes it.
 	bool           m_pagedSkipRestoreCapture = false;
+
+	// ---- busy indicator state (see UpdateBusyIndicator) ---------------------
+	// The timer drives the animation AND acts as the liveness check: on every
+	// tick it re-reads the model, so a read that died without delivering (its
+	// worker gone, the pool stopped) still ends the spinner. That is why the
+	// indicator is not simply started and stopped by whoever launches the read —
+	// the one path that must never be missed is the one where nobody came back.
+	wxTimer        m_busyTimer;
+	// The badge window itself — created on first use, hidden when idle. Owned by
+	// wx (a child of this control), so it goes with the control.
+	class ibDataViewBusyWindow* m_busyWin = nullptr;
+	// Alternate-row stripe phase — 0 or 1, added to the row index before the
+	// odd/even test. Flipped wherever the loaded window shifts (a prepend, a
+	// front trim) and set on a rebuild so the row the user was looking at keeps
+	// the shade it had. Without it the stripes swap on every refresh.
+	int            m_stripePhase = 0;
+	// The parity the top data row had before a refresh, -1 when there was none.
+	int            m_stripeTopParity = -1;
+
+	bool           m_busyShown   = false;   // currently painting
+	wxLongLong     m_busyShownMs = 0;       // when it went up — the minimum counts from here
+	int            m_busyPhase   = 0;       // animation step
+	wxLongLong     m_busySinceMs = 0;       // when waiting started (0 = not waiting)
+
+	void OnBusyTimer(wxTimerEvent& event);
+
+	// "IS THIS CONTROL STILL THERE" — read by the delivery hop on the UI thread.
+	//
+	// A shared_ptr<bool> and NOT a wxWeakRef, because the answer is now needed
+	// across threads: wxWeakRef un-links itself by WRITING into the tracked
+	// object as it dies, so a copy held by a worker while the control is
+	// destroyed here is a data race. This token is only ever copied by the
+	// worker and only ever read on the UI thread — the same thread the
+	// destructor that clears it runs on.
+	std::shared_ptr<bool> m_aliveToken = std::make_shared<bool>(true);
 
 private:
 

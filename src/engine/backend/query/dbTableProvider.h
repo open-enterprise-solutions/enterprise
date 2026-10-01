@@ -1,0 +1,240 @@
+#ifndef __DB_TABLE_PROVIDER_H__
+#define __DB_TABLE_PROVIDER_H__
+
+// ibDbTableProvider — the BIG provider: the L3<->L2 connection for a real DB table (vends
+// physical paged reads / cached reads / aggregate / write) PLUS the static GET/WRITE
+// data-access TEMPLATE — the one place a column's value is lifted from / bound to a DB row.
+// It lives in its OWN L2-coupled file (it traffics L2 IR: BuildPageIR -> ibQueryIR), kept off
+// the deliberately L2-free queryProvider.h. The lighter providers (RAM / temp) do NOT inherit
+// it. (docs/private/query-language-arc.md §22.4)
+
+#include "queryProvider.h"                                          // ibBackendQueryProvider / ibDataQuerySpec / ibReadPageRequest / ibDataQueryResult
+#include "backend/databaseLayer/databaseQueryBuilder.h"             // ibQueryIR / ibQueryResult / ibQuerySortItem / ibRenderedQuery (L2)
+#include "backend/metaCollection/attribute/metaAttributeObject.h"   // ibValueMetaObjectAttributeBase::ibFieldTypes (the value-assembly's TYPE-tag enum)
+
+class ibMetaData;   // the metadata context the column-based value-assembly threads through (reference / enum reconstruction)
+
+// ibRenderedPageCache — the build-once page cache (one scroll shape across ticks). OPAQUE at
+// the door (dataQueryBuilder.h forward-declares it; the list model holds it via shared_ptr and
+// builds it through ibDataQueryBuilder::NewPageCache). Its FULL layout lives here, where L2 is
+// in scope (it stores an L2 ibRenderedQuery): the DB provider's ExecuteReadCached fills/reads
+// it, and NewPageCache constructs it. (docs/private/query-language-arc.md §19/§20)
+struct ibRenderedPageCache
+{
+	ibPageSignature              m_sig;             // the SQL-determining inputs, compared as values (dataQueryBuilder.h)
+	std::vector<ibQuerySortItem> m_effectiveSort;   // resolved once (identity tail walk)
+	ibRenderedQuery              m_rendered;         // SQL + bind plan, rendered once
+	bool                         m_valid = false;
+};
+
+class ibDbTableProvider : public ibBackendQueryProvider
+{
+public:
+	// --- the L3<->L2 read/write engine (vended by a DB-family queryable) ---
+	ibDataQueryResult ExecuteRead(const ibDataQuerySpec& spec, const ibReadPageRequest& req) override;
+	ibDataQueryResult ExecuteReadCached(const ibDataQuerySpec& spec, const ibReadPageRequest& req,
+	                                    ibRenderedPageCache& cache, const ibPageSignature& signature) override;
+	ibDataQueryResult ExecuteAggregate(const ibDataQuerySpec& spec) override;
+	// The same GROUP BY / the same read, stopped one step before they run — see the base declarations.
+	ibQueryRelPtr     BuildAggregateRelation(const ibDataQuerySpec& spec) override;
+	ibQueryRelPtr     BuildReadRelation(const ibDataQuerySpec& spec) override;
+	long ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBuilder::WriteKind kind) override;
+
+	// Reference dot-walk target resolution — THIS is the ONE metadata-owning provider (clsid ->
+	// metaData->GetTypeCtor -> holder -> GetQueryable, read off queryable->GetMetaData()). The base
+	// returns null and the computed provider forwards here, so the query-provider layer stays
+	// metadata-free while resolution has a single home. (docs/private/query-language-arc.md §22 dot-walk)
+	const ibBackendQueryable* ResolveReferenceTarget(const ibBackendQueryable* queryable, const ibBackendQueryColumn* refColumn) const override;
+	std::vector<const ibBackendQueryable*> ResolveReferenceTargets(const ibBackendQueryable* queryable, const ibBackendQueryColumn* refColumn) const override;
+	// …the same answer for a TYPE a holder of fields already has in hand, with no column behind it — a setting's
+	// field, walked by its type (ibQueryConstructorModel::WalkFrom). ResolveReferenceTargets is this over the column.
+	static BACKEND_API std::vector<const ibBackendQueryable*> ReferenceTargetsOf(const ibMetaData* metaData,
+		const ibTypeDescription& type);
+
+	// ⭐⭐ A WALK NARROWED BY CAST. `CAST(Analytics AS Catalog.Goods).Description` walks into the goods and
+	// nowhere else: a counterparty in the same slot answers NULL, not its own description. The narrowing
+	// is carried by the walk itself — the field reached on the named type stands in the path as a column
+	// that knows the type (CastLeaf) — so every road that walks a path reads it where it forks:
+	//   · CastTarget — the type a CAST named for the walk that continues with `next` (null: an ordinary walk);
+	//   · WalkEnters — may a reference with several types be walked into `target` on its way to `next`.
+	// The column answers every other question as the field it stands for, its id included, so a row filed
+	// under it and a projection reading it cannot tell the two apart.
+	static BACKEND_API const ibBackendQueryColumn* CastLeaf(const ibBackendQueryable* target, const ibBackendQueryColumn* leaf);
+	static BACKEND_API const ibBackendQueryable*   CastTarget(const ibBackendQueryColumn* next);
+	static BACKEND_API bool                        WalkEnters(const ibBackendQueryable* target, const ibBackendQueryColumn* next);
+
+	// The flat list read from this base is in hand: the references it made — this base's own — are told
+	// what they say together, a table at a time (ibValueReferenceDataObject::ReadBatch). See the base's note.
+	void ReadReferences() const override;
+
+	// --- multi-source: co-located server-side JOIN (docs/private/query-language-arc.md §22.1a) -------
+	// CanColocateJoin — is the spec's relational tree an N-way INNER/LEFT join of DISTINCT real DB
+	// tables on resolvable (explicit OR reference-derived) single-field keys, every output column
+	// owned by a leaf? When true the whole join runs in ONE server-side SELECT (the DBMS does the
+	// join + the cross-table filter; reference / enum / variant outputs reconstruct via the full
+	// spread). Outside this shape (self-join, a RAM-computed leaf, row-key conditions, dot-walk,
+	// key-in) stays the composer's RAM path — a co-location FAST PATH, not a replacement. Note a DB
+	// TEMP leaf co-locates like any real table (ibDbTempTableQueryable does not override GetProvider),
+	// and an aggregate terminal routes to the sibling gate CanColocateAggregate, not to RAM.
+	// BACKEND_API on the gates so the routing decision is unit-testable across the DLL.
+	static BACKEND_API bool  CanColocateJoin(const ibDataQuerySpec& spec);
+	static ibDataQueryResult ExecuteColocatedJoin(const ibDataQuerySpec& spec, const ibReadPageRequest& page);
+
+	// Co-located server-side AGGREGATE — the same join-tree gate, terminal = GroupBy()/Sum()/… : the
+	// JOIN + GROUP BY + aggregates run in ONE server-side SELECT (vs the composer's RAM fold). Group
+	// keys may be reference (grouped by the full spread); aggregate INPUTS stay scalar.
+	static BACKEND_API bool  CanColocateAggregate(const ibDataQuerySpec& spec);
+	static ibDataQueryResult ExecuteColocatedAggregate(const ibDataQuerySpec& spec);
+
+	// Single-level group KEYSET paging (docs: group-level paging). CanPageGroupLevel: a single PLAIN scalar
+	// grouping dimension over a SINGLE DB source -> the level's groups page server-side as
+	// GROUP BY dim ORDER BY dim [dim > anchor] LIMIT count, instead of reading EVERY detail row and folding
+	// all groups in RAM (the eager path that OOMs a nomenclature hierarchy with thousands of groups per level).
+	// Outside the shape (multi-level, a dot-walk / computed dim, a multi-source group) keeps the RAM fold.
+	// BACKEND_API + no dialect probe -> unit-testable without a DB, like the co-location gates.
+	static BACKEND_API bool CanPageGroupLevel(const ibDataQuerySpec& spec);
+
+	// The paged group-level read (gate above). SELECT dim [, aggs] FROM src WHERE <conds> [AND dim </> anchor]
+	// GROUP BY dim ORDER BY dim LIMIT count -- the dim is the group key AND the keyset column, so a page is
+	// positioned by the anchor group's dim value. Returns the groups for ONE level; the model wraps them as
+	// group nodes. (Single plain scalar dim over a single source -- the gate guarantees the shape.)
+	static ibDataQueryResult ExecuteGroupLevelPage(const ibDataQuerySpec& spec, const ibReadPageRequest& page);
+
+	// Co-located server-side UNION — the branches (each a real DB table) stack as a SQL UNION ALL of
+	// per-branch SELECTs (output columns resolved per branch by NAME, aligned by position); ORDER BY /
+	// LIMIT wrap the union in a subquery. Scalar outputs (the common catalog ∪ catalog list); a
+	// computed branch is handled by the composer's mixed-promote, not this gate.
+	static BACKEND_API bool  CanColocateUnion(const ibDataQuerySpec& spec);
+	static ibDataQueryResult ExecuteColocatedUnion(const ibDataQuerySpec& spec, const ibReadPageRequest& page);
+
+	// Totals push-down via GROUP BY ROLLUP (docs/private/query-language-arc.md §22.1b). CanPushRollupTotals:
+	// a single-source DB queryable, SCALAR or REFERENCE group keys (a reference groups by its full spread as ONE
+	// composite ROLLUP((f0,f1,…)) element, reassembled on read) + scalar aggregate inputs, AND the connected dialect
+	// advertises ROLLUP. ExecuteRollupTotals then runs ONE GROUP BY ROLLUP(keys) + the aggregates +
+	// GROUPING(key) flags — the DBMS computes every subtotal level from raw detail (correct for
+	// COUNT / AVG) — and assembles the ibSelectorTree node tree from the result. Else the composer
+	// RAM-folds the detail. BACKEND_API for the unit test.
+	// CanRollupTotalsShape = the STRUCTURAL half (no dialect probe -> unit-testable without a DB);
+	// CanPushRollupTotals adds the ROLLUP-dialect capability (what the composer dispatches on).
+	static BACKEND_API bool CanRollupTotalsShape(const ibDataQuerySpec& spec);
+	static BACKEND_API bool CanPushRollupTotals(const ibDataQuerySpec& spec);
+	static ibSelectorTree   ExecuteRollupTotals(const ibDataQuerySpec& spec);
+
+	// Multi-source variant of the ROLLUP totals push-down: the SAME GROUP BY ROLLUP + GROUPING()
+	// mechanism, but over a co-located INNER/LEFT JOIN tree (BuildColocatedFrom) OR a UNION-of-branches
+	// derived table (BuildUnionRollupFrom) instead of one table —
+	// so a TOTALS over a JOIN runs server-side (the DBMS computes every subtotal level; only aggregated
+	// rows transit) instead of the composer materialising both leaves and folding the tree in RAM. Same
+	// ibSelectorTree either way — perf, not correctness. Split in two so the routing is unit-testable
+	// without a DB (unlike the single-source CanPushRollupTotals, which conflates shape + dialect and is
+	// consequently untested):
+	//   CanColocateRollupTotals     — the STRUCTURAL half: CanColocateBase's join tree, SCALAR or REFERENCE group
+	//                                 keys over the JOIN (a reference groups by its spread as a composite ROLLUP
+	//                                 element; a UNION branch stays scalar), scalar aggregate inputs, no dot-walk /
+	//                                 computed group or aggregate. No dialect probe -> testable like
+	//                                 CanColocateAggregate.
+	//   CanPushColocatedRollupTotals — adds the DB-intrinsic ROLLUP-dialect capability. The composer
+	//                                 dispatches on this.
+	static BACKEND_API bool CanColocateRollupTotals(const ibDataQuerySpec& spec);
+	static BACKEND_API bool CanPushColocatedRollupTotals(const ibDataQuerySpec& spec);
+	static ibSelectorTree   ExecuteColocatedRollupTotals(const ibDataQuerySpec& spec);
+
+	// (The plain column value codec — GetValueColumn / SetValueColumn — was INLINED to its tier home
+	//  ibColumnCodec::ReadValue / WriteValue (query/columnLayout.h): call sites speak the tier directly,
+	//  no provider forwarder. WriteFieldsOf likewise -> ColumnFieldNames. The attribute adapters below
+	//  stay because they supply the attribute's OWN metaData over that tier.)
+
+	// --- thin convenience adapters for callers that already hold the metaobject attribute (the
+	//     register lowering — recorder / period / dimension / resource attributes). The attribute
+	//     IS a column and carries its own metaData, so these forward to the column-based core; the
+	//     core itself names no attribute.
+	static void SetValueAttribute(const ibValueMetaObjectAttributeBase* attr, const ibValue& cValue, ibQueryStatement* statement, int& position);
+	static bool GetValueAttribute(const ibValueMetaObjectAttributeBase* attr, ibValue& retValue, ibQueryResult& result, bool createData = false);
+	// Read a NAMED field of a KNOWN variant type (a register reading a numeric balance / turnover
+	// column). Forwards to the codec's read leaf (ibColumnCodec::ReadField).
+	static bool GetValueAttribute(const wxString& fieldName, ibFieldTypes fieldType,
+	                              const ibValueMetaObjectAttributeBase* attr, ibValue& retValue, ibQueryResult& result, bool createData = false);
+
+	// ⭐⭐ WOULD THIS DOOR RENDER WHOLE, IF IT WERE DECLARED? Asked BEFORE `.With(name, inner)` by the
+	// lowering that is choosing a road, and answered by the tier that would have to write the SQL.
+	//
+	// A single-source door always would. A JOINED one only when its tree co-locates — the same
+	// question the join read asks (CanColocateJoin), because it is the same rendering: the leaves
+	// become one server-side FROM. A door that would not render whole must go back to the rows road
+	// while there is still a road to go back to; declared anyway, it would leave the outer statement
+	// naming a table nothing ever wrote.
+	//
+	// ⚠ IT TAKES THE DOOR, NOT A SPEC. A door hands its own spec over and nobody else takes one —
+	// this tier is its friend, so the question can be asked here and only here.
+	static BACKEND_API bool CanDeclareAsNamedQuery(const ibDataQueryBuilder& inner);
+
+	// The named queries the door declared (`With`), lowered into the SAME IR as `WITH … AS (…)`.
+	// Each is an ordinary spec lowered by BuildPageIR — or, for a joined one, by the co-located
+	// join's own FROM tree: a CTE is a query written in another place, not a simpler kind of query.
+	//
+	// ⚠ ASKED BY WHOEVER ASSEMBLES AN IR, which is why it is not private: the page read is not the
+	// only assembler. The ROLLUP fold builds its own statement out of the same spec, and a statement
+	// that reads a declared name without carrying the declaration is not a slower query — it is one
+	// the engine cannot parse ("table unknown"). Whoever writes the FROM owes the WITH.
+	static void AttachNamedQueries(const ibDataQuerySpec& spec, ibQueryIR& ir);
+
+	// ⭐ A CONDITION, AS THE EXPRESSION A STATEMENT FILTERS BY — for a caller that writes its own SELECT
+	// over this table and needs the condition INSIDE it (a register reading its totals asks for the
+	// rows before it folds them). The whole tree: AND / OR / NOT, IS NULL, REFS, a comparison; a walk
+	// through a reference is a correlated EXISTS, so the filter never multiplies a row. `qualifier` is
+	// what the statement calls the table (empty: its own name).
+	static BACKEND_API ibQueryExprPtr BuildPredicateIR(const ibBackendQueryable* queryable,
+	                                                   const ibQueryPredicatePtr& predicate,
+	                                                   const wxString& qualifier = wxEmptyString);
+
+	// …AND A COMPUTED VALUE, the same way — arithmetic, a CASE, a column read field by field — for the same
+	// caller: one that writes its own SELECT over this table and needs the value in its projection (the rows
+	// of a register's movements, each one's contribution to the totals, ibSchemaMaterialize::ToReadSpec).
+	static BACKEND_API ibQueryExprPtr BuildColumnExprIR(const ibBackendQueryable* queryable,
+	                                                    const ibQueryColumnExprPtr& expr,
+	                                                    const wxString& qualifier = wxEmptyString);
+
+private:
+	// The GROUP BY, assembled into an L2 builder and not yet run. ONE assembly, two endings: the
+	// execute path runs it, the relation path takes its IR. Split for exactly that reason — two
+	// copies of a join chain, a projection spread and a HAVING would be two chances to answer
+	// differently depending on which door was used.
+	static void BuildAggregateQuery(const ibDataQuerySpec& spec, ibDatabaseQueryBuilder& q);
+
+	// Name-substitution lowering — spec -> L2 IR (connection-free Build()).
+	static ibQueryIR BuildPageIR(const ibDataQuerySpec& spec, const ibReadPageRequest& req,
+	                             const std::vector<ibQuerySortItem>& effective);
+	static std::vector<ibValue> BuildExternal(const ibReadPageRequest& req, const std::vector<ibQuerySortItem>& effective);
+};
+
+// ==========================================================================
+// ⭐⭐ A TYPE, AS A VALUE — made and read WITHOUT naming the class that carries one.
+//
+// `TYPE(Catalog.Goods)`, `VALUETYPE(x)`, a type handed in through a parameter: three spellings of one
+// thing — an ordinary value whose content is a type. The lowering has to MAKE one (a name written in
+// a query) and the evaluator has to READ the clsid back out (a value that came home), and neither may
+// name `ibValueType`: it lives in the runtime's value zoo, and a query tier that reaches in there has
+// stopped being metadata-blind.
+//
+// 🛑 I reached in — `#include "backend/system/value/valueType.h"` in the lowering AND in the provider
+// (Max, 2026-09-06, pointing at the line). And then put the doors in `typeDescription.h`, which is a
+// narrow header a great many things include: closing a leak by widening a wall.
+//
+// THEY BELONG HERE. This file is the seam that is ALREADY allowed to know both storeys — its own
+// header says so ("the ONLY place L2-1 and the attribute field-machinery meet"), and it already
+// includes the value zoo for the same reason. Both callers already include this header, so the doors
+// cost nobody a new include and nothing else in the tree gains sight of a runtime value class.
+//
+// `ibTypeValueClsid` answers FALSE for a value that is not a type — a legitimate answer, and the one
+// a query needs when the other side of a comparison turns out to be a number.
+// ==========================================================================
+BACKEND_API ibValue ibTypeValueOf(const ibClassID& clsid);
+BACKEND_API ibValue ibTypeValueByName(const wxString& typeName);
+BACKEND_API bool    ibTypeValueClsid(const ibValue& value, ibClassID& outClsid);
+
+// ⭐ A VALUE AS A TYPE — what `CAST(x AS …)` answers, through the same door for the same reason. A primitive is
+// CONVERTED as a typed field converts what is written into it (AdjustValue: `Number(15, 2)` rounds, `String(10)`
+// cuts); a reference is NARROWED — it is of the type named or it is NULL, never an empty reference nobody wrote.
+BACKEND_API ibValue ibValueAsType(const ibValue& value, const ibTypeDescription& type);
+
+#endif // __DB_TABLE_PROVIDER_H__

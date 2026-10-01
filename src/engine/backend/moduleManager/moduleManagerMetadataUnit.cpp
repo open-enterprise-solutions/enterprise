@@ -8,17 +8,15 @@
 
 #include "backend/system/value/valueMap.h"
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueModuleManager::ibValueMetadataUnit, ibValue);
 
 ibValueModuleManager::ibValueMetadataUnit::ibValueMetadataUnit(ibMetaData* metaData) :
-	ibValue(ibValueTypes::TYPE_VALUE, true),
-	m_methodHelper(new ibValueMethodHelper()), m_metaData(metaData)
+	ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, true), m_metaData(metaData)
 {
+	m_members.Bind(this, &ibValueMetadataUnit::FillMembers);
 }
 
 ibValueModuleManager::ibValueMetadataUnit::~ibValueMetadataUnit()
 {
-	wxDELETE(m_methodHelper);
 }
 
 enum
@@ -37,25 +35,33 @@ enum
 	enChartsOfCharacteristicTypes,
 	enChartsOfAccounts,
 	enAccountingRegisters,
+	enChartsOfCalculationTypes,
+	enCalculationRegisters,
+	enSequences,
 };
 
-void ibValueModuleManager::ibValueMetadataUnit::PrepareNames() const
+void ibValueModuleManager::ibValueMetadataUnit::FillMembers(ibMemberTable& helper) const
 {
-	m_methodHelper->ClearHelper();
-	m_methodHelper->AppendProp("CommonModules", true, false, g_metaCommonModuleCLSID);
-	m_methodHelper->AppendProp("CommonForms", true, false, g_metaCommonFormCLSID);
-	m_methodHelper->AppendProp("CommonTemplates", true, false, g_metaCommonTemplateCLSID);
-	m_methodHelper->AppendProp("Constants", true, false, g_metaConstantCLSID);
-	m_methodHelper->AppendProp("Catalogs", true, false, g_metaCatalogCLSID);
-	m_methodHelper->AppendProp("Documents", true, false, g_metaDocumentCLSID);
-	m_methodHelper->AppendProp("Enumerations", true, false, g_metaEnumerationCLSID);
-	m_methodHelper->AppendProp("DataProcessors", true, false, g_metaDataProcessorCLSID);
-	m_methodHelper->AppendProp("Reports", true, false, g_metaReportCLSID);
-	m_methodHelper->AppendProp("InformationRegisters", true, false, g_metaInformationRegisterCLSID);
-	m_methodHelper->AppendProp("AccumulationRegisters", true, false, g_metaAccumulationRegisterCLSID);
-	m_methodHelper->AppendProp("ChartsOfCharacteristicTypes", true, false, g_metaChartOfCharacteristicTypesCLSID);
-	m_methodHelper->AppendProp("ChartsOfAccounts", true, false, g_metaChartOfAccountsCLSID);
-	m_methodHelper->AppendProp("AccountingRegisters", true, false, g_metaAccountingRegisterCLSID);
+	// The clsid rides in the (long) property-tag slot only to distinguish these members; GetPropVal
+	// dispatches by ordinal and re-supplies the clsid itself, so the narrowing is intentional and
+	// lossless-in-practice. static_cast makes it explicit (silences C4305/C4309 on the u64 clsid).
+	helper.AppendProp("CommonModules", true, false, static_cast<long>(g_metaCommonModuleCLSID));
+	helper.AppendProp("CommonForms", true, false, static_cast<long>(g_metaCommonFormCLSID));
+	helper.AppendProp("CommonTemplates", true, false, static_cast<long>(g_metaCommonTemplateCLSID));
+	helper.AppendProp("Constants", true, false, static_cast<long>(g_metaConstantCLSID));
+	helper.AppendProp("Catalogs", true, false, static_cast<long>(g_metaCatalogCLSID));
+	helper.AppendProp("Documents", true, false, static_cast<long>(g_metaDocumentCLSID));
+	helper.AppendProp("Enumerations", true, false, static_cast<long>(g_metaEnumerationCLSID));
+	helper.AppendProp("DataProcessors", true, false, static_cast<long>(g_metaDataProcessorCLSID));
+	helper.AppendProp("Reports", true, false, static_cast<long>(g_metaReportCLSID));
+	helper.AppendProp("InformationRegisters", true, false, static_cast<long>(g_metaInformationRegisterCLSID));
+	helper.AppendProp("AccumulationRegisters", true, false, static_cast<long>(g_metaAccumulationRegisterCLSID));
+	helper.AppendProp("ChartsOfCharacteristicTypes", true, false, static_cast<long>(g_metaChartOfCharacteristicTypesCLSID));
+	helper.AppendProp("ChartsOfAccounts", true, false, static_cast<long>(g_metaChartOfAccountsCLSID));
+	helper.AppendProp("AccountingRegisters", true, false, static_cast<long>(g_metaAccountingRegisterCLSID));
+	helper.AppendProp("ChartsOfCalculationTypes", true, false, static_cast<long>(g_metaChartOfCalculationTypesCLSID));
+	helper.AppendProp("CalculationRegisters", true, false, static_cast<long>(g_metaCalculationRegisterCLSID));
+	helper.AppendProp("Sequences", true, false, static_cast<long>(g_metaSequenceCLSID));
 }
 
 //****************************************************************************
@@ -69,7 +75,7 @@ bool ibValueModuleManager::ibValueMetadataUnit::SetPropVal(const long lPropNum, 
 
 bool ibValueModuleManager::ibValueMetadataUnit::GetPropVal(const long lPropNum, ibValue& pvarPropVal)//attribute value
 {
-	ibValueStructure* valStruct = ibValue::CreateAndPrepareValueRef<ibValueStructure>();
+	ibValueStructure* valStruct = new ibValueStructure();
 	switch (lPropNum)
 	{
 	case enCommonModules: {
@@ -142,6 +148,24 @@ bool ibValueModuleManager::ibValueMetadataUnit::GetPropVal(const long lPropNum, 
 	}
 	case enAccountingRegisters: {
 		for (const auto object : m_metaData->GetAnyArrayObject(g_metaAccountingRegisterCLSID)) {
+			valStruct->Insert(object->GetName(), object);
+		}
+		break;
+	}
+	case enChartsOfCalculationTypes: {
+		for (const auto object : m_metaData->GetAnyArrayObject(g_metaChartOfCalculationTypesCLSID)) {
+			valStruct->Insert(object->GetName(), object);
+		}
+		break;
+	}
+	case enCalculationRegisters: {
+		for (const auto object : m_metaData->GetAnyArrayObject(g_metaCalculationRegisterCLSID)) {
+			valStruct->Insert(object->GetName(), object);
+		}
+		break;
+	}
+	case enSequences: {
+		for (const auto object : m_metaData->GetAnyArrayObject(g_metaSequenceCLSID)) {
 			valStruct->Insert(object->GetName(), object);
 		}
 		break;

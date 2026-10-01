@@ -7,78 +7,100 @@
 
 
 //////////////////////////////////////////////////////////////////////
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueForm::ibValueFormCollectionControl, ibValue);
 //////////////////////////////////////////////////////////////////////
 
-ibValueForm::ibValueFormCollectionControl::ibValueFormCollectionControl() : ibValue(ibValueTypes::TYPE_VALUE, true),
-m_formOwner(nullptr), m_methodHelper(nullptr)
+ibValueForm::ibValueFormCollectionControl::ibValueFormCollectionControl() : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, true),
+m_formOwner(nullptr)
 {
 }
 
-ibValueForm::ibValueFormCollectionControl::ibValueFormCollectionControl(ibValueForm* ownerFrame) : ibValue(ibValueTypes::TYPE_VALUE, true),
-m_formOwner(ownerFrame), m_methodHelper(new ibValueMethodHelper())
+ibValueForm::ibValueFormCollectionControl::ibValueFormCollectionControl(ibValueForm* ownerFrame) : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, true),
+m_formOwner(ownerFrame)
 {
+	m_members.Bind(this, &ibValueFormCollectionControl::FillMembers);
 }
 
 #include "backend/system/value/valueMap.h"
 
 ibValueForm::ibValueFormCollectionControl::~ibValueFormCollectionControl()
 {
-	wxDELETE(m_methodHelper);
+}
+
+// Walk the control hierarchy (m_children), collecting controls and skipping
+// sizer-items — the source of truth for the form's "Controls" collection.
+// Replaces the former maintained m_listControl set.
+static void CollectFormControls(const ibValueFrame* node, std::vector<ibValueControl*>& list)
+{
+	for (unsigned int idx = 0; idx < node->GetChildCount(); idx++) {
+		ibValueFrame* child = node->GetChild(idx);
+		if (child == nullptr)
+			continue;
+		if (child->GetComponentType() != COMPONENT_TYPE_SIZERITEM) {
+			if (ibValueControl* control = dynamic_cast<ibValueControl*>(child))
+				list.push_back(control);
+		}
+		CollectFormControls(child, list);
+	}
+}
+
+std::vector<ibValueControl*> ibValueForm::GetControlList() const
+{
+	std::vector<ibValueControl*> list;
+	CollectFormControls(this, list);
+	return list;
 }
 
 std::shared_ptr<ibValueIteratorState> ibValueForm::ibValueFormCollectionControl::CreateIterator()
 {
-	using ListT = std::decay_t<decltype(m_formOwner->m_listControl)>;
+	using ListT = std::vector<ibValueControl*>;
 	class State : public ibValueIteratorState {
 	public:
-		explicit State(const ListT& list) : m_list(list), m_it(list.begin()) {}
+		explicit State(ListT list) : m_list(std::move(list)), m_it(m_list.begin()) {}
 		bool MoveNext(ibValue& current) override {
 			if (m_started) ++m_it; else m_started = true;
 			if (m_it == m_list.end()) return false;
 			ibValue controlValue(*m_it);
 			current = ibValue(static_cast<ibValue*>(
-				ibValue::CreateAndPrepareValueRef<ibValueContainer::ibValueReturnContainer>(
+				new ibValueContainer::ibValueReturnContainer(
 					(*m_it)->GetControlName(), controlValue)));
 			return true;
 		}
 		void Reset() override { m_it = m_list.begin(); m_started = false; }
 		bool PeekSample(ibValue& current) const override {
 			current = ibValue(static_cast<ibValue*>(
-				ibValue::CreateAndPrepareValueRef<ibValueContainer::ibValueReturnContainer>()));
+				new ibValueContainer::ibValueReturnContainer()));
 			return true;
 		}
 	private:
-		const ListT& m_list;
+		ListT m_list;
 		ListT::const_iterator m_it;
 		bool m_started = false;
 	};
-	return std::make_shared<State>(m_formOwner->m_listControl);
+	return std::make_shared<State>(m_formOwner->GetControlList());
 }
 
 bool ibValueForm::ibValueFormCollectionControl::GetAt(const ibValue& varKeyValue, ibValue& pvarValue)
 {
+	const std::vector<ibValueControl*> list = m_formOwner->GetControlList();
 	const ibNumber& number = varKeyValue.GetNumber();
-	if (m_formOwner->m_listControl.size() < number.ToUInt())
+	if (number.ToUInt() >= list.size())
 		return false;
 
-	auto it = m_formOwner->m_listControl.begin();
-	std::advance(it, number.ToUInt());
-	pvarValue = *it;
-
+	pvarValue = list[number.ToUInt()];
 	return true;
 }
 
 bool ibValueForm::ibValueFormCollectionControl::Property(const ibValue& varKeyValue, ibValue& cValueFound)
 {
 	const wxString& key = varKeyValue.GetString();
-	auto it = std::find_if(m_formOwner->m_listControl.begin(), m_formOwner->m_listControl.end(),
+	const std::vector<ibValueControl*> list = m_formOwner->GetControlList();
+	auto it = std::find_if(list.begin(), list.end(),
 		[key](ibValueControl* control) {
 			return stringUtils::CompareString(key, control->GetControlName());
 		}
 	);
 
-	if (it != m_formOwner->m_listControl.end()) {
+	if (it != list.end()) {
 		cValueFound = *it;
 		return true;
 	}
@@ -95,24 +117,22 @@ enum
 	enControlCount
 };
 
-void ibValueForm::ibValueFormCollectionControl::PrepareNames() const
+void ibValueForm::ibValueFormCollectionControl::FillMembers(ibMemberTable& helper) const
 {
-	m_methodHelper->ClearHelper();
-
-	m_methodHelper->AppendFunc(wxT("CreateControl"), 2, wxT("CreateControl(typeControl : type, parentElement : frame)"));
-	m_methodHelper->AppendFunc(wxT("FindControl"), 1, wxT("FindControl(controlName : string)"));
-	m_methodHelper->AppendProc(wxT("RemoveControl"), 1, wxT("RemoveControl(controlElement : frame)"));
-	m_methodHelper->AppendFunc(wxT("Property"), 2, wxT("Property(key : string, valueFound : frame)"));
-	m_methodHelper->AppendFunc(wxT("Count"), wxT("Count()"));
+	helper.AppendFunc(wxT("CreateControl"), 2, wxT("CreateControl(typeControl : type, parentElement : frame)"));
+	helper.AppendFunc(wxT("FindControl"), 1, wxT("FindControl(controlName : string)"));
+	helper.AppendProc(wxT("RemoveControl"), 1, wxT("RemoveControl(controlElement : frame)"));
+	helper.AppendFunc(wxT("Property"), 2, wxT("Property(key : string, valueFound : frame)"));
+	helper.AppendFunc(wxT("Count"), wxT("Count()"));
 
 	wxString controlName;
 
-	for (auto control : m_formOwner->m_listControl) {
+	for (auto control : m_formOwner->GetControlList()) {
 
 		if (!control->GetControlNameAsString(controlName))
 			continue;
 
-		m_methodHelper->AppendProp(
+		helper.AppendProp(
 			controlName,
 			true,
 			false,
@@ -125,7 +145,7 @@ bool ibValueForm::ibValueFormCollectionControl::GetPropVal(const long lPropNum, 
 {
 	wxASSERT(m_formOwner);
 	pvarPropVal = m_formOwner->FindControlByID(
-		m_methodHelper->GetPropData(lPropNum)
+		m_members.GetPropData(lPropNum)
 	);
 	return !pvarPropVal.IsEmpty();
 }
@@ -169,4 +189,4 @@ bool ibValueForm::ibValueFormCollectionControl::CallAsFunc(const long lMethodNum
 //*                       Runtime register                             *
 //**********************************************************************
 
-SYSTEM_TYPE_REGISTER(ibValueForm::ibValueFormCollectionControl, "FormControl", string_to_clsid("VL_CNTR"));
+SYSTEM_TYPE_REGISTER(ibValueForm::ibValueFormCollectionControl, "FormControl", system_to_clsid("VL_CNTR"));

@@ -48,8 +48,10 @@ bool ibDialogPredefinedEditor::ibDataViewPredefinedTreeStore::IsContainer(const 
 	return true;
 }
 
-unsigned int ibDialogPredefinedEditor::ibDataViewPredefinedTreeStore::GetChildren(const ibDataViewItem& parent,
-	ibDataViewItemArray& array) const
+unsigned int ibDialogPredefinedEditor::ibDataViewPredefinedTreeStore::GetFirstFetch(
+	const ibDataViewItem& parent,
+	const ibDataViewItem& /*anchor*/, int /*count*/,
+	ibDataViewItemArray& out) const
 {
 	// Root-level request: return every predefined whose parent is null.
 	// Folder-level request: return predefineds whose GetPredefinedParent()
@@ -63,10 +65,10 @@ unsigned int ibDialogPredefinedEditor::ibDataViewPredefinedTreeStore::GetChildre
 	for (const auto& object : m_valueMetaObjectHierarchy->GetPredefinedValueArray()) {
 		const ibPredefinedValueObject* const itemParent = object->GetPredefinedParent().get();
 		if (itemParent == parentObj)
-			array.Add(ibDataViewItem(object.get()));
+			out.Add(ibDataViewItem(object.get()));
 	}
 
-	return array.Count();
+	return out.Count();
 }
 
 /////////////////////////////////////////////////////////////////////////////////////
@@ -104,7 +106,7 @@ void ibDialogPredefinedEditor::CreateDialogView()
 	ibDataViewColumn* columnCode = new ibDataViewColumn(_("Code"), new ibDataViewTextRenderer(wxT("string"), wxDATAVIEW_CELL_INERT), model_code, FromDIP(100), wxALIGN_LEFT,
 		wxDATAVIEW_COL_SORTABLE);
 
-	ibDataViewColumn* columnDescription = new ibDataViewColumn(_("Description"), new ibDataViewTextRenderer(wxT("string"), wxDATAVIEW_CELL_INERT), model_description, FromDIP(175), wxALIGN_LEFT,
+	ibDataViewColumn* columnDescription = new ibDataViewColumn(wxGETTEXT_IN_CONTEXT("item name", "Description"), new ibDataViewTextRenderer(wxT("string"), wxDATAVIEW_CELL_INERT), model_description, FromDIP(175), wxALIGN_LEFT,
 		wxDATAVIEW_COL_SORTABLE);
 
 	m_tableEditor = new ibDataViewCtrl(this, wxID_ANY);
@@ -114,9 +116,9 @@ void ibDialogPredefinedEditor::CreateDialogView()
 
 	m_tableEditor->Connect(wxEVT_MENU, wxCommandEventHandler(ibDialogPredefinedEditor::OnCommandMenu), nullptr, this);
 
-	m_tableEditor->AppendColumn(columnName);
-	m_tableEditor->AppendColumn(columnCode);
-	m_tableEditor->AppendColumn(columnDescription);
+	m_tableEditor->GetRootColumnGroup()->AppendColumn(columnName);
+	m_tableEditor->GetRootColumnGroup()->AppendColumn(columnCode);
+	m_tableEditor->GetRootColumnGroup()->AppendColumn(columnDescription);
 
 	m_tableEditor->SetForegroundColour(wxDefaultStypeFGColour);
 	//m_tableEditor->SetBackgroundColour(wxDefaultStypeBGColour);

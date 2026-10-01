@@ -5,13 +5,14 @@
 #include "backend/databaseLayer/databaseErrorCodes.h"
 
 // ctor
-ibPreparedStatementODBC::ibPreparedStatementODBC(ibInterfaceODBC* pInterface, SQLHENV sqlEnvHandle, SQLHDBC sqlHDBC)
+ibPreparedStatementODBC::ibPreparedStatementODBC(ibInterfaceODBC* pInterface, SQLHENV sqlEnvHandle, SQLHDBC sqlHDBC, std::atomic<void*>* pExecuting)
 	: ibPreparedStatement()
 {
 	m_pInterface = pInterface;
 	m_sqlEnvHandle = sqlEnvHandle;
 	m_sqlHDBC = sqlHDBC;
 	m_bOneTimeStatement = false;
+	m_pExecuting = pExecuting;
 }
 
 ibPreparedStatementODBC::ibPreparedStatementODBC(ibInterfaceODBC* pInterface, SQLHENV sqlEnvHandle, SQLHDBC sqlHDBC, SQLHSTMT sqlStatementHandle)
@@ -112,7 +113,7 @@ void ibPreparedStatementODBC::SetParamNumber(int nPosition, const ibNumber& dblV
 	SetParam(nPosition, pParameter);
 }
 
-void ibPreparedStatementODBC::SetParamString(int nPosition, const wxString& strValue)
+void ibPreparedStatementODBC::SetParamString(int nPosition, const ibString& strValue)
 {
 	ResetErrorCodes();
 
@@ -136,11 +137,13 @@ void ibPreparedStatementODBC::SetParamBlob(int nPosition, const void* pData, lon
 	SetParam(nPosition, pParameter);
 }
 
-void ibPreparedStatementODBC::SetParamDate(int nPosition, const wxDateTime& dateValue)
+void ibPreparedStatementODBC::SetParamDate(int nPosition, const ibDateTime& dateValue)
 {
 	ResetErrorCodes();
 
-	ibDatabaseParameterODBC* pParameter = new ibDatabaseParameterODBC(dateValue);
+	ibDateTimeParts parts;
+	dateValue.ToParts(parts);
+	ibDatabaseParameterODBC* pParameter = new ibDatabaseParameterODBC(parts);
 	SetParam(nPosition, pParameter);
 }
 
@@ -202,7 +205,7 @@ int ibPreparedStatementODBC::RunQuery()
 		}
 
 		// Execute the current statement
-		nRet = m_pInterface->GetSQLExecute()((SQLHSTMT)(*start));
+		nRet = Execute((SQLHSTMT)(*start));
 		if (nRet != SQL_SUCCESS && nRet != SQL_SUCCESS_WITH_INFO && nRet != SQL_NO_DATA && nRet != SQL_NEED_DATA)
 		{
 			InterpretErrorCodes(nRet, (SQLHSTMT)(*start));
@@ -282,7 +285,7 @@ ibDatabaseResultSet* ibPreparedStatementODBC::RunQueryWithResults(bool bLogForCl
 				return nullptr;
 			}
 
-			nRet = m_pInterface->GetSQLExecute()(m_Statements[i]);
+			nRet = Execute(m_Statements[i]);
 			if (nRet != SQL_SUCCESS && nRet != SQL_SUCCESS_WITH_INFO)
 			{
 				InterpretErrorCodes(nRet, m_Statements[i]);
@@ -318,6 +321,11 @@ void ibPreparedStatementODBC::BindParameters()
 
 		if ((nIndex > -1) && (pParameter != nullptr))
 		{
+			// The five questions below are one descriptor of one parameter, and each of them
+			// answers an unknown kind with a plausible wrong value rather than a refusal. Ask once,
+			// here, whether there is an answer at all (see ibDatabaseParameterODBC::RequireDescribable).
+			pParameter->RequireDescribable();
+
 			// Determine the data type (if supported by the ODBC driver)
 			SQLSMALLINT dataType;
 			SQLULEN dataSize;
@@ -396,9 +404,19 @@ void ibPreparedStatementODBC::SetParam(int nPosition, ibDatabaseParameterODBC* p
 	m_Parameters[nPosition - 1] = pParameter;
 }
 
+SQLRETURN ibPreparedStatementODBC::Execute(SQLHSTMT hstmt)
+{
+	if (m_pExecuting != nullptr)
+		m_pExecuting->store(hstmt);
+	const SQLRETURN nRet = m_pInterface->GetSQLExecute()(hstmt);
+	if (m_pExecuting != nullptr)
+		m_pExecuting->store(nullptr);
+	return nRet;
+}
+
 void ibPreparedStatementODBC::InterpretErrorCodes(long nCode, SQLHSTMT stmth_ptr)
 {
-	wxLogDebug(wxT("ibPreparedStatementODBC::InterpretErrorCodes()\n"));
+	ibJournalInfo(wxT("db.odbc"),wxT("ibPreparedStatementODBC::InterpretErrorCodes()\n"));
 
 	//if ((nCode != SQL_SUCCESS) ) // && (nCode != SQL_SUCCESS_WITH_INFO))
 	{
@@ -417,7 +435,7 @@ void ibPreparedStatementODBC::InterpretErrorCodes(long nCode, SQLHSTMT stmth_ptr
 			m_pInterface->GetSQLGetDiagRec()(SQL_HANDLE_DBC, m_sqlHDBC, 1, strState, &iNativeCode,
 				strBuffer, ERR_BUFFER_LEN, &iMsgLen);
 
-		SetErrorCode((int)iNativeCode);
+		SetErrorCode(ibDatabaseLayerODBC::TranslateErrorCode((int)iNativeCode, ConvertFromUnicodeStream((char*)strState)));
 		//SetErrorMessage(ConvertFromUnicodeStream((char*)strBuffer));
 		SetErrorMessage(wxString((wxChar*)strBuffer));
 	}

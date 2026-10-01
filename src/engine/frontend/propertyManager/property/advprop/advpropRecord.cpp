@@ -2,7 +2,8 @@
 
 #include "backend/propertyManager/property/variant/variantRecord.h"
 
-#include "frontend/propertyManager/property/private/prop.h"
+#include "frontend/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
+#include "frontend/propertyManager/property/private/propertyRegistry.h"
 #include "frontend/propertyManager/propertyEditor.h"
 
 #define icon_size 16
@@ -19,30 +20,22 @@ class ibPropertyRecordLoader
 public:
     ibPropertyRecordLoader()
     {
-        ibPG_IMPLEMENT_PROPERTY_CALLBACK(ibPGRecordProperty, ibPropertyRecord::ms_propertyRecord);
+		ibPropertyRegistry::Register([](ibPropertyRecord* prop) -> wxPGProperty* {
+			ibPropertyChoiceList choices;
+			prop->GetValueList(choices);
+			return new ibPGRecordProperty(prop->GetPropertyObject(), prop->GetLabel(), prop->GetName(), prop->GetValue(), choices);
+		});
     }
 }g_recordLoader;
 
-void ibPGRecordProperty::FillByClsid(const ibClassID& clsid)
-{
-    const ibValueMetaObjectGenericData* metaGenericData = dynamic_cast<const ibValueMetaObjectGenericData*>(m_ownerProperty);
-    if (metaGenericData != nullptr) {
-        ibMetaData* metaData = metaGenericData->GetMetaData();
-        wxASSERT(metaData);
-        for (auto metaRecorder : metaData->GetAnyArrayObject(clsid)) {
-            ibValueMetaObjectRegisterData* registerData = dynamic_cast<ibValueMetaObjectRegisterData*>(metaRecorder);
-            if (registerData == nullptr || !registerData->HasRecorder()) continue;
-            m_choices.Add(registerData->GetName(), registerData->GetIcon(), registerData->GetMetaID());
-        }
-    }
-}
-
-ibPGRecordProperty::ibPGRecordProperty(const ibPropertyObject* property, const wxString& label, const wxString& strName, const wxVariant& value)
+ibPGRecordProperty::ibPGRecordProperty(const ibPropertyObject* property, const wxString& label, const wxString& strName, const wxVariant& value,
+	const ibPropertyChoiceList& choices)
     : wxPGProperty(label, strName), m_ownerProperty(property)
 {
-    FillByClsid(g_metaInformationRegisterCLSID);
-    FillByClsid(g_metaAccumulationRegisterCLSID);
-    FillByClsid(g_metaAccountingRegisterCLSID);
+    // The classes AND the has-a-recorder rule both moved into ibPropertyRecord::GetValueList, so the
+    // list here is the same one every other caller now sees.
+    for (unsigned int idx = 0; idx < choices.GetCount(); idx++)
+        m_choices.Add(choices.GetLabel(idx), choices.GetBitmap(idx), choices.GetId(idx));
 
     //m_flags |= wxPGFlags::ReadOnly;
     m_flags |= wxPGPropertyFlags_ActiveButton; // Property button always enabled.
@@ -88,7 +81,7 @@ wxPGEditorDialogAdapter* ibPGRecordProperty::GetEditorDialog() const
             ibMetaID GetMetaID() const { return m_metaObject->GetMetaID(); }
         };
 
-        void FillByClsid(ibMetaData* metaData, const ibClassID& clsid,
+        void FillByClsid(const ibMetaData* metaData, const ibClassID& clsid,
             ibCheckTree* tc, ibVariantDataRecord* data) {
 
             wxImageList* imageList = tc->GetImageList();
@@ -144,7 +137,7 @@ wxPGEditorDialogAdapter* ibPGRecordProperty::GetEditorDialog() const
             ibCheckTree* tc = new ibCheckTree(dlg, wxID_ANY,
                 wxDefaultPosition, wxDefaultSize, wxTR_HAS_BUTTONS | wxTR_LINES_AT_ROOT | wxTR_NO_LINES | wxTR_HIDE_ROOT | wxCR_MULTIPLE_CHECK | wxCR_EMPTY_CHECK | wxSUNKEN_BORDER | wxTR_TWIST_BUTTONS);
 
-            wxTreeItemId rootItem = tc->AddRoot(wxEmptyString);
+            tc->AddRoot(wxEmptyString);   // the root is hidden (wxTR_HIDE_ROOT); only its existence matters
 
             rowsizer->Add(tc, wxSizerFlags(1).Expand().Border(wxALL, spacing));
             topsizer->Add(rowsizer, wxSizerFlags(1).Expand());
@@ -170,20 +163,36 @@ wxPGEditorDialogAdapter* ibPGRecordProperty::GetEditorDialog() const
                 new wxImageList(icon_size, icon_size)
             );
 
-            ibMetaData* metaData = metaGenericData->GetMetaData();
+            // ⭐⭐ WHAT IS OFFERED IS THE PROPERTY'S OWN ANSWER, and this dialog no longer keeps a
+            // second copy of it. The kinds used to be spelled out here, one FillByClsid per kind —
+            // so a property with a different list (the sequences a document registers in) would have
+            // been shown the registers. The choices arrive with the property; their kinds are asked
+            // of the objects themselves, so a group appears for whatever is in the list.
+            const ibMetaData* metaData = metaGenericData->GetMetaData();
             wxASSERT(metaData);
             if (metaData != nullptr) {
-                FillByClsid(metaData, g_metaInformationRegisterCLSID, tc, data);
-                FillByClsid(metaData, g_metaAccumulationRegisterCLSID, tc, data);
-                FillByClsid(metaData, g_metaAccountingRegisterCLSID, tc, data);
+                const wxPGChoices& offeredChoices = dlgProp->GetChoices();
+                std::vector<ibClassID> kinds;
+                for (unsigned int idx = 0; idx < offeredChoices.GetCount(); idx++) {
+                    const ibValueMetaObject* offered =
+                        metaData->FindAnyObjectByFilter<ibValueMetaObject>(ibMetaID(offeredChoices.GetValue(idx)));
+                    if (offered == nullptr)
+                        continue;
+                    const ibClassID clsid = offered->GetClassType();
+                    if (std::find(kinds.begin(), kinds.end(), clsid) == kinds.end())
+                        kinds.push_back(clsid);
+                }
+                for (const ibClassID clsid : kinds)
+                    FillByClsid(metaData, clsid, tc, data);
             }
             tc->ExpandAll(); int res = dlg->ShowModal();
             ibVariantDataRecord* clone = data->Clone();
             {
                 ibMetaDescription& metaDesc = clone->GetMetaDesc(); metaDesc.ClearMetaType();
                 wxArrayTreeItemIds ids;
-                unsigned int selCount = tc->GetSelections(ids);
-                for (const wxTreeItemId& selItem : ids) {
+                tc->GetSelections(ids);   // the count is in ids itself
+                // BY VALUE: wxArrayTreeItemIds stores void*, so a reference binds to a per-iteration temporary.
+                for (const wxTreeItemId selItem : ids) {
                     if (selItem.IsOk()) {
                         wxTreeItemData* dataItem = tc->GetItemData(selItem);
                         if (dataItem && res == wxID_OK) {

@@ -24,19 +24,20 @@
 //
 // Public surface — minimal:
 //
-//   Init / Shutdown            — lifecycle (driven by ibApplicationData).
+//   Init / Shutdown            — lifecycle (driven by ibApplicationInstance).
 //   IsInitialised()            — lifecycle probe.
 //   GetFreeConnection()        — RAII scope factory; same as a
 //                                default ibConnectionScope().
 //   GetDatabaseLayer()         — backs the global `db_query` macro.
 //
-// Everything else (CurrentHolder, ThreadHolder, GetPrimaryConnection,
+// Everything else (CurrentHolder, ThreadHolder,
 // Checkout, holder-keyed reservation primitives, scope-binding) is
 // internal. End users go through the holder methods
 // (GetConnection / AcquireFreeConnection) or ibConnectionScope, never
 // through the pool directly.
 
 #include "backend/backend.h"
+#include "backend/appDataCtorToken.h"
 
 #include <chrono>
 #include <condition_variable>
@@ -52,11 +53,21 @@ class ibSingleConnectionHolder;
 
 class BACKEND_API ibConnectionPool {
 public:
-	ibConnectionPool();
 	~ibConnectionPool();
 
 	ibConnectionPool(const ibConnectionPool&) = delete;
 	ibConnectionPool& operator=(const ibConnectionPool&) = delete;
+
+	// Construction restricted to ibApplicationInstance via the
+	// ib::AppDataCtorToken gate — appData owns the pool for its
+	// lifetime, same pattern as the other appData-owned subsystems.
+	// Callers reach the pool through ibApplicationInstance::GetConnectionPool().
+	// The token names the base it belongs to; a pool made on its own (the tests) belongs to none.
+	explicit ibConnectionPool(ib::AppDataCtorToken owner);
+
+	// The base this pool belongs to — the chain runs both ways: base → pool, pool → base.
+	class ibApplicationInstance* GetApplicationInstance() const { return m_applicationInstance; }
+
 
 	// Initialise. `primary` is the already-opened master connection —
 	// the pool takes shared ownership and also uses it as the first
@@ -116,6 +127,21 @@ public:
 	// Returns nullptr only when the pool is not initialised.
 	static std::shared_ptr<ibDatabaseLayer> GetDatabaseLayer();
 
+	// The db_query channel's per-thread holder identity — the connection-lifetime anchor for
+	// non-session (designer / CLI) db_query work. Each thread gets its own pool reservation key, so
+	// concurrent non-session calls run on independent connections. Exposed so a subsystem that owns
+	// per-save state keyed on the channel (the DDL/DML restructuring barrier in ibSchemaBuilder)
+	// resolves the SAME holder across the save when no explicit holder was given.
+	static ibDatabaseConnectionHolder* ThreadHolder();
+
+public:
+	// Default upper bound on how long Checkout() blocks when the pool is
+	// saturated (all m_maxSize connections busy). On expiry it throws instead of
+	// waiting forever, so a leaked / stuck borrower can't hang the worker thread.
+	// Public because a caller that knows its work must not stall picks its own
+	// bound against this one (see Checkout below).
+	static constexpr std::chrono::seconds kCheckoutTimeout { 30 };
+
 private:
 	// --- Internal API -------------------------------------------------------
 
@@ -126,24 +152,24 @@ private:
 	// `ibSession::Current()->OpenConnectionScope()`).
 	static ibDatabaseConnectionHolder* CurrentHolder();
 
-	// db_query channel — per-thread holder identity. Used internally by
-	// CurrentHolder; external explicit-channel access goes through
-	// `ibConnectionScope(ibConnectionPool::ThreadHolder())` if needed
-	// (currently no such caller). Each thread gets its own pool
-	// reservation key, so concurrent non-session db_query calls run on
-	// independent connections instead of serialising on a singleton.
-	static ibDatabaseConnectionHolder* ThreadHolder();
-
-	// Master connection accessor — the conn that the pool Clone()s
-	// from. Used as a fallback by GetDatabaseLayer.
-	static std::shared_ptr<ibDatabaseLayer> GetPrimaryConnection();
+	// (ThreadHolder moved to the public section above — the barrier in ibSchemaBuilder resolves the
+	//  db_query channel's holder through it; CurrentHolder still uses it internally.)
 
 	// Borrow a connection. Blocks if all clones are checked out and
 	// the pool is at maxSize. Returns nullptr after Shutdown.
 	// External use is funneled through ibDatabaseConnectionHolder::
 	// AcquireFreeConnection (raw borrow) and ibConnectionScope (RAII
 	// scope-bound borrow); both are friends.
-	std::shared_ptr<ibDatabaseLayer> Checkout();
+	//
+	// HOW LONG TO WAIT IS THE CALLER'S, not the pool's. The default is the
+	// half-minute above — the right answer for work somebody started and is
+	// waiting on, where failing early only means asking again. It is the wrong
+	// answer for work that is merely SERVING somebody: a rented run reads one
+	// portion for a form that already has rows on screen, so "the pool is full"
+	// has to come back as an answer it can act on rather than as a stall. Same
+	// bound, named by whoever knows what the wait costs.
+	std::shared_ptr<ibDatabaseLayer> Checkout(
+		std::chrono::milliseconds wait = kCheckoutTimeout);
 
 	// Symmetric counterpart to Checkout — drops the caller's
 	// shared_ptr (its deleter clears entry.inUse). Most callers just
@@ -151,13 +177,13 @@ private:
 	void Return(std::shared_ptr<ibDatabaseLayer> conn);
 
 	// Active-transaction state — driven by ibDatabaseLayer's
-	// BeginTransaction / Commit / RollBack at depth 0↔1 transitions.
+	// BeginTransaction / Commit / RollBack at depth 0↔1 transitions,
+	// in the layer's own pool (ibDatabaseLayer::GetPool).
 	// SetActiveTxConnection resolves the holder via CurrentHolder()
 	// (or the conn's existing scope-binding for the ad-hoc holder
 	// pattern); ClearActiveTxConnection reads conn->GetHolder() and
 	// releases that holder's pin. Internal — exposed only to the
 	// layer through static-method visibility.
-	static std::shared_ptr<ibDatabaseLayer> GetActiveTxConnection();
 	static void SetActiveTxConnection(std::shared_ptr<ibDatabaseLayer> conn);
 	static void ClearActiveTxConnection(ibDatabaseLayer* conn);
 
@@ -214,6 +240,9 @@ private:
 
 	mutable std::mutex              m_mutex;
 	std::condition_variable         m_cv;
+
+	// The base this pool belongs to (GetApplicationInstance).
+	class ibApplicationInstance* const                m_applicationInstance;
 
 	// Master connection. Always kept alive by the pool so Clone() has
 	// a live source even when every clone is currently checked out.

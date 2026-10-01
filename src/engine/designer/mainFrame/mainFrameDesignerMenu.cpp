@@ -4,12 +4,13 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "mainFrameDesigner.h"
+#include "backend/picturePredefined.h"   // the assistant's icon, from the picture registry
 
 //********************************************************************************
 //*                                Hotkey support                                *
 //********************************************************************************
 
-void ibFrontendDocMDIFrameDesigner::SetDefaultHotKeys()
+void ibFrontendMainFrameDesigner::SetDefaultHotKeys()
 {
 	// Setup the hotkeys.
 	m_keyBinder.SetShortcut(wxID_NEW, wxT("Ctrl+N"));
@@ -25,19 +26,27 @@ void ibFrontendDocMDIFrameDesigner::SetDefaultHotKeys()
 
 	m_keyBinder.SetShortcut(wxID_DESIGNER_DEBUG_START, wxT("F5")); //RUN 
 	m_keyBinder.SetShortcut(wxID_DESIGNER_DEBUG_START_WITHOUT_DEBUGGING, wxT("Ctrl+F5")); // RUN WITHOUT DEBUGGER 
-	m_keyBinder.SetShortcut(wxID_DESIGNER_DEBUG_STEP_INTO, wxT("F11")); //STEP INTO 
-	m_keyBinder.SetShortcut(wxID_DESIGNER_DEBUG_STEP_OVER, wxT("F10")); // STEP OVER 
-	m_keyBinder.SetShortcut(wxID_DESIGNER_DEBUG_STOP_PROGRAM, wxT("Ctrl+Break")); // STEP OVER 
+	m_keyBinder.SetShortcut(wxID_DESIGNER_DEBUG_STEP_INTO, wxT("F11")); //STEP INTO
+	m_keyBinder.SetShortcut(wxID_DESIGNER_DEBUG_STEP_OVER, wxT("F10")); // STEP OVER
+	m_keyBinder.SetShortcut(wxID_DESIGNER_DEBUG_STEP_OUT, wxT("Shift+F11")); // STEP OUT
+	m_keyBinder.SetShortcut(wxID_DESIGNER_DEBUG_STOP_PROGRAM, wxT("Ctrl+Break")); // STOP PROGRAM
 	m_keyBinder.SetShortcut(wxID_DESIGNER_DEBUG_NEXT_POINT, wxT("F9"));
 
 	m_keyBinder.SetShortcut(wxID_DESIGNER_ABOUT, wxT("F1"));
+
+	// Syntax helper. RawCtrl forces literal Control on macOS where
+	// wxWidgets otherwise rewrites "Ctrl" to Cmd; on Windows / Linux
+	// RawCtrl is identical to Ctrl. Without these SetShortcut calls
+	// ibKeyBinder strips the accelerator labels during LoadOptions.
+	m_keyBinder.SetShortcut(wxID_FRONTEND_SYNTAX_HELPER,        wxT("RawCtrl+Alt+F1"));
+	m_keyBinder.SetShortcut(wxID_FRONTEND_SYNTAX_HELPER_LOOKUP, wxT("RawCtrl+F1"));
 }
 
 //********************************************************************************
 //*                                Default menu                                  *
 //********************************************************************************
 
-enum MDI_MENU_ID
+enum WINDOW_MENU_ID
 {
 	wxWINDOWCLOSE = 4001,
 	wxWINDOWCLOSEALL,
@@ -50,28 +59,38 @@ enum MDI_MENU_ID
 
 #include "frontend/artProvider/artProvider.h"
 
-void ibFrontendDocMDIFrameDesigner::InitializeDefaultMenu()
+void ibFrontendMainFrameDesigner::InitializeDefaultMenu()
 {
 	m_frameMenuBar = new wxMenuBar;
 
 	// and its menu bar
 	m_menuFile = new wxMenu();
 
-	m_menuFile->Append(wxID_NEW);
-	m_menuFile->Append(wxID_OPEN);
+	// The file and edit commands carry the pictures their buttons carry on the main toolbar — one
+	// command, one picture, wherever it is pressed from, the same rule the debug menu below follows.
+	// These are wx's own stock pictures, so the client says which SIZE a menu wants rather than which
+	// picture; a command wx has none for keeps its label and nothing else, instead of borrowing one
+	// that means something different.
+	const auto stockPicture = [](wxMenuItem* item, const wxArtID& art) {
+		item->SetBitmap(wxArtProvider::GetBitmapBundle(art, wxART_MENU, wxSize(16, 16)));
+		return item;
+	};
 
-	m_menuFile->Append(wxID_CLOSE);
-	m_menuFile->Append(wxID_SAVE);
-	m_menuFile->Append(wxID_SAVEAS);
+	stockPicture(m_menuFile->Append(wxID_NEW), wxART_NEW);
+	stockPicture(m_menuFile->Append(wxID_OPEN), wxART_FILE_OPEN);
+
+	stockPicture(m_menuFile->Append(wxID_CLOSE), wxART_CLOSE);
+	stockPicture(m_menuFile->Append(wxID_SAVE), wxART_FILE_SAVE);
+	stockPicture(m_menuFile->Append(wxID_SAVEAS), wxART_FILE_SAVE_AS);
 	m_menuFile->Append(wxID_REVERT, _("Re&vert..."));
 
 	m_menuFile->AppendSeparator();
-	m_menuFile->Append(wxID_PRINT);
+	stockPicture(m_menuFile->Append(wxID_PRINT), wxART_PRINT);
 	m_menuFile->Append(wxID_PRINT_SETUP, _("Print &Setup..."));
 	m_menuFile->Append(wxID_PREVIEW);
 
 	m_menuFile->AppendSeparator();
-	m_menuFile->Append(wxID_EXIT);
+	stockPicture(m_menuFile->Append(wxID_EXIT), wxART_QUIT);
 
 	m_frameMenuBar->Append(m_menuFile, wxGetStockLabel(wxID_FILE));
 
@@ -83,45 +102,53 @@ void ibFrontendDocMDIFrameDesigner::InitializeDefaultMenu()
 #endif // wxUSE_CONFIG
 
 	m_menuEdit = new wxMenu;
-	m_menuEdit->Append(wxID_UNDO);
-	m_menuEdit->Append(wxID_REDO);
+	stockPicture(m_menuEdit->Append(wxID_UNDO), wxART_UNDO);
+	stockPicture(m_menuEdit->Append(wxID_REDO), wxART_REDO);
 	m_menuEdit->AppendSeparator();
-	m_menuEdit->Append(wxID_CUT);
-	m_menuEdit->Append(wxID_COPY);
-	m_menuEdit->Append(wxID_PASTE);
-	m_menuEdit->Append(wxID_DELETE);
+	stockPicture(m_menuEdit->Append(wxID_CUT), wxART_CUT);
+	stockPicture(m_menuEdit->Append(wxID_COPY), wxART_COPY);
+	stockPicture(m_menuEdit->Append(wxID_PASTE), wxART_PASTE);
+	stockPicture(m_menuEdit->Append(wxID_DELETE), wxART_DELETE);
 	m_menuEdit->Append(wxID_SELECTALL);
 	m_menuEdit->AppendSeparator();
-	m_menuEdit->Append(wxID_FIND);
+	stockPicture(m_menuEdit->Append(wxID_FIND), wxART_FIND);
 
 	m_frameMenuBar->Append(m_menuEdit, wxGetStockLabel(wxID_EDIT));
 
 	m_menuDebug = new wxMenu;
 
+	// The debugger's commands carry the pictures their buttons carry on the debug toolbar (wxART_DEBUG) — one
+	// command, one picture, wherever it is pressed from.
+	const auto debugPicture = [](wxMenuItem* item, const wxArtID& art) {
+		item->SetBitmap(wxArtProvider::GetBitmapBundle(art, wxART_DEBUG, wxSize(16, 16)));
+		return item;
+	};
+
 	// "Start debugging" → GUI / Web
 	wxMenu* subStart = new wxMenu;
-	subStart->Append(wxID_DESIGNER_DEBUG_START, _("Thick client (GUI)"));
+	debugPicture(subStart->Append(wxID_DESIGNER_DEBUG_START, _("Thick client (GUI)")), wxART_DEBUG_START);
 	subStart->Append(wxID_DESIGNER_DEBUG_START_WEB, _("Web client"));
-	m_menuDebug->AppendSubMenu(subStart, _("Start debugging"));
+	debugPicture(m_menuDebug->AppendSubMenu(subStart, _("Start debugging")), wxART_DEBUG_START);
 
 	// "Start without debugging" → GUI / Web
 	wxMenu* subStartNoDebug = new wxMenu;
-	subStartNoDebug->Append(wxID_DESIGNER_DEBUG_START_WITHOUT_DEBUGGING, _("Thick client (GUI)"));
+	debugPicture(subStartNoDebug->Append(wxID_DESIGNER_DEBUG_START_WITHOUT_DEBUGGING, _("Thick client (GUI)")), wxART_DEBUG_START_WITHOUT_DEBUGGING);
 	subStartNoDebug->Append(wxID_DESIGNER_DEBUG_START_WITHOUT_DEBUGGING_WEB, _("Web client"));
-	m_menuDebug->AppendSubMenu(subStartNoDebug, _("Start without debugging"));
+	debugPicture(m_menuDebug->AppendSubMenu(subStartNoDebug, _("Start without debugging")), wxART_DEBUG_START_WITHOUT_DEBUGGING);
 
-	m_menuDebug->Append(wxID_DESIGNER_DEBUG_ATTACH_FOR_DEBUGGING, _("Attach for debugging..."));
+	debugPicture(m_menuDebug->Append(wxID_DESIGNER_DEBUG_ATTACH_FOR_DEBUGGING, _("Attach for debugging...")), wxART_DEBUG_ATTACH);
 	m_menuDebug->AppendSeparator();
 
-	m_menuDebug->Append(wxID_DESIGNER_DEBUG_NEXT_POINT, _("Continue"))->Enable(false);
-	m_menuDebug->Append(wxID_DESIGNER_DEBUG_PAUSE, _("Pause"), _("Pause"))->Enable(false);
-	m_menuDebug->Append(wxID_DESIGNER_DEBUG_STEP_INTO, _("Step into"))->Enable(false);
-	m_menuDebug->Append(wxID_DESIGNER_DEBUG_STEP_OVER, _("Step over"))->Enable(false);
-	m_menuDebug->Append(wxID_DESIGNER_DEBUG_STOP_DEBUGGING, _("Stop debugging"), _("Stop debugging"))->Enable(false);
-	m_menuDebug->Append(wxID_DESIGNER_DEBUG_STOP_PROGRAM, _("Stop debugging program"), _("Stop program"))->Enable(false);
+	debugPicture(m_menuDebug->Append(wxID_DESIGNER_DEBUG_NEXT_POINT, _("Continue")), wxART_DEBUG_CONTINUE)->Enable(false);
+	debugPicture(m_menuDebug->Append(wxID_DESIGNER_DEBUG_PAUSE, _("Pause"), _("Pause")), wxART_DEBUG_PAUSE)->Enable(false);
+	debugPicture(m_menuDebug->Append(wxID_DESIGNER_DEBUG_STEP_INTO, _("Step into")), wxART_DEBUG_STEP_INTO)->Enable(false);
+	debugPicture(m_menuDebug->Append(wxID_DESIGNER_DEBUG_STEP_OVER, _("Step over")), wxART_DEBUG_STEP_OVER)->Enable(false);
+	debugPicture(m_menuDebug->Append(wxID_DESIGNER_DEBUG_STEP_OUT, _("Step out")), wxART_DEBUG_STEP_OUT)->Enable(false);
+	debugPicture(m_menuDebug->Append(wxID_DESIGNER_DEBUG_STOP_DEBUGGING, _("Stop debugging"), _("Stop debugging")), wxART_DEBUG_STOP_DEBUGGING)->Enable(false);
+	debugPicture(m_menuDebug->Append(wxID_DESIGNER_DEBUG_STOP_PROGRAM, _("Stop debugging program"), _("Stop program")), wxART_DEBUG_STOP_PROGRAM)->Enable(false);
 
 	m_menuDebug->AppendSeparator();
-	m_menuDebug->Append(wxID_DESIGNER_DEBUG_REMOVE_ALL_DEBUGPOINTS, _("Remove all breakpoints"));
+	debugPicture(m_menuDebug->Append(wxID_DESIGNER_DEBUG_REMOVE_ALL_DEBUGPOINTS, _("Remove all breakpoints")), wxART_DEBUG_REMOVE_ALL_BREAKPOINTS);
 
 	m_menuConfiguration = new wxMenu;
 
@@ -145,6 +172,24 @@ void ibFrontendDocMDIFrameDesigner::InitializeDefaultMenu()
 	menuItem = m_menuConfiguration->Append(wxID_DESIGNER_CONFIGURATION_SAVE_TO_FILE, _("Save configuration"));
 	menuItem->Enable(activeMetaData->AccessRight_DataAdministration());
 
+	m_menuConfiguration->AppendSeparator();
+
+	// "Compare configurations" submenu — three entry points (file / DB
+	// baseline / two arbitrary files) grouped together so the parent
+	// Configuration menu stays compact.
+	wxMenu* menuCompare = new wxMenu;
+
+	menuItem = menuCompare->Append(wxID_DESIGNER_CONFIGURATION_COMPARE_FILE, _("With file..."));
+	menuItem->Enable(activeMetaData->AccessRight_DataAdministration());
+
+	menuItem = menuCompare->Append(wxID_DESIGNER_CONFIGURATION_COMPARE_DB, _("With database configuration"));
+	menuItem->Enable(activeMetaData->AccessRight_DataAdministration());
+
+	menuItem = menuCompare->Append(wxID_DESIGNER_CONFIGURATION_COMPARE_TWO_FILES, _("Two files..."));
+	menuItem->Enable(activeMetaData->AccessRight_DataAdministration());
+
+	m_menuConfiguration->AppendSubMenu(menuCompare, _("Compare configurations"));
+
 	m_frameMenuBar->Append(m_menuConfiguration, _("Configuration"));
 	m_frameMenuBar->Append(m_menuDebug, _("Debug"));
 
@@ -155,6 +200,9 @@ void ibFrontendDocMDIFrameDesigner::InitializeDefaultMenu()
 	menuItem = m_menuAdministration->Append(wxID_APPLICATION_ACTIVE_USERS, _("Active users"));
 	menuItem->Enable(activeMetaData->AccessRight_ActiveUsers());
 	m_menuAdministration->AppendSeparator();
+	menuItem = m_menuAdministration->Append(wxID_APPLICATION_AUDIT_LOG, _("Registration journal"));
+	menuItem->Enable(activeMetaData->AccessRight_ActiveUsers());
+	m_menuAdministration->AppendSeparator();
 	menuItem = m_menuAdministration->Append(wxID_DESIGNER_DATABASE_LOAD_FROM_FILE, _("Restore database"));
 	menuItem->Enable(activeMetaData->AccessRight_DataAdministration());
 	menuItem = m_menuAdministration->Append(wxID_DESIGNER_DATABASE_SAVE_TO_FILE, _("Dump database"));
@@ -163,6 +211,19 @@ void ibFrontendDocMDIFrameDesigner::InitializeDefaultMenu()
 	menuItem = m_menuAdministration->Append(wxID_DESIGNER_DATABASE_CLEAR, _("Clear database"));
 	menuItem->Enable(activeMetaData->AccessRight_DataAdministration());
 
+	m_menuAdministration->AppendSeparator();
+	// ASSISTANT ACCESS. No AccessRight gate of its own: what a connected
+	// assistant may do is exactly what THIS person may do — it works inside their
+	// session — so a second permission to keep in step would be one that could
+	// disagree with the first. The label says which way the switch will go.
+	//
+	// ⭐ STARTING AND STOPPING LIVES IN THE SETTINGS, not here. It is one switch a person touches
+	// rarely, and it was costing a permanent line in a menu that has to stay readable — while the
+	// page where the address, the key and the whole setup already are is exactly where somebody
+	// goes when they want to change any of it. One place for the server, not two.
+	menuItem = m_menuAdministration->Append(wxID_APPLICATION_MCP_ASSISTANT, _("Assistant window"));
+	menuItem->SetBitmap(ibBackendPicture::GetPicture(g_picAssistantCLSID));
+
 	m_frameMenuBar->Append(m_menuAdministration, _("Administration"));
 
 	m_menuSetting = new wxMenu;
@@ -170,32 +231,57 @@ void ibFrontendDocMDIFrameDesigner::InitializeDefaultMenu()
 	m_menuSetting->Append(wxID_APPLICATION_SETTING, _("Options..."));
 
 	m_menuHelp = new wxMenu;
+	// Syntax helper pane toggle. Cursor look-up has no menu entry —
+	// the editor's right-click context menu and the RawCtrl+F1
+	// accelerator (m_keyBinder) cover that path; a second top-level
+	// menu surface for the same action just confuses the menubar.
+	// RawCtrl forces the literal Control key on every platform
+	// (wxWidgets maps "Ctrl" to Cmd on macOS). NB: on macOS the Help
+	// menu can be intercepted by the system-native Help search; if
+	// that surfaces as a real problem this can move to Tools (Windows
+	// is the primary platform now).
+	m_menuHelp->Append(wxID_FRONTEND_SYNTAX_HELPER,
+	                   _("Syntax Helper\tRawCtrl+Alt+F1"));
+	m_menuHelp->AppendSeparator();
 	m_menuHelp->Append(wxID_DESIGNER_ABOUT, _("About"));
 	m_frameMenuBar->Append(m_menuHelp, wxGetStockLabel(wxID_HELP, wxSTOCK_NOFLAGS));
 
-	Bind(wxEVT_MENU, &ibFrontendDocMDIFrameDesigner::OnOpenConfiguration, this, wxID_DESIGNER_CONFIGURATION_OPEN_DATABASE);
-	Bind(wxEVT_MENU, &ibFrontendDocMDIFrameDesigner::OnRollbackConfiguration, this, wxID_DESIGNER_CONFIGURATION_ROLLBACK_DATABASE);
-	Bind(wxEVT_MENU, &ibFrontendDocMDIFrameDesigner::OnUpdateConfiguration, this, wxID_DESIGNER_CONFIGURATION_UPDATE_DATABASE);
+	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnOpenConfiguration, this, wxID_DESIGNER_CONFIGURATION_OPEN_DATABASE);
+	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnRollbackConfiguration, this, wxID_DESIGNER_CONFIGURATION_ROLLBACK_DATABASE);
+	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnUpdateConfiguration, this, wxID_DESIGNER_CONFIGURATION_UPDATE_DATABASE);
 
-	Bind(wxEVT_MENU, &ibFrontendDocMDIFrameDesigner::OnConfiguration, this, wxID_DESIGNER_CONFIGURATION_LOAD_FROM_FILE, wxID_DESIGNER_CONFIGURATION_SAVE_TO_FILE);
+	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnConfiguration, this, wxID_DESIGNER_CONFIGURATION_LOAD_FROM_FILE, wxID_DESIGNER_CONFIGURATION_COMPARE_TWO_FILES);
 
-	Bind(wxEVT_MENU, &ibFrontendDocMDIFrameDesigner::OnStartDebug, this, wxID_DESIGNER_DEBUG_START);
-	Bind(wxEVT_MENU, &ibFrontendDocMDIFrameDesigner::OnStartDebugWithoutDebug, this, wxID_DESIGNER_DEBUG_START_WITHOUT_DEBUGGING);
-	Bind(wxEVT_MENU, &ibFrontendDocMDIFrameDesigner::OnStartDebugWeb, this, wxID_DESIGNER_DEBUG_START_WEB);
-	Bind(wxEVT_MENU, &ibFrontendDocMDIFrameDesigner::OnStartDebugWithoutDebugWeb, this, wxID_DESIGNER_DEBUG_START_WITHOUT_DEBUGGING_WEB);
-	Bind(wxEVT_MENU, &ibFrontendDocMDIFrameDesigner::OnAttachForDebugging, this, wxID_DESIGNER_DEBUG_ATTACH_FOR_DEBUGGING);
+	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnStartDebug, this, wxID_DESIGNER_DEBUG_START);
+	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnStartDebugWithoutDebug, this, wxID_DESIGNER_DEBUG_START_WITHOUT_DEBUGGING);
+	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnStartDebugWeb, this, wxID_DESIGNER_DEBUG_START_WEB);
+	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnStartDebugWithoutDebugWeb, this, wxID_DESIGNER_DEBUG_START_WITHOUT_DEBUGGING_WEB);
+	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnAttachForDebugging, this, wxID_DESIGNER_DEBUG_ATTACH_FOR_DEBUGGING);
 
-	Bind(wxEVT_MENU, &ibFrontendDocMDIFrameDesigner::OnRunDebugCommand, this, wxID_DESIGNER_DEBUG_EDIT_POINT, wxID_DESIGNER_DEBUG_REMOVE_ALL_DEBUGPOINTS);
-	Bind(wxEVT_MENU, &ibFrontendDocMDIFrameDesigner::OnToolsSettings, this, wxID_APPLICATION_SETTING);
-	Bind(wxEVT_MENU, &ibFrontendDocMDIFrameDesigner::OnUsers, this, wxID_APPLICATION_USERS);
-	Bind(wxEVT_MENU, &ibFrontendDocMDIFrameDesigner::OnActiveUsers, this, wxID_APPLICATION_ACTIVE_USERS);
-	Bind(wxEVT_MENU, &ibFrontendDocMDIFrameDesigner::OnConnection, this, wxID_APPLICATION_CONNECTION);
+	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnRunDebugCommand, this, wxID_DESIGNER_DEBUG_EDIT_POINT, wxID_DESIGNER_DEBUG_REMOVE_ALL_DEBUGPOINTS);
+	Bind(wxEVT_UPDATE_UI, &ibFrontendMainFrameDesigner::OnUpdateDebugCommand, this, wxID_DESIGNER_DEBUG_STEP_OVER, wxID_DESIGNER_DEBUG_NEXT_POINT);
+	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnToolsSettings, this, wxID_APPLICATION_SETTING);
+	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnUsers, this, wxID_APPLICATION_USERS);
+	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnActiveUsers, this, wxID_APPLICATION_ACTIVE_USERS);
+	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnAuditLog, this, wxID_APPLICATION_AUDIT_LOG);
+	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnMcpAssistant, this, wxID_APPLICATION_MCP_ASSISTANT);
+	Bind(wxEVT_UPDATE_UI, &ibFrontendMainFrameDesigner::OnUpdateMcpAssistant, this, wxID_APPLICATION_MCP_ASSISTANT);
+	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnConnection, this, wxID_APPLICATION_CONNECTION);
 
-	Bind(wxEVT_MENU, &ibFrontendDocMDIFrameDesigner::OnLoadDatabase, this, wxID_DESIGNER_DATABASE_LOAD_FROM_FILE);
-	Bind(wxEVT_MENU, &ibFrontendDocMDIFrameDesigner::OnSaveDatabase, this, wxID_DESIGNER_DATABASE_SAVE_TO_FILE);
-	Bind(wxEVT_MENU, &ibFrontendDocMDIFrameDesigner::OnClearDatabase, this, wxID_DESIGNER_DATABASE_CLEAR);
+	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnLoadDatabase, this, wxID_DESIGNER_DATABASE_LOAD_FROM_FILE);
+	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnSaveDatabase, this, wxID_DESIGNER_DATABASE_SAVE_TO_FILE);
+	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnClearDatabase, this, wxID_DESIGNER_DATABASE_CLEAR);
 
-	Bind(wxEVT_MENU, &ibFrontendDocMDIFrameDesigner::OnAbout, this, wxID_DESIGNER_ABOUT);
+	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnAbout, this, wxID_DESIGNER_ABOUT);
+
+	// Syntax helper — lambda bindings, no member fn to lose to the
+	// designer header.
+	Bind(wxEVT_MENU,
+	     [this](wxCommandEvent&) { ToggleHelpPane(); },
+	     wxID_FRONTEND_SYNTAX_HELPER);
+	Bind(wxEVT_MENU,
+	     [this](wxCommandEvent&) { OpenHelpForCursor(); },
+	     wxID_FRONTEND_SYNTAX_HELPER_LOOKUP);
 
 	LoadOptions();
 }

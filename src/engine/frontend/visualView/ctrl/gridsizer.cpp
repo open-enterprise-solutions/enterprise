@@ -1,10 +1,10 @@
 
 #include "sizer.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #ifdef OES_USE_WEB
 #include "frontend/web/webSizer.h"
 #endif
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueGridSizer, ibValueSizer)
 
 //****************************************************************************
 //*                             GridSizer                                    *
@@ -25,7 +25,7 @@ wxObject* ibValueGridSizer::Create(ibFrontendWindow* /*parent*/, ibVisualHost* /
 #endif
 }
 
-void ibValueGridSizer::OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost, bool firstСreated)
+void ibValueGridSizer::OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost, bool firstCreated)
 {
 }
 
@@ -53,24 +53,24 @@ void ibValueGridSizer::Cleanup(wxObject* obj, ibVisualHost* visualHost)
 //*                           Property                                             *
 //**********************************************************************************
 
-bool ibValueGridSizer::LoadData(ibReaderMemory& reader)
+bool ibValueGridSizer::ReadData(const ibDataNode& node)
 {
-	m_propertyRows->SetValue(reader.r_s32());
-	m_propertyCols->SetValue(reader.r_s32());
+	m_propertyRows->SetNodeValue(node.GetProperty(m_propertyRows->GetName()));
+	m_propertyCols->SetNodeValue(node.GetProperty(m_propertyCols->GetName()));
 
-	return ibValueSizer::LoadData(reader);
+	return ibValueSizer::ReadData(node);
 }
 
-bool ibValueGridSizer::SaveData(ibWriterMemory& writer)
+bool ibValueGridSizer::WriteData(ibDataNode& node) const
 {
-	writer.w_s32(m_propertyRows->GetValueAsUInteger());
-	writer.w_s32(m_propertyCols->GetValueAsUInteger());
+	node.SetProperty(m_propertyRows->GetName(), m_propertyRows->GetNodeValue());
+	node.SetProperty(m_propertyCols->GetName(), m_propertyCols->GetNodeValue());
 
-	return ibValueSizer::SaveData(writer);
+	return ibValueSizer::WriteData(node);
 }
 
 //***********************************************************************
 //*                       Register in runtime                           *
 //***********************************************************************
 
-CONTROL_TYPE_REGISTER(ibValueGridSizer, "Gridsizer", "Sizer", string_to_clsid("CT_GSZR"));
+CONTROL_TYPE_REGISTER(ibValueGridSizer, "Gridsizer", "Sizer", control_to_clsid("CT_GSZR"));

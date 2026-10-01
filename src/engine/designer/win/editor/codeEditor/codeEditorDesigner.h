@@ -16,7 +16,7 @@ protected:
 
 	bool IsDebuggerEnterLoop() const override;
 	void OnEditDebugPoint(int line) override;
-	void OnPatchModule(int line, int linesAdded) override;
+	void OnPatchModule(int line, int linesAdded, bool atLineStart) override;
 	void OnEvaluateAutocomplete(const wxString& fileName,
 	                             const wxString& docPath,
 	                             const wxString& expression,
@@ -26,6 +26,8 @@ protected:
 	                        const wxString& docPath,
 	                        const wxString& expression) override;
 	void RefreshBreakpointMarkers() override;
+	void AppendDebugMenu(wxMenu& menu, int line) override;
+	bool GetDebugPointHint(int line, wxString& hint) override;
 };
 
 #endif // __IB_CODE_DESIGNER_H__

@@ -1,9 +1,10 @@
 ﻿////////////////////////////////////////////////////////////////////////////
-//	Author		: Tetracode Dev
+//	Author		: Maxim Kornienko
 //	Description : chart of characteristic types object
 ////////////////////////////////////////////////////////////////////////////
 
 #include "chartOfCharacteristicTypes.h"
+#include "backend/system/value/valuePointInTime.h"   // the moment an object can be asked for
 #include "backend/metaData.h"
 
 #include "backend/appData.h"
@@ -20,27 +21,39 @@
 ibValueRecordDataObjectChartOfCharacteristicTypes::ibValueRecordDataObjectChartOfCharacteristicTypes(const ibValueMetaObjectChartOfCharacteristicTypes* metaObject, const ibGuid& objGuid, ibObjectMode objMode) :
 	ibValueRecordDataObjectHierarchyRef(metaObject, objGuid, objMode)
 {
+	m_members.Bind(this, &ibValueRecordDataObjectChartOfCharacteristicTypes::FillMethods);
 }
 
 ibValueRecordDataObjectChartOfCharacteristicTypes::ibValueRecordDataObjectChartOfCharacteristicTypes(const ibValueRecordDataObjectChartOfCharacteristicTypes& source) :
 	ibValueRecordDataObjectHierarchyRef(source)
 {
+	m_members.Bind(this, &ibValueRecordDataObjectChartOfCharacteristicTypes::FillMethods);
 }
 
-ibSourceExplorer ibValueRecordDataObjectChartOfCharacteristicTypes::GetSourceExplorer() const
+const ibSourceExplorer* ibValueRecordDataObjectChartOfCharacteristicTypes::GetSourceExplorer() const
 {
-	ibSourceExplorer srcHelper(
-		m_metaObject, GetClassType(),
+	m_sourceExplorer.Reset(
+		wxT("Ref"), _("Ref"), m_metaObject->GetMetaID(), GetClassType(),
 		false
 	);
 
 	ibValueMetaObjectChartOfCharacteristicTypes* metaRef = nullptr;
 
 	if (m_metaObject->ConvertToValue(metaRef)) {
-		srcHelper.AppendSource(metaRef->GetDataCode(), false);
-		srcHelper.AppendSource(metaRef->GetDataDescription());
-		srcHelper.AppendSource(metaRef->GetDataParent());
-		srcHelper.AppendSource(metaRef->GetDataType(), false);
+		m_sourceExplorer.AppendColumn(metaRef->GetDataCode()->GetQueryColumn(), false);
+		m_sourceExplorer.AppendColumn(metaRef->GetDataDescription()->GetQueryColumn());
+		m_sourceExplorer.AppendColumn(metaRef->GetDataParent()->GetQueryColumn());
+		// TYPE BELONGS TO AN ITEM, NOT TO A FOLDER — a group of characteristics is not itself a
+		// characteristic and has no type to declare. So the field is offered only where it exists,
+		// by the same rule the write now checks (ibItemModeFits): a folder's form never shows it,
+		// and nothing demands it of a folder.
+		//
+		// It was also appended DISABLED — the `false` the auto-numbered Code carries above, where
+		// being disabled is right. A disabled node builds a disabled control: the text greys, and
+		// with it the Select button, so the only way to give a characteristic its type was gone
+		// while the write still refused to save without one.
+		if (ibItemModeFits(metaRef->GetDataType()->GetItemMode(), m_objMode))
+			m_sourceExplorer.AppendColumn(metaRef->GetDataType()->GetQueryColumn());
 	}
 
 	for (const auto object : m_metaObject->GetAttributeArrayObject()) {
@@ -49,7 +62,7 @@ ibSourceExplorer ibValueRecordDataObjectChartOfCharacteristicTypes::GetSourceExp
 			if (attrUse == ibItemMode::ibItemMode_Item
 				|| attrUse == ibItemMode::ibItemMode_Folder_Item) {
 				if (!m_metaObject->IsDataReference(object->GetMetaID())) {
-					srcHelper.AppendSource(object);
+					m_sourceExplorer.AppendColumn(object->GetQueryColumn());
 				}
 			}
 		}
@@ -57,7 +70,7 @@ ibSourceExplorer ibValueRecordDataObjectChartOfCharacteristicTypes::GetSourceExp
 			if (attrUse == ibItemMode::ibItemMode_Folder ||
 				attrUse == ibItemMode::ibItemMode_Folder_Item) {
 				if (!m_metaObject->IsDataReference(object->GetMetaID())) {
-					srcHelper.AppendSource(object);
+					m_sourceExplorer.AppendColumn(object->GetQueryColumn());
 				}
 			}
 		}
@@ -68,216 +81,38 @@ ibSourceExplorer ibValueRecordDataObjectChartOfCharacteristicTypes::GetSourceExp
 		if (m_objMode == ibObjectMode::OBJECT_ITEM) {
 			if (tableUse == ibItemMode::ibItemMode_Item
 				|| tableUse == ibItemMode::ibItemMode_Folder_Item) {
-				srcHelper.AppendSource(object);
+				if (object != nullptr && !object->IsDeleted()) {
+					ibSourceExplorer& tblNode = m_sourceExplorer.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
+					for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject()) tblNode.AppendColumn(tblCol->GetQueryColumn());
+				}
 			}
 		}
 		else {
 			if (tableUse == ibItemMode::ibItemMode_Folder ||
 				tableUse == ibItemMode::ibItemMode_Folder_Item) {
-				srcHelper.AppendSource(object);
+				if (object != nullptr && !object->IsDeleted()) {
+					ibSourceExplorer& tblNode = m_sourceExplorer.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
+					for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject()) tblNode.AppendColumn(tblCol->GetQueryColumn());
+				}
 			}
 		}
 	}
 
-	return srcHelper;
+	return &m_sourceExplorer;
 }
 
-#pragma region _form_builder_h_
-void ibValueRecordDataObjectChartOfCharacteristicTypes::ShowFormValue(const wxString& strFormName, ibBackendControlFrame* ownerControl)
-{
-	ibBackendValueForm* const foundedForm = GetForm();
-
-	if (foundedForm && foundedForm->IsShown()) {
-		foundedForm->ActivateForm();
-		return;
-	}
-
-	ibBackendValueForm* const valueForm =
-		GetFormValue(strFormName, ownerControl);
-
-	if (valueForm != nullptr) {
-		valueForm->Modify(m_objModified);
-		valueForm->ShowForm();
-	}
-}
-
-ibBackendValueForm* ibValueRecordDataObjectChartOfCharacteristicTypes::GetFormValue(const wxString& strFormName, ibBackendControlFrame* ownerControl)
-{
-	ibBackendValueForm* const foundedForm = GetForm();
-
-	if (foundedForm == nullptr) {
-
-		ibBackendValueForm* createdForm = m_metaObject->CreateAndBuildForm(
-			strFormName,
-			m_objMode == ibObjectMode::OBJECT_ITEM ? ibValueMetaObjectChartOfCharacteristicTypes::eFormObject : ibValueMetaObjectChartOfCharacteristicTypes::eFormFolder,
-			ownerControl,
-			this,
-			m_objGuid
-		);
-
-		if (createdForm != nullptr)
-			createdForm->CloseOnOwnerClose(false);
-
-		return createdForm;
-	}
-
-	return foundedForm;
-}
-#pragma endregion
+// ShowFormValue / GetFormValue moved up to HierarchyRef.
 
 //***********************************************************************************************
 //*                        ChartOfCharacteristicTypes events                                    *
 //***********************************************************************************************
 
-bool ibValueRecordDataObjectChartOfCharacteristicTypes::WriteObject()
-{
-	if (!appData->DesignerMode())
-	{
-		ibConnectionScope scope = ibSession::Current()->OpenConnectionScope();
-
-		if (!scope || !scope->IsOpen())
-			ibBackendCoreException::Error(_("Database is not open!"));
-
-		if (!ibBackendException::IsEvalMode())
-		{
-			if (!m_metaObject->AccessRight_Write()) {
-				ibBackendAccessException::Error();
-				return false;
-			}
-
-			{
-				ibBackendValueForm* const valueForm = GetForm();
-				{
-					scope.SafeBeginTransaction();
-
-					{
-						ibValue cancel = false;
-						ExecAsProc(wxT("BeforeWrite"), cancel);
-
-						if (cancel.GetBoolean()) {
-							scope.SafeRollBackTransaction();
-							ibBackendCoreException::Error(_("Failed to write object in db!"));
-							return false;
-						}
-					}
-
-					bool newObject = ibValueRecordDataObjectChartOfCharacteristicTypes::IsNewObject();
-					bool generateUniqueIdentifier = false;
-
-					if (!IsSetUniqueIdentifier()) {
-						ibValue prefix = "", standartProcessing = true;
-						ExecAsProc(wxT("SetNewCode"), prefix, standartProcessing);
-						if (standartProcessing.GetBoolean()) {
-							generateUniqueIdentifier =
-								ibValueRecordDataObjectChartOfCharacteristicTypes::GenerateUniqueIdentifier(prefix.GetString());
-						}
-					}
-
-					if (!SaveData()) {
-						if (generateUniqueIdentifier)
-							ibValueRecordDataObjectChartOfCharacteristicTypes::ResetUniqueIdentifier();
-						scope.SafeRollBackTransaction();
-						ibBackendCoreException::Error(_("Failed to write object in db!"));
-						return false;
-					}
-
-					{
-						ibValue cancel = false;
-						ExecAsProc(wxT("OnWrite"), cancel);
-						if (cancel.GetBoolean()) {
-							if (generateUniqueIdentifier)
-								ibValueRecordDataObjectChartOfCharacteristicTypes::ResetUniqueIdentifier();
-							scope.SafeRollBackTransaction();
-							ibBackendCoreException::Error(_("Failed to write object in db!"));
-							return false;
-						}
-					}
-
-					scope.SafeCommitTransaction();
-
-					if (newObject && valueForm != nullptr) valueForm->NotifyCreate(GetReference());
-					else if (valueForm != nullptr) valueForm->NotifyChange(GetReference());
-				}
-				m_objModified = false;
-			}
-		}
-	}
-
-	return true;
-}
-
-bool ibValueRecordDataObjectChartOfCharacteristicTypes::DeleteObject()
-{
-	if (!appData->DesignerMode())
-	{
-		ibConnectionScope scope = ibSession::Current()->OpenConnectionScope();
-
-		if (!scope || !scope->IsOpen())
-			ibBackendCoreException::Error(_("Database is not open!"));
-
-		if (!ibBackendException::IsEvalMode())
-		{
-			if (!m_metaObject->AccessRight_Delete()) {
-				ibBackendAccessException::Error();
-				return false;
-			}
-
-			const ibValueMetaObjectRecordDataHierarchyMutableRef* valueMetaObject = GetMetaObject();
-			wxASSERT(valueMetaObject);
-
-			const ibGuid& objGuid = GetGuid();
-			const auto predefinedValue =
-				valueMetaObject->FindPredefinedValue(objGuid);
-
-			if (predefinedValue != nullptr) {
-				ibBackendCoreException::Error(_("Attempting to delete a predefined element!"));
-				return false;
-			}
-
-			{
-				ibBackendValueForm* const valueForm = GetForm();
-				{
-					scope.SafeBeginTransaction();
-
-					{
-						ibValue cancel = false;
-						ExecAsProc(wxT("BeforeDelete"), cancel);
-						if (cancel.GetBoolean()) {
-							scope.SafeRollBackTransaction();
-							ibBackendCoreException::Error(_("Failed to delete object in db!"));
-							return false;
-						}
-					}
-
-					if (!DeleteData()) {
-						scope.SafeRollBackTransaction();
-						ibBackendCoreException::Error(_("Failed to delete object in db!"));
-						return false;
-					}
-
-					{
-						ibValue cancel = false;
-						ExecAsProc(wxT("OnDelete"), cancel);
-						if (cancel.GetBoolean()) {
-							scope.SafeRollBackTransaction();
-							ibBackendCoreException::Error(_("Failed to delete object in db!"));
-							return false;
-						}
-					}
-
-					scope.SafeCommitTransaction();
-
-					if (valueForm != nullptr) valueForm->NotifyDelete(GetReference());
-				}
-			}
-		}
-	}
-
-	return true;
-}
+// WriteObject / DeleteObject inherited from
+// ibValueRecordDataObjectHierarchyRef — see commonObjectRefQuery.cpp.
 
 enum Func {
-	enIsNew = 0,
+	enPointInTime,
+	enIsNew,
 	enCopy,
 	enFill,
 	enWrite,
@@ -285,64 +120,41 @@ enum Func {
 	enModified,
 	enGetForm,
 	enGetTemplate,
-	enGetMetadata
+	enGetMetadata,
+	enLock,
+	enUnlock
 };
 
 //****************************************************************************
 //*                              Support methods                             *
 //****************************************************************************
 
-void ibValueRecordDataObjectChartOfCharacteristicTypes::PrepareNames() const
+void ibValueRecordDataObjectChartOfCharacteristicTypes::FillMethods(ibMemberTable& helper) const
 {
-	m_methodHelper->ClearHelper();
-
-	m_methodHelper->AppendFunc(wxT("IsNew"), wxT("IsNew()"));
-	m_methodHelper->AppendFunc(wxT("Copy"), wxT("Copy()"));
-	m_methodHelper->AppendFunc(wxT("Fill"), 1, wxT("Fill(object)"));
-	m_methodHelper->AppendFunc(wxT("Write"), wxT("Write()"));
-	m_methodHelper->AppendFunc(wxT("Delete"), wxT("Delete()"));
-	m_methodHelper->AppendFunc(wxT("Modified"), wxT("Modified()"));
-	m_methodHelper->AppendFunc(wxT("GetFormObject"), 3, wxT("GetFormObject(name : string, owner : any , id : guid)"));
-	m_methodHelper->AppendFunc(wxT("GetTemplate"), 1, wxT("GetTemplate(name : string)"));
-	m_methodHelper->AppendFunc(wxT("GetMetadata"), wxT("GetMetadata()"));
-
-	m_methodHelper->AppendProp(wxT("ThisObject"), true, false, true, eThisObject, eSystem);
-
-	wxString objectName;
-
-	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
-		if (object->IsDeleted())
-			continue;
-		if (!object->GetObjectNameAsString(objectName))
-			continue;
-		m_methodHelper->AppendProp(
-			objectName,
-			true,
-			!m_metaObject->IsDataReference(object->GetMetaID()),
-			object->GetMetaID(),
-			eProperty
-		);
-	}
-
-	for (const auto object : m_metaObject->GetGenericTableArrayObject()) {
-		if (object->IsDeleted())
-			continue;
-		if (!object->GetObjectNameAsString(objectName))
-			continue;
-		m_methodHelper->AppendProp(
-			objectName,
-			true,
-			false,
-			object->GetMetaID(),
-			eTable
-		);
-	}
-	ExportNamesToHelper(m_methodHelper, eProcUnit);
+	// Own methods; the data members come from the base FillDataMembers. Order is
+	// load-bearing — CallAsFunc switches on the method index (enIsNew = 0 …).
+	// ⭐ THE MOMENT, ON EVERY REFERENCE-BASED FAMILY. Being addressed by a reference is the whole
+	// qualification: an element of this kind has a place in the data's history, so it can be named
+	// as a moment -- for a period boundary, for an ordering, for "everything up to THIS one". The
+	// families with a date of their own add it; the rest carry the reference alone, which is an
+	// identity with no point on a timeline rather than a date invented to fill the slot.
+	helper.AppendFunc(wxT("PointInTime"), wxT("PointInTime()"));
+	helper.AppendFunc(wxT("IsNew"), wxT("IsNew()"));
+	helper.AppendFunc(wxT("Copy"), wxT("Copy()"));
+	helper.AppendFunc(wxT("Fill"), 1, wxT("Fill(object)"));
+	helper.AppendFunc(wxT("Write"), wxT("Write()"));
+	helper.AppendFunc(wxT("Delete"), wxT("Delete()"));
+	helper.AppendFunc(wxT("Modified"), wxT("Modified()"));
+	helper.AppendFunc(wxT("GetFormObject"), 3, wxT("GetFormObject(name : string, owner : any , id : guid)"));
+	helper.AppendFunc(wxT("GetTemplate"), 1, wxT("GetTemplate(name : string)"));
+	helper.AppendFunc(wxT("GetMetadata"), wxT("GetMetadata()"));
+	helper.AppendProc(wxT("Lock"),   wxT("Lock()"));
+	helper.AppendProc(wxT("Unlock"), wxT("Unlock()"));
 }
 
 bool ibValueRecordDataObjectChartOfCharacteristicTypes::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 {
-	const long lPropAlias = m_methodHelper->GetPropAlias(lPropNum);
+	const long lPropAlias = m_members.GetPropAlias(lPropNum);
 	if (lPropAlias == eProcUnit) {
 		if (m_procUnit != nullptr) {
 			return m_procUnit->SetPropVal(
@@ -352,7 +164,7 @@ bool ibValueRecordDataObjectChartOfCharacteristicTypes::SetPropVal(const long lP
 	}
 	else if (lPropAlias == eProperty) {
 		return SetValueByMetaID(
-			m_methodHelper->GetPropData(lPropNum),
+			m_members.GetPropData(lPropNum),
 			varPropVal
 		);
 	}
@@ -362,7 +174,7 @@ bool ibValueRecordDataObjectChartOfCharacteristicTypes::SetPropVal(const long lP
 
 bool ibValueRecordDataObjectChartOfCharacteristicTypes::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
-	const long lPropAlias = m_methodHelper->GetPropAlias(lPropNum);
+	const long lPropAlias = m_members.GetPropAlias(lPropNum);
 	if (lPropAlias == eProcUnit) {
 		if (m_procUnit != nullptr) {
 			return m_procUnit->GetPropVal(
@@ -371,20 +183,12 @@ bool ibValueRecordDataObjectChartOfCharacteristicTypes::GetPropVal(const long lP
 		}
 	}
 	else if (lPropAlias == eProperty || lPropAlias == eTable) {
-		const long lPropData = m_methodHelper->GetPropData(lPropNum);
+		const long lPropData = m_members.GetPropData(lPropNum);
 		if (m_metaObject->IsDataReference(lPropData)) {
 			pvarPropVal = GetReference();
 			return true;
 		}
 		return GetValueByMetaID(lPropData, pvarPropVal);
-	}
-	else if (lPropAlias == eSystem) {
-		switch (m_methodHelper->GetPropData(lPropNum))
-		{
-		case eThisObject:
-			pvarPropVal = GetValue();
-			return true;
-		}
 	}
 	return false;
 }
@@ -408,12 +212,15 @@ bool ibValueRecordDataObjectChartOfCharacteristicTypes::CallAsFunc(const long lM
 	case enDelete:
 		DeleteObject();
 		return true;
+	case enPointInTime:
+		pvarRetValue = new ibValuePointInTime(ibDateTime(), GetReference());   // a moment with no date: the empty date, the smallest there is
+		return true;
 	case enModified:
 		pvarRetValue = m_objModified;
 		return true;
 	case Func::enGetForm:
 		pvarRetValue = GetFormValue(
-			lSizeArray > 0 ? paParams[0]->GetString() : wxString(wxEmptyString),
+			lSizeArray > 0 ? ibFormRequest(paParams[0]->GetString()) : ibFormRequest(),
 			lSizeArray > 1 ? paParams[1]->ConvertToType<ibBackendControlFrame>() : nullptr
 		);
 		return true;
@@ -422,6 +229,12 @@ bool ibValueRecordDataObjectChartOfCharacteristicTypes::CallAsFunc(const long lM
 		return true;
 	case Func::enGetMetadata:
 		pvarRetValue = m_metaObject;
+		return true;
+	case Func::enLock:
+		TryAcquireFormLock();
+		return true;
+	case Func::enUnlock:
+		ReleaseFormLock();
 		return true;
 	}
 

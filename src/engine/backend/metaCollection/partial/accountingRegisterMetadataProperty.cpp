@@ -1,11 +1,19 @@
 #include "accountingRegister.h"
-#include "backend/metadata.h"
+#include "backend/metaData.h"
 #include "backend/objCtor.h"
 
 void ibValueMetaObjectAccountingRegister::OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue)
 {
-	// When Chart of Accounts binding changes, update the Account field type
-	if (m_propertyChartOfAccounts == property) {
+	// When Chart of Accounts binding changes, update the Account field type.
+	//
+	// ⭐ AND WHEN CORRESPONDENCE IS SWITCHED, through the SAME door. That setting decides how many
+	// sides a line has — so it decides which slots exist, whether there is a credit account to type,
+	// and what the debit side is CALLED (`Account` alone, `AccountDr` beside `AccountCr`). All three
+	// are what SyncAccountDimensionSlots + the typing below do, and none of them happened until
+	// something else — a re-bound chart, or a run — came along: the setting looked applied in the
+	// inspector while the register still had the shape of the other mode. Re-typing under an
+	// unchanged binding is idempotent, so one path serves both properties.
+	if (m_propertyChartOfAccounts == property || m_propertyCorrespondence == property) {
 		const ibMetaDescription& metaDesc = m_propertyChartOfAccounts->GetValueAsMetaDesc();
 		ibTypeDescription typeDesc;
 		for (unsigned int idx = 0; idx < metaDesc.GetTypeCount(); idx++) {
@@ -17,6 +25,28 @@ void ibValueMetaObjectAccountingRegister::OnPropertyChanged(ibProperty* property
 			}
 		}
 		(*m_propertyAttributeAccount)->SetDefaultMetaType(typeDesc);
+
+		// The dimension slots follow the binding too — a different chart declares a different
+		// NUMBER of them. Re-typing only Account here was the old asymmetry: the slots kept the
+		// previous chart's shape until the configuration happened to be run again.
+		SyncAccountDimensionSlots();
+
+		// ⭐ AND THE CREDIT ACCOUNT, WHICH IS A REFERENCE INTO THE SAME CHART. One declaration types
+		// both sides — that is why there is no second chart binding — but only the debit half was
+		// re-typed here, so on a correspondence register the credit account kept an empty type until
+		// a run happened to fix it. Empty means no reference columns: the differ dropped
+		// fld<AccountCr>_RTRef / _RRRef from the movements, and the credit totals trigger, which
+		// reads NEW.fld<AccountCr>_RTRef, could then not be created at all.
+		//
+		// SyncAccountDimensionSlots runs FIRST because turning correspondence on creates the credit
+		// account inside it — typing before that would type something that does not exist yet.
+		// (The dimension slots themselves come back from it already typed — the sync's own tail.)
+		if (m_accountCr != nullptr)
+			m_accountCr->GetTypeDesc().SetDefaultMetaType(typeDesc);
+
+		// And the sides of the fields kept per side: a line with two accounts splits every field whose
+		// `Balance` is cleared, a line with one splits none.
+		SyncFieldSides();
 	}
 
 	// Enable/disable Account field based on binding

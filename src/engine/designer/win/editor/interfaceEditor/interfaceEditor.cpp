@@ -1,5 +1,12 @@
 #include "interfaceEditor.h"
 
+#include "frontend/docView/docView.h"                       // docManager — notify open editors of the change
+#include "designer/docManager/templates/docViewMetaFile.h"  // ibMetaDocument — a config metaobject document
+#include "backend/metaCollection/metaGroups.h"              // what a group is called, and where it stands
+
+#include <algorithm>
+#include <vector>
+
 #define ICON_SIZE 16
 
 ibInterfaceEditor::ibInterfaceEditor(wxWindow* parent,
@@ -28,107 +35,80 @@ ibInterfaceEditor::ibInterfaceEditor(wxWindow* parent,
 
 void ibInterfaceEditor::OnCheckItem(wxTreeEvent& event)
 {
-	wxTreeItemMetaData* data = dynamic_cast<wxTreeItemMetaData*>(
+	ibTreeItemObject* data = dynamic_cast<ibTreeItemObject*>(
 		m_interfaceCtrl->GetItemData(event.GetItem())
 		);
 	if (data != nullptr) {
 		ibInterfaceObject* metaObject = data->GetMetaObject();
 		wxASSERT(metaObject);
 		metaObject->SetInterface(m_metaInterface->GetMetaID(), event.GetExtraLong());
+
+		// Section composition changed -> re-render every open form so its command navigator re-gathers the section's
+		// content LIVE (a just-included / excluded item shows or hides without reopening the form). SKIP ONLY the
+		// section BEING EDITED — matched by its metaID: SetInterface flipped a membership FLAG, THIS section's tree
+		// needs no rebuild (that would drop the checked row). Every OTHER open doc updates and preserves its own row.
+		const ibMetaID editedId = m_metaInterface->GetMetaID();
+		for (auto& doc : docManager->GetDocumentsVector()) {
+			ibMetaDocument* metaDoc = wxDynamicCast(doc, ibMetaDocument);
+			if (metaDoc == nullptr)
+				continue;
+			const ibValueMetaObject* docMeta = metaDoc->GetMetaObject();
+			if (docMeta == nullptr || docMeta->GetMetaID() != editedId)
+				metaDoc->UpdateAllViews();
+		}
 	}
 
 	event.Skip();
 }
 
+
 #include "frontend/artProvider/artProvider.h"
-
-#define commonName _("Common")
-#define commonFormsName _("Common forms")
-
-#define constantsName _("Constants")
-
-#define catalogsName _("Catalogs")
-#define documentsName _("Documents")
-#define dataProcessorName _("Data processors")
-#define reportsName _("Reports")
-#define informationRegisterName _("Information Registers")
-#define accumulationRegisterName _("Accumulation Registers")
 
 void ibInterfaceEditor::InitInterface()
 {
+	m_groups.clear();
+
 	const ibCtorAbstractType* typeCtor = ibValue::GetAvailableCtor(g_metaCommonMetadataCLSID);
 	wxASSERT(typeCtor);
 
 	wxImageList* imageList = m_interfaceCtrl->GetImageList();
 	int imageIndex = imageList->Add(typeCtor->GetClassIcon());
-	m_treeMETADATA = m_interfaceCtrl->AddRoot(_("Configuration"), imageIndex, imageIndex, new wxTreeItemMetaData(activeMetaData->GetCommonMetaObject()));
+	m_treeMETADATA = m_interfaceCtrl->AddRoot(_("Configuration"), imageIndex, imageIndex, new ibTreeItemObject(activeMetaData->GetCommonMetaObject()));
 
-	//*****************************************************************************************************
-	//*                                      Common objects                                               *
-	//*****************************************************************************************************
-
-	int imageCommonIndex = imageList->Add(wxArtProvider::GetIcon(wxART_COMMON_FOLDER, wxART_METATREE));
-	m_treeCOMMON = m_interfaceCtrl->AppendItem(m_treeMETADATA, commonName, imageCommonIndex, imageCommonIndex);
-
-	///////////////////////////////////////////////////////////////////////////////////////////////////////
-
-	m_treeFORMS = AppendGroupItem(m_treeCOMMON, g_metaCommonFormCLSID, commonFormsName);
-
-	//*****************************************************************************************************
-	//*                                      Custom objects                                               *
-	//*****************************************************************************************************
-
-	m_treeCONSTANTS = AppendGroupItem(m_treeMETADATA, g_metaConstantCLSID, constantsName);
-	m_treeCATALOGS = AppendGroupItem(m_treeMETADATA, g_metaCatalogCLSID, catalogsName);
-	m_treeDOCUMENTS = AppendGroupItem(m_treeMETADATA, g_metaDocumentCLSID, documentsName);
-
-	m_treeDATAPROCESSORS = AppendGroupItem(m_treeMETADATA, g_metaDataProcessorCLSID, dataProcessorName);
-	m_treeREPORTS = AppendGroupItem(m_treeMETADATA, g_metaReportCLSID, reportsName);
-
-	m_treeINFORMATION_REGISTERS = AppendGroupItem(m_treeMETADATA, g_metaInformationRegisterCLSID, informationRegisterName);
-	m_treeACCUMULATION_REGISTERS = AppendGroupItem(m_treeMETADATA, g_metaAccumulationRegisterCLSID, accumulationRegisterName);
-
-	m_treeCHARTS_OF_CHARACTERISTIC_TYPES = AppendGroupItem(m_treeMETADATA, g_metaChartOfCharacteristicTypesCLSID, _("Charts of characteristic types"));
-	m_treeCHARTS_OF_ACCOUNTS = AppendGroupItem(m_treeMETADATA, g_metaChartOfAccountsCLSID, _("Charts of accounts"));
-	m_treeACCOUNTING_REGISTERS = AppendGroupItem(m_treeMETADATA, g_metaAccountingRegisterCLSID, _("Accounting registers"));
-
-	//Set item bold and name
-	m_interfaceCtrl->SetItemText(m_treeMETADATA, _("Configuration"));
 	m_interfaceCtrl->SetItemBold(m_treeMETADATA);
-
-	m_interfaceCtrl->ExpandAll();
 }
 
 void ibInterfaceEditor::ClearInterface() {
 
-	//*****************************************************************************************************
-	//*                                      Common objects                                               *
-	//*****************************************************************************************************
-
-	if (m_treeFORMS.IsOk()) m_interfaceCtrl->DeleteChildren(m_treeFORMS);
-
-	if (m_treeCONSTANTS.IsOk()) m_interfaceCtrl->DeleteChildren(m_treeCONSTANTS);
-
-	//*****************************************************************************************************
-	//*                                      Custom objects                                               *
-	//*****************************************************************************************************
-
-	if (m_treeCATALOGS.IsOk()) m_interfaceCtrl->DeleteChildren(m_treeCATALOGS);
-	if (m_treeDOCUMENTS.IsOk()) m_interfaceCtrl->DeleteChildren(m_treeDOCUMENTS);
-
-	if (m_treeDATAPROCESSORS.IsOk()) m_interfaceCtrl->DeleteChildren(m_treeDATAPROCESSORS);
-	if (m_treeREPORTS.IsOk()) m_interfaceCtrl->DeleteChildren(m_treeREPORTS);
-	if (m_treeINFORMATION_REGISTERS.IsOk()) m_interfaceCtrl->DeleteChildren(m_treeINFORMATION_REGISTERS);
-	if (m_treeACCUMULATION_REGISTERS.IsOk()) m_interfaceCtrl->DeleteChildren(m_treeACCUMULATION_REGISTERS);
-	if (m_treeCHARTS_OF_CHARACTERISTIC_TYPES.IsOk()) m_interfaceCtrl->DeleteChildren(m_treeCHARTS_OF_CHARACTERISTIC_TYPES);
-	if (m_treeCHARTS_OF_ACCOUNTS.IsOk()) m_interfaceCtrl->DeleteChildren(m_treeCHARTS_OF_ACCOUNTS);
-	if (m_treeACCOUNTING_REGISTERS.IsOk()) m_interfaceCtrl->DeleteChildren(m_treeACCOUNTING_REGISTERS);
-
-	//delete all items
+	// Nothing to enumerate: the groups are whatever FillData created last time, and it
+	// creates them from the metadata. Wiping the tree wipes them with it.
 	m_interfaceCtrl->DeleteAllItems();
-
-	//Initialize tree
 	InitInterface();
+}
+
+wxTreeItemId ibInterfaceEditor::GroupFor(const ibClassID& clsid)
+{
+	auto found = m_groups.find(clsid);
+	if (found != m_groups.end())
+		return found->second;
+
+	// THE ICON FROM THE TYPE REGISTRY, THE CAPTION FROM THE GROUP'S OWN ANSWER (ibMetaGroupCaption)
+	// — the same one the configuration tree shows. The registered NAME stood here, which is how this
+	// editor came to read "CalculationRegister" where the tree reads "Calculation registers".
+	const ibCtorAbstractType* typeCtor = ibValue::GetAvailableCtor(clsid);
+	if (typeCtor == nullptr)
+		return m_treeMETADATA;
+
+	wxImageList* imageList = m_interfaceCtrl->GetImageList();
+	wxASSERT(imageList);
+	const int imageIndex = imageList->Add(typeCtor->GetClassIcon());
+
+	const wxString caption = ibMetaGroupCaption(clsid);
+	const wxTreeItemId group = m_interfaceCtrl->AppendItem(m_treeMETADATA,
+		caption.IsEmpty() ? typeCtor->GetClassName() : caption, imageIndex, imageIndex, nullptr);
+
+	m_groups.emplace(clsid, group);
+	return group;
 }
 
 void ibInterfaceEditor::FillData()
@@ -140,104 +120,34 @@ void ibInterfaceEditor::FillData()
 
 	m_interfaceCtrl->SetItemText(m_treeMETADATA, commonObject->GetName());
 
-	//****************************************************************
-	//*                          CommonForms                         *
-	//****************************************************************
-	for (auto commonForm : metaData->GetAnyArrayObject(g_metaCommonFormCLSID)) {
-		if (commonForm->IsDeleted())
+	// ASKED, NOT LISTED. Every metaobject that says it can be checked into a section
+	// appears, under a group named by its own metatype.
+	//
+	// This used to be a dozen near-identical blocks — one per metatype, each with its own
+	// pre-created branch, its own caption and its own loop — and a metatype added later was
+	// simply absent from the section editor until somebody noticed. Now a new kind answers
+	// IsInterfaceAllowed() for itself and shows up; one that should not be there says no
+	// and never appears.
+	// …AND IN THE ORDER THE CONFIGURATION IS READ IN: a group is made when its first object arrives,
+	// so the branches used to stand in whatever order the metadata happened to be walked. Sorted by
+	// the group's declared place (ibMetaGroupOrder), this editor reads like the tree; a stable sort
+	// leaves each group's own objects as the metadata gives them.
+	std::vector<ibValueMetaObject*> allowed;
+	for (ibValueMetaObject* object : metaData->GetAnyArrayObject()) {
+		if (object == nullptr || object->IsDeleted())
 			continue;
-		AppendItem(m_treeFORMS, commonForm);
-	}
-
-	//****************************************************************
-	//*                          Constants                           *
-	//****************************************************************
-	for (auto constant : metaData->GetAnyArrayObject(g_metaConstantCLSID)) {
-		if (constant->IsDeleted())
+		if (!object->IsInterfaceAllowed())
 			continue;
-		AppendItem(m_treeCONSTANTS, constant);
+		allowed.push_back(object);
 	}
+	std::stable_sort(allowed.begin(), allowed.end(),
+		[](const ibValueMetaObject* a, const ibValueMetaObject* b) {
+			return ibMetaGroupOrder(a->GetClassType()) < ibMetaGroupOrder(b->GetClassType());
+		});
 
-	//****************************************************************
-	//*                        Catalogs                              *
-	//****************************************************************
-	for (auto catalog : metaData->GetAnyArrayObject(g_metaCatalogCLSID)) {
-		if (catalog->IsDeleted())
-			continue;
-		AppendItem(m_treeCATALOGS, catalog);
-	}
+	for (ibValueMetaObject* object : allowed)
+		AppendItem(GroupFor(object->GetClassType()), object);
 
-	//****************************************************************
-	//*                        Documents                             *
-	//****************************************************************
-	for (auto document : metaData->GetAnyArrayObject(g_metaDocumentCLSID)) {
-		if (document->IsDeleted())
-			continue;
-		AppendItem(m_treeDOCUMENTS, document);
-	}
-
-	//****************************************************************
-	//*                          Data processor                      *
-	//****************************************************************
-	for (auto dataProcessor : metaData->GetAnyArrayObject(g_metaDataProcessorCLSID)) {
-		if (dataProcessor->IsDeleted())
-			continue;
-		AppendItem(m_treeDATAPROCESSORS, dataProcessor);
-	}
-
-	//****************************************************************
-	//*                          Report			                     *
-	//****************************************************************
-	for (auto report : metaData->GetAnyArrayObject(g_metaReportCLSID)) {
-		if (report->IsDeleted())
-			continue;
-		AppendItem(m_treeREPORTS, report);
-	}
-
-	//****************************************************************
-	//*                          Information register			     *
-	//****************************************************************
-	for (auto informationRegister : metaData->GetAnyArrayObject(g_metaInformationRegisterCLSID)) {
-		if (informationRegister->IsDeleted())
-			continue;
-		AppendItem(m_treeINFORMATION_REGISTERS, informationRegister);
-	}
-
-	//****************************************************************
-	//*                          Accumulation register			     *
-	//****************************************************************
-	for (auto accumulationRegister : metaData->GetAnyArrayObject(g_metaAccumulationRegisterCLSID)) {
-		if (accumulationRegister->IsDeleted())
-			continue;
-		AppendItem(m_treeACCUMULATION_REGISTERS, accumulationRegister);
-	}
-
-	//****************************************************************
-	//*                 Charts of characteristic types               *
-	//****************************************************************
-	for (auto chartOfCharTypes : metaData->GetAnyArrayObject(g_metaChartOfCharacteristicTypesCLSID)) {
-		if (chartOfCharTypes->IsDeleted())
-			continue;
-		AppendItem(m_treeCHARTS_OF_CHARACTERISTIC_TYPES, chartOfCharTypes);
-	}
-
-	//****************************************************************
-	//*                      Charts of accounts                      *
-	//****************************************************************
-	for (auto chartOfAccounts : metaData->GetAnyArrayObject(g_metaChartOfAccountsCLSID)) {
-		if (chartOfAccounts->IsDeleted())
-			continue;
-		AppendItem(m_treeCHARTS_OF_ACCOUNTS, chartOfAccounts);
-	}
-
-	//****************************************************************
-	//*                      Accounting registers                    *
-	//****************************************************************
-	for (auto accountingRegister : metaData->GetAnyArrayObject(g_metaAccountingRegisterCLSID)) {
-		if (accountingRegister->IsDeleted())
-			continue;
-		AppendItem(m_treeACCOUNTING_REGISTERS, accountingRegister);
-	}
-
+	m_interfaceCtrl->ExpandAll();
 	m_interfaceCtrl->Enable(m_metaInterface->IsEnabled());
 }

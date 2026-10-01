@@ -7,18 +7,17 @@
 #include "metaModuleObject.h"
 #include "backend/metaData.h"
 
-bool ibValueMetaObjectConfiguration::PrepareContextMenu(wxMenu *defaultMenu)
+bool ibValueMetaObjectConfiguration::CollectContextMenu(std::vector<ibMetaMenuItem>& items)
 {
-	wxMenuItem *menuItem = defaultMenu->Append(ID_METATREE_OPEN_INIT_MODULE, _("Open configuration module"));
-	menuItem->SetBitmap((*m_propertyModuleConfiguration)->GetIcon());
+	items.emplace_back(ibMetaMenuKind::Module, wxT("ConfigurationModule"), _("Open configuration module"), m_propertyModuleConfiguration->GetMetaObject());
+	items.emplace_back(ibMetaMenuKind::Module, wxT("SessionModule"), _("Open session module"), m_propertyModuleSession->GetMetaObject());
+	items.emplace_back(wxT("HomePage"), _("Open home page workspace"), ID_METATREE_EDIT_HOME_PAGE, g_picHomePageCLSID);
 	return true;
 }
 
+// The remainder — a MODAL editor, which has no metaobject for an item to name.
 void ibValueMetaObjectConfiguration::ProcessCommand(unsigned int id)
 {
-	ibBackendMetadataTree *metaTree = m_metaData->GetMetaTree();
-	wxASSERT(metaTree);
-
-	if (id == ID_METATREE_OPEN_INIT_MODULE)
-		metaTree->OpenFormMDI(m_propertyModuleConfiguration->GetMetaObject());
+	if (id == ID_METATREE_EDIT_HOME_PAGE)
+		m_metaData->EditHomePage(this);
 }

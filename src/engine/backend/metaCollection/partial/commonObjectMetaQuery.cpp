@@ -1,10 +1,10 @@
 ////////////////////////////////////////////////////////////////////////////
 //	Author		: Maxim Kornienko
-//	Description : metadata-side DDL — schema build / migrate / serialize.
-//	              Pure metadata layer: Process* compares src/dst attribute
-//	              shapes, CreateAndUpdateTableDB emits CREATE / ALTER /
-//	              DROP, Load/SaveTableData round-trips data on metadata
-//	              import / export. db_query (DDL channel), no ses_query.
+//	Description : metadata-side DATA glue - the queryable face and the row dump /
+//	              restore, DELEGATED to the L3-3 mover (ibDataMover): this file only
+//	              vends the table + columns + key shape. db_query (the local channel),
+//	              no ses_query. The structure DECLARATION (ContributeTables ->
+//	              ibSchemaSnapshot) moved out to commonObjectSchema.cpp.
 ////////////////////////////////////////////////////////////////////////////
 
 #include "commonObject.h"
@@ -15,8 +15,20 @@
 
 #include "backend/metaCollection/partial/tabularSection/tabularSection.h"
 #include "backend/metaCollection/attribute/metaAttributeObject.h"
+#include "backend/metaCollection/partial/reference/reference.h"   // ibValueReferenceDataObject (materialisation)
+#include "backend/query/dataQueryBuilder.h"                       // L3 write door (predefined seeding) + ibBackendColumnRawDB
+#include "backend/objCtor.h"                                      // ibCtorMetaValueType (reference-target resolution)
+#include "backend/system/value/valuePointInTime.h"                // g_valuePointInTimeCLSID — the moment column assembles one
+#include "backend/system/value/valueArray.h"                      // ibValueArray — what the order column reads as
+#include "backend/system/value/valueType.h"                       // ibValueTypeDescription::AdjustValue — the empty value of a declared type
+#include "backend/metaData.h"                                     // ibMetaData::GetTypeCtor
+#include "backend/databaseLayer/databaseQueryBuilder.h"           // ibDdlStatement / ibQueryStatement / ibQueryResult (L2)
+#include "backend/query/columnLayout.h"                           // ColumnFieldNames (column field list via ibBackendQueryColumn)
+#include "backend/query/schemaBuilder.h"                          // ibSchemaBuilder — the L3-2 schema door (DDL apply + barrier)
+#include "backend/query/structureBatch.h"                         // ibStructureBatch — per-table DDL/seed batch the Process* fill
+#include "backend/query/schemaSnapshot.h"                         // ibSchemaSnapshot / SnapshotOf — declarative structure (the differ's input)
 
-wxString ibValueMetaObjectRecordDataRef::GetTableNameDB() const
+wxString ibValueMetaObjectRecordDataRef::GetPhysicalTableName() const
 {
 	const wxString& className = GetClassName();
 	wxASSERT(m_metaId != 0);
@@ -24,862 +36,84 @@ wxString ibValueMetaObjectRecordDataRef::GetTableNameDB() const
 		className, GetMetaID());
 }
 
-int ibValueMetaObjectRecordDataMutableRef::ProcessAttribute(const wxString& tableName, const ibValueMetaObjectAttributeBase* srcAttr, const ibValueMetaObjectAttributeBase* dstAttr)
-{
-	//is null - create
-	if (dstAttr == nullptr) {
-		s_restructureInfo.AppendInfo(_("Create attribute ") + srcAttr->GetFullName());
-	}
-	// update 
-	else if (srcAttr != nullptr) {
-		if (!srcAttr->CompareObject(dstAttr))
-			s_restructureInfo.AppendInfo(_("Changing attribute ") + srcAttr->GetFullName());
-	}
-	//delete 
-	else if (srcAttr == nullptr) {
-		s_restructureInfo.AppendInfo(_("Removed attribute ") + dstAttr->GetFullName());
-	}
+// --- value(<Kind>.<Name>.<Member>) resolution (L4-1 literal reference constant) ------------------------------
+// A pure try-resolve: TRUE + the value in `out`, FALSE when the member is unknown (the query engine raises the
+// exception, so the error carries the query source span — Max). The GENERIC metaobject has no constants; a
+// reference record vends EmptyRef; the hierarchy level adds predefined items. No throw here.
 
-	return ibValueMetaObjectAttributeBase::ProcessAttribute(tableName, srcAttr, dstAttr);
+bool ibValueMetaObjectGenericData::ResolveQueryConstant(const wxString& /*member*/, ibValue& /*out*/) const
+{
+	return false;
 }
 
-int ibValueMetaObjectRecordDataMutableRef::ProcessTable(const wxString& tabularName, const ibValueMetaObjectTableData* srcTable, const ibValueMetaObjectTableData* dstTable)
+// ⭐⭐ A METAOBJECT THAT DECLARES NO LIMIT NARROWS TO ITS OWN CLASS — the answer a plain reference field
+// gives when it governs another: whoever put a counterparty in the first one sees counterparties offered
+// in the second. Written here for every metaobject at once, so the verb's `out` is filled on every road
+// and the bool means one thing throughout: the value came through as it was.
+//
+// ⭐ AND THE EMPTY VALUE IS MADE THE WAY THE TREE ALREADY MAKES IT — the metadata this metaobject belongs
+// to, handed to the same adjustment a field's own type uses (Max, 2026-09-24: "you have the metadata, you
+// pass it to AdjustValue and it makes the empty reference for you"). Nothing new builds a reference here,
+// and a class the registry cannot make — a register, a constant, anything that is not a reference at all —
+// comes back undefined, which is the honest answer for a thing no value can narrow to.
+bool ibValueMetaObjectGenericData::AdjustOutValue(const ibValueDataObject& /*element*/, const ibValue& varValue,
+	ibValue& out) const
 {
-	int retCode = 1;
-	//is null - create
-	if (dstTable == nullptr) {
-
-		s_restructureInfo.AppendInfo(_("Create tabular section ") + srcTable->GetFullName());
-
-		if (db_query->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL)
-			retCode = db_query->RunQuery("CREATE TABLE %s (uuid uuid NOT NULL);", tabularName);
-		else
-			retCode = db_query->RunQuery("CREATE TABLE %s (uuid VARCHAR(36) NOT NULL);", tabularName);
-
-		if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-			return retCode;
-
-		//default attributes
-		for (const auto object : srcTable->GetGenericAttributeArrayObject()) {
-			retCode = ProcessAttribute(tabularName,
-				object, nullptr);
-		}
-
-		if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-			return retCode;
-
-		retCode = db_query->RunQuery("CREATE INDEX %s_INDEX ON %s (uuid);", tabularName, tabularName);
-	}
-	// update 
-	else if (srcTable != nullptr) {
-
-		if (!srcTable->CompareObject(dstTable))
-			s_restructureInfo.AppendInfo(_("Changing tabular section ") + srcTable->GetFullName());
-
-		for (const auto object : srcTable->GetGenericAttributeArrayObject()) {
-			retCode = ProcessAttribute(tabularName,
-				object, dstTable->FindAnyAttributeObjectByFilter(object->GetGuid())
-			);
-			if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-				return retCode;
-		}
-	}
-	//delete
-	else if (srcTable == nullptr) {
-
-		s_restructureInfo.AppendInfo(_("Removed tabular section ") + dstTable->GetFullName());
-
-		retCode = db_query->RunQuery("DROP TABLE %s", tabularName);
+	const ibTypeDescription mine(reference_to_clsid(GetMetaID(), clsid_metaclass(GetClassType())));
+	if (mine.ContainType(varValue.GetClassType())) {
+		out = varValue;
+		return true;
 	}
 
-	return retCode;
+	out = ibValueTypeDescription::AdjustValue(mine, GetMetaData());
+	return false;
 }
 
-bool ibValueMetaObjectRecordDataMutableRef::CreateAndUpdateTableDB(ibMetaDataConfiguration* srcMetaData, ibValueMetaObject* srcMetaObject, int flags)
+bool ibValueMetaObjectRecordDataRef::ResolveQueryConstant(const wxString& member, ibValue& out) const
 {
-	const wxString& tableName = GetTableNameDB(); int retCode = 1;
-
-	if ((flags & createMetaTable) != 0) {
-
-		s_restructureInfo.AppendInfo(_("Create ") + GetFullName());
-
-		if (db_query->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL)
-			retCode = db_query->RunQuery("CREATE TABLE %s (uuid uuid NOT NULL PRIMARY KEY);", tableName);
-		else
-			retCode = db_query->RunQuery("CREATE TABLE %s (uuid VARCHAR(36) NOT NULL PRIMARY KEY);", tableName);
-
-		if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-			return false;
-
-		for (const auto object : GetPredefinedAttributeArrayObject()) {
-			if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-				return false;
-			if (ibValueMetaObjectRecordDataRef::IsDataReference(object->GetMetaID()))
-				continue;
-			retCode = ProcessAttribute(tableName,
-				object, nullptr);
-		}
-
-		if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-			return false;
-
-		for (const auto object : GetAttributeArrayObject()) {
-			if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-				return false;
-			retCode = ProcessAttribute(tableName,
-				object, nullptr);
-		}
-
-		for (const auto object : GetTableArrayObject()) {
-			if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-				return false;
-			retCode = ProcessTable(object->GetTableNameDB(),
-				object, nullptr);
-		}
-
-		if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-			return false;
-
-		retCode = db_query->RunQuery("CREATE INDEX %s_INDEX ON %s (uuid);", tableName, tableName);
-
-	}
-	else if ((flags & updateMetaTable) != 0) {
-
-		//if src is null then delete
-		ibValueMetaObjectRecordDataRef* dstValue = nullptr;
-		if (srcMetaObject->ConvertToValue(dstValue)) {
-
-			if (!dstValue->CompareObject(this))
-				s_restructureInfo.AppendInfo(_("Changed ") + GetFullName());
-
-			//attributes from dst 
-			for (const auto object : dstValue->GetPredefinedAttributeArrayObject()) {
-				ibValueMetaObject* foundedMeta =
-					ibValueMetaObjectRecordDataRef::FindPredefinedAttributeObjectByFilter(object->GetGuid());
-				if (dstValue->IsDataReference(object->GetMetaID()))
-					continue;
-				if (foundedMeta == nullptr) {
-					retCode = ProcessAttribute(tableName, nullptr, object);
-					if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-						return false;
-				}
-			}
-
-			//attributes current
-			for (const auto object : GetPredefinedAttributeArrayObject()) {
-				if (ibValueMetaObjectRecordDataRef::IsDataReference(object->GetMetaID()))
-					continue;
-				retCode = ProcessAttribute(tableName,
-					object, dstValue->FindPredefinedAttributeObjectByFilter(object->GetGuid())
-				);
-				if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-					return false;
-			}
-
-			//attributes from dst 
-			for (const auto object : dstValue->GetAttributeArrayObject()) {
-				ibValueMetaObject* foundedMeta =
-					ibValueMetaObjectRecordDataRef::FindAttributeObjectByFilter(object->GetGuid());
-				if (foundedMeta == nullptr) {
-					retCode = ProcessAttribute(tableName, nullptr, object);
-					if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-						return false;
-				}
-			}
-
-			//attributes current
-			for (const auto object : GetAttributeArrayObject()) {
-				retCode = ProcessAttribute(tableName,
-					object, dstValue->FindAttributeObjectByFilter(object->GetGuid())
-				);
-				if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-					return false;
-			}
-
-			//tables from dst 
-			for (const auto object : dstValue->GetTableArrayObject()) {
-				ibValueMetaObject* foundedMeta =
-					ibValueMetaObjectRecordDataRef::FindTableObjectByFilter(object->GetGuid());
-				if (foundedMeta == nullptr) {
-					retCode = ProcessTable(object->GetTableNameDB(), nullptr, object);
-					if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-						return false;
-				}
-			}
-
-			//tables current 
-			for (const auto object : GetTableArrayObject()) {
-				retCode = ProcessTable(object->GetTableNameDB(),
-					object, dstValue->FindTableObjectByFilter(object->GetGuid())
-				);
-				if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-					return false;
-			}
-		}
-	}
-	else if ((flags & deleteMetaTable) != 0) {
-
-		s_restructureInfo.AppendInfo(_("Removed ") + GetFullName());
-
-		if (db_query->TableExists(tableName)) {
-			retCode = db_query->RunQuery("DROP TABLE %s", tableName);
-		}
-		if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-			return false;
-
-		for (const auto object : GetTableArrayObject()) {
-			if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-				return false;
-			const wxString& tabularName = object->GetTableNameDB();
-			if (db_query->TableExists(tabularName)) {
-				retCode = db_query->RunQuery("DROP TABLE %s", tabularName);
-			}
-		}
-	}
-
-	if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
+	if (member.CmpNoCase(ibRefMember::EmptyRef) != 0)
 		return false;
-
+	out = ibValue(ibValueReferenceDataObject::Create(this));
 	return true;
 }
+
+// ADDITIVE, like every other override in this family: the parent answers what it declares
+// (EmptyRef, spelled ONCE where the reference itself lives) and the level below adds what it has.
+// Re-spelling the base's own constant here would be a second place to change it.
+bool ibValueMetaObjectRecordDataEnumRef::ResolveQueryConstant(const wxString& member, ibValue& out) const
+{
+	if (ibValueMetaObjectRecordDataRef::ResolveQueryConstant(member, out))
+		return true;
+	// The members ARE this object's constants — the same reference the manager hands a script
+	// (ibValueManagerDataObjectEnumeration::GetPropVal), resolved by the name the author wrote.
+	for (const ibValueMetaObjectEnum* object : GetEnumObjectArray()) {
+		if (object == nullptr || object->GetName().CmpNoCase(member) != 0)
+			continue;
+		out = ibValue(ibValueReferenceDataObject::Create(this, object->GetGuid()));
+		return true;
+	}
+	return false;
+}
+
+bool ibValueMetaObjectRecordDataHierarchyMutableRef::ResolveQueryConstant(const wxString& member, ibValue& out) const
+{
+	if (ibValueMetaObjectRecordDataRef::ResolveQueryConstant(member, out))
+		return true;
+	if (const wxObjectDataPtr<ibPredefinedValueObject> pv = FindPredefinedValue(member)) {
+		out = ibValue(ibValueReferenceDataObject::Create(this, pv->GetPredefinedGuid()));
+		return true;
+	}
+	return false;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-bool ibValueMetaObjectRecordDataMutableRef::LoadTableData(const ibReaderMemory& reader)
-{
-	wxMemoryBuffer objectBuffer;
-
-	if (reader.r_chunk(1, objectBuffer)) {
-
-		const wxString& tableName = GetTableNameDB();
-		
-		wxString queryText;
-
-		if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD)
-			queryText = wxT("INSERT INTO ") + tableName + wxT(" (uuid");
-		else
-			queryText = wxT("UPDATE OR INSERT INTO ") + tableName + wxT(" (uuid");
-
-		std::map<ibMetaID, int> assoc; int position = 2;
-
-		for (const auto object : GetGenericAttributeArrayObject()) {
-			if (IsDataReference(object->GetMetaID()))
-				continue;
-			queryText = queryText + ", " + ibValueMetaObjectAttributeBase::GetSQLFieldName(object);
-			assoc.insert_or_assign(object->GetMetaID(),
-				position);
-			position += ibValueMetaObjectAttributeBase::GetSQLFieldCount(object);
-		}
-		queryText += ") VALUES (?";
-		for (const auto object : GetGenericAttributeArrayObject()) {
-			if (IsDataReference(object->GetMetaID()))
-				continue;
-			unsigned int fieldCount = ibValueMetaObjectAttributeBase::GetSQLFieldCount(object);
-			for (unsigned int i = 0; i < fieldCount; i++) {
-				queryText += ", ?";
-			}
-		}
-
-		queryText += ") ";
-
-		if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD)
-			queryText += wxT("ON CONFLICT(uuid) DO UPDATE SET uuid = excluded.uuid;");
-		else
-			queryText += wxT("MATCHING(uuid);");
-
-		ibPreparedStatement* statement = db_query->PrepareStatement(queryText);
-		if (statement == nullptr)
-			return false;
-
-		ibReaderMemory* rowReaderPrev = nullptr;
-		ibReaderMemory objectReader(objectBuffer);
-
-		while (true) {
-
-			ibReaderMemory* colReaderPrev = nullptr;
-
-			u64 row = 0;
-			ibReaderMemory* rowReader(objectReader.open_chunk_iterator(row, rowReaderPrev));
-
-			if (rowReader == nullptr)
-				break;
-
-			while (!rowReader->eof()) {
-
-				u64 col = 0;
-				ibReaderMemory* colReader(rowReader->open_chunk_iterator(col, colReaderPrev));
-
-				if (colReader == nullptr)
-					break;
-
-				ibValueMetaObjectAttributeBase* attribute = FindAnyObjectByFilter<ibValueMetaObjectAttributeBase, ibMetaID>(col);
-				while (!colReader->eof()) {
-					if (col > 0) {
-						wxASSERT(attribute);
-						int position = assoc[col];
-						ibValueMetaObjectAttributeBase::SetBinaryData(attribute, *colReader, statement, position);
-					}
-					else {
-						statement->SetParamString(1, colReader->r_stringZ());
-					}
-				}
-
-				colReaderPrev = colReader;
-			}
-
-			statement->RunQuery();
-			rowReaderPrev = rowReader;
-		}
-
-		statement->Close();
-	}
-
-	wxMemoryBuffer tableBuffer;
-	if (reader.r_chunk(2, tableBuffer)) {
-
-		ibReaderMemory* tableReaderPrev = nullptr;
-		ibReaderMemory objectReader(tableBuffer);
-
-		while (true) {
-
-			ibReaderMemory* rowReaderPrev = nullptr;
-
-			u64 table = 0;
-			ibReaderMemory* tableReader(objectReader.open_chunk_iterator(table, tableReaderPrev));
-
-			if (tableReader == nullptr)
-				break;
-
-			ibValueMetaObjectTableData* object = FindAnyObjectByFilter<ibValueMetaObjectTableData, ibMetaID>(table);
-			if (object != nullptr) {
-
-				const wxString& tableName = object->GetTableNameDB();
-				wxString queryText = "INSERT INTO " + tableName + " (";
-				queryText += "uuid";
-
-				std::map<ibMetaID, int> assoc; int position = 2;
-
-				for (const auto object : object->GetGenericAttributeArrayObject()) {
-					queryText = queryText + ", " + ibValueMetaObjectAttributeBase::GetSQLFieldName(object);
-					assoc.insert_or_assign(object->GetMetaID(),
-						position);
-					position += ibValueMetaObjectAttributeBase::GetSQLFieldCount(object);
-				}
-				queryText += ") VALUES (?";
-				for (const auto object : object->GetGenericAttributeArrayObject()) {
-					unsigned int fieldCount = ibValueMetaObjectAttributeBase::GetSQLFieldCount(object);
-					for (unsigned int i = 0; i < fieldCount; i++) {
-						queryText += ", ?";
-					}
-				}
-
-				queryText += ");";
-
-				ibPreparedStatement* statement = db_query->PrepareStatement(queryText);
-				if (statement == nullptr)
-					return false;
-
-				while (!tableReader->eof()) {
-
-					ibReaderMemory* colReaderPrev = nullptr;
-
-					u64 row = 0;
-					ibReaderMemory* rowReader(tableReader->open_chunk_iterator(row, rowReaderPrev));
-
-					if (rowReader == nullptr)
-						break;
-
-					while (!rowReader->eof()) {
-
-						u64 col = 0;
-						ibReaderMemory* colReader(rowReader->open_chunk_iterator(col, colReaderPrev));
-
-						if (colReader == nullptr)
-							break;
-
-						ibValueMetaObjectAttributeBase* attribute = object->FindAnyObjectByFilter<ibValueMetaObjectAttributeBase, ibMetaID>(col);
-						while (!colReader->eof()) {
-							if (col > 0) {
-								wxASSERT(attribute);
-								int position = assoc[col];
-								ibValueMetaObjectAttributeBase::SetBinaryData(attribute, *colReader, statement, position);
-							}
-							else {
-								statement->SetParamString(1, colReader->r_stringZ());
-							}
-						}
-
-						colReaderPrev = colReader;
-					}
-
-					statement->RunQuery();
-					rowReaderPrev = rowReader;
-				}
-
-				statement->Close();
-			}
-
-			tableReaderPrev = tableReader;
-		}
-	}
-
-	return true;
-}
-
-bool ibValueMetaObjectRecordDataMutableRef::SaveTableData(ibWriterMemory& writer) const
-{
-	ibDatabaseResultSet* dbResultSet = db_query->RunQueryWithResults(wxT("SELECT * FROM %s"), GetTableNameDB());
-	if (dbResultSet == nullptr)
-		return false;
-
-	unsigned int row = 0;
-
-	ibWriterMemory objectWriter;
-
-	while (dbResultSet->Next()) {
-
-		ibWriterMemory rowWriter;
-
-		ibWriterMemory rowGuidWriter;
-		rowGuidWriter.w_stringZ(dbResultSet->GetResultString(wxT("uuid")));
-		rowWriter.w_chunk(0, rowGuidWriter.buffer());
-
-		for (const auto object : GetGenericAttributeArrayObject()) {
-
-			if (IsDataReference(object->GetMetaID()))
-				continue;
-
-			ibWriterMemory attrWriter;
-			ibValueMetaObjectAttributeBase::GetBinaryData(object, attrWriter, dbResultSet);
-			rowWriter.w_chunk(object->GetMetaID(), attrWriter.buffer());
-		}
-
-		objectWriter.w_chunk(row++, rowWriter.buffer());
-	}
-
-	writer.w_chunk(1, objectWriter.buffer());
-
-	db_query->CloseResultSet(dbResultSet);
-
-	ibWriterMemory tableObjectWriter;
-	for (const auto table : GetTableArrayObject()) {
-
-		ibDatabaseResultSet* dbResultSet = db_query->RunQueryWithResults(wxT("SELECT * FROM %s"), table->GetTableNameDB());
-		if (dbResultSet == nullptr)
-			return false;
-
-		unsigned int row = 0;
-
-		ibWriterMemory tableWriter;
-
-		while (dbResultSet->Next()) {
-
-			ibWriterMemory rowWriter;
-			ibWriterMemory rowGuidWriter;
-			rowGuidWriter.w_stringZ(dbResultSet->GetResultString(wxT("uuid")));
-			rowWriter.w_chunk(0, rowGuidWriter.buffer());
-
-			for (const auto object : table->GetGenericAttributeArrayObject()) {
-				ibWriterMemory attrWriter;
-				ibValueMetaObjectAttributeBase::GetBinaryData(object, attrWriter, dbResultSet);
-				rowWriter.w_chunk(object->GetMetaID(), attrWriter.buffer());
-			}
-
-			tableWriter.w_chunk(row++, rowWriter.buffer());
-		}
-
-		tableObjectWriter.w_chunk(table->GetMetaID(), tableWriter.buffer());
-
-		db_query->CloseResultSet(dbResultSet);
-	}
-
-	writer.w_chunk(2, tableObjectWriter.buffer());
-	return true;
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-int ibValueMetaObjectRecordDataEnumRef::ProcessEnumeration(const wxString& tableName, const ibValueMetaObjectEnum* srcEnum, const ibValueMetaObjectEnum* dstEnum)
-{
-	int retCode = 1;
-
-	//is null - create
-	if (dstEnum == nullptr) {
-
-		s_restructureInfo.AppendInfo(_("Create enumeration ") + srcEnum->GetFullName());
-
-		if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD)
-			retCode = db_query->RunQuery("INSERT INTO %s (uuid) VALUES ('%s') ON CONFLICT(uuid) DO UPDATE SET uuid = excluded.uuid;", tableName, srcEnum->GetGuid().str());
-		else
-			retCode = db_query->RunQuery("UPDATE OR INSERT INTO %s (uuid) VALUES ('%s') MATCHING(uuid);", tableName, srcEnum->GetGuid().str());
-	}
-	// update
-	else if (srcEnum != nullptr) {
-
-		if (!srcEnum->CompareObject(dstEnum))
-			s_restructureInfo.AppendInfo(_("Changing enumeration ") + srcEnum->GetFullName());
-
-		if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD)
-			retCode = db_query->RunQuery("INSERT INTO %s (uuid) VALUES ('%s') ON CONFLICT(uuid) DO UPDATE SET uuid = excluded.uuid;", tableName, srcEnum->GetGuid().str());
-		else
-			retCode = db_query->RunQuery("UPDATE OR INSERT INTO %s (uuid) VALUES ('%s') MATCHING(uuid);", tableName, srcEnum->GetGuid().str());
-	}
-	//delete 
-	else if (srcEnum == nullptr) {
-
-		s_restructureInfo.AppendInfo(_("Removed enumeration ") + dstEnum->GetFullName());
-
-		retCode = db_query->RunQuery("DELETE FROM %s WHERE uuid = '%s' ;", tableName, dstEnum->GetGuid().str());
-	}
-
-	return retCode;
-}
-
-bool ibValueMetaObjectRecordDataEnumRef::CreateAndUpdateTableDB(ibMetaDataConfiguration* srcMetaData, ibValueMetaObject* srcMetaObject, int flags)
-{
-	const wxString& tableName = GetTableNameDB(); int retCode = 1;
-
-	if ((flags & createMetaTable) != 0 || (flags & repairMetaTable) != 0) {
-
-		if ((flags & createMetaTable) != 0) {
-
-			s_restructureInfo.AppendInfo(_("Create ") + GetFullName());
-
-			if (db_query->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL)
-				retCode = db_query->RunQuery("CREATE TABLE %s (uuid uuid NOT NULL PRIMARY KEY);", tableName);
-			else
-				retCode = db_query->RunQuery("CREATE TABLE %s (uuid VARCHAR(36) NOT NULL PRIMARY KEY);", tableName);
-
-			if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-				return false;
-
-			if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD) {
-
-				if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-					return false;
-
-				for (const auto object : GetEnumObjectArray()) {
-					if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-						return false;
-					retCode = ProcessEnumeration(tableName,
-						object, nullptr);
-				}
-			}
-
-			if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-				return false;
-
-			retCode = db_query->RunQuery("CREATE INDEX %s_INDEX ON %s (uuid);", tableName, tableName);
-		}
-		else if ((flags & repairMetaTable) != 0) {
-
-			if (db_query->GetDatabaseLayerType() == DATABASELAYER_FIREBIRD) {
-				retCode = 1;
-				for (const auto object : GetEnumObjectArray()) {
-					if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-						return false;
-					retCode = ProcessEnumeration(tableName,
-						object, nullptr);
-				}
-			}
-		}
-	}
-	else if ((flags & updateMetaTable) != 0) {
-
-		//if src is null then delete
-		ibValueMetaObjectRecordDataEnumRef* dstValue = nullptr;
-		if (srcMetaObject->ConvertToValue(dstValue)) {
-
-			if (!dstValue->CompareObject(this))
-				s_restructureInfo.AppendInfo(_("Changed ") + GetFullName());
-
-			//enums from dst 
-			for (const auto object : dstValue->GetEnumObjectArray()) {
-				ibValueMetaObject* foundedMeta =
-					ibValueMetaObjectRecordDataEnumRef::FindEnumObjectByFilter(object->GetGuid());
-				if (foundedMeta == nullptr) {
-					retCode = ProcessEnumeration(tableName,
-						nullptr, object);
-					if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-						return false;
-				}
-			}
-			//enums current
-			for (const auto object : GetEnumObjectArray()) {
-				retCode = ProcessEnumeration(tableName,
-					object, dstValue->FindEnumObjectByFilter(object->GetGuid())
-				);
-				if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-					return false;
-			}
-		}
-	}
-	else if ((flags & deleteMetaTable) != 0) {
-
-		s_restructureInfo.AppendInfo(_("Removed ") + GetFullName());
-
-		if (db_query->TableExists(tableName)) {
-			retCode = db_query->RunQuery("DROP TABLE %s", tableName);
-		}
-
-		if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-			return false;
-	}
-
-	if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-		return false;
-
-	return true;
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-int ibValueMetaObjectRecordDataHierarchyMutableRef::ProcessPredefinedValue(const wxString& tableName,
-	const wxObjectDataPtr<ibPredefinedValueObject>& srcPredefined, const wxObjectDataPtr<ibPredefinedValueObject>& dstPredefined)
-{
-	int retCode = 1;
-
-	//is null - create
-	if (dstPredefined == nullptr) {
-
-		// Idempotency: this branch is the seed path (initial creation of a
-		// table). It can fire repeatedly across Apply runs — either
-		// intentionally (self-heal a table left empty by a prior partial
-		// failure) or accidentally (gate above lifted in metadataConfig).
-		// Cheapest reliable check is "row already there?" before the
-		// INSERT — keeps the multi-column INSERT shape unchanged and
-		// preserves any user edits to code/description on existing rows.
-		// Two round-trips per row, but only during Apply (rare, manual).
-		{
-			ibPreparedStatement* probe = db_query->PrepareStatement(
-				wxT("SELECT 1 FROM ") + tableName + wxT(" WHERE uuid = ?"));
-			if (probe == nullptr)
-				return false;
-			probe->SetParamString(1, srcPredefined->GetPredefinedGuid().str());
-			ibDatabaseResultSet* probeRs = probe->ExecuteQuery();
-			bool rowExists = (probeRs != nullptr) && probeRs->Next();
-			if (probeRs) {
-				probeRs->Close();
-				db_query->CloseResultSet(probeRs);
-			}
-			db_query->CloseStatement(probe);
-			if (rowExists)
-				return 1;
-		}
-
-		wxString queryText;
-
-		queryText = wxT("INSERT INTO ") + tableName + wxT(" (uuid");
-
-		queryText = queryText + ", " + ibValueMetaObjectAttributeBase::GetSQLFieldName(m_propertyAttributePredefined->GetMetaObject());
-		queryText = queryText + ", " + ibValueMetaObjectAttributeBase::GetSQLFieldName(m_propertyAttributeCode->GetMetaObject());
-		queryText = queryText + ", " + ibValueMetaObjectAttributeBase::GetSQLFieldName(m_propertyAttributeDescription->GetMetaObject());
-		queryText = queryText + ", " + ibValueMetaObjectAttributeBase::GetSQLFieldName(m_propertyAttributeIsFolder->GetMetaObject());
-		queryText = queryText + ", " + ibValueMetaObjectAttributeBase::GetSQLFieldName(m_propertyAttributeParent->GetMetaObject());
-
-		queryText += wxT(") VALUES (?");
-
-		for (unsigned int i = 0; i < ibValueMetaObjectAttributeBase::GetSQLFieldCount(m_propertyAttributePredefined->GetMetaObject()); i++) queryText += wxT(", ?");
-		for (unsigned int i = 0; i < ibValueMetaObjectAttributeBase::GetSQLFieldCount(m_propertyAttributeCode->GetMetaObject()); i++) queryText += wxT(", ?");
-		for (unsigned int i = 0; i < ibValueMetaObjectAttributeBase::GetSQLFieldCount(m_propertyAttributeDescription->GetMetaObject()); i++) queryText += wxT(", ?");
-		for (unsigned int i = 0; i < ibValueMetaObjectAttributeBase::GetSQLFieldCount(m_propertyAttributeIsFolder->GetMetaObject()); i++) queryText += wxT(", ?");
-		for (unsigned int i = 0; i < ibValueMetaObjectAttributeBase::GetSQLFieldCount(m_propertyAttributeParent->GetMetaObject()); i++) queryText += wxT(", ?");
-
-		queryText += wxT(");");
-
-		ibPreparedStatement* dbStatement = db_query->PrepareStatement(queryText);
-
-		if (dbStatement == nullptr)
-			return false;
-
-		dbStatement->SetParamString(1, srcPredefined->GetPredefinedGuid().str());
-
-		const wxObjectDataPtr<ibPredefinedValueObject>& predefinedParentValue = srcPredefined->GetPredefinedParent();
-		ibValuePtr<ibValueReferenceDataObject> referenceValue(
-			ibValueReferenceDataObject::Create(this, predefinedParentValue != nullptr ? predefinedParentValue->GetPredefinedGuid() : wxNullGuid));
-
-		int position = 2;
-
-		ibValueMetaObjectAttributeBase::SetValueAttribute(m_propertyAttributePredefined->GetMetaObject(), srcPredefined->GetPredefinedName(), dbStatement, position);
-		ibValueMetaObjectAttributeBase::SetValueAttribute(m_propertyAttributeCode->GetMetaObject(), srcPredefined->GetPredefinedCode(), dbStatement, position);
-		ibValueMetaObjectAttributeBase::SetValueAttribute(m_propertyAttributeDescription->GetMetaObject(), srcPredefined->GetPredefinedDescription(), dbStatement, position);
-		ibValueMetaObjectAttributeBase::SetValueAttribute(m_propertyAttributeIsFolder->GetMetaObject(), srcPredefined->IsPredefinedFolder(), dbStatement, position);
-		ibValueMetaObjectAttributeBase::SetValueAttribute(m_propertyAttributeParent->GetMetaObject(), referenceValue, dbStatement, position);
-
-		retCode =
-			dbStatement->RunQuery();
-
-		db_query->CloseStatement(dbStatement);
-	}
-	// update 
-	else if (srcPredefined != nullptr) {
-
-		wxString queryText;
-
-		if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD)
-			queryText = wxT("INSERT INTO ") + tableName + wxT(" (uuid");
-		else
-			queryText = wxT("UPDATE OR INSERT INTO ") + tableName + wxT(" (uuid");
-
-		queryText = queryText + ", " + ibValueMetaObjectAttributeBase::GetSQLFieldName(m_propertyAttributePredefined->GetMetaObject());
-		queryText = queryText + ", " + ibValueMetaObjectAttributeBase::GetSQLFieldName(m_propertyAttributeParent->GetMetaObject());
-
-		queryText += wxT(") VALUES (?");
-
-		for (unsigned int i = 0; i < ibValueMetaObjectAttributeBase::GetSQLFieldCount(m_propertyAttributePredefined->GetMetaObject()); i++) queryText += wxT(", ?");
-		for (unsigned int i = 0; i < ibValueMetaObjectAttributeBase::GetSQLFieldCount(m_propertyAttributeParent->GetMetaObject()); i++) queryText += wxT(", ?");
-
-		queryText += wxT(") ");
-
-		if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD)
-			queryText += wxT("ON CONFLICT(uuid) DO UPDATE SET uuid = excluded.uuid;");
-		else
-			queryText += wxT("MATCHING(uuid);");
-
-		ibPreparedStatement* dbStatement = db_query->PrepareStatement(queryText);
-
-		if (dbStatement == nullptr)
-			return false;
-
-		dbStatement->SetParamString(1, srcPredefined->GetPredefinedGuid().str());
-
-		const wxObjectDataPtr<ibPredefinedValueObject>& predefinedParentValue = srcPredefined->GetPredefinedParent();
-		ibValuePtr<ibValueReferenceDataObject> referenceValue(
-			ibValueReferenceDataObject::Create(this, predefinedParentValue != nullptr ? predefinedParentValue->GetPredefinedGuid() : wxNullGuid));
-
-		int position = 2;
-
-		ibValueMetaObjectAttributeBase::SetValueAttribute(m_propertyAttributePredefined->GetMetaObject(), srcPredefined->GetPredefinedName(), dbStatement, position);
-		ibValueMetaObjectAttributeBase::SetValueAttribute(m_propertyAttributeParent->GetMetaObject(), referenceValue, dbStatement, position);
-
-		retCode =
-			dbStatement->RunQuery();
-
-		db_query->CloseStatement(dbStatement);
-	}
-	//delete
-	else if (srcPredefined == nullptr) {
-
-		wxString queryText;
-
-		if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD)
-			queryText = wxT("INSERT INTO ") + tableName + wxT(" (uuid");
-		else
-			queryText = wxT("UPDATE OR INSERT INTO ") + tableName + wxT(" (uuid");
-
-		queryText = queryText + ", " + ibValueMetaObjectAttributeBase::GetSQLFieldName(m_propertyAttributePredefined->GetMetaObject());
-		queryText = queryText + ", " + ibValueMetaObjectAttributeBase::GetSQLFieldName(m_propertyAttributeDeletionMark->GetMetaObject());
-
-		queryText += wxT(") VALUES (?");
-
-		for (unsigned int i = 0; i < ibValueMetaObjectAttributeBase::GetSQLFieldCount(m_propertyAttributePredefined->GetMetaObject()); i++) queryText += wxT(", ?");
-		for (unsigned int i = 0; i < ibValueMetaObjectAttributeBase::GetSQLFieldCount(m_propertyAttributeDeletionMark->GetMetaObject()); i++) queryText += wxT(", ?");
-
-		queryText += wxT(") ");
-
-		if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD)
-			queryText += wxT("ON CONFLICT(uuid) DO UPDATE SET uuid = excluded.uuid;");
-		else
-			queryText += wxT("MATCHING(uuid);");
-
-		ibPreparedStatement* dbStatement = db_query->PrepareStatement(queryText);
-
-		if (dbStatement == nullptr)
-			return false;
-
-		dbStatement->SetParamString(1, dstPredefined->GetPredefinedGuid().str());
-
-		int position = 2;
-
-		ibValueMetaObjectAttributeBase::SetValueAttribute(m_propertyAttributePredefined->GetMetaObject(), wxT(""), dbStatement, position);
-		ibValueMetaObjectAttributeBase::SetValueAttribute(m_propertyAttributeDeletionMark->GetMetaObject(), true, dbStatement, position);
-
-		retCode =
-			dbStatement->RunQuery();
-
-		db_query->CloseStatement(dbStatement);
-	}
-
-	return retCode;
-}
-
-bool ibValueMetaObjectRecordDataHierarchyMutableRef::CreateAndUpdateTableDB(ibMetaDataConfiguration* srcMetaData, ibValueMetaObject* srcMetaObject, int flags)
-{
-	if (!ibValueMetaObjectRecordDataMutableRef::CreateAndUpdateTableDB(srcMetaData, srcMetaObject, flags))
-		return false;
-
-	const wxString& tableName = GetTableNameDB(); int retCode = 1;
-
-	if ((flags & createMetaTable) != 0 || (flags & repairMetaTable) != 0) {
-
-		if ((flags & createMetaTable) != 0) {
-
-			if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD) {
-
-				if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-					return false;
-
-				for (const auto& object : m_predefinedObjectVector) {
-					if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-						return false;
-					retCode = ProcessPredefinedValue(tableName,
-						object, wxObjectDataPtr<ibPredefinedValueObject>(nullptr));
-				}
-			}
-
-			if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-				return false;
-		}
-		else if ((flags & repairMetaTable) != 0) {
-
-			if (db_query->GetDatabaseLayerType() == DATABASELAYER_FIREBIRD) {
-				retCode = 1;
-				for (const auto object : m_predefinedObjectVector) {
-					if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-						return false;
-					retCode = ProcessPredefinedValue(tableName,
-						object, wxObjectDataPtr<ibPredefinedValueObject>(nullptr));
-				}
-			}
-		}
-	}
-	else if ((flags & updateMetaTable) != 0) {
-
-		//if src is null then delete
-		ibValueMetaObjectRecordDataHierarchyMutableRef* dstValue = nullptr;
-		if (srcMetaObject->ConvertToValue(dstValue)) {
-
-			//values from dst 
-			for (const auto object : dstValue->m_predefinedObjectVector) {
-				const wxObjectDataPtr<ibPredefinedValueObject>& predefinedValue =
-					ibValueMetaObjectRecordDataHierarchyMutableRef::FindPredefinedValue(object->GetPredefinedGuid());
-				if (predefinedValue == nullptr) {
-					retCode = ProcessPredefinedValue(tableName,
-						wxObjectDataPtr<ibPredefinedValueObject>(nullptr), object);
-					if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-						return false;
-				}
-			}
-			//values current
-			for (const auto object : m_predefinedObjectVector) {
-				retCode = ProcessPredefinedValue(tableName,
-					object, dstValue->FindPredefinedValue(object->GetPredefinedGuid())
-				);
-				if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-					return false;
-			}
-		}
-	}
-
-	if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-		return false;
-
-	return true;
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-wxString ibValueMetaObjectRegisterData::GetTableNameDB() const
+// (Table-data dump / restore is NOT per-object — the orchestrator drives the whole config's
+//  ContributeTables snapshot through the L3-3 mover. See ibMetaDataConfigurationStorage::Dump/
+//  RestoreDataFromBuffer in metadataConfiguration.cpp.)
+
+wxString ibValueMetaObjectRegisterData::GetPhysicalTableName() const
 {
 	const wxString& className = GetClassName();
 	wxASSERT(m_metaId != 0);
@@ -887,375 +121,332 @@ wxString ibValueMetaObjectRegisterData::GetTableNameDB() const
 		className, GetMetaID());
 }
 
-int ibValueMetaObjectRegisterData::ProcessDimension(const wxString& tableName, const ibValueMetaObjectAttributeBase* srcAttr, const ibValueMetaObjectAttributeBase* dstAttr)
-{
-	//is null - create
-	if (dstAttr == nullptr) {
-		s_restructureInfo.AppendInfo(_("Create dimension ") + srcAttr->GetFullName());
-	}
-	// update 
-	else if (srcAttr != nullptr) {
-		if (!srcAttr->CompareObject(dstAttr))
-			s_restructureInfo.AppendInfo(_("Changing dimension ") + srcAttr->GetFullName());
-	}
-	//delete 
-	else if (srcAttr == nullptr) {
-		s_restructureInfo.AppendInfo(_("Removed dimension ") + dstAttr->GetFullName());
-	}
-
-	return ibValueMetaObjectAttributeBase::ProcessAttribute(tableName, srcAttr, dstAttr);
-}
-
-int ibValueMetaObjectRegisterData::ProcessResource(const wxString& tableName, const ibValueMetaObjectAttributeBase* srcAttr, const ibValueMetaObjectAttributeBase* dstAttr)
-{
-	//is null - create
-	if (dstAttr == nullptr) {
-		s_restructureInfo.AppendInfo(_("Create resource ") + srcAttr->GetFullName());
-	}
-	// update 
-	else if (srcAttr != nullptr) {
-		if (!srcAttr->CompareObject(dstAttr))
-			s_restructureInfo.AppendInfo(_("Changing resource ") + srcAttr->GetFullName());
-	}
-	//delete 
-	else if (srcAttr == nullptr) {
-		s_restructureInfo.AppendInfo(_("Removed resource ") + dstAttr->GetFullName());
-	}
-
-	return ibValueMetaObjectAttributeBase::ProcessAttribute(tableName, srcAttr, dstAttr);
-}
-
-int ibValueMetaObjectRegisterData::ProcessAttribute(const wxString& tableName, const ibValueMetaObjectAttributeBase* srcAttr, const ibValueMetaObjectAttributeBase* dstAttr)
-{
-	//is null - create
-	if (dstAttr == nullptr) {
-		s_restructureInfo.AppendInfo(_("Create attribute ") + srcAttr->GetFullName());
-	}
-	// update 
-	else if (srcAttr != nullptr) {
-		if (!srcAttr->CompareObject(dstAttr))
-			s_restructureInfo.AppendInfo(_("Changing attribute ") + srcAttr->GetFullName());
-	}
-	//delete 
-	else if (srcAttr == nullptr) {
-		s_restructureInfo.AppendInfo(_("Removed attribute ") + dstAttr->GetFullName());
-	}
-
-	return ibValueMetaObjectAttributeBase::ProcessAttribute(tableName, srcAttr, dstAttr);
-}
-
-////////////////////////////////////////////////////////////////////////////////////////
-
-bool ibValueMetaObjectRegisterData::UpdateCurrentRecords(const wxString& tableName, ibValueMetaObjectRegisterData* dst)
-{
-	if (HasRecorder()) {
-		ibValueMetaObjectAttributePredefined* metaRec = dst->GetRegisterRecorder();
-		if (metaRec == nullptr)
-			return false;
-		const ibTypeDescription& typeDesc = metaRec->GetTypeDesc();
-		for (auto& clsid : typeDesc.GetClsidList()) {
-			if (!(*m_propertyAttributeRecorder)->ContainType(clsid)) {
-				int retCode = DATABASE_LAYER_QUERY_RESULT_ERROR; wxString clsStr; clsStr << static_cast<wxLongLong_t>(clsid);
-				retCode = db_query->RunQuery(wxT("DELETE FROM %s WHERE %s_RTRef = ") + clsStr, tableName, metaRec->GetFieldNameDB());
-				if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-					return false;
-			}
-		}
-	}
-
-	return true;
-}
-
-////////////////////////////////////////////////////////////////////////////////////////
-
-bool ibValueMetaObjectRegisterData::CreateAndUpdateTableDB(ibMetaDataConfiguration* srcMetaData, ibValueMetaObject* srcMetaObject, int flags)
-{
-	const wxString& tableName = GetTableNameDB();
-
-	int retCode = 1;
-
-	if ((flags & createMetaTable) != 0) {
-
-		s_restructureInfo.AppendInfo(_("Append register ") + GetFullName());
-
-		if (db_query->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL)
-			retCode = db_query->RunQuery(wxT("CREATE TABLE %s (rowData BYTEA);"), tableName);
-		else
-			retCode = db_query->RunQuery(wxT("CREATE TABLE %s (rowData BLOB);"), tableName);
-
-		for (const auto object : GetPredefinedAttributeArrayObject()) {
-			if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-				return false;
-			retCode = ProcessAttribute(tableName,
-				object, nullptr);
-		}
-
-		if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-			return false;
-
-		for (const auto object : GetDimentionArrayObject()) {
-			if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-				return false;
-			retCode = ProcessDimension(tableName,
-				object, nullptr);
-		}
-
-		if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-			return false;
-
-		for (const auto object : GetResourceArrayObject()) {
-			if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-				return false;
-			retCode = ProcessResource(tableName,
-				object, nullptr);
-		}
-
-		if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-			return false;
-
-		for (const auto object : GetAttributeArrayObject()) {
-			if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-				return false;
-			retCode = ProcessAttribute(tableName,
-				object, nullptr);
-		}
-
-		if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-			return false;
-
-		wxString queryText;
-		if (HasRecorder()) {
-			ibValueMetaObjectAttributePredefined* attributeRecorder = GetRegisterRecorder();
-			wxASSERT(attributeRecorder);
-			queryText += ibValueMetaObjectAttributeBase::GetSQLFieldName(attributeRecorder);
-			ibValueMetaObjectAttributePredefined* attributeNumberLine = GetRegisterLineNumber();
-			wxASSERT(attributeNumberLine);
-			queryText += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(attributeNumberLine);
-		}
-		else {
-			bool firstMatching = true;
-			for (const auto object : GetGenericDimentionArrayObject()) {
-				queryText += (firstMatching ? "" : ",") + ibValueMetaObjectAttributeBase::GetSQLFieldName(object);
-				if (firstMatching) {
-					firstMatching = false;
-				}
-			}
-		}
-
-		if (!queryText.IsEmpty()) {
-			retCode = db_query->RunQuery(
-				wxT("CREATE INDEX %s_INDEX ON %s (") + queryText + wxT(");"), tableName, tableName);
-		}
-	}
-	else if ((flags & updateMetaTable) != 0) {
-
-		//if src is null then delete
-		ibValueMetaObjectRegisterData* dstValue = nullptr;
-		if (srcMetaObject->ConvertToValue(dstValue)) {
-
-			if (!UpdateCurrentRecords(tableName, dstValue))
-				return false;
-
-			if (!dstValue->CompareObject(this))
-				s_restructureInfo.AppendInfo(_("Changed register ") + GetFullName());
-
-			//attributes from dst 
-			for (const auto object : dstValue->GetPredefinedAttributeArrayObject()) {
-				ibValueMetaObject* foundedMeta =
-					ibValueMetaObjectRegisterData::FindPredefinedAttributeObjectByFilter(object->GetGuid());
-				if (foundedMeta == nullptr) {
-					retCode = ProcessAttribute(tableName, nullptr, object);
-					if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-						return false;
-				}
-			}
-
-			//attributes current
-			for (const auto object : GetPredefinedAttributeArrayObject()) {
-				retCode = ProcessAttribute(tableName,
-					object, dstValue->FindPredefinedAttributeObjectByFilter(object->GetGuid())
-				);
-				if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-					return false;
-			}
-
-			//dimensions from dst 
-			for (const auto object : dstValue->GetDimentionArrayObject()) {
-				ibValueMetaObject* foundedMeta =
-					ibValueMetaObjectRegisterData::FindDimensionObjectByFilter(object->GetGuid());
-				if (foundedMeta == nullptr) {
-					retCode = ProcessDimension(tableName, nullptr, object);
-					if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-						return false;
-				}
-			}
-
-			//dimensions current
-			for (const auto object : GetDimentionArrayObject()) {
-				retCode = ProcessDimension(tableName,
-					object, dstValue->FindDimensionObjectByFilter(object->GetGuid())
-				);
-				if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-					return false;
-			}
-
-			//resources from dst 
-			for (const auto object : dstValue->GetResourceArrayObject()) {
-				ibValueMetaObject* foundedMeta =
-					ibValueMetaObjectRegisterData::FindResourceObjectByFilter(object->GetGuid());
-				if (foundedMeta == nullptr) {
-					retCode = ProcessResource(tableName, nullptr, object);
-					if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-						return false;
-				}
-			}
-
-			//resources current
-			for (const auto object : GetResourceArrayObject()) {
-				retCode = ProcessResource(tableName,
-					object, dstValue->FindResourceObjectByFilter(object->GetGuid())
-				);
-				if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-					return false;
-			}
-
-			//attributes from dst 
-			for (const auto object : dstValue->GetAttributeArrayObject()) {
-				ibValueMetaObject* foundedMeta =
-					ibValueMetaObjectRegisterData::FindAttributeObjectByFilter(object->GetGuid());
-				if (foundedMeta == nullptr) {
-					retCode = ProcessAttribute(tableName, nullptr, object);
-					if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-						return false;
-				}
-			}
-
-			//attributes current
-			for (const auto object : GetAttributeArrayObject()) {
-				retCode = ProcessAttribute(tableName,
-					object, dstValue->FindAttributeObjectByFilter(object->GetGuid())
-				);
-				if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-					return false;
-			}
-		}
-	}
-	else if ((flags & deleteMetaTable) != 0) {
-
-		s_restructureInfo.AppendInfo(_("Remove register ") + GetFullName());
-
-		retCode = db_query->RunQuery("DROP TABLE %s", tableName);
-	}
-
-	if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-		return false;
-
-	return true;
-}
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-bool ibValueMetaObjectRegisterData::LoadTableData(const ibReaderMemory& reader)
+// (RegisterData / RecordData dump & restore are GONE — the orchestrator moves every table's rows off
+//  the config's ContributeTables snapshot through the L3-3 mover. A register simply declares its table
+//  there; the mover reads "no uuid scaffold -> INSERT" off that structure.)
+
+// --- vended queryables — the L3 navigation LIVES here, not on the metaobject ---
+// The metaobject vends one of these (a stable member) via GetQueryable() and provides
+// only primitives (FindObjectByFilter / GetPhysicalTableName / IsDataReference / guidName);
+// the queryable owns the query-interface logic, reaching the concrete leaf through the
+// metaobject's virtual primitives. (decouple §22.4e)
+
+// catalog / document / charts / enums — identity = the row-key column (guidName);
+// the reference attribute is the row's own key.
+// (ibRecordQueryable's bodies are in commonObject.h, at the end — a template's definitions belong
+//  where whoever instantiates it can see them.)
+// The uniqueness key (UPSERT match + dot-walk self-reference + row identity) — the data-reference
+// attribute (the pure-guid self-reference blob the row stores; type is the _RTRef column). The provider reads its
+// Reference field for the join key and its fields for the match. No GetRowKeyColumn /
+// IsReferenceAttribute / GetReferenceKeyColumn / GetIdentitySort — all of them derive from this one
+// authority, and the last of them was retired for pretending to be a second one: it answered with a
+// SORT whose tail happened to be the key, so a source that sorts by something else first (an
+// enumeration, by Order) handed a number to everyone who wanted identity.
+// (docs/private/query-language-arc.md §22.1)
+// ⚠ THE ROW KEY IS NOT AN ALTERNATIVE ANSWER HERE, however well it fits a source that stores no reference
+// of its own (an enumeration). This key is read by TWO tiers that want different things from it: the cursor
+// expands it into PHYSICAL fields, where the row key is exactly right — and the composer writes its NAME into
+// query TEXT, where the row key is `Row_RRRef`, a physical field the query language deliberately does not
+// know (columnLayout.h § THE ROW KEY). Answering with it made the enum's ordering right and every
+// text-rendered read wrong ("unknown attribute 'Row_RRRef'"), which is how the quick choice stopped opening.
+// Whatever fixes an enum's ordering belongs at the tier that expands fields, not in what the key IS.
+
+// ⭐⭐ THE ORDER OF A REFERENCE KIND, AS A COLUMN (commonObject.h) — ONE NAME for the whole family, so a walk through
+// a reference of several kinds finds each kind's own.
+wxString ibBackendColumnSortOrder::GetName()         const { return wxT("SortOrder"); }
+wxString ibBackendColumnSortOrder::GetSynonym()      const { return _("Sort order"); }
+wxString ibBackendColumnSortOrder::GetPhysicalName() const { return GetName(); }   // none of its own — see the layout
+
+// Nothing declared it, so its id is minted over what it belongs to: its kind's own number, which no other column of
+// any source carries (queryColumn.h, SyntheticId).
+ibMetaID ibBackendColumnSortOrder::GetColumnId() const
 {
-	wxMemoryBuffer objectBuffer;
+	return SyntheticId(SyntheticKind::Derived, m_owner->GetMetaID());
+}
 
-	if (reader.r_chunk(1, objectBuffer)) {
-
-		const wxString& tableName = GetTableNameDB();
-		wxString queryText = "INSERT INTO " + tableName + " (";
-
-		std::map<ibMetaID, int> assoc; int position = 1;
-		bool firstInsert = true, firstValue = true;
-		for (const auto object : GetGenericAttributeArrayObject()) {
-			queryText = queryText + (firstInsert ? wxT(" ") : wxT(", ")) + ibValueMetaObjectAttributeBase::GetSQLFieldName(object);
-			assoc.insert_or_assign(object->GetMetaID(),
-				position);
-			position += ibValueMetaObjectAttributeBase::GetSQLFieldCount(object);
-			firstInsert = false;
-		}
-		queryText += ") VALUES (";
-		for (const auto object : GetGenericAttributeArrayObject()) {
-			unsigned int fieldCount = ibValueMetaObjectAttributeBase::GetSQLFieldCount(object);
-			for (unsigned int i = 0; i < fieldCount; i++) {
-				queryText += (firstValue ? wxT("?") : wxT(", ?"));
-				firstValue = false;
-			}
-		}
-
-		queryText += ");";
-
-		ibPreparedStatement* statement = db_query->PrepareStatement(queryText);
-		if (statement == nullptr)
-			return false;
-
-		ibReaderMemory* rowReaderPrev = nullptr;
-		ibReaderMemory objectReader(objectBuffer);
-
-		while (true) {
-
-			ibReaderMemory* colReaderPrev = nullptr;
-
-			u64 row = 0;
-			ibReaderMemory* rowReader(objectReader.open_chunk_iterator(row, rowReaderPrev));
-
-			if (rowReader == nullptr)
-				break;
-
-			while (!rowReader->eof()) {
-
-				u64 col = 0;
-				ibReaderMemory* colReader(rowReader->open_chunk_iterator(col, colReaderPrev));
-
-				if (colReader == nullptr)
-					break;
-
-				ibValueMetaObjectAttributeBase* attribute = FindAnyObjectByFilter<ibValueMetaObjectAttributeBase, ibMetaID>(col);
-				while (!colReader->eof()) {
-					wxASSERT(attribute);
-					int position = assoc[col];
-					ibValueMetaObjectAttributeBase::SetBinaryData(attribute, *colReader, statement, position);
-				}
-
-				colReaderPrev = colReader;
-			}
-
-			statement->RunQuery();
-			rowReaderPrev = rowReader;
-		}
-
-		statement->Close();
+// IT LIES IN THE FIELDS OF ITS PARTS, one after the other, and nothing else — the moment's rule
+// (ibBackendColumnPointInTime::DescribeLayout, below): without the parts' type tags, since each part's type was
+// chosen when the kind named it, and two tags under one prefix is a statement Firebird refuses.
+std::vector<ibColumnSlot> ibBackendColumnSortOrder::DescribeLayout() const
+{
+	std::vector<ibColumnSlot> slots;
+	for (const ibBackendQueryColumn* part : m_parts()) {
+		if (part == nullptr) continue;
+		for (const ibColumnSlot& slot : DescribeColumnLayout(part))
+			if (slot.m_role != ibColumnRole::Discriminator)
+				slots.push_back(slot);
 	}
+	return slots;
+}
 
+// …and it reads as its parts' values, in that order — each by the part's own field name and role, no tag
+// consulted, exactly as the moment reads its halves. An ARRAY orders element by element, so in memory a sort by
+// this column compares what the server's ORDER BY compares.
+bool ibBackendColumnSortOrder::ReadValue(const wxString& /*fieldName*/, const ibMetaData* metaData,
+	ibValue& retValue, ibQueryResult& result, bool createData) const
+{
+	std::vector<ibValue> values;
+	for (const ibBackendQueryColumn* part : m_parts()) {
+		if (part == nullptr) continue;
+		const ibColumnSlot slot = FirstValueSlot(part);
+		ibValue value;
+		if (slot.m_role == ibColumnRole::ReferenceId)   // a reference takes its own pair off its base name
+			ibColumnCodec::ReadField(part->GetPhysicalName(), ibFieldTypes_Reference, part, metaData, value, result, createData);
+		else
+			ibColumnCodec::ReadField(slot.m_name, ibPersistedTypeTag(slot.m_role), part, metaData, value, result, createData);
+		values.push_back(value);
+	}
+	retValue = new ibValueArray(values);
 	return true;
 }
 
-bool ibValueMetaObjectRegisterData::SaveTableData(ibWriterMemory& writer) const
+// ⭐ AN ENUMERATION IS ORDERED AS ITS AUTHOR DECLARED, then by the reference.
+ibEnumQueryable::ibEnumQueryable(const ibValueMetaObjectRecordDataEnumRef* meta)
+	: ibRecordQueryable<ibValueMetaObjectRecordDataEnumRef>(meta) {}
+
+std::vector<const ibBackendQueryColumn*> ibEnumQueryable::GetSortParts() const
 {
-	ibDatabaseResultSet* dbResultSet = db_query->RunQueryWithResults(wxT("SELECT * FROM %s"), GetTableNameDB());
-	if (dbResultSet == nullptr)
+	return { m_meta->GetDataOrder()->GetQueryColumn(), m_meta->GetDataReference()->GetQueryColumn() };
+}
+
+// ⭐⭐ THE MOMENT READS ITSELF — the one column here that does.
+//
+// It has no field, so there is no `_TYPE` tag to dispatch on and the default read cannot describe it.
+// What it does have is the two columns it stands for: the DATE it happened at and the RECORD standing
+// there. Each is read exactly as it is read anywhere else — through its own column, by its own rules —
+// and the pair is handed to the value type, which is what knows how to be a moment.
+//
+// Nothing about moments is written in the codec, and nothing about columns is written in the value:
+// the column asks for two values, the type makes one out of them.
+ibRecorderQueryable::ibRecorderQueryable(const ibValueMetaObjectRecordDataRecorderRef* meta)
+	: ibRecordQueryable<ibValueMetaObjectRecordDataRecorderRef>(meta), m_momentColumn(meta) {}
+
+// The MOMENT answers first, then the attributes: a query naming it resolves to the column that knows
+// how to build it. Without this the field tree offered a name the query could not resolve — a field
+// that exists only on screen. (The tabular section answers `Ref` the same way.)
+const ibBackendQueryColumn* ibRecorderQueryable::ResolveColumnByName(const wxString& name) const
+{
+	if (name.IsSameAs(m_momentColumn.GetName(), false))
+		return &m_momentColumn;
+	return ibRecordQueryable<ibValueMetaObjectRecordDataRecorderRef>::ResolveColumnByName(name);
+}
+
+// …and it is a field of this source like any other, so `SELECT *` carries it. Nothing stores it, so
+// the projection writes no field for it; the READ constructs it out of the date and the reference,
+// which the same select carries anyway.
+std::vector<const ibBackendQueryColumn*> ibRecorderQueryable::GetColumns() const
+{
+	std::vector<const ibBackendQueryColumn*> cols =
+		ibRecordQueryable<ibValueMetaObjectRecordDataRecorderRef>::GetColumns();
+	cols.push_back(&m_momentColumn);
+	return cols;
+}
+
+// ⭐ A DOCUMENT IS ORDERED BY ITS MOMENT — the very two columns the moment lies in (DescribeLayout below).
+std::vector<const ibBackendQueryColumn*> ibRecorderQueryable::GetSortParts() const
+{
+	return { m_meta->GetDocumentDate()->GetQueryColumn(), m_meta->GetDataReference()->GetQueryColumn() };
+}
+
+// THE MOMENT LIES IN TWO OTHER COLUMNS — the date first, then the reference. Each of them already
+// describes itself (tag + value for the date; tag, metatype and identifier for the reference), so
+// this is their layouts one after the other and nothing else. Sorting by the moment then IS sorting
+// by the date and then by the identifier, through the machinery that sorts any reference by its own
+// two fields — no new rule anywhere.
+std::vector<ibColumnSlot> ibRecorderQueryable::ibBackendColumnPointInTime::DescribeLayout() const
+{
+	std::vector<ibColumnSlot> slots;
+	for (const ibBackendQueryColumn* part : { m_owner->GetDocumentDate()->GetQueryColumn(), m_owner->GetDataReference()->GetQueryColumn() }) {
+		if (part == nullptr) continue;
+		for (const ibColumnSlot& slot : DescribeColumnLayout(part)) {
+			// ⚠ WITHOUT THE PARTS' TYPE TAGS. A `_TYPE` field says WHICH of a column's admissible types
+			// a row holds — a question the moment does not have: its date is always a date and its
+			// reference always a reference, chosen when the pair was named and not per row. Carried
+			// over, the two tags would also collide under one prefix, which is what Firebird said:
+			// `-104 column POINTINTIME_TYPE was specified multiple times` (2026-08-23).
+			if (slot.m_role == ibColumnRole::Discriminator)
+				continue;
+			slots.push_back(slot);
+		}
+	}
+	return slots;
+}
+
+wxString ibRecorderQueryable::ibBackendColumnPointInTime::GetName() const { return m_owner->GetPointInTime()->GetName(); }
+wxString ibRecorderQueryable::ibBackendColumnPointInTime::GetSynonym() const { return m_owner->GetPointInTime()->GetSynonym(); }
+wxString ibRecorderQueryable::ibBackendColumnPointInTime::GetPhysicalName() const { return m_owner->GetPointInTime()->GetPhysicalName(); }
+ibMetaID ibRecorderQueryable::ibBackendColumnPointInTime::GetColumnId() const { return m_owner->GetPointInTime()->GetColumnId(); }
+ibTypeDescription& ibRecorderQueryable::ibBackendColumnPointInTime::GetTypeDesc() const { return m_owner->GetPointInTime()->GetTypeDesc(); }
+bool ibRecorderQueryable::ibBackendColumnPointInTime::IsAvailable() const { return m_owner->GetPointInTime()->IsAvailable(); }
+
+bool ibRecorderQueryable::ibBackendColumnPointInTime::ReadValue(const wxString& fieldName,
+	const ibMetaData* metaData, ibValue& retValue, ibQueryResult& result, bool createData) const
+{
+	const ibBackendQueryColumn* date = m_owner->GetDocumentDate()->GetQueryColumn();
+	const ibBackendQueryColumn* ref = m_owner->GetDataReference()->GetQueryColumn();
+	if (date == nullptr || ref == nullptr)
 		return false;
 
-	unsigned int row = 0;
+	// ⚠ READ BY THE PARTS' OWN FIELD NAMES — `fld<date>_D`, `fld<ref>_RRRef` — because those are the
+	// only fields that exist. The moment has none of its own: nothing projects it (its layout names
+	// fields that belong to the date and the reference), and a declared query publishes those two
+	// columns physically, under exactly the same names they carry in the table. So one spelling works
+	// on both roads, and reading under this column's own name found nothing anywhere
+	// (`Field 'fld1672_D' not found in the resultset`, 2026-08-23).
+	//
+	// The two reads are the ordinary leaves: a DATE field, and a REFERENCE taking its own pair off its
+	// base name. No tag is consulted — the moment has none and needs none: what its halves are was
+	// decided when the pair was named.
+	ibValue vDate, vReference;
+	ibColumnCodec::ReadField(date->GetPhysicalName() + ibFieldSuffix(ibColumnRole::Date), ibFieldTypes_Date,
+	                         date, metaData, vDate, result, createData);
+	ibColumnCodec::ReadField(ref->GetPhysicalName(), ibFieldTypes_Reference,
+	                         ref, metaData, vReference, result, createData);
 
-	ibWriterMemory objectWriter;
-
-	while (dbResultSet->Next()) {
-
-		ibWriterMemory rowWriter;
-
-		for (const auto object : GetGenericAttributeArrayObject()) {
-
-			ibWriterMemory attrWriter;
-			ibValueMetaObjectAttributeBase::GetBinaryData(object, attrWriter, dbResultSet);
-			rowWriter.w_chunk(object->GetMetaID(), attrWriter.buffer());
-		}
-
-		objectWriter.w_chunk(row++, rowWriter.buffer());
-	}
-
-	writer.w_chunk(1, objectWriter.buffer());
-
-	db_query->CloseResultSet(dbResultSet);
+	retValue = new ibValuePointInTime(vDate.GetDate(), vReference);
 	return true;
 }
+
+// ⭐ THE WRITING SIDE OF THE SAME COLUMN — and the thing that makes `WHERE Moment <= &Point` run.
+//
+// A comparison against a metadata column is decomposed field by field (DecomposeOrdered): the fields
+// come from DescribeLayout above, and the CONSTANTS they are compared against are bound here. So the
+// moment's halves must land in the same order the layout names them — the date, then the reference's
+// pair — or the statement compares a date against a guid.
+//
+// ⚠ NOT THE CODEC'S SPREAD. It drives off a value TAG, and a moment has none: every slot would bind
+// NULL, the filter would be `unknown` for every row, and a report asking for "everything up to this
+// document" would come back empty without a word said. This is why the bind is a question for the
+// COLUMN and not for the value's type.
+//
+// A BARE DATE is a legitimate right-hand side — a moment orders with one (ibValuePointInTime::
+// CompareValueLS) — and means the instant ITSELF, before any record standing in it. That falls out of
+// the encoding rather than being special-cased: an empty reference binds type 0, which sorts ahead of
+// every real metatype, so `>= <date>` takes the whole day and `<= <date>` stops before it.
+void ibRecorderQueryable::ibBackendColumnPointInTime::BindValue(ibQueryStatement& statement,
+	const ibMetaData* /*metaData*/, const ibValue& value, int& position) const
+{
+	ibDateTime   date;
+	ibValue      reference;
+	ibValuePointInTime* moment = nullptr;
+	if (value.ConvertToValue(moment) && moment != nullptr) {
+		date      = moment->m_date;
+		reference = moment->m_reference;
+	}
+	else {
+		date = value.GetDate();
+	}
+
+	// The reference pair, resolved once — the same two things the codec binds for a reference slot:
+	// WHICH type (the clsid, as a number) and WHICH row (the key blob). Read off the value itself.
+	ibClassID   refClsid = 0;
+	const void* refBlob  = nullptr;
+	ibValueReferenceDataObject* refData = nullptr;
+	if (IsReference(reference.GetClassType()) && reference.ConvertToValue(refData) && refData != nullptr) {
+		refClsid = reference.GetClassType();
+		refBlob  = refData->GetReferenceData();
+	}
+
+	for (const ibColumnSlot& slot : DescribeLayout()) {
+		switch (slot.m_role) {
+		case ibColumnRole::Date:          statement.SetParamDate(position++, date); break;
+		case ibColumnRole::ReferenceType: statement.SetParamNumber(position++, refClsid); break;
+		case ibColumnRole::ReferenceId:
+			if (refBlob != nullptr) statement.SetParamBlob(position++, refBlob, sizeof(ibReference));
+			else                    statement.SetParamNull(position++);
+			break;
+		// The layout is the date's slots and the reference's, and those are the roles they have.
+		// Anything else would be a field this column does not know it has, so it binds nothing
+		// rather than guessing — and the position still advances, because the field is in the list.
+		default:                          statement.SetParamNull(position++); break;
+		}
+	}
+}
+
+
+// The hierarchy metaobject's own parent column (a predefined attribute IS-A ibBackendQueryColumn) — defined
+// out-of-line HERE where the attribute type is complete. The record queryable (above) forwards to it. (Folder
+// column removed — folders are a creation-time sort/filter setting, not a structural column.)
+const ibBackendQueryColumn* ibValueMetaObjectRecordDataHierarchyMutableRef::GetHierarchyColumn() const {
+	// ⭐⭐ THE HIERARCHY IS THE PARENT. There is exactly ONE arrangement with no hierarchy — the one
+	// with no parent at all (`None`), where the field is gone rather than merely unused, and where
+	// "in hierarchy" can only ever answer with the value itself. Every other arrangement RECORDS a
+	// parent, and a recorded parent IS a hierarchy: something to walk up and something to fold down.
+	//
+	// ⚠ It used to answer `IsHierarchical()` — the two arrangements the engine NAVIGATES — and that
+	// made one accessor carry two different questions under one null: "is there a parent" and "does
+	// the list drill". A source that records a parent without navigating it answered NO to both — the chart
+	// of accounts, before its mode was the tree it now is — and everything downstream that needed only
+	// the FIRST answer went quietly without: `TOTALS BY <account> HIERARCHY` degraded to a flat grouping, and a filter asking in
+	// hierarchy had to reach around this accessor into the metaobject to get an answer at all. The
+	// enumeration says as much in its own words — *whoever wants the structure asks for it, a query,
+	// a grouping* (`commonObjectEnum.h`) — and this is the accessor they ask.
+	//
+	// A FLAT list still answers null, which is what keeps a tree from being built over a column that
+	// is not there.
+	return HasParentLink() ? GetDataParent()->GetQueryColumn() : nullptr;
+}
+// ResolveReferenceTarget / ResolveReferenceTargets moved to ibDbTableProvider (query/dbTableProvider.cpp)
+// — the ONE provider that owns metadata. The record queryable only vends GetMetaData(); the provider
+// reads it off queryable->GetMetaData() and does clsid -> GetTypeCtor -> holder -> GetQueryable. The
+// call sites now go through queryable->GetProvider().ResolveReferenceTarget(queryable, col). (docs §22)
+// (Auto-join no longer needs dedicated self-reference / find-reference virtuals: the
+// composer derives the join keys from the columns — a referencing column resolved by
+// ResolveReferenceTarget, matched to the target's IsPrimaryKey column. The data-reference
+// attribute reports IsPrimaryKey (it asks this record's IsDataReference).)
+// (Row-key + attribute materialisation moved to the DB provider — it receives the column,
+// static_casts it to the attribute, and calls GetValueAttribute; the row self-reference is
+// built from the row guid + this source's metaID. The queryable names no attribute / L1.)
+
+// registers — no single row-key; composite identity (recorder+line / period?+dims),
+// carried as real attributes; the consumer assembles the row identity. No reference.
+// ⭐ Answered with the attribute's QUERY FACE throughout this file: an attribute is not a query
+// column, it holds one (docs/private/ownership-authority.md). The signatures are untouched.
+const ibBackendQueryColumn* ibRegisterDataQueryable::ResolveColumnByName(const wxString& name) const {
+	const ibValueMetaObjectAttributeBase* attribute = m_meta->FindAnyAttributeObjectByFilter(name);
+	return attribute != nullptr ? attribute->GetQueryColumn() : nullptr;
+}
+std::vector<const ibBackendQueryColumn*> ibRegisterDataQueryable::GetColumns() const {
+	// All generic attributes — the register's generic array ALREADY spans the
+	// predefineds (recorder / line / period), the dimensions, the resources and
+	// the plain attributes. Mirrors ibRecordQueryable. Drives the L5 composer's
+	// default projection and SELECT * of a nested subquery.
+	std::vector<const ibBackendQueryColumn*> cols;
+	for (const ibValueMetaObjectAttributeBase* a : m_meta->GetGenericAttributeArrayObject())
+		if (a != nullptr) cols.push_back(a->GetQueryColumn());
+	return cols;
+}
+wxString ibRegisterDataQueryable::GetQueryTableName() const { return m_meta->GetPhysicalTableName(); }
+wxString ibRegisterDataQueryable::GetQueryName()      const { return m_meta->GetName(); }
+const ibMetaData* ibRegisterDataQueryable::GetMetaData() const { return m_meta->GetMetaData(); }
+const ibValueMetaObjectGenericData* ibRegisterDataQueryable::GetSourceMetaObject() const { return m_meta; }   // the metaobject behind the source (front reads its icon)
+// Uniqueness key (UPSERT match): recorder + line number + period for a recorder-based register
+// (its dimensions are data); period + dimensions for an information register. The queryable is
+// the authority — no per-column / per-attribute flag. (docs/private/query-language-arc.md §22.1)
+std::vector<const ibBackendQueryColumn*> ibRegisterDataQueryable::GetPrimaryKeyColumns() const {
+	std::vector<const ibBackendQueryColumn*> cols;
+	// The key's parts, each by its query face — asked in one place so a missing one cannot slip in
+	// as a null and be discovered by whoever hashes the key.
+	auto add = [&cols](const ibValueMetaObjectAttributeBase* a) {
+		if (a != nullptr) cols.push_back(a->GetQueryColumn());
+	};
+	if (m_meta->HasRecorder()) {
+		add(m_meta->GetRegisterRecorder());
+		add(m_meta->GetRegisterLineNumber());
+		// The period only where the register HAS one as a column: a calculation register is dated by its
+		// registration period and carries no family Period at all — keyed on it, its every write would
+		// name a field the table does not have.
+		if (m_meta->HasPeriod())
+			add(m_meta->GetRegisterPeriod());
+		return cols;
+	}
+	if (m_meta->HasPeriod())
+		add(m_meta->GetRegisterPeriod());
+	for (auto* dim : m_meta->GetGenericDimensionArrayObject())
+		add(dim);
+	return cols;
+}
+
 

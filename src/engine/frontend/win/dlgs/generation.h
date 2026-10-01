@@ -27,7 +27,7 @@ public:
 
 	bool ShowModal(ibMetaID& id);
 
-	ibDialogGeneration(ibMetaData* metaData, const ibMetaDescription& metaType);
+	ibDialogGeneration(const ibMetaData* metaData, const ibMetaDescription& metaType);
 	virtual ~ibDialogGeneration();
 
 protected:

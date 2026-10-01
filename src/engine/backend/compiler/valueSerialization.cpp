@@ -1,26 +1,204 @@
-#include "value.h"
+﻿#include "value.h"
+#include "valueSerialization.h"
 
-bool ibValue::DoSerialize(wxString& strValue) const
+#include "backend/serialize/dataBuilder.h"
+#include "backend/backend_exception.h"
+
+////////////////////////////////////////////////////////////////////////////
+// Value serialization — ONE mechanism, over a node
+////////////////////////////////////////////////////////////////////////////
+//
+// There used to be a string form here, and it was the only one: every value had
+// to reduce itself to text, and a composite could not — which is why arrays and
+// structures had no packed form at all.
+//
+// Now there is one mechanism and it writes a NODE — the same tree the platform
+// writes metadata through. What comes out the other end is the provider's
+// business: binary for storage and transport, JSON for exchange and for a human
+// reading a dump. A string is therefore still available everywhere it was, but
+// as a RENDERING of the node rather than as a second implementation every type
+// had to maintain.
+//
+// The split inside is deliberate:
+//
+//   Serialize / Deserialize     — the BASE's job: the header (the type),
+//                                 written once so no child can spell it
+//                                 differently or forget it.
+//   DoSerialize / DoDeserialize — the CHILD's job: its own contents. Its
+//                                 elements are asked the same question, so the
+//                                 walk continues by itself, one class at a time.
+//
+// The default below knows the PRIMITIVES and nothing else, which is all the base
+// can honestly claim. A mutable value — a form, an open object, a lambda —
+// overrides nothing and is refused by IsTransferable before any of this runs.
+////////////////////////////////////////////////////////////////////////////
+
+// The two field names now live in value.h (kValueFieldClsid / kValueFieldData): more than this
+// file writes into a packed node — an enumeration writes its member from the template that
+// defines it — and a value written under one spelling and read under another is a value lost.
+namespace {
+const wxChar* const kFieldClsid = kValueFieldClsid;
+const wxChar* const kFieldData  = kValueFieldData;
+} // namespace
+
+//////////////////////////////////////////////////////////////////////
+// COPYING — the DEFAULT road, which is the same road as travelling
+//
+// `Val` means the parameter gets a copy. `CloneValue` is virtual, so a type may say
+// how it copies itself; this is what it gets when it says nothing.
+//
+// A copy of anything that is not a primitive is: pack it, then create it from
+// what was packed. Creation goes through the value registry, so the class's
+// registered constructor runs and the new instance reads its own contents back.
+//
+// Putting the default here rather than beside a `Copy` of its own is the point:
+// a value that cannot be written cannot be duplicated either, and both facts
+// come from the same override pair (DoSerialize / DoDeserialize). A type that
+// wants a different copy overrides CloneValue; a type that wants none does not have
+// to write a refusal, because not being transferable already is one.
+//////////////////////////////////////////////////////////////////////
+
+ibValue ibValue::CloneValue() const
 {
-	if (m_typeClass == ibValueTypes::TYPE_REFFER)
-		return m_pRef->DoSerialize(strValue);
+	switch (m_typeClass) {
+	case ibValueTypes::TYPE_EMPTY:
+	case ibValueTypes::TYPE_NULL:
+	case ibValueTypes::TYPE_BOOLEAN:
+	case ibValueTypes::TYPE_NUMBER:
+	case ibValueTypes::TYPE_STRING:
+	case ibValueTypes::TYPE_DATE:
+		return *this;   // the payload IS the value; no node, no allocation
+	default:
+		break;
+	}
+
+	// The gate, asked before the work: a form, a running object, a lambda — the
+	// things a session owns — say no here, and say it through the reffer hop, so
+	// an alias to one cannot answer on its behalf.
+	if (!IsTransferable()) {
+		ibBackendCoreException::Error(
+			_("A value of type \"%s\" cannot be copied — it belongs to its session"),
+			GetClassName());
+	}
+
+	ibDataNode node;
+	if (!Serialize(node)) {
+		ibBackendCoreException::Error(
+			_("A value of type \"%s\" cannot be copied — it has no packed form"),
+			GetClassName());
+	}
+
+	// FromNode throws on its own terms — a type registered nowhere, a creation
+	// that fails, contents that cannot be read. Those are the same three
+	// failures, and they are reported once, here.
+	return FromNode(node);
+}
+
+bool ibValue::Serialize(ibDataNode& node) const
+{
+	// THE GATE, not a second opinion: IsTransferable already answers "may this
+	// value leave its session", and packing asks precisely that.
+	if (!IsTransferable())
+		return false;
+
+	// THE TYPE AS TEXT. The node has codecs for wxString / bool / s32 / ibNumber /
+	// wxDateTime / guid / blob — and none for a 64-bit id. Text costs a few bytes
+	// in the binary provider and makes the JSON dump readable, which is half the
+	// reason the JSON provider exists.
+	node.SetValue(kFieldClsid, wxString::Format(wxT("%llu"), (unsigned long long)GetClassType()));
+	return DoSerialize(node);
+}
+
+bool ibValue::Deserialize(const ibDataNode& node)
+{
+	// The type was resolved by whoever CREATED this value, so by
+	// now it already is of the right type; what is left is its own contents.
+	return DoDeserialize(node);
+}
+
+bool ibValue::DoSerialize(ibDataNode& node) const
+{
+	// A reference wrapper is an ALIAS — it hops to what it wraps, exactly as
+	// IsTransferable does, so the wrapper never appears in the packed form.
+	if (IsReference() && m_pRef != nullptr)
+		return m_pRef->DoSerialize(node);
 
 	switch (m_typeClass) {
+	case ibValueTypes::TYPE_EMPTY:
 	case ibValueTypes::TYPE_NULL:
-		strValue = wxEmptyString;
+		// Nothing to write: the type in the header is the whole value.
 		return true;
 	case ibValueTypes::TYPE_BOOLEAN:
-		strValue = m_bData ? wxT("true") : wxT("false");
+		node.SetValue(kFieldData, m_bData);
 		return true;
 	case ibValueTypes::TYPE_NUMBER:
-		strValue = m_fData.ToString();
+		// Through the node's ibNumber codec — exact decimal, no double anywhere
+		// on the way. The internal tagged-word/bignum layout stays internal: it
+		// is built to be fast in memory, not durable on disk.
+		node.SetValue(kFieldData, m_fData);
 		return true;
 	case ibValueTypes::TYPE_STRING:
-		strValue = m_sData;
+		node.SetValue(kFieldData, GetString());
 		return true;
 	case ibValueTypes::TYPE_DATE:
-		strValue = wxString::Format(wxT("%lld"), m_dData);
+		node.SetValue(kFieldData, m_dData);   // through the node's ibDateTime codec — the reading itself, no zone to lose
 		return true;
+	default:
+		break;
+	}
+
+	// A type with contents of its own that did not override this. NOT an
+	// assertion and not a silent empty: the caller is told, and decides whether
+	// that is a refusal or something to skip.
+	return false;
+}
+
+bool ibValue::DoDeserialize(const ibDataNode& node)
+{
+	if (m_typeClass == ibValueTypes::TYPE_REFFER && m_pRef != nullptr)
+		return m_pRef->DoDeserialize(node);
+
+	switch (m_typeClass) {
+	case ibValueTypes::TYPE_EMPTY:
+	case ibValueTypes::TYPE_NULL:
+		return true;
+	case ibValueTypes::TYPE_BOOLEAN:
+		m_bData = node.GetValue<bool>(kFieldData);
+		return true;
+	case ibValueTypes::TYPE_NUMBER:
+		m_fData = node.GetValue<ibNumber>(kFieldData);
+		return true;
+	case ibValueTypes::TYPE_STRING:
+		SetString(node.GetValue<wxString>(kFieldData));
+		return true;
+	case ibValueTypes::TYPE_DATE: {
+		// Straight into the scalar where the format kept one: SetDate takes a STRING (the
+		// script-facing conversion), and going through text would parse what the codec just
+		// formatted.
+		//
+		// 🛑⭐⭐ BUT A TEXT FORMAT CANNOT KEEP ONE, and this is where that stopped being somebody
+		// else's problem. JSON has no date: the writer emits an ISO string and the reader hands back
+		// a String, deliberately — "an ISO string and a string that looks like one are the same
+		// text" (jsonProvider.cpp), and guessing would corrupt every string that resembles a date.
+		// So a value written by Serialize, carried as JSON and read by Deserialize used to THROW on
+		// the way in — the platform's own round trip, broken for the one type most often stored in a
+		// report's parameters (measured 2026-09-06: "wrong value kind (expected 3, got 4)").
+		//
+		// ⭐ TAKING THE TEXT HERE IS NOT A GUESS, and that is what makes it right here and wrong in
+		// the reader: THIS value already knows it is a Date — m_typeClass says so, resolved by
+		// whoever created it from the type the node declares. Converting a stated type is an
+		// instruction; converting an unknown one is the table that never ends.
+		const ibDataValue* const stored = node.FindField(kFieldData);
+		if (stored != nullptr && stored->Kind() == ibDataKind::String) {
+			ibValue text;
+			if (!text.SetDate(stored->AsString()))
+				return false;   // it says it is a date and the text is not one — that is a failure
+			m_dData = text.GetDate();
+			return true;
+		}
+		m_dData = node.GetValue<ibDateTime>(kFieldData);
+		return true;
+	}
 	default:
 		break;
 	}
@@ -28,39 +206,65 @@ bool ibValue::DoSerialize(wxString& strValue) const
 	return false;
 }
 
-bool ibValue::DoDeserialize(const wxString& strValue)
+////////////////////////////////////////////////////////////////////////////
+// Creating a value out of a node — THE mechanism
+////////////////////////////////////////////////////////////////////////////
+//
+// ONE mechanism, reached from two doors. A caller with no configuration in play
+// — a test, a tool, a headless run — calls this directly. A caller holding a
+// metadata calls that, and it creates the types only IT has (a catalog
+// reference, an enum member) and redirects everything else straight back here.
+//
+// The value is still blind to metadata: it is the metadata that knows about
+// this, not the other way round.
+////////////////////////////////////////////////////////////////////////////
+
+ibClassID ibReadNodeType(const ibDataNode& node)
 {
-	if (m_typeClass == ibValueTypes::TYPE_REFFER)
-		return m_pRef->DoDeserialize(strValue);
+	// Parsed into wx's own type first: ToULongLong writes through an
+	// `unsigned long long*` and ibClassID is uint64_t — same width, different
+	// type on LP64, so its address does not fit the parameter.
+	// NO TYPE IN THE NODE READS AS UNDEFINED, not as zero. There is no such thing
+	// as a value with class id 0: a value whose type is nothing IS Undefined, and
+	// saying so here means every caller downstream asks one question ("is this a
+	// type I have?") instead of two.
+	unsigned long long parsed = 0;
+	if (!node.GetValue<wxString>(kFieldClsid).ToULongLong(&parsed) || parsed == 0)
+		return g_valueUndefinedCLSID;
+	return static_cast<ibClassID>(parsed);
+}
 
-	switch (m_typeClass) {
-	case ibValueTypes::TYPE_NULL:
-		return true;
-	case ibValueTypes::TYPE_BOOLEAN:
-		m_bData = (strValue == wxT("true") || strValue == wxT("1"));
-		return true;
-	case ibValueTypes::TYPE_NUMBER: {
-		double dVal = 0;
-		if (strValue.ToDouble(&dVal)) {
-			m_fData = ibNumber(dVal);
-			return true;
-		}
-		return false;
+ibValue ibValue::FromNode(const ibDataNode& node)
+{
+	const ibClassID classType = ibReadNodeType(node);
+
+	// THE END OF THE LINE. Either nobody asked a configuration at all, or one
+	// asked its own registry first and sent the type down here. If the value
+	// registry does not have it either, then nobody does. Returning an empty
+	// would look like a legitimately empty value and surface far away as a blank
+	// field nobody can explain.
+	if (!ibValue::IsRegisterCtor(classType))
+		ibBackendCoreException::Error(_("Unknown value type '%llu' in the data"),
+			(unsigned long long)classType);
+
+	ibValue created;
+	try {
+		created = ibValue::CreateObject(classType);
 	}
-	case ibValueTypes::TYPE_STRING:
-		m_sData = strValue;
-		return true;
-	case ibValueTypes::TYPE_DATE: {
-		wxLongLong_t val = 0;
-		if (strValue.ToLongLong(&val)) {
-			m_dData = val;
-			return true;
-		}
-		return false;
+	catch (const ibBackendException&) {
+		throw;
 	}
-	default:
-		break;
+	catch (...) {
+		ibBackendCoreException::Error(_("Failed to create a value of type '%s'"),
+			ibValue::GetNameObjectFromID(classType));
 	}
 
-	return false;
+	// CREATED, THEN HANDED THE WHOLE NODE — how it reads itself is its own
+	// business. This layer never learns what any of them contain, only whether
+	// they managed.
+	if (!created.Deserialize(node))
+		ibBackendCoreException::Error(_("Failed to read the contents of a value of type '%s'"),
+			ibValue::GetNameObjectFromID(classType));
+
+	return created;
 }

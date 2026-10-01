@@ -7,11 +7,12 @@
 // carries one (ibSession::m_userInfo); other GUIs (designer's Active
 // Users, admin tools) display copies built from sys_session /
 // sys_user reads. Was named ibApplicationDataUserInfo while the
-// singleton ibApplicationData owned the only copy; the registry
+// singleton ibApplicationInstance owned the only copy; the registry
 // refactor distributed ownership, the name is now scope-neutral.
 
 #include "backend/backend.h"
 #include "backend/backend_core.h"
+#include "backend/roleHelper.h"   // ibRoleCompositionMode — how a role combines (the role layer owns it)
 
 #include <vector>
 
@@ -28,6 +29,11 @@ struct BACKEND_API ibUserInfo {
 		wxString m_strRoleGuid;
 		wxString m_strRoleName;
 		ibRoleID m_miRoleId = wxNOT_FOUND;
+		// HOW this role combines with the user's others (ibRoleCompositionMode) — it travels WITH the
+		// membership, in the same chunk as the id, so a reader gets the identifier and how to compare
+		// it in one read and resolves nothing. A row written before this field ends after the id and
+		// the entry keeps Union, which is the behaviour that row had.
+		ibRoleCompositionMode m_mode = ibRoleCompositionMode_Union;
 	};
 
 	bool IsOk() const { return !m_strUserGuid.IsEmpty(); }
@@ -66,6 +72,8 @@ struct BACKEND_API ibUserInfo {
 	static ibUserInfo Read(const ibGuid& userGuid);
 	static ibUserInfo Read(const wxString& userName);
 	static bool       Save(const ibUserInfo& info);
+	// Remove the sys_user row keyed by guid. True on success (or no-op miss).
+	static bool       Delete(const ibGuid& userGuid);
 
 	// Table-wide queries.
 	// HasAny  — `SELECT 1 FROM sys_user LIMIT 1` semantics; true on any row.

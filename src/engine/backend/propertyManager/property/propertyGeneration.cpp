@@ -1,26 +1,53 @@
 #include "propertyGeneration.h"
+#include "backend/serialize/dataBuilder.h"
 #include "backend/propertyManager/property/variant/variantGen.h"
 
-// get property for grid
-wxObject* (*ibPropertyGeneration::ms_propertyGeneration)(ibPropertyObject*, const wxString&, const wxString&, const wxVariant&) = nullptr;
 
 /////////////////////////////////////////////////////////////////////
 
-wxVariantData* ibPropertyGeneration::CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc) const
+wxVariantData* ibPropertyGeneration::CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc)
 {
-	const ibValueMetaObjectGenericData* propFactory = dynamic_cast<const ibValueMetaObjectGenericData*>(property);
-	if (propFactory == nullptr)
-		return nullptr;
-	return new ibVariantDataGeneration(propFactory, typeDesc);
+	// No cast: the variant needs the owner only to reach GetMetaData, which ibPropertyObject answers.
+	return new ibVariantDataGeneration(property, typeDesc);
 }
 
 ibMetaDescription& ibPropertyGeneration::GetValueAsMetaDesc() const {
-	return get_cell_variant<ibVariantDataGeneration>()->GetMetaDesc();
+	return get_cell_variant<ibVariantDataMetaDesc>()->GetMetaDesc();
 }
 
 void ibPropertyGeneration::SetValue(const ibMetaDescription& val)
 {
 	m_propValue = CreateVariantData(m_owner, val);
+}
+
+// See propertyRecord.cpp: the description is right and the wrapper is the neighbour's, so it is
+// taken apart and re-wrapped here, where the class this property holds is known.
+void ibPropertyGeneration::DoSetValue(const wxVariant& val)
+{
+	// Unconditionally, and that is the point: "is this already mine" is a question worth not
+	// asking. A relationship IS its description, so taking it out and wrapping it in this
+	// property's own class is right whichever wrapper it arrived in - and costs one copy of a
+	// short list of ids.
+	if (const ibVariantDataMetaDesc* carried = find_cell_variant<ibVariantDataMetaDesc>(val)) {
+		SetValue(carried->GetMetaDesc());
+		return;
+	}
+
+	ibProperty::DoSetValue(val);
+}
+
+// Everything a document can be generated into. The list used to sit in advpropGeneration.cpp — and a
+// copy of it stayed there, in the editor's dialog, so a chart of calculation types was offered by
+// neither: the metatype that has the property (it is a mutable reference like the other charts) could
+// not be named as a target of it. The dialog now lists what this answers.
+ibPropertyChoiceMode ibPropertyGeneration::GetValueList(ibPropertyChoiceList& list)
+{
+	return CreateValueList(list, ibPropertyChoiceMode::Mult, {
+		g_metaCatalogCLSID,
+		g_metaDocumentCLSID,
+		g_metaChartOfCharacteristicTypesCLSID,
+		g_metaChartOfAccountsCLSID,
+		g_metaChartOfCalculationTypesCLSID });
 }
 
 //base property for "generation"
@@ -37,12 +64,13 @@ bool ibPropertyGeneration::GetDataValue(ibValue& pvarPropVal) const
 	return true;
 }
 
-bool ibPropertyGeneration::LoadData(ibReaderMemory& reader)
+bool ibPropertyGeneration::ReadNodeValue(const ibDataValue& value)
 {
-	return ibMetaDescriptionMemory::LoadData(reader, GetValueAsMetaDesc());
+	return ibMetaDescriptionMemory::ReadNode(value, GetValueAsMetaDesc());
 }
 
-bool ibPropertyGeneration::SaveData(ibWriterMemory& writer)
+bool ibPropertyGeneration::WriteNodeValue(ibDataValue& value) const
 {
-	return ibMetaDescriptionMemory::SaveData(writer, GetValueAsMetaDesc());
+	const ibPropertyObject* owner = m_owner;   // CONST overload — the non-const one returns null (see propertyObject.h)
+	return ibMetaDescriptionMemory::WriteNode(value, GetValueAsMetaDesc(), owner->GetMetaData());
 }

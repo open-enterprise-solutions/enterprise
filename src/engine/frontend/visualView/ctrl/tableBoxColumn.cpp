@@ -1,5 +1,7 @@
 #include "tableBox.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "form.h"
+#include "backend/choiceLinkResolver.h"   // ibChoiceHolder — where this column's link reads its neighbours
 #ifndef OES_USE_WEB
 // Renderer pulls in dataview.h (wxDataView heavy). Web stubs don't
 // touch it.
@@ -10,7 +12,6 @@
 //*                           IMPLEMENT_DYNAMIC_CLASS                               *
 //***********************************************************************************
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueModelTableBoxColumn, ibValueControl);
 
 #ifdef OES_USE_WEB
 #include "frontend/web/webWindow.h"
@@ -24,37 +25,22 @@ bool ibValueModelTableBoxColumn::GetChoiceForm(ibPropertyList* property)
 {
 	const ibMetaData* metaData = GetMetaData();
 	if (metaData != nullptr) {
-		ibValueMetaObjectRecordDataRef* metaObjectRefValue = nullptr;
+		const ibValueMetaObjectRecordDataRef* metaObjectRefValue = nullptr;
 		if (!m_propertySource->IsEmptyProperty()) {
-
-			const ibValueMetaObjectGenericData* metaObjectValue =
-				m_formOwner->GetMetaObject();
-
-			if (metaObjectValue != nullptr) {
-				ibValueMetaObject* metaobject =
-					metaObjectValue->FindAnyObjectByFilter(m_propertySource->GetValueAsSource());
-
-				ibValueMetaObjectAttributeBase* attribute = wxDynamicCast(
-					metaobject, ibValueMetaObjectAttributeBase
-				);
-				if (attribute != nullptr) {
-
-					const ibCtorMetaValueType* so = metaData->GetTypeCtor(attribute->GetFirstClsid());
-					if (so != nullptr) {
-						metaObjectRefValue = wxDynamicCast(so->GetMetaObject(), ibValueMetaObjectRecordDataRef);
-					}
-				}
-				else
-				{
-					metaObjectRefValue = wxDynamicCast(
-						metaobject, ibValueMetaObjectRecordDataRef);
-				}
+			// Resolve the bound field through the source explorer (WalkSource), NOT the form's own metaobject:
+			// a dotted path's leaf — or a value-table / dynamic-list column with NO backing metaobject — is
+			// missed by a source-scoped FindAnyObjectByFilter (and asserts). Mirror ibValueTextCtrl::GetChoiceForm.
+			const ibBackendSourceColumn* column = m_propertySource->GetSourceAttributeObject();
+			if (column != nullptr) {
+				const ibCtorMetaValueType* so = metaData->GetTypeCtor(column->GetTypeDesc().GetFirstClsid());
+				if (so != nullptr)
+					metaObjectRefValue = dynamic_cast<const ibValueMetaObjectRecordDataRef*>(so->GetMetaObject());
 			}
 		}
 		else {
 			const ibCtorMetaValueType* so = metaData->GetTypeCtor(ibTypeControlFactory::GetFirstClsid());
 			if (so != nullptr) {
-				metaObjectRefValue = wxDynamicCast(so->GetMetaObject(), ibValueMetaObjectRecordDataRef);
+				metaObjectRefValue = dynamic_cast<const ibValueMetaObjectRecordDataRef*>(so->GetMetaObject());
 			}
 		}
 
@@ -73,6 +59,32 @@ bool ibValueModelTableBoxColumn::GetChoiceForm(ibPropertyList* property)
 	return true;
 }
 
+#ifndef OES_USE_WEB
+// Re-apply the header sort arrow from the composer's ACTIVE sort — match the column's OWN bound field
+// (GetSourceFieldName, off m_propertySource, the same string OnColumnClick commits) against the composer's
+// sorts; no model column-id resolution (a reference dot-path field is not a model column id). Called from
+// OnUpdated (form build) AND from the control's post-refresh sync (a settings-dialog sort reaches the columns
+// only here, not through a header click). (ibDataViewColumnObject is a desktop-only type — web has no wxDVC.)
+void ibDataViewColumnObject::SyncSortArrowFromModel()
+{
+	ibValueModelTableBoxColumn* col = GetControl();
+	if (col == nullptr) return;
+	ibValueModelTableBox* owner = col->GetOwner();
+	ibValueModel* model = owner != nullptr ? owner->GetTableModel() : nullptr;
+	if (model == nullptr || appData->DesignerMode()
+		|| !model->GetFeatures().Has(ibValueModel::Features::Sorting))
+		return;
+	const wxString field = col->GetSourceFieldName();
+	for (size_t i = 0; !field.IsEmpty() && i < model->GetModelComposer().SortCount(); ++i) {
+		wxString sortField; bool asc;
+		if (model->GetModelComposer().GetSortAt(i, sortField, asc) && sortField == field) {
+			SetSortOrder(asc);
+			break;
+		}
+	}
+}
+#endif
+
 //***********************************************************************************
 //*                            ibValueModelTableBoxColumn                                 *
 //***********************************************************************************
@@ -82,7 +94,36 @@ ibValueModelTableBoxColumn::ibValueModelTableBoxColumn() :
 {
 }
 
-ibMetaData* ibValueModelTableBoxColumn::GetMetaData() const
+// THE TABLE THIS COLUMN SERVES — asked of its PARENT, one step at a time. A table answers
+// with itself; a group asks ITS holder, and that is the whole walk: no loop, and no depth to
+// know, because each node answers only for the step it can see.
+ibValueModelTableBox* ibValueModelTableBoxColumn::GetOwner() const
+{
+	if (ibValueModelTableBox* table = dynamic_cast<ibValueModelTableBox*>(m_parent))
+		return table;
+	if (ibValueModelTableBoxColumnGroup* group = dynamic_cast<ibValueModelTableBoxColumnGroup*>(m_parent))
+		return group->GetOwner();
+	return nullptr;
+}
+
+bool ibValueModelTableBoxColumn::GetSourceList(std::vector<ibBackendFormAttributeValue*>& out) const
+{
+	// #3 — the table-COLUMN source list = the current table (what the parent tablebox offers: the
+	// tabular sections; the picker roots the bound one and lists its columns) PLUS the form's object
+	// attributes (exactly what the ATTRIBUTE picker returns) — so a column can also bind a value from
+	// the object ABOVE the table (its header), living alongside the table's own columns (Mode 2).
+	// The parent tablebox may be transiently DETACHED mid-rebuild — a deferred inspector Create can query a
+	// just-orphaned column (GetOwner() == null). Skip it gracefully instead of dereferencing null, same as
+	// OnCreated below guards the transiently-gone composite inner. The header object still contributes.
+	bool ok = false;
+	if (auto* owner = GetOwner())
+		ok = owner->GetSourceList(out);                            // current table
+	if (m_formOwner != nullptr)
+		ok = m_formOwner->GetSourceList(ibSourceDataType::ibSourceDataType_attribute, out) || ok;   // + header object
+	return ok;
+}
+
+const ibMetaData* ibValueModelTableBoxColumn::GetMetaData() const
 {
 	return m_formOwner ?
 		m_formOwner->GetMetaData() : nullptr;
@@ -90,13 +131,15 @@ ibMetaData* ibValueModelTableBoxColumn::GetMetaData() const
 
 wxString ibValueModelTableBoxColumn::GetControlTitle() const
 {
+	// Explicit Title wins; otherwise the binding's presentation synonym (field synonym | form-attribute
+	// Synonym/Name), resolved once via GetSourceAbstractColumn; else fall back to the control's own name.
 	if (!m_propertyTitle->IsEmptyProperty()) {
 		return m_propertyTitle->GetValueAsTranslateString();
 	}
 	else if (!m_propertySource->IsEmptyProperty()) {
-		const ibValueMetaObject* metaObject = m_propertySource->GetSourceAttributeObject();
-		wxASSERT(metaObject);
-		return metaObject->GetSynonym();
+		const ibBackendAbstractColumn* column = GetSourceAbstractColumn();
+		if (column != nullptr)   // null when the bound field is gone / whole-attribute binding
+			return column->GetSynonym();
 	}
 
 	return m_propertyName->GetValueAsString();
@@ -116,16 +159,17 @@ wxObject* ibValueModelTableBoxColumn::Create(ibFrontendWindow* wxparent, ibVisua
 #endif
 }
 
-void ibValueModelTableBoxColumn::OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost, bool firstСreated)
+void ibValueModelTableBoxColumn::OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost, bool firstCreated)
 {
 #ifndef OES_USE_WEB
-	ibDataViewCtrl* dataViewCtrl = dynamic_cast<ibDataViewCtrl*>(wxparent);
-	wxASSERT(dataViewCtrl);
 	ibDataViewColumnObject* dataViewColumn = dynamic_cast<ibDataViewColumnObject*>(wxobject);
-	wxASSERT(dataViewColumn);
+	if (dataViewColumn == nullptr)
+		return;
 
-	dataViewCtrl->AppendColumn(dataViewColumn);
-	GetOwner()->SetCalculateColumnPos();
+	// HUNG ON ITS HOLDER — the group the parent stands for. Null while the grid is not
+	// built yet or already gone (teardown), which this always skipped over.
+	if (ibDataViewColumnGroup* holder = ibFindColumnHolder(m_parent))
+		holder->AppendColumn(dataViewColumn);
 #endif
 }
 
@@ -134,12 +178,11 @@ void ibValueModelTableBoxColumn::OnCreated(wxObject* wxobject, ibFrontendWindow*
 void ibValueModelTableBoxColumn::OnUpdated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost)
 {
 #ifndef OES_USE_WEB
-	ibDataViewCtrl* dataViewCtrl = dynamic_cast<ibDataViewCtrl*>(wxparent);
-	wxASSERT(dataViewCtrl);
+	// OnUpdated only touches the column itself (wxobject) — no need to resolve
+	// the parent dataview through the teardown-fragile composite owner.
 	ibDataViewColumnObject* dataViewColumn = dynamic_cast<ibDataViewColumnObject*>(wxobject);
-	wxASSERT(dataViewColumn);
-
-	const unsigned int order_position = GetParentPosition();
+	if (dataViewColumn == nullptr)
+		return;
 
 	if (m_propertyRepresentation->GetValueAsEnum() == ibRepresentation::ibRepresentation_Auto) {
 		dataViewColumn->SetTitle(GetControlTitle());
@@ -172,15 +215,30 @@ void ibValueModelTableBoxColumn::OnUpdated(wxObject* wxobject, ibFrontendWindow*
 
 	const ibFormID source_column = GetModelColumn();
 
-	ibValueModel* modelValue = GetOwner()->GetModel();
-	ibSortOrder::ibSortData* sort = modelValue != nullptr ? modelValue->GetSortByID(source_column) : nullptr;
+	ibValueModel* model = GetOwner()->GetTableModel();
 
-	dataViewColumn->SetHidden(!m_propertyVisible->GetValueAsBoolean());
-	dataViewColumn->SetSortable(sort != nullptr && !appData->DesignerMode());
+	// Sortability is gated by the model's Sorting FEATURE (when the flag is turned off, sorting
+	// cannot be used). The ACTIVE sort + direction come from L5 (the composer, read via GetSortAt below).
+	const bool sortable = model != nullptr && !appData->DesignerMode()
+		&& model->GetFeatures().Has(ibValueModel::Features::Sorting);
+
+	// A source-less column is not shown — no binding PATH (m_propertySource) and no explicit model column
+	// (m_model_id). It appears once the user binds a source (a field, or a dotted path), mirroring the
+	// unbound-source-control visibility gate. It stays selectable via the object tree while hidden, so its
+	// Source picker is reachable. (GetModelColumn can't gate this — it falls back to the control id.)
+	const bool sourceMissing = m_propertySource->IsEmptyProperty() && m_model_id == wxNOT_FOUND;
+	// …nor is a column the functional options of this base make unavailable (its field, or the options it names).
+	dataViewColumn->SetHidden(!m_propertyVisible->GetValueAsBoolean() || sourceMissing || !IsAvailable());
+	dataViewColumn->SetSortable(sortable);
 	dataViewColumn->SetResizeable(m_propertyResizable->GetValueAsBoolean());
+	// 🛑 …AND ITS NEIGHBOUR WAS NEVER APPLIED. `Reorderable` serialised both ways and was edited in
+	// the designer, while the flag came from `wxDATAVIEW_COL_REORDERABLE` hardcoded at construction —
+	// so turning it off did nothing at all, and the two properties sitting side by side in the same
+	// category made that impossible to notice (audit, 2026-08-24).
+	dataViewColumn->SetReorderable(m_propertyReorderable->GetValueAsBoolean());
 
-	if (sort != nullptr && sort->m_sortEnable && !sort->m_sortSystem && !appData->DesignerMode())
-		dataViewColumn->SetSortOrder(sort->m_sortAscending);
+	// Reflect the composer's active sort onto THIS column's header arrow (shared with the post-refresh sync).
+	dataViewColumn->SyncSortArrowFromModel();
 
 	dataViewColumn->SetColumnModel(source_column);
 #endif
@@ -189,13 +247,17 @@ void ibValueModelTableBoxColumn::OnUpdated(wxObject* wxobject, ibFrontendWindow*
 void ibValueModelTableBoxColumn::Cleanup(wxObject* obj, ibVisualHost* visualHost)
 {
 #ifndef OES_USE_WEB
-	ibDataViewCtrl* dataViewCtrl = dynamic_cast<ibDataViewCtrl*>(visualHost->GetWxObject(GetOwner()));
-	wxASSERT(dataViewCtrl);
 	ibDataViewColumnObject* dataViewColumn = dynamic_cast<ibDataViewColumnObject*>(obj);
-	wxASSERT(dataViewColumn);
+	if (dataViewColumn == nullptr)
+		return;
 
-	dataViewCtrl->DeleteColumn(dataViewColumn);
-	GetOwner()->SetCalculateColumnPos();
+	// THE GROUP THAT HOLDS IT LETS IT GO — that is the whole of removing a column, and
+	// it MUST happen: being a member is what makes the table's destructor free it, so a
+	// column left hanging is freed a second time after the visual host's wxDELETE here
+	// (that crash was real). The holder is taken off the column itself — during teardown
+	// the walk through the dying host resolves to nothing.
+	if (ibDataViewColumnGroup* holder = dataViewColumn->GetParent())
+		holder->RemoveColumn(dataViewColumn);
 #endif
 }
 
@@ -210,23 +272,15 @@ bool ibValueModelTableBoxColumn::CanDeleteControl() const
 //*							 Control value	                        *
 //*******************************************************************
 
-bool ibValueModelTableBoxColumn::FilterSource(const ibSourceExplorer& src, const ibMetaID& id) const
-{
-	return id == GetOwner()->GetSource();
-}
-
 #ifndef OES_USE_WEB
 #include "frontend/win/ctrls/controlTextEditor.h"
 #endif
 
 bool ibValueModelTableBoxColumn::SetControlValue(const ibValue& varControlVal)
 {
-	ibValueModelTableBase::ibValueModelReturnLine* currentLine = GetCurrentLine();
-	if (currentLine != nullptr) {
-		currentLine->SetValueByMetaID(
-			GetModelColumn(), varControlVal
-		);
-	}
+	ibValueModel::ibValueModelReturnLine* currentLine = GetCurrentLine();
+	if (currentLine != nullptr)
+		currentLine->SetValueByMetaID(GetModelColumn(), varControlVal);
 
 #ifndef OES_USE_WEB
 	ibDataViewColumnObject* dataViewColumn =
@@ -250,9 +304,26 @@ bool ibValueModelTableBoxColumn::SetControlValue(const ibValue& varControlVal)
 	return true;
 }
 
+// ⭐⭐ A COLUMN STANDS IN TWO PLACES AT ONCE, and a link may name a field in either: the other cells of
+// THE ROW it is editing, and the attributes of the OBJECT above the section. So the holder is given
+// both — the row it is in, and the source the form is bound to — and the reading tries them in that
+// order (choiceLinkResolver.cpp). A link by type is simply the choice of a field, of the tabular
+// section or of the header (Max, 2026-09-23).
+ibChoiceHolder ibValueModelTableBoxColumn::GetChoiceHolder() const
+{
+	ibValueModel::ibValueModelReturnLine* currentLine = GetCurrentLine();
+	if (currentLine == nullptr)
+		return m_formOwner != nullptr ? ibChoiceHolder(m_formOwner->GetSourceObject()) : ibChoiceHolder();
+
+	ibChoiceHolder holder(currentLine->GetOwnerModel(), currentLine->GetLineItem());
+	if (m_formOwner != nullptr)
+		holder.m_source = m_formOwner->GetSourceObject();   // …and the header, for a link that names it
+	return holder;
+}
+
 bool ibValueModelTableBoxColumn::GetControlValue(ibValue& pvarControlVal) const
 {
-	ibValueModelTableBase::ibValueModelReturnLine* currentLine = GetCurrentLine();
+	ibValueModel::ibValueModelReturnLine* currentLine = GetCurrentLine();
 	if (currentLine != nullptr) {
 		return currentLine->GetValueByMetaID(
 			GetModelColumn(), pvarControlVal
@@ -266,86 +337,74 @@ bool ibValueModelTableBoxColumn::GetControlValue(ibValue& pvarControlVal) const
 //*                                  Data											*
 //***********************************************************************************
 
-bool ibValueModelTableBoxColumn::LoadData(ibReaderMemory& reader)
+bool ibValueModelTableBoxColumn::ReadData(const ibDataNode& node)
 {
-	m_propertyTitle->LoadData(reader);
-	m_propertyRepresentation->LoadData(reader);
-	m_propertyFooterText->LoadData(reader);
-
-	m_propertyHeaderPicture->LoadData(reader);
-	m_propertyFooterPicture->LoadData(reader);
-
-	m_propertyPasswordMode->LoadData(reader);
-	m_propertyMultilineMode->LoadData(reader);
-	m_propertyTexteditMode->LoadData(reader);
-
-	m_propertySelectButton->LoadData(reader);
-	m_propertyOpenButton->LoadData(reader);
-	m_propertyClearButton->LoadData(reader);
-
-	m_propertyHeaderAlign->LoadData(reader);
-	m_propertyFooterAlign->LoadData(reader);
-
-	m_propertyWidth->LoadData(reader);
-	m_propertyVisible->LoadData(reader);
-	m_propertyResizable->LoadData(reader);
-	//m_propertySortable->LoadData(reader);
-	m_propertyReorderable->LoadData(reader);
-
-	m_propertyChoiceForm->LoadData(reader);
-
-	if (!m_propertySource->LoadData(reader))
-		return false;
+	m_propertyTitle->SetNodeValue(node.GetProperty(m_propertyTitle->GetName()));
+	m_propertyRepresentation->SetNodeValue(node.GetProperty(m_propertyRepresentation->GetName()));
+	m_propertyFooterText->SetNodeValue(node.GetProperty(m_propertyFooterText->GetName()));
+	m_propertyHeaderPicture->SetNodeValue(node.GetProperty(m_propertyHeaderPicture->GetName()));
+	m_propertyFooterPicture->SetNodeValue(node.GetProperty(m_propertyFooterPicture->GetName()));
+	m_propertyPasswordMode->SetNodeValue(node.GetProperty(m_propertyPasswordMode->GetName()));
+	m_propertyMultilineMode->SetNodeValue(node.GetProperty(m_propertyMultilineMode->GetName()));
+	m_propertyTexteditMode->SetNodeValue(node.GetProperty(m_propertyTexteditMode->GetName()));
+	m_propertyFormat->SetNodeValue(node.GetProperty(m_propertyFormat->GetName()));
+	m_propertySelectButton->SetNodeValue(node.GetProperty(m_propertySelectButton->GetName()));
+	m_propertyOpenButton->SetNodeValue(node.GetProperty(m_propertyOpenButton->GetName()));
+	m_propertyClearButton->SetNodeValue(node.GetProperty(m_propertyClearButton->GetName()));
+	m_propertyHeaderAlign->SetNodeValue(node.GetProperty(m_propertyHeaderAlign->GetName()));
+	m_propertyFooterAlign->SetNodeValue(node.GetProperty(m_propertyFooterAlign->GetName()));
+	m_propertyWidth->SetNodeValue(node.GetProperty(m_propertyWidth->GetName()));
+	m_propertyVisible->SetNodeValue(node.GetProperty(m_propertyVisible->GetName()));
+	m_propertyResizable->SetNodeValue(node.GetProperty(m_propertyResizable->GetName()));
+	//m_propertySortable->SetNodeValue(node.GetProperty(m_propertySortable->GetName()));
+	m_propertyReorderable->SetNodeValue(node.GetProperty(m_propertyReorderable->GetName()));
+	m_propertyChoiceForm->SetNodeValue(node.GetProperty(m_propertyChoiceForm->GetName()));
+	m_propertySource->SetNodeValue(node.GetProperty(m_propertySource->GetName()));
 
 	//events
-	m_eventOnChange->LoadData(reader);
-	m_eventStartChoice->LoadData(reader);
-	m_eventStartListChoice->LoadData(reader);
-	m_eventClearing->LoadData(reader);
-	m_eventOpening->LoadData(reader);
-	m_eventChoiceProcessing->LoadData(reader);
-	return ibValueControl::LoadData(reader);
+	m_eventOnChange->SetNodeValue(node.GetProperty(m_eventOnChange->GetName()));
+	m_eventStartChoice->SetNodeValue(node.GetProperty(m_eventStartChoice->GetName()));
+	m_eventStartListChoice->SetNodeValue(node.GetProperty(m_eventStartListChoice->GetName()));
+	m_eventClearing->SetNodeValue(node.GetProperty(m_eventClearing->GetName()));
+	m_eventOpening->SetNodeValue(node.GetProperty(m_eventOpening->GetName()));
+	m_eventChoiceProcessing->SetNodeValue(node.GetProperty(m_eventChoiceProcessing->GetName()));
+	
+	return ibValueControl::ReadData(node);
 }
 
-bool ibValueModelTableBoxColumn::SaveData(ibWriterMemory& writer)
+bool ibValueModelTableBoxColumn::WriteData(ibDataNode& node) const
 {
-	m_propertyTitle->SaveData(writer);
-	m_propertyRepresentation->SaveData(writer);
-	m_propertyFooterText->SaveData(writer);
-
-	m_propertyHeaderPicture->SaveData(writer);
-	m_propertyFooterPicture->SaveData(writer);
-
-	m_propertyPasswordMode->SaveData(writer);
-	m_propertyMultilineMode->SaveData(writer);
-	m_propertyTexteditMode->SaveData(writer);
-
-	m_propertySelectButton->SaveData(writer);
-	m_propertyOpenButton->SaveData(writer);
-	m_propertyClearButton->SaveData(writer);
-
-	m_propertyHeaderAlign->SaveData(writer);
-	m_propertyFooterAlign->SaveData(writer);
-
-	m_propertyWidth->SaveData(writer);
-	m_propertyVisible->SaveData(writer);
-	m_propertyResizable->SaveData(writer);
-	//m_propertySortable->SaveData(writer);
-	m_propertyReorderable->SaveData(writer);
-
-	m_propertyChoiceForm->SaveData(writer);
-
-	if (!m_propertySource->SaveData(writer))
-		return false;
+	node.SetProperty(m_propertyTitle->GetName(), m_propertyTitle->GetNodeValue());
+	node.SetProperty(m_propertyRepresentation->GetName(), m_propertyRepresentation->GetNodeValue());
+	node.SetProperty(m_propertyFooterText->GetName(), m_propertyFooterText->GetNodeValue());
+	node.SetProperty(m_propertyHeaderPicture->GetName(), m_propertyHeaderPicture->GetNodeValue());
+	node.SetProperty(m_propertyFooterPicture->GetName(), m_propertyFooterPicture->GetNodeValue());
+	node.SetProperty(m_propertyPasswordMode->GetName(), m_propertyPasswordMode->GetNodeValue());
+	node.SetProperty(m_propertyMultilineMode->GetName(), m_propertyMultilineMode->GetNodeValue());
+	node.SetProperty(m_propertyTexteditMode->GetName(), m_propertyTexteditMode->GetNodeValue());
+	node.SetProperty(m_propertyFormat->GetName(), m_propertyFormat->GetNodeValue());
+	node.SetProperty(m_propertySelectButton->GetName(), m_propertySelectButton->GetNodeValue());
+	node.SetProperty(m_propertyOpenButton->GetName(), m_propertyOpenButton->GetNodeValue());
+	node.SetProperty(m_propertyClearButton->GetName(), m_propertyClearButton->GetNodeValue());
+	node.SetProperty(m_propertyHeaderAlign->GetName(), m_propertyHeaderAlign->GetNodeValue());
+	node.SetProperty(m_propertyFooterAlign->GetName(), m_propertyFooterAlign->GetNodeValue());
+	node.SetProperty(m_propertyWidth->GetName(), m_propertyWidth->GetNodeValue());
+	node.SetProperty(m_propertyVisible->GetName(), m_propertyVisible->GetNodeValue());
+	node.SetProperty(m_propertyResizable->GetName(), m_propertyResizable->GetNodeValue());
+	//node.SetProperty(m_propertySortable->GetName(), m_propertySortable->GetNodeValue());
+	node.SetProperty(m_propertyReorderable->GetName(), m_propertyReorderable->GetNodeValue());
+	node.SetProperty(m_propertyChoiceForm->GetName(), m_propertyChoiceForm->GetNodeValue());
+	node.SetProperty(m_propertySource->GetName(), m_propertySource->GetNodeValue());
 
 	//events
-	m_eventOnChange->SaveData(writer);
-	m_eventStartChoice->SaveData(writer);
-	m_eventStartListChoice->SaveData(writer);
-	m_eventClearing->SaveData(writer);
-	m_eventOpening->SaveData(writer);
-	m_eventChoiceProcessing->SaveData(writer);
-	return ibValueControl::SaveData(writer);
+	node.SetProperty(m_eventOnChange->GetName(), m_eventOnChange->GetNodeValue());
+	node.SetProperty(m_eventStartChoice->GetName(), m_eventStartChoice->GetNodeValue());
+	node.SetProperty(m_eventStartListChoice->GetName(), m_eventStartListChoice->GetNodeValue());
+	node.SetProperty(m_eventClearing->GetName(), m_eventClearing->GetNodeValue());
+	node.SetProperty(m_eventOpening->GetName(), m_eventOpening->GetNodeValue());
+	node.SetProperty(m_eventChoiceProcessing->GetName(), m_eventChoiceProcessing->GetNodeValue());
+	
+	return ibValueControl::WriteData(node);
 }
 
 #ifdef OES_USE_WEB
@@ -355,9 +414,7 @@ bool ibValueModelTableBoxColumn::SaveData(ibWriterMemory& writer)
 // finds them. ChoiceProcessing in particular is pure-virtual in the
 // base, the override is required even on web.
 void ibValueModelTableBoxColumn::OnPropertyCreated(ibProperty* /*property*/) {}
-void ibValueModelTableBoxColumn::OnPropertyRefresh(
-	class wxPropertyGridManager* /*pg*/, class wxPGProperty* /*pgProperty*/,
-	ibProperty* /*property*/) {}
+void ibValueModelTableBoxColumn::OnPropertyRefresh() {}
 bool ibValueModelTableBoxColumn::OnPropertyChanging(ibProperty* /*property*/,
 	const wxVariant& /*newValue*/) { return true; }
 void ibValueModelTableBoxColumn::ChoiceProcessing(ibValue& /*vSelected*/) {}

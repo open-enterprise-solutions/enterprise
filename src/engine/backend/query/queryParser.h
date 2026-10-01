@@ -1,0 +1,177 @@
+#ifndef __QUERY_PARSER_H__
+#define __QUERY_PARSER_H__
+
+// L4-1 — text query language parser.
+//
+// A hand-written recursive-descent parser in the style of the script compiler
+// (compiler/compileCode.cpp): it consumes the ibQueryToken stream from
+// ibQueryLexer and builds the ibQuerySelect AST. No metadata is touched —
+// names stay as strings; resolution is the lowering's job (queryLowering).
+//
+// Grammar (EN canon; keywords are locale-table driven — queryKeywords.h):
+//   package  := item { ';' item }                      (a trailing ';' is allowed)
+//   item     := statement | link
+//   link     := LINK name { [INNER|LEFT|RIGHT|FULL] JOIN name ON predicate }
+//                                                      (the names are ONTO names — see §24.3)
+//   statement:= DROP name
+//             | selectCore { UNION [ALL] selectCore } [ORDER BY orderList] [TOTALS …] [FOR UPDATE]
+//   selectCore := SELECT [ALLOWED] [TOP n] [DISTINCT] selList [INTO name] FROM source { join }
+//                 [WHERE predicate] [GROUP BY exprList [HAVING predicate]]
+//   totalDim := columnPath [HIERARCHY | ELEMENTS]
+//   selList  := '*' | proj { ',' proj }
+//   proj     := (aggregate | expr) [ [AS] alias ]
+//   aggregate:= (SUM|MIN|MAX|AVG) '(' expr ')' | COUNT '(' ('*'|expr) ')'
+//   source   := dottedName [ '(' arg {',' arg} ')' ] [ [AS] alias ] | '(' statement ')' [ [AS] alias ]
+//   join     := [INNER|LEFT|RIGHT|FULL] [OUTER] JOIN source [ON predicate]
+//                                                  (ON TRUE = cross; omitted ON = auto-join by reference)
+//   predicate:= andExpr { OR andExpr }
+//   andExpr  := notExpr { AND notExpr }
+//   notExpr  := NOT notExpr | comparison
+//   comparison := expr [ cmpOp expr
+//                      | [NOT] LIKE expr
+//                      | [NOT] IN '(' (expr {',' expr} | statement) ')'
+//                      | IS [NOT] NULL
+//                      | [NOT] BETWEEN expr AND expr ]
+//   expr     := mulDiv { ('+'|'-') mulDiv }
+//   mulDiv   := primary { ('*'|'/'|'%') primary }
+//   primary  := columnPath | literal | param | '(' predicate ')' | aggregate | case
+//   case     := CASE { WHEN predicate THEN expr } [ELSE expr] END
+//
+// The parser accepts the FULL grammar above and the lowering (queryLowering) EXECUTES it — arithmetic,
+// CASE, UNION and IN-subquery all run. What still throws a clear "not yet executed" is the residual
+// tail only (a computed expression across a JOIN's leaves, a computed column over aggregates, a
+// dot-walk leaf inside a boolean WHERE over a non-co-located JOIN). See docs/private/query-language-arc.md §23.4.
+//
+// Throws ibBackendCoreException (line / position) on a syntax error.
+//
+// See docs/private/query-language-arc.md §14 / §23.
+
+#include "queryLexer.h"
+#include "queryAST.h"
+
+#include <wx/arrstr.h>
+
+class BACKEND_API ibQueryParser
+{
+public:
+	ibQueryParser() = default;
+
+	// Lex + parse the text into a SELECT statement AST. Throws on a lex / syntax error.
+	// ONE statement — text holding a package (or a bare DROP) is a syntax error here, so an
+	// existing single-query caller cannot silently swallow the rest of a package.
+	ibQuerySelectPtr Parse(const wxString& queryText);
+
+	// Lex + parse a PACKAGE — one or more statements separated by ';'. A single select parses
+	// to a package of one, so this is the general door: the constructor validates through it,
+	// which is what keeps the check the ENGINE's rather than a second, softer opinion.
+	ibQueryPackage ParsePackage(const wxString& queryText);
+
+	// ONE expression on its own — the inverse of ibRenderQueryExpr, for a constructor's
+	// "arbitrary condition" cell and anywhere else a fragment is authored by hand. Same
+	// parser, same errors: a free-typed predicate is read by the engine, never by a
+	// hand-rolled mini-checker beside it.
+	ibQueryAstExprPtr ParseExpression(const wxString& exprText);
+	// ONE FIELD OF A TOTALS LEVEL from text — `Date`, `Store HIERARCHY`, `Period PERIODS(Month, &A, &B)`.
+	// For the query constructor, which edits a level's fields as text: it reads them back through the
+	// LANGUAGE instead of picking out the part it recognises, so nothing a query may say is lost by
+	// passing through the form.
+	ibQueryTotalField ParseTotalsField(const wxString& fieldText);
+
+private:
+	std::vector<ibQueryToken> m_toks;
+	size_t                    m_pos = 0;
+
+	// --- token cursor ----------------------------------------------------
+	// All three clamp to the final End token — a malformed advance never reads out of bounds.
+	const ibQueryToken& Cur()  const { return m_toks[m_pos < m_toks.size() ? m_pos : m_toks.size() - 1]; }
+	const ibQueryToken& Peek() const { return m_toks[m_pos + 1 < m_toks.size() ? m_pos + 1 : m_toks.size() - 1]; }
+	const ibQueryToken& Next()       { const ibQueryToken& t = Cur(); if (m_pos < m_toks.size()) ++m_pos; return t; }
+	bool   AcceptKw(ibQueryKeyword kw);
+	void   ExpectKw(ibQueryKeyword kw, const wxChar* what);
+	bool   AcceptPunct(wxChar c);
+	void   ExpectPunct(wxChar c, const wxChar* what);
+	// Reports a syntax error: formats line / position and throws ibBackendQuerySyntaxException —
+	// L4's own variety, carrying the token's span as data (query/queryException.h). The LOWERING has
+	// a variety of its own for a text that reads and names what is not there. Always throws, so
+	// any code after a call is logically unreachable, mirroring the codebase's "Error(); return false;"
+	// idiom. Named for what it DOES: "Fail" reads like a status the caller might inspect.
+	void   ThrowQueryException(const ibQueryToken& at, const wxString& msg) const;
+
+	// --- productions -----------------------------------------------------
+	ibQueryAstStatement           ParseStatement();         // one package statement: a DROP or a full SELECT
+	// A package-level LINK SECTION — `LINK T1 LEFT JOIN T2 ON … JOIN T3 ON …`. One word, then the
+	// relation spelled as this language spells every relation; a chain yields one link per JOIN.
+	std::vector<ibQueryPackageLink> ParsePackageLinks();
+	// `[INNER|LEFT|RIGHT|FULL] JOIN` — read by a select's join list and by a package link alike,
+	// because it is the same phrase. False = the next token starts no join.
+	bool                          ParseJoinKind(ibQueryJoinKindAst& kind);
+	ibQuerySelectPtr           ParseSelectStatement();   // a full SELECT (+ UNION branches + trailing ORDER/TOTALS)
+	ibQuerySelectPtr           ParseSelectCore();        // one SELECT body up to HAVING (a UNION branch)
+	void                       ParseSelectList(ibQuerySelect& sel);
+	ibQueryProjection          ParseProjection();
+	ibQuerySource              ParseSource();
+	void                       ParseJoins(ibQuerySelect& sel);
+	void                       ParseOrderBy(ibQuerySelect& sel);
+	void                       ParseTotals(ibQuerySelect& sel);
+	ibQueryTotalField          ParseTotalField();   // one field + how it is read (unfold / PERIODS)
+	// `firstMayBeKeyword` — the caller has ALREADY consumed a dot, so this path is a CONTINUATION and
+	// its first segment obeys the after-a-dot rule like every later one (CAST(x AS T).Order).
+	std::vector<wxString>      ParseDottedName(bool firstMayBeKeyword = false);
+
+	ibQueryAstExprPtr             ParsePredicate();   // OR level
+	ibQueryAstExprPtr             ParseAnd();
+	ibQueryAstExprPtr             ParseNot();
+	ibQueryAstExprPtr             ParseComparison();
+	ibQueryAstExprPtr             ParseAddSub();      // + - (lower precedence)
+	ibQueryAstExprPtr             ParseMulDiv();      // * / % (higher precedence)
+
+	// …and the same two levels entered with the left operand ALREADY READ. ORDER BY needs them: it
+	// reads its item as a name first (a keyword there is an attribute name) and only then finds an
+	// operator behind it. Precedence stays stated once — the pair above is written through these.
+	ibQueryAstExprPtr             ParseAddSubFrom(ibQueryAstExprPtr lhs);
+	ibQueryAstExprPtr             ParseMulDivFrom(ibQueryAstExprPtr lhs);
+	ibQueryAstExprPtr             ParsePrimary();
+	// SUM/COUNT/... ( ... ) [OVER (...)]
+	//
+	// ⭐ `allowWindow` — WHICH STOREY IS ASKING. In the SELECTION a call may carry a window over rows,
+	// and `OVER (` opens it. In TOTALS the same word means the figure's AREA — a level of the ladder —
+	// and is read by whoever parses the totals; swallowing it here would leave them nothing.
+	ibQueryAstExprPtr             ParseAggregate(bool allowWindow = true);
+	ibQueryAstExprPtr             ParseRanking();     // ROW_NUMBER/RANK/DENSE_RANK () OVER ( ... )
+	void                          ParseWindowSuffix(ibQueryAstExpr& call);   // the optional OVER (...) after a call
+	ibQueryAstExprPtr             ParseValueConstant();// VALUE( <Kind>.<Name>.<Member> ) — literal reference constant
+	// CAST( <expr> AS <Kind>.<Name> ) [ . field ... ] - narrow a composite reference so the walk a
+	// composite forbids becomes possible. A trailing path makes the result a COLUMN rooted on the cast.
+	ibQueryAstExprPtr             ParseCast();
+	ibQueryAstExprPtr             ParseCase();        // CASE WHEN … THEN … [ELSE …] END
+	ibQueryAstExprPtr             ParseIsNullCall();  // ISNULL(a, b) — read as the CASE it is
+	// YEAR(x) / BEGINOFPERIOD(x, Month) / DATEDIFF(a, b, Day) / SUBSTRING(s, 1, 3) / TYPE(Catalog.Goods) …
+	// The caller has established that an identifier stands before a `(` and that the word names one
+	// of these; this reads the arguments and checks the count against the table that declared it.
+	ibQueryAstExprPtr             ParseScalarCall(ibQueryScalarFn fn);
+
+	// Is the token `offset` ahead this punctuation? Written for the one question a scalar call asks —
+	// "is this name being CALLED" — which needs to look one token past the current one without
+	// consuming it.
+	bool PeekIsPunct(size_t offset, wxChar ch) const {
+		const size_t i = m_pos + offset;
+		return i < m_toks.size() && m_toks[i].IsPunct(ch);
+	}
+};
+
+struct ibTypeDescription;
+
+// ⭐⭐ CAST TO A PRIMITIVE — `CAST(x AS Number(15, 2))`, `String(50)`, `Date(Date)`, `Boolean` — CONVERTS the value,
+// where `CAST(x AS Document.Order)` narrows a reference. The target is named as the value registry names the type;
+// its qualifiers ride in the Cast's m_args, in written order.
+//
+// Both directions of the one reading, so what a window writes is what the lowering reads:
+//   · ibQueryCastType — the type a Cast converts to; false = no primitive target (the narrowing road);
+//   · ibQueryMakeCast — the Cast bringing `value` to `type`; null for a type that is not one primitive.
+BACKEND_API bool              ibQueryCastType(const ibQueryAstExpr& cast, ibTypeDescription& type);
+BACKEND_API ibQueryAstExprPtr ibQueryMakeCast(ibQueryAstExprPtr value, const ibTypeDescription& type);
+// …and the words those primitives are written as, in the order a list offers them — for a palette, a cell's
+// drop-down: whatever offers a CAST's type asks here rather than keeping its own four words.
+BACKEND_API wxArrayString     ibQueryCastPrimitiveWords();
+
+#endif

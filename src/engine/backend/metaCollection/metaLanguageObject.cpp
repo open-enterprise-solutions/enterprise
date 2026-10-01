@@ -1,16 +1,16 @@
 #include "metaLanguageObject.h"
+#include "backend/serialize/dataBuilder.h"
 
 //***********************************************************************
 //*                            MetaObjectLanguage                       *
 //***********************************************************************
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueMetaObjectLanguage, ibValueMetaObject);
 
 //***********************************************************************
 //*                           Metamodule                                *
 //***********************************************************************
 
-#include "backend/metadata.h"
+#include "backend/metaData.h"
 
 bool ibValueMetaObjectLanguage::IsValidCode(const wxString& strLangCode)
 {
@@ -32,8 +32,6 @@ ibValueMetaObjectLanguage::ibValueMetaObjectLanguage(const wxString& name, const
 
 bool ibValueMetaObjectLanguage::OnDeleteMetaObject()
 {
-	const ibValueMetaObject* commonObject = m_metaData->GetCommonMetaObject();
-
 	return true;
 }
 
@@ -83,14 +81,16 @@ bool ibValueMetaObjectLanguage::OnAfterRunMetaObject(int flags)
 	return ibValueMetaObject::OnAfterRunMetaObject(flags);
 }
 
-bool ibValueMetaObjectLanguage::LoadData(ibReaderMemory& reader)
+bool ibValueMetaObjectLanguage::ReadData(const ibDataNode& node)
 {
-	return m_propertyCode->LoadData(reader);
+	m_propertyCode->SetNodeValue(node.GetProperty(m_propertyCode->GetName()));
+	return true;
 }
 
-bool ibValueMetaObjectLanguage::SaveData(ibWriterMemory& writer)
+bool ibValueMetaObjectLanguage::WriteData(ibDataNode& node) const
 {
-	return m_propertyCode->SaveData(writer);
+	node.SetProperty(m_propertyCode->GetName(), m_propertyCode->GetNodeValue());
+	return true;
 }
 
 //***********************************************************************

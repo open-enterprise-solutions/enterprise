@@ -7,152 +7,85 @@
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-bool ibValueRecordSetObjectInformationRegister::WriteRecordSet(bool replace, bool clearTable)
+// WriteRecordSet / DeleteRecordSet inherited from ibValueRecordSetObject
+// (Phase B template-method) — the scaffold is in commonObject.cpp; the
+// Begin/Commit + LockByKeys helpers it calls live in commonObjectRecordSetQuery.cpp.
+
+// A period as the register keeps it — truncated to its periodicity; anything but a date as it is.
+static ibValue TruncateToPeriod(const ibValue& period, ibTotalsPeriod unit)
 {
-	if (!appData->DesignerMode())
-	{
-		ibConnectionScope scope = ibSession::Current()->OpenConnectionScope();
-
-		if (!scope || !scope->IsOpen())
-			ibBackendCoreException::Error(_("Database is not open!"));
-
-		if (!ibBackendException::IsEvalMode())
-		{
-			if (!m_metaObject->AccessRight_Write()) {
-				ibBackendAccessException::Error();
-				return false;
-			}
-
-			{
-				scope.SafeBeginTransaction();
-
-				{
-					ibValue cancel = false;
-					ExecAsProc(wxT("BeforeWrite"), cancel);
-
-					if (cancel.GetBoolean()) {
-						scope.SafeRollBackTransaction();
-						ibBackendCoreException::Error(_("Failed to write object in db!"));
-						return false;
-					}
-				}
-
-				if (!SaveData(replace, clearTable)) {
-					scope.SafeRollBackTransaction();
-					ibBackendCoreException::Error(_("Failed to write object in db!"));
-					return false;
-				}
-
-				{
-					ibValue cancel = false;
-					ExecAsProc(wxT("OnWrite"), cancel);
-					if (cancel.GetBoolean()) {
-						scope.SafeRollBackTransaction();
-						ibBackendCoreException::Error(_("Failed to write object in db!"));
-						return false;
-					}
-				}
-
-				scope.SafeCommitTransaction();
-			}
-
-			m_objModified = false;
-		}
-	}
-
-	return true;
+	if (period.GetType() != TYPE_DATE)
+		return period;
+	return ibValue(period.GetDate().BeginOfPeriod(unit));
 }
 
-bool ibValueRecordSetObjectInformationRegister::DeleteRecordSet()
+// …and the manager's own line, before anything asks by its key: a write, a read, a delete all name the month a
+// monthly register keeps, whatever day the caller set.
+template <class TMeta>
+static void TruncateLinePeriod(const TMeta* meta, ibValueModel::ibValueModelReturnLine* line)
 {
-	if (!appData->DesignerMode())
-	{
-		ibConnectionScope scope = ibSession::Current()->OpenConnectionScope();
+	const ibTotalsPeriod unit = meta->GetPeriodicityUnit();
+	if (unit == ibTotalsPeriod::Second || line == nullptr || meta->GetRegisterPeriod() == nullptr)
+		return;
+	const ibMetaID period = meta->GetRegisterPeriod()->GetMetaID();
+	ibValue written;
+	line->GetValueByMetaID(period, written);
+	line->SetValueByMetaID(period, TruncateToPeriod(written, unit));
+}
 
-		if (!scope || !scope->IsOpen())
-			ibBackendCoreException::Error(_("Database is not open!"));
+// The key the manager's fields name (commonObjectManagerQuery.cpp).
+ibUniqueKeyPair ibRecordKeyOf(const ibValueMetaObjectRegisterData* meta, ibValueModel::ibValueModelReturnLine* line);
 
-		if (!ibBackendException::IsEvalMode())
-		{
-			if (!m_metaObject->AccessRight_Delete()) {
-				ibBackendAccessException::Error();
-				return false;
-			}
-
-			{
-				scope.SafeBeginTransaction();
-
-				{
-					ibValue cancel = false;
-					ExecAsProc(wxT("BeforeWrite"), cancel);
-
-					if (cancel.GetBoolean()) {
-						scope.SafeRollBackTransaction();
-						ibBackendCoreException::Error(_("Failed to write object in db!"));
-						return false;
-					}
-				}
-
-				if (!DeleteData()) {
-					scope.SafeRollBackTransaction();
-					ibBackendCoreException::Error(_("Failed to write object in db!"));
-					return false;
-				}
-
-				{
-					ibValue cancel = false;
-					ExecAsProc(wxT("OnWrite"), cancel);
-					if (cancel.GetBoolean()) {
-						scope.SafeRollBackTransaction();
-						ibBackendCoreException::Error(_("Failed to write object in db!"));
-						return false;
-					}
-				}
-
-				scope.SafeCommitTransaction();
-			}
-
-			m_objModified = false;
-		}
+// The set's own part of it: every line's period and the key's, truncated first — the delete by the key and the lines
+// written after it then name the same month.
+bool ibValueRecordSetObjectInformationRegister::SaveData(bool replace, bool clearTable)
+{
+	const ibTotalsPeriod unit = m_metaObject->GetPeriodicityUnit();
+	if (unit != ibTotalsPeriod::Second) {
+		const ibMetaID period = m_metaObject->GetRegisterPeriod()->GetMetaID();
+		for (long row = 0; row < GetRowCount(); row++)
+			if (ibComposerNode* node = GetViewData<ibComposerNode>(GetItem(row)))
+				node->SetValue(period, TruncateToPeriod(node->GetTableValue(period), unit), true);
+		if (FindKeyValue(period))
+			SetKeyValue(period, TruncateToPeriod(GetKeyValue(period), unit));
 	}
-
-	return true;
+	return ibValueRecordSetObject::SaveData(replace, clearTable);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-ibSourceExplorer ibValueRecordManagerObjectInformationRegister::GetSourceExplorer() const
+const ibSourceExplorer* ibValueRecordManagerObjectInformationRegister::GetSourceExplorer() const
 {
-	ibSourceExplorer srcHelper(
-		m_metaObject, GetClassType(),
-		false
+	m_sourceExplorer.Reset(
+		wxT("Ref"), _("Ref"), m_metaObject->GetMetaID(), GetClassType(),
+		false, false
 	);
 
 	ibValueMetaObjectInformationRegister* metaRef = nullptr;
 
 	if (m_metaObject->ConvertToValue(metaRef)) {
 		if (metaRef->GetPeriodicity() != ibPeriodicity::eNonPeriodic) {
-			srcHelper.AppendSource(metaRef->GetRegisterPeriod());
+			m_sourceExplorer.AppendColumn(metaRef->GetRegisterPeriod()->GetQueryColumn());
 		}
 	}
 
-	for (const auto object : m_metaObject->GetDimentionArrayObject()) {
-		srcHelper.AppendSource(object);
+	for (const auto object : m_metaObject->GetDimensionArrayObject()) {
+		m_sourceExplorer.AppendColumn(object->GetQueryColumn());
 	}
 
 	for (const auto object : m_metaObject->GetResourceArrayObject()) {
-		srcHelper.AppendSource(object);
+		m_sourceExplorer.AppendColumn(object->GetQueryColumn());
 	}
 
 	for (const auto object : m_metaObject->GetAttributeArrayObject()) {
-		srcHelper.AppendSource(object);
+		m_sourceExplorer.AppendColumn(object->GetQueryColumn());
 	}
 
-	return srcHelper;
+	return &m_sourceExplorer;
 }
 
 #pragma region _form_builder_h_
-void ibValueRecordManagerObjectInformationRegister::ShowFormValue(const wxString& strFormName, ibBackendControlFrame* ownerControl)
+void ibValueRecordManagerObjectInformationRegister::ShowFormValue(const ibFormRequest& request, ibBackendControlFrame* ownerControl)
 {
 	ibBackendValueForm* const foundedForm = GetForm();
 
@@ -162,36 +95,39 @@ void ibValueRecordManagerObjectInformationRegister::ShowFormValue(const wxString
 	}
 
 	//if form is not initialized then generate  
-	ibBackendValueForm* const valueForm =
-		GetFormValue(strFormName, ownerControl);
+	const ibFormPtr<ibBackendValueForm> valueForm =
+		GetFormValue(request, ownerControl);
 
-	if (valueForm != nullptr) {
+	if (valueForm) {
 		valueForm->Modify(m_recordSet->IsModified());
 		valueForm->ShowForm();
 	}
 }
 
-ibBackendValueForm* ibValueRecordManagerObjectInformationRegister::GetFormValue(const wxString& strFormName, ibBackendControlFrame* ownerControl)
+ibFormPtr<ibBackendValueForm> ibValueRecordManagerObjectInformationRegister::GetFormValue(const ibFormRequest& request, ibBackendControlFrame* ownerControl)
 {
 	ibBackendValueForm* const foundedForm = GetForm();
 
 	if (foundedForm == nullptr) {
 
-		ibBackendValueForm* createdForm = m_metaObject->CreateAndBuildForm(
-			strFormName,
+		// A record's window is keyed by the record: one window per record.
+		ibFormRequest recordRequest = request;
+		recordRequest.m_formGuid = m_objGuid;
+
+		const ibFormPtr<ibBackendValueForm> createdForm = m_metaObject->CreateAndBuildForm(
+			recordRequest,
 			ibValueMetaObjectInformationRegister::eFormRecord,
 			ownerControl,
-			this,
-			m_objGuid
+			this
 		);
 
-		if (createdForm != nullptr)
+		if (createdForm)
 			createdForm->CloseOnOwnerClose(false);
 
 		return createdForm;
 	}
 
-	return foundedForm;
+	return ibFormPtr<ibBackendValueForm>(foundedForm);   // the open one — its window holds it
 }
 #pragma endregion
 
@@ -211,9 +147,20 @@ bool ibValueRecordManagerObjectInformationRegister::WriteRegister(bool replace)
 
 				bool newObject = ibValueRecordManagerObjectInformationRegister::IsNewObject();
 
-				if (!SaveData()) {
+				// The record's period truncated before anything asks by it — the probe for a record already there asks
+				// by the month a monthly register keeps.
+				TruncateLinePeriod(m_metaObject, m_recordLine);
+
+				// A REGISTER'S KEY FLOATS OVER ITS DIMENSIONS, so editing one does not modify a record — it
+				// REPLACES it: the old key is gone from the table and a row under a new key is what remains.
+				// SaveData rewrites m_objGuid's composite in place (SetKeyValues), so the previous one has to be
+				// taken now, before the write.
+				const ibRowMetaValues keyBefore = m_objGuid.GetKeyValues();
+
+				if (!SaveData(replace)) {   // Write(False) adds and nothing else — SaveData refuses a taken key
 					scope.SafeRollBackTransaction();
-					ibBackendCoreException::Error(_("failed to save object in db!"));
+					ibBackendCoreException::Error(_("Register '%s': failed to store the record"),
+						m_metaObject != nullptr ? m_metaObject->GetSynonym() : wxString());
 					return false;
 				}
 
@@ -221,9 +168,17 @@ bool ibValueRecordManagerObjectInformationRegister::WriteRegister(bool replace)
 
 				scope.SafeCommitTransaction();
 
-				ibBackendValueForm* const valueForm = GetForm();
+				// Told afterwards if there is anybody to tell — ibFormToNotify (backend_form.h).
+				ibBackendValueForm* const valueForm = ibFormToNotify([this] { return GetForm(); });
 
-				if (newObject && valueForm != nullptr) valueForm->NotifyCreate(GetValue());
+				// WHICH NEWS THE LIST NEEDS is not "was this new" but "can the list still find the row it knows".
+				// It identifies rows by their key, so only an identity that APPEARED or MOVED is worth an anchor;
+				// a plain re-write leaves every key where it was and must not drag the user's cursor to it (an
+				// object form sits open while the list is browsed elsewhere). A key change is, for the list,
+				// exactly a create: the row it held is gone, this one is new.
+				const bool keyMoved = !newObject && m_objGuid.GetKeyValues() != keyBefore;
+
+				if ((newObject || keyMoved) && valueForm != nullptr) valueForm->NotifyCreate(GetValue());
 				else if (valueForm != nullptr) valueForm->NotifyChange(GetValue());
 			}
 
@@ -246,13 +201,16 @@ bool ibValueRecordManagerObjectInformationRegister::DeleteRegister()
 		if (!ibBackendException::IsEvalMode())
 		{
 			{
-				ibBackendValueForm* const valueForm = GetForm();
+				// Told afterwards if there is anybody to tell — ibFormToNotify (backend_form.h).
+				ibBackendValueForm* const valueForm = ibFormToNotify([this] { return GetForm(); });
 				{
 					scope.SafeBeginTransaction();
 
+					TruncateLinePeriod(m_metaObject, m_recordLine);   // deleted by the month it is kept under
 					if (!DeleteData()) {
 						scope.SafeRollBackTransaction();
-						ibBackendCoreException::Error(_("Failed to delete object in db!"));
+						ibBackendCoreException::Error(_("Register '%s': failed to delete the record"),
+							m_metaObject != nullptr ? m_metaObject->GetSynonym() : wxString());
 						return false;
 					}
 
@@ -281,73 +239,70 @@ enum recordManager
 	enGetMetadataRecordManager
 };
 
+// 🛑 THIS ORDER IS THE CALL NUMBER, AND IT MUST MATCH FillMembers EXACTLY. A method is invoked by
+// its INDEX in the member table, so an enumerator out of step silently runs a different verb:
+// `Write` landed on Load, `Load` on Unload and `Unload` on Write. Posting any document crashed
+// (Write handed its bool to Load, which casts it to a table) and an Unload would have WRITTEN the
+// set. Found 2026-09-03 by posting a goods receipt from the sandbox.
 enum recordSet
 {
 	enAdd = 0,
 	enCount,
 	enClear,
+	enWriteRecordSet,
 	enLoad,
 	enUnload,
-	enWriteRecordSet,
 	enModifiedRecordSet,
 	enReadRecordSet,
 	enSelectedRecordSet,
 	enGetMetadataRecordSet,
 };
 
-enum prop
-{
-	eThisObject,
-	eFilter
-};
-
 //****************************************************************************
 //*                              Support methods                             *
 //****************************************************************************
 
-void ibValueRecordSetObjectInformationRegister::PrepareNames() const
+void ibValueRecordSetObjectInformationRegister::FillMembers(ibMemberTable& helper) const
 {
-	m_methodHelper->ClearHelper();
+	helper.AppendFunc(wxT("Add"), wxT("Add()"));
+	helper.AppendFunc(wxT("Count"), wxT("Count()"));
+	helper.AppendFunc(wxT("Clear"), wxT("Clear()"));
+	helper.AppendFunc(wxT("Write"), 1, wxT("Write(replace : boolean)"));
+	helper.AppendFunc(wxT("Load"), 1, wxT("Load(value : any table)"));
+	helper.AppendFunc(wxT("Unload"), wxT("Unload()"));
+	helper.AppendFunc(wxT("Modified"), wxT("Modified()"));
+	helper.AppendFunc(wxT("Read"), wxT("Read()"));
+	helper.AppendFunc(wxT("Selected"), wxT("Selected()"));
+	helper.AppendFunc(wxT("GetMetadata"), wxT("GetMetadata()"));
 
-	m_methodHelper->AppendFunc(wxT("Add"), wxT("Add()"));
-	m_methodHelper->AppendFunc(wxT("Count"), wxT("Count()"));
-	m_methodHelper->AppendFunc(wxT("Clear"), wxT("Clear()"));
-	m_methodHelper->AppendFunc(wxT("Write"), 1, wxT("Write(replace : boolean)"));
-	m_methodHelper->AppendFunc(wxT("Load"), 1, wxT("Load(value : any table)"));
-	m_methodHelper->AppendFunc(wxT("Unload"), wxT("Unload()"));
-	m_methodHelper->AppendFunc(wxT("Modified"), wxT("Modified()"));
-	m_methodHelper->AppendFunc(wxT("Read"), wxT("Read()"));
-	m_methodHelper->AppendFunc(wxT("Selected"), wxT("Selected()"));
-	m_methodHelper->AppendFunc(wxT("GetMetadata"), wxT("GetMetadata()"));
-
-	m_methodHelper->AppendProp(wxT("ThisObject"), true, false, true, prop::eThisObject, wxNOT_FOUND);
-	m_methodHelper->AppendProp(wxT("Filter"), true, false, prop::eFilter, wxNOT_FOUND);
+	// `Filter` is NOT declared here: it is an EXPORT VARIABLE of the set, bound in InitializeObject
+	// (commonObject.cpp), and module exports reach this same table on their own. Naming it twice put
+	// it in the list twice — and the second saying could only ever be the one to remove, because the
+	// bind is what every module-backed value uses.
 }
 
-void ibValueRecordManagerObjectInformationRegister::PrepareNames() const
+void ibValueRecordManagerObjectInformationRegister::FillMembers(ibMemberTable& helper) const
 {
-	m_methodHelper->ClearHelper();
+	helper.AppendFunc(wxT("Copy"), wxT("Copy()"));
+	helper.AppendFunc(wxT("Write"), 1, wxT("Write(replace : boolean)"));
+	helper.AppendFunc(wxT("Delete"), wxT("Delete()"));
+	helper.AppendFunc(wxT("Modified"), wxT("Modified()"));
+	helper.AppendFunc(wxT("Read"), wxT("Read()"));
+	helper.AppendFunc(wxT("Selected"), wxT("Selected()"));
+	helper.AppendFunc(wxT("GetFormRecord"), 3, wxT("GetFormRecord(name : string, owner : any, id : guid)"));
+	helper.AppendFunc(wxT("GetTemplate"), 1, wxT("GetTemplate(name : string)"));
+	helper.AppendFunc(wxT("GetMetadata"), wxT("getMetadata()"));
 
-	m_methodHelper->AppendFunc(wxT("Copy"), wxT("Copy()"));
-	m_methodHelper->AppendFunc(wxT("Write"), 1, wxT("Write(replace : boolean)"));
-	m_methodHelper->AppendFunc(wxT("Delete"), wxT("Delete()"));
-	m_methodHelper->AppendFunc(wxT("Modified"), wxT("Modified()"));
-	m_methodHelper->AppendFunc(wxT("Read"), wxT("Read()"));
-	m_methodHelper->AppendFunc(wxT("Selected"), wxT("Selected()"));
-	m_methodHelper->AppendFunc(wxT("GetFormRecord"), 3, wxT("GetFormRecord(name : string, owner : any, id : guid)"));
-	m_methodHelper->AppendFunc(wxT("GetTemplate"), 1, wxT("GetTemplate(name : string)"));
-	m_methodHelper->AppendFunc(wxT("GetMetadata"), wxT("getMetadata()"));
-
-	//set object name 
+	//set object name
 	wxString objectName;
 
-	//fill custom object 
+	//fill custom object
 	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
 		if (object->IsDeleted())
 			continue;
 		if (!object->GetObjectNameAsString(objectName))
 			continue;
-		m_methodHelper->AppendProp(
+		helper.AppendProp(
 			objectName,
 			object->GetMetaID()
 		);
@@ -357,14 +312,14 @@ void ibValueRecordManagerObjectInformationRegister::PrepareNames() const
 bool ibValueRecordManagerObjectInformationRegister::SetPropVal(const long lPropNum, const ibValue& varPropVal)       //setting attribute
 {
 	return SetValueByMetaID(
-		m_methodHelper->GetPropData(lPropNum), varPropVal
+		m_members.GetPropData(lPropNum), varPropVal
 	);
 }
 
 bool ibValueRecordManagerObjectInformationRegister::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
 	return GetValueByMetaID(
-		m_methodHelper->GetPropData(lPropNum), pvarPropVal
+		m_members.GetPropData(lPropNum), pvarPropVal
 	);
 }
 
@@ -377,37 +332,35 @@ bool ibValueRecordSetObjectInformationRegister::SetPropVal(const long lPropNum, 
 
 bool ibValueRecordSetObjectInformationRegister::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
-	switch (lPropNum)
-	{
-	case prop::eThisObject:
-		pvarPropVal = this;
-		return true;
-	case prop::eFilter:
-		pvarPropVal = m_recordSetKeyValue;
-		return true;
-	}
-
-	return false;
+	// The set's own properties (Filter) live on the base — asked here first because a register may add
+	// its own later, and answered by the base when it has none of its own. Returning false outright is
+	// what kept `Filter` unreachable from outside while it was declared in this very file's member
+	// table (2026-09-05).
+	return ibValueRecordSetObject::GetPropVal(lPropNum, pvarPropVal);
 }
 
 bool ibValueRecordSetObjectInformationRegister::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
 {
-	ibMetaData* metaData = m_metaObject->GetMetaData();
+	const ibMetaData* metaData = m_metaObject->GetMetaData();
 	wxASSERT(metaData);
 
 	switch (lMethodNum)
 	{
 	case recordSet::enAdd:
-		pvarRetValue = ibValue::CreateAndPrepareValueRef<ibValueRecordSetObjectRegisterReturnLine>(this, GetItem(AppendRow()));
+		pvarRetValue = new ibValueRecordSetObjectRegisterReturnLine(this, GetItem(AppendRow()));
 		return true;
 	case recordSet::enCount:
 		pvarRetValue = (unsigned int)GetRowCount();
 		return true;
 	case recordSet::enClear:
-		ibValueModelRamTableBase::Clear();
+		ibValueModelStorage::Clear();
+		// ⭐ CLEARING IS A CHANGE. Emptying the set is how a handler says "no movements" - and the
+		// document's final write skips a set that is not modified, so an unmarked Clear would leave
+		// yesterday's movements standing.
+		Modify(true);
 		return true;
 	case recordSet::enLoad:
-		LoadDataFromTable(paParams[0]->ConvertToType<ibValueModelTableBase>());
+		LoadDataFromTable(paParams[0]->ConvertToType<ibValueModel>());
 		return true;
 	case recordSet::enUnload:
 		pvarRetValue = SaveDataToTable();
@@ -443,9 +396,12 @@ bool ibValueRecordManagerObjectInformationRegister::CallAsFunc(const long lMetho
 		pvarRetValue = CopyRegister();
 		return true;
 	case recordManager::enWriteRecordManager:
+		// ⚠ `Write()` IS `Write(False)`: a record is added, and a key already taken is refused in words — the same
+		// answer the form gives (informationRegisterAction.cpp). Replacing another record is said out loud, as
+		// `Write(True)` (Max, 2026-09-24: "the manager must complain too, when you try to make the record new").
 		pvarRetValue = WriteRegister(
 			lSizeArray > 0 ?
-			paParams[0]->GetBoolean() : true
+			paParams[0]->GetBoolean() : false
 		);
 		return true;
 	case recordManager::enDeleteRecordManager:
@@ -455,14 +411,16 @@ bool ibValueRecordManagerObjectInformationRegister::CallAsFunc(const long lMetho
 		pvarRetValue = m_recordSet->IsModified();
 		return true;
 	case recordManager::enReadRecordManager:
-		m_recordSet->Read();
+		// By the key its own fields name — the set read with no key is every record (ReadData says the rest).
+		TruncateLinePeriod(m_metaObject, m_recordLine);
+		pvarRetValue = ReadData(ibRecordKeyOf(m_metaObject, m_recordLine));
 		return true;
 	case recordManager::enSelectedRecordManager:
 		pvarRetValue = m_recordSet->Selected();
 		return true;
 	case recordManager::enGetFormRecord:
 		pvarRetValue = GetFormValue(
-			lSizeArray > 0 ? paParams[0]->GetString() : wxString(wxEmptyString),
+			lSizeArray > 0 ? ibFormRequest(paParams[0]->GetString()) : ibFormRequest(),
 			lSizeArray > 1 ? paParams[1]->ConvertToType<ibBackendControlFrame>() : nullptr
 		);
 		return true;

@@ -206,12 +206,17 @@ ibDataViewItem ibDataViewIndexListModel::GetItem(unsigned int row) const
 	return ibDataViewItem(m_hash[row]);
 }
 
-unsigned int ibDataViewIndexListModel::GetChildren(const ibDataViewItem& item, ibDataViewItemArray& children) const
+unsigned int ibDataViewIndexListModel::GetFirstFetch(const ibDataViewItem& parent,
+	const ibDataViewItem& /*anchor*/, int /*count*/,
+	ibDataViewItemArray& out) const
 {
-	if (item.IsOk())
+	// Non-paged: a real parent has no children here; the invisible
+	// root gets every row in one batch and Next/Prev stay base-default
+	// no-ops so the dataview sees a single-shot fetch.
+	if (parent.IsOk())
 		return 0;
 
-	children = m_hash;
+	out = m_hash;
 
 	return m_hash.GetCount();
 }
@@ -320,11 +325,6 @@ int ibDataViewVirtualListModel::Compare(const ibDataViewItem& item1,
 		return pos2 - pos1;
 }
 
-unsigned int ibDataViewVirtualListModel::GetChildren(const ibDataViewItem& WXUNUSED(item), ibDataViewItemArray& WXUNUSED(children)) const
-{
-	return 0;  // should we report an error ?
-}
-
 #endif  // __WXOSX__
 
 //-----------------------------------------------------------------------------
@@ -382,7 +382,7 @@ bool ibDataViewRendererBase::StartEditing(const ibDataViewItem& item, wxRect lab
 	wxWindow* parent = (wxWindow*)dv_ctrl->CellToDataViewWindow(item, column);
 	const wxSize parentSize = parent ? parent->GetClientSize() : wxSize(-1, -1);
 	const wxPoint parentScreen = parent ? parent->ClientToScreen(wxPoint(0, 0)) : wxPoint(-1, -1);
-	
+
 
 	m_editorCtrl = CreateEditorCtrl(parent, labelRect, value);
 
@@ -524,7 +524,7 @@ ibDataViewRendererBase::CheckedGetValue(const ibDataViewModel* model,
 			// If you're seeing this message, this indicates that either your
 			// renderer is using the wrong type, or your model returns values
 			// of the wrong type.
-			wxLogDebug("Wrong type returned from the model for column %u: "
+			ibJournalInfo(wxT("ui"), "Wrong type returned from the model for column %u: "
 				"%s required but actual type is %s",
 				column,
 				GetVariantType(),
@@ -578,7 +578,7 @@ ibDataViewRendererBase::PrepareForItem(const ibDataViewModel* model,
 		(
 			// There is not much we can do about it here, just log it and don't
 			// show anything in this cell.
-			wxLogDebug("Retrieving the value from the model threw an exception");
+			ibJournalInfo(wxT("ui"), "Retrieving the value from the model threw an exception");
 	return false;
 		)
 }
@@ -641,7 +641,7 @@ ibDataViewCustomRendererBase::WXCallRender(wxRect rectCell, wxDC* dc, int state)
 
 	// adjust the rectangle ourselves to account for the alignment
 	wxRect rectItem = rectCell;
-	const int align = GetEffectiveAlignment();
+	const int align = GetEffectiveItemAlignment();
 
 	const wxSize size = GetSize();
 
@@ -716,17 +716,33 @@ wxSize ibDataViewCustomRendererBase::GetTextExtent(const wxString& str) const
 {
 	const ibDataViewCtrl* view = GetView();
 
+	const wxFont font = m_attr.HasFont()
+		? m_attr.GetEffectiveFont(view->GetFont())
+		: view->GetFont();
+
+	// ⭐ ASKED TWICE FOR THE SAME CELL, ANSWERED ONCE. WXCallRender measures to place the text and
+	// RenderText measures to decide whether it fits - the same string, the same font, one paint
+	// apart. See the note on m_lastMeasured: this is where the second crossing into the font engine
+	// used to happen.
+	if (m_lastMeasuredValid && m_lastMeasured == str && m_lastMeasuredFont == font)
+		return m_lastMeasuredSize;
+
+	wxSize size;
 	if (m_attr.HasFont())
 	{
-		wxFont font(m_attr.GetEffectiveFont(view->GetFont()));
-		wxSize size;
-		view->GetTextExtent(str, &size.x, &size.y, NULL, NULL, &font);
-		return size;
+		wxFont measureWith(font);
+		view->GetTextExtent(str, &size.x, &size.y, NULL, NULL, &measureWith);
 	}
 	else
 	{
-		return view->GetTextExtent(str);
+		size = view->GetTextExtent(str);
 	}
+
+	m_lastMeasured     = str;
+	m_lastMeasuredFont = font;
+	m_lastMeasuredSize = size;
+	m_lastMeasuredValid = true;
+	return size;
 }
 
 void
@@ -740,20 +756,62 @@ ibDataViewCustomRendererBase::RenderText(const wxString& text,
 	rectText.x += xoffset;
 	rectText.width -= xoffset;
 
+	// ⚠ THE CONTROL IS REACHED THROUGH THE COLUMN — renderer → column → ctrl — and during a model
+	// rebuild a renderer can be asked to paint while its column is momentarily DETACHED, so the
+	// control is null. Dereferencing crashed in `IsEnabled`, and `DrawItemText` below needs a real
+	// window anyway. There is nothing to draw into a control that is not attached.
+	//
+	// ⭐ The same pointer is already null-checked one file over (datavgen.cpp, the client DC) — so the
+	// possibility was known there and not carried here. (2026-08-20).
+	wxWindow* const owner = GetOwner() != nullptr ? GetOwner()->GetOwner() : nullptr;
+	if (owner == nullptr)
+		return;
+
 	int flags = 0;
 	if (state & wxDATAVIEW_CELL_SELECTED)
 		flags |= wxCONTROL_SELECTED;
-	if (!(GetOwner()->GetOwner()->IsEnabled() && GetEnabled()))
+	if (!(owner->IsEnabled() && GetEnabled()))
 		flags |= wxCONTROL_DISABLED;
 
+	// ⭐⭐ THE ORDINARY CELL IS DRAWN AS TEXT, not as a themed item, and that is most of them: not
+	// selected, not disabled, and short enough to fit. DrawItemText is the right call for the other
+	// cases and the wrong price for this one - on MSW it opens a THEME HANDLE per call, runs
+	// Ellipsize (which searches for a width by measuring repeatedly) and then draws through uxtheme.
+	// Measured on a grid scroll, 2026-09-06: DrawItemText 20.97% of the whole process, of which the
+	// theme handle 3.77% and Ellipsize 5.12% - paid on every cell, to decide nothing.
+	//
+	// ⚠ WHAT IT DOES NOT CHANGE. The colour is already set by WXCallRender (wxDCTextColourChanger)
+	// and the rectangle is already placed and narrowed by it for the alignment, so a cell that fits
+	// has its box exactly where the text goes. Selection, disabling and real truncation keep the
+	// themed path, which is where those three actually mean something.
+	//
+	// 🛑 AND IT MUST NOT BE MADE UNCONDITIONAL. A text that does NOT fit needs the ellipsis, and the
+	// ellipsis is what DrawItemText is for; drawing it plainly would spill the string across the
+	// neighbouring column instead of cutting it.
+	if (flags == 0) {
+		const wxSize extent = GetTextExtent(text);   // remembered - see GetTextExtent
+		if (extent.x <= rectText.width && extent.y <= rectText.height) {
+			dc->DrawText(text, rectText.x, rectText.y + (rectText.height - extent.y) / 2);
+			return;
+		}
+	}
+
 	wxRendererNative::Get().DrawItemText(
-		GetOwner()->GetOwner(),
+		owner,
 		*dc,
 		text,
 		rectText,
-		GetEffectiveAlignment(),
+		GetEffectiveItemAlignment(),
 		flags,
 		GetEllipsizeMode());
+}
+
+int ibDataViewCustomRendererBase::GetEffectiveItemAlignment() const
+{
+	int alignment = GetEffectiveAlignment();
+	if (m_attr.HasAlignment())
+		alignment = (alignment & ~(wxALIGN_CENTER_HORIZONTAL | wxALIGN_RIGHT)) | m_attr.GetAlignment();
+	return alignment;
 }
 
 void ibDataViewCustomRendererBase::SetEnabled(bool enabled)
@@ -863,7 +921,6 @@ void ibDataViewColumnBase::Init(ibDataViewRenderer* renderer,
 {
 	m_renderer = renderer;
 	m_model_column = model_column;
-	m_owner = NULL;
 	m_renderer->SetOwner((ibDataViewColumn*)this);
 }
 
@@ -985,6 +1042,7 @@ ibDataViewItem ibDataViewCtrlBase::GetSelection() const
 	return selections[0];
 }
 
+
 namespace
 {
 
@@ -1056,7 +1114,7 @@ namespace
 	// Common implementation of all {Append,Prepend}XXXColumn() below.
 	template <typename Renderer, typename LabelType>
 	ibDataViewColumn*
-		AppendColumnWithRenderer(ibDataViewCtrlBase* dvc,
+		AppendColumnWithRenderer(ibDataViewColumnGroup* holder,
 			const LabelType& label,
 			unsigned model_column,
 			ibDataViewCellMode mode,
@@ -1069,13 +1127,13 @@ namespace
 				label, model_column, mode, width, align, flags
 			);
 
-		dvc->AppendColumn(col);
+		holder->AppendColumn(col);
 		return col;
 	}
 
 	template <typename Renderer, typename LabelType>
 	ibDataViewColumn*
-		PrependColumnWithRenderer(ibDataViewCtrlBase* dvc,
+		PrependColumnWithRenderer(ibDataViewColumnGroup* holder,
 			const LabelType& label,
 			unsigned model_column,
 			ibDataViewCellMode mode,
@@ -1088,14 +1146,14 @@ namespace
 				label, model_column, mode, width, align, flags
 			);
 
-		dvc->PrependColumn(col);
+		holder->InsertColumn(0, col);
 		return col;
 	}
 
 } // anonymous namespace
 
 ibDataViewColumn*
-ibDataViewCtrlBase::AppendTextColumn(const wxString& label, unsigned int model_column,
+ibDataViewColumnGroup::AppendTextColumn(const wxString& label, unsigned int model_column,
 	ibDataViewCellMode mode, int width, wxAlignment align, int flags)
 {
 	return AppendColumnWithRenderer<ibDataViewTextRenderer>(
@@ -1104,7 +1162,7 @@ ibDataViewCtrlBase::AppendTextColumn(const wxString& label, unsigned int model_c
 }
 
 ibDataViewColumn*
-ibDataViewCtrlBase::AppendIconTextColumn(const wxString& label, unsigned int model_column,
+ibDataViewColumnGroup::AppendIconTextColumn(const wxString& label, unsigned int model_column,
 	ibDataViewCellMode mode, int width, wxAlignment align, int flags)
 {
 	return AppendColumnWithRenderer<ibDataViewIconTextRenderer>(
@@ -1113,7 +1171,7 @@ ibDataViewCtrlBase::AppendIconTextColumn(const wxString& label, unsigned int mod
 }
 
 ibDataViewColumn*
-ibDataViewCtrlBase::AppendToggleColumn(const wxString& label, unsigned int model_column,
+ibDataViewColumnGroup::AppendToggleColumn(const wxString& label, unsigned int model_column,
 	ibDataViewCellMode mode, int width, wxAlignment align, int flags)
 {
 	return AppendColumnWithRenderer<ibDataViewToggleRenderer>(
@@ -1122,7 +1180,7 @@ ibDataViewCtrlBase::AppendToggleColumn(const wxString& label, unsigned int model
 }
 
 ibDataViewColumn*
-ibDataViewCtrlBase::AppendProgressColumn(const wxString& label, unsigned int model_column,
+ibDataViewColumnGroup::AppendProgressColumn(const wxString& label, unsigned int model_column,
 	ibDataViewCellMode mode, int width, wxAlignment align, int flags)
 {
 	return AppendColumnWithRenderer<ibDataViewProgressRenderer>(
@@ -1131,7 +1189,7 @@ ibDataViewCtrlBase::AppendProgressColumn(const wxString& label, unsigned int mod
 }
 
 ibDataViewColumn*
-ibDataViewCtrlBase::AppendDateColumn(const wxString& label, unsigned int model_column,
+ibDataViewColumnGroup::AppendDateColumn(const wxString& label, unsigned int model_column,
 	ibDataViewCellMode mode, int width, wxAlignment align, int flags)
 {
 	return AppendColumnWithRenderer<ibDataViewDateRenderer>(
@@ -1140,7 +1198,7 @@ ibDataViewCtrlBase::AppendDateColumn(const wxString& label, unsigned int model_c
 }
 
 ibDataViewColumn*
-ibDataViewCtrlBase::AppendBitmapColumn(const wxString& label, unsigned int model_column,
+ibDataViewColumnGroup::AppendBitmapColumn(const wxString& label, unsigned int model_column,
 	ibDataViewCellMode mode, int width, wxAlignment align, int flags)
 {
 	return AppendColumnWithRenderer<ibDataViewBitmapRenderer>(
@@ -1149,7 +1207,7 @@ ibDataViewCtrlBase::AppendBitmapColumn(const wxString& label, unsigned int model
 }
 
 ibDataViewColumn*
-ibDataViewCtrlBase::AppendTextColumn(const wxBitmap& label, unsigned int model_column,
+ibDataViewColumnGroup::AppendTextColumn(const wxBitmap& label, unsigned int model_column,
 	ibDataViewCellMode mode, int width, wxAlignment align, int flags)
 {
 	return AppendColumnWithRenderer<ibDataViewTextRenderer>(
@@ -1158,7 +1216,7 @@ ibDataViewCtrlBase::AppendTextColumn(const wxBitmap& label, unsigned int model_c
 }
 
 ibDataViewColumn*
-ibDataViewCtrlBase::AppendIconTextColumn(const wxBitmap& label, unsigned int model_column,
+ibDataViewColumnGroup::AppendIconTextColumn(const wxBitmap& label, unsigned int model_column,
 	ibDataViewCellMode mode, int width, wxAlignment align, int flags)
 {
 	return AppendColumnWithRenderer<ibDataViewIconTextRenderer>(
@@ -1167,7 +1225,7 @@ ibDataViewCtrlBase::AppendIconTextColumn(const wxBitmap& label, unsigned int mod
 }
 
 ibDataViewColumn*
-ibDataViewCtrlBase::AppendToggleColumn(const wxBitmap& label, unsigned int model_column,
+ibDataViewColumnGroup::AppendToggleColumn(const wxBitmap& label, unsigned int model_column,
 	ibDataViewCellMode mode, int width, wxAlignment align, int flags)
 {
 	return AppendColumnWithRenderer<ibDataViewToggleRenderer>(
@@ -1176,7 +1234,7 @@ ibDataViewCtrlBase::AppendToggleColumn(const wxBitmap& label, unsigned int model
 }
 
 ibDataViewColumn*
-ibDataViewCtrlBase::AppendProgressColumn(const wxBitmap& label, unsigned int model_column,
+ibDataViewColumnGroup::AppendProgressColumn(const wxBitmap& label, unsigned int model_column,
 	ibDataViewCellMode mode, int width, wxAlignment align, int flags)
 {
 	return AppendColumnWithRenderer<ibDataViewProgressRenderer>(
@@ -1185,7 +1243,7 @@ ibDataViewCtrlBase::AppendProgressColumn(const wxBitmap& label, unsigned int mod
 }
 
 ibDataViewColumn*
-ibDataViewCtrlBase::AppendDateColumn(const wxBitmap& label, unsigned int model_column,
+ibDataViewColumnGroup::AppendDateColumn(const wxBitmap& label, unsigned int model_column,
 	ibDataViewCellMode mode, int width, wxAlignment align, int flags)
 {
 	return AppendColumnWithRenderer<ibDataViewDateRenderer>(
@@ -1194,7 +1252,7 @@ ibDataViewCtrlBase::AppendDateColumn(const wxBitmap& label, unsigned int model_c
 }
 
 ibDataViewColumn*
-ibDataViewCtrlBase::AppendBitmapColumn(const wxBitmap& label, unsigned int model_column,
+ibDataViewColumnGroup::AppendBitmapColumn(const wxBitmap& label, unsigned int model_column,
 	ibDataViewCellMode mode, int width, wxAlignment align, int flags)
 {
 	return AppendColumnWithRenderer<ibDataViewBitmapRenderer>(
@@ -1203,7 +1261,7 @@ ibDataViewCtrlBase::AppendBitmapColumn(const wxBitmap& label, unsigned int model
 }
 
 ibDataViewColumn*
-ibDataViewCtrlBase::PrependTextColumn(const wxString& label, unsigned int model_column,
+ibDataViewColumnGroup::PrependTextColumn(const wxString& label, unsigned int model_column,
 	ibDataViewCellMode mode, int width, wxAlignment align, int flags)
 {
 	return PrependColumnWithRenderer<ibDataViewTextRenderer>(
@@ -1212,7 +1270,7 @@ ibDataViewCtrlBase::PrependTextColumn(const wxString& label, unsigned int model_
 }
 
 ibDataViewColumn*
-ibDataViewCtrlBase::PrependIconTextColumn(const wxString& label, unsigned int model_column,
+ibDataViewColumnGroup::PrependIconTextColumn(const wxString& label, unsigned int model_column,
 	ibDataViewCellMode mode, int width, wxAlignment align, int flags)
 {
 	return PrependColumnWithRenderer<ibDataViewIconTextRenderer>(
@@ -1221,7 +1279,7 @@ ibDataViewCtrlBase::PrependIconTextColumn(const wxString& label, unsigned int mo
 }
 
 ibDataViewColumn*
-ibDataViewCtrlBase::PrependToggleColumn(const wxString& label, unsigned int model_column,
+ibDataViewColumnGroup::PrependToggleColumn(const wxString& label, unsigned int model_column,
 	ibDataViewCellMode mode, int width, wxAlignment align, int flags)
 {
 	return PrependColumnWithRenderer<ibDataViewToggleRenderer>(
@@ -1230,7 +1288,7 @@ ibDataViewCtrlBase::PrependToggleColumn(const wxString& label, unsigned int mode
 }
 
 ibDataViewColumn*
-ibDataViewCtrlBase::PrependProgressColumn(const wxString& label, unsigned int model_column,
+ibDataViewColumnGroup::PrependProgressColumn(const wxString& label, unsigned int model_column,
 	ibDataViewCellMode mode, int width, wxAlignment align, int flags)
 {
 	return PrependColumnWithRenderer<ibDataViewProgressRenderer>(
@@ -1239,7 +1297,7 @@ ibDataViewCtrlBase::PrependProgressColumn(const wxString& label, unsigned int mo
 }
 
 ibDataViewColumn*
-ibDataViewCtrlBase::PrependDateColumn(const wxString& label, unsigned int model_column,
+ibDataViewColumnGroup::PrependDateColumn(const wxString& label, unsigned int model_column,
 	ibDataViewCellMode mode, int width, wxAlignment align, int flags)
 {
 	return PrependColumnWithRenderer<ibDataViewDateRenderer>(
@@ -1248,7 +1306,7 @@ ibDataViewCtrlBase::PrependDateColumn(const wxString& label, unsigned int model_
 }
 
 ibDataViewColumn*
-ibDataViewCtrlBase::PrependBitmapColumn(const wxString& label, unsigned int model_column,
+ibDataViewColumnGroup::PrependBitmapColumn(const wxString& label, unsigned int model_column,
 	ibDataViewCellMode mode, int width, wxAlignment align, int flags)
 {
 	return PrependColumnWithRenderer<ibDataViewBitmapRenderer>(
@@ -1257,7 +1315,7 @@ ibDataViewCtrlBase::PrependBitmapColumn(const wxString& label, unsigned int mode
 }
 
 ibDataViewColumn*
-ibDataViewCtrlBase::PrependTextColumn(const wxBitmap& label, unsigned int model_column,
+ibDataViewColumnGroup::PrependTextColumn(const wxBitmap& label, unsigned int model_column,
 	ibDataViewCellMode mode, int width, wxAlignment align, int flags)
 {
 	return PrependColumnWithRenderer<ibDataViewTextRenderer>(
@@ -1266,7 +1324,7 @@ ibDataViewCtrlBase::PrependTextColumn(const wxBitmap& label, unsigned int model_
 }
 
 ibDataViewColumn*
-ibDataViewCtrlBase::PrependIconTextColumn(const wxBitmap& label, unsigned int model_column,
+ibDataViewColumnGroup::PrependIconTextColumn(const wxBitmap& label, unsigned int model_column,
 	ibDataViewCellMode mode, int width, wxAlignment align, int flags)
 {
 	return PrependColumnWithRenderer<ibDataViewIconTextRenderer>(
@@ -1275,7 +1333,7 @@ ibDataViewCtrlBase::PrependIconTextColumn(const wxBitmap& label, unsigned int mo
 }
 
 ibDataViewColumn*
-ibDataViewCtrlBase::PrependToggleColumn(const wxBitmap& label, unsigned int model_column,
+ibDataViewColumnGroup::PrependToggleColumn(const wxBitmap& label, unsigned int model_column,
 	ibDataViewCellMode mode, int width, wxAlignment align, int flags)
 {
 	return PrependColumnWithRenderer<ibDataViewToggleRenderer>(
@@ -1284,7 +1342,7 @@ ibDataViewCtrlBase::PrependToggleColumn(const wxBitmap& label, unsigned int mode
 }
 
 ibDataViewColumn*
-ibDataViewCtrlBase::PrependProgressColumn(const wxBitmap& label, unsigned int model_column,
+ibDataViewColumnGroup::PrependProgressColumn(const wxBitmap& label, unsigned int model_column,
 	ibDataViewCellMode mode, int width, wxAlignment align, int flags)
 {
 	return PrependColumnWithRenderer<ibDataViewProgressRenderer>(
@@ -1293,7 +1351,7 @@ ibDataViewCtrlBase::PrependProgressColumn(const wxBitmap& label, unsigned int mo
 }
 
 ibDataViewColumn*
-ibDataViewCtrlBase::PrependDateColumn(const wxBitmap& label, unsigned int model_column,
+ibDataViewColumnGroup::PrependDateColumn(const wxBitmap& label, unsigned int model_column,
 	ibDataViewCellMode mode, int width, wxAlignment align, int flags)
 {
 	return PrependColumnWithRenderer<ibDataViewDateRenderer>(
@@ -1302,7 +1360,7 @@ ibDataViewCtrlBase::PrependDateColumn(const wxBitmap& label, unsigned int model_
 }
 
 ibDataViewColumn*
-ibDataViewCtrlBase::PrependBitmapColumn(const wxBitmap& label, unsigned int model_column,
+ibDataViewColumnGroup::PrependBitmapColumn(const wxBitmap& label, unsigned int model_column,
 	ibDataViewCellMode mode, int width, wxAlignment align, int flags)
 {
 	return PrependColumnWithRenderer<ibDataViewBitmapRenderer>(
@@ -1310,30 +1368,247 @@ ibDataViewCtrlBase::PrependBitmapColumn(const wxBitmap& label, unsigned int mode
 	);
 }
 
-bool
-ibDataViewCtrlBase::AppendColumn(ibDataViewColumn* col)
+// (No column methods on the control base: a column is a member of a GROUP, and the
+//  base hands out the root group — see ibDataViewColumnGroup.)
+
+// THE COLUMN'S CONTROL COMES THROUGH ITS GROUP. One link up, so a column cannot claim
+// a different table than the group holding it — and nothing has to be told twice.
+ibDataViewCtrl*
+ibDataViewColumnBase::GetOwner() const
 {
-	col->SetOwner((ibDataViewCtrl*)this);
-	return true;
+	return m_group != nullptr ? m_group->GetOwner() : NULL;
 }
 
-bool
-ibDataViewCtrlBase::PrependColumn(ibDataViewColumn* col)
+// ----------------------------------------------------------------------------
+// Membership. A member belongs to exactly ONE group, so taking it in takes it off
+// wherever it was — no member can be in two lists, and none can be in none.
+// ----------------------------------------------------------------------------
+
+void ibDataViewColumnGroup::InsertColumn(unsigned int at, ibDataViewColumn* column)
 {
-	col->SetOwner((ibDataViewCtrl*)this);
-	return true;
+	if (column == nullptr)
+		return;
+
+	// TAKING IT IN IS ALSO MOVING IT: it leaves whichever group held it, this one
+	// included. Coming from THIS list, everything after it shifts down by one, so the
+	// target index is corrected — otherwise "move it one place right" would put it back
+	// exactly where it was.
+	if (ibDataViewColumnGroup* was = column->GetParent()) {
+		const int from = was->GetMemberPosition(column);
+		was->RemoveColumn(column);
+		if (was == this && from != wxNOT_FOUND && (unsigned int)from < at)
+			at--;
+	}
+
+	// HANGING A COLUMN ON A GROUP IS HOW IT ENTERS THE TABLE — and being a member of the
+	// tree is ALSO what makes it the table's to free. One fact, one gesture: there is no
+	// ownership list to fill in beside this, and therefore none to fall out of step.
+	//
+	// The control is asked of the group, which asks ITS group, up to the root — a nested
+	// group knows no control of its own, and asking its own field would leave everything
+	// hung deeper than the first level undrawn.
+	ibDataViewCtrl* owner = GetOwner();
+
+	ibColumnMember member;
+	member.column = column;
+	m_members.insert(m_members.begin() + wxMin(at, GetMemberCount()), member);
+
+	column->SetParent(this);
+
+	// The control's flat list is this tree walked — tell it the walk changed.
+	if (owner != nullptr)
+		owner->WXColumnTreeChanged();
 }
 
-bool
-ibDataViewCtrlBase::InsertColumn(unsigned int WXUNUSED(pos), ibDataViewColumn* col)
+void ibDataViewColumnGroup::InsertGroup(unsigned int at, ibDataViewColumnGroup* group)
 {
-	col->SetOwner((ibDataViewCtrl*)this);
-	return true;
+	if (group == nullptr || group == this)
+		return;
+
+	// NOT INTO ITS OWN SUBTREE. Members move freely between groups — that is the point
+	// — but a group taken inside itself (or inside anything it holds) closes the tree
+	// into a ring, and every walk over it runs forever. Cheap to check, impossible to
+	// debug afterwards.
+	for (const ibDataViewColumnGroup* node = this; node != nullptr; node = node->GetParent()) {
+		if (node == group)
+			return;
+	}
+
+	// Same as for a column: taking it in moves it, and a move within THIS list has its
+	// target index corrected for the hole the removal leaves.
+	if (ibDataViewColumnGroup* was = group->GetParent()) {
+		const int from = was->GetMemberPosition(group);
+		was->RemoveGroup(group);
+		if (was == this && from != wxNOT_FOUND && (unsigned int)from < at)
+			at--;
+	}
+
+	// Same one gesture as for a column: hanging a GROUP on a group is how it enters the
+	// table, and being in the tree is what makes it the table's to free.
+	ibDataViewCtrl* owner = GetOwner();
+
+	ibColumnMember member;
+	member.group = group;
+	m_members.insert(m_members.begin() + wxMin(at, GetMemberCount()), member);
+
+	group->SetParent(this);
+
+	if (owner != nullptr)
+		owner->WXColumnTreeChanged();
 }
+
+void ibDataViewColumnGroup::RemoveColumn(ibDataViewColumn* column)
+{
+	for (auto it = m_members.begin(); it != m_members.end(); ++it) {
+		if (it->column == column) {
+			m_members.erase(it);
+			// IT HAS NO HOLDER NOW, and it must not think it has: the parent is where
+			// both "who draws me" and "who frees me" are read from, so a detached member
+			// still pointing at us is a read of something it is no longer part of.
+			column->SetParent(nullptr);
+			if (ibDataViewCtrl* owner = GetOwner())
+				owner->WXColumnTreeChanged();
+			return;
+		}
+	}
+}
+
+void ibDataViewColumnGroup::RemoveGroup(ibDataViewColumnGroup* group)
+{
+	for (auto it = m_members.begin(); it != m_members.end(); ++it) {
+		if (it->group == group) {
+			m_members.erase(it);
+			group->SetParent(nullptr);   // same as for a column — see RemoveColumn
+			if (ibDataViewCtrl* owner = GetOwner())
+				owner->WXColumnTreeChanged();
+			return;
+		}
+	}
+}
+
+int ibDataViewColumnGroup::GetMemberPosition(const ibDataViewColumn* column) const
+{
+	for (unsigned int pos = 0; pos < GetMemberCount(); pos++) {
+		if (m_members[pos].column == column)
+			return (int)pos;
+	}
+	return wxNOT_FOUND;
+}
+
+int ibDataViewColumnGroup::GetMemberPosition(const ibDataViewColumnGroup* group) const
+{
+	for (unsigned int pos = 0; pos < GetMemberCount(); pos++) {
+		if (m_members[pos].group == group)
+			return (int)pos;
+	}
+	return wxNOT_FOUND;
+}
+
+// ----------------------------------------------------------------------------
+// The columns UNDER a group — its own and its groups', in member order. Everything
+// that used to ask the table "how many columns / which one is nth" asks this.
+// ----------------------------------------------------------------------------
+
+unsigned int ibDataViewColumnGroup::GetColumnCount() const
+{
+	unsigned int count = 0;
+	for (const ibColumnMember& member : m_members) {
+		if (member.IsColumn())
+			count++;
+		else if (member.IsGroup())
+			count += member.group->GetColumnCount();
+	}
+	return count;
+}
+
+ibDataViewColumn* ibDataViewColumnGroup::GetColumn(unsigned int pos) const
+{
+	unsigned int seen = 0;
+	for (const ibColumnMember& member : m_members) {
+		if (member.IsColumn()) {
+			if (seen == pos)
+				return member.column;
+			seen++;
+			continue;
+		}
+		if (!member.IsGroup())
+			continue;
+		const unsigned int under = member.group->GetColumnCount();
+		if (pos < seen + under)
+			return member.group->GetColumn(pos - seen);
+		seen += under;
+	}
+	return nullptr;
+}
+
+int ibDataViewColumnGroup::GetColumnPosition(const ibDataViewColumn* column) const
+{
+	unsigned int seen = 0;
+	for (const ibColumnMember& member : m_members) {
+		if (member.IsColumn()) {
+			if (member.column == column)
+				return (int)seen;
+			seen++;
+			continue;
+		}
+		if (!member.IsGroup())
+			continue;
+		const int under = member.group->GetColumnPosition(column);
+		if (under != wxNOT_FOUND)
+			return (int)seen + under;
+		seen += member.group->GetColumnCount();
+	}
+	return wxNOT_FOUND;
+}
+
+void ibDataViewColumnGroup::ClearColumns()
+{
+	// Down through the groups first, so nothing is left holding a member that is about
+	// to be dropped; then this group's own list goes. Every member is told it has no
+	// holder any more — it is now the caller's, ours no longer (see RemoveColumn).
+	for (const ibColumnMember& member : m_members) {
+		if (member.IsColumn())
+			member.column->SetParent(nullptr);
+		else if (member.IsGroup()) {
+			member.group->ClearColumns();
+			member.group->SetParent(nullptr);
+		}
+	}
+
+	RemoveAllMembers();
+
+	if (ibDataViewCtrl* owner = GetOwner())
+		owner->WXColumnTreeChanged();
+}
+
+// A group CREATES the group it is asked for and takes it in — the same "create and add"
+// shape the column families above have.
+
+ibDataViewColumnGroup*
+ibDataViewColumnGroup::AppendColumnGroup(const wxString& title, ibColumnGroupKind kind, wxAlignment align)
+{
+	return InsertColumnGroup(GetMemberCount(), title, kind, align);
+}
+
+ibDataViewColumnGroup*
+ibDataViewColumnGroup::PrependColumnGroup(const wxString& title, ibColumnGroupKind kind, wxAlignment align)
+{
+	return InsertColumnGroup(0, title, kind, align);
+}
+
+ibDataViewColumnGroup*
+ibDataViewColumnGroup::InsertColumnGroup(unsigned int pos, const wxString& title,
+	ibColumnGroupKind kind, wxAlignment align)
+{
+	ibDataViewColumnGroup* group = new ibDataViewColumnGroup(title, kind, align);
+	InsertGroup(pos, group);
+	return group;
+}
+
 
 void ibDataViewCtrlBase::StartEditor(const ibDataViewItem& item, unsigned int column)
 {
-	EditItem(item, GetColumn(column));
+	EditItem(item, GetRootColumnGroup()->GetColumn(column));
 }
 
 #if wxUSE_DRAG_AND_DROP
@@ -2138,19 +2413,22 @@ bool ibDataViewListCtrl::Create(wxWindow* parent, wxWindowID id,
 bool ibDataViewListCtrl::AppendColumn(ibDataViewColumn* column, const wxString& varianttype)
 {
 	GetStore()->AppendColumn(varianttype);
-	return ibDataViewCtrl::AppendColumn(column);
+	GetRootColumnGroup()->AppendColumn(column);
+	return true;
 }
 
 bool ibDataViewListCtrl::PrependColumn(ibDataViewColumn* column, const wxString& varianttype)
 {
 	GetStore()->PrependColumn(varianttype);
-	return ibDataViewCtrl::PrependColumn(column);
+	GetRootColumnGroup()->InsertColumn(0, column);
+	return true;
 }
 
 bool ibDataViewListCtrl::InsertColumn(unsigned int pos, ibDataViewColumn* column, const wxString& varianttype)
 {
 	GetStore()->InsertColumn(pos, varianttype);
-	return ibDataViewCtrl::InsertColumn(pos, column);
+	GetRootColumnGroup()->InsertColumn(pos, column);
+	return true;
 }
 
 bool ibDataViewListCtrl::PrependColumn(ibDataViewColumn* col)
@@ -2171,7 +2449,8 @@ bool ibDataViewListCtrl::AppendColumn(ibDataViewColumn* col)
 bool ibDataViewListCtrl::ClearColumns()
 {
 	GetStore()->ClearColumns();
-	return ibDataViewCtrl::ClearColumns();
+	GetRootColumnGroup()->ClearColumns();
+	return true;
 }
 
 ibDataViewColumn* ibDataViewListCtrl::AppendTextColumn(const wxString& label,
@@ -2181,9 +2460,9 @@ ibDataViewColumn* ibDataViewListCtrl::AppendTextColumn(const wxString& label,
 
 	ibDataViewColumn* ret = new ibDataViewColumn(label,
 		new ibDataViewTextRenderer(wxT("string"), mode),
-		GetColumnCount(), width, align, flags);
+		GetRootColumnGroup()->GetColumnCount(), width, align, flags);
 
-	ibDataViewCtrl::AppendColumn(ret);
+	GetRootColumnGroup()->AppendColumn(ret);
 
 	return ret;
 }
@@ -2195,9 +2474,10 @@ ibDataViewColumn* ibDataViewListCtrl::AppendToggleColumn(const wxString& label,
 
 	ibDataViewColumn* ret = new ibDataViewColumn(label,
 		new ibDataViewToggleRenderer(wxT("bool"), mode),
-		GetColumnCount(), width, align, flags);
+		GetRootColumnGroup()->GetColumnCount(), width, align, flags);
 
-	return ibDataViewCtrl::AppendColumn(ret) ? ret : NULL;
+	GetRootColumnGroup()->AppendColumn(ret);
+	return ret;
 }
 
 ibDataViewColumn* ibDataViewListCtrl::AppendProgressColumn(const wxString& label,
@@ -2207,9 +2487,10 @@ ibDataViewColumn* ibDataViewListCtrl::AppendProgressColumn(const wxString& label
 
 	ibDataViewColumn* ret = new ibDataViewColumn(label,
 		new ibDataViewProgressRenderer(wxEmptyString, wxT("long"), mode),
-		GetColumnCount(), width, align, flags);
+		GetRootColumnGroup()->GetColumnCount(), width, align, flags);
 
-	return ibDataViewCtrl::AppendColumn(ret) ? ret : NULL;
+	GetRootColumnGroup()->AppendColumn(ret);
+	return ret;
 }
 
 ibDataViewColumn* ibDataViewListCtrl::AppendIconTextColumn(const wxString& label,
@@ -2219,9 +2500,10 @@ ibDataViewColumn* ibDataViewListCtrl::AppendIconTextColumn(const wxString& label
 
 	ibDataViewColumn* ret = new ibDataViewColumn(label,
 		new ibDataViewIconTextRenderer(wxT("ibDataViewIconText"), mode),
-		GetColumnCount(), width, align, flags);
+		GetRootColumnGroup()->GetColumnCount(), width, align, flags);
 
-	return ibDataViewCtrl::AppendColumn(ret) ? ret : NULL;
+	GetRootColumnGroup()->AppendColumn(ret);
+	return ret;
 }
 
 //-----------------------------------------------------------------------------
@@ -2584,16 +2866,18 @@ ibDataViewItem ibDataViewTreeStore::GetParent(const ibDataViewItem& item) const
 	return parent->GetItem();
 }
 
-unsigned int ibDataViewTreeStore::GetChildren(const ibDataViewItem& item, ibDataViewItemArray& children) const
+unsigned int ibDataViewTreeStore::GetFirstFetch(const ibDataViewItem& parent,
+	const ibDataViewItem& /*anchor*/, int /*count*/,
+	ibDataViewItemArray& out) const
 {
-	ibDataViewTreeStoreContainerNode* node = FindContainerNode(item);
+	ibDataViewTreeStoreContainerNode* node = FindContainerNode(parent);
 	if (!node) return 0;
 
 	ibDataViewTreeStoreNodes::iterator iter;
 	for (iter = node->GetChildren().begin(); iter != node->GetChildren().end(); ++iter)
 	{
 		ibDataViewTreeStoreNode* child = *iter;
-		children.Add(child->GetItem());
+		out.Add(child->GetItem());
 	}
 
 	return node->GetChildren().size();
@@ -2678,7 +2962,7 @@ bool ibDataViewTreeCtrl::Create(wxWindow* parent, wxWindowID id,
 	AssociateModel(store);
 	store->DecRef();
 
-	AppendIconTextColumn
+	GetRootColumnGroup()->AppendIconTextColumn
 	(
 		wxString(),                 // no label (header is not shown anyhow)
 		0,                          // the only model column

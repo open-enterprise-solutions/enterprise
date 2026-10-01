@@ -1,0 +1,524 @@
+// =============================================================================
+// OES Enterprise — ibJobManager unit tests
+//
+// Scope: everything the manager decides WITHOUT a live process behind it — the
+// window arithmetic, the registration contract, and the refusal paths.
+//
+// Registering a job creates a session, which needs a running ibApplicationInstance
+// (registry thread + connection pool + metadata). That is integration scope and
+// is not covered here; what IS covered is that a manager with no application
+// data behind it refuses cleanly instead of half-registering — the failure mode
+// that would otherwise surface as a job silently never running.
+// =============================================================================
+
+#include <gtest/gtest.h>
+
+#include "backend/job/jobManager.h"
+#include "backend/compiler/procUnitLambda.h"   // ibValueIterator — a session-bound value
+#include "backend/backend_exception.h"         // ibBackendException — what the gate throws
+
+// ---------------------------------------------------------------------------
+// Window arithmetic — pure, no clock. The wrap-past-midnight case is the whole
+// reason this is a separate function: read as a plain range, a 22..5 window
+// matches no hour at all, and the job it guards would never run.
+// ---------------------------------------------------------------------------
+
+namespace {
+// Minutes-from-midnight, so the tests read as clock time.
+constexpr int At(int hour, int minute = 0) { return hour * 60 + minute; }
+}
+
+TEST(JobSchedule, NoWindowIsAlwaysInside) {
+    EXPECT_TRUE(ibJobScheduleDescription::IsInsideWindow(-1, -1, At(0)));
+    EXPECT_TRUE(ibJobScheduleDescription::IsInsideWindow(-1, -1, At(13)));
+    // One bound unset is still "no window" — a half-declared window is not a
+    // window, and treating it as one would silently gate the job.
+    EXPECT_TRUE(ibJobScheduleDescription::IsInsideWindow(At(2), -1, At(20)));
+    EXPECT_TRUE(ibJobScheduleDescription::IsInsideWindow(-1, At(5), At(20)));
+}
+
+TEST(JobSchedule, DaytimeWindowIsHalfOpen) {
+    // [10:00, 15:00): the start is in, the end is out — half-open so consecutive
+    // windows cannot both claim the boundary minute.
+    EXPECT_TRUE(ibJobScheduleDescription::IsInsideWindow(At(10), At(15), At(10)));
+    EXPECT_TRUE(ibJobScheduleDescription::IsInsideWindow(At(10), At(15), At(14, 59)));
+    EXPECT_FALSE(ibJobScheduleDescription::IsInsideWindow(At(10), At(15), At(15)));
+    EXPECT_FALSE(ibJobScheduleDescription::IsInsideWindow(At(10), At(15), At(9, 59)));
+}
+
+TEST(JobSchedule, WindowResolvesMinutes) {
+    // Minutes, not hours — "from 02:30" has to be expressible.
+    EXPECT_FALSE(ibJobScheduleDescription::IsInsideWindow(At(2, 30), At(5), At(2, 29)));
+    EXPECT_TRUE(ibJobScheduleDescription::IsInsideWindow(At(2, 30), At(5), At(2, 30)));
+}
+
+TEST(JobSchedule, NightWindowWrapsMidnight) {
+    // [22:00, 05:00) — the night window a heavy housekeeping job declares. Read
+    // as a plain range this would match no minute at all.
+    EXPECT_TRUE(ibJobScheduleDescription::IsInsideWindow(At(22), At(5), At(22)));
+    EXPECT_TRUE(ibJobScheduleDescription::IsInsideWindow(At(22), At(5), At(0)));
+    EXPECT_TRUE(ibJobScheduleDescription::IsInsideWindow(At(22), At(5), At(4, 59)));
+    EXPECT_FALSE(ibJobScheduleDescription::IsInsideWindow(At(22), At(5), At(5)));
+    EXPECT_FALSE(ibJobScheduleDescription::IsInsideWindow(At(22), At(5), At(12)));
+}
+
+TEST(JobSchedule, EqualBoundsMatchNothing) {
+    // [3, 3) is empty, not "all day" — and IsValid refuses it, so a job declared
+    // this way is rejected at registration rather than never running.
+    EXPECT_FALSE(ibJobScheduleDescription::IsInsideWindow(At(3), At(3), At(3)));
+
+    ibJobScheduleDescription s = ibJobScheduleDescription::EverySeconds(60);
+    s.m_startMinute = At(3);
+    s.m_endMinute   = At(3);
+    EXPECT_FALSE(s.IsValid());
+}
+
+// ---------------------------------------------------------------------------
+// The calendar combines — "10:00-15:00 on Tuesdays in March" is an AND of
+// independent fields, not a grammar
+// ---------------------------------------------------------------------------
+
+TEST(JobSchedule, DefaultAllowsAnyMoment) {
+    const ibJobScheduleDescription s = ibJobScheduleDescription::EverySeconds(600);
+    EXPECT_TRUE(ibJobScheduleRules::IsAllowed(s, ibDateTime(2026, 3, 17, 3, 0)));
+    EXPECT_TRUE(ibJobScheduleRules::IsAllowed(s, ibDateTime(2026, 1, 1, 23, 59)));
+}
+
+TEST(JobSchedule, WeekDayNarrows) {
+    ibJobScheduleDescription s = ibJobScheduleDescription::EverySeconds(600);
+    s.m_daysOfWeek = ibJobWeekDay_Tuesday;
+
+    EXPECT_TRUE(ibJobScheduleRules::IsAllowed(s, ibDateTime(2026, 3, 17, 12, 0)));   // Tuesday
+    EXPECT_FALSE(ibJobScheduleRules::IsAllowed(s, ibDateTime(2026, 3, 18, 12, 0)));  // Wednesday
+}
+
+TEST(JobSchedule, WindowWeekDayAndMonthCombine) {
+    // The case in full: 10:00-15:00, Tuesdays, March only.
+    ibJobScheduleDescription s = ibJobScheduleDescription::EverySeconds(600);
+    s.m_startMinute = At(10);
+    s.m_endMinute   = At(15);
+    s.m_daysOfWeek  = ibJobWeekDay_Tuesday;
+    s.m_months      = 1u << (3 - 1);   // March — bit 0 is January
+
+    EXPECT_TRUE(ibJobScheduleRules::IsAllowed(s, ibDateTime(2026, 3, 17, 12, 0)));
+
+    EXPECT_FALSE(ibJobScheduleRules::IsAllowed(s, ibDateTime(2026, 3, 17, 9, 0)));   // too early
+    EXPECT_FALSE(ibJobScheduleRules::IsAllowed(s, ibDateTime(2026, 3, 17, 15, 0)));  // end is exclusive
+    EXPECT_FALSE(ibJobScheduleRules::IsAllowed(s, ibDateTime(2026, 3, 18, 12, 0)));  // wrong weekday
+    EXPECT_FALSE(ibJobScheduleRules::IsAllowed(s, ibDateTime(2026, 4, 21, 12, 0)));  // right weekday, wrong month
+}
+
+TEST(JobSchedule, DayOfMonthNarrows) {
+    ibJobScheduleDescription s = ibJobScheduleDescription::EverySeconds(600);
+    s.m_daysOfMonth = 1u << 0;   // the 1st
+
+    EXPECT_TRUE(ibJobScheduleRules::IsAllowed(s, ibDateTime(2026, 3, 1, 12, 0)));
+    EXPECT_FALSE(ibJobScheduleRules::IsAllowed(s, ibDateTime(2026, 3, 2, 12, 0)));
+}
+
+TEST(JobSchedule, ValidityRangeBounds) {
+    ibJobScheduleDescription s = ibJobScheduleDescription::EverySeconds(600);
+    s.m_activeFrom = ibDateTime(2026, 3, 1);
+    s.m_activeTo   = ibDateTime(2026, 3, 31);
+
+    EXPECT_TRUE(ibJobScheduleRules::IsAllowed(s, ibDateTime(2026, 3, 17, 12, 0)));
+    EXPECT_FALSE(ibJobScheduleRules::IsAllowed(s, ibDateTime(2026, 2, 17, 12, 0)));
+    EXPECT_FALSE(ibJobScheduleRules::IsAllowed(s, ibDateTime(2026, 4, 17, 12, 0)));
+
+    // Inverted range names no moment at all — refused rather than silent.
+    std::swap(s.m_activeFrom, s.m_activeTo);
+    EXPECT_FALSE(s.IsValid());
+}
+
+TEST(JobSchedule, NextAllowedSkipsToTheWindow) {
+    ibJobScheduleDescription s = ibJobScheduleDescription::Nightly(2, 5);
+
+    // Asked at noon, the next allowed moment is 02:00 the following day.
+    const ibDateTime next = ibJobScheduleRules::NextAllowedAfter(s, ibDateTime(2026, 3, 17, 12, 0));
+    ASSERT_FALSE(next.IsEmpty());
+    EXPECT_EQ(18, next.GetPart(ibDatePart::Day));
+    EXPECT_EQ(2,  next.GetPart(ibDatePart::Hour));
+    EXPECT_EQ(0,  next.GetPart(ibDatePart::Minute));
+}
+
+TEST(JobSchedule, NextAllowedSkipsToTheWeekday) {
+    ibJobScheduleDescription s = ibJobScheduleDescription::EverySeconds(24 * 3600);
+    s.m_daysOfWeek = ibJobWeekDay_Monday;
+
+    // 17 Mar 2026 is a Tuesday; the next Monday is the 23rd.
+    const ibDateTime next = ibJobScheduleRules::NextAllowedAfter(s, ibDateTime(2026, 3, 17, 12, 0));
+    ASSERT_FALSE(next.IsEmpty());
+    EXPECT_EQ(23, next.GetPart(ibDatePart::Day));
+}
+
+TEST(JobSchedule, ImpossibleCalendarHasNoNextRun) {
+    // 30 February: every field is individually legal, the combination is not.
+    ibJobScheduleDescription s = ibJobScheduleDescription::EverySeconds(600);
+    s.m_daysOfMonth = 1u << 29;             // the 30th
+    s.m_months      = 1u << (2 - 1);        // February
+
+    EXPECT_TRUE(ibJobScheduleRules::NextAllowedAfter(s, ibDateTime(2026, 1, 1)).IsEmpty());
+}
+
+TEST(JobSchedule, ToStringNamesOnlyWhatWasSet) {
+    const wxString plain = ibJobScheduleRules::Describe(ibJobScheduleDescription::EverySeconds(600));
+    EXPECT_FALSE(plain.IsEmpty());
+    // Defaults are not restated — a description that lists "any day, any month"
+    // is one nobody finishes reading.
+    EXPECT_EQ(wxNOT_FOUND, plain.Find(wxT(",")));
+
+    ibJobScheduleDescription s = ibJobScheduleDescription::EverySeconds(600);
+    s.m_startMinute = At(10);
+    s.m_endMinute   = At(15);
+    EXPECT_NE(wxNOT_FOUND, ibJobScheduleRules::Describe(s).Find(wxT("10:00-15:00")));
+}
+
+// ---------------------------------------------------------------------------
+// The argument gate — plain values travel, session-bound ones do not.
+//
+// The rule itself lives on ibValue::IsTransferable(); what is checked here is
+// that the job layer asks every element and reports the FIRST refusal, so a bad
+// argument is named at submission instead of surfacing in the background where
+// no caller is left to hear about it.
+// ---------------------------------------------------------------------------
+
+TEST(JobManager, EmptyArgumentArrayTravels) {
+    std::vector<ibValue> args;
+    EXPECT_EQ(-1, ibJobManager::FindNonTransferable(args));
+}
+
+TEST(JobManager, PlainValuesTravel) {
+    std::vector<ibValue> args;
+    args.push_back(ibValue(42));
+    args.push_back(ibValue(wxT("text")));
+    args.push_back(ibValue(true));
+    args.push_back(ibValue());            // undefined
+    EXPECT_EQ(-1, ibJobManager::FindNonTransferable(args));
+}
+
+TEST(JobManager, IteratorRefusesToTravel) {
+    // A cursor is a position inside somebody else's collection — advancing it
+    // from a second session would move it under the first.
+    ibValueIterator cursor;
+    EXPECT_FALSE(cursor.IsTransferable());
+}
+
+TEST(JobManager, CheckPassesOnPlainValues) {
+    std::vector<ibValue> args;
+    args.push_back(ibValue(1));
+    args.push_back(ibValue(wxT("ok")));
+    EXPECT_NO_THROW(ibJobManager::CheckTransferable(args));
+}
+
+TEST(JobManager, CheckThrowsOnMutableValue) {
+    // The author has to SEE this, at the call, on their own stack — a job that
+    // quietly never runs is the failure mode this exists to prevent.
+    std::vector<ibValue> args;
+    args.push_back(ibValue(1));
+    args.push_back(ibValue(new ibValueIterator()));
+    EXPECT_THROW(ibJobManager::CheckTransferable(args), ibBackendException);
+}
+
+// ---------------------------------------------------------------------------
+// Empty manager — the contract before anything is registered
+// ---------------------------------------------------------------------------
+
+TEST(JobManager, StartsEmpty) {
+    ibJobManager manager(ib::AppDataCtorToken{});
+    EXPECT_EQ(0u, manager.Count());
+    EXPECT_EQ(0u, manager.RunningCount());
+}
+
+TEST(JobManager, TickOnEmptyLaunchesNothing) {
+    ibJobManager manager(ib::AppDataCtorToken{});
+    EXPECT_EQ(0, manager.Tick());
+}
+
+TEST(JobManager, RunNowRejectsUnknownName) {
+    ibJobManager manager(ib::AppDataCtorToken{});
+    EXPECT_FALSE(manager.RunNow(wxT("nobody")));
+}
+
+TEST(JobManager, UnregisterRejectsUnknownName) {
+    ibJobManager manager(ib::AppDataCtorToken{});
+    EXPECT_FALSE(manager.Unregister(wxT("nobody")));
+}
+
+// ---------------------------------------------------------------------------
+// Registration contract — rejections happen at Register, in front of the
+// caller, never as silence at tick time
+// ---------------------------------------------------------------------------
+
+TEST(JobManager, RegisterRejectsEmptyName) {
+    ibJobManager manager(ib::AppDataCtorToken{});
+    ibJobDescription desc;
+    desc.m_name = wxEmptyString;
+    desc.m_body = [](ibSession*) { return false; };
+    EXPECT_FALSE(manager.Register(desc));
+    EXPECT_EQ(0u, manager.Count());
+}
+
+TEST(JobManager, RegisterRejectsMissingBody) {
+    ibJobManager manager(ib::AppDataCtorToken{});
+    ibJobDescription desc;
+    desc.m_name = wxT("bodyless");
+    EXPECT_FALSE(manager.Register(desc));
+    EXPECT_EQ(0u, manager.Count());
+}
+
+TEST(JobManager, RegisterRejectsNonPositiveInterval) {
+    ibJobManager manager(ib::AppDataCtorToken{});
+    ibJobDescription desc;
+    desc.m_name = wxT("zero-interval");
+    desc.m_body = [](ibSession*) { return false; };
+    desc.m_schedule.m_intervalSeconds = 0;
+    EXPECT_FALSE(manager.Register(desc));
+
+    desc.m_schedule.m_intervalSeconds = -60;
+    EXPECT_FALSE(manager.Register(desc));
+    EXPECT_EQ(0u, manager.Count());
+}
+
+TEST(JobManager, RegisterRejectsImpossibleSchedule) {
+    // A schedule that can never match is refused at registration rather than
+    // left to be debugged as silence — an empty window is the easy way to write
+    // one by accident.
+    ibJobManager manager(ib::AppDataCtorToken{});
+    ibJobDescription desc;
+    desc.m_name = wxT("never-matches");
+    desc.m_body = [](ibSession*) { return false; };
+    desc.m_schedule = ibJobScheduleDescription::EverySeconds(60);
+    desc.m_schedule.m_startMinute = At(3);
+    desc.m_schedule.m_endMinute   = At(3);
+    EXPECT_FALSE(manager.Register(desc));
+    EXPECT_EQ(0u, manager.Count());
+}
+
+TEST(JobManager, RegisterNeedsNoApplicationData) {
+    // Registration is DECLARATION ONLY — no session, no database, no metadata.
+    // That is what lets the platform's list be declared the moment a database
+    // opens, and it is why a job that never comes due costs nothing: the session
+    // is built on first launch instead.
+    //
+    // There is no appData in a unit-test process, and it must not matter.
+    ibJobManager manager(ib::AppDataCtorToken{});
+    ibJobDescription desc;
+    desc.m_name = wxT("declared-only");
+    desc.m_body = [](ibSession*) { return false; };
+    EXPECT_TRUE(manager.Register(desc));
+    EXPECT_EQ(1u, manager.Count());
+
+    // And nothing ran: no session could be created, so Launch declines. The job
+    // stays declared and will start the first time it can.
+    EXPECT_EQ(0, manager.Tick());
+    EXPECT_EQ(0u, manager.RunningCount());
+}
+
+TEST(JobManager, RegisterRejectsDuplicateName) {
+    // A duplicate means a double bootstrap. Refusing makes it visible; quietly
+    // keeping one copy would hide it until something ran twice.
+    ibJobManager manager(ib::AppDataCtorToken{});
+    ibJobDescription desc;
+    desc.m_name = wxT("twice");
+    desc.m_body = [](ibSession*) { return false; };
+
+    EXPECT_TRUE(manager.Register(desc));
+    EXPECT_FALSE(manager.Register(desc));
+    EXPECT_EQ(1u, manager.Count());
+}
+
+TEST(JobManager, TheCapCountsRunsNotDeclarations) {
+    // CHANGED 2026-08-04, when the parameterized metatype started declaring one job PER ROW.
+    //
+    // The cap used to refuse registrations, on the reasoning that each job holds a session and a
+    // session holds a pooled connection. The first step of that is false: a registration is a
+    // DESCRIPTION — no session, no database, no metadata — and the session is built on first
+    // launch and released when the run ends. What must be capped is how many run AT ONCE, which
+    // is what the tick enforces; a hundred and fifty rows may all be declared and each comes due
+    // on its own schedule.
+    ibJobManager manager(ib::AppDataCtorToken{});
+    manager.SetMaxJobs(2);
+
+    for (int i = 0; i < 5; ++i) {
+        ibJobDescription desc;
+        desc.m_name = wxString::Format(wxT("job-%d"), i);
+        desc.m_body = [](ibSession*) { return false; };
+        EXPECT_TRUE(manager.Register(desc)) << "declaration " << i << " was refused by the run cap";
+    }
+
+    EXPECT_EQ(5u, manager.Count());
+    EXPECT_EQ(2u, manager.GetMaxJobs());   // the cap itself is untouched — it just means something else
+    EXPECT_EQ(0u, manager.RunningCount());
+}
+
+TEST(JobManager, SnapshotReportsTheSwitch) {
+    // A switched-off job STAYS registered — that is what keeps "Execute" answerable on it — so
+    // "declared" and "on the schedule" are two different answers and the snapshot must carry both.
+    ibJobManager manager(ib::AppDataCtorToken{});
+
+    ibJobDescription off;
+    off.m_name   = wxT("switched-off");
+    off.m_active = false;
+    off.m_body   = [](ibSession*) { return false; };
+    ASSERT_TRUE(manager.Register(off));
+
+    const auto snapshot = manager.Snapshot();
+    ASSERT_EQ(1u, snapshot.size());
+    EXPECT_FALSE(snapshot[0].m_active);
+}
+
+TEST(JobManager, ApplySettingsStatesTheOwnersOpinion) {
+    // The row (or whoever owns the setting) says what it wants through this door, and the entry
+    // takes it IN PLACE — unregister-then-register would drop a session a run may be using, and
+    // would reset the moment the job was registered, turning "I changed the schedule" into "the
+    // job forgot it ever ran".
+    ibJobManager manager(ib::AppDataCtorToken{});
+
+    const ibGuid key = wxNewUniqueGuid;
+    ibJobDescription desc;
+    desc.m_name     = wxT("owned-by-its-row");
+    desc.m_key      = key;
+    desc.m_active   = true;
+    desc.m_schedule = ibJobScheduleDescription::EverySeconds(60);
+    desc.m_body     = [](ibSession*) { return false; };
+    ASSERT_TRUE(manager.Register(desc));
+
+    EXPECT_TRUE(manager.ApplySettings(key, false, ibJobScheduleDescription::EverySeconds(900)));
+
+    const auto snapshot = manager.Snapshot();
+    ASSERT_EQ(1u, snapshot.size());
+    EXPECT_FALSE(snapshot[0].m_active);
+    EXPECT_NE(wxNOT_FOUND, snapshot[0].m_schedule.Find(wxT("15")));   // "Every 15 minutes"
+
+    // A key nobody declared is not an error to raise — it is a "no" to act on: the caller then
+    // registers instead, which is exactly what RegisterRow does.
+    EXPECT_FALSE(manager.ApplySettings(wxNewUniqueGuid, true, ibJobScheduleDescription::EverySeconds(60)));
+}
+
+TEST(JobManager, JobsAreFoundByKeyNotByName) {
+    // The key is the identity, the name is the caption. A rename must not lose a job's settings,
+    // its clock or its claim — so every lookup that matters goes through the guid.
+    ibJobManager manager(ib::AppDataCtorToken{});
+
+    const ibGuid key = wxNewUniqueGuid;
+    ibJobDescription desc;
+    desc.m_name = wxT("ScheduledJob1.a-row");
+    desc.m_key  = key;
+    desc.m_body = [](ibSession*) { return false; };
+    ASSERT_TRUE(manager.Register(desc));
+
+    EXPECT_EQ(wxT("ScheduledJob1.a-row"), manager.FindNameByKey(key));
+    EXPECT_TRUE(manager.FindNameByKey(wxNewUniqueGuid).IsEmpty());
+
+    const auto snapshot = manager.Snapshot();
+    ASSERT_EQ(1u, snapshot.size());
+    EXPECT_EQ(key, snapshot[0].m_key);
+
+    ASSERT_TRUE(manager.Unregister(wxT("ScheduledJob1.a-row")));
+    EXPECT_TRUE(manager.FindNameByKey(key).IsEmpty());
+}
+
+TEST(JobManager, UnregisterByPrefixWithdrawsEveryRowOfOneMetaobject) {
+    // How a parameterized job leaves when its configuration closes: the rows were declared as
+    // "<JobName>.<rowGuid>", and by then the table may no longer be readable — so the manager is
+    // asked what it holds instead of the database.
+    ibJobManager manager(ib::AppDataCtorToken{});
+
+    for (int i = 0; i < 3; ++i) {
+        ibJobDescription row;
+        row.m_name = wxString::Format(wxT("Exchange.%d"), i);
+        row.m_key  = wxNewUniqueGuid;
+        row.m_body = [](ibSession*) { return false; };
+        ASSERT_TRUE(manager.Register(row));
+    }
+
+    ibJobDescription other;
+    other.m_name = wxT("SomethingElse.0");
+    other.m_body = [](ibSession*) { return false; };
+    ASSERT_TRUE(manager.Register(other));
+
+    EXPECT_EQ(3u, manager.UnregisterByPrefix(wxT("Exchange.")));
+    EXPECT_EQ(1u, manager.Count());
+    EXPECT_EQ(0u, manager.UnregisterByPrefix(wxT("Exchange.")));   // nothing left to withdraw
+}
+
+TEST(JobManager, UnregisterDropsTheJob) {
+    ibJobManager manager(ib::AppDataCtorToken{});
+    ibJobDescription desc;
+    desc.m_name = wxT("temporary");
+    desc.m_body = [](ibSession*) { return false; };
+
+    ASSERT_TRUE(manager.Register(desc));
+    EXPECT_TRUE(manager.Unregister(wxT("temporary")));
+    EXPECT_EQ(0u, manager.Count());
+    // Gone means gone — a second Unregister has nothing to find.
+    EXPECT_FALSE(manager.Unregister(wxT("temporary")));
+}
+
+TEST(JobManager, SnapshotReportsDeclaredJobs) {
+    ibJobManager manager(ib::AppDataCtorToken{});
+    ibJobDescription desc;
+    desc.m_name     = wxT("watched");
+    desc.m_body     = [](ibSession*) { return false; };
+    desc.m_schedule = ibJobScheduleDescription::EverySeconds(600);
+    ASSERT_TRUE(manager.Register(desc));
+
+    const std::vector<ibJobState> snap = manager.Snapshot();
+    ASSERT_EQ(1u, snap.size());
+    EXPECT_EQ(wxT("watched"), snap[0].m_name);
+    // Never ran yet: no outcome, no last run, and no promised next run — an empty
+    // cell reads as "on the next tick" rather than as a missing value.
+    EXPECT_EQ(ibJobOutcome::Never, snap[0].m_outcome);
+    EXPECT_TRUE(snap[0].m_lastRunAt.IsEmpty());
+    EXPECT_TRUE(snap[0].m_nextRunAt.IsEmpty());
+    // The schedule reads back as a sentence, which is what a settings list shows.
+    EXPECT_FALSE(snap[0].m_schedule.IsEmpty());
+}
+
+// ---------------------------------------------------------------------------
+// Caps and shutdown
+// ---------------------------------------------------------------------------
+
+TEST(JobManager, MaxJobsRoundTrips) {
+    ibJobManager manager(ib::AppDataCtorToken{});
+    manager.SetMaxJobs(9);
+    EXPECT_EQ(9u, manager.GetMaxJobs());
+}
+
+TEST(JobManager, StopIsIdempotent) {
+    ibJobManager manager(ib::AppDataCtorToken{});
+    manager.Stop();
+    manager.Stop();
+    EXPECT_EQ(0u, manager.Count());
+}
+
+// ---------------------------------------------------------------------------
+// Background runs — the refusal paths reachable without a live process
+// ---------------------------------------------------------------------------
+
+TEST(JobManager, StartBackgroundRejectsEmptyName) {
+    ibJobManager manager(ib::AppDataCtorToken{});
+    EXPECT_THROW(manager.StartBackground(wxEmptyString), ibBackendException);
+}
+
+TEST(JobManager, StartBackgroundRejectsMutableArgumentBeforeAnythingElse) {
+    // The gate runs FIRST — before the name check, before the session. A bad
+    // argument must be reported even when everything after it would also have
+    // failed, otherwise the author fixes the wrong thing.
+    ibJobManager manager(ib::AppDataCtorToken{});
+    std::vector<ibValue> args;
+    args.push_back(ibValue(new ibValueIterator()));
+    EXPECT_THROW(manager.StartBackground(wxEmptyString, args), ibBackendException);
+}
+
+TEST(JobManager, StoppedManagerAcceptsNothing) {
+    ibJobManager manager(ib::AppDataCtorToken{});
+    manager.Stop();
+
+    ibJobDescription desc;
+    desc.m_name = wxT("late");
+    desc.m_body = [](ibSession*) { return false; };
+    EXPECT_FALSE(manager.Register(desc));
+    EXPECT_EQ(0, manager.Tick());
+    EXPECT_FALSE(manager.RunNow(wxT("late")));
+}

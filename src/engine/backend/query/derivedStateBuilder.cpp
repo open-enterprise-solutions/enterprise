@@ -1,0 +1,719 @@
+﻿////////////////////////////////////////////////////////////////////////////
+//	Author		: Maxim Kornienko
+//	Description : L3-4 — regeneration of derived state (register totals)
+////////////////////////////////////////////////////////////////////////////
+
+#include "derivedStateBuilder.h"
+
+#include "backend/query/schemaSnapshot.h"
+#include "backend/query/dataQueryBuilder.h"     // the L3-1 door — aggregate read + write core
+#include "backend/query/queryable.h"
+#include "backend/query/schemaBuilder.h"
+#include "backend/databaseLayer/databaseMaterializeBuilder.h"   // ibCanMaterialize — the capability question belongs to L2-2
+#include "backend/restructureInfo.h"
+#include "backend/backend_exception.h"                // ibBackendCoreException — a rebuild refused aloud
+#include "backend/databaseLayer/connectionScope.h"    // the holder's own transaction scope (no L1 named here)
+#include "backend/databaseLayer/databaseQueryBuilder.h" // L2 — the rebuild's INSERT … SELECT
+#include "backend/query/columnLayout.h"                 // ColumnFieldNames / ibSqlAliasOf — the read's output names
+
+#include <map>
+#include <unordered_map>   // the verification's key figures — keyed by a sequence of values (ibValueSeqHash)
+#include <algorithm>
+
+namespace {
+
+// Enough declared to rebuild from? A derived table with no source, no accumulations, or no
+// queryable of its own has nothing to compute or nowhere to put it.
+bool IsRebuildable(const ibSchemaTable& t)
+{
+	if (!t.m_derived || t.m_queryable == nullptr)
+		return false;
+	const ibSchemaMaterialize& m = t.m_materialize;
+	if (m.m_source == nullptr || m.m_deltas.empty())
+		return false;
+	// Every accumulation needs its REGENERATION form. The trigger form alone cannot be rebuilt from
+	// (it is written against NEW / OLD, which exist only inside a trigger), and silently summing
+	// nothing would produce a table full of zeros that looks maintained.
+	for (const ibSchemaDelta& d : m.m_deltas)
+		if (!d.m_regenExpr || d.m_column == nullptr)
+			return false;
+	return true;
+}
+
+// Enough declared to FOLD? Only a split table has shards to fold, and only a declared accumulation
+// can be summed across them. An unsplit table is not a failure — there is simply nothing to do.
+bool IsCollapsible(const ibSchemaTable& t)
+{
+	if (!t.m_derived || t.m_queryable == nullptr)
+		return false;
+	const ibSchemaMaterialize& m = t.m_materialize;
+	if (m.m_shards <= 1 || m.m_deltas.empty())
+		return false;
+	for (const ibSchemaDelta& d : m.m_deltas)
+		if (d.m_column == nullptr)
+			return false;
+	return true;
+}
+
+// ⚠ EVERY read and write in this file is SYSTEM work, and the access policy must not touch any of
+// it. This recomputes STORED totals: filtered by the caller's rights it would rebuild them from the
+// rows that caller happens to see, and everyone afterwards would read numbers that are simply
+// wrong — silently, because a wrong total does not look like an error. The write half is the same
+// argument from the other side: clearing and re-writing the derived table is not the user's edit.
+//
+// SAID OUT LOUD, not inferred. The door pulls the policy from the CURRENT SESSION, and a background
+// job runs under the identity of whoever queued it — so it has a session and a policy, and any rule
+// of the form "no session = system" would be false exactly here.
+//
+// One helper rather than nine marks: nine copies of a decision drift, and the ninth is the one
+// somebody adds without the comment.
+ibDataQueryBuilder SystemQuery(ibDatabaseConnectionHolder* holder)
+{
+	ibDataQueryBuilder query(holder);
+	query.WithAccessPolicy(nullptr);
+	return query;
+}
+
+} // namespace
+
+namespace ibDerivedState {
+
+bool NeedsRegeneration(const ibSchemaTable* old, const ibSchemaTable& cur)
+{
+	if (!cur.m_derived)
+		return false;
+	if (old == nullptr)
+		return true;   // new table over a possibly-populated source
+
+	// A column that VANISHED (dropped) — the grouping or the accumulation it fed is gone.
+	for (const ibSchemaColumn& o : old->m_columns) {
+		bool stillThere = false;
+		for (const ibSchemaColumn& c : cur.m_columns)
+			if (c.m_id == o.m_id) { stillThere = true; break; }
+		if (!stillThere)
+			return true;
+	}
+
+	// The KEY SHAPE itself — a dimension added or removed, or a different stored grain. Existing
+	// rows are keyed the old way; no in-place fix exists.
+	const ibSchemaMaterialize& a = old->m_materialize;
+	const ibSchemaMaterialize& b = cur.m_materialize;
+	if (a.m_keys.size() != b.m_keys.size())     return true;
+	if (a.m_periodUnit != b.m_periodUnit)       return true;
+	if (a.m_periodColumn != b.m_periodColumn)   return true;
+	// Splitting joins or leaves the KEY, so switching it re-keys every existing row. There is no
+	// in-place fix — an unsplit row has no shard to belong to, and a split one cannot merge back
+	// without summing. Rebuild.
+	if (a.m_shards != b.m_shards)               return true;
+
+	// ⭐⭐ A KEY COLUMN THAT CHANGED SHAPE re-keys every stored row just as surely as a key that was
+	// added — the count is the same, but a dimension retyped from a string to a reference no longer
+	// spreads into the same physical fields (`…_S` becomes `…_RTRef` + `…_RRRef`), and even a plain
+	// widening changes the declared type of a field the table's PRIMARY KEY stands on.
+	//
+	// ⚠ AND NOTHING BELOW CAN FIX IT IN PLACE: the ordinary column diff would emit an ALTER, and no
+	// engine alters a column an index is built over — Firebird refuses the whole apply ("column
+	// FLD1391_S … is referenced in index …_PK", measured 2026-09-16 on a copy while a register's
+	// Currency dimension moved from String to a catalog reference). The right answer is the one this
+	// function already gives for every other re-keying: drop the derived table and regenerate it from
+	// the movements, where the values are kept in their own right.
+	for (size_t i = 0; i < a.m_keys.size(); ++i) {
+		if (a.m_keys[i] == nullptr || b.m_keys[i] == nullptr)
+			return true;   // a key nobody can describe is not a key anybody can prove unchanged
+		const std::vector<ibColumnSlot> was = DescribeColumnLayout(a.m_keys[i]);
+		const std::vector<ibColumnSlot> now = DescribeColumnLayout(b.m_keys[i]);
+		if (was.size() != now.size())
+			return true;
+		for (size_t f = 0; f < was.size(); ++f)
+			if (was[f].m_name != now[f].m_name || !ibSameFieldType(was[f].m_type, now[f].m_type))
+				return true;
+	}
+
+	// The set of ACCUMULATIONS changed — which happens when a register switches between turnover
+	// and balance kinds. This is NOT the harmless "a column was added" case: gaining an expense
+	// side changes what the receipt side MEANS (it stops holding every movement and starts holding
+	// only one direction), so every stored figure is now wrong even though the column that held it
+	// still exists. Rebuild.
+	if (a.m_deltas.size() != b.m_deltas.size()) return true;
+
+	// Only additions left — provably no effect on what is already accumulated.
+	return false;
+}
+
+bool Regenerate(const ibSchemaTable& derived, ibDatabaseConnectionHolder* holder)
+{
+	if (!IsRebuildable(derived))
+		return true;   // nothing declared to rebuild — not a failure
+
+	{
+		// Ask L2-2 whether this driver materialises at all — never inspect a dialect from up here.
+		ibSchemaBuilder schema(holder);
+		if (!ibCanMaterialize(schema.Connection()))
+			return true;   // nothing was ever materialised, so there is nothing to rebuild
+	}
+
+	const ibSchemaMaterialize& spec = derived.m_materialize;
+
+	// 1. The READ of the source, aggregated by the declared key — built here, run as the SELECT of step 3.
+	//
+	// The period key is grouped by the TRUNCATED expression, through the same ibTotalsPeriod and the
+	// same dialect map the trigger uses. That identity is the point: two separate notions of "start
+	// of the month" would make a rebuilt row land on a different key than the trigger would have
+	// produced, silently splitting rows the trigger had merged.
+	ibDataQueryBuilder read = SystemQuery(holder);
+	read.From(spec.m_source);
+
+	// The guard the trigger accumulates under — applied here too, or a rebuild would produce totals
+	// the trigger would never have produced. Same condition, one declaration, two forms.
+	if (spec.m_guardExpr)
+		read.Where(spec.m_guardExpr);
+
+	if (!spec.m_periodColumn.IsEmpty() && spec.m_periodSource != nullptr)
+		read.GroupByExpr(ibQueryColumnExpr::PeriodTrunc(ibQueryColumnExpr::Col(spec.m_periodSource), spec.m_periodUnit),
+		                 spec.m_periodColumn);
+	for (const ibBackendQueryColumn* k : spec.m_keys)
+		read.GroupBy(k);
+
+	for (const ibSchemaDelta& d : spec.m_deltas)
+		read.Aggregate(ibDataQueryBuilder::AggregateFn::Sum, d.m_regenExpr, d.m_column->GetPhysicalName());
+
+	// 2. CLEAR the derived table. It is a cache: everything in it is about to be recomputed. Both steps
+	//    sit inside the caller's restructuring transaction, so a failure rolls the old rows back rather
+	//    than leaving the table empty.
+	{
+		ibDataQueryBuilder clear = SystemQuery(holder);
+		clear.From(derived.m_queryable);
+		if (!clear.Delete())
+			return false;
+	}
+
+	// 3. WRITE the aggregate back — ONE statement: the read above, as the SELECT of an INSERT.
+	//
+	// ⭐⭐ IT WAS ONE UPSERT PER ROW, a statement built and prepared for every one of them: MEASURED 2026-09-13
+	// on a 40 000-employee copy (Debug), ~5 ms a row, and a calculation register's totals (it kept them then)
+	// ran for tens of minutes of an apply. The relation is the read's own lowering (BuildRelation — the provider's aggregate
+	// query stopped before it runs), so nothing here spells a second GROUP BY; its outputs are the key columns'
+	// fields under their own names and every figure under the statement's spelling (ibSqlAliasOf).
+	//
+	// INSERT, not upsert: the table was cleared just above, inside the same restructuring, which holds the base
+	// exclusively — no trigger writes beside it, and a retried rebuild clears first again.
+	//
+	// A SPLIT table still gets ONE row per key from a rebuild — the shard exists to spread concurrent writers,
+	// and a rebuild is a single writer that already holds the consolidated figure. Shard 0 is where it lands;
+	// the trigger spreads everything that follows. A NULL in the unique key would be a fact nobody declared.
+	const ibQueryRelPtr folded = read.BuildRelation();
+	if (!folded)
+		ibBackendCoreException::Error(_("The derived table '%s' cannot be rebuilt: its source is not read from the database"),
+		                              derived.m_name);
+	std::vector<wxString> columns;
+	std::vector<ibQueryProjItem> values;
+	const auto take = [&](const wxString& column, const wxString& output) {
+		columns.push_back(column);
+		values.push_back(ibQueryProjItem{ ibCol(wxT("r_"), output), column });
+	};
+	if (!spec.m_periodColumn.IsEmpty() && spec.m_periodSource != nullptr)   // the read's own condition, above
+		take(spec.m_periodColumn, ibSqlAliasOf(spec.m_periodColumn));
+	// The period and the shard are named here each once, from their own names — `m_keys` holds neither, so
+	// nothing can put the same physical column into the statement twice.
+	for (const ibBackendQueryColumn* k : spec.m_keys)
+		for (const wxString& field : ColumnFieldNames(k))
+			take(field, field);
+	for (const ibSchemaDelta& d : spec.m_deltas)
+		take(d.m_column->GetPhysicalName(), ibSqlAliasOf(d.m_column->GetPhysicalName()));
+	if (spec.m_shards > 1) {
+		columns.push_back(ShardColumnName());
+		values.push_back(ibQueryProjItem{ ibCast(ibConst(ibValue(0)), ibTypeInteger()), ShardColumnName() });
+	}
+	// …and through the barrier, as the hash fill below: Firebird refuses DML against a table created in the
+	// same transaction, and refuses it at commit.
+	{
+		ibSchemaBuilder schema(holder);
+		const ibDmlStatement insert = ibInsertSelect(derived.m_name, columns, ibProject(ibSubquery(folded, wxT("r_")), values));
+		if (!schema.RunOrDefer(derived.m_name, [insert, holder]() {
+				ibDatabaseQueryBuilder write(holder);
+				return write.Execute(insert) >= 0;
+			}))
+			return false;
+	}
+
+	// 4. GIVE THOSE ROWS THE IDENTITY THE TRIGGER WOULD HAVE GIVEN THEM.
+	//
+	// Where a key is too wide for an index, the derived table holds its uniqueness in a hashed field
+	// that the TRIGGER computes as it inserts (databaseMaterializeBuilder.h). A rebuild writes through
+	// the ordinary door, so its rows arrive without one — and an empty identity is not a neutral state:
+	// a UNIQUE index over NULLs enforces nothing, and on the engines that conflict on that column the
+	// next movement for a rebuilt key would insert a second row beside the first. Same reasoning as the
+	// shard column above, one field along.
+	// ⭐⭐ AND IT GOES THROUGH THE BARRIER, like every other write into a table this save created.
+	//
+	// It used to run straight at the connection, and that is the whole reason a chart-of-accounts
+	// register could not be re-keyed: Firebird refuses DML against a table created in the SAME
+	// transaction, and refuses it AT COMMIT — so this UPDATE reported success, the twenty-six
+	// statements before it reported success, and the apply died at the end on "expression evaluation
+	// not supported", naming nothing.
+	//
+	// ⚠ WHY ONLY THIS REGISTER SHOWED IT. The hash column exists only where the key is too wide for
+	// the engine's index (ibKeyNeedsHash) — an accounting register's key is the period, the account,
+	// a (kind, value) pair per analytic and the dimensions, well past Firebird's sixteen segments. An
+	// accumulation register's key fits, carries no hash column, and therefore never issued this
+	// statement: the same switch on the same day worked there and failed here.
+	//
+	// The spec is COPIED into the closure — a deferred fill runs after this function, and after the
+	// builder that started it, has gone. The holder travels for the same reason (see schemaSnapshot).
+	{
+		ibSchemaBuilder schema(holder);
+		const ibMaterializeSpec fillSpec = spec.ToRenderSpec(derived.m_name);
+		if (!schema.RunOrDefer(derived.m_name, [fillSpec, holder]() {
+				ibSchemaBuilder deferred(holder);
+				return ibFillKeyHashes(deferred.Connection(), fillSpec);
+			}))
+			return false;
+	}
+
+	return true;
+}
+
+bool Collapse(const ibSchemaTable& derived, ibDatabaseConnectionHolder* holder)
+{
+	if (holder == nullptr)
+		return false;   // no context = no connection to be sure of; see the header — never guess one
+	if (!IsCollapsible(derived))
+		return true;    // nothing split to fold — not a failure
+
+	{
+		// The same capability question the rebuild asks: a driver that never materialised has no
+		// shards to fold, because it has no derived table at all.
+		ibSchemaBuilder schema(holder);
+		if (!ibCanMaterialize(schema.Connection()))
+			return true;
+	}
+
+	const ibSchemaMaterialize& spec = derived.m_materialize;
+	const bool hasPeriod = !spec.m_periodColumn.IsEmpty();
+
+	// THE BOUNDARY IS DERIVED, NEVER PASSED IN. Everything strictly before the CURRENT stored period
+	// is settled: nothing writes there in the normal course, so folding it is stable work rather than
+	// a race against live postings. And the two facts it takes are both already here — the table's
+	// own stored unit (declared beside it) and the clock — so no caller has to know, track, or
+	// advance anything. There is no "how far have we folded" state to keep, and none to get wrong.
+	//
+	// A table with no period dimension has no such frontier: its whole content is fair game, since
+	// a key without a period is written to at any time or not at all.
+	const ibValue periodBefore = hasPeriod
+		? ibValue(ibDateTime::Now().BeginOfPeriod(spec.m_periodUnit)) : ibValue();
+	const bool bounded = hasPeriod;
+
+	// The period is the table's own column, asked of the SOURCE only for how it is laid out.
+	const ibBackendQueryColumn* periodCol = hasPeriod
+		? derived.m_queryable->ResolveColumnByName(spec.m_periodColumn) : nullptr;
+	if (hasPeriod && periodCol == nullptr)
+		return true;   // the source does not expose what the declaration promised — nothing safe to do
+
+	// ⭐⭐ A ROW IS NAMED BY ITS FIELDS, EXACTLY AS THE TRIGGER NAMES IT.
+	//
+	// 🛑 THE FOLD READ ITS KEYS AS VALUES AND WROTE BACK BY VALUE, and that is two readings of one row. A
+	// value answers for its MEANING: an empty reference and a cell nobody tagged are both "not filled",
+	// and so are their text and their equality (dbTableProvider.cpp, the empty predicate). The table
+	// keeps them as two DIFFERENT rows — the trigger matches a key field by field — so the fold bucketed
+	// rows that are not one key, and aimed its add and its subtract with a WHERE that hit a row of the
+	// other spelling, or two rows at once. A ledger whose currency was added after its first postings
+	// folded one July entry of 5 600 into 11 200 (2026-09-26, the totals job, verified against a copy of
+	// the base taken before it ran). A fold moves figures without changing their sum; that one grew it.
+	//
+	// So the fold works where the trigger works: on the PHYSICAL fields. It buckets by their exact
+	// contents and addresses one row by all of them — a NULL as IS NULL, a key as its bytes. Rows the
+	// reading takes for one key but the table keeps apart stay apart; the reading sums them anyway
+	// (KeyFieldsAsRead), and a fold owes nothing more than a narrower read.
+	std::vector<ibColumnSlot> fields;
+	if (hasPeriod)
+		for (const ibColumnSlot& slot : DescribeColumnLayout(periodCol))
+			fields.push_back(slot);
+	for (const ibBackendQueryColumn* k : spec.m_keys)
+		for (const ibColumnSlot& slot : DescribeColumnLayout(k))
+			fields.push_back(slot);
+
+	const auto SumAlias = [](size_t n) { return wxString::Format(wxT("sum%u_"), static_cast<unsigned>(n)); };
+
+	// 1. READ one row per (key, shard) straight off the TOTALS table — never the movements. This
+	//    re-packs figures that are already correct instead of recomputing them, which is the whole
+	//    reason it is affordable next to a rebuild. It counts the physical rows under each too: see
+	//    the note at the fold.
+	ibDatabaseQueryBuilder read(holder);
+	read.From(derived.m_name);
+	std::vector<ibQueryProjItem> items;
+	for (const ibColumnSlot& f : fields) {
+		items.push_back(ibQueryProjItem{ ibCol(f.m_name), f.m_name });
+		read.GroupBy(ibCol(f.m_name));
+	}
+	items.push_back(ibQueryProjItem{ ibCol(ShardColumnName()), ShardColumnName() });
+	read.GroupBy(ibCol(ShardColumnName()));
+	for (size_t n = 0; n < spec.m_deltas.size(); n++)
+		items.push_back(ibQueryProjItem{ ibFunc(wxT("SUM"), { ibCol(spec.m_deltas[n].m_column->GetPhysicalName()) }), SumAlias(n) });
+	items.push_back(ibQueryProjItem{ ibFunc(wxT("COUNT"), { ibCol(ShardColumnName()) }), wxT("rows_") });
+	read.Project(std::move(items));
+	if (bounded)
+		read.Where(ibBinOp(ibQueryBinOp::Lt, ibCol(spec.m_periodColumn), ibConst(periodBefore)));
+
+	ibQueryResult rows = read.Execute();
+
+	// Drain and bucket by KEY (period + dimensions, field by field). Keys that occupy one row are already
+	// folded and drop out below, so what survives is only what actually spread. Reading the whole
+	// range to discover that is the cost of not tracking state anywhere — and once a period settles
+	// it is one row per key, so the pass gets cheaper every time it runs.
+	struct ibShardRow {
+		std::vector<ibQueryExprPtr> m_fields;    // one equality (or IS NULL) per physical field of the key
+		long long                   m_shard = 0;
+		std::vector<ibNumber>       m_sums;
+		long long                   m_rows = 0;  // physical rows under this (key, shard)
+		bool                        m_addressable = true;
+	};
+	std::map<wxString, std::vector<ibShardRow>> spread;
+
+	while (rows.Next()) {
+		ibShardRow row;
+		wxString id;
+		for (const ibColumnSlot& f : fields) {
+			id += wxT("\x1F");   // unit separator — never inside a field
+			if (rows.IsResultNull(f.m_name)) {
+				row.m_fields.push_back(ibIsNull(ibCol(f.m_name), false));
+				id += wxT("<null>");
+				continue;
+			}
+			ibQueryExprPtr value;
+			switch (f.m_type.m_kind) {
+			case ibCanonicalKind::Boolean: {
+				const bool v = rows.GetResultBool(f.m_name);
+				value = ibConst(ibValue(v));
+				id += v ? wxT("1") : wxT("0");
+				break;
+			}
+			case ibCanonicalKind::Integer:
+			case ibCanonicalKind::BigInt: {
+				const long long v = rows.GetResultLong(f.m_name);
+				value = ibConst(ibValue(ibNumber(v)));
+				id += wxString::Format(wxT("%lld"), v);
+				break;
+			}
+			case ibCanonicalKind::Number: {
+				const ibNumber v = rows.GetResultNumber(f.m_name);
+				value = ibConst(ibValue(v));
+				id += v.ToString();
+				break;
+			}
+			case ibCanonicalKind::Date: {
+				const ibDateTime v = rows.GetResultDate(f.m_name);
+				value = ibConst(ibValue(v));
+				id += wxString::Format(wxT("%lld"), v.GetValue());
+				break;
+			}
+			case ibCanonicalKind::String: {
+				const wxString v = rows.GetResultString(f.m_name);
+				value = ibConst(ibValue(v));
+				id += v;
+				break;
+			}
+			default: {   // Blob / Binary / Guid — the bytes as they are stored
+				wxMemoryBuffer bytes(0);
+				rows.GetResultBlob(f.m_name, bytes);
+				// An empty but present blob has no spelling a statement can bind (ibParamOfConst takes it
+				// for a NULL), so a row that holds one cannot be named - it is read, and left alone.
+				row.m_addressable = row.m_addressable && bytes.GetDataLen() > 0;
+				value = ibConstBlob(bytes.GetData(), bytes.GetDataLen());
+				for (size_t b = 0; b < bytes.GetDataLen(); ++b)
+					id += wxString::Format(wxT("%02x"), static_cast<const unsigned char*>(bytes.GetData())[b]);
+				break;
+			}
+			}
+			row.m_fields.push_back(ibBinOp(ibQueryBinOp::Eq, ibCol(f.m_name), value));
+		}
+		row.m_shard = rows.GetResultLong(ShardColumnName());
+		for (size_t n = 0; n < spec.m_deltas.size(); n++)
+			row.m_sums.push_back(rows.IsResultNull(SumAlias(n)) ? ibNumber() : rows.GetResultNumber(SumAlias(n)));
+		row.m_rows = rows.GetResultLong(wxT("rows_"));
+		spread[id].push_back(std::move(row));
+	}
+
+	// 2. FOLD each spread key: move every other shard's figure into one absorbing row, then drop
+	//    the rows that end up empty.
+	for (auto& entry : spread) {
+		std::vector<ibShardRow>& shards = entry.second;
+		if (shards.size() < 2)
+			continue;   // one row already — nothing to fold, whichever shard it sits in
+
+		// ⚠ ONE PHYSICAL ROW UNDER EACH (KEY, SHARD), OR THE KEY IS LEFT AS IT IS. A NULL in a key field is
+		// a row the unique index does not guard — the trigger that meets one matches nothing and inserts
+		// beside it — so two rows may answer to the same fields, and no WHERE can name one of them.
+		// Leaving the key unfolded costs nothing but a wider read: a split key reads exactly right.
+		if (std::any_of(shards.begin(), shards.end(),
+				[](const ibShardRow& r) { return r.m_rows != 1 || !r.m_addressable; }))
+			continue;
+
+		// ONE TRANSACTION PER KEY — the finest granularity that is still correct, and the choice
+		// that decides whether this can run while people work. Atomicity is needed only across one
+		// key's add / subtract pair; anything wider just holds locks longer. Per TABLE (what this
+		// was) accumulates a row lock for every key it has touched and holds them all until the
+		// table is done — so a posting that happens to need one of those rows waits on a sweep that
+		// has nothing to do with it. Per key, the lock is three statements long and the next
+		// transaction starts clean.
+		//
+		// Nested scopes collapse onto one real transaction, so a caller that already opened one
+		// keeps its own boundary and this becomes a no-op inside it.
+		ibConnectionScope scope(holder);
+		scope.SafeBeginTransaction();
+
+		// The ABSORBER is the lowest-numbered shard PRESENT, not shard 0. The trigger picks shards
+		// by hashing the connection, so a key may well have no shard-0 row at all — and creating one
+		// first would mean an INSERT racing the very writers this fold is meant to tolerate.
+		std::sort(shards.begin(), shards.end(),
+			[](const ibShardRow& a, const ibShardRow& b) { return a.m_shard < b.m_shard; });
+		const ibShardRow& absorber = shards.front();
+
+		// The WHERE that names ONE physical row: every field of the key, and the shard - the trigger's own
+		// match (m_deltaKeyMatchItem, `IS NOT DISTINCT FROM`), spelled against the values read above: IS NULL
+		// for a NULL, = for the rest. One rule for "which row is this key's", whoever writes it.
+		const auto Aim = [](const ibShardRow& row) {
+			ibQueryExprPtr where = ibBinOp(ibQueryBinOp::Eq, ibCol(ShardColumnName()), ibConst(ibValue(ibNumber(row.m_shard))));
+			for (const ibQueryExprPtr& field : row.m_fields)
+				where = ibBinOp(ibQueryBinOp::And, where, field);
+			return where;
+		};
+		// `col = COALESCE(col, 0) + delta` — in-statement arithmetic, NULL-safe on the stored side.
+		const auto Moved = [&spec](const std::vector<ibNumber>& sums, bool negate) {
+			std::vector<ibDmlAssign> assign;
+			for (size_t n = 0; n < spec.m_deltas.size(); n++) {
+				const wxString column = spec.m_deltas[n].m_column->GetPhysicalName();
+				assign.push_back(ibDmlAssign{ column, ibBinOp(ibQueryBinOp::Add,
+					ibFunc(wxT("COALESCE"), { ibCol(column), ibConst(ibValue(ibNumber())) }),
+					ibConst(ibValue(negate ? -sums[n] : sums[n]))) });
+			}
+			return assign;
+		};
+
+		ibDatabaseQueryBuilder write(holder);
+		bool aimed = true;
+		for (size_t i = 1; i < shards.size(); i++) {
+			const ibShardRow& src = shards[i];
+
+			// ADD then SUBTRACT, both as in-statement arithmetic. That is the whole point of the
+			// rewrite: a movement landing mid-fold COMPOSES with the adjustment instead of being
+			// overwritten by it, so the fold no longer needs a quiet range. The pair must be atomic or
+			// a crash between them doubles / loses the figure — hence the key's transaction — and each
+			// must hit exactly ONE row, or the key is rolled back and left for the next pass.
+			const int added = write.Execute(ibUpdate(derived.m_name, Moved(src.m_sums, false), Aim(absorber)));
+			if (added < 0)
+				return false;   // ~scope rolls the key back — nothing half-moved survives
+			const int taken = added == 1 ? write.Execute(ibUpdate(derived.m_name, Moved(src.m_sums, true), Aim(src))) : 0;
+			if (taken < 0)
+				return false;
+			aimed = added == 1 && taken == 1;
+			if (!aimed)
+				break;
+
+			// DROP the drained row — ONLY if it really came out empty. A delta that arrived
+			// mid-fold left it non-zero, and then the row is not ours to remove: its contribution
+			// is still owed to the total, and the next pass folds it. Deleting on the shard number
+			// alone (what the first version did) is exactly the write that would swallow it.
+			ibQueryExprPtr empty = Aim(src);
+			for (const ibSchemaDelta& d : spec.m_deltas)
+				empty = ibBinOp(ibQueryBinOp::And, empty, ibBinOp(ibQueryBinOp::Eq,
+					ibFunc(wxT("COALESCE"), { ibCol(d.m_column->GetPhysicalName()), ibConst(ibValue(ibNumber())) }),
+					ibConst(ibValue(ibNumber()))));
+			if (write.Execute(ibDelete(derived.m_name, empty)) < 0)
+				return false;
+		}
+		if (aimed)
+			scope.SafeCommitTransaction();
+		else
+			scope.SafeRollBackTransaction();
+	}
+
+	return true;
+}
+
+int VerifyLastPeriod(const ibSchemaTable& derived, ibDatabaseConnectionHolder* holder)
+{
+	// IsRebuildable is exactly the right gate: it asks for a source and a REGENERATION expression per
+	// accumulation, which is precisely what re-aggregating the movements needs. A table that cannot be
+	// rebuilt cannot be verified either — there is nothing to compare against.
+	if (holder == nullptr || !IsRebuildable(derived))
+		return -1;
+
+	{
+		ibSchemaBuilder schema(holder);
+		if (!ibCanMaterialize(schema.Connection()))
+			return 0;   // nothing materialised: the live aggregation IS the only path, so it agrees with itself
+	}
+
+	const ibSchemaMaterialize& spec = derived.m_materialize;
+	if (spec.m_periodColumn.IsEmpty() || spec.m_periodSource == nullptr)
+		return -1;   // no period dimension — "the last elapsed period" means nothing here
+
+	const ibBackendQueryColumn* periodCol = derived.m_queryable->ResolveColumnByName(spec.m_periodColumn);
+	if (periodCol == nullptr)
+		return -1;
+
+	// The window is the whole of the PREVIOUS stored period. Stepping back is done by truncating a
+	// moment just before the current period begins — no per-unit calendar arithmetic, and it stays
+	// right for the irregular units too (a week, a ten-day span whose last one runs 8-11 days).
+	const ibDateTime curStart  = ibDateTime::Now().BeginOfPeriod(spec.m_periodUnit);
+	const ibDateTime prevStart = curStart.AddMilliseconds(-1000).BeginOfPeriod(spec.m_periodUnit);
+
+	// Both sides are drained the same way — one entry per key, the accumulations in declaration
+	// order — so the comparison below comes down to two maps of the same shape.
+	//
+	// ⭐ THE KEY AS THE READING SEES IT: a sequence of values (ibValueSeqHash), not their text joined.
+	// 🛑 It was the text, and the entry was ASSIGNED: two groups the table keeps apart - an empty
+	// currency stored untagged and one stored as an empty reference - read as the same text, and the
+	// second replaced the first, so the check compared half a key's figure with the whole of it
+	// (2026-09-26). Groups that are one key to a reader are one entry here, and their figures ADD.
+	using ibKeyFigures = std::unordered_map<std::vector<ibValue>, std::vector<ibNumber>, ibValueSeqHash, ibValueSeqEqual>;
+	auto Drain = [&](ibDataQueryResult& rows) {
+		ibKeyFigures out;
+		while (rows.Next()) {
+			std::vector<ibValue> key;
+			for (const ibBackendQueryColumn* k : spec.m_keys)
+				key.push_back(rows.GetValue(k));
+			std::vector<ibNumber>& sums = out[key];
+			sums.resize(spec.m_deltas.size());
+			for (size_t n = 0; n < spec.m_deltas.size(); n++)
+				sums[n] += rows.GetColumn(spec.m_deltas[n].m_column->GetPhysicalName()).GetNumber();
+		}
+		return out;
+	};
+
+	// SIDE A — re-aggregate the MOVEMENTS. The same read Regenerate performs, narrowed to one period.
+	// Filtering on the RAW period column is correct because truncation is monotone: exactly the
+	// movements that truncate into prevStart lie in [prevStart, curStart).
+	ibKeyFigures fromSource;
+	{
+		ibDataQueryBuilder read = SystemQuery(holder);
+		read.From(spec.m_source);
+		read.WhereCompare(spec.m_periodSource, ibQueryFilterOp::GreaterEqual, ibValue(prevStart));
+		read.WhereCompare(spec.m_periodSource, ibQueryFilterOp::Less,         ibValue(curStart));
+		for (const ibBackendQueryColumn* k : spec.m_keys)
+			read.GroupBy(k);
+		for (const ibSchemaDelta& d : spec.m_deltas)
+			read.Aggregate(ibDataQueryBuilder::AggregateFn::Sum, d.m_regenExpr, d.m_column->GetPhysicalName());
+
+		ibDataQueryResult rows = read.SelectAggregate();
+		fromSource = Drain(rows);
+	}
+
+	// SIDE B — what the TOTALS hold for that period. Grouping WITHOUT the shard column sums the
+	// shards, which is the same thing the read view does, so a split table is compared as one figure.
+	ibKeyFigures fromTotals;
+	{
+		ibDataQueryBuilder read = SystemQuery(holder);
+		read.From(derived.m_queryable);
+		read.Where(periodCol, ibValue(prevStart));
+		for (const ibBackendQueryColumn* k : spec.m_keys)
+			read.GroupBy(k);
+		for (const ibSchemaDelta& d : spec.m_deltas)
+			read.Aggregate(ibDataQueryBuilder::AggregateFn::Sum, d.m_column, d.m_column->GetPhysicalName());
+
+		ibDataQueryResult rows = read.SelectAggregate();
+		fromTotals = Drain(rows);
+	}
+
+	// COMPARE both ways. A key the movements know and the totals do not is a missed accumulation; a
+	// key only the totals carry is a figure nothing accounts for — a leftover from a grouping that
+	// changed, or a movement deleted without its trigger. Both are disagreements, and counting only
+	// the first direction would call the second one clean.
+	int mismatches = 0;
+	for (const auto& entry : fromSource) {
+		const auto found = fromTotals.find(entry.first);
+		if (found == fromTotals.end()) { mismatches++; continue; }
+		for (size_t i = 0; i < entry.second.size() && i < found->second.size(); i++)
+			if (entry.second[i] != found->second[i]) { mismatches++; break; }
+	}
+	for (const auto& entry : fromTotals)
+		if (fromSource.find(entry.first) == fromSource.end())
+			mismatches++;
+
+	return mismatches;
+}
+
+int CollapseAll(const ibSchemaSnapshot& target, ibDatabaseConnectionHolder* holder, ibRestructureInfo* report)
+{
+	// ONE TRANSACTION PER TABLE, and that granularity is the design rather than a detail. The fold's
+	// add / subtract pair must be atomic — a crash between them doubles or drops that one figure —
+	// while one transaction around the whole sweep would hold a write transaction open for as long as
+	// the sweep runs, against a database people are working in. Per table is short enough to be
+	// polite and long enough to be correct.
+	//
+	// So an interrupted run leaves whole tables folded and the rest untouched. That is a valid state,
+	// not a partial one: an unfolded table reads exactly right, it just reads a few rows wider.
+	// NO transaction here. Each fold owns its own, one per KEY (see Collapse) — which is what keeps
+	// the row locks it takes measured in statements rather than in tables. Opening one around the
+	// whole sweep would undo exactly that.
+	if (holder == nullptr)
+		return -1;   // the job must be handed its holder — there is no ambient one worth borrowing
+
+	int done = 0;
+	for (const ibSchemaTable& t : target.Tables()) {
+		if (!IsCollapsible(t))
+			continue;   // unsplit — nothing to fold, not a failure
+
+		if (!Collapse(t, holder))
+			return -1;
+
+		if (report != nullptr)
+			report->AppendInfo(_("Fold totals shards for ") + t.m_name);
+		done++;
+	}
+	return done;
+}
+
+ibTotalsMaintenance MaintainTotals(const ibSchemaSnapshot& target, ibDatabaseConnectionHolder* holder)
+{
+	ibTotalsMaintenance out;
+	if (holder == nullptr) {
+		out.m_failed = true;
+		return out;   // the job is handed its holder; there is no ambient one worth borrowing
+	}
+
+	for (const ibSchemaTable& t : target.Tables()) {
+		if (!t.m_derived)
+			continue;
+		out.m_checked++;
+
+		// VERIFY FIRST. Not for safety — the fold moves figures without changing their sum, so the
+		// order cannot corrupt anything — but because a disagreement discovered afterwards would
+		// have to say whether it predates the fold. Checking first leaves no such question.
+		//
+		// -1 means the check could not run (no period dimension, nothing declared to rebuild from),
+		// which is not a disagreement and must not be counted as one.
+		const int mismatched = VerifyLastPeriod(t, holder);
+		if (mismatched > 0)
+			out.m_mismatched += mismatched;
+
+		// FOLD regardless of the verdict. A disagreement is a question for the Designer's recompute
+		// command, not a reason to leave the table spread — the shards are wrong either way, and
+		// folding them changes nothing about that while still shrinking the read.
+		if (IsCollapsible(t)) {
+			if (!Collapse(t, holder)) {
+				out.m_failed = true;
+				return out;
+			}
+			out.m_folded++;
+		}
+	}
+	return out;
+}
+
+int RegenerateAll(const ibSchemaSnapshot& target, ibDatabaseConnectionHolder* holder, ibRestructureInfo* report)
+{
+	int done = 0;
+	for (const ibSchemaTable& t : target.Tables()) {
+		if (!t.m_derived)
+			continue;
+		if (!Regenerate(t, holder))
+			return -1;
+		if (report != nullptr)
+			report->AppendInfo(_("Rebuild totals for ") + t.m_name);
+		done++;
+	}
+	return done;
+}
+
+} // namespace ibDerivedState

@@ -22,7 +22,10 @@
 
 #include "gridext.h"
 
+#include <unordered_set>   // the paint walk asks "already queued?" per cell — see DrawGridCellArea
+
 #ifndef WX_PRECOMP
+
 #include <wx/utils.h>
 #include <wx/dcclient.h>
 #include <wx/settings.h>
@@ -502,8 +505,12 @@ ibGridCellAttr* ibGridCellAttr::Clone() const
 		attr->SetBorderRight(m_borderRight.m_style, m_borderRight.m_colour, m_borderRight.m_width);
 	if (HasBorderTop())
 		attr->SetBorderTop(m_borderTop.m_style, m_borderTop.m_colour, m_borderTop.m_width);
+	// ⚠ ITS OWN STYLE AND COLOUR. This read them off `m_borderTop` while taking the bottom's width —
+	// so a cell whose two horizontal borders differ drew the bottom one in the top one's colour, and
+	// a cell with a bottom border but NO top border got the top's TRANSPARENT style, which
+	// `DrawCellBorder` skips outright: the border was set, and simply never appeared.
 	if (HasBorderBottom())
-		attr->SetBorderBottom(m_borderTop.m_style, m_borderTop.m_colour, m_borderBottom.m_width);
+		attr->SetBorderBottom(m_borderBottom.m_style, m_borderBottom.m_colour, m_borderBottom.m_width);
 
 	attr->SetSize(m_sizeRows, m_sizeCols);
 
@@ -552,8 +559,10 @@ void ibGridCellAttr::MergeWith(ibGridCellAttr* mergefrom)
 		SetBorderRight(mergefrom->m_borderRight.m_style, mergefrom->m_borderRight.m_colour, mergefrom->m_borderRight.m_width);
 	if (!HasBorderTop() && mergefrom->HasBorderTop())
 		SetBorderTop(mergefrom->m_borderTop.m_style, mergefrom->m_borderTop.m_colour, mergefrom->m_borderTop.m_width);
+	// …and here too: the bottom took the TOP's style and colour, so a merged-in bottom border came
+	// out in the wrong colour, or did not come out at all when the source had no top border.
 	if (!HasBorderBottom() && mergefrom->HasBorderBottom())
-		SetBorderBottom(mergefrom->m_borderTop.m_style, mergefrom->m_borderTop.m_colour, mergefrom->m_borderBottom.m_width);
+		SetBorderBottom(mergefrom->m_borderBottom.m_style, mergefrom->m_borderBottom.m_colour, mergefrom->m_borderBottom.m_width);
 
 	if (!HasSize() && mergefrom->HasSize())
 		mergefrom->GetSize(&m_sizeRows, &m_sizeCols);
@@ -2410,6 +2419,18 @@ void ibGridRowAreaWindow::OnMouseEvent(wxMouseEvent& event)
 
 void ibGridRowAreaWindow::OnMouseWheel(wxMouseEvent& event)
 {
+	// ⭐⭐ THE FREEZE IS DELIBERATE, AND IT COVERS THE SCROLL (Max, 2026-08-26).
+	//
+	// wxScrollHelperBase turns ONE notch of the wheel into `GetLinesPerAction()` scroll events —
+	// three on a stock Windows setup — and each one would paint on its own. The freeze holds the
+	// three together so the sheet is drawn once per notch.
+	//
+	// 🛑 IT WAS TAKEN OFF ON 2026-08-26 AND PUT BACK THE SAME HOUR. The reasoning for removing it
+	// was that a Thaw repaints the whole grid while ScrollWindow would only fill in the newly
+	// exposed strip — true as far as it goes, and WRONG about which is cheaper here: with the three
+	// paints let through, the drawing visibly lagged behind the wheel (it trailed the scroll,
+	// catching up after it). One whole repaint beats three partial ones on this sheet. Measure before touching
+	// this again — the argument that sounds right has already lost to the wheel once.
 	m_owner->Freeze();
 
 	if (event.ControlDown())
@@ -2460,6 +2481,18 @@ void ibGridRowLabelWindow::OnMouseEvent(wxMouseEvent& event)
 
 void ibGridRowLabelWindow::OnMouseWheel(wxMouseEvent& event)
 {
+	// ⭐⭐ THE FREEZE IS DELIBERATE, AND IT COVERS THE SCROLL (Max, 2026-08-26).
+	//
+	// wxScrollHelperBase turns ONE notch of the wheel into `GetLinesPerAction()` scroll events —
+	// three on a stock Windows setup — and each one would paint on its own. The freeze holds the
+	// three together so the sheet is drawn once per notch.
+	//
+	// 🛑 IT WAS TAKEN OFF ON 2026-08-26 AND PUT BACK THE SAME HOUR. The reasoning for removing it
+	// was that a Thaw repaints the whole grid while ScrollWindow would only fill in the newly
+	// exposed strip — true as far as it goes, and WRONG about which is cheaper here: with the three
+	// paints let through, the drawing visibly lagged behind the wheel (it trailed the scroll,
+	// catching up after it). One whole repaint beats three partial ones on this sheet. Measure before touching
+	// this again — the argument that sounds right has already lost to the wheel once.
 	m_owner->Freeze();
 
 	if (event.ControlDown())
@@ -2515,6 +2548,18 @@ void ibGridColAreaWindow::OnMouseEvent(wxMouseEvent& event)
 
 void ibGridColAreaWindow::OnMouseWheel(wxMouseEvent& event)
 {
+	// ⭐⭐ THE FREEZE IS DELIBERATE, AND IT COVERS THE SCROLL (Max, 2026-08-26).
+	//
+	// wxScrollHelperBase turns ONE notch of the wheel into `GetLinesPerAction()` scroll events —
+	// three on a stock Windows setup — and each one would paint on its own. The freeze holds the
+	// three together so the sheet is drawn once per notch.
+	//
+	// 🛑 IT WAS TAKEN OFF ON 2026-08-26 AND PUT BACK THE SAME HOUR. The reasoning for removing it
+	// was that a Thaw repaints the whole grid while ScrollWindow would only fill in the newly
+	// exposed strip — true as far as it goes, and WRONG about which is cheaper here: with the three
+	// paints let through, the drawing visibly lagged behind the wheel (it trailed the scroll,
+	// catching up after it). One whole repaint beats three partial ones on this sheet. Measure before touching
+	// this again — the argument that sounds right has already lost to the wheel once.
 	m_owner->Freeze();
 
 	if (event.ControlDown())
@@ -2568,6 +2613,18 @@ void ibGridColLabelWindow::OnMouseEvent(wxMouseEvent& event)
 
 void ibGridColLabelWindow::OnMouseWheel(wxMouseEvent& event)
 {
+	// ⭐⭐ THE FREEZE IS DELIBERATE, AND IT COVERS THE SCROLL (Max, 2026-08-26).
+	//
+	// wxScrollHelperBase turns ONE notch of the wheel into `GetLinesPerAction()` scroll events —
+	// three on a stock Windows setup — and each one would paint on its own. The freeze holds the
+	// three together so the sheet is drawn once per notch.
+	//
+	// 🛑 IT WAS TAKEN OFF ON 2026-08-26 AND PUT BACK THE SAME HOUR. The reasoning for removing it
+	// was that a Thaw repaints the whole grid while ScrollWindow would only fill in the newly
+	// exposed strip — true as far as it goes, and WRONG about which is cheaper here: with the three
+	// paints let through, the drawing visibly lagged behind the wheel (it trailed the scroll,
+	// catching up after it). One whole repaint beats three partial ones on this sheet. Measure before touching
+	// this again — the argument that sounds right has already lost to the wheel once.
 	m_owner->Freeze();
 
 	if (event.ControlDown())
@@ -2599,11 +2656,15 @@ wxEND_EVENT_TABLE()
 void ibGridRowOutlineWindow::OnPaint(wxPaintEvent&)
 {
 	wxPaintDC dc(this);
-	// match the scroll offset convention used by RowAreaWindow::OnPaint
-	int x, y;
-	ibGridWindow* gridWindow = m_owner->m_gridWin;
-	m_owner->GetGridWindowOffset(gridWindow, x, y);
-	m_owner->CalcGridWindowUnscrolledPosition(x, y, &x, &y, gridWindow);
+	// match the scroll offset convention used by RowAreaWindow::OnPaint. A FROZEN strip does not
+	// scroll — its rows sit where they always were, so shifting the origin would slide the buttons
+	// away from the very rows the freeze keeps in place.
+	int x = 0, y = 0;
+	if (!IsFrozen()) {
+		ibGridWindow* gridWindow = m_owner->m_gridWin;
+		m_owner->GetGridWindowOffset(gridWindow, x, y);
+		m_owner->CalcGridWindowUnscrolledPosition(x, y, &x, &y, gridWindow);
+	}
 	wxPoint pt = dc.GetDeviceOrigin();
 	dc.SetDeviceOrigin(pt.x, pt.y - y);
 	m_owner->DrawRowOutline(dc);
@@ -2612,10 +2673,12 @@ void ibGridRowOutlineWindow::OnPaint(wxPaintEvent&)
 void ibGridRowOutlineWindow::OnMouseEvent(wxMouseEvent& event)
 {
 	if (event.LeftDown()) {
-		// unscrolled position inside outline pane — y needs un-scrolling
-		int x, y;
-		m_owner->GetGridWindowOffset(m_owner->m_gridWin, x, y);
-		m_owner->CalcGridWindowUnscrolledPosition(x, y, &x, &y, m_owner->m_gridWin);
+		// unscrolled position inside outline pane — y needs un-scrolling (never on a frozen strip)
+		int x = 0, y = 0;
+		if (!IsFrozen()) {
+			m_owner->GetGridWindowOffset(m_owner->m_gridWin, x, y);
+			m_owner->CalcGridWindowUnscrolledPosition(x, y, &x, &y, m_owner->m_gridWin);
+		}
 		const wxPoint pt(event.GetX(), event.GetY() + y);
 		const int gi = m_owner->HitTestRowOutlineButton(pt);
 		if (gi >= 0) {
@@ -2643,10 +2706,12 @@ void ibGridColOutlineWindow::OnPaint(wxPaintEvent&)
 {
 	wxPaintDC dc(this);
 	if (m_owner->GetNumberCols() == 0) return;
-	int x, y;
-	ibGridWindow* gridWindow = m_owner->m_gridWin;
-	m_owner->GetGridWindowOffset(gridWindow, x, y);
-	m_owner->CalcGridWindowUnscrolledPosition(x, y, &x, &y, gridWindow);
+	int x = 0, y = 0;
+	if (!IsFrozen()) {   // a frozen strip does not scroll — see ibGridRowOutlineWindow::OnPaint
+		ibGridWindow* gridWindow = m_owner->m_gridWin;
+		m_owner->GetGridWindowOffset(gridWindow, x, y);
+		m_owner->CalcGridWindowUnscrolledPosition(x, y, &x, &y, gridWindow);
+	}
 	wxPoint pt = dc.GetDeviceOrigin();
 	dc.SetDeviceOrigin(pt.x - x, pt.y);
 	m_owner->DrawColOutline(dc);
@@ -2655,9 +2720,11 @@ void ibGridColOutlineWindow::OnPaint(wxPaintEvent&)
 void ibGridColOutlineWindow::OnMouseEvent(wxMouseEvent& event)
 {
 	if (event.LeftDown()) {
-		int x, y;
-		m_owner->GetGridWindowOffset(m_owner->m_gridWin, x, y);
-		m_owner->CalcGridWindowUnscrolledPosition(x, y, &x, &y, m_owner->m_gridWin);
+		int x = 0, y = 0;
+		if (!IsFrozen()) {
+			m_owner->GetGridWindowOffset(m_owner->m_gridWin, x, y);
+			m_owner->CalcGridWindowUnscrolledPosition(x, y, &x, &y, m_owner->m_gridWin);
+		}
 		const wxPoint pt(event.GetX() + x, event.GetY());
 		const int gi = m_owner->HitTestColOutlineButton(pt);
 		if (gi >= 0) {
@@ -2689,6 +2756,18 @@ void ibGridCornerLabelWindow::OnMouseEvent(wxMouseEvent& event)
 
 void ibGridCornerLabelWindow::OnMouseWheel(wxMouseEvent& event)
 {
+	// ⭐⭐ THE FREEZE IS DELIBERATE, AND IT COVERS THE SCROLL (Max, 2026-08-26).
+	//
+	// wxScrollHelperBase turns ONE notch of the wheel into `GetLinesPerAction()` scroll events —
+	// three on a stock Windows setup — and each one would paint on its own. The freeze holds the
+	// three together so the sheet is drawn once per notch.
+	//
+	// 🛑 IT WAS TAKEN OFF ON 2026-08-26 AND PUT BACK THE SAME HOUR. The reasoning for removing it
+	// was that a Thaw repaints the whole grid while ScrollWindow would only fill in the newly
+	// exposed strip — true as far as it goes, and WRONG about which is cheaper here: with the three
+	// paints let through, the drawing visibly lagged behind the wheel (it trailed the scroll,
+	// catching up after it). One whole repaint beats three partial ones on this sheet. Measure before touching
+	// this again — the argument that sounds right has already lost to the wheel once.
 	m_owner->Freeze();
 
 	if (event.ControlDown())
@@ -2714,6 +2793,10 @@ wxEND_EVENT_TABLE()
 
 void ibGridWindow::OnPaint(wxPaintEvent& WXUNUSED(event))
 {
+	// ⚠ THE CELL WINDOW IS THE ONE THAT MAY BE BUFFERED — it paints its whole rectangle
+	// (DrawGridSpace fills what the cells do not cover). The strips around it do NOT: they draw
+	// their items and leave the rest to the system's erase, so buffering them without clearing
+	// first shows the previous frame underneath (2026-08-26 — duplicated row numbers, black bands).
 	wxAutoBufferedPaintDC dc(this);
 	m_owner->PrepareDCFor(dc, this);
 	wxRegion reg = GetUpdateRegion();
@@ -2724,6 +2807,11 @@ void ibGridWindow::OnPaint(wxPaintEvent& WXUNUSED(event))
 
 	ibGridCellCacheArray storage;
 
+	// 🛑 THE GRID CANNOT BE DRAWN FIRST, and it was tried (2026-08-28): every cell paints its own
+	// background SOLID over its whole rect (ibGridCellRenderer::Draw), so lines laid down before the
+	// cells are erased by them — the sheet came up with no grid at all. The lines go after the cells,
+	// and what must survive them says so afterwards: the sheet's own borders (DrawBorder) and the
+	// selection's outline (DrawHighlight), both below.
 	m_owner->DrawGridSpace(dc, this);
 	m_owner->DrawGridCellArea(dc, dirtyCells, storage);
 	m_owner->DrawAllGridWindowLines(dc, reg, this);
@@ -3059,6 +3147,18 @@ void ibGridWindow::OnMouseEvent(wxMouseEvent& event)
 
 void ibGridWindow::OnMouseWheel(wxMouseEvent& event)
 {
+	// ⭐⭐ THE FREEZE IS DELIBERATE, AND IT COVERS THE SCROLL (Max, 2026-08-26).
+	//
+	// wxScrollHelperBase turns ONE notch of the wheel into `GetLinesPerAction()` scroll events —
+	// three on a stock Windows setup — and each one would paint on its own. The freeze holds the
+	// three together so the sheet is drawn once per notch.
+	//
+	// 🛑 IT WAS TAKEN OFF ON 2026-08-26 AND PUT BACK THE SAME HOUR. The reasoning for removing it
+	// was that a Thaw repaints the whole grid while ScrollWindow would only fill in the newly
+	// exposed strip — true as far as it goes, and WRONG about which is cheaper here: with the three
+	// paints let through, the drawing visibly lagged behind the wheel (it trailed the scroll,
+	// catching up after it). One whole repaint beats three partial ones on this sheet. Measure before touching
+	// this again — the argument that sounds right has already lost to the wheel once.
 	m_owner->Freeze();
 
 	if (event.ControlDown())
@@ -3244,6 +3344,10 @@ void ibGrid::Create()
 #pragma endregion
 	m_rowOutlineWin = new ibGridRowOutlineWindow(this);
 	m_colOutlineWin = new ibGridColOutlineWindow(this);
+	m_rowFrozenOutlineWin = new ibGridRowFrozenOutlineWindow(this);
+	m_colFrozenOutlineWin = new ibGridColFrozenOutlineWindow(this);
+	m_rowOutlineCornerWin = new ibGridOutlineCornerWindow(this);
+	m_colOutlineCornerWin = new ibGridOutlineCornerWindow(this);
 	m_rowLabelWin = new ibGridRowLabelWindow(this);
 
 	CreateColumnWindow();
@@ -3281,6 +3385,18 @@ void ibGrid::Create()
 
 	m_labelBackgroundColour = m_rowLabelWin->GetBackgroundColour();
 	m_labelTextColour = m_rowLabelWin->GetForegroundColour();
+
+	// ⭐ THE OUTLINE PANE IS CHROME, AND CHROME IS THE LABEL COLOUR. Left with the default window
+	// background it came up white beside the tinted labels — the strip read as a gap in the sheet
+	// rather than as part of its frame.
+	for (ibGridSubwindow* pane : { (ibGridSubwindow*)m_rowOutlineWin, (ibGridSubwindow*)m_colOutlineWin,
+	                               (ibGridSubwindow*)m_rowFrozenOutlineWin, (ibGridSubwindow*)m_colFrozenOutlineWin,
+	                               (ibGridSubwindow*)m_rowOutlineCornerWin, (ibGridSubwindow*)m_colOutlineCornerWin }) {
+		if (pane == nullptr)
+			continue;
+		pane->SetOwnForegroundColour(m_labelTextColour);
+		pane->SetOwnBackgroundColour(m_labelBackgroundColour);
+	}
 
 	InitPixelFields();
 }
@@ -3453,6 +3569,10 @@ void ibGrid::Init()
 	m_rowLabelWin = NULL;
 	m_rowFrozenLabelWin = NULL;
 	m_rowOutlineWin = NULL;
+	m_rowFrozenOutlineWin = NULL;
+	m_colFrozenOutlineWin = NULL;
+	m_rowOutlineCornerWin = NULL;
+	m_colOutlineCornerWin = NULL;
 	m_colAreaWin = NULL;
 	m_colFrozenAreaWin = NULL;
 	m_colLabelWin = NULL;
@@ -3608,13 +3728,9 @@ int ibGrid::GetColLeft(int col, float scale) const
 	if (m_colWidths.IsEmpty())
 		return GetColPos(col) * ibCalcGridScale(m_defaultColWidth, scale);
 
-	int total_width = 0;
-
-	for (int idx = 0; idx < col; idx++)
-	{
-		const int& width = *(m_colWidths.begin() + idx);
-		if (width > 0) total_width += ibCalcGridScale(width, scale);
-	}
+	// READ, not add up — see ibGridLineSizes in the header for what the loop that used to stand here
+	// cost on a scrolled report.
+	const int total_width = m_colWidths.StartOf(col, scale);
 
 	return total_width;
 }
@@ -3624,15 +3740,7 @@ int ibGrid::GetColRight(int col, float scale) const
 	if (m_colWidths.IsEmpty())
 		return (GetColPos(col) + 1) * ibCalcGridScale(m_defaultColWidth, scale);
 
-	int total_width = 0;
-
-	for (int idx = 0; idx <= col; idx++)
-	{
-		const int& width = *(m_colWidths.begin() + idx);
-		if (width > 0) total_width += ibCalcGridScale(width, scale);
-	}
-
-	return total_width;
+	return m_colWidths.EndOf(col, scale);
 }
 
 int ibGrid::GetRowHeight(int row, float scale) const
@@ -3652,15 +3760,7 @@ int ibGrid::GetRowTop(int row, float scale) const
 	if (m_rowHeights.IsEmpty())
 		return GetRowPos(row) * ibCalcGridScale(m_defaultRowHeight, scale);
 
-	int total_height = 0;
-
-	for (int idx = 0; idx < row; idx++)
-	{
-		const int& height = *(m_rowHeights.begin() + idx);
-		if (height > 0) total_height += ibCalcGridScale(height, scale);
-	}
-
-	return total_height;
+	return m_rowHeights.StartOf(row, scale);
 }
 
 int ibGrid::GetRowBottom(int row, float scale) const
@@ -3668,15 +3768,7 @@ int ibGrid::GetRowBottom(int row, float scale) const
 	if (m_rowHeights.IsEmpty())
 		return (GetRowPos(row) + 1) * ibCalcGridScale(m_defaultRowHeight, scale);
 
-	int total_height = 0;
-
-	for (int idx = 0; idx <= row; idx++)
-	{
-		const int& height = *(m_rowHeights.begin() + idx);
-		if (height > 0) total_height += ibCalcGridScale(height, scale);
-	}
-
-	return total_height;
+	return m_rowHeights.EndOf(row, scale);
 }
 
 void ibGrid::CalcDimensions()
@@ -3772,10 +3864,15 @@ void ibGrid::CalcWindowSizes()
 	const int rowLabelW = ibCalcGridScale(m_rowLabelWidth, GetGridZoom());
 	const int colLabelH = ibCalcGridScale(m_colLabelHeight, GetGridZoom());
 
-	// Outline sits LEFT of area (matching Excel/1C convention). Order left-to-right
+	// Outline sits LEFT of area (matching the spreadsheet convention). Order left-to-right
 	// for rows: [outline][area][label][frozen][grid]; for cols analogously top-down.
-	const int xAfterChrome = rowOutlineW + rowAreaWidth + rowLabelW;
-	const int yAfterChrome = colOutlineH + colAreaHeight + colLabelH;
+	//
+	// ⭐ AND WHERE THE CELLS BEGIN IS ONE ANSWER — the same one the mouse translation and Refresh(rect)
+	// ask (GetGridOrigin). The strips are still named individually below, because each of them has to
+	// be POSITIONED; what must not be written twice is their SUM.
+	const wxPoint origin = GetGridOrigin();
+	const int xAfterChrome = origin.x;
+	const int yAfterChrome = origin.y;
 
 	// the grid may be too small to have enough space for the labels yet, don't
 	// size the windows to negative sizes in this case
@@ -3799,12 +3896,20 @@ void ibGrid::CalcWindowSizes()
 	if (m_colFrozenAreaWin && m_colFrozenAreaWin->IsShown())
 		m_colFrozenAreaWin->SetSize(xAfterChrome, colOutlineH, fgw, colAreaHeight);
 
-	// Column outline pane: strip sitting at the very top of the column chrome.
+	// Column outline pane: strip sitting at the very top of the column chrome, plus its FROZEN
+	// twin over the frozen columns — a frozen column may open a group like any other.
 	if (m_colOutlineWin) {
 		const bool show = GridColOutlineEnabled();
 		m_colOutlineWin->Show(show);
 		if (show)
 			m_colOutlineWin->SetSize(xAfterChrome + fgw, 0, gw, colOutlineH);
+	}
+
+	if (m_colFrozenOutlineWin) {
+		const bool show = GridColOutlineEnabled() && fgw > 0;
+		m_colFrozenOutlineWin->Show(show);
+		if (show)
+			m_colFrozenOutlineWin->SetSize(xAfterChrome, 0, fgw, colOutlineH);
 	}
 
 	if (m_colFrozenLabelWin && m_colFrozenLabelWin->IsShown())
@@ -3822,12 +3927,39 @@ void ibGrid::CalcWindowSizes()
 	if (m_rowFrozenAreaWin && m_rowFrozenAreaWin->IsShown())
 		m_rowFrozenAreaWin->SetSize(rowOutlineW, yAfterChrome, rowAreaWidth, fgh);
 
-	// Row outline pane: strip at the very left of the row chrome.
+	// Row outline pane: strip at the very left of the row chrome, plus its FROZEN twin beside the
+	// frozen rows — those stay in view and their groups have to stay openable there.
 	if (m_rowOutlineWin) {
 		const bool show = GridRowOutlineEnabled();
 		m_rowOutlineWin->Show(show);
 		if (show)
 			m_rowOutlineWin->SetSize(0, yAfterChrome + fgh, rowOutlineW, gh);
+	}
+
+	if (m_rowFrozenOutlineWin) {
+		const bool show = GridRowOutlineEnabled() && fgh > 0;
+		m_rowFrozenOutlineWin->Show(show);
+		if (show)
+			m_rowFrozenOutlineWin->SetSize(0, yAfterChrome, rowOutlineW, fgh);
+	}
+
+	// THE CORNERS THE PANES DO NOT REACH. The row pane begins under the column chrome and the
+	// column pane to the right of the row chrome, so two strips of the frame belong to neither and
+	// were left as bare window background — a white notch beside the labels. They carry the chrome
+	// colour and nothing else: [row pane's strip] is the full height of the column chrome above it,
+	// [column pane's strip] the remainder of its own row to the left.
+	if (m_rowOutlineCornerWin) {
+		const bool show = rowOutlineW > 0 && yAfterChrome > 0;
+		m_rowOutlineCornerWin->Show(show);
+		if (show)
+			m_rowOutlineCornerWin->SetSize(0, 0, rowOutlineW, yAfterChrome);
+	}
+
+	if (m_colOutlineCornerWin) {
+		const bool show = colOutlineH > 0 && xAfterChrome > rowOutlineW;
+		m_colOutlineCornerWin->Show(show);
+		if (show)
+			m_colOutlineCornerWin->SetSize(rowOutlineW, 0, xAfterChrome - rowOutlineW, colOutlineH);
 	}
 
 	if (m_rowFrozenLabelWin && m_rowFrozenLabelWin->IsShown())
@@ -5224,39 +5356,116 @@ ibGrid::DoGridCellDrag(wxMouseEvent& event,
 		ibGridCellCoords blockStart(rowStart, colStart);
 		ibGridCellCoords blockEnd(rowEnd, colEnd);
 
-		for (int row = rowStart; row <= rowEnd; row++)
-		{
-			for (int col = colStart; col <= colEnd; col++)
+		// ⭐⭐ A DRAG NEVER CUTS A MERGED CELL IN HALF: whatever it reaches into, it takes whole.
+		//
+		// 🛑 IT SKIPPED THE CELLS THAT NEEDED IT MOST. `!= CellSpan_Inside` walked past every COVERED
+		// cell — and a covered cell is exactly how a merge that starts ABOVE or to the LEFT of the
+		// block appears inside it. Its owner was never asked about, so the block never grew backwards;
+		// the "start" arithmetic below it only ever re-derived the row a Main cell already sat on.
+		// Dragging upward into the lower half of a merged cell therefore selected that half.
+		//
+		// 🛑 AND IT WAS ONE PASS OVER THE ORIGINAL RANGE. Swallowing a merge MOVES an edge, and the
+		// moved edge can land inside another merge that the first pass never looked at (Max,
+		// 2026-08-28: "because you select it, it shifts, and you touch one more merged cell"). So the
+		// walk repeats over the CURRENT block until a whole pass adds nothing — the block is grown to
+		// a closure, not widened once.
+		// ⚠ AND ONLY THE FOUR EDGES ARE WALKED, not the area. This runs on EVERY mouse-move of a drag,
+		// so an area walk costs width × height per event — and repeating it makes that worse, not
+		// better. It is also unnecessary: a merge that reaches outside the block has to cross one of
+		// its boundaries, and a span is contiguous, so it owns a cell ON the boundary line it crosses.
+		// A merge that lies wholly inside asks for nothing. Edges answer the same question in
+		// width + height.
+		const auto swallow = [&](int row, int col, bool& grew) {
+			if (row < 0 || row >= m_numRows || col < 0 || col >= m_numCols)
+				return;
+
+			int cell_rows, cell_cols;
+			const CellSpan span = GetCellSize(row, col, &cell_rows, &cell_cols);
+			if (span == CellSpan::CellSpan_None)
+				return;                     // an ordinary cell asks for nothing
+
+			// Whoever owns this cell — itself, or the main cell a covered one points back to.
+			int main_row = row, main_col = col;
+			if (span == CellSpan::CellSpan_Inside)
 			{
-				int cell_rows, cell_cols;
-				if (GetCellSize(row, col, &cell_rows, &cell_cols) != CellSpan::CellSpan_Inside)
-				{
-					int end_row = row + cell_rows - 1;
-					int end_col = col + cell_cols - 1;
+				main_row = row + cell_rows;
+				main_col = col + cell_cols;
+				GetCellSize(main_row, main_col, &cell_rows, &cell_cols);
+			}
 
-					if (end_row > blockEnd.GetRow())
-						blockEnd.SetRow(end_row);
+			if (cell_rows < 1) cell_rows = 1;
+			if (cell_cols < 1) cell_cols = 1;
 
-					if (end_col > blockEnd.GetCol())
-						blockEnd.SetCol(end_col);
+			if (main_row + cell_rows - 1 > blockEnd.GetRow())
+			{
+				blockEnd.SetRow(main_row + cell_rows - 1);
+				grew = true;
+			}
 
-					int cell_start_rows, cell_start_cols;
-					GetCellSize(end_row, end_col, &cell_start_rows, &cell_start_cols);
+			if (main_col + cell_cols - 1 > blockEnd.GetCol())
+			{
+				blockEnd.SetCol(main_col + cell_cols - 1);
+				grew = true;
+			}
 
-					int start_row = end_row + cell_start_rows;
-					int start_col = end_col + cell_start_cols;
+			if (main_row < blockStart.GetRow())
+			{
+				blockStart.SetRow(main_row);
+				grew = true;
+			}
 
-					if (start_row < blockStart.GetRow())
-						blockStart.SetRow(start_row);
+			if (main_col < blockStart.GetCol())
+			{
+				blockStart.SetCol(main_col);
+				grew = true;
+			}
+		};
 
-					if (start_col < blockStart.GetCol())
-						blockStart.SetCol(start_col);
-				}
+		bool grew = true;
+		while (grew)
+		{
+			grew = false;
+
+			const int fromRow = blockStart.GetRow(), toRow = blockEnd.GetRow();
+			const int fromCol = blockStart.GetCol(), toCol = blockEnd.GetCol();
+
+			for (int col = fromCol; col <= toCol; col++)
+			{
+				swallow(fromRow, col, grew);
+				swallow(toRow, col, grew);
+			}
+
+			for (int row = fromRow; row <= toRow; row++)
+			{
+				swallow(row, fromCol, grew);
+				swallow(row, toCol, grew);
 			}
 		}
 
-		m_selection->ExtendCurrentBlock(blockStart,
-			blockEnd,
+		// ⭐⭐ THE ANCHOR GOES FIRST, ALWAYS — and that is what makes a drag able to come BACK.
+		//
+		// `ExtendCurrentBlock` works out which side of the current block to move by matching the
+		// first corner against the block's top / bottom (and left / right): the corner it is given
+		// is the one that does NOT move. When neither matches it falls through to a branch that only
+		// UNIONS — the selection can then grow and never shrink again.
+		//
+		// 🛑 min/max LOSES THAT. The rectangle above is correct as a rectangle, but the moment the
+		// cursor goes above (or left of) the anchor, the two corners swap roles: the "start" becomes
+		// the moving end, nothing matches, and pulling the mouse back no longer gives anything up
+		// (Max, 2026-08-28: "I move it forward, and I cannot come back"). The corners are therefore
+		// handed over by ROLE — the anchor's side of the grown block first, the cursor's side second.
+		const bool anchorAtTop  = m_currentCellCoords.GetRow() <= coords.GetRow();
+		const bool anchorAtLeft = m_currentCellCoords.GetCol() <= coords.GetCol();
+
+		const ibGridCellCoords anchorCorner(
+			anchorAtTop  ? blockStart.GetRow() : blockEnd.GetRow(),
+			anchorAtLeft ? blockStart.GetCol() : blockEnd.GetCol());
+		const ibGridCellCoords cursorCorner(
+			anchorAtTop  ? blockEnd.GetRow() : blockStart.GetRow(),
+			anchorAtLeft ? blockEnd.GetCol() : blockStart.GetCol());
+
+		m_selection->ExtendCurrentBlock(anchorCorner,
+			cursorCorner,
 			event,
 			wxEVT_GRID_RANGE_SELECTING);
 	}
@@ -5512,8 +5721,11 @@ void ibGrid::ProcessGridCellMouseEvent(wxMouseEvent& event, ibGridWindow* eventG
 	// store position, before it's modified in the next step
 	const wxPoint posEvent = event.GetPosition();
 
-	event.SetPosition(posEvent + eventGridWindow->GetPosition() -
-		wxPoint((GridRowAreaEnabled() ? ibCalcGridScale(m_rowAreaWidth, GetGridZoom()) : 0) + ibCalcGridScale(m_rowLabelWidth, GetGridZoom()), (GridColAreaEnabled() ? ibCalcGridScale(m_colAreaHeight, GetGridZoom()) : 0) + ibCalcGridScale(m_colLabelHeight, GetGridZoom())));
+	// ⭐ EVERYTHING LEFT OF AND ABOVE THE CELLS, asked in one place. This used to name the row/column
+	// AREA and the LABEL and stop there — the OUTLINE strip was missing, so a report with groupings
+	// (the only case where that strip is wider than nothing) translated a click as if the group
+	// buttons did not exist, and pressing one cell selected its neighbour.
+	event.SetPosition(posEvent + eventGridWindow->GetPosition() - GetGridOrigin());
 
 	wxPoint pos = CalcGridWindowUnscrolledPosition(event.GetPosition(), gridWindow);
 
@@ -6159,6 +6371,13 @@ void ibGrid::ClearGrid()
 		m_rowBrakeAt.Clear();
 		m_colBrakeAt.Clear();
 
+		// 🛑 AND THE OUTLINE GOES WITH THE ROWS IT DESCRIBED. Groups are ranges of row NUMBERS, so
+		// once the rows are gone the ranges point at nothing — and the outline pane, which paints
+		// from them, walked straight off the end of the height array the next time it drew (crash,
+		// 2026-08-19, on re-composing a report into a sheet that already held one).
+		m_rowGroupAt.clear();
+		m_colGroupAt.clear();
+
 		m_selection = new ibGridSelection(this, selmode);
 		CalcDimensions();
 
@@ -6331,34 +6550,42 @@ void ibGrid::Refresh(bool eraseb, const wxRect* rect)
 			rectWidth = rect->GetWidth();
 			rectHeight = rect->GetHeight();
 
-			width_label = (GridRowAreaEnabled() ? ibCalcGridScale(m_rowAreaWidth, GetGridZoom()) : 0) + ibCalcGridScale(m_rowLabelWidth, GetGridZoom()) - rect_x;
+			// ⭐ THE SAME ORIGIN THE LAYOUT AND THE MOUSE USE. Spelled out here as its own copy of the
+			// term list, this had drifted twice over: the OUTLINE strip was missing (so a grid with
+			// groupings split its update rectangle at the wrong x / y), and both cell offsets read
+			// `- area + label` where the parenthesis belongs around the pair — the label's width was
+			// ADDED back instead of taken off. The vertical one also read the raw m_colAreaHeight,
+			// unscaled, so it drifted further with every zoom step away from 100%.
+			const wxPoint origin = GetGridOrigin();
+
+			width_label = origin.x - rect_x;
 			if (width_label > rectWidth)
 				width_label = rectWidth;
 
-			height_label = (GridColAreaEnabled() ? ibCalcGridScale(m_colAreaHeight, GetGridZoom()) : 0) + ibCalcGridScale(m_colLabelHeight, GetGridZoom()) - rect_y;
+			height_label = origin.y - rect_y;
 			if (height_label > rectHeight)
 				height_label = rectHeight;
 
-			if (rect_x > (GridRowAreaEnabled() ? ibCalcGridScale(m_rowAreaWidth, GetGridZoom()) : 0) + ibCalcGridScale(m_rowLabelWidth, GetGridZoom()))
+			if (rect_x > origin.x)
 			{
-				x = rect_x - (GridRowAreaEnabled() ? ibCalcGridScale(m_rowAreaWidth, GetGridZoom()) : 0) + ibCalcGridScale(m_rowLabelWidth, GetGridZoom());
+				x = rect_x - origin.x;
 				width_cell = rectWidth;
 			}
 			else
 			{
 				x = 0;
-				width_cell = rectWidth - ((GridRowAreaEnabled() ? ibCalcGridScale(m_rowAreaWidth, GetGridZoom()) : 0) + ibCalcGridScale(m_rowLabelWidth, GetGridZoom()) - rect_x);
+				width_cell = rectWidth - (origin.x - rect_x);
 			}
 
-			if (rect_y > (GridColAreaEnabled() ? ibCalcGridScale(m_colAreaHeight, GetGridZoom()) : 0) + ibCalcGridScale(m_colLabelHeight, GetGridZoom()))
+			if (rect_y > origin.y)
 			{
-				y = rect_y - m_colAreaHeight + ibCalcGridScale(m_colLabelHeight, GetGridZoom());
+				y = rect_y - origin.y;
 				height_cell = rectHeight;
 			}
 			else
 			{
 				y = 0;
-				height_cell = rectHeight - ((GridColAreaEnabled() ? (m_colAreaHeight, GetGridZoom()) : 0) + ibCalcGridScale(m_colLabelHeight, GetGridZoom()) - rect_y);
+				height_cell = rectHeight - (origin.y - rect_y);
 			}
 
 			// Paint corner label part intersecting rect.
@@ -6545,7 +6772,7 @@ void ibGrid::OnDPIChanged(wxDPIChangedEvent& event)
 			if (height <= 0)
 				continue;
 
-			m_rowHeights[i] = event.ScaleY(height);
+			m_rowHeights.Set(i, event.ScaleY(height));
 		}
 	}
 
@@ -6564,7 +6791,7 @@ void ibGrid::OnDPIChanged(wxDPIChangedEvent& event)
 			if (width <= 0)
 				continue;
 
-			m_colWidths[i] = event.ScaleX(width);
+			m_colWidths.Set(i, event.ScaleX(width));
 
 			if (colHeader)
 				colHeader->UpdateColumn(i);
@@ -7081,8 +7308,13 @@ bool ibGrid::SetCurrentCell(const ibGridCellCoords& coords)
 			wxClientDC prevDc(prevGridWindow);
 			PrepareDCFor(prevDc, prevGridWindow);
 
+			// ⭐ THE SAME ORDER AS THE PAINT — cells, lines, and the selection's outline back on top.
+			// This is the OTHER road into drawing (moving the current cell repaints the one it left,
+			// straight onto a client DC) and it drew no outline at all, so every step of the cursor
+			// left the grid lying across the block's frame.
 			DrawGridCellArea(prevDc, cells);
 			DrawAllGridWindowLines(prevDc, r, prevGridWindow);
+			DrawHighlight(prevDc, cells);
 
 			if (prevGridWindow->GetType() != ibGridWindow::ibGridWindowNormal)
 				DrawFrozenBorder(prevDc, prevGridWindow);
@@ -7120,6 +7352,26 @@ void ibGrid::DrawGridCellArea(wxDC& dc, const ibGridCellCoordsArray& cells, ibGr
 	int i, numCells = cells.GetCount();
 	ibGridCellCoordsArray redrawCells;
 
+	// ⭐⭐ "IS THIS CELL ALREADY GOING TO BE PAINTED" — ASKED IN O(1), not by walking the list.
+	//
+	// The walk below asks it up to four times per exposed cell (an inside-cell's owner, an overflow
+	// neighbour's owner, each against both lists), and each ask used to be a linear scan over every
+	// exposed cell. That is quadratic in what is ON SCREEN, and a REPORT is its worst case by
+	// construction: a cross-table is mostly merged headings and empty cells, which are precisely the
+	// two branches that do the searching. At a small zoom a screenful is thousands of cells, so the
+	// scans dominate the paint that the cells themselves barely cost.
+	//
+	// Two sets, exactly mirroring the two lists — nothing about WHAT gets painted changes.
+	const auto keyOf = [](const ibGridCellCoords& c) {
+		return (static_cast<wxLongLong_t>(c.GetRow()) << 32) | static_cast<wxUint32>(c.GetCol());
+	};
+
+	std::unordered_set<wxLongLong_t> exposed;   // mirrors `cells`
+	std::unordered_set<wxLongLong_t> queued;    // mirrors `redrawCells`
+	exposed.reserve(static_cast<size_t>(numCells) * 2);
+	for (int k = 0; k < numCells; k++)
+		exposed.insert(keyOf(cells[k]));
+
 	storage.Alloc(numCells);
 
 	for (i = numCells - 1; i >= 0; i--)
@@ -7132,31 +7384,10 @@ void ibGrid::DrawGridCellArea(wxDC& dc, const ibGridCellCoordsArray& cells, ibGr
 		if (GetCellSize(row, col, &cell_rows, &cell_cols) == CellSpan_Inside)
 		{
 			ibGridCellCoords cell(row + cell_rows, col + cell_cols);
-			bool marked = false;
-			for (int j = 0; j < numCells; j++)
-			{
-				if (cell == cells[j])
-				{
-					marked = true;
-					break;
-				}
-			}
+			const wxLongLong_t key = keyOf(cell);
 
-			if (!marked)
-			{
-				int count = redrawCells.GetCount();
-				for (int j = 0; j < count; j++)
-				{
-					if (cell == redrawCells[j])
-					{
-						marked = true;
-						break;
-					}
-				}
-
-				if (!marked)
-					redrawCells.Add(cell);
-			}
+			if (exposed.count(key) == 0 && queued.insert(key).second)
+				redrawCells.Add(cell);
 
 			// don't bother drawing this cell
 			continue;
@@ -7194,31 +7425,21 @@ void ibGrid::DrawGridCellArea(wxDC& dc, const ibGridCellCoordsArray& cells, ibGr
 						if (attr->CanOverflow())
 						{
 							ibGridCellCoords cell(row + l, j);
-							bool marked = false;
+							const wxLongLong_t key = keyOf(cell);
 
-							for (int k = 0; k < numCells; k++)
-							{
-								if (cell == cells[k])
-								{
-									marked = true;
-									break;
-								}
-							}
-
-							if (!marked)
-							{
-								int count = redrawCells.GetCount();
-								for (int k = 0; k < count; k++)
-								{
-									if (cell == redrawCells[k])
-									{
-										marked = true;
-										break;
-									}
-								}
-								if (!marked)
-									redrawCells.Add(cell);
-							}
+							// 🛑⭐ QUEUED EVEN WHEN IT IS EXPOSED — and that is the whole point of the
+							// late pass. The paint is CELL BY CELL: the owner draws its text across the
+							// empty cells to its right, and each of those cells then paints its own
+							// background over what it finds there. On a full repaint the owner is
+							// exposed too, so it was drawn EARLY — before the neighbours that erase it
+							// — and skipping it here left a white stripe lying across the text
+							// (Max, 2026-08-28: "the rendering is cell by cell").
+							//
+							// Drawing it again in the late pass costs one cell and is idempotent; the
+							// `queued` set is what keeps it to ONE extra draw however many empty
+							// neighbours ask for it.
+							if (queued.insert(key).second)
+								redrawCells.Add(cell);
 						}
 						break;
 					}
@@ -7239,6 +7460,7 @@ void ibGrid::DrawGridCellArea(wxDC& dc, const ibGridCellCoordsArray& cells, ibGr
 		DrawCell(dc, redrawCells[i], entry);
 		storage.Add(entry);
 	}
+
 }
 
 void ibGrid::DrawGridSpace(wxDC& dc, ibGridWindow* gridWindow)
@@ -7308,11 +7530,22 @@ void ibGrid::DrawCellBorder(wxDC& dc, const ibGridCellCoords& coords, const wxRe
 	if (GetColWidth(coords.GetCol()) <= 0 || GetRowHeight(coords.GetRow()) <= 0)
 		return;
 
-	//draw border  
+	// ⭐⭐ A BORDER'S WIDTH IS A LENGTH ON THE SHEET, so it belongs in the same units as everything
+	// else the sheet is measured in. Every position here is scaled by the zoom while the widths were
+	// not, so at 225% a table grew to more than twice its size with its rules still one pixel thick —
+	// the drawing came apart the further one zoomed, and no single value for a width could be right
+	// at two zooms at once.
+	//
+	// ⚠ NEVER BELOW ONE. A line that rounds away at a small zoom is a line the reader cannot see.
+	const auto scaledWidth = [this](int width) {
+		return wxMax(1, ibCalcGridScale(width, GetGridZoom()));
+	};
+
+	//draw border
 	ibGridCellBorder borderLeft = attr->GetBorderLeft();
 	if (borderLeft.m_style != wxPenStyle::wxPENSTYLE_TRANSPARENT)
 	{
-		dc.SetPen(wxPen(borderLeft.m_colour, borderLeft.m_width, borderLeft.m_style));
+		dc.SetPen(wxPen(borderLeft.m_colour, scaledWidth(borderLeft.m_width), borderLeft.m_style));
 
 		if (m_gridLinesEnabled)
 			dc.DrawLine(rect.GetLeft() - 1, rect.GetTop() - 1,
@@ -7325,7 +7558,10 @@ void ibGrid::DrawCellBorder(wxDC& dc, const ibGridCellCoords& coords, const wxRe
 	ibGridCellBorder borderRight = attr->GetBorderRight();
 	if (borderRight.m_style != wxPenStyle::wxPENSTYLE_TRANSPARENT)
 	{
-		dc.SetPen(wxPen(borderLeft.m_colour, borderRight.m_width, borderRight.m_style));
+		// ⚠ ITS OWN COLOUR. This read borderLeft.m_colour with borderRight's width and style — so a
+		// cell whose two vertical borders differ drew the right one in the left one's colour, and a
+		// cell with only a right border drew it in whatever the (transparent, unused) left one said.
+		dc.SetPen(wxPen(borderRight.m_colour, scaledWidth(borderRight.m_width), borderRight.m_style));
 		if (m_gridLinesEnabled)
 			dc.DrawLine(rect.GetRight() + 1, rect.GetTop() - 1,
 				rect.GetRight() + 1, rect.GetBottom() + 1);
@@ -7337,7 +7573,7 @@ void ibGrid::DrawCellBorder(wxDC& dc, const ibGridCellCoords& coords, const wxRe
 	ibGridCellBorder borderTop = attr->GetBorderTop();
 	if (borderTop.m_style != wxPenStyle::wxPENSTYLE_TRANSPARENT)
 	{
-		dc.SetPen(wxPen(borderTop.m_colour, borderTop.m_width, borderTop.m_style));
+		dc.SetPen(wxPen(borderTop.m_colour, scaledWidth(borderTop.m_width), borderTop.m_style));
 		if (m_gridLinesEnabled)
 			dc.DrawLine(rect.GetLeft() - 1, rect.GetTop() - 1,
 				rect.GetRight() + 1, rect.GetTop() - 1);
@@ -7349,7 +7585,7 @@ void ibGrid::DrawCellBorder(wxDC& dc, const ibGridCellCoords& coords, const wxRe
 	ibGridCellBorder borderBottom = attr->GetBorderBottom();
 	if (borderBottom.m_style != wxPenStyle::wxPENSTYLE_TRANSPARENT)
 	{
-		dc.SetPen(wxPen(borderBottom.m_colour, borderBottom.m_width, borderBottom.m_style));
+		dc.SetPen(wxPen(borderBottom.m_colour, scaledWidth(borderBottom.m_width), borderBottom.m_style));
 		if (m_gridLinesEnabled)
 			dc.DrawLine(rect.GetLeft() - 1, rect.GetBottom() + 1,
 				rect.GetRight() + 1, rect.GetBottom() + 1);
@@ -7368,37 +7604,92 @@ void ibGrid::DrawCellHighlight(wxDC& dc, int row, int col, const ibGridCellAttr*
 	// for now, I just draw a thinner border than for the other ones, but
 	// it doesn't look really good
 
+	// ⭐⭐ THE OUTLINE IS THE BLOCK'S, SO ITS NEIGHBOURS ARE THE BLOCK'S TOO. A merged cell is drawn
+	// from its MAIN cell and `CellToRect` gives the whole span — but each edge was then decided by
+	// looking one cell away from the cell that was PASSED IN. For a merge that is a cell INSIDE
+	// itself: `col + 1` of a three-column block is its own second column, which is in the selection
+	// whenever the block is, so the right edge was simply never drawn (Max, 2026-08-28: "a thin line
+	// instead of a thick one"). The same for the bottom of anything that spans rows.
+	//
+	// ⚠ AND ONLY THE MAIN CELL DRAWS IT. Every covered cell answers with the same whole-block rect,
+	// so each of them re-drew the frame — four times over for a 2×2 — each time deciding its edges
+	// from its own position. Drawing the same line twice is invisible; deciding it twice is not.
+	int cellRows = 1, cellCols = 1;
+	const CellSpan span = GetCellSize(row, col, &cellRows, &cellCols);
+	if (span == CellSpan_Inside)
+		return;   // …its owner draws the whole of it
+	if (cellRows < 1) cellRows = 1;
+	if (cellCols < 1) cellCols = 1;
+
 	wxRect rect = CellToRect(row, col);
 
+	// ⭐ THE FRAME IS PART OF THE SHEET, so its thickness is measured in the sheet's units. Left as a
+	// flat 2 it stayed two pixels while the table it surrounds grew by more than twice — and no one
+	// value for it can be right at two zooms at once, which is why the frame read as too heavy at one
+	// scale and too thin at another. The page-break marks are NOT scaled with it: those are the
+	// window's own annotation, not something drawn on the sheet.
+	const int framePenWidth = wxMax(1, ibCalcGridScale(2, GetGridZoom()));
+
+	// ⚠ AND A FLAT CAP, now that the width is not fixed. A wide pen ends in a ROUND cap by default,
+	// which reaches about half its width PAST the endpoint — the ends of the four sides then stick
+	// out of the corners as little stubs. At a fixed 2px that was a pixel and the coordinates below
+	// were tuned around it; as soon as the width follows the zoom it is no longer a pixel. The line
+	// has to stop where it is told to stop.
+	wxPen framePen(*wxBLACK, framePenWidth, wxPENSTYLE_SOLID);
+	framePen.SetCap(wxCAP_BUTT);
+
 	////////////////////////////////////////////////////////////////////////
-	// Draw selected lines 
+	// Draw selected lines
+
+	// ⚠ AND THE ENDS STOP AT THE CELL. Each of these ran a pixel PAST its corner — a cure for the
+	// round cap, which used to eat that pixel back. With a butt cap nothing eats it, and the overshoot
+	// shows as a stub poking out of every corner (Max, 2026-08-28: "stubs and sticks"). A side runs
+	// the cell's own edge, end to end: neighbouring cells of one block still meet, because each runs
+	// its FULL side.
+	// 🛑⭐ AND A SIDE REACHES ITS NEIGHBOUR, or the block's edge comes out DOTTED. Cell rects do not
+	// tile: between two of them lies the pixel the grid line occupies, and a stripe drawn to
+	// `GetBottom() + 1` stops one short of it. Every row boundary down a tall block therefore left a
+	// one-pixel hole, and the background showing through them read as the grid lying over the frame
+	// (Max, 2026-08-28: "it does not cover the grid"). Nothing lay over it — the stripe was never
+	// there.
+	//
+	// ⚠ ONLY WHERE THE BLOCK CONTINUES. Reaching past the last cell would put the stub back outside
+	// the frame — the overshoot this morning's fix removed — so the extra pixel is taken exactly when
+	// the neighbour on that side is part of the same selection.
+	const int downEnd  = rect.GetBottom() + (IsInSelection(row + cellRows, col) ? 2 : 1);
+	const int rightEnd = rect.GetRight()  + (IsInSelection(row, col + cellCols) ? 2 : 1);
 
 	if (!IsInSelection(row, col - 1))
 	{
-		dc.SetPen({ *wxBLACK, 2, wxPENSTYLE_SOLID });
-		dc.DrawLine(rect.GetLeft(), rect.GetTop() - 1,
-			rect.GetLeft(), rect.GetBottom());
+		dc.SetPen(framePen);
+		dc.DrawLine(rect.GetLeft(), rect.GetTop(),
+			rect.GetLeft(), downEnd);
 	}
 
-	if (!IsInSelection(row, col + 1)) // !!!
+	if (!IsInSelection(row, col + cellCols))
 	{
-		dc.SetPen({ *wxBLACK, 2, wxPENSTYLE_SOLID });
-		dc.DrawLine(rect.GetRight() + 1, rect.GetTop() - 1,
-			rect.GetRight() + 1, rect.GetBottom());
+		dc.SetPen(framePen);
+		dc.DrawLine(rect.GetRight() + 1, rect.GetTop(),
+			rect.GetRight() + 1, downEnd);
 	}
 
+	// ⭐ THE HORIZONTALS ARE THE ONES TO ADJUST, NOT THE VERTICALS. They ran a unit longer at each
+	// end — a leftover from fitting corners under a round cap — and that overhang is what made the
+	// left side READ as thinner than the rest: the verticals were right all along, the horizontals
+	// stuck out past them (Max, 2026-08-28: "you need to change the two top lines, they are drawn one
+	// too long — that is the solution"). Each now spans exactly its own side.
 	if (!IsInSelection(row - 1, col))
 	{
-		dc.SetPen({ *wxBLACK, 2, wxPENSTYLE_SOLID });
-		dc.DrawLine(rect.GetLeft() - 1, rect.GetTop(),
-			rect.GetRight() + 1, rect.GetTop());
+		dc.SetPen(framePen);
+		dc.DrawLine(rect.GetLeft(), rect.GetTop(),
+			rightEnd, rect.GetTop());
 	}
 
-	if (!IsInSelection(row + 1, col)) // !!!
+	if (!IsInSelection(row + cellRows, col))
 	{
-		dc.SetPen({ *wxBLACK, 2, wxPENSTYLE_SOLID });
-		dc.DrawLine(rect.GetLeft() - 1, rect.GetBottom(),
-			rect.GetRight() + 1, rect.GetBottom());
+		dc.SetPen(framePen);
+		dc.DrawLine(rect.GetLeft(), rect.GetBottom(),
+			rightEnd, rect.GetBottom());
 	}
 
 }
@@ -7418,10 +7709,28 @@ wxPen ibGrid::GetColGridLinePen(int WXUNUSED(col))
 	return GetDefaultGridLinePen();
 }
 
+// ⭐⭐ A CELL'S BORDER LINE DOES NOT ALWAYS LIVE IN THAT CELL. With the sheet's grid lines switched
+// off — which is how a report is drawn, so that only the borders it states are seen — `DrawCellBorder`
+// puts the right border at `rect.GetRight() + 1` and the bottom one at `rect.GetBottom() + 1`: the
+// first pixel of the NEXT cell. So painting a cell covers two of its neighbours' lines, and if those
+// neighbours were not painted too, nobody draws them again — the line is gone until something
+// unrelated invalidates its owner (Max, 2026-08-28, on a selection: "it takes more than it should
+// and clears the neighbouring area, it swallows the line").
+//
+// Asked HERE, of the pass whose subject IS borders, and per cell: whoever owns a pixel this paint
+// covered gets its border drawn. Their contents are untouched — only the line is restated — and
+// drawing the same line twice is invisible, so nothing has to be tracked.
 void ibGrid::DrawBorder(wxDC& dc, const ibGridCellCacheArray& storage)
 {
-	// if the active cell was repainted, repaint its highlight too because it
-	// might have been damaged by the grid lines
+	const auto borderOf = [&](int row, int col) {
+		if (row < 0 || col < 0)
+			return;
+
+		const ibGridCellAttrPtr attr = GetCellAttrPtr(row, col);
+		if (attr && attr->HasAnyBorder())
+			DrawCellBorder(dc, ibGridCellCoords(row, col), CellToRect(row, col), attr.get());
+	};
+
 	size_t count = storage.GetCount();
 	for (size_t n = 0; n < count; n++)
 	{
@@ -7432,6 +7741,9 @@ void ibGrid::DrawBorder(wxDC& dc, const ibGridCellCacheArray& storage)
 		{
 			DrawCellBorder(dc, cache.m_coords, cache.m_rect, attr.get());
 		}
+
+		borderOf(cache.m_coords.GetRow(), cache.m_coords.GetCol() - 1);   // its right border is our left pixel
+		borderOf(cache.m_coords.GetRow() - 1, cache.m_coords.GetCol());   // its bottom border is our top pixel
 	}
 }
 
@@ -7452,6 +7764,30 @@ void ibGrid::DrawHighlight(wxDC& dc, const ibGridCellCoordsArray& cells)
 		return;
 	}
 
+	// (⚠ NO FILL HERE. Painting the block again — over the pixel each cell leaves to its neighbour —
+	//  takes the grid away INSIDE the selection, and it belongs there: a selected block still reads
+	//  as cells (Max, 2026-08-28: "now there are no grid lines inside"). Tried twice, reverted twice;
+	//  what this pass draws is the OUTLINE and nothing else.)
+
+	// ⭐⭐ AND THE OUTLINE OF A NEIGHBOUR IS RESTATED TOO — the same rule the sheet's own borders
+	// follow (see DrawBorder). A block's right-hand stripe is drawn at `rect.GetRight() + 1`, which is
+	// the FIRST PIXEL OF THE NEXT CELL: repaint that neighbour and the stripe goes with it, and
+	// nobody draws it again, because the neighbour is not in the selection. Along a tall block that
+	// reads as a dotted side — a stripe with a bite taken out of it at every row that happened to be
+	// repainted (Max, 2026-08-28: "on the stripes down the sides the grid lands and you see dots").
+	//
+	// Whoever owns a pixel this paint covered gets their outline drawn: it is the same line in the
+	// same place, and drawing it twice is invisible.
+	const auto frameOf = [&](int row, int col) {
+		if (row < 0 || col < 0 || row >= m_numRows || col >= m_numCols)
+			return;
+		const ibGridCellCoords neighbour(row, col);
+		if (m_currentCellCoords == neighbour || (m_selection && m_selection->IsInSelection(neighbour))) {
+			ibGridCellAttrPtr attr = GetCellAttrPtr(neighbour);
+			DrawCellHighlight(dc, row, col, attr.get());
+		}
+	};
+
 	// if the active cell was repainted, repaint its highlight too because it
 	// might have been damaged by the grid lines
 	size_t count = cells.GetCount();
@@ -7463,6 +7799,9 @@ void ibGrid::DrawHighlight(wxDC& dc, const ibGridCellCoordsArray& cells)
 			ibGridCellAttrPtr attr = GetCellAttrPtr(cell);
 			DrawCellHighlight(dc, cell.GetRow(), cell.GetCol(), attr.get());
 		}
+
+		frameOf(cell.GetRow(), cell.GetCol() - 1);   // its right stripe is our left pixel
+		frameOf(cell.GetRow() - 1, cell.GetCol());   // its bottom stripe is our top pixel
 	}
 }
 
@@ -8226,11 +8565,17 @@ void ibGrid::DrawTextRectangle(wxDC& dc,
 
 	int x = 0,
 		y = 0;
+	// ⭐ NO MARGIN ABOVE OR BELOW THE TEXT, only at the sides. A row is one line of its font plus the grid
+	// line, and nothing else: spent on a margin as well, that pixel left the last line one short of fitting
+	// - drawn, it was cut by a pixel; whole lines only, it was dropped altogether (2026-09-22, a wrapped
+	// paragraph losing its last line). A sheet has no padding inside a cell - the gap between two blocks is
+	// an empty ROW - so the margin has nothing to do here. Text on its side keeps it: there it is a margin
+	// at the SIDE, which is the one this leaves standing.
 	switch (vertAlign)
 	{
 	case wxALIGN_BOTTOM:
 		if (textOrientation == wxHORIZONTAL)
-			y = rect.y + (rect.height - textHeight - GRID_TEXT_MARGIN);
+			y = rect.y + (rect.height - textHeight);
 		else
 			x = rect.x + (rect.width - textWidth - GRID_TEXT_MARGIN);
 		break;
@@ -8245,7 +8590,7 @@ void ibGrid::DrawTextRectangle(wxDC& dc,
 	case wxALIGN_TOP:
 	default:
 		if (textOrientation == wxHORIZONTAL)
-			y = rect.y + GRID_TEXT_MARGIN;
+			y = rect.y;
 		else
 			x = rect.x + GRID_TEXT_MARGIN;
 		break;
@@ -8256,6 +8601,21 @@ void ibGrid::DrawTextRectangle(wxDC& dc,
 	for (size_t l = 0; l < nLines; l++)
 	{
 		const wxString& line = lines[l];
+
+		// ⭐ WHOLE LINES ONLY, AFTER THE FIRST. A row with a height of its own keeps it — a band of a blank
+		// is a fixed piece of paper — so what does not fit is cut, and cutting THROUGH a line reads as
+		// damage rather than as "this row was given less height than its text asks for" (Max, 2026-09-22,
+		// looking at a printed 14 pt line in a row of 18). Every line after the first is drawn only where it
+		// fits whole; the FIRST one is drawn whatever happens, because a cell that silently prints nothing
+		// loses the text instead of showing it short.
+		if (l > 0) {
+			const wxCoord advance = arrCol.Item(l);
+			const bool fits = textOrientation == wxHORIZONTAL
+				? y + advance <= rect.y + rect.height
+				: x + advance <= rect.x + rect.width;
+			if (!fits)
+				break;
+		}
 
 		if (line.empty())
 		{
@@ -8315,6 +8675,29 @@ void ibGrid::DrawTextRectangle(wxDC& dc,
 {
 	attr.GetNonDefaultAlignment(&hAlign, &vAlign);
 
+	// ⭐⭐ WRAP: THE COMMONEST PLACEMENT IN A REAL BLANK, and the one this control could not do. A
+	// column header reading "Quantity of packages" over a 15mm column has nowhere to go but onto a
+	// second line — the other two modes answer that by spilling over the neighbour or by cutting the
+	// word in half, and both are wrong on a printed form. Measured over 186 templates it is the
+	// majority placement by a wide margin (2026-09-05).
+	//
+	// ⚠ THE CELL'S HEIGHT IS NOT TOUCHED HERE. A blank sets its row heights deliberately - a band is a
+	// fixed piece of paper - so wrapping fills the height that is there and no more. A row that has NO
+	// height of its own is another matter: it has automatic height, and the editor sizes it to its text
+	// beforehand (ibSpreadsheetRowHeight, gridEditorDoc.cpp) - drawing still only fills what is there.
+	if (attr.GetFitMode().IsWrap()) {
+
+		wxArrayString natural;
+		ParseLines(text, natural);
+
+		wxArrayString lines;
+		for (const wxString& one : natural)
+			WrapTextLine(dc, one, rect.GetWidth() - 2 * GRID_TEXT_MARGIN, lines);
+
+		DrawTextRectangle(dc, lines, rect, hAlign, vAlign, attr.GetTextOrient());
+		return;
+	}
+
 	const wxEllipsizeMode mode = attr.GetFitMode().GetEllipsizeMode();
 	if (mode != wxEllipsizeMode::wxELLIPSIZE_NONE) {
 
@@ -8334,6 +8717,64 @@ void ibGrid::DrawTextRectangle(wxDC& dc,
 
 		DrawTextRectangle(dc, text, rect, hAlign, vAlign, attr.GetTextOrient());
 	}
+}
+
+// Break ONE line at word boundaries so that no piece is wider than maxWidth, appending the pieces.
+// The caller has already split on newlines: a wrapped cell honours the breaks that were typed AND
+// adds its own, which is what a person means by both.
+//
+// ⚠ A WORD LONGER THAN THE COLUMN STILL GOES OUT ON ITS OWN LINE rather than being cut mid-letter.
+// A cell narrow enough for that is a layout to fix, and half a word is not a better answer than an
+// overhang - the overhang is at least legible and visibly wrong.
+void ibGrid::WrapTextLine(wxDC& dc, const wxString& line, int maxWidth, wxArrayString& lines)
+{
+	if (maxWidth <= 0 || line.IsEmpty()) {
+		lines.Add(line);
+		return;
+	}
+
+	wxCoord width = 0, height = 0;
+	dc.GetTextExtent(line, &width, &height);
+
+	if (width <= maxWidth) {
+		lines.Add(line);
+		return;
+	}
+
+	wxString current;
+
+	// Whitespace is where a line may break; it is kept with the word before it so that re-joining
+	// the pieces gives the original text back.
+	size_t at = 0;
+	while (at < line.length()) {
+
+		size_t end = line.find(wxT(' '), at);
+		if (end == wxString::npos)
+			end = line.length();
+		else
+			++end;   // the space belongs to the word it follows
+
+		const wxString word = line.Mid(at, end - at);
+		at = end;
+
+		if (current.IsEmpty()) {
+			current = word;
+			continue;
+		}
+
+		dc.GetTextExtent(current + word, &width, &height);
+
+		if (width <= maxWidth) {
+			current += word;
+		}
+		else {
+			lines.Add(current);
+			current = word;
+		}
+	}
+
+	if (!current.IsEmpty())
+		lines.Add(current);
 }
 
 // Split multi-line text up into an array of strings.
@@ -8413,7 +8854,11 @@ void ibGrid::GetTextBoxSize(const wxDC& dc,
 			w = wxMax(w, lineW);
 			h += lineH;
 
-			if (arrRow) arrRow->Add(w);
+			// ⚠ THE LINE'S OWN WIDTH, not the widest so far. `arrRow` is what DrawTextRectangle places each
+			// line by, and given the running maximum every line after the widest one was laid out as if it
+			// were that wide: centred and right-aligned multi-line cells had their short lines pushed left
+			// (a column heading "Quantity / shipped" — the second word off centre under the first).
+			if (arrRow) arrRow->Add(lineW);
 			if (arrCol) arrCol->Add(lineH);
 		}
 	}
@@ -9998,6 +10443,20 @@ void ibGrid::SetLabelBackgroundColour(const wxColour& colour)
 		if (m_colFrozenLabelWin)
 			m_colFrozenLabelWin->SetBackgroundColour(colour);
 
+		// The outline panes are chrome too — see where they are first coloured.
+		if (m_rowOutlineWin)
+			m_rowOutlineWin->SetBackgroundColour(colour);
+		if (m_colOutlineWin)
+			m_colOutlineWin->SetBackgroundColour(colour);
+		if (m_rowFrozenOutlineWin)
+			m_rowFrozenOutlineWin->SetBackgroundColour(colour);
+		if (m_colFrozenOutlineWin)
+			m_colFrozenOutlineWin->SetBackgroundColour(colour);
+		if (m_rowOutlineCornerWin)
+			m_rowOutlineCornerWin->SetBackgroundColour(colour);
+		if (m_colOutlineCornerWin)
+			m_colOutlineCornerWin->SetBackgroundColour(colour);
+
 		if (ShouldRefresh())
 		{
 			m_rowAreaWin->Refresh();
@@ -10851,13 +11310,89 @@ int ibGrid::AddRowGroup(int first, int last, int level, bool collapsed)
 	return (int)m_rowGroupAt.size() - 1;
 }
 
-int ibGrid::AddColGroup(int first, int last, int level, bool collapsed)
+int ibGrid::AddColGroup(int first, int last, int level, bool collapsed, int head)
 {
 	ibGridCellGroup g; g.m_start = first; g.m_end = last;
-	g.m_level = wxMax(1, level); g.m_collapsed = collapsed;
+	g.m_level = wxMax(1, level); g.m_collapsed = collapsed; g.m_head = head;
 	m_colGroupAt.push_back(g);
 	if (collapsed) for (int c = first; c <= last; ++c) HideCol(c);
 	return (int)m_colGroupAt.size() - 1;
+}
+
+// See the header. A row that heads nothing is not a group; a row that heads something folds the run
+// of deeper rows that follows it — which is where the marker's line lives, and why the marker itself
+// sits on the heading (GetRowGroupButtonRect) rather than on the first row it hides.
+void ibGrid::NormalizeRowGroups()
+{
+	if (m_rowGroupAt.empty())
+		return;
+
+	std::vector<ibGridCellGroup> shaped;
+	shaped.reserve(m_rowGroupAt.size());
+
+	for (size_t i = 0; i < m_rowGroupAt.size(); ++i) {
+		const ibGridCellGroup& head = m_rowGroupAt[i];
+
+		// How far the deeper run after this row reaches — that run IS what this row folds.
+		int end = head.m_end;
+		for (size_t j = i + 1; j < m_rowGroupAt.size() && m_rowGroupAt[j].m_level > head.m_level; ++j)
+			end = m_rowGroupAt[j].m_end;
+
+		if (end <= head.m_end)
+			continue;   // a leaf: nothing deeper follows, so there is nothing to fold and no marker
+
+		ibGridCellGroup g;
+		g.m_start     = head.m_end + 1;   // the heading stays visible; its children are what collapse
+		g.m_end       = end;
+		g.m_level     = head.m_level;
+		g.m_collapsed = head.m_collapsed;
+		g.m_head      = head.m_start;     // the heading's FIRST row — the same rule as the columns'
+		shaped.push_back(g);
+	}
+
+	m_rowGroupAt.swap(shaped);
+
+}
+
+// The twin of the above, across instead of down — same rule, same reason, and the columns of a
+// cross-table are the first thing that needed it (see the header).
+void ibGrid::NormalizeColGroups()
+{
+	if (m_colGroupAt.empty())
+		return;
+
+	// ⚠ A PRODUCER THAT ALREADY SAID WHERE ITS MARKER GOES HAS ALREADY SAID WHAT ITS RANGE IS. The
+	// shaping below turns "headings with a depth" into bands, and that reading only holds while the
+	// heading comes BEFORE what it folds. A cross-table's column totals close their groups instead,
+	// so its ranges arrive finished (m_head set) and must be left exactly as they are.
+	for (const ibGridCellGroup& g : m_colGroupAt)
+		if (g.m_head >= 0)
+			return;
+
+	std::vector<ibGridCellGroup> shaped;
+	shaped.reserve(m_colGroupAt.size());
+
+	for (size_t i = 0; i < m_colGroupAt.size(); ++i) {
+		const ibGridCellGroup& head = m_colGroupAt[i];
+
+		// How far the deeper run after this column reaches — that run IS what this column folds.
+		int end = head.m_end;
+		for (size_t j = i + 1; j < m_colGroupAt.size() && m_colGroupAt[j].m_level > head.m_level; ++j)
+			end = m_colGroupAt[j].m_end;
+
+		if (end <= head.m_end)
+			continue;   // a leaf: nothing deeper follows, so there is nothing to fold and no marker
+
+		ibGridCellGroup g;
+		g.m_start     = head.m_end + 1;   // the heading stays visible; its children are what collapse
+		g.m_end       = end;
+		g.m_level     = head.m_level;
+		g.m_collapsed = head.m_collapsed;
+		g.m_head      = head.m_start;     // …and the marker goes at the heading's FIRST column
+		shaped.push_back(g);
+	}
+
+	m_colGroupAt.swap(shaped);
 }
 
 void ibGrid::DeleteRowGroup(int idx)
@@ -10885,7 +11420,24 @@ void ibGrid::SetRowGroupCollapsed(int idx, bool collapsed)
 	for (int r = g.m_start; r <= g.m_end; ++r) {
 		if (collapsed) HideRow(r); else ShowRow(r);
 	}
+
+	// ⭐ EXPANDING AN OUTER GROUP DOES NOT EXPAND WHAT IS FOLDED INSIDE IT. The rows just shown
+	// include the ones belonging to nested groups that are still collapsed — showing those would
+	// undo a fold the person did on purpose, and the nested marker would then say "+" over rows that
+	// are visible. So every nested collapsed group folds itself back.
+	if (!collapsed) {
+		for (const ibGridCellGroup& nested : m_rowGroupAt) {
+			if (!nested.m_collapsed || &nested == &g)
+				continue;
+			if (nested.m_start < g.m_start || nested.m_end > g.m_end)
+				continue;   // not inside this one
+			for (int r = nested.m_start; r <= nested.m_end; ++r)
+				HideRow(r);
+		}
+	}
+
 	if (m_rowOutlineWin) m_rowOutlineWin->Refresh();
+	if (m_rowFrozenOutlineWin) m_rowFrozenOutlineWin->Refresh();
 }
 
 void ibGrid::SetColGroupCollapsed(int idx, bool collapsed)
@@ -10897,7 +11449,24 @@ void ibGrid::SetColGroupCollapsed(int idx, bool collapsed)
 	for (int c = g.m_start; c <= g.m_end; ++c) {
 		if (collapsed) HideCol(c); else ShowCol(c);
 	}
+
+	// ⭐ EXPANDING AN OUTER GROUP DOES NOT EXPAND WHAT IS FOLDED INSIDE IT — the rows' rule, turned
+	// on its side (see SetRowGroupCollapsed). The columns just shown include the ones belonging to
+	// nested groups that are still collapsed; showing those would undo a fold the person made on
+	// purpose, and the nested marker would then say "+" over columns that are plainly visible.
+	if (!collapsed) {
+		for (const ibGridCellGroup& nested : m_colGroupAt) {
+			if (!nested.m_collapsed || &nested == &g)
+				continue;
+			if (nested.m_start < g.m_start || nested.m_end > g.m_end)
+				continue;   // not inside this one
+			for (int c = nested.m_start; c <= nested.m_end; ++c)
+				HideCol(c);
+		}
+	}
+
 	if (m_colOutlineWin) m_colOutlineWin->Refresh();
+	if (m_colFrozenOutlineWin) m_colFrozenOutlineWin->Refresh();
 }
 
 bool ibGrid::ToggleRowGroup(int idx)
@@ -10921,18 +11490,60 @@ int ibGrid::GetMaxColGroupLevel() const {
 	int mx = 0; for (const auto& g : m_colGroupAt) mx = wxMax(mx, g.m_level); return mx;
 }
 
-// Size of the outline button in pixels (square).
-static const int kOutlineBtnSize = 14;
-// Space taken per nesting level along the outline axis.
+// How much smaller than its cell the button is drawn, per side — the marker sits INSIDE the row
+// (resp. the column) rather than filling it (Max, 2026-08-20: "the square should be a little
+// smaller than the cell").
+static const int kOutlineBtnInset = 3;
+// …and the floor under it: below this the minus bar stops reading as one.
+static const int kOutlineBtnMinSize = 7;
+// Space taken per nesting level along the outline axis, at 100%.
 static const int kOutlineLevelStep = 18;
+// ⭐⭐ THE MARKER IS ONE SQUARE, THE SAME ON BOTH AXES. Without a ceiling each axis takes as much as
+// its own lane allows, and the two stop matching the moment the cells differ: a report's rows are
+// tight (a 15px row leaves 9), a report's columns are wide (nothing to trim, so the full 12). Side
+// by side that reads as two different controls doing one job (Max, 2026-08-25: "the +/- is not the
+// right size — bring it to the rows").
+//
+// The cell still TRIMS it — that rule is the rows' own and it is right (Max, 2026-08-20: a fixed
+// square spills over a short row and gets lost in a tall one). The ceiling only stops a marker from
+// growing past its twin, which is what makes them look like the same button.
+static const int kOutlineBtnMaxSize = 10;
+// The pane's trailing margin, at 100%.
+static const int kOutlineMargin = 4;
 
+// HOW BIG THE MARKER IS — asked once, so the two axes cannot answer differently. `laneExtent` is the
+// band its level owns, `cellExtent` the row's height or the column's width it sits against.
+static int ibOutlineButtonExtent(int laneExtent, int cellExtent)
+{
+	const int fromLane = laneExtent - kOutlineBtnInset * 2;
+	const int fromCell = cellExtent - kOutlineBtnInset * 2;
+	return wxMax(kOutlineBtnMinSize, wxMin(wxMin(fromLane, fromCell), kOutlineBtnMaxSize));
+}
+
+// ⭐ THE OUTLINE PANE ZOOMS WITH THE SHEET. Its geometry is read against ROW positions
+// (GetRowTop / GetRowHeight), which are scaled — so a pane sized from raw constants drifts away
+// from the rows it points at the moment the zoom leaves 100%: the buttons no longer line up with
+// their headings, and at a small zoom they are taller than the rows and overlap into a smear.
+// Every length here therefore goes through the same ibCalcGridScale the labels and the areas use.
 int ibGrid::GetRowOutlineSize() const {
 	const int mx = GetMaxRowGroupLevel();
-	return mx > 0 ? (mx * kOutlineLevelStep + 4) : 0;
+	return mx > 0 ? ibCalcGridScale(mx * kOutlineLevelStep + kOutlineMargin, GetGridZoom()) : 0;
 }
 int ibGrid::GetColOutlineSize() const {
 	const int mx = GetMaxColGroupLevel();
-	return mx > 0 ? (mx * kOutlineLevelStep + 4) : 0;
+	return mx > 0 ? ibCalcGridScale(mx * kOutlineLevelStep + kOutlineMargin, GetGridZoom()) : 0;
+}
+
+// THE ONE ANSWER — see the header for what asking it in three places cost.
+wxPoint ibGrid::GetGridOrigin() const
+{
+	return wxPoint(
+		GetRowOutlineSize()
+			+ (GridRowAreaEnabled() ? ibCalcGridScale(m_rowAreaWidth, GetGridZoom()) : 0)
+			+ ibCalcGridScale(m_rowLabelWidth, GetGridZoom()),
+		GetColOutlineSize()
+			+ (GridColAreaEnabled() ? ibCalcGridScale(m_colAreaHeight, GetGridZoom()) : 0)
+			+ ibCalcGridScale(m_colLabelHeight, GetGridZoom()));
 }
 
 // Button rectangles are expressed in outline-pane local coords. Level 1 is
@@ -10941,20 +11552,76 @@ wxRect ibGrid::GetRowGroupButtonRect(int idx) const
 {
 	if (idx < 0 || (size_t)idx >= m_rowGroupAt.size()) return wxRect();
 	const ibGridCellGroup& g = m_rowGroupAt[idx];
+	// A group whose rows no longer exist has no button — asking for the geometry of a row that is
+	// not there is what crashed the outline pane after a re-compose. Empty rect = nothing drawn,
+	// nothing hit-tested, which is the truthful answer for a range with no rows behind it.
+	if (g.m_start >= GetNumberRows() || g.m_end >= GetNumberRows()) return wxRect();
 	ibGrid* self = const_cast<ibGrid*>(this);
-	const int x = (g.m_level - 1) * kOutlineLevelStep + 2;
-	const int y = self->GetRowTop(g.m_start, self->GetGridZoom()) + 2;
-	return wxRect(x, y, kOutlineBtnSize, kOutlineBtnSize);
+	const float zoom = GetGridZoom();
+	const int step = ibCalcGridScale(kOutlineLevelStep, zoom);
+	const int lane = (g.m_level - 1) * step;   // the band this level owns, left to right
+	// 🛑 THE BUTTON BELONGS TO THE ROW THAT OPENS THE GROUP, not to the first row inside it. A group
+	// is what its HEADING introduces — the row carrying the value — and the rows it spans are what
+	// collapsing hides. Drawn on m_start it sat on the first hidden row instead: one line below where
+	// it belongs, and on a report whose heading row is followed by an empty one it landed on a blank
+	// line, so the control appeared where there was nothing to expand (Max, 2026-08-19: "the plus
+	// should be where there IS a value").
+	//
+	// A group that starts at row 0 has no heading above it (a document may be grouped from its very
+	// first row) — there the button stays on the group's own first row, which is the only row it can
+	// be drawn against.
+	const int headingRow = (g.m_head >= 0) ? g.m_head
+		: ((g.m_start > 0) ? g.m_start - 1 : g.m_start);
+	// 🛑 A GROUP FOLDED INSIDE ANOTHER ONE IS GONE, MARKER AND ALL. Collapsing an outer group hides
+	// the rows under it — including the headings of the groups NESTED in it — and a button drawn
+	// against a hidden row has nowhere to sit: it collapses onto the outer group's own line and
+	// stands there offering to expand something nobody can see (Max, 2026-08-20: "one group has to
+	// hide all the subgroups under it, and it does not — it still shows a plus").
+	if (!IsRowShown(headingRow)) return wxRect();
+	// ⭐ THE BUTTON IS SIZED FROM ITS ROW — a little smaller than the cell it sits against (Max,
+	// 2026-08-20). A fixed square is right at exactly one zoom: taller rows leave it lost in the
+	// middle of the band, shorter ones have it spill over the row below. It is bounded by its
+	// LANE too, so a deep level's marker never crosses into its neighbour's.
+	const int rowTop    = self->GetRowTop(headingRow, zoom);
+	const int rowHeight = self->GetRowHeight(headingRow, zoom);
+	const int size      = ibOutlineButtonExtent(step, rowHeight);
+	const int x         = lane + wxMax(0, (step - size) / 2);
+	const int y         = rowTop + wxMax(0, (rowHeight - size) / 2);
+	return wxRect(x, y, size, size);
 }
 
 wxRect ibGrid::GetColGroupButtonRect(int idx) const
 {
 	if (idx < 0 || (size_t)idx >= m_colGroupAt.size()) return wxRect();
 	const ibGridCellGroup& g = m_colGroupAt[idx];
+	// 🛑 A GROUP WHOSE COLUMNS NO LONGER EXIST HAS NO BUTTON — the row pane learned this after a
+	// re-compose crashed it, and the column pane never did: asking for the geometry of a column that
+	// is not there is the same question with the same answer. An empty rect draws nothing and
+	// hit-tests nothing, which is the truth about a range with no columns behind it.
+	if (g.m_start >= GetNumberCols() || g.m_end >= GetNumberCols()) return wxRect();
 	ibGrid* self = const_cast<ibGrid*>(this);
-	const int y = (g.m_level - 1) * kOutlineLevelStep + 2;
-	const int x = self->GetColLeft(g.m_start, self->GetGridZoom()) + 2;
-	return wxRect(x, y, kOutlineBtnSize, kOutlineBtnSize);
+	const float zoom = self->GetGridZoom();
+	const int step = ibCalcGridScale(kOutlineLevelStep, zoom);
+	const int lane = (g.m_level - 1) * step;
+	// The column that OPENS the group carries the button — see GetRowGroupButtonRect. Its heading is
+	// a BLOCK (one column per measure), so the marker goes on the block's first column, which is
+	// what m_head remembers; the line before m_start is that block's last column.
+	const int headingCol = (g.m_head >= 0) ? g.m_head
+		: ((g.m_start > 0) ? g.m_start - 1 : g.m_start);
+	// 🛑 …AND A GROUP FOLDED INSIDE ANOTHER ONE IS GONE, MARKER AND ALL. Collapsing an outer group
+	// hides the columns under it — including the headings of the groups nested in it — so a button
+	// drawn against a hidden column has nowhere to sit and ends up on the outer group's own line,
+	// offering to expand something nobody can see. The rows were fixed on 2026-08-20; the columns
+	// are the same rule, and Max asked for the same behaviour (2026-08-25).
+	if (!IsColShown(headingCol)) return wxRect();
+	const int colLeft  = self->GetColLeft(headingCol, zoom);
+	const int colWidth = self->GetColWidth(headingCol, zoom);
+	// Sized by the SAME function the rows use — the two markers are one control doing one job, and
+	// two copies of a formula are how they stopped looking like it.
+	const int size     = ibOutlineButtonExtent(step, colWidth);
+	const int x        = colLeft + wxMax(0, (colWidth - size) / 2);
+	const int y        = lane + wxMax(0, (step - size) / 2);
+	return wxRect(x, y, size, size);
 }
 
 int ibGrid::HitTestRowOutlineButton(const wxPoint& pt) const
@@ -10999,6 +11666,7 @@ void ibGrid::DrawRowOutline(wxDC& dc)
 	for (size_t i = 0; i < m_rowGroupAt.size(); ++i) {
 		const ibGridCellGroup& g = m_rowGroupAt[i];
 		if (g.m_collapsed) continue;
+		if (g.m_end >= GetNumberRows()) continue;   // stale range — see GetRowGroupButtonRect
 		const wxRect btn = GetRowGroupButtonRect((int)i);
 		if (btn.IsEmpty()) continue;
 		const int railX = btn.x + btn.width / 2;
@@ -11006,6 +11674,12 @@ void ibGrid::DrawRowOutline(wxDC& dc)
 		const int rowBottom = GetRowTop(g.m_end, GetGridZoom())
 			+ GetRowHeight(g.m_end, GetGridZoom()) - 1;
 		if (rowBottom > railTop) dc.DrawLine(railX, railTop, railX, rowBottom);
+		// ⭐ AND THE RAIL CLOSES, OUT TO THE PANE'S RIGHT EDGE (Max, 2026-08-20: "there is no line
+		// at the bottom — it should run to the right edge"). A bare vertical line says where a
+		// group begins and never where it ends; the closing tick on the group's LAST row is what
+		// makes the span readable without counting rows, and it reaches the edge so the eye can
+		// follow it straight into the row it belongs to.
+		if (rowBottom >= railTop) dc.DrawLine(railX, rowBottom, GetRowOutlineSize(), rowBottom);
 	}
 	for (size_t i = 0; i < m_rowGroupAt.size(); ++i) {
 		const wxRect btn = GetRowGroupButtonRect((int)i);
@@ -11020,6 +11694,7 @@ void ibGrid::DrawColOutline(wxDC& dc)
 	for (size_t i = 0; i < m_colGroupAt.size(); ++i) {
 		const ibGridCellGroup& g = m_colGroupAt[i];
 		if (g.m_collapsed) continue;
+		if (g.m_end >= GetNumberCols()) continue;   // stale range — see GetColGroupButtonRect
 		const wxRect btn = GetColGroupButtonRect((int)i);
 		if (btn.IsEmpty()) continue;
 		const int railY = btn.y + btn.height / 2;
@@ -11027,6 +11702,8 @@ void ibGrid::DrawColOutline(wxDC& dc)
 		const int colRight = GetColLeft(g.m_end, GetGridZoom())
 			+ GetColWidth(g.m_end, GetGridZoom()) - 1;
 		if (colRight > railLeft) dc.DrawLine(railLeft, railY, colRight, railY);
+		// The same closing tick, turned on its side — see DrawRowOutline.
+		if (colRight >= railLeft) dc.DrawLine(colRight, railY, colRight, GetColOutlineSize());
 	}
 	for (size_t i = 0; i < m_colGroupAt.size(); ++i) {
 		const wxRect btn = GetColGroupButtonRect((int)i);
@@ -12301,7 +12978,12 @@ void ibGrid::DoSetRowSize(int row, int height)
 		InitRowHeights();
 	}
 
-	const int diff = UpdateRowOrColSize(m_rowHeights[row], height);
+	// ⚠ THROUGH THE SETTER, not a reference into the array: the sizes and their prefix sums are one
+	// object now, and a reference handed out would let a size change behind the sums' back.
+	int rowHeight = m_rowHeights[row];
+	const int diff = UpdateRowOrColSize(rowHeight, height);
+	m_rowHeights.Set(row, rowHeight);
+
 	if (!diff)
 		return;
 
@@ -12525,7 +13207,11 @@ void ibGrid::DoSetColSize(int col, int width)
 		InitColWidths();
 	}
 
-	const int diff = UpdateRowOrColSize(m_colWidths[col], width);
+	// …and the same for a column — see SetRowSize.
+	int colWidth = m_colWidths[col];
+	const int diff = UpdateRowOrColSize(colWidth, width);
+	m_colWidths.Set(col, colWidth);
+
 	if (!diff)
 		return;
 
@@ -13128,50 +13814,36 @@ void ibGrid::SetFocus()
 	m_gridWin->SetFocus();
 }
 
-const wxArrayInt& ibGrid::GetRowBottoms(float scale) const
+// ⭐ THE SUMS, BUILT ONCE PER (sizes, scale). This is what PosToLinePos binary-searches, and it is
+// asked on every mouse move, every exposed-area calculation and every paint — it used to be rebuilt
+// from scratch each of those times, so an O(log n) search carried an O(n) setup.
+void ibGrid::ibGridLineSizes::Rebuild(float scale) const
 {
-	m_rowBottoms.Alloc(m_rowHeights.Count());
-	m_rowBottoms.SetCount(0);
+	m_ends.Alloc(m_sizes.GetCount());
+	m_ends.SetCount(0);
 
-	int total_height = 0;
-	for (const int& height : m_rowHeights) {
-		const int scaled_height = ibCalcGridScale(height, scale);
-		if (height > 0)
-		{
-			total_height += scaled_height;
-			m_rowBottoms.Add(total_height);
-		}
-		else
-		{
-			//total_height += scaled_height;
-			m_rowBottoms.Add(total_height);
-		}
+	int total = 0;
+	for (const int& size : m_sizes) {
+		// A HIDDEN LINE (negative size) ADDS NOTHING and shares its neighbour's edge — the same
+		// answer the hand-written loops gave, kept deliberately: a zero-height row must not shift
+		// everything below it.
+		if (size > 0)
+			total += ibCalcGridScale(size, scale);
+		m_ends.Add(total);
 	}
 
-	return m_rowBottoms;
+	m_endsScale = scale;
+	m_endsValid = true;
+}
+
+const wxArrayInt& ibGrid::GetRowBottoms(float scale) const
+{
+	return m_rowHeights.Ends(scale);
 }
 
 const wxArrayInt& ibGrid::GetColRights(float scale) const
 {
-	m_colRights.Alloc(m_colWidths.Count());
-	m_colRights.SetCount(0);
-
-	int total_width = 0;
-	for (const int& width : m_colWidths) {
-		const int scaled_width = ibCalcGridScale(width, scale);
-		if (width > 0)
-		{
-			total_width += scaled_width;
-			m_colRights.Add(total_width);
-		}
-		else
-		{
-			//total_width += scaled_width;
-			m_colRights.Add(total_width);
-		}
-	}
-
-	return m_colRights;
+	return m_colWidths.Ends(scale);
 }
 
 bool ibGrid::Undo()

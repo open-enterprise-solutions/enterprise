@@ -9,8 +9,7 @@ enum ibAccountingRecordType {
 #pragma region enumeration
 #include "backend/compiler/enumUnit.h"
 class ibValueEnumAccountingRegisterRecordType : public ibValueEnumeration<ibAccountingRecordType> {
-	wxDECLARE_DYNAMIC_CLASS(ibValueEnumAccountingRegisterRecordType);
-public:
+	public:
 	static ibValue CreateDefEnumValue() {
 		return ibValue::CreateEnumObject<ibValueEnumAccountingRegisterRecordType>(ibAccountingRecordType::eDebit);
 	}
@@ -22,7 +21,7 @@ public:
 		AddEnumeration(eCredit, wxT("Credit"), _("Credit"));
 	}
 };
-const ibClassID g_enumAccountingRecordTypeCLSID = string_to_clsid("EN_ARTP");
+constexpr ibClassID g_enumAccountingRecordTypeCLSID = enum_to_clsid("EN_ARTP");
 #pragma endregion
 
 #endif

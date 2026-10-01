@@ -4,14 +4,14 @@
 #include "backend/compiler/value.h"
 
 class BACKEND_API ibValueOLE :
-	public ibValue {
-	wxString m_objectName;
+	public ibValueDynamicMembers {
+	public:
+	ibString m_objectName;
 #ifdef __WXMSW__
 	IDispatch* m_dispatch = nullptr;
 	IStream* m_streamDispatch = nullptr;
 	IDispatch* m_currentDispatch = nullptr;
-#endif 
-	ibValueMethodHelper* m_methodHelper;
+#endif
 #ifdef __WXMSW__
 	CLSID m_clsId;
 #endif
@@ -28,6 +28,12 @@ private:
 #endif
 	friend class ibDebuggerServer;
 public:
+
+	// NOT transferable across sessions: a COM interface pointer is apartment-bound
+	// (that is what the STA stream marshalling below exists for), and the object
+	// behind it is external and mutable. Handing one to a job's own thread would
+	// be a cross-apartment call nobody marshalled.
+	virtual bool IsTransferable() const override { return false; }
 
 	//STA
 	static void CreateStreamForDispatch();
@@ -46,14 +52,10 @@ public:
 	}
 #endif
 
-	virtual ibValueMethodHelper* GetPMethods() const {
-		return m_methodHelper;
-	}
+	void FillMembers(ibMemberTable& helper) const;   // bound in ctor (was PrepareNames)
 
-	virtual void PrepareNames() const;
-
-	virtual long FindMethod(const wxString& strMethodName) const;
-	virtual long FindProp(const wxString& strPropName) const;
+	virtual long FindMethod(const ibString& strMethodName) const override;
+	virtual long FindProp(const ibString& strPropName) const override;
 
 	virtual bool IsPropReadable(const long lPropNum) const {
 		return true;
@@ -87,9 +89,7 @@ public:
 
 	virtual bool Init(ibValue** paParams, const long lSizeArray);
 
-	virtual wxString GetString() const {
-		return m_objectName;
-	}
+	virtual ibString GetString() const { return m_objectName; }
 
 	//operator '=='
 	virtual bool CompareValueEQ(const ibValue& cParam) const {
@@ -114,8 +114,6 @@ public:
 		return false;
 	}
 
-protected:
-	wxDECLARE_DYNAMIC_CLASS_NO_COPY(ibValueOLE);
 };
 
 #endif 

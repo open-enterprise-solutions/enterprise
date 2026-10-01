@@ -10,6 +10,8 @@
 #include "frontend/docView/docView.h"
 #include "res/bitmaps_res.h"
 
+#include <wx/artprov.h>
+
 #define DEF_LINENUMBER_ID 0
 #define DEF_BREAKPOINT_ID 1
 #define DEF_FOLDING_ID 2
@@ -92,6 +94,14 @@ ibCodeEditor::ibCodeEditor(ibMetaDocument* document, wxWindow* parent, wxWindowI
 	MarkerDefineBitmap(CurrentLine, wxMEMORY_BITMAP(Currentline_png));
 	MarkerDefineBitmap(BreakLine, wxMEMORY_BITMAP(Breakline_png));
 
+	// THE SAME DOT, ANOTHER COLOUR, for a breakpoint with a condition: the shape still reads as "a breakpoint",
+	// the colour says "not every time". Turned from the red one rather than drawn anew, so the two never drift.
+	// BLUE, not amber: amber read as a darker red beside the red dot, and the yellow run arrow drawn on top of
+	// it disappeared (Max, 2026-09-11).
+	wxImage conditionalBreakpoint = wxMEMORY_IMAGE(Breakpoint_png);
+	conditionalBreakpoint.RotateHue(0.62);   // red -> blue
+	MarkerDefineBitmap(ConditionalBreakpoint, wxBitmap(conditionalBreakpoint));
+
 	//markers
 	MarkerDefine(wxSTC_MARKNUM_FOLDER, wxSTC_MARK_BOXPLUS, *wxWHITE, *wxBLACK);
 	MarkerDefine(wxSTC_MARKNUM_FOLDEROPEN, wxSTC_MARK_BOXMINUS, *wxWHITE, *wxBLACK);
@@ -117,6 +127,35 @@ ibCodeEditor::ibCodeEditor(ibMetaDocument* document, wxWindow* parent, wxWindowI
 
 	Bind(wxEVT_STC_UPDATEUI, &ibCodeEditor::OnUpdateUI, this);
 
+	// Custom context menu — replaces wxSTC's built-in popup with one
+	// that adds the Syntax Helper Look-Up item alongside the standard
+	// edit actions. The Look-Up item posts wxID_FRONTEND_SYNTAX_HELPER_LOOKUP
+	// upward through the parent chain so the host frame
+	// (mainFrameDesigner's OpenHelpForCursor binding) handles it without
+	// the editor depending on the downstream designer header. See
+	// subphase 1.3 — codeEditor knows nothing about the help corpus.
+	UsePopUp(wxSTC_POPUP_NEVER);
+	Bind(wxEVT_CONTEXT_MENU, &ibCodeEditor::OnContextMenu, this);
+	Bind(wxEVT_MENU, [this](wxCommandEvent&) { Cut();        }, wxID_CUT);
+	Bind(wxEVT_MENU, [this](wxCommandEvent&) { Copy();       }, wxID_COPY);
+	Bind(wxEVT_MENU, [this](wxCommandEvent&) { Paste();      }, wxID_PASTE);
+	Bind(wxEVT_MENU, [this](wxCommandEvent&) { SelectAll();  }, wxID_SELECTALL);
+	Bind(wxEVT_MENU, [this](wxCommandEvent& ev) {
+		// Walk parent chain firing wxEVT_MENU at every wxWindow until
+		// one handles. wxStyledTextCtrl's PopupMenu does not always
+		// propagate through wxAUI / wxAuiDocMDIFrame parents to the
+		// outermost host where the host Bind() lives.
+		wxCommandEvent up(wxEVT_MENU, wxID_FRONTEND_SYNTAX_HELPER_LOOKUP);
+		up.SetEventObject(this);
+		for (wxWindow* p = GetParent(); p != nullptr; p = p->GetParent()) {
+			if (p->ProcessWindowEvent(up)) return;
+		}
+		if (wxTheApp) {
+			if (wxWindow* top = wxTheApp->GetTopWindow())
+				top->ProcessWindowEvent(up);
+		}
+	}, wxID_FRONTEND_SYNTAX_HELPER_LOOKUP);
+
 	// Setup the dwell time before a tooltip is displayed.
 	SetMouseDwellTime(200);
 
@@ -129,19 +168,16 @@ ibCodeEditor::ibCodeEditor(ibMetaDocument* document, wxWindow* parent, wxWindowI
 	//Turn the fold markers red when the caret is a line in the group (optional)
 	MarkerEnableHighlight(true);
 
-	// Construct the precompiler upfront — sessionless hosts (codeRunner)
-	// pass nullptr for the document, so the precompiler initialises with
-	// an empty module name and no metadata. Local variable / function
-	// names parsed from the live editor text still feed autocomplete;
-	// metadata-driven props are simply absent.
-	ibValueMetaObjectModuleBase* moduleObject = m_document != nullptr
-		? m_document->ConvertMetaObjectToType<ibValueMetaObjectModuleBase>()
-		: nullptr;
-	m_precompileModule = new ibPrecompileCode(moduleObject);
+	// The stream needs no module and no metadata: what the text MEANS is asked of the compiler, and
+	// the module is passed at the moment of asking. So a sessionless host (codeRunner, which has no
+	// document) gets the same stream as any other — folding, brace matching and the caret question
+	// all work; only the answers that need a configuration are absent, and they are absent there
+	// anyway.
+	m_tc.SetLexemMode(ibLexemMode::Editing);
 
 	// For document-less hosts there is no LoadModule() to flip the
 	// "initial text loaded" gate — start initialised so OnTextChange
-	// runs the precompile pass right away.
+	// re-lexes right away.
 	if (m_document == nullptr)
 		m_initialized = true;
 }
@@ -161,7 +197,6 @@ ibCodeEditor::~ibCodeEditor()
 		}
 	}
 
-	wxDELETE(m_precompileModule);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -176,6 +211,7 @@ void ibCodeEditor::EditDebugPoint(int line_to_edit)
 void ibCodeEditor::RefreshBreakpoint(bool deleteCurrentBreakline)
 {
 	MarkerDeleteAll(ibCodeEditor::Breakpoint);
+	MarkerDeleteAll(ibCodeEditor::ConditionalBreakpoint);
 	RefreshBreakpointMarkers();
 }
 
@@ -187,6 +223,12 @@ void ibCodeEditor::SetCurrentLine(int lineBreakpoint, bool setBreakLine)
 	//Incorrect position when editing button title
 	//if (!ibCodeEditor::GetSTCFocus()) 
 	// CodeEditor::SetSTCFocus(true);
+
+	// THE RUN LINE MOVED, so every value that was asked about belongs to a state that no longer exists —
+	// the question and its answer both go. This is the door a step comes through, and a step is exactly
+	// what makes an answer stale.
+	m_askedExpression.clear();
+	m_askedValue.clear();
 
 	MarkerDeleteAll(ibCodeEditor::BreakLine);
 
@@ -395,12 +437,10 @@ void ibCodeEditor::SetFontColorSettings(const ibFontColorSettings& settings)
 bool ibCodeEditor::LoadModule()
 {
 	ClearAll();
-	wxDELETE(m_precompileModule);
 
 	if (m_document != nullptr) {
 		ibValueMetaObjectModuleBase* moduleObject = m_document->ConvertMetaObjectToType<ibValueMetaObjectModuleBase>();
 		if (moduleObject != nullptr) {
-			m_precompileModule = new ibPrecompileCode(moduleObject);
 
 			if (IsEditable()) {
 				SetText(moduleObject->GetModuleText()); m_initialized = true;
@@ -411,10 +451,10 @@ bool ibCodeEditor::LoadModule()
 				SetReadOnly(true);
 			}
 
-			m_precompileModule->Load(moduleObject->GetModuleText());
+			m_tc.Load(moduleObject->GetModuleText());
 
 			try {
-				m_precompileModule->PrepareLexem();
+				m_tc.PrepareLexem();
 			}
 			catch (...) {
 			}
@@ -455,6 +495,19 @@ int ibCodeEditor::GetRealPositionFromPoint(const wxPoint& pt)
 {
 	const wxString& codeText = GetTextRange(0, PositionFromPoint(pt));
 	return codeText.Length();
+}
+
+void ibCodeEditor::SetDebugValue(const wxString& value)
+{
+	// KEPT AS WELL AS SHOWN. The system decides on its own when to pop a tooltip and shows the text that
+	// is in place at that moment, so the same answer is laid down again on every movement across the word
+	// it belongs to (LoadToolTip) — and that is only possible if the editor still has it.
+	m_askedValue = value;
+
+	if (value.IsEmpty())
+		UnsetToolTip();
+	else
+		SetToolTip(value);
 }
 
 #include "frontend/win/dlgs/lineInput/lineInput.h"
@@ -545,7 +598,19 @@ bool ibCodeEditor::SyntaxControl(bool throwMessage) const
 	ibRuntimeModuleDataObject* dataRef = nullptr;
 	auto* cc = metaData->GetCompileCache();
 	if (cc && cc->FindCompileModule(metaObject, dataRef)) {
+
+		// A DESCRIPTOR THAT ANSWERS THE LOOKUP CARRIES A MODULE — that is the invariant, and it is
+		// established where the descriptor is built (ibValueCommandDataObject's ctor calls
+		// EnsureCompileModule, as every other registering side does through its first Bind…).
+		// A null here is a REGISTERING SIDE THAT DID NOT WIRE ITS MODULE, so it is asserted rather
+		// than tolerated: returning "no errors" for a module nobody compiled would report a pass
+		// that never happened.
+		//
+		// 2026-08-31: an access violation on this line, pressing Syntax over a command module.
+		// Commands were the first metatype to register a descriptor without wiring one.
 		ibCompileModule* compileModule = dataRef->GetCompileModule();
+		wxASSERT(compileModule);
+
 		try {
 			if (compileModule->Compile()) {
 				if (throwMessage)
@@ -598,6 +663,7 @@ void ibCodeEditor::HighlightSyntaxAndCalculateFoldLevel(const int fromPos, const
 
 	wxString word;
 	unsigned int currPos = fromPos;
+	bool prevWasDot = false;   // last significant token was a member-access '.' (kept across whitespace)
 
 	while (!m_tc.IsEnd()) {
 #ifdef UTF8_LEXEM_TRANSLATE
@@ -608,7 +674,9 @@ void ibCodeEditor::HighlightSyntaxAndCalculateFoldLevel(const int fromPos, const
 		if (m_tc.IsWord()) {
 			(void)m_tc.GetWord(word, false, true);
 			const short keyWord = ibTranslateCode::IsKeyWord(word);
-			if (keyWord != wxNOT_FOUND) {
+			// A keyword right after a member-access `.` is a MEMBER NAME, not a keyword
+			// (`q.Execute().Select()` — `Select` is the method): style it as a plain identifier.
+			if (keyWord != wxNOT_FOUND && !prevWasDot) {
 				if (word.Left(1) == '#') {
 					appendStyle(wxSTC_C_PREPROCESSOR);
 				}
@@ -619,6 +687,7 @@ void ibCodeEditor::HighlightSyntaxAndCalculateFoldLevel(const int fromPos, const
 			else {
 				appendStyle(wxSTC_C_WORD);
 			}
+			prevWasDot = false;
 		}
 		else if (m_tc.IsNumber() || m_tc.IsString() || m_tc.IsDate()) {
 			if (m_tc.IsNumber()) {
@@ -633,10 +702,15 @@ void ibCodeEditor::HighlightSyntaxAndCalculateFoldLevel(const int fromPos, const
 				(void)m_tc.GetDate();
 				appendStyle(wxSTC_C_OPERATOR);
 			}
+			prevWasDot = false;
 		}
 		else {
-			(void)m_tc.GetByte();
+			wxUniChar b;
+			(void)m_tc.GetByte(b);
 			appendStyle(wxSTC_C_IDENTIFIER);
+			// keep "after dot" across intervening whitespace, so `obj . Select` is handled too
+			if (b == '.')                                             prevWasDot = true;
+			else if (b != ' ' && b != '\t' && b != '\r' && b != '\n') prevWasDot = false;
 		}
 	}
 
@@ -718,25 +792,30 @@ void ibCodeEditor::OnTextChange(wxStyledTextEvent& event)
 		(modFlags & (wxSTC_MOD_DELETETEXT)) == 0)
 		return;
 
-	if (!m_initialized || m_precompileModule == nullptr)
+	if (!m_initialized)
 		return;
 
 	const wxString& codeText = GetText();
 	const int line = LineFromPosition(event.GetPosition());
 
-	// Precompile pass — fires for every host (codeRunner included).
-	// Tracks local declarations + functions parsed out of the live
-	// editor text; metadata-driven props come in only when a backing
-	// document exists (PrepareModuleData early-returns otherwise).
-	m_precompileModule->Load(codeText);
+	// Re-lex — fires for every host (codeRunner included). The stream feeds folding, brace
+	// matching and the caret question; nothing here compiles anything.
+	m_tc.Load(codeText);
 
 	if (event.m_linesAdded != 0) {
 
-		OnPatchModule(line, event.m_linesAdded);
+		// Was the edit at the very start (column 0) of `line`? Then the whole
+		// line's content moved by linesAdded, so a marker sitting ON `line`
+		// shifts too; an edit later in the line leaves `line` in place. Without
+		// this the breakpoint/exec-line wouldn't follow an Enter pressed at the
+		// line start (the original bug: BP on 10 + Enter → stays on 10).
+		const bool atLineStart = (event.GetPosition() == PositionFromLine(line));
+
+		OnPatchModule(line, event.m_linesAdded, atLineStart);
 
 		if (m_lineBreakpoint != wxNOT_FOUND) {
 			MarkerDeleteAll(ibCodeEditor::BreakLine);
-			if (line < m_lineBreakpoint)
+			if (line < m_lineBreakpoint || (atLineStart && line == m_lineBreakpoint))
 				m_lineBreakpoint += event.m_linesAdded;
 			MarkerAdd(m_lineBreakpoint, ibCodeEditor::BreakLine);
 		}
@@ -746,37 +825,28 @@ void ibCodeEditor::OnTextChange(wxStyledTextEvent& event)
 
 	try {
 #if _USE_OLD_TEXT_PARSER_IN_CODE_EDITOR == 0
-		// First-time-empty buffer (codeRunner initial SetText, or any
-		// host that hasn't called LoadModule) — incremental PrepareLexem
-		// early-returns when m_listLexem is empty, so the fold parser
-		// gets no KEYWORD lexems and folding doesn't kick in. Bootstrap
-		// with a full pass so subsequent edits have a baseline to patch.
-		if (m_precompileModule->GetLexems().empty()) {
-			m_precompileModule->PrepareLexem();
+		// First-time-empty buffer (codeRunner initial SetText, or any host that hasn't called
+		// LoadModule) — a patch has no baseline to work from, so bootstrap with a full pass and
+		// let subsequent edits patch it.
+		if (!m_tc.HasLexem()) {
+			m_tc.PrepareLexem();
 		}
-		else {
-			const wxString& patchText = event.GetString();
-			const int str_length = patchText.Length();
-			const int str_utf8_length = event.GetLength();
-			if ((modFlags & (wxSTC_MOD_INSERTTEXT)) != 0) {
-				m_precompileModule->PrepareLexem(line,
+		else if ((modFlags & (wxSTC_MOD_INSERTTEXT | wxSTC_MOD_DELETETEXT)) != 0) {
+
+			const bool deleted = (modFlags & wxSTC_MOD_DELETETEXT) != 0;
+			const int  sign = deleted ? -1 : 1;
+
+			ibTranslateCode::ibTextEdit edit;
+			edit.m_line = line;
+			edit.m_lineOffset = event.m_linesAdded;
+			edit.m_posOffset = sign * (int)event.GetString().Length();
 #ifdef UTF8_LEXEM_TRANSLATE
-					event.m_linesAdded, str_length, str_utf8_length);
-#else
-					event.m_linesAdded, str_length);
+			edit.m_posOffsetUtf8 = sign * event.GetLength();
 #endif
-			}
-			else if ((modFlags & (wxSTC_MOD_DELETETEXT)) != 0) {
-				m_precompileModule->PrepareLexem(line,
-#ifdef UTF8_LEXEM_TRANSLATE
-					event.m_linesAdded, -str_length, str_utf8_length);
-#else
-					event.m_linesAdded, -str_length);
-#endif
-			}
+			m_tc.PrepareLexem(edit);
 		}
 #else
-		m_precompileModule->PrepareLexem();
+		m_tc.PrepareLexem();
 #endif
 	}
 	catch (...)
@@ -830,7 +900,6 @@ void ibCodeEditor::OnKeyDown(wxKeyEvent& event)
 			int line = LineFromPosition(currentPos);
 
 			int startPos = PositionFromLine(line);
-			int endPos = GetLineEndPosition(line);
 
 			int length = currentPos - startPos;
 
@@ -853,7 +922,6 @@ void ibCodeEditor::OnKeyDown(wxKeyEvent& event)
 			int line = LineFromPosition(currentPos);
 
 			int startPos = PositionFromLine(line);
-			int endPos = GetLineEndPosition(line);
 
 			int length = currentPos - startPos;
 
@@ -881,4 +949,330 @@ void ibCodeEditor::OnKeyDown(wxKeyEvent& event)
 		break;
 	default: event.Skip(); break;
 	}
+}
+
+wxString ibCodeEditor::GetIdentifierUnderCursor()
+{
+	// Explicit selection wins — user may have selected a multi-word
+	// expression that the autocomplete word-boundary heuristic cannot
+	// see. Callers that want strict identifier-only semantics should
+	// validate the returned string themselves.
+	const wxString sel = GetSelectedText();
+	if (!sel.IsEmpty()) return sel;
+
+	const int pos   = GetCurrentPos();
+	const int start = WordStartPosition(pos, true);
+	const int end   = WordEndPosition  (pos, true);
+	if (end <= start) return wxEmptyString;
+	return GetTextRange(start, end);
+}
+
+// ---------------------------------------------------------------------------
+//  The string literal under the caret — the door a query in a module is reached through
+// ---------------------------------------------------------------------------
+
+ibCodeEditor::StringLiteralSpan ibCodeEditor::GetStringLiteralUnderCursor()
+{
+	StringLiteralSpan span;
+
+	// ⭐⭐ THE LEXER SAYS WHERE A LITERAL IS AND WHAT IT HOLDS — not a quote count of our own.
+	//
+	// The editor already keeps the module's token stream (m_tc) for the colouring and the completion,
+	// and a literal is one of its tokens. The scan this replaced counted quotes from the top of the
+	// document by itself, and went wrong in two ways:
+	//  - it compared the caret, a wxSTC position (a BYTE offset into UTF-8), with an index into
+	//    GetText() (a CHARACTER count). Every non-ASCII character above the query - a Russian message
+	//    in a Tstr() - put the caret further on than the scan believed: a click near the end of a
+	//    query opened the constructor on the NEXT literal ("MonthEnd" - not a query), and OK wrote
+	//    the result that many bytes too early, over the code in front of the literal;
+	//  - it did not know comments, so one quote in a `//` line turned every literal below it inside out.
+	// The stream's m_numUtf8String IS a wxSTC position, and a comment never becomes a token.
+	//
+	// ⚠ A STREAM OF ITS OWN, NOT THE EDITOR'S KEPT ONE. m_tc is patched edit by edit (OnTextChange), and
+	// after the text is replaced WHOLE - a SetText on a live editor, a delete-all then an insert-all - the
+	// patched stream is not the text any more: CI measured it (CodeEditorFix, four tests on 0dfc2f81), the
+	// first literal of a fresh editor found and every literal after a second SetText lost. The question is
+	// asked on a click, not a keystroke, so the text is simply read again by the same lexer in the same
+	// mode; the patching is a question of its own, for the colouring and the folds that read it.
+	const int caret = GetCurrentPos();
+	ibTranslateCode stream;
+	stream.SetLexemMode(ibLexemMode::Editing);
+	stream.Load(GetText());
+	try {
+		stream.PrepareLexem();
+	}
+	catch (...) {
+		return span;
+	}
+	const std::vector<ibLexem>& lexems = stream.GetLexems();
+
+	// The last token that starts at or before the caret. A token's recorded position is where the token
+	// itself starts - the lexer skips the whitespace and comments in front first - so a caret just past a
+	// closing quote, or in the gap after it, still falls to the literal until the next token begins.
+	size_t at = lexems.size();
+	for (size_t i = 0; i < lexems.size(); ++i) {
+		if (lexems[i].m_lexType == ENDPROGRAM || static_cast<int>(lexems[i].m_numUtf8String) > caret)
+			break;
+		at = i;
+	}
+	if (at == lexems.size())
+		return span;
+
+	// WHERE IT OPENS, WHERE IT CLOSES AND WHAT IT SAYS, read by the lexer from the token's start - so
+	// the value is the one the running module would hand a Query: the same `""`, `|` and line breaks.
+	const auto readLiteral = [this, caret, &span](const ibLexem& lex) -> bool {
+		if (lex.m_lexType != CONSTANT || lex.m_valData.GetType() != ibValueTypes::TYPE_STRING)
+			return false;
+		const int from = static_cast<int>(lex.m_numUtf8String);
+		ibTranslateCode reader;
+		reader.Load(GetTextRange(from, GetLength()));
+		try {
+			if (!reader.IsString())
+				return false;
+			const int open = from + static_cast<int>(reader.GetCurrentUtf8Pos());
+			if (GetCharAt(open) != '"')
+				return false;   // a stray `|` the lexer also reads as a string - not a literal to open
+			wxString value;
+			if (!reader.GetString(value))
+				return false;
+			const int close = from + static_cast<int>(reader.GetCurrentUtf8Pos());
+			// Inside from the opening quote to just past the closing one, so a click at either edge
+			// finds the string a person is plainly pointing at.
+			if (caret < open || caret > close)
+				return false;
+			span.m_start = open;
+			span.m_end   = close;
+			span.m_text  = value;
+			return true;
+		}
+		catch (...) {
+			return false;   // a literal still being typed has no closing quote yet
+		}
+	};
+
+	// A caret just past a closing quote already stands in the NEXT token's stretch.
+	if (!readLiteral(lexems[at]) && at > 0)
+		readLiteral(lexems[at - 1]);
+	return span;
+}
+
+// The indent a literal's continuation lines take: the text in front of `position` on its line, a tab
+// kept a tab and anything else a space - counted in CHARACTERS, since a wxSTC position counts bytes
+// and a Cyrillic name in front of the quote is one column, not two.
+static wxString IndentBefore(wxStyledTextCtrl& editor, int position)
+{
+	const wxString lead = editor.GetTextRange(editor.PositionFromLine(editor.LineFromPosition(position)), position);
+	wxString indent;
+	for (const wxUniChar c : lead)
+		indent += (c == wxT('\t')) ? wxT('\t') : wxT(' ');
+	return indent;
+}
+
+wxString ibCodeEditor::SpellStringLiteral(const wxString& text, const wxString& indent)
+{
+	// Quoted, inner quotes doubled, and every line after the first opened with `|` under the
+	// opening quote — the script's own spelling of a multi-line string, and what makes a query
+	// written into a module readable rather than one endless line.
+	wxString spelled = wxT("\"");
+	for (size_t i = 0; i < text.length(); ++i) {
+		if (text[i] == wxT('"'))  { spelled += wxT("\"\""); continue; }
+		if (text[i] == wxT('\r')) { continue; }
+		if (text[i] == wxT('\n')) { spelled += wxT("\n") + indent + wxT("|"); continue; }
+		spelled += text[i];
+	}
+	return spelled + wxT("\"");
+}
+
+void ibCodeEditor::ReplaceStringLiteral(const StringLiteralSpan& span, const wxString& text)
+{
+	if (!span.Found())
+		return;
+
+	// The indent of the opening quote — continuation lines line up under it.
+	SetTargetStart(span.m_start);
+	SetTargetEnd(span.m_end);
+	ReplaceTarget(SpellStringLiteral(text, IndentBefore(*this, span.m_start)));
+}
+
+void ibCodeEditor::InsertStringLiteral(int position, const wxString& text)
+{
+	if (position < 0)
+		position = GetCurrentPos();
+
+	// Indented to WHERE THE CARET IS, so a query written into the middle of a procedure lines up
+	// with the code around it instead of starting at column zero.
+	InsertText(position, SpellStringLiteral(text, IndentBefore(*this, position)));
+}
+
+void ibCodeEditor::OnMouseMove(wxMouseEvent& event)
+{
+	// OVER THE BREAKPOINT MARGIN the hint is the margin's: what the breakpoint on that line stops on. The
+	// margins stand side by side in their order, so this one starts where the line numbers end.
+	const wxPoint at = event.GetPosition();
+	const int marginLeft = GetMarginWidth(DEF_LINENUMBER_ID);
+	if (at.x >= marginLeft && at.x < marginLeft + GetMarginWidth(DEF_BREAKPOINT_ID)) {
+		wxString hint;
+		if (!GetDebugPointHint(LineFromPosition(PositionFromPoint(at)), hint))
+			hint.clear();
+		if (hint != m_marginHint) {
+			if (hint.IsEmpty()) UnsetToolTip();
+			else                SetToolTip(hint);
+			m_marginHint = hint;
+		}
+	}
+	else {
+		// Off the margin its hint comes down, before the text's own (a debugger's value) goes up.
+		if (!m_marginHint.IsEmpty()) {
+			UnsetToolTip();
+			m_marginHint.clear();
+		}
+		LoadToolTip(at);
+	}
+	event.Skip();
+}
+
+#include "frontend/mainFrame/mainFrame.h"  // wxID_FRONTEND_SYNTAX_HELPER_LOOKUP
+#include "frontend/win/dlgs/queryConstructor/queryConstructor.h"   // the constructor, opened on the literal
+#include "frontend/win/dlgs/translateConstructor/translateConstructor.h"   // …and its sibling for a translated text
+#include "frontend/win/dlgs/formatConstructor/formatConstructor.h"         // …and for a format string
+#include "frontend/win/dlgs/linqConstructor/linqConstructor.h"             // …and a LINQ block, at the caret
+#include "frontend/artProvider/artProvider.h"                      // wxART_QUERY_CONSTRUCTOR — the icon, registered not embedded
+#include "backend/metadataConfiguration.h"                         // activeMetaData — the config this module belongs to
+
+void ibCodeEditor::OnContextMenu(wxContextMenuEvent& event)
+{
+	wxMenu menu;
+
+	// The line the menu is about: the one under the mouse, or the caret's when it came from the keyboard.
+	const wxPoint clickAt = event.GetPosition();
+	const int menuLine = clickAt == wxDefaultPosition
+		? LineFromPosition(GetCurrentPos())
+		: LineFromPosition(PositionFromPoint(ScreenToClient(clickAt)));
+
+	// Syntax helper lookup goes first — primary action for an
+	// identifier-aware editor. Disabled when the cursor isn't over
+	// an identifier (whitespace, between tokens).
+	const wxString identifier = GetIdentifierUnderCursor();
+	auto* miLookup = menu.Append(wxID_FRONTEND_SYNTAX_HELPER_LOOKUP,
+	                             _("Look up in Syntax Helper") + wxT("\tRawCtrl+F1"));
+	miLookup->SetBitmap(wxArtProvider::GetBitmap(wxART_HELP_BOOK, wxART_MENU));
+	miLookup->Enable(!identifier.IsEmpty());
+
+	// ITS SIBLING: the query constructor, gated the same way and by the same kind of question —
+	// "is the caret standing on something I can work with". For the lookup that is an identifier;
+	// for the constructor it is a string literal, because a query in a module lives in one.
+	const StringLiteralSpan literal = GetStringLiteralUnderCursor();
+	const int caret = GetCurrentPos();
+	// FENCED ON BOTH SIDES. It is neither a help lookup nor a clipboard verb — it opens a whole
+	// window over the caret, and a menu reads by its groups.
+	menu.AppendSeparator();
+	wxMenuItem* miConstruct = menu.Append(wxID_ANY, _("Query constructor"));
+	miConstruct->SetBitmap(wxArtProvider::GetBitmap(wxART_QUERY_CONSTRUCTOR, wxART_FRONTEND,
+		FromDIP(wxSize(16, 16))));
+	// ALWAYS AVAILABLE. Gating it on "the caret is inside a string" made the constructor a tool for
+	// EDITING a query somebody had already typed, which is the wrong way round — the first query is
+	// the one you most want help writing. Standing on a literal it opens on that query and writes
+	// back into it; standing anywhere else it opens empty and INSERTS the result at the caret.
+	// (A module that cannot be changed still opens it, read-only: a query one may not edit is still
+	// one worth reading, and refusing would hide the only view of it there is.)
+	menu.Bind(wxEVT_MENU, [this, literal, caret](wxCommandEvent&) {
+		wxString text = literal.m_text;
+		if (!ibShowQueryConstructor(this, text, activeMetaData, !IsEditable()))
+			return;
+		if (literal.Found()) ReplaceStringLiteral(literal, text);
+		else                 InsertStringLiteral(caret, text);
+	}, miConstruct->GetId());
+
+	// AND THE TRANSLATION CONSTRUCTOR, on the same literal and by the same rule: a module's messages
+	// are texts a person reads, written once per language like any caption — and the window is the
+	// caption's own (ibDialogTranslateConstructor). The languages are those of the configuration THIS
+	// module belongs to, asked of its document; no document (a code runner) is the language in force.
+	wxMenuItem* miTranslate = menu.Append(wxID_ANY, _("Translation constructor"));
+	miTranslate->SetBitmap(wxArtProvider::GetBitmap(wxART_TRANSLATION_CONSTRUCTOR, wxART_FRONTEND, FromDIP(wxSize(16, 16))));
+	menu.Bind(wxEVT_MENU, [this, literal, caret](wxCommandEvent&) {
+		const ibValueMetaObject* moduleObject = m_document != nullptr ? m_document->GetMetaObject() : nullptr;
+		const ibTranslateString before(literal.m_text);
+		ibDialogTranslateConstructor dialog(this, _("Translation constructor"), before,
+			moduleObject != nullptr ? moduleObject->GetMetaData() : nullptr, !IsEditable());
+		if (dialog.ShowModal() != wxID_OK)
+			return;
+		const ibTranslateString after = dialog.GetTranslate();
+		if (after == before)
+			return;   // nothing was changed: the literal keeps the spelling its author gave it
+		if (literal.Found()) ReplaceStringLiteral(literal, after.GetRawText());
+		else                 InsertStringLiteral(caret, after.GetRawText());
+	}, miTranslate->GetId());
+
+	// …AND THE THIRD: the string Format(value, format) reads. Same literal, same rule — and a string that
+	// comes back unchanged is not written, so it keeps its author's spelling.
+	wxMenuItem* miFormat = menu.Append(wxID_ANY, _("Format string constructor"));
+	miFormat->SetBitmap(wxArtProvider::GetBitmap(wxART_FORMAT_CONSTRUCTOR, wxART_FRONTEND, FromDIP(wxSize(16, 16))));
+	menu.Bind(wxEVT_MENU, [this, literal, caret](wxCommandEvent&) {
+		const ibFormatString before = ibFormatString::Parse(literal.m_text);
+		ibDialogFormatConstructor dialog(this, _("Format string constructor"), before, !IsEditable());
+		if (dialog.ShowModal() != wxID_OK)
+			return;
+		const ibFormatString after = dialog.GetFormat();
+		if (after == before)
+			return;
+		if (literal.Found()) ReplaceStringLiteral(literal, after.Render());
+		else                 InsertStringLiteral(caret, after.Render());
+	}, miFormat->GetId());
+
+	// ⭐ AND THE LINQ CONSTRUCTOR — which stands on no literal, because a LINQ block is not a string: it
+	// is code, at a place, reading what that place can see. It is asked of IntelliSense at the caret
+	// (the text, the CHARACTER position the compiler measures in, and the module). Standing in a query
+	// it opens that query and replaces it; anywhere else it writes a new block at the caret.
+	const int caretChars = GetRealPosition();
+	wxMenuItem* miLinq = menu.Append(wxID_ANY, _("LINQ query constructor"));
+	miLinq->SetBitmap(wxArtProvider::GetBitmap(wxART_LINQ_CONSTRUCTOR, wxART_FRONTEND, FromDIP(wxSize(16, 16))));
+	menu.Bind(wxEVT_MENU, [this, caret, caretChars](wxCommandEvent&) {
+		const wxString text = GetText();
+		ibDialogLinqConstructor dialog(this, text, (unsigned int)caretChars,
+			m_document != nullptr ? m_document->ConvertMetaObjectToType<ibValueMetaObjectModuleBase>() : nullptr,
+			!IsEditable());
+		if (dialog.ShowModal() != wxID_OK || !IsEditable())
+			return;
+		wxString refusal;
+		const wxString block = dialog.GetBlock(refusal);
+		if (block.IsEmpty())
+			return;
+		unsigned int from = 0, to = 0;
+		if (dialog.GetReplacedSpan(from, to)) {
+			// Characters to wxSTC positions: the document counts BYTES of UTF-8.
+			SetTargetStart((int)text.Left(from).ToUTF8().length());
+			SetTargetEnd((int)text.Left(to).ToUTF8().length());
+			ReplaceTarget(block);
+		}
+		else
+			InsertText(caret, block);
+	}, miLinq->GetId());
+
+	AppendDebugMenu(menu, menuLine);
+
+	menu.AppendSeparator();
+
+	// Standard clipboard primitives.
+	auto* miCut       = menu.Append(wxID_CUT,       _("Cut")        + wxT("\tCtrl+X"));
+	auto* miCopy      = menu.Append(wxID_COPY,      _("Copy")       + wxT("\tCtrl+C"));
+	auto* miPaste     = menu.Append(wxID_PASTE,     _("Paste")      + wxT("\tCtrl+V"));
+	auto* miSelectAll = menu.Append(wxID_SELECTALL, _("Select all") + wxT("\tCtrl+A"));
+
+	miCut  ->SetBitmap(wxArtProvider::GetBitmap(wxART_CUT,   wxART_MENU));
+	miCopy ->SetBitmap(wxArtProvider::GetBitmap(wxART_COPY,  wxART_MENU));
+	miPaste->SetBitmap(wxArtProvider::GetBitmap(wxART_PASTE, wxART_MENU));
+	// Select All has no stock id; the provider draws it (a dashed selection round the lines).
+	miSelectAll->SetBitmap(wxArtProvider::GetBitmap(wxART_SELECT_ALL, wxART_DOC_MODULE, FromDIP(wxSize(16, 16))));
+
+	miCut  ->Enable(GetSelectionStart() != GetSelectionEnd() && IsEditable());
+	miCopy ->Enable(GetSelectionStart() != GetSelectionEnd());
+	miPaste->Enable(CanPaste());
+
+	wxPoint pt = event.GetPosition();
+	if (pt == wxDefaultPosition) {
+		// Keyboard-triggered (Shift+F10 / Menu key) — anchor at caret.
+		const int pos = GetCurrentPos();
+		pt = ClientToScreen(wxPoint(PointFromPosition(pos).x, PointFromPosition(pos).y));
+	}
+	PopupMenu(&menu, ScreenToClient(pt));
 }

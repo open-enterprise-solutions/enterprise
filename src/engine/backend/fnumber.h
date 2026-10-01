@@ -1,0 +1,469 @@
+#ifndef __NUMBER_T_H__
+#define __NUMBER_T_H__
+
+#include <cstddef>
+#include <cstdint>
+#include <iosfwd>
+#include <string>
+#include <vector>
+#include <wx/string.h>
+#include <wx/buffer.h>
+
+#include "backend/backend.h"  // BACKEND_API
+
+class ibReaderMemory; // backend/fileSystem/fs.h
+class ibWriterMemory; // backend/fileSystem/fs.h
+
+// ibNumber — exact-decimal number, 8 bytes total.
+//
+// Storage is a single 64-bit word with pointer tagging:
+//
+//   bit  0       : tag (0 = immediate, 1 = heap pointer to the shared BigImpl, tag set)
+//                  — so ALL-ZERO BITS ARE THE NUMBER 0: a zeroed word is a valid ibNumber,
+//                  which is what lets ibValue keep one in its union beside the pointers.
+//   bits 16:1    : exp10 (16 bits signed, ±32767)
+//   bits 63:17   : mantissa (47 bits signed, ±70 trillion, ~14 decimal digits)
+//
+// Value = mantissa * 10^exp10. Numbers that fit those bounds use no heap memory
+// at all — sizeof(ibNumber) == 8, alignment == 8.
+//
+// Numbers that don't fit (more than ~14 mantissa digits, |exp| > 32767, or
+// arithmetic that overflows the inline range) live on the heap as a BigImpl
+// — a sign-magnitude bignum with a std::vector<uint32_t> magnitude that grows
+// by demand and a 32-bit exp10. Promotion happens automatically on assignment
+// / arithmetic. The heap tier is SHARED: a copy is one more owner of the same
+// BigImpl (an atomic count), and a write gets a BigImpl of its own first.
+//
+// Examples:
+//   "0"                         — immediate (0, 0)
+//   "456"                       — immediate (456, 0)
+//   "0.01"                      — immediate (1, -2)
+//   "765.3456754567765443343"   — heap BigImpl (mag=7653...3343, e=-19) — 22 digits
+//
+// Self-contained: no dependency on ttmath. All big-int arithmetic
+// (Add/Sub/Mul/Div/Compare, decimal ToString/FromString) lives inside
+// number.cpp as schoolbook routines on std::vector<uint32_t> limbs.
+//
+// Thread safety:
+//   - Distinct ibNumber instances are fully independent — operations on
+//     different objects from different threads are always safe (no shared
+//     global / static state, no hidden cache; two numbers sharing a heap-tier
+//     BigImpl count their owners atomically and never write to a shared one).
+//   - Concurrent **const-only** access to the same instance from multiple
+//     threads is safe: every const method (ToString, Compare, IsZero, ToInt,
+//     Serialize, etc.) reads `m_payload`, materialises a local BigImpl copy
+//     via LoadBig, and never mutates shared state.
+//   - Mixing reads and writes — or two writes — to the **same** instance
+//     concurrently is **not** safe and requires external synchronisation,
+//     mirroring the contract of std::vector / wxString. Use a different
+//     instance per worker, or a mutex around the shared one.
+
+class BACKEND_API ibNumber
+{
+public:
+	ibNumber() noexcept;
+
+	// Integer constructors are declared over the LANGUAGE types, not over the <cstdint>
+	// aliases, and that is deliberate: `long` and `long long` are DISTINCT types even where
+	// they are the same width, and an alias only ever names one of them.
+	//
+	// With int64_t/uint64_t alone there was a hole. On Windows int64_t IS long long, so every
+	// integer had an exact match and nothing showed. On LP64 (Linux, macOS) int64_t is `long`,
+	// leaving `long long` — which is what wxLongLong_t and every date value is — matched by
+	// nothing: int, long and double all sat equally far away and the conversion was ambiguous.
+	// Spelling all four signed/unsigned widths closes it on every platform at once, with no
+	// per-callsite casts and no #ifdef, because no two of them collide anywhere.
+	ibNumber(int v) noexcept;
+	ibNumber(unsigned int v) noexcept;
+	ibNumber(long v) noexcept;
+	ibNumber(unsigned long v) noexcept;
+	ibNumber(long long v) noexcept;
+	ibNumber(unsigned long long v) noexcept;
+	ibNumber(double v);
+	explicit ibNumber(const wxString& s);
+	ibNumber(const ibNumber& o) noexcept;   // a heap-tier number is shared, not copied
+	ibNumber(ibNumber&& o) noexcept;
+	~ibNumber();
+
+	ibNumber& operator=(const ibNumber& o) noexcept;
+	ibNumber& operator=(ibNumber&& o) noexcept;
+
+	// Hot/cold split, same shape as Compare below. The immediate-integer path is
+	// a gate plus one int64 op and lands in the header so any caller can inline
+	// it; the BigImpl path stays in fnumber.cpp behind AddBig / SubBig / MulBig.
+	// Results are bit-identical either way — the fast path only fires when it
+	// fits immediate, which is the same condition the cold path would settle on.
+	ibNumber& operator+=(const ibNumber& rhs) {
+		// Aligned to one exponent (TryImmAligned — integers are the case where it is 0), the sum cannot
+		// overflow int64; stored if it fits immediate. A zero is stored as (0, 0), as StoreBig does.
+		int64_t am, bm;
+		int32_t e;
+		if (TryImmAligned(rhs, am, bm, e)) {
+			const int64_t r = am + bm;
+			if (r == 0) { StoreImmediate(0, 0); return *this; }
+			if (CanBeImmediate(r, e)) { StoreImmediate(r, e); return *this; }
+		}
+		return AddBig(rhs);
+	}
+	ibNumber& operator-=(const ibNumber& rhs) {
+		int64_t am, bm;
+		int32_t e;
+		if (TryImmAligned(rhs, am, bm, e)) {
+			const int64_t r = am - bm;
+			if (r == 0) { StoreImmediate(0, 0); return *this; }
+			if (CanBeImmediate(r, e)) { StoreImmediate(r, e); return *this; }
+		}
+		return SubBig(rhs);
+	}
+	ibNumber& operator*=(const ibNumber& rhs) {
+		// int32-range operands keep the product below 2^62 (no int64 overflow);
+		// anything wider falls through to the BigImpl multiply.
+		int64_t am, bm;
+		if (TryImmInts(rhs, am, bm)
+			&& am >= INT32_MIN && am <= INT32_MAX && bm >= INT32_MIN && bm <= INT32_MAX) {
+			const int64_t r = am * bm;
+			if (CanBeImmediate(r, 0)) { StoreImmediate(r, 0); return *this; }
+		}
+		return MulBig(rhs);
+	}
+	ibNumber& operator/=(const ibNumber& rhs);
+	ibNumber& operator%=(const ibNumber& rhs);
+	ibNumber& operator++();           // pre-increment
+	ibNumber  operator++(int);        // post-increment
+	ibNumber  operator-() const;
+
+	friend ibNumber operator+(ibNumber a, const ibNumber& b) { a += b; return a; }
+	friend ibNumber operator-(ibNumber a, const ibNumber& b) { a -= b; return a; }
+	friend ibNumber operator*(ibNumber a, const ibNumber& b) { a *= b; return a; }
+	friend ibNumber operator/(ibNumber a, const ibNumber& b) { a /= b; return a; }
+	friend ibNumber operator%(ibNumber a, const ibNumber& b) { a %= b; return a; }
+
+	// Hot/cold split. The immediate-integer path is TryImmInts plus one three-way
+	// compare, and EVERY loop condition (`i < n`) in every script goes through
+	// here; keeping it in the header lets the caller's compiler see it without
+	// depending on whole-program view. The BigImpl branch stays out of line —
+	// inlining it would put a decimal long-compare into every call site for the
+	// rare case. Same shape TryImmInts itself already uses.
+	// FORCED, because `inline` was not honoured where it mattered most. The
+	// disassembly of ibValue::CompareValueLS showed a real `call` to this
+	// function on its number arm — the arm every keyed lookup and every sort of
+	// numbers goes through — while the hot/cold split above exists precisely so
+	// the caller sees the immediate path. The body forced here is the gate plus
+	// one int64 compare; CompareBig stays out of line, so what gets pasted into
+	// a caller is small.
+	IB_FORCEINLINE int Compare(const ibNumber& rhs) const {
+		int64_t am, bm;
+		if (TryImmInts(rhs, am, bm))
+			return (am > bm) - (am < bm);
+		return CompareBig(rhs);
+	}
+
+	bool operator==(const ibNumber& r) const { return Compare(r) == 0; }
+	bool operator!=(const ibNumber& r) const { return Compare(r) != 0; }
+	bool operator<(const ibNumber& r)  const { return Compare(r) <  0; }
+	bool operator>(const ibNumber& r)  const { return Compare(r) >  0; }
+	bool operator<=(const ibNumber& r) const { return Compare(r) <= 0; }
+	bool operator>=(const ibNumber& r) const { return Compare(r) >= 0; }
+
+	bool         IsZero()    const;
+	bool         IsHeap()    const { return (m_payload & 1ULL) != 0; }
+	bool         IsNan()     const { return false; } // exact decimal — no NaN state
+	bool         IsSign()    const; // true if value is negative
+	void         ChangeSign();      // flip sign in place
+	ibNumber     Abs()       const; // |value|
+	void         SetZero();
+	void         FromInt(int v);
+	int          ToInt()     const; // truncates fractional part; clamped on overflow
+	unsigned int ToUInt()    const; // truncates fractional part; clamped on overflow
+	// Out-parameter form: 0 on success, 1 on overflow (ttmath-compat). Declared over the
+	// LANGUAGE types for the same reason as the constructors above — `long` and `long long`
+	// are distinct types, and an int64_t/uint64_t pair only ever names one of the two. A
+	// caller holding a wxLongLong_t (that is `long long`) could not bind to an int64_t& on
+	// LP64, where int64_t is `long`. Four spellings collide nowhere and bind everywhere.
+	//
+	// Where the target is NARROWER than 64 bits (Windows `long`), a value that does not fit
+	// reports overflow rather than truncating silently — same contract as the 64-bit form.
+	int ToInt(long&               out) const;
+	int ToInt(long long&          out) const;
+	int ToInt(unsigned long&      out) const;
+	int ToInt(unsigned long long& out) const;
+	int64_t      ToInt64()   const; // throws on overflow / non-integer
+	double       ToDouble()  const; // lossy for values outside double's precision
+	float        ToFloat()   const; // lossy; truncated double
+	// ⭐⭐ THE EXPONENT A DECODED NUMBER MAY CARRY — and it is not a matter of taste.
+	//
+	// This type is EXACT DECIMAL: every value it holds must be writable as digits, and a value with
+	// exponent e needs |e| of them. The exponent, though, arrives from a BLOB as four raw bytes and was
+	// believed verbatim, so bytes that are not a number at all — a cell read through a column layout
+	// that no longer matches the table, which is exactly what a half-applied restructuring produces —
+	// decoded into a "number" of 10^2000000000. Nothing complained. It detonated later and elsewhere,
+	// the first time anyone asked for its text: the formatter reserves the string it is about to fill,
+	// two billion characters do not fit one, and the standard library throws std::length_error — whose
+	// message is "string too long" and which names neither the number, nor the column, nor the row.
+	// That sentence, arriving in the middle of an apply, said nothing about anything.
+	//
+	// A million digits is past any value an accounting engine can mean and far short of where the text
+	// stops fitting, so the two failure modes cannot meet. Past it, the bytes are not a number, and the
+	// decoder already has a way to say so.
+	static constexpr int32_t kMaxDecodedExp10 = 1000000;
+
+	// ⭐⭐ WHAT STOPS AN ENDLESS FRACTION — because nothing in a long division stops it by itself.
+	//
+	// A third of anything runs forever, and the algorithm has no opinion about that: it produces digits
+	// for exactly as long as it is asked to. So it is asked for a fixed amount MORE than the dividend
+	// already carries — ten digits in, twenty-five out — and that is the whole of the rule. A quotient
+	// is never longer than its dividend plus this, so no division can turn a short number into a
+	// thousand decimal places.
+	//
+	// Measured on the NORMALISED form (trailing decimal zeros dropped first), which is what keeps equal
+	// operands producing equal quotients: 0.10 / 3 and 0.1000000 / 3 would otherwise come out at
+	// different lengths and stop being equal to each other, and that inequality travels into
+	// comparisons, grouping keys and folded totals.
+	static constexpr int32_t kDivExtraDigits = 15;
+
+	// The stop for a CHAIN of divisions, where each result feeds the next and every step would add its
+	// own room. Past it the room is simply not added any more — the DIVIDEND'S OWN digits are never cut,
+	// because shortening data on its way through an operation is a different thing entirely from
+	// declining to invent more of it.
+	static constexpr int32_t kMaxDivFracDigits = 100;
+
+	wxString     ToString()  const;
+	std::wstring ToWString() const;
+
+	// Formatted decimal output. Pass field-by-field; defaults give the same
+	// result as the bare ToString() above. Defined below the class.
+	struct Format;
+	wxString ToString(const Format& fmt) const;
+
+	// …THE SAME TEXT, WRITTEN INTO `out` — the form a caller showing many values uses: one string reused
+	// row after row grows once, and an immediate-tier figure (every ordinary amount) is laid out on the
+	// stack, with no BigImpl, no vector and no temporary string. A report of a hundred thousand rows with a
+	// format on a column goes through here once per cell (docs/private/format-property.md).
+	void ToString(const Format& fmt, wxString& out) const;
+
+	// Rounding (round-half-away-from-zero).
+	ibNumber Round() const;          // to nearest integer
+	ibNumber Round(int n) const;     // to n decimal places (n >= 0)
+	ibNumber Trunc() const;          // truncate fractional part toward zero
+
+	// Transcendental / power math. Computed on the EXACT decimal tier (~34
+	// significant digits) — NOT through double:
+	//   Pow(int)   — exact, repeated multiplication.
+	//   Sqrt       — Newton-Raphson (Heron), double-seeded then refined.
+	//   Exp        — Taylor series + exp(x)=exp(x/2^n)^(2^n) argument reduction.
+	//   Ln         — Newton on f(y)=exp(y)-x (reuses Exp); double-seeded.
+	//   Log(base)  — Ln(x)/Ln(base).
+	//   Pow(frac)  — exp(n*ln x), x > 0.
+	// double is used only to SEED the iterations / for out-of-range fallbacks.
+	ibNumber Pow(int n) const;
+	ibNumber Pow(const ibNumber& n) const;
+	ibNumber Sqrt() const;
+	ibNumber Log(const ibNumber& base) const;
+	ibNumber Ln() const;
+	ibNumber Exp() const;
+
+	// Parses a decimal string ("123", "-1.5", "1.2e3"). Returns false if the
+	// input has no digits or is otherwise unparseable; on failure value is
+	// reset to zero.
+	bool FromString(const wxString& s);
+
+	// 128-bit raw integer extraction / loading. Bytes are little-endian
+	// two's-complement. Used by DB layers (e.g. Firebird SQL_INT128). Caller is
+	// responsible for ensuring the value is integer (use Round/Trunc or
+	// pre-scale via *= 10 if there's a column scale factor).
+	void To128Bytes(uint8_t out[16]) const;
+	void From128Bytes(const uint8_t bytes[16]);
+
+	// ⭐ THE DECIMAL POINT MOVED, NOT DIVIDED FOR — the value times 10^exp10, exactly. A scaled integer
+	// column (NUMERIC(18,6) is an int64 and a scale of -6) IS its digits times 10^scale, and the readers
+	// used to get there by dividing by ten, scale times over: six long divisions on the heap for every
+	// money cell a report read (MEASURED 2026-09-12, Debug stack samples: GetResultNumber -> operator/=).
+	// Here the exponent moves and the fraction's trailing zeros are trimmed, which is the very number —
+	// and the very form — those divisions left behind: each was exact and trimmed its own zeros.
+	void ShiftDecimal(int32_t exp10);
+
+	// Binary buffer accessor — value-as-bytes, in OES property-getter style
+	// (mirrors propertyForm's GetValueAsMemoryBuffer / SetValue pair).
+	// Layout (little-endian):
+	//   [1 byte ]  sign (0 = positive or zero, 1 = negative)
+	//   [4 bytes]  exp10  (int32_t)
+	//   [4 bytes]  limb_count (uint32_t)
+	//   [4*N bytes] mantissa magnitude limbs (uint32_t each), LSB first
+	// Minimum size = 9 bytes. Round-trip exact.
+	//
+	//   - Returning overload — inline use:
+	//         writer.w_chunk(chunkNumber, value.GetBuffer());
+	//   - Out-parameter overload — reuses caller's buffer capacity, clears it
+	//     first, then writes. For tight loops over many numbers:
+	//         wxMemoryBuffer buf;
+	//         for (...) { n.GetBuffer(buf); writer.w_chunk(id, buf); }
+	wxMemoryBuffer GetBuffer() const;
+	void           GetBuffer(wxMemoryBuffer& out) const;
+	bool           GetBuffer(ibWriterMemory& writer) const; // chunked stream write
+
+	bool SetBuffer(const wxMemoryBuffer& in);
+	bool SetBuffer(const void* data, size_t len);
+	bool SetBuffer(const ibReaderMemory& reader); // chunked stream read
+
+	// BigImpl is opaque to callers — fully defined in number.cpp.
+	struct BigImpl;
+
+private:
+	// Bit packing of m_payload when bit 0 == 0 (immediate):
+	//   mantissa: signed 47-bit value in bits [63:17]
+	//   exp10   : signed 16-bit value in bits [16:1]
+	static constexpr int     kImmMantBits = 47;
+	static constexpr int     kImmExpBits  = 16;
+	static constexpr int     kImmExpShift = 1;
+	static constexpr int     kImmMantShift = kImmExpShift + kImmExpBits; // 17
+	static constexpr int64_t kImmMantMax = (1LL << (kImmMantBits - 1)) - 1;       //  +2^46 - 1
+	static constexpr int64_t kImmMantMin = -(1LL << (kImmMantBits - 1));          //  -2^46
+	static constexpr int     kImmExpMax  = (1   << (kImmExpBits  - 1)) - 1;       //  +32767
+	static constexpr int     kImmExpMin  = -(1  << (kImmExpBits  - 1));           //  -32768
+
+	void Clear() noexcept;
+
+	bool     IsImmediate() const { return (m_payload & 1ULL) == 0; }
+	// Inline, NOT out-of-line: TryImmInts below calls ImmExp() twice and
+	// ImmMantissa() twice, and TryImmInts is the gate of every arithmetic and
+	// comparison fast path — so a body left in the .cpp costs four cross-module
+	// calls on every number operation the interpreter performs, to run a shift
+	// and a mask. Whole-program optimisation removes those calls, but only where
+	// it is enabled (MSVC Release); the header form holds on every toolchain and
+	// every configuration, which is the point.
+	int64_t ImmMantissa() const {
+		// Arithmetic right-shift on int64_t sign-extends, restoring the 47-bit
+		// signed mantissa to a full int64_t value.
+		return static_cast<int64_t>(m_payload) >> kImmMantShift;
+	}
+	int ImmExp() const {
+		const uint64_t mask = (1ULL << kImmExpBits) - 1;
+		int64_t e = static_cast<int64_t>((m_payload >> kImmExpShift) & mask);
+		if (e & (1LL << (kImmExpBits - 1))) e -= (1LL << kImmExpBits);
+		return static_cast<int>(e);
+	}
+
+	BigImpl* HeapPtr()     const;   // cold — reached through LoadBig, not the fast path
+
+	// THE HEAP TIER IS SHARED — ibString's scheme (fstring.h): a copy of a heap-tier number is one
+	// more owner of its BigImpl, the last owner frees it, and a write in place goes only to a BigImpl
+	// this number owns alone (StoreBig). The count is atomic. Defined in fnumber.cpp.
+	struct SharedBig;
+	SharedBig* Shared() const;
+
+	// Both operands inline integers (exp10 == 0)? Returns their mantissas in
+	// (a, b). Shared gate for the immediate-integer fast paths in the
+	// arithmetic / comparison operators (operator+=, *=, /=, Compare, ...).
+	bool TryImmInts(const ibNumber& rhs, int64_t& a, int64_t& b) const {
+		if (IsImmediate() && rhs.IsImmediate() && ImmExp() == 0 && rhs.ImmExp() == 0) {
+			a = ImmMantissa();
+			b = rhs.ImmMantissa();
+			return true;
+		}
+		return false;
+	}
+
+	// ⭐ BOTH IMMEDIATE, WHATEVER THEIR DECIMAL PLACES — the gate of the ADDITIVE fast paths. The two
+	// mantissas are brought to ONE exponent, the smaller of the two, exactly where the cold path's
+	// AlignExp takes them (the one with the larger exponent is multiplied by 10^difference), so what
+	// operator+= / -= then store is bit for bit what AddBig / SubBig would have stored.
+	//
+	// It exists because money has cents. The gate above admits integers only, so every sum of amounts
+	// — a report's totals, a register's figures — took the cold path and built a heap number to add two
+	// values that each fit in 47 bits: the payroll sheet's fold did that twice per node on every row
+	// (MEASURED 2026-09-12, Debug stack samples: ibAggAcc::Feed -> AddBig -> BigImpl).
+	//
+	// Refuses (and the cold path runs) when the scaled mantissa could overflow the sum: the other side is
+	// at most 2^46, so a scaled side kept under 2^62 leaves the sum inside int64 with room to spare.
+	bool TryImmAligned(const ibNumber& rhs, int64_t& a, int64_t& b, int32_t& exp10) const {
+		if (!IsImmediate() || !rhs.IsImmediate())
+			return false;
+		a = ImmMantissa();
+		b = rhs.ImmMantissa();
+		const int ea = ImmExp(), eb = rhs.ImmExp();
+		if (ea == eb) {
+			exp10 = ea;
+			return true;
+		}
+		static constexpr int64_t kPow10[] = { 1LL, 10LL, 100LL, 1000LL, 10000LL, 100000LL, 1000000LL,
+			10000000LL, 100000000LL, 1000000000LL, 10000000000LL, 100000000000LL, 1000000000000LL,
+			10000000000000LL, 100000000000000LL, 1000000000000000LL };
+		const int diff = ea > eb ? ea - eb : eb - ea;
+		if (diff >= static_cast<int>(sizeof(kPow10) / sizeof(kPow10[0])))
+			return false;
+		int64_t& up = ea > eb ? a : b;
+		static constexpr int64_t kScaledMax = 1LL << 62;
+		const int64_t limit = kScaledMax / kPow10[diff];
+		if (up > limit || up < -limit)
+			return false;
+		up *= kPow10[diff];
+		exp10 = ea < eb ? ea : eb;
+		return true;
+	}
+
+	// Cold half of Compare — both operands are not plain immediate integers.
+	int CompareBig(const ibNumber& rhs) const;
+
+	// Inline for the same reason as ImmMantissa / ImmExp above: they are the
+	// STORE half of every arithmetic fast path (operator+= and friends, now
+	// defined in this header), so leaving them in the .cpp would put the call
+	// back on the path the split exists to shorten.
+	static bool CanBeImmediate(int64_t mant, int32_t exp10) noexcept {
+		return mant >= kImmMantMin && mant <= kImmMantMax
+		    && exp10 >= kImmExpMin && exp10 <= kImmExpMax;
+	}
+	static uint64_t PackImmediate(int64_t mant, int32_t exp10) noexcept {
+		const uint64_t mantU = static_cast<uint64_t>(mant) & ((1ULL << kImmMantBits) - 1);
+		const uint64_t expU  = static_cast<uint64_t>(exp10) & ((1ULL << kImmExpBits) - 1);
+		return (mantU << kImmMantShift) | (expU << kImmExpShift);   // tag 0 — immediate(0, 0) is all zeros
+	}
+
+	void StoreImmediate(int64_t mant, int32_t exp10) noexcept {
+		m_payload = PackImmediate(mant, exp10);
+	}
+
+	// Cold halves — both operands outside the immediate-integer tier, so the
+	// BigImpl machinery (LoadBig / AlignExp / StoreBig) runs. Deliberately left
+	// out of line: inlining a decimal long-add into every call site would trade
+	// the rare case against the instruction cache the common case lives in.
+	ibNumber& AddBig(const ibNumber& rhs);
+	ibNumber& SubBig(const ibNumber& rhs);
+	ibNumber& MulBig(const ibNumber& rhs);
+	void StoreHeap(SharedBig* p) noexcept;
+
+	// One body per signedness, shared by the long / long long constructor pair above.
+	void FromSigned64(int64_t v) noexcept;
+	void FromUnsigned64(uint64_t v) noexcept;
+
+	// … and the same for the ToInt family: one conversion, four public spellings over it.
+	int ToSigned64(int64_t& out) const;
+	int ToUnsigned64(uint64_t& out) const;
+
+	// Materialises current value into a stack-allocated BigImpl (no extra heap).
+	void LoadBig(BigImpl& out) const;
+	// Stores `src`. If it fits inline, packs as immediate; otherwise allocates heap.
+	void StoreBig(const BigImpl& src);
+
+	uint64_t m_payload;
+};
+
+struct ibNumber::Format
+{
+	int    fracDigits   = -1;        // round to N decimal places (-1 = no rounding)
+	int    precision    = -1;        // cap total significant digits, trim trailing zeros (-1 = off)
+	wxChar decimalSep   = wxT('.');  // decimal separator
+	wxChar groupSep     = 0;         // thousand-group separator (0 = no grouping)
+	int    groupSize    = 0;         // digits per group (0 = no grouping)
+	int    minIntDigits = 0;         // pad integer part with leading '0' to this width (0 = off)
+	                                 //   sign sits OUTSIDE the padding: -5 with width 4 → "-0005",
+	                                 //   not "-005" (printf "%04d" semantics differ here)
+};
+
+static_assert(sizeof(uint64_t) == 8, "ibNumber assumes uint64_t is 8 bytes");
+
+// Stream insertion — writes via ToString(); used by code that builds messages
+// or query fragments through std::stringstream.
+BACKEND_API std::ostream&  operator<<(std::ostream&  os, const ibNumber& n);
+BACKEND_API std::wostream& operator<<(std::wostream& os, const ibNumber& n);
+
+#endif

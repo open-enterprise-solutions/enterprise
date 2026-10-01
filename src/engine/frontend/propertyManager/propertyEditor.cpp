@@ -56,7 +56,6 @@ WX_PG_IMPLEMENT_INTERNAL_EDITOR_CLASS(ComboBoxAndButton,
 	bt->Show();
 #endif
 
-	property->SetAttribute(wxT("hyperLink_clicked"), WXVARIANT(false));
 
 	return wxPGWindowList(ch, bt);
 }
@@ -291,7 +290,23 @@ bool wxPGHyperLinkEditor::OnEvent(wxPropertyGrid* propGrid,
 		wxStaticText* ctrl = wxDynamicCast(wnd, wxStaticText);
 		if (ctrl)
 		{
-			property->SetValue(wxVariant(true, wxT("hyperLink_clicked")));
+			// ⭐⭐ THE CLICK IS A NAME STAMPED ON THE VALUE — the data is left alone, so the cell still
+			// has its variant to read and to clone. What the cell watches for is the NAME, never a
+			// bool: there is no payload here to test.
+			wxVariant variant = property->GetValue();
+			variant.SetName(wxT("hyperLink_clicked"));
+			property->SetValue(variant);
+
+			// 🛑 AND THE NAME IS *NOT* TAKEN BACK OFF HERE. Putting a second SetValue in — stamp, let
+			// the cell react, un-stamp — reads as the tidy fix and is not one: every cell's OnSetValue
+			// runs a second time inside this click, and the ones that DEFER their work (all of them —
+			// a modal opened inside a click takes the mouse with it) then run against a grid that has
+			// moved on. It cost a crash in the hyperlink's deferred OpenObjectForm and stopped the
+			// composer's window from opening at all (measured, 2026-08-24).
+			//
+			// The click is CONSUMED BY WHOEVER ANSWERS IT — see the composer's and the list's cells:
+			// they clear the name off m_value the moment they take it. That is the reader ending its
+			// own signal, which is one place per road rather than one guess for all of them.
 			return true;
 		}
 	}

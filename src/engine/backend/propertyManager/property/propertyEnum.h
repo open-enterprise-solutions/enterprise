@@ -25,28 +25,31 @@ public:
 	{
 	}
 
-	//get property for grid 
-	virtual wxObject* GetPGProperty() const final {
-		if (ms_propertyEnum != nullptr)
-			return ms_propertyEnum(m_propLabel, m_propName, GetEnumList(), GetValueAsInteger());
-		return nullptr;
+	// The choices this enum offers. Public because the FRONT builds the editor now and has
+	// to read them (it was protected while the property built its own wxPGProperty and only
+	// needed them inside GetPGProperty).
+	virtual ibPropertyChoiceList GetEnumList() const = 0;
+
+	// THE SAME QUESTION THE FAMILY ASKS — an enumeration's answer is fixed by its type, which is why
+	// it had a name of its own and why nothing generic could reach it. One word for it now; the
+	// type-fixed list stays where it belongs, above.
+	virtual ibPropertyChoiceMode GetValueList(ibPropertyChoiceList& list) override {
+		list = GetEnumList();
+		return ibPropertyChoiceMode::Single;
 	}
 
 	// set/get property data
 	virtual bool SetDataValue(const ibValue& varPropVal) = 0;
 	virtual bool GetDataValue(ibValue& pvarPropVal) const = 0;
 
-	//load & save object in control 
-	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer);
+	//load & save object in control
+
+	// readable node value (typed Number = the enum's integer)
+	virtual bool ReadNodeValue(const ibDataValue& value) override;
+	virtual bool WriteNodeValue(ibDataValue& value) const override;
 
 public:
 
-	static wxObject* (*ms_propertyEnum)(const wxString&, const wxString&, const wxPGChoices&, const int&);
-
-protected:
-
-	virtual wxPGChoices GetEnumList() const = 0;
 };
 
 #include "backend/compiler/enumUnit.h"
@@ -94,15 +97,15 @@ public:
 	};
 
 protected:
-	virtual wxPGChoices GetEnumList() const {
-		wxPGChoices list;
+	virtual ibPropertyChoiceList GetEnumList() const {
+		ibPropertyChoiceList list;
 		for (unsigned int idx = 0; idx < m_enumCreator->GetEnumCount(); idx++) {
 			list.Add(m_enumCreator->GetEnumDesc(idx), m_enumCreator->GetEnumValue(idx));
 		}
 		return list;
 	}
 private:
-	ibValuePtr<valEnumProp> m_enumCreator = ibValuePtr<valEnumProp>(ibValue::CreateAndConvertObjectRef<valEnumProp>());
+	ibValuePtr<valEnumProp> m_enumCreator = ibValue::CreateObject<valEnumProp>();
 };
 
 #endif

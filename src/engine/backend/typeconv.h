@@ -1,9 +1,14 @@
 #ifndef _TYPECONV_H__
 #define _TYPECONV_H__
-#include "number.h"
+// ⚠ THE JOURNAL DIRECTLY, not through backend_core.h. The core header includes the journal LAST,
+// and this header is reached from inside that same chain — so by the time we get here the core's
+// include guard is already set and its own include of the journal has not run yet. Asking for the
+// journal by name is the only order that works from inside the cycle.
+#include "diagnostics/journal.h"      // ibJournal — the technology journal
+#include "fnumber.h"
 #include "fontcontainer.h"
 
-// macros para la conversión entre wxString <-> wxString
+// macros for converting between wxString <-> std::string
 #define _WXSTR(x)  typeConv::_StringToWxString(x)
 #define _STDSTR(x) typeConv::_WxStringToString(x)
 #define _ANSISTR(x) typeConv::_WxStringToAnsiString(x)
@@ -19,9 +24,25 @@
 		systemVal =	NAME;							\
 	}
 
-#include <wx/artprov.h>
 #include <wx/tokenzr.h>
-#include <wx/propgrid/propgrid.h>
+#include <wx/filename.h>
+
+// This header is a GUI utility that happens to live in the backend: it art-provides
+// bitmaps, crosses out an invalid one with a wxMemoryDC + wxPen, and maps strings to
+// wxSystemColour. It used to get all of that transitively from <wx/propgrid/propgrid.h>
+// — and since backend_core.h includes this file, that made propgrid a de-facto prefix
+// header for every backend TU. The property layer no longer needs propgrid at all
+// (choices travel as ibPropertyChoiceList, point/size live in ibVariantDataPoint /
+// ibVariantDataSize), so what is left is this file's OWN dependencies, named honestly.
+// Moving these conversions to the frontend, where a device context belongs, is its own arc.
+#include <wx/artprov.h>
+#include <wx/gdicmn.h>
+#include <wx/colour.h>
+#include <wx/font.h>
+#include <wx/bitmap.h>
+#include <wx/dcmemory.h>
+#include <wx/pen.h>
+#include <wx/settings.h>
 
 namespace typeConv
 {
@@ -536,20 +557,6 @@ namespace typeConv
 		return val ? wxT("1") : wxT("0");
 	}
 
-	inline wxArrayString StringToArrayString(const wxString& str) {
-		//wxArrayString result = wxStringTokenize( str, wxT(";") );
-		wxArrayString result;
-
-		WX_PG_TOKENIZER2_BEGIN(str, wxT('"'))
-			result.Add(token);
-		WX_PG_TOKENIZER2_END()
-			return result;
-	}
-
-	inline wxString ArrayStringToString(const wxArrayString& arrayStr) {
-		return wxArrayStringProperty::ArrayStringToString(arrayStr, '"', 1);
-	}
-
 	inline void ParseBitmapWithResource(const wxString& value, wxString* image, wxString* source, wxSize* icoSize) {
 		// Splitting bitmap resource property value - it is of the form "path; source [width; height]"
 
@@ -610,7 +617,7 @@ namespace typeConv
 				*source = children[0];
 			}
 		}
-		wxLogDebug(wxT("typeConv:ParseBitmap: source:%s image:%s "), source->c_str(), image->c_str());
+		ibJournalInfo(wxT("typeconv"), wxT("typeConv:ParseBitmap: source:%s image:%s "), source->c_str(), image->c_str());
 	}
 
 	/**
@@ -626,27 +633,27 @@ namespace typeConv
 			wxChar c = str[i];
 			switch (state)
 			{
-			case 0: // esperando (') de comienzo de cadena
+			case 0: // waiting for (') at the start of the string
 				if (c == wxT('\''))
 					state = 1;
 				break;
-			case 1: // guardando cadena
+			case 1: // storing the string
 				if (c == wxT('\''))
 				{
 					if (i + 1 < size && str[i + 1] == wxT('\''))
 					{
-						substr = substr + wxT('\'');  // sustitución ('') por (') y seguimos
+						substr = substr + wxT('\'');  // replace ('') with (') and continue
 						i++;
 					}
 					else
 					{
-						result.Add(substr); // fin de cadena
+						result.Add(substr); // end of string
 						substr.Clear();
 						state = 0;
 					}
 				}
 				else
-					substr = substr + c; // seguimos guardado la cadena
+					substr = substr + c; // keep storing the string
 
 				break;
 			}
@@ -678,14 +685,14 @@ namespace typeConv
 		}
 	}
 
-	// Obtiene la ruta absoluta de un archivo
+	// Gets the absolute path of a file
 	inline wxString MakeAbsolutePath(const wxString& filename, const wxString& basePath) {
 		wxFileName fnFile(filename);
 		wxFileName noChanges = fnFile;
 		if (fnFile.IsRelative())
 		{
-			// Es una ruta relativa, por tanto hemos de obtener la ruta completa
-			// a partir de basePath
+			// It is a relative path, so we have to obtain the full path
+			// from basePath
 			wxFileName fnBasePath(basePath);
 			if (fnBasePath.IsAbsolute())
 			{
@@ -708,7 +715,7 @@ namespace typeConv
 		return protocol + MakeAbsolutePath(path, basePath) + anchor;
 	}
 
-	// Obtiene la ruta relativa de un archivo
+	// Gets the relative path of a file
 	inline wxString MakeRelativePath(const wxString& filename, const wxString& basePath) {
 		wxFileName fnFile(filename);
 		wxFileName noChanges = fnFile;
@@ -742,8 +749,8 @@ namespace typeConv
 		return protocol + MakeRelativePath(path, basePath) + anchor;
 	}
 
-	// dada una cadena de caracteres obtiene otra transformando los caracteres
-	// especiales denotados al estilo C ('\n' '\\' '\t')
+	// given a string, produces another one transforming the special
+	// characters denoted in C style ('\n' '\\' '\t')
 	inline wxString StringToText(const wxString& str) {
 		wxString result;
 		for (unsigned int i = 0; i < str.length(); i++)

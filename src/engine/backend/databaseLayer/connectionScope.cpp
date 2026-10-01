@@ -19,9 +19,6 @@ ibConnectionScope::ibConnectionScope(ibDatabaseConnectionHolder* customHolder)
 
 void ibConnectionScope::Acquire(ibDatabaseConnectionHolder* customHolder)
 {
-	auto* pool = ibApplicationData::GetConnectionPool();
-	if (pool == nullptr) return;   // passive — db_query falls back to primary
-
 	// Resolve the holder for this scope:
 	//   - explicit `customHolder` wins (private-holder pattern, e.g. a
 	//     thread_local singleton owned by the calling subsystem, or
@@ -34,6 +31,11 @@ void ibConnectionScope::Acquire(ibDatabaseConnectionHolder* customHolder)
 		? customHolder
 		: ibConnectionPool::CurrentHolder();
 	auto* holder = m_holder;
+
+	// …and the pool from the HOLDER — its base's (a session's, the registry's), or for the db_query channel
+	// the current base's, through the session.
+	auto* pool = holder != nullptr ? holder->GetPool() : ibApplicationInstance::GetConnectionPool();
+	if (pool == nullptr) return;   // passive — db_query falls back to primary
 
 	if (holder != nullptr) {
 		// 1. Nested scope — another scope is already bound for this
@@ -76,12 +78,12 @@ ibConnectionScope::~ibConnectionScope()
 	// TX on the conn. Swallow driver exceptions here — propagating
 	// from a dtor would std::terminate.
 	if (m_activeTx && m_conn) {
-		try { m_conn->RollBack(); } catch (...) {}
+		try { m_conn->RollBack(); } catch (...) { /* swallowed: see comment above — throw from dtor would std::terminate */ }
 		m_activeTx = false;
 	}
 
 	if (m_ownsConn && m_holder) {
-		if (auto* pool = ibApplicationData::GetConnectionPool())
+		if (auto* pool = m_holder->GetPool())
 			pool->UnbindScopeHolder(m_holder);
 	}
 	// Inherit / passive path: parent still holds the binding; nothing
@@ -107,10 +109,10 @@ ibConnectionScope& ibConnectionScope::operator=(ibConnectionScope&& other) noexc
 		// the holder if we owned it) before adopting the source's
 		// state.
 		if (m_activeTx && m_conn) {
-			try { m_conn->RollBack(); } catch (...) {}
+			try { m_conn->RollBack(); } catch (...) { /* swallowed: move-assign rolls back own state before adopting other's — same dtor-safety rule */ }
 		}
 		if (m_ownsConn && m_holder) {
-			if (auto* pool = ibApplicationData::GetConnectionPool())
+			if (auto* pool = m_holder->GetPool())
 				pool->UnbindScopeHolder(m_holder);
 		}
 
