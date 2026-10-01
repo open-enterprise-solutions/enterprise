@@ -39,17 +39,27 @@
 // still read the identity out of the reference's TEXT — its presentation — and so found nothing ever.
 //
 // The answer leaves as a VALUE: the row's own reference, held by the value that carries it out. The
-// query goes through the L3 door (the engine's FIRST / LIMIT fork is L2's), the pattern as a bound value.
-static ibValue ibFindRefLike(const ibValueMetaObjectRecordDataHierarchyMutableRef* meta,
-                             ibValueMetaObjectAttributePredefined* attribute, const ibValue& pattern)
+// query goes through the L3 door (the engine's FIRST / LIMIT fork is L2's), the value bound.
+//
+// ⭐ EXACT IS BY EQUALITY — the value is the one looked for, not a pattern. It was `LIKE ?` for every lookup, and
+// Firebird reaches no index through a LIKE whose pattern is a parameter: every call read the whole catalog, some
+// 50 ms a lookup at tens of thousands of items (perf night, PR #219), while the code has had an index of its own
+// all along. And a `_` or `%` in a code matched as a wildcard, so the lookup was not even exact. A LIKE is what a
+// lookup that is NOT exact asks — the first item whose value begins with the one given.
+static ibValue ibFindRefByAttribute(const ibValueMetaObjectRecordDataHierarchyMutableRef* meta,
+                                    ibValueMetaObjectAttributePredefined* attribute, const ibValue& value, bool exact)
 {
 	if (meta == nullptr)
 		return ibValue();
-	if (attribute == nullptr || pattern.IsEmpty() || appData->DesignerMode())
+	if (attribute == nullptr || value.IsEmpty() || appData->DesignerMode())
 		return ibValueReferenceDataObject::Create(meta);
 	try {
 		ibDataQueryBuilder q;
-		q.From(meta->GetQueryable()).WhereLike(attribute->GetQueryColumn(), attribute->AdjustValue(pattern));
+		q.From(meta->GetQueryable());
+		if (exact)
+			q.Where(attribute->GetQueryColumn(), attribute->AdjustValue(value));
+		else
+			q.WhereLike(attribute->GetQueryColumn(), ibValue(value.GetString() + wxT("%")));
 		ibReadPageRequest page;
 		page.m_count = 1;
 		ibDataQueryResult sel = q.Execute(page);
@@ -68,13 +78,16 @@ static ibValue ibFindRefLike(const ibValueMetaObjectRecordDataHierarchyMutableRe
 ibValue ibValueManagerDataObjectPredefined::FindByCode(const ibValue& code) const
 {
 	const ibValueMetaObjectRecordDataHierarchyMutableRef* meta = GetMetaObject();
-	return ibFindRefLike(meta, meta != nullptr ? meta->GetDataCode() : nullptr, code);
+	return ibFindRefByAttribute(meta, meta != nullptr ? meta->GetDataCode() : nullptr, code, true);
 }
 
-ibValue ibValueManagerDataObjectPredefined::FindByDescription(const ibValue& description) const
+ibValue ibValueManagerDataObjectPredefined::FindByDescription(const ibValue& description, const ibValue& exact) const
 {
 	const ibValueMetaObjectRecordDataHierarchyMutableRef* meta = GetMetaObject();
-	return ibFindRefLike(meta, meta != nullptr ? meta->GetDataDescription() : nullptr, description);
+	// Not given is exact. Asked of the TYPE, not IsEmpty(): False is "empty" there, and an explicit False is
+	// exactly the one answer that must not read as "not given".
+	const bool isExact = exact.GetType() == ibValueTypes::TYPE_EMPTY || exact.GetBoolean();
+	return ibFindRefByAttribute(meta, meta != nullptr ? meta->GetDataDescription() : nullptr, description, isExact);
 }
 
 bool ibValueRecordManagerObject::ExistData()

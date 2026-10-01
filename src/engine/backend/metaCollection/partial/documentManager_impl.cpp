@@ -7,7 +7,7 @@
 #include "backend/appData.h"
 #include "backend/session/session.h"
 #include "backend/metaCollection/attribute/metaAttributeObject.h"
-#include "backend/query/dataQueryBuilder.h"   // L3 door — FindByNumber via WhereLike / WhereCompare
+#include "backend/query/dataQueryBuilder.h"   // L3 door — FindByNumber via Where / WhereCompare
 
 ibValue ibValueManagerDataObjectDocument::FindByNumber(const ibValue& vNumber, const ibValue& vPeriod)
 {
@@ -18,14 +18,14 @@ ibValue ibValueManagerDataObjectDocument::FindByNumber(const ibValue& vNumber, c
 	ibValueMetaObjectAttributePredefined* attributeDate   = m_metaObject->GetDocumentDate();
 	wxASSERT(attributeNumber && attributeDate);
 
-	// Find by number (LIKE), optionally constrained to documents on/before the
-	// given period (date <= period). The L3 door closes the FB FIRST / others
-	// LIMIT fork; values ride as bound Consts. (The legacy path appended the
-	// period predicate AFTER "LIMIT 1;" against the WRONG attribute — that bug
-	// dies with the move to a structured predicate.)
+	// Find by number (by equality — the number's index answers it; a LIKE with a bound pattern reached no index and
+	// read every document, see FindByCode in commonObjectManagerQuery.cpp), optionally constrained to documents
+	// on/before the given period (date <= period). The L3 door closes the FB FIRST / others LIMIT fork; values ride
+	// as bound Consts. (The legacy path appended the period predicate AFTER "LIMIT 1;" against the WRONG
+	// attribute — that bug dies with the move to a structured predicate.)
 	try {
 		ibDataQueryBuilder q;
-		q.From(m_metaObject->GetQueryable()).WhereLike(attributeNumber->GetQueryColumn(), attributeNumber->AdjustValue(vNumber));
+		q.From(m_metaObject->GetQueryable()).Where(attributeNumber->GetQueryColumn(), attributeNumber->AdjustValue(vNumber));
 		if (!vPeriod.IsEmpty())
 			q.WhereCompare(attributeDate->GetQueryColumn(), ibQueryFilterOp::LessEqual, attributeDate->AdjustValue(vPeriod));
 

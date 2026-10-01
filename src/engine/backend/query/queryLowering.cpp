@@ -1801,11 +1801,12 @@ static bool MentionsSemiJoin(const ibQueryPredicatePtr& p)
 // changes which rows it has (no join, fold, TOP, union, totals). Null otherwise, and the set is read as before; rows
 // in memory test membership, with no parameters to run out of.
 //
-// ⚠ BOTH SIDES ARE IDENTITIES, AND ONE OF THEM IS A ROW'S OWN KEY. The correlation compares one field — a reference
-// by its id — while the set road says "empty" as the zero sentinel OR a NULL (DecomposeEquality), so an empty value
-// on both sides would match there and not here. A row key is never empty: with one on either side an empty value
-// matches nothing on both roads, and IN and NOT IN answer the same — «employees not in …», the case that ran out of
-// parameters, is exactly that shape.
+// ⚠ BOTH SIDES ARE IDENTITIES — a row's own key or a reference. The correlation compares one field, a reference by
+// its id, while the set road says "empty" as the zero sentinel OR a NULL (DecomposeEquality) and matches an empty
+// value against an empty one. A row key is never empty, so with one on either side the plain equality answers as
+// the set road does — «employees not in …», the case that ran out of parameters, is that shape. With two
+// attributes (`Doc.Item IN (SELECT Item FROM …)`) both may be empty, and the correlation is told so
+// (m_emptyMatchesEmpty): empty meets empty on both roads (2026-10-01; until then that shape read the set).
 //
 // ⚠ THE INNER READ IS GUARDED as the read it replaces was. The session's policy folds its restriction into the
 // inner's own WHERE (CheckSelect, as Execute does) — an EXISTS over the bare table would see the rows the user may
@@ -1854,8 +1855,6 @@ static ibQueryPredicatePtr InSubqueryAsSemiJoin(const std::vector<ibSourceBindin
 		const ibBackendQueryColumn* const innerRowKey = rowKeyOf(inner);
 		if (key.size() != 1 || !identity(key.front(), innerRowKey))
 			return nullptr;
-		if (cols.front() != outerRowKey && key.front() != innerRowKey)
-			return nullptr;   // two values that may both be empty — the set road says what "equal" means for them
 
 		ibDataQueryBuilder scope;   // the session's connection and policy, as the inner read would have had
 		scope.From(inner);
@@ -1878,6 +1877,7 @@ static ibQueryPredicatePtr InSubqueryAsSemiJoin(const std::vector<ibSourceBindin
 		semi.m_outerKey = cols.front();
 		semi.m_innerKey = key.front();
 		semi.m_where    = scope.GetWherePredicate();
+		semi.m_emptyMatchesEmpty = cols.front() != outerRowKey && key.front() != innerRowKey;   // two values that may both be empty
 		if (MentionsSemiJoin(semi.m_where))
 			return nullptr;   // a nested EXISTS would read its own alias (`sj`) for this one's
 

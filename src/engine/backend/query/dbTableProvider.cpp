@@ -333,6 +333,16 @@ ibQueryExprPtr OrFold(ibQueryExprPtr a, ibQueryExprPtr b)
 	return ibBinOp(ibQueryBinOp::Or, a, b);
 }
 
+// "NOT FILLED", SAID ABOUT A REFERENCE'S KEY FIELD — both of its spellings: SQL NULL in a row the field was never
+// written in, and the zero-guid sentinel the paths that store an empty reference write (see DecomposeEquality).
+static ibQueryExprPtr EmptyReferenceKey(const wxString& qual, const wxString& idField)
+{
+	const ibReference emptyKey{ ibGuidImpl{} };
+	return OrFold(
+		ibIsNull(ibColQ(qual, idField), false),
+		ibBinOp(ibQueryBinOp::Eq, ibColQ(qual, idField), ibConstBlob(&emptyKey, sizeof(ibReference))));
+}
+
 // ⭐⭐ …AND THE SAME KEY WHEN A WALK ARRIVES AT THE ROW. A dot-walk reaches its target on the target's own
 // reference, and it compared `_RRRef` alone — so the join found each target row by reading the target's
 // table whole, once for every row it came from. The payroll sheet of one month (86 thousand accrual lines,
@@ -473,13 +483,8 @@ ibQueryExprPtr DecomposeEquality(const ibBackendQueryColumn* col, const ibMetaDa
 	// note already spells out both spellings; it was true there and false everywhere else.
 	if (emptyReference) {
 		const wxString idField = ReferenceFieldOf(col);
-		if (!idField.IsEmpty()) {
-			const ibReference emptyKey{ ibGuidImpl{} };
-			return OrFold(
-				ibIsNull(ibColQ(mainQual, idField), false),
-				ibBinOp(ibQueryBinOp::Eq, ibColQ(mainQual, idField),
-				        ibConstBlob(&emptyKey, sizeof(ibReference))));
-		}
+		if (!idField.IsEmpty())
+			return EmptyReferenceKey(mainQual, idField);
 	}
 
 	const std::vector<ibColumnSlot> layout = DescribeColumnLayout(col);
@@ -2013,6 +2018,14 @@ ibQueryExprPtr ibMetaIRBuilder::BuildSemiJoinExists(const ibSemiJoinExists& sj, 
 	ibQueryExprPtr correlation = ibBinOp(FilterOpToBinOp(sj.m_op),
 		ibColQ(sjAlias,  FirstSqlFieldOfColumn(sj.m_innerKey)),
 		ibColQ(outerQual, FirstSqlFieldOfColumn(sj.m_outerKey)));
+	// …and EMPTY MATCHES EMPTY where both keys may be empty (`x IN (SELECT k …)` over two attributes). A key not
+	// filled is spelled two ways, and the equality above never matches NULL against either: an empty row of the
+	// outer would miss the empties of the set — IN would lose it and NOT IN keep it, where the set road, which
+	// reads the set and compares its values (DecomposeEquality), finds it.
+	if (sj.m_emptyMatchesEmpty)
+		correlation = OrFold(correlation, AndFold(
+			EmptyReferenceKey(sjAlias,  FirstSqlFieldOfColumn(sj.m_innerKey)),
+			EmptyReferenceKey(outerQual, FirstSqlFieldOfColumn(sj.m_outerKey))));
 
 	// SELECT * (a bare ibFilter → SELECT *); inner Where AND the correlation as the subquery WHERE.
 	return ibExists(ibFilter(ibScan(sj.m_inner->GetQueryTableName(), sjAlias), AndFold(innerWhere, correlation)),

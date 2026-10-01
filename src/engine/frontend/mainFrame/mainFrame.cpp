@@ -475,6 +475,12 @@ ibFrontendMainFrame::~ibFrontendMainFrame()
 
 	// The session's back-link is cleared by ~ibBackendDocFrame, which
 	// then releases the holder — that release is what ends the session.
+	//
+	// ⚠ AND IT RUNS LAST, because ibBackendDocFrame is the FIRST base: every child window — the metadata
+	// trees among them, which unsubscribe from the configuration as they go — is gone before the session
+	// is. Releasing it queues the Remove, and the last one out closes the configuration on the REGISTRY
+	// thread; a tree still subscribed would be told `Closed` there, off this thread, while this one
+	// destroys it (census of the registry thread, 2026-10-01). Keep that base first.
 
 	// deinitialize the valueForm manager
 	m_mgr.UnInit();

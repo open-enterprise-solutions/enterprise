@@ -2119,12 +2119,14 @@ class BACKEND_API ibValueManagerDataObjectPredefined : public ibValueManagerData
 
 	virtual const ibValueMetaObjectRecordDataHierarchyMutableRef* GetMetaObject() const = 0;
 
-	// THE FIRST ITEM WHOSE CODE / DESCRIPTION IS LIKE THE PATTERN, as a reference — empty when none is.
+	// THE FIRST ITEM WITH THIS CODE / DESCRIPTION, as a reference — empty when none has it. A description may
+	// be asked for not exactly (`exact` False): then it is the first item whose description BEGINS with it.
+	// `exact` arrives as the script's VALUE and is read once, in the body — not given (Undefined) is exact.
 	// Here once, for every manager whose items have both (catalog, the three charts, the parameterized
 	// job): each of them carried its own copy, and every copy handed back freed memory (see the body).
 	// A VALUE, not a pointer — the reference found is held by the value that carries it out.
 	ibValue FindByCode(const ibValue& code) const;
-	ibValue FindByDescription(const ibValue& description) const;
+	ibValue FindByDescription(const ibValue& description, const ibValue& exact) const;
 
 	void FillPredefined(ibMemberTable& helper) const;    // predefined-value props (composes onto FillMembers)
 

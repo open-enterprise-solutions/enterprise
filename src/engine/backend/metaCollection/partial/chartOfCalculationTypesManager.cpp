@@ -37,7 +37,7 @@ void ibValueManagerDataObjectChartOfCalculationTypes::FillManagerMethods(ibMembe
 	helper.AppendFunc(wxT("CreateGroup"), wxT("CreateGroup()"));
 	helper.AppendFunc(wxT("Select"), wxT("Select()"));
 	helper.AppendFunc(wxT("FindByCode"), 1, wxT("FindByCode(code : string)"));
-	helper.AppendFunc(wxT("FindByDescription"), 1, wxT("FindByDescription(descr : string)"));
+	helper.AppendFunc(wxT("FindByDescription"), 2, wxT("FindByDescription(descr : string, exact = true : boolean)"));
 	helper.AppendFunc(wxT("GetForm"), 3, wxT("GetForm(name : string, owner : any, id : guid)"));
 	helper.AppendFunc(wxT("GetListForm"), 3, wxT("GetListForm(name : string, owner : any, id : guid)"));
 	helper.AppendFunc(wxT("GetSelectForm"), 3, wxT("GetSelectForm(name : string, owner : any, id : guid)"));
@@ -66,7 +66,7 @@ bool ibValueManagerDataObjectChartOfCalculationTypes::CallAsFunc(const long lMet
 		pvarRetValue = FindByCode(*paParams[0]);
 		return true;
 	case eFindByDescription:
-		pvarRetValue = FindByDescription(*paParams[0]);
+		pvarRetValue = FindByDescription(*paParams[0], lSizeArray > 1 ? *paParams[1] : ibValue());
 		return true;
 	case eGetForm: {
 		ibValueGuid* guidVal = lSizeArray > 2 ? paParams[2]->ConvertToType<ibValueGuid>() : nullptr;
