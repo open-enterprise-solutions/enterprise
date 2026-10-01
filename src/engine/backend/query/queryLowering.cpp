@@ -1801,12 +1801,15 @@ static bool MentionsSemiJoin(const ibQueryPredicatePtr& p)
 // changes which rows it has (no join, fold, TOP, union, totals). Null otherwise, and the set is read as before; rows
 // in memory test membership, with no parameters to run out of.
 //
-// ⚠ BOTH SIDES ARE IDENTITIES — a row's own key or a reference. The correlation compares one field, a reference by
-// its id, while the set road says "empty" as the zero sentinel OR a NULL (DecomposeEquality) and matches an empty
-// value against an empty one. A row key is never empty, so with one on either side the plain equality answers as
-// the set road does — «employees not in …», the case that ran out of parameters, is that shape. With two
-// attributes (`Doc.Item IN (SELECT Item FROM …)`) both may be empty, and the correlation is told so
-// (m_emptyMatchesEmpty): empty meets empty on both roads (2026-10-01; until then that shape read the set).
+// ⚠ BOTH SIDES ARE ONE FIELD OF ONE KIND — identities (a row's own key, a reference by its id), or values of one
+// primitive kind (a code, a name, a number, a date, a flag: the type tag and one value field). An identity
+// against a value, or a code against a number, goes on reading the set. The correlation compares that field,
+// while the set road matches an EMPTY value against an empty one in every spelling it has (DecomposeEquality):
+// the zero sentinel or a NULL key, an untagged row, the type's own empty value. A row key is never empty, so with
+// one on either side the plain equality answers as the set road does — «employees not in …», the case that ran
+// out of parameters, is that shape. Otherwise both may be empty (`Doc.Item IN (SELECT Item …)`, `Code IN (SELECT
+// Code …)`) and the correlation is told so (m_emptyMatchesEmpty): empty meets empty on both roads (2026-10-01;
+// until then those shapes read the set).
 //
 // ⚠ THE INNER READ IS GUARDED as the read it replaces was. The session's policy folds its restriction into the
 // inner's own WHERE (CheckSelect, as Execute does) — an EXISTS over the bare table would see the rows the user may
@@ -1824,19 +1827,29 @@ static ibQueryPredicatePtr InSubqueryAsSemiJoin(const std::vector<ibSourceBindin
 		const std::vector<const ibBackendQueryColumn*> keys = q->GetPrimaryKeyColumns();
 		return keys.size() == 1 ? keys.front() : nullptr;
 	};
-	auto identity = [](const ibBackendQueryColumn* c, const ibBackendQueryColumn* rowKey) {
+	// WHAT THE CORRELATION COMPARES, as a kind: an identity (ReferenceId, whatever the key's own layout), or the
+	// value role of a primitive — the same shape DecomposeIn reads as "one kind of value". Raw = neither.
+	auto comparedKind = [](const ibBackendQueryColumn* c, const ibBackendQueryColumn* rowKey) {
 		if (c == nullptr)
-			return false;
+			return ibColumnRole::Raw;
 		if (c == rowKey)
-			return true;
+			return ibColumnRole::ReferenceId;
 		const std::vector<ibColumnSlot> slots = ColumnValueSlots(c);
-		return slots.size() == 1 && slots.front().m_role == ibColumnRole::ReferenceId;
+		if (slots.size() == 1 && slots.front().m_role == ibColumnRole::ReferenceId)
+			return ibColumnRole::ReferenceId;
+		const std::vector<ibColumnSlot> layout = DescribeColumnLayout(c);
+		if (layout.size() == 2 && layout[0].m_role == ibColumnRole::Discriminator
+		    && (layout[1].m_role == ibColumnRole::String || layout[1].m_role == ibColumnRole::Number
+		        || layout[1].m_role == ibColumnRole::Date || layout[1].m_role == ibColumnRole::Boolean))
+			return layout[1].m_role;
+		return ibColumnRole::Raw;
 	};
 
 	if (sources.size() != 1 || !plainTable(sources.front().m_q) || cols.size() != 1)
 		return nullptr;
 	const ibBackendQueryColumn* const outerRowKey = rowKeyOf(sources.front().m_q);
-	if (!identity(cols.front(), outerRowKey))
+	const ibColumnRole outerKind = comparedKind(cols.front(), outerRowKey);
+	if (outerKind == ibColumnRole::Raw)
 		return nullptr;
 	if (sel.m_selectAll || sel.m_projections.size() != 1 || !sel.m_joins.empty() || !sel.m_groupBy.empty()
 	    || sel.m_having || sel.m_top > 0 || sel.m_hasTotals || !sel.m_unions.empty() || !sel.m_intoTemp.IsEmpty()
@@ -1853,8 +1866,8 @@ static ibQueryPredicatePtr InSubqueryAsSemiJoin(const std::vector<ibSourceBindin
 		const std::vector<const ibBackendQueryColumn*> key =
 			ResolveFieldOperand(innerSources, *sel.m_projections.front().m_expr, /*allowDotWalk*/ false);
 		const ibBackendQueryColumn* const innerRowKey = rowKeyOf(inner);
-		if (key.size() != 1 || !identity(key.front(), innerRowKey))
-			return nullptr;
+		if (key.size() != 1 || comparedKind(key.front(), innerRowKey) != outerKind)
+			return nullptr;   // nothing one field can compare, or two kinds — the set road says what that means
 
 		ibDataQueryBuilder scope;   // the session's connection and policy, as the inner read would have had
 		scope.From(inner);
