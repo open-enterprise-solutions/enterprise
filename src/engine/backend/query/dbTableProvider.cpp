@@ -3020,6 +3020,18 @@ void ibDbTableProvider::BuildAggregateQuery(const ibDataQuerySpec& spec, ibDatab
 				ibSqlAliasOf(a.m_alias) });   // the STATEMENT's spelling — the author's name may be SQL's word
 			projectedAliases.push_back(ibSqlAliasOf(a.m_alias));
 		}
+		// ⭐⭐ …AND WHAT IS COMPUTED BESIDE THE GROUPS — a constant (`7 AS Seven`), a window over them
+		// (`RANK() OVER (ORDER BY key)`). The lowering hands them over as selected expressions, as it does on
+		// the read road, and the reader takes them by alias (ReadComputedOutputs). Left out here, the read
+		// found no such column and the output came back EMPTY, without a word: a constant and a window beside
+		// a GROUP BY were blank columns (2026-10-01, found through PR #219's window queries). A window whose
+		// argument is not grouped is now refused by the server, out loud, instead of answering nothing.
+		if (spec.m_selectExprs != nullptr)
+			for (const ibQueryColumnSelect& sc : *spec.m_selectExprs) {
+				projection.push_back(ibQueryProjItem{ ibMetaIRBuilder::BuildColumnExpr(queryable, sc.m_expr, mainQual),
+					ibSqlAliasOf(sc.m_alias) });
+				projectedAliases.push_back(ibSqlAliasOf(sc.m_alias));
+			}
 		q.Project(std::move(projection));
 
 		ibQueryExprPtr having;
@@ -3451,6 +3463,9 @@ bool ibDbTableProvider::CanColocateAggregate(const ibDataQuerySpec& spec)
 			return false;
 
 		if (spec.m_groupBy->empty() && spec.m_aggregates->empty()) return false;   // not an aggregate terminal
+		// …nor what is computed beside the groups (a constant, a window): this road drains its rows into memory by
+		// keys and figures alone, and the column came back empty. The fold in memory carries them (RamAggregate).
+		if (spec.m_selectExprs != nullptr && !spec.m_selectExprs->empty()) return false;
 
 		for (const ibBackendQueryColumn* g : *spec.m_groupBy)
 			if (g == nullptr || ColocatedOwner(leaves, g) == nullptr) return false;   // group key owned by a leaf (scalar OR reference spread)

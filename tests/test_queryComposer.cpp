@@ -167,6 +167,7 @@ struct SpecBuf {
 	// groupBy / aggs empty — which is exactly what the gate used to be blind to.
 	std::vector<ibTotalLevel> totals;
 	std::vector<ibDataQueryBuilder::AggregateItem> totalAggs;
+	std::vector<ibQueryColumnSelect> computed;   // SelectExpr — a constant, a window beside the select list
 
 	ibDataQuerySpec Make(const ibQueryNode* root, const ibBackendQueryable* primary) {
 		ibDataQuerySpec s;
@@ -176,6 +177,7 @@ struct SpecBuf {
 		s.m_writeRows = &writeRows; s.m_dotWalks = &dots; s.m_selectCols = &sel;
 		s.m_groupPaths = &groupPaths; s.m_dimWalks = &dimWalks;
 		s.m_totals = &totals; s.m_totalAggregates = &totalAggs;
+		s.m_selectExprs = &computed;
 		return s;
 	}
 };
@@ -757,6 +759,30 @@ TEST(QueryComposerGate, Aggregate_GroupBySum_Colocatable)
 	const ibDataQuerySpec spec = buf.Make(root.get(), &A);
 
 	EXPECT_TRUE(ibDbTableProvider::CanColocateAggregate(spec));
+}
+
+// …but NOT with something computed beside the groups. That road drains its rows into memory by keys and figures
+// alone, and a constant beside a GROUP BY came back as an empty column (2026-10-01). Refused here, the query goes
+// to the fold in memory, which carries it.
+TEST(QueryComposerGate, Aggregate_ConstantBesideTheGroups_NotColocatable)
+{
+	ibBackendColumnRawDB aKey = ibBackendColumnRawDB::Number(wxT("a_key"));
+	ibBackendColumnRawDB aDim = ibBackendColumnRawDB::String(wxT("a_dim"));
+	ibBackendColumnRawDB bKey = ibBackendColumnRawDB::Number(wxT("b_key"));
+	ibBackendColumnRawDB bAmt = ibBackendColumnRawDB::Number(wxT("b_amt"));
+	TestQueryable A(wxT("TableA"), 1); A.AddCol(&aKey); A.AddCol(&aDim);
+	TestQueryable B(wxT("TableB"), 2); B.AddCol(&bKey); B.AddCol(&bAmt);
+
+	auto root = Join2(&A, &B, &aKey, &bKey);
+	SpecBuf buf;
+	buf.groupBy = { &aDim };
+	ibDataQueryBuilder::AggregateItem sum;
+	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = &bAmt; sum.m_alias = wxT("total");
+	buf.aggs = { sum };
+	buf.computed = { ibQueryColumnSelect{ ibQueryColumnExpr::Const(ibValue(7)), wxT("seven") } };
+	const ibDataQuerySpec spec = buf.Make(root.get(), &A);
+
+	EXPECT_FALSE(ibDbTableProvider::CanColocateAggregate(spec));
 }
 
 // ===========================================================================

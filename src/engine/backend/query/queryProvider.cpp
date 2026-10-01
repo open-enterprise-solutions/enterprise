@@ -3614,6 +3614,19 @@ ibDataQueryResult RamAggregate(const ibQueryRamTable& TC, const ibDataQuerySpec&
 		TO.AddColumn(ibSynthSlotId(ibSynthKind::Aggregate, ai), a.m_alias,
 		             a.m_col != nullptr ? a.m_col->GetTypeDesc() : ibTypeDescription());
 	}
+	// ⭐ …AND WHAT IS COMPUTED BESIDE THE GROUPS — a constant (`7 AS Seven`), read by alias like the aggregates.
+	// The SQL road projects these (ibDbTableProvider::BuildAggregateQuery); this fold left them out, and the column
+	// came back empty without a word. A WINDOW is the server's to compute, and a fold in memory has none to
+	// offer: refused out loud, never an empty column.
+	static const std::vector<ibQueryColumnSelect> kNoComputed;
+	const std::vector<ibQueryColumnSelect>& computed = spec.m_selectExprs != nullptr ? *spec.m_selectExprs : kNoComputed;
+	for (size_t k = 0; k < computed.size(); ++k) {
+		if (computed[k].m_expr && computed[k].m_expr->m_kind == ibQueryColumnExprKind::WindowAgg)
+			ibBackendQueryException::Throw(ibBackendQueryException::Kind::TranslationFailure,
+				wxString::Format(_("'%s' is a window over rows grouped in memory, which cannot compute one"),
+					computed[k].m_alias));
+		TO.AddColumn(ibSynthSlotId(ibSynthKind::Stitch, k), computed[k].m_alias, ibTypeDescription());
+	}
 
 	for (const std::vector<ibValue>& key : keyOrder) {
 		const std::vector<long>& idx = buckets[key];
@@ -3630,6 +3643,13 @@ ibDataQueryResult RamAggregate(const ibQueryRamTable& TC, const ibDataQuerySpec&
 		for (size_t ai = 0; ai < spec.m_aggregates->size(); ++ai)
 			TO.SetCell(r, ibSynthSlotId(ibSynthKind::Aggregate, ai),
 			           AggregateOne((*spec.m_aggregates)[ai], TC, idx));
+		// The same in every row of the group — the first one answers; a group of no rows (an aggregate with no
+		// GROUP BY over nothing) has only a constant to give.
+		for (size_t k = 0; k < computed.size(); ++k) {
+			const ibQueryColumnExpr* e = computed[k].m_expr.get();
+			TO.SetCell(r, ibSynthSlotId(ibSynthKind::Stitch, k), !idx.empty() ? EvalColumnExprRow(e, TC, idx.front())
+				: e != nullptr && e->m_kind == ibQueryColumnExprKind::Const ? e->m_const : ibValue());
+		}
 	}
 
 	// ⭐⭐ ORDER BY OVER THE GROUPS, then TOP — what the SQL road says in one statement (ibDbTableProvider::
@@ -4139,7 +4159,10 @@ ibDataQueryResult ibQueryComposer::ExecuteAggregate(const ibDataQuerySpec& given
 	if (IsSingleSource(spec)) {
 		// Push to server: materialise the computed source into a DB temp table and run the aggregate as
 		// server-side SQL (GROUP BY / SUM(expr) / HAVING over a real table). On any miss -> the RAM fold.
-		if (computedSource) {
+		// Not with something computed beside the groups (a constant, a window): the promotion remaps neither
+		// onto the temp table and drains keys and figures alone — the RAM fold carries them.
+		const bool computedBeside = spec.m_selectExprs != nullptr && !spec.m_selectExprs->empty();
+		if (computedSource && !computedBeside) {
 			std::vector<ibQueryCondition> pConds; std::vector<ibQuerySortItem> pSorts;
 			std::vector<std::pair<const ibBackendQueryColumn*, wxString>> pSelects;
 			std::vector<const ibBackendQueryColumn*>       pGroupBy;
