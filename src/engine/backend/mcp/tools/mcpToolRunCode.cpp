@@ -89,6 +89,8 @@
 #include "backend/debugger/debugClient.h" // …and there has to BE one to ask over
 
 #include "backend/compiler/scriptCheck.h"     // the code is CHECKED here, before anything is sent
+#include "backend/session/session.h"          // ibSession::Current — whose worker the check is handed to
+#include "backend/session/workerPool.h"       // …on the thread that owns what it is checked against
 #include "backend/metadataConfiguration.h"    // activeMetaData - whose configuration it checks against
 #include "backend/system/systemEnum.h"        // ibStatusMessage - the level of what the code said
 
@@ -244,9 +246,42 @@ ibMcpDebugBridge* JobBridge(wxString& refusal)
 //
 // ⭐ SO THE DIAGNOSTICS ARE THE COMPILER'S OWN, with the line and position in them, rather than a
 // sentence this file invents about a failure it did not witness.
+//
+// 🛑 ON THE THREAD THAT OWNS WHAT IT IS CHECKED AGAINST. Before it judges the snippet, ibCheckScript compiles
+// the configuration's module manager — the designer's own, which its code editor uses on the main thread —
+// and this tool runs on an MCP connection's thread (it waits for the application; see NeedsMainThread). Two
+// runs asked at once compiled that one module on two threads: one cleared the bytecode the other was reading,
+// and the designer went down (2026-10-01, a dump with ibByteCode::Reset under ibCheckScript on an httplib
+// worker). So the check is handed to the session's worker — the main loop on the desktop — and waited for;
+// the wait for the APPLICATION that follows stays on this thread, where it has to. Its state is shared, not
+// borrowed from this frame: a check the main thread reaches after we stopped waiting writes into its own.
 bool CheckCode(const wxString& text, wxString& refusal)
 {
-	const std::vector<ibDiagnostic> found = ibCheckScript(text, wxT("JobCode"), activeMetaData);
+	struct ibCheckCall {
+		wxString                  m_text;
+		std::vector<ibDiagnostic> m_found;
+	};
+	auto call = std::make_shared<ibCheckCall>();
+	call->m_text = text;
+	const auto check = [call]() { call->m_found = ibCheckScript(call->m_text, wxT("JobCode"), activeMetaData); };
+
+	ibSession* const session = ibSession::Current();
+	ibWorkerPool* const pool = session != nullptr ? session->GetWorkerPool() : nullptr;
+	if (pool == nullptr)
+		check();
+	else {
+		std::future<void> done = pool->Submit(session, check);
+		// The same five minutes RunTool gives a main-thread call, for the same reason: a modal dialog is a
+		// main loop busy until a person clicks, and a run is better refused than wedged behind it.
+		if (done.wait_for(std::chrono::minutes(5)) != std::future_status::ready) {
+			refusal = ibMcpText("The designer did not get to checking that code within five minutes - it is most "
+				"likely waiting behind a dialog. Nothing was sent.");
+			return false;
+		}
+		done.get();
+	}
+
+	const std::vector<ibDiagnostic>& found = call->m_found;
 	if (found.empty())
 		return true;
 
