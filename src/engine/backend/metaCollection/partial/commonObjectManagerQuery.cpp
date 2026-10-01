@@ -18,7 +18,7 @@
 
 #include "commonObject.h"
 
-#include "backend/appData.h"
+#include "backend/backend_exception.h"   // IsEvalComplete — the caret's walk reads nothing
 #include "backend/session/session.h"
 
 #include "backend/query/dataQueryBuilder.h"   // L3 door — composite-key existence probe, FindBy*
@@ -51,7 +51,10 @@ static ibValue ibFindRefByAttribute(const ibValueMetaObjectRecordDataHierarchyMu
 {
 	if (meta == nullptr)
 		return ibValue();
-	if (attribute == nullptr || value.IsEmpty() || appData->DesignerMode())
+	// The caret's walk for completion reads nothing: it CALLS this to learn what the answer is, and an empty
+	// reference of the type says that without a statement on every keystroke. Asked of the evaluation, not of
+	// the process — the client's editors complete with the same walk (2026-10-01).
+	if (attribute == nullptr || value.IsEmpty() || ibBackendException::IsEvalComplete())
 		return ibValueReferenceDataObject::Create(meta);
 	try {
 		ibDataQueryBuilder q;

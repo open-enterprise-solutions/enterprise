@@ -4,14 +4,15 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "documentManager.h"
-#include "backend/appData.h"
+#include "backend/backend_exception.h"   // IsEvalComplete — the caret's walk reads nothing
 #include "backend/session/session.h"
 #include "backend/metaCollection/attribute/metaAttributeObject.h"
 #include "backend/query/dataQueryBuilder.h"   // L3 door — FindByNumber via Where / WhereCompare
 
 ibValue ibValueManagerDataObjectDocument::FindByNumber(const ibValue& vNumber, const ibValue& vPeriod)
 {
-	if (appData->DesignerMode())
+	// The caret's walk for completion reads nothing — see FindByCode (commonObjectManagerQuery.cpp).
+	if (ibBackendException::IsEvalComplete())
 		return ibValueReferenceDataObject::Create(m_metaObject);
 
 	ibValueMetaObjectAttributePredefined* attributeNumber = m_metaObject->GetDocumentNumber();

@@ -793,7 +793,7 @@ public:
 	ibDataQueryBuilder& Where(const ibBackendQueryColumn* col, const ibValue& value);        // 2-arg = equality (meta column)
 	ibDataQueryBuilder& Where(const ibBackendColumnRawDB& rawColumn, const ibValue& value);         // direct field = value (door owns a copy)
 	ibDataQueryBuilder& WhereLike(const ibBackendQueryColumn* col,
-	                              const ibValue& pattern);                                    // col LIKE pattern (FindByCode/Description)
+	                              const ibValue& pattern);                                    // col LIKE pattern (a lookup that is not exact; the language's LIKE)
 	ibDataQueryBuilder& WhereCompare(const ibBackendQueryColumn* col,
 	                                 ibQueryFilterOp op, const ibValue& value);               // col <op> value (ordered: <=, <, >, >=, LIKE)
 	// A ready-made condition, pushed VERBATIM. The composer re-reads leaves through this door, and a
