@@ -38,10 +38,23 @@ inline wchar_t FoldChar(const wchar_t c)
 //   and a number by its magnitude. This is what replaced GetHashKey(): the container used to render
 //   every non-string key to text and compare the text, which made `1` and "1" the same key. They are
 //   different keys now, and deliberately: the language's own comparison says so everywhere else.
+// A KEY'S TEXT, READ IN PLACE — no count taken on its handle. GetString hands back a counted copy, an atomic
+// increment and decrement, and every insert (its hash) and every walked lookup (two texts a candidate) paid it:
+// a one- or two-field Structure grew a third dearer to build once each insert took its key's hash (CI,
+// 2026-10-01). A string is its own text; anything else that reads as one is built into `held`, as before.
+static const ibString& KeyText(const ibValue& key, ibString& held)
+{
+	if (key.m_typeClass == ibValueTypes::TYPE_STRING)
+		return key.m_sData;
+	held = key.GetString();
+	return held;
+}
+
 size_t ibValueContainer::HashOf(const ibValue& key) const
 {
 	if (m_keyKind == ibKeyKind::Name && key.GetType() == ibValueTypes::TYPE_STRING) {
-		const ibString text = key.GetString();        // the key's text shared, not copied
+		ibString held;
+		const ibString& text = KeyText(key, held);
 		std::uint64_t h = kIbHashBasis;
 		for (const wchar_t* p = text.wc_str(); *p != L'\0'; ++p)
 			h = ibHashCombine(h, FoldChar(*p));
@@ -80,8 +93,9 @@ bool ibValueContainer::KeyMatches(const ibValue& candidate, const ibValue& key) 
 	if (isText != (candidate.GetType() == ibValueTypes::TYPE_STRING))
 		return false;                                        // text never matches a non-text key
 	if (isText) {
-		const ibString candText = candidate.GetString();     // shared, not copied
-		const ibString keyText = key.GetString();
+		ibString heldCand, heldKey;
+		const ibString& candText = KeyText(candidate, heldCand);
+		const ibString& keyText  = KeyText(key, heldKey);
 		return m_keyKind == ibKeyKind::Name ? FoldedEquals(candText, keyText) : candText == keyText;
 	}
 	return candidate.CompareValueLS(key) == 0;
