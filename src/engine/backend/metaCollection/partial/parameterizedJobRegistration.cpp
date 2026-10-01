@@ -199,7 +199,7 @@ bool ibValueMetaObjectParameterizedJob::RegisterRow(const ibGuid& objGuid, bool 
 	//
 	// That is the difference between "not due" and "not there". A registered-but-inactive job is
 	// never picked up by the schedule (ibJobManager::IsDue answers false on m_active), and yet it
-	// is a job the manager knows: RunNow finds it, gives it a session of its own and runs it once,
+	// is a job the manager knows: Execute finds it, gives it a session of its own and runs it once,
 	// out of turn, ignoring both the calendar and the switch. Withdrawing it instead would leave
 	// "Execute" on a switched-off row with nothing to ask — which is exactly what it did.
 	//

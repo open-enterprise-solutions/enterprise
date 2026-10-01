@@ -684,7 +684,7 @@ ibApplicationInstance* ibApplicationInstance::CreateFileAppDataEnv(const ibFileI
 	// existed, before the pool was up, before sys_job was created. WHETHER this base is ours to maintain is the
 	// driver's answer; WHEN to act on it is this sequence's.
 	if (applicationInstance != nullptr && db->IsLocalMaintenanceEligible())
-		ibFirebirdMaintenanceJob::Register();
+		ibFirebirdMaintenanceJob::Register(applicationInstance);
 	return applicationInstance;
 #endif
 }
@@ -783,7 +783,7 @@ ibApplicationInstance* ibApplicationInstance::Open(std::unique_ptr<ibApplication
 		// It was not an old-database problem. A base created from scratch has no sys_job at this
 		// point either, so EVERY first run of enterprise.exe raised "Table unknown SYS_JOB" out
 		// of CreateFileAppDataEnv and never reached a window.
-		ibRegisterPlatformJobs();
+		ibRegisterPlatformJobs(applicationInstance);
 
 		return applicationInstance;
 	}

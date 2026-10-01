@@ -826,12 +826,19 @@ void ibSessionRegistry::NotifyDisconnect(ibSession* s)
 	}
 	// THROUGH THE SESSION THAT IS LEAVING — the listeners take its runtime down and, for the last one out,
 	// close its base's configuration; what they reach they reach through that session (its base), as the
-	// login reached it through the session logging in. The scope survives the listener's own UnbindSession:
-	// it restores whatever this thread had before.
-	ibSessionScope leaving(s);
-	for (const auto& cb : disconnects)
-		if (cb) cb(s);
+	// login reached it through the session logging in.
+	{
+		ibSessionScope leaving(s);
+		for (const auto& cb : disconnects)
+			if (cb) cb(s);
+	}
+	// ⚠ …AND BOUND AGAIN FOR THE LAST ONE OUT. A disconnect listener unbinds the session from every thread
+	// (ibSession::UnbindSession) — this one too, which a scope does not undo until it ends. The last-out
+	// listeners then closed the configuration on a thread that worked for nothing: a scheduled job's
+	// Unregister asked "the current base", the throw left ThreadBody, and Die stopped the process — on
+	// every exit of a configuration that declares a job (census of the registry thread, 2026-10-01).
 	if (fireLast) {
+		ibSessionScope leaving(s);
 		for (const auto& cb : lasts)
 			if (cb) cb();
 	}
@@ -1899,6 +1906,11 @@ void ibSessionRegistry::JobCheckSignal()
 				// Teardown then follows by itself: the owner dies, its holder is released, and that
 				// release IS the Remove. Submitting one here as well would race that path — it stays only
 				// as the fallback for a close that answered "not now".
+				//
+				// ⚠ THROUGH THE SESSION BEING CLOSED, as a disconnect goes through the one leaving: this thread
+				// works for no base, and what the close reaches — the web host's force-exit listener, a session
+				// kind's OnClose — asks its base the ordinary way (census of the registry thread, 2026-10-01).
+				const ibSessionScope closing(target.get());
 				if (!target->Close(true)) {
 					ibRegistryRequest rm;
 					rm.kind    = ibRegistryRequestKind::Remove;

@@ -1052,7 +1052,7 @@ bool ibValueSystemFunction::RunJob(const wxString& strJobName)
 	if (manager == nullptr)
 		return false;
 
-	return manager->RunNow(strJobName);
+	return manager->Execute(strJobName);
 }
 
 #include "backend/system/value/valueArray.h"

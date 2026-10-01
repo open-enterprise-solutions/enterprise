@@ -90,9 +90,9 @@ bool FoldTotals(ibSession* session)
 
 } // namespace
 
-void ibRegisterPlatformJobs()
+void ibRegisterPlatformJobs(ibApplicationInstance* const applicationInstance)
 {
-	ibJobManager* const manager = ibApplicationInstance::GetJobManager();
+	ibJobManager* const manager = ibApplicationInstance::GetJobManager(applicationInstance);
 	if (manager == nullptr)
 		return;   // launcher / pre-bootstrap — no schedule to populate
 

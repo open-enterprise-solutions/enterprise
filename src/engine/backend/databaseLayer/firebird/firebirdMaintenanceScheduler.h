@@ -31,9 +31,10 @@ class ibSession;
 
 class BACKEND_API ibFirebirdMaintenanceJob {
 public:
-	// Put maintenance on the schedule. Idempotent — the manager refuses a
-	// duplicate name, so re-opening a database does not stack up jobs.
-	static void Register();
+	// Put maintenance on the schedule of THIS base — the one that was opened, handed in, never "the current
+	// one": the application server opens its bases one after another on one thread. Idempotent — the
+	// manager refuses a duplicate name, so re-opening a database does not stack up jobs.
+	static void Register(class ibApplicationInstance* applicationInstance);
 
 	// The two bodies, one per cadence. Each does its pass unconditionally: WHEN it is due is the
 	// schedule's question, answered before either is called — the job's interval and window, plus

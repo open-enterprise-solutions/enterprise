@@ -29,9 +29,9 @@ static constexpr int kBackupWindowStart  = 2;               // 02:00 local
 static constexpr int kBackupWindowEnd    = 5;               // 05:00 local
 static constexpr int kBackupEveryDays    = 7;
 
-void ibFirebirdMaintenanceJob::Register()
+void ibFirebirdMaintenanceJob::Register(ibApplicationInstance* const applicationInstance)
 {
-	ibJobManager* const jobs = ibApplicationInstance::GetJobManager();
+	ibJobManager* const jobs = ibApplicationInstance::GetJobManager(applicationInstance);
 	if (jobs == nullptr)
 		return;
 

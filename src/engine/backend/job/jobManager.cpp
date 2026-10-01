@@ -125,7 +125,7 @@ bool ibJobManager::IsDue(const ibJobEntry& e, std::chrono::steady_clock::time_po
 	// What protects a plain cadence ("every six hours", no time of day) from firing on every launch
 	// is that its calendar allows any moment, so the interval from registration is the whole answer.
 	// SWITCHED OFF is not "not due yet" — it is "not on the schedule at all". The entry stays
-	// registered and stays in the list, and RunNow still runs it by hand: turning a job off must
+	// registered and stays in the list, and Execute still runs it by hand: turning a job off must
 	// not also take away the ability to fire it once and watch what happens.
 	if (!e.m_desc.m_active)
 		return false;
@@ -864,7 +864,7 @@ int ibJobManager::Tick()
 	return started;
 }
 
-bool ibJobManager::RunNow(const wxString& name)
+bool ibJobManager::Execute(const wxString& name)
 {
 	// DECIDE UNDER THE LOCK, RUN OUTSIDE IT — the same division Tick makes, and for the same
 	// reason: Launch creates a session, and creating one waits on the registry and takes a
