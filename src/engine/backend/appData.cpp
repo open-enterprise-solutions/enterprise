@@ -284,27 +284,6 @@ ibApplicationInstance::ibApplicationInstance(ibApplicationHost* host, ibRunMode 
 	m_settingsStorage(std::unique_ptr<ibSettingsStorage>(new ibSettingsStorage(ib::AppDataCtorToken{ this }))),
 	m_dbMode(ibDatabaseMode::eNONE)
 {
-	// Pick the session access mode from runMode — every Single-session
-	// app (enterprise/designer/appserver/codeRunner) gets
-	// Single, the web server (wes) gets Server (per-tab + system fallback).
-	// Apps no longer need to call SetAccessMode themselves.
-	//
-	// Drive THIS base's registry directly — ibSession::SetAccessMode asks the
-	// current base's, and this base is not yet anybody's current one.
-	switch (runMode) {
-	case eWEB_RUNTIME_MODE:
-		m_sessionRegistry->SetAccessMode(ibSession::AccessMode::Shared);
-		// (The worker pool is the process's, sized for this mode by ibApplicationHost.)
-		break;
-	case eLAUNCHER_MODE:
-		// Launcher has no session — leave default; Current() returns
-		// nullptr until something explicitly binds.
-		break;
-	default:
-		m_sessionRegistry->SetAccessMode(ibSession::AccessMode::Single);
-		break;
-	}
-
 	// (Plugins are the PROCESS's — loaded once by ibApplicationHost, not per base.)
 
 	// Wire session-lifecycle event listeners — drives metadata load on
@@ -393,22 +372,24 @@ void ibApplicationInstance::WireSessionEvents()
 			}
 		} catch (...) {}
 		ibSession::BindSessionToThread(s, std::this_thread::get_id());
+		// ⭐ THE PROCESS'S OWN SESSION IN THIS BASE — of the kind the process runs as: the designer's window,
+		// the client's window, the application server's login, the web server's technical row. Not a job's
+		// and not a visitor's tab, which are let in through this same door and used to take what follows by
+		// being FIRST: the job manager starts with the base, before anybody logs in, so a scheduled job due at
+		// start made its run-as user what every unbound thread answered with, and a job under a user with
+		// settings of their own re-pointed the running MCP server at that user's token (census, 2026-10-01).
+		const bool ownSession = s->GetKind() == SessionKindFromRunMode(m_runMode);
 		auto* registry = m_sessionRegistry.get();
-		if (registry && registry->GetFallback() == nullptr) {
-			// The first authenticated session becomes what an UNBOUND thread
-			// resolves to. No longer gated on Shared mode: identity resolution is
-			// now one rule everywhere (ibSession::Current), and a desktop process
-			// stopped having a single session the moment jobs and readers took
-			// their own. On the desktop this fallback IS the window's session —
-			// the same answer the old "hand back the lone map entry" gave, minus
-			// the part where it stopped being lone.
+		if (ownSession && registry && registry->GetFallback() == nullptr) {
+			// What an UNBOUND thread resolves to (ibSession::Current — one rule everywhere). On the desktop
+			// this IS the window's session, the answer the old "hand back the lone map entry" gave.
 			registry->SetFallback(s);
 		}
 		// A PERSON'S OWN MCP SERVER, read the moment they are let in — the
 		// settings are keyed by user, so opening the designer is when "whose
 		// server is this" gets its answer. Nothing saved yet is a cold start,
 		// not a failure: the defaults stand, and the defaults are off.
-		if (m_mcpServer) m_mcpServer->LoadSettings(s);
+		if (ownSession && m_mcpServer) m_mcpServer->LoadSettings(s);
 
 		// Enable per-session debug context iff this process was started
 		// with --debug. Marks the session as debugged so ibProcUnit's

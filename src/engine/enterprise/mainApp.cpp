@@ -258,8 +258,7 @@ int ibAppEnterprise::DoOnRun()
 		? _app_start_create_debug_server_flag
 		: _app_start_default_flag;
 
-	// AccessMode was set by appData's ctor based on runMode. Registry
-	// listeners (wired in appData ctor) handle BindSessionToThread,
+	// Registry listeners (wired in appData ctor) handle BindSessionToThread,
 	// LoadMetadata, CreateRoot + CompileRoot + AttachRuntime
 	// through OnFirstConnect / OnAuthenticated.
 	// The holder lives on this stack frame until it is handed to the main

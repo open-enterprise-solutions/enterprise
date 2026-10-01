@@ -1086,40 +1086,10 @@ ibSession* ibSession::Current()
 	//
 	// The fix is not a better Single; it is not having one. A thread that bound
 	// itself means it (that is the whole point of ibSessionScope, asked at the top
-	// of this function), and a thread that did not gets the process's fallback —
-	// the first authenticated session, which on a desktop IS the lone session the
-	// old branch was reaching for. The access mode still sizes the worker pool; it
-	// no longer decides identity.
+	// of this function), and a thread that did not gets the base's fallback — the
+	// process's own session there, which on a desktop IS the lone session the old
+	// branch was reaching for (never a job's: see OnAuthenticated in appData.cpp).
 	return reg.GetFallback();
-}
-
-void ibSession::SetAccessMode(AccessMode mode)
-{
-	// Static config setter — set once at process start by appData's ctor.
-	// Null registry means we're outside the appData lifetime; ignore.
-	if (auto* reg = ibApplicationInstance::GetSessionRegistry())
-		reg->SetAccessMode(mode);
-}
-
-ibSession::AccessMode ibSession::GetAccessMode()
-{
-	// Default to Single if no registry — the most conservative fallback
-	// (one session per process). Pre-appData / post-appData readers see
-	// a sane value instead of faulting.
-	auto* reg = ibApplicationInstance::GetSessionRegistry();
-	return reg != nullptr ? reg->GetAccessMode() : AccessMode::Single;
-}
-
-void ibSession::SetFallback(ibSession* s)
-{
-	if (auto* reg = ibApplicationInstance::GetSessionRegistry())
-		reg->SetFallback(s);
-}
-
-void ibSession::ClearFallback()
-{
-	if (auto* reg = ibApplicationInstance::GetSessionRegistry())
-		reg->ClearFallback();
 }
 
 ibSession* ibSession::GetByThread(std::thread::id tid)

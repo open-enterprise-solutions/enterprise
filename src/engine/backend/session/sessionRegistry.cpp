@@ -241,14 +241,12 @@ ibSessionHolder ibSessionRegistry::CreateSessionWithFactory(ibRunMode runMode,
 
 	// Anonymous-phase Connect — registry INSERTs a row with userName=''
 	// immediately so peers (Active Users UI, designer-exclusive policy)
-	// see "someone is logging in". Session kind is explicit: wes's own
-	// technical session is WebServer; desktop modes default via runMode.
+	// see "someone is logging in". The kind is the process's own (wes's
+	// is its technical WebServer row).
 	ibConnectRequest req;
 	req.m_computer       = computer;
 	req.m_appMode        = runMode;
-	req.m_kind           = (runMode == eWEB_RUNTIME_MODE)
-	                         ? ibSessionKind::WebServer
-	                         : SessionKindFromRunMode(runMode);
+	req.m_kind           = SessionKindFromRunMode(runMode);
 	req.m_sessionFactory = std::move(factory);
 
 	auto result = Connect(req);
@@ -844,35 +842,23 @@ void ibSessionRegistry::NotifyDisconnect(ibSession* s)
 	}
 }
 
-// --- Access mode + fallback ---------------------------------------------
-
-void ibSessionRegistry::SetAccessMode(ibSession::AccessMode mode)
-{
-	std::unique_lock<std::shared_mutex> lk(m_accessMutex);
-	m_accessMode = mode;
-}
-
-ibSession::AccessMode ibSessionRegistry::GetAccessMode() const
-{
-	std::shared_lock<std::shared_mutex> lk(m_accessMutex);
-	return m_accessMode;
-}
+// --- Fallback -------------------------------------------------------------
 
 void ibSessionRegistry::SetFallback(ibSession* s)
 {
-	std::unique_lock<std::shared_mutex> lk(m_accessMutex);
+	std::unique_lock<std::shared_mutex> lk(m_fallbackMutex);
 	m_fallback = s ? s->weak_from_this() : std::weak_ptr<ibSession>{};
 }
 
 void ibSessionRegistry::ClearFallback()
 {
-	std::unique_lock<std::shared_mutex> lk(m_accessMutex);
+	std::unique_lock<std::shared_mutex> lk(m_fallbackMutex);
 	m_fallback.reset();
 }
 
 ibSession* ibSessionRegistry::GetFallback() const
 {
-	std::shared_lock<std::shared_mutex> lk(m_accessMutex);
+	std::shared_lock<std::shared_mutex> lk(m_fallbackMutex);
 	return m_fallback.lock().get();
 }
 

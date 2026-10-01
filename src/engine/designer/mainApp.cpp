@@ -225,8 +225,7 @@ int ibAppDesigner::DoOnRun()
 	//   4. Show — Designer kind → EnsureRuntime no-op; AllowRun passes
 	//      unconditionally (no session scripts here).
 
-	// AccessMode was set by appData's ctor based on runMode. Registry
-	// listeners (wired in appData ctor) handle BindSessionToThread,
+	// Registry listeners (wired in appData ctor) handle BindSessionToThread,
 	// LoadMetadata, CreateRoot + CompileRoot through OnFirstConnect /
 	// OnAuthenticated — nothing to compose here.
 	// Holder on the stack until the designer window takes it — see

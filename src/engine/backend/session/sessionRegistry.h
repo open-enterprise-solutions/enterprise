@@ -181,7 +181,7 @@ public:
 	// Reverse lookup — the session in m_own whose root module-manager
 	// equals `mm`. Used by mm::CreateMainModule to recover its owning
 	// session deterministically (without going through ibSession::Current()
-	// which depends on AccessMode + thread-binding state).
+	// which depends on the thread-binding state).
 	ibSessionWatch FindSessionByRoot(ibValueModuleManagerRuntimeConfiguration* mm) const;
 
 	// Symmetric lookup by main-window pointer. The frame's own back-link
@@ -448,20 +448,10 @@ public:
 	// Idempotent — second call is a no-op.
 	void EnableDebugForSession(ibSession* s);
 
-	// ---- Session access mode + fallback ----
-	// Process-wide flag describing how ibSession::Current() resolves the
-	// active session. Owned by registry because it's session-population
-	// policy: Single-mode app has 1 session and resolution is constant;
-	// Client-mode runs N concurrent sessions strictly per-thread; Server-
-	// mode is per-thread with a process-wide fallback. Mode is set by
-	// ibApplicationInstance ctor based on runMode and persists for the
-	// process lifetime. ibSession::Current() reads through here.
-	void                SetAccessMode(ibSession::AccessMode mode);
-	ibSession::AccessMode GetAccessMode() const;
-
-	// Shared-mode fallback session — returned by Current() when calling
-	// thread is unbound. No-op in Single mode (which ignores the calling
-	// thread entirely).
+	// ---- Fallback session ----
+	// Returned by Current() when the calling thread is unbound. The
+	// process's own session in this base, set and cleared by the base's
+	// Authenticated / Disconnect listeners and nobody else.
 	void       SetFallback(ibSession* s);
 	void       ClearFallback();
 	ibSession* GetFallback() const;
@@ -639,11 +629,9 @@ private:
 	// (no need for extra locking — only ThreadBody touches on Add).
 	std::vector<std::unique_ptr<ibSessionPolicy>>                m_policies;
 
-	// Process-wide access mode + Shared-mode fallback. Set once at app
-	// startup (see SetAccessMode); read-only afterwards under shared lock
-	// from ibSession::Current.
-	mutable std::shared_mutex                                    m_accessMutex;
-	ibSession::AccessMode                                        m_accessMode = ibSession::AccessMode::Single;
+	// The fallback — written when the process's own session comes and goes,
+	// read under the shared lock from ibSession::Current.
+	mutable std::shared_mutex                                    m_fallbackMutex;
 	// weak_ptr (not raw) so a destroyed fallback session expires harmlessly
 	// instead of leaving a dangling pointer. GetFallback locks under shared
 	// lock and returns nullptr on expiry.

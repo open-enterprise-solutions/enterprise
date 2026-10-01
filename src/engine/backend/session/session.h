@@ -86,9 +86,9 @@ enum class ibAuthState : int {
 // it sessions come in two flavours:
 //   WebServer  — the process's own technical sys_session row
 //   WebClient  — per-tab / per-API-caller connections
-// Desktop binaries populate their corresponding session kind directly;
-// SessionKindFromRunMode is the default for unambiguous cases and
-// returns WebClient for eWEB_RUNTIME_MODE (the common per-tab case).
+// SessionKindFromRunMode answers the kind of the process's OWN session
+// (WebServer for the web run mode); a per-tab WebClient is always made
+// with its kind said explicitly.
 // ------------------------------------------------------------------
 enum class ibSessionKind : int {
 	Launcher   = eLAUNCHER_MODE,       // 1
@@ -130,11 +130,11 @@ inline bool IsJobSessionKind(ibSessionKind k) {
 	    || k == ibSessionKind::SystemJob;
 }
 
+// THE KIND OF THE SESSION A PROCESS RUNS AS — the one it logs in with (ibApplicationInstance::CreateSession),
+// and the one a base asks about when it decides what only that session gets (its fallback, its MCP settings).
+// The web run mode's own session is the server's technical row; its tabs are made as WebClient by name.
 inline ibSessionKind SessionKindFromRunMode(ibRunMode m) {
-	// Web run mode is ambiguous at this layer — default to WebClient
-	// (the per-tab common case). Callers that need WebServer set the
-	// kind explicitly (see ibSessionRegistry::CreateSessionWithFactory).
-	if (m == eWEB_RUNTIME_MODE) return ibSessionKind::WebClient;
+	if (m == eWEB_RUNTIME_MODE) return ibSessionKind::WebServer;
 	return static_cast<ibSessionKind>(m);
 }
 
@@ -685,27 +685,9 @@ public:
 	// explains itself by the user having asked for it).
 	void SetReason(const wxString& reason);
 
-	// Access mode — set once by the application at startup, before any
-	// session is created.
-	//
-	//   Single — the process runs exactly one session for its entire life
-	//            (designer.exe, enterprise.exe, appserver.exe, codeRunner.exe). Current() returns the lone session
-	//            regardless of the calling thread; bindings are recorded
-	//            for diagnostics but lookup ignores them.
-	//
-	//   Shared — per-thread lookup with a process-wide fallback.
-	//            wenterprise-server.exe — workers serving a tab register
-	//            their session under their thread id; the wes process's
-	//            own system session is registered via SetFallback and
-	//            served to any thread that isn't a tab worker (registry
-	//            consumer, signal handlers, etc.).
-	enum class AccessMode { Single, Shared };
-
-	static void       SetAccessMode(AccessMode mode);
-	static AccessMode GetAccessMode();
-
-	// Canonical "session this code is currently working on". Lookup
-	// strategy depends on AccessMode (see above).
+	// Canonical "session this code is currently working on": the calling
+	// thread's own binding, else its base's fallback — the process's own
+	// session there (set by the base when that session is let in).
 	static ibSession* Current();
 
 	// Current() as far as the thread ALREADY KNOWS it — its own copy of its binding while no binding has
@@ -713,14 +695,8 @@ public:
 	// run under anybody's locks, the journal above all. Everything else asks Current().
 	static ibSession* CurrentCached() noexcept;
 
-	// Shared-mode fallback — session returned by Current() when the
-	// calling thread isn't bound. Effective only when AccessMode == Shared.
-	static void SetFallback(ibSession* s);
-	static void ClearFallback();
-
 	// Diagnostic — given a thread id, what session is currently scoped on
-	// that thread? In Single mode returns the lone session; in Multi mode
-	// returns the bound session or the fallback.
+	// that thread? The same rule as Current(): its binding, else the fallback.
 	static ibSession* GetByThread(std::thread::id tid);
 
 	// Explicit bind — pin a session under an arbitrary thread id without
