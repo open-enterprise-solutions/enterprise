@@ -17,12 +17,34 @@
 
 #include "frontend/docView/docView.h"        // ibDocument / ibView / ibDocManager
 
+#include <functional>
+
 namespace {
 
 // A view is abstract only on OnDraw — a trivial concrete view closes it.
 class ibTestView : public ibView {
 public:
 	void OnDraw(wxDC* /*dc*/) override {}
+};
+
+// A view that counts the updates it receives and then runs a callback owned by the TEST, not by
+// the view. The callback often deletes this very view (or its document), so nothing here may touch
+// a member after it returns — and the callback object must not live inside the view either.
+class ibCountingView : public ibView {
+public:
+	explicit ibCountingView(int* counter, std::function<void()>* onUpdate = nullptr)
+		: m_counter(counter), m_onUpdate(onUpdate) {}
+
+	void OnDraw(wxDC* /*dc*/) override {}
+	void OnUpdate(ibView* /*sender*/, wxObject* /*hint*/) override {
+		++*m_counter;
+		if (m_onUpdate != nullptr && *m_onUpdate)
+			(*m_onUpdate)();
+	}
+
+private:
+	int* m_counter;
+	std::function<void()>* m_onUpdate;
 };
 
 // Light fixture: GUI wxApp only. No appData env — the doc/view framework needs
@@ -128,4 +150,246 @@ TEST_F(DocViewFix, DocManagerTracksDocuments)
 	// d1/d2 intentionally not deleted — the manager's teardown owns document
 	// lifetime; a manual delete risks a double-free. Leaking two docs in a
 	// short-lived test process is harmless.
+}
+
+// ---------------------------------------------------------------------------
+// Lifetime of a document that is torn down while it is being walked or while
+// its children are still alive (designer crash in ibDocument::UpdateAllViews,
+// reached from ibMetaTreeBase::NotifyDocuments — issue #153).
+// ---------------------------------------------------------------------------
+
+// A parent that goes first must not leave its children pointing at freed memory: the child's
+// GetDocumentManager() asks its parent (a virtual call), and ~ibView calls that, and the child's own
+// destructor writes into the parent's list. After the parent is gone the child is a plain top-level
+// document.
+TEST_F(DocViewFix, Destructor_ParentDeletedFirst_ChildBecomesTopLevel)
+{
+	if (!ready) GTEST_SKIP();
+
+	ibDocument* parent = new ibDocument();
+	ibDocument* first  = new ibDocument(parent);
+	ibDocument* second = new ibDocument(parent);
+	ASSERT_TRUE(first->IsChildDocument());
+
+	delete parent;
+
+	EXPECT_FALSE(first->IsChildDocument())  << "the parent is gone, so it is nobody's child";
+	EXPECT_FALSE(second->IsChildDocument());
+	// A parentless document without a template answers with the global manager; a child still
+	// holding its freed parent would have called into it instead.
+	EXPECT_EQ(first->GetDocumentManager(), ibDocManager::GetDocumentManager())
+		<< "must not ask the freed parent";
+
+	// Both children are still deletable — this used to write into the freed parent's child list.
+	delete first;
+	delete second;
+}
+
+// The child that goes first still leaves the parent's list — the pre-existing contract the orphan
+// handling above must not break.
+TEST_F(DocViewFix, Destructor_ChildDeletedFirst_ParentKeepsTheRest)
+{
+	if (!ready) GTEST_SKIP();
+
+	int updates = 0;
+	ibDocument parent;
+	ibDocument* gone = new ibDocument(&parent);
+	ibDocument* kept = new ibDocument(&parent);
+	ibCountingView* keptView = new ibCountingView(&updates);
+	keptView->SetDocument(kept);
+
+	delete gone;
+	parent.UpdateAllViews();
+
+	EXPECT_EQ(updates, 1) << "the surviving child is still reached through the parent";
+
+	keptView->SetDocument(nullptr);
+	delete keptView;
+	delete kept;
+}
+
+// Every view of the document is notified once, and the sender is skipped.
+TEST_F(DocViewFix, UpdateAllViews_TwoViews_EachNotifiedOnceSenderSkipped)
+{
+	if (!ready) GTEST_SKIP();
+
+	int firstCount = 0, secondCount = 0;
+	ibDocument* doc = new ibDocument();
+	ibCountingView* first  = new ibCountingView(&firstCount);
+	ibCountingView* second = new ibCountingView(&secondCount);
+	first->SetDocument(doc);
+	second->SetDocument(doc);
+
+	doc->UpdateAllViews();
+	EXPECT_EQ(firstCount, 1);
+	EXPECT_EQ(secondCount, 1);
+
+	doc->UpdateAllViews(first);
+	EXPECT_EQ(firstCount, 1)  << "the sender is not told about its own change";
+	EXPECT_EQ(secondCount, 2);
+
+	first->SetDocument(nullptr);
+	second->SetDocument(nullptr);
+	delete first;
+	delete second;
+	delete doc;
+}
+
+// Children get the same update as their parent, all of them.
+TEST_F(DocViewFix, UpdateAllViews_ChildDocuments_ReceiveTheUpdate)
+{
+	if (!ready) GTEST_SKIP();
+
+	int parentCount = 0, childCount = 0;
+	ibDocument parent;
+	ibDocument child(&parent);
+	ibCountingView parentView(&parentCount);
+	ibCountingView childView(&childCount);
+	parentView.SetDocument(&parent);
+	childView.SetDocument(&child);
+
+	parent.UpdateAllViews();
+
+	EXPECT_EQ(parentCount, 1);
+	EXPECT_EQ(childCount, 1);
+
+	parentView.SetDocument(nullptr);
+	childView.SetDocument(nullptr);
+}
+
+// A view that closes itself as its answer to the update: the walk must go on to the next view and
+// must not read the node of the view that was just destroyed.
+TEST_F(DocViewFix, UpdateAllViews_ViewDeletesItself_RestStillNotified)
+{
+	if (!ready) GTEST_SKIP();
+
+	int firstCount = 0, secondCount = 0;
+	ibDocument* doc = new ibDocument();
+
+	ibCountingView* first = nullptr;
+	std::function<void()> closeFirst = [&first]() { delete first; first = nullptr; };
+	first = new ibCountingView(&firstCount, &closeFirst);
+	ibCountingView* second = new ibCountingView(&secondCount);
+	first->SetDocument(doc);
+	second->SetDocument(doc);
+
+	doc->UpdateAllViews();
+
+	EXPECT_EQ(firstCount, 1);
+	EXPECT_EQ(secondCount, 1) << "the walk survived the first view leaving";
+	EXPECT_EQ(doc->GetViewsVector().size(), 1u);
+
+	second->SetDocument(nullptr);
+	delete second;
+	delete doc;
+}
+
+// A view that removes ANOTHER view before that view's turn: the removed one must not be notified.
+TEST_F(DocViewFix, UpdateAllViews_LaterViewRemovedMeanwhile_NotNotified)
+{
+	if (!ready) GTEST_SKIP();
+
+	int firstCount = 0, secondCount = 0, thirdCount = 0;
+	ibDocument* doc = new ibDocument();
+
+	ibCountingView* second = nullptr;
+	std::function<void()> dropSecond = [&second]() { delete second; second = nullptr; };
+	ibCountingView* first = new ibCountingView(&firstCount, &dropSecond);
+	second = new ibCountingView(&secondCount);
+	ibCountingView* third = new ibCountingView(&thirdCount);
+	first->SetDocument(doc);
+	second->SetDocument(doc);
+	third->SetDocument(doc);
+
+	doc->UpdateAllViews();
+
+	EXPECT_EQ(firstCount, 1);
+	EXPECT_EQ(secondCount, 0) << "it was gone before its turn";
+	EXPECT_EQ(thirdCount, 1);
+
+	first->SetDocument(nullptr);
+	third->SetDocument(nullptr);
+	delete first;
+	delete third;
+	delete doc;
+}
+
+// A child document that is deleted while the parent walks its children: the ones after it are
+// still notified, and the deleted one is not.
+TEST_F(DocViewFix, UpdateAllViews_ChildDeletedMeanwhile_RestOfChildrenNotified)
+{
+	if (!ready) GTEST_SKIP();
+
+	int firstCount = 0, secondCount = 0, thirdCount = 0;
+	ibDocument parent;
+	ibDocument* first  = new ibDocument(&parent);
+	ibDocument* second = new ibDocument(&parent);
+	ibDocument* third  = new ibDocument(&parent);
+
+	ibCountingView* secondView = new ibCountingView(&secondCount);
+	// The first child's view deletes the SECOND child: its last view leaves, so the document goes.
+	std::function<void()> dropSecond = [&]() {
+		secondView->SetDocument(nullptr);
+		second->RemoveView(secondView);   // detaches; empties the list -> deletes `second`
+		second = nullptr;
+	};
+	ibCountingView* firstView = new ibCountingView(&firstCount, &dropSecond);
+	ibCountingView* thirdView = new ibCountingView(&thirdCount);
+	firstView->SetDocument(first);
+	secondView->SetDocument(second);
+	thirdView->SetDocument(third);
+
+	parent.UpdateAllViews();
+
+	EXPECT_EQ(firstCount, 1);
+	EXPECT_EQ(secondCount, 0) << "the document was deleted before its turn";
+	EXPECT_EQ(thirdCount, 1)  << "the walk went on past the deleted child";
+
+	firstView->SetDocument(nullptr);
+	thirdView->SetDocument(nullptr);
+	delete firstView;
+	delete secondView;
+	delete thirdView;
+	delete first;
+	delete third;
+}
+
+// The strongest case: an update deletes the document that is being walked (its last view leaves).
+// Nothing after that point may touch the document — not its view list, not its children.
+TEST_F(DocViewFix, UpdateAllViews_DocumentDeletedByItsView_WalkStops)
+{
+	if (!ready) GTEST_SKIP();
+
+	int firstCount = 0, secondCount = 0, childCount = 0;
+	ibDocument* doc = new ibDocument();
+	ibDocument* child = new ibDocument(doc);
+	ibCountingView* childView = new ibCountingView(&childCount);
+	childView->SetDocument(child);
+
+	ibCountingView* second = new ibCountingView(&secondCount);
+	ibCountingView* first = nullptr;
+	// Both views leave; the document goes with the last one.
+	std::function<void()> closeAll = [&]() {
+		doc->RemoveView(second);
+		doc->RemoveView(first);
+		doc = nullptr;
+	};
+	first = new ibCountingView(&firstCount, &closeAll);
+	first->SetDocument(doc);
+	second->SetDocument(doc);
+
+	doc->UpdateAllViews();
+
+	EXPECT_EQ(firstCount, 1);
+	EXPECT_EQ(secondCount, 0) << "removed before its turn";
+	EXPECT_EQ(childCount, 0)  << "a deleted parent does not fan the update out any more";
+	EXPECT_FALSE(child->IsChildDocument()) << "and its child was let go, not left dangling";
+
+	first->SetDocument(nullptr);
+	second->SetDocument(nullptr);
+	childView->SetDocument(nullptr);
+	delete first;
+	delete second;
+	delete childView;
+	delete child;
 }
