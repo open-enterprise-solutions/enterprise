@@ -296,7 +296,7 @@ void ibDocManager::RegisterDefaultTemplates()
 
 	// Text / Spreadsheet / Help — meta-bound templates keyed by CLSID.
 	AddDocTemplate(g_metaModuleCLSID,
-		_("Text document"), wxT("*.txt;*.text"), wxT("txt;text"),
+		_("Text document"), ibTextFileDocument::FileMask(), ibTextFileDocument::FileExtensions(),
 		_("Text Doc"), _("Text View"),
 		CLASSINFO(ibTextFileDocument), CLASSINFO(ibTextEditView),
 		ibTEMPLATE_VISIBLE);

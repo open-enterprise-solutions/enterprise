@@ -1,5 +1,6 @@
 #include "docViewText.h"
 #include "frontend/mainFrame/mainFrame.h"
+#include "wx/filedlg.h"   // wxFileSelector - the text box's own Save as
 
 // ----------------------------------------------------------------------------
 // ibTextEditView implementation
@@ -148,17 +149,28 @@ bool ibTextFileDocument::DoOpenDocument(const wxString& filename)
 // ibTextBoxDocument / View: the document a form's text box holds, and its view
 // ----------------------------------------------------------------------------
 
-#include "frontend/docView/docManager.h"   // full ibDocTemplate type
-
 wxIMPLEMENT_DYNAMIC_CLASS(ibTextBoxDocument, ibTextFileDocument);
 wxIMPLEMENT_DYNAMIC_CLASS(ibTextBoxView, ibTextEditView);
 
 ibTextBoxDocument::ibTextBoxDocument() : ibTextFileDocument()
 {
-	// The text document's template: Save as reads the format from it.
-	if (docManager != nullptr)
-		SetDocumentTemplate(docManager->FindTemplateByDocClassInfo(CLASSINFO(ibTextFileDocument)));
 	SetTitle(_("Text document"));
+}
+
+bool ibTextBoxDocument::SaveAs()
+{
+	const wxString fileName = wxFileSelector(_("Save As"),
+		wxEmptyString,
+		wxFileNameFromPath(GetFilename()),
+		wxEmptyString,
+		GetSaveFilter(),
+		wxFD_SAVE | wxFD_OVERWRITE_PROMPT,
+		GetDocumentWindow());
+
+	if (fileName.empty())
+		return false; // cancelled by user
+
+	return DoSaveDocument(fileName);
 }
 
 bool ibTextBoxView::OnCreate(ibDocument* doc, long flags)

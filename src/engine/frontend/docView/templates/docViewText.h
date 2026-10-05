@@ -76,6 +76,12 @@ public:
 	
 	ibTextFileDocument() : ibTextDocument(), m_loadFromFile(false) {}
 
+	// THE TEXT FORMAT, said once: the text template is registered with it (ibDocManager::RegisterDefaultTemplates),
+	// and a text document made from no template saves by it — the way a spreadsheet answers its formats.
+	static wxString FileMask() { return wxT("*.txt;*.text"); }
+	static wxString FileExtensions() { return wxT("txt;text"); }
+	virtual wxString GetSaveFilter() const override { return _("Text document") + wxT(" (") + FileMask() + wxT(")|") + FileMask(); }
+
 	virtual bool OnCreate(const wxString& path, long flags) override;
 	virtual bool OnNewDocument() override {
 
@@ -118,6 +124,9 @@ class FRONTEND_API ibTextBoxDocument : public ibTextFileDocument {
 public:
 
 	ibTextBoxDocument();
+
+	// Save as of its own, by its own formats — the grid box document says why (docViewSpreadsheet.h).
+	virtual bool SaveAs() override;
 
 	// The box holds this document, not its views — none of them going takes it along.
 	virtual void OnChangedViewList() override {}

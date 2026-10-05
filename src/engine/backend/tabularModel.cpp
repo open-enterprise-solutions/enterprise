@@ -151,6 +151,10 @@ ibValueModel::~ibValueModel()
 	//
 	// Cheap in the ordinary case: by the time a form closes its portion has long
 	// since landed, and a run that has finished returns from Wait immediately.
+	//
+	// ⚠ AND HERE IS TOO LATE FOR WHAT A SUBCLASS OWNS: a base destructor runs after the derived
+	// parts are gone, so a model whose read walks its own members waits in its OWN destructor
+	// (ibValueDynamicList, ibValueDataComposition). This one is the last line for the rest.
 	CancelFetch();
 
 	// The RAM node storage (ibRamValueStorage) is a member of ibValueModelStorage — its dtor DecRefs the nodes; the

@@ -150,7 +150,12 @@ ibValueDynamicList::ibValueDynamicList(const ibBackendQueryable* queryable, ibDy
 		SetSourceQueryable(queryable);   // null → set later via SetSource
 }
 
-ibValueDynamicList::~ibValueDynamicList() {}
+// 🛑 THE READ IS WAITED OUT BEFORE THE LIST GOES — here, in the class whose parts it walks, as the
+// composition does. The run reads this list's composer (ibValueModelCursor::m_composer) and asks this
+// list's own overrides; the base destructor waited too, but by then both were gone: a form closed on a
+// list still grouping a million rows, the read heard the cancel, and its catch put the grouping back
+// into a destroyed composer (2026-10-03/05, "front() called on empty vector" in PutGroups).
+ibValueDynamicList::~ibValueDynamicList() { CancelFetch(); }
 
 // --- source (the list starts empty) ----------------------------------------
 
