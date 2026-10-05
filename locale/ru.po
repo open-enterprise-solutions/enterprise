@@ -1028,12 +1028,15 @@ msgstr "Не удалось прочитать содержимое значен
 msgid "there is no runtime in this process to evaluate against"
 msgstr "в этом процессе нет среды выполнения, в которой можно вычислить выражение"
 
-#: src/engine/backend/composition/compositionTheme.cpp:15
 #: src/engine/backend/system/value/valueDataComposition.cpp:419
 msgid "Main"
 msgstr "Основная"
 
-#: src/engine/backend/composition/compositionTheme.cpp:23
+#: src/engine/backend/composition/compositionTheme.cpp:14
+msgid "Meadow"
+msgstr "Луг"
+
+#: src/engine/backend/composition/compositionTheme.cpp:22
 msgid "Neutral"
 msgstr "Нейтральная"
 

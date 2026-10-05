@@ -1005,12 +1005,15 @@ msgstr ""
 msgid "there is no runtime in this process to evaluate against"
 msgstr ""
 
-#: src/engine/backend/composition/compositionTheme.cpp:15
 #: src/engine/backend/system/value/valueDataComposition.cpp:419
 msgid "Main"
 msgstr ""
 
-#: src/engine/backend/composition/compositionTheme.cpp:23
+#: src/engine/backend/composition/compositionTheme.cpp:14
+msgid "Meadow"
+msgstr ""
+
+#: src/engine/backend/composition/compositionTheme.cpp:22
 msgid "Neutral"
 msgstr ""
 
