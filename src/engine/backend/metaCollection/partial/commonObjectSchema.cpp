@@ -18,32 +18,40 @@
 #include "backend/query/columnLayout.h"                           // ibOwnerRefColumn / ibFieldSuffix - the scaffold + field names
 #include "backend/query/schemaSnapshot.h"                         // ibSchemaSnapshot / ibSchemaTable - what a declaration is
 
+#include <algorithm>   // std::find - an attribute that is itself one of the list order's columns
+
 // (SnapshotOf removed: building a snapshot is just `common->ContributeTables(snap)` — the metadata side
 //  does it directly where it drives the builder, keeping the builder itself config-agnostic.)
 
 namespace {
 // One secondary DB index per indexed attribute. Index -> the attribute alone; IndexWithAdditionalOrder ->
-// the attribute plus the row reference, so ordered list browsing reads its order straight off the index.
-// Non-unique — an attribute value repeats. Named <table>_<attrId>_IX (metaID key: stable and short). A
-// register has no single row reference, so its caller passes orderRef = nullptr and the ordered variant
-// degrades to a plain index there.
+// the attribute plus the ORDER A LIST READS THE ROWS IN (`order`): the row reference for an object, (Period,
+// Recorder, LineNumber) for a register a recorder writes. So a list filtered or grouped by the attribute
+// reads its rows straight off the index, in order. Non-unique — an attribute value repeats. Named
+// <table>_<attrId>_IX (metaID key: stable and short). With no list order (a tabular section, a register
+// keyed by its dimensions) the ordered variant degrades to a plain index.
 //
 // ⭐ THE ORDERED VARIANT IS A LIST INDEX, BOTH WAYS. A list sorted by the attribute orders by (attribute,
-// reference) and scrolls up in that order reversed; Firebird walks an index forward only, so the ordered
+// order…) and scrolls up in that order reversed; Firebird walks an index forward only, so the ordered
 // variant carries its descending twin (ListIndex) — the same as the register's period index.
 void ContributeAttributeIndexes(ibSchemaTable& t,
 	const std::vector<ibValueMetaObjectAttributeBase*>& attributes,
-	const ibBackendQueryColumn* orderRef = nullptr)
+	const std::vector<const ibBackendQueryColumn*>& order = {})
 {
 	for (const auto attr : attributes) {
 		const ibIndexingMode mode = attr->GetIndexingMode();
 		if (mode == ibIndexingMode::ibIndexingMode_DontIndex)
 			continue;
 		const wxString name = wxString::Format(wxT("%s_%i_IX"), t.m_name, (int)attr->GetColumnId());
-		if (mode == ibIndexingMode::ibIndexingMode_IndexWithAdditionalOrder && orderRef != nullptr && orderRef != attr->GetQueryColumn())
-			t.ListIndex(name, { attr->GetQueryColumn(), orderRef });
+		const ibBackendQueryColumn* own = attr->GetQueryColumn();
+		if (mode == ibIndexingMode::ibIndexingMode_IndexWithAdditionalOrder && !order.empty()
+		    && std::find(order.begin(), order.end(), own) == order.end()) {
+			std::vector<const ibBackendQueryColumn*> cols{ own };
+			cols.insert(cols.end(), order.begin(), order.end());
+			t.ListIndex(name, std::move(cols));
+		}
 		else
-			t.Index(name, { attr->GetQueryColumn() });
+			t.Index(name, { own });
 	}
 }
 } // namespace
@@ -78,7 +86,7 @@ void ibValueMetaObjectRecordDataMutableRef::ContributeTables(ibSchemaSnapshot& o
 	// the row reference is the additional-order column. Each carries its own Indexing flag.
 	// Same list as the columns above — each attribute carries its own Indexing flag, and a
 	// common attribute may be indexed exactly like the object's own.
-	ContributeAttributeIndexes(t, GetGenericAttributeArrayObject(), GetDataReference()->GetQueryColumn());
+	ContributeAttributeIndexes(t, GetGenericAttributeArrayObject(), { GetDataReference()->GetQueryColumn() });
 
 	// --- tabular sections — each its own table ---
 	for (const auto tab : GetTableArrayObject()) {
@@ -195,15 +203,23 @@ void ibValueMetaObjectRegisterData::ContributeTables(ibSchemaSnapshot& out) cons
 	// scrolling up, against 235 ms walked by the index (2026-10-01). Scrolling up reads the order
 	// backwards, which Firebird walks only on a descending twin (ListIndex).
 	// (Only where the register HAS a Period column — a calculation register is dated otherwise, HasPeriod.)
-	if (HasRecorder() && HasPeriod() && GetRegisterPeriod() != nullptr && GetRegisterRecorder() != nullptr)
-		t.ListIndex(t.m_name + wxT("_PIX"), { GetRegisterPeriod()->GetQueryColumn(), GetRegisterRecorder()->GetQueryColumn(),
-			GetRegisterLineNumber()->GetQueryColumn() });
+	std::vector<const ibBackendQueryColumn*> listOrder;
+	if (HasRecorder() && HasPeriod() && GetRegisterPeriod() != nullptr && GetRegisterRecorder() != nullptr) {
+		listOrder = { GetRegisterPeriod()->GetQueryColumn(), GetRegisterRecorder()->GetQueryColumn(),
+			GetRegisterLineNumber()->GetQueryColumn() };
+		t.ListIndex(t.m_name + wxT("_PIX"), listOrder);
+	}
 
 	// Per-field secondary indexes. Dimensions, resources, attributes and predefined all carry the
 	// Indexing flag (each is-a ibValueMetaObjectAttribute), so GetGenericAttributeArrayObject covers
-	// them all. A register has no single row reference, so the ordered variant degrades to a plain
-	// index here (the dimensions already ride the composite key index above).
-	ContributeAttributeIndexes(t, GetGenericAttributeArrayObject());
+	// them all.
+	//
+	// ⭐ A DIMENSION OF A REGISTER A RECORDER WRITES RIDES NO KEY. The key above is (Recorder, LineNumber) — the
+	// dimensions are in it only where there is no recorder — so a list grouped by a dimension found the rows of
+	// one value by walking the list order from its start and testing each: 1.6 s for a page of a rare warehouse
+	// among 900 000 movements, and the same again for the rows above it (2026-10-05). The ordered variant is the
+	// dimension in that very LIST order, which the page reads straight off.
+	ContributeAttributeIndexes(t, GetGenericAttributeArrayObject(), listOrder);
 }
 
 void ibValueMetaObjectRecordDataHierarchyMutableRef::ContributeTables(ibSchemaSnapshot& out) const

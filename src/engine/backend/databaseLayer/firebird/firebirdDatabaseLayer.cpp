@@ -45,6 +45,7 @@ const ibDialectDictionary& ibDatabaseLayerFirebird::Dialect()
 		// 2026-09-16 failure as aliases sharing their first 31 characters; the 31 fixed it by shortening the path.)
 		// Twelve — three of the head and the hash — keeps ten levels near 130.
 		d.m_maxAliasLength = 12;
+		d.m_maxParameters = 32767;                    // measured on the vendored 5.0.5 (2026-10-05): 30 000 ran, 50 000 refused
 		d.m_groupByPosition = true;                   // GROUP BY 2 — a key that binds a value is named by its position
 		// A `?` in a SELECT list is untyped here (-804), and the batched INSERT is spelled as
 		// SELECTs — so each one names the column it is going into and lets FB look the type up.

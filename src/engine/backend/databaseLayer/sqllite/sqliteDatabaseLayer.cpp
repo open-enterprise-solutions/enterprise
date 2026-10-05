@@ -30,6 +30,7 @@ const ibDialectDictionary& ibDatabaseLayerSQLite::Dialect()
 		d.m_rowLockSuffix = wxEmptyString;            // SQLite locks the whole DB per TX — no row FOR UPDATE
 		d.m_rowLockNoWaitSuffix = wxEmptyString;      // (no row lock at all -> nothing to make non-blocking)
 		d.m_rowIdColumn    = wxT("rowid");            // physical row id for the pre-UNIQUE dedup (keep one row per key)
+		d.m_maxParameters  = 32766;                   // SQLITE_MAX_VARIABLE_NUMBER, the 3.32+ default the vendored engine keeps
 		d.m_returningClause = wxT("RETURNING");       // SQLite 3.35+; the embedded engine here is 3.48
 		// type map (SQLite is dynamically typed; these set column affinity)
 		d.m_typeBoolean       = wxT("INTEGER");

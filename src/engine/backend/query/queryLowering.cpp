@@ -27,6 +27,7 @@
 #include "backend/metaCollection/genericData.h"  // ibValueMetaObjectGenericData::ResolveQueryConstant (value(...) resolution)
 #include "backend/tabularModel.h"     // ibComparisonType
 #include "backend/backend_exception.h"    // ibBackendCoreException
+#include "backend/system/value/valueType.h"   // ibValueTypeDescription::AdjustValue — a field's empty value, for a NULL key
 
 // ⚠ NAMED, NOT INHERITED. std::find / std::remove_if arrived in this file with the grouping and
 // prune passes; MSVC hands <algorithm> over transitively and GCC/Clang do not, so the Windows build
@@ -2284,6 +2285,203 @@ std::vector<const ibBackendQueryColumn*> ResolveFieldOperand(const std::vector<i
 	return ResolveWhereTarget(sources, e, allowDotWalk);
 }
 
+// ⭐⭐ A FILTER THROUGH A REFERENCE IS ASKED OF THE TABLES IT POINTS INTO FIRST. `Recorder.Warehouse = &W AND
+// Recorder.Counterparty = &C` names the DOCUMENTS a row must have been written by. Said as a walk, every row of the
+// register is joined to its document and asked — and an engine that reads the register in its list order (Firebird
+// down `_PIX`) reads all of it to find the few rows of one group: 5.8 s for 4 rows of 900 000 (2026-10-05). Asked of
+// the documents, it is a set of their references, and the register is read by the index on its recorder: 52 ms, the
+// same rows. Every equality through one reference is a question about one object, so they are asked TOGETHER, of each
+// table the reference may point into that has all their fields — a kind without one holds nothing equal to a value.
+// The set is read the way an `IN (SELECT …)` is read (BuildWherePredicate) and handed on as the reference's own IN.
+//
+// ⭐ …AND AN EMPTY VALUE IS ASKED THE OTHER WAY ROUND. Through a walk, "the field is empty" holds also for a row whose
+// reference points at a kind with no such field, or at nothing — the join's NULL. That is everything EXCEPT the rows
+// whose referenced row has the field FILLED: `NOT IN` the references of those, which is exact, and is how the group of
+// "no warehouse" — nearly the whole register — stops being a join of every row (6.5 s, 2026-10-05).
+//
+// One hop deep, equality only.
+struct ibReferenceTest {
+	const ibBackendQueryable*   m_owner;   // the source the walk starts on
+	const ibBackendQueryColumn* m_hop;     // its reference
+	const ibBackendQueryColumn* m_field;   // the field of the referenced row
+	ibValue                     m_value;
+	bool                        m_empty;   // the value is the field's empty one — asked as NOT IN the filled
+};
+
+static void Conjuncts(const ibQueryAstExpr& e, std::vector<const ibQueryAstExpr*>& out)
+{
+	if (e.m_kind == ibQueryAstExprKind::Logical && !e.m_isOr && e.m_lhs && e.m_rhs) {
+		Conjuncts(*e.m_lhs, out);
+		Conjuncts(*e.m_rhs, out);
+		return;
+	}
+	out.push_back(&e);
+}
+
+static std::optional<ibReferenceTest> TestThroughReference(const std::vector<ibSourceBinding>& sources,
+                                                           const ibQueryAstExpr& e, const std::map<wxString, ibValue>& params)
+{
+	if (e.m_kind != ibQueryAstExprKind::Compare || e.m_cmp != ibQueryCompareOp::Eq || !e.m_lhs || !e.m_rhs
+	    || e.m_lhs->m_kind != ibQueryAstExprKind::Column || ComparesComputed(e) || KnownBeforeRows(e, params).has_value())
+		return std::nullopt;
+	const std::vector<const ibBackendQueryColumn*> cols = ResolvePath(sources, *e.m_lhs);
+	if (cols.size() != 2 || cols[0] == nullptr || cols[1] == nullptr)
+		return std::nullopt;
+	const ibBackendQueryable* owner = RootForPath(sources, *e.m_lhs);
+	if (owner == nullptr || owner->IsComputedInRam())
+		return std::nullopt;
+	ibValue value = EvalValue(*e.m_rhs, params);
+	// A NULL is the key of a group whose reference reaches no such field (a fold's COALESCE of nothing); through a walk
+	// it compares as the field's empty value, and is asked as that.
+	if (value.IsNull())
+		value = ibValueTypeDescription::AdjustValue(cols[1]->GetTypeDesc(), owner->GetMetaData());
+	if (value.IsNull())
+		return std::nullopt;
+	return ibReferenceTest{ owner, cols[0], cols[1], value, value.IsEmpty() };
+}
+
+// The references of the rows that pass every test, in every table the reference points into — `filled`: of the rows
+// whose field is NOT the (empty) value. A kind without one of the fields holds nothing equal to a value, and nothing
+// filled either. False when a table is not one the server can read for them — and then the walk stays as written.
+// `most` (0 = all): read no further than one past it, which is all the caller needs to know that it is too many.
+static bool ReferencesPassing(const std::vector<ibReferenceTest>& tests, std::vector<ibValue>& out, bool filled = false,
+                              size_t most = 0)
+{
+	const ibBackendQueryable*   owner = tests.front().m_owner;
+	const ibBackendQueryColumn* hop   = tests.front().m_hop;
+	std::vector<const ibBackendQueryable*> targets;
+	if (const ibBackendQueryable* one = owner->GetProvider().ResolveReferenceTarget(owner, hop))
+		targets.push_back(one);
+	else
+		targets = owner->GetProvider().ResolveReferenceTargets(owner, hop);
+	if (targets.empty())
+		return false;
+	std::vector<std::pair<const ibBackendQueryable*, std::vector<const ibBackendQueryColumn*>>> reads;
+	for (const ibBackendQueryable* target : targets) {
+		std::vector<const ibBackendQueryColumn*> fields;
+		for (const ibReferenceTest& t : tests) {
+			const ibBackendQueryColumn* field = ibDbTableProvider::WalkEnters(target, t.m_field)   // a CAST names its one type
+				? target->ResolveColumnByName(t.m_field->GetName()) : nullptr;
+			if (field == nullptr)
+				break;
+			fields.push_back(field);
+		}
+		if (fields.size() != tests.size())
+			continue;   // a kind without one of the fields holds nothing equal to a value, and nothing filled
+		const std::vector<const ibBackendQueryColumn*> key = target->GetPrimaryKeyColumns();
+		if (target->IsComputedInRam() || key.size() != 1 || key.front() == nullptr)
+			return false;
+		reads.emplace_back(target, std::move(fields));
+	}
+	for (const auto& read : reads) {
+		if (most != 0 && out.size() > most)
+			break;
+		ibDataQueryBuilder q;
+		q.From(read.first);
+		for (size_t i = 0; i < tests.size(); ++i)
+			q.Where(CondEq({ read.second[i] }, tests[i].m_value, /*notEqual*/ filled));
+		ibReadPageRequest page;   // the whole set — or one past `most`
+		if (most != 0)
+			page.m_count = static_cast<int>(most + 1 - out.size());
+		const ibBackendQueryColumn* key = read.first->GetPrimaryKeyColumns().front();
+		ibDataQueryResult r = q.Execute(page);
+		while (r.Next())
+			out.push_back(r.GetValue(key));
+	}
+	return true;
+}
+
+// A set of references as the condition on the reference column itself: one value its equality, several the plain list
+// over one column (see the IN branch of BuildWherePredicate), none — nothing is in it.
+static ibQueryPredicatePtr ReferenceIn(const ibBackendQueryColumn* hop, std::vector<ibValue> refs)
+{
+	if (refs.empty())
+		return ibQueryPredicate::Leaf(ConditionThatIs(false));
+	if (refs.size() == 1)
+		return ibQueryPredicate::Leaf(CondEq({ hop }, refs.front()));
+	ibQueryCondition set;
+	set.m_col    = hop;
+	set.m_op     = ibQueryFilterOp::In;
+	set.m_values = std::move(refs);
+	return ibQueryPredicate::Leaf(set);
+}
+
+// The top-level conjuncts of a WHERE, with the equalities through one reference asked as conditions on the reference
+// itself (appended to `asked`): the values TOGETHER as one IN, each empty one as NOT IN the filled. The rest go to
+// `rest`, to be lowered as before. False — nothing was asked, and the WHERE is lowered whole.
+static bool AskThroughReferences(const std::vector<ibSourceBinding>& sources, const ibQueryAstExpr& where,
+	const std::map<wxString, ibValue>& params, std::vector<ibQueryPredicatePtr>& asked,
+	std::vector<const ibQueryAstExpr*>& rest)
+{
+	std::vector<const ibQueryAstExpr*> parts;
+	Conjuncts(where, parts);
+	struct Group { std::vector<ibReferenceTest> m_tests; std::vector<size_t> m_parts; };
+	std::vector<Group> groups;
+	for (size_t i = 0; i < parts.size(); ++i) {
+		std::optional<ibReferenceTest> test = TestThroughReference(sources, *parts[i], params);
+		if (!test)
+			continue;
+		auto group = std::find_if(groups.begin(), groups.end(), [&test](const Group& g) {
+			return g.m_tests.front().m_owner == test->m_owner && g.m_tests.front().m_hop == test->m_hop; });
+		if (group == groups.end())
+			group = groups.insert(groups.end(), Group());
+		group->m_tests.push_back(*test);
+		group->m_parts.push_back(i);
+	}
+	// ⭐ A SET IS ASKED WHILE IT IS A SMALL PART OF ONE STATEMENT. Its references are bound a value each, and the engine
+	// binds so many and no more (ibDbTableProvider::ParametersOneStatementTakes): half of that for the sets, the rest
+	// for the statement's own values. Past it the walk stays the join — slower, and still an answer. Nothing is lost
+	// that way: a set that large is a DENSE group, which the join finds at once; the set is what a RARE group needs,
+	// and a rare group's set is small (Max, 2026-10-05: "if it does not fit, the query is not optimal, and it runs").
+	const size_t takes = groups.empty() ? 0 : ibDbTableProvider::ParametersOneStatementTakes() / 2;
+	size_t bound = 0;
+	const auto room = [&]() -> size_t {   // how far a read need go (ReferencesPassing's `most`); 0 = all
+		return takes == 0 ? 0 : std::max<size_t>(takes - bound, 1);
+	};
+	const auto fits = [&](const ibBackendQueryColumn* hop, size_t refs) {
+		if (takes == 0 || bound + refs <= takes) {
+			bound += refs;
+			return true;
+		}
+		ibJournalInfo(wxT("query.road"), wxT("SERVER: more references through '%s' than one statement binds - the walk stays a join"),
+			hop->GetName());
+		return false;
+	};
+	std::vector<bool> taken(parts.size(), false);
+	for (const Group& g : groups) {
+		const ibBackendQueryColumn* hop = g.m_tests.front().m_hop;
+		std::vector<ibReferenceTest> values;
+		std::vector<size_t>          valueParts;
+		for (size_t k = 0; k < g.m_tests.size(); ++k) {
+			if (!g.m_tests[k].m_empty) {
+				values.push_back(g.m_tests[k]);
+				valueParts.push_back(g.m_parts[k]);
+				continue;
+			}
+			std::vector<ibValue> filled;
+			if (!ReferencesPassing({ g.m_tests[k] }, filled, /*filled*/ true, room()) || !fits(hop, filled.size()))
+				continue;
+			ibJournalInfo(wxT("query.road"), wxT("SERVER: '%s.%s' is empty - asked as NOT IN the %u reference(s) it is filled in"),
+				hop->GetName(), g.m_tests[k].m_field->GetName(), static_cast<unsigned>(filled.size()));
+			if (!filled.empty())   // filled nowhere — empty everywhere, and the condition asks nothing
+				asked.push_back(ibQueryPredicate::Not(ReferenceIn(hop, std::move(filled))));
+			taken[g.m_parts[k]] = true;
+		}
+		std::vector<ibValue> refs;
+		if (values.empty() || !ReferencesPassing(values, refs, /*filled*/ false, room()) || !fits(hop, refs.size()))
+			continue;
+		ibJournalInfo(wxT("query.road"), wxT("SERVER: %u condition(s) through '%s' asked of the tables it points into - %u reference(s)"),
+			static_cast<unsigned>(values.size()), hop->GetName(), static_cast<unsigned>(refs.size()));
+		asked.push_back(ReferenceIn(hop, std::move(refs)));
+		for (const size_t i : valueParts)
+			taken[i] = true;
+	}
+	for (size_t i = 0; i < parts.size(); ++i)
+		if (!taken[i])
+			rest.push_back(parts[i]);
+	return rest.size() != parts.size();
+}
+
 // Flat AND-tree WHERE -> the door's verb conditions. Plain columns AND reference dot-walks (the leaf
 // of a path, joined by the provider). Used for a flat single-source WHERE (dot-walk allowed) and a
 // flat JOIN WHERE (dot-walk rejected — the composer has no per-leaf dot-walk join yet). OR / NOT / IN
@@ -4212,14 +4410,25 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 	// when allowWhereDotWalk; the provider joins them. For a JOIN the tree lowers only in the co-located
 	// path (the stitch path errors), and a dot-walk leaf there is rejected (allowWhereDotWalk is false).
 	if (ast.m_where) {
-		if (IsFlatAndWhere(*ast.m_where))
-			// A COMPUTED source resolves a flat dot-walk WHERE (Ref.Field = X) in RAM: the provider joins the
-			// reference leaf and filters by it (the register cannot). The boolean predicate path stays gated.
-			LowerFlatWhere(b, sources, *ast.m_where, params, allowWhereDotWalk || computedPrimary);
-		else
-			// A COMPUTED source resolves a boolean dot-walk WHERE (Ref.A = X OR Ref.B = Y) in RAM too: the
-			// provider joins the leaves (predicate-tree gather) and FilterRows evaluates the tree by the leaf.
-			b.Where(BuildWherePredicate(sources, *ast.m_where, params, allowWhereDotWalk || computedPrimary));
+		// The equalities through a reference, asked of the tables it points into first (AskThroughReferences) — and
+		// what is left of the WHERE goes on by the road it would have taken, conjunct by conjunct.
+		std::vector<ibQueryPredicatePtr>   asked;
+		std::vector<const ibQueryAstExpr*> rest;
+		const bool split = allowWhereDotWalk && AskThroughReferences(sources, *ast.m_where, params, asked, rest);
+		for (const ibQueryPredicatePtr& condition : asked)
+			b.Where(condition);
+		const std::vector<const ibQueryAstExpr*> lowered = split ? rest
+			: std::vector<const ibQueryAstExpr*>{ ast.m_where.get() };
+		for (const ibQueryAstExpr* where : lowered) {
+			if (IsFlatAndWhere(*where))
+				// A COMPUTED source resolves a flat dot-walk WHERE (Ref.Field = X) in RAM: the provider joins the
+				// reference leaf and filters by it (the register cannot). The boolean predicate path stays gated.
+				LowerFlatWhere(b, sources, *where, params, allowWhereDotWalk || computedPrimary);
+			else
+				// A COMPUTED source resolves a boolean dot-walk WHERE (Ref.A = X OR Ref.B = Y) in RAM too: the
+				// provider joins the leaves (predicate-tree gather) and FilterRows evaluates the tree by the leaf.
+				b.Where(BuildWherePredicate(sources, *where, params, allowWhereDotWalk || computedPrimary));
+		}
 	}
 
 	// A VIRTUAL TABLE'S CONDITION ARGUMENT lands here, alongside the written WHERE and by exactly the

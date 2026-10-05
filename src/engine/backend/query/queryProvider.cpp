@@ -6570,6 +6570,11 @@ ibDataQueryResult ibQueryComposer::ExecuteGroupLevelPage(const ibDataQuerySpec& 
 // not. False = nothing was read; the caller proceeds exactly as before.
 bool ibQueryComposer::TryFoldTotalsInDbms(const ibDataQuerySpec& spec, ibSelectorTree& out)
 {
+	if (IsSingleSource(spec) && ibDbTableProvider::CanFoldOneLevelTotals(spec)) {
+		ibJournalInfo(wxT("query.road"), wxT("SERVER: one level folded by GROUP BY (single source)"));
+		out = ibDbTableProvider::ExecuteOneLevelTotals(spec);
+		return true;
+	}
 	if (IsSingleSource(spec) && ibDbTableProvider::CanPushRollupTotals(spec)) {
 		out = ibDbTableProvider::ExecuteRollupTotals(spec);
 		return true;
@@ -6592,6 +6597,12 @@ bool ibQueryComposer::CanDeclareNamedQuery(ibDatabaseConnectionHolder* holder)
 ibSelectorTree ibQueryComposer::ExecuteTotals(const ibDataQuerySpec& spec)
 {
 	// The one that needs it most: totals read the detail AND fold it, often in more than one pass.
+
+	// ONE level of headings is a plain GROUP BY, on any engine — ROLLUP or not (CanFoldOneLevelTotals).
+	if (IsSingleSource(spec) && ibDbTableProvider::CanFoldOneLevelTotals(spec)) {
+		ibJournalInfo(wxT("query.road"), wxT("SERVER: one level folded by GROUP BY (single source)"));
+		return ibDbTableProvider::ExecuteOneLevelTotals(spec);
+	}
 
 	// Push-down: a single-source totals on a ROLLUP-capable DBMS runs server-side (GROUP BY ROLLUP),
 	// the DBMS computing every subtotal level — only the aggregated rows transit, no raw detail.

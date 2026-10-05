@@ -230,6 +230,12 @@ struct ibDialectDictionary
 	// vendored 5.0.5). Firebird's bound is therefore short (see its dialect).
 	unsigned int m_maxAliasLength = 0;
 
+	// ⭐⭐ HOW MANY VALUES ONE STATEMENT BINDS (`?`), however many lists they stand in — the engine's own wall, so a
+	// road that would build a long list can ask before it builds one instead of learning it from the refusal. 0 = none
+	// known. Firebird 5: 32 767 (measured 2026-10-05: 30 000 ran; 50 000 "Implementation limit exceeded - Maximum
+	// number of parameters: 32767").
+	unsigned int m_maxParameters = 0;
+
 	// ⭐ A NAME WITHIN A LIMIT — itself when it fits, otherwise its head plus a hash of the WHOLE name. Deterministic,
 	// so whoever writes the name and whoever reads it back compute the same spelling, and two names that share
 	// the head still differ. The relation alias (ibQueryRenderer::AliasIdent) and the result label

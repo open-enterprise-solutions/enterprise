@@ -20,6 +20,23 @@
 #include "backend/metaCollection/partial/reference/reference.h"   // ibValueReferenceDataObject — drilled folder guid
 #include "backend/uniqueKey.h"                      // ibUniqueKey — GetItemKey builds the row's reference key
 #include "backend/diagnostics/journal.h"            // ibJournal — what a group heading arrived with
+
+// A group level as it was folded — the rung, where the reader stood on it, and the rows that came back — served again
+// to a scroll of the same level (ibValueModelCursor::m_foldedLevel, RunComposerPage).
+struct ibValueModelCursor::FoldedLevel {
+	uint32_t                            m_generation = 0;   // the view generation it was folded at
+	std::vector<wxString>               m_dims;
+	std::vector<ibQueryDimUnfold>       m_kinds;
+	std::vector<ibValue>                m_path;
+	std::vector<ibValue>                m_sub;
+	std::vector<ibListFetchDriver::Row> m_rows;
+
+	bool Serves(uint32_t generation, const std::vector<wxString>& dims, const std::vector<ibQueryDimUnfold>& kinds,
+	            const std::vector<ibValue>& path, const std::vector<ibValue>& sub) const {
+		return m_generation == generation && m_dims == dims && m_kinds == kinds && m_path == path && m_sub == sub;
+	}
+};
+
 // ibValueModelCursor::EnsureSnapshot — DynamicRead OFF: materialise the WHOLE result set into m_snapshot ONCE, then
 // every fetch / scroll / group serves from RAM (RunStoragePage). Re-materialises only when the view generation moved
 // (a refresh / filter / sort change bumps it; a scroll does not). The SQL read applies the persistent FILTER + SORT
@@ -375,11 +392,23 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 	}
 	// flat: no drill — the persistent filter + sort render as-is.
 
+	// ⭐ A SCROLL OF A FOLDED LEVEL IS NOT A RE-READ. A group level comes back whole and is windowed below, so the page
+	// above or below the one shown is in rows already read — and the rows above the cursor are asked for in the very
+	// pass that read the page (the control's backfill, datavgen.paged.cpp), which folded a million register rows a
+	// second time to cut a different window out of the same answer (2026-10-05). The snapshot's rule (above): a Reset
+	// re-reads, and so does a view generation that moved; Forward / Backward over the same rung and scope do not.
+	const uint32_t generation = GetViewGeneration();
+	const bool     reuseLevel = groupLevel && dir != ibFetchDirection::Reset && m_foldedLevel != nullptr
+		&& m_foldedLevel->Serves(generation, dims, dimKinds, parentPath, parentSub);
+
 	// Run the composer onto the generic list-fetch sink — the driver carries the page
 	// envelope in and accumulates rows out, keyed by this model's own columns (asked by name).
 	ibListFetchDriver driver(page, [this](const wxString& name) { return GetColumnIDByName(name); });
 	try {
-		composer.Run(driver);
+		if (reuseLevel)
+			driver.Rows() = m_foldedLevel->m_rows;   // a copy — every node below takes its row's appearance
+		else
+			composer.Run(driver);
 	}
 	catch (const ibBackendException&) {
 		composer.PutGroups(savedGroups);
@@ -390,6 +419,17 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 	// Undo the transient drill — the persistent settings are exactly as they were before this fetch.
 	composer.PutGroups(savedGroups);
 	composer.RestoreScope(scope);
+
+	if (groupLevel && !reuseLevel) {
+		auto folded = std::make_shared<FoldedLevel>();
+		folded->m_generation = generation;
+		folded->m_dims       = dims;
+		folded->m_kinds      = dimKinds;
+		folded->m_path       = parentPath;
+		folded->m_sub        = parentSub;
+		folded->m_rows       = driver.Rows();
+		m_foldedLevel = std::move(folded);
+	}
 
 	// Wrap each driver row in a generic composer node, honouring count + direction exactly as RunPage does. A
 	// DETAIL / flat level was keyset-sized by the SQL page — trim the +1 probe, flip a Backward page to display

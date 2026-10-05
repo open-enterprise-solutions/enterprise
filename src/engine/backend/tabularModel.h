@@ -1804,6 +1804,13 @@ protected:
 	// those are is the list's business and never has to become this member's.
 	mutable ibDataViewItemArray m_lastPage;
 
+	// THE LAST GROUP LEVEL A FETCH FOLDED — where it stands and the rows it was folded into (RunComposerPage). A group
+	// level comes back WHOLE and is windowed on this side, so the page above or below the one shown is in rows already
+	// read: a scroll of the same level is served from them, the way the snapshot below serves a scroll. A Reset
+	// re-reads, and so does a view generation that moved. Its shape lives beside its one reader (tabularModelDb.cpp).
+	struct FoldedLevel;
+	mutable std::shared_ptr<const FoldedLevel> m_foldedLevel;
+
 	// Whole-list RAM snapshot — ONLY populated when IsDynamicRead() is false. m_snapshotComposer sources from
 	// m_snapshot (bound in the ctor); it re-materialises when the view generation moves past m_snapshotGen (a refresh
 	// / filter / sort change bumps the generation; a scroll does not).
