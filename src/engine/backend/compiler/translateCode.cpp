@@ -231,7 +231,7 @@ ibTranslateCode::~ibTranslateCode()
 }
 
 // `IsAllowedKey` is declared on ibTranslateCode but its body lives in
-// compileCode.cpp — the gate needs the active code-style (gs_codeStyle,
+// compileCode.cpp — the gate needs the active code-style (GetCodeStyle,
 // owned by ibCompileCode), and putting the body there keeps the include
 // chain one-way (compile → translate, never the reverse). `IsKeyWord`
 // below dispatches through it so lexer / highlighter / autocomplete /
@@ -1057,7 +1057,7 @@ int ibTranslateCode::IsKeyWord(const wxString& strKeyWord)
 		const int idx = it->second;
 		// Code-style gate: hides VES-only block-fence keywords (Then /
 		// Do / End*) when CES is active. Body lives in compileCode.cpp
-		// so the gate reads gs_codeStyle without flipping the include
+		// so the gate asks GetCodeStyle without flipping the include
 		// chain. Hidden keywords look like plain identifiers to every
 		// consumer of IsKeyWord — lexer, syntax highlighter, the CES
 		// parser (which then rejects them as unknown identifiers).

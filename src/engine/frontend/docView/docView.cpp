@@ -76,8 +76,8 @@
 
 // OES — unified modal routing: both desktop and web implement
 // ibBackendDocFrame::ShowModalMessage. Desktop forwards to wxMessageBox
-// (with frame as parent); web parks the worker on a promise + emits the
-// modal via /session, resolves through /modal-reply. Replaces the per-
+// (with frame as parent); web waits in the session's pool (Await) + emits
+// the modal via /session, answered through /modal-reply. Replaces the per-
 // callsite wxMessageDialog / wxMessageBox in OnSaveModified / OnSave-
 // BeforeForceClose / Revert with a single cross-build call.
 #include "backend/session/session.h"

@@ -75,9 +75,10 @@ struct BACKEND_API ibRegistryRequest {
 	ibRegistryRequestKind      kind = ibRegistryRequestKind::Add;
 	std::shared_ptr<ibSession> session;
 
-	// Attach payload.
-	wxString user;
-	wxString password;
+	// Attach payload — the login's verdict, reached on the caller's thread (ibSessionRegistry::Attach); the
+	// registry thread only writes it.
+	bool       accepted = false;
+	ibUserInfo info;
 
 	// SetActivity payload.
 	wxString activity;
@@ -293,6 +294,12 @@ public:
 	// silently for now (callers that care about Timeout use WaitState with
 	// a timeout and observe the session never left Created).
 	void Submit(ibRegistryRequest req, ibPriority priority = ibPriority::Normal);
+
+	// Log `user` into an Added session. The credentials are checked HERE, on the caller's thread — the hash
+	// is slow on purpose, and on the registry thread a queue of logins held up its heartbeat until the peers
+	// settled this process's rows as silent. The registry thread is handed the verdict and only writes it
+	// (ProcessAttach). The answer is the session's auth state — wait for it with WaitForAuth.
+	void Attach(const std::shared_ptr<ibSession>& session, const wxString& user, const wxString& password);
 
 	// ---- Unified entry-point ----
 	// Submit Add (+ optional Attach if req.m_userName is non-empty),

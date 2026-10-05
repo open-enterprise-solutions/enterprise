@@ -7,6 +7,7 @@
 #include "backend/query/queryColumn.h"         // ibBackendColumnRawDB — the section's owner reference, as a field
 
 #include <memory>
+#include <mutex>   // std::once_flag
 
 class ibValueMetaObjectRecordData;
 class ibValueMetaObjectTableData;       // RAM-only tabular section (processors / reports)
@@ -33,6 +34,7 @@ public:
 private:
 	const ibValueMetaObjectTableDataRef*    m_meta;
 	mutable std::unique_ptr<ibBackendColumnRawDB>  m_ownerRef;
+	mutable std::once_flag                         m_ownerRefOnce;   // every session of the base asks it
 };
 
 // ibTabularSourceDescriptor — the DB-backed tabular section's L4 source descriptor. Like the

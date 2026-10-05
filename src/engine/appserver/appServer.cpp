@@ -88,10 +88,9 @@ bool ibAppServer::Open(const ibConfiguredInstance& instance)
 		return false;
 	}
 
-	// THE THREAD COMES BACK AS IT WAS. Opening leaves it working for the base, and a login leaves the session
-	// bound to it (NotifyAuthenticated) — right for a window's thread; wrong for this one, which opens every base
-	// and works for none: the next base would be asked through this one's session. Both are given back.
-	const ibSessionScope unbound(nullptr);
+	// THE THREAD COMES BACK AS IT WAS. Opening leaves it working for the base — right for a window's thread; wrong
+	// for this one, which opens every base and works for none: the next base would be asked through this one.
+	// It is given back. (The login gives its session binding back itself — NotifyAuthenticated.)
 	const ibApplicationInstanceScope opening(nullptr);
 
 	ibApplicationInstance* applicationInstance = nullptr;

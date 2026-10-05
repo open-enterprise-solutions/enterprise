@@ -63,8 +63,10 @@ void ibWorkerPoolHeadless::TrySpawnWorker()
 {
 	std::lock_guard<std::mutex> lk(m_workersMtx);
 	// Re-check inside the lock so two concurrent Submits don't both
-	// spawn past the cap.
-	if (m_aliveWorkers.load(std::memory_order_acquire) >= m_maxWorkers)
+	// spawn past the cap. The cap counts the workers that WORK — a worker
+	// in Await is alive but waits on a person (see m_waitingWorkers).
+	if (m_aliveWorkers.load(std::memory_order_acquire)
+	    >= m_maxWorkers + m_waitingWorkers.load(std::memory_order_acquire))
 		return;
 	if (m_stop.load(std::memory_order_acquire))
 		return;
@@ -115,22 +117,26 @@ std::future<void> ibWorkerPoolHeadless::Submit(ibSession* session, Task task)
 		if (session != nullptr)
 			slot->owner = session->weak_from_this();
 		slot->tasks.push_back({ std::move(task), std::move(promise) });
+		// A script of this session waits in Await on the thread that holds it — that thread runs this task,
+		// no other worker may; ring it.
+		if (slot->waiting > 0)
+			slot->wake.notify_all();
 	}
 	m_cv.notify_one();
 
-	// Lazy spawn. If no worker is currently idle and we're below the
-	// cap, kick a new one into existence. m_idleWorkers is incremented
-	// in WorkerLoop right before the CV wait and decremented on wake-up
-	// — so "idle == 0" means every alive worker is busy on a session.
-	if (m_idleWorkers.load(std::memory_order_acquire) == 0
-	 && m_aliveWorkers.load(std::memory_order_acquire) < m_maxWorkers) {
+	// Lazy spawn. If no worker is currently idle, kick a new one into
+	// existence — TrySpawnWorker says whether there is room under the cap.
+	// m_idleWorkers is incremented in WorkerLoop right before the CV wait
+	// and decremented on wake-up — so "idle == 0" means every alive worker
+	// is busy on a session.
+	if (m_idleWorkers.load(std::memory_order_acquire) == 0) {
 		TrySpawnWorker();
 	}
 
 	return future;
 }
 
-void ibWorkerPoolHeadless::DropSession(ibSession* session)
+void ibWorkerPoolHeadless::Drop(ibSession* session)
 {
 	std::unique_lock<std::mutex> lk(m_mtx);
 	auto it = m_sessions.find(session);
@@ -144,6 +150,83 @@ void ibWorkerPoolHeadless::DropSession(ibSession* session)
 		return;
 	}
 	m_sessions.erase(it);
+}
+
+void ibWorkerPoolHeadless::Await(ibSession* session, const std::function<bool()>& done)
+{
+	// Only the thread that holds the session may run its work, so only it may wait this way — anywhere else
+	// the tasks it waits through would be run by nobody (a task of ANOTHER session would also keep that
+	// session's worker on this one).
+	if (session == nullptr || tl_currentLease != session)
+		throw std::logic_error("ibWorkerPool::Await outside a task of its session");
+
+	const auto stopped = [this, session]() {
+		return m_stop.load(std::memory_order_acquire) || ibRunCancelled(session->RunState());
+	};
+
+	std::unique_lock<std::mutex> lk(m_mtx);
+	const auto it = m_sessions.find(session);
+	if (it == m_sessions.end() || it->second == nullptr)
+		throw std::logic_error("ibWorkerPool::Await: a held session without its queue");
+	// Stays: a held queue is never erased (Drop only marks it, see ibSessionQueue::dropped).
+	ibSessionQueue* const q = it->second.get();
+
+	++q->waiting;
+	m_waitingWorkers.fetch_add(1, std::memory_order_acq_rel);
+	// Waiting made room under the cap — if no worker is free for the other sessions, start one.
+	if (m_idleWorkers.load(std::memory_order_acquire) == 0) {
+		lk.unlock();
+		TrySpawnWorker();
+		lk.lock();
+	}
+
+	for (;;) {
+		// The cancel BEFORE the next task: a teardown cancels, then submits its barrier, and the barrier must
+		// run after this script is out, not under it.
+		if (stopped()) {
+			--q->waiting;
+			m_waitingWorkers.fetch_sub(1, std::memory_order_acq_rel);
+			lk.unlock();
+			ibBackendInterruptException::Error();
+		}
+		if (done()) {
+			--q->waiting;
+			m_waitingWorkers.fetch_sub(1, std::memory_order_acq_rel);
+			return;
+		}
+		if (q->tasks.empty()) {
+			q->wake.wait(lk);
+			continue;
+		}
+
+		{
+			ibSessionTask item = std::move(q->tasks.front());
+			q->tasks.pop_front();
+			// Running it, this thread works again and holds a place for as long as the task takes.
+			m_waitingWorkers.fetch_sub(1, std::memory_order_acq_rel);
+			lk.unlock();
+			try {
+				item.task();
+				item.promise->set_value();
+			}
+			catch (...) {
+				LogWorkerException(wxT("worker pool task under Await"));
+				item.promise->set_exception(std::current_exception());
+			}
+			// item dies HERE, outside the lock — its closure may tear something down that takes it.
+		}
+		lk.lock();
+		m_waitingWorkers.fetch_add(1, std::memory_order_acq_rel);
+	}
+}
+
+void ibWorkerPoolHeadless::Wake(ibSession* session)
+{
+	// Looked up by address only — a session we were never told about, or one already gone, finds nothing.
+	std::lock_guard<std::mutex> lk(m_mtx);
+	const auto it = m_sessions.find(session);
+	if (it != m_sessions.end() && it->second != nullptr && it->second->waiting > 0)
+		it->second->wake.notify_all();
 }
 
 std::pair<ibSession*, ibWorkerPoolHeadless::ibSessionQueue*>
@@ -222,7 +305,7 @@ void ibWorkerPoolHeadless::WorkerLoop()
 		// that session down from inside its own lease. That is DELIBERATE and it is
 		// why the task is destroyed while `tl_currentLease` still names this
 		// session: Teardown's drain-Submit then takes the reentrant inline path
-		// instead of queueing behind itself, and the DropSession it ends with finds
+		// instead of queueing behind itself, and the Drop it ends with finds
 		// this queue leased and defers the erase to us (see ibSessionQueue::dropped).
 		while (true) {
 			ibSessionTask item;
@@ -281,6 +364,7 @@ void ibWorkerPoolHeadless::WorkerLoop()
 
 void ibWorkerPoolHeadless::Stop()
 {
+	std::vector<std::shared_ptr<ibSession>> alive;
 	{
 		std::unique_lock<std::mutex> lk(m_mtx);
 		m_stop.store(true);
@@ -288,11 +372,11 @@ void ibWorkerPoolHeadless::Stop()
 		// between tasks — a task already running reads nothing, and a task
 		// that blocks for minutes (the Firebird maintenance poll) turns
 		// this wait into a hang with no way out. The session's cancel
-		// is what such a task hears, so shutdown sends it here, before
-		// waiting for anyone. Under m_mtx because the queue entry pins
-		// nothing beyond the pointer we hold; Cancel takes the connection
-		// pool's lock and the job manager's, and neither ever calls back
-		// into this pool.
+		// is what such a task hears, so shutdown sends it, before
+		// waiting for anyone. The sessions are COLLECTED here and cancelled
+		// below, outside m_mtx: a cancel rings the session's Await
+		// through Wake, which takes this lock. A script waiting in Await
+		// is rung here as well — it hears m_stop itself.
 		// 🛑 AN ENTRY NAMES A SESSION THAT MAY ALREADY BE GONE, and the key cannot say so. It is
 		// legal to look a freed address up (a map compares addresses) and a use-after-free to call
 		// through one. Two ways a session leaves without us: it DROPS while leased — `dropped` is
@@ -306,12 +390,16 @@ void ibWorkerPoolHeadless::Stop()
 		// and cannot cancel what is already gone.
 		for (auto& kv : m_sessions) {
 			if (kv.second == nullptr || kv.second->dropped) continue;
-			const std::shared_ptr<ibSession> alive = kv.second->owner.lock();
-			if (!alive) continue;
-			alive->Cancel();
+			if (kv.second->waiting > 0)
+				kv.second->wake.notify_all();
+			if (std::shared_ptr<ibSession> session = kv.second->owner.lock())
+				alive.push_back(std::move(session));
 		}
 	}
 	m_cv.notify_all();
+	for (const std::shared_ptr<ibSession>& session : alive)
+		session->Cancel();
+	alive.clear();   // let them go before the wait below — this pool holds no session for longer than a cancel
 
 	// Wait for every detached worker to exit. m_aliveWorkers decrements
 	// at the end of each WorkerLoop and notifies m_stopCv.

@@ -43,7 +43,9 @@ public:
 	~ibWorkerPoolHeadless() override;
 
 	std::future<void> Submit(ibSession* session, Task task) override;
-	void              DropSession(ibSession* session) override;
+	void              Await(ibSession* session, const std::function<bool()>& done) override;
+	void              Wake(ibSession* session) override;
+	void              Drop(ibSession* session) override;
 	void              Stop() override;
 
 	// Diagnostics — current worker counts. Useful for /admin endpoints
@@ -62,7 +64,7 @@ private:
 		std::deque<ibSessionTask> tasks;
 		std::atomic<bool>         leased { false };
 		// DROPPED WHILE LEASED. A session's teardown runs from inside one of its own
-		// tasks — the task's closure can own the session holder — so DropSession can
+		// tasks — the task's closure can own the session holder — so Drop can
 		// arrive while a worker is standing on this very object. Erasing it there is
 		// a use-after-free under the pool's own mutex. So the drop is RECORDED here
 		// and the worker erases the queue itself when it lets the lease go.
@@ -78,6 +80,12 @@ private:
 		// answered with `dropped` alone. `dropped` says the session LET GO; this says it is ALIVE,
 		// and only the second one can be asked of a session that told us nothing.
 		std::weak_ptr<ibSession>  owner;
+
+		// How many Await of this session are on the stack — a question asked from a task run under another
+		// question nests; only the innermost is awake. `wake` is what a submit, an answer or a cancel rings.
+		// Both under m_mtx.
+		int                       waiting { 0 };
+		std::condition_variable   wake;
 	};
 
 	void WorkerLoop();
@@ -100,6 +108,10 @@ private:
 	std::atomic<std::size_t> m_aliveWorkers { 0 };
 	// Idle-count drives lazy growth: zero idle + below cap = spawn.
 	std::atomic<std::size_t> m_idleWorkers  { 0 };
+	// ⭐ A WORKER IN Await HOLDS NO PLACE. It is alive and holds its session, but it waits on a person for as
+	// long as the person takes; counted against the cap, two open questions would stop a pool of two for
+	// everybody. So the cap is on the alive less the waiting, and a worker that starts waiting makes room.
+	std::atomic<std::size_t> m_waitingWorkers { 0 };
 	// Stop() waits on this until m_aliveWorkers reaches 0 (every
 	// detached worker has exited).
 	std::mutex               m_stopMtx;

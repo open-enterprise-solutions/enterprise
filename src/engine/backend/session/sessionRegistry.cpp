@@ -382,9 +382,11 @@ void ibSessionRegistry::Stop()
 
 	// Drain THIS BASE'S work from the worker pool BEFORE killing sessions: tasks in flight reference session
 	// pointers; tear the sessions down first and a worker is left calling into freed memory. The pool is the
-	// process's and the other bases go on using it, so it is not stopped: each own session's queue is run to
-	// its end — a no-op waits behind everything queued before it, the queue being FIFO per session — and
-	// then dropped.
+	// process's and the other bases go on using it, so it is not stopped: each own session is CANCELLED, as the
+	// pool's own Stop does — a script waiting for its client (ibWorkerPool::Await) would wait for an answer
+	// nobody is left to give, and would run the no-op below inside its wait instead of behind it — then its
+	// queue is run to its end — a no-op waits behind everything queued before it, the queue being FIFO per
+	// session — and dropped.
 	if (ibWorkerPool* const pool = GetWorkerPool()) {
 		std::vector<std::shared_ptr<ibSession>> own;
 		{
@@ -397,9 +399,10 @@ void ibSessionRegistry::Stop()
 			// Only the sessions that work in it — a desktop window's runs on its own (ibGUISession).
 			if (s->GetWorkerPool() != pool)
 				continue;
-			try { pool->RunOnSession(s.get(), [] {}); }
+			s->Cancel();
+			try { pool->Execute(s.get(), [] {}); }
 			catch (...) { /* swallowed: a task's own failure was reported where it ran; the queue is drained either way */ }
-			pool->DropSession(s.get());
+			pool->Drop(s.get());
 		}
 	}
 
@@ -581,14 +584,7 @@ ibConnectResult ibSessionRegistry::Connect(const ibConnectRequest& req,
 
 	// --- Optional Attach for creds-supplied flow ---
 	if (!req.m_userName.IsEmpty()) {
-		{
-			ibRegistryRequest att;
-			att.kind     = ibRegistryRequestKind::Attach;
-			att.session  = session;
-			att.user     = req.m_userName;
-			att.password = req.m_password;
-			Submit(std::move(att), ibPriority::Normal);
-		}
+		Attach(session, req.m_userName, req.m_password);
 		ibAuthState auth = session->WaitForAuth(ibAuthState::Anonymous, timeout);
 		if (auth == ibAuthState::Anonymous) {
 			// Producer gave up; tear down the session so we don't leak an
@@ -772,8 +768,12 @@ void ibSessionRegistry::NotifyAuthenticated(ibSession* s)
 	// Pin session as Current() on the calling thread BEFORE listeners
 	// fire, so RunDatabase / CompileRoot / etc. can resolve through
 	// ibSession::Current() inside listener bodies without each listener
-	// having to bind manually.
-	ibSession::BindSessionToThread(s, std::this_thread::get_id());
+	// having to bind manually. For the bring-up only: the thread comes
+	// back as it was. Left bound, a pooled thread (a web request's, a job
+	// tick's) answered every later caller with this session; a window's
+	// thread loses nothing — unbound, it resolves to the process's own
+	// session through the registry's fallback.
+	const ibSessionScope bringingUp(s);
 
 	std::vector<SessionCallback> auths;
 	std::vector<SessionCallback> firsts;
@@ -1178,6 +1178,23 @@ void ibSessionRegistry::ProcessAdd(ibRegistryRequest& req)
 	NotifyConnectCreate(&s);
 }
 
+void ibSessionRegistry::Attach(const std::shared_ptr<ibSession>& session, const wxString& user, const wxString& password)
+{
+	if (!session) return;
+	ibRegistryRequest req;
+	req.kind    = ibRegistryRequestKind::Attach;
+	req.session = session;
+	// Verifies the credentials and (when info.IsOk()) writes m_userInfo / m_sessionRawPassword onto the session
+	// through InstallUser — so the scope pins the session: InstallUser routes to it, and everything the login
+	// reads reaches the session's base through it. The session is not yet authenticated, so nobody reads what
+	// is written here until ProcessAttach announces it.
+	if (m_applicationInstance != nullptr) {
+		ibSessionScope scope(session.get());
+		req.accepted = m_applicationInstance->Login(user, password, req.info);
+	}
+	Submit(std::move(req), ibPriority::Normal);
+}
+
 void ibSessionRegistry::ProcessAttach(ibRegistryRequest& req)
 {
 	if (!req.session) return;
@@ -1188,21 +1205,12 @@ void ibSessionRegistry::ProcessAttach(ibRegistryRequest& req)
 		return;
 	}
 
-	// Single auth entry — verifies creds and (when info.IsOk()) writes
-	// m_userInfo / m_sessionRawPassword onto the target session via
-	// InstallUser. Pin scope to the target so InstallUser routes to this
-	// session, not whatever the registry thread last touched — and so
-	// everything the login reads reaches the session's base through it.
-	ibUserInfo info;
-	bool ok;
-	{
-		ibSessionScope scope(&s);
-		ok = m_applicationInstance->Login(req.user, req.password, info);
-	}
-	if (!ok) {
+	// The verdict was reached on the caller's thread (Attach); here it is only written.
+	if (!req.accepted) {
 		s.TransitionAuth(ibAuthState::AuthFailed, _("invalid user or password"));
 		return;
 	}
+	const ibUserInfo& info = req.info;
 
 	// Open-access pass-through: Login returned true with an empty info
 	// (no sys_user rows AND caller supplied no creds). Transition to
@@ -1285,9 +1293,9 @@ void ibSessionRegistry::ProcessRemove(ibRegistryRequest& req)
 	// for this session don't hold its slot once the session itself goes
 	// away. Caller flow (ibWebSession::OnExit) drains via blocking
 	// RunOnWorker(...).get() before Close, so by this point there are
-	// no in-flight tasks; DropSession just removes the empty queue
+	// no in-flight tasks; Drop just removes the empty queue
 	// entry from the pool's per-session map.
-	if (ibWorkerPool* const pool = GetWorkerPool()) pool->DropSession(&s);
+	if (ibWorkerPool* const pool = GetWorkerPool()) pool->Drop(&s);
 
 	// If this session was holding exclusive mode, release it before the
 	// row teardown so any parked Adds resume. Drop the weak under the

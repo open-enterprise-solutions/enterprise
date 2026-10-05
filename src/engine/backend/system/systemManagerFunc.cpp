@@ -558,8 +558,8 @@ void ibValueSystemFunction::Alert(const wxString& strMessage) //Alert
 
 	// Frontend-owned: frame knows whether to pop a wx-modal (desktop)
 	// or emit a toast/HTTP notification (web). ShowModalMessage on web
-	// parks the worker on a future until the client replies — safe to
-	// call from any thread that owns the script's execution context.
+	// waits in the session's pool (ibWorkerPool::Await) until the client
+	// replies, running the session's work meanwhile.
 	if (auto* frame = ibSession::CurrentFrame())
 		frame->ShowModalMessage(strMessage, _("Warning"), wxICON_WARNING | wxOK);
 }

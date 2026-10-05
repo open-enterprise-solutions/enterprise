@@ -1144,19 +1144,17 @@ WFRONTEND_API std::string wfrontendTabIconPNG(const std::string& sessionId, int 
 
 namespace {
 
-// Open-form implementation, reached via the session manager's slot.
-std::string OpenFormInSession(ibWebSession* session, int metaID)
+// The form opened in the application's frame — on the session's worker (OpenFormInSession).
+std::string OpenFormInFrame(ibWebApplication* app, int metaID)
 {
-	if (session == nullptr || !session->IsAuthenticated() || activeMetaData == nullptr)
-		return "{}";
+	ibWebFrame* frame = app->GetFrame();
+	if (frame == nullptr) return "{}";
 
-	// Pin the tab's ibSession as Current() on this HTTP worker thread so
-	// moduleManager->GetProcUnit() resolves via session->GetProcUnitFor
-	// (the main / common module ProcUnits AttachRuntime attached
-	// at Login). Without the scope, Current() is null on worker threads,
-	// the form's parent-ProcUnit comes up nullptr, and Execute throws
-	// "compilation failed (#2)" at form-open.
-	ibSessionScope scope(session->Session());
+	// A question is open (see ibWebApplication::Dispatch): nothing opens under it.
+	if (frame->HasPendingModal()) {
+		ibVisualHostClient* host = app->GetActiveHost();
+		return host != nullptr ? host->ToJSON().dump(2) : std::string("{}");
+	}
 
 	// Forms live one or two levels deep under the configuration (common
 	// forms directly, object-owned forms under their catalog/document).
@@ -1183,12 +1181,6 @@ std::string OpenFormInSession(ibWebSession* session, int metaID)
 	}
 	if (metaForm == nullptr)
 		return "{}";
-
-	ibWebApplication* app = session->App();
-	if (app == nullptr) return "{}";
-
-	ibWebFrame* frame = app->GetFrame();
-	if (frame == nullptr) return "{}";
 
 	// CreateAndBuildForm runs the LoadFormData / BuildForm fallback for
 	// forms without a designer-drawn layout (empty tabs otherwise). It
@@ -1221,6 +1213,21 @@ std::string OpenFormInSession(ibWebSession* session, int metaID)
 	app->MarkDirty();
 
 	return host->ToJSON().dump(2);
+}
+
+// Open-form implementation, reached via the session manager's slot.
+std::string OpenFormInSession(ibWebSession* session, int metaID)
+{
+	if (session == nullptr || !session->IsAuthenticated() || activeMetaData == nullptr)
+		return "{}";
+	ibWebApplication* app = session->App();
+	if (app == nullptr) return "{}";
+
+	// On the session's own worker, as every other request of this session — opening a form runs its script.
+	// The worker binds the session, so moduleManager->GetProcUnit() resolves via session->GetProcUnitFor (the
+	// main / common module ProcUnits AttachRuntime attached at Login); unbound, the form's parent ProcUnit comes
+	// up nullptr and Execute throws "compilation failed (#2)" at form-open.
+	return app->RunOnWorker([app, metaID]() { return OpenFormInFrame(app, metaID); }).get();
 }
 
 } // namespace
@@ -1728,6 +1735,11 @@ WFRONTEND_API std::string wfrontendOpenMetaObject(const std::string& sessionId,
 	ibWebApplication* app = Sessions().FindApp(sessionId);
 	if (app == nullptr) return "{}";
 	return app->RunOnWorker([app, metaID, cmdType]() -> std::string {
+		// A question is open (see ibWebApplication::Dispatch): nothing opens under it.
+		if (app->GetFrame() != nullptr && app->GetFrame()->HasPendingModal()) {
+			ibVisualHostClient* host = app->GetActiveHost();
+			return host != nullptr ? host->ToJSON().dump(2) : std::string("{}");
+		}
 		auto* metaObject = activeMetaData->FindAnyObjectByFilter<ibValueMetaObject, ibMetaID>(metaID);
 		if (metaObject == nullptr) return "{}";
 		auto* cmdItem = dynamic_cast<ibBackendCommandItem*>(metaObject);
@@ -1757,9 +1769,9 @@ bool SessionManager::ModalReply(const std::string& id,
 	const std::string& modalId, int result)
 {
 	// Resolve the modal via the session's frame — no worker hop needed
-	// (ResolveModal just sets a promise's value under a small mutex;
-	// safe to call from the HTTP thread). The parked script worker
-	// wakes inside ShowModalMessage and returns this result.
+	// (ResolveModal records the answer under a small mutex and rings the
+	// session's pool; safe to call from the HTTP thread). The script
+	// waiting in ShowModalMessage wakes and returns this result.
 	std::shared_ptr<ibWebSession> keeper;
 	{
 		std::lock_guard<std::mutex> lock(m_mutex);
@@ -1886,8 +1898,9 @@ std::string SessionInfoFromSession(ibWebSession* s)
 		}
 		j["messages"] = std::move(arr);
 	}
-	// Pending modal — backend's ShowModalMessage parked a worker on a
-	// promise; surface the topmost modal here so the client can render
+	// Pending modal — a script waits in ShowModalMessage (in its pool's
+	// Await, which runs this very request meanwhile); surface the
+	// topmost modal here so the client can render
 	// a dialog with appropriate buttons. style is raw wx bitmask
 	// (wxOK / wxYES_NO / wxCANCEL / wxICON_*); the client decides
 	// button set + iconography from it. The modal stays in the queue
@@ -2032,6 +2045,13 @@ std::string CloseTabInSession(ibWebSession* session, int tabIndex)
 		if (frame == nullptr) return "{}";
 		if (tabIndex < 0 || static_cast<std::size_t>(tabIndex) >= frame->TabCount())
 			return "{}";
+
+		// A question is open (see ibWebApplication::Dispatch): the tab stays — it may hold the asking form. The
+		// active tree goes back so the client puts back the tab it removed.
+		if (frame->HasPendingModal()) {
+			ibVisualHostClient* host = app->GetActiveHost();
+			return host != nullptr ? host->ToJSON().dump(2) : std::string("{}");
+		}
 
 		// CloseTab fires beforeClose/onClose on the dying form and
 		// returns false if beforeClose vetoed. On veto the tab stays

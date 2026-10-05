@@ -167,8 +167,9 @@ void ibFrameCodeRunner::ClearOutputOnButtonClick(wxCommandEvent& event)
 void ibFrameCodeRunner::SyntaxChoiceOnChange(wxCommandEvent& event)
 {
 	// Items are aligned with the dropdown population order: 0 = VES,
-	// 1 = CES. Mode is process-global on ibCompileCode (gs_codeStyle),
-	// so updating it here affects every subsequent Compile call AND
+	// 1 = CES. Mode lives in this thread's compile state (codeRunner is
+	// sessionless — ibSession::GetCompileState), so updating it here
+	// affects every subsequent Compile call on this thread AND
 	// the fold parser's mode-aware dispatch (VES keyword-folds + CES
 	// brace-folds — both read GetCodeStyle on next CalcFoldLevel).
 	// Trigger an editor refresh so the visual switch is immediate.

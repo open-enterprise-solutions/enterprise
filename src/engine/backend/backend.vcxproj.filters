@@ -212,6 +212,9 @@
     <ClInclude Include="compiler\compileCode.h">
       <Filter>compiler</Filter>
     </ClInclude>
+    <ClInclude Include="compiler\compileState.h">
+      <Filter>compiler</Filter>
+    </ClInclude>
     <ClInclude Include="backend_core.h" />
     <ClInclude Include="databaseLayer\firebird\firebirdBlobCompression.h">
       <Filter>databaseLayer\firebird</Filter>
@@ -850,6 +853,7 @@
       <Filter>metaCollection</Filter>
     </ClInclude>
     <ClInclude Include="backend_localization.h" />
+    <ClInclude Include="translateState.h" />
     <ClInclude Include="formatString.h" />
     <ClInclude Include="res\resource.h">
       <Filter>res</Filter>

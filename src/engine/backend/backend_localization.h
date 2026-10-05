@@ -14,16 +14,17 @@ class BACKEND_API ibBackendLocalization {
 	ibBackendLocalization() = delete;
 public:
 
-	// Process-wide configuration-language default. Pinned by metadata
-	// OnInitialize to the configuration's main language code (the
-	// metadata short-code form ru/en/uk that localization arrays are
-	// keyed on); set once at boot from the platform locale before
-	// metadata loads.
+	// The configuration's main language code (the metadata short-code form
+	// ru/en/uk that localization arrays are keyed on) for whoever translates
+	// here — the current session's translate state, else this thread's
+	// (ibSession::GetTranslateState). Pinned when the configuration loads and
+	// when the designer changes it; a session takes its base's in CompileRoot.
 	static void SetUserLanguage(const wxString& strUserLanguage);
 
-	// Active configuration-language for the calling thread — session's
-	// GetLanguageCode() if a session is bound and it has a code,
-	// otherwise the process-wide default above. Every internal lookup
+	// Active configuration-language for the calling thread — the translate
+	// state's answer: the script's override, else the user's, else the
+	// configuration's; each session its own, a thread without one its own.
+	// Every internal lookup
 	// (synonym translate, raw-loc encode/decode) and the designer's
 	// advprop string editor route through here.
 	//

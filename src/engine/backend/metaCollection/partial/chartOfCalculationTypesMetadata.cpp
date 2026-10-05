@@ -148,7 +148,7 @@ ibFormPtr<ibBackendValueForm> ibValueMetaObjectChartOfCalculationTypes::GetFolde
 
 wxString ibValueMetaObjectChartOfCalculationTypes::GetDataPresentation(const ibValueDataObject* objValue) const
 {
-	static ibValue vDescription;
+	ibValue vDescription;
 	if (objValue->GetValueByMetaID((*m_propertyAttributeDescription)->GetMetaID(), vDescription))
 		return vDescription.GetString();
 	return wxEmptyString;

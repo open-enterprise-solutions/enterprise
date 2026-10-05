@@ -1906,7 +1906,7 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 				try {
 					// Waits for it: the answer has to be in hand before the reply is written, and the
 					// far end is already waiting on us.
-					pool->RunOnSession(session, capture);
+					pool->Execute(session, capture);
 				}
 				catch (...) {
 					focus = _("The window could not be captured.");

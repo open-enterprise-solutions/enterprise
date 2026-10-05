@@ -18,6 +18,8 @@
 #include "backend/backend_exception.h"
 #include "backend/compiler/value.h" // ibValue (base for ibValuePtr)
 #include "backend/compiler/procUnitState.h"   // ibProcUnitState — per-session interpreter swap target
+#include "backend/compiler/compileState.h"    // ibCompileState — per-session compiler state
+#include "backend/translateState.h"           // ibTranslateState — per-session translation state
 #include "backend/value_ptr.h"    // ibValuePtr for m_root
 #include "backend/databaseLayer/connectionHolder.h"   // ibDatabaseConnectionHolder for m_dbHolder
 #include "backend/databaseLayer/connectionScope.h"    // ibConnectionScope for OpenScope return type
@@ -534,21 +536,18 @@ public:
 	// Configuration-language code for this session — selects which
 	// metadata synonym / form-label translation is shown. Distinct from
 	// the platform's wxLocale (UI gettext, process-wide via --locale=).
-	// Set after auth from the user's preferred language (or the config's
-	// default when the user has none); script can override via the
-	// CurrentLanguage() builtin. Empty => fall back to the process-wide
-	// default (ibBackendLocalization::GetUserLanguage), which is what
-	// pre-auth and headless contexts use.
+	// Lives in the session's translate state (GetTranslateState): the
+	// script's override (CurrentLanguage), else the user's preferred
+	// language, else the configuration's — each session its own.
 	//
 	// Hot path: this getter is hit per metadata-synonym lookup, hundreds
 	// of times during a single form open. m_resolvedLanguageCode is the
-	// pre-computed answer — refreshed only when the override or the user
-	// record changes (SetLanguageCode / SetUserInfo). Inline + by-const-ref
-	// keeps the read at one field load with no logic.
-	const wxString& GetLanguageCode() const { return m_resolvedLanguageCode; }
+	// pre-computed answer — refreshed only when one of the three changes.
+	// Inline + by-const-ref keeps the read at one field load with no logic.
+	const wxString& GetLanguageCode() const { return m_translateState.m_resolvedLanguageCode; }
 	void            SetLanguageCode(const wxString& code) {
-		m_languageCode = code;
-		m_resolvedLanguageCode = code.IsEmpty() ? m_userInfo.m_strLanguageCode : code;
+		m_translateState.m_languageCode = code;
+		m_translateState.Resolve();
 	}
 
 protected:
@@ -666,6 +665,22 @@ public:
 	// line earlier resolved it a third time — three lookups per call for one
 	// answer that cannot change while the call runs.
 	static ibProcUnitState* PUStateOf(ibSession* session);
+
+	// Per-session COMPILER state — the twin of the interpreter's above (ibCompileState): what every compile of
+	// this session shares, the code style first. The current session's; a thread without one gets its own, as
+	// with GetPUState — codeRunner compiles that way.
+	static ibCompileState* GetCompileState() { return CompileStateOf(Current()); }
+
+	// The same answer, when the caller already holds the session — as PUStateOf.
+	static ibCompileState* CompileStateOf(ibSession* session);
+
+	// Per-session TRANSLATION state (ibTranslateState) — each session speaks its own language: the script's
+	// override, else the user's, else its configuration's. The current session's; a thread without one gets its
+	// own, as with GetPUState.
+	static ibTranslateState* GetTranslateState() { return TranslateStateOf(Current()); }
+
+	// The same answer, when the caller already holds the session — as PUStateOf.
+	static ibTranslateState* TranslateStateOf(ibSession* session);
 
 	// State accessors — lock-free reads.
 	ibSessionState State() const { return m_state.load(std::memory_order_acquire); }
@@ -822,15 +837,16 @@ private:
 	// mutator of session state, callers from appData / login dialogs
 	// route through it. SetSessionRawPassword writes the plain-text
 	// cache used by the Designer "Start debugging" child spawn; the
-	// matching read accessor stays public (registry-thread is the sole
-	// writer, reads from any thread are race-free against atomic-flag
+	// matching read accessor stays public (the logging-in thread writes
+	// it — ibSessionRegistry::Attach — before the registry announces the
+	// login, so reads from any thread are race-free against atomic-flag
 	// observation of Auth() == Authenticated).
 	void SetUserInfo(const ibUserInfo& info) {
 		m_userInfo = info;
-		// Refresh cached language: explicit SetLanguageCode override
-		// wins; otherwise the new user's preferred language.
-		if (m_languageCode.IsEmpty())
-			m_resolvedLanguageCode = info.m_strLanguageCode;
+		// The new user's preferred language — under an explicit
+		// SetLanguageCode override, over the configuration's.
+		m_translateState.m_userLanguageCode = info.m_strLanguageCode;
+		m_translateState.Resolve();
 	}
 	void SetSessionRawPassword(const wxString& pwd) { m_sessionRawPassword = pwd; }
 	void ClearSessionRawPassword() { m_sessionRawPassword.clear(); }
@@ -1057,16 +1073,6 @@ private:
 	// Initialized to the session-creation wall-clock in the ctor.
 	ibDateTime                m_workDate;
 
-	// Per-session active configuration-language code.
-	// m_languageCode = explicit override from SetLanguageCode (empty =
-	// no override, use the user's preferred language).
-	// m_resolvedLanguageCode = pre-computed answer for GetLanguageCode —
-	// either m_languageCode if non-empty, or m_userInfo.m_strLanguageCode.
-	// Refreshed on every SetLanguageCode / SetUserInfo call so the hot
-	// read path is a single field load, no fallback logic per call.
-	wxString                  m_languageCode;
-	wxString                  m_resolvedLanguageCode;
-
 	// Force-exit request flag — see RequestForceExit / IsForceExit.
 	// One-shot: set once, never cleared. The script thread observes it
 	// and exits its loop; OnForceExit dispatches the per-kind action.
@@ -1084,6 +1090,12 @@ private:
 	// at the worker boundary land in step 2. Default-constructed empty;
 	// no reads from here yet.
 	ibProcUnitState           m_procUnitState;
+
+	// The compiler's — see GetCompileState().
+	ibCompileState            m_compileState;
+
+	// Translation's — see GetTranslateState().
+	ibTranslateState          m_translateState;
 
 	// Exclusive mode — see SetExclusive(). True only on the session that
 	// currently holds monopoly. Atomic for lock-free IsExclusive() reads

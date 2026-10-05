@@ -24,10 +24,11 @@
 //
 // The target type is CONSTANT — a section belongs to one owner — so it rides on the column and never
 // on the row. Built once and kept, because a queryable hands out column POINTERS and a temporary
-// would leave every caller holding a dangling one.
+// would leave every caller holding a dangling one. ONCE across threads: the section is metadata, and every
+// session of the base reads through it at the same time.
 const ibBackendQueryColumn* ibTabularQueryable::OwnerRefColumn() const
 {
-	if (!m_ownerRef) {
+	std::call_once(m_ownerRefOnce, [this]() {
 		// A DB-backed section belongs to a reference owner, and names its owner field as the owner names its own
 		// reference — one spelling, the owner's, so a reader asking by the owner's reference finds this column.
 		const ibValueMetaObjectRecordDataRef* owner = m_meta != nullptr ? m_meta->GetParentAsType<ibValueMetaObjectRecordDataRef>() : nullptr;
@@ -47,7 +48,7 @@ const ibBackendQueryColumn* ibTabularQueryable::OwnerRefColumn() const
 		m_ownerRef.reset(new ibBackendColumnRawDB(ibBackendColumnRawDB::Reference(ibOwnerRefField(),
 			owner != nullptr ? reference_to_clsid(owner->GetMetaID(), clsid_metaclass(owner->GetClassType())) : 0,
 			ownerReference != nullptr ? ownerReference->GetName() : wxString(), identity)));
-	}
+	});
 	return m_ownerRef.get();
 }
 

@@ -1,5 +1,6 @@
 #include "webFrame.h"
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <iostream>
@@ -7,6 +8,7 @@
 
 #include "backend/backend_form.h"
 #include "backend/session/session.h"
+#include "backend/session/workerPool.h"   // Await / Wake — a question waits in the session's pool
 #include "backend/compiler/value.h"
 #include "backend/metaCollection/metaFormObject.h"   // ibValueMetaObjectFormBase::CreateAndBuildForm
 
@@ -62,18 +64,19 @@ ibWebFrame::~ibWebFrame()
 	m_pendingCloses.clear();
 	m_activeForm = nullptr;
 	m_tabs.clear();
-	// Release any worker threads parked on ShowModalMessage promises —
-	// setting value=0 unblocks them with a "cancelled" return so the
-	// script can finish unwinding instead of deadlocking on a future
-	// that will never be set after we go away.
+	// Answer every question still waiting with 0 — no button, read as
+	// cancelled — and wake its script, so it unwinds instead of waiting
+	// for a client nobody will answer for after we go away.
 	std::vector<PendingModal> drained;
 	{
 		std::lock_guard<std::mutex> g(m_modalMutex);
 		drained.swap(m_pendingModals);
 	}
-	for (auto& m : drained) {
-		try { m.reply->set_value(0); } catch (...) { /* already set */ }
-	}
+	for (auto& m : drained)
+		m.reply->received.store(true);
+	ibSession* const session = Session();
+	if (ibWorkerPool* const pool = !drained.empty() && session != nullptr ? session->GetWorkerPool() : nullptr)
+		pool->Wake(session);
 }
 
 void ibWebFrame::SetStatusText(const wxString& strStatus, int /*number*/)
@@ -142,27 +145,33 @@ std::string MakeModalId()
 int ibWebFrame::ShowModalMessage(const wxString& message,
 	const wxString& caption, int style)
 {
-	// Queue an entry, park the calling (script worker) thread on the
-	// entry's promise. The client picks up the modal via /session,
-	// renders a dialog, posts /modal-reply with the chosen wx button
-	// code; the HTTP handler calls ResolveModal which sets the value
-	// and we unblock here returning that code.
-	auto reply = std::make_shared<std::promise<int>>();
-	auto fut   = reply->get_future();
-	PendingModal m{ MakeModalId(), message, caption, style, reply };
+	// Queue the question and WAIT IN THE SESSION'S POOL (ibWorkerPool::Await). This thread holds the session, so
+	// it goes on running the session's tasks meanwhile — the /session poll that carries the question to the
+	// client among them. It used to park on a promise, and that poll, a task of this same session, queued behind
+	// it: the question never reached the client (audit 2026-10-05).
+	ibSession* const session = Session();
+	ibWorkerPool* const pool = session != nullptr ? session->GetWorkerPool() : nullptr;
+	if (pool == nullptr)
+		return 0;   // nobody to ask — 0 == no button, the caller reads it as cancelled
+
+	const auto reply = std::make_shared<ModalReply>();
+	const std::string id = MakeModalId();
 	{
 		std::lock_guard<std::mutex> g(m_modalMutex);
-		m_pendingModals.push_back(m);
+		m_pendingModals.push_back(PendingModal{ id, message, caption, style, reply });
 	}
-	// future.get() throws if the promise is destroyed without
-	// set_value/set_exception. The dtor below sets a fallback value, but
-	// guard anyway — a thrown exception here would propagate back into
-	// the script and look like a runtime error.
 	try {
-		return fut.get();
-	} catch (...) {
-		return 0;   // 0 == no button; caller treats as cancelled
+		pool->Await(session, [reply]() { return reply->received.load(); });
 	}
+	catch (...) {
+		// Cancelled while asking — a kick, a closed tab, the session stopping: the question is withdrawn and the
+		// interruption goes on up the script.
+		std::lock_guard<std::mutex> g(m_modalMutex);
+		m_pendingModals.erase(std::remove_if(m_pendingModals.begin(), m_pendingModals.end(),
+			[&id](const PendingModal& m) { return m.id == id; }), m_pendingModals.end());
+		throw;
+	}
+	return reply->code.load();
 }
 
 bool ibWebFrame::HasPendingModal() const
@@ -179,24 +188,23 @@ ibWebFrame::PendingModal ibWebFrame::PeekPendingModal() const
 
 bool ibWebFrame::ResolveModal(const std::string& id, int result)
 {
-	std::shared_ptr<std::promise<int>> p;
+	std::shared_ptr<ModalReply> reply;
 	{
 		std::lock_guard<std::mutex> g(m_modalMutex);
 		for (auto it = m_pendingModals.begin(); it != m_pendingModals.end(); ++it) {
 			if (it->id == id) {
-				p = it->reply;
+				reply = it->reply;
 				m_pendingModals.erase(it);
 				break;
 			}
 		}
 	}
-	if (!p) return false;
-	try {
-		p->set_value(result);
-	} catch (...) {
-		// promise already satisfied (duplicate reply) — treat as
-		// success since the worker has unblocked anyway.
-	}
+	if (!reply) return false;   // unknown, or answered already (a duplicate reply)
+	reply->code.store(result);
+	reply->received.store(true);
+	ibSession* const session = Session();
+	if (ibWorkerPool* const pool = session != nullptr ? session->GetWorkerPool() : nullptr)
+		pool->Wake(session);
 	return true;
 }
 

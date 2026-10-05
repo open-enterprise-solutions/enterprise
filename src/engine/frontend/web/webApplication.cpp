@@ -260,6 +260,12 @@ ibVisualHostClient* ibWebApplication::GetActiveHost() const
 
 bool ibWebApplication::Dispatch(int controlId, const wxString& kind, const wxString& value)
 {
+	// A QUESTION IS OPEN — the client may only answer it. The asking script runs this session's tasks while it
+	// waits (ibWorkerPool::Await), so an event let through here would run a handler UNDER the one that asked, on
+	// a form it may be about to close: the server's half of what wx does to the windows behind a modal dialog.
+	if (m_frame != nullptr && m_frame->HasPendingModal())
+		return false;
+
 	ibVisualHostClient* host = GetActiveHost();
 	if (host == nullptr)
 		return false;
@@ -354,7 +360,7 @@ void ibWebApplication::OnExit()
 	// it on the HTTP thread (the one that reached OnExit via
 	// ibSessionRegistry::Destroy → ~ibWebSession) would hand procUnit a
 	// thread_local state set up for the session's worker and crash on
-	// deref. Drain via RunOnWorker(...).get() before DropSession below.
+	// deref. Drain via RunOnWorker(...).get() before Drop below.
 	if (m_frame != nullptr) {
 		RunOnWorker([this]() {
 			if (m_frame == nullptr) return true;

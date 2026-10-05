@@ -28,6 +28,7 @@
 #include "backend/system/value/valueQueryable.h"     // ibValueQueryable — a role-module restriction returned as a set
 #include "backend/metaCollection/metaRoleObject.h"   // ibValueMetaObjectRole — GetRoleModule()
 #include "backend/metaCollection/genericData.h"      // AccessRight_Show / _Modify / _Erase — the rights, as the metadata already answers them
+#include "backend/metaCollection/metaIntrospect.h"   // ibConfigurationWritesInWords — the session's code style
 #include "backend/backend_exception.h"               // ibBackendAccessException
 #include "backend/diagnostics/journal.h"             // ibJournalInfo — a cancel says what it reached
 #include "backend/job/jobManager.h"                  // TenantsOf — a cancel reaches the runs reading for this session
@@ -697,7 +698,7 @@ void ibSession::Teardown()
 
 	if (!m_listed) {
 		if (ibWorkerPool* const pool = regPtr != nullptr ? GetWorkerPool() : nullptr)
-			pool->DropSession(this);
+			pool->Drop(this);
 		Transition(ibSessionState::Gone);
 		return;
 	}
@@ -829,6 +830,16 @@ ibValueModuleManagerRuntimeConfiguration* ibSession::CreateRoot(ibMetaDataConfig
 bool ibSession::CompileRoot()
 {
 	if (!m_root) return false;
+	// This session's modules are compiled in ITS configuration's syntax, and it speaks its configuration's main
+	// language when its user has none — its base's, taken before the first compile. One server may hold bases
+	// written in different syntaxes and different languages.
+	const ibMetaDataConfigurationBase* const metaData = ibApplicationInstance::GetActiveMetaData(GetApplicationInstance());
+	CompileStateOf(this)->m_codeStyle = ibConfigurationWritesInWords(metaData)
+		? ibProgramSyntax::syntax_ves : ibProgramSyntax::syntax_ces;
+	if (metaData != nullptr) {
+		TranslateStateOf(this)->m_defLanguageCode = metaData->GetLangCode();
+		TranslateStateOf(this)->Resolve();
+	}
 	if (!m_root->CreateMainModule()) return false;
 
 	// Runtime bring-up — formerly an explicit mm->AttachRuntime(s)
@@ -1007,6 +1018,10 @@ void ibSession::Cancel()
 		ibRunState running = ibRunState::Running;
 		m_procUnitState.m_runState.compare_exchange_strong(running, ibRunState::Cancelled);
 	}
+	// A script that waits for its client (ibWorkerPool::Await — a question on the web) hears it too: rung, it
+	// finds the run cancelled and throws the interruption up the script.
+	if (ibWorkerPool* const pool = GetWorkerPool())
+		pool->Wake(this);
 	for (const std::shared_ptr<ibSession>& tenant : tenants)
 		tenant->Cancel();
 }
@@ -1231,6 +1246,28 @@ ibProcUnitState* ibSession::PUStateOf(ibSession* session)
 	return &ts_fallbackPUState;
 }
 
+ibCompileState* ibSession::CompileStateOf(ibSession* session)
+{
+	if (session != nullptr)
+		return &session->m_compileState;
+
+	// Sessionless fallback — codeRunner, the tests: each thread its own, here and not in GetCompileState for
+	// the reason PUStateOf gives.
+	static thread_local ibCompileState ts_fallbackCompileState;
+	return &ts_fallbackCompileState;
+}
+
+ibTranslateState* ibSession::TranslateStateOf(ibSession* session)
+{
+	if (session != nullptr)
+		return &session->m_translateState;
+
+	// Sessionless fallback — codeRunner, the tests: each thread its own, here and not in GetTranslateState for
+	// the reason PUStateOf gives.
+	static thread_local ibTranslateState ts_fallbackTranslateState;
+	return &ts_fallbackTranslateState;
+}
+
 void ibSession::WakeDebugLoop()
 {
 	// Mark the session for cancellation and pop any parked debug loop.
@@ -1257,8 +1294,21 @@ void ibSession::WakeDebugLoop()
 
 bool ibSession::OnClose(bool /*force*/)
 {
-	// A forced close has already cancelled the work (Close), so the queue Teardown waits behind is idle.
-	Teardown();
+	// A forced close has already cancelled the work (Close). The teardown goes BEHIND that work, on this
+	// session's own worker: run where the close arrives — the registry thread, for a kick — it waited five
+	// seconds for the script to unwind and then took the runtime down under it if it had not. Queued, it runs
+	// once the script is out, whatever that takes, and the registry thread waits for nobody. Where nothing can
+	// run it — no pool (it then ran inline), a stopped one, a session nobody holds by shared_ptr — it runs here.
+	const std::shared_ptr<ibSession> self = weak_from_this().lock();
+	if (!self) {
+		Teardown();
+		return true;
+	}
+	std::future<void> queued = Submit([self]() { self->Teardown(); });
+	if (queued.valid() && queued.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+		try { queued.get(); }
+		catch (...) { Teardown(); }   // refused (a stopped pool) — or it threw, and a second call is a no-op
+	}
 	return true;
 }
 
@@ -1387,12 +1437,7 @@ ibSession::OpenResult ibSession::Open(const wxString& user, const wxString& pass
 		// immediately without the new Attach having been processed.
 		TransitionAuth(ibAuthState::Anonymous);
 
-		ibRegistryRequest req;
-		req.kind     = ibRegistryRequestKind::Attach;
-		req.session  = shared_from_this();
-		req.user     = u;
-		req.password = p;
-		reg.Submit(std::move(req), ibPriority::Normal);
+		reg.Attach(shared_from_this(), u, p);
 
 		return WaitForAuth(ibAuthState::Anonymous, timeout);
 	};
@@ -1407,10 +1452,10 @@ ibSession::OpenResult ibSession::Open(const wxString& user, const wxString& pass
 		//   3. OnAuthenticated listeners — per-session bring-up
 		//      (RunDatabase fires OnBefore/AfterRunMetaObject which read
 		//      session->mm; CompileRoot; AttachRuntime).
-		// Note: NotifyAuthenticated already calls BindSessionToThread
-		// before firing listeners, so any breakpoint hit inside them
-		// resolves Current() to THIS session (the registry-fallback
-		// trap is closed at that level, no extra scope needed here).
+		// Note: NotifyAuthenticated binds this session for the bring-up
+		// (and gives the thread back after), so any breakpoint hit inside
+		// the listeners resolves Current() to THIS session (the registry-
+		// fallback trap is closed at that level, no extra scope needed here).
 		reg.NotifyAuthenticated(this);
 		return OpenResult::Authenticated;
 	}

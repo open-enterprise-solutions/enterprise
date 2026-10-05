@@ -194,15 +194,15 @@ void ibApplicationHost::CloseAll()
 //	The process
 ///////////////////////////////////////////////////////////////////////////////
 
-// How many workers the process's pool gets, by what the process is. The web host serves many sessions at once:
-// 4 × CPU cores, up to 32. Every other host that opens a base runs its scheduled and background sessions there:
-// two — enough that one long job cannot stall another, small enough that background work never crowds out
-// interactive sessions (a session owns ONE connection, so the real ceiling is the connection pool). The
-// launcher runs no session at all.
+// How many workers the process's pool gets, by what the process is. The web host and the application server
+// serve many sessions at once: 4 × CPU cores, up to 32. Every other host that opens a base runs its scheduled
+// and background sessions there: two — enough that one long job cannot stall another, small enough that
+// background work never crowds out interactive sessions (a session owns ONE connection, so the real ceiling is
+// the connection pool). The launcher runs no session at all.
 static std::size_t PickWorkerCount(ibRunMode runMode)
 {
 	if (runMode == eLAUNCHER_MODE) return 0;
-	if (runMode != eWEB_RUNTIME_MODE) return 2;
+	if (runMode != eWEB_RUNTIME_MODE && runMode != eSERVICE_MODE) return 2;
 	const std::size_t hw = std::thread::hardware_concurrency();
 	return std::min<std::size_t>(32, std::max<std::size_t>(4, hw * 4));
 }

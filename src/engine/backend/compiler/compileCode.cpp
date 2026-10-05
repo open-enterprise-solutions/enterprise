@@ -10,6 +10,7 @@
 #include "system/systemManager.h"
 #include "backend/guid.h"  // wxNewUniqueGuid for anonymous-lambda synthetic naming
 #include "backend/diagnostics/journal.h"   // says whether a lambda recorded a query tree
+#include "backend/session/session.h"       // GetCompileState — the code style lives there
 
 #pragma warning(push)
 #pragma warning(disable : 4018)
@@ -71,13 +72,6 @@ static constexpr std::array<int, 256> MakeOperPriority()
 
 static constexpr std::array<int, 256> gs_operPriority = MakeOperPriority();
 
-// set code style by file extension
-// CES is the default — modern brace/paren syntax with `;` terminators.
-// VES (Visual Basic-style ES, a legacy business-scripting dialect) remains supported for legacy ES
-// configurations migrated from a legacy business-scripting platform; loading a VES module flips this
-// via SetCodeStyle().
-static short gs_codeStyle = CODE_CES;
-
 //////////////////////////////////////////////////////////////////////
 // Construction/Destruction ibCompileCode
 //////////////////////////////////////////////////////////////////////
@@ -128,13 +122,19 @@ ibCompileCode::~ibCompileCode()
 	wxDELETE(m_rootContext);
 }
 
+// THE CODE STYLE IS THE COMPILE STATE'S (ibCompileState) — the current session's, which holds its
+// configuration's; a thread without a session its own: codeRunner's syntax choice, a test. It used to be one
+// static for the process, and a process may hold bases written in different syntaxes.
+// CES is the default — modern brace/paren syntax with `;` terminators.
+// VES (Visual Basic-style ES, a legacy business-scripting dialect) remains supported for legacy ES
+// configurations migrated from a legacy business-scripting platform.
 void ibCompileCode::SetCodeStyle(short codeStyle)
 {
-	gs_codeStyle = codeStyle;
+	ibSession::GetCompileState()->m_codeStyle = static_cast<ibProgramSyntax>(codeStyle);
 }
 
 // Definition of ibTranslateCode::IsAllowedKey — declared on the base
-// (translateCode.h), bodied here so the gate can read gs_codeStyle
+// (translateCode.h), bodied here so the gate can ask GetCodeStyle
 // without forcing translateCode.cpp to include compileCode.h. The
 // include chain stays one-way (compile → translate). In CES, block-
 // fence keywords (Then / Do / EndIf / EndDo / EndFunction /
@@ -142,7 +142,7 @@ void ibCompileCode::SetCodeStyle(short codeStyle)
 // place in brace-style sources. VES leaves every keyword in.
 bool ibTranslateCode::IsAllowedKey(int keywordId)
 {
-	if (gs_codeStyle == CODE_CES) {
+	if (ibCompileCode::GetCodeStyle() == CODE_CES) {
 		switch (keywordId) {
 			case KEY_THEN:
 			case KEY_DO:
@@ -160,7 +160,7 @@ bool ibTranslateCode::IsAllowedKey(int keywordId)
 
 short ibCompileCode::GetCodeStyle()
 {
-	return gs_codeStyle;
+	return ibSession::GetCompileState()->m_codeStyle;
 }
 
 void ibCompileCode::Reset()
@@ -1822,7 +1822,7 @@ bool ibCompileCode::EmitFunctionBody(ibCompileContext* /*context*/,
 
 	m_strCurFuncName = savedCurFuncName;
 
-	if (!bareExprBody && gs_codeStyle == CODE_VES) {
+	if (!bareExprBody && GetCodeStyle() == CODE_VES) {
 		// Closer keyword matches the OPENING keyword — derived from
 		// m_bCodeRet, which IsReturnFunction(m_numReturn) populated at
 		// signature parse. Both named and anonymous bodies dispatch
@@ -2151,7 +2151,7 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 	//     the `{` it saw, so the brace is back in the stream — must consume.
 	//   * control-structure body without braces (`if (x) stmt;`) is also
 	//     RETURN_BLOCK with no `{` — guarded by IsNextDelimeter check below.
-	if (gs_codeStyle == CODE_CES && context->m_numReturn != RETURN_NONE && IsNextDelimeter(wxT('{'))) {
+	if (GetCodeStyle() == CODE_CES && context->m_numReturn != RETURN_NONE && IsNextDelimeter(wxT('{'))) {
 		GETDelimeter(wxT('{'));
 		bCompileBlock = true;
 
@@ -2176,7 +2176,7 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 	// call only: a statement opened by a keyword leaves the switch below with a `break` that ends the
 	// switch, not the loop, so `else if (c) { … } n = n + 1;` put the increment inside the else
 	// (2026-09-30: a `while` over it never ended). The loop condition says it for every kind at once.
-	const bool oneStatement = gs_codeStyle == CODE_CES && !bCompileBlock && context->m_numReturn == RETURN_BLOCK;
+	const bool oneStatement = GetCodeStyle() == CODE_CES && !bCompileBlock && context->m_numReturn == RETURN_BLOCK;
 
 	do {
 
@@ -2378,7 +2378,7 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 			const ibLexem& nextLexem = GetLexem();
 			if (IDENTIFIER == nextLexem.m_lexType) {
 
-				if (gs_codeStyle == CODE_VES)
+				if (GetCodeStyle() == CODE_VES)
 					context->m_numTempVar = 0;
 
 				if (IsNextDelimeter(':')) {// this is a label task encountered
@@ -2546,7 +2546,7 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 				&& nextLexem.m_numData == wxT(';'))
 			{
 			}
-			else if (gs_codeStyle == CODE_CES && nextLexem.m_lexType == DELIMITER
+			else if (GetCodeStyle() == CODE_CES && nextLexem.m_lexType == DELIMITER
 				&& nextLexem.m_numData == wxT('{'))
 			{
 				m_numCurrentCompile--;// step back
@@ -2557,7 +2557,7 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 				context->m_numTempVar = numTempVar;
 
 			}
-			else if (gs_codeStyle == CODE_CES && nextLexem.m_lexType == DELIMITER
+			else if (GetCodeStyle() == CODE_CES && nextLexem.m_lexType == DELIMITER
 				&& nextLexem.m_numData == wxT('}'))
 			{
 				// `}` at the module-level body is a syntax error — there
@@ -2592,7 +2592,7 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 	if (oneStatement)
 		PreviewGetLexem();
 
-	if (gs_codeStyle == CODE_CES && bCompileBlock) {
+	if (GetCodeStyle() == CODE_CES && bCompileBlock) {
 		GETDelimeter(wxT('}'));
 
 		// Pair with CTX_BEGIN — emit only for RETURN_BLOCK.
@@ -3156,7 +3156,7 @@ bool ibCompileCode::CompileIf(ibCompileContext* context)
 	AddLineInfo(code);
 	code.m_numOper = OPER_IF;
 
-	if (gs_codeStyle == CODE_CES)
+	if (GetCodeStyle() == CODE_CES)
 		GETDelimeter(wxT('('));
 
 	ibParamUnit variable = GetExpression(context);
@@ -3167,12 +3167,12 @@ bool ibCompileCode::CompileIf(ibCompileContext* context)
 
 	int nLastIFLine = m_cByteCode.m_listCode.size() - 1;
 
-	if (gs_codeStyle == CODE_VES)
+	if (GetCodeStyle() == CODE_VES)
 		GETKeyWord(KEY_THEN);
 	else
 		GETDelimeter(wxT(')'));
 
-	if (gs_codeStyle == CODE_CES)
+	if (GetCodeStyle() == CODE_CES)
 		CompileBlock(CreateLocalContext(context));
 	else
 		CompileBlock(context);
@@ -3199,7 +3199,7 @@ bool ibCompileCode::CompileIf(ibCompileContext* context)
 		AddLineInfo(code2);
 		code2.m_numOper = OPER_IF;
 
-		if (gs_codeStyle == CODE_CES)
+		if (GetCodeStyle() == CODE_CES)
 			GETDelimeter(wxT('('));
 
 		variable = GetExpression(context);
@@ -3209,12 +3209,12 @@ bool ibCompileCode::CompileIf(ibCompileContext* context)
 		m_cByteCode.m_listCode.emplace_back(std::move(code2));
 		nLastIFLine = m_cByteCode.m_listCode.size() - 1;
 
-		if (gs_codeStyle == CODE_VES)
+		if (GetCodeStyle() == CODE_VES)
 			GETKeyWord(KEY_THEN);
 		else
 			GETDelimeter(wxT(')'));
 
-		if (gs_codeStyle == CODE_CES)
+		if (GetCodeStyle() == CODE_CES)
 			CompileBlock(CreateLocalContext(context));
 		else
 			CompileBlock(context);
@@ -3251,13 +3251,13 @@ bool ibCompileCode::CompileIf(ibCompileContext* context)
 
 		GETKeyWord(KEY_ELSE);
 
-		if (gs_codeStyle == CODE_CES)
+		if (GetCodeStyle() == CODE_CES)
 			CompileBlock(CreateLocalContext(context));
 		else
 			CompileBlock(context);
 	}
 
-	if (gs_codeStyle == CODE_VES)
+	if (GetCodeStyle() == CODE_VES)
 		GETKeyWord(KEY_ENDIF);
 
 	const int numCurCompile = m_cByteCode.m_listCode.size();
@@ -3287,7 +3287,7 @@ bool ibCompileCode::CompileWhile(ibCompileContext* context)
 	AddLineInfo(code);
 	code.m_numOper = OPER_IF;
 
-	if (gs_codeStyle == CODE_CES)
+	if (GetCodeStyle() == CODE_CES)
 		GETDelimeter(wxT('('));
 
 	ibParamUnit variable = GetExpression(context);
@@ -3298,17 +3298,17 @@ bool ibCompileCode::CompileWhile(ibCompileContext* context)
 
 	m_cByteCode.m_listCode.emplace_back(std::move(code));
 
-	if (gs_codeStyle == CODE_VES)
+	if (GetCodeStyle() == CODE_VES)
 		GETKeyWord(KEY_DO);
 	else
 		GETDelimeter(wxT(')'));
 
-	if (gs_codeStyle == CODE_CES)
+	if (GetCodeStyle() == CODE_CES)
 		CompileBlock(CreateLocalContext(context));
 	else
 		CompileBlock(context);
 
-	if (gs_codeStyle == CODE_VES)
+	if (GetCodeStyle() == CODE_VES)
 		GETKeyWord(KEY_ENDDO);
 
 	ibByteUnit code2;
@@ -3331,7 +3331,7 @@ bool ibCompileCode::CompileFor(ibCompileContext* context)
 
 	GETKeyWord(KEY_FOR);
 
-	if (gs_codeStyle == CODE_CES)
+	if (GetCodeStyle() == CODE_CES)
 		GETDelimeter(wxT('('));
 
 	const wxString& strRealName = GETIdentifier(true);
@@ -3386,17 +3386,17 @@ bool ibCompileCode::CompileFor(ibCompileContext* context)
 
 	const int nStartFOR = m_cByteCode.m_listCode.size() - 1;
 
-	if (gs_codeStyle == CODE_VES)
+	if (GetCodeStyle() == CODE_VES)
 		GETKeyWord(KEY_DO);
 	else
 		GETDelimeter(wxT(')'));
 
-	if (gs_codeStyle == CODE_CES)
+	if (GetCodeStyle() == CODE_CES)
 		CompileBlock(CreateLocalContext(context));
 	else
 		CompileBlock(context);
 
-	if (gs_codeStyle == CODE_VES)
+	if (GetCodeStyle() == CODE_VES)
 		GETKeyWord(KEY_ENDDO);
 
 	ibByteUnit code2;
@@ -3440,11 +3440,11 @@ int ibCompileCode::FindForeachHeaderEnd(int at) const
 		if (isDelim(i, wxT(')')) || isDelim(i, wxT(']'))) {
 			// The header's own closer is the first one the source did not open.
 			if (depth == 0)
-				return gs_codeStyle == CODE_CES ? (int)i : wxNOT_FOUND;
+				return GetCodeStyle() == CODE_CES ? (int)i : wxNOT_FOUND;
 			--depth;
 			continue;
 		}
-		if (depth == 0 && gs_codeStyle != CODE_CES
+		if (depth == 0 && GetCodeStyle() != CODE_CES
 			&& m_listLexem[i].m_lexType == KEYWORD && m_listLexem[i].m_numData == KEY_DO)
 			return (int)i;
 	}
@@ -3457,7 +3457,7 @@ bool ibCompileCode::CompileForeach(ibCompileContext* context)
 
 	GETKeyWord(KEY_FOREACH);
 
-	if (gs_codeStyle == CODE_CES)
+	if (GetCodeStyle() == CODE_CES)
 		GETDelimeter(wxT('('));
 
 	const wxString& strRealName = GETIdentifier(true);
@@ -3507,17 +3507,17 @@ bool ibCompileCode::CompileForeach(ibCompileContext* context)
 	std::vector<int> chainSkipIps;
 	EmitLinqChainClauses(context, variable, chainSkipIps);
 
-	if (gs_codeStyle == CODE_VES)
+	if (GetCodeStyle() == CODE_VES)
 		GETKeyWord(KEY_DO);
 	else
 		GETDelimeter(wxT(')'));
 
-	if (gs_codeStyle == CODE_CES)
+	if (GetCodeStyle() == CODE_CES)
 		CompileBlock(CreateLocalContext(context));
 	else
 		CompileBlock(context);
 
-	if (gs_codeStyle == CODE_VES)
+	if (GetCodeStyle() == CODE_VES)
 		GETKeyWord(KEY_ENDDO);
 
 	const int nextIterIp = (int)m_cByteCode.m_listCode.size();
@@ -3552,7 +3552,7 @@ bool ibCompileCode::CompileException(ibCompileContext* context)
 	ibByteUnit code2;
 	AddLineInfo(code2);
 
-	if (gs_codeStyle == CODE_CES)
+	if (GetCodeStyle() == CODE_CES)
 		CompileBlock(CreateLocalContext(context));
 	else
 		CompileBlock(context);
@@ -3566,12 +3566,12 @@ bool ibCompileCode::CompileException(ibCompileContext* context)
 
 	GETKeyWord(KEY_EXCEPT);
 
-	if (gs_codeStyle == CODE_CES)
+	if (GetCodeStyle() == CODE_CES)
 		CompileBlock(CreateLocalContext(context));
 	else
 		CompileBlock(context);
 
-	if (gs_codeStyle == CODE_VES)
+	if (GetCodeStyle() == CODE_VES)
 		GETKeyWord(KEY_ENDTRY);
 
 	m_cByteCode.m_listCode[addrLine].m_param1.m_numIndex = m_cByteCode.m_listCode.size();

@@ -457,12 +457,11 @@ bool ibMetaDataConfiguration::OnInitialize(const int flags)
 	if (!LoadDatabase())
 		return false;
 
-	// Localization: pin the process-wide default to the configuration's
-	// main language code (metadata short-code form ru/en/uk). Pre-auth
-	// callers without a session bound — launcher / login screen — read
-	// through this default. Per-session active language is assigned
-	// later by SetUserInfo on authentication and stays cached on the
-	// session for its whole life.
+	// Localization: pin the configuration's main language code (metadata
+	// short-code form ru/en/uk) into the translate state of whoever loads
+	// it — the designer's session, a base's first session. Every other
+	// session takes its base's in CompileRoot; the user's preferred
+	// language is assigned by SetUserInfo on authentication and wins.
 	ibBackendLocalization::SetUserLanguage(GetLangCode());
 
 	if ((flags & _app_start_create_debug_server_flag) != 0) {

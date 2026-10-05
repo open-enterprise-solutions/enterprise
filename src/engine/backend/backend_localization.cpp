@@ -2,34 +2,29 @@
 #include "appData.h"
 #include "session/session.h"
 
-static wxString ms_strUserLanguage = wxT("en");
+// What is answered when nothing has said a language yet.
+static const wxString ms_strUserLanguage = wxT("en");
 
 ////////////////////////////////////////////////////////////////////////////////
 
 void ibBackendLocalization::SetUserLanguage(const wxString& strUserLanguage)
 {
-	if (strUserLanguage.IsEmpty()) {
-		ms_strUserLanguage = wxT("en");
-		return;
-	}
-
-	ms_strUserLanguage = strUserLanguage;
+	// ⭐ THE LANGUAGE OF WHOEVER TRANSLATES HERE — the current session's translate state (the designer's at its
+	// load, a base's first session at its bring-up), else this thread's (codeRunner). It used to be one string for
+	// the process: in a process of several bases a user with no language of their own read the language of
+	// whichever base had opened LAST, and a reader raced the writer.
+	ibTranslateState* const state = ibSession::GetTranslateState();
+	state->m_defLanguageCode = strUserLanguage.IsEmpty() ? ms_strUserLanguage : strUserLanguage;
+	state->Resolve();
 }
 
 const wxString& ibBackendLocalization::GetUserLanguage()
 {
-	// Hot path — two slots only:
-	//   1. ibSession::Current()->GetLanguageCode() — per-session,
-	//      pre-computed m_resolvedLanguageCode (single field load),
-	//      set in SetUserInfo on authentication.
-	//   2. ms_strUserLanguage — process-wide default. Pinned by
-	//      metadata OnInitialize to the configuration's main language
-	//      code (metadata short-code form ru/en/uk).
-	if (auto* s = ibSession::Current()) {
-		const wxString& code = s->GetLanguageCode();
-		if (!code.IsEmpty())
-			return code;
-	}
+	// Hot path — one field: the translate state's ready answer (ibTranslateState::Resolve), of the current
+	// session or of this thread when it has none.
+	const wxString& code = ibSession::GetTranslateState()->m_resolvedLanguageCode;
+	if (!code.IsEmpty())
+		return code;
 	return ms_strUserLanguage;
 }
 
