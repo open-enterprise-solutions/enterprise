@@ -1278,7 +1278,7 @@ void ibSessionRegistry::ProcessRemove(ibRegistryRequest& req)
 {
 	if (!req.session) return;
 	ibSession& s = *req.session;
-	const bool wasAuthenticated = (s.Auth() == ibAuthState::Authenticated);
+	const bool released = (s.State() == ibSessionState::Stopping);
 	s.Transition(ibSessionState::Stopping);
 
 	// Drop the session's queue from the worker pool so any pending tasks
@@ -1320,9 +1320,10 @@ void ibSessionRegistry::ProcessRemove(ibRegistryRequest& req)
 	// Stopping and Gone) — they may need to query session identity.
 	// NotifyDisconnect itself gates the auth-counter decrement on
 	// session's auth state, so non-authenticated removals don't
-	// disturb the first/last-connect bookkeeping.
-	NotifyDisconnect(&s);
-	(void)wasAuthenticated;
+	// disturb the first/last-connect bookkeeping. A released session
+	// has had them already, on its owner's thread (ibSession::Teardown).
+	if (!released)
+		NotifyDisconnect(&s);
 
 	// Drop any long-held sys_lock rows owned by this session before the
 	// row teardown below. Cluster-aware — every wes process owning the

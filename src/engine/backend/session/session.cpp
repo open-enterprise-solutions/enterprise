@@ -703,11 +703,18 @@ void ibSession::Teardown()
 	}
 
 	// Submit Remove@Urgent — the registry thread DELETEs the sys_session
-	// row, fires OnDisconnect and drops the index entry. It does NOT free
-	// the object: m_own is a weak index, so the object dies when the last
-	// holder does, which is normally the window that just went down.
+	// row and drops the index entry. It does NOT free the object: m_own
+	// is a weak index, so the object dies when the last holder does,
+	// which is normally the window that just went down.
 	if (regPtr == nullptr) return;
 	auto& reg = *regPtr;
+
+	// TAKE OUR RUNTIME DOWN OURSELVES, on this thread — the mirror of Open, which brought it up here. The
+	// listeners detach the runtime and destroy the root, and the last one out closes the configuration.
+	// Left to the Remove, the registry thread did it, and the designer's cached forms died off the main
+	// thread at exit (dump of 2026-10-04). Before IsFatal: a dead registry thread does not excuse us.
+	reg.NotifyDisconnect(this);
+
 	if (reg.IsFatal())
 		return;
 
@@ -725,8 +732,8 @@ void ibSession::Teardown()
 	// having.
 	reg.DeleteOwnSessionRow(*this);
 
-	// The Remove still follows: it drops the index entry, fires disconnect listeners and releases
-	// the worker queue — bookkeeping that touches no database, so the shared thread barely feels it.
+	// The Remove still follows: it drops the index entry and releases the worker queue — bookkeeping
+	// that touches no database, so the shared thread barely feels it.
 	ibRegistryRequest req;
 	req.kind    = ibRegistryRequestKind::Remove;
 	req.session = shared_from_this();

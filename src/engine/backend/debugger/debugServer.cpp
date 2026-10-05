@@ -2087,7 +2087,7 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 		// Destroy = process exit, but hosts can decline. wes registers a
 		// keep-alive hook that returns true while user tabs are still
 		// connected. Drop the gate and force-exit the parked session —
-		// its ProcessRemove → NotifyDisconnect cascade is
+		// its Teardown → NotifyDisconnect cascade is
 		// what drives the OnLastDisconnect / wes exit hook chain.
 		// Note: CoUninitialize() is already done in Entry() epilogue
 		// (line ~472). Doing it again here would give a double-uninit

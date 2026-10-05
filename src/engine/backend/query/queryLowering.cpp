@@ -2376,14 +2376,18 @@ static bool ReferencesPassing(const std::vector<ibReferenceTest>& tests, std::ve
 	for (const auto& read : reads) {
 		if (most != 0 && out.size() > most)
 			break;
+		// …the reference and nothing else. An ordinary read takes the whole row (it may have readers past its select
+		// list); DISTINCT over the reference projects that and no more, and a reference is distinct already. A
+		// document's row is wide — read whole, every page of a list re-asked thousands of documents for one column
+		// (2026-10-05).
+		const ibBackendQueryColumn* key = read.first->GetPrimaryKeyColumns().front();
 		ibDataQueryBuilder q;
-		q.From(read.first);
+		q.From(read.first).Select(key, wxEmptyString).Distinct({ key });
 		for (size_t i = 0; i < tests.size(); ++i)
 			q.Where(CondEq({ read.second[i] }, tests[i].m_value, /*notEqual*/ filled));
 		ibReadPageRequest page;   // the whole set — or one past `most`
 		if (most != 0)
 			page.m_count = static_cast<int>(most + 1 - out.size());
-		const ibBackendQueryColumn* key = read.first->GetPrimaryKeyColumns().front();
 		ibDataQueryResult r = q.Execute(page);
 		while (r.Next())
 			out.push_back(r.GetValue(key));

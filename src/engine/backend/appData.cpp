@@ -415,10 +415,12 @@ void ibApplicationInstance::WireSessionEvents()
 		}
 	});
 
-	// Per-session teardown — runs on the registry thread inside
-	// ProcessRemove while the session is in Stopping state. UnbindSession
-	// (by pointer, not thread id) erases bindings regardless of which
-	// thread originally pinned them.
+	// Per-session teardown — runs on the thread that releases the session's
+	// holder (ibSession::Teardown), the mirror of the bring-up above, while
+	// the session is in Stopping state; only a session nobody released is
+	// taken down by the registry (ProcessRemove). UnbindSession (by pointer,
+	// not thread id) erases bindings regardless of which thread originally
+	// pinned them.
 	registry->OnDisconnect([this](ibSession* s) {
 		if (s == nullptr) return;
 		// Capture session.closed BEFORE UnbindSession + DestroyRoot —
