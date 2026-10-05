@@ -361,7 +361,7 @@ bool ibValueMetaObjectAccountingRegister::OnSaveMetaObject(int flags)
 	//
 	// It lives on the schema declaration instead (accountingRegisterMetadataSchema.cpp): every rule
 	// runs BEFORE the first statement, states its reason into the ledger, and greys the Apply button —
-	// the same road the analytics ceiling and the hierarchy rules already take.
+	// the same road the analytics ceiling already takes.
 	//
 	// ⭐ WHAT *IS* CHECKED HERE IS THE ABSENCE, AND IT IS REPORTED, NOT THROWN. "Two charts" is a
 	// question about a schema that can still be computed; "no chart at all" is not — the account

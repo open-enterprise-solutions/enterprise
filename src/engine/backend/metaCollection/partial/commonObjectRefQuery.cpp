@@ -439,8 +439,9 @@ bool ibValueRecordDataObjectRef::DeleteData()
 	// Only the OWN hierarchy is cleared — the parent column of this very table. References to this
 	// object from ELSEWHERE are a different question (referential integrity), and answering it here
 	// would be answering it in the dark.
+	// A flat list has no parent column to clear (FillArrayObjectByPredefinedAttribute).
 	ibValueMetaObjectRecordDataHierarchyMutableRef* hierarchy = nullptr;
-	if (m_metaObject->ConvertToValue(hierarchy) && hierarchy != nullptr) {
+	if (m_metaObject->ConvertToValue(hierarchy) && hierarchy != nullptr && hierarchy->HasParentLink()) {
 		if (const ibValueMetaObjectAttributePredefined* parent = hierarchy->GetDataParent()) {
 			ibDataQueryBuilder()
 				.From(m_metaObject->GetQueryable())

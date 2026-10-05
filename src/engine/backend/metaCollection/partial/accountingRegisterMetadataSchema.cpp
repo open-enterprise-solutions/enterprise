@@ -271,8 +271,7 @@ void ibValueMetaObjectAccountingRegister::ContributeTables(ibSchemaSnapshot& out
 		//
 		// ⚠ Written as a comparison for the same reason, and against the reference's TYPE field: an
 		// empty reference is an all-zero guid rather than NULL, so "is there an account here" is
-		// `_RTRef <> 0` — the same test the hierarchy rules use when they ask whether a row has a
-		// parent.
+		// `_RTRef <> 0`.
 		// ⭐⭐ AND THE SAME GUARD ANSWERS THE CORRESPONDENCE SETTING, so nothing else has to.
 		//
 		// It used to be conditional on the flag, which forced everything around it to be conditional

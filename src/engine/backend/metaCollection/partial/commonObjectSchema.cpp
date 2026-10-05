@@ -3,7 +3,7 @@
 //	Description : the record / register families - the STRUCTURE they declare
 //
 //	ContributeTables and nothing else: what each family becomes in the database - its table, its
-//	columns, its indexes, its seed rows, and the rules those tables carry into the restructuring.
+//	columns, its indexes and its seed rows.
 //	Split out of commonObjectMetaQuery.cpp, which keeps the QUERY surface (the vended queryables,
 //	the value materialisation, the constant resolve). "What does this look like in the database"
 //	is one question and now has one file per family, the way accumulationRegisterMetadataSchema.cpp
@@ -17,8 +17,6 @@
 #include "backend/metaCollection/partial/reference/reference.h"   // ibValueReferenceDataObject - the seed's reference cells
 #include "backend/query/columnLayout.h"                           // ibOwnerRefColumn / ibFieldSuffix - the scaffold + field names
 #include "backend/query/schemaSnapshot.h"                         // ibSchemaSnapshot / ibSchemaTable - what a declaration is
-#include "backend/databaseLayer/databaseQueryBuilder.h"           // the L2 door - the rules count rows through it
-#include "backend/restructureInfo.h"                              // ibRestructureInfo - where a refused rule states its reason
 
 // (SnapshotOf removed: building a snapshot is just `common->ContributeTables(snap)` — the metadata side
 //  does it directly where it drives the builder, keeping the builder itself config-agnostic.)
@@ -224,81 +222,11 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::ContributeTables(ibSchemaSn
 	// _RRRef so the data-reference unique index (_REF_UQ) does not see N rows colliding on the NULL default.
 	ibSchemaTable& t = out.Shared(GetMetaID(), GetPhysicalTableName());   // the main table the base just created
 
-	// RETIRING A COLUMN IS DELETING WHAT IT HOLDS. Changing the hierarchy kind is a declaration and reads
-	// like a setting, but two of its answers take columns away: "no hierarchy" retires Parent, and
-	// anything but folders retires IsFolder (the list stops declaring it — FillArrayObjectByPredefinedAttribute —
-	// and the differ drops it; Parent is still listed always, so its half of this rule waits for that step).
-	// Rows that filled those columns lose their place in the tree with no way back and no word said.
-	//
-	// Same shape as the chart of accounts' ceiling: the rule travels with the declaration, the differ asks
-	// it before touching this table, and a refusal states its reason in the ledger — which greys Apply.
-	{
-		const wxString tableName = GetPhysicalTableName();
-		const wxString objectName = GetName();
-		const ibValueMetaObjectAttributeBase* parentAttr = GetDataParent();
-		const ibValueMetaObjectAttributeBase* folderAttr = GetDataIsFolder();
-		const bool losesParent  = !HasParentLink() && parentAttr != nullptr;
-		const bool losesFolders = !HasFolders()    && folderAttr != nullptr;
-
-		if (losesParent || losesFolders) {
-			// THE PARENT IS FILLED WHEN ITS TARGET TYPE IS SET, not when its key is non-null: an empty
-			// reference is stored as an ALL-ZERO guid (valueInfo.h), so testing the _RRRef blob for NULL
-			// would count every row alive and refuse every time. The _RTRef id is 0 exactly when nothing
-			// is referenced.
-			const wxString parentField = losesParent  ? parentAttr->GetPhysicalName() + ibFieldSuffix(ibColumnRole::ReferenceType) : wxString();
-			const wxString folderField = losesFolders ? folderAttr->GetPhysicalName() + ibFieldSuffix(ibColumnRole::Boolean)     : wxString();
-
-			t.m_beforeChange = [tableName, objectName, parentField, folderField](ibRestructureInfo* report) -> bool {
-				// Counted by the database, compared here — see the note on the chart of accounts' rule for
-				// why the comparison does not ride in SQL.
-				//
-				// ⭐⭐ AND A FAILED COUNT IS NOT A COUNT OF ZERO. This used to answer 0 to any exception,
-				// which reads as "nobody is in the way" — the strongest possible permission, granted
-				// precisely when the rule could not establish anything. What it guards is not cosmetic:
-				// zero here lets a hierarchy be dropped out from under rows that have a parent.
-				//
-				// The one legitimate reason to find nothing is a table that does not exist yet, and that
-				// is asked once, in front. Anything else stops the apply.
-				ibDatabaseQueryBuilder probe;
-				if (!probe.TableExists(tableName))
-					return true;   // nothing was ever applied here; no row can be stranded
-
-				auto rowsWith = [&tableName](const wxString& field, const ibQueryExprPtr& filled) -> int {
-					ibDatabaseQueryBuilder q;
-					ibQueryIR ir;
-					ir.m_root = ibAggregate(ibFilter(ibScan(tableName), filled),
-						{ { ibFunc(wxT("COUNT"), { ibCol(field) }), wxT("rowCount") } }, {});
-					ibQueryResult rs = q.ExecuteIR(ir);
-					return rs.Next() ? rs.GetResultInt(wxT("rowCount")) : 0;
-				};
-
-				bool allowed = true;
-				if (!parentField.IsEmpty()) {
-					const int nested = rowsWith(parentField,
-						ibBinOp(ibQueryBinOp::Ne, ibCol(parentField), ibConst(ibValue(0))));
-					if (nested > 0) {
-						allowed = false;
-						if (report != nullptr)
-							report->AppendError(wxString::Format(
-								_("%s: %i row(s) have a parent - clear it before dropping the hierarchy"),
-								objectName, nested));
-					}
-				}
-				if (!folderField.IsEmpty()) {
-					const int folders = rowsWith(folderField,
-						ibBinOp(ibQueryBinOp::Eq, ibCol(folderField), ibConst(ibValue(true))));
-					if (folders > 0) {
-						allowed = false;
-						if (report != nullptr)
-							report->AppendError(wxString::Format(
-								_("%s: %i folder(s) exist - delete them before switching to a hierarchy without folders"),
-								objectName, folders));
-					}
-				}
-				return allowed;
-			};
-		}
-	}
+	// (No rule on retiring Parent / IsFolder any more, 2026-10-05: a hierarchy switched off takes those
+	//  columns the way deleting any attribute takes its own — the list stops declaring them, the differ
+	//  drops them and the apply ledger says "Remove …". The rule that refused it kept its own idea of which
+	//  columns leave; the list moved without it, and every apply of a catalog without folders died on
+	//  "Column unknown" — PR #220.)
 
 	// RAW, never Create - the same rule the enum's seed above states, and this is the site it was
 	// written for: a seed cell needs the reference's IDENTITY BYTES, while Create MATERIALISES the

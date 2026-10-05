@@ -1419,8 +1419,9 @@ class BACKEND_API ibValueMetaObjectRecordDataHierarchyMutableRef :
 	// And PRESENCE, which is the part a boolean-plus-enum could not express: an attribute that this
 	// arrangement has no use for is not present in this configuration, which is exactly what
 	// metaDisableFlag says (the same flag a catalog with no owner puts on Owner, and an independent
-	// register on Recorder). Being absent, it leaves every metadata walk — so its column leaves the
-	// schema too, and a flat catalog stops carrying a parent it can never fill.
+	// register on Recorder). The flag alone does not reach the schema — the list that becomes columns
+	// asks the same two questions itself (FillArrayObjectByPredefinedAttribute), so a flat catalog
+	// stops carrying a parent it can never fill.
 	void ApplyHierarchyType() {
 		(*m_propertyAttributeParent)->SetSelectMode(HasFolders()
 			? ibSelectMode::ibSelectMode_Folders
@@ -1607,9 +1608,12 @@ protected:
 		array.push_back(m_propertyAttributePredefined->GetMetaObject());
 		array.push_back(m_propertyAttributeCode->GetMetaObject());
 		array.push_back(m_propertyAttributeDescription->GetMetaObject());
-		// Parent is still pushed UNCONDITIONALLY: a flat catalog has none, but its readers (the object
-		// forms' explorers, the Add command) have not been asked yet, and retiring it is its own step.
-		array.push_back(m_propertyAttributeParent->GetMetaObject());
+		// PARENT ONLY WHERE THERE IS A PARENT LINK — the same question IsFolder below answers, one step up. A
+		// flat catalog points at nothing, yet it offered Parent in its field tree and kept a column nobody
+		// could fill. The readers ask the same HasParentLink() (the Add command, the delete that re-parents the
+		// children); the object forms' explorers drop it by the flag (ApplyHierarchyType, AppendColumn).
+		if (HasParentLink())
+			array.push_back(m_propertyAttributeParent->GetMetaObject());
 		// ⭐ ISFOLDER ONLY WHERE THERE ARE FOLDERS — the way every register's list says what it is made of
 		// (an accumulation register lists RecordType only for balances, a catalog its Owner only when it has
 		// one). Listed always, a chart of accounts offered `IsFolder` in every field tree while a query's find
@@ -1617,7 +1621,7 @@ protected:
 		//
 		// The readers ask the same question: a record without folders is always an item (ReadData, the
 		// object's own values, the Add command's anchor), and the schema stops declaring the column — the
-		// differ drops it, behind the rule that refuses while any row is still a folder (commonObjectSchema).
+		// differ drops it, like any attribute that leaves.
 		if (HasFolders())
 			array.push_back(m_propertyAttributeIsFolder->GetMetaObject());
 		return true;

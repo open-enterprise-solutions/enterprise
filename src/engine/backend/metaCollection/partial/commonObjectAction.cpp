@@ -291,7 +291,7 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::CallAsCommand(ibActionID id
 		const ibUniqueKey& ctxKey = anchor;
 		try {
 			ibValue parent;   // empty → root
-			if (ctxKey.IsOk()) {
+			if (ctxKey.IsOk() && HasParentLink()) {   // …and a flat list has no parent to fill
 				ibValuePtr<ibValueRecordDataObjectHierarchyRef> sel(CreateObjectValue(ibObjectMode::OBJECT_ITEM, ctxKey.GetGuid()));
 				if (sel != nullptr) {
 					// WHERE THE NEW NODE LANDS depends on what a parent is allowed to be here.
