@@ -5446,24 +5446,9 @@ msgstr ""
 msgid "Rename of common module '%s' to '%s' left compile in failed state: %s"
 msgstr ""
 
-#: src/engine/backend/moduleManager/moduleManager.cpp:254
+#: src/engine/backend/moduleManager/moduleManager.cpp:391
 #, c-format
-msgid "AttachRuntime main prepare: %s"
-msgstr ""
-
-#: src/engine/backend/moduleManager/moduleManager.cpp:281
-#, c-format
-msgid "AttachRuntime common: %s"
-msgstr ""
-
-#: src/engine/backend/moduleManager/moduleManager.cpp:307
-#, c-format
-msgid "AttachRuntime main run: %s"
-msgstr ""
-
-#: src/engine/backend/moduleManager/moduleManager.cpp:399
-#, c-format
-msgid "Global module init failed: %s"
+msgid "Common module '%s' did not compile - the session cannot start"
 msgstr ""
 
 #: src/engine/backend/moduleManager/moduleManagerDataUnit.cpp:115
@@ -6487,6 +6472,11 @@ msgstr ""
 
 #: src/engine/backend/query/schemaSnapshot.cpp:694
 msgid "Add index "
+msgstr ""
+
+#: src/engine/backend/query/schemaSnapshot.cpp:721
+#, c-format
+msgid "Index %s of %s is too wide for this base: %u fields and about %u bytes of key, where it holds %u and %u - shorten a field of it or take one out of the key (%s)"
 msgstr ""
 
 #: src/engine/backend/query/schemaSnapshot.cpp:767

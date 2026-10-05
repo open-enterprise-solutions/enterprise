@@ -9,8 +9,8 @@
 // the outermost strongest, three rungs down faded into the page — a record faintly, and the grid closes every
 // cell. What the tints ARE is the theme; the rule that uses them stays with the driver that paints.
 //
-// The platform's themes are fixed (ibCompositionThemes) — the first one is what the report was painted in
-// before a theme could be chosen, colour for colour. A setting names one by its ID (ibOutputParameter::Theme);
+// The platform's themes are fixed (ibCompositionThemes) — the first one is the default, what a report is
+// painted in until a setting names another. A setting names one by its ID (ibOutputParameter::Theme);
 // an id nobody knows paints in the first, the way a field that has gone still prints under its name.
 // ---------------------------------------------------------------------------
 

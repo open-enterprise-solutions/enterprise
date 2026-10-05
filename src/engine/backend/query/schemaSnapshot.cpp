@@ -699,6 +699,31 @@ int AlterTable(ibStructureBatch& batch, const ibSchemaTable& old, const ibSchema
 	return retCode;
 }
 
+// ⭐ AN INDEX THE BASE CANNOT HOLD IS REFUSED HERE, before a statement — not by the engine at CREATE INDEX,
+// where the failure rolls the apply back and names nothing useful (a register's records key was declared
+// with no width check at all, ROADMAP §1o). Measured the way a derived key is (ibDeclareDerivedKey): fields
+// as the index counts them, bytes generously. Asked only of an index this apply CREATES — see the caller.
+bool IndexKeyFitsOrSay(const ibDatabaseLayer& conn, const ibSchemaTable& t, const ibSchemaIndex& i, ibRestructureInfo* report)
+{
+	size_t fieldCount = 0;
+	size_t keyBytes = 0;
+	wxString fields;
+	for (const ibBackendQueryColumn* col : i.m_columns) {
+		fieldCount += ColumnFieldNames(col).size();
+		for (const ibColumnSlot& field : DescribeColumnLayout(col))
+			keyBytes += ibIndexFieldByteWidth(field.m_type);
+		fields += (fields.IsEmpty() ? wxString() : wxString(wxT(", "))) + ColName(col);
+	}
+	if (ibIndexKeyFits(conn, fieldCount, keyBytes))
+		return true;
+	if (report != nullptr)
+		report->AppendError(wxString::Format(
+			_("Index %s of %s is too wide for this base: %u fields and about %u bytes of key, where it holds %u and %u - shorten a field of it or take one out of the key (%s)"),
+			i.m_name, LedgerName(t), (unsigned)fieldCount, (unsigned)keyBytes,
+			ibIndexFieldCapacity(conn), conn.GetMaxIndexKeyBytes(), fields));
+	return false;
+}
+
 } // namespace
 
 // Apply a derived table's materialization bundle — drop the old triggers / view, create the new
@@ -852,6 +877,23 @@ int DiffSnapshots(const ibSchemaSnapshot* baseline, const ibSchemaSnapshot& targ
 	for (const ibSchemaTable& cur : target.Tables()) {
 		if (cur.m_beforeChange && !cur.m_beforeChange(report))
 			refused = true;
+	}
+
+	// …and every index this apply would CREATE — new, or changed — is asked whether the base can hold it
+	// (IndexKeyFitsOrSay). Only those: an index standing unchanged is never questioned again, because the
+	// estimate is deliberately generous and a rule that re-judged standing indexes on every apply would refuse
+	// a base whose index the engine already accepted (the PR #220 guard did exactly that to a column).
+	for (const ibSchemaTable& cur : target.Tables()) {
+		if (cur.m_external)
+			continue;
+		const ibSchemaTable* old = baseline != nullptr ? baseline->Find(cur.m_id) : nullptr;
+		for (const ibSchemaIndex& i : cur.m_indexes) {
+			const ibSchemaIndex* standing = old != nullptr ? FindIndex(old->m_indexes, i.m_name) : nullptr;
+			if (standing != nullptr && SameIndex(*standing, i))
+				continue;
+			if (!IndexKeyFitsOrSay(schema.Connection(), cur, i, report))   // the connection this save runs on
+				refused = true;
+		}
 	}
 	if (refused)
 		return 0;

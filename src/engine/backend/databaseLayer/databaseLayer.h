@@ -187,7 +187,9 @@ struct ibDialectDictionary
 	// to read (2026-08-30, a register with a wide string key).
 	//
 	// Declared rather than discovered, for the same reason as the segment count: the identity moves
-	// into one hashed field BEFORE any DDL is emitted.
+	// into one hashed field BEFORE any DDL is emitted. This is the ceiling of a base the driver
+	// CREATES; whoever decides reads ibDatabaseLayer::GetMaxIndexKeyBytes, which a driver whose
+	// ceiling depends on the base answers from the base it is attached to.
 	unsigned int m_maxIndexKeyBytes = 0;
 
 	// Physical row identifier, used to drop duplicate-key rows (keep one) BEFORE a UNIQUE index is created
@@ -1018,6 +1020,11 @@ public:
 	// owns its dialect (typically a static singleton it returns by reference);
 	// ODBC returns a default-constructed ANSI dictionary.
 	virtual const ibDialectDictionary& GetDialect() const = 0;
+
+	// THE BYTE CEILING OF AN INDEX KEY IN THE BASE THIS CONNECTION IS ATTACHED TO. The dialect says what a
+	// base this driver CREATES gets (m_maxIndexKeyBytes); a base is what it was created as, so a driver whose
+	// ceiling depends on the base (Firebird: a quarter of its page) answers from the base it attached to.
+	virtual unsigned int GetMaxIndexKeyBytes() const { return GetDialect().m_maxIndexKeyBytes; }
 
 	// The driver's TEMP-TABLE facts, or nullptr if it has no DB temporary tables. PRESENCE = the
 	// capability: nullptr => L3 materialises an intermediate in RAM (ibQueryComposer — the

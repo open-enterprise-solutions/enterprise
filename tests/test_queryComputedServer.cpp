@@ -634,9 +634,10 @@ TEST_F(ComputedServerFix, In_ReferencesOfOneTableSayTheTableOnce)
 	EXPECT_TRUE(sql.Contains(fields[2] + wxT(" IN (")));
 }
 
-// References of TWO tables do not agree on the table, so nothing may be said once: pair by pair, as before —
-// and folded as a balanced tree, which a renderer can walk whatever the size of the set.
-TEST_F(ComputedServerFix, In_ReferencesOfTwoTablesFoldPairByPair)
+// References of TWO tables do not agree on the table — so each table says itself once over its own ids, and the
+// tables are ORed: one IN per table (DecomposeIn, 2026-10-05). It was pair by pair, a thousand ORs for a thousand
+// references, where a walk filter's set of a few thousand documents is the ordinary case.
+TEST_F(ComputedServerFix, In_ReferencesOfTwoTablesSayEachTableOnce)
 {
 	if (!ready) return;
 	ReferenceSetFix f;
@@ -650,10 +651,10 @@ TEST_F(ComputedServerFix, In_ReferencesOfTwoTablesFoldPairByPair)
 	for (int i = 0; i < 1000; ++i)
 		values.push_back(f.RefTo(i % 2 ? f.items : f.units));
 
-	const wxString sql = f.SqlOfSet(&subject, 344, values);   // a chain a thousand deep is what this must survive
+	const wxString sql = f.SqlOfSet(&subject, 344, values);
 	ASSERT_FALSE(sql.IsEmpty());
-	EXPECT_EQ(ReferenceSetFix::CountOf(sql, wxT(" IN (")), 0) << "two tables share no tag to say once";
-	EXPECT_EQ(ReferenceSetFix::CountOf(sql, wxT(" OR ")), 999);
+	EXPECT_EQ(ReferenceSetFix::CountOf(sql, wxT(" IN (")), 2) << "one IN per table: " << sql.Left(400);
+	EXPECT_EQ(ReferenceSetFix::CountOf(sql, wxT(" OR ")), 1) << "the two tables, ORed";
 }
 
 // 🛑 AN EMPTY REFERENCE IN THE LIST, AND THE WHOLE LIST GOES PAIR BY PAIR. "Not filled" is the zero-guid

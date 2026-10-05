@@ -145,8 +145,17 @@ bool ibWebSession::Login(const wxString& user, const wxString& password)
 	// client-side, not from a modal.
 	// A failed login just lets the holder die here — that removes the
 	// anonymous sys_session row. No cleanup call to forget.
-	if (holder->Open(user, password) != ibSession::OpenResult::Authenticated)
+	//
+	// …and a configuration that does not start refuses the login too (ibSession::CompileRoot throws). The
+	// page can show only "refused"; the reason goes where an administrator reads it.
+	try {
+		if (holder->Open(user, password) != ibSession::OpenResult::Authenticated)
+			return false;
+	}
+	catch (const ibBackendException& err) {
+		ibJournalError(wxT("web"), wxT("login of '%s' refused: %s"), user, err.GetErrorDescription());
 		return false;
+	}
 
 	m_user = user;
 

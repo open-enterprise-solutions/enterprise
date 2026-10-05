@@ -125,7 +125,8 @@ const ibDialectDictionary& ibDatabaseLayerFirebird::Dialect()
 		d.m_maxIndexSegments = 16;                     // "too many keys defined for index" past this — and a failed DDL rolls the apply back
 		// …and the BYTE ceiling beside it: Firebird bounds an index key at roughly page_size/4, and the
 		// base is created at m_pageSize = 16384, so ~4096. Kept a little under it — a hashed key costs
-		// one column, an overflowed CREATE INDEX costs the whole apply.
+		// one column, an overflowed CREATE INDEX costs the whole apply. A base ATTACHED with another page
+		// answers from its own (ibDatabaseLayerFirebird::GetMaxIndexKeyBytes, read at Open).
 		d.m_maxIndexKeyBytes = 4000;
 
 		// --- period truncation: no date_trunc here, so every unit is arithmetic ---
@@ -820,6 +821,34 @@ bool ibDatabaseLayerFirebird::Open()
 
 	ibJournalInfo(wxT("db.firebird"), wxT("ibDatabaseLayerFirebird: attached to %s"),
 	           strDatabaseUrl);
+
+	// THE BASE'S OWN PAGE, not the one this driver creates bases with: a base made before the page size was
+	// written right (the little-endian DPB above) is 4 KB for life, and its index keys end near 1 KB, not 4.
+	// The ceiling is a quarter of the page, kept as far under it as the dialect's is (16 KB -> 4000).
+	m_maxIndexKeyBytes = 0;
+	ibPreparedStatement* pageStatement = nullptr;
+	ibDatabaseResultSet* pageResult = nullptr;
+	try {
+		pageStatement = DoPrepareStatement(wxT("SELECT MON$PAGE_SIZE FROM MON$DATABASE"));
+		if (pageStatement != nullptr)
+			pageResult = pageStatement->ExecuteQuery();
+		if (pageResult != nullptr && pageResult->Next()) {
+			const int pageSize = pageResult->GetResultInt(1);
+			if (pageSize >= 1024)
+				m_maxIndexKeyBytes = (unsigned int)(pageSize / 4 - 96);
+			if (pageSize < m_pageSize)
+				ibJournalInfo(wxT("db.firebird"), wxT("%s has %d-byte pages: an index key is kept under %u bytes ")
+					wxT("(a backup and restore at %d bytes lifts it)"), strDatabaseUrl, pageSize, m_maxIndexKeyBytes,
+					(int)m_pageSize);
+		}
+	}
+	catch (const ibBackendException&) {
+		// Not read: the dialect's ceiling stands (GetMaxIndexKeyBytes).
+	}
+	if (pageResult != nullptr)
+		CloseResultSet(pageResult);
+	if (pageStatement != nullptr)
+		CloseStatement(pageStatement);
 
 	// Spin up the maintenance scheduler — ONLY for Standalone single-
 	// process embedded. Leader-mode (our own spawned firebird.exe

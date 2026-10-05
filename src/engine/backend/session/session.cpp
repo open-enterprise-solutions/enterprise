@@ -837,6 +837,8 @@ bool ibSession::CompileRoot()
 	// session's own responsibility. AttachRuntime self-gates by
 	// session kind (Enterprise / WebClient / Service execute; others
 	// short-circuit), so no external wantsRuntime check is needed.
+	// A configuration that does not start THROWS here (and from CreateMainModule above), and the
+	// session is refused by whoever opens it — nothing below is built over a half-raised runtime.
 	m_root->AttachRuntime(this);
 
 	// SESSION PARAMETERS — filled BEFORE the access policy exists, and that order is the whole

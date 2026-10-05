@@ -5480,25 +5480,10 @@ msgstr "Загальний модуль '%s' не скомпілювався: %s
 msgid "Rename of common module '%s' to '%s' left compile in failed state: %s"
 msgstr "Перейменування загального модуля '%s' на '%s' залишило компіляцію в помилковому стані: %s"
 
-#: src/engine/backend/moduleManager/moduleManager.cpp:254
+#: src/engine/backend/moduleManager/moduleManager.cpp:391
 #, c-format
-msgid "AttachRuntime main prepare: %s"
-msgstr "AttachRuntime головний, підготовка: %s"
-
-#: src/engine/backend/moduleManager/moduleManager.cpp:281
-#, c-format
-msgid "AttachRuntime common: %s"
-msgstr "AttachRuntime загальний: %s"
-
-#: src/engine/backend/moduleManager/moduleManager.cpp:307
-#, c-format
-msgid "AttachRuntime main run: %s"
-msgstr "AttachRuntime головний, виконання: %s"
-
-#: src/engine/backend/moduleManager/moduleManager.cpp:399
-#, c-format
-msgid "Global module init failed: %s"
-msgstr "Не вдалося ініціалізувати глобальний модуль: %s"
+msgid "Common module '%s' did not compile - the session cannot start"
+msgstr "Загальний модуль '%s' не скомпілювався - сеанс не може розпочатися"
 
 #: src/engine/backend/moduleManager/moduleManagerDataUnit.cpp:115
 msgid "Data.From: a value table argument is required"
@@ -6522,6 +6507,11 @@ msgstr "Видалити "
 #: src/engine/backend/query/schemaSnapshot.cpp:694
 msgid "Add index "
 msgstr "Додати індекс "
+
+#: src/engine/backend/query/schemaSnapshot.cpp:721
+#, c-format
+msgid "Index %s of %s is too wide for this base: %u fields and about %u bytes of key, where it holds %u and %u - shorten a field of it or take one out of the key (%s)"
+msgstr "Індекс %s таблиці %s завеликий для цієї бази: %u полів і близько %u байт ключа, а база вміщує %u і %u - скоротіть одне з його полів або приберіть його з ключа (%s)"
 
 #: src/engine/backend/query/schemaSnapshot.cpp:767
 #, c-format

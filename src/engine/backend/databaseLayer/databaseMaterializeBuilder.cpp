@@ -532,7 +532,7 @@ unsigned int ibIndexFieldCapacity(const ibDatabaseLayer& conn)
 bool ibIndexKeyFits(const ibDatabaseLayer& conn, size_t keyFieldCount, size_t keyByteWidth)
 {
 	const unsigned int segCeiling  = ibIndexFieldCapacity(conn);
-	const unsigned int byteCeiling = conn.GetDialect().m_maxIndexKeyBytes;
+	const unsigned int byteCeiling = conn.GetMaxIndexKeyBytes();
 	return (segCeiling == 0 || keyFieldCount <= segCeiling) && (byteCeiling == 0 || keyByteWidth <= byteCeiling);
 }
 
