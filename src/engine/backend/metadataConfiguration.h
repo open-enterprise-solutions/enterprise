@@ -14,16 +14,16 @@ class ibDebuggerServer;
 class ibDebuggerClient;
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
-// activeMetaData — process-wide configuration metadata. Owned by
-// ibApplicationInstance (m_activeMetaData); reached through the thin
-// appEnv accessor. nullptr in modes that don't host metadata
-// (launcher, codeRunner). See backend/appEnv.h for the rationale on
-// the namespace-fasad over appData's static getters.
+// activeMetaData — the configuration the calling thread's session works in: its own reference
+// (ibSession::GetMetaData), else its base's active one (ibApplicationInstance::m_activeMetaData, held for
+// the sessions to come); reached through the thin appEnv accessor. nullptr in modes that don't host
+// metadata (launcher, codeRunner). See backend/appEnv.h for the rationale on the namespace-fasad over
+// appData's static getters.
 #define activeMetaData			(appEnv::ActiveMetaData())
 //////////////////////////////////////////////////////////////////////////////////////////////////////
 // Lifecycle — ibApplicationInstance::CreateActiveMetaData picks the concrete subclass by the kind of the
 // base's first session; teardown happens in the base's Close (ibApplicationInstance::Close), which calls
-// OnDestroy and then releases m_activeMetaData (the polymorphic dtor chain).
+// OnDestroy and then lets the base's reference go — the polymorphic dtor chain runs with the last holder.
 //////////////////////////////////////////////////////////////////////////////////////////////////////
 
 enum ibConfigType {
@@ -59,7 +59,7 @@ protected:
 
 public:
 
-	ibApplicationInstance* GetApplicationInstance() const { return m_applicationInstance; }
+	virtual ibApplicationInstance* GetApplicationInstance() const override { return m_applicationInstance; }
 
 	virtual wxString GetConfigMD5() const = 0;
 	virtual wxString GetConfigName() const = 0;
@@ -179,7 +179,8 @@ public:
 	// Called by the appData fabric right after construction (OnInitialize)
 	// and right before destruction (OnDestroy). Subclasses override to
 	// wire run-mode-specific state. Singleton Get()/Initialize()/Destroy()
-	// retired — ownership is on ibApplicationInstance::m_activeMetaData; the
+	// retired — held by ibApplicationInstance::m_activeMetaData and by the
+	// sessions let in while it was active (ibSession::GetMetaData); the
 	// fabric is ibApplicationInstance::CreateActiveMetaData.
 	//
 	// Public so the appData fabric / ~ibApplicationInstance can call them
@@ -364,7 +365,7 @@ public:
 
 	//is config save
 	virtual bool IsConfigSave() const {
-		return CompareMetadata(m_configMetadata);
+		return CompareMetadata(GetConfiguration());
 	}
 
 	//metadata
@@ -372,17 +373,23 @@ public:
 	virtual bool SaveDatabase(int flags = defaultFlag);
 
 	//run/close
+	// The database's copy runs as the mirror it is (loadConfigFlag), once: after an apply it is the base's active
+	// configuration as well, running already.
 	virtual bool RunDatabase(int flags = defaultFlag) {
 
 		if (!ibMetaDataConfiguration::RunDatabase(flags))
 			return false;
-		
-		return m_configMetadata->RunDatabase(flags | loadConfigFlag);
+
+		return m_configMetadata->IsConfigOpen() || m_configMetadata->RunDatabase(flags | loadConfigFlag);
 	}
 
+	// …and closes with this one only while nobody else holds it; held by the base and its sessions, it goes with
+	// the last of them.
 	virtual bool CloseDatabase(int flags = defaultFlag) {
 		if (!ibMetaDataConfiguration::CloseDatabase(flags))
 			return false;
+		if (m_configMetadata.use_count() > 1 || !m_configMetadata->IsConfigOpen())
+			return true;
 		return m_configMetadata->CloseDatabase(flags);
 	}
 
@@ -399,8 +406,8 @@ public:
 	virtual bool RestoreDataFromBuffer(const wxMemoryBuffer& buffer);
 	virtual bool DumpDataToBuffer(wxMemoryBuffer& buffer);
 
-	// get config metaData 
-	virtual ibMetaDataConfiguration* GetConfiguration() const { return m_configMetadata; }
+	// get config metaData
+	virtual ibMetaDataConfiguration* GetConfiguration() const { return m_configMetadata.get(); }
 
 	//get config type 
 	virtual ibConfigType GetConfigType() const { return ibConfigType::ibConfigType_Load_And_Save; };
@@ -449,7 +456,13 @@ private:
 	bool LoadSequenceFromBuffer(const ibReaderMemory& reader);
 	bool SaveSequenceToBuffer(ibWriterMemory& writer);
 
-	ibMetaDataConfiguration* m_configMetadata;
+	// THE DATABASE'S COPY — what IsConfigSave compares against and what an apply diffs from. Shared: an apply reads
+	// the published configuration into a NEW one and hands it to the base as its active configuration, so the copy
+	// before is never re-read in place under the sessions working in it (OnAfterSaveDatabase).
+	std::shared_ptr<ibMetaDataConfiguration> m_configMetadata;
+
+	// What a new copy is made with — the token this Storage was made with, and with it its base.
+	const ib::AppDataCtorToken m_owner;
 
 	// The config-save STRUCTURE + SEED engine — METADATA-AGNOSTIC: it works only on snapshots this Storage
 	// hands it (built via ContributeTables on the edited config + the saved baseline). On save the Storage

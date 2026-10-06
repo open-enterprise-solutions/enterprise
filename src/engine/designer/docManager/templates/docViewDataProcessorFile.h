@@ -29,7 +29,7 @@ protected:
 static int s_defaultDataProcessorNameCounter = 1;
 
 class ibDataProcessorFileDocument : public ibMetaDataDocument {
-	ibMetaDataDataProcessor* m_metaData;
+	std::shared_ptr<ibMetaDataDataProcessor> m_metaData;   // what it shows, held while it is open
 public:
 
 	virtual wxIcon GetIcon() const {
@@ -42,12 +42,9 @@ public:
 	}
 
 	ibDataProcessorFileDocument() : ibMetaDataDocument() { m_childDoc = false; }
-	virtual ~ibDataProcessorFileDocument() {
-		wxDELETE(m_metaData);
-	}
 
 	virtual ibMetaDataDataProcessor* GetMetaData() const {
-		return m_metaData;
+		return m_metaData.get();
 	}
 
 	virtual bool OnCreate(const wxString& path, long flags) override;

@@ -15,7 +15,7 @@ class BACKEND_API ibValueModuleRuntimeManagerExternalDataProcessor : public ibVa
 	virtual std::map<wxString, ibValue*>& GetGlobalVariables();
 
 	//metaData and external variant
-	ibValueModuleRuntimeManagerExternalDataProcessor(ibMetaData* metaData = nullptr, ibValueMetaObjectDataProcessor* metaObject = nullptr);
+	ibValueModuleRuntimeManagerExternalDataProcessor(std::shared_ptr<ibMetaData> metaData = nullptr, ibValueMetaObjectDataProcessor* metaObject = nullptr);
 	virtual ~ibValueModuleRuntimeManagerExternalDataProcessor();
 
 	//return external module
@@ -59,7 +59,7 @@ class BACKEND_API ibValueModuleRuntimeManagerExternalReport : public ibValueModu
 	virtual std::map<wxString, ibValue*>& GetGlobalVariables();
 
 	//metaData and external variant
-	ibValueModuleRuntimeManagerExternalReport(ibMetaData* metaData = nullptr, ibValueMetaObjectReport* metaObject = nullptr);
+	ibValueModuleRuntimeManagerExternalReport(std::shared_ptr<ibMetaData> metaData = nullptr, ibValueMetaObjectReport* metaObject = nullptr);
 	virtual ~ibValueModuleRuntimeManagerExternalReport();
 
 	//return external module

@@ -1,6 +1,6 @@
 #include "clientSchema.h"
 
-std::function<void()> ibClientSchema::Command(const ibApplicationInstance* WXUNUSED(applicationInstance),
+std::function<void()> ibClientSchema::Command(const ibSession& WXUNUSED(session),
 	s32 WXUNUSED(command), const ibDataNode& WXUNUSED(args), ibClientRefusal& refusal, wxString& error) const
 {
 	// A schema that only shows something takes no commands.

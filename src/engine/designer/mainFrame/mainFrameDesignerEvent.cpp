@@ -251,8 +251,8 @@ void ibFrontendMainFrameDesigner::OnOpenConfiguration(wxCommandEvent& event)
 		}
 	}
 
-	ibMetadataBrowserDocument* newDocument =
-		new ibMetadataBrowserDocument(configDatabase);
+	ibMetadataBrowserDocument* newDocument = new ibMetadataBrowserDocument(
+		std::static_pointer_cast<ibMetaDataConfigurationBase>(configDatabase->shared_from_this()));
 
 	wxASSERT(newDocument);
 	try {
@@ -556,10 +556,10 @@ void ibFrontendMainFrameDesigner::OnConfiguration(wxCommandEvent& event)
 		if (openFileDialog.ShowModal() == wxID_CANCEL)
 			return;
 
-		// Heap-allocate the transient config so it lives for the doc's
-		// lifetime (the historical wxDialog version used a stack object
-		// because ShowModal blocked here; a tab can't rely on that).
-		auto otherHolder = std::make_shared<ibMetaDataConfigurationFile>();
+		// Held by the document for its lifetime (the historical wxDialog
+		// version used a stack object because ShowModal blocked here; a
+		// tab can't rely on that).
+		auto otherHolder = ibMetaData::MakeShared<ibMetaDataConfigurationFile>();
 		const wxString otherPath = openFileDialog.GetPath();
 		if (!otherHolder->LoadConfigFromFile(otherPath)) {
 			wxMessageBox(_("Failed to load configuration file."),
@@ -573,8 +573,8 @@ void ibFrontendMainFrameDesigner::OnConfiguration(wxCommandEvent& event)
 			auto* doc = docManager->CreateDocument<ibConfigCompareDocument>();
 			if (doc != nullptr) {
 				doc->Configure(
-					activeMetaData->GetCommonMetaObject(),
-					otherHolder->GetCommonMetaObject(),
+					activeMetaData->shared_from_this(),
+					otherHolder,
 					_("Current"),
 					otherLabel,
 					[otherHolder, otherPath]() {
@@ -618,8 +618,8 @@ void ibFrontendMainFrameDesigner::OnConfiguration(wxCommandEvent& event)
 			auto* doc = docManager->CreateDocument<ibConfigCompareDocument>();
 			if (doc != nullptr) {
 				doc->Configure(
-					storage->GetCommonMetaObject(),
-					storage->GetConfiguration()->GetCommonMetaObject(),
+					storage->shared_from_this(),
+					storage->GetConfiguration()->shared_from_this(),
 					_("Current"),
 					_("Database"),
 					/*rightSaveCallback*/ {},
@@ -650,10 +650,10 @@ void ibFrontendMainFrameDesigner::OnConfiguration(wxCommandEvent& event)
 		if (dlgB.ShowModal() == wxID_CANCEL)
 			return;
 
-		// Heap-allocate both transient configs so they survive the doc's
-		// lifetime (tab is non-modal — can't rely on stack scope).
-		auto fileA = std::make_shared<ibMetaDataConfigurationFile>();
-		auto fileB = std::make_shared<ibMetaDataConfigurationFile>();
+		// Both held by the document for its lifetime (tab is non-modal —
+		// can't rely on stack scope).
+		auto fileA = ibMetaData::MakeShared<ibMetaDataConfigurationFile>();
+		auto fileB = ibMetaData::MakeShared<ibMetaDataConfigurationFile>();
 		const wxString pathA = dlgA.GetPath();
 		const wxString pathB = dlgB.GetPath();
 		if (!fileA->LoadConfigFromFile(pathA) || !fileB->LoadConfigFromFile(pathB)) {
@@ -669,8 +669,8 @@ void ibFrontendMainFrameDesigner::OnConfiguration(wxCommandEvent& event)
 			auto* doc = docManager->CreateDocument<ibConfigCompareDocument>();
 			if (doc != nullptr) {
 				doc->Configure(
-					fileA->GetCommonMetaObject(),
-					fileB->GetCommonMetaObject(),
+					fileA,
+					fileB,
 					wxFileName(pathA).GetFullName(),
 					wxFileName(pathB).GetFullName(),
 					[fileB, pathB]() {

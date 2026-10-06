@@ -446,12 +446,13 @@ public:
 	// when the session never had a root.
 	void ClearRoot();
 
-	// Idempotent CreateRoot driven by the active process-level metadata.
+	// Idempotent CreateRoot over the configuration this session acquired.
 	// Called by ibSessionRegistry::NotifyAuthenticated between the
 	// OnFirstConnect phase (which may run metadataCreate, populating
-	// activeMetaData) and the OnAuthenticated phase (whose listeners —
+	// the base's active one) and the OnAuthenticated phase (whose listeners —
 	// e.g. RunDatabase → OnBeforeRunMetaObject — need session->mm to
-	// already exist). No-op when m_root already set or activeMetaData null.
+	// already exist). No-op when m_root already set or the session
+	// holds no configuration.
 	void EnsureRoot();
 
 	// Read access — single overload, const only. The non-const reference
@@ -800,6 +801,11 @@ private:
 	// Null for a session made outside any registry (tests, benchmarks) — it belongs to no base.
 	class ibSessionRegistry* m_registry = nullptr;
 
+	// THE CONFIGURATION IT WORKS IN — its own reference (GetMetaData), let go when it leaves (ReleaseMetaData).
+	// Declared before everything the session builds over it — the root, the access policy, its locals: members die
+	// in reverse, so a session that never left lets the configuration go last of all.
+	std::shared_ptr<class ibMetaDataConfigurationBase> m_metaData;
+
 public:
 	// …WHILE IT IS IN IT. A session its registry has let go (Gone — ProcessRemove's last word) answers none:
 	// that registry may be gone with its base by now — a window outlives its base on the way out — and the
@@ -808,6 +814,13 @@ public:
 		return State() == ibSessionState::Gone ? nullptr : m_registry;
 	}
 	ibApplicationInstance* GetApplicationInstance() const;   // through the registry
+
+	// ⭐ THE CONFIGURATION THIS SESSION WORKS IN — its own reference to its base's active one, taken when it is let
+	// in and kept for its whole life (Max, 2026-10-06: *"the session adds one to the count; if the active one
+	// changes, the session uses the old one"*). An update that replaces the base's active configuration does it for
+	// the sessions to come. What `activeMetaData` answers on a thread this session works on. Null before it is let
+	// in, after it has left, and in a base that holds none (the launcher).
+	ibMetaDataConfigurationBase* GetMetaData() const { return m_metaData.get(); }
 
 	// ⭐ IS THIS A RENTED READ? The registry row is the honest signature — a session minted to fetch
 	// one page on somebody's behalf takes none, and nothing else in the tree is unlisted. Asked by
@@ -844,6 +857,14 @@ private:
 	// Add/Attach to settle.
 	ibSessionState WaitForState(ibSessionState from, std::chrono::milliseconds timeout);
 	ibAuthState    WaitForAuth (ibAuthState    from, std::chrono::milliseconds timeout);
+
+	// Its +1 — the base's active configuration as it stands when the session is let in (GetMetaData). Acquired
+	// once, by the registry (NotifyAuthenticated), before the root is built over it; a rented read takes its
+	// parent's instead (ibJobManager).
+	void AcquireMetaData();
+	// …and its −1, when it leaves (NotifyDisconnect): the root built over it first, then the reference. The last
+	// session working in a configuration the base has replaced closes it here, on the thread that takes it down.
+	void ReleaseMetaData();
 
 	// Identity / sys_session-row tracking. Identity is filled in by the
 	// registry as the session moves through Add → Attach; the inserted

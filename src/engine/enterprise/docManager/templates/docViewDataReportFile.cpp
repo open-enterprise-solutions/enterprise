@@ -39,7 +39,7 @@ bool ibReportFileDocument::OnCreate(const wxString& path, long flags)
 	/*if (!ibMetaDocument::OnCreate(path, flags))
 		return false;*/
 
-	m_metaData = new ibMetaDataReport();
+	m_metaData = ibMetaData::MakeShared<ibMetaDataReport>();
 	return true;
 }
 

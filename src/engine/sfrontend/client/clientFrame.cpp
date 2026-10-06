@@ -396,7 +396,7 @@ bool ibClientFrame::CloseTab(std::size_t i)
 bool ibClientFrame::IsSchemaAllowed(ibClientSchemaKind kind) const
 {
 	const ibClientSchema* const schema = GetDocumentManager() != nullptr ? GetDocumentManager()->FindSchema(kind) : nullptr;
-	return schema != nullptr && schema->AccessRight(GetSession()->GetApplicationInstance());
+	return schema != nullptr && schema->AccessRight(*GetSession());
 }
 
 bool ibClientFrame::IsCommandEnabled(ibDocCommand command) const

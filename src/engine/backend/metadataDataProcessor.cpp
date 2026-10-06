@@ -36,8 +36,9 @@ m_version(version_oes_last)
 	// the ctor so a freshly created (not-from-file) DP already has it — the
 	// designer "New data processor" path calls RunDatabase() directly, never
 	// through LoadFromFile (which would otherwise be the only place it's built).
-	// LoadFromFile rebuilds it on the swapped-in root.
-	m_moduleManager = new ibValueModuleRuntimeManagerExternalDataProcessor(this, m_commonObject);
+	// LoadFromFile rebuilds it on the swapped-in root. No container to pass yet — nothing holds this one
+	// while it is being constructed.
+	m_moduleManager = new ibValueModuleRuntimeManagerExternalDataProcessor(nullptr, m_commonObject);
 	m_moduleManager->InvalidateNames();
 
 	m_ownerMeta = this;
@@ -324,7 +325,8 @@ bool ibMetaDataDataProcessor::LoadFromFile(const wxString& strFileName)
 
 	m_commonObject = fresh; // ibValuePtr: release old root (DecrRef -> cascade), adopt fresh
 
-	m_moduleManager = new ibValueModuleRuntimeManagerExternalDataProcessor(this, m_commonObject);
+	// The loader holds this container by now (ibMetaData::MakeShared), so the object can take its own reference.
+	m_moduleManager = new ibValueModuleRuntimeManagerExternalDataProcessor(weak_from_this().lock(), m_commonObject);
 	m_moduleManager->InvalidateNames();
 
 	return LoadDatabase();

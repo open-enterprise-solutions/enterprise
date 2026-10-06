@@ -271,15 +271,14 @@ protected:
 	friend class ibValueModuleRuntimeManagerExternalReport;
 };
 
-// External report value object: regular report behaviour + RAII ownership of the
-// transient external metadata container, dropped in ibExternalOwnerHelper's dtor.
-// Embedded / config reports use the plain ibValueRecordDataObjectReport.
+// External report value object: regular report behaviour + a reference to the external metadata container it works
+// in, held at runtime (ibExternalOwnerHelper). Embedded / config reports use the plain ibValueRecordDataObjectReport.
 class ibValueRecordDataObjectExternalReport :
 	public ibValueRecordDataObjectReport,
 	public ibExternalOwnerHelper {
 public:
-	ibValueRecordDataObjectExternalReport(const ibValueMetaObjectReport* metaObject, ibMetaData* ownedMeta = nullptr)
-		: ibValueRecordDataObjectReport(metaObject), ibExternalOwnerHelper(ownedMeta) {}
+	ibValueRecordDataObjectExternalReport(const ibValueMetaObjectReport* metaObject, std::shared_ptr<ibMetaData> externalMetadata = nullptr)
+		: ibValueRecordDataObjectReport(metaObject), ibExternalOwnerHelper(std::move(externalMetadata)) {}
 };
 
 #endif

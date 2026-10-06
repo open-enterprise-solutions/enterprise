@@ -2343,20 +2343,15 @@ protected:
 };
 
 //Object with file
-// RAII mix-in for external DP/Report value objects: takes the transient external
-// metadata container in its ctor and drops it (CloseDatabase + delete) in its dtor.
-// Mixed into ibValueRecordDataObjectExternal* alongside the regular DP/Report value
-// class; embedded / config value objects don't inherit it. Generic ibMetaData* —
-// CloseDatabase + delete go through the polymorphic base, so no concrete container
-// type is needed and the inline dtor compiles in every TU.
+// Mix-in for external DP/Report value objects: HOLDS the external metadata container the object works in, as every
+// metadata is held (ibMetaData::MakeShared) — at runtime the object's life keeps the container, and its last holder
+// closes it. Mixed into ibValueRecordDataObjectExternal* alongside the regular DP/Report value class; embedded /
+// config value objects don't inherit it. A copy holds it too.
 class BACKEND_API ibExternalOwnerHelper {
 public:
-	ibExternalOwnerHelper(ibMetaData* externalMetadata = nullptr) : m_externalMetadata(externalMetadata) {}
-	// A copy never owns the source's container — only one object drops it.
-	ibExternalOwnerHelper(const ibExternalOwnerHelper&) : m_externalMetadata(nullptr) {}
-	~ibExternalOwnerHelper();   // out-of-line in commonObject.cpp — ibMetaData is only forward-declared here
+	ibExternalOwnerHelper(std::shared_ptr<ibMetaData> externalMetadata = nullptr) : m_externalMetadata(std::move(externalMetadata)) {}
 protected:
-	ibMetaData* m_externalMetadata;
+	std::shared_ptr<ibMetaData> m_externalMetadata;
 };
 
 class BACKEND_API ibValueRecordDataObjectExt : public ibValueRecordDataObject {

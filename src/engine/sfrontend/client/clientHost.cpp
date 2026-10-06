@@ -43,12 +43,13 @@ std::int64_t NowMs()
 }
 
 // WHAT A CLIENT EXECUTES IS WHAT THE DESKTOP'S NAVIGATION DOES: an object of the configuration — a catalog, a
-// document, a common form, a command — found by its metadata id among the configuration's own and executed as a
-// command item (enterprise's OnMenuItemClicked). An object's own forms are reached through the object: it hands
-// out its form for the command type, the configuration's or the one the form builder makes.
-const ibBackendCommandItem* FindCommand(const ibApplicationInstance* applicationInstance, ibMetaID metaId)
+// document, a common form, a command — found by its metadata id among the own objects of the configuration the
+// client's session works in, and executed as a command item (enterprise's OnMenuItemClicked). An object's own forms
+// are reached through the object: it hands out its form for the command type, the configuration's or the one the
+// form builder makes.
+const ibBackendCommandItem* FindCommand(const ibSession& session, ibMetaID metaId)
 {
-	const ibMetaDataConfigurationBase* metaData = ibApplicationInstance::GetActiveMetaData(applicationInstance);
+	const ibMetaDataConfigurationBase* metaData = session.GetMetaData();
 	return metaData != nullptr ? dynamic_cast<const ibBackendCommandItem*>(metaData->FindAnyObjectByFilter(metaId)) : nullptr;
 }
 
@@ -287,7 +288,6 @@ bool ibClientHost::Call(ibClientMethod method, const ibDataNode& params, ibDataN
 				ibClientFrame* const frame = client->instance->GetFrame();
 				std::shared_ptr<ibSession> session = client->instance->ShareSession();
 				const ibClientSchema* const schema = frame != nullptr ? frame->GetDocumentManager()->FindSchema(kind) : nullptr;
-				const ibApplicationInstance* const applicationInstance = m_applicationInstance;
 				if (frame == nullptr || session == nullptr) {
 					refuse(ibClientRefusal::NoSession, wxT("the client has no session"));
 				}
@@ -296,11 +296,11 @@ bool ibClientHost::Call(ibClientMethod method, const ibDataNode& params, ibDataN
 				}
 				else if (params.FindField(wxT("Command")) == nullptr) {
 					// Without the right to it, the person gets an error, not the schema.
-					session->Submit([schema, applicationInstance, &result, &done, &refuse]() {
-						if (!schema->AccessRight(applicationInstance))
+					session->Submit([schema, &session, &result, &done, &refuse]() {
+						if (!schema->AccessRight(*session))
 							refuse(ibClientRefusal::NoRight, wxT("no right to this schema"));
 						else {
-							schema->Build(applicationInstance, result);
+							schema->Build(*session, result);
 							done = true;
 						}
 					}).get();
@@ -312,11 +312,11 @@ bool ibClientHost::Call(ibClientMethod method, const ibDataNode& params, ibDataN
 					const ibDataNode* found = params.FindChild(wxT("Args"));
 					const ibDataNode args = found != nullptr ? *found : ibDataNode();
 					std::function<void()> work;
-					session->Submit([schema, applicationInstance, command, &args, &work, &refuse, &refusal, &error]() {
-						if (!schema->AccessRight(applicationInstance))
+					session->Submit([schema, &session, command, &args, &work, &refuse, &refusal, &error]() {
+						if (!schema->AccessRight(*session))
 							refuse(ibClientRefusal::NoRight, wxT("no right to this schema"));
 						else
-							work = schema->Command(applicationInstance, command, args, refusal, error);
+							work = schema->Command(*session, command, args, refusal, error);
 					}).get();
 					if (work)
 						done = Run(*client, [work](ibClientFrame*) { work(); }, since, result, refusal, error);
@@ -328,8 +328,12 @@ bool ibClientHost::Call(ibClientMethod method, const ibDataNode& params, ibDataN
 				const ibMetaID metaId = params.GetValue<s32>(wxT("Command"));
 				s32 type = ibInterfaceCommandType::ibInterfaceCommandType_Default;
 				params.GetValue(wxT("Type"), type);
-				const ibBackendCommandItem* const command = FindCommand(m_applicationInstance, metaId);
-				if (command == nullptr) {
+				const std::shared_ptr<ibSession> session = client->instance->ShareSession();
+				const ibBackendCommandItem* const command = session != nullptr ? FindCommand(*session, metaId) : nullptr;
+				if (session == nullptr) {
+					refuse(ibClientRefusal::NoSession, wxT("the client has no session"));
+				}
+				else if (command == nullptr) {
 					refuse(ibClientRefusal::NotFound, wxString::Format(wxT("no command with id %d"), metaId));
 				}
 				else {
@@ -413,19 +417,23 @@ bool ibClientHost::Call(ibClientMethod method, const ibDataNode& params, ibDataN
 				std::shared_ptr<ibSession> session = client->instance->ShareSession();
 				const ibDataNode* const value = params.FindChild(wxT("Value"));
 				const wxString format = params.GetValue<wxString>(wxT("Format"));
-				const ibMetaData* const metaData = ibApplicationInstance::GetActiveMetaData(m_applicationInstance);
+				const ibMetaData* const metaData = session != nullptr ? session->GetMetaData() : nullptr;
 				if (session == nullptr)
 					refuse(ibClientRefusal::NoSession, wxT("the client has no session"));
 				else if (value == nullptr)
 					refuse(ibClientRefusal::BadParameter, wxT("a presentation needs a Value"));
 				else if (metaData == nullptr)
-					refuse(ibClientRefusal::Failed, wxT("the base has no configuration"));
+					refuse(ibClientRefusal::Failed, wxT("the session has no configuration"));
 				else {
 					wxString text;
 					session->Submit([metaData, value, &format, &text, &done, &refuse]() {
 						try {
 							const ibValue presented = metaData->Deserialize(*value);
-							text = format.IsEmpty() ? presented.GetString() : ibFormatString::Parse(format).Apply(presented);
+							// Two statements, not `?:` — ibString and wxString convert both ways, and clang refuses to pick.
+							if (format.IsEmpty())
+								text = presented.GetString();
+							else
+								text = ibFormatString::Parse(format).Apply(presented);
 							done = true;
 						}
 						catch (const ibBackendException& err) {

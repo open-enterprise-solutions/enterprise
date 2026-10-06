@@ -1,11 +1,11 @@
 #include "allFunctions.h"
 
-#include "backend/appData.h"                               // the base's configuration
 #include "backend/backend_picture.h"                       // the icons, as they travel
 #include "backend/functionalOption/functionalOptionGate.h"  // ibFunctionalOptionGate::IsAvailable
 #include "backend/metaCollection/genericData.h"
 #include "backend/metadataConfiguration.h"
 #include "backend/serialize/dataBuilder.h"
+#include "backend/session/session.h"                       // the configuration the session works in
 
 #include <vector>
 
@@ -56,15 +56,15 @@ std::vector<const ibValueMetaObjectGenericData*> OfferedObjects(const ibMetaData
 
 } // namespace
 
-bool ibSchemaAllFunctions::AccessRight(const ibApplicationInstance* applicationInstance) const
+bool ibSchemaAllFunctions::AccessRight(const ibSession& session) const
 {
-	const ibMetaDataConfigurationBase* const metaData = ibApplicationInstance::GetActiveMetaData(applicationInstance);
+	const ibMetaDataConfigurationBase* const metaData = session.GetMetaData();
 	return metaData != nullptr && metaData->AccessRight_ModeAllFunction();
 }
 
-void ibSchemaAllFunctions::Build(const ibApplicationInstance* applicationInstance, ibDataNode& tree) const
+void ibSchemaAllFunctions::Build(const ibSession& session, ibDataNode& tree) const
 {
-	const ibMetaDataConfigurationBase* const metaData = ibApplicationInstance::GetActiveMetaData(applicationInstance);
+	const ibMetaDataConfigurationBase* const metaData = session.GetMetaData();
 	if (metaData == nullptr)
 		return;
 
@@ -88,7 +88,7 @@ void ibSchemaAllFunctions::Build(const ibApplicationInstance* applicationInstanc
 	}
 }
 
-std::function<void()> ibSchemaAllFunctions::Command(const ibApplicationInstance* applicationInstance, s32 command,
+std::function<void()> ibSchemaAllFunctions::Command(const ibSession& session, s32 command,
 	const ibDataNode& args, ibClientRefusal& refusal, wxString& error) const
 {
 	if (static_cast<ibSchemaAllFunctionsCommand>(command) != ibSchemaAllFunctionsCommand::Open) {
@@ -97,10 +97,10 @@ std::function<void()> ibSchemaAllFunctions::Command(const ibApplicationInstance*
 		return nullptr;
 	}
 
-	const ibMetaDataConfigurationBase* const metaData = ibApplicationInstance::GetActiveMetaData(applicationInstance);
+	const ibMetaDataConfigurationBase* const metaData = session.GetMetaData();
 	if (metaData == nullptr) {
 		refusal = ibClientRefusal::Failed;
-		error = wxT("the base has no configuration");
+		error = wxT("the session has no configuration");
 		return nullptr;
 	}
 

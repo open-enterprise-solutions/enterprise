@@ -445,16 +445,14 @@ bool ibMetaDataConfigurationStorage::OnAfterSaveDatabase(bool roolback, int flag
 			}
 		} txGuard;
 #endif
-		if (!m_configMetadata->LoadDatabase(onlyLoadFlag)) {
-#if _USE_SAVE_METADATA_IN_TRANSACTION == 1
-			db_query->RollBack();
-			txGuard.m_done = true;
-#else
-			return false;
-#endif
-		}
-
-		if (!m_configNew && !m_configMetadata->RunDatabase()) {
+		// ⭐ THE DATABASE'S COPY IS READ INTO A NEW ONE, never re-read in place: the one before may be the base's
+		// active configuration by now, with sessions working in it, and nothing is changed under them — it goes with
+		// its last holder (metadata-hot-reload.md § 8). Run as the mirror it is (loadConfigFlag), as RunDatabase
+		// runs it.
+		const std::shared_ptr<ibMetaDataConfiguration> published = MakeShared<ibMetaDataConfiguration>(m_owner);
+		const bool read = published->LoadDatabase(onlyLoadFlag)
+			&& (m_configNew || published->RunDatabase(loadConfigFlag));
+		if (!read) {
 #if _USE_SAVE_METADATA_IN_TRANSACTION == 1
 			db_query->RollBack();
 			txGuard.m_done = true;
@@ -468,6 +466,13 @@ bool ibMetaDataConfigurationStorage::OnAfterSaveDatabase(bool roolback, int flag
 			db_query->Commit();
 		txGuard.m_done = true;
 #endif
+		if (read) {
+			m_configMetadata = published;
+			// …and the sessions to come get it: what the database publishes now is the base's active configuration —
+			// this very copy, read once. The sessions working in the one before keep it.
+			if (m_applicationInstance != nullptr && published->IsConfigOpen())
+				m_applicationInstance->ReplaceActiveMetaData(published);
+		}
 		Modify(false);
 
 		// One-time flag: the very first apply on a fresh DB runs the "create new database" path (DROP +

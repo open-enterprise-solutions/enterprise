@@ -2312,16 +2312,6 @@ ibValueRecordDataObjectExt::~ibValueRecordDataObjectExt()
 {
 }
 
-ibExternalOwnerHelper::~ibExternalOwnerHelper()
-{
-	if (m_externalMetadata != nullptr) {
-		if (!m_externalMetadata->CloseDatabase(forceCloseFlag)) {
-			wxASSERT_MSG(false, "external metadata CloseDatabase() == false");
-		}
-		wxDELETE(m_externalMetadata);
-	}
-}
-
 bool ibValueRecordDataObjectExt::InitializeObject()
 {
 	if (!m_metaObject->IsExternalCreate()) {

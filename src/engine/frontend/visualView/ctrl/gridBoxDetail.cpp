@@ -213,13 +213,11 @@ std::vector<ibOutputDescription> ibStructureByField(const wxString& path)
 // `source` — the report the cell was composed in; the detail is named after it.
 void ibOpenReportOver(const ibCompositionDescription& desc, const ibValueMetaObject* source)
 {
-	// A report in memory: the ctor has already made its root and its module manager.
-	ibMetaDataReport* detailMeta = new ibMetaDataReport();
+	// A report in memory, held from birth: the ctor has already made its root and its module manager.
+	const std::shared_ptr<ibMetaDataReport> detailMeta = ibMetaData::MakeShared<ibMetaDataReport>();
 	ibValueMetaObject* root = detailMeta->GetCommonMetaObject();
-	if (root == nullptr) {
-		wxDELETE(detailMeta);
+	if (root == nullptr)
 		return;
-	}
 
 	// ⭐ …AND NAMED AFTER THE REPORT IT DETAILS. A detail is that report's figure broken down, so its window says
 	// whose it is (Max, 2026-09-30); a fresh report answers with the default name, "External report1".
@@ -232,25 +230,21 @@ void ibOpenReportOver(const ibCompositionDescription& desc, const ibValueMetaObj
 	// a gridbox on the generated form without anybody drawing one.
 	ibValueMetaObjectComposer* composer =
 		root->CreateMetaObjectAndSetParent<ibValueMetaObjectComposer>();
-	if (composer == nullptr) {
-		wxDELETE(detailMeta);
+	if (composer == nullptr)
 		return;
-	}
 
 	// REGISTERED LIKE ANY OTHER METAOBJECT — an external report's tree is registered as it is built
 	// (Max: "as an external report it still has to be registered"), and a node that skipped it has no
 	// ctor behind its class.
-	composer->OnCreateMetaObject(detailMeta, newObjectFlag);
-	composer->OnLoadMetaObject(detailMeta);
+	composer->OnCreateMetaObject(detailMeta.get(), newObjectFlag);
+	composer->OnLoadMetaObject(detailMeta.get());
 	composer->SetCompositionDesc(desc);
 
-	if (!detailMeta->RunDatabase()) {
-		wxDELETE(detailMeta);
+	if (!detailMeta->RunDatabase())
 		return;
-	}
 
-	// …and the object owns the container from here on (ibValueRecordDataObjectExternalReport holds it
-	// by RAII), so nothing is deleted below: the form's life is what keeps the report alive.
+	// …and the object holds the container from its load on (ibValueRecordDataObjectExternalReport), so this
+	// reference may go: the form's life is what keeps the report alive.
 	if (ibValueModuleRuntimeManagerExternalReport* manager = detailMeta->GetManagerModule()) {
 		if (ibValueRecordDataObjectReport* object =
 				dynamic_cast<ibValueRecordDataObjectReport*>(manager->GetObjectValue()))

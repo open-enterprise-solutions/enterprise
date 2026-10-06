@@ -790,6 +790,11 @@ private:
 	wxDECLARE_NO_COPY_CLASS(ibMcpMetaBridge);
 };
 
+ibMetaDataConfigurationBase* ibMcpServer::GetMetaData() const
+{
+	return m_session != nullptr ? m_session->GetMetaData() : nullptr;
+}
+
 void ibMcpServer::WatchMetadata()
 {
 	if (m_metaBridge == nullptr)
@@ -797,7 +802,7 @@ void ibMcpServer::WatchMetadata()
 
 	// The open configuration, or nothing — a server outlives any one configuration and must not
 	// keep a subscription on one that has been closed.
-	ibMetaDataConfigurationBase* const metaData = ibApplicationInstance::GetActiveMetaData(m_applicationInstance);
+	ibMetaDataConfigurationBase* const metaData = GetMetaData();
 	m_metaBridge->Watch(metaData != nullptr && metaData->IsConfigOpen() ? metaData : nullptr);
 }
 
@@ -987,7 +992,7 @@ void ibMcpServer::Stop()
 {
 	// 🛑 OFF THE METADATA FIRST, AND BEFORE THE `IsRunning` GATE. The bridge holds a bare pointer to
 	// the configuration it watches, and the process tears down in the other order:
-	// `~ibApplicationInstance` destroys `m_activeMetaData` (it needs db_query on the way out, so it goes
+	// `~ibApplicationInstance` releases `m_activeMetaData` (it needs db_query on the way out, so it goes
 	// early) and reaches `m_mcpServer` several fields later — where the bridge's own destructor
 	// called `RemoveNotifier` on a vector that had been freed, and the designer died on every exit
 	// with a configuration open (crash dump 2026-09-08 09:43, `_Adopt_unlocked` inside
@@ -1210,7 +1215,7 @@ wxString ibMcpServer::Greeting() const
 
 	// WHAT IS OPEN, because that is what an assistant would be working on and what makes the
 	// line worth reading rather than a status light.
-	const ibMetaDataConfigurationBase* const metaData = ibApplicationInstance::GetActiveMetaData(m_applicationInstance);
+	const ibMetaDataConfigurationBase* const metaData = GetMetaData();
 	if (metaData != nullptr && metaData->IsConfigOpen())
 		if (const ibValueMetaObject* root = metaData->GetCommonMetaObject())
 			out += wxString::Format(_(" Configuration '%s' is open."), root->GetName());
@@ -1667,7 +1672,8 @@ void ibMcpDescribePlatform(const ibApplicationInstance* applicationInstance, ibD
 			user.SetValue(wxT("language"), who.m_strLanguageName);
 	}
 
-	ibMetaDataConfigurationBase* metaData = ibApplicationInstance::GetActiveMetaData(applicationInstance);
+	// The configuration of the session this is asked in — as the user above is that session's.
+	ibMetaDataConfigurationBase* metaData = ibApplicationInstance::GetActiveMetaData();
 
 	if (metaData == nullptr || !metaData->IsConfigOpen()) {
 		into.AddField(wxT("configurationOpen"), ibDataValue::Bool(false));
@@ -2036,7 +2042,8 @@ wxString BuildOrientation(const ibApplicationInstance* applicationInstance)
 		<< wxT("And what you DID is kept for you - `journal_read` says what was actually done, and ")
 		<< wxT("tells your changes from somebody else's.\n\n");
 
-	ibMetaDataConfigurationBase* metaData = ibApplicationInstance::GetActiveMetaData(applicationInstance);
+	// The configuration of the session this is asked in — as the user above is that session's.
+	ibMetaDataConfigurationBase* metaData = ibApplicationInstance::GetActiveMetaData();
 
 	if (metaData == nullptr || !metaData->IsConfigOpen()) {
 		out << wxT("NO CONFIGURATION IS OPEN in this designer yet.\n");
@@ -3096,7 +3103,7 @@ wxString ibMcpServer::Answer(const wxString& request, const ibMcpWireHeaders& he
 			// reads as "CatalogRef.Goods" rather than as a number that means
 			// nothing on the other side of the socket.
 			wxString text = ok
-				? ibRpcRenderNode(payload, ibMetaTypeResolver(ibApplicationInstance::GetActiveMetaData(m_applicationInstance)))
+				? ibRpcRenderNode(payload, ibMetaTypeResolver(GetMetaData()))
 				: refusal;
 
 			// ⭐⭐ SAID ONCE IS NOT SAID. The orientation asks a client to introduce itself in the
@@ -3208,7 +3215,7 @@ wxString ibMcpServer::Answer(const wxString& request, const ibMcpWireHeaders& he
 					// per-cell and per-object, and there may be hundreds. A caller that has this
 					// early writes every language as it goes, which costs nothing extra when the one
 					// writing is a model that can translate.
-					ibMetaDataConfigurationBase* const metaData = ibApplicationInstance::GetActiveMetaData(m_applicationInstance);
+					ibMetaDataConfigurationBase* const metaData = GetMetaData();
 					if (!m_saidLanguages && metaData != nullptr && metaData->IsConfigOpen()) {
 
 						const std::vector<wxString> languages =

@@ -9,6 +9,7 @@
 #include <thread>
 #include <algorithm>
 #include <sstream>
+#include <utility>   // std::exchange — the active configuration handed over
 
 #include <wx/ffile.h>      // infobase.conf — written for a new base
 #include <wx/fileconf.h>   // infobase.conf — a base's own settings
@@ -263,22 +264,11 @@ static std::size_t ReadInfobaseConnections(const wxString& folder, std::size_t b
 	return ibApplicationHost::ReadCount(conf, path, wxT("Connections"), 2, byDefault);
 }
 
-namespace {
-
-// THE BASE HOLDS ITS CONFIGURATION TO EDIT IT — a designer's base: the configuration being edited, with the
-// database's beside it (ibMetaDataConfigurationStorage::GetConfiguration). Decided by the base's first session.
-bool HoldsConfigurationToEdit(const ibMetaDataConfigurationBase* metaData)
-{
-	return metaData != nullptr && metaData->GetConfiguration() != nullptr;
-}
-
-} // namespace
-
 // ⭐ ASKED OF THE SESSION DOING THE WORK. A person's session says what it works in, whatever process hosts it — a
 // thin designer and a thin runtime live in one application server side by side, and a file base has its designer
-// and its runtime as a server does. A session nobody sits at (a job, the server's own) and a thread without a
-// session go by the base — by the configuration its first session made it hold: a job in the designer's base builds
-// no runtime.
+// and its runtime as a server does. A session nobody sits at (a job) goes by the process's own session in the base
+// — the designer's window, the client's, the server's login (the registry's fallback): a job in the designer's base
+// builds no runtime.
 bool ibApplicationInstance::DesignerMode() const
 {
 	if (const ibSession* const session = ibSession::Current()) {
@@ -287,7 +277,8 @@ bool ibApplicationInstance::DesignerMode() const
 		if (IsRuntimeSessionKind(session->GetKind()))
 			return false;
 	}
-	return HoldsConfigurationToEdit(m_activeMetaData.get());
+	const ibSession* const own = m_sessionRegistry != nullptr ? m_sessionRegistry->GetFallback() : nullptr;
+	return own != nullptr && IsDesignerSessionKind(own->GetKind());
 }
 
 bool ibApplicationInstance::EnterpriseMode() const
@@ -298,7 +289,8 @@ bool ibApplicationInstance::EnterpriseMode() const
 		if (IsDesignerSessionKind(session->GetKind()))
 			return false;
 	}
-	return m_activeMetaData != nullptr && !HoldsConfigurationToEdit(m_activeMetaData.get());
+	const ibSession* const own = m_sessionRegistry != nullptr ? m_sessionRegistry->GetFallback() : nullptr;
+	return (own == nullptr || !IsDesignerSessionKind(own->GetKind())) && GetActiveMetaData(this) != nullptr;
 }
 
 bool ibApplicationInstance::WebEnterpriseMode() const
@@ -345,7 +337,7 @@ ibApplicationInstance::ibApplicationInstance(ibApplicationHost* host, ibRunMode 
 }
 
 // Fabric — replaces ibMetaDataConfigurationBase::Initialize. Picks the subclass by the kind of the base's first
-// session and stashes it under `m_activeMetaData`. Single ownership, polymorphic dtor chain on reset. On the
+// session and puts it in `m_activeMetaData`, for the sessions to come; each takes its own reference. On the
 // application data NAMED — the session listeners below pass their own rather than let the registry thread
 // resolve one.
 bool ibApplicationInstance::CreateActiveMetaData(ibApplicationInstance* applicationInstance, ibSessionKind kind, int flags)
@@ -362,14 +354,55 @@ bool ibApplicationInstance::CreateActiveMetaData(ibApplicationInstance* applicat
 	// callers can branch uniformly.
 	if (kind == ibSessionKind::Launcher)
 		return true;
+	const ib::AppDataCtorToken owner{ applicationInstance };
+	std::shared_ptr<ibMetaDataConfigurationBase> metaData;
 	if (IsDesignerSessionKind(kind))
-		applicationInstance->m_activeMetaData.reset(new ibMetaDataConfigurationStorage(ib::AppDataCtorToken{ applicationInstance }));
+		metaData = ibMetaData::MakeShared<ibMetaDataConfigurationStorage>(owner);
 	else
-		applicationInstance->m_activeMetaData.reset(new ibMetaDataConfiguration(ib::AppDataCtorToken{ applicationInstance }));
+		metaData = ibMetaData::MakeShared<ibMetaDataConfiguration>(owner);
 
-	return applicationInstance->m_activeMetaData
-		? applicationInstance->m_activeMetaData->OnInitialize(flags)
-		: false;
+	// In place BEFORE it initialises — its loading asks for `activeMetaData`. The session being let in holds none
+	// yet (it takes its own right after, NotifyAuthenticated), so its thread works in it through a scope meanwhile.
+	{
+		std::lock_guard<std::mutex> lk(ibApplicationHost::s_mutex);
+		applicationInstance->m_activeMetaData = metaData;
+	}
+	const ibApplicationInstanceScope initialising(applicationInstance);
+	return metaData->OnInitialize(flags);
+}
+
+ibMetaDataConfigurationBase* ibApplicationInstance::GetActiveMetaData(const ibApplicationInstance* applicationInstance)
+{
+	if (applicationInstance == nullptr)
+		return nullptr;
+	// The session's own, through its reference…
+	if (const ibSession* const session = ibSession::Current())
+		if (ibMetaDataConfigurationBase* const metaData = session->GetMetaData())
+			if (metaData->GetApplicationInstance() == applicationInstance)
+				return metaData;
+	// …a thread working for the base without a session: the one its scope holds for the length of the work…
+	if (ibMetaDataConfigurationBase* const metaData = ibApplicationInstanceScope::GetMetaData())
+		if (metaData->GetApplicationInstance() == applicationInstance)
+			return metaData;
+	// …and a thread that said neither — a session being let in or already gone, the thread that opened the base:
+	// the base's active one, read under the lock. Whoever works in it beyond this line holds `shared_from_this()`.
+	std::lock_guard<std::mutex> lk(ibApplicationHost::s_mutex);
+	return applicationInstance->m_activeMetaData.get();
+}
+
+void ibApplicationInstance::ReplaceActiveMetaData(std::shared_ptr<ibMetaDataConfigurationBase> metaData)
+{
+	const wxString digest = metaData->GetConfigMD5();
+	std::shared_ptr<ibMetaDataConfigurationBase> previous;
+	{
+		std::lock_guard<std::mutex> lk(ibApplicationHost::s_mutex);
+		previous = std::exchange(m_activeMetaData, std::move(metaData));
+	}
+
+	// …and the base lets the old one go. The sessions working in it hold it, each by its own reference, and the
+	// last of them closes it (ibMetaData::MakeShared) — or the end of this call does, when nobody works in it.
+	ibJournalInfo(wxT("metadata"), wxT("the active configuration is now %s; the one before stays with %ld holder(s)"),
+		digest, previous != nullptr ? previous.use_count() - 1 : 0L);
 }
 
 void ibApplicationInstance::WireSessionEvents()
@@ -437,16 +470,18 @@ void ibApplicationInstance::WireSessionEvents()
 		// session's own state instead of the legacy server-singleton.
 		if ((m_loadMetadataFlags & _app_start_create_debug_server_flag) != 0)
 			registry->EnableDebugForSession(s);
-		if (m_activeMetaData != nullptr) {
+		if (ibMetaDataConfigurationBase* const metaData = s->GetMetaData()) {
 			// Root mm is allocated by ibSession::EnsureRoot (called by the
 			// registry between OnFirstConnect and this listener) for runtime
 			// sessions; the Designer has no root mm (it uses the lightweight
 			// designer manager in the compile cache). Here we drive cross-process
 			// metadata bring-up (RunDatabase once per process — fires OnBefore/
 			// After RunMetaObject which populate ibCompileValueCache +
-			// ibModuleStorage) and per-session compile + runtime start.
+			// ibModuleStorage) and per-session compile + runtime start. The
+			// session's own configuration — the active one when it came in;
+			// a replacement arrives already run (ReplaceActiveMetaData).
 			if (!m_run_metadata) {
-				m_run_metadata = m_activeMetaData->RunDatabase();
+				m_run_metadata = metaData->RunDatabase();
 			}
 			// CompileRoot folds compile + AttachRuntime + lambda runtime wire-up.
 			// No-op when there's no root mm (Designer). AttachRuntime self-gates by

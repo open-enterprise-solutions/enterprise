@@ -21,7 +21,7 @@
 
 #include "backend/appData.h"
 #include "backend/backend_exception.h"
-#include "backend/metadataConfiguration.h"                 // activeMetaData
+#include "backend/metadataConfiguration.h"                 // the session's configuration (GetMetaData)
 #include "backend/metaCollection/metaObjectMetadata.h"     // GetSessionModule
 #include "backend/metaCollection/metaModuleObject.h"       // ibValueMetaObjectManagerModule
 #include "backend/moduleManager/moduleManager.h"
@@ -57,8 +57,8 @@ void ibSession::SetSessionParameters()
 	if (appData->DesignerMode())
 		return;   // the designer runs no application code
 
-	ibValueMetaObjectConfiguration* const config = activeMetaData != nullptr
-		? activeMetaData->GetCommonMetaObject() : nullptr;
+	ibValueMetaObjectConfiguration* const config = GetMetaData() != nullptr
+		? GetMetaData()->GetCommonMetaObject() : nullptr;
 	if (config == nullptr)
 		return;
 

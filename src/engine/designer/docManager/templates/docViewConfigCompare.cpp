@@ -27,15 +27,17 @@ ibConfigCompareDocument::ibConfigCompareDocument() : ibDocument()
 }
 
 void ibConfigCompareDocument::Configure(
-	ibValueMetaObject* leftRoot,
-	ibValueMetaObject* rightRoot,
+	std::shared_ptr<ibMetaData> left,
+	std::shared_ptr<ibMetaData> right,
 	const wxString& leftLabel,
 	const wxString& rightLabel,
 	std::function<bool()> rightSaveCallback,
 	std::function<void()> appliedCallback)
 {
-	m_leftRoot  = leftRoot;
-	m_rightRoot = rightRoot;
+	m_left  = std::move(left);
+	m_right = std::move(right);
+	m_leftRoot  = m_left->GetCommonMetaObject();
+	m_rightRoot = m_right->GetCommonMetaObject();
 	m_leftLabel  = leftLabel;
 	m_rightLabel = rightLabel;
 	m_rightSaveCallback = std::move(rightSaveCallback);
@@ -44,7 +46,7 @@ void ibConfigCompareDocument::Configure(
 	// Walk the diff up front. Linear in node count; keeps the document
 	// construction self-contained so the view sees an immutable model.
 	std::vector<ibMetaDiffRecord> records =
-		ibMetaDiffWalker::Walk(leftRoot, rightRoot);
+		ibMetaDiffWalker::Walk(m_leftRoot, m_rightRoot);
 	m_model.reset(new ibDataViewMetaDiffModel(std::move(records)));
 
 	SetTitle(wxString::Format(_("Compare: %s <-> %s"), leftLabel, rightLabel));

@@ -13,6 +13,7 @@
 #include "backend/backend_exception.h"   // a process with no room for another base refuses it
 #include "backend/backend_localization.h"
 #include "backend/diagnostics/journal.h"
+#include "backend/metadataConfiguration.h"   // a scope holds the configuration it works in
 #include "backend/plugin/pluginManager.h"
 #include "backend/session/session.h"   // ibSession::CurrentCached — the journal's first question
 #include "backend/session/workerPoolHeadless.h"   // the process's worker pool
@@ -25,6 +26,9 @@ std::atomic<std::size_t>                            ibApplicationHost::s_instanc
 
 // The base a thread with no session works for (ibApplicationInstanceScope, SetThreadInstance).
 static thread_local ibApplicationInstance* t_instance = nullptr;
+
+// …and the configuration it works in, held by its innermost ibApplicationInstanceScope.
+static thread_local ibMetaDataConfigurationBase* t_metaData = nullptr;
 
 // The base whose service runs on this thread (SetThreadOwner) — for the journal's lines only.
 static thread_local const ibApplicationInstance* t_owner = nullptr;
@@ -153,7 +157,9 @@ void ibApplicationHost::Close(ibApplicationInstance* applicationInstance)
 	}
 
 	// With the closing thread working for it: its teardown reads the journal, the registry and the pool through
-	// `appData` and the accessors.
+	// `appData` and the accessors. The shell outlives the scope — what the scope holds of the base (its
+	// configuration) is let go while the base still stands.
+	std::unique_ptr<ibApplicationInstance> shell;
 	{
 		ibApplicationInstanceScope closing(applicationInstance);
 
@@ -163,7 +169,6 @@ void ibApplicationHost::Close(ibApplicationInstance* applicationInstance)
 		applicationInstance->Close();
 
 		// 2. Then out of the set, and freed outside the lock — an empty shell by now.
-		std::unique_ptr<ibApplicationInstance> shell;
 		{
 			std::lock_guard<std::mutex> lk(s_mutex);
 			const auto it = std::find_if(s_instances.begin(), s_instances.end(), held);
@@ -174,6 +179,7 @@ void ibApplicationHost::Close(ibApplicationInstance* applicationInstance)
 			}
 		}
 	}
+	shell.reset();
 	// …and a thread that was bound to it — the one that opened it, if it is this one — is bound to nothing.
 	if (t_instance == applicationInstance)
 		t_instance = nullptr;
@@ -399,17 +405,27 @@ bool ibApplicationHost::InitLocale(const wxString& locale)
 ///////////////////////////////////////////////////////////////////////////////
 
 ibApplicationInstanceScope::ibApplicationInstanceScope(ibApplicationInstance* applicationInstance) :
-	m_prev(t_instance)
+	m_prev(t_instance),
+	m_prevMetaData(t_metaData)
 {
+	if (ibMetaDataConfigurationBase* const active = ibApplicationInstance::GetActiveMetaData(applicationInstance))
+		m_metaData = std::static_pointer_cast<ibMetaDataConfigurationBase>(active->shared_from_this());
 	t_instance = applicationInstance;
+	t_metaData = m_metaData.get();
 }
 
 ibApplicationInstanceScope::~ibApplicationInstanceScope()
 {
 	t_instance = m_prev;
+	t_metaData = m_prevMetaData;
 }
 
 ibApplicationInstance* ibApplicationInstanceScope::Current()
 {
 	return t_instance;
+}
+
+ibMetaDataConfigurationBase* ibApplicationInstanceScope::GetMetaData()
+{
+	return t_metaData;
 }

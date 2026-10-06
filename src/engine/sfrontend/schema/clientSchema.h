@@ -20,8 +20,8 @@
 #include "sfrontend/sfrontend.h"
 #include "sfrontend/client/clientMethod.h"   // ibClientRefusal
 
-class ibApplicationInstance;
 class ibDataNode;
+class ibSession;
 
 // A schema — a number on the wire, a type here. ONE numbering for the whole protocol, so a number means one thing
 // whatever the mode: never renumbered, a new schema takes the next one.
@@ -41,11 +41,11 @@ public:
 	// does: a client asks for a schema by its number, past any menu that would have hidden it. The menu asks the
 	// same question (ibClientFrame), so it offers what the schema would let through. A schema without a right of
 	// its own is everybody's.
-	virtual bool AccessRight(const ibApplicationInstance* WXUNUSED(applicationInstance)) const { return true; }
+	virtual bool AccessRight(const ibSession& WXUNUSED(session)) const { return true; }
 
-	// What the schema shows, into `result` — of the base the client works in, handed in. Asked on the client's
-	// session: what a schema lists may depend on the person's rights.
-	virtual void Build(const ibApplicationInstance* applicationInstance, ibDataNode& result) const = 0;
+	// What the schema shows, into `result` — of the client's session, handed in: the configuration it works in, the
+	// base it works in. Asked on that session: what a schema lists may depend on the person's rights.
+	virtual void Build(const ibSession& session, ibDataNode& result) const = 0;
 
 	// WHAT A PERSON DID IN IT — one of the schema's own commands (a number of its own on the wire), with its
 	// arguments: the dialog's own handler on the desktop (a double click in All functions opens the item). Asked on
@@ -53,7 +53,7 @@ public:
 	// the WORK that does it, which the client's work then runs: what it opens the frame shows, and what it asks the
 	// person waits for the response. Empty with a refusal — why, and its text: the schema takes no such command, or
 	// not with these arguments — a schema acts only on what it offered; nothing is done then.
-	virtual std::function<void()> Command(const ibApplicationInstance* applicationInstance, s32 command,
+	virtual std::function<void()> Command(const ibSession& session, s32 command,
 		const ibDataNode& args, ibClientRefusal& refusal, wxString& error) const;
 };
 

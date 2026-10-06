@@ -12,11 +12,11 @@ class SFRONTEND_API ibSchemaActiveUser : public ibClientSchema {
 public:
 
 	// The configuration's right to active users — what the desktop's menu item stood on.
-	virtual bool AccessRight(const ibApplicationInstance* applicationInstance) const override;
+	virtual bool AccessRight(const ibSession& session) const override;
 
 	// Sessions {User, Application, Type, Started, Computer, Session} and Locks {Namespace, Key, Mode, User,
 	// Acquired, Lock} — the dialog's two tables, column for column.
-	virtual void Build(const ibApplicationInstance* applicationInstance, ibDataNode& result) const override;
+	virtual void Build(const ibSession& session, ibDataNode& result) const override;
 };
 
 #endif

@@ -128,6 +128,9 @@ ibConfigurationTree::ibConfigurationTree(ibMetaDocument* docParent, wxWindow* pa
 
 ibConfigurationTree::~ibConfigurationTree()
 {
+	// Off its list FIRST, while what it shows still stands — this tree may hold the last reference to it, and that
+	// goes with the members, before the base's own teardown would come to unsubscribe.
+	WatchMetaData(nullptr);
 
 	// The default constructor leaves both of these null and is reachable through the RTTI factory,
 	// so the teardown asks before it unbinds.

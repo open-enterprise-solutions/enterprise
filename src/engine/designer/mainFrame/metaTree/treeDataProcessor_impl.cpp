@@ -496,13 +496,13 @@ void ibDataProcessorTree::FillData()
 	UpdateToolbar(nullptr, Group(g_metaAttributeCLSID));
 }
 
-bool ibDataProcessorTree::Load(ibMetaDataDataProcessor* metaData)
+bool ibDataProcessorTree::Load(std::shared_ptr<ibMetaDataDataProcessor> metaData)
 {
 	CloseDocuments();   // a file is being left — its editors go with it
 	ClearTree();
 
-	m_metaData = metaData;
-	WatchMetaData(m_metaData);   // off the old list, onto this one — one call, one place
+	m_metaData = std::move(metaData);
+	WatchMetaData(GetMetaData());   // off the old list, onto this one — one call, one place
 	m_metaTreeCtrl->Freeze();
 	FillData(); //Fill all data from metaData
 

@@ -4,17 +4,20 @@
 #include "backend/lock/lockManager.h"
 #include "backend/metadataConfiguration.h"
 #include "backend/serialize/dataBuilder.h"
+#include "backend/session/session.h"
 #include "backend/session/sessionRegistry.h"
 #include "backend/session/sessionSnapshot.h"
 
-bool ibSchemaActiveUser::AccessRight(const ibApplicationInstance* applicationInstance) const
+bool ibSchemaActiveUser::AccessRight(const ibSession& session) const
 {
-	const ibMetaDataConfigurationBase* const metaData = ibApplicationInstance::GetActiveMetaData(applicationInstance);
+	const ibMetaDataConfigurationBase* const metaData = session.GetMetaData();
 	return metaData != nullptr && metaData->AccessRight_ActiveUsers();
 }
 
-void ibSchemaActiveUser::Build(const ibApplicationInstance* applicationInstance, ibDataNode& result) const
+void ibSchemaActiveUser::Build(const ibSession& session, ibDataNode& result) const
 {
+	const ibApplicationInstance* const applicationInstance = session.GetApplicationInstance();
+
 	// The sessions — every process's in the base, not this server's alone.
 	ibDataNode& sessions = result.Child(wxT("Sessions"));
 	if (ibSessionRegistry* const registry = ibApplicationInstance::GetSessionRegistry(applicationInstance)) {

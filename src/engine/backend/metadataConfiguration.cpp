@@ -8,7 +8,8 @@
 #include "backend/job/jobManager.h"   // the job records are swept once the surviving jobs are known
 
 // ms_instance / Get / Initialize / Destroy retired — ownership moved
-// to ibApplicationInstance::m_activeMetaData (a unique_ptr). The fabric
+// to ibApplicationInstance::m_activeMetaData, shared with every session let
+// in while it was active (ibSession::GetMetaData). The fabric
 // lives on ibApplicationInstance::CreateActiveMetaData, its tear-down in the base's Close;
 // callers reach the active metadata through `appEnv::ActiveMetaData()`
 // (which the legacy `activeMetaData` macro now redirects to).
@@ -555,7 +556,8 @@ bool ibMetaDataConfigurationStorage::OnDestroy()
 
 ibMetaDataConfigurationStorage::ibMetaDataConfigurationStorage(ib::AppDataCtorToken owner) :
 	ibMetaDataConfiguration(owner),
-	m_configMetadata(new ibMetaDataConfiguration(owner)) {
+	m_configMetadata(MakeShared<ibMetaDataConfiguration>(owner)),
+	m_owner(owner) {
 	// Designer-edit configuration carries a compile-value cache + its module-manager —
 	// built with the runtime image (CreateDesignerCache below); callsites gate on
 	// `if (auto* cc = metaData->GetCompileCache())` rather than appData->DesignerMode().
@@ -579,15 +581,15 @@ std::unique_ptr<ibCompileValueCache> ibMetaDataConfiguration::CreateDesignerCach
 	return cache;
 }
 
-ibMetaDataConfigurationStorage::~ibMetaDataConfigurationStorage() {
-	wxDELETE(m_configMetadata);
-}
+ibMetaDataConfigurationStorage::~ibMetaDataConfigurationStorage() = default;   // the database's copy goes with its last holder
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 bool ibMetaDataConfigurationStorage::LoadDatabase(int flags)
 {
-	if (m_configMetadata->LoadDatabase(onlyLoadFlag)) {
+	// The database's copy is read here once, the first time; a rollback leaves it as it is (the database still
+	// publishes it), and an apply replaces it whole — never re-read in place under the sessions working in it.
+	if (m_configMetadata->IsConfigOpen() || m_configMetadata->LoadDatabase(onlyLoadFlag)) {
 
 		//close if opened
 		if (ibMetaDataConfiguration::IsConfigOpen()
@@ -596,7 +598,7 @@ bool ibMetaDataConfigurationStorage::LoadDatabase(int flags)
 		}
 
 		if (ibMetaDataConfiguration::LoadDatabase()) {
-			Modify(!CompareMetadata(m_configMetadata));
+			Modify(!CompareMetadata(GetConfiguration()));
 			if (m_configNew)
 				SaveDatabase(saveConfigFlag);
 			m_configNew = false;

@@ -831,9 +831,9 @@ bool ibSession::CompileRoot()
 {
 	if (!m_root) return false;
 	// This session's modules are compiled in ITS configuration's syntax, and it speaks its configuration's main
-	// language when its user has none — its base's, taken before the first compile. One server may hold bases
-	// written in different syntaxes and different languages.
-	const ibMetaDataConfigurationBase* const metaData = ibApplicationInstance::GetActiveMetaData(GetApplicationInstance());
+	// language when its user has none — the one it acquired, taken before the first compile. One server may hold
+	// bases written in different syntaxes and different languages.
+	const ibMetaDataConfigurationBase* const metaData = GetMetaData();
 	CompileStateOf(this)->m_codeStyle = ibConfigurationWritesInWords(metaData)
 		? ibProgramSyntax::syntax_ves : ibProgramSyntax::syntax_ces;
 	if (metaData != nullptr) {
@@ -870,7 +870,7 @@ bool ibSession::CompileRoot()
 	// any user query (CompileRoot finishes first), so it is in place before anything it must guard.
 	// Designer never enforces (it runs off the edit-time manager, not this runtime root).
 	if (!m_accessPolicy && !appData->DesignerMode())
-		m_accessPolicy = std::make_unique<ibRuntimeAccessPolicy>(this, activeMetaData);
+		m_accessPolicy = std::make_unique<ibRuntimeAccessPolicy>(this, GetMetaData());
 
 	// Lambda executor — m_root's procUnit is live after AttachRuntime, so it is
 	// available to borrow from. ibValueFunction's Execute resolves this through
@@ -938,15 +938,29 @@ void ibSession::ClearRoot()
 	}
 }
 
+void ibSession::AcquireMetaData()
+{
+	if (m_metaData)
+		return;
+	if (ibMetaDataConfigurationBase* const active = ibApplicationInstance::GetActiveMetaData(GetApplicationInstance()))
+		m_metaData = std::static_pointer_cast<ibMetaDataConfigurationBase>(active->shared_from_this());
+}
+
+void ibSession::ReleaseMetaData()
+{
+	ClearRoot();
+	m_metaData.reset();
+}
+
 void ibSession::EnsureRoot()
 {
 	// Wired by ibSessionRegistry::NotifyAuthenticated to land between
 	// OnFirstConnect (metadataCreate) and OnAuthenticated (RunDatabase /
 	// CompileRoot). CreateRoot itself is idempotent; this wrapper just
-	// guards on activeMetaData so headless sessions (Launcher, technical)
-	// without metadata don't fault.
+	// guards on the acquired configuration so headless sessions
+	// (Launcher, technical) without metadata don't fault.
 	if (m_root) return;
-	if (activeMetaData == nullptr) return;
+	if (GetMetaData() == nullptr) return;
 	// Designer never executes script — it has its own lightweight designer
 	// module manager in the compile cache (ibValueModuleManagerDesigner). No
 	// per-session runtime root mm is created; designer-path consumers read the
@@ -956,7 +970,7 @@ void ibSession::EnsureRoot()
 	// RLS — the access policy is NOT built here: it is built in CompileRoot, between module compile and
 	// run, so its ctor can resolve the user's role-module procUnits (see there). The L3 door pulls it via
 	// GetAccessPolicy(); no query fires before CompileRoot, so it is always in place when needed.
-	CreateRoot(activeMetaData);
+	CreateRoot(GetMetaData());
 }
 
 const ibAccessPolicy* ibSession::GetAccessPolicy() const
@@ -1458,8 +1472,9 @@ ibSession::OpenResult ibSession::Open(const wxString& user, const wxString& pass
 	if (res == ibAuthState::Authenticated) {
 		// NotifyAuthenticated fires three phases in order:
 		//   1. OnFirstConnect listeners — process-level metadata bootstrap
-		//      (metadataCreate, populates activeMetaData) on the first auth.
-		//   2. session->EnsureRoot — per-session root mm allocated NOW so
+		//      (metadataCreate, populates the base's active one) on the first auth.
+		//   2. session->AcquireMetaData + EnsureRoot — the session's own reference
+		//      to it, and the per-session root mm allocated over it NOW so
 		//      step 3's listeners can rely on GetManagerModule() != null.
 		//   3. OnAuthenticated listeners — per-session bring-up
 		//      (RunDatabase fires OnBefore/AfterRunMetaObject which read

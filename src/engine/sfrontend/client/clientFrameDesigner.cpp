@@ -15,7 +15,7 @@ ibClientFrameDesigner::ibClientFrameDesigner(ibSessionHolder&& holder, ibClientI
 
 bool ibClientFrameDesigner::AllowRun()
 {
-	const ibMetaDataConfigurationBase* const metaData = ibApplicationInstance::GetActiveMetaData(GetSession()->GetApplicationInstance());
+	const ibMetaDataConfigurationBase* const metaData = GetSession()->GetMetaData();
 	return metaData != nullptr && metaData->AccessRight_Administration();
 }
 

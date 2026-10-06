@@ -36,9 +36,9 @@ class ibMetadataBrowserDocument : public ibMetaDocument {
 	}
 
 public:
-	
-	ibMetadataBrowserDocument(ibMetaDataConfigurationBase* metaData = nullptr) :
-		ibMetaDocument(), m_metaData(metaData) { m_childDoc = false; }
+
+	ibMetadataBrowserDocument(std::shared_ptr<ibMetaDataConfigurationBase> metaData = nullptr) :
+		ibMetaDocument(), m_metaData(std::move(metaData)) { m_childDoc = false; }
 	
 	virtual wxIcon GetIcon() const {
 		if (m_metaData != nullptr) {
@@ -58,7 +58,8 @@ public:
 
 protected:
 
-	ibMetaDataConfigurationBase* m_metaData;
+	// What it shows, held while it is open — the database's copy stays for the window even when an apply replaces it.
+	std::shared_ptr<ibMetaDataConfigurationBase> m_metaData;
 
 	wxDECLARE_NO_COPY_CLASS(ibMetadataBrowserDocument);
 	wxDECLARE_DYNAMIC_CLASS(ibMetadataBrowserDocument);
@@ -75,7 +76,6 @@ class ibMetadataFileDocument : public ibMetadataBrowserDocument {
 public:
 
 	ibMetadataFileDocument() : ibMetadataBrowserDocument() {}
-	virtual ~ibMetadataFileDocument() { wxDELETE(m_metaData); }
 
 	virtual bool OnCreate(const wxString& path, long flags) override;
 	virtual bool OnCloseDocument() override;

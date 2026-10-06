@@ -21,16 +21,13 @@ protected:
 };
 
 class ibReportFileDocument : public ibMetaDataDocument {
-	ibMetaDataReport* m_metaData;
+	std::shared_ptr<ibMetaDataReport> m_metaData;   // held while it is open — and by its object, from its load on
 public:
 
 	ibReportFileDocument() : ibMetaDataDocument() {}
-	virtual ~ibReportFileDocument() { 
-		/*wxDELETE(m_metaData);*/ 
-	}
 
 	virtual ibMetaDataReport* GetMetaData() const {
-		return m_metaData;
+		return m_metaData.get();
 	}
 
 	virtual bool OnCreate(const wxString& path, long flags) override;

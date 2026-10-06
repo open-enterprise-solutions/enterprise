@@ -71,7 +71,7 @@ The backend is the core engine. It is self-contained — no GUI dependencies. Ke
 
 - **`ibApplicationHost`** (`src/engine/backend/appHost.h`) — the PROCESS: the bases it holds, and what belongs to the process rather than to any base — the plugins, the platform locale and the syntax-helper corpus, the one worker pool, the limits read from `backend.conf`. See [Processes and bases](#processes-and-bases).
 - **`ibApplicationInstance`** (`src/engine/backend/appData.h`) — ONE BASE: its connection pool, lock manager, session registry, job manager, MCP server, settings storage, logger and metadata. A process holds one (every desktop host, the web host, the tests) or several (the application server). Reached through the `appData` macro, which answers the base of the session the thread works for — there is no global current base. Per-session state (user info, ProcUnits, frame) lives on `ibSession`; sys_user on `ibUserInfo`; the sys_session snapshot on `ibSessionSnapshot` produced by `ibSessionRegistry`.
-- **`ibMetaDataConfiguration`** (`src/engine/backend/metadataConfiguration.h`) — loads, saves, and manages the metadata tree (all business objects). Accessed via `activeMetaData`. Stores compile cache (compiled bytecode) per module descriptor; runtime instances live in sessions.
+- **`ibMetaDataConfiguration`** (`src/engine/backend/metadataConfiguration.h`) — loads, saves, and manages the metadata tree (all business objects). Accessed via `activeMetaData` — the calling session's own configuration. Stores compile cache (compiled bytecode) per module descriptor; runtime instances live in sessions.
 - **`ibSession` / `ibSessionRegistry`** (`src/engine/backend/session/`) — per-session state and the base's session manager (one registry per base). The session is reachable via `ibSession::Current()`: the calling thread's own binding, else the base's fallback — the process's own session in that base (never a job's or a web tab's). `ibSessionScope` and `ibSessionThreadBinding` are the RAII helpers that bind a session to the calling thread. See [Sessions and Runtime Ownership](#sessions-and-runtime-ownership).
 - **`ibDebuggerServer`** (`src/engine/backend/debugger/debugServer.h`) — TCP server that accepts designer connections and relays debugger events.
 
@@ -142,7 +142,7 @@ The init list is **the** ordering contract:
 | 6 | `m_mcpServer` | The designer's MCP listener — started by a designer session. |
 | 7 | `m_settingsStorage` | sys_settings — what people saved on their forms and lists. |
 
-`m_logger` is created by `Open` (`CreateLogger`) after the tables exist. `m_activeMetaData` is populated by `CreateActiveMetaData(applicationInstance, kind, flags)` at the base's first session, by its kind — `ibMetaDataConfigurationStorage` for a designer kind, `ibMetaDataConfiguration` otherwise; launcher and codeRunner have none. The plugins and the syntax-helper corpus (constructed in `InitLocale()` once the locale is settled — see `docs/syntax-helper-design.md`) are the process's.
+`m_logger` is created by `Open` (`CreateLogger`) after the tables exist. `m_activeMetaData` is populated by `CreateActiveMetaData(applicationInstance, kind, flags)` at the base's first session, by its kind — `ibMetaDataConfigurationStorage` for a designer kind, `ibMetaDataConfiguration` otherwise; launcher and codeRunner have none. It is held for the sessions to come: a session takes its own reference when it is let in and lets it go when it leaves. A designer's apply replaces it with the configuration it published (`ReplaceActiveMetaData`); sessions already working finish on the old one, which closes with its last holder. Every metadata — a configuration, an external report or data processor, a configuration file — is made by `ibMetaData::MakeShared` and held by `shared_ptr` by whoever works in it. The plugins and the syntax-helper corpus (constructed in `InitLocale()` once the locale is settled — see `docs/syntax-helper-design.md`) are the process's.
 
 ### Closing a base (`ibApplicationHost::Close` → `ibApplicationInstance::Close`)
 
@@ -910,7 +910,8 @@ launcher.exe (or direct enterprise.exe with CLI creds)
                                 └─ InstallUser writes session->m_userInfo
                                      └─ NotifyAuthenticated phases (registry-driven):
                                           1. OnFirstConnect — metadataCreate (one-shot)
-                                          2. session->EnsureRoot() — CreateRoot(activeMetaData)
+                                          2. session->AcquireMetaData() — its own reference
+                                             session->EnsureRoot() — CreateRoot(GetMetaData())
                                           3. OnAuthenticated — RunDatabase (one-shot)
                                                              + session->CompileRoot()
                                                              + mm->AttachRuntime(s)

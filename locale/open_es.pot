@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: OES Enterprise\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-06 22:04+0300\n"
+"POT-Creation-Date: 2026-10-07 00:12+0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,34 +17,34 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: src/engine/backend/appData.cpp:188
+#: src/engine/backend/appData.cpp:189
 #, c-format
 msgid "Thread %s works for no base: it has no session and no base bound to it."
 msgstr ""
 
-#: src/engine/backend/appData.cpp:730
+#: src/engine/backend/appData.cpp:765
 msgid "This build has no Firebird driver (OES_USE_FIREBIRD is not defined), and a base kept in a folder is a Firebird one."
 msgstr ""
 
-#: src/engine/backend/appData.cpp:742
+#: src/engine/backend/appData.cpp:777
 #, c-format
 msgid "There is no base in %s (no %s), and this opening does not create one."
 msgstr ""
 
-#: src/engine/backend/appData.cpp:772
+#: src/engine/backend/appData.cpp:807
 msgid "This build has no PostgreSQL driver (OES_USE_POSTGRESQL is not defined), and a base on a database server is a PostgreSQL one."
 msgstr ""
 
-#: src/engine/backend/appData.cpp:858
+#: src/engine/backend/appData.cpp:893
 #, c-format
 msgid "The base %s is empty (it has no system tables), and this opening does not create them."
 msgstr ""
 
-#: src/engine/backend/appData.cpp:1345
+#: src/engine/backend/appData.cpp:1380
 msgid "The configuration from the file could not be applied - the data was not loaded"
 msgstr ""
 
-#: src/engine/backend/appData.cpp:1390
+#: src/engine/backend/appData.cpp:1425
 msgid "The file carries data before the configuration - it cannot be loaded"
 msgstr ""
 
@@ -61,11 +61,11 @@ msgstr ""
 msgid "Sandbox"
 msgstr ""
 
-#: src/engine/backend/appHost.cpp:78
+#: src/engine/backend/appHost.cpp:82
 msgid "The process did not say how it holds the base: the run mode is unknown."
 msgstr ""
 
-#: src/engine/backend/appHost.cpp:94
+#: src/engine/backend/appHost.cpp:98
 #, c-format
 msgid "This process already holds %u base(s) - as many as its configuration allows (backend.conf, Bases)."
 msgstr ""
@@ -432,7 +432,7 @@ msgid "The program was stopped by the user!"
 msgstr ""
 
 #: src/engine/backend/backend_exception.h:355
-#: src/engine/backend/metadataConfiguration.cpp:531
+#: src/engine/backend/metadataConfiguration.cpp:532
 msgid "Not enough access rights for this user!"
 msgstr ""
 
@@ -736,6 +736,18 @@ msgstr ""
 msgid "compile failed"
 msgstr ""
 
+#: src/engine/backend/compiler/procUnitLambda.h:208
+msgid "Cannot call: function value is not initialised"
+msgstr ""
+
+#: src/engine/backend/compiler/procUnitLambda.h:212
+msgid "Cannot call function value without interpreter state"
+msgstr ""
+
+#: src/engine/backend/compiler/procUnitLambda.h:216
+msgid "No runtime available for function-value call"
+msgstr ""
+
 #: src/engine/backend/compiler/procUnitLINQ.cpp:63
 msgid "Lambda value is not initialised"
 msgstr ""
@@ -894,18 +906,6 @@ msgstr ""
 #: src/engine/backend/compiler/procUnitLINQ.cpp:2398
 #, c-format
 msgid "The projected row is missing where field %d should be stored"
-msgstr ""
-
-#: src/engine/backend/compiler/procUnitLambda.h:208
-msgid "Cannot call: function value is not initialised"
-msgstr ""
-
-#: src/engine/backend/compiler/procUnitLambda.h:212
-msgid "Cannot call function value without interpreter state"
-msgstr ""
-
-#: src/engine/backend/compiler/procUnitLambda.h:216
-msgid "No runtime available for function-value call"
 msgstr ""
 
 #: src/engine/backend/compiler/translateCode.cpp:134
@@ -1510,44 +1510,44 @@ msgstr ""
 msgid "Background job: a rented run needs the session that starts it"
 msgstr ""
 
-#: src/engine/backend/job/jobBackground.cpp:348
+#: src/engine/backend/job/jobBackground.cpp:351
 msgid "Background job: session could not be created"
 msgstr ""
 
-#: src/engine/backend/job/jobBackground.cpp:414
+#: src/engine/backend/job/jobBackground.cpp:417
 #, c-format
 msgid "Background job ENDED WITHOUT SAYING HOW: %s - the run left its body by a path that reported nothing. Anything it committed stays."
 msgstr ""
 
-#: src/engine/backend/job/jobBackground.cpp:424
+#: src/engine/backend/job/jobBackground.cpp:427
 msgid "the run ended without saying how"
 msgstr ""
 
-#: src/engine/backend/job/jobBackground.cpp:482
+#: src/engine/backend/job/jobBackground.cpp:485
 #, c-format
 msgid "Background job finished: %s"
 msgstr ""
 
-#: src/engine/backend/job/jobBackground.cpp:508
+#: src/engine/backend/job/jobBackground.cpp:511
 #, c-format
 msgid "Background job cancelled: %s"
 msgstr ""
 
-#: src/engine/backend/job/jobBackground.cpp:512
+#: src/engine/backend/job/jobBackground.cpp:515
 msgid "the run was cancelled"
 msgstr ""
 
-#: src/engine/backend/job/jobBackground.cpp:515
+#: src/engine/backend/job/jobBackground.cpp:518
 #, c-format
 msgid "Background job FAILED: %s - %s"
 msgstr ""
 
-#: src/engine/backend/job/jobBackground.cpp:522
+#: src/engine/backend/job/jobBackground.cpp:525
 #, c-format
 msgid "Background job FAILED: %s - unknown error"
 msgstr ""
 
-#: src/engine/backend/job/jobBackground.cpp:526
+#: src/engine/backend/job/jobBackground.cpp:529
 #: src/engine/backend/job/jobManager.cpp:428
 #: src/engine/backend/metaCollection/partial/reference/referenceQuery.cpp:78
 #: src/engine/backend/metaCollection/partial/reference/referenceQuery.cpp:176
@@ -1556,7 +1556,7 @@ msgstr ""
 msgid "unknown exception"
 msgstr ""
 
-#: src/engine/backend/job/jobBackground.cpp:551
+#: src/engine/backend/job/jobBackground.cpp:554
 msgid "Background job: the worker pool did not take the run"
 msgstr ""
 
@@ -1782,111 +1782,111 @@ msgstr ""
 msgid "rolled back to the database"
 msgstr ""
 
-#: src/engine/backend/mcp/mcpServer.cpp:903
+#: src/engine/backend/mcp/mcpServer.cpp:908
 msgid "The server is already running"
 msgstr ""
 
-#: src/engine/backend/mcp/mcpServer.cpp:914
+#: src/engine/backend/mcp/mcpServer.cpp:919
 msgid ""
 "Assistant access is switched off.\n"
 "\n"
 "Turn it on in Tools > Options > Assistant access."
 msgstr ""
 
-#: src/engine/backend/mcp/mcpServer.cpp:920
+#: src/engine/backend/mcp/mcpServer.cpp:925
 msgid "The address or the port is not set"
 msgstr ""
 
-#: src/engine/backend/mcp/mcpServer.cpp:925
+#: src/engine/backend/mcp/mcpServer.cpp:930
 msgid "There is no session to work in"
 msgstr ""
 
-#: src/engine/backend/mcp/mcpServer.cpp:1021
+#: src/engine/backend/mcp/mcpServer.cpp:1026
 msgid "Assistant access has been switched off. Nothing is listening, so nothing written here will be collected until it is switched on again in Tools > Options > Assistant access."
 msgstr ""
 
-#: src/engine/backend/mcp/mcpServer.cpp:1205
+#: src/engine/backend/mcp/mcpServer.cpp:1210
 msgid "Assistant access is not running. Start it in Tools > Options > Assistant access."
 msgstr ""
 
-#: src/engine/backend/mcp/mcpServer.cpp:1209
+#: src/engine/backend/mcp/mcpServer.cpp:1214
 #, c-format
 msgid "Assistant access is running at %s (build %u)."
 msgstr ""
 
-#: src/engine/backend/mcp/mcpServer.cpp:1216
+#: src/engine/backend/mcp/mcpServer.cpp:1221
 #, c-format
 msgid " Configuration '%s' is open."
 msgstr ""
 
-#: src/engine/backend/mcp/mcpServer.cpp:1222
+#: src/engine/backend/mcp/mcpServer.cpp:1227
 msgid ""
 "\n"
 "\n"
 "An assistant is connected."
 msgstr ""
 
-#: src/engine/backend/mcp/mcpServer.cpp:1223
+#: src/engine/backend/mcp/mcpServer.cpp:1228
 msgid ""
 "\n"
 "\n"
 "Nothing is connected yet - the key and the setup line are on the same settings page."
 msgstr ""
 
-#: src/engine/backend/mcp/mcpServer.cpp:2444
+#: src/engine/backend/mcp/mcpServer.cpp:2451
 #, c-format
 msgid "The assistant could not answer: %s"
 msgstr ""
 
-#: src/engine/backend/mcp/mcpServer.cpp:2458
+#: src/engine/backend/mcp/mcpServer.cpp:2465
 #, c-format
 msgid "unreadable message: %s"
 msgstr ""
 
-#: src/engine/backend/mcp/mcpServer.cpp:2650
+#: src/engine/backend/mcp/mcpServer.cpp:2657
 msgid "An assistant has connected"
 msgstr ""
 
-#: src/engine/backend/mcp/mcpServer.cpp:2655
+#: src/engine/backend/mcp/mcpServer.cpp:2662
 #, c-format
 msgid "%s has connected"
 msgstr ""
 
-#: src/engine/backend/mcp/mcpServer.cpp:2854
+#: src/engine/backend/mcp/mcpServer.cpp:2861
 #, c-format
 msgid "mcp_call's `arguments` must be an OBJECT - the tool's schema filled in - and this one is not. Send {tool: '%s', arguments: {...}}, not the arguments as a string containing JSON."
 msgstr ""
 
-#: src/engine/backend/mcp/mcpServer.cpp:2907
+#: src/engine/backend/mcp/mcpServer.cpp:2914
 msgid "Something began using the tools without introducing itself - no handshake, only the access key. What it does appears below."
 msgstr ""
 
-#: src/engine/backend/mcp/mcpServer.cpp:2970
+#: src/engine/backend/mcp/mcpServer.cpp:2977
 #, c-format
 msgid "The designer is waiting on a dialog ('%s'), so it cannot take this now. Nothing was done. Read it with window_dismiss, ask the person to answer it, or dismiss it with window_dismiss {close: true} - it is answered as Cancel."
 msgstr ""
 
-#: src/engine/backend/mcp/mcpServer.cpp:3007
+#: src/engine/backend/mcp/mcpServer.cpp:3014
 #, c-format
 msgid "'%s' takes no argument called '%s'. Nothing was done."
 msgstr ""
 
-#: src/engine/backend/mcp/mcpServer.cpp:3010
+#: src/engine/backend/mcp/mcpServer.cpp:3017
 #, c-format
 msgid " Did you mean '%s'?"
 msgstr ""
 
-#: src/engine/backend/mcp/mcpServer.cpp:3021
+#: src/engine/backend/mcp/mcpServer.cpp:3028
 #, c-format
 msgid "'%s' needs '%s', and it did not come. Nothing was done."
 msgstr ""
 
-#: src/engine/backend/mcp/mcpServer.cpp:3081
+#: src/engine/backend/mcp/mcpServer.cpp:3088
 #, c-format
 msgid "'%s' failed in a way it does not describe."
 msgstr ""
 
-#: src/engine/backend/mcp/mcpServer.cpp:3476
+#: src/engine/backend/mcp/mcpServer.cpp:3483
 msgid "refused"
 msgstr ""
 
@@ -2260,8 +2260,8 @@ msgid "Common"
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaDiff.cpp:91
-#: src/engine/designer/mainFrame/metaTree/treeConfiguration_impl.cpp:1328
-#: src/engine/designer/mainFrame/metaTree/treeConfiguration_impl.cpp:1348
+#: src/engine/designer/mainFrame/metaTree/treeConfiguration_impl.cpp:1333
+#: src/engine/designer/mainFrame/metaTree/treeConfiguration_impl.cpp:1353
 #: src/engine/designer/mainFrame/metaTree/treeDataProcessor_impl.cpp:295
 #: src/engine/designer/mainFrame/metaTree/treeDataReport_impl.cpp:296
 #: src/engine/designer/win/editor/visualEditor/visualEditorAttributeTree.cpp:413
@@ -2773,8 +2773,8 @@ msgstr ""
 #: src/engine/designer/mainFrame/mainFrameDesigner.cpp:77
 #: src/engine/designer/mainFrame/mainFrameDesignerMenu.cpp:193
 #: src/engine/designer/mainFrame/mainFrameDesignerParts.cpp:175
-#: src/engine/designer/mainFrame/metaTree/treeConfiguration_impl.cpp:1747
-#: src/engine/designer/mainFrame/metaTree/treeConfiguration_impl.cpp:1764
+#: src/engine/designer/mainFrame/metaTree/treeConfiguration_impl.cpp:1752
+#: src/engine/designer/mainFrame/metaTree/treeConfiguration_impl.cpp:1769
 #: src/engine/designer/mainFrameDesignerCmd.cpp:128
 #: src/engine/designer/mainFrameDesignerMenu.cpp:118
 #: src/engine/designer/win/editor/commonAttributeEditor/commonAttributeEditor.cpp:81
@@ -4043,9 +4043,9 @@ msgstr ""
 #: src/engine/backend/metaCollection/partial/chartOfCalculationTypesObject.cpp:36
 #: src/engine/backend/metaCollection/partial/chartOfCharacteristicTypesObject.cpp:36
 #: src/engine/backend/metaCollection/partial/commonObject.cpp:2025
-#: src/engine/backend/metaCollection/partial/commonObject.cpp:2575
-#: src/engine/backend/metaCollection/partial/commonObject.cpp:2754
-#: src/engine/backend/metaCollection/partial/commonObject.cpp:3697
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:2565
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:2744
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:3687
 #: src/engine/backend/metaCollection/partial/commonObject.h:759
 #: src/engine/backend/metaCollection/partial/documentObject.cpp:57
 #: src/engine/backend/metaCollection/partial/informationRegisterObject.cpp:60
@@ -4355,165 +4355,165 @@ msgstr ""
 msgid "The manager module has no Public method '%s'"
 msgstr ""
 
-#: src/engine/backend/metaCollection/partial/commonObject.cpp:2330
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:2320
 #, c-format
 msgid "using '%s'"
 msgstr ""
 
-#: src/engine/backend/metaCollection/partial/commonObject.cpp:2436
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:2426
 #, c-format
 msgid "reading '%s'"
 msgstr ""
 
-#: src/engine/backend/metaCollection/partial/commonObject.cpp:2818
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:2808
 msgid "You can't change your parent to yourself!"
 msgstr ""
 
-#: src/engine/backend/metaCollection/partial/commonObject.cpp:2823
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:2813
 msgid "You cannot change predefined value!"
 msgstr ""
 
-#: src/engine/backend/metaCollection/partial/commonObject.cpp:2971
-#: src/engine/backend/metaCollection/partial/commonObject.cpp:3335
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:2961
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:3325
 #, c-format
 msgid "%s: writing cancelled by the BeforeWrite handler"
 msgstr ""
 
-#: src/engine/backend/metaCollection/partial/commonObject.cpp:2982
-#: src/engine/backend/metaCollection/partial/commonObject.cpp:3357
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:2972
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:3347
 #, c-format
 msgid "%s: failed to save the object data"
 msgstr ""
 
-#: src/engine/backend/metaCollection/partial/commonObject.cpp:2988
-#: src/engine/backend/metaCollection/partial/commonObject.cpp:3414
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:2978
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:3404
 #, c-format
 msgid "%s: writing cancelled by the OnWrite handler"
 msgstr ""
 
-#: src/engine/backend/metaCollection/partial/commonObject.cpp:3005
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:2995
 #, c-format
 msgid "%s cannot be deleted: it is a predefined element"
 msgstr ""
 
-#: src/engine/backend/metaCollection/partial/commonObject.cpp:3023
-#: src/engine/backend/metaCollection/partial/commonObject.cpp:3481
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:3013
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:3471
 #, c-format
 msgid "%s: deletion cancelled by the BeforeDelete handler"
 msgstr ""
 
-#: src/engine/backend/metaCollection/partial/commonObject.cpp:3031
-#: src/engine/backend/metaCollection/partial/commonObject.cpp:3515
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:3021
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:3505
 #, c-format
 msgid "%s: failed to delete the object data"
 msgstr ""
 
-#: src/engine/backend/metaCollection/partial/commonObject.cpp:3040
-#: src/engine/backend/metaCollection/partial/commonObject.cpp:3507
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:3030
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:3497
 #, c-format
 msgid "%s: deletion cancelled by the OnDelete handler"
 msgstr ""
 
-#: src/engine/backend/metaCollection/partial/commonObject.cpp:3112
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:3102
 #, c-format
 msgid "Failed to write the movements of register '%s'"
 msgstr ""
 
-#: src/engine/backend/metaCollection/partial/commonObject.cpp:3127
-#: src/engine/backend/metaCollection/partial/commonObject.cpp:3150
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:3117
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:3140
 #, c-format
 msgid "Failed to clear the movements of register '%s'"
 msgstr ""
 
-#: src/engine/backend/metaCollection/partial/commonObject.cpp:3294
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:3284
 #, c-format
 msgid "%s cannot be posted: it is marked for deletion"
 msgstr ""
 
-#: src/engine/backend/metaCollection/partial/commonObject.cpp:3379
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:3369
 #, c-format
 msgid "%s: failed to clear the movements of the previous posting"
 msgstr ""
 
-#: src/engine/backend/metaCollection/partial/commonObject.cpp:3382
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:3372
 #, c-format
 msgid "%s: failed to clear the registrations of the previous posting"
 msgstr ""
 
-#: src/engine/backend/metaCollection/partial/commonObject.cpp:3388
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:3378
 #, c-format
 msgid "%s: posting cancelled by the Posting handler"
 msgstr ""
 
-#: src/engine/backend/metaCollection/partial/commonObject.cpp:3393
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:3383
 #, c-format
 msgid "%s: failed to write the register movements"
 msgstr ""
 
-#: src/engine/backend/metaCollection/partial/commonObject.cpp:3397
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:3387
 #, c-format
 msgid "%s: failed to write the sequence registrations"
 msgstr ""
 
-#: src/engine/backend/metaCollection/partial/commonObject.cpp:3403
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:3393
 #, c-format
 msgid "%s: undo posting cancelled by the UndoPosting handler"
 msgstr ""
 
-#: src/engine/backend/metaCollection/partial/commonObject.cpp:3405
-#: src/engine/backend/metaCollection/partial/commonObject.cpp:3489
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:3395
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:3479
 #, c-format
 msgid "%s: failed to clear the register movements"
 msgstr ""
 
-#: src/engine/backend/metaCollection/partial/commonObject.cpp:3407
-#: src/engine/backend/metaCollection/partial/commonObject.cpp:3497
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:3397
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:3487
 #, c-format
 msgid "%s: failed to clear the sequence registrations"
 msgstr ""
 
-#: src/engine/backend/metaCollection/partial/commonObject.cpp:3836
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:3826
 #, c-format
 msgid "reading register '%s'"
 msgstr ""
 
-#: src/engine/backend/metaCollection/partial/commonObject.cpp:3954
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:3944
 #, c-format
 msgid "Register '%s': writing cancelled by the BeforeWrite handler"
 msgstr ""
 
-#: src/engine/backend/metaCollection/partial/commonObject.cpp:3964
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:3954
 #, c-format
 msgid "Register '%s': failed to store the records"
 msgstr ""
 
-#: src/engine/backend/metaCollection/partial/commonObject.cpp:3974
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:3964
 #, c-format
 msgid "Register '%s': writing cancelled by the OnWrite handler"
 msgstr ""
 
-#: src/engine/backend/metaCollection/partial/commonObject.cpp:3994
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:3984
 #, c-format
 msgid "Register '%s': deletion cancelled by the BeforeDelete handler"
 msgstr ""
 
-#: src/engine/backend/metaCollection/partial/commonObject.cpp:4002
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:3992
 #, c-format
 msgid "Register '%s': failed to delete the records"
 msgstr ""
 
-#: src/engine/backend/metaCollection/partial/commonObject.cpp:4012
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:4002
 #, c-format
 msgid "Register '%s': deletion cancelled by the OnDelete handler"
 msgstr ""
 
-#: src/engine/backend/metaCollection/partial/commonObject.cpp:4026
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:4016
 #: src/engine/backend/metaCollection/partial/tabularSection/tabularSection.cpp:54
 #: src/engine/backend/system/value/valueTable.cpp:250
 msgid "Array index out of bounds"
 msgstr ""
 
-#: src/engine/backend/metaCollection/partial/commonObject.cpp:4224
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:4214
 #: src/engine/backend/metaCollection/partial/tabularSection/tabularSection.cpp:473
 #: src/engine/backend/system/value/valueArray.cpp:43
 #: src/engine/backend/system/value/valueArray.cpp:51
@@ -4786,7 +4786,7 @@ msgstr ""
 #: src/engine/backend/metaCollection/partial/tabularSection/tabularSection.h:247
 #: src/engine/backend/system/value/valueTable.h:390
 #: src/engine/designer/mainFrame/metaTree/treeConfiguration.cpp:28
-#: src/engine/designer/mainFrame/metaTree/treeConfiguration_impl.cpp:1311
+#: src/engine/designer/mainFrame/metaTree/treeConfiguration_impl.cpp:1316
 #: src/engine/designer/mainFrame/metaTree/treeDataProcessor_impl.cpp:289
 #: src/engine/designer/mainFrame/metaTree/treeDataReport_impl.cpp:290
 #: src/engine/designer/win/dlg/predefinedEditor.cpp:87
@@ -4942,7 +4942,7 @@ msgstr ""
 msgid "The form the data processor opens with. Empty: a form generated from its attributes."
 msgstr ""
 
-#: src/engine/backend/metaCollection/partial/dataProcessorManager.cpp:75
+#: src/engine/backend/metaCollection/partial/dataProcessorManager.cpp:76
 #, c-format
 msgid "Failed to load data processor '%s'"
 msgstr ""
@@ -4971,7 +4971,7 @@ msgstr ""
 msgid "Which of the report's composers (its query, fields, groupings and variants) the report builds with when none is named - the one its form shows and Compose uses."
 msgstr ""
 
-#: src/engine/backend/metaCollection/partial/dataReportManager.cpp:78
+#: src/engine/backend/metaCollection/partial/dataReportManager.cpp:79
 #, c-format
 msgid "Failed to load report '%s'"
 msgstr ""
@@ -5464,39 +5464,39 @@ msgstr ""
 msgid "The row's number in the tabular section, 1-based, kept by the platform: renumbered when rows are added, deleted or moved, and written with the object. Read-only for code."
 msgstr ""
 
-#: src/engine/backend/metadataConfiguration.cpp:372
+#: src/engine/backend/metadataConfiguration.cpp:373
 msgid "This configuration is stored in a format this build cannot read: it was written by an older or a different build. Nothing was loaded."
 msgstr ""
 
-#: src/engine/backend/metadataConfiguration.cpp:623
+#: src/engine/backend/metadataConfiguration.cpp:625
 #, c-format
 msgid "The data was saved by a newer build (date form %u) that this build cannot read. Nothing was loaded."
 msgstr ""
 
-#: src/engine/backend/metadataConfiguration.cpp:762
-#: src/engine/backend/metadataConfiguration.cpp:800
-#: src/engine/backend/metadataConfiguration.cpp:897
+#: src/engine/backend/metadataConfiguration.cpp:764
+#: src/engine/backend/metadataConfiguration.cpp:802
+#: src/engine/backend/metadataConfiguration.cpp:899
 msgid "This configuration is open for reading only."
 msgstr ""
 
-#: src/engine/backend/metadataConfiguration.cpp:784
-#: src/engine/backend/metadataConfiguration.cpp:815
+#: src/engine/backend/metadataConfiguration.cpp:786
+#: src/engine/backend/metadataConfiguration.cpp:817
 msgid "Failed to save the configuration."
 msgstr ""
 
-#: src/engine/backend/metadataConfiguration.cpp:844
+#: src/engine/backend/metadataConfiguration.cpp:846
 msgid "The update could not be started."
 msgstr ""
 
-#: src/engine/backend/metadataConfiguration.cpp:865
+#: src/engine/backend/metadataConfiguration.cpp:867
 msgid "Failed to update the database."
 msgstr ""
 
-#: src/engine/backend/metadataConfiguration.cpp:872
+#: src/engine/backend/metadataConfiguration.cpp:874
 msgid "Rolled back - nothing was applied."
 msgstr ""
 
-#: src/engine/backend/metadataConfiguration.cpp:902
+#: src/engine/backend/metadataConfiguration.cpp:904
 msgid "The configuration could not be taken back from the database."
 msgstr ""
 
@@ -5552,12 +5552,12 @@ msgstr ""
 msgid "OnExit: %s"
 msgstr ""
 
-#: src/engine/backend/moduleManager/moduleManagerExt.cpp:159
+#: src/engine/backend/moduleManager/moduleManagerExt.cpp:163
 #, c-format
 msgid "External module '%s' init failed: %s"
 msgstr ""
 
-#: src/engine/backend/moduleManager/moduleManagerExt.cpp:399
+#: src/engine/backend/moduleManager/moduleManagerExt.cpp:408
 #, c-format
 msgid "External module '%s' re-init failed: %s"
 msgstr ""
@@ -6675,11 +6675,11 @@ msgstr ""
 msgid "this session has no root to evaluate against"
 msgstr ""
 
-#: src/engine/backend/session/session.cpp:1584
+#: src/engine/backend/session/session.cpp:1599
 msgid "ses_query: no active session"
 msgstr ""
 
-#: src/engine/backend/session/session.cpp:1589
+#: src/engine/backend/session/session.cpp:1604
 msgid "ses_query: session failed to acquire a database connection"
 msgstr ""
 
@@ -6709,20 +6709,20 @@ msgstr ""
 msgid "registry did not answer to Attach"
 msgstr ""
 
-#: src/engine/backend/session/sessionRegistry.cpp:1083
+#: src/engine/backend/session/sessionRegistry.cpp:1090
 #, c-format
 msgid "Another session holds exclusive mode (user '%s')"
 msgstr ""
 
-#: src/engine/backend/session/sessionRegistry.cpp:1183
+#: src/engine/backend/session/sessionRegistry.cpp:1190
 msgid "appData unavailable"
 msgstr ""
 
-#: src/engine/backend/session/sessionRegistry.cpp:1189
+#: src/engine/backend/session/sessionRegistry.cpp:1196
 msgid "invalid user or password"
 msgstr ""
 
-#: src/engine/backend/session/sessionRegistry.cpp:1882
+#: src/engine/backend/session/sessionRegistry.cpp:1889
 msgid "Your session has been closed by the administrator."
 msgstr ""
 
@@ -7179,6 +7179,14 @@ msgstr ""
 msgid "Excluding"
 msgstr ""
 
+#: src/engine/backend/system/value/valueDatabaseLayer.cpp:53
+msgid "DatabaseLayer runs raw SQL past the access policy - it needs the Data administration right"
+msgstr ""
+
+#: src/engine/backend/system/value/valueDatabasePrepareStatement.cpp:68
+msgid "Index goes beyond statement"
+msgstr ""
+
 #: src/engine/backend/system/value/valueDataComposition.cpp:269
 msgid "A composition does not take TOTALS: its totals are the resources and its levels are the groupings"
 msgstr ""
@@ -7242,14 +7250,6 @@ msgstr ""
 
 #: src/engine/backend/system/value/valueDataComposition.h:545
 msgid "Opens the composition's settings window: query, resources, parameters, structure (groupings, table, charts) and settings variants."
-msgstr ""
-
-#: src/engine/backend/system/value/valueDatabaseLayer.cpp:53
-msgid "DatabaseLayer runs raw SQL past the access policy - it needs the Data administration right"
-msgstr ""
-
-#: src/engine/backend/system/value/valueDatabasePrepareStatement.cpp:68
-msgid "Index goes beyond statement"
 msgstr ""
 
 #: src/engine/backend/system/value/valueDynamicList.h:344
@@ -8128,7 +8128,7 @@ msgstr ""
 #: src/engine/codeRunner/codeRunner.cpp:243
 #: src/engine/designer/docManager/templates/docViewFormEditor.cpp:159
 #: src/engine/designer/docManager/templates/docViewModuleEditor.cpp:107
-#: src/engine/designer/mainFrame/metaTree/treeConfiguration_impl.cpp:1313
+#: src/engine/designer/mainFrame/metaTree/treeConfiguration_impl.cpp:1318
 #: src/engine/frontend/mainFrame/settings/keybinderdialog.cpp:66
 msgid "Remove"
 msgstr ""
@@ -8269,20 +8269,20 @@ msgstr ""
 msgid "Waiting for an assistant to collect it"
 msgstr ""
 
-#: src/engine/designer/docManager/templates/docViewConfigCompare.cpp:50
+#: src/engine/designer/docManager/templates/docViewConfigCompare.cpp:52
 #, c-format
 msgid "Compare: %s <-> %s"
 msgstr ""
 
-#: src/engine/designer/docManager/templates/docViewConfigCompare.cpp:90
+#: src/engine/designer/docManager/templates/docViewConfigCompare.cpp:92
 msgid "Select all differences"
 msgstr ""
 
-#: src/engine/designer/docManager/templates/docViewConfigCompare.cpp:91
+#: src/engine/designer/docManager/templates/docViewConfigCompare.cpp:93
 msgid "Mark every non-Same row for merge"
 msgstr ""
 
-#: src/engine/designer/docManager/templates/docViewConfigCompare.cpp:92
+#: src/engine/designer/docManager/templates/docViewConfigCompare.cpp:94
 #: src/engine/designer/mainFrame/output/outputWindow.cpp:264
 #: src/engine/enterprise/mainFrame/output/outputWindow.cpp:237
 #: src/engine/frontend/docView/templates/docViewAuditLog.cpp:313
@@ -8290,45 +8290,45 @@ msgstr ""
 msgid "Clear"
 msgstr ""
 
-#: src/engine/designer/docManager/templates/docViewConfigCompare.cpp:93
+#: src/engine/designer/docManager/templates/docViewConfigCompare.cpp:95
 msgid "Unmark every row"
 msgstr ""
 
-#: src/engine/designer/docManager/templates/docViewConfigCompare.cpp:95
+#: src/engine/designer/docManager/templates/docViewConfigCompare.cpp:97
 msgid "Expand all"
 msgstr ""
 
-#: src/engine/designer/docManager/templates/docViewConfigCompare.cpp:96
+#: src/engine/designer/docManager/templates/docViewConfigCompare.cpp:98
 msgid "Expand every tree node"
 msgstr ""
 
-#: src/engine/designer/docManager/templates/docViewConfigCompare.cpp:97
+#: src/engine/designer/docManager/templates/docViewConfigCompare.cpp:99
 msgid "Collapse all"
 msgstr ""
 
-#: src/engine/designer/docManager/templates/docViewConfigCompare.cpp:98
+#: src/engine/designer/docManager/templates/docViewConfigCompare.cpp:100
 msgid "Collapse every tree node"
 msgstr ""
 
-#: src/engine/designer/docManager/templates/docViewConfigCompare.cpp:124
-#: src/engine/designer/docManager/templates/docViewConfigCompare.cpp:355
-#: src/engine/designer/docManager/templates/docViewConfigCompare.cpp:430
+#: src/engine/designer/docManager/templates/docViewConfigCompare.cpp:126
+#: src/engine/designer/docManager/templates/docViewConfigCompare.cpp:357
+#: src/engine/designer/docManager/templates/docViewConfigCompare.cpp:432
 msgid "Merge"
 msgstr ""
 
-#: src/engine/designer/docManager/templates/docViewConfigCompare.cpp:133
+#: src/engine/designer/docManager/templates/docViewConfigCompare.cpp:135
 msgid "Object"
 msgstr ""
 
-#: src/engine/designer/docManager/templates/docViewConfigCompare.cpp:145
+#: src/engine/designer/docManager/templates/docViewConfigCompare.cpp:147
 msgid "Status"
 msgstr ""
 
-#: src/engine/designer/docManager/templates/docViewConfigCompare.cpp:187
+#: src/engine/designer/docManager/templates/docViewConfigCompare.cpp:189
 msgid "Show:"
 msgstr ""
 
-#: src/engine/designer/docManager/templates/docViewConfigCompare.cpp:191
+#: src/engine/designer/docManager/templates/docViewConfigCompare.cpp:193
 #: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:948
 #: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:954
 #: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:1029
@@ -8336,51 +8336,51 @@ msgstr ""
 msgid "All"
 msgstr ""
 
-#: src/engine/designer/docManager/templates/docViewConfigCompare.cpp:192
+#: src/engine/designer/docManager/templates/docViewConfigCompare.cpp:194
 msgid "Only differences"
 msgstr ""
 
-#: src/engine/designer/docManager/templates/docViewConfigCompare.cpp:193
+#: src/engine/designer/docManager/templates/docViewConfigCompare.cpp:195
 msgid "Only unchanged"
 msgstr ""
 
-#: src/engine/designer/docManager/templates/docViewConfigCompare.cpp:200
+#: src/engine/designer/docManager/templates/docViewConfigCompare.cpp:202
 msgid "Direction:"
 msgstr ""
 
-#: src/engine/designer/docManager/templates/docViewConfigCompare.cpp:211
+#: src/engine/designer/docManager/templates/docViewConfigCompare.cpp:213
 msgid "Apply merge"
 msgstr ""
 
-#: src/engine/designer/docManager/templates/docViewConfigCompare.cpp:236
-#: src/engine/designer/docManager/templates/docViewConfigCompare.cpp:241
+#: src/engine/designer/docManager/templates/docViewConfigCompare.cpp:238
+#: src/engine/designer/docManager/templates/docViewConfigCompare.cpp:243
 #, c-format
 msgid "%s -> %s"
 msgstr ""
 
-#: src/engine/designer/docManager/templates/docViewConfigCompare.cpp:353
+#: src/engine/designer/docManager/templates/docViewConfigCompare.cpp:355
 msgid "Push direction has no save target - open the other configuration from a writable source first."
 msgstr ""
 
-#: src/engine/designer/docManager/templates/docViewConfigCompare.cpp:415
+#: src/engine/designer/docManager/templates/docViewConfigCompare.cpp:417
 #, c-format
 msgid "Merge applied to %d item(s)."
 msgstr ""
 
-#: src/engine/designer/docManager/templates/docViewConfigCompare.cpp:419
+#: src/engine/designer/docManager/templates/docViewConfigCompare.cpp:421
 #, c-format
 msgid "%d reorder-only change(s) skipped (not supported in V1)."
 msgstr ""
 
-#: src/engine/designer/docManager/templates/docViewConfigCompare.cpp:424
+#: src/engine/designer/docManager/templates/docViewConfigCompare.cpp:426
 msgid "Use Configuration > Save configuration to persist the changes."
 msgstr ""
 
-#: src/engine/designer/docManager/templates/docViewConfigCompare.cpp:426
+#: src/engine/designer/docManager/templates/docViewConfigCompare.cpp:428
 msgid "The other-side file has been saved."
 msgstr ""
 
-#: src/engine/designer/docManager/templates/docViewConfigCompare.cpp:428
+#: src/engine/designer/docManager/templates/docViewConfigCompare.cpp:430
 msgid "Warning: failed to save the other-side file."
 msgstr ""
 
@@ -8446,7 +8446,7 @@ msgid "(unnamed)"
 msgstr ""
 
 #: src/engine/designer/mainFrame/mainFrameDesigner.cpp:260
-#: src/engine/designer/mainFrame/metaTree/treeConfiguration_impl.cpp:1931
+#: src/engine/designer/mainFrame/metaTree/treeConfiguration_impl.cpp:1940
 #, c-format
 msgid "Configuration '%s' has been changed. Save?"
 msgstr ""
@@ -8784,8 +8784,8 @@ msgstr ""
 
 #: src/engine/designer/mainFrame/mainFrameDesignerParts.cpp:63
 #: src/engine/designer/mainFrame/metaTree/treeConfiguration.cpp:27
-#: src/engine/designer/mainFrame/metaTree/treeConfiguration_impl.cpp:1308
-#: src/engine/designer/mainFrame/metaTree/treeConfiguration_impl.cpp:1334
+#: src/engine/designer/mainFrame/metaTree/treeConfiguration_impl.cpp:1313
+#: src/engine/designer/mainFrame/metaTree/treeConfiguration_impl.cpp:1339
 #: src/engine/designer/mainFrame/metaTree/treeDataProcessor_impl.cpp:286
 #: src/engine/designer/mainFrame/metaTree/treeDataProcessor_impl.cpp:299
 #: src/engine/designer/mainFrame/metaTree/treeDataReport_impl.cpp:287
@@ -8925,36 +8925,36 @@ msgid "Enums"
 msgstr ""
 
 #: src/engine/designer/mainFrame/metaTree/treeConfiguration_impl.cpp:1072
-#: src/engine/designer/mainFrame/metaTree/treeConfiguration_impl.cpp:1123
-#: src/engine/designer/mainFrame/metaTree/treeConfiguration_impl.cpp:1197
+#: src/engine/designer/mainFrame/metaTree/treeConfiguration_impl.cpp:1124
+#: src/engine/designer/mainFrame/metaTree/treeConfiguration_impl.cpp:1199
 msgid "Open data processor file"
 msgstr ""
 
-#: src/engine/designer/mainFrame/metaTree/treeConfiguration_impl.cpp:1093
-#: src/engine/designer/mainFrame/metaTree/treeConfiguration_impl.cpp:1151
-#: src/engine/designer/mainFrame/metaTree/treeConfiguration_impl.cpp:1213
+#: src/engine/designer/mainFrame/metaTree/treeConfiguration_impl.cpp:1094
+#: src/engine/designer/mainFrame/metaTree/treeConfiguration_impl.cpp:1153
+#: src/engine/designer/mainFrame/metaTree/treeConfiguration_impl.cpp:1217
 msgid "Open report file"
 msgstr ""
 
-#: src/engine/designer/mainFrame/metaTree/treeConfiguration_impl.cpp:1233
+#: src/engine/designer/mainFrame/metaTree/treeConfiguration_impl.cpp:1238
 msgid "Replace data processor, report..."
 msgstr ""
 
-#: src/engine/designer/mainFrame/metaTree/treeConfiguration_impl.cpp:1235
+#: src/engine/designer/mainFrame/metaTree/treeConfiguration_impl.cpp:1240
 msgid "Save data processor, report..."
 msgstr ""
 
-#: src/engine/designer/mainFrame/metaTree/treeConfiguration_impl.cpp:1273
-#: src/engine/designer/mainFrame/metaTree/treeConfiguration_impl.cpp:1280
+#: src/engine/designer/mainFrame/metaTree/treeConfiguration_impl.cpp:1278
+#: src/engine/designer/mainFrame/metaTree/treeConfiguration_impl.cpp:1285
 msgid "Help information..."
 msgstr ""
 
-#: src/engine/designer/mainFrame/metaTree/treeConfiguration_impl.cpp:1274
-#: src/engine/designer/mainFrame/metaTree/treeConfiguration_impl.cpp:1281
+#: src/engine/designer/mainFrame/metaTree/treeConfiguration_impl.cpp:1279
+#: src/engine/designer/mainFrame/metaTree/treeConfiguration_impl.cpp:1286
 msgid "Technical information..."
 msgstr ""
 
-#: src/engine/designer/mainFrame/metaTree/treeConfiguration_impl.cpp:1342
+#: src/engine/designer/mainFrame/metaTree/treeConfiguration_impl.cpp:1347
 msgid "Insert data processor, report..."
 msgstr ""
 
@@ -10481,10 +10481,6 @@ msgstr ""
 msgid "Found: %zu"
 msgstr ""
 
-#: src/engine/frontend/uikit/theme.cpp:114
-msgid "Failed to initialize GUI: no built-in themes found."
-msgstr ""
-
 #: src/engine/frontend/uikit/theme/lunaTheme.cpp:832
 msgid "OES Luna theme"
 msgstr ""
@@ -10519,6 +10515,10 @@ msgstr ""
 
 #: src/engine/frontend/uikit/theme/theme_win32.cpp:3757
 msgid "Alt+"
+msgstr ""
+
+#: src/engine/frontend/uikit/theme.cpp:114
+msgid "Failed to initialize GUI: no built-in themes found."
 msgstr ""
 
 #: src/engine/frontend/visualView/controlEnum.h:36
@@ -10789,8 +10789,8 @@ msgstr ""
 msgid "When a cell is clicked - before its value is opened or detailed"
 msgstr ""
 
-#: src/engine/frontend/visualView/ctrl/gridBoxDetail.cpp:313
-#: src/engine/sfrontend/visualView/ctrl/gridBoxDetail.cpp:309
+#: src/engine/frontend/visualView/ctrl/gridBoxDetail.cpp:307
+#: src/engine/sfrontend/visualView/ctrl/gridBoxDetail.cpp:303
 msgid "Detail by"
 msgstr ""
 
@@ -12217,12 +12217,12 @@ msgid "LockGuid"
 msgstr ""
 
 #: src/engine/frontend/win/dlgs/activeUser.cpp:105
-#: src/engine/sfrontend/schema/activeUser.cpp:49
+#: src/engine/sfrontend/schema/activeUser.cpp:52
 msgid "Shared"
 msgstr ""
 
 #: src/engine/frontend/win/dlgs/activeUser.cpp:105
-#: src/engine/sfrontend/schema/activeUser.cpp:49
+#: src/engine/sfrontend/schema/activeUser.cpp:52
 msgid "Exclusive"
 msgstr ""
 
@@ -12477,67 +12477,6 @@ msgstr ""
 msgid "Critical failure"
 msgstr ""
 
-#: src/engine/frontend/win/dlgs/formEditor.cpp:204
-msgid "Form editor"
-msgstr ""
-
-#: src/engine/frontend/win/dlgs/formEditor.cpp:212
-msgid "Up control"
-msgstr ""
-
-#: src/engine/frontend/win/dlgs/formEditor.cpp:213
-msgid "Down control"
-msgstr ""
-
-#: src/engine/frontend/win/dlgs/formEditor.cpp:238
-msgid "Save setting"
-msgstr ""
-
-#: src/engine/frontend/win/dlgs/formEditor.cpp:240
-msgid "Restore default setting"
-msgstr ""
-
-#: src/engine/frontend/win/dlgs/formEditor.cpp:317
-msgid "Setting saved."
-msgstr ""
-
-#: src/engine/frontend/win/dlgs/formEditor.cpp:325
-msgid "This form is generated from its data and cannot keep a setting of its own."
-msgstr ""
-
-#: src/engine/frontend/win/dlgs/formEditor.cpp:329
-msgid "Settings are not available in this session."
-msgstr ""
-
-#: src/engine/frontend/win/dlgs/formEditor.cpp:333
-msgid "The form setting could not be saved."
-msgstr ""
-
-#: src/engine/frontend/win/dlgs/formEditor.cpp:347
-msgid "Setting cleared - the default layout returns on the next open."
-msgstr ""
-
-#: src/engine/frontend/win/dlgs/formEditor.cpp:352
-msgid "The form setting could not be cleared."
-msgstr ""
-
-#: src/engine/frontend/win/dlgs/formSelector/formSelector.cpp:14
-msgid " form wizard"
-msgstr ""
-
-#: src/engine/frontend/win/dlgs/formSelector/formSelector.cpp:25
-msgid "Select form type"
-msgstr ""
-
-#: src/engine/frontend/win/dlgs/formSelector/formSelector.cpp:33
-msgid "Generic form"
-msgstr ""
-
-#: src/engine/frontend/win/dlgs/formSelector/formSelector.cpp:75
-#: src/engine/frontend/win/dlgs/functionSearcher/functionSearcher.cpp:24
-msgid "OK"
-msgstr ""
-
 #: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp:27
 msgid "Hours and minutes"
 msgstr ""
@@ -12653,6 +12592,67 @@ msgstr ""
 #: src/engine/frontend/win/editor/codeEditor/codeEditor.cpp:1208
 #: src/engine/frontend/win/editor/codeEditor/codeEditor.cpp:1212
 msgid "Format string constructor"
+msgstr ""
+
+#: src/engine/frontend/win/dlgs/formEditor.cpp:204
+msgid "Form editor"
+msgstr ""
+
+#: src/engine/frontend/win/dlgs/formEditor.cpp:212
+msgid "Up control"
+msgstr ""
+
+#: src/engine/frontend/win/dlgs/formEditor.cpp:213
+msgid "Down control"
+msgstr ""
+
+#: src/engine/frontend/win/dlgs/formEditor.cpp:238
+msgid "Save setting"
+msgstr ""
+
+#: src/engine/frontend/win/dlgs/formEditor.cpp:240
+msgid "Restore default setting"
+msgstr ""
+
+#: src/engine/frontend/win/dlgs/formEditor.cpp:317
+msgid "Setting saved."
+msgstr ""
+
+#: src/engine/frontend/win/dlgs/formEditor.cpp:325
+msgid "This form is generated from its data and cannot keep a setting of its own."
+msgstr ""
+
+#: src/engine/frontend/win/dlgs/formEditor.cpp:329
+msgid "Settings are not available in this session."
+msgstr ""
+
+#: src/engine/frontend/win/dlgs/formEditor.cpp:333
+msgid "The form setting could not be saved."
+msgstr ""
+
+#: src/engine/frontend/win/dlgs/formEditor.cpp:347
+msgid "Setting cleared - the default layout returns on the next open."
+msgstr ""
+
+#: src/engine/frontend/win/dlgs/formEditor.cpp:352
+msgid "The form setting could not be cleared."
+msgstr ""
+
+#: src/engine/frontend/win/dlgs/formSelector/formSelector.cpp:14
+msgid " form wizard"
+msgstr ""
+
+#: src/engine/frontend/win/dlgs/formSelector/formSelector.cpp:25
+msgid "Select form type"
+msgstr ""
+
+#: src/engine/frontend/win/dlgs/formSelector/formSelector.cpp:33
+msgid "Generic form"
+msgstr ""
+
+#: src/engine/frontend/win/dlgs/formSelector/formSelector.cpp:75
+#: src/engine/frontend/win/dlgs/functionSearcher/functionSearcher.cpp:24
+msgid "OK"
 msgstr ""
 
 #: src/engine/frontend/win/dlgs/generation.cpp:24

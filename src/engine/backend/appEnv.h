@@ -68,7 +68,9 @@ BACKEND_API ibLogger* Logger();
 // live as runtime nodes under ibValueModuleRuntimeManagerExternalDataProcessor
 // / ibValueModuleRuntimeManagerExternalReport on each open session, with their
 // own per-instance ibMetaData. ActiveMetaData() is exclusively the
-// configuration that backs the base the calling session works for.
+// configuration the calling session works in — its own reference, taken
+// when it was let in (ibSession::GetMetaData); a thread working for its base
+// without a session gets the one its ibApplicationInstanceScope holds.
 BACKEND_API ibMetaDataConfigurationBase* ActiveMetaData();
 
 // Debugger endpoints — exclusive of each other. enterprise / wes own

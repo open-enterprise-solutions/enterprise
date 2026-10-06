@@ -533,13 +533,13 @@ void ibDataReportTree::FillData()
 	UpdateToolbar(nullptr, Group(g_metaAttributeCLSID));
 }
 
-bool ibDataReportTree::Load(ibMetaDataReport* metaData)
+bool ibDataReportTree::Load(std::shared_ptr<ibMetaDataReport> metaData)
 {
 	CloseDocuments();   // a file is being left — its editors go with it
 	ClearTree();
 
-	m_metaData = metaData;
-	WatchMetaData(m_metaData);   // off the old list, onto this one — one call, one place
+	m_metaData = std::move(metaData);
+	WatchMetaData(GetMetaData());   // off the old list, onto this one — one call, one place
 	m_metaTreeCtrl->Freeze();
 	FillData(); //Fill all data from metaData
 

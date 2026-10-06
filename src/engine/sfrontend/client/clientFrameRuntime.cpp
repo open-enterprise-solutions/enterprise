@@ -49,7 +49,7 @@ bool ibClientFrameRuntime::AllowRun()
 
 void ibClientFrameRuntime::CreateStartupPage()
 {
-	// The page is the configuration's: its metaobject is handed in from the base this client works in.
-	if (const ibMetaDataConfigurationBase* const metaData = ibApplicationInstance::GetActiveMetaData(GetSession()->GetApplicationInstance()))
+	// The page is the configuration's: its metaobject is handed in from the configuration this client works in.
+	if (const ibMetaDataConfigurationBase* const metaData = GetSession()->GetMetaData())
 		ibHomePageDocument::ShowHomePage(metaData->GetCommonMetaObject());
 }

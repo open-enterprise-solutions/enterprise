@@ -506,7 +506,7 @@ private:
 
 private:
 
-	ibMetaDataConfigurationBase* m_metaData;
+	std::shared_ptr<ibMetaDataConfigurationBase> m_metaData;   // what it shows, held while it shows it
 
 	class ibMetaTreeCtrl : public wxTreeCtrl {
 		// NAMES ITSELF — it used to name the owner tree. The macro ignores its argument, so that
@@ -812,7 +812,7 @@ public:
 	// ⭐ COVARIANT, so the window's Save / Apply / Rollback act on THIS navigator's configuration
 	// and never on `activeMetaData` — several are open at once (a file, the database, one being
 	// compared), and *the active one* is not the same question as *mine*.
-	virtual ibMetaDataConfigurationBase* GetMetaData() const { return m_metaData; }
+	virtual ibMetaDataConfigurationBase* GetMetaData() const { return m_metaData.get(); }
 
 	ibConfigurationTree();
 	ibConfigurationTree(wxWindow* parent, int id = wxID_ANY);
@@ -821,7 +821,7 @@ public:
 
 	void InitTree();
 
-	bool Load(ibMetaDataConfigurationBase* metadata = nullptr);
+	bool Load(std::shared_ptr<ibMetaDataConfigurationBase> metadata = nullptr);
 	bool Save();
 
 	void Search(const wxString& strSearch);

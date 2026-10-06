@@ -335,6 +335,9 @@ std::shared_ptr<ibBackgroundRun> ibJobManager::StartBackground(ibBackgroundBody 
 		// gives its connection — and takes it back on whatever thread the session dies.
 		minted->m_registry = registry;
 		minted->m_dbHolder.SetPool(ibApplicationInstance::GetConnectionPool(m_applicationInstance));
+		// …and in its parent's configuration — the one the parent works in, not the base's newest: a read for a
+		// session is read the way that session reads.
+		minted->m_metaData = launch->m_parent->m_metaData;
 		run->m_holder = ibSessionHolder(std::move(minted));
 	}
 	else {

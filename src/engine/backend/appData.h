@@ -481,10 +481,12 @@ private:
 	// fields itself in that same order, each one null before it dies.
 	//
 	// Destruction order (top of stack = destroyed first):
-	//   1. m_activeMetaData   — OnDestroy already ran above; its
-	//                            polymorphic dtor (Storage→Configuration→
-	//                            File→Base) needs db_query for some
-	//                            paths, so it goes BEFORE pool / registry.
+	//   1. m_activeMetaData   — OnDestroy already ran above; the base
+	//                            lets its reference go BEFORE pool /
+	//                            registry, and the polymorphic dtor
+	//                            (Storage→Configuration→File→Base) runs
+	//                            with the LAST holder: here, for the
+	//                            sessions let theirs go as they left.
 	//   2. m_sessionRegistry  — Stop() already drained workers; dtor
 	//                            cleans up the session vector. Session
 	//                            destructors may still want pool.
@@ -552,14 +554,18 @@ private:
 	// back when the pool shuts down — the lock manager's arrangement, for the lock manager's reason.
 	std::unique_ptr<class ibTempStorage> m_tempStorage;
 
-	// Active configuration metadata. Polymorphic — concrete subclass
-	// (`ibMetaDataConfiguration` for the application,
+	// ⭐ THE ACTIVE CONFIGURATION — held FOR THE SESSIONS STILL TO COME (Max, 2026-10-06: *"the active metadata
+	// holds for new sessions"*). A session let in takes its own reference to it (ibSession::GetMetaData, +1) and
+	// works in that one for its whole life, so an update that puts another one here leaves every working session
+	// in the configuration it came in with; the old one goes with the last of them. A shared_ptr, swapped under the
+	// process's lock (ReplaceActiveMetaData).
+	// Polymorphic — concrete subclass (`ibMetaDataConfiguration` for the application,
 	// `ibMetaDataConfigurationStorage` for a designer's process) chosen by the
 	// fabric `CreateActiveMetaData` by the process's own session. nullptr in
 	// launcher / codeRunner (no DB-backed metadata). Declared last so
-	// reverse-order destruction kills it first — OnDestroy ran already
-	// in the dtor above, dtor itself wraps up.
-	std::unique_ptr<class ibMetaDataConfigurationBase> m_activeMetaData;
+	// reverse-order destruction lets it go first — OnDestroy ran already
+	// in the dtor above.
+	std::shared_ptr<class ibMetaDataConfigurationBase> m_activeMetaData;
 
 public:
 	// Static accessor — returns nullptr when no appData is alive.
@@ -590,14 +596,16 @@ public:
 	// after DestroyAppDataEnv. Callers MUST null-check.
 	static class ibHelpService* GetHelpService();
 
-	// Active configuration metadata accessor. nullptr in launcher /
-	// codeRunner; nullptr before CreateActiveMetaData fires for the
-	// first time. The legacy `activeMetaData` macro redirects to
-	// `appEnv::ActiveMetaData()` which calls this.
+	// Active configuration metadata accessor — the configuration this thread works in: its session's own, else the
+	// one its scope holds, else the base's active one (held for the sessions to come). nullptr in launcher /
+	// codeRunner; nullptr before CreateActiveMetaData fires for the first time. The legacy `activeMetaData` macro
+	// redirects to `appEnv::ActiveMetaData()` which calls this. Whoever works in it holds `shared_from_this()`.
 	static class ibMetaDataConfigurationBase* GetActiveMetaData() { return GetActiveMetaData(Get()); }
-	static class ibMetaDataConfigurationBase* GetActiveMetaData(const ibApplicationInstance* applicationInstance) {
-		return applicationInstance != nullptr ? applicationInstance->m_activeMetaData.get() : nullptr;
-	}
+	static class ibMetaDataConfigurationBase* GetActiveMetaData(const ibApplicationInstance* applicationInstance);
+
+	// The active configuration replaced — by the one handed in: the designer's apply hands in what the database now
+	// publishes. The sessions working in the old one keep it; it goes with the last of them.
+	void ReplaceActiveMetaData(std::shared_ptr<class ibMetaDataConfigurationBase> metaData);
 
 	// Fabric — pick subclass by the kind of the base's first session (a designer's: the
 	// configuration to edit; anyone else's: the one the application runs) and

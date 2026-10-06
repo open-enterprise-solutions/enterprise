@@ -115,7 +115,7 @@ protected:
 	};
 
 	ibDataProcessorTreeCtrl* m_metaTreeCtrl = nullptr;
-	ibMetaDataDataProcessor* m_metaData = nullptr;
+	std::shared_ptr<ibMetaDataDataProcessor> m_metaData;   // what it shows, held while it shows it
 
 private:
 
@@ -171,7 +171,7 @@ public:
 
 	// ITS OWN TYPE, not the base's — the override is covariant, so a caller that needs the data
 	// processor's own verbs gets them without a cast, and the base gets what it asks for.
-	virtual ibMetaDataDataProcessor* GetMetaData() const { return m_metaData; }
+	virtual ibMetaDataDataProcessor* GetMetaData() const { return m_metaData.get(); }
 
 	ibDataProcessorTree() { }
 	ibDataProcessorTree(ibMetaDocument* docParent, wxWindow* parent, wxWindowID id = wxID_ANY);
@@ -179,7 +179,7 @@ public:
 	
 	void InitTree();
 
-	bool Load(ibMetaDataDataProcessor* metaData);
+	bool Load(std::shared_ptr<ibMetaDataDataProcessor> metaData);
 	bool Save();
 
 	void ActivateTree();

@@ -50,7 +50,7 @@ wxIMPLEMENT_DYNAMIC_CLASS(ibReportFileDocument, ibMetaDataDocument);
 
 bool ibReportFileDocument::OnCreate(const wxString& path, long flags)
 {
-	m_metaData = new ibMetaDataReport();
+	m_metaData = ibMetaData::MakeShared<ibMetaDataReport>();
 	if (!ibMetaDocument::OnCreate(path, flags))
 		return false;
 	return true;

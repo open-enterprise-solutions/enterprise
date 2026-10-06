@@ -771,10 +771,13 @@ void ibSessionRegistry::NotifyAuthenticated(ibSession* s)
 		for (const auto& cb : firsts)
 			if (cb) cb(s);
 	}
-	// Between phases — OnFirstConnect's metadataCreate may have just set
-	// activeMetaData; OnAuthenticated's listeners (RunDatabase ->
+	// Between phases — OnFirstConnect's metadataCreate may have just made the
+	// base's active configuration, and the session acquires its own reference
+	// to it NOW: the one it works in for its whole life, whatever replaces the
+	// active one later. OnAuthenticated's listeners (RunDatabase ->
 	// OnBeforeRunMetaObject) need session->mm to exist. Session creates
 	// its root here so ownership stays in ibSession (see EnsureRoot).
+	s->AcquireMetaData();
 	s->EnsureRoot();
 	for (const auto& cb : auths)
 		if (cb) cb(s);
@@ -808,6 +811,10 @@ void ibSessionRegistry::NotifyDisconnect(ibSession* s)
 		ibSessionScope leaving(s);
 		for (const auto& cb : disconnects)
 			if (cb) cb(s);
+		// …and it lets go of the configuration it worked in — the mirror of NotifyAuthenticated's acquire. The last
+		// session in a configuration the base has replaced closes it right here, on this thread, before the last
+		// one out below closes the active one.
+		s->ReleaseMetaData();
 	}
 	// ⚠ …AND BOUND AGAIN FOR THE LAST ONE OUT. A disconnect listener unbinds the session from every thread
 	// (ibSession::UnbindSession) — this one too, which a scope does not undo until it ends. The last-out

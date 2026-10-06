@@ -47,7 +47,7 @@ wxIMPLEMENT_DYNAMIC_CLASS(ibDataProcessorFileDocument, ibMetaDataDocument);
 
 bool ibDataProcessorFileDocument::OnCreate(const wxString& path, long flags)
 {
-	m_metaData = new ibMetaDataDataProcessor();
+	m_metaData = ibMetaData::MakeShared<ibMetaDataDataProcessor>();
 	if (!ibMetaDocument::OnCreate(path, flags))
 		return false;
 	return true;

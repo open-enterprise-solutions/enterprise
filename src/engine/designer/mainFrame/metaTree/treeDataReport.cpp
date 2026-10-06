@@ -144,6 +144,8 @@ ibDataReportTree::ibDataReportTree(ibMetaDocument* docParent, wxWindow* parent, 
 
 ibDataReportTree::~ibDataReportTree()
 {
+	// Off its list FIRST — see ibConfigurationTree's destructor: this tree may hold the last reference.
+	WatchMetaData(nullptr);
 
 	// ASK BEFORE TEARING DOWN. The default constructor is reachable through wxCreateDynamicObject
 	// and leaves every control null; the configuration tree guards exactly this, the twins did not.
