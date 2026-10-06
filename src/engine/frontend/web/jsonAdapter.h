@@ -11,7 +11,7 @@
 
 #include <wx/string.h>
 
-#include "../../../3rdparty/nlohmann/json.hpp"
+#include <nlohmann/json.hpp>
 
 namespace nlohmann {
 

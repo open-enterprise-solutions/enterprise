@@ -74,7 +74,7 @@
 #include "backend/session/session.h"           // DISABLED_CallCost — what a frame asks for
 #include "backend/system/value/valueArray.h"   // DISABLED_TypeCheckCost
 #include "backend/system/value/valueJson.h"    // JsonBench
-#include "3rdparty/nlohmann/json.hpp"          // JsonBench - the native baseline
+#include <nlohmann/json.hpp>                   // JsonBench - the native baseline
 
 namespace {
 

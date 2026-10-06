@@ -71,7 +71,7 @@
 #	define _SSIZE_T_DEFINED
 #endif
 
-#include "httplib.h"
+#include <cpp-httplib/httplib.h>
 
 namespace {
 

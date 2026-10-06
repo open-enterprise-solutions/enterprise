@@ -226,6 +226,7 @@ endfunction()
 
 # Said here rather than three hundred lines later, as a header that cannot be opened.
 oes_require_submodule(cpp-httplib httplib.h)
+oes_require_submodule(nlohmann single_include/nlohmann/json.hpp)
 
 # ---------------------------------------------------------------------------
 # Platform detection and global compile definitions
@@ -373,13 +374,16 @@ endif()
 
 # ---------------------------------------------------------------------------
 # Global include directories — mirrors AdditionalIncludeDirectories from
-# Common.props: .;$(SolutionDir);$(oesSrcDir);$(oesEngine)
+# Common.props: .;$(SolutionDir);$(oesSrcDir);$(oesEngine);$(oes3rdParty);$(oes3rdParty)nlohmann\single_include
 # ---------------------------------------------------------------------------
 
+# A third-party header is named by its library: <cpp-httplib/httplib.h>, <nlohmann/json.hpp> (its single_include).
 include_directories(
     "${CMAKE_SOURCE_DIR}"
     "${OES_SRC_DIR}"
     "${OES_ENGINE_DIR}"
+    "${OES_3RDPARTY_DIR}"
+    "${OES_3RDPARTY_DIR}/nlohmann/single_include"
 )
 
 # ---------------------------------------------------------------------------

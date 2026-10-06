@@ -11,7 +11,7 @@
 #include "backend/system/value/valueArray.h"
 #include "backend/system/value/valueMap.h"
 
-#include "3rdparty/nlohmann/json.hpp"
+#include <nlohmann/json.hpp>
 
 #include <algorithm>   // std::min
 #include <cstddef>     // std::size_t

@@ -30,7 +30,7 @@
 #	define _SSIZE_T_DEFINED
 #endif
 
-#include "3rdparty/cpp-httplib/httplib.h"
+#include <cpp-httplib/httplib.h>
 
 namespace {
 

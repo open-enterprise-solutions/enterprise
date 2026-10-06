@@ -37,7 +37,7 @@
 #include <utility>
 #include <vector>
 
-#include "3rdparty/nlohmann/json.hpp"
+#include <nlohmann/json.hpp>
 
 #include "backend/backend_exception.h"
 #include "backend/system/value/valueJson.h"

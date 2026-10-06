@@ -19,7 +19,7 @@
 #include <wx/wfstream.h>
 #include <wx/zipstrm.h>
 
-#include "3rdparty/nlohmann/json.hpp"
+#include <nlohmann/json.hpp>
 
 #include <exception>
 #include <map>

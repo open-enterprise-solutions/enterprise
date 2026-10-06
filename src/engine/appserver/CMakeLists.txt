@@ -23,8 +23,6 @@ target_include_directories(appserver PRIVATE
     ${CMAKE_SOURCE_DIR}/src/engine
     ${CMAKE_SOURCE_DIR}/src/engine/backend
     ${CMAKE_CURRENT_SOURCE_DIR}
-    # The clients' port — header-only, included by clientListener.cpp alone.
-    ${CMAKE_SOURCE_DIR}/src/3rdparty/cpp-httplib
 )
 
 target_link_libraries(appserver PRIVATE

@@ -13,3 +13,6 @@
 [submodule "src/3rdparty/mbedtls"]
 	path = src/3rdparty/mbedtls
 	url = https://github.com/Mbed-TLS/mbedtls.git
+[submodule "src/3rdparty/nlohmann"]
+	path = src/3rdparty/nlohmann
+	url = https://github.com/nlohmann/json.git

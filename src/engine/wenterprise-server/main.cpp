@@ -23,9 +23,9 @@
 #	define _SSIZE_T_DEFINED
 #endif
 
-#include "../../3rdparty/cpp-httplib/httplib.h"
+#include <cpp-httplib/httplib.h>
 #include "wfrontend.h"
-#include "../../3rdparty/nlohmann/json.hpp"
+#include <nlohmann/json.hpp>
 #include "backend/backend_exception.h"
 #include "backend/databaseLayer/databaseLayerException.h"
 #include "frontend/diagnostics/oesConsole.h"

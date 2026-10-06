@@ -19,7 +19,7 @@
 #	define _SSIZE_T_DEFINED
 #endif
 
-#include "httplib.h"
+#include <cpp-httplib/httplib.h>
 
 // The mutexes Mbed TLS locks with, given to it when this library is loaded. Once per module, and this is the
 // engine's one place (the header says why it cannot wait for the first connection).
