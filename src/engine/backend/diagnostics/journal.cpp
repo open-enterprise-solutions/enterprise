@@ -14,6 +14,10 @@
 #include <atomic>
 #include <cstdarg>
 
+#ifdef __WXMSW__
+#include <windows.h>
+#endif
+
 namespace {
 
 // The journal's whole state: a file, a lock, and a flag. Every producer in the process writes
@@ -24,6 +28,7 @@ namespace {
 wxFFile            s_file;
 wxCriticalSection  s_lock;
 wxString           s_path;
+wxString           s_program;   // the name the program opened the journal with — its own lines carry it as their source
 
 // The gate the macro reads. An atomic and not the file handle, because the handle needs the lock to
 // be looked at and the whole point is to decide WITHOUT taking one.
@@ -122,6 +127,7 @@ void ibTechJournal::Open(const wxString& exeName)
 	const wxString stamp = wxDateTime::Now().Format(wxT("%Y%m%dT%H%M%S"));
 	{
 		wxCriticalSectionLocker lock(s_lock);
+		s_program = exeName;
 		s_path = dir + wxFILE_SEP_PATH
 			+ wxString::Format(wxT("%s_%s_%u.log"), exeName, stamp,
 				static_cast<unsigned>(wxGetProcessId()));
@@ -254,6 +260,7 @@ void ibTechJournal::Write(ibJournalMark mark, const wxString& source, const wxSt
 	const wxString about = context != nullptr ? context() : wxString();
 
 	wxString line;
+	bool forConsole = false;   // what a program that narrates (EchoToStderr) shows in its console — see below
 	{
 		wxCriticalSectionLocker lock(s_lock);
 		if (!s_file.IsOpened())
@@ -285,6 +292,7 @@ void ibTechJournal::Write(ibJournalMark mark, const wxString& source, const wxSt
 
 		s_file.Write(line);
 		s_file.Flush();               // a crash must not cost the lines that explain it
+		forConsole = mark != ibJournalMark::Info || source == s_program;
 	}
 
 	// ⭐ AND TO STANDARD ERROR, ON REQUEST — for a machine with no debugger to attach to: a console
@@ -297,12 +305,34 @@ void ibTechJournal::Write(ibJournalMark mark, const wxString& source, const wxSt
 	//
 	//     set OES_JOURNAL_STDERR=1
 	//
-	// …or the program asks, when narrating is what it is for: the application server started by hand shows in its
-	// console exactly what goes to the file (EchoToStderr) — one road, not a print of its own beside it.
+	// …or the program asks, when narrating is what it is for (EchoToStderr) — one road, not a print of its own
+	// beside it.
+	//
+	// ⭐⭐ AND THEN THE CONSOLE SHOWS WHAT A PERSON WATCHING IT NEEDS: what the program itself says (a line whose
+	// source is the program's name) and every warning and error, whoever wrote it; the running commentary — every
+	// statement prepared, every query rendered — is the FILE's. It was every line, and a console is slow and has one
+	// lock: four sessions of an application server stood in a queue to the console window, 43 of 45 threads caught
+	// in the journal were in this echo (2026-10-06, crawlers ×4: 130 s with the window, 99 s with stderr in a file).
+	// Max chose: the console only what matters. Hundreds of lines a second are not read there anyway.
 	static const bool s_toStderr = ibDebugTraceEnabled("OES_JOURNAL_STDERR");
-	if (s_toStderr || s_echoToStderr.load(std::memory_order_relaxed)) {
-		std::fputs(line.utf8_str(), stderr);
-		std::fflush(stderr);
+	if (s_toStderr || (forConsole && s_echoToStderr.load(std::memory_order_relaxed))) {
+#ifdef __WXMSW__
+		// ⚠ A WINDOWS CONSOLE IS TOLD IN ITS OWN CHARACTERS. Bytes reach it read in its code page (866, 1251), so
+		// UTF-8 came out as `????N'N?N` for every Cyrillic word (the application server's console, 2026-10-06); a
+		// console takes UTF-16 as is (WriteConsoleW), and changes nothing for the window it may share with whoever
+		// started the program. A stream that is not a console — a file, a pipe — gets the UTF-8 the file has.
+		static const HANDLE s_stderr = ::GetStdHandle(STD_ERROR_HANDLE);
+		DWORD mode = 0;
+		if (s_stderr != nullptr && s_stderr != INVALID_HANDLE_VALUE && ::GetConsoleMode(s_stderr, &mode)) {
+			DWORD written = 0;
+			::WriteConsoleW(s_stderr, line.wc_str(), static_cast<DWORD>(line.length()), &written, nullptr);
+		}
+		else
+#endif
+		{
+			std::fputs(line.utf8_str(), stderr);
+			std::fflush(stderr);
+		}
 	}
 
 	// ⭐ AND THE SAME LINE INTO THE DEBUGGER, so the two views never disagree: what is watched live
@@ -313,7 +343,12 @@ void ibTechJournal::Write(ibJournalMark mark, const wxString& source, const wxSt
 	// the wx target lets a line marked this way pass — on whichever thread wx delivers it. Written
 	// OUTSIDE the lock — wx may take locks of its own, and holding two in one order here and the other
 	// order there is how a deadlock is built.
-	{
+	//
+	// ⚠ NOT IN A PROGRAM THAT NARRATES IN ITS CONSOLE (EchoToStderr). There the previous target is off the chain, so
+	// the echo reaches only our own target, which lets it pass — nobody. And from any thread but the main one wx does
+	// not deliver it: it keeps the record in a buffer, under a lock of its own, until the main thread flushes — which
+	// an application server's never does, so every line of every session was held in memory until exit (2026-10-06).
+	if (!s_echoToStderr.load(std::memory_order_relaxed)) {
 		// ⭐⭐ THE ECHO SPEAKS IN THE SEVERITY IT WAS GIVEN — and this is what makes migrating a
 		// `wxLogError` callsite to `ibJournalError` safe. wx's verbs are not interchangeable: in a
 		// GUI application wxLogError puts a dialog in front of the user, wxLogMessage shows a

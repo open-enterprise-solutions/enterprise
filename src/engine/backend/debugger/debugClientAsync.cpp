@@ -1,6 +1,7 @@
 #include "debugClient.h"
 
 #include "backend/session/session.h"   // whose worker a reply is handed to
+#include "backend/diagnostics/journal.h"   // ibJournalWarning — a reply nobody waits for says its own failure
 
 #include <algorithm>
 
@@ -106,8 +107,19 @@ void ibDebuggerClient::ibDebuggerClientAdapter::Defer(std::function<void()> call
 	}
 	// …and a session that has GONE took its listeners with it: the reply has nobody left to reach,
 	// and running it here would hand the windows of a closed session to the socket thread.
+	// Not waited for — so what the reply throws is said here, nobody holding its future.
 	if (const std::shared_ptr<ibSession> session = m_session.Share())
-		session->Submit(std::move(call));
+		session->Submit([call = std::move(call)]() {
+			try {
+				call();
+			}
+			catch (const std::exception& err) {
+				ibJournalWarning(wxT("debugger"), wxT("a debugger's reply ended with an exception: %s"), wxString::FromUTF8(err.what()));
+			}
+			catch (...) {
+				ibJournalWarning(wxT("debugger"), wxT("a debugger's reply ended with an exception"));
+			}
+		});
 }
 
 void ibDebuggerClient::ibDebuggerClientAdapter::RemoveBridge(ibDebuggerClientBridge* bridge)

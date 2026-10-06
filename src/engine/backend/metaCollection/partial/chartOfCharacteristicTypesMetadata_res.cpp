@@ -10,8 +10,7 @@ wxIcon ibValueMetaObjectChartOfCharacteristicTypes::GetIcon() const
 
 wxIcon ibValueMetaObjectChartOfCharacteristicTypes::GetIconGroup()
 {
-	static wxIcon icon =
-		ibBackendPicture::GetIconFromBase64(s_chartOfCharacteristicTypes_16_png, wxSize(16, 16));
+	static const ibServerPicture picture(s_chartOfCharacteristicTypes_16_png, wxSize(16, 16));
 
-	return icon;
+	return picture.ToIcon();
 }

@@ -27,8 +27,8 @@ public:
 class SFRONTEND_API ibSpreadsheetDocument : public ibMetaDocument {
 public:
 
-	virtual wxIcon GetIcon() const {
-		return ibBackendPicture::GetPictureAsIcon(g_metaCommonTemplateCLSID);
+	virtual ibServerPicture GetIcon() const {
+		return ibBackendPicture::GetServerPicture(g_metaCommonTemplateCLSID);
 	}
 
 	ibSpreadsheetDocument() : ibMetaDocument() {}

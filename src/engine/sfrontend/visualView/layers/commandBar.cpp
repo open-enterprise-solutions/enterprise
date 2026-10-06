@@ -13,7 +13,7 @@
 #include "backend/metaCollection/metaCommandGroupObject.h" // the platform's groups + the declared ones, in order
 #include <functional>                            // std::function — the recursive section walk
 #include "sfrontend/visualView/ctrl/tableBox.h"  // g_controlTableBoxCLSID — the form's tables (their own commands)
-#include "backend/backend_picture.h"            // ibBackendPicture::CreatePicture — an action-command's own picture
+#include "backend/backend_picture.h"            // ibBackendPicture::GetServerPicture — every command's picture as it is sent
 #include "backend/srcDataObject.h"              // ibSourceDataObject / ibSourceExplorer + IsReference — the form's data types (parameterized-command filter)
 #include "backend/typeDescription.h"            // ibTypeDescription::GetClsidList — a command's parameter type
 #include "backend/tabularModel.h"               // ibValueModel::GetModelComposer — the setting a quick filter edits
@@ -123,11 +123,11 @@ std::vector<ibCommandSourceEntry> GatherFormCommands(ibValueForm* form)
 	// builder, the section fill and this picker all read it, so the surfaces never drift.
 	// The COMMAND determines its picture — from its OWN Picture property. No picture on the command -> NO icon
 	// (text-only projection); we do NOT force the metatype glyph. A table action bakes its own picture (section 2).
-	auto commandIcon = [](ibValueMetaObjectCommand* cmd) -> wxBitmap {
-		return cmd->IsEmptyPicture() ? wxNullBitmap : cmd->GetPictureAsBitmap();
+	auto commandIcon = [](ibValueMetaObjectCommand* cmd) -> ibServerPicture {
+		return cmd->IsEmptyPicture() ? ibServerPicture() : ibBackendPicture::GetServerPicture(cmd->GetPictureDesc(), cmd->GetMetaData());
 	};
-	auto actionIcon = [metaData](const ibPictureDescription& pic) -> wxBitmap {
-		return pic.IsEmptyPicture() ? wxNullBitmap : ibBackendPicture::CreatePicture(pic, metaData);
+	auto actionIcon = [metaData](const ibPictureDescription& pic) -> ibServerPicture {
+		return ibBackendPicture::GetServerPicture(pic, metaData);
 	};
 
 	const std::vector<wxString> sections = GetCommandSections();
@@ -145,7 +145,7 @@ std::vector<ibCommandSourceEntry> GatherFormCommands(ibValueForm* form)
 		if (fc == nullptr)
 			continue;
 		const ibCommandDescription desc(fc->GetId());   // 1-hop [id] — the form command's own id
-		const wxBitmap icon = fc->IsEmptyPicture() ? wxNullBitmap : fc->GetPictureBitmap();
+		const ibServerPicture icon = fc->IsEmptyPicture() ? ibServerPicture() : ibBackendPicture::GetServerPicture(fc->GetPictureDesc(), metaData);
 		out.push_back({ sForm, fc->GetName(), desc, icon, wxEmptyString, fc->GetFullName() });   // tree: name; cell: Form.<name>
 	}
 
@@ -233,7 +233,7 @@ std::vector<ibCommandSourceEntry> GatherFormCommands(ibValueForm* form)
 				wxString name = item->GetName();
 				if (groupType == ibInterfaceCommandType_Create)
 					name += wxT(": ") + wxString(_("Create"));
-				out.push_back({ section->GetName(), name, desc, wxBitmap(item->GetIcon()), groupLabel, name });
+				out.push_back({ section->GetName(), name, desc, ibBackendPicture::GetServerPicture(item->GetClassType()), groupLabel, name });
 			}
 		};
 		const std::vector<ibValueMetaObjectCommandGroup*> declaredGroups =
@@ -418,7 +418,7 @@ const std::vector<ibCommandEntry>& ibValueCommandBar::BuildCommands()
 				wxString caption = cmd->GetSynonym();
 				if (caption.IsEmpty()) caption = cmd->GetName();
 				const bool modifies = cmd->GetModifiesData();
-				const wxBitmap icon = wxBitmap(cmd->GetIcon());   // the command determines its picture
+				const ibServerPicture icon = ibBackendPicture::GetServerPicture(cmd->GetClassType());   // the command determines its picture
 				ownCommands.emplace_back(cmdId++, caption, ibPictureDescription(),
 					ibRepresentation_PictureAndText, !(viewOnly && modifies), item, icon);
 			}
@@ -445,7 +445,7 @@ const std::vector<ibCommandEntry>& ibValueCommandBar::BuildCommands()
 			for (const auto& g : groups) {
 				const ibValueMetaObjectCommandGroup* group = g.first;
 				ibCommandEntry entry(cmdId++, group->GetSynonym(), ibPictureDescription(), ibRepresentation_PictureAndText,
-					true, nullptr, group->IsEmptyPicture() ? wxNullBitmap : group->GetPictureAsBitmap());
+					true, nullptr, group->IsEmptyPicture() ? ibServerPicture() : ibBackendPicture::GetServerPicture(group->GetPictureDesc(), group->GetMetaData()));
 				entry.kind = ibCommandEntryKind_Group;
 				entry.members = g.second;
 				entry.tooltip = group->GetToolTip();
@@ -526,12 +526,12 @@ const std::vector<ibCommandEntry>& ibValueCommandBar::BuildCommands()
 		// (ResolveCommand on the door): walk + reliable gather fallback -> existence + caption + icon + modifies, the
 		// SAME decision the button and the inspector cell use. A truly gone command misses BOTH -> drop the projection
 		// entirely (nothing to click). The item's own caption / picture only OVERRIDE the look where set.
-		wxString cmdCaption; wxBitmap cmdIcon; bool cmdModifies = true; bool cmdPicAndText = true;
+		wxString cmdCaption; ibServerPicture cmdIcon; bool cmdModifies = true; bool cmdPicAndText = true;
 		if (!ResolveCommand(bindDesc, cmdCaption, cmdIcon, &cmdModifies, nullptr, &cmdPicAndText))
 			continue;
 		const wxString caption = item->GetCaption().IsEmpty() ? cmdCaption : item->GetCaption();
 		const ibPictureDescription pic = item->IsEmptyPicture() ? ibPictureDescription() : item->GetPictureDesc();
-		const wxBitmap icon = item->IsEmptyPicture() ? cmdIcon : wxBitmap();   // command icon only when the item sets none
+		const ibServerPicture icon = item->IsEmptyPicture() ? cmdIcon : ibServerPicture();   // command icon only when the item sets none
 		const bool enabled = item->IsEnabled() && !(viewOnly && cmdModifies);   // greyed per the COMMAND's flag
 		// The item's OWN Representation wins; left on Auto it takes the COMMAND's default (a standard action like
 		// Close / Update is picture-only, Add / Post is picture+text) — no longer forced to text+picture.
@@ -683,15 +683,9 @@ void ibValueCommandBar::ExecuteCommand(const ibActionID& id, size_t member)
 	if (entry == nullptr || entry->kind != ibCommandEntryKind_Group || member >= entry->members.size())
 		return;
 	const ibCommandDescription desc = entry->members[member]->GetBindingDesc();
-	wxString caption; wxBitmap icon;
+	wxString caption; ibServerPicture icon;
 	if (ResolveCommand(desc, caption, icon))
 		ExecuteValueByPath(desc);
-}
-
-// A picture as the frame carries it: PNG, base64, ready for a client to show. Empty when there is none.
-static wxString PictureForFrame(const wxBitmap& bitmap)
-{
-	return bitmap.IsOk() ? ibBackendPicture::CreateBase64Image(bitmap.ConvertToImage()) : wxString();
 }
 
 void ibValueCommandBar::Update(ibDataNode& state)
@@ -708,12 +702,11 @@ void ibValueCommandBar::Update(ibDataNode& state)
 			continue;
 		}
 
-		// The command's own live bitmap (resolved in BuildCommands) wins; else its picture description. The
+		// The command's own live icon (resolved in BuildCommands) wins; else its picture description. The
 		// representation decides which of the two a client shows — said here once, not left to each client.
-		const wxBitmap picture = c.bitmap.IsOk() ? c.bitmap
-			: (c.picture.IsEmptyPicture() ? wxNullBitmap : ibBackendPicture::CreatePicture(c.picture, metaData));
+		const ibServerPicture picture = c.icon.IsOk() ? c.icon : ibBackendPicture::GetServerPicture(c.picture, metaData);
 		entry.SetValue(wxT("Caption"), c.representation == ibRepresentation_Picture ? wxString() : c.caption);
-		entry.SetValue(wxT("Picture"), c.representation == ibRepresentation_Text ? wxString() : PictureForFrame(picture));
+		entry.SetValue(wxT("Picture"), c.representation == ibRepresentation_Text ? wxString() : wxString(picture.GetData()));
 		entry.SetValue(wxT("Tooltip"), c.tooltip.IsEmpty() ? c.caption : c.tooltip);
 		entry.SetValue(wxT("Enabled"), c.enabled);
 		entry.SetValue(wxT("Kind"), static_cast<s32>(c.kind));
@@ -721,11 +714,11 @@ void ibValueCommandBar::Update(ibDataNode& state)
 		// A GROUP carries its submenu: its commands in the order they were gathered, each with the caption,
 		// picture and "modifies data" the command itself answers — the same resolve every projection uses.
 		for (const ibValueCommandBarItem* item : c.members) {
-			wxString caption; wxBitmap icon; bool modifies = true;
+			wxString caption; ibServerPicture icon; bool modifies = true;
 			ibDataNode& member = entry.AddChild(0, 0);
 			const bool resolved = ResolveCommand(item->GetBindingDesc(), caption, icon, &modifies);
 			member.SetValue(wxT("Caption"), caption);
-			member.SetValue(wxT("Picture"), PictureForFrame(icon));
+			member.SetValue(wxT("Picture"), wxString(icon.GetData()));
 			// A member gone since the bar was built is listed, disabled, so the places stay the places
 			// ExecuteCommand(id, member) counts.
 			member.SetValue(wxT("Enabled"), resolved && !(viewOnly && modifies));

@@ -3,7 +3,20 @@
 
 #include "backend/propertyManager/propertyObject.h"
 
+#include <atomic>
+#include <mutex>
+#include <shared_mutex>
+
 //base property for "list"
+//
+// ⭐⭐ THE CHOICES ARE FILLED ONCE, AND A READ ONLY READS. The functor asks the owner what it offers and fills
+// m_listPropValue; it used to run on EVERY read of the value, so a read wrote. A configuration is one object for
+// all the sessions of a base, and two sessions reading its language at once (each compiling its root at login)
+// refilled the same vector under each other — the application server and the web host fell on six logins at
+// once (2026-10-06). So a configuration fills its lists when it loads (ibValueMetaObject::RunSubtree, the resolve
+// phase — sequential, every object present), anything else on its first read; afterwards a read takes the shared
+// lock and reads. The list is refilled where what is offered may have changed: when the value is SET (the next
+// read fills afresh) and when the choices are SHOWN (GetValueList — the designer has just been editing).
 class BACKEND_API ibPropertyList : public ibProperty {
 public:
 
@@ -11,13 +24,13 @@ public:
 	// reads them there; it fires the functor itself, since that is what fills the list —
 	// this used to sit in GetPGProperty, which is the one caller it had.
 	//
-	// NOT const: the functor REFILLS m_listPropValue, so this mutates. The const here was
-	// a lie the old code paid for with a const_cast on `this`.
+	// NOT const: the choices are read afresh here (FillList) — shown, they must be the owner's as it is now.
 	// ⭐ THE ONE THAT GAVE THE BASE ITS SHAPE. This worked, and it worked here alone — an enumeration
 	// answered the same question under another name, and a relationship could not be asked at all.
 	// Now it is the family's own verb and this is one member of it.
 	virtual ibPropertyChoiceMode GetValueList(ibPropertyChoiceList& list) override {
-		if (!m_functor->Invoke(this))
+		std::unique_lock<std::shared_mutex> lock(m_listMutex);
+		if (!FillListLocked())
 			return ibPropertyChoiceMode::None;
 		for (unsigned int idx = 0; idx < m_listPropValue.GetItemCount(); idx++) {
 			list.Add(
@@ -46,7 +59,7 @@ private:
 		ibValue  m_cValue;
 	public:
 
-		operator ibValue* () { return GetOptionValue(); }
+		operator ibValue* () const { return GetOptionValue(); }
 		ibPropertyOptionValue& operator = (const ibPropertyOptionValue& src) {
 
 			if (src.m_valType == eValType::eValType_pointer)
@@ -67,7 +80,7 @@ private:
 		ibPropertyOptionValue(const ibPropertyOptionValue& val) : m_valType(val.m_valType), m_pValue(val.m_pValue), m_cValue(val.m_cValue) {}
 		~ibPropertyOptionValue() {}
 
-		ibValue* GetOptionValue() {
+		ibValue* GetOptionValue() const {
 			return (m_valType == eValType::eValType_pointer) ? m_pValue : new ibValue(m_cValue.GetValue());
 		}
 	};
@@ -121,12 +134,11 @@ private:
 			ibPropertyOptionValue m_value;
 		};
 
-		ibPropertyOptionItem GetItemAt(const unsigned int idx) const {
-			if (idx >= m_listValue.size())
-				return ibPropertyOptionItem();
-			auto it = m_listValue.begin();
-			std::advance(it, idx);
-			return *it;
+		// The item itself, not a copy: a copy copied its bitmap, and a bitmap's reference count in wx is a plain int —
+		// readers of one list on several threads counted it up and down under each other.
+		const ibPropertyOptionItem& GetItemAt(const unsigned int idx) const {
+			static const ibPropertyOptionItem s_none;
+			return idx < m_listValue.size() ? m_listValue[idx] : s_none;
 		};
 
 	public:
@@ -165,27 +177,51 @@ private:
 		{
 		}
 		virtual bool Invoke(ibPropertyList* property) override {
-			const ibPropertyOptionList listPropValue = property->m_listPropValue;
-			if (property != nullptr) property->ResetListItem();
 			return (m_handler->*m_funcHandler)(property);
 		}
 	private:
 		optClass* m_handler;
 	};
-#pragma region item 
-	void ResetListItem() { (void)m_listPropValue.ResetListItem(); }
-#pragma endregion
+
+	// Under the exclusive lock: the list emptied and filled by the owner, and the owner's answer kept — false offers
+	// nothing.
+	bool FillListLocked() {
+		m_listPropValue.ResetListItem();
+		m_listOffered = m_functor != nullptr && m_functor->Invoke(this);
+		m_listFilled.store(true, std::memory_order_release);
+		return m_listOffered;
+	}
+
+	// A list nobody has filled yet — its owner is not loaded with a configuration (a form's control), or its value
+	// has just been set — is filled on its first read, once.
+	void EnsureList() const {
+		if (m_listFilled.load(std::memory_order_acquire))
+			return;
+		std::unique_lock<std::shared_mutex> lock(m_listMutex);
+		if (!m_listFilled.load(std::memory_order_relaxed))
+			const_cast<ibPropertyList*>(this)->FillListLocked();
+	}
+
 public:
+	// The value, when it is among the choices; wxNOT_FOUND otherwise. Reads — never fills a list that was filled.
 	int GetValueAsInteger() const {
 		const long sel = m_propValue;
-		if (m_functor->Invoke(const_cast<ibPropertyList*>(this))) {
+		EnsureList();
+		std::shared_lock<std::shared_mutex> lock(m_listMutex);
+		if (m_listOffered) {
 			for (unsigned int idx = 0; idx < m_listPropValue.GetItemCount(); idx++) {
-				if (m_listPropValue.GetItemId(idx) == sel) {
+				if (m_listPropValue.GetItemId(idx) == sel)
 					return sel;
-				}
 			}
 		}
 		return wxNOT_FOUND;
+	}
+
+	// The choices read afresh from the owner: by a configuration as it loads (every list of every object, once), and
+	// by whoever knows what is offered has changed. A read waits for the fill and never sees half of it.
+	void FillList() {
+		std::unique_lock<std::shared_mutex> lock(m_listMutex);
+		FillListLocked();
 	}
 
 #pragma region item 
@@ -234,15 +270,21 @@ public:
 
 protected:
 
+	// A value set — what is offered may have changed with it (the designer has been editing the owner): the next
+	// read fills the list afresh.
 	virtual void DoSetValue(const wxVariant& val) {
-		if (m_functor != nullptr) m_functor->Invoke(this);
 		ibProperty::DoSetValue(val);
+		m_listFilled.store(false, std::memory_order_release);
 	}
 
 private:
 
 	ibPropertyOptionList m_listPropValue;
 	ibPropertyFunctor* m_functor;
+
+	mutable std::shared_mutex m_listMutex;   // readers shared, a fill exclusive
+	std::atomic<bool>         m_listFilled { false };
+	bool                      m_listOffered = false;
 };
 
 #endif

@@ -5,11 +5,11 @@
 // for the designer, the desktop and the web alike. With no window here, what it holds is the frame it draws; each
 // control's node in it stands where the control's window stood.
 //
-//   CreateVisualHost   OnCreate → the children → OnCreated      the form opened
-//   UpdateVisualHost   OnUpdate → the children → OnUpdated      the frame drawn
-//   ClearVisualHost    the children → OnCleanup                 the form closed
-//   CreateControl / RemoveControl                               a control added to / taken off an open form
-//   SelectControl      OnSelected                               a control picked out (the client's Focus)
+//   CreateVisualHost   the title → OnCreate → the children → OnCreated    the form opened
+//   UpdateVisualHost   the title → OnUpdate → the children → OnUpdated    the frame drawn
+//   ClearVisualHost    the children → OnCleanup                           the form closed
+//   CreateControl / RemoveControl                                         a control added to / taken off an open form
+//   SelectControl      OnSelected                                         a control picked out (the client's Focus)
 //
 // A control asks the host what it is held by (IsDesignerHost), never the process: a designer and a client may be
 // one process.
@@ -25,6 +25,9 @@ public:
 	virtual class ibValueForm* GetValueForm() const = 0;
 	// Held for the designer's picture of the form, not for a person working in it.
 	virtual bool IsDesignerHost() const { return false; }
+	// The title bar — the form's caption, as the host shows it: the client's view, as its document's title; the
+	// designer's editor, on the card it draws.
+	virtual void SetCaption(const wxString& strCaption) = 0;
 
 	void CreateVisualHost();
 	bool UpdateVisualHost(class ibDataNode& frame);
@@ -55,6 +58,10 @@ private:
 // ⭐ THE VIEW IS THE FORM'S HOST — it holds the form for its client and draws its frame, so it takes the
 // controls through their life (ibVisualHost): created as the view is, drawn with every frame, cleaned up when
 // its document closes.
+//
+// The CLIENT's host, the desktop's and the web's (ibVisualHostClient) — a demonstration document's included:
+// through it the designer shows a form as a person would see it. The designer's picture of a form being edited
+// is the other host, its editor's (ibVisualEditorHost): its own class, with its own title and IsDesignerHost.
 class SFRONTEND_API ibFormVisualEditView : public ibView, public ibVisualHost {
 public:
 
@@ -70,8 +77,10 @@ public:
 	// moment (ibVisualHost::UpdateVisualHost). Written whole every time; what reaches a client is the difference.
 	virtual void OnDraw(ibDataNode& frame) override;
 
-	// The designer's picture of a form is a demonstration document.
-	virtual bool IsDesignerHost() const override;
+	// THE DOCUMENT'S TITLE FROM THE FORM'S CAPTION, the desktop host's own (ibVisualHostClient::SetCaption): a
+	// caption the form has is the title; without one, what its source object says of itself (a new object's form
+	// included), else the form's synonym. What a person reads the document as — its tab, a question about it.
+	virtual void SetCaption(const wxString& strCaption) override;
 
 	// THE SAME DOC/VIEW, A FACADE OVER THE FORM'S ACTIVE CONTROL (ibValueForm::GetActiveControl): when it holds
 	// a view of its own (ibValueFrame::GetControlView — the grid box, the text box), activating the form

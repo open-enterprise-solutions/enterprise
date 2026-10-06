@@ -102,7 +102,7 @@ private:
 // ibMetaDocTemplate — metadata-aware template subclass.
 //
 // Holds the OES-side keying that the wx-style file template doesn't have:
-// the metaobject CLSID, a per-template GUID, and the class icon.
+// the metaobject CLSID, a per-template GUID, and the id of its picture.
 // Registered through the ibDocManager::AddDocTemplate
 // overloads that take ibClassID / ibPictureID instead of a plain wxClassInfo.
 // Lives in the same m_templates list as plain ibDocTemplate; lookups by CLSID
@@ -132,13 +132,17 @@ public:
 
 	const ibGuid&    GetGuidTemplate() const { return m_guidTemplate; }
 
-	const wxIcon&    GetClassIcon()    const { return m_classIcon; }
-	void             SetClassIcon(const wxIcon& icon) { m_classIcon = icon; }
+	// THE PICTURE BY ITS ID — what a client creating a document is sent with each template it may choose from (Max,
+	// 2026-10-06), the picture itself asked for by that id (ibBackendPicture::GetServerPicture). An id, not a wxIcon:
+	// a wxIcon was made for every template of every session's manager — a wx object on a worker thread — where the
+	// client needs a number.
+	ibPictureID      GetPictureID()    const { return m_pictureID; }
+	void             SetPictureID(const ibPictureID& id) { m_pictureID = id; }
 
 protected:
-	ibClassID m_clsid;
-	ibGuid    m_guidTemplate;
-	wxIcon    m_classIcon;
+	ibClassID   m_clsid;
+	ibGuid      m_guidTemplate;
+	ibPictureID m_pictureID = 0;
 };
 
 #endif // _DOC_MANAGER_H__

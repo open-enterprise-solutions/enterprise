@@ -6,7 +6,7 @@
 #include "sfrontend/visualView/ctrl/formCommand.h"   // ibFormCommandValue — a form command resolved BY ID (caption / Action)
 #include "backend/metaCollection/metaCommandObject.h" // ibValueMetaObjectCommand — the leaf command
 #include "backend/metaCollection/metaObject.h"     // g_metaCommandCLSID
-#include "backend/backend_picture.h"                // ibBackendPicture::CreatePicture (a standard action's picture)
+#include "backend/backend_picture.h"                // ibBackendPicture::GetServerPicture (every command's picture)
 #include "backend/srcDataObject.h"                  // ibSourceDataObject — the form's main object (command parameter)
 #include "backend/metaCollection/genericData.h"     // ibValueMetaObjectGenericData::GetMetaID (parameter type match)
 #include "backend/typeDescription.h"                // ibTypeDescription::GetClsidList (command parameter type)
@@ -133,7 +133,7 @@ bool ibFrontendCommandReceiver::ExecuteValueByPath(const ibCommandDescription& d
 
 // The READ twin — start the SAME walk, then read the resolved leaf's own default look (caption + icon + modifies
 // flag). outModifiesData is optional.
-bool ibFrontendCommandReceiver::ResolveValueByPath(const ibCommandDescription& desc, wxString& outCaption, wxBitmap& outIcon,
+bool ibFrontendCommandReceiver::ResolveValueByPath(const ibCommandDescription& desc, wxString& outCaption, ibServerPicture& outIcon,
 	bool* outModifiesData, bool* outPictureAndText) const
 {
 	ibValueForm* const gate = GetCommandGateForm();
@@ -154,7 +154,7 @@ bool ibFrontendCommandReceiver::ResolveValueByPath(const ibCommandDescription& d
 	ibFormCommandValue* fc = nullptr;
 	if (leaf.ConvertToValue(fc) && fc != nullptr) {
 		outCaption = fc->GetCaption();
-		outIcon    = fc->IsEmptyPicture() ? wxNullBitmap : fc->GetPictureBitmap();
+		outIcon    = fc->IsEmptyPicture() ? ibServerPicture() : ibBackendPicture::GetServerPicture(fc->GetPictureDesc(), gate->GetMetaData());
 		if (outModifiesData != nullptr)
 			*outModifiesData = true;
 		return true;
@@ -163,7 +163,7 @@ bool ibFrontendCommandReceiver::ResolveValueByPath(const ibCommandDescription& d
 	ibValueMetaObjectCommand* cmd = nullptr;
 	if (leaf.ConvertToValue(cmd) && cmd != nullptr) {
 		outCaption = cmd->GetSynonym().IsEmpty() ? cmd->GetName() : cmd->GetSynonym();
-		outIcon    = cmd->IsEmptyPicture() ? wxNullBitmap : cmd->GetPictureAsBitmap();
+		outIcon    = cmd->IsEmptyPicture() ? ibServerPicture() : ibBackendPicture::GetServerPicture(cmd->GetPictureDesc(), cmd->GetMetaData());
 		if (outModifiesData != nullptr)
 			*outModifiesData = cmd->GetModifiesData();
 		return true;
@@ -174,7 +174,7 @@ bool ibFrontendCommandReceiver::ResolveValueByPath(const ibCommandDescription& d
 		outCaption = obj->GetSynonym();
 		if (desc.GetCommandType() == ibInterfaceCommandType_Create)
 			outCaption += wxT(": ") + wxString(_("Create"));
-		outIcon = wxBitmap(obj->GetIcon());
+		outIcon = ibBackendPicture::GetServerPicture(obj->GetClassType());
 		return true;
 	}
 	// (4) standard action — its caption + picture + modifies flag off the resolved frame's bus.
@@ -183,7 +183,7 @@ bool ibFrontendCommandReceiver::ResolveValueByPath(const ibCommandDescription& d
 		auto actions = frame->GetStandardCommands(frame->GetTypeForm());
 		outCaption = actions.GetCaptionByID((ibActionID)desc.GetLeaf());
 		const ibPictureDescription pic = actions.GetPictureByID((ibActionID)desc.GetLeaf());
-		outIcon = pic.IsEmptyPicture() ? wxNullBitmap : ibBackendPicture::CreatePicture(pic, gate->GetMetaData());
+		outIcon = ibBackendPicture::GetServerPicture(pic, gate->GetMetaData());
 		if (outModifiesData != nullptr)
 			*outModifiesData = actions.GetModifiesDataByID((ibActionID)desc.GetLeaf());
 		// A standard action's OWN default display — Close / Update are picture-only, Add / Post picture+text.
@@ -213,7 +213,7 @@ bool ibFrontendCommandReceiver::ResolveSubCommands(const ibCommandDescription& d
 		ibCommandSubItem item;
 		item.desc    = ibCommandDescription(sub->GetMetaID());   // the sub-command is terminal on its own
 		item.caption = sub->GetSynonym().IsEmpty() ? sub->GetName() : sub->GetSynonym();   // rendered menu text = SYNONYM
-		item.icon    = wxBitmap(sub->GetIcon());
+		item.icon    = ibBackendPicture::GetServerPicture(sub->GetClassType());
 		out.push_back(item);
 	}
 	return !out.empty();
@@ -222,7 +222,7 @@ bool ibFrontendCommandReceiver::ResolveSubCommands(const ibCommandDescription& d
 // THE one command resolve — see the header. EVERY projection (button Update / bar BuildCommands / the inspector
 // cell via WalkCommand) routes through here, so existence + look are decided in ONE place, not guessed per-surface.
 bool ibFrontendCommandReceiver::ResolveCommand(const ibCommandDescription& desc, wxString& outCaption,
-	wxBitmap& outIcon, bool* outModifies, wxString* outPath, bool* outPictureAndText) const
+	ibServerPicture& outIcon, bool* outModifies, wxString* outPath, bool* outPictureAndText) const
 {
 	// (1) The walk on THIS door — the authoritative caption / icon / modifies / default display for a FORM or GLOBAL
 	// command. picAndText defaults true (a command shows its text); a standard action overrides (Close = picture only).
@@ -262,7 +262,7 @@ bool ibFrontendCommandReceiver::ResolveCommand(const ibCommandDescription& desc,
 // the inspector cell shows the full PATH name, "<not found>" when the command is gone.
 bool ibFrontendCommandReceiver::WalkCommand(const ibCommandDescription& desc, wxString* outText) const
 {
-	wxString caption; wxBitmap icon; wxString path;
+	wxString caption; ibServerPicture icon; wxString path;
 	if (!ResolveCommand(desc, caption, icon, nullptr, &path))
 		return false;
 	if (outText != nullptr)

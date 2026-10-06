@@ -316,8 +316,11 @@ public:
 
 	// ---- Cluster snapshot ----
 	// Returns a copy of the last-refreshed snapshot of sys_session,
-	// across all processes / machines. Refreshed every sweep tick
-	// (~3s) by JobRefreshSnapshot. Caller UI (Active Users dialog,
+	// across all processes / machines. Refreshed by JobRefreshSnapshot
+	// every sweep tick (~3s) and after every batch of requests that
+	// wrote rows (a session added, attached, detached, removed, made
+	// exclusive), so a session that has just come or gone is seen at
+	// once. Caller UI (Active Users dialog,
 	// admin endpoint) polls this; no blocking on the registry thread.
 	// Returns an empty array before the first refresh or when
 	// m_ownsSysSession is false (the registry isn't reading the table).
@@ -785,7 +788,8 @@ private:
 	// Cluster snapshot — mirror of sys_session across every process.
 	// Written by JobRefreshSnapshot on the registry thread, read by UI
 	// via GetClusterSnapshot() on any thread. shared_mutex: writers are
-	// rare (~3s), readers may be frequent (polling dialogs).
+	// rare (a sweep tick, a batch that wrote rows), readers may be
+	// frequent (polling dialogs).
 	mutable std::shared_mutex                              m_snapshotMtx;
 	std::unique_ptr<ibSessionSnapshot>         m_snapshot;
 

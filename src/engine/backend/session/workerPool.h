@@ -44,8 +44,10 @@ public:
 
 	// Schedule a task to run with `session` bound on the worker thread.
 	// Returns a future that fulfils after the task runs or holds the
-	// exception thrown by the task. Per-session order is FIFO; tasks
-	// for distinct sessions run in parallel up to the worker count.
+	// exception thrown by the task — and nobody else says it: a caller
+	// that does not wait for its task catches inside the task. Per-session
+	// order is FIFO; tasks for distinct sessions run in parallel up to the
+	// worker count.
 	virtual std::future<void> Submit(ibSession* session, Task task) = 0;
 
 	// ⭐ AWAIT `done`, RUNNING THE SESSION'S WORK MEANWHILE — how a script waits for its client: a question, later

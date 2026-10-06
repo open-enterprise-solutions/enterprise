@@ -19,6 +19,9 @@ The address is `oes://server[:port]/<base>`; the port is 7373 unless the server'
 file base needs no server: the client opens it itself and makes the same calls in process. Clients logged in over a
 WebSocket go when it closes.
 
+A WebSocket opened with `?compress=deflate` gets every answer of 1 KB and more as a binary message: the JSON, raw
+deflate (RFC 1951 — a browser's `DecompressionStream("deflate-raw")`). A text message is the JSON as it is.
+
 ## Methods
 
 | Method | Parameters | Answer |
@@ -37,6 +40,7 @@ WebSocket go when it closes.
 | `download` | `Client`, `File`, `Part` | `Name`, `Part`, `Parts`, `Data` |
 | `open` | `Client`, `File` | the frame — the file opened as a document |
 | `command` | `Client`, `Command` | the frame — the command done on the active tab's document |
+| `presentation` | `Client`, `Value`, `Format` | `Text` — the value as a person reads it, formatted by the server (`Format`: the codes `Format()` takes) |
 
 A method name is never changed; a new method takes a new name. Every number below is the protocol's: never
 renumbered, a new one takes the next. A field a side does not know is skipped; an absent field is its default — so
@@ -57,6 +61,15 @@ A patch is a node of the frame's shape carrying only what changed. A client appl
   inserted whole; `NodeRemovedIds` names those gone, taken out first; `NodeOrder` gives the order of all of them
   whenever it changed or something was inserted;
 - children without ids come whole when anything among them changed: `NodeChildrenWhole`.
+
+From protocol 2 a patch's `View` is taken from the view the client was last sent for the tab active now — back on a
+tab it gets what changed there, not the whole form. A client keeps each tab's view, puts the one of the tab the patch
+makes active in place (keeping the view it holds when it has none for that tab), applies the patch's `View` to it,
+and begins the store again with a frame sent whole.
+
+A field's `State` carries `Text`, as shown, and `Value`, the value with its type: `{"t": <type id>, "type": <name>,
+"v": <text>}`, a reference `{"t", "m", "g"}`. An `event` that changes a field (`Change`) gives either: `Value` is
+taken as it is, `Text` is parsed by the field's type.
 
 | Field | Holds |
 |---|---|
@@ -147,7 +160,6 @@ An HTTP status answers only what comes before the protocol: no base at the addre
 
 ## Where it stops
 
-- A control's `State` carries display text, not the value.
 - A call is answered once; a call repeated after a dropped connection is done again — the dropped socket ends its
   clients anyway.
 - A file travels in base64 inside JSON.

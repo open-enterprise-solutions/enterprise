@@ -13,6 +13,7 @@
 #include <cerrno>        // ToLong & co read ERANGE, as wx does
 #include <climits>       // ToInt's range
 #include <cstdarg>       // Print — the arguments Format hands on
+#include <cstdlib>       // std::atexit — the last drain
 #include <cwchar>        // vswprintf; wmemcpy / wmemmove / wmemset — the characters in their block
 #include <functional>    // std::less — is an appended piece inside this very text
 #include <locale>
@@ -154,6 +155,29 @@ inline void Deallocate(void* p, std::size_t bytes) noexcept {
 void Drain() noexcept { detail::t_pool.Release(); }
 
 } // namespace ibFStringPool
+
+// ⚠ AND ONCE MORE, LAST OF ALL. A store of strings as long-lived as the process — the pictures a server sends, made
+// once and kept in statics (ibServerPicture) — hands its blocks back during static destruction, after every Drain
+// above; there they would sit in the pool past the end and read as leaks. So a drain is registered before every
+// ordinary static of this module and runs after all of them: the runtime keeps static destructors and atexit
+// handlers in one LIFO list (docs/private/engineering-playbook/25-memory-leaks.md, "Ordering: running a cleanup last").
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable: 4073)   // init_seg(lib) is reserved for library code — this IS the library
+#pragma init_seg(lib)            // construct before every ordinary static in this DLL
+#pragma warning(pop)
+#endif
+
+namespace {
+struct ibStringPoolDrainAtExit {
+	ibStringPoolDrainAtExit() { std::atexit([] { ibFStringPool::Drain(); }); }
+};
+#if defined(__GNUC__)
+ibStringPoolDrainAtExit s_stringPoolDrainAtExit __attribute__((init_priority(101)));
+#else
+ibStringPoolDrainAtExit s_stringPoolDrainAtExit;
+#endif
+} // namespace
 
 // --- the text and its owners ------------------------------------------------------
 //

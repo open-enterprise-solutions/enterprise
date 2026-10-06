@@ -3,6 +3,8 @@
 
 #include "backend/metaData.h"
 #include "backend/objCtor.h"
+#include "backend/backend_exception.h"       // ibBackendException — a value of a type the configuration lacks
+#include "backend/serialize/dataBuilder.h"   // ibDataNode — the value as the client sent it
 
 // The typed text becomes a value of the cell's type, or is refused. A refused text leaves the cell as it
 // was, and the next fetch of the row shows that value again in place of what was typed. A read-only
@@ -35,6 +37,31 @@ bool ibValueModelTableBoxColumn::TextProcessing(const wxString& strData)
 		SetControlValue(newValue);
 	}
 
+	ibValueControl::CallAsEvent(m_eventOnChange, GetValue());
+	return true;
+}
+
+// The value the client sent with its type becomes the cell's — made by the configuration (a reference is its), and
+// only of a type the column admits; anything else is refused as a text that is no value is.
+bool ibValueModelTableBoxColumn::ValueProcessing(const ibDataNode& node)
+{
+	if (IsReadOnly())
+		return false;
+
+	const ibMetaData* metaData = GetMetaData();
+	if (metaData == nullptr)
+		return false;
+	ibValue newValue;
+	try {
+		newValue = metaData->Deserialize(node);
+	}
+	catch (const ibBackendException&) {
+		return false;   // a type this configuration does not have
+	}
+	if (!GetTypeValueDesc().ContainType(newValue.GetClassType()))
+		return false;
+
+	SetControlValue(newValue);
 	ibValueControl::CallAsEvent(m_eventOnChange, GetValue());
 	return true;
 }

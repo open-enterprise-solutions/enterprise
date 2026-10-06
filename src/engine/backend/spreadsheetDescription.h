@@ -63,7 +63,14 @@ const static int s_rowLabelWidth = 40;
 const static int s_defaultColWidth = 70;
 const static int s_colLabelHeight = 15;
 
-static const wxFont s_defaultSpreadsheetFont = wxFont(8, wxFontFamily::wxFONTFAMILY_DEFAULT, wxFontStyle::wxFONTSTYLE_NORMAL, wxFontWeight::wxFONTWEIGHT_NORMAL);
+// ⭐ THE SHEET'S ORDINARY FONT, MADE ANEW ON EVERY ASK — never one object everybody copies. wx counts the holders of a
+// font in a plain int, so a font shared by the sessions of a server is counted up and down by several threads at
+// once and freed under one of them: `static const wxFont` here (one per translation unit, shared by all its threads)
+// stopped an application server on a list's output — "m_count > 0 failed in DecRef()" in ~wxFont, from
+// ibSpreadsheetComposeDriver::PrintRow (2026-10-06, Max's crawl). A font is made where it is wanted, and held by one.
+inline wxFont ibDefaultSpreadsheetFont() {
+	return wxFont(8, wxFontFamily::wxFONTFAMILY_DEFAULT, wxFontStyle::wxFONTSTYLE_NORMAL, wxFontWeight::wxFONTWEIGHT_NORMAL);
+}
 
 // ⭐ ARE THESE TWO THE SAME FONT — asked WITHOUT a screen. wxFont's own operator== ends up in
 // GetPixelSize(), and that opens a wxScreenDC to measure the glyphs; a description compares what
@@ -111,6 +118,7 @@ struct ibSpreadsheetCellDescription {
 	};
 
 	ibSpreadsheetCellDescription(int row, int col) : m_row(row), m_col(col) {}
+	ibSpreadsheetCellDescription(const ibSpreadsheetCellDescription& rhs) : m_row(rhs.m_row), m_col(rhs.m_col) { SetCell(&rhs); }
 
 	bool IsEmptyValue() const { return m_value.IsEmpty(); }
 
@@ -158,7 +166,11 @@ struct ibSpreadsheetCellDescription {
 		m_alignHorz = rhs->m_alignHorz;
 		m_alignVert = rhs->m_alignVert;
 		m_textOrient = rhs->m_textOrient;
-		m_font = rhs->m_font;
+		// ⚠ A COPY'S FONT IS ITS OWN — made from what the font is, not shared with the one copied. A template in the
+		// configuration is one object for every session, and each document made of it (GetTemplate) copied its fonts:
+		// wx counts the holders of a font in a plain int, so sessions counted the template's fonts up and down under
+		// each other (see ibDefaultSpreadsheetFont). Reading what a font is touches no count.
+		m_font = rhs->m_font.IsOk() ? wxFont(*rhs->m_font.GetNativeFontInfo()) : wxFont();
 		m_backgroundColour = rhs->m_backgroundColour;
 		m_textColour = rhs->m_textColour;
 		m_borderAt[0] = rhs->m_borderAt[0];
@@ -215,7 +227,7 @@ struct ibSpreadsheetCellDescription {
 	int m_alignVert = wxALIGN_TOP;
 	int m_textOrient = wxHORIZONTAL;
 	// 🛑 UNSET, LIKE THE COLOURS BELOW — and for the same reason, found the same way. A cell used to
-	// be born holding s_defaultSpreadsheetFont, so the node writer had to ASK whether that font was
+	// be born holding the sheet's default font, so the node writer had to ASK whether that font was
 	// still the default one; and asking two wxFonts whether they are equal MEASURES them —
 	// wxFontBase::operator== calls GetPixelSize(), which opens a wxScreenDC. On a machine with no
 	// screen that is a crash, not a slow answer: six round-trip tests died with SIGSEGV inside GTK
@@ -747,7 +759,7 @@ struct ibSpreadsheetDescription {
 		const ibSpreadsheetCellDescription* cell = GetCell(row, col);
 		if (cell != nullptr && cell->m_font.IsOk())
 			return cell->m_font;
-		return s_defaultSpreadsheetFont;
+		return ibDefaultSpreadsheetFont();
 	}
 
 	void SetCellFont(int row, int col, const wxFont& font) {

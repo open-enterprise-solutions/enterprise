@@ -984,9 +984,13 @@ bool ibValueModelTableBox::OnCellEvent(ibClientEvent event, const ibDataNode& ar
 			m_editRow = 0;
 		return true;
 	case ibClientEvent::Change:
-		// The text committed into the current line's cell, and the edit is over.
+		// The value committed into the current line's cell — with its type when the client has one (Value), else the
+		// text it typed — and the edit is over.
 		m_editRow = 0;
-		column->OnTextEnter(args.GetValue<wxString>(wxT("Text")));
+		if (const ibDataNode* const value = args.FindChild(wxT("Value")))
+			column->ValueProcessing(*value);
+		else
+			column->OnTextEnter(args.GetValue<wxString>(wxT("Text")));
 		column->OnEditingDone();
 		return true;
 	case ibClientEvent::Select: column->OnSelectButtonPressed(); return true;

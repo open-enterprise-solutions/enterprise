@@ -14,6 +14,12 @@ ibClientChildFrame::~ibClientChildFrame()
 	m_childDocument = nullptr;
 }
 
+wxString ibClientChildFrame::GetTitle() const
+{
+	const ibDocument* const document = GetDocument();
+	return document != nullptr && !document->GetTitle().IsEmpty() ? document->GetTitle() : m_title;
+}
+
 bool ibClientChildFrame::Show(bool show)
 {
 	if (!show || m_frame == nullptr)

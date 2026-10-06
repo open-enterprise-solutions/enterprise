@@ -117,7 +117,8 @@ private:
 	static std::atomic<std::size_t>                            s_instanceCount;   // its size, read without the lock
 
 	// backend.conf — read once for the process: the locale, how much the process may consume, and the default
-	// a base's own infobase.conf overrides (0 = the built-in value; Bases 0 = as many as are opened).
+	// a base's own infobase.conf overrides (Workers and Bases: the most there may be, 0 = no limit; Connections 0 =
+	// the built-in value).
 	wxString    m_configLocale;
 	std::size_t m_configWorkers     = 0;
 	std::size_t m_configBases       = 0;

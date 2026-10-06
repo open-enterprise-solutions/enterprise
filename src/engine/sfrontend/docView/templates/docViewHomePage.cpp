@@ -70,7 +70,7 @@ ibHomePageDocument* ibHomePageDocument::ShowHomePage(const ibValueMetaObjectConf
 	}
 
 	homeDoc->SetTitle(_("Home page"));
-	homeDoc->SetIcon(ibBackendPicture::GetPictureAsIcon(g_picHomePageCLSID));
+	homeDoc->SetIcon(ibBackendPicture::GetServerPicture(g_picHomePageCLSID));
 	documentManager->AddDocument(homeDoc);
 
 	if (!homeDoc->OnCreate(wxEmptyString, 0)) {
@@ -196,17 +196,17 @@ void ibHomePageView::DrawCell(const ibHomePageCell& cell, ibDataNode& node) cons
 	// falling back to the form's own, and to the page's glyph when the form is gone. An embedded form has no tab
 	// to carry either.
 	const ibValueMetaObjectFormBase* const metaForm = cell.m_metaForm;
-	wxIcon headerIcon;
+	ibServerPicture headerIcon;
 	if (metaForm != nullptr) {
 		const ibValueMetaObject* const owner = metaForm->GetParent();
-		headerIcon = owner != nullptr ? owner->GetIcon() : metaForm->GetIcon();
+		headerIcon = ibBackendPicture::GetServerPicture(owner != nullptr ? owner->GetClassType() : metaForm->GetClassType());
 		if (!headerIcon.IsOk())
-			headerIcon = metaForm->GetIcon();
+			headerIcon = ibBackendPicture::GetServerPicture(metaForm->GetClassType());
 	}
 	if (!headerIcon.IsOk())
-		headerIcon = ibBackendPicture::GetPictureAsIcon(g_picHomePageCLSID);
+		headerIcon = ibBackendPicture::GetServerPicture(g_picHomePageCLSID);
 	if (headerIcon.IsOk())
-		node.SetValue(wxT("Icon"), ibBackendPicture::CreateBase64Image(wxBitmap(headerIcon).ConvertToImage()));
+		node.SetValue(wxT("Icon"), wxString(headerIcon.GetData()));
 
 	const ibFormVisualDocument* const formDoc = cell.m_valueForm ? cell.m_valueForm->GetVisualDocument() : nullptr;
 	ibFormVisualEditView* const formView = formDoc != nullptr ? formDoc->GetFirstView() : nullptr;

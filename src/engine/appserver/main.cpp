@@ -127,7 +127,8 @@ int main(int argc, char** argv)
 		return -1;
 	}
 
-	// What the server does is what its console shows.
+	// What the server says, and every warning and error, is what its console shows; the running commentary is the
+	// journal file's.
 	ibTechJournal::EchoToStderr();
 
 	wxCmdLineParser parser(s_cmdLineDesc, argc, argv);

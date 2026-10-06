@@ -1,5 +1,6 @@
 #include "widgets.h"
 #include "backend/serialize/dataBuilder.h"   // ibDataNode — an event's arguments
+#include "backend/backend_exception.h"       // ibBackendException — a value of a type the configuration lacks
 #include "backend/metaCollection/partial/commonObject.h"
 #include "backend/metaData.h"
 #include "sfrontend/visualView/ctrl/form.h"
@@ -37,6 +38,31 @@ bool ibValueTextCtrl::TextProcessing(const wxString& strData)
 	return true;
 }
 
+// The value the client sent with its type becomes the field's — made by the configuration (a reference is its), and
+// only of a type the field admits; anything else is refused as a text that is no value is.
+bool ibValueTextCtrl::ValueProcessing(const ibDataNode& node)
+{
+	if (IsReadOnly())
+		return false;
+
+	const ibMetaData* metaData = GetMetaData();
+	if (metaData == nullptr)
+		return false;
+	ibValue newValue;
+	try {
+		newValue = metaData->Deserialize(node);
+	}
+	catch (const ibBackendException&) {
+		return false;   // a type this configuration does not have
+	}
+	if (!GetTypeValueDesc().ContainType(newValue.GetClassType()))
+		return false;
+
+	SetControlValue(newValue);
+	ibValueControl::CallAsEvent(m_eventOnChange, GetValue());
+	return true;
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////////
 
 void ibValueTextCtrl::ChoiceProcessing(ibValue& vSelected)
@@ -55,7 +81,14 @@ bool ibValueTextCtrl::OnClientEvent(ibClientEvent event, const ibDataNode& args)
 {
 	switch (event) {
 	case ibClientEvent::Input:  OnTextUpdated(); return true;
-	case ibClientEvent::Change: OnTextEnter(args.GetValue<wxString>(wxT("Text"))); return true;
+	case ibClientEvent::Change: {
+		// The value with its type when the client has one (Value), else the text it typed.
+		if (const ibDataNode* const value = args.FindChild(wxT("Value")))
+			ValueProcessing(*value);
+		else
+			OnTextEnter(args.GetValue<wxString>(wxT("Text")));
+		return true;
+	}
 	case ibClientEvent::Select: OnSelectButtonPressed(); return true;
 	case ibClientEvent::Open:   OnOpenButtonPressed(); return true;
 	case ibClientEvent::Clear:  OnClearButtonPressed(); return true;

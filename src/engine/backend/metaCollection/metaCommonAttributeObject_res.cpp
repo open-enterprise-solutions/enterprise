@@ -22,10 +22,9 @@ wxIcon ibValueMetaObjectCommonAttribute::GetIcon() const
 
 wxIcon ibValueMetaObjectCommonAttribute::GetIconGroup()
 {
-	static wxIcon icon =
-		ibBackendPicture::GetIconFromBase64(s_commonAttribute_16_png, wxSize(16, 16));
+	static const ibServerPicture picture(s_commonAttribute_16_png, wxSize(16, 16));
 
-	return icon;
+	return picture.ToIcon();
 }
 
 wxIcon ibValueMetaObjectCommonAttributeColumn::GetIcon() const

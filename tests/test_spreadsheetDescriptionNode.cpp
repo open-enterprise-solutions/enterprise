@@ -41,8 +41,8 @@ void FillCell(ibSpreadsheetCellDescription& cell)
 	cell.m_textOrient = wxVERTICAL;
 
 	// 🛑 NO FONT IS SET HERE, and the reason is not the one this comment used to give.
-	// CONSTRUCTING a wxFont is harmless without a display — every one of the 1752 tests
-	// builds s_defaultSpreadsheetFont at start-up. COMPARING two of them is not:
+	// CONSTRUCTING a wxFont is harmless without a display — the tests build the sheet's default
+	// one (ibDefaultSpreadsheetFont) again and again. COMPARING two of them is not:
 	// wxFontBase::operator== asks GetPixelSize(), and that opens a wxScreenDC to measure
 	// the glyphs. The node writer used to ask exactly that ("is this still the default
 	// font?"), so six round-trip tests died inside GTK while the ones that wrote no cell

@@ -35,7 +35,7 @@
 #include "backend/composition/compositionTheme.h"   // ibCompositionThemes — the palettes report_other_settings offers
 #include "backend/system/value/valueColour.h"        // report_conditional_appearance — a colour, kept as the value it is
 #include "backend/system/value/valueFont.h"          // …a font
-#include "backend/spreadsheetDescription.h"                   // …said against the report's own (s_defaultSpreadsheetFont)
+#include "backend/spreadsheetDescription.h"                   // …said against the report's own (ibDefaultSpreadsheetFont())
 #include "backend/composition/drivers/compositionDriver.h"    // …as the parts it changes (ibCompositionFont)
 #include "backend/system/value/valueSpreadsheet.h"   // …and an alignment, the sheet's own enumeration
 #include "backend/metaCollection/metaComposerObject.h"
@@ -1520,7 +1520,7 @@ class ibMcpToolReportConditionalAppearance : public ibMcpTool {
 		case ibAppearanceParameter::Font: {
 			// OVER THE REPORT'S OWN FONT, word by word — what the words do not say stays that font's, so the rule
 			// says exactly the words (ibCompositionFont::Of reads them back out of it).
-			wxFont font = s_defaultSpreadsheetFont;
+			wxFont font = ibDefaultSpreadsheetFont();
 			wxString face;
 			for (const wxString& one : wxSplit(word, wxT(' '), wxT('\0'))) {
 				long size = 0;
@@ -1568,7 +1568,7 @@ class ibMcpToolReportConditionalAppearance : public ibMcpTool {
 			ibValueFont* font = nullptr;
 			if (!value.ConvertToValue(font) || font == nullptr || !font->m_font.IsOk())
 				return wxString();
-			const ibCompositionFont said = ibCompositionFont::Of(font->m_font, s_defaultSpreadsheetFont);
+			const ibCompositionFont said = ibCompositionFont::Of(font->m_font, ibDefaultSpreadsheetFont());
 			wxString words;
 			const auto add = [&words](const wxString& one) { words << (words.IsEmpty() ? wxT("") : wxT(" ")) << one; };
 			if (said.IsBold())

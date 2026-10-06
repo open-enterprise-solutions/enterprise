@@ -5,7 +5,6 @@
 #include "backend/appHost.h"
 
 #include <algorithm>
-#include <thread>
 
 #include <wx/fileconf.h>
 #include <wx/filename.h>
@@ -202,31 +201,19 @@ void ibApplicationHost::CloseAll()
 //	The process
 ///////////////////////////////////////////////////////////////////////////////
 
-// How many workers the process's pool gets, by what the process is. The web host and the application server
-// serve many sessions at once: 4 × CPU cores, up to 32. Every other host that opens a base runs its scheduled
-// and background sessions there: two — enough that one long job cannot stall another, small enough that
-// background work never crowds out interactive sessions (a session owns ONE connection, so the real ceiling is
-// the connection pool). The launcher runs no session at all.
-static std::size_t PickWorkerCount(ibRunMode runMode)
-{
-	if (runMode == eLAUNCHER_MODE) return 0;
-	if (runMode != eSERVER_MODE) return 2;
-	const std::size_t hw = std::thread::hardware_concurrency();
-	return std::min<std::size_t>(32, std::max<std::size_t>(4, hw * 4));
-}
-
 ibApplicationHost::ibApplicationHost(ibRunMode runMode) :
 	m_localeLang(wxLanguage::wxLANGUAGE_UNKNOWN),
 	m_pluginManager(std::unique_ptr<ibPluginManager>(new ibPluginManager(ib::AppDataCtorToken{})))
 {
 	ReadBackendConf();
 
-	// The config's word on the workers, else the run mode's; the launcher runs no session either way.
-	const std::size_t workers = runMode == eLAUNCHER_MODE ? 0
-		: m_configWorkers > 0 ? m_configWorkers
-		: PickWorkerCount(runMode);
-	if (workers > 0)
-		m_workerPool = std::make_unique<ibWorkerPoolHeadless>(workers);
+	// ⭐ THE WORKERS GROW WITH THE WORK, up to the config's word — 0 sets no limit. A worker is spawned only when none
+	// is idle, and a session is worked by one at a time, so the workers follow the sessions that have work in hand,
+	// whatever the process is. It used to be guessed from the run mode (the server 4 × cores, every other host 2),
+	// and the web host, opening its base as a file one, was left with two for all its people (2026-10-06). The
+	// launcher runs no session.
+	if (runMode != eLAUNCHER_MODE)
+		m_workerPool = std::make_unique<ibWorkerPoolHeadless>(m_configWorkers);
 
 	// Load everything under <exe-dir>/plugins that exports the OES plugin ABI — ONCE FOR THE PROCESS. A
 	// plugin is a DLL loaded into it, and its initialise hook registers what it brings; a second load per
@@ -298,8 +285,8 @@ void ibApplicationHost::ReadBackendConf()
 	wxFileConfig fc(wxT(""), wxT(""), wxT(""), strConfigFile);
 	fc.Read(wxT("Locale"), &m_configLocale);
 
-	// HOW MUCH THE PROCESS MAY CONSUME — said by whoever runs it, not compiled in. A key left out leaves the
-	// built-in value (0): PickWorkerCount for the workers; Bases left out means as many as are opened.
+	// HOW MUCH THE PROCESS MAY CONSUME — said by whoever runs it, not compiled in. Workers and Bases are the most there
+	// may be: left out, or 0, no limit.
 	m_configWorkers = ReadCount(fc, BACKEND_CONF, wxT("Workers"), 1, 0);
 	m_configBases   = ReadCount(fc, BACKEND_CONF, wxT("Bases"), 1, 0);
 	// The connections are a base's own — its infobase.conf says them; this is only the default for a base that does
@@ -384,6 +371,16 @@ bool ibApplicationHost::InitLocale(const wxString& locale)
 
 	// Initialize the catalogs we'll be using.
 	m_locale.AddCatalog(wxT("open_es"));
+
+	// ⭐ NO CATALOG OF OURS FOR THE LANGUAGE — NOTHING TO ASK. The engine's strings stay as they are written (English
+	// has no catalog: it is what they are written in), and a translations object with nothing of ours misses on every
+	// one of them — and wx TRACES a miss (wxLogTrace in GetTranslatedString), taking a process-wide lock for it
+	// (wxLog::GetComponentLevel). Every control and every property made says a dozen words: sixty logins at once kept
+	// about two thirds of the application server's busy threads waiting on that one lock (2026-10-06, Debug, cdb).
+	// Without the object, `_()` hands the string back at once.
+	if (wxTranslations* const translations = wxTranslations::Get())
+		if (!translations->IsLoaded(wxT("open_es")))
+			wxTranslations::Set(nullptr);
 
 	// Initialize localization engine
 	ibBackendLocalization::SetUserLanguage(m_locale.GetName());

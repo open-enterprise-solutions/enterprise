@@ -93,9 +93,10 @@ public:
 	// complete before it does something drastic can ask.
 	static void Close();
 
-	// Echo every line on standard error as well — the journal's own word for a copy of a line elsewhere (it
-	// echoes to the debugger the same way), and what OES_JOURNAL_STDERR=1 asks, asked by the program itself.
-	// A console host that exists to be watched (the application server) turns it on; everything else leaves it off.
+	// Echo on standard error what a person watching the console needs: the program's own lines (their source is the
+	// name it opened the journal with) and every warning and error — the rest stays in the file (OES_JOURNAL_STDERR=1
+	// still echoes every line). A console host that exists to be watched (the application server) turns it on;
+	// everything else leaves it off.
 	static void EchoToStderr();
 
 	// WHICH BASE A LINE IS ABOUT, beyond the thread that wrote it (docs/private/multi-base-process.md § 5.3).

@@ -1,7 +1,6 @@
 #include "choiceRequest.h"
 
 #include "backend/backend_mainFrame.h"
-#include "backend/backend_picture.h"   // ibBackendPicture::CreateBase64Image — a picture as a request carries it
 #include "backend/serialize/dataBuilder.h"
 #include "backend/session/session.h"
 #include "backend/settings/settingsComposer.h"   // the reader's shelf — listed, and one entry of it restored
@@ -22,7 +21,7 @@ bool ibRequestChoice(const wxString& caption, const std::vector<ibChoiceItem>& i
 		node.SetValue(wxT("Id"), item.id);
 		node.SetValue(wxT("Caption"), item.caption);
 		if (item.icon.IsOk())
-			node.SetValue(wxT("Picture"), ibBackendPicture::CreateBase64Image(wxBitmap(item.icon).ConvertToImage()));
+			node.SetValue(wxT("Picture"), wxString(item.icon.GetData()));
 		if (item.selected)
 			node.SetValue(wxT("Selected"), true);
 	}

@@ -291,7 +291,7 @@ wxString Styles(const std::vector<CellStyle>& styles)
 	xml += wxString::Format(wxT("<fonts count=\"%u\">"), static_cast<unsigned>(styles.size() + 1));
 	// 🛑 FONT ZERO IS THE WHOLE SHEET'S DEFAULT, AND IT WAS A CONSTANT THAT CONTRADICTED OURS.
 	// Excel draws every cell with no style of its own in this font, so declaring Calibri 11 while
-	// this platform's own default is EIGHT POINT (s_defaultSpreadsheetFont) made an exported blank
+	// this platform's own default is EIGHT POINT (ibDefaultSpreadsheetFont) made an exported blank
 	// come back three points larger everywhere the layout had not been given an explicit font —
 	// with the row heights and column widths still exactly right, so the text simply no longer fit
 	// them. A blank that reads properly here looked broken the moment it was opened in Excel
@@ -300,11 +300,12 @@ wxString Styles(const std::vector<CellStyle>& styles)
 	//
 	// ⚠ TAKEN FROM THE DEFAULT ITSELF rather than written out again: a number repeated in a second
 	// file is a number that stops agreeing the day the first one changes.
-	const int defaultSize = s_defaultSpreadsheetFont.GetPointSize() > 0
-		? s_defaultSpreadsheetFont.GetPointSize() : 8;
+	const wxFont ordinary = ibDefaultSpreadsheetFont();
+	const int defaultSize = ordinary.GetPointSize() > 0
+		? ordinary.GetPointSize() : 8;
 
-	const wxString defaultFace = s_defaultSpreadsheetFont.GetFaceName().IsEmpty()
-		? wxString(wxT("Arial")) : s_defaultSpreadsheetFont.GetFaceName();
+	const wxString defaultFace = ordinary.GetFaceName().IsEmpty()
+		? wxString(wxT("Arial")) : ordinary.GetFaceName();
 
 	xml += wxString::Format(wxT("<font><sz val=\"%d\"/><name val=\"%s\"/></font>"),
 		defaultSize, XmlText(defaultFace));

@@ -33,7 +33,7 @@
 class BACKEND_API ibWorkerPoolHeadless : public ibWorkerPool {
 public:
 	// maxWorkers — hard cap on the number of OS threads the pool will
-	// ever spawn concurrently. Workers spawn lazily on demand: ctor
+	// ever spawn concurrently; 0 — no cap. Workers spawn lazily on demand: ctor
 	// creates none; the first Submit launches the first worker;
 	// subsequent Submits spawn more (up to the cap) when no idle
 	// worker is available. Idle workers self-exit after kIdleTimeout
@@ -48,7 +48,7 @@ public:
 	void              Drop(ibSession* session) override;
 	void              Stop() override;
 
-	// Diagnostics — current worker counts. Useful for /admin endpoints
+	// Diagnostics — current worker counts (the cap 0 — none). Useful for /admin endpoints
 	// and load tests.
 	std::size_t MaxWorkers()   const { return m_maxWorkers; }
 	std::size_t AliveWorkers() const { return m_aliveWorkers.load(std::memory_order_acquire); }

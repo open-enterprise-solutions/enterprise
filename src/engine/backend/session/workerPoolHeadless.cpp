@@ -25,11 +25,10 @@ constexpr std::size_t kMinIdle    = 1;
 // deadline — the wait is unbounded by design; see Stop().
 constexpr auto       kStopWaitReport = std::chrono::seconds(5);
 
+// What the POOL failed at — its own loop, not a task (a task's exception goes to its future; see WorkerLoop).
 void LogWorkerException(const wxString& location)
 {
-	// Reraise to identify the type without losing the original exception_ptr —
-	// outer catch(...) keeps current_exception() valid across this nested
-	// rethrow, so set_exception below still gets the same one.
+	// Reraise to identify the type — the outer catch(...) keeps the exception alive across this nested rethrow.
 	try { throw; }
 	catch (const ibBackendException& e) {
 		ibJournalWarning(wxT("session.worker"),wxT("%s: ibBackendException: %s"),
@@ -47,11 +46,11 @@ void LogWorkerException(const wxString& location)
 } // namespace
 
 ibWorkerPoolHeadless::ibWorkerPoolHeadless(std::size_t maxWorkers)
-	: m_maxWorkers(maxWorkers > 0 ? maxWorkers : 1)
+	: m_maxWorkers(maxWorkers)
 {
 	// Lazy spawn — no workers at construction. The first Submit kicks
 	// the first worker into existence; load growth spawns more up to
-	// m_maxWorkers; idle ones eventually self-exit via timeout.
+	// m_maxWorkers (0 — no limit); idle ones eventually self-exit via timeout.
 }
 
 ibWorkerPoolHeadless::~ibWorkerPoolHeadless()
@@ -65,7 +64,7 @@ void ibWorkerPoolHeadless::TrySpawnWorker()
 	// Re-check inside the lock so two concurrent Submits don't both
 	// spawn past the cap. The cap counts the workers that WORK — a worker
 	// in Await is alive but waits on a person (see m_waitingWorkers).
-	if (m_aliveWorkers.load(std::memory_order_acquire)
+	if (m_maxWorkers != 0 && m_aliveWorkers.load(std::memory_order_acquire)
 	    >= m_maxWorkers + m_waitingWorkers.load(std::memory_order_acquire))
 		return;
 	if (m_stop.load(std::memory_order_acquire))
@@ -99,8 +98,7 @@ std::future<void> ibWorkerPoolHeadless::Submit(ibSession* session, Task task)
 			promise->set_value();
 		}
 		catch (...) {
-			LogWorkerException(wxT("worker pool reentrant task"));
-			promise->set_exception(std::current_exception());
+			promise->set_exception(std::current_exception());   // the one who holds the future says it (see WorkerLoop)
 		}
 		return future;
 	}
@@ -210,8 +208,7 @@ void ibWorkerPoolHeadless::Await(ibSession* session, const std::function<bool()>
 				item.promise->set_value();
 			}
 			catch (...) {
-				LogWorkerException(wxT("worker pool task under Await"));
-				item.promise->set_exception(std::current_exception());
+				item.promise->set_exception(std::current_exception());   // the one who holds the future says it (see WorkerLoop)
 			}
 			// item dies HERE, outside the lock — its closure may tear something down that takes it.
 		}
@@ -320,12 +317,15 @@ void ibWorkerPoolHeadless::WorkerLoop()
 				item.promise->set_value();
 			}
 			catch (...) {
-				// Always log — PostWork drops the future, so without this
-				// log the exception is silently swallowed (timer-driven
-				// script bugs would mask). RunOnWorker callers will see
-				// double-logging when they handle the rethrown exception
-				// themselves; that's an acceptable cost for the safety win.
-				LogWorkerException(wxT("worker pool task"));
+				// ⭐ HANDED TO THE FUTURE, AND SAID BY WHOEVER HOLDS IT — the pool is a door: it runs the task or hands
+				// back what the task threw, and does not act for the owner. It used to say every one itself, as a
+				// warning, "the double-logging an acceptable cost": a person's refusal («posting cancelled by the
+				// handler», «required fields are not filled») the client host had already put in the frame's messages
+				// and journalled (ibClientHost::Settle) was told a second time, as a warning, and filled the server's
+				// console with them (2026-10-06). A caller that does not wait for its task catches in the task itself
+				// — the idle handlers (ibClientHost), a composed report delivered (gridBoxAction), a debugger's
+				// reply (debugClientAsync); the jobs catch in their bodies. The desktop's pool (ibWorkerPoolGUI) never
+				// said them: one contract for both now. What the POOL fails at is still its own to say (the loop, below).
 				item.promise->set_exception(std::current_exception());
 			}
 			// item dies HERE, inside the lease — see above.

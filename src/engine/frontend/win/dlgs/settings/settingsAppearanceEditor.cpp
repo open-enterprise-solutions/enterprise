@@ -8,7 +8,7 @@
 #include "backend/system/value/valueColour.h"            // a colour parameter, kept as a value
 #include "backend/system/value/valueFont.h"              // …and a font
 #include "backend/system/value/valueSpreadsheet.h"       // …and an alignment, the sheet's own enumeration
-#include "backend/spreadsheetDescription.h"              // s_defaultSpreadsheetFont — the font a font is chosen from
+#include "backend/spreadsheetDescription.h"              // ibDefaultSpreadsheetFont() — the font a font is chosen from
 
 #include <wx/choicdlg.h>   // wxGetSingleChoiceIndex — an alignment is one of three words
 #include <wx/colordlg.h>   // wxColourDialog — a colour is chosen in the system's window
@@ -235,7 +235,7 @@ private:
 		// is read as what it changes of that one (ibCompositionFont::Of), so ticking italic says italic and nothing more.
 		case ibAppearanceParameter::Font: {
 			wxFontData data;
-			data.SetInitialFont(s_defaultSpreadsheetFont);
+			data.SetInitialFont(ibDefaultSpreadsheetFont());
 			if (const ibAppearanceValueDescription* said = m_edited.Find(parameter)) {
 				ibValue kept = ibStoredValue(said->m_value, nullptr);
 				ibValueFont* font = nullptr;

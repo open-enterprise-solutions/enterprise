@@ -54,11 +54,6 @@ std::vector<const ibValueMetaObjectGenericData*> OfferedObjects(const ibMetaData
 	return offered;
 }
 
-wxString IconData(const wxIcon& icon)
-{
-	return icon.IsOk() ? ibBackendPicture::CreateBase64Image(wxBitmap(icon).ConvertToImage()) : wxString();
-}
-
 } // namespace
 
 bool ibSchemaAllFunctions::AccessRight(const ibApplicationInstance* applicationInstance) const
@@ -78,19 +73,17 @@ void ibSchemaAllFunctions::Build(const ibApplicationInstance* applicationInstanc
 	for (std::size_t i = 0; i < groups.size(); ++i) {
 		ibDataNode& group = nodes.AddChild(0, static_cast<ibMetaID>(i));
 		group.SetValue(wxT("Title"), groups[i].title);
-		if (const ibCtorAbstractType* typeCtor = ibValue::GetAvailableCtor(groups[i].clsid)) {
-			const wxString icon = IconData(typeCtor->GetClassIcon());
-			if (!icon.IsEmpty())
-				group.SetValue(wxT("Icon"), icon);
-		}
+		const ibServerPicture groupIcon = ibBackendPicture::GetServerPicture(groups[i].clsid);
+		if (groupIcon.IsOk())
+			group.SetValue(wxT("Icon"), wxString(groupIcon.GetData()));
 
 		for (const ibValueMetaObjectGenericData* object : OfferedObjects(metaData, groups[i].clsid)) {
 			ibDataNode& item = group.AddChild(0, object->GetMetaID());
 			item.SetValue(wxT("Item"), static_cast<s32>(object->GetMetaID()));
 			item.SetValue(wxT("Title"), object->GetSynonym());
-			const wxString icon = IconData(object->GetIcon());
-			if (!icon.IsEmpty())
-				item.SetValue(wxT("Icon"), icon);
+			const ibServerPicture icon = ibBackendPicture::GetServerPicture(object->GetClassType());
+			if (icon.IsOk())
+				item.SetValue(wxT("Icon"), wxString(icon.GetData()));
 		}
 	}
 }

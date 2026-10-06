@@ -180,11 +180,11 @@ A headless process that serves the bases of its **server folder** (`--dir`, by d
   <Id>/            one folder per base: its journal (oeslog) and infobase.conf; a Firebird base's sys.fdb too
 ```
 
-- **Settings in three layers**, key by key: built-in values → `backend.conf` (the process: `Locale`, `Workers`, `Bases`, the default `Connections`) → the base's `infobase.conf` (`Connections` to ITS DBMS). 0 means the default; a value that cannot be used is said in the journal (`ibApplicationHost::ReadCount`).
+- **Settings in three layers**, key by key: built-in values → `backend.conf` (the process: `Locale`, `Workers`, `Bases`, the default `Connections`) → the base's `infobase.conf` (`Connections` to ITS DBMS). `Workers` and `Bases` are a maximum, 0 = no limit (the pool grows as sessions bring work); `Connections` 0 = the default; a value that cannot be used is said in the journal (`ibApplicationHost::ReadCount`).
 - **Secrets** are sealed in `server.conf` with AES-256-GCM (`ibFieldCipher`, key in `server.key`); plain text is refused. `appserver --set-password=<base>/<Password|IbPassword>` reads one from the keyboard and seals it.
 - **Opening:** every base through `CreateFile/ServerAppDataEnv` in `eSERVER_MODE`, then a session of kind `Service` logged into it. A base that does not open or refuses the login is said and closed alone; the rest are served. Firebird and PostgreSQL bases share one process.
 - **Who may come in** (`ibServiceExclusivePolicy`, asked at open by `CanOpen` and at every session by `CanAdd`): application servers (`eSERVER_MODE`) share a base with application servers, file bases with file bases — a file-base process (designer, enterprise, the web host) is refused while a server serves the base, and a server while a file base uses it. The row's run mode decides, whatever its kind: a server's thin clients are the server's. What several servers on one base share already lives in it: `sys_session`, `sys_lock`, a job's claim and its clock in `sys_job`.
-- **Journal:** every line about a base carries its name — `(trade1) source …` — and the console shows what goes to the file.
+- **Journal:** every line about a base carries its name — `(trade1) source …`. The console shows the server's own lines and every warning and error; the running commentary stays in the file.
 - **Stop:** Ctrl+C, SIGTERM or the console closing raises a flag; the main thread ends the server's sessions, then closes every base newest first.
 - **Not yet:** a port and a protocol for clients (the host's protocol is the next stage), choosing which bases to start (`--base`, for a coordinator), running as a Windows service, creating a new base (only the designer creates the system tables).
 

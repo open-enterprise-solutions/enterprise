@@ -35,8 +35,8 @@ class SFRONTEND_API ibHelpDocument : public ibDocument
 {
 public:
 
-	virtual wxIcon GetIcon() const {
-		return ibBackendPicture::GetPictureAsIcon(g_metaCommonModuleCLSID);
+	virtual ibServerPicture GetIcon() const {
+		return ibBackendPicture::GetServerPicture(g_metaCommonModuleCLSID);
 	}
 
 	ibHelpDocument() : ibDocument() {}

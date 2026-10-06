@@ -261,12 +261,15 @@ void ibVariantDataChoiceLink::RefreshLinkDesc() const
 		return;
 
 	const unsigned int object_version = metaData->GetFactoryCountChanges();
-	if (object_version == m_object_version)
+	if (object_version == m_object_version.load(std::memory_order_acquire))
 		return;
 
+	const std::lock_guard<std::mutex> lock(m_refreshMutex);
+	if (object_version == m_object_version.load(std::memory_order_relaxed))
+		return;
 	if (ibChoiceHolderFieldName(m_ownerProperty, m_linkDesc.m_source.GetFirst()).IsEmpty())
 		m_linkDesc = ibChoiceTypeLinkDescription();
-	m_object_version = object_version;
+	m_object_version.store(object_version, std::memory_order_release);
 }
 
 // THE GOVERNING FIELD'S NAME — one word on the inspector's row, because that is the question the row
@@ -331,15 +334,18 @@ void ibVariantDataChoiceParameters::RefreshParametersDesc() const
 		return;
 
 	const unsigned int object_version = metaData->GetFactoryCountChanges();
-	if (object_version == m_object_version)
+	if (object_version == m_object_version.load(std::memory_order_acquire))
 		return;
 
+	const std::lock_guard<std::mutex> lock(m_refreshMutex);
+	if (object_version == m_object_version.load(std::memory_order_relaxed))
+		return;
 	std::vector<ibChoiceParameterRowDescription>& rows = m_paramsDesc.m_rows;
 	rows.erase(std::remove_if(rows.begin(), rows.end(), [this, metaData](const ibChoiceParameterRowDescription& row) {
 		return metaData->FindAnyObjectByFilter(row.m_parameter, true) == nullptr
 			|| ibChoiceHolderFieldName(m_ownerProperty, row.m_source.GetFirst()).IsEmpty();
 	}), rows.end());
-	m_object_version = object_version;
+	m_object_version.store(object_version, std::memory_order_release);
 }
 
 // THE PARAMETERS, NAMED RATHER THAN COUNTED. "3 parameters" tells a reader nothing they can act on,

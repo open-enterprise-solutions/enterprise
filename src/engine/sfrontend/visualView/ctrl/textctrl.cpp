@@ -162,6 +162,11 @@ void ibValueTextCtrl::OnUpdate(ibDataNode& state, ibVisualHost* host)
 		const ibTranslateString& format = m_propertyFormat->GetValueAsFormatString();
 		GetFormatFromColumn(!format.IsEmpty() ? format : GetSourceFormat(), GetTypeDesc()).Apply(value, text);
 		state.SetValue(wxT("Text"), text);
+		// …and the value itself, with its type (ibValue::Serialize): a client edits by the type — a date as a date —
+		// and may answer a Change with the value instead of text. One that does not travel (an open object) is shown
+		// by its text alone.
+		if (value.IsTransferable())
+			value.Serialize(state.Child(wxT("Value")));
 	}
 
 	// TextEditMode off or a binding that cannot be written: the text is shown but not typed into, and

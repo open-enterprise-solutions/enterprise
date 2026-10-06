@@ -733,8 +733,17 @@ ibApplicationInstance* ibApplicationInstance::Open(ibRunMode runMode, const ibIn
 		// The process first — it refuses a base it has no room for before the database is touched.
 		ibApplicationHost* const host = ibApplicationHost::Ensure(runMode);
 
+		// ⭐ NO FILE, NO BASE — asked before the driver is. Given a path with nothing at it the driver CREATES the
+		// database there (that is how a base is made), so an opening that makes nothing — a server, which only opens
+		// what its settings name — left an empty sys.fdb behind and refused it without a word, at every start
+		// (2026-10-06). Whether to create is this opening's word, said once.
+		const wxString database = storage.m_directory + wxFileName::GetPathSeparator() + sys_db;
+		if (!create && !wxFileName::FileExists(database))
+			ibBackendCoreException::Error(_("There is no base in %s (no %s), and this opening does not create one."),
+				storage.m_directory, sys_db);
+
 		std::shared_ptr<ibDatabaseLayerFirebird> db(new ibDatabaseLayerFirebird());
-		if (!db->Open(storage.m_directory + wxFileName::GetPathSeparator() + sys_db))
+		if (!db->Open(database))
 			return nullptr;
 
 		std::unique_ptr<ibApplicationInstance> opening(new ibApplicationInstance(host, runMode));
@@ -843,8 +852,11 @@ ibApplicationInstance* ibApplicationInstance::Open(std::unique_ptr<ibApplication
 			CreateTableLock();
 			WriteInfobaseConf(folder);   // a new base — its own settings file, with the defaults
 		}
+		// A base with no tables is not opened empty — and says so: a bare refusal left its caller nothing to report
+		// ("did not open: no reason given").
 		else if (!TableAlreadyCreated())
-			return refuse();
+			ibBackendCoreException::Error(_("The base %s is empty (it has no system tables), and this opening does not create them."),
+				applicationInstance->GetDatabaseDescription());
 
 		// Additive and idempotent — a base made before any of these picks them up at its next open.
 		MigrateTableSession();         // pid / address / currentActivity, which the registry's INSERT assumes

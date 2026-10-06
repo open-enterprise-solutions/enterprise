@@ -10,6 +10,7 @@
 #include "backend/backend_exception.h"                    // ibBackendInterruptException — a read stopped, not failed
 #include "backend/backend_mainFrame.h"                    // ibBackendDocFrame::ShowModalMessage — a refusal, said to the person
 #include "backend/session/session.h"                      // ibSession — whose queue a compose is delivered on
+#include "backend/diagnostics/journal.h"                  // ibJournalWarning — a delivery nobody waits for says its own failure
 #include "sfrontend/visualView/choiceRequest.h"           // ibRequestChoice / ibChooseSavedSettings — a variant, a saved setting: "pick one of these"
 
 // (No ids of its own any more: the verbs are the MODEL's and their ids are named there —
@@ -155,8 +156,20 @@ void ibValueGridBox::CallAsAction(const ibActionID& lNumAction, ibBackendValueFo
 				self->m_shownDocument = keepModel->GetSpreadsheetDocument();
 				++self->m_documentVersion;
 			};
+			// Delivered on the session's queue and not waited for — so what the delivery throws is said in the task,
+			// nobody holding its future.
 			if (session != nullptr)
-				session->Submit(std::move(deliver));
+				session->Submit([deliver = std::move(deliver)]() {
+					try {
+						deliver();
+					}
+					catch (const std::exception& err) {
+						ibJournalWarning(wxT("gridbox"), wxT("a composed report was not delivered: %s"), wxString::FromUTF8(err.what()));
+					}
+					catch (...) {
+						ibJournalWarning(wxT("gridbox"), wxT("a composed report was not delivered"));
+					}
+				});
 			else
 				deliver();   // no session to go back to — delivered where the read ended
 		});

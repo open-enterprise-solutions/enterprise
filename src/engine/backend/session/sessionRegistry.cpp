@@ -2174,6 +2174,7 @@ void ibSessionRegistry::ThreadBody() noexcept
 
 			// Drain queue by strict descending priority.
 			auto batch = DrainAll();
+			bool rowsWritten = false;
 			for (auto& req : batch) {
 				switch (req.kind) {
 					case ibRegistryRequestKind::Add:          ProcessAdd(req);          break;
@@ -2183,6 +2184,10 @@ void ibSessionRegistry::ThreadBody() noexcept
 					case ibRegistryRequestKind::SetActivity:  ProcessSetActivity(req);  break;
 					case ibRegistryRequestKind::SetExclusive: ProcessSetExclusive(req); break;
 				}
+				// Every request but an activity label may add, sign in, take out or mark a row the snapshot
+				// shows; the label is not in it.
+				if (req.kind != ibRegistryRequestKind::SetActivity)
+					rowsWritten = true;
 			}
 
 			// ⭐⭐ AND AGAIN BEFORE EVERY PHASE THAT TOUCHES THE DATABASE. `m_stop` was read once, at
@@ -2211,6 +2216,13 @@ void ibSessionRegistry::ThreadBody() noexcept
 				JobRefreshSnapshot();
 				nextRefresh = now + kRefreshInterval;
 			}
+			// ⭐ A BATCH THAT WROTE THIS PROCESS'S ROWS RE-READS THE TABLE AT ONCE — the write is the moment the
+			// snapshot went stale, and the tick only comes round to it a second later: a session that had just
+			// signed in was missing from Active Users for up to two ticks (2026-10-06, a thin client's list).
+			// Once per batch, not per request: a burst of sessions drained together costs one read. Not patched
+			// in place — the snapshot is a reading of the table, and one road writes it.
+			else if (rowsWritten)
+				JobRefreshSnapshot();
 
 			// Sweep only every 3s — cluster-wide zombie cleanup, bounded
 			// latency for dead-session pickup is fine. Signal check piggy-

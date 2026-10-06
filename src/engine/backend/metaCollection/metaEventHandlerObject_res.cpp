@@ -11,8 +11,7 @@ wxIcon ibValueMetaObjectEventHandler::GetIcon() const
 
 wxIcon ibValueMetaObjectEventHandler::GetIconGroup()
 {
-	static wxIcon icon =
-		ibBackendPicture::GetIconFromBase64(s_eventHandler_16_png, wxSize(16, 16));
+	static const ibServerPicture picture(s_eventHandler_16_png, wxSize(16, 16));
 
-	return icon;
+	return picture.ToIcon();
 }

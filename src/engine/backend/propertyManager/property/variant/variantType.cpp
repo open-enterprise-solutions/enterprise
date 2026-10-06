@@ -77,7 +77,12 @@ void ibVariantDataAttribute::DoRefreshTypeDesc()
 		}
 
 		const unsigned int object_version = metaData->GetFactoryCountChanges();
-		if (object_version != m_object_version) {
+		if (object_version != m_object_version.load(std::memory_order_acquire)) {
+			const std::lock_guard<std::mutex> lock(m_refreshMutex);
+			if (object_version == m_object_version.load(std::memory_order_relaxed)) {
+				if (!m_typeDesc.IsOk()) SetDefaultMetaType();
+				return;
+			}
 
 			// ONE WALK, over a copy — the declaration loses a type no longer registered as it goes. What a value may
 			// be is built beside it: a barrier stands for its members — `AnyRef` for every reference of the
@@ -109,7 +114,7 @@ void ibVariantDataAttribute::DoRefreshTypeDesc()
 			if (!replaced)
 				m_typeValueDesc = ibTypeDescription();
 
-			m_object_version = object_version;
+			m_object_version.store(object_version, std::memory_order_release);
 		}
 
 		if (!m_typeDesc.IsOk()) SetDefaultMetaType();

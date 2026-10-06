@@ -3,12 +3,14 @@
 #include <algorithm>
 #include <chrono>
 #include <functional>
+#include <set>
 #include <vector>
 
 #include <wx/base64.h>
 
 #include "backend/appData.h"
-#include "backend/backend_picture.h"     // ibBackendPicture::CreateBase64Image — a tab's icon as it travels
+#include "backend/backend_exception.h"   // ibBackendException — a value the configuration cannot make
+#include "backend/formatString.h"        // ibFormatString — a value presented through Format()'s codes
 #include "backend/guid.h"
 #include "backend/metadataConfiguration.h"
 #include "backend/metaCollection/metaFormObject.h"   // ibBackendCommandItem::Execute
@@ -33,11 +35,6 @@ std::map<const ibApplicationInstance*, ibClientHost*>     s_hosts;
 
 // An instance nobody has heard from for this long is taken down.
 constexpr std::chrono::minutes kIdleLimit(30);
-
-wxString IconForFrame(const wxIcon& icon)
-{
-	return icon.IsOk() ? ibBackendPicture::CreateBase64Image(wxBitmap(icon).ConvertToImage()) : wxString();
-}
 
 std::int64_t NowMs()
 {
@@ -233,6 +230,7 @@ bool ibClientHost::Call(ibClientMethod method, const ibDataNode& params, ibDataN
 		params.GetValue(wxT("Mode"), mode);
 		client->instance = std::make_shared<ibClientInstance>(m_applicationInstance, id, address, static_cast<ibClientMode>(mode));
 		client->connection = connection;
+		client->protocol = std::min(protocol, ibClientProtocolVersion);
 		if (protocol < 1) {
 			refuse(ibClientRefusal::BadParameter, wxString::Format(wxT("no protocol version %d"), protocol));
 		}
@@ -259,7 +257,7 @@ bool ibClientHost::Call(ibClientMethod method, const ibDataNode& params, ibDataN
 				// THE VERSION BOTH SPEAK — the older of the two — and what the server offers at it beyond the version
 				// itself: nothing yet; a feature is switched on by being listed here, so an older client never meets it.
 				result.SetValue(wxT("Client"), id);
-				result.SetValue(wxT("Protocol"), std::min(protocol, ibClientProtocolVersion));
+				result.SetValue(wxT("Protocol"), client->protocol);
 				result.AddField(wxT("Features"), ibDataValue::Array(std::vector<ibDataValue>()));
 			}
 		}
@@ -407,6 +405,36 @@ bool ibClientHost::Call(ibClientMethod method, const ibDataNode& params, ibDataN
 				}
 				if (!done)
 					refuse(ibClientRefusal::NotFound, wxT("nothing to fetch there"));
+			}
+			else if (method == ibClientMethod::Presentation) {
+				// A VALUE AS A PERSON READS IT — formatted here, where the configuration is (a reference's name is
+				// its), on the client's session: a value the client holds itself (a date from its calendar, a value an
+				// answer carried) is shown the way the server shows any other.
+				std::shared_ptr<ibSession> session = client->instance->ShareSession();
+				const ibDataNode* const value = params.FindChild(wxT("Value"));
+				const wxString format = params.GetValue<wxString>(wxT("Format"));
+				const ibMetaData* const metaData = ibApplicationInstance::GetActiveMetaData(m_applicationInstance);
+				if (session == nullptr)
+					refuse(ibClientRefusal::NoSession, wxT("the client has no session"));
+				else if (value == nullptr)
+					refuse(ibClientRefusal::BadParameter, wxT("a presentation needs a Value"));
+				else if (metaData == nullptr)
+					refuse(ibClientRefusal::Failed, wxT("the base has no configuration"));
+				else {
+					wxString text;
+					session->Submit([metaData, value, &format, &text, &done, &refuse]() {
+						try {
+							const ibValue presented = metaData->Deserialize(*value);
+							text = format.IsEmpty() ? presented.GetString() : ibFormatString::Parse(format).Apply(presented);
+							done = true;
+						}
+						catch (const ibBackendException& err) {
+							refuse(ibClientRefusal::BadParameter, err.GetErrorDescription());
+						}
+					}).get();
+					if (done)
+						result.SetValue(wxT("Text"), text);
+				}
 			}
 			else if (method == ibClientMethod::Upload) {
 				// A FILE COMES IN PARTS, each a call of its own, and none is held whole here: the first names the file
@@ -585,8 +613,29 @@ bool ibClientHost::Run(Client& client, std::function<void(ibClientFrame*)> work,
 	// ⭐ THE ANSWER IS NUMBERED, and a client that names the frame it holds (Since — the last number it was given)
 	// is answered with the patch from it to this one; any other gets the frame whole. The events go beside either:
 	// they are not state, and a message said twice is two messages, never «unchanged».
+	//
+	// ⭐ (protocol 2) A TAB'S VIEW IS PATCHED FROM ITS OWN — from the view the client was last sent for the tab active
+	// now, not from the last frame's, which showed another tab when the client switched: back on a tab it is sent what
+	// changed there, not the whole form again (8 KB → 153 B, 2026-10-06). A tab the client was never sent the view of
+	// is patched from the last frame's, as in 1 — forms are alike, and the difference of two is a part of either
+	// (25 KB for a list, not its 47). The frame the patch is taken from is the last one sent with that view in its
+	// place; the client puts its own copy in place the same way.
+	const s32 active = drawn.GetValue<s32>(wxT("ActiveTab"));
+	ibDataNode base;
+	const bool fromLast = since != 0 && since == client.frame;
+	if (fromLast && client.protocol >= 2) {
+		const auto kept = client.views.find(active);
+		const bool ownView = kept != client.views.end();
+		for (const auto& field : client.sent.Fields())
+			base.AddField(field.first, field.second);
+		for (const auto& property : client.sent.Properties())
+			if (!ownView || property.first != wxT("View"))
+				base.SetProperty(property.first, property.second);
+		if (ownView)
+			base.SetProperty(wxT("View"), ibDataValue::Child(kept->second));
+	}
 	ibDataNode patch;
-	const bool patched = since != 0 && since == client.frame && ibClientFramePatch(client.sent, drawn, patch);
+	const bool patched = fromLast && ibClientFramePatch(client.protocol >= 2 ? base : client.sent, drawn, patch);
 	if (patched) {
 		result.SetValue(wxT("Since"), since);
 		result.Child(wxT("Patch")) = patch;
@@ -602,6 +651,24 @@ bool ibClientHost::Run(Client& client, std::function<void(ibClientFrame*)> work,
 	for (const auto& property : events.Properties())
 		result.SetProperty(property.first, property.second);
 	result.SetValue(wxT("Frame"), ++client.frame);
+
+	// …and the views kept as the client keeps them: this tab's is the one just sent; a frame sent whole begins the
+	// store again; a tab gone takes its view with it.
+	if (client.protocol >= 2) {
+		if (!patched)
+			client.views.clear();
+		if (const ibDataValue* const view = drawn.FindProperty(wxT("View")))
+			client.views[active] = view->AsChild();
+		else
+			client.views.erase(active);
+		std::set<s32> open;
+		if (const ibDataNode* const tabs = drawn.FindChild(wxT("Tabs")))
+			for (const ibDataNode& tab : tabs->Children())
+				open.insert(static_cast<s32>(tab.GetMetaId()));
+		for (auto it = client.views.begin(); it != client.views.end();)
+			it = open.count(it->first) != 0 ? std::next(it) : client.views.erase(it);
+	}
+
 	client.sent = std::move(drawn);
 	return true;
 }
@@ -666,9 +733,8 @@ void ibClientHost::DrawFrame(ibClientFrame* frame, ibDataNode& state, ibDataNode
 		ibClientChildFrame* const tab = frame->Tab(i);
 		ibDataNode& node = tabs.AddChild(0, tab->GetId());
 		node.SetValue(wxT("Title"), tab->GetTitle());
-		const wxString icon = IconForFrame(tab->GetIcon());
-		if (!icon.IsEmpty())
-			node.SetValue(wxT("Icon"), icon);
+		if (tab->GetIcon().IsOk())
+			node.SetValue(wxT("Icon"), wxString(tab->GetIcon().GetData()));
 		if (tab->IsLocked())
 			node.SetValue(wxT("Locked"), true);
 	}
@@ -725,10 +791,21 @@ void ibClientHost::RoundBody()
 				continue;
 			}
 			// The forms' due idle handlers, handed to the session — they run where the forms' scripts run, in order
-			// with everything else the session does, and not waited for here.
+			// with everything else the session does, and not waited for here: so what they throw is said in the task,
+			// nobody holding its future (the pool hands an exception to the future only).
 			if (std::shared_ptr<ibSession> session = instance->ShareSession()) {
 				if (instance->GetFrame() != nullptr) {
-					(void)session->Submit([]() { ibFormVisualDocument::RunIdleHandlers(); });
+					(void)session->Submit([]() {
+						try {
+							ibFormVisualDocument::RunIdleHandlers();
+						}
+						catch (const std::exception& err) {
+							ibJournalWarning(wxT("client"), wxT("an idle handler ended with an exception: %s"), wxString::FromUTF8(err.what()));
+						}
+						catch (...) {
+							ibJournalWarning(wxT("client"), wxT("an idle handler ended with an exception"));
+						}
+					});
 				}
 			}
 		}

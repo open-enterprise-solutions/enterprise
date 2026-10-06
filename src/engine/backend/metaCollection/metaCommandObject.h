@@ -66,6 +66,8 @@ public:
 		if (!m_propertyPicture->IsEmptyProperty()) return m_propertyPicture->GetValueAsBitmap();
 		return ibBackendPicture::CreatePicture(g_metaCommonMetadataCLSID);
 	}
+	// …and what the picture IS — what a server sends it by (ibBackendPicture::GetServerPicture).
+	ibPictureDescription GetPictureDesc() const { return m_propertyPicture->GetValueAsPictureDesc(); }
 	// The command carries NO picture -> a projection of it is TEXT-ONLY (do not force the metatype glyph). A picture
 	// is inherited from the command only when the command actually HAS one; a table action bakes its own picture.
 	bool IsEmptyPicture() const { return m_propertyPicture->IsEmptyProperty(); }

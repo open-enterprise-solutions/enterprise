@@ -91,14 +91,14 @@ bool ibFormVisualDocument::OnCreate(const wxString& path, long flags)
 	if (sourceObject != nullptr && !IsVisualDemonstrationDoc()) {
 		const ibValueMetaObjectGenericData* genericObject = sourceObject->GetSourceMetaObject();
 		if (genericObject != nullptr) {
-			ibFormVisualDocument::SetIcon(genericObject->GetIcon());
+			ibFormVisualDocument::SetIcon(ibBackendPicture::GetServerPicture(genericObject->GetClassType()));
 			ibFormVisualDocument::SetFilename(genericObject->GetFileName());
 		}
 	}
 	else {
 		const ibValueMetaObjectFormBase* creator = m_valueForm->GetFormMetaObject();
 		if (creator != nullptr) {
-			ibFormVisualDocument::SetIcon(creator->GetIcon());
+			ibFormVisualDocument::SetIcon(ibBackendPicture::GetServerPicture(creator->GetClassType()));
 			ibFormVisualDocument::SetFilename(creator->GetFileName());
 		}
 	}
@@ -303,9 +303,62 @@ void ibFormVisualEditView::OnDraw(ibDataNode& frame)
 	UpdateVisualHost(frame);
 }
 
-bool ibFormVisualEditView::IsDesignerHost() const
+void ibFormVisualEditView::SetCaption(const wxString& strCaption)
 {
-	return m_document->IsVisualDemonstrationDoc();
+	const ibValueForm* handler = m_document->GetValueForm();
+
+	if (m_document->IsVisualDemonstrationDoc()) {
+		if (strCaption.IsEmpty()) {
+			const ibSourceDataObject* srcObject = handler->GetSourceObject();
+			if (srcObject != nullptr) {
+				const ibValueMetaObjectFormBase* creator = handler->GetFormMetaObject();
+				const ibValueMetaObjectGenericData* genericObject = srcObject->GetSourceMetaObject();
+				if (genericObject != nullptr) {
+					m_document->SetTitle(genericObject->GetSynonym() + wxT(": ") + creator->GetSynonym());
+					m_document->SetFilename(genericObject->GetFileName(), true);
+				}
+				else if (creator != nullptr) {
+					m_document->SetTitle(creator->GetSynonym());
+					m_document->SetFilename(creator->GetFileName(), true);
+				}
+			}
+			else {
+				const ibValueMetaObjectFormBase* creator = handler->GetFormMetaObject();
+				if (creator != nullptr) {
+					m_document->SetTitle(creator->GetSynonym());
+					m_document->SetFilename(creator->GetFileName(), true);
+				}
+			}
+		}
+		else {
+			m_document->SetTitle(strCaption);
+			m_document->SetFilename(wxEmptyString, true);
+		}
+	}
+	else if (strCaption.IsEmpty()) {
+		const ibSourceDataObject* srcObject = handler->GetSourceObject();
+		if (srcObject != nullptr && !m_document->IsVisualDemonstrationDoc()) {
+			m_document->SetTitle(srcObject->GetSourceCaption());
+			const ibValueMetaObjectGenericData* genericObject = srcObject->GetSourceMetaObject();
+			if (genericObject != nullptr) {
+				m_document->SetFilename(genericObject->GetFileName(), true);
+			}
+			else {
+				m_document->SetFilename(srcObject->GetSourceCaption(), true);
+			}
+		}
+		else {
+			const ibValueMetaObjectFormBase* creator = handler->GetFormMetaObject();
+			if (creator != nullptr && !m_document->IsVisualDemonstrationDoc()) {
+				m_document->SetTitle(creator->GetSynonym());
+				m_document->SetFilename(creator->GetFileName(), true);
+			}
+		}
+	}
+	else if (m_document != nullptr && !m_document->IsVisualDemonstrationDoc()) {
+		m_document->SetTitle(strCaption);
+		m_document->SetFilename(wxEmptyString, true);
+	}
 }
 
 void ibFormVisualEditView::OnUpdate(ibView* WXUNUSED(sender), wxObject* WXUNUSED(hint))

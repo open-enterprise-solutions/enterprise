@@ -1,65 +1,16 @@
-////////////////////////////////////////////////////////////////////////////
-//	Description : parameterized scheduled job — save & load metaData
-////////////////////////////////////////////////////////////////////////////
-
 #include "parameterizedJob.h"
 
-#include "backend/serialize/dataBuilder.h"
+/* PNG — the same clock the predefined kind wears: one subsystem, one visual. */
+static const wxString s_parameterizedJob_16_png = wxT("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");
 
-//***********************************************************************
-//*                       Save & load metaData                          *
-//***********************************************************************
-
-bool ibValueMetaObjectParameterizedJob::WriteData(ibDataNode& node) const
+wxIcon ibValueMetaObjectParameterizedJob::GetIcon() const
 {
-	// The job's own attributes are SERIALISED, like the catalog's Owner — an attribute that is not
-	// written comes back with a fresh metaID on the next load, and a column is addressed by that
-	// id: the stored Schedule / LastRun of every row would then belong to no requisite at all.
-	node.SetProperty(m_propertyAttributeActive->GetName(), m_propertyAttributeActive->GetNodeValue());
-	node.SetProperty(m_propertyAttributeSchedule->GetName(), m_propertyAttributeSchedule->GetNodeValue());
-	node.SetProperty(m_propertyAttributeLastRun->GetName(), m_propertyAttributeLastRun->GetNodeValue());
-	node.SetProperty(m_propertyAttributeNextRun->GetName(), m_propertyAttributeNextRun->GetNodeValue());
-
-	node.SetProperty(m_propertyObjectModule->GetName(), m_propertyObjectModule->GetNodeValue());
-	node.SetProperty(m_propertyManagerModule->GetName(), m_propertyManagerModule->GetNodeValue());
-
-	node.SetValue(m_propertyDefFormObject->GetName(), GetGuidByID(m_propertyDefFormObject->GetValueAsInteger()).str());
-	node.SetValue(m_propertyDefFormFolder->GetName(), GetGuidByID(m_propertyDefFormFolder->GetValueAsInteger()).str());
-	node.SetValue(m_propertyDefFormList->GetName(), GetGuidByID(m_propertyDefFormList->GetValueAsInteger()).str());
-	node.SetValue(m_propertyDefFormSelect->GetName(), GetGuidByID(m_propertyDefFormSelect->GetValueAsInteger()).str());
-	node.SetValue(m_propertyDefFormFolderSelect->GetName(), GetGuidByID(m_propertyDefFormFolderSelect->GetValueAsInteger()).str());
-
-	// Both sides in the same commit — a property declared and never serialised is "the one failure
-	// mode that looks like the feature working" (SplitTotals, docs/private/scheduled-jobs.md § 12).
-	node.SetProperty(m_propertyUse->GetName(), m_propertyUse->GetNodeValue());
-	node.SetProperty(m_propertySchedule->GetName(), m_propertySchedule->GetNodeValue());
-	node.SetProperty(m_propertyRetryCount->GetName(), m_propertyRetryCount->GetNodeValue());
-	node.SetProperty(m_propertyRetryInterval->GetName(), m_propertyRetryInterval->GetNodeValue());
-
-	return ibValueMetaObjectRecordDataHierarchyMutableRef::WriteData(node);
+	return GetIconGroup();
 }
 
-bool ibValueMetaObjectParameterizedJob::ReadData(const ibDataNode& node)
+wxIcon ibValueMetaObjectParameterizedJob::GetIconGroup()
 {
-	m_propertyAttributeActive->SetNodeValue(node.GetProperty(m_propertyAttributeActive->GetName()));
-	m_propertyAttributeSchedule->SetNodeValue(node.GetProperty(m_propertyAttributeSchedule->GetName()));
-	m_propertyAttributeLastRun->SetNodeValue(node.GetProperty(m_propertyAttributeLastRun->GetName()));
-	m_propertyAttributeNextRun->SetNodeValue(node.GetProperty(m_propertyAttributeNextRun->GetName()));
+	static const ibServerPicture picture(s_parameterizedJob_16_png, wxSize(16, 16));
 
-	m_propertyObjectModule->SetNodeValue(node.GetProperty(m_propertyObjectModule->GetName()));
-	m_propertyManagerModule->SetNodeValue(node.GetProperty(m_propertyManagerModule->GetName()));
-
-	m_propertyDefFormObject->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormObject->GetName())));
-	m_propertyDefFormFolder->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormFolder->GetName())));
-	m_propertyDefFormList->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormList->GetName())));
-	m_propertyDefFormSelect->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormSelect->GetName())));
-	m_propertyDefFormFolderSelect->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormFolderSelect->GetName())));
-
-	m_propertyUse->SetNodeValue(node.GetProperty(m_propertyUse->GetName()));
-	m_propertySchedule->SetNodeValue(node.GetProperty(m_propertySchedule->GetName()));
-	m_propertyRetryCount->SetNodeValue(node.GetProperty(m_propertyRetryCount->GetName()));
-	m_propertyRetryInterval->SetNodeValue(node.GetProperty(m_propertyRetryInterval->GetName()));
-
-	return ibValueMetaObjectRecordDataHierarchyMutableRef::ReadData(node);
+	return picture.ToIcon();
 }
-

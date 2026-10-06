@@ -32,6 +32,7 @@
 
 #include "sfrontend/docView/commandProcessor.h"   // a document's commands, and their undo
 #include "sfrontend/docView/docCommand.h"         // the commands a manager offers
+#include "backend/backend_picture.h"              // ibServerPicture — a document's icon as it is sent
 
 #if wxUSE_STD_IOSTREAM
   #include "wx/iosfwrap.h"
@@ -245,9 +246,9 @@ public:
 
     // OES-side adaptations lifted from ibMetaDocument (step-4 collapse).
 
-    // Document icon — generic concept (wxDocument has none).
-    virtual void SetIcon(const wxIcon& icon) { m_docIcon = icon; }
-    virtual wxIcon GetIcon() const { return m_docIcon; }
+    // Document icon — generic concept (wxDocument has none); as a server sends it.
+    virtual void SetIcon(const ibServerPicture& icon) { m_docIcon = icon; }
+    virtual ibServerPicture GetIcon() const { return m_docIcon; }
 
     // Cascading-close opt-out. Returning false means "this child stays open
     // when its parent closes" — ibDocument::Close re-parents it onto the
@@ -279,7 +280,7 @@ protected:
     ibDocument*           m_documentParent;
     ibCommandProcessor*   m_commandProcessor;
     bool                  m_savedYet;
-    wxIcon                m_docIcon;
+    ibServerPicture       m_docIcon;
 
     virtual bool DoSaveDocument(const wxString& file);
     virtual bool DoOpenDocument(const wxString& file);
@@ -460,7 +461,7 @@ public:
     // OES meta-template API — see ibMetaDocTemplate in docManager.h.
     //
     // AddDocTemplate(ibPictureID/ibClassID,...) overloads create an
-    // ibMetaDocTemplate, populate its CLSID + icon, and associate it
+    // ibMetaDocTemplate, populate its CLSID + picture id, and associate it
     // with the same m_templates list as plain file templates. Lookups
     // by CLSID iterate m_templates and dynamic_cast.
     //

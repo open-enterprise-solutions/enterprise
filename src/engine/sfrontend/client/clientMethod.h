@@ -26,6 +26,7 @@ enum class ibClientMethod {
 	Download,   // {Client, File, Part} → Name, Part, Parts, Data — the file's part, from 0, of how many there are
 	Open,       // {Client, File} → the frame: the file opened by the template its name says (the frame's Templates)
 	Command,    // {Client, Command} → the frame: a command of the frame's Menu done on the active tab's document (Command: ibDocCommand — sfrontend/docView/docCommand.h); one not enabled now is refused
+	Presentation, // {Client, Value[, Format]} → Text: a value as a person reads it, the server formatting it (a reference's name is the configuration's) — Value: as ibValue::Serialize writes it (a field's state carries one); Format: the codes Format() takes (ND=10;NFD=2)
 };
 
 // WHY A CALL IS REFUSED — what a client branches on; the text beside it is for a person and may change. On the wire
@@ -50,7 +51,12 @@ enum class ibClientRefusal : s32 {
 
 // The version of the protocol this server speaks — the newest; a client names its own at login, and the two go on
 // with the older. Raised when a change needs it, never for a field added: an absent field is its default.
-constexpr s32 ibClientProtocolVersion = 1;
+//   1  a patch is from the frame last sent;
+//   2  …and its View from the view last sent for the tab active NOW, when the client was sent one; else from the
+//      last frame's, as in 1. A client keeps each tab's view, puts the one of the tab the patch makes active in
+//      place (keeping the view it holds when it has none for that tab), and applies the patch's View to it; a frame
+//      sent whole begins the store again — back on a tab, it is sent what changed there, not the whole form.
+constexpr s32 ibClientProtocolVersion = 2;
 
 // The method a name means; Unknown for a name the protocol does not have.
 inline ibClientMethod ibClientMethodFromName(const wxString& name)
@@ -70,6 +76,7 @@ inline ibClientMethod ibClientMethodFromName(const wxString& name)
 		{ wxT("download"),  ibClientMethod::Download },
 		{ wxT("open"),      ibClientMethod::Open },
 		{ wxT("command"),   ibClientMethod::Command },
+		{ wxT("presentation"), ibClientMethod::Presentation },
 	};
 	for (const auto& entry : s_methods) {
 		if (name == entry.name)

@@ -300,9 +300,9 @@ ibClientChildFrame* ibClientFrame::CreateChildFrame(ibView* view)
 	auto tab = std::make_unique<ibClientChildFrame>(frame, ++frame->m_lastTabId, document, view, title);
 
 	// The document's own icon first (a catalog's form shows the catalog's), the form's otherwise.
-	wxIcon icon = document != nullptr ? document->GetIcon() : wxIcon();
+	ibServerPicture icon = document != nullptr ? document->GetIcon() : ibServerPicture();
 	if (!icon.IsOk() && form != nullptr)
-		icon = form->GetIcon();
+		icon = ibBackendPicture::GetServerPicture(form->GetClassType());
 	if (icon.IsOk())
 		tab->SetIcon(icon);
 

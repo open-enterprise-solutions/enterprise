@@ -81,6 +81,10 @@ private:
 		// with the patch from it.
 		s32                               frame = 0;
 		ibDataNode                        sent;
+		// The version of the protocol it speaks (the older of its and ours) — and, from 2, the view it was last sent
+		// for each tab: a tab's view is patched from its own (Run).
+		s32                                           protocol = 1;
+		std::map<s32, std::shared_ptr<ibDataNode>>   views;
 	};
 
 	std::shared_ptr<Client> FindClient(const wxString& id) const;

@@ -8,17 +8,17 @@
 
 #include <vector>
 
-#include <wx/icon.h>
 #include <wx/string.h>
 
 #include "sfrontend/sfrontend.h"
+#include "backend/backend_picture.h"    // ibServerPicture — the item's picture as it is sent
 #include "backend/fileSystem/types.h"   // s32
 
 struct ibChoiceItem {
-	s32      id = 0;
-	wxString caption;
-	wxIcon   icon;
-	bool     selected = false;
+	s32             id = 0;
+	wxString        caption;
+	ibServerPicture icon;
+	bool            selected = false;
 };
 
 // False: nothing chosen — cancelled, or nobody to ask. Only what was offered can come back: a response naming

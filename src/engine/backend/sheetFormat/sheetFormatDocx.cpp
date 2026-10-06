@@ -109,7 +109,7 @@ wxString Styles()
 		wxT("</w:pPr></w:pPrDefault>")
 		wxT("</w:docDefaults>")
 		wxT("</w:styles>"),
-		s_defaultSpreadsheetFont.GetPointSize() * 2);
+		ibDefaultSpreadsheetFont().GetPointSize() * 2);
 }
 
 wxString RootRels()
@@ -208,7 +208,7 @@ wxString RunOf(const ibSpreadsheetCellDescription* cell, const wxString& text)
 			// WORD COUNTS IN HALF-POINTS — and says nothing where the cell agrees with the size the
 			// styles part already declared for the whole document. On a sheet where every cell is
 			// the default size that is one element saved per cell, out of a hundred thousand.
-			if (font.GetPointSize() > 0 && font.GetPointSize() != s_defaultSpreadsheetFont.GetPointSize())
+			if (font.GetPointSize() > 0 && font.GetPointSize() != ibDefaultSpreadsheetFont().GetPointSize())
 				properties += wxString::Format(wxT("<w:sz w:val=\"%d\"/>"), font.GetPointSize() * 2);
 			if (font.GetUnderlined())
 				properties += wxT("<w:u w:val=\"single\"/>");

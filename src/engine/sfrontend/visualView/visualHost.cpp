@@ -5,8 +5,10 @@
 
 void ibVisualHost::CreateVisualHost()
 {
-	if (ibValueForm* const form = GetValueForm())
+	if (ibValueForm* const form = GetValueForm()) {
+		SetCaption(form->GetCaption());   // the title bar
 		GenerateControl(form);
+	}
 }
 
 bool ibVisualHost::UpdateVisualHost(ibDataNode& frame)
@@ -14,6 +16,7 @@ bool ibVisualHost::UpdateVisualHost(ibDataNode& frame)
 	ibValueForm* const form = GetValueForm();
 	if (form == nullptr)
 		return false;
+	SetCaption(form->GetCaption());   // the title bar
 	frame.SetClsid(form->GetClassType());
 	frame.SetMetaId(form->EnsureControlID());
 	return RefreshControl(form, frame);

@@ -2,7 +2,7 @@
 #include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "sfrontend/visualView/ctrl/form.h"           // ibValueForm — GetOwnerForm (the command-door gate)
 #include "sfrontend/visualView/layers/commandBar.h"   // GatherFormCommands — the icon/caption source the navigator uses
-#include "backend/backend_picture.h"                  // ibBackendPicture::CreateBase64Image — the picture as it travels
+#include "backend/backend_picture.h"                  // ibBackendPicture::GetServerPicture — the picture as it travels
 
 
 //****************************************************************************
@@ -27,14 +27,14 @@ void ibValueButton::OnUpdate(ibDataNode& state, ibVisualHost* host)
 	// pulled straight FROM the command through the command door (ResolveValueByPath), not gathered. So a plain
 	// button shows its own text; a command button left blank shows the command's caption + icon.
 	wxString title = m_propertyTitle->GetValueAsTranslateString();
-	wxBitmap picture = m_propertyPicture->GetValueAsBitmap();
+	ibServerPicture picture = ibBackendPicture::GetServerPicture(m_propertyPicture->GetValueAsPictureDesc(), GetMetaData());
 	const ibCommandDescription& cmdDesc = GetCommandDesc();
 	ibValueForm* const ownerForm = GetOwnerForm();
 	bool cmdModifies = false;   // only meaningful when a command is bound (used for the view-only greying below)
 	bool cmdResolved = false;   // the bound command still resolves through the door — a button with no LIVE command hides
 	bool cmdPicAndText = true;  // the bound command's DEFAULT display (a standard action like Close is picture-only)
 	if (cmdDesc.IsOk() && ownerForm != nullptr) {
-		wxString cmdCaption; wxBitmap cmdIcon;
+		wxString cmdCaption; ibServerPicture cmdIcon;
 		// THE one resolve (ResolveCommand on the door): walk + reliable gather fallback -> existence + caption + icon
 		// + modifies + default display, decided in ONE place so the button, the command bar and the inspector cell can't drift.
 		cmdResolved = ResolveCommand(cmdDesc, cmdCaption, cmdIcon, &cmdModifies, nullptr, &cmdPicAndText);
@@ -56,7 +56,7 @@ void ibValueButton::OnUpdate(ibDataNode& state, ibVisualHost* host)
 	state.SetValue(wxT("Caption"), title);
 	state.SetValue(wxT("Representation"), static_cast<s32>(rep));
 	if (rep != ibRepresentation::ibRepresentation_Text && picture.IsOk())
-		state.SetValue(wxT("Picture"), ibBackendPicture::CreateBase64Image(picture.ConvertToImage()));
+		state.SetValue(wxT("Picture"), wxString(picture.GetData()));
 
 	// A button carries ONLY a command — with none bound, OR the bound command DELETED (its path no longer resolves
 	// through the door), it has nothing to do, so it is NOT shown. The orphaned control still lives in the object
@@ -86,7 +86,7 @@ void ibValueButton::WalkGroup(const std::vector<ibFrontendCommandReceiver::ibCom
 		if (member != nullptr) {
 			member->SetValue(wxT("Caption"), sub.caption);
 			if (sub.icon.IsOk())
-				member->SetValue(wxT("Picture"), ibBackendPicture::CreateBase64Image(sub.icon.ConvertToImage()));
+				member->SetValue(wxT("Picture"), wxString(sub.icon.GetData()));
 		}
 		std::vector<ibFrontendCommandReceiver::ibCommandSubItem> nested;
 		if (ResolveSubCommands(sub.desc, nested)) {   // a GROUP -> its own submenu

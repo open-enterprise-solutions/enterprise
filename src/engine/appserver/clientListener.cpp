@@ -14,6 +14,9 @@
 
 #include <cpp-httplib/httplib.h>
 
+#include <wx/mstream.h>
+#include <wx/zstream.h>
+
 namespace {
 
 // The largest request a client sends — a frame's answer goes the other way; a request is a method and its
@@ -25,6 +28,28 @@ constexpr std::chrono::seconds kStopPoll(1);
 
 // The furthest a chosen port goes from where it started looking.
 constexpr unsigned int kChooseRange = 100;
+
+// ⭐ THE TRANSPORT DEFLATES, when the client asked for it as it connected (?compress=deflate): an answer of some size
+// goes as a BINARY message holding it deflated — raw, RFC 1951, what a browser's DecompressionStream("deflate-raw")
+// reads — and a small one as text, as before. The protocol never knows: the same JSON either way. A frame is text
+// that repeats itself (names, ids, the same fields on every control) and shrinks several times over.
+constexpr std::size_t kDeflateFrom = 1024;
+
+bool SendAnswer(httplib::ws::WebSocket& ws, const std::string& text, bool deflate)
+{
+	if (!deflate || text.size() < kDeflateFrom)
+		return ws.send(text);
+
+	wxMemoryOutputStream packed;
+	{
+		wxZlibOutputStream zip(packed, wxZ_DEFAULT_COMPRESSION, wxZLIB_NO_HEADER);
+		zip.Write(text.data(), text.size());
+		if (!zip.Close())
+			return ws.send(text);   // not packed — sent as it is
+	}
+	const wxStreamBuffer* const buffer = packed.GetOutputStreamBuffer();
+	return ws.send(static_cast<const char*>(buffer->GetBufferStart()), static_cast<size_t>(packed.GetLength()));
+}
 
 } // namespace
 
@@ -99,6 +124,7 @@ bool ibClientListener::Start(const wxString& host, unsigned short& port, bool ch
 		// The connection's own wait is bounded, so a stopping server is noticed between messages.
 		ws.set_read_timeout(kStopPoll);
 		const wxString address = wxString::FromUTF8(req.remote_addr);
+		const bool deflate = req.has_param("compress") && req.get_param_value("compress") == "deflate";
 		std::string message;
 		for (;;) {
 			const httplib::ws::ReadResult read = ws.read(message);
@@ -111,7 +137,7 @@ bool ibClientListener::Start(const wxString& host, unsigned short& port, bool ch
 				break;   // closed — or a binary frame, which this protocol does not speak (yet)
 
 			const wxString response = clientHost->Call(wxString::FromUTF8(message), &ws, address);
-			if (!response.IsEmpty() && !ws.send(std::string(response.utf8_str())))
+			if (!response.IsEmpty() && !SendAnswer(ws, std::string(response.utf8_str()), deflate))
 				break;
 		}
 

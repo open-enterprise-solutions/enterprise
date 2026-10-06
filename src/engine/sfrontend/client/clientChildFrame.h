@@ -9,7 +9,6 @@
 // It does not own the document: the document goes with its last view (ibDocument::DeleteAllViews), and
 // the tab goes after it — the frame erases it once the view is gone.
 
-#include <wx/icon.h>
 #include <wx/string.h>
 
 #include "sfrontend/docView/docView.h"
@@ -36,13 +35,15 @@ public:
 
 	ibClientFrame* GetFrame() const { return m_frame; }
 
-	void            SetTitle(const wxString& title) { m_title = title; }
-	const wxString& GetTitle() const { return m_title; }
+	// Its title — its document's once the document has one (a form's host sets it from the form's caption,
+	// ibFormVisualEditView::SetCaption, as the desktop's tab followed its document), the one it opened with before.
+	void     SetTitle(const wxString& title) { m_title = title; }
+	wxString GetTitle() const;
 
 	// The tab's icon — the document's own when it has one (a catalog's form shows the catalog's), the
 	// form's otherwise. An empty icon tells the client to show the title alone.
-	void          SetIcon(const wxIcon& icon) { m_icon = icon; }
-	const wxIcon& GetIcon() const { return m_icon; }
+	void                   SetIcon(const ibServerPicture& icon) { m_icon = icon; }
+	const ibServerPicture& GetIcon() const { return m_icon; }
 
 	// Locked — the frame keeps it ahead of the normal tabs and lets no close reach it (ibClientFrame::LockTab).
 	void Lock() { m_locked = true; }
@@ -50,11 +51,11 @@ public:
 
 private:
 
-	ibClientFrame* m_frame;
-	s32            m_id;
-	wxString       m_title;
-	wxIcon         m_icon;
-	bool           m_locked = false;
+	ibClientFrame*  m_frame;
+	s32             m_id;
+	wxString        m_title;
+	ibServerPicture m_icon;
+	bool            m_locked = false;
 };
 
 #endif

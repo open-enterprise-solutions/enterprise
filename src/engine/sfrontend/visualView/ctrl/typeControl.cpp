@@ -87,7 +87,7 @@ bool ibTypeControlFactory::QuickChoice(ibControlFrame* ownerValue, const ibClass
 
 	std::vector<ibChoiceItem> items;
 	for (size_t idx = 0; idx < values.size(); idx++)
-		items.push_back(ibChoiceItem{ static_cast<s32>(idx), values[idx].GetString(), wxIcon(), values[idx] == current });
+		items.push_back(ibChoiceItem{ static_cast<s32>(idx), values[idx].GetString(), ibServerPicture(), values[idx] == current });
 
 	s32 chosen = 0;
 	if (ibRequestChoice(wxString(), items, chosen))
@@ -116,7 +116,7 @@ void ibTypeControlFactory::QuickChoice(ibControlFrame* controlValue, ibValue& ne
 
 	std::vector<ibChoiceItem> items;
 	for (size_t idx = 0; idx < values.size(); idx++)
-		items.push_back(ibChoiceItem{ static_cast<s32>(idx), values[idx].GetString(), wxIcon(), values[idx] == newValue });
+		items.push_back(ibChoiceItem{ static_cast<s32>(idx), values[idx].GetString(), ibServerPicture(), values[idx] == newValue });
 
 	ibBackendDocFrame* const frame = ibSession::CurrentFrame();
 	if (frame == nullptr)
@@ -196,7 +196,7 @@ ibClassID ibTypeControlFactory::ShowSelectType(const ibMetaData* metaData, const
 		const ibCtorAbstractType* ctor = metaData != nullptr ? metaData->GetAvailableCtor(offered[idx]) : nullptr;
 		items.push_back(ibChoiceItem{ static_cast<s32>(idx),
 			ctor != nullptr ? ctor->GetClassName() : wxString(),
-			ctor != nullptr ? ctor->GetClassIcon() : wxIcon() });
+			ctor != nullptr ? ibServerPicture(wxBitmap(ctor->GetClassIcon()).ConvertToImage()) : ibServerPicture() });
 	}
 
 	s32 chosen = 0;

@@ -45,7 +45,7 @@ struct ibCommandEntry {
 	ibRepresentation        representation;
 	bool                    enabled;
 	ibValueCommandBarItem*  item;
-	wxBitmap                bitmap;   // the COMMAND's own live icon (from the command / gather); wins over `picture` when Ok
+	ibServerPicture         icon;     // the COMMAND's own live icon (from the command / gather); wins over `picture` when Ok
 	ibCommandEntryKind      kind;
 	// …and WHICH filter line, for a quick filter: its index among the top-level nodes of the
 	// setting in force. An index rather than a pointer because the settings are rebuilt under the
@@ -58,8 +58,8 @@ struct ibCommandEntry {
 	wxString                tooltip;
 	ibCommandEntry() : id(wxNOT_FOUND), representation(ibRepresentation_Auto), enabled(true), item(nullptr),
 		kind(ibCommandEntryKind_Command), filterLine(0) {}
-	ibCommandEntry(const ibActionID& i, const wxString& c, const ibPictureDescription& p, ibRepresentation r, bool en = true, ibValueCommandBarItem* it = nullptr, const wxBitmap& bmp = wxNullBitmap)
-		: id(i), caption(c), picture(p), representation(r), enabled(en), item(it), bitmap(bmp),
+	ibCommandEntry(const ibActionID& i, const wxString& c, const ibPictureDescription& p, ibRepresentation r, bool en = true, ibValueCommandBarItem* it = nullptr, const ibServerPicture& ic = ibServerPicture())
+		: id(i), caption(c), picture(p), representation(r), enabled(en), item(it), icon(ic),
 		  kind(ibCommandEntryKind_Command), filterLine(0) {}
 };
 
@@ -309,7 +309,7 @@ struct ibCommandSourceEntry {
 	wxString             label;   // the TREE LEAF text — the command's own NAME (the tree's sub-folders already carry
 	                              // the path, and the configurator works with NAMES, not synonyms).
 	ibCommandDescription desc;
-	wxBitmap             icon;   // THE COMMAND'S picture — the command determines it (a command's own icon; an
+	ibServerPicture      icon;   // THE COMMAND'S picture — the command determines it (a command's own icon; an
 	                             // action-command's own picture) and every surface (navigator / picker / button)
 	                             // reads it from HERE, never from a separate action lookup.
 	wxString             subgroup;   // optional SUB-group WITHIN the section (empty = directly under it). Used by

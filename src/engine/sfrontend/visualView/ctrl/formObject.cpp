@@ -667,7 +667,7 @@ bool ibValueForm::GenerateForm(ibValueRecordDataObjectRef* obj) const
 		const ibValueMetaObject* target = metaData->FindAnyObjectByFilter(generation.GetByIdx(idx));
 		if (target == nullptr)
 			continue;
-		items.push_back(ibChoiceItem{ target->GetMetaID(), target->GetSynonym(), target->GetIcon() });
+		items.push_back(ibChoiceItem{ target->GetMetaID(), target->GetSynonym(), ibBackendPicture::GetServerPicture(target->GetClassType()) });
 	}
 
 	s32 chosen = 0;

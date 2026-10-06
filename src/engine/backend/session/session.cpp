@@ -1304,7 +1304,19 @@ bool ibSession::OnClose(bool /*force*/)
 		Teardown();
 		return true;
 	}
-	std::future<void> queued = Submit([self]() { self->Teardown(); });
+	// Not waited for once it is queued — so what the teardown throws is said in the task (the pool hands an exception
+	// to the future only, and this one is dropped).
+	std::future<void> queued = Submit([self]() {
+		try {
+			self->Teardown();
+		}
+		catch (const std::exception& err) {
+			ibJournalWarning(wxT("session"), wxT("a session's teardown ended with an exception: %s"), wxString::FromUTF8(err.what()));
+		}
+		catch (...) {
+			ibJournalWarning(wxT("session"), wxT("a session's teardown ended with an exception"));
+		}
+	});
 	if (queued.valid() && queued.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
 		try { queued.get(); }
 		catch (...) { Teardown(); }   // refused (a stopped pool) — or it threw, and a second call is a no-op

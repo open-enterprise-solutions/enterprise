@@ -4,16 +4,17 @@
 #include "sfrontend/sfrontend.h"            // SFRONTEND_API
 #include "backend/backend_command.h"      // ibBackendCommandReceiver — the door EXTENDS the backend receiver (one chain)
 #include "backend/commandDescription.h"   // ibCommandDescription / ibCommandHop
+#include "backend/backend_picture.h"      // ibServerPicture (ResolveValueByPath out-icon)
 #include <wx/string.h>                     // wxString (ResolveValueByPath out-caption)
-#include <wx/bitmap.h>                     // wxBitmap (ResolveValueByPath out-icon)
 #include <vector>                          // std::vector (ResolveSubCommands out-list)
 
 // The FRONTEND command receiver — the full DOOR. It EXTENDS the backend receiver (ibBackendCommandReceiver), so the
 // inheritance reads as one chain: ibBackendCommandReceiver <- ibFrontendCommandReceiver <- the controls (a button /
 // the command bar / a bar item). A projection INHERITS this so it IS-A door: it HOPS a command id path from the form
 // gate and, at the leaf, RUNS or READS a command; it supplies its own gate form (GetCommandGateForm), so there is no
-// temporary door and no form passed twice. It stays on the FRONTEND (it renders wxBitmap); the backend base is the
-// slice the command-source variant casts to, and this door IMPLEMENTS its WalkCommand (a walk that reads the leaf).
+// temporary door and no form passed twice. It stays on the FRONTEND (it hands out the look a client draws — the
+// picture as the server sends it, ibServerPicture); the backend base is the slice the command-source variant casts
+// to, and this door IMPLEMENTS its WalkCommand (a walk that reads the leaf).
 class SFRONTEND_API ibFrontendCommandReceiver : public ibBackendCommandReceiver {
 public:
 
@@ -29,7 +30,7 @@ public:
 	// fall back to the RELIABLE gather — the SAME set the picker offered. Returns whether the command EXISTS (walk
 	// resolved OR gather has it); fills the readable caption (button/bar text), icon, the modifies-data flag, and the
 	// full PATH name (the inspector cell text). WalkCommand is a thin wrapper over this.
-	bool ResolveCommand(const ibCommandDescription& desc, wxString& outCaption, wxBitmap& outIcon,
+	bool ResolveCommand(const ibCommandDescription& desc, wxString& outCaption, ibServerPicture& outIcon,
 		bool* outModifies = nullptr, wxString* outPath = nullptr, bool* outPictureAndText = nullptr) const;
 
 	// Walk the WHOLE command id path from the form gate and RUN the leaf command (a source object walks a path to
@@ -40,14 +41,14 @@ public:
 	// flag instead of running it — the command OWNS its look AND its behaviour; a projection shows this where it
 	// sets nothing of its own, and OBEYS the flag. outModifiesData is optional. FALSE = a hop no longer resolves
 	// (the bound command was deleted / re-homed) — this failure is what the command-source check reads as "<not found>".
-	bool ResolveValueByPath(const ibCommandDescription& desc, wxString& outCaption, wxBitmap& outIcon,
+	bool ResolveValueByPath(const ibCommandDescription& desc, wxString& outCaption, ibServerPicture& outIcon,
 		bool* outModifiesData = nullptr, bool* outPictureAndText = nullptr) const;
 
 	// HUB — a leaf command that is a GROUP (holds sub-commands) projects as a dropdown, not a run. Resolve the
 	// leaf of `desc`; if it is a group, fill `out` with each sub-command as a DIRECT 1-hop path (the sub-command
 	// is itself terminal) + caption + icon — the menu a projection pops on click. Returns true + non-empty `out`
 	// for a group; false for a leaf (the projection runs `desc` directly).
-	struct ibCommandSubItem { ibCommandDescription desc; wxString caption; wxBitmap icon; };
+	struct ibCommandSubItem { ibCommandDescription desc; wxString caption; ibServerPicture icon; };
 	bool ResolveSubCommands(const ibCommandDescription& desc, std::vector<ibCommandSubItem>& out) const;
 
 	// The form gate the walk starts from (also the ExecuteParameters a command handler receives) — supplied by the

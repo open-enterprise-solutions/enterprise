@@ -2,7 +2,7 @@
 #include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "form.h"
 #include "backend/choiceLinkResolver.h"   // ibChoiceHolder — where this column's link reads its neighbours
-#include "backend/backend_picture.h"      // ibBackendPicture::CreateBase64Image — a header picture as it travels
+#include "backend/backend_picture.h"      // ibBackendPicture::GetServerPicture — a header picture as it travels
 #include "backend/composition/dataComposer.h"   // the composer's active sort — the header's arrow
 #include "backend/formatString.h"         // ibFormatString — what a cell is shown through
 #include "backend/appData.h"
@@ -165,12 +165,12 @@ void ibValueModelTableBoxColumn::OnUpdate(ibDataNode& state, ibVisualHost* host)
 	state.SetValue(wxT("FooterText"), m_propertyFooterText->GetValueAsTranslateString());
 	state.SetValue(wxT("Representation"), static_cast<s32>(rep));
 	if (rep != ibRepresentation::ibRepresentation_Text) {
-		const wxBitmap header = m_propertyHeaderPicture->GetValueAsBitmap();
+		const ibServerPicture header = ibBackendPicture::GetServerPicture(m_propertyHeaderPicture->GetValueAsPictureDesc(), GetMetaData());
 		if (header.IsOk())
-			state.SetValue(wxT("HeaderPicture"), ibBackendPicture::CreateBase64Image(header.ConvertToImage()));
-		const wxBitmap footer = m_propertyFooterPicture->GetValueAsBitmap();
+			state.SetValue(wxT("HeaderPicture"), wxString(header.GetData()));
+		const ibServerPicture footer = ibBackendPicture::GetServerPicture(m_propertyFooterPicture->GetValueAsPictureDesc(), GetMetaData());
 		if (footer.IsOk())
-			state.SetValue(wxT("FooterPicture"), ibBackendPicture::CreateBase64Image(footer.ConvertToImage()));
+			state.SetValue(wxT("FooterPicture"), wxString(footer.GetData()));
 	}
 
 	// Its own Visible, a binding, the functional options — the group above says its own (its Visible).
@@ -253,6 +253,10 @@ void ibValueModelTableBoxColumn::UpdateCell(const ibDataViewItem& item, ibDataNo
 	else
 		text = cellValue.GetString();
 	cell.SetValue(wxT("Text"), text);
+	// …and, in a cell the client may edit, the value with its type (ibValue::Serialize) — the field's way. A list's
+	// cells, never edited, carry their text alone and stay as light as they were.
+	if (IsCellEditable(item) && cellValue.IsTransferable())
+		cellValue.Serialize(cell.Child(wxT("Value")));
 
 	// A boolean is drawn as a tick, and whether it has one is the value's, not its text's; a number stands
 	// to the right.

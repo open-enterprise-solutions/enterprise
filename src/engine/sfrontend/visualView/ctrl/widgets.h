@@ -319,6 +319,8 @@ private:
 protected:
 
 	bool TextProcessing(const wxString& strData);
+	// …and a value the client sent with its type (ibValue::Serialize — a date from its calendar): the same commit.
+	bool ValueProcessing(const class ibDataNode& node);
 
 	// The format written on the attribute the field is bound to — what it shows its value with when it has
 	// none of its own. Empty when the source is no attribute.

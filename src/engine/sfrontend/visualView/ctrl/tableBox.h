@@ -790,6 +790,8 @@ private:
 
 	// text processing
 	bool TextProcessing(const wxString& strData);
+	// …and a value the client sent with its type (ibValue::Serialize): the same commit.
+	bool ValueProcessing(const class ibDataNode& node);
 
 	ibFormID m_model_id;
 

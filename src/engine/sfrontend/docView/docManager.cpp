@@ -266,7 +266,8 @@ ibDocManager::ibDocManager(long WXUNUSED(flags), bool initialize)
 	if (initialize)
 		Initialize();
 
-	// Text / Spreadsheet / Help — meta-bound templates keyed by CLSID.
+	// Text / Spreadsheet / Help — file templates, keyed by no CLSID; the id each is given is its picture's, sent with
+	// the template to a client choosing what to create.
 	AddDocTemplate(g_metaModuleCLSID,
 		_("Text document"), ibTextFileDocument::FileMask(), ibTextFileDocument::FileExtensions(),
 		_("Text Doc"), _("Text View"),
@@ -357,7 +358,7 @@ void ibDocManager::AddDocTemplate(const ibPictureID& id,
 		this, descr, filter, dir, ext, docTypeName, viewTypeName,
 		docClassInfo, viewClassInfo, flags);
 
-	docTemplate->SetClassIcon(ibBackendPicture::GetPictureAsIcon(id));
+	docTemplate->SetPictureID(id);
 
 	AssociateTemplate(docTemplate);
 }
@@ -394,7 +395,7 @@ void ibDocManager::AddDocTemplate(const ibClassID& clsid,
 		ibTEMPLATE_INVISIBLE | (!ext.IsEmpty() ? ibTEMPLATE_SAVE_AS_FILE : 0));
 
 	docTemplate->SetClassID(clsid);
-	docTemplate->SetClassIcon(ibBackendPicture::GetPictureAsIcon(clsid));
+	docTemplate->SetPictureID(clsid);   // a class's picture is registered under its clsid
 
 	AssociateTemplate(docTemplate);
 }
@@ -472,7 +473,7 @@ ibMetaDocument* ibDocManager::OpenForm(ibValueMetaObject* metaObject, long flags
 
 		AddDocument(newDocument);
 
-		newDocument->SetIcon(metaObject->GetIcon());
+		newDocument->SetIcon(ibBackendPicture::GetServerPicture(metaObject->GetClassType()));
 
 		if (newDocument->OnCreate(metaObject->GetModuleName(), flags | ibDOC_NEW)) {
 			newDocument->SetCommandProcessor(newDocument->OnCreateCommandProcessor());
