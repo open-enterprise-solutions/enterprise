@@ -22,7 +22,8 @@
       "see_also": [
         "kw.Else",
         "kw.Elseif",
-        "kw.While"
+        "kw.While",
+        "op.Ternary"
       ],
       "reviewed": true,
       "syntax_block_ves": "If <Expression1> Then\n    // statements\nElsIf <Expression2> Then\n    // statements\nElse\n    // statements\nEndIf",
@@ -137,6 +138,33 @@
       "reviewed": true,
       "modes": [
         "ves"
+      ]
+    },
+    {
+      "id": "op.Ternary",
+      "name_local": "?()",
+      "name_en": "?()",
+      "kind": "operator",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "?(<Condition>, <ValueIfTrue>, <ValueIfFalse>)",
+      "description": "Умовний (тернарний) вираз — Якщо, яке відповідає значенням. Коли <Condition> виконано, вираз дорівнює <ValueIfTrue>, інакше — <ValueIfFalse>. Пишеться однаково в обох діалектах і стоїть усюди, де стоїть значення: у присвоєнні, в аргументі, у поверненні, всередині іншого виразу; вкладається.\n\nУмова перевіряється так само, як у Якщо: логічне значення читається як є, будь-яке інше вважається істинним, коли воно не порожнє.\n\n⚠ ОБЧИСЛЮЮТЬСЯ ВСІ ТРИ, ПОТІМ ОБИРАЄТЬСЯ ОДНЕ. Обидва значення обчислюються до вибору, тому значення, яке падає, падає й тоді, коли умова його не обрала: `?(doc <> Undefined, doc.Number, \"\")` кидає виняток на Undefined, а виклик у необраній гілці все одно виконується. Обирайте ним між значеннями; охороняйте через Якщо.",
+      "syntax_block": "var <Result> = ?(<Condition>, <ValueIfTrue>, <ValueIfFalse>);",
+      "parameters": "<Condition> — перевірка: логічне значення або будь-яке інше, істинне, коли воно не порожнє.\n<ValueIfTrue> — результат, коли умову виконано.\n<ValueIfFalse> — результат в інших випадках.",
+      "return_descr": "<ValueIfTrue> або <ValueIfFalse> — те, що обрала умова.",
+      "example": "var caption = ?(qty > 0, \"In stock\", \"Sold out\");\nvar size = ?(weight < 1, \"small\", ?(weight < 10, \"medium\", \"large\"));",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.If"
+      ],
+      "reviewed": true,
+      "syntax_block_ves": "<Result> = ?(<Condition>, <ValueIfTrue>, <ValueIfFalse>);",
+      "example_ves": "Caption = ?(Qty > 0, \"In stock\", \"Sold out\");\nSize = ?(Weight < 1, \"small\", ?(Weight < 10, \"medium\", \"large\"));",
+      "modes": [
+        "ves",
+        "ces"
       ]
     },
     {

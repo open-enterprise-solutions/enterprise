@@ -22,7 +22,8 @@
       "see_also": [
         "kw.Else",
         "kw.Elseif",
-        "kw.While"
+        "kw.While",
+        "op.Ternary"
       ],
       "reviewed": true,
       "syntax_block_ves": "If <Expression1> Then\n    // statements\nElsIf <Expression2> Then\n    // statements\nElse\n    // statements\nEndIf",
@@ -137,6 +138,33 @@
       "reviewed": true,
       "modes": [
         "ves"
+      ]
+    },
+    {
+      "id": "op.Ternary",
+      "name_local": "?()",
+      "name_en": "?()",
+      "kind": "operator",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "?(<Condition>, <ValueIfTrue>, <ValueIfFalse>)",
+      "description": "Conditional (ternary) expression — an If that answers with a value. When <Condition> holds, the expression is <ValueIfTrue>, otherwise <ValueIfFalse>. Spelled the same in both dialects, it stands wherever a value does: an assignment, an argument, a return, a part of another expression; it nests.\n\nThe condition is tested as If tests it: a Boolean is read as it is, any other value counts as true when it is not empty.\n\n⚠ ALL THREE ARE EVALUATED, THEN ONE IS CHOSEN. Both values are computed before the choice, so a value that fails, fails even when the condition did not pick it: `?(doc <> Undefined, doc.Number, \"\")` raises on Undefined, and a call in the branch not taken still runs. Choose between values with it; guard with If.",
+      "syntax_block": "var <Result> = ?(<Condition>, <ValueIfTrue>, <ValueIfFalse>);",
+      "parameters": "<Condition> — the test: a Boolean, or any value, true when it is not empty.\n<ValueIfTrue> — the result when the condition holds.\n<ValueIfFalse> — the result otherwise.",
+      "return_descr": "<ValueIfTrue> or <ValueIfFalse>, whichever the condition chose.",
+      "example": "var caption = ?(qty > 0, \"In stock\", \"Sold out\");\nvar size = ?(weight < 1, \"small\", ?(weight < 10, \"medium\", \"large\"));",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.If"
+      ],
+      "reviewed": true,
+      "syntax_block_ves": "<Result> = ?(<Condition>, <ValueIfTrue>, <ValueIfFalse>);",
+      "example_ves": "Caption = ?(Qty > 0, \"In stock\", \"Sold out\");\nSize = ?(Weight < 1, \"small\", ?(Weight < 10, \"medium\", \"large\"));",
+      "modes": [
+        "ves",
+        "ces"
       ]
     },
     {

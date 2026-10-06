@@ -37,10 +37,15 @@ namespace ibCrashGuard {
 
 namespace {
 
-// Where dumps land. Resolved once on Install so the SEH/signal
-// handlers agree on a single path even after cwd changes.
-wxString s_crashDir;
-wxString s_exeName;
+// Where dumps land, resolved once so the SEH/signal handlers agree on a single path even after cwd
+// changes — and the program's name, the dump's prefix.
+//
+// ⚠ PLAIN ARRAYS, NOT wxString: the guard answers until the process is gone, and a fault in the
+// CRT's atexit comes after this DLL's static wxStrings were destroyed — the dump of 2026-10-07 was
+// named `_7948_t6580_…`, its program's name already gone. An array has no destructor. UTF-8,
+// because the signal handler may hand only bytes to snprintf.
+char s_crashDir[4096] = {};
+char s_exeName[64] = {};
 
 unsigned int CurrentPidPortable()
 {
@@ -60,12 +65,13 @@ std::atomic<bool>            s_installed{ false };
 
 void EnsureCrashDir()
 {
-	if (s_crashDir.IsEmpty()) {
+	if (s_crashDir[0] == '\0') {
 		const wxString exePath = wxStandardPaths::Get().GetExecutablePath();
-		s_crashDir = wxFileName(exePath).GetPath()
+		const wxString crashDir = wxFileName(exePath).GetPath()
 			+ wxFILE_SEP_PATH + wxT("crashdumps");
+		std::snprintf(s_crashDir, sizeof(s_crashDir), "%s", crashDir.utf8_str().data());
 	}
-	wxFileName::Mkdir(s_crashDir, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
+	wxFileName::Mkdir(wxString::FromUTF8(s_crashDir), wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
 }
 
 // WINDOWS ONLY, and declared under the same guard as its single caller (the minidump writer).
@@ -83,8 +89,8 @@ wxString MakeDumpPath(const wxString& kindSuffix, const wxString& extension)
 	const wxString stamp = wxDateTime::Now().Format(wxT("%Y%m%dT%H%M%S"));
 	const unsigned seq = s_seq.fetch_add(1, std::memory_order_relaxed);
 	return wxString::Format(wxT("%s%c%s_%s%u_t%lu_%s_%u.%s"),
-		s_crashDir, wxFILE_SEP_PATH,
-		s_exeName,
+		wxString::FromUTF8(s_crashDir), wxFILE_SEP_PATH,
+		wxString::FromUTF8(s_exeName),
 		kindSuffix,
 		CurrentPidPortable(),
 		CurrentTidPortable(),
@@ -105,8 +111,8 @@ void LogTerminateReason(const wxString& reason)
 
 	EnsureCrashDir();
 	const wxString logPath = wxString::Format(wxT("%s%c%s_terminate_%u.log"),
-		s_crashDir, wxFILE_SEP_PATH,
-		s_exeName,
+		wxString::FromUTF8(s_crashDir), wxFILE_SEP_PATH,
+		wxString::FromUTF8(s_exeName),
 		CurrentPidPortable());
 	wxFile f(logPath, wxFile::write_append);
 	if (f.IsOpened()) {
@@ -155,13 +161,10 @@ LONG WINAPI PersistentCrashDumpFilter(EXCEPTION_POINTERS* ep)
 // wxFile / wxLog are NOT.
 void PosixCrashSignalHandler(int sig)
 {
-	char path[1024];
-	const char* dir = s_crashDir.empty()
-		? "crashdumps"
-		: s_crashDir.ToUTF8().data();
+	char path[sizeof(s_crashDir) + 128];
 	std::snprintf(path, sizeof(path), "%s/%s_signal_%u_t%lu.log",
-		dir,
-		s_exeName.IsEmpty() ? "oes" : (const char*)s_exeName.ToUTF8(),
+		s_crashDir[0] == '\0' ? "crashdumps" : s_crashDir,
+		s_exeName[0] == '\0' ? "oes" : s_exeName,
 		CurrentPidPortable(),
 		CurrentTidPortable());
 
@@ -249,7 +252,7 @@ void Install(const wxString& exeName)
 {
 	// Update the label even on repeat install — frontend might call
 	// after console / web layer already armed the handlers.
-	s_exeName = exeName;
+	std::snprintf(s_exeName, sizeof(s_exeName), "%s", exeName.utf8_str().data());
 
 	if (s_installed.exchange(true, std::memory_order_acq_rel))
 		return;
@@ -392,7 +395,7 @@ void WriteDumpNow(const wxString& kindSuffix)
 wxString GetCrashDir()
 {
 	EnsureCrashDir();
-	return s_crashDir;
+	return wxString::FromUTF8(s_crashDir);
 }
 
 } // namespace ibCrashGuard
