@@ -13,7 +13,7 @@ bool ibAppCodeRunner::DoOnInit()
 		return false;
 
 	// Crash plumbing is wired by ibWxApp::OnInit before this runs.
-	ibApplicationInstance::CreateAppDataEnv(ibRunMode::eRUNTIME_MODE);
+	ibApplicationInstance::CreateAppDataEnv(ibRunMode::eSANDBOX_MODE);
 	m_codeRunner = new ibFrameCodeRunner(nullptr, wxID_ANY);
 
 	return wxApp::OnInit() && m_codeRunner->Show();

@@ -80,7 +80,7 @@ public:
 	virtual void ClearMessage() override;
 	virtual void BackendError(const wxString& strFileName,
 		const wxString& strDocPath, const long line,
-		const wxString& strErrorMessage) const override;
+		const wxString& strErrorMessage) override;
 	// Blocking modal message box. Mirrors desktop wxMessageBox via
 	// frame->ShowModalMessage(message, caption, style). The script's
 	// thread waits in its pool's Await, running the session's work
@@ -125,8 +125,8 @@ public:
 		int      level;     // 1=info, 2=warn, 3=error
 		wxString text;
 	};
-	std::vector<PendingMessage> DrainPendingMessages() const;
-	bool                        TakeClearPending() const;
+	std::vector<PendingMessage> DrainPendingMessages();
+	bool                        TakeClearPending();
 
 	// Repaint/raise are desktop concepts (native window redraw, bring
 	// to front). No-op here — the HTTP response itself is the "refresh".
@@ -230,14 +230,10 @@ private:
 	// drained after the event handler chain unwinds.
 	std::vector<const class ibValueForm*>            m_pendingCloses;
 
-	// Backend-driven notifications waiting for the next /session poll.
-	// Mutable because BackendError() on the base interface is `const`
-	// (called from logging paths that promise not to mutate the frame's
-	// "structural" state); appending a pending line is a benign mutation
-	// to internal queues, guarded by m_msgMutex for thread safety.
-	mutable std::mutex                  m_msgMutex;
-	mutable std::vector<PendingMessage> m_pendingMessages;
-	mutable bool                        m_clearPending = false;
+	// Backend-driven notifications waiting for the next /session poll, guarded by m_msgMutex.
+	std::mutex                  m_msgMutex;
+	std::vector<PendingMessage> m_pendingMessages;
+	bool                        m_clearPending = false;
 
 	// Modal-message queue. ShowModalMessage pushes here and waits for
 	// the entry's answer; /modal-reply HTTP handler records the answer

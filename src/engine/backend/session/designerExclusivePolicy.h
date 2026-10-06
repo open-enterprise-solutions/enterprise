@@ -7,7 +7,7 @@
 // Rule: at most one live designer session per DB cluster. Any second
 // designer that tries to Add is Rejected with a message naming the
 // living one. "Alive" is decided by row-lock probe — if another
-// sys_session row with application=eDESIGNER_MODE is visible in the
+// sys_session row of a designer kind is visible in the
 // cluster snapshot AND a `TryProbeRowLock` on it fails, the owner is
 // still holding the lock and we reject. If the probe succeeds the row
 // is a zombie (owner crashed / was killed); the sweep tick will delete

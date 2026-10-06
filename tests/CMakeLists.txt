@@ -81,7 +81,7 @@ add_executable(oes_tests
     test_queryL2.cpp
     test_queryComposer.cpp
     test_compositionSettings.cpp
-    test_mcpMessage.cpp
+    test_rpcMessage.cpp
     test_mcpToolContract.cpp
     test_spreadsheetCompose.cpp
     test_spreadsheetDocument.cpp

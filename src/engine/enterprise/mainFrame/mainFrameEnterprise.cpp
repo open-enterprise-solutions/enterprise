@@ -42,7 +42,7 @@ ibFrontendMainFrameEnterprise::~ibFrontendMainFrameEnterprise()
 #include "backend/appData.h"
 #include "backend/session/sessionRegistry.h"
 
-void ibFrontendMainFrameEnterprise::BackendError(const wxString& strFileName, const wxString& strDocPath, const long currLine, const wxString& strErrorMessage) const
+void ibFrontendMainFrameEnterprise::BackendError(const wxString& strFileName, const wxString& strDocPath, const long currLine, const wxString& strErrorMessage)
 {
 	//open error dialog
 	std::shared_ptr<ibDialogError> errDlg(new ibDialogError(mainFrame, wxID_ANY));

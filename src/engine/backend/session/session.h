@@ -80,29 +80,25 @@ enum class ibAuthState : int {
 };
 
 // ------------------------------------------------------------------
-// ibSessionKind — sessions-layer enum. Shares numeric values with
-// ibRunMode for the 1:1 cases (Launcher/Designer/Enterprise/Service)
-// so casts round-trip; splits the web case into two distinct session
-// roles that both share ibRunMode::eWEB_RUNTIME_MODE as the host
-// process's run mode. Physically only the wes process runs — inside
-// it sessions come in two flavours:
-//   WebServer  — the process's own technical sys_session row
-//   WebClient  — per-tab / per-API-caller connections
-// SessionKindFromRunMode answers the kind of the process's OWN session
-// (WebServer for the web run mode); a per-tab WebClient is always made
-// with its kind said explicitly.
+// ibSessionKind — WHAT A SESSION IS: the designer, the application, a job,
+// a server's own login. The process says only how it holds the base
+// (ibRunMode); a file base has its designer, its runtime and its jobs as a
+// server does. A file base is started as something — its first session is that
+// (the designer's window, the client's window); a server is started as the
+// server — its first session is its own, and the clients of every kind come
+// later. A number on disk (sys_session.kind): never renumbered.
 // ------------------------------------------------------------------
 enum class ibSessionKind : int {
-	Launcher   = eLAUNCHER_MODE,       // 1
-	Designer   = eDESIGNER_MODE,       // 2
-	Enterprise = eRUNTIME_MODE,     // 3
-	Service    = eSERVICE_MODE,        // 4
-	WebServer  = eWEB_RUNTIME_MODE, // 5 — wes process technical row
+	Unknown    = 0,                    // nobody said — a row of a legacy schema, or one that slipped through
+	Launcher   = 1,
+	Designer   = 2,
+	Enterprise = 3,
+	Service    = 4,                    // a server's own login
+	WebServer  = 5,                    // the web server's own technical row
 	WebClient  = 100,                  // per-tab / API caller
-	// A job's own session. Like WebClient these live OUTSIDE the run-mode range,
-	// because a job is not a way of running the process: any host can hold one
-	// alongside its normal sessions, so "what kind of session is this" stops
-	// being answerable from how the process was started.
+	// A job's own session. A job is not a way of running the process: any host
+	// can hold one alongside its normal sessions, so "what kind of session is
+	// this" is not answerable from how the process was started.
 	//
 	// THREE kinds rather than one, because an administrator looking at Active
 	// Users has a different decision for each. A stuck BackgroundJob has a user
@@ -117,27 +113,52 @@ enum class ibSessionKind : int {
 	ScheduledJob  = 102,   // declared by the configuration, runs on its interval
 	SystemJob     = 103,   // the platform's own (totals fold, maintenance)
 
+	// A CLIENT OF THE PROTOCOL working in the application — the thin runtime, the web, the assistant (sfrontend):
+	// a person at it, whatever process hosts it. Its run mode is its host's — a server's or a file base's — so the
+	// kind is what says what it is.
+	ThinClient    = 104,
+	// …working in the configuration — the thin designer. A designer as the desktop's is (IsDesignerSessionKind):
+	// no runtime, the one designer of the base.
+	ThinDesigner  = 105,
+
 };
 
 // IS THIS SESSION A JOB — one of the three above, whatever host it lives in.
 //
-// Worth one question because a job's session carries the APP MODE of whoever
-// started it: a run inside designer.exe says eDESIGNER_MODE, and anything reading
-// the app mode to decide "is this a designer" counts it as one. It is not — it is a
-// job that happens to live there. The KIND is what answers, and this is the
-// shorthand for asking.
+// Worth one question because a job lives in whatever process started it — the
+// designer's, the application's, a server — and is none of them. The KIND is what
+// answers, and this is the shorthand for asking.
 inline bool IsJobSessionKind(ibSessionKind k) {
 	return k == ibSessionKind::BackgroundJob
 	    || k == ibSessionKind::ScheduledJob
 	    || k == ibSessionKind::SystemJob;
 }
 
-// THE KIND OF THE SESSION A PROCESS RUNS AS — the one it logs in with (ibApplicationInstance::CreateSession),
-// and the one a base asks about when it decides what only that session gets (its fallback, its MCP settings).
-// The web run mode's own session is the server's technical row; its tabs are made as WebClient by name.
-inline ibSessionKind SessionKindFromRunMode(ibRunMode m) {
-	if (m == eWEB_RUNTIME_MODE) return ibSessionKind::WebServer;
-	return static_cast<ibSessionKind>(m);
+// IS THIS SESSION A DESIGNER'S — the desktop's or the thin one, whatever process hosts it. Asked of the session's
+// kind, not of the process's run mode: a server and a file base host designers alike.
+inline bool IsDesignerSessionKind(ibSessionKind k) {
+	return k == ibSessionKind::Designer
+	    || k == ibSessionKind::ThinDesigner;
+}
+
+// IS THIS SESSION A PERSON'S IN THE APPLICATION — the desktop's runtime, a web tab, a thin client — whatever process
+// hosts it.
+inline bool IsRuntimeSessionKind(ibSessionKind k) {
+	return k == ibSessionKind::Enterprise
+	    || k == ibSessionKind::WebClient
+	    || k == ibSessionKind::ThinClient;
+}
+
+// IS THIS THE PROCESS'S OWN LOGIN — what a program logs in as (the designer's window, the client's window, a
+// server's own, the web server's technical row): what a base gives only that session — the thread without a session
+// falls back to it, its person's MCP settings are read. Not a job's and not a visitor's (a web tab, a client of the
+// protocol), which come in through the same door.
+inline bool IsProcessSessionKind(ibSessionKind k) {
+	return k == ibSessionKind::Launcher
+	    || k == ibSessionKind::Designer
+	    || k == ibSessionKind::Enterprise
+	    || k == ibSessionKind::Service
+	    || k == ibSessionKind::WebServer;
 }
 
 // ------------------------------------------------------------------
@@ -165,7 +186,7 @@ struct BACKEND_API ibSessionIdentity {
 	wxString     m_userGuid;           // sys_user row, empty before Attach
 	wxString     m_computer;          // hostname
 	wxString     m_address;            // "host:port" for web; "" for desktop
-	ibRunMode    m_appMode;            // eENTERPRISE / eDESIGNER / eWEB_ENTERPRISE / ...
+	ibRunMode    m_appMode;            // how its process holds the base: a file base, a server, …
 	ibDateTime   m_started;
 	int          m_pid = 0;            // OS pid — for kick / attach debugger
 	bool         m_expectsAnonPhase = true;  // true: INSERT on Add; false: INSERT deferred to Attach success

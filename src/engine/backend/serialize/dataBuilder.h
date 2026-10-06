@@ -93,6 +93,10 @@ public:
 	bool operator==(const ibDataValue& other) const;
 	bool operator!=(const ibDataValue& other) const { return !(*this == other); }
 
+	// HOW MUCH IT SAYS — near enough to what it weighs written out: a text by its length, a list by its items, a
+	// node all the way down. For telling which of two answers is heavier, not for counting bytes.
+	std::size_t Weight() const;
+
 private:
 	void Expect(ibDataKind expected) const; // throws ibBackendException on kind mismatch
 
@@ -248,6 +252,9 @@ public:
 	// last optimistic lookup stopped — so they take no part in it.
 	bool operator==(const ibDataNode& other) const;
 	bool operator!=(const ibDataNode& other) const { return !(*this == other); }
+
+	// …and its weight: its entries' names and values, its raw block, its children (ibDataValue::Weight).
+	std::size_t Weight() const;
 
 	// --- transitional opaque data ----------------------------------------
 	// The not-yet-decomposed remainder of this node (today: the eDataBlock

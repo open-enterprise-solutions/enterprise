@@ -52,18 +52,18 @@ Communication between `frontend.dll` and `backend.dll` goes through abstract C++
 
 ### Application Layer (executables)
 
-Each executable links against both DLLs and provides a `wxApp` subclass that selects the run mode:
+Each executable links against both DLLs and provides a `wxApp` subclass that selects the run mode and the kind of its own session:
 
-| Executable | Run Mode (`ibRunMode`) | Purpose |
-|---|---|---|
-| `launcher.exe` | `eLAUNCHER_MODE` | Connection chooser; creates/selects database |
-| `designer.exe` | `eDESIGNER_MODE` | Full IDE — metadata editor, form designer, debugger client |
-| `enterprise.exe` | `eRUNTIME_MODE` | Desktop thick-client runtime (GUI, single user session per process) |
-| `wenterprise-server.exe` | `eWEB_RUNTIME_MODE` | Web runtime host — HTTP server, N per-cookie user sessions, browser client |
-| `appserver.exe` | `eSERVICE_MODE` | The application server: holds the bases of its server folder, headless |
-| `codeRunner.exe` | `eSERVICE_MODE` | Executes a single script module |
+| Executable | Run Mode (`ibRunMode`) | Own session (`ibSessionKind`) | Purpose |
+|---|---|---|---|
+| `launcher.exe` | `eLAUNCHER_MODE` | — | Connection chooser; creates/selects database |
+| `designer.exe` | `eFILE_MODE` | `Designer` | Full IDE — metadata editor, form designer, debugger client |
+| `enterprise.exe` | `eFILE_MODE` | `Enterprise` | Desktop thick-client runtime (GUI, single user session per process) |
+| `wenterprise-server.exe` | `eFILE_MODE` | `WebServer` | Web runtime host — HTTP server, N per-cookie `WebClient` sessions, browser client; given its DBMS on the command line |
+| `appserver.exe` | `eSERVER_MODE` | `Service` | The application server: holds the bases of its server folder, headless; protocol clients are `ThinClient` / `ThinDesigner` |
+| `codeRunner.exe` | `eSANDBOX_MODE` | — | Executes a single script module |
 
-> Both thick-client and web hosts are "runtime", differing only in UI transport — hence `eRUNTIME_MODE` / `eWEB_RUNTIME_MODE` (renamed from the former `eENTERPRISE_MODE` / `eWEB_ENTERPRISE_MODE`).
+> The run mode says only how the process holds the base — serving it (`eSERVER_MODE`) or as a file base for the one who started it (`eFILE_MODE`). What a session works in is its kind: either mode hosts designers, runtimes and jobs alike, and `DesignerMode()` / `EnterpriseMode()` are answered by the current session's kind. The base's FIRST SESSION picks its configuration by its kind — editable for a designer kind, runtime otherwise; a server's first session is the server itself.
 
 ### Backend Layer (`backend.dll`)
 
@@ -112,8 +112,10 @@ A connection layer knows its pool (`ibDatabaseLayer::GetPool`), so a transaction
   exe-specific main()
     • argv parsing, runMode pick
     • ibCrashGuard::Install (headless) OR ibWxApp::OnInit (GUI)
-    • ibApplicationInstance::CreateFileAppDataEnv(ibFileInstanceRequest)
-      or CreateServerAppDataEnv(ibServerInstanceRequest)     ← run mode, name, locale + the DBMS's
+    • ibApplicationInstance::CreateAppDataEnv(ibFileInstanceRequest)  ← the type is the run mode; name, locale,
+                                                      the folder, a PostgreSQL server when named (else Firebird)
+      or CreateAppDataEnv(ibServerInstanceRequest)  ← the server folder + the base's name: the DBMS is read
+                                                      from server.conf by the opening itself
           │
           ├─ ibApplicationHost::Ensure(runMode)   the process comes up with its first base;
           │                                       one beyond backend.conf `Bases` is refused
@@ -140,7 +142,7 @@ The init list is **the** ordering contract:
 | 6 | `m_mcpServer` | The designer's MCP listener — started by a designer session. |
 | 7 | `m_settingsStorage` | sys_settings — what people saved on their forms and lists. |
 
-`m_logger` is created by `Open` (`CreateLogger`) after the tables exist. `m_activeMetaData` is populated by `CreateActiveMetaData(mode, flags)` — `ibMetaDataConfiguration` for runtime, `ibMetaDataConfigurationStorage` for designer; launcher and codeRunner have none. The plugins and the syntax-helper corpus (constructed in `InitLocale()` once the locale is settled — see `docs/syntax-helper-design.md`) are the process's.
+`m_logger` is created by `Open` (`CreateLogger`) after the tables exist. `m_activeMetaData` is populated by `CreateActiveMetaData(applicationInstance, kind, flags)` at the base's first session, by its kind — `ibMetaDataConfigurationStorage` for a designer kind, `ibMetaDataConfiguration` otherwise; launcher and codeRunner have none. The plugins and the syntax-helper corpus (constructed in `InitLocale()` once the locale is settled — see `docs/syntax-helper-design.md`) are the process's.
 
 ### Closing a base (`ibApplicationHost::Close` → `ibApplicationInstance::Close`)
 
@@ -180,8 +182,8 @@ A headless process that serves the bases of its **server folder** (`--dir`, by d
 
 - **Settings in three layers**, key by key: built-in values → `backend.conf` (the process: `Locale`, `Workers`, `Bases`, the default `Connections`) → the base's `infobase.conf` (`Connections` to ITS DBMS). 0 means the default; a value that cannot be used is said in the journal (`ibApplicationHost::ReadCount`).
 - **Secrets** are sealed in `server.conf` with AES-256-GCM (`ibFieldCipher`, key in `server.key`); plain text is refused. `appserver --set-password=<base>/<Password|IbPassword>` reads one from the keyboard and seals it.
-- **Opening:** every base through `CreateFile/ServerAppDataEnv` in `eSERVICE_MODE`, then a session of kind `Service` logged into it. A base that does not open or refuses the login is said and closed alone; the rest are served. Firebird and PostgreSQL bases share one process.
-- **Who may come in** (`ibServiceExclusivePolicy`, asked at open by `CanOpen` and at every session by `CanAdd`): application servers share a base with application servers, clients with clients — a client (designer, enterprise, the web host) is refused while a server serves the base, and a server while a client uses it. What several servers on one base share already lives in it: `sys_session`, `sys_lock`, a job's claim and its clock in `sys_job`.
+- **Opening:** every base through `CreateFile/ServerAppDataEnv` in `eSERVER_MODE`, then a session of kind `Service` logged into it. A base that does not open or refuses the login is said and closed alone; the rest are served. Firebird and PostgreSQL bases share one process.
+- **Who may come in** (`ibServiceExclusivePolicy`, asked at open by `CanOpen` and at every session by `CanAdd`): application servers (`eSERVER_MODE`) share a base with application servers, file bases with file bases — a file-base process (designer, enterprise, the web host) is refused while a server serves the base, and a server while a file base uses it. The row's run mode decides, whatever its kind: a server's thin clients are the server's. What several servers on one base share already lives in it: `sys_session`, `sys_lock`, a job's claim and its clock in `sys_job`.
 - **Journal:** every line about a base carries its name — `(trade1) source …` — and the console shows what goes to the file.
 - **Stop:** Ctrl+C, SIGTERM or the console closing raises a flag; the main thread ends the server's sessions, then closes every base newest first.
 - **Not yet:** a port and a protocol for clients (the host's protocol is the next stage), choosing which bases to start (`--base`, for a coordinator), running as a Windows service, creating a new base (only the designer creates the system tables).
@@ -657,7 +659,7 @@ OES distinguishes between **metadata** (compile-time, process-wide, shared) and 
 `ibSession::Current()` is the canonical "session this code is currently working on". One rule in every host:
 
 - **The thread's binding** — a thread that bound a session (`ibSessionScope`, `ibSessionThreadBinding`, a job's run) works for it.
-- **Else the base's fallback** — the process's own session there, of the kind the process runs as (`SessionKindFromRunMode`: the designer's or the client's window, the application server's login, wenterprise-server's `WebServer` row). A job or a web tab never becomes it.
+- **Else the base's fallback** — the process's own session there (`IsProcessSessionKind`: the designer's or the client's window, the application server's login, wenterprise-server's `WebServer` row). A job or a web tab never becomes it.
 
 `ibSessionScope` (legacy) and `ibSessionThreadBinding` (preferred for app entry points) are the RAII helpers that bind a session to the calling thread. The interpreter no longer reads global `thread_local` state directly: `ibProcUnitState` lives under `ibSession` (`session.h`), and the only `thread_local` slot in `session.cpp` is a fallback for sessionless callers (codeRunner sandbox / system bootstrap). The worker pool (`workerPool.h` + `workerPoolHeadless.cpp`) leases a session into a thread via `tl_currentLease` and runs the request on it.
 
@@ -706,7 +708,7 @@ ibSession::m_root  →  ibValueModuleManagerRuntimeConfiguration  (per-session r
 
 ### Designer — compile only
 
-Designer (`eDESIGNER_MODE`) creates sessions without runtime — `AttachRuntime` returns early for Designer role. Designer reads `ibCompileCode` for autocomplete, function search, jump-to-definition, and cascading recompile. Scripts are not executed. Autocomplete surfaces bound names by reading the compile module's bind tables and walking the **compile-module** parent chain — from the backend since 2026-09-08 (`ibValueAtCaret` / `ibNamesAtCaret`, `backend/compiler/scriptComplete.h`); the editor's own precompiler is deleted and it keeps only its lexer. See [Name binding § Designer](private/name-binding.md#designer--surfacing-the-same-binds). Debug sessions attach to a separate runtime process (enterprise.exe / wenterprise-server.exe) via the TCP debug protocol.
+A designer session (`Designer`, `ThinDesigner`) has no runtime — `AttachRuntime` returns early for a designer kind. Designer reads `ibCompileCode` for autocomplete, function search, jump-to-definition, and cascading recompile. Scripts are not executed. Autocomplete surfaces bound names by reading the compile module's bind tables and walking the **compile-module** parent chain — from the backend since 2026-09-08 (`ibValueAtCaret` / `ibNamesAtCaret`, `backend/compiler/scriptComplete.h`); the editor's own precompiler is deleted and it keeps only its lexer. See [Name binding § Designer](private/name-binding.md#designer--surfacing-the-same-binds). Debug sessions attach to a separate runtime process (enterprise.exe / wenterprise-server.exe) via the TCP debug protocol.
 
 ---
 
@@ -893,7 +895,7 @@ The server runs each connection as a `wxThread` (`ibDebuggerServer::ibDebuggerSe
 
 ```
 launcher.exe (or direct enterprise.exe with CLI creds)
-  └─ ibApplicationInstance::CreateServerAppDataEnv(ibServerInstanceRequest{ mode, server, port, user, pwd, db, locale })
+  └─ ibApplicationInstance::CreateAppDataEnv(ibFileInstanceRequest{ server, port, user, pwd, db, locale })
        └─ ibDatabaseLayer::Open(server, port, db, ibUser, ibPwd)   # DB-level admin connection
             └─ appData->CreateSession<ibEnterpriseSession>()        # phased session lifecycle
                  # registry runs Connect(req) under the session factory:

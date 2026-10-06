@@ -1,5 +1,5 @@
 // appserver — the application server: the process that serves the bases of its server folder without a window
-// (serverConfig.h — the folder; appServer.h — the serving; docs/private/multi-base-process.md § 5). It was
+// (backend/server/serverConfig.h — the folder; appServer.h — the serving; docs/private/multi-base-process.md § 5). It was
 // called `daemon` until 2026-10-01. Started by hand it narrates in its console — the technological journal
 // mirrored onto standard error — and stays until Ctrl+C; later it becomes a service and the journal stays.
 

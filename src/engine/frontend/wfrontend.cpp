@@ -670,14 +670,13 @@ bool FinishConnect(const std::string& ibUser, const std::string& ibPassword)
 	// allocation/compile and runtime init through OnFirstConnect /
 	// OnAuthenticated; nothing to do here beyond auth.
 	//
-	// Kind == WebServer (default for eWEB_RUNTIME_MODE through the
-	// no-arg CreateSession overload) registers this session as the
-	// process's server in ibSessionRegistry::ServerSession(); subsequent
-	// per-tab WebClient sessions auto-link to it.
+	// Kind == WebServer registers this session as the process's server in
+	// ibSessionRegistry::ServerSession(); subsequent per-tab WebClient
+	// sessions auto-link to it.
 	// This session has no window, so the process itself is its owner: the
 	// holder lives in a process-lifetime global and the technical
 	// sys_session row disappears when wfrontend shuts down.
-	g_serverSession = appData->CreateSession();
+	g_serverSession = appData->CreateSession(ibSessionKind::WebServer);
 	if (!g_serverSession ||
 	    g_serverSession->Open(
 	        wxString::FromUTF8(ibUser.c_str()),
@@ -720,10 +719,9 @@ WFRONTEND_API bool wfrontendInitFile(
 
 	if (!RunBringUp([&] {
 		ibFileInstanceRequest request;
-		request.m_runMode   = ibRunMode::eWEB_RUNTIME_MODE;
 		request.m_directory = wxString::FromUTF8(filePath.c_str());
 		request.m_locale    = wxString::FromUTF8(locale.c_str());
-		return ibApplicationInstance::CreateFileAppDataEnv(request) != nullptr;
+		return ibApplicationInstance::CreateAppDataEnv(request) != nullptr;
 	}))
 		return false;
 
@@ -760,15 +758,14 @@ WFRONTEND_API bool wfrontendInitServer(
 	g_lastError.clear();
 
 	if (!RunBringUp([&] {
-		ibServerInstanceRequest request;
-		request.m_runMode  = ibRunMode::eWEB_RUNTIME_MODE;
+		ibFileInstanceRequest request;
 		request.m_server   = wxString::FromUTF8(server.c_str());
 		request.m_port     = wxString::FromUTF8(port.c_str());
 		request.m_user     = wxString::FromUTF8(user.c_str());
 		request.m_password = wxString::FromUTF8(password.c_str());
 		request.m_database = wxString::FromUTF8(database.c_str());
 		request.m_locale   = wxString::FromUTF8(locale.c_str());
-		return ibApplicationInstance::CreateServerAppDataEnv(request) != nullptr;
+		return ibApplicationInstance::CreateAppDataEnv(request) != nullptr;
 	}))
 		return false;
 

@@ -587,7 +587,7 @@ ibValueModuleManager* ibSession::GetEditModuleManager(const ibMetaData* metaData
 	// appData->DesignerMode()): a Designer session has no per-session runtime root —
 	// it reads the lightweight designer manager from the metadata's compile cache.
 	// Every other kind (Enterprise / WebClient / Service / …) uses its root mm.
-	if (m_kind == ibSessionKind::Designer) {
+	if (IsDesignerSessionKind(m_kind)) {
 		if (auto* cc = metaData ? metaData->GetCompileCache() : nullptr)
 			return cc->GetModuleManager();
 		return nullptr;

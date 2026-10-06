@@ -575,7 +575,7 @@ ibValue ibValueSystemFunction::Question(const wxString& strMessage, ibQuestionMo
 		if (debugServer != nullptr && debugServer->IsDebugging())
 			debugServer->SendEvalMessage(wxT("(question, not asked) ") + strMessage);
 
-		return new ibValueEnumQuestionReturnCode();
+		return ibValue::CreateObject<ibValueEnumQuestionReturnCode>();
 	}
 
 	int wndStyle = 0;
@@ -598,26 +598,26 @@ ibValue ibValueSystemFunction::Question(const wxString& strMessage, ibQuestionMo
 		? frame->ShowModalMessage(strMessage, _("Question"), wndStyle | wxICON_QUESTION)
 		: wxCANCEL;
 
-	ibValueEnumQuestionReturnCode* retValue = new ibValueEnumQuestionReturnCode();
+	ibQuestionReturnCode code = ibQuestionReturnCode::ibQuestionReturnCode_Yes;
 	switch (retCode) {
 	case wxOK:
-		retValue->InitializeEnumeration(ibQuestionReturnCode::ibQuestionReturnCode_OK);
+		code = ibQuestionReturnCode::ibQuestionReturnCode_OK;
 		break;
 	case wxCANCEL:
-		retValue->InitializeEnumeration(ibQuestionReturnCode::ibQuestionReturnCode_Cancel);
+		code = ibQuestionReturnCode::ibQuestionReturnCode_Cancel;
 		break;
 	case wxYES:
-		retValue->InitializeEnumeration(ibQuestionReturnCode::ibQuestionReturnCode_Yes);
+		code = ibQuestionReturnCode::ibQuestionReturnCode_Yes;
 		break;
 	case wxNO:
-		retValue->InitializeEnumeration(ibQuestionReturnCode::ibQuestionReturnCode_No);
-		break;
-	default:
-		retValue->InitializeEnumeration(ibQuestionReturnCode::ibQuestionReturnCode_Yes);
+		code = ibQuestionReturnCode::ibQuestionReturnCode_No;
 		break;
 	}
 
-	return retValue;
+	// 🛑 MADE BY ITS REGISTERED CTOR, which fills the members' names (ibCtorEnumType::CreateObject). A bare `new`
+	// left them empty, and naming the answer threw (std::map::at) — after the person had answered: the question
+	// was asked and the script ended there, silently (found over the protocol, 2026-10-06).
+	return ibValue::CreateEnumObject<ibValueEnumQuestionReturnCode>(code);
 }
 
 void ibValueSystemFunction::SetStatus(const wxString& sStatus)

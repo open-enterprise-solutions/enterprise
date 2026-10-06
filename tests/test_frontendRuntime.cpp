@@ -8,7 +8,7 @@
 // that. So this first target proves exactly that seam, nothing more.
 //
 // Runtime host, because the first client is a runtime control (warehouse / TSD
-// list), not the designer editor. The designer-mode harness (eDESIGNER_MODE) is
+// list), not the designer editor. The designer harness (a Designer-kind session) is
 // a sibling target added once this one is green.
 //
 // NOTE — forms need a concrete main frame. ibFrontendMainFrame is abstract

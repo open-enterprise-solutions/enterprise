@@ -62,7 +62,7 @@ struct JobTenancyFix : ::testing::Test {
 	void SetUp() override {
 		if (!m_wxInit.IsOk())
 			GTEST_SKIP() << "wxBase init failed (no wxApp host)";
-		if (!ibApplicationInstance::CreateAppDataEnv(ibRunMode::eRUNTIME_MODE))
+		if (!ibApplicationInstance::CreateAppDataEnv(ibRunMode::eFILE_MODE))
 			GTEST_SKIP() << "appData env unavailable headless";
 		if (ibApplicationInstance::GetSessionRegistry() == nullptr)
 			GTEST_SKIP() << "no session registry after CreateAppDataEnv";

@@ -386,7 +386,7 @@ TEST(RegisterArmCut, TheBalanceBeforeMidnightLeavesOutTheDayThatStartsThere)
     wxInitializer wxInit;
     if (!wxInit.IsOk())
         GTEST_SKIP() << "wxBase init failed (no wxApp host)";
-    if (!ibApplicationInstance::CreateAppDataEnv(ibRunMode::eRUNTIME_MODE))
+    if (!ibApplicationInstance::CreateAppDataEnv(ibRunMode::eFILE_MODE))
         GTEST_SKIP() << "appData env unavailable headless";
     struct EnvGuard { ~EnvGuard() { if (ibApplicationInstance::Get() != nullptr) ibApplicationInstance::DestroyAppDataEnv(); } } guard;
     ibConnectionPool* pool = ibApplicationInstance::GetConnectionPool();

@@ -178,7 +178,7 @@ void ibDataReportTree::EraseItem(const wxTreeItemId& item)
 
 void ibDataReportTree::SelectItem()
 {
-	if (appData->GetAppMode() != ibRunMode::eDESIGNER_MODE)
+	if (!appData->DesignerMode())
 		return;
 	const wxTreeItemId& selection = m_metaTreeCtrl->GetSelection();
 	ibValueMetaObject* metaObject = GetMetaObject(selection);
@@ -188,7 +188,7 @@ void ibDataReportTree::SelectItem()
 
 void ibDataReportTree::PropertyItem()
 {
-	if (appData->GetAppMode() != ibRunMode::eDESIGNER_MODE)
+	if (!appData->DesignerMode())
 		return;
 	const wxTreeItemId& selection = m_metaTreeCtrl->GetSelection();
 	ibValueMetaObject* metaObject = GetMetaObject(selection);
@@ -223,7 +223,7 @@ void ibDataReportTree::Expand(const wxTreeItemId& item)
 
 void ibDataReportTree::UpItem()
 {
-	if (appData->GetAppMode() != ibRunMode::eDESIGNER_MODE)
+	if (!appData->DesignerMode())
 		return;
 	m_metaTreeCtrl->Freeze();
 	const wxTreeItemId& selection = m_metaTreeCtrl->GetSelection();
@@ -241,7 +241,7 @@ void ibDataReportTree::UpItem()
 
 void ibDataReportTree::DownItem()
 {
-	if (appData->GetAppMode() != ibRunMode::eDESIGNER_MODE)
+	if (!appData->DesignerMode())
 		return;
 
 	m_metaTreeCtrl->Freeze();
@@ -260,7 +260,7 @@ void ibDataReportTree::DownItem()
 
 void ibDataReportTree::SortItem()
 {
-	if (appData->GetAppMode() != ibRunMode::eDESIGNER_MODE)
+	if (!appData->DesignerMode())
 		return;
 	m_metaTreeCtrl->Freeze();
 	const wxTreeItemId& selection = m_metaTreeCtrl->GetSelection();

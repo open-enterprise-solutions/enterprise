@@ -14,6 +14,7 @@
 #include "workerPool.h"
 #include "workerPoolHeadless.h"
 #include "backend/lock/lockManager.h"
+#include "backend/temp/tempStorage.h"
 #include "backend/utils/debugTrace.h"   // ibTraceToFile — Die's reason must survive a GUI build
 
 #include <chrono>
@@ -209,7 +210,7 @@ bool ibSessionRegistry::HasClients() const
 
 // --- Session factory facade ----------------------------------------------
 
-void ibSessionRegistry::EnsureStartedForCreateSession(ibRunMode runMode)
+void ibSessionRegistry::EnsureStartedForCreateSession()
 {
 	if (m_threadAlive.load(std::memory_order_acquire)) return;
 
@@ -220,11 +221,10 @@ void ibSessionRegistry::EnsureStartedForCreateSession(ibRunMode runMode)
 	// before the first Start().
 	EnableSysSessionOwnership(true);
 
-	// Designer-exclusive policy — only one designer process per IB at a
-	// time. AddPolicy must happen BEFORE Start so the chain is immutable
-	// once the consumer thread is running.
-	if (runMode == eDESIGNER_MODE)
-		AddPolicy(std::make_unique<ibDesignerExclusivePolicy>(this));
+	// Designer-exclusive policy — one designer per IB at a time, in EVERY process: a designer is a session's kind,
+	// and a file base's designer and a thin designer in a server are the same question. It lets everyone else
+	// through. AddPolicy must happen BEFORE Start so the chain is immutable once the consumer thread is running.
+	AddPolicy(std::make_unique<ibDesignerExclusivePolicy>(this));
 
 	// …and a base served by an application server is that server's — in EVERY process, because the refusal has to happen
 	// in the one trying to come in (docs/private/multi-base-process.md § 5.2).
@@ -233,20 +233,23 @@ void ibSessionRegistry::EnsureStartedForCreateSession(ibRunMode runMode)
 	Start();
 }
 
-ibSessionHolder ibSessionRegistry::CreateSessionWithFactory(ibRunMode runMode,
-                                                            const wxString& computer,
-                                                            ibConnectRequest::SessionFactory factory)
+ibSessionHolder ibSessionRegistry::CreateSessionOfKind(ibRunMode runMode,
+                                                       const wxString& computer,
+                                                       ibSessionKind kind,
+                                                       ibConnectRequest::SessionFactory factory)
 {
-	EnsureStartedForCreateSession(runMode);
+	EnsureStartedForCreateSession();
 
 	// Anonymous-phase Connect — registry INSERTs a row with userName=''
 	// immediately so peers (Active Users UI, designer-exclusive policy)
-	// see "someone is logging in". The kind is the process's own (wes's
-	// is its technical WebServer row).
+	// see "someone is logging in", and a job is visible from the moment it
+	// exists — before it has an identity, and whether or not it ever gets
+	// one. The kind is the caller's: the server's own login, the designer's
+	// window, wes's technical WebServer row, a job.
 	ibConnectRequest req;
 	req.m_computer       = computer;
 	req.m_appMode        = runMode;
-	req.m_kind           = SessionKindFromRunMode(runMode);
+	req.m_kind           = kind;
 	req.m_sessionFactory = std::move(factory);
 
 	auto result = Connect(req);
@@ -265,32 +268,6 @@ ibSessionHolder ibSessionRegistry::CreateSessionWithFactory(ibRunMode runMode,
 	return std::move(result.m_holder);
 }
 
-ibSessionHolder ibSessionRegistry::CreateSessionOfKind(ibRunMode runMode,
-                                                       const wxString& computer,
-                                                       ibSessionKind kind,
-                                                       ibConnectRequest::SessionFactory factory)
-{
-	EnsureStartedForCreateSession(runMode);
-
-	// Same anonymous-phase Connect as the facade above; only the kind is the
-	// caller's rather than derived from runMode. The row appears immediately with
-	// an empty user name, so a job is visible from the moment it exists — before
-	// it has an identity, and whether or not it ever gets one.
-	ibConnectRequest req;
-	req.m_computer       = computer;
-	req.m_appMode        = runMode;
-	req.m_kind           = kind;
-	req.m_sessionFactory = std::move(factory);
-
-	auto result = Connect(req);
-	if (result.m_code != ibConnectResult::Ok) {
-		if (!result.m_reason.IsEmpty())
-			ibBackendCoreException::Error(result.m_reason);
-		return ibSessionHolder();
-	}
-	return std::move(result.m_holder);
-}
-
 // No Connect, no queue, no row — the session simply exists and is owned. Mirrors what
 // ibJobManager does inline for a rented read; lifted here so the one place that may call
 // SetUnlisted is the registry that owns the listing rule. See the header for who uses it.
@@ -304,6 +281,7 @@ ibSessionHolder ibSessionRegistry::MintUnlisted(std::shared_ptr<ibSession> sessi
 
 ibSessionHolder ibSessionRegistry::CreateSessionWithFactory(ibRunMode runMode,
                                                             const wxString& computer,
+                                                            ibSessionKind kind,
                                                             const wxString& presetGuid,
                                                             const wxString& address,
                                                             ibConnectRequest::SessionFactory factory)
@@ -311,13 +289,14 @@ ibSessionHolder ibSessionRegistry::CreateSessionWithFactory(ibRunMode runMode,
 	// Per-tab variant — registry is normally already running by the time
 	// per-tab logins arrive (wes process bring-up created its WebServer
 	// system session at startup). EnsureStartedForCreateSession is
-	// idempotent so calling it here is safe in either order.
-	EnsureStartedForCreateSession(runMode);
+	// idempotent so calling it here is safe in either order. The kind is the
+	// caller's: a web tab's, a client of the protocol's.
+	EnsureStartedForCreateSession();
 
 	ibConnectRequest req;
 	req.m_computer       = computer;
 	req.m_appMode        = runMode;
-	req.m_kind           = ibSessionKind::WebClient;
+	req.m_kind           = kind;
 	req.m_address        = address;
 	req.m_presetGuid     = presetGuid;
 	req.m_sessionFactory = std::move(factory);
@@ -1341,6 +1320,10 @@ void ibSessionRegistry::ProcessRemove(ibRegistryRequest& req)
 	if (auto* lm = ibApplicationInstance::GetLockManager(m_applicationInstance))
 		lm->OnSessionEnd(s.Identity().m_guid);
 
+	// …and its temporary files: they were the session's, and nothing else is there to open them.
+	if (auto* ts = ibApplicationInstance::GetTempStorage(m_applicationInstance))
+		ts->OnSessionEnd(s.Identity().m_guid);
+
 	if (m_ownsSysSession && m_writeConn && s.Inserted()) {
 		const wxString guidStr = s.GetId();
 		DeleteSessionRow(m_writeHolder, guidStr);
@@ -1678,6 +1661,13 @@ void ibSessionRegistry::JobSweepStale()
 			lm->SweepOrphans(live);
 	}
 	catch (...) { /* swallowed: lock cleanup is best-effort, next sweep retries on stale rows */ }
+
+	// The temporary files of a session that died without its end — by the same list of who is alive.
+	try {
+		if (auto* ts = ibApplicationInstance::GetTempStorage(m_applicationInstance))
+			ts->SweepOrphans(live);
+	}
+	catch (...) { /* swallowed: the next sweep retries */ }
 }
 
 void ibSessionRegistry::JobHeartbeatOwn()
@@ -1734,6 +1724,11 @@ void ibSessionRegistry::JobHeartbeatOwn()
 int ibSessionRegistry::GetSilentSeconds()
 {
 	return kSilentSeconds;
+}
+
+std::chrono::milliseconds ibSessionRegistry::GetHeartbeatInterval()
+{
+	return std::chrono::milliseconds(kHeartbeatInterval);
 }
 
 size_t ibSessionRegistry::SettleSilentPeers(const std::vector<wxString>& peers)

@@ -107,14 +107,42 @@ std::vector<ibConfiguredInstance> ibServerConfig::ReadInstances() const
 		instance.m_ibUser     = conf.Read(at + wxT("IbUser"));
 		instance.m_ibPassword = conf.Read(at + wxT("IbPassword"));
 
-		if (instance.m_kind == wxT("firebird"))
-			instance.m_mode = eFILE;
-		else if (instance.m_kind == wxT("postgresql"))
-			instance.m_mode = eSERVER;
-
 		instances.push_back(instance);
 	}
 	return instances;
+}
+
+wxString ibServerConfig::ReadHost() const
+{
+	wxFileConfig conf(wxEmptyString, wxEmptyString, m_confPath, wxEmptyString, kConfStyle);
+	return conf.Read(wxT("/Host"));
+}
+
+bool ibServerConfig::ReadPort(unsigned short& port, wxString& error) const
+{
+	wxFileConfig conf(wxEmptyString, wxEmptyString, m_confPath, wxEmptyString, kConfStyle);
+	const wxString written = conf.Read(wxT("/Port")).Trim().Trim(false);
+
+	port = 0;
+	if (written.IsEmpty())
+		return true;
+
+	unsigned long value = 0;
+	if (!written.ToULong(&value) || value == 0 || value > 65535) {
+		error = wxString::Format(wxT("Port=%s in %s is not a port"), written, m_confPath);
+		return false;
+	}
+	port = static_cast<unsigned short>(value);
+	return true;
+}
+
+void ibServerConfig::WritePort(unsigned short port) const
+{
+	wxFileConfig conf(wxEmptyString, wxEmptyString, m_confPath, wxEmptyString, kConfStyle);
+	conf.Write(wxT("/Port"), static_cast<long>(port));
+	if (!conf.Flush())
+		ibAppServerSay(ibJournalMark::Warning, wxT("the config %s cannot be written - port %u is not kept"),
+			m_confPath, static_cast<unsigned>(port));
 }
 
 void ibServerConfig::AssignIds(std::vector<ibConfiguredInstance>& instances) const

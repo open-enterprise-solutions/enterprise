@@ -61,6 +61,34 @@ bool ibDataNode::operator==(const ibDataNode& other) const
 	return m_children == other.m_children;
 }
 
+std::size_t ibDataValue::Weight() const
+{
+	switch (m_kind) {
+	case ibDataKind::String: return m_text.length() + 2;
+	case ibDataKind::Binary: return m_binary.GetDataLen();
+	case ibDataKind::Child:  return m_child ? m_child->Weight() : 1;
+	case ibDataKind::Array: {
+		std::size_t weight = 2;
+		for (const ibDataValue& item : m_array)
+			weight += item.Weight() + 1;
+		return weight;
+	}
+	default:                 return 4;
+	}
+}
+
+std::size_t ibDataNode::Weight() const
+{
+	std::size_t weight = 2 + m_rawData.GetDataLen();
+	for (const auto& entry : m_fields)
+		weight += entry.first.length() + entry.second.Weight();
+	for (const auto& entry : m_props)
+		weight += entry.first.length() + entry.second.Weight();
+	for (const ibDataNode& child : m_children)
+		weight += child.Weight();
+	return weight;
+}
+
 ibDataValue ibDataValue::String(const wxString& text) {
 	ibDataValue v; v.m_kind = ibDataKind::String; v.m_text = text; return v;
 }

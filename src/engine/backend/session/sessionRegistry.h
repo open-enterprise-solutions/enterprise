@@ -98,13 +98,11 @@ struct BACKEND_API ibRegistryRequest {
 struct BACKEND_API ibConnectRequest {
 	wxString  m_computer;
 	wxString  m_address;           // "host:port" for web; "" for desktop
-	// Process-level run mode — stays eWEB_RUNTIME_MODE across all
-	// sessions that belong to a wes process, even per-tab clients.
-	ibRunMode m_appMode = eRUNTIME_MODE;
-	// Session-level role. WebServer for wes's own technical row;
-	// WebClient for per-tab connections; other values mirror runMode.
-	// Default computed from m_appMode (see SessionKindFromRunMode).
-	ibSessionKind m_kind = ibSessionKind::Enterprise;
+	// Process-level run mode — how the process holds the base, the same
+	// for every session in it.
+	ibRunMode m_appMode = eUNKNOWN_MODE;
+	// Session-level role — what the session is; the caller's to say.
+	ibSessionKind m_kind = ibSessionKind::Unknown;
 
 	// Optional caller-supplied session guid. When non-empty and parsable
 	// as an ibGuid, Connect uses it as the session's identifier instead
@@ -210,35 +208,29 @@ public:
 
 	// ---- Session factory facade ----
 	// Wraps the EnsureStartedForCreateSession + Connect(req) handshake.
-	// `appData->CreateSession*` forward here; per-tab web flow uses the
-	// (presetGuid, address) overload to inject cookie-derived identity.
+	// `appData->CreateSession*` forward here; per-tab web flow and the
+	// clients of the protocol use the (presetGuid, address) overload to
+	// inject their own identity.
 	// Caller passes runMode + computer so the registry stays decoupled
-	// from appData's runtime state (those values are used for the
-	// DesignerExclusivePolicy gate + the default ibConnectRequest fields
-	// m_appMode / m_computer / m_kind).
+	// from appData's runtime state (the ibConnectRequest fields m_appMode /
+	// m_computer), and the KIND — what the session is never follows from how
+	// the process was started: a server's own login, the designer's window, a
+	// job any host holds next to its own session.
 	// Returns OWNERSHIP of the registered session. Empty holder on
 	// registry-Connect failure (policy veto, duplicate id, registry down).
 	// The caller moves the holder into the object that will own the
 	// session; anything it does not move out dies with the temporary,
 	// which is the correct behaviour for every early-return path.
-	ibSessionHolder CreateSessionWithFactory(ibRunMode runMode,
-	                                         const wxString& computer,
-	                                         ibConnectRequest::SessionFactory factory);
-	ibSessionHolder CreateSessionWithFactory(ibRunMode runMode,
-	                                         const wxString& computer,
-	                                         const wxString& presetGuid,
-	                                         const wxString& address,
-	                                         ibConnectRequest::SessionFactory factory);
-
-	// Explicit-kind variant, for a session whose kind does not follow from the
-	// run mode. A job is exactly that case: any host can hold one next to its
-	// own session, so "what kind of session is this" stops being answerable from
-	// how the process was started. Giving it its own kind is what makes it show
-	// up in Active Users as work rather than as another user.
 	ibSessionHolder CreateSessionOfKind(ibRunMode runMode,
 	                                    const wxString& computer,
 	                                    ibSessionKind kind,
 	                                    ibConnectRequest::SessionFactory factory);
+	ibSessionHolder CreateSessionWithFactory(ibRunMode runMode,
+	                                         const wxString& computer,
+	                                         ibSessionKind kind,
+	                                         const wxString& presetGuid,
+	                                         const wxString& address,
+	                                         ibConnectRequest::SessionFactory factory);
 
 	// UNLISTED — a session the registry never takes in: no sys_session row, no cluster
 	// snapshot refresh, no disconnect audit. Teardown reads m_listed and skips the Remove,
@@ -351,6 +343,10 @@ public:
 	// the question above go by it, and so does a base asked at open whether another process holds it
 	// (ibServiceExclusivePolicy::CanOpen).
 	static int GetSilentSeconds();
+
+	// THE BEAT — how often a live owner moves its row's lastActive. A row watched for a fraction of it shows
+	// whether it moves (SettleSilentPeers, ibServiceExclusivePolicy::CanOpen).
+	static std::chrono::milliseconds GetHeartbeatInterval();
 
 	// ---- Lifecycle events ----
 	// Process-wide event hooks fired by registry as sessions move through
@@ -520,9 +516,9 @@ private:
 
 	// Idempotent registry bring-up driven from CreateSessionWithFactory.
 	// First call enables sys_session ownership, registers the
-	// DesignerExclusive policy when runMode == eDESIGNER_MODE, and
-	// starts the consumer thread. Subsequent calls are no-ops.
-	void EnsureStartedForCreateSession(ibRunMode runMode);
+	// DesignerExclusive and ServiceExclusive policies, and starts the
+	// consumer thread. Subsequent calls are no-ops.
+	void EnsureStartedForCreateSession();
 
 	void ThreadBody() noexcept;
 
@@ -857,24 +853,25 @@ inline std::shared_ptr<ibSession> MakeSessionFactory(wxString id, ibSessionKind 
 // empty holder is the failure, and letting it die is the cleanup.
 
 template<class SessionT>
-ibSessionHolder ibApplicationInstance::CreateSession()
+ibSessionHolder ibApplicationInstance::CreateSession(ibSessionKind kind)
 {
 	static_assert(std::is_base_of<ibSession, SessionT>::value,
 		"CreateSession<T>: T must derive from ibSession");
 
-	return m_sessionRegistry->CreateSessionWithFactory(
-		m_runMode, m_strComputer, &ib_detail::MakeSessionFactory<SessionT>);
+	return m_sessionRegistry->CreateSessionOfKind(
+		m_runMode, m_strComputer, kind, &ib_detail::MakeSessionFactory<SessionT>);
 }
 
 template<class SessionT>
-ibSessionHolder ibApplicationInstance::CreateSession(const wxString& presetGuid,
+ibSessionHolder ibApplicationInstance::CreateSession(ibSessionKind kind,
+                                                 const wxString& presetGuid,
                                                  const wxString& address)
 {
 	static_assert(std::is_base_of<ibSession, SessionT>::value,
 		"CreateSession<T>: T must derive from ibSession");
 
 	return m_sessionRegistry->CreateSessionWithFactory(
-		m_runMode, m_strComputer, presetGuid, address,
+		m_runMode, m_strComputer, kind, presetGuid, address,
 		&ib_detail::MakeSessionFactory<SessionT>);
 }
 

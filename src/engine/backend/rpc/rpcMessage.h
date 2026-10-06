@@ -1,12 +1,14 @@
-﻿#ifndef _IB_MCP_MESSAGE_H_
-#define _IB_MCP_MESSAGE_H_
+﻿#ifndef _IB_RPC_MESSAGE_H_
+#define _IB_RPC_MESSAGE_H_
 
 ////////////////////////////////////////////////////////////////////////////
-//	Description : the JSON-RPC envelope MCP is spoken in
+//	Description : the JSON-RPC envelope
 ////////////////////////////////////////////////////////////////////////////
 //
-// MCP is JSON-RPC 2.0: a request names a METHOD and carries PARAMS, an answer
-// carries a RESULT or an ERROR under the request's id.
+// JSON-RPC 2.0: a request names a METHOD and carries PARAMS, an answer carries
+// a RESULT or an ERROR under the request's id. Two speak it: MCP, and the
+// client protocol a renderer talks to the server's forms in — ONE envelope for
+// both, so what the assistant sends and what a client sends are the same bytes.
 //
 // NO SECOND JSON. The envelope is read and written with ibJsonProvider over
 // ibDataNode — the pair already in the tree. Its Read half has been complete
@@ -33,7 +35,7 @@
 
 #include <wx/string.h>
 
-struct BACKEND_API ibMcpRequest {
+struct BACKEND_API ibRpcRequest {
 
 	wxString    m_method;
 	ibDataValue m_id;       // Number or String; Empty means a notification
@@ -44,7 +46,7 @@ struct BACKEND_API ibMcpRequest {
 
 // JSON-RPC error codes, as the protocol spells them. Kept as an enum so a
 // refusal names itself instead of arriving as a bare number at a call site.
-enum class ibMcpError {
+enum class ibRpcError {
 	Parse          = -32700,
 	InvalidRequest = -32600,
 	MethodNotFound = -32601,
@@ -77,7 +79,7 @@ enum class ibMcpError {
 
 // Reads one request. Answers false and fills `error` when the text is not a
 // JSON-RPC request — malformed JSON, or well-formed JSON that is not one.
-BACKEND_API bool ibMcpParseRequest(const wxString& text, ibMcpRequest& request, wxString& error);
+BACKEND_API bool ibRpcParseRequest(const wxString& text, ibRpcRequest& request, wxString& error);
 
 // A MESSAGE THAT IS AN ANSWER, not a call. Once the server can ask the client
 // something (sampling), the same endpoint starts receiving both — and they are
@@ -87,31 +89,36 @@ BACKEND_API bool ibMcpParseRequest(const wxString& text, ibMcpRequest& request, 
 //
 // `payload` is the result (or the error) rendered back to text: what came back
 // is the client's business, and this layer does not pretend to know its shape.
-BACKEND_API bool ibMcpParseResponse(const wxString& text, ibDataValue& id,
+BACKEND_API bool ibRpcParseResponse(const wxString& text, ibDataValue& id,
 	wxString& payload, bool& isError);
 
 // ANY node as JSON text. `typeResolver` turns config-specific class ids into
 // the portable names a configuration writes (metaIntrospect.h) — without one a
 // described object answers with numbers that mean nothing outside this process.
 // The envelope itself needs no resolver: it carries no types.
-BACKEND_API wxString ibMcpRenderNode(const ibDataNode& node,
+BACKEND_API wxString ibRpcRenderNode(const ibDataNode& node,
 	const std::function<wxString(ibClassID)>& typeResolver = {});
 
 // ⭐⭐ THE MIRROR OF THAT RESOLVER, installed on a provider that is about to READ. A node's type goes
 // out as a word; without this it comes back as clsid 0, and a schema read, edited and returned loses
 // every typed part it was made of — silently, since an untyped node parses perfectly well and simply
 // means nothing. Registered types first, a composition's own parts under them.
-BACKEND_API void ibMcpInstallTypeLookup(class ibJsonProvider& provider);
+BACKEND_API void ibRpcInstallTypeLookup(class ibJsonProvider& provider);
 
 // The two answers. `id` is the request's, verbatim: the protocol matches a
 // reply to its call by that value and by nothing else.
-BACKEND_API wxString ibMcpWriteResult(const ibDataValue& id, const ibDataNode& result);
-BACKEND_API wxString ibMcpWriteError(const ibDataValue& id, ibMcpError code, const wxString& message);
+BACKEND_API wxString ibRpcWriteResult(const ibDataValue& id, const ibDataNode& result);
+BACKEND_API wxString ibRpcWriteError(const ibDataValue& id, ibRpcError code, const wxString& message);
 
 // The same, with the `data` member a few refusals owe the caller — chiefly the list
 // of versions this server speaks, which is what makes a version refusal answerable
 // rather than merely final.
-BACKEND_API wxString ibMcpWriteError(const ibDataValue& id, ibMcpError code, const wxString& message,
+BACKEND_API wxString ibRpcWriteError(const ibDataValue& id, ibRpcError code, const wxString& message,
 	const ibDataNode* data);
 
-#endif // _IB_MCP_MESSAGE_H_
+// An APPLICATION'S OWN refusal — a code of its own numbering, outside the range JSON-RPC reserves for itself
+// (-32768..-32000), which the specification leaves to the application: the client protocol's reasons
+// (sfrontend's ibClientRefusal), which a client branches on.
+BACKEND_API wxString ibRpcWriteError(const ibDataValue& id, s32 code, const wxString& message);
+
+#endif // _IB_RPC_MESSAGE_H_

@@ -942,7 +942,7 @@ void ibConfigurationTree::SelectItem()
 	ibValueMetaObject* metaObject = GetMetaObject(selection);
 	UpdateToolbar(metaObject, selection);
 
-	if (appData->GetAppMode() != ibRunMode::eDESIGNER_MODE)
+	if (!appData->DesignerMode())
 		return;
 
 	objectInspector->SelectObject(metaObject);
@@ -954,7 +954,7 @@ void ibConfigurationTree::PropertyItem()
 	ibValueMetaObject* metaObject = GetMetaObject(selection);
 	UpdateToolbar(metaObject, selection);
 
-	if (appData->GetAppMode() != ibRunMode::eDESIGNER_MODE)
+	if (!appData->DesignerMode())
 		return;
 
 	if (!objectInspector->IsShownInspector())
@@ -1000,7 +1000,7 @@ void ibConfigurationTree::Expand(const wxTreeItemId& item)
 
 void ibConfigurationTree::UpItem()
 {
-	if (appData->GetAppMode() != ibRunMode::eDESIGNER_MODE)
+	if (!appData->DesignerMode())
 		return;
 
 	m_metaTreeCtrl->Freeze();
@@ -1020,7 +1020,7 @@ void ibConfigurationTree::UpItem()
 
 void ibConfigurationTree::DownItem()
 {
-	if (appData->GetAppMode() != ibRunMode::eDESIGNER_MODE)
+	if (!appData->DesignerMode())
 		return;
 
 	m_metaTreeCtrl->Freeze();
@@ -1040,7 +1040,7 @@ void ibConfigurationTree::DownItem()
 
 void ibConfigurationTree::SortItem()
 {
-	if (appData->GetAppMode() != ibRunMode::eDESIGNER_MODE)
+	if (!appData->DesignerMode())
 		return;
 	m_metaTreeCtrl->Freeze();
 	const wxTreeItemId& selection = m_metaTreeCtrl->GetSelection();

@@ -70,7 +70,17 @@ void ibValueModuleManagerRuntimeConfiguration::OnStart()
 			pu->CallAsProc(wxT("onStart"));
 		}
 	}
+	catch (const ibBackendInterruptException&) {
+		// Stopped, not failed — as BeforeStart.
+	}
+	catch (const ibBackendException& err) {
+		ibJournalWarning(wxT("module.event"), _("OnStart: %s"), err.GetErrorDescription());
+	}
+	catch (const std::exception& err) {
+		ibJournalWarning(wxT("module.event"), wxT("OnStart: %s"), err.what());
+	}
 	catch (...) {
+		ibJournalWarning(wxT("module.event"), wxT("OnStart: unknown exception"));
 	}
 }
 
@@ -87,7 +97,20 @@ bool ibValueModuleManagerRuntimeConfiguration::BeforeExit()
 		}
 		return !bCancel.GetBoolean();
 	}
+	catch (const ibBackendInterruptException&) {
+		// Stopped, not failed — as BeforeStart.
+		return false;
+	}
+	catch (const ibBackendException& err) {
+		ibJournalWarning(wxT("module.event"), _("BeforeExit: %s"), err.GetErrorDescription());
+		return false;
+	}
+	catch (const std::exception& err) {
+		ibJournalWarning(wxT("module.event"), wxT("BeforeExit: %s"), err.what());
+		return false;
+	}
 	catch (...) {
+		ibJournalWarning(wxT("module.event"), wxT("BeforeExit: unknown exception"));
 		return false;
 	}
 }
@@ -103,6 +126,16 @@ void ibValueModuleManagerRuntimeConfiguration::OnExit()
 			pu->CallAsProc(wxT("onExit"));
 		}
 	}
+	catch (const ibBackendInterruptException&) {
+		// Stopped, not failed — as BeforeStart.
+	}
+	catch (const ibBackendException& err) {
+		ibJournalWarning(wxT("module.event"), _("OnExit: %s"), err.GetErrorDescription());
+	}
+	catch (const std::exception& err) {
+		ibJournalWarning(wxT("module.event"), wxT("OnExit: %s"), err.what());
+	}
 	catch (...) {
+		ibJournalWarning(wxT("module.event"), wxT("OnExit: unknown exception"));
 	}
 }

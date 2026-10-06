@@ -13,8 +13,8 @@
     <ClInclude Include="mcp\mcpDebugBridge.h">
       <Filter>mcp</Filter>
     </ClInclude>
-    <ClInclude Include="mcp\mcpMessage.h">
-      <Filter>mcp</Filter>
+    <ClInclude Include="rpc\rpcMessage.h">
+      <Filter>rpc</Filter>
     </ClInclude>
     <ClInclude Include="mcp\mcpServer.h">
       <Filter>mcp</Filter>
@@ -975,6 +975,12 @@
     <ClInclude Include="settings\settingsComposer.h">
       <Filter>settings</Filter>
     </ClInclude>
+    <ClInclude Include="temp\tempStorage.h">
+      <Filter>temp</Filter>
+    </ClInclude>
+    <ClInclude Include="server\serverConfig.h">
+      <Filter>server</Filter>
+    </ClInclude>
     <ClInclude Include="sheetFormat\sheetFormat.h">
       <Filter>sheetFormat</Filter>
     </ClInclude>
@@ -1010,8 +1016,8 @@
     <ClCompile Include="mcp\mcpDebugBridge.cpp">
       <Filter>mcp</Filter>
     </ClCompile>
-    <ClCompile Include="mcp\mcpMessage.cpp">
-      <Filter>mcp</Filter>
+    <ClCompile Include="rpc\rpcMessage.cpp">
+      <Filter>rpc</Filter>
     </ClCompile>
     <ClCompile Include="mcp\mcpServer.cpp">
       <Filter>mcp</Filter>
@@ -2425,6 +2431,12 @@
     <ClCompile Include="settings\settingsComposer.cpp">
       <Filter>settings</Filter>
     </ClCompile>
+    <ClCompile Include="temp\tempStorage.cpp">
+      <Filter>temp</Filter>
+    </ClCompile>
+    <ClCompile Include="server\serverConfig.cpp">
+      <Filter>server</Filter>
+    </ClCompile>
     <ClCompile Include="sheetFormat\sheetFormat.cpp">
       <Filter>sheetFormat</Filter>
     </ClCompile>
@@ -2453,6 +2465,9 @@
   <ItemGroup>
     <Filter Include="mcp">
       <UniqueIdentifier>{519ca79a-6240-43ae-9637-76d4703e2a93}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="rpc">
+      <UniqueIdentifier>{7d3e2b1c-4f6a-4c8e-9b2d-3a1f5e6c7b80}</UniqueIdentifier>
     </Filter>
     <Filter Include="mcp\tools">
       <UniqueIdentifier>{47f007aa-54f8-4d79-81ac-462ac7fbcd79}</UniqueIdentifier>
@@ -2627,6 +2642,12 @@
     </Filter>
     <Filter Include="settings">
       <UniqueIdentifier>{3f7b2c5d-8e14-4a6b-9c02-5d8e7a1b3c4f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="temp">
+      <UniqueIdentifier>{6c2e9a41-7b3d-4f58-a1e6-0d9b4c7f2e35}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="server">
+      <UniqueIdentifier>{4d8a1f63-2c7e-4b95-8e30-7a5c9d1b6f42}</UniqueIdentifier>
     </Filter>
     <Filter Include="sheetFormat">
       <UniqueIdentifier>{8c1d4a92-6f30-4b7e-a58d-2e94c07b6a15}</UniqueIdentifier>

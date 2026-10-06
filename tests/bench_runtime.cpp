@@ -351,7 +351,7 @@ struct SessionBench : ::testing::Test {
         if (wxLog::GetActiveTarget() != nullptr)
             delete wxLog::SetActiveTarget(new wxLogStderr());
         if (ibApplicationInstance::Get() == nullptr) {
-            if (!ibApplicationInstance::CreateAppDataEnv(ibRunMode::eRUNTIME_MODE))
+            if (!ibApplicationInstance::CreateAppDataEnv(ibRunMode::eFILE_MODE))
                 GTEST_SKIP() << "appData env unavailable headless";
             m_ownsAppData = true;
         }

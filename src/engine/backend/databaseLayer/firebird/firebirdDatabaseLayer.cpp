@@ -868,7 +868,7 @@ bool ibDatabaseLayerFirebird::Open()
 	//
 	// Eligibility is still the DRIVER's knowledge (a local standalone file base, not leader-mode,
 	// not a remote server), so the test stays; only the ACTION moved. See
-	// ibApplicationInstance::CreateFileAppDataEnv — it registers after the tables, which is the only
+	// ibApplicationInstance::Open (the Firebird base) — it registers after the tables, which is the only
 	// place that can honestly promise they exist.
 	m_localMaintenanceEligible = m_strServer.IsEmpty()
 		&& ibFirebirdLeaderMode::CurrentRole() == ibFirebirdLeaderMode::Role::Standalone;

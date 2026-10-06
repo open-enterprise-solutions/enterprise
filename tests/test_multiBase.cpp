@@ -39,7 +39,7 @@ namespace {
 // this thread works for it. Null when the environment cannot come up.
 ibApplicationInstance* OpenBase()
 {
-	if (!ibApplicationInstance::CreateAppDataEnv(ibRunMode::eRUNTIME_MODE))
+	if (!ibApplicationInstance::CreateAppDataEnv(ibRunMode::eFILE_MODE))
 		return nullptr;
 	ibApplicationInstance* const applicationInstance = ibApplicationHost::GetInstances().back();
 

@@ -21,15 +21,9 @@ class ibDebuggerClient;
 // the namespace-fasad over appData's static getters.
 #define activeMetaData			(appEnv::ActiveMetaData())
 //////////////////////////////////////////////////////////////////////////////////////////////////////
-// Lifecycle — fabric on ibApplicationInstance picks the concrete subclass
-// by runMode and stashes the unique_ptr in m_activeMetaData. Returns
-// true on success (or true with no-op for modes that don't allocate
-// metadata, like launcher).
-//
-// `metaDataDestroy()` macro was retired — nobody called it; teardown
-// happens in the base's Close (ibApplicationInstance::Close), which calls
+// Lifecycle — ibApplicationInstance::CreateActiveMetaData picks the concrete subclass by the kind of the
+// base's first session; teardown happens in the base's Close (ibApplicationInstance::Close), which calls
 // OnDestroy and then releases m_activeMetaData (the polymorphic dtor chain).
-#define metaDataCreate(mode, f)	(ibApplicationInstance::CreateActiveMetaData(mode, f))
 //////////////////////////////////////////////////////////////////////////////////////////////////////
 
 enum ibConfigType {

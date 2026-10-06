@@ -219,7 +219,7 @@ struct ScriptCorpus : ::testing::Test {
 		// cycle — the cycle is what wipes them (wxImageModule::OnExit).
 
 		if (ibApplicationInstance::Get() == nullptr
-		 && !ibApplicationInstance::CreateAppDataEnv(ibRunMode::eRUNTIME_MODE))
+		 && !ibApplicationInstance::CreateAppDataEnv(ibRunMode::eFILE_MODE))
 			GTEST_SKIP() << "appData env unavailable headless";
 
 		m_styleSaved = ibCompileCode::GetCodeStyle();

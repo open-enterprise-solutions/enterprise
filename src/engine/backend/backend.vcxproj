@@ -67,7 +67,7 @@
     <ClInclude Include="job\jobManager.h" />
     <ClInclude Include="job\jobRunByteCode.h" />
     <ClInclude Include="mcp\mcpClipboard.h" />
-    <ClInclude Include="mcp\mcpMessage.h" />
+    <ClInclude Include="rpc\rpcMessage.h" />
     <ClInclude Include="mcp\mcpServer.h" />
     <ClInclude Include="mcp\mcpDebugBridge.h" />
     <ClInclude Include="mcp\mcpTool.h" />
@@ -75,6 +75,8 @@
     <ClInclude Include="job\jobSchedule.h" />
     <ClInclude Include="settings\settingsStorage.h" />
     <ClInclude Include="settings\settingsComposer.h" />
+    <ClInclude Include="temp\tempStorage.h" />
+    <ClInclude Include="server\serverConfig.h" />
     <ClInclude Include="sheetFormat\sheetFormat.h" />
     <ClInclude Include="sheetFormat\sheetFormatXlsx.h" />
     <ClInclude Include="sheetFormat\sheetFormatNative.h" />
@@ -498,7 +500,7 @@
     <ClCompile Include="lock\lockManager.cpp" />
     <ClCompile Include="job\jobManager.cpp" />
     <ClCompile Include="mcp\mcpClipboard.cpp" />
-    <ClCompile Include="mcp\mcpMessage.cpp" />
+    <ClCompile Include="rpc\rpcMessage.cpp" />
     <ClCompile Include="mcp\mcpServer.cpp" />
     <ClCompile Include="mcp\mcpTool.cpp" />
     <ClCompile Include="mcp\tools\mcpToolChat.cpp" />
@@ -545,6 +547,8 @@
     <ClCompile Include="query\queryable.cpp" />
     <ClCompile Include="settings\settingsStorage.cpp" />
     <ClCompile Include="settings\settingsComposer.cpp" />
+    <ClCompile Include="temp\tempStorage.cpp" />
+    <ClCompile Include="server\serverConfig.cpp" />
     <ClCompile Include="sheetFormat\sheetFormat.cpp" />
     <ClCompile Include="sheetFormat\sheetFormatNative.cpp" />
     <ClCompile Include="sheetFormat\sheetFormatDocx.cpp" />

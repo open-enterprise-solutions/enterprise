@@ -227,11 +227,7 @@ void ibValueModuleRuntimeManager::AttachRuntime(ibSession* session)
 	// A RENTED run never arrives here — it is not authenticated and asks for no
 	// runtime (see ibJobTenancy) — so this gate is not what keeps it cheap.
 	const ibSessionKind kind = session->GetKind();
-	const bool noRuntime =
-		(kind == ibSessionKind::Launcher)  ||
-		(kind == ibSessionKind::Designer)  ||
-		(kind == ibSessionKind::WebServer);
-	if (noRuntime)
+	if (kind == ibSessionKind::Launcher || kind == ibSessionKind::WebServer || IsDesignerSessionKind(kind))
 		return;
 	// Imperative pipeline — each descriptor owns its m_procUnit.
 	// CreateMainModule already compiled m_compileModule.

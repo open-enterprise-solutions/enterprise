@@ -213,6 +213,36 @@ void ibApplicationInstance::CreateTableSettings()
 	}
 }
 
+// sys_file — the sessions' temporary files (ibTempStorage). One row per PART of a file: part 0 is its header
+// (the name it came under), the content follows in parts — a file is never one blob, so a large one passes
+// through without being held whole anywhere.
+//
+// The key is the part's address, file + number, in ONE column — PRIMARY KEY is spelled per column (see
+// sys_settings above); the two halves stand beside it for the reads. The owner is on every part, as sys_lock
+// carries it on every lock: the session-end cascade and the sweep delete by it.
+//
+// Nothing here outlives its session, so a schema change may drop and rebuild it.
+void ibApplicationInstance::CreateTableFile()
+{
+	ibDatabaseQueryBuilder q;
+	if (!q.TableExists(file_table)) {
+
+		q.Execute(ibCreateTable(file_table, {
+			{ wxT("partKey"),     ibTypeString(48),  false, true,  wxEmptyString },   // fileKey:partIndex
+			{ wxT("fileKey"),     ibTypeString(36),  true,  false, wxEmptyString },   // the file's id
+			{ wxT("partIndex"),   ibTypeInteger(),   true,  false, wxEmptyString },   // 0 the header, then 1, 2, … in the order written
+			{ wxT("sessionGuid"), ibTypeString(36),  true,  false, wxEmptyString },   // the owner
+			{ wxT("fileName"),    ibTypeString(260), false, false, wxEmptyString },   // the header's: the name the file came under
+			{ wxT("changed"),     ibTypeDate(),      true,  false, wxEmptyString },
+			{ wxT("dataSize"),    ibTypeInteger(),   true,  false, wxEmptyString },
+			{ wxT("binaryData"),  ibTypeBlob(),      false, false, wxEmptyString },   // a content part's bytes; the header has none
+		}));
+		// A file's parts in order; and the owner's, for the session-end cascade.
+		q.Execute(ibCreateIndex(file_table, wxT("file_index_1"), { wxT("fileKey"), wxT("partIndex") }));
+		q.Execute(ibCreateIndex(file_table, wxT("file_index_2"), { wxT("sessionGuid") }));
+	}
+}
+
 // sys_job schema move — the key went from the display NAME to the job's stable key, and the table
 // gained its settings columns (active / schedule) on 2026-08-04.
 //
@@ -408,13 +438,13 @@ bool ibApplicationInstance::SaveUserInfoToBuffer(wxMemoryBuffer& buffer) const
 // what removes the row.
 // -----------------------------------------------------------------------
 
-ibSessionHolder ibApplicationInstance::CreateSession()
+ibSessionHolder ibApplicationInstance::CreateSession(ibSessionKind kind)
 {
 	// Default-factory passthrough — registry builds a plain ibSession.
 	// Used by codeRunner / appserver / headless callers and by the wes
 	// process's own system session bring-up. GUI apps go through the
 	// typed CreateSession<T>() template overload (defined in
 	// sessionRegistry.h after the registry class).
-	return m_sessionRegistry->CreateSessionWithFactory(m_runMode, m_strComputer, {});
+	return m_sessionRegistry->CreateSessionOfKind(m_runMode, m_strComputer, kind, {});
 }
 

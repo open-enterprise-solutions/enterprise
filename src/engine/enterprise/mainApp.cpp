@@ -102,7 +102,7 @@ int ibAppEnterprise::DoOnRun()
 	// Decide whether this is a file-based launch (Firebird embedded /
 	// SQLite — `--file=…`) or a server launch (`--server=… --db=…`).
 	// Reject the no-arg case explicitly: the previous behaviour fell
-	// through to CreateServerAppDataEnv with empty server/port/db, the
+	// through to the PostgreSQL opening with empty server/port/db, the
 	// PostgreSQL driver opened a connection with all-empty credentials
 	// and the resulting ThrowDatabaseException re-entered the
 	// half-initialised session registry. Surfacing the missing-arg case
@@ -119,22 +119,18 @@ int ibAppEnterprise::DoOnRun()
 	// ibBackendException records itself when constructed), so the only thing missing was arriving
 	// at the code that prints it.
 	auto bringUp = [&]() -> bool {
-		if (!m_strFile.IsEmpty()) {
-			ibFileInstanceRequest request;
-			request.m_runMode   = ibRunMode::eRUNTIME_MODE;
+		ibFileInstanceRequest request;
+		request.m_locale = m_strLocale;
+		if (!m_strFile.IsEmpty())
 			request.m_directory = m_strFile;
-			request.m_locale    = m_strLocale;
-			return ibApplicationInstance::CreateFileAppDataEnv(request) != nullptr;
+		else {
+			request.m_server   = m_strServer;
+			request.m_port     = m_strPort;
+			request.m_user     = m_strUser;
+			request.m_password = m_strPassword;
+			request.m_database = m_strDatabase;
 		}
-		ibServerInstanceRequest request;
-		request.m_runMode  = ibRunMode::eRUNTIME_MODE;
-		request.m_server   = m_strServer;
-		request.m_port     = m_strPort;
-		request.m_user     = m_strUser;
-		request.m_password = m_strPassword;
-		request.m_database = m_strDatabase;
-		request.m_locale   = m_strLocale;
-		return ibApplicationInstance::CreateServerAppDataEnv(request) != nullptr;
+		return ibApplicationInstance::CreateAppDataEnv(request) != nullptr;
 	};
 
 	wxString thrown;   // what escaped, when it was not an ibBackendException (those record themselves)
@@ -269,7 +265,7 @@ int ibAppEnterprise::DoOnRun()
 	wxString openError;
 	ibSession::OpenResult openResult = ibSession::OpenResult::Failed;
 	try {
-		holder = appData->CreateSession<ibGUISession>();
+		holder = appData->CreateSession<ibGUISession>(ibSessionKind::Enterprise);
 		if (holder) {
 			openResult = holder->Open(m_strIBUser, m_strIBPassword);
 			if (openResult != ibSession::OpenResult::Authenticated)

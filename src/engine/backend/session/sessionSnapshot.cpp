@@ -33,11 +33,9 @@ wxString ibSessionSnapshot::GetApplication(unsigned int idx) const {
 	if (idx > m_listSession.size())
 		return wxEmptyString;
 	const auto& row = m_listSession[idx];
-	// ibSessionKind values mirror ibRunMode for 1:1 cases (Launcher /
-	// Designer / Enterprise / Service), plus two web roles that share
-	// the same ibRunMode::eWEB_RUNTIME_MODE. Pick a web-specific
-	// label when the kind disambiguates, otherwise fall back to the
-	// run-mode description.
+	// THE KIND SAYS WHAT A SESSION WORKS IN; the run mode only says whether its process is a server or a file
+	// base, and either hosts designers, clients and jobs alike. A row whose kind says nothing (Unknown, or a
+	// legacy schema without the column) falls back to the run-mode description.
 	// A JOB IS NOT AN APPLICATION. Its run mode says which executable happens to
 	// host it, which is exactly the wrong answer for the question this column
 	// asks — a fold running inside enterprise.exe is not a thick client, and
@@ -47,13 +45,14 @@ wxString ibSessionSnapshot::GetApplication(unsigned int idx) const {
 	case static_cast<int>(ibSessionKind::BackgroundJob): return _("Background job");
 	case static_cast<int>(ibSessionKind::ScheduledJob):  return _("Scheduled job");
 	case static_cast<int>(ibSessionKind::SystemJob):     return _("System job");
+	case static_cast<int>(ibSessionKind::ThinClient):    return _("Runtime");
+	case static_cast<int>(ibSessionKind::Designer):
+	case static_cast<int>(ibSessionKind::ThinDesigner):  return _("Designer");
+	case static_cast<int>(ibSessionKind::Enterprise):    return _("Thick client (GUI)");
+	case static_cast<int>(ibSessionKind::Service):       return _("Application server");
+	case static_cast<int>(ibSessionKind::WebServer):     return _("Web server");
+	case static_cast<int>(ibSessionKind::WebClient):     return _("Web client");
 	default: break;
-	}
-
-	if (row.m_runMode == ibRunMode::eWEB_RUNTIME_MODE) {
-		// ibSessionKind::WebServer = 5, WebClient = 100.
-		if (row.m_kind == 100) return _("Web client");
-		return _("Web server");
 	}
 	return appData->GetRunModeDescr(row.m_runMode);
 }
@@ -77,26 +76,24 @@ wxString ibSessionSnapshot::GetSessionKindDescr(unsigned int idx) const
 	if (idx >= m_listSession.size())
 		return wxEmptyString;
 	const auto& row = m_listSession[idx];
-	// Only web runtime carries the server/client split; desktop modes
-	// are always user-facing, reported as "Client" for consistency in
-	// the Active Users dialog. Legacy schemas (no `kind` column) read
-	// m_kind = 0; interpret that as Server when run-mode is web (the
-	// historic behaviour before per-tab sessions landed) and Client
-	// otherwise.
+	// The kind carries the server/client split; everything else is user-facing, reported as "Client" for
+	// consistency in the Active Users dialog — a legacy row without a kind (m_kind = 0) included.
 	// Jobs are neither: nobody is sitting at them. Saying "Client" here would
 	// claim a person is connected, which is the one thing an administrator reads
 	// this column to find out.
+	// A server's own session is the server, not somebody at it; a client of the protocol is a thin client.
 	switch (row.m_kind) {
 	case static_cast<int>(ibSessionKind::BackgroundJob):
 	case static_cast<int>(ibSessionKind::ScheduledJob):
 	case static_cast<int>(ibSessionKind::SystemJob):
 		return _("Job");
+	case static_cast<int>(ibSessionKind::Service):
+	case static_cast<int>(ibSessionKind::WebServer):
+		return _("Server");
+	case static_cast<int>(ibSessionKind::ThinClient):
+	case static_cast<int>(ibSessionKind::ThinDesigner):
+		return _("Thin client");
 	default: break;
-	}
-
-	if (row.m_runMode == ibRunMode::eWEB_RUNTIME_MODE) {
-		// ibSessionKind::WebClient = 100.
-		return (row.m_kind == 100) ? _("Client") : _("Server");
 	}
 	return _("Client");
 }

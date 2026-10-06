@@ -32,6 +32,10 @@ std::atomic<bool>  s_open{ false };
 // Asked by the program itself to echo every line on standard error (EchoToStderr) — the variable's twin.
 std::atomic<bool>  s_echoToStderr{ false };
 
+// The chain Open makes — kept, so a program whose console the journal writes can take the previous target off it
+// (EchoToStderr).
+wxLogChain*        s_chain = nullptr;
+
 // Who installed the question "which base is this line about" (SetContext); null when nobody did.
 std::atomic<ibTechJournal::ContextFn> s_context{ nullptr };
 
@@ -186,7 +190,9 @@ void ibTechJournal::Open(const wxString& exeName)
 	//
 	// Deliberately never deleted: it must outlive every other subsystem's last log line, and a
 	// process-lifetime object is what that means.
-	new wxLogChain(new ibJournalLogTarget());
+	s_chain = new wxLogChain(new ibJournalLogTarget());
+	if (s_echoToStderr.load(std::memory_order_relaxed))
+		s_chain->PassMessages(false);   // the console is the journal's already (EchoToStderr)
 }
 
 void ibTechJournal::Close()
@@ -202,6 +208,13 @@ void ibTechJournal::Close()
 void ibTechJournal::EchoToStderr()
 {
 	s_echoToStderr.store(true, std::memory_order_relaxed);
+
+	// ⭐ AND THE CONSOLE HAS ONE WRITER. A console program's previous wx target IS standard error, so the chain
+	// passed every line there a second time — the journal's own echo and wx's own lines alike, each printed
+	// twice (the application server's console, 2026-10-06). The program that asks for this narrates in its
+	// console: the journal is that console now, and the previous target comes off the chain.
+	if (s_chain != nullptr)
+		s_chain->PassMessages(false);
 }
 
 void ibTechJournal::SetContext(ContextFn context)

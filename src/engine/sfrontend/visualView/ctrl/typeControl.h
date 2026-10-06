@@ -1,0 +1,111 @@
+#ifndef _ATTRIBUTE_CONTROL_H__
+#define _ATTRIBUTE_CONTROL_H__
+
+#include "sfrontend/sfrontend.h"
+
+#include <vector>
+
+///////////////////////////////////////////////////////////////////////////
+#include "backend/backend_type.h"
+#include "backend/sourceDescription.h"   // ibSourceDescription::GetPath (GetSourceAbstractColumn inline)
+#include "backend/compiler/value.h"
+#include "backend/createRequest.h"   // ibSelectMode (GetSelectMode's return type)
+#include "backend/choiceLinkResolver.h"             // ibChoiceHolder — who holds this control's field
+///////////////////////////////////////////////////////////////////////////
+
+class BACKEND_API ibMetaData;
+
+class BACKEND_API ibValueMetaObject;
+class BACKEND_API ibValueMetaObjectAttributeBase;
+class BACKEND_API ibValueMetaObjectGenericData;
+class BACKEND_API ibValueMetaObjectTableData;
+
+class BACKEND_API ibSourceDataObject;
+
+///////////////////////////////////////////////////////////////////////////
+class SFRONTEND_API ibControlFrame;
+///////////////////////////////////////////////////////////////////////////
+
+#include "backend/srcObject.h"
+
+class SFRONTEND_API ibTypeControlFactory : public ibBackendTypeSourceFactory {
+public:
+
+	//////////////////////////////////////////////////
+	virtual const ibBackendSourceColumn* GetSourceAttributeObject() const = 0;
+	//////////////////////////////////////////////////
+
+	// THE ONE ROUTE every value editor walks when its Select button is pressed:
+	//
+	//   Undefined      -> GetDataType() decides the type (asking only when the cell
+	//                     admits more than one) and the value is created;
+	//   typed value    -> the quick choice for that type, and if the type has none,
+	//                     the metaobject's own selection form.
+	//
+	// Written ONCE here rather than in each control: a text control on a form, a
+	// table column and a filter cell are the same conversation with the user, and
+	// the second copy of it is where they start to differ by accident.
+	// `choiceForm` — the selection form the caller wants opened (a text control and a
+	// table column each carry one as a property); null = the metaobject's own.
+	// A number and a date are picked by the client itself (a calculator, a calendar):
+	// what comes back is typed into the field like anything else.
+	static bool ChooseValue(ibControlFrame* ownerValue, const class ibValueMetaObject* choiceForm = nullptr);
+
+	// The short list a value of this type is picked from (an enumeration's members, a boolean, a
+	// small reference list), put to the person as a choice. False when the type has none.
+	static bool QuickChoice(ibControlFrame* ownerValue, const ibClassID& clsid);
+	// …and the same list NARROWED BY WHAT WAS TYPED: one match is taken at once, several are put
+	// to the person; typed text that matches nothing changes nothing.
+	static void QuickChoice(ibControlFrame* controlValue, ibValue& newValue, const wxString& strData);
+
+	static ibClassID ShowSelectType(const ibMetaData* metadata, const ibTypeDescription& typeDescription);
+
+	//////////////////////////////////////////////////
+
+	ibSelectMode GetSelectMode() const;
+	
+	//Create value by selected type
+	virtual ibValue CreateValue() const;
+
+	//Get data type
+	virtual ibClassID GetDataType() const;
+
+	// The bound source's PRESENTATION (name / synonym / comment), resolved ONCE: a metadata FIELD -> its
+	// column (is-a presentation); a whole FORM ATTRIBUTE (no field column) -> the head attribute (also a
+	// presentation). Controls read GetSynonym/GetName/GetComment off it, blind to metadata vs attribute.
+	const ibBackendAbstractColumn* GetSourceAbstractColumn() const {
+		if (const ibBackendSourceColumn* column = GetSourceAttributeObject())
+			return column;
+		const ibSourceDescription& desc = GetSourceDesc();
+		return desc.IsOk() ? FindSourceHolder(desc.GetFirst()) : nullptr;   // whole-attribute → the head holder
+	}
+
+	// Designer: (re)build the control's DEFAULT child controls from its bound source explorer — a
+	// tablebox fills its columns (the runtime CreateColumnCollection is DesignerMode-gated, so the
+	// designer needs this twin). Default no-op; called after a drag-to-create drop AND by the inspector's
+	// Source-change refill — ONE source-explorer traversal point, no duplication.
+	virtual void RefillFromSource() { }
+
+	// GetSourceList is NOT implemented here — each concrete control overrides
+	// ibBackendTypeSourceFactory::GetSourceList(out) using its own GetOwnerForm()
+	// + GetFilterSourceDataType() (no cross-cast). See widgets / tableBox.
+
+	// (A VALUE IS *NOT* ADJUSTED HERE. It was, for one draft — and a form is one way a value arrives,
+	//  not the way it arrives most: a script, a record set written on the server and a data exchange
+	//  reach the same fields with no control anywhere. The narrowing belongs where the data is, so it
+	//  happens in the holder's own write, through ibChoiceLinkResolver::Adjust — Max, 2026-09-23.)
+
+	// ⭐ WHO HOLDS THIS CONTROL'S FIELD — the form's source for a control on a form, the ROW for a table
+	// column. One question, asked the way this class already asks GetOwnerForm / GetSourceObject; the
+	// answer is the tree's own pair of source shapes (choiceLinkResolver.h), not a new one.
+	//
+	// 🛑 AND NOT A PAIR OF VALUE VERBS, which is what stood here first: reading and writing values is
+	// the source's job, and putting it on the control dragged it onto the SCHEMA, which must know
+	// nothing about runtime values (Max, 2026-09-23).
+	//
+	// Empty by default: a control bound to nothing — a filter cell, a script's value — holds no fields
+	// and nothing is chosen within it.
+	virtual ibChoiceHolder GetChoiceHolder() const { return ibChoiceHolder(); }
+};
+
+#endif

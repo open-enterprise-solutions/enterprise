@@ -10,7 +10,7 @@
 // and no casting on either side.
 //
 // Instantiated only by ibWebSession::Login through
-// appData->CreateSession<ibWebClientSession>(presetGuid, address).
+// appData->CreateSession<ibWebClientSession>(ibSessionKind::WebClient, presetGuid, address).
 
 #include "backend/session/session.h"
 

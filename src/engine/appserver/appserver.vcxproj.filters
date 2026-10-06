@@ -7,11 +7,11 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="appServer.cpp" />
+    <ClCompile Include="clientListener.cpp" />
     <ClCompile Include="main.cpp" />
-    <ClCompile Include="serverConfig.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="appServer.h" />
-    <ClInclude Include="serverConfig.h" />
+    <ClInclude Include="clientListener.h" />
   </ItemGroup>
 </Project>

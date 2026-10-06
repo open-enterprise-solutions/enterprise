@@ -42,7 +42,7 @@ public:
 private:
 	// THE RULE, once: a row of another process is in the way when exactly one of the two is a Service session —
 	// servers share a base with servers, clients with clients, the two do not mix.
-	static bool IsInTheWay(bool arrivingService, ibSessionKind rowKind);
+	static bool IsInTheWay(bool arrivingService, ibRunMode rowRunMode);
 
 	ibSessionRegistry* m_registry;
 };

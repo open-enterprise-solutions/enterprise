@@ -103,7 +103,7 @@ void ibWebFrame::ClearMessage()
 
 void ibWebFrame::BackendError(const wxString& /*strFileName*/,
 	const wxString& /*strDocPath*/, const long /*line*/,
-	const wxString& strErrorMessage) const
+	const wxString& strErrorMessage)
 {
 	// Backend error → output panel as an error-level line. File / doc
 	// path / line are dropped for now; future surface could format
@@ -113,7 +113,7 @@ void ibWebFrame::BackendError(const wxString& /*strFileName*/,
 		static_cast<int>(ibStatusMessage_Error), strErrorMessage });
 }
 
-std::vector<ibWebFrame::PendingMessage> ibWebFrame::DrainPendingMessages() const
+std::vector<ibWebFrame::PendingMessage> ibWebFrame::DrainPendingMessages()
 {
 	std::lock_guard<std::mutex> g(m_msgMutex);
 	std::vector<PendingMessage> out;
@@ -121,7 +121,7 @@ std::vector<ibWebFrame::PendingMessage> ibWebFrame::DrainPendingMessages() const
 	return out;
 }
 
-bool ibWebFrame::TakeClearPending() const
+bool ibWebFrame::TakeClearPending()
 {
 	std::lock_guard<std::mutex> g(m_msgMutex);
 	const bool was = m_clearPending;

@@ -72,6 +72,14 @@ bool ibApplicationHost::HasPool(const ibConnectionPool* pool)
 
 ibApplicationHost* ibApplicationHost::Ensure(ibRunMode runMode)
 {
+	// ⚠ A RUN MODE NOBODY SAID IS REFUSED, not guessed: whether the process serves its bases or holds one as a file
+	// base decides its pool, who may share the base with it and what its first session is — a default picking one
+	// would pick it silently. Every opener comes through here first, before a database is touched.
+	if (runMode == eUNKNOWN_MODE) {
+		ibBackendCoreException::Error(_("The process did not say how it holds the base: the run mode is unknown."));
+		return nullptr;
+	}
+
 	// Startup is one thread, and the ctor loads plugins, whose initialise hook must be free to ask anything —
 	// so no lock is held around it.
 	if (s_applicationHost == nullptr) {
@@ -202,7 +210,7 @@ void ibApplicationHost::CloseAll()
 static std::size_t PickWorkerCount(ibRunMode runMode)
 {
 	if (runMode == eLAUNCHER_MODE) return 0;
-	if (runMode != eWEB_RUNTIME_MODE && runMode != eSERVICE_MODE) return 2;
+	if (runMode != eSERVER_MODE) return 2;
 	const std::size_t hw = std::thread::hardware_concurrency();
 	return std::min<std::size_t>(32, std::max<std::size_t>(4, hw * 4));
 }

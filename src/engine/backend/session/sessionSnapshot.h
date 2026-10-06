@@ -76,10 +76,11 @@ public:
 
 	ibRunMode GetSessionApplication(unsigned int idx) const;
 	int       GetSessionKind       (unsigned int idx) const;
-	// Short "Server" / "Client" label derived from (runMode, kind):
-	//   Web runtime + kind=WebClient (100) → "Client"
-	//   Web runtime + kind=WebServer (5) or legacy 0 → "Server"
-	//   Any desktop runtime → "Client"
+	// Short label derived from the kind:
+	//   Service / WebServer → "Server"
+	//   ThinClient / ThinDesigner → "Thin client"
+	//   a job → "Job"
+	//   anything else, legacy 0 included → "Client"
 	// Used by designer's Active Users dialog.
 	wxString  GetSessionKindDescr  (unsigned int idx) const;
 	unsigned int GetSessionCount() const { return static_cast<unsigned int>(m_listSession.size()); }

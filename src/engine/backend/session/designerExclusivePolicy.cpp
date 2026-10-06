@@ -15,13 +15,13 @@ bool ibDesignerExclusivePolicy::CanAdd(const ibSession& session, wxString& reaso
 	// Only designer Adds are subject to the exclusion; everyone else
 	// passes unconditionally.
 	//
-	// WHAT IS BEING ADDED, not WHERE it runs. A job's session carries the app mode of
+	// WHAT IS BEING ADDED, not WHERE it runs. A job's session carries the run mode of
 	// the process that started it, so a scheduled or background run inside
-	// designer.exe announced itself as eDESIGNER_MODE and was vetoed as "another
+	// designer.exe announced itself as a designer and was vetoed as "another
 	// designer process". One designer per base is about DESIGNERS; the kind is what
 	// says whether this is one. (A rented read never reaches here at all — it is
 	// minted unlisted and never goes through the registry.)
-	if (session.GetKind() != ibSessionKind::Designer)
+	if (!IsDesignerSessionKind(session.GetKind()))
 		return true;
 
 	if (m_registry == nullptr)
@@ -40,15 +40,15 @@ bool ibDesignerExclusivePolicy::CanAdd(const ibSession& session, wxString& reaso
 	const auto peerDesigners = [&ownId](const ibSessionSnapshot& snap) {
 		std::vector<unsigned int> rows;
 		for (unsigned int i = 0; i < snap.GetSessionCount(); ++i) {
-			if (snap.GetSessionApplication(i) != eDESIGNER_MODE)
-				continue;
-
-			// Same distinction on the ROW side: a job started BY a designer process
-			// carries that process's app mode without being a designer, so a peer's
-			// scheduled run must not veto a designer starting here. An unknown kind
-			// (legacy schema, back-fill missed) still counts as a designer — the safe
-			// side of this particular question.
-			if (IsJobSessionKind(static_cast<ibSessionKind>(snap.GetSessionKind(i))))
+			// A DESIGNER BY ITS KIND — a file base's or a thin one in a server alike; a job started BY a designer
+			// process is not one, so a peer's scheduled run does not veto a designer starting here. A row whose
+			// kind says nothing (legacy schema, back-fill missed) is a designer by the run mode such a row carried,
+			// the designer's 2 — the safe side of this particular question.
+			constexpr int kLegacyDesignerRunMode = 2;
+			const ibSessionKind kind = static_cast<ibSessionKind>(snap.GetSessionKind(i));
+			const bool legacyDesigner = kind == ibSessionKind::Unknown
+				&& static_cast<int>(snap.GetSessionApplication(i)) == kLegacyDesignerRunMode;
+			if (!IsDesignerSessionKind(kind) && !legacyDesigner)
 				continue;
 
 			if (snap.GetSession(i) == ownId)

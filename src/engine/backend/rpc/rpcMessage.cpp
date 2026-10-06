@@ -2,7 +2,7 @@
 //	Description : reading and writing the JSON-RPC envelope
 ////////////////////////////////////////////////////////////////////////////
 
-#include "backend/mcp/mcpMessage.h"
+#include "backend/rpc/rpcMessage.h"
 
 #include "backend/backend_exception.h"
 #include "backend/fileSystem/fs.h"            // ibReaderMemory / ibWriterMemory
@@ -21,7 +21,7 @@
 // ⚠ CHAINED, NOT CHOSEN — the same mistake the resolver below made once and says so. The metadata
 // answers for registered types; a composition's own parts are registered nowhere, so they are the
 // FLOOR under it. Asking only one of the two is how a lookup exists and never fires.
-void ibMcpInstallTypeLookup(ibJsonProvider& provider)
+void ibRpcInstallTypeLookup(ibJsonProvider& provider)
 {
 	provider.SetTypeLookup([](const wxString& name) -> ibClassID {
 		// ⚠ THE COMPOSITION'S OWN PARTS FIRST, AND NOT ONLY FOR SPEED. A lookup runs INSIDE the JSON
@@ -56,7 +56,7 @@ void ibMcpInstallTypeLookup(ibJsonProvider& provider)
 	});
 }
 
-wxString ibMcpRenderNode(const ibDataNode& node, const std::function<wxString(ibClassID)>& typeResolver)
+wxString ibRpcRenderNode(const ibDataNode& node, const std::function<wxString(ibClassID)>& typeResolver)
 {
 	ibJsonProvider provider;
 
@@ -88,7 +88,7 @@ wxString ibMcpRenderNode(const ibDataNode& node, const std::function<wxString(ib
 
 namespace {
 
-wxString EmitNode(const ibDataNode& node) { return ibMcpRenderNode(node); }
+wxString EmitNode(const ibDataNode& node) { return ibRpcRenderNode(node); }
 
 // The envelope every answer shares. Written by hand rather than by a helper
 // object because there are exactly two shapes and both are three lines.
@@ -105,7 +105,7 @@ ibDataNode Envelope(const ibDataValue& id)
 
 } // namespace
 
-bool ibMcpParseRequest(const wxString& text, ibMcpRequest& request, wxString& error)
+bool ibRpcParseRequest(const wxString& text, ibRpcRequest& request, wxString& error)
 {
 	const wxScopedCharBuffer utf8 = text.utf8_str();
 
@@ -119,7 +119,7 @@ bool ibMcpParseRequest(const wxString& text, ibMcpRequest& request, wxString& er
 	try {
 		ibReaderMemory reader(buffer);
 		ibJsonProvider provider;
-		ibMcpInstallTypeLookup(provider);
+		ibRpcInstallTypeLookup(provider);
 		if (!provider.Read(reader, root)) {
 			error = wxT("the request could not be read as JSON");
 			return false;
@@ -153,7 +153,7 @@ bool ibMcpParseRequest(const wxString& text, ibMcpRequest& request, wxString& er
 	return true;
 }
 
-bool ibMcpParseResponse(const wxString& text, ibDataValue& id, wxString& payload, bool& isError)
+bool ibRpcParseResponse(const wxString& text, ibDataValue& id, wxString& payload, bool& isError)
 {
 	const wxScopedCharBuffer utf8 = text.utf8_str();
 
@@ -165,7 +165,7 @@ bool ibMcpParseResponse(const wxString& text, ibDataValue& id, wxString& payload
 	try {
 		ibReaderMemory reader(buffer);
 		ibJsonProvider provider;
-		ibMcpInstallTypeLookup(provider);
+		ibRpcInstallTypeLookup(provider);
 		if (!provider.Read(reader, root))
 			return false;
 	}
@@ -187,24 +187,24 @@ bool ibMcpParseResponse(const wxString& text, ibDataValue& id, wxString& payload
 		id = *found;
 
 	isError = (failed != nullptr);
-	payload = ibMcpRenderNode(isError ? *failed : *result);
+	payload = ibRpcRenderNode(isError ? *failed : *result);
 	return true;
 }
 
-wxString ibMcpWriteResult(const ibDataValue& id, const ibDataNode& result)
+wxString ibRpcWriteResult(const ibDataValue& id, const ibDataNode& result)
 {
 	ibDataNode root = Envelope(id);
 	root.Child(wxT("result")) = result;
 	return EmitNode(root);
 }
 
-wxString ibMcpWriteError(const ibDataValue& id, ibMcpError code, const wxString& message)
+wxString ibRpcWriteError(const ibDataValue& id, ibRpcError code, const wxString& message)
 {
-	return ibMcpWriteError(id, code, message, nullptr);
+	return ibRpcWriteError(id, code, message, nullptr);
 }
 
-wxString ibMcpWriteError(const ibDataValue& id, ibMcpError code, const wxString& message,
-	const ibDataNode* data)
+// The error answer, whoever numbers the code — JSON-RPC's own, or the application's.
+static wxString WriteError(const ibDataValue& id, s64 code, const wxString& message, const ibDataNode* data)
 {
 	ibDataNode root = Envelope(id);
 
@@ -212,7 +212,7 @@ wxString ibMcpWriteError(const ibDataValue& id, ibMcpError code, const wxString&
 	// Built as a VALUE, not through SetValue<T>: the node's codecs cover a fixed
 	// set (wxString / bool / s32 / buffer / guid / ibNumber / date) and a 64-bit
 	// integer is not one of them.
-	error.AddField(wxT("code"), ibDataValue::Int((s64)code));
+	error.AddField(wxT("code"), ibDataValue::Int(code));
 	error.SetValue(wxT("message"), message);
 
 	// ⭐ WHAT THE CALLER CAN DO ABOUT IT, when the refusal has an answer. A version
@@ -224,4 +224,15 @@ wxString ibMcpWriteError(const ibDataValue& id, ibMcpError code, const wxString&
 		error.Child(wxT("data")) = *data;
 
 	return EmitNode(root);
+}
+
+wxString ibRpcWriteError(const ibDataValue& id, ibRpcError code, const wxString& message,
+	const ibDataNode* data)
+{
+	return WriteError(id, static_cast<s64>(code), message, data);
+}
+
+wxString ibRpcWriteError(const ibDataValue& id, s32 code, const wxString& message)
+{
+	return WriteError(id, code, message, nullptr);
 }
