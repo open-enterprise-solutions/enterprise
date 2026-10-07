@@ -13,6 +13,10 @@ one process, a web server — and a built-in **MCP server**, so an
 AI assistant can read, build and check a configuration alongside the developer, through the same
 doors the developer uses.
 
+**New here?** The [wiki](https://github.com/open-enterprise-solutions/enterprise/wiki) is the
+user's guide: installing a build, a first application step by step, the designer, the metadata
+tree, forms, the language, queries and reports, and the pitfalls.
+
 ---
 
 ## What you build with it
