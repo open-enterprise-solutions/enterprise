@@ -166,10 +166,10 @@ ibString ibValueRecordDataObjectConstant::GetString() const
 
 const ibSourceExplorer* ibValueRecordDataObjectConstant::GetSourceExplorer() const
 {
-	m_sourceExplorer.Reset(
+	if (!m_sourceExplorer.Reset(m_metaObject->GetMetaData()->GetFactoryCountChanges(),
 		m_metaObject->GetName(), m_metaObject->GetSynonym(), m_metaObject->GetMetaID(), GetClassType(),
-		false, true
-	);
+		false, true))
+		return &m_sourceExplorer;   // built at this version of the metadata already — read as it is
 
 	m_sourceExplorer.AppendColumn(m_metaObject->GetValueColumn()->GetQueryColumn());
 	return &m_sourceExplorer;

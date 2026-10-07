@@ -411,7 +411,7 @@ wxString Styles(const std::vector<CellStyle>& styles)
 
 } // namespace
 
-bool ibSheetFormatXlsx::Write(const wxString& fileName, const ibSpreadsheetDescription& sheet) const
+bool ibSheetFormatXlsx::Write(wxOutputStream& output, const ibSpreadsheetDescription& sheet) const
 {
 	// --- the styles the cells actually use, gathered before anything is written --
 	std::map<CellStyle, size_t> styleAt;
@@ -678,11 +678,7 @@ bool ibSheetFormatXlsx::Write(const wxString& fileName, const ibSpreadsheetDescr
 	body += wxT("</worksheet>");
 
 	// --- write the package -------------------------------------------------------
-	wxFileOutputStream file(fileName);
-	if (!file.IsOk())
-		return false;
-
-	wxZipOutputStream zip(file);
+	wxZipOutputStream zip(output);
 	if (!zip.IsOk())
 		return false;
 
@@ -696,7 +692,7 @@ bool ibSheetFormatXlsx::Write(const wxString& fileName, const ibSpreadsheetDescr
 	// ⚠ CLOSED EXPLICITLY, and its answer read: a zip finishes with a central
 	// directory written on Close, so a stream that is merely destructed can leave a
 	// file that exists, has size, and is not a zip.
-	return zip.Close() && file.Close();
+	return zip.Close();
 }
 
 ///////////////////////////////////////////////////////////////////////////////

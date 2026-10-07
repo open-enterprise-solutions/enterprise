@@ -882,7 +882,9 @@ const ibSourceExplorer* ibValueReferenceDataObject::GetSourceExplorer() const
 	const ibValueMetaObjectRecordData* metaObject = GetMetaObject();
 	if (metaObject == nullptr)
 		return nullptr;   // unresolved / empty reference — no target type to describe, so the hop stops here
-	m_sourceExplorer.Reset(wxT("Ref"), _("Ref"), metaObject->GetMetaID(), GetClassType(), false, false);
+	if (!m_sourceExplorer.Reset(metaObject->GetMetaData()->GetFactoryCountChanges(),
+		wxT("Ref"), _("Ref"), metaObject->GetMetaID(), GetClassType(), false, false))
+		return &m_sourceExplorer;   // built at this version of the metadata already — read as it is
 	for (const auto object : metaObject->GetGenericAttributeArrayObject())
 		m_sourceExplorer.AppendColumn(object->GetQueryColumn());
 	return &m_sourceExplorer;

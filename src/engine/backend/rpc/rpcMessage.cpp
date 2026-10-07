@@ -59,6 +59,8 @@ void ibRpcInstallTypeLookup(ibJsonProvider& provider)
 wxString ibRpcRenderNode(const ibDataNode& node, const std::function<wxString(ibClassID)>& typeResolver)
 {
 	ibJsonProvider provider;
+	// A message on the wire is one line: a program reads it, and the readable view's breaks and indents were bytes.
+	provider.SetCompact(true);
 
 	// ⭐ A NODE SAYS WHAT IT IS, IN WORDS — even when its type is a synthetic id nothing constructs.
 	// The provider already names every REGISTERED type; what it could not name were the ids a

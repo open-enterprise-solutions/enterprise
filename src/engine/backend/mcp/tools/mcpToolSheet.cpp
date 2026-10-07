@@ -1366,7 +1366,7 @@ public:
 		}
 
 		ibSpreadsheetDescription desc;
-		if (!format->Read(fileName, desc)) {
+		if (!format->ReadFile(fileName, desc)) {
 			refusal = wxString::Format(
 				ibMcpText("'%s' could not read that file - it may be damaged, or written by something "
 				  "this format does not follow."), format->GetName());
@@ -2097,7 +2097,7 @@ public:
 		// having this here: the file then answers for what the CONFIGURATION holds, and a
 		// difference between this file and one saved from an editor says the editor's road is
 		// where something is lost.
-		if (!format->Write(fileName, sheet->GetSpreadsheetDesc())) {
+		if (!format->WriteFile(fileName, sheet->GetSpreadsheetDesc())) {
 			refusal = wxString::Format(ibMcpText("'%s' could not be written."), fileName);
 			return false;
 		}

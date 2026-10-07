@@ -52,13 +52,20 @@ public:
 	// clsid 0; a numeric NodeType needs no lookup and always resolves.
 	void SetTypeLookup(std::function<ibClassID(const wxString&)> fn) { m_lookupType = std::move(fn); }
 
+	// One line, no space — the wire's: a protocol's answer is read by a program, and the line breaks and the indents of
+	// the readable view were bytes on every call (ibRpcRenderNode). Off — readable — by default.
+	void SetCompact(bool compact) { m_compact = compact; }
+
 private:
 	void EmitNode(const ibDataNode& node, std::string& out, int depth) const;
 	void EmitValue(const ibDataValue& value, std::string& out, int depth) const;
+	// The indent of a line of the readable view; nothing in the compact one.
+	void Pad(std::string& out, int depth) const { if (!m_compact) out.append(static_cast<size_t>(depth) * 2, ' '); }
 	wxString ResolveType(ibClassID clsid) const;
 
 	std::function<wxString(ibClassID)>       m_resolveType;
 	std::function<ibClassID(const wxString&)> m_lookupType;
+	bool                                      m_compact = false;
 };
 
 #endif // !__SERIALIZE_JSON_PROVIDER_H__

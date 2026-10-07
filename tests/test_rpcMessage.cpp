@@ -130,8 +130,10 @@ TEST(RpcMessage,WriteResult_CarriesTheIdBackVerbatim)
 	result.SetValue(wxT("answer"), wxString(wxT("yes")));
 
 	const wxString numeric = ibRpcWriteResult(ibDataValue::Int(7), result);
-	EXPECT_NE(numeric.Find(wxT("\"id\": 7")), wxNOT_FOUND) << numeric.ToStdString();
+	EXPECT_NE(numeric.Find(wxT("\"id\":7")), wxNOT_FOUND) << numeric.ToStdString();
 	EXPECT_NE(numeric.Find(wxT("result")), wxNOT_FOUND);
+	// …and on one line: a message on the wire carries no breaks nor indents.
+	EXPECT_EQ(numeric.Find(wxT('\n')), wxNOT_FOUND) << numeric.ToStdString();
 
 	const wxString textual = ibRpcWriteResult(ibDataValue::String(wxT("abc")), result);
 	EXPECT_NE(textual.Find(wxT("\"abc\"")), wxNOT_FOUND) << textual.ToStdString();

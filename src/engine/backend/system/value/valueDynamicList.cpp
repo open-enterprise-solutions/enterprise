@@ -201,6 +201,7 @@ void ibValueDynamicList::RebuildSource()
 	// to every picker in the settings dialog. That was the gap — the composer took the text and
 	// nothing downstream knew what came out of it.
 	m_querySchema.clear();
+	m_sourceExplorer.Clear();   // the source or its query changed — described anew on the next read
 	if (IsArbitraryQuery()) {
 		m_composer.FromText(GetArbitraryQueryText());
 
@@ -619,7 +620,9 @@ const ibSourceExplorer* ibValueDynamicList::GetSourceExplorer() const
 	// neither m_col nor the synonym (synonym defaulted to the name). null / !IsAllowed are skipped inside.
 	// Root flagged a TABLE SECTION — a dynamic list IS a table, so IsTableSource() reports true and the
 	// attribute drags as a tablebox (metadata-free, same as the value-table / object lists).
-	m_sourceExplorer.Reset(GetObjectTypeName(), GetObjectTypeName(), wxNOT_FOUND, g_valueDynamicListCLSID, /*tableSection*/true);
+	if (!m_sourceExplorer.Reset(GetSourceMetaData()->GetFactoryCountChanges(),
+		GetObjectTypeName(), GetObjectTypeName(), wxNOT_FOUND, g_valueDynamicListCLSID, /*tableSection*/true))
+		return &m_sourceExplorer;   // built at this version of the metadata, of this source and query — read as it is
 	// The list is a MIRROR: it resets the explorer and hands it to the source descriptor (the single bridge), which
 	// forwards the fill to the metaobject — the same one that lists/runs commands and resolves select.
 	if (const ibQueryableSourceDescriptor* holder = GetSourceDescriptor())
@@ -783,6 +786,7 @@ bool ibValueDynamicList::ReadProperty(const ibDataNode& node)
 
 	// Default view — a hidden intrinsic field (absent on an old blob → Normal, forward-compatible).
 	m_view = (ibDynamicListView)node.GetValue<s32>(wxT("View"));
+	m_sourceExplorer.Clear();   // read anew — its source and its view with it
 
 	// DynamicRead — stored INVERTED (DynamicReadOff: 1 = static/RAM-snapshot, absent/0 = the default dynamic read), so
 	// a list blob written before this field loads as dynamic. (SetValue does not fire OnPropertyChanged.)

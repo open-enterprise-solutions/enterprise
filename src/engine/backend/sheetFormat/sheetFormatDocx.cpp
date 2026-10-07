@@ -277,14 +277,14 @@ bool ContinuesMerge(const ibSpreadsheetDescription& sheet, int row, int numCols)
 
 } // namespace
 
-bool ibSheetFormatDocx::Read(const wxString& WXUNUSED(fileName), ibSpreadsheetDescription& WXUNUSED(sheet)) const
+bool ibSheetFormatDocx::Read(wxInputStream& WXUNUSED(input), ibSpreadsheetDescription& WXUNUSED(sheet)) const
 {
 	// See the header: a Word file is a flow, not a sheet. Refused plainly rather
 	// than half-guessed.
 	return false;
 }
 
-bool ibSheetFormatDocx::Write(const wxString& fileName, const ibSpreadsheetDescription& sheet) const
+bool ibSheetFormatDocx::Write(wxOutputStream& output, const ibSpreadsheetDescription& sheet) const
 {
 	const int numRows = sheet.GetNumberRows();
 	const int numCols = sheet.GetNumberCols();
@@ -486,11 +486,7 @@ bool ibSheetFormatDocx::Write(const wxString& fileName, const ibSpreadsheetDescr
 	body += wxT("<w:p/>");
 	body += wxT("</w:body></w:document>");
 
-	wxFileOutputStream file(fileName);
-	if (!file.IsOk())
-		return false;
-
-	wxZipOutputStream zip(file);
+	wxZipOutputStream zip(output);
 	if (!zip.IsOk())
 		return false;
 
@@ -503,7 +499,7 @@ bool ibSheetFormatDocx::Write(const wxString& fileName, const ibSpreadsheetDescr
 
 	// The central directory is written on Close — a zip that is merely destructed
 	// is a file that exists and is not a zip.
-	return zip.Close() && file.Close();
+	return zip.Close();
 }
 
 ///////////////////////////////////////////////////////////////////////////////

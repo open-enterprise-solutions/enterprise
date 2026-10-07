@@ -29,8 +29,8 @@ public:
 	virtual wxString GetName() const override;
 	virtual wxString GetExtension() const override;
 
-	virtual bool Read(const wxString& fileName, ibSpreadsheetDescription& sheet) const override;
-	virtual bool Write(const wxString& fileName, const ibSpreadsheetDescription& sheet) const override;
+	virtual bool Read(wxInputStream& input, ibSpreadsheetDescription& sheet) const override;
+	virtual bool Write(wxOutputStream& output, const ibSpreadsheetDescription& sheet) const override;
 };
 
 #endif // !__SHEET_FORMAT_NATIVE_H__

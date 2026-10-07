@@ -506,6 +506,7 @@ bool ibValueRecordDataObjectHierarchyRef::ReadData()
 			m_objMode = ibObjectMode::OBJECT_FOLDER;
 		else
 			m_objMode = ibObjectMode::OBJECT_ITEM;
+		m_sourceExplorer.Clear();   // a folder is described otherwise than an item — built anew on the next read
 		return true;
 	}
 	return false;
@@ -523,6 +524,7 @@ bool ibValueRecordDataObjectHierarchyRef::ReadData(const ibGuid& srcGuid)
 			m_objMode = ibObjectMode::OBJECT_FOLDER;
 		else
 			m_objMode = ibObjectMode::OBJECT_ITEM;
+		m_sourceExplorer.Clear();   // …and so described anew
 		return true;
 	}
 	return false;

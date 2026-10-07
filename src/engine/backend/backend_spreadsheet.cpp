@@ -658,7 +658,7 @@ bool ibBackendSpreadsheetObject::LoadFromFile(const wxString& strFileName)
 		return false;   // a name nothing here reads — said plainly, not guessed at
 
 	ibSpreadsheetDescription read;
-	if (!format->Read(strFileName, read))
+	if (!format->ReadFile(strFileName, read))
 		return false;
 
 	m_spreadsheetDesc = read;
@@ -673,7 +673,7 @@ bool ibBackendSpreadsheetObject::SaveToFile(const wxString& strFileName)
 	if (format == nullptr)
 		return false;
 
-	return format->Write(strFileName, m_spreadsheetDesc);
+	return format->WriteFile(strFileName, m_spreadsheetDesc);
 }
 
 #pragma endregion 

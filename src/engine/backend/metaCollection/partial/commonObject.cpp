@@ -2021,10 +2021,10 @@ const ibSourceExplorer* ibValueRecordDataObject::GetSourceExplorer() const
 {
 	const ibValueMetaObjectRecordData* metaObject = GetMetaObject();
 
-	m_sourceExplorer.Reset(
+	if (!m_sourceExplorer.Reset(metaObject->GetMetaData()->GetFactoryCountChanges(),
 		wxT("Ref"), _("Ref"), metaObject->GetMetaID(), GetClassType(),
-		false, false
-	);
+		false, false))
+		return &m_sourceExplorer;   // built at this version of the metadata already — read as it is
 
 	for (const auto object : metaObject->GetGenericAttributeArrayObject()) {
 		m_sourceExplorer.AppendColumn(object->GetQueryColumn());
@@ -2561,10 +2561,10 @@ ibString ibValueRecordDataObjectRef::GetString() const
 
 const ibSourceExplorer* ibValueRecordDataObjectRef::GetSourceExplorer() const
 {
-	m_sourceExplorer.Reset(
+	if (!m_sourceExplorer.Reset(m_metaObject->GetMetaData()->GetFactoryCountChanges(),
 		wxT("Ref"), _("Ref"), m_metaObject->GetMetaID(), GetClassType(),
-		false, false
-	);
+		false, false))
+		return &m_sourceExplorer;   // built at this version of the metadata already — read as it is
 
 	ibValueMetaObjectAttributeBase* attribute = m_metaObject->GetAttributeForCode();
 
@@ -2740,10 +2740,10 @@ ibValueRecordDataObjectHierarchyRef::~ibValueRecordDataObjectHierarchyRef()
 
 const ibSourceExplorer* ibValueRecordDataObjectHierarchyRef::GetSourceExplorer() const
 {
-	m_sourceExplorer.Reset(
+	if (!m_sourceExplorer.Reset(m_metaObject->GetMetaData()->GetFactoryCountChanges(),
 		wxT("Ref"), _("Ref"), m_metaObject->GetMetaID(), GetClassType(),
-		false, false
-	);
+		false, false))
+		return &m_sourceExplorer;   // built at this version of the metadata already — read as it is
 	ibValueMetaObjectAttributeBase* attribute = m_metaObject->GetAttributeForCode();
 	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
 		ibItemMode attrUse = object->GetItemMode();
@@ -3683,9 +3683,9 @@ bool ibValueRecordManagerObject::IsEmpty() const
 
 const ibSourceExplorer* ibValueRecordManagerObject::GetSourceExplorer() const
 {
-	m_sourceExplorer.Reset(
-		wxT("Ref"), _("Ref"), m_metaObject->GetMetaID(), GetClassType(), false, false
-	);
+	if (!m_sourceExplorer.Reset(m_metaObject->GetMetaData()->GetFactoryCountChanges(),
+		wxT("Ref"), _("Ref"), m_metaObject->GetMetaID(), GetClassType(), false, false))
+		return &m_sourceExplorer;   // built at this version of the metadata already — read as it is
 
 	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
 		m_sourceExplorer.AppendColumn(object->GetQueryColumn());

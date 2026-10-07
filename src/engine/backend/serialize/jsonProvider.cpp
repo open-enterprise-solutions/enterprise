@@ -10,8 +10,6 @@
 
 namespace {
 
-void Indent(std::string& out, int depth) { out.append((size_t)depth * 2, ' '); }
-
 // Built-in clsid -> name (Number, String, …) via the STATIC factory. Reference
 // types are metadata-specific and resolve only through the injected resolver.
 wxString BuiltinTypeName(ibClassID clsid) {
@@ -71,13 +69,13 @@ void ibJsonProvider::EmitValue(const ibDataValue& v, std::string& out, int depth
 	case ibDataKind::Array: {
 		const std::vector<ibDataValue>& a = v.AsArray();
 		if (a.empty()) { out += "[]"; break; }
-		out += "[\n";
+		out += m_compact ? "[" : "[\n";
 		for (size_t i = 0; i < a.size(); i++) {
-			Indent(out, depth + 1);
+			Pad(out, depth + 1);
 			EmitValue(a[i], out, depth + 1);
-			out += (i + 1 < a.size()) ? ",\n" : "\n";
+			out += (i + 1 < a.size()) ? (m_compact ? "," : ",\n") : (m_compact ? "" : "\n");
 		}
-		Indent(out, depth);
+		Pad(out, depth);
 		out += "]";
 		break;
 	}
@@ -86,24 +84,24 @@ void ibJsonProvider::EmitValue(const ibDataValue& v, std::string& out, int depth
 
 void ibJsonProvider::EmitNode(const ibDataNode& node, std::string& out, int depth) const
 {
-	out += "{\n";
+	out += m_compact ? "{" : "{\n";
 	bool first = true;
 	const int inner = depth + 1;
 
 	auto key = [&](const char* keyLiteral) {
-		if (!first) out += ",\n";
+		if (!first) out += m_compact ? "," : ",\n";
 		first = false;
-		Indent(out, inner);
+		Pad(out, inner);
 		out += "\"";
 		out += keyLiteral;
-		out += "\": ";
+		out += m_compact ? "\":" : "\": ";
 	};
 	auto namedKey = [&](const wxString& name) {
-		if (!first) out += ",\n";
+		if (!first) out += m_compact ? "," : ",\n";
 		first = false;
-		Indent(out, inner);
+		Pad(out, inner);
 		out += JsonString(name);
-		out += ": ";
+		out += m_compact ? ":" : ": ";
 	};
 
 	// identity (only when meaningful — keeps Child sub-nodes clean). NodeType is the
@@ -181,18 +179,19 @@ void ibJsonProvider::EmitNode(const ibDataNode& node, std::string& out, int dept
 	const std::vector<ibDataNode>& children = node.Children();
 	if (!children.empty()) {
 		key("NodeChildren");
-		out += "[\n";
+		out += m_compact ? "[" : "[\n";
 		for (size_t i = 0; i < children.size(); i++) {
-			Indent(out, inner + 1);
+			Pad(out, inner + 1);
 			EmitNode(children[i], out, inner + 1);
-			out += (i + 1 < children.size()) ? ",\n" : "\n";
+			out += (i + 1 < children.size()) ? (m_compact ? "," : ",\n") : (m_compact ? "" : "\n");
 		}
-		Indent(out, inner);
+		Pad(out, inner);
 		out += "]";
 	}
 
-	out += "\n";
-	Indent(out, depth);
+	if (!m_compact)
+		out += "\n";
+	Pad(out, depth);
 	out += "}";
 }
 

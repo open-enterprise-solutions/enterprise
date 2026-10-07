@@ -352,13 +352,9 @@ std::vector<XlsxStyle> ReadStyles(const wxString& xmlText)
 	return byIndex;
 }
 
-bool ReadPackage(const wxString& fileName, ibPackage& parts)
+bool ReadPackage(wxInputStream& input, ibPackage& parts)
 {
-	wxFileInputStream file(fileName);
-	if (!file.IsOk())
-		return false;
-
-	wxZipInputStream zip(file);
+	wxZipInputStream zip(input);
 	if (!zip.IsOk())
 		return false;
 
@@ -765,10 +761,10 @@ int ReadSheet(const wxString& partText, const std::vector<wxString>& strings,
 
 } // namespace
 
-bool ibSheetFormatXlsx::Read(const wxString& fileName, ibSpreadsheetDescription& sheet) const
+bool ibSheetFormatXlsx::Read(wxInputStream& input, ibSpreadsheetDescription& sheet) const
 {
 	ibPackage parts;
-	if (!ReadPackage(fileName, parts))
+	if (!ReadPackage(input, parts))
 		return false;
 
 	std::vector<wxString> sheetParts;

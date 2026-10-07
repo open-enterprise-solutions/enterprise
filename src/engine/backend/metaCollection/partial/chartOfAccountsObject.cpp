@@ -100,7 +100,9 @@ bool ibValueRecordDataObjectChartOfAccounts::SaveData()
 
 const ibSourceExplorer* ibValueRecordDataObjectChartOfAccounts::GetSourceExplorer() const
 {
-	m_sourceExplorer.Reset(wxT("Ref"), _("Ref"), m_metaObject->GetMetaID(), GetClassType(), false);
+	if (!m_sourceExplorer.Reset(m_metaObject->GetMetaData()->GetFactoryCountChanges(),
+		wxT("Ref"), _("Ref"), m_metaObject->GetMetaID(), GetClassType(), false))
+		return &m_sourceExplorer;   // built at this version of the metadata already — read as it is
 	ibValueMetaObjectChartOfAccounts* metaRef = nullptr;
 
 	if (m_metaObject->ConvertToValue(metaRef)) {

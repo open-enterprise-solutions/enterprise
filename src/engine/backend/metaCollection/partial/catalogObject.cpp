@@ -32,10 +32,10 @@ ibValueRecordDataObjectCatalog::ibValueRecordDataObjectCatalog(const ibValueReco
 
 const ibSourceExplorer* ibValueRecordDataObjectCatalog::GetSourceExplorer() const
 {
-	m_sourceExplorer.Reset(
+	if (!m_sourceExplorer.Reset(m_metaObject->GetMetaData()->GetFactoryCountChanges(),
 		wxT("Ref"), _("Ref"), m_metaObject->GetMetaID(), GetClassType(),
-		false
-	);
+		false))
+		return &m_sourceExplorer;   // built at this version of the metadata already — read as it is
 
 	ibValueMetaObjectCatalog* metaRef = nullptr;
 

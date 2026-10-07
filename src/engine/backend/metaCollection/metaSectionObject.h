@@ -26,6 +26,10 @@ public:
 			return m_propertyPicture->GetValueAsBitmap();
 		return ibBackendPicture::CreatePicture(g_metaCommonMetadataCLSID);
 	}
+	// …and what the picture IS — what a server sends it by (ibBackendPicture::GetServerPicture), as a command's; none —
+	// the section shows the configuration's picture, as above.
+	ibPictureDescription GetPictureDesc() const { return m_propertyPicture->GetValueAsPictureDesc(); }
+	bool IsEmptyPicture() const { return m_propertyPicture->IsEmptyProperty(); }
 
 	virtual ibClassID ResolveChild(const ibClassID& clsid) const {
 		if (clsid == g_metaSectionCLSID ||
