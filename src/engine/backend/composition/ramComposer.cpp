@@ -14,6 +14,7 @@
 #include "backend/tabularModel.h"           // ibRamValueStorage — RowCount / SplitField / ResolveField
 #include "backend/composition/drivers/compositionDriver.h"   // ibCompositionDriver — a composition is printed through
 #include "backend/query/queryConstructorModel.h"            // WalkFrom — the hops of a path, a reference by its type
+#include "backend/query/queryRender.h"                      // ibQueryColumnFromPath — a dotted path becomes its hops, once
 
 // ⚠ NAMED, NOT INHERITED — MSVC hands these over transitively and GCC / Clang do not.
 #include <algorithm>    // std::find / std::distance — the grouping paths are looked up by value
@@ -253,10 +254,18 @@ bool ibDataRamComposer::Run(ibCompositionDriver& driver)
 		column.m_alias    = field;
 		column.m_byAlias  = true;    // read by name — a RAM table has no query column to point at
 		column.m_role     = ibQueryLowering::ibColumnRole::Detail;
+		// ⭐ …OF ITS DECLARED TYPE, as a query's column is (queryLowering: `oc.m_type = c->GetTypeDesc()`): the leaf of the
+		// field's walk — Number(15,2), a date's fractions. With none, a driver had no type to write a figure by
+		// (ibFormatString::FromTypeDesc): a tabular section's price printed `55`, a quantity `300.000` here and `250` there.
+		const ibQueryAstExprPtr hops = ibQueryColumnFromPath(field);
+		if (hops && !hops->m_path.empty())
+			column.m_type = WalkPath(hops->m_path).m_type;
 		info.m_schema.push_back(column);
 		info.m_titles.push_back(field);
 		info.m_paths.push_back(field);
 		info.m_shown.push_back(true);
+		// …and how it is shown — the field's appearance (its Format), as the DB side reads it (dataComposerRun).
+		info.m_appearances.push_back(AppearanceForPath(field));
 	}
 
 	driver.OnOutputBegin(info);

@@ -12,6 +12,8 @@
 #include <wx/msgdlg.h>
 
 #include "core/diagnostics/crashGuard.h"   // ibCrashGuard::Install — the process's journal and dumps
+#include "frmclient/artProvider/splash/splashLogo.h"   // the splash's picture, the desktop's
+#include "frmclient/win/picture.h"                     // ibProtocolPicture — a PNG in base64, made a bitmap
 #include "protocol/connectionFile.h"
 #include "protocol/connectionServer.h"
 
@@ -33,6 +35,7 @@ void ibAppEnterprise::OnInitCmdLine(wxCmdLineParser& parser)
 	parser.AddOption(wxT("ib_usr"), wxT("ibuser"),   "IB user",                 wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL);
 	parser.AddOption(wxT("ib_pwd"), wxT("ibpwd"),    "IB password",             wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL);
 	parser.AddOption(wxT("lc"),     wxT("locale"),   "UI locale",               wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL);
+	parser.AddSwitch(wxT("debug"),  wxT("debug"),    "Enable debug attach.",    wxCMD_LINE_VAL_NONE);
 
 	wxApp::OnInitCmdLine(parser);
 }
@@ -54,6 +57,8 @@ bool ibAppEnterprise::OnCmdLineParsed(wxCmdLineParser& parser)
 
 	parser.Found(wxT("lc"), &m_strLocale);
 
+	m_debugEnable = parser.FoundSwitch(wxT("debug")) == wxCMD_SWITCH_ON;
+
 	return wxApp::OnCmdLineParsed(parser);
 }
 
@@ -73,6 +78,12 @@ bool ibAppEnterprise::OnInit()
 
 	wxInitAllImageHandlers();
 
+	// THE SPLASH — the desktop's (enterprise/mainApp.cpp): up while the base opens and the client logs in, gone with the
+	// main window shown — or before a refusal is said, which it would stand over.
+	const auto splashDestroy = [](wxSplashScreen* shown) { shown->Destroy(); };
+	std::unique_ptr<wxSplashScreen, decltype(splashDestroy)> splash(new ibProcessSplashScreen(ibProtocolPicture(s_splashLogo_png),
+		wxSPLASH_CENTRE_ON_SCREEN, -1, nullptr, -1, wxDefaultPosition, wxDefaultSize, wxBORDER_SIMPLE), splashDestroy);
+
 	std::unique_ptr<ibProtocolConnection> connection;
 	wxString error;
 
@@ -80,6 +91,7 @@ bool ibAppEnterprise::OnInit()
 		// An application server — over its port.
 		auto server = std::make_unique<ibProtocolConnectionServer>();
 		if (!server->Open(m_strAddress, error)) {
+			splash.reset();
 			wxMessageBox(error, _("OES Enterprise - startup error"), wxOK | wxICON_ERROR);
 			return false;
 		}
@@ -88,7 +100,8 @@ bool ibAppEnterprise::OnInit()
 	else if (!m_strFile.IsEmpty() || (!m_strServer.IsEmpty() && !m_strDatabase.IsEmpty())) {
 		// A file base — opened in this process, by the library that brings the server in.
 		ibProtocolNode request;
-		request.SetValue(ibProtocolName::Locale, m_strLocale);
+		request.SetValue(ibProtocolName::Locale, m_strLocale)
+			.SetValue(ibProtocolName::Debug, m_debugEnable);
 		if (!m_strFile.IsEmpty()) {
 			request.SetValue(ibProtocolName::Directory, m_strFile);
 		}
@@ -101,6 +114,7 @@ bool ibAppEnterprise::OnInit()
 		}
 		auto file = std::make_unique<ibProtocolConnectionFile>();
 		if (!file->Open(request.Write(), error)) {
+			splash.reset();
 			wxMessageBox(error + wxT("\n\n") + (m_strFile.IsEmpty() ? m_strServer + wxT(" / ") + m_strDatabase : m_strFile),
 				_("OES Enterprise - startup error"), wxOK | wxICON_ERROR);
 			return false;
@@ -108,6 +122,7 @@ bool ibAppEnterprise::OnInit()
 		connection = std::move(file);
 	}
 	else {
+		splash.reset();
 		wxMessageBox(
 			_("Cannot start enterprise-thin.exe - no infobase specified.\n\n"
 			  "Provide one of:\n"

@@ -22,8 +22,8 @@ struct ibFileBase;
 extern "C" {
 
 // `request` — a JSON object saying where the base lives, as ibFileInstanceRequest does: Directory (a Firebird base's
-// folder), or Server, Port, User, Password, Database (PostgreSQL); Name, Locale. Null when it did not open, and why
-// in `error`.
+// folder), or Server, Port, User, Password, Database (PostgreSQL); Name, Locale; Debug (true — the engine's debug
+// server comes up, as enterprise.exe's `--debug`). Null when it did not open, and why in `error`.
 FILESERVER_API ibFileBase* ibFileBaseOpen(const std::string& request, wxString& error);
 
 // One JSON-RPC request to the base's clients, and its answer.

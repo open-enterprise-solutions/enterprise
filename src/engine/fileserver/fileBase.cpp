@@ -58,6 +58,8 @@ ibFileBase* ibFileBaseOpen(const std::string& request, wxString& error)
 	opening.m_user      = text("User");
 	opening.m_password  = text("Password");
 	opening.m_database  = text("Database");
+	const auto debug = where.find("Debug");
+	const bool debugEnable = debug != where.end() && debug->is_boolean() && debug->get<bool>();
 
 	// THE THREAD COMES BACK AS IT WAS. Opening leaves it working for the base — and the client's thread works for
 	// none: its calls are served on the sessions' own workers (ibClientHost::Call), as the application server's are.
@@ -82,6 +84,11 @@ ibFileBase* ibFileBaseOpen(const std::string& request, wxString& error)
 		ReleaseProcess();
 		return nullptr;
 	}
+
+	// THE DEBUG SERVER — as enterprise.exe's `--debug`: the flag the first session's configuration starts it by
+	// (ibMetaDataConfiguration::OnInitialize), set before any session is, and every session after it debuggable.
+	if (debugEnable)
+		applicationInstance->m_loadMetadataFlags = _app_start_create_debug_server_flag;
 
 	auto base = std::make_unique<ibFileBase>();
 	base->applicationInstance = applicationInstance;

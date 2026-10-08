@@ -48,6 +48,9 @@ enum {
 	wxID_DESIGNER_DATABASE_CLEAR,
 
 	wxID_DESIGNER_ABOUT,
+
+	wxID_DESIGNER_DEBUG_START_THIN,
+	wxID_DESIGNER_DEBUG_START_WITHOUT_DEBUGGING_THIN,
 	wxID_DESIGNER_END
 };
 
@@ -208,6 +211,8 @@ protected:
 	void OnStartDebugWithoutDebug(wxCommandEvent& WXUNUSED(event));
 	void OnStartDebugWeb(wxCommandEvent& WXUNUSED(event));
 	void OnStartDebugWithoutDebugWeb(wxCommandEvent& WXUNUSED(event));
+	void OnStartDebugThin(wxCommandEvent& WXUNUSED(event));
+	void OnStartDebugWithoutDebugThin(wxCommandEvent& WXUNUSED(event));
 	void OnAttachForDebugging(wxCommandEvent& WXUNUSED(event));
 
 	void OnOpenConfiguration(wxCommandEvent& event);

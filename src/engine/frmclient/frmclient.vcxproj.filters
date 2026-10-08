@@ -7,6 +7,9 @@
     <Filter Include="artProvider\private">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5002}</UniqueIdentifier>
     </Filter>
+    <Filter Include="artProvider\splash">
+      <UniqueIdentifier>{cb3a6cf5-1439-4492-bd72-160a7d1c1456}</UniqueIdentifier>
+    </Filter>
     <Filter Include="docView">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5004}</UniqueIdentifier>
     </Filter>
@@ -252,6 +255,9 @@
     </ClInclude>
     <ClInclude Include="artProvider\private\picturePredefined.h">
       <Filter>artProvider\private</Filter>
+    </ClInclude>
+    <ClInclude Include="artProvider\splash\splashLogo.h">
+      <Filter>artProvider\splash</Filter>
     </ClInclude>
     <ClInclude Include="docView\docView.h">
       <Filter>docView</Filter>

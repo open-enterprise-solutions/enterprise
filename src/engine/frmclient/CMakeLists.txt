@@ -38,6 +38,7 @@ target_link_libraries(frmclient
     PRIVATE
         wx::core
         wx::aui
+        wx::propgrid
         wx::adv
         wx::stc
         wx::xrc

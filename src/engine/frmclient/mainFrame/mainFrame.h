@@ -10,6 +10,7 @@
 
 #include <wx/wx.h>
 #include <wx/aui/aui.h>
+#include <wx/splash.h>
 
 #include "frmclient/backend/backend_mainFrame.h"   // the frame an object asks for its inspector's selection
 #include "frmclient/docView/docView.h"
@@ -301,6 +302,30 @@ private:
 	bool                                  m_closingWindow = false;
 	bool                                  m_exitGranted = false;     // the server's Exit done: every tab closed, the client goes
 	bool                                  m_callUpdateFrameManager = false;
+};
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// The desktop's (frontend/mainFrame/mainFrame.h): the picture shown while the base opens and the client logs in.
+class ibProcessSplashScreen : public wxSplashScreen {
+public:
+	ibProcessSplashScreen(const wxBitmap& bitmap, long splashStyle = wxSPLASH_CENTRE_ON_SCREEN, int milliseconds = -1,
+		wxWindow* parent = nullptr, wxWindowID id = wxID_ANY,
+		const wxPoint& pos = wxDefaultPosition,
+		const wxSize& size = wxDefaultSize,
+		long style = wxSIMPLE_BORDER | wxFRAME_NO_TASKBAR | wxSTAY_ON_TOP) :
+		wxSplashScreen(bitmap, splashStyle, milliseconds,
+			parent, id,
+			pos, size, style
+		)
+	{
+		wxTheApp->SetTopWindow(this);
+
+		//Needed to get the splashscreen to paint
+		wxSplashScreen::Update();
+	}
+
+	virtual int FilterEvent(wxEvent& event) wxOVERRIDE { return Event_Skip; }
 };
 
 #endif

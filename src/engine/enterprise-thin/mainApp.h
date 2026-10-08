@@ -29,6 +29,9 @@ class ibAppEnterprise : public wxApp {
 	//LOCALE
 	wxString m_strLocale;
 
+	// DEBUG — a file base's engine brings its debug server up (the designer's Start debugging)
+	bool m_debugEnable = false;
+
 public:
 
 	virtual bool OnInit() override;

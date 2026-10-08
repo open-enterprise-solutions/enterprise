@@ -502,8 +502,9 @@ set_target_properties(oes_multi_base_test PROPERTIES
 oes_discover_tests(oes_multi_base_test)
 
 # ---------------------------------------------------------------------------
-# The client protocol's patch — made by the server's half (frmserver) and applied by the client's (frmclient), in
-# process and through the port's JSON. Its own target: it links the two libraries no other suite needs.
+# The client protocol's patch — made by the server's half (frmserver) and applied by the talking side's library
+# (protocol: ibProtocolNode::Apply), in process and through the port's JSON. Its own target: it links the two
+# libraries no other suite needs — and no GUI of the client's.
 #   cmake --build build --target oes_protocol_test --config Debug
 #   ./bin/oes_protocol_test
 # ---------------------------------------------------------------------------
@@ -513,7 +514,7 @@ target_link_libraries(oes_protocol_test
     PRIVATE
         backend
         frmserver
-        frmclient
+        protocol
         wx::core
         wx::base
         GTest::gtest

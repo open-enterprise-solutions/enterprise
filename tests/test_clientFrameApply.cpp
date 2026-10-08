@@ -13,7 +13,7 @@
 #include "core/serialize/dataBuilder.h"
 
 #include "frmserver/client/clientPatch.h"
-#include "frmclient/protocol/protocolNode.h"
+#include "protocol/protocolNode.h"
 
 namespace {
 

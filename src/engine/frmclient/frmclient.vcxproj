@@ -273,6 +273,7 @@
     <ClInclude Include="frmclient.h" />
     <ClInclude Include="artProvider\artProvider.h" />
     <ClInclude Include="artProvider\private\picturePredefined.h" />
+    <ClInclude Include="artProvider\splash\splashLogo.h" />
     <ClInclude Include="docView\docView.h" />
     <ClInclude Include="docView\docManager.h" />
     <ClInclude Include="docView\print\printPreview.h" />

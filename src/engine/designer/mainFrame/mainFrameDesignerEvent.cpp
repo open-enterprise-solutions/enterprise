@@ -184,6 +184,29 @@ void ibFrontendMainFrameDesigner::OnStartDebugWithoutDebug(wxCommandEvent& WXUNU
 	appData->RunApplication(wxT("enterprise"), false);
 }
 
+// THE THIN CLIENT, the same way: the same command line (a file base, or a server's connection), the same search for its
+// debug server — a file base's engine runs in the thin client's own process (fileserver), and `--debug` brings it up there.
+void ibFrontendMainFrameDesigner::OnStartDebugThin(wxCommandEvent& WXUNUSED(event))
+{
+	if (debugClient->HasConnections()) {
+		wxMessageBox(_("Debugger is already running!"));
+		return;
+	}
+
+	if (!SaveBeforeChildLaunch(this))
+		return;
+
+	appData->RunApplication(wxT("enterprise-thin"));
+}
+
+void ibFrontendMainFrameDesigner::OnStartDebugWithoutDebugThin(wxCommandEvent& WXUNUSED(event))
+{
+	if (!SaveBeforeChildLaunch(this))
+		return;
+
+	appData->RunApplication(wxT("enterprise-thin"), false);
+}
+
 static bool SaveIfModifiedBeforeWebDebug(wxWindow* parent)
 {
 	return SaveBeforeChildLaunch(parent);

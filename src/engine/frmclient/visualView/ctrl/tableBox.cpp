@@ -187,7 +187,7 @@ void ibValueModelTableBox::Create(wxWindow* parent, const ibProtocolNode& /*node
 
 	// The chrome: its command bar above it.
 	m_commandBar = std::make_unique<ibViewCommandBar>(m_panel, [this](const ibProtocolNode& args) {
-		Send(ibProtocolEvent::Command, args);
+		CallAsAction(ibProtocolEvent::Command, args);
 	});
 	sizer->Add(m_commandBar->GetWindow(), 0, wxEXPAND);
 
@@ -398,6 +398,16 @@ bool ibValueModelTableBox::EditCurrentRow(const ibDataViewItem& item)
 
 	m_dataView->EditItem(item, editColumn);
 	return true;
+}
+
+void ibValueModelTableBox::CallAsAction(ibProtocolEvent event, const ibProtocolNode& args)
+{
+	// As the row's activation (OnItemActivated): the editor opens here when the row has a cell that may be edited — its
+	// Input tells the server the cell; otherwise the server decides — a list's row opens its object's form, and an
+	// editor it opens comes in the answer (State's Edit), awaited from before the command goes.
+	if ((args.GetInt(ibProtocolName::Id) & eStartEditingFlag) != 0 && !EditCurrentRow(m_dataView->GetSelection()))
+		m_awaitEdit = true;
+	Send(event, args);
 }
 
 void ibValueModelTableBox::SendCell(ibProtocolEvent event, const ibProtocolNode& args)
@@ -661,7 +671,7 @@ void ibValueModelTableBox::OnContextMenu(ibDataViewEvent& event)
 
 	ibProtocolNode args;
 	args.SetValue(ibProtocolName::Id, entries[idx].GetInt(ibProtocolName::Id));
-	Send(ibProtocolEvent::Action, args);
+	CallAsAction(ibProtocolEvent::Action, args);
 }
 
 void ibValueModelTableBox::OnHeaderEndResize(ibHeaderGenericCtrlEvent& event)

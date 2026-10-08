@@ -123,6 +123,9 @@ private:
 	bool EditCurrentRow(const ibDataViewItem& item);
 	// What is done in the cell edited, to the server — the cell named with it.
 	void SendCell(ibProtocolEvent event, const ibProtocolNode& args);
+	// The desktop's CallAsAction: a command of the table's (its command bar's, its context menu's), to the server — and
+	// one that edits (eStartEditingFlag) opens the current row's editor here first (EditCurrentRow).
+	void CallAsAction(ibProtocolEvent event, const ibProtocolNode& args);
 
 	void OnIdle(wxIdleEvent& event);
 	void OnSelectionChanged(ibDataViewEvent& event);
