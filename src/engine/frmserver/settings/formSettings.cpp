@@ -9,7 +9,6 @@
 #include "backend/srcDataObject.h"                    // …and the source behind it, which names its metaobject
 
 #include "backend/appData.h"
-#include "backend/diagnostics/journal.h"
 #include "backend/metaCollection/metaFormObject.h"   // the form's metaobject — its guid IS the address
 #include "core/serialize/dataBuilder.h"
 #include "backend/settings/settingsComposer.h"   // ibUserSettingsKey — whose settings, said once

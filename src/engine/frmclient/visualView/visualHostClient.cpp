@@ -11,7 +11,6 @@
 #include <wx/wupdlock.h>   // wxWindowUpdateLocker — RAII Freeze/Thaw
 
 #include "frmclient/backend/serialize/dataProtocol.h"   // a control's node read as the engine reads its JSON
-#include "frmclient/diagnostics/journal.h"
 #include "frmclient/mainFrame/mainFrame.h"
 #include "frmclient/win/typeconv.h"
 #include "frmclient/win/ctrls/dynamicBorder.h"
@@ -232,7 +231,7 @@ void ibVisualHostClient::Draw(const ibProtocolNode& view, const ibProtocolNode& 
 		if (layoutChanged)
 			freeze.Lock(this);
 		UpdateNode(view, patch);
-		ibClientJournalInfo(wxT("view"), wxT("form %s drawn by its patch%s"), m_formKey,
+		ibJournalInfo(wxT("view"), wxT("form %s drawn by its patch%s"), m_formKey,
 			layoutChanged ? wxT(", laid out") : wxT(""));
 		if (layoutChanged) {
 			AlignLabels();
@@ -262,14 +261,14 @@ void ibVisualHostClient::Draw(const ibProtocolNode& view, const ibProtocolNode& 
 		const auto found = m_controls.find(editing);
 		if (found != m_controls.end())
 			found->second->RestoreEdit(edit);
-		ibClientJournalInfo(wxT("view"), wxT("form %s built anew: %u controls"), m_formKey,
+		ibJournalInfo(wxT("view"), wxT("form %s built anew: %u controls"), m_formKey,
 			static_cast<unsigned>(m_controls.size()));
 	}
 	else if (isForm) {
 		UpdateForm(view);
 		for (const ibProtocolNode& child : view.Children())
 			UpdateNode(child);
-		ibClientJournalInfo(wxT("view"), wxT("form %s drawn again"), m_formKey);
+		ibJournalInfo(wxT("view"), wxT("form %s drawn again"), m_formKey);
 	}
 	else {
 		UpdateNode(view);
@@ -296,7 +295,7 @@ void ibVisualHostClient::Send(long long controlId, ibProtocolEvent event, const 
 	// What it says, as it says it — a sheet handed over whole by its size: written out, it was the sheet again in the
 	// journal at every edit.
 	const std::string said = args.IsNode() ? args.Write() : std::string("{}");
-	ibClientJournalInfo(wxT("event"), wxT("%d on %lld: %s"), static_cast<int>(event), controlId,
+	ibJournalInfo(wxT("event"), wxT("%d on %lld: %s"), static_cast<int>(event), controlId,
 		said.size() <= 1024 ? wxString::FromUTF8(said) : wxString::Format(wxT("%zu bytes"), said.size()));
 	m_mainFrame.Post(ibProtocolMethod::Event, params);
 }

@@ -31,7 +31,7 @@
 #include <wx/debug.h>   // wxSetAssertHandler
 #include <wx/log.h>     // wxLogStderr — the default wxLogGui is a MODAL flush
 
-#include "backend/diagnostics/journal.h"   // ibTechJournal — the suite gets one too
+#include "core/diagnostics/journal.h"   // ibTechJournal — the suite gets one too
 
 #ifdef _WIN32
 #include <crtdbg.h>

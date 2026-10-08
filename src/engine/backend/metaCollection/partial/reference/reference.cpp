@@ -17,8 +17,7 @@
 #include <utility>
 
 #include "backend/session/session.h"   // ibSession::Current — the register lives on the session
-#include "backend/diagnostics/journal.h"   // a read refused across sessions is said out loud
-#include "backend/utils/debugTrace.h"      // ibDebugTraceEnabled — the register measurement is opt-in
+#include "core/diagnostics/debugTrace.h"      // ibDebugTraceEnabled — the register measurement is opt-in
 #include <unordered_map>
 #include <unordered_set>         // Unread — an identity filed twice is told once
 #include <mutex>                 // the table is read by a rented read on another thread

@@ -34,8 +34,7 @@
 // Anything outside the wxApp pipeline (ReportStartupError, etc.) goes
 // through ibCrashGuard directly — backend symbols, no wrapper needed.
 
-#include "backend/diagnostics/crashGuard.h"
-#include "backend/diagnostics/journal.h"   // ibJournalInfo — where a failed assertion is said
+#include "core/diagnostics/crashGuard.h"
 #include "backend/backend_exception.h"
 
 #include <wx/app.h>

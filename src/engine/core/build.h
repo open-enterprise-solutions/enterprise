@@ -3,6 +3,19 @@
 
 #include "core/core.h"
 
+//*******************************************************************************************
+//*                                 Versions support									    *
+//*******************************************************************************************
+
+#define version_generate(major, minor, release) \
+		( (major * 1000) + (minor * 100) + release )
+
+enum ibProgramVersion {
+	version_oes_1_0_0 = version_generate(1, 0, 0),
+	version_oes_1_0_1 = version_generate(1, 0, 1),
+	version_oes_last  = version_oes_1_0_1
+};
+
 // THE BUILD — its number: the days from 2018-01-01 to the day it was compiled, the VERSION, stable across a day of
 // rebuilds; one for the engine and its clients alike.
 CORE_API unsigned int GetBuildId();

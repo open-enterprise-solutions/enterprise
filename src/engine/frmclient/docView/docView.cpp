@@ -80,7 +80,6 @@
 // the modal via /session, answered through /modal-reply. Replaces the per-
 // callsite wxMessageDialog / wxMessageBox in OnSaveModified / OnSave-
 // BeforeForceClose / Revert with a single cross-build call.
-#include "frmclient/diagnostics/journal.h"
 
 
 // Used by the 5 OES overrides of inherited wx handlers that remain in this
@@ -743,13 +742,13 @@ bool ibFrontendDocument::DoSaveDocument(const wxString& file)
     if ( store.GetLastError() != wxSTREAM_NO_ERROR )
 #endif
     {
-        ibClientJournalError(wxT("docview"), _("File \"%s\" could not be opened for writing."), file);
+        ibJournalError(wxT("docview"), _("File \"%s\" could not be opened for writing."), file);
         return false;
     }
 
     if (!SaveObject(store))
     {
-        ibClientJournalError(wxT("docview"), _("Failed to save document to the file \"%s\"."), file);
+        ibJournalError(wxT("docview"), _("Failed to save document to the file \"%s\"."), file);
         return false;
     }
 
@@ -766,7 +765,7 @@ bool ibFrontendDocument::DoOpenDocument(const wxString& file)
     if (store.GetLastError() != wxSTREAM_NO_ERROR || !store.IsOk())
 #endif
     {
-        ibClientJournalError(wxT("docview"), _("File \"%s\" could not be opened for reading."), file);
+        ibJournalError(wxT("docview"), _("File \"%s\" could not be opened for reading."), file);
         return false;
     }
 
@@ -778,7 +777,7 @@ bool ibFrontendDocument::DoOpenDocument(const wxString& file)
     if ( res != wxSTREAM_NO_ERROR && res != wxSTREAM_EOF )
 #endif
     {
-        ibClientJournalError(wxT("docview"), _("Failed to read document from the file \"%s\"."), file);
+        ibJournalError(wxT("docview"), _("Failed to read document from the file \"%s\"."), file);
         return false;
     }
 
@@ -1213,7 +1212,7 @@ void ibFrontendDocManager::OnMRUFileNotExist(unsigned n, const wxString& filenam
     RemoveFileFromHistory(n);
 
     // and tell the user about it
-    ibClientJournalError(wxT("docview"), _("The file '%s' doesn't exist and couldn't be opened.\n"
+    ibJournalError(wxT("docview"), _("The file '%s' doesn't exist and couldn't be opened.\n"
                  "It has been removed from the most recently used files list."),
                filename);
 }
@@ -1301,7 +1300,7 @@ void ibFrontendDocManager::OnPreview(wxCommandEvent& WXUNUSED(event))
         if ( !preview->IsOk() )
         {
             delete preview;
-            ibClientJournalError(wxT("docview"), _("Print preview creation failed."));
+            ibJournalError(wxT("docview"), _("Print preview creation failed."));
             return;
         }
 
@@ -1578,7 +1577,7 @@ ibFrontendDocument *ibFrontendDocManager::CreateDocument(const wxString& pathOri
         temp = FindTemplateForPath(path);
         if ( !temp )
         {
-            ibClientJournalWarning(wxT("docview"), _("The format of file '%s' couldn't be determined."),
+            ibJournalWarning(wxT("docview"), _("The format of file '%s' couldn't be determined."),
                          path);
         }
     }

@@ -18,6 +18,12 @@
       <Platform>x64</Platform>
     </ProjectConfiguration>
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="res\resource.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="res\core.rc" />
+  </ItemGroup>
   <!-- THE CORE — the shared meanings under the engine (backend) and its clients (frmclient): the class ids and the ids
        of the configuration, the kinds of a value, a text, a number, a date, a guid, a block of bytes read and written,
        the core's refusal, the build's number. Of wx — the base only. -->
@@ -148,13 +154,18 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="anyValue.cpp" />
     <ClCompile Include="build.cpp" />
     <ClCompile Include="core.cpp" />
+    <ClCompile Include="diagnostics\crashGuard.cpp" />
+    <ClCompile Include="diagnostics\journal.cpp" />
+    <ClCompile Include="diagnostics\leakTracker.cpp" />
     <ClCompile Include="exception.cpp" />
     <ClCompile Include="fdatetime.cpp" />
     <ClCompile Include="fileSystem\fs.cpp" />
     <ClCompile Include="fileSystem\lz\lzhuf.cpp" />
     <ClCompile Include="fnumber.cpp" />
+    <ClCompile Include="formatString.cpp" />
     <ClCompile Include="fstring.cpp" />
     <ClCompile Include="guid.cpp" />
     <ClCompile Include="localization.cpp" />
@@ -163,15 +174,21 @@
     <ClCompile Include="serialize\jsonText.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="anyValue.h" />
     <ClInclude Include="build.h" />
     <ClInclude Include="clsid.h" />
     <ClInclude Include="core.h" />
+    <ClInclude Include="diagnostics\crashGuard.h" />
+    <ClInclude Include="diagnostics\debugTrace.h" />
+    <ClInclude Include="diagnostics\journal.h" />
+    <ClInclude Include="diagnostics\leakTracker.h" />
     <ClInclude Include="exception.h" />
     <ClInclude Include="fdatetime.h" />
     <ClInclude Include="fileSystem\fs.h" />
     <ClInclude Include="fileSystem\lz\lzhuf.h" />
     <ClInclude Include="fileSystem\types.h" />
     <ClInclude Include="fnumber.h" />
+    <ClInclude Include="formatString.h" />
     <ClInclude Include="fstring.h" />
     <ClInclude Include="guid.h" />
     <ClInclude Include="localization.h" />

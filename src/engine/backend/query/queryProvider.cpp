@@ -28,7 +28,6 @@
 #include "queryException.h"                                           // ibBackendQueryException — a named hierarchy refused over rows in memory
 #include "queryHierarchy.h"                                           // ibQueryHierarchyScope — «IN HIERARCHY» resolved where rows are filtered in memory
 
-#include "backend/diagnostics/journal.h"                              // ibJournal — the technology journal
 
 #include <deque>                                                      // the streaming fold's pools — see ibStreamingFold
 #include <map>                                                        // dot-walk join dedup + col->attr cache

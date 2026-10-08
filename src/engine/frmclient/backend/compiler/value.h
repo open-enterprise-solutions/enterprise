@@ -9,6 +9,7 @@
 #include <wx/icon.h>
 
 #include "frmclient/backend/backend_core.h"   // …as the engine's value.h brings it to those who include it
+#include "core/anyValue.h"   // ibAnyValue — what every value answers, the engine's and the client's
 #include "core/fileSystem/types.h"
 #include "core/types.h"   // kValueFieldClsid / kValueFieldData — the fields a value is written into a node by
 
@@ -16,24 +17,20 @@ template <class T> class ibValuePtr;
 class ibDataNode;
 class ibCtorAbstractType;
 
-constexpr ibClassID g_valueBooleanCLSID = primitive_to_clsid("VL_BOOL");
-constexpr ibClassID g_valueNumberCLSID = primitive_to_clsid("VL_NUMB");
-constexpr ibClassID g_valueDateCLSID = primitive_to_clsid("VL_DATE");
-constexpr ibClassID g_valueStringCLSID = primitive_to_clsid("VL_STRI");
-
-constexpr ibClassID g_valueNullCLSID = primitive_to_clsid("VL_NULL");
-
 // THE VALUE — the engine's ibValue (backend/compiler/value.h) as the client holds one. There is no runtime here and no
 // base: a PRIMITIVE — a text, a number, a date, a flag — is data a person types, and is held as it is; a value of a type
 // the SERVER has (a reference, an enum member) is held as the server wrote it — its node, carried and given back
 // untouched — and read as the server presents it. An object of the client's own a property reads its choices from (an
-// enumeration) is one too.
-class ibValue {
+// enumeration) is one too. What it answers is what every value answers (core/anyValue.h); how it holds it, its own.
+class ibValue : public ibAnyValue {
 public:
 
 	ibValue() = default;
 	ibValue(const wxString& text) : m_typeClass(ibValueTypes::TYPE_STRING), m_text(text) {}
 	ibValue(const wxChar* text) : m_typeClass(ibValueTypes::TYPE_STRING), m_text(text) {}
+	// A narrow literal is a text too — without this one `ibValue("x")` is the flag TRUE (pointer-to-bool beats the
+	// conversion to wxString), the trap the engine's ctors name.
+	ibValue(const char* text) : m_typeClass(ibValueTypes::TYPE_STRING), m_text(text) {}
 	ibValue(bool flag) : m_typeClass(ibValueTypes::TYPE_BOOLEAN), m_text(flag ? wxT("True") : wxT("False")), m_number(flag ? 1 : 0) {}
 	ibValue(int number) : m_typeClass(ibValueTypes::TYPE_NUMBER), m_text(wxString::Format(wxT("%d"), number)), m_number(number), m_numeric(number) {}
 	ibValue(long number) : m_typeClass(ibValueTypes::TYPE_NUMBER), m_text(wxString::Format(wxT("%ld"), number)), m_number(number), m_numeric(number) {}
@@ -50,9 +47,9 @@ public:
 	virtual ~ibValue() { Release(); }
 
 	// What it is — a primitive, Undefined, or a type of the server's (GetClassType says which).
-	ibValueTypes GetType() const { return m_typeClass; }
+	virtual ibValueTypes GetType() const override { return m_typeClass; }
 	virtual ibClassID GetClassType() const;
-	virtual bool IsEmpty() const;
+	virtual bool IsEmpty() const override;
 
 	virtual bool CompareValueEQ(const ibValue& cParam) const;
 	virtual bool CompareValueNE(const ibValue& cParam) const { return !CompareValueEQ(cParam); }
@@ -80,14 +77,14 @@ public:
 	template <class T>
 	T* ConvertToType() const { T* ptr = nullptr; return ConvertToValue(ptr) ? ptr : nullptr; }
 
-	virtual ibString GetString() const;
+	virtual ibString GetString() const override;
 	// …and AS another primitive — the engine's conversions: a text typed into a cell read as the number, the date or the
 	// flag it spells.
-	bool GetBoolean() const;
+	virtual bool GetBoolean() const override;
 	long GetInteger() const { return m_number; }
 	unsigned int GetUInteger() const { return static_cast<unsigned int>(m_number); }
-	ibNumber GetNumber() const;
-	ibDateTime GetDate() const;
+	virtual ibNumber GetNumber() const override;
+	virtual ibDateTime GetDate() const override;
 
 	// INTO A NODE AND BACK — the engine's form ({t, v}): a primitive writes its payload, a value of the server's writes
 	// back the node it came in; FromNode makes a primitive of a primitive's node and keeps any other as it was written.

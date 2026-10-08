@@ -13,6 +13,7 @@
 #include <thread>
 
 #include "backend/backend_core.h"   // + ibCtorObjectType — the registry surface below names it
+#include "core/anyValue.h"          // ibAnyValue — what every value answers, the engine's and the client's
 
 // The registry's ctor type — its definition (compiler/typeCtor.h) is built on a complete ibValue,
 // so it is included at the end of this file.
@@ -90,15 +91,10 @@ public:
 // rule itself lives in docs/private/ownership-authority.md; on this side it is a rule people keep, not one
 // the compiler keeps for them.
 
-constexpr ibClassID g_valueBooleanCLSID = primitive_to_clsid("VL_BOOL");
-constexpr ibClassID g_valueNumberCLSID = primitive_to_clsid("VL_NUMB");
-constexpr ibClassID g_valueDateCLSID = primitive_to_clsid("VL_DATE");
-constexpr ibClassID g_valueStringCLSID = primitive_to_clsid("VL_STRI");
-
-constexpr ibClassID g_valueNullCLSID = primitive_to_clsid("VL_NULL");
+// (The primitives' class ids — g_valueBooleanCLSID … g_valueNullCLSID — are the core's too: core/types.h.)
 
 //simple type date
-class BACKEND_API ibValue {
+class BACKEND_API ibValue : public ibAnyValue {
 public:
 	//ATTRIBUTES:
 	ibValueTypes m_typeClass;  // 1 byte (enum : unsigned char)
@@ -1231,9 +1227,9 @@ public:
 
 	//Virtual methods:
 	virtual void SetType(ibValueTypes type);
-	virtual ibValueTypes GetType() const;
+	virtual ibValueTypes GetType() const override;
 
-	virtual bool IsEmpty() const;
+	virtual bool IsEmpty() const override;
 
 	// SQL / explicit NULL: the `Null` literal, and a NULL DB column (the driver yields ibValue(TYPE_NULL)).
 	// Distinct from IsEmpty (TYPE_EMPTY = Undefined — a COMPOSITE value with no type chosen yet). Only
@@ -1349,15 +1345,15 @@ public:
 	// is a declared contract with a test behind it (ValueClone.ATypeMayStateItsOwnCopy).
 	virtual ibValue CloneValue() const;
 
-	virtual bool GetBoolean() const;
+	virtual bool GetBoolean() const override;
 	virtual int GetInteger() const { return GetNumber().ToInt(); }
 	virtual unsigned int GetUInteger() const { return GetNumber().ToUInt(); }
 	virtual double GetDouble() const { return GetNumber().ToDouble(); }
 
-	virtual ibNumber GetNumber() const;
+	virtual ibNumber GetNumber() const override;
 	// THE VALUE AS TEXT, in the engine's own string. A string value hands its text out SHARED — one
 	// more owner of it, no characters copied (fstring.h) — so a caller has no buffer to pass in.
-	virtual ibString GetString() const;
+	virtual ibString GetString() const override;
 
 	// ============================ IDENTITY ==================================
 	// ONE OF THEM. There used to be a second — `GetHashKey()`, a wxString the
@@ -1387,7 +1383,7 @@ public:
 	virtual size_t GetValueHash() const;
 	// THE VALUE AS A DATE, in the engine's own date (fdatetime.h). A window that holds a wxDateTime
 	// crosses at its own edge: GetDate().ToWxDateTime().
-	virtual ibDateTime GetDate() const;
+	virtual ibDateTime GetDate() const override;
 
 	/////////////////////////////////////////////////////////////////////////
 

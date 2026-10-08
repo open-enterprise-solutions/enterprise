@@ -6,7 +6,7 @@
 #ifndef __IB_LEAK_TRACKER_H__
 #define __IB_LEAK_TRACKER_H__
 
-#include "backend/backend.h"
+#include "core/core.h"
 
 // The debug CRT prints "Detected memory leaks!" on exit and names every surviving block by size
 // and by an allocation ordinal — never by WHO allocated it, which is the only thing worth knowing.
@@ -34,13 +34,13 @@
 
 // Reads the environment and installs the hooks. Returns true when something was asked for and the
 // tracker is live — only then is a report worth registering.
-BACKEND_API bool ibLeakTrackArm();
+CORE_API bool ibLeakTrackArm();
 
 // Prints the surviving blocks, grouped by call site. Must run from atexit: every atexit handler
 // runs after main returns, i.e. after wxEntry has torn down the windows and cleaned up wx's own
 // caches, which is the same heap the CRT dump is about to read. Reporting from OnExit instead put
 // the print three orders of magnitude too early (4618 "alive" against the dump's 2273).
-BACKEND_API void ibLeakTrackReport();
+CORE_API void ibLeakTrackReport();
 
 // One line per binary, next to wxIMPLEMENT_APP. Static init on purpose — the hooks have to be
 // armed before wxWidgets allocates anything, which rules out OnInit.

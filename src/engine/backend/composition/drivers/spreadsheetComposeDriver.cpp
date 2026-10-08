@@ -1,5 +1,4 @@
 #include "backend/composition/drivers/spreadsheetComposeDriver.h"
-#include "backend/backend_type.h"                           // GetFormatFromTypeDesc — a column's format from its type
 #include "backend/backend_localization.h"                   // ibTranslateString — an appearance's format, in the language in force
 #include "backend/system/value/valueSpreadsheetDetails.h"   // what a cell is stamped with — value + its links
 #include "backend/session/session.h"                        // ibSession::RunState — the lines hear a cancel
@@ -196,7 +195,7 @@ void ibSpreadsheetComposeDriver::OnOutputBegin(const ibCompositionOutputInfo& in
 			info.AppearanceOf(i).ValueInForce(ibAppearanceParameter::Format).GetString()).GetString();
 		if (said.IsEmpty() || !ibFormatString::Parse(said, format)) {
 			format = ibFormatString();
-			ibBackendTypeConfigFactory::GetFormatFromTypeDesc(info.m_schema[i].GetTypeDesc(), format);
+			ibFormatString::FromTypeDesc(info.m_schema[i].GetTypeDesc(), format);
 		}
 		// …and the report's own rule, where the format says nothing of its own: nothing is written empty.
 		if (!format.m_number.m_zero)

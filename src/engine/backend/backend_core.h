@@ -115,18 +115,7 @@ typedef ibRowValues<ibMetaID, class BACKEND_API ibValue> ibRowMetaValues;
 #define MAX_STATIC_VAR 10ll
 #endif 
 
-//*******************************************************************************************
-//*                                 Versions support									    *
-//*******************************************************************************************
-
-#define version_generate(major, minor, release) \
-		( (major * 1000) + (minor * 100) + release )
-
-enum ibProgramVersion {
-	version_oes_1_0_0 = version_generate(1, 0, 0),
-	version_oes_1_0_1 = version_generate(1, 0, 1),
-	version_oes_last  = version_oes_1_0_1
-};
+// (The program's version — ibProgramVersion, version_oes_last — is the core's, beside its build: core/build.h.)
 
 enum ibProgramSyntax {
 	syntax_ves,    // Visual Basic-style ES, a legacy business-scripting dialect — keyword-fenced (Then/Do/EndIf/...).
@@ -176,6 +165,6 @@ enum ibEvalMode : unsigned char {
 // Included LAST, and from here rather than the other way round: journal.h includes this header for
 // BACKEND_API, and the guard above makes that re-entry a no-op, so the pair resolves whichever file
 // is reached first.
-#include "backend/diagnostics/journal.h"
+#include "core/diagnostics/journal.h"
 
 #endif 

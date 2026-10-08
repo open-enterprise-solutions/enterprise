@@ -3,7 +3,7 @@
 //	Description : leak attribution for the debug CRT dump
 ////////////////////////////////////////////////////////////////////////////
 
-#include "backend/diagnostics/leakTracker.h"
+#include "core/diagnostics/leakTracker.h"
 
 #if defined(DEBUG) && defined(__WXMSW__)
 
@@ -372,7 +372,7 @@ bool ibLeakFormatFrame(void* address, char* text, size_t textSize)
 // Prints what the CRT dump cannot: the call site behind every surviving block of a watched
 // size. Called from OnExit once the application data is gone, so anything still held here has
 // outlived the whole metadata tree and every session.
-BACKEND_API void ibLeakTrackReport()
+CORE_API void ibLeakTrackReport()
 {
 	if (!g_leakEnabled || g_leakTable == nullptr)
 		return;
@@ -573,7 +573,7 @@ BACKEND_API void ibLeakTrackReport()
 // Called from IB_LEAK_TRACKER_ARM at static-init time — both hooks have to be armed before
 // wxWidgets allocates anything, which rules out OnInit. Returns whether anything was asked for, so
 // the caller only registers a report when there is something to report.
-BACKEND_API bool ibLeakTrackArm()
+CORE_API bool ibLeakTrackArm()
 {
 	{
 		if (const char* env = std::getenv("OES_BREAK_ALLOC")) {

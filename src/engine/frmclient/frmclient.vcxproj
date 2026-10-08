@@ -18,6 +18,12 @@
       <Platform>x64</Platform>
     </ProjectConfiguration>
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="res\resource.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="res\frmclient.rc" />
+  </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>15.0</VCProjectVersion>
     <ProjectGuid>{A1B2C3D4-0005-4E5F-8A9B-C0D1E2F30005}</ProjectGuid>
@@ -146,7 +152,6 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="frmclient.cpp" />
-    <ClCompile Include="diagnostics\journal.cpp" />
     <ClCompile Include="artProvider\artProvider.cpp" />
     <ClCompile Include="docView\docView.cpp" />
     <ClCompile Include="docView\docManager.cpp" />
@@ -235,7 +240,6 @@
     <ClCompile Include="visualView\commandBar.cpp" />
     <ClCompile Include="visualView\tableModel.cpp" />
     <ClCompile Include="backend\backend_localization.cpp" />
-    <ClCompile Include="backend\formatString.cpp" />
     <ClCompile Include="backend\compiler\value_res.cpp" />
     <ClCompile Include="backend\metaCollection\partial\reference\reference.cpp" />
     <ClCompile Include="backend\backend_type.cpp" />
@@ -267,7 +271,6 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="frmclient.h" />
-    <ClInclude Include="diagnostics\journal.h" />
     <ClInclude Include="artProvider\artProvider.h" />
     <ClInclude Include="artProvider\private\picturePredefined.h" />
     <ClInclude Include="docView\docView.h" />
@@ -348,7 +351,6 @@
     <ClInclude Include="backend\system\value\valueColour.h" />
     <ClInclude Include="backend\propertyManager\property\variant\variantOwner.h" />
     <ClInclude Include="backend\backend_core.h" />
-    <ClInclude Include="backend\diagnostics\journal.h" />
     <ClInclude Include="backend\propertyManager\propertyManager.h" />
     <ClInclude Include="backend\system\value\valueSpreadsheet.h" />
     <ClInclude Include="win\theme\luna_dockart.h" />
@@ -396,7 +398,6 @@
     <ClInclude Include="backend\compiler\value.h" />
     <ClInclude Include="backend\serialize\dataProtocol.h" />
     <ClInclude Include="backend\backend.h" />
-    <ClInclude Include="backend\formatString.h" />
     <ClInclude Include="backend\metaCollection\partial\reference\reference.h" />
     <ClInclude Include="backend\backend_type.h" />
     <ClInclude Include="backend\backend_form.h" />

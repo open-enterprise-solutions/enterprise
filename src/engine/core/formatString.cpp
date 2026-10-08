@@ -2,12 +2,11 @@
 //	Description : The format string as a value (formatString.h)
 ////////////////////////////////////////////////////////////////////////////
 
-#include "formatString.h"
-
-#include "frmclient/backend/compiler/value.h"
-#include "core/fnumber.h"
+#include "core/formatString.h"
+#include "core/anyValue.h"   // ibAnyValue — what Apply asks of a value
 
 #include <wx/datetime.h>
+#include <wx/wxcrt.h>   // wxAtoi — a code's number read
 
 #include <algorithm>   // std::max / std::min — the spelling of a date letter
 
@@ -352,31 +351,31 @@ wxString ibFormatString::Render() const
 	return text;
 }
 
-wxString ibFormatString::Apply(const ibValue& cData) const
+wxString ibFormatString::Apply(const ibAnyValue& value) const
 {
 	wxString result;
-	Apply(cData, result);
+	Apply(value, result);
 	return result;
 }
 
-bool ibFormatString::Apply(const ibValue& cData, wxString& result) const
+bool ibFormatString::Apply(const ibAnyValue& value, wxString& result) const
 {
-	switch (cData.GetType()) {
+	switch (value.GetType()) {
 	case ibValueTypes::TYPE_BOOLEAN: {
-		const std::optional<wxString>& text = cData.GetBoolean() ? m_boolean.m_true : m_boolean.m_false;
-		if (text)
-			result = *text;
+		const std::optional<wxString>& said = value.GetBoolean() ? m_boolean.m_true : m_boolean.m_false;
+		if (said)
+			result = *said;
 		else
-			result = cData.GetString();
-		break;
+			result = value.GetString();
+		return !result.IsEmpty();
 	}
 	case ibValueTypes::TYPE_NUMBER: {
-		const ibNumber number = cData.GetNumber();
+		const ibNumber number = value.GetNumber();
 
 		// NZ: replacement string when value is exactly zero.
 		if (number.IsZero() && m_number.m_zero) {
 			result = *m_number.m_zero;
-			break;
+			return !result.IsEmpty();
 		}
 
 		ibNumber::Format numFmt;
@@ -390,26 +389,21 @@ bool ibFormatString::Apply(const ibValue& cData, wxString& result) const
 		if (m_number.m_groupSize)        numFmt.groupSize  = *m_number.m_groupSize;
 
 		number.ToString(numFmt, result);
-		break;
+		return !result.IsEmpty();
 	}
-	case ibValueTypes::TYPE_DATE: {
-		if (cData.IsEmpty() && m_date.m_empty) {
+	case ibValueTypes::TYPE_DATE:
+		if (value.IsEmpty() && m_date.m_empty)
 			result = *m_date.m_empty;
-			break;
-		}
-		if (m_date.m_pattern) {
+		else if (m_date.m_pattern) {
 			ibDateTimeParts parts;
-			cData.GetDate().ToParts(parts);
+			value.GetDate().ToParts(parts);
 			WriteDate(*m_date.m_pattern, parts, result);
-			break;
 		}
-		result = cData.GetString();
-		break;
-	}
+		else
+			result = value.GetString();
+		return !result.IsEmpty();
 	default:
-		result = cData.GetString();   // every other type formats as its plain string
-		break;
+		result = value.GetString();   // every other type formats as its plain string
+		return !result.IsEmpty();
 	}
-
-	return !result.IsEmpty();
 }

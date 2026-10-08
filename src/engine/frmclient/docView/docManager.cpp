@@ -11,7 +11,6 @@
 #include "frmclient/docView/docManager.h"  // also brings docView.h transitively
 
 #include "frmclient/win/dlgs/choiceTemplate.h"
-#include "frmclient/diagnostics/journal.h"
 
 // Desktop-only: Find/Replace dialog parents the wxFindReplaceDialog against
 // the main frame singleton. mainFrame.h pulls in ibFrontendMainFrame
@@ -278,8 +277,8 @@ void ibFrontendView::Activate(bool activate)
 		mgr->ActivateView(this, activate);
 	}
 
-	if (activate) ibClientJournalInfo(wxT("docview"), "! <debug> activate view %s", GetViewName());
-	else ibClientJournalInfo(wxT("docview"), "! <debug> deactivate view %s", GetViewName());
+	if (activate) ibJournalInfo(wxT("docview"), "! <debug> activate view %s", GetViewName());
+	else ibJournalInfo(wxT("docview"), "! <debug> deactivate view %s", GetViewName());
 }
 
 #endif // wxUSE_DOC_VIEW_ARCHITECTURE

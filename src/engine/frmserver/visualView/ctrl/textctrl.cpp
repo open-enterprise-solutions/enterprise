@@ -136,7 +136,7 @@ bool ibValueTextCtrl::IsReadOnly() const
 }
 
 #include "backend/appData.h"
-#include "backend/formatString.h"   // ibFormatString — what the field shows its value through
+#include "core/formatString.h"   // ibFormatString — what the field shows its value through
 #include "backend/metaCollection/attribute/metaAttributeObject.h"
 
 const ibTranslateString& ibValueTextCtrl::GetSourceFormat() const

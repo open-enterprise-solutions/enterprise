@@ -21,7 +21,6 @@
 #include "core/fileSystem/fs.h"
 #include "backend/job/jobRunByteCode.h"      // the request and the state that cross this wire whole
 #include "backend/backend_exception.h"       // a frame that cannot be read is caught, not escaped
-#include "backend/diagnostics/journal.h"     // …and the reason is written down before the socket goes
 #if _USE_NET_COMPRESSOR == 1
 #include "utils/fs/lz/lzhuf.h"
 #endif 

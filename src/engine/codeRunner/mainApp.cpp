@@ -39,7 +39,7 @@ void ibAppCodeRunner::AppendOutput(const wxString& str)
 		m_codeRunner->AppendOutput(str);
 }
 
-#include "backend/diagnostics/leakTracker.h"
+#include "core/diagnostics/leakTracker.h"
 
 IB_LEAK_TRACKER_ARM();
 

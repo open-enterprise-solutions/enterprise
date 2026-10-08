@@ -10,8 +10,7 @@
 
 #include "backend/appData.h"
 #include "backend/backend_exception.h"   // ibBackendException — a value the configuration cannot make
-#include "backend/formatString.h"        // ibFormatString — a value presented through Format()'s codes
-#include "core/guid.h"
+#include "core/formatString.h"        // ibFormatString — a value presented through Format()'s codes
 #include "backend/metadataConfiguration.h"
 #include "backend/metaCollection/metaFormObject.h"   // ibBackendCommandItem::Execute
 #include "backend/rpc/rpcMessage.h"

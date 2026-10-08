@@ -1,7 +1,6 @@
 #include "debugClient.h"
 
 #include "backend/session/session.h"   // whose worker a reply is handed to
-#include "backend/diagnostics/journal.h"   // ibJournalWarning — a reply nobody waits for says its own failure
 
 #include <algorithm>
 

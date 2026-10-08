@@ -18,7 +18,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "frontend/frontend.h"
-#include "backend/formatString.h"
+#include "core/formatString.h"
 #include "frontend/win/dlgs/translateConstructor/translateConstructor.h"   // ibBoxEditor — a language's box, edited here
 
 #include <wx/dialog.h>

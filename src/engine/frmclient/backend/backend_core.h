@@ -14,7 +14,7 @@
 #include "core/fstring.h"
 #include "frmclient/win/typeconv.h"
 #include "core/stringUtils.h"
-#include "frmclient/backend/diagnostics/journal.h"
+#include "core/diagnostics/journal.h"
 
 #define oes_clipboard_template	wxT("oes_clipboard_template")
 

@@ -40,7 +40,7 @@
 // differently depending on which file the compiler reaches first. Taking only what is actually
 // needed (the export macro) breaks it: this header can then be included from anywhere, including
 // from inside the core's own chain.
-#include "backend/backend.h"
+#include "core/core.h"
 
 #include <wx/wx.h>          // WX_DEFINE_VARARG_FUNC + wxFormatString
 #include <wx/string.h>
@@ -68,7 +68,7 @@ enum class ibJournalMark : wxChar {
 	Error   = wxT('!'),
 };
 
-class BACKEND_API ibTechJournal {
+class CORE_API ibTechJournal {
 public:
 	// ⭐ THE ONE INSTANCE. Callers do not need it — `ibJournalInfo(...)` and the statics below are the
 	// whole surface — and it exists for the same reason the statics do: there is exactly one

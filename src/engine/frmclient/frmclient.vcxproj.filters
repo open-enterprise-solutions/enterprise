@@ -7,9 +7,6 @@
     <Filter Include="artProvider\private">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5002}</UniqueIdentifier>
     </Filter>
-    <Filter Include="diagnostics">
-      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5003}</UniqueIdentifier>
-    </Filter>
     <Filter Include="docView">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5004}</UniqueIdentifier>
     </Filter>
@@ -64,9 +61,6 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="frmclient.cpp" />
-    <ClCompile Include="diagnostics\journal.cpp">
-      <Filter>diagnostics</Filter>
-    </ClCompile>
     <ClCompile Include="artProvider\artProvider.cpp">
       <Filter>artProvider</Filter>
     </ClCompile>
@@ -128,7 +122,7 @@
       <Filter>win\dlgs</Filter>
     </ClCompile>
     <ClCompile Include="win\dlgs\settings\savedSettings.cpp">
-      <Filter>win\dlgs</Filter>
+      <Filter>win\dlgs\settings</Filter>
     </ClCompile>
     <ClCompile Include="win\editor\gridEditor\gridEditor.cpp">
       <Filter>win\editor\gridEditor</Filter>
@@ -253,9 +247,6 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="frmclient.h" />
-    <ClInclude Include="diagnostics\journal.h">
-      <Filter>diagnostics</Filter>
-    </ClInclude>
     <ClInclude Include="artProvider\artProvider.h">
       <Filter>artProvider</Filter>
     </ClInclude>
@@ -320,7 +311,7 @@
       <Filter>win\dlgs</Filter>
     </ClInclude>
     <ClInclude Include="win\dlgs\settings\savedSettings.h">
-      <Filter>win\dlgs</Filter>
+      <Filter>win\dlgs\settings</Filter>
     </ClInclude>
     <ClInclude Include="win\dlgs\choiceTemplate.h">
       <Filter>win\dlgs</Filter>
@@ -456,9 +447,6 @@
     <Filter Include="backend\composition">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5024}</UniqueIdentifier>
     </Filter>
-    <Filter Include="backend\diagnostics">
-      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5025}</UniqueIdentifier>
-    </Filter>
     <Filter Include="backend\metaCollection">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5026}</UniqueIdentifier>
     </Filter>
@@ -592,15 +580,6 @@
     </ClInclude>
     <ClInclude Include="backend\composition\dataComposer.h">
       <Filter>backend\composition</Filter>
-    </ClInclude>
-    <ClInclude Include="backend\diagnostics\journal.h">
-      <Filter>backend\diagnostics</Filter>
-    </ClInclude>
-    <ClCompile Include="backend\formatString.cpp">
-      <Filter>backend</Filter>
-    </ClCompile>
-    <ClInclude Include="backend\formatString.h">
-      <Filter>backend</Filter>
     </ClInclude>
     <ClInclude Include="backend\metaCollection\metaLanguageObject.h">
       <Filter>backend\metaCollection</Filter>
@@ -956,5 +935,20 @@
     <ClCompile Include="win\editor\gridEditor\gridProperty.cpp">
       <Filter>win\editor\gridEditor</Filter>
     </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="res">
+      <UniqueIdentifier>{3e8440b3-9a4c-467e-b4e0-b2a26b4e6e8c}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="res\resource.h">
+      <Filter>res</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="res\frmclient.rc">
+      <Filter>res</Filter>
+    </ResourceCompile>
   </ItemGroup>
 </Project>

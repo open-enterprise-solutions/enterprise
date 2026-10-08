@@ -12,7 +12,6 @@
 #include "backend/compiler/procUnit.h"             // CallAsFunc by name
 #include "backend/backend_exception.h"
 #include "backend/system/systemManager.h"          // WriteJournalEvent - the run's own record
-#include "backend/diagnostics/journal.h"            // ibJournalInfo - the engine's account of a cancel
 
 #include <wx/log.h>
 

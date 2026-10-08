@@ -33,7 +33,7 @@
 //   - wxApp::OnExceptionInMainLoop / OnFatalException / OnUnhandled.
 //   - wxTheApp->CallAfter marshalling.
 
-#include "backend/backend_core.h"
+#include "core/core.h"
 #include <wx/string.h>
 #include <functional>
 #include <utility>      // std::forward — the journal's parameter pack
@@ -46,16 +46,16 @@ namespace ibCrashGuard {
 //
 // Idempotent — second Install with a different exeName updates the
 // label but does not re-register handlers.
-BACKEND_API void Install(const wxString& exeName);
+CORE_API void Install(const wxString& exeName);
 
 
 // Append `message` to `<exeName>_startup.log` next to the binary. No UI.
 // Frontend / web / console wrappers add their own user-visible surface.
-BACKEND_API void LogStartupError(const wxString& exeName,
+CORE_API void LogStartupError(const wxString& exeName,
                                   const wxString& message);
 
 // Append `diag` to `<exeName>_unhandled.log`. No UI.
-BACKEND_API void LogUnhandledException(const wxString& exeName,
+CORE_API void LogUnhandledException(const wxString& exeName,
                                         const wxString& diag);
 
 // Platform-native message box that does NOT depend on wx state. Safe
@@ -66,14 +66,14 @@ BACKEND_API void LogUnhandledException(const wxString& exeName,
 // Frontend / web layers should still prefer wxMessageBox or HTTP-500
 // responses while the higher-level state is alive; this is the bottom
 // fallback for startup failure / background-thread faults / post-exit.
-BACKEND_API void PlatformNativeMessage(const wxString& caption,
+CORE_API void PlatformNativeMessage(const wxString& caption,
                                        const wxString& message);
 
 // Force-terminate the current process without running destructors or
 // atexit handlers. Use only after a fault has already torn diagnostic
 // state — never as a normal exit path. Windows: TerminateProcess;
 // POSIX: _Exit.
-BACKEND_API void TerminateProcessFast(int exitCode);
+CORE_API void TerminateProcessFast(int exitCode);
 
 // Headless WrapStartup — runs `body` inside a try/catch, logs any
 // escape to `<exeName>_startup.log` AND surfaces a PlatformNativeMessage.
@@ -81,7 +81,7 @@ BACKEND_API void TerminateProcessFast(int exitCode);
 // wraps DoOnRun with a wx-aware variant that prefers wxMessageBox
 // over PlatformNativeMessage; for console / appserver / wes, this is the
 // direct path.
-BACKEND_API int WrapStartup(const wxString& exeName,
+CORE_API int WrapStartup(const wxString& exeName,
                              std::function<int()> body);
 
 // ⭐ A DUMP RIGHT NOW, with nothing wrong yet — the process keeps running. Written when something
@@ -91,12 +91,12 @@ BACKEND_API int WrapStartup(const wxString& exeName,
 // `kindSuffix` goes into the file name beside the pid and the stamp, so a deliberate dump is
 // distinguishable from a crash one at a glance. No-op off Windows for now — the POSIX side writes a
 // backtrace from its signal handler and has no equivalent "snapshot me" call.
-BACKEND_API void WriteDumpNow(const wxString& kindSuffix);
+CORE_API void WriteDumpNow(const wxString& kindSuffix);
 
 // Where this process writes its dump files. Resolved on first Install,
 // stable for the rest of the process. ibWxApp::OnFatalException quotes
 // this path in its background-thread "we crashed, look here" message.
-BACKEND_API wxString GetCrashDir();
+CORE_API wxString GetCrashDir();
 
 } // namespace ibCrashGuard
 

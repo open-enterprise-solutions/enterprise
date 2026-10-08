@@ -14,7 +14,6 @@
 // parts are text and small beside its cells.
 
 #include "backend/sheetFormat/sheetFormatXlsx.h"
-#include "backend/diagnostics/journal.h"   // ibJournalStopwatch — what of a workbook takes the time
 
 #include <wx/wfstream.h>
 #include <wx/zipstrm.h>

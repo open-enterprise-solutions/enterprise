@@ -30,7 +30,6 @@
 #include "backend/metaCollection/genericData.h"      // AccessRight_Show / _Modify / _Erase — the rights, as the metadata already answers them
 #include "backend/metaCollection/metaIntrospect.h"   // ibConfigurationWritesInWords — the session's code style
 #include "backend/backend_exception.h"               // ibBackendAccessException
-#include "backend/diagnostics/journal.h"             // ibJournalInfo — a cancel says what it reached
 #include "backend/job/jobManager.h"                  // TenantsOf — a cancel reaches the runs reading for this session
 
 namespace {

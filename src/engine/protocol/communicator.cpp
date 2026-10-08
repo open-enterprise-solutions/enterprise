@@ -9,7 +9,7 @@
 #include <wx/scopeguard.h>   // wxMakeGuard — a call's line, however it returns
 #include <wx/time.h>
 
-#include "protocol/journal.h"
+#include "core/diagnostics/journal.h"
 
 namespace {
 
@@ -134,10 +134,10 @@ bool ibCommunicator::CallLocked(ibProtocolMethod method, const ibProtocolNode& p
 	wxLongLong exchanged = 0;
 	const wxScopeGuard said = wxMakeGuard([&]() {
 		if (refusal == ibProtocolRefusal::None)
-			ibProtocolJournalInfo(wxT("call"), wxT("%s: %lld ms, the exchange %lld ms"), ibProtocolMethodName(method),
+			ibJournalInfo(wxT("call"), wxT("%s: %lld ms, the exchange %lld ms"), ibProtocolMethodName(method),
 				(wxGetUTCTimeMillis() - began).GetValue(), exchanged.GetValue());
 		else
-			ibProtocolJournalWarning(wxT("call"), wxT("%s refused (%d) after %lld ms: %s"), ibProtocolMethodName(method),
+			ibJournalWarning(wxT("call"), wxT("%s refused (%d) after %lld ms: %s"), ibProtocolMethodName(method),
 				static_cast<int>(refusal), (wxGetUTCTimeMillis() - began).GetValue(), error);
 	});
 
@@ -165,7 +165,7 @@ bool ibCommunicator::CallLocked(ibProtocolMethod method, const ibProtocolNode& p
 	// THE WHOLE EXCHANGE, beside the call's own line — what went, and what came back with how long it took: the debug
 	// build's journal (the macro is nothing in a release one).
 	const std::string sent = request.Write();
-	ibProtocolJournalInfo(wxT("protocol"), wxT("%s sent: %s"), ibProtocolMethodName(method), wxString::FromUTF8(sent));
+	ibJournalInfo(wxT("protocol"), wxT("%s sent: %s"), ibProtocolMethodName(method), wxString::FromUTF8(sent));
 
 	std::string answer;
 	const wxLongLong exchanging = wxGetUTCTimeMillis();
@@ -173,7 +173,7 @@ bool ibCommunicator::CallLocked(ibProtocolMethod method, const ibProtocolNode& p
 		return false;
 	exchanged = wxGetUTCTimeMillis() - exchanging;
 
-	ibProtocolJournalInfo(wxT("protocol"), wxT("%s answered in %lld ms, %zu bytes: %s"), ibProtocolMethodName(method),
+	ibJournalInfo(wxT("protocol"), wxT("%s answered in %lld ms, %zu bytes: %s"), ibProtocolMethodName(method),
 		(wxGetUTCTimeMillis() - began).GetValue(), answer.size(), wxString::FromUTF8(answer));
 
 	ibProtocolNode root;

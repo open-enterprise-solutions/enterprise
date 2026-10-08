@@ -180,11 +180,11 @@ The compiler is a single-pass recursive descent parser with a deferred-call-reso
 
 `backend.dll` has zero UI code. `frontend.dll` owns all wxWidgets code. Communication is through abstract C++ interfaces exported by `backend.dll`. This allows the backend to run headless (daemon, codeRunner, service mode).
 
-Under both sits **`core.dll`** (`src/engine/core/`, `CORE_API` / `CORE_EXPORTS`, wx base only): what the engine and its clients mean by the same words — ids and `ibValueTypes` (`core/types.h`), `clsid.h`, `ibString` (+ pool), `ibNumber`, `ibDateTime`, `ibGuid`, `fileSystem/` (`ibReader`/`ibWriter`, lz), `serialize/` (`ibDataNode`, binary + JSON providers), `ibCoreException`, `ibLocalization`, `GetBuildId`/`GetBuildStamp`. It reads no base, runs no script, draws no window.
+Under both sits **`core.dll`** (`src/engine/core/`, `CORE_API` / `CORE_EXPORTS`, wx base only): what the engine and its clients mean by the same words — ids and `ibValueTypes` (`core/types.h`), `ibAnyValue` (the interface every value answers — the engine's and the client's `ibValue` derive from it, each storing its own way), `clsid.h`, `ibString` (+ pool), `ibNumber`, `ibDateTime`, `ibGuid`, `ibFormatString`, `fileSystem/` (`ibReader`/`ibWriter`, lz), `serialize/` (`ibDataNode`, binary + JSON providers), `ibCoreException`, `ibLocalization`, `diagnostics/` (the technology journal — one per process — and the crash guard), `GetBuildId`/`GetBuildStamp`. It reads no base, runs no script, draws no window.
 
 - Chain: core → backend → frmserver ⇄ protocol ⇄ frmclient → enterprise-thin; fileserver = backend + frmserver inside the client process.
-- backend links core PUBLIC; every project that links `backend.lib` also links `core.lib`; frmclient links core + protocol. `protocol.dll` does not link core — `protocol.h` stays dependency-free.
-- Not in core: `typeconv` (fonts/colours), `quicklz`, frmclient's `dataProtocol` seam.
+- backend links core PUBLIC; every project that links `backend.lib` also links `core.lib`; protocol links core; frmclient links core + protocol. `protocol.h` itself stays dependency-free.
+- Not in core: `typeconv` (fonts/colours), frmclient's `dataProtocol` seam, a value's storage.
 - Same class names as before the move; `backend/backend_core.h` includes the core headers (it is the remnant of the engine's original "core"). frmclient's `backend/backend_core.h` / `backend.h` / `backend_exception.h` are facades that include core.
 
 ### 5. Throw-By-Value Exception Pattern

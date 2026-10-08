@@ -1,7 +1,7 @@
 #include "firebirdBlobCompression.h"
 
 #include "backend/backend_exception.h"
-#include "backend/diagnostics/journal.h"   // ibJournal — this TU does not pull in backend_core.h
+#include "core/diagnostics/journal.h"   // ibJournal — this TU does not pull in backend_core.h
 
 #include <wx/log.h>
 #include <wx/mstream.h>

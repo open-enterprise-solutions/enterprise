@@ -10,7 +10,7 @@
 #include "backend/appData.h"            // ibFileInstanceRequest, CreateAppDataEnv
 #include "backend/appHost.h"            // ibApplicationInstanceScope
 #include "backend/backend_exception.h"
-#include "backend/diagnostics/crashGuard.h"   // ibCrashGuard::Install — the journal and the dumps of the process
+#include "core/diagnostics/crashGuard.h"   // ibCrashGuard::Install — the journal and the dumps of the process
 
 #include "frmserver/client/clientHost.h"
 

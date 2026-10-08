@@ -18,6 +18,12 @@
       <Platform>x64</Platform>
     </ProjectConfiguration>
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="res\resource.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="res\protocol.rc" />
+  </ItemGroup>
   <!-- THE PROTOCOL — its contract (protocol.h: the names and numbers, depending on nothing), which the server's forms
        include, and the library of the sides that talk it: a node of the wire, the connections, the communicator and
        the protocol's journal, which the GUI client (frmclient) and the web server link. Of wx — the base only. -->
@@ -92,7 +98,7 @@
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(oesLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>ws2_32.lib;crypt32.lib;mbedtls.lib;bcrypt.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>core.lib;ws2_32.lib;crypt32.lib;mbedtls.lib;bcrypt.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -152,7 +158,6 @@
     <ClCompile Include="connectionFile.cpp" />
     <ClCompile Include="connectionServer.cpp" />
     <ClCompile Include="framePatch.cpp" />
-    <ClCompile Include="journal.cpp" />
     <ClCompile Include="protocolNode.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -160,7 +165,6 @@
     <ClInclude Include="connection.h" />
     <ClInclude Include="connectionFile.h" />
     <ClInclude Include="connectionServer.h" />
-    <ClInclude Include="journal.h" />
     <ClInclude Include="protocol.h" />
     <ClInclude Include="protocolApi.h" />
     <ClInclude Include="protocolNode.h" />

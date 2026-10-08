@@ -4,7 +4,7 @@
 #endif
 #include "backend/metaCollection/partial/commonObject.h"
 #include "backend/metaData.h"
-#include "backend/formatString.h"   // ibFormatString — what the field shows its value through
+#include "core/formatString.h"   // ibFormatString — what the field shows its value through
 #include "frontend/visualView/ctrl/form.h"
 
 bool ibValueTextCtrl::TextProcessing(wxTextCtrl* textCtrl, const wxString& strData)

@@ -46,9 +46,6 @@
     <ClInclude Include="backend_exception.h" />
     <ClInclude Include="backend_diagnostic.h" />
     <ClInclude Include="fileKind.h" />
-    <ClInclude Include="diagnostics\crashGuard.h" />
-    <ClInclude Include="diagnostics\journal.h" />
-    <ClInclude Include="diagnostics\leakTracker.h" />
     <ClInclude Include="session\designerExclusivePolicy.h" />
     <ClInclude Include="session\serviceExclusivePolicy.h" />
     <ClInclude Include="session\sessionException.h" />
@@ -186,11 +183,9 @@
     <ClInclude Include="debugger\debugDefs.h" />
     <ClInclude Include="debugger\debugServer.h" />
     <ClInclude Include="backend_form.h" />
-    <ClInclude Include="fileSystem\quicklz\quicklz.h" />
     <ClInclude Include="eventDispatcher.h" />
     <ClInclude Include="backend_localization.h" />
     <ClInclude Include="translateState.h" />
-    <ClInclude Include="formatString.h" />
     <ClInclude Include="metaCollection\metaLanguageObject.h" />
     <ClInclude Include="metaCollection\metaPictureObject.h" />
     <ClInclude Include="homePageDescription.h" />
@@ -440,7 +435,6 @@
     <ClInclude Include="plugin\pluginManager.h" />
     <ClInclude Include="utils\md5.hpp" />
     <ClInclude Include="utils\sha256.hpp" />
-    <ClInclude Include="utils\debugTrace.h" />
     <ClInclude Include="utils\passwordHash.hpp" />
     <ClInclude Include="utils\dataVersion.hpp" />
     <ClInclude Include="valueInfo.h" />
@@ -470,9 +464,6 @@
     <ClCompile Include="backend_exception.cpp" />
     <ClCompile Include="backend_diagnostic.cpp" />
     <ClCompile Include="fileKind.cpp" />
-    <ClCompile Include="diagnostics\crashGuard.cpp" />
-    <ClCompile Include="diagnostics\journal.cpp" />
-    <ClCompile Include="diagnostics\leakTracker.cpp" />
     <ClCompile Include="session\designerExclusivePolicy.cpp" />
     <ClCompile Include="session\serviceExclusivePolicy.cpp" />
     <ClCompile Include="session\session.cpp" />
@@ -546,7 +537,6 @@
     <ClCompile Include="backend_mainFrame.cpp" />
     <ClCompile Include="backend_picture.cpp" />
     <ClCompile Include="backend_localization.cpp" />
-    <ClCompile Include="formatString.cpp" />
     <ClCompile Include="characteristicCtor.cpp" />
     <ClCompile Include="compiler\cache\byteCodeCache.cpp" />
     <ClCompile Include="compiler\byteCodeAOT.cpp" />
@@ -636,7 +626,6 @@
     <ClCompile Include="debugger\debugClientQuery.cpp" />
     <ClCompile Include="debugger\debugServer.cpp" />
     <ClCompile Include="backend_form.cpp" />
-    <ClCompile Include="fileSystem\quicklz\quicklz.c" />
     <ClCompile Include="eventDispatcher.cpp" />
     <ClCompile Include="metaCollection\attribute\metaAttributeObject.cpp" />
     <ClCompile Include="metaCollection\attribute\metaAttributeObjectEnum.cpp" />

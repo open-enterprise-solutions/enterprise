@@ -17,7 +17,7 @@
 
 #include "backend/mcp/mcpTool.h"
 
-#include "backend/formatString.h"
+#include "core/formatString.h"
 #include "backend/compiler/value.h"
 
 #include <memory>

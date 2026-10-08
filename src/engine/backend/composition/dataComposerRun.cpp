@@ -14,7 +14,6 @@
 #include "dataComposerInternal.h"
 
 #include "backend/query/queryParser.h"        // ibQueryParser — text -> AST
-#include "backend/diagnostics/journal.h"      // ibJournal — what each output was read as, and the shared read
 #include "backend/query/queryable.h"          // ibBackendQueryable / ibBackendQueryColumn
 #include "backend/query/queryableFactory.h"   // the source factory — the column dictionary
 #include "backend/query/dataQueryBuilder.h"   // ibDataQueryResult / ibSelectKind

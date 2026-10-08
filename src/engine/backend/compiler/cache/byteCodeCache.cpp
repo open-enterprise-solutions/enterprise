@@ -16,8 +16,6 @@
 #include "backend/databaseLayer/databaseResultSet.h"
 #include "backend/databaseLayer/databaseQueryBuilder.h"   // L2 door: descriptor pilot
 #include "core/fileSystem/fs.h"
-#include "backend/diagnostics/journal.h"   // ibJournal — an invalidation that did NOT happen must say so
-#include "core/guid.h"
 #include "backend/utils/md5.hpp"   // the key is digested to the width its column declares
 #include "backend/backend_core.h"   // GetBuildId — the engine half of the cache key
 

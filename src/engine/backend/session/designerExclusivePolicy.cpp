@@ -3,7 +3,6 @@
 #include "sessionSnapshot.h"
 
 #include "backend/appData.h"
-#include "backend/diagnostics/journal.h"   // the veto is written down, not only shown
 
 ibDesignerExclusivePolicy::ibDesignerExclusivePolicy(ibSessionRegistry* registry)
 	: m_registry(registry)

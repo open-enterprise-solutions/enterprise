@@ -10,7 +10,6 @@
 #include "backend/backend_exception.h"                    // ibBackendInterruptException — a read stopped, not failed
 #include "backend/backend_mainFrame.h"                    // ibBackendDocFrame::ShowModalMessage — a refusal, said to the person
 #include "backend/session/session.h"                      // ibSession — whose queue a compose is delivered on
-#include "backend/diagnostics/journal.h"                  // ibJournalWarning — a delivery nobody waits for says its own failure
 #include "frmserver/visualView/choiceRequest.h"           // ibRequestMenu — a variant, picked from the popup menu
 #include "frmserver/win/dlgs/settings/savedSettings.h"    // ibDialogSavedSettings — the reader's shelf
 #include "frmserver/visualView/visualHost.h"              // ibFormVisualEditView — the host a delivered compose updates the box on

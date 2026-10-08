@@ -11,7 +11,6 @@
 #include "frmclient/backend/sourceDescription.h"   // ibSourceDescription — control's bound source path (GetSourceDesc)
 
 class FRMCLIENT_API ibMetaData;
-class FRMCLIENT_API ibFormatString;
 class ibBackendSourceColumn;
 
 class FRMCLIENT_API ibBackendTypeFactory {
@@ -52,9 +51,6 @@ public:
 	virtual ibSelectorDataType GetFilterDataType() const {
 		return ibSelectorDataType::ibSelectorDataType_reference;
 	}
-
-	// The format a type is shown through when nobody set one — the engine's.
-	static bool GetFormatFromTypeDesc(const ibTypeDescription& type, class ibFormatString& formatString);
 
 	virtual const class ibMetaData* GetMetaData() const = 0;
 };

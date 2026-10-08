@@ -6,7 +6,6 @@
 #include "backend/objCtor.h"   // ibCtorMetaValueType — the type the metadata REGISTERED for the chart
 #include "core/clsid.h"   // reference_to_clsid — the calc-type attribute's type is a reference into the bound chart
 #include "chartOfCalculationTypes.h"   // the bound chart — resolved, asked for its metaID and for its relations
-#include "backend/diagnostics/journal.h"   // ibJournalInfo — a recalculation saved as an object, let go
 
 // Bind the register to a chart of calculation types: the CalculationType standard attribute becomes a
 // reference into that chart. Empty metaID leaves it untyped (no chart bound yet).

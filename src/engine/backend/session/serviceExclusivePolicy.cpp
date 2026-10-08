@@ -4,7 +4,6 @@
 
 #include "backend/appData.h"
 #include "backend/databaseLayer/databaseQueryBuilder.h"   // CanOpen reads the rows the base has now
-#include "backend/diagnostics/journal.h"                  // the veto is written down, not only shown
 
 #include <map>
 #include <thread>

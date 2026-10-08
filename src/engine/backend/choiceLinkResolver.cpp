@@ -5,7 +5,6 @@
 #include "backend/metaCollection/attribute/metaAttributeObject.h"        // a field answers what governs it
 #include "backend/srcDataObject.h"                                       // the path door every source answers
 #include "backend/backend_type.h"                                        // ibBackendTypeSourceFactory — the binding that names the field
-#include "backend/diagnostics/journal.h"                                 // ibJournal — see the note below
 
 // ⭐⭐ THIS ROAD SAYS WHAT IT DECIDED, AND IT DID NOT (2026-09-23). Four reports came in on one evening —
 // "the value does not react", "every other time", "the substitution does not work", "the characteristic

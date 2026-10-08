@@ -3,7 +3,7 @@
 
 #include "frmclient/win/ctrls/dataview/dataview.h"
 #include "frmclient/backend/compiler/value.h"
-#include "frmclient/backend/formatString.h"   // ibFormatString — what a cell is shown through (GetCellFormat)
+#include "core/formatString.h"   // ibFormatString — what a cell is shown through (GetCellFormat)
 
 #include <wx/renderer.h>   // wxRendererNative::DrawCheckMark — a boolean cell
 #include <optional>

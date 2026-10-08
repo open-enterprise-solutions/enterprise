@@ -4,7 +4,7 @@
 #include "backend/choiceLinkResolver.h"   // ibChoiceHolder — where this column's link reads its neighbours
 #include "frmserver/visualView/visualHost.h"   // ibVisualHost::SendPicture — a header picture, by its id
 #include "backend/composition/dataComposer.h"   // the composer's active sort — the header's arrow
-#include "backend/formatString.h"         // ibFormatString — what a cell is shown through
+#include "core/formatString.h"         // ibFormatString — what a cell is shown through
 #include "backend/appData.h"
 
 //****************************************************************************

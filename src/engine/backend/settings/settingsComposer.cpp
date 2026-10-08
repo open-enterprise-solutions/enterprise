@@ -4,7 +4,6 @@
 #include "backend/composition/dataComposer.h"       // the settings themselves
 #include "backend/compositionDescription.h"         // ibSettingsDescriptionMemory — the pair that writes them
 #include "core/serialize/dataBuilder.h"          // ibDataNode
-#include "core/guid.h"                           // a new setting's identity
 
 #include <algorithm>
 

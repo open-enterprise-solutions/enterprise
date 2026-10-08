@@ -8,7 +8,6 @@
 #include <wx/itemattr.h>   // wxItemAttr — the header's look
 #include <wx/renderer.h>   // wxRendererNative::DrawCheckMark — a boolean cell
 
-#include "frmclient/diagnostics/journal.h"
 #include "frmclient/visualView/commandBar.h"
 #include "frmclient/win/picture.h"
 #include "frmclient/win/ctrls/controlTextEditor.h"
@@ -338,7 +337,7 @@ void ibValueModelTableBox::SelectRow(long long handle)
 	// out and arms a new one) — and that read's answer names the current row again, for ever. It waits for the read to
 	// land (OnIdle).
 	m_selectPending = m_dataView->IsFetchInFlight();
-	ibClientJournalInfo(wxT("table"), wxT("current row %lld%s, the cursor on %lld"), handle,
+	ibJournalInfo(wxT("table"), wxT("current row %lld%s, the cursor on %lld"), handle,
 		m_selectPending ? wxT(" once the read lands") : wxT(""), ibViewTableModel::HandleOf(m_dataView->GetSelection()));
 	if (m_selectPending)
 		return;
@@ -467,7 +466,7 @@ void ibValueModelTableBox::SendCursor()
 	const long long columnId = column != nullptr ? static_cast<long long>(column->GetModelColumn()) : 0;
 	if (handle == 0 || (handle == m_currentRow && columnId == m_currentColumn))
 		return;
-	ibClientJournalInfo(wxT("table"), wxT("the cursor moved to %lld, column %lld, the current row %lld"), handle,
+	ibJournalInfo(wxT("table"), wxT("the cursor moved to %lld, column %lld, the current row %lld"), handle,
 		columnId, m_currentRow);
 
 	// The person went on: an activation's editor is not opened behind them.

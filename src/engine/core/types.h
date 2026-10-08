@@ -8,6 +8,14 @@
 // The UNDEFINED value type's clsid — the canonical "no concrete type"; base-level so low-level code can name it.
 constexpr ibClassID g_valueUndefinedCLSID = primitive_to_clsid("VL_UNDF");
 
+// …and the primitives' — what every value is (anyValue.h), named the same by the engine and the client.
+constexpr ibClassID g_valueBooleanCLSID = primitive_to_clsid("VL_BOOL");
+constexpr ibClassID g_valueNumberCLSID = primitive_to_clsid("VL_NUMB");
+constexpr ibClassID g_valueDateCLSID = primitive_to_clsid("VL_DATE");
+constexpr ibClassID g_valueStringCLSID = primitive_to_clsid("VL_STRI");
+
+constexpr ibClassID g_valueNullCLSID = primitive_to_clsid("VL_NULL");
+
 //*******************************************************************************************
 //*                                 Special structures                                      *
 //*******************************************************************************************
@@ -53,6 +61,14 @@ enum ibValueTypes : unsigned char {
 	TYPE_ITERATOR = 204, // iterator wrapper (ibValueIterator)
 
 	TYPE_LAST,
+};
+
+// What a date keeps — the date, both, the time. Here, beside the value types, because the type
+// description keeps it (typeDescription.h) and the format string reads it (formatString.h).
+enum ibDateFractions {
+	ibDateFractions_Date = 0,
+	ibDateFractions_DateTime,
+	ibDateFractions_Time
 };
 
 // WHAT KIND OF THING A REGISTERED TYPE IS, and what the registry tells it. Here, beside the value

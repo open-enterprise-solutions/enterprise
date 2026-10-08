@@ -5,7 +5,6 @@
 // stands on one: a control that holds a value. The form itself, its creation and its keys are the server's.
 
 #include "frmclient/backend/compiler/value.h"
-#include "core/guid.h"
 
 class ibBackendValueForm;
 

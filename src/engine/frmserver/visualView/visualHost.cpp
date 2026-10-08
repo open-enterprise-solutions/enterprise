@@ -1,6 +1,5 @@
 #include "visualHost.h"
 
-#include "backend/diagnostics/journal.h"
 #include "core/serialize/dataBuilder.h"
 #include "frmserver/visualView/ctrl/form.h"
 

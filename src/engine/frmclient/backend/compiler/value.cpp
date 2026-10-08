@@ -15,7 +15,7 @@ ibValue::ibValue(const ibNumber& number)
 	: m_typeClass(ibValueTypes::TYPE_NUMBER), m_text(number.ToString()), m_numeric(number)
 {
 	long long whole = 0;
-	if (number.ToInt(whole))
+	if (number.ToInt(whole) == 0)   // 0 — it fits
 		m_number = static_cast<long>(whole);
 }
 

@@ -572,7 +572,7 @@ bool ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo::SetProp
 }
 
 #include "backend/backend_localization.h"   // ibTranslateString — a column here has no format written on it
-#include "backend/formatString.h"           // ibFormatString — what GetColumnFormat answers with
+#include "core/formatString.h"           // ibFormatString — what GetColumnFormat answers with
 
 const ibFormatString& ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo::GetColumnFormat() const
 {

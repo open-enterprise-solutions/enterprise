@@ -72,17 +72,21 @@ reads no base, runs no script, draws no window. `CORE_API` / `CORE_EXPORTS` (`co
 
 | Unit | Holds |
 |---|---|
-| `types.h` | id typedefs (`ibRoleID`, `ibMetaID`, `ibSourceId`, `ibFormID`, `ibActionID`, `ibPictureID`, `ibVersionID`), `ibValueTypes`, `ibCtorObjectType`, `g_valueUndefinedCLSID`, `COMPONENT_TYPE_*`, the packed value node's field names `kValueFieldClsid` "t" / `kValueFieldData` "v" |
+| `types.h` | id typedefs (`ibRoleID`, `ibMetaID`, `ibSourceId`, `ibFormID`, `ibActionID`, `ibPictureID`, `ibVersionID`), `ibValueTypes`, `ibDateFractions`, `ibCtorObjectType`, the primitives' class ids (`g_valueUndefinedCLSID`, `g_valueBooleanCLSID` … `g_valueNullCLSID`), `COMPONENT_TYPE_*`, the packed value node's field names `kValueFieldClsid` "t" / `kValueFieldData` "v" |
+| `anyValue` | `ibAnyValue` — the INTERFACE every value answers (`GetType`, `IsEmpty`, `GetBoolean`, `GetNumber`, `GetDate`, `GetString`). The engine's `ibValue` and the client's derive from it and hold the value each its own way; what only asks these takes either |
 | `clsid.h`, `fstring`, `fnumber`, `fdatetime`, `guid`, `stringUtils.h` | `ibClassID`, `ibString` (+ pool), `ibNumber`, `ibDateTime`, `ibGuid` |
+| `formatString` | `ibFormatString` — the `Format` string as a value: `Parse` / `Render`, `Apply(const ibAnyValue&)`, `FromTypeDesc` (the format a type description gives, over either side's description) |
 | `fileSystem/` | `ibReader` / `ibWriter`, memory readers/writers, `u32`/`u64`…, lz block compression |
 | `serialize/` | `ibDataNode` / `ibDataValue`, binary provider, `ibJsonProvider`, JSON text. A type is named only by the injected resolver (`SetTypeResolver`) |
 | `exception` | `ibCoreException : std::exception` — the base of every refusal (see [Exception taxonomy](#exception-taxonomy)) |
 | `localization` | `ibLocalization` — template (`ibLocalizationEntryArray` or `en = '…'; ru = '…';`) + a language in, that language's text out; missing language → the first written. The owner passes the language |
-| `build` | `GetBuildId` / `GetBuildStamp` |
+| `diagnostics/` | the technology journal (`ibTechJournal`, `ibJournal*`) — ONE per process, the engine's, the protocol's and the client's lines in one file; `ibCrashGuard` (idempotent `Install`), leak tracker, `debugTrace.h` |
+| `build` | `GetBuildId` / `GetBuildStamp`, the program version |
 | `core.cpp` | `DllMain`: `DLL_THREAD_DETACH` drains the `ibString` pool for every process that holds one, engine or not |
 
-- Links: backend → core (PUBLIC); frmclient → core + protocol. `protocol.dll` does not link core.
-- Not in core: `typeconv` (fonts/colours/GDI), `quicklz`, frmclient's `dataProtocol` seam.
+- Links: backend → core (PUBLIC); protocol → core; frmclient → core + protocol; enterprise-thin → core.
+- Not in core: `typeconv` (fonts/colours/GDI), frmclient's `dataProtocol` seam, the value's storage (each side's own).
+- Every library carries a version resource (`res/<name>.rc`).
 
 ### Backend Layer (`backend.dll`)
 

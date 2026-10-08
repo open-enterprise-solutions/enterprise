@@ -31,7 +31,7 @@
 #include <wx/string.h>
 
 #include "backend/backend.h"
-#include "backend/diagnostics/journal.h"
+#include "core/diagnostics/journal.h"
 
 // What the application server says goes through Print, not the journal macros: those compile to nothing in a
 // release build, and this is what a person watching the console must always see.

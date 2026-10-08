@@ -12,7 +12,6 @@
 
 #include "backend/backend_exception.h"   // a process with no room for another base refuses it
 #include "backend/backend_localization.h"
-#include "backend/diagnostics/journal.h"
 #include "backend/metadataConfiguration.h"   // a scope holds the configuration it works in
 #include "backend/plugin/pluginManager.h"
 #include "backend/session/session.h"   // ibSession::CurrentCached — the journal's first question

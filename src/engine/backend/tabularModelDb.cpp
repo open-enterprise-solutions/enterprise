@@ -19,7 +19,6 @@
 #include "backend/system/value/valueType.h"        // ibValueTypeDescription::AdjustValue — typed empty parent ref (hierarchy roots)
 #include "backend/metaCollection/partial/reference/reference.h"   // ibValueReferenceDataObject — drilled folder guid
 #include "backend/uniqueKey.h"                      // ibUniqueKey — GetItemKey builds the row's reference key
-#include "backend/diagnostics/journal.h"            // ibJournal — what a group heading arrived with
 
 // A group level as it was folded — the rung, where the reader stood on it, and the rows that came back — served again
 // to a scroll of the same level (ibValueModelCursor::m_foldedLevel, RunComposerPage).

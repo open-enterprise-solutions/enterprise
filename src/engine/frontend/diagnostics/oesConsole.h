@@ -36,7 +36,7 @@
 // their teardown timing is different — non-wxApp binaries don't need
 // the extra dance.)
 
-#include "backend/diagnostics/crashGuard.h"
+#include "core/diagnostics/crashGuard.h"
 
 #include <wx/init.h>
 #include <wx/socket.h>

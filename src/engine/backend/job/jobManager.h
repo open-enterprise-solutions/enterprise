@@ -41,7 +41,6 @@
 
 #include "backend/backend.h"
 #include "backend/appDataCtorToken.h"
-#include "core/guid.h"        // ibGuid — a job names its user by key, never by name
 #include "backend/session/sessionHolder.h"
 #include "backend/compiler/value.h"        // ibValue — the argument-array gate
 #include "backend/job/jobSchedule.h"       // ibJobScheduleDescription — when a job is due

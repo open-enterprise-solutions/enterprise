@@ -36,7 +36,6 @@
 #include "backend/mcp/mcpTool.h"
 
 #include "backend/appData.h"
-#include "backend/diagnostics/journal.h"
 #include "backend/compiler/value.h"      // ibValue - the payload journal_write carries
 #include "backend/system/value/valueMap.h"   // ibValueStructure - what a sent object becomes
 #include "backend/logger/logger.h"

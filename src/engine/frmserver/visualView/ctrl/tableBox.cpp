@@ -10,7 +10,7 @@
 #include "backend/settings/settingsComposer.h"          // the reader's shelf — the setting marked "restore on open" goes on here
 #include "backend/system/systemManager.h"               // ibValueSystemFunction::Message — a mark whose setting is gone is said
 #include "backend/composition/dataComposer.h"           // the composer a header click sorts through
-#include "backend/formatString.h"                       // ibFormatString — a column's format, found once per fetch
+#include "core/formatString.h"                       // ibFormatString — a column's format, found once per fetch
 #include "formAttribute.h"                              // the attribute this box is bound to — its source IS the address
 #include "backend/srcDataObject.h"                      // …and the source answers with the guid of what it reads
 #include "backend/appData.h"

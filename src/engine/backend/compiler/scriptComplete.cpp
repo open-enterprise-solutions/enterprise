@@ -10,7 +10,6 @@
 #include "backend/moduleInfo.h"                  // ibRuntimeModuleDataObject::GetCompileModule
 #include "backend/moduleManager/moduleManager.h" // ibValueModuleManager — the context a snippet parents to
 #include "backend/session/session.h"             // ibSession::EditModuleManagerFor
-#include "backend/diagnostics/journal.h"         // where the refusals are read out when nothing resolved
 #include "backend/typeDescription.h"             // ibTypeDescription - a type, possibly several
 #include "backend/objCtor.h"                     // ibCtorMetaValueType - one door: the metaobject AND the maker
 #include "backend/metaCollection/metaObjectComposite.h"   // where fields live: catalog, document, register, tabular section

@@ -7,7 +7,6 @@
 #include "backend/appHost.h"   // SetThreadOwner — the registry thread's journal lines name its base
 #include "sessionSnapshot.h"
 #include "backend/backend_exception.h"
-#include "core/guid.h"
 #include "backend/databaseLayer/connectionPool.h"
 #include "backend/databaseLayer/databaseLayer.h"
 #include "backend/databaseLayer/databaseQueryBuilder.h"   // L2 door — q(&m_writeHolder) resolves to the holder's bound conn (write helpers); snapshot reads still raw
@@ -15,7 +14,7 @@
 #include "workerPoolHeadless.h"
 #include "backend/lock/lockManager.h"
 #include "backend/temp/tempStorage.h"
-#include "backend/utils/debugTrace.h"   // ibTraceToFile — Die's reason must survive a GUI build
+#include "core/diagnostics/debugTrace.h"   // ibTraceToFile — Die's reason must survive a GUI build
 
 #include <chrono>
 #include <iostream>

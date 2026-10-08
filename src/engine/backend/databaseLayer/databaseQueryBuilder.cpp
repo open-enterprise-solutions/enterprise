@@ -8,7 +8,7 @@
 #include "backend/databaseLayer/databaseResultSet.h"
 #include "backend/databaseLayer/resultSetMetaData.h"
 #include "backend/session/session.h"   // ibQueryResult hears its reader's cancel (ibSession::RunState)
-#include "backend/utils/debugTrace.h"  // ibDebugTraceEnabled — the parameters' values, only when asked for
+#include "core/diagnostics/debugTrace.h"  // ibDebugTraceEnabled — the parameters' values, only when asked for
 
 // --------------------------------------------------------------------------
 // Parameter binding: ibValue -> ibPreparedStatement::SetParam* by type.

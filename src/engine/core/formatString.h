@@ -19,13 +19,17 @@
 //
 ////////////////////////////////////////////////////////////////////////////
 
-#include "backend/backend_core.h"
-
 #include <optional>
 #include <utility>
 #include <vector>
 
-class ibValue;
+#include <wx/string.h>
+
+#include "core/fdatetime.h"
+#include "core/fnumber.h"
+#include "core/types.h"   // ibValueTypes, ibDateFractions — what a type description is asked
+
+class ibAnyValue;
 
 // Which values a code applies to.
 enum class ibFormatKind {
@@ -60,7 +64,7 @@ enum class ibDatePreset {
 	Sortable,                  // yyyy-mm-dd
 };
 
-struct BACKEND_API ibNumberFormat {
+struct CORE_API ibNumberFormat {
 	std::optional<int>       m_digits;             // ND
 	std::optional<int>       m_fractionDigits;     // NFD
 	std::optional<wxUniChar> m_decimalSeparator;   // NDS
@@ -71,21 +75,21 @@ struct BACKEND_API ibNumberFormat {
 	bool operator == (const ibNumberFormat& other) const;
 };
 
-struct BACKEND_API ibDateFormat {
+struct CORE_API ibDateFormat {
 	std::optional<wxString>  m_pattern;            // DF
 	std::optional<wxString>  m_empty;              // DE
 
 	bool operator == (const ibDateFormat& other) const;
 };
 
-struct BACKEND_API ibBooleanFormat {
+struct CORE_API ibBooleanFormat {
 	std::optional<wxString>  m_true;               // BT
 	std::optional<wxString>  m_false;              // BF
 
 	bool operator == (const ibBooleanFormat& other) const;
 };
 
-class BACKEND_API ibFormatString {
+class CORE_API ibFormatString {
 public:
 
 	ibNumberFormat  m_number;
@@ -102,15 +106,51 @@ public:
 	static bool Parse(const wxString& text, ibFormatString& formatString);
 	wxString Render() const;
 
+	// ⭐ THE FORMAT A TYPE DESCRIPTION GIVES, written into `formatString` in place — for a number `NFD=2`
+	// from Number(15,2), as many digits after the point as the type keeps, so the figures of a column line
+	// up; for a date the pattern its fractions keep (date, time, both). False for a type that gives none:
+	// nothing is written (docs/private/format-property.md). The description is its owner's — the engine's,
+	// the client's — asked the same questions of either.
+	template <class TypeDesc>
+	static bool FromTypeDesc(const TypeDesc& type, ibFormatString& formatString) {
+		bool written = false;
+
+		// A number: as many digits after the point as the type keeps — `5.00`, not `5`. A number nobody bounded
+		// (precision 0, "no limit" — an average, a product) keeps no count of its own and is shown as it is.
+		if (type.ContainType(ibValueTypes::TYPE_NUMBER) && type.GetPrecision() > 0) {
+			formatString.m_number.m_fractionDigits = type.GetScale();
+			written = true;
+		}
+
+		// A date: what its fractions keep — a date alone shows no time, a time no date.
+		if (type.ContainType(ibValueTypes::TYPE_DATE)) {
+			switch (type.GetDateFraction()) {
+			case ibDateFractions::ibDateFractions_Date:
+				formatString.m_date.m_pattern = PresetPattern(ibDatePreset::Date);
+				break;
+			case ibDateFractions::ibDateFractions_Time:
+				formatString.m_date.m_pattern = PresetPattern(ibDatePreset::Time);
+				break;
+			default:
+				formatString.m_date.m_pattern = PresetPattern(ibDatePreset::DateTime);
+				break;
+			}
+			written = true;
+		}
+
+		return written;
+	}
+
 	// What Format(value, this) prints: a number, a date and a boolean each by their own codes, any
-	// other value as its plain string.
-	wxString Apply(const ibValue& value) const;
+	// other value as its plain string. The value is either side's — the engine's ibValue, the client's —
+	// asked what every value answers (anyValue.h: its kind, its number, date, flag, emptiness and text).
+	wxString Apply(const ibAnyValue& value) const;
 
 	// …THE SAME TEXT, WRITTEN INTO `result` — the form a caller showing many values uses (a column of a
 	// report goes through here once per cell): a string reused row after row grows once, an ordinary
 	// amount is laid out on the stack (ibNumber::ToString) and a date straight from its pattern. False when
 	// the value shows as nothing.
-	bool Apply(const ibValue& value, wxString& result) const;
+	bool Apply(const ibAnyValue& value, wxString& result) const;
 
 	// A value that can be written at all: `;` ends a pair and `=` is not kept in one, so neither
 	// can stand in a text.

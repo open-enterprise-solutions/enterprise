@@ -5,8 +5,7 @@
 
 #include "backend/system/value/valueType.h"   // ibValueTypeDescription::AdjustValue — typed text lands as its type
 #include "backend/system/value/composition/valueComposerSettings.h"   // the pickers a cell offers
-#include "backend/backend_type.h"    // GetFormatFromTypeDesc — a value written as its field's type writes it
-#include "backend/formatString.h"
+#include "core/formatString.h"   // ibFormatString::FromTypeDesc — a value written as its field's type writes it
 
 // ===========================================================================
 //  ibFilterTreeNode — a row is a PATH; resolving it is walking that path
@@ -210,7 +209,7 @@ static wxString ibFieldText(const ibFilterOperandDescription& side)
 wxString ibFilterValueText(const ibValue& value, const ibFilterOperandDescription& field)
 {
 	ibFormatString format;
-	if (field.IsField() && ibBackendTypeConfigFactory::GetFormatFromTypeDesc(field.m_type, format))
+	if (field.IsField() && ibFormatString::FromTypeDesc(field.m_type, format))
 		return format.Apply(value);
 	return value.GetString();
 }

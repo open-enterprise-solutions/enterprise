@@ -12,7 +12,6 @@
 #include "backend/picturePredefined.h"          // g_pic*CLSID — the TableBox composes the standard command band
 #include "backend/compositionDescription.h"     // the description the quick filter writes into
 #include "backend/appData.h"
-#include "backend/diagnostics/journal.h"        // the probe on where the output list thinks it stands
 #include "frontend/win/dlgs/settings/list/listSettings.h"   // the ONE door a model's settings are opened by
 #include "frontend/win/dlgs/settings/composer/composerSettings.h"   // the saved-settings shelf — shared with the report's world
 #include "backend/settings/settingsComposer.h"              // ibSettingsCategory — which shelf a list's settings sit on

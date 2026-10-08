@@ -10,7 +10,6 @@
 #include "queryRender.h"                  // ibQueryOutputName — the ONE answer to "what is this field called"
 #include "queryLexer.h"                   // ibQueryLexer::ParamNames — which words of a query are its parameters
 #include "queryParser.h"                  // ibQueryCastType — the primitive a CAST converts to, as the parser read it
-#include "backend/diagnostics/journal.h"  // ibJournal — the technology journal
 #include "queryRamTable.h"                // ibQueryRamTable — a package's temp table IS a snapshot
 #include "queryTempStore.h"               // ibQueryTempTableStore — WHO keeps the temp tables alive
 #include "tempTableQueryable.h"           // ibTempTableQueryable — a table handed in as a PARAMETER is a source

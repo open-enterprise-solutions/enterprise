@@ -1,0 +1,109 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="diagnostics">
+      <UniqueIdentifier>{b908aefe-25b6-4f92-822f-12cb5562e048}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="fileSystem">
+      <UniqueIdentifier>{3e658492-3710-4562-a676-5eecced213a9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="fileSystem\lz">
+      <UniqueIdentifier>{a606016d-466d-412e-ab20-5490f6a2e37f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="res">
+      <UniqueIdentifier>{3be40a77-37b2-4932-b674-ea437eebb065}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="serialize">
+      <UniqueIdentifier>{8708f6ac-1c30-4368-8d4f-7555b0b5d7bf}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="anyValue.cpp" />
+    <ClCompile Include="build.cpp" />
+    <ClCompile Include="core.cpp" />
+    <ClCompile Include="diagnostics\crashGuard.cpp">
+      <Filter>diagnostics</Filter>
+    </ClCompile>
+    <ClCompile Include="diagnostics\journal.cpp">
+      <Filter>diagnostics</Filter>
+    </ClCompile>
+    <ClCompile Include="diagnostics\leakTracker.cpp">
+      <Filter>diagnostics</Filter>
+    </ClCompile>
+    <ClCompile Include="exception.cpp" />
+    <ClCompile Include="fdatetime.cpp" />
+    <ClCompile Include="fileSystem\fs.cpp">
+      <Filter>fileSystem</Filter>
+    </ClCompile>
+    <ClCompile Include="fileSystem\lz\lzhuf.cpp">
+      <Filter>fileSystem\lz</Filter>
+    </ClCompile>
+    <ClCompile Include="fnumber.cpp" />
+    <ClCompile Include="formatString.cpp" />
+    <ClCompile Include="fstring.cpp" />
+    <ClCompile Include="guid.cpp" />
+    <ClCompile Include="localization.cpp" />
+    <ClCompile Include="serialize\dataBuilder.cpp">
+      <Filter>serialize</Filter>
+    </ClCompile>
+    <ClCompile Include="serialize\jsonProvider.cpp">
+      <Filter>serialize</Filter>
+    </ClCompile>
+    <ClCompile Include="serialize\jsonText.cpp">
+      <Filter>serialize</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="anyValue.h" />
+    <ClInclude Include="build.h" />
+    <ClInclude Include="clsid.h" />
+    <ClInclude Include="core.h" />
+    <ClInclude Include="diagnostics\crashGuard.h">
+      <Filter>diagnostics</Filter>
+    </ClInclude>
+    <ClInclude Include="diagnostics\debugTrace.h">
+      <Filter>diagnostics</Filter>
+    </ClInclude>
+    <ClInclude Include="diagnostics\journal.h">
+      <Filter>diagnostics</Filter>
+    </ClInclude>
+    <ClInclude Include="diagnostics\leakTracker.h">
+      <Filter>diagnostics</Filter>
+    </ClInclude>
+    <ClInclude Include="exception.h" />
+    <ClInclude Include="fdatetime.h" />
+    <ClInclude Include="fileSystem\fs.h">
+      <Filter>fileSystem</Filter>
+    </ClInclude>
+    <ClInclude Include="fileSystem\lz\lzhuf.h">
+      <Filter>fileSystem\lz</Filter>
+    </ClInclude>
+    <ClInclude Include="fileSystem\types.h">
+      <Filter>fileSystem</Filter>
+    </ClInclude>
+    <ClInclude Include="fnumber.h" />
+    <ClInclude Include="formatString.h" />
+    <ClInclude Include="fstring.h" />
+    <ClInclude Include="guid.h" />
+    <ClInclude Include="localization.h" />
+    <ClInclude Include="res\resource.h">
+      <Filter>res</Filter>
+    </ClInclude>
+    <ClInclude Include="serialize\dataBuilder.h">
+      <Filter>serialize</Filter>
+    </ClInclude>
+    <ClInclude Include="serialize\jsonProvider.h">
+      <Filter>serialize</Filter>
+    </ClInclude>
+    <ClInclude Include="serialize\jsonText.h">
+      <Filter>serialize</Filter>
+    </ClInclude>
+    <ClInclude Include="stringUtils.h" />
+    <ClInclude Include="types.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="res\core.rc">
+      <Filter>res</Filter>
+    </ResourceCompile>
+  </ItemGroup>
+</Project>

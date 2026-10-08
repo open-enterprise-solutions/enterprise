@@ -30,7 +30,7 @@ static const wxCmdLineEntryDesc s_cmdLineDesc[] = {
 	{ wxCMD_LINE_NONE,   nullptr, nullptr,     nullptr,                   wxCMD_LINE_VAL_NONE,   0 }
 };
 
-#include "backend/diagnostics/leakTracker.h"
+#include "core/diagnostics/leakTracker.h"
 
 IB_LEAK_TRACKER_ARM();
 

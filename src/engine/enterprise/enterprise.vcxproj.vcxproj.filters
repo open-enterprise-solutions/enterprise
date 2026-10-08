@@ -68,9 +68,6 @@
     <Filter Include="res">
       <UniqueIdentifier>{d3f4bf29-6f86-43b3-b079-064ad3a64eb7}</UniqueIdentifier>
     </Filter>
-    <Filter Include="res\xpm">
-      <UniqueIdentifier>{c2556e89-bf77-4e37-b5b5-1d1202759bad}</UniqueIdentifier>
-    </Filter>
     <Filter Include="mainFrame">
       <UniqueIdentifier>{bd02bd41-d4ef-4e04-ab63-bc8c625942ca}</UniqueIdentifier>
     </Filter>

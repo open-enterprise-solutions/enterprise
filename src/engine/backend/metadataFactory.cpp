@@ -1,6 +1,6 @@
 ﻿#include "metaData.h"
 #include "backend/objCtor.h"
-#include "backend/utils/debugTrace.h"   // ibDebugTraceEnabled — class-registration tracing is opt-in
+#include "core/diagnostics/debugTrace.h"   // ibDebugTraceEnabled — class-registration tracing is opt-in
 #include "backend/query/queryableFactory.h"   // ibMetaQueryableFactory — the per-config source factory (complete here)
 
 // The image's designer infrastructure (compile cache + its module-manager) is built by the owner metadata's

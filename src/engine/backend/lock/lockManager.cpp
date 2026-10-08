@@ -31,7 +31,6 @@
 #include "backend/databaseLayer/databaseLayer.h"            // ibTxOptions (the lock TX still rides the driver's tpb)
 #include "backend/databaseLayer/databaseQueryBuilder.h"     // L2 door — pessimistic SELECT via ir.m_lockForUpdate/m_lockNoWait
 #include "backend/databaseLayer/databaseErrorCodes.h"
-#include "backend/diagnostics/journal.h"              // a release that did not complete is a line, not a stop
 #include "backend/session/session.h"
 #include "backend/userInfo.h"
 

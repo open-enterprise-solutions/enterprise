@@ -2,7 +2,6 @@
 #define __BYTE_CODE_H__
 
 #include "backend/compiler/value.h"     // ibValue::GetIDObjectFromString — the type registry
-#include "core/guid.h"
 
 // A TYPE NAME AS WRITTEN → its class id; nothing declared → no id.
 //

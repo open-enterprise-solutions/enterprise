@@ -6,7 +6,6 @@
 #include "connectionHolder.h"
 #include "connectionScope.h"
 #include "databaseLayer.h"
-#include "backend/diagnostics/journal.h"   // ibJournalInfo — what an interruption found to interrupt
 
 ibDatabaseConnectionHolder* ibConnectionPool::ThreadHolder()
 {

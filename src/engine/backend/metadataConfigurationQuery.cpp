@@ -7,7 +7,6 @@
 #include "backend/utils/md5.hpp"
 #include "backend/appData.h"
 #include "backend/logger/logger.h"
-#include "backend/diagnostics/journal.h"   // ibJournal — the apply writes WHAT changed, not only that it did
 #include "backend/backend_exception.h"
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -13,7 +13,6 @@
 #include "queryable.h"         // ibAliasColumn — a CAST's narrowed field answers as the field it stands for
 #include "dataQueryBuilder.h"  // ibDataQueryBuilder::EffectiveSort / ibDataQueryResult / ibReadPageRequest / ibDataQuerySpec / ibDotWalkColumn
 #include "resultSource.h"      // ibDataResultSource — the selection backing ibDbResultSource derives
-#include "backend/diagnostics/journal.h"   // ibJournal — why a server fold was declined, and what was lowered
 #include "columnLayout.h"      // the column-layout tier: DescribeColumnLayout + ibColumnCodec (value codec) + HasReference
 #include "columnSpread.h"      // ibColumnSpread::TagForValue — which of a tagged column's fields a value fills
 #include "queryException.h"    // ibBackendQueryException — L3-L5 varieties (it used to arrive through the DB header)

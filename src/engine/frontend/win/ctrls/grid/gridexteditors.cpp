@@ -15,7 +15,7 @@
 #if wxUSE_GRID
 
 #include "gridext.h"
-#include "backend/diagnostics/journal.h"   // ibJournal* — this TU does not pull in backend_core.h
+#include "core/diagnostics/journal.h"   // ibJournal* — this TU does not pull in backend_core.h
 
 #ifndef WX_PRECOMP
 #include <wx/utils.h>

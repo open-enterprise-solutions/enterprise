@@ -6,7 +6,7 @@
 // which is what lets a row evaluate its own schedule without a second scheduler.
 #include "jobSchedule.h"
 #include "backend/compiler/value.h"   // ibValue — a bound printed through the engine's format
-#include "backend/formatString.h"     // ibFormatString — the date format a script's Format uses
+#include "core/formatString.h"     // ibFormatString — the date format a script's Format uses
 
 #include <wx/datetime.h>   // the weekday and month NAMES Describe prints
 

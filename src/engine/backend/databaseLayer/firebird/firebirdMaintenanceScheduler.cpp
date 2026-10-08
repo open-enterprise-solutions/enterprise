@@ -4,7 +4,6 @@
 #include "backend/appData.h"
 #include "backend/job/jobManager.h"
 #include "backend/session/session.h"
-#include "backend/diagnostics/journal.h"   // ibJournalInfo — a sweep pass says why it ran and what it cleared
 
 // THE SCHEDULE SAYS WHEN THE WORK IS DUE — that is the whole point of having one. It used to say
 // "ask every 60 seconds", with the real cadences (sweep every 6 h, backup/restore weekly) hidden in

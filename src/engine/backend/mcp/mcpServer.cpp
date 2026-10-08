@@ -37,7 +37,6 @@
 
 #include "backend/appData.h"                        // GetSettingsStorage — where a person's settings live
 #include "backend/logger/logger.h"                  // …and ibLog — the registration journal
-#include "backend/diagnostics/journal.h"            // ibJournalInfo — the ENGINE's journal, `mcp` channel
 #include "backend/backend_exception.h"              // an engine refusal arrives as an exception
 #include "backend/query/queryException.h"           // …and the query family says WHERE
 #include "backend/debugger/debugClient.h"           // the bridge list — we ride along on a session

@@ -1,7 +1,8 @@
 #include "journal.h"
 
 #include "crashGuard.h"          // the journal lives beside the dumps — same directory decision
-#include "backend/utils/debugTrace.h"   // ibDebugTraceEnabled — the house env-var switch
+#include "core/diagnostics/debugTrace.h"   // ibDebugTraceEnabled — the house env-var switch
+#include "core/build.h"                    // GetBuildId, version_oes_last — what is running, said first
 
 #include <wx/datetime.h>
 #include <wx/ffile.h>

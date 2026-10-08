@@ -24,7 +24,6 @@
 #include "frmclient/docView/docManager.h"
 #include "frmclient/docView/templates/docViewFile.h"
 #include "frmclient/artProvider/artProvider.h"
-#include "frmclient/diagnostics/journal.h"
 #include "frmclient/visualView/visualHostClient.h"
 #include "frmclient/win/picture.h"
 #include "frmclient/win/dlgs/about.h"
@@ -953,7 +952,7 @@ void ibFrontendMainFrame::Settle(const ibProtocolNode& answer)
 	// The client's part of a call, beside its exchange (the communicator's line): the window drawn from the answer.
 	const wxLongLong began = wxGetUTCTimeMillis();
 	Draw(answer);
-	ibClientJournalInfo(wxT("call"), wxT("  drawn in %lld ms"), (wxGetUTCTimeMillis() - began).GetValue());
+	ibJournalInfo(wxT("call"), wxT("  drawn in %lld ms"), (wxGetUTCTimeMillis() - began).GetValue());
 	Ask();
 }
 

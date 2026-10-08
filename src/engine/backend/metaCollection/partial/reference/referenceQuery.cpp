@@ -10,8 +10,7 @@
 #include "backend/metaCollection/partial/tabularSection/tabularSection.h"
 #include "backend/query/dataQueryBuilder.h"   // L3 door — reference read by key / scan
 #include "backend/logger/logger.h"        // a read that FAILED is said out loud, unlike a row that is absent
-#include "backend/diagnostics/journal.h"  // every read is counted — how many there are is a measurement, not a guess
-#include "backend/utils/debugTrace.h"     // ibDebugTraceEnabled — the same gate as the hit line
+#include "core/diagnostics/debugTrace.h"     // ibDebugTraceEnabled — the same gate as the hit line
 #include "core/stringUtils.h"          // a typed text against a code: the whole of it, case aside
 #include "backend/system/value/valueArray.h"   // ibValueArray — ChoiceDataGetProcessing's ChoiceData
 #include "backend/system/value/valueMap.h"     // ibValueStructure — …and its Parameters

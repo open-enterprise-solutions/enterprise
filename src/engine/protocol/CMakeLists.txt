@@ -34,6 +34,9 @@ endif()
 # client, compiled with the build's TLS — which the backend carries for everyone else, and this library, linking no
 # backend, carries itself.
 target_link_libraries(protocol
+    PUBLIC
+        # The core's journal — one per process, the client's and the protocol's lines alike (core/diagnostics).
+        core
     PRIVATE
         wx::base
         mbedtls

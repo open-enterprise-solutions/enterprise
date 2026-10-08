@@ -8,7 +8,7 @@
 #include "backend/metadataConfiguration.h"   // ibMetaDataConfigurationBase::GetRestructureInfo (the static ledger accessor)
 
 #include "backend/metaData.h"
-#include "backend/utils/debugTrace.h"   // ibDebugTraceEnabled — per-object id tracing is opt-in
+#include "core/diagnostics/debugTrace.h"   // ibDebugTraceEnabled — per-object id tracing is opt-in
 #include "backend/databaseLayer/databaseErrorCodes.h"
 
 #include <wx/log.h>

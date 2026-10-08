@@ -5,7 +5,7 @@
 #include "valueQuery.h"
 
 #include "backend/query/queryParser.h"
-#include "backend/diagnostics/crashGuard.h"  // ibJournal — the technology journal
+#include "core/diagnostics/crashGuard.h"  // ibJournal — the technology journal
 #include "valueArray.h"                  // ibValueArray — a package answers with results BY POSITION
 #include "backend/compiler/typeCtor.h"   // VALUE_TYPE_REGISTER / SYSTEM_TYPE_REGISTER / ENUM_TYPE_REGISTER
 #include "backend/backend_exception.h"   // ibBackendCoreException — a wrong TempTablesManager is told, not ignored

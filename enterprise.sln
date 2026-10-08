@@ -55,6 +55,7 @@ EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "protocol", "src\engine\protocol\protocol.vcxproj", "{A1B2C3D4-0008-4E5F-8A9B-C0D1E2F30008}"
 	ProjectSection(ProjectDependencies) = postProject
 		{A1B2C3D4-0003-4E5F-8A9B-C0D1E2F30003} = {A1B2C3D4-0003-4E5F-8A9B-C0D1E2F30003}
+		{A1B2C3D4-0009-4E5F-8A9B-C0D1E2F30009} = {A1B2C3D4-0009-4E5F-8A9B-C0D1E2F30009}
 	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "frmserver", "src\engine\frmserver\frmserver.vcxproj", "{A1B2C3D4-0004-4E5F-8A9B-C0D1E2F30004}"

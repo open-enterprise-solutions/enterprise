@@ -1,5 +1,5 @@
 #include "firebirdLocalServer.h"
-#include "backend/diagnostics/journal.h"   // ibJournal — this TU does not pull in backend_core.h
+#include "core/diagnostics/journal.h"   // ibJournal — this TU does not pull in backend_core.h
 
 // OES_FB_LOCALSERVER — compile-time gate for the bitness-decoupling
 // out-of-process server path. OFF by default; the only scenario that

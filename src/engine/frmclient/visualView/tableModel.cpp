@@ -7,7 +7,6 @@
 
 #include <algorithm>
 
-#include "frmclient/diagnostics/journal.h"
 
 namespace {
 
@@ -206,7 +205,7 @@ unsigned int ibViewTableModel::Fetch(int direction, const ibDataViewItem& parent
 	for (const ibProtocolNode& picture : answer.FindChild(ibProtocolName::Pictures).Children())
 		done.pictures.emplace_back(PictureIdOf(picture.GetString(ibProtocolName::Id)), picture.GetString(ibProtocolName::Picture));
 
-	ibClientJournalInfo(wxT("table"), wxT("read %d from %lld under %lld, %d asked: %u rows%s, current %lld, %u pictures"),
+	ibJournalInfo(wxT("table"), wxT("read %d from %lld under %lld, %d asked: %u rows%s, current %lld, %u pictures"),
 		direction, HandleOf(anchor), HandleOf(level), asked, read, answer.GetBool(ibProtocolName::End) ? wxT(", the end") : wxT(""),
 		done.currentRow, static_cast<unsigned>(done.pictures.size()));
 	if (done.currentRow != 0 || !done.pictures.empty())

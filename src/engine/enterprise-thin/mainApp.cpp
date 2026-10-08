@@ -11,7 +11,7 @@
 #include <wx/image.h>
 #include <wx/msgdlg.h>
 
-#include "frmclient/diagnostics/journal.h"
+#include "core/diagnostics/crashGuard.h"   // ibCrashGuard::Install — the process's journal and dumps
 #include "protocol/connectionFile.h"
 #include "protocol/connectionServer.h"
 
@@ -61,8 +61,10 @@ bool ibAppEnterprise::OnCmdLineParsed(wxCmdLineParser& parser)
 
 bool ibAppEnterprise::OnInit()
 {
-	// The client's journal — the first act, so whatever goes wrong after it has somewhere to be said.
-	ibClientJournal::Open(wxT("enterprise-thin"));
+	// THE JOURNAL AND THE DUMPS — the first act, as every application of the platform does (ibCrashGuard::Install), so
+	// whatever goes wrong after it has somewhere to be said: one journal of the process, the client's, the protocol's
+	// and a file base's engine's lines in it alike.
+	ibCrashGuard::Install(wxT("enterprise-thin"));
 
 	// THE COMMAND LINE FIRST, then the connection: wx calls OnExit only after an OnInit that succeeded, so nothing is
 	// opened before a refusal here could leave it behind (the codeRunner exit crash, 2026-10-07).

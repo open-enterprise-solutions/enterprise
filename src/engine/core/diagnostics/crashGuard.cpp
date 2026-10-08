@@ -1,7 +1,7 @@
 #include "crashGuard.h"
 
 #include "journal.h"                 // the technology journal opens with the guard, before anything else
-#include "backend/backend_exception.h"
+#include "core/exception.h"         // ibCoreException — a refusal, named as such in the dump's reason
 
 #include <wx/datetime.h>
 #include <wx/ffile.h>
@@ -220,7 +220,7 @@ void OesTerminateHandler()
 			if (p) std::rethrow_exception(p);
 		}
 		catch (const ibCoreException& e) {
-			reason = wxT("ibBackendException: ") + e.GetErrorDescription();
+			reason = wxT("ibCoreException: ") + e.GetErrorDescription();
 		}
 		catch (const std::exception& e) {
 			reason = wxT("std::exception: ") + wxString::FromUTF8(e.what());
@@ -350,7 +350,7 @@ int WrapStartup(const wxString& exeName, std::function<int()> body)
 		return body();
 	}
 	catch (const ibCoreException& e) {
-		report(wxT("ibBackendException during startup: ") + e.GetErrorDescription());
+		report(wxT("ibCoreException during startup: ") + e.GetErrorDescription());
 		return 1;
 	}
 	catch (const std::exception& e) {
@@ -358,7 +358,7 @@ int WrapStartup(const wxString& exeName, std::function<int()> body)
 		return 1;
 	}
 	catch (...) {
-		report(wxT("Unknown exception during startup (non-std, non-ibBackend)"));
+		report(wxT("Unknown exception during startup (non-std)"));
 		return 1;
 	}
 }

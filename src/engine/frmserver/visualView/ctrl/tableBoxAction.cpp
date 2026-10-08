@@ -12,7 +12,6 @@
 #include "backend/picturePredefined.h"          // g_pic*CLSID — the TableBox composes the standard command band
 #include "backend/compositionDescription.h"     // the description the quick filter writes into
 #include "backend/appData.h"
-#include "backend/diagnostics/journal.h"        // the probe on where the output list thinks it stands
 #include "backend/settings/settingsComposer.h"  // the reader's shelf — ibSettingsCategory::List, restore / save
 #include "frmserver/visualView/choiceRequest.h" // ibRequestChoice — the columns printed
 #include "frmserver/win/dlgs/settings/savedSettings.h"   // ibDialogSavedSettings — the reader's shelf

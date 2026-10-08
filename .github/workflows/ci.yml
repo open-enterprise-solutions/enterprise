@@ -150,6 +150,7 @@ jobs:
           --target oes_tests oes_string_tests oes_query_totals_test
           oes_query_parity_test oes_query_join_parity_test
           oes_temp_db_sqlite_test oes_job_tenancy_test oes_multi_base_test
+          oes_protocol_test
 
       - name: Run
         working-directory: build/linux-debug
@@ -268,6 +269,7 @@ jobs:
           --target oes_tests oes_string_tests oes_query_totals_test
           oes_query_parity_test oes_query_join_parity_test
           oes_temp_db_sqlite_test oes_job_tenancy_test oes_multi_base_test
+          oes_protocol_test
 
       - name: Run
         # No -C: every preset here uses Ninja, which is single-config.
@@ -546,6 +548,7 @@ jobs:
           --target oes_tests oes_string_tests oes_query_totals_test
           oes_query_parity_test oes_query_join_parity_test
           oes_temp_db_sqlite_test oes_job_tenancy_test oes_multi_base_test
+          oes_protocol_test
 
       # Twice the timeout of tests-linux: ASan costs about 2x.
       #
@@ -841,6 +844,7 @@ jobs:
           --target oes_tests oes_string_tests oes_query_totals_test
           oes_query_parity_test oes_query_join_parity_test
           oes_temp_db_sqlite_test oes_job_tenancy_test oes_multi_base_test
+          oes_protocol_test
           -- -k 0
 
       - name: Run

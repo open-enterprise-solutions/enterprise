@@ -4,7 +4,6 @@
 #include "databaseLayer/databaseQueryBuilder.h"   // L2 door — the whole sys_user DAO rides this (no raw ibDatabaseLayer / result set)
 #include "databaseLayer/databaseErrorCodes.h"
 #include "core/fileSystem/fs.h"
-#include "core/guid.h"
 
 namespace {
 

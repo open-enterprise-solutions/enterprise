@@ -792,7 +792,7 @@ void ibValueSystemFunction::Execute(const wxString& strExpression)
 	ibProcUnit::Evaluate(strExpression, puState ? puState->GetCurrentRunContext() : nullptr, retValue, true);
 }
 
-#include "backend/formatString.h"
+#include "core/formatString.h"
 
 // THE FORMAT STRING IS A VALUE of its own now (formatString.h) — read once, and applied by the same
 // code the format string constructor prints its sample with. The reading here was the only one.
