@@ -20,6 +20,7 @@
 #include <vector>
 #include <utility>
 #include <memory>
+#include <variant>
 
 #include "backend/backend_core.h"          // ibMetaID
 #include "backend/clsid.h"                  // ibClassID
@@ -39,7 +40,7 @@ class BACKEND_API ibDataNode;   // a value can BE a child node (composite) — s
 // format). As each metaobject's Describe is filled out, those blobs are
 // replaced by real named scalars + child sub-nodes.
 ////////////////////////////////////////////////////////////////////////////
-// Each value carries a TYPE SIGNATURE (m_kind), so it is self-describing: the
+// Each value carries a TYPE SIGNATURE (Kind), so it is self-describing: the
 // internal store keeps the natural binary form per kind (number as an integer,
 // bool as a byte, string as text, blob as bytes) and the provider writes the
 // signature + the value. The signature preserves the type end-to-end, so a JSON
@@ -60,8 +61,8 @@ class BACKEND_API ibDataValue {
 public:
 	ibDataValue() = default;
 
-	ibDataKind Kind() const { return m_kind; }
-	bool IsEmpty() const { return m_kind == ibDataKind::Empty; }
+	ibDataKind Kind() const { return static_cast<ibDataKind>(m_payload.index()); }
+	bool IsEmpty() const { return Kind() == ibDataKind::Empty; }
 
 	static ibDataValue String(const wxString& text);
 	static ibDataValue Bool(bool value);
@@ -76,15 +77,16 @@ public:
 	// Typed accessors — each checks the signature and THROWS (ibBackendException) on
 	// a wrong kind, so a mis-read fails loud instead of returning garbage. Callers
 	// that may see another kind must gate on Kind() first (as ReadNodeValue does).
-	wxString                         AsString() const { Expect(ibDataKind::String); return m_text; }
-	bool                             AsBool()   const { Expect(ibDataKind::Bool);   return m_bool; }
-	const ibNumber&                  AsNumber() const { Expect(ibDataKind::Number); return m_number; }
-	s64                              AsInt()    const { Expect(ibDataKind::Number); s64 out = 0; m_number.ToInt(out); return out; }
-	u64                              AsUInt()   const { Expect(ibDataKind::Number); u64 out = 0; m_number.ToInt(out); return out; }
-	ibDateTime                       AsDate()   const { Expect(ibDataKind::Date);   return m_date; }
-	const wxMemoryBuffer&            AsBinary() const { Expect(ibDataKind::Binary); return m_binary; }
-	const std::shared_ptr<ibDataNode>& AsChild() const { Expect(ibDataKind::Child); return m_child; }
-	const std::vector<ibDataValue>&  AsArray()  const { Expect(ibDataKind::Array);  return m_array; }
+	// An Empty value (an absent field) reads as the kind's default.
+	wxString                         AsString() const;
+	bool                             AsBool()   const;
+	const ibNumber&                  AsNumber() const;
+	s64                              AsInt()    const { s64 out = 0; AsNumber().ToInt(out); return out; }
+	u64                              AsUInt()   const { u64 out = 0; AsNumber().ToInt(out); return out; }
+	ibDateTime                       AsDate()   const;
+	const wxMemoryBuffer&            AsBinary() const;
+	const std::shared_ptr<ibDataNode>& AsChild() const;
+	const std::vector<ibDataValue>&  AsArray()  const;
 
 	// ⭐ TWO PACKED VALUES ARE THE SAME VALUE WHEN THEIR NODES SAY THE SAME THING. A stored value is
 	// compared HERE rather than by building both back into runtime objects and asking them: what a
@@ -100,14 +102,18 @@ public:
 private:
 	void Expect(ibDataKind expected) const; // throws ibBackendException on kind mismatch
 
-	ibDataKind     m_kind = ibDataKind::Empty;  // the signature
-	wxString       m_text;     // String payload
-	bool           m_bool = false; // Bool payload
-	ibNumber       m_number;   // Number payload (exact decimal, huge-capable)
-	ibDateTime     m_date;     // Date payload (the wall-clock reading, fdatetime.h) — never mixed with Number
-	wxMemoryBuffer m_binary;   // Binary payload
-	std::shared_ptr<ibDataNode> m_child; // Child payload (composite sub-node)
-	std::vector<ibDataValue>    m_array; // Array payload (ordered list of values)
+	// ⭐ ONE PAYLOAD, OF ITS OWN KIND — the alternatives in ibDataKind's order, so which one is held IS the signature
+	// (Kind). It held every kind's at once: a bool carried a text, a number, a date, a buffer (a kilobyte, by wx's
+	// default) and a list, each made, copied and freed with it — a dozen allocations a field written, ~70 µs a
+	// command entry of a frame in a Debug build.
+	std::variant<std::monostate,                 // Empty
+		bool,                                     // Bool
+		ibNumber,                                 // Number (exact decimal, huge-capable)
+		ibDateTime,                               // Date (the wall-clock reading, fdatetime.h) — never mixed with Number
+		wxString,                                 // String
+		wxMemoryBuffer,                           // Binary
+		std::shared_ptr<ibDataNode>,              // Child (composite sub-node)
+		std::vector<ibDataValue>> m_payload;      // Array (ordered list of values)
 };
 
 ////////////////////////////////////////////////////////////////////////////
@@ -298,7 +304,7 @@ private:
 
 	std::vector<std::pair<wxString, ibDataValue>> m_fields;   // plain / hidden / intrinsic fields
 	std::vector<std::pair<wxString, ibDataValue>> m_props;    // the property bag (separate area)
-	wxMemoryBuffer                                m_rawData;  // transitional un-decomposed block
+	wxMemoryBuffer                                m_rawData{ 0 };   // transitional un-decomposed block — empty: a default wxMemoryBuffer allocates a kilobyte
 	std::vector<ibDataNode>                       m_children; // metaobject sub-nodes
 
 	mutable size_t m_cursor = 0;          // optimistic read cursor over m_fields

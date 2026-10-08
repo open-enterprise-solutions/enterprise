@@ -472,12 +472,11 @@ bool ibSpreadsheetDescriptionMemory::ReadNode(const ibDataValue& value, ibSpread
 			const int row = node->GetValue<s32>(wxT("row"));
 			const int col = node->GetValue<s32>(wxT("col"));
 
-			ibSpreadsheetCellDescription* cell = spreadsheetDesc.GetOrCreateCell(row, col);
-			if (cell == nullptr)
-				continue;
-
-			// The sheet places it; the cell fills itself in.
-			ibSpreadsheetCellDescriptionMemory::ReadNode(entry, *cell);
+			// The cell fills itself in; the sheet places it — its font the sheet's, one a kind (ibSpreadsheetFontCopy):
+			// a font of its own for each cell read ran a big sheet out of the GDI's.
+			ibSpreadsheetCellDescription read(row, col);
+			ibSpreadsheetCellDescriptionMemory::ReadNode(entry, read);
+			spreadsheetDesc.GetOrCreateCell(row, col, &read);
 		}
 	}
 

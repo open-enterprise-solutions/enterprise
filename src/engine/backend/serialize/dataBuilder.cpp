@@ -14,36 +14,94 @@
 // ibDataValue — typed factories
 ////////////////////////////////////////////////////////////////////////////
 void ibDataValue::Expect(ibDataKind expected) const {
+	// The payload stands at the place of its kind — one alternative a kind, in ibDataKind's order (Kind).
+	static_assert(std::variant_size_v<decltype(m_payload)> == static_cast<size_t>(ibDataKind::Array) + 1,
+		"one alternative a kind, in ibDataKind's order");
+	static_assert(std::is_same_v<std::variant_alternative_t<static_cast<size_t>(ibDataKind::String), decltype(m_payload)>, wxString>
+		&& std::is_same_v<std::variant_alternative_t<static_cast<size_t>(ibDataKind::Array), decltype(m_payload)>, std::vector<ibDataValue>>,
+		"one alternative a kind, in ibDataKind's order");
+
 	// Empty (an absent field) is allowed — As* yields the default, so a missing tag
 	// loads as a default, never an error. Only a present, WRONG kind throws.
-	if (m_kind != ibDataKind::Empty && m_kind != expected)
+	if (Kind() != ibDataKind::Empty && Kind() != expected)
 		ibBackendCoreException::Error(_("ibDataValue: wrong value kind (expected %d, got %d)"),
-			(int)expected, (int)m_kind);
+			(int)expected, (int)Kind());
+}
+
+wxString ibDataValue::AsString() const {
+	Expect(ibDataKind::String);
+	const wxString* const text = std::get_if<wxString>(&m_payload);
+	return text != nullptr ? *text : wxString();
+}
+
+bool ibDataValue::AsBool() const {
+	Expect(ibDataKind::Bool);
+	const bool* const value = std::get_if<bool>(&m_payload);
+	return value != nullptr && *value;
+}
+
+const ibNumber& ibDataValue::AsNumber() const {
+	Expect(ibDataKind::Number);
+	static const ibNumber s_zero;
+	const ibNumber* const number = std::get_if<ibNumber>(&m_payload);
+	return number != nullptr ? *number : s_zero;
+}
+
+ibDateTime ibDataValue::AsDate() const {
+	Expect(ibDataKind::Date);
+	const ibDateTime* const date = std::get_if<ibDateTime>(&m_payload);
+	return date != nullptr ? *date : ibDateTime();
+}
+
+const wxMemoryBuffer& ibDataValue::AsBinary() const {
+	Expect(ibDataKind::Binary);
+	static const wxMemoryBuffer s_empty(0);
+	const wxMemoryBuffer* const data = std::get_if<wxMemoryBuffer>(&m_payload);
+	return data != nullptr ? *data : s_empty;
+}
+
+const std::shared_ptr<ibDataNode>& ibDataValue::AsChild() const {
+	Expect(ibDataKind::Child);
+	static const std::shared_ptr<ibDataNode> s_none;
+	const std::shared_ptr<ibDataNode>* const child = std::get_if<std::shared_ptr<ibDataNode>>(&m_payload);
+	return child != nullptr ? *child : s_none;
+}
+
+const std::vector<ibDataValue>& ibDataValue::AsArray() const {
+	Expect(ibDataKind::Array);
+	static const std::vector<ibDataValue> s_none;
+	const std::vector<ibDataValue>* const items = std::get_if<std::vector<ibDataValue>>(&m_payload);
+	return items != nullptr ? *items : s_none;
 }
 
 // ⭐⭐ EQUALITY OF PACKED VALUES — see the header. A schema lives entirely on serialisation, so "is
 // this the same value" is a question about what was written, answered without building anything.
 bool ibDataValue::operator==(const ibDataValue& other) const
 {
-	if (m_kind != other.m_kind)
+	if (Kind() != other.Kind())
 		return false;
 
-	switch (m_kind) {
+	switch (Kind()) {
 	case ibDataKind::Empty:  return true;
-	case ibDataKind::String: return m_text == other.m_text;
-	case ibDataKind::Bool:   return m_bool == other.m_bool;
-	case ibDataKind::Number: return m_number == other.m_number;
-	case ibDataKind::Date:   return m_date == other.m_date;
-	case ibDataKind::Binary:
-		return m_binary.GetDataLen() == other.m_binary.GetDataLen()
-			&& (m_binary.GetDataLen() == 0
-				|| std::memcmp(m_binary.GetData(), other.m_binary.GetData(), m_binary.GetDataLen()) == 0);
-	case ibDataKind::Child:
+	case ibDataKind::String: return std::get<wxString>(m_payload) == std::get<wxString>(other.m_payload);
+	case ibDataKind::Bool:   return std::get<bool>(m_payload) == std::get<bool>(other.m_payload);
+	case ibDataKind::Number: return std::get<ibNumber>(m_payload) == std::get<ibNumber>(other.m_payload);
+	case ibDataKind::Date:   return std::get<ibDateTime>(m_payload) == std::get<ibDateTime>(other.m_payload);
+	case ibDataKind::Binary: {
+		const wxMemoryBuffer& data = std::get<wxMemoryBuffer>(m_payload);
+		const wxMemoryBuffer& otherData = std::get<wxMemoryBuffer>(other.m_payload);
+		return data.GetDataLen() == otherData.GetDataLen()
+			&& (data.GetDataLen() == 0 || std::memcmp(data.GetData(), otherData.GetData(), data.GetDataLen()) == 0);
+	}
+	case ibDataKind::Child: {
 		// Two nodes, or two absences — a child held by pointer is compared by what it HOLDS.
-		if (!m_child || !other.m_child)
-			return !m_child && !other.m_child;
-		return *m_child == *other.m_child;
-	case ibDataKind::Array:  return m_array == other.m_array;
+		const std::shared_ptr<ibDataNode>& child = std::get<std::shared_ptr<ibDataNode>>(m_payload);
+		const std::shared_ptr<ibDataNode>& otherChild = std::get<std::shared_ptr<ibDataNode>>(other.m_payload);
+		if (!child || !otherChild)
+			return !child && !otherChild;
+		return *child == *otherChild;
+	}
+	case ibDataKind::Array:  return std::get<std::vector<ibDataValue>>(m_payload) == std::get<std::vector<ibDataValue>>(other.m_payload);
 	}
 	return false;
 }
@@ -63,13 +121,16 @@ bool ibDataNode::operator==(const ibDataNode& other) const
 
 std::size_t ibDataValue::Weight() const
 {
-	switch (m_kind) {
-	case ibDataKind::String: return m_text.length() + 2;
-	case ibDataKind::Binary: return m_binary.GetDataLen();
-	case ibDataKind::Child:  return m_child ? m_child->Weight() : 1;
+	switch (Kind()) {
+	case ibDataKind::String: return std::get<wxString>(m_payload).length() + 2;
+	case ibDataKind::Binary: return std::get<wxMemoryBuffer>(m_payload).GetDataLen();
+	case ibDataKind::Child: {
+		const std::shared_ptr<ibDataNode>& child = std::get<std::shared_ptr<ibDataNode>>(m_payload);
+		return child ? child->Weight() : 1;
+	}
 	case ibDataKind::Array: {
 		std::size_t weight = 2;
-		for (const ibDataValue& item : m_array)
+		for (const ibDataValue& item : std::get<std::vector<ibDataValue>>(m_payload))
 			weight += item.Weight() + 1;
 		return weight;
 	}
@@ -89,32 +150,34 @@ std::size_t ibDataNode::Weight() const
 	return weight;
 }
 
+// Each payload put in by its own type, never converted into one: a variant holding a bool takes a pointer or a text
+// as a bool if left to choose.
 ibDataValue ibDataValue::String(const wxString& text) {
-	ibDataValue v; v.m_kind = ibDataKind::String; v.m_text = text; return v;
+	ibDataValue v; v.m_payload.emplace<wxString>(text); return v;
 }
 ibDataValue ibDataValue::Bool(bool value) {
-	ibDataValue v; v.m_kind = ibDataKind::Bool; v.m_bool = value; return v;
+	ibDataValue v; v.m_payload.emplace<bool>(value); return v;
 }
 ibDataValue ibDataValue::Number(const ibNumber& value) {
-	ibDataValue v; v.m_kind = ibDataKind::Number; v.m_number = value; return v;
+	ibDataValue v; v.m_payload.emplace<ibNumber>(value); return v;
 }
 ibDataValue ibDataValue::Int(s64 value) {
-	ibDataValue v; v.m_kind = ibDataKind::Number; v.m_number = ibNumber((int64_t)value); return v;
+	ibDataValue v; v.m_payload.emplace<ibNumber>((int64_t)value); return v;
 }
 ibDataValue ibDataValue::UInt(u64 value) {
-	ibDataValue v; v.m_kind = ibDataKind::Number; v.m_number = ibNumber((uint64_t)value); return v;
+	ibDataValue v; v.m_payload.emplace<ibNumber>((uint64_t)value); return v;
 }
 ibDataValue ibDataValue::Date(const ibDateTime& date) {
-	ibDataValue v; v.m_kind = ibDataKind::Date; v.m_date = date; return v;
+	ibDataValue v; v.m_payload.emplace<ibDateTime>(date); return v;
 }
 ibDataValue ibDataValue::Binary(const wxMemoryBuffer& data) {
-	ibDataValue v; v.m_kind = ibDataKind::Binary; v.m_binary = data; return v;
+	ibDataValue v; v.m_payload.emplace<wxMemoryBuffer>(data); return v;
 }
 ibDataValue ibDataValue::Child(const std::shared_ptr<ibDataNode>& child) {
-	ibDataValue v; v.m_kind = ibDataKind::Child; v.m_child = child; return v;
+	ibDataValue v; v.m_payload.emplace<std::shared_ptr<ibDataNode>>(child); return v;
 }
 ibDataValue ibDataValue::Array(const std::vector<ibDataValue>& items) {
-	ibDataValue v; v.m_kind = ibDataKind::Array; v.m_array = items; return v;
+	ibDataValue v; v.m_payload.emplace<std::vector<ibDataValue>>(items); return v;
 }
 
 ////////////////////////////////////////////////////////////////////////////

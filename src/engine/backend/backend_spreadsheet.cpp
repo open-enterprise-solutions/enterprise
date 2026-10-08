@@ -34,9 +34,7 @@ ibSpreadsheetDescription ibBackendSpreadsheetObject::GetArea(int rowLeft, int ro
 	if (rowLeft >= 0 && colTop >= 0 && rowRight > 0 && colBottom > 0) {
 		for (int row = rowLeft; row < rowRight; row++) {
 			for (int col = colTop; col < colBottom; col++) {
-				ibSpreadsheetCellDescription* cell =
-					spreadsheetDesc.GetOrCreateCell(row - rowLeft, col - colTop);
-				cell->SetCell(m_spreadsheetDesc.GetCell(row, col));
+				spreadsheetDesc.GetOrCreateCell(row - rowLeft, col - colTop, m_spreadsheetDesc.GetCell(row, col));
 			}
 		}
 
@@ -67,9 +65,7 @@ ibSpreadsheetDescription ibBackendSpreadsheetObject::GetArea(int rowLeft, int ro
 				// ⚠ NOT `col - colTop`. colTop is the ABSENCE marker (-1) on this branch, so
 				// subtracting it shifted every cell one column to the right — a sentinel used as
 				// an origin. The origin is 0 here, because the columns were not narrowed.
-				ibSpreadsheetCellDescription* cell =
-					spreadsheetDesc.GetOrCreateCell(row - rowLeft, col);
-				cell->SetCell(m_spreadsheetDesc.GetCell(row, col));
+				spreadsheetDesc.GetOrCreateCell(row - rowLeft, col, m_spreadsheetDesc.GetCell(row, col));
 			}
 		}
 
@@ -89,9 +85,7 @@ ibSpreadsheetDescription ibBackendSpreadsheetObject::GetArea(int rowLeft, int ro
 		for (int row = 0; row <= lastRow; row++) {
 			for (int col = colTop; col < colBottom; col++) {
 				// ⚠ NOT `row - rowLeft` — rowLeft is the absence marker here, same trap, other axis.
-				ibSpreadsheetCellDescription* cell =
-					spreadsheetDesc.GetOrCreateCell(row, col - colTop);
-				cell->SetCell(m_spreadsheetDesc.GetCell(row, col));
+				spreadsheetDesc.GetOrCreateCell(row, col - colTop, m_spreadsheetDesc.GetCell(row, col));
 			}
 		}
 
@@ -134,9 +128,7 @@ ibSpreadsheetDescription ibBackendSpreadsheetObject::GetAreaByName(const wxStrin
 	if (r != nullptr && c != nullptr) {
 		for (int row = r->m_start; row <= (int)r->m_end; row++) {
 			for (int col = c->m_start; col <= (int)c->m_end; col++) {
-				ibSpreadsheetCellDescription* cell =
-					spreadsheetDesc.GetOrCreateCell(row - r->m_start, col - c->m_start);
-				cell->SetCell(m_spreadsheetDesc.GetCell(row, col));
+				spreadsheetDesc.GetOrCreateCell(row - r->m_start, col - c->m_start, m_spreadsheetDesc.GetCell(row, col));
 			}
 		}
 
@@ -155,9 +147,7 @@ ibSpreadsheetDescription ibBackendSpreadsheetObject::GetAreaByName(const wxStrin
 		// A ROW AREA IS AS WIDE AS THE SHEET. Nothing bounds it on the free side but the content.
 		for (int row = r->m_start; row <= (int)r->m_end; row++) {
 			for (int col = 0; col <= lastCol; col++) {
-				ibSpreadsheetCellDescription* cell =
-					spreadsheetDesc.GetOrCreateCell(row - r->m_start, col);
-				cell->SetCell(m_spreadsheetDesc.GetCell(row, col));
+				spreadsheetDesc.GetOrCreateCell(row - r->m_start, col, m_spreadsheetDesc.GetCell(row, col));
 			}
 		}
 
@@ -178,9 +168,7 @@ ibSpreadsheetDescription ibBackendSpreadsheetObject::GetAreaByName(const wxStrin
 		// …and a COLUMN area is as tall as the sheet. Same rule, other axis.
 		for (int row = 0; row <= lastRow; row++) {
 			for (int col = c->m_start; col <= (int)c->m_end; col++) {
-				ibSpreadsheetCellDescription* cell =
-					spreadsheetDesc.GetOrCreateCell(row, col - c->m_start);
-				cell->SetCell(m_spreadsheetDesc.GetCell(row, col));
+				spreadsheetDesc.GetOrCreateCell(row, col - c->m_start, m_spreadsheetDesc.GetCell(row, col));
 			}
 		}
 
@@ -209,9 +197,7 @@ void ibBackendSpreadsheetObject::PutArea(const wxObjectDataPtr<ibBackendSpreadsh
 		for (int col = 0; col < doc->GetNumberCols(); col++) {
 
 			ibSpreadsheetCellDescription* cell =
-				m_spreadsheetDesc.GetOrCreateCell(maxRowBrake + row, col);
-
-			cell->SetCell(doc->GetSpreadsheetDesc().GetCell(row, col));
+				m_spreadsheetDesc.GetOrCreateCell(maxRowBrake + row, col, doc->GetSpreadsheetDesc().GetCell(row, col));
 
 			// ⭐⭐ WHAT LANDS IS THE TEXT, in THIS document's language. The template keeps every language
 			// and its fill instructions; the document it is put into keeps what they came to — a caption
@@ -268,9 +254,7 @@ void ibBackendSpreadsheetObject::JoinArea(const wxObjectDataPtr<ibBackendSpreads
 		for (int row = 0; row < doc->GetNumberRows(); row++) {
 
 			ibSpreadsheetCellDescription* cell =
-				m_spreadsheetDesc.GetOrCreateCell(row, maxColBrake + col);
-
-			cell->SetCell(doc->GetSpreadsheetDesc().GetCell(row, col));
+				m_spreadsheetDesc.GetOrCreateCell(row, maxColBrake + col, doc->GetSpreadsheetDesc().GetCell(row, col));
 
 			// what lands is the text, in this document's language — see PutArea
 			cell->m_value = doc->ComputeStringValueFromParameters(cell->m_value, cell->m_fillSetType, m_docLangCode);
