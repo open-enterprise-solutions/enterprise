@@ -573,7 +573,7 @@ bool ibClientFrame::DoCommand(ibDocCommand command, const wxString& name)
 	case ibDocCommand::Open:
 		return OpenChosenFile();
 	case ibDocCommand::Exit:
-		return ExitClient();
+		return ExitClient(false);
 	case ibDocCommand::Cut:
 	case ibDocCommand::Copy:
 	case ibDocCommand::Paste:
@@ -613,17 +613,25 @@ bool ibClientFrame::DoCommand(ibDocCommand command, const wxString& name)
 	return false;
 }
 
-bool ibClientFrame::ExitClient()
+bool ibClientFrame::ExitClient(bool force)
 {
 	// Each tab closed the one road every close goes — its form asks about what is unsaved, and the person may keep it:
 	// then the client stays, as the desktop window stayed when a document was kept. The start page goes with the client.
-	for (std::size_t i = 0; i < m_tabs.size(); ++i) {
-		if (!m_tabs[i]->IsLocked() && !CloseTab(i))
-			return false;
+	// A forced exit asks nothing: the session's work is already stopped (ibSession::Close).
+	if (!force) {
+		for (std::size_t i = 0; i < m_tabs.size(); ++i) {
+			if (!m_tabs[i]->IsLocked() && !CloseTab(i))
+				return false;
+		}
 	}
 
-	std::lock_guard<std::mutex> lock(m_msgMutex);
-	m_exitPending = true;
+	{
+		std::lock_guard<std::mutex> lock(m_msgMutex);
+		m_exitPending = true;
+	}
+	// …and a client that is not calling is called for it: nothing else would bring it.
+	if (force)
+		RefreshFrame();
 	return true;
 }
 

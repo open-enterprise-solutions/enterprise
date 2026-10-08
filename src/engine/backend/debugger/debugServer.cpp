@@ -2079,7 +2079,17 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 	}
 	else if (commandFromClient == CommandId_Destroy) {
 
+		// THE SESSION TO TAKE DOWN — asked BEFORE the stops are woken. Out of its loop, a parked session is no longer
+		// what this thread's Current() answers: it answered the process's own session where there is one (the desktop's)
+		// and nothing in a thin client's process, whose session stayed stopped-and-woken with its window up.
+		const std::shared_ptr<ibSession> stopped = ParkedSession(wxString());
+
 		ms_debugServer->m_bUseDebug = false;
+		// …and woken BY NAME, as Continue wakes it: the sweep below wakes the sessions bound to a thread, and a desktop's
+		// stopped in its start (BeforeStart, inside its window's Show) is not among them yet — it stayed parked, the
+		// process hanging with its session closed.
+		if (stopped)
+			ms_debugServer->WakeDebugSession(stopped->GetId());
 		ms_debugServer->WakeAllDebugSessions();
 
 		ibDebuggerServerConnection::Disconnect();
@@ -2093,8 +2103,11 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 		// (line ~472). Doing it again here would give a double-uninit
 		// on the worker thread. The forced close breaks the parked script
 		// out of its loop and takes the window down with it — desktop
-		// closes its main frame, a web tab kicks itself.
-		if (auto* s = ibSession::Current())
+		// closes its main frame, a web tab kicks itself, a thin client is
+		// told to go (ibClientSession::OnClose → Exit).
+		if (stopped)
+			stopped->Close(true);
+		else if (auto* s = ibSession::Current())
 			s->Close(true);
 	}
 	else if (commandFromClient == CommandId_DeleteAllBreakpoints) {

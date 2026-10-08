@@ -165,6 +165,11 @@ public:
 	bool                        TakeClearPending();
 	// The client is to go — Exit done: every tab closed. A one-shot flag, as Clear, told with the next answer.
 	bool                        TakeExitPending();
+	// ⭐ THE CLIENT TOLD TO GO — its own Exit (DoCommand): every tab but the locked ones closed, each may keep itself, and
+	// then the client stays. FORCED — the session closed under it (a debugger's Stop, an administrator's kick: OnClose):
+	// nothing is asked, and a client at rest is called for it (RefreshFrame) — it hears Exit in the next answer, or in
+	// the answer of the call it is in, and goes as from its own Exit: its logout takes the session.
+	bool                        ExitClient(bool force);
 
 	// ⭐ A PICTURE BY ITS ID — what a frame names a picture by: a backend picture's number, a configuration picture's
 	// guid. The picture itself goes to the client once, with the next answer (DrainPendingPictures), and the client keeps
@@ -244,10 +249,9 @@ private:
 	void MarkTabForClose(const ibClientChildFrame* tab);
 	friend class ibClientChildFrame;
 
-	// The window's own commands (DoCommand). Exit: every tab but the locked ones closed — each may keep itself, and
-	// then the client stays. Edit: the client asked to do it to the field under its focus. Open: the person asked for a
-	// file of theirs, which the client uploads, and the file opened by the template its name says.
-	bool ExitClient();
+	// The window's own commands (DoCommand; Exit is ExitClient, above). Edit: the client asked to do it to the field
+	// under its focus. Open: the person asked for a file of theirs, which the client uploads, and the file opened by the
+	// template its name says.
 	bool EditFocused(ibDocCommand command);
 	bool OpenChosenFile();
 

@@ -564,7 +564,10 @@ bool ibFrontendMainFrame::Show(bool show)
 	const bool loggedIn = m_communicator->Login(m_user, m_password, m_mode, answer, refusal, error);
 	m_password.clear();
 	if (!loggedIn) {
-		wxMessageBox(!error.IsEmpty() ? error : wxString(_("The start was refused.")), GetTitle(), wxOK | wxICON_ERROR);
+		// A start that ended the run itself (its BeforeStart cancelled it, a debugger's Stop in it) is no failure to say:
+		// the person ended it, or saw what it said — the desktop's start goes as quietly (enterprise/mainApp.cpp, Cancelled).
+		if (refusal != ibProtocolRefusal::StartRefused)
+			wxMessageBox(!error.IsEmpty() ? error : wxString(_("The start was refused.")), GetTitle(), wxOK | wxICON_ERROR);
 		return false;
 	}
 
@@ -577,6 +580,12 @@ bool ibFrontendMainFrame::Show(bool show)
 	SetClientSize(FromDIP(wxSize(800, 600)));
 	Center();
 	Settle(answer);
+
+	// EXIT ALREADY — the start went no further (a debugger's Stop at a breakpoint in it): the window is not shown at all,
+	// as the desktop's is not when its start ends the run, and whoever showed it takes it down. Shown, it flashed up and
+	// went with the Exit the same answer carried.
+	if (m_exitGranted)
+		return false;
 
 	// The window's own parts, once the start has run and nothing of it is pending.
 	CreateStartupPage();
