@@ -21,7 +21,7 @@
 #include <vector>
 
 #include "backend/appData.h"
-#include "backend/clsid.h"
+#include "core/clsid.h"
 #include "backend/compiler/value.h"
 #include "backend/databaseLayer/connectionPool.h"
 #include "backend/databaseLayer/connectionHolder.h"

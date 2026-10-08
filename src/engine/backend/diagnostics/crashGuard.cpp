@@ -219,7 +219,7 @@ void OesTerminateHandler()
 			auto p = std::current_exception();
 			if (p) std::rethrow_exception(p);
 		}
-		catch (const ibBackendException& e) {
+		catch (const ibCoreException& e) {
 			reason = wxT("ibBackendException: ") + e.GetErrorDescription();
 		}
 		catch (const std::exception& e) {
@@ -349,7 +349,7 @@ int WrapStartup(const wxString& exeName, std::function<int()> body)
 	try {
 		return body();
 	}
-	catch (const ibBackendException& e) {
+	catch (const ibCoreException& e) {
 		report(wxT("ibBackendException during startup: ") + e.GetErrorDescription());
 		return 1;
 	}

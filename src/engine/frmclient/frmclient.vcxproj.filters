@@ -1,0 +1,960 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="artProvider">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5001}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="artProvider\private">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5002}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="diagnostics">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5003}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="docView">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5004}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="docView\print">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5005}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="docView\templates">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5006}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="mainFrame">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5007}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="mainFrame\output">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5008}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="mainFrame\settings">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5009}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="visualView">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5011}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="visualView\ctrl">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5012}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5013}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\ctrls">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5014}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\ctrls\dataview">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5015}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\ctrls\grid">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5016}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\dlgs">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5017}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\editor">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5018}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\editor\gridEditor">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5019}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\editor\textEditor">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5020}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\theme">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5021}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="frmclient.cpp" />
+    <ClCompile Include="diagnostics\journal.cpp">
+      <Filter>diagnostics</Filter>
+    </ClCompile>
+    <ClCompile Include="artProvider\artProvider.cpp">
+      <Filter>artProvider</Filter>
+    </ClCompile>
+    <ClCompile Include="docView\docView.cpp">
+      <Filter>docView</Filter>
+    </ClCompile>
+    <ClCompile Include="docView\docManager.cpp">
+      <Filter>docView</Filter>
+    </ClCompile>
+    <ClCompile Include="docView\print\printPreview.cpp">
+      <Filter>docView\print</Filter>
+    </ClCompile>
+    <ClCompile Include="docView\templates\docViewText.cpp">
+      <Filter>docView\templates</Filter>
+    </ClCompile>
+    <ClCompile Include="docView\templates\docViewFile.cpp">
+      <Filter>docView\templates</Filter>
+    </ClCompile>
+    <ClCompile Include="docView\templates\docViewHelp.cpp">
+      <Filter>docView\templates</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\mainFrame.cpp">
+      <Filter>mainFrame</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\mainFrameChild.cpp">
+      <Filter>mainFrame</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\output\outputWindow.cpp">
+      <Filter>mainFrame\output</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\settings\editorsettings.cpp">
+      <Filter>mainFrame\settings</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\settings\fontcolorsettings.cpp">
+      <Filter>mainFrame\settings</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\settings\xmlutility.cpp">
+      <Filter>mainFrame\settings</Filter>
+    </ClCompile>
+    <ClCompile Include="win\editor\textEditor\textEditor.cpp">
+      <Filter>win\editor\textEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="win\editor\textEditor\textEditorPrintOut.cpp">
+      <Filter>win\editor\textEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="win\picture.cpp">
+      <Filter>win</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\about.cpp">
+      <Filter>win\dlgs</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\activeUser.cpp">
+      <Filter>win\dlgs</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\formEditor.cpp">
+      <Filter>win\dlgs</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\generation.cpp">
+      <Filter>win\dlgs</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\settings\savedSettings.cpp">
+      <Filter>win\dlgs</Filter>
+    </ClCompile>
+    <ClCompile Include="win\editor\gridEditor\gridEditor.cpp">
+      <Filter>win\editor\gridEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="win\theme\luna_dockart.cpp">
+      <Filter>win\theme</Filter>
+    </ClCompile>
+    <ClCompile Include="win\theme\luna_tabart.cpp">
+      <Filter>win\theme</Filter>
+    </ClCompile>
+    <ClCompile Include="win\theme\luna_toolbarart.cpp">
+      <Filter>win\theme</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\dataview\headerctrlcmn.cpp">
+      <Filter>win\ctrls\dataview</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\dataview\headerctrlg.cpp">
+      <Filter>win\ctrls\dataview</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\dataview\datavcmn.cpp">
+      <Filter>win\ctrls\dataview</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\dataview\datavgen.cpp">
+      <Filter>win\ctrls\dataview</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\dataview\datavgen.paged.cpp">
+      <Filter>win\ctrls\dataview</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\dataview\datavgen.scrollbar.cpp">
+      <Filter>win\ctrls\dataview</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\dataview\datavlayout.cpp">
+      <Filter>win\ctrls\dataview</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\dataview\tabularModelView.cpp">
+      <Filter>win\ctrls\dataview</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\grid\gridext.cpp">
+      <Filter>win\ctrls\grid</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\grid\gridextctrl.cpp">
+      <Filter>win\ctrls\grid</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\grid\gridexteditors.cpp">
+      <Filter>win\ctrls\grid</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\grid\gridextsel.cpp">
+      <Filter>win\ctrls\grid</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\checktree.cpp">
+      <Filter>win\ctrls</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\tableView.cpp">
+      <Filter>win\ctrls</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\controlButton.cpp">
+      <Filter>win\ctrls</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\controlCheckboxEditor.cpp">
+      <Filter>win\ctrls</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\controlStaticText.cpp">
+      <Filter>win\ctrls</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\controlTextEditor.cpp">
+      <Filter>win\ctrls</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\dynamicBorder.cpp">
+      <Filter>win\ctrls</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\treelistctrl.cpp">
+      <Filter>win\ctrls</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\commandBar.cpp">
+      <Filter>visualView</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\tableModel.cpp">
+      <Filter>visualView</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\frame.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\form.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\visualHostClient.cpp">
+      <Filter>visualView</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\visualHostClientDocView.cpp">
+      <Filter>visualView</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\button.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\checkbox.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\gridBox.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\placeholder.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\sizer.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\staticline.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\statictext.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\tableBox.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\textctrl.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\textBox.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="frmclient.h" />
+    <ClInclude Include="diagnostics\journal.h">
+      <Filter>diagnostics</Filter>
+    </ClInclude>
+    <ClInclude Include="artProvider\artProvider.h">
+      <Filter>artProvider</Filter>
+    </ClInclude>
+    <ClInclude Include="artProvider\private\picturePredefined.h">
+      <Filter>artProvider\private</Filter>
+    </ClInclude>
+    <ClInclude Include="docView\docView.h">
+      <Filter>docView</Filter>
+    </ClInclude>
+    <ClInclude Include="docView\docManager.h">
+      <Filter>docView</Filter>
+    </ClInclude>
+    <ClInclude Include="docView\print\printPreview.h">
+      <Filter>docView\print</Filter>
+    </ClInclude>
+    <ClInclude Include="docView\templates\docViewText.h">
+      <Filter>docView\templates</Filter>
+    </ClInclude>
+    <ClInclude Include="docView\templates\docViewFile.h">
+      <Filter>docView\templates</Filter>
+    </ClInclude>
+    <ClInclude Include="docView\templates\docViewHelp.h">
+      <Filter>docView\templates</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\settings\editorsettings.h">
+      <Filter>mainFrame\settings</Filter>
+    </ClInclude>
+    <ClInclude Include="win\editor\textEditor\textEditor.h">
+      <Filter>win\editor\textEditor</Filter>
+    </ClInclude>
+    <ClInclude Include="win\editor\textEditor\textEditorPrintOut.h">
+      <Filter>win\editor\textEditor</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\mainFrame.h">
+      <Filter>mainFrame</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\mainFrameChild.h">
+      <Filter>mainFrame</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\output\outputWindow.h">
+      <Filter>mainFrame\output</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\settings\fontcolorsettings.h">
+      <Filter>mainFrame\settings</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\settings\xmlutility.h">
+      <Filter>mainFrame\settings</Filter>
+    </ClInclude>
+    <ClInclude Include="win\picture.h">
+      <Filter>win</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\about.h">
+      <Filter>win\dlgs</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\activeUser.h">
+      <Filter>win\dlgs</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\formEditor.h">
+      <Filter>win\dlgs</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\generation.h">
+      <Filter>win\dlgs</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\settings\savedSettings.h">
+      <Filter>win\dlgs</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\choiceTemplate.h">
+      <Filter>win\dlgs</Filter>
+    </ClInclude>
+    <ClInclude Include="win\editor\gridEditor\gridEditor.h">
+      <Filter>win\editor\gridEditor</Filter>
+    </ClInclude>
+    <ClInclude Include="win\theme\luna_dockart.h">
+      <Filter>win\theme</Filter>
+    </ClInclude>
+    <ClInclude Include="win\theme\luna_tabart.h">
+      <Filter>win\theme</Filter>
+    </ClInclude>
+    <ClInclude Include="win\theme\luna_toolbarart.h">
+      <Filter>win\theme</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\dataview\headerctrlg.h">
+      <Filter>win\ctrls\dataview</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\dataview\datavgen.h">
+      <Filter>win\ctrls\dataview</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\dataview\datavlayout.h">
+      <Filter>win\ctrls\dataview</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\dataview\dataview.h">
+      <Filter>win\ctrls\dataview</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\dataview\dataviewEditOnActivate.h">
+      <Filter>win\ctrls\dataview</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\dataview\dvrenderers.h">
+      <Filter>win\ctrls\dataview</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\dataview\datavgen.paged.private.h">
+      <Filter>win\ctrls\dataview</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\dataview\datavgen.window.private.h">
+      <Filter>win\ctrls\dataview</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\dataview\tabularModelView.h">
+      <Filter>win\ctrls\dataview</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\grid\gridext.h">
+      <Filter>win\ctrls\grid</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\grid\gridextctrl.h">
+      <Filter>win\ctrls\grid</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\grid\gridexteditors.h">
+      <Filter>win\ctrls\grid</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\grid\gridextprivate.h">
+      <Filter>win\ctrls\grid</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\grid\gridextsel.h">
+      <Filter>win\ctrls\grid</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\checktree.h">
+      <Filter>win\ctrls</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\tableView.h">
+      <Filter>win\ctrls</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\controlButton.h">
+      <Filter>win\ctrls</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\controlCheckboxEditor.h">
+      <Filter>win\ctrls</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\controlStaticText.h">
+      <Filter>win\ctrls</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\controlStaticTextValue.h">
+      <Filter>win\ctrls</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\controlTextEditor.h">
+      <Filter>win\ctrls</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\dynamicBorder.h">
+      <Filter>win\ctrls</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\floatingNotebook.h">
+      <Filter>win\ctrls</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\toolBar.h">
+      <Filter>win\ctrls</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\treelistctrl.h">
+      <Filter>win\ctrls</Filter>
+    </ClInclude>
+    <ClInclude Include="win\fontcontainer.h">
+      <Filter>win</Filter>
+    </ClInclude>
+    <ClInclude Include="win\typeconv.h">
+      <Filter>win</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\commandBar.h">
+      <Filter>visualView</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\tableModel.h">
+      <Filter>visualView</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\ctrl\frame.h">
+      <Filter>visualView\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\ctrl\form.h">
+      <Filter>visualView\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\visualHostClient.h">
+      <Filter>visualView</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\ctrl\gridBox.h">
+      <Filter>visualView\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\ctrl\sizer.h">
+      <Filter>visualView\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\ctrl\tableBox.h">
+      <Filter>visualView\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\ctrl\widgets.h">
+      <Filter>visualView\ctrl</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="backend">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5022}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="backend\compiler">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5023}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="backend\composition">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5024}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="backend\diagnostics">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5025}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="backend\metaCollection">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5026}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="backend\metaCollection\partial">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5027}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="backend\metaCollection\partial\reference">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5028}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="backend\propertyManager">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5029}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="backend\propertyManager\property">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f502a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="backend\propertyManager\property\variant">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f502b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="backend\query">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f502c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="backend\serialize">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f502d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="backend\session">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f502e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="backend\settings">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f502f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="backend\sheetFormat">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5030}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="backend\system">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5031}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="backend\system\value">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5032}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="backend\system\value\composition">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5033}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="mainFrame\objinspect">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5034}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="propertyManager">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5035}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="propertyManager\property">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5036}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="propertyManager\property\advprop">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5037}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="propertyManager\property\private">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5038}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="settings">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5039}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\dlgs\formatConstructor">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f503a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\dlgs\settings">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f503b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\dlgs\settings\list">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f503c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\dlgs\translateConstructor">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f503d}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="backend\appData.h">
+      <Filter>backend</Filter>
+    </ClInclude>
+    <ClInclude Include="backend\backend.h">
+      <Filter>backend</Filter>
+    </ClInclude>
+    <ClInclude Include="backend\backend_core.h">
+      <Filter>backend</Filter>
+    </ClInclude>
+    <ClInclude Include="backend\backend_exception.h">
+      <Filter>backend</Filter>
+    </ClInclude>
+    <ClInclude Include="backend\backend_form.h">
+      <Filter>backend</Filter>
+    </ClInclude>
+    <ClCompile Include="backend\backend_localization.cpp">
+      <Filter>backend</Filter>
+    </ClCompile>
+    <ClInclude Include="backend\backend_localization.h">
+      <Filter>backend</Filter>
+    </ClInclude>
+    <ClInclude Include="backend\backend_mainFrame.h">
+      <Filter>backend</Filter>
+    </ClInclude>
+    <ClInclude Include="backend\backend_picture.h">
+      <Filter>backend</Filter>
+    </ClInclude>
+    <ClCompile Include="backend\backend_spreadsheet.cpp">
+      <Filter>backend</Filter>
+    </ClCompile>
+    <ClInclude Include="backend\backend_spreadsheet.h">
+      <Filter>backend</Filter>
+    </ClInclude>
+    <ClCompile Include="backend\backend_type.cpp">
+      <Filter>backend</Filter>
+    </ClCompile>
+    <ClInclude Include="backend\backend_type.h">
+      <Filter>backend</Filter>
+    </ClInclude>
+    <ClInclude Include="backend\compiler\enumUnit.h">
+      <Filter>backend\compiler</Filter>
+    </ClInclude>
+    <ClCompile Include="backend\compiler\value.cpp">
+      <Filter>backend\compiler</Filter>
+    </ClCompile>
+    <ClInclude Include="backend\compiler\value.h">
+      <Filter>backend\compiler</Filter>
+    </ClInclude>
+    <ClCompile Include="backend\compiler\value_res.cpp">
+      <Filter>backend\compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="backend\compositionDescription.cpp">
+      <Filter>backend</Filter>
+    </ClCompile>
+    <ClInclude Include="backend\compositionDescription.h">
+      <Filter>backend</Filter>
+    </ClInclude>
+    <ClInclude Include="backend\composition\dataComposer.h">
+      <Filter>backend\composition</Filter>
+    </ClInclude>
+    <ClInclude Include="backend\diagnostics\journal.h">
+      <Filter>backend\diagnostics</Filter>
+    </ClInclude>
+    <ClCompile Include="backend\formatString.cpp">
+      <Filter>backend</Filter>
+    </ClCompile>
+    <ClInclude Include="backend\formatString.h">
+      <Filter>backend</Filter>
+    </ClInclude>
+    <ClInclude Include="backend\metaCollection\metaLanguageObject.h">
+      <Filter>backend\metaCollection</Filter>
+    </ClInclude>
+    <ClInclude Include="backend\metaCollection\metaObject.h">
+      <Filter>backend\metaCollection</Filter>
+    </ClInclude>
+    <ClInclude Include="backend\metaCollection\metaSpreadsheetObject.h">
+      <Filter>backend\metaCollection</Filter>
+    </ClInclude>
+    <ClCompile Include="backend\metaCollection\partial\reference\reference.cpp">
+      <Filter>backend\metaCollection\partial\reference</Filter>
+    </ClCompile>
+    <ClInclude Include="backend\metaCollection\partial\reference\reference.h">
+      <Filter>backend\metaCollection\partial\reference</Filter>
+    </ClInclude>
+    <ClInclude Include="backend\metaData.h">
+      <Filter>backend</Filter>
+    </ClInclude>
+    <ClInclude Include="backend\metadataConfiguration.h">
+      <Filter>backend</Filter>
+    </ClInclude>
+    <ClInclude Include="backend\picturePredefined.h">
+      <Filter>backend</Filter>
+    </ClInclude>
+    <ClInclude Include="backend\propertyManager\propertyManager.h">
+      <Filter>backend\propertyManager</Filter>
+    </ClInclude>
+    <ClCompile Include="backend\propertyManager\propertyObject.cpp">
+      <Filter>backend\propertyManager</Filter>
+    </ClCompile>
+    <ClInclude Include="backend\propertyManager\propertyObject.h">
+      <Filter>backend\propertyManager</Filter>
+    </ClInclude>
+    <ClCompile Include="backend\propertyManager\property\propertyBoolean.cpp">
+      <Filter>backend\propertyManager\property</Filter>
+    </ClCompile>
+    <ClInclude Include="backend\propertyManager\property\propertyBoolean.h">
+      <Filter>backend\propertyManager\property</Filter>
+    </ClInclude>
+    <ClCompile Include="backend\propertyManager\property\propertyColour.cpp">
+      <Filter>backend\propertyManager\property</Filter>
+    </ClCompile>
+    <ClInclude Include="backend\propertyManager\property\propertyColour.h">
+      <Filter>backend\propertyManager\property</Filter>
+    </ClInclude>
+    <ClCompile Include="backend\propertyManager\property\propertyEnum.cpp">
+      <Filter>backend\propertyManager\property</Filter>
+    </ClCompile>
+    <ClInclude Include="backend\propertyManager\property\propertyEnum.h">
+      <Filter>backend\propertyManager\property</Filter>
+    </ClInclude>
+    <ClCompile Include="backend\propertyManager\property\propertyFont.cpp">
+      <Filter>backend\propertyManager\property</Filter>
+    </ClCompile>
+    <ClInclude Include="backend\propertyManager\property\propertyFont.h">
+      <Filter>backend\propertyManager\property</Filter>
+    </ClInclude>
+    <ClInclude Include="backend\propertyManager\property\propertyFormat.h">
+      <Filter>backend\propertyManager\property</Filter>
+    </ClInclude>
+    <ClInclude Include="backend\propertyManager\property\propertyNumber.h">
+      <Filter>backend\propertyManager\property</Filter>
+    </ClInclude>
+    <ClCompile Include="backend\propertyManager\property\propertySize.cpp">
+      <Filter>backend\propertyManager\property</Filter>
+    </ClCompile>
+    <ClInclude Include="backend\propertyManager\property\propertySize.h">
+      <Filter>backend\propertyManager\property</Filter>
+    </ClInclude>
+    <ClCompile Include="backend\propertyManager\property\propertyString.cpp">
+      <Filter>backend\propertyManager\property</Filter>
+    </ClCompile>
+    <ClInclude Include="backend\propertyManager\property\propertyString.h">
+      <Filter>backend\propertyManager\property</Filter>
+    </ClInclude>
+    <ClCompile Include="backend\propertyManager\property\propertyStringExt.cpp">
+      <Filter>backend\propertyManager\property</Filter>
+    </ClCompile>
+    <ClInclude Include="backend\propertyManager\property\variant\variantOwner.h">
+      <Filter>backend\propertyManager\property\variant</Filter>
+    </ClInclude>
+    <ClCompile Include="backend\propertyManager\property\variant\variantSize.cpp">
+      <Filter>backend\propertyManager\property\variant</Filter>
+    </ClCompile>
+    <ClInclude Include="backend\propertyManager\property\variant\variantSize.h">
+      <Filter>backend\propertyManager\property\variant</Filter>
+    </ClInclude>
+    <ClInclude Include="backend\propertyManager\property\variant\variantTranslate.h">
+      <Filter>backend\propertyManager\property\variant</Filter>
+    </ClInclude>
+    <ClInclude Include="backend\query\queryBalanceRole.h">
+      <Filter>backend\query</Filter>
+    </ClInclude>
+    <ClInclude Include="backend\query\queryUnfold.h">
+      <Filter>backend\query</Filter>
+    </ClInclude>
+    <ClCompile Include="backend\serialize\dataProtocol.cpp">
+      <Filter>backend\serialize</Filter>
+    </ClCompile>
+    <ClInclude Include="backend\serialize\dataProtocol.h">
+      <Filter>backend\serialize</Filter>
+    </ClInclude>
+    <ClInclude Include="backend\session\session.h">
+      <Filter>backend\session</Filter>
+    </ClInclude>
+    <ClCompile Include="backend\settings\settingsComposer.cpp">
+      <Filter>backend\settings</Filter>
+    </ClCompile>
+    <ClInclude Include="backend\settings\settingsComposer.h">
+      <Filter>backend\settings</Filter>
+    </ClInclude>
+    <ClInclude Include="backend\sheetFormat\sheetFormat.h">
+      <Filter>backend\sheetFormat</Filter>
+    </ClInclude>
+    <ClInclude Include="backend\sourceDescription.h">
+      <Filter>backend</Filter>
+    </ClInclude>
+    <ClCompile Include="backend\spreadsheetDescription.cpp">
+      <Filter>backend</Filter>
+    </ClCompile>
+    <ClInclude Include="backend\spreadsheetDescription.h">
+      <Filter>backend</Filter>
+    </ClInclude>
+    <ClInclude Include="backend\srcObject.h">
+      <Filter>backend</Filter>
+    </ClInclude>
+    <ClCompile Include="backend\system\value\composition\valueComposerField.cpp">
+      <Filter>backend\system\value\composition</Filter>
+    </ClCompile>
+    <ClInclude Include="backend\system\value\composition\valueComposerField.h">
+      <Filter>backend\system\value\composition</Filter>
+    </ClInclude>
+    <ClInclude Include="backend\system\value\composition\valueComposerSettings.h">
+      <Filter>backend\system\value\composition</Filter>
+    </ClInclude>
+    <ClCompile Include="backend\system\value\valueColour.cpp">
+      <Filter>backend\system\value</Filter>
+    </ClCompile>
+    <ClInclude Include="backend\system\value\valueColour.h">
+      <Filter>backend\system\value</Filter>
+    </ClInclude>
+    <ClCompile Include="backend\system\value\valueFont.cpp">
+      <Filter>backend\system\value</Filter>
+    </ClCompile>
+    <ClInclude Include="backend\system\value\valueFont.h">
+      <Filter>backend\system\value</Filter>
+    </ClInclude>
+    <ClInclude Include="backend\system\value\valueSize.h">
+      <Filter>backend\system\value</Filter>
+    </ClInclude>
+    <ClInclude Include="backend\system\value\valueSpreadsheet.h">
+      <Filter>backend\system\value</Filter>
+    </ClInclude>
+    <ClCompile Include="backend\system\value\valueType.cpp">
+      <Filter>backend\system\value</Filter>
+    </ClCompile>
+    <ClInclude Include="backend\system\value\valueType.h">
+      <Filter>backend\system\value</Filter>
+    </ClInclude>
+    <ClCompile Include="backend\typeDescription.cpp">
+      <Filter>backend</Filter>
+    </ClCompile>
+    <ClInclude Include="backend\typeDescription.h">
+      <Filter>backend</Filter>
+    </ClInclude>
+    <ClCompile Include="docView\templates\docViewSpreadsheet.cpp">
+      <Filter>docView\templates</Filter>
+    </ClCompile>
+    <ClInclude Include="docView\templates\docViewSpreadsheet.h">
+      <Filter>docView\templates</Filter>
+    </ClInclude>
+    <ClCompile Include="mainFrame\objinspect\objinspect.cpp">
+      <Filter>mainFrame\objinspect</Filter>
+    </ClCompile>
+    <ClInclude Include="mainFrame\objinspect\objinspect.h">
+      <Filter>mainFrame\objinspect</Filter>
+    </ClInclude>
+    <ClCompile Include="propertyManager\property\advprop\advpropBoolean.cpp">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClCompile>
+    <ClCompile Include="propertyManager\property\advprop\advpropColour.cpp">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClCompile>
+    <ClCompile Include="propertyManager\property\advprop\advpropEnum.cpp">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClCompile>
+    <ClCompile Include="propertyManager\property\advprop\advpropFont.cpp">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClCompile>
+    <ClInclude Include="propertyManager\property\advprop\advpropFont.h">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClInclude>
+    <ClCompile Include="propertyManager\property\advprop\advpropNumber.cpp">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClCompile>
+    <ClInclude Include="propertyManager\property\advprop\advpropNumber.h">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClInclude>
+    <ClCompile Include="propertyManager\property\advprop\advpropSize.cpp">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClCompile>
+    <ClInclude Include="propertyManager\property\advprop\advpropSize.h">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClInclude>
+    <ClCompile Include="propertyManager\property\advprop\advpropString.cpp">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClCompile>
+    <ClInclude Include="propertyManager\property\advprop\advpropString.h">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClInclude>
+    <ClInclude Include="propertyManager\property\private\prop.h">
+      <Filter>propertyManager\property\private</Filter>
+    </ClInclude>
+    <ClCompile Include="propertyManager\property\private\propertyRegistry.cpp">
+      <Filter>propertyManager\property\private</Filter>
+    </ClCompile>
+    <ClInclude Include="propertyManager\property\private\propertyRegistry.h">
+      <Filter>propertyManager\property\private</Filter>
+    </ClInclude>
+    <ClCompile Include="settings\formSettings.cpp">
+      <Filter>settings</Filter>
+    </ClCompile>
+    <ClInclude Include="settings\formSettings.h">
+      <Filter>settings</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\controlEnum.h">
+      <Filter>visualView</Filter>
+    </ClInclude>
+    <ClCompile Include="visualView\ctrl\control.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClInclude Include="visualView\ctrl\control.h">
+      <Filter>visualView\ctrl</Filter>
+    </ClInclude>
+    <ClCompile Include="visualView\ctrl\tableBoxColumnRenderer.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClInclude Include="visualView\ctrl\tableBoxColumnRenderer.h">
+      <Filter>visualView\ctrl</Filter>
+    </ClInclude>
+    <ClCompile Include="visualView\ctrl\typeControl.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClInclude Include="visualView\ctrl\typeControl.h">
+      <Filter>visualView\ctrl</Filter>
+    </ClInclude>
+    <ClCompile Include="visualView\ctrl\window.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClInclude Include="visualView\ctrl\window.h">
+      <Filter>visualView\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\formdefs.h">
+      <Filter>visualView</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\callbackDropTarget.h">
+      <Filter>win\dlgs</Filter>
+    </ClInclude>
+    <ClCompile Include="win\dlgs\colHeight.cpp">
+      <Filter>win\dlgs</Filter>
+    </ClCompile>
+    <ClInclude Include="win\dlgs\colHeight.h">
+      <Filter>win\dlgs</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\formatConstructor\formatConstructor.h">
+      <Filter>win\dlgs\formatConstructor</Filter>
+    </ClInclude>
+    <ClCompile Include="win\dlgs\rowHeight.cpp">
+      <Filter>win\dlgs</Filter>
+    </ClCompile>
+    <ClInclude Include="win\dlgs\rowHeight.h">
+      <Filter>win\dlgs</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\rowValueCell.h">
+      <Filter>win\dlgs</Filter>
+    </ClInclude>
+    <ClCompile Include="win\dlgs\selectData.cpp">
+      <Filter>win\dlgs</Filter>
+    </ClCompile>
+    <ClInclude Include="win\dlgs\selectData.h">
+      <Filter>win\dlgs</Filter>
+    </ClInclude>
+    <ClCompile Include="win\dlgs\settings\filterTreeModel.cpp">
+      <Filter>win\dlgs\settings</Filter>
+    </ClCompile>
+    <ClInclude Include="win\dlgs\settings\filterTreeModel.h">
+      <Filter>win\dlgs\settings</Filter>
+    </ClInclude>
+    <ClCompile Include="win\dlgs\settings\list\listSettings.cpp">
+      <Filter>win\dlgs\settings\list</Filter>
+    </ClCompile>
+    <ClInclude Include="win\dlgs\settings\list\listSettings.h">
+      <Filter>win\dlgs\settings\list</Filter>
+    </ClInclude>
+    <ClCompile Include="win\dlgs\settings\settingsAppearanceEditor.cpp">
+      <Filter>win\dlgs\settings</Filter>
+    </ClCompile>
+    <ClInclude Include="win\dlgs\settings\settingsAppearanceEditor.h">
+      <Filter>win\dlgs\settings</Filter>
+    </ClInclude>
+    <ClCompile Include="win\dlgs\settings\settingsConditionalAppearanceEditor.cpp">
+      <Filter>win\dlgs\settings</Filter>
+    </ClCompile>
+    <ClInclude Include="win\dlgs\settings\settingsConditionalAppearanceEditor.h">
+      <Filter>win\dlgs\settings</Filter>
+    </ClInclude>
+    <ClCompile Include="win\dlgs\settings\settingsFieldTree.cpp">
+      <Filter>win\dlgs\settings</Filter>
+    </ClCompile>
+    <ClInclude Include="win\dlgs\settings\settingsFieldTree.h">
+      <Filter>win\dlgs\settings</Filter>
+    </ClInclude>
+    <ClCompile Include="win\dlgs\settings\settingsFilterEditor.cpp">
+      <Filter>win\dlgs\settings</Filter>
+    </ClCompile>
+    <ClInclude Include="win\dlgs\settings\settingsFilterEditor.h">
+      <Filter>win\dlgs\settings</Filter>
+    </ClInclude>
+    <ClCompile Include="win\dlgs\settings\settingsSortEditor.cpp">
+      <Filter>win\dlgs\settings</Filter>
+    </ClCompile>
+    <ClInclude Include="win\dlgs\settings\settingsSortEditor.h">
+      <Filter>win\dlgs\settings</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\settings\settingsStyle.h">
+      <Filter>win\dlgs\settings</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\textWithDotsCell.h">
+      <Filter>win\dlgs</Filter>
+    </ClInclude>
+    <ClCompile Include="win\dlgs\translateConstructor\translateConstructor.cpp">
+      <Filter>win\dlgs\translateConstructor</Filter>
+    </ClCompile>
+    <ClInclude Include="win\dlgs\translateConstructor\translateConstructor.h">
+      <Filter>win\dlgs\translateConstructor</Filter>
+    </ClInclude>
+    <ClCompile Include="win\editor\gridEditor\gridCellEditor.cpp">
+      <Filter>win\editor\gridEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="win\editor\gridEditor\gridEditorClipbrd.cpp">
+      <Filter>win\editor\gridEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="win\editor\gridEditor\gridEditorDoc.cpp">
+      <Filter>win\editor\gridEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="win\editor\gridEditor\gridPrintout.cpp">
+      <Filter>win\editor\gridEditor</Filter>
+    </ClCompile>
+    <ClInclude Include="win\editor\gridEditor\gridPrintout.h">
+      <Filter>win\editor\gridEditor</Filter>
+    </ClInclude>
+    <ClCompile Include="win\editor\gridEditor\gridProperty.cpp">
+      <Filter>win\editor\gridEditor</Filter>
+    </ClCompile>
+  </ItemGroup>
+</Project>

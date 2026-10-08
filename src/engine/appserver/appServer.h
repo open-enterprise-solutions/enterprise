@@ -36,7 +36,7 @@ private:
 	wxString                     m_locale;
 	std::vector<ibSessionHolder> m_sessions;   // one per base served — the base is reached through its session
 
-	// The clients of each base, working through the protocol (sfrontend) — one host per base served, by the
+	// The clients of each base, working through the protocol (frmserver) — one host per base served, by the
 	// base's name — and the one port they all come in by.
 	std::map<wxString, std::unique_ptr<ibClientHost>> m_clientHosts;
 	ibClientListener                                  m_clientListener;

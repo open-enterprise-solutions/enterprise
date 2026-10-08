@@ -1,5 +1,5 @@
 #include "tableBox.h"
-#include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
+#include "core/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #ifndef OES_USE_WEB
 // Renderer pulls in dataview.h (wxDataView heavy). Web stubs don't
 // touch the renderer at all.

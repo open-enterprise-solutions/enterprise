@@ -666,7 +666,7 @@ bool ibListSettingsPanel::Commit()
 	try {
 		ibValidateSettings(EditedSettings());
 	}
-	catch (const ibBackendException& err) {
+	catch (const ibCoreException& err) {
 		wxMessageBox(err.GetErrorDescription(), _("List settings"), wxOK | wxICON_WARNING, this);
 		return false;   // the host stays open — nothing is committed
 	}

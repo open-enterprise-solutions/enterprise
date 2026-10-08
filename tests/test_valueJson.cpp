@@ -15,7 +15,7 @@
 #include "backend/system/value/valueJson.h"
 #include "backend/system/value/valueArray.h"
 #include "backend/system/value/valueMap.h"
-#include "backend/serialize/jsonText.h"
+#include "core/serialize/jsonText.h"
 
 namespace {
 

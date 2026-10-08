@@ -244,7 +244,7 @@ bool ibMetaDataDataProcessor::CloseDatabase(int flags)
 #include <filesystem>
 
 #include "backend/backend_exception.h"   // catch ibBackendException at the LoadCommonTree boundary
-#include "backend/serialize/dataBuilder.h"  // ibDataBuilder / ibBinaryProvider — top-level structure builder
+#include "core/serialize/dataBuilder.h"  // ibDataBuilder / ibBinaryProvider — top-level structure builder
 #include "backend/temp/tempStorage.h"       // ibTempFile — LoadFromTempFile
 
 ibValueMetaObjectDataProcessor* ibMetaDataDataProcessor::BuildFreshRoot()
@@ -460,7 +460,7 @@ bool ibMetaDataDataProcessor::LoadCommonTree(ibValueMetaObjectDataProcessor* roo
 		MetaObjectStage(ibMetaDataNotifier::ibMetaStage::Loaded, GetCommonMetaObject());
 		return true;
 	}
-	catch (const ibBackendException& err) {
+	catch (const ibCoreException& err) {
 		// ⭐ THE ENGINE'S WORDS REACH THE USER — the twin of the report container's catch, and it
 		// has to say the same thing: `ApplyDataNode` refuses for reasons the user can act on, and
 		// answering `false` in silence makes a file that will not open indistinguishable from one

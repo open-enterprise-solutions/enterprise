@@ -7,7 +7,7 @@
 #include "backend/appData.h"
 #include "backend/debugger/debugClient.h"
 #include "backend/mcp/mcpServer.h"
-#include "backend/fileSystem/fs.h"   // ibWriterMemory / ibReaderMemory - the node on the wire
+#include "core/fileSystem/fs.h"   // ibWriterMemory / ibReaderMemory - the node on the wire
 
 #include <chrono>
 

@@ -17,7 +17,7 @@
 // The lexer's name tables — keywords and #Define alike — are matched case-insensitively and consulted for
 // EVERY identifier the lexer meets, so the folding belongs in their comparator (ibCaseFoldLess): the
 // alternative is upper-casing the query into a throw-away wxString once per token, per table.
-#include "backend/stringUtils.h"
+#include "core/stringUtils.h"
 
 //List of keywords
 struct ibKeyWords {

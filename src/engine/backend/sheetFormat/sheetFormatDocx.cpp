@@ -405,7 +405,7 @@ bool ibSheetFormatDocx::Write(wxOutputStream& output, const ibSpreadsheetDescrip
 			}
 
 			// the text, not the stored form — see the xlsx writer
-			const wxString text = cell != nullptr ? ibBackendLocalization::GetTranslateGetRawLocText(cell->GetValue()) : wxString();
+			const wxString text = cell != nullptr ? ibLocalization::GetTranslateGetRawLocText(ibBackendLocalization::GetUserLanguage(), cell->GetValue()) : wxString();
 
 			wxString paragraph = wxT("<w:p>");
 			if (!paragraphProperties.IsEmpty())

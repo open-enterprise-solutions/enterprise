@@ -1,5 +1,5 @@
 #include "tableBox.h"
-#include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
+#include "core/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "form.h"
 #include "backend/choiceLinkResolver.h"   // ibChoiceHolder — where this column's link reads its neighbours
 #ifndef OES_USE_WEB

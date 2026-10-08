@@ -327,7 +327,7 @@ TEST(CompilerTest, SyntaxErrorReturnsFalse) {
 // Compile + AOT round-trip — checks the AOT layer with real compiler output
 // ===========================================================================
 
-#include "backend/fileSystem/fs.h"
+#include "core/fileSystem/fs.h"
 
 TEST(CompilerAOT, RealCompileOutputRoundTrips) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
@@ -881,7 +881,7 @@ TEST(AnyKinds, TypedParameterOfAKindCompiles) {
 #include "backend/system/value/valueArray.h"
 #include "backend/system/value/valueMap.h"
 #include "backend/system/value/valuePoint.h"
-#include "backend/serialize/dataBuilder.h"
+#include "core/serialize/dataBuilder.h"
 #include "backend/backend_exception.h"
 
 namespace {

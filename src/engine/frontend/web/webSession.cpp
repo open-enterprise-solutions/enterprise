@@ -130,7 +130,7 @@ bool ibWebSession::Login(const wxString& user, const wxString& password)
 	ibSessionHolder holder;
 	try {
 		holder = appData->CreateSession<ibWebClientSession>(ibSessionKind::WebClient, presetGuid, address);
-	} catch (const ibBackendException&) {
+	} catch (const ibCoreException&) {
 		holder.Reset();
 	}
 	if (!holder)
@@ -159,7 +159,7 @@ bool ibWebSession::Login(const wxString& user, const wxString& password)
 			opened = holder->Open(user, password) == ibSession::OpenResult::Authenticated;
 		}).get();
 	}
-	catch (const ibBackendException& err) {
+	catch (const ibCoreException& err) {
 		ibJournalError(wxT("web"), wxT("login of '%s' refused: %s"), user, err.GetErrorDescription());
 		return false;
 	}

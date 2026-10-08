@@ -348,7 +348,7 @@ bool ibValueMetaObjectParameterizedJob::RegisterJobs()
 			RegisterRow(rowGuid, activeValue.GetBoolean(), schedule->GetSchedule(), description.GetString());
 		}
 	}
-	catch (const ibBackendException& err) {
+	catch (const ibCoreException& err) {
 		// A table that cannot be read at start-up must not stop the configuration from opening —
 		// the rows are still there and re-register themselves as they are written.
 		ibJournalInfo(wxT("job.register"),wxT("scheduled job '%s': rows were not registered: %s"),

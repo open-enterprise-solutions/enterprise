@@ -5,8 +5,10 @@
 #include "backend/rpc/rpcMessage.h"
 
 #include "backend/backend_exception.h"
-#include "backend/fileSystem/fs.h"            // ibReaderMemory / ibWriterMemory
-#include "backend/serialize/jsonProvider.h"
+#include "core/fileSystem/fs.h"            // ibReaderMemory / ibWriterMemory
+#include "core/serialize/jsonProvider.h"
+#include "backend/compiler/value.h"            // ibValue::GetAvailableCtor — a built-in's name
+#include "backend/objCtor.h"                   // ibCtorAbstractType::GetClassName
 #include "backend/compositionDescription.h"   // ibCompositionNodeName / …Clsid — a composition's parts, both ways
 #include "backend/metadataConfiguration.h"    // activeMetaData — the registered types, for the lookup
 
@@ -47,7 +49,7 @@ void ibRpcInstallTypeLookup(ibJsonProvider& provider)
 			try {
 				return activeMetaData->GetIDObjectFromString(name);
 			}
-			catch (const ibBackendException&) {
+			catch (const ibCoreException&) {
 				// Neither stage knew it — which is where that call raises. A node keeps clsid 0 and
 				// is read as an untyped one, which is what an unknown name has always meant here.
 			}
@@ -78,7 +80,13 @@ wxString ibRpcRenderNode(const ibDataNode& node, const std::function<wxString(ib
 			if (!named.IsEmpty())
 				return named;
 		}
-		return ibCompositionNodeName(clsid);
+		const wxString part = ibCompositionNodeName(clsid);
+		if (!part.IsEmpty())
+			return part;
+		// …and under it the static registry — a built-in's name (Number, String), which the provider itself gave
+		// before it moved into the core.
+		const ibCtorAbstractType* const ctor = ibValue::GetAvailableCtor(clsid);
+		return ctor != nullptr ? ctor->GetClassName() : wxString();
 	});
 
 	ibWriterMemory writer;
@@ -127,7 +135,7 @@ bool ibRpcParseRequest(const wxString& text, ibRpcRequest& request, wxString& er
 			return false;
 		}
 	}
-	catch (const ibBackendException& e) {
+	catch (const ibCoreException& e) {
 		// The parser throws with a byte offset — the most useful half of the
 		// answer, so it is passed on rather than replaced with a summary.
 		error = e.what();

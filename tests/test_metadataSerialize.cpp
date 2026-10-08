@@ -32,7 +32,7 @@
 #include <wx/filefn.h>     // wxRemoveFile
 
 #include "backend/metadataConfiguration.h"
-#include "backend/clsid.h"   // metadata_to_clsid("MD_CAT")
+#include "core/clsid.h"   // metadata_to_clsid("MD_CAT")
 
 namespace {
 

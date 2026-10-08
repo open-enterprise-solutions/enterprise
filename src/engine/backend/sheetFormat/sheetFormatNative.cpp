@@ -1,7 +1,7 @@
 #include "backend/sheetFormat/sheetFormatNative.h"
 
 #include "backend/fileKind.h"           // the one table that names our files
-#include "backend/fileSystem/fs.h"      // ibReaderMemory / ibWriterMemory
+#include "core/fileSystem/fs.h"      // ibReaderMemory / ibWriterMemory
 
 #include <wx/mstream.h>
 

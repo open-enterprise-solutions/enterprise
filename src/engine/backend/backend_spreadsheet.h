@@ -2,7 +2,7 @@
 #define __BACKEND_CELL_H__
 
 #include "spreadsheetDescription.h"
-#include "backend/stringUtils.h"   // ibCaseFoldLess — the parameters are matched without case
+#include "core/stringUtils.h"   // ibCaseFoldLess — the parameters are matched without case
 
 class BACKEND_API ibBackendSpreadsheetNotifier {
 public:

@@ -7,7 +7,7 @@
 #include "backend/appHost.h"   // SetThreadOwner — the registry thread's journal lines name its base
 #include "sessionSnapshot.h"
 #include "backend/backend_exception.h"
-#include "backend/guid.h"
+#include "core/guid.h"
 #include "backend/databaseLayer/connectionPool.h"
 #include "backend/databaseLayer/databaseLayer.h"
 #include "backend/databaseLayer/databaseQueryBuilder.h"   // L2 door — q(&m_writeHolder) resolves to the holder's bound conn (write helpers); snapshot reads still raw
@@ -943,7 +943,7 @@ static bool InsertSessionRow(ibDatabaseConnectionHolder& holder, const ibSession
 		          << " user='" << (const char*)userName.ToUTF8().data() << "'"
 		          << " mode=" << int(id.m_appMode));
 	}
-	catch (const ibBackendException& err) {
+	catch (const ibCoreException& err) {
 		SESSION_LOG("[session INSERT] FAILED: "
 		          << (const char*)err.GetErrorDescription().ToUTF8().data());
 		return false;
@@ -2074,7 +2074,7 @@ void ibSessionRegistry::JobRefreshSnapshot()
 		} catch (...) { /* legacy schema — fine, exclusive stays false */ }
 		}   // !wideRead — the legacy three-pass road
 	}
-	catch (const ibBackendException& err) {
+	catch (const ibCoreException& err) {
 		SESSION_LOG("[session REFRESH] SELECT failed: "
 		          << (const char*)err.GetErrorDescription().ToUTF8().data());
 		// Self-heal after a leader handoff is handled inside the FB
@@ -2272,7 +2272,7 @@ void ibSessionRegistry::ThreadBody() noexcept
 	// C++ requires (derived before base) rather than a preference. Before it derived, it landed in
 	// `catch (...)` and died as "unknown": the message it carries, the only thing that says WHAT
 	// went wrong, was thrown away at the exact moment the process decided to stop.
-	catch (const ibBackendException& err) {
+	catch (const ibCoreException& err) {
 		Die(wxString::Format(wxT("registry-thread backend exception: %s"), err.GetErrorDescription()));
 	}
 	catch (const std::exception& e) {

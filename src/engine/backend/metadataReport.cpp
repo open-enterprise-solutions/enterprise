@@ -247,7 +247,7 @@ bool ibMetaDataReport::CloseDatabase(int flags)
 #include <filesystem>
 
 #include "backend/backend_exception.h"   // catch ibBackendException at the LoadCommonTree boundary
-#include "backend/serialize/dataBuilder.h"  // ibDataBuilder / ibBinaryProvider — top-level structure builder
+#include "core/serialize/dataBuilder.h"  // ibDataBuilder / ibBinaryProvider — top-level structure builder
 #include "backend/temp/tempStorage.h"       // ibTempFile — LoadFromTempFile
 
 ibValueMetaObjectReport* ibMetaDataReport::BuildFreshRoot()
@@ -460,7 +460,7 @@ bool ibMetaDataReport::LoadCommonTree(ibValueMetaObjectReport* root, const ibCla
 		MetaObjectStage(ibMetaDataNotifier::ibMetaStage::Loaded, GetCommonMetaObject());
 		return true;
 	}
-	catch (const ibBackendException& err) {
+	catch (const ibCoreException& err) {
 		// ⭐ THE ENGINE'S WORDS REACH THE USER. This catch used to answer `false` in silence, so a
 		// report that would not open looked exactly like one that opened and failed later — and the
 		// failure that found this (a composer's variant nodes read as metatypes, 2026-08-20) was

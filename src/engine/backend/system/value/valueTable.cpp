@@ -258,7 +258,7 @@ bool ibValueModelTable::GetAt(const ibValue& varKeyValue, ibValue& pvarValue)
 //   ibValueModelTable as a form data source + property object       //
 //////////////////////////////////////////////////////////////////////
 
-#include "backend/serialize/dataBuilder.h"   // ibDataNode — column collection round-trip
+#include "core/serialize/dataBuilder.h"   // ibDataNode — column collection round-trip
 #include "backend/typeDescription.h"         // ibTypeDescriptionMemory — column type node round-trip
 #include "backend/metadataConfiguration.h"   // ibMetaDataConfigurationBase : ibMetaData — GetActiveMetaData() base cast
 

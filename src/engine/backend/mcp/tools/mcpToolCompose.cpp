@@ -512,7 +512,7 @@ public:
 				ibQueryLexer lexer;
 				lexer.Tokenize(bareQuery);
 			}
-			catch (const ibBackendException& error) {
+			catch (const ibCoreException& error) {
 				refusal = wxString::Format(ibMcpText("The query does not read as a query: %s"), error.GetErrorDescription());
 				return false;
 			}

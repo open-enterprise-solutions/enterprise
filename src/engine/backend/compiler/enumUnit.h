@@ -2,7 +2,7 @@
 #define __ENUM_UNIT_H__
 
 #include "value.h"
-#include "backend/serialize/dataBuilder.h"   // ibDataNode - the enum writes its member into one
+#include "core/serialize/dataBuilder.h"   // ibDataNode - the enum writes its member into one
 
 class BACKEND_API ibValueEnumerationWrapper : public ibValueDynamicMembers {
 public:

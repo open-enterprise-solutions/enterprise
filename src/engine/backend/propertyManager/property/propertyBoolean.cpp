@@ -1,5 +1,5 @@
 #include "propertyBoolean.h"
-#include "backend/serialize/dataBuilder.h"   // ibDataNode — readable Bool node value
+#include "core/serialize/dataBuilder.h"   // ibDataNode — readable Bool node value
 
 
 //base property for "bool"

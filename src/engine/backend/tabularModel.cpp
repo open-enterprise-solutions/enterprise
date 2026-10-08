@@ -213,7 +213,7 @@ void ibValueModel::SubmitFetchAsync(std::function<void()> work)
 				ibJobTenancy::Tenant);
 			return;
 		}
-		catch (const ibBackendException&) {
+		catch (const ibCoreException&) {
 			// Nothing to rent — fall through.
 		}
 	}

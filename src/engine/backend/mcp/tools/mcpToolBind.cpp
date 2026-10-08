@@ -29,7 +29,7 @@
 #include "backend/metaCollection/metaIntrospect.h"
 #include "backend/metaCollection/metaObject.h"
 #include "backend/metadataConfiguration.h"
-#include "backend/stringUtils.h"
+#include "core/stringUtils.h"
 #include "backend/typeDescription.h"              // ibMetaDescription — what these properties hold
 #include "backend/propertyManager/property/variant/variantMetaDesc.h"   // the one shape that holds it
 

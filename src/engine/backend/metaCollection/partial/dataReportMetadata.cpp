@@ -4,7 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "dataReport.h"
-#include "backend/serialize/dataBuilder.h"
+#include "core/serialize/dataBuilder.h"
 #include "backend/metaData.h"
 #include "backend/metadataReport.h"
 #include "backend/moduleManager/moduleManagerExt.h"

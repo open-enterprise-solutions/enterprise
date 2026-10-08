@@ -103,7 +103,7 @@ bool ibValueQueryExec::Init(ibValue** paParams, const long lSizeArray)
 	// Anything else: a syntax error throws ibBackendException (line:pos) as before.
 	if (ibBackendException::IsEvalComplete()) {
 		try { m_package = ibQueryParser().ParsePackage(m_text); }
-		catch (const ibBackendException&) { m_package = ibQueryPackage(); }
+		catch (const ibCoreException&) { m_package = ibQueryPackage(); }
 		return true;
 	}
 

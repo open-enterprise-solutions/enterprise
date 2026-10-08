@@ -33,7 +33,7 @@
 #include "backend/propertyManager/propertyManager.h"
 #include "backend/backend_type.h"       // ibBackendFormAttribute (backend wrapper)
 #include "backend/uniqueKey.h"
-#include "backend/stringUtils.h"         // stringUtils::GenerateSynonym (Synonym fallback, mirrors metaObject)
+#include "core/stringUtils.h"         // stringUtils::GenerateSynonym (Synonym fallback, mirrors metaObject)
 
 class BACKEND_API ibSourceDataObject;
 class BACKEND_API ibDataNode;

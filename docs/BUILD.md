@@ -66,7 +66,7 @@ sudo apt install -y \
 ```
 
 `libgtk-3-dev` and `uuid-dev` are **not optional**: the build defines `__WXGTK__` and the CMake configure step
-pkg-checks `gtk+-3.0`, so wx will not configure without it; and under GTK `guid.cpp` generates guids through libuuid's `uuid_generate`, which the backend links against. `ninja-build` is what the
+pkg-checks `gtk+-3.0`, so wx will not configure without it; and under GTK `guid.cpp` generates guids through libuuid's `uuid_generate`, which `core` links against. `ninja-build` is what the
 `linux-debug` / `linux-release` presets generate for. The driver `-dev` packages are only needed
 for the `OES_USE_*` options you turn on — SQLite is always embedded.
 
@@ -169,9 +169,15 @@ folder `Win32`/`Win64`):
 bin\
   Win32\            (Platform=x86)
     Debug\      or  Release\
+      core.dll
       backend.dll
       frontend.dll
       wfrontend.dll
+      protocol.dll
+      frmserver.dll
+      frmclient.dll
+      fileserver.dll
+      enterprise-thin.exe
       enterprise.exe
       designer.exe
       launcher.exe
@@ -182,8 +188,11 @@ bin\
     ...
 ```
 
+`core.dll` is the shared layer under `backend.dll` and `frmclient.dll` (wx base only); every
+project that links `backend.lib` also links `core.lib`.
 `wfrontend.dll` + `wenterprise-server.exe` are the web runtime (headless
-server + web frontend). `simplePlugin.dll` is the plugin example; it builds into
+server + web frontend). `protocol.dll`, `frmserver.dll`, `frmclient.dll`, `fileserver.dll` and `enterprise-thin.exe`
+are the thin client and its server side ([thin-client.md](public/thin-client.md)). `simplePlugin.dll` is the plugin example; it builds into
 `bin\<Platform>\<Configuration>\plugins\` — the directory the plugin manager scans at
 startup.
 
@@ -285,15 +294,21 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release -DOES_USE_POSTGRESQL=ON
 
 ### Build Targets
 
-The root `CMakeLists.txt` adds eight engine subdirectories, each with its own
-`CMakeLists.txt`:
+The root `CMakeLists.txt` adds fourteen engine subdirectories, each with its own
+`CMakeLists.txt`, in this order — `core` first, `backend` second:
 
 | Target | Type |
 |---|---|
-| backend | shared lib (`BACKEND_EXPORTS`) |
+| core | shared lib (`CORE_EXPORTS`; of wx, `wx::base` only; plus libuuid / CoreFoundation for `guid.cpp`) |
+| backend | shared lib (`BACKEND_EXPORTS`, links `core` PUBLIC) |
 | frontend | shared lib (`FRONTEND_EXPORTS`, links wx GUI) |
+| protocol | shared lib (`PROTOCOL_EXPORTS`) — does not link `core` |
+| frmserver | shared lib (`FRMSERVER_EXPORTS`) |
+| fileserver | shared lib (`FILESERVER_EXPORTS`) |
+| frmclient | shared lib (`FRMCLIENT_EXPORTS`, links `core` + `protocol`) |
 | appserver | executable (console) — the application server; `daemon` is kept as an alias target |
 | enterprise | executable (GUI) |
+| enterprise-thin | executable (GUI) — the thin client |
 | designer | executable (GUI) |
 | launcher | executable (GUI) |
 | codeRunner | executable (GUI) |
@@ -466,7 +481,7 @@ Five notes on why it is shaped this way — each one paid for by a wasted round:
   locally, and 0.09–0.37 s for the backend-linking suite — so `tests/CMakeLists.txt` registers
   every suite through one `oes_discover_tests()` wrapper carrying `DISCOVERY_TIMEOUT 120`. Add a
   new suite through that wrapper, not through `gtest_discover_tests` directly.
-- **The solution compiles no tests.** `enterprise.sln` carries the 10 shipping projects and nothing
+- **The solution compiles no tests.** `enterprise.sln` carries the 17 shipping projects and nothing
   from `tests/` — the test tree is reached through CMake only. So a rename or a header move that a
   local `Debug|x86` build accepts can still leave test sources naming a file that no longer exists,
   and CI is what says so. Three did, on 2026-08-20

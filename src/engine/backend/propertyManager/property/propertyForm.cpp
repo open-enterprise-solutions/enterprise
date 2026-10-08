@@ -1,6 +1,6 @@
 #include "propertyForm.h"
 #include "backend/propertyManager/property/variant/variantForm.h"
-#include "backend/serialize/dataBuilder.h"          // ibDataValue / ibDataNode
+#include "core/serialize/dataBuilder.h"          // ibDataValue / ibDataNode
 #include "backend/metaCollection/metaFormObject.h"  // ibValueMetaObjectFormBase — the form-blob<->node shim
 
 #define chunkForm 0x023456543

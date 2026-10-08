@@ -11,7 +11,7 @@
 #include "backend/metaData.h"
 #include "backend/backend_exception.h"
 #include "backend/databaseLayer/databaseErrorCodes.h"
-#include "backend/serialize/dataBuilder.h"   // ibDataNode — universal structure bridge (BuildDataNode/ApplyDataNode)
+#include "core/serialize/dataBuilder.h"   // ibDataNode — universal structure bridge (BuildDataNode/ApplyDataNode)
 
 
 namespace {

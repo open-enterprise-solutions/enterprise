@@ -6,7 +6,7 @@
 #include "chartOfCalculationTypesRelationTable.h"
 #include "backend/metaData.h"
 #include "backend/objCtor.h"   // tabular value-ctor register macros (registerTabularSection / _String)
-#include "backend/serialize/dataBuilder.h"   // ibDataNode — per-type node data
+#include "core/serialize/dataBuilder.h"   // ibDataNode — per-type node data
 
 // BOUND TO ITS PARENT FOR LIFE — the section states that about ITSELF, at construction. A chart of
 // calculation types always has its relations to author, so this is a fact about the class rather than

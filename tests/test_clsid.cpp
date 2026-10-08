@@ -11,7 +11,7 @@
 #include <gtest/gtest.h>
 #include <set>
 #include "backend/backend_core.h"
-#include "backend/clsid.h"
+#include "core/clsid.h"
 
 // --- the underlying FNV-1a hash is still deterministic (it is the body source) ---
 TEST(ClsidTest, HashIsDeterministic) {

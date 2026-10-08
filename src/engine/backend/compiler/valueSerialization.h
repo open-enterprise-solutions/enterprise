@@ -2,7 +2,7 @@
 #define _VALUE_SERIALIZATION_H__
 
 #include "backend/backend_core.h"
-#include "backend/clsid.h"
+#include "core/clsid.h"
 
 class ibValue;
 class ibDataNode;

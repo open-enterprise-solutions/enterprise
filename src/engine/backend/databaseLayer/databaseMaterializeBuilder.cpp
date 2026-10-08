@@ -1181,7 +1181,7 @@ static bool ExistsByProbe(ibDatabaseLayer& conn, const wxString& probe)
 	try {
 		rs = conn.RunQueryWithResults(wxT("%s"), probe);   // a statement is data, not a format (ibRunRendered)
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		conn.ResetErrorCodes();
 		throw;
 	}
@@ -1217,7 +1217,7 @@ bool ibMaterializeSql::Apply(ibDatabaseLayer& conn) const
 		try {
 			conn.RunStatement(s.m_sql);
 		}
-		catch (const ibBackendException&) {
+		catch (const ibCoreException&) {
 			conn.ResetErrorCodes();   // the object was not there — that is the normal first apply
 		}
 	}
@@ -1259,7 +1259,7 @@ bool ibMaterializeSql::Apply(ibDatabaseLayer& conn) const
 		try {
 			conn.RunStatement(s.m_sql);
 		}
-		catch (const ibBackendException& err) {
+		catch (const ibCoreException& err) {
 			ibBackendQueryException::Throw(ibBackendQueryException::Kind::TranslationFailure,
 			                               wxString::Format(wxT("%s\n\nstatement:\n%s"),
 			                                                err.GetErrorDescription(), s.m_sql));

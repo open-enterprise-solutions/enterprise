@@ -224,19 +224,8 @@ static wxString gs_listErrorString[] =
 // Error handling
 //////////////////////////////////////////////////////////////////////
 
-const wxString ibBackendException::GetErrorDescription() const
-{
-	return wxString::FromUTF8(m_errorDescriptionUtf8);
-}
-
-const char* ibBackendException::what() const noexcept
-{
-	// The stored bytes themselves — nothing is built here, which is what lets this be noexcept.
-	return m_errorDescriptionUtf8.c_str();
-}
-
 ibBackendException::ibBackendException(const wxString& strErrorDescription)
-	: m_errorHandled(false), m_errorDescriptionUtf8(strErrorDescription.utf8_string())
+	: ibCoreException(strErrorDescription), m_errorHandled(false)
 {
 #ifdef DEBUG
 	// "thrown", said as such: a line per exception MADE — every level a cancel walks out of makes one — and

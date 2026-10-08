@@ -18,7 +18,7 @@
 #include <vector>
 #include "backend/srcDataObject.h"        // ibSourceExplorer
 #include "backend/compiler/value.h"       // g_valueNumber/StringCLSID
-#include "backend/clsid.h"                // reference_to_clsid / IsReference
+#include "core/clsid.h"                // reference_to_clsid / IsReference
 
 // ---------------------------------------------------------------------------
 // One hop: FindById resolves a column by id; a miss returns null (so a caller

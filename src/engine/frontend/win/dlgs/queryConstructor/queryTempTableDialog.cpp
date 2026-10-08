@@ -230,7 +230,7 @@ bool ibDialogQueryTempTable::ReadType(const wxString& text, ibTypeDescription& t
 			return false;
 		type = m_model.TypeOfCast(*cast);
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		return false;
 	}
 	return type.IsOk();

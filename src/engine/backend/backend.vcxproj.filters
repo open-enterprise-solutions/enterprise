@@ -151,7 +151,6 @@
     <ClInclude Include="databaseLayer\resultSetMetaData.h">
       <Filter>databaseLayer</Filter>
     </ClInclude>
-    <ClInclude Include="guid.h" />
     <ClInclude Include="databaseLayer\sqllite\sqliteDatabaseLayer.h">
       <Filter>databaseLayer\sqllite</Filter>
     </ClInclude>
@@ -319,30 +318,7 @@
     <ClInclude Include="diagnostics\crashGuard.h">
       <Filter>diagnostics</Filter>
     </ClInclude>
-    <ClInclude Include="stringUtils.h" />
     <ClInclude Include="typeconv.h" />
-    <ClInclude Include="clsid.h" />
-    <ClInclude Include="fdatetime.h" />
-    <ClInclude Include="fnumber.h" />
-    <ClInclude Include="fstring.h" />
-    <ClInclude Include="fileSystem\fs.h">
-      <Filter>fileSystem</Filter>
-    </ClInclude>
-    <ClInclude Include="serialize\dataBuilder.h">
-      <Filter>serialize</Filter>
-    </ClInclude>
-    <ClInclude Include="serialize\jsonProvider.h">
-      <Filter>serialize</Filter>
-    </ClInclude>
-    <ClInclude Include="serialize\jsonText.h">
-      <Filter>serialize</Filter>
-    </ClInclude>
-    <ClInclude Include="fileSystem\types.h">
-      <Filter>fileSystem</Filter>
-    </ClInclude>
-    <ClInclude Include="fileSystem\lz\lzhuf.h">
-      <Filter>fileSystem\lz</Filter>
-    </ClInclude>
     <ClInclude Include="fileSystem\quicklz\quicklz.h">
       <Filter>fileSystem\quicklz</Filter>
     </ClInclude>
@@ -1237,7 +1213,6 @@
     <ClCompile Include="databaseLayer\resultSetMetaData.cpp">
       <Filter>databaseLayer</Filter>
     </ClCompile>
-    <ClCompile Include="guid.cpp" />
     <ClCompile Include="databaseLayer\sqllite\sqliteDatabaseLayer.cpp">
       <Filter>databaseLayer\sqllite</Filter>
     </ClCompile>
@@ -1289,7 +1264,6 @@
     <ClCompile Include="compiler\compileContext.cpp">
       <Filter>compiler</Filter>
     </ClCompile>
-    <ClCompile Include="backend_core.cpp" />
     <ClCompile Include="databaseLayer\firebird\firebirdBlobCompression.cpp">
       <Filter>databaseLayer\firebird</Filter>
     </ClCompile>
@@ -1390,23 +1364,8 @@
     <ClCompile Include="diagnostics\crashGuard.cpp">
       <Filter>diagnostics</Filter>
     </ClCompile>
-    <ClCompile Include="fileSystem\lz\lzhuf.cpp">
-      <Filter>fileSystem\lz</Filter>
-    </ClCompile>
     <ClCompile Include="fileSystem\quicklz\quicklz.c">
       <Filter>fileSystem\quicklz</Filter>
-    </ClCompile>
-    <ClCompile Include="fileSystem\fs.cpp">
-      <Filter>fileSystem</Filter>
-    </ClCompile>
-    <ClCompile Include="serialize\dataBuilder.cpp">
-      <Filter>serialize</Filter>
-    </ClCompile>
-    <ClCompile Include="serialize\jsonProvider.cpp">
-      <Filter>serialize</Filter>
-    </ClCompile>
-    <ClCompile Include="serialize\jsonText.cpp">
-      <Filter>serialize</Filter>
     </ClCompile>
     <ClCompile Include="metadataConfiguration.cpp" />
     <ClCompile Include="roleHelper.cpp" />
@@ -2018,9 +1977,6 @@
     <ClCompile Include="tabularModelDb.cpp" />
     <ClCompile Include="tabularModelRam.cpp" />
     <ClCompile Include="moduleInfo.cpp" />
-    <ClCompile Include="fdatetime.cpp" />
-    <ClCompile Include="fnumber.cpp" />
-    <ClCompile Include="fstring.cpp" />
     <ClCompile Include="compiler\value_res.cpp">
       <Filter>compiler</Filter>
     </ClCompile>

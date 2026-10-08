@@ -13,7 +13,7 @@
 #include "backend/databaseLayer/connectionPool.h"
 #include "backend/system/systemManager.h"
 
-#include "backend/fileSystem/fs.h"
+#include "core/fileSystem/fs.h"
 //*********************************************************************************************
 //*                          ObjectChartOfCharacteristicTypesValue                             *
 //*********************************************************************************************

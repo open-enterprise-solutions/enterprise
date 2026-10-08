@@ -3,7 +3,7 @@
 #include "backend/appData.h"                              // settings_table
 #include "backend/databaseLayer/databaseQueryBuilder.h"   // L2 door — DML + typed row reads
 #include "backend/lock/lockKeyHash.h"                     // the deterministic address hash (sys_lock's own)
-#include "backend/serialize/dataBuilder.h"                // ibDataNode + ibBinaryProvider
+#include "core/serialize/dataBuilder.h"                // ibDataNode + ibBinaryProvider
 #include <algorithm>
 
 ///////////////////////////////////////////////////////////////////////////////

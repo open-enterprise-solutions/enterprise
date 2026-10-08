@@ -1,0 +1,423 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>15.0</VCProjectVersion>
+    <ProjectGuid>{A1B2C3D4-0005-4E5F-8A9B-C0D1E2F30005}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <RootNamespace>frmclient</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <ProjectName>frmclient</ProjectName>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\..\..\Common.props" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\..\..\Common.props" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\..\..\Common.props" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\..\..\Common.props" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;_UNICODE;WXUSINGDLL;_USRDLL;FRMCLIENT_EXPORTS;_WIN32_WINNT=0x0A00;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>false</ConformanceMode>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <AdditionalIncludeDirectories>$(oesEngine);$(oes3rdParty)mbedtls\include;$(oesEngine)backend\tls;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>$(oesLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>protocol.lib;core.lib;ws2_32.lib;crypt32.lib;mbedtls.lib;bcrypt.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll\mswud;$(oes3rdParty)wxWidgets\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>wxmsw33ud_aui.lib;wxmsw33ud_qa.lib;wxmsw33ud_html.lib;wxmsw33ud_propgrid.lib;wxmsw33ud_adv.lib;wxmsw33ud_core.lib;wxbase33ud_xml.lib;wxbase33ud_net.lib;wxmsw33ud_stc.lib;wxmsw33ud_xrc.lib;wxbase33ud.lib;wxtiffd.lib;wxjpegd.lib;wxpngd.lib;wxzlibd.lib;wxscintillad.lib;wxregexud.lib;wxexpatd.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll\mswud;$(oes3rdParty)wxWidgets\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_x64_dll;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>wxmsw33ud_aui.lib;wxmsw33ud_qa.lib;wxmsw33ud_html.lib;wxmsw33ud_propgrid.lib;wxmsw33ud_adv.lib;wxmsw33ud_core.lib;wxbase33ud_xml.lib;wxbase33ud_net.lib;wxmsw33ud_stc.lib;wxmsw33ud_xrc.lib;wxbase33ud.lib;wxtiffd.lib;wxjpegd.lib;wxpngd.lib;wxzlibd.lib;wxscintillad.lib;wxregexud.lib;wxexpatd.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll\mswu;$(oes3rdParty)wxWidgets\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>wxmsw33u_aui.lib;wxmsw33u_qa.lib;wxmsw33u_html.lib;wxmsw33u_propgrid.lib;wxmsw33u_adv.lib;wxmsw33u_core.lib;wxbase33u_xml.lib;wxbase33u_net.lib;wxmsw33u_stc.lib;wxmsw33u_xrc.lib;wxbase33u.lib;wxtiff.lib;wxjpeg.lib;wxpng.lib;wxzlib.lib;wxscintilla.lib;wxregexu.lib;wxexpat.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll\mswu;$(oes3rdParty)wxWidgets\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_x64_dll;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>wxmsw33u_aui.lib;wxmsw33u_qa.lib;wxmsw33u_html.lib;wxmsw33u_propgrid.lib;wxmsw33u_adv.lib;wxmsw33u_core.lib;wxbase33u_xml.lib;wxbase33u_net.lib;wxmsw33u_stc.lib;wxmsw33u_xrc.lib;wxbase33u.lib;wxtiff.lib;wxjpeg.lib;wxpng.lib;wxzlib.lib;wxscintilla.lib;wxregexu.lib;wxexpat.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="frmclient.cpp" />
+    <ClCompile Include="diagnostics\journal.cpp" />
+    <ClCompile Include="artProvider\artProvider.cpp" />
+    <ClCompile Include="docView\docView.cpp" />
+    <ClCompile Include="docView\docManager.cpp" />
+    <ClCompile Include="docView\print\printPreview.cpp" />
+    <ClCompile Include="docView\templates\docViewText.cpp" />
+    <ClCompile Include="docView\templates\docViewFile.cpp" />
+    <ClCompile Include="docView\templates\docViewHelp.cpp" />
+    <ClCompile Include="mainFrame\mainFrame.cpp" />
+    <ClCompile Include="mainFrame\mainFrameChild.cpp" />
+    <ClCompile Include="mainFrame\output\outputWindow.cpp" />
+    <ClCompile Include="mainFrame\settings\editorsettings.cpp" />
+    <ClCompile Include="mainFrame\settings\fontcolorsettings.cpp" />
+    <ClCompile Include="mainFrame\settings\xmlutility.cpp" />
+    <ClCompile Include="win\editor\textEditor\textEditor.cpp" />
+    <ClCompile Include="win\editor\textEditor\textEditorPrintOut.cpp" />
+    <ClCompile Include="win\picture.cpp" />
+    <ClCompile Include="win\dlgs\about.cpp" />
+    <ClCompile Include="win\dlgs\activeUser.cpp" />
+    <ClCompile Include="win\dlgs\formEditor.cpp" />
+    <ClCompile Include="win\dlgs\generation.cpp" />
+    <ClCompile Include="win\dlgs\settings\savedSettings.cpp" />
+    <ClCompile Include="win\dlgs\settings\list\listSettings.cpp" />
+    <ClCompile Include="win\dlgs\settings\settingsFieldTree.cpp" />
+    <ClCompile Include="win\dlgs\settings\settingsFilterEditor.cpp" />
+    <ClCompile Include="win\dlgs\settings\filterTreeModel.cpp" />
+    <ClCompile Include="win\dlgs\settings\settingsSortEditor.cpp" />
+    <ClCompile Include="win\dlgs\settings\settingsConditionalAppearanceEditor.cpp" />
+    <ClCompile Include="win\dlgs\settings\settingsAppearanceEditor.cpp" />
+    <ClCompile Include="visualView\ctrl\typeControl.cpp" />
+    <ClCompile Include="win\dlgs\selectData.cpp" />
+    <ClCompile Include="visualView\ctrl\tableBoxColumnRenderer.cpp" />
+    <ClCompile Include="backend\system\value\composition\valueComposerField.cpp" />
+    <ClCompile Include="win\editor\gridEditor\gridEditor.cpp" />
+    <ClCompile Include="win\editor\gridEditor\gridCellEditor.cpp" />
+    <ClCompile Include="win\editor\gridEditor\gridEditorClipbrd.cpp" />
+    <ClCompile Include="win\editor\gridEditor\gridEditorDoc.cpp" />
+    <ClCompile Include="win\editor\gridEditor\gridPrintout.cpp" />
+    <ClCompile Include="win\editor\gridEditor\gridProperty.cpp" />
+    <ClCompile Include="backend\propertyManager\propertyObject.cpp" />
+    <ClCompile Include="backend\propertyManager\property\propertyBoolean.cpp" />
+    <ClCompile Include="backend\propertyManager\property\propertyString.cpp" />
+    <ClCompile Include="backend\propertyManager\property\propertyStringExt.cpp" />
+    <ClCompile Include="backend\propertyManager\property\propertyEnum.cpp" />
+    <ClCompile Include="backend\propertyManager\property\propertyFont.cpp" />
+    <ClCompile Include="backend\propertyManager\property\propertyColour.cpp" />
+    <ClCompile Include="backend\propertyManager\property\propertySize.cpp" />
+    <ClCompile Include="backend\propertyManager\property\variant\variantSize.cpp" />
+    <ClCompile Include="backend\compiler\value.cpp" />
+    <ClCompile Include="settings\formSettings.cpp" />
+    <ClCompile Include="propertyManager\property\private\propertyRegistry.cpp" />
+    <ClCompile Include="propertyManager\property\advprop\advpropNumber.cpp" />
+    <ClCompile Include="propertyManager\property\advprop\advpropString.cpp" />
+    <ClCompile Include="propertyManager\property\advprop\advpropBoolean.cpp" />
+    <ClCompile Include="propertyManager\property\advprop\advpropEnum.cpp" />
+    <ClCompile Include="propertyManager\property\advprop\advpropFont.cpp" />
+    <ClCompile Include="propertyManager\property\advprop\advpropColour.cpp" />
+    <ClCompile Include="propertyManager\property\advprop\advpropSize.cpp" />
+    <ClCompile Include="mainFrame\objinspect\objinspect.cpp" />
+    <ClCompile Include="win\dlgs\translateConstructor\translateConstructor.cpp" />
+    <ClCompile Include="win\dlgs\colHeight.cpp" />
+    <ClCompile Include="win\dlgs\rowHeight.cpp" />
+    <ClCompile Include="docView\templates\docViewSpreadsheet.cpp" />
+    <ClCompile Include="win\theme\luna_dockart.cpp" />
+    <ClCompile Include="win\theme\luna_tabart.cpp" />
+    <ClCompile Include="win\theme\luna_toolbarart.cpp" />
+    <ClCompile Include="win\ctrls\dataview\headerctrlcmn.cpp" />
+    <ClCompile Include="win\ctrls\dataview\headerctrlg.cpp" />
+    <ClCompile Include="win\ctrls\dataview\datavcmn.cpp" />
+    <ClCompile Include="win\ctrls\dataview\datavgen.cpp" />
+    <ClCompile Include="win\ctrls\dataview\datavgen.paged.cpp" />
+    <ClCompile Include="win\ctrls\dataview\datavgen.scrollbar.cpp" />
+    <ClCompile Include="win\ctrls\dataview\datavlayout.cpp" />
+    <ClCompile Include="win\ctrls\dataview\tabularModelView.cpp" />
+    <ClCompile Include="win\ctrls\grid\gridext.cpp" />
+    <ClCompile Include="win\ctrls\grid\gridextctrl.cpp" />
+    <ClCompile Include="win\ctrls\grid\gridexteditors.cpp" />
+    <ClCompile Include="win\ctrls\grid\gridextsel.cpp" />
+    <ClCompile Include="win\ctrls\checktree.cpp" />
+    <ClCompile Include="win\ctrls\tableView.cpp" />
+    <ClCompile Include="win\ctrls\controlButton.cpp" />
+    <ClCompile Include="win\ctrls\controlCheckboxEditor.cpp" />
+    <ClCompile Include="win\ctrls\controlStaticText.cpp" />
+    <ClCompile Include="win\ctrls\controlTextEditor.cpp" />
+    <ClCompile Include="win\ctrls\dynamicBorder.cpp" />
+    <ClCompile Include="win\ctrls\treelistctrl.cpp" />
+    <ClCompile Include="visualView\commandBar.cpp" />
+    <ClCompile Include="visualView\tableModel.cpp" />
+    <ClCompile Include="backend\backend_localization.cpp" />
+    <ClCompile Include="backend\formatString.cpp" />
+    <ClCompile Include="backend\compiler\value_res.cpp" />
+    <ClCompile Include="backend\metaCollection\partial\reference\reference.cpp" />
+    <ClCompile Include="backend\backend_type.cpp" />
+    <ClCompile Include="backend\system\value\valueColour.cpp" />
+    <ClCompile Include="backend\system\value\valueFont.cpp" />
+    <ClCompile Include="backend\system\value\valueType.cpp" />
+    <ClCompile Include="backend\serialize\dataProtocol.cpp" />
+    <ClCompile Include="backend\settings\settingsComposer.cpp" />
+    <ClCompile Include="backend\backend_spreadsheet.cpp" />
+    <ClCompile Include="backend\spreadsheetDescription.cpp" />
+    <ClCompile Include="backend\compositionDescription.cpp" />
+    <ClCompile Include="backend\typeDescription.cpp" />
+    <ClCompile Include="visualView\ctrl\frame.cpp" />
+    <ClCompile Include="visualView\ctrl\control.cpp" />
+    <ClCompile Include="visualView\ctrl\window.cpp" />
+    <ClCompile Include="visualView\ctrl\form.cpp" />
+    <ClCompile Include="visualView\visualHostClient.cpp" />
+    <ClCompile Include="visualView\visualHostClientDocView.cpp" />
+    <ClCompile Include="visualView\ctrl\button.cpp" />
+    <ClCompile Include="visualView\ctrl\checkbox.cpp" />
+    <ClCompile Include="visualView\ctrl\gridBox.cpp" />
+    <ClCompile Include="visualView\ctrl\placeholder.cpp" />
+    <ClCompile Include="visualView\ctrl\sizer.cpp" />
+    <ClCompile Include="visualView\ctrl\staticline.cpp" />
+    <ClCompile Include="visualView\ctrl\statictext.cpp" />
+    <ClCompile Include="visualView\ctrl\tableBox.cpp" />
+    <ClCompile Include="visualView\ctrl\textctrl.cpp" />
+    <ClCompile Include="visualView\ctrl\textBox.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="frmclient.h" />
+    <ClInclude Include="diagnostics\journal.h" />
+    <ClInclude Include="artProvider\artProvider.h" />
+    <ClInclude Include="artProvider\private\picturePredefined.h" />
+    <ClInclude Include="docView\docView.h" />
+    <ClInclude Include="docView\docManager.h" />
+    <ClInclude Include="docView\print\printPreview.h" />
+    <ClInclude Include="docView\templates\docViewText.h" />
+    <ClInclude Include="docView\templates\docViewFile.h" />
+    <ClInclude Include="docView\templates\docViewHelp.h" />
+    <ClInclude Include="mainFrame\settings\editorsettings.h" />
+    <ClInclude Include="win\editor\textEditor\textEditor.h" />
+    <ClInclude Include="win\editor\textEditor\textEditorPrintOut.h" />
+    <ClInclude Include="mainFrame\mainFrame.h" />
+    <ClInclude Include="mainFrame\mainFrameChild.h" />
+    <ClInclude Include="mainFrame\output\outputWindow.h" />
+    <ClInclude Include="mainFrame\settings\fontcolorsettings.h" />
+    <ClInclude Include="mainFrame\settings\xmlutility.h" />
+    <ClInclude Include="win\picture.h" />
+    <ClInclude Include="win\dlgs\about.h" />
+    <ClInclude Include="win\dlgs\activeUser.h" />
+    <ClInclude Include="win\dlgs\formEditor.h" />
+    <ClInclude Include="win\dlgs\generation.h" />
+    <ClInclude Include="win\dlgs\settings\savedSettings.h" />
+    <ClInclude Include="win\dlgs\settings\list\listSettings.h" />
+    <ClInclude Include="win\dlgs\settings\settingsFieldTree.h" />
+    <ClInclude Include="win\dlgs\settings\settingsFilterEditor.h" />
+    <ClInclude Include="win\dlgs\settings\filterTreeModel.h" />
+    <ClInclude Include="win\dlgs\settings\settingsSortEditor.h" />
+    <ClInclude Include="win\dlgs\settings\settingsConditionalAppearanceEditor.h" />
+    <ClInclude Include="win\dlgs\settings\settingsAppearanceEditor.h" />
+    <ClInclude Include="win\dlgs\settings\settingsStyle.h" />
+    <ClInclude Include="win\dlgs\callbackDropTarget.h" />
+    <ClInclude Include="win\dlgs\rowValueCell.h" />
+    <ClInclude Include="win\dlgs\textWithDotsCell.h" />
+    <ClInclude Include="visualView\ctrl\typeControl.h" />
+    <ClInclude Include="win\dlgs\selectData.h" />
+    <ClInclude Include="visualView\ctrl\tableBoxColumnRenderer.h" />
+    <ClInclude Include="backend\system\value\composition\valueComposerField.h" />
+    <ClInclude Include="backend\system\value\composition\valueComposerSettings.h" />
+    <ClInclude Include="win\dlgs\choiceTemplate.h" />
+    <ClInclude Include="win\editor\gridEditor\gridEditor.h" />
+    <ClInclude Include="win\editor\gridEditor\gridPrintout.h" />
+    <ClInclude Include="win\dlgs\colHeight.h" />
+    <ClInclude Include="win\dlgs\rowHeight.h" />
+    <ClInclude Include="docView\templates\docViewSpreadsheet.h" />
+    <ClInclude Include="mainFrame\objinspect\objinspect.h" />
+    <ClInclude Include="backend\propertyManager\propertyObject.h" />
+    <ClInclude Include="backend\propertyManager\property\propertyBoolean.h" />
+    <ClInclude Include="backend\propertyManager\property\propertyString.h" />
+    <ClInclude Include="backend\propertyManager\property\propertyEnum.h" />
+    <ClInclude Include="backend\propertyManager\property\propertyFont.h" />
+    <ClInclude Include="backend\propertyManager\property\propertyColour.h" />
+    <ClInclude Include="backend\propertyManager\property\propertyFormat.h" />
+    <ClInclude Include="backend\propertyManager\property\propertyNumber.h" />
+    <ClInclude Include="backend\propertyManager\property\variant\variantTranslate.h" />
+    <ClInclude Include="propertyManager\property\private\propertyRegistry.h" />
+    <ClInclude Include="propertyManager\property\private\prop.h" />
+    <ClInclude Include="propertyManager\property\advprop\advpropNumber.h" />
+    <ClInclude Include="propertyManager\property\advprop\advpropString.h" />
+    <ClInclude Include="visualView\controlEnum.h" />
+    <ClInclude Include="propertyManager\property\advprop\advpropFont.h" />
+    <ClInclude Include="win\dlgs\translateConstructor\translateConstructor.h" />
+    <ClInclude Include="win\dlgs\formatConstructor\formatConstructor.h" />
+    <ClInclude Include="backend\metadataConfiguration.h" />
+    <ClInclude Include="backend\metaCollection\metaSpreadsheetObject.h" />
+    <ClInclude Include="backend\metaCollection\metaObject.h" />
+    <ClInclude Include="backend\metaCollection\metaLanguageObject.h" />
+    <ClInclude Include="backend\metaData.h" />
+    <ClInclude Include="backend\appData.h" />
+    <ClInclude Include="backend\backend_mainFrame.h" />
+    <ClInclude Include="backend\session\session.h" />
+    <ClInclude Include="backend\compiler\enumUnit.h" />
+    <ClInclude Include="backend\system\value\valueFont.h" />
+    <ClInclude Include="backend\system\value\valueSize.h" />
+    <ClInclude Include="backend\propertyManager\property\propertySize.h" />
+    <ClInclude Include="backend\propertyManager\property\variant\variantSize.h" />
+    <ClInclude Include="propertyManager\property\advprop\advpropSize.h" />
+    <ClInclude Include="settings\formSettings.h" />
+    <ClInclude Include="backend\system\value\valueColour.h" />
+    <ClInclude Include="backend\propertyManager\property\variant\variantOwner.h" />
+    <ClInclude Include="backend\backend_core.h" />
+    <ClInclude Include="backend\diagnostics\journal.h" />
+    <ClInclude Include="backend\propertyManager\propertyManager.h" />
+    <ClInclude Include="backend\system\value\valueSpreadsheet.h" />
+    <ClInclude Include="win\theme\luna_dockart.h" />
+    <ClInclude Include="win\theme\luna_tabart.h" />
+    <ClInclude Include="win\theme\luna_toolbarart.h" />
+    <ClInclude Include="win\ctrls\dataview\headerctrlg.h" />
+    <ClInclude Include="win\ctrls\dataview\datavgen.h" />
+    <ClInclude Include="win\ctrls\dataview\datavlayout.h" />
+    <ClInclude Include="win\ctrls\dataview\dataview.h" />
+    <ClInclude Include="win\ctrls\dataview\dataviewEditOnActivate.h" />
+    <ClInclude Include="win\ctrls\dataview\dvrenderers.h" />
+    <ClInclude Include="win\ctrls\dataview\datavgen.paged.private.h" />
+    <ClInclude Include="win\ctrls\dataview\datavgen.window.private.h" />
+    <ClInclude Include="win\ctrls\dataview\tabularModelView.h" />
+    <ClInclude Include="win\ctrls\grid\gridext.h" />
+    <ClInclude Include="win\ctrls\grid\gridextctrl.h" />
+    <ClInclude Include="win\ctrls\grid\gridexteditors.h" />
+    <ClInclude Include="win\ctrls\grid\gridextprivate.h" />
+    <ClInclude Include="win\ctrls\grid\gridextsel.h" />
+    <ClInclude Include="win\ctrls\checktree.h" />
+    <ClInclude Include="win\ctrls\tableView.h" />
+    <ClInclude Include="win\ctrls\controlButton.h" />
+    <ClInclude Include="win\ctrls\controlCheckboxEditor.h" />
+    <ClInclude Include="win\ctrls\controlStaticText.h" />
+    <ClInclude Include="win\ctrls\controlStaticTextValue.h" />
+    <ClInclude Include="win\ctrls\controlTextEditor.h" />
+    <ClInclude Include="win\ctrls\dynamicBorder.h" />
+    <ClInclude Include="win\ctrls\floatingNotebook.h" />
+    <ClInclude Include="win\ctrls\toolBar.h" />
+    <ClInclude Include="win\ctrls\treelistctrl.h" />
+    <ClInclude Include="win\fontcontainer.h" />
+    <ClInclude Include="win\typeconv.h" />
+    <ClInclude Include="visualView\commandBar.h" />
+    <ClInclude Include="visualView\tableModel.h" />
+    <ClInclude Include="backend\backend_exception.h" />
+    <ClInclude Include="backend\backend_localization.h" />
+    <ClInclude Include="backend\backend_spreadsheet.h" />
+    <ClInclude Include="backend\composition\dataComposer.h" />
+    <ClInclude Include="backend\settings\settingsComposer.h" />
+    <ClInclude Include="backend\spreadsheetDescription.h" />
+    <ClInclude Include="backend\compositionDescription.h" />
+    <ClInclude Include="backend\typeDescription.h" />
+    <ClInclude Include="backend\query\queryBalanceRole.h" />
+    <ClInclude Include="backend\query\queryUnfold.h" />
+    <ClInclude Include="backend\compiler\value.h" />
+    <ClInclude Include="backend\serialize\dataProtocol.h" />
+    <ClInclude Include="backend\backend.h" />
+    <ClInclude Include="backend\formatString.h" />
+    <ClInclude Include="backend\metaCollection\partial\reference\reference.h" />
+    <ClInclude Include="backend\backend_type.h" />
+    <ClInclude Include="backend\backend_form.h" />
+    <ClInclude Include="backend\backend_picture.h" />
+    <ClInclude Include="backend\picturePredefined.h" />
+    <ClInclude Include="backend\sourceDescription.h" />
+    <ClInclude Include="backend\srcObject.h" />
+    <ClInclude Include="backend\system\value\valueType.h" />
+    <ClInclude Include="backend\sheetFormat\sheetFormat.h" />
+    <ClInclude Include="visualView\ctrl\frame.h" />
+    <ClInclude Include="visualView\ctrl\control.h" />
+    <ClInclude Include="visualView\ctrl\window.h" />
+    <ClInclude Include="visualView\ctrl\form.h" />
+    <ClInclude Include="visualView\formdefs.h" />
+    <ClInclude Include="visualView\visualHostClient.h" />
+    <ClInclude Include="visualView\ctrl\gridBox.h" />
+    <ClInclude Include="visualView\ctrl\sizer.h" />
+    <ClInclude Include="visualView\ctrl\tableBox.h" />
+    <ClInclude Include="visualView\ctrl\widgets.h" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

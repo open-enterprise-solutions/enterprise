@@ -5,7 +5,7 @@
 #include "valueJson.h"
 
 #include "backend/backend_exception.h"
-#include "backend/serialize/jsonText.h"            // ibJsonText — how a string is spelled in JSON, said once
+#include "core/serialize/jsonText.h"            // ibJsonText — how a string is spelled in JSON, said once
 #include "backend/compiler/enumUnit.h"            // ConvertToEnumValue<> is declared in value.h and DEFINED here
 #include "backend/system/systemManagerEnum.h"
 #include "backend/system/value/valueArray.h"
@@ -213,7 +213,7 @@ void ibValueJsonReader::SetText(const ibString& text)
 		if (!parsed)
 			failure = sink.GetError();
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		throw;
 	}
 	catch (const std::exception& error) {

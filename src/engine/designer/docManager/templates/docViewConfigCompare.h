@@ -14,7 +14,7 @@
 // (backend/clsid.h, configCompareModel.h).
 #include "frontend/docView/docView.h"
 
-#include "backend/clsid.h"
+#include "core/clsid.h"
 #include "designer/mainFrame/configCompare/configCompareModel.h"
 
 #include <wx/object.h>

@@ -614,7 +614,7 @@ bool ibValueStructure::Property(const ibValue& varKeyValue, ibValue& cValueFound
 // A STRUCTURE inherits this unchanged: it differs in what it accepts as a KEY,
 // not in how it is written, and the header already says which of the two it was.
 
-#include "backend/serialize/dataBuilder.h"
+#include "core/serialize/dataBuilder.h"
 
 
 bool ibValueContainer::DoSerialize(ibDataNode& node) const

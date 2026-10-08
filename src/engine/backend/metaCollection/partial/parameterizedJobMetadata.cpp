@@ -7,7 +7,7 @@
 #include "backend/appData.h"                       // appData->DesignerMode(), GetJobManager
 #include "backend/metaData.h"
 #include "backend/moduleManager/moduleManager.h"
-#include "backend/serialize/dataBuilder.h"
+#include "core/serialize/dataBuilder.h"
 #include "backend/system/value/valueDynamicList.h"   // ibCreateHierarchyList / ibCreateFolderList
 #include "backend/userInfo.h"                        // ibUserInfo — the identity the job inherits
 #include "backend/job/jobManager.h"                  // ibJobManager / ibJobDescription

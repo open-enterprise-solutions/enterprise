@@ -19,7 +19,7 @@ bool ibValueMetaObjectConfiguration::ExecuteSystemSQLCommand()
 	try {
 		return db_query->CreateMissingRoutines();
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		return false;
 	}
 }

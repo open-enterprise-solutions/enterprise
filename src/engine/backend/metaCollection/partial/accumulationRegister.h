@@ -3,7 +3,7 @@
 
 #include "commonObject.h"
 #include "accumulationRegisterEnum.h"
-#include "backend/stringUtils.h"   // CompareString — the one case-insensitive name comparison
+#include "core/stringUtils.h"   // CompareString — the one case-insensitive name comparison
 #include "backend/query/queryable.h"          // ibComputedRegisterQueryable<TReg> — shared base for the balance / turnover virtual tables
 #include "backend/query/tempTableQueryable.h" // ibDbTempTableQueryable — a named physical relation; what a VIEW is to L3
 // The register-shared lowering: ibRegFilterPredicate / ibRegFlatLeaves / ibRegCompositeIR. Shared on

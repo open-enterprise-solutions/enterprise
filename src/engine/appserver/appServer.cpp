@@ -17,7 +17,7 @@
 #include "backend/mcp/mcpServer.h"
 #include "backend/session/session.h"
 
-#include "sfrontend/client/clientHost.h"
+#include "frmserver/client/clientHost.h"
 
 namespace {
 
@@ -180,7 +180,7 @@ bool ibAppServer::Open(const ibConfiguredInstance& instance)
 		request.m_locale = m_locale;
 		applicationInstance = ibApplicationInstance::CreateAppDataEnv(request);
 	}
-	catch (const ibBackendException& err) {
+	catch (const ibCoreException& err) {
 		error = err.GetErrorDescription();
 	}
 	if (applicationInstance == nullptr) {
@@ -199,7 +199,7 @@ bool ibAppServer::Open(const ibConfiguredInstance& instance)
 		if (session && session->Open(instance.m_ibUser, ibPassword) != ibSession::OpenResult::Authenticated)
 			session.Reset();
 	}
-	catch (const ibBackendException& err) {
+	catch (const ibCoreException& err) {
 		ibAppServerSay(ibJournalMark::Error, wxT("base '%s': login refused: %s"), instance.m_name,
 			err.GetErrorDescription());
 		session.Reset();
@@ -211,7 +211,7 @@ bool ibAppServer::Open(const ibConfiguredInstance& instance)
 		return false;
 	}
 
-	// THE BASE'S CLIENTS — the protocol served for it (sfrontend), and the base's MCP when its settings switch it
+	// THE BASE'S CLIENTS — the protocol served for it (frmserver), and the base's MCP when its settings switch it
 	// on: an assistant reaches the clients through it (client_call), as a client.
 	m_clientHosts[instance.m_name] = std::make_unique<ibClientHost>(applicationInstance);
 	if (ibMcpServer* const mcp = ibApplicationInstance::GetMcpServer(applicationInstance)) {

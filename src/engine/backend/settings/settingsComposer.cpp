@@ -3,8 +3,8 @@
 #include "backend/appData.h"                        // the session's user + GetSettingsStorage
 #include "backend/composition/dataComposer.h"       // the settings themselves
 #include "backend/compositionDescription.h"         // ibSettingsDescriptionMemory — the pair that writes them
-#include "backend/serialize/dataBuilder.h"          // ibDataNode
-#include "backend/guid.h"                           // a new setting's identity
+#include "core/serialize/dataBuilder.h"          // ibDataNode
+#include "core/guid.h"                           // a new setting's identity
 
 #include <algorithm>
 

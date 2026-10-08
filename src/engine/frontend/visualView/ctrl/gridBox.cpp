@@ -1,5 +1,5 @@
 #include "gridBox.h"
-#include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
+#include "core/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "backend/system/value/valueDataComposition.h"   // the source that turns this box into a report
 #include "frontend/win/dlgs/settings/savedSettings.h"    // the setting marked "restore on open" goes on here
 #include "frontend/docView/templates/docViewSpreadsheet.h"   // the document it holds, and its view

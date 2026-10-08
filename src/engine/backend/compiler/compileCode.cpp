@@ -8,7 +8,7 @@
 #include "lambdaQueryAST.h"   // L4-2 — lambda body -> L4 query AST (pushdown)
 
 #include "system/systemManager.h"
-#include "backend/guid.h"  // wxNewUniqueGuid for anonymous-lambda synthetic naming
+#include "core/guid.h"  // wxNewUniqueGuid for anonymous-lambda synthetic naming
 #include "backend/diagnostics/journal.h"   // says whether a lambda recorded a query tree
 #include "backend/session/session.h"       // GetCompileState — the code style lives there
 
@@ -1203,7 +1203,7 @@ bool ibCompileCode::CompileModule()
 		if (m_compileMode == ibCompileMode::Tolerant) {
 			bool resolved = false;
 			try { resolved = PushCallFunction(callFunc); }
-			catch (const ibBackendException&) { resolved = false; }
+			catch (const ibCoreException&) { resolved = false; }
 			if (!resolved)
 				continue;
 		}

@@ -131,7 +131,7 @@ int ibAppDesigner::DoOnRun()
 			request.m_directory = m_strFile;
 		ret = ibApplicationInstance::CreateAppDataEnv(request) != nullptr;
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		ret = false;   // already recorded in the chain, drained below
 	}
 	catch (const std::exception& e) {
@@ -236,7 +236,7 @@ int ibAppDesigner::DoOnRun()
 			if (openResult != ibSession::OpenResult::Authenticated)
 				holder.Reset();
 		}
-	} catch (const ibBackendException& e) {
+	} catch (const ibCoreException& e) {
 		openError = e.GetErrorDescription();
 		holder.Reset();
 		openResult = ibSession::OpenResult::Failed;

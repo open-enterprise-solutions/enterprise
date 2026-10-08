@@ -4,7 +4,7 @@
 #include "backend/backend.h"   // BACKEND_API — self-sufficient: srcDataObject.h includes this header FIRST,
                                // before anything else defines the export macro (the old srcExplorer.h got it
                                // transitively via queryColumn.h; this base header must not rely on include order).
-#include "backend/clsid.h"     // ibClassID (GetSourceClassType) — same reason: don't rely on the includer.
+#include "core/clsid.h"     // ibClassID (GetSourceClassType) — same reason: don't rely on the includer.
 
 //********************************************************************************************
 //*                                     Defines                                              *

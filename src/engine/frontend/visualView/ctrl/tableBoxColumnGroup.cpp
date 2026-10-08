@@ -7,7 +7,7 @@
 #include "tableBox.h"
 #include "form.h"
 
-#include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
+#include "core/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "backend/appData.h"
 
 #ifndef OES_USE_WEB

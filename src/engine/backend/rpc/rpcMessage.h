@@ -29,7 +29,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "backend/backend_core.h"
-#include "backend/serialize/dataBuilder.h"
+#include "core/serialize/dataBuilder.h"
 
 #include <functional>
 
@@ -118,7 +118,7 @@ BACKEND_API wxString ibRpcWriteError(const ibDataValue& id, ibRpcError code, con
 
 // An APPLICATION'S OWN refusal — a code of its own numbering, outside the range JSON-RPC reserves for itself
 // (-32768..-32000), which the specification leaves to the application: the client protocol's reasons
-// (sfrontend's ibClientRefusal), which a client branches on.
+// (frmserver's ibProtocolRefusal), which a client branches on.
 BACKEND_API wxString ibRpcWriteError(const ibDataValue& id, s32 code, const wxString& message);
 
 #endif // _IB_RPC_MESSAGE_H_

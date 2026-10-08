@@ -302,7 +302,7 @@ void ibDialogQueryCase::OnOk(wxCommandEvent& event)
 			return;
 		}
 	}
-	catch (const ibBackendException& error) {
+	catch (const ibCoreException& error) {
 		wxMessageBox(error.GetErrorDescription(), GetTitle(), wxOK | wxICON_ERROR, this);
 		return;
 	}

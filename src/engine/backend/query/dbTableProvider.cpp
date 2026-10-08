@@ -22,7 +22,7 @@
 
 #include "backend/databaseLayer/databaseLayer.h"
 #include "backend/valueInfo.h"                                    // ibReference (physical reference blob, GetQueryTableId source)
-#include "backend/fnumber.h"                                      // ibNumber — the _RTRef type (clsid) keyset tiebreak const
+#include "core/fnumber.h"                                      // ibNumber — the _RTRef type (clsid) keyset tiebreak const
 #include "backend/metaData.h"                                     // ibMetaData (threaded through reads/writes)
 #include "backend/objCtor.h"                                      // ibCtorMetaValueType::GetQueryable — reference-target resolution (clsid -> ctor -> queryable, no cast)
 #include "backend/system/value/valueType.h"                      // ibValueTypeDescription::AdjustValue (dot-walk typed empty)
@@ -5292,7 +5292,7 @@ long ibDbTableProvider::ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBui
 			                                                   spec.m_predicate, wxEmptyString, /*pathAsExists*/ true);
 			ibDatabaseQueryBuilder q(spec.m_holder);
 			try { return q.Execute(ibDelete(table, where)); }   // rows deleted; 0 under a policy = no accessible row
-			catch (const ibBackendException&) { throw; }        // the DB's own reason — see the note at the INSERT below
+			catch (const ibCoreException&) { throw; }        // the DB's own reason — see the note at the INSERT below
 			catch (...) { return -1; }
 		}
 
@@ -5498,7 +5498,7 @@ long ibDbTableProvider::ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBui
 						if (n < 0) return -1;         // a refused row stops the set — the caller's TX rolls back
 						total += n;
 					}
-					catch (const ibBackendException&) { throw; }
+					catch (const ibCoreException&) { throw; }
 					catch (...) { return -1; }
 				}
 				return total;
@@ -5526,7 +5526,7 @@ long ibDbTableProvider::ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBui
 				if (n < 0) return -1;
 				return total + n;
 			}
-			catch (const ibBackendException&) { throw; }   // the DB's own reason travels up intact
+			catch (const ibCoreException&) { throw; }   // the DB's own reason travels up intact
 			catch (...) { return -1; }
 		}
 
@@ -5554,7 +5554,7 @@ long ibDbTableProvider::ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBui
 			ibQueryRelPtr checked = ibFilter(ibSubquery(valuesRow, wxT("src")), rls);          // SELECT * FROM (…) src WHERE rls
 			ibDatabaseQueryBuilder q(spec.m_holder);
 			try { return q.Execute(ibInsertSelect(table, columns, checked)); }                 // 0 inserted -> WITH CHECK denied
-			catch (const ibBackendException&) { throw; }
+			catch (const ibCoreException&) { throw; }
 			catch (...) { return -1; }
 		}
 
@@ -5570,7 +5570,7 @@ long ibDbTableProvider::ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBui
 		// moment something decided to stop. An ibBackendException carries that text, so it goes up; anything
 		// else still degrades to -1 rather than crossing the door as an unknown type.
 		try { return statement.RunQuery(); }        // rows inserted / upserted
-		catch (const ibBackendException&) { throw; }
+		catch (const ibCoreException&) { throw; }
 		catch (...) { return -1; }
 	}
 

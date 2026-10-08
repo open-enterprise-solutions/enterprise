@@ -25,7 +25,7 @@
 
 #include "backend/appDataCtorToken.h"
 #include "backend/databaseLayer/connectionHolder.h"
-#include "backend/guid.h"
+#include "core/guid.h"
 
 #include <cstddef>
 #include <mutex>

@@ -21,7 +21,7 @@
 
 #include "backend/appData.h"
 #include "backend/appHost.h"   // ibApplicationInstanceScope — the HTTP and sweep threads work for the served base
-#include "backend/guid.h"
+#include "core/guid.h"
 #include "backend/session/session.h"
 #include "backend/session/sessionRegistry.h"
 #include "backend/backend_exception.h"
@@ -625,7 +625,7 @@ bool RunBringUp(Step&& step)
 		if (step())
 			return true;
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		// Its ctor pushed the description onto this thread's chain.
 	}
 	catch (const std::exception& err) {
@@ -878,7 +878,7 @@ WFRONTEND_API std::string wfrontendLocksJSON()
 			arr.push_back(std::move(row));
 		}
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		// Snapshot is best-effort observability — never propagate.
 	}
 	catch (...) { /* swallowed: same as above, observability endpoint must not throw */ }
@@ -896,7 +896,7 @@ WFRONTEND_API bool wfrontendForceReleaseLockByGuid(const std::string& lockGuid)
 		lm->ReleaseRows(one);
 		return true;
 	}
-	catch (const ibBackendException&) { return false; }
+	catch (const ibCoreException&) { return false; }
 	catch (...)                        { return false; }
 }
 
@@ -1271,7 +1271,7 @@ namespace {
 //     UX: generic error toast carrying the actual text — never lose info
 //
 // See docs/private/record-locks.md for the lock-specific shape.
-std::string ExceptionToJson(const ibBackendException& e)
+std::string ExceptionToJson(const ibCoreException& e)
 {
 	nlohmann::json j;
 
@@ -1343,7 +1343,7 @@ std::string FireActionInSession(ibWebSession* session, int controlID)
 			if (!app->DispatchControlAction(controlID))
 				return "{}";
 		}
-		catch (const ibBackendException& e) {
+		catch (const ibCoreException& e) {
 			return ExceptionToJson(e);
 		}
 		catch (...) {
@@ -1390,7 +1390,7 @@ std::string FireKindInSession(ibWebSession* session, int controlID,
 			if (!app->Dispatch(controlID, wkind, wxString()))
 				return "{}";
 		}
-		catch (const ibBackendException& e) {
+		catch (const ibCoreException& e) {
 			return ExceptionToJson(e);
 		}
 		catch (...) {
@@ -1438,7 +1438,7 @@ std::string FireTextChangeInSession(ibWebSession* session, int controlID,
 			if (!app->DispatchTextChange(controlID, w))
 				return "{}";
 		}
-		catch (const ibBackendException& e) {
+		catch (const ibCoreException& e) {
 			return ExceptionToJson(e);
 		}
 		catch (...) {
@@ -1484,7 +1484,7 @@ std::string FireToggleInSession(ibWebSession* session, int controlID, bool check
 			if (!app->DispatchToggle(controlID, checked))
 				return "{}";
 		}
-		catch (const ibBackendException& e) {
+		catch (const ibCoreException& e) {
 			return ExceptionToJson(e);
 		}
 		catch (...) {

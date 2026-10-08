@@ -18,7 +18,7 @@
 
 #include "systemManagerEnum.h"
 
-#include "backend/serialize/jsonProvider.h"          // a value as text — the two verbs below
+#include "core/serialize/jsonProvider.h"          // a value as text — the two verbs below
 #include "backend/metaCollection/metaIntrospect.h"   // …and the type names the writing needs
 
 #include "backend/debugger/debugServer.h"            // …and up to whoever is debugging this run
@@ -354,7 +354,7 @@ short ibValueSystemFunction::Asc(const ibValue& cSource)
 // no longer adds it back by hand.
 wxString ibValueSystemFunction::TStr(const ibValue& cSource, const ibValue& cLanguage)
 {
-	return ibBackendLocalization::GetTranslateGetRawLocText(cLanguage.GetString(), cSource.GetString());
+	return ibLocalization::GetTranslateGetRawLocText(cLanguage.GetString(), cSource.GetString());
 }
 
 //--- Date and time:

@@ -2,7 +2,7 @@
 #define __META_CONTEXT_H__
 
 #include "backend/metaCollection/attribute/metaAttributeObject.h"
-#include "backend/serialize/dataBuilder.h"   // ibDataValue — node value (String guid)
+#include "core/serialize/dataBuilder.h"   // ibDataValue — node value (String guid)
 
 #pragma region __property_standart_h__
 

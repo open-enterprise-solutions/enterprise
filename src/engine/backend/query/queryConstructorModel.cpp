@@ -801,7 +801,7 @@ wxString ibQueryTextWithoutRoles(const wxString& text)
 		return text;
 	ibQueryPackage package;
 	try { package = ibQueryParser().ParsePackage(text); }
-	catch (const ibBackendException&) { return text; }   // half-typed: whoever reads it says why, in the parser's words
+	catch (const ibCoreException&) { return text; }   // half-typed: whoever reads it says why, in the parser's words
 	return ibQueryDropRoles(package) ? ibRenderQueryPackage(package) : text;
 }
 
@@ -881,7 +881,7 @@ std::vector<ibQueryConstructorField> ibQueryFieldsOfText(const wxString& text,
 		const ibQueryConstructorModel model(metaData);
 		fields = model.FieldsOfSelect(*select, package, last);
 	}
-	catch (const ibBackendException& err) {
+	catch (const ibCoreException& err) {
 		// Half-typed text offers nothing YET — an empty list, and the complaint only if asked for.
 		fields.clear();
 		if (error != nullptr)

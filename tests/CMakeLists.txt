@@ -259,7 +259,7 @@ set_tests_properties(oes_cross_zone_read PROPERTIES
 #
 # fstring.h is the facade and fstring.cpp the module behind it; both depend on
 # nothing but wxBase, so this target compiles the module IN (as if it were
-# backend, BACKEND_EXPORTS) and does NOT link (or recompile) backend.dll. Use it
+# core, CORE_EXPORTS) and does NOT link (or recompile) core.dll. Use it
 # for fast iteration on the string type — it builds in seconds even after
 # touching core backend headers:
 #
@@ -271,9 +271,9 @@ set_tests_properties(oes_cross_zone_read PROPERTIES
 add_executable(oes_string_tests
     test_string.cpp
     bench_string.cpp
-    "${CMAKE_SOURCE_DIR}/src/engine/backend/fstring.cpp"
+    "${CMAKE_SOURCE_DIR}/src/engine/core/fstring.cpp"
 )
-target_compile_definitions(oes_string_tests PRIVATE BACKEND_EXPORTS)
+target_compile_definitions(oes_string_tests PRIVATE CORE_EXPORTS)
 
 target_link_libraries(oes_string_tests
     PRIVATE
@@ -500,6 +500,42 @@ set_target_properties(oes_multi_base_test PROPERTIES
 )
 
 oes_discover_tests(oes_multi_base_test)
+
+# ---------------------------------------------------------------------------
+# The client protocol's patch — made by the server's half (frmserver) and applied by the client's (frmclient), in
+# process and through the port's JSON. Its own target: it links the two libraries no other suite needs.
+#   cmake --build build --target oes_protocol_test --config Debug
+#   ./bin/oes_protocol_test
+# ---------------------------------------------------------------------------
+add_executable(oes_protocol_test test_clientFrameApply.cpp)
+
+target_link_libraries(oes_protocol_test
+    PRIVATE
+        backend
+        frmserver
+        frmclient
+        wx::core
+        wx::base
+        GTest::gtest
+        GTest::gtest_main
+)
+
+target_compile_definitions(oes_protocol_test PRIVATE OES_TESTING)
+
+target_include_directories(oes_protocol_test PRIVATE
+    "${CMAKE_SOURCE_DIR}/src"
+    "${CMAKE_SOURCE_DIR}/src/engine"
+    "${CMAKE_SOURCE_DIR}/src/engine/backend"
+)
+
+set_target_properties(oes_protocol_test PROPERTIES
+    CXX_STANDARD          17
+    CXX_STANDARD_REQUIRED ON
+    BUILD_RPATH            "${CMAKE_BINARY_DIR}/bin"
+    INSTALL_RPATH          "${CMAKE_BINARY_DIR}/bin"
+)
+
+oes_discover_tests(oes_protocol_test)
 
 # ---------------------------------------------------------------------------
 # Frontend GUI harness — STEP 1. Links the DESKTOP frontend.dll (real wx

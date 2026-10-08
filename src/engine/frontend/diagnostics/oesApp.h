@@ -161,7 +161,7 @@ public:
 		try {
 			return DoOnRun();
 		}
-		catch (const ibBackendException& e) {
+		catch (const ibCoreException& e) {
 			ReportStartupFault(exe,
 				wxT("ibBackendException during startup: ") + e.GetErrorDescription());
 			return 1;
@@ -184,8 +184,8 @@ public:
 		// wx delegates here when a C++ exception escapes from an event
 		// handler back into the main loop. Returning true keeps the loop
 		// running (recoverable); false escalates to OnUnhandledException.
-		// ibBackendException is the only "show and continue" class —
-		// known business / DB error. Everything else lets the loop unwind.
+		// A refusal (ibCoreException — the engine's ibBackendException among them) is the only "show and
+		// continue" class — known business / DB error. Everything else lets the loop unwind.
 		try {
 			throw;
 		}
@@ -206,6 +206,11 @@ public:
 				return true;
 			}
 
+			ibJournalError(wxT("app"), wxT("%s"), e.GetErrorDescription());
+			return true;
+		}
+		catch (const ibCoreException& e) {
+			// …and a refusal of the core (a read that could not go on) is one too: said, and the loop goes on.
 			ibJournalError(wxT("app"), wxT("%s"), e.GetErrorDescription());
 			return true;
 		}
@@ -231,7 +236,7 @@ public:
 			auto p = std::current_exception();
 			if (p) std::rethrow_exception(p);
 		}
-		catch (const ibBackendException& e) {
+		catch (const ibCoreException& e) {
 			diag = wxT("Unhandled ibBackendException: ") + e.GetErrorDescription();
 		}
 		catch (const std::exception& e) {

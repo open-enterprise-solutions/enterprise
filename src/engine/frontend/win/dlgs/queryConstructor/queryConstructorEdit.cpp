@@ -646,7 +646,7 @@ public:
 				ibQueryParser parser;
 				out.push_back(parser.ParseExpression(text));
 			}
-			catch (const ibBackendException& e) {
+			catch (const ibCoreException& e) {
 				error = e.GetErrorDescription();
 				return false;
 			}
@@ -698,7 +698,7 @@ private:
 		text.Trim(true).Trim(false);
 		if (!text.IsEmpty()) {
 			try { ibQueryParser parser; existing = parser.ParseExpression(text); }
-			catch (const ibBackendException&) { existing = nullptr; }   // unparsable so far: start from the text
+			catch (const ibCoreException&) { existing = nullptr; }   // unparsable so far: start from the text
 		}
 
 		ibDialogQueryExpression dialog(this, _("Condition"), m_fieldsForSlot(slot), existing,
@@ -765,7 +765,7 @@ bool ibDialogQueryConstructor::EditConditionText(wxString& text)
 	written.Trim(true).Trim(false);
 	if (!written.IsEmpty()) {
 		try { ibQueryParser parser; existing = parser.ParseExpression(written); }
-		catch (const ibBackendException&) { existing = nullptr; }
+		catch (const ibCoreException&) { existing = nullptr; }
 	}
 
 	ibDialogQueryExpression dialog(this, _("Condition"), AvailableFields(), existing,
@@ -1294,7 +1294,7 @@ bool ibDialogQueryConstructor::EditSelectionLinkCondition(wxString& text)
 	written.Trim(true).Trim(false);
 	if (!written.IsEmpty()) {
 		try { ibQueryParser parser; existing = parser.ParseExpression(written); }
-		catch (const ibBackendException&) { existing = nullptr; }
+		catch (const ibCoreException&) { existing = nullptr; }
 	}
 
 	ibDialogQueryExpression dialog(this, _("Link condition"), fields, existing, m_metaData, !CanEdit());
@@ -1390,7 +1390,7 @@ bool ibDialogQueryConstructor::EditLinkCondition(wxString& text)
 	written.Trim(true).Trim(false);
 	if (!written.IsEmpty()) {
 		try { ibQueryParser parser; existing = parser.ParseExpression(written); }
-		catch (const ibBackendException&) { existing = nullptr; }
+		catch (const ibCoreException&) { existing = nullptr; }
 	}
 
 	ibDialogQueryExpression dialog(this, _("Link condition"), AvailableFields(), existing,
@@ -2452,7 +2452,7 @@ ibQueryAstExprPtr ibDialogQueryConstructor::SeededAggregateFor(const ibQuerySele
 		ibQueryParser parser;
 		argument = parser.ParseExpression(field);
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		return nullptr;   // a name this window wrote that the engine will not read — say nothing
 	}
 	if (!argument)
@@ -2475,7 +2475,7 @@ ibQueryAstExprPtr ibDialogQueryConstructor::SeededAggregateFor(const ibQuerySele
 		ibQueryParser parser;
 		return parser.ParseExpression(ibQueryKeywordText(chosen) + wxT("(") + field + wxT(")"));
 	}
-	catch (const ibBackendException& error) {
+	catch (const ibCoreException& error) {
 		ShowEngineError(error.GetErrorDescription());
 		return nullptr;
 	}
@@ -2532,7 +2532,7 @@ void ibDialogQueryConstructor::AddConditionsForSelectedFields()
 			if (ibQueryAstExprPtr condition = parser.ParseExpression(text))
 				rows.push_back(condition);
 		}
-		catch (const ibBackendException& error) {
+		catch (const ibCoreException& error) {
 			ShowEngineError(error.GetErrorDescription());
 			return;
 		}
@@ -3221,7 +3221,7 @@ void ibDialogQueryConstructor::ApplyTotalsPeriods()
 		// grand-totals box follows, so ticking the box is enough to have asked for one.
 		select->m_hasTotals = true;
 	}
-	catch (const ibBackendException& error) {
+	catch (const ibCoreException& error) {
 		// The engine's own words, and then the panel goes back to what the level actually says — a
 		// refused edit must not leave the window describing a query that does not exist.
 		ShowEngineError(error.GetErrorDescription());

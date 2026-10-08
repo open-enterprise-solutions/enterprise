@@ -262,7 +262,7 @@ class ibDialogPredefinedEditor : public wxDialog {
 
 	protected:
 
-#include "backend/stringUtils.h"
+#include "core/stringUtils.h"
 
 		void OnCommandOK(wxCommandEvent& event)
 		{

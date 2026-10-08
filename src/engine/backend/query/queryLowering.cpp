@@ -563,7 +563,7 @@ const ibBackendQueryable* ResolveSource(const ibQuerySource& src, const std::map
 		// it genuinely is a mistake.
 		if (conditionsOut == nullptr) {
 			try { argVals.push_back(EvalValue(*src.m_args[i], params)); }
-			catch (const ibBackendException&) { argVals.push_back(ibValue()); }
+			catch (const ibCoreException&) { argVals.push_back(ibValue()); }
 		}
 		else {
 			argVals.push_back(EvalValue(*src.m_args[i], params));
@@ -1900,7 +1900,7 @@ static ibQueryPredicatePtr InSubqueryAsSemiJoin(const std::vector<ibSourceBindin
 		const ibQueryPredicatePtr leaf = ibQueryPredicate::Leaf(exists);
 		return negated ? ibQueryPredicate::Not(leaf) : leaf;
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		return nullptr;   // the rows road resolves the same select and says what is wrong with it
 	}
 }
@@ -2998,7 +2998,7 @@ bool IsExprAvailable(const std::vector<ibSourceBinding>& sources, const ibQueryA
 	for (const ibQueryAstExpr* column : columns) {
 		std::vector<const ibBackendQueryColumn*> path;
 		try { path = ResolvePath(sources, *column); }
-		catch (const ibBackendException&) { continue; }
+		catch (const ibCoreException&) { continue; }
 		if (!ibIsWalkAvailable(path))
 			return false;
 	}
@@ -5273,7 +5273,7 @@ std::shared_ptr<const ibBackendQueryable> DeclareNamedResultAsCte(ibDataQueryBui
 		if (sel.m_top > 0)
 			inner.Top(sel.m_top);
 	}
-	catch (const ibBackendException& err) {
+	catch (const ibCoreException& err) {
 		// ⚠ THE DESCRIPTION IS DATA, never the format — a message carrying a stray `%` would be read
 		// as a conversion and print whatever happened to be next (CLAUDE.md, the same rule wxLogError
 		// follows).
@@ -5969,7 +5969,7 @@ bool BuildCheckSources(const ibQuerySelect& ast, const std::map<wxString, ibValu
 		// of trouble arrives when somebody runs it.
 		const ibBackendQueryable* queryable = nullptr;
 		try { queryable = ResolveSource(*source, params); }
-		catch (const ibBackendException&) {
+		catch (const ibCoreException&) {
 			if (reportMissing && source->m_name.size() > 1)
 				throw;      // the engine's own words, its own position — carried up verbatim
 			// A temp table this check cannot see — or a reading that does not accuse.
@@ -6719,7 +6719,7 @@ bool StillResolves(const std::vector<ibSourceBinding>& sources, const ibQueryAst
 		if (column == nullptr || column->m_path.empty())
 			continue;
 		try { ResolvePath(sources, *column); }
-		catch (const ibBackendException&) { return false; }
+		catch (const ibCoreException&) { return false; }
 	}
 	return true;
 }
@@ -7017,7 +7017,7 @@ std::vector<ibQueryAstExprPtr> ibQueryLowering::UngroupedProjections(
 	try {
 		return CollectUngrouped(ast, sources);
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		// A name that does not resolve is CheckNames' verdict to give, with its own words. Here it
 		// only means "nothing can be said about grouping yet".
 		return {};
@@ -8188,7 +8188,7 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 					const ibBalanceRole role = m.m_col->GetBalanceRole();
 					if (role == ibBalanceRole::Opening || role == ibBalanceRole::Closing) { measuresArePlain = false; break; }
 				}
-				catch (const ibBackendException&) { measuresArePlain = false; break; }
+				catch (const ibCoreException&) { measuresArePlain = false; break; }
 			}
 			m.m_type = TypeOfFold(agg->m_func, m.m_col != nullptr ? m.m_col->GetTypeDesc() : ibTypeDescription());
 			pagedMeasures.push_back(m);
@@ -8219,7 +8219,7 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 				if (!sortBy || IsComputedExprAst(*sortBy)) { sortIsTheDimension = false; break; }
 				std::vector<const ibBackendQueryColumn*> orderCols;
 				try { orderCols = ResolveWhereTarget(sources, *sortBy, /*allowDotWalk*/true); }
-				catch (const ibBackendException&) { sortIsTheDimension = false; break; }
+				catch (const ibCoreException&) { sortIsTheDimension = false; break; }
 				if (orderCols.size() != 1 || orderCols.front() != pathCols.back()) { sortIsTheDimension = false; break; }
 			}
 		}
@@ -9095,7 +9095,7 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 				continue;
 			std::vector<const ibBackendQueryColumn*> oc;
 			try { oc = ResolveWhereTarget(sources, *sortBy, /*allowDotWalk*/true); }
-			catch (const ibBackendException&) { continue; }
+			catch (const ibCoreException&) { continue; }
 			if (oc.size() == 1 && oc.front() == ls.m_col) {
 				levelAscending[li] = o.m_ascending;
 				orderConsumed[oi]  = true;

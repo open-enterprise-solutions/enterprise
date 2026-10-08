@@ -117,7 +117,7 @@ void ibValueToolbar::OnTool(wxCommandEvent& event)
 			(void)err;
 #endif
 		}
-		catch (const ibBackendException& err) {
+		catch (const ibCoreException& err) {
 			// WAS EMPTY — and this is the button bar: Post / Clear posting / Save all land here.
 			// Everything the backend says about a refused write (which register failed, which
 			// handler cancelled, which attribute is missing) died right here, and the user got a

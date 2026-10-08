@@ -1,0 +1,168 @@
+#include "widgets.h"
+#include "core/serialize/dataBuilder.h"   // ibDataNode — an event's arguments
+#include "backend/backend_exception.h"       // ibBackendException — a value of a type the configuration lacks
+#include "backend/metaCollection/partial/commonObject.h"
+#include "backend/metaData.h"
+#include "frmserver/visualView/ctrl/form.h"
+
+// The typed text becomes a value of the field's type, or is refused. A refused text leaves the value
+// as it was, and the next Update shows that value again in place of what was typed. A read-only field
+// (IsReadOnly) takes no text at all.
+bool ibValueTextCtrl::TextProcessing(const wxString& strData)
+{
+	if (IsReadOnly())
+		return false;
+
+	const ibMetaData* metaData = GetMetaData();
+	wxASSERT(metaData);
+	if (metaData == nullptr)
+		return false;
+	ibValue selValue; GetControlValue(selValue);
+	const ibValue& newValue = metaData->CreateObject(selValue.GetClassType());
+	if (newValue.GetType() == ibValueTypes::TYPE_EMPTY)
+		return false;
+	if (strData.Length() > 0) {
+		std::vector<ibValue> listValue;
+		if (newValue.FindValue(strData, listValue)) {
+			SetControlValue(listValue.at(0));
+		}
+		else {
+			return false;
+		}
+	}
+	else {
+		SetControlValue(newValue);
+	}
+
+	ibValueControl::CallAsEvent(m_eventOnChange, GetValue());
+	return true;
+}
+
+// The value the client sent with its type becomes the field's — made by the configuration (a reference is its), and
+// only of a type the field admits; anything else is refused as a text that is no value is.
+bool ibValueTextCtrl::ValueProcessing(const ibDataNode& node)
+{
+	if (IsReadOnly())
+		return false;
+
+	const ibMetaData* metaData = GetMetaData();
+	if (metaData == nullptr)
+		return false;
+	ibValue newValue;
+	try {
+		newValue = metaData->Deserialize(node);
+	}
+	catch (const ibCoreException&) {
+		return false;   // a type this configuration does not have
+	}
+	if (!GetTypeValueDesc().ContainType(newValue.GetClassType()))
+		return false;
+
+	SetControlValue(newValue);
+	ibValueControl::CallAsEvent(m_eventOnChange, GetValue());
+	return true;
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////
+
+void ibValueTextCtrl::ChoiceProcessing(ibValue& vSelected)
+{
+	ibValue standartProcessing = true;
+	ibValueControl::CallAsEvent(m_eventChoiceProcessing, GetValue(), vSelected, standartProcessing);
+	if (standartProcessing.GetBoolean()) {
+		SetControlValue(vSelected);
+		ibValueControl::CallAsEvent(m_eventOnChange, GetValue());
+	}
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////
+
+bool ibValueTextCtrl::OnClientEvent(ibProtocolEvent event, const ibDataNode& args)
+{
+	switch (event) {
+	case ibProtocolEvent::Input:  OnTextUpdated(); return true;
+	case ibProtocolEvent::Change: {
+		// The value with its type when the client has one (Value), else the text it typed.
+		if (const ibDataNode* const value = args.FindChild(wxT("Value")))
+			ValueProcessing(*value);
+		else
+			OnTextEnter(args.GetValue<wxString>(wxT("Text")));
+		return true;
+	}
+	case ibProtocolEvent::Select: OnSelectButtonPressed(); return true;
+	case ibProtocolEvent::Open:   OnOpenButtonPressed(); return true;
+	case ibProtocolEvent::Clear:  OnClearButtonPressed(); return true;
+	default:                    return ibValueWindow::OnClientEvent(event, args);
+	}
+}
+
+// The text as it stands is committed.
+void ibValueTextCtrl::OnTextEnter(const wxString& text)
+{
+	TextProcessing(text);
+}
+
+// Typing (or the text cleared by hand) — nothing is committed yet, but the form's object is modified
+// from the first keystroke.
+void ibValueTextCtrl::OnTextUpdated()
+{
+	if (IsReadOnly())
+		return;
+
+	if (m_formOwner != nullptr) {
+		ibSourceDataObject* sourceObject = m_formOwner->GetSourceObject();
+		if (sourceObject != nullptr && sourceObject->ModifiesData()) {
+			sourceObject->Modify(true);
+		}
+	}
+}
+
+#include "backend/objCtor.h"
+
+void ibValueTextCtrl::OnSelectButtonPressed()
+{
+	if (IsReadOnly())
+		return;
+
+	// The script may take the choice over entirely (StartChoice + standard
+	// processing off) — that decision belongs to the control, not to the route.
+	ibValue standartProcessing = true;
+	ibValueControl::CallAsEvent(m_eventStartChoice, GetValue(), standartProcessing);
+	if (!standartProcessing.GetBoolean())
+		return;
+
+	// THE ONE ROUTE (ibTypeControlFactory::ChooseValue): settle the type — from the
+	// metadata, asking only when the control admits more than one — then choose the
+	// value of that type. This sequence used to be written out here, and it is the
+	// original this control lends to every other value editor; it now lives in one
+	// place so a filter cell and a table column walk exactly it, not a copy that
+	// drifts.
+	// The form the author picked in the property grid (null = the metaobject's own).
+	const ibMetaID& formId = m_propertyChoiceForm->GetValueAsInteger();
+	const ibMetaData* metaData = GetMetaData();
+	const ibValueMetaObject* choiceForm = (formId != wxNOT_FOUND && metaData != nullptr)
+		? metaData->FindAnyObjectByFilter(formId) : nullptr;
+	ibTypeControlFactory::ChooseValue(this, choiceForm);
+}
+
+void ibValueTextCtrl::OnOpenButtonPressed()
+{
+	ibValue standartProcessing = true;
+	ibValueControl::CallAsEvent(m_eventOpening, GetValue(), standartProcessing);
+	if (standartProcessing.GetBoolean()) {
+		ibValue selValue;
+		if (GetControlValue(selValue) && !selValue.IsEmpty())
+			selValue.ShowValue();
+	}
+}
+
+void ibValueTextCtrl::OnClearButtonPressed()
+{
+	if (IsReadOnly())
+		return;
+
+	ibValue standartProcessing = true;
+	ibValueControl::CallAsEvent(m_eventClearing, GetValue(), standartProcessing);
+	if (standartProcessing.GetBoolean())
+		SetControlValue();
+}

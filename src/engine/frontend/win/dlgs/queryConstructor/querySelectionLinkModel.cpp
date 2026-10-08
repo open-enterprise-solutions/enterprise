@@ -197,7 +197,7 @@ bool ibQuerySelectionLinkModel::SetValueByRow(const wxVariant& variant, unsigned
 			ibQueryParser parser;
 			link->m_on = parser.ParseExpression(text);
 		}
-		catch (const ibBackendException& error) {
+		catch (const ibCoreException& error) {
 			if (m_onError)
 				m_onError(error.GetErrorDescription());
 			return false;

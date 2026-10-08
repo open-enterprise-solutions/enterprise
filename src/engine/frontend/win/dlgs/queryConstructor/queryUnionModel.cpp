@@ -353,7 +353,7 @@ bool ibQueryUnionFieldModel::SetBranchColumn(unsigned int row, unsigned int bran
 				ibQueryParser parser;
 				added.m_expr = parser.ParseExpression(field);
 			}
-			catch (const ibBackendException& error) {
+			catch (const ibCoreException& error) {
 				if (m_onError) m_onError(error.GetErrorDescription());
 				return false;
 			}
@@ -400,7 +400,7 @@ bool ibQueryUnionFieldModel::SetBranchColumn(unsigned int row, unsigned int bran
 			ibQueryParser parser;
 			target->m_projections[row].m_expr = parser.ParseExpression(field);
 		}
-		catch (const ibBackendException& error) {
+		catch (const ibCoreException& error) {
 			if (m_onError) m_onError(error.GetErrorDescription());
 			return false;
 		}
@@ -465,7 +465,7 @@ bool ibQueryUnionFieldModel::SetBranchColumn(unsigned int row, unsigned int bran
 		ibQueryParser parser;
 		expr = parser.ParseExpression(field);
 	}
-	catch (const ibBackendException& error) {
+	catch (const ibCoreException& error) {
 		if (m_onError) m_onError(error.GetErrorDescription());
 		return false;
 	}

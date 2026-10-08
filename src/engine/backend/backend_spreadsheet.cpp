@@ -1,5 +1,5 @@
 #include "backend_spreadsheet.h"
-#include "backend/fileSystem/fs.h"
+#include "core/fileSystem/fs.h"
 #include "backend/sheetFormat/sheetFormat.h"   // a table that came from somewhere else (Excel today)
 
 #define spreadsheetNotify \
@@ -548,7 +548,7 @@ wxString ibBackendSpreadsheetObject::ComputeStringValueFromParameters(const wxSt
 	if (type == ibSpreadsheetFillType::ibSpreadsheetFillType_StrParameter) {
 		ibValue cVal;//scratch for one call — see the template below
 		if (!strValue.IsEmpty() && GetParameter(strValue, cVal))
-			return ibBackendLocalization::GetTranslateGetRawLocText(strLangCode, cVal.GetString());
+			return ibLocalization::GetTranslateGetRawLocText(strLangCode, cVal.GetString());
 		return wxT("");
 	}
 
@@ -556,7 +556,7 @@ wxString ibBackendSpreadsheetObject::ComputeStringValueFromParameters(const wxSt
 
 		if (!strValue.IsEmpty()) {
 
-			wxString strTemplateValue = ibBackendLocalization::GetTranslateGetRawLocText(strLangCode, strValue);
+			wxString strTemplateValue = ibLocalization::GetTranslateGetRawLocText(strLangCode, strValue);
 
 			size_t start_pos = 0, end_pos = 0;
 
@@ -582,7 +582,7 @@ wxString ibBackendSpreadsheetObject::ComputeStringValueFromParameters(const wxSt
 						ibValue cVal;
 						if (GetParameter(token, cVal))
 							strTemplateValue.replace(start_pos, end_pos - start_pos + 1,
-								ibBackendLocalization::GetTranslateGetRawLocText(strLangCode, cVal.GetString()));
+								ibLocalization::GetTranslateGetRawLocText(strLangCode, cVal.GetString()));
 						else
 							strTemplateValue.replace(start_pos, end_pos - start_pos + 1, wxT(""));
 					}
@@ -608,7 +608,7 @@ wxString ibBackendSpreadsheetObject::ComputeStringValueFromParameters(const wxSt
 		return wxT("");
 	}
 
-	return ibBackendLocalization::GetTranslateGetRawLocText(strLangCode, strValue);
+	return ibLocalization::GetTranslateGetRawLocText(strLangCode, strValue);
 }
 
 #pragma endregion 

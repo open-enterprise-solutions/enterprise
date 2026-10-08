@@ -1,6 +1,6 @@
 #include "metaCommandGroupObject.h"
 #include "metaCommandObject.h"               // ibValueEnumInterfaceCommandSection — the platform groups' captions
-#include "backend/serialize/dataBuilder.h"
+#include "core/serialize/dataBuilder.h"
 
 //***********************************************************************
 //*                            Command group                            *

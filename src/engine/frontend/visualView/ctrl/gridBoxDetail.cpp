@@ -292,7 +292,7 @@ std::vector<wxString> ibValueGridBox::AppendDetailByMenu(wxMenu& menu, int first
 
 		// …in the reader's language: a title is kept in every language it was written in, and a sheet reads
 		// it as a cell lands (PutArea) — a menu is not a sheet, and printed it every language at once.
-		wxString title = ibBackendLocalization::GetTranslateGetRawLocText(desc.TitleForPath(field.m_name));
+		wxString title = ibLocalization::GetTranslateGetRawLocText(ibBackendLocalization::GetUserLanguage(), desc.TitleForPath(field.m_name));
 		if (title.IsEmpty())
 			title = ibTitleFromName(field.m_name);
 		byMenu->Append(firstId + static_cast<int>(paths.size()), title);

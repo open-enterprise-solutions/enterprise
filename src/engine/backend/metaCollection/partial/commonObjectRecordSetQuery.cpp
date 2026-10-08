@@ -198,7 +198,7 @@ bool ibValueRecordSetObject::ExistData(ibNumber& lastNum)
 			}
 		}
 	}
-	catch (const ibBackendException&) { throw; }   // the engine's own reason — it names the table and the column
+	catch (const ibCoreException&) { throw; }   // the engine's own reason — it names the table and the column
 	catch (...) {}
 	return false;
 }

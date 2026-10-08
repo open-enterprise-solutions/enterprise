@@ -6,7 +6,7 @@
 
 #include "backend/metaData.h"
 #include "backend/metaCollection/metaLanguageObject.h"
-#include "backend/stringUtils.h"
+#include "core/stringUtils.h"
 
 #include <wx/button.h>
 #include <wx/sizer.h>
@@ -94,7 +94,7 @@ ibDialogTranslateConstructor::ibDialogTranslateConstructor(wxWindow* parent, con
 	wxFlexGridSizer* other = nullptr;
 	wxSizerItem* otherItem = nullptr;
 	int otherRows = 0;
-	for (const ibBackendLocalizationEntry& entry : m_original.GetTranslations()) {
+	for (const ibLocalizationEntry& entry : m_original.GetTranslations()) {
 		if (isLanguage(entry.m_code))
 			continue;
 		if (other == nullptr) {
@@ -140,19 +140,19 @@ ibDialogTranslateConstructor::ibDialogTranslateConstructor(wxWindow* parent, con
 
 ibTranslateString ibDialogTranslateConstructor::GetTranslate() const
 {
-	ibBackendLocalizationEntryArray typed;
+	ibLocalizationEntryArray typed;
 	for (const auto& box : m_boxes)
-		typed.push_back(ibBackendLocalizationEntry{ box.first, box.second->GetValue() });
+		typed.push_back(ibLocalizationEntry{ box.first, box.second->GetValue() });
 	return Collect(m_original, typed);
 }
 
 ibTranslateString ibDialogTranslateConstructor::Collect(const ibTranslateString& original,
-	const ibBackendLocalizationEntryArray& boxes)
+	const ibLocalizationEntryArray& boxes)
 {
 	// FROM THE TEXT THAT CAME IN, not from the boxes alone: its order stays, and a code no box was made
 	// for is still in it.
 	ibTranslateString collected = original;
-	for (const ibBackendLocalizationEntry& box : boxes) {
+	for (const ibLocalizationEntry& box : boxes) {
 		// AN EMPTY BOX IS "NOT TRANSLATED", not "translated to nothing" — see the header.
 		if (box.m_data.IsEmpty())
 			collected.RemoveTranslate(box.m_code);

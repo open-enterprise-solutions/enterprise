@@ -285,7 +285,7 @@ bool ibMetaDataConfigurationStorage::OnSaveDatabase(int flags)
 		if (ibLog != nullptr && ibLog->IsEnabled(ibLogLevel::Audit)) {
 			wxString reason;
 			try { throw; }
-			catch (const ibBackendException& err) { reason = err.GetErrorDescription(); }
+			catch (const ibCoreException& err) { reason = err.GetErrorDescription(); }
 			catch (const std::exception& err)     { reason = wxString::FromUTF8(err.what()); }
 			catch (...)                           { reason = _("unknown exception"); }
 			ibLog->Audit(wxT("metadata"), wxT("apply_failed"),

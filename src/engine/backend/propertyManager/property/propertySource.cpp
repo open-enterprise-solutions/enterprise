@@ -1,8 +1,8 @@
 #include "propertySource.h"
 #include "backend/propertyManager/property/variant/variantSource.h"   // GetGuidByID / GetIdByGuid — the hop <-> guid resolve
-#include "backend/serialize/dataBuilder.h"   // ibDataValue — node value (Binary)
+#include "core/serialize/dataBuilder.h"   // ibDataValue — node value (Binary)
 #include "backend/sourceDescription.h"       // ibSourceDescription / ibSourceHop (the id path the variant holds)
-#include "backend/fileSystem/fs.h"           // ibReaderMemory / ibWriterMemory — the guid-keyed node blob
+#include "core/fileSystem/fs.h"           // ibReaderMemory / ibWriterMemory — the guid-keyed node blob
 #include "backend/functionalOption/functionalOptionGate.h"   // ibFunctionalOptionGate::AnyUnavailable — IsAvailable
 
 

@@ -3080,7 +3080,7 @@ wxString ibMcpServer::Answer(const wxString& request, const ibMcpWireHeaders& he
 			catch (const ibBackendAccessException& e)    { kind = wxT("access");    refusal = e.GetErrorDescription(); }
 			catch (const ibBackendLockException& e)      { kind = wxT("lock");      refusal = e.GetErrorDescription(); }
 			catch (const ibBackendInterruptException& e) { kind = wxT("interrupt"); refusal = e.GetErrorDescription(); }
-			catch (const ibBackendException& e)          { kind = wxT("platform");  refusal = e.GetErrorDescription(); }
+			catch (const ibCoreException& e)          { kind = wxT("platform");  refusal = e.GetErrorDescription(); }
 			catch (const std::exception& e)              { kind = wxT("internal");  refusal = wxString::FromUTF8(e.what()); }
 			catch (...) {
 				kind = wxT("unknown");
@@ -3419,7 +3419,7 @@ wxString ibMcpServer::Answer(const wxString& request, const ibMcpWireHeaders& he
 				// written would bury exactly that.
 				detail = called->GetDetail(toolArguments);
 			}
-			catch (const ibBackendException&) { activity = tool; detail.clear(); }
+			catch (const ibCoreException&) { activity = tool; detail.clear(); }
 			catch (const std::exception&)     { activity = tool; detail.clear(); }
 			catch (...)                       { activity = tool; detail.clear(); }
 		}

@@ -1,5 +1,5 @@
 #include "textBox.h"
-#include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
+#include "core/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "frontend/docView/templates/docViewText.h"
 
 //***********************************************************************************

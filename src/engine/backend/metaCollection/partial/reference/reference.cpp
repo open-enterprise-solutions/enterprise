@@ -1123,7 +1123,7 @@ bool ibValueReferenceDataObject::CallAsFunc(const long lMethodNum, ibValue& pvar
 // in is still a reference, and the far side must be able to compare and assign
 // it without a type error.
 
-#include "backend/serialize/dataBuilder.h"
+#include "core/serialize/dataBuilder.h"
 
 bool ibValueReferenceDataObject::DoSerialize(ibDataNode& node) const
 {

@@ -17,7 +17,7 @@
 #include "backend/query/queryRender.h"               // ibRenderQuery / ibQueryColumnFromPath — the seed query, written out
 #include "backend/backend_exception.h"               // the engine's verdict on a query that will not resolve
 #include "backend/srcDataObject.h"                   // ibSourceExplorer
-#include "backend/serialize/dataBuilder.h"           // ibDataNode (object-level save/load)
+#include "core/serialize/dataBuilder.h"           // ibDataNode (object-level save/load)
 #include "backend/metadataConfiguration.h"           // ibMetaDataConfigurationBase (GetSourceMetaData)
 #include "backend/composition/drivers/spreadsheetComposeDriver.h"   // the OUTPUT — composition → document
 #include "backend/system/value/composition/valueComposerSettings.h"   // ibValueEnumComparisonKind — a condition's word
@@ -276,7 +276,7 @@ void ibValueDataComposition::RebuildSource()
 			if (ast)
 				ibQueryLowering::DescribeOutput(*ast, ParameterValues(), m_querySchema);
 		}
-		catch (const ibBackendException& error) {
+		catch (const ibCoreException& error) {
 			// AT ONCE, AND IN THE ENGINE'S WORDS. A query that cannot be described is a query that
 			// cannot be run, and learning that when the report is first composed — in front of a user
 			// rather than its author — is the thing worth avoiding.
@@ -821,7 +821,7 @@ bool ibValueDataComposition::Compose(ibBackendSpreadsheetObject* target)
 	if (shows(ibOutputParameter::ShowTitle, true)) {
 		// A title a person wrote, read in the reader's language — else what the report is called.
 		const wxString title = other.ValueInForce(ibOutputParameter::Title).GetString();
-		driver.SetTitle(title.IsEmpty() ? GetSourceCaption() : ibBackendLocalization::GetTranslateGetRawLocText(title));
+		driver.SetTitle(title.IsEmpty() ? GetSourceCaption() : ibLocalization::GetTranslateGetRawLocText(ibBackendLocalization::GetUserLanguage(), title));
 	}
 	// …THE VALUES THE READER FILLED IN, as the query was given them — only the ones offered to the reader: a
 	// value the author settles is not a condition anybody chose.
@@ -849,7 +849,7 @@ bool ibValueDataComposition::Compose(ibBackendSpreadsheetObject* target)
 		// consulted by nothing at all (audit, 2026-08-24). A heading is exactly where somebody's own
 		// phrasing of a condition belongs.
 		if (!node.m_presentation.IsEmpty()) {
-			driver.AddHeaderLine(ibBackendLocalization::GetTranslateGetRawLocText(node.m_presentation));
+			driver.AddHeaderLine(ibLocalization::GetTranslateGetRawLocText(ibBackendLocalization::GetUserLanguage(), node.m_presentation));
 			continue;
 		}
 		// …and generated otherwise. A SIDE READS AS ITS OWN TEXT — a field as its presentation, a
@@ -859,7 +859,7 @@ bool ibValueDataComposition::Compose(ibBackendSpreadsheetObject* target)
 		// read in the reader's, as the title above is — a heading line is text, not a cell PutArea reads.
 		auto side = [](const ibFilterOperandDescription& operand) {
 			return operand.IsField()
-				? (operand.m_presentation.IsEmpty() ? operand.m_path : ibBackendLocalization::GetTranslateGetRawLocText(operand.m_presentation))
+				? (operand.m_presentation.IsEmpty() ? operand.m_path : ibLocalization::GetTranslateGetRawLocText(ibBackendLocalization::GetUserLanguage(), operand.m_presentation))
 				: operand.m_value.GetString().ToWxString();
 		};
 		driver.AddHeaderLine(side(node.m_left) + wxT(" ")
@@ -930,7 +930,7 @@ void ibValueDataComposition::SubmitFetchAsync(std::function<void()> work)
 				ibJobTenancy::Tenant);
 			return;
 		}
-		catch (const ibBackendException&) {
+		catch (const ibCoreException&) {
 			// Nothing to rent — fall through and read on this thread.
 		}
 	}

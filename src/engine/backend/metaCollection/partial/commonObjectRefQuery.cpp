@@ -689,7 +689,7 @@ ibValue ibValueRecordDataObjectRef::GenerateNextIdentifier(ibValueMetaObjectAttr
 				gotCode = true;
 			}
 		}
-		catch (const ibBackendException&) {
+		catch (const ibCoreException&) {
 			// PK conflict from a racing session's bootstrap — the constraint violation now
 			// arrives as an exception (L1 signals failure by throwing), so it is caught here
 			// rather than read off a return code. Fall through to the retry.

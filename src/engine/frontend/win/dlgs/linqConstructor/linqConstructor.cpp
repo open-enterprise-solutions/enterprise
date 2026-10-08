@@ -11,7 +11,7 @@
 #include "backend/compiler/typeCtor.h"          // ibCtorAbstractType::GetClassIcon - a metatype's own picture
 #include "backend/metaData.h"                   // GetAvailableCtor
 #include "backend/metaCollection/metaObject.h"  // the module's name and configuration
-#include "backend/stringUtils.h"
+#include "core/stringUtils.h"
 #include "frontend/artProvider/artProvider.h"   // wxART_FRONTEND and the product's own pictures
 #include "frontend/mainFrame/mainFrame.h"       // the editor settings the block is coloured with
 #include "frontend/win/ctrls/dataview/dataview.h"   // ibDataViewListCtrl - the platform's list, edited in place

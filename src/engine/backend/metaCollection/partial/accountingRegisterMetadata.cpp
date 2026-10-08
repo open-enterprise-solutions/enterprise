@@ -10,7 +10,7 @@
 #include <set>         // the fields laid out with the posting block, asked once per attribute
 #include "backend/metaCollection/dimension/metaDimensionObject.h"   // IsBalanceDimension — does this field split
 #include "backend/metaCollection/resource/metaResourceObject.h"     // IsBalanceResource  — the same question of a figure
-#include "backend/serialize/dataBuilder.h"
+#include "core/serialize/dataBuilder.h"
 #include "chartOfAccounts.h"
 #include "chartOfCharacteristicTypes.h"   // the CONTOUR — a slot's value type is the chart's own composition
 #include "backend/system/value/valueDynamicList.h"   // ibValueDynamicList — the standard list migrates onto the universal dynamic list

@@ -1,6 +1,6 @@
 #include "spreadsheetDescription.h"
-#include "backend/fileSystem/fs.h"
-#include "backend/serialize/dataBuilder.h"   // ibDataValue — node form (Binary blob)
+#include "core/fileSystem/fs.h"
+#include "core/serialize/dataBuilder.h"   // ibDataValue — node form (Binary blob)
 
 #define cell_sign		0x0243565431
 

@@ -248,7 +248,7 @@ void ibValueMetaObjectRecordDataMutableRef::CallAsCommand(ibActionID id, const i
 	// ⚠ Level Error, not the default Information: a failed command IS an error, and a reader
 	// filtering the pane for problems must find it there.
 	catch (const ibBackendInterruptException&) {}   // the user stopped it — nothing to report
-	catch (const ibBackendException&) {}   // already reported where it happened - see ProcessExceptionError
+	catch (const ibCoreException&) {}   // already reported where it happened - see ProcessExceptionError
 	catch (...) { ibJournalError(wxT("metadata.action"),wxT("ibValueMetaObjectRecordDataMutableRef::CallAsCommand: unhandled non-ibBackend exception swallowed")); }
 }
 
@@ -260,7 +260,7 @@ void ibValueMetaObjectRecordDataMutableRef::ShowValueByKey(const ibUniqueKey& ke
 		if (obj != nullptr) obj->ShowFormValue(ibFormRequest(), dynamic_cast<ibBackendControlFrame*>(srcForm));
 	}
 	catch (const ibBackendInterruptException&) {}
-	catch (const ibBackendException&) {}   // already reported where it happened - see ProcessExceptionError
+	catch (const ibCoreException&) {}   // already reported where it happened - see ProcessExceptionError
 	catch (...) { ibJournalError(wxT("metadata.action"),wxT("ibValueMetaObjectRecordDataMutableRef::ShowValueByKey: unhandled non-ibBackend exception swallowed")); }
 }
 
@@ -320,7 +320,7 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::CallAsCommand(ibActionID id
 			}
 		}
 		catch (const ibBackendInterruptException&) {}
-		catch (const ibBackendException&) {}   // already reported where it happened - see ProcessExceptionError
+		catch (const ibCoreException&) {}   // already reported where it happened - see ProcessExceptionError
 		catch (...) { ibJournalError(wxT("metadata.action"),wxT("ibValueMetaObjectRecordDataHierarchyMutableRef::CallAsCommand: unhandled non-ibBackend exception swallowed")); }
 		return;
 	}
@@ -379,7 +379,7 @@ void ibValueMetaObjectRegisterData::CallAsCommand(ibActionID id, const ibUniqueK
 		}
 	}
 	catch (const ibBackendInterruptException&) {}
-	catch (const ibBackendException&) {}   // already reported where it happened - see ProcessExceptionError
+	catch (const ibCoreException&) {}   // already reported where it happened - see ProcessExceptionError
 	catch (...) { ibJournalError(wxT("metadata.action"),wxT("ibValueMetaObjectRegisterData::CallAsCommand: unhandled non-ibBackend exception swallowed")); }
 }
 
@@ -409,7 +409,7 @@ void ibValueMetaObjectRegisterData::ShowValueByKey(const ibUniqueKey& key, ibBac
 			}
 		}
 		catch (const ibBackendInterruptException&) {}
-		catch (const ibBackendException&) {}   // already reported where it happened - see ProcessExceptionError
+		catch (const ibCoreException&) {}   // already reported where it happened - see ProcessExceptionError
 		catch (...) { ibJournalError(wxT("metadata.action"),wxT("ibValueMetaObjectRegisterData::ShowValueByKey: unhandled non-ibBackend exception swallowed")); }
 		return;
 	}
@@ -419,7 +419,7 @@ void ibValueMetaObjectRegisterData::ShowValueByKey(const ibUniqueKey& key, ibBac
 		if (obj != nullptr) obj->ShowFormValue(ibFormRequest(), dynamic_cast<ibBackendControlFrame*>(srcForm));
 	}
 	catch (const ibBackendInterruptException&) {}
-	catch (const ibBackendException&) {}   // already reported where it happened - see ProcessExceptionError
+	catch (const ibCoreException&) {}   // already reported where it happened - see ProcessExceptionError
 	catch (...) { ibJournalError(wxT("metadata.action"),wxT("ibValueMetaObjectRegisterData::ShowValueByKey: unhandled non-ibBackend exception swallowed")); }
 }
 

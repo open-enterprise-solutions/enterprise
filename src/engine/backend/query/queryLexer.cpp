@@ -349,7 +349,7 @@ bool ibQueryLexer::IsIdentifier(const wxString& text)
 			&& tokens[0].m_kind == ibQueryTokenKind::Ident
 			&& tokens[0].m_text.IsSameAs(text, true);               // it consumed the WHOLE text
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		return false;
 	}
 }
@@ -375,7 +375,7 @@ std::vector<wxString> ibQueryLexer::ParamNames(const wxString& queryText)
 				names.push_back(token.m_text);
 		}
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		// Half-typed text has no parameters to speak of yet — see the header.
 		names.clear();
 	}

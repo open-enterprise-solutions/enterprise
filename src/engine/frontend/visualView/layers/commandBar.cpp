@@ -2,7 +2,7 @@
 #include "frontend/visualView/ctrl/frame.h"   // ibValueFrame — the owner's action collection + CallAsAction
 #include "frontend/visualView/ctrl/form.h"    // ibValueForm::IsViewOnly — grey data-modifying commands in view-only
 #include "frontend/visualView/ctrl/formCommand.h"   // ibFormCommandValue — form-local command (gather section 1)
-#include "backend/serialize/dataBuilder.h"     // ibDataNode (layer -> node)
+#include "core/serialize/dataBuilder.h"     // ibDataNode (layer -> node)
 #include "backend/metaCollection/genericData.h"  // ibValueMetaObjectGenericData::GetCommandArrayObject — the owner object's own commands
 #include "backend/metaCollection/metaCommandObject.h" // ibValueMetaObjectCommand::GetModifiesData (view-only greying)
 #include "backend/metaData.h"                   // ibMetaData::FindAnyObjectByFilter

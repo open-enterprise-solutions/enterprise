@@ -11,7 +11,7 @@
 #include "backend/appData.h"
 #include "backend/diagnostics/journal.h"
 #include "backend/metaCollection/metaFormObject.h"   // the form's metaobject — its guid IS the address
-#include "backend/serialize/dataBuilder.h"
+#include "core/serialize/dataBuilder.h"
 #include "backend/settings/settingsComposer.h"   // ibUserSettingsKey — whose settings, said once
 #include "backend/settings/settingsStorage.h"
 
@@ -145,7 +145,7 @@ void ibRestoreFormSettings(ibValueForm* form)
 				property->PasteNodeValue(stored.GetProperty(name));
 				applied++;
 			}
-			catch (const ibBackendException& err) {
+			catch (const ibCoreException& err) {
 				ibJournalWarning(wxT("ui.form"), wxT("saved form setting: '%s' not restored (%s)"),
 					name, err.GetErrorDescription());
 			}

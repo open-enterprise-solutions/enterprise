@@ -3,9 +3,11 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <memory>
+#include <mutex>
 #include <string>
 
-#include "sfrontend/client/clientHost.h"
+#include "frmserver/client/clientHost.h"
 
 // After wx, with the guard already set: wx aliases ssize_t and so does cpp-httplib (backend/mcp/mcpServer.cpp).
 #if defined(_WIN32) && !defined(_SSIZE_T_DEFINED)
@@ -50,6 +52,13 @@ bool SendAnswer(httplib::ws::WebSocket& ws, const std::string& text, bool deflat
 	const wxStreamBuffer* const buffer = packed.GetOutputStreamBuffer();
 	return ws.send(static_cast<const char*>(buffer->GetBufferStart()), static_cast<size_t>(packed.GetLength()));
 }
+
+// A connection's way out — one send at a time, and none once it closed: a notification from a session's thread may
+// come while the connection goes.
+struct ibConnectionOut {
+	std::mutex mutex;
+	bool       open = true;
+};
 
 } // namespace
 
@@ -121,10 +130,20 @@ bool ibClientListener::Start(const wxString& host, unsigned short& port, bool ch
 			return;
 		}
 
-		// The connection's own wait is bounded, so a stopping server is noticed between messages.
+		// The connection's wait is bounded, so a stopping server is noticed between messages.
 		ws.set_read_timeout(kStopPoll);
 		const wxString address = wxString::FromUTF8(req.remote_addr);
 		const bool deflate = req.has_param("compress") && req.get_param_value("compress") == "deflate";
+
+		// WHAT THE SERVER SAYS UNASKED goes out on it too — a notification from a session's thread (a client's frame
+		// changed by itself), between the answers this thread sends: one send at a time, and none once it closed.
+		const std::shared_ptr<ibConnectionOut> out = std::make_shared<ibConnectionOut>();
+		clientHost->SetNotifier(&ws, [&ws, out, deflate](const wxString& text) {
+			std::lock_guard<std::mutex> lock(out->mutex);
+			if (out->open)
+				SendAnswer(ws, std::string(text.utf8_str()), deflate);
+		});
+
 		std::string message;
 		for (;;) {
 			const httplib::ws::ReadResult read = ws.read(message);
@@ -137,12 +156,20 @@ bool ibClientListener::Start(const wxString& host, unsigned short& port, bool ch
 				break;   // closed — or a binary frame, which this protocol does not speak (yet)
 
 			const wxString response = clientHost->Call(wxString::FromUTF8(message), &ws, address);
-			if (!response.IsEmpty() && !SendAnswer(ws, std::string(response.utf8_str()), deflate))
+			if (response.IsEmpty())
+				continue;
+			std::lock_guard<std::mutex> lock(out->mutex);
+			if (!SendAnswer(ws, std::string(response.utf8_str()), deflate))
 				break;
 		}
 
 		// THE CLIENTS LOGGED IN THROUGH IT GO WITH IT — a closed tab is a client gone, not one idle for
-		// half an hour.
+		// half an hour; and the connection is told nothing more: closed here, before the socket goes, for a
+		// notification already on its way.
+		{
+			std::lock_guard<std::mutex> lock(out->mutex);
+			out->open = false;
+		}
 		clientHost->Disconnect(&ws);
 	});
 

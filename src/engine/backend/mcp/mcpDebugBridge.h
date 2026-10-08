@@ -4,7 +4,7 @@
 #include "backend/backend.h"
 #include "backend/debugger/debugClientBridge.h"
 #include "backend/debugger/debugDefs.h"
-#include "backend/serialize/dataBuilder.h"   // a composition travels as a node, both ways
+#include "core/serialize/dataBuilder.h"   // a composition travels as a node, both ways
 #include "backend/job/jobRunByteCode.h"      // …and a job request/state travels as itself
 
 #include <condition_variable>

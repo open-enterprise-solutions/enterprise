@@ -321,7 +321,7 @@ private:
 				if (!proc->CallAsProc(handler, src, op, allowed))
 					return RoleOutcome::NoHandler;
 			}
-			catch (const ibBackendException&) {
+			catch (const ibCoreException&) {
 				return RoleOutcome::Failed;    // the handler body threw (e.g. "cannot be lowered") -> deny
 			}
 			return (allowed.GetType() == ibValueTypes::TYPE_BOOLEAN && allowed.GetBoolean())

@@ -584,7 +584,7 @@ bool ibSheetFormatXlsx::Write(wxOutputStream& output, const ibSpreadsheetDescrip
 			// The text, not the stored form: a caption written in every language goes out in one,
 			// read the way the grid and the printout read it (a printed document's cells are text
 			// already — a template's are not).
-			const wxString value = ibBackendLocalization::GetTranslateGetRawLocText(cell->GetValue());
+			const wxString value = ibLocalization::GetTranslateGetRawLocText(ibBackendLocalization::GetUserLanguage(), cell->GetValue());
 			if (value.IsEmpty() && styleIndex == 0)
 				continue;   // nothing to say about this cell at all
 

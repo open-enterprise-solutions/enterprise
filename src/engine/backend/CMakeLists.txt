@@ -122,6 +122,9 @@ endif()
 # ---------------------------------------------------------------------------
 target_link_libraries(backend
     PUBLIC
+        # The shared meanings the engine is written in (ids, texts, numbers, dates, guids) — PUBLIC: every consumer of
+        # the engine's headers speaks them too.
+        core
         wx::base
         wx::core
         wx::net
@@ -158,22 +161,6 @@ if(UNIX)
         ${CMAKE_DL_LIBS}     # dlopen / dlsym
         Threads::Threads      # pthread
     )
-
-    # guid.cpp picks its generator by toolkit: Windows -> CoCreateGuid, macOS -> CFUUID
-    # (CoreFoundation), everything else -> libuuid's uuid_generate. Only the last one is a
-    # separate library, and only on non-Apple UNIX; Apple's CFUUID rides in CoreFoundation.
-    if(NOT APPLE)
-        find_library(UUID_LIBRARY NAMES uuid)
-        if(UUID_LIBRARY)
-            target_link_libraries(backend PRIVATE ${UUID_LIBRARY})
-        else()
-            message(FATAL_ERROR
-                "libuuid not found. guid.cpp uses uuid_generate on this platform — "
-                "install uuid-dev (Debian/Ubuntu) or libuuid-devel (Fedora/RHEL).")
-        endif()
-    else()
-        target_link_libraries(backend PRIVATE "-framework CoreFoundation")
-    endif()
 endif()
 
 if(WIN32 AND OES_USE_ODBC)

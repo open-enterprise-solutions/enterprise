@@ -39,7 +39,7 @@ void ibMetaData::Dispose(ibMetaData* metaData)
 			metaData->CloseDatabase(forceCloseFlag);
 		}
 	}
-	catch (const ibBackendException& err) {
+	catch (const ibCoreException& err) {
 		ibJournalWarning(wxT("metadata"), wxT("'%s' did not close: %s"), name, err.GetErrorDescription());
 	}
 	catch (...) {

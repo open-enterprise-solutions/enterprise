@@ -1,6 +1,6 @@
 #include "propertySpreadsheet.h"
 #include "backend/propertyManager/property/variant/variantSpreadsheet.h"
-#include "backend/serialize/dataBuilder.h"   // ibDataValue — node value (Binary, transitional)
+#include "core/serialize/dataBuilder.h"   // ibDataValue — node value (Binary, transitional)
 
 
 ////////////////////////////////////////////////////////////////////////

@@ -5,7 +5,7 @@
 
 #include "metaAttributeObject.h"
 #include "backend/metaData.h"
-#include "backend/serialize/dataBuilder.h"   // ibDataNode — per-type DescribeData
+#include "core/serialize/dataBuilder.h"   // ibDataNode — per-type DescribeData
 #include "backend/metaCollection/partial/commonObject.h"   // the owners an attribute asks: generic data, a hierarchy
 #include "backend/functionalOption/functionalOptionGate.h"   // ibFunctionalOptionGate::IsAvailable — the column's IsAvailable
 

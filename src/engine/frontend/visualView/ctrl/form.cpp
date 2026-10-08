@@ -5,7 +5,7 @@
 
 #include "form.h"
 #include "formAttribute.h"
-#include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
+#include "core/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "backend/metaCollection/partial/commonObject.h"
 #ifdef OES_USE_WEB
 // ibWebTimer full type needed for the dtor's delete in the idle-handler

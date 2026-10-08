@@ -45,7 +45,7 @@
 #include "backend/propertyManager/property/propertyDataComposition.h"   // …the report's own
 #include "backend/propertyManager/property/propertyDynamicList.h"       // …and the list's, judged by list rules
 #include "backend/compositionDescription.h"
-#include "backend/stringUtils.h"   // GenerateSynonym — the caption the platform makes from a name
+#include "core/stringUtils.h"   // GenerateSynonym — the caption the platform makes from a name
 
 #include "frontend/visualView/ctrl/form.h"
 #include "frontend/visualView/ctrl/formAttribute.h"   // the main attribute — the head of every binding

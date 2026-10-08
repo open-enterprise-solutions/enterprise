@@ -1,7 +1,7 @@
 #include "pictureDescription.h"
 #include "backend_picture.h"                 // ibBackendPicture::IsRegisterPicture — whether the engine has it
-#include "backend/fileSystem/fs.h"
-#include "backend/serialize/dataBuilder.h"   // ibDataNode / ibDataValue — node form
+#include "core/fileSystem/fs.h"
+#include "core/serialize/dataBuilder.h"   // ibDataNode / ibDataValue — node form
 
 ////////////////////////////////////////////////////////////////////////
 

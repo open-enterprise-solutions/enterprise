@@ -25,7 +25,7 @@
 #include "backend/backend_exception.h"   // catch ibBackendException at the LoadCommonTree boundary
 #include "backend/query/schemaSnapshot.h"   // ibSchemaSnapshot / ibSchemaTable — ContributeTables drives data dump
 #include "backend/query/dataMover.h"         // ibDataMover::Dump / Restore (L3-3 row mover)
-#include "backend/serialize/dataBuilder.h"      // ibDataBuilder / ibBinaryProvider — top-level structure builder
+#include "core/serialize/dataBuilder.h"      // ibDataBuilder / ibBinaryProvider — top-level structure builder
 #include "backend/objCtor.h"                       // ibCtorMetaValueType::GetClassName — clsid -> type name
 
 bool ibMetaDataConfigurationBase::LoadConfigFromFile(const wxString& strFileName)
@@ -234,7 +234,7 @@ bool ibMetaDataConfigurationFile::RunDatabase(int flags)
 		if (!m_commonObject->RunSubtree(flags, ibValueMetaObject::ibRunPhase::After))
 			return false;
 	}
-	catch (const ibBackendException& err) {
+	catch (const ibCoreException& err) {
 		ibJournalError(wxT("metadata.config"),err.GetErrorDescription());
 		return false;
 	}
@@ -413,7 +413,7 @@ bool ibMetaDataConfigurationFile::LoadCommonTree(const ibClassID& clsid, ibReade
 	try {
 		fresh->ApplyDataNode(rootNode);
 	}
-	catch (const ibBackendException& err) {
+	catch (const ibCoreException& err) {
 		// ⭐ THE ENGINE'S WORDS REACH THE USER — the twin of the report / data-processor catches.
 		// A configuration that refuses to load is the costliest of the three to face in silence.
 		ibJournalError(wxT("metadata.config"),wxT("%s"), err.GetErrorDescription());
@@ -787,7 +787,7 @@ bool ibMetaDataConfigurationBase::SaveConfiguration(wxString& refusal)
 			return false;
 		}
 	}
-	catch (const ibBackendException& e) {
+	catch (const ibCoreException& e) {
 		refusal = e.GetErrorDescription();
 		return false;
 	}
@@ -879,7 +879,7 @@ bool ibMetaDataConfigurationBase::ApplyConfiguration(wxString& refusal,
 		// that did not happen — which is the whole value of it to a watcher that did not start it.
 		outcome.m_applied = true;
 	}
-	catch (const ibBackendException& e) {
+	catch (const ibCoreException& e) {
 		// OnSaveDatabase self-rolls-back and releases exclusive on a thrown DDL error (its own
 		// try/catch), so there is no transaction left open here — only a message to carry out.
 		refusal = e.GetErrorDescription();

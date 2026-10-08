@@ -3,7 +3,7 @@
 
 #include "backend/compiler/value.h"
 #include "backend/system/systemEnum.h"
-#include "backend/fstring.h"   // ibString - the text SetText and WritePropertyName take
+#include "core/fstring.h"   // ibString - the text SetText and WritePropertyName take
 
 #include <string>
 #include <vector>

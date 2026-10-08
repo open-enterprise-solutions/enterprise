@@ -24,7 +24,7 @@
 #include <gtest/gtest.h>
 
 #include "backend/spreadsheetDescription.h"
-#include "backend/serialize/dataBuilder.h"
+#include "core/serialize/dataBuilder.h"
 
 namespace {
 

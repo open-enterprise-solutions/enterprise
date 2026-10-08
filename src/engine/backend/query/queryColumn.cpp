@@ -20,7 +20,7 @@
 #include "backend/backend_core.h"                                  // emptyEnum — the "no member" ordinal
 
 #include <atomic>                                                  // the synthetic-id counter below
-#include "backend/clsid.h"                                         // IsReference — a reference target by its clsid KIND
+#include "core/clsid.h"                                         // IsReference — a reference target by its clsid KIND
 #include "backend/system/value/valueJob.h"                         // g_valueScheduleCLSID — a value stored whole
 #include "backend/system/value/valueType.h"                        // g_valueTypeDescriptionCLSID — the other one
 #include "backend/valueInfo.h"                                     // ibReference (the stored guid form)

@@ -842,7 +842,7 @@ bool ibDatabaseLayerFirebird::Open()
 					(int)m_pageSize);
 		}
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		// Not read: the dialect's ceiling stands (GetMaxIndexKeyBytes).
 	}
 	if (pageResult != nullptr)
@@ -910,7 +910,7 @@ bool ibDatabaseLayerFirebird::GetSweepBacklog(long long& transactions)
 	try {
 		rs = RunQueryWithResults(wxT("SELECT MON$OLDEST_TRANSACTION, MON$OLDEST_SNAPSHOT FROM MON$DATABASE"));
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		ResetErrorCodes();
 		return false;
 	}
@@ -1569,7 +1569,7 @@ ibDatabaseResultSet* ibDatabaseLayerFirebird::DoRunQueryWithResults(const wxStri
 				// already on the error path; the original isc_dsql_*
 				// failure is what we want the caller to see, not a
 				// secondary cleanup exception.
-				try { delete pResultSet; } catch (const ibBackendException&) {}
+				try { delete pResultSet; } catch (const ibCoreException&) {}
 
 				ThrowDatabaseException();
 				return NULL;   // unreachable today (the throw above always throws) — but the code below
@@ -1599,7 +1599,7 @@ ibDatabaseResultSet* ibDatabaseLayerFirebird::DoRunQueryWithResults(const wxStri
 				// Swallow any throw from the result-set dtor — the
 				// isc_dsql_execute failure above is the user-visible
 				// error; a secondary cleanup exception would mask it.
-				try { delete pResultSet; } catch (const ibBackendException&) {}
+				try { delete pResultSet; } catch (const ibCoreException&) {}
 
 				ThrowDatabaseException();
 				return NULL;
@@ -1707,7 +1707,7 @@ bool ibDatabaseLayerFirebird::TableExists(const wxString& table)
 			pStatement = NULL;
 		}
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		// Close any still-open resources before propagating; preserves the
 		// in-flight exception (sqlstate / native_code on derived types).
 		if (pResult != NULL) {
@@ -1764,7 +1764,7 @@ bool ibDatabaseLayerFirebird::ViewExists(const wxString& view)
 			pStatement = NULL;
 		}
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		// Close any still-open resources before propagating; preserves the
 		// in-flight exception (sqlstate / native_code on derived types).
 		if (pResult != NULL) {
@@ -1801,7 +1801,7 @@ wxArrayString ibDatabaseLayerFirebird::GetTables()
 			pResult = NULL;
 		}
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		// Close any still-open result set before propagating; preserves the
 		// in-flight exception (sqlstate / native_code on derived types).
 		if (pResult != NULL) {
@@ -1834,7 +1834,7 @@ wxArrayString ibDatabaseLayerFirebird::GetViews()
 			pResult = NULL;
 		}
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		// Close any still-open result set before propagating; preserves the
 		// in-flight exception (sqlstate / native_code on derived types).
 		if (pResult != NULL) {
@@ -1885,7 +1885,7 @@ wxArrayString ibDatabaseLayerFirebird::GetColumns(const wxString& table)
 			pStatement = NULL;
 		}
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		// Close any still-open resources before propagating; preserves the
 		// in-flight exception (sqlstate / native_code on derived types).
 		if (pResult != NULL) {

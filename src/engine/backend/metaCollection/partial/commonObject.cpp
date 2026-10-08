@@ -9,7 +9,7 @@
 #include "backend/system/systemManager.h"
 #include "backend/objCtor.h"
 #include "backend/session/session.h"
-#include "backend/serialize/dataBuilder.h"   // node serialization (WriteData / ReadData)
+#include "core/serialize/dataBuilder.h"   // node serialization (WriteData / ReadData)
 #include "backend/choiceLinkResolver.h"      // what narrows a choice, put on the list before it is shown
 
 #include "backend/metaCollection/partial/reference/reference.h"
@@ -132,7 +132,7 @@ ibValueSpreadsheetDocument* ibValueMetaObjectGenericData::GetTemplate(const wxSt
 //*                           ibValueMetaObjectRecordData				*
 //***********************************************************************
 
-#include "backend/fileSystem/fs.h"
+#include "core/fileSystem/fs.h"
 
 //***********************************************************************
 //*                           read & save events                        *
@@ -2333,7 +2333,7 @@ bool ibValueRecordDataObjectExt::InitializeObject()
 		try {
 			Compile();
 		}
-		catch (const ibBackendException&) {
+		catch (const ibCoreException&) {
 			if (!appData->DesignerMode())
 				throw;
 			return false;
@@ -2364,7 +2364,7 @@ bool ibValueRecordDataObjectExt::InitializeObject(ibValueRecordDataObjectExt* so
 		try {
 			Compile();
 		}
-		catch (const ibBackendException&) {
+		catch (const ibCoreException&) {
 			if (!appData->DesignerMode())
 				throw;
 			return false;
@@ -2437,7 +2437,7 @@ bool ibValueRecordDataObjectRef::InitializeObject(const ibGuid& copyGuid)
 	try {
 		Compile();
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		if (!appData->DesignerMode())
 			throw;
 		return false;
@@ -2492,7 +2492,7 @@ bool ibValueRecordDataObjectRef::InitializeObject(ibValueRecordDataObjectRef* so
 	try {
 		Compile();
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		if (!appData->DesignerMode())
 			throw;
 		return false;
@@ -3837,7 +3837,7 @@ bool ibValueRecordSetObject::InitializeObject(const ibValueRecordSetObject* sour
 	try {
 		Compile();
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		if (!appData->DesignerMode())
 			throw;
 		return false;

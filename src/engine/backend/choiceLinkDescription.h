@@ -2,7 +2,7 @@
 #define __CHOICE_LINK_DESCRIPTION_H__
 
 #include "backend/backend_core.h"      // ibMetaID
-#include "backend/clsid.h"             // ibClassID — the type a link governs is a TYPE, never an ordinal
+#include "core/clsid.h"             // ibClassID — the type a link governs is a TYPE, never an ordinal
 #include "backend/sourceDescription.h" // ibSourceDescription — THE path in this tree, hop by hop
 
 #include <vector>

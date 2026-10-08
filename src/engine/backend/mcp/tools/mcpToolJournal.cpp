@@ -42,7 +42,7 @@
 #include "backend/logger/logger.h"
 #include "backend/logger/loggerReader.h"
 #include "backend/metadataConfiguration.h"   // activeMetaData - the door that knows configuration types
-#include "backend/serialize/dataBuilder.h"   // ibDataNode + ibBinaryProvider - the details payload
+#include "core/serialize/dataBuilder.h"   // ibDataNode + ibBinaryProvider - the details payload
 
 #include <wx/datetime.h>
 #include <wx/dir.h>

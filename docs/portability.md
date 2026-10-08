@@ -84,6 +84,12 @@ from `<sys/socket.h>` / `<netinet/in.h>` / `<netinet/tcp.h>` on POSIX. A `#if de
 block whose `#else` branch is thinner than its `#if` branch is a bug waiting for the first person
 to build the other platform.
 
+The platform's LIBRARY is linked by the target that compiles the call. `core/guid.cpp` picks its
+generator three ways — Windows `CoCreateGuid`, macOS CFUUID, else libuuid's `uuid_generate` — so
+libuuid (non-Apple UNIX) and `-framework CoreFoundation` (Apple) are linked in
+`core/CMakeLists.txt` (moved from `backend/CMakeLists.txt` with `guid` on 2026-10-08). `core` is
+wx base only; its `fstring.cpp` carries the Apple `uselocale` formatting of § 1.5a′.
+
 ### 1.5 A nested class cannot carry a default argument built from its own initializers
 
 A nested class's default member initializers are not complete until the **enclosing** class is,

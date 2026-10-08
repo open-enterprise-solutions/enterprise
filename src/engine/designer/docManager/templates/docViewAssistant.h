@@ -17,7 +17,7 @@
 
 #include "frontend/docView/docView.h"
 
-#include "backend/clsid.h"
+#include "core/clsid.h"
 #include "backend/mcp/mcpServer.h"   // ibMcpNotifier — this window is one
 
 #include <wx/timer.h>   // wxTimer — a member below, so the type has to be complete here

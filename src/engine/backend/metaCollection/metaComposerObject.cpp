@@ -4,7 +4,7 @@
 
 #include "metaComposerObject.h"
 #include "backend/metaData.h"
-#include "backend/serialize/dataBuilder.h"   // ibDataNode — per-type node data
+#include "core/serialize/dataBuilder.h"   // ibDataNode — per-type node data
 #include "backend/metaCollection/partial/dataReport.h"   // the owner told about its default composer
 #include "backend/system/systemManager.h"                // ibValueSystemFunction::Message — the pane, not a dialog
 

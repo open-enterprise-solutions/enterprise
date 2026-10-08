@@ -362,7 +362,7 @@ bool ibValueForm::InitializeFormModule()
 			Compile();
 			Run(true);
 		}
-		catch (const ibBackendException&) {
+		catch (const ibCoreException&) {
 			if (!appData->DesignerMode())
 				throw;
 			return false;
@@ -537,7 +537,7 @@ bool ibValueForm::ShowForm(ibDocument* docParent, bool createContext)
 				if (lockErr.GetKind() == ibBackendLockException::Kind::LockConflict)
 					SetLockBadge(lockErr.GetBlockingUser());
 			}
-			catch (const ibBackendException&) {
+			catch (const ibCoreException&) {
 				// Non-conflict lock-infra error (DB transient etc.) —
 				// silent. Write path will re-check at save time.
 			}

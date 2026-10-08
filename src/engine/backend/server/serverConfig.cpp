@@ -10,7 +10,7 @@
 #endif
 
 #include "backend/cipher/fieldCipher.h"
-#include "backend/guid.h"
+#include "core/guid.h"
 
 namespace {
 

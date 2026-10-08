@@ -4,7 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "propertyObject.h"
-#include "backend/serialize/dataBuilder.h"   // ibDataValue — property node serialization
+#include "core/serialize/dataBuilder.h"   // ibDataValue — property node serialization
 #include "backend/metaData.h"                                        // GetAnyArrayObject — the candidates
 #include "backend/propertyManager/property/variant/variantOwner.h"   // the variant a relationship holds
 

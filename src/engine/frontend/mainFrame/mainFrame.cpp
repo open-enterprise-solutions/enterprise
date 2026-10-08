@@ -250,10 +250,12 @@ ibFrontendWindow* ibFrontendMainFrame::CreateChildFrame(ibView* view, const wxPo
 
 		wxWindow* parent = wxTheApp->GetTopWindow();
 
+		// Over the INNERMOST modal — the last one opened (the list runs in the order they were made): over the first, a
+		// form chosen from a dialog opened by a modal window (a condition's, in the list's settings) stood behind it.
 		for (wxWindow* window : wxTopLevelWindows) {
 			if (window->IsKindOf(CLASSINFO(wxDialog))) {
 				if (((wxDialog*)window)->IsModal()) {
-					parent = window; break;
+					parent = window;
 				}
 			}
 		}

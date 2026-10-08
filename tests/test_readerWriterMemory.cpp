@@ -12,7 +12,7 @@
 // =============================================================================
 
 #include <gtest/gtest.h>
-#include "backend/fileSystem/fs.h"   // ibWriterMemory / ibReaderMemory + u8/u16/u32/s32 types
+#include "core/fileSystem/fs.h"   // ibWriterMemory / ibReaderMemory + u8/u16/u32/s32 types
 
 TEST(ReaderWriterMemory, PrimitiveRoundTrip) {
     ibWriterMemory w;

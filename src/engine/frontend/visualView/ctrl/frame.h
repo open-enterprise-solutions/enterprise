@@ -41,7 +41,7 @@ class FRONTEND_API ibVisualHostClient;
 #define wxDefaultStypeFGColour wxColour(0x3F, 0x5C, 0x77)  // #3F5C77 deep dusty blue
 #define wxDefaultStypeBGColour wxColour(0xFA, 0xF7, 0xF0)  // #FAF7F0 cream content
 
-#include "backend/fileSystem/fs.h"
+#include "core/fileSystem/fs.h"
 
 class FRONTEND_API ibFormVisualDocument;
 

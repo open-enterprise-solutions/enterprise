@@ -32,7 +32,7 @@
 
 #include <wx/init.h>                                           // wxInitializer - the live reading below
 #include "backend/appData.h"
-#include "backend/clsid.h"                                     // reference_to_clsid - the recorder's type
+#include "core/clsid.h"                                     // reference_to_clsid - the recorder's type
 #include "backend/metadataConfiguration.h"                     // ibMetaDataConfigurationFile - a register in memory
 #include "backend/metaCollection/metaObject.h"
 #include "backend/databaseLayer/connectionPool.h"

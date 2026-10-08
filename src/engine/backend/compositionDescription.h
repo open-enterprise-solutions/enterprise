@@ -7,9 +7,9 @@
 // description of the same family). Nothing from the composer, nothing from the model.
 #include "backend/backend_core.h"     // ibMetaID, wxNOT_FOUND, ibClassID
 #include "backend/compiler/value.h"   // ibValue — a filter's right-hand side travels as one
-#include "backend/serialize/dataBuilder.h"   // ibDataNode — a stored value is a BLOB, never a runtime value
+#include "core/serialize/dataBuilder.h"   // ibDataNode — a stored value is a BLOB, never a runtime value
 #include "backend/typeDescription.h"  // ibTypeDescription — the sibling description a parameter declares
-#include "backend/guid.h"             // ibGuid — the stable key a select is identified by
+#include "core/guid.h"             // ibGuid — the stable key a select is identified by
 // ⭐ THE UNFOLD IS THE LANGUAGE'S OWN WORD, and this header exists so every tier can name it without
 // dragging a tier down (query/queryUnfold.h). A twin enum here would be a second vocabulary for one
 // fact — and it WAS one: the runtime enumeration is registered over ibQueryDimUnfold, so a window

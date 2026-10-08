@@ -1,5 +1,5 @@
 #include "homePageDescription.h"
-#include "backend/serialize/dataBuilder.h"   // ibDataNode / ibDataValue — node form
+#include "core/serialize/dataBuilder.h"   // ibDataNode / ibDataValue — node form
 
 ////////////////////////////////////////////////////////////////////////
 

@@ -485,7 +485,7 @@ int main(int argc, char** argv)
 				+ ",\"message\":" + nlohmann::json(e.GetErrorDescription().ToUTF8().data()).dump()
 				+ "}";
 		}
-		catch (const ibBackendException& e) {
+		catch (const ibCoreException& e) {
 			body = std::string("{\"error\":\"backend\",\"message\":")
 				+ nlohmann::json(e.GetErrorDescription().ToUTF8().data()).dump()
 				+ "}";

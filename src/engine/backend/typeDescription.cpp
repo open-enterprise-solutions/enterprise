@@ -1,6 +1,6 @@
 #include "typeDescription.h"
-#include "backend/fileSystem/fs.h"
-#include "backend/serialize/dataBuilder.h"   // ibDataNode / ibDataValue (Child + Array)
+#include "core/fileSystem/fs.h"
+#include "core/serialize/dataBuilder.h"   // ibDataNode / ibDataValue (Child + Array)
 #include "backend/metaData.h"                 // ibMetaData::GetTypeCtor — clsid <-> type name
 #include "backend/objCtor.h"                  // ibCtorMetaValueType::GetClassName / GetClassType
 

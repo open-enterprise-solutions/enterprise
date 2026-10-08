@@ -9,7 +9,7 @@
 
 #include "backend/compiler/compileCode.h"      // GetCodeStyle - a function is spelled by the module's syntax
 
-#include "backend/stringUtils.h"
+#include "core/stringUtils.h"
 
 #include <algorithm>
 #include <functional>

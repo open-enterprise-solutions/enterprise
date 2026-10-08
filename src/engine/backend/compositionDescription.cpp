@@ -18,7 +18,7 @@
 
 #include "compositionDescription.h"
 
-#include "backend/serialize/dataBuilder.h"         // ibDataNode / ibDataValue
+#include "core/serialize/dataBuilder.h"         // ibDataNode / ibDataValue
 #include "backend/metaData.h"                      // ibMetaData::Deserialize — the door a caller HANDS IN
 
 #include "backend/backend_exception.h"             // ibBackendCoreException — a setting that cannot apply is refused
@@ -169,7 +169,7 @@ void ReadSelectedList(const ibDataNode& node, const wxString& name,
 // and a synonym written plainly (no languages in it at all) is its own caption.
 wxString ibVariantDescription::GetPresentation() const
 {
-	const wxString caption = ibBackendLocalization::GetTranslateGetRawLocText(m_synonym);
+	const wxString caption = ibLocalization::GetTranslateGetRawLocText(ibBackendLocalization::GetUserLanguage(), m_synonym);
 	return caption.IsEmpty() ? m_name : caption;
 }
 
@@ -370,11 +370,27 @@ ibValue ibStoredValue(const ibDataNode& stored, const ibMetaData* metaData)
 // ⭐ NOTHING IS WRITTEN ONLY FOR "NOTHING CHOSEN" — Undefined. `IsEmpty` asked instead, and the empty value of
 // a type is a value: a 0, a False, an empty date or an empty reference was dropped here and read back as
 // Undefined — `Amount < 0` came back `Amount < Undefined` (2026-09-30, found by the round-trip test).
+//
+// …AND A VALUE OF A CONFIGURATION'S TYPE IS SAID AS IT READS, beside it (Presentation): a reference's name, an
+// enumeration member's word are the configuration's, and whoever shows a setting without one (a thin client's
+// settings window) has nothing else to show it by. Written afresh at every write, never read back — the value is
+// read through the configuration's door (ReadStoredValue).
 void ibStoreValue(ibDataNode& stored, const ibValue& value)
 {
 	stored = ibDataNode();
-	if (value.GetType() != ibValueTypes::TYPE_EMPTY)
-		value.Serialize(stored);
+	if (value.GetType() == ibValueTypes::TYPE_EMPTY)
+		return;
+	value.Serialize(stored);
+	switch (value.GetType()) {
+	case ibValueTypes::TYPE_NULL:
+	case ibValueTypes::TYPE_BOOLEAN:
+	case ibValueTypes::TYPE_NUMBER:
+	case ibValueTypes::TYPE_DATE:
+	case ibValueTypes::TYPE_STRING:
+		break;
+	default:
+		stored.SetValue<wxString>(wxT("Presentation"), value.GetString());
+	}
 }
 
 namespace {
@@ -447,7 +463,7 @@ void ibWriteOperand(ibDataNode& node, const wxString& prefix, const ibFilterOper
 	// a saved setting outlives the schema it was saved against. The value is written unless it is Undefined —
 	// the empty value of its type is a value (see ibStoreValue).
 	if (side.m_value.GetType() != ibValueTypes::TYPE_EMPTY)
-		side.m_value.Serialize(node.Child(prefix + wxT("Value")));
+		ibStoreValue(node.Child(prefix + wxT("Value")), side.m_value);
 }
 
 void ibReadOperand(const ibDataNode& node, const wxString& prefix, ibFilterOperandDescription& side,

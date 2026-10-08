@@ -81,7 +81,7 @@ bool ibValueRecordDataObjectConstant::InitializeObject(const ibValueRecordDataOb
 	try {
 		m_constValue = GetConstValue();
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		if (!appData->DesignerMode())
 			throw;
 		return false;
@@ -91,7 +91,7 @@ bool ibValueRecordDataObjectConstant::InitializeObject(const ibValueRecordDataOb
 	try {
 		Compile();
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		if (!appData->DesignerMode())
 			throw;
 		return false;

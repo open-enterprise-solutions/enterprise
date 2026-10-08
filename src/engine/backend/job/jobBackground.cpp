@@ -514,7 +514,7 @@ std::shared_ptr<ibBackgroundRun> ibJobManager::StartBackground(ibBackgroundBody 
 			std::lock_guard<std::mutex> lk(run->m_mtx);
 			run->m_error = _("the run was cancelled");
 		}
-		catch (const ibBackendException& err) {
+		catch (const ibCoreException& err) {
 			Journal(wxString::Format(_("Background job FAILED: %s - %s"),
 				l.m_activity, err.GetErrorDescription()), ibStatusMessage_Error);
 

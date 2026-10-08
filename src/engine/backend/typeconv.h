@@ -5,7 +5,7 @@
 // include guard is already set and its own include of the journal has not run yet. Asking for the
 // journal by name is the only order that works from inside the cycle.
 #include "diagnostics/journal.h"      // ibJournal — the technology journal
-#include "fnumber.h"
+#include "core/fnumber.h"
 #include "fontcontainer.h"
 
 // macros for converting between wxString <-> std::string

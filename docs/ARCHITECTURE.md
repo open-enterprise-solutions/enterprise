@@ -44,7 +44,7 @@
                         └─────────────────────────────────────┘
 ```
 
-Communication between `frontend.dll` and `backend.dll` goes through abstract C++ interfaces exported from `backend.dll`. The frontend never accesses database drivers or the compiler directly.
+Communication between `frontend.dll` and `backend.dll` goes through abstract C++ interfaces exported from `backend.dll`. The frontend never accesses database drivers or the compiler directly. Under `backend.dll` sits `core.dll` — see [Core Layer](#core-layer-coredll).
 
 ---
 
@@ -65,6 +65,25 @@ Each executable links against both DLLs and provides a `wxApp` subclass that sel
 
 > The run mode says only how the process holds the base — serving it (`eSERVER_MODE`) or as a file base for the one who started it (`eFILE_MODE`). What a session works in is its kind: either mode hosts designers, runtimes and jobs alike, and `DesignerMode()` / `EnterpriseMode()` are answered by the current session's kind. The base's FIRST SESSION picks its configuration by its kind — editable for a designer kind, runtime otherwise; a server's first session is the server itself.
 
+### Core Layer (`core.dll`)
+
+`src/engine/core/` — what the engine and its clients mean by the same words. Under `backend` and `frmclient`; wx base only;
+reads no base, runs no script, draws no window. `CORE_API` / `CORE_EXPORTS` (`core/core.h`, also `IB_FORCEINLINE` / `IB_NOINLINE`).
+
+| Unit | Holds |
+|---|---|
+| `types.h` | id typedefs (`ibRoleID`, `ibMetaID`, `ibSourceId`, `ibFormID`, `ibActionID`, `ibPictureID`, `ibVersionID`), `ibValueTypes`, `ibCtorObjectType`, `g_valueUndefinedCLSID`, `COMPONENT_TYPE_*`, the packed value node's field names `kValueFieldClsid` "t" / `kValueFieldData` "v" |
+| `clsid.h`, `fstring`, `fnumber`, `fdatetime`, `guid`, `stringUtils.h` | `ibClassID`, `ibString` (+ pool), `ibNumber`, `ibDateTime`, `ibGuid` |
+| `fileSystem/` | `ibReader` / `ibWriter`, memory readers/writers, `u32`/`u64`…, lz block compression |
+| `serialize/` | `ibDataNode` / `ibDataValue`, binary provider, `ibJsonProvider`, JSON text. A type is named only by the injected resolver (`SetTypeResolver`) |
+| `exception` | `ibCoreException : std::exception` — the base of every refusal (see [Exception taxonomy](#exception-taxonomy)) |
+| `localization` | `ibLocalization` — template (`ibLocalizationEntryArray` or `en = '…'; ru = '…';`) + a language in, that language's text out; missing language → the first written. The owner passes the language |
+| `build` | `GetBuildId` / `GetBuildStamp` |
+| `core.cpp` | `DllMain`: `DLL_THREAD_DETACH` drains the `ibString` pool for every process that holds one, engine or not |
+
+- Links: backend → core (PUBLIC); frmclient → core + protocol. `protocol.dll` does not link core.
+- Not in core: `typeconv` (fonts/colours/GDI), `quicklz`, frmclient's `dataProtocol` seam.
+
 ### Backend Layer (`backend.dll`)
 
 The backend is the core engine. It is self-contained — no GUI dependencies. Key objects:
@@ -79,8 +98,22 @@ The backend is the core engine. It is self-contained — no GUI dependencies. Ke
 
 Two sibling DLLs share the same form/view/control code paths through `OES_USE_WEB` ifdefs and `ibFrontendWindow` typedef (`wxWindow` for desktop, `ibWebWindow` for web):
 
-- **`frontend.dll`** — wxWidgets GUI. Used by `enterprise.exe`, `designer.exe`, `launcher.exe`, `codeRunner.exe`. (`appserver.exe` links `backend` alone.)
+- **`frontend.dll`** — wxWidgets GUI. Used by `enterprise.exe`, `designer.exe`, `launcher.exe`, `codeRunner.exe`. (`appserver.exe` links `backend` and `frmserver`.)
 - **`wfrontend.dll`** — web UI (HTML serialisation of form control trees via `ToJSON()`, cpp-httplib transport). Used by `wenterprise-server.exe`.
+
+### Thin client layer (`protocol.dll`, `frmserver.dll`, `frmclient.dll`, `fileserver.dll`)
+
+`frontend.dll` carries two functions at once — the forms' logic and their drawing. The thin client splits them, with the
+[client protocol](public/client-protocol.md) between: **`frmserver`** holds the forms on the server and answers clients;
+**`frmclient`** draws them (main window, document/view, controls, editors) for **`enterprise-thin.exe`**; **`protocol`** is
+the contract both keep (`protocol.h`, no dependencies — `frmserver` includes it only) and the talking side's library
+(`frmclient` and the web server link it). **`fileserver`** puts `backend` + `frmserver` into the client's process for a
+file base. `frmclient` does not link `backend`; it links `core` (node and JSON, string, number, date, guid, exception,
+localization — the same classes the engine uses). `frmclient/backend/` keeps reduced copies of the rest — same names and
+classes, only what the client's windows use (type description, settings schema, sheet and composition descriptions) —
+meeting the wire at `frmclient/backend/serialize/dataProtocol.h`; its `backend_core.h` / `backend.h` /
+`backend_exception.h` just include core. Chain: core → backend → frmserver ⇄ protocol ⇄ frmclient → enterprise-thin.
+See [thin-client.md](public/thin-client.md).
 
 Shared frontend objects:
 - **`ibValueForm`** — the runtime representation of an open form; holds the control tree and responds to user events. Same class on both builds.
@@ -227,7 +260,13 @@ Two header-only helpers in `frontend/diagnostics/` cover the boilerplate every b
 ### Exception taxonomy
 
 ```
-  ibBackendException                      ─── base; per-thread error chain
+ibCoreException : std::exception          ─── core/exception.h. The base of every
+  │                                            refusal; thrown by the core itself
+  │                                            (read past a block's end, wrong value
+  │                                            kind, malformed JSON). frmclient's
+  │                                            ibBackendException is an alias of it.
+  │
+  ibBackendException                      ─── engine base; per-thread error chain
     │                                          (PushLastError / DrainLastErrors).
     │
     ├── ibBackendDatabaseException        ─── DB-tier failure. Enum Kind:
@@ -270,6 +309,10 @@ Two header-only helpers in `frontend/diagnostics/` cover the boilerplate every b
     └── ibBackendInterruptException       ─── The user stopped the program.
 ```
 
+A handler that only tells a person what went wrong catches `ibCoreException`. The script runtime's `Try` meets a core
+refusal as the engine's own (re-raised as `ibBackendCoreException`, then the same `Try` / `ProcessError` path); the
+desktop's main-loop handler shows it and continues.
+
 ⭐ **Each subsystem owns its exception TYPE; `Kind` says what went wrong inside it.** One type
 plus a string would make every handler match on message TEXT. The division is by WHO refused,
 which is what a caller can act on — see [exceptions.md](private/exceptions.md).
@@ -299,7 +342,7 @@ Per-driver `ClassifyDatabaseError(int nativeCode)` on each `ibDatabaseErrorRepor
 | `byteCodeAOT.cpp` | `ibByteCode::SerializeAOT/DeserializeAOT` | Binary persistence for the AOT cache (`sys_bytecode_cache.bc_blob`); host-endian linear format with magic `'PBC1'` + format version |
 | `procUnit.h/cpp` | `ibProcUnit` | Interpreter: executes `ibByteCode` against a variable stack |
 | `procContext.h/cpp` | `ibRunContext` | Execution context: local variable frame, call stack |
-| `value.h/cpp` | `ibValue` | Universal value type — tag enum `ibValueTypes` in `backend_core.h`: `TYPE_EMPTY` (=0, the "undefined" value), `TYPE_BOOLEAN`, `TYPE_NUMBER` (`ibNumber`), `TYPE_DATE`, `TYPE_STRING`, `TYPE_NULL`, `TYPE_REFFER` / `TYPE_CONST_REFFER`, object kinds `TYPE_VALUE` / `TYPE_ENUM` / `TYPE_OLE` / `TYPE_FUNCTION` / `TYPE_ITERATOR` |
+| `value.h/cpp` | `ibValue` | Universal value type — tag enum `ibValueTypes` in `core/types.h`: `TYPE_EMPTY` (=0, the "undefined" value), `TYPE_BOOLEAN`, `TYPE_NUMBER` (`ibNumber`), `TYPE_DATE`, `TYPE_STRING`, `TYPE_NULL`, `TYPE_REFFER` / `TYPE_CONST_REFFER`, object kinds `TYPE_VALUE` / `TYPE_ENUM` / `TYPE_OLE` / `TYPE_FUNCTION` / `TYPE_ITERATOR` |
 | `codeDef.h` | enums | Opcode (`OPER_*`) and keyword (`KEY_*`) definitions |
 
 ### `src/engine/backend/databaseLayer/`
@@ -583,7 +626,7 @@ A metadata's **open state is the presence of its image**, not a separate boolean
 
 ### Serialization — `ibDataNode` + format providers
 
-Metadata serialization runs through a uniform, format-agnostic tree (`src/engine/backend/serialize/dataBuilder.h`):
+Metadata serialization runs through a uniform, format-agnostic tree (`src/engine/core/serialize/dataBuilder.h`):
 
 - **`ibDataNode`** — one self-similar node of the structure tree (clsid + metaId + field bag + property bag + child nodes). A metaobject contributes its data into a node; a composite value can itself *be* a child node (`ibDataKind::Child`).
 - **`ibFormatProvider`** — abstract `Write(node, writer)` / `Read(reader, node)`. Concrete providers:

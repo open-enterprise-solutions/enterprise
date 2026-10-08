@@ -10,7 +10,7 @@
 #include "backend/backend_exception.h"               // the engine's verdict on a query that will not resolve
 #include "backend/srcDataObject.h"                      // ibSourceExplorer
 #include "backend/metaCollection/partial/reference/reference.h"   // ibValueReferenceDataObject — GetItemKey row guid
-#include "backend/serialize/dataBuilder.h"            // ibDataNode (object-level save/load)
+#include "core/serialize/dataBuilder.h"            // ibDataNode (object-level save/load)
 #include "backend/metadataConfiguration.h"            // ibMetaDataConfigurationBase (GetSourceMetaData)
 #include "backend/picturePredefined.h"                // g_picRowFolderCLSID — what a grouping's heading wears
 
@@ -28,7 +28,8 @@ public:
 		explicit ColInfo(const ibBackendQueryColumn* col) : m_col(col) {}
 		virtual unsigned int GetColumnID() const override { return m_col != nullptr ? m_col->GetColumnId() : 0; }
 		virtual wxString GetColumnName() const override { return m_col != nullptr ? m_col->GetName() : wxString(); }
-		virtual wxString GetColumnCaption() const override { return m_col != nullptr ? m_col->GetName() : wxString(); }
+		// …and how it reads: the column's synonym, as a metaobject's column reads (commonObject.h) — the name is the designer's.
+		virtual wxString GetColumnCaption() const override { return m_col != nullptr ? m_col->GetSynonym() : wxString(); }
 		// Name + id + TYPE straight off the column (an attribute IS-A column → GetTypeDesc is free).
 		// Enough to render/edit a cell type-aware; for 90% of sources nothing else is needed.
 		virtual const ibTypeDescription GetColumnType() const override { return m_col != nullptr ? m_col->GetTypeDesc() : ibTypeDescription(); }
@@ -213,7 +214,7 @@ void ibValueDynamicList::RebuildSource()
 			if (ast)
 				ibQueryLowering::DescribeOutput(*ast, {}, m_querySchema);
 		}
-		catch (const ibBackendException&) {
+		catch (const ibCoreException&) {
 			// A QUERY THAT CANNOT BE DESCRIBED HAS NO COLUMNS — that is the whole of what this road
 			// has to decide. The engine's WORDS are told to whoever can act on them: the settings
 			// window asks the text the same question and shows the answer under the editor.

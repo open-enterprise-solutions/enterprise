@@ -91,7 +91,7 @@ void ibValueMetaObjectDocument::CallAsCommand(ibActionID id, const ibUniqueKey& 
 		// ibBackendException too, and catching only Core dropped them into the catch(...) below —
 		// posting refused for lack of rights, and the user saw nothing but a line in the log.
 		catch (const ibBackendInterruptException&) {}   // the user stopped it — nothing to report
-		catch (const ibBackendException&) {}   // already reported where it happened - see ProcessExceptionError
+		catch (const ibCoreException&) {}   // already reported where it happened - see ProcessExceptionError
 		catch (...) { ibJournalError(wxT("metadata.action"),wxT("ibValueMetaObjectDocument::CallAsCommand: unhandled non-ibBackend exception swallowed")); }
 		return;
 	}

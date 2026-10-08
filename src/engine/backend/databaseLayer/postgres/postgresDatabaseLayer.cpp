@@ -484,7 +484,7 @@ bool ibDatabaseLayerPostgres::Open()
 			try {
 				DoRunQuery("CREATE DATABASE " + m_strDatabase, false);
 			}
-			catch (const ibBackendException&) {
+			catch (const ibCoreException&) {
 				return false;
 			}
 			DoRunQuery("GRANT ALL PRIVILEGES ON DATABASE " + m_strDatabase + " to " + m_strUser, false);
@@ -758,7 +758,7 @@ bool ibDatabaseLayerPostgres::DatabaseExists(const wxString& database)
 			pStatement = nullptr;
 		}
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		// Close any still-open resources before propagating; preserves the
 		// in-flight exception (sqlstate / native_code on derived types).
 		if (pResult != nullptr) {
@@ -810,7 +810,7 @@ bool ibDatabaseLayerPostgres::TableExists(const wxString& table)
 			pStatement = nullptr;
 		}
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		// Close any still-open resources before propagating; preserves the
 		// in-flight exception (sqlstate / native_code on derived types).
 		if (pResult != nullptr) {
@@ -862,7 +862,7 @@ bool ibDatabaseLayerPostgres::ViewExists(const wxString& view)
 			pStatement = nullptr;
 		}
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		// Close any still-open resources before propagating; preserves the
 		// in-flight exception (sqlstate / native_code on derived types).
 		if (pResult != nullptr) {
@@ -899,7 +899,7 @@ wxArrayString ibDatabaseLayerPostgres::GetTables()
 			pResult = nullptr;
 		}
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		// Close any still-open result set before propagating; preserves the
 		// in-flight exception (sqlstate / native_code on derived types).
 		if (pResult != nullptr) {
@@ -932,7 +932,7 @@ wxArrayString ibDatabaseLayerPostgres::GetViews()
 			pResult = nullptr;
 		}
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		// Close any still-open result set before propagating; preserves the
 		// in-flight exception (sqlstate / native_code on derived types).
 		if (pResult != nullptr) {
@@ -983,7 +983,7 @@ wxArrayString ibDatabaseLayerPostgres::GetColumns(const wxString& table)
 			pStatement = nullptr;
 		}
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		// Close any still-open resources before propagating; preserves the
 		// in-flight exception (sqlstate / native_code on derived types).
 		if (pResult != nullptr) {

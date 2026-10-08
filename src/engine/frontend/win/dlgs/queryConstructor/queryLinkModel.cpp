@@ -334,7 +334,7 @@ bool ibQueryLinkModel::SetValueByRow(const wxVariant& variant, unsigned row, uns
 			ibQueryParser parser;
 			written = parser.ParseExpression(text);
 		}
-		catch (const ibBackendException& error) {
+		catch (const ibCoreException& error) {
 			if (m_onError)
 				m_onError(error.GetErrorDescription());
 			return false;

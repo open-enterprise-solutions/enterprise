@@ -236,7 +236,7 @@ output to a document) measures something nobody waits for.
 **Ask one question once.** When many readers ask the same thing with the same key, fold them
 into one question before the join, not after.
 
-**Hot paths carry `ibString`.** The engine's own string (`backend/fstring.h`) is a shared handle:
+**Hot paths carry `ibString`.** The engine's own string (`core/fstring.h`) is a shared handle:
 copying it copies a reference, not the characters. A name that reaches the runtime is taken as
 `const ibString&` — `ibProcUnit::CallAsProc` / `CallAsFunc`, `ibRuntimeModuleDataObject::ExecAsProc` /
 `ExecAsFunc` / `ExecAsEvent` / `ExecAsManagerEvent`. `wxString` stays where speed is not the question

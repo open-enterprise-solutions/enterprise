@@ -211,7 +211,7 @@ ibLockHandle ibLockManager::Acquire(const std::vector<ibLockItem>& items,
 			acquired.push_back(newGuid);
 		}
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		// RollBack already fired in the throw paths above; this catches any other
 		// ibBackendException from the SQL helpers so we always rollback before propagating.
 		if (q.IsActiveTransaction())
@@ -255,14 +255,14 @@ void ibLockManager::ReleaseRows(const std::vector<ibGuid>& lockGuids)
 				guids.push_back(ibConst(ibValue(g.str())));
 			q.Execute(ibDelete(kSysLockTable, ibIn(ibCol(wxT("lockGuid")), std::move(guids))));
 		}
-		catch (const ibBackendException&) {
+		catch (const ibCoreException&) {
 			if (q.IsActiveTransaction())
 				q.RollBack();
 			return;
 		}
 		q.Commit();
 	}
-	catch (const ibBackendException& err) {
+	catch (const ibCoreException& err) {
 		ibJournalInfo(wxT("lock"), wxT("release of %d row(s) did not complete: %s"),
 			static_cast<int>(lockGuids.size()), err.GetErrorDescription());
 	}
@@ -290,7 +290,7 @@ void ibLockManager::OnSessionEnd(const ibGuid& sessionGuid)
 		q.Execute(ibDelete(kSysLockTable,
 			ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("sessionGuid")), ibConst(ibValue(sessionGuid.str())))));
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		if (q.IsActiveTransaction())
 			q.RollBack();
 		return;
@@ -325,7 +325,7 @@ void ibLockManager::SweepOrphans(const std::vector<ibGuid>& liveSessionGuids)
 				orphans.insert(owner);
 		}
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		return;   // transient DB error — the next sweep tick retries
 	}
 

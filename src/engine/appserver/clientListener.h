@@ -2,7 +2,7 @@
 #define __APP_CLIENT_LISTENER_H__
 
 // THE PORT THE CLIENTS COME IN BY — one per application server, for every base it serves; the base is named in
-// the path. The protocol is sfrontend's (ibClientHost::Call); this only carries it:
+// the path. The protocol is frmserver's (ibClientHost::Call); this only carries it:
 //
 //   WS   /<base>/client    a connection: each text message one JSON-RPC request, answered by its response — and
 //                          the clients logged in through it go when it closes

@@ -18,7 +18,7 @@
 #define _IB_HELP_ENTRY_H_
 
 #include "backend/backend.h"
-#include "backend/clsid.h"   // ibClassID — the class an article is about
+#include "core/clsid.h"   // ibClassID — the class an article is about
 
 #include <vector>
 

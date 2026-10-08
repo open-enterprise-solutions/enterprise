@@ -30,7 +30,7 @@ void LogWorkerException(const wxString& location)
 {
 	// Reraise to identify the type — the outer catch(...) keeps the exception alive across this nested rethrow.
 	try { throw; }
-	catch (const ibBackendException& e) {
+	catch (const ibCoreException& e) {
 		ibJournalWarning(wxT("session.worker"),wxT("%s: ibBackendException: %s"),
 		             location, e.GetErrorDescription());
 	}

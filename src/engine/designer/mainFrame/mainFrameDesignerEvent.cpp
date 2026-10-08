@@ -148,7 +148,7 @@ static bool SaveBeforeChildLaunch(wxWindow* parent)
 			return false;
 		}
 	}
-	catch (const ibBackendException& e) {
+	catch (const ibCoreException& e) {
 		ShowBackendErrorChain(parent, wxMessageBoxCaptionStr,
 			_("Pre-launch save aborted by a backend error."),
 			e.GetErrorDescription());
@@ -438,7 +438,7 @@ void ibFrontendMainFrameDesigner::OnLoadDatabase(wxCommandEvent& event)
 				_("Error when trying to load database from a file!"));
 		}
 	}
-	catch (const ibBackendException& e) {
+	catch (const ibCoreException& e) {
 		ShowBackendErrorChain(this, wxMessageBoxCaptionStr,
 			_("Loading the database failed."),
 			e.GetErrorDescription());

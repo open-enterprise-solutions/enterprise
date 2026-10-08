@@ -1,7 +1,7 @@
 #include "docViewConfigCompare.h"
 
 #include "backend/backend_exception.h"
-#include "backend/fileSystem/fs.h"
+#include "core/fileSystem/fs.h"
 #include "backend/metaCollection/metaDiff.h"
 #include "backend/metaCollection/metaObject.h"
 #include "backend/metaData.h"
@@ -394,7 +394,7 @@ void ibConfigCompareView::OnApplyMerge(wxCommandEvent& WXUNUSED(event))
 			else if (delOp)     { ApplyDelete(rec, pull);  ++applied; }
 			else if (replaceOp) { ApplyReplace(rec, pull); ++applied; }
 		}
-		catch (const ibBackendException& err) {
+		catch (const ibCoreException& err) {
 			ibJournalInfo(wxT("designer"), wxT("[merge] %s: %s"),
 				rec.GetAnyObject() != nullptr
 					? rec.GetAnyObject()->GetName()

@@ -948,9 +948,9 @@ msgstr "Спроба змінити тип об'єкта лише для чит�
 #: src/engine/frontend/visualView/ctrl/frame.cpp:36
 #: src/engine/frontend/visualView/ctrl/frame.cpp:41
 #: src/engine/frontend/visualView/ctrl/frame.cpp:51
-#: src/engine/sfrontend/visualView/ctrl/frame.cpp:32
-#: src/engine/sfrontend/visualView/ctrl/frame.cpp:37
-#: src/engine/sfrontend/visualView/ctrl/frame.cpp:47
+#: src/engine/frmserver/visualView/ctrl/frame.cpp:32
+#: src/engine/frmserver/visualView/ctrl/frame.cpp:37
+#: src/engine/frmserver/visualView/ctrl/frame.cpp:47
 msgid "Class not registered"
 msgstr "Клас не зареєстровано"
 
@@ -1099,8 +1099,8 @@ msgstr "Загальний підсумок"
 #: src/engine/designer/docManager/templates/docViewModuleEditor.cpp:116
 #: src/engine/frontend/visualView/ctrl/tableBox.h:744
 #: src/engine/frontend/visualView/ctrl/widgets.h:338
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:804
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:341
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:804
+#: src/engine/frmserver/visualView/ctrl/widgets.h:341
 msgid "Format"
 msgstr "Формат"
 
@@ -1118,8 +1118,8 @@ msgstr "Колір тексту"
 #: src/engine/frontend/visualView/ctrl/sizer.h:231
 #: src/engine/frontend/visualView/ctrl/window.h:45
 #: src/engine/frontend/win/editor/gridEditor/gridEditor.h:629
-#: src/engine/sfrontend/visualView/ctrl/sizer.h:187
-#: src/engine/sfrontend/visualView/ctrl/window.h:33
+#: src/engine/frmserver/visualView/ctrl/sizer.h:187
+#: src/engine/frmserver/visualView/ctrl/window.h:33
 msgid "Font"
 msgstr "Шрифт"
 
@@ -1131,7 +1131,7 @@ msgstr "Горизонтальне положення"
 #: src/engine/backend/system/value/valueSpreadsheet.h:147
 #: src/engine/frontend/visualView/controlEnum.h:96
 #: src/engine/frontend/win/editor/gridEditor/gridEditor.h:603
-#: src/engine/sfrontend/visualView/controlEnum.h:96
+#: src/engine/frmserver/visualView/controlEnum.h:96
 msgid "Text"
 msgstr "Текст"
 
@@ -1153,22 +1153,22 @@ msgstr "Тема"
 #: src/engine/frontend/visualView/ctrl/widgets.h:573
 #: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:3369
 #: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:3397
-#: src/engine/sfrontend/visualView/ctrl/form.h:592
-#: src/engine/sfrontend/visualView/ctrl/notebook.h:124
-#: src/engine/sfrontend/visualView/ctrl/sizer.h:185
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:563
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:799
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:60
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:174
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:336
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:504
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:545
+#: src/engine/frmserver/visualView/ctrl/form.h:592
+#: src/engine/frmserver/visualView/ctrl/notebook.h:124
+#: src/engine/frmserver/visualView/ctrl/sizer.h:185
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:563
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:799
+#: src/engine/frmserver/visualView/ctrl/widgets.h:60
+#: src/engine/frmserver/visualView/ctrl/widgets.h:174
+#: src/engine/frmserver/visualView/ctrl/widgets.h:336
+#: src/engine/frmserver/visualView/ctrl/widgets.h:504
+#: src/engine/frmserver/visualView/ctrl/widgets.h:545
 msgid "Title"
 msgstr "Заголовок"
 
 #: src/engine/backend/compositionDescription.cpp:1082
 #: src/engine/frontend/visualView/ctrl/tableBox.h:548
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:573
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:573
 msgid "Show title"
 msgstr "Виводити заголовок"
 
@@ -1182,7 +1182,7 @@ msgstr "Виводити параметри"
 
 #: src/engine/backend/compositionDescription.cpp:1092
 #: src/engine/frontend/visualView/controlEnum.h:95
-#: src/engine/sfrontend/visualView/controlEnum.h:95
+#: src/engine/frmserver/visualView/controlEnum.h:95
 msgid "Auto"
 msgstr "Авто"
 
@@ -1940,12 +1940,12 @@ msgstr "відмовлено"
 #: src/engine/frontend/visualView/ctrl/widgets.h:176
 #: src/engine/frontend/visualView/ctrl/widgets.h:341
 #: src/engine/frontend/visualView/ctrl/widgets.h:533
-#: src/engine/sfrontend/visualView/ctrl/gridBox.h:223
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:426
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:810
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:184
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:344
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:510
+#: src/engine/frmserver/visualView/ctrl/gridBox.h:223
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:426
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:810
+#: src/engine/frmserver/visualView/ctrl/widgets.h:184
+#: src/engine/frmserver/visualView/ctrl/widgets.h:344
+#: src/engine/frmserver/visualView/ctrl/widgets.h:510
 msgid "Data"
 msgstr "Дані"
 
@@ -1962,7 +1962,7 @@ msgstr "Дані"
 #: src/engine/frontend/win/dlgs/queryConstructor/queryTempTableDialog.cpp:183
 #: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:3343
 #: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:3716
-#: src/engine/sfrontend/visualView/ctrl/formAttribute.h:141
+#: src/engine/frmserver/visualView/ctrl/formAttribute.h:141
 msgid "Type"
 msgstr "Тип"
 
@@ -1979,7 +1979,7 @@ msgstr "Реквізит"
 #: src/engine/backend/metaCollection/attribute/metaAttributeObject.h:309
 #: src/engine/backend/metaCollection/partial/constant.h:40
 #: src/engine/frontend/visualView/ctrl/formAttribute.h:144
-#: src/engine/sfrontend/visualView/ctrl/formAttribute.h:144
+#: src/engine/frmserver/visualView/ctrl/formAttribute.h:144
 msgid "Fill check"
 msgstr "Перевірка заповнення"
 
@@ -2141,11 +2141,11 @@ msgstr "Де показується група: на панелі навігац
 #: src/engine/frontend/visualView/ctrl/toolBar.h:247
 #: src/engine/frontend/visualView/ctrl/widgets.h:57
 #: src/engine/frontend/visualView/layers/commandBar.h:154
-#: src/engine/sfrontend/visualView/controlEnum.h:97
-#: src/engine/sfrontend/visualView/ctrl/formCommand.h:90
-#: src/engine/sfrontend/visualView/ctrl/notebook.h:131
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:65
-#: src/engine/sfrontend/visualView/layers/commandBar.h:150
+#: src/engine/frmserver/visualView/controlEnum.h:97
+#: src/engine/frmserver/visualView/ctrl/formCommand.h:90
+#: src/engine/frmserver/visualView/ctrl/notebook.h:131
+#: src/engine/frmserver/visualView/ctrl/widgets.h:65
+#: src/engine/frmserver/visualView/layers/commandBar.h:150
 msgid "Picture"
 msgstr "Картинка"
 
@@ -2159,9 +2159,9 @@ msgstr "Значок біля заголовка групи: біля її за�
 #: src/engine/frontend/visualView/ctrl/toolBar.h:251
 #: src/engine/frontend/visualView/ctrl/window.h:48
 #: src/engine/frontend/visualView/layers/commandBar.h:156
-#: src/engine/sfrontend/visualView/ctrl/sizer.h:190
-#: src/engine/sfrontend/visualView/ctrl/window.h:36
-#: src/engine/sfrontend/visualView/layers/commandBar.h:152
+#: src/engine/frmserver/visualView/ctrl/sizer.h:190
+#: src/engine/frmserver/visualView/ctrl/window.h:36
+#: src/engine/frmserver/visualView/layers/commandBar.h:152
 msgid "Tooltip"
 msgstr "Підказка"
 
@@ -2181,15 +2181,15 @@ msgstr "Звичайна"
 #: src/engine/backend/metaCollection/metaCommandObject.h:20
 #: src/engine/frontend/visualView/layers/commandBar.cpp:271
 #: src/engine/frontend/visualView/layers/commandReceiver.cpp:200
-#: src/engine/sfrontend/visualView/layers/commandBar.cpp:235
-#: src/engine/sfrontend/visualView/layers/commandReceiver.cpp:176
+#: src/engine/frmserver/visualView/layers/commandBar.cpp:235
+#: src/engine/frmserver/visualView/layers/commandReceiver.cpp:176
 msgid "Create"
 msgstr "Створити"
 
 #: src/engine/backend/metaCollection/metaCommandObject.h:21
 #: src/engine/backend/metaCollection/metaGroups.cpp:48
 #: src/engine/enterprise/win/dlg/functionAll.cpp:102
-#: src/engine/sfrontend/schema/runtime/allFunctions.cpp:31
+#: src/engine/frmserver/schema/runtime/allFunctions.cpp:31
 msgid "Reports"
 msgstr "Звіти"
 
@@ -2202,10 +2202,10 @@ msgstr "Сервіс"
 #: src/engine/frontend/visualView/layers/commandBar.h:144
 #: src/engine/frontend/visualView/layers/commandBar.h:146
 #: src/engine/frontend/visualView/layers/commandBar.h:166
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:70
-#: src/engine/sfrontend/visualView/layers/commandBar.h:140
-#: src/engine/sfrontend/visualView/layers/commandBar.h:142
-#: src/engine/sfrontend/visualView/layers/commandBar.h:162
+#: src/engine/frmserver/visualView/ctrl/widgets.h:70
+#: src/engine/frmserver/visualView/layers/commandBar.h:140
+#: src/engine/frmserver/visualView/layers/commandBar.h:142
+#: src/engine/frmserver/visualView/layers/commandBar.h:162
 msgid "Command"
 msgstr "Команда"
 
@@ -2323,12 +2323,12 @@ msgstr "Обробник події"
 #: src/engine/frontend/visualView/ctrl/widgets.h:177
 #: src/engine/frontend/visualView/ctrl/widgets.h:342
 #: src/engine/frontend/visualView/ctrl/widgets.h:534
-#: src/engine/sfrontend/visualView/ctrl/gridBox.h:224
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:427
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:811
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:185
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:345
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:511
+#: src/engine/frmserver/visualView/ctrl/gridBox.h:224
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:427
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:811
+#: src/engine/frmserver/visualView/ctrl/widgets.h:185
+#: src/engine/frmserver/visualView/ctrl/widgets.h:345
+#: src/engine/frmserver/visualView/ctrl/widgets.h:511
 msgid "Source"
 msgstr "Джерело"
 
@@ -2346,14 +2346,14 @@ msgstr "Що викликає подію: об'єкти, менеджери аб
 #: src/engine/frontend/visualView/ctrl/widgets.h:184
 #: src/engine/frontend/visualView/ctrl/widgets.h:357
 #: src/engine/frontend/visualView/ctrl/widgets.h:538
-#: src/engine/sfrontend/visualView/ctrl/formCommand.h:95
-#: src/engine/sfrontend/visualView/ctrl/gridBox.h:262
-#: src/engine/sfrontend/visualView/ctrl/notebook.h:72
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:439
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:849
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:192
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:360
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:515
+#: src/engine/frmserver/visualView/ctrl/formCommand.h:95
+#: src/engine/frmserver/visualView/ctrl/gridBox.h:262
+#: src/engine/frmserver/visualView/ctrl/notebook.h:72
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:439
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:849
+#: src/engine/frmserver/visualView/ctrl/widgets.h:192
+#: src/engine/frmserver/visualView/ctrl/widgets.h:360
+#: src/engine/frmserver/visualView/ctrl/widgets.h:515
 msgid "Event"
 msgstr "Подія"
 
@@ -2386,7 +2386,7 @@ msgstr "відкриття форми '%s'"
 #: src/engine/designer/win/dlg/homePageEditor.cpp:88
 #: src/engine/frontend/visualView/ctrl/toolBarAction.cpp:15
 #: src/engine/frontend/visualView/layers/commandBar.cpp:200
-#: src/engine/sfrontend/visualView/layers/commandBar.cpp:164
+#: src/engine/frmserver/visualView/layers/commandBar.cpp:164
 msgid "Form"
 msgstr "Форма"
 
@@ -2415,8 +2415,8 @@ msgstr "Відкрити форму"
 #: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:3695
 #: src/engine/frontend/win/dlgs/settings/settingsAppearanceEditor.cpp:159
 #: src/engine/frontend/win/dlgs/settings/settingsOutputParametersEditor.cpp:176
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:590
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:613
+#: src/engine/frmserver/visualView/ctrl/widgets.h:590
+#: src/engine/frmserver/visualView/ctrl/widgets.h:613
 msgid "Value"
 msgstr "Значення"
 
@@ -2463,7 +2463,7 @@ msgstr "Загальні шаблони"
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:31
 #: src/engine/enterprise/win/dlg/functionAll.cpp:159
-#: src/engine/sfrontend/schema/runtime/allFunctions.cpp:40
+#: src/engine/frmserver/schema/runtime/allFunctions.cpp:40
 msgid "Scheduled jobs"
 msgstr "Регламентні завдання"
 
@@ -2483,9 +2483,9 @@ msgstr "Параметри сеансу"
 #: src/engine/enterprise/win/dlg/functionAll.cpp:77
 #: src/engine/frontend/visualView/ctrl/control.h:108
 #: src/engine/frontend/visualView/layers/commandBar.h:170
-#: src/engine/sfrontend/schema/runtime/allFunctions.cpp:26
-#: src/engine/sfrontend/visualView/ctrl/control.h:107
-#: src/engine/sfrontend/visualView/layers/commandBar.h:166
+#: src/engine/frmserver/schema/runtime/allFunctions.cpp:26
+#: src/engine/frmserver/visualView/ctrl/control.h:107
+#: src/engine/frmserver/visualView/layers/commandBar.h:166
 msgid "Functional options"
 msgstr "Функціональні опції"
 
@@ -2512,19 +2512,19 @@ msgstr "Мови"
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:43
 #: src/engine/enterprise/win/dlg/functionAll.cpp:82
-#: src/engine/sfrontend/schema/runtime/allFunctions.cpp:27
+#: src/engine/frmserver/schema/runtime/allFunctions.cpp:27
 msgid "Constants"
 msgstr "Константи"
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:44
 #: src/engine/enterprise/win/dlg/functionAll.cpp:87
-#: src/engine/sfrontend/schema/runtime/allFunctions.cpp:28
+#: src/engine/frmserver/schema/runtime/allFunctions.cpp:28
 msgid "Catalogs"
 msgstr "Довідники"
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:45
 #: src/engine/enterprise/win/dlg/functionAll.cpp:92
-#: src/engine/sfrontend/schema/runtime/allFunctions.cpp:29
+#: src/engine/frmserver/schema/runtime/allFunctions.cpp:29
 msgid "Documents"
 msgstr "Документи"
 
@@ -2534,55 +2534,55 @@ msgstr "Перерахування"
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:47
 #: src/engine/enterprise/win/dlg/functionAll.cpp:97
-#: src/engine/sfrontend/schema/runtime/allFunctions.cpp:30
+#: src/engine/frmserver/schema/runtime/allFunctions.cpp:30
 msgid "Data processors"
 msgstr "Обробки"
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:50
 #: src/engine/enterprise/win/dlg/functionAll.cpp:107
-#: src/engine/sfrontend/schema/runtime/allFunctions.cpp:32
+#: src/engine/frmserver/schema/runtime/allFunctions.cpp:32
 msgid "Charts of characteristic types"
 msgstr "Плани видів характеристик"
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:51
 #: src/engine/enterprise/win/dlg/functionAll.cpp:112
-#: src/engine/sfrontend/schema/runtime/allFunctions.cpp:33
+#: src/engine/frmserver/schema/runtime/allFunctions.cpp:33
 msgid "Charts of accounts"
 msgstr "Плани рахунків"
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:52
 #: src/engine/enterprise/win/dlg/functionAll.cpp:117
-#: src/engine/sfrontend/schema/runtime/allFunctions.cpp:34
+#: src/engine/frmserver/schema/runtime/allFunctions.cpp:34
 msgid "Charts of calculation types"
 msgstr "Плани видів розрахунку"
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:53
 #: src/engine/enterprise/win/dlg/functionAll.cpp:126
-#: src/engine/sfrontend/schema/runtime/allFunctions.cpp:35
+#: src/engine/frmserver/schema/runtime/allFunctions.cpp:35
 msgid "Information registers"
 msgstr "Регістри відомостей"
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:54
 #: src/engine/enterprise/win/dlg/functionAll.cpp:131
-#: src/engine/sfrontend/schema/runtime/allFunctions.cpp:36
+#: src/engine/frmserver/schema/runtime/allFunctions.cpp:36
 msgid "Accumulation registers"
 msgstr "Регістри накопичення"
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:55
 #: src/engine/enterprise/win/dlg/functionAll.cpp:136
-#: src/engine/sfrontend/schema/runtime/allFunctions.cpp:37
+#: src/engine/frmserver/schema/runtime/allFunctions.cpp:37
 msgid "Accounting registers"
 msgstr "Регістри бухгалтерії"
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:56
 #: src/engine/enterprise/win/dlg/functionAll.cpp:141
-#: src/engine/sfrontend/schema/runtime/allFunctions.cpp:38
+#: src/engine/frmserver/schema/runtime/allFunctions.cpp:38
 msgid "Calculation registers"
 msgstr "Регістри розрахунку"
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:59
 #: src/engine/enterprise/win/dlg/functionAll.cpp:146
-#: src/engine/sfrontend/schema/runtime/allFunctions.cpp:39
+#: src/engine/frmserver/schema/runtime/allFunctions.cpp:39
 msgid "Sequences"
 msgstr "Послідовності"
 
@@ -2760,10 +2760,10 @@ msgstr "Структурні зміни (DDL) вимагають монопол�
 #: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:2504
 #: src/engine/frontend/win/dlgs/userList.cpp:85
 #: src/engine/frontend/win/editor/gridEditor/gridEditor.h:601
-#: src/engine/sfrontend/visualView/ctrl/control.h:102
-#: src/engine/sfrontend/visualView/ctrl/formAttribute.h:139
-#: src/engine/sfrontend/visualView/ctrl/formCommand.h:88
-#: src/engine/sfrontend/visualView/layers/commandBar.h:141
+#: src/engine/frmserver/visualView/ctrl/control.h:102
+#: src/engine/frmserver/visualView/ctrl/formAttribute.h:139
+#: src/engine/frmserver/visualView/ctrl/formCommand.h:88
+#: src/engine/frmserver/visualView/layers/commandBar.h:141
 msgid "Name"
 msgstr "Ім'я"
 
@@ -2895,8 +2895,8 @@ msgstr "Діалект, яким написано модулі конфігур�
 #: src/engine/designer/mainFrame/mainFrameDesignerMenu.cpp:227
 #: src/engine/designer/mainFrameDesignerMenu.cpp:124
 #: src/engine/enterprise/mainFrame/mainFrameEnterpriseMenu.cpp:105
-#: src/engine/sfrontend/client/clientFrameDesigner.cpp:37
-#: src/engine/sfrontend/client/clientFrameRuntime.cpp:40
+#: src/engine/frmserver/client/clientFrameDesigner.cpp:37
+#: src/engine/frmserver/client/clientFrameRuntime.cpp:40
 msgid "Administration"
 msgstr "Адміністрування"
 
@@ -2914,8 +2914,8 @@ msgstr "Оновити конфігурацію бази даних"
 #: src/engine/designer/mainFrameDesignerMenu.cpp:123
 #: src/engine/enterprise/mainFrame/mainFrameEnterpriseMenu.cpp:102
 #: src/engine/frontend/win/dlgs/activeUser.h:32
-#: src/engine/sfrontend/client/clientFrameDesigner.cpp:36
-#: src/engine/sfrontend/client/clientFrameRuntime.cpp:39
+#: src/engine/frmserver/client/clientFrameDesigner.cpp:36
+#: src/engine/frmserver/client/clientFrameRuntime.cpp:39
 msgid "Active users"
 msgstr "Активні користувачі"
 
@@ -3171,7 +3171,7 @@ msgstr "Зберегти та закрити"
 #: src/engine/designer/mainFrameDesignerCmd.cpp:18
 #: src/engine/enterprise/mainFrame/mainFrameEnterpriseParts.cpp:20
 #: src/engine/frontend/win/dlgs/settings/savedSettings.cpp:77
-#: src/engine/sfrontend/docView/docManager.cpp:313
+#: src/engine/frmserver/docView/docManager.cpp:313
 msgid "Save"
 msgstr "Зберегти"
 
@@ -3218,7 +3218,7 @@ msgstr "Константа '%s': запис скасовано обробник�
 #: src/engine/backend/metaCollection/metaStoredValueObjectRecord.cpp:406
 #: src/engine/backend/metaCollection/partial/commonObjectRefQuery.cpp:327
 #: src/engine/frontend/visualView/ctrl/formAttribute.cpp:414
-#: src/engine/sfrontend/visualView/ctrl/formAttribute.cpp:407
+#: src/engine/frmserver/visualView/ctrl/formAttribute.cpp:407
 #, c-format
 msgid "%s is a required field"
 msgstr "Поле %s обов'язкове для заповнення"
@@ -4831,8 +4831,8 @@ msgstr "Копіювати"
 #: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:2156
 #: src/engine/frontend/win/dlgs/userList.cpp:74
 #: src/engine/launcher/launcher.cpp:249
-#: src/engine/sfrontend/client/clientFrameDesigner.cpp:32
-#: src/engine/sfrontend/client/clientFrameRuntime.cpp:28
+#: src/engine/frmserver/client/clientFrameDesigner.cpp:32
+#: src/engine/frmserver/client/clientFrameRuntime.cpp:28
 msgid "Edit"
 msgstr "Редагувати"
 
@@ -6832,7 +6832,7 @@ msgstr "Документ Word"
 #: src/engine/frontend/docView/docManager.cpp:314
 #: src/engine/frontend/docView/templates/docViewSpreadsheet.cpp:532
 #: src/engine/frontend/win/editor/gridEditor/gridEditor.cpp:155
-#: src/engine/sfrontend/docView/docManager.cpp:279
+#: src/engine/frmserver/docView/docManager.cpp:279
 msgid "Spreadsheet document"
 msgstr "Табличний документ"
 
@@ -7244,7 +7244,7 @@ msgstr "формування звіту"
 
 #: src/engine/backend/system/value/valueDataComposition.cpp:981
 #: src/engine/frontend/visualView/ctrl/gridBoxAction.cpp:109
-#: src/engine/sfrontend/visualView/ctrl/gridBoxAction.cpp:151
+#: src/engine/frmserver/visualView/ctrl/gridBoxAction.cpp:151
 msgid "Compose"
 msgstr "Сформувати"
 
@@ -7262,9 +7262,9 @@ msgstr "Варіанти"
 #: src/engine/backend/system/value/valueDataComposition.cpp:1006
 #: src/engine/frontend/visualView/ctrl/tableBoxAction.cpp:114
 #: src/engine/frontend/win/dlgs/settings/savedSettings.cpp:57
-#: src/engine/sfrontend/visualView/choiceRequest.cpp:56
-#: src/engine/sfrontend/visualView/choiceRequest.cpp:70
-#: src/engine/sfrontend/visualView/ctrl/tableBoxAction.cpp:106
+#: src/engine/frmserver/visualView/choiceRequest.cpp:56
+#: src/engine/frmserver/visualView/choiceRequest.cpp:70
+#: src/engine/frmserver/visualView/ctrl/tableBoxAction.cpp:106
 msgid "Restore settings"
 msgstr "Відновити налаштування"
 
@@ -7274,7 +7274,7 @@ msgstr "Відновити налаштування"
 #: src/engine/frontend/win/dlgs/settings/savedSettings.cpp:184
 #: src/engine/frontend/win/dlgs/settings/savedSettings.cpp:231
 #: src/engine/frontend/win/dlgs/settings/savedSettings.cpp:240
-#: src/engine/sfrontend/visualView/ctrl/tableBoxAction.cpp:107
+#: src/engine/frmserver/visualView/ctrl/tableBoxAction.cpp:107
 msgid "Save settings"
 msgstr "Зберегти налаштування"
 
@@ -7771,8 +7771,8 @@ msgstr "показ табличного документа"
 #: src/engine/frontend/visualView/controlEnum.h:25
 #: src/engine/frontend/visualView/ctrl/tableBox.h:468
 #: src/engine/frontend/win/editor/gridEditor/gridEditor.h:621
-#: src/engine/sfrontend/visualView/controlEnum.h:25
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:496
+#: src/engine/frmserver/visualView/controlEnum.h:25
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:496
 msgid "Horizontal"
 msgstr "Горизонтальний"
 
@@ -7780,8 +7780,8 @@ msgstr "Горизонтальний"
 #: src/engine/frontend/visualView/controlEnum.h:26
 #: src/engine/frontend/visualView/ctrl/tableBox.h:469
 #: src/engine/frontend/win/editor/gridEditor/gridEditor.h:623
-#: src/engine/sfrontend/visualView/controlEnum.h:26
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:497
+#: src/engine/frmserver/visualView/controlEnum.h:26
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:497
 msgid "Vertical"
 msgstr "Вертикальний"
 
@@ -7792,9 +7792,9 @@ msgstr "Вертикальний"
 #: src/engine/frontend/visualView/ctrl/sizer.h:136
 #: src/engine/frontend/win/ctrls/dataview/datavgen.cpp:8950
 #: src/engine/frontend/win/editor/gridEditor/gridEditor.h:637
-#: src/engine/sfrontend/visualView/controlEnum.h:60
-#: src/engine/sfrontend/visualView/controlEnum.h:84
-#: src/engine/sfrontend/visualView/ctrl/sizer.h:108
+#: src/engine/frmserver/visualView/controlEnum.h:60
+#: src/engine/frmserver/visualView/controlEnum.h:84
+#: src/engine/frmserver/visualView/ctrl/sizer.h:108
 msgid "Left"
 msgstr "Ліворуч"
 
@@ -7802,8 +7802,8 @@ msgstr "Ліворуч"
 #: src/engine/backend/system/value/valueSpreadsheet.h:99
 #: src/engine/frontend/visualView/controlEnum.h:61
 #: src/engine/frontend/visualView/controlEnum.h:73
-#: src/engine/sfrontend/visualView/controlEnum.h:61
-#: src/engine/sfrontend/visualView/controlEnum.h:73
+#: src/engine/frmserver/visualView/controlEnum.h:61
+#: src/engine/frmserver/visualView/controlEnum.h:73
 msgid "Center"
 msgstr "По центру"
 
@@ -7814,9 +7814,9 @@ msgstr "По центру"
 #: src/engine/frontend/visualView/ctrl/sizer.h:138
 #: src/engine/frontend/win/ctrls/dataview/datavgen.cpp:8953
 #: src/engine/frontend/win/editor/gridEditor/gridEditor.h:639
-#: src/engine/sfrontend/visualView/controlEnum.h:62
-#: src/engine/sfrontend/visualView/controlEnum.h:85
-#: src/engine/sfrontend/visualView/ctrl/sizer.h:110
+#: src/engine/frmserver/visualView/controlEnum.h:62
+#: src/engine/frmserver/visualView/controlEnum.h:85
+#: src/engine/frmserver/visualView/ctrl/sizer.h:110
 msgid "Right"
 msgstr "Праворуч"
 
@@ -7825,9 +7825,9 @@ msgstr "Праворуч"
 #: src/engine/frontend/visualView/controlEnum.h:72
 #: src/engine/frontend/visualView/ctrl/sizer.h:140
 #: src/engine/frontend/win/editor/gridEditor/gridEditor.h:641
-#: src/engine/sfrontend/visualView/controlEnum.h:49
-#: src/engine/sfrontend/visualView/controlEnum.h:72
-#: src/engine/sfrontend/visualView/ctrl/sizer.h:112
+#: src/engine/frmserver/visualView/controlEnum.h:49
+#: src/engine/frmserver/visualView/controlEnum.h:72
+#: src/engine/frmserver/visualView/ctrl/sizer.h:112
 msgid "Top"
 msgstr "Згори"
 
@@ -7836,9 +7836,9 @@ msgstr "Згори"
 #: src/engine/frontend/visualView/controlEnum.h:74
 #: src/engine/frontend/visualView/ctrl/sizer.h:142
 #: src/engine/frontend/win/editor/gridEditor/gridEditor.h:643
-#: src/engine/sfrontend/visualView/controlEnum.h:50
-#: src/engine/sfrontend/visualView/controlEnum.h:74
-#: src/engine/sfrontend/visualView/ctrl/sizer.h:114
+#: src/engine/frmserver/visualView/controlEnum.h:50
+#: src/engine/frmserver/visualView/controlEnum.h:74
+#: src/engine/frmserver/visualView/ctrl/sizer.h:114
 msgid "Bottom"
 msgstr "Знизу"
 
@@ -7852,7 +7852,7 @@ msgstr "Обрізати"
 
 #: src/engine/backend/system/value/valueSpreadsheet.h:115
 #: src/engine/frontend/visualView/ctrl/widgets.h:164
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:172
+#: src/engine/frmserver/visualView/ctrl/widgets.h:172
 msgid "Wrap"
 msgstr "Перенесення"
 
@@ -7933,8 +7933,8 @@ msgstr "Колонка таблиці '%s' містить значення, що
 #: src/engine/frontend/visualView/ctrl/formCommand.h:93
 #: src/engine/frontend/win/dlgs/jobSchedule/jobScheduleSettings.cpp:46
 #: src/engine/frontend/win/editor/gridEditor/gridEditor.h:600
-#: src/engine/sfrontend/visualView/ctrl/formAttribute.h:138
-#: src/engine/sfrontend/visualView/ctrl/formCommand.h:87
+#: src/engine/frmserver/visualView/ctrl/formAttribute.h:138
+#: src/engine/frmserver/visualView/ctrl/formCommand.h:87
 msgid "General"
 msgstr "Загальний"
 
@@ -7946,9 +7946,9 @@ msgstr "Ім'я колонки"
 #: src/engine/frontend/visualView/ctrl/formAttribute.h:140
 #: src/engine/frontend/visualView/ctrl/formCommand.h:95
 #: src/engine/frontend/visualView/layers/commandBar.h:149
-#: src/engine/sfrontend/visualView/ctrl/formAttribute.h:140
-#: src/engine/sfrontend/visualView/ctrl/formCommand.h:89
-#: src/engine/sfrontend/visualView/layers/commandBar.h:145
+#: src/engine/frmserver/visualView/ctrl/formAttribute.h:140
+#: src/engine/frmserver/visualView/ctrl/formCommand.h:89
+#: src/engine/frmserver/visualView/layers/commandBar.h:145
 msgid "Caption"
 msgstr "Заголовок"
 
@@ -8664,7 +8664,7 @@ msgstr "Не вдалося завантажити один із файлів к
 #: src/engine/enterprise/mainFrame/mainFrameEnterpriseEvent.cpp:52
 #: src/engine/enterprise/mainFrame/mainFrameEnterpriseMenu.cpp:104
 #: src/engine/frontend/docView/docManager.cpp:332
-#: src/engine/sfrontend/docView/docManager.cpp:293
+#: src/engine/frmserver/docView/docManager.cpp:293
 msgid "Registration journal"
 msgstr "Журнал реєстрації"
 
@@ -8867,16 +8867,16 @@ msgstr "Знайти"
 #: src/engine/designer/mainFrame/mainFrameDesignerParts.cpp:70
 #: src/engine/designer/mainFrameDesignerCmd.cpp:23
 #: src/engine/enterprise/mainFrame/mainFrameEnterpriseParts.cpp:25
-#: src/engine/sfrontend/docView/commandProcessor.cpp:156
-#: src/engine/sfrontend/docView/docManager.cpp:312
+#: src/engine/frmserver/docView/commandProcessor.cpp:156
+#: src/engine/frmserver/docView/docManager.cpp:312
 msgid "Redo"
 msgstr "Повторити"
 
 #: src/engine/designer/mainFrame/mainFrameDesignerParts.cpp:71
 #: src/engine/designer/mainFrameDesignerCmd.cpp:24
 #: src/engine/enterprise/mainFrame/mainFrameEnterpriseParts.cpp:26
-#: src/engine/sfrontend/docView/commandProcessor.cpp:143
-#: src/engine/sfrontend/docView/docManager.cpp:311
+#: src/engine/frmserver/docView/commandProcessor.cpp:143
+#: src/engine/frmserver/docView/docManager.cpp:311
 msgid "Undo"
 msgstr "Скасувати"
 
@@ -9259,7 +9259,7 @@ msgstr "Дві колонки, широка права (1:2)"
 
 #: src/engine/designer/win/dlg/homePageEditor.cpp:201
 #: src/engine/frontend/docView/templates/docViewHomePage.cpp:270
-#: src/engine/sfrontend/docView/templates/docViewHomePage.cpp:222
+#: src/engine/frmserver/docView/templates/docViewHomePage.cpp:222
 msgid "<not found>"
 msgstr "<не знайдено>"
 
@@ -9468,12 +9468,12 @@ msgid "Enterprise"
 msgstr "Підприємство"
 
 #: src/engine/enterprise/mainFrame/mainFrameEnterpriseMenu.cpp:92
-#: src/engine/sfrontend/client/clientFrameRuntime.cpp:33
+#: src/engine/frmserver/client/clientFrameRuntime.cpp:33
 msgid "All operations..."
 msgstr "Усі функції..."
 
 #: src/engine/enterprise/mainFrame/mainFrameEnterpriseMenu.cpp:93
-#: src/engine/sfrontend/client/clientFrameRuntime.cpp:34
+#: src/engine/frmserver/client/clientFrameRuntime.cpp:34
 msgid "Operations"
 msgstr "Операції"
 
@@ -9497,69 +9497,69 @@ msgstr "Усі функції"
 #: src/engine/frontend/docView/docManager.cpp:299
 #: src/engine/frontend/docView/templates/docViewText.cpp:157
 #: src/engine/frontend/docView/templates/docViewText.h:83
-#: src/engine/sfrontend/docView/docManager.cpp:272
+#: src/engine/frmserver/docView/docManager.cpp:272
 msgid "Text document"
 msgstr "Текстовий документ"
 
 #: src/engine/frontend/docView/docManager.cpp:300
-#: src/engine/sfrontend/docView/docManager.cpp:273
+#: src/engine/frmserver/docView/docManager.cpp:273
 msgid "Text Doc"
 msgstr "Текстовий документ"
 
 #: src/engine/frontend/docView/docManager.cpp:300
-#: src/engine/sfrontend/docView/docManager.cpp:273
+#: src/engine/frmserver/docView/docManager.cpp:273
 msgid "Text View"
 msgstr "Перегляд тексту"
 
 #: src/engine/frontend/docView/docManager.cpp:315
-#: src/engine/sfrontend/docView/docManager.cpp:280
+#: src/engine/frmserver/docView/docManager.cpp:280
 msgid "Spreadsheet Doc"
 msgstr "Табличний документ"
 
 #: src/engine/frontend/docView/docManager.cpp:315
-#: src/engine/sfrontend/docView/docManager.cpp:280
+#: src/engine/frmserver/docView/docManager.cpp:280
 msgid "Spreadsheet View"
 msgstr "Перегляд табличного документа"
 
 #: src/engine/frontend/docView/docManager.cpp:320
-#: src/engine/sfrontend/docView/docManager.cpp:285
+#: src/engine/frmserver/docView/docManager.cpp:285
 msgid "Help document"
 msgstr "Довідка"
 
 #: src/engine/frontend/docView/docManager.cpp:321
-#: src/engine/sfrontend/docView/docManager.cpp:286
+#: src/engine/frmserver/docView/docManager.cpp:286
 msgid "Help Doc"
 msgstr "Документ довідки"
 
 #: src/engine/frontend/docView/docManager.cpp:321
-#: src/engine/sfrontend/docView/docManager.cpp:286
+#: src/engine/frmserver/docView/docManager.cpp:286
 msgid "Help View"
 msgstr "Перегляд довідки"
 
 #: src/engine/frontend/docView/docManager.cpp:334
-#: src/engine/sfrontend/docView/docManager.cpp:294
+#: src/engine/frmserver/docView/docManager.cpp:294
 msgid "Audit Log Doc"
 msgstr "Документ журналу аудиту"
 
 #: src/engine/frontend/docView/docManager.cpp:334
-#: src/engine/sfrontend/docView/docManager.cpp:294
+#: src/engine/frmserver/docView/docManager.cpp:294
 msgid "Audit Log View"
 msgstr "Перегляд журналу аудиту"
 
 #: src/engine/frontend/docView/docManager.cpp:343
 #: src/engine/frontend/docView/templates/docViewHomePage.cpp:82
-#: src/engine/sfrontend/docView/docManager.cpp:302
-#: src/engine/sfrontend/docView/templates/docViewHomePage.cpp:72
+#: src/engine/frmserver/docView/docManager.cpp:302
+#: src/engine/frmserver/docView/templates/docViewHomePage.cpp:72
 msgid "Home page"
 msgstr "Початкова сторінка"
 
 #: src/engine/frontend/docView/docManager.cpp:345
-#: src/engine/sfrontend/docView/docManager.cpp:303
+#: src/engine/frmserver/docView/docManager.cpp:303
 msgid "Home Page Doc"
 msgstr "Документ початкової сторінки"
 
 #: src/engine/frontend/docView/docManager.cpp:345
-#: src/engine/sfrontend/docView/docManager.cpp:303
+#: src/engine/frmserver/docView/docManager.cpp:303
 msgid "Home Page View"
 msgstr "Перегляд початкової сторінки"
 
@@ -9571,53 +9571,53 @@ msgid "Save As"
 msgstr "Зберегти як"
 
 #: src/engine/frontend/docView/docView.cpp:544
-#: src/engine/sfrontend/docView/docView.cpp:419
+#: src/engine/frmserver/docView/docView.cpp:419
 msgid "Discard changes and reload the last saved version?"
 msgstr "Скасувати зміни й завантажити останню збережену версію?"
 
 #: src/engine/frontend/docView/docView.cpp:575
-#: src/engine/sfrontend/docView/docView.cpp:454
+#: src/engine/frmserver/docView/docView.cpp:454
 msgid "unnamed"
 msgstr "без назви"
 
 #: src/engine/frontend/docView/docView.cpp:616
-#: src/engine/sfrontend/docView/docView.cpp:480
+#: src/engine/frmserver/docView/docView.cpp:480
 #, c-format
 msgid "Do you want to save changes to %s?"
 msgstr "Зберегти зміни в %s?"
 
 #: src/engine/frontend/docView/docView.cpp:647
-#: src/engine/sfrontend/docView/docView.cpp:507
+#: src/engine/frmserver/docView/docView.cpp:507
 #, c-format
 msgid "Do you want to save changes to %s before closing it?"
 msgstr "Зберегти зміни в %s перед закриттям?"
 
 #: src/engine/frontend/docView/docView.cpp:657
-#: src/engine/sfrontend/docView/docView.cpp:517
+#: src/engine/frmserver/docView/docView.cpp:517
 #, c-format
 msgid "Saving %s failed, would you like to retry?"
 msgstr "Не вдалося зберегти %s. Спробувати ще раз?"
 
 #: src/engine/frontend/docView/docView.cpp:768
-#: src/engine/sfrontend/docView/docView.cpp:624
+#: src/engine/frmserver/docView/docView.cpp:624
 #, c-format
 msgid "File \"%s\" could not be opened for writing."
 msgstr "Не вдалося відкрити файл \"%s\" для запису."
 
 #: src/engine/frontend/docView/docView.cpp:774
-#: src/engine/sfrontend/docView/docView.cpp:632
+#: src/engine/frmserver/docView/docView.cpp:632
 #, c-format
 msgid "Failed to save document to the file \"%s\"."
 msgstr "Не вдалося зберегти документ у файл \"%s\"."
 
 #: src/engine/frontend/docView/docView.cpp:791
-#: src/engine/sfrontend/docView/docView.cpp:644
+#: src/engine/frmserver/docView/docView.cpp:644
 #, c-format
 msgid "File \"%s\" could not be opened for reading."
 msgstr "Не вдалося відкрити файл \"%s\" для читання."
 
 #: src/engine/frontend/docView/docView.cpp:803
-#: src/engine/sfrontend/docView/docView.cpp:653
+#: src/engine/frmserver/docView/docView.cpp:653
 #, c-format
 msgid "Failed to read document from the file \"%s\"."
 msgstr "Не вдалося прочитати документ з файлу \"%s\"."
@@ -9648,13 +9648,13 @@ msgid "Print Preview"
 msgstr "Попередній перегляд"
 
 #: src/engine/frontend/docView/docView.cpp:1666
-#: src/engine/sfrontend/docView/docView.cpp:986
+#: src/engine/frmserver/docView/docView.cpp:986
 #, c-format
 msgid "The format of file '%s' couldn't be determined."
 msgstr "Не вдалося визначити формат файлу '%s'."
 
 #: src/engine/frontend/docView/docView.cpp:1792
-#: src/engine/sfrontend/docView/docView.cpp:1093
+#: src/engine/frmserver/docView/docView.cpp:1093
 #, c-format
 msgid "unnamed%d"
 msgstr "без назви%d"
@@ -9775,7 +9775,7 @@ msgid "Not Found!"
 msgstr "Не знайдено!"
 
 #: src/engine/frontend/docView/templates/docViewHomePage.cpp:272
-#: src/engine/sfrontend/docView/templates/docViewHomePage.cpp:223
+#: src/engine/frmserver/docView/templates/docViewHomePage.cpp:223
 msgid "Form is not available"
 msgstr "Форма недоступна"
 
@@ -9856,7 +9856,7 @@ msgstr "Без меж"
 #: src/engine/frontend/docView/templates/docViewSpreadsheet.cpp:134
 #: src/engine/frontend/visualView/ctrl/sizer.h:133
 #: src/engine/frontend/win/editor/gridEditor/gridEditor.h:636
-#: src/engine/sfrontend/visualView/ctrl/sizer.h:105
+#: src/engine/frmserver/visualView/ctrl/sizer.h:105
 msgid "Border"
 msgstr "Межа"
 
@@ -9904,7 +9904,7 @@ msgstr "Розгрупувати колонки"
 #: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:3145
 #: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:3235
 #: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:4896
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:567
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:567
 msgid "Grouping"
 msgstr "Групування"
 
@@ -10031,7 +10031,7 @@ msgstr "Оператор"
 
 #: src/engine/frontend/mainFrame/settings/fontcolorsettings.cpp:7
 #: src/engine/frontend/visualView/ctrl/tableBox.h:431
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:440
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:440
 msgid "Selection"
 msgstr "Виділення"
 
@@ -10310,8 +10310,8 @@ msgstr "Ім'я шрифту"
 #: src/engine/frontend/propertyManager/property/advprop/advpropFont.cpp:116
 #: src/engine/frontend/visualView/ctrl/tableBox.h:552
 #: src/engine/frontend/visualView/ctrl/tableBox.h:766
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:577
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:826
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:577
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:826
 msgid "Style"
 msgstr "Стиль"
 
@@ -10393,7 +10393,7 @@ msgstr "Вибрати реєстратор"
 
 #: src/engine/frontend/propertyManager/property/advprop/advpropSize.cpp:33
 #: src/engine/frontend/visualView/ctrl/tableBox.h:767
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:827
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:827
 msgid "Width"
 msgstr "Ширина"
 
@@ -10437,8 +10437,8 @@ msgstr "Виберіть розділ зі списку:"
 #: src/engine/frontend/syntaxHelper/helpChooserDialog.cpp:61
 #: src/engine/frontend/visualView/ctrl/formAction.cpp:70
 #: src/engine/frontend/visualView/ctrl/formObject.cpp:709
-#: src/engine/sfrontend/visualView/ctrl/formAction.cpp:70
-#: src/engine/sfrontend/visualView/ctrl/formObject.cpp:643
+#: src/engine/frmserver/visualView/ctrl/formAction.cpp:70
+#: src/engine/frmserver/visualView/ctrl/formObject.cpp:643
 msgid "Help"
 msgstr "Довідка"
 
@@ -10587,76 +10587,76 @@ msgid "Failed to initialize GUI: no built-in themes found."
 msgstr "Не вдалося ініціалізувати графічний інтерфейс: вбудовані теми не знайдено."
 
 #: src/engine/frontend/visualView/controlEnum.h:36
-#: src/engine/sfrontend/visualView/controlEnum.h:36
+#: src/engine/frmserver/visualView/controlEnum.h:36
 msgctxt "sizer flag"
 msgid "Shrink"
 msgstr "Стиснути"
 
 #: src/engine/frontend/visualView/controlEnum.h:37
-#: src/engine/sfrontend/visualView/controlEnum.h:37
+#: src/engine/frmserver/visualView/controlEnum.h:37
 msgctxt "sizer flag"
 msgid "Expand"
 msgstr "Розширити"
 
 #: src/engine/frontend/visualView/controlEnum.h:98
-#: src/engine/sfrontend/visualView/controlEnum.h:98
+#: src/engine/frmserver/visualView/controlEnum.h:98
 msgid "Picture and text"
 msgstr "Картинка і текст"
 
 #: src/engine/frontend/visualView/ctrl/control.h:103
-#: src/engine/sfrontend/visualView/ctrl/control.h:102
+#: src/engine/frmserver/visualView/ctrl/control.h:102
 msgid "Object name"
 msgstr "Ім'я об'єкта"
 
 #: src/engine/frontend/visualView/ctrl/control.h:107
 #: src/engine/frontend/visualView/layers/commandBar.h:169
-#: src/engine/sfrontend/visualView/ctrl/control.h:106
-#: src/engine/sfrontend/visualView/layers/commandBar.h:165
+#: src/engine/frmserver/visualView/ctrl/control.h:106
+#: src/engine/frmserver/visualView/layers/commandBar.h:165
 msgid "User visibility"
 msgstr "Видимість для користувача"
 
 #: src/engine/frontend/visualView/ctrl/control.h:108
 #: src/engine/frontend/visualView/layers/commandBar.h:171
-#: src/engine/sfrontend/visualView/ctrl/control.h:107
-#: src/engine/sfrontend/visualView/layers/commandBar.h:167
+#: src/engine/frmserver/visualView/ctrl/control.h:107
+#: src/engine/frmserver/visualView/layers/commandBar.h:167
 msgid "The functional options this element is available under: while every one of them is off, it is neither shown nor offered, and neither is what it holds. Empty - available whatever the options are. Works together with Visible and does not change it."
 msgstr "Функціональні опції, за яких елемент доступний: поки всі вони вимкнені, ні він, ні те, що в ньому лежить, не показується і не пропонується. Порожньо - доступний за будь-яких опцій. Діє разом із властивістю Видимість і не змінює її."
 
 #: src/engine/frontend/visualView/ctrl/form.h:590
-#: src/engine/sfrontend/visualView/ctrl/form.h:591
+#: src/engine/frmserver/visualView/ctrl/form.h:591
 msgid "Frame"
 msgstr "Рамка"
 
 #: src/engine/frontend/visualView/ctrl/form.h:592
-#: src/engine/sfrontend/visualView/ctrl/form.h:593
+#: src/engine/frmserver/visualView/ctrl/form.h:593
 msgid "The form window's title. Empty: the synonym of the object the form shows (or of the form itself) is used. Can be written per language and changed from code while the form is open."
 msgstr "Заголовок вікна форми. Якщо порожньо, використовується синонім об'єкта, який показує форма (або синонім самої форми). Можна задати для кожної мови та змінювати з коду, поки форму відкрито."
 
 #: src/engine/frontend/visualView/ctrl/form.h:594
 #: src/engine/frontend/visualView/ctrl/sizer.h:232
 #: src/engine/frontend/visualView/ctrl/window.h:46
-#: src/engine/sfrontend/visualView/ctrl/form.h:595
-#: src/engine/sfrontend/visualView/ctrl/sizer.h:188
-#: src/engine/sfrontend/visualView/ctrl/window.h:34
+#: src/engine/frmserver/visualView/ctrl/form.h:595
+#: src/engine/frmserver/visualView/ctrl/sizer.h:188
+#: src/engine/frmserver/visualView/ctrl/window.h:34
 msgid "Foreground"
 msgstr "Передній план"
 
 #: src/engine/frontend/visualView/ctrl/form.h:594
-#: src/engine/sfrontend/visualView/ctrl/form.h:595
+#: src/engine/frmserver/visualView/ctrl/form.h:595
 msgid "The form's text colour, inherited by controls that have no colour of their own. Default: the system colour."
 msgstr "Колір тексту форми; його успадковують елементи, які не мають власного кольору. За замовчуванням: системний колір."
 
 #: src/engine/frontend/visualView/ctrl/form.h:595
 #: src/engine/frontend/visualView/ctrl/sizer.h:233
 #: src/engine/frontend/visualView/ctrl/window.h:47
-#: src/engine/sfrontend/visualView/ctrl/form.h:596
-#: src/engine/sfrontend/visualView/ctrl/sizer.h:189
-#: src/engine/sfrontend/visualView/ctrl/window.h:35
+#: src/engine/frmserver/visualView/ctrl/form.h:596
+#: src/engine/frmserver/visualView/ctrl/sizer.h:189
+#: src/engine/frmserver/visualView/ctrl/window.h:35
 msgid "Background"
 msgstr "Фон"
 
 #: src/engine/frontend/visualView/ctrl/form.h:595
-#: src/engine/sfrontend/visualView/ctrl/form.h:596
+#: src/engine/frmserver/visualView/ctrl/form.h:596
 msgid "The form's background colour. Default: the system colour, which follows the user's theme."
 msgstr "Колір фону форми. За замовчуванням: системний колір, що відповідає темі оформлення користувача."
 
@@ -10665,24 +10665,24 @@ msgstr "Колір фону форми. За замовчуванням: сис�
 #: src/engine/frontend/visualView/ctrl/toolBar.h:253
 #: src/engine/frontend/visualView/ctrl/window.h:49
 #: src/engine/frontend/visualView/layers/commandBar.h:158
-#: src/engine/sfrontend/visualView/ctrl/form.h:597
-#: src/engine/sfrontend/visualView/ctrl/sizer.h:193
-#: src/engine/sfrontend/visualView/ctrl/window.h:37
-#: src/engine/sfrontend/visualView/layers/commandBar.h:154
+#: src/engine/frmserver/visualView/ctrl/form.h:597
+#: src/engine/frmserver/visualView/ctrl/sizer.h:193
+#: src/engine/frmserver/visualView/ctrl/window.h:37
+#: src/engine/frmserver/visualView/layers/commandBar.h:154
 msgid "Enabled"
 msgstr "Увімкнено"
 
 #: src/engine/frontend/visualView/ctrl/form.h:596
-#: src/engine/sfrontend/visualView/ctrl/form.h:597
+#: src/engine/frmserver/visualView/ctrl/form.h:597
 msgid "Whether the user can interact with the form. Off: every control on it is greyed out and takes no input - a view-only form."
 msgstr "Чи може користувач працювати з формою. Вимкнено: усі елементи форми неактивні (сірі) й не приймають введення - форма лише для перегляду."
 
 #: src/engine/frontend/visualView/ctrl/form.h:597
 #: src/engine/frontend/visualView/ctrl/notebook.h:132
 #: src/engine/frontend/visualView/ctrl/sizer.h:26
-#: src/engine/sfrontend/visualView/ctrl/form.h:598
-#: src/engine/sfrontend/visualView/ctrl/notebook.h:133
-#: src/engine/sfrontend/visualView/ctrl/sizer.h:18
+#: src/engine/frmserver/visualView/ctrl/form.h:598
+#: src/engine/frmserver/visualView/ctrl/notebook.h:133
+#: src/engine/frmserver/visualView/ctrl/sizer.h:18
 msgid "Sizer"
 msgstr "Контейнер"
 
@@ -10694,31 +10694,31 @@ msgstr "Контейнер"
 #: src/engine/frontend/visualView/ctrl/widgets.h:603
 #: src/engine/frontend/visualView/ctrl/widgets.h:638
 #: src/engine/frontend/visualView/ctrl/widgets.h:670
-#: src/engine/sfrontend/visualView/ctrl/form.h:599
-#: src/engine/sfrontend/visualView/ctrl/notebook.h:134
-#: src/engine/sfrontend/visualView/ctrl/sizer.h:137
-#: src/engine/sfrontend/visualView/ctrl/sizer.h:156
-#: src/engine/sfrontend/visualView/ctrl/sizer.h:182
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:566
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:592
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:615
+#: src/engine/frmserver/visualView/ctrl/form.h:599
+#: src/engine/frmserver/visualView/ctrl/notebook.h:134
+#: src/engine/frmserver/visualView/ctrl/sizer.h:137
+#: src/engine/frmserver/visualView/ctrl/sizer.h:156
+#: src/engine/frmserver/visualView/ctrl/sizer.h:182
+#: src/engine/frmserver/visualView/ctrl/widgets.h:566
+#: src/engine/frmserver/visualView/ctrl/widgets.h:592
+#: src/engine/frmserver/visualView/ctrl/widgets.h:615
 msgid "Orient"
 msgstr "Орієнтація"
 
 #: src/engine/frontend/visualView/ctrl/form.h:599
-#: src/engine/sfrontend/visualView/ctrl/form.h:600
+#: src/engine/frmserver/visualView/ctrl/form.h:600
 msgid "How the form lays out its top-level controls: vertically (the default, one under another) or horizontally (side by side). Groups inside the form have their own orientation."
 msgstr "Як форма розташовує елементи верхнього рівня: вертикально (за замовчуванням, один під одним) або горизонтально (поруч). Групи всередині форми мають власну орієнтацію."
 
 #: src/engine/frontend/visualView/ctrl/formAction.cpp:68
 #: src/engine/frontend/web/webClient.cpp:196
-#: src/engine/sfrontend/docView/docManager.cpp:314
-#: src/engine/sfrontend/visualView/ctrl/formAction.cpp:68
+#: src/engine/frmserver/docView/docManager.cpp:314
+#: src/engine/frmserver/visualView/ctrl/formAction.cpp:68
 msgid "Close"
 msgstr "Закрити"
 
 #: src/engine/frontend/visualView/ctrl/formAction.cpp:69
-#: src/engine/sfrontend/visualView/ctrl/formAction.cpp:69
+#: src/engine/frmserver/visualView/ctrl/formAction.cpp:69
 msgid "Update"
 msgstr "Оновити"
 
@@ -10727,191 +10727,191 @@ msgstr "Оновити"
 #: src/engine/frontend/win/dlgs/formEditor.cpp:330
 #: src/engine/frontend/win/dlgs/formEditor.cpp:334
 #: src/engine/frontend/win/dlgs/formEditor.cpp:352
-#: src/engine/sfrontend/visualView/ctrl/formAction.cpp:73
+#: src/engine/frmserver/visualView/ctrl/formAction.cpp:73
 msgid "Change form"
 msgstr "Змінити форму"
 
 #: src/engine/frontend/visualView/ctrl/formAttribute.h:139
-#: src/engine/sfrontend/visualView/ctrl/formAttribute.h:139
+#: src/engine/frmserver/visualView/ctrl/formAttribute.h:139
 msgid "The attribute's name: how the form module reads and writes it (by bare name) and how a control's data path names it. Unique on the form."
 msgstr "Ім'я реквізиту: за ним модуль форми читає й записує реквізит (просто за іменем) і за ним шлях до даних елемента вказує на реквізит. Унікальне в межах форми."
 
 #: src/engine/frontend/visualView/ctrl/formAttribute.h:140
-#: src/engine/sfrontend/visualView/ctrl/formAttribute.h:140
+#: src/engine/frmserver/visualView/ctrl/formAttribute.h:140
 msgid "The attribute's caption: the label of a control bound to it and its column header. Empty: made from the name. Can be written per language."
 msgstr "Заголовок реквізиту: напис прив'язаного до нього елемента та заголовок його колонки. Якщо порожньо, формується з імені. Можна задати для кожної мови."
 
 #: src/engine/frontend/visualView/ctrl/formAttribute.h:142
-#: src/engine/sfrontend/visualView/ctrl/formAttribute.h:142
+#: src/engine/frmserver/visualView/ctrl/formAttribute.h:142
 msgid "Which values the attribute holds: a primitive, a reference, an object, or a list type such as a dynamic list or a value table. The type decides which controls can be bound to it and what they edit."
 msgstr "Які значення зберігає реквізит: примітивний тип, посилання, об'єкт або списковий тип, наприклад динамічний список чи таблицю значень. Від типу залежить, які елементи можна до нього прив'язати і що вони редагують."
 
 #: src/engine/frontend/visualView/ctrl/formAttribute.h:145
-#: src/engine/sfrontend/visualView/ctrl/formAttribute.h:145
+#: src/engine/frmserver/visualView/ctrl/formAttribute.h:145
 msgid "Whether the attribute must be filled. Show error: ThisForm.CheckFilling() reports it when empty and answers False. Checked only when code calls CheckFilling() - the form does not check on its own."
 msgstr "Чи має реквізит бути заповнений. Видавати помилку: ThisForm.CheckFilling() повідомляє про незаповнений реквізит і повертає False. Перевіряється, лише коли код викликає CheckFilling() - сама форма не перевіряє."
 
 #: src/engine/frontend/visualView/ctrl/formAttributeProperty.cpp:83
-#: src/engine/sfrontend/visualView/ctrl/formAttributeProperty.cpp:44
+#: src/engine/frmserver/visualView/ctrl/formAttributeProperty.cpp:44
 msgid "Don't check"
 msgstr "Не перевіряти"
 
 #: src/engine/frontend/visualView/ctrl/formAttributeProperty.cpp:84
-#: src/engine/sfrontend/visualView/ctrl/formAttributeProperty.cpp:45
+#: src/engine/frmserver/visualView/ctrl/formAttributeProperty.cpp:45
 msgid "Show error"
 msgstr "Видавати помилку"
 
 #: src/engine/frontend/visualView/ctrl/formCommand.h:94
-#: src/engine/sfrontend/visualView/ctrl/formCommand.h:88
+#: src/engine/frmserver/visualView/ctrl/formCommand.h:88
 msgid "The command's name: how buttons and command bars on the form refer to it. Unique among the form's commands."
 msgstr "Ім'я команди: за ним на команду посилаються кнопки та командні панелі форми. Унікальне серед команд форми."
 
 #: src/engine/frontend/visualView/ctrl/formCommand.h:95
-#: src/engine/sfrontend/visualView/ctrl/formCommand.h:89
+#: src/engine/frmserver/visualView/ctrl/formCommand.h:89
 msgid "The command's caption: the text of a button or menu item that runs it. Empty: made from the name. Can be written per language."
 msgstr "Заголовок команди: текст кнопки або пункту меню, що її виконує. Якщо порожньо, формується з імені. Можна задати для кожної мови."
 
 #: src/engine/frontend/visualView/ctrl/formCommand.h:97
-#: src/engine/sfrontend/visualView/ctrl/formCommand.h:91
+#: src/engine/frmserver/visualView/ctrl/formCommand.h:91
 msgid "The command's icon on buttons and command bars that show pictures."
 msgstr "Значок команди на кнопках і командних панелях, які показують картинки."
 
 #: src/engine/frontend/visualView/ctrl/formCommand.h:102
 #: src/engine/frontend/visualView/ctrl/toolBar.h:256
-#: src/engine/sfrontend/visualView/ctrl/formCommand.h:96
+#: src/engine/frmserver/visualView/ctrl/formCommand.h:96
 msgid "Action"
 msgstr "Дія"
 
 #: src/engine/frontend/visualView/ctrl/formFactory.cpp:78
-#: src/engine/sfrontend/visualView/ctrl/formFactory.cpp:78
+#: src/engine/frmserver/visualView/ctrl/formFactory.cpp:78
 #, c-format
 msgid "Class id %lld is not a form element"
 msgstr "Ідентифікатор класу %lld не є елементом форми"
 
 #: src/engine/frontend/visualView/ctrl/formFactory.cpp:97
-#: src/engine/sfrontend/visualView/ctrl/formFactory.cpp:97
+#: src/engine/frmserver/visualView/ctrl/formFactory.cpp:97
 #, c-format
 msgid "Failed to create form element (class id %lld)"
 msgstr "Не вдалося створити елемент форми (ідентифікатор класу %lld)"
 
 #: src/engine/frontend/visualView/ctrl/formObject.cpp:460
-#: src/engine/sfrontend/visualView/ctrl/formObject.cpp:435
+#: src/engine/frmserver/visualView/ctrl/formObject.cpp:435
 msgid "Error occurred while trying to create a form element!"
 msgstr "Сталася помилка при спробі створити елемент форми!"
 
 #: src/engine/frontend/visualView/ctrl/formObject.cpp:682
-#: src/engine/sfrontend/visualView/ctrl/formObject.cpp:634
+#: src/engine/frmserver/visualView/ctrl/formObject.cpp:634
 msgid "Nothing has been written about this yet."
 msgstr "Про це поки нічого не написано."
 
 #: src/engine/frontend/visualView/ctrl/formObject.cpp:709
-#: src/engine/sfrontend/visualView/ctrl/formObject.cpp:643
+#: src/engine/frmserver/visualView/ctrl/formObject.cpp:643
 #, c-format
 msgid "Help: %s"
 msgstr "Довідка: %s"
 
 #: src/engine/frontend/visualView/ctrl/formObject.cpp:906
 #: src/engine/frontend/visualView/ctrl/formObject.cpp:939
-#: src/engine/sfrontend/visualView/ctrl/formObject.cpp:796
-#: src/engine/sfrontend/visualView/ctrl/formObject.cpp:822
+#: src/engine/frmserver/visualView/ctrl/formObject.cpp:796
+#: src/engine/frmserver/visualView/ctrl/formObject.cpp:822
 msgid "Procedure can enter only numbers, letters and the symbol \"_\""
 msgstr "Назва процедури може містити лише цифри, літери та символ \"_\""
 
 #: src/engine/frontend/visualView/ctrl/frame.cpp:131
-#: src/engine/sfrontend/visualView/ctrl/frame.cpp:127
+#: src/engine/frmserver/visualView/ctrl/frame.cpp:127
 #, c-format
 msgid "Control '%s' of '%s' could not be restored (class id %lld)"
 msgstr "Не вдалося відновити елемент '%s' у '%s' (ідентифікатор класу %lld)"
 
 #: src/engine/frontend/visualView/ctrl/frame.cpp:226
-#: src/engine/sfrontend/visualView/ctrl/frame.cpp:234
+#: src/engine/frmserver/visualView/ctrl/frame.cpp:234
 #, c-format
 msgid "Control '%s' of '%s' could not be pasted (class id %lld)"
 msgstr "Не вдалося вставити елемент '%s' у '%s' (ідентифікатор класу %lld)"
 
 #: src/engine/frontend/visualView/ctrl/gridBox.h:179
-#: src/engine/sfrontend/visualView/ctrl/gridBox.h:225
+#: src/engine/frmserver/visualView/ctrl/gridBox.h:225
 msgid "The form attribute the grid shows: a spreadsheet document, or a composition (a report) whose result the grid displays. Empty: the grid keeps a spreadsheet document of its own."
 msgstr "Реквізит форми, який показує поле табличного документа: табличний документ або компонування (звіт), результат якого виводиться в полі. Якщо порожньо, поле зберігає власний табличний документ."
 
 #: src/engine/frontend/visualView/ctrl/gridBox.h:195
-#: src/engine/sfrontend/visualView/ctrl/gridBox.h:241
+#: src/engine/frmserver/visualView/ctrl/gridBox.h:241
 msgid "Compose on open"
 msgstr "Формувати під час відкриття"
 
 #: src/engine/frontend/visualView/ctrl/gridBox.h:196
-#: src/engine/sfrontend/visualView/ctrl/gridBox.h:242
+#: src/engine/frmserver/visualView/ctrl/gridBox.h:242
 msgid "Whether a report bound to the grid builds itself once when the control is created, without the user pressing Compose. Off (the default) suits a report whose parameters are set first; on suits one with nothing left to ask, such as a report on a desktop."
 msgstr "Чи формується прив'язаний до поля звіт один раз під час створення елемента, без натискання користувачем кнопки Сформувати. Вимкнено (за замовчуванням) підходить для звіту, параметри якого спершу задаються; увімкнено - для звіту, якому більше нічого питати, наприклад звіту на робочому столі."
 
 #: src/engine/frontend/visualView/ctrl/gridBox.h:218
-#: src/engine/sfrontend/visualView/ctrl/gridBox.h:264
+#: src/engine/frmserver/visualView/ctrl/gridBox.h:264
 msgid "On detail processing"
 msgstr "Обробка розшифровки"
 
 #: src/engine/frontend/visualView/ctrl/gridBox.h:218
-#: src/engine/sfrontend/visualView/ctrl/gridBox.h:264
+#: src/engine/frmserver/visualView/ctrl/gridBox.h:264
 msgid "When a cell is clicked - before its value is opened or detailed"
 msgstr "Під час клацання по клітинці - до того, як її значення буде відкрито чи розшифровано"
 
 #: src/engine/frontend/visualView/ctrl/gridBoxDetail.cpp:307
-#: src/engine/sfrontend/visualView/ctrl/gridBoxDetail.cpp:303
+#: src/engine/frmserver/visualView/ctrl/gridBoxDetail.cpp:303
 msgid "Detail by"
 msgstr "Розшифрувати за"
 
 #: src/engine/frontend/visualView/ctrl/gridBoxEvent.cpp:66
-#: src/engine/sfrontend/visualView/ctrl/gridBoxEvent.cpp:77
+#: src/engine/frmserver/visualView/ctrl/gridBoxEvent.cpp:77
 msgid "Open value"
 msgstr "Відкрити значення"
 
 #: src/engine/frontend/visualView/ctrl/gridBoxEvent.cpp:67
-#: src/engine/sfrontend/visualView/ctrl/gridBoxEvent.cpp:79
+#: src/engine/frmserver/visualView/ctrl/gridBoxEvent.cpp:79
 msgid "Detail..."
 msgstr "Розшифрувати..."
 
 #: src/engine/frontend/visualView/ctrl/notebook.h:30
 #: src/engine/frontend/visualView/ctrl/notebook.h:71
-#: src/engine/sfrontend/visualView/ctrl/notebook.h:29
-#: src/engine/sfrontend/visualView/ctrl/notebook.h:68
+#: src/engine/frmserver/visualView/ctrl/notebook.h:29
+#: src/engine/frmserver/visualView/ctrl/notebook.h:68
 msgid "Notebook"
 msgstr "Панель вкладок"
 
 #: src/engine/frontend/visualView/ctrl/notebook.h:72
-#: src/engine/sfrontend/visualView/ctrl/notebook.h:69
+#: src/engine/frmserver/visualView/ctrl/notebook.h:69
 msgid "Orient page"
 msgstr "Орієнтація сторінки"
 
 #: src/engine/frontend/visualView/ctrl/notebook.h:73
-#: src/engine/sfrontend/visualView/ctrl/notebook.h:70
+#: src/engine/frmserver/visualView/ctrl/notebook.h:70
 msgid "Where the page tabs are drawn: above the pages (the default) or below them."
 msgstr "Де відображаються вкладки сторінок: над сторінками (за замовчуванням) або під ними."
 
 #: src/engine/frontend/visualView/ctrl/notebook.h:76
-#: src/engine/sfrontend/visualView/ctrl/notebook.h:73
+#: src/engine/frmserver/visualView/ctrl/notebook.h:73
 msgid "Page changed"
 msgstr "Сторінка змінена"
 
 #: src/engine/frontend/visualView/ctrl/notebook.h:97
 #: src/engine/frontend/visualView/ctrl/notebook.h:98
-#: src/engine/sfrontend/visualView/ctrl/notebook.h:94
-#: src/engine/sfrontend/visualView/ctrl/notebook.h:95
+#: src/engine/frmserver/visualView/ctrl/notebook.h:94
+#: src/engine/frmserver/visualView/ctrl/notebook.h:95
 msgid "Page item: "
 msgstr "Елемент сторінки: "
 
 #: src/engine/frontend/visualView/ctrl/notebook.h:98
 #: src/engine/frontend/visualView/ctrl/toolBar.h:215
 #: src/engine/frontend/win/dlgs/formEditor.h:138
-#: src/engine/sfrontend/visualView/ctrl/notebook.h:95
+#: src/engine/frmserver/visualView/ctrl/notebook.h:95
 msgid "<empty caption>"
 msgstr "<пустий заголовок>"
 
 #: src/engine/frontend/visualView/ctrl/notebook.h:122
-#: src/engine/sfrontend/visualView/ctrl/notebook.h:123
+#: src/engine/frmserver/visualView/ctrl/notebook.h:123
 msgid "Page"
 msgstr "Сторінка"
 
 #: src/engine/frontend/visualView/ctrl/notebook.h:124
-#: src/engine/sfrontend/visualView/ctrl/notebook.h:125
+#: src/engine/frmserver/visualView/ctrl/notebook.h:125
 msgid "The text on the page's tab. Can be written per language and changed from code while the form is open."
 msgstr "Текст на вкладці сторінки. Можна задати для кожної мови та змінювати з коду, поки форму відкрито."
 
@@ -10921,17 +10921,17 @@ msgstr "Текст на вкладці сторінки. Можна задати
 #: src/engine/frontend/visualView/ctrl/tableBox.h:781
 #: src/engine/frontend/visualView/ctrl/window.h:50
 #: src/engine/frontend/visualView/layers/commandBar.h:160
-#: src/engine/sfrontend/visualView/ctrl/notebook.h:126
-#: src/engine/sfrontend/visualView/ctrl/sizer.h:194
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:580
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:841
-#: src/engine/sfrontend/visualView/ctrl/window.h:38
-#: src/engine/sfrontend/visualView/layers/commandBar.h:156
+#: src/engine/frmserver/visualView/ctrl/notebook.h:126
+#: src/engine/frmserver/visualView/ctrl/sizer.h:194
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:580
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:841
+#: src/engine/frmserver/visualView/ctrl/window.h:38
+#: src/engine/frmserver/visualView/layers/commandBar.h:156
 msgid "Visible"
 msgstr "Видимий"
 
 #: src/engine/frontend/visualView/ctrl/notebook.h:126
-#: src/engine/sfrontend/visualView/ctrl/notebook.h:127
+#: src/engine/frmserver/visualView/ctrl/notebook.h:127
 msgid "Whether the page's tab is shown. A hidden page keeps its controls and their data and can be shown again from code."
 msgstr "Чи показується вкладка сторінки. Прихована сторінка зберігає свої елементи та їхні дані, її можна знову показати з коду."
 
@@ -10940,25 +10940,25 @@ msgstr "Чи показується вкладка сторінки. Прихо�
 #: src/engine/frontend/visualView/ctrl/toolBar.h:244
 #: src/engine/frontend/visualView/ctrl/widgets.h:54
 #: src/engine/frontend/visualView/layers/commandBar.h:151
-#: src/engine/sfrontend/visualView/ctrl/notebook.h:128
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:833
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:62
-#: src/engine/sfrontend/visualView/layers/commandBar.h:147
+#: src/engine/frmserver/visualView/ctrl/notebook.h:128
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:833
+#: src/engine/frmserver/visualView/ctrl/widgets.h:62
+#: src/engine/frmserver/visualView/layers/commandBar.h:147
 msgid "Representation"
 msgstr "Представлення"
 
 #: src/engine/frontend/visualView/ctrl/notebook.h:128
-#: src/engine/sfrontend/visualView/ctrl/notebook.h:129
+#: src/engine/frmserver/visualView/ctrl/notebook.h:129
 msgid "What the page's tab shows: text, picture, or both. Auto: the title and the picture, whichever are set."
 msgstr "Що показує вкладка сторінки: текст, картинку або те й інше. Авто: заголовок і картинку - ті, що задані."
 
 #: src/engine/frontend/visualView/ctrl/notebook.h:131
-#: src/engine/sfrontend/visualView/ctrl/notebook.h:132
+#: src/engine/frmserver/visualView/ctrl/notebook.h:132
 msgid "The icon on the page's tab, beside or instead of the title (see Representation)."
 msgstr "Значок на вкладці сторінки, поруч із заголовком або замість нього (див. Представлення)."
 
 #: src/engine/frontend/visualView/ctrl/notebook.h:134
-#: src/engine/sfrontend/visualView/ctrl/notebook.h:135
+#: src/engine/frmserver/visualView/ctrl/notebook.h:135
 msgid "How the page lays out the controls placed on it: vertically (the default, one under another) or horizontally (side by side)."
 msgstr "Як сторінка розташовує розміщені на ній елементи: вертикально (за замовчуванням, один під одним) або горизонтально (поруч)."
 
@@ -10968,206 +10968,206 @@ msgstr "Додати сторінку\tInsert"
 
 #: src/engine/frontend/visualView/ctrl/sizer.h:27
 #: src/engine/frontend/visualView/ctrl/window.h:43
-#: src/engine/sfrontend/visualView/ctrl/sizer.h:19
-#: src/engine/sfrontend/visualView/ctrl/window.h:31
+#: src/engine/frmserver/visualView/ctrl/sizer.h:19
+#: src/engine/frmserver/visualView/ctrl/window.h:31
 msgid "Minimum size"
 msgstr "Мінімальний розмір"
 
 #: src/engine/frontend/visualView/ctrl/sizer.h:27
-#: src/engine/sfrontend/visualView/ctrl/sizer.h:19
+#: src/engine/frmserver/visualView/ctrl/sizer.h:19
 msgid "The smallest size the sizer keeps for the area it lays out, in pixels; -1 on a side means no limit there. The form cannot shrink the area below it."
 msgstr "Найменший розмір області, яку розмічає контейнер, у пікселях; -1 для сторони означає, що за нею обмеження немає. Форма не може зменшити область нижче цього розміру."
 
 #: src/engine/frontend/visualView/ctrl/sizer.h:129
-#: src/engine/sfrontend/visualView/ctrl/sizer.h:101
+#: src/engine/frmserver/visualView/ctrl/sizer.h:101
 msgid "Sizer item"
 msgstr "Елемент контейнера"
 
 #: src/engine/frontend/visualView/ctrl/sizer.h:130
-#: src/engine/sfrontend/visualView/ctrl/sizer.h:102
+#: src/engine/frmserver/visualView/ctrl/sizer.h:102
 msgid "Proportion"
 msgstr "Пропорції"
 
 #: src/engine/frontend/visualView/ctrl/sizer.h:131
-#: src/engine/sfrontend/visualView/ctrl/sizer.h:103
+#: src/engine/frmserver/visualView/ctrl/sizer.h:103
 msgid "How much of its sizer's spare room the control takes along the sizer's direction. 0 (the default): the control keeps its natural size. Otherwise the spare room is shared in these proportions - controls with 1 and 2 get one third and two thirds."
 msgstr "Яку частку вільного місця контейнера елемент займає вздовж напрямку контейнера. 0 (за замовчуванням): елемент зберігає природний розмір. Інакше вільне місце ділиться в цих пропорціях - елементи з 1 і 2 отримують одну третину і дві третини."
 
 #: src/engine/frontend/visualView/ctrl/sizer.h:134
-#: src/engine/sfrontend/visualView/ctrl/sizer.h:106
+#: src/engine/frmserver/visualView/ctrl/sizer.h:106
 msgid "Size"
 msgstr "Розмір"
 
 #: src/engine/frontend/visualView/ctrl/sizer.h:135
-#: src/engine/sfrontend/visualView/ctrl/sizer.h:107
+#: src/engine/frmserver/visualView/ctrl/sizer.h:107
 msgid "The empty margin kept around the control, in pixels, on the sides switched on below. Default 5."
 msgstr "Порожній відступ навколо елемента в пікселях, з боків, увімкнених нижче. За замовчуванням 5."
 
 #: src/engine/frontend/visualView/ctrl/sizer.h:137
-#: src/engine/sfrontend/visualView/ctrl/sizer.h:109
+#: src/engine/frmserver/visualView/ctrl/sizer.h:109
 msgid "Whether the margin (Size) is kept on the control's left side."
 msgstr "Чи зберігається відступ (Розмір) ліворуч від елемента."
 
 #: src/engine/frontend/visualView/ctrl/sizer.h:139
-#: src/engine/sfrontend/visualView/ctrl/sizer.h:111
+#: src/engine/frmserver/visualView/ctrl/sizer.h:111
 msgid "Whether the margin (Size) is kept on the control's right side."
 msgstr "Чи зберігається відступ (Розмір) праворуч від елемента."
 
 #: src/engine/frontend/visualView/ctrl/sizer.h:141
-#: src/engine/sfrontend/visualView/ctrl/sizer.h:113
+#: src/engine/frmserver/visualView/ctrl/sizer.h:113
 msgid "Whether the margin (Size) is kept above the control."
 msgstr "Чи зберігається відступ (Розмір) над елементом."
 
 #: src/engine/frontend/visualView/ctrl/sizer.h:143
-#: src/engine/sfrontend/visualView/ctrl/sizer.h:115
+#: src/engine/frmserver/visualView/ctrl/sizer.h:115
 msgid "Whether the margin (Size) is kept below the control."
 msgstr "Чи зберігається відступ (Розмір) під елементом."
 
 #: src/engine/frontend/visualView/ctrl/sizer.h:144
-#: src/engine/sfrontend/visualView/ctrl/sizer.h:116
+#: src/engine/frmserver/visualView/ctrl/sizer.h:116
 msgid "Stretch"
 msgstr "Розтягнення"
 
 #: src/engine/frontend/visualView/ctrl/sizer.h:145
-#: src/engine/sfrontend/visualView/ctrl/sizer.h:117
+#: src/engine/frmserver/visualView/ctrl/sizer.h:117
 msgid "The control's size across its sizer's direction. Shrink (the default): its natural size. Expand: the full width of a vertical sizer, or the full height of a horizontal one."
 msgstr "Розмір елемента впоперек напрямку контейнера. Стиснути (за замовчуванням): природний розмір. Розгорнути: уся ширина вертикального контейнера або вся висота горизонтального."
 
 #: src/engine/frontend/visualView/ctrl/sizer.h:172
-#: src/engine/sfrontend/visualView/ctrl/sizer.h:138
+#: src/engine/frmserver/visualView/ctrl/sizer.h:138
 msgid "How the sizer lays out its controls: vertically (the default, one under another) or horizontally (side by side)."
 msgstr "Як контейнер розташовує свої елементи: вертикально (за замовчуванням, один під одним) або горизонтально (поруч)."
 
 #: src/engine/frontend/visualView/ctrl/sizer.h:199
-#: src/engine/sfrontend/visualView/ctrl/sizer.h:157
+#: src/engine/frmserver/visualView/ctrl/sizer.h:157
 msgid "The direction controls are laid out in. When a row (or column) has no room for the next control, it wraps to a new one. Horizontal by default."
 msgstr "Напрямок, у якому розташовуються елементи. Коли в рядку (або колонці) немає місця для наступного елемента, він переноситься в новий рядок (або колонку). За замовчуванням горизонтальний."
 
 #: src/engine/frontend/visualView/ctrl/sizer.h:227
-#: src/engine/sfrontend/visualView/ctrl/sizer.h:183
+#: src/engine/frmserver/visualView/ctrl/sizer.h:183
 msgid "How the framed group lays out its controls: horizontally (the default, side by side) or vertically (one under another)."
 msgstr "Як група з рамкою розташовує свої елементи: горизонтально (за замовчуванням, поруч) або вертикально (один під одним)."
 
 #: src/engine/frontend/visualView/ctrl/sizer.h:230
-#: src/engine/sfrontend/visualView/ctrl/sizer.h:186
+#: src/engine/frmserver/visualView/ctrl/sizer.h:186
 msgid "The caption drawn on the group's frame. Empty: a frame with no caption. Can be written per language."
 msgstr "Заголовок, що виводиться на рамці групи. Якщо порожньо, рамка без заголовка. Можна задати для кожної мови."
 
 #: src/engine/frontend/visualView/ctrl/sizer.h:231
-#: src/engine/sfrontend/visualView/ctrl/sizer.h:187
+#: src/engine/frmserver/visualView/ctrl/sizer.h:187
 msgid "The font of the frame's caption. Unset: the form's font."
 msgstr "Шрифт заголовка рамки. Якщо не задано, використовується шрифт форми."
 
 #: src/engine/frontend/visualView/ctrl/sizer.h:232
-#: src/engine/sfrontend/visualView/ctrl/sizer.h:188
+#: src/engine/frmserver/visualView/ctrl/sizer.h:188
 msgid "The colour of the frame's caption. Default: the system colour."
 msgstr "Колір заголовка рамки. За замовчуванням: системний колір."
 
 #: src/engine/frontend/visualView/ctrl/sizer.h:233
-#: src/engine/sfrontend/visualView/ctrl/sizer.h:189
+#: src/engine/frmserver/visualView/ctrl/sizer.h:189
 msgid "The frame's background colour. Default: the system colour."
 msgstr "Колір фону рамки. За замовчуванням: системний колір."
 
 #: src/engine/frontend/visualView/ctrl/sizer.h:234
-#: src/engine/sfrontend/visualView/ctrl/sizer.h:190
+#: src/engine/frmserver/visualView/ctrl/sizer.h:190
 msgid "Text shown when the mouse pointer rests over the frame. Empty: no tooltip."
 msgstr "Текст, що показується, коли вказівник миші затримується над рамкою. Якщо порожньо, підказки немає."
 
 #: src/engine/frontend/visualView/ctrl/sizer.h:235
 #: src/engine/frontend/visualView/ctrl/toolBar.h:249
-#: src/engine/sfrontend/visualView/ctrl/sizer.h:191
+#: src/engine/frmserver/visualView/ctrl/sizer.h:191
 msgid "Context menu"
 msgstr "Контекстне меню"
 
 #: src/engine/frontend/visualView/ctrl/sizer.h:235
-#: src/engine/sfrontend/visualView/ctrl/sizer.h:191
+#: src/engine/frmserver/visualView/ctrl/sizer.h:191
 msgid "Saved with the form; nothing reads it yet, so it has no effect on a framed group."
 msgstr "Зберігається разом із формою; поки цю властивість ніщо не читає, тому на групу з рамкою вона не впливає."
 
 #: src/engine/frontend/visualView/ctrl/sizer.h:236
-#: src/engine/sfrontend/visualView/ctrl/sizer.h:192
+#: src/engine/frmserver/visualView/ctrl/sizer.h:192
 msgid "Context help"
 msgstr "Контекстна довідка"
 
 #: src/engine/frontend/visualView/ctrl/sizer.h:236
-#: src/engine/sfrontend/visualView/ctrl/sizer.h:192
+#: src/engine/frmserver/visualView/ctrl/sizer.h:192
 msgid "Saved with the form; nothing reads it yet, so no context help is shown for a framed group."
 msgstr "Зберігається разом із формою; поки цю властивість ніщо не читає, тому контекстна довідка для групи з рамкою не показується."
 
 #: src/engine/frontend/visualView/ctrl/sizer.h:237
-#: src/engine/sfrontend/visualView/ctrl/sizer.h:193
+#: src/engine/frmserver/visualView/ctrl/sizer.h:193
 msgid "Whether the controls inside the frame take input. Off: the frame and everything in it are greyed out."
 msgstr "Чи приймають введення елементи всередині рамки. Вимкнено: рамка та весь її вміст неактивні (сірі)."
 
 #: src/engine/frontend/visualView/ctrl/sizer.h:238
-#: src/engine/sfrontend/visualView/ctrl/sizer.h:194
+#: src/engine/frmserver/visualView/ctrl/sizer.h:194
 msgid "Whether the frame is shown. Hiding it hides the frame itself; its controls keep their data."
 msgstr "Чи показується рамка. Приховування приховує саму рамку; її елементи зберігають свої дані."
 
 #: src/engine/frontend/visualView/ctrl/sizer.h:261
 #: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:935
-#: src/engine/sfrontend/visualView/ctrl/sizer.h:211
+#: src/engine/frmserver/visualView/ctrl/sizer.h:211
 msgid "Rows"
 msgstr "Рядки"
 
 #: src/engine/frontend/visualView/ctrl/sizer.h:262
-#: src/engine/sfrontend/visualView/ctrl/sizer.h:212
+#: src/engine/frmserver/visualView/ctrl/sizer.h:212
 msgid "The number of rows in the grid. 0 (the default): as many as the controls need, given the column count."
 msgstr "Кількість рядків сітки. 0 (за замовчуванням): стільки, скільки потрібно елементам за заданої кількості колонок."
 
 #: src/engine/frontend/visualView/ctrl/sizer.h:263
-#: src/engine/sfrontend/visualView/ctrl/sizer.h:213
+#: src/engine/frmserver/visualView/ctrl/sizer.h:213
 msgid "Cols"
 msgstr "Колонки"
 
 #: src/engine/frontend/visualView/ctrl/sizer.h:264
-#: src/engine/sfrontend/visualView/ctrl/sizer.h:214
+#: src/engine/frmserver/visualView/ctrl/sizer.h:214
 msgid "The number of columns in the grid; controls fill it row by row, left to right. All cells get the same size. Default 2."
 msgstr "Кількість колонок сітки; елементи заповнюють її рядок за рядком, зліва направо. Усі клітинки однакового розміру. За замовчуванням 2."
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:75
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:52
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:52
 msgid "Select cell"
 msgstr "Вибір клітинки"
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:76
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:53
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:53
 msgid "Select row"
 msgstr "Вибір рядка"
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:86
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:63
-#: src/engine/sfrontend/visualView/ctrl/tableBoxAction.cpp:154
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:63
+#: src/engine/frmserver/visualView/ctrl/tableBoxAction.cpp:154
 msgid "Hierarchical"
 msgstr "Ієрархічний"
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:87
 #: src/engine/frontend/win/ctrls/tableView.cpp:33
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:64
-#: src/engine/sfrontend/visualView/ctrl/tableBoxAction.cpp:155
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:64
+#: src/engine/frmserver/visualView/ctrl/tableBoxAction.cpp:155
 msgid "Tree"
 msgstr "Дерево"
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:88
 #: src/engine/frontend/visualView/ctrl/tableBoxAction.cpp:576
 #: src/engine/frontend/win/ctrls/tableView.cpp:37
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:65
-#: src/engine/sfrontend/visualView/ctrl/tableBoxAction.cpp:155
-#: src/engine/sfrontend/visualView/ctrl/tableBoxAction.cpp:529
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:65
+#: src/engine/frmserver/visualView/ctrl/tableBoxAction.cpp:155
+#: src/engine/frmserver/visualView/ctrl/tableBoxAction.cpp:529
 msgid "List"
 msgstr "Список"
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:203
 #: src/engine/frontend/visualView/ctrl/tableBox.h:206
 #: src/engine/frontend/visualView/ctrl/tableBoxProperty.cpp:29
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:228
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:231
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:228
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:231
 msgid "TableBox"
 msgstr "Таблиця"
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:206
 #: src/engine/frontend/visualView/ctrl/toolBar.h:45
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:231
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:231
 msgid "<empty source>"
 msgstr "<пусте джерело>"
 
@@ -11175,438 +11175,438 @@ msgstr "<пусте джерело>"
 #: src/engine/frontend/visualView/ctrl/tableBox.h:537
 #: src/engine/frontend/visualView/ctrl/tableBox.h:738
 #: src/engine/frontend/win/dlgs/about.cpp:77
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:413
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:562
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:798
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:413
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:562
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:798
 msgid "Info"
 msgstr "Інформація"
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:405
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:414
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:414
 msgid "Header"
 msgstr "Заголовок"
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:406
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:415
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:415
 msgid "Whether the column headers are shown above the rows. On by default; clicking a header sorts by that column."
 msgstr "Чи показуються заголовки колонок над рядками. За замовчуванням увімкнено; клацання по заголовку сортує за цією колонкою."
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:407
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:416
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:416
 msgid "Header height"
 msgstr "Висота заголовка"
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:408
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:417
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:417
 msgid "The header's height in text lines. At least 1, and never less than the column groups need, so a grouped header always fits."
 msgstr "Висота заголовка в рядках тексту. Не менше 1 і ніколи не менше, ніж потрібно групам колонок, тому згрупований заголовок завжди вміщується."
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:409
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:418
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:418
 msgid "Footer"
 msgstr "Підвал"
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:410
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:419
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:419
 msgid "Whether a footer row is shown under the rows, carrying each column's footer text (a total, for example). Off by default."
 msgstr "Чи показується під рядками рядок підвалу з текстом підвалу кожної колонки (наприклад, підсумком). За замовчуванням вимкнено."
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:411
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:420
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:420
 msgid "Footer height"
 msgstr "Висота підвалу"
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:412
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:421
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:421
 msgid "The footer's height in text lines, used when the footer is shown. Default 1."
 msgstr "Висота підвалу в рядках тексту; використовується, коли підвал показано. За замовчуванням 1."
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:413
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:422
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:422
 msgid "Frezee row"
 msgstr "Зафіксувати рядок"
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:414
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:423
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:423
 msgid "How many leading rows stay in place while the rest scroll vertically. 0 (the default): none."
 msgstr "Скільки перших рядків залишаються на місці під час вертикального прокручування решти. 0 (за замовчуванням): жодного."
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:415
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:424
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:424
 msgid "Frezee column"
 msgstr "Зафіксувати колонку"
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:416
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:425
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:425
 msgid "How many leading columns stay in place while the rest scroll horizontally - keeps a name column visible in a wide table. 0 (the default): none."
 msgstr "Скільки перших колонок залишаються на місці під час горизонтального прокручування решти - так колонка з найменуванням лишається видимою в широкій таблиці. 0 (за замовчуванням): жодної."
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:419
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:428
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:428
 msgid "The form attribute the table shows: a dynamic list, a value table or tree, or a tabular section of the form's object. The table's columns are bound to its fields, and its command bar gets the source's commands."
 msgstr "Реквізит форми, який показує таблиця: динамічний список, таблиця чи дерево значень або таблична частина об'єкта форми. Колонки таблиці прив'язуються до його полів, а її командна панель отримує команди джерела."
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:420
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:429
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:429
 msgid "Row selection mode"
 msgstr "Режим вибору рядка"
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:421
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:430
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:430
 msgid "What the cursor highlights. Select cell (the default): one cell, moved cell by cell - suits a table edited in place. Select row: the whole row - suits a list rows are picked or opened from."
 msgstr "Що виділяє курсор. Вибір клітинки (за замовчуванням): одну клітинку, переміщення по клітинках - підходить для таблиці, що редагується на місці. Вибір рядка: увесь рядок - підходить для списку, з якого рядки вибирають або відкривають."
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:423
 #: src/engine/frontend/visualView/ctrl/tableBoxAction.cpp:125
 #: src/engine/frontend/win/ctrls/tableView.cpp:25
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:432
-#: src/engine/sfrontend/visualView/ctrl/tableBoxAction.cpp:117
-#: src/engine/sfrontend/visualView/ctrl/tableBoxAction.cpp:163
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:432
+#: src/engine/frmserver/visualView/ctrl/tableBoxAction.cpp:117
+#: src/engine/frmserver/visualView/ctrl/tableBoxAction.cpp:163
 msgid "View mode"
 msgstr "Режим перегляду"
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:424
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:433
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:433
 msgid "How a source with folders or parents is shown. Hierarchical (the default): one level at a time, entering a folder to see its contents. Tree: an expandable tree. List: every row flat, hierarchy ignored. The user can switch it at run time."
 msgstr "Як показується джерело з папками або батьками. Ієрархічний (за замовчуванням): по одному рівню, щоб побачити вміст папки, у неї треба увійти. Дерево: розгортане дерево. Список: усі рядки пласким списком, ієрархія не враховується. Користувач може перемикати режим під час роботи."
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:427
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:436
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:436
 msgid "Choice mode"
 msgstr "Режим вибору"
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:428
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:437
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:437
 msgid "Whether the table works as a picker: double-click or Enter hands the current row back to whoever opened the form, instead of opening or editing it, and a Select command leads its command bar. Set automatically on a choice form's list."
 msgstr "Чи працює таблиця для вибору: подвійне клацання або Enter повертає поточний рядок тому, хто відкрив форму, замість його відкриття чи редагування, а першою в командній панелі стоїть команда Вибрати. Встановлюється автоматично для списку форми вибору."
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:431
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:440
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:440
 msgid "On double mouse click or pressing of Enter."
 msgstr "При подвійному клацанні мишею або натисканні Enter."
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:432
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:441
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:441
 msgid "Activate row"
 msgstr "Активувати рядок"
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:432
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:441
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:441
 msgid "When row is activated"
 msgstr "Коли рядок активовано"
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:433
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:442
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:442
 msgid "Before add row"
 msgstr "Перед додаванням рядка"
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:433
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:442
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:442
 msgid "When row addition mode is called"
 msgstr "Коли викликається режим додавання рядка"
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:434
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:443
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:443
 msgid "Before delete row"
 msgstr "Перед видаленням рядка"
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:434
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:443
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:443
 msgid "When row deletion is called"
 msgstr "Коли викликається видалення рядка"
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:441
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:447
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:447
 msgid "On add row"
 msgstr "Під час додавання рядка"
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:441
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:447
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:447
 msgid "When a new row has been inserted"
 msgstr "Коли новий рядок вставлено"
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:442
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:448
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:448
 msgid "On delete row"
 msgstr "Під час видалення рядка"
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:442
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:448
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:448
 msgid "When a row has been deleted"
 msgstr "Коли рядок видалено"
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:470
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:498
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:498
 msgid "In cell"
 msgstr "У клітинці"
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:539
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:564
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:564
 msgid "The group's title in the header, shown when Show title is on (an in-cell group always shows it as its one header cell). Can be written per language."
 msgstr "Заголовок групи в шапці; показується, коли ввімкнено Виводити заголовок (група У клітинці завжди показує його як свою єдину клітинку заголовка). Можна задати для кожної мови."
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:543
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:568
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:568
 msgid "Where the group's columns go. Vertical (the default): stacked within one width, so the row grows taller instead of wider. Horizontal: side by side under the group's title. In cell: side by side but merged under one header cell, reading as one field. Groups nest."
 msgstr "Як розташовуються колонки групи. Вертикальний (за замовчуванням): одна під одною в межах однієї ширини, тож рядок стає вищим, а не ширшим. Горизонтальний: поруч під заголовком групи. У клітинці: поруч, але об'єднані під однією клітинкою заголовка й читаються як одне поле. Групи можуть бути вкладеними."
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:549
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:574
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:574
 msgid "Whether the group's title takes a band of the header above its columns. Off (the default): the group only arranges its columns and costs the header no height."
 msgstr "Чи займає заголовок групи смугу шапки над її колонками. Вимкнено (за замовчуванням): група лише впорядковує свої колонки й не збільшує висоту шапки."
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:553
 #: src/engine/frontend/visualView/ctrl/tableBox.h:769
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:578
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:829
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:578
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:829
 msgid "Header align"
 msgstr "Вирівнювання заголовка"
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:554
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:579
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:579
 msgid "How the group's title is aligned in its header cell: left, center (the default) or right."
 msgstr "Вирівнювання заголовка групи в клітинці шапки: за лівим краєм, по центру (за замовчуванням) або за правим краєм."
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:556
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:581
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:581
 msgid "Whether the group and all its columns are shown. Hidden columns keep their data and can be shown again from code."
 msgstr "Чи показуються група та всі її колонки. Приховані колонки зберігають свої дані, їх можна знову показати з коду."
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:740
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:800
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:800
 msgid "The column's header text. Empty: the synonym of the bound field, or the column's name when nothing is bound. Can be written per language."
 msgstr "Текст заголовка колонки. Якщо порожньо, використовується синонім прив'язаного поля або ім'я колонки, якщо нічого не прив'язано. Можна задати для кожної мови."
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:741
 #: src/engine/frontend/visualView/ctrl/widgets.h:335
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:801
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:338
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:801
+#: src/engine/frmserver/visualView/ctrl/widgets.h:338
 msgid "Password mode"
 msgstr "Режим пароля"
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:741
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:801
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:801
 msgid "Whether the cell editor hides what is typed behind placeholder characters, for secrets such as passwords. Off by default."
 msgstr "Чи приховує редактор клітинки введений текст за символами-замінниками - для секретів, наприклад паролів. За замовчуванням вимкнено."
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:742
 #: src/engine/frontend/visualView/ctrl/widgets.h:336
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:802
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:339
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:802
+#: src/engine/frmserver/visualView/ctrl/widgets.h:339
 msgid "Multiline mode"
 msgstr "Багаторядковий режим"
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:742
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:802
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:802
 msgid "Whether the cell editor accepts several lines of text (Enter starts a new line). Off by default: Enter finishes the edit."
 msgstr "Чи приймає редактор клітинки кілька рядків тексту (Enter починає новий рядок). За замовчуванням вимкнено: Enter завершує редагування."
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:743
 #: src/engine/frontend/visualView/ctrl/widgets.h:337
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:803
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:340
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:803
+#: src/engine/frmserver/visualView/ctrl/widgets.h:340
 msgid "Textedit mode"
 msgstr "Режим редагування тексту"
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:743
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:803
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:803
 msgid "Whether the value can be typed into the cell. Off: it can only be picked with the Select button or cleared. On by default; a read-only column never takes typing."
 msgstr "Чи можна вводити значення в клітинку з клавіатури. Вимкнено: його можна лише вибрати кнопкою вибору або очистити. За замовчуванням увімкнено; колонка лише для читання ніколи не приймає введення."
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:745
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:805
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:805
 msgid "How the column shows its cells, written per language: digits after the point, separators, a date pattern. Empty: the bound attribute's format, and without one a number shows as many digits after the point as its type keeps."
 msgstr "Як колонка показує свої клітинки, задається для кожної мови: цифри після крапки, роздільники, шаблон дати. Якщо порожньо, використовується формат прив'язаного реквізиту, а без нього число показується з тією кількістю цифр після крапки, яку зберігає його тип."
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:747
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:807
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:807
 msgid "Footer text"
 msgstr "Текст підвалу"
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:748
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:808
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:808
 msgid "The text in this column's footer cell, shown when the table's footer is on - a label or a total set from code. Can be written per language."
 msgstr "Текст у клітинці підвалу цієї колонки; показується, коли підвал таблиці ввімкнено, - напис або підсумок, заданий з коду. Можна задати для кожної мови."
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:752
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:812
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:812
 msgid "The field of the table's source this column shows and edits. A path through a reference (such as Owner.Description) is shown read-only."
 msgstr "Поле джерела таблиці, яке показує й редагує ця колонка. Шлях через посилання (наприклад, Owner.Description) показується лише для читання."
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:754
 #: src/engine/frontend/visualView/ctrl/widgets.h:345
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:814
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:348
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:814
+#: src/engine/frmserver/visualView/ctrl/widgets.h:348
 msgid "Choice form"
 msgstr "Форма вибору"
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:755
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:815
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:815
 msgid "Which form opens when the user presses Select in the cell: one of the forms of the value's type. Empty: the type's default choice form."
 msgstr "Яка форма відкривається, коли користувач натискає кнопку вибору в клітинці: одна з форм типу значення. Якщо порожньо, форма вибору типу за замовчуванням."
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:758
 #: src/engine/frontend/visualView/ctrl/widgets.h:51
 #: src/engine/frontend/visualView/ctrl/widgets.h:349
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:818
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:59
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:352
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:818
+#: src/engine/frmserver/visualView/ctrl/widgets.h:59
+#: src/engine/frmserver/visualView/ctrl/widgets.h:352
 msgid "Button"
 msgstr "Кнопка"
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:759
 #: src/engine/frontend/visualView/ctrl/widgets.h:350
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:819
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:353
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:819
+#: src/engine/frmserver/visualView/ctrl/widgets.h:353
 msgid "Select button"
 msgstr "Кнопка вибору"
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:760
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:820
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:820
 msgid "Whether the cell editor shows the Select button (...), which opens a choice form or list to pick the value from. On by default."
 msgstr "Чи показує редактор клітинки кнопку вибору (...), яка відкриває форму вибору або список для вибору значення. За замовчуванням увімкнено."
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:761
 #: src/engine/frontend/visualView/ctrl/widgets.h:352
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:821
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:355
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:821
+#: src/engine/frmserver/visualView/ctrl/widgets.h:355
 msgid "Clear button"
 msgstr "Кнопка очищення"
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:762
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:822
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:822
 msgid "Whether the cell editor shows the Clear button (X), which empties the value. On by default."
 msgstr "Чи показує редактор клітинки кнопку очищення (X), яка очищає значення. За замовчуванням увімкнено."
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:763
 #: src/engine/frontend/visualView/ctrl/widgets.h:354
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:823
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:357
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:823
+#: src/engine/frmserver/visualView/ctrl/widgets.h:357
 msgid "Open button"
 msgstr "Кнопка відкриття"
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:764
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:824
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:824
 msgid "Whether the cell editor shows the Open button, which opens the referenced object's form. Off by default."
 msgstr "Чи показує редактор клітинки кнопку відкриття, яка відкриває форму об'єкта за посиланням. За замовчуванням вимкнено."
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:768
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:828
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:828
 msgid "The column's starting width, in pixels. The user can change it when the column is resizable."
 msgstr "Початкова ширина колонки в пікселях. Користувач може змінити її, якщо колонка змінного розміру."
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:770
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:830
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:830
 msgid "How the header text is aligned: left (the default), center or right."
 msgstr "Вирівнювання тексту заголовка: за лівим краєм (за замовчуванням), по центру або за правим краєм."
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:771
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:831
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:831
 msgid "Footer align"
 msgstr "Вирівнювання підвалу"
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:772
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:832
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:832
 msgid "How the footer text is aligned: left (the default), center or right. Right suits a total under a numeric column."
 msgstr "Вирівнювання тексту підвалу: за лівим краєм (за замовчуванням), по центру або за правим краєм. За правим краєм зручно для підсумку під числовою колонкою."
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:774
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:834
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:834
 msgid "What the header and footer cells show: text, picture, or both. Auto: the title and the picture, whichever are set."
 msgstr "Що показують клітинки заголовка й підвалу: текст, картинку або те й інше. Авто: заголовок і картинку - ті, що задані."
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:776
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:836
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:836
 msgid "Header picture"
 msgstr "Картинка заголовка"
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:777
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:837
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:837
 msgid "An icon in the column's header cell, beside or instead of the title (see Representation). A narrow flag column often shows only a picture."
 msgstr "Значок у клітинці заголовка колонки, поруч із заголовком або замість нього (див. Представлення). Вузька колонка-прапорець часто показує лише картинку."
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:778
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:838
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:838
 msgid "Footer picture"
 msgstr "Картинка підвалу"
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:779
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:839
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:839
 msgid "An icon in the column's footer cell, beside or instead of the footer text (see Representation)."
 msgstr "Значок у клітинці підвалу колонки, поруч із текстом підвалу або замість нього (див. Представлення)."
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:782
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:842
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:842
 msgid "Whether the column is shown. A hidden column keeps its data and can be shown again from code."
 msgstr "Чи показується колонка. Прихована колонка зберігає свої дані, її можна знову показати з коду."
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:783
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:843
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:843
 msgid "Resizable"
 msgstr "Змінного розміру"
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:784
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:844
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:844
 msgid "Whether the user can change the column's width by dragging its header edge. On by default."
 msgstr "Чи може користувач змінювати ширину колонки, перетягуючи край її заголовка. За замовчуванням увімкнено."
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:786
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:846
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:846
 msgid "Reorderable"
 msgstr "Переставний"
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:787
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:847
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:847
 msgid "Whether the user can move the column to another place by dragging its header. On by default."
 msgstr "Чи може користувач перемістити колонку на інше місце, перетягуючи її заголовок. За замовчуванням увімкнено."
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:790
 #: src/engine/frontend/visualView/ctrl/widgets.h:358
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:850
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:361
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:850
+#: src/engine/frmserver/visualView/ctrl/widgets.h:361
 msgid "Change"
 msgstr "Зміна"
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:791
 #: src/engine/frontend/visualView/ctrl/widgets.h:359
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:851
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:362
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:851
+#: src/engine/frmserver/visualView/ctrl/widgets.h:362
 msgid "Start choice"
 msgstr "Початок вибору"
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:792
 #: src/engine/frontend/visualView/ctrl/widgets.h:360
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:852
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:363
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:852
+#: src/engine/frmserver/visualView/ctrl/widgets.h:363
 msgid "Start list choice"
 msgstr "Початок вибору зі списку"
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:793
 #: src/engine/frontend/visualView/ctrl/widgets.h:361
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:853
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:364
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:853
+#: src/engine/frmserver/visualView/ctrl/widgets.h:364
 msgid "Clearing"
 msgstr "Очищення"
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:794
 #: src/engine/frontend/visualView/ctrl/widgets.h:185
 #: src/engine/frontend/visualView/ctrl/widgets.h:362
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:854
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:193
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:365
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:854
+#: src/engine/frmserver/visualView/ctrl/widgets.h:193
+#: src/engine/frmserver/visualView/ctrl/widgets.h:365
 msgid "Opening"
 msgstr "Відкриття"
 
 #: src/engine/frontend/visualView/ctrl/tableBox.h:795
 #: src/engine/frontend/visualView/ctrl/widgets.h:363
-#: src/engine/sfrontend/visualView/ctrl/tableBox.h:855
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:366
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:855
+#: src/engine/frmserver/visualView/ctrl/widgets.h:366
 msgid "Choice processing"
 msgstr "Обробка вибору"
 
 #: src/engine/frontend/visualView/ctrl/tableBoxAction.cpp:83
 #: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:2489
-#: src/engine/sfrontend/visualView/ctrl/tableBoxAction.cpp:75
+#: src/engine/frmserver/visualView/ctrl/tableBoxAction.cpp:75
 msgid "Select"
 msgstr "Вибрати"
 
@@ -11614,23 +11614,23 @@ msgstr "Вибрати"
 #: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:3265
 #: src/engine/frontend/win/dlgs/settings/filterTreeModel.cpp:233
 #: src/engine/frontend/win/dlgs/settings/list/listSettings.cpp:144
-#: src/engine/sfrontend/visualView/ctrl/tableBoxAction.cpp:92
+#: src/engine/frmserver/visualView/ctrl/tableBoxAction.cpp:92
 msgid "Filter"
 msgstr "Фільтр"
 
 #: src/engine/frontend/visualView/ctrl/tableBoxAction.cpp:107
-#: src/engine/sfrontend/visualView/ctrl/tableBoxAction.cpp:99
+#: src/engine/frmserver/visualView/ctrl/tableBoxAction.cpp:99
 msgid "Filter by column"
 msgstr "Фільтр за стовпцем"
 
 #: src/engine/frontend/visualView/ctrl/tableBoxAction.cpp:108
-#: src/engine/sfrontend/visualView/ctrl/tableBoxAction.cpp:100
+#: src/engine/frmserver/visualView/ctrl/tableBoxAction.cpp:100
 msgid "Filter clear"
 msgstr "Очистити фільтр"
 
 #: src/engine/frontend/visualView/ctrl/tableBoxAction.cpp:122
 #: src/engine/frontend/visualView/ctrl/tableBoxAction.cpp:405
-#: src/engine/sfrontend/visualView/ctrl/tableBoxAction.cpp:114
+#: src/engine/frmserver/visualView/ctrl/tableBoxAction.cpp:114
 msgid "Output list"
 msgstr "Вивести список"
 
@@ -11639,7 +11639,7 @@ msgid "Which columns do you want to see?"
 msgstr "Які колонки ви хочете бачити?"
 
 #: src/engine/frontend/visualView/ctrl/tableBoxAction.cpp:585
-#: src/engine/sfrontend/visualView/ctrl/tableBoxAction.cpp:538
+#: src/engine/frmserver/visualView/ctrl/tableBoxAction.cpp:538
 msgid "The list could not be output"
 msgstr "Не вдалося вивести список"
 
@@ -11697,7 +11697,7 @@ msgstr "Текст, що показується, коли вказівник м�
 
 #: src/engine/frontend/visualView/ctrl/toolBar.h:254
 #: src/engine/frontend/visualView/layers/commandBar.h:159
-#: src/engine/sfrontend/visualView/layers/commandBar.h:155
+#: src/engine/frmserver/visualView/layers/commandBar.h:155
 msgid "Whether the item can be pressed. Off: it is shown greyed out."
 msgstr "Чи можна натиснути елемент. Вимкнено: він показується сірим."
 
@@ -11722,356 +11722,356 @@ msgid "The data source has been changed. Refill Tools?"
 msgstr "Джерело даних змінилось. Перезаповнити інструменти?"
 
 #: src/engine/frontend/visualView/ctrl/typeControl.cpp:815
-#: src/engine/sfrontend/visualView/ctrl/typeControl.cpp:134
+#: src/engine/frmserver/visualView/ctrl/typeControl.cpp:134
 msgid "Incorrect data entered into field. Do you want to cancel?"
 msgstr "Введено невірні дані в поле. Скасувати?"
 
 #: src/engine/frontend/visualView/ctrl/widgets.h:53
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:61
+#: src/engine/frmserver/visualView/ctrl/widgets.h:61
 msgid "The text on the button. Can be written per language and changed from code while the form is open."
 msgstr "Текст на кнопці. Можна задати для кожної мови та змінювати з коду, поки форму відкрито."
 
 #: src/engine/frontend/visualView/ctrl/widgets.h:55
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:63
+#: src/engine/frmserver/visualView/ctrl/widgets.h:63
 msgid "What the button shows: text, picture, or both. Auto: what the bound command prefers (Close is a picture alone, Add a picture with text); picture and text when no command is bound."
 msgstr "Що показує кнопка: текст, картинку або те й інше. Авто: те, чому віддає перевагу прив'язана команда (Закрити - лише картинка, Додати - картинка з текстом); картинка й текст, якщо команду не прив'язано."
 
 #: src/engine/frontend/visualView/ctrl/widgets.h:58
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:66
+#: src/engine/frmserver/visualView/ctrl/widgets.h:66
 msgid "The button's icon, beside or instead of the text (see Representation)."
 msgstr "Значок кнопки, поруч із текстом або замість нього (див. Представлення)."
 
 #: src/engine/frontend/visualView/ctrl/widgets.h:63
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:71
+#: src/engine/frmserver/visualView/ctrl/widgets.h:71
 msgid "The command a press runs: a form command, a standard command of the form or of one of its tables, or a command of the configuration. A button has no click event of its own - the code goes into the command's handler."
 msgstr "Команда, що виконується під час натискання: команда форми, стандартна команда форми або однієї з її таблиць чи команда конфігурації. Кнопка не має власної події натискання - код пишеться в обробнику команди."
 
 #: src/engine/frontend/visualView/ctrl/widgets.h:161
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:169
+#: src/engine/frmserver/visualView/ctrl/widgets.h:169
 msgid "Static text"
 msgstr "Статичний текст"
 
 #: src/engine/frontend/visualView/ctrl/widgets.h:162
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:170
+#: src/engine/frmserver/visualView/ctrl/widgets.h:170
 msgid "Markup"
 msgstr "Розмітка"
 
 #: src/engine/frontend/visualView/ctrl/widgets.h:163
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:171
+#: src/engine/frmserver/visualView/ctrl/widgets.h:171
 msgid "Kept for older forms and saved with the form; it has no effect - the caption is shown as plain text."
 msgstr "Залишено для старих форм і зберігається разом із формою; ні на що не впливає - напис показується як звичайний текст."
 
 #: src/engine/frontend/visualView/ctrl/widgets.h:165
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:173
+#: src/engine/frmserver/visualView/ctrl/widgets.h:173
 msgid "Kept for older forms and saved with the form; it has no effect. For several lines, put line breaks into the title."
 msgstr "Залишено для старих форм і зберігається разом із формою; ні на що не впливає. Для кількох рядків вставте переноси рядків у заголовок."
 
 #: src/engine/frontend/visualView/ctrl/widgets.h:167
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:175
+#: src/engine/frmserver/visualView/ctrl/widgets.h:175
 msgid "The caption text. Empty on a bound static text: the bound field's synonym. Can be written per language and changed from code while the form is open."
 msgstr "Текст напису. Якщо порожньо для прив'язаного статичного тексту, використовується синонім прив'язаного поля. Можна задати для кожної мови та змінювати з коду, поки форму відкрито."
 
 #: src/engine/frontend/visualView/ctrl/widgets.h:171
 #: src/engine/frontend/visualView/ctrl/widgets.h:529
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:179
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:506
+#: src/engine/frmserver/visualView/ctrl/widgets.h:179
+#: src/engine/frmserver/visualView/ctrl/widgets.h:506
 msgid "Title location"
 msgstr "Розташування заголовка"
 
 #: src/engine/frontend/visualView/ctrl/widgets.h:172
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:180
+#: src/engine/frmserver/visualView/ctrl/widgets.h:180
 msgid "Which side of the value the caption sits on when the static text is bound: left (the default) or right."
 msgstr "З якого боку від значення розташовується напис, коли статичний текст прив'язано: ліворуч (за замовчуванням) або праворуч."
 
 #: src/engine/frontend/visualView/ctrl/widgets.h:178
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:186
+#: src/engine/frmserver/visualView/ctrl/widgets.h:186
 msgid "Optional: a value to show beside the caption - a form attribute or any field reachable from it by a dotted path. A non-empty value is drawn as a link that opens its own form. Unbound, the static text is a plain caption."
 msgstr "Необов'язково: значення, яке показується поруч із написом, - реквізит форми або будь-яке поле, доступне від нього шляхом через крапку. Непорожнє значення виводиться як посилання, що відкриває його форму. Без прив'язки статичний текст - просто напис."
 
 #: src/engine/frontend/visualView/ctrl/widgets.h:332
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:335
+#: src/engine/frmserver/visualView/ctrl/widgets.h:335
 msgid "Textbox"
 msgstr "Текстове поле"
 
 #: src/engine/frontend/visualView/ctrl/widgets.h:334
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:337
+#: src/engine/frmserver/visualView/ctrl/widgets.h:337
 msgid "The field's caption, shown beside it. Empty: the bound field's synonym. Can be written per language."
 msgstr "Заголовок поля, показується поруч із ним. Якщо порожньо, використовується синонім прив'язаного поля. Можна задати для кожної мови."
 
 #: src/engine/frontend/visualView/ctrl/widgets.h:335
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:338
+#: src/engine/frmserver/visualView/ctrl/widgets.h:338
 msgid "Whether the field hides what is typed behind placeholder characters, for secrets such as passwords. Off by default."
 msgstr "Чи приховує поле введений текст за символами-замінниками - для секретів, наприклад паролів. За замовчуванням вимкнено."
 
 #: src/engine/frontend/visualView/ctrl/widgets.h:336
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:339
+#: src/engine/frmserver/visualView/ctrl/widgets.h:339
 msgid "Whether the field accepts several lines of text (Enter starts a new line) - for comments and addresses. Off by default: Enter finishes the input."
 msgstr "Чи приймає поле кілька рядків тексту (Enter починає новий рядок) - для коментарів і адрес. За замовчуванням вимкнено: Enter завершує введення."
 
 #: src/engine/frontend/visualView/ctrl/widgets.h:337
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:340
+#: src/engine/frmserver/visualView/ctrl/widgets.h:340
 msgid "Whether the value can be typed into the field. Off: it can only be picked with the Select button or cleared. On by default; a field bound through a reference path is read-only whatever this says."
 msgstr "Чи можна вводити значення в поле з клавіатури. Вимкнено: його можна лише вибрати кнопкою вибору або очистити. За замовчуванням увімкнено; поле, прив'язане через шлях за посиланням, доступне лише для читання незалежно від цієї властивості."
 
 #: src/engine/frontend/visualView/ctrl/widgets.h:339
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:342
+#: src/engine/frmserver/visualView/ctrl/widgets.h:342
 msgid "How the field shows its value, written per language: digits after the point, separators, a date pattern. Empty: the bound attribute's format, and without one a number shows as many digits after the point as its type keeps."
 msgstr "Як поле показує своє значення, задається для кожної мови: цифри після крапки, роздільники, шаблон дати. Якщо порожньо, використовується формат прив'язаного реквізиту, а без нього число показується з тією кількістю цифр після крапки, яку зберігає його тип."
 
 #: src/engine/frontend/visualView/ctrl/widgets.h:343
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:346
+#: src/engine/frmserver/visualView/ctrl/widgets.h:346
 msgid "The value the field shows and edits: a form attribute, a field of the form's object, or a field reachable from them by a dotted path (read-only). The value's type decides how input is parsed and which choice form Select opens."
 msgstr "Значення, яке поле показує й редагує: реквізит форми, поле об'єкта форми або поле, доступне від них шляхом через крапку (лише для читання). Від типу значення залежить, як розбирається введення і яку форму вибору відкриває кнопка вибору."
 
 #: src/engine/frontend/visualView/ctrl/widgets.h:346
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:349
+#: src/engine/frmserver/visualView/ctrl/widgets.h:349
 msgid "Which form opens when the user presses Select: one of the forms of the value's type. Empty: the type's default choice form."
 msgstr "Яка форма відкривається, коли користувач натискає кнопку вибору: одна з форм типу значення. Якщо порожньо, форма вибору типу за замовчуванням."
 
 #: src/engine/frontend/visualView/ctrl/widgets.h:351
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:354
+#: src/engine/frmserver/visualView/ctrl/widgets.h:354
 msgid "Whether the field shows the Select button (...), which opens a choice form or list to pick the value from. On by default."
 msgstr "Чи показує поле кнопку вибору (...), яка відкриває форму вибору або список для вибору значення. За замовчуванням увімкнено."
 
 #: src/engine/frontend/visualView/ctrl/widgets.h:353
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:356
+#: src/engine/frmserver/visualView/ctrl/widgets.h:356
 msgid "Whether the field shows the Clear button (X), which empties the value. On by default."
 msgstr "Чи показує поле кнопку очищення (X), яка очищає значення. За замовчуванням увімкнено."
 
 #: src/engine/frontend/visualView/ctrl/widgets.h:355
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:358
+#: src/engine/frmserver/visualView/ctrl/widgets.h:358
 msgid "Whether the field shows the Open button, which opens the referenced object's form. Off by default."
 msgstr "Чи показує поле кнопку відкриття, яка відкриває форму об'єкта за посиланням. За замовчуванням вимкнено."
 
 #: src/engine/frontend/visualView/ctrl/widgets.h:526
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:503
+#: src/engine/frmserver/visualView/ctrl/widgets.h:503
 msgid "Checkbox"
 msgstr "Прапорець"
 
 #: src/engine/frontend/visualView/ctrl/widgets.h:528
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:505
+#: src/engine/frmserver/visualView/ctrl/widgets.h:505
 msgid "The checkbox's caption. Empty: the bound field's synonym. Can be written per language."
 msgstr "Заголовок прапорця. Якщо порожньо, використовується синонім прив'язаного поля. Можна задати для кожної мови."
 
 #: src/engine/frontend/visualView/ctrl/widgets.h:530
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:507
+#: src/engine/frmserver/visualView/ctrl/widgets.h:507
 msgid "Which side of the box the caption sits on: left (the default) or right."
 msgstr "З якого боку від прапорця розташовується заголовок: ліворуч (за замовчуванням) або праворуч."
 
 #: src/engine/frontend/visualView/ctrl/widgets.h:535
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:512
+#: src/engine/frmserver/visualView/ctrl/widgets.h:512
 msgid "The boolean value the checkbox shows and toggles: a form attribute or a field of the form's object. Bound through a reference path, or on a view-only form, it shows the value but cannot be toggled. Unbound, the checkbox is not shown at run time."
 msgstr "Логічне значення, яке прапорець показує й перемикає: реквізит форми або поле об'єкта форми. У разі прив'язки через шлях за посиланням або на формі лише для перегляду прапорець показує значення, але не перемикається. Без прив'язки прапорець не показується під час роботи."
 
 #: src/engine/frontend/visualView/ctrl/widgets.h:539
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:516
+#: src/engine/frmserver/visualView/ctrl/widgets.h:516
 msgid "Checkbox clicked"
 msgstr "Прапорець натиснуто"
 
 #: src/engine/frontend/visualView/ctrl/widgets.h:572
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:544
+#: src/engine/frmserver/visualView/ctrl/widgets.h:544
 msgid "Radio button"
 msgstr "Перемикач"
 
 #: src/engine/frontend/visualView/ctrl/widgets.h:574
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:546
+#: src/engine/frmserver/visualView/ctrl/widgets.h:546
 msgid "The radio button's caption. Can be written per language."
 msgstr "Заголовок перемикача. Можна задати для кожної мови."
 
 #: src/engine/frontend/visualView/ctrl/widgets.h:575
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:547
+#: src/engine/frmserver/visualView/ctrl/widgets.h:547
 msgid "Selected"
 msgstr "Вибрано"
 
 #: src/engine/frontend/visualView/ctrl/widgets.h:576
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:548
+#: src/engine/frmserver/visualView/ctrl/widgets.h:548
 msgid "Whether the radio button is shown selected. A radio button has no data source of its own."
 msgstr "Чи показується перемикач вибраним. Перемикач не має власного джерела даних."
 
 #: src/engine/frontend/visualView/ctrl/widgets.h:602
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:565
+#: src/engine/frmserver/visualView/ctrl/widgets.h:565
 msgid "Static line"
 msgstr "Статична лінія"
 
 #: src/engine/frontend/visualView/ctrl/widgets.h:604
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:567
+#: src/engine/frmserver/visualView/ctrl/widgets.h:567
 msgid "The line's direction: horizontal (the default), separating stacked parts of a form, or vertical, separating side-by-side ones. Set Stretch to Expand for the line to run the full width or height."
 msgstr "Напрямок лінії: горизонтальна (за замовчуванням) розділяє частини форми, розташовані одна під одною, вертикальна - розташовані поруч. Задайте властивості Розтягнення значення Розгорнути, щоб лінія йшла на всю ширину або висоту."
 
 #: src/engine/frontend/visualView/ctrl/widgets.h:631
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:585
+#: src/engine/frmserver/visualView/ctrl/widgets.h:585
 msgid "Slider"
 msgstr "Повзунок"
 
 #: src/engine/frontend/visualView/ctrl/widgets.h:632
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:586
+#: src/engine/frmserver/visualView/ctrl/widgets.h:586
 msgid "Min value"
 msgstr "Мінімальне значення"
 
 #: src/engine/frontend/visualView/ctrl/widgets.h:633
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:587
+#: src/engine/frmserver/visualView/ctrl/widgets.h:587
 msgid "The slider's smallest value, at its start. Default 0."
 msgstr "Найменше значення повзунка, на його початку. За замовчуванням 0."
 
 #: src/engine/frontend/visualView/ctrl/widgets.h:634
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:588
+#: src/engine/frmserver/visualView/ctrl/widgets.h:588
 msgid "Max value"
 msgstr "Максимальне значення"
 
 #: src/engine/frontend/visualView/ctrl/widgets.h:635
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:589
+#: src/engine/frmserver/visualView/ctrl/widgets.h:589
 msgid "The slider's largest value, at its end. Default 100."
 msgstr "Найбільше значення повзунка, у його кінці. За замовчуванням 100."
 
 #: src/engine/frontend/visualView/ctrl/widgets.h:637
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:591
+#: src/engine/frmserver/visualView/ctrl/widgets.h:591
 msgid "Where the slider's thumb starts, between the min and max values. Default 50."
 msgstr "Початкове положення бігунка повзунка між мінімальним і максимальним значеннями. За замовчуванням 50."
 
 #: src/engine/frontend/visualView/ctrl/widgets.h:639
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:593
+#: src/engine/frmserver/visualView/ctrl/widgets.h:593
 msgid "The slider's direction: horizontal (the default) or vertical."
 msgstr "Напрямок повзунка: горизонтальний (за замовчуванням) або вертикальний."
 
 #: src/engine/frontend/visualView/ctrl/widgets.h:665
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:610
+#: src/engine/frmserver/visualView/ctrl/widgets.h:610
 msgid "Gauge"
 msgstr "Індикатор"
 
 #: src/engine/frontend/visualView/ctrl/widgets.h:666
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:611
+#: src/engine/frmserver/visualView/ctrl/widgets.h:611
 msgid "Range"
 msgstr "Діапазон"
 
 #: src/engine/frontend/visualView/ctrl/widgets.h:667
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:612
+#: src/engine/frmserver/visualView/ctrl/widgets.h:612
 msgid "The value at which the progress bar is full. Default 100, so the value reads as a percentage."
 msgstr "Значення, за якого індикатор заповнений повністю. За замовчуванням 100, тож значення читається як відсоток."
 
 #: src/engine/frontend/visualView/ctrl/widgets.h:669
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:614
+#: src/engine/frmserver/visualView/ctrl/widgets.h:614
 msgid "How far the progress bar is filled, from 0 to the range. Default 30."
 msgstr "Наскільки заповнений індикатор, від 0 до значення діапазону. За замовчуванням 30."
 
 #: src/engine/frontend/visualView/ctrl/widgets.h:671
-#: src/engine/sfrontend/visualView/ctrl/widgets.h:616
+#: src/engine/frmserver/visualView/ctrl/widgets.h:616
 msgid "The progress bar's direction: horizontal (the default, filling left to right) or vertical."
 msgstr "Напрямок індикатора: горизонтальний (за замовчуванням, заповнюється зліва направо) або вертикальний."
 
 #: src/engine/frontend/visualView/ctrl/window.h:42
-#: src/engine/sfrontend/visualView/ctrl/window.h:30
+#: src/engine/frmserver/visualView/ctrl/window.h:30
 msgid "Window"
 msgstr "Вікно"
 
 #: src/engine/frontend/visualView/ctrl/window.h:43
-#: src/engine/sfrontend/visualView/ctrl/window.h:31
+#: src/engine/frmserver/visualView/ctrl/window.h:31
 msgid "The smallest size the form layout may give the control, in pixels; -1 on a side means no limit there. The layout never shrinks the control below it, even when the form is made smaller."
 msgstr "Найменший розмір, який розкладка форми може дати елементу, у пікселях; -1 для сторони означає, що за нею обмеження немає. Розкладка ніколи не зменшує елемент нижче цього розміру, навіть коли форму зменшують."
 
 #: src/engine/frontend/visualView/ctrl/window.h:44
-#: src/engine/sfrontend/visualView/ctrl/window.h:32
+#: src/engine/frmserver/visualView/ctrl/window.h:32
 msgid "Maximum size"
 msgstr "Максимальний розмір"
 
 #: src/engine/frontend/visualView/ctrl/window.h:44
-#: src/engine/sfrontend/visualView/ctrl/window.h:32
+#: src/engine/frmserver/visualView/ctrl/window.h:32
 msgid "The largest size the form layout may give the control, in pixels; -1 on a side means no limit there. Useful to keep a stretched field from growing across a wide form."
 msgstr "Найбільший розмір, який розкладка форми може дати елементу, у пікселях; -1 для сторони означає, що за нею обмеження немає. Корисно, щоб розтягнуте поле не розросталося на всю широку форму."
 
 #: src/engine/frontend/visualView/ctrl/window.h:45
-#: src/engine/sfrontend/visualView/ctrl/window.h:33
+#: src/engine/frmserver/visualView/ctrl/window.h:33
 msgid "The control's font. Unset: the parent's font is used. A font set on a group or page is inherited by the controls inside it that have no font of their own."
 msgstr "Шрифт елемента. Якщо не задано, використовується шрифт батька. Шрифт, заданий для групи або сторінки, успадковують елементи всередині неї, які не мають власного шрифту."
 
 #: src/engine/frontend/visualView/ctrl/window.h:46
-#: src/engine/sfrontend/visualView/ctrl/window.h:34
+#: src/engine/frmserver/visualView/ctrl/window.h:34
 msgid "The control's text colour. Default: the system colour, which follows the user's theme."
 msgstr "Колір тексту елемента. За замовчуванням: системний колір, що відповідає темі оформлення користувача."
 
 #: src/engine/frontend/visualView/ctrl/window.h:47
-#: src/engine/sfrontend/visualView/ctrl/window.h:35
+#: src/engine/frmserver/visualView/ctrl/window.h:35
 msgid "The control's background colour. Default: the system colour, which follows the user's theme."
 msgstr "Колір фону елемента. За замовчуванням: системний колір, що відповідає темі оформлення користувача."
 
 #: src/engine/frontend/visualView/ctrl/window.h:48
-#: src/engine/sfrontend/visualView/ctrl/window.h:36
+#: src/engine/frmserver/visualView/ctrl/window.h:36
 msgid "Text shown when the mouse pointer rests over the control. Empty: no tooltip. Can be written per language."
 msgstr "Текст, що показується, коли вказівник миші затримується над елементом. Якщо порожньо, підказки немає. Можна задати для кожної мови."
 
 #: src/engine/frontend/visualView/ctrl/window.h:49
-#: src/engine/sfrontend/visualView/ctrl/window.h:37
+#: src/engine/frmserver/visualView/ctrl/window.h:37
 msgid "Whether the user can interact with the control. A disabled control is shown greyed out and takes no input; disabling a group or page disables everything inside it. Code can change it while the form is open."
 msgstr "Чи може користувач працювати з елементом. Недоступний елемент показується сірим і не приймає введення; якщо зробити недоступною групу або сторінку, недоступним стає все всередині неї. Код може змінювати це, поки форму відкрито."
 
 #: src/engine/frontend/visualView/ctrl/window.h:50
-#: src/engine/sfrontend/visualView/ctrl/window.h:38
+#: src/engine/frmserver/visualView/ctrl/window.h:38
 msgid "Whether the control is shown on the form. A hidden control keeps its data and can be shown again from code; the layout closes the gap it leaves."
 msgstr "Чи показується елемент на формі. Прихований елемент зберігає свої дані, його можна знову показати з коду; розкладка закриває залишений ним проміжок."
 
 #: src/engine/frontend/visualView/layers/commandBar.cpp:82
-#: src/engine/sfrontend/visualView/layers/commandBar.cpp:46
+#: src/engine/frmserver/visualView/layers/commandBar.cpp:46
 msgid "Form commands"
 msgstr "Команди форми"
 
 #: src/engine/frontend/visualView/layers/commandBar.cpp:82
-#: src/engine/sfrontend/visualView/layers/commandBar.cpp:46
+#: src/engine/frmserver/visualView/layers/commandBar.cpp:46
 msgid "Standard commands"
 msgstr "Стандартні команди"
 
 #: src/engine/frontend/visualView/layers/commandBar.cpp:82
-#: src/engine/sfrontend/visualView/layers/commandBar.cpp:46
+#: src/engine/frmserver/visualView/layers/commandBar.cpp:46
 msgid "Global commands"
 msgstr "Глобальні команди"
 
 #: src/engine/frontend/visualView/layers/commandBar.h:146
-#: src/engine/sfrontend/visualView/layers/commandBar.h:142
+#: src/engine/frmserver/visualView/layers/commandBar.h:142
 msgid "The item's name, unique among the command bar's items. It identifies the item in the designer; the user never sees it."
 msgstr "Ім'я елемента, унікальне серед елементів командної панелі. Воно ідентифікує елемент у конфігураторі; користувач його ніколи не бачить."
 
 #: src/engine/frontend/visualView/layers/commandBar.h:150
-#: src/engine/sfrontend/visualView/layers/commandBar.h:146
+#: src/engine/frmserver/visualView/layers/commandBar.h:146
 msgid "The item's caption on the bar. Empty: the bound command's own caption. Can be written per language."
 msgstr "Заголовок елемента на панелі. Якщо порожньо, використовується заголовок прив'язаної команди. Можна задати для кожної мови."
 
 #: src/engine/frontend/visualView/layers/commandBar.h:152
-#: src/engine/sfrontend/visualView/layers/commandBar.h:148
+#: src/engine/frmserver/visualView/layers/commandBar.h:148
 msgid "What the item shows: text, picture, or both. Auto: what the bound command prefers (Close is a picture alone, Add a picture with text)."
 msgstr "Що показує елемент: текст, картинку або те й інше. Авто: те, чому віддає перевагу прив'язана команда (Закрити - лише картинка, Додати - картинка з текстом)."
 
 #: src/engine/frontend/visualView/layers/commandBar.h:155
-#: src/engine/sfrontend/visualView/layers/commandBar.h:151
+#: src/engine/frmserver/visualView/layers/commandBar.h:151
 msgid "The item's icon. Empty: the bound command's own picture."
 msgstr "Значок елемента. Якщо порожньо, використовується картинка прив'язаної команди."
 
 #: src/engine/frontend/visualView/layers/commandBar.h:157
-#: src/engine/sfrontend/visualView/layers/commandBar.h:153
+#: src/engine/frmserver/visualView/layers/commandBar.h:153
 msgid "Saved with the form, but the bar does not show it yet: an item's tooltip is always its caption."
 msgstr "Зберігається разом із формою, але панель поки його не показує: підказка елемента завжди збігається з його заголовком."
 
 #: src/engine/frontend/visualView/layers/commandBar.h:161
-#: src/engine/sfrontend/visualView/layers/commandBar.h:157
+#: src/engine/frmserver/visualView/layers/commandBar.h:157
 msgid "Whether the item is shown on the bar."
 msgstr "Чи показується елемент на панелі."
 
 #: src/engine/frontend/visualView/layers/commandBar.h:167
-#: src/engine/sfrontend/visualView/layers/commandBar.h:163
+#: src/engine/frmserver/visualView/layers/commandBar.h:163
 msgid "The command the item runs: a form command, a standard command of the form or of one of its tables, or a command of the form's object or of the configuration."
 msgstr "Команда, яку виконує елемент: команда форми, стандартна команда форми або однієї з її таблиць чи команда об'єкта форми або конфігурації."
 
 #: src/engine/frontend/visualView/layers/commandBar.h:271
 #: src/engine/frontend/visualView/layers/commandBar.h:295
-#: src/engine/sfrontend/visualView/layers/commandBar.h:272
-#: src/engine/sfrontend/visualView/layers/commandBar.h:296
+#: src/engine/frmserver/visualView/layers/commandBar.h:272
+#: src/engine/frmserver/visualView/layers/commandBar.h:296
 msgid "Command bar"
 msgstr "Командна панель"
 
 #: src/engine/frontend/visualView/layers/commandBar.h:296
-#: src/engine/sfrontend/visualView/layers/commandBar.h:297
+#: src/engine/frmserver/visualView/layers/commandBar.h:297
 msgid "Auto fill"
 msgstr "Автозаповнення"
 
 #: src/engine/frontend/visualView/layers/commandBar.h:297
-#: src/engine/sfrontend/visualView/layers/commandBar.h:298
+#: src/engine/frmserver/visualView/layers/commandBar.h:298
 msgid "Whether the bar fills itself with its owner's standard commands (the form's or the table's: Add, Copy, Delete, Write and so on) and the commands of the owner's object. On by default. Off: the bar holds only the items added to it by hand."
 msgstr "Чи заповнюється панель сама стандартними командами свого власника (форми або таблиці: Додати, Копіювати, Видалити, Записати тощо) і командами об'єкта власника. За замовчуванням увімкнено. Вимкнено: на панелі лише елементи, додані вручну."
 
@@ -12282,12 +12282,12 @@ msgid "LockGuid"
 msgstr "LockGuid"
 
 #: src/engine/frontend/win/dlgs/activeUser.cpp:105
-#: src/engine/sfrontend/schema/activeUser.cpp:52
+#: src/engine/frmserver/schema/activeUser.cpp:52
 msgid "Shared"
 msgstr "Спільний"
 
 #: src/engine/frontend/win/dlgs/activeUser.cpp:105
-#: src/engine/sfrontend/schema/activeUser.cpp:52
+#: src/engine/frmserver/schema/activeUser.cpp:52
 msgid "Exclusive"
 msgstr "Виключний"
 
@@ -12727,7 +12727,7 @@ msgid "OK"
 msgstr "OK"
 
 #: src/engine/frontend/win/dlgs/generation.cpp:24
-#: src/engine/sfrontend/visualView/ctrl/formObject.cpp:674
+#: src/engine/frmserver/visualView/ctrl/formObject.cpp:674
 msgid "Select generation"
 msgstr "Виберіть, що створити на підставі"
 
@@ -13998,7 +13998,7 @@ msgstr "Висота рядка"
 
 #: src/engine/frontend/win/dlgs/selectData.cpp:34
 #: src/engine/frontend/win/dlgs/typeSelector.cpp:86
-#: src/engine/sfrontend/visualView/ctrl/typeControl.cpp:203
+#: src/engine/frmserver/visualView/ctrl/typeControl.cpp:203
 msgid "Select data type"
 msgstr "Виберіть тип даних"
 
@@ -14026,7 +14026,7 @@ msgid "from query"
 msgstr "із запиту"
 
 #: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:681
-#: src/engine/sfrontend/visualView/ctrl/gridBoxAction.cpp:40
+#: src/engine/frmserver/visualView/ctrl/gridBoxAction.cpp:40
 #, c-format
 msgid "Variant %u"
 msgstr "Варіант %u"
@@ -14290,8 +14290,8 @@ msgid "List settings"
 msgstr "Налаштування списку"
 
 #: src/engine/frontend/win/dlgs/settings/savedSettings.cpp:42
-#: src/engine/sfrontend/visualView/ctrl/gridBox.cpp:152
-#: src/engine/sfrontend/visualView/ctrl/tableBox.cpp:452
+#: src/engine/frmserver/visualView/ctrl/gridBox.cpp:152
+#: src/engine/frmserver/visualView/ctrl/tableBox.cpp:452
 msgid "The settings marked to be restored on open could not be found"
 msgstr "Налаштування, позначені для відновлення під час відкриття, не знайдено"
 
@@ -14312,14 +14312,14 @@ msgid "The settings could not be saved."
 msgstr "Не вдалося зберегти налаштування."
 
 #: src/engine/frontend/win/dlgs/settings/savedSettings.cpp:207
-#: src/engine/sfrontend/visualView/choiceRequest.cpp:79
+#: src/engine/frmserver/visualView/choiceRequest.cpp:79
 #, c-format
 msgid "The settings named \"%s\" could not be restored."
 msgstr "Не вдалося відновити налаштування \"%s\"."
 
 #: src/engine/frontend/win/dlgs/settings/savedSettings.cpp:208
 #: src/engine/frontend/win/dlgs/settings/savedSettings.cpp:261
-#: src/engine/sfrontend/visualView/choiceRequest.cpp:80
+#: src/engine/frmserver/visualView/choiceRequest.cpp:80
 msgid "Saved settings"
 msgstr "Збережені налаштування"
 
@@ -14672,30 +14672,30 @@ msgstr "Запуск OES"
 msgid "Failed to start wenterprise-server: %s"
 msgstr "Не вдалося запустити wenterprise-server: %s"
 
-#: src/engine/sfrontend/client/clientFrameDesigner.cpp:27
-#: src/engine/sfrontend/client/clientFrameRuntime.cpp:23
+#: src/engine/frmserver/client/clientFrameDesigner.cpp:27
+#: src/engine/frmserver/client/clientFrameRuntime.cpp:23
 msgid "File"
 msgstr "Файл"
 
-#: src/engine/sfrontend/docView/commandProcessor.cpp:17
+#: src/engine/frmserver/docView/commandProcessor.cpp:17
 msgid "Unnamed command"
 msgstr "Команда без імені"
 
-#: src/engine/sfrontend/docView/commandProcessor.cpp:146
+#: src/engine/frmserver/docView/commandProcessor.cpp:146
 #, c-format
 msgid "Undo %s"
 msgstr "Скасувати %s"
 
-#: src/engine/sfrontend/docView/commandProcessor.cpp:147
+#: src/engine/frmserver/docView/commandProcessor.cpp:147
 #, c-format
 msgid "Can't Undo %s"
 msgstr "Не можна скасувати %s"
 
-#: src/engine/sfrontend/docView/commandProcessor.cpp:158
+#: src/engine/frmserver/docView/commandProcessor.cpp:158
 #, c-format
 msgid "Redo %s"
 msgstr "Повторити %s"
 
-#: src/engine/sfrontend/visualView/choiceRequest.cpp:56
+#: src/engine/frmserver/visualView/choiceRequest.cpp:56
 msgid "No settings have been saved here yet."
 msgstr "Тут ще не збережено жодного налаштування."

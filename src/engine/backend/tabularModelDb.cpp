@@ -66,7 +66,7 @@ void ibValueModelCursor::EnsureSnapshot() const
 		try {
 			composer.Run(driver);
 		}
-		catch (const ibBackendException&) {
+		catch (const ibCoreException&) {
 			composer.PutGroups(savedGroups);
 			composer.RestoreScope(scope);
 			throw;
@@ -410,7 +410,7 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 		else
 			composer.Run(driver);
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		composer.PutGroups(savedGroups);
 		composer.RestoreScope(scope);
 		throw;

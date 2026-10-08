@@ -29,7 +29,7 @@
 
 #include "backend/backend.h"
 #include "backend/compiler/value.h"
-#include "backend/guid.h"
+#include "core/guid.h"
 
 #include <cstdint>
 #include <vector>

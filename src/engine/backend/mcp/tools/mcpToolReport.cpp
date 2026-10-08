@@ -2958,7 +2958,7 @@ public:
 					"written."), (int)e.GetLine(), (int)e.GetColumn(), e.GetErrorDescription());
 				return false;
 			}
-			catch (const ibBackendException& e) {
+			catch (const ibCoreException& e) {
 				refusal = wxString::Format(
 					ibMcpText("The query was refused: %s. Nothing was written."), e.GetErrorDescription());
 				return false;

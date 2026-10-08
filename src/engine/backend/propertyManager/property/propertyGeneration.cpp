@@ -1,5 +1,5 @@
 #include "propertyGeneration.h"
-#include "backend/serialize/dataBuilder.h"
+#include "core/serialize/dataBuilder.h"
 #include "backend/propertyManager/property/variant/variantGen.h"
 
 

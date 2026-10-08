@@ -1513,7 +1513,7 @@ public:
 		// module nobody compiled carries an empty bytecode, so there is nothing to stand beside.
 		if (ibCompileModule* host = HostModuleOf(moduleObject)) {
 			try { host->Compile(); }
-			catch (const ibBackendException&) {
+			catch (const ibCoreException&) {
 				// A configuration whose own modules do not compile is not this walk's complaint to
 				// make — it was asked about the CARET. It answers with whatever did resolve.
 			}
@@ -2332,7 +2332,7 @@ std::vector<ibQueryOutline> ibOutlineScriptQueries(const wxString& text, const w
 		if (ibValueModuleManager* manager = ibSession::EditModuleManagerFor(metaData)) {
 			if (ibCompileModule* host = manager->GetCompileModule()) {
 				try { host->Compile(); }
-				catch (const ibBackendException&) { /* the snippet's own context, best effort */ }
+				catch (const ibCoreException&) { /* the snippet's own context, best effort */ }
 				compiler.SetParent(host);
 				for (const ibCompileModule* up = host; up != nullptr; up = up->GetParent())
 					chain.push_back(up);
@@ -2345,7 +2345,7 @@ std::vector<ibQueryOutline> ibOutlineScriptQueries(const wxString& text, const w
 	// like — and this door is called from the MCP server's thread, where taking the caller down to
 	// report a malformed text is the wrong trade. Whatever WAS read is still the answer.
 	try { compiler.Compile(text); }
-	catch (const ibBackendException&) {}
+	catch (const ibCoreException&) {}
 	catch (...) {}
 
 	for (const ibLinqQuery& query : compiler.m_cByteCode.m_listLinq) {

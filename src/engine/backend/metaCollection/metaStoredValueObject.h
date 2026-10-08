@@ -13,7 +13,7 @@
 #include "backend/metaCollection/metaModuleObject.h"              // ibPropertyInnerModule / ibValueMetaObjectModule — the record module
 #include "backend/metaCollection/attribute/metaAttributeObject.h" // ibValueMetaObjectAttributeBase — the value column's base
 #include "backend/backend_type.h"                                 // ibBackendTypeConfigFactory — the value's type
-#include "backend/stringUtils.h"                                  // stringUtils::GenerateSynonym — the record object's caption
+#include "core/stringUtils.h"                                  // stringUtils::GenerateSynonym — the record object's caption
 
 class BACKEND_API ibValueRecordDataObjectConstant;
 class ibStructureBatch;   // per-table DDL/seed batch — ProcessAttribute pours the value column into it

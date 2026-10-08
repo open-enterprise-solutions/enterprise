@@ -11,7 +11,7 @@
 #include "backend/syntaxHelper/helpCorpus.h"
 #include "backend/syntaxHelper/helpEntry.h"
 #include "backend/compiler/value.h"   // ibValue::IsRegisterCtor / GetNameObjectFromID — an article's class_id, checked
-#include "backend/stringUtils.h"
+#include "core/stringUtils.h"
 
 #include <wx/dir.h>
 #include <wx/file.h>

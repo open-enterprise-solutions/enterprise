@@ -2,7 +2,7 @@
 #include "advpropValuePicture.h"                                         // the value's picture, read when drawn
 
 #include "backend/propertyManager/property/eventControl.h"
-#include "backend/stringUtils.h"
+#include "core/stringUtils.h"
 #include "backend/backend_picture.h"      // ibBackendPicture::GetPicture
 #include "backend/picturePredefined.h"    // g_picEventCLSID — an event's picture
 

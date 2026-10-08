@@ -354,7 +354,7 @@ bool ibValueArray::SetAt(const ibValue& varKeyValue, const ibValue& varValue)//a
 // No lengths, no separators: the tree carries the structure that a flat string
 // would have had to encode by hand.
 
-#include "backend/serialize/dataBuilder.h"
+#include "core/serialize/dataBuilder.h"
 
 
 bool ibValueArray::DoSerialize(ibDataNode& node) const

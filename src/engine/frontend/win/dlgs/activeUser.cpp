@@ -320,7 +320,7 @@ void ibDialogActiveUser::OnForceReleaseSelected(wxCommandEvent&)
 		m_lastLockRowCount = static_cast<size_t>(-1);
 		RefreshLocksTable();
 	}
-	catch (const ibBackendException& err) {
+	catch (const ibCoreException& err) {
 		ibJournalWarning(wxT("ui"), _("Failed to release lock %s: %s"),
 			lockGuid, err.GetErrorDescription());
 	}

@@ -115,7 +115,7 @@ static void MarkPlacedWords(wxStyledTextCtrl* text)
 		ibQueryLexer lexer;
 		tokens = lexer.Tokenize(text->GetText());
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		return;
 	}
 
@@ -848,7 +848,7 @@ wxWindow* ibDialogQueryConstructor::BuildTablesPage(wxWindow* parent)
 			ibQueryParser parser;
 			select->m_projections[row].m_expr = parser.ParseExpression(text);
 		}
-		catch (const ibBackendException& error) {
+		catch (const ibCoreException& error) {
 			ShowEngineError(error.GetErrorDescription());
 			return false;
 		}
@@ -1118,7 +1118,7 @@ wxWindow* ibDialogQueryConstructor::BuildGroupingPage(wxWindow* parent)
 			ibQueryParser parser;
 			select->m_groupBy[row] = parser.ParseExpression(text);
 		}
-		catch (const ibBackendException& error) {
+		catch (const ibCoreException& error) {
 			ShowEngineError(error.GetErrorDescription());
 			return false;
 		}
@@ -1238,7 +1238,7 @@ wxWindow* ibDialogQueryConstructor::BuildGroupingPage(wxWindow* parent)
 			projection.m_expr->m_arg  = parser.ParseExpression(text);
 			projection.m_expr->m_star = false;
 		}
-		catch (const ibBackendException& error) {
+		catch (const ibCoreException& error) {
 			ShowEngineError(error.GetErrorDescription());
 			return false;
 		}
@@ -1470,7 +1470,7 @@ wxWindow* ibDialogQueryConstructor::BuildIndexPage(wxWindow* parent)
 			ibQueryParser parser;
 			select->m_indexBy[row] = parser.ParseExpression(text);
 		}
-		catch (const ibBackendException& error) {
+		catch (const ibCoreException& error) {
 			ShowEngineError(error.GetErrorDescription());
 			return false;
 		}
@@ -1565,7 +1565,7 @@ wxWindow* ibDialogQueryConstructor::BuildOrderPage(wxWindow* parent)
 			ibQueryParser parser;
 			item.m_expr = parser.ParseExpression(text);
 		}
-		catch (const ibBackendException& error) {
+		catch (const ibCoreException& error) {
 			ShowEngineError(error.GetErrorDescription());
 			return false;
 		}
@@ -1865,7 +1865,7 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 			}
 			dim.m_fields = std::move(parsed);
 		}
-		catch (const ibBackendException& error) {
+		catch (const ibCoreException& error) {
 			ShowEngineError(error.GetErrorDescription());
 			return false;
 		}
@@ -2204,7 +2204,7 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 			ibQueryParser parser;
 			select->m_totalsAggregates[row].m_expr = parser.ParseExpression(source);
 		}
-		catch (const ibBackendException& error) {
+		catch (const ibCoreException& error) {
 			ShowEngineError(error.GetErrorDescription());
 			return false;
 		}

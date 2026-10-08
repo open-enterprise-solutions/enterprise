@@ -12,7 +12,7 @@
 
 #include "backend/backend.h"
 #include "backend/backend_core.h"
-#include "backend/guid.h"
+#include "core/guid.h"
 #include "backend/appData.h"   // ibRunMode (plain enum, can't forward-declare cleanly)
 
 #include <unordered_map>

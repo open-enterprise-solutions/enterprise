@@ -22,7 +22,7 @@
 #include <gtest/gtest.h>
 
 #include "backend/rpc/rpcMessage.h"
-#include "backend/serialize/dataBuilder.h"
+#include "core/serialize/dataBuilder.h"
 
 //---------------------------------------------------------------------------
 // reading

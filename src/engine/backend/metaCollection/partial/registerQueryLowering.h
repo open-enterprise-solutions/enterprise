@@ -29,7 +29,7 @@
 #include <vector>
 #include "backend/system/value/valuePointInTime.h"   // ibValuePointInTime — a boundary that names a document
 #include "backend/system/value/valueBoundary.h"       // ibValueBoundary — the position AND which side of it
-#include "backend/stringUtils.h"             // CompareString — the one case-insensitive name comparison
+#include "core/stringUtils.h"             // CompareString — the one case-insensitive name comparison
 #include "backend/query/queryableFactory.h"  // ibQuerySourceParameter — what a virtual table DECLARES it takes
 #include "backend/session/session.h"         // ses_query — the session's channel; ibRequireOpenBase asks it
 

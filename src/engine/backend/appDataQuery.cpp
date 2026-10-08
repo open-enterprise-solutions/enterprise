@@ -371,7 +371,7 @@ bool ibApplicationInstance::ClearTableUser()
 
 ///////////////////////////////////////////////////////////////////////////////
 
-#include "fileSystem/fs.h"
+#include "core/fileSystem/fs.h"
 
 // User-record DB I/O moved onto ibUserInfo as static factories; see
 // backend/userInfo.{h,cpp}. ibApplicationInstance no longer mediates the

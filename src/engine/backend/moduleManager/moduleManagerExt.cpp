@@ -141,7 +141,7 @@ bool ibValueModuleRuntimeManagerExternalDataProcessor::CreateMainModule()
 			Compile();
 			Run();
 		}
-		catch (const ibBackendException& err) {
+		catch (const ibCoreException& err) {
 			// 🛑 THE HANDLER MUST NOT THROW — and `GetClassName()` can (Max, 2026-08-20: "it is
 			// addressed after it was taken off the registry"). A value's class NAME is looked up in
 			// the ctor registry by its dynamic clsid, and the external pair is registered on RUN and
@@ -387,7 +387,7 @@ bool ibValueModuleRuntimeManagerExternalReport::CreateMainModule()
 			Compile();
 			Run();
 		}
-		catch (const ibBackendException& err) {
+		catch (const ibCoreException& err) {
 			// Same rule as the data processor's twin above: the handler asks the METAOBJECT for a
 			// name, because a value's class name is a registry lookup and the registry entry may
 			// already be gone on this very path — a reporting call that throws replaces the fault

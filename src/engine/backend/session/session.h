@@ -113,7 +113,7 @@ enum class ibSessionKind : int {
 	ScheduledJob  = 102,   // declared by the configuration, runs on its interval
 	SystemJob     = 103,   // the platform's own (totals fold, maintenance)
 
-	// A CLIENT OF THE PROTOCOL working in the application — the thin runtime, the web, the assistant (sfrontend):
+	// A CLIENT OF THE PROTOCOL working in the application — the thin runtime, the web, the assistant (frmserver):
 	// a person at it, whatever process hosts it. Its run mode is its host's — a server's or a file base's — so the
 	// kind is what says what it is.
 	ThinClient    = 104,

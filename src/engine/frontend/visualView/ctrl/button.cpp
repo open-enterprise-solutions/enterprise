@@ -1,5 +1,5 @@
 #include "widgets.h"
-#include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
+#include "core/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "frontend/visualView/ctrl/form.h"           // ibValueForm — GetOwnerForm (the command-door gate)
 #include "frontend/visualView/layers/commandBar.h"   // GatherFormCommands — the icon/caption source the navigator uses
 #ifdef OES_USE_WEB

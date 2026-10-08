@@ -21,7 +21,7 @@
 #include "backend/metaData.h"                                            // ibMetaData — CreateMetaObject / find (the editor's own config tree)
 #include "frontend/docView/docView.h"                                   // ibMetaDocument — the editor's document config (create in the edited tree, not the global)
 #include "backend/backend_core.h"                                        // oes_clipboard_metadata — the metaobject clipboard format
-#include "backend/fileSystem/fs.h"                                       // ibWriterMemory / ibReaderMemory — serialize (drag payload + copy/paste)
+#include "core/fileSystem/fs.h"                                       // ibWriterMemory / ibReaderMemory — serialize (drag payload + copy/paste)
 
 #include <map>            // std::map — pre-create the fixed command sections (shown even empty)
 #include <wx/treectrl.h>

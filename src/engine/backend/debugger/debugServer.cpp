@@ -23,7 +23,7 @@
 #include "backend/session/sessionRegistry.h"
 #include "backend/session/workerPool.h"
 
-#include "backend/fileSystem/fs.h"
+#include "core/fileSystem/fs.h"
 #include "backend/system/systemManager.h"     // Message — the person is told before code runs
 #include "backend/databaseLayer/databaseLayer.h"   // …and the transaction that undoes it
 #include "backend/job/jobRunByteCode.h"       // sent code is a background job, and it lives with them
@@ -1432,7 +1432,7 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 								propCount = vAttribute.GetNProps();
 							}
 						}
-						catch (const ibBackendException& err) {
+						catch (const ibCoreException& err) {
 
 							wxString strErrorMessage = err.GetErrorDescription();
 							strErrorMessage.Replace('\n', ' ');
@@ -1675,7 +1675,7 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 						}
 					}
 				}
-				catch (const ibBackendException& err) {
+				catch (const ibCoreException& err) {
 					answer = err.GetErrorDescription();
 				}
 				catch (...) {

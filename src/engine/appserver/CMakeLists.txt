@@ -26,7 +26,7 @@ target_include_directories(appserver PRIVATE
 )
 
 target_link_libraries(appserver PRIVATE
-    sfrontend
+    frmserver
     backend
     wx::core wx::aui wx::html wx::propgrid wx::adv wx::stc wx::xrc wx::qa wx::base wx::net wx::xml
 )

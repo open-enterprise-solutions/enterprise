@@ -324,7 +324,7 @@ bool ibJobManager::Launch(ibJobEntry& e)
 	try {
 		runSession = std::make_shared<ibSessionHolder>(OpenRunSession(e.m_desc));
 	}
-	catch (const ibBackendException& err) {
+	catch (const ibCoreException& err) {
 		e.m_everRun   = true;
 		e.m_lastRun   = std::chrono::steady_clock::now();
 		e.m_lastRunAt = ibDateTime::Now();
@@ -360,7 +360,7 @@ bool ibJobManager::Launch(ibJobEntry& e)
 				ibJobSessionLockHolder owner(session, desc.m_name);
 				claim = locks->Acquire(items, {}, &owner);
 			}
-			catch (const ibBackendException&) {
+			catch (const ibCoreException&) {
 				// SOMEBODY ELSE HOLDS IT. Not an error and not a retry — the work
 				// is being done, just not by us. A job that must not run twice
 				// (the totals fold corrupts sums if two passes race on one table)
@@ -419,7 +419,7 @@ bool ibJobManager::Launch(ibJobEntry& e)
 			result->m_more.store(desc.m_body(session), std::memory_order_release);
 			result->m_ok.store(true, std::memory_order_release);
 		}
-		catch (const ibBackendException& err) {
+		catch (const ibCoreException& err) {
 			std::lock_guard<std::mutex> lk(result->m_mtx);
 			result->m_error = err.GetErrorDescription();
 		}
@@ -767,7 +767,7 @@ void ibJobManager::ThreadBody()
 		try {
 			(void)Tick();
 		}
-		catch (const ibBackendException& err) {
+		catch (const ibCoreException& err) {
 			ibJournalInfo(wxT("job"),wxT("job tick failed: %s"), err.GetErrorDescription());
 		}
 		catch (...) {

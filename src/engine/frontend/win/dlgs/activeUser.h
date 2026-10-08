@@ -14,7 +14,7 @@
 #include <wx/dialog.h>
 #include <wx/timer.h>
 
-#include "backend/guid.h"
+#include "core/guid.h"
 #include "frontend/frontend.h"
 
 class FRONTEND_API ibDialogActiveUser : public wxDialog {

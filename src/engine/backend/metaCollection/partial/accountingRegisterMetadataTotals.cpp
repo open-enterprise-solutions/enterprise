@@ -5097,7 +5097,7 @@ bool AnyTurnoverOnlyKind(const ibValueMetaObjectChartOfAccounts* chart)
 		ibDataQueryResult sel = b.Execute(page);
 		return sel.Next();
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		return true;   // unknown reads as "there is one" — the half that tests every row and loses nothing
 	}
 }

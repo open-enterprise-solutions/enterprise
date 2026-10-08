@@ -14,7 +14,7 @@
 #include "visualEditor.h"                // ibVisualEditorNotebook::ibVisualEditor (ApplyDrop target), ibValueFrame
 #include "backend/sourceDescription.h"   // ibSourceDescription / ibSourceDescriptionMemory
 #include "backend/commandDescription.h"  // ibCommandDescription / ibCommandDescriptionMemory
-#include "backend/fileSystem/fs.h"       // ibWriterMemory / ibReaderMemory (payload buffer)
+#include "core/fileSystem/fs.h"       // ibWriterMemory / ibReaderMemory (payload buffer)
 
 #include <wx/dnd.h>       // wxDropSource / wxCustomDataObject / wxDataFormat
 #include <wx/dataobj.h>

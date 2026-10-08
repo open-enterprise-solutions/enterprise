@@ -139,7 +139,7 @@ int ibAppEnterprise::DoOnRun()
 		try {
 			ret = bringUp();
 		}
-		catch (const ibBackendException&) {
+		catch (const ibCoreException&) {
 			ret = false;   // its words are already in the chain, drained and shown below
 		}
 		catch (const std::exception& e) {
@@ -271,7 +271,7 @@ int ibAppEnterprise::DoOnRun()
 			if (openResult != ibSession::OpenResult::Authenticated)
 				holder.Reset();
 		}
-	} catch (const ibBackendException& e) {
+	} catch (const ibCoreException& e) {
 		openError = e.GetErrorDescription();
 		holder.Reset();
 		openResult = ibSession::OpenResult::Failed;

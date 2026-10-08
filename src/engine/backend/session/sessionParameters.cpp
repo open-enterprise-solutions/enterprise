@@ -86,7 +86,7 @@ void ibSession::SetSessionParameters()
 	try {
 		unit->ExecAsProc(wxT("SetSessionParameters"));
 	}
-	catch (const ibBackendException& err) {
+	catch (const ibCoreException& err) {
 		ibJournalWarning(wxT("session.params"),_("SetSessionParameters: %s"), err.GetErrorDescription());
 	}
 	catch (const std::exception& err) {

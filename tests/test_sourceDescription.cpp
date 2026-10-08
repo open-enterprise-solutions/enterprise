@@ -15,9 +15,9 @@
 #include <gtest/gtest.h>
 #include <vector>
 #include "backend/sourceDescription.h"          // ibSourceHop / ibSourceDescription / ibSourceDescriptionMemory
-#include "backend/clsid.h"                       // reference_to_clsid (a pinned reference branch)
-#include "backend/fileSystem/fs.h"               // ibReaderMemory / ibWriterMemory (serialize round-trip)
-#include "backend/serialize/dataBuilder.h"       // ibDataValue (node-form round-trip)
+#include "core/clsid.h"                       // reference_to_clsid (a pinned reference branch)
+#include "core/fileSystem/fs.h"               // ibReaderMemory / ibWriterMemory (serialize round-trip)
+#include "core/serialize/dataBuilder.h"       // ibDataValue (node-form round-trip)
 
 // ---------------------------------------------------------------------------
 // ibSourceHop identity — the pinned type is PART of the hop, so a retyped

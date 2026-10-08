@@ -119,7 +119,7 @@ bool ibValueModuleRuntimeManager::RuntimeRegisterCommonModule(ibValueMetaObjectC
 			try {
 				Compile();
 			}
-			catch (const ibBackendException& err) {
+			catch (const ibCoreException& err) {
 				// ⚠ INFO, NOT WARNING — a warning is ECHOED THROUGH wxLog, and in a GUI application
 				// that opens a MODAL. A module that does not compile then stops the whole client on a
 				// dialog captioned "Warning", in front of somebody who merely opened a list; and for
@@ -163,7 +163,7 @@ bool ibValueModuleRuntimeManager::RuntimeRenameCommonModule(ibValueMetaObjectCom
 			UnbindVariable(commonModule->GetName());
 			Compile();
 		}
-		catch (const ibBackendException& err) {
+		catch (const ibCoreException& err) {
 			ibJournalWarning(wxT("module"),_("Rename of common module '%s' to '%s' left compile in failed state: %s"),
 				commonModule->GetName(), newName, err.GetErrorDescription());
 		};

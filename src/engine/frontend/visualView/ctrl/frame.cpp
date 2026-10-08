@@ -6,7 +6,7 @@
 #include "control.h"
 #include "form.h"
 #include "backend/compiler/procUnit.h"
-#include "backend/serialize/dataBuilder.h"   // ibDataNode / ibDataBuilder / ibBinaryProvider
+#include "core/serialize/dataBuilder.h"   // ibDataNode / ibDataBuilder / ibBinaryProvider
 #include "backend/metaCollection/metaFormObject.h"   // ibValueMetaObjectFormBase — IsCopyMode / IsPasteMode mark
 
 #ifdef OES_USE_WEB

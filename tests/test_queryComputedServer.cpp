@@ -47,7 +47,7 @@
 #include "backend/compiler/compileCode.h"     // ibCompileCode — script lexer feeding the LINQ recorder
 #include "backend/compiler/lambdaQueryAST.h"  // ibBuildLambdaQueryAstFromCode (L4-2 recorder)
 
-#include "backend/clsid.h"                                   // reference_to_clsid — a reference column's type
+#include "core/clsid.h"                                   // reference_to_clsid — a reference column's type
 #include "backend/metadataConfiguration.h"                   // ibMetaDataConfigurationFile — a catalog to point references at
 #include "backend/metaCollection/metaObject.h"               // g_metaCatalogCLSID
 #include "backend/metaCollection/partial/reference/reference.h"   // ibValueReferenceDataObject::Create

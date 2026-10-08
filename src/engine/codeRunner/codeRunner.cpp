@@ -131,7 +131,7 @@ void ibFrameCodeRunner::SyntaxCheckOnButtonClick(wxCommandEvent& event)
 		m_compileCode->Compile(m_codeEditor->GetText());
 		ibFrameCodeRunner::AppendOutput(_("No syntax errors detected!"));
 	}
-	catch (const ibBackendException& err) {
+	catch (const ibCoreException& err) {
 		ibFrameCodeRunner::AppendOutput(err.GetErrorDescription());
 	}
 
@@ -149,7 +149,7 @@ void ibFrameCodeRunner::RunCodeOnButtonClick(wxCommandEvent& event)
 		ibByteBinder binder = m_compileCode->CreateBinder();
 		m_procUnit->Execute(m_compileCode->m_cByteCode, binder);
 	}
-	catch (const ibBackendException& err) {
+	catch (const ibCoreException& err) {
 		ibFrameCodeRunner::AppendOutput(err.GetErrorDescription());
 	}
 

@@ -29,7 +29,7 @@
 #include "backend/propertyManager/propertyManager.h"          // ibPropertyObject
 #include "backend/propertyManager/property/propertyBoolean.h"
 #include "backend/propertyManager/property/propertyNumber.h"   // ibPropertyInteger
-#include "backend/serialize/dataBuilder.h"                    // ibDataValue / ibDataNode
+#include "core/serialize/dataBuilder.h"                    // ibDataValue / ibDataNode
 
 namespace {
 

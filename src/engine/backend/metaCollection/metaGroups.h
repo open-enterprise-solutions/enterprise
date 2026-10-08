@@ -39,7 +39,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "backend/backend_core.h"
-#include "backend/clsid.h"
+#include "core/clsid.h"
 
 #include <wx/string.h>
 
