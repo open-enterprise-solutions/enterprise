@@ -1292,12 +1292,21 @@ bool ibFrontendMainFrame::DownloadFile(const wxString& file, const wxString& pat
 
 void ibFrontendMainFrame::Refused(ibProtocolRefusal refusal, const wxString& error)
 {
-	wxMessageBox(!error.IsEmpty() ? error : wxString(_("The server refused it.")), GetTitle(),
-		wxOK | (refusal == ibProtocolRefusal::NoSession ? wxICON_ERROR : wxICON_WARNING), IsShown() ? this : nullptr);
+	const wxString said = !error.IsEmpty() ? error : wxString(_("The server refused it."));
 
-	// The session is gone — the window has nothing left to show.
-	if (refusal == ibProtocolRefusal::NoSession && !m_closingWindow)
+	// THE SESSION IS GONE — the server's, or the connection to it: the window has nothing left to show. It goes FIRST and
+	// says why after, ONCE. Said before it went, the message box ran a message loop in which every call due (a window's
+	// own refresh, a timer's) met the same refusal and put up a box of its own, one after another; the window going, a
+	// refusal it meets is said by nobody.
+	if (refusal == ibProtocolRefusal::NoSession) {
+		if (m_closingWindow)
+			return;
 		Close(true);
+		wxMessageBox(said, GetTitle(), wxOK | wxICON_ERROR);
+		return;
+	}
+
+	wxMessageBox(said, GetTitle(), wxOK | wxICON_WARNING, IsShown() ? this : nullptr);
 }
 
 void ibFrontendMainFrame::CallPosted()
