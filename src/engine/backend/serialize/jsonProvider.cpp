@@ -201,7 +201,8 @@ bool ibJsonProvider::Write(const ibDataNode& root, ibWriter& writer) const
 {
 	std::string out;
 	EmitNode(root, out, 0);
-	out += "\n";
+	if (!m_compact)
+		out += "\n";
 	writer.w(out.data(), (u32)out.size());
 	return true;
 }
