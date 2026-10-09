@@ -336,7 +336,7 @@ TEST(WorkerPoolFiber, StopUnwindsParkedFibers)
 	for (int i = 0; i < n; ++i) {
 		sessions.push_back(MakeSession(wxString::Format(wxT("stop-%d"), i)));
 		ibSession* raw = sessions.back().get();
-		futures.push_back(pool.Submit(raw, [raw, &parked] {
+		futures.push_back(pool.Submit(raw, [raw, &pool, &parked] {
 			pool.Await(raw, [counted = false, &parked]() mutable {
 				if (!counted) {
 					counted = true;
@@ -395,7 +395,7 @@ TEST(WorkerPoolFiber, OpenQuestionsDoNotGrowOsThreads)
 	for (int i = 0; i < n; ++i) {
 		sessions.push_back(MakeSession(wxString::Format(wxT("open-%d"), i)));
 		ibSession* raw = sessions.back().get();
-		futures.push_back(pool.Submit(raw, [raw, &waiting, &go] {
+		futures.push_back(pool.Submit(raw, [raw, &pool, &waiting, &go] {
 			pool.Await(raw, [counted = false, &waiting, &go]() mutable {
 				if (!counted) {
 					counted = true;
@@ -489,7 +489,7 @@ TEST(WorkerPoolFiber, MeasuresThreadsAndMemory)
 		for (int i = 0; i < n; ++i) {
 			sessions.push_back(MakeSession(wxString::Format(wxT("measure-%d-%d"), n, i)));
 			ibSession* raw = sessions.back().get();
-			futures.push_back(pool.Submit(raw, [raw, &waiting, &go] {
+			futures.push_back(pool.Submit(raw, [raw, &pool, &waiting, &go] {
 				pool.Await(raw, [counted = false, &waiting, &go]() mutable {
 					if (!counted) {
 						counted = true;
