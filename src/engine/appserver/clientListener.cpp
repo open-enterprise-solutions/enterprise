@@ -3,9 +3,14 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
+#include <deque>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <string>
+#include <thread>
+#include <vector>
 
 #include "frmserver/client/clientHost.h"
 
@@ -63,6 +68,86 @@ struct ibConnectionOut {
 	bool       open = true;
 };
 
+// ⭐ THE POOL HAS TO GROW FOR A BURST, NOT ONLY ONCE IT IS ALREADY BUSY.
+//
+// cpp-httplib's ThreadPool starts a new thread only when its idle count is already zero. A burst that is
+// queued while the base threads are still counted idle — they have not taken a job yet — never grows the
+// pool. Those jobs then sit there: the threads that exist are inside a WebSocket for its whole life, and
+// nothing calls enqueue again to notice the queue. The client is accepted and never answered, which is the
+// hang this ceiling was raised to stop.
+//
+// So this queue starts another thread whenever more work is waiting than there are idle threads, up to the
+// ceiling. The threads still live as long as the sockets do. An asynchronous core is what retires that.
+class ibClientConnectionQueue : public httplib::TaskQueue {
+public:
+	ibClientConnectionQueue(std::size_t base, std::size_t ceiling)
+		: m_ceiling(std::max<std::size_t>(ceiling, 1))
+	{
+		const std::size_t start = std::min(std::max<std::size_t>(base, 1), m_ceiling);
+		for (std::size_t i = 0; i < start; ++i)
+			m_threads.emplace_back([this] { Worker(); });
+	}
+
+	~ibClientConnectionQueue() override { shutdown(); }
+
+	bool enqueue(std::function<void()> fn) override
+	{
+		{
+			std::lock_guard<std::mutex> lock(m_mutex);
+			if (m_shutdown)
+				return false;
+			m_jobs.push_back(std::move(fn));
+			// One new thread per job the idle ones cannot cover. A burst of N, with B base threads still
+			// idle, starts N - B more — so the queue is not left holding connections nobody will read.
+			if (m_jobs.size() > m_idle && m_threads.size() < m_ceiling)
+				m_threads.emplace_back([this] { Worker(); });
+		}
+		m_cond.notify_one();
+		return true;
+	}
+
+	void shutdown() override
+	{
+		{
+			std::lock_guard<std::mutex> lock(m_mutex);
+			if (m_shutdown)
+				return;
+			m_shutdown = true;
+		}
+		m_cond.notify_all();
+		for (std::thread& thread : m_threads)
+			if (thread.joinable())
+				thread.join();
+	}
+
+private:
+	void Worker()
+	{
+		for (;;) {
+			std::function<void()> fn;
+			{
+				std::unique_lock<std::mutex> lock(m_mutex);
+				++m_idle;
+				m_cond.wait(lock, [this] { return m_shutdown || !m_jobs.empty(); });
+				--m_idle;
+				if (m_shutdown && m_jobs.empty())
+					return;
+				fn = std::move(m_jobs.front());
+				m_jobs.pop_front();
+			}
+			fn();
+		}
+	}
+
+	const std::size_t                m_ceiling;
+	std::mutex                       m_mutex;
+	std::condition_variable          m_cond;
+	std::deque<std::function<void()>> m_jobs;
+	std::vector<std::thread>         m_threads;
+	std::size_t                      m_idle = 0;
+	bool                             m_shutdown = false;
+};
+
 } // namespace
 
 class ibClientListener::ibServer {
@@ -112,7 +197,7 @@ bool ibClientListener::Start(const wxString& host, unsigned short& port, bool ch
 	const std::size_t limit = std::max<std::size_t>(connections, 1);
 	const std::size_t base = std::min(limit, static_cast<std::size_t>(CPPHTTPLIB_THREAD_POOL_COUNT));
 	server->m_http.new_task_queue = [base, limit] {
-		return new httplib::ThreadPool(base, limit);
+		return new ibClientConnectionQueue(base, limit);
 	};
 
 	// 🛑 ONE LISTENER PER PORT, SAID TO THE OPERATING SYSTEM — on Windows httplib's SO_REUSEADDR lets a second
