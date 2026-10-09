@@ -62,6 +62,32 @@ set_source_files_properties(${SQLITE3_SOURCE} PROPERTIES
 # ---------------------------------------------------------------------------
 add_library(backend SHARED ${BACKEND_SOURCES})
 
+# The bytecode cache key carries a hash of the compiler and the built-in
+# registry, computed here rather than typed in. The MSBuild project runs the
+# same script before it compiles (EngineFingerprint). The header is rewritten
+# only when the hash changes, so an untouched tree does not rebuild the backend.
+set(OES_ENGINE_FINGERPRINT_HEADER "${CMAKE_CURRENT_BINARY_DIR}/generated/engineFingerprintBuild.h")
+file(GLOB_RECURSE OES_FINGERPRINT_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/compiler/*"
+    "${CMAKE_CURRENT_SOURCE_DIR}/system/*")
+add_custom_command(
+    OUTPUT "${OES_ENGINE_FINGERPRINT_HEADER}"
+    COMMAND ${CMAKE_COMMAND}
+        -DOES_COMPILER_DIR=${CMAKE_CURRENT_SOURCE_DIR}/compiler
+        -DOES_SYSTEM_DIR=${CMAKE_CURRENT_SOURCE_DIR}/system
+        -DOES_BACKEND_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+        -DOES_FINGERPRINT_OUT=${OES_ENGINE_FINGERPRINT_HEADER}
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/compiler/engineFingerprint.cmake
+    DEPENDS ${OES_FINGERPRINT_SOURCES} "${CMAKE_CURRENT_SOURCE_DIR}/compiler/engineFingerprint.cmake"
+    COMMENT "Hashing the compiler and the built-in registry"
+    VERBATIM
+)
+add_custom_target(oes_engine_fingerprint DEPENDS "${OES_ENGINE_FINGERPRINT_HEADER}")
+add_dependencies(backend oes_engine_fingerprint)
+set_source_files_properties(
+    "${CMAKE_CURRENT_SOURCE_DIR}/compiler/cache/byteCodeCache.cpp"
+    PROPERTIES OBJECT_DEPENDS "${OES_ENGINE_FINGERPRINT_HEADER}")
+
 # ---------------------------------------------------------------------------
 # Include directories
 # ---------------------------------------------------------------------------
@@ -74,6 +100,8 @@ target_include_directories(backend
         "${CMAKE_SOURCE_DIR}/src/engine"
         # Embedded database engine headers
         "${CMAKE_CURRENT_SOURCE_DIR}/databaseLayer/sqllite/engine"
+        # engineFingerprintBuild.h, written by oes_engine_fingerprint
+        "${CMAKE_CURRENT_BINARY_DIR}/generated"
 )
 
 # Firebird headers (bundled in-tree)

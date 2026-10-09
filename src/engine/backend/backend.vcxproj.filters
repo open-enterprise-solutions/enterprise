@@ -208,6 +208,9 @@
     <ClInclude Include="compiler\byteCodeFormat.h">
       <Filter>compiler</Filter>
     </ClInclude>
+    <None Include="compiler\engineFingerprint.cmake">
+      <Filter>compiler</Filter>
+    </None>
     <ClInclude Include="compiler\codeDef.h">
       <Filter>compiler</Filter>
     </ClInclude>

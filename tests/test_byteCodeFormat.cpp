@@ -5,12 +5,11 @@
 // core/build.cpp. core is a separate library and is not rebuilt when the
 // compiler or the interpreter changes, so a stale blob kept its key.
 //
-// The key is now kAOTFormatVersion (compiler/byteCodeFormat.h) plus the
-// configuration digest. This file is what makes an opcode change unable to
-// land without moving that number: the fingerprint is computed from
-// codeDef.h, not typed in by hand. When it differs from the fingerprint
-// recorded with the current version, the test fails and the message says
-// to bump the version.
+// The key is kAOTFormatVersion, the hash compiler/engineFingerprint.cmake
+// writes at build time from compiler/** and system/**, and the configuration
+// digest. The opcode fingerprint stays as a second guard: it fails when
+// codeDef.h moves and the version does not. A separate test shows that a
+// changed built-in source is a different hash, and therefore a different key.
 // =============================================================================
 
 #include <gtest/gtest.h>
@@ -23,7 +22,9 @@
 #include "backend/utils/md5.hpp"
 
 #include <wx/filename.h>
+#include <wx/stdpaths.h>
 #include <wx/textfile.h>
+#include <wx/utils.h>
 
 namespace {
 
@@ -31,12 +32,15 @@ namespace {
 // by OpcodeFingerprint(), which reads codeDef.h: every OPER_ enumerator and
 // the TYPE_DELTA macros, comments stripped. 35 still contains OPER_ITER.
 //
-// When the ternary short-circuit removes OPER_ITER it also sets the version
-// to 36. Both have to move together here: a 35 fingerprint on a 36 engine,
-// or a 36 engine still advertising 35, would let the cache serve a blob
-// that ran both branches of ?().
+// #225 merges first and removes OPER_ITER. This branch still has the opcode,
+// so the checked pair stays 35 / the fingerprint below. Setting 36 here
+// while OPER_ITER remains would let a blob from this engine pass for the
+// engine that no longer runs both branches of ?(). After that merge, set
+// kAOTFormatVersion to 36 and replace the fingerprint with
+// kOpcodeFingerprintOnceOperIterLeaves.
 constexpr std::uint16_t kVersionOfThisFingerprint = 35;
 constexpr std::uint64_t kOpcodeFingerprintAtThatVersion = 7984000650070154738ULL;
+constexpr std::uint64_t kOpcodeFingerprintOnceOperIterLeaves = 9806823567777943829ULL;
 
 wxString CodeDefPath()
 {
@@ -113,19 +117,118 @@ TEST(ByteCodeFormat, AnOpcodeChangeBumpsTheVersion) {
 		<< kAOTFormatVersion << ". Bump kAOTFormatVersion in byteCodeFormat.h "
 		   "(the cache key is that number) and record the new fingerprint here. "
 		   "The list was read from " << path.ToStdString();
+
+	// #225's list, kept here so the merge does not have to recompute it.
+	EXPECT_NE(kOpcodeFingerprintOnceOperIterLeaves, kOpcodeFingerprintAtThatVersion);
 }
 
-// A version bump has to change the key. The old key was the build stamp, which
-// does not. This pins the spelling: "<version>.<configuration digest>", then
-// MD5, which is what fits in config_md5.
-TEST(ByteCodeCacheKey, CarriesTheFormatVersion) {
+wxString RepoRoot()
+{
+	wxFileName here(wxString::FromUTF8(__FILE__));
+	here.RemoveLastDir();   // tests/ -> the repository root
+	here.SetFullName(wxEmptyString);
+	here.Normalize(wxPATH_NORM_DOTS | wxPATH_NORM_ABSOLUTE);
+	return here.GetPath();
+}
+
+// The hash the build script writes for these two directories. `substituteRel`
+// empty hashes the tree as it is; otherwise that path, relative to backend/,
+// is read from `substituteFile` instead.
+wxString ScriptFingerprint(const wxString& substituteRel, const wxString& substituteFile)
+{
+	const wxString root = RepoRoot();
+	const wxString backend = root + wxFILE_SEP_PATH + wxT("src") + wxFILE_SEP_PATH
+		+ wxT("engine") + wxFILE_SEP_PATH + wxT("backend");
+	const wxString script = backend + wxFILE_SEP_PATH + wxT("compiler")
+		+ wxFILE_SEP_PATH + wxT("engineFingerprint.cmake");
+	const wxString out = wxFileName(wxStandardPaths::Get().GetTempDir(),
+		substituteRel.empty() ? wxT("oes-engine-fp.h") : wxT("oes-engine-fp-sub.h")).GetFullPath();
+	wxString cmd = wxString::Format(
+		wxT("cmake -DOES_COMPILER_DIR=\"%s\" -DOES_SYSTEM_DIR=\"%s\" -DOES_BACKEND_DIR=\"%s\" -DOES_FINGERPRINT_OUT=\"%s\""),
+		backend + wxFILE_SEP_PATH + wxT("compiler"),
+		backend + wxFILE_SEP_PATH + wxT("system"),
+		backend,
+		out);
+	if (!substituteRel.empty())
+		cmd += wxString::Format(wxT(" -DOES_SUBSTITUTE_REL=\"%s\" -DOES_SUBSTITUTE_FILE=\"%s\""),
+			substituteRel, substituteFile);
+	cmd += wxT(" -P \"") + script + wxT("\"");
+
+	const long rc = wxExecute(cmd, wxEXEC_SYNC);
+	EXPECT_EQ(rc, 0) << cmd.ToStdString();
+
+	wxTextFile file;
+	EXPECT_TRUE(file.Open(out, wxConvUTF8)) << out.ToStdString();
+	wxString hash;
+	for (size_t i = 0; i < file.GetLineCount(); ++i) {
+		const wxString line = file.GetLine(i);
+		const int at = line.Find(wxT("kEngineFingerprint[] = \""));
+		if (at == wxNOT_FOUND)
+			continue;
+		const int from = at + wxString(wxT("kEngineFingerprint[] = \"")).length();
+		const int to = line.Find(wxT("\""), true);
+		hash = line.Mid(from, to - from);
+	}
+	wxRemoveFile(out);
+	return hash;
+}
+
+// The spelling is "<version>.<engine hash>.<configuration digest>", then MD5,
+// which is what fits in config_md5. The old key was the build stamp, which
+// does not move when the compiler does.
+TEST(ByteCodeCacheKey, CarriesTheFormatVersionAndTheEngineHash) {
 	const wxString digest = wxT("0123456789abcdef0123456789abcdef");
-	const wxString spelled = wxString::Format(wxT("%u.%s"),
-		(unsigned)kAOTFormatVersion, digest);
+	const wxString fingerprint = ibByteCodeCache::EngineFingerprint();
+	ASSERT_EQ(fingerprint.length(), 64u);
+
+	const wxString spelled = wxString::Format(wxT("%u.%s.%s"),
+		(unsigned)kAOTFormatVersion, fingerprint, digest);
 	EXPECT_EQ(ibByteCodeCache::CacheKey(digest), ibMD5::ComputeMd5(spelled));
 
-	const wxString next = wxString::Format(wxT("%u.%s"),
-		(unsigned)kAOTFormatVersion + 1u, digest);
-	EXPECT_NE(ibMD5::ComputeMd5(spelled), ibMD5::ComputeMd5(next))
-		<< "two format versions produced one cache key";
+	const wxString otherVersion = wxString::Format(wxT("%u.%s.%s"),
+		(unsigned)kAOTFormatVersion + 1u, fingerprint, digest);
+	EXPECT_NE(ibMD5::ComputeMd5(spelled), ibMD5::ComputeMd5(otherVersion));
+
+	const wxString otherEngine = wxString::Format(wxT("%u.%s.%s"),
+		(unsigned)kAOTFormatVersion, fingerprint + wxT("x"), digest);
+	EXPECT_NE(ibMD5::ComputeMd5(spelled), ibMD5::ComputeMd5(otherEngine))
+		<< "two engine hashes produced one cache key";
+}
+
+// A built-in lives under system/. Changing one is a different hash from the
+// script the build runs, and that hash is what the key is made of.
+TEST(ByteCodeCacheKey, ABuiltInChangeAltersTheKey) {
+	const wxString real = ScriptFingerprint(wxString(), wxString());
+	ASSERT_FALSE(real.empty());
+	EXPECT_EQ(real, ibByteCodeCache::EngineFingerprint())
+		<< "the header the backend was built with is not the script's hash of this tree";
+
+	const wxString source = RepoRoot() + wxFILE_SEP_PATH + wxT("src") + wxFILE_SEP_PATH
+		+ wxT("engine") + wxFILE_SEP_PATH + wxT("backend") + wxFILE_SEP_PATH
+		+ wxT("system") + wxFILE_SEP_PATH + wxT("systemManager.cpp");
+	const wxString changed = wxFileName(wxStandardPaths::Get().GetTempDir(),
+		wxT("oes-systemManager-changed.cpp")).GetFullPath();
+	{
+		wxTextFile in;
+		ASSERT_TRUE(in.Open(source, wxConvUTF8)) << source.ToStdString();
+		wxTextFile out;
+		ASSERT_TRUE(out.Create(changed));
+		for (size_t i = 0; i < in.GetLineCount(); ++i)
+			out.AddLine(in.GetLine(i));
+		out.AddLine(wxT("/* a built-in that was not here */"));
+		ASSERT_TRUE(out.Write());
+	}
+
+	const wxString altered = ScriptFingerprint(wxT("system/systemManager.cpp"), changed);
+	wxRemoveFile(changed);
+	ASSERT_FALSE(altered.empty());
+	EXPECT_NE(altered, real);
+
+	const wxString digest = wxT("0123456789abcdef0123456789abcdef");
+	const wxString was = wxString::Format(wxT("%u.%s.%s"),
+		(unsigned)kAOTFormatVersion, real, digest);
+	const wxString now = wxString::Format(wxT("%u.%s.%s"),
+		(unsigned)kAOTFormatVersion, altered, digest);
+	EXPECT_NE(ibMD5::ComputeMd5(was), ibMD5::ComputeMd5(now));
+	EXPECT_EQ(ibByteCodeCache::CacheKey(digest), ibMD5::ComputeMd5(was));
 }

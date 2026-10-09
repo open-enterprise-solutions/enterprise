@@ -17,7 +17,8 @@
 #include "backend/databaseLayer/databaseQueryBuilder.h"   // L2 door: descriptor pilot
 #include "core/fileSystem/fs.h"
 #include "backend/utils/md5.hpp"   // the key is digested to the width its column declares
-#include "backend/compiler/byteCodeFormat.h"   // kAOTFormatVersion — the engine half of the key
+#include "backend/compiler/byteCodeFormat.h"   // kAOTFormatVersion — one half of the engine key
+#include "engineFingerprintBuild.h"            // kEngineFingerprint — the other, generated at build
 
 // Descriptor (ibRuntimeModuleDataObject) AOT-cache DAO, migrated onto the L2
 // query door. The default-ctor ibDatabaseQueryBuilder resolves to
@@ -40,9 +41,16 @@
 //
 // The first engine half was GetBuildStamp(), the __DATE__/__TIME__ of core/build.cpp. core is its
 // own library and is not rebuilt when the compiler or the interpreter changes, so the stamp stayed
-// put and a stale blob kept running. The engine half is now kAOTFormatVersion. It lives in the
-// compiler, and it moves when the bytecode's format or meaning moves — which is the question the
-// key is asking. A test refuses an opcode change that leaves the number where it was.
+// put and a stale blob kept running. A hand-bumped version in its place has the same hole from the
+// other side: a built-in added at noon, or a codegen change that keeps the opcodes, is invisible
+// until somebody remembers the bump, and a release that forgets it serves the previous engine's
+// bytecode. A miss costs one recompile. A hit of the wrong blob does not announce itself.
+//
+// So the engine half is two things. kAOTFormatVersion is the number a person bumps when an opcode's
+// meaning changes, and the opcode test refuses a list that moved without it. The other is
+// kEngineFingerprint, a hash of compiler/** and system/** made by compiler/engineFingerprint.cmake
+// when the backend is built — the compiler, the interpreter, and the built-in registry. Nobody
+// writes that hash down. A change in those sources is a different key on the next build.
 //
 // Kept as one KEY VALUE rather than a second column: a row from another engine is then NOT FOUND,
 // instead of found and rejected by a check somebody has to remember to write.
@@ -51,10 +59,15 @@
 // Returning the raw spelling made the key longer than 32 and every statement touching it died
 // with a string truncation; the misses looked like a cold cache (found 2026-09-04). A wider
 // column would be a schema change for a table whose contents are disposable.
+wxString ibByteCodeCache::EngineFingerprint()
+{
+	return wxString::FromUTF8(kEngineFingerprint);
+}
+
 wxString ibByteCodeCache::CacheKey(const wxString& configDigest)
 {
-	return ibMD5::ComputeMd5(
-		wxString::Format(wxT("%u.%s"), (unsigned)kAOTFormatVersion, configDigest));
+	return ibMD5::ComputeMd5(wxString::Format(wxT("%u.%s.%s"),
+		(unsigned)kAOTFormatVersion, EngineFingerprint(), configDigest));
 }
 
 bool ibByteCodeCache::Save(const ibByteCode& bc, const wxString& configDigest)

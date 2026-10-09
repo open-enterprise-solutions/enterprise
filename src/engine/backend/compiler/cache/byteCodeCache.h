@@ -30,8 +30,10 @@
 // One digest of the whole configuration covers every one of those causes,
 // because the module text and the metadata shape are both inside it.
 //
-// The engine half of the key is kAOTFormatVersion (compiler/byteCodeFormat.h).
-// DeserializeAOT still rejects a blob whose header carries another number.
+// The engine half of the key is kAOTFormatVersion (compiler/byteCodeFormat.h)
+// and the hash of compiler/ and system/ generated when the backend is built
+// (compiler/engineFingerprint.cmake). DeserializeAOT still rejects a blob
+// whose header carries another number.
 ////////////////////////////////////////////////////////////////////////////
 
 #ifndef __IB_BYTECODE_CACHE_H__
@@ -57,13 +59,18 @@ public:
 	// ⚠ WHAT IS STORED IS NOT ONLY THAT DIGEST. Bytecode belongs to the ENGINE that produced it as
 	// much as to the configuration, so the row is keyed by BOTH — see CacheKey, and the day it
 	// cost to find out (2026-09-02). Callers pass the configuration's digest and nothing else:
-	// which engine this is, the cache knows for itself (kAOTFormatVersion).
+	// which engine this is, the cache knows for itself.
 	static bool Save(const ibByteCode& bc, const wxString& configMd5);
 
-	// The row key, digested to the 32 characters `config_md5` holds: the format
-	// version, then the configuration digest. Two engines that disagree on
-	// kAOTFormatVersion do not find each other's rows.
+	// The row key, digested to the 32 characters `config_md5` holds:
+	// kAOTFormatVersion, the build-time engine hash, then the configuration
+	// digest. Two engines that disagree on either half do not find each
+	// other's rows.
 	static wxString CacheKey(const wxString& configDigest);
+
+	// The engine hash this build wrote into the key. A test compares it with
+	// the script, including after a built-in source has been substituted.
+	static wxString EngineFingerprint();
 
 	// Try to populate `outBc` from cache. Returns:
 	//   true  — row found, blob deserialized successfully. outBc is
