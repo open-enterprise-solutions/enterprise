@@ -8,6 +8,8 @@
 #include "backend/syntaxHelper/helpCorpus.h"
 #include "backend/syntaxHelper/helpLoader.h"
 
+#include "core/programFolder.h"
+
 #include <wx/filename.h>
 #include <wx/stdpaths.h>
 
@@ -23,30 +25,22 @@ wxString ResolvePlatformDir(const wxString& locale)
 {
 	wxFileName exeFile(wxStandardPaths::Get().GetExecutablePath());
 	const wxString exeDir = exeFile.GetPath();
+	const wxString programDir = ibProgramFolder(exeFile.GetFullPath());
 
 	auto hasLocale = [&](const wxString& root) -> bool {
 		return wxFileName::FileExists(root + wxFILE_SEP_PATH + locale + wxT(".hlk"))
 		    || wxFileName::DirExists(root + wxFILE_SEP_PATH + locale);
 	};
 
-	// Candidate 1: <exe>/help — prod layout. PostBuildEvent copies
+	// Candidate 1: <program folder>/help — prod layout. Inside a bundle that
+	// folder is beside the .app, not Contents/MacOS/. PostBuildEvent copies
 	// syntaxHelper/<locale>/ into here in 1.1; 1.1b will switch
 	// the layout to <locale>.hlk and the service will gain a ZipSource.
-	wxString platformDir = exeDir + wxFILE_SEP_PATH + wxT("help");
+	wxString platformDir = programDir + wxFILE_SEP_PATH + wxT("help");
 
 #if defined(__WXOSX__) || defined(__APPLE__)
 	if (!hasLocale(platformDir)) {
-		// macOS .app bundle sibling — exe lives in
-		// MyApp.app/Contents/MacOS/, three RemoveLastDir walks out.
-		wxFileName bundleSibling(exeDir, wxEmptyString);
-		bundleSibling.RemoveLastDir();
-		bundleSibling.RemoveLastDir();
-		bundleSibling.RemoveLastDir();
-		const wxString c = bundleSibling.GetPath() + wxFILE_SEP_PATH + wxT("help");
-		if (hasLocale(c)) platformDir = c;
-	}
-	if (!hasLocale(platformDir)) {
-		// Alt macOS layout — bundled inside Resources.
+		// Inside the bundle (Contents/Resources), which is not the program folder.
 		wxFileName resources(exeDir, wxEmptyString);
 		resources.RemoveLastDir();
 		resources.AppendDir(wxT("Resources"));

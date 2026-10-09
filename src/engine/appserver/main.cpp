@@ -6,7 +6,7 @@
 #include <wx/app.h>
 #include <wx/cmdline.h>
 #include <wx/filename.h>
-#include <wx/stdpaths.h>
+#include "core/programFolder.h"
 
 #ifdef __WXMSW__
 #include <windows.h>
@@ -36,10 +36,11 @@ IB_LEAK_TRACKER_ARM();
 
 namespace {
 
-// Where a server started without --dir keeps its bases — `server` beside the executable.
+// Where a server started without --dir keeps its bases — `server` in the program folder.
+// Inside a bundle that is beside the .app, not in Contents/MacOS/.
 wxString DefaultServerDir()
 {
-	wxFileName fn(wxStandardPaths::Get().GetExecutablePath());
+	wxFileName fn = wxFileName::DirName(ibProgramFolder());
 	fn.AppendDir(wxT("server"));
 	return fn.GetPath();
 }

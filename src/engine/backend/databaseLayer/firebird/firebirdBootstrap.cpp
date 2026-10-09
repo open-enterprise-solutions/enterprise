@@ -1,7 +1,8 @@
 #include "firebirdBootstrap.h"
 
+#include "core/programFolder.h"
+
 #include <wx/filename.h>
-#include <wx/stdpaths.h>
 #include <wx/utils.h>
 
 #ifdef __WXMSW__
@@ -26,33 +27,14 @@ wxString       s_fbRuntimeDir;
 // Returns empty wxString if the directory doesn't exist (caller falls
 // back to default behaviour).
 wxString DetectFbRuntimeDir() {
-	const wxString exePath = wxStandardPaths::Get().GetExecutablePath();
-	wxFileName fn(exePath);
-	fn.AppendDir(wxT("_fb"));
-	const wxString candidate = fn.GetPath();
-
-	// Verify it exists — during early dev / unit tests the build
-	// output may not have been laid out yet, in which case the
-	// default DLL search still finds fbclient.dll next to the exe
-	// (legacy layout). Tolerate that.
+	// _fb stands in the program folder: beside the executable, or beside the .app when this
+	// process is inside a bundle. The same place as lang/ and backend.conf.
+	//
+	// Missing is tolerated. During early dev / unit tests the directory may not have been
+	// laid out, and the default DLL search still finds fbclient next to the executable.
+	const wxString candidate = ibProgramFolder() + wxFILE_SEP_PATH + wxT("_fb");
 	if (wxDirExists(candidate))
 		return candidate;
-
-#ifdef __WXOSX__
-	// AN APPLICATION BUNDLE KEEPS ITS EXECUTABLE THREE LEVELS DOWN (X.app/Contents/MacOS), and _fb stands
-	// beside the bundle, with the libraries and the other applications — the same place lang/ and
-	// backend.conf are looked for (appData.cpp).
-	wxFileName bundled(exePath);
-	if (bundled.GetDirCount() >= 3 && bundled.GetDirs()[bundled.GetDirCount() - 2].IsSameAs(wxT("Contents"))) {
-		bundled.RemoveLastDir(); // MacOS
-		bundled.RemoveLastDir(); // Contents
-		bundled.RemoveLastDir(); // X.app
-		bundled.AppendDir(wxT("_fb"));
-		if (wxDirExists(bundled.GetPath()))
-			return bundled.GetPath();
-	}
-#endif
-
 	return wxEmptyString;
 }
 

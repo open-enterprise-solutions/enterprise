@@ -3,6 +3,7 @@
 #include "crashGuard.h"          // the journal lives beside the dumps — same directory decision
 #include "core/diagnostics/debugTrace.h"   // ibDebugTraceEnabled — the house env-var switch
 #include "core/build.h"                    // GetBuildId, version_oes_last — what is running, said first
+#include "core/programFolder.h"            // journal/ sits in the program folder, beside the dumps
 
 #include <wx/datetime.h>
 #include <wx/ffile.h>
@@ -119,8 +120,7 @@ void ibTechJournal::Open(const wxString& exeName)
 {
 	// BESIDE THE DUMPS. `journal/` next to `crashdumps/`, so the two halves of one incident live in
 	// one place: the dump says where it stopped, the journal says what it was doing.
-	const wxString exeDir = wxFileName(wxStandardPaths::Get().GetExecutablePath()).GetPath();
-	const wxString dir    = exeDir + wxFILE_SEP_PATH + wxT("journal");
+	const wxString dir = ibProgramFolder() + wxFILE_SEP_PATH + wxT("journal");
 	wxFileName::Mkdir(dir, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
 
 	// ONE FILE PER RUN, KEYED — the same stamp+pid the dumps carry. A single overwritten file loses

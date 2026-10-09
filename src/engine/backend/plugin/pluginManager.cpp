@@ -5,8 +5,9 @@
 #include "pluginManager.h"
 #include "pluginHost.h"   // ibPluginHostInstance — what initialize() receives
 
+#include "core/programFolder.h"
+
 #include <wx/filename.h>
-#include <wx/stdpaths.h>
 #include <wx/dir.h>
 #include <wx/log.h>
 
@@ -32,9 +33,8 @@ struct ScopedSilenceLoadErrors {
 
 wxString ibPluginManager::GetPluginsDir()
 {
-	wxFileName fn(wxStandardPaths::Get().GetExecutablePath());
-	fn.AppendDir("plugins");
-	fn.SetFullName(wxEmptyString);
+	wxFileName fn = wxFileName::DirName(ibProgramFolder());
+	fn.AppendDir(wxT("plugins"));
 	return fn.GetPath();
 }
 

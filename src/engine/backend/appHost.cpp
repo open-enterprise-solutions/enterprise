@@ -15,6 +15,7 @@
 #include "backend/metadataConfiguration.h"   // a scope holds the configuration it works in
 #include "backend/plugin/pluginManager.h"
 #include "core/fiber/fiberLocals.h"
+#include "core/programFolder.h"   // backend.conf and lang/ sit in the program folder, not inside a bundle
 #include "backend/session/session.h"   // ibSession::CurrentCached — the journal's first question
 #include "backend/session/workerPoolHeadless.h"   // the process's worker pool
 #include "backend/syntaxHelper/helpService.h"
@@ -289,24 +290,11 @@ void ibApplicationHost::ReadBackendConf()
 			wxFILE_SEP_PATH + BACKEND_CONF;
 	}
 	else {
-		wxFileName fn(wxStandardPaths::Get().GetExecutablePath());
-		wxString exeDir = fn.GetPath();
-		if (wxFileName::FileExists(exeDir + wxFILE_SEP_PATH + BACKEND_CONF)) {
-			strConfigFile = exeDir + wxFILE_SEP_PATH + BACKEND_CONF;
-		}
-#if defined(__WXOSX__) || defined(__APPLE__)
-		// On macOS, exe is inside .app/Contents/MacOS/ — check 3 levels up
-		else {
-			wxFileName bundlePath(exeDir);
-			bundlePath.RemoveLastDir(); // MacOS
-			bundlePath.RemoveLastDir(); // Contents
-			bundlePath.RemoveLastDir(); // .app
-			wxString bundleDir = bundlePath.GetPath();
-			if (wxFileName::FileExists(bundleDir + wxFILE_SEP_PATH + BACKEND_CONF)) {
-				strConfigFile = bundleDir + wxFILE_SEP_PATH + BACKEND_CONF;
-			}
-		}
-#endif
+		// Beside the program. Inside a bundle that is the folder that contains the .app,
+		// which is where the file is shipped; the working directory above still wins.
+		const wxString beside = ibProgramFolder() + wxFILE_SEP_PATH + BACKEND_CONF;
+		if (wxFileName::FileExists(beside))
+			strConfigFile = beside;
 	}
 
 	wxFileConfig fc(wxT(""), wxT(""), wxT(""), strConfigFile);
@@ -363,7 +351,7 @@ bool ibApplicationHost::InitLocale(const wxString& locale)
 	wxFileName fn(wxStandardPaths::Get().GetExecutablePath());
 
 	wxLocale::AddCatalogLookupPathPrefix(workingDir + wxFILE_SEP_PATH + wxT("lang"));
-	wxLocale::AddCatalogLookupPathPrefix(fn.GetPath() + wxFILE_SEP_PATH + wxT("lang"));
+	wxLocale::AddCatalogLookupPathPrefix(ibProgramFolder() + wxFILE_SEP_PATH + wxT("lang"));
 
 	// …AND, FOR A RUN FROM THE BUILD TREE, THE SOURCE'S OWN `lang` ABOVE THE EXECUTABLE — the walk-up the
 	// syntax helper makes for its corpus (helpService.cpp; bin/Win32/Debug is three levels under it). The
@@ -383,12 +371,6 @@ bool ibApplicationHost::InitLocale(const wxString& locale)
 			walk.RemoveLastDir();
 		}
 	}
-#if defined(__WXOSX__) || defined(__APPLE__)
-	// On macOS, also check outside .app bundle
-	wxFileName bundleLang(fn.GetPath());
-	bundleLang.RemoveLastDir(); bundleLang.RemoveLastDir(); bundleLang.RemoveLastDir();
-	wxLocale::AddCatalogLookupPathPrefix(bundleLang.GetPath() + wxFILE_SEP_PATH + wxT("lang"));
-#endif
 
 	if (!m_locale.Init(m_localeLang)) {
 		if (!m_locale.Init(wxLanguage::wxLANGUAGE_ENGLISH))

@@ -41,13 +41,13 @@
 #include "backend/logger/logger.h"
 #include "backend/logger/loggerReader.h"
 #include "backend/metadataConfiguration.h"   // activeMetaData - the door that knows configuration types
+#include "core/programFolder.h"          // the journal lives in the program folder
 #include "core/serialize/dataBuilder.h"   // ibDataNode + ibBinaryProvider - the details payload
 
 #include <wx/datetime.h>
 #include <wx/dir.h>
 #include <wx/ffile.h>
 #include <wx/filename.h>
-#include <wx/stdpaths.h>
 #include <wx/tokenzr.h>
 
 #include <algorithm>
@@ -149,8 +149,7 @@ wxString TraceDirectory()
 	if (!own.IsEmpty())
 		return wxFileName(own).GetPath();
 
-	return wxFileName(wxStandardPaths::Get().GetExecutablePath()).GetPath()
-		+ wxFILE_SEP_PATH + wxT("journal");
+	return ibProgramFolder() + wxFILE_SEP_PATH + wxT("journal");
 }
 
 // `<app>_<yyyymmddThhmmss>_<pid>.log` — the app is the head, the start time is the middle.
