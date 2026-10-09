@@ -179,10 +179,6 @@ ibRecalculationSpec ibRecalculationSpecOf(const ibValueMetaObjectCalculationRegi
 	if (leading == nullptr || !leading->IsAllowed() || leading->GetCalculationType() == nullptr)
 		return v;
 
-	const auto fieldsOf = [](const ibValueMetaObjectAttributeBase* attribute, std::vector<wxString>& out) {
-		for (const wxString& field : ibRegFieldsOf(attribute))
-			out.push_back(field);
-	};
 	const auto dayOf = [](const ibValueMetaObjectAttributeBase* attribute) {
 		return ibRegFieldOfRole(attribute->GetQueryColumn(), ibColumnRole::Date);
 	};

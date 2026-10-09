@@ -177,7 +177,7 @@ ibDialogLinqConstructor::ibDialogLinqConstructor(wxWindow* parent, const wxStrin
 	// order the pages are added below, which is also each page's picture index.
 	{
 		wxWithImages::Images pictures;
-		for (const wxString& id : { wxART_TABLE, wxART_FILTER, wxART_GROUPING, wxART_SORT, wxART_ADVANCED })
+		for (const wxString id : { wxART_TABLE, wxART_FILTER, wxART_GROUPING, wxART_SORT, wxART_ADVANCED })
 			pictures.push_back(wxArtProvider::GetBitmapBundle(id, wxART_FRONTEND, wxSize(16, 16)));   // normal DPI, no FromDIP
 		m_notebook->SetImages(pictures);
 	}

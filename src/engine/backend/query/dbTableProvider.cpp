@@ -2163,6 +2163,13 @@ ibQueryExprPtr ibMetaIRBuilder::BuildColumnExpr(const ibBackendQueryable* querya
 		                                                                  : ibQueryFrame::NoFrame;
 		return ibWindowed(ibFunc(WindowFnName(expr->m_windowFn), std::move(args)), std::move(window));
 	}
+
+	// A finished result's column, and a question put to a value, have no SQL. PRESENTATION, VALUETYPE
+	// and a CAST are answered over the row after it comes back; an OutputRef names a column of that
+	// result, not of this table. nullptr is what the condition path already refuses to send.
+	case ibQueryColumnExprKind::OutputRef:
+	case ibQueryColumnExprKind::ValueAsk:
+		return nullptr;
 	}
 	return nullptr;
 }
@@ -3396,6 +3403,16 @@ static bool CollectExprColumns(const ibQueryColumnExpr* e, std::vector<const ibB
 		// here rather than left to the fallthrough: the refusal is a decision, and a reader who meets
 		// a missing case cannot tell one from an oversight.
 		return false;
+	// The calendar calls, a published result column, and a question put to a value are not cells this
+	// walk projects. False keeps the RAM road — the answer the missing cases used to fall through to.
+	case ibQueryColumnExprKind::PeriodEnd:
+	case ibQueryColumnExprKind::DateAdd:
+	case ibQueryColumnExprKind::DateDiff:
+	case ibQueryColumnExprKind::DatePart:
+	case ibQueryColumnExprKind::Substring:
+	case ibQueryColumnExprKind::OutputRef:
+	case ibQueryColumnExprKind::ValueAsk:
+		return false;
 	}
 	return false;
 }
@@ -3841,6 +3858,10 @@ static bool UnionPredicateColocatable(const ibQueryPredicatePtr& p,
 		for (const auto& ch : p->m_children)
 			if (!UnionPredicateColocatable(ch, parts)) return false;
 		return true;
+	// A REFS test is the reference's type tag, not a scalar this branch resolves by name, and the
+	// branch scan has no join to walk. The RAM road answers it.
+	case ibQueryPredicateKind::RefType:
+		return false;
 	}
 	return false;
 }
@@ -3885,6 +3906,9 @@ static ibQueryExprPtr BuildBranchPredicate(const ibQueryPredicatePtr& p, const i
 		if (!allNull) return nullptr;
 		return p->m_negated ? ibNot(allNull) : allNull;
 	}
+	// UnionPredicateColocatable keeps a REFS test off this road. Nothing here would be a type tag.
+	case ibQueryPredicateKind::RefType:
+		return nullptr;
 	}
 	return nullptr;
 }

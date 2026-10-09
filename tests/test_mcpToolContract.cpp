@@ -299,7 +299,7 @@ TEST(McpToolContract, EveryTextSentDownTheWire_IsAscii)
 	const wxString engine = EngineSourceDir();
 	size_t scanned = 0;
 
-	for (const wxString layer : { wxString(wxT("backend")), wxString(wxT("frontend")), wxString(wxT("designer")) }) {
+	for (const wxString& layer : { wxString(wxT("backend")), wxString(wxT("frontend")), wxString(wxT("designer")) }) {
 		wxFileName dir(engine, wxEmptyString);
 		dir.AppendDir(layer);
 		dir.AppendDir(wxT("mcp"));
@@ -421,7 +421,7 @@ TEST(McpToolContract, PictureSet_DeclaresTheNameItAsksForWhenTheImageComesAsData
 	ASSERT_NE(tool, nullptr);
 
 	const std::set<wxString> declared = DeclaredArguments(SchemaOf(tool));
-	for (const wxString& name : { wxT("id"), wxT("engine"), wxT("configuration"), wxT("data"), wxT("svg"),
+	for (const wxString name : { wxT("id"), wxT("engine"), wxT("configuration"), wxT("data"), wxT("svg"),
 		wxT("width"), wxT("height"), wxT("name") })
 		EXPECT_TRUE(declared.count(name) != 0) << "picture_set does not declare '" << wxString(name).ToStdString() << "'";
 }
@@ -434,7 +434,7 @@ TEST(McpToolContract, PictureFromSvg_DeclaresEverythingItReads)
 	ASSERT_NE(tool, nullptr);
 
 	const std::set<wxString> declared = DeclaredArguments(SchemaOf(tool));
-	for (const wxString& name : { wxT("svg"), wxT("width"), wxT("height"), wxT("name") })
+	for (const wxString name : { wxT("svg"), wxT("width"), wxT("height"), wxT("name") })
 		EXPECT_TRUE(declared.count(name) != 0) << "picture_from_svg does not declare '" << wxString(name).ToStdString() << "'";
 }
 

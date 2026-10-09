@@ -699,6 +699,11 @@ public:
 		void* const block = ::operator new(sizeof(ibValueLinqRecord) + fields * sizeof(ibValue));
 		return ::new (block) ibValueLinqRecord(shape, fields);
 	}
+	// The registry's `new T()` and `delete` have to be one pair. A class delete with no class new
+	// makes `new T()` allocate with the global operator and free with this one — the same function
+	// underneath, and a mismatch the compiler is right to name. Make() still asks the global operator
+	// for the oversized block; this delete hands that block back.
+	static void* operator new(std::size_t size) { return ::operator new(size); }
 	static void operator delete(void* block) { ::operator delete(block); }
 
 	ibValueLinqRecord(const ibValueLinqRecord&) = delete;

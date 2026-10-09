@@ -9770,7 +9770,6 @@ public:
 		// instead - which is the behaviour this exists to avoid.
 		if (!wanted.IsEmpty()) {
 
-			wxString answered;
 			std::vector<ibDataValue> parts;
 
 			for (const ibMcpTopic& topic : topics) {
