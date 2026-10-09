@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <atomic>
-#include <ctime>
 #include <chrono>
 #include <condition_variable>
 #include <deque>
@@ -38,8 +37,8 @@ constexpr std::size_t kMaxRequestBytes = 4 * 1024 * 1024;
 // How often a connection waiting for its client looks up to see whether the server is stopping.
 constexpr std::chrono::seconds kStopPoll(1);
 
-// A socket that has not logged in holds a thread and has not reached the half-hour round. This is how long it
-// may sit there. The same bound is the HTTP handshake, so a slow open cannot hold a thread either.
+// A socket that has not logged in holds a thread and has not reached the half-hour round. This is how long
+// it may live, counted from the moment it opened. A message does not move that mark.
 constexpr std::chrono::seconds kUnauthenticatedIdle(15);
 
 // The furthest a chosen port goes from where it started looking.
@@ -77,6 +76,10 @@ struct ibConnectionOut {
 // How many of the next thread creations fail, the way the operating system refuses one. A test sets it.
 // The server never does. Consumed under the queue's lock, so a single failure is a single refused socket.
 std::atomic<unsigned> g_failNextThreads{ 0 };
+
+// While this is set, an idle thread does not take a job. A test uses it to hold the pool still between
+// two enqueues. The server never sets it.
+std::atomic<bool> g_holdIdle{ false };
 
 // ⭐ THE POOL GROWS FOR A BURST, AND THE THREADS THAT BURST ADDED THEN LEAVE.
 //
@@ -127,8 +130,8 @@ public:
 				return false;
 			Reap();
 			const std::size_t alive = m_base.size() + m_extra.size();
-			// Nothing idle and nowhere to grow: do not leave the job where no thread will take it.
-			if (m_idle == 0 && alive >= m_ceiling)
+			// An idle thread that already has a queued job is not free.
+			if (m_jobs.size() >= m_idle && alive >= m_ceiling)
 				return false;
 			m_jobs.push_back(std::move(fn));
 			// One new thread per job the idle ones cannot cover. A burst of N, with B base threads still
@@ -230,9 +233,15 @@ private:
 				else {
 					m_cond.wait(lock, [this] { return m_shutdown || !m_jobs.empty(); });
 				}
+				// Still counted idle. A test may be parking the pool between two arrivals; the job stays
+				// queued until the hold lifts, and shutdown is not a hold.
+				while (g_holdIdle.load(std::memory_order_relaxed) && !m_shutdown)
+					m_cond.wait_for(lock, std::chrono::milliseconds(50));
 				--m_idle;
 				if (m_shutdown && m_jobs.empty())
 					return;
+				if (m_jobs.empty())
+					continue;
 				fn = std::move(m_jobs.front());
 				m_jobs.pop_front();
 			}
@@ -257,6 +266,11 @@ private:
 void ibClientListenerFailNextThreads(unsigned count)
 {
 	g_failNextThreads.store(count, std::memory_order_relaxed);
+}
+
+void ibClientListenerHoldIdleThreads(bool hold)
+{
+	g_holdIdle.store(hold, std::memory_order_relaxed);
 }
 
 class ibClientListener::ibServer {
@@ -293,18 +307,16 @@ bool ibClientListener::Start(const wxString& host, unsigned short& port, bool ch
 
 	server->m_http.set_payload_max_length(kMaxRequestBytes);
 	server->m_http.set_tcp_nodelay(true);
-	// The handshake, before a WebSocket exists. A slow open holds a thread no longer than a socket that
-	// never logs in. The WebSocket's own read is shorter, so a stop is noticed between messages.
-	server->m_http.set_read_timeout(static_cast<time_t>(kUnauthenticatedIdle.count()));
-	server->m_http.set_write_timeout(static_cast<time_t>(kUnauthenticatedIdle.count()));
+	// The handshake keeps cpp-httplib's own read timeout, five seconds. The fifteen seconds before a
+	// login belong to the WebSocket loop, counted from the moment the socket opened.
 
 	// STOPGAP until the network core is asynchronous. A connection holds whichever pool thread
 	// accepted it for as long as the socket lives. cpp-httplib's own pool grows to
 	// 4 * max(8, cores - 1) — 32 threads on an 8-core machine — and the client after that is
 	// accepted and never answered; nothing refuses it. ClientConnections (backend.conf) is how
 	// many of those threads this process will make. Left out, or 0, that is kDefaultClientConnections
-	// (1000), not "no limit". Threads above the base leave once they have been idle; a socket with
-	// nobody logged in is closed after a short idle, so it cannot hold one of those threads forever.
+	// (1000), not "no limit". Threads above the base leave once they have been idle. A socket that has
+	// not logged in is closed fifteen seconds after it opened, and a message does not extend that.
 	const std::size_t connections = ibApplicationHost::Get() != nullptr
 		? ibApplicationHost::Get()->GetClientConnections()
 		: ibApplicationHost::kDefaultClientConnections;
@@ -362,23 +374,23 @@ bool ibClientListener::Start(const wxString& host, unsigned short& port, bool ch
 		});
 
 		std::string message;
-		// Idle is measured from the last message. Timeouts are how a stop is noticed; they are also how long
-		// a connection that has not logged in may sit. After a login, the host's half-hour round is the idle.
-		auto idleFrom = std::chrono::steady_clock::now();
+		// Timeouts are how a stop is noticed. Until a login, they are also the life of the socket, counted
+		// from when it opened: a message does not move that mark. After a login, the host's half-hour round
+		// is the idle, and this window no longer applies.
+		const auto opened = std::chrono::steady_clock::now();
 		for (;;) {
 			const httplib::ws::ReadResult read = ws.read(message);
 			if (read == httplib::ws::Timeout) {
 				if (server->m_stopping.load())
 					break;
 				if (!clientHost->LoggedIn(&ws)
-					&& std::chrono::steady_clock::now() - idleFrom >= kUnauthenticatedIdle)
+					&& std::chrono::steady_clock::now() - opened >= kUnauthenticatedIdle)
 					break;
 				continue;
 			}
 			if (read != httplib::ws::Text)
 				break;   // closed — or a binary frame, which this protocol does not speak (yet)
 
-			idleFrom = std::chrono::steady_clock::now();
 			const wxString response = clientHost->Call(wxString::FromUTF8(message), &ws, address);
 			if (response.IsEmpty())
 				continue;

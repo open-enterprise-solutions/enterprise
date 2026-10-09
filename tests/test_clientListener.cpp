@@ -430,3 +430,105 @@ TEST(ClientListener, StopReturnsWhileSocketsAreOpen) {
 	StopWithin(listener);
 	clients.clear();
 }
+
+// An idle thread with a job already waiting is not a free thread. The pool is held still so the two
+// arrivals cannot be reordered by a worker taking the first one.
+struct HoldIdleThreads {
+	HoldIdleThreads() { ibClientListenerHoldIdleThreads(true); }
+	~HoldIdleThreads() { ibClientListenerHoldIdleThreads(false); }
+};
+
+TEST(ClientListener, AnIdleThreadThatAlreadyHasAJobIsNotFree) {
+	WxReady();
+	RestoreCwd cwd;
+	RestoreHost process;
+	const wxString dir = wxFileName(wxStandardPaths::Get().GetTempDir(),
+		wxString::Format(wxT("oes-cc-queued-%ld"), static_cast<long>(wxGetProcessId()))).GetFullPath();
+	wxMkdir(dir);
+	ASSERT_TRUE(wxSetWorkingDirectory(dir));
+	{
+		wxFile file;
+		ASSERT_TRUE(file.Create(dir + wxFILE_SEP_PATH + wxT("backend.conf"), true));
+		ASSERT_TRUE(file.Write(wxString(wxT("ClientConnections=1\n"))));
+	}
+	ASSERT_TRUE(ibApplicationInstance::CreateAppDataEnv(ibRunMode::eFILE_MODE));
+	ASSERT_EQ(ibApplicationHost::Get()->GetClientConnections(), static_cast<std::size_t>(1));
+
+	ibClientHost host(nullptr);
+	ibClientListener listener;
+	unsigned short port = 28220;
+	std::string url;
+	ASSERT_TRUE(Bind(listener, host, port, url));
+
+	HoldIdleThreads hold;
+	std::atomic<int> first{ -1 };
+	std::thread opener([&] {
+		httplib::ws::WebSocketClient client(url);
+		client.set_connection_timeout(3);
+		first = client.connect() ? 1 : 0;
+	});
+
+	const auto parked = std::chrono::steady_clock::now();
+	while (first.load() < 0
+		&& std::chrono::steady_clock::now() - parked < std::chrono::milliseconds(500))
+		std::this_thread::sleep_for(std::chrono::milliseconds(20));
+	// The handshake has not completed: the one idle thread is still idle, and the job is queued for it.
+	ASSERT_LT(first.load(), 0);
+
+	httplib::ws::WebSocketClient second(url);
+	second.set_connection_timeout(3);
+	const auto began = std::chrono::steady_clock::now();
+	EXPECT_FALSE(second.connect());
+	EXPECT_LT(std::chrono::steady_clock::now() - began, std::chrono::milliseconds(500));
+
+	ibClientListenerHoldIdleThreads(false);
+	opener.join();
+	listener.Stop();
+	ibApplicationInstance::DestroyAppDataEnv();
+	wxRemoveFile(dir + wxFILE_SEP_PATH + wxT("backend.conf"));
+	wxRmdir(dir);
+}
+
+// Sending does not buy another fifteen seconds. Once #224 is merged, also cover a socket that opens
+// and resumes within those fifteen seconds.
+TEST(ClientListener, ASocketThatNeverLogsInClosesFifteenSecondsAfterItOpened) {
+	WxReady();
+	ASSERT_EQ(ibApplicationHost::Get(), nullptr);
+
+	ibClientHost host(nullptr);
+	ibClientListener listener;
+	unsigned short port = 28230;
+	std::string url;
+	ASSERT_TRUE(Bind(listener, host, port, url));
+
+	httplib::ws::WebSocketClient client(url);
+	client.set_connection_timeout(8);
+	client.set_read_timeout(2);
+	ASSERT_TRUE(client.connect());
+
+	const auto opened = std::chrono::steady_clock::now();
+	auto nextSend = opened;
+	bool closed = false;
+	while (std::chrono::steady_clock::now() - opened < std::chrono::seconds(25)) {
+		if (std::chrono::steady_clock::now() >= nextSend) {
+			if (!client.send("x")) {
+				closed = true;
+				break;
+			}
+			nextSend += std::chrono::seconds(5);
+		}
+		std::string reply;
+		const auto read = client.read(reply);
+		if (read == httplib::ws::Text || read == httplib::ws::Timeout)
+			continue;
+		closed = true;
+		break;
+	}
+
+	const auto elapsed = std::chrono::steady_clock::now() - opened;
+	EXPECT_TRUE(closed);
+	EXPECT_GE(elapsed, std::chrono::seconds(14));
+	EXPECT_LE(elapsed, std::chrono::seconds(20));
+
+	listener.Stop();
+}
