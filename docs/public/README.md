@@ -47,4 +47,5 @@ Add a row to the table below when you add a document, so this folder can be read
 | [functional-options.md](functional-options.md) | Functional options: a constant that decides what is shown, membership kept on the member, the one rule, where it stops |
 | [http-client.md](http-client.md) | HTTP and HTTPS from a script: the values, what they guarantee, where they stop |
 | [json.md](json.md) | JSON from a script: what reading gives, what the writer guarantees, where it stops |
+| [session-failover.md](session-failover.md) | A thin client's session after a drop: the token, the draft, the locks, and what a move to another server restores |
 | [thin-client.md](thin-client.md) | The thin client: its parts, who does what, the document/view skeleton, spreadsheets, printing, a file base, what it guarantees |
