@@ -4,7 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "chartOfCalculationTypes.h"
-#include "backend/serialize/dataBuilder.h"
+#include "core/serialize/dataBuilder.h"
 #include "backend/system/value/valueDynamicList.h"   // ibValueDynamicList — the standard list migrates onto the universal dynamic list
 #include "backend/metaData.h"
 #include "backend/moduleManager/moduleManager.h"
@@ -148,7 +148,7 @@ ibFormPtr<ibBackendValueForm> ibValueMetaObjectChartOfCalculationTypes::GetFolde
 
 wxString ibValueMetaObjectChartOfCalculationTypes::GetDataPresentation(const ibValueDataObject* objValue) const
 {
-	static ibValue vDescription;
+	ibValue vDescription;
 	if (objValue->GetValueByMetaID((*m_propertyAttributeDescription)->GetMetaID(), vDescription))
 		return vDescription.GetString();
 	return wxEmptyString;

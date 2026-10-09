@@ -22,8 +22,8 @@
 
 #include "backend/compiler/byteCode.h"
 #include "backend/compiler/value.h"
-#include "backend/fileSystem/fs.h"
-#include "backend/guid.h"
+#include "core/fileSystem/fs.h"
+#include "core/guid.h"
 
 namespace {
 

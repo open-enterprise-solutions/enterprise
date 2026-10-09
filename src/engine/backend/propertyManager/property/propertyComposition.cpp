@@ -2,7 +2,7 @@
 
 #include "backend/propertyManager/property/variant/variantComposition.h"
 #include "backend/system/value/valueDataComposition.h"   // the running composition a script is handed
-#include "backend/serialize/dataBuilder.h"   // ibDataNode / ibDataValue (Child)
+#include "core/serialize/dataBuilder.h"   // ibDataNode / ibDataValue (Child)
 
 ////////////////////////////////////////////////////////////////////////
 

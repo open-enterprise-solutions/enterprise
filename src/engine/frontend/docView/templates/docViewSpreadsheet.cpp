@@ -529,10 +529,23 @@ wxIMPLEMENT_DYNAMIC_CLASS(ibSpreadsheetGridBoxView, ibSpreadsheetEditView);
 
 ibSpreadsheetGridBoxDocument::ibSpreadsheetGridBoxDocument() : ibSpreadsheetFileDocument()
 {
-	// The spreadsheet document's template: Save as reads the default extension from it.
-	if (docManager != nullptr)
-		SetDocumentTemplate(docManager->FindTemplateByDocClassInfo(CLASSINFO(ibSpreadsheetFileDocument)));
 	SetTitle(_("Spreadsheet document"));
+}
+
+bool ibSpreadsheetGridBoxDocument::SaveAs()
+{
+	const wxString fileName = wxFileSelector(_("Save As"),
+		wxEmptyString,
+		wxFileNameFromPath(GetFilename()),
+		wxEmptyString,
+		GetSaveFilter(),
+		wxFD_SAVE | wxFD_OVERWRITE_PROMPT,
+		GetDocumentWindow());
+
+	if (fileName.empty())
+		return false; // cancelled by user
+
+	return DoSaveDocument(fileName);
 }
 
 void ibSpreadsheetGridBoxDocument::SetSpreadsheetDocument(const wxObjectDataPtr<ibBackendSpreadsheetObject>& spreadSheetDocument)

@@ -125,8 +125,8 @@ ibGridEditor::ibGridEditor(ibMetaDocument* document,
 	m_selectionBackground.Set(211, 217, 239);
 	m_selectionForeground.Set(0, 0, 0);
 
-	ibGrid::SetLabelFont(s_defaultSpreadsheetFont);
-	ibGrid::SetDefaultCellFont(s_defaultSpreadsheetFont);
+	ibGrid::SetLabelFont(ibDefaultSpreadsheetFont());
+	ibGrid::SetDefaultCellFont(ibDefaultSpreadsheetFont());
 
 	ibGrid::SetDefaultEditor(new ibGridEditorCellTextEditor);
 

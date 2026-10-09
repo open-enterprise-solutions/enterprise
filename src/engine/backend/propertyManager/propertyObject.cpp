@@ -4,7 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "propertyObject.h"
-#include "backend/serialize/dataBuilder.h"   // ibDataValue — property node serialization
+#include "core/serialize/dataBuilder.h"   // ibDataValue — property node serialization
 #include "backend/metaData.h"                                        // GetAnyArrayObject — the candidates
 #include "backend/propertyManager/property/variant/variantOwner.h"   // the variant a relationship holds
 
@@ -226,6 +226,31 @@ ibPropertyObject::ibPropertyObject()
 
 ibPropertyObject::~ibPropertyObject()
 {
+	// Clear dangling reference on the main frame's property slot if this
+	// is the current selection. Explicit chain through appData → main
+	// session → frame; null-guarded for headless (no UI). TODO: replace
+	// this with an observer pattern so ibPropertyObject doesn't reach
+	// the frame at destruction time.
+	//
+	// ⚠ FIRST, WHILE THE INSPECTOR STILL KNOWS US: it tells the object it
+	// shows by the notifier's owner (ShownObject), and the loop below clears
+	// that owner — asked after it, GetProperty already answered nothing and
+	// the panel kept the rows of an object that was gone (a closed sheet's
+	// R1C1 under the next tab).
+	//
+	// Deliberately NOT ibSession::CurrentFrame(): that door is shut on a
+	// force-exiting session, and rightly so — but this is not someone
+	// reaching for a window to work with, it is the window's own slot
+	// being cleaned of a pointer that is about to dangle. Exactly then it
+	// matters most, because a forced close is when this object dies with
+	// the frame still standing.
+	ibSession* const owner = ibSession::Current();
+	if (auto* frame = owner != nullptr ? owner->GetFrame() : nullptr) {
+		if (this == frame->GetProperty()) {
+			frame->SetProperty(nullptr);
+		}
+	}
+
 	// Sever the attach graph both ways so no back-link outlives us: our attached children drop their
 	// upward owner-link, and if we were attached to an owner, we leave its downward list.
 	DetachAllPropertyObjects();
@@ -247,25 +272,6 @@ ibPropertyObject::~ibPropertyObject()
 
 	for (auto& event : m_events)
 		wxDELETE(event.second);
-
-	// Clear dangling reference on the main frame's property slot if this
-	// is the current selection. Explicit chain through appData → main
-	// session → frame; null-guarded for headless (no UI). TODO: replace
-	// this with an observer pattern so ibPropertyObject doesn't reach
-	// the frame at destruction time.
-	//
-	// Deliberately NOT ibSession::CurrentFrame(): that door is shut on a
-	// force-exiting session, and rightly so — but this is not someone
-	// reaching for a window to work with, it is the window's own slot
-	// being cleaned of a pointer that is about to dangle. Exactly then it
-	// matters most, because a forced close is when this object dies with
-	// the frame still standing.
-	ibSession* const owner = ibSession::Current();
-	if (auto* frame = owner != nullptr ? owner->GetFrame() : nullptr) {
-		if (this == frame->GetProperty()) {
-			frame->SetProperty(nullptr);
-		}
-	}
 }
 
 wxString ibPropertyObject::GetIndentString(int indent) const

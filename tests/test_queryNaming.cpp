@@ -504,6 +504,36 @@ TEST(QueryGrouping, AWindowArgumentStillObeysAnOrdinaryGroupBesideIt)
 	EXPECT_THROW(ibQueryLowering::CheckNames(package, {}), ibBackendException);
 }
 
+TEST(QueryGrouping, ARunQueryIsRefusedAsTheCheckRefusesIt)
+{
+	// The check refused an incomplete grouping and no road that RUNS a query passed the check: a script's
+	// Execute, the composer, a dynamic list and a report ran it and handed back the ungrouped column EMPTY
+	// (2026-10-01). Describing the output is filled through the same door as running it, and needs no
+	// database — so it answers here for every road, in the check's own sentence.
+	WindowSales sales;
+	OpenConfiguration cfg;
+	ASSERT_NE(nullptr, cfg.GetSourceFactory());
+	cfg.RegisterSource(&sales);
+	const ibSourceMetaDataScope scope(&cfg);
+
+	ibQueryParser parser;
+	const ibQueryPackage incomplete = parser.ParsePackage(
+		wxT("SELECT S.Region, S.Period, SUM(S.Amount) AS Total FROM Document.Sales AS S GROUP BY S.Region"));
+	EXPECT_THROW(ibQueryLowering::CheckNames(incomplete, {}), ibBackendException);
+
+	std::vector<ibQueryLowering::OutputColumn> schema;
+	wxString refusal;
+	try { ibQueryLowering::DescribeOutput(*incomplete.SingleSelect(), {}, schema); }
+	catch (const ibBackendException& error) { refusal = error.GetErrorDescription(); }
+	EXPECT_NE(wxNOT_FOUND, refusal.Find(wxT("neither grouped nor aggregated"))) << refusal.ToStdString();
+	EXPECT_NE(wxNOT_FOUND, refusal.Find(wxT("Period"))) << "the field it names is the one left out";
+
+	// …and the complete grouping runs as before.
+	const ibQueryPackage complete = parser.ParsePackage(
+		wxT("SELECT S.Region, S.Period, SUM(S.Amount) AS Total FROM Document.Sales AS S GROUP BY S.Region, S.Period"));
+	EXPECT_NO_THROW(ibQueryLowering::DescribeOutput(*complete.SingleSelect(), {}, schema));
+}
+
 // ===========================================================================
 //  A table handed in as a parameter
 // ===========================================================================

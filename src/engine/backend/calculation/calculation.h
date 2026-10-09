@@ -20,7 +20,7 @@
 // starting on the 10th instead of the 11th.
 
 #include "backend/backend.h"         // BACKEND_API
-#include "backend/fnumber.h"         // ibNumber — a schedule's figures
+#include "core/fnumber.h"         // ibNumber — a schedule's figures
 
 #include <cstddef>
 #include <cstdint>

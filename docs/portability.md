@@ -84,6 +84,12 @@ from `<sys/socket.h>` / `<netinet/in.h>` / `<netinet/tcp.h>` on POSIX. A `#if de
 block whose `#else` branch is thinner than its `#if` branch is a bug waiting for the first person
 to build the other platform.
 
+The platform's LIBRARY is linked by the target that compiles the call. `core/guid.cpp` picks its
+generator three ways — Windows `CoCreateGuid`, macOS CFUUID, else libuuid's `uuid_generate` — so
+libuuid (non-Apple UNIX) and `-framework CoreFoundation` (Apple) are linked in
+`core/CMakeLists.txt` (moved from `backend/CMakeLists.txt` with `guid` on 2026-10-08). `core` is
+wx base only; its `fstring.cpp` carries the Apple `uselocale` formatting of § 1.5a′.
+
 ### 1.5 A nested class cannot carry a default argument built from its own initializers
 
 A nested class's default member initializers are not complete until the **enclosing** class is,
@@ -450,11 +456,9 @@ Two lessons about *silencing* itself, both learned the hard way here:
   headers, and one of them was re-reading `collection.GetID(i)` twice per loop iteration while
   leaving the first read unused.
 
-Still open, in order of weight: **the web is absent from CMake entirely** (`wenterprise-server`
-has no `CMakeLists.txt`, `wfrontend` is filtered out of the frontend glob) — so breaking it keeps
-all four jobs green. That was not a discovery: [BUILD.md](BUILD.md) has said "the web runtime
-targets build under the MSBuild solution only" all along. What is new is only the consequence,
-now that CI builds the applications everywhere else; `designer` compiles `mainFrameDesignerCmd.cpp`, a dead legacy main-frame the
+Still open, in order of weight: **the web is not built in CI** — CMake has its targets since
+2a3843f82 (`-DOES_BUILD_WEB=ON`, default OFF), but no job sets the option, so breaking the web keeps
+all the jobs green; `designer` compiles `mainFrameDesignerCmd.cpp`, a dead legacy main-frame the
 `.vcxproj` excludes, which means the two build systems produce different binaries; and 936
 `-Woverloaded-virtual` plus ~100 unmarked `override` declarations across 27 property headers.
 

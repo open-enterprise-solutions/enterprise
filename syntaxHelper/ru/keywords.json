@@ -22,7 +22,8 @@
       "see_also": [
         "kw.Else",
         "kw.Elseif",
-        "kw.While"
+        "kw.While",
+        "op.Ternary"
       ],
       "reviewed": true,
       "syntax_block_ves": "If <Expression1> Then\n    // statements\nElsIf <Expression2> Then\n    // statements\nElse\n    // statements\nEndIf",
@@ -137,6 +138,33 @@
       "reviewed": true,
       "modes": [
         "ves"
+      ]
+    },
+    {
+      "id": "op.Ternary",
+      "name_local": "?()",
+      "name_en": "?()",
+      "kind": "operator",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "?(<Condition>, <ValueIfTrue>, <ValueIfFalse>)",
+      "description": "Условное (тернарное) выражение — Если, которое отвечает значением. Когда <Condition> выполнено, выражение равно <ValueIfTrue>, иначе — <ValueIfFalse>. Пишется одинаково в обоих диалектах и стоит везде, где стоит значение: в присваивании, в аргументе, в возврате, внутри другого выражения; вкладывается.\n\nУсловие проверяется так же, как в Если: логическое значение читается как есть, любое другое считается истинным, когда оно не пустое.\n\n⚠ ВЫЧИСЛЯЮТСЯ ВСЕ ТРИ, ПОТОМ ВЫБИРАЕТСЯ ОДНО. Оба значения считаются до выбора, поэтому значение, которое падает, падает и тогда, когда условие его не выбрало: `?(doc <> Undefined, doc.Number, \"\")` бросает исключение на Undefined, а вызов в невыбранной ветке всё равно выполняется. Выбирайте им между значениями; охраняйте через Если.",
+      "syntax_block": "var <Result> = ?(<Condition>, <ValueIfTrue>, <ValueIfFalse>);",
+      "parameters": "<Condition> — проверка: логическое значение или любое другое, истинное, когда оно не пустое.\n<ValueIfTrue> — результат, когда условие выполнено.\n<ValueIfFalse> — результат в остальных случаях.",
+      "return_descr": "<ValueIfTrue> или <ValueIfFalse> — то, что выбрало условие.",
+      "example": "var caption = ?(qty > 0, \"In stock\", \"Sold out\");\nvar size = ?(weight < 1, \"small\", ?(weight < 10, \"medium\", \"large\"));",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.If"
+      ],
+      "reviewed": true,
+      "syntax_block_ves": "<Result> = ?(<Condition>, <ValueIfTrue>, <ValueIfFalse>);",
+      "example_ves": "Caption = ?(Qty > 0, \"In stock\", \"Sold out\");\nSize = ?(Weight < 1, \"small\", ?(Weight < 10, \"medium\", \"large\"));",
+      "modes": [
+        "ves",
+        "ces"
       ]
     },
     {

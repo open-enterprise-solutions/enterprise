@@ -44,7 +44,7 @@
 #include "backend/system/value/valueArray.h"      // …and the list an «in» condition reads
 #include "backend/query/queryHierarchy.h"         // …and the subtree an «in hierarchy» one is handed
 #include "backend/compositionDescription.h"       // the description + its Memory (read/write) pair
-#include "backend/serialize/dataBuilder.h"        // ibDataNode — what a description is written into
+#include "core/serialize/dataBuilder.h"        // ibDataNode — what a description is written into
 
 namespace {
 

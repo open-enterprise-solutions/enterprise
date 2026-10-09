@@ -246,6 +246,7 @@ public:
 			ibSourceDataObject* owner = m_sourceInfo.m_owner;
 			m_sourceInfo = ibSourceInfo{};
 			m_sourceInfo.m_owner = owner;
+			m_sourceVersion = 0;
 		}
 
 		// Reset to a fresh ROOT with this info for an in-place rebuild — drops children (KEEPS capacity) and
@@ -262,8 +263,24 @@ public:
 			m_sourceInfo.m_typeDesc = typeDesc;
 			m_sourceInfo.m_flags = eSrcEnabled | eSrcVisible | (tableSection ? eSrcTableSection : 0) | (select ? eSrcSelect : 0);
 			m_sourceInfo.m_owner = owner;
+			m_sourceVersion = 0;
 			return *this;
 		}
+
+		// ⭐ …AT THE VERSION OF THE METADATA IT DESCRIBES (ibMetaData::GetFactoryCountChanges) — what a source the
+		// metadata describes resets with. Built at that version already: nothing is reset, false — read it as it is.
+		// Built at another: reset, true — fill it.
+		bool Reset(unsigned int sourceVersion, const wxString& name, const wxString& synonym, const ibMetaID& id,
+			const ibTypeDescription& typeDesc, bool tableSection = false, bool select = true) {
+			if (m_sourceVersion == sourceVersion)
+				return false;
+			Reset(name, synonym, id, typeDesc, tableSection, select);
+			m_sourceVersion = sourceVersion;
+			return true;
+		}
+
+		// The version of the metadata it was built at — 0: none (built without one, or not built yet).
+		unsigned int GetSourceVersion() const { return m_sourceVersion; }
 
 	private:
 
@@ -278,6 +295,7 @@ public:
 
 		ibSourceInfo m_sourceInfo;
 		std::vector<ibSourceExplorer> m_arraySource;
+		unsigned int m_sourceVersion = 0;
 	};
 
 

@@ -13,8 +13,8 @@
     <ClInclude Include="mcp\mcpDebugBridge.h">
       <Filter>mcp</Filter>
     </ClInclude>
-    <ClInclude Include="mcp\mcpMessage.h">
-      <Filter>mcp</Filter>
+    <ClInclude Include="rpc\rpcMessage.h">
+      <Filter>rpc</Filter>
     </ClInclude>
     <ClInclude Include="mcp\mcpServer.h">
       <Filter>mcp</Filter>
@@ -151,7 +151,6 @@
     <ClInclude Include="databaseLayer\resultSetMetaData.h">
       <Filter>databaseLayer</Filter>
     </ClInclude>
-    <ClInclude Include="guid.h" />
     <ClInclude Include="databaseLayer\sqllite\sqliteDatabaseLayer.h">
       <Filter>databaseLayer\sqllite</Filter>
     </ClInclude>
@@ -210,6 +209,9 @@
       <Filter>compiler</Filter>
     </ClInclude>
     <ClInclude Include="compiler\compileCode.h">
+      <Filter>compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\compileState.h">
       <Filter>compiler</Filter>
     </ClInclude>
     <ClInclude Include="backend_core.h" />
@@ -313,36 +315,7 @@
     <ClInclude Include="backend_exception.h" />
     <ClInclude Include="backend_diagnostic.h" />
     <ClInclude Include="fileKind.h" />
-    <ClInclude Include="diagnostics\crashGuard.h">
-      <Filter>diagnostics</Filter>
-    </ClInclude>
-    <ClInclude Include="stringUtils.h" />
     <ClInclude Include="typeconv.h" />
-    <ClInclude Include="clsid.h" />
-    <ClInclude Include="fdatetime.h" />
-    <ClInclude Include="fnumber.h" />
-    <ClInclude Include="fstring.h" />
-    <ClInclude Include="fileSystem\fs.h">
-      <Filter>fileSystem</Filter>
-    </ClInclude>
-    <ClInclude Include="serialize\dataBuilder.h">
-      <Filter>serialize</Filter>
-    </ClInclude>
-    <ClInclude Include="serialize\jsonProvider.h">
-      <Filter>serialize</Filter>
-    </ClInclude>
-    <ClInclude Include="serialize\jsonText.h">
-      <Filter>serialize</Filter>
-    </ClInclude>
-    <ClInclude Include="fileSystem\types.h">
-      <Filter>fileSystem</Filter>
-    </ClInclude>
-    <ClInclude Include="fileSystem\lz\lzhuf.h">
-      <Filter>fileSystem\lz</Filter>
-    </ClInclude>
-    <ClInclude Include="fileSystem\quicklz\quicklz.h">
-      <Filter>fileSystem\quicklz</Filter>
-    </ClInclude>
     <ClInclude Include="metadataConfiguration.h" />
     <ClInclude Include="roleHelper.h" />
     <ClInclude Include="databaseLayer\postgres\engine\libpq-fe.h">
@@ -850,7 +823,7 @@
       <Filter>metaCollection</Filter>
     </ClInclude>
     <ClInclude Include="backend_localization.h" />
-    <ClInclude Include="formatString.h" />
+    <ClInclude Include="translateState.h" />
     <ClInclude Include="res\resource.h">
       <Filter>res</Filter>
     </ClInclude>
@@ -901,7 +874,9 @@
     <ClInclude Include="vcs\gitService.h">
       <Filter>vcs</Filter>
     </ClInclude>
-    <ClInclude Include="plugin\pluginApi.h" />
+    <ClInclude Include="plugin\pluginApi.h">
+      <Filter>plugin</Filter>
+    </ClInclude>
     <ClInclude Include="plugin\pluginHost.h">
       <Filter>plugin</Filter>
     </ClInclude>
@@ -971,6 +946,12 @@
     <ClInclude Include="settings\settingsComposer.h">
       <Filter>settings</Filter>
     </ClInclude>
+    <ClInclude Include="temp\tempStorage.h">
+      <Filter>temp</Filter>
+    </ClInclude>
+    <ClInclude Include="server\serverConfig.h">
+      <Filter>server</Filter>
+    </ClInclude>
     <ClInclude Include="sheetFormat\sheetFormat.h">
       <Filter>sheetFormat</Filter>
     </ClInclude>
@@ -1006,8 +987,8 @@
     <ClCompile Include="mcp\mcpDebugBridge.cpp">
       <Filter>mcp</Filter>
     </ClCompile>
-    <ClCompile Include="mcp\mcpMessage.cpp">
-      <Filter>mcp</Filter>
+    <ClCompile Include="rpc\rpcMessage.cpp">
+      <Filter>rpc</Filter>
     </ClCompile>
     <ClCompile Include="mcp\mcpServer.cpp">
       <Filter>mcp</Filter>
@@ -1227,7 +1208,6 @@
     <ClCompile Include="databaseLayer\resultSetMetaData.cpp">
       <Filter>databaseLayer</Filter>
     </ClCompile>
-    <ClCompile Include="guid.cpp" />
     <ClCompile Include="databaseLayer\sqllite\sqliteDatabaseLayer.cpp">
       <Filter>databaseLayer\sqllite</Filter>
     </ClCompile>
@@ -1279,7 +1259,6 @@
     <ClCompile Include="compiler\compileContext.cpp">
       <Filter>compiler</Filter>
     </ClCompile>
-    <ClCompile Include="backend_core.cpp" />
     <ClCompile Include="databaseLayer\firebird\firebirdBlobCompression.cpp">
       <Filter>databaseLayer\firebird</Filter>
     </ClCompile>
@@ -1377,27 +1356,6 @@
     <ClCompile Include="backend_exception.cpp" />
     <ClCompile Include="backend_diagnostic.cpp" />
     <ClCompile Include="fileKind.cpp" />
-    <ClCompile Include="diagnostics\crashGuard.cpp">
-      <Filter>diagnostics</Filter>
-    </ClCompile>
-    <ClCompile Include="fileSystem\lz\lzhuf.cpp">
-      <Filter>fileSystem\lz</Filter>
-    </ClCompile>
-    <ClCompile Include="fileSystem\quicklz\quicklz.c">
-      <Filter>fileSystem\quicklz</Filter>
-    </ClCompile>
-    <ClCompile Include="fileSystem\fs.cpp">
-      <Filter>fileSystem</Filter>
-    </ClCompile>
-    <ClCompile Include="serialize\dataBuilder.cpp">
-      <Filter>serialize</Filter>
-    </ClCompile>
-    <ClCompile Include="serialize\jsonProvider.cpp">
-      <Filter>serialize</Filter>
-    </ClCompile>
-    <ClCompile Include="serialize\jsonText.cpp">
-      <Filter>serialize</Filter>
-    </ClCompile>
     <ClCompile Include="metadataConfiguration.cpp" />
     <ClCompile Include="roleHelper.cpp" />
     <ClCompile Include="appDataQuery.cpp" />
@@ -2008,9 +1966,6 @@
     <ClCompile Include="tabularModelDb.cpp" />
     <ClCompile Include="tabularModelRam.cpp" />
     <ClCompile Include="moduleInfo.cpp" />
-    <ClCompile Include="fdatetime.cpp" />
-    <ClCompile Include="fnumber.cpp" />
-    <ClCompile Include="fstring.cpp" />
     <ClCompile Include="compiler\value_res.cpp">
       <Filter>compiler</Filter>
     </ClCompile>
@@ -2281,7 +2236,6 @@
       <Filter>metaCollection</Filter>
     </ClCompile>
     <ClCompile Include="backend_localization.cpp" />
-    <ClCompile Include="formatString.cpp" />
     <ClCompile Include="metaCollection\metaObjectMetadataProperty.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>
@@ -2351,7 +2305,9 @@
     <ClCompile Include="vcs\gitService.cpp">
       <Filter>vcs</Filter>
     </ClCompile>
-    <ClCompile Include="plugin\pluginManager.cpp" />
+    <ClCompile Include="plugin\pluginManager.cpp">
+      <Filter>plugin</Filter>
+    </ClCompile>
     <ClCompile Include="plugin\pluginHost.cpp">
       <Filter>plugin</Filter>
     </ClCompile>
@@ -2421,6 +2377,12 @@
     <ClCompile Include="settings\settingsComposer.cpp">
       <Filter>settings</Filter>
     </ClCompile>
+    <ClCompile Include="temp\tempStorage.cpp">
+      <Filter>temp</Filter>
+    </ClCompile>
+    <ClCompile Include="server\serverConfig.cpp">
+      <Filter>server</Filter>
+    </ClCompile>
     <ClCompile Include="sheetFormat\sheetFormat.cpp">
       <Filter>sheetFormat</Filter>
     </ClCompile>
@@ -2450,6 +2412,9 @@
     <Filter Include="mcp">
       <UniqueIdentifier>{519ca79a-6240-43ae-9637-76d4703e2a93}</UniqueIdentifier>
     </Filter>
+    <Filter Include="rpc">
+      <UniqueIdentifier>{7d3e2b1c-4f6a-4c8e-9b2d-3a1f5e6c7b80}</UniqueIdentifier>
+    </Filter>
     <Filter Include="mcp\tools">
       <UniqueIdentifier>{47f007aa-54f8-4d79-81ac-462ac7fbcd79}</UniqueIdentifier>
     </Filter>
@@ -2467,9 +2432,6 @@
     </Filter>
     <Filter Include="debugger">
       <UniqueIdentifier>{e7188396-0035-47b0-b863-be1ec229b525}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="diagnostics">
-      <UniqueIdentifier>{a1b2c3d4-5e6f-7a8b-9c0d-1e2f3a4b5c6d}</UniqueIdentifier>
     </Filter>
     <Filter Include="moduleManager">
       <UniqueIdentifier>{ac49a1b3-bb42-4b4f-9b17-a6ec169f254f}</UniqueIdentifier>
@@ -2507,18 +2469,6 @@
     <Filter Include="databaseLayer\postgres">
       <UniqueIdentifier>{d30249ca-7a5a-4c3a-a1ec-b642a76dc60b}</UniqueIdentifier>
     </Filter>
-    <Filter Include="fileSystem">
-      <UniqueIdentifier>{abe9471e-5391-4bba-a9f7-6f050759d4b2}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="serialize">
-      <UniqueIdentifier>{3f1c8a64-2d7e-4b19-9c0a-7e5b1a2f6d40}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="fileSystem\lz">
-      <UniqueIdentifier>{b90ba678-9672-4d50-aebb-fac2355d5f67}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="fileSystem\quicklz">
-      <UniqueIdentifier>{2bee2522-1df5-49c5-afa8-21aea5b6ebfd}</UniqueIdentifier>
-    </Filter>
     <Filter Include="databaseLayer\postgres\engine">
       <UniqueIdentifier>{16d7e749-7aed-4b1c-a574-65151ff8df41}</UniqueIdentifier>
     </Filter>
@@ -2546,9 +2496,6 @@
     <Filter Include="metaCollection\table">
       <UniqueIdentifier>{f2dc3d03-c9ee-455c-a66b-fc299a460c86}</UniqueIdentifier>
     </Filter>
-    <Filter Include="metaCollection\partial\list">
-      <UniqueIdentifier>{1b0d2cd0-1dd7-4d9b-a6ad-a7a7151b7ddd}</UniqueIdentifier>
-    </Filter>
     <Filter Include="metaCollection\partial\reference">
       <UniqueIdentifier>{3019c9d7-3be0-4fd4-adca-aede6f885a79}</UniqueIdentifier>
     </Filter>
@@ -2575,6 +2522,9 @@
     </Filter>
     <Filter Include="system\value">
       <UniqueIdentifier>{6c33e170-a787-4450-8345-50e49a8875cf}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="system\value\composition">
+      <UniqueIdentifier>{6fc1b5bc-0884-4cdc-8d16-aa5f9b43e5a1}</UniqueIdentifier>
     </Filter>
     <Filter Include="databaseLayer\firebird\engine">
       <UniqueIdentifier>{7e478872-4863-41fa-a74b-02c3a2f658cf}</UniqueIdentifier>
@@ -2623,6 +2573,12 @@
     </Filter>
     <Filter Include="settings">
       <UniqueIdentifier>{3f7b2c5d-8e14-4a6b-9c02-5d8e7a1b3c4f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="temp">
+      <UniqueIdentifier>{6c2e9a41-7b3d-4f58-a1e6-0d9b4c7f2e35}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="server">
+      <UniqueIdentifier>{4d8a1f63-2c7e-4b95-8e30-7a5c9d1b6f42}</UniqueIdentifier>
     </Filter>
     <Filter Include="sheetFormat">
       <UniqueIdentifier>{8c1d4a92-6f30-4b7e-a58d-2e94c07b6a15}</UniqueIdentifier>
@@ -2757,7 +2713,9 @@
     <ClCompile Include="query\queryLexer.cpp">
       <Filter>query</Filter>
     </ClCompile>
-    <ClCompile Include="query\queryRender.cpp" />
+    <ClCompile Include="query\queryRender.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
     <ClCompile Include="query\queryConstructorModel.cpp">
       <Filter>query</Filter>
     </ClCompile>
@@ -2932,7 +2890,9 @@
     <ClInclude Include="query\queryAST.h">
       <Filter>query</Filter>
     </ClInclude>
-    <ClInclude Include="query\queryRender.h" />
+    <ClInclude Include="query\queryRender.h">
+      <Filter>query</Filter>
+    </ClInclude>
     <ClInclude Include="query\queryConstructorModel.h">
       <Filter>query</Filter>
     </ClInclude>
@@ -3018,12 +2978,6 @@
     <ClCompile Include="databaseLayer\preparedStatement.cpp">
       <Filter>databaseLayer</Filter>
     </ClCompile>
-    <ClCompile Include="diagnostics\journal.cpp">
-      <Filter>diagnostics</Filter>
-    </ClCompile>
-    <ClCompile Include="diagnostics\leakTracker.cpp">
-      <Filter>diagnostics</Filter>
-    </ClCompile>
     <ClCompile Include="eventDispatcher.cpp" />
     <ClCompile Include="homePageDescription.cpp" />
     <ClCompile Include="metaCollection\metaObjectEnum.cpp">
@@ -3056,12 +3010,6 @@
   <ItemGroup>
     <ClInclude Include="appEnv.h" />
     <ClInclude Include="compositionDescription.h" />
-    <ClInclude Include="diagnostics\journal.h">
-      <Filter>diagnostics</Filter>
-    </ClInclude>
-    <ClInclude Include="diagnostics\leakTracker.h">
-      <Filter>diagnostics</Filter>
-    </ClInclude>
     <ClInclude Include="eventDispatcher.h" />
     <ClInclude Include="homePageDescription.h" />
     <ClInclude Include="metaCollection\createRequest.h">
@@ -3096,8 +3044,5 @@
       <Filter>system\value</Filter>
     </ClInclude>
     <ClInclude Include="tabularDataObject.h" />
-    <ClInclude Include="utils\debugTrace.h">
-      <Filter>utils</Filter>
-    </ClInclude>
   </ItemGroup>
 </Project>

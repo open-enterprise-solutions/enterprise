@@ -151,6 +151,10 @@ ibValueModel::~ibValueModel()
 	//
 	// Cheap in the ordinary case: by the time a form closes its portion has long
 	// since landed, and a run that has finished returns from Wait immediately.
+	//
+	// ⚠ AND HERE IS TOO LATE FOR WHAT A SUBCLASS OWNS: a base destructor runs after the derived
+	// parts are gone, so a model whose read walks its own members waits in its OWN destructor
+	// (ibValueDynamicList, ibValueDataComposition). This one is the last line for the rest.
 	CancelFetch();
 
 	// The RAM node storage (ibRamValueStorage) is a member of ibValueModelStorage — its dtor DecRefs the nodes; the
@@ -209,7 +213,7 @@ void ibValueModel::SubmitFetchAsync(std::function<void()> work)
 				ibJobTenancy::Tenant);
 			return;
 		}
-		catch (const ibBackendException&) {
+		catch (const ibCoreException&) {
 			// Nothing to rent — fall through.
 		}
 	}
@@ -568,7 +572,7 @@ bool ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo::SetProp
 }
 
 #include "backend/backend_localization.h"   // ibTranslateString — a column here has no format written on it
-#include "backend/formatString.h"           // ibFormatString — what GetColumnFormat answers with
+#include "core/formatString.h"           // ibFormatString — what GetColumnFormat answers with
 
 const ibFormatString& ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo::GetColumnFormat() const
 {

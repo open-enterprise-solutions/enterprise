@@ -81,7 +81,7 @@ bool ibValueRecordDataObjectConstant::InitializeObject(const ibValueRecordDataOb
 	try {
 		m_constValue = GetConstValue();
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		if (!appData->DesignerMode())
 			throw;
 		return false;
@@ -91,7 +91,7 @@ bool ibValueRecordDataObjectConstant::InitializeObject(const ibValueRecordDataOb
 	try {
 		Compile();
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		if (!appData->DesignerMode())
 			throw;
 		return false;
@@ -166,10 +166,10 @@ ibString ibValueRecordDataObjectConstant::GetString() const
 
 const ibSourceExplorer* ibValueRecordDataObjectConstant::GetSourceExplorer() const
 {
-	m_sourceExplorer.Reset(
+	if (!m_sourceExplorer.Reset(m_metaObject->GetMetaData()->GetFactoryCountChanges(),
 		m_metaObject->GetName(), m_metaObject->GetSynonym(), m_metaObject->GetMetaID(), GetClassType(),
-		false, true
-	);
+		false, true))
+		return &m_sourceExplorer;   // built at this version of the metadata already — read as it is
 
 	m_sourceExplorer.AppendColumn(m_metaObject->GetValueColumn()->GetQueryColumn());
 	return &m_sourceExplorer;

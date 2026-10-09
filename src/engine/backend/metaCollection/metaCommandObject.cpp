@@ -268,7 +268,7 @@ ibValueCommandDataObject::ibValueCommandDataObject(const ibValueMetaObjectComman
 	try {
 		Compile();
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		if (!appData->DesignerMode())
 			throw;
 		return;

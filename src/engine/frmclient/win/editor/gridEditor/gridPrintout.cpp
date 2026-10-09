@@ -1,0 +1,635 @@
+﻿////////////////////////////////////////////////////////////////////////////
+//	Author		: Maxim Kornienko, wxwidgets community
+//	Description : grid printer 
+////////////////////////////////////////////////////////////////////////////
+
+#include "gridPrintout.h"
+
+ibGridEditorPrintout::ibGridEditorPrintout(const wxString& title) : wxPrintout(title)
+{
+	SetStyle(wxGP_SHOW_NONE);
+
+	m_minPage = 1;
+	m_maxPage = 1;
+	m_selPageFrom = 1;
+	m_selPageTo = 1;
+	m_screenScale = 1.0;
+	m_userScale = 1.0;
+	m_topMargin = 50;
+	m_bottomMargin = 50;
+	m_leftMargin = 50;
+	m_rightMargin = 50;
+}
+
+ibGridEditorPrintout::ibGridEditorPrintout(const wxObjectDataPtr<ibBackendSpreadsheetObject>& doc, int style, const wxString& title) : wxPrintout(title)
+{
+	m_doc = doc;
+	SetStyle(style);
+
+	m_minPage = 1;
+	m_maxPage = 1;
+	m_selPageFrom = 1;
+	m_selPageTo = 1;
+	m_screenScale = 1.0;
+	m_userScale = 1.0;
+	m_topMargin = 50;
+	m_bottomMargin = 50;
+	m_leftMargin = 50;
+	m_rightMargin = 50;
+}
+
+void ibGridEditorPrintout::SetStyle(int style)
+{
+	m_style = style;
+
+	m_showCl = false;
+	m_showRl = false;
+	m_showClAlways = false;
+	m_showRlAlways = false;
+
+	if (m_style & wxGP_DEFAULT) {
+		m_showCl = true;
+		m_showRl = true;
+		m_showClAlways = true;
+		m_showRlAlways = true;
+
+		return;
+	}
+	if (m_style & wxGP_SHOW_CL)
+		m_showCl = true;
+	if (m_style & wxGP_SHOW_RL)
+		m_showRl = true;
+	if (m_style & wxGP_SHOW_CL_ALWAYS)
+		m_showClAlways = true;
+	if (m_style & wxGP_SHOW_RL_ALWAYS)
+		m_showRlAlways = true;
+}
+
+int ibGridEditorPrintout::GetStyle() const
+{
+	return m_style;
+}
+
+// A twin over the same document, set the way this one is. Nothing measured is copied - a printout lays its
+// pages out against the DC it is handed, so the twin works that out for itself.
+wxPrintout* ibGridEditorPrintout::Clone() const
+{
+	ibGridEditorPrintout* twin = new ibGridEditorPrintout(m_doc, m_style, GetTitle());
+	twin->m_userScale = m_userScale;
+	twin->m_fitToPageWidth = m_fitToPageWidth;
+	return twin;
+}
+
+// ⭐⭐ PRINT ASKS THE DOCUMENT THE SAME QUESTION THE SCREEN ASKS (Max, 2026-08-28: *"print must
+// simply get the same thing the render gets"*). The document holds the translation too, and it
+// knows how to hand out the string — `ComputeStringValueFromParameters` is that door, and the
+// notifier that fills the grid goes through it (gridEditorDoc, `SetValueAsCustom`).
+//
+// 🛑 PRINTING DID NOT. It called the translator itself, on the RAW cell value, and threw the answer
+// away — and that answer is `false` for anything that is not a localisation envelope, in which case
+// the translator CLEARS the string. So every cell printed as nothing while the same cell on screen
+// read fine: fills and rules on paper, not one character of text.
+wxString ibGridEditorPrintout::CellText(int row, int col) const
+{
+	return m_doc->ComputeStringValueFromParameters(
+		m_doc->GetCellValue(row, col), m_doc->GetCellFillType(row, col));
+}
+
+// ⭐⭐ A PAGE BREAK MAY NOT FALL INSIDE A MERGED CELL (Max, 2026-08-28: *"you have a merged cell and
+// it somehow carries it over, tears it"*). The pagination measured row heights and knew nothing
+// about spans, so a break could land in the middle of one — and then the sheet showed the damage
+// twice: the main cell drew its whole height past the bottom of its page, and on the NEXT page its
+// remaining rows are `CellSpan_Inside`, which the drawing loop skips entirely. A blank band.
+//
+// A covered cell carries the NEGATIVE offset to the cell that owns it (wxGrid's convention), so the
+// place the break belongs is simply that owner: the whole block moves to the next page.
+int ibGridEditorPrintout::RowBreakAt(int row) const
+{
+	int highest = row;
+	for (int col = 0; col < m_doc->GetNumberCols(); col++) {
+		int cell_rows = 0, cell_cols = 0;
+		if (m_doc->GetCellSize(row, col, &cell_rows, &cell_cols) == ibGrid::CellSpan_Inside
+		    && row + cell_rows < highest)
+			highest = row + cell_rows;
+	}
+	return highest;
+}
+
+int ibGridEditorPrintout::ColBreakAt(int col) const
+{
+	int leftmost = col;
+	for (int row = 0; row < m_doc->GetNumberRows(); row++) {
+		int cell_rows = 0, cell_cols = 0;
+		if (m_doc->GetCellSize(row, col, &cell_rows, &cell_cols) == ibGrid::CellSpan_Inside
+		    && col + cell_cols < leftmost)
+			leftmost = col + cell_cols;
+	}
+	return leftmost;
+}
+
+int ibGridEditorPrintout::RowSize(int row) const
+{
+	if (row >= 0 && row < static_cast<int>(m_rowHeights.size()))
+		return m_rowHeights[row];
+	return m_doc->GetRowSize(row);
+}
+
+bool ibGridEditorPrintout::OnPrintPage(int page)
+{
+	wxDC* dc = GetDC();
+
+	if (dc == nullptr)
+		return false;
+
+	ArrangePage(dc);
+
+	dc->SetUserScale(m_overallScale, m_overallScale);
+	// The top-left margin, on the device: the printer's resolution, not the fitting (ArrangePage).
+	dc->SetDeviceOrigin(wxRound(m_leftMargin * m_screenScale), wxRound(m_topMargin * m_screenScale));
+
+	// 🛑 NO CLIPPING REGION HERE. Tried (2026-09-22) to keep a torn merged cell inside the margins, and the
+	// page came out cut along a DIAGONAL: every cell's text goes through a wxDCClipper
+	// (ibGrid::DrawTextRectangle), which puts back the region it found by reading GetClippingBox and
+	// setting it again - a round trip through logical units that, under the print scale, rounds down each
+	// time. So the region shrank a little with every cell, and the rows down the page lost more and more
+	// on the right. A torn block is kept inside its band where it is drawn instead (DrawPage).
+	return DrawPage(dc, page);
+}
+
+// ⚠ THE PAGE HAS TO EXIST. This said yes to any number at all, while `DrawPage` indexes
+// `m_colsPerPage` by it without a check — the bound was stated in one place and trusted in another.
+bool ibGridEditorPrintout::HasPage(int page)
+{
+	return page >= m_minPage && page <= m_maxPage;
+}
+
+void ibGridEditorPrintout::GetPageInfo(int* minPage, int* maxPage, int* selPageFrom, int* selPageTo)
+{
+	*minPage = m_minPage;
+	*maxPage = m_maxPage;
+	*selPageFrom = m_selPageFrom;
+	*selPageTo = m_selPageTo;
+}
+
+bool ibGridEditorPrintout::DrawPage(wxDC* dc, int page)
+{
+	int columnPages = m_colsPerPage.Count();
+
+	int colIndex, rowIndex;
+
+	page--;
+
+	colIndex = page % columnPages;
+	rowIndex = page / columnPages;
+
+	int toCol;
+	if (colIndex == m_colsPerPage.Count() - 1)
+		toCol = m_doc->GetNumberCols();
+	else
+		toCol = m_colsPerPage.Item(colIndex + 1);
+	int toRow;
+	if (rowIndex == m_rowsPerPage.Count() - 1)
+		toRow = m_doc->GetNumberRows();
+	else
+		toRow = m_rowsPerPage.Item(rowIndex + 1);
+
+	int countWidth = 0;
+	int countHeight = 0;
+
+	int cellInitialH = 0;
+	int cellInitialW = 0;
+
+	//draw column headers if requested //
+	if ((m_showCl && rowIndex == 0) || m_showClAlways) {
+		if ((m_showRl && colIndex == 0) || m_showRlAlways) {
+			dc->SetBrush(*wxLIGHT_GREY_BRUSH);
+			dc->DrawRectangle(countWidth, 0, m_doc->GetRowLabelSize(), m_doc->GetColLabelSize());
+			countWidth += m_doc->GetRowLabelSize();
+		}
+		for (int i = m_colsPerPage.Item(colIndex); i < toCol; i++) {
+			dc->SetBrush(*wxLIGHT_GREY_BRUSH);
+			wxString str = m_doc->GetColLabelValue(i);
+			wxRect rect = wxRect(countWidth, 0, m_doc->GetColSize(i), m_doc->GetColLabelSize());
+			wxFont fnt = m_doc->GetLabelFont();
+			DrawTextInRectangle(*dc, str, rect, fnt, *wxBLACK, wxALIGN_CENTER, wxALIGN_CENTER);
+			countWidth += m_doc->GetColSize(i);
+		}
+
+		cellInitialH = m_doc->GetColLabelSize();
+	}
+	//////////////////////////////////////
+
+	//draw row headers if requested //
+	countHeight = cellInitialH;
+	if ((m_showRl && colIndex == 0) || m_showRlAlways) {
+		for (int i = m_rowsPerPage.Item(rowIndex); i < toRow; i++) {
+			dc->SetBrush(*wxLIGHT_GREY_BRUSH);
+			wxString str = m_doc->GetRowLabelValue(i);
+			wxRect rct = wxRect(0, countHeight, m_doc->GetRowLabelSize(), RowSize(i));
+			wxFont fnt = m_doc->GetLabelFont();
+			DrawTextInRectangle(*dc, str, rct, fnt, *wxBLACK, wxALIGN_CENTER, wxALIGN_CENTER);
+			countHeight += RowSize(i);
+		}
+		cellInitialW = m_doc->GetRowLabelSize();
+	}
+	
+	////////////////////////////////
+
+	// Draw cell content //
+	countHeight = cellInitialH;
+	
+	for (int row = m_rowsPerPage.Item(rowIndex); row < toRow; row++) {
+		
+		countWidth = cellInitialW;
+
+		for (int col = m_colsPerPage.Item(colIndex); col < toCol; col++) {
+			
+			int cell_rows, cell_cols;
+			if (m_doc->GetCellSize(row, col, &cell_rows, &cell_cols) == ibGrid::CellSpan_Main) {
+			
+				int colSize = 0, rowSize = 0;
+				
+				// ⚠ ONLY AS FAR AS THIS PAGE GOES. A block wider or taller than the page is torn by the
+				// pagination (OnPreparePrinting), and drawn whole from here it would run through the
+				// margin to the paper's edge; the part on this page is the part inside its band.
+				for (int i = col; i < wxMin(col + cell_cols, toCol); i++)
+					colSize += m_doc->GetColSize(i);
+
+				for (int i = row; i < wxMin(row + cell_rows, toRow); i++)
+					rowSize += RowSize(i);
+				
+				wxRect rect(countWidth, countHeight, colSize, rowSize);
+				
+				dc->SetBrush(m_doc->GetCellBackgroundColour(row, col));
+				dc->SetPen(*wxTRANSPARENT_PEN);
+				dc->DrawRectangle(rect.x + 1, rect.y, rect.width - 1, rect.height);
+				
+				int horz, vert;
+				m_doc->GetCellAlignment(row, col, &horz, &vert);
+
+				DrawTextInRectangle(*dc, CellText(row, col),
+					rect,
+					m_doc->GetCellFont(row, col),
+					m_doc->GetCellTextColour(row, col),
+					horz, vert,
+					m_doc->GetCellTextOrient(row, col),
+					m_doc->GetCellFitMode(row, col) == ibSpreadsheetCellDescription::ibFitMode::Mode_Wrap
+				);
+			}
+			else if (m_doc->GetCellSize(row, col, &cell_rows, &cell_cols) == ibGrid::CellSpan_None) {
+				
+				wxRect rect(countWidth, countHeight, m_doc->GetColSize(col), RowSize(row));
+				
+				dc->SetBrush(m_doc->GetCellBackgroundColour(row, col));
+				dc->SetPen(*wxTRANSPARENT_PEN);
+				dc->DrawRectangle(rect.x + 1, rect.y, rect.width - 1, rect.height);
+				
+				int horz, vert;
+				m_doc->GetCellAlignment(row, col, &horz, &vert);
+
+				DrawTextInRectangle(*dc, CellText(row, col),
+					rect,
+					m_doc->GetCellFont(row, col),
+					m_doc->GetCellTextColour(row, col),
+					horz, vert,
+					m_doc->GetCellTextOrient(row, col),
+					m_doc->GetCellFitMode(row, col) == ibSpreadsheetCellDescription::ibFitMode::Mode_Wrap
+				);
+			}
+
+			countWidth += m_doc->GetColSize(col);
+		}
+
+		countHeight += RowSize(row);
+	}
+
+	// Draw border content //
+	countHeight = cellInitialH;
+
+	for (int row = m_rowsPerPage.Item(rowIndex); row < toRow; row++) {
+
+		countWidth = cellInitialW;
+
+		for (int col = m_colsPerPage.Item(colIndex); col < toCol; col++) {
+
+			int cell_rows, cell_cols;
+			if (m_doc->GetCellSize(row, col, &cell_rows, &cell_cols) == ibGrid::CellSpan_Main) {
+
+				int colSize = 0, rowSize = 0;
+
+				// …and its rules the same - see the fill pass above.
+				for (int i = col; i < wxMin(col + cell_cols, toCol); i++)
+					colSize += m_doc->GetColSize(i);
+
+				for (int i = row; i < wxMin(row + cell_rows, toRow); i++)
+					rowSize += RowSize(i);
+
+				wxRect rect(countWidth, countHeight, colSize, rowSize);
+
+				ibSpreadsheetBorderDescription borderLeft = m_doc->GetCellBorderLeft(row, col);
+				if (borderLeft.m_style != wxPenStyle::wxPENSTYLE_TRANSPARENT) {
+					dc->SetPen(wxPen(borderLeft.m_colour, borderLeft.m_width, borderLeft.m_style));
+					dc->DrawLine(rect.GetLeft() + 1, rect.GetTop(), rect.GetLeft() + 1, rect.GetBottom() + 1);
+				}
+
+				ibSpreadsheetBorderDescription borderRight = m_doc->GetCellBorderRight(row, col);
+				if (borderRight.m_style != wxPenStyle::wxPENSTYLE_TRANSPARENT) {
+					dc->SetPen(wxPen(borderLeft.m_colour, borderRight.m_width, borderRight.m_style));
+					dc->DrawLine(rect.GetRight() + 2, rect.GetTop(), rect.GetRight() + 2, rect.GetBottom() + 1);
+				}
+
+				ibSpreadsheetBorderDescription borderTop = m_doc->GetCellBorderTop(row, col);
+				if (borderTop.m_style != wxPenStyle::wxPENSTYLE_TRANSPARENT) {
+					dc->SetPen(wxPen(borderTop.m_colour, borderTop.m_width, borderTop.m_style));
+					dc->DrawLine(rect.GetLeft() + 1 , rect.GetTop(), rect.GetRight() + 2, rect.GetTop());
+				}
+
+				ibSpreadsheetBorderDescription borderBottom = m_doc->GetCellBorderBottom(row, col);
+				if (borderBottom.m_style != wxPenStyle::wxPENSTYLE_TRANSPARENT) {
+					dc->SetPen(wxPen(borderBottom.m_colour, borderBottom.m_width, borderBottom.m_style));
+					dc->DrawLine(rect.GetLeft() + 1, rect.GetBottom() + 1, rect.GetRight() + 2, rect.GetBottom() + 1);
+				}
+			}
+			else if (m_doc->GetCellSize(row, col, &cell_rows, &cell_cols) == ibGrid::CellSpan_None) {
+
+				wxRect rect(countWidth, countHeight, m_doc->GetColSize(col), RowSize(row));
+
+				ibSpreadsheetBorderDescription borderLeft = m_doc->GetCellBorderLeft(row, col);
+				if (borderLeft.m_style != wxPenStyle::wxPENSTYLE_TRANSPARENT) {
+					dc->SetPen(wxPen(borderLeft.m_colour, borderLeft.m_width, borderLeft.m_style));
+					dc->DrawLine(rect.GetLeft() + 1, rect.GetTop(), rect.GetLeft() + 1, rect.GetBottom() + 1);
+				}
+
+				ibSpreadsheetBorderDescription borderRight = m_doc->GetCellBorderRight(row, col);
+				if (borderRight.m_style != wxPenStyle::wxPENSTYLE_TRANSPARENT) {
+					dc->SetPen(wxPen(borderLeft.m_colour, borderRight.m_width, borderRight.m_style));
+					dc->DrawLine(rect.GetRight() + 2, rect.GetTop(), rect.GetRight() + 2, rect.GetBottom() + 1);
+				}
+
+				ibSpreadsheetBorderDescription borderTop = m_doc->GetCellBorderTop(row, col);
+				if (borderTop.m_style != wxPenStyle::wxPENSTYLE_TRANSPARENT) {
+					dc->SetPen(wxPen(borderTop.m_colour, borderTop.m_width, borderTop.m_style));
+					dc->DrawLine(rect.GetLeft() + 1, rect.GetTop(), rect.GetRight() + 2, rect.GetTop());
+				}
+
+				ibSpreadsheetBorderDescription borderBottom = m_doc->GetCellBorderBottom(row, col);
+				if (borderBottom.m_style != wxPenStyle::wxPENSTYLE_TRANSPARENT) {
+					dc->SetPen(wxPen(borderBottom.m_colour, borderBottom.m_width, borderBottom.m_style));
+					dc->DrawLine(rect.GetLeft() + 1, rect.GetBottom() + 1, rect.GetRight() + 2, rect.GetBottom() + 1);
+				}
+			}
+
+			countWidth += m_doc->GetColSize(col);
+		}
+
+		countHeight += RowSize(row);
+	}
+
+	////////////////////////////////
+
+	//dc->SetBrush(*wxTRANSPARENT_BRUSH);
+	//dc->SetPen(*wxBLACK_PEN);
+	//dc->DrawRectangle(1, 1, m_maxWidth, m_maxHeight);
+
+	return true;
+}
+
+void ibGridEditorPrintout::OnPreparePrinting()
+{
+	wxDC* dc = GetDC();
+	if (dc == nullptr)
+		return;   // …as OnPrintPage already checks; this dereferenced it regardless
+
+	ArrangePage(dc);
+
+	// ⭐ THE ROWS AT THE HEIGHTS THE SCREEN SHOWS THEM AT, not the default each row without a height of its
+	// own stores: a caption in a larger font or wrapped over several lines got 15 on paper and ran over the
+	// row below. Measured on a screen DC — the printout's unit is a screen pixel (CalculateScale), and a
+	// script prints a sheet no grid has shown (PrintSpreadsheetDocument), so there is no grid to ask.
+	{
+		wxScreenDC screen;
+		const wxString langCode = m_doc->GetLangCode();
+		m_rowHeights.resize(m_doc->GetNumberRows());
+		for (int row = 0; row < m_doc->GetNumberRows(); row++)
+			m_rowHeights[row] = ibSpreadsheetRowHeight(*m_doc, row, screen, langCode);
+	}
+
+	long widthCount = 0, heightCount = 0;
+
+	//Calculate pages per columns
+	m_colsPerPage.Clear();
+	m_colsPerPage.Add(0);
+
+	if (m_showRl || m_showRlAlways)
+		widthCount = m_doc->GetRowLabelSize();
+
+	// 🛑⭐ THE WHOLE SHEET IS WALKED, AND THE EXTENT MARKER IS NOT A BREAK (2026-09-22).
+	//
+	// `m_colBrakeAt` holds two kinds of thing: real page breaks (AddColBrake) and an EXTENT MARKER that
+	// SetColBrake writes over the list's maximum — PutArea stamps it on every put
+	// (backend_spreadsheet.cpp), and typing a value stamps it too (gridext.cpp, "set new brake pos").
+	// ⚠ The marker is the LAST column of the content, not the one after it: SetColBrake caps it at
+	// GetNumberCols() - 1.
+	//
+	// The walk used to stop BEFORE the marker, so the last column was never measured — while the last
+	// band draws to GetNumberCols(). Nothing sent it to a page of its own when it did not fit, and
+	// fitting to the page's width left it out of the width it fitted: the rest filled the room between
+	// the margins exactly, and the last column ran over the right margin to the paper's edge (a
+	// register's list, 2026-09-22 — a margin on the left, none on the right).
+	//
+	// It stopped there because it could not tell the marker from a break: walking past it broke a page
+	// before the last column of every sheet (2026-08-31: a one-page report printed as four, reverted).
+	// So the walk goes to the end of the sheet and the list's maximum is not taken as a break — it IS the
+	// end of the sheet, by design (Max, 2026-09-22: *"the last page break is the last row — you do not
+	// need to work out where the content ends"*), which is why a break of one's own belongs above it and
+	// the door that places one keeps it there (sheet_band).
+	const int colExtent = m_doc->GetMaxColBrake();
+	for (int i = 0; i < m_doc->GetNumberCols(); i++) {
+		const int size = m_doc->GetColSize(i);
+		const bool overflows = (widthCount + size) > m_maxWidth;
+		const bool asked = m_colsPerPage.Last() != i && i != colExtent && m_doc->IsColBrake(i);
+
+		if (overflows || asked) {
+			// Not here if that tears a merged cell — the block goes over whole.
+			int at = ColBreakAt(i);
+
+			// 🛑 …UNLESS THE BLOCK IS WIDER THAN THE PAGE, and then it is torn here, as a spreadsheet tears
+			// it. Moved to its owner, the break landed where the page already began and was not taken at
+			// all: a title merged across a table too wide for the page kept every column in one band,
+			// and the table ran off the paper on a sheet counted as one page (a register's list,
+			// 2026-09-22 — "it cuts it off, and there should be two pages"). What it tears is clipped to
+			// the page when drawn (OnPrintPage).
+			if (at <= m_colsPerPage.Last())
+				at = i;
+
+			// ⚠ AND ONLY IF THE BREAK MOVES. A column wider than the whole sheet overflows the moment
+			// it starts, so breaking before it puts it at the head of the next page where it overflows
+			// again — the old loop added the same index forever and the page array grew without end.
+			// A column that cannot share a page gets one to itself.
+			if (at > m_colsPerPage.Last()) {
+				m_colsPerPage.Add(at);
+				widthCount = m_showRlAlways ? m_doc->GetRowLabelSize() : 0;
+				i = at - 1;         // …and the walk resumes AT the break
+				continue;
+			}
+		}
+		widthCount += size;
+	}
+
+	//Calculate pager per rows
+	m_rowsPerPage.Clear();
+	m_rowsPerPage.Add(0);
+
+	if (m_showCl || m_showClAlways)
+		heightCount = m_doc->GetColLabelSize();
+
+	// Same down the page — see the note on the column pass above: the last row is measured too.
+	const int rowExtent = m_doc->GetMaxRowBrake();
+	for (int i = 0; i < m_doc->GetNumberRows(); i++) {
+		const int size = RowSize(i);
+		const bool overflows = (heightCount + size) > m_maxHeight;
+		const bool asked = m_rowsPerPage.Last() != i && i != rowExtent && m_doc->IsRowBrake(i);
+
+		if (overflows || asked) {
+			int at = RowBreakAt(i);
+			if (at <= m_rowsPerPage.Last())   // a block taller than the page is torn - see the column pass
+				at = i;
+			if (at > m_rowsPerPage.Last()) {
+				m_rowsPerPage.Add(at);
+				heightCount = m_showClAlways ? m_doc->GetColLabelSize() : 0;
+				i = at - 1;
+				continue;
+			}
+		}
+		heightCount += size;
+	}
+
+	m_maxPage = m_rowsPerPage.GetCount() * m_colsPerPage.GetCount();
+}
+
+void ibGridEditorPrintout::CalculateScale(wxDC* dc)
+{
+	// You might use THIS code to set the printer DC to roughly
+	// reflect the screen text size. This page also draws lines of
+	// actual length 5cm on the page.
+
+	// Get the logical pixels per inch of screen and printer
+	int ppiScreenX, ppiScreenY;
+	GetPPIScreen(&ppiScreenX, &ppiScreenY);
+	int ppiPrinterX, ppiPrinterY;
+	GetPPIPrinter(&ppiPrinterX, &ppiPrinterY);
+
+	// This scales the DC so that the printout roughly represents the
+	// the screen scaling.
+	float scale = (float)((float)ppiPrinterX / (float)ppiScreenX);
+
+	// Now we have to check in case our real page size is reduced
+	// (e.g. because we're drawing to a print preview memory DC)
+	int pageWidth, pageHeight;
+	int w, h;
+	dc->GetSize(&w, &h);
+	GetPageSizePixels(&pageWidth, &pageHeight);
+
+	// If printer pageWidth == current DC width, then this doesn't
+	// change. But w might be the preview bitmap width,
+	// so scale down.
+	float screenScale = scale * (float)(w / (float)pageWidth);
+
+	m_screenScale = screenScale;
+}
+
+void ibGridEditorPrintout::SetUserScale(float scale)
+{
+	m_userScale = scale;
+	m_overallScale = m_screenScale * m_userScale * m_fitScale;
+}
+
+// ⭐⭐ ONE LAYOUT FOR BOTH HALVES. The pagination and the drawing each worked the scale out for themselves,
+// and the margin was a literal in two places — 50 as the origin, 100 off the room — that the user scale
+// pulled in with it, while the printout's own four margins (m_leftMargin …, 50 each since the
+// constructors) were read by nobody. With a scale of 1 that never showed. Fitting the page's width IS a
+// scale below 1, and then a table shrunk to the page brought its margins in too: less room than the
+// pagination had counted on, on a page that no longer looked like the others. Now the four margins are
+// READ — in the sheet's units, scaled to the printer's resolution and NOT by the fitting — and the room is
+// what lies between them, in whatever units the scale makes; at a scale of 1 it is the same page as
+// before (w / s - 100).
+void ibGridEditorPrintout::ArrangePage(wxDC* dc)
+{
+	CalculateScale(dc);
+
+	int width = 0, height = 0;
+	dc->GetSize(&width, &height);
+
+	const double roomWidth  = width  - (m_leftMargin + m_rightMargin) * static_cast<double>(m_screenScale);
+	const double roomHeight = height - (m_topMargin + m_bottomMargin) * static_cast<double>(m_screenScale);
+
+	// FIT: only ever smaller. A table narrower than the page is left at its size - blown up to the
+	// width it would print in type nobody chose.
+	m_fitScale = 1.0f;
+	const int content = m_fitToPageWidth ? ContentWidth() : 0;
+	if (content > 0) {
+		const double contentOnDevice = content * m_screenScale * m_userScale;
+		if (contentOnDevice > roomWidth)
+			m_fitScale = static_cast<float>(roomWidth / contentOnDevice);
+	}
+
+	m_overallScale = m_screenScale * m_userScale * m_fitScale;
+
+	m_maxWidth  = static_cast<int>(roomWidth / m_overallScale);
+	m_maxHeight = static_cast<int>(roomHeight / m_overallScale);
+
+	// ⚠ …and the room fitted to is the content's own width, not one unit less: a division that rounds down
+	// would leave the last column a unit over the edge and send it to a page of its own - the one thing
+	// fitting was asked to prevent.
+	if (m_fitScale < 1.0f && m_maxWidth < content)
+		m_maxWidth = content;
+}
+
+int ibGridEditorPrintout::ContentWidth() const
+{
+	// The same extent the column walk in OnPreparePrinting runs to — the whole sheet, its last column
+	// included (see the note on the walk there).
+	int width = (m_showRl || m_showRlAlways) ? m_doc->GetRowLabelSize() : 0;
+	for (int col = 0; col < m_doc->GetNumberCols(); col++)
+		width += m_doc->GetColSize(col);
+	return width;
+}
+
+void ibGridEditorPrintout::DrawTextInRectangle(wxDC& dc, const wxString& strValue, wxRect& rect, const wxFont& font, const wxColour& fontClr,
+	int horizAlign, int vertAlign, int textOrientation, bool wrap)
+{
+	wxArrayString lines, naturalLines;
+	ibGridEditor::ParseLines(strValue, naturalLines);
+
+	rect.x += 2;
+	rect.width -= 2;
+
+	// 🛑 THIS PASS EXISTED AND WAS SWITCHED OFF, and the reason it had to be is that it had nothing
+	// to ask: it wrapped EVERY cell, because the placement of the one being drawn was not reachable
+	// from here. So the machinery sat commented out with its measuring variables deleted around it.
+	// Now the caller knows, and the pass runs for the cells that asked for it.
+	//
+	// ⚠ The font goes on the dc BEFORE any measuring - a width measured in the wrong face wraps in
+	// the wrong place, and that is invisible until the paper comes out.
+	dc.SetFont(font);
+
+	if (wrap) {
+		for (const wxString& one : naturalLines)
+			ibGridEditor::WrapTextLine(dc, one, rect.width, lines);
+	}
+	else {
+		lines = naturalLines;
+	}
+
+	dc.SetTextBackground(fontClr);
+	dc.SetTextForeground(fontClr);
+
+	dc.SetFont(font);
+
+	ibGridEditor::DrawTextRectangle(dc,
+		lines, rect, horizAlign, vertAlign, textOrientation);
+}
+
+// (GetTextLines is gone: its live body added one line and its wrapping pass had been commented out
+//  for want of a way to ask whether the cell wanted wrapping. Both questions are answered above now,
+//  and the splitting itself is ibGrid::WrapTextLine, shared with the screen.)

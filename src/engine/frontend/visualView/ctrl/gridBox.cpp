@@ -1,5 +1,5 @@
 #include "gridBox.h"
-#include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
+#include "core/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "backend/system/value/valueDataComposition.h"   // the source that turns this box into a report
 #include "frontend/win/dlgs/settings/savedSettings.h"    // the setting marked "restore on open" goes on here
 #include "frontend/docView/templates/docViewSpreadsheet.h"   // the document it holds, and its view
@@ -215,7 +215,10 @@ bool ibValueGridBox::WriteData(ibDataNode& node) const
 {
 	node.SetProperty(m_propertySource->GetName(), m_propertySource->GetNodeValue());
 
-	if (m_spreadsheetModel) {
+	// ⭐ THE SHEET IS THE CONTROL'S ONLY WHEN NOTHING IS BOUND — the one a designer typed in (HasValueInControl). A bound
+	// box shows what its source holds — a report's output, an attribute's document — taken again when the form opens
+	// (RefreshModel), so writing it would keep a copy nobody reads back.
+	if (m_spreadsheetModel && HasValueInControl()) {
 		ibDataValue spreadsheet;
 		ibSpreadsheetDescriptionMemory::WriteNode(spreadsheet,
 			m_spreadsheetModel->GetSpreadsheetDocument()->GetSpreadsheetDesc());

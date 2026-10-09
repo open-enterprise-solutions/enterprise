@@ -1,6 +1,6 @@
 #include "eventAction.h"
 #include "backend/propertyManager/property/variant/variantAction.h"
-#include "backend/serialize/dataBuilder.h"   // ibDataValue — node value (Binary, transitional)
+#include "core/serialize/dataBuilder.h"   // ibDataValue — node value (Binary, transitional)
 
 
 //////////////////////////////////////////////////////////////////

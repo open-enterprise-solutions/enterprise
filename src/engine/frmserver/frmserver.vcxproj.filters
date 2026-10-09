@@ -1,0 +1,602 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="client">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f4001}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="docView">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f4002}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="docView\templates">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f4008}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="mcp">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f4003}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="mcp\tools">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f400b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="schema">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f4009}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="schema\runtime">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f400a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="settings">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f4004}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="visualView">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f4005}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="visualView\ctrl">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f4006}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="visualView\layers">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f4007}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f400c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\dlgs">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f400d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\dlgs\settings">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f400e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\dlgs\settings\list">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f400f}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="frmserver.cpp" />
+    <ClCompile Include="client\clientChildFrame.cpp">
+      <Filter>client</Filter>
+    </ClCompile>
+    <ClCompile Include="client\clientFrame.cpp">
+      <Filter>client</Filter>
+    </ClCompile>
+    <ClCompile Include="client\clientFrameDesigner.cpp">
+      <Filter>client</Filter>
+    </ClCompile>
+    <ClCompile Include="client\clientFrameRuntime.cpp">
+      <Filter>client</Filter>
+    </ClCompile>
+    <ClCompile Include="client\clientHost.cpp">
+      <Filter>client</Filter>
+    </ClCompile>
+    <ClCompile Include="client\clientInstance.cpp">
+      <Filter>client</Filter>
+    </ClCompile>
+    <ClCompile Include="client\clientMenu.cpp">
+      <Filter>client</Filter>
+    </ClCompile>
+    <ClCompile Include="client\clientPatch.cpp">
+      <Filter>client</Filter>
+    </ClCompile>
+    <ClCompile Include="client\clientSession.cpp">
+      <Filter>client</Filter>
+    </ClCompile>
+    <ClCompile Include="docView\commandProcessor.cpp">
+      <Filter>docView</Filter>
+    </ClCompile>
+    <ClCompile Include="docView\docManager.cpp">
+      <Filter>docView</Filter>
+    </ClCompile>
+    <ClCompile Include="docView\docManagerDesigner.cpp">
+      <Filter>docView</Filter>
+    </ClCompile>
+    <ClCompile Include="docView\docManagerRuntime.cpp">
+      <Filter>docView</Filter>
+    </ClCompile>
+    <ClCompile Include="docView\docView.cpp">
+      <Filter>docView</Filter>
+    </ClCompile>
+    <ClCompile Include="docView\templates\docViewAuditLog.cpp">
+      <Filter>docView\templates</Filter>
+    </ClCompile>
+    <ClCompile Include="docView\templates\docViewDataProcessorFile.cpp">
+      <Filter>docView\templates</Filter>
+    </ClCompile>
+    <ClCompile Include="docView\templates\docViewDataReportFile.cpp">
+      <Filter>docView\templates</Filter>
+    </ClCompile>
+    <ClCompile Include="docView\templates\docViewHelp.cpp">
+      <Filter>docView\templates</Filter>
+    </ClCompile>
+    <ClCompile Include="docView\templates\docViewHomePage.cpp">
+      <Filter>docView\templates</Filter>
+    </ClCompile>
+    <ClCompile Include="docView\templates\docViewSpreadsheet.cpp">
+      <Filter>docView\templates</Filter>
+    </ClCompile>
+    <ClCompile Include="docView\templates\docViewText.cpp">
+      <Filter>docView\templates</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolProtocol.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="schema\about.cpp">
+      <Filter>schema</Filter>
+    </ClCompile>
+    <ClCompile Include="schema\activeUser.cpp">
+      <Filter>schema</Filter>
+    </ClCompile>
+    <ClCompile Include="schema\clientSchema.cpp">
+      <Filter>schema</Filter>
+    </ClCompile>
+    <ClCompile Include="schema\runtime\allFunctions.cpp">
+      <Filter>schema\runtime</Filter>
+    </ClCompile>
+    <ClCompile Include="schema\runtime\sections.cpp">
+      <Filter>schema\runtime</Filter>
+    </ClCompile>
+    <ClCompile Include="settings\formSettings.cpp">
+      <Filter>settings</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\choiceRequest.cpp">
+      <Filter>visualView</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\controlEnum.cpp">
+      <Filter>visualView</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\layerObject.cpp">
+      <Filter>visualView</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\visualHost.cpp">
+      <Filter>visualView</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\visualHostDocView.cpp">
+      <Filter>visualView</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\formEditor.cpp">
+      <Filter>win\dlgs</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\generation.cpp">
+      <Filter>win\dlgs</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\settings\savedSettings.cpp">
+      <Filter>win\dlgs\settings</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\settings\list\listSettings.cpp">
+      <Filter>win\dlgs\settings\list</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\layers\commandBar.cpp">
+      <Filter>visualView\layers</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\layers\commandReceiver.cpp">
+      <Filter>visualView\layers</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\boxsizer.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\boxsizer_res.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\button.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\buttonEvent.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\button_res.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\chartBox.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\chartBox_res.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\checkbox.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\checkboxEvent.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\checkboxProperty.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\checkbox_res.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\choice.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\combobox.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\control.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\controlProperty.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\form.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\formAction.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\formAttribute.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\formAttributeProperty.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\formCommand.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\formControl.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\formFactory.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\formMem.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\formObject.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\formVisualHost.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\form_res.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\frame.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\frameEvent.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\frameID.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\frameProperty.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\gauge.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\gauge_res.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\gridBox.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\gridBoxAction.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\gridBoxDetail.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\gridBoxEvent.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\gridBoxProperty.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\gridBoxSource.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\gridBox_res.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\gridsizer.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\gridsizer_res.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\htmlBox.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\htmlBox_res.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\itemsizer.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\listbox.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\notebook.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\notebookEvent.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\notebookPage.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\notebookPage_res.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\notebook_res.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\radiobutton.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\radiobutton_res.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\sizer.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\slider.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\slider_res.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\staticboxsizer.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\staticboxsizer_res.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\staticline.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\staticline_res.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\statictext.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\statictextEvent.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\statictext_res.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\tableBox.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\tableBoxAction.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\tableBoxColumn.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\tableBoxColumnEvent.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\tableBoxColumnGroup.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\tableBoxColumnGroup_res.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\tableBoxColumnProperty.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\tableBoxColumn_res.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\tableBoxProperty.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\tableBox_res.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\textBox.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\textBox_res.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\textctrl.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\textctrlEvent.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\textctrlProperty.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\textctrl_res.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\typeControl.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\window.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\wrapsizer.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\wrapsizer_res.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="frmserver.h" />
+    <ClInclude Include="client\clientChildFrame.h">
+      <Filter>client</Filter>
+    </ClInclude>
+    <ClInclude Include="client\clientFrame.h">
+      <Filter>client</Filter>
+    </ClInclude>
+    <ClInclude Include="client\clientFrameDesigner.h">
+      <Filter>client</Filter>
+    </ClInclude>
+    <ClInclude Include="client\clientFrameRuntime.h">
+      <Filter>client</Filter>
+    </ClInclude>
+    <ClInclude Include="client\clientHost.h">
+      <Filter>client</Filter>
+    </ClInclude>
+    <ClInclude Include="client\clientInstance.h">
+      <Filter>client</Filter>
+    </ClInclude>
+    <ClInclude Include="client\clientMenu.h">
+      <Filter>client</Filter>
+    </ClInclude>
+    <ClInclude Include="client\clientPatch.h">
+      <Filter>client</Filter>
+    </ClInclude>
+    <ClInclude Include="client\clientSession.h">
+      <Filter>client</Filter>
+    </ClInclude>
+    <ClInclude Include="docView\commandProcessor.h">
+      <Filter>docView</Filter>
+    </ClInclude>
+    <ClInclude Include="docView\docCommand.h">
+      <Filter>docView</Filter>
+    </ClInclude>
+    <ClInclude Include="docView\docManager.h">
+      <Filter>docView</Filter>
+    </ClInclude>
+    <ClInclude Include="docView\docManagerDesigner.h">
+      <Filter>docView</Filter>
+    </ClInclude>
+    <ClInclude Include="docView\docManagerRuntime.h">
+      <Filter>docView</Filter>
+    </ClInclude>
+    <ClInclude Include="docView\docView.h">
+      <Filter>docView</Filter>
+    </ClInclude>
+    <ClInclude Include="docView\templates\docViewAuditLog.h">
+      <Filter>docView\templates</Filter>
+    </ClInclude>
+    <ClInclude Include="docView\templates\docViewDataProcessorFile.h">
+      <Filter>docView\templates</Filter>
+    </ClInclude>
+    <ClInclude Include="docView\templates\docViewDataReportFile.h">
+      <Filter>docView\templates</Filter>
+    </ClInclude>
+    <ClInclude Include="docView\templates\docViewHelp.h">
+      <Filter>docView\templates</Filter>
+    </ClInclude>
+    <ClInclude Include="docView\templates\docViewHomePage.h">
+      <Filter>docView\templates</Filter>
+    </ClInclude>
+    <ClInclude Include="docView\templates\docViewSpreadsheet.h">
+      <Filter>docView\templates</Filter>
+    </ClInclude>
+    <ClInclude Include="docView\templates\docViewText.h">
+      <Filter>docView\templates</Filter>
+    </ClInclude>
+    <ClInclude Include="schema\about.h">
+      <Filter>schema</Filter>
+    </ClInclude>
+    <ClInclude Include="schema\activeUser.h">
+      <Filter>schema</Filter>
+    </ClInclude>
+    <ClInclude Include="schema\clientSchema.h">
+      <Filter>schema</Filter>
+    </ClInclude>
+    <ClInclude Include="schema\runtime\allFunctions.h">
+      <Filter>schema\runtime</Filter>
+    </ClInclude>
+    <ClInclude Include="schema\runtime\sections.h">
+      <Filter>schema\runtime</Filter>
+    </ClInclude>
+    <ClInclude Include="settings\formSettings.h">
+      <Filter>settings</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\choiceRequest.h">
+      <Filter>visualView</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\controlCtor.h">
+      <Filter>visualView</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\controlEnum.h">
+      <Filter>visualView</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\formdefs.h">
+      <Filter>visualView</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\layerObject.h">
+      <Filter>visualView</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\visualHost.h">
+      <Filter>visualView</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\formEditor.h">
+      <Filter>win\dlgs</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\generation.h">
+      <Filter>win\dlgs</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\settings\savedSettings.h">
+      <Filter>win\dlgs\settings</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\settings\list\listSettings.h">
+      <Filter>win\dlgs\settings\list</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\layers\commandBar.h">
+      <Filter>visualView\layers</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\layers\commandReceiver.h">
+      <Filter>visualView\layers</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\ctrl\chartBox.h">
+      <Filter>visualView\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\ctrl\columnLayout.h">
+      <Filter>visualView\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\ctrl\control.h">
+      <Filter>visualView\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\ctrl\form.h">
+      <Filter>visualView\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\ctrl\formAttribute.h">
+      <Filter>visualView\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\ctrl\formCommand.h">
+      <Filter>visualView\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\ctrl\frame.h">
+      <Filter>visualView\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\ctrl\gridBox.h">
+      <Filter>visualView\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\ctrl\htmlBox.h">
+      <Filter>visualView\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\ctrl\notebook.h">
+      <Filter>visualView\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\ctrl\sizer.h">
+      <Filter>visualView\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\ctrl\tableBox.h">
+      <Filter>visualView\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\ctrl\textBox.h">
+      <Filter>visualView\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\ctrl\typeControl.h">
+      <Filter>visualView\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\ctrl\widgets.h">
+      <Filter>visualView\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\ctrl\window.h">
+      <Filter>visualView\ctrl</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="res">
+      <UniqueIdentifier>{3a8c43ef-66aa-4a5f-9a8d-dfe454435925}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="res\resource.h">
+      <Filter>res</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="res\frmserver.rc">
+      <Filter>res</Filter>
+    </ResourceCompile>
+  </ItemGroup>
+</Project>

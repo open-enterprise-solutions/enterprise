@@ -1777,7 +1777,7 @@
       <Filter>artProvider\private</Filter>
     </ClInclude>
     <ClInclude Include="artProvider\splash\splashLogo.h">
-      <Filter>artProvider</Filter>
+      <Filter>artProvider\splash</Filter>
     </ClInclude>
     <ClInclude Include="res\resource.h">
       <Filter>res</Filter>
@@ -1929,6 +1929,9 @@
     <ClInclude Include="propertyManager\property\advprop\advpropType.h">
       <Filter>propertyManager\property\advprop</Filter>
     </ClInclude>
+    <ClInclude Include="propertyManager\property\advprop\advpropValuePicture.h">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClInclude>
     <ClInclude Include="propertyManager\property\advprop\advpropChartBinding.h">
       <Filter>propertyManager\property\advprop</Filter>
     </ClInclude>
@@ -2039,6 +2042,9 @@
     <Filter Include="visualView">
       <UniqueIdentifier>{15ab1d55-40d6-4e89-96f1-2b9b0bfdc779}</UniqueIdentifier>
     </Filter>
+    <Filter Include="visualView\layers">
+      <UniqueIdentifier>{d441756b-807c-4bbd-88be-2981cf07be87}</UniqueIdentifier>
+    </Filter>
     <Filter Include="uikit">
       <UniqueIdentifier>{a3f1c2d4-7b88-4e15-9c30-6d2a51e8b471}</UniqueIdentifier>
     </Filter>
@@ -2056,6 +2062,9 @@
     </Filter>
     <Filter Include="artProvider">
       <UniqueIdentifier>{d4a27d48-5c40-457b-a665-214b6054de8c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="artProvider\splash">
+      <UniqueIdentifier>{8b8df8ea-04cc-461a-ba11-3f84be9a82d9}</UniqueIdentifier>
     </Filter>
     <Filter Include="visualView\ctrl">
       <UniqueIdentifier>{afa18155-1b9d-4ce9-9fa1-fa7484971d73}</UniqueIdentifier>
@@ -2099,11 +2108,11 @@
     <Filter Include="win\ctrls\grid">
       <UniqueIdentifier>{9C823E66-69F4-4AB3-9630-5E0073116F33}</UniqueIdentifier>
     </Filter>
-    <Filter Include="win\ctrls\res">
-      <UniqueIdentifier>{3B27C01B-A129-487D-B08C-08B67009FEA3}</UniqueIdentifier>
-    </Filter>
     <Filter Include="win\dlgs">
       <UniqueIdentifier>{0F7CB570-C767-4C50-B602-646AC313AA62}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\dlgs\jobSchedule">
+      <UniqueIdentifier>{b6ef8af6-6db9-4bd5-9d3c-65b1e04f51bf}</UniqueIdentifier>
     </Filter>
     <Filter Include="win\dlgs\settings">
       <UniqueIdentifier>{9d2c51ab-73f4-4a6e-8c15-2ad7e40b96c1}</UniqueIdentifier>

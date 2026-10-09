@@ -441,7 +441,7 @@ public:
 			stage = wxT("names");
 			complaint = e.GetErrorDescription();
 		}
-		catch (const ibBackendException& e) {
+		catch (const ibCoreException& e) {
 			stage = wxT("engine");
 			complaint = e.GetErrorDescription();
 		}

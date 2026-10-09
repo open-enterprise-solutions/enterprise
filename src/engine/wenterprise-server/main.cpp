@@ -23,9 +23,9 @@
 #	define _SSIZE_T_DEFINED
 #endif
 
-#include "../../3rdparty/cpp-httplib/httplib.h"
+#include <cpp-httplib/httplib.h>
 #include "wfrontend.h"
-#include "../../3rdparty/nlohmann/json.hpp"
+#include <nlohmann/json.hpp>
 #include "backend/backend_exception.h"
 #include "backend/databaseLayer/databaseLayerException.h"
 #include "frontend/diagnostics/oesConsole.h"
@@ -394,7 +394,7 @@ static void BuildUtf8Argv(int& argc, char**& argv)
 }
 #endif
 
-#include "backend/diagnostics/leakTracker.h"
+#include "core/diagnostics/leakTracker.h"
 
 IB_LEAK_TRACKER_ARM();
 
@@ -485,7 +485,7 @@ int main(int argc, char** argv)
 				+ ",\"message\":" + nlohmann::json(e.GetErrorDescription().ToUTF8().data()).dump()
 				+ "}";
 		}
-		catch (const ibBackendException& e) {
+		catch (const ibCoreException& e) {
 			body = std::string("{\"error\":\"backend\",\"message\":")
 				+ nlohmann::json(e.GetErrorDescription().ToUTF8().data()).dump()
 				+ "}";
@@ -1004,8 +1004,6 @@ int main(int argc, char** argv)
 	// technical-session INSERT records "host:boundPort" in sys_session.address.
 	wfrontendSetServerAddress(args.host, boundPort);
 
-	// AccessMode (Server) is set by appData's ctor inside InitBackend
-	// based on the eWEB_RUNTIME_MODE runMode.
 	if (!InitBackend(args)) {
 		const std::string err = wfrontendLastError();
 		std::cerr << "Failed to open the database";

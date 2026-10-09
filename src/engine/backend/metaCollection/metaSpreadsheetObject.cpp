@@ -5,7 +5,7 @@
 
 #include "metaSpreadsheetObject.h"
 #include "backend/metaData.h"
-#include "backend/serialize/dataBuilder.h"   // ibDataNode — per-type node data
+#include "core/serialize/dataBuilder.h"   // ibDataNode — per-type node data
 
 
 

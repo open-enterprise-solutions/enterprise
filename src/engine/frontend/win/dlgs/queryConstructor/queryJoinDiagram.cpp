@@ -338,7 +338,7 @@ void ibQueryJoinDiagram::ConnectFields(size_t fromTable, size_t fromField,
 		ibQueryParser parser;
 		join.m_on = parser.ParseExpression(text);
 	}
-	catch (const ibBackendException& e) {
+	catch (const ibCoreException& e) {
 		wxMessageBox(e.GetErrorDescription(), _("Link"), wxOK | wxICON_ERROR, this);
 		return;
 	}

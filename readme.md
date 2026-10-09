@@ -9,9 +9,13 @@ the database in step with the description as it changes.
 
 It ships with everything that loop needs: a designer, a compiler and bytecode interpreter, a remote
 debugger, a multi-database layer, a job manager, an application server that serves several bases from
-one process, a web server — and a built-in **MCP server**, so an
+one process, a thin client and a web server — and a built-in **MCP server**, so an
 AI assistant can read, build and check a configuration alongside the developer, through the same
 doors the developer uses.
+
+**New here?** The [wiki](https://github.com/open-enterprise-solutions/enterprise/wiki) is the
+user's guide: installing a build, a first application step by step, the designer, the metadata
+tree, forms, the language, queries and reports, and the pitfalls.
 
 ---
 
@@ -62,7 +66,7 @@ doors the developer uses.
 - **Jobs** — scheduled and background jobs in sessions of their own, with a cross-process claim so a
   job runs once across a cluster; the platform's own housekeeping (totals folding and verification,
   Firebird sweep and backup) runs on the same manager.
-- **AI access over MCP** — an MCP server inside the designer, 114 tools across the platform: read and
+- **AI access over MCP** — an MCP server inside the designer, 127 tools across the platform: read and
   edit metadata, forms and modules; apply the configuration with a rehearsal; run code on the
   application; ask the data questions and compose reports; drive the debugger; read and write the
   registration journal. Protected by a token, listening on loopback by default; every call is
@@ -72,6 +76,11 @@ doors the developer uses.
   connections, sessions, locks, jobs and journal. Several servers may share a base; a desktop client
   and a server may not use one at the same time. Passwords in its configuration are sealed
   (AES-256-GCM).
+- **Thin client** — `enterprise-thin` runs no code of the configuration: the server holds the session,
+  its forms and documents, the client draws what it is answered and sends what the person did. One
+  [client protocol](docs/public/client-protocol.md) — JSON-RPC 2.0 over WebSocket or HTTP to an
+  application server; a file base is the same protocol in the client's own process. See
+  [thin-client.md](docs/public/thin-client.md).
 - **Databases** — Firebird (embedded, shipped with the distribution) and PostgreSQL for production;
   ODBC; SQLite for tests and logging.
 - **Localisation** — the whole interface in English, Russian and Ukrainian; every caption of a
@@ -112,15 +121,16 @@ On a copy of a 40 000-employee payroll base (Release, x86): a month's payroll re
 5. Build the solution (`Ctrl+Shift+B`). Binaries are placed in `bin\<Platform>\<Configuration>\`
    (`Win32` or `Win64`).
 6. Run `designer.exe` to build a configuration, `enterprise.exe` to work in it — or `launcher.exe`
-   to pick a base first. `appserver.exe` serves the bases of a server folder with no window.
+   to pick a base first. `appserver.exe` serves the bases of a server folder with no window;
+   `enterprise-thin.exe` works in a base it serves, or in a file base.
 
 ### macOS
 
 > The CMake build lives at `CMakeLists.txt` (repo root, CMake ≥ 3.20).
 
 ```bash
-# Install dependencies
-brew install cmake wxwidgets firebird-client postgresql
+# Install dependencies (wxWidgets is built from its submodule)
+brew install cmake ninja
 
 # Clone and initialise submodules
 git clone https://github.com/open-enterprise-solutions/enterprise.git
@@ -128,8 +138,8 @@ cd enterprise
 git submodule update --init --recursive
 
 # Configure and build
-cmake -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build -j$(sysctl -n hw.logicalcpu)
+cmake --preset macos-release -DOES_USE_FIREBIRD=ON -DOES_USE_POSTGRESQL=ON
+cmake --build --preset macos-release
 ```
 
 ### Linux (Ubuntu / Debian)
@@ -137,10 +147,10 @@ cmake --build build -j$(sysctl -n hw.logicalcpu)
 > The CMake build lives at `CMakeLists.txt` (repo root, CMake ≥ 3.20).
 
 ```bash
-# Install dependencies
+# Install dependencies (wxWidgets is built from its submodule)
 sudo apt update
-sudo apt install -y build-essential cmake libwxgtk3.2-dev \
-    libfirebird-dev libpq-dev libsqlite3-dev
+sudo apt install -y build-essential cmake ninja-build pkg-config \
+    libgtk-3-dev libsqlite3-dev uuid-dev libpq-dev
 
 # Clone and initialise submodules
 git clone https://github.com/open-enterprise-solutions/enterprise.git
@@ -148,8 +158,8 @@ cd enterprise
 git submodule update --init --recursive
 
 # Configure and build
-cmake -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build -j$(nproc)
+cmake --preset linux-release -DOES_USE_FIREBIRD=ON -DOES_USE_POSTGRESQL=ON
+cmake --build --preset linux-release
 ```
 
 ---
@@ -193,7 +203,7 @@ git submodule update --init --recursive
 
 ```
 enterprise/
-├── enterprise.sln            # MSBuild solution (11 C++ projects)
+├── enterprise.sln            # MSBuild solution (17 C++ projects)
 ├── CMakeLists.txt            # the cross-platform build, tests included
 ├── Common.props              # Shared MSBuild properties (paths, platforms)
 ├── ConfigurationDefs.props   # Preprocessor definitions per configuration
@@ -207,9 +217,9 @@ enterprise/
 │                             # organisation only and is empty for everyone else. The build never
 │                             # needs it, so links to docs/private/… will not open for you.
 └── src/
-    ├── 3rdparty/
-    │   └── wxWidgets/        # Git submodule — wxWidgets 3.3.2
+    ├── 3rdparty/             # Git submodules: wxWidgets 3.3.2, Mbed TLS, cpp-httplib, nlohmann/json
     └── engine/
+        ├── core/             # What the engine and its clients share: values, strings, dates, nodes, the journal
         ├── backend/          # Core engine DLL
         │   ├── compiler/     # Lexer, parser, bytecode, interpreter, LINQ
         │   ├── query/        # The query language: parse, lower, render to SQL, run in memory
@@ -231,7 +241,12 @@ enterprise/
         │   ├── web/          # The same controls for the browser (wfrontend)
         │   ├── docView/      # Document/view framework wrappers
         │   └── win/          # Editors, dialogs and custom widgets
+        ├── protocol/         # The client protocol: its contract (protocol.h) and connections
+        ├── frmserver/        # The server side of the thin client: sessions, forms, the client host
+        ├── frmclient/        # The thin client's window, document/view and controls
+        ├── fileserver/       # A file base in the thin client's process
         ├── enterprise/       # Enterprise runtime executable
+        ├── enterprise-thin/  # The thin client runtime executable
         ├── designer/         # Designer/IDE executable
         ├── wenterprise-server/ # Web server (wes process)
         ├── launcher/         # Launcher (connection chooser)
@@ -251,6 +266,8 @@ enterprise/
 | Primary database | Firebird (embedded) |
 | Production alternative | PostgreSQL |
 | Other databases | ODBC; SQLite (tests + logging) |
+| Client protocol | JSON-RPC 2.0 over WebSocket / HTTP |
+| TLS and ciphers | Mbed TLS |
 | AI access | Model Context Protocol (Streamable HTTP) |
 | Build (Windows) | MSBuild / Visual Studio 2019+ |
 | Build (cross-platform) | CMake ≥ 3.20 — `CMakeLists.txt` at repo root (Windows / macOS / Linux) |

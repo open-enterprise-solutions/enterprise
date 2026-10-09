@@ -5,6 +5,8 @@
 
 #include "metaData.h"
 
+#include "backend/appHost.h"                  // ibApplicationInstanceScope — the last holder works for the base
+#include "backend/backend_exception.h"
 #include "backend/metaCollection/metaModuleObject.h"
 #include "backend/metaCollection/metaFormObject.h"
 #include "backend/query/queryableFactory.h"   // ibQueryableFactory::Register/Unregister — the per-config source registry
@@ -12,8 +14,39 @@
 
 #include <algorithm>
 #include <cwctype>
+#include <optional>
 #include <string>
 #include <unordered_set>
+
+//**************************************************************************************************
+//*                          the last holder — see MakeShared in metaData.h                         *
+//**************************************************************************************************
+
+void ibMetaData::Dispose(ibMetaData* metaData)
+{
+	// Working for its base while it closes, when it has one — a close asks for the base.
+	std::optional<ibApplicationInstanceScope> working;
+	if (ibApplicationInstance* const applicationInstance = metaData->GetApplicationInstance())
+		working.emplace(applicationInstance);
+	// A release never throws — it runs where the last reference drops, a destructor among them. A close that refused
+	// is said, and the metadata goes regardless.
+	const ibValueMetaObject* const root = metaData->GetCommonMetaObject();
+	const wxString name = root != nullptr ? root->GetName() : wxString();
+	try {
+		if (metaData->IsConfigOpen()) {
+			ibJournalInfo(wxT("metadata"), wxT("'%s' %s closed: its last holder let it go"), name,
+				metaData->GetConfigMD5());
+			metaData->CloseDatabase(forceCloseFlag);
+		}
+	}
+	catch (const ibCoreException& err) {
+		ibJournalWarning(wxT("metadata"), wxT("'%s' did not close: %s"), name, err.GetErrorDescription());
+	}
+	catch (...) {
+		ibJournalWarning(wxT("metadata"), wxT("'%s' did not close"), name);
+	}
+	delete metaData;
+}
 
 //**************************************************************************************************
 //*                          copy-aware identity resolve (metaId <-> guid)                          *

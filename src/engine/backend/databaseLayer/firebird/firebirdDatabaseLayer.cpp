@@ -45,6 +45,7 @@ const ibDialectDictionary& ibDatabaseLayerFirebird::Dialect()
 		// 2026-09-16 failure as aliases sharing their first 31 characters; the 31 fixed it by shortening the path.)
 		// Twelve — three of the head and the hash — keeps ten levels near 130.
 		d.m_maxAliasLength = 12;
+		d.m_maxParameters = 32767;                    // measured on the vendored 5.0.5 (2026-10-05): 30 000 ran, 50 000 refused
 		d.m_groupByPosition = true;                   // GROUP BY 2 — a key that binds a value is named by its position
 		// A `?` in a SELECT list is untyped here (-804), and the batched INSERT is spelled as
 		// SELECTs — so each one names the column it is going into and lets FB look the type up.
@@ -119,11 +120,13 @@ const ibDialectDictionary& ibDatabaseLayerFirebird::Dialect()
 		// It does NOT ask RDB$INDICES — reading the physical schema to decide what to emit is banned
 		// (docs/private/schema-authority.md § 3); the introspection this line used to describe, and the
 		// `m_indexListQuery` behind it, were removed 2026-08-14. Do not revive either.
+		d.m_descendingIndexWord = wxT("DESCENDING");   // FB walks an ascending index forward only — measured 2026-10-01: 1100 ms a page backwards, 235 forwards
 		d.m_rowIdColumn    = wxT("RDB$DB_KEY");         // physical row id for the pre-UNIQUE dedup (keep one row per key)
 		d.m_maxIndexSegments = 16;                     // "too many keys defined for index" past this — and a failed DDL rolls the apply back
 		// …and the BYTE ceiling beside it: Firebird bounds an index key at roughly page_size/4, and the
 		// base is created at m_pageSize = 16384, so ~4096. Kept a little under it — a hashed key costs
-		// one column, an overflowed CREATE INDEX costs the whole apply.
+		// one column, an overflowed CREATE INDEX costs the whole apply. A base ATTACHED with another page
+		// answers from its own (ibDatabaseLayerFirebird::GetMaxIndexKeyBytes, read at Open).
 		d.m_maxIndexKeyBytes = 4000;
 
 		// --- period truncation: no date_trunc here, so every unit is arithmetic ---
@@ -570,14 +573,18 @@ bool ibDatabaseLayerFirebird::Open()
 		dpbBuffer.push_back(SQL_DIALECT_CURRENT);
 
 		// page_size DPB: only honoured by isc_create_database (ignored on
-		// attach). Encoded as big-endian 2 bytes per legacy DPB. FB 5
-		// supports up to 32768; widen via uint32 before shifting so
-		// 32768 doesn't sign-overflow.
+		// attach). A numeric DPB item is a LITTLE-endian integer, like
+		// num_buffers below. It was written big-endian: 16384 (0x4000) reached
+		// the engine as 64, was rejected without a word, and every base came
+		// up at the 4096 default — where an index key ends near 1 KB, not the
+		// ~4 KB the dialect's m_maxIndexKeyBytes counts on. FB 5 supports up
+		// to 32768; widen via uint32 before shifting so 32768 doesn't
+		// sign-overflow.
 		const uint32_t pageSize = (uint32_t)m_pageSize;
 		dpbBuffer.push_back(isc_dpb_page_size);
 		dpbBuffer.push_back(2);
-		dpbBuffer.push_back((char)((pageSize >> 8) & 0xFF));
 		dpbBuffer.push_back((char)(pageSize & 0xFF));
+		dpbBuffer.push_back((char)((pageSize >> 8) & 0xFF));
 
 		// UTF8 character set:
 		//   isc_dpb_set_db_charset — only honoured on CREATE DATABASE; sets
@@ -815,6 +822,34 @@ bool ibDatabaseLayerFirebird::Open()
 	ibJournalInfo(wxT("db.firebird"), wxT("ibDatabaseLayerFirebird: attached to %s"),
 	           strDatabaseUrl);
 
+	// THE BASE'S OWN PAGE, not the one this driver creates bases with: a base made before the page size was
+	// written right (the little-endian DPB above) is 4 KB for life, and its index keys end near 1 KB, not 4.
+	// The ceiling is a quarter of the page, kept as far under it as the dialect's is (16 KB -> 4000).
+	m_maxIndexKeyBytes = 0;
+	ibPreparedStatement* pageStatement = nullptr;
+	ibDatabaseResultSet* pageResult = nullptr;
+	try {
+		pageStatement = DoPrepareStatement(wxT("SELECT MON$PAGE_SIZE FROM MON$DATABASE"));
+		if (pageStatement != nullptr)
+			pageResult = pageStatement->ExecuteQuery();
+		if (pageResult != nullptr && pageResult->Next()) {
+			const int pageSize = pageResult->GetResultInt(1);
+			if (pageSize >= 1024)
+				m_maxIndexKeyBytes = (unsigned int)(pageSize / 4 - 96);
+			if (pageSize < m_pageSize)
+				ibJournalInfo(wxT("db.firebird"), wxT("%s has %d-byte pages: an index key is kept under %u bytes ")
+					wxT("(a backup and restore at %d bytes lifts it)"), strDatabaseUrl, pageSize, m_maxIndexKeyBytes,
+					(int)m_pageSize);
+		}
+	}
+	catch (const ibCoreException&) {
+		// Not read: the dialect's ceiling stands (GetMaxIndexKeyBytes).
+	}
+	if (pageResult != nullptr)
+		CloseResultSet(pageResult);
+	if (pageStatement != nullptr)
+		CloseStatement(pageStatement);
+
 	// Spin up the maintenance scheduler — ONLY for Standalone single-
 	// process embedded. Leader-mode (our own spawned firebird.exe
 	// holds the .fdb via TCP) cannot do gbak BR-cycle's atomic SWAP:
@@ -833,7 +868,7 @@ bool ibDatabaseLayerFirebird::Open()
 	//
 	// Eligibility is still the DRIVER's knowledge (a local standalone file base, not leader-mode,
 	// not a remote server), so the test stays; only the ACTION moved. See
-	// ibApplicationInstance::CreateFileAppDataEnv — it registers after the tables, which is the only
+	// ibApplicationInstance::Open (the Firebird base) — it registers after the tables, which is the only
 	// place that can honestly promise they exist.
 	m_localMaintenanceEligible = m_strServer.IsEmpty()
 		&& ibFirebirdLeaderMode::CurrentRole() == ibFirebirdLeaderMode::Role::Standalone;
@@ -875,7 +910,7 @@ bool ibDatabaseLayerFirebird::GetSweepBacklog(long long& transactions)
 	try {
 		rs = RunQueryWithResults(wxT("SELECT MON$OLDEST_TRANSACTION, MON$OLDEST_SNAPSHOT FROM MON$DATABASE"));
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		ResetErrorCodes();
 		return false;
 	}
@@ -1534,7 +1569,7 @@ ibDatabaseResultSet* ibDatabaseLayerFirebird::DoRunQueryWithResults(const wxStri
 				// already on the error path; the original isc_dsql_*
 				// failure is what we want the caller to see, not a
 				// secondary cleanup exception.
-				try { delete pResultSet; } catch (const ibBackendException&) {}
+				try { delete pResultSet; } catch (const ibCoreException&) {}
 
 				ThrowDatabaseException();
 				return NULL;   // unreachable today (the throw above always throws) — but the code below
@@ -1564,7 +1599,7 @@ ibDatabaseResultSet* ibDatabaseLayerFirebird::DoRunQueryWithResults(const wxStri
 				// Swallow any throw from the result-set dtor — the
 				// isc_dsql_execute failure above is the user-visible
 				// error; a secondary cleanup exception would mask it.
-				try { delete pResultSet; } catch (const ibBackendException&) {}
+				try { delete pResultSet; } catch (const ibCoreException&) {}
 
 				ThrowDatabaseException();
 				return NULL;
@@ -1672,7 +1707,7 @@ bool ibDatabaseLayerFirebird::TableExists(const wxString& table)
 			pStatement = NULL;
 		}
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		// Close any still-open resources before propagating; preserves the
 		// in-flight exception (sqlstate / native_code on derived types).
 		if (pResult != NULL) {
@@ -1729,7 +1764,7 @@ bool ibDatabaseLayerFirebird::ViewExists(const wxString& view)
 			pStatement = NULL;
 		}
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		// Close any still-open resources before propagating; preserves the
 		// in-flight exception (sqlstate / native_code on derived types).
 		if (pResult != NULL) {
@@ -1766,7 +1801,7 @@ wxArrayString ibDatabaseLayerFirebird::GetTables()
 			pResult = NULL;
 		}
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		// Close any still-open result set before propagating; preserves the
 		// in-flight exception (sqlstate / native_code on derived types).
 		if (pResult != NULL) {
@@ -1799,7 +1834,7 @@ wxArrayString ibDatabaseLayerFirebird::GetViews()
 			pResult = NULL;
 		}
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		// Close any still-open result set before propagating; preserves the
 		// in-flight exception (sqlstate / native_code on derived types).
 		if (pResult != NULL) {
@@ -1850,7 +1885,7 @@ wxArrayString ibDatabaseLayerFirebird::GetColumns(const wxString& table)
 			pStatement = NULL;
 		}
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		// Close any still-open resources before propagating; preserves the
 		// in-flight exception (sqlstate / native_code on derived types).
 		if (pResult != NULL) {

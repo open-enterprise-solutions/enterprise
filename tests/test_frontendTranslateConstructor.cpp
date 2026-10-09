@@ -17,9 +17,9 @@
 
 namespace {
 
-ibBackendLocalizationEntryArray Boxes(std::initializer_list<ibBackendLocalizationEntry> boxes)
+ibLocalizationEntryArray Boxes(std::initializer_list<ibLocalizationEntry> boxes)
 {
-	return ibBackendLocalizationEntryArray(boxes);
+	return ibLocalizationEntryArray(boxes);
 }
 
 } // namespace

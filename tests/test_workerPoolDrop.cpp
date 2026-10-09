@@ -17,10 +17,18 @@
 // its own "a read is out" state and would otherwise wait forever for a delivery
 // nobody will make (the spinner that never stops, the list that refuses every
 // later portion).
+//
+// AWAIT is the third. A script waiting for its client (a question on the web)
+// waits on the thread that holds its session, and that thread goes on running
+// the session's tasks meanwhile — otherwise the very request that shows the
+// question to the client queues behind it and never comes. Pinned here: the
+// order, the place a waiting worker does not take under the cap, the cancel
+// that wins over the next task, the stop, and who may wait at all.
 // =============================================================================
 
 #include <gtest/gtest.h>
 
+#include "backend/backend_exception.h"   // ibBackendInterruptException — how a cancelled wait ends
 #include "backend/session/session.h"
 #include "backend/session/workerPoolHeadless.h"
 
@@ -30,6 +38,10 @@
 #include <future>
 #include <memory>
 #include <mutex>
+#include <stdexcept>
+#include <string>
+#include <thread>
+#include <vector>
 
 namespace {
 
@@ -84,10 +96,10 @@ TEST(WorkerPoolDrop, DropWhileLeasedDoesNotBlockTheDropper)
 	// — erasing here would pull the queue out from under a running worker, and
 	// waiting here would deadlock every teardown that runs from inside a task.
 	const auto before = std::chrono::steady_clock::now();
-	pool.DropSession(session.get());
+	pool.Drop(session.get());
 	const auto spent = std::chrono::steady_clock::now() - before;
 	EXPECT_LT(std::chrono::duration_cast<std::chrono::milliseconds>(spent).count(), 500)
-		<< "DropSession waited for the lease instead of deferring the erase";
+		<< "Drop waited for the lease instead of deferring the erase";
 
 	release.Signal();
 	ASSERT_EQ(task.wait_for(std::chrono::seconds(5)), std::future_status::ready)
@@ -110,7 +122,7 @@ TEST(WorkerPoolDrop, ThePoolStaysUsableAfterADeferredErase)
 	});
 	ASSERT_TRUE(started.Wait());
 
-	pool.DropSession(dropped.get());
+	pool.Drop(dropped.get());
 	release.Signal();
 	ASSERT_EQ(held.wait_for(std::chrono::seconds(5)), std::future_status::ready);
 
@@ -138,8 +150,8 @@ TEST(WorkerPoolDrop, DroppingAnUnknownSessionIsHarmless)
 {
 	ibWorkerPoolHeadless pool(1);
 	auto stranger = MakeSession(wxT("never-submitted"));
-	EXPECT_NO_THROW(pool.DropSession(stranger.get()));
-	EXPECT_NO_THROW(pool.DropSession(nullptr));
+	EXPECT_NO_THROW(pool.Drop(stranger.get()));
+	EXPECT_NO_THROW(pool.Drop(nullptr));
 	pool.Stop();
 }
 
@@ -163,4 +175,170 @@ TEST(WorkerPoolDrop, SubmitAfterStopFailsTheFutureInsteadOfGoingQuiet)
 	EXPECT_THROW(f.get(), std::exception)
 		<< "the refusal must be visible to whoever asked";
 	EXPECT_FALSE(ran.load()) << "a stopped pool must not run the work";
+}
+
+// ---------------------------------------------------------------------------
+// Await — a script waiting for its client, on the thread that holds its session
+// ---------------------------------------------------------------------------
+
+namespace {
+
+// What happened, in the order it happened, from whichever thread.
+class ibOrder {
+public:
+	void Note(const char* what) {
+		std::lock_guard<std::mutex> lk(m_mtx);
+		m_seen.push_back(what);
+	}
+	std::vector<std::string> Seen() {
+		std::lock_guard<std::mutex> lk(m_mtx);
+		return m_seen;
+	}
+private:
+	std::mutex               m_mtx;
+	std::vector<std::string> m_seen;
+};
+
+// A session whose cancel always stands: a job's. A host session's cancel is for a running script only
+// (ibSession::Cancel), and these tasks are not scripts.
+std::shared_ptr<ibSession> MakeJobSession(const wxString& id) {
+	return std::make_shared<ibSession>(id, ibSessionKind::BackgroundJob);
+}
+
+} // namespace
+
+TEST(WorkerPoolAwait, TheWaitingThreadRunsItsSessionsTasksInOrderUntilDone)
+{
+	ibWorkerPoolHeadless pool(2);
+	auto session = MakeSession(wxT("await-runs"));
+
+	ibOrder order;
+	std::atomic<bool> answered { false };
+	std::thread::id waiter, readOn;
+	ibLatch waiting;
+	std::future<void> script = pool.Submit(session.get(), [&]() {
+		waiter = std::this_thread::get_id();
+		order.Note("script");
+		waiting.Signal();
+		pool.Await(session.get(), [&answered]() { return answered.load(); });
+		order.Note("script-out");
+	});
+	ASSERT_TRUE(waiting.Wait());
+
+	// Two tasks of the same session arrive while the script waits: a read (the request that shows the question),
+	// then the answer.
+	std::future<void> read = pool.Submit(session.get(), [&]() {
+		readOn = std::this_thread::get_id();
+		order.Note("read");
+	});
+	std::future<void> answer = pool.Submit(session.get(), [&]() {
+		order.Note("answer");
+		answered.store(true);
+	});
+
+	ASSERT_EQ(script.wait_for(std::chrono::seconds(5)), std::future_status::ready)
+		<< "the wait never ended — the tasks it waited through were not run";
+	EXPECT_NO_THROW(script.get());
+	EXPECT_EQ(readOn, waiter) << "the session's task ran on another thread — two threads in one session";
+	EXPECT_EQ(order.Seen(), (std::vector<std::string>{ "script", "read", "answer", "script-out" }));
+	pool.Stop();
+}
+
+TEST(WorkerPoolAwait, AWaitingWorkerHoldsNoPlaceUnderTheCap)
+{
+	ibWorkerPoolHeadless pool(1);
+	auto asking = MakeSession(wxT("asking"));
+	auto other  = MakeSession(wxT("other"));
+
+	std::atomic<bool> answered { false };
+	ibLatch waiting;
+	std::future<void> script = pool.Submit(asking.get(), [&]() {
+		waiting.Signal();
+		pool.Await(asking.get(), [&answered]() { return answered.load(); });
+	});
+	ASSERT_TRUE(waiting.Wait());
+
+	// A pool of ONE, and its one worker waits on a person: another session must still be served.
+	std::future<void> served = pool.Submit(other.get(), []() {});
+	EXPECT_EQ(served.wait_for(std::chrono::seconds(5)), std::future_status::ready)
+		<< "a question in one session stopped the pool for everybody";
+
+	answered.store(true);
+	pool.Wake(asking.get());
+	ASSERT_EQ(script.wait_for(std::chrono::seconds(5)), std::future_status::ready);
+	EXPECT_NO_THROW(script.get());
+	pool.Stop();
+}
+
+TEST(WorkerPoolAwait, ACancelEndsTheWaitBeforeTheBarrierThatFollowsIt)
+{
+	ibWorkerPoolHeadless pool(2);
+	auto session = MakeJobSession(wxT("await-cancelled"));
+
+	ibOrder order;
+	ibLatch waiting;
+	std::future<void> script = pool.Submit(session.get(), [&]() {
+		waiting.Signal();
+		try {
+			pool.Await(session.get(), []() { return false; });
+		}
+		catch (const ibBackendInterruptException&) {
+			order.Note("interrupted");
+			throw;
+		}
+	});
+	ASSERT_TRUE(waiting.Wait());
+
+	// A teardown's order: the cancel, then the barrier it waits on. The barrier must run after the script is
+	// out — run inside the wait, it would tell the teardown "drained" with the script still on the stack.
+	session->Cancel();
+	pool.Wake(session.get());   // a session without a registry has no pool of its own to ring through Cancel
+	std::future<void> barrier = pool.Submit(session.get(), [&order]() { order.Note("barrier"); });
+
+	ASSERT_EQ(script.wait_for(std::chrono::seconds(5)), std::future_status::ready)
+		<< "the cancel did not end the wait";
+	EXPECT_THROW(script.get(), ibBackendInterruptException);
+	ASSERT_EQ(barrier.wait_for(std::chrono::seconds(5)), std::future_status::ready);
+	EXPECT_EQ(order.Seen(), (std::vector<std::string>{ "interrupted", "barrier" }));
+	pool.Stop();
+}
+
+TEST(WorkerPoolAwait, StoppingThePoolEndsAWaitWithTheInterruption)
+{
+	ibWorkerPoolHeadless pool(1);
+	auto session = MakeSession(wxT("await-stopped"));
+
+	ibLatch waiting;
+	std::future<void> script = pool.Submit(session.get(), [&]() {
+		waiting.Signal();
+		pool.Await(session.get(), []() { return false; });
+	});
+	ASSERT_TRUE(waiting.Wait());
+
+	pool.Stop();   // returns once every worker is out — a wait deaf to the stop would hang it here
+	ASSERT_EQ(script.wait_for(std::chrono::seconds(0)), std::future_status::ready);
+	EXPECT_THROW(script.get(), ibBackendInterruptException);
+}
+
+// A thread that does not hold the session would wait for tasks nobody may run — refused, not hung.
+TEST(WorkerPoolAwait, AThreadOffTheLeaseIsRefused)
+{
+	ibWorkerPoolHeadless pool(1);
+	auto session = MakeSession(wxT("await-off-lease"));
+	EXPECT_THROW(pool.Await(session.get(), []() { return true; }), std::logic_error);
+	pool.Stop();
+}
+
+TEST(WorkerPoolAwait, ATaskOfAnotherSessionMayNotWaitForThisOne)
+{
+	ibWorkerPoolHeadless pool(1);
+	auto mine   = MakeSession(wxT("mine"));
+	auto theirs = MakeSession(wxT("theirs"));
+
+	std::future<void> f = pool.Submit(mine.get(), [&]() {
+		pool.Await(theirs.get(), []() { return true; });
+	});
+	ASSERT_EQ(f.wait_for(std::chrono::seconds(5)), std::future_status::ready);
+	EXPECT_THROW(f.get(), std::logic_error) << "it would keep this session's worker on another session";
+	pool.Stop();
 }

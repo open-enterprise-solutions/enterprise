@@ -1,6 +1,6 @@
 #include "metaData.h"
 
-#include "serialize/dataBuilder.h"
+#include "core/serialize/dataBuilder.h"
 #include "compiler/valueSerialization.h"
 #include "backend_exception.h"
 
@@ -63,7 +63,7 @@ ibValue ibMetaData::Deserialize(const ibDataNode& node) const
 	try {
 		createdValue = CreateObject(classType);
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		throw;
 	}
 	catch (...) {

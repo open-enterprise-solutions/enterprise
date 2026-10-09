@@ -31,7 +31,7 @@
 #	define _SSIZE_T_DEFINED
 #endif
 
-#include "3rdparty/cpp-httplib/httplib.h"
+#include <cpp-httplib/httplib.h>
 
 // This binary brings a TLS server up itself, so it is a user of Mbed TLS in its own right - and Mbed TLS is a
 // static library, so its copy here has its own mutexes to be given. One translation unit of this module.

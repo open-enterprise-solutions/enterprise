@@ -250,10 +250,12 @@ ibFrontendWindow* ibFrontendMainFrame::CreateChildFrame(ibView* view, const wxPo
 
 		wxWindow* parent = wxTheApp->GetTopWindow();
 
+		// Over the INNERMOST modal — the last one opened (the list runs in the order they were made): over the first, a
+		// form chosen from a dialog opened by a modal window (a condition's, in the list's settings) stood behind it.
 		for (wxWindow* window : wxTopLevelWindows) {
 			if (window->IsKindOf(CLASSINFO(wxDialog))) {
 				if (((wxDialog*)window)->IsModal()) {
-					parent = window; break;
+					parent = window;
 				}
 			}
 		}
@@ -475,6 +477,12 @@ ibFrontendMainFrame::~ibFrontendMainFrame()
 
 	// The session's back-link is cleared by ~ibBackendDocFrame, which
 	// then releases the holder — that release is what ends the session.
+	//
+	// ⚠ AND IT RUNS LAST, because ibBackendDocFrame is the FIRST base: every child window — the metadata
+	// trees among them, which unsubscribe from the configuration as they go — is gone before the session
+	// is. Releasing it takes the session down on this thread (ibSession::Teardown), and the last one out
+	// closes the configuration inside that release; a tree still subscribed would be told `Closed` while
+	// half destroyed (census of the registry thread, 2026-10-01). Keep that base first.
 
 	// deinitialize the valueForm manager
 	m_mgr.UnInit();

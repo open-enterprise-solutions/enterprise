@@ -33,7 +33,7 @@
 
 #include "backend/composition/drivers/compositionDriver.h"   // a DRIVER needs the contract, not the composer
 #include "backend/backend_spreadsheet.h"
-#include "backend/formatString.h"   // how a column writes its figures — see m_formats
+#include "core/formatString.h"   // how a column writes its figures — see m_formats
 
 #include "backend/rowValues.h"   // a cross row's cells — sparse, column key index -> figures
 
@@ -137,7 +137,7 @@ private:
 		return column < m_paths.size() ? m_paths[column] : wxString();
 	}
 
-	// ⭐ HOW EACH COLUMN WRITES ITS FIGURES — the format its TYPE gives (GetFormatFromTypeDesc), taken beside
+	// ⭐ HOW EACH COLUMN WRITES ITS FIGURES — the format its TYPE gives (ibFormatString::FromTypeDesc), taken beside
 	// the titles: as many digits after the point as the column keeps, so a sum of kopecks reads `1500.00`
 	// and not `1500`. No codes where the type states nothing — an average, a product — and the value's own
 	// text is written. Nothing is cut before this: the figure travels whole to here.

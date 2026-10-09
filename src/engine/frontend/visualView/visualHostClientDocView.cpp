@@ -130,7 +130,7 @@ bool ibFormVisualDocument::Save()
 		// again puts one failure in the pane twice.
 		success = false;
 	}
-	catch (const ibBackendException& err) {
+	catch (const ibCoreException& err) {
 		// The exception already carries the reason ("Register 'Stock': failed to store the
 		// records", "… cancelled by the OnWrite handler"). Replacing it with a generic
 		// "an error occurred" threw away the only part worth reading — show what it says.

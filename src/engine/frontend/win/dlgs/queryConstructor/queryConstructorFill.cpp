@@ -1152,7 +1152,7 @@ void ibDialogQueryConstructor::ExpandStars()
 				}
 				// ⚠ A FIELD THAT CANNOT BE WRITTEN KEEPS THE STAR. Skipped, it would have left the query
 				// selecting one column fewer than the `*` it replaced — silently, on opening the window.
-				catch (const ibBackendException&) { return; }
+				catch (const ibCoreException&) { return; }
 				if (!projection.m_expr)
 					return;
 				listed.push_back(std::move(projection));
@@ -1727,7 +1727,7 @@ bool ibDialogQueryConstructor::AskEngine(wxString& message) const
 		ibQueryLowering::CheckNames(read, std::map<wxString, ibValue>());
 		return true;
 	}
-	catch (const ibBackendException& e) {
+	catch (const ibCoreException& e) {
 		message = e.GetErrorDescription();   // VERBATIM. The core said it; the dialog only carries it.
 		return false;
 	}

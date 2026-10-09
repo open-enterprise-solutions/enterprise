@@ -288,7 +288,7 @@ bool ibValuePredefinedJobs::ibValueJobRow::CallAsFunc(const long lMethodNum, ibV
 			return true;
 		}
 		const wxString registeredName = manager->FindNameByKey(m_jobKey);
-		pvarRetValue = !registeredName.IsEmpty() && manager->RunNow(registeredName);
+		pvarRetValue = !registeredName.IsEmpty() && manager->Execute(registeredName);
 		return true;
 	}
 	}

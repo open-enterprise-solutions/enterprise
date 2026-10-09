@@ -29,7 +29,7 @@
 #define _IB_LOCK_HOLDER_H_
 
 #include "backend/backend.h"
-#include "backend/guid.h"
+#include "core/guid.h"
 
 class BACKEND_API ibLockHolder {
 public:

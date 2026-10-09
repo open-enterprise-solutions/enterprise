@@ -215,7 +215,7 @@ void ibStructureBuilder::UndoAppliedDdl()
 		// in the journal about why the base no longer matches its configuration.
 		wxString why = wxT("an unknown failure");
 		try { throw; }
-		catch (const ibBackendException& err) { why = err.GetErrorDescription(); }
+		catch (const ibCoreException& err) { why = err.GetErrorDescription(); }
 		catch (...) {}
 		ibLog->Warn(wxT("restructure"), wxT("compensation"), wxString::Format(
 			wxT("the compensation of a failed apply could not run (%s) - the schema is ahead of the configuration"), why));

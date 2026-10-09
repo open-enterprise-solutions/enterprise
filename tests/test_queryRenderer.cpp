@@ -405,6 +405,22 @@ TEST(QueryDdlRenderer, CreateUniqueIndex)
 		"CREATE UNIQUE INDEX Reg7_UX ON Reg7 (recorder, line_N)");
 }
 
+// The twin a list reads backwards by: made where the engine walks an index forward only (Firebird), and
+// neither made nor dropped where it walks one both ways — its CREATE and its DROP render empty there.
+TEST(QueryDdlRenderer, ADescendingTwinIsMadeOnlyWhereTheEngineCannotWalkBackwards)
+{
+	const ibDdlStatement create = ibCreateIndex(wxT("Reg7"), wxT("Reg7_PIXD"), { wxT("period_D"), wxT("line_N") },
+		/*unique=*/false, /*descending=*/true);
+	EXPECT_EQ(ibQueryRenderer(FbDialect()).RenderDDL(create).ToStdString(),
+		"CREATE DESCENDING INDEX Reg7_PIXD ON Reg7 (period_D, line_N)");
+	EXPECT_TRUE(ibQueryRenderer(PgDialect()).RenderDDL(create).IsEmpty());
+
+	const ibDdlStatement drop = ibDropIndex(wxT("Reg7_PIXD"), wxT("Reg7"), { wxT("period_D"), wxT("line_N") },
+		/*unique=*/false, /*descending=*/true);
+	EXPECT_EQ(ibQueryRenderer(FbDialect()).RenderDDL(drop).ToStdString(), "DROP INDEX Reg7_PIXD");
+	EXPECT_TRUE(ibQueryRenderer(PgDialect()).RenderDDL(drop).IsEmpty());
+}
+
 TEST(QueryDdlRenderer, DropColumn)
 {
 	EXPECT_EQ(ibQueryRenderer(PgDialect()).RenderDDL(ibDropColumn(wxT("Reference9"), wxT("oldAttr_S"))).ToStdString(),

@@ -34,7 +34,7 @@
 #include "backend/metadataConfiguration.h"
 #include "backend/typeDescription.h"
 #include "backend/system/value/valueType.h"
-#include "backend/stringUtils.h"                // CompareString - how this tree compares text
+#include "core/stringUtils.h"                // CompareString - how this tree compares text
 
 #include <memory>
 

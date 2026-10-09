@@ -11,7 +11,7 @@
 #include "backend/metaData.h"
 #include "backend/backend_exception.h"
 #include "backend/databaseLayer/databaseErrorCodes.h"
-#include "backend/serialize/dataBuilder.h"   // ibDataNode — universal structure bridge (BuildDataNode/ApplyDataNode)
+#include "core/serialize/dataBuilder.h"   // ibDataNode — universal structure bridge (BuildDataNode/ApplyDataNode)
 
 
 namespace {
@@ -265,6 +265,24 @@ bool ibValueMetaObject::RunSubtree(int flags, ibRunPhase phase)
 			continue;
 		if (!child->RunSubtree(flags, phase))
 			return false;
+	}
+
+	// ⭐ WHAT A PROPERTY DERIVES IS DERIVED HERE, ONCE — the choices of a list, the types a type description stands
+	// for, the fields a choice link names — in the resolve phase, its children resolved too, and the load sequential.
+	// Every session of the base reads this object; from now on such a read only reads (ibPropertyList,
+	// ibVariantDataAttribute, ibVariantDataChoiceLink).
+	if (phase == ibRunPhase::After) {
+		for (unsigned int idx = 0; idx < GetPropertyCount(); idx++) {
+			ibProperty* const property = GetPropertyByIndex(idx);
+			if (ibPropertyList* const list = dynamic_cast<ibPropertyList*>(property))
+				list->FillList();
+			else if (const ibPropertyType* const type = dynamic_cast<const ibPropertyType*>(property))
+				type->GetValueAsTypeDesc();   // refreshed against the types now registered
+			else if (const ibPropertyChoiceLink* const link = dynamic_cast<const ibPropertyChoiceLink*>(property))
+				link->GetValueAsLinkDesc();
+			else if (const ibPropertyChoiceParameters* const parameters = dynamic_cast<const ibPropertyChoiceParameters*>(property))
+				parameters->GetValueAsParametersDesc();
+		}
 	}
 	return true;
 }

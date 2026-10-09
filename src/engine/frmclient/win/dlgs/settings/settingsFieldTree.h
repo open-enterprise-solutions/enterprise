@@ -1,0 +1,149 @@
+#ifndef __SETTINGS_FIELD_TREE_H__
+#define __SETTINGS_FIELD_TREE_H__
+
+// ---------------------------------------------------------------------------
+// "WHICH FIELDS DOES THIS THING HAVE" — asked once, answered once.
+//
+// Every settings surface needs the same left-hand pane: the source's fields, a
+// reference field unfolding lazily into its target's (Supplier.Region.Country),
+// double-click or drag putting one into the list on the right. And every value
+// cell that holds a FIELD needs the same picker over it.
+//
+// That is one question, so it is one class — and it is what lets the dynamic
+// list's window and the composer's window share their filter and sort editors
+// without either of them containing the other (Max, 2026-08-20: "two different
+// worlds; what is really shared is filter and sort").
+//
+// It is NOT a widget. A tree control belongs to whoever laid the pane out; this
+// fills one, wires the two behaviours a field tree has (unfold, drag) and opens
+// the picker. A window can drive several trees with one of these — which is what
+// the list's four tabs do.
+// ---------------------------------------------------------------------------
+
+#include <wx/treectrl.h>
+
+#include <vector>
+#include <functional>
+
+#include "frmclient/backend/system/value/composition/valueComposerSettings.h"   // ibValueCompositionField — a field IS a value
+#include "frmclient/backend/typeDescription.h"                // ibTypeDescription
+
+class ibSourceDataObject;
+class ibMetaData;
+
+// A field as a FLAT list gives it — the fallback for a source that cannot describe
+// itself (a plain table model's columns). A self-describing source needs none of
+// this: its explorer is walked directly.
+struct ibSettingsPlainField {
+	wxString          m_name;
+	ibMetaID          m_id = wxNOT_FOUND;
+	ibTypeDescription m_type;
+	// The column's own answer (functional options): an unavailable field is known to the tree — a line
+	// standing on it is recognised — and not put up.
+	bool              m_available = true;
+	// WHAT A PERSON READS — the title the host gives the field (a composition: its title in force, the
+	// one printed over its column). Empty reads as the name. What a pick STORES stays the name above.
+	wxString          m_presentation;
+};
+
+// THE FIELDS AS THE SERVER DESCRIBES THEM — children Name, Presentation, Id, Type, Available (ibDialogListSettings on the
+// server): a list's columns, or the fields of the targets a reference field opened on.
+std::vector<ibSettingsPlainField> ibReadSettingsFields(const class ibProtocolNode& fields);
+
+class ibSettingsFieldTree {
+public:
+
+	// WHERE THE FIELDS COME FROM — on the client, a flat list: the server describes them (a source that describes
+	// itself is the configuration's to walk).
+	void SetPlainFields(std::vector<ibSettingsPlainField> fields, const ibMetaData* metaData) {
+		m_plain = std::move(fields);
+		m_metaData = metaData;
+	}
+
+	// ⭐ WHICH OF THESE FIELDS ARE RESOURCES — asked of the HOST, because being a resource is not a
+	// property of the field: it is a DECLARATION the composition makes about it (Max, 2026-08-22:
+	// once a field is added to the resources, the settings list must already show that it is one).
+	//
+	// A predicate rather than a list, so the tree never holds a second copy of the resources and
+	// cannot fall out of step with them; unset, every field is drawn as it always was.
+	void SetResourceTest(std::function<bool(const wxString& path)> isResource) {
+		m_isResource = std::move(isResource);
+	}
+
+	// (⛔ `SetVisibleTest` STOOD HERE — "which of these fields this node may use at all", the narrowing
+	//  the AVAILABLE set existed to apply. The set is gone (docs/private/data-composer.md), and with it the
+	//  only caller; what was left was a `std::function` threaded through seven call sites and two
+	//  guards that could never be true.)
+
+	// The config that resolves reference targets — the source's own, else the active one.
+	const ibMetaData* GetMetaData() const;
+
+	// FILL a tree control. REBUILT, not built once: changing the query changes which
+	// fields exist, and this runs again to say so.
+	void Populate(wxTreeCtrl* tree) const;
+
+	// Walk a dotted technical path down the tree, loading each reference on the way — the node, or an
+	// invalid id when the path names nothing here. SelectByPath lands the cursor on it.
+	wxTreeItemId FindByPath(wxTreeCtrl* tree, const wxString& path) const;
+	void SelectByPath(wxTreeCtrl* tree, const wxString& path) const;
+
+	// ⭐ WHETHER THE FIELD A PATH REACHES IS AVAILABLE — the question the tree asks of every field before
+	// putting it up, asked of a path already written, so what a picker offers and which lines a list lists
+	// are one answer. Every hop answers. A line on an unavailable field is not listed, stays in the
+	// settings and keeps working.
+	bool IsAvailable(const wxString& path) const;
+
+	// WIRE the two behaviours every field tree has: unfold a reference lazily, and
+	// drag a field out (dropping on the right-hand pane adds it — the dropped field
+	// is GetDragItem()). The host binds what it does with a double-click itself,
+	// because that differs per tab.
+	void Attach(wxTreeCtrl* tree);
+
+	// The field being dragged out of a tree, or an invalid id.
+	const wxTreeItemId& GetDragItem() const { return m_dragItem; }
+
+	// Read one tree node as a FIELD — the path, the readable presentation, the leaf
+	// id and the type behind it. Null when the node is a road (a reference) or empty.
+	static class ibValueCompositionField* FieldAt(const wxTreeCtrl* tree, const wxTreeItemId& item);
+
+	// THE PICKER — the same tree as a form. A field is a VALUE, so choosing one is
+	// choosing a value, and it happens where every other value choice happens: the
+	// Select button of the cell. Returns null when the user closed without picking.
+	ibValueCompositionField* ChooseField(wxWindow* parent, const wxString& currentPath = wxEmptyString) const;
+
+private:
+
+	std::vector<ibSettingsPlainField> m_plain;                // the fields, as the server described them
+	const ibMetaData*                 m_metaData = nullptr;
+	// "Is this path one of the composition's resources?" — see SetResourceTest.
+	std::function<bool(const wxString& path)> m_isResource;
+
+	wxTreeItemId m_dragItem;   // field being dragged from a tree
+};
+
+// ⭐ THE LINES A VIEW LISTS of an ordered list of settings (a sort, a grouping), row by row: row N of
+// the view is line At(N) of the description — the filter tree's IsListed, for a flat list. A line on a
+// field the options of the base take away is not listed and stays in the description, applied — hidden,
+// never removed. A move trades places with the next LISTED line, so a hidden one keeps its own place.
+class ibSettingsListedLines {
+public:
+
+	template <class Lines>
+	void Read(const Lines& lines, const ibSettingsFieldTree* fields) {
+		m_listed.clear();
+		for (size_t i = 0; i < lines.size(); ++i)
+			if (fields == nullptr || fields->IsAvailable(lines[i].m_path))
+				m_listed.push_back(i);
+	}
+
+	unsigned int Count() const { return static_cast<unsigned int>(m_listed.size()); }
+
+	// The line row `row` (0-based) is; past the end, (size_t)-1 — which every caller already reads as
+	// "no such line" by its bounds check.
+	size_t At(size_t row) const { return row < m_listed.size() ? m_listed[row] : (size_t)-1; }
+
+private:
+	std::vector<size_t> m_listed;
+};
+
+#endif // __SETTINGS_FIELD_TREE_H__

@@ -34,8 +34,9 @@ foreach ($dll in 'msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll') {
 }
 
 $required = @(
-    'enterprise.exe', 'designer.exe', 'launcher.exe', 'codeRunner.exe', 'appserver.exe',
-    'backend.dll', 'frontend.dll', 'backend.conf',
+    'enterprise.exe', 'enterprise-thin.exe', 'designer.exe', 'launcher.exe', 'codeRunner.exe', 'appserver.exe',
+    'core.dll', 'backend.dll', 'frontend.dll', 'protocol.dll', 'frmclient.dll', 'frmserver.dll', 'fileserver.dll',
+    'backend.conf',
     '_fb\fbclient.dll', '_fb\firebird.msg', '_fb\firebird.conf', '_fb\plugins\engine13.dll', '_fb\intl\fbintl.dll',
     'libpq.dll', 'libssl-3-x64.dll', 'libcrypto-3-x64.dll',
     'help\en.hlk', 'lang\ru\open_es.mo', 'plugins\simplePlugin.dll',

@@ -7,7 +7,7 @@
 #include "backend/logger/loggerSweep.h"
 #include "backend/logger/loggerWriter.h"
 
-#include "backend/serialize/dataBuilder.h"   // ibDataNode + ibBinaryProvider — the details payload
+#include "core/serialize/dataBuilder.h"   // ibDataNode + ibBinaryProvider — the details payload
 #include "backend/session/session.h"
 #include "backend/userInfo.h"
 

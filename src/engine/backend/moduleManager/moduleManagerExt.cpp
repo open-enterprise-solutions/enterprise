@@ -56,15 +56,13 @@ std::map<wxString, ibValue*>& ibValueModuleRuntimeManagerExternalDataProcessor::
 	return moduleManager->GetGlobalVariables();
 }
 
-ibValueModuleRuntimeManagerExternalDataProcessor::ibValueModuleRuntimeManagerExternalDataProcessor(ibMetaData* metadata, ibValueMetaObjectDataProcessor* metaObject)
+ibValueModuleRuntimeManagerExternalDataProcessor::ibValueModuleRuntimeManagerExternalDataProcessor(std::shared_ptr<ibMetaData> metadata, ibValueMetaObjectDataProcessor* metaObject)
 	: ibValueModuleRuntimeManager(appEnv::ActiveMetaData(), metaObject ? metaObject->GetObjectModule() : nullptr)
 {
-	// metadata is the owning container — LoadFromFile creates this manager and passes
-	// `this` (there is no bootstrap manager). In designer the value object never owns
-	// the metadata. No member access on metadata here → this TU needs no container
-	// header; the External value object's out-of-line dtor instantiates the drop elsewhere.
+	// metadata is the container the object works in — LoadFromFile creates this manager and passes
+	// itself, and at runtime the object holds it. In designer the document holds it, never the object.
 	m_objectValue = new ibValueRecordDataObjectExternalDataProcessor(
-		metaObject, appData->DesignerMode() ? nullptr : metadata);
+		metaObject, appData->DesignerMode() ? nullptr : std::move(metadata));
 	//set complile module
 	//set proc unit
 	m_objectValue->m_compileModule = m_compileModule;
@@ -143,7 +141,7 @@ bool ibValueModuleRuntimeManagerExternalDataProcessor::CreateMainModule()
 			Compile();
 			Run();
 		}
-		catch (const ibBackendException& err) {
+		catch (const ibCoreException& err) {
 			// 🛑 THE HANDLER MUST NOT THROW — and `GetClassName()` can (Max, 2026-08-20: "it is
 			// addressed after it was taken off the registry"). A value's class NAME is looked up in
 			// the ctor registry by its dynamic clsid, and the external pair is registered on RUN and
@@ -318,13 +316,13 @@ std::map<wxString, ibValue*>& ibValueModuleRuntimeManagerExternalReport::GetGlob
 	return moduleManager->GetGlobalVariables();
 }
 
-ibValueModuleRuntimeManagerExternalReport::ibValueModuleRuntimeManagerExternalReport(ibMetaData* metadata, ibValueMetaObjectReport* metaObject)
+ibValueModuleRuntimeManagerExternalReport::ibValueModuleRuntimeManagerExternalReport(std::shared_ptr<ibMetaData> metadata, ibValueMetaObjectReport* metaObject)
 	: ibValueModuleRuntimeManager(appEnv::ActiveMetaData(), metaObject ? metaObject->GetObjectModule() : nullptr)
 {
-	// See the data-processor manager above: metadata is the owning container (passed
-	// by LoadFromFile), never owned in designer. No member access here.
+	// See the data-processor manager above: metadata is the container (passed by LoadFromFile),
+	// held by the object at runtime, never in designer.
 	m_objectValue = new ibValueRecordDataObjectExternalReport(
-		metaObject, appData->DesignerMode() ? nullptr : metadata);
+		metaObject, appData->DesignerMode() ? nullptr : std::move(metadata));
 	//set complile module
 	//set proc unit
 	m_objectValue->m_compileModule = m_compileModule;
@@ -389,7 +387,7 @@ bool ibValueModuleRuntimeManagerExternalReport::CreateMainModule()
 			Compile();
 			Run();
 		}
-		catch (const ibBackendException& err) {
+		catch (const ibCoreException& err) {
 			// Same rule as the data processor's twin above: the handler asks the METAOBJECT for a
 			// name, because a value's class name is a registry lookup and the registry entry may
 			// already be gone on this very path — a reporting call that throws replaces the fault

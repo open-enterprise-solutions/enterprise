@@ -1,5 +1,5 @@
 #include "propertyAccountingKind.h"
-#include "backend/serialize/dataBuilder.h"
+#include "core/serialize/dataBuilder.h"
 #include "backend/propertyManager/property/variant/variantOwner.h"
 #include "backend/metaCollection/partial/chartOfAccounts.h"   // the chart whose kinds these are
 

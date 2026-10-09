@@ -3,7 +3,7 @@
 //	Description : the record / register families - the STRUCTURE they declare
 //
 //	ContributeTables and nothing else: what each family becomes in the database - its table, its
-//	columns, its indexes, its seed rows, and the rules those tables carry into the restructuring.
+//	columns, its indexes and its seed rows.
 //	Split out of commonObjectMetaQuery.cpp, which keeps the QUERY surface (the vended queryables,
 //	the value materialisation, the constant resolve). "What does this look like in the database"
 //	is one question and now has one file per family, the way accumulationRegisterMetadataSchema.cpp
@@ -17,30 +17,41 @@
 #include "backend/metaCollection/partial/reference/reference.h"   // ibValueReferenceDataObject - the seed's reference cells
 #include "backend/query/columnLayout.h"                           // ibOwnerRefColumn / ibFieldSuffix - the scaffold + field names
 #include "backend/query/schemaSnapshot.h"                         // ibSchemaSnapshot / ibSchemaTable - what a declaration is
-#include "backend/databaseLayer/databaseQueryBuilder.h"           // the L2 door - the rules count rows through it
-#include "backend/restructureInfo.h"                              // ibRestructureInfo - where a refused rule states its reason
+
+#include <algorithm>   // std::find - an attribute that is itself one of the list order's columns
 
 // (SnapshotOf removed: building a snapshot is just `common->ContributeTables(snap)` — the metadata side
 //  does it directly where it drives the builder, keeping the builder itself config-agnostic.)
 
 namespace {
 // One secondary DB index per indexed attribute. Index -> the attribute alone; IndexWithAdditionalOrder ->
-// the attribute plus the row reference, so ordered list browsing reads its order straight off the index.
-// Non-unique — an attribute value repeats. Named <table>_<attrId>_IX (metaID key: stable and short). A
-// register has no single row reference, so its caller passes orderRef = nullptr and the ordered variant
-// degrades to a plain index there.
+// the attribute plus the ORDER A LIST READS THE ROWS IN (`order`): the row reference for an object, (Period,
+// Recorder, LineNumber) for a register a recorder writes. So a list filtered or grouped by the attribute
+// reads its rows straight off the index, in order. Non-unique — an attribute value repeats. Named
+// <table>_<attrId>_IX (metaID key: stable and short). With no list order (a tabular section, a register
+// keyed by its dimensions) the ordered variant degrades to a plain index.
+//
+// ⭐ THE ORDERED VARIANT IS A LIST INDEX, BOTH WAYS. A list sorted by the attribute orders by (attribute,
+// order…) and scrolls up in that order reversed; Firebird walks an index forward only, so the ordered
+// variant carries its descending twin (ListIndex) — the same as the register's period index.
 void ContributeAttributeIndexes(ibSchemaTable& t,
 	const std::vector<ibValueMetaObjectAttributeBase*>& attributes,
-	const ibBackendQueryColumn* orderRef = nullptr)
+	const std::vector<const ibBackendQueryColumn*>& order = {})
 {
 	for (const auto attr : attributes) {
 		const ibIndexingMode mode = attr->GetIndexingMode();
 		if (mode == ibIndexingMode::ibIndexingMode_DontIndex)
 			continue;
-		std::vector<const ibBackendQueryColumn*> cols = { attr->GetQueryColumn() };
-		if (mode == ibIndexingMode::ibIndexingMode_IndexWithAdditionalOrder && orderRef != nullptr && orderRef != attr->GetQueryColumn())
-			cols.push_back(orderRef);
-		t.Index(wxString::Format(wxT("%s_%i_IX"), t.m_name, (int)attr->GetColumnId()), std::move(cols));
+		const wxString name = wxString::Format(wxT("%s_%i_IX"), t.m_name, (int)attr->GetColumnId());
+		const ibBackendQueryColumn* own = attr->GetQueryColumn();
+		if (mode == ibIndexingMode::ibIndexingMode_IndexWithAdditionalOrder && !order.empty()
+		    && std::find(order.begin(), order.end(), own) == order.end()) {
+			std::vector<const ibBackendQueryColumn*> cols{ own };
+			cols.insert(cols.end(), order.begin(), order.end());
+			t.ListIndex(name, std::move(cols));
+		}
+		else
+			t.Index(name, { own });
 	}
 }
 } // namespace
@@ -75,7 +86,7 @@ void ibValueMetaObjectRecordDataMutableRef::ContributeTables(ibSchemaSnapshot& o
 	// the row reference is the additional-order column. Each carries its own Indexing flag.
 	// Same list as the columns above — each attribute carries its own Indexing flag, and a
 	// common attribute may be indexed exactly like the object's own.
-	ContributeAttributeIndexes(t, GetGenericAttributeArrayObject(), GetDataReference()->GetQueryColumn());
+	ContributeAttributeIndexes(t, GetGenericAttributeArrayObject(), { GetDataReference()->GetQueryColumn() });
 
 	// --- tabular sections — each its own table ---
 	for (const auto tab : GetTableArrayObject()) {
@@ -186,18 +197,29 @@ void ibValueMetaObjectRegisterData::ContributeTables(ibSchemaSnapshot& out) cons
 	// (ibValuePointInTime::CompareValueLS): the same index serves "up to this instant" and "up to
 	// this document within the instant", and the second needs no re-sort.
 	//
-	// ⚠ NOT the line number. It already rides the key index above, where it is asked for; on its own
-	// it is a small integer repeated across every document — an index the planner would never choose
-	// and every INSERT would pay for. A fold over the tail sums lines, and a sum has no order.
+	// ⭐ …AND THE LINE NUMBER LAST, BOTH WAYS: (Period, Recorder, LineNumber) is the register's LIST order,
+	// and an index that ends before the order does is one the engine cannot walk. Without it every page of
+	// the list sorted the whole register — a million movements, 1100 ms a page scrolling down and the same
+	// scrolling up, against 235 ms walked by the index (2026-10-01). Scrolling up reads the order
+	// backwards, which Firebird walks only on a descending twin (ListIndex).
 	// (Only where the register HAS a Period column — a calculation register is dated otherwise, HasPeriod.)
-	if (HasRecorder() && HasPeriod() && GetRegisterPeriod() != nullptr && GetRegisterRecorder() != nullptr)
-		t.Index(t.m_name + wxT("_PIX"), { GetRegisterPeriod()->GetQueryColumn(), GetRegisterRecorder()->GetQueryColumn() });
+	std::vector<const ibBackendQueryColumn*> listOrder;
+	if (HasRecorder() && HasPeriod() && GetRegisterPeriod() != nullptr && GetRegisterRecorder() != nullptr) {
+		listOrder = { GetRegisterPeriod()->GetQueryColumn(), GetRegisterRecorder()->GetQueryColumn(),
+			GetRegisterLineNumber()->GetQueryColumn() };
+		t.ListIndex(t.m_name + wxT("_PIX"), listOrder);
+	}
 
 	// Per-field secondary indexes. Dimensions, resources, attributes and predefined all carry the
 	// Indexing flag (each is-a ibValueMetaObjectAttribute), so GetGenericAttributeArrayObject covers
-	// them all. A register has no single row reference, so the ordered variant degrades to a plain
-	// index here (the dimensions already ride the composite key index above).
-	ContributeAttributeIndexes(t, GetGenericAttributeArrayObject());
+	// them all.
+	//
+	// ⭐ A DIMENSION OF A REGISTER A RECORDER WRITES RIDES NO KEY. The key above is (Recorder, LineNumber) — the
+	// dimensions are in it only where there is no recorder — so a list grouped by a dimension found the rows of
+	// one value by walking the list order from its start and testing each: 1.6 s for a page of a rare warehouse
+	// among 900 000 movements, and the same again for the rows above it (2026-10-05). The ordered variant is the
+	// dimension in that very LIST order, which the page reads straight off.
+	ContributeAttributeIndexes(t, GetGenericAttributeArrayObject(), listOrder);
 }
 
 void ibValueMetaObjectRecordDataHierarchyMutableRef::ContributeTables(ibSchemaSnapshot& out) const
@@ -216,81 +238,11 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::ContributeTables(ibSchemaSn
 	// _RRRef so the data-reference unique index (_REF_UQ) does not see N rows colliding on the NULL default.
 	ibSchemaTable& t = out.Shared(GetMetaID(), GetPhysicalTableName());   // the main table the base just created
 
-	// RETIRING A COLUMN IS DELETING WHAT IT HOLDS. Changing the hierarchy kind is a declaration and reads
-	// like a setting, but two of its answers take columns away: "no hierarchy" retires Parent, and
-	// anything but folders retires IsFolder (the list stops declaring it — FillArrayObjectByPredefinedAttribute —
-	// and the differ drops it; Parent is still listed always, so its half of this rule waits for that step).
-	// Rows that filled those columns lose their place in the tree with no way back and no word said.
-	//
-	// Same shape as the chart of accounts' ceiling: the rule travels with the declaration, the differ asks
-	// it before touching this table, and a refusal states its reason in the ledger — which greys Apply.
-	{
-		const wxString tableName = GetPhysicalTableName();
-		const wxString objectName = GetName();
-		const ibValueMetaObjectAttributeBase* parentAttr = GetDataParent();
-		const ibValueMetaObjectAttributeBase* folderAttr = GetDataIsFolder();
-		const bool losesParent  = !HasParentLink() && parentAttr != nullptr;
-		const bool losesFolders = !HasFolders()    && folderAttr != nullptr;
-
-		if (losesParent || losesFolders) {
-			// THE PARENT IS FILLED WHEN ITS TARGET TYPE IS SET, not when its key is non-null: an empty
-			// reference is stored as an ALL-ZERO guid (valueInfo.h), so testing the _RRRef blob for NULL
-			// would count every row alive and refuse every time. The _RTRef id is 0 exactly when nothing
-			// is referenced.
-			const wxString parentField = losesParent  ? parentAttr->GetPhysicalName() + ibFieldSuffix(ibColumnRole::ReferenceType) : wxString();
-			const wxString folderField = losesFolders ? folderAttr->GetPhysicalName() + ibFieldSuffix(ibColumnRole::Boolean)     : wxString();
-
-			t.m_beforeChange = [tableName, objectName, parentField, folderField](ibRestructureInfo* report) -> bool {
-				// Counted by the database, compared here — see the note on the chart of accounts' rule for
-				// why the comparison does not ride in SQL.
-				//
-				// ⭐⭐ AND A FAILED COUNT IS NOT A COUNT OF ZERO. This used to answer 0 to any exception,
-				// which reads as "nobody is in the way" — the strongest possible permission, granted
-				// precisely when the rule could not establish anything. What it guards is not cosmetic:
-				// zero here lets a hierarchy be dropped out from under rows that have a parent.
-				//
-				// The one legitimate reason to find nothing is a table that does not exist yet, and that
-				// is asked once, in front. Anything else stops the apply.
-				ibDatabaseQueryBuilder probe;
-				if (!probe.TableExists(tableName))
-					return true;   // nothing was ever applied here; no row can be stranded
-
-				auto rowsWith = [&tableName](const wxString& field, const ibQueryExprPtr& filled) -> int {
-					ibDatabaseQueryBuilder q;
-					ibQueryIR ir;
-					ir.m_root = ibAggregate(ibFilter(ibScan(tableName), filled),
-						{ { ibFunc(wxT("COUNT"), { ibCol(field) }), wxT("rowCount") } }, {});
-					ibQueryResult rs = q.ExecuteIR(ir);
-					return rs.Next() ? rs.GetResultInt(wxT("rowCount")) : 0;
-				};
-
-				bool allowed = true;
-				if (!parentField.IsEmpty()) {
-					const int nested = rowsWith(parentField,
-						ibBinOp(ibQueryBinOp::Ne, ibCol(parentField), ibConst(ibValue(0))));
-					if (nested > 0) {
-						allowed = false;
-						if (report != nullptr)
-							report->AppendError(wxString::Format(
-								_("%s: %i row(s) have a parent - clear it before dropping the hierarchy"),
-								objectName, nested));
-					}
-				}
-				if (!folderField.IsEmpty()) {
-					const int folders = rowsWith(folderField,
-						ibBinOp(ibQueryBinOp::Eq, ibCol(folderField), ibConst(ibValue(true))));
-					if (folders > 0) {
-						allowed = false;
-						if (report != nullptr)
-							report->AppendError(wxString::Format(
-								_("%s: %i folder(s) exist - delete them before switching to a hierarchy without folders"),
-								objectName, folders));
-					}
-				}
-				return allowed;
-			};
-		}
-	}
+	// (No rule on retiring Parent / IsFolder any more, 2026-10-05: a hierarchy switched off takes those
+	//  columns the way deleting any attribute takes its own — the list stops declaring them, the differ
+	//  drops them and the apply ledger says "Remove …". The rule that refused it kept its own idea of which
+	//  columns leave; the list moved without it, and every apply of a catalog without folders died on
+	//  "Column unknown" — PR #220.)
 
 	// RAW, never Create - the same rule the enum's seed above states, and this is the site it was
 	// written for: a seed cell needs the reference's IDENTITY BYTES, while Create MATERIALISES the

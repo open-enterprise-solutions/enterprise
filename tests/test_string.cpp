@@ -20,7 +20,7 @@
 #if defined(_MSC_VER) && defined(_DEBUG)
 #include <crtdbg.h>     // _CrtMemCheckpoint — what a decoded string keeps, counted on the debug heap
 #endif
-#include "backend/fstring.h"
+#include "core/fstring.h"
 
 namespace {
 // "Привет" in UTF-8 (6 Cyrillic code points → 6 wxChars, 12 UTF-8 bytes).

@@ -81,11 +81,6 @@ public:
 	virtual bool OnBeforeCloseMetaObject();
 	virtual bool OnAfterCloseMetaObject();
 
-	// Run it now, ignoring the schedule — the designer / script door. Without it a job can only be
-	// exercised by waiting out its interval, which makes "is the job wrong or is the manager wrong?"
-	// unanswerable.
-	bool RunNow() const;
-
 protected:
 
 

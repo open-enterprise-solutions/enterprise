@@ -90,9 +90,9 @@ bool FoldTotals(ibSession* session)
 
 } // namespace
 
-void ibRegisterPlatformJobs()
+void ibRegisterPlatformJobs(ibApplicationInstance* const applicationInstance)
 {
-	ibJobManager* const manager = ibApplicationInstance::GetJobManager();
+	ibJobManager* const manager = ibApplicationInstance::GetJobManager(applicationInstance);
 	if (manager == nullptr)
 		return;   // launcher / pre-bootstrap — no schedule to populate
 
@@ -129,12 +129,10 @@ void ibRegisterPlatformJobs()
 	// manager refuses a duplicate name anyway, so the two would silently race to
 	// be first.)
 
-	// The schedule starts running here, once there is something to run. Every
-	// host that opens a database gets it — desktop client, web server, compute
-	// server, daemon — without arranging a timer of its own. A thin client never
-	// reaches this code because it never opens a database, which is exactly why
-	// it neither schedules nor executes anything.
-	manager->Start();
+	// The schedule is DECLARED here and starts running with the base's first session (ibApplicationInstance's
+	// OnFirstConnect): every host that opens a database gets it — a file base's program, a server — without
+	// arranging a timer of its own, and nobody comes into the base ahead of the one who opened it, a job due at
+	// start included.
 }
 
 

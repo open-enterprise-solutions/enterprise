@@ -151,6 +151,7 @@ std::shared_ptr<ibQueryAstExpr> Record(const wxString& body, const wxString& row
 
 // A test holding the metadata-free source, the RAM fixture, and the SQLite twin side by side.
 struct LinqExecFix : ::testing::Test {
+	ibTestCodeStyle       style{ CODE_CES };   // the lambda bodies below are CES ('{ return … ; }')
 	TestCol               region{ wxT("region"), REGION };
 	TestCol               qty{ wxT("qty"), QTY };
 	TestQueryable         src{ wxT("t"), 100 };
@@ -158,7 +159,6 @@ struct LinqExecFix : ::testing::Test {
 	ibDatabaseLayerSQLite db;
 
 	void SetUp() override {
-		ibCompileCode::SetCodeStyle(CODE_CES);   // the lambda bodies below are CES ('{ return … ; }')
 		src.AddCol(&region);
 		src.AddCol(&qty);
 		ASSERT_TRUE(MakeSqlFixture(db)) << "SQLite in-memory fixture failed to open";

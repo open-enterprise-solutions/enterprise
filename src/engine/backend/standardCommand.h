@@ -217,20 +217,8 @@ public:
 // collection uses — one unified record; a default item, m_actionId == wxNOT_FOUND, is a separator), (2) execute a
 // command by id against the CURRENT ROW + form. The FRONT (TableBox) merges the set into the real action it
 // gives the command bar and routes the execute here with the front-owned row — the model never pulls the widget.
-// A command's id carries THIS bit to say "after running me on the model, ALSO start the row's inline editor on
-// the front". A model BAKES it into its Edit id in the enum (`eEditValue = <n> | eStartEditingFlag`) — for the MODEL
-// it is just an ordinary command value (its own `case eEditValue` carries the bit too). The TableBox's CallAsAction
-// tests the bit on EVERY id it forwards to CallAsCommand (which dispatches its Edit case normally — a list opens the
-// object form, a value-table does nothing there) and — if the bit is set — runs EditCurrentRow after (a value-table
-// / tabular row edits inline; a list no-ops, its form already opened). Inline editing is a pure FRONT operation, not
-// round-tripped through the backend to call back.
-//
-// The id (flag included) MUST stay a valid wxMenuItem id (< 32767): the TableBox appends its command ids straight as
-// context-menu item ids (OnContextMenu) — a high bit here trips wxMenuItemBase's `itemid < 32767` assert. So it is a
-// FREE bit no real id band sets: model ids (1..27), form chrome (10000..10003), TableBox band (20000..20004) all
-// leave bit 12 clear, and `<n> | 0x1000` stays well under 32767 (e.g. eEditValue = 3 | 0x1000 = 4099). A new band
-// must likewise keep bit 12 clear.
-constexpr ibActionID eStartEditingFlag = 0x1000;
+// A command's id may carry eStartEditingFlag (core/types.h): after the model runs it, the front opens the row's
+// inline editor — the engine's front and the thin client's alike read the bit there.
 
 class ibStandardCommandTabular {
 public:

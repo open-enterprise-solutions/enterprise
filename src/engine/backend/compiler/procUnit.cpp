@@ -481,9 +481,13 @@ IB_NOINLINE void RaiseRecursionLimit(ibProcUnitState* state)
 		const ibByteCode* stackByteCode = stackContext->GetByteCode();
 		wxASSERT(stackByteCode);
 
+		// Same rule as the diagnostic's stack walk: a position outside its own bytecode prints as
+		// line 0 — the message about a runaway must not itself read past the array.
+		const long curLine = stackContext->m_lCurLine;
 		const ibString frame = ibString::Format(wxT("%s (#line %d)"),
 			stackByteCode->m_strModuleName,
-			stackByteCode->m_listCode[stackContext->m_lCurLine].m_numLine + 1
+			(curLine >= 0 && (size_t)curLine < stackByteCode->m_listCode.size())
+				? (int)stackByteCode->m_listCode[curLine].m_numLine + 1 : 0
 		);
 
 		if (frame == previous) {
@@ -1117,6 +1121,38 @@ void ibProcUnit::Execute(ibRunContext* pContext, ibValue* pvarRetValue, bool bDe
 	// iterations. (docs: interpreter hot-loop per-opcode overhead trim.)
 	constexpr unsigned kCancelPoll = 1024;   // power of two -> mask test, not modulo
 	unsigned opTick = 0;
+
+	// A FAILURE MET IN THIS MODULE'S RUN — taken by its innermost Try (true: the run goes on at `lCodeLine`), or its place
+	// kept for the modules above and the failure said and thrown on (ProcessError rethrows the one being handled).
+	const auto catchError = [&](const ibBackendException& err) -> bool {
+
+		const long trySize = tryList.size() - 1;
+		if (trySize >= 0) {
+
+			if (auto* puState = ibSession::GetPUState())
+				puState->m_errorPlace.Reset(); //Error is handled in this module - erase the error location
+
+			const long tryCodeLine = tryList[trySize].m_lEndLine;
+			tryList.resize(trySize);
+			lCodeLine = tryCodeLine;
+			return true;
+		}
+
+		//there is no handler in this module - save the error location for the following modules
+		//But we don't throw an error right away, because we don't know if there are any handlers further
+		if (auto* puState = ibSession::GetPUState()) {
+			if (puState->m_errorPlace.m_byteCode == nullptr && m_pByteCode != puState->m_errorPlace.m_skipByteCode) { //the Error system function throws an exception only for child modules
+
+				//previously saved the original error location (i.e. the error didn't occur in this module)
+				puState->m_errorPlace.m_byteCode = m_pByteCode;
+				puState->m_errorPlace.m_errorLine = lCodeLine;
+			}
+		}
+
+		//show and throw error message (ProcessError rethrows via `throw;`)
+		ibBackendException::ProcessError(err, m_pByteCode->m_listCode[lCodeLine]);
+		return false;
+	};
 
 start_label:
 
@@ -2439,32 +2475,19 @@ start_label:
 
 	}
 	catch (const ibBackendException& err) {
-
-		const long trySize = tryList.size() - 1;
-		if (trySize >= 0) {
-
-			if (auto* puState = ibSession::GetPUState())
-				puState->m_errorPlace.Reset(); //Error is handled in this module - erase the error location
-
-			const long tryCodeLine = tryList[trySize].m_lEndLine;
-			tryList.resize(trySize);
-			lCodeLine = tryCodeLine;
+		if (catchError(err))
 			goto start_label;
+	}
+	// …AND A REFUSAL OF THE CORE BELOW — a read that could not go on — is the module's failure like any other: met as the
+	// engine's own (ibBackendCoreException), so a Try takes it and the error is placed where it happened.
+	catch (const ibCoreException& core) {
+		try {
+			ibBackendCoreException::Error(wxT("%s"), core.GetErrorDescription());
 		}
-
-		//there is no handler in this module - save the error location for the following modules
-		//But we don't throw an error right away, because we don't know if there are any handlers further
-		if (auto* puState = ibSession::GetPUState()) {
-			if (puState->m_errorPlace.m_byteCode == nullptr && m_pByteCode != puState->m_errorPlace.m_skipByteCode) { //the Error system function throws an exception only for child modules
-
-				//previously saved the original error location (i.e. the error didn't occur in this module)
-				puState->m_errorPlace.m_byteCode = m_pByteCode;
-				puState->m_errorPlace.m_errorLine = lCodeLine;
-			}
+		catch (const ibBackendException& err) {
+			if (catchError(err))
+				goto start_label;
 		}
-
-		//show and throw error message (ProcessError rethrows via `throw;`)
-		ibBackendException::ProcessError(err, m_pByteCode->m_listCode[lCodeLine]);
 	}
 
 	// ⭐ THE CANCEL GOES UP, TO WHOEVER CALLED. This frame has run out - of the loops the block above walked it
@@ -3010,7 +3033,7 @@ bool ibProcUnit::Evaluate(const ibString& strExpression, ibRunContext* pRunConte
 			if (reusable)
 				pRunContext->m_listEval.emplace_back(stringUtils::MakeUpper(strExpression), runEvaluate);
 		}
-		catch (const ibBackendException& e) {
+		catch (const ibCoreException& e) {
 			reportFailure(e.GetErrorDescription());
 			return false;
 		}
@@ -3069,7 +3092,7 @@ bool ibProcUnit::Evaluate(const ibString& strExpression, ibRunContext* pRunConte
 	try {
 		runEvaluate->Execute(pEvalFrame, &pvarRetValue, /*bDelta=*/false);
 	}
-	catch (const ibBackendException& e) {
+	catch (const ibCoreException& e) {
 		// Carry the message into the watch result. Previous behaviour
 		// (bare `return false`) made the panel show a blank row for
 		// any runtime failure — user couldn't tell apart a deliberately-

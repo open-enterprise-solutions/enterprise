@@ -1282,8 +1282,8 @@ protected:
 	// a configuration that has not set it posts as it always has.
 	ibPropertyEnum<ibValueEnumDocumentRecordsDeletion>* m_propertyRegisterRecordsDeletion =ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumDocumentRecordsDeletion>>(m_categoryData,
 		wxT("RegisterRecordsDeletion"), _("Register records deletion"), _("What the platform does with the document's movements when it is posted again or its posting is undone. Automatically (the default): cleared before the posting handler runs and when the posting is undone. On undo posting: kept when posted again, cleared on undo. Never: the configuration clears them. A deleted document always takes its movements with it."), ibDocumentRecordsDeletion::ibDocumentRecordsDeletion_Automatically);
-	ibPropertyContainer<>* m_propertyAttributeNumber = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateString(wxT("Number"), wxGETTEXT_IN_CONTEXT("document attribute", "Number"), _("The document's number - what a person finds it by. Indexed; shown with the date in lists and links. Left empty, it is generated when the document is written; the object module's SetNewNumber handler may give it a prefix or take the numbering over."), 11, true, ibItemMode::ibItemMode_Item, ibSelectMode::ibSelectMode_Items, ibIndexingMode::ibIndexingMode_Index));
-	ibPropertyContainer<>* m_propertyAttributeDate = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateDate(wxT("Date"), _("Date"), _("The document's date and time - when the fact happened. Documents are ordered by it, and it is the moment its movements stand at in the registers: a balance as of a moment counts the documents up to it."), ibDateFractions::ibDateFractions_DateTime, true, ibItemMode::ibItemMode_Item, ibSelectMode::ibSelectMode_Items, ibIndexingMode::ibIndexingMode_Index));
+	ibPropertyContainer<>* m_propertyAttributeNumber = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateString(wxT("Number"), wxGETTEXT_IN_CONTEXT("document attribute", "Number"), _("The document's number - what a person finds it by. Indexed; shown with the date in lists and links. Left empty, it is generated when the document is written; the object module's SetNewNumber handler may give it a prefix or take the numbering over."), 11, true, ibItemMode::ibItemMode_Item, ibSelectMode::ibSelectMode_Items, ibIndexingMode::ibIndexingMode_IndexWithAdditionalOrder));
+	ibPropertyContainer<>* m_propertyAttributeDate = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateDate(wxT("Date"), _("Date"), _("The document's date and time - when the fact happened. Documents are ordered by it, and it is the moment its movements stand at in the registers: a balance as of a moment counts the documents up to it."), ibDateFractions::ibDateFractions_DateTime, true, ibItemMode::ibItemMode_Item, ibSelectMode::ibSelectMode_Items, ibIndexingMode::ibIndexingMode_IndexWithAdditionalOrder));
 	// The moment — registered like the date above, typed as the PointInTime value. See GetPointInTime
 	// for why it never joins the predefined list.
 	ibPropertyContainer<>* m_propertyAttributePointInTime = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateSpecialType(wxT("PointInTime"), _("Point in time"), _("The document's moment: its date together with the document itself, so two documents of the same second are still ordered. Not stored - built from the date and the reference; passed to a register's virtual table it reads everything up to (or before) this very document."), value_to_clsid(wxT("PointInTime"))));
@@ -1419,8 +1419,9 @@ class BACKEND_API ibValueMetaObjectRecordDataHierarchyMutableRef :
 	// And PRESENCE, which is the part a boolean-plus-enum could not express: an attribute that this
 	// arrangement has no use for is not present in this configuration, which is exactly what
 	// metaDisableFlag says (the same flag a catalog with no owner puts on Owner, and an independent
-	// register on Recorder). Being absent, it leaves every metadata walk — so its column leaves the
-	// schema too, and a flat catalog stops carrying a parent it can never fill.
+	// register on Recorder). The flag alone does not reach the schema — the list that becomes columns
+	// asks the same two questions itself (FillArrayObjectByPredefinedAttribute), so a flat catalog
+	// stops carrying a parent it can never fill.
 	void ApplyHierarchyType() {
 		(*m_propertyAttributeParent)->SetSelectMode(HasFolders()
 			? ibSelectMode::ibSelectMode_Folders
@@ -1607,9 +1608,12 @@ protected:
 		array.push_back(m_propertyAttributePredefined->GetMetaObject());
 		array.push_back(m_propertyAttributeCode->GetMetaObject());
 		array.push_back(m_propertyAttributeDescription->GetMetaObject());
-		// Parent is still pushed UNCONDITIONALLY: a flat catalog has none, but its readers (the object
-		// forms' explorers, the Add command) have not been asked yet, and retiring it is its own step.
-		array.push_back(m_propertyAttributeParent->GetMetaObject());
+		// PARENT ONLY WHERE THERE IS A PARENT LINK — the same question IsFolder below answers, one step up. A
+		// flat catalog points at nothing, yet it offered Parent in its field tree and kept a column nobody
+		// could fill. The readers ask the same HasParentLink() (the Add command, the delete that re-parents the
+		// children); the object forms' explorers drop it by the flag (ApplyHierarchyType, AppendColumn).
+		if (HasParentLink())
+			array.push_back(m_propertyAttributeParent->GetMetaObject());
 		// ⭐ ISFOLDER ONLY WHERE THERE ARE FOLDERS — the way every register's list says what it is made of
 		// (an accumulation register lists RecordType only for balances, a catalog its Owner only when it has
 		// one). Listed always, a chart of accounts offered `IsFolder` in every field tree while a query's find
@@ -1617,7 +1621,7 @@ protected:
 		//
 		// The readers ask the same question: a record without folders is always an item (ReadData, the
 		// object's own values, the Add command's anchor), and the schema stops declaring the column — the
-		// differ drops it, behind the rule that refuses while any row is still a folder (commonObjectSchema).
+		// differ drops it, like any attribute that leaves.
 		if (HasFolders())
 			array.push_back(m_propertyAttributeIsFolder->GetMetaObject());
 		return true;
@@ -1656,8 +1660,8 @@ protected:
 
 	//create default attributes
 	ibPropertyContainer<>* m_propertyAttributePredefined = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateString(wxT("PredefinedName"), _("Predefined name"), _("The name of an item the configuration itself declares (a predefined item) - what code refers to it by, as Catalogs.<Name>.<PredefinedName>. Empty for items created by users; a predefined item cannot be deleted."), 150, ibItemMode::ibItemMode_Folder_Item));
-	ibPropertyContainer<>* m_propertyAttributeCode = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateString(wxT("Code"), _("Code"), _("The item's code - a short identifier a person types or searches by. Indexed. Left empty, it is generated when the item is written; the object module's SetNewCode handler may give it a prefix or take the numbering over."), 8, true, ibItemMode::ibItemMode_Folder_Item, ibSelectMode::ibSelectMode_Items, ibIndexingMode::ibIndexingMode_Index));
-	ibPropertyContainer<>* m_propertyAttributeDescription = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateString(wxT("Description"), wxGETTEXT_IN_CONTEXT("item name", "Description"), _("The item's name - what it is shown as wherever a reference to it appears: in fields, lists, reports and printed forms. Indexed, and searched by in quick choice."), 150, true, ibItemMode::ibItemMode_Folder_Item, ibSelectMode::ibSelectMode_Items, ibIndexingMode::ibIndexingMode_Index));
+	ibPropertyContainer<>* m_propertyAttributeCode = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateString(wxT("Code"), _("Code"), _("The item's code - a short identifier a person types or searches by. Indexed. Left empty, it is generated when the item is written; the object module's SetNewCode handler may give it a prefix or take the numbering over."), 8, true, ibItemMode::ibItemMode_Folder_Item, ibSelectMode::ibSelectMode_Items, ibIndexingMode::ibIndexingMode_IndexWithAdditionalOrder));
+	ibPropertyContainer<>* m_propertyAttributeDescription = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateString(wxT("Description"), wxGETTEXT_IN_CONTEXT("item name", "Description"), _("The item's name - what it is shown as wherever a reference to it appears: in fields, lists, reports and printed forms. Indexed, and searched by in quick choice."), 150, true, ibItemMode::ibItemMode_Folder_Item, ibSelectMode::ibSelectMode_Items, ibIndexingMode::ibIndexingMode_IndexWithAdditionalOrder));
 	ibPropertyContainer<>* m_propertyAttributeParent = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateEmptyType(wxT("Parent"), _("Parent"), _("The folder or item this one sits under. What it may point to follows the hierarchy type: a folder in a folders-and-items hierarchy, any item in an items hierarchy. Empty: the item is at the top level."), ibItemMode::ibItemMode_Folder_Item, ibSelectMode::ibSelectMode_Folders, ibIndexingMode::ibIndexingMode_Index));
 	ibPropertyContainer<>* m_propertyAttributeIsFolder = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateBoolean(wxT("IsFolder"), _("Is folder"), _("Set on a folder of a folders-and-items hierarchy: a folder only holds other items and folders, and carries only the attributes whose use says folders. Decided when the object is created and not changed afterwards."), ibItemMode::ibItemMode_Folder_Item));
 
@@ -2119,12 +2123,14 @@ class BACKEND_API ibValueManagerDataObjectPredefined : public ibValueManagerData
 
 	virtual const ibValueMetaObjectRecordDataHierarchyMutableRef* GetMetaObject() const = 0;
 
-	// THE FIRST ITEM WHOSE CODE / DESCRIPTION IS LIKE THE PATTERN, as a reference — empty when none is.
+	// THE FIRST ITEM WITH THIS CODE / DESCRIPTION, as a reference — empty when none has it. A description may
+	// be asked for not exactly (`exact` False): then it is the first item whose description BEGINS with it.
+	// `exact` arrives as the script's VALUE and is read once, in the body — not given (Undefined) is exact.
 	// Here once, for every manager whose items have both (catalog, the three charts, the parameterized
 	// job): each of them carried its own copy, and every copy handed back freed memory (see the body).
 	// A VALUE, not a pointer — the reference found is held by the value that carries it out.
 	ibValue FindByCode(const ibValue& code) const;
-	ibValue FindByDescription(const ibValue& description) const;
+	ibValue FindByDescription(const ibValue& description, const ibValue& exact) const;
 
 	void FillPredefined(ibMemberTable& helper) const;    // predefined-value props (composes onto FillMembers)
 
@@ -2337,20 +2343,15 @@ protected:
 };
 
 //Object with file
-// RAII mix-in for external DP/Report value objects: takes the transient external
-// metadata container in its ctor and drops it (CloseDatabase + delete) in its dtor.
-// Mixed into ibValueRecordDataObjectExternal* alongside the regular DP/Report value
-// class; embedded / config value objects don't inherit it. Generic ibMetaData* —
-// CloseDatabase + delete go through the polymorphic base, so no concrete container
-// type is needed and the inline dtor compiles in every TU.
+// Mix-in for external DP/Report value objects: HOLDS the external metadata container the object works in, as every
+// metadata is held (ibMetaData::MakeShared) — at runtime the object's life keeps the container, and its last holder
+// closes it. Mixed into ibValueRecordDataObjectExternal* alongside the regular DP/Report value class; embedded /
+// config value objects don't inherit it. A copy holds it too.
 class BACKEND_API ibExternalOwnerHelper {
 public:
-	ibExternalOwnerHelper(ibMetaData* externalMetadata = nullptr) : m_externalMetadata(externalMetadata) {}
-	// A copy never owns the source's container — only one object drops it.
-	ibExternalOwnerHelper(const ibExternalOwnerHelper&) : m_externalMetadata(nullptr) {}
-	~ibExternalOwnerHelper();   // out-of-line in commonObject.cpp — ibMetaData is only forward-declared here
+	ibExternalOwnerHelper(std::shared_ptr<ibMetaData> externalMetadata = nullptr) : m_externalMetadata(std::move(externalMetadata)) {}
 protected:
-	ibMetaData* m_externalMetadata;
+	std::shared_ptr<ibMetaData> m_externalMetadata;
 };
 
 class BACKEND_API ibValueRecordDataObjectExt : public ibValueRecordDataObject {

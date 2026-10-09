@@ -126,4 +126,19 @@
     <ClInclude Include="visualView\visualHost.h">       <Filter>visualView</Filter></ClInclude>
     <ClInclude Include="visualView\visualHostClient.h"> <Filter>visualView</Filter></ClInclude>
   </ItemGroup>
+  <ItemGroup>
+    <Filter Include="res">
+      <UniqueIdentifier>{9ba25c4e-6f1d-42a1-8cf5-08bc75e6c207}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="res\resource.h">
+      <Filter>res</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="res\wfrontend.rc">
+      <Filter>res</Filter>
+    </ResourceCompile>
+  </ItemGroup>
 </Project>

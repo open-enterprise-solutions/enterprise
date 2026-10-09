@@ -150,6 +150,13 @@ struct ibDialectDictionary
 	// SQLite take just "DROP INDEX <name>". Default = standalone (no table).
 	bool m_dropIndexNeedsTable = false;
 
+	// A list read BACKWARDS (scrolling up: ORDER BY … DESC) walks an index only where the engine can walk
+	// one in that direction. Firebird walks an ascending index forward only, so a descending twin is
+	// declared beside the index a list reads by, and this is the word that makes one there
+	// (`CREATE DESCENDING INDEX`). EMPTY (default) = the engine walks an ascending index both ways
+	// (PostgreSQL, SQLite, MySQL, MSSQL) — the twin would only cost every write, so it is not made.
+	wxString m_descendingIndexWord;
+
 	// ⭐⭐ HOW MANY FIELDS AN INDEX MAY COVER. 0 (the default) = no limit worth declaring.
 	//
 	// A key is a list of LOGICAL columns; an index is built over their PHYSICAL fields, and a
@@ -180,7 +187,9 @@ struct ibDialectDictionary
 	// to read (2026-08-30, a register with a wide string key).
 	//
 	// Declared rather than discovered, for the same reason as the segment count: the identity moves
-	// into one hashed field BEFORE any DDL is emitted.
+	// into one hashed field BEFORE any DDL is emitted. This is the ceiling of a base the driver
+	// CREATES; whoever decides reads ibDatabaseLayer::GetMaxIndexKeyBytes, which a driver whose
+	// ceiling depends on the base answers from the base it is attached to.
 	unsigned int m_maxIndexKeyBytes = 0;
 
 	// Physical row identifier, used to drop duplicate-key rows (keep one) BEFORE a UNIQUE index is created
@@ -222,6 +231,12 @@ struct ibDialectDictionary
 	// showed it is the PATH: one statement ran with its outer alias 20 characters long and failed at 26 (the
 	// vendored 5.0.5). Firebird's bound is therefore short (see its dialect).
 	unsigned int m_maxAliasLength = 0;
+
+	// ⭐⭐ HOW MANY VALUES ONE STATEMENT BINDS (`?`), however many lists they stand in — the engine's own wall, so a
+	// road that would build a long list can ask before it builds one instead of learning it from the refusal. 0 = none
+	// known. Firebird 5: 32 767 (measured 2026-10-05: 30 000 ran; 50 000 "Implementation limit exceeded - Maximum
+	// number of parameters: 32767").
+	unsigned int m_maxParameters = 0;
 
 	// ⭐ A NAME WITHIN A LIMIT — itself when it fits, otherwise its head plus a hash of the WHOLE name. Deterministic,
 	// so whoever writes the name and whoever reads it back compute the same spelling, and two names that share
@@ -1005,6 +1020,11 @@ public:
 	// owns its dialect (typically a static singleton it returns by reference);
 	// ODBC returns a default-constructed ANSI dictionary.
 	virtual const ibDialectDictionary& GetDialect() const = 0;
+
+	// THE BYTE CEILING OF AN INDEX KEY IN THE BASE THIS CONNECTION IS ATTACHED TO. The dialect says what a
+	// base this driver CREATES gets (m_maxIndexKeyBytes); a base is what it was created as, so a driver whose
+	// ceiling depends on the base (Firebird: a quarter of its page) answers from the base it attached to.
+	virtual unsigned int GetMaxIndexKeyBytes() const { return GetDialect().m_maxIndexKeyBytes; }
 
 	// The driver's TEMP-TABLE facts, or nullptr if it has no DB temporary tables. PRESENCE = the
 	// capability: nullptr => L3 materialises an intermediate in RAM (ibQueryComposer — the

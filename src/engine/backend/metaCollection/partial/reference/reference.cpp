@@ -17,8 +17,7 @@
 #include <utility>
 
 #include "backend/session/session.h"   // ibSession::Current — the register lives on the session
-#include "backend/diagnostics/journal.h"   // a read refused across sessions is said out loud
-#include "backend/utils/debugTrace.h"      // ibDebugTraceEnabled — the register measurement is opt-in
+#include "core/diagnostics/debugTrace.h"      // ibDebugTraceEnabled — the register measurement is opt-in
 #include <unordered_map>
 #include <unordered_set>         // Unread — an identity filed twice is told once
 #include <mutex>                 // the table is read by a rented read on another thread
@@ -882,7 +881,9 @@ const ibSourceExplorer* ibValueReferenceDataObject::GetSourceExplorer() const
 	const ibValueMetaObjectRecordData* metaObject = GetMetaObject();
 	if (metaObject == nullptr)
 		return nullptr;   // unresolved / empty reference — no target type to describe, so the hop stops here
-	m_sourceExplorer.Reset(wxT("Ref"), _("Ref"), metaObject->GetMetaID(), GetClassType(), false, false);
+	if (!m_sourceExplorer.Reset(metaObject->GetMetaData()->GetFactoryCountChanges(),
+		wxT("Ref"), _("Ref"), metaObject->GetMetaID(), GetClassType(), false, false))
+		return &m_sourceExplorer;   // built at this version of the metadata already — read as it is
 	for (const auto object : metaObject->GetGenericAttributeArrayObject())
 		m_sourceExplorer.AppendColumn(object->GetQueryColumn());
 	return &m_sourceExplorer;
@@ -1121,7 +1122,7 @@ bool ibValueReferenceDataObject::CallAsFunc(const long lMethodNum, ibValue& pvar
 // in is still a reference, and the far side must be able to compare and assign
 // it without a type error.
 
-#include "backend/serialize/dataBuilder.h"
+#include "core/serialize/dataBuilder.h"
 
 bool ibValueReferenceDataObject::DoSerialize(ibDataNode& node) const
 {

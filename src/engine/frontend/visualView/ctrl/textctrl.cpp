@@ -1,5 +1,5 @@
 #include "widgets.h"
-#include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
+#include "core/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 
 #ifdef OES_USE_WEB
 #include "frontend/web/webWindow.h"
@@ -162,7 +162,7 @@ void ibValueTextCtrl::OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, 
 }
 
 #include "backend/appData.h"
-#include "backend/formatString.h"   // ibFormatString — what the field shows its value through
+#include "core/formatString.h"   // ibFormatString — what the field shows its value through
 #include "backend/metaCollection/attribute/metaAttributeObject.h"
 
 const ibTranslateString& ibValueTextCtrl::GetSourceFormat() const

@@ -9,6 +9,7 @@
 #include <thread>
 #include <algorithm>
 #include <sstream>
+#include <utility>   // std::exchange — the active configuration handed over
 
 #include <wx/ffile.h>      // infobase.conf — written for a new base
 #include <wx/fileconf.h>   // infobase.conf — a base's own settings
@@ -25,6 +26,8 @@
 #include "backend/mcp/mcpServer.h"            // ibMcpServer (owned via GetMcpServer)
 #include "backend/job/platformJobs.h"         // the engine's own jobs, declared when a database opens
 #include "backend/settings/settingsStorage.h" // ibSettingsStorage (owned via GetSettingsStorage)
+#include "backend/temp/tempStorage.h"         // ibTempStorage (owned via GetTempStorage)
+#include "backend/server/serverConfig.h"      // a server reads where its base lives itself
 
 #include "backend/backend_exception.h"        // ibBackendCoreException — a build with no driver says so
 #include "backend/utils/passwordHash.hpp"
@@ -64,11 +67,11 @@ std::shared_ptr<ibDatabaseLayer> ibApplicationInstance::GetDatabaseLayer()
 wxString ibApplicationInstance::ResolveLogDir() const
 {
 	const wxString sep = wxFileName::GetPathSeparator();
-	if (m_dbMode == ibDatabaseMode::eFILE) {
+	if (m_strServer.IsEmpty() && !m_strFile.IsEmpty()) {
 		// Lives next to sys.fdb — admins see logs alongside the base.
 		return m_strFile + sep + wxT("oeslog");
 	}
-	if (m_dbMode == ibDatabaseMode::eSERVER) {
+	if (!m_strServer.IsEmpty()) {
 		// A server keeps each base in a folder of its own — the journal lives there, beside nothing else
 		// (a file base's folder holds the database as well).
 		if (!m_strDirLocal.IsEmpty())
@@ -150,6 +153,8 @@ wxString DescribeSessionKind(ibSessionKind k) {
 	case ibSessionKind::BackgroundJob: return wxT("BackgroundJob");
 	case ibSessionKind::ScheduledJob:  return wxT("ScheduledJob");
 	case ibSessionKind::SystemJob:     return wxT("SystemJob");
+	case ibSessionKind::ThinClient:    return wxT("ThinClient");
+	case ibSessionKind::ThinDesigner:  return wxT("ThinDesigner");
 	}
 	return wxT("Unknown");
 }
@@ -222,9 +227,8 @@ ibPluginManager* ibApplicationInstance::GetPluginManager() const
 static std::size_t PickConnectionMinIdle(ibRunMode runMode)
 {
 	switch (runMode) {
-	case eWEB_RUNTIME_MODE: return 4;
-	case eSERVICE_MODE:        return 2;
-	default:                   return 2;   // designer / enterprise / launcher
+	case eSERVER_MODE: return 4;
+	default:           return 2;   // a file base / a sandbox / the launcher
 	}
 }
 
@@ -260,6 +264,46 @@ static std::size_t ReadInfobaseConnections(const wxString& folder, std::size_t b
 	return ibApplicationHost::ReadCount(conf, path, wxT("Connections"), 2, byDefault);
 }
 
+// ⭐ ASKED OF THE SESSION DOING THE WORK. A person's session says what it works in, whatever process hosts it — a
+// thin designer and a thin runtime live in one application server side by side, and a file base has its designer
+// and its runtime as a server does. A session nobody sits at (a job) goes by the process's own session in the base
+// — the designer's window, the client's, the server's login (the registry's fallback): a job in the designer's base
+// builds no runtime.
+bool ibApplicationInstance::DesignerMode() const
+{
+	if (const ibSession* const session = ibSession::Current()) {
+		if (IsDesignerSessionKind(session->GetKind()))
+			return true;
+		if (IsRuntimeSessionKind(session->GetKind()))
+			return false;
+	}
+	const ibSession* const own = m_sessionRegistry != nullptr ? m_sessionRegistry->GetFallback() : nullptr;
+	return own != nullptr && IsDesignerSessionKind(own->GetKind());
+}
+
+bool ibApplicationInstance::EnterpriseMode() const
+{
+	if (const ibSession* const session = ibSession::Current()) {
+		if (IsRuntimeSessionKind(session->GetKind()))
+			return true;
+		if (IsDesignerSessionKind(session->GetKind()))
+			return false;
+	}
+	const ibSession* const own = m_sessionRegistry != nullptr ? m_sessionRegistry->GetFallback() : nullptr;
+	return (own == nullptr || !IsDesignerSessionKind(own->GetKind())) && GetActiveMetaData(this) != nullptr;
+}
+
+bool ibApplicationInstance::WebEnterpriseMode() const
+{
+	const ibSession* const session = ibSession::Current();
+	return session != nullptr && (session->GetKind() == ibSessionKind::WebServer || session->GetKind() == ibSessionKind::WebClient);
+}
+
+bool ibApplicationInstance::ServiceMode() const
+{
+	return m_runMode == ibRunMode::eSERVER_MODE;
+}
+
 ibApplicationInstance::ibApplicationInstance(ibApplicationHost* host, ibRunMode runMode) :
 	m_host(host),
 	m_runMode(runMode),
@@ -282,29 +326,8 @@ ibApplicationInstance::ibApplicationInstance(ibApplicationHost* host, ibRunMode 
 	m_jobManager(std::unique_ptr<ibJobManager>(new ibJobManager(ib::AppDataCtorToken{ this }))),
 	m_mcpServer(std::unique_ptr<ibMcpServer>(new ibMcpServer(ib::AppDataCtorToken{ this }))),
 	m_settingsStorage(std::unique_ptr<ibSettingsStorage>(new ibSettingsStorage(ib::AppDataCtorToken{ this }))),
-	m_dbMode(ibDatabaseMode::eNONE)
+	m_tempStorage(std::unique_ptr<ibTempStorage>(new ibTempStorage(ib::AppDataCtorToken{ this })))
 {
-	// Pick the session access mode from runMode — every Single-session
-	// app (enterprise/designer/appserver/codeRunner) gets
-	// Single, the web server (wes) gets Server (per-tab + system fallback).
-	// Apps no longer need to call SetAccessMode themselves.
-	//
-	// Drive THIS base's registry directly — ibSession::SetAccessMode asks the
-	// current base's, and this base is not yet anybody's current one.
-	switch (runMode) {
-	case eWEB_RUNTIME_MODE:
-		m_sessionRegistry->SetAccessMode(ibSession::AccessMode::Shared);
-		// (The worker pool is the process's, sized for this mode by ibApplicationHost.)
-		break;
-	case eLAUNCHER_MODE:
-		// Launcher has no session — leave default; Current() returns
-		// nullptr until something explicitly binds.
-		break;
-	default:
-		m_sessionRegistry->SetAccessMode(ibSession::AccessMode::Single);
-		break;
-	}
-
 	// (Plugins are the PROCESS's — loaded once by ibApplicationHost, not per base.)
 
 	// Wire session-lifecycle event listeners — drives metadata load on
@@ -313,43 +336,73 @@ ibApplicationInstance::ibApplicationInstance(ibApplicationHost* host, ibRunMode 
 		WireSessionEvents();
 }
 
-// Fabric — replaces ibMetaDataConfigurationBase::Initialize. Picks the
-// subclass by runMode (the same switch the legacy static used) and
-// stashes it under `m_activeMetaData`. Single ownership, polymorphic
-// dtor chain on reset.
-bool ibApplicationInstance::CreateActiveMetaData(ibRunMode mode, int flags)
-{
-	return CreateActiveMetaData(Get(), mode, flags);
-}
-
-// …on the application data NAMED — the session listeners below pass their own rather than let the registry
-// thread resolve one.
-bool ibApplicationInstance::CreateActiveMetaData(ibApplicationInstance* applicationInstance, ibRunMode mode, int flags)
+// Fabric — replaces ibMetaDataConfigurationBase::Initialize. Picks the subclass by the kind of the base's first
+// session and puts it in `m_activeMetaData`, for the sessions to come; each takes its own reference. On the
+// application data NAMED — the session listeners below pass their own rather than let the registry thread
+// resolve one.
+bool ibApplicationInstance::CreateActiveMetaData(ibApplicationInstance* applicationInstance, ibSessionKind kind, int flags)
 {
 	if (applicationInstance == nullptr)
 		return false;
 	if (applicationInstance->m_activeMetaData)
 		return false;   // already initialised — caller passes a fresh appData
 
-	// Same dispatch the historical Initialize() did. The metadata
-	// subclass ctors are gated on ib::AppDataCtorToken — this TU is
-	// ibApplicationInstance's, so it can mint the token; nobody outside
-	// can. Launcher mode has no metadata at all — that's a successful
-	// no-op so callers can branch uniformly.
-	switch (mode) {
-	case eLAUNCHER_MODE:
+	// WHAT THE BASE WAS STARTED AS — the kind of its first session: a file base's is what it was started as, a
+	// server's is the server itself. A designer's base holds the configuration to edit; anyone else's the one the application runs.
+	// The metadata subclass ctors are gated on ib::AppDataCtorToken — this TU is ibApplicationInstance's, so it can
+	// mint the token; nobody outside can. The launcher has no metadata at all — that's a successful no-op so
+	// callers can branch uniformly.
+	if (kind == ibSessionKind::Launcher)
 		return true;
-	case eDESIGNER_MODE:
-		applicationInstance->m_activeMetaData.reset(new ibMetaDataConfigurationStorage(ib::AppDataCtorToken{ applicationInstance }));
-		break;
-	default:
-		applicationInstance->m_activeMetaData.reset(new ibMetaDataConfiguration(ib::AppDataCtorToken{ applicationInstance }));
-		break;
+	const ib::AppDataCtorToken owner{ applicationInstance };
+	std::shared_ptr<ibMetaDataConfigurationBase> metaData;
+	if (IsDesignerSessionKind(kind))
+		metaData = ibMetaData::MakeShared<ibMetaDataConfigurationStorage>(owner);
+	else
+		metaData = ibMetaData::MakeShared<ibMetaDataConfiguration>(owner);
+
+	// In place BEFORE it initialises — its loading asks for `activeMetaData`. The session being let in holds none
+	// yet (it takes its own right after, NotifyAuthenticated), so its thread works in it through a scope meanwhile.
+	{
+		std::lock_guard<std::mutex> lk(ibApplicationHost::s_mutex);
+		applicationInstance->m_activeMetaData = metaData;
+	}
+	const ibApplicationInstanceScope initialising(applicationInstance);
+	return metaData->OnInitialize(flags);
+}
+
+ibMetaDataConfigurationBase* ibApplicationInstance::GetActiveMetaData(const ibApplicationInstance* applicationInstance)
+{
+	if (applicationInstance == nullptr)
+		return nullptr;
+	// The session's own, through its reference…
+	if (const ibSession* const session = ibSession::Current())
+		if (ibMetaDataConfigurationBase* const metaData = session->GetMetaData())
+			if (metaData->GetApplicationInstance() == applicationInstance)
+				return metaData;
+	// …a thread working for the base without a session: the one its scope holds for the length of the work…
+	if (ibMetaDataConfigurationBase* const metaData = ibApplicationInstanceScope::GetMetaData())
+		if (metaData->GetApplicationInstance() == applicationInstance)
+			return metaData;
+	// …and a thread that said neither — a session being let in or already gone, the thread that opened the base:
+	// the base's active one, read under the lock. Whoever works in it beyond this line holds `shared_from_this()`.
+	std::lock_guard<std::mutex> lk(ibApplicationHost::s_mutex);
+	return applicationInstance->m_activeMetaData.get();
+}
+
+void ibApplicationInstance::ReplaceActiveMetaData(std::shared_ptr<ibMetaDataConfigurationBase> metaData)
+{
+	const wxString digest = metaData->GetConfigMD5();
+	std::shared_ptr<ibMetaDataConfigurationBase> previous;
+	{
+		std::lock_guard<std::mutex> lk(ibApplicationHost::s_mutex);
+		previous = std::exchange(m_activeMetaData, std::move(metaData));
 	}
 
-	return applicationInstance->m_activeMetaData
-		? applicationInstance->m_activeMetaData->OnInitialize(flags)
-		: false;
+	// …and the base lets the old one go. The sessions working in it hold it, each by its own reference, and the
+	// last of them closes it (ibMetaData::MakeShared) — or the end of this call does, when nobody works in it.
+	ibJournalInfo(wxT("metadata"), wxT("the active configuration is now %s; the one before stays with %ld holder(s)"),
+		digest, previous != nullptr ? previous.use_count() - 1 : 0L);
 }
 
 void ibApplicationInstance::WireSessionEvents()
@@ -362,18 +415,17 @@ void ibApplicationInstance::WireSessionEvents()
 	// (and the designer's manual RunDatabase after the window shows) — this
 	// listener is just the one-shot metadata bootstrap.
 	//
-	// Direct CreateActiveMetaData call — we are inside ibApplicationInstance
-	// already, so the legacy `metaDataCreate(...)` macro indirection
-	// (which expands to `ibApplicationInstance::CreateActiveMetaData(...)`)
-	// just adds a step. The macro stays for outside callers.
-	//
 	// ⚠ EVERY LISTENER HERE WORKS ON ITS OWN BASE — `this`, its members — and never through `appData`,
 	// `activeMetaData` or `ibLog`: those answer the base of the thread that fires the listener, and with
 	// several bases in the process the registry thread of one base must not be asked which base it is.
-	registry->OnFirstConnect([this](ibSession* /*s*/) {
+	// The base's FIRST SESSION says what it was started as — a file base's is what it was started as, a server's
+	// the server itself — and so, by its kind, which configuration it holds. Its schedule starts with it, not before: nobody comes
+	// into a base ahead of the one who opened it, a job due at start included.
+	registry->OnFirstConnect([this](ibSession* s) {
 		if (m_created_metadata) return;
-		if (!CreateActiveMetaData(this, m_runMode, m_loadMetadataFlags)) return;
+		if (!CreateActiveMetaData(this, s != nullptr ? s->GetKind() : ibSessionKind::Unknown, m_loadMetadataFlags)) return;
 		m_created_metadata = true;
+		if (m_jobManager) m_jobManager->Start();
 	});
 
 	// Every authenticated session (including the first) gets per-session
@@ -393,22 +445,29 @@ void ibApplicationInstance::WireSessionEvents()
 			}
 		} catch (...) {}
 		ibSession::BindSessionToThread(s, std::this_thread::get_id());
+		// ⭐ THE PROCESS'S OWN SESSION IN THIS BASE — of a process kind (IsProcessSessionKind): the designer's window,
+		// the client's window, the application server's login, the web server's technical row. Not a job's
+		// and not a visitor's tab, which are let in through this same door and used to take what follows by
+		// being FIRST: the job manager starts with the base, before anybody logs in, so a scheduled job due at
+		// start made its run-as user what every unbound thread answered with, and a job under a user with
+		// settings of their own re-pointed the running MCP server at that user's token (census, 2026-10-01).
+		// …and a thin client's in a FILE base: there the process IS the thin client (fileserver in its own process), as
+		// the desktop's window is enterprise.exe — on a server the same session is one visitor among many. Asked by the
+		// debugger's Stop when nothing is parked (ibSession::Current on its thread falls back to this session).
+		const bool ownSession = IsProcessSessionKind(s->GetKind())
+			|| (m_runMode == ibRunMode::eFILE_MODE
+				&& (s->GetKind() == ibSessionKind::ThinClient || s->GetKind() == ibSessionKind::ThinDesigner));
 		auto* registry = m_sessionRegistry.get();
-		if (registry && registry->GetFallback() == nullptr) {
-			// The first authenticated session becomes what an UNBOUND thread
-			// resolves to. No longer gated on Shared mode: identity resolution is
-			// now one rule everywhere (ibSession::Current), and a desktop process
-			// stopped having a single session the moment jobs and readers took
-			// their own. On the desktop this fallback IS the window's session —
-			// the same answer the old "hand back the lone map entry" gave, minus
-			// the part where it stopped being lone.
+		if (ownSession && registry && registry->GetFallback() == nullptr) {
+			// What an UNBOUND thread resolves to (ibSession::Current — one rule everywhere). On the desktop
+			// this IS the window's session, the answer the old "hand back the lone map entry" gave.
 			registry->SetFallback(s);
 		}
 		// A PERSON'S OWN MCP SERVER, read the moment they are let in — the
 		// settings are keyed by user, so opening the designer is when "whose
 		// server is this" gets its answer. Nothing saved yet is a cold start,
 		// not a failure: the defaults stand, and the defaults are off.
-		if (m_mcpServer) m_mcpServer->LoadSettings(s);
+		if (ownSession && m_mcpServer) m_mcpServer->LoadSettings(s);
 
 		// Enable per-session debug context iff this process was started
 		// with --debug. Marks the session as debugged so ibProcUnit's
@@ -416,16 +475,18 @@ void ibApplicationInstance::WireSessionEvents()
 		// session's own state instead of the legacy server-singleton.
 		if ((m_loadMetadataFlags & _app_start_create_debug_server_flag) != 0)
 			registry->EnableDebugForSession(s);
-		if (m_activeMetaData != nullptr) {
+		if (ibMetaDataConfigurationBase* const metaData = s->GetMetaData()) {
 			// Root mm is allocated by ibSession::EnsureRoot (called by the
 			// registry between OnFirstConnect and this listener) for runtime
 			// sessions; the Designer has no root mm (it uses the lightweight
 			// designer manager in the compile cache). Here we drive cross-process
 			// metadata bring-up (RunDatabase once per process — fires OnBefore/
 			// After RunMetaObject which populate ibCompileValueCache +
-			// ibModuleStorage) and per-session compile + runtime start.
+			// ibModuleStorage) and per-session compile + runtime start. The
+			// session's own configuration — the active one when it came in;
+			// a replacement arrives already run (ReplaceActiveMetaData).
 			if (!m_run_metadata) {
-				m_run_metadata = m_activeMetaData->RunDatabase();
+				m_run_metadata = metaData->RunDatabase();
 			}
 			// CompileRoot folds compile + AttachRuntime + lambda runtime wire-up.
 			// No-op when there's no root mm (Designer). AttachRuntime self-gates by
@@ -434,10 +495,12 @@ void ibApplicationInstance::WireSessionEvents()
 		}
 	});
 
-	// Per-session teardown — runs on the registry thread inside
-	// ProcessRemove while the session is in Stopping state. UnbindSession
-	// (by pointer, not thread id) erases bindings regardless of which
-	// thread originally pinned them.
+	// Per-session teardown — runs on the thread that releases the session's
+	// holder (ibSession::Teardown), the mirror of the bring-up above, while
+	// the session is in Stopping state; only a session nobody released is
+	// taken down by the registry (ProcessRemove). UnbindSession (by pointer,
+	// not thread id) erases bindings regardless of which thread originally
+	// pinned them.
 	registry->OnDisconnect([this](ibSession* s) {
 		if (s == nullptr) return;
 		// Capture session.closed BEFORE UnbindSession + DestroyRoot —
@@ -539,8 +602,8 @@ void ibApplicationInstance::Close()
 	//    has already completed.
 	if (m_connectionPool) m_connectionPool->Shutdown();
 
-	// 4. The fields, in reverse declaration order: m_activeMetaData → m_settingsStorage → m_mcpServer →
-	//    m_jobManager → m_sessionRegistry → m_logger → m_queryableFactory → m_lockManager →
+	// 4. The fields, in reverse declaration order: m_activeMetaData → m_tempStorage → m_settingsStorage →
+	//    m_mcpServer → m_jobManager → m_sessionRegistry → m_logger → m_queryableFactory → m_lockManager →
 	//    m_connectionPool. (The job manager's own dtor calls Stop() again; it is idempotent, so the
 	//    explicit step above only fixes the ORDER.)
 	//
@@ -560,6 +623,7 @@ void ibApplicationInstance::Close()
 		}
 	};
 	release(m_activeMetaData);
+	release(m_tempStorage);
 	release(m_settingsStorage);
 	release(m_mcpServer);
 	release(m_jobManager);
@@ -644,48 +708,128 @@ bool ibApplicationInstance::CreateAppDataEnv(ibRunMode runMode)
 
 #define sys_db wxT("sys.fdb")
 
-ibApplicationInstance* ibApplicationInstance::CreateFileAppDataEnv(const ibFileInstanceRequest& request)
+// THE REQUEST'S TYPE IS THE RUN MODE — a file base holds its base itself, a server holds it for its clients. Only a
+// file base makes a base not made yet (the designer's opening); a server never does — that is the launcher's.
+ibApplicationInstance* ibApplicationInstance::CreateAppDataEnv(const ibFileInstanceRequest& request)
 {
+	return Open(ibRunMode::eFILE_MODE, request, request, request.m_create);
+}
+
+// A SERVER IS STARTED FROM ITS SETTINGS — it reads where the base lives itself, from the base's group in server.conf:
+// its Kind, its folder, the DBMS, and the DBMS's password sealed with the installation's key.
+ibApplicationInstance* ibApplicationInstance::CreateAppDataEnv(const ibServerInstanceRequest& request)
+{
+	ibServerConfig config(request.m_folder);
+	if (!config.HasConf())
+		ibBackendCoreException::Error(wxT("no config at %s"), config.GetConfPath());
+	wxString error;
+	if (!config.LoadKey(error))
+		ibBackendCoreException::Error(wxT("%s"), error);
+
+	std::vector<ibConfiguredInstance> instances = config.ReadInstances();
+	config.AssignIds(instances);   // its folder is named by its Id
+	const auto base = std::find_if(instances.begin(), instances.end(),
+		[&request](const ibConfiguredInstance& instance) { return instance.m_name == request.m_name; });
+	if (base == instances.end())
+		ibBackendCoreException::Error(wxT("the config %s has no base '%s'"), config.GetConfPath(), request.m_name);
+
+	ibInstanceStorage storage;
+	storage.m_directory = base->m_path;
+	if (base->m_kind == wxT("postgresql")) {
+		storage.m_server   = base->m_server;
+		storage.m_port     = base->m_port;
+		storage.m_user     = base->m_user;
+		storage.m_database = base->m_database;
+		if (!config.OpenSecret(base->m_name, wxT("Password"), base->m_password, storage.m_password, error))
+			ibBackendCoreException::Error(wxT("%s"), error);
+	}
+	else if (base->m_kind != wxT("firebird"))
+		ibBackendCoreException::Error(wxT("unknown Kind '%s' - expected firebird or postgresql"), base->m_kind);
+	return Open(ibRunMode::eSERVER_MODE, request, storage, false);
+}
+
+ibApplicationInstance* ibApplicationInstance::Open(ibRunMode runMode, const ibInstanceRequest& request,
+	const ibInstanceStorage& storage, bool create)
+{
+	// WHERE THE BASE LIVES — the folder's sys.fdb (Firebird), or a PostgreSQL server when one is named.
+	if (storage.m_server.IsEmpty()) {
 #ifndef OES_USE_FIREBIRD
-	// ⭐⭐ A BUILD WITHOUT THE DRIVER MUST SAY SO — this used to be a bare `return false`.
-	//
-	// A file base IS a Firebird base (sys.fdb), so with the driver left out there is nothing to
-	// open. But the caller reports what it is GIVEN, and it was given nothing: no exception, no
-	// error chain, no code. The startup dialog then said "the failure carried no description" —
-	// which is true and useless, because the reason is not a runtime failure at all. It is a
-	// property OF THE BUILD, known before the program ran.
-	//
-	// It cost a day. Release binaries were shipped for months with every OES_USE_* macro dropped
-	// (the Release ItemDefinitionGroups had lost `%(PreprocessorDefinitions)`, so nothing was
-	// inherited from ConfigurationDefs.props) — and the only symptom anyone could see was an
-	// infobase that would not open, with no reason given, in Release but never in Debug.
+		// ⭐⭐ A BUILD WITHOUT THE DRIVER MUST SAY SO — this used to be a bare `return false`.
+		//
+		// A base in a folder IS a Firebird base (sys.fdb), so with the driver left out there is nothing to
+		// open. But the caller reports what it is GIVEN, and it was given nothing: no exception, no
+		// error chain, no code. The startup dialog then said "the failure carried no description" —
+		// which is true and useless, because the reason is not a runtime failure at all. It is a
+		// property OF THE BUILD, known before the program ran.
+		//
+		// It cost a day. Release binaries were shipped for months with every OES_USE_* macro dropped
+		// (the Release ItemDefinitionGroups had lost `%(PreprocessorDefinitions)`, so nothing was
+		// inherited from ConfigurationDefs.props) — and the only symptom anyone could see was an
+		// infobase that would not open, with no reason given, in Release but never in Debug.
+		ibBackendCoreException::Error(
+			_("This build has no Firebird driver (OES_USE_FIREBIRD is not defined), and a base kept in a folder is a Firebird one."));
+		return nullptr;
+#else
+		// The process first — it refuses a base it has no room for before the database is touched.
+		ibApplicationHost* const host = ibApplicationHost::Ensure(runMode);
+
+		// ⭐ NO FILE, NO BASE — asked before the driver is. Given a path with nothing at it the driver CREATES the
+		// database there (that is how a base is made), so an opening that makes nothing — a server, which only opens
+		// what its settings name — left an empty sys.fdb behind and refused it without a word, at every start
+		// (2026-10-06). Whether to create is this opening's word, said once.
+		const wxString database = storage.m_directory + wxFileName::GetPathSeparator() + sys_db;
+		if (!create && !wxFileName::FileExists(database))
+			ibBackendCoreException::Error(_("There is no base in %s (no %s), and this opening does not create one."),
+				storage.m_directory, sys_db);
+
+		std::shared_ptr<ibDatabaseLayerFirebird> db(new ibDatabaseLayerFirebird());
+		if (!db->Open(database))
+			return nullptr;
+
+		std::unique_ptr<ibApplicationInstance> opening(new ibApplicationInstance(host, runMode));
+		opening->m_strFile = storage.m_directory;
+		const wxArrayString dirs = wxFileName::DirName(storage.m_directory).GetDirs();
+		opening->m_strInstance = !request.m_name.IsEmpty() ? request.m_name
+			: dirs.IsEmpty() ? storage.m_directory : dirs.Last();
+
+		ibApplicationInstance* const applicationInstance = Open(std::move(opening), db, storage.m_directory, request, create);
+
+		// …and the Firebird driver's OWN maintenance, declared by the startup sequence like the platform's jobs and
+		// one layer deeper: it used to declare itself from inside ibDatabaseLayerFirebird::Open — before this object
+		// existed, before the pool was up, before sys_job was created. WHETHER this base is ours to maintain is the
+		// driver's answer; WHEN to act on it is this sequence's.
+		if (applicationInstance != nullptr && db->IsLocalMaintenanceEligible())
+			ibFirebirdMaintenanceJob::Register(applicationInstance);
+		return applicationInstance;
+#endif
+	}
+
+#ifndef OES_USE_POSTGRESQL
+	// The PostgreSQL base — same silence, same reason, same cure as the Firebird one above.
+	// A build missing this driver would otherwise refuse every server connection with no cause
+	// given, and the search would go to the network and the credentials, where nothing is wrong.
 	ibBackendCoreException::Error(
-		_("This build has no Firebird driver (OES_USE_FIREBIRD is not defined), and a file infobase is a Firebird one."));
+		_("This build has no PostgreSQL driver (OES_USE_POSTGRESQL is not defined), and a base on a database server is a PostgreSQL one."));
 	return nullptr;
 #else
-	// The process first — it refuses a base it has no room for before the database is touched.
-	ibApplicationHost* const host = ibApplicationHost::Ensure(request.m_runMode);
+	// The process first — see the Firebird base above.
+	ibApplicationHost* const host = ibApplicationHost::Ensure(runMode);
 
-	std::shared_ptr<ibDatabaseLayerFirebird> db(new ibDatabaseLayerFirebird());
-	if (!db->Open(request.m_directory + wxFileName::GetPathSeparator() + sys_db))
+	std::shared_ptr<ibDatabaseLayerPostgres> db(new ibDatabaseLayerPostgres());
+	if (!db->Open(storage.m_server, storage.m_port, storage.m_database, storage.m_user, storage.m_password))
 		return nullptr;
 
-	std::unique_ptr<ibApplicationInstance> opening(new ibApplicationInstance(host, request.m_runMode));
-	opening->m_dbMode  = ibDatabaseMode::eFILE;
-	opening->m_strFile = request.m_directory;
-	const wxArrayString dirs = wxFileName::DirName(request.m_directory).GetDirs();
-	opening->m_strInstance = !request.m_name.IsEmpty() ? request.m_name
-		: dirs.IsEmpty() ? request.m_directory : dirs.Last();
+	std::unique_ptr<ibApplicationInstance> opening(new ibApplicationInstance(host, runMode));
+	opening->m_strServer   = storage.m_server;
+	opening->m_strPort     = storage.m_port;
+	opening->m_strUser     = storage.m_user;
+	opening->m_strPassword = storage.m_password;
+	opening->m_strDatabase = storage.m_database;
+	opening->m_strDirLocal = storage.m_directory;
+	opening->m_strInstance = !request.m_name.IsEmpty() ? request.m_name : storage.m_database;
 
-	ibApplicationInstance* const applicationInstance = Open(std::move(opening), db, request.m_directory, request.m_locale);
-
-	// …and the Firebird driver's OWN maintenance, declared by the startup sequence like the platform's jobs and
-	// one layer deeper: it used to declare itself from inside ibDatabaseLayerFirebird::Open — before this object
-	// existed, before the pool was up, before sys_job was created. WHETHER this base is ours to maintain is the
-	// driver's answer; WHEN to act on it is this sequence's.
-	if (applicationInstance != nullptr && db->IsLocalMaintenanceEligible())
-		ibFirebirdMaintenanceJob::Register();
-	return applicationInstance;
+	// A PostgreSQL base has no directory of its own: its settings and its journal are kept in its local folder.
+	return Open(std::move(opening), db, storage.m_directory, request, create);
 #endif
 }
 
@@ -693,7 +837,7 @@ ibApplicationInstance* ibApplicationInstance::CreateFileAppDataEnv(const ibFileI
 // the process, the opening thread working for it, then its pool, its tables, its locale, its journal and its jobs.
 // A base that does not come up — refused or thrown — is closed again, alone, and the thread gets back what it had.
 ibApplicationInstance* ibApplicationInstance::Open(std::unique_ptr<ibApplicationInstance> opening,
-	std::shared_ptr<ibDatabaseLayer> db, const wxString& folder, const wxString& locale)
+	std::shared_ptr<ibDatabaseLayer> db, const wxString& folder, const ibInstanceRequest& request, bool create)
 {
 	const ibRunMode runMode = opening->m_runMode;
 	ibApplicationInstance* const applicationInstance = ibApplicationHost::Adopt(std::move(opening));
@@ -741,15 +885,18 @@ ibApplicationInstance* ibApplicationInstance::Open(std::unique_ptr<ibApplication
 		if (TableAlreadyCreated() && !ibServiceExclusivePolicy::CanOpen(runMode, heldBy))
 			ibBackendCoreException::Error(wxT("%s"), heldBy);
 
-		if (runMode == ibRunMode::eDESIGNER_MODE && !TableAlreadyCreated()) {
+		if (create && !TableAlreadyCreated()) {
 			CreateTableSession();
 			CreateTableUser();
 			CreateTableEvent();
 			CreateTableLock();
 			WriteInfobaseConf(folder);   // a new base — its own settings file, with the defaults
 		}
+		// A base with no tables is not opened empty — and says so: a bare refusal left its caller nothing to report
+		// ("did not open: no reason given").
 		else if (!TableAlreadyCreated())
-			return refuse();
+			ibBackendCoreException::Error(_("The base %s is empty (it has no system tables), and this opening does not create them."),
+				applicationInstance->GetDatabaseDescription());
 
 		// Additive and idempotent — a base made before any of these picks them up at its next open.
 		MigrateTableSession();         // pid / address / currentActivity, which the registry's INSERT assumes
@@ -758,8 +905,9 @@ ibApplicationInstance* ibApplicationInstance::Open(std::unique_ptr<ibApplication
 		CreateTableJob();              // sys_job — the shared last-run clock…
 		MigrateTableJob();             // …and its settings columns
 		CreateTableSettings();         // sys_settings — what people saved on their forms and their lists
+		CreateTableFile();             // sys_file — the sessions' temporary files
 
-		if (!SetLocaleAppDataEnv(locale))
+		if (!SetLocaleAppDataEnv(request.m_locale))
 			return refuse();
 
 		// Audit + trace logger — built after pool + tables so the
@@ -782,8 +930,8 @@ ibApplicationInstance* ibApplicationInstance::Open(std::unique_ptr<ibApplication
 		//
 		// It was not an old-database problem. A base created from scratch has no sys_job at this
 		// point either, so EVERY first run of enterprise.exe raised "Table unknown SYS_JOB" out
-		// of CreateFileAppDataEnv and never reached a window.
-		ibRegisterPlatformJobs();
+		// of CreateAppDataEnv and never reached a window.
+		ibRegisterPlatformJobs(applicationInstance);
 
 		return applicationInstance;
 	}
@@ -792,38 +940,6 @@ ibApplicationInstance* ibApplicationInstance::Open(std::unique_ptr<ibApplication
 		refuse();
 		throw;
 	}
-}
-
-ibApplicationInstance* ibApplicationInstance::CreateServerAppDataEnv(const ibServerInstanceRequest& request)
-{
-#ifndef OES_USE_POSTGRESQL
-	// The server base is PostgreSQL — same silence, same reason, same cure as the file base above.
-	// A build missing this driver would otherwise refuse every server connection with no cause
-	// given, and the search would go to the network and the credentials, where nothing is wrong.
-	ibBackendCoreException::Error(
-		_("This build has no PostgreSQL driver (OES_USE_POSTGRESQL is not defined), and a server infobase is a PostgreSQL one."));
-	return nullptr;
-#else
-	// The process first — see the file base above.
-	ibApplicationHost* const host = ibApplicationHost::Ensure(request.m_runMode);
-
-	std::shared_ptr<ibDatabaseLayerPostgres> db(new ibDatabaseLayerPostgres());
-	if (!db->Open(request.m_server, request.m_port, request.m_database, request.m_user, request.m_password))
-		return nullptr;
-
-	std::unique_ptr<ibApplicationInstance> opening(new ibApplicationInstance(host, request.m_runMode));
-	opening->m_dbMode      = ibDatabaseMode::eSERVER;
-	opening->m_strServer   = request.m_server;
-	opening->m_strPort     = request.m_port;
-	opening->m_strUser     = request.m_user;
-	opening->m_strPassword = request.m_password;
-	opening->m_strDatabase = request.m_database;
-	opening->m_strDirLocal = request.m_dirLocal;
-	opening->m_strInstance = !request.m_name.IsEmpty() ? request.m_name : request.m_database;
-
-	// A server base has no directory of its own: its settings and its journal are kept in its local folder.
-	return Open(std::move(opening), db, request.m_dirLocal, request.m_locale);
-#endif
 }
 
 bool ibApplicationInstance::DestroyAppDataEnv(ibApplicationInstance* applicationInstance)
@@ -1385,15 +1501,12 @@ bool ibApplicationInstance::ClearDatabase()
 	return true;
 }
 
-wxString ibApplicationInstance::GetDatabaseDescription()
+wxString ibApplicationInstance::GetDatabaseDescription() const
 {
-	if (m_dbMode == ibDatabaseMode::eFILE)
-		return m_strFile;
-
-	if (m_dbMode == ibDatabaseMode::eSERVER)
+	// Where the base lives: a PostgreSQL server's database, or a Firebird folder (none — the launcher's, no base).
+	if (!m_strServer.IsEmpty())
 		return m_strServer + wxT(":") + m_strPort + wxT("/") + m_strDatabase;
-
-	return wxT("");
+	return m_strFile;
 }
 
 ///////////////////////////////////////////////////////////////////////////////

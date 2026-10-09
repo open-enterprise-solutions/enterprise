@@ -1,6 +1,6 @@
 #include "commandDescription.h"
-#include "backend/fileSystem/fs.h"                // ibReaderMemory / ibWriterMemory
-#include "backend/serialize/dataBuilder.h"        // ibDataValue — node form (Binary blob)
+#include "core/fileSystem/fs.h"                // ibReaderMemory / ibWriterMemory
+#include "core/serialize/dataBuilder.h"        // ibDataValue — node form (Binary blob)
 
 ////////////////////////////////////////////////////////////////////////
 

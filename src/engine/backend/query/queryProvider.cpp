@@ -28,7 +28,6 @@
 #include "queryException.h"                                           // ibBackendQueryException — a named hierarchy refused over rows in memory
 #include "queryHierarchy.h"                                           // ibQueryHierarchyScope — «IN HIERARCHY» resolved where rows are filtered in memory
 
-#include "backend/diagnostics/journal.h"                              // ibJournal — the technology journal
 
 #include <deque>                                                      // the streaming fold's pools — see ibStreamingFold
 #include <map>                                                        // dot-walk join dedup + col->attr cache
@@ -1775,6 +1774,13 @@ bool RamIsNullValue(const ibValue& v)
 
 RamTri RamEvalLeaf(const ibQueryCondition& c, const ibQueryRow& row)
 {
+	// A SEMI-JOIN IS THE SERVER'S TO ANSWER — an `IN (SELECT …)` said as EXISTS, or a policy's restriction. Rows in
+	// memory have no inner table to look in, and the empty column below would answer FALSE for every row (TRUE under
+	// a NOT): a filter that looks applied. Refused in words instead.
+	if (c.m_semiJoin)
+		ibBackendQueryException::Throw(ibBackendQueryException::Kind::TranslationFailure,
+			_("a condition the server was to answer (EXISTS over a nested query) reached a filter over rows held in memory"));
+
 	// A COMPUTED lhs (WHERE Qty * Price > 100, a CASE) evaluates its expression per row; else read the column.
 	ibValue cell;
 	if (c.m_expr)                cell = EvalColumnExprRow(c.m_expr.get(), row);
@@ -6563,6 +6569,11 @@ ibDataQueryResult ibQueryComposer::ExecuteGroupLevelPage(const ibDataQuerySpec& 
 // not. False = nothing was read; the caller proceeds exactly as before.
 bool ibQueryComposer::TryFoldTotalsInDbms(const ibDataQuerySpec& spec, ibSelectorTree& out)
 {
+	if (IsSingleSource(spec) && ibDbTableProvider::CanFoldOneLevelTotals(spec)) {
+		ibJournalInfo(wxT("query.road"), wxT("SERVER: one level folded by GROUP BY (single source)"));
+		out = ibDbTableProvider::ExecuteOneLevelTotals(spec);
+		return true;
+	}
 	if (IsSingleSource(spec) && ibDbTableProvider::CanPushRollupTotals(spec)) {
 		out = ibDbTableProvider::ExecuteRollupTotals(spec);
 		return true;
@@ -6585,6 +6596,12 @@ bool ibQueryComposer::CanDeclareNamedQuery(ibDatabaseConnectionHolder* holder)
 ibSelectorTree ibQueryComposer::ExecuteTotals(const ibDataQuerySpec& spec)
 {
 	// The one that needs it most: totals read the detail AND fold it, often in more than one pass.
+
+	// ONE level of headings is a plain GROUP BY, on any engine — ROLLUP or not (CanFoldOneLevelTotals).
+	if (IsSingleSource(spec) && ibDbTableProvider::CanFoldOneLevelTotals(spec)) {
+		ibJournalInfo(wxT("query.road"), wxT("SERVER: one level folded by GROUP BY (single source)"));
+		return ibDbTableProvider::ExecuteOneLevelTotals(spec);
+	}
 
 	// Push-down: a single-source totals on a ROLLUP-capable DBMS runs server-side (GROUP BY ROLLUP),
 	// the DBMS computing every subtotal level — only the aggregated rows transit, no raw detail.

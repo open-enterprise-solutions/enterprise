@@ -6,8 +6,8 @@
 #include "form.h"
 
 #include "backend/system/value/valueType.h"   // SYSTEM_TYPE_REGISTER
-#include "backend/serialize/dataBuilder.h"     // ibDataNode + ibBinaryProvider (property serialize + clipboard)
-#include "backend/fileSystem/fs.h"             // ibWriterMemory / ibReaderMemory (clipboard serialize)
+#include "core/serialize/dataBuilder.h"     // ibDataNode + ibBinaryProvider (property serialize + clipboard)
+#include "core/fileSystem/fs.h"             // ibWriterMemory / ibReaderMemory (clipboard serialize)
 #include "backend/backend_core.h"              // oes_clipboard_command
 #ifndef OES_USE_WEB
 #include <wx/clipbrd.h>

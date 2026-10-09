@@ -1,7 +1,7 @@
 ﻿#include "value.h"
 #include "valueSerialization.h"
 
-#include "backend/serialize/dataBuilder.h"
+#include "core/serialize/dataBuilder.h"
 #include "backend/backend_exception.h"
 
 ////////////////////////////////////////////////////////////////////////////
@@ -251,7 +251,7 @@ ibValue ibValue::FromNode(const ibDataNode& node)
 	try {
 		created = ibValue::CreateObject(classType);
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		throw;
 	}
 	catch (...) {

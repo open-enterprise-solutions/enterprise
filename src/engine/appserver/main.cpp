@@ -1,5 +1,5 @@
 // appserver — the application server: the process that serves the bases of its server folder without a window
-// (serverConfig.h — the folder; appServer.h — the serving; docs/private/multi-base-process.md § 5). It was
+// (backend/server/serverConfig.h — the folder; appServer.h — the serving; docs/private/multi-base-process.md § 5). It was
 // called `daemon` until 2026-10-01. Started by hand it narrates in its console — the technological journal
 // mirrored onto standard error — and stays until Ctrl+C; later it becomes a service and the journal stays.
 
@@ -30,7 +30,7 @@ static const wxCmdLineEntryDesc s_cmdLineDesc[] = {
 	{ wxCMD_LINE_NONE,   nullptr, nullptr,     nullptr,                   wxCMD_LINE_VAL_NONE,   0 }
 };
 
-#include "backend/diagnostics/leakTracker.h"
+#include "core/diagnostics/leakTracker.h"
 
 IB_LEAK_TRACKER_ARM();
 
@@ -127,7 +127,8 @@ int main(int argc, char** argv)
 		return -1;
 	}
 
-	// What the server does is what its console shows.
+	// What the server says, and every warning and error, is what its console shows; the running commentary is the
+	// journal file's.
 	ibTechJournal::EchoToStderr();
 
 	wxCmdLineParser parser(s_cmdLineDesc, argc, argv);

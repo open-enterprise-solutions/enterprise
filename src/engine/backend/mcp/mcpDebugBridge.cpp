@@ -7,7 +7,7 @@
 #include "backend/appData.h"
 #include "backend/debugger/debugClient.h"
 #include "backend/mcp/mcpServer.h"
-#include "backend/fileSystem/fs.h"   // ibWriterMemory / ibReaderMemory - the node on the wire
+#include "core/fileSystem/fs.h"   // ibWriterMemory / ibReaderMemory - the node on the wire
 
 #include <chrono>
 
@@ -108,6 +108,7 @@ void ibMcpDebugBridge::Running()
 
 bool ibMcpDebugBridge::Evaluate(const wxString& expression, wxString& answer, int timeoutMs)
 {
+	const std::lock_guard<std::mutex> one(m_oneQuestion);   // see the member: one question on the wire
 	answer.Clear();
 
 	if (debugClient == nullptr)
@@ -145,6 +146,7 @@ bool ibMcpDebugBridge::Evaluate(const wxString& expression, wxString& answer, in
 bool ibMcpDebugBridge::Sandbox(const wxString& code, bool& ran, wxString& answer, wxString& json,
 	std::vector<wxString>& printed, wxLongLong_t& microseconds, int timeoutMs)
 {
+	const std::lock_guard<std::mutex> one(m_oneQuestion);
 	ran = false;
 	microseconds = 0;
 	answer.Clear();
@@ -191,6 +193,7 @@ bool ibMcpDebugBridge::Sandbox(const wxString& code, bool& ran, wxString& answer
 bool ibMcpDebugBridge::Screenshot(const wxString& reason, const wxString& area, const wxString& format,
 	bool& allowed, wxMemoryBuffer& png, wxString& focus, int timeoutMs)
 {
+	const std::lock_guard<std::mutex> one(m_oneQuestion);
 	allowed = false;
 	png.SetDataLen(0);
 	focus.Clear();
@@ -266,6 +269,7 @@ void ibMcpDebugBridge::OnScreenshot(const wxMemoryBuffer& png, const wxString& f
 bool ibMcpDebugBridge::SendJob(unsigned int which, const wxString& token,
 	const ibJobRunRequest& request, ibJobRunByteCodeState& state, int timeoutMs)
 {
+	const std::lock_guard<std::mutex> one(m_oneQuestion);
 	state = ibJobRunByteCodeState();
 
 	if (debugClient == nullptr)
@@ -346,6 +350,7 @@ void ibMcpDebugBridge::OnJobState(unsigned int which, const ibJobRunByteCodeStat
 bool ibMcpDebugBridge::Compose(const ibDataNode& request, ibDataNode& result, bool& answered,
 	wxString& refusal, int timeoutMs)
 {
+	const std::lock_guard<std::mutex> one(m_oneQuestion);
 	answered = false;
 	refusal.Clear();
 
@@ -408,6 +413,7 @@ void ibMcpDebugBridge::OnComposed(bool answered, const wxString& refusal, const 
 
 bool ibMcpDebugBridge::Unfold(const wxString& expression, std::vector<Local>& members, int timeoutMs)
 {
+	const std::lock_guard<std::mutex> one(m_oneQuestion);
 	members.clear();
 
 	if (debugClient == nullptr)

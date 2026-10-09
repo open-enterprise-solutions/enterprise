@@ -13,7 +13,7 @@
 #include "backend/databaseLayer/connectionPool.h"
 #include "backend/system/systemManager.h"
 
-#include "backend/fileSystem/fs.h"
+#include "core/fileSystem/fs.h"
 //*********************************************************************************************
 //*                          ObjectChartOfCharacteristicTypesValue                             *
 //*********************************************************************************************
@@ -32,10 +32,10 @@ ibValueRecordDataObjectChartOfCharacteristicTypes::ibValueRecordDataObjectChartO
 
 const ibSourceExplorer* ibValueRecordDataObjectChartOfCharacteristicTypes::GetSourceExplorer() const
 {
-	m_sourceExplorer.Reset(
+	if (!m_sourceExplorer.Reset(m_metaObject->GetMetaData()->GetFactoryCountChanges(),
 		wxT("Ref"), _("Ref"), m_metaObject->GetMetaID(), GetClassType(),
-		false
-	);
+		false))
+		return &m_sourceExplorer;   // built at this version of the metadata already — read as it is
 
 	ibValueMetaObjectChartOfCharacteristicTypes* metaRef = nullptr;
 

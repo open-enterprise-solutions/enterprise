@@ -46,9 +46,6 @@
     <ClInclude Include="backend_exception.h" />
     <ClInclude Include="backend_diagnostic.h" />
     <ClInclude Include="fileKind.h" />
-    <ClInclude Include="diagnostics\crashGuard.h" />
-    <ClInclude Include="diagnostics\journal.h" />
-    <ClInclude Include="diagnostics\leakTracker.h" />
     <ClInclude Include="session\designerExclusivePolicy.h" />
     <ClInclude Include="session\serviceExclusivePolicy.h" />
     <ClInclude Include="session\sessionException.h" />
@@ -67,7 +64,7 @@
     <ClInclude Include="job\jobManager.h" />
     <ClInclude Include="job\jobRunByteCode.h" />
     <ClInclude Include="mcp\mcpClipboard.h" />
-    <ClInclude Include="mcp\mcpMessage.h" />
+    <ClInclude Include="rpc\rpcMessage.h" />
     <ClInclude Include="mcp\mcpServer.h" />
     <ClInclude Include="mcp\mcpDebugBridge.h" />
     <ClInclude Include="mcp\mcpTool.h" />
@@ -75,6 +72,8 @@
     <ClInclude Include="job\jobSchedule.h" />
     <ClInclude Include="settings\settingsStorage.h" />
     <ClInclude Include="settings\settingsComposer.h" />
+    <ClInclude Include="temp\tempStorage.h" />
+    <ClInclude Include="server\serverConfig.h" />
     <ClInclude Include="sheetFormat\sheetFormat.h" />
     <ClInclude Include="sheetFormat\sheetFormatXlsx.h" />
     <ClInclude Include="sheetFormat\sheetFormatNative.h" />
@@ -90,11 +89,11 @@
     <ClInclude Include="restructureInfo.h" />
     <ClInclude Include="spreadsheetDescription.h" />
     <ClInclude Include="spreadsheetModel.h" />
-    <ClInclude Include="clsid.h" />
     <ClInclude Include="compiler\cache\byteCodeCache.h" />
     <ClInclude Include="compiler\byteCode.h" />
     <ClInclude Include="compiler\codeDef.h" />
     <ClInclude Include="compiler\compileCode.h" />
+    <ClInclude Include="compiler\compileState.h" />
     <ClInclude Include="compiler\compileContext.h" />
     <ClInclude Include="compiler\byteCodeLINQ.h" />
     <ClInclude Include="compiler\compileModule.h" />
@@ -184,17 +183,9 @@
     <ClInclude Include="debugger\debugDefs.h" />
     <ClInclude Include="debugger\debugServer.h" />
     <ClInclude Include="backend_form.h" />
-    <ClInclude Include="fileSystem\fs.h" />
-    <ClInclude Include="serialize\dataBuilder.h" />
-    <ClInclude Include="serialize\jsonProvider.h" />
-    <ClInclude Include="serialize\jsonText.h" />
-    <ClInclude Include="fileSystem\lz\lzhuf.h" />
-    <ClInclude Include="fileSystem\quicklz\quicklz.h" />
-    <ClInclude Include="fileSystem\types.h" />
     <ClInclude Include="eventDispatcher.h" />
-    <ClInclude Include="guid.h" />
     <ClInclude Include="backend_localization.h" />
-    <ClInclude Include="formatString.h" />
+    <ClInclude Include="translateState.h" />
     <ClInclude Include="metaCollection\metaLanguageObject.h" />
     <ClInclude Include="metaCollection\metaPictureObject.h" />
     <ClInclude Include="homePageDescription.h" />
@@ -334,9 +325,6 @@
     <ClInclude Include="moduleInfo.h" />
     <ClInclude Include="moduleManager\moduleManager.h" />
     <ClInclude Include="moduleManager\moduleManagerExt.h" />
-    <ClInclude Include="fdatetime.h" />
-    <ClInclude Include="fnumber.h" />
-    <ClInclude Include="fstring.h" />
     <ClInclude Include="objCtor.h" />
     <ClInclude Include="picturePredefined.h" />
     <ClInclude Include="propertyManager\propertyManager.h" />
@@ -401,7 +389,6 @@
     <ClInclude Include="srcObject.h" />
     <ClInclude Include="srcDataObject.h" />
     <ClInclude Include="tabularDataObject.h" />
-    <ClInclude Include="stringUtils.h" />
     <ClInclude Include="interfaceHelper.h" />
     <ClInclude Include="compositionHelper.h" />
     <ClInclude Include="functionalOptionHelper.h" />
@@ -448,7 +435,6 @@
     <ClInclude Include="plugin\pluginManager.h" />
     <ClInclude Include="utils\md5.hpp" />
     <ClInclude Include="utils\sha256.hpp" />
-    <ClInclude Include="utils\debugTrace.h" />
     <ClInclude Include="utils\passwordHash.hpp" />
     <ClInclude Include="utils\dataVersion.hpp" />
     <ClInclude Include="valueInfo.h" />
@@ -478,9 +464,6 @@
     <ClCompile Include="backend_exception.cpp" />
     <ClCompile Include="backend_diagnostic.cpp" />
     <ClCompile Include="fileKind.cpp" />
-    <ClCompile Include="diagnostics\crashGuard.cpp" />
-    <ClCompile Include="diagnostics\journal.cpp" />
-    <ClCompile Include="diagnostics\leakTracker.cpp" />
     <ClCompile Include="session\designerExclusivePolicy.cpp" />
     <ClCompile Include="session\serviceExclusivePolicy.cpp" />
     <ClCompile Include="session\session.cpp" />
@@ -496,7 +479,7 @@
     <ClCompile Include="lock\lockManager.cpp" />
     <ClCompile Include="job\jobManager.cpp" />
     <ClCompile Include="mcp\mcpClipboard.cpp" />
-    <ClCompile Include="mcp\mcpMessage.cpp" />
+    <ClCompile Include="rpc\rpcMessage.cpp" />
     <ClCompile Include="mcp\mcpServer.cpp" />
     <ClCompile Include="mcp\mcpTool.cpp" />
     <ClCompile Include="mcp\tools\mcpToolChat.cpp" />
@@ -543,17 +526,17 @@
     <ClCompile Include="query\queryable.cpp" />
     <ClCompile Include="settings\settingsStorage.cpp" />
     <ClCompile Include="settings\settingsComposer.cpp" />
+    <ClCompile Include="temp\tempStorage.cpp" />
+    <ClCompile Include="server\serverConfig.cpp" />
     <ClCompile Include="sheetFormat\sheetFormat.cpp" />
     <ClCompile Include="sheetFormat\sheetFormatNative.cpp" />
     <ClCompile Include="sheetFormat\sheetFormatDocx.cpp" />
     <ClCompile Include="sheetFormat\sheetFormatXlsxRead.cpp" />
     <ClCompile Include="sheetFormat\sheetFormatXlsxWrite.cpp" />
     <ClCompile Include="system\value\valueBackgroundJob.cpp" />
-    <ClCompile Include="backend_core.cpp" />
     <ClCompile Include="backend_mainFrame.cpp" />
     <ClCompile Include="backend_picture.cpp" />
     <ClCompile Include="backend_localization.cpp" />
-    <ClCompile Include="formatString.cpp" />
     <ClCompile Include="characteristicCtor.cpp" />
     <ClCompile Include="compiler\cache\byteCodeCache.cpp" />
     <ClCompile Include="compiler\byteCodeAOT.cpp" />
@@ -643,14 +626,7 @@
     <ClCompile Include="debugger\debugClientQuery.cpp" />
     <ClCompile Include="debugger\debugServer.cpp" />
     <ClCompile Include="backend_form.cpp" />
-    <ClCompile Include="fileSystem\fs.cpp" />
-    <ClCompile Include="serialize\dataBuilder.cpp" />
-    <ClCompile Include="serialize\jsonProvider.cpp" />
-    <ClCompile Include="serialize\jsonText.cpp" />
-    <ClCompile Include="fileSystem\lz\lzhuf.cpp" />
-    <ClCompile Include="fileSystem\quicklz\quicklz.c" />
     <ClCompile Include="eventDispatcher.cpp" />
-    <ClCompile Include="guid.cpp" />
     <ClCompile Include="metaCollection\attribute\metaAttributeObject.cpp" />
     <ClCompile Include="metaCollection\attribute\metaAttributeObjectEnum.cpp" />
     <ClCompile Include="metaCollection\attribute\metaAttributeObjectProperty.cpp" />
@@ -910,9 +886,6 @@
     <ClCompile Include="metadataReport.cpp" />
     <ClCompile Include="metadataReportFactory.cpp" />
     <ClCompile Include="moduleInfo.cpp" />
-    <ClCompile Include="fdatetime.cpp" />
-    <ClCompile Include="fnumber.cpp" />
-    <ClCompile Include="fstring.cpp" />
     <ClCompile Include="moduleManager\moduleManager.cpp" />
     <ClCompile Include="moduleManager\moduleManagerEvent.cpp" />
     <ClCompile Include="moduleManager\moduleManagerExt.cpp" />
@@ -1507,7 +1480,7 @@
       <PreprocessorDefinitions>WIN32;_DEBUG;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;_UNICODE;WXUSINGDLL;_CONSOLE;%(PreprocessorDefinitions);BACKEND_EXPORTS;OES_FB_LOCALSERVER</PreprocessorDefinitions>
       <ConformanceMode>false</ConformanceMode>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
-      <AdditionalIncludeDirectories>$(oes3rdParty)cpp-httplib;$(oes3rdParty)mbedtls\include;$(oesEngine)backend\tls;$(oes3rdParty)wxWidgets\lib\vc_dll\mswud;$(oes3rdParty)wxWidgets\include;$(oesEngine);$(oesSrcDir)include;.;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(oes3rdParty)mbedtls\include;$(oesEngine)backend\tls;$(oes3rdParty)wxWidgets\lib\vc_dll\mswud;$(oes3rdParty)wxWidgets\include;$(oesEngine);$(oesSrcDir)include;.;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
@@ -1517,7 +1490,7 @@
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll;$(oesLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>mbedtls.lib;bcrypt.lib;wxmsw33ud_aui.lib;wxmsw33ud_qa.lib;wxmsw33ud_html.lib;wxmsw33ud_propgrid.lib;wxmsw33ud_adv.lib;wxmsw33ud_core.lib;wxbase33ud_xml.lib;wxbase33ud_net.lib;wxmsw33ud_stc.lib;wxmsw33ud_xrc.lib;wxbase33ud.lib;wxtiffd.lib;wxjpegd.lib;wxpngd.lib;wxzlibd.lib;wxscintillad.lib;wxregexud.lib;wxexpatd.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>core.lib;mbedtls.lib;bcrypt.lib;wxmsw33ud_aui.lib;wxmsw33ud_qa.lib;wxmsw33ud_html.lib;wxmsw33ud_propgrid.lib;wxmsw33ud_adv.lib;wxmsw33ud_core.lib;wxbase33ud_xml.lib;wxbase33ud_net.lib;wxmsw33ud_stc.lib;wxmsw33ud_xrc.lib;wxbase33ud.lib;wxtiffd.lib;wxjpegd.lib;wxpngd.lib;wxzlibd.lib;wxscintillad.lib;wxregexud.lib;wxexpatd.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -1528,7 +1501,7 @@
       <PreprocessorDefinitions>WIN32;_DEBUG;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;_UNICODE;WXUSINGDLL;_CONSOLE;%(PreprocessorDefinitions);BACKEND_EXPORTS;OES_FB_LOCALSERVER</PreprocessorDefinitions>
       <ConformanceMode>false</ConformanceMode>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
-      <AdditionalIncludeDirectories>$(oes3rdParty)cpp-httplib;$(oes3rdParty)mbedtls\include;$(oesEngine)backend\tls;$(oes3rdParty)wxWidgets\lib\vc_dll\mswud;$(oes3rdParty)wxWidgets\include;$(oesEngine);.;$(oesEngine)/core;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(oes3rdParty)mbedtls\include;$(oesEngine)backend\tls;$(oes3rdParty)wxWidgets\lib\vc_dll\mswud;$(oes3rdParty)wxWidgets\include;$(oesEngine);.;$(oesEngine)/core;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <AdditionalOptions>/Gw /bigobj %(AdditionalOptions)</AdditionalOptions>
@@ -1537,7 +1510,7 @@
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_x64_dll;$(oesLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>mbedtls.lib;bcrypt.lib;wxmsw33ud_aui.lib;wxmsw33ud_qa.lib;wxmsw33ud_html.lib;wxmsw33ud_propgrid.lib;wxmsw33ud_adv.lib;wxmsw33ud_core.lib;wxbase33ud_xml.lib;wxbase33ud_net.lib;wxmsw33ud_stc.lib;wxmsw33ud_xrc.lib;wxbase33ud.lib;wxtiffd.lib;wxjpegd.lib;wxpngd.lib;wxzlibd.lib;wxscintillad.lib;wxregexud.lib;wxexpatd.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>core.lib;mbedtls.lib;bcrypt.lib;wxmsw33ud_aui.lib;wxmsw33ud_qa.lib;wxmsw33ud_html.lib;wxmsw33ud_propgrid.lib;wxmsw33ud_adv.lib;wxmsw33ud_core.lib;wxbase33ud_xml.lib;wxbase33ud_net.lib;wxmsw33ud_stc.lib;wxmsw33ud_xrc.lib;wxbase33ud.lib;wxtiffd.lib;wxjpegd.lib;wxpngd.lib;wxzlibd.lib;wxscintillad.lib;wxregexud.lib;wxexpatd.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <Profile>true</Profile>
     </Link>
   </ItemDefinitionGroup>
@@ -1551,7 +1524,7 @@
       <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;NDEBUG;_UNICODE;WXUSINGDLL;_CONSOLE;%(PreprocessorDefinitions);BACKEND_EXPORTS;OES_FB_LOCALSERVER</PreprocessorDefinitions>
       <ConformanceMode>false</ConformanceMode>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
-      <AdditionalIncludeDirectories>$(oes3rdParty)cpp-httplib;$(oes3rdParty)mbedtls\include;$(oesEngine)backend\tls;$(oes3rdParty)wxWidgets\lib\vc_dll\mswu;$(oes3rdParty)wxWidgets\include;$(oesEngine);.;$(oesEngine)core;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(oes3rdParty)mbedtls\include;$(oesEngine)backend\tls;$(oes3rdParty)wxWidgets\lib\vc_dll\mswu;$(oes3rdParty)wxWidgets\include;$(oesEngine);.;$(oesEngine)core;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
@@ -1565,7 +1538,7 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>DebugFastLink</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll;$(oesLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>mbedtls.lib;bcrypt.lib;wxmsw33u_aui.lib;wxmsw33u_qa.lib;wxmsw33u_html.lib;wxmsw33u_propgrid.lib;wxmsw33u_adv.lib;wxmsw33u_core.lib;wxbase33u_xml.lib;wxbase33u_net.lib;wxmsw33u_stc.lib;wxmsw33u_xrc.lib;wxbase33u.lib;wxtiffd.lib;wxjpegd.lib;wxpngd.lib;wxzlibd.lib;wxscintillad.lib;wxregexud.lib;wxexpatd.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>core.lib;mbedtls.lib;bcrypt.lib;wxmsw33u_aui.lib;wxmsw33u_qa.lib;wxmsw33u_html.lib;wxmsw33u_propgrid.lib;wxmsw33u_adv.lib;wxmsw33u_core.lib;wxbase33u_xml.lib;wxbase33u_net.lib;wxmsw33u_stc.lib;wxmsw33u_xrc.lib;wxbase33u.lib;wxtiffd.lib;wxjpegd.lib;wxpngd.lib;wxzlibd.lib;wxscintillad.lib;wxregexud.lib;wxexpatd.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -1578,7 +1551,7 @@
       <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;NDEBUG;_UNICODE;WXUSINGDLL;_CONSOLE;%(PreprocessorDefinitions);BACKEND_EXPORTS;OES_FB_LOCALSERVER</PreprocessorDefinitions>
       <ConformanceMode>false</ConformanceMode>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
-      <AdditionalIncludeDirectories>$(oes3rdParty)cpp-httplib;$(oes3rdParty)mbedtls\include;$(oesEngine)backend\tls;$(oes3rdParty)wxWidgets\lib\vc_dll\mswu;$(oes3rdParty)wxWidgets\include;$(oesEngine);.;$(oesEngine)/core;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(oes3rdParty)mbedtls\include;$(oesEngine)backend\tls;$(oes3rdParty)wxWidgets\lib\vc_dll\mswu;$(oes3rdParty)wxWidgets\include;$(oesEngine);.;$(oesEngine)/core;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
@@ -1593,7 +1566,7 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>DebugFastLink</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_x64_dll;$(oesLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>mbedtls.lib;bcrypt.lib;wxmsw33u_aui.lib;wxmsw33u_qa.lib;wxmsw33u_html.lib;wxmsw33u_propgrid.lib;wxmsw33u_adv.lib;wxmsw33u_core.lib;wxbase33u_xml.lib;wxbase33u_net.lib;wxmsw33u_stc.lib;wxmsw33u_xrc.lib;wxbase33u.lib;wxtiffd.lib;wxjpegd.lib;wxpngd.lib;wxzlibd.lib;wxscintillad.lib;wxregexud.lib;wxexpatd.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>core.lib;mbedtls.lib;bcrypt.lib;wxmsw33u_aui.lib;wxmsw33u_qa.lib;wxmsw33u_html.lib;wxmsw33u_propgrid.lib;wxmsw33u_adv.lib;wxmsw33u_core.lib;wxbase33u_xml.lib;wxbase33u_net.lib;wxmsw33u_stc.lib;wxmsw33u_xrc.lib;wxbase33u.lib;wxtiffd.lib;wxjpegd.lib;wxpngd.lib;wxzlibd.lib;wxscintillad.lib;wxregexud.lib;wxexpatd.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

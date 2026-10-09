@@ -6,6 +6,7 @@
 #include <memory>
 #include <optional>
 #include <functional>
+#include <utility>   // std::forward — MakeShared
 #include <vector>
 
 #include "backend/moduleManager/moduleManager.h"
@@ -389,7 +390,12 @@ private:
 
 ///////////////////////////////////////////////////////////////////////////////
 
-class BACKEND_API ibMetaData {
+// ⭐ EVERY METADATA IS HELD BY A shared_ptr (Max, 2026-10-06: *"implement shared_from_this in the metadata, and hold
+// the reference properly, as a shared_ptr — all the metadata"*): a configuration, an external report or data
+// processor, a configuration file, both sides of a comparison. It is handed around as a plain pointer; whoever
+// works in it holds `shared_from_this()` for as long as it works — a session, a document, a tree, an external
+// object — and it goes with the last of them.
+class BACKEND_API ibMetaData : public std::enable_shared_from_this<ibMetaData> {
 	void DoGenerateNewID(ibMetaID& id, const ibValueMetaObject* top) const;
 
 	// The next id to hand out — see GenerateNewID. 0 = not seeded yet (the first call walks the tree
@@ -404,6 +410,21 @@ public:
 	}
 
 	virtual ~ibMetaData() {}
+
+	// ⭐ HOW A METADATA IS MADE — std::make_shared's twin, with one difference: its last holder closes what is still
+	// open before it goes (Dispose), on their own thread, working for its base meanwhile.
+	template <class T, class... Args>
+	static std::shared_ptr<T> MakeShared(Args&&... args) {
+		return std::shared_ptr<T>(new T(std::forward<Args>(args)...), &ibMetaData::Dispose);
+	}
+
+	// The base it belongs to — a configuration's (ibMetaDataConfigurationBase); an external report or data processor
+	// and a configuration read from a file belong to none.
+	virtual class ibApplicationInstance* GetApplicationInstance() const { return nullptr; }
+
+private:
+	static void Dispose(ibMetaData* metaData);
+public:
 
 	// Module-storage skeleton — list of common-module descriptors that
 	// runtime mm reads in CreateMainModule to spawn its own instances.

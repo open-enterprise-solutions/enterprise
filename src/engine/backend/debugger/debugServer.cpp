@@ -23,7 +23,7 @@
 #include "backend/session/sessionRegistry.h"
 #include "backend/session/workerPool.h"
 
-#include "backend/fileSystem/fs.h"
+#include "core/fileSystem/fs.h"
 #include "backend/system/systemManager.h"     // Message — the person is told before code runs
 #include "backend/databaseLayer/databaseLayer.h"   // …and the transaction that undoes it
 #include "backend/job/jobRunByteCode.h"       // sent code is a background job, and it lives with them
@@ -1432,7 +1432,7 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 								propCount = vAttribute.GetNProps();
 							}
 						}
-						catch (const ibBackendException& err) {
+						catch (const ibCoreException& err) {
 
 							wxString strErrorMessage = err.GetErrorDescription();
 							strErrorMessage.Replace('\n', ' ');
@@ -1675,7 +1675,7 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 						}
 					}
 				}
-				catch (const ibBackendException& err) {
+				catch (const ibCoreException& err) {
 					answer = err.GetErrorDescription();
 				}
 				catch (...) {
@@ -1906,7 +1906,7 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 				try {
 					// Waits for it: the answer has to be in hand before the reply is written, and the
 					// far end is already waiting on us.
-					pool->RunOnSession(session, capture);
+					pool->Execute(session, capture);
 				}
 				catch (...) {
 					focus = _("The window could not be captured.");
@@ -2079,7 +2079,17 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 	}
 	else if (commandFromClient == CommandId_Destroy) {
 
+		// THE SESSION TO TAKE DOWN — asked BEFORE the stops are woken. Out of its loop, a parked session is no longer
+		// what this thread's Current() answers: it answered the process's own session where there is one (the desktop's)
+		// and nothing in a thin client's process, whose session stayed stopped-and-woken with its window up.
+		const std::shared_ptr<ibSession> stopped = ParkedSession(wxString());
+
 		ms_debugServer->m_bUseDebug = false;
+		// …and woken BY NAME, as Continue wakes it: the sweep below wakes the sessions bound to a thread, and a desktop's
+		// stopped in its start (BeforeStart, inside its window's Show) is not among them yet — it stayed parked, the
+		// process hanging with its session closed.
+		if (stopped)
+			ms_debugServer->WakeDebugSession(stopped->GetId());
 		ms_debugServer->WakeAllDebugSessions();
 
 		ibDebuggerServerConnection::Disconnect();
@@ -2087,14 +2097,17 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 		// Destroy = process exit, but hosts can decline. wes registers a
 		// keep-alive hook that returns true while user tabs are still
 		// connected. Drop the gate and force-exit the parked session —
-		// its ProcessRemove → NotifyDisconnect cascade is
+		// its Teardown → NotifyDisconnect cascade is
 		// what drives the OnLastDisconnect / wes exit hook chain.
 		// Note: CoUninitialize() is already done in Entry() epilogue
 		// (line ~472). Doing it again here would give a double-uninit
 		// on the worker thread. The forced close breaks the parked script
 		// out of its loop and takes the window down with it — desktop
-		// closes its main frame, a web tab kicks itself.
-		if (auto* s = ibSession::Current())
+		// closes its main frame, a web tab kicks itself, a thin client is
+		// told to go (ibClientSession::OnClose → Exit).
+		if (stopped)
+			stopped->Close(true);
+		else if (auto* s = ibSession::Current())
 			s->Close(true);
 	}
 	else if (commandFromClient == CommandId_DeleteAllBreakpoints) {

@@ -1,0 +1,15 @@
+#include "textBox.h"
+
+#include "backend/backend_picture.h"
+
+static const wxString s_textBox_png = "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAABhUlEQVR4nOybsU4CURBF72z8A8slsZYCS0v/wfgJmmgBlpZGEwpbLSy01P9xKTQmlvyDHc9FLUgIDJsdlh3mnoIEeMXbk527My/ZDMHJEBwKQHB2tAV5vzgpNd0KsI8NkoAPmchw/NB7hSHqHSCSbjZ98b/7mO4hSy+dQXEKQ/QSEOmiTQieLCX4zIBSQj54O4cBoi3oXBZp9vvdRQ9NcvU4Wvxnwtn4/uAZNfD9FDAoB/+PwZoS3Ak4Psrnf6whwZ2Aw+6uqQSXJWApwW0GWElwHYIWEtRZoG0s7QtmmUroj7612WGrp8Ekk6G2xt0dUAUR2dPW8DwALafq7LFyRvzDIzEEhxkAI6rWnkZT5w4sAQSHGQAjmj4rtIIlgOAwA2CEdR+gYZU5LAEEhxkAI9gHOIUCEBz2AQgOBSA47AMQHApAcFrXBzSdJSwBBIcZACPYBziFAhCcyhnQ9Ny/blgC6oqU3uGVFfauCkhJrsvPLzgjAZ9/e1+O+s7QtsMMQHDCC/gBAAD//0qcl2UAAAAGSURBVAMAIYde1O8QyCcAAAAASUVORK5CYII=";
+
+wxIcon ibValueTextBox::GetIcon() const
+{
+	return ibBackendPicture::GetIconFromBase64(s_textBox_png, wxSize(16, 16));
+}
+
+wxIcon ibValueTextBox::GetIconGroup()
+{
+	return ibBackendPicture::GetIconFromBase64(s_textBox_png, wxSize(16, 16));
+}

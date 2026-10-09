@@ -352,13 +352,9 @@ std::vector<XlsxStyle> ReadStyles(const wxString& xmlText)
 	return byIndex;
 }
 
-bool ReadPackage(const wxString& fileName, ibPackage& parts)
+bool ReadPackage(wxInputStream& input, ibPackage& parts)
 {
-	wxFileInputStream file(fileName);
-	if (!file.IsOk())
-		return false;
-
-	wxZipInputStream zip(file);
+	wxZipInputStream zip(input);
 	if (!zip.IsOk())
 		return false;
 
@@ -523,10 +519,13 @@ void GroupsFromLevels(const std::map<int, int>& level, const std::map<int, bool>
 }
 
 int ReadSheet(const wxString& partText, const std::vector<wxString>& strings,
-              const std::vector<XlsxStyle>& styles, ibSpreadsheetDescription& document, int topRow)
+              const std::vector<XlsxStyle>& styles, ibSpreadsheetDescription& document, int topRow, ibJournalStopwatch& parsed)
 {
 	wxXmlDocument xml;
-	if (!ParseXml(partText, xml) || xml.GetRoot() == nullptr)
+	parsed.Resume();
+	const bool read = ParseXml(partText, xml);
+	parsed.Pause();
+	if (!read || xml.GetRoot() == nullptr)
 		return 0;
 
 	int usedRows = 0;
@@ -765,10 +764,16 @@ int ReadSheet(const wxString& partText, const std::vector<wxString>& strings,
 
 } // namespace
 
-bool ibSheetFormatXlsx::Read(const wxString& fileName, ibSpreadsheetDescription& sheet) const
+bool ibSheetFormatXlsx::Read(wxInputStream& input, ibSpreadsheetDescription& sheet) const
 {
+	// Its stages timed — what of a workbook takes the time (a debug build's journal).
+	ibJournalStopwatch unpacked, said, styled, filled, parsed, handed;
+
+	unpacked.Resume();
 	ibPackage parts;
-	if (!ReadPackage(fileName, parts))
+	const bool opened = ReadPackage(input, parts);
+	unpacked.Pause();
+	if (!opened)
 		return false;
 
 	std::vector<wxString> sheetParts;
@@ -776,18 +781,23 @@ bool ibSheetFormatXlsx::Read(const wxString& fileName, ibSpreadsheetDescription&
 	if (sheetParts.empty())
 		return false;   // nothing in this file is a worksheet
 
+	said.Resume();
 	std::vector<wxString> strings;
 	ReadSharedStrings(parts, strings);
+	said.Pause();
 
+	styled.Resume();
 	const auto stylePart = parts.find(wxT("xl/styles.xml"));
 	const std::vector<XlsxStyle> styles =
 		ReadStyles(stylePart != parts.end() ? stylePart->second : wxString());
+	styled.Pause();
 
 	// ⚠ FILLED INTO A DOCUMENT OF ITS OWN and handed over only once it is whole: a
 	// caller that gets false must be free to keep the document it already had, and
 	// a half-read workbook is worse than none.
 	ibSpreadsheetDescription read;
 
+	filled.Resume();
 	int topRow = 0;
 	for (size_t at = 0; at < sheetParts.size(); at++) {
 		const auto part = parts.find(sheetParts[at]);
@@ -799,10 +809,20 @@ bool ibSheetFormatXlsx::Read(const wxString& fileName, ibSpreadsheetDescription&
 		if (at > 0 && topRow > 0)
 			read.AddRowBrake(topRow - 1);
 
-		const int used = ReadSheet(part->second, strings, styles, read, topRow);
+		const int used = ReadSheet(part->second, strings, styles, read, topRow, parsed);
 		topRow += wxMax(used, 1);
 	}
 
-	sheet = read;
+	// ⚠ MOVED, NOT COPIED: a copy's cell makes a font of its own (ibSpreadsheetCellDescription::SetCell) — a GDI font,
+	// where this reading shares one of a style's among all its cells. A sheet of 46 thousand cells copied ran the
+	// process out of them (CreateFont failed, the client hung, 2026-10-08).
+	filled.Pause();
+	handed.Resume();
+	sheet = std::move(read);
+	handed.Pause();
+
+	ibJournalInfo(wxT("sheet"), wxT("xlsx read: %u parts unpacked %lld ms, %u strings %lld ms, %u styles %lld ms, %d rows filled %lld ms (the XML parsed %lld ms), handed %lld ms"),
+		static_cast<unsigned>(parts.size()), unpacked.Ms(), static_cast<unsigned>(strings.size()), said.Ms(),
+		static_cast<unsigned>(styles.size()), styled.Ms(), topRow, filled.Ms(), parsed.Ms(), handed.Ms());
 	return true;
 }

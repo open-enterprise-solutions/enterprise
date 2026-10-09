@@ -1,6 +1,7 @@
 #include "informationRegister.h"
 
 #include "backend/appData.h"
+#include "backend/metaData.h"   // GetFactoryCountChanges — the version an explorer is built at
 #include "backend/session/session.h"
 #include "backend/databaseLayer/connectionPool.h"
 #include "backend/system/systemManager.h"
@@ -56,10 +57,10 @@ bool ibValueRecordSetObjectInformationRegister::SaveData(bool replace, bool clea
 
 const ibSourceExplorer* ibValueRecordManagerObjectInformationRegister::GetSourceExplorer() const
 {
-	m_sourceExplorer.Reset(
+	if (!m_sourceExplorer.Reset(m_metaObject->GetMetaData()->GetFactoryCountChanges(),
 		wxT("Ref"), _("Ref"), m_metaObject->GetMetaID(), GetClassType(),
-		false, false
-	);
+		false, false))
+		return &m_sourceExplorer;   // built at this version of the metadata already — read as it is
 
 	ibValueMetaObjectInformationRegister* metaRef = nullptr;
 

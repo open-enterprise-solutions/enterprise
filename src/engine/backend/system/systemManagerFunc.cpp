@@ -18,7 +18,7 @@
 
 #include "systemManagerEnum.h"
 
-#include "backend/serialize/jsonProvider.h"          // a value as text — the two verbs below
+#include "core/serialize/jsonProvider.h"          // a value as text — the two verbs below
 #include "backend/metaCollection/metaIntrospect.h"   // …and the type names the writing needs
 
 #include "backend/debugger/debugServer.h"            // …and up to whoever is debugging this run
@@ -354,7 +354,7 @@ short ibValueSystemFunction::Asc(const ibValue& cSource)
 // no longer adds it back by hand.
 wxString ibValueSystemFunction::TStr(const ibValue& cSource, const ibValue& cLanguage)
 {
-	return ibBackendLocalization::GetTranslateGetRawLocText(cLanguage.GetString(), cSource.GetString());
+	return ibLocalization::GetTranslateGetRawLocText(cLanguage.GetString(), cSource.GetString());
 }
 
 //--- Date and time:
@@ -558,8 +558,8 @@ void ibValueSystemFunction::Alert(const wxString& strMessage) //Alert
 
 	// Frontend-owned: frame knows whether to pop a wx-modal (desktop)
 	// or emit a toast/HTTP notification (web). ShowModalMessage on web
-	// parks the worker on a future until the client replies — safe to
-	// call from any thread that owns the script's execution context.
+	// waits in the session's pool (ibWorkerPool::Await) until the client
+	// replies, running the session's work meanwhile.
 	if (auto* frame = ibSession::CurrentFrame())
 		frame->ShowModalMessage(strMessage, _("Warning"), wxICON_WARNING | wxOK);
 }
@@ -575,7 +575,7 @@ ibValue ibValueSystemFunction::Question(const wxString& strMessage, ibQuestionMo
 		if (debugServer != nullptr && debugServer->IsDebugging())
 			debugServer->SendEvalMessage(wxT("(question, not asked) ") + strMessage);
 
-		return new ibValueEnumQuestionReturnCode();
+		return ibValue::CreateObject<ibValueEnumQuestionReturnCode>();
 	}
 
 	int wndStyle = 0;
@@ -598,26 +598,26 @@ ibValue ibValueSystemFunction::Question(const wxString& strMessage, ibQuestionMo
 		? frame->ShowModalMessage(strMessage, _("Question"), wndStyle | wxICON_QUESTION)
 		: wxCANCEL;
 
-	ibValueEnumQuestionReturnCode* retValue = new ibValueEnumQuestionReturnCode();
+	ibQuestionReturnCode code = ibQuestionReturnCode::ibQuestionReturnCode_Yes;
 	switch (retCode) {
 	case wxOK:
-		retValue->InitializeEnumeration(ibQuestionReturnCode::ibQuestionReturnCode_OK);
+		code = ibQuestionReturnCode::ibQuestionReturnCode_OK;
 		break;
 	case wxCANCEL:
-		retValue->InitializeEnumeration(ibQuestionReturnCode::ibQuestionReturnCode_Cancel);
+		code = ibQuestionReturnCode::ibQuestionReturnCode_Cancel;
 		break;
 	case wxYES:
-		retValue->InitializeEnumeration(ibQuestionReturnCode::ibQuestionReturnCode_Yes);
+		code = ibQuestionReturnCode::ibQuestionReturnCode_Yes;
 		break;
 	case wxNO:
-		retValue->InitializeEnumeration(ibQuestionReturnCode::ibQuestionReturnCode_No);
-		break;
-	default:
-		retValue->InitializeEnumeration(ibQuestionReturnCode::ibQuestionReturnCode_Yes);
+		code = ibQuestionReturnCode::ibQuestionReturnCode_No;
 		break;
 	}
 
-	return retValue;
+	// 🛑 MADE BY ITS REGISTERED CTOR, which fills the members' names (ibCtorEnumType::CreateObject). A bare `new`
+	// left them empty, and naming the answer threw (std::map::at) — after the person had answered: the question
+	// was asked and the script ended there, silently (found over the protocol, 2026-10-06).
+	return ibValue::CreateEnumObject<ibValueEnumQuestionReturnCode>(code);
 }
 
 void ibValueSystemFunction::SetStatus(const wxString& sStatus)
@@ -792,7 +792,7 @@ void ibValueSystemFunction::Execute(const wxString& strExpression)
 	ibProcUnit::Evaluate(strExpression, puState ? puState->GetCurrentRunContext() : nullptr, retValue, true);
 }
 
-#include "backend/formatString.h"
+#include "core/formatString.h"
 
 // THE FORMAT STRING IS A VALUE of its own now (formatString.h) — read once, and applied by the same
 // code the format string constructor prints its sample with. The reading here was the only one.
@@ -1052,7 +1052,7 @@ bool ibValueSystemFunction::RunJob(const wxString& strJobName)
 	if (manager == nullptr)
 		return false;
 
-	return manager->RunNow(strJobName);
+	return manager->Execute(strJobName);
 }
 
 #include "backend/system/value/valueArray.h"

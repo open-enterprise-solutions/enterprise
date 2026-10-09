@@ -5,11 +5,10 @@
 #include "valueQuery.h"
 
 #include "backend/query/queryParser.h"
-#include "backend/diagnostics/crashGuard.h"  // ibJournal — the technology journal
+#include "core/diagnostics/crashGuard.h"  // ibJournal — the technology journal
 #include "valueArray.h"                  // ibValueArray — a package answers with results BY POSITION
 #include "backend/compiler/typeCtor.h"   // VALUE_TYPE_REGISTER / SYSTEM_TYPE_REGISTER / ENUM_TYPE_REGISTER
 #include "backend/backend_exception.h"   // ibBackendCoreException — a wrong TempTablesManager is told, not ignored
-#include "backend/appData.h"             // appData->DesignerMode()
 #include "backend/session/session.h"     // ibSession::Current — the session knows WHICH config it was opened for
 #include "backend/moduleManager/moduleManager.h"  // GetMetaManager()->GetMetaData() — that config, held
 
@@ -99,11 +98,12 @@ bool ibValueQueryExec::Init(ibValue** paParams, const long lSizeArray)
 	if (m_text.IsEmpty())
 		return true;
 
-	// Designer: tolerate a malformed / half-typed query so the value (and its method chain) stays reachable
-	// for autocomplete. Runtime: a syntax error throws ibBackendException (line:pos) as before.
-	if (appData->DesignerMode()) {
+	// The caret's walk for completion (eval_complete): tolerate a malformed / half-typed query so the value
+	// (and its method chain) stays reachable — in whichever editor is completing, the client's included.
+	// Anything else: a syntax error throws ibBackendException (line:pos) as before.
+	if (ibBackendException::IsEvalComplete()) {
 		try { m_package = ibQueryParser().ParsePackage(m_text); }
-		catch (const ibBackendException&) { m_package = ibQueryPackage(); }
+		catch (const ibCoreException&) { m_package = ibQueryPackage(); }
 		return true;
 	}
 
@@ -180,12 +180,12 @@ bool ibValueQueryExec::RunPackage(std::vector<ibValue>& out, std::vector<wxStrin
 		return true;
 	}
 	catch (...) {
-		if (!appData->DesignerMode())
+		if (!ibBackendException::IsEvalComplete())
 			throw;   // runtime: the package fails at the statement that failed, with THAT statement's message
-		// designer: editing / autocomplete has no live session to read from, and a session-less read can throw
-		// beyond ibBackendException — degrade instead of failing, so the .Execute().Select()… chain stays
-		// introspectable. (The editor's own eval would otherwise swallow the throw and leave the chain object
-		// undefined → no Select in the dropdown.)
+		// completion: the caret's walk may have no live session to read from (the designer's has no runtime),
+		// and a session-less read can throw beyond ibBackendException — degrade instead of failing, so the
+		// .Execute().Select()… chain stays introspectable. (The walk would otherwise swallow the throw and
+		// leave the chain object undefined → no Select in the dropdown.)
 		out.clear();
 		return false;
 	}

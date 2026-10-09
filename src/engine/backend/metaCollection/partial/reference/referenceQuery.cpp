@@ -10,9 +10,8 @@
 #include "backend/metaCollection/partial/tabularSection/tabularSection.h"
 #include "backend/query/dataQueryBuilder.h"   // L3 door — reference read by key / scan
 #include "backend/logger/logger.h"        // a read that FAILED is said out loud, unlike a row that is absent
-#include "backend/diagnostics/journal.h"  // every read is counted — how many there are is a measurement, not a guess
-#include "backend/utils/debugTrace.h"     // ibDebugTraceEnabled — the same gate as the hit line
-#include "backend/stringUtils.h"          // a typed text against a code: the whole of it, case aside
+#include "core/diagnostics/debugTrace.h"     // ibDebugTraceEnabled — the same gate as the hit line
+#include "core/stringUtils.h"          // a typed text against a code: the whole of it, case aside
 #include "backend/system/value/valueArray.h"   // ibValueArray — ChoiceDataGetProcessing's ChoiceData
 #include "backend/system/value/valueMap.h"     // ibValueStructure — …and its Parameters
 
@@ -67,7 +66,7 @@ bool ibValueReferenceDataObject::ReadData(bool createData)
 	//
 	// It stays non-throwing (a presentation asking "who is this reference" must not blow up a form),
 	// but the fault is now SAID, with the table it happened on.
-	catch (const ibBackendException& err) {
+	catch (const ibCoreException& err) {
 		if (ibLogger* const log = ibApplicationInstance::GetLogger())
 			log->Error(wxT("reference"), wxT("read"),
 				m_metaObject->GetPhysicalTableName() + wxT(": ") + err.GetErrorDescription());
@@ -165,7 +164,7 @@ void ibValueReferenceDataObject::ReadBatch()
 		// A read that FAILED — or a key that did not come back, deleted or refused by its rights — leaves
 		// its references raw: each reads itself when it is asked, and says there what it found, with the
 		// object it happened on.
-		catch (const ibBackendException& err) {
+		catch (const ibCoreException& err) {
 			if (ibLogger* const log = ibApplicationInstance::GetLogger())
 				log->Error(wxT("reference"), wxT("read"),
 					metaObject->GetPhysicalTableName() + wxT(": ") + err.GetErrorDescription());

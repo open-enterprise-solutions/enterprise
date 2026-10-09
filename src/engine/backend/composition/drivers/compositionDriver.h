@@ -187,7 +187,7 @@ struct ibCompositionOutputInfo
 // though it were the next grouping (Max, 2026-08-29, live: the nested element with an empty
 // reference, and row 5 counted as a group).
 // ⭐ A FONT SAID PART BY PART — what a rule's font changes of the ORDINARY font it was chosen from (the report's own,
-// s_defaultSpreadsheetFont: the font window and the MCP words both start from it), and nothing else. It is laid OVER
+// ibDefaultSpreadsheetFont: the font window and the MCP words both start from it), and nothing else. It is laid OVER
 // the font the cell already has (Over), so a bold heading made italic stays bold and a report keeps its size (Max,
 // 2026-09-30, the run: a whole font took the headings' bold and turned 8pt into the system's 9). The flags are said
 // only as ON — a rule makes a line bold or italic, it does not take a heading's bold away.

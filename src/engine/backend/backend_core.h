@@ -8,24 +8,14 @@
 #include "backend/backend.h"
 #include "rowValues.h"
 
-extern BACKEND_API unsigned int GetBuildId();
-
-// THE BUILD, SPELLED OUT: the number above plus when it was actually compiled —
-// "3164 (Sep  2 2026 16:55:03)". The number is the VERSION and is stable across a day of rebuilds,
-// which is right for saying which engine this is and wrong for telling two of them apart; this is
-// for the second question (the bytecode cache key, a banner that has to be exact).
-extern BACKEND_API const char* GetBuildStamp();
-
-#include "guid.h"
-#include "clsid.h"
-#include "fnumber.h"
-#include "fdatetime.h"
-#include "fstring.h"
+#include "core/build.h"   // GetBuildId / GetBuildStamp
+#include "core/guid.h"
+#include "core/types.h"   // the class ids, the ids of the configuration, the kinds of a value
+#include "core/fnumber.h"
+#include "core/fdatetime.h"
+#include "core/fstring.h"
 #include "typeconv.h"
-#include "stringUtils.h"
-
-// The UNDEFINED value type's clsid — the canonical "no concrete type"; base-level so low-level code can name it.
-constexpr ibClassID g_valueUndefinedCLSID = primitive_to_clsid("VL_UNDF");
+#include "core/stringUtils.h"
 
 //*******************************************************************************************
 
@@ -87,75 +77,12 @@ enum ibHierarchyType {
 	eItems      = 3,
 };
 
-typedef int ibRoleID;
-typedef int ibMetaID;
-// A metaId acting as a SOURCE-binding hop (an element of a control's binding
-// path: attribute id, then field / reference / column ids). A distinct name so a
-// binding chain reads as source ids, not as arbitrary metaIds.
-typedef int ibSourceId;
-typedef int ibFormID;
-typedef int ibActionID;
-
-typedef uint64_t ibPictureID;   // same base as ibClassID / u64 — see the note in clsid.h
-typedef unsigned int ibVersionID;
-
 // metaID -> ibValue set of one record object / table row.
 // ibRowValues (sorted vector) — same std::map API & sorted order, but one
 // allocation, contiguous lookup and no per-entry RB-node overhead. See rowValues.h.
 // (Alias only — ibValue is forward-declared inline; instantiated at member sites
 // where value.h is complete.)
 typedef ibRowValues<ibMetaID, class BACKEND_API ibValue> ibRowMetaValues;
-
-//*******************************************************************************************
-//*                                 Special enumeration                                     *
-//*******************************************************************************************
-
-// Underlying type fixed at 1 byte: the largest enumerator (TYPE_ITERATOR
-// = 204) fits in unsigned char, and the AOT wire format already narrows
-// m_typeClass to uint8_t (byteCodeAOT.cpp), so this is binary-compatible
-// with persisted bytecode. Shrinks the m_typeClass slot in every ibValue.
-enum ibValueTypes : unsigned char {
-
-	TYPE_EMPTY = 0,
-	TYPE_BOOLEAN = 1,
-	TYPE_NUMBER = 2,
-	TYPE_DATE = 3,
-	TYPE_STRING = 4,
-	TYPE_NULL = 5,
-
-	TYPE_REFFER = 100, // object reference (owned: IncrRef/DecrRef, Reset may delete)
-	TYPE_CONST_REFFER = 101, // read-only reference to a NON-owned object (e.g. a
-	                         // const ibValueMetaObject* from the metadata tree).
-	                         // No ref-count, Reset never deletes it; mutation blocked.
-
-	TYPE_VALUE = 200, // value
-	TYPE_ENUM = 201, // enumeration
-	TYPE_OLE = 202, // ole object
-	TYPE_FUNCTION = 203, // anonymous-function / lambda value (ibValueFunction)
-	TYPE_ITERATOR = 204, // iterator wrapper (ibValueIterator)
-
-	TYPE_LAST,
-};
-
-// WHAT KIND OF THING A REGISTERED TYPE IS, and what the registry tells it. Here, beside the value
-// types, because ibValue's registry surface names them (value.h) while the ctors that carry them
-// (compiler/typeCtor.h) are built on a complete ibValue — so they cannot live with the ctors.
-enum ibCtorObjectType {
-	ibCtorObjectType_object_primitive = 1,
-	ibCtorObjectType_object_value,
-	ibCtorObjectType_object_control,
-	ibCtorObjectType_object_system,
-	ibCtorObjectType_object_enum,
-	ibCtorObjectType_object_context,
-
-	ibCtorObjectType_object_metadata,
-	ibCtorObjectType_object_meta_value
-};
-
-enum ibCtorObjectTypeEvent {
-	ibCtorObjectTypeEvent_Register,
-	ibCtorObjectTypeEvent_UnRegister,
-};
 
 //*******************************************************************************************
 //*                                 Declare special var                                     *
@@ -188,18 +115,7 @@ enum ibCtorObjectTypeEvent {
 #define MAX_STATIC_VAR 10ll
 #endif 
 
-//*******************************************************************************************
-//*                                 Versions support									    *
-//*******************************************************************************************
-
-#define version_generate(major, minor, release) \
-		( (major * 1000) + (minor * 100) + release )
-
-enum ibProgramVersion {
-	version_oes_1_0_0 = version_generate(1, 0, 0),
-	version_oes_1_0_1 = version_generate(1, 0, 1),
-	version_oes_last  = version_oes_1_0_1
-};
+// (The program's version — ibProgramVersion, version_oes_last — is the core's, beside its build: core/build.h.)
 
 enum ibProgramSyntax {
 	syntax_ves,    // Visual Basic-style ES, a legacy business-scripting dialect — keyword-fenced (Then/Do/EndIf/...).
@@ -242,11 +158,6 @@ enum ibEvalMode : unsigned char {
 
 //*******************************************************************************************
 
-#define COMPONENT_TYPE_ABSTRACT		 0
-#define COMPONENT_TYPE_METADATA		 COMPONENT_TYPE_ABSTRACT
-
-//*******************************************************************************************
-
 // ⭐ THE TECHNOLOGY JOURNAL, DECLARED IN THE CORE — so `ibJournalInfo(...)` is available in every file
 // of the engine without an include of its own. A diagnostic that has to be arranged for is a
 // diagnostic nobody writes at the moment they need it; this one is simply there, like `_()`.
@@ -254,6 +165,6 @@ enum ibEvalMode : unsigned char {
 // Included LAST, and from here rather than the other way round: journal.h includes this header for
 // BACKEND_API, and the guard above makes that re-entry a no-op, so the pair resolves whichever file
 // is reached first.
-#include "backend/diagnostics/journal.h"
+#include "core/diagnostics/journal.h"
 
 #endif 

@@ -15,9 +15,7 @@
 #include "backend/databaseLayer/databaseLayer.h"
 #include "backend/databaseLayer/databaseResultSet.h"
 #include "backend/databaseLayer/databaseQueryBuilder.h"   // L2 door: descriptor pilot
-#include "backend/fileSystem/fs.h"
-#include "backend/diagnostics/journal.h"   // ibJournal — an invalidation that did NOT happen must say so
-#include "backend/guid.h"
+#include "core/fileSystem/fs.h"
 #include "backend/utils/md5.hpp"   // the key is digested to the width its column declares
 #include "backend/backend_core.h"   // GetBuildId — the engine half of the cache key
 
@@ -297,7 +295,7 @@ void ibByteCodeCache::Invalidate(const ibGuid& descId)
 			ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("descriptor_id")),
 			        ibConst(ibValue(wxString(descId))))));
 	}
-	catch (const ibBackendException& err) {
+	catch (const ibCoreException& err) {
 		ibJournalWarning(wxT("bytecode.cache"),
 			wxT("invalidate failed for '%s': %s"), wxString(descId), err.GetErrorDescription());
 	}

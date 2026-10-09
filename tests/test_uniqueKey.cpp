@@ -11,7 +11,7 @@
 
 #include <gtest/gtest.h>
 #include "backend/uniqueKey.h"
-#include "backend/guid.h"
+#include "core/guid.h"
 
 // ---------------------------------------------------------------------------
 // ibUniqueKey — GUID identity

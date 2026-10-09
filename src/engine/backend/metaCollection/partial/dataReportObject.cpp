@@ -4,7 +4,8 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "dataReport.h"
-#include "backend/serialize/dataBuilder.h"   // ibDataNode — a composer's settings travel as a node
+#include "core/serialize/dataBuilder.h"   // ibDataNode — a composer's settings travel as a node
+#include "backend/metaData.h"                // GetFactoryCountChanges — the version an explorer is built at
 
 //*********************************************************************************************
 //*                                  ObjectCatalogValue                                       *
@@ -120,6 +121,10 @@ void ibValueRecordDataObjectReport::FillDataMembers(ibMemberTable& helper) const
 // builder turns into a GRIDBOX, so declaring a composer is what puts the report on the screen.
 const ibSourceExplorer* ibValueRecordDataObjectReport::GetSourceExplorer() const
 {
+	// Built at this version of the metadata already, the composers with it — read as it is.
+	if (m_sourceExplorer.GetSourceVersion() == GetMetaObject()->GetMetaData()->GetFactoryCountChanges())
+		return &m_sourceExplorer;
+
 	const ibSourceExplorer* explorer = ibValueRecordDataObject::GetSourceExplorer();
 
 	const auto* metaObject = dynamic_cast<const ibValueMetaObjectReport*>(GetMetaObject());

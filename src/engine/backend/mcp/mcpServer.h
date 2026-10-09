@@ -299,6 +299,14 @@ private:
 	bool RunTool(const class ibMcpTool* tool, const class ibDataNode& arguments,
 		class ibDataNode& payload, wxString& refusal, bool* outPending = nullptr);
 
+	// The configuration its session works in — what every answer here is about. Null while it is stopped.
+	class ibMetaDataConfigurationBase* GetMetaData() const;
+
+	// Puts the bridge on the open configuration's list, moving it when that configuration is not
+	// the one it is already watching. Called from the one place every tool call passes through —
+	// a configuration can be opened, closed and reopened while the server runs.
+	void WatchMetadata();
+
 	ibMcpSettings                m_settings;
 	std::unique_ptr<ibMcpListener> m_listener;
 
@@ -314,10 +322,6 @@ private:
 	// notifier does. Nothing hands one in, nothing holds one but this.
 	std::unique_ptr<class ibMcpMetaBridge> m_metaBridge;
 
-	// Puts the bridge on the open configuration's list, moving it when that configuration is not
-	// the one it is already watching. Called from the one place every tool call passes through —
-	// a configuration can be opened, closed and reopened while the server runs.
-	void WatchMetadata();
 	std::atomic<bool>            m_running{ false };
 
 	// Not owned — the debug client's bridge list owns what it holds. Null when

@@ -110,7 +110,7 @@ bool ibWebSession::Login(const wxString& user, const wxString& password)
 	// Anonymous-phase create through the session registry — same shape as
 	// desktop's appData->CreateSession<ibGUISession>() (see
 	// enterprise/mainApp.cpp). The anonymous row lands in sys_session
-	// immediately (empty userName + eWEB_RUNTIME_MODE app mode) so
+	// immediately (empty userName + WebClient kind) so
 	// admin / Active-Users listings see "login in progress" between
 	// GET / (cookie mint) and POST /login settling. Reuse the tab's
 	// sessionStorage id as the registry's session guid — one identifier
@@ -129,8 +129,8 @@ bool ibWebSession::Login(const wxString& user, const wxString& password)
 	// as a real client without an explicit pointer here.
 	ibSessionHolder holder;
 	try {
-		holder = appData->CreateSession<ibWebClientSession>(presetGuid, address);
-	} catch (const ibBackendException&) {
+		holder = appData->CreateSession<ibWebClientSession>(ibSessionKind::WebClient, presetGuid, address);
+	} catch (const ibCoreException&) {
 		holder.Reset();
 	}
 	if (!holder)
@@ -145,7 +145,25 @@ bool ibWebSession::Login(const wxString& user, const wxString& password)
 	// client-side, not from a modal.
 	// A failed login just lets the holder die here — that removes the
 	// anonymous sys_session row. No cleanup call to forget.
-	if (holder->Open(user, password) != ibSession::OpenResult::Authenticated)
+	//
+	// …and a configuration that does not start refuses the login too (ibSession::CompileRoot throws). The
+	// page can show only "refused"; the reason goes where an administrator reads it.
+	//
+	// ⭐ ON THE SESSION'S OWN WORKER — the open and the start below both run the configuration's script (its main
+	// module, its start handlers), and everything else of this session runs there: on the request's thread they
+	// ran BESIDE the worker serving this session's polls, two threads in one session, and a question asked at
+	// start waited without holding the session (ibWorkerPool::Await).
+	bool opened = false;
+	try {
+		sessionRaw->Submit([&]() {
+			opened = holder->Open(user, password) == ibSession::OpenResult::Authenticated;
+		}).get();
+	}
+	catch (const ibCoreException& err) {
+		ibJournalError(wxT("web"), wxT("login of '%s' refused: %s"), user, err.GetErrorDescription());
+		return false;
+	}
+	if (!opened)
 		return false;
 
 	m_user = user;
@@ -166,17 +184,17 @@ bool ibWebSession::Login(const wxString& user, const wxString& password)
 	// session, the web frame owns it.
 	m_session = ibSessionWatch(holder);
 
+	// PUBLISHED BEFORE THE START RUNS — a question asked at start (OnStart) reaches the client through /session,
+	// and /session finds the frame through m_app: published after, the question waited for a client that could
+	// not see it (the stage-0 run, 2026-10-05). A start that fails takes it back.
+	m_app = std::move(app);
 	bool initOk = false;
-	{
-		ibSessionScope scope(sessionRaw);
-		initOk = app->OnInit(std::move(holder));
-	}
+	sessionRaw->Submit([&]() { initOk = m_app->OnInit(std::move(holder)); }).get();   // the worker, as above
 	if (!initOk) {
+		m_app.reset();
 		m_session.Reset();
 		return false;
 	}
-
-	m_app = std::move(app);
 	return true;
 }
 
@@ -204,8 +222,14 @@ void ibWebSession::OnExit()
 	// side gets a clean LeaveLoop on the wire — the unpark path inside
 	// DoDebugLoop sends it before returning, just as a designer-issued
 	// Continue would.
-	if (auto s = m_session.Share())
+	//
+	// And a script waiting for its client — a question (ibWorkerPool::Await) — is cancelled: it runs this
+	// session's tasks while it waits, so the drain below would run INSIDE its wait and the runtime and the tabs
+	// would go down under it. Cancelled, it unwinds first and the drain waits behind it.
+	if (auto s = m_session.Share()) {
 		s->WakeDebugLoop();
+		s->Cancel();
+	}
 
 	// Drain the worker before tearing down the runtime. Submit a no-op
 	// and wait — the per-session worker queue is FIFO, so by the time

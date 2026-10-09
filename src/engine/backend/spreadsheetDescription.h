@@ -3,6 +3,7 @@
 
 #include "backend/compiler/value.h"
 
+#include <map>             // the fonts a sheet made of another's (ibSpreadsheetFontCopy)
 #include <unordered_map>   // the cell index — MSVC drags it in transitively, libstdc++ does not
 #include <memory>          // the cells' blocks — see m_cellAt: their addresses must survive a later insert
 #include <new>             // …and each cell is made in place inside its block
@@ -63,7 +64,14 @@ const static int s_rowLabelWidth = 40;
 const static int s_defaultColWidth = 70;
 const static int s_colLabelHeight = 15;
 
-static const wxFont s_defaultSpreadsheetFont = wxFont(8, wxFontFamily::wxFONTFAMILY_DEFAULT, wxFontStyle::wxFONTSTYLE_NORMAL, wxFontWeight::wxFONTWEIGHT_NORMAL);
+// ⭐ THE SHEET'S ORDINARY FONT, MADE ANEW ON EVERY ASK — never one object everybody copies. wx counts the holders of a
+// font in a plain int, so a font shared by the sessions of a server is counted up and down by several threads at
+// once and freed under one of them: `static const wxFont` here (one per translation unit, shared by all its threads)
+// stopped an application server on a list's output — "m_count > 0 failed in DecRef()" in ~wxFont, from
+// ibSpreadsheetComposeDriver::PrintRow (2026-10-06, Max's crawl). A font is made where it is wanted, and held by one.
+inline wxFont ibDefaultSpreadsheetFont() {
+	return wxFont(8, wxFontFamily::wxFONTFAMILY_DEFAULT, wxFontStyle::wxFONTSTYLE_NORMAL, wxFontWeight::wxFONTWEIGHT_NORMAL);
+}
 
 // ⭐ ARE THESE TWO THE SAME FONT — asked WITHOUT a screen. wxFont's own operator== ends up in
 // GetPixelSize(), and that opens a wxScreenDC to measure the glyphs; a description compares what
@@ -76,6 +84,34 @@ inline bool ibSameSpreadsheetFont(const wxFont& lhs, const wxFont& rhs) {
 		return lhs.IsOk() == rhs.IsOk();
 	return lhs.GetNativeFontInfoDesc() == rhs.GetNativeFontInfoDesc();
 }
+
+// ⭐ THE FONTS A SHEET MADE OF ANOTHER'S, ONE A KIND — what a cell copied holds (ibSpreadsheetCellDescription::SetCell).
+// A copy's font is its own, made from what the font is: a template in the configuration is one object for every
+// session, and wx counts the holders of a font in a plain int (see ibDefaultSpreadsheetFont). But made for each cell,
+// on Windows it is an object of the GDI for each cell — a sheet of 46 thousand cells ran the process out of them and
+// everything that copies cells grew slow (2026-10-08). Made once a kind and shared by the cells of the one sheet. A
+// sheet copied makes its own: these are never copied with it.
+class ibSpreadsheetFontCopy {
+public:
+	ibSpreadsheetFontCopy() = default;
+	ibSpreadsheetFontCopy(const ibSpreadsheetFontCopy&) {}
+	ibSpreadsheetFontCopy(ibSpreadsheetFontCopy&&) noexcept = default;
+	ibSpreadsheetFontCopy& operator=(const ibSpreadsheetFontCopy&) { m_made.clear(); return *this; }
+	ibSpreadsheetFontCopy& operator=(ibSpreadsheetFontCopy&&) noexcept = default;
+
+	// This sheet's font of the kind of `font` — asked by what it is, which touches no count.
+	wxFont Copy(const wxFont& font) {
+		if (!font.IsOk())
+			return wxFont();
+		wxFont& made = m_made[font.GetNativeFontInfoDesc()];
+		if (!made.IsOk())
+			made = wxFont(*font.GetNativeFontInfo());
+		return made;
+	}
+
+private:
+	std::map<wxString, wxFont> m_made;
+};
 
 ///////////////////////////////////////
 
@@ -111,6 +147,8 @@ struct ibSpreadsheetCellDescription {
 	};
 
 	ibSpreadsheetCellDescription(int row, int col) : m_row(row), m_col(col) {}
+	ibSpreadsheetCellDescription(const ibSpreadsheetCellDescription& rhs) : m_row(rhs.m_row), m_col(rhs.m_col) { ibSpreadsheetFontCopy fonts; SetCell(&rhs, fonts); }
+	ibSpreadsheetCellDescription(const ibSpreadsheetCellDescription& rhs, ibSpreadsheetFontCopy& fonts) : m_row(rhs.m_row), m_col(rhs.m_col) { SetCell(&rhs, fonts); }
 
 	bool IsEmptyValue() const { return m_value.IsEmpty(); }
 
@@ -150,7 +188,7 @@ struct ibSpreadsheetCellDescription {
 		m_col_size = num_cols;
 	}
 
-	void SetCell(const ibSpreadsheetCellDescription* rhs) {
+	void SetCell(const ibSpreadsheetCellDescription* rhs, ibSpreadsheetFontCopy& fonts) {
 		if (rhs == nullptr)
 			return;
 		//m_row = rhs->m_row;
@@ -158,7 +196,9 @@ struct ibSpreadsheetCellDescription {
 		m_alignHorz = rhs->m_alignHorz;
 		m_alignVert = rhs->m_alignVert;
 		m_textOrient = rhs->m_textOrient;
-		m_font = rhs->m_font;
+		// ⚠ A COPY'S FONT IS ITS OWN — made from what the font is, not shared with the one copied: the sheet's, one a
+		// kind (ibSpreadsheetFontCopy).
+		m_font = fonts.Copy(rhs->m_font);
 		m_backgroundColour = rhs->m_backgroundColour;
 		m_textColour = rhs->m_textColour;
 		m_borderAt[0] = rhs->m_borderAt[0];
@@ -175,7 +215,8 @@ struct ibSpreadsheetCellDescription {
 	}
 
 	ibSpreadsheetCellDescription& operator =(const ibSpreadsheetCellDescription& rhs) {
-		SetCell(&rhs);
+		ibSpreadsheetFontCopy fonts;
+		SetCell(&rhs, fonts);
 		return *this;
 	}
 
@@ -215,7 +256,7 @@ struct ibSpreadsheetCellDescription {
 	int m_alignVert = wxALIGN_TOP;
 	int m_textOrient = wxHORIZONTAL;
 	// 🛑 UNSET, LIKE THE COLOURS BELOW — and for the same reason, found the same way. A cell used to
-	// be born holding s_defaultSpreadsheetFont, so the node writer had to ASK whether that font was
+	// be born holding the sheet's default font, so the node writer had to ASK whether that font was
 	// still the default one; and asking two wxFonts whether they are equal MEASURES them —
 	// wxFontBase::operator== calls GetPixelSize(), which opens a wxScreenDC. On a machine with no
 	// screen that is a crash, not a slow answer: six round-trip tests died with SIGSEGV inside GTK
@@ -410,6 +451,14 @@ struct ibSpreadsheetDescription {
 		m_maxCol = std::max(m_maxCol, entry.m_col + 1);
 
 		return &entry;
+	}
+
+	// …and filled as a cell of another sheet, its span with it — an area taken or put; its font this sheet's.
+	ibSpreadsheetCellDescription* GetOrCreateCell(int row, int col, const ibSpreadsheetCellDescription* from) {
+		ibSpreadsheetCellDescription* cell = GetOrCreateCell(row, col);
+		if (cell != nullptr)
+			cell->SetCell(from, m_fontCopy);
+		return cell;
 	}
 
 	const ibSpreadsheetCellDescription* GetCellByIdx(size_t idx) const {
@@ -747,7 +796,7 @@ struct ibSpreadsheetDescription {
 		const ibSpreadsheetCellDescription* cell = GetCell(row, col);
 		if (cell != nullptr && cell->m_font.IsOk())
 			return cell->m_font;
-		return s_defaultSpreadsheetFont;
+		return ibDefaultSpreadsheetFont();
 	}
 
 	void SetCellFont(int row, int col, const wxFont& font) {
@@ -1047,7 +1096,7 @@ struct ibSpreadsheetDescription {
 		if (cell == nullptr)
 			return;
 		const int rowSize = cell->m_row_size, colSize = cell->m_col_size;
-		cell->SetCell(&desc);
+		cell->SetCell(&desc, m_fontCopy);
 		cell->m_row_size = rowSize;
 		cell->m_col_size = colSize;
 	}
@@ -1165,9 +1214,10 @@ private:
 			return reinterpret_cast<ibSpreadsheetCellDescription*>(m_blocks[block].get() + offset * sizeof(ibSpreadsheetCellDescription));
 		}
 		void CopyFrom(const CellBlocks& src) {
+			ibSpreadsheetFontCopy fonts;   // the copy's own, one a kind
 			try {
 				for (size_t i = 0; i < src.m_size; ++i)
-					emplace_back(src[i]);
+					emplace_back(src[i], fonts);
 			}
 			catch (...) {
 				clear();   // the cells made so far are destroyed, not leaked, and the copy says why it failed
@@ -1218,6 +1268,9 @@ private:
 	// The blocks grow 16, 32, 64, 128 cells and then 256 at a time, so a one-row area document does
 	// not pay for a block it will never fill.
 	CellBlocks m_cellAt;
+
+	// The fonts this sheet made of another's, one a kind — what its cells copied from one hold (SetCell, CopyCell).
+	ibSpreadsheetFontCopy m_fontCopy;
 
 	// WHERE each cell is, keyed by its address. Kept in step with m_cellAt by the two
 	// places that touch it — GetOrCreateCell (insert) and ClearSpreadsheet (drop);

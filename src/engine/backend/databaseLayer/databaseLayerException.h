@@ -6,7 +6,7 @@
 //
 //   catch (const ibDatabaseLayerException&)    // driver native code + sqlstate
 //   catch (const ibBackendDatabaseException&)  // any DB-tier failure
-//   catch (const ibBackendException&)          // catch-all
+//   catch (const ibCoreException&)          // catch-all
 //
 // Direct callers (business logic that wants to say "this is a DB
 // failure" without knowing the driver details) can throw the category

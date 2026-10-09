@@ -168,6 +168,65 @@ TEST(ValueStructure, GetAnswersAFieldInAnyCaseOrUndefined) {
     EXPECT_EQ(out.GetType(), ibValueTypes::TYPE_EMPTY);
 }
 
+// A small structure is WALKED, a large one is INDEXED — the index exists from kIndexMin entries
+// on (valueMap.h). The two roads must answer alike: every field found in any case, a
+// duplicate refused, on the way up past the threshold and on the way back down by Delete.
+TEST(ValueStructure, FieldsAreFoundTheSameWalkedAndIndexed) {
+    ibValueStructure s;
+    const int kFields = 20;   // well past the threshold
+    auto name = [](int i) { return ibValue(wxString::Format(wxT("Field%d"), i)); };
+    auto upper = [](int i) { return ibValue(wxString::Format(wxT("FIELD%d"), i)); };
+
+    for (int i = 0; i < kFields; ++i) {
+        s.Insert(name(i), ibValue(ibNumber(i)));
+        for (int j = 0; j <= i; ++j) {
+            ibValue out;
+            ASSERT_TRUE(s.Property(upper(j), out)) << "field " << j << " after " << i + 1 << " inserts";
+            EXPECT_EQ(out.GetInteger(), j);
+        }
+        ibValue out;
+        EXPECT_FALSE(s.Property(name(i + 1), out)) << "a field not yet inserted, after " << i + 1;
+        EXPECT_ANY_THROW(s.Insert(upper(i), ibValue())) << "a duplicate in another case, at " << i + 1 << " fields";
+        EXPECT_EQ(s.Count(), static_cast<unsigned int>(i + 1)) << "the duplicate was not added";
+    }
+
+    for (int i = kFields - 1; i >= 2; --i) {
+        s.Delete(name(i));
+        ibValue out;
+        EXPECT_FALSE(s.Property(name(i), out)) << "a deleted field, at " << i << " fields";
+        for (int j = 0; j < i; ++j) {
+            ASSERT_TRUE(s.Property(upper(j), out)) << "field " << j << " with " << i << " left";
+            EXPECT_EQ(out.GetInteger(), j);
+        }
+    }
+    EXPECT_EQ(s.Count(), 2u);
+}
+
+// Insert refuses a repeated key in every process, with no question about the designer; an owner for whom a
+// repeat is no error puts it with SetAt — one entry, the later value (the metadata namespaces do).
+TEST(ValueStructure, InsertRefusesARepeatAndSetAtPutsIt) {
+    ibValueStructure s;
+    s.Insert(Field(wxT("Name")), ibValue(ibNumber(1)));
+    EXPECT_ANY_THROW(s.Insert(Field(wxT("NAME")), ibValue(ibNumber(2))));
+    EXPECT_TRUE(s.SetAt(Field(wxT("name")), ibValue(ibNumber(3))));
+    ibValue out;
+    ASSERT_TRUE(s.Property(Field(wxT("Name")), out));
+    EXPECT_EQ(out.GetInteger(), 3);
+    EXPECT_EQ(s.Count(), 1u);
+}
+
+// THE METHOD TABLE IS ONE PER TYPE, not one per structure: two structures answer from the same
+// table, and a read-only one from the other (it has no Insert, and Get keeps its number).
+TEST(ValueStructure, StructuresShareOneMethodTable) {
+    ibValueStructure a, b;
+    ibValueStructure fixed(true);
+    EXPECT_EQ(a.GetPMethods(), b.GetPMethods());
+    EXPECT_NE(a.GetPMethods(), fixed.GetPMethods());
+    EXPECT_NE(a.FindMethod(wxT("Insert")), wxNOT_FOUND);
+    EXPECT_EQ(fixed.FindMethod(wxT("Insert")), wxNOT_FOUND);
+    EXPECT_EQ(a.FindMethod(wxT("Get")), fixed.FindMethod(wxT("Get")));
+}
+
 // ===========================================================================
 // COPYING — the verb behind `Val`
 //

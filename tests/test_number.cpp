@@ -9,7 +9,7 @@
 // =============================================================================
 
 #include <gtest/gtest.h>
-#include "backend/fnumber.h"
+#include "core/fnumber.h"
 
 #include <climits>
 #include <sstream>
@@ -322,6 +322,31 @@ TEST(NumberDivision, ChainStopsAtTheCeiling) {
     const size_t point = text.Find(wxT('.'));
     ASSERT_NE(point, wxString::npos);
     EXPECT_LE(text.length() - point - 1, static_cast<size_t>(ibNumber::kMaxDivFracDigits));
+}
+
+TEST(NumberDivision, TheImmediateRoadAnswersAsTheGeneralOne) {
+    // Two immediate operands are divided on the stack (operator/=); the same dividend written with zeros
+    // enough to live on the heap takes the general road. Both must give the same number in the same
+    // spelling — the room, the rounding, the sign, the zeros dropped. The text compare catches a quotient
+    // that is equal in value but carries another length, which the next division would measure.
+    const wxChar* const cases[][2] = {
+        { wxT("1000000"), wxT("7") },          { wxT("2"), wxT("3") },            { wxT("-2"), wxT("3") },
+        { wxT("1"), wxT("-8") },               { wxT("0.1234"), wxT("3") },       { wxT("123.45"), wxT("0.07") },
+        { wxT("70368744177663"), wxT("3") },   { wxT("1"), wxT("70368744177663") },
+        { wxT("5000"), wxT("3") },             { wxT("0.000001"), wxT("7") },     { wxT("99.99"), wxT("33.33") },
+        { wxT("-70368744177663"), wxT("-0.0000007") },                            { wxT("1"), wxT("0.0000000001234") },
+    };
+    const wxString zeros = wxT("000000000000000000000000");   // 24: the mantissa leaves the immediate tier
+    for (const auto& c : cases) {
+        const wxString written(c[0]);
+        const ibNumber a(written), b{ wxString(c[1]) };
+        const ibNumber aOnTheHeap(written.Contains(wxT(".")) ? written + zeros : written + wxT(".") + zeros);
+        ASSERT_EQ(a, aOnTheHeap);
+        const ibNumber viaStack = a / b;
+        const ibNumber viaHeap  = aOnTheHeap / b;
+        EXPECT_EQ(viaStack, viaHeap) << c[0] << " / " << c[1];
+        EXPECT_EQ(viaStack.ToString(), viaHeap.ToString()) << c[0] << " / " << c[1];
+    }
 }
 
 TEST(NumberDivision, QuotientAndRemainderReconstructTheDividend) {

@@ -10,8 +10,7 @@ wxIcon ibValueMetaObjectChartOfCalculationTypes::GetIcon() const
 
 wxIcon ibValueMetaObjectChartOfCalculationTypes::GetIconGroup()
 {
-	static wxIcon icon =
-		ibBackendPicture::GetIconFromBase64(s_chartOfCalculationTypes_16_png, wxSize(16, 16));
+	static const ibServerPicture picture(s_chartOfCalculationTypes_16_png, wxSize(16, 16));
 
-	return icon;
+	return picture.ToIcon();
 }

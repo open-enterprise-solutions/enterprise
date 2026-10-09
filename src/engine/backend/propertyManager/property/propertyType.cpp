@@ -1,6 +1,6 @@
 #include "propertyType.h"
 #include "backend/propertyManager/property/variant/variantType.h"
-#include "backend/serialize/dataBuilder.h"   // ibDataNode / ibDataValue (Child + Array)
+#include "core/serialize/dataBuilder.h"   // ibDataNode / ibDataValue (Child + Array)
 #include "backend/typeDescription.h"        // ibTypeDescription + qualifiers
 
 

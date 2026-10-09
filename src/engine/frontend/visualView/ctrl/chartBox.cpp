@@ -1,5 +1,5 @@
 #include "chartBox.h"
-#include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
+#include "core/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "frontend/win/ctrls/charts/wxcharts.h"
 
 //***********************************************************************************

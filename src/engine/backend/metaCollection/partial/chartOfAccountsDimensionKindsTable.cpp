@@ -7,7 +7,7 @@
 #include "chartOfAccounts.h"   // the owner chart — its analytics flags are this table's columns
 #include "backend/metaData.h"
 #include "backend/objCtor.h"   // tabular value-ctor register macros (registerTabularSection / _String)
-#include "backend/serialize/dataBuilder.h"   // ibDataNode — per-type node data
+#include "core/serialize/dataBuilder.h"   // ibDataNode — per-type node data
 
 
 // BOUND TO ITS PARENT FOR LIFE — the section states that about ITSELF, at construction. It is a fact

@@ -45,7 +45,7 @@ void ibValueManagerDataObjectJob::FillManagerMethods(ibMemberTable& helper) cons
 	helper.AppendFunc(wxT("CreateGroup"), wxT("CreateGroup()"));
 	helper.AppendFunc(wxT("Select"), wxT("Select()"));
 	helper.AppendFunc(wxT("FindByCode"), 1, wxT("FindByCode(code : string)"));
-	helper.AppendFunc(wxT("FindByDescription"), 1, wxT("FindByDescription(descr : string)"));
+	helper.AppendFunc(wxT("FindByDescription"), 2, wxT("FindByDescription(descr : string, exact = true : boolean)"));
 	// RUN ONE ROW by reference, ignoring its schedule — the script-side twin of the list command,
 	// and the same single entry the tick uses. Without it a job could only be exercised by waiting
 	// out its interval, which makes "is the job wrong or is the manager wrong?" unanswerable.
@@ -75,7 +75,7 @@ bool ibValueManagerDataObjectJob::CallAsFunc(const long lMethodNum, ibValue& pva
 		pvarRetValue = FindByCode(*paParams[0]);
 		return true;
 	case eFindByDescription:
-		pvarRetValue = FindByDescription(*paParams[0]);
+		pvarRetValue = FindByDescription(*paParams[0], lSizeArray > 1 ? *paParams[1] : ibValue());
 		return true;
 	case eExecute: {
 		// The argument is a reference to one of THIS job's rows — the one value that crosses a

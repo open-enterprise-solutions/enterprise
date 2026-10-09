@@ -2,7 +2,7 @@
 #define __INTERFACE_HELPER_H__
 
 #include "backend_core.h"
-#include "backend/fileSystem/fs.h"
+#include "core/fileSystem/fs.h"
 
 #include <set>   // m_interfaces — arrived transitively while propgrid was in backend_core's chain
 

@@ -22,7 +22,7 @@
 #include "backend/system/value/valueType.h"                   // AdjustValue - the declared type wins
 #include "backend/system/value/valueDataComposition.h"        // ibSyncParameters - the text declares its parameters
 #include "backend/backend_exception.h"
-#include "backend/stringUtils.h"                              // CompareString - how this tree compares a NAME
+#include "core/stringUtils.h"                              // CompareString - how this tree compares a NAME
 
 #include <algorithm>
 #include <memory>
@@ -499,7 +499,7 @@ bool ibComposeRunSchema::Run(const ibDataNode& request, ibDataNode& result, wxSt
 				ibComposeText("reading a report for an assistant"),
 				ibJobTenancy::Tenant);
 		}
-		catch (const ibBackendException&) {
+		catch (const ibCoreException&) {
 			rented.reset();   // nothing to rent - fall through and read here
 		}
 	}
@@ -513,7 +513,7 @@ bool ibComposeRunSchema::Run(const ibDataNode& request, ibDataNode& result, wxSt
 		// period is not set" would reach the caller two different ways depending on whether a session
 		// happened to be free.
 		try                                      { work(); }
-		catch (const ibBackendException& thrown) { failed = thrown.GetErrorDescription(); }
+		catch (const ibCoreException& thrown) { failed = thrown.GetErrorDescription(); }
 	}
 
 	// The pointers do not outlive this call - the drivers are locals, and an output holding a
@@ -548,7 +548,7 @@ bool ibComposeRunSchema::Run(const ibDataNode& request, ibDataNode& result, wxSt
 		// The same render the read used, so it cannot describe a different query. (A report's FILTER is
 		// ANDed into the parsed query as a condition — dataComposer.h, AndWhere — and is not in the text.)
 		try { table->SetValue(wxT("query"), composer.RenderTextFor(outputs[i])); }
-		catch (const ibBackendException&) { /* it rendered for the read; a second refusal says nothing new */ }
+		catch (const ibCoreException&) { /* it rendered for the read; a second refusal says nothing new */ }
 		WriteColumns(*table, *driver);
 
 		if (const ibCrossComposeDriver* cross = dynamic_cast<const ibCrossComposeDriver*>(driver.get())) {

@@ -291,7 +291,7 @@ wxString Styles(const std::vector<CellStyle>& styles)
 	xml += wxString::Format(wxT("<fonts count=\"%u\">"), static_cast<unsigned>(styles.size() + 1));
 	// 🛑 FONT ZERO IS THE WHOLE SHEET'S DEFAULT, AND IT WAS A CONSTANT THAT CONTRADICTED OURS.
 	// Excel draws every cell with no style of its own in this font, so declaring Calibri 11 while
-	// this platform's own default is EIGHT POINT (s_defaultSpreadsheetFont) made an exported blank
+	// this platform's own default is EIGHT POINT (ibDefaultSpreadsheetFont) made an exported blank
 	// come back three points larger everywhere the layout had not been given an explicit font —
 	// with the row heights and column widths still exactly right, so the text simply no longer fit
 	// them. A blank that reads properly here looked broken the moment it was opened in Excel
@@ -300,11 +300,12 @@ wxString Styles(const std::vector<CellStyle>& styles)
 	//
 	// ⚠ TAKEN FROM THE DEFAULT ITSELF rather than written out again: a number repeated in a second
 	// file is a number that stops agreeing the day the first one changes.
-	const int defaultSize = s_defaultSpreadsheetFont.GetPointSize() > 0
-		? s_defaultSpreadsheetFont.GetPointSize() : 8;
+	const wxFont ordinary = ibDefaultSpreadsheetFont();
+	const int defaultSize = ordinary.GetPointSize() > 0
+		? ordinary.GetPointSize() : 8;
 
-	const wxString defaultFace = s_defaultSpreadsheetFont.GetFaceName().IsEmpty()
-		? wxString(wxT("Arial")) : s_defaultSpreadsheetFont.GetFaceName();
+	const wxString defaultFace = ordinary.GetFaceName().IsEmpty()
+		? wxString(wxT("Arial")) : ordinary.GetFaceName();
 
 	xml += wxString::Format(wxT("<font><sz val=\"%d\"/><name val=\"%s\"/></font>"),
 		defaultSize, XmlText(defaultFace));
@@ -410,7 +411,7 @@ wxString Styles(const std::vector<CellStyle>& styles)
 
 } // namespace
 
-bool ibSheetFormatXlsx::Write(const wxString& fileName, const ibSpreadsheetDescription& sheet) const
+bool ibSheetFormatXlsx::Write(wxOutputStream& output, const ibSpreadsheetDescription& sheet) const
 {
 	// --- the styles the cells actually use, gathered before anything is written --
 	std::map<CellStyle, size_t> styleAt;
@@ -583,7 +584,7 @@ bool ibSheetFormatXlsx::Write(const wxString& fileName, const ibSpreadsheetDescr
 			// The text, not the stored form: a caption written in every language goes out in one,
 			// read the way the grid and the printout read it (a printed document's cells are text
 			// already — a template's are not).
-			const wxString value = ibBackendLocalization::GetTranslateGetRawLocText(cell->GetValue());
+			const wxString value = ibLocalization::GetTranslateGetRawLocText(ibBackendLocalization::GetUserLanguage(), cell->GetValue());
 			if (value.IsEmpty() && styleIndex == 0)
 				continue;   // nothing to say about this cell at all
 
@@ -677,11 +678,7 @@ bool ibSheetFormatXlsx::Write(const wxString& fileName, const ibSpreadsheetDescr
 	body += wxT("</worksheet>");
 
 	// --- write the package -------------------------------------------------------
-	wxFileOutputStream file(fileName);
-	if (!file.IsOk())
-		return false;
-
-	wxZipOutputStream zip(file);
+	wxZipOutputStream zip(output);
 	if (!zip.IsOk())
 		return false;
 
@@ -695,7 +692,7 @@ bool ibSheetFormatXlsx::Write(const wxString& fileName, const ibSpreadsheetDescr
 	// ⚠ CLOSED EXPLICITLY, and its answer read: a zip finishes with a central
 	// directory written on Close, so a stream that is merely destructed can leave a
 	// file that exists, has size, and is not a zip.
-	return zip.Close() && file.Close();
+	return zip.Close();
 }
 
 ///////////////////////////////////////////////////////////////////////////////

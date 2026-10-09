@@ -177,7 +177,7 @@ void ibDataProcessorTree::EraseItem(const wxTreeItemId& item)
 
 void ibDataProcessorTree::SelectItem()
 {
-	if (appData->GetAppMode() != ibRunMode::eDESIGNER_MODE) return;
+	if (!appData->DesignerMode()) return;
 	const wxTreeItemId& selection = m_metaTreeCtrl->GetSelection();
 	ibValueMetaObject* metaObject = GetMetaObject(selection);
 	UpdateToolbar(metaObject, selection);
@@ -186,7 +186,7 @@ void ibDataProcessorTree::SelectItem()
 
 void ibDataProcessorTree::PropertyItem()
 {
-	if (appData->GetAppMode() != ibRunMode::eDESIGNER_MODE) return;
+	if (!appData->DesignerMode()) return;
 	const wxTreeItemId& selection = m_metaTreeCtrl->GetSelection();
 	ibValueMetaObject* metaObject = GetMetaObject(selection);
 	UpdateToolbar(metaObject, selection);
@@ -221,7 +221,7 @@ void ibDataProcessorTree::Expand(const wxTreeItemId& item)
 
 void ibDataProcessorTree::UpItem()
 {
-	if (appData->GetAppMode() != ibRunMode::eDESIGNER_MODE)
+	if (!appData->DesignerMode())
 		return;
 
 	m_metaTreeCtrl->Freeze();
@@ -240,7 +240,7 @@ void ibDataProcessorTree::UpItem()
 
 void ibDataProcessorTree::DownItem()
 {
-	if (appData->GetAppMode() != ibRunMode::eDESIGNER_MODE)
+	if (!appData->DesignerMode())
 		return;
 
 	m_metaTreeCtrl->Freeze();
@@ -259,7 +259,7 @@ void ibDataProcessorTree::DownItem()
 
 void ibDataProcessorTree::SortItem()
 {
-	if (appData->GetAppMode() != ibRunMode::eDESIGNER_MODE)
+	if (!appData->DesignerMode())
 		return;
 	m_metaTreeCtrl->Freeze();
 	const wxTreeItemId& selection = m_metaTreeCtrl->GetSelection();
@@ -496,13 +496,13 @@ void ibDataProcessorTree::FillData()
 	UpdateToolbar(nullptr, Group(g_metaAttributeCLSID));
 }
 
-bool ibDataProcessorTree::Load(ibMetaDataDataProcessor* metaData)
+bool ibDataProcessorTree::Load(std::shared_ptr<ibMetaDataDataProcessor> metaData)
 {
 	CloseDocuments();   // a file is being left — its editors go with it
 	ClearTree();
 
-	m_metaData = metaData;
-	WatchMetaData(m_metaData);   // off the old list, onto this one — one call, one place
+	m_metaData = std::move(metaData);
+	WatchMetaData(GetMetaData());   // off the old list, onto this one — one call, one place
 	m_metaTreeCtrl->Freeze();
 	FillData(); //Fill all data from metaData
 

@@ -123,7 +123,7 @@
   <ItemDefinitionGroup>
     <ClCompile>
       <AdditionalIncludeDirectories>
-        .;$(SolutionDir);$(oesSrcDir);$(oesEngine);$(ProjectDir);%(AdditionalIncludeDirectories)
+        .;$(SolutionDir);$(oesSrcDir);$(oesEngine);$(ProjectDir);$(oes3rdParty);$(oes3rdParty)nlohmann\single_include;%(AdditionalIncludeDirectories)
       </AdditionalIncludeDirectories>
       <!-- MultiProcessorCompilation don't compatible with LinkIncremental and UseDebugLibraries -->
       <MultiProcessorCompilation Condition="$(Configuration.StartsWith('Debug'  ))">false</MultiProcessorCompilation>

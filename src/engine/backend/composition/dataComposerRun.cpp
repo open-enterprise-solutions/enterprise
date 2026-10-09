@@ -14,7 +14,6 @@
 #include "dataComposerInternal.h"
 
 #include "backend/query/queryParser.h"        // ibQueryParser — text -> AST
-#include "backend/diagnostics/journal.h"      // ibJournal — what each output was read as, and the shared read
 #include "backend/query/queryable.h"          // ibBackendQueryable / ibBackendQueryColumn
 #include "backend/query/queryableFactory.h"   // the source factory — the column dictionary
 #include "backend/query/dataQueryBuilder.h"   // ibDataQueryResult / ibSelectKind
@@ -396,7 +395,7 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 				info.m_titles[i] = ibTitleFromName(schema[i].m_name);
 			// …AND A TITLE WRITTEN IN SEVERAL LANGUAGES IS READ IN THE READER'S, as a synonym is — and
 			// one written plainly is itself (the reading says so; it is no longer this caller's rule).
-			info.m_titles[i] = ibBackendLocalization::GetTranslateGetRawLocText(info.m_titles[i]);
+			info.m_titles[i] = ibLocalization::GetTranslateGetRawLocText(ibBackendLocalization::GetUserLanguage(), info.m_titles[i]);
 			// ⭐⭐ …AND THE PATH FALLS BACK THE SAME WAY, which is the half that was missing. Over a
 			// PARSED QUERY a field's path IS its name — that is the identity the picker writes into a
 			// grouping line and the one `GetConstructorFields` hands a window — so a column whose

@@ -10,7 +10,7 @@
 #include "frontend/visualView/ctrl/form.h"
 #include "frontend/visualView/ctrl/tableBox.h"
 
-#include "backend/formatString.h"   // ibFormatString — what a cell is shown through (GetCellFormat)
+#include "core/formatString.h"   // ibFormatString — what a cell is shown through (GetCellFormat)
 
 #include <wx/renderer.h>   // wxRendererNative::DrawCheckMark — a boolean cell
 #include <optional>

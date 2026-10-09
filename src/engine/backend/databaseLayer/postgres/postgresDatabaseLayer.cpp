@@ -40,6 +40,7 @@ const ibDialectDictionary& ibDatabaseLayerPostgres::Dialect()
 		d.m_analyzePrefix     = wxT("ANALYZE");   // ANALYZE <t> — refresh planner stats (temps aren't autovacuumed)
 		d.m_rowIdColumn    = wxT("ctid");         // physical row id for the pre-UNIQUE dedup (keep one row per key)
 		d.m_maxIndexSegments = 32;                // INDEX_MAX_KEYS — a build-time constant, 32 in every stock build
+		d.m_maxParameters    = 65535;             // the protocol counts them in 16 bits (libpq-fe.h PQ_QUERY_PARAM_MAX_LIMIT)
 		d.m_returningClause = wxT("RETURNING");   // PostgreSQL has had it since 8.2
 		// Period truncation. date_trunc names seven of the ten units directly; the other three are
 		// offsets from the start of the enclosing unit:
@@ -483,7 +484,7 @@ bool ibDatabaseLayerPostgres::Open()
 			try {
 				DoRunQuery("CREATE DATABASE " + m_strDatabase, false);
 			}
-			catch (const ibBackendException&) {
+			catch (const ibCoreException&) {
 				return false;
 			}
 			DoRunQuery("GRANT ALL PRIVILEGES ON DATABASE " + m_strDatabase + " to " + m_strUser, false);
@@ -757,7 +758,7 @@ bool ibDatabaseLayerPostgres::DatabaseExists(const wxString& database)
 			pStatement = nullptr;
 		}
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		// Close any still-open resources before propagating; preserves the
 		// in-flight exception (sqlstate / native_code on derived types).
 		if (pResult != nullptr) {
@@ -809,7 +810,7 @@ bool ibDatabaseLayerPostgres::TableExists(const wxString& table)
 			pStatement = nullptr;
 		}
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		// Close any still-open resources before propagating; preserves the
 		// in-flight exception (sqlstate / native_code on derived types).
 		if (pResult != nullptr) {
@@ -861,7 +862,7 @@ bool ibDatabaseLayerPostgres::ViewExists(const wxString& view)
 			pStatement = nullptr;
 		}
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		// Close any still-open resources before propagating; preserves the
 		// in-flight exception (sqlstate / native_code on derived types).
 		if (pResult != nullptr) {
@@ -898,7 +899,7 @@ wxArrayString ibDatabaseLayerPostgres::GetTables()
 			pResult = nullptr;
 		}
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		// Close any still-open result set before propagating; preserves the
 		// in-flight exception (sqlstate / native_code on derived types).
 		if (pResult != nullptr) {
@@ -931,7 +932,7 @@ wxArrayString ibDatabaseLayerPostgres::GetViews()
 			pResult = nullptr;
 		}
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		// Close any still-open result set before propagating; preserves the
 		// in-flight exception (sqlstate / native_code on derived types).
 		if (pResult != nullptr) {
@@ -982,7 +983,7 @@ wxArrayString ibDatabaseLayerPostgres::GetColumns(const wxString& table)
 			pStatement = nullptr;
 		}
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		// Close any still-open resources before propagating; preserves the
 		// in-flight exception (sqlstate / native_code on derived types).
 		if (pResult != nullptr) {

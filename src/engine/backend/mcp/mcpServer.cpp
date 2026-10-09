@@ -37,12 +37,11 @@
 
 #include "backend/appData.h"                        // GetSettingsStorage — where a person's settings live
 #include "backend/logger/logger.h"                  // …and ibLog — the registration journal
-#include "backend/diagnostics/journal.h"            // ibJournalInfo — the ENGINE's journal, `mcp` channel
 #include "backend/backend_exception.h"              // an engine refusal arrives as an exception
 #include "backend/query/queryException.h"           // …and the query family says WHERE
 #include "backend/debugger/debugClient.h"           // the bridge list — we ride along on a session
 #include "backend/mcp/mcpDebugBridge.h"
-#include "backend/mcp/mcpMessage.h"
+#include "backend/rpc/rpcMessage.h"
 #include "backend/mcp/mcpTool.h"
 #include "backend/metaCollection/metaIntrospect.h"  // ibMetaTypeResolver
 #include "backend/metadataConfiguration.h"
@@ -71,7 +70,7 @@
 #	define _SSIZE_T_DEFINED
 #endif
 
-#include "httplib.h"
+#include <cpp-httplib/httplib.h>
 
 namespace {
 
@@ -388,7 +387,7 @@ private:
 
 		// No id: the refusal happens before the body has been read, so there is no call to
 		// answer — which is the shape JSON-RPC allows for exactly this.
-		const wxString text = ibMcpWriteError(ibDataValue(), ibMcpError::UnsupportedVersion,
+		const wxString text = ibRpcWriteError(ibDataValue(), ibRpcError::UnsupportedVersion,
 			wxT("Unsupported protocol version"), &data);
 
 		const wxScopedCharBuffer utf8 = text.utf8_str();
@@ -502,10 +501,10 @@ private:
 			// unknown method WITHOUT parsing — and that is how a dual-era client decides whether
 			// to retry with another version or fall back to `initialize` entirely. A refusal
 			// answered 200 reads as agreement to a client that only looks at the status.
-			switch ((ibMcpError)refusalCode) {
-				case ibMcpError::UnsupportedVersion:                       // retry with another version
-				case ibMcpError::HeaderMismatch: res.status = 400; break;  // the two sources disagree
-				case ibMcpError::MethodNotFound: res.status = 404; break;  // nothing here answers to that name
+			switch ((ibRpcError)refusalCode) {
+				case ibRpcError::UnsupportedVersion:                       // retry with another version
+				case ibRpcError::HeaderMismatch: res.status = 400; break;  // the two sources disagree
+				case ibRpcError::MethodNotFound: res.status = 404; break;  // nothing here answers to that name
 				default: break;                                            // 200: the body carries the whole answer
 			}
 
@@ -790,6 +789,11 @@ private:
 	wxDECLARE_NO_COPY_CLASS(ibMcpMetaBridge);
 };
 
+ibMetaDataConfigurationBase* ibMcpServer::GetMetaData() const
+{
+	return m_session != nullptr ? m_session->GetMetaData() : nullptr;
+}
+
 void ibMcpServer::WatchMetadata()
 {
 	if (m_metaBridge == nullptr)
@@ -797,7 +801,7 @@ void ibMcpServer::WatchMetadata()
 
 	// The open configuration, or nothing — a server outlives any one configuration and must not
 	// keep a subscription on one that has been closed.
-	ibMetaDataConfigurationBase* const metaData = ibApplicationInstance::GetActiveMetaData(m_applicationInstance);
+	ibMetaDataConfigurationBase* const metaData = GetMetaData();
 	m_metaBridge->Watch(metaData != nullptr && metaData->IsConfigOpen() ? metaData : nullptr);
 }
 
@@ -987,7 +991,7 @@ void ibMcpServer::Stop()
 {
 	// 🛑 OFF THE METADATA FIRST, AND BEFORE THE `IsRunning` GATE. The bridge holds a bare pointer to
 	// the configuration it watches, and the process tears down in the other order:
-	// `~ibApplicationInstance` destroys `m_activeMetaData` (it needs db_query on the way out, so it goes
+	// `~ibApplicationInstance` releases `m_activeMetaData` (it needs db_query on the way out, so it goes
 	// early) and reaches `m_mcpServer` several fields later — where the bridge's own destructor
 	// called `RemoveNotifier` on a vector that had been freed, and the designer died on every exit
 	// with a configuration open (crash dump 2026-09-08 09:43, `_Adopt_unlocked` inside
@@ -1131,7 +1135,7 @@ void ibMcpServer::Say(const wxString& text)
 		params.SetValue(wxT("logger"), wxString(wxT("chat")));
 		params.SetValue(wxT("data"), text);
 
-		m_listener->WriteToStream(ibMcpRenderNode(note));
+		m_listener->WriteToStream(ibRpcRenderNode(note));
 	}
 }
 
@@ -1165,7 +1169,7 @@ void ibMcpServer::Note(const wxString& text)
 		params.SetValue(wxT("logger"), wxString(wxT("metadata")));
 		params.SetValue(wxT("data"), text);
 
-		m_listener->WriteToStream(ibMcpRenderNode(note));
+		m_listener->WriteToStream(ibRpcRenderNode(note));
 	}
 }
 
@@ -1210,7 +1214,7 @@ wxString ibMcpServer::Greeting() const
 
 	// WHAT IS OPEN, because that is what an assistant would be working on and what makes the
 	// line worth reading rather than a status light.
-	const ibMetaDataConfigurationBase* const metaData = ibApplicationInstance::GetActiveMetaData(m_applicationInstance);
+	const ibMetaDataConfigurationBase* const metaData = GetMetaData();
 	if (metaData != nullptr && metaData->IsConfigOpen())
 		if (const ibValueMetaObject* root = metaData->GetCommonMetaObject())
 			out += wxString::Format(_(" Configuration '%s' is open."), root->GetName());
@@ -1314,7 +1318,7 @@ bool ibMcpServer::AskModel(const wxString& question, wxString& refusal)
 	// what comes back is shown in a window, not saved to a file.
 	params.AddField(wxT("maxTokens"), ibDataValue::Int(4096));
 
-	m_listener->WriteToStream(ibMcpRenderNode(ask));
+	m_listener->WriteToStream(ibRpcRenderNode(ask));
 
 	// Shown as asked the moment it is asked. The answer arrives later, through Answer() → Reply,
 	// and a window that showed nothing in between would look like the question was swallowed.
@@ -1620,8 +1624,8 @@ void ibMcpDescribePlatform(const ibApplicationInstance* applicationInstance, ibD
 	// and two designers can stand open on two different bases — so an answer naming the configuration but
 	// not the base lets a caller work in the wrong one and never learn it from anything but the journal
 	// (2026-09-22: a print form, a command and an applied configuration, all built in the base somebody
-	// else had open). The mode is said beside it because a path means a file base and nothing else does.
-	into.SetValue(wxT("connection"), applicationInstance->GetDatabaseModeDescr());
+	// else had open). Where the base lives is said beside it: a Firebird folder, or a PostgreSQL server's database.
+	into.SetValue(wxT("connection"), applicationInstance->GetDatabaseDescription());
 	if (!applicationInstance->GetFile().IsEmpty())
 		into.SetValue(wxT("base"), applicationInstance->GetFile());
 
@@ -1667,7 +1671,8 @@ void ibMcpDescribePlatform(const ibApplicationInstance* applicationInstance, ibD
 			user.SetValue(wxT("language"), who.m_strLanguageName);
 	}
 
-	ibMetaDataConfigurationBase* metaData = ibApplicationInstance::GetActiveMetaData(applicationInstance);
+	// The configuration of the session this is asked in — as the user above is that session's.
+	ibMetaDataConfigurationBase* metaData = ibApplicationInstance::GetActiveMetaData();
 
 	if (metaData == nullptr || !metaData->IsConfigOpen()) {
 		into.AddField(wxT("configurationOpen"), ibDataValue::Bool(false));
@@ -2036,7 +2041,8 @@ wxString BuildOrientation(const ibApplicationInstance* applicationInstance)
 		<< wxT("And what you DID is kept for you - `journal_read` says what was actually done, and ")
 		<< wxT("tells your changes from somebody else's.\n\n");
 
-	ibMetaDataConfigurationBase* metaData = ibApplicationInstance::GetActiveMetaData(applicationInstance);
+	// The configuration of the session this is asked in — as the user above is that session's.
+	ibMetaDataConfigurationBase* metaData = ibApplicationInstance::GetActiveMetaData();
 
 	if (metaData == nullptr || !metaData->IsConfigOpen()) {
 		out << wxT("NO CONFIGURATION IS OPEN in this designer yet.\n");
@@ -2420,14 +2426,14 @@ wxString ibMcpServer::Answer(const wxString& request, const ibMcpWireHeaders& he
 	// the first attempt and it failed on a space: the writer emits `"code": -32020`
 	// and the search looked for `"code":-32020`.
 	if (outErrorCode != nullptr) *outErrorCode = 0;
-	const auto refuse = [&](const ibDataValue& id, ibMcpError code, const wxString& text,
+	const auto refuse = [&](const ibDataValue& id, ibRpcError code, const wxString& text,
 		const ibDataNode* data = nullptr) -> wxString {
 		if (outErrorCode != nullptr) *outErrorCode = (int)code;
-		return ibMcpWriteError(id, code, text, data);
+		return ibRpcWriteError(id, code, text, data);
 	};
 	// ⭐ IT MAY NOT BE A CALL AT ALL. Once the server can ask the client something, the same
 	// endpoint starts receiving both — and they are told apart by one fact: a request names a
-	// method, a response does not (mcpMessage.h). This has to be asked FIRST, because reading a
+	// method, a response does not (rpcMessage.h). This has to be asked FIRST, because reading a
 	// response as a request finds no method and answers "no method named ''" to what was actually
 	// an answer to our own question.
 	{
@@ -2435,7 +2441,7 @@ wxString ibMcpServer::Answer(const wxString& request, const ibMcpWireHeaders& he
 		wxString    payload;
 		bool        wasError = false;
 
-		if (ibMcpParseResponse(request, answeringId, payload, wasError)) {
+		if (ibRpcParseResponse(request, answeringId, payload, wasError)) {
 
 			// THE MODEL ANSWERED. It goes where every other side of this conversation goes — into
 			// the window, through Reply — rather than back to whoever asked, who by design did not
@@ -2449,14 +2455,14 @@ wxString ibMcpServer::Answer(const wxString& request, const ibMcpWireHeaders& he
 		}
 	}
 
-	ibMcpRequest parsed;
+	ibRpcRequest parsed;
 	wxString     error;
 
-	if (!ibMcpParseRequest(request, parsed, error)) {
+	if (!ibRpcParseRequest(request, parsed, error)) {
 		// A malformed message IS worth a line — but the line says what went
 		// wrong, not what the bytes were.
 		Publish(wxT("did"), wxString::Format(_("unreadable message: %s"), error), wxEmptyString);
-		return ibMcpWriteError(ibDataValue(), ibMcpError::Parse, error);
+		return ibRpcWriteError(ibDataValue(), ibRpcError::Parse, error);
 	}
 
 	// ⭐⭐ WHICH ERA IS SPEAKING, decided before the method is looked at — because the answer
@@ -2480,12 +2486,12 @@ wxString ibMcpServer::Answer(const wxString& request, const ibMcpWireHeaders& he
 		// the header, this server executes on the body. A request where they differ is the one
 		// that gets past the first and is carried out by the second.
 		if (!headers.m_protocolVersion.IsEmpty() && headers.m_protocolVersion != asked) {
-			return refuse(parsed.m_id, ibMcpError::HeaderMismatch,
+			return refuse(parsed.m_id, ibRpcError::HeaderMismatch,
 				wxString::Format(wxT("MCP-Protocol-Version header says '%s' and the body says '%s'"),
 					headers.m_protocolVersion, asked));
 		}
 		if (!headers.m_method.IsEmpty() && headers.m_method != parsed.m_method) {
-			return refuse(parsed.m_id, ibMcpError::HeaderMismatch,
+			return refuse(parsed.m_id, ibRpcError::HeaderMismatch,
 				wxString::Format(wxT("Mcp-Method header says '%s' and the body calls '%s'"),
 					headers.m_method, parsed.m_method));
 		}
@@ -2502,7 +2508,7 @@ wxString ibMcpServer::Answer(const wxString& request, const ibMcpWireHeaders& he
 			// The SAME refusal the header check answers with, from the same list — the only
 			// difference is that here there is a call to answer, so it carries the id.
 			const ibDataNode data = SupportedVersions(asked);
-			return refuse(parsed.m_id, ibMcpError::UnsupportedVersion,
+			return refuse(parsed.m_id, ibRpcError::UnsupportedVersion,
 				wxT("Unsupported protocol version"), &data);
 		}
 	}
@@ -2533,7 +2539,7 @@ wxString ibMcpServer::Answer(const wxString& request, const ibMcpWireHeaders& he
 		// The same orientation text initialize hands over - one source, two doors.
 		result.SetValue(wxT("instructions"), BuildOrientation(m_applicationInstance));
 
-		return ibMcpWriteResult(parsed.m_id, result);
+		return ibRpcWriteResult(parsed.m_id, result);
 	}
 
 	wxString answer;
@@ -2659,7 +2665,7 @@ wxString ibMcpServer::Answer(const wxString& request, const ibMcpWireHeaders& he
 
 		Publish(wxT("did"), arrival + wxT("."), wxEmptyString);
 
-		answer = ibMcpWriteResult(parsed.m_id, result);
+		answer = ibRpcWriteResult(parsed.m_id, result);
 	}
 	// ⭐⭐ THE MENU A PERSON SEES, AND IT IS NINE ENTRIES RATHER THAN SIXTY-SEVEN.
 	//
@@ -2727,7 +2733,7 @@ wxString ibMcpServer::Answer(const wxString& request, const ibMcpWireHeaders& he
 
 		ibDataNode result;
 		result.AddField(wxT("prompts"), ibDataValue::Array(prompts));
-		answer = ibMcpWriteResult(parsed.m_id, result);
+		answer = ibRpcWriteResult(parsed.m_id, result);
 	}
 	// ⭐ AND ONE ENTRY, WHOLE. The corpus is prose meant to be read by whoever is deciding — so the
 	// message is the text as it stands, not a summary of it: a prompt that paraphrases the thing it
@@ -2756,7 +2762,7 @@ wxString ibMcpServer::Answer(const wxString& request, const ibMcpWireHeaders& he
 			for (const std::pair<wxString, wxString>& each : ibMcpPatternIndex())
 				names << (names.IsEmpty() ? wxT("") : wxT(", ")) << each.first;
 
-			answer = refuse(parsed.m_id, ibMcpError::InvalidParams,
+			answer = refuse(parsed.m_id, ibRpcError::InvalidParams,
 				wanted.IsEmpty()
 					? ibMcpText("Say which entry: `pattern` takes a `name` argument.")
 					: wxString::Format(
@@ -2778,7 +2784,7 @@ wxString ibMcpServer::Answer(const wxString& request, const ibMcpWireHeaders& he
 			result.AddField(wxT("messages"),
 				ibDataValue::Array({ ibDataValue::Child(message) }));
 
-			answer = ibMcpWriteResult(parsed.m_id, result);
+			answer = ibRpcWriteResult(parsed.m_id, result);
 		}
 	}
 	else if (parsed.m_method == wxT("tools/list")) {
@@ -2805,7 +2811,7 @@ wxString ibMcpServer::Answer(const wxString& request, const ibMcpWireHeaders& he
 		}
 
 		result.AddField(wxT("tools"), ibDataValue::Array(tools));
-		answer = ibMcpWriteResult(parsed.m_id, result);
+		answer = ibRpcWriteResult(parsed.m_id, result);
 	}
 	else if (parsed.m_method == wxT("tools/call")) {
 
@@ -2867,10 +2873,10 @@ wxString ibMcpServer::Answer(const wxString& request, const ibMcpWireHeaders& he
 		const ibMcpTool* tool = envelopeRefusal.IsEmpty() ? ibFindMcpTool(name) : nullptr;
 
 		if (!envelopeRefusal.IsEmpty()) {
-			answer = ibMcpWriteError(parsed.m_id, ibMcpError::InvalidParams, envelopeRefusal);
+			answer = ibRpcWriteError(parsed.m_id, ibRpcError::InvalidParams, envelopeRefusal);
 		}
 		else if (tool == nullptr) {
-			answer = refuse(parsed.m_id, ibMcpError::MethodNotFound,
+			answer = refuse(parsed.m_id, ibRpcError::MethodNotFound,
 				wxString::Format(wxT("No tool named '%s'"), name));
 		}
 		else {
@@ -3073,7 +3079,7 @@ wxString ibMcpServer::Answer(const wxString& request, const ibMcpWireHeaders& he
 			catch (const ibBackendAccessException& e)    { kind = wxT("access");    refusal = e.GetErrorDescription(); }
 			catch (const ibBackendLockException& e)      { kind = wxT("lock");      refusal = e.GetErrorDescription(); }
 			catch (const ibBackendInterruptException& e) { kind = wxT("interrupt"); refusal = e.GetErrorDescription(); }
-			catch (const ibBackendException& e)          { kind = wxT("platform");  refusal = e.GetErrorDescription(); }
+			catch (const ibCoreException& e)          { kind = wxT("platform");  refusal = e.GetErrorDescription(); }
 			catch (const std::exception& e)              { kind = wxT("internal");  refusal = wxString::FromUTF8(e.what()); }
 			catch (...) {
 				kind = wxT("unknown");
@@ -3096,7 +3102,7 @@ wxString ibMcpServer::Answer(const wxString& request, const ibMcpWireHeaders& he
 			// reads as "CatalogRef.Goods" rather than as a number that means
 			// nothing on the other side of the socket.
 			wxString text = ok
-				? ibMcpRenderNode(payload, ibMetaTypeResolver(ibApplicationInstance::GetActiveMetaData(m_applicationInstance)))
+				? ibRpcRenderNode(payload, ibMetaTypeResolver(GetMetaData()))
 				: refusal;
 
 			// ⭐⭐ SAID ONCE IS NOT SAID. The orientation asks a client to introduce itself in the
@@ -3208,7 +3214,7 @@ wxString ibMcpServer::Answer(const wxString& request, const ibMcpWireHeaders& he
 					// per-cell and per-object, and there may be hundreds. A caller that has this
 					// early writes every language as it goes, which costs nothing extra when the one
 					// writing is a model that can translate.
-					ibMetaDataConfigurationBase* const metaData = ibApplicationInstance::GetActiveMetaData(m_applicationInstance);
+					ibMetaDataConfigurationBase* const metaData = GetMetaData();
 					if (!m_saidLanguages && metaData != nullptr && metaData->IsConfigOpen()) {
 
 						const std::vector<wxString> languages =
@@ -3319,7 +3325,7 @@ wxString ibMcpServer::Answer(const wxString& request, const ibMcpWireHeaders& he
 				toolFruitless = empty(wxT("messages")) && empty(wxT("observed"));
 			}
 
-			answer = ibMcpWriteResult(parsed.m_id, result);
+			answer = ibRpcWriteResult(parsed.m_id, result);
 		}
 	}
 	else if (parsed.m_method == wxT("ping")) {
@@ -3330,7 +3336,7 @@ wxString ibMcpServer::Answer(const wxString& request, const ibMcpWireHeaders& he
 		// where refusing correctly is worse than saying nothing.
 		//
 		// An empty result IS the answer the spec asks for; there is nothing to report.
-		answer = ibMcpWriteResult(parsed.m_id, ibDataNode());
+		answer = ibRpcWriteResult(parsed.m_id, ibDataNode());
 	}
 	else if (parsed.m_method == wxT("logging/setLevel")) {
 
@@ -3344,7 +3350,7 @@ wxString ibMcpServer::Answer(const wxString& request, const ibMcpWireHeaders& he
 		// business, not the gate's.
 		m_logLevel.store(ibMcpLevelRank(level));
 
-		answer = ibMcpWriteResult(parsed.m_id, ibDataNode());
+		answer = ibRpcWriteResult(parsed.m_id, ibDataNode());
 	}
 	else if (!parsed.WantsAnswer()) {
 		// A notification we do not act on — `notifications/initialized`, `notifications/cancelled`
@@ -3352,7 +3358,7 @@ wxString ibMcpServer::Answer(const wxString& request, const ibMcpWireHeaders& he
 		answer = wxEmptyString;
 	}
 	else {
-		answer = refuse(parsed.m_id, ibMcpError::MethodNotFound,
+		answer = refuse(parsed.m_id, ibRpcError::MethodNotFound,
 			wxString::Format(wxT("No method named '%s'"), parsed.m_method));
 	}
 
@@ -3412,7 +3418,7 @@ wxString ibMcpServer::Answer(const wxString& request, const ibMcpWireHeaders& he
 				// written would bury exactly that.
 				detail = called->GetDetail(toolArguments);
 			}
-			catch (const ibBackendException&) { activity = tool; detail.clear(); }
+			catch (const ibCoreException&) { activity = tool; detail.clear(); }
 			catch (const std::exception&)     { activity = tool; detail.clear(); }
 			catch (...)                       { activity = tool; detail.clear(); }
 		}

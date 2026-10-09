@@ -92,6 +92,7 @@ enum { //Error message numbers
 };
 
 #include "backend/backend.h"
+#include "core/exception.h"   // ibCoreException — the refusal this one is, and the one a handler that only tells catches
 
 // Forward-declared rather than included: this is a wide header, and the failure
 // RECORD (diagnostic.h) is only named here, never used by value.
@@ -110,9 +111,8 @@ enum class ibDiagnosticKind;
 // which is the order C++ requires anyway — derived before base. What it buys is that the places
 // that catch only the standard base now SEE the description instead of losing it.
 //
-// what() returns UTF-8 and is prepared at construction: it must be noexcept, so it cannot be the
-// place where the string is built.
-class BACKEND_API ibBackendException : public std::exception {
+// The description and what() are the core's refusal's (ibCoreException), which this one is.
+class BACKEND_API ibBackendException : public ibCoreException {
 protected:
 
 	class wxFormatErrorString : public wxFormatString {
@@ -154,20 +154,8 @@ public:
 	// ibBackendCoreException / ibBackendInterruptException / ibBackendAccessException.
 	virtual ~ibBackendException() = default;
 
-	// THE STANDARD DOOR — same text as GetErrorDescription(), in UTF-8, built once in the
-	// constructor because this override must not throw.
-	const char* what() const noexcept override;
-
 	WX_DEFINE_VARARG_FUNC(static wxString, Format, 1, (const wxFormatErrorString&),
 		DoFormatWchar, DoFormatUtf8);
-
-	// Out-of-line — BACKEND_API class + inline body decays to
-	// dllimport-only in consumer TUs. When the call sits inside a
-	// lambda (e.g. cpp-httplib's set_exception_handler in wes/main.cpp)
-	// MSVC can decline to inline and then the linker hunts the symbol
-	// in backend.dll's export table, where the inline never got
-	// emitted. Defining the body in .cpp guarantees the export.
-	const wxString GetErrorDescription() const;
 
 	// ⭐ HAS THE PERSON ALREADY BEEN TOLD? Nothing new is remembered here — m_errorHandled is set
 	// the moment ProcessError reports, and rides the rethrow. It was simply never READABLE from
@@ -285,14 +273,6 @@ private:
 #endif
 
 	mutable bool m_errorHandled;
-
-	// THE DESCRIPTION, HELD ONCE — as UTF-8 bytes, because that is the representation the
-	// narrower of its two doors can hand out: what() returns a `const char*` into storage that
-	// must outlive the call, and a wxString holds UTF-16 here, so asking it for UTF-8 yields a
-	// temporary buffer that dies on return. Keeping the wxString as well would mean two copies
-	// of one sentence, kept in step by hand; GetErrorDescription() builds its wxString from these
-	// bytes instead, and an exception is never on a hot path.
-	std::string m_errorDescriptionUtf8;
 };
 
 #pragma region _exception_h_

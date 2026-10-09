@@ -45,7 +45,7 @@ bool ibValueModuleManagerRuntimeConfiguration::BeforeStart()
 		// was one for nothing (2026-09-11). Not started, as with any BeforeStart that did not finish.
 		return false;
 	}
-	catch (const ibBackendException& err) {
+	catch (const ibCoreException& err) {
 		ibJournalWarning(wxT("module.event"),_("BeforeStart: %s"), err.GetErrorDescription());
 		return false;
 	}
@@ -70,7 +70,17 @@ void ibValueModuleManagerRuntimeConfiguration::OnStart()
 			pu->CallAsProc(wxT("onStart"));
 		}
 	}
+	catch (const ibBackendInterruptException&) {
+		// Stopped, not failed — as BeforeStart.
+	}
+	catch (const ibCoreException& err) {
+		ibJournalWarning(wxT("module.event"), _("OnStart: %s"), err.GetErrorDescription());
+	}
+	catch (const std::exception& err) {
+		ibJournalWarning(wxT("module.event"), wxT("OnStart: %s"), err.what());
+	}
 	catch (...) {
+		ibJournalWarning(wxT("module.event"), wxT("OnStart: unknown exception"));
 	}
 }
 
@@ -87,7 +97,20 @@ bool ibValueModuleManagerRuntimeConfiguration::BeforeExit()
 		}
 		return !bCancel.GetBoolean();
 	}
+	catch (const ibBackendInterruptException&) {
+		// Stopped, not failed — as BeforeStart.
+		return false;
+	}
+	catch (const ibCoreException& err) {
+		ibJournalWarning(wxT("module.event"), _("BeforeExit: %s"), err.GetErrorDescription());
+		return false;
+	}
+	catch (const std::exception& err) {
+		ibJournalWarning(wxT("module.event"), wxT("BeforeExit: %s"), err.what());
+		return false;
+	}
 	catch (...) {
+		ibJournalWarning(wxT("module.event"), wxT("BeforeExit: unknown exception"));
 		return false;
 	}
 }
@@ -103,6 +126,16 @@ void ibValueModuleManagerRuntimeConfiguration::OnExit()
 			pu->CallAsProc(wxT("onExit"));
 		}
 	}
+	catch (const ibBackendInterruptException&) {
+		// Stopped, not failed — as BeforeStart.
+	}
+	catch (const ibCoreException& err) {
+		ibJournalWarning(wxT("module.event"), _("OnExit: %s"), err.GetErrorDescription());
+	}
+	catch (const std::exception& err) {
+		ibJournalWarning(wxT("module.event"), wxT("OnExit: %s"), err.what());
+	}
 	catch (...) {
+		ibJournalWarning(wxT("module.event"), wxT("OnExit: unknown exception"));
 	}
 }

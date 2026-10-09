@@ -4,7 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "metaFormObject.h"
-#include "backend/serialize/dataBuilder.h"
+#include "core/serialize/dataBuilder.h"
 #include "backend/metaData.h"
 #include "backend/metaCollection/partial/commonObject.h"
 #include "backend/appData.h"
@@ -46,7 +46,7 @@ bool ibBackendCommandItem::Execute(ibInterfaceCommandType cmdType, ibBackendValu
 		// again puts one failure in the pane twice.
 		return false;
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		return false;
 	}
 
@@ -127,7 +127,7 @@ ibFormPtr<ibBackendValueForm> ibValueMetaObjectFormBase::CreateAndBuildForm(cons
 		try {
 			success = result->InitializeFormModule();
 		}
-		catch (const ibBackendException& err) {
+		catch (const ibCoreException& err) {
 			// Surface it — don't let a form-module compile/run error or a missing
 			// required binding vanish (the old catch(...) made the form silently
 			// fail to open with no clue why).

@@ -299,6 +299,7 @@ const ibSchemaIndex* FindIndex(const std::vector<ibSchemaIndex>& indexes, const 
 bool SameIndex(const ibSchemaIndex& a, const ibSchemaIndex& b)
 {
 	if (a.m_unique != b.m_unique)             return false;
+	if (a.m_descending != b.m_descending)     return false;
 	if (a.m_columns.size() != b.m_columns.size()) return false;
 	for (size_t k = 0; k < a.m_columns.size(); ++k)
 		if (a.m_columns[k]->GetColumnId() != b.m_columns[k]->GetColumnId())
@@ -631,7 +632,7 @@ int CreateTable(ibStructureBatch& batch, const ibSchemaTable& t, ibRestructureIn
 	}
 	if (!t.m_external)
 		for (const ibSchemaIndex& i : t.m_indexes)
-			batch.CreateIndex(i.m_name, i.m_columns, i.m_unique);
+			batch.CreateIndex(i.m_name, i.m_columns, i.m_unique, i.m_descending);
 	return 1;
 }
 
@@ -659,7 +660,7 @@ int AlterTable(ibStructureBatch& batch, const ibSchemaTable& old, const ibSchema
 	for (const ibSchemaIndex& o : old.m_indexes) {
 		const ibSchemaIndex* c = FindIndex(cur.m_indexes, o.m_name);
 		if (c == nullptr || !SameIndex(o, *c)) {
-			batch.DropIndex(o.m_name, o.m_columns, o.m_unique);   // the shape rides along for the compensation
+			batch.DropIndex(o.m_name, o.m_columns, o.m_unique, o.m_descending);   // the shape rides along for the compensation
 			if (report != nullptr)
 				report->AppendInfo((c == nullptr ? _("Remove index ") : _("Rebuild index ")) + o.m_name);
 		}
@@ -689,13 +690,38 @@ int AlterTable(ibStructureBatch& batch, const ibSchemaTable& old, const ibSchema
 	for (const ibSchemaIndex& i : cur.m_indexes) {
 		const ibSchemaIndex* o = FindIndex(old.m_indexes, i.m_name);
 		if (o == nullptr || !SameIndex(*o, i)) {
-			batch.CreateIndex(i.m_name, i.m_columns, i.m_unique);
+			batch.CreateIndex(i.m_name, i.m_columns, i.m_unique, i.m_descending);
 			if (report != nullptr && o == nullptr)
 				report->AppendInfo(_("Add index ") + i.m_name);
 		}
 	}
 
 	return retCode;
+}
+
+// ⭐ AN INDEX THE BASE CANNOT HOLD IS REFUSED HERE, before a statement — not by the engine at CREATE INDEX,
+// where the failure rolls the apply back and names nothing useful (a register's records key was declared
+// with no width check at all, ROADMAP §1o). Measured the way a derived key is (ibDeclareDerivedKey): fields
+// as the index counts them, bytes generously. Asked only of an index this apply CREATES — see the caller.
+bool IndexKeyFitsOrSay(const ibDatabaseLayer& conn, const ibSchemaTable& t, const ibSchemaIndex& i, ibRestructureInfo* report)
+{
+	size_t fieldCount = 0;
+	size_t keyBytes = 0;
+	wxString fields;
+	for (const ibBackendQueryColumn* col : i.m_columns) {
+		fieldCount += ColumnFieldNames(col).size();
+		for (const ibColumnSlot& field : DescribeColumnLayout(col))
+			keyBytes += ibIndexFieldByteWidth(field.m_type);
+		fields += (fields.IsEmpty() ? wxString() : wxString(wxT(", "))) + ColName(col);
+	}
+	if (ibIndexKeyFits(conn, fieldCount, keyBytes))
+		return true;
+	if (report != nullptr)
+		report->AppendError(wxString::Format(
+			_("Index %s of %s is too wide for this base: %u fields and about %u bytes of key, where it holds %u and %u - shorten a field of it or take one out of the key (%s)"),
+			i.m_name, LedgerName(t), (unsigned)fieldCount, (unsigned)keyBytes,
+			ibIndexFieldCapacity(conn), conn.GetMaxIndexKeyBytes(), fields));
+	return false;
 }
 
 } // namespace
@@ -851,6 +877,23 @@ int DiffSnapshots(const ibSchemaSnapshot* baseline, const ibSchemaSnapshot& targ
 	for (const ibSchemaTable& cur : target.Tables()) {
 		if (cur.m_beforeChange && !cur.m_beforeChange(report))
 			refused = true;
+	}
+
+	// …and every index this apply would CREATE — new, or changed — is asked whether the base can hold it
+	// (IndexKeyFitsOrSay). Only those: an index standing unchanged is never questioned again, because the
+	// estimate is deliberately generous and a rule that re-judged standing indexes on every apply would refuse
+	// a base whose index the engine already accepted (the PR #220 guard did exactly that to a column).
+	for (const ibSchemaTable& cur : target.Tables()) {
+		if (cur.m_external)
+			continue;
+		const ibSchemaTable* old = baseline != nullptr ? baseline->Find(cur.m_id) : nullptr;
+		for (const ibSchemaIndex& i : cur.m_indexes) {
+			const ibSchemaIndex* standing = old != nullptr ? FindIndex(old->m_indexes, i.m_name) : nullptr;
+			if (standing != nullptr && SameIndex(*standing, i))
+				continue;
+			if (!IndexKeyFitsOrSay(schema.Connection(), cur, i, report))   // the connection this save runs on
+				refused = true;
+		}
 	}
 	if (refused)
 		return 0;

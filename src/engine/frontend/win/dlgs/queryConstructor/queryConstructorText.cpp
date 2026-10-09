@@ -31,7 +31,7 @@ bool ibDialogQueryConstructor::AdoptText(const wxString& text, bool reportModall
 		FillAll();
 		return true;
 	}
-	catch (const ibBackendException& e) {
+	catch (const ibCoreException& e) {
 		// SAID ONCE, in the place that is already saying it. The verdict line under the text
 		// carries the engine's words continuously; popping a modal with the same sentence every
 		// time focus leaves a half-typed query turns the one useful message into an obstacle.
@@ -151,7 +151,7 @@ void ibDialogQueryConstructor::OnCheck(wxCommandEvent&)
 			parser.ParsePackage(selection);
 			wxMessageBox(_("No errors found in the selection."), _("Check query"), wxOK | wxICON_INFORMATION, this);
 		}
-		catch (const ibBackendException& e) {
+		catch (const ibCoreException& e) {
 			wxMessageBox(e.GetErrorDescription(), _("Check query"), wxOK | wxICON_ERROR, this);
 		}
 		return;
@@ -239,7 +239,7 @@ void ibDialogQueryConstructor::OnOk(wxCommandEvent&)
 		ibQueryParser parser;
 		m_package = parser.ParsePackage(ibRenderQueryPackage(m_package));
 	}
-	catch (const ibBackendException& e) {
+	catch (const ibCoreException& e) {
 		wxMessageBox(e.GetErrorDescription(), _("Query"), wxOK | wxICON_ERROR, this);
 		return;
 	}
@@ -328,7 +328,7 @@ bool ibShowQueryConstructor(wxWindow* parent, wxString& queryText, const ibMetaD
 			const ibSourceMetaDataScope resolveAgainst(metaData);
 			ibQueryLowering::CheckNames(package, std::map<wxString, ibValue>());
 		}
-		catch (const ibBackendException& e) {
+		catch (const ibCoreException& e) {
 			complaint = e.GetErrorDescription();
 		}
 

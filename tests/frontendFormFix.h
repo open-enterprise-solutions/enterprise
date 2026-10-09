@@ -21,7 +21,7 @@
 #include "frontend/visualView/ctrl/form.h"       // ibValueForm
 #include "backend/backend_form.h"                // ibBackendValueForm::CreateNewForm
 #include "backend/appData.h"                     // appData->CreateSession<T>()
-#include "backend/session/session.h"             // ibSessionThreadBinding / AccessMode
+#include "backend/session/session.h"             // ibSessionThreadBinding
 #include "backend/session/sessionHolder.h"       // ibSessionHolder — the frame takes one
 #include "backend/session/sessionRegistry.h"     // the CreateSession<T> template body
 
@@ -51,8 +51,6 @@ struct FrontendFormFix : FrontendRuntimeFix {
 	void SetUp() override {
 		FrontendRuntimeFix::SetUp();          // wxApp + appData env + SQLite pool
 		if (!ready) return;
-
-		ibSession::SetAccessMode(ibSession::AccessMode::Shared);
 
 		// An UNLISTED session — imitated, not registered. The registered path
 		// (appData->CreateSession<T>()) makes the registry own sys_session I/O, and this

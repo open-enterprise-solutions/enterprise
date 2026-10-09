@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.16)
 set(APPSERVER_SOURCES
     main.cpp
     appServer.cpp
-    serverConfig.cpp
+    clientListener.cpp
 )
 
 add_executable(appserver ${APPSERVER_SOURCES})
@@ -26,9 +26,13 @@ target_include_directories(appserver PRIVATE
 )
 
 target_link_libraries(appserver PRIVATE
+    frmserver
     backend
     wx::core wx::aui wx::html wx::propgrid wx::adv wx::stc wx::xrc wx::qa wx::base wx::net wx::xml
 )
+
+find_package(Threads REQUIRED)
+target_link_libraries(appserver PRIVATE Threads::Threads)
 
 # The program was called `daemon` until 2026-10-01. The nightly workflow is run from master, which still asks
 # for `--target … daemon …`; this keeps that request building the application server until master moves.

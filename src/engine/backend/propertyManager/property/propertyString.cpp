@@ -1,5 +1,5 @@
 #include "propertyString.h"
-#include "backend/serialize/dataBuilder.h"   // ibDataNode — readable String node value
+#include "core/serialize/dataBuilder.h"   // ibDataNode — readable String node value
 
 
 //base property for "string"

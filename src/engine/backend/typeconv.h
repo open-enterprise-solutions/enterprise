@@ -4,8 +4,8 @@
 // and this header is reached from inside that same chain — so by the time we get here the core's
 // include guard is already set and its own include of the journal has not run yet. Asking for the
 // journal by name is the only order that works from inside the cycle.
-#include "diagnostics/journal.h"      // ibJournal — the technology journal
-#include "fnumber.h"
+#include "core/diagnostics/journal.h"      // ibJournal — the technology journal
+#include "core/fnumber.h"
 #include "fontcontainer.h"
 
 // macros for converting between wxString <-> std::string

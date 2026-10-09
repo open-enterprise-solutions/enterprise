@@ -36,7 +36,6 @@
 #include "compileCode.h"
 #include "codeDef.h"
 
-#include "backend/diagnostics/journal.h"   // what a chain folded, and where the loop was emitted
 #include "procUnitLambda.h"                // LINQ_THREE_VALUED_NULL — the mark a filter's instructions carry
 
 #include <algorithm>                       // std::any_of — the column namer asks a taken list

@@ -10,7 +10,7 @@
 #include "backend/backend_exception.h"               // the engine's verdict on a query that will not resolve
 #include "backend/srcDataObject.h"                      // ibSourceExplorer
 #include "backend/metaCollection/partial/reference/reference.h"   // ibValueReferenceDataObject — GetItemKey row guid
-#include "backend/serialize/dataBuilder.h"            // ibDataNode (object-level save/load)
+#include "core/serialize/dataBuilder.h"            // ibDataNode (object-level save/load)
 #include "backend/metadataConfiguration.h"            // ibMetaDataConfigurationBase (GetSourceMetaData)
 #include "backend/picturePredefined.h"                // g_picRowFolderCLSID — what a grouping's heading wears
 
@@ -28,7 +28,8 @@ public:
 		explicit ColInfo(const ibBackendQueryColumn* col) : m_col(col) {}
 		virtual unsigned int GetColumnID() const override { return m_col != nullptr ? m_col->GetColumnId() : 0; }
 		virtual wxString GetColumnName() const override { return m_col != nullptr ? m_col->GetName() : wxString(); }
-		virtual wxString GetColumnCaption() const override { return m_col != nullptr ? m_col->GetName() : wxString(); }
+		// …and how it reads: the column's synonym, as a metaobject's column reads (commonObject.h) — the name is the designer's.
+		virtual wxString GetColumnCaption() const override { return m_col != nullptr ? m_col->GetSynonym() : wxString(); }
 		// Name + id + TYPE straight off the column (an attribute IS-A column → GetTypeDesc is free).
 		// Enough to render/edit a cell type-aware; for 90% of sources nothing else is needed.
 		virtual const ibTypeDescription GetColumnType() const override { return m_col != nullptr ? m_col->GetTypeDesc() : ibTypeDescription(); }
@@ -150,7 +151,12 @@ ibValueDynamicList::ibValueDynamicList(const ibBackendQueryable* queryable, ibDy
 		SetSourceQueryable(queryable);   // null → set later via SetSource
 }
 
-ibValueDynamicList::~ibValueDynamicList() {}
+// 🛑 THE READ IS WAITED OUT BEFORE THE LIST GOES — here, in the class whose parts it walks, as the
+// composition does. The run reads this list's composer (ibValueModelCursor::m_composer) and asks this
+// list's own overrides; the base destructor waited too, but by then both were gone: a form closed on a
+// list still grouping a million rows, the read heard the cancel, and its catch put the grouping back
+// into a destroyed composer (2026-10-03/05, "front() called on empty vector" in PutGroups).
+ibValueDynamicList::~ibValueDynamicList() { CancelFetch(); }
 
 // --- source (the list starts empty) ----------------------------------------
 
@@ -196,6 +202,7 @@ void ibValueDynamicList::RebuildSource()
 	// to every picker in the settings dialog. That was the gap — the composer took the text and
 	// nothing downstream knew what came out of it.
 	m_querySchema.clear();
+	m_sourceExplorer.Clear();   // the source or its query changed — described anew on the next read
 	if (IsArbitraryQuery()) {
 		m_composer.FromText(GetArbitraryQueryText());
 
@@ -207,7 +214,7 @@ void ibValueDynamicList::RebuildSource()
 			if (ast)
 				ibQueryLowering::DescribeOutput(*ast, {}, m_querySchema);
 		}
-		catch (const ibBackendException&) {
+		catch (const ibCoreException&) {
 			// A QUERY THAT CANNOT BE DESCRIBED HAS NO COLUMNS — that is the whole of what this road
 			// has to decide. The engine's WORDS are told to whoever can act on them: the settings
 			// window asks the text the same question and shows the answer under the editor.
@@ -614,7 +621,9 @@ const ibSourceExplorer* ibValueDynamicList::GetSourceExplorer() const
 	// neither m_col nor the synonym (synonym defaulted to the name). null / !IsAllowed are skipped inside.
 	// Root flagged a TABLE SECTION — a dynamic list IS a table, so IsTableSource() reports true and the
 	// attribute drags as a tablebox (metadata-free, same as the value-table / object lists).
-	m_sourceExplorer.Reset(GetObjectTypeName(), GetObjectTypeName(), wxNOT_FOUND, g_valueDynamicListCLSID, /*tableSection*/true);
+	if (!m_sourceExplorer.Reset(GetSourceMetaData()->GetFactoryCountChanges(),
+		GetObjectTypeName(), GetObjectTypeName(), wxNOT_FOUND, g_valueDynamicListCLSID, /*tableSection*/true))
+		return &m_sourceExplorer;   // built at this version of the metadata, of this source and query — read as it is
 	// The list is a MIRROR: it resets the explorer and hands it to the source descriptor (the single bridge), which
 	// forwards the fill to the metaobject — the same one that lists/runs commands and resolves select.
 	if (const ibQueryableSourceDescriptor* holder = GetSourceDescriptor())
@@ -778,6 +787,7 @@ bool ibValueDynamicList::ReadProperty(const ibDataNode& node)
 
 	// Default view — a hidden intrinsic field (absent on an old blob → Normal, forward-compatible).
 	m_view = (ibDynamicListView)node.GetValue<s32>(wxT("View"));
+	m_sourceExplorer.Clear();   // read anew — its source and its view with it
 
 	// DynamicRead — stored INVERTED (DynamicReadOff: 1 = static/RAM-snapshot, absent/0 = the default dynamic read), so
 	// a list blob written before this field loads as dynamic. (SetValue does not fire OnPropertyChanged.)

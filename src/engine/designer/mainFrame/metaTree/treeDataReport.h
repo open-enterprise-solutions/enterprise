@@ -116,7 +116,7 @@ protected:
 	};
 
 	ibDataReportTreeCtrl* m_metaTreeCtrl = nullptr;
-	ibMetaDataReport* m_metaData = nullptr;
+	std::shared_ptr<ibMetaDataReport> m_metaData;   // what it shows, held while it shows it
 
 private:
 
@@ -170,14 +170,14 @@ public:
 public:
 
 	// ITS OWN TYPE — covariant, see the twin in treeDataProcessor.h.
-	virtual ibMetaDataReport* GetMetaData() const { return m_metaData; }
+	virtual ibMetaDataReport* GetMetaData() const { return m_metaData.get(); }
 
 	ibDataReportTree() { }
 	ibDataReportTree(ibMetaDocument* docParent, wxWindow* parent, wxWindowID id = wxID_ANY);
 	virtual ~ibDataReportTree();
 
 	void InitTree();
-	bool Load(ibMetaDataReport* metaData);
+	bool Load(std::shared_ptr<ibMetaDataReport> metaData);
 	bool Save();
 
 	void ActivateTree();

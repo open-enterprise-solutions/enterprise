@@ -24,10 +24,10 @@
 
 #include "backend/backend.h"
 
-// Register every platform-owned job with ibApplicationInstance::GetJobManager().
+// Register every platform-owned job with THIS base's job manager — the base being opened, handed in.
 // No-op when there is no job manager (launcher, pre-bootstrap). Individual
 // failures are logged and skipped: a housekeeping job that could not register
 // must not stop the application from starting.
-BACKEND_API void ibRegisterPlatformJobs();
+BACKEND_API void ibRegisterPlatformJobs(class ibApplicationInstance* applicationInstance);
 
 #endif // !__IB_PLATFORM_JOBS_H__

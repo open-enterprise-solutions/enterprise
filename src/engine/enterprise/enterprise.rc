@@ -60,7 +60,7 @@ BEGIN
             VALUE "FileVersion", "1.0.0.0"
             VALUE "InternalName", "enterprise.exe"
             VALUE "LegalCopyright", "Copyright (C) 2026"
-            VALUE "OriginalFilename", "backend.dll"
+            VALUE "OriginalFilename", "enterprise.exe"
             VALUE "ProductName", "Open enterprise solutIons"
             VALUE "ProductVersion", "1.0.0.0"
         END

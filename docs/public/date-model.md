@@ -1,7 +1,7 @@
 # The date model
 
 **What.** A date is a wall-clock reading: the parts a calendar and a clock show -
-`2026-03-29 02:30:00` - and no zone. In the engine it is `ibDateTime` (`backend/fdatetime.h`), the
+`2026-03-29 02:30:00` - and no zone. In the engine it is `ibDateTime` (`core/fdatetime.h`), the
 engine's own type beside `ibNumber` and `ibString`: 8 bytes, milliseconds from `0001-01-01 00:00:00`
 of the proleptic Gregorian calendar, counted by integer arithmetic that never asks the machine what
 its clock says or which zone it stands in. The same parts give the same number on every machine, and

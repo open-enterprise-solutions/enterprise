@@ -18,10 +18,9 @@
 #include "backend/session/session.h"
 #include "backend/system/systemManager.h"   // Message — the standard door to whoever is watching
 
-#include "backend/fileSystem/fs.h"
+#include "core/fileSystem/fs.h"
 #include "backend/job/jobRunByteCode.h"      // the request and the state that cross this wire whole
 #include "backend/backend_exception.h"       // a frame that cannot be read is caught, not escaped
-#include "backend/diagnostics/journal.h"     // …and the reason is written down before the socket goes
 #if _USE_NET_COMPRESSOR == 1
 #include "utils/fs/lz/lzhuf.h"
 #endif 
@@ -895,7 +894,7 @@ void ibDebuggerClient::ibDebuggerClientConnection::EntryClient()
 								RecvCommand(bufferData.GetData(), length);
 #endif
 							}
-							catch (const ibBackendException& err) {
+							catch (const ibCoreException& err) {
 								ibJournalError(wxT("debugger"),
 									wxT("debug client: a frame of %u bytes could not be read, closing the connection: %s"),
 									length, err.GetErrorDescription());

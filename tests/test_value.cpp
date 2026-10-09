@@ -11,7 +11,7 @@
 #include "backend/compiler/procUnitLambda.h"   // CopyValue — the LET road a script's `r = …` takes
 #include "backend/system/value/valueArray.h"   // ValueHashContract — composite keys
 #include "backend/system/systemManager.h"      // ibValueSystemFunction::Date — the script's door to a date
-#include "backend/serialize/dataBuilder.h"     // ibDataNode — a date packed and unpacked
+#include "core/serialize/dataBuilder.h"     // ibDataNode — a date packed and unpacked
 
 #include <tuple>     // std::make_tuple — a date's place in its week and year, asked at once
 #include <utility>   // std::move — the ValueMove cases

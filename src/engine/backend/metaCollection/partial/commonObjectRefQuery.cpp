@@ -439,8 +439,9 @@ bool ibValueRecordDataObjectRef::DeleteData()
 	// Only the OWN hierarchy is cleared — the parent column of this very table. References to this
 	// object from ELSEWHERE are a different question (referential integrity), and answering it here
 	// would be answering it in the dark.
+	// A flat list has no parent column to clear (FillArrayObjectByPredefinedAttribute).
 	ibValueMetaObjectRecordDataHierarchyMutableRef* hierarchy = nullptr;
-	if (m_metaObject->ConvertToValue(hierarchy) && hierarchy != nullptr) {
+	if (m_metaObject->ConvertToValue(hierarchy) && hierarchy != nullptr && hierarchy->HasParentLink()) {
 		if (const ibValueMetaObjectAttributePredefined* parent = hierarchy->GetDataParent()) {
 			ibDataQueryBuilder()
 				.From(m_metaObject->GetQueryable())
@@ -505,6 +506,7 @@ bool ibValueRecordDataObjectHierarchyRef::ReadData()
 			m_objMode = ibObjectMode::OBJECT_FOLDER;
 		else
 			m_objMode = ibObjectMode::OBJECT_ITEM;
+		m_sourceExplorer.Clear();   // a folder is described otherwise than an item — built anew on the next read
 		return true;
 	}
 	return false;
@@ -522,6 +524,7 @@ bool ibValueRecordDataObjectHierarchyRef::ReadData(const ibGuid& srcGuid)
 			m_objMode = ibObjectMode::OBJECT_FOLDER;
 		else
 			m_objMode = ibObjectMode::OBJECT_ITEM;
+		m_sourceExplorer.Clear();   // …and so described anew
 		return true;
 	}
 	return false;
@@ -686,7 +689,7 @@ ibValue ibValueRecordDataObjectRef::GenerateNextIdentifier(ibValueMetaObjectAttr
 				gotCode = true;
 			}
 		}
-		catch (const ibBackendException&) {
+		catch (const ibCoreException&) {
 			// PK conflict from a racing session's bootstrap — the constraint violation now
 			// arrives as an exception (L1 signals failure by throwing), so it is caught here
 			// rather than read off a return code. Fall through to the retry.

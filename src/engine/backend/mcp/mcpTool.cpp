@@ -24,7 +24,7 @@
 #include <wx/regex.h>     // …unless it is written as a pattern, which is also a way to ask
 #include <wx/log.h>       // a query that does not compile is not the person's error to read
 
-#include "backend/stringUtils.h"   // names compare case-insensitively here, as everywhere else
+#include "core/stringUtils.h"   // names compare case-insensitively here, as everywhere else
 
 #include <memory>
 #include <set>      // one link per id — the same object named twice is one fact
@@ -978,7 +978,7 @@ void ibMcpSayCaption(const ibPropertyTString* caption, ibDataNode& into)
 
 	ibDataNode& byLanguage = into.Child(wxT("value"));
 
-	for (const ibBackendLocalizationEntry& cell : caption->GetValueAsTranslate().GetTranslations())
+	for (const ibLocalizationEntry& cell : caption->GetValueAsTranslate().GetTranslations())
 		byLanguage.SetValue(cell.m_code, cell.m_data);
 }
 
@@ -1384,8 +1384,14 @@ wxString ibMcpTool::GetDetail(const ibDataNode& params) const
 	return out;
 }
 
+// ⚠ ANY VALUE COMES HERE, NOT ONLY A SHAPE — the setter answers every property it wrote through these two. A
+// scalar is no picture and is left as it is; AsChild on one raises (`wrong value kind (expected 6, got 2)`), and
+// it did, after the write had succeeded: a number, a Boolean or a plain string was set and then refused in
+// the answer (#100, 2026-10-01).
 void ibMcpPictureIdAsText(ibDataValue& shape)
 {
+	if (shape.Kind() != ibDataKind::Child)
+		return;
 	const std::shared_ptr<ibDataNode>& node = shape.AsChild();
 	if (!node)
 		return;
@@ -1400,6 +1406,8 @@ void ibMcpPictureIdAsText(ibDataValue& shape)
 
 void ibMcpPictureIdAsNumber(ibDataValue& shape)
 {
+	if (shape.Kind() != ibDataKind::Child)
+		return;
 	const std::shared_ptr<ibDataNode>& node = shape.AsChild();
 	if (!node)
 		return;
@@ -1608,7 +1616,7 @@ bool ibMcpLanguageDeclared(const ibMetaData* owner, const wxString& code, wxStri
 bool ibMcpCaptionInEveryLanguage(const ibMetaData* owner, const wxString& text, const wxString& what,
 	wxString& refusal)
 {
-	if (text.IsEmpty() || ibBackendLocalization::IsLocalizationString(text))
+	if (text.IsEmpty() || ibLocalization::IsLocalizationString(text))
 		return true;   // nothing to write, or it already carries its languages
 	wxString declared;
 	ibMcpLanguageDeclared(owner, wxEmptyString, declared);   // asked only for the list
@@ -1714,7 +1722,7 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 		// string — that is what the class is for, declared once where the property is created — so
 		// the question goes to the property, not to the text it happens to be holding.
 		//
-		// 🛑 IT ASKED THE VALUE FOR A WHILE (ibBackendLocalization::IsLocalizationString), and that
+		// 🛑 IT ASKED THE VALUE FOR A WHILE (ibLocalization::IsLocalizationString), and that
 		// is a heuristic wearing a check's clothes: an EMPTY caption carries no cells yet, so it
 		// does not look like one, and the first translation of a fresh object could not be written
 		// at all. A property that has never been filled in is exactly when this is used.

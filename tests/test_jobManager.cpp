@@ -234,9 +234,9 @@ TEST(JobManager, TickOnEmptyLaunchesNothing) {
     EXPECT_EQ(0, manager.Tick());
 }
 
-TEST(JobManager, RunNowRejectsUnknownName) {
+TEST(JobManager, ExecuteRejectsUnknownName) {
     ibJobManager manager(ib::AppDataCtorToken{});
-    EXPECT_FALSE(manager.RunNow(wxT("nobody")));
+    EXPECT_FALSE(manager.Execute(wxT("nobody")));
 }
 
 TEST(JobManager, UnregisterRejectsUnknownName) {
@@ -520,5 +520,5 @@ TEST(JobManager, StoppedManagerAcceptsNothing) {
     desc.m_body = [](ibSession*) { return false; };
     EXPECT_FALSE(manager.Register(desc));
     EXPECT_EQ(0, manager.Tick());
-    EXPECT_FALSE(manager.RunNow(wxT("late")));
+    EXPECT_FALSE(manager.Execute(wxT("late")));
 }

@@ -10,7 +10,6 @@
 #include "queryRender.h"                  // ibQueryOutputName — the ONE answer to "what is this field called"
 #include "queryLexer.h"                   // ibQueryLexer::ParamNames — which words of a query are its parameters
 #include "queryParser.h"                  // ibQueryCastType — the primitive a CAST converts to, as the parser read it
-#include "backend/diagnostics/journal.h"  // ibJournal — the technology journal
 #include "queryRamTable.h"                // ibQueryRamTable — a package's temp table IS a snapshot
 #include "queryTempStore.h"               // ibQueryTempTableStore — WHO keeps the temp tables alive
 #include "tempTableQueryable.h"           // ibTempTableQueryable — a table handed in as a PARAMETER is a source
@@ -22,10 +21,12 @@
 #include "dbTableProvider.h"              // ibDbTableProvider::CanDeclareAsNamedQuery — would this door render whole?
 #include "queryableFactory.h"             // ibQueryableFactory — source-namespace resolution
 #include "backend/appData.h"              // ibApplicationInstance::GetQueryableFactory
+#include "backend/session/session.h"      // the session's access policy — an IN (SELECT …) said as EXISTS is guarded by it
 #include "backend/metaData.h"             // ibMetaData::GetSourceFactory — resolve through the query's OWN config
 #include "backend/metaCollection/genericData.h"  // ibValueMetaObjectGenericData::ResolveQueryConstant (value(...) resolution)
 #include "backend/tabularModel.h"     // ibComparisonType
 #include "backend/backend_exception.h"    // ibBackendCoreException
+#include "backend/system/value/valueType.h"   // ibValueTypeDescription::AdjustValue — a field's empty value, for a NULL key
 
 // ⚠ NAMED, NOT INHERITED. std::find / std::remove_if arrived in this file with the grouping and
 // prune passes; MSVC hands <algorithm> over transitively and GCC/Clang do not, so the Windows build
@@ -561,7 +562,7 @@ const ibBackendQueryable* ResolveSource(const ibQuerySource& src, const std::map
 		// it genuinely is a mistake.
 		if (conditionsOut == nullptr) {
 			try { argVals.push_back(EvalValue(*src.m_args[i], params)); }
-			catch (const ibBackendException&) { argVals.push_back(ibValue()); }
+			catch (const ibCoreException&) { argVals.push_back(ibValue()); }
 		}
 		else {
 			argVals.push_back(EvalValue(*src.m_args[i], params));
@@ -1775,6 +1776,134 @@ ibQueryCondition ComputedComparison(const std::vector<ibSourceBinding>& sources,
 	return c;
 }
 
+static bool MentionsSemiJoin(const ibQueryPredicatePtr& p)
+{
+	if (!p)
+		return false;
+	if (p->m_kind == ibQueryPredicateKind::Leaf && p->m_leaf.m_semiJoin)
+		return true;
+	for (const ibQueryPredicatePtr& child : p->m_children)
+		if (MentionsSemiJoin(child))
+			return true;
+	return false;
+}
+
+// ⭐⭐ `x [NOT] IN (SELECT k FROM T WHERE …)` SAID TO THE SERVER AS THE SEMI-JOIN IT MEANS.
+//
+// The set used to be read here: the inner select run on its own, every value it returned brought over and sent
+// back as a parameter each. A payroll's «employees not yet paid» stopped at Firebird's 32 767 parameters at some
+// thirty-one thousand employees (perf night, PR #219), and below that every value made the round trip twice. The
+// server can answer the question itself — `EXISTS (SELECT * FROM T WHERE … AND T.k = x)`, the correlated filter
+// the access policy already renders (ibSemiJoinExists) — and NOT IN is the NOT of it, an anti-join.
+//
+// Said only where the leaf is certain to reach SQL: a WHERE handed to the door (not a CASE's WHEN, not a reading's
+// own condition) over ONE plain table, and an inner select over one plain table with one column and nothing that
+// changes which rows it has (no join, fold, TOP, union, totals). Null otherwise, and the set is read as before; rows
+// in memory test membership, with no parameters to run out of.
+//
+// ⚠ BOTH SIDES ARE ONE FIELD OF ONE KIND — identities (a row's own key, a reference by its id), or values of one
+// primitive kind (a code, a name, a number, a date, a flag: the type tag and one value field). An identity
+// against a value, or a code against a number, goes on reading the set. The correlation compares that field,
+// while the set road matches an EMPTY value against an empty one in every spelling it has (DecomposeEquality):
+// the zero sentinel or a NULL key, an untagged row, the type's own empty value. A row key is never empty, so with
+// one on either side the plain equality answers as the set road does — «employees not in …», the case that ran
+// out of parameters, is that shape. Otherwise both may be empty (`Doc.Item IN (SELECT Item …)`, `Code IN (SELECT
+// Code …)`) and the correlation is told so (m_emptyMatchesEmpty): empty meets empty on both roads (2026-10-01;
+// until then those shapes read the set).
+//
+// ⚠ THE INNER READ IS GUARDED as the read it replaces was. The session's policy folds its restriction into the
+// inner's own WHERE (CheckSelect, as Execute does) — an EXISTS over the bare table would see the rows the user may
+// not, and the outer rows would tell which. A refusal, a restriction through a join, a semi-join of the policy's own
+// go back to the rows road, which says or applies them in its own words.
+static ibQueryPredicatePtr InSubqueryAsSemiJoin(const std::vector<ibSourceBinding>& sources,
+	const std::vector<const ibBackendQueryColumn*>& cols, const ibQuerySelect& sel,
+	const std::map<wxString, ibValue>& params, bool negated)
+{
+	auto plainTable = [](const ibBackendQueryable* q) {
+		return q != nullptr && !q->IsComputedInRam() && q->GetSourceRelation(wxString()) == nullptr
+			&& !q->GetQueryTableName().IsEmpty();
+	};
+	auto rowKeyOf = [](const ibBackendQueryable* q) -> const ibBackendQueryColumn* {
+		const std::vector<const ibBackendQueryColumn*> keys = q->GetPrimaryKeyColumns();
+		return keys.size() == 1 ? keys.front() : nullptr;
+	};
+	// WHAT THE CORRELATION COMPARES, as a kind: an identity (ReferenceId, whatever the key's own layout), or the
+	// value role of a primitive — the same shape DecomposeIn reads as "one kind of value". Raw = neither.
+	auto comparedKind = [](const ibBackendQueryColumn* c, const ibBackendQueryColumn* rowKey) {
+		if (c == nullptr)
+			return ibColumnRole::Raw;
+		if (c == rowKey)
+			return ibColumnRole::ReferenceId;
+		const std::vector<ibColumnSlot> slots = ColumnValueSlots(c);
+		if (slots.size() == 1 && slots.front().m_role == ibColumnRole::ReferenceId)
+			return ibColumnRole::ReferenceId;
+		const std::vector<ibColumnSlot> layout = DescribeColumnLayout(c);
+		if (layout.size() == 2 && layout[0].m_role == ibColumnRole::Discriminator
+		    && (layout[1].m_role == ibColumnRole::String || layout[1].m_role == ibColumnRole::Number
+		        || layout[1].m_role == ibColumnRole::Date || layout[1].m_role == ibColumnRole::Boolean))
+			return layout[1].m_role;
+		return ibColumnRole::Raw;
+	};
+
+	if (sources.size() != 1 || !plainTable(sources.front().m_q) || cols.size() != 1)
+		return nullptr;
+	const ibBackendQueryColumn* const outerRowKey = rowKeyOf(sources.front().m_q);
+	const ibColumnRole outerKind = comparedKind(cols.front(), outerRowKey);
+	if (outerKind == ibColumnRole::Raw)
+		return nullptr;
+	if (sel.m_selectAll || sel.m_projections.size() != 1 || !sel.m_joins.empty() || !sel.m_groupBy.empty()
+	    || sel.m_having || sel.m_top > 0 || sel.m_hasTotals || !sel.m_unions.empty() || !sel.m_intoTemp.IsEmpty()
+	    || sel.m_forUpdate || sel.m_from.m_subquery || !sel.m_from.m_args.empty()
+	    || ibQueryMentionsAggregate(sel.m_projections.front().m_expr))
+		return nullptr;
+
+	try {
+		std::vector<ibQueryAstExprPtr> own;
+		const ibBackendQueryable* inner = ResolveSource(sel.m_from, params, &own, &sel);
+		if (!plainTable(inner) || !own.empty())
+			return nullptr;
+		const std::vector<ibSourceBinding> innerSources{ { ibQuerySourceName(sel.m_from), inner } };
+		const std::vector<const ibBackendQueryColumn*> key =
+			ResolveFieldOperand(innerSources, *sel.m_projections.front().m_expr, /*allowDotWalk*/ false);
+		const ibBackendQueryColumn* const innerRowKey = rowKeyOf(inner);
+		if (key.size() != 1 || comparedKind(key.front(), innerRowKey) != outerKind)
+			return nullptr;   // nothing one field can compare, or two kinds — the set road says what that means
+
+		ibDataQueryBuilder scope;   // the session's connection and policy, as the inner read would have had
+		scope.From(inner);
+		if (sel.m_where)
+			scope.Where(BuildWherePredicate(innerSources, *sel.m_where, params, /*allowDotWalk*/ true));
+		const ibAccessPolicy* const policy =
+			ibSession::Current() != nullptr ? ibSession::Current()->GetAccessPolicy() : nullptr;
+		if (policy != nullptr) {
+			scope.WithAccessPolicy(nullptr);
+			if (!policy->CheckSelect(scope, ibAccessStage::Table))
+				return nullptr;
+			std::vector<const ibBackendQueryable*> read;
+			scope.GetSources(read);
+			if (read.size() != 1)
+				return nullptr;
+		}
+
+		ibSemiJoinExists semi;
+		semi.m_inner    = inner;
+		semi.m_outerKey = cols.front();
+		semi.m_innerKey = key.front();
+		semi.m_where    = scope.GetWherePredicate();
+		semi.m_emptyMatchesEmpty = cols.front() != outerRowKey && key.front() != innerRowKey;   // two values that may both be empty
+		if (MentionsSemiJoin(semi.m_where))
+			return nullptr;   // a nested EXISTS would read its own alias (`sj`) for this one's
+
+		ibQueryCondition exists;
+		exists.m_semiJoin = std::make_shared<ibSemiJoinExists>(semi);
+		const ibQueryPredicatePtr leaf = ibQueryPredicate::Leaf(exists);
+		return negated ? ibQueryPredicate::Not(leaf) : leaf;
+	}
+	catch (const ibCoreException&) {
+		return nullptr;   // the rows road resolves the same select and says what is wrong with it
+	}
+}
+
 // Build the full boolean WHERE as an L3 predicate TREE (ibQueryPredicate). The door lowers it to
 // the L2 IR (OR/NOT/IS NULL all expressible there). IN expands to Or(Eq …), BETWEEN to And(>=, <=),
 // NOT IN / NOT BETWEEN / NOT LIKE wrap the positive form in Not — so the tree needs no dedicated node.
@@ -1955,6 +2084,10 @@ ibQueryPredicatePtr BuildWherePredicate(const std::vector<ibSourceBinding>& sour
 			values = ibQueryHierarchyScope(owner, cols.back(), named, e.m_unfold).Accepted();
 		}
 		else if (e.m_subquery) {
+			// Said to the server where it can be (InSubqueryAsSemiJoin) — then the set is never read here.
+			if (answer == ibHierarchyAnswer::Door)
+				if (ibQueryPredicatePtr semi = InSubqueryAsSemiJoin(sources, cols, *e.m_subquery, params, e.m_negated))
+					return semi;
 			ibSubqueryOwner localOwner;   // the inner queryable lives only for this materialisation
 			const std::shared_ptr<ibSubqueryQueryable> subq = WrapSelectAsQueryable(*e.m_subquery, params, localOwner);
 			const std::vector<const ibBackendQueryColumn*> outCols = subq->GetColumns();
@@ -2149,6 +2282,207 @@ std::vector<const ibBackendQueryColumn*> ResolveFieldOperand(const std::vector<i
 			  "parameters)"),
 			ibRenderQueryExpr(e)));
 	return ResolveWhereTarget(sources, e, allowDotWalk);
+}
+
+// ⭐⭐ A FILTER THROUGH A REFERENCE IS ASKED OF THE TABLES IT POINTS INTO FIRST. `Recorder.Warehouse = &W AND
+// Recorder.Counterparty = &C` names the DOCUMENTS a row must have been written by. Said as a walk, every row of the
+// register is joined to its document and asked — and an engine that reads the register in its list order (Firebird
+// down `_PIX`) reads all of it to find the few rows of one group: 5.8 s for 4 rows of 900 000 (2026-10-05). Asked of
+// the documents, it is a set of their references, and the register is read by the index on its recorder: 52 ms, the
+// same rows. Every equality through one reference is a question about one object, so they are asked TOGETHER, of each
+// table the reference may point into that has all their fields — a kind without one holds nothing equal to a value.
+// The set is read the way an `IN (SELECT …)` is read (BuildWherePredicate) and handed on as the reference's own IN.
+//
+// ⭐ …AND AN EMPTY VALUE IS ASKED THE OTHER WAY ROUND. Through a walk, "the field is empty" holds also for a row whose
+// reference points at a kind with no such field, or at nothing — the join's NULL. That is everything EXCEPT the rows
+// whose referenced row has the field FILLED: `NOT IN` the references of those, which is exact, and is how the group of
+// "no warehouse" — nearly the whole register — stops being a join of every row (6.5 s, 2026-10-05).
+//
+// One hop deep, equality only.
+struct ibReferenceTest {
+	const ibBackendQueryable*   m_owner;   // the source the walk starts on
+	const ibBackendQueryColumn* m_hop;     // its reference
+	const ibBackendQueryColumn* m_field;   // the field of the referenced row
+	ibValue                     m_value;
+	bool                        m_empty;   // the value is the field's empty one — asked as NOT IN the filled
+};
+
+static void Conjuncts(const ibQueryAstExpr& e, std::vector<const ibQueryAstExpr*>& out)
+{
+	if (e.m_kind == ibQueryAstExprKind::Logical && !e.m_isOr && e.m_lhs && e.m_rhs) {
+		Conjuncts(*e.m_lhs, out);
+		Conjuncts(*e.m_rhs, out);
+		return;
+	}
+	out.push_back(&e);
+}
+
+static std::optional<ibReferenceTest> TestThroughReference(const std::vector<ibSourceBinding>& sources,
+                                                           const ibQueryAstExpr& e, const std::map<wxString, ibValue>& params)
+{
+	if (e.m_kind != ibQueryAstExprKind::Compare || e.m_cmp != ibQueryCompareOp::Eq || !e.m_lhs || !e.m_rhs
+	    || e.m_lhs->m_kind != ibQueryAstExprKind::Column || ComparesComputed(e) || KnownBeforeRows(e, params).has_value())
+		return std::nullopt;
+	const std::vector<const ibBackendQueryColumn*> cols = ResolvePath(sources, *e.m_lhs);
+	if (cols.size() != 2 || cols[0] == nullptr || cols[1] == nullptr)
+		return std::nullopt;
+	const ibBackendQueryable* owner = RootForPath(sources, *e.m_lhs);
+	if (owner == nullptr || owner->IsComputedInRam())
+		return std::nullopt;
+	ibValue value = EvalValue(*e.m_rhs, params);
+	// A NULL is the key of a group whose reference reaches no such field (a fold's COALESCE of nothing); through a walk
+	// it compares as the field's empty value, and is asked as that.
+	if (value.IsNull())
+		value = ibValueTypeDescription::AdjustValue(cols[1]->GetTypeDesc(), owner->GetMetaData());
+	if (value.IsNull())
+		return std::nullopt;
+	return ibReferenceTest{ owner, cols[0], cols[1], value, value.IsEmpty() };
+}
+
+// The references of the rows that pass every test, in every table the reference points into — `filled`: of the rows
+// whose field is NOT the (empty) value. A kind without one of the fields holds nothing equal to a value, and nothing
+// filled either. False when a table is not one the server can read for them — and then the walk stays as written.
+// `most` (0 = all): read no further than one past it, which is all the caller needs to know that it is too many.
+static bool ReferencesPassing(const std::vector<ibReferenceTest>& tests, std::vector<ibValue>& out, bool filled = false,
+                              size_t most = 0)
+{
+	const ibBackendQueryable*   owner = tests.front().m_owner;
+	const ibBackendQueryColumn* hop   = tests.front().m_hop;
+	std::vector<const ibBackendQueryable*> targets;
+	if (const ibBackendQueryable* one = owner->GetProvider().ResolveReferenceTarget(owner, hop))
+		targets.push_back(one);
+	else
+		targets = owner->GetProvider().ResolveReferenceTargets(owner, hop);
+	if (targets.empty())
+		return false;
+	std::vector<std::pair<const ibBackendQueryable*, std::vector<const ibBackendQueryColumn*>>> reads;
+	for (const ibBackendQueryable* target : targets) {
+		std::vector<const ibBackendQueryColumn*> fields;
+		for (const ibReferenceTest& t : tests) {
+			const ibBackendQueryColumn* field = ibDbTableProvider::WalkEnters(target, t.m_field)   // a CAST names its one type
+				? target->ResolveColumnByName(t.m_field->GetName()) : nullptr;
+			if (field == nullptr)
+				break;
+			fields.push_back(field);
+		}
+		if (fields.size() != tests.size())
+			continue;   // a kind without one of the fields holds nothing equal to a value, and nothing filled
+		const std::vector<const ibBackendQueryColumn*> key = target->GetPrimaryKeyColumns();
+		if (target->IsComputedInRam() || key.size() != 1 || key.front() == nullptr)
+			return false;
+		reads.emplace_back(target, std::move(fields));
+	}
+	for (const auto& read : reads) {
+		if (most != 0 && out.size() > most)
+			break;
+		// …the reference and nothing else. An ordinary read takes the whole row (it may have readers past its select
+		// list); DISTINCT over the reference projects that and no more, and a reference is distinct already. A
+		// document's row is wide — read whole, every page of a list re-asked thousands of documents for one column
+		// (2026-10-05).
+		const ibBackendQueryColumn* key = read.first->GetPrimaryKeyColumns().front();
+		ibDataQueryBuilder q;
+		q.From(read.first).Select(key, wxEmptyString).Distinct({ key });
+		for (size_t i = 0; i < tests.size(); ++i)
+			q.Where(CondEq({ read.second[i] }, tests[i].m_value, /*notEqual*/ filled));
+		ibReadPageRequest page;   // the whole set — or one past `most`
+		if (most != 0)
+			page.m_count = static_cast<int>(most + 1 - out.size());
+		ibDataQueryResult r = q.Execute(page);
+		while (r.Next())
+			out.push_back(r.GetValue(key));
+	}
+	return true;
+}
+
+// A set of references as the condition on the reference column itself: one value its equality, several the plain list
+// over one column (see the IN branch of BuildWherePredicate), none — nothing is in it.
+static ibQueryPredicatePtr ReferenceIn(const ibBackendQueryColumn* hop, std::vector<ibValue> refs)
+{
+	if (refs.empty())
+		return ibQueryPredicate::Leaf(ConditionThatIs(false));
+	if (refs.size() == 1)
+		return ibQueryPredicate::Leaf(CondEq({ hop }, refs.front()));
+	ibQueryCondition set;
+	set.m_col    = hop;
+	set.m_op     = ibQueryFilterOp::In;
+	set.m_values = std::move(refs);
+	return ibQueryPredicate::Leaf(set);
+}
+
+// The top-level conjuncts of a WHERE, with the equalities through one reference asked as conditions on the reference
+// itself (appended to `asked`): the values TOGETHER as one IN, each empty one as NOT IN the filled. The rest go to
+// `rest`, to be lowered as before. False — nothing was asked, and the WHERE is lowered whole.
+static bool AskThroughReferences(const std::vector<ibSourceBinding>& sources, const ibQueryAstExpr& where,
+	const std::map<wxString, ibValue>& params, std::vector<ibQueryPredicatePtr>& asked,
+	std::vector<const ibQueryAstExpr*>& rest)
+{
+	std::vector<const ibQueryAstExpr*> parts;
+	Conjuncts(where, parts);
+	struct Group { std::vector<ibReferenceTest> m_tests; std::vector<size_t> m_parts; };
+	std::vector<Group> groups;
+	for (size_t i = 0; i < parts.size(); ++i) {
+		std::optional<ibReferenceTest> test = TestThroughReference(sources, *parts[i], params);
+		if (!test)
+			continue;
+		auto group = std::find_if(groups.begin(), groups.end(), [&test](const Group& g) {
+			return g.m_tests.front().m_owner == test->m_owner && g.m_tests.front().m_hop == test->m_hop; });
+		if (group == groups.end())
+			group = groups.insert(groups.end(), Group());
+		group->m_tests.push_back(*test);
+		group->m_parts.push_back(i);
+	}
+	// ⭐ A SET IS ASKED WHILE IT IS A SMALL PART OF ONE STATEMENT. Its references are bound a value each, and the engine
+	// binds so many and no more (ibDbTableProvider::ParametersOneStatementTakes): half of that for the sets, the rest
+	// for the statement's own values. Past it the walk stays the join — slower, and still an answer. Nothing is lost
+	// that way: a set that large is a DENSE group, which the join finds at once; the set is what a RARE group needs,
+	// and a rare group's set is small (Max, 2026-10-05: "if it does not fit, the query is not optimal, and it runs").
+	const size_t takes = groups.empty() ? 0 : ibDbTableProvider::ParametersOneStatementTakes() / 2;
+	size_t bound = 0;
+	const auto room = [&]() -> size_t {   // how far a read need go (ReferencesPassing's `most`); 0 = all
+		return takes == 0 ? 0 : std::max<size_t>(takes - bound, 1);
+	};
+	const auto fits = [&](const ibBackendQueryColumn* hop, size_t refs) {
+		if (takes == 0 || bound + refs <= takes) {
+			bound += refs;
+			return true;
+		}
+		ibJournalInfo(wxT("query.road"), wxT("SERVER: more references through '%s' than one statement binds - the walk stays a join"),
+			hop->GetName());
+		return false;
+	};
+	std::vector<bool> taken(parts.size(), false);
+	for (const Group& g : groups) {
+		const ibBackendQueryColumn* hop = g.m_tests.front().m_hop;
+		std::vector<ibReferenceTest> values;
+		std::vector<size_t>          valueParts;
+		for (size_t k = 0; k < g.m_tests.size(); ++k) {
+			if (!g.m_tests[k].m_empty) {
+				values.push_back(g.m_tests[k]);
+				valueParts.push_back(g.m_parts[k]);
+				continue;
+			}
+			std::vector<ibValue> filled;
+			if (!ReferencesPassing({ g.m_tests[k] }, filled, /*filled*/ true, room()) || !fits(hop, filled.size()))
+				continue;
+			ibJournalInfo(wxT("query.road"), wxT("SERVER: '%s.%s' is empty - asked as NOT IN the %u reference(s) it is filled in"),
+				hop->GetName(), g.m_tests[k].m_field->GetName(), static_cast<unsigned>(filled.size()));
+			if (!filled.empty())   // filled nowhere — empty everywhere, and the condition asks nothing
+				asked.push_back(ibQueryPredicate::Not(ReferenceIn(hop, std::move(filled))));
+			taken[g.m_parts[k]] = true;
+		}
+		std::vector<ibValue> refs;
+		if (values.empty() || !ReferencesPassing(values, refs, /*filled*/ false, room()) || !fits(hop, refs.size()))
+			continue;
+		ibJournalInfo(wxT("query.road"), wxT("SERVER: %u condition(s) through '%s' asked of the tables it points into - %u reference(s)"),
+			static_cast<unsigned>(values.size()), hop->GetName(), static_cast<unsigned>(refs.size()));
+		asked.push_back(ReferenceIn(hop, std::move(refs)));
+		for (const size_t i : valueParts)
+			taken[i] = true;
+	}
+	for (size_t i = 0; i < parts.size(); ++i)
+		if (!taken[i])
+			rest.push_back(parts[i]);
+	return rest.size() != parts.size();
 }
 
 // Flat AND-tree WHERE -> the door's verb conditions. Plain columns AND reference dot-walks (the leaf
@@ -2663,7 +2997,7 @@ bool IsExprAvailable(const std::vector<ibSourceBinding>& sources, const ibQueryA
 	for (const ibQueryAstExpr* column : columns) {
 		std::vector<const ibBackendQueryColumn*> path;
 		try { path = ResolvePath(sources, *column); }
-		catch (const ibBackendException&) { continue; }
+		catch (const ibCoreException&) { continue; }
 		if (!ibIsWalkAvailable(path))
 			return false;
 	}
@@ -3479,6 +3813,8 @@ void ProjectPlainColumn(ibDataQueryBuilder& b, OutputColumn& oc, const ibBackend
 		oc.m_col = c;
 }
 
+void RefuseUngrouped(const ibQuerySelect& ast, const std::vector<ibSourceBinding>& sources);   // beside the rule, below
+
 // Populate the door from a single SELECT's clauses (projections / GROUP BY / HAVING / WHERE / ORDER /
 // DISTINCT). Shared by the top-level execute, nested subqueries, and JOIN queries. The source set
 // (1 = single source, >1 = JOIN) drives column resolution. explicitProjection (a subquery's inner
@@ -3555,6 +3891,15 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 	bool aggregate = !ast.m_groupBy.empty();
 	for (const ibQueryProjection& p : ast.m_projections)
 		if (ibQueryMentionsAggregate(p.m_expr)) aggregate = true;
+
+	// ⭐⭐ …AND A FOLDING QUERY IS COMPLETE, OR IT DOES NOT RUN. The aggregate terminal builds its SELECT list from
+	// the group keys and the folds alone, so a projection that is neither never reaches the database: the schema
+	// declares it, and the caller gets it EMPTY with nothing said. Only the CHECK refused that (query_check,
+	// report_query, the constructor), and no road that RUNS a query passed the check — a script's Execute, the
+	// composer, a dynamic list, a report (2026-10-01: compose_run ran what query_check refused, and the column
+	// came back blank). Here is the one door every SELECT of every road is filled through, nested ones included.
+	if (aggregate)
+		RefuseUngrouped(ast, sources);
 
 	// projections -> output schema (+ door select for dot-walk / aggregates / explicit projection)
 	outSchema.clear();
@@ -4068,14 +4413,25 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 	// when allowWhereDotWalk; the provider joins them. For a JOIN the tree lowers only in the co-located
 	// path (the stitch path errors), and a dot-walk leaf there is rejected (allowWhereDotWalk is false).
 	if (ast.m_where) {
-		if (IsFlatAndWhere(*ast.m_where))
-			// A COMPUTED source resolves a flat dot-walk WHERE (Ref.Field = X) in RAM: the provider joins the
-			// reference leaf and filters by it (the register cannot). The boolean predicate path stays gated.
-			LowerFlatWhere(b, sources, *ast.m_where, params, allowWhereDotWalk || computedPrimary);
-		else
-			// A COMPUTED source resolves a boolean dot-walk WHERE (Ref.A = X OR Ref.B = Y) in RAM too: the
-			// provider joins the leaves (predicate-tree gather) and FilterRows evaluates the tree by the leaf.
-			b.Where(BuildWherePredicate(sources, *ast.m_where, params, allowWhereDotWalk || computedPrimary));
+		// The equalities through a reference, asked of the tables it points into first (AskThroughReferences) — and
+		// what is left of the WHERE goes on by the road it would have taken, conjunct by conjunct.
+		std::vector<ibQueryPredicatePtr>   asked;
+		std::vector<const ibQueryAstExpr*> rest;
+		const bool split = allowWhereDotWalk && AskThroughReferences(sources, *ast.m_where, params, asked, rest);
+		for (const ibQueryPredicatePtr& condition : asked)
+			b.Where(condition);
+		const std::vector<const ibQueryAstExpr*> lowered = split ? rest
+			: std::vector<const ibQueryAstExpr*>{ ast.m_where.get() };
+		for (const ibQueryAstExpr* where : lowered) {
+			if (IsFlatAndWhere(*where))
+				// A COMPUTED source resolves a flat dot-walk WHERE (Ref.Field = X) in RAM: the provider joins the
+				// reference leaf and filters by it (the register cannot). The boolean predicate path stays gated.
+				LowerFlatWhere(b, sources, *where, params, allowWhereDotWalk || computedPrimary);
+			else
+				// A COMPUTED source resolves a boolean dot-walk WHERE (Ref.A = X OR Ref.B = Y) in RAM too: the
+				// provider joins the leaves (predicate-tree gather) and FilterRows evaluates the tree by the leaf.
+				b.Where(BuildWherePredicate(sources, *where, params, allowWhereDotWalk || computedPrimary));
+		}
 	}
 
 	// A VIRTUAL TABLE'S CONDITION ARGUMENT lands here, alongside the written WHERE and by exactly the
@@ -4916,7 +5272,7 @@ std::shared_ptr<const ibBackendQueryable> DeclareNamedResultAsCte(ibDataQueryBui
 		if (sel.m_top > 0)
 			inner.Top(sel.m_top);
 	}
-	catch (const ibBackendException& err) {
+	catch (const ibCoreException& err) {
 		// ⚠ THE DESCRIPTION IS DATA, never the format — a message carrying a stray `%` would be read
 		// as a conversion and print whatever happened to be next (CLAUDE.md, the same rule wxLogError
 		// follows).
@@ -5612,7 +5968,7 @@ bool BuildCheckSources(const ibQuerySelect& ast, const std::map<wxString, ibValu
 		// of trouble arrives when somebody runs it.
 		const ibBackendQueryable* queryable = nullptr;
 		try { queryable = ResolveSource(*source, params); }
-		catch (const ibBackendException&) {
+		catch (const ibCoreException&) {
 			if (reportMissing && source->m_name.size() > 1)
 				throw;      // the engine's own words, its own position — carried up verbatim
 			// A temp table this check cannot see — or a reading that does not accuse.
@@ -5822,6 +6178,20 @@ std::vector<ibQueryAstExprPtr> CollectUngrouped(const ibQuerySelect& ast,
 		}
 	}
 	return out;
+}
+
+// ⚠⚠ AN INCOMPLETE GROUPING IS REFUSED — asked of the SAME door a host asks to complete one, so what the
+// check calls wrong and what the constructor fixes are one answer (see the header). Said by the check
+// (CheckSelectNames) and by every query that RUNS (PopulateBuilder) in these words.
+void RefuseUngrouped(const ibQuerySelect& ast, const std::vector<ibSourceBinding>& sources)
+{
+	const std::vector<ibQueryAstExprPtr> ungrouped = CollectUngrouped(ast, sources);
+	if (ungrouped.empty())
+		return;
+	const ibQueryAstExprPtr& first = ungrouped.front();
+	ThrowQueryException(first->m_line, first->m_col, wxString::Format(
+		_("'%s' is neither grouped nor aggregated: add it to GROUP BY, or wrap it in an aggregate"),
+		first->m_path.back()));
 }
 
 // ⭐⭐ THE LINKS MUST NOT CONTRADICT ONE ANOTHER, and it is the ENGINE that says so.
@@ -6334,15 +6704,7 @@ void CheckSelectNames(const ibQuerySelect& astAsWritten, const std::map<wxString
 		}
 	}
 
-	// ⚠⚠ AN INCOMPLETE GROUPING IS REFUSED — asked of the SAME door a host asks to complete one, so
-	// what the check calls wrong and what the constructor fixes are one answer (see the header).
-	const std::vector<ibQueryAstExprPtr> ungrouped = CollectUngrouped(ast, sources);
-	if (!ungrouped.empty()) {
-		const ibQueryAstExprPtr& first = ungrouped.front();
-		ThrowQueryException(first->m_line, first->m_col, wxString::Format(
-			_("'%s' is neither grouped nor aggregated: add it to GROUP BY, or wrap it in an aggregate"),
-			first->m_path.back()));
-	}
+	RefuseUngrouped(ast, sources);
 }
 
 
@@ -6356,7 +6718,7 @@ bool StillResolves(const std::vector<ibSourceBinding>& sources, const ibQueryAst
 		if (column == nullptr || column->m_path.empty())
 			continue;
 		try { ResolvePath(sources, *column); }
-		catch (const ibBackendException&) { return false; }
+		catch (const ibCoreException&) { return false; }
 	}
 	return true;
 }
@@ -6654,7 +7016,7 @@ std::vector<ibQueryAstExprPtr> ibQueryLowering::UngroupedProjections(
 	try {
 		return CollectUngrouped(ast, sources);
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		// A name that does not resolve is CheckNames' verdict to give, with its own words. Here it
 		// only means "nothing can be said about grouping yet".
 		return {};
@@ -7825,7 +8187,7 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 					const ibBalanceRole role = m.m_col->GetBalanceRole();
 					if (role == ibBalanceRole::Opening || role == ibBalanceRole::Closing) { measuresArePlain = false; break; }
 				}
-				catch (const ibBackendException&) { measuresArePlain = false; break; }
+				catch (const ibCoreException&) { measuresArePlain = false; break; }
 			}
 			m.m_type = TypeOfFold(agg->m_func, m.m_col != nullptr ? m.m_col->GetTypeDesc() : ibTypeDescription());
 			pagedMeasures.push_back(m);
@@ -7856,7 +8218,7 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 				if (!sortBy || IsComputedExprAst(*sortBy)) { sortIsTheDimension = false; break; }
 				std::vector<const ibBackendQueryColumn*> orderCols;
 				try { orderCols = ResolveWhereTarget(sources, *sortBy, /*allowDotWalk*/true); }
-				catch (const ibBackendException&) { sortIsTheDimension = false; break; }
+				catch (const ibCoreException&) { sortIsTheDimension = false; break; }
 				if (orderCols.size() != 1 || orderCols.front() != pathCols.back()) { sortIsTheDimension = false; break; }
 			}
 		}
@@ -8732,7 +9094,7 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 				continue;
 			std::vector<const ibBackendQueryColumn*> oc;
 			try { oc = ResolveWhereTarget(sources, *sortBy, /*allowDotWalk*/true); }
-			catch (const ibBackendException&) { continue; }
+			catch (const ibCoreException&) { continue; }
 			if (oc.size() == 1 && oc.front() == ls.m_col) {
 				levelAscending[li] = o.m_ascending;
 				orderConsumed[oi]  = true;

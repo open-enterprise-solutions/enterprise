@@ -13,7 +13,6 @@
 #include "queryProvider.h"                                           // ibBackendQueryProvider abstraction (NO L2 — the door runs through it)
 #include "queryRamTable.h"                                           // ibQueryRamTable — the empty selection an ALLOWED read yields on a refusal
 #include "backend/session/session.h"                                 // ibSession::Current()->Holder()
-#include "backend/guid.h"                                            // ibGuid -> wxString (WhereKey / WhereKeyIn)
 #include "backend/backend_exception.h"                               // ibBackendAccessException
 
 // NOTE: this TU intentionally includes NO L2 (databaseQueryBuilder.h) and NO

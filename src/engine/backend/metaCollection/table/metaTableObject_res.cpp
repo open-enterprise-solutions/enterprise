@@ -10,8 +10,7 @@ wxIcon ibValueMetaObjectTableData::GetIcon() const
 
 wxIcon ibValueMetaObjectTableData::GetIconGroup()
 {
-	static wxIcon icon = 
-		ibBackendPicture::GetIconFromBase64(s_table_16_png, wxSize(16, 16));
+	static const ibServerPicture picture(s_table_16_png, wxSize(16, 16));
 	
-	return icon;
+	return picture.ToIcon();
 }

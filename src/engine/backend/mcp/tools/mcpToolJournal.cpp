@@ -36,13 +36,12 @@
 #include "backend/mcp/mcpTool.h"
 
 #include "backend/appData.h"
-#include "backend/diagnostics/journal.h"
 #include "backend/compiler/value.h"      // ibValue - the payload journal_write carries
 #include "backend/system/value/valueMap.h"   // ibValueStructure - what a sent object becomes
 #include "backend/logger/logger.h"
 #include "backend/logger/loggerReader.h"
 #include "backend/metadataConfiguration.h"   // activeMetaData - the door that knows configuration types
-#include "backend/serialize/dataBuilder.h"   // ibDataNode + ibBinaryProvider - the details payload
+#include "core/serialize/dataBuilder.h"   // ibDataNode + ibBinaryProvider - the details payload
 
 #include <wx/datetime.h>
 #include <wx/dir.h>

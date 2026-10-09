@@ -9,7 +9,7 @@
 #include "backend/system/systemManager.h"
 #include "backend/objCtor.h"
 #include "backend/session/session.h"
-#include "backend/serialize/dataBuilder.h"   // node serialization (WriteData / ReadData)
+#include "core/serialize/dataBuilder.h"   // node serialization (WriteData / ReadData)
 #include "backend/choiceLinkResolver.h"      // what narrows a choice, put on the list before it is shown
 
 #include "backend/metaCollection/partial/reference/reference.h"
@@ -132,7 +132,7 @@ ibValueSpreadsheetDocument* ibValueMetaObjectGenericData::GetTemplate(const wxSt
 //*                           ibValueMetaObjectRecordData				*
 //***********************************************************************
 
-#include "backend/fileSystem/fs.h"
+#include "core/fileSystem/fs.h"
 
 //***********************************************************************
 //*                           read & save events                        *
@@ -2021,10 +2021,10 @@ const ibSourceExplorer* ibValueRecordDataObject::GetSourceExplorer() const
 {
 	const ibValueMetaObjectRecordData* metaObject = GetMetaObject();
 
-	m_sourceExplorer.Reset(
+	if (!m_sourceExplorer.Reset(metaObject->GetMetaData()->GetFactoryCountChanges(),
 		wxT("Ref"), _("Ref"), metaObject->GetMetaID(), GetClassType(),
-		false, false
-	);
+		false, false))
+		return &m_sourceExplorer;   // built at this version of the metadata already — read as it is
 
 	for (const auto object : metaObject->GetGenericAttributeArrayObject()) {
 		m_sourceExplorer.AppendColumn(object->GetQueryColumn());
@@ -2312,16 +2312,6 @@ ibValueRecordDataObjectExt::~ibValueRecordDataObjectExt()
 {
 }
 
-ibExternalOwnerHelper::~ibExternalOwnerHelper()
-{
-	if (m_externalMetadata != nullptr) {
-		if (!m_externalMetadata->CloseDatabase(forceCloseFlag)) {
-			wxASSERT_MSG(false, "external metadata CloseDatabase() == false");
-		}
-		wxDELETE(m_externalMetadata);
-	}
-}
-
 bool ibValueRecordDataObjectExt::InitializeObject()
 {
 	if (!m_metaObject->IsExternalCreate()) {
@@ -2343,7 +2333,7 @@ bool ibValueRecordDataObjectExt::InitializeObject()
 		try {
 			Compile();
 		}
-		catch (const ibBackendException&) {
+		catch (const ibCoreException&) {
 			if (!appData->DesignerMode())
 				throw;
 			return false;
@@ -2374,7 +2364,7 @@ bool ibValueRecordDataObjectExt::InitializeObject(ibValueRecordDataObjectExt* so
 		try {
 			Compile();
 		}
-		catch (const ibBackendException&) {
+		catch (const ibCoreException&) {
 			if (!appData->DesignerMode())
 				throw;
 			return false;
@@ -2447,7 +2437,7 @@ bool ibValueRecordDataObjectRef::InitializeObject(const ibGuid& copyGuid)
 	try {
 		Compile();
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		if (!appData->DesignerMode())
 			throw;
 		return false;
@@ -2502,7 +2492,7 @@ bool ibValueRecordDataObjectRef::InitializeObject(ibValueRecordDataObjectRef* so
 	try {
 		Compile();
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		if (!appData->DesignerMode())
 			throw;
 		return false;
@@ -2571,10 +2561,10 @@ ibString ibValueRecordDataObjectRef::GetString() const
 
 const ibSourceExplorer* ibValueRecordDataObjectRef::GetSourceExplorer() const
 {
-	m_sourceExplorer.Reset(
+	if (!m_sourceExplorer.Reset(m_metaObject->GetMetaData()->GetFactoryCountChanges(),
 		wxT("Ref"), _("Ref"), m_metaObject->GetMetaID(), GetClassType(),
-		false, false
-	);
+		false, false))
+		return &m_sourceExplorer;   // built at this version of the metadata already — read as it is
 
 	ibValueMetaObjectAttributeBase* attribute = m_metaObject->GetAttributeForCode();
 
@@ -2750,10 +2740,10 @@ ibValueRecordDataObjectHierarchyRef::~ibValueRecordDataObjectHierarchyRef()
 
 const ibSourceExplorer* ibValueRecordDataObjectHierarchyRef::GetSourceExplorer() const
 {
-	m_sourceExplorer.Reset(
+	if (!m_sourceExplorer.Reset(m_metaObject->GetMetaData()->GetFactoryCountChanges(),
 		wxT("Ref"), _("Ref"), m_metaObject->GetMetaID(), GetClassType(),
-		false, false
-	);
+		false, false))
+		return &m_sourceExplorer;   // built at this version of the metadata already — read as it is
 	ibValueMetaObjectAttributeBase* attribute = m_metaObject->GetAttributeForCode();
 	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
 		ibItemMode attrUse = object->GetItemMode();
@@ -3693,9 +3683,9 @@ bool ibValueRecordManagerObject::IsEmpty() const
 
 const ibSourceExplorer* ibValueRecordManagerObject::GetSourceExplorer() const
 {
-	m_sourceExplorer.Reset(
-		wxT("Ref"), _("Ref"), m_metaObject->GetMetaID(), GetClassType(), false, false
-	);
+	if (!m_sourceExplorer.Reset(m_metaObject->GetMetaData()->GetFactoryCountChanges(),
+		wxT("Ref"), _("Ref"), m_metaObject->GetMetaID(), GetClassType(), false, false))
+		return &m_sourceExplorer;   // built at this version of the metadata already — read as it is
 
 	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
 		m_sourceExplorer.AppendColumn(object->GetQueryColumn());
@@ -3847,7 +3837,7 @@ bool ibValueRecordSetObject::InitializeObject(const ibValueRecordSetObject* sour
 	try {
 		Compile();
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		if (!appData->DesignerMode())
 			throw;
 		return false;

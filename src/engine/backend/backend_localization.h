@@ -2,28 +2,25 @@
 #define __BACKEND_LOCALIZATION_H__
 
 #include "backend_core.h"
+#include "core/localization.h"   // ibLocalization — the translation engine; a language is always given to it
 
-struct ibBackendLocalizationEntry {
-	wxString m_code;
-	wxString m_data;
-};
-
-typedef std::vector<ibBackendLocalizationEntry> ibBackendLocalizationEntryArray;
-
+// WHICH LANGUAGE IS IN FORCE HERE — the engine's half of translation; the translating itself is the core's
+// (ibLocalization), asked with this language.
 class BACKEND_API ibBackendLocalization {
 	ibBackendLocalization() = delete;
 public:
 
-	// Process-wide configuration-language default. Pinned by metadata
-	// OnInitialize to the configuration's main language code (the
-	// metadata short-code form ru/en/uk that localization arrays are
-	// keyed on); set once at boot from the platform locale before
-	// metadata loads.
+	// The configuration's main language code (the metadata short-code form
+	// ru/en/uk that localization arrays are keyed on) for whoever translates
+	// here — the current session's translate state, else this thread's
+	// (ibSession::GetTranslateState). Pinned when the configuration loads and
+	// when the designer changes it; a session takes its base's in CompileRoot.
 	static void SetUserLanguage(const wxString& strUserLanguage);
 
-	// Active configuration-language for the calling thread — session's
-	// GetLanguageCode() if a session is bound and it has a code,
-	// otherwise the process-wide default above. Every internal lookup
+	// Active configuration-language for the calling thread — the translate
+	// state's answer: the script's override, else the user's, else the
+	// configuration's; each session its own, a thread without one its own.
+	// Every internal lookup
 	// (synonym translate, raw-loc encode/decode) and the designer's
 	// advprop string editor route through here.
 	//
@@ -33,32 +30,6 @@ public:
 	// stay at (const wxString&) return + cached session-side value +
 	// no logic per call.
 	static const wxString& GetUserLanguage();
-
-	static bool CreateLocalizationArray(const wxString& strRawTranslate,
-		ibBackendLocalizationEntryArray& array);
-
-	static wxString CreateLocalizationRawLocText(const wxString& strLocale);
-	static bool IsLocalizationString(const wxString& strRawLocale);
-	static wxString GetRawLocText(const ibBackendLocalizationEntryArray& array);
-	static bool GetRawLocText(const ibBackendLocalizationEntryArray& array, wxString& strResult);
-
-	static bool IsEmptyLocalizationString(const wxString& strRawLocale);
-
-	static void SetArrayTranslate(ibBackendLocalizationEntryArray& array, const wxString &strResult);
-	static void SetArrayTranslate(const wxString& strLangCode, ibBackendLocalizationEntryArray& array, const wxString& strResult);
-
-	static bool GetTranslateFromArray(const wxString& strLangCode,
-		const ibBackendLocalizationEntryArray& array, wxString& strResult);
-	static wxString GetTranslateFromArray(const wxString& strLangCode,
-		const ibBackendLocalizationEntryArray& array);
-	
-	static bool GetTranslateGetRawLocText(
-		const wxString& strRawLocale, wxString& strResult);
-	static bool GetTranslateGetRawLocText(
-		const wxString& strLangCode, const wxString& strRawLocale, wxString& strResult);
-
-	static wxString GetTranslateGetRawLocText(const wxString& strRawLocale);
-	static wxString GetTranslateGetRawLocText(const wxString& strLangCode, const wxString& strRawLocale);
 };
 
 // ⭐ THE TRANSLATED TEXT ITSELF — what is passed, held and compared, the way ibNumber is what a
@@ -72,7 +43,7 @@ public:
 //
 // The format lives at the edge here: read once in SetRawText, written once in GetRawText.
 class BACKEND_API ibTranslateString {
-	ibBackendLocalizationEntryArray m_translations;
+	ibLocalizationEntryArray m_translations;
 public:
 
 	ibTranslateString() = default;
@@ -83,8 +54,8 @@ public:
 	ibTranslateString(const wxChar* strRawTranslate) { SetRawText(strRawTranslate); }
 
 	// BY REFERENCE, both ways — a caller edits the cells in place.
-	ibBackendLocalizationEntryArray& GetTranslations() { return m_translations; }
-	const ibBackendLocalizationEntryArray& GetTranslations() const { return m_translations; }
+	ibLocalizationEntryArray& GetTranslations() { return m_translations; }
+	const ibLocalizationEntryArray& GetTranslations() const { return m_translations; }
 
 	// WHAT A PERSON READS — the language in force, and a language with no cell of its own reads as
 	// that one.
@@ -99,13 +70,13 @@ public:
 	// …AND THE SAME TEXT WRITTEN INTO `scratch`, which is what comes back — for a caller reading one text
 	// after another: a scratch reused call after call grows once and then stops allocating.
 	const wxString& GetString(wxString& scratch) const {
-		ibBackendLocalization::GetTranslateFromArray(ibBackendLocalization::GetUserLanguage(), m_translations, scratch);
+		ibLocalization::GetTranslateFromArray(ibBackendLocalization::GetUserLanguage(), m_translations, scratch);
 		return scratch;
 	}
 
 	// …AND THE TEXT OF ONE NAMED LANGUAGE.
 	wxString GetTranslate(const wxString& strLangCode) const {
-		return ibBackendLocalization::GetTranslateFromArray(strLangCode, m_translations);
+		return ibLocalization::GetTranslateFromArray(strLangCode, m_translations);
 	}
 
 	// ⭐ AND EXACTLY THIS LANGUAGE, no substitute — the Find half of the pair. An editor showing one
@@ -116,10 +87,10 @@ public:
 
 	// A LANGUAGE THAT IS NOT HERE IS ADDED — SetArrayTranslate's own rule, kept where it was.
 	void SetTranslate(const wxString& strLangCode, const wxString& strResult) {
-		ibBackendLocalization::SetArrayTranslate(strLangCode, m_translations, strResult);
+		ibLocalization::SetArrayTranslate(strLangCode, m_translations, strResult);
 	}
 	void SetTranslate(const wxString& strResult) {
-		ibBackendLocalization::SetArrayTranslate(m_translations, strResult);
+		SetTranslate(ibBackendLocalization::GetUserLanguage(), strResult);
 	}
 
 	// …AND ONE THAT IS TAKEN OUT. Not the same as writing it empty: a language with no cell reads as
@@ -132,7 +103,7 @@ public:
 	// this. A text that is NOT in the format is the text itself, in the language in force: the same
 	// reading the platform's own writer gives it (CreateLocalizationRawLocText).
 	void SetRawText(const wxString& strRawTranslate);
-	wxString GetRawText() const { return ibBackendLocalization::GetRawLocText(m_translations); }
+	wxString GetRawText() const { return ibLocalization::GetRawLocText(m_translations); }
 
 	bool operator == (const ibTranslateString& src) const;
 	bool operator != (const ibTranslateString& src) const { return !(*this == src); }

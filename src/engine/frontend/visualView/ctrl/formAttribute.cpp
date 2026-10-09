@@ -7,7 +7,7 @@
 #include "form.h"
 
 #include "backend/metaCollection/partial/commonObject.h"   // ibSourceDataObject
-#include "backend/serialize/dataBuilder.h"
+#include "core/serialize/dataBuilder.h"
 #include "backend/system/value/valueType.h"                 // ibValueTypeDescription::AdjustValue
 #include "backend/compositionDescription.h"                 // ibCompositionDescription (list settings form)
 #include "backend/tabularModel.h"                        // ibValueModel (table-source check)
@@ -17,10 +17,10 @@
 #include "backend/objCtor.h"                                 // ibCtorMetaValueType / ibCtorObjectMetaType
 #include "backend/appData.h"                                 // ibApplicationInstance::GetActiveMetaData (metadata fallback)
 #include "backend/metadataConfiguration.h"                   // ibMetaDataConfigurationBase : ibMetaData (upcast)
-#include "backend/clsid.h"
+#include "core/clsid.h"
 #include "backend/metaCollection/metaFormObject.h"            // ibValueMetaObjectFormBase::SaveFormData — the live form back into its blob
 #include "backend/backend_core.h"                            // oes_clipboard_attribute
-#include "backend/fileSystem/fs.h"                           // ibWriterMemory / ibReaderMemory (clipboard serialize)
+#include "core/fileSystem/fs.h"                           // ibWriterMemory / ibReaderMemory (clipboard serialize)
 #ifndef OES_USE_WEB
 #include "frontend/visualView/visualHost.h"                  // g_visualHostContext / RefreshEditor (designer refresh)
 #include <wx/clipbrd.h>

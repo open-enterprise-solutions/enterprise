@@ -12,7 +12,6 @@
 
 #include "backend/query/queryable.h"             // ibBackendQueryable / ibBackendQueryColumn
 #include "backend/query/querySelector.h"         // ibSelector::Snapshot — ToTable's rows as the fast table
-#include "backend/diagnostics/journal.h"         // says which step fell to the RAM floor, and why
 #include "backend/system/value/valueType.h"      // ibValueTypeDescription::AdjustValue — an empty value of a declared type
 #include "backend/query/queryReadState.h"        // ibQueryReadState — one state for a whole pipeline
 #include "backend/query/queryAST.h"              // ibQueryAstExpr — the tree a predicate lowers from

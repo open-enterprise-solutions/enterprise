@@ -1,5 +1,5 @@
 // =============================================================================
-// The format string as a value — backend/formatString.h.
+// The format string as a value — core/formatString.h.
 //
 // What Format(value, format) reads, and what the format string constructor
 // edits. Its failures are quiet: a code dropped on the way through a window,
@@ -9,7 +9,7 @@
 // =============================================================================
 
 #include <gtest/gtest.h>
-#include "backend/formatString.h"
+#include "core/formatString.h"
 #include "backend/compiler/value.h"
 
 namespace {

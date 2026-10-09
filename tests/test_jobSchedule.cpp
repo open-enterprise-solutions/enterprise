@@ -14,7 +14,7 @@
 #include <gtest/gtest.h>
 
 #include "backend/job/jobSchedule.h"
-#include "backend/serialize/dataBuilder.h"
+#include "core/serialize/dataBuilder.h"
 
 namespace {
 

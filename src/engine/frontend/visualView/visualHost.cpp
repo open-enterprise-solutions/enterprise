@@ -676,7 +676,7 @@ void ibVisualHost::ibContentWindow::CreateContent(const ibValueForm* valueForm)
 		// first (C++ requires derived before base) and read its own description. And "%s": the
 		// message is DATA, not a format — an object name carrying a '%' made this read a vararg
 		// that was never passed.
-		catch (const ibBackendException& err) {
+		catch (const ibCoreException& err) {
 			ibJournalError(wxT("ui.form"), wxT("%s"), err.GetErrorDescription());
 			failures << wxString::Format(wxT("%s: %s\n"),
 				child != nullptr ? child->GetControlName() : wxString(wxEmptyString),
@@ -712,7 +712,7 @@ void ibVisualHost::ibContentWindow::UpdateContent(const ibValueForm* valueForm)
 		// first (C++ requires derived before base) and read its own description. And "%s": the
 		// message is DATA, not a format — an object name carrying a '%' made this read a vararg
 		// that was never passed.
-		catch (const ibBackendException& err) {
+		catch (const ibCoreException& err) {
 			ibJournalError(wxT("ui.form"), wxT("%s"), err.GetErrorDescription());
 		}
 		catch (const std::exception& ex) {

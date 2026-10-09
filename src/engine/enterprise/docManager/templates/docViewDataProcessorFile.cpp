@@ -38,7 +38,7 @@ bool ibDataProcessorFileDocument::OnCreate(const wxString& path, long flags)
 {
 	/*if (!ibMetaDocument::OnCreate(path, flags))
 		return false;*/
-	m_metaData = new ibMetaDataDataProcessor();
+	m_metaData = ibMetaData::MakeShared<ibMetaDataDataProcessor>();
 	return true;
 }
 

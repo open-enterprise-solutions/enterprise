@@ -15,8 +15,7 @@ wxIcon ibValueMetaObjectComposer::GetIcon() const
 
 wxIcon ibValueMetaObjectComposer::GetIconGroup()
 {
-	static wxIcon icon =
-		ibBackendPicture::GetIconFromBase64(s_composer_80_png, wxSize(16, 16));
+	static const ibServerPicture picture(s_composer_80_png, wxSize(16, 16));
 
-	return icon;
+	return picture.ToIcon();
 }

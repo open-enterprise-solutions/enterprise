@@ -178,7 +178,7 @@ void ibDataReportTree::EraseItem(const wxTreeItemId& item)
 
 void ibDataReportTree::SelectItem()
 {
-	if (appData->GetAppMode() != ibRunMode::eDESIGNER_MODE)
+	if (!appData->DesignerMode())
 		return;
 	const wxTreeItemId& selection = m_metaTreeCtrl->GetSelection();
 	ibValueMetaObject* metaObject = GetMetaObject(selection);
@@ -188,7 +188,7 @@ void ibDataReportTree::SelectItem()
 
 void ibDataReportTree::PropertyItem()
 {
-	if (appData->GetAppMode() != ibRunMode::eDESIGNER_MODE)
+	if (!appData->DesignerMode())
 		return;
 	const wxTreeItemId& selection = m_metaTreeCtrl->GetSelection();
 	ibValueMetaObject* metaObject = GetMetaObject(selection);
@@ -223,7 +223,7 @@ void ibDataReportTree::Expand(const wxTreeItemId& item)
 
 void ibDataReportTree::UpItem()
 {
-	if (appData->GetAppMode() != ibRunMode::eDESIGNER_MODE)
+	if (!appData->DesignerMode())
 		return;
 	m_metaTreeCtrl->Freeze();
 	const wxTreeItemId& selection = m_metaTreeCtrl->GetSelection();
@@ -241,7 +241,7 @@ void ibDataReportTree::UpItem()
 
 void ibDataReportTree::DownItem()
 {
-	if (appData->GetAppMode() != ibRunMode::eDESIGNER_MODE)
+	if (!appData->DesignerMode())
 		return;
 
 	m_metaTreeCtrl->Freeze();
@@ -260,7 +260,7 @@ void ibDataReportTree::DownItem()
 
 void ibDataReportTree::SortItem()
 {
-	if (appData->GetAppMode() != ibRunMode::eDESIGNER_MODE)
+	if (!appData->DesignerMode())
 		return;
 	m_metaTreeCtrl->Freeze();
 	const wxTreeItemId& selection = m_metaTreeCtrl->GetSelection();
@@ -533,13 +533,13 @@ void ibDataReportTree::FillData()
 	UpdateToolbar(nullptr, Group(g_metaAttributeCLSID));
 }
 
-bool ibDataReportTree::Load(ibMetaDataReport* metaData)
+bool ibDataReportTree::Load(std::shared_ptr<ibMetaDataReport> metaData)
 {
 	CloseDocuments();   // a file is being left — its editors go with it
 	ClearTree();
 
-	m_metaData = metaData;
-	WatchMetaData(m_metaData);   // off the old list, onto this one — one call, one place
+	m_metaData = std::move(metaData);
+	WatchMetaData(GetMetaData());   // off the old list, onto this one — one call, one place
 	m_metaTreeCtrl->Freeze();
 	FillData(); //Fill all data from metaData
 

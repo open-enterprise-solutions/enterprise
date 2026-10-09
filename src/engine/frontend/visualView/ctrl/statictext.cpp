@@ -2,7 +2,7 @@
 #include "widgets.h"
 #include "form.h"                             // ibValueForm — the bound read goes through the owning form
 #include "backend/srcDataObject.h"            // ibSourceDataObject IS-A ibSourceObject (the upcast below)
-#include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
+#include "core/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "backend/compiler/procUnit.h"
 #ifdef OES_USE_WEB
 #include "frontend/web/webWindow.h"

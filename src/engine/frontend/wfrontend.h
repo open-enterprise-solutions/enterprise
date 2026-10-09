@@ -51,8 +51,11 @@ extern "C" WFRONTEND_API const char* wfrontendClientHTML();
 //
 // Two flavours:
 //
-//   * wfrontendInitFile()   — CreateFileAppDataEnv   (single-file DB path)
-//   * wfrontendInitServer() — CreateServerAppDataEnv (host/port/db)
+//   * wfrontendInitFile()   — CreateAppDataEnv(ibFileInstanceRequest), a Firebird folder
+//   * wfrontendInitServer() — CreateAppDataEnv(ibFileInstanceRequest), PostgreSQL (host/port/db)
+//
+// Both a file base: the process holds its base itself, given its DBMS on the command line (a server reads its
+// own from server.conf).
 //
 // Both then bring up the wes process's own system session via
 // CreateSession + session->Open(ibUser, ibPassword) — that's the

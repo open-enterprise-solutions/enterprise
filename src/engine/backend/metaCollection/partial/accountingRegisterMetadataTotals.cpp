@@ -538,8 +538,8 @@ ibQueryPredicatePtr AccountDimensionCondition(const ibValueMetaObjectAccountingR
 		return nullptr;
 
 	ibQueryPredicatePtr folded;
-	for (const std::pair<ibValue, ibValue>& entry : pairs->Entries()) {
-		if (entry.first.GetType() == TYPE_STRING || entry.first.IsEmpty())
+	for (const auto& entry : pairs->Entries()) {
+		if (entry.key.GetType() == TYPE_STRING || entry.key.IsEmpty())
 			continue;   // a dimension by name — not this converter's business
 
 		ibQueryPredicatePtr perKind;
@@ -552,12 +552,12 @@ ibQueryPredicatePtr AccountDimensionCondition(const ibValueMetaObjectAccountingR
 			ibQueryCondition kindLeaf;
 			kindLeaf.m_col   = ColumnOn(source, kindSlot);
 			kindLeaf.m_op    = ibQueryFilterOp::Equal;
-			kindLeaf.m_value = entry.first;
+			kindLeaf.m_value = entry.key;
 
 			ibQueryCondition valueLeaf;
 			valueLeaf.m_col   = ColumnOn(source, slot);
 			valueLeaf.m_op    = ibQueryFilterOp::Equal;
-			valueLeaf.m_value = entry.second;
+			valueLeaf.m_value = entry.value;
 
 			perKind = OrWith(perKind, AndWith(ibQueryPredicate::Leaf(kindLeaf), ibQueryPredicate::Leaf(valueLeaf)));
 		}
@@ -5097,7 +5097,7 @@ bool AnyTurnoverOnlyKind(const ibValueMetaObjectChartOfAccounts* chart)
 		ibDataQueryResult sel = b.Execute(page);
 		return sel.Next();
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		return true;   // unknown reads as "there is one" — the half that tests every row and loses nothing
 	}
 }

@@ -4,7 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "window.h"
-#include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
+#include "core/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "form.h"
 #include "frontend/visualView/layers/commandBar.h"  // ibValueCommandBar (store, web-safe) + BuildCommandBarToolBar
 #ifndef OES_USE_WEB

@@ -1002,17 +1002,20 @@ public:
 		//
 		// Identity for paged re-fetch + selection survival: a GROUP node identifies by its dimension-value path;
 		// a DB-list row / FindRowValue stub by its primary-key row-key (ibValue == compares a reference key BY
-		// GUID, so a guid-keyed stub matches a freshly-fetched row); a RAM row survives by its stable pointer, so
-		// it rarely falls to the inherited value-map tail. Mixed kinds never match.
+		// GUID, so a guid-keyed stub matches a freshly-fetched row); a RAM row by its stable pointer alone, never
+		// by the value-map tail. Mixed kinds never match.
 		virtual bool IsEqualTo(const ibDataViewObject& other) const override {
 			const ibComposerNode* o = dynamic_cast<const ibComposerNode*>(&other);
 			if (o == nullptr) return false;
+			// A ROW OF A TABLE IN MEMORY IS ITS OBJECT: the storage keeps the same node across every re-fetch, and a
+			// copied line equals its original in every value — matched by values, two rows would be one.
+			if (!m_selfContained || !o->m_selfContained)
+				return this == o;
 			if (m_heading || o->m_heading)
 				return m_heading == o->m_heading
 				    && m_groupPath == o->m_groupPath && m_subPath == o->m_subPath;
-			// A RAM live row survives selection by its STABLE POINTER (same storage row across re-fetch), so the
-			// value-map fallback is rarely consulted for it; a DB-list copy node identifies by its primary-key
-			// row-key (a guid reference compares BY GUID, so a FindRowValue stub matches a freshly-fetched row).
+			// A DB-list copy node identifies by its primary-key row-key (a guid reference compares BY GUID, so a
+			// FindRowValue stub matches a freshly-fetched row).
 			//
 			// ⚠ …AND BY WHERE IT STANDS. One catalog element may appear under SEVERAL groups (the folder
 			// skeleton is printed once per group), so the row-key alone stopped being an identity the
@@ -1803,6 +1806,13 @@ protected:
 	// A dynamic list joins several sources and a row may carry several references; which columns
 	// those are is the list's business and never has to become this member's.
 	mutable ibDataViewItemArray m_lastPage;
+
+	// THE LAST GROUP LEVEL A FETCH FOLDED — where it stands and the rows it was folded into (RunComposerPage). A group
+	// level comes back WHOLE and is windowed on this side, so the page above or below the one shown is in rows already
+	// read: a scroll of the same level is served from them, the way the snapshot below serves a scroll. A Reset
+	// re-reads, and so does a view generation that moved. Its shape lives beside its one reader (tabularModelDb.cpp).
+	struct FoldedLevel;
+	mutable std::shared_ptr<const FoldedLevel> m_foldedLevel;
 
 	// Whole-list RAM snapshot — ONLY populated when IsDynamicRead() is false. m_snapshotComposer sources from
 	// m_snapshot (bound in the ctor); it re-materialises when the view generation moves past m_snapshotGen (a refresh

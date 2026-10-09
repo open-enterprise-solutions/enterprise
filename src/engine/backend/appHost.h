@@ -117,7 +117,8 @@ private:
 	static std::atomic<std::size_t>                            s_instanceCount;   // its size, read without the lock
 
 	// backend.conf — read once for the process: the locale, how much the process may consume, and the default
-	// a base's own infobase.conf overrides (0 = the built-in value; Bases 0 = as many as are opened).
+	// a base's own infobase.conf overrides (Workers and Bases: the most there may be, 0 = no limit; Connections 0 =
+	// the built-in value).
 	wxString    m_configLocale;
 	std::size_t m_configWorkers     = 0;
 	std::size_t m_configBases       = 0;
@@ -135,6 +136,9 @@ private:
 // thread of its own for whoever asked — binds it for as long as it works. The base's own services do NOT:
 // they hold their base (the registry, the job manager, the MCP server, the debugger through its metadata).
 // The twin of ibSessionScope, and restored the same way when it ends.
+// …AND HOLDS THE CONFIGURATION IT WORKS IN, as a session does: the base's active one, acquired for the length of
+// the work, so a replacement meanwhile does not take it from under the thread (Max, 2026-10-06 — the shared wx
+// icons' disease, cured by the sessions' rule). A scope must therefore end while its base still stands.
 class BACKEND_API ibApplicationInstanceScope {
 public:
 	explicit ibApplicationInstanceScope(ibApplicationInstance* applicationInstance);
@@ -146,8 +150,14 @@ public:
 	// The base this thread works for without a session — bound by a scope, or by opening it; null when none is.
 	static ibApplicationInstance* Current();
 
+	// The configuration the innermost scope of this thread holds — null when none does (no scope, or a base with
+	// no configuration yet).
+	static class ibMetaDataConfigurationBase* GetMetaData();
+
 private:
 	ibApplicationInstance* m_prev;
+	std::shared_ptr<class ibMetaDataConfigurationBase> m_metaData;
+	class ibMetaDataConfigurationBase* m_prevMetaData;
 };
 
 #endif

@@ -34,7 +34,7 @@
 
 #include "backend/mcp/mcpTool.h"
 #include "backend/mcp/mcpClipboard.h"
-#include "backend/serialize/dataBuilder.h"
+#include "core/serialize/dataBuilder.h"
 
 #include <wx/dir.h>        // the ASCII rule reads the MCP sources themselves
 #include <wx/file.h>

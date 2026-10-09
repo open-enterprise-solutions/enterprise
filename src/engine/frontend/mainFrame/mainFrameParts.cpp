@@ -133,24 +133,10 @@ bool ibFrontendMainFrame::EnsureRuntime()
 	if (session == nullptr || activeMetaData == nullptr)
 		return false;
 
-	// Re-entry guard — root module manager lives on the session; if it's
-	// already installed the runtime was started on a previous Show().
-	if (session->GetManagerModule() != nullptr)
-		return true;
-
-	const ibSessionKind kind = session->GetKind();
-	const bool wantsRuntime =
-		(kind == ibSessionKind::Enterprise) ||
-		(kind == ibSessionKind::WebClient)  ||
-		(kind == ibSessionKind::Service);
-	if (!wantsRuntime)
-		return true;
-
-	// CreateRoot + CompileRoot already happened during authentication
-	// (registry's NotifyAuthenticated chain) — only the runtime attach is
-	// left, and it waits until Show() so activeMetaData is populated.
-	if (auto* mm = session->GetManagerModule())
-		mm->AttachRuntime(session);
+	// THE RUNTIME CAME UP AT LOGIN — NotifyAuthenticated → CompileRoot → AttachRuntime — and a
+	// configuration that did not start refused the login there, so a window being shown has it. (A
+	// second attach stood here behind a guard that made it unreachable, beside a list of the session
+	// kinds that get a runtime which the module manager no longer keeps.)
 	return true;
 }
 

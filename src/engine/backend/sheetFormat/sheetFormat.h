@@ -26,6 +26,8 @@
 #include "backend/backend.h"
 #include "backend/spreadsheetDescription.h"
 
+#include <wx/stream.h>
+
 // WHAT A FOREIGN TABLE CAN CARRY ACROSS. Stated here rather than discovered per
 // format, because it is the same answer for all of them and a person deserves to
 // be told it before they save, not after:
@@ -61,11 +63,17 @@ public:
 	virtual bool CanRead()  const { return true; }
 	virtual bool CanWrite() const { return true; }
 
-	// False on a file that is not this format, cannot be opened, or is damaged in
-	// a way that leaves nothing to show. ⚠ NEVER a half-filled document: a caller
-	// that gets false must be free to keep what it had.
-	virtual bool Read(const wxString& fileName, ibSpreadsheetDescription& sheet) const = 0;
-	virtual bool Write(const wxString& fileName, const ibSpreadsheetDescription& sheet) const = 0;
+	// False on a stream that is not this format, or is damaged in a way that leaves nothing to show. ⚠ NEVER a
+	// half-filled document: a caller that gets false must be free to keep what it had.
+	//
+	// ⭐ A STREAM, NOT A PATH: the bytes come from a file on disk or from the session's temporary storage by its id,
+	// and the format does not care which — the server works with ids, not with files.
+	virtual bool Read(wxInputStream& input, ibSpreadsheetDescription& sheet) const = 0;
+	virtual bool Write(wxOutputStream& output, const ibSpreadsheetDescription& sheet) const = 0;
+
+	// …and the same over a file on disk — false also when it cannot be opened, or (writing) closed whole.
+	bool ReadFile(const wxString& fileName, ibSpreadsheetDescription& sheet) const;
+	bool WriteFile(const wxString& fileName, const ibSpreadsheetDescription& sheet) const;
 };
 
 // THE FORMAT A FILE NAME MEANS — null when nothing reads it. One place, so every
@@ -95,6 +103,12 @@ BACKEND_API const std::vector<const ibSheetFormat*>& ibSheetFormats();
 BACKEND_API wxString ibSheetFormatMask();
 BACKEND_API wxString ibSheetFormatExtensions();
 BACKEND_API wxString ibSheetFormatSaveFilter();
+
+// ⭐ THE SAME FORMATS OVER THE SESSION'S TEMPORARY STORAGE, BY ID — a file a thin client handed over, read by the
+// format the name it came under says; a sheet written into a file of it, by the format the name it was made under says.
+// The parts stream straight through: no file on disk.
+BACKEND_API bool ibSheetFormatReadTempFile(const wxString& id, ibSpreadsheetDescription& sheet);
+BACKEND_API bool ibSheetFormatWriteTempFile(const wxString& id, const ibSpreadsheetDescription& sheet);
 
 // ⭐ A FORMAT PUTS ITSELF ON THE LIST — the shape every type in this tree already
 // registers by (VALUE_TYPE_REGISTER and its family). One line at the BOTTOM of the

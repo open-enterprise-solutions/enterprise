@@ -1049,7 +1049,7 @@ void ibDataViewCtrl::DispatchPagedFetch(ibFetchDirection dir, int batch)
 				break;
 			}
 		}
-		catch (const ibBackendException& err) {
+		catch (const ibCoreException& err) {
 			req->m_ok = false;
 			req->m_error = err.GetErrorDescription();
 			if (ibLogger* const log = ibApplicationInstance::GetLogger())

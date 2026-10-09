@@ -4,7 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "metaModuleObject.h"
-#include "backend/serialize/dataBuilder.h"
+#include "core/serialize/dataBuilder.h"
 #include "backend/appData.h"
 #include "backend/metaData.h" // ibCompileValueCache::GetModuleManager (designer compile-cache)
 #include "backend/compiler/cache/byteCodeCache.h"

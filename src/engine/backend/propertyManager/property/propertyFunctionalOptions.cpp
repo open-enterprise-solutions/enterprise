@@ -1,5 +1,5 @@
 #include "propertyFunctionalOptions.h"
-#include "backend/serialize/dataBuilder.h"
+#include "core/serialize/dataBuilder.h"
 #include "backend/propertyManager/property/variant/variantOwner.h"
 #include "backend/metaCollection/metaObject.h"   // g_metaFunctionalOptionCLSID — the candidates' kind
 #include "backend/functionalOption/functionalOptionGate.h"   // IsAvailable — the rule a member is available by

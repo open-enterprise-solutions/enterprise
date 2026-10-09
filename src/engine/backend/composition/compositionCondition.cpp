@@ -20,7 +20,7 @@
 #include "backend/compiler/enumUnit.h"          // its alignment, an enumeration member…
 #include "backend/spreadsheetDescription.h"     // …in the sheet's own word, ibSpreadsheetAlignmentHorz
 #include "backend/backend_localization.h"       // its Text and Format, in every language
-#include "backend/formatString.h"               // what its Format writes a value as
+#include "core/formatString.h"               // what its Format writes a value as
 
 // ⚠ NAMED, NOT INHERITED — MSVC hands these over transitively and GCC / Clang do not.
 #include <algorithm>   // std::find_if — a column's own among a line's
@@ -223,7 +223,7 @@ ibCompositionAttr AttrOfAppearance(const ibAppearanceDescription& appearance)
 		case ibAppearanceParameter::Font: {
 			ibValueFont* font = nullptr;
 			if (stored.ConvertToValue(font) && font != nullptr && font->m_font.IsOk())
-				attr.m_font = ibCompositionFont::Of(font->m_font, s_defaultSpreadsheetFont);   // what it changes, and only that
+				attr.m_font = ibCompositionFont::Of(font->m_font, ibDefaultSpreadsheetFont());   // what it changes, and only that
 			break;
 		}
 		case ibAppearanceParameter::HorizontalAlignment: {

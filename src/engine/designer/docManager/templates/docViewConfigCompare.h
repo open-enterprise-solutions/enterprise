@@ -14,12 +14,13 @@
 // (backend/clsid.h, configCompareModel.h).
 #include "frontend/docView/docView.h"
 
-#include "backend/clsid.h"
+#include "core/clsid.h"
 #include "designer/mainFrame/configCompare/configCompareModel.h"
 
 #include <wx/object.h>
 
 #include <functional>
+#include <memory>
 
 constexpr ibClassID g_toolConfigCompareCLSID = make_clsid("TL_CCMP", ibClassKind_None);   // tool/doc id — not a registered type
 
@@ -34,11 +35,11 @@ public:
 	ibConfigCompareDocument();
 
 	// Caller wires the diff context BEFORE OnCreate runs (the view's
-	// BuildLayout reads roots/labels/model from here). Both roots are
-	// non-owning — caller keeps the source configurations alive for
-	// the document's lifetime.
-	void Configure(class ibValueMetaObject* leftRoot,
-	               class ibValueMetaObject* rightRoot,
+	// BuildLayout reads roots/labels/model from here). Both sides are HELD
+	// for the document's life — a metadata is held by whoever works in it —
+	// and the diff walks their roots.
+	void Configure(std::shared_ptr<class ibMetaData> left,
+	               std::shared_ptr<class ibMetaData> right,
 	               const wxString& leftLabel,
 	               const wxString& rightLabel,
 	               std::function<bool()> rightSaveCallback = {},
@@ -61,6 +62,8 @@ protected:
 	bool DoOpenDocument(const wxString&) override { return true; }
 
 private:
+	std::shared_ptr<class ibMetaData> m_left;
+	std::shared_ptr<class ibMetaData> m_right;
 	class ibValueMetaObject* m_leftRoot  = nullptr;
 	class ibValueMetaObject* m_rightRoot = nullptr;
 	wxString m_leftLabel;

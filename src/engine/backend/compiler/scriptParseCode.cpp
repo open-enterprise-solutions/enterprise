@@ -19,7 +19,7 @@ bool ibParseCode::ParseModule(const wxString& sModule)
 	try {
 		PrepareLexem();
 	}
-	catch (const ibBackendException&)
+	catch (const ibCoreException&)
 	{
 		return false;
 	};

@@ -30,7 +30,7 @@
 #	define _SSIZE_T_DEFINED
 #endif
 
-#include "3rdparty/cpp-httplib/httplib.h"
+#include <cpp-httplib/httplib.h>
 
 namespace {
 
@@ -469,11 +469,11 @@ TEST_F(HttpClient, ARepeatedResponseHeaderIsJoinedAndTheLastCookieStays)
 
 	const long tag = headers.FindProp(wxT("x-tag"));
 	ASSERT_GE(tag, 0) << "and a header's name folds case";
-	EXPECT_EQ(headers.Entries()[static_cast<size_t>(tag)].second.GetString(), wxString(wxT("a, b")));
+	EXPECT_EQ(headers.Entries()[static_cast<size_t>(tag)].value.GetString(), wxString(wxT("a, b")));
 
 	const long cookie = headers.FindProp(wxT("Set-Cookie"));
 	ASSERT_GE(cookie, 0);
-	EXPECT_EQ(headers.Entries()[static_cast<size_t>(cookie)].second.GetString(), wxString(wxT("second=2")));
+	EXPECT_EQ(headers.Entries()[static_cast<size_t>(cookie)].value.GetString(), wxString(wxT("second=2")));
 }
 
 TEST_F(HttpClient, BasicAuthorizationGoesWithEveryRequestUnlessTheRequestSaysItsOwn)
@@ -586,7 +586,7 @@ TEST_F(HttpClient, ARedirectIsAnAnswerWithItsLocationNotARoadTakenBehindTheScrip
 	EXPECT_EQ(moved->StatusCode(), 302);
 	const long location = moved->Headers().FindProp(wxT("location"));
 	ASSERT_GE(location, 0);
-	EXPECT_EQ(moved->Headers().Entries()[static_cast<size_t>(location)].second.GetString(), wxString(wxT("/echo")));
+	EXPECT_EQ(moved->Headers().Entries()[static_cast<size_t>(location)].value.GetString(), wxString(wxT("/echo")));
 	EXPECT_EQ(Last().m_path, std::string("/moved")) << "one request went out, and it was this one";
 
 	request.SetResourceAddress(wxT("/see-other"));

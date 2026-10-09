@@ -23,6 +23,10 @@ class BACKEND_API ibDatabaseLayerFirebird : public ibDatabaseLayer
 	// the DPB field is encoded as a 2-byte big-endian value.
 	const int32_t m_pageSize = 16384;
 
+	// …and the page the ATTACHED base actually has, as an index-key ceiling (GetMaxIndexKeyBytes). A base
+	// created before the page size was written right is 4 KB for life. 0 = not read.
+	unsigned int m_maxIndexKeyBytes = 0;
+
 public:
 	// ctor()
 	ibDatabaseLayerFirebird();
@@ -95,6 +99,11 @@ public:
 
 	static const ibDialectDictionary& Dialect();                       // FB dialect (no instance needed)
 	virtual const ibDialectDictionary& GetDialect() const override;    // polymorphic access for L2
+
+	// The attached base's own ceiling — read from its page at Open; the dialect's when it could not be read.
+	virtual unsigned int GetMaxIndexKeyBytes() const override {
+		return m_maxIndexKeyBytes != 0 ? m_maxIndexKeyBytes : ibDatabaseLayer::GetMaxIndexKeyBytes();
+	}
 
 	// Derived-state materialisation (register totals). Firebird is the DEFAULT embedded
 	// database, so this is the dialect most installations will actually run, and it is also

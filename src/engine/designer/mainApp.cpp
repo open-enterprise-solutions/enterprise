@@ -33,7 +33,7 @@
 #include <wx/xrc/xh_aui.h>
 #endif
 
-#include "backend/diagnostics/leakTracker.h"
+#include "core/diagnostics/leakTracker.h"
 
 IB_LEAK_TRACKER_ARM();
 
@@ -117,26 +117,21 @@ int ibAppDesigner::DoOnRun()
 	// ⚠ THE BRING-UP CAN THROW — see enterprise/mainApp.cpp for the whole argument. A raised
 	// exception walked out past the reporting below and closed the process with no message at all.
 	try {
+		ibFileInstanceRequest request;
+		request.m_create = true;
+		request.m_locale = m_strLocale;
 		if (m_strFile.IsEmpty()) {
-			ibServerInstanceRequest request;
-			request.m_runMode  = ibRunMode::eDESIGNER_MODE;
 			request.m_server   = m_strServer;
 			request.m_port     = m_strPort;
 			request.m_user     = m_strUser;
 			request.m_password = m_strPassword;
 			request.m_database = m_strDatabase;
-			request.m_locale   = m_strLocale;
-			ret = ibApplicationInstance::CreateServerAppDataEnv(request) != nullptr;
 		}
-		else {
-			ibFileInstanceRequest request;
-			request.m_runMode   = ibRunMode::eDESIGNER_MODE;
+		else
 			request.m_directory = m_strFile;
-			request.m_locale    = m_strLocale;
-			ret = ibApplicationInstance::CreateFileAppDataEnv(request) != nullptr;
-		}
+		ret = ibApplicationInstance::CreateAppDataEnv(request) != nullptr;
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		ret = false;   // already recorded in the chain, drained below
 	}
 	catch (const std::exception& e) {
@@ -225,8 +220,7 @@ int ibAppDesigner::DoOnRun()
 	//   4. Show — Designer kind → EnsureRuntime no-op; AllowRun passes
 	//      unconditionally (no session scripts here).
 
-	// AccessMode was set by appData's ctor based on runMode. Registry
-	// listeners (wired in appData ctor) handle BindSessionToThread,
+	// Registry listeners (wired in appData ctor) handle BindSessionToThread,
 	// LoadMetadata, CreateRoot + CompileRoot through OnFirstConnect /
 	// OnAuthenticated — nothing to compose here.
 	// Holder on the stack until the designer window takes it — see
@@ -236,13 +230,13 @@ int ibAppDesigner::DoOnRun()
 	wxString openError;
 	ibSession::OpenResult openResult = ibSession::OpenResult::Failed;
 	try {
-		holder = appData->CreateSession<ibGUISession>();
+		holder = appData->CreateSession<ibGUISession>(ibSessionKind::Designer);
 		if (holder) {
 			openResult = holder->Open(m_strIBUser, m_strIBPassword);
 			if (openResult != ibSession::OpenResult::Authenticated)
 				holder.Reset();
 		}
-	} catch (const ibBackendException& e) {
+	} catch (const ibCoreException& e) {
 		openError = e.GetErrorDescription();
 		holder.Reset();
 		openResult = ibSession::OpenResult::Failed;

@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="mainFrame">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f7003}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f7004}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\dlg">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f7005}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="mainApp.cpp" />
+    <ClCompile Include="mainAppEvent.cpp" />
+    <ClCompile Include="mainFrame\mainFrameEnterprise.cpp">
+      <Filter>mainFrame</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\mainFrameEnterpriseInterface.cpp">
+      <Filter>mainFrame</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlg\functionAll.cpp">
+      <Filter>win\dlg</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="mainApp.h" />
+    <ClInclude Include="mainFrame\mainFrameEnterprise.h">
+      <Filter>mainFrame</Filter>
+    </ClInclude>
+    <ClInclude Include="resource.h" />
+    <ClInclude Include="win\dlg\functionAll.h">
+      <Filter>win\dlg</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="enterprise.ico" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="enterprise-thin.rc" />
+  </ItemGroup>
+</Project>

@@ -4,12 +4,12 @@
 
 #include "backend/metaCollection/metaIntrospect.h"
 
-#include "backend/fileSystem/fs.h"            // ibWriterMemory — the JSON sink
+#include "core/fileSystem/fs.h"            // ibWriterMemory — the JSON sink
 #include "backend/metaData.h"
 #include "backend/metaCollection/metaObject.h"
 #include "backend/metaCollection/metaObjectMetadata.h"   // GetCompileSyntax — the configuration's dialect
 #include "backend/objCtor.h"                  // ibCtorMetaValueType — full type, for the type resolver
-#include "backend/serialize/jsonProvider.h"
+#include "core/serialize/jsonProvider.h"
 
 ibClassID ibResolveMetaKind(const ibMetaData* metaData, const wxString& kind)
 {

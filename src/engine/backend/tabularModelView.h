@@ -358,6 +358,9 @@ public:
 	bool GetBold() const { return m_bold; }
 	bool GetItalic() const { return m_italic; }
 	bool GetStrikethrough() const { return m_strikethrough; }
+	bool GetUnderlined() const { return m_underlined; }
+	int GetPointSize() const { return m_pointSize; }
+	const wxString& GetFaceName() const { return m_face; }
 
 	bool HasBackgroundColour() const { return m_bgColour.IsOk(); }
 	const wxColour& GetBackgroundColour() const { return m_bgColour; }

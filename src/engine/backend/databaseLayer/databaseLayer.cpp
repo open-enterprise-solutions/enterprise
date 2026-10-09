@@ -307,7 +307,7 @@ int ibDatabaseLayer::GetSingleResultInt(const wxString& strSQL, const wxVariant*
 			return value;
 		}
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		// Close any still-open result set before propagating; preserves the
 		// in-flight exception (sqlstate / native_code on derived types).
 		if (pResult != nullptr) {
@@ -385,7 +385,7 @@ ibString ibDatabaseLayer::GetSingleResultString(const wxString& strSQL, const wx
 			return value;
 		}
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		// Close any still-open result set before propagating; preserves the
 		// in-flight exception (sqlstate / native_code on derived types).
 		if (pResult != nullptr) {
@@ -463,7 +463,7 @@ long ibDatabaseLayer::GetSingleResultLong(const wxString& strSQL, const wxVarian
 			return value;
 		}
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		// Close any still-open result set before propagating; preserves the
 		// in-flight exception (sqlstate / native_code on derived types).
 		if (pResult != nullptr) {
@@ -541,7 +541,7 @@ bool ibDatabaseLayer::GetSingleResultBool(const wxString& strSQL, const wxVarian
 			return value;
 		}
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		// Close any still-open result set before propagating; preserves the
 		// in-flight exception (sqlstate / native_code on derived types).
 		if (pResult != nullptr) {
@@ -619,7 +619,7 @@ ibDateTime ibDatabaseLayer::GetSingleResultDate(const wxString& strSQL, const wx
 			return value;
 		}
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		// Close any still-open result set before propagating; preserves the
 		// in-flight exception (sqlstate / native_code on derived types).
 		if (pResult != nullptr) {
@@ -697,7 +697,7 @@ void* ibDatabaseLayer::GetSingleResultBlob(const wxString& strSQL, const wxVaria
 			return value;
 		}
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		// Close any still-open result set before propagating; preserves the
 		// in-flight exception (sqlstate / native_code on derived types).
 		if (pResult != nullptr) {
@@ -775,7 +775,7 @@ double ibDatabaseLayer::GetSingleResultDouble(const wxString& strSQL, const wxVa
 			return value;
 		}
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		// Close any still-open result set before propagating; preserves the
 		// in-flight exception (sqlstate / native_code on derived types).
 		if (pResult != nullptr) {
@@ -854,7 +854,7 @@ ibNumber ibDatabaseLayer::GetSingleResultNumber(const wxString& strSQL, const wx
 			return value;
 		}
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		// Close any still-open result set before propagating; preserves the
 		// in-flight exception (sqlstate / native_code on derived types).
 		if (pResult != nullptr) {
@@ -901,7 +901,7 @@ wxArrayInt ibDatabaseLayer::GetResultsArrayInt(const wxString& strSQL, const wxV
 			pResult = nullptr;
 		}
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		// Close any still-open result set before propagating; preserves the
 		// in-flight exception (sqlstate / native_code on derived types).
 		if (pResult != nullptr) {
@@ -948,7 +948,7 @@ wxArrayString ibDatabaseLayer::GetResultsArrayString(const wxString& strSQL, con
 			pResult = nullptr;
 		}
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		// Close any still-open result set before propagating; preserves the
 		// in-flight exception (sqlstate / native_code on derived types).
 		if (pResult != nullptr) {
@@ -995,7 +995,7 @@ wxArrayLong ibDatabaseLayer::GetResultsArrayLong(const wxString& strSQL, const w
 			pResult = nullptr;
 		}
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		// Close any still-open result set before propagating; preserves the
 		// in-flight exception (sqlstate / native_code on derived types).
 		if (pResult != nullptr) {
@@ -1043,7 +1043,7 @@ wxArrayDouble ibDatabaseLayer::GetResultsArrayDouble(const wxString& strSQL, con
 			pResult = nullptr;
 		}
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		// Close any still-open result set before propagating; preserves the
 		// in-flight exception (sqlstate / native_code on derived types).
 		if (pResult != nullptr) {

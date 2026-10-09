@@ -361,6 +361,11 @@ struct ibSemiJoinExists
 	const ibBackendQueryColumn* m_innerKey = nullptr;   // a.k — correlation column on the INNER
 	ibQueryFilterOp             m_op = ibQueryFilterOp::Equal;   // correlation comparison (Equal default; FilterOpToBinOp at render)
 	bool                        m_negated  = false;      // NOT EXISTS — a deny-if-present rule (future)
+	// An EMPTY key matches an empty one, in whichever spelling either side holds it (a NULL or zero key, an
+	// untagged row, the type's empty value), as an equality of values says (DecomposeEquality). Set by
+	// `x IN (SELECT k …)` when neither key is a row's own (and so both may be empty); a policy's restriction
+	// keeps the plain correlation.
+	bool                        m_emptyMatchesEmpty = false;
 };
 
 // ==========================================================================

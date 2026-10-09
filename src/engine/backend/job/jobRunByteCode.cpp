@@ -16,8 +16,8 @@
 #include "backend/compiler/compileCode.h"   // the code is COMPILED here, against this application
 #include "backend/compiler/compileModule.h" // ...parented to the root, which is what it must see
 #include "backend/moduleInfo.h"             // GetCompileModule - which is how the root is asked for
-#include "backend/stringUtils.h"            // CompareString - how this tree compares a NAME
-#include "backend/fileSystem/fs.h"          // ibWriterMemory / ibReaderMemory - the wire format below
+#include "core/stringUtils.h"            // CompareString - how this tree compares a NAME
+#include "core/fileSystem/fs.h"          // ibWriterMemory / ibReaderMemory - the wire format below
 
 #include <wx/app.h>                         // wxTheApp - the thread that may touch a window
 
@@ -385,7 +385,7 @@ bool ibJobRunByteCode::Start(const ibJobRunRequest& request, ibJobRunByteCodeSta
 	try {
 		run = jobs->StartBackground(body, activity, ibJobTenancy::Standalone);
 	}
-	catch (const ibBackendException& thrown) {
+	catch (const ibCoreException& thrown) {
 		state.m_refusal = thrown.GetErrorDescription();
 		return false;
 	}

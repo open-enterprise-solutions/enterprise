@@ -10,7 +10,7 @@
 #include <set>         // the fields laid out with the posting block, asked once per attribute
 #include "backend/metaCollection/dimension/metaDimensionObject.h"   // IsBalanceDimension — does this field split
 #include "backend/metaCollection/resource/metaResourceObject.h"     // IsBalanceResource  — the same question of a figure
-#include "backend/serialize/dataBuilder.h"
+#include "core/serialize/dataBuilder.h"
 #include "chartOfAccounts.h"
 #include "chartOfCharacteristicTypes.h"   // the CONTOUR — a slot's value type is the chart's own composition
 #include "backend/system/value/valueDynamicList.h"   // ibValueDynamicList — the standard list migrates onto the universal dynamic list
@@ -361,7 +361,7 @@ bool ibValueMetaObjectAccountingRegister::OnSaveMetaObject(int flags)
 	//
 	// It lives on the schema declaration instead (accountingRegisterMetadataSchema.cpp): every rule
 	// runs BEFORE the first statement, states its reason into the ledger, and greys the Apply button —
-	// the same road the analytics ceiling and the hierarchy rules already take.
+	// the same road the analytics ceiling already takes.
 	//
 	// ⭐ WHAT *IS* CHECKED HERE IS THE ABSENCE, AND IT IS REPORTED, NOT THROWN. "Two charts" is a
 	// question about a schema that can still be computed; "no chart at all" is not — the account

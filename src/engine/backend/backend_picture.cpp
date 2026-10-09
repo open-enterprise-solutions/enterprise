@@ -1,11 +1,22 @@
 #include "backend_picture.h"
 
+#include <map>
+#include <mutex>
+
 #include <wx/base64.h>
 #include <wx/mstream.h>
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-static std::vector<ibBackendPictureEntry> s_arrayPicture;
+// The registry keeps each picture as the server does; a wx image is made from it when one is asked for
+// (GetPicture), so no two sessions copy one shared wx object.
+struct ibRegisteredPicture {
+	wxString        m_name;
+	ibPictureID     m_id;
+	ibServerPicture m_picture;
+};
+
+static std::vector<ibRegisteredPicture> s_arrayPicture;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -133,11 +144,65 @@ wxBitmap ibBackendPicture::CreatePicture(const ibPictureDescription& pictureDesc
 	return wxNullBitmap;
 }
 
+ibServerPicture ibBackendPicture::GetServerPicture(const ibPictureDescription& pictureDesc, const ibMetaData* metaData)
+{
+	if (pictureDesc.IsEmptyPicture())
+		return ibServerPicture();
+
+	// A backend picture is the process's: a registered one is kept as it is sent; a class's icon is made at its
+	// first asking, under the lock, and only read after that.
+	if (pictureDesc.m_type == ibPictureType::eFromBackend) {
+		const auto registered = std::find_if(s_arrayPicture.begin(), s_arrayPicture.end(),
+			[&pictureDesc](const auto& entry) { return entry.m_id == pictureDesc.m_class_identifier; });
+		if (registered != s_arrayPicture.end())
+			return registered->m_picture;
+
+		static std::mutex s_madeMutex;
+		static std::map<ibPictureID, ibServerPicture> s_made;
+		const std::lock_guard<std::mutex> lock(s_madeMutex);
+		const auto found = s_made.find(pictureDesc.m_class_identifier);
+		if (found != s_made.end())
+			return found->second;
+		const wxBitmap bitmap = GetPicture(pictureDesc.m_class_identifier);
+		return s_made.emplace(pictureDesc.m_class_identifier,
+			bitmap.IsOk() ? ibServerPicture(bitmap.ConvertToImage()) : ibServerPicture()).first->second;
+	}
+
+	// A configuration's picture and a file's are made from the bytes they keep — anew, shared with nobody.
+	const wxBitmap bitmap = CreatePicture(pictureDesc, metaData);
+	return bitmap.IsOk() ? ibServerPicture(bitmap.ConvertToImage()) : ibServerPicture();
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+ibServerPicture::ibServerPicture(const wxString& base64, const wxSize& size)
+	: ibServerPicture(ibBackendPicture::GetImageFromBase64(base64, size))
+{
+}
+
+ibServerPicture::ibServerPicture(const wxImage& image)
+	: m_data(image.IsOk() ? ibBackendPicture::CreateBase64Image(image) : wxString())
+{
+}
+
+wxBitmap ibServerPicture::ToBitmap() const
+{
+	return IsOk() ? wxBitmap(ibBackendPicture::GetImageFromBase64(m_data)) : wxNullBitmap;
+}
+
+wxIcon ibServerPicture::ToIcon() const
+{
+	wxIcon icon;
+	if (IsOk())
+		icon.CopyFromBitmap(ToBitmap());
+	return icon;
+}
+
 #pragma region __picture_factory_h__
 bool ibBackendPicture::IsRegisterPicture(const ibPictureID& id)
 {
 	auto iterator = std::find_if(s_arrayPicture.begin(), s_arrayPicture.end(),
-		[id](const auto entry) { return entry.m_id == id; });
+		[id](const auto& entry) { return entry.m_id == id; });
 
 	if (iterator != s_arrayPicture.end())
 		return true;
@@ -151,11 +216,7 @@ bool ibBackendPicture::IsRegisterPicture(const ibPictureID& id)
 
 void ibBackendPicture::RegisterPicture(const wxString name, const ibPictureID& id, const wxBitmap& bitmap)
 {
-	ibBackendPictureEntry entry;
-	entry.m_name = name;
-	entry.m_id = id;
-	entry.m_data = bitmap;
-	s_arrayPicture.push_back(entry);
+	s_arrayPicture.push_back({ name, id, ibServerPicture(bitmap.ConvertToImage()) });
 }
 
 wxBitmap ibBackendPicture::GetPicture(const ibPictureID& id)
@@ -166,7 +227,7 @@ wxBitmap ibBackendPicture::GetPicture(const ibPictureID& id)
 		[id](const auto& entry) { return entry.m_id == id; });
 
 	if (iterator != s_arrayPicture.end())
-		return iterator->m_data;
+		return iterator->m_picture.ToBitmap();
 
 	const ibCtorAbstractType* so = ibValue::GetAvailableCtor(id);
 	if (so != nullptr)
@@ -178,13 +239,10 @@ wxBitmap ibBackendPicture::GetPicture(const ibPictureID& id)
 wxIcon ibBackendPicture::GetPictureAsIcon(const ibPictureID& id)
 {
 	auto iterator = std::find_if(s_arrayPicture.begin(), s_arrayPicture.end(),
-		[id](const auto entry) { return entry.m_id == id; });
+		[id](const auto& entry) { return entry.m_id == id; });
 
-	if (iterator != s_arrayPicture.end()) {	
-		wxIcon icon; 
-		icon.CopyFromBitmap(iterator->m_data);
-		return icon;
-	}
+	if (iterator != s_arrayPicture.end())
+		return iterator->m_picture.ToIcon();
 
 	const ibCtorAbstractType* so = ibValue::GetAvailableCtor(id);
 	if (so != nullptr)
@@ -195,7 +253,9 @@ wxIcon ibBackendPicture::GetPictureAsIcon(const ibPictureID& id)
 
 std::vector<ibBackendPictureEntry> ibBackendPicture::GetArrayPicture()
 {
-	std::vector<ibBackendPictureEntry> arrayPicture = { s_arrayPicture };
+	std::vector<ibBackendPictureEntry> arrayPicture;
+	for (const ibRegisteredPicture& registered : s_arrayPicture)
+		arrayPicture.push_back({ registered.m_name, registered.m_picture.ToBitmap(), registered.m_id });
 
 	for (auto so : ibValue::GetListCtorsByType(ibCtorObjectType::ibCtorObjectType_object_metadata)) {
 		const wxIcon backend_icon = so->GetClassIcon();

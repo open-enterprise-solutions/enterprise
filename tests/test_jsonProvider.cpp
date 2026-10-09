@@ -9,7 +9,7 @@
 #include <gtest/gtest.h>
 #include <cstring>
 
-#include "backend/serialize/jsonProvider.h"
+#include "core/serialize/jsonProvider.h"
 #include "backend/backend_exception.h"
 
 namespace {
@@ -244,7 +244,7 @@ TEST(JsonProvider, MalformedInput_Throws) {
 
 	ibReaderMemory reader(bad);
 	ibDataNode out;
-	EXPECT_THROW(ibJsonProvider().Read(reader, out), ibBackendException);
+	EXPECT_THROW(ibJsonProvider().Read(reader, out), ibCoreException);
 }
 
 // An empty buffer is "nothing to read", not a parse error.

@@ -109,7 +109,7 @@ wxString Styles()
 		wxT("</w:pPr></w:pPrDefault>")
 		wxT("</w:docDefaults>")
 		wxT("</w:styles>"),
-		s_defaultSpreadsheetFont.GetPointSize() * 2);
+		ibDefaultSpreadsheetFont().GetPointSize() * 2);
 }
 
 wxString RootRels()
@@ -208,7 +208,7 @@ wxString RunOf(const ibSpreadsheetCellDescription* cell, const wxString& text)
 			// WORD COUNTS IN HALF-POINTS — and says nothing where the cell agrees with the size the
 			// styles part already declared for the whole document. On a sheet where every cell is
 			// the default size that is one element saved per cell, out of a hundred thousand.
-			if (font.GetPointSize() > 0 && font.GetPointSize() != s_defaultSpreadsheetFont.GetPointSize())
+			if (font.GetPointSize() > 0 && font.GetPointSize() != ibDefaultSpreadsheetFont().GetPointSize())
 				properties += wxString::Format(wxT("<w:sz w:val=\"%d\"/>"), font.GetPointSize() * 2);
 			if (font.GetUnderlined())
 				properties += wxT("<w:u w:val=\"single\"/>");
@@ -277,14 +277,14 @@ bool ContinuesMerge(const ibSpreadsheetDescription& sheet, int row, int numCols)
 
 } // namespace
 
-bool ibSheetFormatDocx::Read(const wxString& WXUNUSED(fileName), ibSpreadsheetDescription& WXUNUSED(sheet)) const
+bool ibSheetFormatDocx::Read(wxInputStream& WXUNUSED(input), ibSpreadsheetDescription& WXUNUSED(sheet)) const
 {
 	// See the header: a Word file is a flow, not a sheet. Refused plainly rather
 	// than half-guessed.
 	return false;
 }
 
-bool ibSheetFormatDocx::Write(const wxString& fileName, const ibSpreadsheetDescription& sheet) const
+bool ibSheetFormatDocx::Write(wxOutputStream& output, const ibSpreadsheetDescription& sheet) const
 {
 	const int numRows = sheet.GetNumberRows();
 	const int numCols = sheet.GetNumberCols();
@@ -405,7 +405,7 @@ bool ibSheetFormatDocx::Write(const wxString& fileName, const ibSpreadsheetDescr
 			}
 
 			// the text, not the stored form — see the xlsx writer
-			const wxString text = cell != nullptr ? ibBackendLocalization::GetTranslateGetRawLocText(cell->GetValue()) : wxString();
+			const wxString text = cell != nullptr ? ibLocalization::GetTranslateGetRawLocText(ibBackendLocalization::GetUserLanguage(), cell->GetValue()) : wxString();
 
 			wxString paragraph = wxT("<w:p>");
 			if (!paragraphProperties.IsEmpty())
@@ -486,11 +486,7 @@ bool ibSheetFormatDocx::Write(const wxString& fileName, const ibSpreadsheetDescr
 	body += wxT("<w:p/>");
 	body += wxT("</w:body></w:document>");
 
-	wxFileOutputStream file(fileName);
-	if (!file.IsOk())
-		return false;
-
-	wxZipOutputStream zip(file);
+	wxZipOutputStream zip(output);
 	if (!zip.IsOk())
 		return false;
 
@@ -503,7 +499,7 @@ bool ibSheetFormatDocx::Write(const wxString& fileName, const ibSpreadsheetDescr
 
 	// The central directory is written on Close — a zip that is merely destructed
 	// is a file that exists and is not a zip.
-	return zip.Close() && file.Close();
+	return zip.Close();
 }
 
 ///////////////////////////////////////////////////////////////////////////////

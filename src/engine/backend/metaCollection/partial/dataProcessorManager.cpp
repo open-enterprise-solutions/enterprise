@@ -65,13 +65,14 @@ bool ibValueManagerDataObjectExternalDataProcessor::CallAsFunc(const long lMetho
 	{
 	case eCreate:
 	{
-		ibMetaDataDataProcessor* metaDataProcessor = new ibMetaDataDataProcessor();
+		// Held from birth; the object it loads holds it from its load on (ibExternalOwnerHelper), so this
+		// reference may go at the end of the call.
+		const std::shared_ptr<ibMetaDataDataProcessor> metaDataProcessor = ibMetaData::MakeShared<ibMetaDataDataProcessor>();
 		if (metaDataProcessor->LoadFromFile(paParams[0]->GetString())) {
 			ibValueModuleRuntimeManagerExternalDataProcessor* moduleManager = metaDataProcessor->GetManagerModule();
 			pvarRetValue = moduleManager->GetObjectValue();
 			return true;
 		}
-		wxDELETE(metaDataProcessor);
 		ibBackendCoreException::Error(_("Failed to load data processor '%s'"), paParams[0]->GetString());
 		return false;
 	}

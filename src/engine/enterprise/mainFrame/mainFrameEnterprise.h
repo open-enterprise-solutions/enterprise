@@ -39,7 +39,7 @@ public:
 	virtual void Message(const wxString& strMessage, ibStatusMessage status) { m_outputWindow->SharedOutput(strMessage, status); }
 	virtual void ClearMessage() { m_outputWindow->ClearAll(); }
 
-	virtual void BackendError(const wxString& strFileName, const wxString& strDocPath, const long line, const wxString& strErrorMessage) const override;
+	virtual void BackendError(const wxString& strFileName, const wxString& strDocPath, const long line, const wxString& strErrorMessage) override;
 
 	virtual void CreateGUI();
 	virtual bool Show(bool show = true) override;

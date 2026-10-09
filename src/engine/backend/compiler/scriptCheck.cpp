@@ -51,7 +51,7 @@ std::vector<ibDiagnostic> CollectFrom(Compile compile)
 	try {
 		compile();
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		// Already in the collector — see above.
 	}
 	catch (...) {
@@ -108,7 +108,7 @@ std::vector<ibDiagnostic> ibCheckScript(const wxString& text, const wxString& mo
 					// written down instead, because "the check knows fewer names than it should" is
 					// invisible otherwise.
 					try { context->Compile(); }
-					catch (const ibBackendException& error) {
+					catch (const ibCoreException& error) {
 						ibJournalInfo(wxT("compiler"),
 							wxT("script check: the module manager did not compile - %s"),
 							error.GetErrorDescription());

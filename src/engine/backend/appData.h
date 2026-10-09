@@ -32,19 +32,16 @@
 // ibApplicationInstance. Resolves to nullptr before Init / after Destroy.
 #define ibLog     (ibApplicationInstance::GetLogger())
 
+// HOW THE PROCESS HOLDS ITS BASES — and nothing else. Whether a session designs the configuration or runs the
+// application is the session's (ibSessionKind): a file base has its designer, its runtime, its jobs exactly as a
+// server does. A number on disk (sys_session's appMode): never renumbered; 2, 3 and 5 were the designer, the
+// runtime and the web runtime, and are not taken again.
 enum ibRunMode {
-	eLAUNCHER_MODE = 1,		// for create db, only backmode
-	eDESIGNER_MODE = 2,		// backmode + frontmode
-	eRUNTIME_MODE = 3,	// backmode + frontmode (thick client)
-	eSERVICE_MODE = 4,		// only backmode
-	eWEB_RUNTIME_MODE = 5	// backmode + wfrontend (web — wes process)
-};
-
-enum ibDatabaseMode {
-	eFILE,
-	eSERVER,
-
-	eNONE = 1000
+	eUNKNOWN_MODE  = 0,   // nobody said — the default; a base is not opened with it (ibApplicationHost::Ensure throws)
+	eLAUNCHER_MODE = 1,   // the launcher: holds no base — makes and lists them
+	eSERVER_MODE   = 4,   // a server: holds bases for other people's clients, as its settings say (the application server)
+	eFILE_MODE     = 6,   // a file base: holds its base itself, in its own process (designer.exe, enterprise.exe, wes, a thin client)
+	eSANDBOX_MODE  = 7,   // a sandbox: opens a base, runs, closes (codeRunner)
 };
 
 //////////////////////////////////////////////////////////////////
@@ -55,6 +52,7 @@ enum ibDatabaseMode {
 class BACKEND_API ibDatabaseLayer;
 class BACKEND_API ibSession;
 class BACKEND_API ibHelpService;  // defined in backend/help/helpService.h
+
 enum class ibSessionKind : int;   // defined in backend/session/session.h
 
 // ibSessionSnapshot — cluster-wide sys_session snapshot — moved to
@@ -74,25 +72,39 @@ enum class ibSessionKind : int;   // defined in backend/session/session.h
 // fills what it knows and the rest keeps its default; a new field is one edit, not one per caller. A base's
 // own settings are not here: they live in its folder, in infobase.conf (the connections to its DBMS), and the
 // process's in backend.conf.
+// THE TYPE SAYS HOW THE PROCESS HOLDS THE BASE — a file base (ibFileInstanceRequest) or a server
+// (ibServerInstanceRequest). What a session works in is said when it is created (CreateSession), not here.
 struct BACKEND_API ibInstanceRequest {
-	ibRunMode m_runMode = eRUNTIME_MODE;
-	wxString  m_name;        // the base's name in the journal; empty — its directory's (file), its database's (server)
+	// The base's name in the journal; empty — its folder's (Firebird), its database's (PostgreSQL). A server's:
+	// the base's group in server.conf.
+	wxString  m_name;
 	wxString  m_locale;      // empty — the process's
 };
 
-struct BACKEND_API ibFileInstanceRequest : ibInstanceRequest {
-	wxString  m_directory;   // the base's folder — sys.fdb, its journal and its infobase.conf in it
-};
-
-struct BACKEND_API ibServerInstanceRequest : ibInstanceRequest {
+// WHERE A BASE LIVES — a Firebird base in its folder, or a PostgreSQL one on the server named.
+struct BACKEND_API ibInstanceStorage {
+	// The base's folder — its journal and its infobase.conf, and a Firebird base's sys.fdb. A PostgreSQL base's may
+	// be left empty — the user's local data, as before.
+	wxString  m_directory;
+	// A PostgreSQL base — on the server named; no server — the base is the folder's sys.fdb (Firebird).
 	wxString  m_server;
 	wxString  m_port;
 	wxString  m_user;        // the DBMS's
 	wxString  m_password;
 	wxString  m_database;
-	// The folder this base keeps its local files in — its journal and its infobase.conf — when the opener keeps one
-	// (a server keeps each base in a folder of its own). Empty — the user's local data, as before.
-	wxString  m_dirLocal;
+};
+
+// A FILE BASE — the process holds it itself, and its opener says where it lives.
+struct BACKEND_API ibFileInstanceRequest : ibInstanceRequest, ibInstanceStorage {
+	// A base not made yet is made — its tables, its settings file: the designer's opening. Otherwise a base with
+	// nothing in it is refused. A server makes none — that is the launcher's.
+	bool      m_create = false;
+};
+
+// A SERVER — started from its settings: it reads where the base lives itself, from the base's group (m_name) in
+// server.conf of its folder. Nobody hands it a DBMS.
+struct BACKEND_API ibServerInstanceRequest : ibInstanceRequest {
+	wxString  m_folder;      // the server folder — server.conf and server.key in it
 };
 
 // ONE BASE. A process holds one (every host of today) or several (the application server); the set and what belongs
@@ -103,11 +115,15 @@ class BACKEND_API ibApplicationInstance {
 	// base → host.
 	ibApplicationInstance(class ibApplicationHost* host, ibRunMode runMode);
 
+	// Opening a base held as `runMode` says: its database — a Firebird folder or a PostgreSQL server, as `storage`
+	// says — and then the road below. `create` — a base not made yet is made.
+	static ibApplicationInstance* Open(ibRunMode runMode, const ibInstanceRequest& request,
+		const ibInstanceStorage& storage, bool create);
 	// The one road a base comes up by once its database is open, a file base and a server base alike (the
 	// pool, the tables, the locale, the journal, the jobs): the base it now is, or null — refused or thrown, it
-	// is closed again. `folder` keeps its infobase.conf.
+	// is closed again. `folder` keeps its infobase.conf; `request` says the locale.
 	static ibApplicationInstance* Open(std::unique_ptr<ibApplicationInstance> opening,
-		std::shared_ptr<class ibDatabaseLayer> db, const wxString& folder, const wxString& locale);
+		std::shared_ptr<class ibDatabaseLayer> db, const wxString& folder, const ibInstanceRequest& request, bool create);
 
 	// Its teardown, in order — run by its owner while it is still listed (ibApplicationHost::Close), before it
 	// is freed. Idempotent: the destructor runs it again over the empty shell.
@@ -128,13 +144,14 @@ public:
 
 
 	///////////////////////////////////////////////////////////////////////////
-	static bool CreateAppDataEnv(ibRunMode runMode = ibRunMode::eRUNTIME_MODE);
+	static bool CreateAppDataEnv(ibRunMode runMode = ibRunMode::eUNKNOWN_MODE);
 	///////////////////////////////////////////////////////////////////////////
 
 	// Open a base and ADD it to the process's set — answering the base itself, or null when it did not open (a
 	// base that fails half-way closes itself, never the others). A host that opens once holds a set of one.
-	static ibApplicationInstance* CreateFileAppDataEnv(const ibFileInstanceRequest& request);
-	static ibApplicationInstance* CreateServerAppDataEnv(const ibServerInstanceRequest& request);
+	// The request's type is the run mode: a file base, a server.
+	static ibApplicationInstance* CreateAppDataEnv(const ibFileInstanceRequest& request);
+	static ibApplicationInstance* CreateAppDataEnv(const ibServerInstanceRequest& request);
 
 	static bool SetLocaleAppDataEnv(const wxString& strLocale = wxT(""));
 
@@ -167,34 +184,35 @@ public:
 	// a bare live session: whoever calls this holds the session's life in
 	// its hands until it moves the holder into a real owner (a frame), and
 	// an empty holder is the failure case (policy veto, duplicate id).
-	ibSessionHolder CreateSession();
+	// `kind` — what the session is (the server's own login, the designer's window…); Unknown unless said.
+	ibSessionHolder CreateSession(ibSessionKind kind = ibSessionKind{});
 
 	// Typed overload of CreateSession. The caller (enterprise/mainApp.cpp,
 	// designer/mainApp.cpp, web code) picks the concrete derived session
 	// class (ibGUISession on desktop, ibWebClientSession per web tab, …).
 	// Template bodies live in backend/session/sessionRegistry.h (callers
 	// that instantiate the typed overload include it) so the registry's
-	// CreateSessionWithFactory is visible at instantiation.
+	// CreateSessionOfKind is visible at instantiation.
 	// Flow:
-	//   1. m_sessionRegistry->CreateSessionWithFactory runs
+	//   1. m_sessionRegistry->CreateSessionOfKind runs
 	//      EnsureStartedForCreateSession + Connect(req) under a factory
-	//      that builds SessionT instead of the plain base.
+	//      that builds SessionT instead of the plain base, of the kind said.
 	//   2. The holder comes back to the caller, which moves it into the
 	//      window it builds. An empty holder means Connect failed.
 	template<class SessionT>
-	ibSessionHolder CreateSession();
+	ibSessionHolder CreateSession(ibSessionKind kind = ibSessionKind{});
 
-	// Per-tab variant for the wes web frontend. Caller supplies the cookie
-	// guid (used as sys_session.session PK + the registry's session id —
-	// one identifier across cookie / SessionManager / sys_session row) and
-	// the listener address ("host:port", surfaced in admin UI). Kind is
-	// fixed at WebClient (per-tab), independent of process run mode.
+	// A visitor's session — a wes tab (WebClient), a client of the protocol (ThinClient, ThinDesigner). Caller
+	// supplies the kind, independent of process run mode, the guid it already knows the visitor by (used as
+	// sys_session.session PK + the registry's session id — one identifier across cookie / SessionManager /
+	// sys_session row) and the listener address ("host:port", surfaced in admin UI).
 	// Server() is auto-populated by the registry — it tracks the most
 	// recent WebServer-kind session in the process and attaches subsequent
 	// non-server sessions to it. Single-session apps never register a
 	// WebServer session so their Server() stays null.
 	template<class SessionT>
-	ibSessionHolder CreateSession(const wxString& presetGuid,
+	ibSessionHolder CreateSession(ibSessionKind kind,
+	                              const wxString& presetGuid,
 	                              const wxString& address);
 
 private:
@@ -269,49 +287,32 @@ public:
 	ibRunMode GetAppMode() const { return m_runMode; }
 
 	bool LauncherMode() const { return m_runMode == ibRunMode::eLAUNCHER_MODE; }
-	bool DesignerMode() const { return m_runMode == ibRunMode::eDESIGNER_MODE; }
-	bool EnterpriseMode() const {
-		return m_runMode == ibRunMode::eRUNTIME_MODE
-			|| m_runMode == ibRunMode::eWEB_RUNTIME_MODE;
-	}
-	bool WebEnterpriseMode() const { return m_runMode == ibRunMode::eWEB_RUNTIME_MODE; }
-	bool ServiceMode() const { return m_runMode == ibRunMode::eSERVICE_MODE; }
+	// THE DESIGNER'S WORK, OR THE APPLICATION'S — asked of the session doing it, not of the process: a thin designer
+	// and a thin runtime live in one application server side by side. A session nobody sits at and a thread
+	// without a session go by the process's own session (appData.cpp).
+	bool DesignerMode() const;
+	bool EnterpriseMode() const;
+	// What the process itself is — by the session it logs in as: the old web server, the application server.
+	bool WebEnterpriseMode() const;
+	bool ServiceMode() const;
 
 	inline wxString GetRunModeDescr(const ibRunMode& mode) const {
 		switch (mode)
 		{
+		case eUNKNOWN_MODE:
 		case eLAUNCHER_MODE:
 			return wxEmptyString;
-		case eDESIGNER_MODE:
-			return _("Designer");
-		case eRUNTIME_MODE:
-			return _("Thick client (GUI)");
-		case eWEB_RUNTIME_MODE:
-			return _("Web server");
-		case eSERVICE_MODE:
+		case eSERVER_MODE:
 			return _("Application server");
+		case eFILE_MODE:
+			return _("File base");
+		case eSANDBOX_MODE:
+			return _("Sandbox");
 		}
 		return wxEmptyString;
 	}
 
 	inline wxString GetRunModeDescr() const { return GetRunModeDescr(m_runMode); }
-
-	ibDatabaseMode GetDatabaseMode() const { return m_dbMode; }
-
-	inline wxString GetDatabaseModeDescr(const ibDatabaseMode& mode) const {
-		switch (mode)
-		{
-		case eNONE:
-			return wxEmptyString;
-		case eFILE:
-			return _("File");
-		case eSERVER:
-			return _("Server");
-		}
-		return wxEmptyString;
-	}
-
-	inline wxString GetDatabaseModeDescr() const { return GetDatabaseModeDescr(m_dbMode); }
 
 	// Verify credentials and install the resolved user onto the current
 	// ibSessionScope's ibSession. Single entry point used by both the GUI
@@ -365,7 +366,7 @@ public:
 	// The base's name, as its opening request gave it (ibInstanceRequest::m_name) — else the directory of a
 	// file base or the name of a server one. Read by the journal.
 	wxString GetInstanceName() const { return m_strInstance; }
-	const wxString& GetFile() const { return m_strFile; } // file-mode config/db path (VCS working copy root)
+	const wxString& GetFile() const { return m_strFile; } // a Firebird base's folder (VCS working copy root)
 
 	// The platform locale — the PROCESS's (ibApplicationHost), asked here so its readers need not know that.
 	wxString GetLocale() const;
@@ -419,7 +420,7 @@ public:
 
 #pragma endregion 
 
-	wxString GetDatabaseDescription();
+	wxString GetDatabaseDescription() const;
 
 private:
 
@@ -450,6 +451,9 @@ private:
 	// of TableAlreadyCreated()'s init contract, so existing databases pick it up
 	// on next open. See backend/settings/settingsStorage.h.
 	static void CreateTableSettings();
+	// Additive — creates sys_file if missing. The sessions' temporary files, in parts; independent
+	// table, not part of TableAlreadyCreated()'s init contract. See backend/temp/tempStorage.h.
+	static void CreateTableFile();
 	// Additive — creates sys_bytecode_cache if missing. Runs in any
 	// runMode after the existing-tables gate, so DBs initialised before
 	// AOT cache landed pick the table up on next open. Independent
@@ -477,10 +481,12 @@ private:
 	// fields itself in that same order, each one null before it dies.
 	//
 	// Destruction order (top of stack = destroyed first):
-	//   1. m_activeMetaData   — OnDestroy already ran above; its
-	//                            polymorphic dtor (Storage→Configuration→
-	//                            File→Base) needs db_query for some
-	//                            paths, so it goes BEFORE pool / registry.
+	//   1. m_activeMetaData   — OnDestroy already ran above; the base
+	//                            lets its reference go BEFORE pool /
+	//                            registry, and the polymorphic dtor
+	//                            (Storage→Configuration→File→Base) runs
+	//                            with the LAST holder: here, for the
+	//                            sessions let theirs go as they left.
 	//   2. m_sessionRegistry  — Stop() already drained workers; dtor
 	//                            cleans up the session vector. Session
 	//                            destructors may still want pool.
@@ -544,14 +550,22 @@ private:
 	// here because it is read at the same moments jobs are: while a base is open.
 	std::unique_ptr<class ibSettingsStorage> m_settingsStorage;
 
-	// Active configuration metadata. Polymorphic — concrete subclass
-	// (`ibMetaDataConfiguration` for runtime modes,
-	// `ibMetaDataConfigurationStorage` for designer) chosen by the
-	// fabric `CreateActiveMetaData` based on runMode. nullptr in
+	// The sessions' temporary files (sys_file). Its own connection, taken from the pool above and given
+	// back when the pool shuts down — the lock manager's arrangement, for the lock manager's reason.
+	std::unique_ptr<class ibTempStorage> m_tempStorage;
+
+	// ⭐ THE ACTIVE CONFIGURATION — held FOR THE SESSIONS STILL TO COME (Max, 2026-10-06: *"the active metadata
+	// holds for new sessions"*). A session let in takes its own reference to it (ibSession::GetMetaData, +1) and
+	// works in that one for its whole life, so an update that puts another one here leaves every working session
+	// in the configuration it came in with; the old one goes with the last of them. A shared_ptr, swapped under the
+	// process's lock (ReplaceActiveMetaData).
+	// Polymorphic — concrete subclass (`ibMetaDataConfiguration` for the application,
+	// `ibMetaDataConfigurationStorage` for a designer's process) chosen by the
+	// fabric `CreateActiveMetaData` by the process's own session. nullptr in
 	// launcher / codeRunner (no DB-backed metadata). Declared last so
-	// reverse-order destruction kills it first — OnDestroy ran already
-	// in the dtor above, dtor itself wraps up.
-	std::unique_ptr<class ibMetaDataConfigurationBase> m_activeMetaData;
+	// reverse-order destruction lets it go first — OnDestroy ran already
+	// in the dtor above.
+	std::shared_ptr<class ibMetaDataConfigurationBase> m_activeMetaData;
 
 public:
 	// Static accessor — returns nullptr when no appData is alive.
@@ -582,23 +596,24 @@ public:
 	// after DestroyAppDataEnv. Callers MUST null-check.
 	static class ibHelpService* GetHelpService();
 
-	// Active configuration metadata accessor. nullptr in launcher /
-	// codeRunner; nullptr before CreateActiveMetaData fires for the
-	// first time. The legacy `activeMetaData` macro redirects to
-	// `appEnv::ActiveMetaData()` which calls this.
+	// Active configuration metadata accessor — the configuration this thread works in: its session's own, else the
+	// one its scope holds, else the base's active one (held for the sessions to come). nullptr in launcher /
+	// codeRunner; nullptr before CreateActiveMetaData fires for the first time. The legacy `activeMetaData` macro
+	// redirects to `appEnv::ActiveMetaData()` which calls this. Whoever works in it holds `shared_from_this()`.
 	static class ibMetaDataConfigurationBase* GetActiveMetaData() { return GetActiveMetaData(Get()); }
-	static class ibMetaDataConfigurationBase* GetActiveMetaData(const ibApplicationInstance* applicationInstance) {
-		return applicationInstance != nullptr ? applicationInstance->m_activeMetaData.get() : nullptr;
-	}
+	static class ibMetaDataConfigurationBase* GetActiveMetaData(const ibApplicationInstance* applicationInstance);
 
-	// Fabric — pick subclass by runMode and stash it in m_activeMetaData.
-	// Returns false if construction or OnInitialize failed; nullptr modes
-	// (launcher) return true with no-op so callers can branch uniformly.
-	// Replaces the historical `ibMetaDataConfigurationBase::Initialize`
-	// static. The `metaDataCreate(mode, f)` macro routes here.
-	static bool CreateActiveMetaData(enum ibRunMode mode, int flags);
-	// …on the application data named rather than the current one.
-	static bool CreateActiveMetaData(ibApplicationInstance* applicationInstance, enum ibRunMode mode, int flags);
+	// The active configuration replaced — by the one handed in: the designer's apply hands in what the database now
+	// publishes. The sessions working in the old one keep it; it goes with the last of them.
+	void ReplaceActiveMetaData(std::shared_ptr<class ibMetaDataConfigurationBase> metaData);
+
+	// Fabric — pick subclass by the kind of the base's first session (a designer's: the
+	// configuration to edit; anyone else's: the one the application runs) and
+	// stash it in m_activeMetaData. Returns false if construction or
+	// OnInitialize failed; the launcher returns true with no-op so callers can
+	// branch uniformly.
+	// Replaces the historical `ibMetaDataConfigurationBase::Initialize` static.
+	static bool CreateActiveMetaData(ibApplicationInstance* applicationInstance, ibSessionKind kind, int flags);
 	// (Its tear-down is the base's own Close: OnDestroy, then the field released.)
 
 	// Audit + trace logger. Created during CreateFile/Server AppDataEnv
@@ -642,13 +657,18 @@ public:
 		return applicationInstance != nullptr ? applicationInstance->m_settingsStorage.get() : nullptr;
 	}
 
+	// The sessions' temporary files. Same nullptr-before-and-after contract. See backend/temp/tempStorage.h.
+	static class ibTempStorage* GetTempStorage(const ibApplicationInstance* applicationInstance) {
+		return applicationInstance != nullptr ? applicationInstance->m_tempStorage.get() : nullptr;
+	}
+
 private:
 
 	// Build the absolute path for the .olg directory:
-	//   - file-mode   → <m_strFile>/oeslog
-	//   - server-mode → <m_strDirLocal>/oeslog when the opener named the base's folder,
-	//                   else <wxStandardPaths::GetUserLocalDataDir>/OES/<server>_<db>/logs
-	// Called from CreateFile/Server AppDataEnv after m_dbMode is set.
+	//   - a Firebird base   → <m_strFile>/oeslog
+	//   - a PostgreSQL base → <m_strDirLocal>/oeslog when the opener named the base's folder,
+	//                         else <wxStandardPaths::GetUserLocalDataDir>/OES/<server>_<db>/logs
+	// Called from the opening once the base's fields are set.
 	wxString ResolveLogDir() const;
 
 	// Stand up m_logger using ResolveLogDir(). No-op for LAUNCHER mode
@@ -669,12 +689,10 @@ public:
 	int  m_loadMetadataFlags = _app_start_default_flag;
 private:
 
-	ibDatabaseMode m_dbMode;
-
-	// FILE ENTRY
+	// A FIREBIRD BASE — its folder
 	wxString m_strFile;
 
-	// SERVER ENTRY
+	// A POSTGRESQL BASE — the server named; none — the base is Firebird (ibInstanceStorage says the same)
 	wxString m_strServer;
 	wxString m_strPort;
 	wxString m_strDatabase;
@@ -682,7 +700,7 @@ private:
 	wxString m_strUser;
 	wxString m_strPassword;
 
-	// The base's own folder on this machine, when its opener keeps one (CreateServerAppDataEnv).
+	// A PostgreSQL base's own folder on this machine, when its opener keeps one (ibInstanceRequest::m_directory).
 	wxString m_strDirLocal;
 };
 
@@ -701,6 +719,9 @@ private:
 // address of category + object + name + user. What a person arranged survives
 // the form that arranged it. See backend/settings/settingsStorage.h.
 #define settings_table			wxT("sys_settings")
+// sys_file — the sessions' temporary files: one row per PART of a file (its header first), owned by a
+// session and gone with it. See backend/temp/tempStorage.h.
+#define file_table				wxT("sys_file")
 ///////////////////////////////////////////////////////////////////////////////
 
 #endif

@@ -6,8 +6,8 @@
 #include <typeinfo>
 #include <memory>
 
-#include "backend/clsid.h"               // ibClassID
-#include "backend/stringUtils.h"         // stringUtils::CompareString (name lookup)
+#include "core/clsid.h"               // ibClassID
+#include "core/stringUtils.h"         // stringUtils::CompareString (name lookup)
 #include "backend/compiler/typeCtor.h"   // ibCtorAbstractType — the key accessors
 
 // =============================================================================

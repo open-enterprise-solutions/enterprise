@@ -27,7 +27,7 @@
 #include "backend/query/queryable.h"         // ibBackendQueryable / ibQueryCondition
 #include "backend/query/queryColumn.h"       // ibBackendQueryColumn / ibBackendColumnRawDB
 #include "backend/query/tempTableQueryable.h" // ibCteQueryable — what a declared query publishes
-#include "backend/clsid.h"                    // reference_to_clsid — a reference-typed column (multi-field spread)
+#include "core/clsid.h"                    // reference_to_clsid — a reference-typed column (multi-field spread)
 
 namespace {
 

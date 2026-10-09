@@ -942,7 +942,7 @@ void ibConfigurationTree::SelectItem()
 	ibValueMetaObject* metaObject = GetMetaObject(selection);
 	UpdateToolbar(metaObject, selection);
 
-	if (appData->GetAppMode() != ibRunMode::eDESIGNER_MODE)
+	if (!appData->DesignerMode())
 		return;
 
 	objectInspector->SelectObject(metaObject);
@@ -954,7 +954,7 @@ void ibConfigurationTree::PropertyItem()
 	ibValueMetaObject* metaObject = GetMetaObject(selection);
 	UpdateToolbar(metaObject, selection);
 
-	if (appData->GetAppMode() != ibRunMode::eDESIGNER_MODE)
+	if (!appData->DesignerMode())
 		return;
 
 	if (!objectInspector->IsShownInspector())
@@ -1000,7 +1000,7 @@ void ibConfigurationTree::Expand(const wxTreeItemId& item)
 
 void ibConfigurationTree::UpItem()
 {
-	if (appData->GetAppMode() != ibRunMode::eDESIGNER_MODE)
+	if (!appData->DesignerMode())
 		return;
 
 	m_metaTreeCtrl->Freeze();
@@ -1020,7 +1020,7 @@ void ibConfigurationTree::UpItem()
 
 void ibConfigurationTree::DownItem()
 {
-	if (appData->GetAppMode() != ibRunMode::eDESIGNER_MODE)
+	if (!appData->DesignerMode())
 		return;
 
 	m_metaTreeCtrl->Freeze();
@@ -1040,7 +1040,7 @@ void ibConfigurationTree::DownItem()
 
 void ibConfigurationTree::SortItem()
 {
-	if (appData->GetAppMode() != ibRunMode::eDESIGNER_MODE)
+	if (!appData->DesignerMode())
 		return;
 	m_metaTreeCtrl->Freeze();
 	const wxTreeItemId& selection = m_metaTreeCtrl->GetSelection();
@@ -1075,12 +1075,13 @@ void ibConfigurationTree::InsertItem()
 		if (openFileDialog.ShowModal() == wxID_CANCEL)
 			return;     // the user changed idea...
 
-		//create main metaObject
-		ibMetaDataDataProcessor metadataDataProcessor(m_metaData);
+		// A reader only — what it reads lives on in this configuration, so it is never closed: a plain make_shared,
+		// not ibMetaData::MakeShared, whose last holder would close the object it handed over.
+		const std::shared_ptr<ibMetaDataDataProcessor> metadataDataProcessor = std::make_shared<ibMetaDataDataProcessor>(GetMetaData());
 
-		if (metadataDataProcessor.LoadFromFile(openFileDialog.GetPath())) {
+		if (metadataDataProcessor->LoadFromFile(openFileDialog.GetPath())) {
 			m_metaTreeCtrl->Freeze();
-			ibValueMetaObjectDataProcessor* dataProcessor = metadataDataProcessor.GetDataProcessor();
+			ibValueMetaObjectDataProcessor* dataProcessor = metadataDataProcessor->GetDataProcessor();
 			wxASSERT(dataProcessor);
 			const wxTreeItemId& createdItem = AppendItem(hSelItem, dataProcessor);
 			AddDataProcessorItem(dataProcessor, createdItem);
@@ -1096,11 +1097,11 @@ void ibConfigurationTree::InsertItem()
 		if (openFileDialog.ShowModal() == wxID_CANCEL)
 			return;     // the user changed idea...
 
-		ibMetaDataReport metadataReport(m_metaData);
+		const std::shared_ptr<ibMetaDataReport> metadataReport = std::make_shared<ibMetaDataReport>(GetMetaData());   // a reader — see above
 
-		if (metadataReport.LoadFromFile(openFileDialog.GetPath())) {
+		if (metadataReport->LoadFromFile(openFileDialog.GetPath())) {
 			m_metaTreeCtrl->Freeze();
-			ibValueMetaObjectReport* report = metadataReport.GetReport();
+			ibValueMetaObjectReport* report = metadataReport->GetReport();
 			wxASSERT(report);
 			const wxTreeItemId& createdItem = AppendItem(hSelItem, report);
 			AddReportItem(report, createdItem);
@@ -1126,10 +1127,11 @@ void ibConfigurationTree::ReplaceItem()
 		if (openFileDialog.ShowModal() == wxID_CANCEL)
 			return;     // the user changed idea...
 
-		ibMetaDataDataProcessor metadataDataProcessor(m_metaData);
-		if (metadataDataProcessor.LoadFromFile(openFileDialog.GetPath())) {
+		// A reader — never closed: what it reads replaces the object in this configuration (see AppendItem's import).
+		const std::shared_ptr<ibMetaDataDataProcessor> metadataDataProcessor = std::make_shared<ibMetaDataDataProcessor>(GetMetaData());
+		if (metadataDataProcessor->LoadFromFile(openFileDialog.GetPath())) {
 			m_metaTreeCtrl->Freeze();
-			ibValueMetaObjectDataProcessor* metaObject = metadataDataProcessor.GetDataProcessor();
+			ibValueMetaObjectDataProcessor* metaObject = metadataDataProcessor->GetDataProcessor();
 			wxTreeItemData* itemData = m_metaTreeCtrl->GetItemData(hSelItem);
 			if (itemData != nullptr) {
 				ibTreeDataObject* metaItem = dynamic_cast<ibTreeDataObject*>(itemData);
@@ -1160,10 +1162,10 @@ void ibConfigurationTree::ReplaceItem()
 
 		wxASSERT(newReport);
 
-		ibMetaDataReport metadataDataProcessor(m_metaData);
-		if (metadataDataProcessor.LoadFromFile(openFileDialog.GetPath())) {
+		const std::shared_ptr<ibMetaDataReport> metadataDataProcessor = std::make_shared<ibMetaDataReport>(GetMetaData());   // a reader
+		if (metadataDataProcessor->LoadFromFile(openFileDialog.GetPath())) {
 			m_metaTreeCtrl->Freeze();
-			ibValueMetaObjectReport* metaObject = metadataDataProcessor.GetReport();
+			ibValueMetaObjectReport* metaObject = metadataDataProcessor->GetReport();
 			wxTreeItemData* itemData = m_metaTreeCtrl->GetItemData(hSelItem);
 			if (itemData != nullptr) {
 				ibTreeDataObject* metaItem = dynamic_cast<ibTreeDataObject*>(itemData);
@@ -1206,8 +1208,10 @@ void ibConfigurationTree::SaveItem()
 			currentMetaObject
 			);
 		wxASSERT(newDataProcessor);
-		ibMetaDataDataProcessor metadataDataProcessor(m_metaData, newDataProcessor);
-		metadataDataProcessor.SaveToFile(saveFileDialog.GetPath());
+		// A writer over this configuration's own object — never closed, for the object stays here.
+		const std::shared_ptr<ibMetaDataDataProcessor> metadataDataProcessor =
+			std::make_shared<ibMetaDataDataProcessor>(GetMetaData(), newDataProcessor);
+		metadataDataProcessor->SaveToFile(saveFileDialog.GetPath());
 	}
 	else {
 		wxFileDialog saveFileDialog(this, _("Open report file"), "", "",
@@ -1222,8 +1226,9 @@ void ibConfigurationTree::SaveItem()
 			currentMetaObject
 			);
 		wxASSERT(newDataProcessor);
-		ibMetaDataReport metadataDataProcessor(m_metaData, newDataProcessor);
-		metadataDataProcessor.SaveToFile(saveFileDialog.GetPath());
+		const std::shared_ptr<ibMetaDataReport> metadataDataProcessor =
+			std::make_shared<ibMetaDataReport>(GetMetaData(), newDataProcessor);   // a writer — see above
+		metadataDataProcessor->SaveToFile(saveFileDialog.GetPath());
 	}
 }
 
@@ -1898,14 +1903,18 @@ void ibConfigurationTree::FillData()
 	m_metaTreeCtrl->Expand(m_treeCOMMON);
 }
 
-bool ibConfigurationTree::Load(ibMetaDataConfigurationBase* metaData)
+bool ibConfigurationTree::Load(std::shared_ptr<ibMetaDataConfigurationBase> metaData)
 {
 	m_metaTreeCtrl->Freeze();
 	CloseDocuments();   // a configuration is being left — its editors go with it
 	ClearTree();
 
-	m_metaData = metaData ? metaData : appEnv::ActiveMetaData();
-	WatchMetaData(m_metaData);   // off the old list, onto this one — one call, one place
+	// What it shows, held while it shows it: the one handed in, else the configuration this session works in.
+	if (metaData == nullptr)
+		if (ibMetaDataConfigurationBase* const active = appEnv::ActiveMetaData())
+			metaData = std::static_pointer_cast<ibMetaDataConfigurationBase>(active->shared_from_this());
+	m_metaData = std::move(metaData);
+	WatchMetaData(GetMetaData());   // off the old list, onto this one — one call, one place
 	FillData(); //Fill all data from metaData
 
 	// …and the metadata learns whether this file may be edited at all. Said HERE because the view

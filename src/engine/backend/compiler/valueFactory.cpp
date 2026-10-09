@@ -7,7 +7,7 @@
 #include "value.h"
 #include "backend/backend_exception.h"
 #include "backend/ctorRegistry.h"
-#include "backend/utils/debugTrace.h"
+#include "core/diagnostics/debugTrace.h"
 
 #ifdef DEBUG
 // OFF unless OES_TRACE_TYPES says otherwise — see utils/debugTrace.h.

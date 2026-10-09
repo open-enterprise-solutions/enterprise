@@ -1,0 +1,449 @@
+#include "fs.h"
+#include "lz/lzhuf.h"
+
+#include "core/fstring.h"          // ibString — r_stringZ(ibString&)
+#include "core/exception.h"      // a read past the end of a block is refused, not asserted
+
+typedef unsigned char byte_t;
+
+//------------------------------------------------------------------------------------
+// Write
+//------------------------------------------------------------------------------------
+
+void	ibWriter::open_chunk(u64 type)
+{
+	w_u64(type);
+	m_chunk_pos.push(tell());
+	w_u64(0);	// the place for 'size'
+}
+
+void	ibWriter::close_chunk()
+{
+	wxASSERT(!m_chunk_pos.empty());
+
+	int pos = tell();
+	seek(m_chunk_pos.top());
+	w_u64(pos - m_chunk_pos.top() - 8);
+	seek(pos);
+	m_chunk_pos.pop();
+}
+
+u32	ibWriter::chunk_size() const // returns size of currently opened chunk, 0 otherwise
+{
+	if (m_chunk_pos.empty())	return 0;
+	return tell() - m_chunk_pos.top() - 8;
+}
+
+void	ibWriter::w_compressed(void* ptr, u32 count)
+{
+	byte_t* dest = 0;
+	unsigned	dest_sz = 0;
+	_compressLZ(&dest, &dest_sz, ptr, count);
+
+	if (dest && dest_sz)
+		w(dest, dest_sz);
+	wxDELETE(dest);
+}
+
+void ibWriter::w_compressed(const wxMemoryBuffer& data)
+{
+	w_compressed(data.GetData(), data.GetDataLen());
+}
+
+void	ibWriter::w_chunk(u64 type, void* data, u32 size)
+{
+	open_chunk(type);
+	w(data, size);
+	close_chunk();
+}
+
+void ibWriter::w_chunk(u64 type, const wxMemoryBuffer& data)
+{
+	w_chunk(type, data.GetData(), data.GetDataLen());
+}
+
+void	ibWriter::w_printf(const char* format, ...)
+{
+	va_list mark;
+	char buf[1024];
+
+	va_start(mark, format);
+#ifdef __WXMSW__
+	vsprintf_s(buf, format, mark);
+#else
+	vsnprintf(buf, sizeof(buf), format, mark);
+#endif
+	va_end(mark);
+
+	w(buf, strlen(buf));
+}
+
+//////////////////////////////////////////////////////////////////////
+// Construction/Destruction
+//////////////////////////////////////////////////////////////////////
+//---------------------------------------------------
+// memory
+ibWriterMemory::~ibWriterMemory()
+{
+	// ONE ROAD OUT: the release lives in ibWriterMemory::free (fs.h), which says why it is not
+	// `delete`. Repeating it here is how the buffer came to have two ways of being let go.
+	free();
+}
+
+void ibWriterMemory::w(const void* ptr, u32 count)
+{
+	// A WRITE OF NOTHING IS NOT A WRITE. memcpy forbids a null source even for zero bytes, and
+	// the writers above do hand one over for an empty payload (an empty string, a zero-length
+	// chunk) - UBSan: "null pointer passed as argument 2, which is declared to never be null".
+	// Leaving early also spares the buffer a growth it does not need.
+	if (count == 0 || ptr == nullptr)
+		return;
+
+	if (m_pos + count > m_mem_size) {
+		// reallocate
+		if (m_mem_size == 0)	
+			m_mem_size = 128;
+		
+		while (m_mem_size <= (m_pos + count)) 
+			m_mem_size *= 2;
+		
+		if (0 == m_data)		
+			m_data = (byte_t*)malloc(m_mem_size);
+		else				
+			m_data = (byte_t*)realloc(m_data, m_mem_size);
+	}
+
+	memcpy(m_data + m_pos, ptr, count);
+
+	m_pos += count;
+	
+	if (m_pos > m_file_size) 
+		m_file_size = m_pos;
+}
+
+//static const u32 mb_sz = 0x1000000;
+void* ibWriterMemory::save_to()
+{
+	return pointer();
+}
+
+//------------------------------------------------------------------------------------
+// Read
+//------------------------------------------------------------------------------------
+
+#pragma warning (disable:4701)
+
+ibReader* ibReader::open_chunk(u64 ID) const
+{
+	bool	bCompressed;
+
+	u32	dwSize = find_chunk(ID, &bCompressed);
+	if (dwSize != 0) {
+		if (bCompressed) {
+			byte_t* dest;
+			unsigned	dest_sz;
+			_decompressLZ(&dest, &dest_sz, pointer(), dwSize);
+			return new ibReader(dest, dest_sz, tell() + dwSize);
+		}
+		else {
+			return new ibReader(pointer(), dwSize, tell() + dwSize);
+		}
+	}
+	else return 0;
+};
+
+void	ibReader::close()
+{
+	delete((ibReader*)this);
+}
+
+u64 ibReader::find_chunk(u64 ID, bool* bCompressed) const
+{
+	u64	dwSize = 0, dwType = 0;
+	bool success = false;
+
+	// A chunk header is 2x u64 (type + size); never read it without that many bytes left,
+	// or a malformed / truncated buffer drives r() past the end (access violation).
+	if (m_last_pos != 0) {
+		seek(m_last_pos);
+		if (elapsed() >= 16) {
+			dwType = r_u64();
+			dwSize = r_u64();
+			if (dwType == ID)
+				success = true;
+		}
+	}
+
+	if (!success) {
+		rewind();
+		while (elapsed() >= 16)
+		{
+			dwType = r_u64();
+			dwSize = r_u64();
+			if (dwType == ID)
+			{
+				success = true;
+				break;
+			}
+			else
+			{
+				// ⚠ A SIZE THAT DOES NOT FIT IS NOT A CHUNK TO STEP OVER. A block of another format (a base
+				// written before the configuration's layout changed) reads as a header with any number in
+				// it; stepped over, the reader landed past its own end and stayed there (advance only
+				// ASSERTS), and the next read walked off the page — the designer died opening an old base
+				// (2026-09-27). Not the chunk sought, and nothing after it can be trusted: not found.
+				if (dwSize > (u64)elapsed())
+					break;
+				advance(dwSize);
+			}
+		}
+
+		if (!success)
+		{
+			m_last_pos = 0;
+			seek(length());   // at its end, as a search that read everything leaves it — and not past it
+			return 0;
+		}
+	}
+
+	// The found chunk must fit in the buffer — a corrupt size would otherwise build an
+	// over-sized sub-reader that reads past the allocation.
+	if ((u64)tell() + dwSize > (u64)length())
+	{
+		m_last_pos = 0;
+		return 0;
+	}
+	if (bCompressed) *bCompressed = false;
+
+	const int dwPos = tell();
+	if (dwPos + dwSize < (u64)length())
+	{
+		m_last_pos = dwPos + dwSize;
+	}
+	else
+	{
+		m_last_pos = 0;
+	}
+
+	return dwSize;
+}
+
+ibReader* ibReader::open_chunk_iterator(u64& ID, ibReader* _prev) const
+{
+	if (0 == _prev) {
+		// first
+		rewind();
+	}
+	else {
+		// next
+		seek(_prev->m_iterpos);
+		_prev->close();
+	}
+
+	//	open
+	if (elapsed() < 8)
+		return nullptr;
+
+	ID = r_u64();
+	u64 _size = r_u64();
+
+	// 🛑 THE SIZE CAME OUT OF THE DATA, SO IT IS A CLAIM AND NOT A MEASUREMENT — and the lines below
+	// hand it to a new reader as though somebody had checked it. find_chunk, one road over, has
+	// asked this question since a corrupt size was found building a reader on memory that was never
+	// there; the two ITERATOR roads never did, and an iterator is what walks a frame that arrived
+	// over a wire. Refusing here is what keeps the difference between "declared" and "present"
+	// visible: by the time the over-read happens it reads as a crash inside memcpy, subsystems away
+	// from the frame that lied (2026-09-23, the designer, while it was debugging).
+	if (_size > (u64)elapsed())
+		ibCoreException::Error(
+			_("Chunk %llu declares %llu bytes, and %i are left in the block"),
+			ID, _size, elapsed());
+
+	if (false)
+	{
+		// compressed
+		u8* dest;
+		unsigned		dest_sz;
+		_decompressLZ(&dest, &dest_sz, pointer(), _size);
+		return new ibReader(dest, dest_sz, tell() + _size);
+	}
+	else {
+		// normal
+		return new ibReader(pointer(), _size, tell() + _size);
+	}
+}
+ 
+void	ibReader::r(void* p, int cnt) const
+{
+	// 🛑 REFUSES INSTEAD OF SAYING SO AND READING ANYWAY. This was a wxASSERT followed by the copy:
+	// the assert is a line in the journal and nothing else, so an over-read was ANNOUNCED and then
+	// performed, leaving m_pos past m_size for whoever read next. That is how the designer died on
+	// 2026-09-23 while it was debugging - two asserts from one worker thread at 01:36:38 (this line
+	// and advance's), and a second later the same thread walked off the end of the page inside
+	// memcpy: access violation, 348 MB of dump, and a stack that named nothing because the binary
+	// had been rebuilt since.
+	//
+	// Reading past the end of a block is never a legitimate thing to do, so it is an answer, not a
+	// remark. The numbers are in the message because the question a reader of it asks next is
+	// "by how much" - a frame short by four bytes is a truncated write, one short by thousands is
+	// a different format altogether.
+	if (cnt < 0 || (long long)m_pos + cnt > (long long)m_size)
+		ibCoreException::Error(
+			_("Reading %i bytes at offset %i would pass the end of a %i-byte block"),
+			cnt, m_pos, m_size);
+
+	std::memcpy(p, pointer(), cnt);
+	advance(cnt);
+};
+
+inline bool is_term(const wxUniChar &c) {
+	return (c == 13) || (c == 10);
+};
+
+inline u32	ibReader::advance_term_string() const
+{
+	u32 sz = 0;
+	char* src = (char*)m_data;
+	while (!eof()) {
+		m_pos++;
+		sz++;
+		if (!eof() && is_term(src[m_pos]))
+		{
+			while (!eof() && is_term(src[m_pos]))
+				m_pos++;
+			break;
+		}
+	}
+	return sz;
+}
+void	ibReader::r_string(char* dest, u32 tgt_sz) const
+{
+	char* src = (char*)m_data + m_pos;
+	u32 sz = advance_term_string();
+	wxASSERT(sz < (tgt_sz - 1));
+#ifdef __WXMSW__
+	wxASSERT(!IsBadReadPtr((void*)src, sz));
+	strncpy_s(dest, tgt_sz, src, sz);
+#else
+	strncpy(dest, src, tgt_sz - 1);
+#endif
+
+	dest[sz] = 0;
+}
+void	ibReader::r_string(std::string& dest) const
+{
+	char* src = (char*)m_data + m_pos;
+	u32 sz = advance_term_string();
+	dest.assign(src, sz);
+}
+
+void	ibReader::r_string(wxString& dest) const
+{
+	char* src = (char*)m_data + m_pos;
+	u32 sz = advance_term_string();
+	dest = wxString::FromUTF8(src, sz);
+}
+
+wxString ibReader::r_stringZ() const
+{
+	std::string destSrc = (char*)m_data + m_pos;
+	m_pos += int(destSrc.size() + 1);
+	return wxString::FromUTF8(destSrc);
+}
+
+void	ibReader::r_stringZ(char* dest, u32 tgt_sz) const
+{
+	char* src = (char*)m_data;
+	u32 sz = strlen(src);
+	wxASSERT(sz < tgt_sz);
+	while ((src[m_pos] != 0) && (!eof())) *dest++ = src[m_pos++];
+	*dest = 0;
+	m_pos++;
+}
+
+void	ibReader::r_stringZ(std::string& dest) const
+{
+	dest = (char*)(m_data + m_pos);
+	m_pos += int(dest.size() + 1);
+}
+
+void	ibReader::r_stringZ(wxString& dest) const
+{
+	std::string destSrc = (char*)(m_data + m_pos);
+	m_pos += int(destSrc.size() + 1);
+	dest = wxString::FromUTF8(destSrc);
+}
+
+void	ibReader::r_stringZ(ibString& dest) const
+{
+	std::string destSrc = (char*)(m_data + m_pos);
+	m_pos += int(destSrc.size() + 1);
+	dest.SetUtf8(destSrc.data(), destSrc.size());   // native UTF-8 → wchar, no wxString
+}
+
+void	ibReader::skip_stringZ() const
+{
+	char* src = (char*)m_data;
+	while ((src[m_pos] != 0) && (!eof())) m_pos++;
+	m_pos++;
+}
+
+ibReaderMemory* ibReaderMemory::open_chunk(u64 ID) const 
+{
+	bool	bCompressed;
+
+	u32	dwSize = find_chunk(ID, &bCompressed);
+
+	if (dwSize != 0) {
+		if (bCompressed) {
+			byte_t* dest;
+			unsigned	dest_sz;
+			_decompressLZ(&dest, &dest_sz, pointer(), dwSize);
+			return new ibReaderMemory(dest, dest_sz, tell() + dwSize);
+		}
+		else {
+			return new ibReaderMemory(pointer(), dwSize, tell() + dwSize);
+		}
+	}
+
+	return nullptr;
+};
+
+ibReaderMemory* ibReaderMemory::open_chunk_iterator(u64& ID, ibReaderMemory* _prev) const
+{
+	if (0 == _prev) {
+		// first
+		rewind();
+	}
+	else {
+		// next
+		seek(_prev->m_iterpos);
+		_prev->close();
+	}
+
+	//	open
+	if (elapsed() < 8)
+		return nullptr;
+
+	ID = r_u64();
+	u64 _size = r_u64();
+
+	// The same question the reader's own iterator asks, and for the same reason — see the note
+	// there. This is the copy that walks a buffer held in memory, which is what a received frame is.
+	if (_size > (u64)elapsed())
+		ibCoreException::Error(
+			_("Chunk %llu declares %llu bytes, and %i are left in the block"),
+			ID, _size, elapsed());
+
+	if (false) {
+		// compressed
+		u8* dest;
+		unsigned		dest_sz;
+		_decompressLZ(&dest, &dest_sz, pointer(), _size);
+		return new ibReaderMemory(dest, dest_sz, tell() + _size);
+	}
+	else {
+		// normal
+		return new ibReaderMemory(pointer(), _size, tell() + _size);
+	}
+}

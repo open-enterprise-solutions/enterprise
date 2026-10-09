@@ -4,6 +4,9 @@
 #include "backend/propertyManager/propertyObject.h"
 #include "backend/choiceLinkDescription.h"
 
+#include <atomic>
+#include <mutex>
+
 // The variant of a link by type — it holds an ibChoiceTypeLinkDescription, as ibVariantDataCalcSchedule
 // holds a schedule and ibVariantDataAttribute holds a type description.
 class BACKEND_API ibVariantDataChoiceLink : public wxVariantData {
@@ -54,7 +57,10 @@ protected:
 
 	const ibPropertyObject*              m_ownerProperty;
 	mutable ibChoiceTypeLinkDescription  m_linkDesc;
-	mutable unsigned int                 m_object_version = 0;
+	// One refresh at a time, the version asked again inside the lock — read by every session of the base
+	// (ibVariantDataAttribute, the same counter and the same race).
+	mutable std::atomic<unsigned int>    m_object_version { 0 };
+	mutable std::mutex                   m_refreshMutex;
 };
 
 // The variant of the choice parameters — the table beside the link by type, in the same shape. Kept in
@@ -105,7 +111,8 @@ protected:
 
 	const ibPropertyObject*               m_ownerProperty;
 	mutable ibChoiceParametersDescription m_paramsDesc;
-	mutable unsigned int                  m_object_version = 0;
+	mutable std::atomic<unsigned int>     m_object_version { 0 };   // as the link's above
+	mutable std::mutex                    m_refreshMutex;
 };
 
 // ⭐⭐ THE NAME OF A FIELD A LINK OR A PARAMETER NAMES — looked for WHERE SUCH A FIELD LIVES, which is

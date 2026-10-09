@@ -14,7 +14,9 @@ CI.
 | [public/](public/) | Design documents anyone may read — how a subsystem works, and why it is shaped that way |
 | [release-notes/](release-notes/) | What each release changed |
 
-Outside this folder: [README.md](../README.md) (what OES is, quick start),
+Outside this folder: [the wiki](https://github.com/open-enterprise-solutions/enterprise/wiki)
+(the user's guide: installing, first steps, the designer, metadata, forms, the language),
+[README.md](../README.md) (what OES is, quick start),
 [CONTRIBUTING.md](../CONTRIBUTING.md) (what sending a pull request means) and
 [CLAUDE.md](../CLAUDE.md) (layout, naming, key decisions; also the context file for assistants).
 

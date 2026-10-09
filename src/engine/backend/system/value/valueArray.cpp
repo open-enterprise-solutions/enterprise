@@ -34,37 +34,31 @@ bool ibValueArray::Init(ibValue** paParams, const long lSizeArray)
 	return false;
 }
 
-#include "appData.h"
-
-// Raises when `index` is out of range for ELEMENT ACCESS ([0, size)) — but only
-// outside the designer, which tolerates transient bad indices while editing. It
-// only RAISES; the caller must still guard the access itself, because inside the
-// designer this returns without throwing and `m_listValue[oob]` would be UB.
+// Raises when `index` is out of range for ELEMENT ACCESS ([0, size)) — everywhere, the designer included:
+// the one evaluation there, the caret's walk for completion, catches what a call raises and offers nothing
+// for it, which is what an index into the empty array it built deserves anyway (census, 2026-10-01).
 void ibValueArray::CheckIndex(unsigned int index) const
 {
-	if (index >= m_listValue.size() && !appData->DesignerMode())
+	if (index >= m_listValue.size())
 		ibBackendCoreException::Error(_("Index goes beyond array"));
 }
 
 // Insert BEFORE `index`; index == size appends. The valid range is [0, size],
-// one wider than element access. Out of range refuses outside the designer and
-// is a no-op inside it — never `insert(begin() + oob)`, which is UB.
+// one wider than element access — never `insert(begin() + oob)`, which is UB.
 void ibValueArray::Insert(unsigned int index, const ibValue& varValue)
 {
 	if (index > m_listValue.size()) {
-		if (!appData->DesignerMode())
-			ibBackendCoreException::Error(_("Index goes beyond array"));
+		ibBackendCoreException::Error(_("Index goes beyond array"));
 		return;
 	}
 	m_listValue.insert(m_listValue.begin() + index, varValue);
 }
 
-// Erase the element AT `index` ([0, size)). Same designer-safe guard: refuse
-// outside it, no-op inside it, never `erase(begin() + oob)`.
+// Erase the element AT `index` ([0, size)) — never `erase(begin() + oob)`.
 void ibValueArray::Remove(unsigned int index)
 {
 	if (index >= m_listValue.size()) {
-		CheckIndex(index);   // raises outside the designer; a no-op inside it
+		CheckIndex(index);
 		return;
 	}
 	m_listValue.erase(m_listValue.begin() + index);
@@ -327,10 +321,8 @@ void ibValueArray::DispatchLinqMethod(ibLinqMethod method, ibValue& ret,
 bool ibValueArray::GetAt(const ibValue& varKeyValue, ibValue& pvarValue) //array index must start from 0
 {
 	const unsigned int index = varKeyValue.GetUInteger();
-	// CheckIndex does NOT throw in the designer, so the access must be guarded on
-	// its own — `m_listValue[oob]` is undefined behaviour, worse than the refusal.
 	if (index >= m_listValue.size()) {
-		CheckIndex(index);   // raises outside the designer; a no-op inside it
+		CheckIndex(index);
 		return false;
 	}
 	pvarValue = m_listValue[index];
@@ -362,7 +354,7 @@ bool ibValueArray::SetAt(const ibValue& varKeyValue, const ibValue& varValue)//a
 // No lengths, no separators: the tree carries the structure that a flat string
 // would have had to encode by hand.
 
-#include "backend/serialize/dataBuilder.h"
+#include "core/serialize/dataBuilder.h"
 
 
 bool ibValueArray::DoSerialize(ibDataNode& node) const

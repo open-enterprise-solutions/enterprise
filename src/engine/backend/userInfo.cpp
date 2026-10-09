@@ -3,8 +3,7 @@
 #include "appData.h"   // user_table macro
 #include "databaseLayer/databaseQueryBuilder.h"   // L2 door — the whole sys_user DAO rides this (no raw ibDatabaseLayer / result set)
 #include "databaseLayer/databaseErrorCodes.h"
-#include "fileSystem/fs.h"
-#include "guid.h"
+#include "core/fileSystem/fs.h"
 
 namespace {
 

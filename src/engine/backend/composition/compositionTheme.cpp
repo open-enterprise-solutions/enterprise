@@ -4,15 +4,13 @@
 // Built inside the function rather than at namespace scope: a colour is not a constant expression, and a
 // palette asked for while another file is still being initialised must already be there.
 //
-// Every theme keeps the rule the first was drawn by — a heading's tint fades with its rung, a record is fainter
-// than any heading, the grid is darker than every fill — so changing the theme changes the colour and never how
-// the structure reads.
+// Every theme keeps one rule — a heading's tint fades with its rung, a record is fainter than any heading, the
+// grid is darker than every fill — so changing the theme changes the colour and never how the structure reads.
 const std::vector<const ibCompositionTheme*>& ibCompositionThemes()
 {
-	// THE ONE THE REPORT WAS PAINTED IN before a theme could be chosen — a neutral green that blends rather
-	// than announces itself.
-	static const ibCompositionTheme s_main = {
-		wxT("Main"), wxTRANSLATE("Main"),
+	// THE ONE REPORTS WERE PAINTED IN until 2026-10-05 — a neutral green that blends rather than announces itself.
+	static const ibCompositionTheme s_meadow = {
+		wxT("Meadow"), wxTRANSLATE("Meadow"),
 		wxColour(0xD4, 0xE4, 0xD4),
 		{ wxColour(0xE2, 0xEE, 0xE2), wxColour(0xE9, 0xF2, 0xE9), wxColour(0xF0, 0xF7, 0xF0) },
 		wxColour(0xFA, 0xFA, 0xF8),
@@ -27,6 +25,7 @@ const std::vector<const ibCompositionTheme*>& ibCompositionThemes()
 		wxColour(0xB0, 0xB4, 0xB8),
 		wxColour(0x40, 0x44, 0x48),
 	};
+	// THE DEFAULT — the blue-grey of the application's own window, so a report reads as part of it.
 	static const ibCompositionTheme s_sea = {
 		wxT("Sea"), wxTRANSLATE("Sea"),
 		wxColour(0xD2, 0xDF, 0xEC),
@@ -55,7 +54,7 @@ const std::vector<const ibCompositionTheme*>& ibCompositionThemes()
 	};
 
 	static const std::vector<const ibCompositionTheme*> s_themes = {
-		&s_main, &s_neutral, &s_sea, &s_sand, &s_blackAndWhite,
+		&s_sea, &s_neutral, &s_meadow, &s_sand, &s_blackAndWhite,
 	};
 	return s_themes;
 }

@@ -24,9 +24,9 @@
 #include "backend/metaCollection/metaSectionObject.h"
 #include "backend/metaCollection/metaCommandGroupObject.h"   // where on the section page an item stands
 #include "backend/typeDescription.h"   // a command's ParameterType — what it is typed FOR
-#include "backend/clsid.h"             // IsReference — read off the id, no lookup
+#include "core/clsid.h"             // IsReference — read off the id, no lookup
 #include "backend/metadataConfiguration.h"
-#include "backend/stringUtils.h"
+#include "core/stringUtils.h"
 
 #include <functional>
 #include <map>

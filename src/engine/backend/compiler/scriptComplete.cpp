@@ -10,7 +10,6 @@
 #include "backend/moduleInfo.h"                  // ibRuntimeModuleDataObject::GetCompileModule
 #include "backend/moduleManager/moduleManager.h" // ibValueModuleManager — the context a snippet parents to
 #include "backend/session/session.h"             // ibSession::EditModuleManagerFor
-#include "backend/diagnostics/journal.h"         // where the refusals are read out when nothing resolved
 #include "backend/typeDescription.h"             // ibTypeDescription - a type, possibly several
 #include "backend/objCtor.h"                     // ibCtorMetaValueType - one door: the metaobject AND the maker
 #include "backend/metaCollection/metaObjectComposite.h"   // where fields live: catalog, document, register, tabular section
@@ -1513,7 +1512,7 @@ public:
 		// module nobody compiled carries an empty bytecode, so there is nothing to stand beside.
 		if (ibCompileModule* host = HostModuleOf(moduleObject)) {
 			try { host->Compile(); }
-			catch (const ibBackendException&) {
+			catch (const ibCoreException&) {
 				// A configuration whose own modules do not compile is not this walk's complaint to
 				// make — it was asked about the CARET. It answers with whatever did resolve.
 			}
@@ -2332,7 +2331,7 @@ std::vector<ibQueryOutline> ibOutlineScriptQueries(const wxString& text, const w
 		if (ibValueModuleManager* manager = ibSession::EditModuleManagerFor(metaData)) {
 			if (ibCompileModule* host = manager->GetCompileModule()) {
 				try { host->Compile(); }
-				catch (const ibBackendException&) { /* the snippet's own context, best effort */ }
+				catch (const ibCoreException&) { /* the snippet's own context, best effort */ }
 				compiler.SetParent(host);
 				for (const ibCompileModule* up = host; up != nullptr; up = up->GetParent())
 					chain.push_back(up);
@@ -2345,7 +2344,7 @@ std::vector<ibQueryOutline> ibOutlineScriptQueries(const wxString& text, const w
 	// like — and this door is called from the MCP server's thread, where taking the caller down to
 	// report a malformed text is the wrong trade. Whatever WAS read is still the answer.
 	try { compiler.Compile(text); }
-	catch (const ibBackendException&) {}
+	catch (const ibCoreException&) {}
 	catch (...) {}
 
 	for (const ibLinqQuery& query : compiler.m_cByteCode.m_listLinq) {

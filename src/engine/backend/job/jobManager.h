@@ -41,7 +41,6 @@
 
 #include "backend/backend.h"
 #include "backend/appDataCtorToken.h"
-#include "backend/guid.h"        // ibGuid — a job names its user by key, never by name
 #include "backend/session/sessionHolder.h"
 #include "backend/compiler/value.h"        // ibValue — the argument-array gate
 #include "backend/job/jobSchedule.h"       // ibJobScheduleDescription — when a job is due
@@ -191,7 +190,7 @@ struct BACKEND_API ibJobDescription {
 	ibJobScheduleDescription m_schedule;
 
 	// IS IT SWITCHED ON? The declaration's schedule keeps existing either way — an inactive job is
-	// still registered, still listed, and still runnable BY HAND (RunNow ignores this, as it
+	// still registered, still listed, and still runnable BY HAND (Execute ignores this, as it
 	// ignores the calendar). Only the tick reads it.
 	//
 	// Why the manager holds it rather than the metadata: switching a misbehaving job off at 3 a.m.
@@ -459,13 +458,13 @@ public:
 	// every lock here is let go.
 	std::vector<std::shared_ptr<ibSession>> TenantsOf(const ibSession* landlord) const;
 
-	// Run one job now, ignoring interval and window. Returns false when the name is
-	// unknown or that job is already running.
+	// Execute one job, ignoring interval and window — the script's `Execute()` / `RunJob(name)`. Returns
+	// false when the name is unknown or that job is already running.
 	//
 	// Not a debugging convenience — without it a job can only be exercised by
 	// waiting out its schedule, which makes "is the job wrong or is the manager
 	// wrong?" unanswerable when a fresh tenant misbehaves.
-	bool RunNow(const wxString& name);
+	bool Execute(const wxString& name);
 
 	// Cap on jobs registered at once. Each holds a session, and a session holds a
 	// connection out of ibConnectionPool — whose Checkout BLOCKS once maxSize is
@@ -680,7 +679,7 @@ public:
 	bool ApplySettings(const ibGuid& key, bool active, const ibJobScheduleDescription& schedule);
 
 	// The job registered under this key, by NAME — what a settings value needs to run one by hand
-	// (RunNow is keyed by name, because that is the manager's own identity for an entry).
+	// (Execute is keyed by name, because that is the manager's own identity for an entry).
 	wxString FindNameByKey(const ibGuid& key) const;
 
 private:

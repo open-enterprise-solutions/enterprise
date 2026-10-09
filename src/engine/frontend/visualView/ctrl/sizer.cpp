@@ -1,5 +1,5 @@
 #include "sizer.h"
-#include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
+#include "core/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #ifdef OES_USE_WEB
 // Needed so ibWebSizer's SetMinSize / Layout no-ops are visible when
 // UpdateSizer calls through an ibFrontendSizer* that resolves to

@@ -1,0 +1,45 @@
+#ifndef __PROPERTY_SIZE_H__
+#define __PROPERTY_SIZE_H__
+
+#include "frmclient/backend/propertyManager/propertyObject.h"
+
+//base property for "size"
+class FRMCLIENT_API ibPropertySize : public ibProperty {
+	static wxVariantData* CreateVariantData(const wxSize& val);
+public:
+	wxSize GetValueAsSize() const;
+	wxString GetValueAsString() const { return typeConv::SizeToString(GetValueAsSize()); }
+
+	void SetValue(const wxSize& val) { m_propValue = CreateVariantData(val); }
+	void SetValue(const wxString& val) { SetValue(typeConv::StringToSize(val)); }
+
+	ibPropertySize(ibPropertyCategory* cat, const wxString& name, const wxSize& s = wxDefaultSize)
+		: ibProperty(cat, name, CreateVariantData(s))
+	{
+	}
+
+	ibPropertySize(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxSize& s = wxDefaultSize)
+		: ibProperty(cat, name, label, CreateVariantData(s))
+	{
+	}
+
+	ibPropertySize(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString, const wxSize& s = wxDefaultSize)
+		: ibProperty(cat, name, label, helpString, CreateVariantData(s))
+	{
+	}
+
+	// set/get property data
+	virtual bool SetDataValue(const ibValue& varPropVal);
+	virtual bool GetDataValue(ibValue& pvarPropVal) const;
+
+	//load & save object in control 
+
+	// readable node value
+	virtual bool ReadNodeValue(const ibDataValue& value) override;
+	virtual bool WriteNodeValue(ibDataValue& value) const override;
+
+public:
+
+};
+
+#endif

@@ -8,7 +8,8 @@
 #include "backend/job/jobManager.h"   // the job records are swept once the surviving jobs are known
 
 // ms_instance / Get / Initialize / Destroy retired — ownership moved
-// to ibApplicationInstance::m_activeMetaData (a unique_ptr). The fabric
+// to ibApplicationInstance::m_activeMetaData, shared with every session let
+// in while it was active (ibSession::GetMetaData). The fabric
 // lives on ibApplicationInstance::CreateActiveMetaData, its tear-down in the base's Close;
 // callers reach the active metadata through `appEnv::ActiveMetaData()`
 // (which the legacy `activeMetaData` macro now redirects to).
@@ -24,7 +25,7 @@
 #include "backend/backend_exception.h"   // catch ibBackendException at the LoadCommonTree boundary
 #include "backend/query/schemaSnapshot.h"   // ibSchemaSnapshot / ibSchemaTable — ContributeTables drives data dump
 #include "backend/query/dataMover.h"         // ibDataMover::Dump / Restore (L3-3 row mover)
-#include "backend/serialize/dataBuilder.h"      // ibDataBuilder / ibBinaryProvider — top-level structure builder
+#include "core/serialize/dataBuilder.h"      // ibDataBuilder / ibBinaryProvider — top-level structure builder
 #include "backend/objCtor.h"                       // ibCtorMetaValueType::GetClassName — clsid -> type name
 
 bool ibMetaDataConfigurationBase::LoadConfigFromFile(const wxString& strFileName)
@@ -233,7 +234,7 @@ bool ibMetaDataConfigurationFile::RunDatabase(int flags)
 		if (!m_commonObject->RunSubtree(flags, ibValueMetaObject::ibRunPhase::After))
 			return false;
 	}
-	catch (const ibBackendException& err) {
+	catch (const ibCoreException& err) {
 		ibJournalError(wxT("metadata.config"),err.GetErrorDescription());
 		return false;
 	}
@@ -412,7 +413,7 @@ bool ibMetaDataConfigurationFile::LoadCommonTree(const ibClassID& clsid, ibReade
 	try {
 		fresh->ApplyDataNode(rootNode);
 	}
-	catch (const ibBackendException& err) {
+	catch (const ibCoreException& err) {
 		// ⭐ THE ENGINE'S WORDS REACH THE USER — the twin of the report / data-processor catches.
 		// A configuration that refuses to load is the costliest of the three to face in silence.
 		ibJournalError(wxT("metadata.config"),wxT("%s"), err.GetErrorDescription());
@@ -457,12 +458,11 @@ bool ibMetaDataConfiguration::OnInitialize(const int flags)
 	if (!LoadDatabase())
 		return false;
 
-	// Localization: pin the process-wide default to the configuration's
-	// main language code (metadata short-code form ru/en/uk). Pre-auth
-	// callers without a session bound — launcher / login screen — read
-	// through this default. Per-session active language is assigned
-	// later by SetUserInfo on authentication and stays cached on the
-	// session for its whole life.
+	// Localization: pin the configuration's main language code (metadata
+	// short-code form ru/en/uk) into the translate state of whoever loads
+	// it — the designer's session, a base's first session. Every other
+	// session takes its base's in CompileRoot; the user's preferred
+	// language is assigned by SetUserInfo on authentication and wins.
 	ibBackendLocalization::SetUserLanguage(GetLangCode());
 
 	if ((flags & _app_start_create_debug_server_flag) != 0) {
@@ -556,7 +556,8 @@ bool ibMetaDataConfigurationStorage::OnDestroy()
 
 ibMetaDataConfigurationStorage::ibMetaDataConfigurationStorage(ib::AppDataCtorToken owner) :
 	ibMetaDataConfiguration(owner),
-	m_configMetadata(new ibMetaDataConfiguration(owner)) {
+	m_configMetadata(MakeShared<ibMetaDataConfiguration>(owner)),
+	m_owner(owner) {
 	// Designer-edit configuration carries a compile-value cache + its module-manager —
 	// built with the runtime image (CreateDesignerCache below); callsites gate on
 	// `if (auto* cc = metaData->GetCompileCache())` rather than appData->DesignerMode().
@@ -580,15 +581,15 @@ std::unique_ptr<ibCompileValueCache> ibMetaDataConfiguration::CreateDesignerCach
 	return cache;
 }
 
-ibMetaDataConfigurationStorage::~ibMetaDataConfigurationStorage() {
-	wxDELETE(m_configMetadata);
-}
+ibMetaDataConfigurationStorage::~ibMetaDataConfigurationStorage() = default;   // the database's copy goes with its last holder
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 bool ibMetaDataConfigurationStorage::LoadDatabase(int flags)
 {
-	if (m_configMetadata->LoadDatabase(onlyLoadFlag)) {
+	// The database's copy is read here once, the first time; a rollback leaves it as it is (the database still
+	// publishes it), and an apply replaces it whole — never re-read in place under the sessions working in it.
+	if (m_configMetadata->IsConfigOpen() || m_configMetadata->LoadDatabase(onlyLoadFlag)) {
 
 		//close if opened
 		if (ibMetaDataConfiguration::IsConfigOpen()
@@ -597,7 +598,7 @@ bool ibMetaDataConfigurationStorage::LoadDatabase(int flags)
 		}
 
 		if (ibMetaDataConfiguration::LoadDatabase()) {
-			Modify(!CompareMetadata(m_configMetadata));
+			Modify(!CompareMetadata(GetConfiguration()));
 			if (m_configNew)
 				SaveDatabase(saveConfigFlag);
 			m_configNew = false;
@@ -786,7 +787,7 @@ bool ibMetaDataConfigurationBase::SaveConfiguration(wxString& refusal)
 			return false;
 		}
 	}
-	catch (const ibBackendException& e) {
+	catch (const ibCoreException& e) {
 		refusal = e.GetErrorDescription();
 		return false;
 	}
@@ -878,7 +879,7 @@ bool ibMetaDataConfigurationBase::ApplyConfiguration(wxString& refusal,
 		// that did not happen — which is the whole value of it to a watcher that did not start it.
 		outcome.m_applied = true;
 	}
-	catch (const ibBackendException& e) {
+	catch (const ibCoreException& e) {
 		// OnSaveDatabase self-rolls-back and releases exclusive on a thrown DDL error (its own
 		// try/catch), so there is no transaction left open here — only a message to carry out.
 		refusal = e.GetErrorDescription();

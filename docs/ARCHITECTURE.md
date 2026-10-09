@@ -44,7 +44,7 @@
                         └─────────────────────────────────────┘
 ```
 
-Communication between `frontend.dll` and `backend.dll` goes through abstract C++ interfaces exported from `backend.dll`. The frontend never accesses database drivers or the compiler directly.
+Communication between `frontend.dll` and `backend.dll` goes through abstract C++ interfaces exported from `backend.dll`. The frontend never accesses database drivers or the compiler directly. Under `backend.dll` sits `core.dll` — see [Core Layer](#core-layer-coredll).
 
 ---
 
@@ -52,18 +52,41 @@ Communication between `frontend.dll` and `backend.dll` goes through abstract C++
 
 ### Application Layer (executables)
 
-Each executable links against both DLLs and provides a `wxApp` subclass that selects the run mode:
+Each executable links against both DLLs and provides a `wxApp` subclass that selects the run mode and the kind of its own session:
 
-| Executable | Run Mode (`ibRunMode`) | Purpose |
-|---|---|---|
-| `launcher.exe` | `eLAUNCHER_MODE` | Connection chooser; creates/selects database |
-| `designer.exe` | `eDESIGNER_MODE` | Full IDE — metadata editor, form designer, debugger client |
-| `enterprise.exe` | `eRUNTIME_MODE` | Desktop thick-client runtime (GUI, single user session per process) |
-| `wenterprise-server.exe` | `eWEB_RUNTIME_MODE` | Web runtime host — HTTP server, N per-cookie user sessions, browser client |
-| `appserver.exe` | `eSERVICE_MODE` | The application server: holds the bases of its server folder, headless |
-| `codeRunner.exe` | `eSERVICE_MODE` | Executes a single script module |
+| Executable | Run Mode (`ibRunMode`) | Own session (`ibSessionKind`) | Purpose |
+|---|---|---|---|
+| `launcher.exe` | `eLAUNCHER_MODE` | — | Connection chooser; creates/selects database |
+| `designer.exe` | `eFILE_MODE` | `Designer` | Full IDE — metadata editor, form designer, debugger client |
+| `enterprise.exe` | `eFILE_MODE` | `Enterprise` | Desktop thick-client runtime (GUI, single user session per process) |
+| `wenterprise-server.exe` | `eFILE_MODE` | `WebServer` | Web runtime host — HTTP server, N per-cookie `WebClient` sessions, browser client; given its DBMS on the command line |
+| `appserver.exe` | `eSERVER_MODE` | `Service` | The application server: holds the bases of its server folder, headless; protocol clients are `ThinClient` / `ThinDesigner` |
+| `codeRunner.exe` | `eSANDBOX_MODE` | — | Executes a single script module |
 
-> Both thick-client and web hosts are "runtime", differing only in UI transport — hence `eRUNTIME_MODE` / `eWEB_RUNTIME_MODE` (renamed from the former `eENTERPRISE_MODE` / `eWEB_ENTERPRISE_MODE`).
+> The run mode says only how the process holds the base — serving it (`eSERVER_MODE`) or as a file base for the one who started it (`eFILE_MODE`). What a session works in is its kind: either mode hosts designers, runtimes and jobs alike, and `DesignerMode()` / `EnterpriseMode()` are answered by the current session's kind. The base's FIRST SESSION picks its configuration by its kind — editable for a designer kind, runtime otherwise; a server's first session is the server itself.
+
+### Core Layer (`core.dll`)
+
+`src/engine/core/` — what the engine and its clients mean by the same words. Under `backend` and `frmclient`; wx base only;
+reads no base, runs no script, draws no window. `CORE_API` / `CORE_EXPORTS` (`core/core.h`, also `IB_FORCEINLINE` / `IB_NOINLINE`).
+
+| Unit | Holds |
+|---|---|
+| `types.h` | id typedefs (`ibRoleID`, `ibMetaID`, `ibSourceId`, `ibFormID`, `ibActionID`, `ibPictureID`, `ibVersionID`), `ibValueTypes`, `ibDateFractions`, `ibCtorObjectType`, the primitives' class ids (`g_valueUndefinedCLSID`, `g_valueBooleanCLSID` … `g_valueNullCLSID`), `COMPONENT_TYPE_*`, the packed value node's field names `kValueFieldClsid` "t" / `kValueFieldData` "v" |
+| `anyValue` | `ibAnyValue` — the INTERFACE every value answers (`GetType`, `IsEmpty`, `GetBoolean`, `GetNumber`, `GetDate`, `GetString`). The engine's `ibValue` and the client's derive from it and hold the value each its own way; what only asks these takes either |
+| `clsid.h`, `fstring`, `fnumber`, `fdatetime`, `guid`, `stringUtils.h` | `ibClassID`, `ibString` (+ pool), `ibNumber`, `ibDateTime`, `ibGuid` |
+| `formatString` | `ibFormatString` — the `Format` string as a value: `Parse` / `Render`, `Apply(const ibAnyValue&)`, `FromTypeDesc` (the format a type description gives, over either side's description) |
+| `fileSystem/` | `ibReader` / `ibWriter`, memory readers/writers, `u32`/`u64`…, lz block compression |
+| `serialize/` | `ibDataNode` / `ibDataValue`, binary provider, `ibJsonProvider`, JSON text. A type is named only by the injected resolver (`SetTypeResolver`) |
+| `exception` | `ibCoreException : std::exception` — the base of every refusal (see [Exception taxonomy](#exception-taxonomy)) |
+| `localization` | `ibLocalization` — template (`ibLocalizationEntryArray` or `en = '…'; ru = '…';`) + a language in, that language's text out; missing language → the first written. The owner passes the language |
+| `diagnostics/` | the technology journal (`ibTechJournal`, `ibJournal*`) — ONE per process, the engine's, the protocol's and the client's lines in one file; `ibCrashGuard` (idempotent `Install`), leak tracker, `debugTrace.h` |
+| `build` | `GetBuildId` / `GetBuildStamp`, the program version |
+| `core.cpp` | `DllMain`: `DLL_THREAD_DETACH` drains the `ibString` pool for every process that holds one, engine or not |
+
+- Links: backend → core (PUBLIC); protocol → core; frmclient → core + protocol; enterprise-thin → core.
+- Not in core: `typeconv` (fonts/colours/GDI), frmclient's `dataProtocol` seam, the value's storage (each side's own).
+- Every library carries a version resource (`res/<name>.rc`).
 
 ### Backend Layer (`backend.dll`)
 
@@ -71,16 +94,30 @@ The backend is the core engine. It is self-contained — no GUI dependencies. Ke
 
 - **`ibApplicationHost`** (`src/engine/backend/appHost.h`) — the PROCESS: the bases it holds, and what belongs to the process rather than to any base — the plugins, the platform locale and the syntax-helper corpus, the one worker pool, the limits read from `backend.conf`. See [Processes and bases](#processes-and-bases).
 - **`ibApplicationInstance`** (`src/engine/backend/appData.h`) — ONE BASE: its connection pool, lock manager, session registry, job manager, MCP server, settings storage, logger and metadata. A process holds one (every desktop host, the web host, the tests) or several (the application server). Reached through the `appData` macro, which answers the base of the session the thread works for — there is no global current base. Per-session state (user info, ProcUnits, frame) lives on `ibSession`; sys_user on `ibUserInfo`; the sys_session snapshot on `ibSessionSnapshot` produced by `ibSessionRegistry`.
-- **`ibMetaDataConfiguration`** (`src/engine/backend/metadataConfiguration.h`) — loads, saves, and manages the metadata tree (all business objects). Accessed via `activeMetaData`. Stores compile cache (compiled bytecode) per module descriptor; runtime instances live in sessions.
-- **`ibSession` / `ibSessionRegistry`** (`src/engine/backend/session/`) — per-session state and the base's session manager (one registry per base). The session is reachable via `ibSession::Current()`, which dispatches by the registry's `AccessMode` — `Single` (desktop, the application server's bases, codeRunner) returns the lone session regardless of thread; `Shared` (wenterprise-server) does per-thread lookup with a process-wide fallback. `ibSessionScope` and `ibSessionThreadBinding` are the RAII helpers that bind a session to the calling thread. See [Sessions and Runtime Ownership](#sessions-and-runtime-ownership).
+- **`ibMetaDataConfiguration`** (`src/engine/backend/metadataConfiguration.h`) — loads, saves, and manages the metadata tree (all business objects). Accessed via `activeMetaData` — the calling session's own configuration. Stores compile cache (compiled bytecode) per module descriptor; runtime instances live in sessions.
+- **`ibSession` / `ibSessionRegistry`** (`src/engine/backend/session/`) — per-session state and the base's session manager (one registry per base). The session is reachable via `ibSession::Current()`: the calling thread's own binding, else the base's fallback — the process's own session in that base (never a job's or a web tab's). `ibSessionScope` and `ibSessionThreadBinding` are the RAII helpers that bind a session to the calling thread. See [Sessions and Runtime Ownership](#sessions-and-runtime-ownership).
 - **`ibDebuggerServer`** (`src/engine/backend/debugger/debugServer.h`) — TCP server that accepts designer connections and relays debugger events.
 
 ### Frontend Layer (`frontend.dll`, `wfrontend.dll`)
 
 Two sibling DLLs share the same form/view/control code paths through `OES_USE_WEB` ifdefs and `ibFrontendWindow` typedef (`wxWindow` for desktop, `ibWebWindow` for web):
 
-- **`frontend.dll`** — wxWidgets GUI. Used by `enterprise.exe`, `designer.exe`, `launcher.exe`, `codeRunner.exe`. (`appserver.exe` links `backend` alone.)
+- **`frontend.dll`** — wxWidgets GUI. Used by `enterprise.exe`, `designer.exe`, `launcher.exe`, `codeRunner.exe`. (`appserver.exe` links `backend` and `frmserver`.)
 - **`wfrontend.dll`** — web UI (HTML serialisation of form control trees via `ToJSON()`, cpp-httplib transport). Used by `wenterprise-server.exe`.
+
+### Thin client layer (`protocol.dll`, `frmserver.dll`, `frmclient.dll`, `fileserver.dll`)
+
+`frontend.dll` carries two functions at once — the forms' logic and their drawing. The thin client splits them, with the
+[client protocol](public/client-protocol.md) between: **`frmserver`** holds the forms on the server and answers clients;
+**`frmclient`** draws them (main window, document/view, controls, editors) for **`enterprise-thin.exe`**; **`protocol`** is
+the contract both keep (`protocol.h`, no dependencies — `frmserver` includes it only) and the talking side's library
+(`frmclient` and the web server link it). **`fileserver`** puts `backend` + `frmserver` into the client's process for a
+file base. `frmclient` does not link `backend`; it links `core` (node and JSON, string, number, date, guid, exception,
+localization — the same classes the engine uses). `frmclient/backend/` keeps reduced copies of the rest — same names and
+classes, only what the client's windows use (type description, settings schema, sheet and composition descriptions) —
+meeting the wire at `frmclient/backend/serialize/dataProtocol.h`; its `backend_core.h` / `backend.h` /
+`backend_exception.h` just include core. Chain: core → backend → frmserver ⇄ protocol ⇄ frmclient → enterprise-thin.
+See [thin-client.md](public/thin-client.md).
 
 Shared frontend objects:
 - **`ibValueForm`** — the runtime representation of an open form; holds the control tree and responds to user events. Same class on both builds.
@@ -112,8 +149,10 @@ A connection layer knows its pool (`ibDatabaseLayer::GetPool`), so a transaction
   exe-specific main()
     • argv parsing, runMode pick
     • ibCrashGuard::Install (headless) OR ibWxApp::OnInit (GUI)
-    • ibApplicationInstance::CreateFileAppDataEnv(ibFileInstanceRequest)
-      or CreateServerAppDataEnv(ibServerInstanceRequest)     ← run mode, name, locale + the DBMS's
+    • ibApplicationInstance::CreateAppDataEnv(ibFileInstanceRequest)  ← the type is the run mode; name, locale,
+                                                      the folder, a PostgreSQL server when named (else Firebird)
+      or CreateAppDataEnv(ibServerInstanceRequest)  ← the server folder + the base's name: the DBMS is read
+                                                      from server.conf by the opening itself
           │
           ├─ ibApplicationHost::Ensure(runMode)   the process comes up with its first base;
           │                                       one beyond backend.conf `Bases` is refused
@@ -140,7 +179,7 @@ The init list is **the** ordering contract:
 | 6 | `m_mcpServer` | The designer's MCP listener — started by a designer session. |
 | 7 | `m_settingsStorage` | sys_settings — what people saved on their forms and lists. |
 
-`m_logger` is created by `Open` (`CreateLogger`) after the tables exist. `m_activeMetaData` is populated by `CreateActiveMetaData(mode, flags)` — `ibMetaDataConfiguration` for runtime, `ibMetaDataConfigurationStorage` for designer; launcher and codeRunner have none. The plugins and the syntax-helper corpus (constructed in `InitLocale()` once the locale is settled — see `docs/syntax-helper-design.md`) are the process's.
+`m_logger` is created by `Open` (`CreateLogger`) after the tables exist. `m_activeMetaData` is populated by `CreateActiveMetaData(applicationInstance, kind, flags)` at the base's first session, by its kind — `ibMetaDataConfigurationStorage` for a designer kind, `ibMetaDataConfiguration` otherwise; launcher and codeRunner have none. It is held for the sessions to come: a session takes its own reference when it is let in and lets it go when it leaves. A designer's apply replaces it with the configuration it published (`ReplaceActiveMetaData`); sessions already working finish on the old one, which closes with its last holder. Every metadata — a configuration, an external report or data processor, a configuration file — is made by `ibMetaData::MakeShared` and held by `shared_ptr` by whoever works in it. The plugins and the syntax-helper corpus (constructed in `InitLocale()` once the locale is settled — see `docs/syntax-helper-design.md`) are the process's.
 
 ### Closing a base (`ibApplicationHost::Close` → `ibApplicationInstance::Close`)
 
@@ -178,11 +217,11 @@ A headless process that serves the bases of its **server folder** (`--dir`, by d
   <Id>/            one folder per base: its journal (oeslog) and infobase.conf; a Firebird base's sys.fdb too
 ```
 
-- **Settings in three layers**, key by key: built-in values → `backend.conf` (the process: `Locale`, `Workers`, `Bases`, the default `Connections`) → the base's `infobase.conf` (`Connections` to ITS DBMS). 0 means the default; a value that cannot be used is said in the journal (`ibApplicationHost::ReadCount`).
+- **Settings in three layers**, key by key: built-in values → `backend.conf` (the process: `Locale`, `Workers`, `Bases`, the default `Connections`) → the base's `infobase.conf` (`Connections` to ITS DBMS). `Workers` and `Bases` are a maximum, 0 = no limit (the pool grows as sessions bring work); `Connections` 0 = the default; a value that cannot be used is said in the journal (`ibApplicationHost::ReadCount`).
 - **Secrets** are sealed in `server.conf` with AES-256-GCM (`ibFieldCipher`, key in `server.key`); plain text is refused. `appserver --set-password=<base>/<Password|IbPassword>` reads one from the keyboard and seals it.
-- **Opening:** every base through `CreateFile/ServerAppDataEnv` in `eSERVICE_MODE`, then a session of kind `Service` logged into it. A base that does not open or refuses the login is said and closed alone; the rest are served. Firebird and PostgreSQL bases share one process.
-- **Who may come in** (`ibServiceExclusivePolicy`, asked at open by `CanOpen` and at every session by `CanAdd`): application servers share a base with application servers, clients with clients — a client (designer, enterprise, the web host) is refused while a server serves the base, and a server while a client uses it. What several servers on one base share already lives in it: `sys_session`, `sys_lock`, a job's claim and its clock in `sys_job`.
-- **Journal:** every line about a base carries its name — `(trade1) source …` — and the console shows what goes to the file.
+- **Opening:** every base through `CreateFile/ServerAppDataEnv` in `eSERVER_MODE`, then a session of kind `Service` logged into it. A base that does not open or refuses the login is said and closed alone; the rest are served. Firebird and PostgreSQL bases share one process.
+- **Who may come in** (`ibServiceExclusivePolicy`, asked at open by `CanOpen` and at every session by `CanAdd`): application servers (`eSERVER_MODE`) share a base with application servers, file bases with file bases — a file-base process (designer, enterprise, the web host) is refused while a server serves the base, and a server while a file base uses it. The row's run mode decides, whatever its kind: a server's thin clients are the server's. What several servers on one base share already lives in it: `sys_session`, `sys_lock`, a job's claim and its clock in `sys_job`.
+- **Journal:** every line about a base carries its name — `(trade1) source …`. The console shows the server's own lines and every warning and error; the running commentary stays in the file.
 - **Stop:** Ctrl+C, SIGTERM or the console closing raises a flag; the main thread ends the server's sessions, then closes every base newest first.
 - **Not yet:** a port and a protocol for clients (the host's protocol is the next stage), choosing which bases to start (`--base`, for a coordinator), running as a Windows service, creating a new base (only the designer creates the system tables).
 
@@ -225,7 +264,13 @@ Two header-only helpers in `frontend/diagnostics/` cover the boilerplate every b
 ### Exception taxonomy
 
 ```
-  ibBackendException                      ─── base; per-thread error chain
+ibCoreException : std::exception          ─── core/exception.h. The base of every
+  │                                            refusal; thrown by the core itself
+  │                                            (read past a block's end, wrong value
+  │                                            kind, malformed JSON). frmclient's
+  │                                            ibBackendException is an alias of it.
+  │
+  ibBackendException                      ─── engine base; per-thread error chain
     │                                          (PushLastError / DrainLastErrors).
     │
     ├── ibBackendDatabaseException        ─── DB-tier failure. Enum Kind:
@@ -268,6 +313,10 @@ Two header-only helpers in `frontend/diagnostics/` cover the boilerplate every b
     └── ibBackendInterruptException       ─── The user stopped the program.
 ```
 
+A handler that only tells a person what went wrong catches `ibCoreException`. The script runtime's `Try` meets a core
+refusal as the engine's own (re-raised as `ibBackendCoreException`, then the same `Try` / `ProcessError` path); the
+desktop's main-loop handler shows it and continues.
+
 ⭐ **Each subsystem owns its exception TYPE; `Kind` says what went wrong inside it.** One type
 plus a string would make every handler match on message TEXT. The division is by WHO refused,
 which is what a caller can act on — see [exceptions.md](private/exceptions.md).
@@ -297,7 +346,7 @@ Per-driver `ClassifyDatabaseError(int nativeCode)` on each `ibDatabaseErrorRepor
 | `byteCodeAOT.cpp` | `ibByteCode::SerializeAOT/DeserializeAOT` | Binary persistence for the AOT cache (`sys_bytecode_cache.bc_blob`); host-endian linear format with magic `'PBC1'` + format version |
 | `procUnit.h/cpp` | `ibProcUnit` | Interpreter: executes `ibByteCode` against a variable stack |
 | `procContext.h/cpp` | `ibRunContext` | Execution context: local variable frame, call stack |
-| `value.h/cpp` | `ibValue` | Universal value type — tag enum `ibValueTypes` in `backend_core.h`: `TYPE_EMPTY` (=0, the "undefined" value), `TYPE_BOOLEAN`, `TYPE_NUMBER` (`ibNumber`), `TYPE_DATE`, `TYPE_STRING`, `TYPE_NULL`, `TYPE_REFFER` / `TYPE_CONST_REFFER`, object kinds `TYPE_VALUE` / `TYPE_ENUM` / `TYPE_OLE` / `TYPE_FUNCTION` / `TYPE_ITERATOR` |
+| `value.h/cpp` | `ibValue` | Universal value type — tag enum `ibValueTypes` in `core/types.h`: `TYPE_EMPTY` (=0, the "undefined" value), `TYPE_BOOLEAN`, `TYPE_NUMBER` (`ibNumber`), `TYPE_DATE`, `TYPE_STRING`, `TYPE_NULL`, `TYPE_REFFER` / `TYPE_CONST_REFFER`, object kinds `TYPE_VALUE` / `TYPE_ENUM` / `TYPE_OLE` / `TYPE_FUNCTION` / `TYPE_ITERATOR` |
 | `codeDef.h` | enums | Opcode (`OPER_*`) and keyword (`KEY_*`) definitions |
 
 ### `src/engine/backend/databaseLayer/`
@@ -581,7 +630,7 @@ A metadata's **open state is the presence of its image**, not a separate boolean
 
 ### Serialization — `ibDataNode` + format providers
 
-Metadata serialization runs through a uniform, format-agnostic tree (`src/engine/backend/serialize/dataBuilder.h`):
+Metadata serialization runs through a uniform, format-agnostic tree (`src/engine/core/serialize/dataBuilder.h`):
 
 - **`ibDataNode`** — one self-similar node of the structure tree (clsid + metaId + field bag + property bag + child nodes). A metaobject contributes its data into a node; a composite value can itself *be* a child node (`ibDataKind::Child`).
 - **`ibFormatProvider`** — abstract `Write(node, writer)` / `Read(reader, node)`. Concrete providers:
@@ -646,17 +695,18 @@ OES distinguishes between **metadata** (compile-time, process-wide, shared) and 
 - **State machine** — `ibSessionState` (Created / Added / Rejected / Stopping / Gone), `ibAuthState` (Anonymous / Authenticated / AuthFailed)
 - **User info** — `ibUserInfo` (formerly `ibApplicationDataUserInfo`) — OES-user (from `sys_user` table), distinct from the DB-level admin user used to open the database connection. Plus `m_sessionRawPassword` — plain-text cached only for Designer "Start debugging" so spawned children can re-authenticate without prompting. `ibUserInfo` itself owns sys_user CRUD as static factories — `appData` no longer mediates.
 - **Working date** — `m_workDate` per-session (replaces the legacy static `ibValueSystemFunction::ms_workDate` so two web sessions don't step on each other).
-- **Configuration language** — `m_languageCode` (explicit override) plus `m_resolvedLanguageCode` (cached `override || user-default`). Selects which metadata synonym / form-label translation is shown. Per-session so concurrent web tabs each render their own user's language. Distinct from the platform's wxLocale (UI gettext, process-wide). Routed through `ibBackendLocalization::GetActiveLanguage()` / `SetActiveLanguage()`.
+- **Translate state** — `ibTranslateState`: explicit override, the user's language, the configuration's own, and the resolved code (`override || user || configuration`). Selects which metadata synonym / form-label translation is shown. Per-session, so concurrent web tabs each render their own user's language and two bases in one process each keep their own. Distinct from the platform's wxLocale (UI gettext, process-wide). Read through `ibBackendLocalization::GetUserLanguage()`.
+- **Compile state** — `ibCompileState`: the code style (CES / VES) the session's modules compile in, taken from its base's configuration. Like the interpreter's `ibProcUnitState`, a thread with no session (codeRunner, tests) has its own `thread_local` one.
 - **Root module manager** — `m_root : ibValuePtr<ibValueModuleManagerRuntimeConfiguration>`. Created via `EnsureRoot()` in `ibSessionRegistry::NotifyAuthenticated`'s middle phase (between `OnFirstConnect` and `OnAuthenticated` listener phases). Stays nullptr for sessions that never run scripts — **the Designer never creates a root** (`EnsureRoot` is gated on `DesignerMode()`; it uses the lightweight `ibValueModuleManagerDesigner` in the compile cache instead), and likewise WebServer technical / Launcher. Objects/records/modules reach the right manager through the `ibSession::GetEditModuleManager(metaData)` seam (Designer → compile-cache designer manager; runtime → `m_root`). See `module-manager-split.md`.
 - **Frame** — `virtual ibBackendDocFrame* GetFrame() const { return nullptr; }` on base `ibSession`. Frame storage lives on derived sessions that have a GUI surface (e.g. `ibWebClientSession::SetFrame(ibWebFrame*)`; `ibGUISession` desktop variants). Base has no `m_frame` field — null means "no frame on this session" (codeRunner / wenterprise-server technical session). The frame belongs to the session that created it, not to a process-wide singleton.
 - **Per-session debug** — optional `ibDebugSession` (CV/mutex + per-session watch expressions + run context) so concurrent web sessions can each enter their own debug loop without blocking.
 - **Exclusive (monopoly) mode** — `m_exclusive`. At most one session in the registry holds it; while held, every other Connect parks until release.
 - **Server back-link** — `m_server : weak_ptr<ibSession>` from a server-spawned client to the session that hosts it (e.g., wes's WebClient → wes's WebServer). Used by shutdown logic, cluster topology, and admin UI.
 
-`ibSession::Current()` is the canonical "session this code is currently working on". Dispatch depends on `AccessMode` (a process-wide setting fixed at startup before any session is created):
+`ibSession::Current()` is the canonical "session this code is currently working on". One rule in every host:
 
-- **Single** (desktop, codeRunner, each base of the application server) — one session per registry for its lifetime. `Current()` returns the lone session regardless of thread.
-- **Shared** (wenterprise-server) — per-thread lookup of bound sessions, with a process-wide fallback for threads that aren't bound (registry consumer, signal handlers).
+- **The thread's binding** — a thread that bound a session (`ibSessionScope`, `ibSessionThreadBinding`, a job's run) works for it.
+- **Else the base's fallback** — the process's own session there (`IsProcessSessionKind`: the designer's or the client's window, the application server's login, wenterprise-server's `WebServer` row). A job or a web tab never becomes it.
 
 `ibSessionScope` (legacy) and `ibSessionThreadBinding` (preferred for app entry points) are the RAII helpers that bind a session to the calling thread. The interpreter no longer reads global `thread_local` state directly: `ibProcUnitState` lives under `ibSession` (`session.h`), and the only `thread_local` slot in `session.cpp` is a fallback for sessionless callers (codeRunner sandbox / system bootstrap). The worker pool (`workerPool.h` + `workerPoolHeadless.cpp`) leases a session into a thread via `tl_currentLease` and runs the request on it.
 
@@ -695,7 +745,7 @@ ibSession::m_root  →  ibValueModuleManagerRuntimeConfiguration  (per-session r
 - Forms, per-instance catalog/document runtimes, external data processors / reports hang off as children of the root via the same descriptor mixin (`m_parent` raw-pointer chain; container enforces parent-outlives-child).
 - Concurrent sessions therefore run on **physically separate** ProcUnit instances. The shared resource is the immutable `ibByteCode` (read-only); per-session frame stacks, locals, and binders are isolated.
 
-**`m_runtimeMutex` guards bring-up vs teardown, not execution.** `ibValueModuleManager::AttachRuntime(session)` (called from `ibApplicationInstance::CreateSession` for desktop / `ibWebSession::Login` for web) builds the runtime tree under the lock. `DetachRuntime(session)` drops it under the same lock. Per-session script execution does NOT take this lock — different sessions execute in parallel on their own descriptors.
+**`m_runtimeMutex` guards bring-up vs teardown, not execution.** `ibValueModuleManager::AttachRuntime(session)` (called from `ibSession::CompileRoot` at login, on every run mode; a configuration that does not start throws there and the login is refused) builds the runtime tree under the lock. `DetachRuntime(session)` drops it under the same lock. Per-session script execution does NOT take this lock — different sessions execute in parallel on their own descriptors.
 
 **Worker pool dispatch.** Script execution runs on a worker thread leased via `ibWorkerPool` (`backend/session/workerPool.h` + headless impl). Each request leases a session into `tl_currentLease` for the call's duration; `ibSession::Current()` resolves through this slot. Desktop has N=1 session on the wx main thread; web has N per-cookie sessions, each pinned to its own worker. The script interpreter never touches global `thread_local` state directly — `ibProcUnitState` lives under `ibSession`, the one `thread_local` fallback in `session.cpp` exists only for sessionless callers (codeRunner sandbox / system bootstrap).
 
@@ -705,7 +755,7 @@ ibSession::m_root  →  ibValueModuleManagerRuntimeConfiguration  (per-session r
 
 ### Designer — compile only
 
-Designer (`eDESIGNER_MODE`) creates sessions without runtime — `AttachRuntime` returns early for Designer role. Designer reads `ibCompileCode` for autocomplete, function search, jump-to-definition, and cascading recompile. Scripts are not executed. Autocomplete surfaces bound names by reading the compile module's bind tables and walking the **compile-module** parent chain — from the backend since 2026-09-08 (`ibValueAtCaret` / `ibNamesAtCaret`, `backend/compiler/scriptComplete.h`); the editor's own precompiler is deleted and it keeps only its lexer. See [Name binding § Designer](private/name-binding.md#designer--surfacing-the-same-binds). Debug sessions attach to a separate runtime process (enterprise.exe / wenterprise-server.exe) via the TCP debug protocol.
+A designer session (`Designer`, `ThinDesigner`) has no runtime — `AttachRuntime` returns early for a designer kind. Designer reads `ibCompileCode` for autocomplete, function search, jump-to-definition, and cascading recompile. Scripts are not executed. Autocomplete surfaces bound names by reading the compile module's bind tables and walking the **compile-module** parent chain — from the backend since 2026-09-08 (`ibValueAtCaret` / `ibNamesAtCaret`, `backend/compiler/scriptComplete.h`); the editor's own precompiler is deleted and it keeps only its lexer. See [Name binding § Designer](private/name-binding.md#designer--surfacing-the-same-binds). Debug sessions attach to a separate runtime process (enterprise.exe / wenterprise-server.exe) via the TCP debug protocol.
 
 ---
 
@@ -892,7 +942,7 @@ The server runs each connection as a `wxThread` (`ibDebuggerServer::ibDebuggerSe
 
 ```
 launcher.exe (or direct enterprise.exe with CLI creds)
-  └─ ibApplicationInstance::CreateServerAppDataEnv(ibServerInstanceRequest{ mode, server, port, user, pwd, db, locale })
+  └─ ibApplicationInstance::CreateAppDataEnv(ibFileInstanceRequest{ server, port, user, pwd, db, locale })
        └─ ibDatabaseLayer::Open(server, port, db, ibUser, ibPwd)   # DB-level admin connection
             └─ appData->CreateSession<ibEnterpriseSession>()        # phased session lifecycle
                  # registry runs Connect(req) under the session factory:
@@ -907,7 +957,8 @@ launcher.exe (or direct enterprise.exe with CLI creds)
                                 └─ InstallUser writes session->m_userInfo
                                      └─ NotifyAuthenticated phases (registry-driven):
                                           1. OnFirstConnect — metadataCreate (one-shot)
-                                          2. session->EnsureRoot() — CreateRoot(activeMetaData)
+                                          2. session->AcquireMetaData() — its own reference
+                                             session->EnsureRoot() — CreateRoot(GetMetaData())
                                           3. OnAuthenticated — RunDatabase (one-shot)
                                                              + session->CompileRoot()
                                                              + mm->AttachRuntime(s)
@@ -989,7 +1040,7 @@ HTTP: POST /w/<dbalias>/logout?sid=<tabSid>  (sendBeacon from browser pagehide)
 
 Two parallel translation surfaces exist; do not confuse them:
 
-- **Configuration language** — per-session `ibSession::m_resolvedLanguageCode`, selects metadata synonyms / form-label translations stored *inside* the configuration. See `ibBackendLocalization::GetActiveLanguage` / `SetActiveLanguage`.
+- **Configuration language** — the session's translate state (`ibTranslateState::m_resolvedLanguageCode`), selects metadata synonyms / form-label translations stored *inside* the configuration. See `ibBackendLocalization::GetUserLanguage` / `SetUserLanguage`.
 - **Process UI language** — gettext catalogs under `locale/` (`ru.po` / `uk.po` + compiled `*.mo`). Strings wrapped in `_("...")` macros across `src/engine/**` end up in the `.mo` and are looked up by wxLocale at runtime.
 
 **Workflow** (when adding new `_()` strings):

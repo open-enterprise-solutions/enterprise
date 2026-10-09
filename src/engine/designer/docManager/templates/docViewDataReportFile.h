@@ -29,7 +29,7 @@ protected:
 static int s_defaultReportNameCounter = 1;
 
 class ibReportFileDocument : public ibMetaDataDocument {
-	ibMetaDataReport* m_metaData;
+	std::shared_ptr<ibMetaDataReport> m_metaData;   // what it shows, held while it is open
 public:
 
 	virtual wxIcon GetIcon() const {
@@ -42,12 +42,9 @@ public:
 	}
 
 	ibReportFileDocument() : ibMetaDataDocument() { m_childDoc = false; }
-	virtual ~ibReportFileDocument() { 
-		wxDELETE(m_metaData); 
-	}
 
 	virtual ibMetaDataReport* GetMetaData() const {
-		return m_metaData;
+		return m_metaData.get();
 	}
 
 	virtual bool OnCreate(const wxString& path, long flags) override;

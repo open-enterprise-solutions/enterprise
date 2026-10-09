@@ -382,7 +382,7 @@ ibValuePtr<ibValueForm> ibHomePageView::CreateFormValue(const ibValueMetaObjectF
 		// No branch here, no cast: the page does not care which kind it is holding.
 		backendForm = metaForm->GetObjectForm(nullptr, formKey);
 	}
-	catch (const ibBackendException& err) {
+	catch (const ibCoreException& err) {
 		// A form that refuses to build (access denied, a broken source) must not take the whole
 		// start page down with it — the cell reports it and the others still open.
 		// Already reported where it happened (ProcessExceptionError hands it to the frame) - saying it

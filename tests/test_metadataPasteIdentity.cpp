@@ -35,7 +35,7 @@
 #include "backend/metadataConfiguration.h"
 #include "backend/metaCollection/metaObject.h"        // ibValueMetaObject + g_meta*CLSID
 #include "backend/metaCollection/metaModuleObject.h"  // ibValueMetaObjectModule
-#include "backend/serialize/dataBuilder.h"            // ibDataValue — the clipboard's shape
+#include "core/serialize/dataBuilder.h"            // ibDataValue — the clipboard's shape
 
 namespace {
 

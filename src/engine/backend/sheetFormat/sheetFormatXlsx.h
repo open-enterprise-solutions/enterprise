@@ -30,12 +30,12 @@ public:
 	// ⭐ EVERY SHEET OF THE WORKBOOK, ONE AFTER ANOTHER, with a page break between
 	// them — see ibSheetFormat for why that is the right shape for us rather than
 	// a loss. A single-sheet workbook therefore reads back with no break at all.
-	virtual bool Read(const wxString& fileName, ibSpreadsheetDescription& sheet) const override;
+	virtual bool Read(wxInputStream& input, ibSpreadsheetDescription& sheet) const override;
 
 	// …and out again as ONE sheet. The document's page breaks travel as Excel's
 	// own row breaks, so a document that came from a three-sheet workbook prints
 	// in three pages there too.
-	virtual bool Write(const wxString& fileName, const ibSpreadsheetDescription& sheet) const override;
+	virtual bool Write(wxOutputStream& output, const ibSpreadsheetDescription& sheet) const override;
 };
 
 #endif // !__SHEET_FORMAT_XLSX_H__

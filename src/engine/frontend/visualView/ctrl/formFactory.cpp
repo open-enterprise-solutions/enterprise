@@ -89,7 +89,7 @@ ibValueFrame* ibValueForm::NewObject(const ibClassID& clsid, ibValueFrame* contr
 		// that threw, so a saved control disappeared from the form with nothing said anywhere. The
 		// nullptr contract stays (an old file may name a control this build does not have, and that
 		// must not cost the whole form); what changes is that the engine's own words survive it.
-		catch (const ibBackendException& err) {
+		catch (const ibCoreException& err) {
 			ibJournalError(wxT("ui.form"), wxT("%s"), err.GetErrorDescription());
 			return nullptr;
 		}

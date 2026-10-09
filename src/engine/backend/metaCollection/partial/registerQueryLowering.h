@@ -25,10 +25,11 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <vector>
 #include "backend/system/value/valuePointInTime.h"   // ibValuePointInTime — a boundary that names a document
 #include "backend/system/value/valueBoundary.h"       // ibValueBoundary — the position AND which side of it
-#include "backend/stringUtils.h"             // CompareString — the one case-insensitive name comparison
+#include "core/stringUtils.h"             // CompareString — the one case-insensitive name comparison
 #include "backend/query/queryableFactory.h"  // ibQuerySourceParameter — what a virtual table DECLARES it takes
 #include "backend/session/session.h"         // ses_query — the session's channel; ibRequireOpenBase asks it
 
@@ -1401,6 +1402,25 @@ public:
 	                                 const wxString& table, const ibMetaData* metaData,
 	                                 const std::function<void(std::vector<ibTempColumn>&)>& build) const
 	{
+		// ⭐ ONE REGISTER, EVERY SESSION OF THE BASE. The register is metadata, read by all the sessions of a
+		// base at once, so the cache is asked from as many threads; unguarded, two first queries corrupt the
+		// map. Looked up under the lock, BUILT outside it — a build reads the register's attributes and may
+		// take a while, and nobody else should wait for that — and offered back under it: if another thread
+		// built the same shape meanwhile, its surface stays and ours is dropped.
+		{
+			std::lock_guard<std::mutex> lock(m_mutex);
+			const auto cached = m_sources.find(key);
+			if (cached != m_sources.end() && cached->second.m_builtFrom == builtFrom)
+				return cached->second.m_surface.get();
+		}
+
+		std::vector<ibTempColumn> columns;
+		// Each builder numbers its columns over the metaIDs they are of (ibRegDerivedColumnId) — no counter
+		// is handed in, because none is needed.
+		build(columns);
+		auto surface = std::make_unique<ibDbTempTableQueryable>(table, std::move(columns), metaData);
+
+		std::lock_guard<std::mutex> lock(m_mutex);
 		const auto cached = m_sources.find(key);
 		if (cached != m_sources.end()) {
 			if (cached->second.m_builtFrom == builtFrom)
@@ -1411,13 +1431,6 @@ public:
 			m_retired.push_back(std::move(cached->second.m_surface));
 			m_sources.erase(cached);
 		}
-
-		std::vector<ibTempColumn> columns;
-		// Each builder numbers its columns over the metaIDs they are of (ibRegDerivedColumnId) — no counter
-		// is handed in, because none is needed.
-		build(columns);
-
-		auto surface = std::make_unique<ibDbTempTableQueryable>(table, std::move(columns), metaData);
 		const ibBackendQueryable* raw = surface.get();
 		m_sources.emplace(key, Entry{ std::move(surface), builtFrom });
 		return raw;
@@ -1434,6 +1447,7 @@ private:
 	// register being logically modified.
 	mutable std::map<wxString, Entry>                            m_sources;
 	mutable std::vector<std::unique_ptr<ibDbTempTableQueryable>> m_retired;
+	mutable std::mutex                                           m_mutex;   // both of the above
 };
 
 // ⭐⭐ AN ATTRIBUTE PUBLISHED AS ITSELF, on a derived surface — its own name, its own storage field,

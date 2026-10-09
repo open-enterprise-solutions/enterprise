@@ -1,11 +1,7 @@
 #ifndef __TYPE_DESCRIPTION_H__
 #define __TYPE_DESCRIPTION_H__
 
-enum ibDateFractions {
-	ibDateFractions_Date = 0,
-	ibDateFractions_DateTime,
-	ibDateFractions_Time
-};
+#include "core/types.h"   // ibValueTypes, ibDateFractions — what a type is made of
 
 enum ibAllowedLength {
 	ibAllowedLength_Variable,

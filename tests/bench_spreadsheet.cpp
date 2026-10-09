@@ -79,14 +79,14 @@ TEST(SheetFormatBench, DISABLED_ReadWrite)
 				+ wxString::Format(wxT("oes_bench_%d.%s"), rows, format->GetExtension());
 
 			const auto t0 = std::chrono::steady_clock::now();
-			const bool written = format->Write(file, sheet);
+			const bool written = format->WriteFile(file, sheet);
 			const auto t1 = std::chrono::steady_clock::now();
 
 			long long readMs = -1;
 			if (written && format->CanRead()) {
 				ibSpreadsheetDescription back;
 				const auto t2 = std::chrono::steady_clock::now();
-				format->Read(file, back);
+				format->ReadFile(file, back);
 				readMs = std::chrono::duration_cast<std::chrono::milliseconds>(
 					std::chrono::steady_clock::now() - t2).count();
 			}

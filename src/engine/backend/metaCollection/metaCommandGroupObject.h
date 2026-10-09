@@ -76,6 +76,7 @@ public:
 
 	bool IsEmptyPicture() const { return m_propertyPicture->IsEmptyProperty(); }
 	wxBitmap GetPictureAsBitmap() const { return m_propertyPicture->GetValueAsBitmap(); }
+	ibPictureDescription GetPictureDesc() const { return m_propertyPicture->GetValueAsPictureDesc(); }
 	// What a person reads when the pointer rests on the group — its own tooltip, the synonym when it has none.
 	wxString GetToolTip() const {
 		const wxString tooltip = m_propertyTooltip->GetValueAsTranslateString();

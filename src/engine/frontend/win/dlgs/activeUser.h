@@ -1,6 +1,7 @@
 #ifndef _ACTIVE_USERS_WND_H__
 #define _ACTIVE_USERS_WND_H__
 
+#include "core/guid.h"
 #include <wx/artprov.h>
 #include <wx/xrc/xmlres.h>
 #include <wx/listctrl.h>
@@ -14,7 +15,6 @@
 #include <wx/dialog.h>
 #include <wx/timer.h>
 
-#include "backend/guid.h"
 #include "frontend/frontend.h"
 
 class FRONTEND_API ibDialogActiveUser : public wxDialog {

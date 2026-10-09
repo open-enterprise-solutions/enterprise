@@ -510,7 +510,7 @@ void ibDialogQueryExpression::OnOk(wxCommandEvent& event)
 		ibQueryParser parser;
 		m_expression = parser.ParseExpression(text);
 	}
-	catch (const ibBackendException& e) {
+	catch (const ibCoreException& e) {
 		wxMessageBox(e.GetErrorDescription(), GetTitle(), wxOK | wxICON_ERROR, this);
 		return;
 	}
@@ -664,7 +664,7 @@ void ibDialogQueryExpression::OnEditChoice(wxCommandEvent&)
 			ibQueryParser parser;
 			existing = parser.ParseExpression(fragment);
 		}
-		catch (const ibBackendException&) {
+		catch (const ibCoreException&) {
 			existing = nullptr;
 		}
 	}

@@ -67,6 +67,8 @@ public:
 
 	//load/save form file
 	bool LoadFromFile(const wxString& strFileName);
+	// …and from a file of the session's temporary storage, by its id — what a thin client handed the server.
+	bool LoadFromTempFile(const wxString& id);
 	bool SaveToFile(const wxString& strFileName);
 
 	virtual const ibValueMetaObject* GetCommonMetaObject() const; // out-of-line: m_commonObject is ibValuePtr
@@ -88,6 +90,9 @@ protected:
 	ibValueMetaObjectReport* BuildFreshRoot();
 
 private:
+
+	// The file's content in hand, loaded — the one load both roads come to, whatever the bytes were read from.
+	bool LoadFromBuffer(const wxMemoryBuffer& buffer, const wxString& fullPath);
 
 	wxString m_fullPath;
 

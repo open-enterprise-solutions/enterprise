@@ -75,98 +75,99 @@ bool ibValueModuleManager::ibValueMetadataUnit::SetPropVal(const long lPropNum, 
 
 bool ibValueModuleManager::ibValueMetadataUnit::GetPropVal(const long lPropNum, ibValue& pvarPropVal)//attribute value
 {
+	// A name repeated while the configuration is edited is put, not inserted (globalContextManager.cpp).
 	ibValueStructure* valStruct = new ibValueStructure();
 	switch (lPropNum)
 	{
 	case enCommonModules: {
 		for (const auto object : m_metaData->GetAnyArrayObject(g_metaCommonModuleCLSID)) {
-			valStruct->Insert(object->GetName(), object);
+			valStruct->SetAt(object->GetName(), object);
 		}
 	} break;
 	case enCommonForms: {
 		for (const auto object : m_metaData->GetAnyArrayObject(g_metaCommonFormCLSID)) {
-			valStruct->Insert(object->GetName(), object);
+			valStruct->SetAt(object->GetName(), object);
 		}
 	} break;
 	case enCommonTemplates: {
 		for (const auto object : m_metaData->GetAnyArrayObject(g_metaCommonTemplateCLSID)) {
-			valStruct->Insert(object->GetName(), object);
+			valStruct->SetAt(object->GetName(), object);
 		}
 	} break;
 	case enConstants: {
 		for (const auto object : m_metaData->GetAnyArrayObject(g_metaConstantCLSID)) {
-			valStruct->Insert(object->GetName(), object);
+			valStruct->SetAt(object->GetName(), object);
 		}
 	} break;
 	case enCatalogs: {
 		for (const auto object : m_metaData->GetAnyArrayObject(g_metaCatalogCLSID)) {
-			valStruct->Insert(object->GetName(), object);
+			valStruct->SetAt(object->GetName(), object);
 		}
 	} break;
 	case enDocuments: {
 		for (const auto object : m_metaData->GetAnyArrayObject(g_metaDocumentCLSID)) {
-			valStruct->Insert(object->GetName(), object);
+			valStruct->SetAt(object->GetName(), object);
 		}
 	} break;
 	case enEnumerations: {
 		for (const auto object : m_metaData->GetAnyArrayObject(g_metaEnumerationCLSID)) {
-			valStruct->Insert(object->GetName(), object);
+			valStruct->SetAt(object->GetName(), object);
 		}
 	} break;
 	case enDataProcessors: {
 		for (const auto object : m_metaData->GetAnyArrayObject(g_metaDataProcessorCLSID)) {
-			valStruct->Insert(object->GetName(), object);
+			valStruct->SetAt(object->GetName(), object);
 		}
 	} break;
 	case enReports: {
 		for (const auto object : m_metaData->GetAnyArrayObject(g_metaReportCLSID)) {
-			valStruct->Insert(object->GetName(), object);
+			valStruct->SetAt(object->GetName(), object);
 		}
 	} break;
 	case enInformationRegisters: {
 		for (const auto object : m_metaData->GetAnyArrayObject(g_metaInformationRegisterCLSID)) {
-			valStruct->Insert(object->GetName(), object);
+			valStruct->SetAt(object->GetName(), object);
 		}
 	} break;
 	case enAccumulationRegisters: {
 		for (const auto object : m_metaData->GetAnyArrayObject(g_metaAccumulationRegisterCLSID)) {
-			valStruct->Insert(object->GetName(), object);
+			valStruct->SetAt(object->GetName(), object);
 		}
 		break;
 	}
 	case enChartsOfCharacteristicTypes: {
 		for (const auto object : m_metaData->GetAnyArrayObject(g_metaChartOfCharacteristicTypesCLSID)) {
-			valStruct->Insert(object->GetName(), object);
+			valStruct->SetAt(object->GetName(), object);
 		}
 		break;
 	}
 	case enChartsOfAccounts: {
 		for (const auto object : m_metaData->GetAnyArrayObject(g_metaChartOfAccountsCLSID)) {
-			valStruct->Insert(object->GetName(), object);
+			valStruct->SetAt(object->GetName(), object);
 		}
 		break;
 	}
 	case enAccountingRegisters: {
 		for (const auto object : m_metaData->GetAnyArrayObject(g_metaAccountingRegisterCLSID)) {
-			valStruct->Insert(object->GetName(), object);
+			valStruct->SetAt(object->GetName(), object);
 		}
 		break;
 	}
 	case enChartsOfCalculationTypes: {
 		for (const auto object : m_metaData->GetAnyArrayObject(g_metaChartOfCalculationTypesCLSID)) {
-			valStruct->Insert(object->GetName(), object);
+			valStruct->SetAt(object->GetName(), object);
 		}
 		break;
 	}
 	case enCalculationRegisters: {
 		for (const auto object : m_metaData->GetAnyArrayObject(g_metaCalculationRegisterCLSID)) {
-			valStruct->Insert(object->GetName(), object);
+			valStruct->SetAt(object->GetName(), object);
 		}
 		break;
 	}
 	case enSequences: {
 		for (const auto object : m_metaData->GetAnyArrayObject(g_metaSequenceCLSID)) {
-			valStruct->Insert(object->GetName(), object);
+			valStruct->SetAt(object->GetName(), object);
 		}
 		break;
 	}

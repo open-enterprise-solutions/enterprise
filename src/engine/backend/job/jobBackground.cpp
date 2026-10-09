@@ -12,7 +12,6 @@
 #include "backend/compiler/procUnit.h"             // CallAsFunc by name
 #include "backend/backend_exception.h"
 #include "backend/system/systemManager.h"          // WriteJournalEvent - the run's own record
-#include "backend/diagnostics/journal.h"            // ibJournalInfo - the engine's account of a cancel
 
 #include <wx/log.h>
 
@@ -335,6 +334,9 @@ std::shared_ptr<ibBackgroundRun> ibJobManager::StartBackground(ibBackgroundBody 
 		// gives its connection — and takes it back on whatever thread the session dies.
 		minted->m_registry = registry;
 		minted->m_dbHolder.SetPool(ibApplicationInstance::GetConnectionPool(m_applicationInstance));
+		// …and in its parent's configuration — the one the parent works in, not the base's newest: a read for a
+		// session is read the way that session reads.
+		minted->m_metaData = launch->m_parent->m_metaData;
 		run->m_holder = ibSessionHolder(std::move(minted));
 	}
 	else {
@@ -511,7 +513,7 @@ std::shared_ptr<ibBackgroundRun> ibJobManager::StartBackground(ibBackgroundBody 
 			std::lock_guard<std::mutex> lk(run->m_mtx);
 			run->m_error = _("the run was cancelled");
 		}
-		catch (const ibBackendException& err) {
+		catch (const ibCoreException& err) {
 			Journal(wxString::Format(_("Background job FAILED: %s - %s"),
 				l.m_activity, err.GetErrorDescription()), ibStatusMessage_Error);
 

@@ -2,7 +2,7 @@
 #define _METAMODULE_OBJECT_H__
 
 #include "metaObject.h"
-#include "backend/serialize/dataBuilder.h"   // ibDataNode — holder serializes its metaobject's node
+#include "core/serialize/dataBuilder.h"   // ibDataNode — holder serializes its metaobject's node
 
 enum ibContentHelper {
 	eProcedureHelper = 1,

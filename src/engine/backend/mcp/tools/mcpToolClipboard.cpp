@@ -31,7 +31,7 @@
 #include "backend/mcp/mcpTool.h"
 #include "backend/mcp/mcpClipboard.h"
 
-#include "backend/fileSystem/fs.h"
+#include "core/fileSystem/fs.h"
 #include "backend/metaCollection/metaIntrospect.h"
 #include "backend/metaCollection/metaObject.h"
 #include "backend/metadataConfiguration.h"

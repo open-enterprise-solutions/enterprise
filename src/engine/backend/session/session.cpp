@@ -28,8 +28,8 @@
 #include "backend/system/value/valueQueryable.h"     // ibValueQueryable — a role-module restriction returned as a set
 #include "backend/metaCollection/metaRoleObject.h"   // ibValueMetaObjectRole — GetRoleModule()
 #include "backend/metaCollection/genericData.h"      // AccessRight_Show / _Modify / _Erase — the rights, as the metadata already answers them
+#include "backend/metaCollection/metaIntrospect.h"   // ibConfigurationWritesInWords — the session's code style
 #include "backend/backend_exception.h"               // ibBackendAccessException
-#include "backend/diagnostics/journal.h"             // ibJournalInfo — a cancel says what it reached
 #include "backend/job/jobManager.h"                  // TenantsOf — a cancel reaches the runs reading for this session
 
 namespace {
@@ -320,7 +320,7 @@ private:
 				if (!proc->CallAsProc(handler, src, op, allowed))
 					return RoleOutcome::NoHandler;
 			}
-			catch (const ibBackendException&) {
+			catch (const ibCoreException&) {
 				return RoleOutcome::Failed;    // the handler body threw (e.g. "cannot be lowered") -> deny
 			}
 			return (allowed.GetType() == ibValueTypes::TYPE_BOOLEAN && allowed.GetBoolean())
@@ -586,7 +586,7 @@ ibValueModuleManager* ibSession::GetEditModuleManager(const ibMetaData* metaData
 	// appData->DesignerMode()): a Designer session has no per-session runtime root —
 	// it reads the lightweight designer manager from the metadata's compile cache.
 	// Every other kind (Enterprise / WebClient / Service / …) uses its root mm.
-	if (m_kind == ibSessionKind::Designer) {
+	if (IsDesignerSessionKind(m_kind)) {
 		if (auto* cc = metaData ? metaData->GetCompileCache() : nullptr)
 			return cc->GetModuleManager();
 		return nullptr;
@@ -697,17 +697,24 @@ void ibSession::Teardown()
 
 	if (!m_listed) {
 		if (ibWorkerPool* const pool = regPtr != nullptr ? GetWorkerPool() : nullptr)
-			pool->DropSession(this);
+			pool->Drop(this);
 		Transition(ibSessionState::Gone);
 		return;
 	}
 
 	// Submit Remove@Urgent — the registry thread DELETEs the sys_session
-	// row, fires OnDisconnect and drops the index entry. It does NOT free
-	// the object: m_own is a weak index, so the object dies when the last
-	// holder does, which is normally the window that just went down.
+	// row and drops the index entry. It does NOT free the object: m_own
+	// is a weak index, so the object dies when the last holder does,
+	// which is normally the window that just went down.
 	if (regPtr == nullptr) return;
 	auto& reg = *regPtr;
+
+	// TAKE OUR RUNTIME DOWN OURSELVES, on this thread — the mirror of Open, which brought it up here. The
+	// listeners detach the runtime and destroy the root, and the last one out closes the configuration.
+	// Left to the Remove, the registry thread did it, and the designer's cached forms died off the main
+	// thread at exit (dump of 2026-10-04). Before IsFatal: a dead registry thread does not excuse us.
+	reg.NotifyDisconnect(this);
+
 	if (reg.IsFatal())
 		return;
 
@@ -725,8 +732,8 @@ void ibSession::Teardown()
 	// having.
 	reg.DeleteOwnSessionRow(*this);
 
-	// The Remove still follows: it drops the index entry, fires disconnect listeners and releases
-	// the worker queue — bookkeeping that touches no database, so the shared thread barely feels it.
+	// The Remove still follows: it drops the index entry and releases the worker queue — bookkeeping
+	// that touches no database, so the shared thread barely feels it.
 	ibRegistryRequest req;
 	req.kind    = ibRegistryRequestKind::Remove;
 	req.session = shared_from_this();
@@ -822,6 +829,16 @@ ibValueModuleManagerRuntimeConfiguration* ibSession::CreateRoot(ibMetaDataConfig
 bool ibSession::CompileRoot()
 {
 	if (!m_root) return false;
+	// This session's modules are compiled in ITS configuration's syntax, and it speaks its configuration's main
+	// language when its user has none — the one it acquired, taken before the first compile. One server may hold
+	// bases written in different syntaxes and different languages.
+	const ibMetaDataConfigurationBase* const metaData = GetMetaData();
+	CompileStateOf(this)->m_codeStyle = ibConfigurationWritesInWords(metaData)
+		? ibProgramSyntax::syntax_ves : ibProgramSyntax::syntax_ces;
+	if (metaData != nullptr) {
+		TranslateStateOf(this)->m_defLanguageCode = metaData->GetLangCode();
+		TranslateStateOf(this)->Resolve();
+	}
 	if (!m_root->CreateMainModule()) return false;
 
 	// Runtime bring-up — formerly an explicit mm->AttachRuntime(s)
@@ -830,6 +847,8 @@ bool ibSession::CompileRoot()
 	// session's own responsibility. AttachRuntime self-gates by
 	// session kind (Enterprise / WebClient / Service execute; others
 	// short-circuit), so no external wantsRuntime check is needed.
+	// A configuration that does not start THROWS here (and from CreateMainModule above), and the
+	// session is refused by whoever opens it — nothing below is built over a half-raised runtime.
 	m_root->AttachRuntime(this);
 
 	// SESSION PARAMETERS — filled BEFORE the access policy exists, and that order is the whole
@@ -850,7 +869,7 @@ bool ibSession::CompileRoot()
 	// any user query (CompileRoot finishes first), so it is in place before anything it must guard.
 	// Designer never enforces (it runs off the edit-time manager, not this runtime root).
 	if (!m_accessPolicy && !appData->DesignerMode())
-		m_accessPolicy = std::make_unique<ibRuntimeAccessPolicy>(this, activeMetaData);
+		m_accessPolicy = std::make_unique<ibRuntimeAccessPolicy>(this, GetMetaData());
 
 	// Lambda executor — m_root's procUnit is live after AttachRuntime, so it is
 	// available to borrow from. ibValueFunction's Execute resolves this through
@@ -918,15 +937,29 @@ void ibSession::ClearRoot()
 	}
 }
 
+void ibSession::AcquireMetaData()
+{
+	if (m_metaData)
+		return;
+	if (ibMetaDataConfigurationBase* const active = ibApplicationInstance::GetActiveMetaData(GetApplicationInstance()))
+		m_metaData = std::static_pointer_cast<ibMetaDataConfigurationBase>(active->shared_from_this());
+}
+
+void ibSession::ReleaseMetaData()
+{
+	ClearRoot();
+	m_metaData.reset();
+}
+
 void ibSession::EnsureRoot()
 {
 	// Wired by ibSessionRegistry::NotifyAuthenticated to land between
 	// OnFirstConnect (metadataCreate) and OnAuthenticated (RunDatabase /
 	// CompileRoot). CreateRoot itself is idempotent; this wrapper just
-	// guards on activeMetaData so headless sessions (Launcher, technical)
-	// without metadata don't fault.
+	// guards on the acquired configuration so headless sessions
+	// (Launcher, technical) without metadata don't fault.
 	if (m_root) return;
-	if (activeMetaData == nullptr) return;
+	if (GetMetaData() == nullptr) return;
 	// Designer never executes script — it has its own lightweight designer
 	// module manager in the compile cache (ibValueModuleManagerDesigner). No
 	// per-session runtime root mm is created; designer-path consumers read the
@@ -936,7 +969,7 @@ void ibSession::EnsureRoot()
 	// RLS — the access policy is NOT built here: it is built in CompileRoot, between module compile and
 	// run, so its ctor can resolve the user's role-module procUnits (see there). The L3 door pulls it via
 	// GetAccessPolicy(); no query fires before CompileRoot, so it is always in place when needed.
-	CreateRoot(activeMetaData);
+	CreateRoot(GetMetaData());
 }
 
 const ibAccessPolicy* ibSession::GetAccessPolicy() const
@@ -998,6 +1031,10 @@ void ibSession::Cancel()
 		ibRunState running = ibRunState::Running;
 		m_procUnitState.m_runState.compare_exchange_strong(running, ibRunState::Cancelled);
 	}
+	// A script that waits for its client (ibWorkerPool::Await — a question on the web) hears it too: rung, it
+	// finds the run cancelled and throws the interruption up the script.
+	if (ibWorkerPool* const pool = GetWorkerPool())
+		pool->Wake(this);
 	for (const std::shared_ptr<ibSession>& tenant : tenants)
 		tenant->Cancel();
 }
@@ -1086,40 +1123,10 @@ ibSession* ibSession::Current()
 	//
 	// The fix is not a better Single; it is not having one. A thread that bound
 	// itself means it (that is the whole point of ibSessionScope, asked at the top
-	// of this function), and a thread that did not gets the process's fallback —
-	// the first authenticated session, which on a desktop IS the lone session the
-	// old branch was reaching for. The access mode still sizes the worker pool; it
-	// no longer decides identity.
+	// of this function), and a thread that did not gets the base's fallback — the
+	// process's own session there, which on a desktop IS the lone session the old
+	// branch was reaching for (never a job's: see OnAuthenticated in appData.cpp).
 	return reg.GetFallback();
-}
-
-void ibSession::SetAccessMode(AccessMode mode)
-{
-	// Static config setter — set once at process start by appData's ctor.
-	// Null registry means we're outside the appData lifetime; ignore.
-	if (auto* reg = ibApplicationInstance::GetSessionRegistry())
-		reg->SetAccessMode(mode);
-}
-
-ibSession::AccessMode ibSession::GetAccessMode()
-{
-	// Default to Single if no registry — the most conservative fallback
-	// (one session per process). Pre-appData / post-appData readers see
-	// a sane value instead of faulting.
-	auto* reg = ibApplicationInstance::GetSessionRegistry();
-	return reg != nullptr ? reg->GetAccessMode() : AccessMode::Single;
-}
-
-void ibSession::SetFallback(ibSession* s)
-{
-	if (auto* reg = ibApplicationInstance::GetSessionRegistry())
-		reg->SetFallback(s);
-}
-
-void ibSession::ClearFallback()
-{
-	if (auto* reg = ibApplicationInstance::GetSessionRegistry())
-		reg->ClearFallback();
 }
 
 ibSession* ibSession::GetByThread(std::thread::id tid)
@@ -1252,6 +1259,28 @@ ibProcUnitState* ibSession::PUStateOf(ibSession* session)
 	return &ts_fallbackPUState;
 }
 
+ibCompileState* ibSession::CompileStateOf(ibSession* session)
+{
+	if (session != nullptr)
+		return &session->m_compileState;
+
+	// Sessionless fallback — codeRunner, the tests: each thread its own, here and not in GetCompileState for
+	// the reason PUStateOf gives.
+	static thread_local ibCompileState ts_fallbackCompileState;
+	return &ts_fallbackCompileState;
+}
+
+ibTranslateState* ibSession::TranslateStateOf(ibSession* session)
+{
+	if (session != nullptr)
+		return &session->m_translateState;
+
+	// Sessionless fallback — codeRunner, the tests: each thread its own, here and not in GetTranslateState for
+	// the reason PUStateOf gives.
+	static thread_local ibTranslateState ts_fallbackTranslateState;
+	return &ts_fallbackTranslateState;
+}
+
 void ibSession::WakeDebugLoop()
 {
 	// Mark the session for cancellation and pop any parked debug loop.
@@ -1278,8 +1307,33 @@ void ibSession::WakeDebugLoop()
 
 bool ibSession::OnClose(bool /*force*/)
 {
-	// A forced close has already cancelled the work (Close), so the queue Teardown waits behind is idle.
-	Teardown();
+	// A forced close has already cancelled the work (Close). The teardown goes BEHIND that work, on this
+	// session's own worker: run where the close arrives — the registry thread, for a kick — it waited five
+	// seconds for the script to unwind and then took the runtime down under it if it had not. Queued, it runs
+	// once the script is out, whatever that takes, and the registry thread waits for nobody. Where nothing can
+	// run it — no pool (it then ran inline), a stopped one, a session nobody holds by shared_ptr — it runs here.
+	const std::shared_ptr<ibSession> self = weak_from_this().lock();
+	if (!self) {
+		Teardown();
+		return true;
+	}
+	// Not waited for once it is queued — so what the teardown throws is said in the task (the pool hands an exception
+	// to the future only, and this one is dropped).
+	std::future<void> queued = Submit([self]() {
+		try {
+			self->Teardown();
+		}
+		catch (const std::exception& err) {
+			ibJournalWarning(wxT("session"), wxT("a session's teardown ended with an exception: %s"), wxString::FromUTF8(err.what()));
+		}
+		catch (...) {
+			ibJournalWarning(wxT("session"), wxT("a session's teardown ended with an exception"));
+		}
+	});
+	if (queued.valid() && queued.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+		try { queued.get(); }
+		catch (...) { Teardown(); }   // refused (a stopped pool) — or it threw, and a second call is a no-op
+	}
 	return true;
 }
 
@@ -1408,12 +1462,7 @@ ibSession::OpenResult ibSession::Open(const wxString& user, const wxString& pass
 		// immediately without the new Attach having been processed.
 		TransitionAuth(ibAuthState::Anonymous);
 
-		ibRegistryRequest req;
-		req.kind     = ibRegistryRequestKind::Attach;
-		req.session  = shared_from_this();
-		req.user     = u;
-		req.password = p;
-		reg.Submit(std::move(req), ibPriority::Normal);
+		reg.Attach(shared_from_this(), u, p);
 
 		return WaitForAuth(ibAuthState::Anonymous, timeout);
 	};
@@ -1422,16 +1471,17 @@ ibSession::OpenResult ibSession::Open(const wxString& user, const wxString& pass
 	if (res == ibAuthState::Authenticated) {
 		// NotifyAuthenticated fires three phases in order:
 		//   1. OnFirstConnect listeners — process-level metadata bootstrap
-		//      (metadataCreate, populates activeMetaData) on the first auth.
-		//   2. session->EnsureRoot — per-session root mm allocated NOW so
+		//      (metadataCreate, populates the base's active one) on the first auth.
+		//   2. session->AcquireMetaData + EnsureRoot — the session's own reference
+		//      to it, and the per-session root mm allocated over it NOW so
 		//      step 3's listeners can rely on GetManagerModule() != null.
 		//   3. OnAuthenticated listeners — per-session bring-up
 		//      (RunDatabase fires OnBefore/AfterRunMetaObject which read
 		//      session->mm; CompileRoot; AttachRuntime).
-		// Note: NotifyAuthenticated already calls BindSessionToThread
-		// before firing listeners, so any breakpoint hit inside them
-		// resolves Current() to THIS session (the registry-fallback
-		// trap is closed at that level, no extra scope needed here).
+		// Note: NotifyAuthenticated binds this session for the bring-up
+		// (and gives the thread back after), so any breakpoint hit inside
+		// the listeners resolves Current() to THIS session (the registry-
+		// fallback trap is closed at that level, no extra scope needed here).
 		reg.NotifyAuthenticated(this);
 		return OpenResult::Authenticated;
 	}

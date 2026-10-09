@@ -5,7 +5,6 @@
 
 #include "valueOLE.h"
 #include "backend/backend_exception.h"
-#include "backend/appData.h"
 
 #include <wx/clipbrd.h>
 
@@ -538,7 +537,10 @@ bool ibValueOLE::Init(ibValue** paParams, const long lSizeArray)
 
 bool ibValueOLE::Create(const wxString& strOleName)
 {
-	if (appData->DesignerMode())
+	// THE CARET'S WALK FOR COMPLETION STARTS NO COM SERVER: it builds `New COMObject("…")` to list its members,
+	// and that must not launch the application named. Asked of the evaluation, not of the process — the
+	// designer runs no other script, and the client's editors complete with the same walk (census, 2026-10-01).
+	if (ibBackendException::IsEvalComplete())
 		return true;
 
 #ifdef __WXMSW__

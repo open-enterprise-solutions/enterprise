@@ -37,7 +37,7 @@
 #include <utility>
 #include <vector>
 
-#include "3rdparty/nlohmann/json.hpp"
+#include <nlohmann/json.hpp>
 
 #include "backend/backend_exception.h"
 #include "backend/system/value/valueJson.h"
@@ -288,9 +288,9 @@ wxString Differs(const ibValue& value, const ibJsonNode& node, const wxString& p
 			return path + wxString::Format(wxT(": %u members, written %u"),
 				static_cast<unsigned>(object->Entries().size()), static_cast<unsigned>(node.m_members.size()));
 		for (size_t i = 0; i < node.m_members.size(); i++) {
-			if (object->Entries()[i].first.GetString() != node.m_members[i].first)
+			if (object->Entries()[i].key.GetString() != node.m_members[i].first)
 				return path + wxString::Format(wxT(": member %u is not the key written there"), static_cast<unsigned>(i));
-			const wxString inner = Differs(object->Entries()[i].second, node.m_members[i].second,
+			const wxString inner = Differs(object->Entries()[i].value, node.m_members[i].second,
 				path + wxT(".") + node.m_members[i].first);
 			if (!inner.empty()) return inner;
 		}

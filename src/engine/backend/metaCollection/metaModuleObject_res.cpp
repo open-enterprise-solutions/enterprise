@@ -10,10 +10,9 @@ wxIcon ibValueMetaObjectModuleBase::GetIcon() const
 
 wxIcon ibValueMetaObjectModuleBase::GetIconGroup()
 {
-	static wxIcon icon =
-		ibBackendPicture::GetIconFromBase64(s_module_64_png, wxSize(16, 16));
+	static const ibServerPicture picture(s_module_64_png, wxSize(16, 16));
 
-	return icon;
+	return picture.ToIcon();
 }
 
 wxIcon ibValueMetaObjectCommonModule::GetIcon() const
@@ -23,10 +22,9 @@ wxIcon ibValueMetaObjectCommonModule::GetIcon() const
 
 wxIcon ibValueMetaObjectCommonModule::GetIconGroup()
 {
-	static wxIcon icon =
-		ibBackendPicture::GetIconFromBase64(s_module_64_png, wxSize(16, 16));
+	static const ibServerPicture picture(s_module_64_png, wxSize(16, 16));
 
-	return icon;
+	return picture.ToIcon();
 }
 
 wxIcon ibValueMetaObjectManagerModule::GetIcon() const
@@ -36,8 +34,7 @@ wxIcon ibValueMetaObjectManagerModule::GetIcon() const
 
 wxIcon ibValueMetaObjectManagerModule::GetIconGroup()
 {
-	static wxIcon icon =
-		ibBackendPicture::GetIconFromBase64(s_module_64_png, wxSize(16, 16));
+	static const ibServerPicture picture(s_module_64_png, wxSize(16, 16));
 
-	return icon;
+	return picture.ToIcon();
 }

@@ -16,8 +16,8 @@
 #include "backend/query/schemaSnapshot.h"                 // ibSchemaTable / ibSchemaColumn / ibSchemaIndex — the mover's input
 #include "backend/query/queryable.h"                      // ibBackendQueryable::GetMetaData
 #include "backend/typeDescription.h"                       // ibTypeDescription::ContainType (the wire codec gates on it)
-#include "backend/fnumber.h"                               // ibNumber (the wire codec round-trips it)
-#include "backend/fileSystem/fs.h"                        // ibReaderMemory / ibWriterMemory (the binary wire)
+#include "core/fnumber.h"                               // ibNumber (the wire codec round-trips it)
+#include "core/fileSystem/fs.h"                        // ibReaderMemory / ibWriterMemory (the binary wire)
 
 #include <map>
 

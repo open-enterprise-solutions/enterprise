@@ -4,7 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "valueColour.h"
-#include "backend/serialize/dataBuilder.h"   // ibDataNode — the packed form
+#include "core/serialize/dataBuilder.h"   // ibDataNode — the packed form
 
 
 

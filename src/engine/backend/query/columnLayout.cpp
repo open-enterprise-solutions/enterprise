@@ -210,6 +210,14 @@ std::vector<wxString> ColumnValueFields(const ibBackendQueryColumn* col)
 	return out;
 }
 
+std::vector<wxString> ColumnSortFields(const ibBackendQueryColumn* col)
+{
+	std::vector<wxString> out = ColumnValueFields(col);
+	if (FirstValueSlot(col).m_role == ibColumnRole::ReferenceId)
+		out.push_back(col->GetPhysicalName() + ibFieldSuffix(ibColumnRole::ReferenceType));
+	return out;
+}
+
 // ==========================================================================
 // ibColumnCodec — the value <-> physical-fields codec (was ibDbTableProvider::Set/GetValueColumn).
 // Lives here, next to the layout, so the field SHAPE (DescribeColumnLayout) and the field VALUES

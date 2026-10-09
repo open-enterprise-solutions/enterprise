@@ -125,7 +125,7 @@ bool ibJobManager::IsDue(const ibJobEntry& e, std::chrono::steady_clock::time_po
 	// What protects a plain cadence ("every six hours", no time of day) from firing on every launch
 	// is that its calendar allows any moment, so the interval from registration is the whole answer.
 	// SWITCHED OFF is not "not due yet" — it is "not on the schedule at all". The entry stays
-	// registered and stays in the list, and RunNow still runs it by hand: turning a job off must
+	// registered and stays in the list, and Execute still runs it by hand: turning a job off must
 	// not also take away the ability to fire it once and watch what happens.
 	if (!e.m_desc.m_active)
 		return false;
@@ -316,7 +316,24 @@ bool ibJobManager::Launch(ibJobEntry& e)
 		}
 	}
 
-	auto runSession = std::make_shared<ibSessionHolder>(OpenRunSession(e.m_desc));
+	// A SESSION THAT REFUSED TO COME UP is this run's failure: its configuration did not start — a module
+	// that does not compile, a module body that throws (ibSession::CompileRoot). Said where a run's failure
+	// is said, the job's outcome and the journal's error row, and the next attempt waits for the schedule
+	// as after any run instead of coming back every tick. The tick's catch around Launch says nothing.
+	std::shared_ptr<ibSessionHolder> runSession;
+	try {
+		runSession = std::make_shared<ibSessionHolder>(OpenRunSession(e.m_desc));
+	}
+	catch (const ibCoreException& err) {
+		e.m_everRun   = true;
+		e.m_lastRun   = std::chrono::steady_clock::now();
+		e.m_lastRunAt = ibDateTime::Now();
+		e.m_outcome   = ibJobOutcome::Failed;
+		e.m_error     = err.GetErrorDescription();
+		if (ibLogger* const log = ibApplicationInstance::GetLogger())
+			log->Error(wxT("job"), wxT("failed"), wxString::Format(_("Job '%s' failed: %s"), desc.m_name, e.m_error));
+		return false;
+	}
 	if (!*runSession)
 		return false;   // no session — try again on the next tick
 
@@ -343,7 +360,7 @@ bool ibJobManager::Launch(ibJobEntry& e)
 				ibJobSessionLockHolder owner(session, desc.m_name);
 				claim = locks->Acquire(items, {}, &owner);
 			}
-			catch (const ibBackendException&) {
+			catch (const ibCoreException&) {
 				// SOMEBODY ELSE HOLDS IT. Not an error and not a retry — the work
 				// is being done, just not by us. A job that must not run twice
 				// (the totals fold corrupts sums if two passes race on one table)
@@ -402,7 +419,7 @@ bool ibJobManager::Launch(ibJobEntry& e)
 			result->m_more.store(desc.m_body(session), std::memory_order_release);
 			result->m_ok.store(true, std::memory_order_release);
 		}
-		catch (const ibBackendException& err) {
+		catch (const ibCoreException& err) {
 			std::lock_guard<std::mutex> lk(result->m_mtx);
 			result->m_error = err.GetErrorDescription();
 		}
@@ -750,7 +767,7 @@ void ibJobManager::ThreadBody()
 		try {
 			(void)Tick();
 		}
-		catch (const ibBackendException& err) {
+		catch (const ibCoreException& err) {
 			ibJournalInfo(wxT("job"),wxT("job tick failed: %s"), err.GetErrorDescription());
 		}
 		catch (...) {
@@ -864,7 +881,7 @@ int ibJobManager::Tick()
 	return started;
 }
 
-bool ibJobManager::RunNow(const wxString& name)
+bool ibJobManager::Execute(const wxString& name)
 {
 	// DECIDE UNDER THE LOCK, RUN OUTSIDE IT — the same division Tick makes, and for the same
 	// reason: Launch creates a session, and creating one waits on the registry and takes a

@@ -5,13 +5,13 @@
 #include "valueJson.h"
 
 #include "backend/backend_exception.h"
-#include "backend/serialize/jsonText.h"            // ibJsonText — how a string is spelled in JSON, said once
+#include "core/serialize/jsonText.h"            // ibJsonText — how a string is spelled in JSON, said once
 #include "backend/compiler/enumUnit.h"            // ConvertToEnumValue<> is declared in value.h and DEFINED here
 #include "backend/system/systemManagerEnum.h"
 #include "backend/system/value/valueArray.h"
 #include "backend/system/value/valueMap.h"
 
-#include "3rdparty/nlohmann/json.hpp"
+#include <nlohmann/json.hpp>
 
 #include <algorithm>   // std::min
 #include <cstddef>     // std::size_t
@@ -213,7 +213,7 @@ void ibValueJsonReader::SetText(const ibString& text)
 		if (!parsed)
 			failure = sink.GetError();
 	}
-	catch (const ibBackendException&) {
+	catch (const ibCoreException&) {
 		throw;
 	}
 	catch (const std::exception& error) {
@@ -354,7 +354,7 @@ ibValue ibValueJsonReader::BuildValue(int depth)
 			const ibString spelled = name.GetString();
 			const long matched = object->FindProp(spelled);
 			if (matched >= 0) {
-				const ibString held = object->Entries()[static_cast<size_t>(matched)].first.GetString();
+				const ibString held = object->Entries()[static_cast<size_t>(matched)].key.GetString();
 				if (held != spelled)
 					ibBackendCoreException::Error(_("JSONReader: the object has the keys '%s' and '%s', which differ only in case - a Structure cannot hold both; walk it with Read() instead"),
 						held, spelled);
@@ -587,12 +587,12 @@ void ibValueJsonWriter::WriteAny(const ibValue& value, int depth)
 		if (depth >= kMaxDepth)
 			ibBackendCoreException::Error(_("JSONWriter: the value nests deeper than %d levels"), kMaxDepth);
 		WriteStartObject();
-		for (const std::pair<ibValue, ibValue>& entry : map->Entries()) {
-			if (entry.first.GetType() != ibValueTypes::TYPE_STRING)
+		for (const auto& entry : map->Entries()) {
+			if (entry.key.GetType() != ibValueTypes::TYPE_STRING)
 				ibBackendCoreException::Error(_("JSONWriter: the names in a JSON object are strings, and this one has a key of type '%s'"),
-					entry.first.GetClassName());
-			WritePropertyName(entry.first.GetString());
-			WriteAny(entry.second, depth + 1);
+					entry.key.GetClassName());
+			WritePropertyName(entry.key.GetString());
+			WriteAny(entry.value, depth + 1);
 		}
 		WriteEndObject();
 		return;

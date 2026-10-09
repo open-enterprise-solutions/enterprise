@@ -30,7 +30,7 @@ namespace {
 // answers with the text; this helper reads a text written in every language the
 // one way the platform reads it, for the tests about that form itself.
 wxString Translated(const wxString& raw) {
-	return ibBackendLocalization::GetTranslateGetRawLocText(raw);
+	return ibLocalization::GetTranslateGetRawLocText(ibBackendLocalization::GetUserLanguage(), raw);
 }
 
 wxObjectDataPtr<ibBackendSpreadsheetObject> MakeDocument() {
@@ -276,11 +276,11 @@ TEST(SpreadsheetDocument, FillTypeParameter_KeepsAnApostrophe)
 // red test of a full run (2026-09-26).
 TEST(SpreadsheetDocument, LocalisedText_WithoutTheLastSemicolon)
 {
-	EXPECT_TRUE(ibBackendLocalization::IsLocalizationString(wxT("en = 'June'; ru = 'Iyun'")));
-	EXPECT_EQ(wxT("June"), ibBackendLocalization::GetTranslateGetRawLocText(wxT("en"), wxT("en = 'June'; ru = 'Iyun'")));
-	EXPECT_EQ(wxT("Iyun"), ibBackendLocalization::GetTranslateGetRawLocText(wxT("ru"), wxT("en = 'June'; ru = 'Iyun'")));   // the last one is found
-	EXPECT_EQ(wxT("June"), ibBackendLocalization::GetTranslateGetRawLocText(wxT("en"), wxT("ru = 'Iyun'; en = 'June'")));   // …whichever it is
-	EXPECT_FALSE(ibBackendLocalization::IsLocalizationString(wxT("June")));
+	EXPECT_TRUE(ibLocalization::IsLocalizationString(wxT("en = 'June'; ru = 'Iyun'")));
+	EXPECT_EQ(wxT("June"), ibLocalization::GetTranslateGetRawLocText(wxT("en"), wxT("en = 'June'; ru = 'Iyun'")));
+	EXPECT_EQ(wxT("Iyun"), ibLocalization::GetTranslateGetRawLocText(wxT("ru"), wxT("en = 'June'; ru = 'Iyun'")));   // the last one is found
+	EXPECT_EQ(wxT("June"), ibLocalization::GetTranslateGetRawLocText(wxT("en"), wxT("ru = 'Iyun'; en = 'June'")));   // …whichever it is
+	EXPECT_FALSE(ibLocalization::IsLocalizationString(wxT("June")));
 }
 
 // An unknown token disappears rather than staying on the page as `[Whoever]`.

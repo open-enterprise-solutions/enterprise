@@ -7,7 +7,7 @@
 #include "watchdroptarget.h"
 
 #include "backend/debugger/debugClient.h"
-#include "backend/fileSystem/fs.h"
+#include "core/fileSystem/fs.h"
 
 #include <functional>
 

@@ -1,5 +1,4 @@
 #include "backend/composition/drivers/spreadsheetComposeDriver.h"
-#include "backend/backend_type.h"                           // GetFormatFromTypeDesc — a column's format from its type
 #include "backend/backend_localization.h"                   // ibTranslateString — an appearance's format, in the language in force
 #include "backend/system/value/valueSpreadsheetDetails.h"   // what a cell is stamped with — value + its links
 #include "backend/session/session.h"                        // ibSession::RunState — the lines hear a cancel
@@ -104,7 +103,7 @@ void ApplyAttr(ibSpreadsheetCellDescription& cell, const ibCompositionAttr& attr
 	if (attr.m_textColour.IsOk())
 		cell.m_textColour = attr.m_textColour;
 	if (attr.m_font.IsSaid())
-		cell.m_font = attr.m_font.Over(cell.m_font.IsOk() ? cell.m_font : s_defaultSpreadsheetFont);
+		cell.m_font = attr.m_font.Over(cell.m_font.IsOk() ? cell.m_font : ibDefaultSpreadsheetFont());
 	if (attr.m_horizontalAlignment != wxALIGN_INVALID) {
 		cell.m_alignHorz = SheetAlignmentOf(attr);
 		cell.m_alignVert = wxALIGN_CENTER;
@@ -196,7 +195,7 @@ void ibSpreadsheetComposeDriver::OnOutputBegin(const ibCompositionOutputInfo& in
 			info.AppearanceOf(i).ValueInForce(ibAppearanceParameter::Format).GetString()).GetString();
 		if (said.IsEmpty() || !ibFormatString::Parse(said, format)) {
 			format = ibFormatString();
-			ibBackendTypeConfigFactory::GetFormatFromTypeDesc(info.m_schema[i].GetTypeDesc(), format);
+			ibFormatString::FromTypeDesc(info.m_schema[i].GetTypeDesc(), format);
 		}
 		// …and the report's own rule, where the format says nothing of its own: nothing is written empty.
 		if (!format.m_number.m_zero)
@@ -633,7 +632,7 @@ void ibSpreadsheetComposeDriver::WriteOutputCaption()
 
 	wxObjectDataPtr<ibBackendSpreadsheetObject> caption(new ibBackendSpreadsheetObject());
 	caption->SetCellValue(0, 0, m_outputName);
-	wxFont font = s_defaultSpreadsheetFont;
+	wxFont font = ibDefaultSpreadsheetFont();
 	font.SetWeight(wxFontWeight::wxFONTWEIGHT_BOLD);
 	caption->SetCellFont(0, 0, font);
 	m_document->PutArea(caption, 0);
@@ -654,7 +653,7 @@ void ibSpreadsheetComposeDriver::WriteHeading()
 	if (!m_title.IsEmpty()) {
 		heading->SetCellValue(row, 0, m_title);
 		heading->SetCellSize(row, 0, 1, span);
-		wxFont font = s_defaultSpreadsheetFont;
+		wxFont font = ibDefaultSpreadsheetFont();
 		font.SetPointSize(24);
 		font.SetWeight(wxFontWeight::wxFONTWEIGHT_BOLD);
 		heading->SetCellFont(row, 0, font);
@@ -867,7 +866,7 @@ void ibSpreadsheetComposeDriver::PrintRow(const ibCompositionLine& line, const s
 	const bool groupRow = line.m_kind != ibSelectorNodeKind::Detail && (hasChildren || line.m_levelReadsDeeper);
 	const ibCompositionTheme& theme = ThemeOf(line);
 	const wxColour fill = groupRow ? theme.GroupFill(level) : theme.m_detailFill;
-	wxFont font = s_defaultSpreadsheetFont;
+	wxFont font = ibDefaultSpreadsheetFont();
 	if (groupRow)
 		font.SetWeight(wxFontWeight::wxFONTWEIGHT_BOLD);
 	for (int col = 0; col < m_columnCount; ++col) {
@@ -960,7 +959,7 @@ void ibSpreadsheetComposeDriver::WriteTotalLine(int level, const std::vector<ibV
 	// TINTED AND BOLD LIKE THE HEADING IT BELONGS TO — a total is the group's other half, so it reads
 	// as part of it rather than as a stray row. The grand total is the output's own line, in its palette.
 	const wxColour fill = m_theme->GroupFill(level);
-	wxFont font = s_defaultSpreadsheetFont;
+	wxFont font = ibDefaultSpreadsheetFont();
 	font.SetWeight(wxFontWeight::wxFONTWEIGHT_BOLD);
 	for (int col = 0; col < m_columnCount; ++col) {
 		row->SetCellBackgroundColour(0, col, fill);
@@ -1573,7 +1572,7 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 	// 1 and `Cell_11` + 2 + 11 are both `Cell_11211` — so past ten columns and a hundred rows two cells
 	// could share a link and one breakdown answered for the other. A separator makes it one name per
 	// cell by construction.
-	wxFont boldFont = s_defaultSpreadsheetFont;
+	wxFont boldFont = ibDefaultSpreadsheetFont();
 	boldFont.SetWeight(wxFontWeight::wxFONTWEIGHT_BOLD);
 	// WHAT EACH CELL OF A LINE SAYS, gathered first and written in ONE call per cell (SetCell) — its
 	// text, its alignment, its link and its look — instead of a setter per attribute, each finding the
@@ -1819,7 +1818,7 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 		if (m_hasGrandTotal && measures > 0)
 			writeAt(dimWidth + keys * perKey, m_crossGrandTotal, ibValue(), m_crossGrandTotalAttr.get());
 
-		wxFont font = s_defaultSpreadsheetFont;
+		wxFont font = ibDefaultSpreadsheetFont();
 		font.SetWeight(wxFontWeight::wxFONTWEIGHT_BOLD);
 		for (int col = 0; col < totalCols; ++col) {
 			totals->SetCellBackgroundColour(0, col, m_theme->m_headerFill);

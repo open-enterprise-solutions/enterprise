@@ -52,7 +52,7 @@ const ibArg& ArgApplication()
 {
 	static const ibArg s_a(wxT("application"), ibArg::Kind::Text,
 		ibMcpText("Which one. Default is the thick client."),
-			/*required*/ false, { wxT("enterprise"), wxT("wenterprise-server") });
+			/*required*/ false, { wxT("enterprise"), wxT("enterprise-thin"), wxT("wenterprise-server") });
 	return s_a;
 }
 

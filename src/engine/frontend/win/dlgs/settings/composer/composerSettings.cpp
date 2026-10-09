@@ -3866,7 +3866,7 @@ void ibComposerSettingsPanel::PrepareModuleContext()
 			// compile is not this window's complaint to make — but "the expression check knows fewer
 			// names than it should" is invisible otherwise, and the reason is exactly this line.
 			try { context->Compile(); }
-			catch (const ibBackendException& error) {
+			catch (const ibCoreException& error) {
 				ibJournalInfo(wxT("ui"), wxT("composer settings: module manager did not compile - %s"),
 					error.GetErrorDescription());
 			}
@@ -3964,7 +3964,7 @@ bool ibComposerSettingsPanel::CheckExpression(const wxString& expression, wxStri
 			}
 		}
 	}
-	catch (const ibBackendException& error) {
+	catch (const ibCoreException& error) {
 		complaint = error.GetErrorDescription();
 		return false;
 	}
@@ -4296,7 +4296,7 @@ bool ibComposerSettingsPanel::ValidateEditedSettings()
 	try {
 		ibValidateSettings(EditedSettings());
 	}
-	catch (const ibBackendException& err) {
+	catch (const ibCoreException& err) {
 		wxMessageBox(err.GetErrorDescription(), _("Data composer settings"), wxOK | wxICON_WARNING, this);
 		return false;
 	}

@@ -2,7 +2,7 @@
 #define __PROPERTY_NUMBER_H__
 
 #include "backend/propertyManager/propertyObject.h"
-#include "backend/serialize/dataBuilder.h"   // ibDataValue — node value (inline Int for integers)
+#include "core/serialize/dataBuilder.h"   // ibDataValue — node value (inline Int for integers)
 
 //base property for "number"
 class BACKEND_API ibPropertyNumber : public ibProperty {

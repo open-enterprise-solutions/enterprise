@@ -1,6 +1,6 @@
 #include "propertyString.h"
 #include "backend/propertyManager/property/variant/variantTranslate.h"
-#include "backend/serialize/dataBuilder.h"   // ibDataValue — node value (String, the stored form)
+#include "core/serialize/dataBuilder.h"   // ibDataValue — node value (String, the stored form)
 
 
 ////////////////////////////////////////////////////////////////////////

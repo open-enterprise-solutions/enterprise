@@ -58,7 +58,7 @@ public:
 	// writes its language into the original text, an empty box takes that language out, and whatever
 	// had no box stays as it was, where it was.
 	static ibTranslateString Collect(const ibTranslateString& original,
-		const ibBackendLocalizationEntryArray& boxes);
+		const ibLocalizationEntryArray& boxes);
 
 private:
 

@@ -13,7 +13,6 @@
 #include "queryable.h"         // ibAliasColumn — a CAST's narrowed field answers as the field it stands for
 #include "dataQueryBuilder.h"  // ibDataQueryBuilder::EffectiveSort / ibDataQueryResult / ibReadPageRequest / ibDataQuerySpec / ibDotWalkColumn
 #include "resultSource.h"      // ibDataResultSource — the selection backing ibDbResultSource derives
-#include "backend/diagnostics/journal.h"   // ibJournal — why a server fold was declined, and what was lowered
 #include "columnLayout.h"      // the column-layout tier: DescribeColumnLayout + ibColumnCodec (value codec) + HasReference
 #include "columnSpread.h"      // ibColumnSpread::TagForValue — which of a tagged column's fields a value fills
 #include "queryException.h"    // ibBackendQueryException — L3-L5 varieties (it used to arrive through the DB header)
@@ -22,7 +21,7 @@
 
 #include "backend/databaseLayer/databaseLayer.h"
 #include "backend/valueInfo.h"                                    // ibReference (physical reference blob, GetQueryTableId source)
-#include "backend/fnumber.h"                                      // ibNumber — the _RTRef type (clsid) keyset tiebreak const
+#include "core/fnumber.h"                                      // ibNumber — the _RTRef type (clsid) keyset tiebreak const
 #include "backend/metaData.h"                                     // ibMetaData (threaded through reads/writes)
 #include "backend/objCtor.h"                                      // ibCtorMetaValueType::GetQueryable — reference-target resolution (clsid -> ctor -> queryable, no cast)
 #include "backend/system/value/valueType.h"                      // ibValueTypeDescription::AdjustValue (dot-walk typed empty)
@@ -32,7 +31,8 @@
 #include <deque>          // ibDbResultSource — the field names it has found, where they stay put
 #include <map>            // dot-walk join dedup
 #include <unordered_map>  // ROLLUP node index — keyed by the group values themselves
-#include <unordered_set>  // ibArrivedReferences — one entry per reference object
+#include <unordered_set>  // ibArrivedReferences — one entry per reference object; an id bound once (DecomposeIn)
+#include <string>         // …keyed by its bytes
 #include <vector>
 #include <algorithm>    // std::find / std::remove — column-list housekeeping (the ROLLUP rows are no longer sorted here: the server orders them)
 #include <stdexcept>    // std::logic_error — the un-co-locatable WHERE-tree guard (BuildColocatedPredicate)
@@ -531,43 +531,63 @@ ibQueryExprPtr DecomposeIn(const ibBackendQueryColumn* col, const ibMetaData* me
 		[&values](const ibValue& v) { return v.GetType() == values.front().GetType(); });
 	// ⭐ REFERENCES OF ONE TABLE ARE THE SAME CASE ONE FIELD WIDER. A reference is its type tag, its table
 	// and its id; a list of items of one catalog spells the first two alike, so they are said once and
-	// the ids go into the engine's IN. (Anything the values do not agree on — two catalogs in one list, an
-	// empty reference among them — falls through to the pairwise road below, as before.)
+	// the ids go into the engine's IN. (An empty reference among them falls through to the pairwise road
+	// below, as before.)
+	// ⭐ …AND REFERENCES OF SEVERAL TABLES ARE ONE SUCH IN PER TABLE, ORed — a register's recorder of two kinds of
+	// document. Pair by pair, every row was weighed against as many branches as there were values.
 	// 🛑 AN EMPTY VALUE NEVER TAKES THIS ROAD. "Not filled" is spelled three ways in a row (DecomposeEquality:
 	// the zero-guid sentinel, SQL NULL, an untagged value) and only the pairwise road below says all of
 	// them; an EmptyRef in the engine's IN would match the sentinel alone and silently lose the rest.
 	const bool anyEmpty = std::any_of(values.begin(), values.end(), [](const ibValue& v) { return v.IsEmpty(); });
 	if (!primitive && !anyEmpty && !IsComputedColumn(col) && fields.size() >= 2 && values.size() > 1) {
-		std::vector<ibQueryExprPtr> leading, ids;
-		bool agree = true;
+		const auto isConst   = [](const ibQueryExprPtr& a) { return a && a->m_kind == ibQueryExprKind::Const; };
+		const auto sameConst = [&isConst](const ibQueryExprPtr& a, const ibQueryExprPtr& b) {
+			return isConst(a) && isConst(b)
+				&& a->m_blob.GetDataLen() == b->m_blob.GetDataLen()
+				&& (a->m_blob.GetDataLen() == 0
+					? (a->m_const.GetType() == b->m_const.GetType() && a->m_const.CompareValueEQ(b->m_const))
+					: memcmp(a->m_blob.GetData(), b->m_blob.GetData(), a->m_blob.GetDataLen()) == 0);
+		};
+		// …and an id already in its table's list is not bound a second time: IN does not count repeats, the engine
+		// counts every value it binds (ibDialectDictionary::m_maxParameters).
+		struct Table { std::vector<ibQueryExprPtr> m_leading, m_ids; const ibValue* m_first; std::unordered_set<std::string> m_seen; };
+		std::vector<Table> tables;
+		bool spelled = true;
 		for (const ibValue& v : values) {
 			ibQueryStatement capture(ibQueryStatement::Kind::Delete, wxString(), fields);
 			int position = 1;
 			BindWriteValue(capture, col, metaData, v, position);
 			const std::vector<ibQueryExprPtr>& consts = capture.CapturedValues();
-			if (consts.size() != fields.size()) { agree = false; break; }
-			if (leading.empty())
-				leading.assign(consts.begin(), consts.end() - 1);
-			for (size_t i = 0; agree && i + 1 < consts.size(); ++i) {
-				const ibQueryExprPtr& a = leading[i];
-				const ibQueryExprPtr& b = consts[i];
-				agree = a && b && a->m_kind == ibQueryExprKind::Const && b->m_kind == ibQueryExprKind::Const
-					&& a->m_blob.GetDataLen() == b->m_blob.GetDataLen()
-					&& (a->m_blob.GetDataLen() == 0
-						? (a->m_const.GetType() == b->m_const.GetType() && a->m_const.CompareValueEQ(b->m_const))
-						: memcmp(a->m_blob.GetData(), b->m_blob.GetData(), a->m_blob.GetDataLen()) == 0);
+			if (consts.size() != fields.size() || !consts.back()) { spelled = false; break; }
+			auto table = std::find_if(tables.begin(), tables.end(), [&](const Table& t) {
+				for (size_t i = 0; i + 1 < consts.size(); ++i)
+					if (!sameConst(t.m_leading[i], consts[i]))
+						return false;
+				return true;
+			});
+			if (table == tables.end()) {
+				if (!std::all_of(consts.begin(), consts.end() - 1, isConst)) { spelled = false; break; }
+				table = tables.insert(tables.end(),
+					Table{ std::vector<ibQueryExprPtr>(consts.begin(), consts.end() - 1), {}, &v, {} });
 			}
-			if (!agree || !consts.back()) { agree = false; break; }
-			ids.push_back(consts.back());
+			const ibQueryExprPtr& id = consts.back();
+			if (id->m_blob.GetDataLen() > 0
+			    && !table->m_seen.insert(std::string(static_cast<const char*>(id->m_blob.GetData()), id->m_blob.GetDataLen())).second)
+				continue;
+			table->m_ids.push_back(id);
 		}
-		if (agree) {
-			// The values agree on their kind, so the first one says which fields are compared (ComparedFields).
-			const std::vector<bool> compared = ComparedFields(layout, values.front());
-			ibQueryExprPtr pred;
-			for (size_t i = 0; i < leading.size(); ++i)
-				if (i >= compared.size() || compared[i])
-					pred = AndFold(pred, ibBinOp(ibQueryBinOp::Eq, ibColQ(mainQual, fields[i]), leading[i]));
-			return AndFold(pred, ibIn(ibColQ(mainQual, fields.back()), std::move(ids)));
+		if (spelled) {
+			ibQueryExprPtr any;
+			for (Table& t : tables) {
+				// The values of one table agree on their kind, so its first says which fields are compared (ComparedFields).
+				const std::vector<bool> compared = ComparedFields(layout, *t.m_first);
+				ibQueryExprPtr pred;
+				for (size_t i = 0; i < t.m_leading.size(); ++i)
+					if (i >= compared.size() || compared[i])
+						pred = AndFold(pred, ibBinOp(ibQueryBinOp::Eq, ibColQ(mainQual, fields[i]), t.m_leading[i]));
+				any = OrFold(any, AndFold(pred, ibIn(ibColQ(mainQual, fields.back()), std::move(t.m_ids))));
+			}
+			return any;
 		}
 	}
 
@@ -2013,6 +2033,18 @@ ibQueryExprPtr ibMetaIRBuilder::BuildSemiJoinExists(const ibSemiJoinExists& sj, 
 	ibQueryExprPtr correlation = ibBinOp(FilterOpToBinOp(sj.m_op),
 		ibColQ(sjAlias,  FirstSqlFieldOfColumn(sj.m_innerKey)),
 		ibColQ(outerQual, FirstSqlFieldOfColumn(sj.m_outerKey)));
+	// …and EMPTY MATCHES EMPTY where both keys may be empty (`x IN (SELECT k …)` over two attributes). A value not
+	// filled has several spellings — a NULL or zero key, an untagged row, the type's own empty value — and the
+	// equality above does not read them as one value: an empty row of the outer would miss the empties of
+	// the set — IN would lose it and NOT IN keep it, where the set road finds it. So "empty" is asked here in the
+	// set road's own words: its equality with the column's empty value (DecomposeEquality), on each side.
+	if (sj.m_emptyMatchesEmpty) {
+		const ibMetaData* const metaData = sj.m_inner->GetMetaData();
+		const auto isEmpty = [metaData](const ibBackendQueryColumn* col, const wxString& qual) {
+			return DecomposeEquality(col, metaData, ibValueTypeDescription::AdjustValue(col->GetTypeValueDesc(), metaData), qual);
+		};
+		correlation = OrFold(correlation, AndFold(isEmpty(sj.m_innerKey, sjAlias), isEmpty(sj.m_outerKey, outerQual)));
+	}
 
 	// SELECT * (a bare ibFilter → SELECT *); inner Where AND the correlation as the subquery WHERE.
 	return ibExists(ibFilter(ibScan(sj.m_inner->GetQueryTableName(), sjAlias), AndFold(innerWhere, correlation)),
@@ -2144,14 +2176,13 @@ ibQueryExprPtr ibMetaIRBuilder::BuildColumnExpr(const ibBackendQueryable* querya
 // A reference's identity is (guid, type). ColumnValueFields gives the _RRRef guid; the _RTRef type follows as the
 // tiebreak so an empty reference (all-zero guid) of type A orders distinctly from one of type B — in lockstep with
 // BuildAnchorPredicate and CompareValueLS (reference clsids order by metaID). A single-type / self-reference column
-// has a constant _RTRef, so this is a harmless no-op there.
+// has a constant _RTRef, so this is a harmless no-op there. The fields are ColumnSortFields — the same an index is
+// built over (ibStructureBatch::CreateIndex), so the engine can walk the index instead of sorting.
 static std::vector<ibQueryExprPtr> SortFieldsOf(const ibBackendQueryColumn* col, const wxString& qual)
 {
 	std::vector<ibQueryExprPtr> fields;
-	for (const wxString& name : ColumnValueFields(col))
+	for (const wxString& name : ColumnSortFields(col))
 		fields.push_back(ibColQ(qual, name));
-	if (IsReferenceValued(col))
-		fields.push_back(ibColQ(qual, col->GetPhysicalName() + ibFieldSuffix(ibColumnRole::ReferenceType)));
 	return fields;
 }
 
@@ -2255,6 +2286,13 @@ ibQueryExprPtr ibMetaIRBuilder::BuildAnchorPredicate(const ibBackendQueryable* /
 		ibQueryExprPtr clause = AndFold(eqUpTo(i), ibBinOp(op, terms[i].field, terms[i].operand));
 		predicate = OrFold(predicate, clause);
 	}
+
+	// ⭐ …AND THE FIRST FIELD'S BOUND IN FRONT OF IT. Every clause above holds the first field past or at the
+	// anchor, so the bound says nothing new about the rows — it says where the index walk STARTS. Without it
+	// the engine walks the list's index from its first entry and tests each against the OR, so a page near
+	// the end of a million movements cost the whole walk up to it.
+	if (terms.size() > 1)
+		predicate = AndFold(ibBinOp(inclusiveOp(terms[0].asc), terms[0].field, terms[0].operand), predicate);
 
 	return predicate;
 }
@@ -2480,8 +2518,11 @@ public:
 	// date silently disappeared and the balance surface was read whole (measured 2026-09-05: as of
 	// 2020 the same rows came back as as of today), and `BalanceAndTurnovers` — a name the schema
 	// deliberately never creates — asked Firebird for a table that does not exist.
-	ibRefJoinChain(const ibBackendQueryable* root, const wxString& rootTable)
-		: m_root(root), m_rootTable(rootTable), m_from(SourceRelationOf(root, rootTable)) {}
+	// `rootRelation`, when given, stands where the root's own relation would — under the same name, so every
+	// join and every column qualified by `rootTable` reads it unchanged (BuildPageIR's windowed root).
+	ibRefJoinChain(const ibBackendQueryable* root, const wxString& rootTable, ibQueryRelPtr rootRelation = nullptr)
+		: m_root(root), m_rootTable(rootTable),
+		  m_from(rootRelation ? std::move(rootRelation) : SourceRelationOf(root, rootTable)) {}
 
 	// Resolve a reference path to its LEAF's join alias + target queryable, appending (deduped) joins.
 	// Returns false if a segment is not a single-target reference (an unresolvable / composite edge).
@@ -2489,7 +2530,7 @@ public:
 	             wxString& outAlias, const ibBackendQueryable*& outTarget)
 	{
 		const ibBackendQueryable* curQ = m_root;
-		wxString curQual = m_rootTable, prefixKey;
+		wxString curQual = m_rootTable;
 		for (size_t i = 0; i + 1 < path.size(); ++i) {
 			const ibBackendQueryColumn* refCol = path[i];
 			const ibBackendQueryable* tgtQ = (curQ != nullptr) ? curQ->GetProvider().ResolveReferenceTarget(curQ, refCol) : nullptr;
@@ -2497,12 +2538,7 @@ public:
 				tgtQ = ibDbTableProvider::CastTarget(path[i + 1]);   // a reference with several types, narrowed to one by a CAST
 			const wxString tgtRefField = (tgtQ != nullptr) ? SelfReferenceField(tgtQ) : wxString();
 			if (tgtQ == nullptr || tgtRefField.empty()) return false;
-			prefixKey += wxString::Format(wxT("%p|"), (const void*)refCol);
-			auto it = m_prefixAlias.find(prefixKey);
-			if (it != m_prefixAlias.end())
-				curQual = it->second;
-			else
-				curQual = m_prefixAlias[prefixKey] = AddLeftJoin(tgtQ, curQual, FirstSqlFieldOfColumn(refCol));
+			curQual = AddLeftJoin(tgtQ, curQual, FirstSqlFieldOfColumn(refCol));   // a prefix joined once — see there
 			curQ = tgtQ;
 		}
 		outAlias = curQual; outTarget = curQ;
@@ -2510,13 +2546,23 @@ public:
 	}
 
 	// Append one LEFT join to a reference TARGET, on its own reference as the index holds it
-	// (SelfReferenceMatch) — NOT deduped, for the composite branch's per-target joins; returns its alias.
+	// (SelfReferenceMatch); returns its alias.
+	//
+	// ⭐ ONE JOIN IS JOINED ONCE. It matches at most one row of the target, so the same target on the same field is the
+	// same row however many walks ask for it — and every walk through a composite hop asked again: a page filtered by
+	// `Recorder.Warehouse` and `Recorder.Counterparty` joined both recorder kinds twice, four joins over every register
+	// row where two say the same (2026-10-05). Keyed by what the join IS — the target and the field it hangs on.
 	wxString AddLeftJoin(const ibBackendQueryable* target, const wxString& leftQual, const wxString& leftField)
 	{
+		const wxString key = target->GetQueryTableName() + wxT("|") + leftQual + wxT("|") + leftField;
+		const auto it = m_joinAlias.find(key);
+		if (it != m_joinAlias.end())
+			return it->second;
 		const wxString alias = wxString::Format(wxT("dw%d"), m_aliasSeq++);
 		m_from = ibJoin(m_from, ibScan(target->GetQueryTableName(), alias),
 			SelfReferenceMatch(target, alias, ibCol(leftQual, leftField)),
 			ibQueryJoinType::Left);
+		m_joinAlias[key] = alias;
 		return alias;
 	}
 
@@ -2641,6 +2687,45 @@ public:
 		if (!sawComposite || out.empty()) return nullptr;            // pure single-target — caller's path
 		if (empty) out.push_back(empty);
 		return out.size() == 1 ? out.front() : ibFunc(wxT("COALESCE"), out);
+	}
+
+	// ⭐⭐ …AND A LEAF OF SEVERAL FIELDS, READ BACK AS ITSELF. Each kind's leaf brings its FULL field spread, and the
+	// spreads merge PER SUFFIX of the first kind's (the type the lowering resolved the path against) with COALESCE:
+	// a row matches at most one kind, so exactly one of them is non-null. The merged spread reads back under a
+	// prefix like any other (ReadValue). A kind whose leaf lacks a suffix contributes nothing to it.
+	//
+	// ONE MERGE FOR WHAT A WALK PROJECTS AND WHAT A FOLD GROUPS BY, so the key a heading is filed under is the
+	// value the list reads. The fold had only the single-target road (Resolve) and refused the rest, so a list
+	// grouped by `Recorder.Warehouse` read a million rows into memory to group them (2026-10-05). Empty for a
+	// path with no composite hop — the caller's Resolve.
+	struct SpreadField { wxString m_suffix; ibQueryExprPtr m_expr; };
+	std::vector<SpreadField> MergedSpread(const std::vector<const ibBackendQueryColumn*>& path)
+	{
+		bool sawComposite = false;
+		const std::vector<LeafOccurrence> occs = LeafOccurrences(path, sawComposite);
+		if (!sawComposite || occs.empty())
+			return {};
+
+		// Per-occurrence field spreads, cached; the first drives the suffix list.
+		std::vector<std::vector<wxString>> occFields;
+		occFields.reserve(occs.size());
+		for (const LeafOccurrence& o : occs)
+			occFields.push_back(ColumnFieldNames(o.m_col));
+
+		std::vector<SpreadField> merged;
+		const wxString repBase = occs.front().m_col->GetPhysicalName();
+		for (const wxString& repField : occFields.front()) {
+			const wxString suffix = repField.Mid(repBase.length());
+			std::vector<ibQueryExprPtr> args;
+			for (size_t oi = 0; oi < occs.size(); ++oi) {
+				const wxString branchField = occs[oi].m_col->GetPhysicalName() + suffix;
+				for (const wxString& bf : occFields[oi])
+					if (bf == branchField) { args.push_back(ibCol(occs[oi].m_alias, branchField)); break; }
+			}
+			if (args.empty()) continue;
+			merged.push_back(SpreadField{ suffix, args.size() == 1 ? args.front() : ibFunc(wxT("COALESCE"), args) });
+		}
+		return merged;
 	}
 
 	// ⭐⭐ …AND A LEAF OF SEVERAL FIELDS, SORTED BY THROUGH A REFERENCE OF SEVERAL KINDS — a kind's ORDER
@@ -2866,9 +2951,21 @@ private:
 	const ibBackendQueryable*    m_root;
 	wxString                     m_rootTable;
 	ibQueryRelPtr                m_from;
-	std::map<wxString, wxString> m_prefixAlias;   // path-prefix key -> join alias (shared dedup across all paths)
+	std::map<wxString, wxString> m_joinAlias;     // target|left qualifier|left field -> join alias (AddLeftJoin)
 	int                          m_aliasSeq = 0;
 };
+
+// Does a walk reach its leaf in at least one table — through single-target hops and through a reference of several
+// kinds alike? Asked of the chain's one walker over a scratch chain, so a gate and the statement it admits cannot
+// disagree about which walks there are. Metadata only, no database.
+static bool WalkReaches(const ibBackendQueryable* root, const std::vector<const ibBackendQueryColumn*>& path)
+{
+	if (root == nullptr)
+		return false;
+	ibRefJoinChain probe(root, root->GetQueryTableName());
+	bool sawComposite = false;
+	return !probe.LeafOccurrences(path, sawComposite).empty();
+}
 
 	// Aggregated read (totals) — a physical GROUP BY built from the spec. The
 	// AggregateItem / HavingItem are public on the door, so the provider lowers them.
@@ -2965,7 +3062,33 @@ void ibDbTableProvider::BuildAggregateQuery(const ibDataQuerySpec& spec, ibDatab
 					// ⭐ …AND A WALK THROUGH A REFERENCE OF SEVERAL KINDS — a register's recorder grouped by, sorted by
 					// its kind's order (ibDataQueryBuilder::OrderBy) — groups by each field of its leaf met across the
 					// kinds, projected under the FIRST kind's names: the ones the leaf column reads its value back by
-					// (ibRefJoinChain::CompositeRoleFields). A walk named by the author through one stays refused.
+					// (ibRefJoinChain::CompositeRoleFields).
+					// ⭐ …AND ONE THE AUTHOR NAMED is projected under the name, as a single-target walk is below: the
+					// leaf's spread merged across the kinds (MergedSpread) with the name as its prefix, a scalar leaf as
+					// one value. It was refused outright — `GROUP BY R.Recorder.Warehouse AS W` (2026-10-05).
+					if (!keyAlias.IsEmpty()) {
+						const wxString sqlAlias = ibSqlAliasOf(keyAlias);
+						const bool scalar = TypedScalarEmpty(gcol) != nullptr && ibReadsBackAsItself(gcol->GetTypeDesc());
+						if (scalar) {
+							if (ibQueryExprPtr value = chain.CompositeLeaf(path, /*withTypedEmpty*/ true)) {
+								q.GroupBy(value);
+								projection.push_back(ibQueryProjItem{ value, sqlAlias });
+								projectedAliases.push_back(sqlAlias);
+								continue;
+							}
+						}
+						else {
+							const std::vector<ibRefJoinChain::SpreadField> spread = chain.MergedSpread(path);
+							if (!spread.empty()) {
+								for (const ibRefJoinChain::SpreadField& sf : spread) {
+									q.GroupBy(sf.m_expr);
+									projection.push_back(ibQueryProjItem{ sf.m_expr, sqlAlias + sf.m_suffix });
+								}
+								projectedAliases.push_back(sqlAlias);
+								continue;
+							}
+						}
+					}
 					const std::vector<ibRefJoinChain::RoleField> fields =
 						keyAlias.IsEmpty() ? chain.CompositeRoleFields(path) : std::vector<ibRefJoinChain::RoleField>{};
 					if (fields.empty())
@@ -3990,7 +4113,66 @@ static ibTotalLevel PhantomLevel(const ibDataQuerySpec& spec)
 	do { ibJournalInfo(wxT("query.road"), wxT("server fold declined: ") fmt, ##__VA_ARGS__); \
 	     return false; } while (false)
 
-bool ibDbTableProvider::CanRollupTotalsShape(const ibDataQuerySpec& spec)
+// Does a sort name this level's own key — the field itself, or the same walk to it?
+static bool SortsByLevelKey(const ibTotalLevel& level, const ibQuerySortItem& s)
+{
+	if (s.m_expr != nullptr)
+		return false;
+	for (const ibTotalField& f : level.m_fields) {
+		if (!s.m_path.empty() ? (s.m_path == f.m_path) : (f.m_path.empty() && s.m_col != nullptr && s.m_col == f.m_col))
+			return true;
+	}
+	return false;
+}
+
+// …or a walk ON FROM the key — `Recorder.Warehouse` sorted by its kind's order is `[Recorder, Warehouse, SortOrder]`
+// (ibDataQueryBuilder::OrderBy). Whatever it reaches is one value per group, since the group IS one key. Which of the
+// level's fields it goes on from, or -1.
+static int LevelKeyWalkedOnFrom(const ibTotalLevel& level, const ibQuerySortItem& s)
+{
+	if (s.m_expr != nullptr || s.m_path.empty())
+		return -1;
+	for (size_t i = 0; i < level.m_fields.size(); ++i) {
+		const ibTotalField& f = level.m_fields[i];
+		const std::vector<const ibBackendQueryColumn*> key = f.m_path.empty()
+			? std::vector<const ibBackendQueryColumn*>{ f.m_col } : f.m_path;
+		if (s.m_path.size() > key.size() && std::equal(key.begin(), key.end(), s.m_path.begin()))
+			return static_cast<int>(i);
+	}
+	return -1;
+}
+
+// The one table a level key's reference points into — asked of the key's leaf in every table the key's walk reaches,
+// through each kind of a composite hop — or null when it points into several, or into none that can be joined.
+static const ibBackendQueryable* LevelKeyTarget(const ibBackendQueryable* q, const ibTotalField& f)
+{
+	const std::vector<const ibBackendQueryColumn*> key = f.m_path.empty()
+		? std::vector<const ibBackendQueryColumn*>{ f.m_col } : f.m_path;
+	ibRefJoinChain probe(q, q->GetQueryTableName());
+	bool sawComposite = false;
+	const ibBackendQueryable* target = nullptr;
+	for (const ibRefJoinChain::LeafOccurrence& at : probe.LeafOccurrences(key, sawComposite)) {
+		const ibBackendQueryable* t = at.m_q->GetProvider().ResolveReferenceTarget(at.m_q, at.m_col);
+		if (t == nullptr || (target != nullptr && t != target))
+			return nullptr;
+		target = t;
+	}
+	return target != nullptr && !SelfReferenceField(target).empty() ? target : nullptr;
+}
+
+// ONE LEVEL: how a sort that walks on from the level's key orders the groups. What a walk past the key's own target
+// reaches is joined to every row before the grouping (`walked`); the key's own target — the one a kind's order asks
+// for — is looked up over the groups instead, once per group (`target`), on the key the group already holds.
+struct GroupOrderWalk {
+	std::vector<ibQueryExprPtr> walked;              // over the rows — the order takes MIN / MAX of each
+	size_t                      keyField = 0;        // …or: the level field the walk goes on from,
+	const ibBackendQueryable*   target   = nullptr;  // the one table its reference points into,
+	const ibBackendQueryColumn* column   = nullptr;  // and that table's column the sort names
+};
+
+// The STRUCTURAL half of a fold on the server, for both of its roads: ROLLUP over a ladder, and a plain GROUP BY
+// over ONE level (`oneLevel`), which needs no ROLLUP and orders its groups itself (see the sorts below).
+static bool TotalsShapeFoldable(const ibDataQuerySpec& spec, bool oneLevel)
 	{
 		// Single-source DB queryable (a multi-source totals goes through the co-located / RAM paths).
 		if (spec.m_root != nullptr && spec.m_root->m_kind != ibQueryNode::Kind::Source)
@@ -4080,19 +4262,12 @@ bool ibDbTableProvider::CanRollupTotalsShape(const ibDataQuerySpec& spec)
 				// plain grouping under a word that asked for something else.
 				if (f.m_dim != ibDimensionKind::Elements)
 					RollupDecline(wxT("level '%s' asks for a HIERARCHY unfold"), f.m_col->GetName());
-				// A DOT-WALKED DIMENSION (`Producer.Region`) rides a reference JOIN chain, the same
-				// one a dot-walked flat key rides — allowed WHEN every non-leaf hop is a SINGLE-TARGET
-				// reference, so the chain is resolvable from metadata alone. A composite / multi-target
-				// mid-hop cannot be joined and keeps the RAM fold, which handles it.
-				if (!f.m_path.empty()) {
-					const ibBackendQueryable* walk = q;
-					for (size_t s = 0; s + 1 < f.m_path.size() && walk != nullptr; ++s) {
-						const ibBackendQueryable* const next = walk->GetProvider().ResolveReferenceTarget(walk, f.m_path[s]);
-						walk = next != nullptr ? next : ibDbTableProvider::CastTarget(f.m_path[s + 1]);   // …or the one type a CAST named
-					}
-					if (walk == nullptr)
-						RollupDecline(wxT("dot-walked dimension '%s' has an unresolvable hop"), f.m_col->GetName());
-				}
+				// A DOT-WALKED DIMENSION (`Producer.Region`, `Recorder.Warehouse`) rides a reference JOIN chain,
+				// the same one a walked output rides — a hop through a reference of several kinds included, the
+				// key merged across them the way the output merges it (ibRefJoinChain::MergedSpread). Asked of
+				// the chain's walker, so only a walk that reaches no table keeps the RAM fold.
+				if (!f.m_path.empty() && !WalkReaches(q, f.m_path))
+					RollupDecline(wxT("dot-walked dimension '%s' reaches no table"), f.m_col->GetName());
 			}
 		}
 
@@ -4103,6 +4278,24 @@ bool ibDbTableProvider::CanRollupTotalsShape(const ibDataQuerySpec& spec)
 		// else keeps the RAM fold, which orders the rows and then groups them in first-seen order.
 		if (spec.m_sorts != nullptr)
 			for (const ibQuerySortItem& s : *spec.m_sorts) {
+				// ⭐ ONE LEVEL ORDERS ITS GROUPS ITSELF (RunRollupTotals): by the key a sort names, by what a walk
+				// on from the key reaches (one value per group — the key's kind order is such a walk), and by an
+				// ordinary field's first (MIN) or last (MAX) value — the order the groups are first met in when
+				// the rows are read sorted by that field, which is the order the RAM fold shows. A row-key sort
+				// has no group to speak of and is left to the key. Anything else cannot be said over groups.
+				if (oneLevel) {
+					if (SortsByLevelKey(levels.front(), s)
+						|| (LevelKeyWalkedOnFrom(levels.front(), s) >= 0 && WalkReaches(q, s.m_path))
+						|| (s.m_expr == nullptr && s.m_path.empty() && s.m_col == nullptr))
+						continue;
+					if (s.m_expr != nullptr || !s.m_path.empty())
+						RollupDecline(wxT("one level: a computed sort, or a walk that does not go on from the level's key"));
+					ColocatedLeaves one; one.push_back(q);
+					if (!ScalarReadable(s.m_col, one))
+						RollupDecline(wxT("one level: sort by '%s', which is neither the key nor a scalar to order the groups by"),
+						              s.m_col->GetName());
+					continue;
+				}
 				if (s.m_expr != nullptr || !s.m_path.empty())
 					RollupDecline(wxT("a computed / dot-walked sort over a folded result"));
 				if (s.m_col == nullptr)
@@ -4124,20 +4317,12 @@ bool ibDbTableProvider::CanRollupTotalsShape(const ibDataQuerySpec& spec)
 			if (!c.m_path.empty() && !c.m_asExists)             RollupDecline(wxT("a dot-walked filter"));
 		if (PredicateHasPath(spec.m_predicate))                   RollupDecline(wxT("a dot-walked filter"));
 
-		// A dot-walk GROUP key rides a reference JOIN chain (ExecuteRollupTotals builds it) — allowed WHEN every
-		// NON-leaf path segment is a SINGLE-TARGET reference (structurally resolvable, metadata-only, no DB). A
-		// composite / multi-target mid-hop can't be joined -> RAM-fold (correct there).
+		// A dot-walk GROUP key rides a reference JOIN chain (ExecuteRollupTotals builds it) — the same walk and the
+		// same merge across the kinds of a composite hop as a dimension above.
 		if (spec.m_groupPaths != nullptr)
-			for (const auto& gp : *spec.m_groupPaths) {
-				if (gp.empty()) continue;
-				const ibBackendQueryable* walk = q;
-				for (size_t s = 0; s + 1 < gp.size() && walk != nullptr; ++s) {
-					const ibBackendQueryable* const next = walk->GetProvider().ResolveReferenceTarget(walk, gp[s]);
-					walk = next != nullptr ? next : ibDbTableProvider::CastTarget(gp[s + 1]);   // …or the one type a CAST named
-				}
-				if (walk == nullptr)
-					RollupDecline(wxT("a dot-walked group key has an unresolvable hop"));
-			}
+			for (const auto& gp : *spec.m_groupPaths)
+				if (!gp.empty() && !WalkReaches(q, gp))
+					RollupDecline(wxT("a dot-walked group key reaches no table"));
 		// Group keys: SCALAR or a REFERENCE / variant (a reference groups by its full spread as ONE composite
 		// ROLLUP element, reassembled on read — RunRollupTotals handles it). Aggregate inputs stay SCALAR;
 		// the null-column check for the keys is made above, where the levels are walked.
@@ -4150,6 +4335,34 @@ bool ibDbTableProvider::CanRollupTotalsShape(const ibDataQuerySpec& spec)
 				RollupDecline(wxT("'%s' is a balance, taken at a moment rather than added up"), a.m_alias);
 		}
 		return true;
+	}
+
+bool ibDbTableProvider::CanRollupTotalsShape(const ibDataQuerySpec& spec)
+	{
+		return TotalsShapeFoldable(spec, /*oneLevel*/ false);
+	}
+
+// ⭐⭐ ONE LEVEL NEEDS NO ROLLUP. A list grouped by a field asks for exactly one level of headings, and a plain
+// GROUP BY — which every engine has — answers it; ROLLUP only adds the subtotals of a LADDER. Firebird has no
+// ROLLUP at all (ibSqlFeatures::m_rollup), so a grouped list there read every row into memory to make its few
+// headings: a million register rows for five warehouses, fifty seconds per read (2026-10-05).
+//
+// The grand total is what the groups add up to, so only a figure that adds up may ride here: a sum, a count, a
+// minimum, a maximum. An average or a count of DISTINCT values over the groups is not the one over the rows.
+bool ibDbTableProvider::CanFoldOneLevelTotals(const ibDataQuerySpec& spec)
+	{
+		const std::vector<ibTotalLevel> levels = RollupLevelsOf(spec);
+		if (levels.size() != 1 || levels.front().m_fields.empty())
+			return false;   // not one level of headings — the ROLLUP road's question, asked next
+		for (const ibDataQueryBuilder::AggregateItem& a : RollupAggregatesOf(spec)) {
+			if (a.m_fn == ibDataQueryBuilder::AggregateFn::Avg)
+				RollupDecline(wxT("one level: '%s' is an average, which the groups do not add up to"), a.m_alias);
+			if (a.m_distinct)
+				RollupDecline(wxT("one level: '%s' counts distinct values, which the groups do not add up to"), a.m_alias);
+			if (a.m_scopeDepth != 0 || a.m_scopeBranch != nullptr)
+				RollupDecline(wxT("one level: '%s' is computed over an area of its own"), a.m_alias);
+		}
+		return TotalsShapeFoldable(spec, /*oneLevel*/ true);
 	}
 
 bool ibDbTableProvider::CanPushRollupTotals(const ibDataQuerySpec& spec)
@@ -4173,8 +4386,11 @@ bool ibDbTableProvider::CanPushRollupTotals(const ibDataQuerySpec& spec)
 // Per group-key rendering plan for a ROLLUP totals: a SCALAR key is one field (colExpr); a REFERENCE / variant
 // key is its FULL SPREAD grouped as ONE composite ROLLUP element ((f0,f1,…)) so the whole reference is a single
 // level, projected under a prefix, and reassembled on read via ibColumnCodec::ReadValue. The caller supplies the
-// per-column plan (scalar? + qualifier for the spread fields + the metaData for reassembly).
-struct RollupGroupKey { bool scalar; wxString qualifier; const ibMetaData* meta; };
+// per-column plan (scalar? + qualifier for the spread fields + the metaData for reassembly). A key walked through a
+// reference of several kinds brings its fields already merged (`spread`, ibRefJoinChain::MergedSpread) — there is no
+// one qualifier for them.
+struct RollupGroupKey { bool scalar; wxString qualifier; const ibMetaData* meta;
+                        std::vector<ibRefJoinChain::SpreadField> spread; };
 
 // A NODE THAT HAS CHILDREN SAYS SO. The flag is what every reader folds by — a report tints and
 // bolds a heading, a grid draws the expander, the walk asks HasChildren() — and a tree assembled
@@ -4190,10 +4406,14 @@ static void MarkRollupFolders(ibSelectorTree::Node& node)
 			MarkRollupFolders(*child);
 }
 
+// `rollup` false = ONE level by a plain GROUP BY (ibDbTableProvider::CanFoldOneLevelTotals): every row is a heading,
+// the groups are ordered here (the query's sorts said over groups) and the grand total is added up from them.
 static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr from,
 	const std::function<ibQueryExprPtr(const ibBackendQueryColumn*)>& colExpr,
 	const std::function<RollupGroupKey(const ibBackendQueryColumn*)>& keyInfo,
-	std::vector<ibQuerySortKey> orderKeys)
+	std::vector<ibQuerySortKey> orderKeys, bool rollup = true,
+	const std::vector<GroupOrderWalk>& sortWalks = {},   // one level: per sort, a walk on from the key
+	const std::vector<ibQueryExprPtr>& partials = {})    // one level over rows folded by a hop first: each aggregate's part
 {
 	// Build the IR: SELECT <field | spread>, GROUPING(<level's first field>) AS grp<L>, <agg> AS alias
 	//               FROM <from> GROUP BY ROLLUP(<level 0>, <level 1>, …)
@@ -4209,20 +4429,24 @@ static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr
 	// changing spelling because a rarer one was made expressible.
 	// Does this engine have GROUPING()? Asked ONCE, of L2, the same way "can it fold at all" is asked
 	// — the two are separate facts (Firebird 5 has the fold and not the function).
+	// (A plain GROUP BY has no levels to tell apart — every row it returns is a heading.)
 	bool hasGrouping = false;
-	{
+	if (rollup) {
 		ibConnectionScope scope(spec.m_holder);
 		hasGrouping = scope && ibCanUseGrouping(scope.get());
 	}
 
-	struct FieldPlan { const ibBackendQueryColumn* col; bool scalar; wxString tag; const ibMetaData* meta; };
+	// `refAlias` — a reference field's id under the name the statement wrote it (one level looks its target up by it).
+	struct FieldPlan { const ibBackendQueryColumn* col; bool scalar; wxString tag; const ibMetaData* meta; wxString refAlias; };
 	// ⭐ …AND THE ALIAS OF THE LEVEL'S FIRST PROJECTED FIELD. It is what says whether this row is AT
 	// this level, on an engine with no GROUPING(): a level that the rollup folded away comes back
 	// SQL NULL in its own keys. Exact here — OES attributes hold typed empties and never SQL NULL, so
 	// a NULL in a result can only have come from the fold (see ibSqlFeatures::m_grouping).
 	// The EXPRESSION for that same field rides along, because the ORDER BY below says the same thing
 	// to the server and an ORDER BY cannot lean on a projection alias inside an expression.
-	struct LevelPlan { std::vector<FieldPlan> fields; wxString firstAlias; ibQueryExprPtr firstExpr; };
+	// `keys` are every field the level groups by, in order — what a plain GROUP BY orders its groups by.
+	struct LevelPlan { std::vector<FieldPlan> fields; wxString firstAlias; ibQueryExprPtr firstExpr;
+	                   std::vector<ibQueryExprPtr> keys; };
 	std::vector<ibTotalLevel> levels = RollupLevelsOf(spec);
 
 	// A DETAIL level (no fields) is lowered to the phantom level — the row's own identity as a group
@@ -4278,26 +4502,40 @@ static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr
 			}
 			else {
 				// REFERENCE / variant field: its FULL SPREAD joins this level's element, projected under a
-				// prefix and reassembled on read (ibColumnCodec::ReadValue).
+				// prefix and reassembled on read (ibColumnCodec::ReadValue) — merged across the kinds when the
+				// walk went through a reference of several (the projection's own merge, ki.spread).
 				const wxString prefix = wxString::Format(wxT("gcol%d_%d"), li, fi);
-				const wxString base   = g->GetPhysicalName();
-				for (const wxString& f : ColumnFieldNames(g)) {
-					const ibQueryExprPtr fexpr = fieldCol(f);
+				const auto add = [&](const ibQueryExprPtr& fexpr, const wxString& suffix) {
 					if (!firstField) firstField = fexpr;
 					element.push_back(fexpr);
-					const wxString falias = prefix + f.Mid(base.length());
+					const wxString falias = prefix + suffix;
 					projection.push_back(ibQueryProjItem{ fexpr, falias });
 					if (plan.firstAlias.IsEmpty()) plan.firstAlias = falias;
+				};
+				if (!ki.spread.empty())
+					for (const ibRefJoinChain::SpreadField& sf : ki.spread)
+						add(sf.m_expr, sf.m_suffix);
+				else {
+					const wxString base = g->GetPhysicalName();
+					for (const wxString& f : ColumnFieldNames(g))
+						add(fieldCol(f), f.Mid(base.length()));
 				}
-				plan.fields.push_back({ g, false, prefix, ki.meta });
+				wxString refAlias;
+				for (const ibColumnSlot& slot : DescribeColumnLayout(g))
+					if (slot.m_role == ibColumnRole::ReferenceId)
+						refAlias = prefix + slot.m_name.Mid(g->GetPhysicalName().length());
+				plan.fields.push_back({ g, false, prefix, ki.meta, refAlias });
 			}
 			++fi;
 		}
 
 		// One field, scalar: the bare expression (the shape that was always rendered). Anything else is
-		// a composite element — an empty-name Func renders as "(f0, f1, …)".
-		if (element.size() == 1) groupKeys.push_back(element.front());
-		else                     groupKeys.push_back(ibFunc(wxT(""), std::move(element)));
+		// a composite element — an empty-name Func renders as "(f0, f1, …)". A plain GROUP BY takes the
+		// fields one by one: it has no elements to keep together, and not every engine reads that spelling.
+		plan.keys = element;
+		if (!rollup)                  groupKeys.insert(groupKeys.end(), element.begin(), element.end());
+		else if (element.size() == 1) groupKeys.push_back(element.front());
+		else                          groupKeys.push_back(ibFunc(wxT(""), std::move(element)));
 
 		// ⭐ THE LEVEL FLAG, ONLY WHERE THE ENGINE HAS THE FUNCTION. Without GROUPING the same fact is
 		// read off the keys themselves (the row comes back NULL in the level the fold rolled away), so
@@ -4310,7 +4548,15 @@ static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr
 		++li;
 	}
 	const std::vector<ibDataQueryBuilder::AggregateItem>& aggregates = RollupAggregatesOf(spec);
-	for (const ibDataQueryBuilder::AggregateItem& a : aggregates) {
+	for (size_t ai = 0; ai < aggregates.size(); ++ai) {
+		const ibDataQueryBuilder::AggregateItem& a = aggregates[ai];
+		// Over rows already folded by a hop (FoldSingleSource) the parts add up: a sum of sums, a minimum of minima — and
+		// a count of counts is their SUM.
+		if (ai < partials.size()) {
+			const wxString fn = a.m_fn == ibDataQueryBuilder::AggregateFn::Count ? wxString(wxT("SUM")) : AggregateFnName(a.m_fn);
+			projection.push_back(ibQueryProjItem{ ibFunc(fn, { partials[ai] }), ibSqlAliasOf(a.m_alias) });
+			continue;
+		}
 		std::vector<ibQueryExprPtr> args;
 		args.push_back(a.m_col != nullptr ? colExpr(a.m_col) : ibCol(wxT("*")));
 		projection.push_back(ibQueryProjItem{ ibFunc(AggregateFnName(a.m_fn), std::move(args), a.m_distinct),
@@ -4344,15 +4590,84 @@ static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr
 	// but has no GROUPING() gets the same guarantee. The query's own keys follow, deciding the order
 	// WITHIN a level exactly as before.
 	std::vector<ibQuerySortKey> parentsFirst;
-	for (const LevelPlan& plan : levelPlans)
-		if (plan.firstExpr)
-			parentsFirst.push_back(ibQuerySortKey{
-				ibCase({ { ibIsNull(plan.firstExpr), ibConst(ibValue(ibNumber(0L))) } }, ibConst(ibValue(ibNumber(1L)))),
-				ibQuerySortDir::Asc });
-	for (ibQuerySortKey& key : orderKeys)
-		parentsFirst.push_back(std::move(key));
+	// ONE LEVEL, A KEY'S TARGET LOOKED UP OVER THE GROUPS (GroupOrderWalk::target): the fold becomes `q_groups`, each
+	// target joins it on the key's id, and whatever else the order says over the groups — a key, a MIN — is written
+	// inside under a name of its own (`q_order<n>`) and read outside by it, since outside there are no rows to take a MIN of.
+	struct GroupLookup { const ibBackendQueryable* target; wxString alias; wxString keyRef; };
+	const wxString               groups = wxT("q_groups");
+	std::vector<GroupLookup>     lookups;
+	std::vector<ibQueryProjItem> orderedInside;
+	const bool overGroups = !rollup && std::any_of(sortWalks.begin(), sortWalks.end(),
+		[](const GroupOrderWalk& w) { return w.target != nullptr; });
+	const auto overFolded = [&](ibQueryExprPtr e) -> ibQueryExprPtr {
+		if (!overGroups)
+			return e;
+		const wxString alias = wxString::Format(wxT("q_order%u"), static_cast<unsigned>(orderedInside.size()));
+		orderedInside.push_back(ibQueryProjItem{ std::move(e), alias });
+		return ibCol(groups, alias);
+	};
+	if (rollup) {
+		for (const LevelPlan& plan : levelPlans)
+			if (plan.firstExpr)
+				parentsFirst.push_back(ibQuerySortKey{
+					ibCase({ { ibIsNull(plan.firstExpr), ibConst(ibValue(ibNumber(0L))) } }, ibConst(ibValue(ibNumber(1L)))),
+					ibQuerySortDir::Asc });
+		for (ibQuerySortKey& key : orderKeys)
+			parentsFirst.push_back(std::move(key));
+	}
+	else {
+		// ⭐ ONE LEVEL ORDERS ITS GROUPS ITSELF (the gate's note, TotalsShapeFoldable): by the key a sort names,
+		// by what a walk on from the key reaches (`sortWalks` — one value per group, so MIN is that value), by
+		// an ordinary field's first (MIN) or last (MAX) value — the order the groups are met in when the rows
+		// are read sorted by it, which is what the RAM fold shows — and by the key last, for the groups that
+		// tie and for a read that named no order at all, unless a sort has named the key already.
+		const LevelPlan&    only  = levelPlans.front();
+		const ibTotalLevel& level = levels.front();
+		bool keyNamed = false;
+		if (spec.m_sorts != nullptr)
+			for (size_t k = 0; k < spec.m_sorts->size(); ++k) {
+				const ibQuerySortItem& s   = (*spec.m_sorts)[k];
+				const ibQuerySortDir   dir = s.m_ascending ? ibQuerySortDir::Asc : ibQuerySortDir::Desc;
+				const wxString         fn  = s.m_ascending ? wxT("MIN") : wxT("MAX");
+				if (SortsByLevelKey(level, s)) {
+					for (const ibQueryExprPtr& key : only.keys)
+						parentsFirst.push_back(ibQuerySortKey{ overFolded(key), dir });
+					keyNamed = true;
+					continue;
+				}
+				const GroupOrderWalk* walk = k < sortWalks.size() ? &sortWalks[k] : nullptr;
+				if (walk != nullptr && walk->target != nullptr) {
+					const wxString keyRef = walk->keyField < only.fields.size() ? only.fields[walk->keyField].refAlias : wxString();
+					if (keyRef.IsEmpty())
+						throw std::logic_error("RunRollupTotals: a level key looked up over the groups wrote no reference id");
+					const wxString alias = wxString::Format(wxT("gl%u"), static_cast<unsigned>(k));
+					lookups.push_back(GroupLookup{ walk->target, alias, keyRef });
+					for (ibQueryExprPtr& field : SortFieldsOf(walk->column, alias))
+						parentsFirst.push_back(ibQuerySortKey{ std::move(field), dir });
+					continue;
+				}
+				if (walk != nullptr && !walk->walked.empty()) {
+					for (const ibQueryExprPtr& field : walk->walked)
+						parentsFirst.push_back(ibQuerySortKey{ overFolded(ibFunc(fn, { field })), dir });
+					continue;
+				}
+				if (s.m_expr == nullptr && s.m_path.empty() && s.m_col != nullptr)
+					parentsFirst.push_back(ibQuerySortKey{ overFolded(ibFunc(fn, { colExpr(s.m_col) })), dir });
+			}
+		if (!keyNamed)
+			for (const ibQueryExprPtr& k : only.keys)
+				parentsFirst.push_back(ibQuerySortKey{ overFolded(k), ibQuerySortDir::Asc });
+		projection.insert(projection.end(), orderedInside.begin(), orderedInside.end());
+	}
 
-	ibQueryRelPtr folded = ibAggregate(from, std::move(projection), std::move(groupKeys), having, /*rollup*/ true);
+	ibQueryRelPtr folded = ibAggregate(from, std::move(projection), std::move(groupKeys), having, rollup);
+	if (overGroups) {
+		ibQueryRelPtr over = ibSubquery(folded, groups);
+		for (const GroupLookup& l : lookups)
+			over = ibJoin(over, ibScan(l.target->GetQueryTableName(), l.alias),
+				SelfReferenceMatch(l.target, l.alias, ibCol(groups, l.keyRef)), ibQueryJoinType::Left);
+		folded = ibProject(over, { ibQueryProjItem{ ibCol(groups, wxT("*")), wxString() } });
+	}
 	if (!parentsFirst.empty())
 		folded = ibSort(folded, std::move(parentsFirst));
 	ibQueryIR ir(folded);
@@ -4404,6 +4719,10 @@ static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr
 	// asked for parents-before-children (see the sort keys above), so a row's parent is always
 	// already in the map by the time the row is read.
 	struct RRow { std::vector<std::vector<ibValue>> levelValues; std::vector<ibValue> aggs; int level; };
+	// A plain GROUP BY returns no grand total: it is what the groups add up to (the gate let in only figures that
+	// do — CanFoldOneLevelTotals).
+	std::vector<ibValue> grandTotal(aggregates.size());
+	std::vector<bool>    grandSeen(aggregates.size(), false);
 	while (cursor.Next()) {
 		RRow rr; rr.level = 0;
 		for (size_t i = 0; i < levelPlans.size(); ++i) {
@@ -4422,9 +4741,9 @@ static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr
 			// never SQL NULL, so a NULL here cannot have come from the data. Read as an ibValue,
 			// which carries TYPE_NULL from the driver — the codec would have turned it into a typed
 			// empty and lost exactly the distinction being made.
-			const bool atThisLevel = hasGrouping
+			const bool atThisLevel = !rollup || (hasGrouping
 				? (cursor.GetResultInt(groupingAliases[i]) == 0)
-				: !cursor.GetValue(levelPlans[i].firstAlias).IsNull();
+				: !cursor.GetValue(levelPlans[i].firstAlias).IsNull());
 			if (atThisLevel) ++rr.level;
 		}
 		for (const ibDataQueryBuilder::AggregateItem& a : aggregates) {
@@ -4438,6 +4757,14 @@ static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr
 			else
 				av = ibValue(cursor.GetResultNumber(aggAlias));
 			rr.aggs.push_back(av);
+
+			if (rollup || av.IsNull())
+				continue;
+			const size_t i = rr.aggs.size() - 1;
+			if (!grandSeen[i])                                                      { grandTotal[i] = av; grandSeen[i] = true; }
+			else if (a.m_fn == Fn::Min) { if (av.CompareValueLS(grandTotal[i]) < 0)   grandTotal[i] = av; }
+			else if (a.m_fn == Fn::Max) { if (av.CompareValueLS(grandTotal[i]) > 0)   grandTotal[i] = av; }
+			else                                                                      grandTotal[i] = ibValue(grandTotal[i].GetNumber() + av.GetNumber());
 		}
 
 		// --- this row becomes its node, here, while the cursor stands on it ---------------------
@@ -4483,6 +4810,19 @@ static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr
 			node->m_values[ac->GetColumnId()] = rr.aggs[i];   // IN-PLACE in the aggregate's own column
 		}
 	}
+	// The grand total of a plain GROUP BY — added up above; a sum or a count of no groups is a zero, as it is on
+	// every other road (a minimum of nothing stays unsaid).
+	if (!rollup)
+		for (size_t i = 0; i < aggregates.size(); ++i) {
+			using Fn = ibDataQueryBuilder::AggregateFn;
+			const ibBackendQueryColumn* ac = aggregates[i].m_col;
+			if (ac == nullptr)
+				continue;
+			if (grandSeen[i])
+				tree.Root().m_values[ac->GetColumnId()] = grandTotal[i];
+			else if (aggregates[i].m_fn == Fn::Sum || aggregates[i].m_fn == Fn::Count)
+				tree.Root().m_values[ac->GetColumnId()] = ibValue(ibNumber(0L));
+		}
 	MarkRollupFolders(tree.Root());
 	// …AND THE PERIODS THE SERVER HAD NOTHING TO REPORT FOR. A `GROUP BY` returns the periods that
 	// have rows; the quiet month is missing by construction, on this road exactly as on the RAM one.
@@ -4491,22 +4831,111 @@ static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr
 	return tree;
 }
 
-// Single-source ROLLUP totals push-down — SELECT … GROUP BY ROLLUP over ONE physical table.
-ibSelectorTree ibDbTableProvider::ExecuteRollupTotals(const ibDataQuerySpec& spec)
+// ⭐⭐ ONE LEVEL BY A FIELD BEHIND A REFERENCE IS FOLDED BY THE REFERENCE FIRST. `Recorder.Warehouse` over a register
+// joined every movement to its document to read the key — 900 000 rows, two joins each, 3.7 s (2026-10-05) — while the
+// documents are a few dozen. Grouped by the reference itself (the source's own fields, no join) the rows come down to
+// one per document, the walk joins THOSE, and the level is folded over them: the parts add up (RunRollupTotals'
+// `partials`). The hop it folds by, or null: taken when the one level's one field is a walk of one hop, every aggregate
+// is read off the source's own column (a sum, a count, a minimum, a maximum — the one-level gate lets in no other),
+// nothing is asked of the groups (HAVING), no flat key says otherwise, and each plain sort names its column once.
+static const ibBackendQueryColumn* HopToFoldFirst(const ibDataQuerySpec& spec)
+{
+	const std::vector<ibTotalLevel> levels = RollupLevelsOf(spec);
+	if (levels.size() != 1 || levels.front().m_fields.size() != 1)
+		return nullptr;
+	const ibTotalField& field = levels.front().m_fields.front();
+	if (field.m_path.size() != 2 || field.m_path.front() == nullptr || field.ByPeriods())
+		return nullptr;
+	if (spec.m_having != nullptr && !spec.m_having->empty())
+		return nullptr;
+	using Fn = ibDataQueryBuilder::AggregateFn;
+	for (const ibDataQueryBuilder::AggregateItem& a : RollupAggregatesOf(spec))
+		if (!a.m_path.empty() || a.m_distinct
+		    || (a.m_fn != Fn::Sum && a.m_fn != Fn::Count && a.m_fn != Fn::Min && a.m_fn != Fn::Max))
+			return nullptr;
+	if (spec.m_groupBy != nullptr)
+		for (size_t i = 0; i < spec.m_groupBy->size(); ++i)
+			if (spec.m_groupPaths == nullptr || i >= spec.m_groupPaths->size() || (*spec.m_groupPaths)[i] != field.m_path)
+				return nullptr;
+	if (spec.m_sorts != nullptr) {
+		std::vector<const ibBackendQueryColumn*> sorted;
+		for (const ibQuerySortItem& s : *spec.m_sorts) {
+			if (s.m_expr != nullptr || !s.m_path.empty() || s.m_col == nullptr || SortsByLevelKey(levels.front(), s))
+				continue;
+			if (std::find(sorted.begin(), sorted.end(), s.m_col) != sorted.end())
+				return nullptr;
+			sorted.push_back(s.m_col);
+		}
+	}
+	return field.m_path.front();
+}
+
+// Single-source fold on the server — SELECT … GROUP BY [ROLLUP] over ONE source; `rollup` false = the one-level
+// plain GROUP BY (ibDbTableProvider::CanFoldOneLevelTotals).
+static ibSelectorTree FoldSingleSource(const ibDataQuerySpec& spec, bool rollup)
 	{
 		const ibBackendQueryable* q = spec.m_queryable;
 		const wxString mainTable = q->GetQueryTableName();
 
+		// ONE LEVEL BY A FIELD BEHIND A REFERENCE (HopToFoldFirst): the source folded by the reference first, filtered
+		// inside, under a name of its own — its rows one per referenced object, its columns the reference's own fields
+		// (under their own names, so the walk reads them as it would the source's), each aggregate's part and each plain
+		// sort's. The chain below walks it like any root (BuildPageIR's windowed root is the same move).
+		const ibBackendQueryColumn* hop = rollup ? nullptr : HopToFoldFirst(spec);
+		const wxString rootTable = hop != nullptr ? wxString(wxT("q_hops")) : mainTable;
+		std::vector<ibQueryExprPtr> partials;                         // each aggregate's part, as the level adds it up
+		std::map<const ibBackendQueryColumn*, wxString> sortParts;   // a plain sort's column -> its part's name
+		ibQueryRelPtr hopsRelation;
+		if (hop != nullptr) {
+			std::vector<ibQueryProjItem> inner;
+			std::vector<ibQueryExprPtr>  byHop;
+			for (const wxString& field : ColumnFieldNames(hop)) {
+				inner.push_back(ibQueryProjItem{ ibCol(field), field });
+				byHop.push_back(ibCol(field));
+			}
+			const std::vector<ibDataQueryBuilder::AggregateItem>& aggregates = RollupAggregatesOf(spec);
+			for (size_t i = 0; i < aggregates.size(); ++i) {
+				const ibDataQueryBuilder::AggregateItem& a = aggregates[i];
+				const wxString part = wxString::Format(wxT("q_part%u"), static_cast<unsigned>(i));
+				inner.push_back(ibQueryProjItem{ ibFunc(AggregateFnName(a.m_fn),
+					{ a.m_col != nullptr ? ibCol(FirstSqlFieldOfColumn(a.m_col)) : ibCol(wxT("*")) }), part });
+				partials.push_back(ibCol(rootTable, part));
+			}
+			if (spec.m_sorts != nullptr) {
+				const std::vector<ibTotalLevel> levels = RollupLevelsOf(spec);
+				for (size_t k = 0; k < spec.m_sorts->size(); ++k) {
+					const ibQuerySortItem& s = (*spec.m_sorts)[k];
+					if (s.m_expr != nullptr || !s.m_path.empty() || s.m_col == nullptr || SortsByLevelKey(levels.front(), s))
+						continue;
+					const wxString part = wxString::Format(wxT("q_spart%u"), static_cast<unsigned>(k));
+					inner.push_back(ibQueryProjItem{ ibFunc(s.m_ascending ? wxT("MIN") : wxT("MAX"),
+						{ ibCol(FirstSqlFieldOfColumn(s.m_col)) }), part });
+					sortParts[s.m_col] = part;
+				}
+			}
+			ibQueryRelPtr source = SourceRelationOf(q, mainTable);
+			if (ibQueryExprPtr where = ibMetaIRBuilder::BuildWhere(q, *spec.m_conditions, spec.m_predicate))
+				source = ibFilter(source, where);
+			hopsRelation = ibSubquery(ibAggregate(source, std::move(inner), std::move(byHop)), rootTable);
+			ibJournalInfo(wxT("query.road"), wxT("SERVER: one level folded by '%s' first - the walk joins its groups, not every row"),
+				hop->GetName());
+		}
+
 		// DOT-WALK group keys / aggregate inputs (Producer.Region) ride a reference JOIN chain, exactly like the
 		// non-ROLLUP aggregate: resolve each path to a join alias + its JOINED source (whose leaf-set / metaData
 		// drive the leaf's scalar test + a reference leaf's spread reassembly). A plain column keeps the main table.
-		ibRefJoinChain chain(q, mainTable);
+		ibRefJoinChain chain(q, rootTable, hopsRelation);
 		std::map<const ibBackendQueryColumn*, std::pair<wxString, const ibBackendQueryable*>> dw;   // col -> (alias, joined source)
+		// …and a walk through a reference of several kinds (`Recorder.Warehouse`) has no one alias: its leaf is the
+		// spread merged across the kinds, the one a walked output projects (ibRefJoinChain::MergedSpread).
+		std::map<const ibBackendQueryColumn*, std::vector<ibRefJoinChain::SpreadField>> merged;
 		bool hasDotWalk = false;
 		auto resolveDot = [&](const ibBackendQueryColumn* col, const std::vector<const ibBackendQueryColumn*>& path) {
 			if (col == nullptr || path.empty()) return;
 			wxString a; const ibBackendQueryable* tq = nullptr;
-			if (chain.Resolve(path, a, tq) && tq != nullptr) { dw[col] = { a, tq }; hasDotWalk = true; }   // gate guaranteed resolvable
+			if (chain.Resolve(path, a, tq) && tq != nullptr) { dw[col] = { a, tq }; hasDotWalk = true; return; }
+			std::vector<ibRefJoinChain::SpreadField> spread = chain.MergedSpread(path);   // the gate saw the walk reach (WalkReaches)
+			if (!spread.empty()) { merged[col] = std::move(spread); hasDotWalk = true; }
 		};
 		// The flat group keys and THEIR paths (parallel lists) — the plain GROUP BY road.
 		for (size_t i = 0; i < spec.m_groupBy->size(); ++i)
@@ -4522,6 +4951,39 @@ ibSelectorTree ibDbTableProvider::ExecuteRollupTotals(const ibDataQuerySpec& spe
 		for (const ibDataQueryBuilder::AggregateItem& a : RollupAggregatesOf(spec))
 			resolveDot(a.m_col, a.m_path);
 
+		// ONE LEVEL: what a sort's walk on from the key reaches, to order the groups by (RunRollupTotals, GroupOrderWalk).
+		// One step past the key — its target's own field, a kind's order — is looked up over the groups, on the key they
+		// hold: a thousand items, not every register row joined to the catalog (2026-10-05). A longer walk takes the
+		// fields the page read sorts it on (BuildPageIR's path ORDER BY, the same three ways), joined here with the rest
+		// of the chain, because the FROM is taken next.
+		std::vector<GroupOrderWalk> sortWalks;
+		if (!rollup && spec.m_sorts != nullptr) {
+			const std::vector<ibTotalLevel> levels = RollupLevelsOf(spec);
+			for (const ibQuerySortItem& s : *spec.m_sorts) {
+				GroupOrderWalk walk;
+				const int fi = levels.empty() ? -1 : LevelKeyWalkedOnFrom(levels.front(), s);
+				if (fi >= 0) {
+					const ibTotalField& f = levels.front().m_fields[static_cast<size_t>(fi)];
+					const size_t keyLength = f.m_path.empty() ? 1 : f.m_path.size();
+					if (s.m_path.size() == keyLength + 1)
+						if (const ibBackendQueryable* target = LevelKeyTarget(q, f))
+							if (const ibBackendQueryColumn* col = target->ResolveColumnByName(s.m_path.back()->GetName()))
+								if (!ColumnSortFields(col).empty())
+									walk = GroupOrderWalk{ {}, static_cast<size_t>(fi), target, col };
+					if (walk.target == nullptr) {
+						wxString a; const ibBackendQueryable* tq = nullptr;
+						if (ibQueryExprPtr e = chain.CompositeLeaf(s.m_path, /*withTypedEmpty*/ true)) walk.walked = { e };
+						else if (chain.Resolve(s.m_path, a, tq))                                    walk.walked = SortFieldsOf(s.m_col, a);
+						else                                                                        walk.walked = chain.CompositeSortFields(s.m_path);
+						if (walk.walked.empty())   // the gate asked WalkReaches — a dropped key would mis-order the groups
+							throw std::logic_error("FoldSingleSource: a walk the groups are ordered by did not resolve its path");
+						hasDotWalk = true;
+					}
+				}
+				sortWalks.push_back(std::move(walk));
+			}
+		}
+
 		// ⭐ A SOURCE THAT IS NOT A PLAIN TABLE PUTS ITSELF IN THE FROM. `GetSourceRelation(alias)` is
 		// the queryable's own answer to "what am I read from" — null for an ordinary table (scan its
 		// name), a derived table for the ones that cannot be a view: a register's Balance / Turnover
@@ -4531,23 +4993,43 @@ ibSelectorTree ibDbTableProvider::ExecuteRollupTotals(const ibDataQuerySpec& spe
 		// `FROM  GROUP BY ROLLUP(…)`, with nothing at all between FROM and GROUP. Firebird said
 		// exactly that: "Token unknown - line 1, column 219: GROUP" (2026-08-22, with the road forced
 		// open). The engine was right; the statement was ours.
-		ibQueryRelPtr from = hasDotWalk ? chain.From() : SourceRelationOf(q, mainTable);
-		if (ibQueryExprPtr where = ibMetaIRBuilder::BuildWhere(q, *spec.m_conditions, spec.m_predicate))
-			from = ibFilter(from, where);
+		const bool chained = hasDotWalk || hop != nullptr;   // folded by a hop first, the chain's root IS the FROM
+		ibQueryRelPtr from = chained ? chain.From() : SourceRelationOf(q, mainTable);
+		if (hop == nullptr)   // …and its rows were filtered inside
+			if (ibQueryExprPtr where = ibMetaIRBuilder::BuildWhere(q, *spec.m_conditions, spec.m_predicate))
+				from = ibFilter(from, where);
 
 		// A plain column qualifies by the main table WHEN joins are present (disambiguation), else UNqualified.
-		const wxString mainQual = hasDotWalk ? mainTable : wxString();
+		const wxString mainQual = chained ? rootTable : wxString();
 		auto qualOf = [dw, mainQual](const ibBackendQueryColumn* c) {
 			const auto it = dw.find(c); return it != dw.end() ? it->second.first : mainQual;
 		};
 		return RunRollupTotals(spec, from,
-			[qualOf](const ibBackendQueryColumn* c) {
+			[qualOf, merged, sortParts, rootTable](const ibBackendQueryColumn* c) -> ibQueryExprPtr {
+				// Folded by a hop first, a plain sort's column is read off its part.
+				const auto p = sortParts.find(c);
+				if (p != sortParts.end())
+					return ibCol(rootTable, p->second);
+				// A scalar walked through several kinds: its merged VALUE field, not the type tag its spread opens with.
+				const auto m = merged.find(c);
+				if (m != merged.end()) {
+					const wxString valueSuffix = FirstSqlFieldOfColumn(c).Mid(c->GetPhysicalName().length());
+					for (const ibRefJoinChain::SpreadField& sf : m->second)
+						if (sf.m_suffix == valueSuffix) return sf.m_expr;
+					return m->second.back().m_expr;
+				}
 				const wxString ql = qualOf(c);
 				return ql.empty() ? ibCol(FirstSqlFieldOfColumn(c)) : ibCol(ql, FirstSqlFieldOfColumn(c));
 			},
-			[dw, qualOf, q](const ibBackendQueryColumn* g) -> RollupGroupKey {
+			[dw, merged, qualOf, q](const ibBackendQueryColumn* g) -> RollupGroupKey {
 				// scalar key -> one field; a reference / variant key -> its spread (composite ROLLUP element). A
-				// dot-walk key qualifies by its join alias + tests scalar / reassembles against the JOINED source.
+				// dot-walk key qualifies by its join alias + tests scalar / reassembles against the JOINED source;
+				// one through several kinds brings its spread merged.
+				const auto m = merged.find(g);
+				if (m != merged.end()) {
+					ColocatedLeaves ls; ls.push_back(q);
+					return { g->IsRawColumn() || ScalarReadable(g, ls), wxString(), q->GetMetaData(), m->second };
+				}
 				const auto it = dw.find(g);
 				const ibBackendQueryable* owner = (it != dw.end()) ? it->second.second : q;
 				ColocatedLeaves ls; ls.push_back(owner);
@@ -4556,7 +5038,20 @@ ibSelectorTree ibDbTableProvider::ExecuteRollupTotals(const ibDataQuerySpec& spe
 			// ⭐ THE QUERY'S OWN ORDER, HANDED OVER — not a second one derived from the levels. The
 			// composition sorts the data the groupings run over and says so ONCE; the fold reflects it.
 			// (The RAM fold gets the same thing for free: it groups in first-seen order over that read.)
-			ibMetaIRBuilder::BuildSortKeys(q, *spec.m_sorts, /*reverse*/ false, mainQual));
+			// One level orders its groups itself (RunRollupTotals) — a sort over rows says nothing there.
+			rollup ? ibMetaIRBuilder::BuildSortKeys(q, *spec.m_sorts, /*reverse*/ false, mainQual)
+			       : std::vector<ibQuerySortKey>{},
+			rollup, sortWalks, partials);
+	}
+
+ibSelectorTree ibDbTableProvider::ExecuteRollupTotals(const ibDataQuerySpec& spec)
+	{
+		return FoldSingleSource(spec, /*rollup*/ true);
+	}
+
+ibSelectorTree ibDbTableProvider::ExecuteOneLevelTotals(const ibDataQuerySpec& spec)
+	{
+		return FoldSingleSource(spec, /*rollup*/ false);
 	}
 
 // STRUCTURAL gate for a co-located UNION totals: every branch a real DB Source leaf, and every column
@@ -4796,7 +5291,7 @@ long ibDbTableProvider::ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBui
 			                                                   spec.m_predicate, wxEmptyString, /*pathAsExists*/ true);
 			ibDatabaseQueryBuilder q(spec.m_holder);
 			try { return q.Execute(ibDelete(table, where)); }   // rows deleted; 0 under a policy = no accessible row
-			catch (const ibBackendException&) { throw; }        // the DB's own reason — see the note at the INSERT below
+			catch (const ibCoreException&) { throw; }        // the DB's own reason — see the note at the INSERT below
 			catch (...) { return -1; }
 		}
 
@@ -5002,7 +5497,7 @@ long ibDbTableProvider::ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBui
 						if (n < 0) return -1;         // a refused row stops the set — the caller's TX rolls back
 						total += n;
 					}
-					catch (const ibBackendException&) { throw; }
+					catch (const ibCoreException&) { throw; }
 					catch (...) { return -1; }
 				}
 				return total;
@@ -5030,7 +5525,7 @@ long ibDbTableProvider::ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBui
 				if (n < 0) return -1;
 				return total + n;
 			}
-			catch (const ibBackendException&) { throw; }   // the DB's own reason travels up intact
+			catch (const ibCoreException&) { throw; }   // the DB's own reason travels up intact
 			catch (...) { return -1; }
 		}
 
@@ -5058,7 +5553,7 @@ long ibDbTableProvider::ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBui
 			ibQueryRelPtr checked = ibFilter(ibSubquery(valuesRow, wxT("src")), rls);          // SELECT * FROM (…) src WHERE rls
 			ibDatabaseQueryBuilder q(spec.m_holder);
 			try { return q.Execute(ibInsertSelect(table, columns, checked)); }                 // 0 inserted -> WITH CHECK denied
-			catch (const ibBackendException&) { throw; }
+			catch (const ibCoreException&) { throw; }
 			catch (...) { return -1; }
 		}
 
@@ -5074,7 +5569,7 @@ long ibDbTableProvider::ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBui
 		// moment something decided to stop. An ibBackendException carries that text, so it goes up; anything
 		// else still degrades to -1 rather than crossing the door as an unknown type.
 		try { return statement.RunQuery(); }        // rows inserted / upserted
-		catch (const ibBackendException&) { throw; }
+		catch (const ibCoreException&) { throw; }
 		catch (...) { return -1; }
 	}
 
@@ -5119,6 +5614,58 @@ static bool ReadWalks(const ibDataQuerySpec& spec, const std::vector<ibQuerySort
 		|| (spec.m_dimWalks != nullptr && !spec.m_dimWalks->empty());
 }
 
+// Does an expression compute a window anywhere in it? (A partition or an order key hangs off a window,
+// which has answered already.)
+static bool ExprHasWindow(const ibQueryColumnExpr* e)
+{
+	if (e == nullptr)
+		return false;
+	if (e->m_kind == ibQueryColumnExprKind::WindowAgg)
+		return true;
+	if (ExprHasWindow(e->m_lhs.get()) || ExprHasWindow(e->m_rhs.get()) || ExprHasWindow(e->m_else.get()))
+		return true;
+	for (const ibQueryColumnExprPtr& a : e->m_args)
+		if (ExprHasWindow(a.get())) return true;
+	for (const auto& wt : e->m_cases)
+		if (ExprHasWindow(wt.second.get())) return true;
+	return false;
+}
+
+// ⭐ A WINDOW IS COMPUTED OVER THE SOURCE, NOT OVER THE JOIN. A read whose outputs hold a window and whose
+// outputs or order walk a reference is answered with the window computed in a derived table over the source
+// alone, under the source's own name, and the joins and the order outside it (BuildPageIR).
+//
+// MEASURED 2026-10-01 — a million movements of a stock register, a running total per item, ordered by the
+// item (its presentation, so a join): the window beside the join and the order took 37 s with an ample sort
+// cache and 47 s with the default; the same window in a derived table, joined and ordered outside, 8 s and
+// 22 s. The window alone, with no join and in its own order, 3.8 s.
+//
+// The rows are the same either way: a walk is a LEFT join to the one row a key names, and the read's own
+// filter goes inside with the window, which counts the rows the read keeps. What has to filter THROUGH a
+// join — a walked condition — keeps the read as it was; so does DISTINCT, which projects its own list, a
+// read by keys, a grouping's walked dimension, a lock, and an order computed through a window.
+static bool WindowBeforeJoin(const ibDataQuerySpec& spec, const ibReadPageRequest& req,
+	const std::vector<ibQuerySortItem>& effective)
+{
+	if (spec.m_selectExprs == nullptr || spec.m_distinct || !spec.m_keyIn->empty() || req.m_lockForUpdate
+		|| (spec.m_dimWalks != nullptr && !spec.m_dimWalks->empty()))
+		return false;
+	if (std::none_of(spec.m_selectExprs->begin(), spec.m_selectExprs->end(),
+			[](const ibQueryColumnSelect& sc) { return ExprHasWindow(sc.m_expr.get()); }))
+		return false;
+	for (const ibQueryCondition& c : *spec.m_conditions)
+		if (!c.m_path.empty()) return false;
+	if (PredicateHasPath(spec.m_predicate))
+		return false;
+	bool joins = !spec.m_dotWalks->empty();
+	for (const ibQuerySortItem& s : effective) {
+		if (s.m_expr && ExprHasWindow(s.m_expr.get()))
+			return false;
+		joins = joins || !s.m_path.empty();
+	}
+	return joins;
+}
+
 // Generate L2-1 by substituting names — all read from the spec; Build() is connection-free.
 // The dot-walk join-tree + projection, the parent/tree filter, the user conditions, the
 // key-in set, the keyset anchor, the sort keys, the limit.
@@ -5135,6 +5682,7 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 		const bool hasDimWalk  = spec.m_dimWalks != nullptr && !spec.m_dimWalks->empty();
 		const bool hasDotWalk  = ReadWalks(spec, effective);
 		const wxString mainQual = hasDotWalk ? mainTable : wxString();
+		const bool windowFirst = WindowBeforeJoin(spec, req, effective);   // implies hasDotWalk
 
 		ibDatabaseQueryBuilder q(spec.m_holder);
 
@@ -5145,7 +5693,28 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 		if (hasDotWalk) {
 			// The reference dot-walk join chain — shared by the projection, the path filters, and the path
 			// sorts (a prefix joined once is reused). MUST run before q.From() (it mutates the from-tree).
-			ibRefJoinChain chain(queryable, mainTable);
+			//
+			// The windowed root (WindowBeforeJoin): the source with its own filter, its whole row and the computed
+			// outputs written once — the ones a spread does not carry — as a derived table under the source's name.
+			// Every join, column and sort below reads it as it would the source; the outputs ride its star.
+			ibQueryRelPtr windowedRoot;
+			if (windowFirst) {
+				std::vector<ibQueryProjItem> inner{ ibQueryProjItem{ ibCol(mainTable, wxT("*")), wxString() } };
+				for (const ibQueryColumnSelect& sc : *spec.m_selectExprs)
+					if (ExprSpreadColumn(sc.m_expr.get()) == nullptr)
+						inner.push_back(ibQueryProjItem{ ibMetaIRBuilder::BuildColumnExpr(queryable, sc.m_expr, mainTable),
+							ibSqlAliasOf(sc.m_alias) });
+				ibQueryExprPtr innerWhere = ibMetaIRBuilder::BuildFilterPredicate(queryable, *spec.m_conditions, mainTable);
+				innerWhere = AndFold(innerWhere, ibMetaIRBuilder::BuildPredicateExpr(queryable, spec.m_predicate, mainTable));
+				if (req.m_hierarchyFilter && !req.m_flatScan)
+					innerWhere = AndFold(innerWhere, ibMetaIRBuilder::BuildParentRefPredicate(queryable,
+						ReferenceFieldOf(req.m_hierarchyCol), req.m_hierarchyKey, req.m_isTopLevel, mainTable));
+				ibQueryRelPtr source = SourceRelationOf(queryable, mainTable);
+				if (innerWhere)
+					source = ibFilter(source, innerWhere);
+				windowedRoot = ibSubquery(ibProject(source, std::move(inner)), mainTable);
+			}
+			ibRefJoinChain chain(queryable, mainTable, windowedRoot);
 			auto resolvePath = [&chain](const std::vector<const ibBackendQueryColumn*>& path,
 			                            wxString& outAlias, const ibBackendQueryable*& outTarget) {
 				return chain.Resolve(path, outAlias, outTarget);
@@ -5194,46 +5763,18 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 					}
 				}
 			}
-			// COMPOSITE reference anywhere in the path + a leaf of SEVERAL fields (reference / enum / composite):
-			// each branch joins its target type and contributes the leaf's FULL field spread; the spreads merge PER
-			// SUFFIX with COALESCE under the alias prefix (a row matches at most one branch, so exactly one branch's
-			// fields are non-null). The reader (GetColumn(prefix, col)) reassembles the object off the merged spread
-			// exactly like a single-target full-spread projection. Suffix alignment rides the REPRESENTATIVE leaf
-			// (the first branch — the same type the lowering resolved the path against); a branch whose leaf lacks
-			// a representative suffix simply skips that COALESCE argument. A path with no composite hop projects nothing.
+			// COMPOSITE reference anywhere in the path + a leaf of SEVERAL fields (reference / enum / composite): the
+			// merged spread under the alias prefix (ibRefJoinChain::MergedSpread), reassembled by the reader
+			// (GetColumn(prefix, col)) exactly like a single-target full-spread projection. A path with no composite
+			// hop projects nothing.
 			//
 			// ⭐ ONE PROJECTION FOR BOTH WALKS — a projected path and a grouping's dimension. The dimension had only
 			// the single-target road and skipped the rest, so a list grouped by `Recorder.Counterparty` folded rows
 			// it could not read the key of (`out_dim0_TYPE not found`, 82 times per read — journal, 2026-09-29)
 			// and every heading came out empty.
 			auto projectCompositeSpread = [&](const std::vector<const ibBackendQueryColumn*>& fp, const wxString& alias) {
-				// The leaf occurrences — the chain's one walker (LeafOccurrences), yielding (join alias, branch leaf
-				// column, branch target) per branch.
-				bool sawComposite = false;
-				const std::vector<ibRefJoinChain::LeafOccurrence> occs = chain.LeafOccurrences(fp, sawComposite);
-				if (!sawComposite || occs.empty())
-					return;
-
-				// Per-occurrence field spreads, cached; the representative drives the suffix list.
-				std::vector<std::vector<wxString>> occFields;
-				occFields.reserve(occs.size());
-				for (const ibRefJoinChain::LeafOccurrence& o : occs)
-					occFields.push_back(ColumnFieldNames(o.m_col));
-
-				const wxString repBase = occs.front().m_col->GetPhysicalName();
-				for (const wxString& repField : occFields.front()) {
-					const wxString suffix = repField.Mid(repBase.length());
-					std::vector<ibQueryExprPtr> args;
-					for (size_t oi = 0; oi < occs.size(); ++oi) {
-						const wxString branchField = occs[oi].m_col->GetPhysicalName() + suffix;
-						for (const wxString& bf : occFields[oi])
-							if (bf == branchField) { args.push_back(ibCol(occs[oi].m_alias, branchField)); break; }
-					}
-					if (args.empty()) continue;
-					projection.push_back(ibQueryProjItem{
-						args.size() == 1 ? args.front() : ibFunc(wxT("COALESCE"), args),
-						alias + suffix });
-				}
+				for (const ibRefJoinChain::SpreadField& f : chain.MergedSpread(fp))
+					projection.push_back(ibQueryProjItem{ f.m_expr, alias + f.m_suffix });
 			};
 			for (const ibDotWalkColumn& dw : *spec.m_dotWalks) {
 				const std::vector<const ibBackendQueryColumn*>& fp = dw.m_path;
@@ -5295,8 +5836,9 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 					const wxString              alias  = ibSqlAliasOf(sc.m_alias);
 					const ibBackendQueryColumn* spread = ExprSpreadColumn(sc.m_expr.get());
 					if (spread == nullptr) {
-						projection.push_back(ibQueryProjItem{ ibMetaIRBuilder::BuildColumnExpr(queryable, sc.m_expr, mainQual),
-							alias });
+						if (!windowFirst)   // …else computed in the windowed root, and read out of its star
+							projection.push_back(ibQueryProjItem{ ibMetaIRBuilder::BuildColumnExpr(queryable, sc.m_expr, mainQual),
+								alias });
 						continue;
 					}
 
@@ -5393,7 +5935,8 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 
 			// boolean predicate TREE — lowered HERE (before From) so a dot-walk leaf joins through the chain
 			// (ibRefJoinChain::Predicate), the same lowering the aggregate uses.
-			treeWhere = chain.Predicate(spec.m_predicate, mainQual);
+			if (!windowFirst)   // …the windowed root carries it inside
+				treeWhere = chain.Predicate(spec.m_predicate, mainQual);
 
 			q.From(chain.From());
 			q.Project(std::move(projection));
@@ -5429,7 +5972,8 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 			}
 		}
 
-		if (req.m_hierarchyFilter && !req.m_flatScan) {
+		// (A windowed root has its parent filter and its conditions inside, where the window counts them.)
+		if (req.m_hierarchyFilter && !req.m_flatScan && !windowFirst) {
 			// The envelope carries the parent COLUMN; the physical field derives HERE
 			// — the field machinery is the provider's job, not the consumer's.
 			const wxString parentField = ReferenceFieldOf(req.m_hierarchyCol);
@@ -5439,7 +5983,8 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 
 		// WHERE = flat plain conditions  AND  the boolean tree  AND  the flat dot-walk conditions.
 		// hasDotWalk: the tree was lowered above (path-aware, treeWhere). Else: lower it here by mainQual.
-		ibQueryExprPtr where = ibMetaIRBuilder::BuildFilterPredicate(queryable, *spec.m_conditions, mainQual);
+		ibQueryExprPtr where = windowFirst ? ibQueryExprPtr()
+			: ibMetaIRBuilder::BuildFilterPredicate(queryable, *spec.m_conditions, mainQual);
 		where = AndFold(where, hasDotWalk ? treeWhere
 		                                  : ibMetaIRBuilder::BuildPredicateExpr(queryable, spec.m_predicate, mainQual));
 		where = AndFold(where, dotWalkWhere);
@@ -5610,8 +6155,13 @@ void ibDbTableProvider::AttachNamedQueries(const ibDataQuerySpec& spec, ibQueryI
 			const ibDataQuerySpec innerSpec = named.m_inner->BuildSpec();
 			if (innerSpec.m_queryable == nullptr)
 				continue;   // nothing to read — a declaration of nothing declares nothing
-			const std::vector<ibQuerySortItem> innerSort =
-				ibDataQueryBuilder::EffectiveSort(innerSpec.m_queryable, *innerSpec.m_sorts);
+			// ⭐ A DECLARED QUERY IS A SET THE READER ORDERS — on both branches below. An order inside it decides
+			// something only together with its limit (WHICH ten rows); without one it decided nothing and still cost a
+			// sort of every row before the reader's own: 900 000 register rows in identity order under a list grouped
+			// by one field, then grouped (2026-10-05).
+			const std::vector<ibQuerySortItem> innerSort = innerSpec.m_topCount > 0
+				? ibDataQueryBuilder::EffectiveSort(innerSpec.m_queryable, *innerSpec.m_sorts)
+				: std::vector<ibQuerySortItem>{};
 
 			// ⭐ A JOINED DECLARATION IS THE CO-LOCATED JOIN, WRITTEN SOMEWHERE ELSE. BuildPageIR reads
 			// ONE queryable (it asks the spec for its table name), so a declaration whose door holds a
@@ -5820,6 +6370,10 @@ void ibDbTableProvider::AttachNamedQueries(const ibDataQuerySpec& spec, ibQueryI
 				//
 				// Lowered exactly as the ordinary projected read lowers it (BuildColumnExpr AS the
 				// alias) — one way of writing a computed column, wherever it is written.
+				// ⚠ …EXCEPT WHERE THE BODY HAS COMPUTED IT: a windowed root (WindowBeforeJoin) writes the
+				// outputs inside itself, and evaluating them again here would compute the window twice. Asked
+				// the way the body asked it, so the two agree.
+				const bool computedInBody = leaves.empty() && WindowBeforeJoin(innerSpec, ibReadPageRequest(), innerSort);
 				if (hasExprs) {
 					for (const ibQueryColumnSelect& se : *innerSpec.m_selectExprs) {
 						if (se.m_alias.IsEmpty())
@@ -5827,9 +6381,11 @@ void ibDbTableProvider::AttachNamedQueries(const ibDataQuerySpec& spec, ibQueryI
 						if (std::find(projectedNames.begin(), projectedNames.end(), se.m_alias) != projectedNames.end())
 							continue;
 						projectedNames.push_back(se.m_alias);
+						const wxString alias = ibSqlAliasOf(se.m_alias);
 						proj.push_back(ibQueryProjItem{
-							ibMetaIRBuilder::BuildColumnExpr(innerSpec.m_queryable, se.m_expr, innerQual),
-							ibSqlAliasOf(se.m_alias) });
+							computedInBody && ExprSpreadColumn(se.m_expr.get()) == nullptr ? ibColQ(innerQual, alias)
+								: ibMetaIRBuilder::BuildColumnExpr(innerSpec.m_queryable, se.m_expr, innerQual),
+							alias });
 					}
 				}
 
@@ -6073,6 +6629,12 @@ bool ibDbTableProvider::WalkEnters(const ibBackendQueryable* target, const ibBac
 		return true;
 	return target != nullptr && named->GetSourceMetaObject() != nullptr
 	    && named->GetSourceMetaObject() == target->GetSourceMetaObject();
+}
+
+size_t ibDbTableProvider::ParametersOneStatementTakes()
+{
+	ibConnectionScope scope;
+	return scope ? scope.get()->GetDialect().m_maxParameters : 0;
 }
 
 // ⭐⭐ THE FLAT LIST IS IN HAND, AND ITS REFERENCES ARE TOLD WHAT THEY SAY. A reference leaves a row RAW —

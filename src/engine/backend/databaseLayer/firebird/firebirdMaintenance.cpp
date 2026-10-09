@@ -1,6 +1,6 @@
 #include "firebirdMaintenance.h"
 #include "firebirdInterface.h"
-#include "backend/diagnostics/journal.h"   // ibJournal — this TU does not pull in backend_core.h
+#include "core/diagnostics/journal.h"   // ibJournal — this TU does not pull in backend_core.h
 
 #include <wx/filename.h>
 #include <wx/log.h>

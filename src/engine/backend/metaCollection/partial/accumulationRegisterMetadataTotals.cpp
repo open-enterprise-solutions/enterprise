@@ -170,7 +170,7 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalance(const ibVa
 	// 🛑 A BALANCE THAT COULD NOT BE READ IS NOT A BALANCE OF ZERO. Swallowed, this handed back the
 	// rows gathered before the fault — figures under a register's name that reconcile to nothing,
 	// with nothing said anywhere. The reading says what happened; the caller decides what it means.
-	catch (const ibBackendException& err) {
+	catch (const ibCoreException& err) {
 		ibJournalError(wxT("register.totals"), wxT("balance read failed: %s"), err.GetErrorDescription());
 		throw;
 	}
@@ -474,7 +474,7 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeTurnover(const ibV
 	// Same rule as the balance above, and it is the ORACLE saying it: a parity test measures the
 	// materialised road against this one, so a fault read as "no turnovers" would report the two
 	// roads as disagreeing about the figures rather than as one of them being unable to answer.
-	catch (const ibBackendException& err) {
+	catch (const ibCoreException& err) {
 		ibJournalError(wxT("register.totals"), wxT("turnover read failed: %s"), err.GetErrorDescription());
 		throw;
 	}
@@ -588,7 +588,7 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalanceAndTurnover
 		// from, so a fault read as "no openings" does not produce an empty answer — it produces a
 		// complete one in which every key starts at zero. Every period after it is then wrong by the
 		// same amount, and the report still adds up.
-		catch (const ibBackendException& err) {
+		catch (const ibCoreException& err) {
 			ibJournalError(wxT("register.totals"), wxT("opening balances failed: %s"), err.GetErrorDescription());
 			throw;
 		}
@@ -714,7 +714,7 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalanceAndTurnover
 		}
 		// The movement inside the interval. Read as nothing, it says every period was quiet — and the
 		// balances still roll forward through them, so the answer looks like a register nobody wrote to.
-		catch (const ibBackendException& err) {
+		catch (const ibCoreException& err) {
 			ibJournalError(wxT("register.totals"), wxT("period figures failed: %s"), err.GetErrorDescription());
 			throw;
 		}

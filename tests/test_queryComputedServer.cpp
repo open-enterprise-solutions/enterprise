@@ -47,7 +47,7 @@
 #include "backend/compiler/compileCode.h"     // ibCompileCode — script lexer feeding the LINQ recorder
 #include "backend/compiler/lambdaQueryAST.h"  // ibBuildLambdaQueryAstFromCode (L4-2 recorder)
 
-#include "backend/clsid.h"                                   // reference_to_clsid — a reference column's type
+#include "core/clsid.h"                                   // reference_to_clsid — a reference column's type
 #include "backend/metadataConfiguration.h"                   // ibMetaDataConfigurationFile — a catalog to point references at
 #include "backend/metaCollection/metaObject.h"               // g_metaCatalogCLSID
 #include "backend/metaCollection/partial/reference/reference.h"   // ibValueReferenceDataObject::Create
@@ -153,7 +153,7 @@ struct ComputedServerFix : ::testing::Test {
 	void SetUp() override {
 		if (!m_wxInit.IsOk())
 			GTEST_SKIP() << "wxBase init failed (no wxApp host)";
-		if (!ibApplicationInstance::CreateAppDataEnv(ibRunMode::eRUNTIME_MODE))
+		if (!ibApplicationInstance::CreateAppDataEnv(ibRunMode::eFILE_MODE))
 			GTEST_SKIP() << "appData env unavailable headless";
 		ibConnectionPool* pool = ibApplicationInstance::GetConnectionPool();
 		if (pool == nullptr)
@@ -219,7 +219,7 @@ TEST_F(ComputedServerFix, Aggregate_PromotesToServer)
 TEST_F(ComputedServerFix, Linq_WherePushesToServer)
 {
 	if (!ready) return;
-	ibCompileCode::SetCodeStyle(CODE_CES);   // the lambda body below is CES ('{ return … ; }')
+	ibTestCodeStyle style(CODE_CES);   // the lambda body below is CES ('{ return … ; }')
 
 	db->RunQuery(wxT("CREATE TABLE t (region TEXT, qty INTEGER)"));
 	db->RunQuery(wxT("INSERT INTO t (region, qty) VALUES ('North', 10), ('South', 5), ('North', 7), ('East', 3)"));
@@ -634,9 +634,10 @@ TEST_F(ComputedServerFix, In_ReferencesOfOneTableSayTheTableOnce)
 	EXPECT_TRUE(sql.Contains(fields[2] + wxT(" IN (")));
 }
 
-// References of TWO tables do not agree on the table, so nothing may be said once: pair by pair, as before —
-// and folded as a balanced tree, which a renderer can walk whatever the size of the set.
-TEST_F(ComputedServerFix, In_ReferencesOfTwoTablesFoldPairByPair)
+// References of TWO tables do not agree on the table — so each table says itself once over its own ids, and the
+// tables are ORed: one IN per table (DecomposeIn, 2026-10-05). It was pair by pair, a thousand ORs for a thousand
+// references, where a walk filter's set of a few thousand documents is the ordinary case.
+TEST_F(ComputedServerFix, In_ReferencesOfTwoTablesSayEachTableOnce)
 {
 	if (!ready) return;
 	ReferenceSetFix f;
@@ -650,10 +651,10 @@ TEST_F(ComputedServerFix, In_ReferencesOfTwoTablesFoldPairByPair)
 	for (int i = 0; i < 1000; ++i)
 		values.push_back(f.RefTo(i % 2 ? f.items : f.units));
 
-	const wxString sql = f.SqlOfSet(&subject, 344, values);   // a chain a thousand deep is what this must survive
+	const wxString sql = f.SqlOfSet(&subject, 344, values);
 	ASSERT_FALSE(sql.IsEmpty());
-	EXPECT_EQ(ReferenceSetFix::CountOf(sql, wxT(" IN (")), 0) << "two tables share no tag to say once";
-	EXPECT_EQ(ReferenceSetFix::CountOf(sql, wxT(" OR ")), 999);
+	EXPECT_EQ(ReferenceSetFix::CountOf(sql, wxT(" IN (")), 2) << "one IN per table: " << sql.Left(400);
+	EXPECT_EQ(ReferenceSetFix::CountOf(sql, wxT(" OR ")), 1) << "the two tables, ORed";
 }
 
 // 🛑 AN EMPTY REFERENCE IN THE LIST, AND THE WHOLE LIST GOES PAIR BY PAIR. "Not filled" is the zero-guid

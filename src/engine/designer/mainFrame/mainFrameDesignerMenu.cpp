@@ -124,15 +124,17 @@ void ibFrontendMainFrameDesigner::InitializeDefaultMenu()
 		return item;
 	};
 
-	// "Start debugging" → GUI / Web
+	// "Start debugging" → GUI / Thin / Web
 	wxMenu* subStart = new wxMenu;
 	debugPicture(subStart->Append(wxID_DESIGNER_DEBUG_START, _("Thick client (GUI)")), wxART_DEBUG_START);
+	subStart->Append(wxID_DESIGNER_DEBUG_START_THIN, _("Thin client"));
 	subStart->Append(wxID_DESIGNER_DEBUG_START_WEB, _("Web client"));
 	debugPicture(m_menuDebug->AppendSubMenu(subStart, _("Start debugging")), wxART_DEBUG_START);
 
-	// "Start without debugging" → GUI / Web
+	// "Start without debugging" → GUI / Thin / Web
 	wxMenu* subStartNoDebug = new wxMenu;
 	debugPicture(subStartNoDebug->Append(wxID_DESIGNER_DEBUG_START_WITHOUT_DEBUGGING, _("Thick client (GUI)")), wxART_DEBUG_START_WITHOUT_DEBUGGING);
+	subStartNoDebug->Append(wxID_DESIGNER_DEBUG_START_WITHOUT_DEBUGGING_THIN, _("Thin client"));
 	subStartNoDebug->Append(wxID_DESIGNER_DEBUG_START_WITHOUT_DEBUGGING_WEB, _("Web client"));
 	debugPicture(m_menuDebug->AppendSubMenu(subStartNoDebug, _("Start without debugging")), wxART_DEBUG_START_WITHOUT_DEBUGGING);
 
@@ -256,6 +258,8 @@ void ibFrontendMainFrameDesigner::InitializeDefaultMenu()
 	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnStartDebugWithoutDebug, this, wxID_DESIGNER_DEBUG_START_WITHOUT_DEBUGGING);
 	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnStartDebugWeb, this, wxID_DESIGNER_DEBUG_START_WEB);
 	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnStartDebugWithoutDebugWeb, this, wxID_DESIGNER_DEBUG_START_WITHOUT_DEBUGGING_WEB);
+	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnStartDebugThin, this, wxID_DESIGNER_DEBUG_START_THIN);
+	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnStartDebugWithoutDebugThin, this, wxID_DESIGNER_DEBUG_START_WITHOUT_DEBUGGING_THIN);
 	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnAttachForDebugging, this, wxID_DESIGNER_DEBUG_ATTACH_FOR_DEBUGGING);
 
 	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnRunDebugCommand, this, wxID_DESIGNER_DEBUG_EDIT_POINT, wxID_DESIGNER_DEBUG_REMOVE_ALL_DEBUGPOINTS);

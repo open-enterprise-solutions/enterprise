@@ -96,39 +96,46 @@ void ibStructureBatch::DropTable(std::vector<const ibBackendQueryColumn*> column
 	m_steps.push_back(ibDropTable(m_table, std::move(ddlCols)));
 }
 
-void ibStructureBatch::CreateIndex(const wxString& indexName, std::vector<const ibBackendQueryColumn*> columns, bool unique)
-{
-	// Expand every logical column to its physical field names — the index covers those.
-	//
-	// ⭐⭐ THE VALUE FIRST, the tag after it (ColumnValueFields, then the rest). A reference is stored as
-	// `_TYPE, _RTRef, _RRRef`, and indexed in that order its key came LAST: a join that meets it on the key
-	// alone — the only way a reference column may be met, since its tag can be empty in a row that still
-	// matches (the co-located join says why) — could not use the index at all, and Firebird read the table
-	// through once per row of the other side. `Goods LEFT JOIN Stock ON S.Item = G.Ref WHERE S.Item IS NULL`
-	// over 3 000 goods took 1.2 s per run with the index present (measured 2026-09-29). The engine compares
-	// and sorts a column by its value fields, so that is the order the index holds; a value-and-tag index
-	// answers the full equality exactly as before, and uniqueness is the same set of fields.
-	std::vector<wxString> fields;
-	for (const ibBackendQueryColumn* col : columns) {
-		const std::vector<wxString> values = ColumnValueFields(col);
-		for (const wxString& f : values)
-			fields.push_back(f);
-		for (const wxString& f : ColumnFieldNames(col))
-			if (std::find(values.begin(), values.end(), f) == values.end())
-				fields.push_back(f);
-	}
-	if (fields.empty())   // a column with no physical fields => no index (the old explicit guard)
-		return;
-	m_steps.push_back(ibCreateIndex(m_table, indexName, std::move(fields), unique));
-}
-
-void ibStructureBatch::DropIndex(const wxString& indexName, std::vector<const ibBackendQueryColumn*> columns, bool unique)
+// Expand every logical column to its physical field names — the index covers those.
+//
+// ⭐⭐ THE VALUE FIRST, the tag after it. A reference is stored as `_TYPE, _RTRef, _RRRef`, and indexed in that
+// order its key came LAST: a join that meets it on the key alone — the only way a reference column may be met,
+// since its tag can be empty in a row that still matches (the co-located join says why) — could not use the
+// index at all, and Firebird read the table through once per row of the other side. `Goods LEFT JOIN Stock ON
+// S.Item = G.Ref WHERE S.Item IS NULL` over 3 000 goods took 1.2 s per run with the index present (measured
+// 2026-09-29). A value-and-tag index answers the full equality exactly as before, and uniqueness is the same
+// set of fields.
+//
+// ⭐⭐ …AND EVERY COLUMN'S VALUE BEFORE ANY COLUMN'S TAG, in the order a read sorts on (ColumnSortFields). With
+// the tags beside their own columns the period's `_TYPE` stood between the date and the recorder, so a list
+// ordered by period, recorder and line was not the index's leading fields, and Firebird sorted a million
+// movements for every page of the register's list: 1100 ms a page, 235 ms walked by the index (2026-10-01).
+static std::vector<wxString> IndexFields(const std::vector<const ibBackendQueryColumn*>& columns)
 {
 	std::vector<wxString> fields;
 	for (const ibBackendQueryColumn* col : columns)
-		for (const wxString& f : ColumnFieldNames(col))
+		for (const wxString& f : ColumnSortFields(col))
 			fields.push_back(f);
-	m_steps.push_back(ibDropIndex(indexName, m_table, std::move(fields), unique));
+	for (const ibBackendQueryColumn* col : columns)
+		for (const wxString& f : ColumnFieldNames(col))
+			if (std::find(fields.begin(), fields.end(), f) == fields.end())
+				fields.push_back(f);
+	return fields;
+}
+
+void ibStructureBatch::CreateIndex(const wxString& indexName, std::vector<const ibBackendQueryColumn*> columns, bool unique,
+	bool descending)
+{
+	std::vector<wxString> fields = IndexFields(columns);
+	if (fields.empty())   // a column with no physical fields => no index (the old explicit guard)
+		return;
+	m_steps.push_back(ibCreateIndex(m_table, indexName, std::move(fields), unique, descending));
+}
+
+void ibStructureBatch::DropIndex(const wxString& indexName, std::vector<const ibBackendQueryColumn*> columns, bool unique,
+	bool descending)
+{
+	m_steps.push_back(ibDropIndex(indexName, m_table, IndexFields(columns), unique, descending));
 }
 
 void ibStructureBatch::Ddl(const ibDdlStatement& ddl)

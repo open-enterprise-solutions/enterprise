@@ -1,0 +1,32 @@
+﻿#include "propertyColour.h"
+#include "core/serialize/dataBuilder.h"
+#include "frmclient/backend/system/value/valueColour.h"
+
+
+//base property for "colour"
+bool ibPropertyColour::SetDataValue(const ibValue& varPropVal)
+{
+	ibValueColour* valueColour = varPropVal.ConvertToType<ibValueColour>();
+	if (valueColour == nullptr)
+		return false;
+	SetValue(valueColour->m_colour);
+	return true;
+}
+
+bool ibPropertyColour::GetDataValue(ibValue& pvarPropVal) const
+{
+	pvarPropVal = ibValue::CreateObjectValue<ibValueColour>(GetValueAsColour());
+	return true;
+}
+
+bool ibPropertyColour::ReadNodeValue(const ibDataValue& value)
+{
+	ibPropertyColour::SetValue(value.AsString());
+	return true;
+}
+
+bool ibPropertyColour::WriteNodeValue(ibDataValue& value) const
+{
+	value = ibDataValue::String(ibPropertyColour::GetValueAsString());
+	return true;
+}

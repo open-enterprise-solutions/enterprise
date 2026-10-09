@@ -1117,7 +1117,7 @@ public:
 					try {
 						ibMcpSetProperty(property, one, said, why);
 					}
-					catch (const ibBackendException& e) {
+					catch (const ibCoreException& e) {
 						why = e.GetErrorDescription();
 					}
 				}

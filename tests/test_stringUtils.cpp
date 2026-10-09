@@ -15,7 +15,7 @@
 #include <gtest/gtest.h>
 #include <initializer_list>
 #include <map>
-#include "backend/stringUtils.h"
+#include "core/stringUtils.h"
 
 using namespace stringUtils;
 

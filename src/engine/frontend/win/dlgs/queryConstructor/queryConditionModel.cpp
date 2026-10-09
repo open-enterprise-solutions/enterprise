@@ -178,7 +178,7 @@ bool ibQueryConditionModel::SetValueByRow(const wxVariant& variant, unsigned row
 		ibQueryParser parser;
 		rows[row] = parser.ParseExpression(text);
 	}
-	catch (const ibBackendException& error) {
+	catch (const ibCoreException& error) {
 		if (m_onError)
 			m_onError(error.GetErrorDescription());
 		return false;

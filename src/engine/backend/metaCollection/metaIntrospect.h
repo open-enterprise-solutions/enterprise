@@ -35,8 +35,8 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "backend/backend_core.h"
-#include "backend/clsid.h"
-#include "backend/serialize/dataBuilder.h"
+#include "core/clsid.h"
+#include "core/serialize/dataBuilder.h"
 
 #include <functional>
 #include <vector>

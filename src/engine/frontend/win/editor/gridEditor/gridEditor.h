@@ -245,7 +245,7 @@ class FRONTEND_API ibGridEditor : public ibGrid {
 
 			const ibSpreadsheetFillType type = GetTypeString(row, col);
 			return type == ibSpreadsheetFillType_StrText || type == ibSpreadsheetFillType_StrTemplate ?
-				ibBackendLocalization::IsEmptyLocalizationString(m_data[row][col]) : m_data[row][col].IsEmpty();
+				ibLocalization::IsEmptyLocalizationString(m_data[row][col]) : m_data[row][col].IsEmpty();
 		}
 
 		// ⭐ WHERE THE CONTENT ENDS — a question for the TABLE, because the table is where content
@@ -318,7 +318,7 @@ class FRONTEND_API ibGridEditor : public ibGrid {
 
 			const ibSpreadsheetFillType type = GetTypeString(row, col);
 			if (type == ibSpreadsheetFillType_StrText || type == ibSpreadsheetFillType_StrTemplate)
-				ibBackendLocalization::GetTranslateGetRawLocText(m_data[row][col], s);
+				ibLocalization::GetTranslateGetRawLocText(ibBackendLocalization::GetUserLanguage(), m_data[row][col], s);
 			else if (type == ibSpreadsheetFillType_StrParameter)
 				s = m_data[row][col];
 		}
@@ -340,19 +340,19 @@ class FRONTEND_API ibGridEditor : public ibGrid {
 			if (s != value) {
 				const ibSpreadsheetFillType type = GetTypeString(row, col);
 				if (type == ibSpreadsheetFillType_StrText || type == ibSpreadsheetFillType_StrTemplate) {
-					if (ibBackendLocalization::IsLocalizationString(s)) {
+					if (ibLocalization::IsLocalizationString(s)) {
 						ibGridStringTable::SetValue(row, col, s);
 					}
-					else if (ibBackendLocalization::IsLocalizationString(value)) {
-						static ibBackendLocalizationEntryArray array;
-						if (ibBackendLocalization::CreateLocalizationArray(value, array)) {
-							ibBackendLocalization::SetArrayTranslate(array, s);
+					else if (ibLocalization::IsLocalizationString(value)) {
+						static ibLocalizationEntryArray array;
+						if (ibLocalization::CreateLocalizationArray(value, array)) {
+							ibLocalization::SetArrayTranslate(ibBackendLocalization::GetUserLanguage(), array, s);
 							ibGridStringTable::SetValue(row, col,
-								ibBackendLocalization::GetRawLocText(array));
+								ibLocalization::GetRawLocText(array));
 						}
 					}
 					else {
-						ibGridStringTable::SetValue(row, col, ibBackendLocalization::CreateLocalizationRawLocText(s));
+						ibGridStringTable::SetValue(row, col, ibLocalization::CreateLocalizationRawLocText(ibBackendLocalization::GetUserLanguage(), s));
 					}
 				}
 				else if (type == ibSpreadsheetFillType_StrParameter) {
@@ -417,12 +417,12 @@ class FRONTEND_API ibGridEditor : public ibGrid {
 			const ibSpreadsheetFillType typeFill = GetTypeString(row, col);
 			if (stringUtils::CompareString(typeName, s_strTypeTextOrString)
 				|| stringUtils::CompareString(typeName, s_strTypeTemplate)) {
-				return new wxString(ibBackendLocalization::CreateLocalizationRawLocText(m_data[row][col]));
+				return new wxString(ibLocalization::CreateLocalizationRawLocText(ibBackendLocalization::GetUserLanguage(), m_data[row][col]));
 			}
 			else if (stringUtils::CompareString(typeName, s_strTypeParameter)) {
 				if (typeFill == ibSpreadsheetFillType::ibSpreadsheetFillType_StrText || typeFill == ibSpreadsheetFillType::ibSpreadsheetFillType_StrTemplate) {
 					wxString* s = new wxString;
-					ibBackendLocalization::GetTranslateGetRawLocText(m_data[row][col], *s);
+					ibLocalization::GetTranslateGetRawLocText(ibBackendLocalization::GetUserLanguage(), m_data[row][col], *s);
 					return s;
 				}
 				return new wxString(m_data[row][col]);

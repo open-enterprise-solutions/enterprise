@@ -21,7 +21,7 @@
 #include <sstream>
 #include <thread>
 #include <wx/log.h>
-#include "backend/utils/debugTrace.h"
+#include "core/diagnostics/debugTrace.h"
 
 // Atomic counter — Create/Delete can race across the HTTP and worker
 // threads on the web build, and even on desktop if the designer's debug

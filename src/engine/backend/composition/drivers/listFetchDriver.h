@@ -63,6 +63,20 @@ public:
 		// an empty map (Max, 2026-09-30: "no conditional appearance, nothing to count").
 		std::unique_ptr<ibCompositionRowAttr> m_attr;
 
+		Row() = default;
+		Row(Row&&) = default;
+		Row& operator=(Row&&) = default;
+		// …AND A COPY, ITS APPEARANCE WITH IT — a list serves a folded level again to the page next to it
+		// (ibValueModelCursor::m_foldedLevel), and every node built from a row takes the appearance as its own.
+		Row(const Row& other)
+			: m_level(other.m_level), m_indent(other.m_indent), m_expandable(other.m_expandable),
+			  m_values(other.m_values), m_key(other.m_key), m_keyed(other.m_keyed),
+			  m_attr(other.m_attr != nullptr ? std::make_unique<ibCompositionRowAttr>(*other.m_attr) : nullptr) {}
+		Row& operator=(const Row& other) {
+			if (this != &other) { Row copy(other); *this = std::move(copy); }
+			return *this;
+		}
+
 		ibValue GetValue(const ibMetaID& id) const {
 			const auto it = m_values.find(id);
 			return it != m_values.end() ? it->second : ibValue();

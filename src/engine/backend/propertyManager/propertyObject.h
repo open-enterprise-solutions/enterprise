@@ -26,7 +26,7 @@ template <class T> class ibValuePtr;
 
 ///////////////////////////////////////////////////////////////////////////////
 
-#include "backend/fileSystem/fs.h"
+#include "core/fileSystem/fs.h"
 #include "backend/backend_exception.h"   // ibBackendCoreException — a cell that is not what it is asked for raises
 
 ///////////////////////////////////////////////////////////////////////////////

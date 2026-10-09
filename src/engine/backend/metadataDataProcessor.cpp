@@ -32,13 +32,10 @@ m_version(version_oes_last)
 	m_commonObject->InvalidateNames();
 	// m_commonObject is an ibValuePtr — the assignment above already holds the ref.
 
-	// Runtime module manager for this external DP, on the prepared root. Built in
-	// the ctor so a freshly created (not-from-file) DP already has it — the
-	// designer "New data processor" path calls RunDatabase() directly, never
-	// through LoadFromFile (which would otherwise be the only place it's built).
-	// LoadFromFile rebuilds it on the swapped-in root.
-	m_moduleManager = new ibValueModuleRuntimeManagerExternalDataProcessor(this, m_commonObject);
-	m_moduleManager->InvalidateNames();
+	// ⚠ NO MODULE MANAGER YET — it is built where the DP first runs (RunDatabase), on whichever road it came: the
+	// loader holds this container by then (ibMetaData::MakeShared), and the object the manager makes takes its own
+	// reference to it. Built here, it held nothing — nothing holds a container while it is being constructed — and a
+	// DP made in memory closed under its own open form (the external report's twin, metadataReport.cpp).
 
 	m_ownerMeta = this;
 }
@@ -160,6 +157,13 @@ bool ibMetaDataDataProcessor::RunDatabase(int flags)
 
 	if (m_commonObject->IsExternalCreate()) {
 
+		// The runtime module manager, on the root it runs — born here, on the first run of this root: the loader
+		// holds the container by now, so the object can take its own reference (see the ctor).
+		if (m_moduleManager == nullptr) {
+			m_moduleManager = new ibValueModuleRuntimeManagerExternalDataProcessor(weak_from_this().lock(), m_commonObject);
+			m_moduleManager->InvalidateNames();
+		}
+
 		// The designer module-manager (for the DP's own compile cache) was already
 		// built by the image ctor via CreateDesignerModuleManager() — common modules
 		// register into it during RunSubtree(true) below.
@@ -240,14 +244,14 @@ bool ibMetaDataDataProcessor::CloseDatabase(int flags)
 #include <filesystem>
 
 #include "backend/backend_exception.h"   // catch ibBackendException at the LoadCommonTree boundary
-#include "backend/serialize/dataBuilder.h"  // ibDataBuilder / ibBinaryProvider — top-level structure builder
+#include "core/serialize/dataBuilder.h"  // ibDataBuilder / ibBinaryProvider — top-level structure builder
+#include "backend/temp/tempStorage.h"       // ibTempFile — LoadFromTempFile
 
 ibValueMetaObjectDataProcessor* ibMetaDataDataProcessor::BuildFreshRoot()
 {
-	// Mirror the ctor's external-root setup, minus the module manager — the
-	// manager is a runtime concern (CreateObjectExtValue / CreateMainModule), not
-	// touched by LoadSubtree, so it is re-created after the swap. Returned at
-	// refcount 0 — the caller's ibValuePtr adopts it.
+	// Mirror the ctor's external-root setup — the module manager is a runtime concern
+	// (CreateObjectExtValue / CreateMainModule), not touched by LoadSubtree, built by
+	// the run after the swap. Returned at refcount 0 — the caller's ibValuePtr adopts it.
 	auto* root = new ibValueMetaObjectExternalDataProcessor;
 	root->SetName(ibMetaData::GetNewName(g_metaExternalDataProcessorCLSID, nullptr, root->GetClassName()));
 	if (!root->OnCreateMetaObject(this, newObjectFlag)) {
@@ -275,13 +279,34 @@ bool ibMetaDataDataProcessor::LoadFromFile(const wxString& strFileName)
 	in.seekg(0, in.beg);
 	wxMemoryBuffer tempBuffer(fsize);
 	in.read((char*)tempBuffer.GetWriteBuf(fsize), fsize);
+	tempBuffer.UngetWriteBuf(fsize);
 	in.close();
 
-	ibReaderMemory readerData(tempBuffer.GetData(), tempBuffer.GetBufSize());
+	return LoadFromBuffer(tempBuffer, strFileName);
+}
+
+bool ibMetaDataDataProcessor::LoadFromTempFile(const wxString& id)
+{
+	// The parts read in order, whole — as the disk's file is read up front.
+	const ibTempFile file(id);
+	if (!file.IsOpened())
+		return false;
+
+	wxMemoryBuffer tempBuffer;
+	wxMemoryBuffer part;
+	for (int index = 0; file.ReadPart(index, part); ++index)
+		tempBuffer.AppendData(part.GetData(), part.GetDataLen());
+
+	return LoadFromBuffer(tempBuffer, file.GetName());
+}
+
+bool ibMetaDataDataProcessor::LoadFromBuffer(const wxMemoryBuffer& buffer, const wxString& fullPath)
+{
+	ibReaderMemory readerData(buffer.GetData(), buffer.GetDataLen());
 	if (readerData.eof())
 		return false;
 
-	m_fullPath = strFileName;
+	m_fullPath = fullPath;
 
 	// Inner (read object + copy into a config): the data processor is a child of
 	// the configuration tree — load into the existing root, no swap. resetId=true
@@ -313,19 +338,16 @@ bool ibMetaDataDataProcessor::LoadFromFile(const wxString& strFileName)
 	// down the old module manager BEFORE the swap — the ibValuePtr assignment releases
 	// the old root, and the manager references it via m_objectValue (use-after-free if
 	// the manager outlives the root). Then swap (the assignment releases old + adopts
-	// fresh) and rebuild the manager on the fresh root (mirrors ctor / dtor ordering).
+	// fresh); the run builds the manager on the fresh root (RunDatabase).
 	if (IsConfigOpen() && !CloseDatabase(forceCloseFlag))
 		return false; // fresh discarded automatically
 
 	// Release the old manager first (its dtor runs DestroyMainModule via RAII) while
 	// the old root is still alive — the manager references it via m_objectValue. Then
-	// swap the root, then build the new manager on the fresh root.
+	// swap the root; the new manager is built on the fresh root by its run (RunDatabase).
 	m_moduleManager = nullptr;
 
 	m_commonObject = fresh; // ibValuePtr: release old root (DecrRef -> cascade), adopt fresh
-
-	m_moduleManager = new ibValueModuleRuntimeManagerExternalDataProcessor(this, m_commonObject);
-	m_moduleManager->InvalidateNames();
 
 	return LoadDatabase();
 }
@@ -438,7 +460,7 @@ bool ibMetaDataDataProcessor::LoadCommonTree(ibValueMetaObjectDataProcessor* roo
 		MetaObjectStage(ibMetaDataNotifier::ibMetaStage::Loaded, GetCommonMetaObject());
 		return true;
 	}
-	catch (const ibBackendException& err) {
+	catch (const ibCoreException& err) {
 		// ⭐ THE ENGINE'S WORDS REACH THE USER — the twin of the report container's catch, and it
 		// has to say the same thing: `ApplyDataNode` refuses for reasons the user can act on, and
 		// answering `false` in silence makes a file that will not open indistinguishable from one

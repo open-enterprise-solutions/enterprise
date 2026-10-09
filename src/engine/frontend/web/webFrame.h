@@ -11,8 +11,8 @@
 // releases its ibValuePtr<ibValueForm>, and when no other reference
 // holds the form it's freed automatically (RAII, no manual delete).
 
+#include <atomic>
 #include <cstddef>
-#include <future>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -80,15 +80,15 @@ public:
 	virtual void ClearMessage() override;
 	virtual void BackendError(const wxString& strFileName,
 		const wxString& strDocPath, const long line,
-		const wxString& strErrorMessage) const override;
+		const wxString& strErrorMessage) override;
 	// Blocking modal message box. Mirrors desktop wxMessageBox via
-	// frame->ShowModalMessage(message, caption, style). The worker
-	// thread that ran the script parks on a future; the next /session
-	// poll surfaces the modal to the client, the client renders a
-	// dialog with buttons derived from `style` (wxOK / wxYES_NO /
-	// wxCANCEL), POSTs the chosen wx button code to /modal-reply/<id>,
-	// the HTTP handler resolves the future, and the worker unblocks
-	// returning the selected button code.
+	// frame->ShowModalMessage(message, caption, style). The script's
+	// thread waits in its pool's Await, running the session's work
+	// meanwhile — so the /session poll that carries the modal to the
+	// client gets through; the client renders a dialog with buttons
+	// derived from `style` (wxOK / wxYES_NO / wxCANCEL), POSTs the
+	// chosen wx button code to /modal-reply/<id>, ResolveModal records
+	// it and wakes the waiter, and the selected button code is returned.
 	virtual int ShowModalMessage(const wxString& message,
 		const wxString& caption, int style) override;
 
@@ -97,15 +97,21 @@ public:
 	//     the topmost queued modal's metadata (id/message/caption/style)
 	//     without removing it; it stays in the queue until the client
 	//     POSTs /modal-reply with the chosen code.
-	//   • wfrontendModalReply — ResolveModal() looks up by id, sets the
-	//     promise's value (waking the parked worker), removes from
-	//     queue.
+	//   • wfrontendModalReply — ResolveModal() looks up by id, records
+	//     the answer (waking the waiting script), removes from queue.
+	//
+	// The reply is a slot of its own, shared with the waiting script — answered, the script reads the slot
+	// and not the frame.
+	struct ModalReply {
+		std::atomic<bool> received { false };
+		std::atomic<int>  code     { 0 };
+	};
 	struct PendingModal {
 		std::string id;
 		wxString    message;
 		wxString    caption;
 		int         style;
-		std::shared_ptr<std::promise<int>> reply;
+		std::shared_ptr<ModalReply> reply;
 	};
 	bool        HasPendingModal() const;
 	PendingModal PeekPendingModal() const;   // copy of top modal; safe if HasPendingModal()
@@ -119,8 +125,8 @@ public:
 		int      level;     // 1=info, 2=warn, 3=error
 		wxString text;
 	};
-	std::vector<PendingMessage> DrainPendingMessages() const;
-	bool                        TakeClearPending() const;
+	std::vector<PendingMessage> DrainPendingMessages();
+	bool                        TakeClearPending();
 
 	// Repaint/raise are desktop concepts (native window redraw, bring
 	// to front). No-op here — the HTTP response itself is the "refresh".
@@ -224,17 +230,13 @@ private:
 	// drained after the event handler chain unwinds.
 	std::vector<const class ibValueForm*>            m_pendingCloses;
 
-	// Backend-driven notifications waiting for the next /session poll.
-	// Mutable because BackendError() on the base interface is `const`
-	// (called from logging paths that promise not to mutate the frame's
-	// "structural" state); appending a pending line is a benign mutation
-	// to internal queues, guarded by m_msgMutex for thread safety.
-	mutable std::mutex                  m_msgMutex;
-	mutable std::vector<PendingMessage> m_pendingMessages;
-	mutable bool                        m_clearPending = false;
+	// Backend-driven notifications waiting for the next /session poll, guarded by m_msgMutex.
+	std::mutex                  m_msgMutex;
+	std::vector<PendingMessage> m_pendingMessages;
+	bool                        m_clearPending = false;
 
-	// Modal-message queue. ShowModalMessage pushes here and blocks on
-	// the entry's promise; /modal-reply HTTP handler resolves the promise
+	// Modal-message queue. ShowModalMessage pushes here and waits for
+	// the entry's answer; /modal-reply HTTP handler records the answer
 	// and removes the entry. mutex shared with pending-messages would
 	// cross-lock unnecessarily — modals are rarer, separate lock is
 	// cheaper than coupling.

@@ -75,9 +75,10 @@ struct BACKEND_API ibRegistryRequest {
 	ibRegistryRequestKind      kind = ibRegistryRequestKind::Add;
 	std::shared_ptr<ibSession> session;
 
-	// Attach payload.
-	wxString user;
-	wxString password;
+	// Attach payload — the login's verdict, reached on the caller's thread (ibSessionRegistry::Attach); the
+	// registry thread only writes it.
+	bool       accepted = false;
+	ibUserInfo info;
 
 	// SetActivity payload.
 	wxString activity;
@@ -97,13 +98,11 @@ struct BACKEND_API ibRegistryRequest {
 struct BACKEND_API ibConnectRequest {
 	wxString  m_computer;
 	wxString  m_address;           // "host:port" for web; "" for desktop
-	// Process-level run mode — stays eWEB_RUNTIME_MODE across all
-	// sessions that belong to a wes process, even per-tab clients.
-	ibRunMode m_appMode = eRUNTIME_MODE;
-	// Session-level role. WebServer for wes's own technical row;
-	// WebClient for per-tab connections; other values mirror runMode.
-	// Default computed from m_appMode (see SessionKindFromRunMode).
-	ibSessionKind m_kind = ibSessionKind::Enterprise;
+	// Process-level run mode — how the process holds the base, the same
+	// for every session in it.
+	ibRunMode m_appMode = eUNKNOWN_MODE;
+	// Session-level role — what the session is; the caller's to say.
+	ibSessionKind m_kind = ibSessionKind::Unknown;
 
 	// Optional caller-supplied session guid. When non-empty and parsable
 	// as an ibGuid, Connect uses it as the session's identifier instead
@@ -181,7 +180,7 @@ public:
 	// Reverse lookup — the session in m_own whose root module-manager
 	// equals `mm`. Used by mm::CreateMainModule to recover its owning
 	// session deterministically (without going through ibSession::Current()
-	// which depends on AccessMode + thread-binding state).
+	// which depends on the thread-binding state).
 	ibSessionWatch FindSessionByRoot(ibValueModuleManagerRuntimeConfiguration* mm) const;
 
 	// Symmetric lookup by main-window pointer. The frame's own back-link
@@ -209,35 +208,29 @@ public:
 
 	// ---- Session factory facade ----
 	// Wraps the EnsureStartedForCreateSession + Connect(req) handshake.
-	// `appData->CreateSession*` forward here; per-tab web flow uses the
-	// (presetGuid, address) overload to inject cookie-derived identity.
+	// `appData->CreateSession*` forward here; per-tab web flow and the
+	// clients of the protocol use the (presetGuid, address) overload to
+	// inject their own identity.
 	// Caller passes runMode + computer so the registry stays decoupled
-	// from appData's runtime state (those values are used for the
-	// DesignerExclusivePolicy gate + the default ibConnectRequest fields
-	// m_appMode / m_computer / m_kind).
+	// from appData's runtime state (the ibConnectRequest fields m_appMode /
+	// m_computer), and the KIND — what the session is never follows from how
+	// the process was started: a server's own login, the designer's window, a
+	// job any host holds next to its own session.
 	// Returns OWNERSHIP of the registered session. Empty holder on
 	// registry-Connect failure (policy veto, duplicate id, registry down).
 	// The caller moves the holder into the object that will own the
 	// session; anything it does not move out dies with the temporary,
 	// which is the correct behaviour for every early-return path.
-	ibSessionHolder CreateSessionWithFactory(ibRunMode runMode,
-	                                         const wxString& computer,
-	                                         ibConnectRequest::SessionFactory factory);
-	ibSessionHolder CreateSessionWithFactory(ibRunMode runMode,
-	                                         const wxString& computer,
-	                                         const wxString& presetGuid,
-	                                         const wxString& address,
-	                                         ibConnectRequest::SessionFactory factory);
-
-	// Explicit-kind variant, for a session whose kind does not follow from the
-	// run mode. A job is exactly that case: any host can hold one next to its
-	// own session, so "what kind of session is this" stops being answerable from
-	// how the process was started. Giving it its own kind is what makes it show
-	// up in Active Users as work rather than as another user.
 	ibSessionHolder CreateSessionOfKind(ibRunMode runMode,
 	                                    const wxString& computer,
 	                                    ibSessionKind kind,
 	                                    ibConnectRequest::SessionFactory factory);
+	ibSessionHolder CreateSessionWithFactory(ibRunMode runMode,
+	                                         const wxString& computer,
+	                                         ibSessionKind kind,
+	                                         const wxString& presetGuid,
+	                                         const wxString& address,
+	                                         ibConnectRequest::SessionFactory factory);
 
 	// UNLISTED — a session the registry never takes in: no sys_session row, no cluster
 	// snapshot refresh, no disconnect audit. Teardown reads m_listed and skips the Remove,
@@ -294,6 +287,12 @@ public:
 	// a timeout and observe the session never left Created).
 	void Submit(ibRegistryRequest req, ibPriority priority = ibPriority::Normal);
 
+	// Log `user` into an Added session. The credentials are checked HERE, on the caller's thread — the hash
+	// is slow on purpose, and on the registry thread a queue of logins held up its heartbeat until the peers
+	// settled this process's rows as silent. The registry thread is handed the verdict and only writes it
+	// (ProcessAttach). The answer is the session's auth state — wait for it with WaitForAuth.
+	void Attach(const std::shared_ptr<ibSession>& session, const wxString& user, const wxString& password);
+
 	// ---- Unified entry-point ----
 	// Submit Add (+ optional Attach if req.m_userName is non-empty),
 	// block until the session settles or timeout. On success returns an
@@ -317,8 +316,11 @@ public:
 
 	// ---- Cluster snapshot ----
 	// Returns a copy of the last-refreshed snapshot of sys_session,
-	// across all processes / machines. Refreshed every sweep tick
-	// (~3s) by JobRefreshSnapshot. Caller UI (Active Users dialog,
+	// across all processes / machines. Refreshed by JobRefreshSnapshot
+	// every sweep tick (~3s) and after every batch of requests that
+	// wrote rows (a session added, attached, detached, removed, made
+	// exclusive), so a session that has just come or gone is seen at
+	// once. Caller UI (Active Users dialog,
 	// admin endpoint) polls this; no blocking on the registry thread.
 	// Returns an empty array before the first refresh or when
 	// m_ownsSysSession is false (the registry isn't reading the table).
@@ -344,6 +346,10 @@ public:
 	// the question above go by it, and so does a base asked at open whether another process holds it
 	// (ibServiceExclusivePolicy::CanOpen).
 	static int GetSilentSeconds();
+
+	// THE BEAT — how often a live owner moves its row's lastActive. A row watched for a fraction of it shows
+	// whether it moves (SettleSilentPeers, ibServiceExclusivePolicy::CanOpen).
+	static std::chrono::milliseconds GetHeartbeatInterval();
 
 	// ---- Lifecycle events ----
 	// Process-wide event hooks fired by registry as sessions move through
@@ -448,20 +454,10 @@ public:
 	// Idempotent — second call is a no-op.
 	void EnableDebugForSession(ibSession* s);
 
-	// ---- Session access mode + fallback ----
-	// Process-wide flag describing how ibSession::Current() resolves the
-	// active session. Owned by registry because it's session-population
-	// policy: Single-mode app has 1 session and resolution is constant;
-	// Client-mode runs N concurrent sessions strictly per-thread; Server-
-	// mode is per-thread with a process-wide fallback. Mode is set by
-	// ibApplicationInstance ctor based on runMode and persists for the
-	// process lifetime. ibSession::Current() reads through here.
-	void                SetAccessMode(ibSession::AccessMode mode);
-	ibSession::AccessMode GetAccessMode() const;
-
-	// Shared-mode fallback session — returned by Current() when calling
-	// thread is unbound. No-op in Single mode (which ignores the calling
-	// thread entirely).
+	// ---- Fallback session ----
+	// Returned by Current() when the calling thread is unbound. The
+	// process's own session in this base, set and cleared by the base's
+	// Authenticated / Disconnect listeners and nobody else.
 	void       SetFallback(ibSession* s);
 	void       ClearFallback();
 	ibSession* GetFallback() const;
@@ -523,9 +519,9 @@ private:
 
 	// Idempotent registry bring-up driven from CreateSessionWithFactory.
 	// First call enables sys_session ownership, registers the
-	// DesignerExclusive policy when runMode == eDESIGNER_MODE, and
-	// starts the consumer thread. Subsequent calls are no-ops.
-	void EnsureStartedForCreateSession(ibRunMode runMode);
+	// DesignerExclusive and ServiceExclusive policies, and starts the
+	// consumer thread. Subsequent calls are no-ops.
+	void EnsureStartedForCreateSession();
 
 	void ThreadBody() noexcept;
 
@@ -639,11 +635,9 @@ private:
 	// (no need for extra locking — only ThreadBody touches on Add).
 	std::vector<std::unique_ptr<ibSessionPolicy>>                m_policies;
 
-	// Process-wide access mode + Shared-mode fallback. Set once at app
-	// startup (see SetAccessMode); read-only afterwards under shared lock
-	// from ibSession::Current.
-	mutable std::shared_mutex                                    m_accessMutex;
-	ibSession::AccessMode                                        m_accessMode = ibSession::AccessMode::Single;
+	// The fallback — written when the process's own session comes and goes,
+	// read under the shared lock from ibSession::Current.
+	mutable std::shared_mutex                                    m_fallbackMutex;
 	// weak_ptr (not raw) so a destroyed fallback session expires harmlessly
 	// instead of leaving a dangling pointer. GetFallback locks under shared
 	// lock and returns nullptr on expiry.
@@ -794,7 +788,8 @@ private:
 	// Cluster snapshot — mirror of sys_session across every process.
 	// Written by JobRefreshSnapshot on the registry thread, read by UI
 	// via GetClusterSnapshot() on any thread. shared_mutex: writers are
-	// rare (~3s), readers may be frequent (polling dialogs).
+	// rare (a sweep tick, a batch that wrote rows), readers may be
+	// frequent (polling dialogs).
 	mutable std::shared_mutex                              m_snapshotMtx;
 	std::unique_ptr<ibSessionSnapshot>         m_snapshot;
 
@@ -862,24 +857,25 @@ inline std::shared_ptr<ibSession> MakeSessionFactory(wxString id, ibSessionKind 
 // empty holder is the failure, and letting it die is the cleanup.
 
 template<class SessionT>
-ibSessionHolder ibApplicationInstance::CreateSession()
+ibSessionHolder ibApplicationInstance::CreateSession(ibSessionKind kind)
 {
 	static_assert(std::is_base_of<ibSession, SessionT>::value,
 		"CreateSession<T>: T must derive from ibSession");
 
-	return m_sessionRegistry->CreateSessionWithFactory(
-		m_runMode, m_strComputer, &ib_detail::MakeSessionFactory<SessionT>);
+	return m_sessionRegistry->CreateSessionOfKind(
+		m_runMode, m_strComputer, kind, &ib_detail::MakeSessionFactory<SessionT>);
 }
 
 template<class SessionT>
-ibSessionHolder ibApplicationInstance::CreateSession(const wxString& presetGuid,
+ibSessionHolder ibApplicationInstance::CreateSession(ibSessionKind kind,
+                                                 const wxString& presetGuid,
                                                  const wxString& address)
 {
 	static_assert(std::is_base_of<ibSession, SessionT>::value,
 		"CreateSession<T>: T must derive from ibSession");
 
 	return m_sessionRegistry->CreateSessionWithFactory(
-		m_runMode, m_strComputer, presetGuid, address,
+		m_runMode, m_strComputer, kind, presetGuid, address,
 		&ib_detail::MakeSessionFactory<SessionT>);
 }
 

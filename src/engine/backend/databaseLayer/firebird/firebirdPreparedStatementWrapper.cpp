@@ -282,7 +282,7 @@ ibDatabaseResultSet* ibPreparedStatementFirebirdWrapper::DoRunQueryWithResults()
 		// Swallow a possible throw from ~ibDatabaseResultSet — the
 		// original isc_dsql_* error must reach the caller via
 		// ThrowDatabaseException; secondary cleanup throw would mask it.
-		try { delete pResultSet; } catch (const ibBackendException&) {}
+		try { delete pResultSet; } catch (const ibCoreException&) {}
 
 		ThrowDatabaseException();
 	}
@@ -305,7 +305,7 @@ ibDatabaseResultSet* ibPreparedStatementFirebirdWrapper::DoRunQueryWithResults()
 		// Swallow on cleanup — isc_dsql_execute2 error above is the
 		// user-visible one (ThrowDatabaseException below); a secondary
 		// throw from the result-set dtor would mask it.
-		try { delete pResultSet; } catch (const ibBackendException&) {}
+		try { delete pResultSet; } catch (const ibCoreException&) {}
 		ThrowDatabaseException();
 		return NULL;
 	}

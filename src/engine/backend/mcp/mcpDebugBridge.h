@@ -4,7 +4,7 @@
 #include "backend/backend.h"
 #include "backend/debugger/debugClientBridge.h"
 #include "backend/debugger/debugDefs.h"
-#include "backend/serialize/dataBuilder.h"   // a composition travels as a node, both ways
+#include "core/serialize/dataBuilder.h"   // a composition travels as a node, both ways
 #include "backend/job/jobRunByteCode.h"      // …and a job request/state travels as itself
 
 #include <condition_variable>
@@ -189,6 +189,12 @@ private:
 	mutable std::mutex      m_mutex;
 	Stop                    m_stop;
 	bool                    m_attached = false;
+
+	// ⭐ ONE QUESTION ON THE WIRE AT A TIME — taken by every asking verb for its whole round trip, before
+	// m_mutex and never by an answer. The pending slot below holds ONE question, and nothing kept a second
+	// asker out of it: two MCP calls at once (two code_status polls, 2026-10-01) both set it, the first answer
+	// woke both, and one of them went away with the other's run.
+	std::mutex              m_oneQuestion;
 
 	// The pending question: one at a time, which is all a stopped runtime can
 	// meaningfully answer anyway. Two kinds because the runtime answers them

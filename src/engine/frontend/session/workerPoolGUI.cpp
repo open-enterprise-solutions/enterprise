@@ -44,7 +44,7 @@ std::future<void> ibWorkerPoolGUI::Submit(ibSession* /*session*/, Task task)
 	//
 	// It is also a correctness rule, not just a shortcut: a task submitted from
 	// the main thread and deferred would fulfil its future only on the next idle
-	// pump, so a caller that waits on that future (RunOnSession, the teardown
+	// pump, so a caller that waits on that future (Execute, the teardown
 	// drain) would block the very loop that has to run it — a self-deadlock.
 	// Reentrant-inline is the same contract the headless pool keeps for a caller
 	// that already holds the session's lease.
@@ -74,10 +74,23 @@ std::future<void> ibWorkerPoolGUI::Submit(ibSession* /*session*/, Task task)
 	return future;
 }
 
-void ibWorkerPoolGUI::DropSession(ibSession* /*session*/)
+void ibWorkerPoolGUI::Drop(ibSession* /*session*/)
 {
 	// No per-session bookkeeping — tasks share the wx event queue,
 	// which has no per-session partition. Nothing to drop.
+}
+
+void ibWorkerPoolGUI::Await(ibSession* /*session*/, const std::function<bool()>& /*done*/)
+{
+	// The desktop waits for its user in wx's own modal loop (wxMessageBox, ShowModal), and that loop runs
+	// everything else on the main thread meanwhile. Nothing here waits; a caller that gets here took the
+	// server's road on the desktop.
+	throw std::logic_error("ibWorkerPoolGUI::Await: the desktop waits in wx's modal loop");
+}
+
+void ibWorkerPoolGUI::Wake(ibSession* /*session*/)
+{
+	// Nobody waits here — see Await.
 }
 
 void ibWorkerPoolGUI::Stop()

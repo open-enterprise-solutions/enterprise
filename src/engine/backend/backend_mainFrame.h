@@ -48,7 +48,7 @@ public:
 
 
 	virtual class ibMetaData* FindMetadataByPath(const wxString& strFileName) const { return nullptr; }
-	virtual void BackendError(const wxString& strFileName, const wxString& strDocPath, const long line, const wxString& strErrorMessage) const {}
+	virtual void BackendError(const wxString& strFileName, const wxString& strDocPath, const long line, const wxString& strErrorMessage) {}
 
 #pragma region _frontend_call_h__
 
@@ -138,6 +138,14 @@ public:
 
 	virtual void RefreshFrame() = 0;
 	virtual void RaiseFrame() = 0;
+
+	// ⭐ A REQUEST TO THE CLIENT, and its response — the server's half of the request/response pair, as a
+	// protocol carries it: `request` names its kind (Kind — the protocol's, not this frame's) and holds what the
+	// person is shown — a type to pick among several, a quick-choice list, a template, a composer's settings — and
+	// `response` comes back in the shape that kind defines. One door for every dialog a form on the server opens:
+	// each kind is a small protocol of its own, the client draws it, and the caller waits the way ShowModalMessage
+	// waits. False — no response: declined, cancelled, or (the default here) a host with nobody to ask.
+	virtual bool Request(const class ibDataNode& request, class ibDataNode& response) { return false; }
 
 private:
 	// The thread of life. Filled at construction — there is no other way

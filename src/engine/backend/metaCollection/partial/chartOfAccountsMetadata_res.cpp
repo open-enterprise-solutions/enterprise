@@ -10,7 +10,6 @@ wxIcon ibValueMetaObjectChartOfAccounts::GetIcon() const
 
 wxIcon ibValueMetaObjectChartOfAccounts::GetIconGroup()
 {
-	static wxIcon icon =
-		ibBackendPicture::GetIconFromBase64(s_chartOfAccounts_16_png, wxSize(16, 16));
-	return icon;
+	static const ibServerPicture picture(s_chartOfAccounts_16_png, wxSize(16, 16));
+	return picture.ToIcon();
 }

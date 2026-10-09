@@ -1096,7 +1096,7 @@ static std::vector<wxString> ReadOf(const std::vector<wxString>& projected,
 		// every column it names. Read by the query's own parser; a text that does not parse reads
 		// nothing here and is refused where TOTALS is parsed, in the parser's words.
 		try { AppendColumnsOf(ibQueryParser().ParseExpression(named->m_path), read); }
-		catch (const ibBackendException&) {}
+		catch (const ibCoreException&) {}
 	}
 	return read;
 }
@@ -1661,7 +1661,7 @@ void ibDataDBComposer::SplitSourceText() const
 
 	ibQueryPackage package;
 	try { package = ibQueryParser().ParsePackage(m_sourceText); }
-	catch (const ibBackendException&) { return; }
+	catch (const ibCoreException&) { return; }
 
 	if (package.m_statements.size() <= 1 && package.m_links.empty())
 		return;   // one query and nothing related — a nested source, exactly as before

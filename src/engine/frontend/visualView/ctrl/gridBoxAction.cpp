@@ -86,7 +86,7 @@ void ibValueGridBox::CallAsAction(const ibActionID& lNumAction, ibBackendValueFo
 				// Nothing to report: whoever cancelled it is the one who asked.
 				cancelled = true;
 			}
-			catch (const ibBackendException& error) {
+			catch (const ibCoreException& error) {
 				failure = error.GetErrorDescription();
 			}
 

@@ -81,7 +81,7 @@ ibPreparedStatementFirebird* ibPreparedStatementFirebird::CreateStatement(ibInte
 		// Swallow a possible throw from the statement dtor — original
 		// "no SQL statements" error is the user-visible one; a secondary
 		// cleanup exception would mask it.
-		try { delete pStatement; } catch (const ibBackendException&) {}
+		try { delete pStatement; } catch (const ibCoreException&) {}
 		ibDatabaseLayerException::Throw(
 			ibBackendDatabaseException::Kind::Unknown,
 			nCode, wxEmptyString, msg);
@@ -107,7 +107,7 @@ ibPreparedStatementFirebird* ibPreparedStatementFirebird::CreateStatement(ibInte
 			const wxString msg   = pStatement->GetErrorMessage();
 			// Swallow a possible throw from the statement dtor — the
 			// isc_start_transaction failure is what we want surfaced.
-			try { delete pStatement; } catch (const ibBackendException&) {}
+			try { delete pStatement; } catch (const ibCoreException&) {}
 			ibDatabaseLayerException::Throw(
 				ibBackendDatabaseException::Kind::Unknown,
 				nCode, wxEmptyString, msg);
@@ -136,8 +136,8 @@ ibPreparedStatementFirebird* ibPreparedStatementFirebird::CreateStatement(ibInte
 				return pStatement;
 			}
 		}
-		catch (const ibBackendException&) {
-			try { delete pStatement; } catch (const ibBackendException&) {}
+		catch (const ibCoreException&) {
+			try { delete pStatement; } catch (const ibCoreException&) {}
 			throw;
 		}
 
@@ -148,7 +148,7 @@ ibPreparedStatementFirebird* ibPreparedStatementFirebird::CreateStatement(ibInte
 			// Swallow a possible throw from the statement dtor — the
 			// per-fragment AddPreparedStatement failure recorded above
 			// is the original error and must reach the caller.
-			try { delete pStatement; } catch (const ibBackendException&) {}
+			try { delete pStatement; } catch (const ibCoreException&) {}
 			ibDatabaseLayerException::Throw(
 				ibBackendDatabaseException::Kind::Unknown,
 				nCode, wxEmptyString, msg);
@@ -348,7 +348,7 @@ ibDatabaseResultSet* ibPreparedStatementFirebird::RunQueryWithResults()
 				if (pResultSet)
 					delete pResultSet;
 			}
-			catch (const ibBackendException&) {}
+			catch (const ibCoreException&) {}
 
 			return NULL;
 	}

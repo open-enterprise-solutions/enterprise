@@ -366,7 +366,8 @@ public:
 	// on `this`. Overridden by subclasses with additional modules
 	// (external data processor, report). Default impl handles the
 	// common-case main module + m_listCommonModuleManager fanout.
-	virtual bool AttachRuntime(class ibSession* session);
+	// Done, or THROWN: a configuration that does not start refuses the session (see the .cpp).
+	virtual void AttachRuntime(class ibSession* session);
 
 	// Symmetric teardown — drop this session's ProcUnit entries.
 	virtual void DetachRuntime(class ibSession* session);

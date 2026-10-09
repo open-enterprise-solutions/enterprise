@@ -80,13 +80,8 @@ ibDialogAbout::ibDialogAbout(wxWindow* parent, int id)
 	wxFlexGridSizer* grid = new wxFlexGridSizer(/*rows*/0, /*cols*/2, kRowGap, kPad * 2);
 	grid->AddGrowableCol(1, 1);
 
-	if (appData->GetDatabaseMode() != ibDatabaseMode::eNONE) {
-		m_textCtrl1 = AddInfoRow(infoHost, grid,
-			appData->GetDatabaseModeDescr(), appData->GetDatabaseDescription());
-	}
-	else {
-		m_textCtrl1 = nullptr;
-	}
+	const wxString database = appData->GetDatabaseDescription();   // empty — the launcher's, no base
+	m_textCtrl1 = !database.IsEmpty() ? AddInfoRow(infoHost, grid, _("Database"), database) : nullptr;
 
 	m_textCtrl2 = AddInfoRow(infoHost, grid, _("Application"), appData->GetRunModeDescr());
 	m_textCtrl3 = AddInfoRow(infoHost, grid, _("User"),        appData->GetUserName());

@@ -1,4 +1,5 @@
 ﻿#include "advpropType.h"
+#include "advpropValuePicture.h"                                         // the value's picture, read when drawn
 
 #include "backend/propertyManager/property/propertyType.h"
 #include "backend/propertyManager/property/variant/variantType.h"
@@ -316,22 +317,6 @@ void ibPGTypeProperty::RefreshChildren()
 				m_length->SetValue(td.GetLength());
 			}
 		}
-
-		// THE VALUE'S PICTURE — the one the chosen type's own choice carries (a metaobject's, a family's metatype's,
-		// AnyRef's); none for several types at once. The grid never drew one: this property answers no choice
-		// selection (GetChoiceSelection), so it is set here, as the value changes.
-		wxBitmapBundle picture;
-		if (td.GetClsidCount() == 1) {
-			for (const std::pair<const int, ibClassID>& choice : m_valChoices) {
-				if (choice.second != td.GetFirstClsid())
-					continue;
-				const int idx = m_choices.Index(choice.first);
-				if (idx != wxNOT_FOUND)
-					picture = m_choices.Item(idx).GetBitmap();
-				break;
-			}
-		}
-		SetValueImage(picture);
 	}
 	else {
 		m_precision->Hide(true);
@@ -345,6 +330,36 @@ void ibPGTypeProperty::RefreshChildren()
 	}
 
 	ibPGTypeProperty::SetExpanded(true);
+}
+
+// THE VALUE'S PICTURE — the one the chosen type's own choice carries; none for several types at once. This
+// property answers no choice selection (GetChoiceSelection), so the grid would draw none of its own accord.
+wxBitmapBundle ibPGTypeProperty::GetValuePicture() const
+{
+	ibVariantDataAttribute* const varData = property_cast(m_value, ibVariantDataAttribute);
+	if (varData == nullptr)
+		return wxBitmapBundle();
+	const ibTypeDescription& td = varData->GetTypeDesc();
+	if (td.GetClsidCount() != 1)
+		return wxBitmapBundle();
+	const ibClassID chosen = td.GetFirstClsid();
+	for (const std::pair<const int, ibClassID>& choice : m_valChoices) {
+		if (choice.second != chosen)
+			continue;
+		const int idx = m_choices.Index(choice.first);
+		return idx != wxNOT_FOUND ? m_choices.Item(idx).GetBitmap() : wxBitmapBundle();
+	}
+	return wxBitmapBundle();
+}
+
+wxSize ibPGTypeProperty::OnMeasureImage(int /*item*/) const
+{
+	return ibMeasureValuePicture(GetValuePicture(), GetGrid());
+}
+
+void ibPGTypeProperty::OnCustomPaint(wxDC& dc, const wxRect& rect, wxPGPaintData& paintdata)
+{
+	ibPaintValuePicture(GetValuePicture(), dc, rect, paintdata);
 }
 
 #include "frontend/win/dlgs/typeSelector.h"   // the shared picker — this editor is one of its two callers

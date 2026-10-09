@@ -51,9 +51,10 @@ int ibSpreadsheetRowHeight(const ibBackendSpreadsheetObject& doc, int row, wxDC&
 	// in the default font never makes a row grow, whatever the platform's font metrics come to. It may come
 	// out below nothing (a scaled display, where that line is taller than the row): the row still does not
 	// grow for it, and a larger line grows it by what it adds.
-	dc.SetFont(s_defaultSpreadsheetFont);
+	const wxFont ordinary = ibDefaultSpreadsheetFont();
+	dc.SetFont(ordinary);
 	const int padding = s_defaultRowHeight - dc.GetCharHeight();
-	const double defaultPoints = s_defaultSpreadsheetFont.GetFractionalPointSize();
+	const double defaultPoints = ordinary.GetFractionalPointSize();
 
 	// ⚠ BROKEN AGAINST THE WIDTH THE DRAWING BREAKS IT AGAINST, or the two count lines apart and the row
 	// comes out a line short. Of a column's width the cell keeps the grid line, the renderer's pixel on
@@ -77,7 +78,7 @@ int ibSpreadsheetRowHeight(const ibBackendSpreadsheetObject& doc, int row, wxDC&
 			continue;
 
 		const bool wrap = cell->m_fitMode == ibSpreadsheetCellDescription::ibFitMode::Mode_Wrap;
-		const wxFont font = cell->m_font.IsOk() ? cell->m_font : s_defaultSpreadsheetFont;
+		const wxFont font = cell->m_font.IsOk() ? cell->m_font : ordinary;
 
 		// The quick answer, which is most cells of most sheets: one line in a font no larger than the
 		// default fits the default row. Nothing is measured for it.
@@ -118,6 +119,7 @@ int ibSpreadsheetColWidth(const ibBackendSpreadsheetObject& doc, int col, wxDC& 
 	// pixel on each side and the one margin the text starts from (gridextctrl.cpp, DrawTextRectangle). A
 	// line being BROKEN has a margin at each side — see chromeWrapping above.
 	const int chrome = 4;
+	const wxFont ordinary = ibDefaultSpreadsheetFont();
 
 	int width = 0;
 	for (int row = 0; row < desc.GetNumberRows(); row++) {
@@ -138,7 +140,7 @@ int ibSpreadsheetColWidth(const ibBackendSpreadsheetObject& doc, int col, wxDC& 
 		if (text.IsEmpty())
 			continue;
 
-		dc.SetFont(cell->m_font.IsOk() ? cell->m_font : s_defaultSpreadsheetFont);
+		dc.SetFont(cell->m_font.IsOk() ? cell->m_font : ordinary);
 
 		wxArrayString lines;
 		ibGrid::ParseLines(text, lines);

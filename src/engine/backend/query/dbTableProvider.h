@@ -63,6 +63,10 @@ public:
 	static BACKEND_API const ibBackendQueryable*   CastTarget(const ibBackendQueryColumn* next);
 	static BACKEND_API bool                        WalkEnters(const ibBackendQueryable* target, const ibBackendQueryColumn* next);
 
+	// How many values one statement may bind on the connected engine (ibDialectDictionary::m_maxParameters) — what a
+	// road that would bind a long list asks first; 0 = none known.
+	static BACKEND_API size_t ParametersOneStatementTakes();
+
 	// The flat list read from this base is in hand: the references it made — this base's own — are told
 	// what they say together, a table at a time (ibValueReferenceDataObject::ReadBatch). See the base's note.
 	void ReadReferences() const override;
@@ -119,6 +123,13 @@ public:
 	static BACKEND_API bool CanRollupTotalsShape(const ibDataQuerySpec& spec);
 	static BACKEND_API bool CanPushRollupTotals(const ibDataQuerySpec& spec);
 	static ibSelectorTree   ExecuteRollupTotals(const ibDataQuerySpec& spec);
+
+	// ONE level of headings needs no ROLLUP: a plain GROUP BY, which every engine has (Firebird has no ROLLUP),
+	// the groups ordered by the key and by an ordinary sort's MIN / MAX, the grand total added up from the groups
+	// — so only a sum, a count, a minimum or a maximum rides here. Same shape rules as the ROLLUP road otherwise;
+	// no dialect probe -> unit-testable without a DB.
+	static BACKEND_API bool CanFoldOneLevelTotals(const ibDataQuerySpec& spec);
+	static ibSelectorTree   ExecuteOneLevelTotals(const ibDataQuerySpec& spec);
 
 	// Multi-source variant of the ROLLUP totals push-down: the SAME GROUP BY ROLLUP + GROUPING()
 	// mechanism, but over a co-located INNER/LEFT JOIN tree (BuildColocatedFrom) OR a UNION-of-branches

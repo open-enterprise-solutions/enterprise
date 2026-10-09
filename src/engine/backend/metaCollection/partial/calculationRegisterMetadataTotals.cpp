@@ -22,7 +22,6 @@
 #include "backend/system/value/valueMap.h"
 #include "backend/query/queryRamTable.h"                             // the base: the table GetBase answers, filled fast
 #include "backend/metaData.h"                                        // the schedule data: the schedule register, by its id
-#include "backend/diagnostics/journal.h"                             // the schedule data: what each read brought, and how long
 
 #include <algorithm>
 #include <map>

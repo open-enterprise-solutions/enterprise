@@ -29,7 +29,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "backend/backend_core.h"
-#include "backend/serialize/dataBuilder.h"
+#include "core/serialize/dataBuilder.h"
 
 #include <functional>   // an argument may carry a function that writes its shape
 #include <set>          // one object link per id, across the three texts an object carries
