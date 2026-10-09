@@ -73,6 +73,10 @@ private:
 	bool m_finished = false;
 	std::exception_ptr m_exception;
 	void* m_asanFake = nullptr;
+	// TSan's context for this fiber. The scheduler holds the thread's own
+	// context and must not destroy it; every other fiber owns the one
+	// Create made. Null when the build is not instrumented.
+	void* m_tsanFiber = nullptr;
 	ibFiberLocals::Snapshot m_locals;
 
 	void RunEntry();

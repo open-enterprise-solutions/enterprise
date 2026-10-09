@@ -12,6 +12,9 @@
  * Callee-saved registers only. XMM is caller-saved on SysV; MXCSR and the
  * x87 control word are not, so they travel with the fiber. No red zone is
  * live across the call that entered here.
+ *
+ * TSan does not see this ret. The caller notifies it with
+ * __tsan_switch_to_fiber immediately before the call.
  */
 
 #if defined(__APPLE__)

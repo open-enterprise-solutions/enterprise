@@ -37,6 +37,20 @@ void __sanitizer_finish_switch_fiber(void* fake_stack_save, const void** bottom_
 }
 #endif
 
+#if defined(__SANITIZE_THREAD__)
+#  define IB_FIBER_TSAN 1
+#elif defined(__has_feature)
+#  if __has_feature(thread_sanitizer)
+#    define IB_FIBER_TSAN 1
+#  endif
+#endif
+
+#if defined(IB_FIBER_TSAN)
+// The assembly switch is invisible to TSan. These are what tell it a
+// fiber exists and which one is running. <sanitizer/tsan_interface.h>
+#  include <sanitizer/tsan_interface.h>
+#endif
+
 #if !defined(_WIN32)
 extern "C" void ibFiberSwitch(void** fromSp, void** toSp);
 extern "C" void ibFiberTrampoline();
@@ -132,6 +146,12 @@ void ibFiber::ConvertThread()
 	}
 	self->m_osFiber = handle;
 #endif
+#if defined(IB_FIBER_TSAN)
+	// The thread is already a fiber to TSan. The scheduler keeps that
+	// context, so the first switch leaves it.
+	self->m_tsanFiber = __tsan_get_current_fiber();
+	__tsan_set_fiber_name(self->m_tsanFiber, "scheduler");
+#endif
 	tl_schedulerFiber = self;
 	tl_currentFiber = self;
 }
@@ -147,6 +167,8 @@ void ibFiber::ReleaseThread()
 	ConvertFiberToThread();
 	self->m_osFiber = nullptr;
 #endif
+	// The scheduler's TSan context belongs to the thread. Destroying it
+	// here would retire the thread out from under the sanitizer.
 	delete self;
 }
 
@@ -204,6 +226,10 @@ ibFiber* ibFiber::Create(Entry entry, void* arg, std::size_t reserveBytes)
 		delete fiber;
 		throw;
 	}
+#if defined(IB_FIBER_TSAN)
+	fiber->m_tsanFiber = __tsan_create_fiber(0);
+	__tsan_set_fiber_name(fiber->m_tsanFiber, "fiber");
+#endif
 	return fiber;
 }
 
@@ -217,6 +243,15 @@ void ibFiber::Destroy(ibFiber* fiber)
 		std::fputs("ibFiber::Destroy called on a fiber that has not unwound\n", stderr);
 		std::abort();
 	}
+#if defined(IB_FIBER_TSAN)
+	// From the fiber that resumed, never from this one: it has already
+	// switched back. The context is ours; the scheduler's is not, and
+	// Destroy refuses a scheduler above.
+	if (fiber->m_tsanFiber != nullptr) {
+		__tsan_destroy_fiber(fiber->m_tsanFiber);
+		fiber->m_tsanFiber = nullptr;
+	}
+#endif
 #if defined(_WIN32)
 	if (fiber->m_osFiber != nullptr)
 		DeleteFiber(fiber->m_osFiber);
@@ -245,6 +280,16 @@ void ibFiber::SwitchTo(ibFiber* target)
 		size = target->m_stackSize;
 	}
 	__sanitizer_start_switch_fiber(&m_asanFake, bottom, size);
+#endif
+
+#if defined(IB_FIBER_TSAN)
+	// Immediately before the switch, and not no_sync: the writes before
+	// this call happen-before the reads after it on the target. The
+	// assembly (and SwitchToFiber) cannot tell TSan that themselves.
+	// A missing context would leave TSan on the fiber we just left.
+	if (target->m_tsanFiber == nullptr)
+		std::abort();
+	__tsan_switch_to_fiber(target->m_tsanFiber, 0);
 #endif
 
 #if defined(_WIN32)
