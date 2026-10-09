@@ -1,11 +1,31 @@
 #include "connectionPool.h"
 
+#include "core/fiber/fiberLocals.h"
 #include "backend/appData.h"
 #include "backend/appHost.h"             // Holds — is a holder's pool still standing
 #include "backend/backend_exception.h"   // ibBackendCoreException on pool-exhaustion timeout
 #include "connectionHolder.h"
 #include "connectionScope.h"
 #include "databaseLayer.h"
+
+namespace {
+
+// The pool pins a connection by the holder's ADDRESS. A fiber parked on
+// this thread must not share that address with the session that runs
+// next, or the parked question's transaction would be the next session's.
+thread_local ibDatabaseConnectionHolder* t_activeHolder = nullptr;
+
+struct ibRegisterHolderLocal {
+	ibRegisterHolderLocal()
+	{
+		ibFiberLocals::RegisterPerFiber(
+			[]() -> void* { return new ibSingleConnectionHolder; },
+			[](void* p) { delete static_cast<ibSingleConnectionHolder*>(p); },
+			[](void* p) { t_activeHolder = static_cast<ibDatabaseConnectionHolder*>(p); });
+	}
+} s_registerHolderLocal;
+
+} // namespace
 
 ibDatabaseConnectionHolder* ibConnectionPool::ThreadHolder()
 {
@@ -14,8 +34,11 @@ ibDatabaseConnectionHolder* ibConnectionPool::ThreadHolder()
 	// so concurrent db_query work from different threads acquires
 	// independent pool connections rather than serialising on one singleton.
 	// Block-local thread_local static guarantees zero-init on first use per
-	// thread, no global ctor ordering.
+	// thread, no global ctor ordering. A fiber installs its own holder in
+	// t_activeHolder; the scheduler leaves that null and uses this one.
 	static thread_local ibSingleConnectionHolder ts_holder;
+	if (t_activeHolder != nullptr)
+		return t_activeHolder;
 	return &ts_holder;
 }
 

@@ -34,6 +34,7 @@
 #include "backend/syntaxHelper/helpEntry.h"
 #include "backend/syntaxHelper/helpLoadError.h"
 
+#include <cstdint>
 #include <map>
 #include <memory>
 #include <unordered_map>

@@ -162,6 +162,8 @@
     <ClCompile Include="diagnostics\leakTracker.cpp" />
     <ClCompile Include="exception.cpp" />
     <ClCompile Include="fdatetime.cpp" />
+    <ClCompile Include="fiber\fiber.cpp" />
+    <ClCompile Include="fiber\fiberLocals.cpp" />
     <ClCompile Include="fileSystem\fs.cpp" />
     <ClCompile Include="fileSystem\lz\lzhuf.cpp" />
     <ClCompile Include="fnumber.cpp" />
@@ -184,6 +186,8 @@
     <ClInclude Include="diagnostics\leakTracker.h" />
     <ClInclude Include="exception.h" />
     <ClInclude Include="fdatetime.h" />
+    <ClInclude Include="fiber\fiber.h" />
+    <ClInclude Include="fiber\fiberLocals.h" />
     <ClInclude Include="fileSystem\fs.h" />
     <ClInclude Include="fileSystem\lz\lzhuf.h" />
     <ClInclude Include="fileSystem\types.h" />

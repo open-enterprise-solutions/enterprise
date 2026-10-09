@@ -5,6 +5,7 @@
 #include "jobManager.h"
 
 #include "backend/appData.h"
+#include "core/fiber/fiberLocals.h"
 #include "backend/session/session.h"
 #include "backend/session/sessionRegistry.h"
 #include "backend/moduleManager/moduleManager.h"   // root module manager -> GetProcUnit
@@ -57,6 +58,15 @@ struct ibBackgroundLaunch {
 
 // THE RUN THIS THREAD IS DOING — set around its body (ibCurrentRun), read by ibBackgroundRun::Current.
 thread_local ibBackgroundRun* t_currentRun = nullptr;
+
+struct ibRegisterCurrentRunLocal {
+	ibRegisterCurrentRunLocal()
+	{
+		ibFiberLocals::RegisterTrivial<ibBackgroundRun*>(
+			[](void* dst) { *static_cast<ibBackgroundRun**>(dst) = t_currentRun; },
+			[](const void* src) { t_currentRun = *static_cast<ibBackgroundRun* const*>(src); });
+	}
+} s_registerCurrentRunLocal;
 
 struct ibCurrentRun {
 	ibBackgroundRun* const m_previous;

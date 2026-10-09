@@ -13,6 +13,20 @@ file(GLOB_RECURSE CORE_SOURCES CONFIGURE_DEPENDS
 
 add_library(core SHARED ${CORE_SOURCES})
 
+# The fiber switch (fiber/) is a few instructions with a fixed frame. It lives in its own file so the C++ around it
+# cannot reorder the saves. Windows uses CreateFiberEx and does not compile these.
+if(NOT WIN32)
+    if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64|amd64")
+        enable_language(ASM)
+        target_sources(core PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/fiber/fiber_x64.S")
+    elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64|ARM64")
+        enable_language(ASM)
+        target_sources(core PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/fiber/fiber_arm64.S")
+    else()
+        message(FATAL_ERROR "ibFiber has no stack switcher for ${CMAKE_SYSTEM_PROCESSOR}")
+    endif()
+endif()
+
 target_include_directories(core
     PUBLIC
         ${CMAKE_SOURCE_DIR}/src/engine

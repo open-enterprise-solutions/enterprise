@@ -5,14 +5,18 @@
 // per-session sequential dispatch (single in-flight task per session).
 //
 // Lease semantics: each session has a queue + an atomic "leased" flag.
-// A worker claiming a session's queue CAS-flips leased→true, drains
-// every task in FIFO order under the lease, then releases. Other
-// workers see leased sessions and skip them; cross-session work
-// proceeds in parallel.
+// A worker claiming a session's queue CAS-flips leased→true and runs
+// the lease on a fiber pinned to that worker. Tasks drain in FIFO
+// order on that fiber. Await suspends the fiber and returns the OS
+// thread to the scheduler; the lease stays held, so no other worker
+// picks the session up. Wake, a queued task, or cancel resumes the
+// fiber on its home thread. Other sessions proceed in parallel.
 //
 // Reentrant Submit (a task running on session S calls Submit on the
 // same session) runs inline rather than enqueuing — avoids the
-// self-deadlock where a worker would queue work behind itself.
+// self-deadlock where a worker would queue work behind itself. A
+// parked fiber has saved its lease, so a submit from another session
+// on the same OS thread does not look reentrant.
 //
 // Used by wenterprise-server.exe (replaces today's per-session worker
 // thread in ibWebApplication) and the future oes-server.exe compute
@@ -29,6 +33,8 @@
 #include <thread>
 #include <unordered_map>
 #include <vector>
+
+class ibFiber;
 
 class BACKEND_API ibWorkerPoolHeadless : public ibWorkerPool {
 public:
@@ -82,10 +88,11 @@ private:
 		std::weak_ptr<ibSession>  owner;
 
 		// How many Await of this session are on the stack — a question asked from a task run under another
-		// question nests; only the innermost is awake. `wake` is what a submit, an answer or a cancel rings.
-		// Both under m_mtx.
+		// question nests; only the innermost is awake. `woken` is what a submit, an answer or a cancel sets: the
+		// waiting fiber is parked and its home thread is in the pool's own wait, which reads this flag. Both
+		// under m_mtx.
 		int                       waiting { 0 };
-		std::condition_variable   wake;
+		bool                      woken { false };
 	};
 
 	void WorkerLoop();
@@ -100,6 +107,38 @@ private:
 	// nullptr} if no work is available. Must be called with m_mtx held.
 	std::pair<ibSession*, ibSessionQueue*> ClaimSessionLocked();
 
+	// A fiber parked on this worker.
+	struct ibParked {
+		ibSession*       session = nullptr;
+		ibSessionQueue*  queue = nullptr;
+		ibFiber*         fiber = nullptr;
+	};
+	// The fibers parked on the CALLING worker. Per OS thread — fibers never migrate, so the home thread's scheduler is
+	// the only reader and the only writer. A function and not a `static thread_local` member: an exported class may not
+	// have one (MSVC C2492; procUnit.h says the same of the interpreter's state).
+	static std::vector<ibParked>& ParkedFibers();
+
+	static void RunTask(ibSessionTask& item);
+	static void RegisterFiberLocals();
+
+	// Passed across the fiber entry. A nested type so the translation
+	// unit can name the queue (private) without a friend.
+	struct ibLeaseArgs {
+		ibWorkerPoolHeadless* pool = nullptr;
+		ibSession*            session = nullptr;
+		ibSessionQueue*       queue = nullptr;
+	};
+	bool TakeRunnable(ibParked& out);
+	static void LeaseEntry(void* raw);
+	void        DrainLease(ibSessionQueue* q);
+	void        StartLease(ibSession* session, ibSessionQueue* q);
+	void        FinishFiber(ibSession* session, ibSessionQueue* q, ibFiber* fiber);
+	bool        ShouldInterrupt(ibSession* session) const;
+	// m_mtx must be held. True when a fiber parked on THIS thread should
+	// be resumed: it was woken, it has queued tasks, the pool is
+	// stopping, or its session was cancelled.
+	bool        HasRunnableParkedLocked() const;
+
 	std::size_t              m_maxWorkers;
 	std::atomic<bool>        m_stop { false };
 
@@ -108,10 +147,6 @@ private:
 	std::atomic<std::size_t> m_aliveWorkers { 0 };
 	// Idle-count drives lazy growth: zero idle + below cap = spawn.
 	std::atomic<std::size_t> m_idleWorkers  { 0 };
-	// ⭐ A WORKER IN Await HOLDS NO PLACE. It is alive and holds its session, but it waits on a person for as
-	// long as the person takes; counted against the cap, two open questions would stop a pool of two for
-	// everybody. So the cap is on the alive less the waiting, and a worker that starts waiting makes room.
-	std::atomic<std::size_t> m_waitingWorkers { 0 };
 	// Stop() waits on this until m_aliveWorkers reaches 0 (every
 	// detached worker has exited).
 	std::mutex               m_stopMtx;

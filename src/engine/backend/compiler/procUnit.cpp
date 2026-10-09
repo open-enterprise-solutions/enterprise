@@ -5,6 +5,7 @@
 
 #include "procUnit.h"
 #include "procUnitLambda.h"    // ibValueIterator / ibValueFunction / AsFunction / AsIterator
+#include "core/fiber/fiberLocals.h"
 
 #include "debugger/debugServer.h"
 #include "system/systemManager.h"
@@ -890,6 +891,19 @@ inline void ModValue(ibValue& cValue1, const ibValue& cValue2, const ibValue& cV
 
 // Definition of the LINQ-filter three-valued NULL flag (declared in procUnitLambda.h).
 thread_local bool ts_threeValuedNullCompare = false;
+
+namespace {
+
+struct ibRegisterThreeValuedLocal {
+	ibRegisterThreeValuedLocal()
+	{
+		ibFiberLocals::RegisterTrivial<bool>(
+			[](void* dst) { *static_cast<bool*>(dst) = ts_threeValuedNullCompare; },
+			[](const void* src) { ts_threeValuedNullCompare = *static_cast<const bool*>(src); });
+	}
+} s_registerThreeValuedLocal;
+
+} // namespace
 
 
 // SQL three-valued NULL: in a filter, a comparison with a NULL operand yields UNKNOWN

@@ -4,6 +4,9 @@
     <Filter Include="diagnostics">
       <UniqueIdentifier>{b908aefe-25b6-4f92-822f-12cb5562e048}</UniqueIdentifier>
     </Filter>
+    <Filter Include="fiber">
+      <UniqueIdentifier>{5d0c7a3e-6b1f-4e2a-9c84-1f7e2b9d4a60}</UniqueIdentifier>
+    </Filter>
     <Filter Include="fileSystem">
       <UniqueIdentifier>{3e658492-3710-4562-a676-5eecced213a9}</UniqueIdentifier>
     </Filter>
@@ -32,6 +35,12 @@
     </ClCompile>
     <ClCompile Include="exception.cpp" />
     <ClCompile Include="fdatetime.cpp" />
+    <ClCompile Include="fiber\fiber.cpp">
+      <Filter>fiber</Filter>
+    </ClCompile>
+    <ClCompile Include="fiber\fiberLocals.cpp">
+      <Filter>fiber</Filter>
+    </ClCompile>
     <ClCompile Include="fileSystem\fs.cpp">
       <Filter>fileSystem</Filter>
     </ClCompile>
@@ -72,6 +81,12 @@
     </ClInclude>
     <ClInclude Include="exception.h" />
     <ClInclude Include="fdatetime.h" />
+    <ClInclude Include="fiber\fiber.h">
+      <Filter>fiber</Filter>
+    </ClInclude>
+    <ClInclude Include="fiber\fiberLocals.h">
+      <Filter>fiber</Filter>
+    </ClInclude>
     <ClInclude Include="fileSystem\fs.h">
       <Filter>fileSystem</Filter>
     </ClInclude>

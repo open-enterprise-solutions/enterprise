@@ -3,6 +3,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "functionalOptionGate.h"
+#include "core/fiber/fiberLocals.h"
 #include "backend/metaCollection/metaFunctionalOptionObject.h"
 
 #include "backend/appData.h"
@@ -67,6 +68,17 @@ std::map<const ibMetaData*, ibFunctionalOptionValues> s_values;
 
 // Open AsApplication scopes on this thread — see the header.
 thread_local int s_asApplication = 0;
+
+// A composition parked mid-question must not leave the designer's
+// "as application" view on for the next session on this thread.
+struct ibRegisterAsApplicationLocal {
+	ibRegisterAsApplicationLocal()
+	{
+		ibFiberLocals::RegisterTrivial<int>(
+			[](void* dst) { *static_cast<int*>(dst) = s_asApplication; },
+			[](const void* src) { s_asApplication = *static_cast<const int*>(src); });
+	}
+} s_registerAsApplicationLocal;
 
 // Only the running application makes anything unavailable: the designer shows what it edits — but for a
 // composition's run, which prints what a person sees (AsApplication) — and a process with no application (a
