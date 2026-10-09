@@ -39,7 +39,10 @@
 #include "backend/databaseLayer/postgres/postgresDatabaseLayer.h"
 #include "backend/databaseLayer/databaseResultSet.h"
 #include "backend/databaseLayer/preparedStatement.h"
+#include "backend/databaseLayer/databaseLayerException.h"
+#include "backend/backend_exception.h"
 
+#include <chrono>
 #include <cstdlib>
 #include <memory>
 
@@ -55,6 +58,20 @@ bool HaveServer()
 {
 	const char* user = std::getenv("OES_PG_USER");
 	return user != nullptr && *user != '\0';
+}
+
+std::shared_ptr<ibDatabaseLayerPostgres> OpenFresh()
+{
+	auto db = std::make_shared<ibDatabaseLayerPostgres>();
+	const bool opened = db->Open(
+		EnvOr("OES_PG_HOST", wxT("127.0.0.1")),
+		EnvOr("OES_PG_PORT", wxT("5432")),
+		EnvOr("OES_PG_DB", wxT("oes_test")),
+		EnvOr("OES_PG_USER", wxT("postgres")),
+		EnvOr("OES_PG_PASSWORD", wxEmptyString));
+	if (!opened)
+		return nullptr;
+	return db;
 }
 
 // One connection for the whole target: opening PostgreSQL is a network round
@@ -210,4 +227,66 @@ TEST_F(PostgresDialect, UpsertUpdatesInsteadOfDuplicating)
 	EXPECT_EQ(2, rs->GetResultInt(2)) << "upsert did not update the existing row";
 
 	s_db->RunQuery(wxT("DROP TABLE oes_dialect_upsert"));
+}
+
+// A noWait transaction must be refused when the row is held, not block.
+// The safety statement_timeout is only so a broken lock_timeout fails this
+// test in a few seconds instead of hanging the job; the refusal we want is
+// lock_not_available (55P03), which fires before that bound.
+TEST_F(PostgresDialect, NoWaitDoesNotWaitForAHeldRow)
+{
+	s_db->RunQuery(wxT("DROP TABLE IF EXISTS oes_dialect_nowait"));
+	s_db->RunQuery(wxT("CREATE TABLE oes_dialect_nowait (id INTEGER PRIMARY KEY)"));
+	s_db->RunQuery(wxT("INSERT INTO oes_dialect_nowait (id) VALUES (1)"));
+
+	const auto holder = OpenFresh();
+	const auto waiter = OpenFresh();
+	ASSERT_TRUE(holder);
+	ASSERT_TRUE(waiter);
+
+	holder->BeginTransaction();
+	// RunQuery rejects a SELECT (it wants COMMAND_OK). The row lock is the
+	// transaction's, so it outlives this result.
+	{
+		ibResultSetGuard held(holder,
+			holder->RunQueryWithResults(wxT("SELECT id FROM oes_dialect_nowait WHERE id = 1 FOR UPDATE")));
+		ASSERT_TRUE(static_cast<bool>(held));
+		ASSERT_TRUE(held->Next());
+	}
+
+	waiter->RunQuery(wxT("SET statement_timeout = '3s'"));
+	ibDatabaseLayer::ibTxOptions opts;
+	opts.noWait = true;
+	waiter->BeginTransaction(opts);
+
+	wxString state;
+	const auto started = std::chrono::steady_clock::now();
+	try {
+		ibResultSetGuard blocked(waiter,
+			waiter->RunQueryWithResults(wxT("SELECT id FROM oes_dialect_nowait WHERE id = 1 FOR UPDATE")));
+		if (blocked && blocked->Next())
+			state = wxT("acquired");
+	}
+	catch (const ibDatabaseLayerException& err) {
+		// The driver does not stash SQLSTATE on this path, so the refusal is
+		// recognised by the server's own words: a lock timeout, not a cancel.
+		state = err.GetErrorDescription();
+	}
+	catch (const ibBackendInterruptException&) {
+		state = wxT("57014");
+	}
+	const auto waited = std::chrono::duration_cast<std::chrono::milliseconds>(
+		std::chrono::steady_clock::now() - started).count();
+
+	if (waiter->IsActiveTransaction())
+		waiter->RollBack();
+	if (holder->IsActiveTransaction())
+		holder->RollBack();
+	waiter->Close();
+	holder->Close();
+	s_db->RunQuery(wxT("DROP TABLE IF EXISTS oes_dialect_nowait"));
+
+	EXPECT_NE(state.Lower().Find(wxT("lock")), wxNOT_FOUND)
+		<< "a noWait transaction must be refused for the lock, not cancelled: " << state.utf8_str();
+	EXPECT_LT(waited, 1000) << "waited " << waited << " ms";
 }
