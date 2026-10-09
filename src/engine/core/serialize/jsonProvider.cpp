@@ -218,6 +218,28 @@ private:
 	const char* m_start;
 	const char* m_p;
 	const char* m_end;
+	int m_depth = 0;
+
+	// One container on this path. The destructor releases it on every return,
+	// including a failure halfway through, so a sibling is not counted as deeper.
+	// Past kMaxNesting the text is refused: the descent is the call stack, and a
+	// few thousand brackets overflow it (measured near 5000 on a Linux Debug build).
+	class Depth {
+	public:
+		explicit Depth(ibJsonReader& reader)
+			: m_reader(reader), m_held(reader.m_depth < ibJsonProvider::kMaxNesting)
+		{
+			if (m_held)
+				++m_reader.m_depth;
+		}
+		~Depth() { if (m_held) --m_reader.m_depth; }
+		bool Held() const { return m_held; }
+		Depth(const Depth&) = delete;
+		Depth& operator=(const Depth&) = delete;
+	private:
+		ibJsonReader& m_reader;
+		bool m_held;
+	};
 
 	bool Eof() const { return m_p >= m_end; }
 	char Peek() const { return Eof() ? '\0' : *m_p; }
@@ -338,6 +360,8 @@ bool ibJsonReader::ParseValue(ibDataValue& out, const std::function<ibClassID(co
 		return true;
 	}
 	if (c == '[') {
+		Depth depth(*this);
+		if (!depth.Held()) return false;
 		if (!Accept('[')) return false;
 		std::vector<ibDataValue> items;
 		if (Accept(']')) { out = ibDataValue::Array(items); return true; }
@@ -364,6 +388,8 @@ bool ibJsonReader::ParseValue(ibDataValue& out, const std::function<ibClassID(co
 
 bool ibJsonReader::ParseNode(ibDataNode& node, const std::function<ibClassID(const wxString&)>& lookupType)
 {
+	Depth depth(*this);
+	if (!depth.Held()) return false;
 	if (!Expect('{')) return false;
 	if (Accept('}')) return true;   // {} — a legitimately empty node
 

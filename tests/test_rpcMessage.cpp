@@ -20,9 +20,11 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include <gtest/gtest.h>
+#include <string>
 
 #include "backend/rpc/rpcMessage.h"
 #include "core/serialize/dataBuilder.h"
+#include "core/serialize/jsonProvider.h"   // kMaxNesting — the reader's ceiling, one number
 
 //---------------------------------------------------------------------------
 // reading
@@ -117,6 +119,59 @@ TEST(RpcMessage,ParseRequest_WellFormedJsonThatIsNotARequest_IsRefused)
 	wxString error;
 
 	EXPECT_FALSE(ibRpcParseRequest(wxT("{\"jsonrpc\":\"2.0\",\"id\":1}"), request, error));
+	EXPECT_FALSE(error.IsEmpty());
+}
+
+namespace {
+
+// The root object counts, so (limit - 1) arrays under it is the deepest params
+// value that is still read.
+wxString LoginWithArrays(int arrays)
+{
+	std::string text;
+	text.reserve(static_cast<size_t>(arrays) * 2 + 64);
+	text += "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"login\",\"params\":";
+	text.append(static_cast<size_t>(arrays), '[');
+	text.append(static_cast<size_t>(arrays), ']');
+	text += '}';
+	return wxString::FromUTF8(text.data(), text.size());
+}
+
+} // namespace
+
+TEST(RpcMessage,ParseRequest_NestingAtTheLimit_IsRead)
+{
+	ibRpcRequest request;
+	wxString error;
+
+	ASSERT_TRUE(ibRpcParseRequest(LoginWithArrays(ibJsonProvider::kMaxNesting - 1), request, error))
+		<< error.ToStdString();
+	EXPECT_EQ(request.m_method, wxT("login"));
+	EXPECT_EQ(request.m_id.AsInt(), (s64)1);
+}
+
+// ibClientHost::Call parses before it authenticates, and on a refusal writes a
+// JSON-RPC parse error. One array past the ceiling must take that road.
+TEST(RpcMessage,ParseRequest_NestingPastTheLimit_AnswersAParseError)
+{
+	ibRpcRequest request;
+	wxString error;
+
+	ASSERT_FALSE(ibRpcParseRequest(LoginWithArrays(ibJsonProvider::kMaxNesting), request, error));
+	ASSERT_FALSE(error.IsEmpty());
+
+	const wxString answer = ibRpcWriteError(ibDataValue(), ibRpcError::Parse, error);
+	EXPECT_NE(answer.Find(wxT("-32700")), wxNOT_FOUND) << answer.ToStdString();
+	EXPECT_NE(answer.Find(wxT("error")), wxNOT_FOUND);
+}
+
+// N ≈ 5000–6000 of this shape SIGSEGV'd a Linux Debug build (about 12 KB).
+TEST(RpcMessage,ParseRequest_TheReportedCrashDepth_IsAParseError)
+{
+	ibRpcRequest request;
+	wxString error;
+
+	EXPECT_FALSE(ibRpcParseRequest(LoginWithArrays(8000), request, error));
 	EXPECT_FALSE(error.IsEmpty());
 }
 

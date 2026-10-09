@@ -8,6 +8,7 @@
 
 #include <gtest/gtest.h>
 #include <cstring>
+#include <string>
 
 #include "core/serialize/jsonProvider.h"
 #include "backend/backend_exception.h"
@@ -253,4 +254,90 @@ TEST(JsonProvider, EmptyInput_ReturnsFalse) {
 	ibReaderMemory reader(empty);
 	ibDataNode out;
 	EXPECT_FALSE(ibJsonProvider().Read(reader, out));
+}
+
+// ---------------------------------------------------------------------------
+// Nesting. The reader recurses, and a request is parsed before authentication.
+// A few thousand brackets overflow the stack (measured on a Linux Debug build
+// of this reader, N ≈ 5000–6000, about 12 KB). The ceiling is one number, and
+// both containers count: the root object is one, each nested array or object
+// is one more.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+wxMemoryBuffer Text(const std::string& text)
+{
+	wxMemoryBuffer buf;
+	buf.AppendData(text.data(), text.size());
+	return buf;
+}
+
+// A root object whose field "v" is `arrays` nested arrays around the number 1.
+wxMemoryBuffer NestedArrays(int arrays)
+{
+	std::string text;
+	text.reserve(static_cast<size_t>(arrays) * 2 + 16);
+	text += "{\"v\":";
+	text.append(static_cast<size_t>(arrays), '[');
+	text += '1';
+	text.append(static_cast<size_t>(arrays), ']');
+	text += '}';
+	return Text(text);
+}
+
+// `levels` nested objects, the outermost being the root. The innermost field is n = 1.
+wxMemoryBuffer NestedObjects(int levels)
+{
+	std::string text;
+	text.reserve(static_cast<size_t>(levels) * 8);
+	for (int i = 1; i < levels; ++i)
+		text += "{\"c\":";
+	text += "{\"n\":1}";
+	text.append(static_cast<size_t>(levels > 0 ? levels - 1 : 0), '}');
+	return Text(text);
+}
+
+const ibDataValue* InnermostArray(const ibDataNode& node, int arrays)
+{
+	const ibDataValue* v = node.FindField(wxT("v"));
+	for (int i = 0; i < arrays; ++i) {
+		if (v == nullptr || v->Kind() != ibDataKind::Array || v->AsArray().size() != 1)
+			return nullptr;
+		v = &v->AsArray()[0];
+	}
+	return v;
+}
+
+} // namespace
+
+// The deepest legal text is still a value: the leaf is the number that was written.
+TEST(JsonProvider, Nesting_AtTheLimit_IsRead) {
+	// Root plus (limit - 1) arrays is exactly `limit` containers.
+	const int limit = ibJsonProvider::kMaxNesting;
+	const ibDataNode arrays = Parse(NestedArrays(limit - 1));
+	const ibDataValue* leaf = InnermostArray(arrays, limit - 1);
+	ASSERT_NE(leaf, nullptr);
+	EXPECT_EQ(leaf->Kind(), ibDataKind::Number);
+	EXPECT_EQ(leaf->AsInt(), (s64)1);
+
+	const ibDataNode objects = Parse(NestedObjects(limit));
+	const ibDataNode* inner = &objects;
+	for (int i = 1; i < limit; ++i) {
+		inner = inner->FindChild(wxT("c"));
+		ASSERT_NE(inner, nullptr);
+	}
+	EXPECT_EQ(inner->GetValue<s32>(wxT("n")), 1);
+}
+
+// One container past the ceiling is a parse error, not a deeper call.
+TEST(JsonProvider, Nesting_OnePastTheLimit_IsRefused) {
+	const int limit = ibJsonProvider::kMaxNesting;
+	EXPECT_THROW(Parse(NestedArrays(limit)), ibCoreException);
+	EXPECT_THROW(Parse(NestedObjects(limit + 1)), ibCoreException);
+}
+
+// The request that took the application server down: thousands of brackets, a few kilobytes.
+TEST(JsonProvider, Nesting_TheReportedCrashDepth_IsRefused) {
+	EXPECT_THROW(Parse(NestedArrays(8000)), ibCoreException);
 }
