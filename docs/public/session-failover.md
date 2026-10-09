@@ -21,6 +21,11 @@ The form contract in [The form, after a move](#the-form-after-a-move) is the tex
 The forks below are decided. [Stage 1, the change](#stage-1-the-change) is what the first code change
 does, and nothing past it.
 
+Re-checked against upstream `develop` `f8d0c463`. Between `645e82b2` and that commit the only change
+in this area is that a waiting question parks a fiber (open-enterprise-solutions/enterprise#222).
+The socket, the protocol, `sys_session`, the locks and the client were not touched. The decided forks
+are unchanged; the fiber landing is recorded where the plan talks about a pending question.
+
 ## What exists
 
 The chain is core → backend → frmserver ⇄ protocol ⇄ frmclient → enterprise-thin. `fileserver` is the
@@ -189,9 +194,11 @@ server. Questions stay synchronous; the script API does not grow an asynchronous
 ## Stages
 
 Each stage is a later change of its own. The protocol only grows, by the fields and the one method
-below. `ibWorkerPoolHeadless::Await` / `Wake` and `session/workerPool*` stay as they are: a script
-parked on a question keeps waiting on the pool it uses now (`ibClientInstance::OnExit` already
-cancels that wait when the session actually ends).
+below. As of `f8d0c463` a question waits on a fiber, not on an OS thread
+(open-enterprise-solutions/enterprise#222). That landing does not change the fork: these stages still
+do not edit `session/workerPool*`. A script parked on a question keeps waiting on that pool.
+`ibClientInstance::OnExit` still cancels the wait, and it runs only when the session actually ends —
+for a thin client, when the `Resume` window expires, not when the socket drops.
 
 ### 1. The session survives a dropped connection
 
@@ -224,8 +231,10 @@ anything new. The slot lives in the process, on that client. It is not written t
 crash there is nothing to return, and the client does not retry that call on the new server: it
 restores the workplace instead. A write the crashed call had already committed stays committed.
 
-A pending question survives this stage, because the session object does. The resumed frame still
-carries `Request`. The person answers it. The script continues where it waited.
+A pending question survives this stage, because the session object does. The question is a fiber
+parked on the session's worker (`f8d0c463`); the window does not call `OnExit`, so that fiber is not
+cancelled. The resumed frame still carries `Request`. The person answers it. The script continues
+where it waited. The fork is unchanged: stage 1 does not edit `Await` / `Wake`.
 
 `Features` on the login answer lists `resume`. Absent or 0 in `backend.conf` is read as 120, so the
 server that has this code offers the window; an older server does not list it, and the client does
@@ -610,7 +619,8 @@ What that change does, and what it leaves:
   across the reconnect.
 
 Not this change: `restore`, drafts, `resumeUntil`, the lock move and its gap test, an address list,
-the web client's window, the worker pool's `Await` / `Wake`, TLS, and any branch for `fileserver`.
+the web client's window, `session/workerPool*` (the fiber wait already landed in `f8d0c463`; this
+change still does not edit those files), TLS, and any branch for `fileserver`.
 
 ## Where it stops
 
@@ -623,4 +633,5 @@ the web client's window, the worker pool's `Await` / `Wake`, TLS, and any branch
   interrupted is not returned and not replayed.
 - A spreadsheet's unsaved sheet is outside the first cut of the draft.
 - The protocol version stays 2. Existing names and numbers stay. `fileserver` takes the same path.
-- The worker pool's `Await` / `Wake` is untouched.
+- The worker pool's `Await` / `Wake` is the fiber wait that landed in `f8d0c463`. This series does not
+  edit `session/workerPool*`. The decision is unchanged.
