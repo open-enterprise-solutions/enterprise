@@ -160,14 +160,17 @@ wxString ScriptFingerprint(const wxString& substituteRel, const wxString& substi
 	wxTextFile file;
 	EXPECT_TRUE(file.Open(out, wxConvUTF8)) << out.ToStdString();
 	wxString hash;
+	const wxString marker = wxT("kEngineFingerprint[] = \"");
 	for (size_t i = 0; i < file.GetLineCount(); ++i) {
 		const wxString line = file.GetLine(i);
-		const int at = line.Find(wxT("kEngineFingerprint[] = \""));
+		const int at = line.Find(marker);
 		if (at == wxNOT_FOUND)
 			continue;
-		const int from = at + wxString(wxT("kEngineFingerprint[] = \"")).length();
-		const int to = line.Find(wxT("\""), true);
-		hash = line.Mid(from, to - from);
+		const wxString rest = line.Mid(at + marker.length());
+		const int end = rest.Find(wxUniChar('"'));
+		if (end == wxNOT_FOUND)
+			continue;
+		hash = rest.Left(end);
 	}
 	wxRemoveFile(out);
 	return hash;
