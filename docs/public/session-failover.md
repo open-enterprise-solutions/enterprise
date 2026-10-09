@@ -18,6 +18,9 @@ implemented yet.
 The form contract in [The form, after a move](#the-form-after-a-move) is the text that will be added to
 [thin-client.md](thin-client.md), under Forms. It is not added in this step.
 
+The forks below are decided. [Stage 1, the change](#stage-1-the-change) is what the first code change
+does, and nothing past it.
+
 ## What exists
 
 The chain is core → backend → frmserver ⇄ protocol ⇄ frmclient → enterprise-thin. `fileserver` is the
@@ -67,7 +70,7 @@ calls `Modify` on it. The form's own state also carries `Modified` (`ibValueForm
 Created in `ibApplicationInstance::CreateTableSession` (`appDataQuery.cpp`). The primary key is
 `session` (36 characters). Beside it: `userName`, `application`, `started`, `lastActive`, `computer`,
 and, by later migration, `pid`, `address`, `currentActivity`, `kind`, `signal`, `exclusive`. There is
-no token column and no resume deadline.
+no `tokenHash` column and no resume deadline.
 
 The owning process updates `lastActive` every second (`JobHeartbeatOwn`). `JobSweepStale` runs about
 every 3 seconds. A row this process still holds is alive. Any other row whose `lastActive` is older
@@ -158,8 +161,11 @@ not branch on file-versus-server. A file base's address list has one entry, the 
 
 1. **The socket drops, the server stays up.** `Disconnect` → `OnExit` ends the session at once. The
    next call is a new login. A call whose answer was lost, retried, runs a second time. The JSON-RPC
-   id is already monotonic per client (`ibCommunicator::m_lastId` in `communicator.cpp`); the server
-   does not remember it.
+   id lives on one `ibCommunicator` (`m_lastId` in `communicator.cpp`). `Forget` and a second `Login`
+   on that same object do not put it back to 0, so it is monotonic for as long as the object lives.
+   A dropped socket is reported as `NoSession` (`connectionServer.cpp`), `Call` then `Forget`s the
+   frame, and the window closes (`ibFrontendMainFrame::Refused`). Nothing reconnects, and a new
+   communicator would start its ids at 0. The server does not remember the id.
 2. **The server process dies.** The person types the password again. Forms, cursors and unsaved edits
    are in that process and are gone. `Var` in the form module, a script that was running, and a
    question the server was waiting on die with it.
@@ -195,25 +201,35 @@ and the frame cache stay. `RoundBody` does not treat that client as idle: the id
 while a connection is attached (and, as today, to an HTTP client, which has none). When the deadline
 passes with no return, the host calls `OnExit`, and the session closes as it does today.
 
-`login` accepts `Token` and no `User`. The server finds the in-memory client for that token, binds
-the new connection, and answers with the same `Client`. The call may name `Since`. The answer is the
-patch from the frame the client holds, the same rule as any other call. A `login` that still carries
-`User` and `Password` is a new session, as today.
+`login` accepts `Token` and no `User`. There is no `resume` method: one door. The server finds the
+in-memory client for that token, binds the new connection, and answers with the previous `Client`,
+the `Protocol` and the `Features`. It does not draw a frame and it does not change the frame number
+the client was last answered (`Client::frame`, `Client::sent`). The next call is `frame` with
+`Since` set to that number, and the answer is a `Patch`, not a frame sent whole. A `login` that
+still carries `User` is a new session, as today, and that answer still carries the frame.
 
-The server keeps one slot on the client: the JSON-RPC `id` of the last call it answered, and the
-response text it wrote. A request that arrives with that id is answered with the saved text and is
-not run. The slot is filled when the call finishes, including a refusal. A request that is still
-running (the client's `unsettled` future) is waited for, not started again. The client keeps the
-unacked request and sends it again with the same id after it has logged in by token, and only then
-sends anything new. The slot lives in the process, with the session. It is not written to the base.
-After a crash there is nothing to return, and the client does not retry that call on the new server:
-it restores the workplace instead. A write the crashed call had already committed stays committed.
+While the deadline is armed the public `Client` id is not enough to call: Active users already shows
+it. A call that names it is refused with 401 (`NoSession`) until `login` `{Token}` binds a connection
+again. `logout` still ends the session at once.
+
+The server keeps one slot on the client, not one for the process: the JSON-RPC `id` of the last call
+it answered for that session, and the response text it wrote. A request that arrives with that id is
+answered with the saved text and is not run. The slot is filled when the call finishes, including a
+refusal, except a refusal of `NoSession` while the client is detached (the call was not accepted) and
+except `login` `{Token}` itself, which must not replace the slot: the lost call is retried after the
+login, with the same id, and the login's own id is a newer one. A request that is still running is
+waited for, not started again. The client keeps its ids monotonic across the reconnect — the counter
+is not put back to 0 — and sends the unanswered request again with the same id, and only then sends
+anything new. The slot lives in the process, on that client. It is not written to the base. After a
+crash there is nothing to return, and the client does not retry that call on the new server: it
+restores the workplace instead. A write the crashed call had already committed stays committed.
 
 A pending question survives this stage, because the session object does. The resumed frame still
 carries `Request`. The person answers it. The script continues where it waited.
 
-`Features` on the login answer lists `resume` when `Resume` is not 0, so an older client never
-depends on it. The protocol version stays 2.
+`Features` on the login answer lists `resume`. Absent or 0 in `backend.conf` is read as 120, so the
+server that has this code offers the window; an older server does not list it, and the client does
+not depend on it. The protocol version stays 2.
 
 ### 2. A login on another server
 
@@ -225,7 +241,7 @@ accepts a comma-separated list of authorities in front of the base:
 One host, as today, still parses. The client tries the server it last spoke to, then the others,
 until a socket connects. It logs in by itself. No password when it still holds a token.
 
-The token is a column on `sys_session`, so any process that opens the base can see it. When this
+The token's hash is a column on `sys_session`, so any process that opens the base can see it. When this
 process does not hold the in-memory client, and the row's `resumeUntil` is still ahead, `login`
 `{Token}` is accepted. It creates a new session for the same `userName`, without
 `AuthenticationAndSetUser`. The answer's `Client` is the new id. The frame is the new session's
@@ -305,6 +321,11 @@ counts as alive for the sweep, even when `lastActive` is older than 10 seconds. 
 the old id runs only for a session that ended without being adopted. An adopted id has already given
 its rows away, so the delete matches nothing.
 
+The move and the delete of the old row are two steps. Between them no other session may acquire the
+same lock: the rows already name the new session, and the old row is not yet gone, so a third
+session still conflicts with the holder. The test for that window is in
+[Tests](#tests). It is part of stage 5, not of stage 1.
+
 ## Protocol
 
 Names go in `ibProtocolName`. Numbers already assigned stay. `ibProtocolMethodFromName` walks from
@@ -313,7 +334,7 @@ moves with it.
 
 | Addition | Kind | Number / name | On the wire |
 |---|---|---|---|
-| `Token` | field | name `Token` | `login` parameter. Present without `User`: resume. Answer of a password `login`, and of a resume: the token to keep |
+| `Token` | field | name `Token` | `login` parameter. Present without `User`: resume. Answer of a password `login` only: the token, once. A resume does not repeat it — the server no longer has it |
 | `Address` | field | name `Address` | child of a tab. `Object`, `Form`, `Command`, `Type`, `Draft`, as [stage 3](#3-the-workplace-comes-back) |
 | `Current` | field | name `Current` | `restore`: the row's reference (or its key), not the handle |
 | `Focus` | field | name `Focus` | `restore`: `Control`, `Column` |
@@ -321,46 +342,83 @@ moves with it.
 | `resume` | feature | string in `Features` | the server offers stages 1–5. Absent: an older server, the client behaves as today |
 | `restore` | method | 16, name `restore` | `{Client, Tabs}` → the frame. `Tabs`: `Address`, `Current`, `Focus` each. `Active` beside them |
 
-No new refusal code. An unknown or expired token on `login` is 401, the code `login` already uses
-for a refused login. A `restore` with no session is the existing 401 `NoSession`.
+`Presentation` is the last enumerator in `ibProtocolMethod` and its value is 15, so 16 is free.
+`restore` is not added to the enum until stage 3. Stage 1 adds the name `Token` and the feature
+string `resume`, and no method.
 
-`Since` is the existing field. A resume of a live session honours it. A new session answers with the
-frame whole, and the client starts its store again, as a whole frame already requires.
+No new refusal code. An unknown, malformed or expired token on `login` is 401, the code `login`
+already uses for a refused login. A `restore` with no session is the existing 401 `NoSession`.
+
+`Since` is the existing field. `login` `{Token}` does not honour it and does not return a frame.
+The following `frame` `{Since}` does: a patch from the frame the client holds. A new session
+(a password `login`, or stage 2's adopted session) answers with the frame whole, and the client
+starts its store again, as a whole frame already requires.
 
 ## Where the token is stored
 
-A new nullable column `token` on `sys_session`, `ibTypeString(64)`, indexed for the login lookup —
-the width `sys_lock.keyHash` already uses. It is not the session guid. The session guid is
-`Client`, and Active users already shows it (`schema` 2, the `Session` column). The token is 32
-random bytes, written as 64 hex characters, returned at `login` and stored by the client. It is
-not put on the frame and not put in the Active users schema.
+The token is a bearer key. The database stores a hash of it, never the token, and the compare is
+constant-time. The randomness is at least 128 bits from a CSPRNG. Mbed TLS is already in the build;
+the bytes come from its CTR-DRBG (its own personalization, not the field cipher's). Stage 1 draws
+32 bytes (256 bits). The column holds the SHA-256 of those bytes, lowercase hex, 64 characters.
 
-A new nullable column `resumeUntil` (`ibTypeDate`). For a `ThinClient` row, the heartbeat writes
-`now + Resume`. Other kinds leave it null, and the 10-second silence is unchanged for them. A thin
-designer holds the base's exclusive flag; giving it the resume window would keep a dead designer in
-the way. A thin designer still ends on `Disconnect`.
+A new nullable column `tokenHash` on `sys_session`, `ibTypeString(64)`, indexed for the later login
+lookup — the width `sys_lock.keyHash` already uses. It is not the session guid. The session guid is
+`Client`, and Active users already shows it (`schema` 2, the `Session` column). The plaintext token
+is 32 random bytes written as 64 hex characters, returned once, in the password `login` answer, and
+stored by the client. It is not put on the frame, not put in the Active users schema, and not kept
+on the server after that answer is written: the server keeps the digest. A resume therefore does
+not echo `Token`. The presented token is hashed and the digest is compared to the stored digest
+with a constant-time compare (`mbedtls_ct_memcmp`), over every in-memory client, with no early exit
+on a match.
 
-Both columns are added by `MigrateTableSession`, the additive path that table already uses. The
-table is not dropped. Existing rows stay valid: null `token` and null `resumeUntil` mean today's
-sweep.
+While the protocol runs over plain `ws://` (`connectionServer.cpp` — no TLS context is made), anyone
+on the path can read the token. TLS is phase 0 of the data-protection task, and this window is not
+safe until that phase has landed. The hash in the database does not close that hole; it closes the
+one where a copy of the base is a copy of every bearer key.
 
-The in-memory client, while this process holds it, maps the token to the `Client` record. The column
-is what another process reads.
+A new nullable column `resumeUntil` (`ibTypeDate`), added with stage 2, when a peer has to see the
+window. For a `ThinClient` row the heartbeat writes `now + Resume`. Other kinds leave it null, and
+the 10-second silence is unchanged for them. A thin designer holds the base's exclusive flag; giving
+it the resume window would keep a dead designer in the way. A thin designer still ends on
+`Disconnect`. Stage 1's window is the host's own deadline. It does not need the column: this process
+still holds the row, and the sweep skips a row it holds.
+
+`tokenHash` is added by `MigrateTableSession`, the additive path that table already uses, and by
+`CreateTableSession` for a base made after this change. `resumeUntil` follows in stage 2, the same
+way. The table is not dropped. Existing rows stay valid: null `tokenHash` means no resume, and until
+`resumeUntil` exists the 10-second silence is unchanged for a peer.
+
+The in-memory client, while this process holds it, keeps the digest. The column is what another
+process reads in stage 2.
 
 ## Draft format
 
-A new table `sys_draft`, created beside `sys_settings` (the same startup path as `sys_lock`). The
-primary key is one column, as that table's is: a hash, because the renderer spells `PRIMARY KEY` per
-column.
+A new table `sys_draft`, created beside `sys_settings` (the same startup path as `sys_lock`). It is
+a new system table, so a base that already exists needs a migration on startup, the same additive
+kind `sys_session` uses — a create when the table is absent, not a drop. The primary key is one
+column, as `sys_settings`'s is: a hash, because the renderer spells `PRIMARY KEY` per column.
+
+The draft carries personal data. It is written and read through the same column-codec door as
+regular data (the parallel data-protection task). It does not grow a second cipher, and it is not
+left as plaintext beside data that door already seals. TLS for the socket is phase 0 of that task;
+the draft's column is the same phase as the object's own columns.
 
 | Column | Holds |
 |---|---|
-| `draftKey` | SHA-256 hex of `token` plus the address. Primary key |
-| `token` | the session token. The drafts survive a new session id; the index serves "every draft of this token" |
+| `draftKey` | SHA-256 hex of the user, the object and the form. Primary key. One draft of that form of that object for that user |
+| `userGuid` | the user. With the object and the form, the key |
+| `session` | the session that wrote it. Not part of the key: a new session of the same user still finds the draft. The sweep uses it to find orphans |
 | `address` | the readable address: object guid + form guid, or the `Draft` id of a new object |
 | `changed` | when it was written |
 | `dataSize` | the blob's length |
-| `binaryData` | the node, through `ibBinaryProvider` |
+| `binaryData` | the node, through `ibBinaryProvider`, sealed by the column codec |
+
+The key is the user, the object and the form — not the token and not the session id. Writing or
+saving the object deletes the draft, in the same success path as `SaveData`. Closing the form
+deletes it too, whether or not the person saved. An orphan is a draft whose session is gone and
+whose form was not closed (the process died inside the window, and nobody adopted the session).
+The sweep that drops an expired session deletes the drafts that name it. A draft whose session row
+is still alive, including one inside `resumeUntil`, is left for the resume.
 
 The node:
 
@@ -386,79 +444,77 @@ that reader: **120**. An explicit off is a follow-up only if a deployment must k
 immediate logout; the plan does not add a second key. 120 is the starting value the measurement
 below is meant to confirm or replace.
 
-The same number is the host's deadline after `Disconnect` and the `resumeUntil` offset on the
-heartbeat. One window, both roads: the process is alive but the socket is gone, or the process is
-gone and a peer is sweeping.
+The same number is the host's deadline after `Disconnect` and, from stage 2, the `resumeUntil`
+offset on the heartbeat. One window, both roads: the process is alive but the socket is gone, or
+the process is gone and a peer is sweeping.
+
+The window is the thin client's. A thin designer still ends on `Disconnect`. The web client behind
+the future gateway gets the same window when that gateway exists. That case is not built now: no
+web-client session is armed, and stage 1 does not grow a second kind.
 
 ## A file base, again
 
-No branch. `Disconnect` on a file base runs when the in-process listener is closed, which is the
-process going away, and the host's deadline then does not matter. A new process that opens the file
-inside `resumeUntil` takes the token, the locks, the files and the drafts by the same adopt path a
-standby server uses. There is no second server to list.
+No branch. Closing a file base destroys the host (`ibFileBaseClose` resets it). The destructor
+calls `OnExit` on every client still held, including one whose resume deadline has not passed, so
+the window does not outlive the process. `Disconnect` is the dropped socket, not that close.
+A new process that opens the file inside `resumeUntil` takes the token, the locks, the files and
+the drafts by the same adopt path a standby server uses. There is no second server to list.
 
-## Open forks
+## Decisions
 
-1. **Token versus reusing `Client`.** `Client` is already in `sys_session.session` and already shown
-   as Active users' `Session`. Using it as the secret would let anyone who can see that schema resume
-   the session. **Recommendation:** a separate `token` column, never displayed. `Client` stays the
-   public session id.
+These were the open forks. Each one is decided as it was proposed, with the refinements written into
+the sections above.
 
-2. **Where idempotency lives.** The saved reply can sit in the process, or in the base so another
-   server can return it. **Recommendation:** one slot in the process, keyed by the JSON-RPC `id` the
-   client already sends. Cluster-wide exactly-once is a different problem: a call that crashed
-   mid-write may have committed, and replaying it is what this plan refuses. On a new server the
-   client does not resend the in-flight call.
+1. **Token versus reusing `Client`.** A separate column, never displayed. `Client` stays the public
+   session id. The column stores the hash, not the token. The compare is constant-time. The bytes
+   are at least 128 bits from Mbed TLS's CTR-DRBG. Plain `ws://` can carry the token to anyone on
+   the path until TLS, phase 0 of the data-protection task.
 
-3. **`login` `{Token}` versus a `resume` method.** **Recommendation:** a field on `login`. The
-   session either is the one this process holds, or is a new one that adopted the row. The answer's
-   `Client` says which: the same id means the live form (stage 1, honour `Since`); a new id means
-   call `restore`. A second method would duplicate login's answer (the frame, the version, the
-   features).
+2. **Where idempotency lives.** One slot in the process, on the client, keyed by the JSON-RPC `id`.
+   Not one slot for the process. Cluster-wide exactly-once is a different problem: a call that
+   crashed mid-write may have committed, and replaying it is what this plan refuses. On a new server
+   the client does not resend the in-flight call. The client's ids are monotonic across reconnects,
+   so the lost call is retried with the same id. They are not, today: see
+   [What a failure loses](#what-a-failure-loses).
 
-4. **How long a dead row lives.** Stretching the 10-second silence for every session would hold a
-   dead designer and a dead exclusive flag for the whole window. **Recommendation:** `resumeUntil`
-   on `ThinClient` rows only. `JobSweepStale` treats " `resumeUntil` still ahead" as alive, and
-   otherwise keeps the 10-second rule. `SettleSilentPeers` stays on `lastActive`, and a thin designer
-   never sets `resumeUntil`.
+3. **`login` `{Token}` versus a `resume` method.** A field on `login`. One door. The answer's
+   `Client` says which session: the same id means the live form. That answer does not carry the
+   frame. The next `frame` `{Since}` is the patch. A new id (stage 2) means call `restore`.
 
-5. **Who wins when two servers accept one token.** **Recommendation:** the adopt deletes the old
-   row after moving locks and files. The process that still holds the memory closes the session when
-   its heartbeat finds the row gone. The client tries the last server first, so this is the crash
-   path, not the ordinary blip.
+4. **How long a dead row lives.** `Resume` in `backend.conf`, 120 seconds, `ThinClient` only. A thin
+   designer ends on `Disconnect`. `resumeUntil` on those rows, and `JobSweepStale` treating
+   "`resumeUntil` still ahead" as alive, land with stage 2. The web client behind the future
+   gateway gets the same window. It is not built now.
 
-6. **What a draft includes.** The whole form, including `Var` and the control tree, would restore a
-   COM object, a connection or a lambda, and would be a second copy of the frame. **Recommendation:**
-   object attributes, tabular sections, and transferable form attributes, through `DoSerialize`.
-   `Var` is started again by `OnCreate`. The frame on the client is not applied back.
+5. **Who wins when two servers accept one token.** The adopt deletes the old row after moving locks
+   and files. The process that still holds the memory closes the session when its heartbeat finds
+   the row gone. The client tries the last server first, so this is the crash path, not the
+   ordinary blip.
 
-7. **When the draft is written.** Every settled call on a modified form, including `Input` (the
-   object is marked modified before the text is committed) and including `Focus` / `Row`.
-   **Recommendation:** write when the serialized node differs from the stored draft, after a settled
-   call with no question pending. `Input` that has not changed a committed value does not change the
-   node, so it does not write. Not a timer, and not a write per keystroke of an identical value.
+6. **What a draft includes.** Object attributes, tabular sections, and transferable form attributes,
+   through `DoSerialize`. `Var` is started again by `OnCreate`. The frame on the client is not
+   applied back.
 
-8. **Spreadsheets and texts.** Stage 4 is specified for a form's object and its attributes. A
-   sheet's unsaved edit is the sheet node the server already stores on the document.
-   **Recommendation:** object forms in the first cut of stage 4. A sheet can use the same
+7. **When the draft is written.** When the serialized node differs from the stored draft, after a
+   settled call with no question pending, and only when the form is modified and the data changed.
+   Not a timer, and not a write per keystroke of an identical value.
+
+8. **Spreadsheets and texts.** Object forms in the first cut of stage 4. A sheet can use the same
    `sys_draft` blob later, the spreadsheet's existing node, without a new table. Until then a
    spreadsheet reopened from its temporary file comes back as last saved to that file.
 
-9. **The row sent to `restore`.** The handle is process-local. **Recommendation:** the reference
-   value (or the key fields). The control id is stable for a control the form definition numbered.
+9. **The row sent to `restore`.** The reference value (or the key fields), not the view's row
+   handle. The control id is stable for a control the form definition numbered. Method number 16,
+   checked free against `protocol.h` (`Presentation` is 15). The enumerator is added in stage 3.
 
-10. **Redacting the token in the debug journal.** The protocol journal logs the request text, and
-    today that text contains `Password` (`communicator.cpp`). The macro is empty in a release build.
-    **Recommendation:** when stage 1 touches that line, redact `Password` and `Token` in the debug
-    line. Not a new mechanism; the release build already keeps the wire out of the journal.
+10. **Redacting the token in the debug journal.** When stage 1 touches that line, redact `Password`
+    and `Token` in the debug line. The macro is empty in a release build.
 
-11. **`Resume=0`.** The conf reader treats 0 as "use the default". **Recommendation:** absent means
-    120, via that reader. Do not overload 0 as "off" unless a later change adds an explicit key. The
-    window is the behaviour.
+11. **`Resume=0`.** Absent means 120, via the reader that treats 0 as the default. 0 is not "off".
 
 12. **Startup on the adopted session.** The new session runs the application's start, including the
-    start page, and then `restore` opens the person's tabs. **Recommendation:** do not skip the
-    start. It is a login. The start page is the locked tab; the restored tabs follow it.
+    start page, and then `restore` opens the person's tabs. The start page is the locked tab; the
+    restored tabs follow it.
 
 ## Measurement
 
@@ -486,13 +542,20 @@ is answered with). The two-process cases use one base and two server instances. 
 cases that need only one process; it is not a separate code path.
 
 - **Drop and return by token.** Close the socket. The `sys_session` row and the in-memory client
-  remain. `login` `{Token, Since}` returns the same `Client` and a patch that applies
-  (`ClientFrameApply`'s rule). An open modified form is still the same object.
+  remain, and `tokenHash` is the SHA-256 of the token, not the token. A call that names `Client`
+  while the window is open is 401. `login` `{Token}` returns the same `Client` and no frame. The
+  next `frame` `{Since}` returns a `Patch`, not a frame sent whole (`ClientFrameApply`'s rule). An
+  open modified form is still the same object.
 - **A lost call is not executed twice.** A call that increments a counter finishes on the server; the
   response is discarded. The same JSON-RPC `id` is sent again and the saved response is returned. The
-  counter is 1. A new id increments it.
+  counter is 1. A new id increments it. The counter stage 1 can see without a script is the frame
+  number: a repeated id does not draw another frame.
+- **The client's ids across a reconnect.** A dropped exchange is resumed on the same communicator.
+  The unanswered request is sent again with its id. The `login` `{Token}` that precedes it takes a
+  newer id. The counter is not put back to 0.
 - **The window expires.** After `Resume` seconds with no return, the row is gone and `login`
-  `{Token}` is 401. Locks of that session are gone with the sweep.
+  `{Token}` is 401. The session has been closed as it is today. Locks of that session are gone with
+  the sweep.
 - **Tabs reopen on another instance of the same base.** Two processes. The first dies (or its row is
   the one the second adopts). `login` `{Token}` on the second returns a new `Client`. `restore` with
   the stored addresses opens the forms. `OnCreate` has run (the test's handler sets a field the
@@ -504,6 +567,50 @@ cases that need only one process; it is not a separate code path.
 - **Locks move.** The first session holds a record. It dies. The second logs in by token. Before the
   10-second sweep, `sys_lock.sessionGuid` is the new session, and that session opens the record. A
   third session still conflicts.
+- **The gap between the move and the delete.** Locks and files are updated to the new session, and
+  the old row is not deleted yet. A third session that acquires the same record in that window is
+  refused. The row then goes. Nobody else became the holder in between.
+
+## Stage 1, the change
+
+Stage 1 is its own change, on its own branch from `develop`, not on this document's branch: the
+document and the code are different concerns, and the code does not wait on this file to merge.
+What that change does, and what it leaves:
+
+- The name `Token` and the feature string `resume` in `protocol.h`. No new method. `restore` stays
+  unnumbered; 16 stays free.
+- `sys_session.tokenHash`, nullable `ibTypeString(64)`, in `CreateTableSession` and
+  `MigrateTableSession`, indexed. Not `resumeUntil` — that column and the sweep's reading of it are
+  stage 2.
+- On a password `login`, 32 bytes from Mbed TLS CTR-DRBG. SHA-256 of those bytes, hex, written to
+  `tokenHash`. The plaintext hex is only in that answer. The server keeps the digest. A presented
+  token is hashed and compared with `mbedtls_ct_memcmp` against every in-memory digest.
+- `backend.conf` key `Resume`, seconds. Absent or 0 means 120 (`ReadCount`). Thin client only.
+- `Disconnect` of a `ThinClient` clears the connection and the notifier and arms `now + Resume`. It
+  does not call `OnExit`. A thin designer, and any other kind, still ends at once. The host's
+  destructor still ends every client, so a file base's close does. `logout` stays immediate.
+  `RoundBody` does not apply the 30-minute idle limit while the deadline is armed, and calls
+  `OnExit` when the deadline passes.
+- While the deadline is armed, a call that names `Client` is 401. `login` `{Token}` with no `User`
+  binds the new connection, clears the deadline, and returns the same `Client`, `Protocol` and
+  `Features`. No frame, and `Client::frame` is unchanged. An unknown, malformed or expired token is
+  401; an expired client still in memory is closed. A password `login` is a new session and still
+  returns the frame, plus `Token` and `Features` listing `resume`.
+- The next `frame` `{Since}` is the patch path that already exists.
+- One slot on the client: the last answered JSON-RPC id and its response text, not replaced by
+  `login` `{Token}`, not stored for a detached `NoSession`. The same id is returned and not run. An
+  id still in flight is waited for.
+- The communicator keeps `m_lastId` across `Forget` and across a new login on the same object. On a
+  transport failure, when the server offered `resume` and the client holds a token, it opens the
+  socket again, sends `login` `{Token}` under a new id, and sends the unanswered request again under
+  its original id. The frame and `Since` stay. A refused token login is the session gone: the window
+  closes as it does today. `Password` and `Token` are redacted in the debug journal line.
+- The tests next to `tests/test_clientFrameApply.cpp`: drop and return by token; a lost call retried
+  is not executed twice; an expired window closes the session; the client's ids stay monotonic
+  across the reconnect.
+
+Not this change: `restore`, drafts, `resumeUntil`, the lock move and its gap test, an address list,
+the web client's window, the worker pool's `Await` / `Wake`, TLS, and any branch for `fileserver`.
 
 ## Where it stops
 
