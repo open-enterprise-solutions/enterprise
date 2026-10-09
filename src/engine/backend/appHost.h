@@ -63,7 +63,11 @@ public:
 	std::size_t      GetDefaultConnections() const;
 
 	// How many client connections the application server will hold at once — backend.conf
-	// (ClientConnections), else 1000. Each one keeps a thread until the network core is asynchronous.
+	// (ClientConnections). Left out, or 0, that is kDefaultClientConnections, not "no limit".
+	// Above kMostClientConnections the most is used, and the journal says so. Each one keeps a
+	// thread until the network core is asynchronous.
+	static constexpr std::size_t kDefaultClientConnections = 1000;
+	static constexpr std::size_t kMostClientConnections    = 10000;
 	std::size_t      GetClientConnections() const { return m_configClientConnections; }
 	ibHelpService*   GetHelpService() const   { return m_helpService.get(); }
 	wxString         GetLocale() const        { return m_locale.GetCanonicalName(); }
@@ -74,9 +78,10 @@ public:
 	bool InitLocale(const wxString& locale);
 
 	// A count from a settings file — backend.conf, a base's infobase.conf: left out or 0 means the default, and
-	// one below `least` is said in the journal and the default is used.
+	// one below `least` is said in the journal and the default is used. `most` of 0 is no ceiling; a number
+	// above `most` is said and `most` is used.
 	static std::size_t ReadCount(const class wxConfigBase& conf, const wxString& file, const wxString& key, long least,
-		std::size_t byDefault);
+		std::size_t byDefault, std::size_t most = 0);
 
 private:
 
@@ -122,12 +127,13 @@ private:
 
 	// backend.conf — read once for the process: the locale, how much the process may consume, and the default
 	// a base's own infobase.conf overrides (Workers and Bases: the most there may be, 0 = no limit; Connections 0 =
-	// the built-in value). ClientConnections is the application server's own ceiling, 1000 when left out.
+	// the built-in value). ClientConnections is the application server's own ceiling: 0 means
+	// kDefaultClientConnections, and a number above kMostClientConnections is that most.
 	wxString    m_configLocale;
 	std::size_t m_configWorkers            = 0;
 	std::size_t m_configBases              = 0;
 	std::size_t m_configConnections        = 0;
-	std::size_t m_configClientConnections  = 1000;
+	std::size_t m_configClientConnections  = kDefaultClientConnections;
 
 	wxLocale m_locale;
 	int      m_localeLang;

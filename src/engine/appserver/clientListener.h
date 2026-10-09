@@ -41,4 +41,9 @@ private:
 	std::thread               m_thread;
 };
 
+// The next `count` client threads are refused as the operating system would refuse to create them.
+// The listener answers false and the socket is closed, instead of the exception leaving the accept loop.
+// The server does not call this; a test does, after Start, so the base threads are already there.
+void ibClientListenerFailNextThreads(unsigned count);
+
 #endif
