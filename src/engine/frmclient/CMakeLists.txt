@@ -13,10 +13,28 @@ file(GLOB_RECURSE FRMCLIENT_SOURCES CONFIGURE_DEPENDS
 
 add_library(frmclient SHARED ${FRMCLIENT_SOURCES})
 
+# The FORKED widget layer compiles quiet — frontend's rule, for the same forks copied here (win/ctrls: wx's dataview,
+# grid, treelistctrl; win/theme: wxAUI dock art). frontend/CMakeLists.txt has the why and the limit: this reaches the
+# .cpp only, a vendored header silences itself with `#pragma GCC system_header`.
+set(FRMCLIENT_VENDORED_SOURCES ${FRMCLIENT_SOURCES})
+list(FILTER FRMCLIENT_VENDORED_SOURCES INCLUDE REGEX "/(win/ctrls|win/theme)/")
+
+if(FRMCLIENT_VENDORED_SOURCES)
+    if(MSVC)
+        set_source_files_properties(${FRMCLIENT_VENDORED_SOURCES} PROPERTIES COMPILE_OPTIONS "/W0")
+    else()
+        set_source_files_properties(${FRMCLIENT_VENDORED_SOURCES} PROPERTIES COMPILE_OPTIONS "-w")
+    endif()
+endif()
+
 target_include_directories(frmclient
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${CMAKE_SOURCE_DIR}/src/engine
+        # win/theme/luna_dockart.cpp is a fork of wxAUI's dock art and reaches into wx's
+        # GTK-private headers, which include <gtk/gtk.h> outright. wx links GTK privately,
+        # so those paths never arrive through wx::core. Empty off Linux, hence unguarded.
+        ${GTK3_INCLUDE_DIRS}
 )
 
 target_compile_definitions(frmclient
