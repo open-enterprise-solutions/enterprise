@@ -9,7 +9,11 @@
 
 #include <gtest/gtest.h>
 
+#include <wx/init.h>
+
 #include "core/fiber/fiberLocals.h"
+#include "backend/appData.h"
+#include "backend/appHost.h"
 #include "backend/databaseLayer/connectionPool.h"   // ThreadHolder — the holder a parked session must keep to itself
 #include "backend/session/session.h"
 #include "backend/session/workerPoolHeadless.h"
@@ -54,6 +58,29 @@ std::shared_ptr<ibSession> MakeSession(const wxString& id)
 {
 	return std::make_shared<ibSession>(id, ibSessionKind::Designer);
 }
+
+// ibSession::Current() answers "no session" while the process holds no base — the gate for bootstrap and
+// teardown — before it reads any binding, so a test that asks it opens one, as every pool in the engine has by
+// the time it runs a task. Closed again unless it was already there.
+class ibBaseForTest {
+public:
+	ibBaseForTest()
+	{
+		if (m_wxInit.IsOk() && ibApplicationHost::IsEmpty()) {
+			ibApplicationInstance::CreateAppDataEnv(ibRunMode::eFILE_MODE);
+			m_owns = !ibApplicationHost::IsEmpty();   // a base that opened half-way is still ours to close
+		}
+	}
+	~ibBaseForTest()
+	{
+		if (m_owns)
+			ibApplicationInstance::DestroyAppDataEnv();
+	}
+	bool IsOpen() const { return !ibApplicationHost::IsEmpty(); }
+private:
+	wxInitializer m_wxInit;
+	bool          m_owns = false;
+};
 
 void MarkRunning(ibSession& session)
 {
@@ -384,6 +411,10 @@ TEST(WorkerPoolFiber, TaskExceptionReachesTheFuture)
 
 TEST(WorkerPoolFiber, ASessionUnderAParkedOneIsItself)
 {
+	// Declared before the pool, so it closes after the pool has stopped.
+	ibBaseForTest base;
+	ASSERT_TRUE(base.IsOpen()) << "no base to ask: Current() would say null for every session";
+
 	ibWorkerPoolHeadless pool(1);
 	auto first = MakeSession(wxT("current-a"));
 	auto second = MakeSession(wxT("current-b"));
