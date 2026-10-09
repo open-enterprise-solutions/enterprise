@@ -87,6 +87,8 @@ bool ibCommunicator::Login(const wxString& user, const wxString& password, ibPro
 		.SetValue(ibProtocolName::Password, password)
 		.SetValue(ibProtocolName::Mode, static_cast<int>(mode))
 		.SetValue(ibProtocolName::Protocol, ibProtocolVersion);
+	// Opt into the slot. A server that does not offer `resume` ignores it.
+	params.AddItem(ibProtocolName::Features, wxString::FromUTF8(ibProtocolName::FeatureResume));
 	if (!CallLocked(ibProtocolMethod::Login, params, result, refusal, error))
 		return false;
 

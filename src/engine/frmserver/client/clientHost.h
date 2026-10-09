@@ -89,11 +89,14 @@ private:
 		// One call of a client at a time: a call that leaves its work waiting for a response has returned by
 		// then, so the call carrying the response gets in.
 		std::mutex                        lock;
-		// The last call this client answered — its JSON-RPC id and the text written back, including a refusal.
-		// One slot for this client, not for the process. A login by token does not replace it: the lost call is
-		// retried after that login, with the same id. Under `lock`.
+		// The last call this client answered, and only when it opted in (`dedupe`). The id, a digest of the
+		// method and the params, and the text written back, including a refusal. One slot for this client.
+		// A login by token does not replace it. Under `lock`. `working` is set by the call that owns the slot
+		// and cleared only by that call.
+		bool                              dedupe = false;
 		bool                              hasReply = false;
 		ibDataValue                       replyId;
+		unsigned char                     replyDigest[32] = {};
 		wxString                          reply;
 		bool                              working = false;
 		ibDataValue                       workingId;

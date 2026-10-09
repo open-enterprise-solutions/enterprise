@@ -5,6 +5,7 @@
 #include "backend/backend_exception.h"
 
 #include "backend/session/sessionRegistry.h"
+#include "core/diagnostics/journal.h"
 
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -316,7 +317,13 @@ void ibApplicationInstance::MigrateTableSession()
 			ibDatabaseQueryBuilder q;
 			q.Execute(ibCreateIndex(session_table, wxT("session_index_4"), { wxT("tokenHash") }));
 		}
-		catch (...) { /* the index may already exist, or this driver refused it — lookup does not require it */ }
+		catch (const ibCoreException& err) {
+			// The column is enough to resume. The index is only the lookup, and a driver that refuses it is said.
+			ibJournalWarning(wxT("engine"), wxT("sys_session tokenHash index was not created: %s"), err.GetErrorDescription());
+		}
+		catch (...) {
+			ibJournalWarning(wxT("engine"), wxT("sys_session tokenHash index was not created"));
+		}
 	}
 
 	// NO BACK-FILL FOR THE ROWS. A column added to a populated table arrives NULL everywhere, which

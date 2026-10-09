@@ -20,8 +20,10 @@ is never renumbered.
 | In process: `ibClientHost::Call(method, params, result, refusal, error)` | the client's own process | a file base; the assistant's MCP tool (`client_call`) |
 
 The address is `oes://server[:port]/<base>`; the port is 7373 unless the server's `server.conf` says otherwise. A
-file base needs no server: the client opens it itself and makes the same calls in process. Clients logged in over a
-WebSocket go when it closes.
+file base needs no server: the client opens it itself and makes the same calls in process. A thin designer's
+WebSocket, and a thin runtime's when `backend.conf` `Resume` is 0, ends its session when it closes. A thin runtime
+with the window on (left out, 120 seconds; 0 is off; never more than 30 minutes) keeps the session that long, and
+comes back with `login` `{Token}`.
 
 A WebSocket opened with `?compress=deflate` gets every answer of 1 KB and more as a binary message: the JSON, raw
 deflate (RFC 1951 — a browser's `DecompressionStream("deflate-raw")`). A text message is the JSON as it is.
@@ -30,7 +32,8 @@ deflate (RFC 1951 — a browser's `DecompressionStream("deflate-raw")`). A text 
 
 | Method | Parameters | Answer |
 |---|---|---|
-| `login` | `User`, `Password`, `Mode` (1 runtime — the default, 2 designer), `Protocol` (the newest version the client speaks, 1 if absent) | `Client`, `Protocol` (the version both speak), `Features` (what the server offers beyond it — none yet), and the frame |
+| `login` | `User`, `Password`, `Mode` (1 runtime — the default, 2 designer), `Protocol` (the newest version the client speaks, 1 if absent), `Features` (what this client accepts; `resume` opts into the slot below) | `Client`, `Protocol` (the version both speak), `Features` (what the server offers; `resume` when a dropped thin runtime is kept), `Token` (that runtime only, once), and the frame |
+| `login` | `Token` and no `User`, only while that client is detached | the same `Client`, `Protocol`, `Features`, and no frame and no new `Token`. The next `frame` `{Since}` is the patch |
 | `logout` | `Client` | — |
 | `frame` | `Client` | the frame |
 | `schema` | `Client`, `Schema` | what the schema shows |
@@ -207,6 +210,36 @@ A client's session is a thin client in the runtime and a designer in the designe
 Active users shows both columns: the application (Runtime, Designer, Application server, …) and the kind (Thin client,
 Client, Server, Job).
 
+## A dropped connection
+
+`backend.conf` key `Resume`, seconds. Absent is 120. 0 is off: the drop ends the session, its locks and its seat at
+once. A value above 30 minutes is 30 minutes. The window is a thin runtime that logged in on a WebSocket. A designer,
+an HTTP client, and `Resume` 0 get no `Token` and no `resume` feature.
+
+While the window is armed, a call that names `Client` is 401. `login` `{Token}` binds the new socket and returns the
+same `Client` and no frame. The next `frame` `{Since}` is the patch. A token presented while the client is still
+attached is 401 and does not move the session. An unknown, malformed or expired token is 401. While attached, a
+WebSocket call whose connection is not the one that logged in is 401, including one that repeats the last id.
+
+`Token` is 32 bytes from a CSPRNG, returned once, on the password `login`. The server stores SHA-256 of it and
+compares that digest in constant time. The answer of `login` `{Token}` does not carry a new token.
+
+### The slot
+
+Only a client that named `resume` in `login`'s `Features`, and only when the server offers the window.
+
+- **Stored:** the JSON-RPC id, SHA-256 of the method and the params, and the response text (a result or a refusal).
+  One slot on that client. Not written to the base. Not replaced by `login` `{Token}`.
+- **Keyed by** the client and that id.
+- **Cleared** when a newer id is answered (the slot then holds that call), and when the session ends. A detached
+  401 is not stored.
+- **Same id, same method and params:** the stored text is returned and the call is not run.
+- **Same id, different method or params:** 400, not run, and the stored text stays.
+- **An id lower than the last one answered:** 400, not run.
+- **A notification** (no id) is never deduplicated.
+- A client has one outstanding call. Ids are unique and increasing across reconnects; the counter is not put back
+  to 0. The lost call is sent again under its original id, after `login` `{Token}` under a newer id.
+
 ## Refusals
 
 A refused call is a JSON-RPC error: `code` says why — a client branches on it — and `message` says it to a person.
@@ -216,7 +249,7 @@ are HTTP's by meaning; where two reasons share one, the method tells them apart.
 | Code | Why |
 |---|---|
 | 400 | a parameter missing or malformed |
-| 401 | `login`: the user or the password; any other call: no such client, or its session is gone — log in anew |
+| 401 | `login`: the user, the password, or a token that is unknown, expired, or presented while the client is still attached. Any other call: no such client, a session that is gone, a detached client, or a connection that is not the one logged in — log in anew |
 | 403 | no right to it; `login`: the application refused to start |
 | 404 | no such schema, command, item, tab, file, part or request |
 | 409 | not now: the active document does not take the command |
@@ -239,7 +272,9 @@ session included.
 
 ## Where it stops
 
-- A call is answered once; a call repeated after a dropped connection is done again — the dropped socket ends its
-  clients anyway.
+- A call is answered once. A client that did not name `resume` in `login`'s `Features`, and a session with no
+  window, runs a repeated call again. A dropped socket with the window off, or a designer's, ends its session.
+- HTTP `POST` is not bound to a connection. The `Client` id remains its bearer. The window and the token are not
+  offered there.
 - A file travels in base64 inside JSON.
 - The platform's own captions are in the server's language, not the session's.

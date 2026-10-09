@@ -4,6 +4,7 @@
 #include <chrono>
 #include <functional>
 #include <set>
+#include <string>
 #include <vector>
 
 #include <cstring>
@@ -23,6 +24,7 @@
 #include "backend/session/session.h"
 #include "backend/temp/tempStorage.h"   // the client's files
 #include "backend/utils/sessionToken.h"
+#include "backend/utils/sha256.hpp"
 
 #include "frmserver/docView/docManager.h"   // ibDocTemplate — what opens a file
 #include "frmserver/visualView/visualHost.h"
@@ -59,6 +61,102 @@ bool IsThinClient(const ibClientInstance& instance)
 {
 	const std::shared_ptr<ibSession> session = instance.ShareSession();
 	return session != nullptr && session->GetKind() == ibSessionKind::ThinClient;
+}
+
+// A socket to come back to, and a window that is on. An HTTP login has no connection, a designer is not kept,
+// and Resume 0 drops the session at once — none of those is handed a token.
+bool WindowFor(const void* connection, const ibClientInstance& instance)
+{
+	return connection != nullptr && IsThinClient(instance) && ResumeWindowMs() > 0;
+}
+
+// The public Client id is not the bearer of an attached socket. A detached client is reached by login {Token}
+// only. An HTTP client (no connection, and so no window) is unchanged.
+bool MayCall(const void* bound, std::int64_t deadline, const void* connection)
+{
+	if (deadline != 0)
+		return false;
+	if (bound == nullptr)
+		return true;
+	return bound == connection;
+}
+
+bool AskedResume(const ibDataNode& params)
+{
+	const ibDataValue* features = params.FindField(wxString::FromUTF8(ibProtocolName::Features));
+	if (features == nullptr || features->Kind() != ibDataKind::Array)
+		return false;
+	const wxString resume = wxString::FromUTF8(ibProtocolName::FeatureResume);
+	for (const ibDataValue& item : features->AsArray()) {
+		if (item.Kind() == ibDataKind::String && item.AsString() == resume)
+			return true;
+	}
+	return false;
+}
+
+void FeedText(ibSHA256& sha, const wxString& text);
+void FeedValue(ibSHA256& sha, const ibDataValue& value);
+
+void FeedNode(ibSHA256& sha, const ibDataNode& node)
+{
+	for (const auto& field : node.Fields()) {
+		FeedText(sha, field.first);
+		FeedValue(sha, field.second);
+	}
+}
+
+// utf8_str() does not own its bytes. Copy them out of the wxString before it dies.
+void FeedText(ibSHA256& sha, const wxString& text)
+{
+	const std::string utf(text.utf8_str());
+	if (!utf.empty())
+		sha.Update(reinterpret_cast<const unsigned char*>(utf.data()), utf.size());
+}
+
+void FeedValue(ibSHA256& sha, const ibDataValue& value)
+{
+	const unsigned char kind = static_cast<unsigned char>(value.Kind());
+	sha.Update(&kind, 1);
+	switch (value.Kind()) {
+	case ibDataKind::Bool: {
+		const unsigned char bit = value.AsBool() ? 1 : 0;
+		sha.Update(&bit, 1);
+		break;
+	}
+	case ibDataKind::Number:
+		FeedText(sha, value.AsNumber().ToString());
+		break;
+	case ibDataKind::String:
+		FeedText(sha, value.AsString());
+		break;
+	case ibDataKind::Array:
+		for (const ibDataValue& item : value.AsArray())
+			FeedValue(sha, item);
+		break;
+	case ibDataKind::Child:
+		if (value.AsChild())
+			FeedNode(sha, *value.AsChild());
+		break;
+	default:
+		break;
+	}
+}
+
+void CallDigest(const wxString& method, const ibDataNode& params, unsigned char out[32])
+{
+	ibSHA256 sha;
+	FeedText(sha, method);
+	FeedNode(sha, params);
+	sha.Final(out);
+}
+
+bool IdLess(const ibDataValue& left, const ibDataValue& right)
+{
+	if (left.Kind() == ibDataKind::Number && right.Kind() == ibDataKind::Number)
+		return left.AsNumber().Compare(right.AsNumber()) < 0;
+	if (left.Kind() == ibDataKind::String && right.Kind() == ibDataKind::String)
+		return left.AsString() < right.AsString();
+	return false;
 }
 
 void OfferResume(ibDataNode& result, const wxString& id, int protocol, const wxString& token)
@@ -239,7 +337,13 @@ bool ibClientHost::ResumeByToken(const ibDataNode& params, ibDataNode& result, i
 			return false;
 		}
 		const std::int64_t deadline = client->resumeDeadlineMs.load(std::memory_order_acquire);
-		if (deadline != 0 && NowMs() >= deadline)
+		// Attached: the token must not move the session onto another socket. Only the window (deadline set,
+		// and not yet passed) rebinds. An expired window closes the client below.
+		if (deadline == 0) {
+			refuse(wxT("the login was refused"));
+			return false;
+		}
+		if (NowMs() >= deadline)
 			expired = true;
 		else {
 			client->connection = connection;
@@ -331,7 +435,7 @@ void ibClientHost::Disconnect(const void* connection)
 	std::vector<Held> held;
 	held.reserve(matched.size());
 	for (const std::shared_ptr<Client>& client : matched)
-		held.push_back(Held{ client, IsThinClient(*client->instance) });
+		held.push_back(Held{ client, WindowFor(client->connection, *client->instance) });
 
 	const std::int64_t deadline = NowMs() + ResumeWindowMs();
 	std::vector<std::shared_ptr<Client>> gone;
@@ -415,38 +519,68 @@ wxString ibClientHost::Call(const wxString& text, const void* connection, const 
 			: wxString();
 	}
 
-	// THE LAST ANSWER OF THIS CLIENT — the same JSON-RPC id is the saved text, and it is not run again. A login by
-	// token does not take the slot: the lost call is retried after it, with its own id. Under the client's lock,
-	// released before the work, which takes that lock itself.
+	// THE LAST ANSWER OF A CLIENT THAT OPTED IN. The same id with the same method and params is the saved text,
+	// and it is not run again. A different call under that id, or an older id, is refused and not run. A login
+	// does not take the slot: the lost call is retried after login {Token}, with its own id. Who may call is
+	// decided before the slot is read, so a detached client does not hand its last answer to whoever names it.
 	const bool tokenLogin = method == ibProtocolMethod::Login
 		&& request.m_params.FindField(wxString::FromUTF8(ibProtocolName::User)) == nullptr
 		&& request.m_params.FindField(wxString::FromUTF8(ibProtocolName::Token)) != nullptr;
 	struct Slot {
 		std::shared_ptr<Client> client;
+		bool                    owner = false;   // set only by the call that sets working
 		~Slot()
 		{
-			if (!client)
+			if (!owner || !client)
 				return;
 			std::lock_guard<std::mutex> lock(client->lock);
 			client->working = false;
 			client->replyWait.notify_all();
 		}
 	} slot;
+	unsigned char callDigest[32] = {};
 	if (request.WantsAnswer() && !tokenLogin && method != ibProtocolMethod::Login) {
 		slot.client = FindClient(request.m_params.GetValue<wxString>(wxString::FromUTF8(ibProtocolName::Client)));
 		if (slot.client) {
 			std::unique_lock<std::mutex> lock(slot.client->lock);
-			for (;;) {
-				if (slot.client->working) {
-					slot.client->replyWait.wait(lock);
-					continue;
-				}
-				if (slot.client->hasReply && slot.client->replyId == request.m_id)
-					return slot.client->reply;
-				slot.client->working = true;
-				slot.client->workingId = request.m_id;
-				break;
+			if (!MayCall(slot.client->connection, slot.client->resumeDeadlineMs.load(std::memory_order_acquire), connection)) {
+				lock.unlock();
+				slot.client.reset();
+				return ibRpcWriteError(request.m_id, static_cast<s32>(ibProtocolRefusal::NoSession), wxT("the client is not connected"));
 			}
+			if (slot.client->dedupe) {
+				CallDigest(request.m_method, request.m_params, callDigest);
+				for (;;) {
+					if (slot.client->working) {
+						slot.client->replyWait.wait(lock);
+						continue;
+					}
+					if (slot.client->hasReply && IdLess(request.m_id, slot.client->replyId)) {
+						lock.unlock();
+						slot.client.reset();
+						return ibRpcWriteError(request.m_id, static_cast<s32>(ibProtocolRefusal::BadParameter),
+							wxT("the call id is older than the last one answered"));
+					}
+					if (slot.client->hasReply && slot.client->replyId == request.m_id) {
+						const bool same = slot.client->hasReply == true
+							&& std::memcmp(callDigest, slot.client->replyDigest, sizeof(callDigest)) == 0;
+						if (same) {
+							const wxString saved = slot.client->reply;
+							return saved;
+						}
+						lock.unlock();
+						slot.client.reset();
+						return ibRpcWriteError(request.m_id, static_cast<s32>(ibProtocolRefusal::BadParameter),
+							wxT("the call id was already answered for another call"));
+					}
+					slot.client->working = true;
+					slot.client->workingId = request.m_id;
+					slot.owner = true;
+					break;
+				}
+			}
+			else
+				slot.client.reset();
 		}
 	}
 
@@ -473,10 +607,12 @@ wxString ibClientHost::Call(const wxString& text, const void* connection, const 
 	const wxString answer = done ? ibRpcWriteResult(request.m_id, result) : ibRpcWriteError(request.m_id, static_cast<s32>(refusal), error);
 	ibJournalInfo(wxT("client"), wxT("  answer written %lld ms, %zu chars"), NowMs() - writing, answer.length());
 	// A detached NoSession was not accepted, so it is not the call's answer. Anything else, including a refusal, is.
-	if (slot.client && (done || refusal != ibProtocolRefusal::NoSession)) {
+	// Only the call that owns the slot writes it: a lookup that returned the saved text never did.
+	if (slot.owner && slot.client && (done || refusal != ibProtocolRefusal::NoSession)) {
 		std::lock_guard<std::mutex> lock(slot.client->lock);
 		slot.client->hasReply = true;
 		slot.client->replyId = request.m_id;
+		std::memcpy(slot.client->replyDigest, callDigest, sizeof(callDigest));
 		slot.client->reply = answer;
 	}
 	return answer;
@@ -535,21 +671,44 @@ bool ibClientHost::Call(ibProtocolMethod method, const ibDataNode& params, ibDat
 			}
 			if (!done)
 				RemoveClient(id);
+			else if (!WindowFor(client->connection, *client->instance)) {
+				// No window: no token, and `resume` is not offered. The answer is the frame, as before.
+				result.SetValue(wxT("Client"), id);
+				result.SetValue(wxT("Protocol"), client->protocol);
+			}
 			else if (!RememberToken(*client, result, refusal, error)) {
 				done = false;
 				RemoveClient(id);
 			}
 			else {
 				// THE VERSION BOTH SPEAK — the older of the two — and what the server offers beyond it. `resume` is
-				// listed, so a client that does not know it never depends on it. RememberToken has put Token on the answer.
+				// listed, so a client that does not know it never depends on it. Naming it on the request opts into
+				// the slot. RememberToken has put Token on the answer, once.
+				if (AskedResume(params))
+					client->dedupe = true;
 				OfferResume(result, id, client->protocol, result.GetValue<wxString>(wxString::FromUTF8(ibProtocolName::Token)));
 			}
 		}
 		}
 	}
 	else if (method == ibProtocolMethod::Logout) {
-		RemoveClient(params.GetValue<wxString>(wxT("Client")));
-		done = true;
+		const std::shared_ptr<Client> client = FindClient(params.GetValue<wxString>(wxT("Client")));
+		if (client == nullptr) {
+			done = true;
+		}
+		else {
+			bool allowed = false;
+			{
+				std::lock_guard<std::mutex> clientLock(client->lock);
+				allowed = MayCall(client->connection, client->resumeDeadlineMs.load(std::memory_order_acquire), connection);
+			}
+			if (!allowed)
+				refuse(ibProtocolRefusal::NoSession, wxT("the client is not connected"));
+			else {
+				RemoveClient(params.GetValue<wxString>(wxT("Client")));
+				done = true;
+			}
+		}
 	}
 	else {
 		const std::shared_ptr<Client> client = FindClient(params.GetValue<wxString>(wxT("Client")));
@@ -558,8 +717,8 @@ bool ibClientHost::Call(ibProtocolMethod method, const ibDataNode& params, ibDat
 		}
 		else {
 			std::lock_guard<std::mutex> clientLock(client->lock);
-			// Detached: the public Client id is not the bearer. login {Token} is the door back.
-			if (client->resumeDeadlineMs.load(std::memory_order_acquire) != 0) {
+			// Detached, or a socket that is not this client's: the public Client id is not the bearer.
+			if (!MayCall(client->connection, client->resumeDeadlineMs.load(std::memory_order_acquire), connection)) {
 				refuse(ibProtocolRefusal::NoSession, wxT("the client is not connected"));
 			}
 			else {

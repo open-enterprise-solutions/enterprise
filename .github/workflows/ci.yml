@@ -451,7 +451,7 @@ jobs:
         run: cmake --preset linux-debug -DBUILD_TESTING=ON -DOES_USE_FIREBIRD=ON -DOES_USE_POSTGRESQL=ON -DwxBUILD_PRECOMP=OFF
 
       - name: Build the test target
-        run: cmake --build --preset linux-debug --target oes_tests
+        run: cmake --build --preset linux-debug --target oes_tests --target oes_protocol_test
 
       - name: Firebird 5 kit
         run: |
@@ -465,6 +465,13 @@ jobs:
           ./bin/Debug/oes_tests --gtest_filter='Firebird*' --gtest_color=no | tee firebird.txt
           if grep -q '\[  SKIPPED \]' firebird.txt; then
             echo "::error::a Firebird test skipped - the kit did not load"
+            exit 1
+          fi
+          # The session-failover cases open a Firebird file base. The general Linux job has no client,
+          # so they skip there; here the kit is beside the binary and a skip is the kit not loading.
+          ./bin/Debug/oes_protocol_test --gtest_color=no | tee protocol.txt
+          if grep -q '\[  SKIPPED \]' protocol.txt; then
+            echo "::error::a protocol test skipped - the Firebird kit did not load"
             exit 1
           fi
 

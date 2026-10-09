@@ -36,8 +36,8 @@
 
 namespace {
 
-// Absent or 0 is 120, which is too long for a test. The file is the process's, written before any base is opened
-// (the host reads it once), and removed when this process goes.
+// Left out, Resume is 120, which is too long for a test. 0 is off. The file is the process's, written before any
+// base is opened (the host reads it once), and removed when this process goes.
 struct ResumeFile {
 	bool created = false;
 	ResumeFile()
@@ -210,13 +210,24 @@ struct Base {
 
 Base* g_base = nullptr;
 
-ibProtocolNode PasswordLogin()
+ibProtocolNode PasswordLogin(bool resume = true)
 {
 	ibProtocolNode params;
 	params.SetValue(ibProtocolName::User, wxString())
 		.SetValue(ibProtocolName::Password, wxString())
 		.SetValue(ibProtocolName::Protocol, ibProtocolVersion);
+	if (resume)
+		params.AddItem(ibProtocolName::Features, wxString::FromUTF8(ibProtocolName::FeatureResume));
 	return params;
+}
+
+bool ListsResume(const ibProtocolNode& result)
+{
+	for (const ibProtocolNode& feature : result.GetList(ibProtocolName::Features)) {
+		if (feature.AsString() == wxString::FromUTF8(ibProtocolName::FeatureResume))
+			return true;
+	}
+	return false;
 }
 
 } // namespace
@@ -340,6 +351,192 @@ TEST_F(SessionFailover, ExpiredWindowClosesTheSession)
 	EXPECT_FALSE(SessionRowExists(client));
 }
 
+TEST_F(SessionFailover, WrongTokenIsRefusedAndTheSessionStays)
+{
+	int connection = 0;
+	const Rpc login = g_base->Call(Request(30, "login", PasswordLogin()), &connection);
+	ASSERT_TRUE(login.ok) << login.message;
+	const wxString client = login.result.GetString(ibProtocolName::Client);
+	ASSERT_TRUE(SessionRowExists(client));
+
+	int other = 0;
+	ibProtocolNode bad;
+	bad.SetValue(ibProtocolName::Token, wxString(wxT("not-a-token")));
+	const Rpc malformed = g_base->Call(Request(31, "login", bad), &other);
+	EXPECT_FALSE(malformed.ok);
+	EXPECT_EQ(malformed.code, 401);
+
+	ibProtocolNode unknown;
+	unknown.SetValue(ibProtocolName::Token, wxString(wxT("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")));
+	const Rpc refused = g_base->Call(Request(32, "login", unknown), &other);
+	EXPECT_FALSE(refused.ok);
+	EXPECT_EQ(refused.code, 401);
+	EXPECT_TRUE(SessionRowExists(client));
+
+	ibProtocolNode frameParams;
+	frameParams.SetValue(ibProtocolName::Client, client);
+	const Rpc still = g_base->Call(Request(33, "frame", frameParams), &connection);
+	EXPECT_TRUE(still.ok) << still.message;
+}
+
+TEST_F(SessionFailover, LiveSessionIsNotTakenByToken)
+{
+	int connection = 0;
+	const Rpc login = g_base->Call(Request(40, "login", PasswordLogin()), &connection);
+	ASSERT_TRUE(login.ok) << login.message;
+	const wxString client = login.result.GetString(ibProtocolName::Client);
+	const wxString token = login.result.GetString(ibProtocolName::Token);
+	ASSERT_FALSE(token.IsEmpty());
+
+	int intruder = 0;
+	ibProtocolNode tokenParams;
+	tokenParams.SetValue(ibProtocolName::Token, token);
+	const Rpc stolen = g_base->Call(Request(41, "login", tokenParams), &intruder);
+	EXPECT_FALSE(stolen.ok);
+	EXPECT_EQ(stolen.code, 401);
+
+	ibProtocolNode frameParams;
+	frameParams.SetValue(ibProtocolName::Client, client);
+	const Rpc still = g_base->Call(Request(42, "frame", frameParams), &connection);
+	ASSERT_TRUE(still.ok) << still.message;
+	const Rpc intruderFrame = g_base->Call(Request(43, "frame", frameParams), &intruder);
+	EXPECT_FALSE(intruderFrame.ok);
+	EXPECT_EQ(intruderFrame.code, 401);
+}
+
+TEST_F(SessionFailover, DesignerGetsNoToken)
+{
+	int connection = 0;
+	ibProtocolNode params = PasswordLogin();
+	params.SetValue(ibProtocolName::Mode, static_cast<int>(ibProtocolMode::Designer));
+	const Rpc login = g_base->Call(Request(55, "login", params), &connection);
+	ASSERT_TRUE(login.ok) << login.message;
+	EXPECT_TRUE(login.result.GetString(ibProtocolName::Token).IsEmpty());
+	EXPECT_FALSE(ListsResume(login.result));
+	const wxString client = login.result.GetString(ibProtocolName::Client);
+	g_base->host->Disconnect(&connection);
+	EXPECT_FALSE(SessionRowExists(client));
+}
+
+TEST_F(SessionFailover, NoTokenWithoutASocket)
+{
+	const Rpc login = g_base->Call(Request(50, "login", PasswordLogin()), nullptr);
+	ASSERT_TRUE(login.ok) << login.message;
+	EXPECT_TRUE(login.result.GetString(ibProtocolName::Token).IsEmpty());
+	EXPECT_FALSE(ListsResume(login.result));
+	EXPECT_TRUE(login.result.Has(ibProtocolName::Frame));
+}
+
+TEST_F(SessionFailover, RepeatedIdWithoutOptInRunsAgain)
+{
+	int connection = 0;
+	const Rpc login = g_base->Call(Request(60, "login", PasswordLogin(false)), &connection);
+	ASSERT_TRUE(login.ok) << login.message;
+	EXPECT_FALSE(login.result.GetString(ibProtocolName::Token).IsEmpty());
+	const wxString client = login.result.GetString(ibProtocolName::Client);
+	const long long frame = login.result.GetInt(ibProtocolName::Frame);
+
+	ibProtocolNode params;
+	params.SetValue(ibProtocolName::Client, client).SetValue(ibProtocolName::Since, frame);
+	const Rpc first = g_base->Call(Request(61, "frame", params), &connection);
+	ASSERT_TRUE(first.ok) << first.message;
+	const Rpc again = g_base->Call(Request(61, "frame", params), &connection);
+	ASSERT_TRUE(again.ok) << again.message;
+	EXPECT_EQ(again.result.GetInt(ibProtocolName::Frame), first.result.GetInt(ibProtocolName::Frame) + 1);
+}
+
+TEST_F(SessionFailover, OlderIdAndADifferentCallAreRefused)
+{
+	int connection = 0;
+	const Rpc login = g_base->Call(Request(70, "login", PasswordLogin()), &connection);
+	ASSERT_TRUE(login.ok) << login.message;
+	const wxString client = login.result.GetString(ibProtocolName::Client);
+	const long long frame = login.result.GetInt(ibProtocolName::Frame);
+
+	ibProtocolNode params;
+	params.SetValue(ibProtocolName::Client, client).SetValue(ibProtocolName::Since, frame);
+	const Rpc first = g_base->Call(Request(71, "frame", params), &connection);
+	ASSERT_TRUE(first.ok) << first.message;
+	const long long drawn = first.result.GetInt(ibProtocolName::Frame);
+
+	ibProtocolNode next = params;
+	const Rpc second = g_base->Call(Request(72, "frame", next), &connection);
+	ASSERT_TRUE(second.ok) << second.message;
+
+	const Rpc replay = g_base->Call(Request(71, "frame", params), &connection);
+	EXPECT_FALSE(replay.ok);
+	EXPECT_EQ(replay.code, 400);
+
+	ibProtocolNode other = params;
+	other.SetValue(ibProtocolName::Since, frame + 50);
+	const Rpc mismatch = g_base->Call(Request(72, "frame", other), &connection);
+	EXPECT_FALSE(mismatch.ok);
+	EXPECT_EQ(mismatch.code, 400);
+
+	const Rpc onward = g_base->Call(Request(73, "frame", params), &connection);
+	ASSERT_TRUE(onward.ok) << onward.message;
+	EXPECT_EQ(onward.result.GetInt(ibProtocolName::Frame), drawn + 2);
+}
+
+TEST_F(SessionFailover, DuplicateIdRunsOnce)
+{
+	int connection = 0;
+	const Rpc login = g_base->Call(Request(80, "login", PasswordLogin()), &connection);
+	ASSERT_TRUE(login.ok) << login.message;
+	const wxString client = login.result.GetString(ibProtocolName::Client);
+	const long long frame = login.result.GetInt(ibProtocolName::Frame);
+
+	ibProtocolNode params;
+	params.SetValue(ibProtocolName::Client, client).SetValue(ibProtocolName::Since, frame);
+	const wxString text = Request(81, "frame", params);
+	wxString first;
+	wxString second;
+	std::thread one([&]() { first = g_base->host->Call(text, &connection, wxT("test")); });
+	std::thread two([&]() { second = g_base->host->Call(text, &connection, wxT("test")); });
+	one.join();
+	two.join();
+	const Rpc a = ReadRpc(first);
+	const Rpc b = ReadRpc(second);
+	ASSERT_TRUE(a.ok) << a.message;
+	ASSERT_TRUE(b.ok) << b.message;
+	EXPECT_EQ(first, second);
+	EXPECT_EQ(a.result.GetInt(ibProtocolName::Frame), frame + 1);
+
+	const Rpc third = g_base->Call(Request(81, "frame", params), &connection);
+	ASSERT_TRUE(third.ok) << third.message;
+	EXPECT_EQ(ReadRpc(g_base->host->Call(text, &connection, wxT("test"))).result.GetInt(ibProtocolName::Frame), frame + 1);
+
+	const Rpc next = g_base->Call(Request(82, "frame", params), &connection);
+	ASSERT_TRUE(next.ok) << next.message;
+	EXPECT_EQ(next.result.GetInt(ibProtocolName::Frame), frame + 2);
+}
+
+TEST_F(SessionFailover, AnotherConnectionDoesNotReadTheCachedAnswer)
+{
+	int connection = 0;
+	const Rpc login = g_base->Call(Request(90, "login", PasswordLogin()), &connection);
+	ASSERT_TRUE(login.ok) << login.message;
+	const wxString client = login.result.GetString(ibProtocolName::Client);
+
+	ibProtocolNode params;
+	params.SetValue(ibProtocolName::Client, client);
+	const wxString text = Request(91, "frame", params);
+	const Rpc first = g_base->Call(text, &connection);
+	ASSERT_TRUE(first.ok) << first.message;
+
+	int other = 0;
+	const wxString stolenText = g_base->host->Call(text, &other, wxT("test"));
+	const Rpc stolen = ReadRpc(stolenText);
+	EXPECT_FALSE(stolen.ok);
+	EXPECT_EQ(stolen.code, 401);
+
+	const wxString cachedText = g_base->host->Call(text, &connection, wxT("test"));
+	const Rpc cached = ReadRpc(cachedText);
+	EXPECT_TRUE(cached.ok) << cached.message;
+	EXPECT_NE(stolenText, cachedText);
+	EXPECT_EQ(cached.result.GetInt(ibProtocolName::Frame), first.result.GetInt(ibProtocolName::Frame));
+}
+
 namespace {
 
 // A connection that fails one exchange, then accepts the login and the resent call.
@@ -442,4 +639,14 @@ TEST(SessionFailoverClient, IdsStayMonotonicAcrossReconnect)
 
 	ASSERT_TRUE(communicator.Call(ibProtocolMethod::Frame, params, result, refusal, error)) << error;
 	EXPECT_EQ(IdOf(raw->sent.back()), 4);
+}
+
+TEST(SessionFailoverResume, AbsentIs120AndZeroIsOff)
+{
+	EXPECT_EQ(ibApplicationHost::ResumeSeconds(false, 0), 120u);
+	EXPECT_EQ(ibApplicationHost::ResumeSeconds(true, 0), 0u);
+	EXPECT_EQ(ibApplicationHost::ResumeSeconds(true, 2), 2u);
+	EXPECT_EQ(ibApplicationHost::ResumeSeconds(true, -1), 120u);
+	EXPECT_EQ(ibApplicationHost::ResumeSeconds(true, 30 * 60), static_cast<std::size_t>(30 * 60));
+	EXPECT_EQ(ibApplicationHost::ResumeSeconds(true, 30 * 60 + 1), static_cast<std::size_t>(30 * 60));
 }
