@@ -162,11 +162,13 @@ ibProtocolConnectionServer::~ibProtocolConnectionServer()
 
 bool ibProtocolConnectionServer::Reconnect(wxString& error)
 {
-	if (m_address.IsEmpty()) {
+	// A copy: Open closes the socket first, and the address it parses must not be the member it may clear.
+	const wxString address = m_address;
+	if (address.IsEmpty()) {
 		error = wxT("no server to return to");
 		return false;
 	}
-	return Open(m_address, error);
+	return Open(address, error);
 }
 
 bool ibProtocolConnectionServer::Exchange(const std::string& request, std::string& answer,

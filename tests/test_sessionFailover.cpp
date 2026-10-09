@@ -14,12 +14,17 @@
 #include <thread>
 
 #include <wx/filename.h>
+#include <wx/image.h>    // wxInitAllImageHandlers — a new base loads icons, and wx decodes nothing until registered
 #include <wx/init.h>
+#include <wx/log.h>      // wxLogStderr — a warning must not become a modal box and hang a headless run
 
 #include "backend/appData.h"
 #include "backend/appHost.h"
 #include "backend/databaseLayer/connectionPool.h"
 #include "backend/databaseLayer/databaseLayer.h"
+#ifdef OES_USE_FIREBIRD
+#include "backend/databaseLayer/firebird/firebirdDatabaseLayer.h"
+#endif
 #include "backend/utils/sessionToken.h"
 #include "core/exception.h"
 
@@ -101,17 +106,14 @@ wxString TokenHashOf(const wxString& token)
 
 wxString StoredHash(const wxString& sessionId)
 {
-	ibConnectionPool* const pool = ibApplicationInstance::GetConnectionPool();
-	if (pool == nullptr)
+	ibConnectionScope scope = ibConnectionPool::GetFreeConnection();
+	if (!scope)
 		return wxString();
-	const std::shared_ptr<ibDatabaseLayer> conn = pool->Checkout();
-	if (!conn)
-		return wxString();
-	ibStatementGuard statement(conn, conn->PrepareStatement(wxT("SELECT tokenHash FROM sys_session WHERE session = ?")));
+	ibStatementGuard statement(scope.shared(), scope->PrepareStatement(wxT("SELECT tokenHash FROM sys_session WHERE session = ?")));
 	if (!statement)
 		return wxString();
 	statement->SetParamString(1, sessionId);
-	ibResultSetGuard rows(conn, statement->RunQueryWithResults());
+	ibResultSetGuard rows(scope.shared(), statement->RunQueryWithResults());
 	if (!rows.get() || !rows->Next())
 		return wxString();
 	return rows->GetResultString(1);
@@ -119,32 +121,43 @@ wxString StoredHash(const wxString& sessionId)
 
 bool SessionRowExists(const wxString& sessionId)
 {
-	ibConnectionPool* const pool = ibApplicationInstance::GetConnectionPool();
-	if (pool == nullptr)
+	ibConnectionScope scope = ibConnectionPool::GetFreeConnection();
+	if (!scope)
 		return false;
-	const std::shared_ptr<ibDatabaseLayer> conn = pool->Checkout();
-	if (!conn)
-		return false;
-	ibStatementGuard statement(conn, conn->PrepareStatement(wxT("SELECT session FROM sys_session WHERE session = ?")));
+	ibStatementGuard statement(scope.shared(), scope->PrepareStatement(wxT("SELECT session FROM sys_session WHERE session = ?")));
 	if (!statement)
 		return false;
 	statement->SetParamString(1, sessionId);
-	ibResultSetGuard rows(conn, statement->RunQueryWithResults());
+	ibResultSetGuard rows(scope.shared(), statement->RunQueryWithResults());
 	return rows.get() && rows->Next();
 }
 
 struct Base {
 	wxInitializer                          wx;
 	wxString                               dir;
+	wxString                               reason;
+	bool                                   failed = false;   // the client is here and the base still did not open
 	ibApplicationInstance*                 app = nullptr;
 	std::unique_ptr<ibClientHost>          host;
 
 	void Open()
 	{
-		ASSERT_TRUE(wx.IsOk());
+		if (!wx.IsOk()) {
+			reason = wxT("wxBase init failed");
+			return;
+		}
+		// The same two a headless runtime test sets: icons the configuration loads, and no modal log.
+		wxInitAllImageHandlers();
+		if (wxLog::GetActiveTarget() != nullptr)
+			delete wxLog::SetActiveTarget(new wxLogStderr());
+
 		dir = wxFileName::CreateTempFileName(wxT("oes-failover"));
 		wxRemoveFile(dir);
-		ASSERT_TRUE(wxFileName::Mkdir(dir));
+		if (!wxFileName::Mkdir(dir)) {
+			failed = true;
+			reason = wxT("the base directory was not made");
+			return;
+		}
 
 		ibFileInstanceRequest request;
 		request.m_name = wxT("failover");
@@ -154,12 +167,29 @@ struct Base {
 			app = ibApplicationInstance::CreateAppDataEnv(request);
 		}
 		catch (const ibCoreException& err) {
-			FAIL() << err.GetErrorDescription();
+			reason = err.GetErrorDescription();
 		}
-		ASSERT_NE(app, nullptr);
+		if (app == nullptr) {
+			// No client on this machine is a skip, the way the other Firebird tests skip. A client that
+			// loaded and still did not open the base is a failure.
+			bool client = false;
+#ifdef OES_USE_FIREBIRD
+			client = ibDatabaseLayerFirebird::IsAvailable();
+#endif
+			if (client) {
+				failed = true;
+				if (reason.IsEmpty())
+					reason = wxT("the base did not open");
+			}
+			else
+				reason = wxT("no Firebird client on this machine");
+			return;
+		}
 		host = std::make_unique<ibClientHost>(app);
-		ASSERT_NE(ibApplicationHost::Get(), nullptr);
-		ASSERT_EQ(ibApplicationHost::Get()->GetResumeSeconds(), 2u);
+		if (ibApplicationHost::Get() == nullptr || ibApplicationHost::Get()->GetResumeSeconds() != 2u) {
+			failed = true;
+			reason = wxT("Resume was not 2 — backend.conf was not the one this test wrote");
+		}
 	}
 
 	void Close()
@@ -197,11 +227,6 @@ protected:
 	{
 		g_base = new Base;
 		g_base->Open();
-		if (g_base->host == nullptr) {
-			g_base->Close();
-			delete g_base;
-			g_base = nullptr;
-		}
 	}
 	static void TearDownTestSuite()
 	{
@@ -213,8 +238,12 @@ protected:
 	}
 	void SetUp() override
 	{
-		if (g_base == nullptr || g_base->host == nullptr)
-			GTEST_FAIL() << "the base did not open";
+		if (g_base == nullptr)
+			GTEST_FAIL() << "the base was not started";
+		if (g_base->failed)
+			GTEST_FAIL() << g_base->reason;
+		if (g_base->host == nullptr)
+			GTEST_SKIP() << g_base->reason;
 	}
 };
 
@@ -371,24 +400,11 @@ TEST(SessionFailoverClient, IdsStayMonotonicAcrossReconnect)
 	auto script = std::make_unique<ScriptedConnection>();
 	ScriptedConnection* const raw = script.get();
 
-	ibProtocolNode loginResult;
-	loginResult.SetValue(ibProtocolName::Client, wxString(wxT("client-1")))
-		.SetValue(ibProtocolName::Protocol, 2)
-		.SetValue(ibProtocolName::Token, wxString(wxT("tok")))
-		.SetValue(ibProtocolName::Frame, 1)
-		.SetValue(ibProtocolName::Title, wxString(wxT("Home")));
-	loginResult.AddItem(ibProtocolName::Features).SetValue(ibProtocolName::FeatureResume, wxString()); // wrong shape
-	// Features is a list of strings. AddItem makes a node; the reader wants string items. Build the list by hand.
-	loginResult = ibProtocolNode();
-	loginResult.SetValue(ibProtocolName::Client, wxString(wxT("client-1")))
-		.SetValue(ibProtocolName::Protocol, 2)
-		.SetValue(ibProtocolName::Token, wxString(wxT("tok")))
-		.SetValue(ibProtocolName::Frame, 1)
-		.SetValue(ibProtocolName::Title, wxString(wxT("Home")));
-
 	raw->fail = { false, true, false, false, false };
+	// Features is a list of strings. The node writer has no string-list, so the password login's answer is the wire.
 	raw->answers = {
-		Answer(1, loginResult),
+		"{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"Client\":\"client-1\",\"Protocol\":2,\"Token\":\"tok\","
+			"\"Features\":[\"resume\"],\"Frame\":1,\"Title\":\"Home\"}}",
 		Answer(3, [&]() {
 			ibProtocolNode resumed;
 			resumed.SetValue(ibProtocolName::Client, wxString(wxT("client-1")))
@@ -407,27 +423,10 @@ TEST(SessionFailoverClient, IdsStayMonotonicAcrossReconnect)
 		}()),
 	};
 
-	// Features must be a JSON array of strings. Answer() writes the node; set the list on a copy the writer understands.
-	{
-		ibProtocolNode listed;
-		listed.SetValue(ibProtocolName::Client, wxString(wxT("client-1")))
-			.SetValue(ibProtocolName::Protocol, 2)
-			.SetValue(ibProtocolName::Token, wxString(wxT("tok")))
-			.SetValue(ibProtocolName::Frame, 1)
-			.SetValue(ibProtocolName::Title, wxString(wxT("Home")));
-		listed.AddItem(ibProtocolName::Features, 0); // a number is not the feature. Replaced below if the API allows strings.
-		raw->answers[0] = Answer(1, listed);
-	}
-
 	ibCommunicator communicator(std::move(script));
 	ibProtocolNode result;
 	ibProtocolRefusal refusal = ibProtocolRefusal::None;
 	wxString error;
-	// The scripted feature list is fixed up after we see how AddItem writes a string — see the assertion on m_resume
-	// by whether the drop is resumed. Build the login answer as JSON so Features is ["resume"].
-	raw->answers[0] =
-		"{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"Client\":\"client-1\",\"Protocol\":2,\"Token\":\"tok\","
-		"\"Features\":[\"resume\"],\"Frame\":1,\"Title\":\"Home\"}}";
 
 	ASSERT_TRUE(communicator.Login(wxT("user"), wxT("secret"), ibProtocolMode::Runtime, result, refusal, error)) << error;
 

@@ -5,7 +5,11 @@
 
 #include <mbedtls/ctr_drbg.h>
 #include <mbedtls/entropy.h>
-#include <mbedtls/platform_util.h>
+
+// constant_time.h does not open extern "C" itself. The symbol is C.
+extern "C" {
+#include <mbedtls/constant_time.h>
+}
 
 #include "sha256.hpp"
 
