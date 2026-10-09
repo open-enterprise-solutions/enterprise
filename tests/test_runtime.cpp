@@ -451,6 +451,73 @@ TEST(RuntimeTest, TernaryGuardsAMemberOfUndefined) {
 	EXPECT_EQ(v.GetString(), wxT("Goods"));
 }
 
+// A ternary inside a ternary patches its own jumps. The outer branch that is
+// not taken does not run, and the inner one still chooses.
+TEST(RuntimeTest, TernaryNestedChoosesTheInnerBranch) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	const wxString src =
+		wxT("var calls public; var inner public; var outer public;\n")
+		wxT("Function Touch(n) Public\n")
+		wxT("  calls = calls + 1;\n")
+		wxT("  Return n;\n")
+		wxT("EndFunction\n")
+		wxT("Function Boom() Public\n")
+		wxT("  calls = calls + 1;\n")
+		wxT("  Raise(\"unchosen branch ran\");\n")
+		wxT("  Return 0;\n")
+		wxT("EndFunction\n")
+		wxT("calls = 0;\n")
+		wxT("inner = ?(True, ?(False, Boom(), Touch(2)), Boom());\n")
+		wxT("outer = ?(False, ?(True, Boom(), 1), Touch(4));\n");
+	ASSERT_TRUE(TryCompile(cc, src));
+
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+
+	ibValue v;
+	ASSERT_TRUE(pu.GetPropVal(wxT("inner"), v));
+	EXPECT_EQ(v.GetInteger(), 2);
+	ASSERT_TRUE(pu.GetPropVal(wxT("outer"), v));
+	EXPECT_EQ(v.GetInteger(), 4);
+	ASSERT_TRUE(pu.GetPropVal(wxT("calls"), v));
+	EXPECT_EQ(v.GetInteger(), 2) << "each chosen branch ran once; neither Boom ran";
+}
+
+// A Number condition takes the typed OPER_IF (CorrectTypeDef, TYPE_DELTA1):
+// zero is the branch not taken, any other number is the branch taken.
+TEST(RuntimeTest, TernaryWithANumberConditionUsesTheTypedTest) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	const wxString src =
+		wxT("Number n;\n")
+		wxT("var calls public; var whenZero public; var whenOther public;\n")
+		wxT("Function Touch(k) Public\n")
+		wxT("  calls = calls + 1;\n")
+		wxT("  Return k;\n")
+		wxT("EndFunction\n")
+		wxT("Function Boom() Public\n")
+		wxT("  calls = calls + 1;\n")
+		wxT("  Raise(\"unchosen branch ran\");\n")
+		wxT("  Return 0;\n")
+		wxT("EndFunction\n")
+		wxT("calls = 0;\n")
+		wxT("n = 0;\n")
+		wxT("whenZero = ?(n, Boom(), Touch(20));\n")
+		wxT("n = 4;\n")
+		wxT("whenOther = ?(n, Touch(10), Boom());\n");
+	ASSERT_TRUE(TryCompile(cc, src));
+
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+
+	ibValue v;
+	ASSERT_TRUE(pu.GetPropVal(wxT("whenZero"), v));
+	EXPECT_EQ(v.GetInteger(), 20);
+	ASSERT_TRUE(pu.GetPropVal(wxT("whenOther"), v));
+	EXPECT_EQ(v.GetInteger(), 10);
+	ASSERT_TRUE(pu.GetPropVal(wxT("calls"), v));
+	EXPECT_EQ(v.GetInteger(), 2);
+}
+
 // A BODY WITHOUT BRACES IS ONE STATEMENT, whatever word it opens with. A statement opened by a
 // keyword (`if`, `while`, `try`) used to run on into the next one: `else if (…) { … } b = 7;` put
 // `b = 7` inside the else, and a loop counting its passes that way never ended. The forms that
