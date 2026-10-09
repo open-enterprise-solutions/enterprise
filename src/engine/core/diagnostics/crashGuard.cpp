@@ -2,7 +2,7 @@
 
 #include "journal.h"                 // the technology journal opens with the guard, before anything else
 #include "core/exception.h"         // ibCoreException — a refusal, named as such in the dump's reason
-#include "core/programFolder.h"     // crashdumps/ sits in the program folder, beside the journal
+#include "core/programFolder.h"     // crashdumps/ sits with the journal, in the diagnostic folder
 
 #include <wx/datetime.h>
 #include <wx/ffile.h>
@@ -66,7 +66,7 @@ std::atomic<bool>            s_installed{ false };
 void EnsureCrashDir()
 {
 	if (s_crashDir[0] == '\0') {
-		const wxString crashDir = ibProgramFolder()
+		const wxString crashDir = ibDiagnosticFolder()
 			+ wxFILE_SEP_PATH + wxT("crashdumps");
 		std::snprintf(s_crashDir, sizeof(s_crashDir), "%s", crashDir.utf8_str().data());
 	}
