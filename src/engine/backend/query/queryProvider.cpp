@@ -2313,9 +2313,7 @@ void GatherColumnExprColumns(const ibQueryColumnExpr* e, const std::function<voi
 			for (const ibQueryColumnExprPtr& key : e->m_partition)
 				GatherColumnExprColumns(key.get(), add);
 			break;
-		// A published result column is not a source column — the row answers it by name. A question
-		// put to a value is answered over that same row (queryLowering.cpp), and this walk does not
-		// project it.
+		// A published result column is not a source column — the row answers it by name.
 		case ibQueryColumnExprKind::OutputRef:
 		case ibQueryColumnExprKind::ValueAsk:
 			break;
