@@ -3831,19 +3831,58 @@ ibParamUnit ibCompileCode::GetExpression(ibCompileContext* context, int nPriorit
 		GETDelimeter(')');
 	}
 	else if (lex.m_lexType == DELIMITER && lex.m_numData == '?') {
+		// ?(cond, whenTrue, whenFalse) — an If that answers with a value.
+		//
+		// Both branches used to be compiled, and run, before OPER_ITER copied
+		// one of the two results. The branch the condition did not pick still
+		// raised and still called: `?(Ref <> Undefined, Ref.Description, "")`
+		// died on Undefined. The shape below is CompileIf's: test the
+		// condition, write the chosen value into the result, jump over the
+		// other branch. The branch not taken is in the tape and is not executed.
 		variable = context->CreateVariable();
+
+		GETDelimeter('(');
+
 		ibByteUnit code;
 		AddLineInfo(code);
-		code.m_numOper = OPER_ITER;
-		code.m_param1 = variable;
-		GETDelimeter('(');
-		code.m_param2 = GetExpression(context);
-		GETDelimeter(',');
-		code.m_param3 = GetExpression(context);
-		GETDelimeter(',');
-		code.m_param4 = GetExpression(context);
-		GETDelimeter(')');
+		code.m_numOper = OPER_IF;
+		ibParamUnit condition = GetExpression(context);
+		code.m_param1 = condition;
+		CorrectTypeDef(condition);
 		m_cByteCode.m_listCode.emplace_back(std::move(code));
+		const int ifLine = m_cByteCode.m_listCode.size() - 1;
+
+		GETDelimeter(',');
+		{
+			ibByteUnit letTrue;
+			AddLineInfo(letTrue);
+			letTrue.m_numOper = OPER_LET;
+			letTrue.m_param1 = variable;
+			letTrue.m_param2 = GetExpression(context);
+			m_cByteCode.m_listCode.emplace_back(std::move(letTrue));
+		}
+
+		ibByteUnit jumpOver;
+		AddLineInfo(jumpOver);
+		jumpOver.m_numOper = OPER_GOTO;
+		m_cByteCode.m_listCode.emplace_back(std::move(jumpOver));
+		const int gotoLine = m_cByteCode.m_listCode.size() - 1;
+
+		// Where If sends a condition that does not hold: the other branch.
+		m_cByteCode.m_listCode[ifLine].m_param2.m_numIndex = m_cByteCode.m_listCode.size();
+
+		GETDelimeter(',');
+		{
+			ibByteUnit letFalse;
+			AddLineInfo(letFalse);
+			letFalse.m_numOper = OPER_LET;
+			letFalse.m_param1 = variable;
+			letFalse.m_param2 = GetExpression(context);
+			m_cByteCode.m_listCode.emplace_back(std::move(letFalse));
+		}
+		GETDelimeter(')');
+
+		m_cByteCode.m_listCode[gotoLine].m_param1.m_numIndex = m_cByteCode.m_listCode.size();
 	}
 	else if (lex.m_lexType == IDENTIFIER) {
 		// postfix ++ / -- in expression on a BARE variable: `x++` / `x--` yields

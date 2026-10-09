@@ -240,7 +240,12 @@ constexpr uint32_t kAOTMagic         = 0x31434250u; // 'PBC1' little-endian
 //    are registered under other ids now.
 // 🛑 34 -> 35 (2026-09-30): A DATE CONSTANT IS AN ibDateTime (fdatetime.h) - a wall-clock reading counted from the
 //    empty date - where a v34 blob holds an instant of the compiling machine's clock.
-constexpr uint16_t kAOTFormatVersion = 35;
+// 🛑 35 -> 36 (2026-10-09): OPER_ITER left the opcode list (codeDef.h). The ternary is If's shape
+//    now — OPER_IF, the chosen branch writing the result, OPER_GOTO over the other — so both
+//    branches are no longer computed before the choice. Dropping the enumerator moves every opcode
+//    from OPER_GT through OPER_END, and TYPE_DELTA with them. A v35 blob stores the old numbers and
+//    would dispatch the wrong handler on every instruction after that slot.
+constexpr uint16_t kAOTFormatVersion = 36;
 [[maybe_unused]] constexpr uint16_t kAOTFlagPortable = 0x0001;   // reserved — host-endian today, no reader yet
 
 // Sentinel for an over-large collection — guards Deserialize against
