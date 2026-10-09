@@ -9,6 +9,9 @@
 
 #include "frmserver/client/clientHost.h"
 
+#include "backend/appHost.h"                 // ClientConnections — how many of these threads
+#include "backend/server/serverConfig.h"     // ibAppServerSay — the line a person watching the console sees
+
 // After wx, with the guard already set: wx aliases ssize_t and so does cpp-httplib (backend/mcp/mcpServer.cpp).
 #if defined(_WIN32) && !defined(_SSIZE_T_DEFINED)
 #	define _SSIZE_T_DEFINED
@@ -97,6 +100,21 @@ bool ibClientListener::Start(const wxString& host, unsigned short& port, bool ch
 	server->m_http.set_payload_max_length(kMaxRequestBytes);
 	server->m_http.set_tcp_nodelay(true);
 
+	// STOPGAP until the network core is asynchronous. A connection holds whichever pool thread
+	// accepted it for as long as the socket lives. cpp-httplib's own pool grows to
+	// 4 * max(8, cores - 1) — 32 threads on an 8-core machine — and the client after that is
+	// accepted and never answered; nothing refuses it. ClientConnections (backend.conf) is how
+	// many of those threads this process will make. Left out, or 0, that is 1000. The threads
+	// still exist; only the ceiling moved. An asynchronous core is what retires this.
+	const std::size_t connections = ibApplicationHost::Get() != nullptr
+		? ibApplicationHost::Get()->GetClientConnections()
+		: static_cast<std::size_t>(1000);
+	const std::size_t limit = std::max<std::size_t>(connections, 1);
+	const std::size_t base = std::min(limit, static_cast<std::size_t>(CPPHTTPLIB_THREAD_POOL_COUNT));
+	server->m_http.new_task_queue = [base, limit] {
+		return new httplib::ThreadPool(base, limit);
+	};
+
 	// 🛑 ONE LISTENER PER PORT, SAID TO THE OPERATING SYSTEM — on Windows httplib's SO_REUSEADDR lets a second
 	// process bind a port another one listens on, and which of them a connection reaches is undefined. Two
 	// application servers on one machine would both "start" on 7373. The MCP listener's cure, the same lines
@@ -179,6 +197,8 @@ bool ibClientListener::Start(const wxString& host, unsigned short& port, bool ch
 	for (unsigned int candidate = first; candidate <= last; ++candidate) {
 		if (server->m_http.bind_to_port(address, static_cast<int>(candidate))) {
 			port = static_cast<unsigned short>(candidate);
+			ibAppServerSay(ibJournalMark::Info, wxT("accepting %u client connections"),
+				static_cast<unsigned>(connections));
 			m_thread = std::thread([server]() { server->m_http.listen_after_bind(); });
 			return true;
 		}

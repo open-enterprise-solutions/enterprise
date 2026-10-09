@@ -171,13 +171,21 @@ add_executable(oes_tests
     test_metadataMove.cpp
     test_sectionInterfaceItems.cpp
     test_socketLock.cpp
+    test_clientListener.cpp
 )
 
 target_link_libraries(oes_tests
     PRIVATE
         backend
+        frmserver
         GTest::gtest
         GTest::gtest_main
+)
+
+# The client listener is the application server's, not a library. This one file
+# is what accepts the sockets; frmserver is ibClientHost, which answers them.
+target_sources(oes_tests PRIVATE
+    "${CMAKE_SOURCE_DIR}/src/engine/appserver/clientListener.cpp"
 )
 
 # Tests need to construct app-owned subsystems directly (no full appData
@@ -189,6 +197,7 @@ target_include_directories(oes_tests PRIVATE
     "${CMAKE_SOURCE_DIR}/src"
     "${CMAKE_SOURCE_DIR}/src/engine"
     "${CMAKE_SOURCE_DIR}/src/engine/backend"
+    "${CMAKE_SOURCE_DIR}/src/engine/appserver"
 )
 
 # On non-Windows the backend is a .dylib/.so; ensure the test can find it

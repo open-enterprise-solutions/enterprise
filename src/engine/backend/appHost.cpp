@@ -304,6 +304,9 @@ void ibApplicationHost::ReadBackendConf()
 	// may be: left out, or 0, no limit.
 	m_configWorkers = ReadCount(fc, BACKEND_CONF, wxT("Workers"), 1, 0);
 	m_configBases   = ReadCount(fc, BACKEND_CONF, wxT("Bases"), 1, 0);
+	// The application server's client ceiling. Left out, or 0: a thousand. See clientListener.cpp —
+	// a connection holds a thread, and this is how many of those threads the process will make.
+	m_configClientConnections = ReadCount(fc, BACKEND_CONF, wxT("ClientConnections"), 1, 1000);
 	// The connections are a base's own — its infobase.conf says them; this is only the default for a base that does
 	// not. Two at least: the registry holds one for its writes, a session needs another.
 	m_configConnections = ReadCount(fc, BACKEND_CONF, wxT("Connections"), 2, 0);

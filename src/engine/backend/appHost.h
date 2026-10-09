@@ -61,6 +61,10 @@ public:
 	// The connections to its DBMS a base may hold when its own infobase.conf does not say — backend.conf
 	// (Connections), else the built-in 32. A base's connections are its own; this is only their default.
 	std::size_t      GetDefaultConnections() const;
+
+	// How many client connections the application server will hold at once — backend.conf
+	// (ClientConnections), else 1000. Each one keeps a thread until the network core is asynchronous.
+	std::size_t      GetClientConnections() const { return m_configClientConnections; }
 	ibHelpService*   GetHelpService() const   { return m_helpService.get(); }
 	wxString         GetLocale() const        { return m_locale.GetCanonicalName(); }
 	wxString         GetLocaleName() const    { return m_locale.GetName(); }
@@ -118,11 +122,12 @@ private:
 
 	// backend.conf — read once for the process: the locale, how much the process may consume, and the default
 	// a base's own infobase.conf overrides (Workers and Bases: the most there may be, 0 = no limit; Connections 0 =
-	// the built-in value).
+	// the built-in value). ClientConnections is the application server's own ceiling, 1000 when left out.
 	wxString    m_configLocale;
-	std::size_t m_configWorkers     = 0;
-	std::size_t m_configBases       = 0;
-	std::size_t m_configConnections = 0;
+	std::size_t m_configWorkers            = 0;
+	std::size_t m_configBases              = 0;
+	std::size_t m_configConnections        = 0;
+	std::size_t m_configClientConnections  = 1000;
 
 	wxLocale m_locale;
 	int      m_localeLang;
