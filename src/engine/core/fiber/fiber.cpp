@@ -1,4 +1,9 @@
+#if !defined(_WIN32) && !defined(_GNU_SOURCE)
+#  define _GNU_SOURCE
+#endif
 #include "core/fiber/fiber.h"
+
+#include "core/diagnostics/crashGuard.h"   // ArmCurrentThread — the overflow log needs an alternate stack
 
 #include <cstdint>
 #include <cstdio>
@@ -18,6 +23,7 @@
 #  endif
 #  include <windows.h>
 #else
+#  include <pthread.h>
 #  include <sys/mman.h>
 #  include <unistd.h>
 #endif
@@ -60,6 +66,70 @@ namespace {
 
 thread_local ibFiber* tl_currentFiber = nullptr;
 thread_local ibFiber* tl_schedulerFiber = nullptr;
+
+// The OS thread's stack, measured once. A fiber has its own span and
+// does not use this. Low is the bottom of the reservation (the guard
+// sits there); high is the top. Remaining is the distance down to low,
+// which is how much the stack can still grow, not how much is committed.
+struct ibStackSpan {
+	const char* low = nullptr;
+	const char* high = nullptr;
+};
+
+thread_local ibStackSpan tl_threadStack;
+
+bool ThreadStackSpan(ibStackSpan& out)
+{
+	if (tl_threadStack.low != nullptr) {
+		out = tl_threadStack;
+		return true;
+	}
+#if defined(_WIN32)
+	char here;
+	MEMORY_BASIC_INFORMATION hereInfo;
+	if (::VirtualQuery(&here, &hereInfo, sizeof(hereInfo)) == 0 || hereInfo.AllocationBase == nullptr)
+		return false;
+	const char* base = static_cast<const char*>(hereInfo.AllocationBase);
+	const char* end = base;
+	const char* p = base;
+	for (;;) {
+		MEMORY_BASIC_INFORMATION region;
+		if (::VirtualQuery(p, &region, sizeof(region)) == 0)
+			break;
+		if (region.AllocationBase != hereInfo.AllocationBase)
+			break;
+		end = static_cast<const char*>(region.BaseAddress) + region.RegionSize;
+		p = end;
+		if (static_cast<std::size_t>(end - base) > 64u * 1024u * 1024u)
+			break;
+	}
+	if (end <= base)
+		return false;
+	out.low = base;
+	out.high = end;
+#elif defined(__APPLE__)
+	void* const top = pthread_get_stackaddr_np(pthread_self());
+	const std::size_t size = pthread_get_stacksize_np(pthread_self());
+	if (top == nullptr || size == 0)
+		return false;
+	out.high = static_cast<const char*>(top);
+	out.low = out.high - size;
+#else
+	pthread_attr_t attr;
+	if (pthread_getattr_np(pthread_self(), &attr) != 0)
+		return false;
+	void* addr = nullptr;
+	std::size_t size = 0;
+	const int rc = pthread_attr_getstack(&attr, &addr, &size);
+	pthread_attr_destroy(&attr);
+	if (rc != 0 || addr == nullptr || size == 0)
+		return false;
+	out.low = static_cast<const char*>(addr);
+	out.high = out.low + size;
+#endif
+	tl_threadStack = out;
+	return out.low != nullptr && out.high > out.low;
+}
 
 } // namespace
 
@@ -129,6 +199,9 @@ void ibFiber::InitPosixStack()
 
 void ibFiber::ConvertThread()
 {
+	// Before the first switch. A fiber's guard page faults on this thread,
+	// and the crash log runs on the alternate stack installed here.
+	ibCrashGuard::ArmCurrentThread();
 	if (tl_schedulerFiber != nullptr)
 		return;
 	ibFiber* self = new ibFiber();
@@ -174,6 +247,35 @@ void ibFiber::ReleaseThread()
 
 ibFiber* ibFiber::Current() { return tl_currentFiber; }
 ibFiber* ibFiber::Scheduler() { return tl_schedulerFiber; }
+
+std::size_t ibFiber::StackRemaining() noexcept
+{
+	// volatile so the address is a real slot, not a register the optimiser
+	// reused from somewhere above this frame.
+	volatile char here = 0;
+	const char* const sp = const_cast<const char*>(&here);
+	(void)here;
+
+	const char* low = nullptr;
+	const char* high = nullptr;
+	const ibFiber* const cur = tl_currentFiber;
+	if (cur != nullptr && !cur->m_scheduler && cur->m_stackBottom != nullptr && cur->m_stackSize != 0) {
+		low = static_cast<const char*>(cur->m_stackBottom);
+		high = low + cur->m_stackSize;
+	}
+	else {
+		ibStackSpan span;
+		if (!ThreadStackSpan(span))
+			return kUnknownStack;
+		low = span.low;
+		high = span.high;
+	}
+	// Outside the span is a measurement we do not trust. Refusing on it
+	// would turn a healthy script into a recursion error.
+	if (sp <= low || sp > high)
+		return kUnknownStack;
+	return static_cast<std::size_t>(sp - low);
+}
 
 ibFiber* ibFiber::Create(Entry entry, void* arg, std::size_t reserveBytes)
 {
@@ -311,9 +413,28 @@ void __stdcall ibFiber::FiberProc(void* arg)
 #  if defined(IB_FIBER_ASAN)
 	__sanitizer_finish_switch_fiber(nullptr, nullptr, nullptr);
 #  endif
+	// The reservation, not the commit. AllocationBase is the low end;
+	// the regions that share it run up to the top the pointer grows from.
 	MEMORY_BASIC_INFORMATION info;
-	if (::VirtualQuery(&info, &info, sizeof(info)) != 0)
+	if (::VirtualQuery(&info, &info, sizeof(info)) != 0 && info.AllocationBase != nullptr) {
+		const char* const base = static_cast<const char*>(info.AllocationBase);
+		const char* end = base;
+		const char* p = base;
+		for (;;) {
+			MEMORY_BASIC_INFORMATION region;
+			if (::VirtualQuery(p, &region, sizeof(region)) == 0)
+				break;
+			if (region.AllocationBase != info.AllocationBase)
+				break;
+			end = static_cast<const char*>(region.BaseAddress) + region.RegionSize;
+			p = end;
+			if (static_cast<std::size_t>(end - base) > 64u * 1024u * 1024u)
+				break;
+		}
 		self->m_stackBottom = info.AllocationBase;
+		if (end > base)
+			self->m_stackSize = static_cast<std::size_t>(end - base);
+	}
 	self->RunEntry();
 	self->SwitchTo(tl_schedulerFiber);
 	std::abort();

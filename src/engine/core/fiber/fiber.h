@@ -25,18 +25,29 @@ class CORE_API ibFiber {
 public:
 	using Entry = void (*)(void* arg);
 
-	// One megabyte, the same reserve a worker thread has on Windows
-	// (the MSVC default). There is no interpreter recursion limit, so a
-	// fiber has to offer what the thread it replaces offered. The pages
-	// commit on touch; a parked question pays for what the script used,
-	// not for the whole reserve.
+	// The same reserve a thread has (Common.props, StackReserveSize, 8 MB).
+	// MAX_REC_COUNT is 200 and ibProcUnit::Execute keeps about 9.4 KB per
+	// interpreted level, so the guard needs roughly 2 MB before it can be
+	// what stops a script. A 1 MB fiber died around depth 75 — the same
+	// measurement that raised the thread reserve — and a server session
+	// now runs on a fiber. The pages commit on touch: a parked question
+	// pays for the stack the script used, not for the reserve.
 	//
-	// Win32 x86 (the shipping build) has a 2 GB user address space, 4 GB
-	// under WOW64 only when the exe is linked /LARGEADDRESSAWARE — this
-	// tree does not pass that flag. After the image, the heap and wx,
-	// roughly a gigabyte is left, which is about a thousand fibers at
-	// this reserve. x64 and arm64 are not address-space bound.
-	static constexpr std::size_t kStackReserve = 1024u * 1024u;
+	// Win32 x86 (the shipping build) has a 2 GB user address space. The
+	// reserve is virtual, the same 8 MB the thread this fiber replaces
+	// already took. A process with a gigabyte free holds on the order of
+	// a hundred parked fibers; placing one that does not fit throws
+	// bad_alloc. A counted refusal for that limit is the address-space
+	// budget, not a smaller stack that makes the guard unreachable again.
+	static constexpr std::size_t kStackReserve = 8u * 1024u * 1024u;
+
+	// Left below the pointer so the refusal itself still fits. The depth
+	// counters stay the limit a script sees; this fires only when the
+	// native stack would run out first.
+	static constexpr std::size_t kRecursionSlack = 128u * 1024u;
+
+	// StackRemaining answers this when it cannot see the bounds. Not empty.
+	static constexpr std::size_t kUnknownStack = static_cast<std::size_t>(-1);
 
 	// The calling thread becomes its own scheduler fiber (the thread
 	// stack). Idempotent on a thread that already converted.
@@ -45,6 +56,15 @@ public:
 
 	static ibFiber* Current();
 	static ibFiber* Scheduler();
+
+	// Bytes still unused below the stack pointer: this fiber's reserve
+	// when one is current, otherwise the OS thread's stack.
+	static std::size_t StackRemaining() noexcept;
+	static bool StackLow() noexcept
+	{
+		const std::size_t left = StackRemaining();
+		return left != kUnknownStack && left < kRecursionSlack;
+	}
 
 	static ibFiber* Create(Entry entry, void* arg, std::size_t reserveBytes = kStackReserve);
 	static void Destroy(ibFiber* fiber);

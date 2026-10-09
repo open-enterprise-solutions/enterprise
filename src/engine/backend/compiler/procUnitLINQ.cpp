@@ -31,6 +31,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "procUnitLambda.h"   // ibValueFunction full def + AsFunction / AsIterator
+#include "core/fiber/fiber.h"  // StackLow — a pipeline entered with no stack left refuses, it does not fault
 
 #include "backend/query/queryException.h"   // ibBackendQueryLinqException — the pipeline refuses in its own variety
 #include "backend/query/queryRamTable.h"   // ibQueryRamTable — …filled first, then loaded into it (TableOfRows)
@@ -1608,6 +1609,9 @@ static void ibValueLinqDispatchImpl(ibValue* self, ibValue::ibLinqMethod method,
 {
 	using M = ibValue::ibLinqMethod;
 	const long realNum = static_cast<long>(method);
+
+	if (ibFiber::StackLow())
+		ibBackendQueryLinqException::Error(_("the query is nested deeper than the stack allows"));
 
 	if (self == nullptr) {
 		ibBackendQueryLinqException::Error(_("Cannot dispatch on null value"));

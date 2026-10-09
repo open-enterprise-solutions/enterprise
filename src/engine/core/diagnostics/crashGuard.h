@@ -48,6 +48,14 @@ namespace ibCrashGuard {
 // label but does not re-register handlers.
 CORE_API void Install(const wxString& exeName);
 
+// The POSIX handlers run on an alternate stack, so a stack overflow —
+// a fiber's guard page arrives as SIGSEGV — can still be written down.
+// The stack is per thread. Install arms the calling thread; a thread
+// that switches fibers arms itself from ibFiber::ConvertThread.
+// No-op on Windows, where the unhandled filter sees
+// EXCEPTION_STACK_OVERFLOW and _resetstkoflw puts the guard page back.
+CORE_API void ArmCurrentThread();
+
 
 // Append `message` to `<exeName>_startup.log` next to the binary. No UI.
 // Frontend / web / console wrappers add their own user-visible surface.

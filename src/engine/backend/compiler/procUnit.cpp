@@ -5,7 +5,7 @@
 
 #include "procUnit.h"
 #include "procUnitLambda.h"    // ibValueIterator / ibValueFunction / AsFunction / AsIterator
-#include "core/fiber/fiberLocals.h"
+#include "core/fiber/fiber.h"          // StackLow — the depth count is not the only way the stack runs out
 
 #include "debugger/debugServer.h"
 #include "system/systemManager.h"
@@ -525,7 +525,12 @@ struct ibProcStackGuard {
 		// through a bound session (ibSessionScope / ibSessionThreadBinding).
 		m_state = state;
 		wxASSERT(state != nullptr);
-		if (state->m_recCount > MAX_REC_COUNT) //critical error
+		// The count is the limit a script sees (MAX_REC_COUNT). The stack
+		// check is the overflow that used to kill the process before the
+		// count was reached — a fiber reserved less than this frame costs.
+		// On ibFiber::kStackReserve the count is reached first, and both
+		// roads say the same thing.
+		if (state->m_recCount > MAX_REC_COUNT || ibFiber::StackLow())
 			RaiseRecursionLimit(state);
 		state->m_recCount++;
 		m_currentContext = runContext;

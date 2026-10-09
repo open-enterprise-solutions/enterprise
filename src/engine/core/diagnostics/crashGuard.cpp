@@ -24,6 +24,7 @@
 #ifdef __WXMSW__
 #include <windows.h>
 #include <dbghelp.h>
+#include <malloc.h>          // _resetstkoflw — the guard page, put back after an overflow
 #pragma comment(lib, "dbghelp.lib")
 #else
 // POSIX backtrace — glibc + macOS libSystem. FreeBSD same header.
@@ -151,6 +152,14 @@ LONG WINAPI PersistentCrashDumpFilter(EXCEPTION_POINTERS* ep)
 		::CloseHandle(hFile);
 	}
 
+	// A fiber overflow is this exception. The guard page is gone until
+	// something puts it back; a second overflow on the same thread is
+	// then not an exception at all. The dump above is the record. This
+	// is what lets a handler that continues still have a guard.
+	if (ep != nullptr && ep->ExceptionRecord != nullptr
+	    && ep->ExceptionRecord->ExceptionCode == static_cast<DWORD>(EXCEPTION_STACK_OVERFLOW))
+		(void)_resetstkoflw();
+
 	// Chain to the previous filter (wx's, if frontend installed it).
 	return s_prevSehFilter ? s_prevSehFilter(ep) : EXCEPTION_CONTINUE_SEARCH;
 }
@@ -247,6 +256,28 @@ void OesTerminateHandler()
 
 } // namespace
 
+void ArmCurrentThread()
+{
+#ifdef __WXMSW__
+	// EXCEPTION_STACK_OVERFLOW reaches PersistentCrashDumpFilter on the
+	// thread's own stack; _resetstkoflw there restores the guard page.
+#else
+	thread_local bool armed = false;
+	if (armed)
+		return;
+	// For the life of the thread. backtrace_symbols_fd needs more than
+	// SIGSTKSZ, and a fiber overflow is delivered on this thread.
+	thread_local char stack[64 * 1024];
+	stack_t ss;
+	std::memset(&ss, 0, sizeof(ss));
+	ss.ss_sp = stack;
+	ss.ss_size = sizeof(stack);
+	ss.ss_flags = 0;
+	if (::sigaltstack(&ss, nullptr) == 0)
+		armed = true;
+#endif
+}
+
 void Install(const wxString& exeName)
 {
 	// Update the label even on repeat install — frontend might call
@@ -272,6 +303,10 @@ void Install(const wxString& exeName)
 	if (s_prevTerminate == nullptr)
 		s_prevTerminate = std::set_terminate(&OesTerminateHandler);
 
+	// Before the handlers, so a fault in the rest of Install can be logged.
+	// Worker threads arm themselves when they become fiber schedulers.
+	ArmCurrentThread();
+
 #ifdef __WXMSW__
 	if (s_prevSehFilter == nullptr)
 		s_prevSehFilter = ::SetUnhandledExceptionFilter(&PersistentCrashDumpFilter);
@@ -280,7 +315,10 @@ void Install(const wxString& exeName)
 	std::memset(&sa, 0, sizeof(sa));
 	sa.sa_handler = &PosixCrashSignalHandler;
 	sigemptyset(&sa.sa_mask);
-	sa.sa_flags = SA_RESTART;
+	// SA_ONSTACK: the handler runs on the alternate stack ArmCurrentThread
+	// installed. Without it a guard-page fault has nowhere to run and the
+	// process dies with no log.
+	sa.sa_flags = SA_RESTART | SA_ONSTACK;
 	::sigaction(SIGSEGV, &sa, nullptr);
 	::sigaction(SIGABRT, &sa, nullptr);
 	::sigaction(SIGFPE,  &sa, nullptr);
