@@ -138,6 +138,7 @@ bool ibProtocolConnectionServer::Open(const wxString& address, wxString& error)
 	}
 	m_stopping = false;
 	m_reader = std::thread(&ibProtocolConnectionServer::ReadMessages, this);
+	m_address = address;
 	return true;
 }
 
@@ -157,6 +158,15 @@ void ibProtocolConnectionServer::Close()
 ibProtocolConnectionServer::~ibProtocolConnectionServer()
 {
 	Close();
+}
+
+bool ibProtocolConnectionServer::Reconnect(wxString& error)
+{
+	if (m_address.IsEmpty()) {
+		error = wxT("no server to return to");
+		return false;
+	}
+	return Open(m_address, error);
 }
 
 bool ibProtocolConnectionServer::Exchange(const std::string& request, std::string& answer,

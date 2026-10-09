@@ -16,7 +16,9 @@
 // A round once a second takes down the instances that asked to go and those idle too long, and hands each
 // session the forms' due idle handlers.
 
+#include <atomic>
 #include <condition_variable>
+#include <cstdint>
 #include <functional>
 #include <future>
 #include <map>
@@ -87,6 +89,15 @@ private:
 		// One call of a client at a time: a call that leaves its work waiting for a response has returned by
 		// then, so the call carrying the response gets in.
 		std::mutex                        lock;
+		// The last call this client answered — its JSON-RPC id and the text written back, including a refusal.
+		// One slot for this client, not for the process. A login by token does not replace it: the lost call is
+		// retried after that login, with the same id. Under `lock`.
+		bool                              hasReply = false;
+		ibDataValue                       replyId;
+		wxString                          reply;
+		bool                              working = false;
+		ibDataValue                       workingId;
+		std::condition_variable           replyWait;
 		// The last frame answered — its number and itself, as sent: a call naming that number (Since) is answered
 		// with the patch from it.
 		s32                               frame = 0;
@@ -95,10 +106,23 @@ private:
 		// for each tab: a tab's view is patched from its own (Run).
 		s32                                           protocol = 1;
 		std::map<s32, std::shared_ptr<ibDataNode>>   views;
+		// SHA-256 of the bearer token. The token itself is not kept. Under m_mutex, with hasToken.
+		bool                              hasToken = false;
+		unsigned char                     tokenDigest[32] = {};
+		// Armed when a thin client's connection has dropped: the moment the session ends if nobody returns.
+		// 0 — a connection is attached, or this client never had one (an HTTP call). Atomic: the round reads it
+		// while Disconnect writes it.
+		std::atomic<std::int64_t>         resumeDeadlineMs{ 0 };
 	};
 
 	std::shared_ptr<Client> FindClient(const wxString& id) const;
+	std::shared_ptr<Client> FindByDigest(const unsigned char* digest) const;
 	void                    RemoveClient(const wxString& id);
+	// login {Token} and no User — the same client, no frame drawn.
+	bool                    ResumeByToken(const ibDataNode& params, ibDataNode& result, ibProtocolRefusal& refusal,
+		wxString& error, const void* connection);
+	// The password login's bearer: drawn, hashed into sys_session, digest kept, plaintext put on `result` once.
+	bool                    RememberToken(Client& client, ibDataNode& result, ibProtocolRefusal& refusal, wxString& error);
 
 	// The work on the client's session worker, waited for until it settles; then the frame drawn into `result` —
 	// numbered, and the patch from the frame of number `since` when that is the last one the client was answered.

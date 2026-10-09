@@ -307,6 +307,9 @@ void ibApplicationHost::ReadBackendConf()
 	// The connections are a base's own — its infobase.conf says them; this is only the default for a base that does
 	// not. Two at least: the registry holds one for its writes, a session needs another.
 	m_configConnections = ReadCount(fc, BACKEND_CONF, wxT("Connections"), 2, 0);
+	// A thin client's session outlives a dropped socket by this many seconds. Left out, or 0, is 120 —
+	// the same reader as the counts above, so 0 is the default and not "off".
+	m_configResume = ReadCount(fc, BACKEND_CONF, wxT("Resume"), 1, 120);
 
 	// (THE MCP SERVER'S SETTINGS ARE NOT HERE. They belong to a PERSON in a
 	//  BASE — the server is started from an authenticated designer session and

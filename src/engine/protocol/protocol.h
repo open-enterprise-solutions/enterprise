@@ -38,9 +38,12 @@ namespace ibProtocolName {
 	// The login, and what every call names.
 	inline constexpr const char* User     = "User";
 	inline constexpr const char* Password = "Password";
+	inline constexpr const char* Token    = "Token";   // login's bearer, once, in the password login's answer. The
+	                                                   // database keeps its hash (docs/public/session-failover.md)
 	inline constexpr const char* Mode     = "Mode";
 	inline constexpr const char* Protocol = "Protocol";
 	inline constexpr const char* Features = "Features";
+	inline constexpr const char* FeatureResume = "resume";   // listed in Features when a dropped thin client may return
 	inline constexpr const char* Client   = "Client";
 	inline constexpr const char* Since    = "Since";
 
@@ -280,9 +283,11 @@ constexpr int ibProtocolVersion = 2;
 // method takes a new one. Every answer but logout's, fetch's, a schema's own and a file's is the client's frame.
 enum class ibProtocolMethod {
 	Unknown,        // a name the protocol does not have
-	Login,          // {User, Password[, Mode][, Protocol]} → Client, Protocol, Features, and the frame (Mode: ibProtocolMode,
-	                // Runtime when absent; Protocol: the newest version the client speaks, 1 when absent — answered with the
-	                // one both speak, and the features the server offers at it)
+	Login,          // {User, Password[, Mode][, Protocol]} → Client, Protocol, Features, Token, and the frame — or
+	                // {Token[, Protocol]} and no User → the previous Client, Protocol, Features, and no frame (the next
+	                // frame {Since} is the patch). Token is the bearer, returned once, on the password login. Mode:
+	                // ibProtocolMode, Runtime when absent; Protocol: the newest version the client speaks, 1 when
+	                // absent — answered with the one both speak, and the features the server offers at it
 	Logout,         // {Client}
 	Frame,          // {Client} → the frame
 	Schema,         // {Client, Schema[, Command[, Args]]} → what that schema shows; with a Command, the schema does it and

@@ -61,6 +61,9 @@ public:
 	// The connections to its DBMS a base may hold when its own infobase.conf does not say — backend.conf
 	// (Connections), else the built-in 32. A base's connections are its own; this is only their default.
 	std::size_t      GetDefaultConnections() const;
+	// How long a thin client's session outlives a dropped connection — backend.conf (Resume), seconds.
+	// Left out, or 0, is 120. Not a switch: 0 is the reader's "use the default", not "off".
+	std::size_t      GetResumeSeconds() const { return m_configResume; }
 	ibHelpService*   GetHelpService() const   { return m_helpService.get(); }
 	wxString         GetLocale() const        { return m_locale.GetCanonicalName(); }
 	wxString         GetLocaleName() const    { return m_locale.GetName(); }
@@ -123,6 +126,7 @@ private:
 	std::size_t m_configWorkers     = 0;
 	std::size_t m_configBases       = 0;
 	std::size_t m_configConnections = 0;
+	std::size_t m_configResume      = 120;
 
 	wxLocale m_locale;
 	int      m_localeLang;
