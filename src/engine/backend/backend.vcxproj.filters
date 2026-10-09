@@ -913,6 +913,12 @@
     <ClInclude Include="session\workerPoolHeadless.h">
       <Filter>session</Filter>
     </ClInclude>
+    <ClInclude Include="session\fiber.h">
+      <Filter>session</Filter>
+    </ClInclude>
+    <ClInclude Include="session\fiberLocals.h">
+      <Filter>session</Filter>
+    </ClInclude>
     <ClInclude Include="lock\lockTypes.h">
       <Filter>lock</Filter>
     </ClInclude>
@@ -2336,6 +2342,12 @@
       <Filter>session</Filter>
     </ClCompile>
     <ClCompile Include="session\workerPoolHeadless.cpp">
+      <Filter>session</Filter>
+    </ClCompile>
+    <ClCompile Include="session\fiber.cpp">
+      <Filter>session</Filter>
+    </ClCompile>
+    <ClCompile Include="session\fiberLocals.cpp">
       <Filter>session</Filter>
     </ClCompile>
     <ClCompile Include="lock\lockHandle.cpp">

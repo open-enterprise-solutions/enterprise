@@ -56,6 +56,8 @@
     <ClInclude Include="session\sessionSnapshot.h" />
     <ClInclude Include="session\workerPool.h" />
     <ClInclude Include="session\workerPoolHeadless.h" />
+    <ClInclude Include="session\fiber.h" />
+    <ClInclude Include="session\fiberLocals.h" />
     <ClInclude Include="lock\lockTypes.h" />
     <ClInclude Include="lock\lockHandle.h" />
     <ClInclude Include="lock\lockHolder.h" />
@@ -473,6 +475,8 @@
     <ClCompile Include="session\sessionRegistry.cpp" />
     <ClCompile Include="session\sessionSnapshot.cpp" />
     <ClCompile Include="session\workerPoolHeadless.cpp" />
+    <ClCompile Include="session\fiber.cpp" />
+    <ClCompile Include="session\fiberLocals.cpp" />
     <ClCompile Include="lock\lockHandle.cpp" />
     <ClCompile Include="lock\lockHolder.cpp" />
     <ClCompile Include="lock\lockKeyHash.cpp" />

@@ -62,6 +62,21 @@ set_source_files_properties(${SQLITE3_SOURCE} PROPERTIES
 # ---------------------------------------------------------------------------
 add_library(backend SHARED ${BACKEND_SOURCES})
 
+# The fiber switch is a few instructions with a fixed frame. It lives in
+# its own file so the C++ around it cannot reorder the saves. Windows
+# uses CreateFiberEx and does not compile these.
+if(NOT WIN32)
+	if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64|amd64")
+		enable_language(ASM)
+		target_sources(backend PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/session/fiber_x64.S")
+	elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64|ARM64")
+		enable_language(ASM)
+		target_sources(backend PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/session/fiber_arm64.S")
+	else()
+		message(FATAL_ERROR "ibFiber has no stack switcher for ${CMAKE_SYSTEM_PROCESSOR}")
+	endif()
+endif()
+
 # ---------------------------------------------------------------------------
 # Include directories
 # ---------------------------------------------------------------------------

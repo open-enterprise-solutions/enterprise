@@ -11,7 +11,10 @@
 #include "backend/appData.h"
 #include "backend/appHost.h"                      // the gate and the unbound thread's base
 #include "workerPool.h"
+#include "fiberLocals.h"
 
+#include <new>
+#include <memory>
 #include <utility>
 #include <chrono>
 #include <shared_mutex>
@@ -527,6 +530,51 @@ void BindingsChanged() noexcept
 {
 	s_bindingEpoch.fetch_add(1, std::memory_order_release);
 }
+
+// The map slot is per OS thread, and two fibers of this thread suspend out of
+// stack order, so each fiber keeps the weak_ptr that was current when it
+// parked. Restoring it also refreshes t_binding at the epoch the map is at
+// now: CurrentCached() would otherwise keep answering the fiber that ran
+// here last. The epoch is not bumped — every other thread's cache is still
+// true, and writers bump it themselves under this same unique lock.
+void SaveSessionBinding(void* dst)
+{
+	auto* slot = static_cast<std::weak_ptr<ibSession>*>(dst);
+	const auto tid = std::this_thread::get_id();
+	std::shared_lock<std::shared_mutex> lk(s_currentMutex);
+	const auto it = s_currentByThread.find(tid);
+	if (it != s_currentByThread.end())
+		*slot = it->second;
+	else
+		slot->reset();
+}
+
+void RestoreSessionBinding(const void* src)
+{
+	const auto* slot = static_cast<const std::weak_ptr<ibSession>*>(src);
+	const auto tid = std::this_thread::get_id();
+	const std::shared_ptr<ibSession> alive = slot->lock();
+	std::unique_lock<std::shared_mutex> lk(s_currentMutex);
+	if (!alive)
+		s_currentByThread.erase(tid);
+	else
+		s_currentByThread[tid] = *slot;
+	const uint64_t epoch = s_bindingEpoch.load(std::memory_order_relaxed);
+	t_binding = { epoch, alive.get() };
+}
+
+struct ibRegisterBindingLocal {
+	ibRegisterBindingLocal()
+	{
+		ibFiberLocals::Register(
+			sizeof(std::weak_ptr<ibSession>),
+			alignof(std::weak_ptr<ibSession>),
+			[](void* dst) { new (dst) std::weak_ptr<ibSession>(); },
+			[](void* dst) { static_cast<std::weak_ptr<ibSession>*>(dst)->~weak_ptr(); },
+			&SaveSessionBinding,
+			&RestoreSessionBinding);
+	}
+} s_registerBindingLocal;
 
 } // namespace
 

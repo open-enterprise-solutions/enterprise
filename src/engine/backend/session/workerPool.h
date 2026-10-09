@@ -12,9 +12,10 @@
 //
 // Concrete backends:
 //   - ibWorkerPoolHeadless (in this directory): N threads, per-session
-//     queue + lease, blocking workers wait on a CV. Suitable for
-//     wenterprise-server.exe and the future oes-server.exe compute
-//     server.
+//     queue + lease. A script that waits parks a fiber on its home
+//     thread and the thread serves other sessions; Wake resumes that
+//     fiber. Suitable for wenterprise-server.exe and the future
+//     oes-server.exe compute server.
 //   - ibWorkerPoolGUI (frontend/session/workerPoolGUI.{h,cpp}): wraps
 //     wxTheApp's CallAfter so tasks run on the wx main thread. Installed by
 //     ibGUISession; a task submitted on the main thread runs inline, so the

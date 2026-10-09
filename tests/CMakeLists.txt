@@ -161,6 +161,7 @@ add_executable(oes_tests
     test_sourceHopChain.cpp
     test_modelFetchDoor.cpp
     test_workerPoolDrop.cpp
+    test_workerPoolFiber.cpp
     test_typeFamilyAdjust.cpp
     test_eventHandler.cpp
     test_functionalOption.cpp

@@ -258,7 +258,9 @@ TEST(WorkerPoolAwait, AWaitingWorkerHoldsNoPlaceUnderTheCap)
 	});
 	ASSERT_TRUE(waiting.Wait());
 
-	// A pool of ONE, and its one worker waits on a person: another session must still be served.
+	// A pool of ONE, and its one worker is inside a question. The question is a fiber, so that
+	// worker is free to serve another session. The cap stays where it was — a waiting question
+	// does not spend a thread, and it does not borrow one either.
 	std::future<void> served = pool.Submit(other.get(), []() {});
 	EXPECT_EQ(served.wait_for(std::chrono::seconds(5)), std::future_status::ready)
 		<< "a question in one session stopped the pool for everybody";

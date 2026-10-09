@@ -14,6 +14,7 @@
 #include "backend/backend_localization.h"
 #include "backend/metadataConfiguration.h"   // a scope holds the configuration it works in
 #include "backend/plugin/pluginManager.h"
+#include "backend/session/fiberLocals.h"
 #include "backend/session/session.h"   // ibSession::CurrentCached — the journal's first question
 #include "backend/session/workerPoolHeadless.h"   // the process's worker pool
 #include "backend/syntaxHelper/helpService.h"
@@ -31,6 +32,27 @@ static thread_local ibMetaDataConfigurationBase* t_metaData = nullptr;
 
 // The base whose service runs on this thread (SetThreadOwner) — for the journal's lines only.
 static thread_local const ibApplicationInstance* t_owner = nullptr;
+
+namespace {
+
+// A question parked on this thread has a base. The next session on the
+// thread must not journal or resolve metadata as that base.
+struct ibRegisterAppHostLocal {
+	ibRegisterAppHostLocal()
+	{
+		ibFiberLocals::RegisterTrivial<ibApplicationInstance*>(
+			[](void* dst) { *static_cast<ibApplicationInstance**>(dst) = t_instance; },
+			[](const void* src) { t_instance = *static_cast<ibApplicationInstance* const*>(src); });
+		ibFiberLocals::RegisterTrivial<ibMetaDataConfigurationBase*>(
+			[](void* dst) { *static_cast<ibMetaDataConfigurationBase**>(dst) = t_metaData; },
+			[](const void* src) { t_metaData = *static_cast<ibMetaDataConfigurationBase* const*>(src); });
+		ibFiberLocals::RegisterTrivial<const ibApplicationInstance*>(
+			[](void* dst) { *static_cast<const ibApplicationInstance**>(dst) = t_owner; },
+			[](const void* src) { t_owner = *static_cast<const ibApplicationInstance* const*>(src); });
+	}
+} s_registerAppHostLocal;
+
+} // namespace
 
 // The connections to its DBMS a base may hold when neither its infobase.conf nor backend.conf says (Connections):
 // enough for the heartbeat, the metadata watcher, ~20 concurrent sessions and slack.
