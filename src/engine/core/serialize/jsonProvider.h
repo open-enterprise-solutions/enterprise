@@ -40,6 +40,7 @@
 class CORE_API ibJsonProvider : public ibFormatProvider {
 public:
 	// Objects and arrays on one path, counting the root. Past this the text is refused.
+	// The same ceiling the script's JSONReader already uses (valueJson.cpp, kMaxDepth).
 	static constexpr int kMaxNesting = 256;
 
 	bool Write(const ibDataNode& root, ibWriter& writer) const override;
