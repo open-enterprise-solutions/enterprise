@@ -393,3 +393,49 @@ TEST_F(ComputedFix, DotWalk_BooleanWhere)
 		qtys.push_back(res.GetValue(&balQty).GetInteger());
 	EXPECT_EQ(qtys, (std::vector<long>{ 100, 50 }));
 }
+
+// A field whose functional option is off. IsAvailable is that question.
+class OptionOffCol : public TestCol {
+public:
+	using TestCol::TestCol;
+	bool IsAvailable() const override { return false; }
+};
+
+// The nested table is made by walking the expression (IsColumnExprAvailable). An arithmetic already
+// walks its inputs, so a switched-off field is not offered out here.
+TEST(NestedQueryAvailability, AnExpressionOfASwitchedOffFieldIsNotOffered)
+{
+	OptionOffCol field(wxT("Field"), 8);
+	ibDataQueryBuilder inner(nullptr);
+	inner.SelectExpr(ibQueryColumnExpr::Arith(ibQueryColumnArithOp::Mul,
+		ibQueryColumnExpr::Col(&field), ibQueryColumnExpr::Col(&field)), wxT("Product"));
+	ibSubqueryQueryable nested(inner);
+	const ibBackendQueryColumn* product = nested.Column(wxT("Product"));
+	ASSERT_NE(product, nullptr);
+	EXPECT_FALSE(product->IsAvailable());
+}
+
+// PRESENTATION(Field) in the nested query. The column out here is offered only while Field is.
+TEST(NestedQueryAvailability, PresentationOfASwitchedOffFieldIsNotOffered)
+{
+	OptionOffCol field(wxT("Field"), 7);
+	ibDataQueryBuilder inner(nullptr);
+	inner.SelectExpr(ibQueryColumnExpr::ValueAsk(ibQueryColumnExpr::Col(&field), ibQueryValueAsk::Presentation),
+		wxT("Shown"));
+	ibSubqueryQueryable nested(inner);
+	const ibBackendQueryColumn* shown = nested.Column(wxT("Shown"));
+	ASSERT_NE(shown, nullptr);
+	EXPECT_FALSE(shown->IsAvailable());
+}
+
+TEST(NestedQueryAvailability, PresentationOfAnAvailableFieldIsOffered)
+{
+	TestCol field(wxT("Field"), 7);
+	ibDataQueryBuilder inner(nullptr);
+	inner.SelectExpr(ibQueryColumnExpr::ValueAsk(ibQueryColumnExpr::Col(&field), ibQueryValueAsk::Presentation),
+		wxT("Shown"));
+	ibSubqueryQueryable nested(inner);
+	const ibBackendQueryColumn* shown = nested.Column(wxT("Shown"));
+	ASSERT_NE(shown, nullptr);
+	EXPECT_TRUE(shown->IsAvailable());
+}

@@ -2313,6 +2313,11 @@ void GatherColumnExprColumns(const ibQueryColumnExpr* e, const std::function<voi
 			for (const ibQueryColumnExprPtr& key : e->m_partition)
 				GatherColumnExprColumns(key.get(), add);
 			break;
+		// The question reads the value it is asked of. A nested query's PRESENTATION(Field) is offered
+		// out here only while Field is: a functional option that hides Field hides that column too.
+		case ibQueryColumnExprKind::ValueAsk:
+			GatherColumnExprColumns(e->m_lhs.get(), add);
+			break;
 	}
 }
 
