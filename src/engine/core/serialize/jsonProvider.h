@@ -29,6 +29,8 @@
 //	     clsid again, and without one the node keeps clsid 0 rather than inventing a value.
 //	Closing 1 and 2 means changing what WRITE emits — a separate lossless emitter, not more
 //	parser. Malformed input throws with the byte offset rather than yielding a partial tree.
+//	Nesting past kMaxNesting is malformed too: the reader recurses, and a request is parsed
+//	before authentication, so an unbounded descent overflows the stack.
 ////////////////////////////////////////////////////////////////////////////
 
 #include "core/serialize/dataBuilder.h"
@@ -37,6 +39,10 @@
 
 class CORE_API ibJsonProvider : public ibFormatProvider {
 public:
+	// Objects and arrays on one path, counting the root. Past this the text is refused.
+	// The same ceiling the script's JSONReader already uses (valueJson.cpp, kMaxDepth).
+	static constexpr int kMaxNesting = 256;
+
 	bool Write(const ibDataNode& root, ibWriter& writer) const override;
 	bool Read(ibReader& reader, ibDataNode& root) const override;  // implemented; nothing calls it
 
