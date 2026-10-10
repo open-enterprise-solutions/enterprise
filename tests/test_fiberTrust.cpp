@@ -23,6 +23,7 @@
 #include "backend/query/dataQueryBuilder.h"
 #include "backend/session/session.h"
 #include "backend/session/sessionHolder.h"
+#include "backend/session/sessionRegistry.h"
 #include "backend/session/workerPoolHeadless.h"
 #include "backend/system/systemEnum.h"
 #include "backend/system/systemManager.h"
@@ -271,7 +272,10 @@ TEST(FiberTrust, ARoleHandlerThatAsksThroughTheGateDoesNotHang)
 	membership.m_strRoleName = wxT("Clerk");
 	membership.m_mode = ibRoleCompositionMode_Intersection;
 	user.m_roleArray.push_back(membership);
-	session->SetUserInfo(user);
+	// SetUserInfo is the registry's. The policy reads this session's roles.
+	ibSessionRegistry* registry = ibApplicationInstance::GetSessionRegistry();
+	ASSERT_NE(registry, nullptr);
+	registry->InstallUser(session.get(), user, wxEmptyString);
 
 	{
 		ibSessionScope bound(session.get());
