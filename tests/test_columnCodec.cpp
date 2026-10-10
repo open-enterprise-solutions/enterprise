@@ -17,6 +17,38 @@
 
 // The role -> physical-suffix table. These suffixes are the on-disk column names AND the wire spread;
 // they must never change silently. Raw carries no suffix (the column is its own single field).
+// `AS out_Флаг` is not an identifier Firebird will take unquoted, and quoting is off
+// because a quoted name becomes case-sensitive. The statement gets an ASCII label;
+// an ASCII alias is still `out_<name>`.
+TEST(ColumnLayout, ANonAsciiAliasIsAnAsciiLabel)
+{
+	EXPECT_EQ(ibSqlAliasOf(wxT("Date")), wxT("out_Date"));
+	EXPECT_EQ(ibSqlAliasOf(wxT("Flag")), wxT("out_Flag"));
+
+	const auto ascii = [](const wxString& name) {
+		for (const wxUniChar c : name)
+			if (c.GetValue() > 127)
+				return false;
+		return !name.IsEmpty();
+	};
+
+	const wxString flag = ibSqlAliasOf(wxT("Флаг"));
+	EXPECT_TRUE(flag.StartsWith(wxT("out_")));
+	EXPECT_TRUE(ascii(flag));
+	EXPECT_EQ(flag, ibSqlAliasOf(wxT("Флаг")));
+	EXPECT_NE(flag, ibSqlAliasOf(wxT("Значение")));
+
+	// A long Cyrillic name used to keep a Cyrillic head in front of the hash.
+	const wxString longName = ibSqlAliasOf(wxT("ЗначениеНеограниченнойДлиныДляПроверки"));
+	EXPECT_TRUE(ascii(longName));
+	EXPECT_NE(longName, flag);
+
+	// A hyphen is the same refusal (`out_a-b` is not an identifier).
+	const wxString hyphen = ibSqlAliasOf(wxT("a-b"));
+	EXPECT_TRUE(ascii(hyphen));
+	EXPECT_EQ(hyphen.Find(wxT('-')), wxNOT_FOUND);
+}
+
 TEST(ColumnLayout, FieldSuffix_RoleTable)
 {
 	EXPECT_EQ(ibFieldSuffix(ibColumnRole::Raw),           wxString());
