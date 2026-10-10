@@ -12,6 +12,7 @@
 
 #include "backend/session/session.h"
 #include "backend/databaseLayer/connectionHolder.h"
+#include "backend/appData.h"
 #include "backend/metadataConfiguration.h"
 #include "backend/metaCollection/metaSessionParameterObject.h"
 #include "backend/system/value/valueArray.h"
@@ -92,6 +93,9 @@ struct SessionParameterRead : ::testing::Test {
 	long index = -1;
 
 	void SetUp() override {
+		// Current() answers nothing until a base exists. The read under test asks it.
+		if (!ibApplicationInstance::CreateAppDataEnv(ibRunMode::eFILE_MODE))
+			GTEST_SKIP() << "appData env unavailable";
 		session = std::make_shared<ibSession>(wxT("session-params"), ibSessionKind::Designer);
 		scope = std::make_unique<ibSessionScope>(session.get());
 		cfg = std::make_unique<ibMetaDataConfigurationFile>();
@@ -103,6 +107,15 @@ struct SessionParameterRead : ::testing::Test {
 		parameters = std::make_unique<ibValueSessionParameters>(cfg.get());
 		index = parameters->FindProp(wxT("CurrentUser"));
 		ASSERT_GE(index, 0);
+	}
+
+	void TearDown() override {
+		scope.reset();
+		session.reset();
+		parameters.reset();
+		cfg.reset();
+		if (ibApplicationInstance::Get() != nullptr)
+			ibApplicationInstance::DestroyAppDataEnv();
 	}
 };
 
