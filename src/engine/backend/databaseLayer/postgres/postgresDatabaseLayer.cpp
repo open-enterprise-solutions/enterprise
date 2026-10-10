@@ -630,14 +630,19 @@ void ibDatabaseLayerPostgres::DoBeginTransaction(const ibTxOptions& opts)
 		                 : wxT("BEGIN ISOLATION LEVEL REPEATABLE READ"))
 		: wxT("BEGIN"), false);
 
-	// PG's NOWAIT behaviour is per-statement (`SELECT ... FOR UPDATE NOWAIT`)
-	// or session-level (`SET lock_timeout`). Inside a TX the cleanest knob
-	// is `SET LOCAL lock_timeout = 0` — applies only to this TX, reverts
-	// on commit/rollback. Lets a noWait transaction (ibTxOptions::noWait)
-	// fail immediately with a lock-timeout exception rather than blocking.
+	// lock_timeout of 0 means wait forever. A noWait transaction has to fail
+	// the moment a lock is held, on every statement, not only one that spells
+	// NOWAIT. If the SET itself fails, the transaction is already aborted:
+	// roll it back and let that error out, or the connection stays unusable.
 	if (opts.noWait) {
-		try { DoRunQuery(wxT("SET LOCAL lock_timeout = 0"), false); }
-		catch (...) { /* best-effort — server without lock_timeout just waits */ }
+		try {
+			DoRunQuery(wxT("SET LOCAL lock_timeout = '1ms'"), false);
+		}
+		catch (...) {
+			try { DoRollBack(); }
+			catch (...) {}   // the transaction is already dead; the SET's error is the one that leaves
+			throw;
+		}
 	}
 }
 
