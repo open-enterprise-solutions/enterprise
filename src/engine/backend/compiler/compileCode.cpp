@@ -3644,6 +3644,13 @@ ibParamUnit ibCompileCode::GetCallFunction(ibCompileContext* context, const wxSt
 
 
 	code.m_numOper = OPER_GOTO;// jump to the end of the bytecode where the expanded call will be made
+	// The call itself is appended at the end of the module, so this jump leaves
+	// whatever try contains it. A jump to a line outside the try drops the handler
+	// (procUnit, OPER_GOTO). The return jump comes back in, but the handler is
+	// already gone, and an exception from a function declared later is not caught.
+	// param2 stays 0 on every other goto. The interpreter keeps the handler when
+	// this one is set. No new opcode: the operand was already stored, and it was 0.
+	code.m_param2.m_numIndex = 1;
 	m_cByteCode.m_listCode.emplace_back(std::move(code));
 
 	ibParamUnit& puRetValue = callFunc->m_puRetValue;
