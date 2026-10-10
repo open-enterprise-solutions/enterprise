@@ -965,6 +965,13 @@ public:
 	// then throws the cancel on. No-op (true) when debug is not attached.
 	bool ParkDebugLoop();
 
+	// While a runtime event holds its mutex (BeforeExit, OnStart), a task
+	// submitted for this session stays queued. Running it on this stack
+	// would take the same mutex again.
+	void PushDeferInlineTasks() { m_deferInline.fetch_add(1, std::memory_order_acq_rel); }
+	void PopDeferInlineTasks() { m_deferInline.fetch_sub(1, std::memory_order_acq_rel); }
+	bool DefersInlineTasks() const { return m_deferInline.load(std::memory_order_acquire) != 0; }
+
 	// --- Database connection façade ----------------------------------
 	// Composition over inheritance: session OWNS a connection holder
 	// rather than BEING one. Each session has ONE connection; runtime
@@ -1125,6 +1132,7 @@ private:
 	// One-shot: set once, never cleared. The script thread observes it
 	// and exits its loop; OnForceExit dispatches the per-kind action.
 	std::atomic<bool>         m_forceExit       { false };
+	std::atomic<int>          m_deferInline     { 0 };
 
 	// Eval / processing-backend-error flags — see Get/Set above.
 	std::atomic<ibEvalMode>   m_evalMode                { eval_none };
@@ -1212,6 +1220,26 @@ public:
 
 private:
 	std::weak_ptr<ibSession> m_prev;
+};
+
+// Open while a runtime event holds the mutex a second close would take.
+// Tasks submitted for the session stay queued until this ends.
+class BACKEND_API ibDeferInlineTasks {
+public:
+	explicit ibDeferInlineTasks(ibSession* session) : m_session(session)
+	{
+		if (m_session != nullptr)
+			m_session->PushDeferInlineTasks();
+	}
+	~ibDeferInlineTasks()
+	{
+		if (m_session != nullptr)
+			m_session->PopDeferInlineTasks();
+	}
+	ibDeferInlineTasks(const ibDeferInlineTasks&) = delete;
+	ibDeferInlineTasks& operator=(const ibDeferInlineTasks&) = delete;
+private:
+	ibSession* m_session;
 };
 
 // RAII: mark the session's access context TRUSTED for the scope's lifetime, so

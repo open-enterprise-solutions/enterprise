@@ -11,7 +11,7 @@
 #include "backend/appData.h"
 #include "backend/appHost.h"                      // the gate and the unbound thread's base
 #include "workerPool.h"
-#include "core/fiber/fiber.h"         // ibFiberMutexLock — a lock held across a role handler
+#include "core/fiber/fiberLocals.h"   // the session binding is a fiber local
 
 #include <new>
 #include <memory>
@@ -236,9 +236,9 @@ private:
 
 		// The modules run one at a time: they belong to the host session's runtime and keep their
 		// frame in the object, and a rented run borrows this very policy on another thread.
-		// Counted on the fiber for the same span: a question inside the handler parks, and a
-		// mutex held across that park deadlocks the thread.
-		ibFiberMutexLock<std::mutex> lk(m_applyMtx);
+		// A breakpoint in the handler stays allowed. A question there is refused
+		// at the question, not by this lock.
+		std::lock_guard<std::mutex> lk(m_applyMtx);
 		Unwind(query, [&](const ibBackendQueryable* source, const ibValueMetaObjectGenericData*) {
 			ApplyToSource(query, source, operation);
 			return true;
@@ -1368,18 +1368,22 @@ bool ibSession::ParkDebugLoop()
 	if (dbg == nullptr)
 		return true;
 
-	// The fiber that holds this session parks itself. Current() is that
-	// lease's pool; the desktop never sets it and waits on the CV.
+	// The fiber that holds THIS session parks itself, and does not run
+	// the session's queue while it is stopped. Any other lease — a fiber
+	// of another session on this thread — waits on the CV: Await would
+	// refuse it. The desktop never sets a pool and waits on the CV.
 	if (ibWorkerPool* const pool = ibWorkerPool::Current()) {
-		try {
-			pool->Await(this, [dbg]() {
-				return !dbg->m_debugLoop.load(std::memory_order_acquire);
-			});
+		if (ibWorkerPool::Leases(this)) {
+			try {
+				pool->Await(this, [dbg]() {
+					return !dbg->m_debugLoop.load(std::memory_order_acquire);
+				}, false);
+			}
+			catch (const ibBackendInterruptException&) {
+				return false;
+			}
+			return true;
 		}
-		catch (const ibBackendInterruptException&) {
-			return false;
-		}
-		return true;
 	}
 
 	while (dbg->m_debugLoop.load(std::memory_order_acquire)) {

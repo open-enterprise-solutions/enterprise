@@ -36,7 +36,7 @@ public:
 	~ibWorkerPoolGUI() override = default;
 
 	std::future<void> Submit(ibSession* session, Task task) override;
-	void              Await(ibSession* session, const std::function<bool()>& done) override;
+	void              Await(ibSession* session, const std::function<bool()>& done, bool drain = true) override;
 	void              Wake(ibSession* session) override;
 	void              Drop(ibSession* session) override;
 	void              Stop() override;

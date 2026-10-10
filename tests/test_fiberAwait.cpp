@@ -7,7 +7,9 @@
 
 #include "backend/appData.h"
 #include "backend/appHost.h"
+#include "backend/backend_exception.h"
 #include "backend/session/session.h"
+#include "backend/session/sessionHolder.h"
 #include "backend/session/sessionRegistry.h"
 #include "backend/session/workerPoolHeadless.h"
 #include "core/fiber/fiber.h"
@@ -20,6 +22,7 @@
 #include <mutex>
 #include <stdexcept>
 #include <string>
+#include <thread>
 
 namespace {
 
@@ -75,38 +78,34 @@ void ExpectRefusal(ibWorkerPoolHeadless& pool, ibSession* session, const char* b
 		pool.Await(session, [] { return false; });
 		FAIL() << "the fiber parked";
 	}
-	catch (const std::logic_error& err) {
+	catch (const ibBackendException& err) {
 		EXPECT_NE(std::string(err.what()).find(because), std::string::npos) << err.what();
 	}
 }
 
 } // namespace
 
-TEST(FiberAwaitGuards, AnUnwindingFiberRefusesToPark)
+TEST(FiberAwaitGuards, AnUnwindingFiberDoesNotThrowFromTheDestructor)
 {
-#ifndef NDEBUG
+	// A destructor is noexcept. The park returns without throwing, and
+	// the exception that is already in flight goes on.
 	ibWorkerPoolHeadless pool(1);
 	auto session = MakeSession(wxT("unwind"));
-	std::atomic<bool> refused{ false };
+	std::atomic<bool> returned{ false };
 
 	std::future<void> f = pool.Submit(session.get(), [&] {
 		struct DuringUnwind {
 			ibWorkerPoolHeadless* pool;
 			ibSession*            session;
-			std::atomic<bool>*    refused;
+			std::atomic<bool>*    returned;
 			~DuringUnwind()
 			{
-				try {
-					pool->Await(session, [] { return false; });
-				}
-				catch (const std::logic_error& err) {
-					if (std::string(err.what()).find("unwinding") != std::string::npos)
-						refused->store(true);
-				}
+				pool->Await(session, [] { return false; });
+				returned->store(true);
 			}
 		};
 		try {
-			DuringUnwind guard{ &pool, session.get(), &refused };
+			DuringUnwind guard{ &pool, session.get(), &returned };
 			throw 1;
 		}
 		catch (int) {
@@ -115,16 +114,12 @@ TEST(FiberAwaitGuards, AnUnwindingFiberRefusesToPark)
 
 	ASSERT_EQ(f.wait_for(std::chrono::seconds(5)), std::future_status::ready);
 	EXPECT_NO_THROW(f.get());
-	EXPECT_TRUE(refused.load());
+	EXPECT_TRUE(returned.load());
 	pool.Stop();
-#else
-	GTEST_SKIP() << "the park guards are compiled into the debug build";
-#endif
 }
 
 TEST(FiberAwaitGuards, ACatchHandlerRefusesToPark)
 {
-#ifndef NDEBUG
 	ibWorkerPoolHeadless pool(1);
 	auto session = MakeSession(wxT("catch"));
 
@@ -133,7 +128,6 @@ TEST(FiberAwaitGuards, ACatchHandlerRefusesToPark)
 			throw 1;
 		}
 		catch (int) {
-			ibFiberHandlerScope handler;
 			ExpectRefusal(pool, session.get(), "catch handler");
 		}
 	});
@@ -141,14 +135,10 @@ TEST(FiberAwaitGuards, ACatchHandlerRefusesToPark)
 	ASSERT_EQ(f.wait_for(std::chrono::seconds(5)), std::future_status::ready);
 	EXPECT_NO_THROW(f.get());
 	pool.Stop();
-#else
-	GTEST_SKIP() << "the park guards are compiled into the debug build";
-#endif
 }
 
 TEST(FiberAwaitGuards, AHeldMutexRefusesToPark)
 {
-#ifndef NDEBUG
 	ibWorkerPoolHeadless pool(1);
 	auto session = MakeSession(wxT("mutex"));
 
@@ -161,9 +151,6 @@ TEST(FiberAwaitGuards, AHeldMutexRefusesToPark)
 	ASSERT_EQ(f.wait_for(std::chrono::seconds(5)), std::future_status::ready);
 	EXPECT_NO_THROW(f.get());
 	pool.Stop();
-#else
-	GTEST_SKIP() << "the park guards are compiled into the debug build";
-#endif
 }
 
 TEST(FiberAwaitGuards, ABreakpointDoesNotFreezeTheSibling)
@@ -202,5 +189,85 @@ TEST(FiberAwaitGuards, ABreakpointDoesNotFreezeTheSibling)
 	ASSERT_EQ(fb.wait_for(std::chrono::seconds(5)), std::future_status::ready);
 	EXPECT_NO_THROW(fb.get());
 	EXPECT_TRUE(ran) << "the breakpoint parked the thread, so the sibling never ran";
+	pool.Stop();
+}
+
+TEST(FiberAwaitGuards, DetachReleasesAStoppedFiberAndDoesNotRunTheCallInsideIt)
+{
+	ibBaseForTest base;
+	ASSERT_TRUE(base.IsOpen());
+	ibSessionRegistry* const reg = ibApplicationInstance::GetSessionRegistry();
+	ASSERT_NE(reg, nullptr);
+	reg->Start();
+
+	ibSessionHolder holder = reg->CreateSessionOfKind(
+		ibRunMode::eFILE_MODE, wxT("fiber-await"), ibSessionKind::Designer, {});
+	ASSERT_TRUE(static_cast<bool>(holder));
+	ibSession* const stopped = holder.Get();
+	reg->EnableDebugForSession(stopped);
+	ibWorkerPool* const pool = stopped->GetWorkerPool();
+	ASSERT_NE(pool, nullptr);
+
+	ibLatch entered;
+	std::atomic<bool> stopReturned{ false };
+	std::future<void> fa = pool->Submit(stopped, [&] {
+		stopped->Debug()->m_debugLoop = true;
+		reg->EnterDebugLoop(stopped);
+		entered.Signal();
+		EXPECT_TRUE(stopped->ParkDebugLoop());
+		stopReturned.store(true);
+	});
+	ASSERT_TRUE(entered.Wait());
+
+	std::atomic<bool> callRanInside{ false };
+	std::future<void> call = pool->Submit(stopped, [&] {
+		callRanInside.store(!stopReturned.load());
+	});
+	std::this_thread::sleep_for(std::chrono::milliseconds(200));
+	EXPECT_FALSE(callRanInside.load());
+	EXPECT_EQ(call.wait_for(std::chrono::milliseconds(0)), std::future_status::timeout);
+
+	// The road Detach and ResetDebugger take.
+	reg->ReleaseDebugParks();
+	ASSERT_EQ(fa.wait_for(std::chrono::seconds(5)), std::future_status::ready);
+	EXPECT_NO_THROW(fa.get());
+	ASSERT_EQ(call.wait_for(std::chrono::seconds(5)), std::future_status::ready);
+	EXPECT_NO_THROW(call.get());
+	EXPECT_FALSE(callRanInside.load());
+}
+
+TEST(FiberAwaitGuards, ASecondCloseWhileBeforeExitAsksDoesNotLockAgain)
+{
+	ibWorkerPoolHeadless pool(1);
+	auto session = MakeSession(wxT("second-close"));
+	std::mutex gate;
+	ibLatch inside;
+	std::atomic<bool> release{ false };
+	std::atomic<bool> secondRan{ false };
+
+	std::future<void> first = pool.Submit(session.get(), [&] {
+		ibDeferInlineTasks defer(session.get());
+		std::lock_guard<std::mutex> lock(gate);
+		pool.Await(session.get(), [&] {
+			inside.Signal();
+			return release.load();
+		});
+	});
+	ASSERT_TRUE(inside.Wait());
+
+	std::future<void> second = pool.Submit(session.get(), [&] {
+		std::lock_guard<std::mutex> lock(gate);
+		secondRan.store(true);
+	});
+	std::this_thread::sleep_for(std::chrono::milliseconds(200));
+	EXPECT_FALSE(secondRan.load());
+
+	release.store(true);
+	pool.Wake(session.get());
+	ASSERT_EQ(first.wait_for(std::chrono::seconds(5)), std::future_status::ready);
+	EXPECT_NO_THROW(first.get());
+	ASSERT_EQ(second.wait_for(std::chrono::seconds(5)), std::future_status::ready);
+	EXPECT_NO_THROW(second.get());
+	EXPECT_TRUE(secondRan.load());
 	pool.Stop();
 }

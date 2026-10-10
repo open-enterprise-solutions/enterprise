@@ -37,6 +37,7 @@
 #endif
 
 #include "backend/appData.h"
+#include "backend/appHost.h"   // every base, so a parked fiber on any of them is released
 
 ///////////////////////////////////////////////////////////////////////
 ibDebuggerServer* ibDebuggerServer::ms_debugServer = nullptr;
@@ -323,16 +324,12 @@ void ibDebuggerServer::WakeDebugSession(const wxString& sessionGuid)
 
 void ibDebuggerServer::WakeAllDebugSessions()
 {
-	// Iterate live sessions, flip their per-session m_debugLoop off and
-	// kick the CV so the script-thread parked in DoDebugLoop returns.
-	// Used on connection loss / server shutdown so sibling tabs in a
-	// wes process don't stay frozen after the designer disconnects.
-	for (auto& [tid, s] : ibSession::SnapshotByThread()) {
-		(void)tid;
-		if (s == nullptr) continue;
-		auto* d = s->Debug();
-		if (d == nullptr) continue;
-		ReleaseDebugPark(s, d);
+	// The debug queue, on every base. A fiber parked at a breakpoint is
+	// bound to no thread, so the thread map does not contain it. Detach,
+	// ResetDebugger and ShutdownServer all come through here.
+	for (ibApplicationInstance* const inst : ibApplicationHost::GetInstances()) {
+		if (ibSessionRegistry* const reg = ibApplicationInstance::GetSessionRegistry(inst))
+			reg->ReleaseDebugParks();
 	}
 }
 

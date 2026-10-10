@@ -905,6 +905,30 @@ void ibSessionRegistry::LeaveDebugLoop(ibSession* s)
 	}
 }
 
+void ibSessionRegistry::ReleaseDebugParks()
+{
+	std::vector<std::shared_ptr<ibSession>> sessions;
+	{
+		std::shared_lock<std::shared_mutex> lk(m_debugMtx);
+		sessions.reserve(m_debugQueue.size());
+		for (const auto& waiting : m_debugQueue)
+			if (auto held = waiting.lock())
+				sessions.push_back(std::move(held));
+	}
+	for (const std::shared_ptr<ibSession>& session : sessions) {
+		ibSession::ibDebugSession* const dbg = session->Debug();
+		if (dbg == nullptr)
+			continue;
+		dbg->m_debugLoop.store(false, std::memory_order_release);
+		{
+			std::lock_guard<std::mutex> lk(dbg->m_mutex);
+			dbg->m_cv.notify_all();
+		}
+		if (ibWorkerPool* const pool = session->GetWorkerPool())
+			pool->Wake(session.get());
+	}
+}
+
 ibSessionWatch ibSessionRegistry::GetActiveDebugTarget() const
 {
 	std::shared_lock<std::shared_mutex> lk(m_debugMtx);
