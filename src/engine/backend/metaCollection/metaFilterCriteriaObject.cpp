@@ -152,12 +152,13 @@ wxString ibValueFilterCriteriaManager::GetClassName() const
 	return wxT("FilterCriteriaManager");
 }
 } // namespace
-bool ibValueMetaObjectFilterCriteria::OnLoadMetaObject(ibMetaData* metaData)
+bool ibValueMetaObjectFilterCriteria::OnBeforeRunMetaObject(int flags)
 {
-	if (!ibValueMetaObject::OnLoadMetaObject(metaData))
+	if (!ibValueMetaObject::OnBeforeRunMetaObject(flags))
 		return false;
-	if (metaData != nullptr && metaData->GetTypeCtor(this, ibCtorObjectMetaType::ibCtorObjectMetaType_Manager) == nullptr)
-		metaData->RegisterCtor(new ibCtorFilterCriteriaManager(this));
+	if (m_metaData != nullptr && m_metaData->IsConfigOpen()
+		&& m_metaData->GetTypeCtor(this, ibCtorObjectMetaType::ibCtorObjectMetaType_Manager) == nullptr)
+		m_metaData->RegisterCtor(new ibCtorFilterCriteriaManager(this));
 	return true;
 }
 bool ibValueMetaObjectFilterCriteria::OnDeleteMetaObject()

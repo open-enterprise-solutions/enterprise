@@ -9,7 +9,7 @@ public:
 	virtual ibClassID ResolveChild(const ibClassID&) const override { return 0; }
 	wxString GetContent() const { return m_propertyContent->GetValueAsString(); }
 	void SetContent(const wxString& content) { m_propertyContent->SetValue(content); }
-	virtual bool OnLoadMetaObject(ibMetaData* metaData) override;
+	virtual bool OnBeforeRunMetaObject(int flags) override;
 	virtual bool OnDeleteMetaObject() override;
 protected:
 	virtual bool ReadData(const ibDataNode& node) override;

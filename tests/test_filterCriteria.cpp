@@ -3,6 +3,9 @@
 #include "backend/metaCollection/metaFilterCriteriaObject.h"
 #include "backend/moduleManager/globalContextManager.h"
 #include "backend/system/value/valueArray.h"
+struct OpenCriteriaFile : ibMetaDataConfigurationFile {
+	ibMetaData::LoadGuard m_open{ this };
+};
 TEST(FilterCriteria, TheConfigurationAcceptsOneAndACatalogDoesNot) {
 	ibMetaDataConfigurationFile cfg;
 	ibValueMetaObjectConfiguration* const root = cfg.GetCommonMetaObject();
@@ -16,10 +19,10 @@ TEST(FilterCriteria, TheConfigurationAcceptsOneAndACatalogDoesNot) {
 	EXPECT_EQ(cfg.CreateMetaObject(g_metaFilterCriteriaCLSID, catalog, false), nullptr);
 }
 TEST(FilterCriteria, FindReturnsTheReferencesOfTheNamedCriterion) {
-	ibMetaDataConfigurationFile cfg;
+	OpenCriteriaFile cfg;
 	ibValueMetaObjectConfiguration* const root = cfg.GetCommonMetaObject();
 	ibValueMetaObjectFilterCriteria* const criterion = dynamic_cast<ibValueMetaObjectFilterCriteria*>(
-		cfg.CreateMetaObject(g_metaFilterCriteriaCLSID, root, false));
+		cfg.CreateMetaObject(g_metaFilterCriteriaCLSID, root, true));
 	ASSERT_NE(criterion, nullptr);
 	criterion->SetName(wxT("SubordinateDocuments"));
 	criterion->SetContent(wxT("Document.Invoice.Basis\nDocument.Return.Attribute.DocumentBasis"));
