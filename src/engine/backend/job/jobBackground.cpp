@@ -62,7 +62,7 @@ thread_local ibBackgroundRun* t_currentRun = nullptr;
 struct ibRegisterCurrentRunLocal {
 	ibRegisterCurrentRunLocal()
 	{
-		ibFiberLocals::RegisterTrivial<ibBackgroundRun*>(
+		ibFiberLocals::RegisterTrivial<ibBackgroundRun*>("job.currentRun",
 			[](void* dst) { *static_cast<ibBackgroundRun**>(dst) = t_currentRun; },
 			[](const void* src) { t_currentRun = *static_cast<ibBackgroundRun* const*>(src); });
 	}

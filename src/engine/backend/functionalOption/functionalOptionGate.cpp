@@ -74,7 +74,7 @@ thread_local int s_asApplication = 0;
 struct ibRegisterAsApplicationLocal {
 	ibRegisterAsApplicationLocal()
 	{
-		ibFiberLocals::RegisterTrivial<int>(
+		ibFiberLocals::RegisterTrivial<int>("functionalOption.asApplication",
 			[](void* dst) { *static_cast<int*>(dst) = s_asApplication; },
 			[](const void* src) { s_asApplication = *static_cast<const int*>(src); });
 	}

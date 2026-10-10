@@ -897,7 +897,7 @@ namespace {
 struct ibRegisterThreeValuedLocal {
 	ibRegisterThreeValuedLocal()
 	{
-		ibFiberLocals::RegisterTrivial<bool>(
+		ibFiberLocals::RegisterTrivial<bool>("procUnit.threeValuedNull",
 			[](void* dst) { *static_cast<bool*>(dst) = ts_threeValuedNullCompare; },
 			[](const void* src) { ts_threeValuedNullCompare = *static_cast<const bool*>(src); });
 	}

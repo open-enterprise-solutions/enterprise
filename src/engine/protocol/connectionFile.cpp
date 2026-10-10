@@ -1,5 +1,7 @@
 #include "connectionFile.h"
 
+#include "core/diagnostics/journal.h"
+#include "core/fiber/fiberLocals.h"
 #include "core/programFolder.h"
 
 #include <wx/dynlib.h>
@@ -22,7 +24,19 @@ wxDllType Library(wxString& path)
 	static const wxDllType s_library = [](const wxString& from) {
 		wxLogNull quiet;   // a library not found is said by the caller, not by a dialog of wx's
 		wxDynamicLibrary library;
-		return library.Load(from) ? library.Detach() : wxDllType(nullptr);
+		// What fileserver registers as it loads is refused. The library is
+		// not kept: a slot taken during load would be missing from fibers
+		// that are already parked.
+		ibFiberLocals::ModuleLoadScope loading(from);
+		if (!library.Load(from))
+			return wxDllType(nullptr);
+		if (loading.Refused()) {
+			if (ibTechJournal::IsOpen())
+				ibTechJournal::Print(ibJournalMark::Error, wxT("fileserver"),
+					wxT("The file base library did not load: it registered a fiber local (%s)"), from);
+			return wxDllType(nullptr);
+		}
+		return library.Detach();
 	}(path);
 	return s_library;
 }

@@ -41,13 +41,13 @@ namespace {
 struct ibRegisterAppHostLocal {
 	ibRegisterAppHostLocal()
 	{
-		ibFiberLocals::RegisterTrivial<ibApplicationInstance*>(
+		ibFiberLocals::RegisterTrivial<ibApplicationInstance*>("appHost.instance",
 			[](void* dst) { *static_cast<ibApplicationInstance**>(dst) = t_instance; },
 			[](const void* src) { t_instance = *static_cast<ibApplicationInstance* const*>(src); });
-		ibFiberLocals::RegisterTrivial<ibMetaDataConfigurationBase*>(
+		ibFiberLocals::RegisterTrivial<ibMetaDataConfigurationBase*>("appHost.metaData",
 			[](void* dst) { *static_cast<ibMetaDataConfigurationBase**>(dst) = t_metaData; },
 			[](const void* src) { t_metaData = *static_cast<ibMetaDataConfigurationBase* const*>(src); });
-		ibFiberLocals::RegisterTrivial<const ibApplicationInstance*>(
+		ibFiberLocals::RegisterTrivial<const ibApplicationInstance*>("appHost.owner",
 			[](void* dst) { *static_cast<const ibApplicationInstance**>(dst) = t_owner; },
 			[](const void* src) { t_owner = *static_cast<const ibApplicationInstance* const*>(src); });
 	}
