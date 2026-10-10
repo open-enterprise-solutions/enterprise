@@ -274,6 +274,7 @@
     <ClInclude Include="query\derivedStateBuilder.h" />
     <ClInclude Include="query\schemaSnapshot.h" />
     <ClInclude Include="query\structureBatch.h" />
+    <ClInclude Include="query\typeChangeReport.h" />
     <ClInclude Include="query\structureBuilder.h" />
     <ClInclude Include="query\tempTableManager.h" />
     <ClInclude Include="query\queryRamTable.h" />
@@ -851,6 +852,7 @@
     <ClCompile Include="query\queryRamTable.cpp" />
     <ClCompile Include="query\schemaSnapshot.cpp" />
     <ClCompile Include="query\structureBatch.cpp" />
+    <ClCompile Include="query\typeChangeReport.cpp" />
     <ClCompile Include="query\structureBuilder.cpp" />
     <ClCompile Include="query\tempTableManager.cpp" />
     <ClCompile Include="system\value\valueDataComposition.cpp" />

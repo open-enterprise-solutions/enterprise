@@ -1,6 +1,8 @@
 #include "backend/query/schemaSnapshot.h"
 
 #include "backend/query/structureBatch.h"                  // ibStructureBatch + DiffColumnInto
+#include "backend/query/typeChangeReport.h"                // a loss is refused before the first DDL statement
+#include "backend/databaseLayer/connectionHolder.h"        // EnsureConnection — the read runs on the apply's connection
 #include "backend/query/schemaBuilder.h"                   // ibSchemaBuilder — the DDL door + FB barrier
 #include "backend/query/columnLayout.h"                    // ColumnFieldNames + ibColumnCodec::WriteValue (seed cell spread)
 #include "backend/databaseLayer/databaseQueryBuilder.h"    // ibDropIndex / ibQueryStatement (the seed upsert + uuid delete)
@@ -898,6 +900,22 @@ int DiffSnapshots(const ibSchemaSnapshot* baseline, const ibSchemaSnapshot& targ
 	}
 	if (refused)
 		return 0;
+
+	// A type change is judged HERE, after exclusive mode is taken and before a
+	// statement. The values the report sees are the values the apply would
+	// change: nothing is written between the two. A loss refuses the apply, so
+	// the structure and the stored values stay as they are.
+	if (baseline != nullptr) {
+		const std::shared_ptr<ibDatabaseLayer> layer = holder != nullptr
+			? holder->EnsureConnection() : db_query;
+		const ibTypeChangeReport change = ibReadTypeChangeReport(baseline, target, layer, report);
+		wxString refusal;
+		if (ibTypeChangeBlocksApply(change, refusal)) {
+			if (report != nullptr)
+				report->AppendError(refusal);
+			ibBackendCoreException::Error(refusal);
+		}
+	}
 
 	// Tables present in baseline but gone from target -> DROP (a vanished id).
 	if (baseline != nullptr) {
