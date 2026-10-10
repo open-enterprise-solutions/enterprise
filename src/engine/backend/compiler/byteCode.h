@@ -608,9 +608,10 @@ public:
 	// format-version). Caller treats false as cache miss and
 	// recompiles from source.
 	//
-	// Format constants live in byteCodeAOT.cpp; bump
-	// kAOTFormatVersion when the layout changes — readers reject
-	// older blobs and fall back to recompile.
+	// The format number is kAOTFormatVersion in byteCodeFormat.h. Bump
+	// it when the layout or the meaning changes — readers reject
+	// another number and fall back to recompile. The cache key
+	// carries the same number, so the row is not found either.
 	// Exported individually (the struct itself isn't BACKEND_API): the AOT
 	// cache API is the public seam tools / tests call across the DLL boundary.
 	BACKEND_API bool SerializeAOT(ibWriterMemory& writer) const;

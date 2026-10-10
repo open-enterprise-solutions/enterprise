@@ -17,14 +17,11 @@ static std::string build_date = __DATE__;
 // below is a day count — right for "which release is this", useless for development, where an
 // engine is rebuilt forty times between breakfast and dinner and every one of them answers 3164.
 //
-// 🛑 WHAT MADE IT WORTH HAVING: the bytecode cache is keyed by the platform plus the configuration,
-// and with a day-granular platform half, cached bytecode from this morning's engine looked valid to
-// this evening's (2026-09-02 — a global function added at noon was invisible for an hour, and Max
-// recognised it as the same thing we had been chasing the day before).
-//
-// ⚠ IT IS THIS TRANSLATION UNIT'S COMPILE TIME. That is what __TIME__ means, so an incremental
-// build that does not recompile backend_core.cpp keeps the previous stamp. It moves for a clean
-// build, for any change reaching this file's headers, and for a release — which is what it is for.
+// 🛑 WHAT IT WAS FOR: the bytecode cache used to key on this stamp, so two builds of one day
+// would not share a blob (2026-09-02). The stamp is this translation unit's compile time, and
+// core is not rebuilt when the compiler changes, so a stale blob kept its key. The cache now
+// keys on kAOTFormatVersion (compiler/byteCodeFormat.h). This stamp remains the spelled-out
+// build, for whoever is telling two builds of one day apart.
 static std::string build_time = __TIME__;
 
 static std::string month_id[] = {
@@ -83,9 +80,9 @@ unsigned int GetBuildId()
 // which engine this is, and a day's builds are one engine as far as anybody outside is concerned.
 // The stamp is the same fact unfolded: the number, and the date and time it was actually compiled.
 //
-// Whoever needs to tell two builds of one day apart takes this one (the bytecode cache does — see
-// byteCodeCache.cpp, and the hour it cost on 2026-09-02 to find out why cached bytecode outlived
-// the engine that made it). Whoever is showing a version takes the number.
+// Whoever needs to tell two builds of one day apart takes this one. Whoever is showing a
+// version takes the number. The bytecode cache does not: its engine half is the format
+// version, which moves when the bytecode does (byteCodeCache.cpp).
 const char* GetBuildStamp()
 {
 	// "3164 (Sep  2 2026 16:55:03)" — assembled once; nothing here is meant to be parsed back.
