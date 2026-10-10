@@ -51,7 +51,36 @@ void LogWorkerException(const wxString& location)
 	}
 }
 
+void JoinWorkers(std::vector<std::thread> workers)
+{
+	for (std::thread& worker : workers) {
+		if (worker.joinable())
+			worker.join();
+	}
+}
+
 } // namespace
+
+std::vector<std::thread> ibWorkerPoolHeadless::TakeWorkersLocked(bool exitedOnly)
+{
+	std::vector<std::thread> out;
+	const auto self = std::this_thread::get_id();
+	auto it = m_workers.begin();
+	while (it != m_workers.end()) {
+		const bool exited = it->exited && it->exited->load(std::memory_order_acquire);
+		// Joining the thread we are on deadlocks. An idle worker whose
+		// thread_local destructor re-enters the pool stays in the list;
+		// the next other thread, or Stop, joins it.
+		if ((exitedOnly && !exited) || (it->thread.joinable() && it->thread.get_id() == self)) {
+			++it;
+			continue;
+		}
+		if (it->thread.joinable())
+			out.push_back(std::move(it->thread));
+		it = m_workers.erase(it);
+	}
+	return out;
+}
 
 std::vector<ibWorkerPoolHeadless::ibParked>& ibWorkerPoolHeadless::ParkedFibers()
 {
@@ -88,19 +117,65 @@ ibWorkerPoolHeadless::~ibWorkerPoolHeadless()
 
 void ibWorkerPoolHeadless::TrySpawnWorker()
 {
+	// Joined by the new worker, before WorkerLoop, so Submit does not wait
+	// out another thread's thread_local destructors. Shared so a failed
+	// constructor can put the handles back: destroying a joinable
+	// std::thread is std::terminate.
+	std::shared_ptr<std::vector<std::thread>> toJoin;
+	struct PutBack {
+		ibWorkerPoolHeadless* self = nullptr;
+		std::shared_ptr<std::vector<std::thread>>* held = nullptr;
+		bool armed = true;
+		~PutBack()
+		{
+			if (!armed || self == nullptr || held == nullptr || *held == nullptr)
+				return;
+			std::lock_guard<std::mutex> lk(self->m_workersMtx);
+			for (std::thread& worker : **held) {
+				if (worker.joinable())
+					self->m_workers.push_back(ibWorker{ nullptr, std::move(worker) });
+			}
+		}
+	} putBack{ this, &toJoin };
+
 	std::lock_guard<std::mutex> lk(m_workersMtx);
-	// Re-check inside the lock so two concurrent Submits don't both
-	// spawn past the cap. A question is a parked fiber and its thread is
-	// free, so the cap is the real cap — nothing is added for the waiting.
-	if (m_maxWorkers != 0 && m_aliveWorkers.load(std::memory_order_acquire) >= m_maxWorkers)
-		return;
+	// At the cap, or while stopping, idle self-exits stay in m_workers
+	// for the next spawn or for Stop. Taking them here would make this
+	// Submit join them.
 	if (m_stop.load(std::memory_order_acquire))
 		return;
+	if (m_maxWorkers != 0 && m_aliveWorkers.load(std::memory_order_acquire) >= m_maxWorkers)
+		return;
+
+	auto finished = TakeWorkersLocked(true);
+	if (!finished.empty())
+		toJoin = std::make_shared<std::vector<std::thread>>(std::move(finished));
+
+	// No allocation under the push: a throw after the thread exists would
+	// destroy a still-joinable std::thread. PutBack returns any handles
+	// already taken if reserve, make_shared or the thread constructor throws.
+	m_workers.reserve(m_workers.size() + 1);
+	auto exited = std::make_shared<std::atomic<bool>>(false);
 	m_aliveWorkers.fetch_add(1, std::memory_order_acq_rel);
-	// Detached: the thread takes care of its own lifetime; Stop() waits
-	// on m_stopCv until m_aliveWorkers reaches 0. Avoids tracking handles
-	// in a vector that has to be cleaned up when workers self-exit.
-	std::thread(&ibWorkerPoolHeadless::WorkerLoop, this).detach();
+	try {
+		m_workers.push_back(ibWorker{
+			exited,
+			std::thread([this, exited, toJoin]() {
+				if (toJoin)
+					JoinWorkers(std::move(*toJoin));
+				WorkerLoop();
+				// Still before thread_local destructors. The next spawn
+				// joins an idle self-exit that has stored this; Stop joins
+				// every handle, and that join is what waits the destructors out.
+				exited->store(true, std::memory_order_release);
+			})
+		});
+	}
+	catch (...) {
+		m_aliveWorkers.fetch_sub(1, std::memory_order_acq_rel);
+		throw;
+	}
+	putBack.armed = false;
 }
 
 std::future<void> ibWorkerPoolHeadless::Submit(ibSession* session, Task task)
@@ -142,8 +217,12 @@ std::future<void> ibWorkerPoolHeadless::Submit(ibSession* session, Task task)
 		// a hold on the session THIS task belongs to. Empty for a session nobody holds by
 		// shared_ptr — a test's own, a stack one — and empty is the right answer there too: such a
 		// session cannot be cancelled by us, and must not be reached for.
-		if (session != nullptr)
+		if (session != nullptr) {
 			slot->owner = session->weak_from_this();
+			// Every submit, not once. A flag left true would interrupt a later
+			// session that reused the address before that session had a hold.
+			slot->owned = !slot->owner.expired();
+		}
 		slot->tasks.push_back({ std::move(task), std::move(promise) });
 		// A script of this session waits in Await on the fiber that holds it. That fiber runs this
 		// task, no other worker may. Its home thread is in m_cv, so the flag and a broadcast are what
@@ -183,6 +262,13 @@ void ibWorkerPoolHeadless::Drop(ibSession* session)
 	// has unwound and the lease is released.
 	if (it->second && it->second->leased.load(std::memory_order_acquire)) {
 		it->second->dropped = true;
+		// The lease's own hold keeps the session alive, so "the owner expired"
+		// never becomes true while the fiber exists. The drop is the interrupt,
+		// and the parked fiber has to be resumed to hear it.
+		if (it->second->waiting > 0)
+			it->second->woken = true;
+		lk.unlock();
+		m_cv.notify_all();
 		return;
 	}
 	m_sessions.erase(it);
@@ -190,21 +276,44 @@ void ibWorkerPoolHeadless::Drop(ibSession* session)
 
 bool ibWorkerPoolHeadless::ShouldInterrupt(ibSession* session) const
 {
+	// m_mtx is held by the only caller (Await). The queue is found here so a
+	// drop is seen under that same hold as the pop of the next task.
 	if (m_stop.load(std::memory_order_acquire))
 		return true;
-	return session != nullptr && ibRunCancelled(session->RunState());
+	if (session == nullptr)
+		return false;
+	const auto it = m_sessions.find(session);
+	if (it != m_sessions.end() && it->second != nullptr && it->second->dropped)
+		return true;
+	if (static_cast<int>(session->State()) >= static_cast<int>(ibSessionState::Stopping))
+		return true;
+	return ibRunCancelled(session->RunState());
+}
+
+bool ibWorkerPoolHeadless::ParkedShouldRunLocked(ibSessionQueue* q) const
+{
+	if (q == nullptr)
+		return false;
+	if (q->woken || !q->tasks.empty() || q->dropped)
+		return true;
+	if (m_stop.load(std::memory_order_acquire))
+		return true;
+	// The session, if it is still there. lock() on an expired hold does not
+	// touch the object. A hold that used to lock and no longer does is a
+	// session that ended while its fiber was parked — resume it so the
+	// stack unwinds, instead of calling RunState through the map key.
+	if (std::shared_ptr<ibSession> alive = q->owner.lock()) {
+		if (static_cast<int>(alive->State()) >= static_cast<int>(ibSessionState::Stopping))
+			return true;
+		return ibRunCancelled(alive->RunState());
+	}
+	return q->owned;
 }
 
 bool ibWorkerPoolHeadless::HasRunnableParkedLocked() const
 {
 	for (const ibParked& parked : ParkedFibers()) {
-		if (parked.queue == nullptr)
-			continue;
-		if (parked.queue->woken || !parked.queue->tasks.empty())
-			return true;
-		if (m_stop.load(std::memory_order_acquire))
-			return true;
-		if (parked.session != nullptr && ibRunCancelled(parked.session->RunState()))
+		if (ParkedShouldRunLocked(parked.queue))
 			return true;
 	}
 	return false;
@@ -276,6 +385,13 @@ void ibWorkerPoolHeadless::Await(ibSession* session, const std::function<bool()>
 		// back into the pool. A teardown cancels, then submits its barrier, and the barrier must run
 		// after this script is out, not under it. The check and the pop stay in one hold of the lock,
 		// so a barrier submitted after the cancel cannot slip between them.
+		// A session that ended under the park is the same outcome as a cancel, and it is asked
+		// of the weak hold: `session` is the map key, and calling through it here is the use-after-free.
+		if (q->owned && q->owner.expired()) {
+			--q->waiting;
+			lk.unlock();
+			ibBackendInterruptException::Error();
+		}
 		if (ShouldInterrupt(session)) {
 			--q->waiting;
 			lk.unlock();
@@ -334,12 +450,30 @@ void ibWorkerPoolHeadless::LeaseEntry(void* raw)
 	ibWorkerPoolHeadless* const pool = args->pool;
 	ibSession* const session = args->session;
 	ibSessionQueue* const q = args->queue;
+
+	// The hold was taken from the queue's weak owner under m_mtx, in
+	// ClaimSessionLocked. It keeps the raw pointer live for this stack.
+	// A session that was never shared has an empty hold — its caller
+	// keeps it, as before.
+	//
+	// The last reference is not released here. Worker tasks do not keep
+	// a session alive, and ~ibSession must not run on this fiber, outside
+	// the session scope. HandOff moves the pointer onto the queue; 
+	// FinishFiber releases it on the scheduler after this stack is gone.
+	struct HandOff {
+		ibWorkerPoolHeadless*      pool = nullptr;
+		ibSessionQueue*            queue = nullptr;
+		std::shared_ptr<ibSession> hold;
+		~HandOff()
+		{
+			if (pool == nullptr || queue == nullptr || !hold)
+				return;
+			std::lock_guard<std::mutex> lk(pool->m_mtx);
+			queue->releaseOnScheduler = std::move(hold);
+		}
+	} handOff{ pool, q, std::move(args->hold) };
 	args.reset();
 
-	// The scope's previous-binding lives on THIS stack. The map slot it
-	// writes is per OS thread, so the fiber snapshot (registered from
-	// session.cpp) is what puts the binding back when we resume — the
-	// scope destructor only runs when the lease actually ends.
 	ibSessionScope scope(session);
 	struct ClearLease {
 		~ClearLease() { tl_currentLease = nullptr; }
@@ -354,6 +488,7 @@ void ibWorkerPoolHeadless::StartLease(ibSession* session, ibSessionQueue* q)
 	args->pool = this;
 	args->session = session;
 	args->queue = q;
+	args->hold = std::move(q->leaseHold);
 	ibFiber* fiber = nullptr;
 	try {
 		fiber = ibFiber::Create(&ibWorkerPoolHeadless::LeaseEntry, args, ibFiber::kStackReserve);
@@ -382,8 +517,10 @@ void ibWorkerPoolHeadless::FinishFiber(ibSession* session, ibSessionQueue* q, ib
 	}
 
 	bool more = false;
+	std::shared_ptr<ibSession> release;
 	{
 		std::lock_guard<std::mutex> lk(m_mtx);
+		release = std::move(q->releaseOnScheduler);
 		q->woken = false;
 		q->leased.store(false);
 		auto it = m_sessions.find(session);
@@ -399,8 +536,11 @@ void ibWorkerPoolHeadless::FinishFiber(ibSession* session, ibSessionQueue* q, ib
 	if (more)
 		m_cv.notify_all();
 	// The fiber has unwound (LeaseEntry returned, its scopes destroyed).
-	// Only now is the stack free of live objects.
+	// Only now is the stack free of live objects. The session, if this
+	// was its last reference, is released here — on the scheduler, not
+	// on the fiber.
 	ibFiber::Destroy(fiber);
+	release.reset();
 }
 
 std::pair<ibSession*, ibWorkerPoolHeadless::ibSessionQueue*>
@@ -409,9 +549,26 @@ ibWorkerPoolHeadless::ClaimSessionLocked()
 	for (auto& kv : m_sessions) {
 		ibSessionQueue* q = kv.second.get();
 		if (q->tasks.empty()) continue;
+		// The owner ended after the task was queued and before a fiber
+		// took it. Fail the tasks. Do not call through the map key.
+		if (q->owned && q->owner.expired()) {
+			std::deque<ibSessionTask> dead;
+			dead.swap(q->tasks);
+			for (ibSessionTask& item : dead) {
+				try {
+					item.promise->set_exception(std::make_exception_ptr(
+						std::runtime_error("worker pool: the session ended before its task ran")));
+				}
+				catch (...) {
+				}
+			}
+			continue;
+		}
 		bool expected = false;
-		if (q->leased.compare_exchange_strong(expected, true))
+		if (q->leased.compare_exchange_strong(expected, true)) {
+			q->leaseHold = q->owner.lock();
 			return { kv.first, q };
+		}
 	}
 	return { nullptr, nullptr };
 }
@@ -426,9 +583,7 @@ bool ibWorkerPoolHeadless::TakeRunnable(ibParked& out)
 			ibSessionQueue* q = it->queue;
 			if (q == nullptr)
 				continue;
-			run = q->woken || !q->tasks.empty()
-				|| m_stop.load(std::memory_order_acquire)
-				|| (it->session != nullptr && ibRunCancelled(it->session->RunState()));
+			run = ParkedShouldRunLocked(q);
 			if (run)
 				q->woken = false;
 		}
@@ -587,24 +742,42 @@ void ibWorkerPoolHeadless::Stop()
 		session->Cancel();
 	alive.clear();   // let them go before the wait below — this pool holds no session for longer than a cancel
 
-	// Wait for every detached worker to exit. m_aliveWorkers decrements
-	// at the end of each WorkerLoop and notifies m_stopCv. A parked fiber
-	// is resumed by the notify above, throws on its own stack, and only
-	// then does its home thread leave — Stop does not return while a
-	// fiber is still suspended.
+	// Wait until every WorkerLoop has returned. m_aliveWorkers decrements
+	// in that function's last destructor and notifies m_stopCv. A parked
+	// fiber is resumed by the notify above, throws on its own stack, and
+	// only then does its home thread leave — Stop does not return while
+	// a fiber is still suspended.
 	//
-	// Timed, and it keeps waiting — leaving early would let a detached
-	// worker run on into session teardown, which is the use-after-free
-	// this drain exists to prevent. What the deadline buys is a VOICE:
-	// a wait that says nothing is indistinguishable from a deadlock, and
-	// reading that difference cost a full-memory dump (2026-08-03: main
-	// parked here while a worker sat in the Firebird sweep poll, which
-	// was passing nullptr for its cancel token).
-	std::unique_lock<std::mutex> lk(m_stopMtx);
-	while (!m_stopCv.wait_for(lk, kStopWaitReport, [this]() {
-		return m_aliveWorkers.load(std::memory_order_acquire) == 0;
-	})) {
-		ibJournalWarning(wxT("session.worker"),wxT("worker pool: still waiting on %lu worker(s) after stop"),
-		             (unsigned long)m_aliveWorkers.load(std::memory_order_acquire));
+	// That counter is not the thread. The std::thread function returns,
+	// then thread_local destructors run, then the thread is actually
+	// gone. Returning here used to overlap those destructors with the
+	// caller freeing the sessions and, on the way out of the process,
+	// with wx teardown. macOS arm64 reports the resulting fault as a
+	// bus error (WorkerPoolFiber.WakeResumesOnlyTheNamedSession, fork
+	// CI on develop 8dc49fe3: the test printed OK, then died in global
+	// tear-down). The join below is the rest of the wait.
+	//
+	// Timed, and it keeps waiting — leaving early would let a worker run
+	// on into session teardown, which is the use-after-free this drain
+	// exists to prevent. What the deadline buys is a VOICE: a wait that
+	// says nothing is indistinguishable from a deadlock, and reading
+	// that difference cost a full-memory dump (2026-08-03: main parked
+	// here while a worker sat in the Firebird sweep poll, which was
+	// passing nullptr for its cancel token).
+	{
+		std::unique_lock<std::mutex> lk(m_stopMtx);
+		while (!m_stopCv.wait_for(lk, kStopWaitReport, [this]() {
+			return m_aliveWorkers.load(std::memory_order_acquire) == 0;
+		})) {
+			ibJournalWarning(wxT("session.worker"),wxT("worker pool: still waiting on %lu worker(s) after stop"),
+			             (unsigned long)m_aliveWorkers.load(std::memory_order_acquire));
+		}
 	}
+
+	std::vector<std::thread> joining;
+	{
+		std::lock_guard<std::mutex> lk(m_workersMtx);
+		joining = TakeWorkersLocked(false);
+	}
+	JoinWorkers(std::move(joining));
 }

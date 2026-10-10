@@ -197,7 +197,13 @@ ibFiber* ibFiber::Create(Entry entry, void* arg, std::size_t reserveBytes)
 		const std::size_t usable = (reserveBytes + pageSize - 1) & ~(pageSize - 1);
 		const std::size_t total = usable + pageSize;
 		int flags = MAP_PRIVATE | MAP_ANONYMOUS;
-#  ifdef MAP_STACK
+		// Linux MAP_STACK is a hint. Where the flag really means "this
+		// mapping is a kernel stack" (the BSDs that implement it),
+		// munmap of the region raises SIGBUS, and macOS arm64 reports
+		// that fault as a bus error — including from a thread that is
+		// still leaving. Darwin does not define the macro; do not pass
+		// it if an SDK grows it.
+#  if defined(MAP_STACK) && !defined(__APPLE__)
 		flags |= MAP_STACK;
 #  endif
 		void* mem = ::mmap(nullptr, total, PROT_NONE, flags, -1, 0);

@@ -86,6 +86,17 @@ private:
 		// answered with `dropped` alone. `dropped` says the session LET GO; this says it is ALIVE,
 		// and only the second one can be asked of a session that told us nothing.
 		std::weak_ptr<ibSession>  owner;
+		// Recomputed on every submit: true only while the weak hold locks. A session
+		// that was never shared stays false — its caller keeps it alive. A later
+		// session that reuses the address starts false until its own submit locks.
+		bool                      owned { false };
+		// The hold ClaimSessionLocked took under m_mtx. StartLease moves it onto
+		// the fiber. Empty for a session that was never shared.
+		std::shared_ptr<ibSession> leaseHold;
+		// The fiber's last reference, moved off its stack when the lease returns.
+		// FinishFiber releases it on the scheduler, so ~ibSession does not run
+		// on the fiber and not inside the session scope.
+		std::shared_ptr<ibSession> releaseOnScheduler;
 
 		// How many Await of this session are on the stack — a question asked from a task run under another
 		// question nests; only the innermost is awake. `woken` is what a submit, an answer or a cancel sets: the
@@ -97,17 +108,28 @@ private:
 
 	void WorkerLoop();
 
-	// Spawn a new detached worker thread. Re-checks alive-vs-cap under
-	// m_workersMtx to handle the race between two threads racing to
-	// spawn; bumps m_aliveWorkers atomically before std::thread::detach.
+	// Spawn a worker. Re-checks alive-vs-cap under m_workersMtx so two
+	// Submits cannot both pass the cap. m_aliveWorkers is bumped before
+	// the thread exists. The handle is kept: Stop joins it. An idle
+	// self-exit is joined by the new worker, before WorkerLoop, so Submit
+	// does not wait out another thread's thread_local destructors. A
+	// detached thread would still be inside those destructors after
+	// m_aliveWorkers hit zero, which is after Stop used to return.
 	void TrySpawnWorker();
+
+	// m_workersMtx must be held. Moves out handles to join outside the
+	// lock (a thread_local destructor can call back into the pool).
+	// exitedOnly takes workers whose WorkerLoop has already returned.
+	std::vector<std::thread> TakeWorkersLocked(bool exitedOnly);
 
 	// Find a session with pending tasks not currently leased and CAS
 	// the lease in. Returns the session pointer + queue, or {nullptr,
 	// nullptr} if no work is available. Must be called with m_mtx held.
 	std::pair<ibSession*, ibSessionQueue*> ClaimSessionLocked();
 
-	// A fiber parked on this worker.
+	// A fiber parked on this worker. `session` is the map key FinishFiber
+	// looks the queue up by. It is not asked whether the session is still
+	// there: that question goes through the queue's weak hold.
 	struct ibParked {
 		ibSession*       session = nullptr;
 		ibSessionQueue*  queue = nullptr;
@@ -124,9 +146,10 @@ private:
 	// Passed across the fiber entry. A nested type so the translation
 	// unit can name the queue (private) without a friend.
 	struct ibLeaseArgs {
-		ibWorkerPoolHeadless* pool = nullptr;
-		ibSession*            session = nullptr;
-		ibSessionQueue*       queue = nullptr;
+		ibWorkerPoolHeadless*      pool = nullptr;
+		ibSession*                 session = nullptr;
+		ibSessionQueue*            queue = nullptr;
+		std::shared_ptr<ibSession> hold;
 	};
 	bool TakeRunnable(ibParked& out);
 	static void LeaseEntry(void* raw);
@@ -134,21 +157,32 @@ private:
 	void        StartLease(ibSession* session, ibSessionQueue* q);
 	void        FinishFiber(ibSession* session, ibSessionQueue* q, ibFiber* fiber);
 	bool        ShouldInterrupt(ibSession* session) const;
+	// m_mtx must be held. True when this parked queue should be resumed:
+	// woken, work queued, the pool stopping, the queue dropped, the
+	// session stopping or cancelled, or the session gone. Cancel and
+	// "gone" are asked of the weak hold, never of the raw map key.
+	bool        ParkedShouldRunLocked(ibSessionQueue* q) const;
 	// m_mtx must be held. True when a fiber parked on THIS thread should
-	// be resumed: it was woken, it has queued tasks, the pool is
-	// stopping, or its session was cancelled.
+	// be resumed.
 	bool        HasRunnableParkedLocked() const;
 
 	std::size_t              m_maxWorkers;
 	std::atomic<bool>        m_stop { false };
 
-	// Worker spawn coordination + join replacement (detached threads).
+	// Handles live until joined. m_aliveWorkers hits zero when WorkerLoop
+	// returns; the thread itself is still running thread_local
+	// destructors until join returns.
+	struct ibWorker {
+		std::shared_ptr<std::atomic<bool>> exited;
+		std::thread                        thread;
+	};
 	std::mutex               m_workersMtx;
+	std::vector<ibWorker>    m_workers;
 	std::atomic<std::size_t> m_aliveWorkers { 0 };
 	// Idle-count drives lazy growth: zero idle + below cap = spawn.
 	std::atomic<std::size_t> m_idleWorkers  { 0 };
-	// Stop() waits on this until m_aliveWorkers reaches 0 (every
-	// detached worker has exited).
+	// Stop waits here until every WorkerLoop has returned, then joins
+	// the handles so thread_local destructors have run too.
 	std::mutex               m_stopMtx;
 	std::condition_variable  m_stopCv;
 

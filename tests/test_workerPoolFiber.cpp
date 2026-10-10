@@ -346,10 +346,11 @@ TEST(WorkerPoolFiber, DropWhileParkedDoesNotBlockOrLeak)
 	const auto spent = std::chrono::steady_clock::now() - before;
 	EXPECT_LT(std::chrono::duration_cast<std::chrono::milliseconds>(spent).count(), 500);
 
-	release.store(true);
-	pool.Wake(session.get());
+	// A drop while parked is the interrupt. The fiber unwinds without an
+	// answer, and Drop itself did not wait for that unwind.
 	ASSERT_EQ(task.wait_for(std::chrono::seconds(5)), std::future_status::ready);
-	EXPECT_NO_THROW(task.get());
+	EXPECT_THROW(task.get(), ibBackendInterruptException);
+	EXPECT_FALSE(release.load());
 	pool.Stop();
 }
 
