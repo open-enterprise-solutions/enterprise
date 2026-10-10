@@ -403,6 +403,38 @@
       "reviewed": true
     },
     {
+      "id": "fn.StrSplit",
+      "name_local": "StrSplit",
+      "name_en": "StrSplit",
+      "kind": "system_function",
+      "category_keys": ["global_context", "global_functions"],
+      "signature": "StrSplit(string, separator, includeEmpty : boolean)",
+      "description": "Массив частей строки. Каждый символ разделителя — отдельный разделитель, поэтому \",;\" делит по любому из них. Пустой разделитель ничего не делит: вся строка — один элемент. includeEmpty по умолчанию истина: подряд идущие разделители, а также разделитель в начале и в конце, дают пустые строки. Ложь отбрасывает эти пустые строки.",
+      "syntax_block": "StrSplit(string, separator, includeEmpty : boolean)",
+      "parameters": "string — исходная строка. separator — символы-разделители. includeEmpty — оставлять пустые части (по умолчанию: истина).",
+      "return_descr": "Массив строк.",
+      "example": "Message(StrSplit(\"a,b;c\", \",;\").Count());   // 3\nMessage(StrSplit(\"a,,b\", \",\", false).Count());   // 2",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": ["fn.StrReplace", "fn.FillPropertyValues"],
+      "reviewed": true
+    },
+    {
+      "id": "fn.FillPropertyValues",
+      "name_local": "FillPropertyValues",
+      "name_en": "FillPropertyValues",
+      "kind": "system_procedure",
+      "category_keys": ["global_context", "global_functions"],
+      "signature": "FillPropertyValues(receiver, source, list : string, exclude : string)",
+      "description": "Копирует значения свойств из источника в приёмник, сопоставляя по имени. Пустой список копирует каждое свойство источника, которое есть и у приёмника. Список — имена через запятую: пробелы вокруг имени и пустые элементы игнорируются, копируются только они. Исключение — такой же список, и эти имена пропускаются. Имени, которого нет на одной из сторон, просто нет в копировании, ошибки нет, и новые свойства не создаются. Имена сопоставляются так, как платформа ищет свойство.",
+      "syntax_block": "FillPropertyValues(receiver, source, list : string, exclude : string)",
+      "parameters": "receiver — куда пишутся значения. source — откуда они читаются. list — какие имена копировать (по умолчанию: все общие). exclude — какие пропустить (по умолчанию: никакие).",
+      "return_descr": "",
+      "example": "dst = New Structure(\"A, B\", 1, 2);\nsrc = New Structure(\"B, C\", 9, 8);\nFillPropertyValues(dst, src);\nMessage(dst.B);   // 9",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": ["fn.StrSplit", "cls.Structure"],
+      "reviewed": true
+    },
+    {
       "id": "fn.StrCountOccur",
       "name_local": "StrCountOccur",
       "name_en": "StrCountOccur",

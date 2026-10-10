@@ -403,6 +403,38 @@
       "reviewed": true
     },
     {
+      "id": "fn.StrSplit",
+      "name_local": "StrSplit",
+      "name_en": "StrSplit",
+      "kind": "system_function",
+      "category_keys": ["global_context", "global_functions"],
+      "signature": "StrSplit(string, separator, includeEmpty : boolean)",
+      "description": "An array of the parts of a string. Each character of the separator is its own delimiter, so \",;\" splits on either. An empty separator does not split: the whole string is the one element. includeEmpty defaults to true, and then consecutive, leading and trailing delimiters leave empty strings. False drops those empty strings.",
+      "syntax_block": "StrSplit(string, separator, includeEmpty : boolean)",
+      "parameters": "string — the source. separator — the delimiter characters. includeEmpty — keep empty parts (default: true).",
+      "return_descr": "Array of strings.",
+      "example": "Message(StrSplit(\"a,b;c\", \",;\").Count());   // 3\nMessage(StrSplit(\"a,,b\", \",\", false).Count());   // 2",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": ["fn.StrReplace", "fn.FillPropertyValues"],
+      "reviewed": true
+    },
+    {
+      "id": "fn.FillPropertyValues",
+      "name_local": "FillPropertyValues",
+      "name_en": "FillPropertyValues",
+      "kind": "system_procedure",
+      "category_keys": ["global_context", "global_functions"],
+      "signature": "FillPropertyValues(receiver, source, list : string, exclude : string)",
+      "description": "Copies property values from source to receiver, matched by name. An empty list copies every source property the receiver also has. A list is comma-separated names, with spaces around a name ignored and an empty token ignored, and only those are copied. Exclude is the same kind of list and is skipped. A name missing on either side is skipped, not an error, and nothing new is created. Names match the way the platform finds a property.",
+      "syntax_block": "FillPropertyValues(receiver, source, list : string, exclude : string)",
+      "parameters": "receiver — where the values are written. source — where they are read. list — the names to copy (default: every shared name). exclude — the names to skip (default: none).",
+      "return_descr": "",
+      "example": "dst = New Structure(\"A, B\", 1, 2);\nsrc = New Structure(\"B, C\", 9, 8);\nFillPropertyValues(dst, src);\nMessage(dst.B);   // 9",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": ["fn.StrSplit", "cls.Structure"],
+      "reviewed": true
+    },
+    {
       "id": "fn.StrCountOccur",
       "name_local": "StrCountOccur",
       "name_en": "StrCountOccur",
