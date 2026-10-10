@@ -132,6 +132,11 @@ jobs:
           key: ccache-${{ github.job }}-${{ github.sha }}
           restore-keys: ccache-${{ github.job }}-
 
+      - name: The acceptance fixtures match the oracle
+        run: |
+          python3 tools/oracle/acceptance.py
+          git diff --exit-code -- tests/fixtures/acceptance
+
       - name: Configure
         run: cmake --preset linux-debug -DBUILD_TESTING=ON -DOES_USE_FIREBIRD=ON -DOES_USE_POSTGRESQL=ON -DwxBUILD_PRECOMP=OFF
 

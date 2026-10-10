@@ -1,0 +1,370 @@
+{
+  "for_the_accountant": "Stock of flour in two warehouses, sugar and a spice whose quantities are not round in binary. Receipts add and expenses take away. A line stored inactive is not a movement, and it is not an unposted document: undoing a posting deletes the document's lines. The balance at a bare date is the balance before that point, so the receipt posted exactly at 2 March 00:00 is not in the balance at that midnight. Naming the boundary Including takes that receipt in; naming it Excluding leaves it out. A day's turnover is that day, from its midnight up to but not including the next. Posting the same document again replaces its line. The register stores a negative balance; refusing one is the document's posting handler, not this register.",
+  "midnight_rule": "A balance at a bare date or a bare moment is the balance before that point. Boundary Including takes the movements at the point; Boundary Excluding leaves them out. Boundary with no kind stays Including.",
+  "movements": [
+    {
+      "doc": "R1",
+      "line": 1,
+      "when": "2026-03-01 10:00:00",
+      "wh": "kitchen",
+      "item": "flour",
+      "receipt": true,
+      "qty": "100.50",
+      "active": true
+    },
+    {
+      "doc": "R1",
+      "line": 2,
+      "when": "2026-03-01 10:00:00",
+      "wh": "bar",
+      "item": "flour",
+      "receipt": true,
+      "qty": "20",
+      "active": true
+    },
+    {
+      "doc": "X1",
+      "line": 1,
+      "when": "2026-03-01 11:00:00",
+      "wh": "kitchen",
+      "item": "flour",
+      "receipt": true,
+      "qty": "999",
+      "active": false
+    },
+    {
+      "doc": "R2",
+      "line": 1,
+      "when": "2026-03-01 18:30:00",
+      "wh": "kitchen",
+      "item": "flour",
+      "receipt": false,
+      "qty": "30.25",
+      "active": true
+    },
+    {
+      "doc": "R3",
+      "line": 1,
+      "when": "2026-03-02 00:00:00",
+      "wh": "kitchen",
+      "item": "flour",
+      "receipt": true,
+      "qty": "5",
+      "active": true
+    },
+    {
+      "doc": "R4",
+      "line": 1,
+      "when": "2026-03-02 12:00:00",
+      "wh": "kitchen",
+      "item": "flour",
+      "receipt": false,
+      "qty": "10",
+      "active": true
+    },
+    {
+      "doc": "R5",
+      "line": 1,
+      "when": "2026-03-15 00:00:00",
+      "wh": "kitchen",
+      "item": "flour",
+      "receipt": true,
+      "qty": "8",
+      "active": true
+    },
+    {
+      "doc": "R6",
+      "line": 1,
+      "when": "2026-03-15 09:00:00",
+      "wh": "kitchen",
+      "item": "sugar",
+      "receipt": true,
+      "qty": "2.50",
+      "active": true
+    },
+    {
+      "doc": "R7",
+      "line": 1,
+      "when": "2026-04-01 00:00:00",
+      "wh": "kitchen",
+      "item": "flour",
+      "receipt": true,
+      "qty": "1",
+      "active": true
+    },
+    {
+      "doc": "S1",
+      "line": 1,
+      "when": "2026-03-01 12:00:00",
+      "wh": "kitchen",
+      "item": "spice",
+      "receipt": true,
+      "qty": "33.33",
+      "active": true
+    },
+    {
+      "doc": "S2",
+      "line": 1,
+      "when": "2026-03-02 12:00:00",
+      "wh": "kitchen",
+      "item": "spice",
+      "receipt": true,
+      "qty": "0.10",
+      "active": true
+    }
+  ],
+  "balances": [
+    {
+      "kind": "balance",
+      "wh": "kitchen",
+      "item": "flour",
+      "at": "2026-03-02 00:00:00",
+      "road": "bare",
+      "qty": "70.25"
+    },
+    {
+      "kind": "balance",
+      "wh": "kitchen",
+      "item": "flour",
+      "at": "2026-03-02 00:00:00",
+      "road": "including",
+      "qty": "75.25"
+    },
+    {
+      "kind": "balance",
+      "wh": "kitchen",
+      "item": "flour",
+      "at": "2026-03-02 00:00:00",
+      "road": "excluding",
+      "qty": "70.25"
+    },
+    {
+      "kind": "balance",
+      "wh": "kitchen",
+      "item": "flour",
+      "at": "2026-03-15 00:00:00",
+      "road": "excluding",
+      "qty": "65.25"
+    },
+    {
+      "kind": "balance",
+      "wh": "kitchen",
+      "item": "flour",
+      "at": "2026-03-15 00:00:00",
+      "road": "including",
+      "qty": "73.25"
+    },
+    {
+      "kind": "balance",
+      "wh": "kitchen",
+      "item": "flour",
+      "at": "2026-04-01 00:00:00",
+      "road": "excluding",
+      "qty": "73.25"
+    },
+    {
+      "kind": "balance",
+      "wh": "kitchen",
+      "item": "flour",
+      "at": "2026-04-01 00:00:00",
+      "road": "including",
+      "qty": "74.25"
+    },
+    {
+      "kind": "balance",
+      "wh": "bar",
+      "item": "flour",
+      "at": "2026-03-02 00:00:00",
+      "road": "excluding",
+      "qty": "20"
+    },
+    {
+      "kind": "balance",
+      "wh": "kitchen",
+      "item": "sugar",
+      "at": "2026-03-15 00:00:00",
+      "road": "excluding",
+      "qty": "0"
+    },
+    {
+      "kind": "balance",
+      "wh": "kitchen",
+      "item": "sugar",
+      "at": "2026-03-15 09:00:00",
+      "road": "excluding",
+      "qty": "0"
+    },
+    {
+      "kind": "balance",
+      "wh": "kitchen",
+      "item": "sugar",
+      "at": "2026-03-15 09:00:00",
+      "road": "including",
+      "qty": "2.5"
+    },
+    {
+      "kind": "balance",
+      "wh": "kitchen",
+      "item": "spice",
+      "at": "2026-04-01 00:00:00",
+      "road": "excluding",
+      "qty": "33.43"
+    }
+  ],
+  "turnovers": [
+    {
+      "kind": "turnover",
+      "wh": "kitchen",
+      "item": "flour",
+      "from": "2026-03-01 00:00:00",
+      "to": "2026-03-02 00:00:00",
+      "receipt": "100.5",
+      "expense": "30.25",
+      "net": "70.25"
+    },
+    {
+      "kind": "turnover",
+      "wh": "kitchen",
+      "item": "flour",
+      "from": "2026-03-02 00:00:00",
+      "to": "2026-03-03 00:00:00",
+      "receipt": "5",
+      "expense": "10",
+      "net": "-5"
+    },
+    {
+      "kind": "turnover",
+      "wh": "kitchen",
+      "item": "flour",
+      "from": "2026-03-01 00:00:00",
+      "to": "2026-04-01 00:00:00",
+      "receipt": "113.5",
+      "expense": "40.25",
+      "net": "73.25"
+    },
+    {
+      "kind": "turnover",
+      "wh": "bar",
+      "item": "flour",
+      "from": "2026-03-01 00:00:00",
+      "to": "2026-04-01 00:00:00",
+      "receipt": "20",
+      "expense": "0",
+      "net": "20"
+    }
+  ],
+  "balance_and_turnovers": [
+    {
+      "kind": "balance_and_turnovers",
+      "wh": "kitchen",
+      "item": "flour",
+      "from": "2026-03-01 00:00:00",
+      "to": "2026-04-01 00:00:00",
+      "opening": "0",
+      "receipt": "113.5",
+      "expense": "40.25",
+      "closing": "73.25"
+    },
+    {
+      "kind": "balance_and_turnovers",
+      "wh": "bar",
+      "item": "flour",
+      "from": "2026-03-01 00:00:00",
+      "to": "2026-04-01 00:00:00",
+      "opening": "0",
+      "receipt": "20",
+      "expense": "0",
+      "closing": "20"
+    },
+    {
+      "kind": "balance_and_turnovers",
+      "wh": "kitchen",
+      "item": "flour",
+      "from": "2026-03-02 00:00:00",
+      "to": "2026-04-01 00:00:00",
+      "opening": "70.25",
+      "receipt": "13",
+      "expense": "10",
+      "closing": "73.25"
+    }
+  ],
+  "periods": [
+    {
+      "kind": "period",
+      "unit": "day",
+      "wh": "kitchen",
+      "item": "flour",
+      "from": "2026-03-01 00:00:00",
+      "to": "2026-04-01 00:00:00",
+      "rows": 3,
+      "receipt": "113.5",
+      "expense": "40.25",
+      "periods": [
+        {
+          "period": "2026-03-01",
+          "receipt": "100.5",
+          "expense": "30.25"
+        },
+        {
+          "period": "2026-03-02",
+          "receipt": "5",
+          "expense": "10"
+        },
+        {
+          "period": "2026-03-15",
+          "receipt": "8",
+          "expense": "0"
+        }
+      ]
+    },
+    {
+      "kind": "period",
+      "unit": "month",
+      "wh": "kitchen",
+      "item": "flour",
+      "from": "2026-03-01 00:00:00",
+      "to": "2026-04-02 00:00:00",
+      "rows": 2,
+      "receipt": "114.5",
+      "expense": "40.25",
+      "periods": [
+        {
+          "period": "2026-03",
+          "receipt": "113.5",
+          "expense": "40.25"
+        },
+        {
+          "period": "2026-04",
+          "receipt": "1",
+          "expense": "0"
+        }
+      ]
+    }
+  ],
+  "repost": {
+    "doc": "R2",
+    "line": 1,
+    "qty": "10.25",
+    "receipt": false,
+    "then": {
+      "kind": "balance",
+      "wh": "kitchen",
+      "item": "flour",
+      "at": "2026-04-01 00:00:00",
+      "road": "excluding",
+      "qty": "93.25"
+    }
+  },
+  "unpost": {
+    "doc": "R3",
+    "line": 1,
+    "then": {
+      "kind": "balance",
+      "wh": "kitchen",
+      "item": "flour",
+      "at": "2026-04-01 00:00:00",
+      "road": "excluding",
+      "qty": "88.25"
+    }
+  }
+}
