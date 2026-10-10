@@ -2482,6 +2482,8 @@ start_label:
 
 	}
 	catch (const ibBackendException& err) {
+		// A park from inside this handler is refused by the pool: the
+		// caught exception is the thread's until the handler returns.
 		if (catchError(err))
 			goto start_label;
 	}

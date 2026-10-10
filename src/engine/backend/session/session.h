@@ -904,9 +904,10 @@ public:
 	// in wenterprise-server can each enter their own debug loop without
 	// blocking the others.
 	struct ibDebugSession {
-		// True while ibProcUnit::Execute is parked in DoDebugLoop's CV
-		// wait. Designer's Continue/Step/Detach commands clear this and
-		// notify the CV for the matching session.
+		// True while ibProcUnit::Execute is stopped in DoDebugLoop. On a
+		// worker fiber the wait parks the fiber; on a thread that is not
+		// a fiber it waits on m_cv. Continue/Step/Detach clear this,
+		// notify the CV, and Wake the session's pool.
 		std::atomic<bool>       m_debugLoop{false};
 
 		// Run context of the script frame currently stopped at the
@@ -950,14 +951,26 @@ public:
 	bool IsDebug() const     { return m_debug != nullptr; }
 	ibDebugSession* Debug()  { return m_debug.get(); }
 
-	// Drop the debug-park flag and notify the per-session CV so any
-	// script worker stopped at a breakpoint inside DoDebugLoop wakes
-	// up immediately and unwinds. Used by session-destroy paths (web
-	// F5 → ibWebSession::OnExit → worker join) so the parked thread
-	// doesn't hold the worker indefinitely while the destroy waits to
-	// release the registry slot. No-op if the session isn't being
-	// debugged.
+	// Drop the debug-park flag, notify the per-session CV, and Wake the
+	// pool so a fiber parked in ParkDebugLoop resumes. Used by
+	// session-destroy paths (web F5 → ibWebSession::OnExit) so the
+	// parked script unwinds instead of holding its lease. No-op if the
+	// session isn't being debugged.
 	void WakeDebugLoop();
+
+	// Wait until m_debugLoop is clear. On the fiber that holds this
+	// session, parks that fiber (the thread keeps serving other
+	// sessions). Otherwise waits on m_cv. Returns false when the wait
+	// was cut by cancel — the caller finishes leaving the breakpoint,
+	// then throws the cancel on. No-op (true) when debug is not attached.
+	bool ParkDebugLoop();
+
+	// While a runtime event holds its mutex (BeforeExit, OnStart), a task
+	// submitted for this session stays queued. Running it on this stack
+	// would take the same mutex again.
+	void PushDeferInlineTasks() { m_deferInline.fetch_add(1, std::memory_order_acq_rel); }
+	void PopDeferInlineTasks() { m_deferInline.fetch_sub(1, std::memory_order_acq_rel); }
+	bool DefersInlineTasks() const { return m_deferInline.load(std::memory_order_acquire) != 0; }
 
 	// --- Database connection façade ----------------------------------
 	// Composition over inheritance: session OWNS a connection holder
@@ -1119,6 +1132,7 @@ private:
 	// One-shot: set once, never cleared. The script thread observes it
 	// and exits its loop; OnForceExit dispatches the per-kind action.
 	std::atomic<bool>         m_forceExit       { false };
+	std::atomic<int>          m_deferInline     { 0 };
 
 	// Eval / processing-backend-error flags — see Get/Set above.
 	std::atomic<ibEvalMode>   m_evalMode                { eval_none };
@@ -1206,6 +1220,26 @@ public:
 
 private:
 	std::weak_ptr<ibSession> m_prev;
+};
+
+// Open while a runtime event holds the mutex a second close would take.
+// Tasks submitted for the session stay queued until this ends.
+class BACKEND_API ibDeferInlineTasks {
+public:
+	explicit ibDeferInlineTasks(ibSession* session) : m_session(session)
+	{
+		if (m_session != nullptr)
+			m_session->PushDeferInlineTasks();
+	}
+	~ibDeferInlineTasks()
+	{
+		if (m_session != nullptr)
+			m_session->PopDeferInlineTasks();
+	}
+	ibDeferInlineTasks(const ibDeferInlineTasks&) = delete;
+	ibDeferInlineTasks& operator=(const ibDeferInlineTasks&) = delete;
+private:
+	ibSession* m_session;
 };
 
 // RAII: mark the session's access context TRUSTED for the scope's lifetime, so

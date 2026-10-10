@@ -49,7 +49,7 @@ public:
 	~ibWorkerPoolHeadless() override;
 
 	std::future<void> Submit(ibSession* session, Task task) override;
-	void              Await(ibSession* session, const std::function<bool()>& done) override;
+	void              Await(ibSession* session, const std::function<bool()>& done, bool drain = true) override;
 	void              Wake(ibSession* session) override;
 	void              Drop(ibSession* session) override;
 	void              Stop() override;
@@ -93,6 +93,10 @@ private:
 		// under m_mtx.
 		int                       waiting { 0 };
 		bool                      woken { false };
+		// A breakpoint sets this false for the wait. A queued task must not
+		// resume the fiber, and must not run on its stack. A question leaves
+		// it true. Put back to true when the wait returns.
+		bool                      drain { true };
 	};
 
 	void WorkerLoop();

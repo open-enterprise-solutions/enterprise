@@ -488,6 +488,11 @@ public:
 	void EnterDebugLoop(ibSession* s);
 	void LeaveDebugLoop(ibSession* s);
 
+	// Detach, ResetDebugger and ShutdownServer. Every session in the debug
+	// queue, not the ones bound to a thread: a fiber parked at a breakpoint
+	// is bound to none. Clears the park and wakes the session's pool.
+	void ReleaseDebugParks();
+
 	// Read by ibSession::Current() on debug threads. Returns nullptr
 	// when no session is parked.
 	ibSessionWatch GetActiveDebugTarget() const;

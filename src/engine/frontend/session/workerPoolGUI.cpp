@@ -80,7 +80,7 @@ void ibWorkerPoolGUI::Drop(ibSession* /*session*/)
 	// which has no per-session partition. Nothing to drop.
 }
 
-void ibWorkerPoolGUI::Await(ibSession* /*session*/, const std::function<bool()>& /*done*/)
+void ibWorkerPoolGUI::Await(ibSession* /*session*/, const std::function<bool()>& /*done*/, bool /*drain*/)
 {
 	// The desktop waits for its user in wx's own modal loop (wxMessageBox, ShowModal), and that loop runs
 	// everything else on the main thread meanwhile. Nothing here waits; a caller that gets here took the

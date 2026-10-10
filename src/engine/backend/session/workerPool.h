@@ -64,7 +64,23 @@ public:
 	//
 	// `done` is asked under the pool's lock: a flag read, nothing that calls back into the pool. Whoever
 	// makes it true calls Wake.
-	virtual void Await(ibSession* session, const std::function<bool()>& done) = 0;
+	//
+	// Before the park, in every build, Await refuses with ibBackendCoreException while a catch handler
+	// is running or an ibFiberMutexLock is held. The message names the module and line when a script
+	// frame is current. It does not throw while a C++ exception is already unwinding: a destructor is
+	// noexcept, and a second exception there would terminate. `drain` is false for a breakpoint. The
+	// tasks that arrive stay queued until the stop ends, and they do not run inside the stopped frame.
+	// A question passes true and still runs them.
+	virtual void Await(ibSession* session, const std::function<bool()>& done, bool drain = true) = 0;
+
+	// The pool whose fiber is running on this thread, or null when this thread is not inside a headless
+	// lease (the desktop, the scheduler between fibers). Saved with the fiber's locals, so a park restores
+	// null on the scheduler and the lease's pool when the fiber resumes.
+	static ibWorkerPool* Current();
+
+	// True when this thread's fiber is leasing `session`. A breakpoint in some other session's fiber
+	// waits on the condition variable instead: Await would refuse it.
+	static bool Leases(const ibSession* session);
 
 	// What an Await of `session` waits for may have changed — its answer arrived, or the session was
 	// cancelled. Any thread. Nobody waiting — nothing to do.

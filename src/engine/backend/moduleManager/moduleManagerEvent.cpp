@@ -6,6 +6,7 @@
 #include "moduleManager.h"
 #include "backend/appData.h"
 #include "backend/backend_exception.h"
+#include "backend/session/session.h"   // ibDeferInlineTasks — a second close stays queued
 
 //*********************************************************************************************************
 //*                                   Events "moduleManager"                                              *
@@ -34,6 +35,7 @@ bool ibValueModuleManagerRuntimeConfiguration::BeforeStart()
 
 	try {
 		ibValue bCancel = false;
+		ibDeferInlineTasks defer(ibSession::Current());
 		std::lock_guard<std::mutex> lock(m_runtimeMutex);
 		if (auto pu = GetProcUnit())
 			pu->CallAsProc(wxT("beforeStart"), bCancel);
@@ -65,6 +67,7 @@ void ibValueModuleManagerRuntimeConfiguration::OnStart()
 		return;
 
 	try {
+		ibDeferInlineTasks defer(ibSession::Current());
 		std::lock_guard<std::mutex> lock(m_runtimeMutex);
 		if (auto pu = GetProcUnit()) {
 			pu->CallAsProc(wxT("onStart"));
@@ -91,6 +94,9 @@ bool ibValueModuleManagerRuntimeConfiguration::BeforeExit()
 
 	try {
 		ibValue bCancel = false;
+		// A second close that arrives while this one is asking stays
+		// queued until this returns and the mutex is free.
+		ibDeferInlineTasks defer(ibSession::Current());
 		std::lock_guard<std::mutex> lock(m_runtimeMutex);
 		if (auto pu = GetProcUnit()) {
 			pu->CallAsProc(wxT("beforeExit"), bCancel);
@@ -121,6 +127,7 @@ void ibValueModuleManagerRuntimeConfiguration::OnExit()
 		return;
 
 	try {
+		ibDeferInlineTasks defer(ibSession::Current());
 		std::lock_guard<std::mutex> lock(m_runtimeMutex);
 		if (auto pu = GetProcUnit()) {
 			pu->CallAsProc(wxT("onExit"));
