@@ -97,7 +97,7 @@ thread_local int g_marker = 0;
 struct ibRegisterMarker {
 	ibRegisterMarker()
 	{
-		ibFiberLocals::RegisterTrivial<int>(
+		ibFiberLocals::RegisterTrivial<int>("test.marker",
 			[](void* dst) { *static_cast<int*>(dst) = g_marker; },
 			[](const void* src) { g_marker = *static_cast<const int*>(src); });
 	}

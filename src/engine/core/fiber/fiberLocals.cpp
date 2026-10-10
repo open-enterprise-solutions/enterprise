@@ -1,5 +1,7 @@
 #include "core/fiber/fiberLocals.h"
 
+#include "core/diagnostics/journal.h"
+
 #include <atomic>
 #include <cstdio>
 #include <cstdlib>
@@ -103,45 +105,112 @@ void ConstructAndSave(const ibFiberLocals::Registry& registry, ibFiberLocals::Sn
 		slot.save(impl.pod.get() + slot.offset);
 }
 
-void RefuseLateRegistration(const ibFiberLocals::Registry& registry, const char* what)
-{
-	if (!registry.sealed.load(std::memory_order_acquire))
-		return;
-	std::fprintf(stderr, "ibFiberLocals::%s after the first fiber snapshot\n", what);
-	std::abort();
-}
-
 } // namespace
 
+// The library this thread is loading. Static initialisers and initialize()
+// run on the loader's thread, so a thread_local is the scope.
+static thread_local ibFiberLocals::ModuleLoadScope* t_loading = nullptr;
+
+static const char* ShownName(const char* name)
+{
+	return (name != nullptr && name[0] != '\0') ? name : "(unnamed)";
+}
+
+static void JournalRefusal(const char* api, const char* name, const wxString& path, bool late)
+{
+	if (!ibTechJournal::IsOpen())
+		return;
+	const wxString variable = wxString::FromUTF8(ShownName(name));
+	if (late) {
+		ibTechJournal::Print(ibJournalMark::Error, wxT("fiber.locals"),
+			wxT("ibFiberLocals::%s('%s') after the first fiber snapshot"),
+			wxString::FromUTF8(api), variable);
+		return;
+	}
+	ibTechJournal::Print(ibJournalMark::Error, wxT("fiber.locals"),
+		wxT("ibFiberLocals::%s refused while loading '%s': variable '%s'"),
+		wxString::FromUTF8(api), path, variable);
+}
+
+ibFiberLocals::ModuleLoadScope::ModuleLoadScope(const wxString& path)
+	: m_previous(nullptr), m_path(path), m_refused(false)
+{
+	m_previous = t_loading;
+	t_loading = this;
+}
+
+ibFiberLocals::ModuleLoadScope::~ModuleLoadScope()
+{
+	t_loading = m_previous;
+}
+
 void ibFiberLocals::Register(
+	const char* name,
 	std::size_t size, std::size_t align,
 	void (*construct)(void*), void (*destroy)(void*),
 	void (*save)(void*), void (*restore)(const void*))
 {
-	Registry& registry = Get();
-	std::lock_guard<std::mutex> lk(registry.mutex);
-	RefuseLateRegistration(registry, "Register");
-	ibFiberSlot slot;
-	slot.size = size;
-	slot.align = align;
-	slot.construct = construct;
-	slot.destroy = destroy;
-	slot.save = save;
-	slot.restore = restore;
-	registry.slots.push_back(slot);
+	wxString loading;
+	bool late = false;
+	{
+		Registry& registry = Get();
+		std::lock_guard<std::mutex> lk(registry.mutex);
+		if (t_loading != nullptr) {
+			t_loading->Refuse();
+			loading = t_loading->Path();
+		}
+		else if (registry.sealed.load(std::memory_order_relaxed)) {
+			late = true;
+		}
+		else {
+			ibFiberSlot slot;
+			slot.size = size;
+			slot.align = align;
+			slot.construct = construct;
+			slot.destroy = destroy;
+			slot.save = save;
+			slot.restore = restore;
+			registry.slots.push_back(slot);
+			return;
+		}
+	}
+	JournalRefusal("Register", name, loading, late);
+	if (late) {
+		std::fprintf(stderr, "ibFiberLocals::Register('%s') after the first fiber snapshot\n", ShownName(name));
+		std::abort();
+	}
 }
 
 void ibFiberLocals::RegisterPerFiber(
+	const char* name,
 	void* (*create)(), void (*destroy)(void*), void (*activate)(void*))
 {
-	Registry& registry = Get();
-	std::lock_guard<std::mutex> lk(registry.mutex);
-	RefuseLateRegistration(registry, "RegisterPerFiber");
-	ibFiberObjectSlot slot;
-	slot.create = create;
-	slot.destroy = destroy;
-	slot.activate = activate;
-	registry.objects.push_back(slot);
+	wxString loading;
+	bool late = false;
+	{
+		Registry& registry = Get();
+		std::lock_guard<std::mutex> lk(registry.mutex);
+		if (t_loading != nullptr) {
+			t_loading->Refuse();
+			loading = t_loading->Path();
+		}
+		else if (registry.sealed.load(std::memory_order_relaxed)) {
+			late = true;
+		}
+		else {
+			ibFiberObjectSlot slot;
+			slot.create = create;
+			slot.destroy = destroy;
+			slot.activate = activate;
+			registry.objects.push_back(slot);
+			return;
+		}
+	}
+	JournalRefusal("RegisterPerFiber", name, loading, late);
+	if (late) {
+		std::fprintf(stderr, "ibFiberLocals::RegisterPerFiber('%s') after the first fiber snapshot\n", ShownName(name));
+		std::abort();
+	}
 }
 
 ibFiberLocals::Snapshot::Snapshot() noexcept = default;

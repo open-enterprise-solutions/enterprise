@@ -12,11 +12,22 @@
 // the wrong session. Each switch saves the running fiber's set and
 // installs the one that is about to run.
 //
-// Owners register a save/restore once, at static initialisation. The pool
-// does not name them. Registration after the first snapshot is a fault:
-// a slot that appears late would be missing from fibers already parked.
+// Owners register a save/restore once, at static initialisation, from core
+// or backend. The pool does not name them. A plugin or the file-base
+// library must not register: the loader opens a ModuleLoadScope around
+// the load and its initialize(), and a registration in that scope is
+// refused and remembered. The loader then unloads the library. Nothing
+// is inferred from a return address.
+//
+// A registration after the first snapshot, and outside any loading
+// scope, aborts. That call is our own code. A slot that appeared late
+// would be missing from fibers already parked, and the next session on
+// the thread would see the previous one's values. The name is what the
+// journal prints for the variable.
 
 #include "core/core.h"
+
+#include <wx/string.h>
 
 #include <cstddef>
 #include <memory>
@@ -52,8 +63,10 @@ public:
 	// A value copied by save/restore. `construct`/`destroy` bracket the
 	// storage inside the snapshot (placement new / explicit destructor).
 	// `save` writes the calling thread's current value; `restore` copies
-	// it back. All four run on the fiber's home thread.
+	// it back. All four run on the fiber's home thread. `name` is the
+	// journal's name for the variable.
 	static void Register(
+		const char* name,
 		std::size_t size,
 		std::size_t align,
 		void (*construct)(void* dst),
@@ -62,11 +75,12 @@ public:
 		void (*restore)(const void* src));
 
 	template <typename T>
-	static void RegisterTrivial(void (*save)(void* dst), void (*restore)(const void* src))
+	static void RegisterTrivial(const char* name, void (*save)(void* dst), void (*restore)(const void* src))
 	{
 		static_assert(std::is_trivially_copyable<T>::value, "RegisterTrivial wants a trivial type");
 		static_assert(std::is_trivially_destructible<T>::value, "RegisterTrivial wants a trivial type");
 		Register(
+			name,
 			sizeof(T), alignof(T),
 			[](void* dst) { new (dst) T(); },
 			[](void* dst) { static_cast<T*>(dst)->~T(); },
@@ -80,9 +94,31 @@ public:
 	// (with nullptr for the scheduler); `destroy` runs on the home
 	// thread after the fiber has unwound.
 	static void RegisterPerFiber(
+		const char* name,
 		void* (*create)(),
 		void (*destroy)(void* obj),
 		void (*activate)(void* obj));
+
+	// Open around a dynamic library's Load and its initialize(). While
+	// one is open on this thread, every registration is refused and
+	// recorded here. Nested scopes are a stack; the refusal is recorded
+	// on the innermost. Destroy them in reverse order of construction.
+	class CORE_API ModuleLoadScope {
+	public:
+		explicit ModuleLoadScope(const wxString& path);
+		~ModuleLoadScope();
+		ModuleLoadScope(const ModuleLoadScope&) = delete;
+		ModuleLoadScope& operator=(const ModuleLoadScope&) = delete;
+
+		bool Refused() const { return m_refused; }
+		const wxString& Path() const { return m_path; }
+		void Refuse() { m_refused = true; }
+
+	private:
+		ModuleLoadScope* m_previous;
+		wxString         m_path;
+		bool             m_refused;
+	};
 
 	// The calling thread's values, and no per-fiber objects: the
 	// scheduler's snapshot.

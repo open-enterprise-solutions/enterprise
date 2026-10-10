@@ -566,7 +566,7 @@ void RestoreSessionBinding(const void* src)
 struct ibRegisterBindingLocal {
 	ibRegisterBindingLocal()
 	{
-		ibFiberLocals::Register(
+		ibFiberLocals::Register("session.binding",
 			sizeof(std::weak_ptr<ibSession>),
 			alignof(std::weak_ptr<ibSession>),
 			[](void* dst) { new (dst) std::weak_ptr<ibSession>(); },

@@ -171,6 +171,7 @@ add_executable(oes_tests
     test_metadataMove.cpp
     test_sectionInterfaceItems.cpp
     test_socketLock.cpp
+    test_fiberRegistration.cpp
 )
 
 target_link_libraries(oes_tests
@@ -223,6 +224,27 @@ include(GoogleTest)
 function(oes_discover_tests target)
     gtest_discover_tests(${target} DISCOVERY_TIMEOUT 120)
 endfunction()
+
+# A plugin that registers a fiber local. Two copies: the call is in a
+# static initialiser, or in oes_plugin_initialize. Built beside oes_tests
+# so the test can load it. Not part of backend.
+function(oes_fiber_registration_plugin target define)
+    add_library(${target} SHARED fiberRegistrationPlugin.cpp)
+    target_compile_definitions(${target} PRIVATE ${define})
+    target_include_directories(${target} PRIVATE
+        "${CMAKE_SOURCE_DIR}/src/engine"
+        "${CMAKE_SOURCE_DIR}/src/engine/backend"
+    )
+    target_link_libraries(${target} PRIVATE core)
+    set_target_properties(${target} PROPERTIES
+        CXX_STANDARD 17
+        CXX_STANDARD_REQUIRED ON
+        BUILD_RPATH "${CMAKE_BINARY_DIR}/bin"
+    )
+endfunction()
+oes_fiber_registration_plugin(fiberRegStatic OES_FIBER_REG_AT_STATIC)
+oes_fiber_registration_plugin(fiberRegInit OES_FIBER_REG_AT_INIT)
+add_dependencies(oes_tests fiberRegStatic fiberRegInit)
 
 oes_discover_tests(oes_tests)
 

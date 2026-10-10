@@ -5,6 +5,8 @@
 #include "pluginManager.h"
 #include "pluginHost.h"   // ibPluginHostInstance — what initialize() receives
 
+#include "core/diagnostics/journal.h"
+#include "core/fiber/fiberLocals.h"
 #include "core/programFolder.h"
 
 #include <wx/filename.h>
@@ -60,14 +62,26 @@ size_t ibPluginManager::LoadAll()
 	for (const wxString& path : files) {
 
 		auto lib = std::make_unique<wxDynamicLibrary>();
+		// Static initialisers run inside Load, on this thread. A registration
+		// there is refused and the library is unloaded: the process stays up.
+		ibFiberLocals::ModuleLoadScope loading(path);
 		if (!lib->Load(path, wxDL_DEFAULT | wxDL_QUIET)) {
 			// Quiet in the UI, never quiet altogether. A stray DLL in the folder
 			// legitimately fails to load and must not disturb anyone — but so does
 			// OUR plugin when a dependency is missing or a symbol went unresolved,
 			// and that one used to vanish without a trace. Same file, same branch;
-			// only the log tells them apart afterwards.
-			ibJournalInfo(wxT("plugin"),"Plugin candidate '%s' did not load - missing dependency or "
-				"unresolved symbol; skipped.", path);
+			// only the log tells them apart afterwards. Print, not ibJournalInfo:
+			// a Release build still has to say why the file did not load.
+			if (ibTechJournal::IsOpen())
+				ibTechJournal::Print(ibJournalMark::Info, wxT("plugin"),
+					wxT("Plugin candidate '%s' did not load - missing dependency or unresolved symbol; skipped."),
+					path);
+			continue;
+		}
+		if (loading.Refused()) {
+			if (ibTechJournal::IsOpen())
+				ibTechJournal::Print(ibJournalMark::Error, wxT("plugin"),
+					wxT("Plugin '%s' did not load: it registered a fiber local"), path);
 			continue;
 		}
 
@@ -103,7 +117,15 @@ size_t ibPluginManager::LoadAll()
 		// return non-zero here, and it is then unloaded without shutdown being
 		// called: it never finished starting, so it has nothing to tear down.
 		if (init_fn && init_fn(ibPluginHostInstance()) != 0) {
-			ibJournalInfo(wxT("plugin"),"Plugin '%s' initialize() failed", path);
+			if (ibTechJournal::IsOpen())
+				ibTechJournal::Print(ibJournalMark::Info, wxT("plugin"),
+					wxT("Plugin '%s' initialize() failed"), path);
+			continue;
+		}
+		if (loading.Refused()) {
+			if (ibTechJournal::IsOpen())
+				ibTechJournal::Print(ibJournalMark::Error, wxT("plugin"),
+					wxT("Plugin '%s' did not load: it registered a fiber local"), path);
 			continue;
 		}
 
