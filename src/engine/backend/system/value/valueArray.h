@@ -175,14 +175,18 @@ public:
 		m_listValue.clear();
 	}
 
-	// Sum — accumulate via ibValue::operator+ (works numerically for
-	// number/date, concatenates for string). Empty array returns the
-	// default ibValue (TYPE_EMPTY).
+	// Sum — accumulate via ibValue::operator+. Numbers and dates add as themselves.
+	// Text that reads as a number adds as that number (a column added without a type
+	// stores text, and UnloadColumn hands that text back); text that does not raises.
+	// A single element is asked the same question: one numeric string is that number.
+	// Empty array returns the default ibValue (TYPE_EMPTY).
 	ibValue Sum() const {
 		if (m_listValue.empty()) return ibValue();
 		ibValue acc = m_listValue.front();
 		for (size_t i = 1; i < m_listValue.size(); ++i)
 			acc = acc + m_listValue[i];
+		if (acc.GetType() == ibValueTypes::TYPE_STRING)
+			acc = acc.GetNumber();
 		return acc;
 	}
 

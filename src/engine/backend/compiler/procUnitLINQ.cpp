@@ -1997,6 +1997,12 @@ static void ibValueLinqDispatchImpl(ibValue* self, ibValue::ibLinqMethod method,
 			if (seen == 0)
 				break;                     // ret stays empty — an empty sequence has no total
 
+			// One element never reaches '+', so a lone numeric string would stay text. The same
+			// question Array.Sum asks (valueArray.h): it is that number, or a refusal.
+			if ((method == M::Sum || method == M::Average)
+				&& acc.GetType() == ibValueTypes::TYPE_STRING)
+				acc = acc.GetNumber();
+
 			if (method == M::Average) {
 				const ibNumber count(static_cast<int64_t>(seen));
 				CopyValue(ret, ibValue(acc.GetNumber() / count));
