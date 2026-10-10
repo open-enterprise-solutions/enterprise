@@ -287,8 +287,8 @@ TEST(SequenceWithoutDimensions, SavesAndKeepsOneBorderWhileAnEmptyRegisterDoesNo
 	ibApplicationInstance::Get()->ReplaceActiveMetaData(cfg);
 	struct Release {
 		~Release() {
-			if (ibApplicationInstance* app = ibApplicationInstance::Get(false))
-				app->ReplaceActiveMetaData(nullptr);
+			// The active configuration is this test's file config. Destroying the base drops
+			// that reference; ReplaceActiveMetaData does not accept an empty one.
 			ibApplicationInstance::DestroyAppDataEnv();
 		}
 	} release;
