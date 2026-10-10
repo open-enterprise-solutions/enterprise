@@ -176,6 +176,9 @@ ibValue ibValueArray::SumWithSelector(ibValue& selector) const
 		if (first) { acc = projected; first = false; }
 		else       { acc = acc + projected; }
 	}
+	// The same question Sum() asks of a lone element: one projected string is its number, or a refusal.
+	if (acc.GetType() == ibValueTypes::TYPE_STRING)
+		acc = acc.GetNumber();
 	return acc;
 }
 
