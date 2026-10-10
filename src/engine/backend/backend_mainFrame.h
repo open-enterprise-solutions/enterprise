@@ -10,6 +10,12 @@
 
 class ibSession;
 
+// A role handler (OnAccessRead / OnAccessWrite) may not ask the user. Question and
+// every ShowModalMessage call this before anything is shown, so desktop, thin client
+// and web all refuse. A script Try catches the exception. Outside a role handler
+// this does nothing.
+BACKEND_API void ibRefuseQuestionFromRoleHandler();
+
 // The frame is not a process-level singleton — it belongs to ibSession.
 // Every caller reaches its frame through a session pointer available
 // in its own scope:

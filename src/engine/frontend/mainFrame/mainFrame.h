@@ -96,6 +96,7 @@ public:
 	// session->GetFrame()->ShowModalMessage(...) instead of raw
 	// wxMessageBox so the backend stays wx-ignorant.
 	int ShowModalMessage(const wxString& message, const wxString& caption, int style) override {
+		ibRefuseQuestionFromRoleHandler();
 		return wxMessageBox(message, caption, style, this);
 	}
 

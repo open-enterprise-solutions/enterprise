@@ -566,6 +566,11 @@ void ibValueSystemFunction::Alert(const wxString& strMessage) //Alert
 
 ibValue ibValueSystemFunction::Question(const wxString& strMessage, ibQuestionMode mode)//Question
 {
+	// OnAccessRead / OnAccessWrite run before every query. A question there would be asked
+	// on every execution, and while it is open the person cannot do anything else. Refused
+	// in every build, before eval mode and before any frame, so a script Try can catch it.
+	ibRefuseQuestionFromRoleHandler();
+
 	// …AND THE SAME FOR A QUESTION, whose answer nobody can give here: the code gets the empty
 	// return code it always got, and the person who ran it learns that the code STOPPED TO ASK —
 	// which is often the finding itself, since a question in the middle of a calculation is why

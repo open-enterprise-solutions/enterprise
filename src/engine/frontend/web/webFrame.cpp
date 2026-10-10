@@ -145,6 +145,7 @@ std::string MakeModalId()
 int ibWebFrame::ShowModalMessage(const wxString& message,
 	const wxString& caption, int style)
 {
+	ibRefuseQuestionFromRoleHandler();
 	// Queue the question and WAIT IN THE SESSION'S POOL (ibWorkerPool::Await). This thread holds the session, so
 	// it goes on running the session's tasks meanwhile — the /session poll that carries the question to the
 	// client among them. It used to park on a promise, and that poll, a task of this same session, queued behind

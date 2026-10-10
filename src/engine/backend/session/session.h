@@ -335,7 +335,18 @@ public:
 	// Designer / technical sessions (no enforcement). Created at authentication
 	// (EnsureRoot) for runtime sessions; the concrete impl lives in session.cpp.
 	// Returns null inside an ibAccessTrustScope (a role module runs privileged).
+	// Await pauses that window, so a task it runs while a question is open
+	// does not see the bypass.
 	const ibAccessPolicy* GetAccessPolicy() const;
+
+	// The role-handler bypass and the session-parameter write window.
+	// Await clears both for the tasks it runs and puts them back after.
+	bool AccessTrusted() const { return m_accessTrusted; }
+	bool SessionParametersOpen() const { return m_sessionParametersOpen; }
+
+	// A role handler (OnAccessRead / OnAccessWrite) may not ask the user. Question and
+	// every modal entry call this. SetSessionParameters is not a role handler and may ask.
+	void RefuseQuestionFromRoleHandler() const;
 
 	// The module manager whose context (Manager / Catalogs / Documents / globals)
 	// an object/record/module compiled against `metaData` should parent to. One
@@ -839,6 +850,9 @@ private:
 	// convention, and why nothing else needs to report a close.
 	void Teardown();
 	friend class ibAccessTrustScope;   // toggles m_accessTrusted (RLS privileged window)
+	friend class ibRoleHandlerScope;   // names the OnAccess* handler that is on the stack
+	friend class ibSessionParameterWriteWindow; // toggles m_sessionParametersOpen
+	friend class ibSessionTrustPause;  // Await clears both for the tasks it runs
 
 	wxString       m_id;
 	ibSessionKind  m_kind;
@@ -1024,6 +1038,10 @@ private:
 	// survives a handler throw). Per-session, never process-global: a trusted
 	// window on one web session must not lift enforcement on another.
 	bool m_accessTrusted = false;
+
+	// Set only by ibRoleHandlerScope, and only around OnAccessRead / OnAccessWrite.
+	// Null the rest of the time, including inside SetSessionParameters, which may ask.
+	const wxString* m_roleHandler = nullptr;
 
 	// SESSION PARAMETERS — declared in metadata, filled once by the session module,
 	// read everywhere. Keyed by the parameter's NAME, which is what a script writes.
@@ -1230,6 +1248,93 @@ public:
 private:
 	ibSession* m_session;
 	bool       m_prev;
+};
+
+// Names the role handler on the stack. Question and every modal refuse while it is open.
+// Not every trusted window is a role handler: SetSessionParameters uses the trust scope
+// and may still ask. The name is copied so a temporary at the call survives the scope.
+class BACKEND_API ibRoleHandlerScope {
+public:
+	ibRoleHandlerScope(ibSession* session, const wxString& handler)
+		: m_session(session)
+		, m_name(handler)
+		, m_prev(session != nullptr ? session->m_roleHandler : nullptr)
+	{
+		if (m_session != nullptr)
+			m_session->m_roleHandler = &m_name;
+	}
+	~ibRoleHandlerScope()
+	{
+		if (m_session != nullptr)
+			m_session->m_roleHandler = m_prev;
+	}
+
+	ibRoleHandlerScope(const ibRoleHandlerScope&)            = delete;
+	ibRoleHandlerScope& operator=(const ibRoleHandlerScope&) = delete;
+
+private:
+	ibSession*       m_session;
+	wxString         m_name;
+	const wxString*  m_prev;
+};
+
+// The write window SetSessionParameters opens around the one call that may
+// write. Saves the prior flag, so a nested window composes, and closes on
+// every exit including a throw.
+class BACKEND_API ibSessionParameterWriteWindow {
+public:
+	explicit ibSessionParameterWriteWindow(ibSession* s)
+		: m_session(s), m_prev(s != nullptr && s->m_sessionParametersOpen)
+	{
+		if (m_session != nullptr) m_session->m_sessionParametersOpen = true;
+	}
+	~ibSessionParameterWriteWindow()
+	{
+		if (m_session != nullptr) m_session->m_sessionParametersOpen = m_prev;
+	}
+
+	ibSessionParameterWriteWindow(const ibSessionParameterWriteWindow&)            = delete;
+	ibSessionParameterWriteWindow& operator=(const ibSessionParameterWriteWindow&) = delete;
+
+private:
+	ibSession* m_session;
+	bool       m_prev;
+};
+
+// Await holds this for the whole wait. SetSessionParameters may ask, and its
+// trust and write window live on the session. The tasks Await runs are that
+// session's, so they would run privileged — RLS off, parameters writable —
+// for as long as the question is open. Clearing the flags here is what keeps
+// that work from inheriting the bypass; the destructor puts them back,
+// including when the wait is cancelled. A role handler never reaches this:
+// it is refused at the question, before it can park.
+class BACKEND_API ibSessionTrustPause {
+public:
+	explicit ibSessionTrustPause(ibSession* s)
+		: m_session(s)
+		, m_trusted(s != nullptr && s->m_accessTrusted)
+		, m_parametersOpen(s != nullptr && s->m_sessionParametersOpen)
+	{
+		if (m_session == nullptr)
+			return;
+		m_session->m_accessTrusted = false;
+		m_session->m_sessionParametersOpen = false;
+	}
+	~ibSessionTrustPause()
+	{
+		if (m_session == nullptr)
+			return;
+		m_session->m_accessTrusted = m_trusted;
+		m_session->m_sessionParametersOpen = m_parametersOpen;
+	}
+
+	ibSessionTrustPause(const ibSessionTrustPause&)            = delete;
+	ibSessionTrustPause& operator=(const ibSessionTrustPause&) = delete;
+
+private:
+	ibSession* m_session;
+	bool       m_trusted;
+	bool       m_parametersOpen;
 };
 
 // ibApplicationInstance::CreateSession<SessionT> template bodies live in
