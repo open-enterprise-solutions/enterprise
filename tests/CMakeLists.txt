@@ -148,6 +148,7 @@ add_executable(oes_tests
     test_databaseStringConverter.cpp
     test_readerWriterMemory.cpp
     test_passwordHash.cpp
+    test_programFolder.cpp
     test_md5.cpp
     test_sha256.cpp
     test_stringUtils.cpp

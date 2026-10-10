@@ -7,7 +7,8 @@
 
 #include <wx/string.h>
 #include <wx/utils.h>
-#include <wx/stdpaths.h>
+#include "core/programFolder.h"
+
 #include <wx/filename.h>
 #include <wx/file.h>
 #include <wx/datetime.h>
@@ -27,8 +28,10 @@ inline bool ibDebugTraceEnabled(const char* envVar)
 	return !value.IsEmpty() && value != wxT("0") && value != wxT("false") && value != wxT("off");
 }
 
-// DIAGNOSTICS THAT SOMEBODY CAN ACTUALLY READ. Writes one line to `oes-debug.log` next to the
-// executable, appending.
+// DIAGNOSTICS THAT SOMEBODY CAN ACTUALLY READ. Writes one line to `oes-debug.log`, appending.
+// Inside an installed macOS bundle that file is ~/Library/Logs/OES/oes-debug.log, because the
+// folder beside the .app is often /Applications and a normal user cannot write there. Everywhere
+// else it is the program folder.
 //
 // Deliberately NOT wxLogError / wxLogMessage / wxFAIL_MSG / OutputDebugString: the applications
 // are normally run WITHOUT a debugger attached, so anything sent to the logger or to the debug
@@ -41,7 +44,7 @@ inline bool ibDebugTraceEnabled(const char* envVar)
 // remove the call when its question is answered.
 inline void ibTraceToFile(const wxString& text)
 {
-	wxFileName traceFile(wxStandardPaths::Get().GetExecutablePath());
+	wxFileName traceFile = wxFileName::DirName(ibDiagnosticFolder());
 	traceFile.SetFullName(wxT("oes-debug.log"));
 
 	const wxString path = traceFile.GetFullPath();

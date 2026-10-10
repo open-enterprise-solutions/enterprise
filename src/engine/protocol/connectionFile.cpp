@@ -1,10 +1,11 @@
 #include "connectionFile.h"
 
+#include "core/programFolder.h"
+
 #include <wx/dynlib.h>
 #include <wx/filename.h>
 #include <wx/intl.h>   // _() — what a refusal says to a person
 #include <wx/log.h>
-#include <wx/stdpaths.h>
 
 namespace {
 
@@ -14,7 +15,9 @@ namespace {
 // it was looked for.
 wxDllType Library(wxString& path)
 {
-	path = wxFileName(wxStandardPaths::Get().GetExecutablePath()).GetPathWithSep()
+	// Beside the program. Inside enterprise-thin.app that is next to the bundle, where
+	// libfileserver.dylib is shipped — not Contents/MacOS/, which is only the binary.
+	path = ibProgramFolder() + wxFileName::GetPathSeparator()
 		+ wxDynamicLibrary::CanonicalizeName(wxT("fileserver"));
 	static const wxDllType s_library = [](const wxString& from) {
 		wxLogNull quiet;   // a library not found is said by the caller, not by a dialog of wx's

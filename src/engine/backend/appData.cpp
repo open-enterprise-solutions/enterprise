@@ -16,6 +16,8 @@
 #include <wx/filename.h>
 #include <wx/stdpaths.h>
 
+#include "core/programFolder.h"
+
 #include "backend/session/session.h"
 #include "backend/session/sessionRegistry.h"
 #include "backend/session/serviceExclusivePolicy.h"   // CanOpen — a base another process holds is refused at open
@@ -1046,19 +1048,9 @@ long ibApplicationInstance::RunApplication(const wxString& strAppName, const wxS
 	// sibling is enterprise.app and the executable sits inside it. Without this the fork succeeds,
 	// the exec fails, and wxExecute still returns a pid — so the caller is told the application
 	// started while nothing runs.
-	wxFileName home = wxFileName::DirName(
-		wxFileName(wxStandardPaths::Get().GetExecutablePath()).GetPath());
-
-#ifdef __WXOSX__
-	// This binary is itself inside a bundle, so its siblings are three levels up.
-	if (home.GetDirCount() >= 2
-		&& home.GetDirs().Last().IsSameAs(wxT("MacOS"))
-		&& home.GetDirs()[home.GetDirCount() - 2].IsSameAs(wxT("Contents"))) {
-		home.RemoveLastDir();
-		home.RemoveLastDir();
-		home.RemoveLastDir();
-	}
-#endif
+	// The program folder. Inside a bundle the sibling is not in Contents/MacOS — it is
+	// beside this .app, either as a flat binary or as its own bundle.
+	wxFileName home = wxFileName::DirName(ibProgramFolder());
 
 	wxFileName binary(home);
 	binary.SetFullName(strAppName);

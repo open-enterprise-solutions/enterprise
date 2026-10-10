@@ -1,5 +1,6 @@
 #include "launcher.h"
 #include "backend/appData.h"
+#include "core/programFolder.h"
 
 #include <wx/config.h>
 #include <wx/fileconf.h>
@@ -12,48 +13,25 @@
 namespace {
 
 wxString FindSiblingExecutable(const wxString& exeName) {
-	wxFileName selfPath(wxStandardPaths::Get().GetExecutablePath());
-	wxString dir = selfPath.GetPath();
+	// The program folder: the executable's directory, or — inside a bundle — the directory that
+	// contains the .app. A flat build keeps designer beside launcher. A bundle keeps
+	// designer.app beside launcher.app, and the binary is Contents/MacOS/designer.
+	const wxString sep = wxFileName::GetPathSeparator();
+	const wxString folder = ibProgramFolder();
 
-#if defined(__WXOSX__) || defined(__APPLE__)
-	// If running inside a .app bundle, the executable is at:
-	//   Foo.app/Contents/MacOS/foo
-	// The sibling app would be at:
-	//   <parent>/Bar.app/Contents/MacOS/bar
-	// First, try the same directory (flat layout in build/bin/Debug)
-	wxString flatPath = dir + wxFileName::GetPathSeparator() + exeName;
+	wxString flatPath = folder + sep + exeName;
+#ifdef __WXMSW__
+	flatPath += wxT(".exe");
+#endif
 	if (wxFileExists(flatPath))
 		return flatPath;
 
-	// Try sibling .app bundle: go up 3 levels from Contents/MacOS/launcher
-	// to reach the directory containing launcher.app, then look for exeName.app
-	//
-	// ⚠ DirName, NOT the plain constructor. `dir` carries no trailing separator, and wxFileName(dir) reads its
-	// last component as a FILE name: "MacOS" became the name, the three RemoveLastDir() below stripped Contents,
-	// launcher.app and the folder above it, and the path came out as <two levels too high>/MacOSdesigner.app —
-	// found nowhere, so the flat fallback was run, which does not exist inside a bundle. That is the designer
-	// that would not start from the launcher on a Mac (a colleague's report, 2026-09-22).
-	wxFileName bundlePath = wxFileName::DirName(dir);
-	bundlePath.RemoveLastDir(); // MacOS -> Contents
-	bundlePath.RemoveLastDir(); // Contents -> launcher.app
-	bundlePath.RemoveLastDir(); // launcher.app -> parent dir
-	wxString siblingApp = bundlePath.GetFullPath() + exeName + ".app"
-		+ wxFileName::GetPathSeparator() + "Contents"
-		+ wxFileName::GetPathSeparator() + "MacOS"
-		+ wxFileName::GetPathSeparator() + exeName;
+	const wxString siblingApp = folder + sep + exeName + wxT(".app")
+		+ sep + wxT("Contents") + sep + wxT("MacOS") + sep + exeName;
 	if (wxFileExists(siblingApp))
 		return siblingApp;
 
-	// Fallback: same directory
 	return flatPath;
-#else
-	// Windows / Linux: sibling executable in the same directory
-	wxString path = dir + wxFileName::GetPathSeparator() + exeName;
-#ifdef __WXMSW__
-	path += ".exe";
-#endif
-	return path;
-#endif
 }
 
 wxString BuildLaunchCommand(const wxString& exeName, const CListInfo& info) {

@@ -12,8 +12,8 @@
 // Now the client lives in `webClient/` as ordinary files, and this file finds
 // them. The resolution is the SAME one the syntax helper uses (helpService.cpp):
 //
-//   1. <exe>/web/client.wpk   — a zip, what a release ships;
-//   2. <exe>/web/client.html  — unpacked beside the binary;
+//   1. <program folder>/web/client.wpk   — a zip, what a release ships;
+//   2. <program folder>/web/client.html  — unpacked beside the program;
 //   3. walk up from <exe> looking for `webClient/` — the development tree, so a
 //      dev run reads the file being edited with no build step at all.
 //
@@ -26,6 +26,8 @@
 // 100 KB per request would be a self-inflicted slowdown. A dev run picks changes
 // up on restart, which is the same granularity a rebuild used to give.
 ////////////////////////////////////////////////////////////////////////////
+
+#include "core/programFolder.h"
 
 #include <wx/filename.h>
 #include <wx/stdpaths.h>
@@ -104,9 +106,11 @@ std::string LoadClient()
 {
 	wxFileName exeFile(wxStandardPaths::Get().GetExecutablePath());
 	const wxString exeDir = exeFile.GetPath();
+	const wxString programDir = ibProgramFolder(exeFile.GetFullPath());
 
-	// 1. Packed, beside the binary — the release layout.
-	const wxString packPath = exeDir + wxFILE_SEP_PATH + wxT("web")
+	// 1. Packed, in the program folder — the release layout. Inside a bundle that
+	//    folder is beside the .app.
+	const wxString packPath = programDir + wxFILE_SEP_PATH + wxT("web")
 		+ wxFILE_SEP_PATH + wxString::FromUTF8(kPackName);
 	if (wxFileName::FileExists(packPath)) {
 		const std::string packed = ReadFromPack(packPath);
@@ -114,9 +118,9 @@ std::string LoadClient()
 			return packed;
 	}
 
-	// 2. Unpacked, beside the binary — what an administrator adjusts on a live
+	// 2. Unpacked, in the program folder — what an administrator adjusts on a live
 	//    installation without touching the platform.
-	const wxString besidePath = exeDir + wxFILE_SEP_PATH + wxT("web")
+	const wxString besidePath = programDir + wxFILE_SEP_PATH + wxT("web")
 		+ wxFILE_SEP_PATH + wxString::FromUTF8(kEntryName);
 	if (wxFileName::FileExists(besidePath)) {
 		const std::string beside = ReadWholeFile(besidePath);
