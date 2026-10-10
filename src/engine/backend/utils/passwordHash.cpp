@@ -189,15 +189,29 @@ wxString ibPasswordHash::Hash(const wxString& password)
 	return wxString::Format("%s%u$%s$%s", kPrefix, kIterations, saltB64, hashB64);
 }
 
+const wxString ibPasswordHash::Placeholder()
+{
+	return wxT("12345678");
+}
+
+wxString ibPasswordHash::PasswordToStore(const wxString& stored, bool touched, const wxString& text)
+{
+	// The placeholder is what the box shows for a hash we are keeping.
+	// Typing one character and deleting it used to leave this text, and
+	// OK then stored it as the password.
+	if (!touched || text == Placeholder())
+		return stored;
+	if (text.IsEmpty())
+		return wxEmptyString;
+	return Hash(text);
+}
+
 bool ibPasswordHash::Verify(const wxString& password, const wxString& storedHash)
 {
-	// A blank column is not a password. It used to answer true for an empty
-	// password, so a user row whose hash had been wiped (the user dialog
-	// saved one whenever the box was left untouched) could be entered by
-	// typing nothing. An account with no password is refused here; giving
-	// it a password means storing a real hash.
+	// An empty column means the account has no password. An empty password
+	// logs that user in. A non-empty password does not.
 	if (storedHash.IsEmpty())
-		return false;
+		return password.IsEmpty();
 
 	// Legacy fast path: 32-hex MD5.
 	if (IsLegacy(storedHash))
