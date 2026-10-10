@@ -45,9 +45,53 @@ TEST(PasswordHash, VerifyRejectsEmptyAgainstNonEmpty) {
 }
 
 TEST(PasswordHash, EmptyPasswordRoundTrips) {
+    // An empty password that was actually hashed is a real PHC string.
+    // That is a different value from a row whose hash column is blank.
     const wxString h = ibPasswordHash::Hash(wxEmptyString);
+    EXPECT_FALSE(h.IsEmpty());
     EXPECT_TRUE(ibPasswordHash::Verify(wxEmptyString, h));
     EXPECT_FALSE(ibPasswordHash::Verify(wxT("x"), h));
+}
+
+TEST(PasswordHash, EmptyStoredHashMeansNoPassword) {
+    EXPECT_TRUE(ibPasswordHash::Verify(wxEmptyString, wxEmptyString));
+    EXPECT_FALSE(ibPasswordHash::Verify(wxT("x"), wxEmptyString));
+}
+
+TEST(PasswordToStore, Untouched_KeepsTheStoredHash) {
+    const wxString stored = wxT("stored-hash");
+    EXPECT_EQ(ibPasswordHash::PasswordToStore(stored, false, ibPasswordHash::Placeholder()), stored);
+    EXPECT_EQ(ibPasswordHash::PasswordToStore(stored, false, wxEmptyString), stored);
+}
+
+TEST(PasswordToStore, Cleared_StoresNoPassword) {
+    EXPECT_TRUE(ibPasswordHash::PasswordToStore(wxT("stored-hash"), true, wxEmptyString).IsEmpty());
+}
+
+TEST(PasswordToStore, Typed_HashesTheText) {
+    const wxString stored = ibPasswordHash::PasswordToStore(wxT("stored-hash"), true, wxT("secret"));
+    EXPECT_TRUE(ibPasswordHash::Verify(wxT("secret"), stored));
+    EXPECT_FALSE(ibPasswordHash::Verify(wxT("stored-hash"), stored));
+}
+
+TEST(PasswordToStore, TypeAndDelete_StoresNoPassword) {
+    // One character typed over the placeholder, then deleted: the box is empty.
+    EXPECT_TRUE(ibPasswordHash::PasswordToStore(wxT("stored-hash"), true, wxEmptyString).IsEmpty());
+}
+
+TEST(PasswordToStore, PlaceholderLeftInTheBox_KeepsTheStoredHash) {
+    const wxString stored = wxT("stored-hash");
+    EXPECT_EQ(ibPasswordHash::PasswordToStore(stored, true, ibPasswordHash::Placeholder()), stored);
+}
+
+TEST(PasswordToStore, ReplacingThePlaceholder_HashesTheTypedText) {
+    const wxString stored = ibPasswordHash::PasswordToStore(wxT("stored-hash"), true, wxT("new-secret"));
+    EXPECT_TRUE(ibPasswordHash::Verify(wxT("new-secret"), stored));
+    EXPECT_NE(stored, ibPasswordHash::Placeholder());
+}
+
+TEST(PasswordToStore, NewUserWithAnEmptyBox_StoresNoPassword) {
+    EXPECT_TRUE(ibPasswordHash::PasswordToStore(wxEmptyString, false, wxEmptyString).IsEmpty());
 }
 
 // ---------------------------------------------------------------------------

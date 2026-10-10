@@ -17,11 +17,15 @@ bool ibDialogUserItem::ReadUserData(const ibGuid& userGuid, bool copy)
 		m_textName->SetValue(userInfo.m_strUserName);
 		m_textFullName->SetValue(userInfo.m_strUserFullName);
 
-		if (userInfo.IsSetPassword()) {
+		// The box shows a placeholder, not the hash. Keep the hash that is
+		// already stored, and do not treat the placeholder as an edit: the
+		// handler below is quiet while m_bInitialized is false.
+		// A copy starts without a password. It does not inherit the hash.
+		m_passwordTouched = false;
+		m_strUserPassword = copy ? wxString() : userInfo.m_strUserPassword;
+		if (!copy && userInfo.IsSetPassword()) {
 			m_bInitialized = false;
-			m_textPassword->SetValue(
-				wxT("12345678")
-			);
+			m_textPassword->SetValue(ibPasswordHash::Placeholder());
 			m_bInitialized = true;
 		}
 
@@ -66,7 +70,7 @@ bool ibDialogUserItem::ReadUserData(const ibGuid& userGuid, bool copy)
 #include "backend/metaCollection/metaLanguageObject.h"
 
 ibDialogUserItem::ibDialogUserItem(wxWindow* parent, wxWindowID id, const wxString& title, const wxPoint& pos, const wxSize& size, long style) :
-	wxDialog(parent, id, title, pos, size, style), m_bInitialized(false)
+	wxDialog(parent, id, title, pos, size, style), m_bInitialized(false), m_passwordTouched(false)
 {
 	wxDialog::SetSizeHints(wxDefaultSize, wxDefaultSize);
 
@@ -200,19 +204,23 @@ ibDialogUserItem::ibDialogUserItem(wxWindow* parent, wxWindowID id, const wxStri
 		}
 	);
 
+	m_textPassword->Bind(wxEVT_SET_FOCUS,
+		[&](wxFocusEvent& event) {
+			// The placeholder is selected, so the next key replaces it
+			// instead of appending to 12345678.
+			if (m_textPassword->GetValue() == ibPasswordHash::Placeholder())
+				m_textPassword->SelectAll();
+			event.Skip();
+		}
+	);
+
 	m_textPassword->Bind(wxEVT_COMMAND_TEXT_UPDATED,
 		[&](wxCommandEvent& event) {
-			if (m_bInitialized) {
-				const wxString& strUserPassword = m_textPassword->GetValue();
-				if (!strUserPassword.IsEmpty()) {
-					// PBKDF2-SHA256 with a per-user salt; legacy MD5 is still accepted
-					// on login and upgraded lazily in AuthenticateUser (NeedsRehash).
-					m_strUserPassword = ibPasswordHash::Hash(strUserPassword);
-				}
-				else {
-					m_strUserPassword.Clear();
-				}
-			}
+			// Remember that the box was edited. The hash is computed once, on OK:
+			// doing it here ran 600 000 PBKDF2 rounds on every keystroke, and a
+			// placeholder written with m_bInitialized false must not count.
+			if (m_bInitialized)
+				m_passwordTouched = true;
 
 			event.Skip();
 		}
@@ -234,7 +242,8 @@ ibDialogUserItem::ibDialogUserItem(wxWindow* parent, wxWindowID id, const wxStri
 			userInfo.m_strUserGuid = m_userGuid.str();
 			userInfo.m_strUserName = m_textName->GetValue();
 			userInfo.m_strUserFullName = m_textFullName->GetValue();
-			userInfo.m_strUserPassword = m_strUserPassword;
+			userInfo.m_strUserPassword = ibPasswordHash::PasswordToStore(
+				m_strUserPassword, m_passwordTouched, m_textPassword->GetValue());
 
 			const ibValueMetaObjectConfiguration* commonObject = activeMetaData->GetCommonMetaObject();
 			wxASSERT(commonObject);
