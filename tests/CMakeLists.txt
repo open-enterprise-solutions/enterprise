@@ -146,6 +146,7 @@ add_executable(oes_tests
     test_rowValues.cpp
     test_queryRamTable.cpp
     test_physicalFieldName.cpp
+    test_schemaIndex.cpp
     test_databaseStringConverter.cpp
     test_readerWriterMemory.cpp
     test_passwordHash.cpp
