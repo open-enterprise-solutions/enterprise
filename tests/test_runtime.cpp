@@ -2223,21 +2223,21 @@ TEST(RuntimeTest, AnObjectModuleMayExportTheManagersName) {
 		wxT("Function GetRate() Public\n")
 		wxT("  Return 1;\n")
 		wxT("EndFunction\n")
-		wxT("var mine public;\n")
-		wxT("mine = GetRate();\n")));
+		wxT("var managerResult public;\n")
+		wxT("managerResult = GetRate();\n")));
 
 	ParentedCompiler object(wxT("object"));
 	ASSERT_TRUE(object.CompileUnder(&manager,
 		wxT("Function GetRate() Public\n")
 		wxT("  Return 2;\n")
 		wxT("EndFunction\n")
-		wxT("var mine public;\n")
-		wxT("mine = GetRate();\n")));
+		wxT("var objectResult public;\n")
+		wxT("objectResult = GetRate();\n")));
 
 	ibProcUnit puManager;
 	ASSERT_TRUE(TryExecute(puManager, manager.m_cByteCode));
 	ibValue managerValue;
-	ASSERT_TRUE(puManager.GetPropVal(wxT("mine"), managerValue));
+	ASSERT_TRUE(puManager.GetPropVal(wxT("managerResult"), managerValue));
 	EXPECT_EQ(managerValue.GetInteger(), 1);
 
 	ibProcUnit puObject;
@@ -2245,7 +2245,7 @@ TEST(RuntimeTest, AnObjectModuleMayExportTheManagersName) {
 	wxString strError;
 	ASSERT_TRUE(RunBound(object, puObject, strError)) << strError.ToStdString();
 	ibValue objectValue;
-	ASSERT_TRUE(puObject.GetPropVal(wxT("mine"), objectValue));
+	ASSERT_TRUE(puObject.GetPropVal(wxT("objectResult"), objectValue));
 	EXPECT_EQ(objectValue.GetInteger(), 2) << "the object called the manager's function";
 
 	ibCompileCode again(wxT("test"), wxT("memory"), false);
