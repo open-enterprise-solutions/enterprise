@@ -16,6 +16,19 @@ class ibValueEnumStatusMessage : public ibValueEnumeration<ibStatusMessage> {
 	}
 };
 
+class ibValueEnumMessageStatus : public ibValueEnumeration<ibMessageStatus> {
+	public:
+	ibValueEnumMessageStatus() : ibValueEnumeration() {}
+
+	virtual void CreateEnumeration() {
+		AddEnumeration(ibMessageStatus::ibMessageStatus_Ordinary, wxT("Ordinary"), _("Ordinary"));
+		AddEnumeration(ibMessageStatus::ibMessageStatus_Information, wxT("Information"), _("Information"));
+		AddEnumeration(ibMessageStatus::ibMessageStatus_Important, wxT("Important"), _("Important"));
+		AddEnumeration(ibMessageStatus::ibMessageStatus_VeryImportant, wxT("VeryImportant"), _("Very important"));
+		AddEnumeration(ibMessageStatus::ibMessageStatus_Attention, wxT("Attention"), _("Attention"));
+	}
+};
+
 class ibValueEnumQuestionMode : public ibValueEnumeration<ibQuestionMode> {
 	public:
 	ibValueEnumQuestionMode() : ibValueEnumeration() {}

@@ -8,6 +8,18 @@ enum ibStatusMessage
 	ibStatusMessage_Error
 };
 
+// The status a script passes to Message(). It is not a window level: the client
+// styles Information, Warning and Error, and these five names are what 1C code
+// writes. A value here is accepted and shown as Information.
+enum ibMessageStatus
+{
+	ibMessageStatus_Ordinary = 1,
+	ibMessageStatus_Information,
+	ibMessageStatus_Important,
+	ibMessageStatus_VeryImportant,
+	ibMessageStatus_Attention
+};
+
 enum ibQuestionMode
 {
 	ibQuestionMode_YesNo = 1,

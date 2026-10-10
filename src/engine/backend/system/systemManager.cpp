@@ -260,6 +260,19 @@ void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibVal
 
 #include "backend/appData.h"
 
+// MessageStatus is a different enumeration from StatusMessage. A cast that misses
+// is 0, and 0 is not a level the client knows: those start at 1. A message whose
+// status is not one of the three levels is shown as Information.
+static ibStatusMessage MessageLevel(ibValue* param)
+{
+	if (param == nullptr)
+		return ibStatusMessage::ibStatusMessage_Information;
+	const ibStatusMessage status = param->ConvertToEnumValue<ibStatusMessage>();
+	if (status == static_cast<ibStatusMessage>(0))
+		return ibStatusMessage::ibStatusMessage_Information;
+	return status;
+}
+
 bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
 {
 	if (!appData->DesignerMode()) {
@@ -368,7 +381,7 @@ bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 			//--- Special:
 		case enMessage:
 			Message(paParams[0]->GetString(),
-				lSizeArray > 1 ? paParams[1]->ConvertToEnumValue<ibStatusMessage>() : ibStatusMessage::ibStatusMessage_Information);
+				lSizeArray > 1 ? MessageLevel(paParams[1]) : ibStatusMessage::ibStatusMessage_Information);
 			return true;
 		case enWriteJournalEvent:
 			WriteJournalEvent(paParams[0]->GetString(),
@@ -476,7 +489,7 @@ bool ibValueSystemFunction::CallAsProc(const long lMethodNum, ibValue** paParams
 			//--- Special:
 		case enMessage:
 			Message(paParams[0]->GetString(),
-				lSizeArray > 1 ? paParams[1]->ConvertToEnumValue<ibStatusMessage>() : ibStatusMessage::ibStatusMessage_Information);
+				lSizeArray > 1 ? MessageLevel(paParams[1]) : ibStatusMessage::ibStatusMessage_Information);
 			return true;
 		case enWriteJournalEvent:
 			WriteJournalEvent(paParams[0]->GetString(),

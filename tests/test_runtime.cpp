@@ -1654,6 +1654,31 @@ TEST_F(BuiltInRuntime, ABuiltInGlobalTakesFewerArgumentsThanItDeclares) {
 		<< strError.ToStdString();
 }
 
+// Message("x", MessageStatus.Important) is how 1C names a message. The name has
+// to compile, and the run has to accept it. StatusMessage is the window level
+// and still compiles beside it.
+TEST_F(BuiltInRuntime, MessageStatusIsANameMessageAccepts) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+
+	ibValueSystemFunction valueSystem;
+	ibValue enums = ibValue::CreateObject(wxT("EnumManager"));
+	cc.AddContextVariable(wxT("System"), &valueSystem, true);
+	cc.AddContextVariable(wxT("EnumManager"), enums, true);
+
+	const wxString src =
+		wxT("Message(\"a\", MessageStatus.Ordinary);\n")
+		wxT("Message(\"b\", MessageStatus.Information);\n")
+		wxT("Message(\"c\", MessageStatus.Important);\n")
+		wxT("Message(\"d\", MessageStatus.VeryImportant);\n")
+		wxT("Message(\"e\", MessageStatus.Attention);\n")
+		wxT("Message(\"f\", StatusMessage.Warning);\n");
+	ASSERT_TRUE(TryCompile(cc, src));
+
+	ibProcUnit pu;
+	wxString strError;
+	EXPECT_TRUE(RunBound(cc, pu, strError)) << strError.ToStdString();
+}
+
 // ===========================================================================
 // A BUILT-IN FUNCTION AS THE ARGUMENT OF A BUILT-IN PROCEDURE
 //
