@@ -102,10 +102,18 @@ private:
 
 	void WorkerLoop();
 
-	// Spawn a new detached worker thread. Re-checks alive-vs-cap under
-	// m_workersMtx to handle the race between two threads racing to
-	// spawn; bumps m_aliveWorkers atomically before std::thread::detach.
+	// Spawn a worker. Re-checks alive-vs-cap under m_workersMtx so two
+	// Submits cannot both pass the cap. m_aliveWorkers is bumped before
+	// the thread exists. The handle is kept: Stop joins it, and an idle
+	// self-exit is joined on the next spawn. A detached thread would
+	// still be inside thread_local destructors after m_aliveWorkers hit
+	// zero, which is after Stop used to return.
 	void TrySpawnWorker();
+
+	// m_workersMtx must be held. Moves out handles to join outside the
+	// lock (a thread_local destructor can call back into the pool).
+	// exitedOnly takes workers whose WorkerLoop has already returned.
+	std::vector<std::thread> TakeWorkersLocked(bool exitedOnly);
 
 	// Find a session with pending tasks not currently leased and CAS
 	// the lease in. Returns the session pointer + queue, or {nullptr,
@@ -153,13 +161,20 @@ private:
 	std::size_t              m_maxWorkers;
 	std::atomic<bool>        m_stop { false };
 
-	// Worker spawn coordination + join replacement (detached threads).
+	// Handles live until joined. m_aliveWorkers hits zero when WorkerLoop
+	// returns; the thread itself is still running thread_local
+	// destructors until join returns.
+	struct ibWorker {
+		std::shared_ptr<std::atomic<bool>> exited;
+		std::thread                        thread;
+	};
 	std::mutex               m_workersMtx;
+	std::vector<ibWorker>    m_workers;
 	std::atomic<std::size_t> m_aliveWorkers { 0 };
 	// Idle-count drives lazy growth: zero idle + below cap = spawn.
 	std::atomic<std::size_t> m_idleWorkers  { 0 };
-	// Stop() waits on this until m_aliveWorkers reaches 0 (every
-	// detached worker has exited).
+	// Stop waits here until every WorkerLoop has returned, then joins
+	// the handles so thread_local destructors have run too.
 	std::mutex               m_stopMtx;
 	std::condition_variable  m_stopCv;
 
