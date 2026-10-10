@@ -1425,9 +1425,26 @@ wxString ibQueryRenderer::RenderDDL(const ibDdlStatement& ddl)
 		             : wxT("CREATE TABLE ");
 		if (ddl.m_ifNotExists) sql += wxT("IF NOT EXISTS ");
 		sql += QuoteIdent(ddl.m_table) + wxT(" (");
+		// Two columns both marked PRIMARY KEY are one key, not two. A column-level PRIMARY KEY
+		// on each is illegal; the key is named once, after the columns.
+		int primaryKeys = 0;
+		for (const ibDdlColumn& col : ddl.m_columns)
+			if (col.m_primaryKey) ++primaryKeys;
+		const bool compositeKey = primaryKeys > 1;
 		for (size_t i = 0; i < ddl.m_columns.size(); ++i) {
 			if (i) sql += wxT(", ");
-			sql += RenderColumn(ddl.m_columns[i]);
+			sql += RenderColumn(ddl.m_columns[i], !compositeKey);
+		}
+		if (compositeKey) {
+			sql += wxT(", PRIMARY KEY (");
+			bool firstKey = true;
+			for (const ibDdlColumn& col : ddl.m_columns) {
+				if (!col.m_primaryKey) continue;
+				if (!firstKey) sql += wxT(", ");
+				sql += QuoteIdent(col.m_name);
+				firstKey = false;
+			}
+			sql += wxT(")");
 		}
 		sql += wxT(")");
 		if (ddl.m_temporary && !ddl.m_createSuffix.empty())
@@ -1511,12 +1528,12 @@ wxString ibQueryRenderer::RenderDDL(const ibDdlStatement& ddl)
 	return wxString();
 }
 
-wxString ibQueryRenderer::RenderColumn(const ibDdlColumn& col)
+wxString ibQueryRenderer::RenderColumn(const ibDdlColumn& col, bool inlinePrimaryKey)
 {
 	wxString s = QuoteIdent(col.m_name) + wxT(" ") + MapType(col.m_type);
 	if (!col.m_default.empty()) s += wxT(" DEFAULT ") + col.m_default;   // before NOT NULL (e.g. "INTEGER DEFAULT 0 NOT NULL")
-	if (col.m_primaryKey)   s += wxT(" PRIMARY KEY");   // implies NOT NULL
-	else if (col.m_notNull) s += wxT(" NOT NULL");
+	if (inlinePrimaryKey && col.m_primaryKey) s += wxT(" PRIMARY KEY");   // implies NOT NULL
+	else if (col.m_notNull || col.m_primaryKey) s += wxT(" NOT NULL");
 	return s;
 }
 

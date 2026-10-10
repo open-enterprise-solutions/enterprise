@@ -1103,7 +1103,8 @@ private:
 	static wxString BinOpText(ibQueryBinOp op);
 	static wxString JoinTypeText(ibQueryJoinType type);
 
-	wxString RenderColumn(const ibDdlColumn& col);      // "<name> <sqltype> [PRIMARY KEY|NOT NULL]"
+	// inlinePrimaryKey false: a composite key is a table constraint, so the column is only NOT NULL.
+	wxString RenderColumn(const ibDdlColumn& col, bool inlinePrimaryKey = true);
 	wxString MapType(const ibColumnType& type) const;   // canonical type -> dialect SQL type (thin wrapper over ibMapColumnType)
 
 	ibDialectDictionary m_dialect;             // BY VALUE — a renderer built from a dialect TEMPORARY
