@@ -179,6 +179,10 @@ BACKEND_API ibTotalsMaintenance MaintainTotals(const ibSchemaSnapshot& target,
 //                                      resource to a large register instant instead of an outage.
 //   a column DROPPED / CHANGED -> YES. Dropping a dimension coarsens the grouping (rows must merge);
 //                                      a changed column invalidates what accumulated under it.
+//   a declared type REMOVED     -> YES. Decided from GetTypeValueDesc(), not the SQL layout: two
+//                                      composite references share _RTRef/_RRRef, and the differ still
+//                                      clears every value of the type that left. Asked of the key and
+//                                      of every movement column the rebuild reads.
 //   the KEY SHAPE changed      -> YES. Every existing row is keyed the old way and cannot be re-keyed.
 //
 // The asymmetry is load-bearing: "added" is skippable because its effect on existing totals is

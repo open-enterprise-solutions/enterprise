@@ -74,6 +74,134 @@ ibDataQueryBuilder SystemQuery(ibDatabaseConnectionHolder* holder)
 	return query;
 }
 
+// A type the column used to admit and no longer does. That is the differ's clear (DiffColumnInto
+// writes an empty value for each removed clsid). Adding a type leaves every stored value intact,
+// so it is not a reason to rebuild.
+bool LostADeclaredType(const ibBackendQueryColumn* was, const ibBackendQueryColumn* now)
+{
+	if (was == nullptr || now == nullptr)
+		return was != now;
+	const std::vector<ibClassID>& oldList = was->GetTypeValueDesc().GetClsidList();
+	const std::vector<ibClassID>& newList = now->GetTypeValueDesc().GetClsidList();
+	for (ibClassID clsid : oldList)
+		if (std::find(newList.begin(), newList.end(), clsid) == newList.end())
+			return true;
+	return false;
+}
+
+void CollectExprColumns(const ibQueryColumnExpr* expr, std::vector<const ibBackendQueryColumn*>& out);
+void CollectPredColumns(const ibQueryPredicate* pred, std::vector<const ibBackendQueryColumn*>& out);
+
+void CollectExprColumns(const ibQueryColumnExpr* expr, std::vector<const ibBackendQueryColumn*>& out)
+{
+	if (expr == nullptr)
+		return;
+	if (expr->m_col != nullptr)
+		out.push_back(expr->m_col);
+	CollectExprColumns(expr->m_lhs.get(), out);
+	CollectExprColumns(expr->m_rhs.get(), out);
+	CollectExprColumns(expr->m_else.get(), out);
+	for (const auto& arm : expr->m_cases) {
+		if (arm.first)
+			CollectPredColumns(arm.first.get(), out);
+		CollectExprColumns(arm.second.get(), out);
+	}
+	for (const ibQueryColumnExprPtr& arg : expr->m_args)
+		CollectExprColumns(arg.get(), out);
+	for (const ibQueryColumnExprPtr& part : expr->m_partition)
+		CollectExprColumns(part.get(), out);
+	for (const auto& ordered : expr->m_windowOrder)
+		CollectExprColumns(ordered.first.get(), out);
+}
+
+void CollectPredColumns(const ibQueryPredicate* pred, std::vector<const ibBackendQueryColumn*>& out)
+{
+	if (pred == nullptr)
+		return;
+	if (pred->m_leaf.m_col != nullptr)
+		out.push_back(pred->m_leaf.m_col);
+	for (const ibBackendQueryColumn* col : pred->m_leaf.m_path)
+		if (col != nullptr)
+			out.push_back(col);
+	CollectExprColumns(pred->m_leaf.m_expr.get(), out);
+	CollectExprColumns(pred->m_leaf.m_valueExpr.get(), out);
+	if (pred->m_leaf.m_semiJoin) {
+		if (pred->m_leaf.m_semiJoin->m_outerKey != nullptr)
+			out.push_back(pred->m_leaf.m_semiJoin->m_outerKey);
+		if (pred->m_leaf.m_semiJoin->m_innerKey != nullptr)
+			out.push_back(pred->m_leaf.m_semiJoin->m_innerKey);
+		CollectPredColumns(pred->m_leaf.m_semiJoin->m_where.get(), out);
+	}
+	if (pred->m_col != nullptr)
+		out.push_back(pred->m_col);
+	for (const ibBackendQueryColumn* col : pred->m_path)
+		if (col != nullptr)
+			out.push_back(col);
+	CollectExprColumns(pred->m_expr.get(), out);
+	for (const ibQueryPredicatePtr& child : pred->m_children)
+		CollectPredColumns(child.get(), out);
+}
+
+// Pair movement columns the rebuild reads. A declared id is the key; a scaffold column (id 0) is
+// paired by its physical name, because it has no id to key on.
+struct MovementColKey
+{
+	ibMetaID m_id = 0;
+	wxString m_name;
+
+	bool operator<(const MovementColKey& other) const
+	{
+		const bool keyed = m_id != 0;
+		const bool otherKeyed = other.m_id != 0;
+		if (keyed != otherKeyed)
+			return keyed;
+		if (keyed)
+			return m_id < other.m_id;
+		return m_name < other.m_name;
+	}
+};
+
+MovementColKey KeyOf(const ibBackendQueryColumn* col)
+{
+	MovementColKey key;
+	key.m_id = col->GetColumnId();
+	if (key.m_id == 0)
+		key.m_name = col->GetPhysicalName();
+	return key;
+}
+
+std::map<MovementColKey, const ibBackendQueryColumn*> MovementColumns(const ibSchemaMaterialize& spec)
+{
+	std::vector<const ibBackendQueryColumn*> cols;
+	for (const ibSchemaDelta& delta : spec.m_deltas)
+		CollectExprColumns(delta.m_regenExpr.get(), cols);
+	if (spec.m_guardExpr)
+		CollectPredColumns(spec.m_guardExpr.get(), cols);
+
+	std::map<MovementColKey, const ibBackendQueryColumn*> byKey;
+	for (const ibBackendQueryColumn* col : cols)
+		if (col != nullptr)
+			byKey.emplace(KeyOf(col), col);
+	return byKey;
+}
+
+// True when a movement column the rebuild still reads lost a declared type. The SQL layout is the
+// wrong question: CatalogRef.A|B|C and A|B occupy the same _RTRef/_RRRef pair, and the differ
+// still clears every C.
+bool MovementColumnsLostAType(const ibSchemaMaterialize& was, const ibSchemaMaterialize& now)
+{
+	const std::map<MovementColKey, const ibBackendQueryColumn*> oldCols = MovementColumns(was);
+	const std::map<MovementColKey, const ibBackendQueryColumn*> newCols = MovementColumns(now);
+	for (const auto& entry : oldCols) {
+		const auto found = newCols.find(entry.first);
+		if (found == newCols.end())
+			continue;
+		if (LostADeclaredType(entry.second, found->second))
+			return true;
+	}
+	return false;
+}
+
 } // namespace
 
 namespace ibDerivedState {
@@ -127,6 +255,10 @@ bool NeedsRegeneration(const ibSchemaTable* old, const ibSchemaTable& cur)
 		for (size_t f = 0; f < was.size(); ++f)
 			if (was[f].m_name != now[f].m_name || !ibSameFieldType(was[f].m_type, now[f].m_type))
 				return true;
+		// The slots can match and the type still be narrower. CatalogRef.A|B|C and A|B share one
+		// reference pair, and the differ clears every value of the type that left.
+		if (LostADeclaredType(a.m_keys[i], b.m_keys[i]))
+			return true;
 	}
 
 	// The set of ACCUMULATIONS changed — which happens when a register switches between turnover
@@ -135,6 +267,14 @@ bool NeedsRegeneration(const ibSchemaTable* old, const ibSchemaTable& cur)
 	// only one direction), so every stored figure is now wrong even though the column that held it
 	// still exists. Rebuild.
 	if (a.m_deltas.size() != b.m_deltas.size()) return true;
+
+	// A movement column the rebuild reads can lose a type without changing any key's SQL layout
+	// (a resource, the period source, a column inside the contribution or the guard). The differ
+	// then clears those movement values, and the stored totals still name them.
+	if (LostADeclaredType(a.m_periodSource, b.m_periodSource))
+		return true;
+	if (MovementColumnsLostAType(a, b))
+		return true;
 
 	// Only additions left — provably no effect on what is already accumulated.
 	return false;

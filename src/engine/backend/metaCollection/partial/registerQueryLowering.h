@@ -1556,15 +1556,17 @@ inline bool ibRegSplitIntoKey(ibSchemaTable& t, const ibValueMetaObjectRegisterT
 // and the day one forgot, an inactive entry would show up in exactly one report.
 //
 // ⚠ IT IS AN EXPRESSION, AND IT HAS TO BE A BOOLEAN ONE. A "boolean" attribute is stored as a
-// SMALLINT, so `WHERE NEW.fld…_B` is a field where a condition is required — Firebird answers
-// "invalid usage of boolean expression" and the whole CREATE TRIGGER fails, taking the restructuring
-// that emitted it down with it. The cost is asymmetric: nothing READS wrong, the APPLY does not
-// finish. This was written twice and one copy shipped without the ` <> 0`.
+// SMALLINT on Firebird and SQLite, and as a real BOOLEAN on PostgreSQL. A bare `WHERE NEW.fld…_B`
+// is a field where a condition is required — Firebird answers "invalid usage of boolean expression"
+// and the whole CREATE TRIGGER fails. `<> 0` is that condition for a SMALLINT, and PostgreSQL
+// refuses it: boolean <> integer. CAST to INTEGER is the same test on every engine (a BOOLEAN
+// becomes 1 or 0, a SMALLINT stays a number). The cost is asymmetric: nothing READS wrong, the
+// APPLY does not finish.
 inline void ibRegGuardInForce(ibSchemaMaterialize& m, const ibValueMetaObjectAttributeBase* active)
 {
 	if (active == nullptr)
 		return;
-	m.Guard(wxT("{row}.") + ibRegValueField(active) + wxT(" <> 0"),
+	m.Guard(wxT("CAST({row}.") + ibRegValueField(active) + wxT(" AS INTEGER) <> 0"),
 		ibQueryPredicate::Leaf(ibQueryCondition{ active->GetQueryColumn(), ibQueryFilterOp::Equal, ibValue(true) }));
 }
 
