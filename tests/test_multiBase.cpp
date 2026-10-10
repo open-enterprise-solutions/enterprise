@@ -32,14 +32,15 @@
 #include "backend/databaseLayer/connectionPool.h"
 #include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
 #include "backend/session/session.h"
+#include "backend/session/sessionHolder.h"
 
 namespace {
 
 // A base with no database, then a database of its own — an in-memory SQLite in its own pool, set up while
 // this thread works for it. Null when the environment cannot come up.
-ibApplicationInstance* OpenBase()
+ibApplicationInstance* OpenBase(ibRunMode mode = ibRunMode::eFILE_MODE)
 {
-	if (!ibApplicationInstance::CreateAppDataEnv(ibRunMode::eFILE_MODE))
+	if (!ibApplicationInstance::CreateAppDataEnv(mode))
 		return nullptr;
 	ibApplicationInstance* const applicationInstance = ibApplicationHost::GetInstances().back();
 
@@ -211,4 +212,47 @@ TEST_F(OneBaseFix, AFreshThreadIsRefusedEvenWithOneBase)
 	});
 	fresh.join();
 	EXPECT_TRUE(refused) << "there is no global current base — not even \"the only one\"";
+}
+
+// An empty sys_user that was actually read is open access, including the
+// application server's own login and the web server's own session. A table
+// that cannot be read is not empty, and the login is refused.
+TEST_F(OneBaseFix, AnEmptyUserListOpensAndAnUnreadableOneRefuses)
+{
+	if (!ready) GTEST_SKIP();
+
+	{
+		ibApplicationInstanceScope working(only);
+		ASSERT_NE(db_query, nullptr);
+		ASSERT_NE(db_query->RunQuery(wxT("CREATE TABLE sys_user (name TEXT)")), -1);
+		ibUserInfo info;
+		EXPECT_TRUE(only->AuthenticateUser(wxEmptyString, wxEmptyString, info));
+		EXPECT_TRUE(ibUserInfo::ListAll().empty());
+
+		ASSERT_NE(db_query->RunQuery(wxT("DROP TABLE sys_user")), -1);
+		EXPECT_FALSE(only->AuthenticateUser(wxEmptyString, wxEmptyString, info));
+		EXPECT_THROW(ibUserInfo::ListAll(), ibCoreException);
+	}
+
+	ibApplicationInstance* const server = OpenBase(ibRunMode::eSERVER_MODE);
+	if (server == nullptr)
+		GTEST_SKIP() << "server env unavailable headless";
+	{
+		ibApplicationInstanceScope working(server);
+		ASSERT_TRUE(server->ServiceMode());
+		ASSERT_NE(db_query->RunQuery(wxT("CREATE TABLE sys_user (name TEXT)")), -1);
+		ibUserInfo info;
+		EXPECT_TRUE(server->AuthenticateUser(wxEmptyString, wxEmptyString, info));
+	}
+
+	{
+		ibApplicationInstanceScope working(only);
+		ASSERT_NE(db_query->RunQuery(wxT("CREATE TABLE sys_user (name TEXT)")), -1);
+		ibSessionHolder web = only->CreateSession(ibSessionKind::WebServer);
+		ASSERT_NE(web.Get(), nullptr);
+		ibSessionScope scope(web.Get());
+		EXPECT_TRUE(only->WebEnterpriseMode());
+		ibUserInfo info;
+		EXPECT_TRUE(only->AuthenticateUser(wxEmptyString, wxEmptyString, info));
+	}
 }

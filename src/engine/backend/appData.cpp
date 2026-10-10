@@ -32,6 +32,7 @@
 #include "backend/server/serverConfig.h"      // a server reads where its base lives itself
 
 #include "backend/backend_exception.h"        // ibBackendCoreException — a build with no driver says so
+#include "core/diagnostics/journal.h"         // the refusal is said in Release, where ibJournalError is compiled out
 #include "backend/utils/passwordHash.hpp"
 
 #include "backend/moduleManager/moduleManager.h"
@@ -1230,60 +1231,41 @@ bool ibApplicationInstance::AuthenticateUser(const wxString& strUserName,
 {
 	// An empty name used to be accepted whenever HasAny() came back false,
 	// and HasAny() came back false both for an empty table and for a
-	// query that threw. A process that serves other clients (the
-	// application server, the web server) does not offer that pass-through.
+	// query that threw. An empty list that was actually read is open
+	// access on every host, including the application server and the web
+	// server. A list that could not be read is a refusal.
 	if (strUserName.IsEmpty()) {
+		const auto audit = [](const wxString& action, const wxString& detail) {
+			if (ibLog)
+				ibLog->Audit(wxT("auth"), action, detail);
+		};
 		bool noUsers = false;
 		try {
 			noUsers = !ibUserInfo::HasAny();
 		}
-		catch (const ibBackendException& err) {
-			ibJournalError(wxT("auth"),
-				wxT("login refused: the user list could not be read: %s"),
-				err.GetErrorDescription());
-			if (ibLog) {
-				try {
-					ibLog->Audit(wxT("auth"), wxT("login_failed"),
-						wxT("reason=user_list_unreadable"));
-				}
-				catch (const ibBackendException&) {
-					ibJournalError(wxT("auth"),
-						wxT("the refusal could not be written to the audit log"));
-				}
+		catch (const ibBackendInterruptException&) {
+			throw;
+		}
+		catch (const ibCoreException& err) {
+			// ibJournalError is compiled out of Release. The person and the
+			// journal both have to see why the door stayed shut.
+			if (ibTechJournal::IsOpen()) {
+				ibTechJournal::Print(ibJournalMark::Error, wxT("auth"),
+					wxT("login refused: the user list could not be read: %s"),
+					err.GetErrorDescription());
 			}
+			audit(wxT("login_failed"),
+				wxString::Format(wxT("reason=user_list_unreadable detail=%s"), err.GetErrorDescription()));
 			return false;
 		}
 
-		const bool servesClients = ServiceMode() || WebEnterpriseMode();
-		if (ibOpenAccessPermitted(noUsers, servesClients)) {
-			ibJournalInfo(wxT("auth"),
-				wxT("open access: the user list is empty, and this process is not serving other clients"));
-			if (ibLog) {
-				try {
-					ibLog->Audit(wxT("auth"), wxT("open_access"),
-						wxT("reason=empty_user_list"));
-				}
-				catch (const ibBackendException&) {
-					ibJournalError(wxT("auth"),
-						wxT("open access was granted and the audit row could not be written"));
-				}
-			}
-			return true;
-		}
 		if (noUsers) {
-			ibJournalError(wxT("auth"),
-				wxT("login refused: open access is not offered while this process serves other clients"));
-			if (ibLog) {
-				try {
-					ibLog->Audit(wxT("auth"), wxT("login_failed"),
-						wxT("reason=open_access_refused"));
-				}
-				catch (const ibBackendException&) {
-					ibJournalError(wxT("auth"),
-						wxT("the refusal could not be written to the audit log"));
-				}
+			if (ibTechJournal::IsOpen()) {
+				ibTechJournal::Print(ibJournalMark::Info, wxT("auth"),
+					wxT("open access: the user list is empty"));
 			}
-			return false;
+			audit(wxT("open_access"), wxT("reason=empty_user_list"));
+			return true;
 		}
 	}
 

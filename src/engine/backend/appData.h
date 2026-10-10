@@ -44,13 +44,6 @@ enum ibRunMode {
 	eSANDBOX_MODE  = 7,   // a sandbox: opens a base, runs, closes (codeRunner)
 };
 
-// An empty user list is open access only on a process that is not serving
-// other people's clients. A list that was not read is not empty.
-inline bool ibOpenAccessPermitted(bool userListEmpty, bool servesClients)
-{
-	return userListEmpty && !servesClients;
-}
-
 //////////////////////////////////////////////////////////////////
 #define _app_start_default_flag 0x0000
 #define _app_start_create_debug_server_flag 0x0080

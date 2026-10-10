@@ -24,6 +24,7 @@
 #include "backend/session/session.h"
 #include "backend/session/sessionRegistry.h"
 #include "backend/backend_exception.h"
+#include "core/diagnostics/journal.h"
 #include "backend/databaseLayer/connectionHolder.h"
 #include "backend/databaseLayer/connectionPool.h"
 #include "backend/databaseLayer/databaseQueryBuilder.h"   // L2 door — the meta-watch sys_config read (ibQueryResult, no raw L1)
@@ -1040,7 +1041,22 @@ WFRONTEND_API bool wfrontendHasUsers()
 {
 	if (!g_initialized.load() || appData == nullptr)
 		return false;
-	return ibUserInfo::HasAny();
+	try {
+		return ibUserInfo::HasAny();
+	}
+	catch (const ibBackendInterruptException&) {
+		throw;
+	}
+	catch (const ibCoreException& err) {
+		// Ask for credentials. A 500 from an uncaught read is not an answer
+		// the login page can show, and "no users" would be the open door.
+		if (ibTechJournal::IsOpen()) {
+			ibTechJournal::Print(ibJournalMark::Error, wxT("auth"),
+				wxT("the user list could not be read; asking for credentials: %s"),
+				err.GetErrorDescription());
+		}
+		return true;
+	}
 }
 
 namespace {
