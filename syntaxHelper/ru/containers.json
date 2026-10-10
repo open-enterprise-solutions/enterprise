@@ -401,6 +401,21 @@
         "cls.KeyValue.Key"
       ],
       "reviewed": false
+    },
+    {
+      "id": "cls.FilterCriteria",
+      "name_local": "FilterCriteria",
+      "name_en": "FilterCriteria",
+      "kind": "object",
+      "category_keys": ["value_types"],
+      "signature": "FilterCriteria.<Name>.Find(value)",
+      "description": "Именованный поиск по реквизитам, перечисленным в критерии. Find возвращает массив ссылок, у которых реквизит равен значению.",
+      "parameters": "value - искомое значение.",
+      "return_descr": "Массив ссылок.",
+      "example": "rows = FilterCriteria.SubordinateDocuments.Find(Ref);",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": ["cls.Structure"],
+      "reviewed": true
     }
   ]
 }

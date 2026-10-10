@@ -57,6 +57,7 @@ const ibMetaGroupRow s_groups[] = {
 	// …and the sequences last of all: a sequence is about the order the DOCUMENTS above were posted
 	// in, so it is read after everything it is about (sequence-arc.md).
 	{ g_metaSequenceCLSID,                   wxTRANSLATE("Sequences"),                      ibMetaGroupBand::Metadata },
+	{ g_metaFilterCriteriaCLSID,             wxTRANSLATE("Filter criteria"),                ibMetaGroupBand::Metadata },
 
 	// ——— the groups INSIDE an object: what it IS, then what is done with it ———
 	{ g_metaAttributeCLSID,                      wxTRANSLATE("Attributes"),  ibMetaGroupBand::Inner },
