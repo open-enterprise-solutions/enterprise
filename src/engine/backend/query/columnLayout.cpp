@@ -46,6 +46,45 @@ const wxString& ibFieldSuffix(ibColumnRole role)
 	}
 }
 
+namespace {
+
+// What Firebird will take unquoted. Quotes stay off: a quoted name is case-sensitive
+// there, and the schema is written bare (databaseLayer.h). A letter or underscore,
+// then letters, digits and underscores. Anything else — Cyrillic, a hyphen — is not.
+bool IsUnquotedSqlIdent(const wxString& name)
+{
+	if (name.IsEmpty())
+		return false;
+	const auto body = [](const wxUniChar c) {
+		return (c >= wxT('A') && c <= wxT('Z'))
+			|| (c >= wxT('a') && c <= wxT('z'))
+			|| (c >= wxT('0') && c <= wxT('9'))
+			|| c == wxT('_');
+	};
+	const wxUniChar first = name[0];
+	if (first != wxT('_')
+		&& !((first >= wxT('A') && first <= wxT('Z')) || (first >= wxT('a') && first <= wxT('z'))))
+		return false;
+	for (const wxUniChar c : name)
+		if (!body(c))
+			return false;
+	return true;
+}
+
+// The same FNV-1a BoundedName uses, over the author's whole name, so two aliases that
+// share a head still differ and the writer and the reader compute one spelling.
+wxString AsciiAlias(const wxString& outputName)
+{
+	unsigned long hash = 2166136261UL;
+	for (const wxUniChar ch : outputName) {
+		hash ^= static_cast<unsigned long>(ch.GetValue());
+		hash = (hash * 16777619UL) & 0xFFFFFFFFUL;
+	}
+	return wxString::Format(wxT("out_%08lx"), hash);
+}
+
+} // namespace
+
 wxString ibSqlAliasOf(const wxString& outputName)
 {
 	// THE PREFIX IS A NAMESPACE, NOT AN ESCAPE.
@@ -104,7 +143,13 @@ wxString ibSqlAliasOf(const wxString& outputName)
 			return ibSqlAliasOf(outputName.Left(outputName.length() - suffix.length())) + suffix;
 	}
 
-	return ibDialectDictionary::BoundedName(wxT("out_") + outputName, kResultLabelLimit - kLongestSuffix);
+	// A name Firebird will not take unquoted (`AS out_Флаг`, token unknown) is spelled
+	// `out_<hash>` of the author's whole name. The person still sees their name on the
+	// result; only the statement's label moves, and both ends ask here.
+	const wxString prefixed = wxT("out_") + outputName;
+	if (!IsUnquotedSqlIdent(prefixed))
+		return AsciiAlias(outputName);
+	return ibDialectDictionary::BoundedName(prefixed, kResultLabelLimit - kLongestSuffix);
 }
 
 bool ibIsPlainScalarType(const ibTypeDescription& type)
