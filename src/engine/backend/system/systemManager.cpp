@@ -260,17 +260,27 @@ void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibVal
 
 #include "backend/appData.h"
 
-// MessageStatus is a different enumeration from StatusMessage. A cast that misses
-// is 0, and 0 is not a level the client knows: those start at 1. A message whose
-// status is not one of the three levels is shown as Information.
+// MessageStatus is a different enumeration from StatusMessage. ConvertToEnumValue
+// throws when the value is the wrong enumeration, and a thrown cast is not "the
+// client ignores this status". A message whose status is not one of the three
+// window levels is shown as Information. Those levels start at 1.
 static ibStatusMessage MessageLevel(ibValue* param)
 {
 	if (param == nullptr)
 		return ibStatusMessage::ibStatusMessage_Information;
-	const ibStatusMessage status = param->ConvertToEnumValue<ibStatusMessage>();
-	if (status == static_cast<ibStatusMessage>(0))
+
+	const ibValueEnumerationVariantBase<ibStatusMessage>* status = nullptr;
+	if (param->IsReference())
+		status = dynamic_cast<const ibValueEnumerationVariantBase<ibStatusMessage>*>(param->GetRef());
+	else if (param->GetType() != ibValueTypes::TYPE_EMPTY)
+		status = dynamic_cast<const ibValueEnumerationVariantBase<ibStatusMessage>*>(param);
+
+	if (status == nullptr)
 		return ibStatusMessage::ibStatusMessage_Information;
-	return status;
+	const ibStatusMessage level = status->GetEnumValue();
+	if (static_cast<int>(level) == 0)
+		return ibStatusMessage::ibStatusMessage_Information;
+	return level;
 }
 
 bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
