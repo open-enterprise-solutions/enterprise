@@ -45,6 +45,11 @@ public:
 	int DoRunQuery();
 	ibDatabaseResultSet* DoRunQueryWithResults();
 
+	// The statement throws from here, not from the layer, so the SQLSTATE
+	// has to be on this reporter or the exception leaves with an empty one.
+	ibBackendDatabaseException::Kind ClassifyDatabaseError(int nativeCode) const override;
+	wxString GetSqlState() const override { return m_sqlState; }
+
 	// Frees the statement on the server. Called by its owner's Close, once — not by this dtor: the owner's
 	// array holds copies, and a temporary copy dying would free a statement still in use.
 	void Deallocate();
@@ -56,6 +61,7 @@ private:
 	wxString m_strStatementName;
 
 	ibPreparedStatementPostgresParameterCollection m_Parameters;
+	wxString m_sqlState;
 };
 
 #endif // __POSTGRESQL_PREPARED_STATEMENT_WRAPPER_H__
