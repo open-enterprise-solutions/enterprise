@@ -26,7 +26,7 @@ This document covers how to build OES on Windows (MSBuild), macOS (CMake), and L
 |---|---|---|
 | Visual Studio | 2022 (17.x) | "Desktop development with C++" workload; platform toolset is `v143` |
 | Windows SDK | 10.0 (latest) | Installed by VS workload (`WindowsTargetPlatformVersion=10.0`) |
-| CMake | Any recent | **Needed by the MSBuild build too**: before it compiles, `backend.vcxproj` runs `cmake -P compiler/engineFingerprint.cmake` (the engine hash in the bytecode cache key). It uses the cmake of Visual Studio's *C++ CMake tools for Windows* component when that is installed, and otherwise `cmake` from `PATH`; with neither, the build fails |
+| CMake | Any recent | Only for the CMake presets. The MSBuild build does not need it: `backend.vcxproj` computes the engine hash in the bytecode cache key itself (an inline MSBuild task, the same rule as `compiler/engineFingerprint.cmake`) |
 | Git | Any recent | For submodule initialisation |
 
 MSBuild (`enterprise.sln`) is the shipping build on Windows. CMake (`CMakeLists.txt` at repo root) is the build for macOS / Linux — **and it also works on Windows**: `CMakePresets.json` ships four host-conditioned presets (`windows-x64-debug`, `windows-x64-release`, `windows-x86-debug`, `windows-x86-release`), and that is the path the Google Test targets are built through (see [engineering-playbook/10-testing.md](private/engineering-playbook/10-testing.md)).
@@ -603,8 +603,8 @@ General > Platform Toolset** and install the VS 2022 C++ toolset if missing.
 
 **Symptom:** `backend` stops before compiling anything: `MSB3073: The command "cmake -D OES_COMPILER_DIR=…" exited with code 9009`.
 
-**Fix:** Install Visual Studio's *C++ CMake tools for Windows* component, or put CMake on `PATH` (see [Prerequisites](#windows)), and build again. The project runs
-`compiler/engineFingerprint.cmake` to write `engineFingerprintBuild.h`, which the bytecode cache includes.
+**Fix:** Pull: the project no longer calls cmake (2026-10-10). The `EngineFingerprint` target computes the hash
+in MSBuild and writes `engineFingerprintBuild.h`, which the bytecode cache includes.
 
 ### CMake cannot find wxWidgets
 

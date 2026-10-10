@@ -1,8 +1,10 @@
 # The engine half of the bytecode cache key.
 #
 # Hashes every file under compiler/ and system/ (the compiler, the interpreter,
-# and the built-in registry). CMake's custom command and the backend's MSBuild
-# pre-build both run this script, so there is one hasher. The header is written
+# and the built-in registry). CMake's custom command runs this script; the
+# backend's MSBuild project computes the same rule in an inline task
+# (EngineFingerprint in backend.vcxproj), so a Windows build needs no cmake.
+# Change one, change the other: the two must give one hash. The header is written
 # only when the hash changes: a timestamp that moved on every build would
 # recompile the backend for nothing.
 #
