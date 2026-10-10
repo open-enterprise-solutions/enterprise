@@ -64,7 +64,16 @@ public:
 	//
 	// `done` is asked under the pool's lock: a flag read, nothing that calls back into the pool. Whoever
 	// makes it true calls Wake.
+	//
+	// In a debug build Await also refuses, with std::logic_error, before the park: while a C++ exception
+	// is unwinding, while an ibFiberHandlerScope is open, or while an ibFiberMutexLock is held. Exception
+	// state and mutex ownership belong to the OS thread.
 	virtual void Await(ibSession* session, const std::function<bool()>& done) = 0;
+
+	// The pool whose fiber is running on this thread, or null when this thread is not inside a headless
+	// lease (the desktop, the scheduler between fibers). Saved with the fiber's locals, so a park restores
+	// null on the scheduler and the lease's pool when the fiber resumes.
+	static ibWorkerPool* Current();
 
 	// What an Await of `session` waits for may have changed — its answer arrived, or the session was
 	// cancelled. Any thread. Nobody waiting — nothing to do.

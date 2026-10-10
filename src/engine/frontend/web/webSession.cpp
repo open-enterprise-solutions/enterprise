@@ -210,18 +210,14 @@ void ibWebSession::OnExit()
 	if (!m_initialized)
 		return;
 
-	// If the script worker is parked at a breakpoint, unpark it before
-	// touching the runtime — DetachRuntime below resets the
-	// per-session ProcUnit, and m_app->OnExit's RunOnWorker(...) must
-	// dispatch onto an idle worker. A worker stuck inside DoDebugLoop's
-	// CV wait would block both. WakeDebugLoop sets m_forceExit on the
-	// session and pops the debug-park flag, so the parked thread
-	// unwinds out of DoDebugLoop, the next opcode-loop iteration in
-	// ibProcUnit::Execute throws on the cancellation flag, and the
-	// originally-Submit'ed task returns with an exception. Designer
-	// side gets a clean LeaveLoop on the wire — the unpark path inside
-	// DoDebugLoop sends it before returning, just as a designer-issued
-	// Continue would.
+	// If the script is parked at a breakpoint, unpark it before touching
+	// the runtime — DetachRuntime below resets the per-session ProcUnit.
+	// On a worker fiber the wait parks the fiber; WakeDebugLoop clears
+	// the flag and Wakes the pool so that fiber resumes and leaves
+	// DoDebugLoop. On a thread that is not a fiber the same call notifies
+	// the condition variable. Either way the script sends LeaveLoop and
+	// the cancel below unwinds it, and the originally submitted task
+	// returns with an exception.
 	//
 	// And a script waiting for its client — a question (ibWorkerPool::Await) — is cancelled: it runs this
 	// session's tasks while it waits, so the drain below would run INSIDE its wait and the runtime and the tabs

@@ -5,7 +5,7 @@
 
 #include "procUnit.h"
 #include "procUnitLambda.h"    // ibValueIterator / ibValueFunction / AsFunction / AsIterator
-#include "core/fiber/fiberLocals.h"
+#include "core/fiber/fiber.h"          // ibFiberHandlerScope — a catch must not park
 
 #include "debugger/debugServer.h"
 #include "system/systemManager.h"
@@ -2482,12 +2482,16 @@ start_label:
 
 	}
 	catch (const ibBackendException& err) {
+		// The caught exception is the thread's until this handler returns.
+		// A park from inside it would hand that state to the next fiber.
+		ibFiberHandlerScope inHandler;
 		if (catchError(err))
 			goto start_label;
 	}
 	// …AND A REFUSAL OF THE CORE BELOW — a read that could not go on — is the module's failure like any other: met as the
 	// engine's own (ibBackendCoreException), so a Try takes it and the error is placed where it happened.
 	catch (const ibCoreException& core) {
+		ibFiberHandlerScope inHandler;
 		try {
 			ibBackendCoreException::Error(wxT("%s"), core.GetErrorDescription());
 		}

@@ -8,6 +8,7 @@
 #include <wx/log.h>
 
 #include <chrono>
+#include <exception>
 #include <stdexcept>
 
 namespace {
@@ -17,6 +18,12 @@ namespace {
 // this fiber is parked the thread runs someone else, and the value has
 // to come back as it was when the fiber resumes.
 thread_local ibSession* tl_currentLease = nullptr;
+
+// The pool that leased this fiber. The debugger parks through it, and
+// the waker is another thread, so the fiber has to be able to name its
+// own pool. Null on the scheduler: a park must not leave it set for the
+// next session.
+thread_local ibWorkerPool* tl_currentPool = nullptr;
 
 // Idle worker self-exits after this much inactivity, unless it's one
 // of the last kMinIdle survivors which stay alive for fast response
@@ -69,7 +76,15 @@ void ibWorkerPoolHeadless::RegisterFiberLocals()
 		ibFiberLocals::RegisterTrivial<ibSession*>(
 			[](void* dst) { *static_cast<ibSession**>(dst) = tl_currentLease; },
 			[](const void* src) { tl_currentLease = *static_cast<ibSession* const*>(src); });
+		ibFiberLocals::RegisterTrivial<ibWorkerPool*>(
+			[](void* dst) { *static_cast<ibWorkerPool**>(dst) = tl_currentPool; },
+			[](const void* src) { tl_currentPool = *static_cast<ibWorkerPool* const*>(src); });
 	});
+}
+
+ibWorkerPool* ibWorkerPool::Current()
+{
+	return tl_currentPool;
 }
 
 ibWorkerPoolHeadless::ibWorkerPoolHeadless(std::size_t maxWorkers)
@@ -292,6 +307,26 @@ void ibWorkerPoolHeadless::Await(ibSession* session, const std::function<bool()>
 			q->woken = false;
 			lk.unlock();
 
+#ifndef NDEBUG
+			// Before the switch. Exception state and a mutex are the
+			// thread's; the next fiber would see both, and this fiber's
+			// restore would write over them. The wait stays counted so a
+			// refusal does not leave the queue marked waiting.
+			try {
+				if (std::uncaught_exceptions() != 0)
+					throw std::logic_error("a fiber cannot park while an exception is unwinding");
+				if (self->HandlerDepth() != 0)
+					throw std::logic_error("a fiber cannot park inside a catch handler");
+				if (self->LockDepth() != 0)
+					throw std::logic_error("a fiber cannot park while a mutex is held");
+			}
+			catch (...) {
+				std::lock_guard<std::mutex> relock(m_mtx);
+				--q->waiting;
+				throw;
+			}
+#endif
+
 			ParkedFibers().push_back(ibParked{ session, q, self });
 			self->SwitchTo(ibFiber::Scheduler());
 
@@ -342,9 +377,14 @@ void ibWorkerPoolHeadless::LeaseEntry(void* raw)
 	// scope destructor only runs when the lease actually ends.
 	ibSessionScope scope(session);
 	struct ClearLease {
-		~ClearLease() { tl_currentLease = nullptr; }
+		~ClearLease()
+		{
+			tl_currentLease = nullptr;
+			tl_currentPool = nullptr;
+		}
 	} clear;
 	tl_currentLease = session;
+	tl_currentPool = pool;
 	pool->DrainLease(q);
 }
 

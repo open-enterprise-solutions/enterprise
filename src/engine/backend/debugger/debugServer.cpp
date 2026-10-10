@@ -22,6 +22,9 @@
 #include "backend/session/session.h"
 #include "backend/session/sessionRegistry.h"
 #include "backend/session/workerPool.h"
+#include "backend/backend_exception.h"    // cancel leaving a breakpoint
+
+#include <exception>
 
 #include "core/fileSystem/fs.h"
 #include "backend/system/systemManager.h"     // Message — the person is told before code runs
@@ -267,6 +270,26 @@ void ibDebuggerServer::ClearCollectionBreakpoint()
 	m_listBreakpoint.clear();
 }
 
+namespace {
+
+// Clears the park flag, kicks a thread waiting on the CV, and Wakes the
+// pool so a fiber parked in ParkDebugLoop resumes. The pool wake is
+// after the debug mutex: the fiber takes that mutex once it is back.
+void ReleaseDebugPark(ibSession* session, ibSession::ibDebugSession* dbg)
+{
+	if (session == nullptr || dbg == nullptr)
+		return;
+	dbg->m_debugLoop = false;
+	{
+		std::lock_guard<std::mutex> lk(dbg->m_mutex);
+		dbg->m_cv.notify_all();
+	}
+	if (ibWorkerPool* const pool = session->GetWorkerPool())
+		pool->Wake(session);
+}
+
+} // namespace
+
 void ibDebuggerServer::WakeDebugSession(const wxString& sessionGuid)
 {
 	// Empty guid -> wake everyone (legacy / pre-multi-session designer
@@ -295,9 +318,7 @@ void ibDebuggerServer::WakeDebugSession(const wxString& sessionGuid)
 
 	auto* d = sess->Debug();
 	if (d == nullptr) return;
-	d->m_debugLoop = false;
-	std::lock_guard<std::mutex> lk(d->m_mutex);
-	d->m_cv.notify_all();
+	ReleaseDebugPark(sess.get(), d);
 }
 
 void ibDebuggerServer::WakeAllDebugSessions()
@@ -311,9 +332,7 @@ void ibDebuggerServer::WakeAllDebugSessions()
 		if (s == nullptr) continue;
 		auto* d = s->Debug();
 		if (d == nullptr) continue;
-		d->m_debugLoop = false;
-		std::lock_guard<std::mutex> lk(d->m_mutex);
-		d->m_cv.notify_all();
+		ReleaseDebugPark(s, d);
 	}
 }
 
@@ -408,23 +427,24 @@ void ibDebuggerServer::DoDebugLoop(const wxString& strDocPath, const wxString& s
 	ibValueOLE::CreateStreamForDispatch();
 #endif
 
-	// event-driven wait: woken immediately by Continue/StepInto/StepOver/Detach/Destroy.
-	// CV/mutex live on the per-session ibDebugSession so a sibling tab's
-	// step doesn't unpark this script thread by accident.
-	// 250ms wake-up is a safety tick only. Connection-loss / shutdown
-	// (ResetDebugger / ShutdownServer / Detach / Destroy) all drain via
-	// WakeAllDebugSessions, which flips this session's m_debugLoop and
-	// kicks its CV — the single per-session exit condition below.
-	while (dbg->m_debugLoop.load(std::memory_order_acquire)) {
-		std::unique_lock<std::mutex> lock(dbg->m_mutex);
-		dbg->m_cv.wait_for(lock, std::chrono::milliseconds(250), [dbg]() {
-			return !dbg->m_debugLoop.load(std::memory_order_acquire);
-		});
+	// A worker fiber parks itself, so the other sessions on its thread
+	// keep running. A thread that is not a fiber waits on this session's
+	// condition variable (250ms tick, same as before). Cancel resumes
+	// the fiber; the leave path below still runs, then the cancel is
+	// thrown on. A refusal from Await (an open catch, a held mutex) is
+	// held until that leave path has run.
+	bool resumed = true;
+	std::exception_ptr parkError;
+	try {
+		resumed = sess->ParkDebugLoop();
+	}
+	catch (...) {
+		parkError = std::current_exception();
 	}
 
-	// (No store here. The loop above exits only once the flag already reads false, and the ONE
-	// authoritative clear is the one below, inside the lock, published together with the run-context
-	// pointer — an unsynchronised write beside it could only make the pair disagree.)
+	// (No store here. The wait returns once the flag already reads false, or with the exception
+	// that refused the park, which is rethrown after the clear below. The ONE authoritative clear
+	// is inside the lock, published together with the run-context pointer.)
 
 	// Symmetric leave — front rotation happens automatically: the next
 	// parked session (if any) becomes the new active target for any
@@ -471,6 +491,11 @@ void ibDebuggerServer::DoDebugLoop(const wxString& strDocPath, const wxString& s
 		dbg->m_debugLoop = false;
 		dbg->m_runContext = nullptr;
 	}
+
+	if (parkError)
+		std::rethrow_exception(parkError);
+	if (!resumed)
+		ibBackendInterruptException::Error();
 }
 
 // Whether an opcode is a "user-stepping" instruction in the debugger

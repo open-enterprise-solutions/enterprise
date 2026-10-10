@@ -320,3 +320,41 @@ void __stdcall ibFiber::FiberProc(void* arg)
 }
 
 #endif
+
+namespace {
+
+ibFiber* FiberToAccount()
+{
+	ibFiber* const fiber = ibFiber::Current();
+	if (fiber == nullptr || fiber->IsScheduler())
+		return nullptr;
+	return fiber;
+}
+
+} // namespace
+
+ibFiberHandlerScope::ibFiberHandlerScope()
+	: m_fiber(FiberToAccount())
+{
+	if (m_fiber != nullptr)
+		m_fiber->EnterHandler();
+}
+
+ibFiberHandlerScope::~ibFiberHandlerScope()
+{
+	if (m_fiber != nullptr)
+		m_fiber->LeaveHandler();
+}
+
+ibFiberLockScope::ibFiberLockScope()
+	: m_fiber(FiberToAccount())
+{
+	if (m_fiber != nullptr)
+		m_fiber->EnterLock();
+}
+
+ibFiberLockScope::~ibFiberLockScope()
+{
+	if (m_fiber != nullptr)
+		m_fiber->LeaveLock();
+}

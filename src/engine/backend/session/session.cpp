@@ -11,7 +11,7 @@
 #include "backend/appData.h"
 #include "backend/appHost.h"                      // the gate and the unbound thread's base
 #include "workerPool.h"
-#include "core/fiber/fiberLocals.h"
+#include "core/fiber/fiber.h"         // ibFiberMutexLock — a lock held across a role handler
 
 #include <new>
 #include <memory>
@@ -236,7 +236,9 @@ private:
 
 		// The modules run one at a time: they belong to the host session's runtime and keep their
 		// frame in the object, and a rented run borrows this very policy on another thread.
-		std::lock_guard<std::mutex> lk(m_applyMtx);
+		// Counted on the fiber for the same span: a question inside the handler parks, and a
+		// mutex held across that park deadlocks the thread.
+		ibFiberMutexLock<std::mutex> lk(m_applyMtx);
 		Unwind(query, [&](const ibBackendQueryable* source, const ibValueMetaObjectGenericData*) {
 			ApplyToSource(query, source, operation);
 			return true;
@@ -1349,8 +1351,44 @@ void ibSession::WakeDebugLoop()
 	// graceful LeaveLoop is sent on the wire when the loop unwinds.
 	if (m_debug == nullptr) return;
 	m_debug->m_debugLoop = false;
-	std::lock_guard<std::mutex> lk(m_debug->m_mutex);
-	m_debug->m_cv.notify_all();
+	{
+		std::lock_guard<std::mutex> lk(m_debug->m_mutex);
+		m_debug->m_cv.notify_all();
+	}
+	// The fiber is resumed by its pool. The CV above is what a thread
+	// that is not a fiber is waiting on. Wake after the debug mutex:
+	// the resumed fiber takes that mutex on the way out.
+	if (ibWorkerPool* const pool = GetWorkerPool())
+		pool->Wake(this);
+}
+
+bool ibSession::ParkDebugLoop()
+{
+	ibDebugSession* const dbg = m_debug.get();
+	if (dbg == nullptr)
+		return true;
+
+	// The fiber that holds this session parks itself. Current() is that
+	// lease's pool; the desktop never sets it and waits on the CV.
+	if (ibWorkerPool* const pool = ibWorkerPool::Current()) {
+		try {
+			pool->Await(this, [dbg]() {
+				return !dbg->m_debugLoop.load(std::memory_order_acquire);
+			});
+		}
+		catch (const ibBackendInterruptException&) {
+			return false;
+		}
+		return true;
+	}
+
+	while (dbg->m_debugLoop.load(std::memory_order_acquire)) {
+		std::unique_lock<std::mutex> lock(dbg->m_mutex);
+		dbg->m_cv.wait_for(lock, std::chrono::milliseconds(250), [dbg]() {
+			return !dbg->m_debugLoop.load(std::memory_order_acquire);
+		});
+	}
+	return true;
 }
 
 bool ibSession::OnClose(bool /*force*/)
