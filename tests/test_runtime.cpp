@@ -594,12 +594,13 @@ TEST(RuntimeTest, TryCatchesAFunctionDeclaredLater) {
 		EXPECT_EQ(v.GetInteger(), 7) << wxString(src).ToStdString();
 	}
 
-	// The call after the try is not inside it, including when the callee is
-	// declared later. Catching it would mean the handler was left in place.
+	// The try finishes, then the function calls a callee declared later. That
+	// call is not inside the try. Catching it would mean the handler was left
+	// in place. The try must not return, or the call is never reached.
 	{
 		ibCompileCode cc(wxT("test"), wxT("memory"), false);
 		const wxString src =
-			wxT("function C() { try { return 1; } except { return 2; } return N(); }\n")
+			wxT("function C() { try { var x; x = 1; } except { return 2; } return N(); }\n")
 			wxT("function N() { Raise(\"left the try\"); return 0; }\n")
 			wxT("var r public; r = C();\n");
 		ASSERT_TRUE(TryCompile(cc, src));
@@ -607,8 +608,9 @@ TEST(RuntimeTest, TryCatchesAFunctionDeclaredLater) {
 		ibProcUnit pu;
 		const ::testing::AssertionResult ran = TryExecute(pu, cc.m_cByteCode);
 		EXPECT_FALSE(ran);
-		if (!ran)
+		if (!ran) {
 			EXPECT_NE(std::string(ran.message()).find("left the try"), std::string::npos) << ran.message();
+		}
 	}
 }
 
