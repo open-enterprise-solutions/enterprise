@@ -224,6 +224,11 @@ are HTTP's by meaning; where two reasons share one, the method tells them apart.
 
 An HTTP status answers only what comes before the protocol: no base at the address (404), a notification (204).
 
+A message that cannot be read as a request — not JSON, JSON nesting more than 256 objects and arrays (the
+outermost counted), or no `method` in it — is answered with JSON-RPC's own parse error, `-32700`, and an `id` of
+`null`, over a WebSocket and over HTTP alike. It is refused before anything else is looked at, the client and its
+session included.
+
 ## What it guarantees
 
 - **Code never runs on the client.**

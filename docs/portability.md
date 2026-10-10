@@ -372,6 +372,15 @@ What that claim does **not** cover, so nobody reads more into the table than it 
   on AArch64 `char` is **unsigned**, the memory model is weaker (a missing atomic ordering is no
   longer hidden by x86's), and alignment/padding differ where a type's natural alignment drove
   the layout. Those are properties of the CPU, not of one class's intrinsics.
+- **ThreadSanitizer watches part of the suite, on Linux only.** Since 2026-10-10
+  `Tests (Linux, TSan)` builds with `-DOES_SANITIZE=thread` and runs the suites a fiber can race —
+  the worker pool, sessions, the connection pool, locks, the job manager — and a race there fails
+  the job. The rest of the suite does not run under it, and nothing does on Windows or macOS. Two
+  toolchain facts it cost: TSan cannot see the assembly fiber switch (`fiber_x64.S`,
+  `fiber_arm64.S`), so `ibFiber::SwitchTo` announces each switch (`__tsan_switch_to_fiber`); and
+  GCC 11's libtsan reports a double lock of a destroyed mutex when a fiber locks a mutex on the
+  calling thread's stack, which GCC 13 does not — so the job runs GCC 13 (ubuntu-24.04) rather
+  than suppress a report in our own code.
 - **Nobody has run the product on Linux.** Building is not running: the `wxScreenDC` in §1.7 was
   found by reading, and that class of fault — load order, resources, paths — only appears when
   something actually starts.
