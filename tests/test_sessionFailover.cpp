@@ -588,10 +588,14 @@ TEST_F(SessionFailover, StartModuleThatAsksDoesNotHangTheLogin)
 		wxString                 text;
 		~Restore() { module->SetModuleText(text); }
 	} restore{ module, module->GetModuleText() };
-	module->SetModuleText(
-		wxT("Procedure onStart() {\n")
-		wxT("\tQuestion(\"stay\");\n")
-		wxT("}\n"));
+	const bool words = common->GetCompileSyntax() == ibProgramSyntax::syntax_ves;
+	module->SetModuleText(words
+		? wxT("Procedure onStart()\n")
+		  wxT("\tQuestion(\"stay\", QuestionMode.Ok);\n")
+		  wxT("EndProcedure\n")
+		: wxT("Procedure onStart() {\n")
+		  wxT("\tQuestion(\"stay\", QuestionMode.Ok);\n")
+		  wxT("}\n"));
 
 	int connection = 0;
 	auto pending = std::async(std::launch::async, [&]() {
@@ -603,7 +607,8 @@ TEST_F(SessionFailover, StartModuleThatAsksDoesNotHangTheLogin)
 	ASSERT_TRUE(login.ok) << login.message;
 	EXPECT_FALSE(login.result.GetString(ibProtocolName::Token).IsEmpty());
 	const ibProtocolNode request = login.result.FindChild("Request");
-	ASSERT_TRUE(request.IsNode()) << "the start module's question was not on the login answer";
+	ASSERT_TRUE(request.IsNode()) << "the start module's question was not on the login answer: "
+		<< login.result.Write();
 	EXPECT_EQ(request.GetString("Text"), wxT("stay"));
 
 	const wxString client = login.result.GetString(ibProtocolName::Client);
