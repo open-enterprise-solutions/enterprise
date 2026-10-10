@@ -196,16 +196,26 @@ TEST(FiberStack, ABinaryValueNestedPastTheStack_Raises)
 {
 	ibDataNode root;
 	ibDataNode* cursor = &root;
-	for (int i = 0; i < 400; ++i)
+	for (int i = 0; i < 8; ++i)
 		cursor = &cursor->AddChild(1, i);
 	ibWriterMemory writer;
 	ASSERT_TRUE(ibBinaryProvider().Write(root, writer));
 	const wxMemoryBuffer blob = writer.buffer();
+
+	// The same bytes on the ordinary reserve. The refusal below is the
+	// reserve, not a document the reader cannot read.
+	RunOnFiber([&] {
+		ibDataNode read;
+		ibReaderMemory reader(blob);
+		ASSERT_TRUE(ibBinaryProvider().Read(reader, read));
+	});
+
+	// Below kRecursionSlack, so the first nested read is already low.
 	const wxString why = Refusal([&] {
 		ibDataNode read;
 		ibReaderMemory reader(blob);
 		ibBinaryProvider().Read(reader, read);
-	}, 256u * 1024u);
+	}, 64u * 1024u);
 	EXPECT_NE(why.Find(wxT("stack")), wxNOT_FOUND) << why.ToStdString();
 }
 
