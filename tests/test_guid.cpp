@@ -17,7 +17,7 @@
 // ---------------------------------------------------------------------------
 
 TEST(Guid, NewGuidIsValid) {
-    EXPECT_TRUE(ibGuid::newGuid().isValid());
+    EXPECT_TRUE(ibGuid(ibGuid::newGuid()).isValid());
 }
 
 TEST(Guid, DefaultIsInvalidNil) {
@@ -25,7 +25,7 @@ TEST(Guid, DefaultIsInvalidNil) {
 }
 
 TEST(Guid, TwoNewGuidsDiffer) {
-    EXPECT_NE(ibGuid::newGuid(), ibGuid::newGuid());
+    EXPECT_NE(ibGuid(ibGuid::newGuid()), ibGuid(ibGuid::newGuid()));
 }
 
 TEST(Guid, ResetMakesInvalid) {
@@ -40,7 +40,7 @@ TEST(Guid, ResetMakesInvalid) {
 // ---------------------------------------------------------------------------
 
 TEST(Guid, StrIsCanonical36) {
-    const wxString s = ibGuid::newGuid().str();
+    const wxString s = ibGuid(ibGuid::newGuid()).str();
     EXPECT_EQ(s.length(), 36u);            // 8-4-4-4-12 + 4 hyphens
     EXPECT_EQ(s.Freq(wxT('-')), 4);
 }
@@ -77,7 +77,7 @@ TEST(Guid, SelfEquality) {
 }
 
 TEST(Guid, BytesAre16) {
-    EXPECT_EQ(ibGuid::newGuid().bytes().size(), 16u);
+    EXPECT_EQ(ibGuid(ibGuid::newGuid()).bytes().size(), 16u);
 }
 
 // ---------------------------------------------------------------------------
