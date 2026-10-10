@@ -1,6 +1,7 @@
 ﻿#include "workerPoolHeadless.h"
 
 #include "core/fiber/fiber.h"
+#include "core/fiber/fiberLocals.h"   // AssertClear — a scope that must not outlive a park
 
 #include "backend/session/session.h"   // ibSessionScope
 #include "backend/backend_exception.h" // ibBackendException
@@ -291,6 +292,19 @@ void ibWorkerPoolHeadless::Await(ibSession* session, const std::function<bool()>
 			// flag TakeRunnable sees once we have switched.
 			q->woken = false;
 			lk.unlock();
+
+			// Before the switch, and with the wait still counted: a scope
+			// that is open belongs to this fiber. Leaving it on the thread
+			// hands it to the next session, and that session's restore
+			// would write over it.
+			try {
+				ibFiberLocals::AssertClear();
+			}
+			catch (...) {
+				std::lock_guard<std::mutex> relock(m_mtx);
+				--q->waiting;
+				throw;
+			}
 
 			ParkedFibers().push_back(ibParked{ session, q, self });
 			self->SwitchTo(ibFiber::Scheduler());

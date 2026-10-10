@@ -5,6 +5,7 @@
 
 #include "compileCode.h"
 #include "codeDef.h"
+#include "core/fiber/fiberLocals.h"   // a question must not be asked mid-expression
 #include "lambdaQueryAST.h"   // L4-2 — lambda body -> L4 query AST (pushdown)
 
 #include "system/systemManager.h"
@@ -3692,6 +3693,18 @@ ibParamUnit ibCompileCode::FindConst(const ibValue& constData)
 // the expression is refused like any other bad expression.
 static thread_local int ts_expressionDepth = 0;
 static constexpr int gs_maxExpressionDepth = 400;
+
+// GetExpression does not run a script, so a question is never asked with
+// a frame of it still open. A non-zero depth at a park would be a compile
+// that called out, and the next fiber would spend this fiber's budget.
+struct ibRegisterExpressionDepthClear {
+	ibRegisterExpressionDepthClear()
+	{
+		ibFiberLocals::RegisterMustBeClear(
+			[]() { return ts_expressionDepth == 0; },
+			"an expression compile");
+	}
+} s_registerExpressionDepthClear;
 
 ibParamUnit ibCompileCode::GetExpression(ibCompileContext* context, int nPriority)
 {

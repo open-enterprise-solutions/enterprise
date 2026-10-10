@@ -339,12 +339,25 @@ bool ibValueMetaObject::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 #include "backend/backend_exception.h"
 #include "backend/session/session.h"
 #include "backend/session/sessionRegistry.h"
+#include "core/fiber/fiberLocals.h"   // exclusive-mode ownership moves with the fiber that took it
 
 namespace {
 	// True if the most recent RequireExclusiveForDDL on this thread
 	// auto-acquired exclusive mode. ReleaseAutoExclusive uses it to know
 	// whether to drop the flag (don't drop if the caller had it before).
 	thread_local bool ts_acquiredByGate = false;
+
+	// Require clears this on entry. A second fiber that did that while the
+	// first was parked would make the first one's release a no-op, and the
+	// exclusive mode it took would stay held.
+	struct ibRegisterAcquiredByGate {
+		ibRegisterAcquiredByGate()
+		{
+			ibFiberLocals::RegisterTrivial<bool>(
+				[](void* dst) { *static_cast<bool*>(dst) = ts_acquiredByGate; },
+				[](const void* src) { ts_acquiredByGate = *static_cast<const bool*>(src); });
+		}
+	} s_registerAcquiredByGate;
 }
 
 void ibRestructureInfo::RequireExclusiveForDDL()

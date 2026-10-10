@@ -4,6 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "reference.h"
+#include "core/fiber/fiberLocals.h"   // the read guard moves with the fiber that pushed it
 #include "backend/system/value/valuePointInTime.h"   // the moment a reference can be asked for
 
 #include "backend/metaData.h"
@@ -14,6 +15,7 @@
 
 #include <vector>
 #include <algorithm>
+#include <new>
 #include <utility>
 
 #include "backend/session/session.h"   // ibSession::Current — the register lives on the session
@@ -375,6 +377,36 @@ namespace {
 
 	thread_local std::pair<ibMetaID, ibGuid> g_refReadStack[kRefReadDepthMax];
 	thread_local std::size_t                 g_refReadDepth = 0;
+
+	// Not a LIFO shared with the other session on this thread. A read that
+	// asks a person stays on this stack; the next fiber has its own, and
+	// this one has to be here again when the read resumes and pops.
+	struct RefReadState {
+		std::size_t depth = 0;
+		std::pair<ibMetaID, ibGuid> stack[kRefReadDepthMax];
+	};
+
+	struct ibRegisterRefReadLocal {
+		ibRegisterRefReadLocal()
+		{
+			ibFiberLocals::Register(
+				sizeof(RefReadState), alignof(RefReadState),
+				[](void* dst) { new (dst) RefReadState(); },
+				[](void* dst) { static_cast<RefReadState*>(dst)->~RefReadState(); },
+				[](void* dst) {
+					auto* state = static_cast<RefReadState*>(dst);
+					state->depth = g_refReadDepth;
+					for (std::size_t i = 0; i < kRefReadDepthMax; ++i)
+						state->stack[i] = g_refReadStack[i];
+				},
+				[](const void* src) {
+					const auto* state = static_cast<const RefReadState*>(src);
+					g_refReadDepth = state->depth;
+					for (std::size_t i = 0; i < kRefReadDepthMax; ++i)
+						g_refReadStack[i] = state->stack[i];
+				});
+		}
+	} s_registerRefReadLocal;
 
 	struct ibRefReadGuard {
 		bool m_cycle = false;

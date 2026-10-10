@@ -22,6 +22,7 @@
 #include "queryableFactory.h"             // ibQueryableFactory — source-namespace resolution
 #include "backend/appData.h"              // ibApplicationInstance::GetQueryableFactory
 #include "backend/session/session.h"      // the session's access policy — an IN (SELECT …) said as EXISTS is guarded by it
+#include "core/fiber/fiberLocals.h"       // a role handler can ask a person while these scopes are open
 #include "backend/metaData.h"             // ibMetaData::GetSourceFactory — resolve through the query's OWN config
 #include "backend/metaCollection/genericData.h"  // ibValueMetaObjectGenericData::ResolveQueryConstant (value(...) resolution)
 #include "backend/tabularModel.h"     // ibComparisonType
@@ -1290,6 +1291,37 @@ struct ibValueAskWalk {
 	const ibQueryAstExpr*                    m_written = nullptr;   // the walk as written — where it starts
 };
 static thread_local std::vector<ibValueAskWalk>* t_valueAskWalks = nullptr;
+
+// A role's OnAccessRead runs while a package's scopes are open, and that
+// handler can ask a person. The pointers are the scope. The next fiber
+// must not resolve its sources through the parked package's tables, and
+// the scope's destructor must restore THIS fiber's previous pointer.
+struct ibRegisterQueryScopeLocals {
+	ibRegisterQueryScopeLocals()
+	{
+		ibFiberLocals::RegisterTrivial<const std::map<wxString, const ibBackendQueryable*>*>(
+			[](void* dst) { *static_cast<const std::map<wxString, const ibBackendQueryable*>**>(dst) = t_tempSources; },
+			[](const void* src) { t_tempSources = *static_cast<const std::map<wxString, const ibBackendQueryable*>* const*>(src); });
+		ibFiberLocals::RegisterTrivial<const std::map<wxString, const ibQuerySelect*>*>(
+			[](void* dst) { *static_cast<const std::map<wxString, const ibQuerySelect*>**>(dst) = t_namedResults; },
+			[](const void* src) { t_namedResults = *static_cast<const std::map<wxString, const ibQuerySelect*>* const*>(src); });
+		ibFiberLocals::RegisterTrivial<const ibMetaData*>(
+			[](void* dst) { *static_cast<const ibMetaData**>(dst) = t_sourceMetaData; },
+			[](const void* src) { t_sourceMetaData = *static_cast<const ibMetaData* const*>(src); });
+		ibFiberLocals::RegisterTrivial<ibDotWalkTwins*>(
+			[](void* dst) { *static_cast<ibDotWalkTwins**>(dst) = t_dotWalkTwins; },
+			[](const void* src) { t_dotWalkTwins = *static_cast<ibDotWalkTwins* const*>(src); });
+		ibFiberLocals::RegisterTrivial<const ibDotWalkExpansion*>(
+			[](void* dst) { *static_cast<const ibDotWalkExpansion**>(dst) = t_dotWalkExpansion; },
+			[](const void* src) { t_dotWalkExpansion = *static_cast<const ibDotWalkExpansion* const*>(src); });
+		ibFiberLocals::RegisterTrivial<const ibAggregateSink*>(
+			[](void* dst) { *static_cast<const ibAggregateSink**>(dst) = t_aggregateSink; },
+			[](const void* src) { t_aggregateSink = *static_cast<const ibAggregateSink* const*>(src); });
+		ibFiberLocals::RegisterTrivial<std::vector<ibValueAskWalk>*>(
+			[](void* dst) { *static_cast<std::vector<ibValueAskWalk>**>(dst) = t_valueAskWalks; },
+			[](const void* src) { t_valueAskWalks = *static_cast<std::vector<ibValueAskWalk>* const*>(src); });
+	}
+} s_registerQueryScopeLocals;
 
 struct ibValueAskWalksScope {
 	explicit ibValueAskWalksScope(std::vector<ibValueAskWalk>* now)

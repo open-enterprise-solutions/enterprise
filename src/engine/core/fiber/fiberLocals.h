@@ -84,6 +84,14 @@ public:
 		void (*destroy)(void* obj),
 		void (*activate)(void* obj));
 
+	// A scope a question must not be inside. `isClear` is true when the
+	// value is at rest. Await asks before it parks; a false answer is a
+	// logic error, because the next fiber on the thread would see it and
+	// the scope's own restore would write that fiber's previous value.
+	// Registered at static init, with the slots.
+	static void RegisterMustBeClear(bool (*isClear)(), const char* what);
+	static void AssertClear();
+
 	// The calling thread's values, and no per-fiber objects: the
 	// scheduler's snapshot.
 	static Snapshot ForScheduler();
