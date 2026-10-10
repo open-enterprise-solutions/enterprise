@@ -10,13 +10,14 @@
 
 #include <gtest/gtest.h>
 #include "core/guid.h"
+#include "backend/system/value/valueGuid.h"
 
 // ---------------------------------------------------------------------------
 // Generation + validity
 // ---------------------------------------------------------------------------
 
 TEST(Guid, NewGuidIsValid) {
-    EXPECT_TRUE(ibGuid::newGuid().isValid());
+    EXPECT_TRUE(ibGuid(ibGuid::newGuid()).isValid());
 }
 
 TEST(Guid, DefaultIsInvalidNil) {
@@ -24,7 +25,7 @@ TEST(Guid, DefaultIsInvalidNil) {
 }
 
 TEST(Guid, TwoNewGuidsDiffer) {
-    EXPECT_NE(ibGuid::newGuid(), ibGuid::newGuid());
+    EXPECT_NE(ibGuid(ibGuid::newGuid()), ibGuid(ibGuid::newGuid()));
 }
 
 TEST(Guid, ResetMakesInvalid) {
@@ -39,7 +40,7 @@ TEST(Guid, ResetMakesInvalid) {
 // ---------------------------------------------------------------------------
 
 TEST(Guid, StrIsCanonical36) {
-    const wxString s = ibGuid::newGuid().str();
+    const wxString s = ibGuid(ibGuid::newGuid()).str();
     EXPECT_EQ(s.length(), 36u);            // 8-4-4-4-12 + 4 hyphens
     EXPECT_EQ(s.Freq(wxT('-')), 4);
 }
@@ -76,7 +77,7 @@ TEST(Guid, SelfEquality) {
 }
 
 TEST(Guid, BytesAre16) {
-    EXPECT_EQ(ibGuid::newGuid().bytes().size(), 16u);
+    EXPECT_EQ(ibGuid(ibGuid::newGuid()).bytes().size(), 16u);
 }
 
 // ---------------------------------------------------------------------------
@@ -91,4 +92,34 @@ TEST(Guid, OrderingIsAntisymmetric) {
         EXPECT_EQ(a < b, b > a);           // '<' and '>' agree
     }
     EXPECT_FALSE(a < a);                   // irreflexive
+}
+
+// New Guid("0000...") is the empty identity. isValid() stays false for the nil
+// GUID, which means "no object", and the script value still holds it.
+TEST(ValueGuid, NilStringIsAnEmptyGuid)
+{
+	const wxString nil = wxT("00000000-0000-0000-0000-000000000000");
+	ibValue text(nil);
+	ibValue* params[] = { &text };
+
+	ibValueGuid guid;
+	ASSERT_TRUE(guid.Init(params, 1));
+	EXPECT_TRUE(guid.IsEmpty());
+	EXPECT_EQ(guid.GetString(), nil);
+
+	ibValueGuid other;
+	ASSERT_TRUE(other.Init(params, 1));
+	EXPECT_TRUE(guid.CompareValueEQ(other));
+
+	ibValue realText(wxT("6fab82bc-d41d-4664-b0f6-bb61b0ed78d8"));
+	ibValue* realParams[] = { &realText };
+	ibValueGuid real;
+	ASSERT_TRUE(real.Init(realParams, 1));
+	EXPECT_FALSE(real.IsEmpty());
+	EXPECT_FALSE(guid.CompareValueEQ(real));
+
+	ibValue junk(wxT("not-a-guid"));
+	ibValue* bad[] = { &junk };
+	ibValueGuid refused;
+	EXPECT_FALSE(refused.Init(bad, 1));
 }
