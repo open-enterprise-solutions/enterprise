@@ -140,3 +140,18 @@ TEST(WorkerPoolFiber, StopJoinsTheWorkerBeforeTheCallerTearsDown)
 			<< "pass " << pass << ": Stop returned before the worker thread exited";
 	}
 }
+
+// Stop skips the calling thread's handle. Destroying the pool from a
+// task used to destroy that joinable std::thread, which is
+// std::terminate. The destructor detaches it and the worker leaves
+// without touching the pool again.
+TEST(WorkerPoolFiber, PoolDestroyedFromATaskDoesNotTerminate)
+{
+	auto pool = std::make_unique<ibWorkerPoolHeadless>(1);
+	std::future<void> done = pool->Submit(nullptr, [&]() {
+		pool.reset();
+	});
+	ASSERT_EQ(done.wait_for(std::chrono::seconds(5)), std::future_status::ready);
+	EXPECT_NO_THROW(done.get());
+	EXPECT_EQ(pool, nullptr);
+}

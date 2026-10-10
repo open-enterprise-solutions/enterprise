@@ -102,6 +102,11 @@ private:
 	// the thread exists. The handle is kept: Stop joins it. A detached
 	// thread is still inside thread_local destructors after that counter
 	// hits zero, which is when Stop used to return.
+	//
+	// An idle self-exit is joined by the thread this function spawns,
+	// before that thread enters WorkerLoop — not by Submit. At the cap,
+	// or while stopping, the handle stays in m_workers for the next
+	// spawn or for Stop.
 	void TrySpawnWorker();
 
 	// m_workersMtx must be held. Moves handles out so the caller can join
@@ -154,6 +159,10 @@ private:
 	// returns; the thread itself is still running thread_local
 	// destructors until join returns.
 	struct ibWorker {
+		// Set at the end of the thread function, before thread_local
+		// destructors. It means WorkerLoop has returned, not that join
+		// would return without waiting: join still waits those
+		// destructors out.
 		std::shared_ptr<std::atomic<bool>> exited;
 		std::thread                        thread;
 	};
