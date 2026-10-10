@@ -1339,7 +1339,12 @@ start_label:
 			case OPER_IF: {
 				// A boolean condition — what a comparison leaves — is read where it lies; anything else
 				// asks its own emptiness.
+				//
+				// An `and` marks its test (m_param4 = LINQ_THREE_VALUED_NULL) so a SQL NULL left
+				// side does not skip the right one. UNKNOWN does not decide the conjunction.
 				const ibValue& condition = cvariable1;
+				if (curCode.m_param4.m_numIndex == LINQ_THREE_VALUED_NULL && IsNullOperand(condition))
+					break;
 				if (condition.m_typeClass == ibValueTypes::TYPE_BOOLEAN ? !condition.m_bData : IsEmptyValue(condition))
 					lCodeLine = index2 - 1;
 				break;
@@ -2448,7 +2453,13 @@ start_label:
 			case OPER_LS + TYPE_DELTA4: SetTypeBoolean(variable1, (cvariable2.m_bData < cvariable3.m_bData)); break;
 			case OPER_GE + TYPE_DELTA4: SetTypeBoolean(variable1, (cvariable2.m_bData >= cvariable3.m_bData)); break;
 			case OPER_LE + TYPE_DELTA4: SetTypeBoolean(variable1, (cvariable2.m_bData <= cvariable3.m_bData)); break;
-			case OPER_IF + TYPE_DELTA4: if (!cvariable1.m_bData) lCodeLine = index2 - 1; break;
+			case OPER_IF + TYPE_DELTA4:
+				// Same mark as the untyped test: a boolean-tier comparison can still be SQL NULL,
+				// and that must not skip the right operand of `and`.
+				if (curCode.m_param4.m_numIndex == LINQ_THREE_VALUED_NULL && IsNullOperand(cvariable1))
+					break;
+				if (!cvariable1.m_bData) lCodeLine = index2 - 1;
+				break;
 			}
 			lCodeLine++;
 		}

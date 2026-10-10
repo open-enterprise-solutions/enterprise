@@ -10,6 +10,11 @@
 #include "system/systemManager.h"
 #include "backend/session/session.h"       // GetCompileState — the code style lives there
 
+// The mark a filter writes on a comparison (procUnitLambda.h, LINQ_THREE_VALUED_NULL).
+// Repeated here so the compiler does not include the interpreter. OPER_IF treats a
+// NULL condition as "does not decide" when an `and` sets this on m_param4.
+constexpr long kAndUnknownMark = 1;
+
 #pragma warning(push)
 #pragma warning(disable : 4018)
 
@@ -4145,6 +4150,15 @@ delimOperation:
 					code.m_numOper = OPER_IF;
 					code.m_param1 = variable;
 					CorrectTypeDef(variable);
+					// A definite false skips the right side of `and`. SQL NULL does not: UNKNOWN
+					// AND x is not FALSE, and `Not (Null = a And Null = b)` must stay UNKNOWN.
+					// The mark is LINQ_THREE_VALUED_NULL (procUnitLambda.h); OPER_IF reads it
+					// and falls through on NULL. `or` already falls through only on a true left,
+					// and NULL is not true, so its test needs no mark.
+					if (!isOr) {
+						code.m_param4.m_numArray = DEF_VAR_SKIP;
+						code.m_param4.m_numIndex = kAndUnknownMark;
+					}
 					m_cByteCode.m_listCode.emplace_back(std::move(code));
 					const int ifLine = (int)m_cByteCode.m_listCode.size() - 1;
 
