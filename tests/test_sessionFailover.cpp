@@ -594,7 +594,7 @@ TEST_F(SessionFailover, StartModuleThatAsksDoesNotHangTheLogin)
 		wxT("}\n"));
 
 	int connection = 0;
-	const auto pending = std::async(std::launch::async, [&]() {
+	auto pending = std::async(std::launch::async, [&]() {
 		return g_base->Call(Request(120, "login", PasswordLogin()), &connection);
 	});
 	ASSERT_EQ(pending.wait_for(std::chrono::seconds(10)), std::future_status::ready)
