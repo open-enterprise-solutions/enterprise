@@ -223,6 +223,39 @@ TEST_F(FrontendFormFix, FormSerializeRoundTripPreservesControls)
 		<< "the round-tripped form owns the same controls";
 }
 
+// A control that holds no value is still named from the form module.
+// ThisForm.HelpPane compiles for an HTML box; the member has to be there,
+// and reading it has to yield the box (SetPage lives on the box).
+TEST_F(FrontendFormFix, NamedControlWithoutAValueIsAFormMember)
+{
+	if (!frameReady) GTEST_SKIP();
+
+	ibValueForm* form = NewForm();
+	ibValueFrame* box = form->NewObject(control_to_clsid("CT_HTML"), form);
+	ASSERT_NE(box, nullptr);
+	// The name is set before the first lookup, so the lazy member table includes it.
+	box->SetControlName(wxT("HelpPane"));
+
+	bool holdsValue = true;
+	bool found = false;
+	for (ibValueControl* control : form->GetControlList()) {
+		if (control->GetControlName() == wxT("HelpPane")) {
+			found = true;
+			holdsValue = control->HasValueInControl();
+		}
+	}
+	ASSERT_TRUE(found);
+	EXPECT_FALSE(holdsValue);
+
+	const long prop = form->FindProp(wxT("HelpPane"));
+	ASSERT_NE(prop, wxNOT_FOUND);
+
+	ibValue reached;
+	ASSERT_TRUE(form->GetPropVal(prop, reached));
+	EXPECT_TRUE(reached.IsReference());
+	EXPECT_NE(reached.FindMethod(wxT("SetPage")), wxNOT_FOUND);
+}
+
 // ------------------------------ clsid kind-typing ----------------------------
 // Pure classification helpers (clsid.h) — no fixture, no wxApp: they read the
 // high byte of the id. Control identity is by kind, never by C++ RTTI.
