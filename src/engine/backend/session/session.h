@@ -335,7 +335,14 @@ public:
 	// Designer / technical sessions (no enforcement). Created at authentication
 	// (EnsureRoot) for runtime sessions; the concrete impl lives in session.cpp.
 	// Returns null inside an ibAccessTrustScope (a role module runs privileged).
+	// Await pauses that window, so a task it runs while a question is open
+	// does not see the bypass.
 	const ibAccessPolicy* GetAccessPolicy() const;
+
+	// The role-handler bypass and the session-parameter write window.
+	// Await clears both for the tasks it runs and puts them back after.
+	bool AccessTrusted() const { return m_accessTrusted; }
+	bool SessionParametersOpen() const { return m_sessionParametersOpen; }
 
 	// The module manager whose context (Manager / Catalogs / Documents / globals)
 	// an object/record/module compiled against `metaData` should parent to. One
@@ -839,6 +846,8 @@ private:
 	// convention, and why nothing else needs to report a close.
 	void Teardown();
 	friend class ibAccessTrustScope;   // toggles m_accessTrusted (RLS privileged window)
+	friend class ibSessionParameterWriteWindow; // toggles m_sessionParametersOpen
+	friend class ibSessionTrustPause;  // Await clears both for the tasks it runs
 
 	wxString       m_id;
 	ibSessionKind  m_kind;
@@ -1230,6 +1239,63 @@ public:
 private:
 	ibSession* m_session;
 	bool       m_prev;
+};
+
+// The write window SetSessionParameters opens around the one call that may
+// write. Saves the prior flag, so a nested window composes, and closes on
+// every exit including a throw.
+class BACKEND_API ibSessionParameterWriteWindow {
+public:
+	explicit ibSessionParameterWriteWindow(ibSession* s)
+		: m_session(s), m_prev(s != nullptr && s->m_sessionParametersOpen)
+	{
+		if (m_session != nullptr) m_session->m_sessionParametersOpen = true;
+	}
+	~ibSessionParameterWriteWindow()
+	{
+		if (m_session != nullptr) m_session->m_sessionParametersOpen = m_prev;
+	}
+
+	ibSessionParameterWriteWindow(const ibSessionParameterWriteWindow&)            = delete;
+	ibSessionParameterWriteWindow& operator=(const ibSessionParameterWriteWindow&) = delete;
+
+private:
+	ibSession* m_session;
+	bool       m_prev;
+};
+
+// Await holds this for the whole wait. The fiber that asked is still inside
+// a role handler or SetSessionParameters — those flags are on the session,
+// and the tasks Await runs are this session's. Clearing them here is what
+// keeps that work from inheriting the bypass; the destructor puts back
+// whatever the asker had, including when the wait is cancelled.
+class BACKEND_API ibSessionTrustPause {
+public:
+	explicit ibSessionTrustPause(ibSession* s)
+		: m_session(s)
+		, m_trusted(s != nullptr && s->m_accessTrusted)
+		, m_parametersOpen(s != nullptr && s->m_sessionParametersOpen)
+	{
+		if (m_session == nullptr)
+			return;
+		m_session->m_accessTrusted = false;
+		m_session->m_sessionParametersOpen = false;
+	}
+	~ibSessionTrustPause()
+	{
+		if (m_session == nullptr)
+			return;
+		m_session->m_accessTrusted = m_trusted;
+		m_session->m_sessionParametersOpen = m_parametersOpen;
+	}
+
+	ibSessionTrustPause(const ibSessionTrustPause&)            = delete;
+	ibSessionTrustPause& operator=(const ibSessionTrustPause&) = delete;
+
+private:
+	ibSession* m_session;
+	bool       m_trusted;
+	bool       m_parametersOpen;
 };
 
 // ibApplicationInstance::CreateSession<SessionT> template bodies live in

@@ -260,6 +260,13 @@ void ibWorkerPoolHeadless::Await(ibSession* session, const std::function<bool()>
 	if (self == nullptr || self->IsScheduler())
 		throw std::logic_error("ibWorkerPool::Await outside a task of its session");
 
+	// The asker may be a role handler or SetSessionParameters. Both flags live
+	// on the session, and the tasks below are that session's, so they would
+	// run privileged — RLS off, parameters writable — for as long as the
+	// question is open. The pause clears them and puts them back on every
+	// exit, including the cancel.
+	ibSessionTrustPause pause(session);
+
 	std::unique_lock<std::mutex> lk(m_mtx);
 	const auto it = m_sessions.find(session);
 	if (it == m_sessions.end() || it->second == nullptr)

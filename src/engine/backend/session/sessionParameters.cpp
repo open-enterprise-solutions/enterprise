@@ -75,13 +75,8 @@ void ibSession::SetSessionParameters()
 	ibAccessTrustScope trusted(this);
 
 	// THE WRITE WINDOW, opened exactly around the one call that may write and closed
-	// on every path out of it — including the exceptional ones, which is why it is a
-	// guard object and not two assignments.
-	struct WriteWindow {
-		explicit WriteWindow(bool& flag) : m_flag(flag) { m_flag = true; }
-		~WriteWindow() { m_flag = false; }
-		bool& m_flag;
-	} window(m_sessionParametersOpen);
+	// on every path out of it — including the exceptional ones.
+	ibSessionParameterWriteWindow window(this);
 
 	try {
 		unit->ExecAsProc(wxT("SetSessionParameters"));
