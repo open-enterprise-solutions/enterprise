@@ -191,8 +191,13 @@ wxString ibPasswordHash::Hash(const wxString& password)
 
 bool ibPasswordHash::Verify(const wxString& password, const wxString& storedHash)
 {
+	// A blank column is not a password. It used to answer true for an empty
+	// password, so a user row whose hash had been wiped (the user dialog
+	// saved one whenever the box was left untouched) could be entered by
+	// typing nothing. An account with no password is refused here; giving
+	// it a password means storing a real hash.
 	if (storedHash.IsEmpty())
-		return password.IsEmpty();
+		return false;
 
 	// Legacy fast path: 32-hex MD5.
 	if (IsLegacy(storedHash))

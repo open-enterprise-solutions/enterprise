@@ -45,9 +45,17 @@ TEST(PasswordHash, VerifyRejectsEmptyAgainstNonEmpty) {
 }
 
 TEST(PasswordHash, EmptyPasswordRoundTrips) {
+    // An empty password that was actually hashed is a real PHC string.
+    // That is a different value from a row whose hash column is blank.
     const wxString h = ibPasswordHash::Hash(wxEmptyString);
+    EXPECT_FALSE(h.IsEmpty());
     EXPECT_TRUE(ibPasswordHash::Verify(wxEmptyString, h));
     EXPECT_FALSE(ibPasswordHash::Verify(wxT("x"), h));
+}
+
+TEST(PasswordHash, EmptyStoredHashNeverVerifies) {
+    EXPECT_FALSE(ibPasswordHash::Verify(wxEmptyString, wxEmptyString));
+    EXPECT_FALSE(ibPasswordHash::Verify(wxT("x"), wxEmptyString));
 }
 
 // ---------------------------------------------------------------------------
