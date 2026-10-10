@@ -1,12 +1,13 @@
 #include "core/fiber/fiberLocals.h"
+#include "core/exception.h"
+
+#include <wx/intl.h>
 
 #include <atomic>
 #include <cstdio>
 #include <cstdlib>
 #include <mutex>
 #include <new>
-#include <stdexcept>
-#include <string>
 #include <utility>
 #include <vector>
 
@@ -162,19 +163,13 @@ void ibFiberLocals::RegisterMustBeClear(bool (*isClear)(), const char* what)
 
 void ibFiberLocals::AssertClear()
 {
-	Registry& registry = Get();
-	const char* bad = nullptr;
-	{
-		std::lock_guard<std::mutex> lk(registry.mutex);
-		for (const ibClearCheck& check : registry.clearChecks) {
-			if (check.isClear != nullptr && !check.isClear()) {
-				bad = check.what;
-				break;
-			}
-		}
+	// Sealed() takes the registry lock only until the first snapshot.
+	// After that the check list is fixed and this read does not lock.
+	const Registry& registry = Sealed();
+	for (const ibClearCheck& check : registry.clearChecks) {
+		if (check.isClear != nullptr && !check.isClear())
+			ibCoreException::Error(_("a fiber cannot park while %s is set"), wxString::FromUTF8(check.what));
 	}
-	if (bad != nullptr)
-		throw std::logic_error(std::string("a fiber cannot park while ") + bad + " is set");
 }
 
 ibFiberLocals::Snapshot::Snapshot() noexcept = default;

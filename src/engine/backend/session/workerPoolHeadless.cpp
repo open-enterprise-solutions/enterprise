@@ -317,7 +317,15 @@ void ibWorkerPoolHeadless::Await(ibSession* session, const std::function<bool()>
 			ibSessionTask item = std::move(q->tasks.front());
 			q->tasks.pop_front();
 			lk.unlock();
-			RunTask(item);
+			// The task shares this stack. It must not resolve through the
+			// waiter's query scopes, and a RequireExclusiveForDDL in it
+			// must not clear the flag the waiter holds. The session stays:
+			// the task was queued for this session.
+			self->CallWithSchedulerLocals([&] {
+				tl_currentLease = session;
+				ibSessionScope scope(session);
+				RunTask(item);
+			});
 			// item dies HERE, outside the lock — its closure may tear something down that takes it.
 		}
 		lk.lock();
