@@ -14,6 +14,7 @@
 #include <string>
 #include <thread>
 
+#include "backend/compiler/cache/byteCodeCache.h"
 #include "backend/metadataConfiguration.h"
 #include "backend/metaCollection/metaObjectMetadata.h"
 
@@ -577,16 +578,35 @@ TEST_F(SessionFailover, HttpClientStaysCallableWithoutASocket)
 
 TEST_F(SessionFailover, StartModuleThatAsksDoesNotHangTheLogin)
 {
+	// The configuration is created by the first login. A filter that runs this test alone has not
+	// logged in yet, so the module is not there to write.
+	if (ibApplicationInstance::GetActiveMetaData(g_base->app) == nullptr) {
+		int opened = 0;
+		const Rpc primed = g_base->Call(Request(119, "login", PasswordLogin(false)), &opened);
+		ASSERT_TRUE(primed.ok) << primed.message;
+		ibProtocolNode bye;
+		bye.SetValue(ibProtocolName::Client, primed.result.GetString(ibProtocolName::Client));
+		const Rpc out = g_base->Call(Request(1191, "logout", bye), &opened);
+		EXPECT_TRUE(out.ok) << out.message;
+	}
+
 	ibMetaDataConfigurationBase* const meta = ibApplicationInstance::GetActiveMetaData(g_base->app);
 	ASSERT_NE(meta, nullptr);
 	ibValueMetaObjectConfiguration* const common = meta->GetCommonMetaObject();
 	ASSERT_NE(common, nullptr);
 	ibValueMetaObjectModule* const module = const_cast<ibValueMetaObjectModule*>(common->GetObjectModule());
 	ASSERT_NE(module, nullptr);
+	// The cache key is the configuration digest, not the module text. A login that already compiled
+	// the empty module would serve that bytecode again, and onStart would never ask. Drop the row
+	// whenever the text changes, the same way an apply retires it.
 	struct Restore {
 		ibValueMetaObjectModule* module;
 		wxString                 text;
-		~Restore() { module->SetModuleText(text); }
+		~Restore()
+		{
+			module->SetModuleText(text);
+			ibByteCodeCache::Invalidate(module->GetGuid().GetGuid());
+		}
 	} restore{ module, module->GetModuleText() };
 	const bool words = common->GetCompileSyntax() == ibProgramSyntax::syntax_ves;
 	module->SetModuleText(words
@@ -596,6 +616,7 @@ TEST_F(SessionFailover, StartModuleThatAsksDoesNotHangTheLogin)
 		: wxT("Procedure onStart() {\n")
 		  wxT("\tQuestion(\"stay\", QuestionMode.Ok);\n")
 		  wxT("}\n"));
+	ibByteCodeCache::Invalidate(module->GetGuid().GetGuid());
 
 	int connection = 0;
 	auto pending = std::async(std::launch::async, [&]() {
