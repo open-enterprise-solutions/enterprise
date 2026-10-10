@@ -293,17 +293,35 @@ const ibSchemaIndex* FindIndex(const std::vector<ibSchemaIndex>& indexes, const 
 	return nullptr;
 }
 
-// Two same-named indexes are the SAME shape iff their uniqueness and their column list (by model id,
-// stable across config instances) match. A mismatch (e.g. Index -> IndexWithAdditionalOrder adds the
-// order column, or a unique flip) means the index must be dropped and rebuilt, not left as-is.
+// Two same-named indexes are the SAME shape iff their uniqueness, their column list (by model id,
+// stable across config instances) and the PHYSICAL type of each column match. A mismatch (e.g.
+// Index -> IndexWithAdditionalOrder adds the order column, a unique flip, or a dimension retyped
+// from string to a reference) means the index must be dropped and rebuilt, not left as-is.
+//
+// The model id survives a type change. The index does not: it stands on the physical fields, and
+// no engine alters a column an index references — Firebird answers "column ... is referenced in
+// index" and rolls the apply back. A different layout is a different index, so the differ drops
+// it before the column and puts it back after.
 bool SameIndex(const ibSchemaIndex& a, const ibSchemaIndex& b)
 {
 	if (a.m_unique != b.m_unique)             return false;
 	if (a.m_descending != b.m_descending)     return false;
 	if (a.m_columns.size() != b.m_columns.size()) return false;
-	for (size_t k = 0; k < a.m_columns.size(); ++k)
-		if (a.m_columns[k]->GetColumnId() != b.m_columns[k]->GetColumnId())
+	for (size_t k = 0; k < a.m_columns.size(); ++k) {
+		const ibBackendQueryColumn* const left = a.m_columns[k];
+		const ibBackendQueryColumn* const right = b.m_columns[k];
+		if (left == nullptr || right == nullptr)
 			return false;
+		if (left->GetColumnId() != right->GetColumnId())
+			return false;
+		const std::vector<ibColumnSlot> was = DescribeColumnLayout(left);
+		const std::vector<ibColumnSlot> now = DescribeColumnLayout(right);
+		if (was.size() != now.size())
+			return false;
+		for (size_t f = 0; f < was.size(); ++f)
+			if (was[f].m_name != now[f].m_name || !ibSameFieldType(was[f].m_type, now[f].m_type))
+				return false;
+	}
 	return true;
 }
 
@@ -725,6 +743,11 @@ bool IndexKeyFitsOrSay(const ibDatabaseLayer& conn, const ibSchemaTable& t, cons
 }
 
 } // namespace
+
+bool ibSameSchemaIndex(const ibSchemaIndex& a, const ibSchemaIndex& b)
+{
+	return SameIndex(a, b);
+}
 
 // Apply a derived table's materialization bundle — drop the old triggers / view, create the new
 // ones. Runs AFTER the table's own structure is in place (a trigger references its columns).

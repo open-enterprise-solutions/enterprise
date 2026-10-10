@@ -439,6 +439,11 @@ private:
 BACKEND_API int DiffSnapshots(const ibSchemaSnapshot* baseline, const ibSchemaSnapshot& target,
                               ibDatabaseConnectionHolder* holder = nullptr, ibRestructureInfo* report = nullptr);
 
+// The predicate the differ uses for "this index can stay". False when a covered column changed
+// type: the model id is the same, the physical fields are not, and the index has to come down
+// before that column is altered.
+BACKEND_API bool ibSameSchemaIndex(const ibSchemaIndex& a, const ibSchemaIndex& b);
+
 // Do these two snapshots describe the SAME physical structure? Tables by id, their columns by id + type,
 // their indexes, and a derived table's materialisation spec. Answers the one question the apply flow asks
 // BEFORE it starts: is there anything here that has to be written into the database, or does the change
