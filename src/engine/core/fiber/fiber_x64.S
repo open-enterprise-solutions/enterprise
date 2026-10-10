@@ -47,8 +47,8 @@
 SYM(ibFiberSwitch):
     .cfi_startproc
 #if defined(__CET__)
-    /* The landing pad the property note below claims. A direct call does not
-     * need it; an indirect one does, once the DSO keeps the CET bit. */
+    /* Harmless, and not required. The switch is called directly, and the
+     * trampoline is reached by ret, which IBT does not check. */
     endbr64
 #endif
     pushq %rbp
@@ -118,10 +118,12 @@ SYM(ibFiberTrampoline):
 #endif
 
 /* C++ objects in this DSO carry GNU_PROPERTY_X86_FEATURE_1_AND when the
- * compiler was built with CET (__CET__ is 1, 2, or 3). One assembly file
- * without the same note clears the bit for every object at link time, and
- * libcore.so then turns CET off for itself. The value is the compiler's.
- * The endbr64 above is what that value requires. */
+ * compiler was built with CET (__CET__ is 1 for IBT, 2 for SHSTK, 3 for
+ * both). One assembly file without the same note clears the bit for every
+ * object at link time. SHSTK stays off until the switch saves and restores
+ * the shadow-stack pointer: there is no shadow stack per fiber, and a ret
+ * into the forged trampoline would raise #CP if the note claimed it.
+ * (__CET__ & 1) is IBT only. */
 #if defined(__linux__) && defined(__ELF__) && defined(__CET__)
     .section .note.gnu.property, "a"
     .align 8
@@ -135,7 +137,7 @@ SYM(ibFiberTrampoline):
     .long 0xc0000002
     .long 3f - 2f
 2:
-    .long __CET__
+    .long (__CET__ & 1)
 3:
     .align 8
 4:

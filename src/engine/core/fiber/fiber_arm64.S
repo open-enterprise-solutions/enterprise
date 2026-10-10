@@ -72,7 +72,13 @@ SYM(ibFiberSwitch):
     ldr x9, [x1]
     mov sp, x9
     ldr x9, [sp], #16
+    /* msr fpcr is slow on some cores, and a fiber that never changed
+     * rounding would pay it on every switch. */
+    mrs x10, fpcr
+    cmp x9, x10
+    b.eq fpcr_unchanged
     msr fpcr, x9
+fpcr_unchanged:
     ldp d8,  d9,  [sp], #16
     ldp d10, d11, [sp], #16
     ldp d12, d13, [sp], #16
