@@ -184,6 +184,19 @@ void ibClientHost::Disconnect(const void* connection)
 		client->instance->OnExit();
 }
 
+bool ibClientHost::LoggedIn(const void* connection) const
+{
+	if (connection == nullptr)
+		return false;
+
+	std::lock_guard<std::mutex> lock(m_mutex);
+	for (const auto& it : m_clients) {
+		if (it.second->connection == connection)
+			return true;
+	}
+	return false;
+}
+
 void ibClientHost::SetNotifier(const void* connection, std::function<void(const wxString& text)> notify)
 {
 	if (connection == nullptr)

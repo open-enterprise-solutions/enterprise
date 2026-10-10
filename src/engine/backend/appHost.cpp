@@ -268,7 +268,7 @@ ibApplicationHost::~ibApplicationHost()
 #define BACKEND_CONF wxT("backend.conf")
 
 std::size_t ibApplicationHost::ReadCount(const wxConfigBase& conf, const wxString& file, const wxString& key, long least,
-	std::size_t byDefault)
+	std::size_t byDefault, std::size_t most)
 {
 	long configured = 0;
 	if (!conf.Read(key, &configured) || configured == 0)   // left out, or 0 — the default, on purpose
@@ -278,6 +278,12 @@ std::size_t ibApplicationHost::ReadCount(const wxConfigBase& conf, const wxStrin
 		ibTechJournal::Print(ibJournalMark::Warning, wxT("engine"),
 			wxT("%s: %s = %ld is less than %ld - the default is used"), file, key, configured, least);
 		return byDefault;
+	}
+	if (most != 0 && configured > static_cast<long>(most)) {
+		ibTechJournal::Print(ibJournalMark::Warning, wxT("engine"),
+			wxT("%s: %s = %ld is more than %ld - %ld is used"), file, key, configured,
+			static_cast<long>(most), static_cast<long>(most));
+		return most;
 	}
 	return static_cast<std::size_t>(configured);
 }
@@ -304,6 +310,11 @@ void ibApplicationHost::ReadBackendConf()
 	// may be: left out, or 0, no limit.
 	m_configWorkers = ReadCount(fc, BACKEND_CONF, wxT("Workers"), 1, 0);
 	m_configBases   = ReadCount(fc, BACKEND_CONF, wxT("Bases"), 1, 0);
+	// The application server's client ceiling. Left out, or 0: a thousand — not "no limit", which is what
+	// Workers and Bases mean by 0. Above the most, the most is used. See clientListener.cpp — a connection
+	// holds a thread, and this is how many of those threads the process will make.
+	m_configClientConnections = ReadCount(fc, BACKEND_CONF, wxT("ClientConnections"), 1,
+		kDefaultClientConnections, kMostClientConnections);
 	// The connections are a base's own — its infobase.conf says them; this is only the default for a base that does
 	// not. Two at least: the registry holds one for its writes, a session needs another.
 	m_configConnections = ReadCount(fc, BACKEND_CONF, wxT("Connections"), 2, 0);
