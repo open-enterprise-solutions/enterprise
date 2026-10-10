@@ -1502,32 +1502,20 @@ bool ibCompileCode::CompileFunction(ibCompileContext* context)
 	const wxString& strFuncName = createdFunction->m_strRealName;
 	const wxString& strFuncRealName = createdFunction->m_strRealName;
 
-	// Ancestor-chain dedup: declaration cannot collide with an
-	// exported function visible from any enclosing scope. Walk
-	// up via m_parentContext; on collision rewind to errorPlace
-	// (position right after the function name in the source) so
-	// the error highlight points at the conflicting name.
-	int numParent = 0;
-	ibCompileContext* pCurContext = context;
-	while (pCurContext != nullptr) {
-		numParent++;
-		if (numParent > MAX_OBJECTS_LEVEL) {
-			ibValueSystemFunction::Message(pCurContext->m_compileModule->GetModuleName());
-			if (numParent > 2 * MAX_OBJECTS_LEVEL) {
-				ibBackendCoreException::Error(_("Recursive call of modules!"));
-			}
-		}
-
+	// A second declaration in THIS module collides. A function of the same
+	// name in a parent module does not: an object module and its manager are
+	// different methods, and the object's own declaration shadows the
+	// manager's export. The call inside this module sees this declaration.
+	// The highlight stays on the name (errorPlace is the token after it).
+	{
 		std::shared_ptr<ibCompileContext::ibFunction> foundedFunc = nullptr;
-		if (pCurContext->FindFunction(strFuncName, foundedFunc)) { // found
+		if (context->FindFunction(strFuncName, foundedFunc)) {
 			if (foundedFunc != createdFunction && foundedFunc->IsCrossBcVisible()) {
 				m_numCurrentCompile = errorPlace;
 				SetError(ERROR_DEF_FUNCTION, strFuncRealName);
 				return false;
 			}
 		}
-
-		pCurContext = pCurContext->m_parentContext;
 	}
 
 	// Upsert into the vector (was map subscript assign): replace a same-named
