@@ -68,6 +68,7 @@ add_executable(oes_tests
     test_propertySerialized.cpp
     test_metadataTree.cpp
     test_commonAttribute.cpp
+    test_filterCriteria.cpp
     test_roleComposition.cpp
     test_rolePolicyFold.cpp
     test_dataNode.cpp

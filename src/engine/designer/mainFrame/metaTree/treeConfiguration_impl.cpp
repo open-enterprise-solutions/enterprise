@@ -1644,6 +1644,7 @@ const ibMetaTreeGroupDef s_groups[] = {
 	{ g_metaAccountingRegisterCLSID,         0, ibMetaRow::Item },
 	{ g_metaCalculationRegisterCLSID,        0, ibMetaRow::Item },
 	{ g_metaSequenceCLSID,                   0, ibMetaRow::Item },
+	{ g_metaFilterCriteriaCLSID,             0, ibMetaRow::Item },
 };
 
 // The rows this tree draws, in the order the declaration gives — so the tree cannot drift from the
