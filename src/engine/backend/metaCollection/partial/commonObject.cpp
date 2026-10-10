@@ -1521,7 +1521,10 @@ bool ibValueMetaObjectRegisterData::OnSaveMetaObject(int flags)
 	// (`ibValueMetaObjectEnumeration::OnSaveMetaObject`): an empty metaobject is refused where it is
 	// SAVED, by the restructure report, so the message lands in the pane under the editor and no
 	// exception leaves the configuration write transaction open.
-	if (GetDimensionArrayObject().empty() && GetResourceArrayObject().empty()
+	//
+	// A sequence is not that shape. AllowsEmptyBody is its answer: no dimensions is one border for
+	// the whole configuration, and the predefined columns are the table either way.
+	if (!AllowsEmptyBody() && GetDimensionArrayObject().empty() && GetResourceArrayObject().empty()
 		&& GetAttributeArrayObject().empty()) {
 		RestructureError(_("! Doesn't have any dimension, resource or attribute ") + GetFullName());
 		return false;
