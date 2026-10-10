@@ -282,6 +282,29 @@ std::size_t ibApplicationHost::ReadCount(const wxConfigBase& conf, const wxStrin
 	return static_cast<std::size_t>(configured);
 }
 
+std::size_t ibApplicationHost::ResumeSeconds(bool present, long configured)
+{
+	// The same 30 minutes a client already dies by when nobody calls (kIdleLimit). A window longer than that
+	// would hold locks and a seat past the idle limit the process already has.
+	constexpr long kMost = 30 * 60;
+	constexpr std::size_t kDefault = 120;
+	if (!present)
+		return kDefault;
+	if (configured == 0)
+		return 0;
+	if (configured < 0) {
+		ibTechJournal::Print(ibJournalMark::Warning, wxT("engine"),
+			wxT("%s: Resume = %ld is not a duration - 120 is used"), BACKEND_CONF, configured);
+		return kDefault;
+	}
+	if (configured > kMost) {
+		ibTechJournal::Print(ibJournalMark::Warning, wxT("engine"),
+			wxT("%s: Resume = %ld is above %ld seconds - %ld is used"), BACKEND_CONF, configured, kMost, kMost);
+		return static_cast<std::size_t>(kMost);
+	}
+	return static_cast<std::size_t>(configured);
+}
+
 void ibApplicationHost::ReadBackendConf()
 {
 	const wxString& workingDir = wxGetCwd(); wxString strConfigFile;
@@ -307,6 +330,10 @@ void ibApplicationHost::ReadBackendConf()
 	// The connections are a base's own — its infobase.conf says them; this is only the default for a base that does
 	// not. Two at least: the registry holds one for its writes, a session needs another.
 	m_configConnections = ReadCount(fc, BACKEND_CONF, wxT("Connections"), 2, 0);
+	// Resume is not ReadCount: there 0 means the default, and here 0 means the window is off.
+	long resume = 0;
+	const bool resumePresent = fc.Read(wxT("Resume"), &resume);
+	m_configResume = ResumeSeconds(resumePresent, resume);
 
 	// (THE MCP SERVER'S SETTINGS ARE NOT HERE. They belong to a PERSON in a
 	//  BASE — the server is started from an authenticated designer session and

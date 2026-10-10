@@ -61,6 +61,12 @@ public:
 	// The connections to its DBMS a base may hold when its own infobase.conf does not say — backend.conf
 	// (Connections), else the built-in 32. A base's connections are its own; this is only their default.
 	std::size_t      GetDefaultConnections() const;
+	// How long a thin client's session outlives a dropped connection — backend.conf (Resume), seconds.
+	// Left out is 120. 0 is off: the drop ends the session, its locks and its seat, as before this window.
+	// Above 30 minutes — the idle limit a client already dies by — is that limit.
+	std::size_t      GetResumeSeconds() const { return m_configResume; }
+	// `present` is false when the key is absent. 0 present is off, not the default.
+	static std::size_t ResumeSeconds(bool present, long configured);
 	ibHelpService*   GetHelpService() const   { return m_helpService.get(); }
 	wxString         GetLocale() const        { return m_locale.GetCanonicalName(); }
 	wxString         GetLocaleName() const    { return m_locale.GetName(); }
@@ -123,6 +129,7 @@ private:
 	std::size_t m_configWorkers     = 0;
 	std::size_t m_configBases       = 0;
 	std::size_t m_configConnections = 0;
+	std::size_t m_configResume      = 120;
 
 	wxLocale m_locale;
 	int      m_localeLang;

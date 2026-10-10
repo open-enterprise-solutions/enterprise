@@ -36,6 +36,7 @@ void ibSchemaActiveUser::Build(const ibSession& session, ibDataNode& result) con
 			row.SetValue(wxT("Started"), snapshot.GetStartedDate(idx));
 			row.SetValue(wxT("Computer"), snapshot.GetComputerName(idx));
 			row.SetValue(wxT("Session"), snapshot.GetSession(idx));
+			row.SetValue(wxT("Activity"), snapshot.GetActivity(idx));
 		}
 	}
 

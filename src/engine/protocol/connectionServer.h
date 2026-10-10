@@ -15,8 +15,8 @@ namespace httplib { namespace ws { class WebSocketClient; } }
 // AN APPLICATION SERVER — over its port: one WebSocket to `oes://server[:port]/<base>`, one text message per request,
 // its answer the next answer on it. Asked for compressed, as the protocol offers it: an answer of some size comes as a
 // binary message, raw deflate. Between the answers the server may say something unasked — a notification, a message
-// with a method and no id — which goes to whoever listens. The clients logged in through the socket go when it
-// closes — a dropped socket ends them (no `login {Resume}` yet).
+// with a method and no id — which goes to whoever listens. A dropped socket is not itself the end of a thin client's
+// session: the communicator opens this socket again and logs in by token (docs/public/session-failover.md).
 class PROTOCOL_API ibProtocolConnectionServer : public ibProtocolConnection {
 public:
 
@@ -34,6 +34,8 @@ public:
 
 	virtual bool Exchange(const std::string& request, std::string& answer,
 		ibProtocolRefusal& refusal, wxString& error) override;
+	// The same address, opened again. False when Open has never succeeded.
+	virtual bool Reconnect(wxString& error) override;
 	// What the server says unasked — on the thread that reads the socket.
 	virtual void Listen(std::function<void(const std::string& text)> notified) override;
 
@@ -57,6 +59,9 @@ private:
 	std::optional<std::string>                 m_answer;
 	bool                                       m_closed = true;
 	std::function<void(const std::string&)>    m_notified;
+
+	// The address Open succeeded with — what Reconnect opens again.
+	wxString                                   m_address;
 };
 
 #endif

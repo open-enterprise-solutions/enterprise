@@ -512,7 +512,10 @@ oes_discover_tests(oes_multi_base_test)
 #   cmake --build build --target oes_protocol_test --config Debug
 #   ./bin/oes_protocol_test
 # ---------------------------------------------------------------------------
-add_executable(oes_protocol_test test_clientFrameApply.cpp)
+add_executable(oes_protocol_test
+    test_clientFrameApply.cpp
+    test_sessionFailover.cpp
+)
 
 target_link_libraries(oes_protocol_test
     PRIVATE

@@ -21,7 +21,8 @@ bool IsAnswerWord(const std::string& name)
 {
 	return name == ibProtocolName::Frame || name == ibProtocolName::Since || name == ibProtocolName::Patch
 		|| name == ibProtocolName::Messages || name == ibProtocolName::Clear || name == ibProtocolName::Pictures
-		|| name == ibProtocolName::Client || name == ibProtocolName::Protocol || name == ibProtocolName::Features;
+		|| name == ibProtocolName::Client || name == ibProtocolName::Protocol || name == ibProtocolName::Features
+		|| name == ibProtocolName::Token;
 }
 
 // The envelope's own refusals — JSON-RPC's numbers, said by the port for a message that is not JSON-RPC or a method
@@ -36,6 +37,31 @@ ibProtocolRefusal RefusalOf(long long code)
 	if (code == -32603)   // internal error
 		return ibProtocolRefusal::Failed;
 	return ibProtocolRefusal::BadParameter;
+}
+
+// Password and Token are bearer secrets. The debug journal records the exchange; the release build's macro is empty.
+std::string Redacted(const std::string& text)
+{
+	json node = json::parse(text, nullptr, false);
+	if (!node.is_object())
+		return text;
+	const auto hide = [](json& object) {
+		if (!object.is_object())
+			return;
+		for (const char* name : { ibProtocolName::Password, ibProtocolName::Token }) {
+			const auto found = object.find(name);
+			if (found != object.end() && found->is_string())
+				*found = "***";
+		}
+	};
+	hide(node);
+	const auto params = node.find(ibProtocolName::RpcParams);
+	if (params != node.end())
+		hide(*params);
+	const auto result = node.find(ibProtocolName::RpcResult);
+	if (result != node.end())
+		hide(*result);
+	return node.dump();
 }
 
 } // namespace
@@ -61,12 +87,21 @@ bool ibCommunicator::Login(const wxString& user, const wxString& password, ibPro
 		.SetValue(ibProtocolName::Password, password)
 		.SetValue(ibProtocolName::Mode, static_cast<int>(mode))
 		.SetValue(ibProtocolName::Protocol, ibProtocolVersion);
+	// Opt into the slot. A server that does not offer `resume` ignores it.
+	params.AddItem(ibProtocolName::Features, wxString::FromUTF8(ibProtocolName::FeatureResume));
 	if (!CallLocked(ibProtocolMethod::Login, params, result, refusal, error))
 		return false;
 
 	// The client by its id, and the version both speak — the older of the two; a server too old to say one speaks 1.
 	m_client = result.GetString(ibProtocolName::Client);
 	m_protocol = std::max(1, static_cast<int>(result.GetInt(ibProtocolName::Protocol, 1)));
+	m_mode = mode;
+	m_token = result.GetString(ibProtocolName::Token);
+	m_resume = false;
+	for (const ibProtocolNode& feature : result.GetList(ibProtocolName::Features)) {
+		if (feature.AsString() == wxString::FromUTF8(ibProtocolName::FeatureResume))
+			m_resume = true;
+	}
 	Take(result);
 	return true;
 }
@@ -165,16 +200,16 @@ bool ibCommunicator::CallLocked(ibProtocolMethod method, const ibProtocolNode& p
 	// THE WHOLE EXCHANGE, beside the call's own line — what went, and what came back with how long it took: the debug
 	// build's journal (the macro is nothing in a release one).
 	const std::string sent = request.Write();
-	ibJournalInfo(wxT("protocol"), wxT("%s sent: %s"), ibProtocolMethodName(method), wxString::FromUTF8(sent));
+	ibJournalInfo(wxT("protocol"), wxT("%s sent: %s"), ibProtocolMethodName(method), wxString::FromUTF8(Redacted(sent)));
 
 	std::string answer;
 	const wxLongLong exchanging = wxGetUTCTimeMillis();
-	if (!m_connection->Exchange(sent, answer, refusal, error))
+	if (!m_connection->Exchange(sent, answer, refusal, error) && !Resume(sent, answer, refusal, error))
 		return false;
 	exchanged = wxGetUTCTimeMillis() - exchanging;
 
 	ibJournalInfo(wxT("protocol"), wxT("%s answered in %lld ms, %zu bytes: %s"), ibProtocolMethodName(method),
-		(wxGetUTCTimeMillis() - began).GetValue(), answer.size(), wxString::FromUTF8(answer));
+		(wxGetUTCTimeMillis() - began).GetValue(), answer.size(), wxString::FromUTF8(Redacted(answer)));
 
 	ibProtocolNode root;
 	if (!ibProtocolNode::Read(answer, root) || !root.IsNode()) {
@@ -198,6 +233,72 @@ bool ibCommunicator::CallLocked(ibProtocolMethod method, const ibProtocolNode& p
 	const ibProtocolNode done = root.FindChild(ibProtocolName::RpcResult);
 	if (!done.IsEmpty())
 		result = done;
+	return true;
+}
+
+bool ibCommunicator::Resume(const std::string& sent, std::string& answer, ibProtocolRefusal& refusal, wxString& error)
+{
+	// A transport failure of a session the server offered to keep. One try. The unanswered request keeps its id;
+	// the login that precedes it takes a newer one, so the counter never goes backwards and never back to 0.
+	if (!m_resume || m_token.IsEmpty() || refusal != ibProtocolRefusal::NoSession || !m_connection)
+		return false;
+
+	wxString reopen;
+	if (!m_connection->Reconnect(reopen)) {
+		error = reopen.IsEmpty() ? error : reopen;
+		return false;
+	}
+
+	const long long loginId = ++m_lastId;
+	ibProtocolNode params;
+	params.SetValue(ibProtocolName::Token, m_token)
+		.SetValue(ibProtocolName::Mode, static_cast<int>(m_mode))
+		.SetValue(ibProtocolName::Protocol, ibProtocolVersion);
+	ibProtocolNode request;
+	request.SetValue(ibProtocolName::RpcVersion, "2.0")
+		.SetValue(ibProtocolName::RpcId, loginId)
+		.SetValue(ibProtocolName::RpcMethod, ibProtocolMethodName(ibProtocolMethod::Login))
+		.SetValue(ibProtocolName::RpcParams, params);
+	const std::string loginSent = request.Write();
+	ibJournalInfo(wxT("protocol"), wxT("login sent: %s"), wxString::FromUTF8(Redacted(loginSent)));
+
+	std::string loginAnswer;
+	ibProtocolRefusal loginRefusal = ibProtocolRefusal::None;
+	wxString loginError;
+	if (!m_connection->Exchange(loginSent, loginAnswer, loginRefusal, loginError)) {
+		refusal = loginRefusal;
+		error = loginError;
+		return false;
+	}
+	ibProtocolNode root;
+	if (!ibProtocolNode::Read(loginAnswer, root) || !root.IsNode()) {
+		refusal = ibProtocolRefusal::Failed;
+		error = wxT("the server's answer could not be read");
+		return false;
+	}
+	if (root.GetInt(ibProtocolName::RpcId, loginId) != loginId) {
+		refusal = ibProtocolRefusal::Failed;
+		error = wxT("the server answered another call");
+		return false;
+	}
+	const ibProtocolNode failed = root.FindChild(ibProtocolName::RpcError);
+	if (failed.IsNode()) {
+		// 401 is the session gone — the window closes as it does for any other lost session.
+		refusal = RefusalOf(failed.GetInt(ibProtocolName::RpcCode));
+		error = failed.GetString(ibProtocolName::RpcMessage);
+		return false;
+	}
+	const ibProtocolNode done = root.FindChild(ibProtocolName::RpcResult);
+	if (done.GetString(ibProtocolName::Client) != m_client) {
+		// A new Client is another server's session (stage 2). This return is the same process, the same id.
+		refusal = ibProtocolRefusal::NoSession;
+		error = wxT("the session was not resumed");
+		return false;
+	}
+
+	ibJournalInfo(wxT("protocol"), wxT("sent again: %s"), wxString::FromUTF8(Redacted(sent)));
+	if (!m_connection->Exchange(sent, answer, refusal, error))
+		return false;
 	return true;
 }
 
@@ -262,6 +363,8 @@ void ibCommunicator::Take(const ibProtocolNode& answer)
 void ibCommunicator::Forget()
 {
 	m_client.clear();
+	m_token.clear();
+	m_resume = false;
 	m_protocol = 1;
 	m_number = 0;
 	m_frame = ibProtocolNode();

@@ -68,9 +68,10 @@ public:
 	ibProtocolNode  Child(const char* name);
 	// A child at the end of NodeChildren, to fill.
 	ibProtocolNode  AddChild();
-	// An item at the end of the list under the name — made when there is none: a node to fill, or a number.
+	// An item at the end of the list under the name — made when there is none: a node to fill, a number, or text.
 	ibProtocolNode  AddItem(const char* name);
 	void            AddItem(const char* name, long long number);
+	void            AddItem(const char* name, const wxString& text);
 	void            Remove(const char* name);
 
 	// A PATCH APPLIED — this frame, as the client holds it, made into the frame drawn now: the other half of the server's

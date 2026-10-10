@@ -138,6 +138,7 @@ bool ibProtocolConnectionServer::Open(const wxString& address, wxString& error)
 	}
 	m_stopping = false;
 	m_reader = std::thread(&ibProtocolConnectionServer::ReadMessages, this);
+	m_address = address;
 	return true;
 }
 
@@ -157,6 +158,17 @@ void ibProtocolConnectionServer::Close()
 ibProtocolConnectionServer::~ibProtocolConnectionServer()
 {
 	Close();
+}
+
+bool ibProtocolConnectionServer::Reconnect(wxString& error)
+{
+	// A copy: Open closes the socket first, and the address it parses must not be the member it may clear.
+	const wxString address = m_address;
+	if (address.IsEmpty()) {
+		error = wxT("no server to return to");
+		return false;
+	}
+	return Open(address, error);
 }
 
 bool ibProtocolConnectionServer::Exchange(const std::string& request, std::string& answer,
