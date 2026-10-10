@@ -1,4 +1,5 @@
 #include "metaFilterCriteriaObject.h"
+#include "backend/metaData.h"
 #include "backend/metaCtor.h"
 #include "backend/objCtor.h"
 #include "backend/backend_exception.h"
