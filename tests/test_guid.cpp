@@ -94,8 +94,8 @@ TEST(Guid, OrderingIsAntisymmetric) {
     EXPECT_FALSE(a < a);                   // irreflexive
 }
 
-// New Guid("0000…") is the empty identity. isValid() stays false for the nil
-// GUID — that answer means "no object" — and the script value still holds it.
+// New Guid("0000...") is the empty identity. isValid() stays false for the nil
+// GUID, which means "no object", and the script value still holds it.
 TEST(ValueGuid, NilStringIsAnEmptyGuid)
 {
 	const wxString nil = wxT("00000000-0000-0000-0000-000000000000");
