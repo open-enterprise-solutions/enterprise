@@ -86,11 +86,17 @@ private:
 		// answered with `dropped` alone. `dropped` says the session LET GO; this says it is ALIVE,
 		// and only the second one can be asked of a session that told us nothing.
 		std::weak_ptr<ibSession>  owner;
-		// Set once a submit's weak hold actually locked. An empty hold is a session
-		// that was never shared — its caller keeps it alive, and cancel reaches the
-		// fiber through Wake. An owned hold that no longer locks means the session
-		// has ended, and the fiber must be resumed so it can unwind.
+		// Recomputed on every submit: true only while the weak hold locks. A session
+		// that was never shared stays false — its caller keeps it alive. A later
+		// session that reuses the address starts false until its own submit locks.
 		bool                      owned { false };
+		// The hold ClaimSessionLocked took under m_mtx. StartLease moves it onto
+		// the fiber. Empty for a session that was never shared.
+		std::shared_ptr<ibSession> leaseHold;
+		// The fiber's last reference, moved off its stack when the lease returns.
+		// FinishFiber releases it on the scheduler, so ~ibSession does not run
+		// on the fiber and not inside the session scope.
+		std::shared_ptr<ibSession> releaseOnScheduler;
 
 		// How many Await of this session are on the stack — a question asked from a task run under another
 		// question nests; only the innermost is awake. `woken` is what a submit, an answer or a cancel sets: the
@@ -104,10 +110,11 @@ private:
 
 	// Spawn a worker. Re-checks alive-vs-cap under m_workersMtx so two
 	// Submits cannot both pass the cap. m_aliveWorkers is bumped before
-	// the thread exists. The handle is kept: Stop joins it, and an idle
-	// self-exit is joined on the next spawn. A detached thread would
-	// still be inside thread_local destructors after m_aliveWorkers hit
-	// zero, which is after Stop used to return.
+	// the thread exists. The handle is kept: Stop joins it. An idle
+	// self-exit is joined by the new worker, before WorkerLoop, so Submit
+	// does not wait out another thread's thread_local destructors. A
+	// detached thread would still be inside those destructors after
+	// m_aliveWorkers hit zero, which is after Stop used to return.
 	void TrySpawnWorker();
 
 	// m_workersMtx must be held. Moves out handles to join outside the
@@ -139,9 +146,10 @@ private:
 	// Passed across the fiber entry. A nested type so the translation
 	// unit can name the queue (private) without a friend.
 	struct ibLeaseArgs {
-		ibWorkerPoolHeadless* pool = nullptr;
-		ibSession*            session = nullptr;
-		ibSessionQueue*       queue = nullptr;
+		ibWorkerPoolHeadless*      pool = nullptr;
+		ibSession*                 session = nullptr;
+		ibSessionQueue*            queue = nullptr;
+		std::shared_ptr<ibSession> hold;
 	};
 	bool TakeRunnable(ibParked& out);
 	static void LeaseEntry(void* raw);
@@ -150,9 +158,9 @@ private:
 	void        FinishFiber(ibSession* session, ibSessionQueue* q, ibFiber* fiber);
 	bool        ShouldInterrupt(ibSession* session) const;
 	// m_mtx must be held. True when this parked queue should be resumed:
-	// woken, work queued, the pool stopping, the session cancelled, or
-	// the session gone. Cancel and "gone" are asked of the weak hold,
-	// never of the raw map key.
+	// woken, work queued, the pool stopping, the queue dropped, the
+	// session stopping or cancelled, or the session gone. Cancel and
+	// "gone" are asked of the weak hold, never of the raw map key.
 	bool        ParkedShouldRunLocked(ibSessionQueue* q) const;
 	// m_mtx must be held. True when a fiber parked on THIS thread should
 	// be resumed.

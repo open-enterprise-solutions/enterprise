@@ -1,9 +1,9 @@
 // The pool finds a session's queue by the session's address, and a fiber
-// parked on a question keeps that address on its stack. The session is not
-// the pool's. Its holder can let go while the question is still open —
-// teardown's barrier runs under Await, and then the last shared_ptr the
-// holder had is dropped. The lease holds one of its own until the fiber
-// has unwound, so the address stays live for that whole stack.
+// parked on a question keeps that address on its stack. Drop, or a session
+// that has reached Stopping, is an interrupt: the fiber unwinds while the
+// base is still open, and the future throws. The lease's hold keeps the
+// address live for that unwind, then FinishFiber releases it on the
+// scheduler — ~ibSession does not run on the fiber.
 //
 // Stop asks the same question through the queue's weak hold. A second
 // Stop, the one the pool's destructor makes after the sessions are
@@ -103,7 +103,7 @@ private:
 
 } // namespace
 
-TEST(FiberLifetime, LastHolderDroppedWhileParkedDoesNotFreeTheSession)
+TEST(FiberLifetime, DroppedWhileParkedUnwindsAndTheSessionDies)
 {
 	ibWorkerPoolHeadless pool(1);
 	std::atomic<bool> died { false };
@@ -118,16 +118,14 @@ TEST(FiberLifetime, LastHolderDroppedWhileParkedDoesNotFreeTheSession)
 	});
 	ASSERT_TRUE(parked.Wait()) << "the question never parked";
 
+	pool.Drop(raw);
 	session.reset();
-	EXPECT_FALSE(died.load())
-		<< "the session was freed while its fiber was still parked";
-
-	answered.store(true);
-	pool.Wake(raw);
 	ASSERT_EQ(waiting.wait_for(std::chrono::seconds(5)), std::future_status::ready);
-	EXPECT_NO_THROW(waiting.get());
+	EXPECT_THROW(waiting.get(), ibBackendException);
 	EXPECT_TRUE(WaitUntil(died))
 		<< "the fiber unwound and the session was still alive";
+	EXPECT_FALSE(answered.load())
+		<< "the drop must not wait for the person to answer";
 
 	pool.Stop();
 }
