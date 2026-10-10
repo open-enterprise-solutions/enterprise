@@ -12,7 +12,11 @@
 
 #include "backend/session/session.h"
 #include "backend/databaseLayer/connectionHolder.h"
+#include "backend/metadataConfiguration.h"
+#include "backend/metaCollection/metaSessionParameterObject.h"
+#include "backend/system/value/valueArray.h"
 
+#include <memory>
 #include <type_traits>
 
 // ---------------------------------------------------------------------------
@@ -64,4 +68,80 @@ TEST(SessionDbLayer, ThrowsWhenNoCurrentSession) {
     EXPECT_THROW(
         ibSession::DatabaseLayer(),
         ibBackendException);
+}
+
+// ---------------------------------------------------------------------------
+// SessionParameters.Name reads as the stored value
+// ---------------------------------------------------------------------------
+//
+// A script writes SessionParameters.CurrentUser.Employee, compares the parameter
+// with a reference, and puts it in an array. Those all see whatever GetPropVal
+// returned. The holder that performs the read is not that value: it has none of
+// the reference's fields, TypeOf names the holder, and '=' compares two holders.
+//
+// The manager is held by pointer: its member table binds `this`, and a copy would
+// keep the temporary's address.
+
+namespace {
+
+struct SessionParameterRead : ::testing::Test {
+	std::shared_ptr<ibSession> session;
+	std::unique_ptr<ibSessionScope> scope;
+	std::unique_ptr<ibMetaDataConfigurationFile> cfg;
+	std::unique_ptr<ibValueSessionParameters> parameters;
+	long index = -1;
+
+	void SetUp() override {
+		session = std::make_shared<ibSession>(wxT("session-params"), ibSessionKind::Designer);
+		scope = std::make_unique<ibSessionScope>(session.get());
+		cfg = std::make_unique<ibMetaDataConfigurationFile>();
+		ibValueMetaObjectConfiguration* root = cfg->GetCommonMetaObject();
+		ASSERT_NE(root, nullptr);
+		ibValueMetaObject* created = cfg->CreateMetaObject(g_metaSessionParameterCLSID, root, /*runObject*/ false);
+		ASSERT_NE(created, nullptr);
+		created->SetName(wxT("CurrentUser"));
+		parameters = std::make_unique<ibValueSessionParameters>(cfg.get());
+		index = parameters->FindProp(wxT("CurrentUser"));
+		ASSERT_GE(index, 0);
+	}
+};
+
+} // namespace
+
+TEST_F(SessionParameterRead, ReadIsTheDeclaredValueNotTheHolder) {
+	ASSERT_EQ(session.get(), ibSession::Current());
+
+	ibValue read;
+	ASSERT_TRUE(parameters->GetPropVal(index, read));
+
+	// An unset string parameter is the type's own empty, not a holder and not Undefined.
+	EXPECT_EQ(nullptr, dynamic_cast<ibValueSessionParameter*>(read.GetRef()));
+	EXPECT_EQ(ibValueTypes::TYPE_STRING, read.GetType());
+	EXPECT_TRUE(read.GetString().IsEmpty());
+	EXPECT_NE(wxT("SessionParameterValue"), read.GetClassName());
+
+	// SessionParameters["CurrentUser"] is the same door.
+	ibValue indexed;
+	ASSERT_TRUE(parameters->GetAt(ibValue(wxT("CurrentUser")), indexed));
+	EXPECT_EQ(nullptr, dynamic_cast<ibValueSessionParameter*>(indexed.GetRef()));
+	EXPECT_EQ(ibValueTypes::TYPE_STRING, indexed.GetType());
+
+	// What lands in a collection is that value. The holder used to escape with it.
+	ibValueArray list;
+	list.Add(read);
+	ibValue cell;
+	ASSERT_TRUE(list.GetAt(ibValue(0), cell));
+	EXPECT_EQ(nullptr, dynamic_cast<ibValueSessionParameter*>(cell.GetRef()));
+	EXPECT_EQ(ibValueTypes::TYPE_STRING, cell.GetType());
+}
+
+TEST_F(SessionParameterRead, AWriteOutsideTheSessionModuleIsRefused) {
+	ASSERT_EQ(session.get(), ibSession::Current());
+	try {
+		parameters->SetPropVal(index, ibValue(wxT("no")));
+		FAIL() << "a write outside the session module was accepted";
+	}
+	catch (const ibBackendException& err) {
+		EXPECT_NE(wxNOT_FOUND, wxString(err.GetErrorDescription()).Find(wxT("session module")));
+	}
 }

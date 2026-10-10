@@ -102,8 +102,13 @@ class BACKEND_API ibValueSessionParameter : public ibValue {
 // appears without a restart, and the editor completes exactly what the runtime
 // accepts.
 //
-// Each name yields the UNIT above, and the unit is what talks to the session. This
-// object holds no values and no cached list of its own.
+// A read yields the value stored for that name, already adjusted to the declared
+// type. A script that writes SessionParameters.CurrentUser.Employee, or compares
+// the parameter with a reference, or asks TypeOf, is talking about that value —
+// a catalog reference, a string, a boolean — and not about the holder that read
+// it. The unit above is how the read is made. A write still goes through the
+// declaration, and only while the session module runs. This object holds no
+// values and no cached list of its own.
 
 class BACKEND_API ibValueSessionParameters : public ibValueDynamicMembers {
 	public:
