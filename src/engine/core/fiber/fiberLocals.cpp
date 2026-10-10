@@ -1,4 +1,7 @@
 #include "core/fiber/fiberLocals.h"
+#include "core/exception.h"
+
+#include <wx/intl.h>
 
 #include <atomic>
 #include <cstdio>
@@ -47,10 +50,16 @@ struct ibFiberLocals::Snapshot::Impl {
 // ⭐ WRITTEN UNTIL THE FIRST SNAPSHOT, READ-ONLY AFTER IT. A registration after the seal aborts, so once `sealed` is
 // set the vectors never change and every switch reads them without the lock — a switch happens at every task start,
 // every park and every wake, on every worker, and a process-wide mutex there would serialise them all.
+struct ibClearCheck {
+	bool (*isClear)() = nullptr;
+	const char* what = nullptr;
+};
+
 struct ibFiberLocals::Registry {
 	std::mutex mutex;
 	std::vector<ibFiberSlot> slots;
 	std::vector<ibFiberObjectSlot> objects;
+	std::vector<ibClearCheck> clearChecks;
 	std::size_t podSize = 0;
 	std::size_t podAlign = alignof(std::max_align_t);
 	std::atomic<bool> sealed{ false };
@@ -142,6 +151,25 @@ void ibFiberLocals::RegisterPerFiber(
 	slot.destroy = destroy;
 	slot.activate = activate;
 	registry.objects.push_back(slot);
+}
+
+void ibFiberLocals::RegisterMustBeClear(bool (*isClear)(), const char* what)
+{
+	Registry& registry = Get();
+	std::lock_guard<std::mutex> lk(registry.mutex);
+	RefuseLateRegistration(registry, "RegisterMustBeClear");
+	registry.clearChecks.push_back(ibClearCheck{ isClear, what != nullptr ? what : "a scope" });
+}
+
+void ibFiberLocals::AssertClear()
+{
+	// Sealed() takes the registry lock only until the first snapshot.
+	// After that the check list is fixed and this read does not lock.
+	const Registry& registry = Sealed();
+	for (const ibClearCheck& check : registry.clearChecks) {
+		if (check.isClear != nullptr && !check.isClear())
+			ibCoreException::Error(_("a fiber cannot park while %s is set"), wxString::FromUTF8(check.what));
+	}
 }
 
 ibFiberLocals::Snapshot::Snapshot() noexcept = default;

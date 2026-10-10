@@ -4,6 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "reference.h"
+#include "core/fiber/fiberLocals.h"   // the read guard moves with the fiber that pushed it
 #include "backend/system/value/valuePointInTime.h"   // the moment a reference can be asked for
 
 #include "backend/metaData.h"
@@ -14,6 +15,7 @@
 
 #include <vector>
 #include <algorithm>
+#include <new>
 #include <utility>
 
 #include "backend/session/session.h"   // ibSession::Current — the register lives on the session
@@ -376,6 +378,58 @@ namespace {
 	thread_local std::pair<ibMetaID, ibGuid> g_refReadStack[kRefReadDepthMax];
 	thread_local std::size_t                 g_refReadDepth = 0;
 
+	// Not a LIFO shared with the other session on this thread. A read that
+	// asks a person stays on this stack; the next fiber has its own, and
+	// this one has to be here again when the read resumes and pops.
+	struct RefReadState {
+		std::size_t depth = 0;
+		std::pair<ibMetaID, ibGuid> stack[kRefReadDepthMax];
+	};
+
+	struct ibRegisterRefReadLocal {
+		ibRegisterRefReadLocal()
+		{
+			ibFiberLocals::Register(
+				sizeof(RefReadState), alignof(RefReadState),
+				[](void* dst) { new (dst) RefReadState(); },
+				[](void* dst) { static_cast<RefReadState*>(dst)->~RefReadState(); },
+				[](void* dst) {
+					auto* state = static_cast<RefReadState*>(dst);
+					state->depth = g_refReadDepth;
+					for (std::size_t i = 0; i < state->depth && i < kRefReadDepthMax; ++i)
+						state->stack[i] = g_refReadStack[i];
+				},
+				[](const void* src) {
+					const auto* state = static_cast<const RefReadState*>(src);
+					g_refReadDepth = state->depth;
+					for (std::size_t i = 0; i < state->depth && i < kRefReadDepthMax; ++i)
+						g_refReadStack[i] = state->stack[i];
+				});
+		}
+	} s_registerRefReadLocal;
+
+	// The fiber test pushes an identity and parks. The next fiber on the
+	// worker must not see it, and this fiber must find it again. These
+	// stay in this namespace (the stack is private); the exported names
+	// below are what the test calls.
+	std::size_t RefReadDepthForTest() { return g_refReadDepth; }
+	void RefReadPushForTest(const ibMetaID& id, const ibGuid& guid)
+	{
+		if (g_refReadDepth < kRefReadDepthMax)
+			g_refReadStack[g_refReadDepth++] = { id, guid };
+	}
+	void RefReadPopForTest()
+	{
+		if (g_refReadDepth > 0)
+			--g_refReadDepth;
+	}
+	bool RefReadContainsForTest(const ibMetaID& id, const ibGuid& guid)
+	{
+		const std::pair<ibMetaID, ibGuid> key{ id, guid };
+		return std::find(g_refReadStack, g_refReadStack + g_refReadDepth, key)
+			!= g_refReadStack + g_refReadDepth;
+	}
+
 	struct ibRefReadGuard {
 		bool m_cycle = false;
 		bool m_pushed = false;
@@ -398,6 +452,16 @@ namespace {
 		return std::find(g_refReadStack, g_refReadStack + g_refReadDepth, key)
 			!= g_refReadStack + g_refReadDepth;
 	}
+}
+
+// Exported so the fiber test can drive the stack. The stack itself stays
+// private to this file.
+BACKEND_API std::size_t ibRefReadDepthForTest() { return RefReadDepthForTest(); }
+BACKEND_API void ibRefReadPushForTest(const ibMetaID& id, const ibGuid& guid) { RefReadPushForTest(id, guid); }
+BACKEND_API void ibRefReadPopForTest() { RefReadPopForTest(); }
+BACKEND_API bool ibRefReadContainsForTest(const ibMetaID& id, const ibGuid& guid)
+{
+	return RefReadContainsForTest(id, guid);
 }
 
 

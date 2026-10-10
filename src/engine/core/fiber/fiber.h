@@ -14,6 +14,7 @@
 
 #include <cstddef>
 #include <exception>
+#include <utility>
 
 #if !defined(_WIN32)
 // The asm trampoline calls this. It has to reach RunEntry, which stays
@@ -55,6 +56,25 @@ public:
 
 	// Save this fiber's locals, install the target's, switch stacks.
 	void SwitchTo(ibFiber* target);
+
+	// Run `fn` with the scheduler's locals, then put this fiber's back.
+	// A task Await runs inline shares this stack. It must not see the
+	// scopes the waiter has open, and it must not clear them.
+	template <typename Fn>
+	void CallWithSchedulerLocals(Fn&& fn)
+	{
+		m_locals.Capture();
+		if (ibFiber* sched = Scheduler(); sched != nullptr && sched != this)
+			sched->m_locals.Install();
+		try {
+			std::forward<Fn>(fn)();
+		}
+		catch (...) {
+			m_locals.Install();
+			throw;
+		}
+		m_locals.Install();
+	}
 
 private:
 	ibFiber() = default;

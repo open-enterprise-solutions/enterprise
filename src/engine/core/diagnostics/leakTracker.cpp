@@ -4,6 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "core/diagnostics/leakTracker.h"
+#include "core/fiber/fiberLocals.h"
 
 #if defined(DEBUG) && defined(__WXMSW__)
 
@@ -269,6 +270,15 @@ void ibLeakTailPrint(long request, size_t size)
 
 // realloc is deliberately ignored: it never fires for C++ objects, which allocate through
 // operator new.
+thread_local bool inHook = false;
+
+struct ibRegisterLeakHookClear {
+	ibRegisterLeakHookClear()
+	{
+		ibFiberLocals::RegisterMustBeClear([]() { return !inHook; }, "the leak-tracker alloc hook");
+	}
+} s_registerLeakHookClear;
+
 int __cdecl ibLeakAllocHook(int allocType, void* userData, size_t size, int blockType,
 	long request, const unsigned char* /*fileName*/, int /*line*/)
 {
@@ -276,7 +286,8 @@ int __cdecl ibLeakAllocHook(int allocType, void* userData, size_t size, int bloc
 	if (!g_leakEnabled || blockType == _CRT_BLOCK)
 		return TRUE;
 
-	static thread_local bool inHook = false;
+	// File scope, so the park check registered below can see it. A hook
+	// that parked would re-enter the allocator on the next fiber.
 	if (inHook)
 		return TRUE;
 	inHook = true;

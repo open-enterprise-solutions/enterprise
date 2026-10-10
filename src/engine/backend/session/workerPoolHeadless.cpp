@@ -1,6 +1,7 @@
 ﻿#include "workerPoolHeadless.h"
 
 #include "core/fiber/fiber.h"
+#include "core/fiber/fiberLocals.h"   // AssertClear — a scope that must not outlive a park
 
 #include "backend/session/session.h"   // ibSessionScope
 #include "backend/backend_exception.h" // ibBackendException
@@ -292,6 +293,19 @@ void ibWorkerPoolHeadless::Await(ibSession* session, const std::function<bool()>
 			q->woken = false;
 			lk.unlock();
 
+			// Before the switch, and with the wait still counted: a scope
+			// that is open belongs to this fiber. Leaving it on the thread
+			// hands it to the next session, and that session's restore
+			// would write over it.
+			try {
+				ibFiberLocals::AssertClear();
+			}
+			catch (...) {
+				std::lock_guard<std::mutex> relock(m_mtx);
+				--q->waiting;
+				throw;
+			}
+
 			ParkedFibers().push_back(ibParked{ session, q, self });
 			self->SwitchTo(ibFiber::Scheduler());
 
@@ -303,7 +317,15 @@ void ibWorkerPoolHeadless::Await(ibSession* session, const std::function<bool()>
 			ibSessionTask item = std::move(q->tasks.front());
 			q->tasks.pop_front();
 			lk.unlock();
-			RunTask(item);
+			// The task shares this stack. It must not resolve through the
+			// waiter's query scopes, and a RequireExclusiveForDDL in it
+			// must not clear the flag the waiter holds. The session stays:
+			// the task was queued for this session.
+			self->CallWithSchedulerLocals([&] {
+				tl_currentLease = session;
+				ibSessionScope scope(session);
+				RunTask(item);
+			});
 			// item dies HERE, outside the lock — its closure may tear something down that takes it.
 		}
 		lk.lock();

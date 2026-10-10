@@ -22,6 +22,7 @@
 #include "queryableFactory.h"             // ibQueryableFactory — source-namespace resolution
 #include "backend/appData.h"              // ibApplicationInstance::GetQueryableFactory
 #include "backend/session/session.h"      // the session's access policy — an IN (SELECT …) said as EXISTS is guarded by it
+#include "core/fiber/fiberLocals.h"       // a breakpoint can park while these scopes are open
 #include "backend/metaData.h"             // ibMetaData::GetSourceFactory — resolve through the query's OWN config
 #include "backend/metaCollection/genericData.h"  // ibValueMetaObjectGenericData::ResolveQueryConstant (value(...) resolution)
 #include "backend/tabularModel.h"     // ibComparisonType
@@ -294,6 +295,37 @@ ibQueryReadColumns ReadColumnsOf(const ibQuerySelect* ast, const wxString& sourc
 	return read;
 }
 
+// The wrap of a table handed in as `&Name`. It has to live for the whole run,
+// and two fibers on one worker bind the same name to different tables: the
+// map follows the fiber, or the second binding frees the first fiber's wrap.
+struct ibBoundTable {
+	const ibValueModelTable*              m_table = nullptr;
+	unsigned int                          m_columns = 0;
+	const ibMetaData*                     m_metaData = nullptr;
+	ibValue                               m_value;
+	std::shared_ptr<ibTempTableQueryable> m_wrap;
+};
+
+using ibBoundTableMap = std::map<wxString, ibBoundTable>;
+thread_local ibBoundTableMap g_boundTables;
+
+struct ibRegisterBoundTables {
+	ibRegisterBoundTables()
+	{
+		ibFiberLocals::Register(
+			sizeof(ibBoundTableMap), alignof(ibBoundTableMap),
+			[](void* dst) { new (dst) ibBoundTableMap(); },
+			[](void* dst) { static_cast<ibBoundTableMap*>(dst)->~ibBoundTableMap(); },
+			[](void* dst) { *static_cast<ibBoundTableMap*>(dst) = g_boundTables; },
+			[](const void* src) { g_boundTables = *static_cast<const ibBoundTableMap*>(src); });
+	}
+} s_registerBoundTables;
+
+ibBoundTableMap& BoundTables()
+{
+	return g_boundTables;
+}
+
 // Resolve the FROM / JOIN source namespace.name to a queryable through the source
 // factory appData owns (built-in metaobject families + plugin / external sources).
 //
@@ -340,20 +372,12 @@ const ibBackendQueryable* ResolveSource(const ibQuerySource& src, const std::map
 		// happens to share the name is not asked (Max, 2026-09-28: the ampersand is where the rows come from).
 		const auto bound = src.m_parameter ? params.find(src.m_name[0]) : params.end();
 		if (bound != params.end()) {
-			struct ibBoundTable {
-				const ibValueModelTable*              m_table = nullptr;
-				unsigned int                          m_columns = 0;
-				const ibMetaData*                     m_metaData = nullptr;   // the config its references are read in
-				ibValue                               m_value;   // keeps the table the wrap reads alive
-				std::shared_ptr<ibTempTableQueryable> m_wrap;
-			};
-			static thread_local std::map<wxString, ibBoundTable> s_boundTables;
 			ibValueModelTable* table = nullptr;
 			bound->second.ConvertToValue(table);
 			const unsigned int columns = table != nullptr && table->GetColumnCollection() != nullptr
 				? table->GetColumnCollection()->GetColumnCount() : 0;
 			const ibMetaData* metaData = ibSourceMetaDataScope::Get();
-			ibBoundTable& held = s_boundTables[src.m_name[0]];
+			ibBoundTable& held = BoundTables()[src.m_name[0]];
 			if (!held.m_wrap || held.m_table != table || held.m_columns != columns || held.m_metaData != metaData) {
 				held.m_table    = table;
 				held.m_columns  = columns;
@@ -366,7 +390,7 @@ const ibBackendQueryable* ResolveSource(const ibQuerySource& src, const std::map
 			// A parameter that is NOT a table vends no columns. Fall through and let the ordinary
 			// "a source must be <Kind>.<Name>" verdict be given — naming the real mistake rather
 			// than "this table has no columns", which would send the author looking at the wrong end.
-			s_boundTables.erase(src.m_name[0]);
+			BoundTables().erase(src.m_name[0]);
 		}
 	}
 
@@ -1290,6 +1314,38 @@ struct ibValueAskWalk {
 	const ibQueryAstExpr*                    m_written = nullptr;   // the walk as written — where it starts
 };
 static thread_local std::vector<ibValueAskWalk>* t_valueAskWalks = nullptr;
+
+// A breakpoint can park while a package's scopes are open, and another
+// session's fiber then runs on this worker. The pointers are the scope.
+// The next fiber must not resolve its sources through the parked
+// package's tables, and the scope's destructor must restore THIS fiber's
+// previous pointer. A role handler may not ask the user.
+struct ibRegisterQueryScopeLocals {
+	ibRegisterQueryScopeLocals()
+	{
+		ibFiberLocals::RegisterTrivial<const std::map<wxString, const ibBackendQueryable*>*>(
+			[](void* dst) { *static_cast<const std::map<wxString, const ibBackendQueryable*>**>(dst) = t_tempSources; },
+			[](const void* src) { t_tempSources = *static_cast<const std::map<wxString, const ibBackendQueryable*>* const*>(src); });
+		ibFiberLocals::RegisterTrivial<const std::map<wxString, const ibQuerySelect*>*>(
+			[](void* dst) { *static_cast<const std::map<wxString, const ibQuerySelect*>**>(dst) = t_namedResults; },
+			[](const void* src) { t_namedResults = *static_cast<const std::map<wxString, const ibQuerySelect*>* const*>(src); });
+		ibFiberLocals::RegisterTrivial<const ibMetaData*>(
+			[](void* dst) { *static_cast<const ibMetaData**>(dst) = t_sourceMetaData; },
+			[](const void* src) { t_sourceMetaData = *static_cast<const ibMetaData* const*>(src); });
+		ibFiberLocals::RegisterTrivial<ibDotWalkTwins*>(
+			[](void* dst) { *static_cast<ibDotWalkTwins**>(dst) = t_dotWalkTwins; },
+			[](const void* src) { t_dotWalkTwins = *static_cast<ibDotWalkTwins* const*>(src); });
+		ibFiberLocals::RegisterTrivial<const ibDotWalkExpansion*>(
+			[](void* dst) { *static_cast<const ibDotWalkExpansion**>(dst) = t_dotWalkExpansion; },
+			[](const void* src) { t_dotWalkExpansion = *static_cast<const ibDotWalkExpansion* const*>(src); });
+		ibFiberLocals::RegisterTrivial<const ibAggregateSink*>(
+			[](void* dst) { *static_cast<const ibAggregateSink**>(dst) = t_aggregateSink; },
+			[](const void* src) { t_aggregateSink = *static_cast<const ibAggregateSink* const*>(src); });
+		ibFiberLocals::RegisterTrivial<std::vector<ibValueAskWalk>*>(
+			[](void* dst) { *static_cast<std::vector<ibValueAskWalk>**>(dst) = t_valueAskWalks; },
+			[](const void* src) { t_valueAskWalks = *static_cast<std::vector<ibValueAskWalk>* const*>(src); });
+	}
+} s_registerQueryScopeLocals;
 
 struct ibValueAskWalksScope {
 	explicit ibValueAskWalksScope(std::vector<ibValueAskWalk>* now)
@@ -6803,6 +6859,17 @@ int PruneSelect(ibQuerySelect& ast, const std::map<wxString, ibValue>& params)
 }
 
 } // namespace
+
+// The fiber test records the wrap before a park and asks for it again
+// after. A shared map would hand back the other fiber's wrap. Defined
+// out here so the name is exported; the map itself stays private.
+BACKEND_API const void* ibBoundWrapForTest(const wxString& name)
+{
+	const auto it = BoundTables().find(name);
+	if (it == BoundTables().end() || !it->second.m_wrap)
+		return nullptr;
+	return it->second.m_wrap.get();
+}
 
 int ibQueryLowering::PruneUnresolved(ibQueryPackage& package, const std::map<wxString, ibValue>& params)
 {
