@@ -223,6 +223,7 @@ bool ibClientFrame::Request(const ibDataNode& request, ibDataNode& response)
 
 int ibClientFrame::ShowModalMessage(const wxString& message, const wxString& caption, int style)
 {
+	ibRefuseQuestionFromRoleHandler();
 	ibDataNode request;
 	request.SetValue(wxT("Kind"), static_cast<s32>(ibProtocolRequestKind::Message));
 	request.SetValue(wxT("Text"), message);

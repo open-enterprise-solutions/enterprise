@@ -127,6 +127,7 @@ public:
 	// A MODAL BOX IS THE LOUDEST OF THEM, and the only one that never reaches the
 	// pane at all — it is shown to the person in front of it and to nobody else.
 	int ShowModalMessage(const wxString& message, const wxString& caption, int style) override {
+		ibRefuseQuestionFromRoleHandler();
 		ibDesignerMessages::Report({ caption.IsEmpty() ? message : caption + wxT(": ") + message,
 			ibStatusMessage::ibStatusMessage_Warning, wxEmptyString, wxNOT_FOUND, true });
 		return ibFrontendMainFrame::ShowModalMessage(message, caption, style);
