@@ -14,6 +14,7 @@
 
 #include "backend/backend.h"
 #include "backend/restructureInfo.h"   // ibRestructureInfo — the builder OWNS its change log (member below)
+#include "backend/query/typeChangeReport.h"   // ibTypeChangeAccept — carried into the differ for this save only
 
 class ibSchemaSnapshot;
 class ibDatabaseLayer;
@@ -34,6 +35,9 @@ public:
 	// during write — diff baseline -> target into DDL (columns) + data (value rows), inside the held
 	// transaction. baseline == null => create-all. Records the delta into the change log (GetChanges).
 	int  OnSave(const ibSchemaSnapshot* baseline, const ibSchemaSnapshot& target);
+
+	// For this save only. Empty refuses a loss. Cleared by the caller when the save returns.
+	void SetTypeChangeAccept(ibTypeChangeAccept accept) { m_accept = std::move(accept); }
 
 	// after write — CLOSE the transaction: rollback if asked, else commit (+ on a barrier dialect flush the
 	// writes deferred past the DDL commit, in their own transaction). The just-created tables are durable.
@@ -60,6 +64,7 @@ private:
 
 	ibDatabaseConnectionHolder* m_holder = nullptr;
 	ibRestructureInfo           m_changes;
+	ibTypeChangeAccept          m_accept;
 };
 
 #endif // !__STRUCTURE_BUILDER_H__

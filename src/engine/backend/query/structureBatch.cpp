@@ -6,6 +6,7 @@
 #include "backend/databaseLayer/databaseQueryBuilder.h"   // L2 door — ibUpdate / ibDelete / Execute (the type-removal data cleanups)
 #include "backend/restructureInfo.h"                      // RequireExclusiveForDDL — demanded here, by the code that writes DDL
 #include "backend/backend_exception.h"                    // ibBackendCoreException — a refused write stops the apply
+#include "backend/appData.h"                              // db_query — the connection the conversion writes on
 
 #include <set>
 #include <algorithm>   // std::find — an index's value fields first, then the rest (CreateIndex)
@@ -143,8 +144,48 @@ void ibStructureBatch::Ddl(const ibDdlStatement& ddl)
 	m_steps.push_back(ddl);
 }
 
+void ibStructureBatch::TakeTypeChanges(const std::vector<ibTypeChangeWrite>& writes)
+{
+	for (const ibTypeChangeWrite& write : writes)
+		if (write.table.IsSameAs(m_table, false))
+			m_typeChanges.push_back(write);
+}
+
+void ibStructureBatch::QueueTypeChange(const wxString& field)
+{
+	std::vector<ibTypeChangeWrite> before;
+	std::vector<ibTypeChangeWrite> after;
+	for (auto it = m_typeChanges.begin(); it != m_typeChanges.end(); ) {
+		if (!it->field.IsSameAs(field, false)) {
+			++it;
+			continue;
+		}
+		(it->before ? before : after).push_back(std::move(*it));
+		it = m_typeChanges.erase(it);
+	}
+	auto run = [](std::vector<ibTypeChangeWrite> rows) {
+		return [rows = std::move(rows)]() {
+			const std::shared_ptr<ibDatabaseLayer> layer = db_query;
+			if (!layer)
+				ibBackendCoreException::Error(_("The converted values could not be written."));
+			ibApplyTypeChangeWrites(layer, rows);
+			return true;
+		};
+	};
+	if (!before.empty())
+		m_before.push_back(run(std::move(before)));
+	if (!after.empty())
+		m_inserts.push_back(run(std::move(after)));
+}
+
 int ibStructureBatch::Flush(ibSchemaBuilder& schema)
 {
+	// A narrowing is written while the old column can still hold it. The ALTER
+	// that follows then meets a value the new type accepts.
+	for (std::function<bool()>& write : m_before)
+		if (!write())
+			ibBackendCoreException::Error(
+				_("Failed to write the data of %s - the restructuring was rolled back"), m_table);
 	// MONOPOLY IS OWED BY WHOEVER WRITES DDL, NOT BY WHOEVER PRESSED "UPDATE". The gate used to sit at the
 	// top of the save (ibStructureBuilder::OnBeforeSave), so editing a module demanded exclusive mode as
 	// loudly as adding a dimension — and the error message promised the opposite ("code-only changes can be
@@ -227,7 +268,12 @@ int ibStructureBatch::Flush(ibSchemaBuilder& schema)
 				_("Failed to write the data of %s - the restructuring was rolled back"), m_table);
 
 	m_steps.clear();
+	m_before.clear();
 	m_inserts.clear();
+	// A conversion this batch was given and never queued would be dropped on
+	// the floor. That is a missed column, and it is a refusal.
+	if (!m_typeChanges.empty())
+		ibBackendCoreException::Error(_("The converted values could not be written."));
 	return 1;   // reached the end => success (a real DB error THREW; a 0-row count is not an error)
 }
 
@@ -286,9 +332,64 @@ void ClearRowsOfType(ibStructureBatch& batch, const wxString& tableName, const w
 	});
 }
 
+// How many rows a clear will empty. The same predicate the UPDATE uses, asked before the batch
+// runs it, so the ledger can say the number while the values are still there.
+long long CountWhere(const wxString& table, ibQueryExprPtr where)
+{
+	if (table.IsEmpty() || !where)
+		return 0;
+	ibQueryIR ir;
+	ir.m_root = ibProject(ibFilter(ibScan(table), where),
+		{ ibQueryProjItem{ ibFunc(wxT("COUNT"), {}), wxT("n") } });
+	ibDatabaseQueryBuilder q;
+	ibQueryResult rows = q.ExecuteIR(ir);
+	if (!rows.Next())
+		return 0;
+	return rows.GetResultLong(wxT("n"));
+}
+
+long long CountOfType(const wxString& table, const wxString& fieldName, int typeTag)
+{
+	const wxString typeCol = fieldName + ibFieldSuffix(ibColumnRole::Discriminator);
+	return CountWhere(table, ibBinOp(ibQueryBinOp::Eq, ibCol(typeCol), ibConst(ibValue(typeTag))));
+}
+
+long long CountOfReference(const wxString& table, const wxString& fieldName, ibClassID clsid)
+{
+	// The clear matches the reference column alone — the same UPDATE DiffColumnInto queues.
+	const wxString refCol = fieldName + ibFieldSuffix(ibColumnRole::ReferenceType);
+	return CountWhere(table, ibBinOp(ibQueryBinOp::Eq, ibCol(refCol), ibConst(ibValue(ibNumber(clsid)))));
+}
+
+// "1 234" — a space every three digits, as the apply window says it.
+wxString GroupedCount(long long count)
+{
+	wxString digits;
+	digits << count;
+	wxString grouped;
+	int placed = 0;
+	for (int i = static_cast<int>(digits.length()) - 1; i >= 0; --i) {
+		if (placed > 0 && placed % 3 == 0)
+			grouped = wxT(" ") + grouped;
+		grouped = wxString(digits[i]) + grouped;
+		++placed;
+	}
+	return grouped;
+}
+
+void NoteCleared(ibRestructureInfo* report, const wxString& objectName, const wxString& attributeName, long long count)
+{
+	if (report == nullptr || count <= 0)
+		return;
+	const wxString who = objectName.IsEmpty() ? attributeName
+		: (attributeName.IsEmpty() ? objectName : objectName + wxT(" / ") + attributeName);
+	report->AppendInfo(wxString::Format(_("%s: %s stored values will be cleared"), who, GroupedCount(count)));
+}
+
 } // namespace
 
-int DiffColumnInto(ibStructureBatch& batch, const ibBackendQueryColumn* srcCol, const ibBackendQueryColumn* dstCol)
+int DiffColumnInto(ibStructureBatch& batch, const ibBackendQueryColumn* srcCol, const ibBackendQueryColumn* dstCol,
+	ibRestructureInfo* report, const wxString& objectName, const wxString& attributeName)
 {
 	int retCode = 1;
 
@@ -315,6 +416,7 @@ int DiffColumnInto(ibStructureBatch& batch, const ibBackendQueryColumn* srcCol, 
 
 	const wxString&    tableName = batch.GetTable();
 	const wxString fieldName = srcCol->GetPhysicalName();
+	long long cleared = 0;
 	const std::vector<ibColumnSlot> srcLayout = DescribeColumnLayout(srcCol);
 	const std::vector<ibColumnSlot> dstLayout = DescribeColumnLayout(dstCol);
 
@@ -333,8 +435,11 @@ int DiffColumnInto(ibStructureBatch& batch, const ibBackendQueryColumn* srcCol, 
 		if (s == nullptr) {
 			// gone -> DROP the field; clear the stale _TYPE tag of rows that held this type.
 			batch.DropField(d);
-			if (d.m_role != ibColumnRole::Discriminator)
-				ClearRowsOfType(batch, tableName, fieldName, ibPersistedTypeTag(d.m_role));
+			if (d.m_role != ibColumnRole::Discriminator) {
+				const int tag = ibPersistedTypeTag(d.m_role);
+				cleared += CountOfType(tableName, fieldName, tag);
+				ClearRowsOfType(batch, tableName, fieldName, tag);
+			}
 		}
 		else if (!ibSameFieldType(s->m_type, d.m_type)) {
 			// A date narrowing from Time cannot ALTER in place -> drop + re-add; else ALTER.
@@ -342,6 +447,13 @@ int DiffColumnInto(ibStructureBatch& batch, const ibBackendQueryColumn* srcCol, 
 			    && s->m_type.m_datePrec != ibDatePrec::Time && d.m_type.m_datePrec == ibDatePrec::Time) {
 				batch.DropField(d);
 				batch.AddField(*s);
+			}
+			else if (db_query && db_query->GetDialect().m_alterColumnTemplate.empty()
+			         && s->m_type.m_kind == d.m_type.m_kind) {
+				// This engine cannot change a column's type in place, and the kind did
+				// not change: only a qualifier (scale, precision, length). The conversion
+				// write is what makes the stored value fit. Emitting the alter would
+				// refuse the apply on an engine whose column type is affinity.
 			}
 			else {
 				batch.AlterField(*s, d);
@@ -382,7 +494,9 @@ int DiffColumnInto(ibStructureBatch& batch, const ibBackendQueryColumn* srcCol, 
 		// Field LOST all references -> clear the rows that held one + DROP the shared pair (never a row
 		// DELETE — that wipes records). The slots come off the OLD layout — they exist there because
 		// oldHasRef is what this branch means.
-		ClearRowsOfType(batch, tableName, fieldName, ibPersistedTypeTag(ibColumnRole::ReferenceType));
+		const int refTag = ibPersistedTypeTag(ibColumnRole::ReferenceType);
+		cleared += CountOfType(tableName, fieldName, refTag);
+		ClearRowsOfType(batch, tableName, fieldName, refTag);
 		if (const ibColumnSlot* rt = SlotOfRole(dstLayout, ibColumnRole::ReferenceType))
 			batch.DropField(*rt);
 		if (const ibColumnSlot* rr = SlotOfRole(dstLayout, ibColumnRole::ReferenceId))
@@ -395,7 +509,8 @@ int DiffColumnInto(ibStructureBatch& batch, const ibBackendQueryColumn* srcCol, 
 		const wxString refCol  = fieldName + ibFieldSuffix(ibColumnRole::ReferenceType);
 		// Batched for the same reason as the two cleanups above — it reads columns this very apply
 		// may still be creating.
-		for (auto clsid : removedRef)
+		for (auto clsid : removedRef) {
+			cleared += CountOfReference(tableName, fieldName, clsid);
 			batch.Insert([tableName, typeCol, refCol, clsid]() {
 				ibDatabaseQueryBuilder q;
 				// clsid is a 64-bit ibClassID — bind through ibNumber: ibValue has no 64-bit integer ctor.
@@ -404,6 +519,11 @@ int DiffColumnInto(ibStructureBatch& batch, const ibBackendQueryColumn* srcCol, 
 					ibBinOp(ibQueryBinOp::Eq, ibCol(refCol), ibConst(ibValue(ibNumber(clsid))))));
 				return true;
 			});
+		}
 	}
+	NoteCleared(report, objectName, attributeName, cleared);
+	// After this column's clears. The plan was attached to the batch by the
+	// differ; this is the column it belongs to.
+	batch.QueueTypeChange(fieldName);
 	return retCode;   // 1 — success; a real DB error THREW (the affected-row count is not an error signal)
 }

@@ -744,6 +744,7 @@
     <ClInclude Include="win\dlgs\about.h" />
     <ClInclude Include="win\dlgs\activeUser.h" />
     <ClInclude Include="win\dlgs\applyChange.h" />
+    <ClInclude Include="win\dlgs\typeChangeLoss.h" />
     <ClInclude Include="win\dlgs\settings\composer\composerSettings.h" />
     <ClInclude Include="win\dlgs\settings\filterTreeModel.h" />
     <ClInclude Include="win\dlgs\settings\list\listSettings.h" />

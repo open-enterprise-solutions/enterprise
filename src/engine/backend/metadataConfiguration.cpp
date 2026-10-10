@@ -796,8 +796,14 @@ bool ibMetaDataConfigurationBase::SaveConfiguration(wxString& refusal)
 }
 
 bool ibMetaDataConfigurationBase::ApplyConfiguration(wxString& refusal,
-	const std::function<bool(const ibRestructureInfo&)>& decide)
+	const std::function<bool(const ibRestructureInfo&)>& decide,
+	const ibTypeChangeAccept& acceptLoss)
 {
+	struct ibClearAccept {
+		ibMetaDataConfigurationBase* self;
+		~ibClearAccept() { self->m_acceptTypeChange = nullptr; }
+	} clearAccept{ this };
+	m_acceptTypeChange = acceptLoss;
 	if (!IsEditable()) {
 		refusal = _("This configuration is open for reading only.");
 		return false;

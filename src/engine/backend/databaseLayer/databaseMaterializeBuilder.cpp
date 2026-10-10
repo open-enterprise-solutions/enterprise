@@ -123,10 +123,22 @@ std::vector<std::pair<wxString, wxString>> KeyColumnValues(const ibMaterializeSp
 	for (const wxString& k : spec.m_keyColumns)
 		out.push_back({ k, overRow ? (rowAlias + wxT(".") + k) : k });
 
-	if (shards > 1) {
-		wxString shardExpr = Fill(mat.m_shardExprTemplate, wxT("conn"), mat.m_connectionIdExpr);
-		shardExpr = Fill(shardExpr, wxT("n"), wxString::Format(wxT("%u"), shards));
-		out.push_back({ ShardColumnName(), overRow ? shardExpr : wxString(ShardColumnName()) });
+	// The unique index names the shard whenever the register asked for one. An
+	// engine with no connection id keeps a single shard (EffectiveShardCount),
+	// and the conflict target still has to name that column: the index is
+	// (key, shard_) and ON CONFLICT (key) matches no constraint.
+	const unsigned int declared = spec.m_shards > 1 ? spec.m_shards : 1;
+	if (declared > 1) {
+		wxString shardExpr;
+		if (!overRow)
+			shardExpr = ShardColumnName();
+		else if (shards > 1) {
+			shardExpr = Fill(mat.m_shardExprTemplate, wxT("conn"), mat.m_connectionIdExpr);
+			shardExpr = Fill(shardExpr, wxT("n"), wxString::Format(wxT("%u"), shards));
+		}
+		else
+			shardExpr = wxT("0");
+		out.push_back({ ShardColumnName(), shardExpr });
 	}
 	return out;
 }
