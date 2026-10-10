@@ -46,6 +46,11 @@
     .p2align 4
 SYM(ibFiberSwitch):
     .cfi_startproc
+#if defined(__CET__)
+    /* The landing pad the property note below claims. A direct call does not
+     * need it; an indirect one does, once the DSO keeps the CET bit. */
+    endbr64
+#endif
     pushq %rbp
     .cfi_def_cfa_offset 16
     .cfi_offset rbp, -16
@@ -98,6 +103,9 @@ SYM(ibFiberSwitch):
 SYM(ibFiberTrampoline):
     .cfi_startproc
     .cfi_undefined rip
+#if defined(__CET__)
+    endbr64
+#endif
     call PLT(ibFiberEnter)
     ud2
     .cfi_endproc
@@ -107,4 +115,28 @@ SYM(ibFiberTrampoline):
 
 #if defined(__linux__) && defined(__ELF__)
     .section .note.GNU-stack, "", @progbits
+#endif
+
+/* C++ objects in this DSO carry GNU_PROPERTY_X86_FEATURE_1_AND when the
+ * compiler was built with CET (__CET__ is 1, 2, or 3). One assembly file
+ * without the same note clears the bit for every object at link time, and
+ * libcore.so then turns CET off for itself. The value is the compiler's.
+ * The endbr64 above is what that value requires. */
+#if defined(__linux__) && defined(__ELF__) && defined(__CET__)
+    .section .note.gnu.property, "a"
+    .align 8
+    .long 1f - 0f
+    .long 4f - 1f
+    .long 5
+0:
+    .string "GNU"
+1:
+    .align 8
+    .long 0xc0000002
+    .long 3f - 2f
+2:
+    .long __CET__
+3:
+    .align 8
+4:
 #endif

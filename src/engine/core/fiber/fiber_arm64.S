@@ -3,13 +3,18 @@
  * void ibFiberSwitch(void** from_sp, void** to_sp);
  *   x0 = from_sp, x1 = to_sp.
  *
- * Saves the callee-saved integer registers (x19-x30, x29 is fp) and the
- * callee-saved SIMD registers (d8-d15). sp stays 16-byte aligned. A new
- * fiber's forged frame returns through ibFiberTrampoline.
+ * Saves the callee-saved integer registers (x19-x30, x29 is fp), the
+ * callee-saved SIMD registers (d8-d15), and FPCR. FPCR is not callee-saved
+ * by AAPCS, and it is not switched with the thread: a fiber that changes
+ * rounding must not hand that to the next session on the same thread.
+ * sp stays 16-byte aligned. A new fiber's forged frame returns through
+ * ibFiberTrampoline. The forged FPCR slot is 0, the reset value.
  *
  * Pointer authentication (arm64e) is not the ABI this builds: the forged
- * link register is the raw address of the trampoline. The macOS port is
- * the plain arm64 slice.
+ * link register is the raw address of the trampoline. The note at the bottom
+ * does not claim PAC. BTI landing pads are emitted only when the compiler
+ * already asked for them, so this file does not clear that bit. The macOS
+ * port is the plain arm64 slice.
  *
  * TSan does not see this ret. The caller notifies it with
  * __tsan_switch_to_fiber immediately before the call.
@@ -44,6 +49,9 @@
     .p2align 2
 SYM(ibFiberSwitch):
     .cfi_startproc
+#if defined(__ARM_FEATURE_BTI_DEFAULT)
+    bti c
+#endif
     stp x29, x30, [sp, #-16]!
     .cfi_def_cfa_offset 16
     .cfi_offset x29, -16
@@ -57,10 +65,14 @@ SYM(ibFiberSwitch):
     stp d12, d13, [sp, #-16]!
     stp d10, d11, [sp, #-16]!
     stp d8,  d9,  [sp, #-16]!
+    mrs x9, fpcr
+    str x9, [sp, #-16]!
     mov x9, sp
     str x9, [x0]
     ldr x9, [x1]
     mov sp, x9
+    ldr x9, [sp], #16
+    msr fpcr, x9
     ldp d8,  d9,  [sp], #16
     ldp d10, d11, [sp], #16
     ldp d12, d13, [sp], #16
@@ -87,6 +99,9 @@ SYM(ibFiberSwitch):
 SYM(ibFiberTrampoline):
     .cfi_startproc
     .cfi_undefined x30
+#if defined(__ARM_FEATURE_BTI_DEFAULT)
+    bti c
+#endif
     bl PLT(ibFiberEnter)
     brk #1
     .cfi_endproc
@@ -96,4 +111,27 @@ SYM(ibFiberTrampoline):
 
 #if defined(__linux__) && defined(__ELF__)
     .section .note.GNU-stack, "", %progbits
+#endif
+
+/* Same rule as fiber_x64.S: a missing GNU property note clears the bit for
+ * the whole DSO. Emitted only when the compiler is already asking for BTI,
+ * and the bit is BTI alone. PAC is not claimed — the forged x30 is a raw
+ * address, and signing it is a separate decision. */
+#if defined(__linux__) && defined(__ELF__) && defined(__ARM_FEATURE_BTI_DEFAULT)
+    .section .note.gnu.property, "a"
+    .align 3
+    .long 1f - 0f
+    .long 4f - 1f
+    .long 5
+0:
+    .string "GNU"
+1:
+    .align 3
+    .long 0xc0000000
+    .long 3f - 2f
+2:
+    .long 1
+3:
+    .align 3
+4:
 #endif
