@@ -86,6 +86,11 @@ private:
 		// answered with `dropped` alone. `dropped` says the session LET GO; this says it is ALIVE,
 		// and only the second one can be asked of a session that told us nothing.
 		std::weak_ptr<ibSession>  owner;
+		// Set once a submit's weak hold actually locked. An empty hold is a session
+		// that was never shared — its caller keeps it alive, and cancel reaches the
+		// fiber through Wake. An owned hold that no longer locks means the session
+		// has ended, and the fiber must be resumed so it can unwind.
+		bool                      owned { false };
 
 		// How many Await of this session are on the stack — a question asked from a task run under another
 		// question nests; only the innermost is awake. `woken` is what a submit, an answer or a cancel sets: the
@@ -107,7 +112,9 @@ private:
 	// nullptr} if no work is available. Must be called with m_mtx held.
 	std::pair<ibSession*, ibSessionQueue*> ClaimSessionLocked();
 
-	// A fiber parked on this worker.
+	// A fiber parked on this worker. `session` is the map key FinishFiber
+	// looks the queue up by. It is not asked whether the session is still
+	// there: that question goes through the queue's weak hold.
 	struct ibParked {
 		ibSession*       session = nullptr;
 		ibSessionQueue*  queue = nullptr;
@@ -134,9 +141,13 @@ private:
 	void        StartLease(ibSession* session, ibSessionQueue* q);
 	void        FinishFiber(ibSession* session, ibSessionQueue* q, ibFiber* fiber);
 	bool        ShouldInterrupt(ibSession* session) const;
+	// m_mtx must be held. True when this parked queue should be resumed:
+	// woken, work queued, the pool stopping, the session cancelled, or
+	// the session gone. Cancel and "gone" are asked of the weak hold,
+	// never of the raw map key.
+	bool        ParkedShouldRunLocked(ibSessionQueue* q) const;
 	// m_mtx must be held. True when a fiber parked on THIS thread should
-	// be resumed: it was woken, it has queued tasks, the pool is
-	// stopping, or its session was cancelled.
+	// be resumed.
 	bool        HasRunnableParkedLocked() const;
 
 	std::size_t              m_maxWorkers;

@@ -142,8 +142,13 @@ std::future<void> ibWorkerPoolHeadless::Submit(ibSession* session, Task task)
 		// a hold on the session THIS task belongs to. Empty for a session nobody holds by
 		// shared_ptr — a test's own, a stack one — and empty is the right answer there too: such a
 		// session cannot be cancelled by us, and must not be reached for.
-		if (session != nullptr)
+		if (session != nullptr) {
 			slot->owner = session->weak_from_this();
+			// A live lock is what distinguishes "never shared" (empty, and
+			// empty on purpose) from "was shared, and has since ended".
+			if (!slot->owner.expired())
+				slot->owned = true;
+		}
 		slot->tasks.push_back({ std::move(task), std::move(promise) });
 		// A script of this session waits in Await on the fiber that holds it. That fiber runs this
 		// task, no other worker may. Its home thread is in m_cv, so the flag and a broadcast are what
@@ -195,16 +200,27 @@ bool ibWorkerPoolHeadless::ShouldInterrupt(ibSession* session) const
 	return session != nullptr && ibRunCancelled(session->RunState());
 }
 
+bool ibWorkerPoolHeadless::ParkedShouldRunLocked(ibSessionQueue* q) const
+{
+	if (q == nullptr)
+		return false;
+	if (q->woken || !q->tasks.empty())
+		return true;
+	if (m_stop.load(std::memory_order_acquire))
+		return true;
+	// The session, if it is still there. lock() on an expired hold does not
+	// touch the object. A hold that used to lock and no longer does is a
+	// session that ended while its fiber was parked — resume it so the
+	// stack unwinds, instead of calling RunState through the map key.
+	if (std::shared_ptr<ibSession> alive = q->owner.lock())
+		return ibRunCancelled(alive->RunState());
+	return q->owned;
+}
+
 bool ibWorkerPoolHeadless::HasRunnableParkedLocked() const
 {
 	for (const ibParked& parked : ParkedFibers()) {
-		if (parked.queue == nullptr)
-			continue;
-		if (parked.queue->woken || !parked.queue->tasks.empty())
-			return true;
-		if (m_stop.load(std::memory_order_acquire))
-			return true;
-		if (parked.session != nullptr && ibRunCancelled(parked.session->RunState()))
+		if (ParkedShouldRunLocked(parked.queue))
 			return true;
 	}
 	return false;
@@ -276,6 +292,13 @@ void ibWorkerPoolHeadless::Await(ibSession* session, const std::function<bool()>
 		// back into the pool. A teardown cancels, then submits its barrier, and the barrier must run
 		// after this script is out, not under it. The check and the pop stay in one hold of the lock,
 		// so a barrier submitted after the cancel cannot slip between them.
+		// A session that ended under the park is the same outcome as a cancel, and it is asked
+		// of the weak hold: `session` is the map key, and calling through it here is the use-after-free.
+		if (q->owned && q->owner.expired()) {
+			--q->waiting;
+			lk.unlock();
+			ibBackendInterruptException::Error();
+		}
 		if (ShouldInterrupt(session)) {
 			--q->waiting;
 			lk.unlock();
@@ -340,6 +363,14 @@ void ibWorkerPoolHeadless::LeaseEntry(void* raw)
 	// writes is per OS thread, so the fiber snapshot (registered from
 	// session.cpp) is what puts the binding back when we resume — the
 	// scope destructor only runs when the lease actually ends.
+	//
+	// And the session itself stays alive for that whole stack. Teardown's
+	// barrier runs under Await and then the last holder lets go; without
+	// this the parked fiber's raw pointer and the map key name freed
+	// memory the moment that holder returns. A session that is not in a
+	// shared_ptr cannot be held — its caller keeps it, as before.
+	[[maybe_unused]] const std::shared_ptr<ibSession> hold = session != nullptr
+		? session->weak_from_this().lock() : std::shared_ptr<ibSession>();
 	ibSessionScope scope(session);
 	struct ClearLease {
 		~ClearLease() { tl_currentLease = nullptr; }
@@ -426,9 +457,7 @@ bool ibWorkerPoolHeadless::TakeRunnable(ibParked& out)
 			ibSessionQueue* q = it->queue;
 			if (q == nullptr)
 				continue;
-			run = q->woken || !q->tasks.empty()
-				|| m_stop.load(std::memory_order_acquire)
-				|| (it->session != nullptr && ibRunCancelled(it->session->RunState()));
+			run = ParkedShouldRunLocked(q);
 			if (run)
 				q->woken = false;
 		}
