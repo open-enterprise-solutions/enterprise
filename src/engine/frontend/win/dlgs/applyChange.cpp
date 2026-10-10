@@ -1,4 +1,10 @@
 #include "applyChange.h"
+#include "typeChangeLoss.h"
+
+#include <wx/button.h>
+#include <wx/listbox.h>
+#include <wx/sizer.h>
+#include <wx/stattext.h>
 
 ibDialogApplyChange::ibDialogApplyChange(const ibRestructureInfo& info, wxWindow* parent) :
 	wxDialog(parent, wxID_ANY, _("Design changes"), wxDefaultPosition, wxSize(500, 200), wxDEFAULT_DIALOG_STYLE)
@@ -61,4 +67,42 @@ ibDialogApplyChange::ibDialogApplyChange(const ibRestructureInfo& info, wxWindow
 
 	wxDialog::SetIcon(dlg_icon);
 	wxDialog::SetFocus();
+}
+
+ibDialogTypeChangeLoss::ibDialogTypeChangeLoss(const ibTypeChangeReport& report, wxWindow* parent)
+	: wxDialog(parent, wxID_ANY, _("Data will be lost"), wxDefaultPosition, wxSize(520, 320), wxDEFAULT_DIALOG_STYLE)
+{
+	wxBoxSizer* windowSizer = new wxBoxSizer(wxVERTICAL);
+
+	wxStaticText* information = new wxStaticText(this, wxID_ANY,
+		_("This type change loses stored values. Accepting continues the update and leaves empty what cannot be kept."));
+	information->Wrap(FromDIP(480));
+	windowSizer->Add(information, 0, wxEXPAND | wxALL, FromDIP(5));
+
+	wxListBox* lines = new wxListBox(this, wxID_ANY);
+	const wxString text = report.Text();
+	wxString rest = text;
+	int shown = 0;
+	while (!rest.IsEmpty() && shown < 200) {
+		wxString line = rest.BeforeFirst(wxT('\n'));
+		rest = rest.AfterFirst(wxT('\n'));
+		if (line.IsEmpty() && rest.IsEmpty())
+			break;
+		lines->Append(line);
+		++shown;
+		if (rest == text)
+			break;
+	}
+	if (!rest.IsEmpty())
+		lines->Append(_("..."));
+	windowSizer->Add(lines, 1, wxEXPAND | wxLEFT | wxRIGHT, FromDIP(5));
+
+	wxBoxSizer* buttons = new wxBoxSizer(wxHORIZONTAL);
+	buttons->Add(new wxButton(this, wxID_OK, _("Accept data loss")), 0, wxALL, FromDIP(5));
+	buttons->Add(new wxButton(this, wxID_CANCEL, _("Cancel")), 0, wxALL, FromDIP(5));
+	windowSizer->Add(buttons, 0, wxALIGN_RIGHT);
+
+	SetSizer(windowSizer);
+	Layout();
+	Centre(wxBOTH);
 }

@@ -116,6 +116,7 @@ int CountOtherLiveSessions()
 #include "backend/mcp/mcpServer.h"   // the page edits ITS value, and it owns where that is kept
 
 #include "frontend/win/dlgs/applyChange.h"
+#include "frontend/win/dlgs/typeChangeLoss.h"
 
 //********************************************************************************
 //*                                 Debug commands                               *
@@ -414,6 +415,9 @@ void ibFrontendMainFrameDesigner::OnUpdateConfiguration(wxCommandEvent& event)
 	const bool applied = m_metaWindow->GetMetaData()->ApplyConfiguration(refusal,
 		[this](const ibRestructureInfo& info) {
 			return ibDialogApplyChange::ShowApplyChange(info, this);
+		},
+		[this](const ibTypeChangeReport& report) {
+			return ibDialogTypeChangeLoss::Confirm(report, this);
 		});
 
 	if (!applied && !refusal.IsEmpty())

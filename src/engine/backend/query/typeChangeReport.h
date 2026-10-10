@@ -13,8 +13,11 @@
 #include "backend/typeDescription.h"
 
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <vector>
+
+#include <wx/buffer.h>
 
 class ibDatabaseLayer;
 class ibMetaData;
@@ -72,20 +75,77 @@ struct BACKEND_API ibTypeChangeReport {
 	wxString Text() const;
 };
 
+// A loss is a refusal. Nothing has been written yet.
+BACKEND_API bool ibTypeChangeBlocksApply(const ibTypeChangeReport& report, wxString& refusal);
+
+// Asked only when the report has a loss. Empty, or an answer of false, stops
+// the apply. True converts: a value that fits is written as the new type, and
+// a value that does not is left empty.
+using ibTypeChangeAccept = std::function<bool(const ibTypeChangeReport&)>;
+
+// How one physical field of a converted row is bound.
+enum class ibTypeChangeBind {
+	Null,
+	Int,
+	Number,
+	String,
+	Date,
+	Bool,
+	Blob
+};
+
+struct ibTypeChangeCell {
+	wxString         field;
+	ibTypeChangeBind bind = ibTypeChangeBind::Null;
+	int              integer = 0;
+	ibNumber         number;
+	wxString         text;
+	ibDateTime       date;
+	bool             flag = false;
+	wxMemoryBuffer   blob;
+};
+
+// One row of one attribute. `key` is every slot of every column in
+// GetPrimaryKeyColumns, except the discriminator. `before` is written while
+// the old column still exists, so a narrowing fits the ALTER that follows.
+struct ibTypeChangeWrite {
+	wxString table;
+	wxString field;
+	bool     before = false;
+	std::vector<ibTypeChangeCell> key;
+	std::vector<ibTypeChangeCell> set;
+};
+
+// The writes, and the tables that need one but have no complete key. An
+// update that cannot name its row is not stored here.
+struct BACKEND_API ibTypeChangePlan {
+	std::vector<ibTypeChangeWrite> writes;
+	std::vector<wxString>          incomplete;
+
+	wxString KeyRefusal() const;
+};
+
 // Every stored value whose attribute type differs. One SELECT per table, of
 // every changed column of that table. A derived table is not read: its rows
 // are recomputed. The read runs only after exclusive mode is held.
 //
 // A cell that cannot be read becomes a refusal naming the table and the row,
 // rather than an exception escaping the apply. `journal`, when set, receives
-// one line per table with the number of rows read.
+// one line per table with the number of rows read. `plan`, when set, receives
+// the writes that make the stored values match the new type. Both are filled
+// from this one read, inside the exclusive window.
 BACKEND_API ibTypeChangeReport ibReadTypeChangeReport(
 	const ibSchemaSnapshot* baseline,
 	const ibSchemaSnapshot& target,
 	const std::shared_ptr<ibDatabaseLayer>& layer,
-	ibRestructureInfo* journal);
+	ibRestructureInfo* journal,
+	ibTypeChangePlan* plan = nullptr);
 
-// A loss is a refusal. Nothing has been written yet.
-BACKEND_API bool ibTypeChangeBlocksApply(const ibTypeChangeReport& report, wxString& refusal);
+// UPDATE each planned row. One prepared statement per column shape, rebound
+// per row. A write that does not change exactly one row is a refusal: the key
+// did not name that row.
+BACKEND_API void ibApplyTypeChangeWrites(
+	const std::shared_ptr<ibDatabaseLayer>& layer,
+	const std::vector<ibTypeChangeWrite>& writes);
 
 #endif // __TYPE_CHANGE_REPORT_H__

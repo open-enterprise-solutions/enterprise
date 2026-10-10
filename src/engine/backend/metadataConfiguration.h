@@ -9,6 +9,7 @@
 #include "backend/appData.h"
 #include "backend/appEnv.h"   // appEnv::ActiveMetaData accessor
 #include "backend/query/structureBuilder.h"   // ibStructureBuilder — the config-save structure subsystem (member)
+#include "backend/query/typeChangeReport.h"   // ibTypeChangeReport — the loss a caller may accept
 
 class ibDebuggerServer;
 class ibDebuggerClient;
@@ -154,7 +155,8 @@ public:
 	// exception - an explicit `Load()` - is what the Loaded stage now does by itself.
 	virtual bool SaveConfiguration(wxString& refusal);
 	virtual bool ApplyConfiguration(wxString& refusal,
-		const std::function<bool(const class ibRestructureInfo&)>& decide = {});
+		const std::function<bool(const class ibRestructureInfo&)>& decide = {},
+		const ibTypeChangeAccept& acceptLoss = {});
 	virtual bool RollbackConfiguration(wxString& refusal);
 
 	//special delete and create 
@@ -188,6 +190,11 @@ public:
 	// Construction itself stays gated on ib::AppDataCtorToken.
 	virtual bool OnInitialize(const int flag) { return true; }
 	virtual bool OnDestroy() { return true; }
+
+protected:
+	// Set for the duration of one ApplyConfiguration. OnSaveDatabase hands it
+	// to the differ. Empty refuses a loss.
+	ibTypeChangeAccept m_acceptTypeChange;
 };
 
 class BACKEND_API ibMetaDataConfigurationFile : public ibMetaDataConfigurationBase {

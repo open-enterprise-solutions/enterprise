@@ -330,6 +330,11 @@ TEST(MaterializeRenderer, SplitCollapsesWhereItIsMeaningless) {
     EXPECT_EQ(EffectiveShardCount(f.spec, &Sqlite()), 1u);
     const wxString view = RenderSqlite(f.spec).LastCreate();
     EXPECT_FALSE(view.Contains(wxT("GROUP BY")));
+    // The table's unique index still names the shard. The trigger writes one
+    // shard and conflicts on that same column, or the insert is refused.
+    const wxString text = CreateText(RenderSqlite(f.spec));
+    EXPECT_TRUE(text.Contains(wxT("ON CONFLICT (period_, wh, shard_)")));
+    EXPECT_TRUE(text.Contains(wxT(", 0")));
 }
 
 #ifdef OES_USE_POSTGRESQL

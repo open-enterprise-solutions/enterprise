@@ -196,6 +196,7 @@ bool ibMetaDataConfigurationStorage::OnSaveDatabase(int flags)
 			? m_configMetadata->BuildSchemaSnapshot()
 			: ibSchemaSnapshot();
 
+		m_structureBuilder.SetTypeChangeAccept(m_acceptTypeChange);
 		const int structRet = m_structureBuilder.OnSave(hasBaseline ? &baseline : nullptr, target);
 
 		// Extract what the builder changed into this metadata's ledger (so the apply-change dialog shows it

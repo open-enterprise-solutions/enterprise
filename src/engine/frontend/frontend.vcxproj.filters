@@ -1769,6 +1769,9 @@
     <ClInclude Include="win\dlgs\applyChange.h">
       <Filter>win\dlgs</Filter>
     </ClInclude>
+    <ClInclude Include="win\dlgs\typeChangeLoss.h">
+      <Filter>win\dlgs</Filter>
+    </ClInclude>
     <ClInclude Include="win\dlgs\formEditor.h">
       <Filter>win\dlgs</Filter>
     </ClInclude>

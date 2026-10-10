@@ -24,6 +24,8 @@
 #include <map>
 #include <functional>   // ibSchemaTable::m_beforeChange — the structural check a table may carry
 
+#include "backend/query/typeChangeReport.h"   // ibTypeChangeAccept — a loss is converted only when the caller says so
+
 class ibBackendQueryable;
 class ibMetaData;
 class ibDatabaseConnectionHolder;
@@ -436,8 +438,14 @@ private:
 // `report` (optional) receives a human-readable line for each REAL structural change — CREATE / DROP
 // table, add / drop column, and a column ALTER ONLY when its slot diff actually emitted DDL (a no-op
 // column is silent). This is what the apply-change dialog shows; pass null to diff without reporting.
+// `accept`, when the report has a loss, is asked before anything is written.
+// Empty, or an answer of false, refuses. True converts the stored values: a
+// value that fits is written as the new type, and a value that does not is
+// left empty. A table with no complete key is refused either way — an update
+// that cannot name its row is not run.
 BACKEND_API int DiffSnapshots(const ibSchemaSnapshot* baseline, const ibSchemaSnapshot& target,
-                              ibDatabaseConnectionHolder* holder = nullptr, ibRestructureInfo* report = nullptr);
+                              ibDatabaseConnectionHolder* holder = nullptr, ibRestructureInfo* report = nullptr,
+                              const ibTypeChangeAccept& accept = {});
 
 // Do these two snapshots describe the SAME physical structure? Tables by id, their columns by id + type,
 // their indexes, and a derived table's materialisation spec. Answers the one question the apply flow asks

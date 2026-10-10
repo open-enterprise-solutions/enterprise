@@ -74,7 +74,9 @@ int ibStructureBuilder::OnSave(const ibSchemaSnapshot* baseline, const ibSchemaS
 	// One diff migrates everything: structure (CREATE/ALTER/DROP columns) + data (INSERT/UPDATE/DELETE value
 	// rows), inside the held transaction. baseline == null => create-all. A row into a just-created table is
 	// deferred past the DDL commit on Firebird (the batch barrier); other dialects fill it in-transaction.
-	return DiffSnapshots(baseline, target, m_holder, &m_changes);
+	const ibTypeChangeAccept accept = std::move(m_accept);
+	m_accept = nullptr;
+	return DiffSnapshots(baseline, target, m_holder, &m_changes, accept);
 }
 
 int ibStructureBuilder::OnAfterSave(bool rollback)

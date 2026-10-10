@@ -19,6 +19,7 @@
 #include "backend/backend.h"
 #include "backend/databaseLayer/databaseQueryBuilder.h"   // ibDdlColumn / ibAlterClause / ibDdlStatement
 #include "backend/query/columnLayout.h"                    // ibColumnSlot + DescribeColumnLayout (the layout tier)
+#include "backend/query/typeChangeReport.h"                // ibTypeChangeWrite — the conversion rides this batch, not a static
 
 #include <functional>
 #include <vector>
@@ -81,6 +82,13 @@ public:
 	// A self-contained "do the write, return success" closure (the write site stays target-agnostic).
 	void Insert(std::function<bool()> write) { m_inserts.push_back(std::move(write)); }
 
+	// The conversion for this apply. Taken from the plan the differ built inside
+	// the exclusive window — never from a process-wide static. QueueTypeChange
+	// moves one column's rows onto the batch: a narrowing runs before the ALTER,
+	// and a change of kind runs after the new fields exist.
+	void TakeTypeChanges(const std::vector<ibTypeChangeWrite>& writes);
+	void QueueTypeChange(const wxString& field);
+
 	size_t StepCount() const { return m_steps.size(); }   // DDL steps so far — lets the differ tell a REAL
 	                                                      // column change (a slot diff emitted a step) from a no-op.
 
@@ -93,7 +101,9 @@ private:
 	const ibBackendQueryable*         m_queryable = nullptr;   // the schema handle (null when keyed by bare name)
 	wxString                          m_table;
 	std::vector<ibDdlStatement>       m_steps;      // single-op DDL, in emission order
+	std::vector<std::function<bool()>> m_before;    // narrowings, run before the ALTER sees a value it would refuse
 	std::vector<std::function<bool()>> m_inserts;   // data seeds (deferred past the DDL commit by ibSchemaBuilder's barrier)
+	std::vector<ibTypeChangeWrite>    m_typeChanges;
 };
 
 // Diff one LOGICAL column into the batch — the structure tier's column-creation, lifted off the

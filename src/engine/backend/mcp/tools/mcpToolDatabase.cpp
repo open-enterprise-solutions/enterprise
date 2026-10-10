@@ -81,6 +81,15 @@ const ibArg& ArgConfirm()
 	return s_a;
 }
 
+const ibArg& ArgAcceptLoss()
+{
+	static const ibArg s_a(wxT("accept_loss"), ibArg::Kind::Flag,
+		ibMcpText("true converts stored values that do not fit the new type, and leaves empty "
+			  "what cannot be kept. Omit it, or pass false, and a loss stops the apply before "
+			  "any structure is written."), /*required*/ false);
+	return s_a;
+}
+
 } // namespace
 
 //---------------------------------------------------------------------------
@@ -219,12 +228,14 @@ public:
 			"which is the only way to see the schema changes in advance, because the engine has "
 			"no rehearsal mode by design. Saving first costs nothing here - config_save stores the "
 			"configuration without touching the structure, so the ledger this hands back still "
-			"holds everything the base has not got.");
+			"holds everything the base has not got. accept_loss=true converts stored values "
+			"that do not fit a new type; without it a loss stops the apply before any "
+			"structure is written.");
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
-		static const std::vector<ibMcpArgument> s_arguments = { ArgConfirm() };
+		static const std::vector<ibMcpArgument> s_arguments = { ArgConfirm(), ArgAcceptLoss() };
 		return s_arguments;
 	}
 
@@ -279,6 +290,7 @@ public:
 			ledger.push_back(ibDataValue::Child(line));
 		};
 
+		const bool acceptLoss = ArgAcceptLoss().Flag(params);
 		const bool applied = config->ApplyConfiguration(refusal,
 			[&appendEntry, &capturedUpTo, &sawErrors, &decisionReached, commit](const ibRestructureInfo& info) {
 
@@ -294,7 +306,8 @@ public:
 				// was asked — confirming an apply is confirming the CHANGE, not overriding the
 				// engine's own account of it going wrong.
 				return commit && !info.HasErrors();
-			});
+			},
+			[acceptLoss](const ibTypeChangeReport&) { return acceptLoss; });
 
 		// ⭐⭐ AND THE SECOND HALF: WHAT THE APPLY ITSELF SAID.
 		//

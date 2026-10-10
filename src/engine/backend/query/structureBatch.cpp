@@ -6,6 +6,7 @@
 #include "backend/databaseLayer/databaseQueryBuilder.h"   // L2 door — ibUpdate / ibDelete / Execute (the type-removal data cleanups)
 #include "backend/restructureInfo.h"                      // RequireExclusiveForDDL — demanded here, by the code that writes DDL
 #include "backend/backend_exception.h"                    // ibBackendCoreException — a refused write stops the apply
+#include "backend/appData.h"                              // db_query — the connection the conversion writes on
 
 #include <set>
 #include <algorithm>   // std::find — an index's value fields first, then the rest (CreateIndex)
@@ -143,8 +144,48 @@ void ibStructureBatch::Ddl(const ibDdlStatement& ddl)
 	m_steps.push_back(ddl);
 }
 
+void ibStructureBatch::TakeTypeChanges(const std::vector<ibTypeChangeWrite>& writes)
+{
+	for (const ibTypeChangeWrite& write : writes)
+		if (write.table.IsSameAs(m_table, false))
+			m_typeChanges.push_back(write);
+}
+
+void ibStructureBatch::QueueTypeChange(const wxString& field)
+{
+	std::vector<ibTypeChangeWrite> before;
+	std::vector<ibTypeChangeWrite> after;
+	for (auto it = m_typeChanges.begin(); it != m_typeChanges.end(); ) {
+		if (!it->field.IsSameAs(field, false)) {
+			++it;
+			continue;
+		}
+		(it->before ? before : after).push_back(std::move(*it));
+		it = m_typeChanges.erase(it);
+	}
+	auto run = [](std::vector<ibTypeChangeWrite> rows) {
+		return [rows = std::move(rows)]() {
+			const std::shared_ptr<ibDatabaseLayer> layer = db_query;
+			if (!layer)
+				ibBackendCoreException::Error(_("The converted values could not be written."));
+			ibApplyTypeChangeWrites(layer, rows);
+			return true;
+		};
+	};
+	if (!before.empty())
+		m_before.push_back(run(std::move(before)));
+	if (!after.empty())
+		m_inserts.push_back(run(std::move(after)));
+}
+
 int ibStructureBatch::Flush(ibSchemaBuilder& schema)
 {
+	// A narrowing is written while the old column can still hold it. The ALTER
+	// that follows then meets a value the new type accepts.
+	for (std::function<bool()>& write : m_before)
+		if (!write())
+			ibBackendCoreException::Error(
+				_("Failed to write the data of %s - the restructuring was rolled back"), m_table);
 	// MONOPOLY IS OWED BY WHOEVER WRITES DDL, NOT BY WHOEVER PRESSED "UPDATE". The gate used to sit at the
 	// top of the save (ibStructureBuilder::OnBeforeSave), so editing a module demanded exclusive mode as
 	// loudly as adding a dimension — and the error message promised the opposite ("code-only changes can be
@@ -227,7 +268,12 @@ int ibStructureBatch::Flush(ibSchemaBuilder& schema)
 				_("Failed to write the data of %s - the restructuring was rolled back"), m_table);
 
 	m_steps.clear();
+	m_before.clear();
 	m_inserts.clear();
+	// A conversion this batch was given and never queued would be dropped on
+	// the floor. That is a missed column, and it is a refusal.
+	if (!m_typeChanges.empty())
+		ibBackendCoreException::Error(_("The converted values could not be written."));
 	return 1;   // reached the end => success (a real DB error THREW; a 0-row count is not an error)
 }
 
@@ -402,6 +448,13 @@ int DiffColumnInto(ibStructureBatch& batch, const ibBackendQueryColumn* srcCol, 
 				batch.DropField(d);
 				batch.AddField(*s);
 			}
+			else if (db_query && db_query->GetDialect().m_alterColumnTemplate.empty()
+			         && s->m_type.m_kind == d.m_type.m_kind) {
+				// This engine cannot change a column's type in place, and the kind did
+				// not change: only a qualifier (scale, precision, length). The conversion
+				// write is what makes the stored value fit. Emitting the alter would
+				// refuse the apply on an engine whose column type is affinity.
+			}
 			else {
 				batch.AlterField(*s, d);
 			}
@@ -469,5 +522,8 @@ int DiffColumnInto(ibStructureBatch& batch, const ibBackendQueryColumn* srcCol, 
 		}
 	}
 	NoteCleared(report, objectName, attributeName, cleared);
+	// After this column's clears. The plan was attached to the batch by the
+	// differ; this is the column it belongs to.
+	batch.QueueTypeChange(fieldName);
 	return retCode;   // 1 — success; a real DB error THREW (the affected-row count is not an error signal)
 }

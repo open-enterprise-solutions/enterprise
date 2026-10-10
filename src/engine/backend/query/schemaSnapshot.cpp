@@ -642,8 +642,11 @@ int CreateTable(ibStructureBatch& batch, const ibSchemaTable& t, ibRestructureIn
 // diff by name (present-only-in-target -> create, only-in-baseline -> drop). Scaffold never changes.
 // Reporting: add / drop is reported unconditionally; a MATCHED column is reported as "Change" ONLY when
 // its slot diff actually emitted DDL (StepCount grew) — an unchanged column stays silent.
-int AlterTable(ibStructureBatch& batch, const ibSchemaTable& old, const ibSchemaTable& cur, ibRestructureInfo* report, ibSchemaBuilder& schema)
+int AlterTable(ibStructureBatch& batch, const ibSchemaTable& old, const ibSchemaTable& cur, ibRestructureInfo* report, ibSchemaBuilder& schema,
+	const ibTypeChangePlan* plan)
 {
+	if (plan != nullptr)
+		batch.TakeTypeChanges(plan->writes);
 	int retCode = 1;
 
 	// ⭐⭐ INDEXES COME DOWN FIRST, COLUMNS SECOND, INDEXES BACK UP LAST — and the order is forced by
@@ -862,7 +865,8 @@ bool SameStructure(const ibSchemaSnapshot* baseline, const ibSchemaSnapshot& tar
 	return true;
 }
 
-int DiffSnapshots(const ibSchemaSnapshot* baseline, const ibSchemaSnapshot& target, ibDatabaseConnectionHolder* holder, ibRestructureInfo* report)
+int DiffSnapshots(const ibSchemaSnapshot* baseline, const ibSchemaSnapshot& target, ibDatabaseConnectionHolder* holder, ibRestructureInfo* report,
+	const ibTypeChangeAccept& accept)
 {
 	int retCode = 1;
 	ibSchemaBuilder schema(holder);
@@ -903,14 +907,24 @@ int DiffSnapshots(const ibSchemaSnapshot* baseline, const ibSchemaSnapshot& targ
 
 	// A type change is judged HERE, after exclusive mode is taken and before a
 	// statement. The values the report sees are the values the apply would
-	// change: nothing is written between the two. A loss refuses the apply, so
-	// the structure and the stored values stay as they are.
+	// change: nothing is written between the two. The same read builds the
+	// writes. A loss refuses unless the caller has accepted it. A table with
+	// no complete key refuses either way: the update would not name its row.
+	ibTypeChangePlan typeChange;
 	if (baseline != nullptr) {
 		const std::shared_ptr<ibDatabaseLayer> layer = holder != nullptr
 			? holder->EnsureConnection() : db_query;
-		const ibTypeChangeReport change = ibReadTypeChangeReport(baseline, target, layer, report);
+		const ibTypeChangeReport change = ibReadTypeChangeReport(baseline, target, layer, report, &typeChange);
+		if (!typeChange.incomplete.empty()) {
+			wxString refusal = typeChange.KeyRefusal();
+			if (change.HasDataLoss())
+				refusal << wxT("\n") << change.Text();
+			if (report != nullptr)
+				report->AppendError(refusal);
+			ibBackendCoreException::Error(refusal);
+		}
 		wxString refusal;
-		if (ibTypeChangeBlocksApply(change, refusal)) {
+		if (ibTypeChangeBlocksApply(change, refusal) && !(accept && accept(change))) {
 			if (report != nullptr)
 				report->AppendError(refusal);
 			ibBackendCoreException::Error(refusal);
@@ -1077,7 +1091,7 @@ int DiffSnapshots(const ibSchemaSnapshot* baseline, const ibSchemaSnapshot& targ
 		if (old == nullptr)
 			CreateTable(batch, cur, report);
 		else
-			AlterTable(batch, *old, cur, report, schema);
+			AlterTable(batch, *old, cur, report, schema, &typeChange);
 
 		// DATA after structure, SAME batch: rows into a just-created table defer past the DDL commit on
 		// Firebird; other dialects fill them inside the transaction (ibStructureBatch::Flush -> RunOrDefer).
