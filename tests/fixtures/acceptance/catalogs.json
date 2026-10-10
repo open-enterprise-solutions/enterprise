@@ -1,0 +1,231 @@
+{
+  "for_the_accountant": "A goods catalog with folders. Bread, milk and a marked stale item sit in Food; a hammer sits in Tools, then moves into Food. A total for a folder adds everything recorded under it, including an item marked for deletion — the mark does not erase the row. The choice a person is offered is a different question: the marked item should not be offered, and a contract should be offered only for its owner. The platform, as it stands, still shows the marked item in the choice list and does not narrow that list by owner; a query that asks for the mark and the owner does.",
+  "goods": {
+    "nodes": [
+      {
+        "code": "GOODS",
+        "parent": "",
+        "folder": true,
+        "qty": "0",
+        "deletion_mark": false,
+        "predefined": "Goods"
+      },
+      {
+        "code": "FOOD",
+        "parent": "GOODS",
+        "folder": true,
+        "qty": "0",
+        "deletion_mark": false,
+        "predefined": ""
+      },
+      {
+        "code": "BREAD",
+        "parent": "FOOD",
+        "folder": false,
+        "qty": "10.5",
+        "deletion_mark": false,
+        "predefined": ""
+      },
+      {
+        "code": "MILK",
+        "parent": "FOOD",
+        "folder": false,
+        "qty": "4",
+        "deletion_mark": false,
+        "predefined": ""
+      },
+      {
+        "code": "STALE",
+        "parent": "FOOD",
+        "folder": false,
+        "qty": "100",
+        "deletion_mark": true,
+        "predefined": ""
+      },
+      {
+        "code": "TOOLS",
+        "parent": "GOODS",
+        "folder": true,
+        "qty": "0",
+        "deletion_mark": false,
+        "predefined": ""
+      },
+      {
+        "code": "HAMMER",
+        "parent": "TOOLS",
+        "folder": false,
+        "qty": "7.25",
+        "deletion_mark": false,
+        "predefined": ""
+      },
+      {
+        "code": "SERVICES",
+        "parent": "",
+        "folder": true,
+        "qty": "0",
+        "deletion_mark": false,
+        "predefined": ""
+      },
+      {
+        "code": "DELIVERY",
+        "parent": "SERVICES",
+        "folder": false,
+        "qty": "3",
+        "deletion_mark": false,
+        "predefined": ""
+      }
+    ],
+    "move": {
+      "code": "HAMMER",
+      "to": "FOOD"
+    },
+    "before": {
+      "in_hierarchy": {
+        "GOODS": [
+          "BREAD",
+          "FOOD",
+          "GOODS",
+          "HAMMER",
+          "MILK",
+          "STALE",
+          "TOOLS"
+        ],
+        "FOOD": [
+          "BREAD",
+          "FOOD",
+          "MILK",
+          "STALE"
+        ],
+        "TOOLS": [
+          "HAMMER",
+          "TOOLS"
+        ],
+        "SERVICES": [
+          "DELIVERY",
+          "SERVICES"
+        ]
+      },
+      "hierarchy_only": {
+        "FOOD": [
+          "BREAD",
+          "MILK",
+          "STALE"
+        ],
+        "TOOLS": [
+          "HAMMER"
+        ]
+      },
+      "totals": {
+        "GOODS": "121.75",
+        "FOOD": "114.5",
+        "TOOLS": "7.25",
+        "SERVICES": "3"
+      }
+    },
+    "after": {
+      "in_hierarchy": {
+        "GOODS": [
+          "BREAD",
+          "FOOD",
+          "GOODS",
+          "HAMMER",
+          "MILK",
+          "STALE",
+          "TOOLS"
+        ],
+        "FOOD": [
+          "BREAD",
+          "FOOD",
+          "HAMMER",
+          "MILK",
+          "STALE"
+        ],
+        "TOOLS": [
+          "TOOLS"
+        ],
+        "SERVICES": [
+          "DELIVERY",
+          "SERVICES"
+        ]
+      },
+      "hierarchy_only": {
+        "FOOD": [
+          "BREAD",
+          "HAMMER",
+          "MILK",
+          "STALE"
+        ],
+        "TOOLS": []
+      },
+      "totals": {
+        "GOODS": "121.75",
+        "FOOD": "121.75",
+        "TOOLS": "0",
+        "SERVICES": "3"
+      }
+    }
+  },
+  "choice": {
+    "marked_code": "STALE",
+    "platform_includes_deletion_mark": true,
+    "reason": "DeletionMark is documented as staying in the base and shown crossed out (commonObject.h, the DeletionMark property). FindValue adds no DeletionMark condition (referenceQuery.cpp). Excluding it from choice is not what that door does.",
+    "filtered_no_mark": [
+      "BREAD",
+      "DELIVERY",
+      "FOOD",
+      "GOODS",
+      "HAMMER",
+      "MILK",
+      "SERVICES",
+      "TOOLS"
+    ]
+  },
+  "contracts": {
+    "owners": [
+      {
+        "code": "ACME",
+        "predefined": "Acme"
+      },
+      {
+        "code": "GLOBEX",
+        "predefined": ""
+      }
+    ],
+    "items": [
+      {
+        "code": "C1",
+        "owner": "ACME",
+        "deletion_mark": false
+      },
+      {
+        "code": "C2",
+        "owner": "ACME",
+        "deletion_mark": true
+      },
+      {
+        "code": "C3",
+        "owner": "GLOBEX",
+        "deletion_mark": false
+      }
+    ],
+    "of_owner_including_marked": {
+      "ACME": [
+        "C1",
+        "C2"
+      ],
+      "GLOBEX": [
+        "C3"
+      ]
+    },
+    "of_owner_choosable": {
+      "ACME": [
+        "C1"
+      ],
+      "GLOBEX": [
+        "C3"
+      ]
+    },
+    "choice_not_narrowed_by_owner": true,
+    "reason": "List owner says the choice is not narrowed to one owner by itself (catalog.h, the ListOwner property). A query of the Owner column's stored fields does narrow. ibDataQueryBuilder::Where on that reference returned no rows for the same bytes; the scenario asks the fields."
+  }
+}
