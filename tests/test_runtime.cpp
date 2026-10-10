@@ -13,11 +13,14 @@
 
 #include <gtest/gtest.h>
 
+#include <initializer_list>
+
 #include "backend/compiler/compileCode.h"
 #include "backend/compiler/procUnit.h"
 #include "backend/compiler/byteCode.h"
 #include "backend/compiler/value.h"
 #include "backend/system/systemManager.h"   // ibValueSystemFunction — IsNull / ValueIsFilled impls
+#include "backend/system/value/valueArray.h"   // StrSplit's answer
 #include "backend/compiler/procUnitState.h"   // m_errorPlace — which opcode raised
 #include "backend/session/session.h"
 #include "backend/appData.h"                // the built-in dispatcher reads appData on entry
@@ -2640,6 +2643,89 @@ TEST_F(BuiltInRuntime, StringCountingFunctionsCountRatherThanLocate) {
 	// The two must agree about what a line IS, which is why StrGetLine is here.
 	ASSERT_TRUE(pu.GetPropVal(wxT("lineTwo"), v));
 	EXPECT_EQ(v.GetString(), wxT("b"));
+}
+
+namespace {
+
+void ExpectParts(const ibValue& result, std::initializer_list<const wchar_t*> expect)
+{
+	ibValueArray* const parts = dynamic_cast<ibValueArray*>(result.GetRef());
+	ASSERT_NE(nullptr, parts);
+	ASSERT_EQ(expect.size(), parts->Count());
+	size_t i = 0;
+	for (const wchar_t* text : expect) {
+		EXPECT_EQ(wxString(text), parts->Values()[i].GetString()) << i;
+		++i;
+	}
+}
+
+} // namespace
+
+TEST(StrSplit, EachCharacterOfTheSeparatorIsADelimiter) {
+	ExpectParts(ibValueSystemFunction::StrSplit(ibValue(wxT("a,b")), ibValue(wxT(","))),
+		{ wxT("a"), wxT("b") });
+	ExpectParts(ibValueSystemFunction::StrSplit(ibValue(wxT("a,,b")), ibValue(wxT(",")), true),
+		{ wxT("a"), wxT(""), wxT("b") });
+	ExpectParts(ibValueSystemFunction::StrSplit(ibValue(wxT("a,,b")), ibValue(wxT(",")), false),
+		{ wxT("a"), wxT("b") });
+	ExpectParts(ibValueSystemFunction::StrSplit(ibValue(wxT(",a,")), ibValue(wxT(",")), true),
+		{ wxT(""), wxT("a"), wxT("") });
+	ExpectParts(ibValueSystemFunction::StrSplit(ibValue(wxT(",a,")), ibValue(wxT(",")), false),
+		{ wxT("a") });
+	ExpectParts(ibValueSystemFunction::StrSplit(ibValue(wxT("a,b;c")), ibValue(wxT(",;"))),
+		{ wxT("a"), wxT("b"), wxT("c") });
+	ExpectParts(ibValueSystemFunction::StrSplit(ibValue(wxT("")), ibValue(wxT(",")), true),
+		{ wxT("") });
+	ExpectParts(ibValueSystemFunction::StrSplit(ibValue(wxT("")), ibValue(wxT(",")), false),
+		{});
+	ExpectParts(ibValueSystemFunction::StrSplit(ibValue(wxT("ab")), ibValue(wxT(""))),
+		{ wxT("ab") });
+	ExpectParts(ibValueSystemFunction::StrSplit(ibValue(wxT(",,")), ibValue(wxT(",")), false),
+		{});
+}
+
+TEST_F(BuiltInRuntime, StrSplitAndFillPropertyValuesAreCallable) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ibValueSystemFunction valueSystem;
+	cc.AddContextVariable(wxT("System"), &valueSystem, true);
+
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("var parts public; var n public; var first public; var second public;\n")
+		wxT("var kept public; var copied public; var left public; var extra public;\n")
+		wxT("parts = StrSplit(\"a,,b\", \",\");\n")
+		wxT("n = parts.Count();\n")
+		wxT("first = parts.Get(0);\n")
+		wxT("second = parts.Get(1);\n")
+		wxT("dst = New Structure(\"A, B, C\", 1, 2, 3);\n")
+		wxT("src = New Structure(\"a, B, C, Extra\", 7, 8, 9, 4);\n")
+		wxT("FillPropertyValues(dst, src, \"A, B, NoSuch\", \"B\");\n")
+		wxT("kept = dst.A;\n")
+		wxT("copied = dst.B;\n")
+		wxT("left = dst.C;\n")
+		wxT("extra = dst.Property(\"Extra\", 0);\n")));
+
+	ibProcUnit pu;
+	wxString strError;
+	ASSERT_TRUE(RunBound(cc, pu, strError)) << strError.ToStdString();
+
+	ibValue v;
+	ASSERT_TRUE(pu.GetPropVal(wxT("n"), v));
+	EXPECT_EQ(3, v.GetInteger());
+	ASSERT_TRUE(pu.GetPropVal(wxT("first"), v));
+	EXPECT_EQ(wxT("a"), v.GetString());
+	ASSERT_TRUE(pu.GetPropVal(wxT("second"), v));
+	EXPECT_EQ(wxT(""), v.GetString());
+
+	// A is listed and present on both, folded. B is excluded. C is not listed.
+	// Extra is not a property of the receiver, and NoSuch is not an error.
+	ASSERT_TRUE(pu.GetPropVal(wxT("kept"), v));
+	EXPECT_EQ(7, v.GetInteger());
+	ASSERT_TRUE(pu.GetPropVal(wxT("copied"), v));
+	EXPECT_EQ(2, v.GetInteger());
+	ASSERT_TRUE(pu.GetPropVal(wxT("left"), v));
+	EXPECT_EQ(3, v.GetInteger());
+	ASSERT_TRUE(pu.GetPropVal(wxT("extra"), v));
+	EXPECT_FALSE(v.GetBoolean());
 }
 
 // ===========================================================================
