@@ -5,6 +5,7 @@
 
 #include "core/diagnostics/crashGuard.h"   // ArmCurrentThread — the overflow log needs an alternate stack
 
+#include <atomic>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -22,6 +23,9 @@
 #    define _WIN32_WINNT 0x0600
 #  endif
 #  include <windows.h>
+#  if defined(_MSC_VER)
+#    include <intrin.h>   // _AddressOfReturnAddress — the frame, not a local ASan moved
+#  endif
 #else
 #  include <pthread.h>
 #  include <sys/mman.h>
@@ -77,18 +81,23 @@ struct ibStackSpan {
 };
 
 thread_local ibStackSpan tl_threadStack;
+thread_local int tl_spanState = 0;   // 0 untried, 1 measured, 2 failed
 
 bool ThreadStackSpan(ibStackSpan& out)
 {
-	if (tl_threadStack.low != nullptr) {
+	if (tl_spanState == 1) {
 		out = tl_threadStack;
 		return true;
 	}
+	if (tl_spanState == 2)
+		return false;
 #if defined(_WIN32)
 	char here;
 	MEMORY_BASIC_INFORMATION hereInfo;
-	if (::VirtualQuery(&here, &hereInfo, sizeof(hereInfo)) == 0 || hereInfo.AllocationBase == nullptr)
+	if (::VirtualQuery(&here, &hereInfo, sizeof(hereInfo)) == 0 || hereInfo.AllocationBase == nullptr) {
+		tl_spanState = 2;
 		return false;
+	}
 	const char* base = static_cast<const char*>(hereInfo.AllocationBase);
 	const char* end = base;
 	const char* p = base;
@@ -103,32 +112,41 @@ bool ThreadStackSpan(ibStackSpan& out)
 		if (static_cast<std::size_t>(end - base) > 64u * 1024u * 1024u)
 			break;
 	}
-	if (end <= base)
+	if (end <= base) {
+		tl_spanState = 2;
 		return false;
+	}
 	out.low = base;
 	out.high = end;
 #elif defined(__APPLE__)
 	void* const top = pthread_get_stackaddr_np(pthread_self());
 	const std::size_t size = pthread_get_stacksize_np(pthread_self());
-	if (top == nullptr || size == 0)
+	if (top == nullptr || size == 0) {
+		tl_spanState = 2;
 		return false;
+	}
 	out.high = static_cast<const char*>(top);
 	out.low = out.high - size;
 #else
 	pthread_attr_t attr;
-	if (pthread_getattr_np(pthread_self(), &attr) != 0)
+	if (pthread_getattr_np(pthread_self(), &attr) != 0) {
+		tl_spanState = 2;
 		return false;
+	}
 	void* addr = nullptr;
 	std::size_t size = 0;
 	const int rc = pthread_attr_getstack(&attr, &addr, &size);
 	pthread_attr_destroy(&attr);
-	if (rc != 0 || addr == nullptr || size == 0)
+	if (rc != 0 || addr == nullptr || size == 0) {
+		tl_spanState = 2;
 		return false;
+	}
 	out.low = static_cast<const char*>(addr);
 	out.high = out.low + size;
 #endif
 	tl_threadStack = out;
-	return out.low != nullptr && out.high > out.low;
+	tl_spanState = (out.low != nullptr && out.high > out.low) ? 1 : 2;
+	return tl_spanState == 1;
 }
 
 } // namespace
@@ -248,13 +266,36 @@ void ibFiber::ReleaseThread()
 ibFiber* ibFiber::Current() { return tl_currentFiber; }
 ibFiber* ibFiber::Scheduler() { return tl_schedulerFiber; }
 
+namespace {
+
+const char* FrameAddress() noexcept
+{
+#if defined(_MSC_VER)
+	return static_cast<const char*>(_AddressOfReturnAddress());
+#else
+	return static_cast<const char*>(__builtin_frame_address(0));
+#endif
+}
+
+void LogUnknownFiberBoundsOnce() noexcept
+{
+#ifndef NDEBUG
+	static std::atomic<bool> logged{ false };
+	if (!logged.exchange(true, std::memory_order_relaxed))
+		std::fprintf(stderr, "ibFiber::StackRemaining: fiber stack bounds are unknown\n");
+#else
+	// Release has nothing to say. The caller treats the answer as unknown.
+#endif
+}
+
+} // namespace
+
 std::size_t ibFiber::StackRemaining() noexcept
 {
-	// volatile so the address is a real slot, not a register the optimiser
-	// reused from somewhere above this frame.
-	volatile char here = 0;
-	const char* const sp = const_cast<const char*>(&here);
-	(void)here;
+	// The frame address, not the address of a local. With
+	// detect_stack_use_after_return a local lives on ASan's fake stack, and
+	// the distance from there to the fiber is not a remaining budget.
+	const char* const sp = FrameAddress();
 
 	const char* low = nullptr;
 	const char* high = nullptr;
@@ -264,6 +305,8 @@ std::size_t ibFiber::StackRemaining() noexcept
 		high = low + cur->m_stackSize;
 	}
 	else {
+		if (cur != nullptr && !cur->m_scheduler)
+			LogUnknownFiberBoundsOnce();
 		ibStackSpan span;
 		if (!ThreadStackSpan(span))
 			return kUnknownStack;
@@ -272,8 +315,11 @@ std::size_t ibFiber::StackRemaining() noexcept
 	}
 	// Outside the span is a measurement we do not trust. Refusing on it
 	// would turn a healthy script into a recursion error.
-	if (sp <= low || sp > high)
+	if (sp == nullptr || sp <= low || sp > high) {
+		if (cur != nullptr && !cur->m_scheduler)
+			LogUnknownFiberBoundsOnce();
 		return kUnknownStack;
+	}
 	return static_cast<std::size_t>(sp - low);
 }
 

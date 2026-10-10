@@ -31,6 +31,7 @@
 // Wrap behind a feature check if a future port lacks it.
 #include <execinfo.h>
 #include <fcntl.h>
+#include <sys/mman.h>
 #include <unistd.h>
 #endif
 
@@ -265,16 +266,62 @@ void ArmCurrentThread()
 	thread_local bool armed = false;
 	if (armed)
 		return;
-	// For the life of the thread. backtrace_symbols_fd needs more than
-	// SIGSTKSZ, and a fiber overflow is delivered on this thread.
-	thread_local char stack[64 * 1024];
+
+	// ASan (and anything else that already armed this thread) owns a
+	// page-aligned alternate stack. Replacing it with storage this thread
+	// did not mmap is what makes a later throw abort, and what makes ASan
+	// fail when it frees that stack on the way out. Keep the one in place.
+	stack_t existing;
+	std::memset(&existing, 0, sizeof(existing));
+	if (::sigaltstack(nullptr, &existing) == 0
+	    && existing.ss_sp != nullptr
+	    && (existing.ss_flags & SS_DISABLE) == 0) {
+		armed = true;
+		return;
+	}
+
+	// backtrace_symbols_fd needs more than SIGSTKSZ. mmap, not a
+	// thread_local array: the array lands in static TLS, so every thread
+	// in the process carries it, and a small pthread stack then fails
+	// with EINVAL.
+	const long page = ::sysconf(_SC_PAGESIZE);
+	const std::size_t pageSize = page > 0 ? static_cast<std::size_t>(page) : 4096u;
+	const std::size_t bytes = (static_cast<std::size_t>(64 * 1024) + pageSize - 1) & ~(pageSize - 1);
+	void* const mem = ::mmap(nullptr, bytes, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	if (mem == MAP_FAILED)
+		return;
+
 	stack_t ss;
 	std::memset(&ss, 0, sizeof(ss));
-	ss.ss_sp = stack;
-	ss.ss_size = sizeof(stack);
+	ss.ss_sp = mem;
+	ss.ss_size = bytes;
 	ss.ss_flags = 0;
-	if (::sigaltstack(&ss, nullptr) == 0)
-		armed = true;
+	if (::sigaltstack(&ss, nullptr) != 0) {
+		::munmap(mem, bytes);
+		return;
+	}
+
+	// Disable the alternate stack before the mapping goes away. Freeing it
+	// while it is still installed is the fault the signal handler would
+	// then run on.
+	struct AltStack {
+		void* mem = nullptr;
+		std::size_t bytes = 0;
+		~AltStack()
+		{
+			if (mem == nullptr)
+				return;
+			stack_t off;
+			std::memset(&off, 0, sizeof(off));
+			off.ss_flags = SS_DISABLE;
+			::sigaltstack(&off, nullptr);
+			::munmap(mem, bytes);
+		}
+	};
+	thread_local AltStack hold;
+	hold.mem = mem;
+	hold.bytes = bytes;
+	armed = true;
 #endif
 }
 

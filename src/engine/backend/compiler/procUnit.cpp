@@ -459,7 +459,7 @@ inline void ResetByteCode() { auto* st = ibSession::GetPUState(); while (EndByte
 // below it gave every script call a 384-byte frame, seven saved registers and a stack-cookie check (the
 // disassembly, 2026-09-28) — for a message a correct script never reaches. Same shape as the raise
 // helpers above.
-IB_NOINLINE void RaiseRecursionLimit(ibProcUnitState* state)
+IB_NOINLINE void RaiseRecursionLimit(ibProcUnitState* state, bool nativeStack = false)
 {
 	// ⚠ THE REPEAT IS THE WHOLE POINT, SO IT IS COUNTED AND NOT REPRINTED. A runaway is
 	// recursion, so the frame that ran away is BY DEFINITION on the stack hundreds of
@@ -517,8 +517,10 @@ IB_NOINLINE void RaiseRecursionLimit(ibProcUnitState* state)
 	// argument, and a frame carries names the author wrote — a per cent sign in one of them
 	// is a conversion specifier `FormatV` then reads a missing argument for. Same shape as
 	// the compile-error site in backend_exception.cpp; passed as an argument here too.
-	ibBackendCoreException::Error(wxT("%s"),
-		_("Number of recursive calls exceeded the maximum allowed value!\nCall stack :") + strError);
+	const wxString reason = nativeStack
+		? _("The native stack is too low to continue this call.\nCall stack :")
+		: _("Number of recursive calls exceeded the maximum allowed value!\nCall stack :");
+	ibBackendCoreException::Error(wxT("%s"), reason + strError);
 }
 
 struct ibProcStackGuard {
@@ -1121,7 +1123,7 @@ int RunBodyOrOverflow(void (*fn)(void*), void* arg)
 IB_NOINLINE void ibProcUnit::Execute(ibRunContext* pContext, ibValue* pvarRetValue, bool bDelta)
 {
 	if (ibFiber::StackLow())
-		RaiseRecursionLimit(ibSession::PUStateOf(ibSession::Current()));
+		RaiseRecursionLimit(ibSession::PUStateOf(ibSession::Current()), true);
 
 #if defined(_MSC_VER)
 	ibExecuteArgs args{ this, pContext, pvarRetValue, bDelta };
@@ -1130,7 +1132,7 @@ IB_NOINLINE void ibProcUnit::Execute(ibRunContext* pContext, ibValue* pvarRetVal
 		// ate the guard page; put it back, then refuse from this frame,
 		// which is the one the probe measured.
 		(void)_resetstkoflw();
-		RaiseRecursionLimit(ibSession::PUStateOf(ibSession::Current()));
+		RaiseRecursionLimit(ibSession::PUStateOf(ibSession::Current()), true);
 	}
 #else
 	ExecuteBody(pContext, pvarRetValue, bDelta);

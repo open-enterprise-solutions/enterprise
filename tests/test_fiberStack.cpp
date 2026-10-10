@@ -149,10 +149,11 @@ TEST(FiberStack, Recursion_PastTheGuard_Raises)
 // The same refusal, reached early, is what a tight fiber must do.
 TEST(FiberStack, Recursion_OnATightReserve_Raises)
 {
-	// Big enough for a shallow call and the compiler that builds it, too
-	// small for 400 interpreted frames. 1 MB is the reserve that used to
-	// die around depth 75.
-	const std::size_t tight = 1024u * 1024u;
+	// Below the depth counter. A 1 MB reserve still reaches the count of 200
+	// in Release before the stack check, so the refusal then says "recursive"
+	// and proves nothing about StackLow. 384 KB leaves about 256 KB under
+	// the 128 KB slack — a few frames, not 200.
+	const std::size_t tight = 384u * 1024u;
 	int shallow = -1;
 	RunOnFiber([&] { RunDepth(4, shallow); }, tight);
 	EXPECT_EQ(shallow, 4);
@@ -161,7 +162,7 @@ TEST(FiberStack, Recursion_OnATightReserve_Raises)
 		int ignored = 0;
 		RunDepth(400, ignored);
 	}, tight);
-	EXPECT_NE(why.Find(wxT("recursive")), wxNOT_FOUND) << why.ToStdString();
+	EXPECT_NE(why.Find(wxT("native stack")), wxNOT_FOUND) << why.ToStdString();
 }
 
 // 399 parentheses sit on the ceiling (the check is depth > 400, and the
