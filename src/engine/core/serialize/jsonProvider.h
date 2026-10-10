@@ -12,8 +12,9 @@
 //
 //	Read (JSON -> tree) is IMPLEMENTED and complete — a self-contained recursive-descent
 //	parser covering everything Write emits: nested children, arrays, base64 binaries, the
-//	structural keys, the synthetic ones. It is deliberately NOT wired into any load path:
-//	nothing calls it, and ibBinaryProvider stays the round-trip format.
+//	structural keys, the synthetic ones. It reads MESSAGES, never a configuration: the client
+//	protocol and MCP parse every JSON-RPC request through it (rpc/rpcMessage.cpp), as does the
+//	thin client; ibBinaryProvider stays the round-trip format.
 //
 //	Why it is not a round trip. The VIEW is lossy by design — readability is its whole
 //	point — so three things do not survive Write -> Read, and no parser can undo them:
@@ -44,7 +45,7 @@ public:
 	static constexpr int kMaxNesting = 256;
 
 	bool Write(const ibDataNode& root, ibWriter& writer) const override;
-	bool Read(ibReader& reader, ibDataNode& root) const override;  // implemented; nothing calls it
+	bool Read(ibReader& reader, ibDataNode& root) const override;  // messages, before any login (see above)
 
 	// clsid -> readable type name. The names are the registry's — a configuration's own
 	// (CatalogRef.X, DocumentRef.Y) and the built-in ones (Number, String) alike — so the

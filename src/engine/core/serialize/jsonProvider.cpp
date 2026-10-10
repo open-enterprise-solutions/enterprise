@@ -222,8 +222,9 @@ private:
 
 	// One container on this path. The destructor releases it on every return,
 	// including a failure halfway through, so a sibling is not counted as deeper.
-	// Past kMaxNesting the text is refused: the descent is the call stack, and a
-	// few thousand brackets overflow it (measured near 5000 on a Linux Debug build).
+	// Past kMaxNesting the text is refused: every level is a frame of the descent,
+	// and a few thousand brackets overflow the stack (measured near 5000 on a Linux
+	// Debug build, when each level also copied its subtree; it moves it now).
 	class Depth {
 	public:
 		explicit Depth(ibJsonReader& reader)
@@ -368,12 +369,12 @@ bool ibJsonReader::ParseValue(ibDataValue& out, const std::function<ibClassID(co
 		for (;;) {
 			ibDataValue item;
 			if (!ParseValue(item, lookupType)) return false;
-			items.push_back(item);
+			items.push_back(std::move(item));
 			if (Accept(',')) continue;
 			if (Accept(']')) break;
 			return false;
 		}
-		out = ibDataValue::Array(items);
+		out = ibDataValue::Array(std::move(items));
 		return true;
 	}
 	if (ParseLiteral("true"))  { out = ibDataValue::Bool(true);  return true; }
@@ -457,8 +458,8 @@ bool ibJsonReader::ParseNode(ibDataNode& node, const std::function<ibClassID(con
 			// Properties into one key set). Child values are placed back into the property
 			// area because that is where ibDataNode::Child puts them by construction; every
 			// other key lands in Fields. See the header.
-			if (v.Kind() == ibDataKind::Child) node.SetProperty(key, v);
-			else                               node.AddField(key, v);
+			if (v.Kind() == ibDataKind::Child) node.SetProperty(key, std::move(v));
+			else                               node.AddField(key, std::move(v));
 		}
 
 		if (Accept(',')) continue;

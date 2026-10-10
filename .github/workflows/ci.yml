@@ -652,21 +652,25 @@ jobs:
           cmake --preset linux-debug -DBUILD_TESTING=ON -DOES_USE_FIREBIRD=ON -DOES_USE_POSTGRESQL=ON
           -DOES_SANITIZE=thread -DwxBUILD_PRECOMP=OFF
 
-      # gtest_discover_tests runs the binary to list tests. A race at that
-      # startup fails the build, which is what we want; halt stays off only
-      # so one report does not abort the lister before it has printed.
+      # gtest_discover_tests runs the binary to list tests. Here TSan only
+      # reports: halt and the exit code stay off so a report cannot stop the
+      # lister before it has printed. Races are judged by the Run step below,
+      # which halts on the first one.
       - name: Build the test target
         env:
           TSAN_OPTIONS: halt_on_error=0:exit_code=0
         run: cmake --build --preset linux-debug --target oes_tests
 
+      # Fiber* rather than one suite: a fiber's own tests join as they land.
+      # The step has its own bound, so a hang costs this step, not the job's 120 minutes.
       - name: Run
         working-directory: build/linux-debug
+        timeout-minutes: 30
         env:
           TSAN_OPTIONS: halt_on_error=1:suppressions=${{ github.workspace }}/.github/tsan-suppressions.txt
         run: >
           ./bin/Debug/oes_tests
-          --gtest_filter=WorkerPool*:FiberTsan.*:SessionHolder.*:SessionDbLayer.*:ConnectionPool.*:SocketLockFix.*:JobManager.*:JobSchedule.*
+          --gtest_filter=WorkerPool*:Fiber*:SessionHolder.*:SessionDbLayer.*:ConnectionPool.*:SocketLockFix.*:JobManager.*:JobSchedule.*
 
       - name: Journal on failure
         if: failure()
