@@ -2809,6 +2809,9 @@
     <ClCompile Include="query\structureBatch.cpp">
       <Filter>query</Filter>
     </ClCompile>
+    <ClCompile Include="query\typeChangeReport.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
     <ClCompile Include="databaseLayer\databaseMaterializeBuilder.cpp">
       <Filter>databaseLayer</Filter>
     </ClCompile>
@@ -2864,6 +2867,9 @@
       <Filter>query</Filter>
     </ClInclude>
     <ClInclude Include="query\structureBatch.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\typeChangeReport.h">
       <Filter>query</Filter>
     </ClInclude>
     <ClInclude Include="databaseLayer\databaseMaterializeBuilder.h">

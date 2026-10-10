@@ -286,9 +286,64 @@ void ClearRowsOfType(ibStructureBatch& batch, const wxString& tableName, const w
 	});
 }
 
+// How many rows a clear will empty. The same predicate the UPDATE uses, asked before the batch
+// runs it, so the ledger can say the number while the values are still there.
+long long CountWhere(const wxString& table, ibQueryExprPtr where)
+{
+	if (table.IsEmpty() || !where)
+		return 0;
+	ibQueryIR ir;
+	ir.m_root = ibProject(ibFilter(ibScan(table), where),
+		{ ibQueryProjItem{ ibFunc(wxT("COUNT"), {}), wxT("n") } });
+	ibDatabaseQueryBuilder q;
+	ibQueryResult rows = q.ExecuteIR(ir);
+	if (!rows.Next())
+		return 0;
+	return rows.GetResultLong(wxT("n"));
+}
+
+long long CountOfType(const wxString& table, const wxString& fieldName, int typeTag)
+{
+	const wxString typeCol = fieldName + ibFieldSuffix(ibColumnRole::Discriminator);
+	return CountWhere(table, ibBinOp(ibQueryBinOp::Eq, ibCol(typeCol), ibConst(ibValue(typeTag))));
+}
+
+long long CountOfReference(const wxString& table, const wxString& fieldName, ibClassID clsid)
+{
+	// The clear matches the reference column alone — the same UPDATE DiffColumnInto queues.
+	const wxString refCol = fieldName + ibFieldSuffix(ibColumnRole::ReferenceType);
+	return CountWhere(table, ibBinOp(ibQueryBinOp::Eq, ibCol(refCol), ibConst(ibValue(ibNumber(clsid)))));
+}
+
+// "1 234" — a space every three digits, as the apply window says it.
+wxString GroupedCount(long long count)
+{
+	wxString digits;
+	digits << count;
+	wxString grouped;
+	int placed = 0;
+	for (int i = static_cast<int>(digits.length()) - 1; i >= 0; --i) {
+		if (placed > 0 && placed % 3 == 0)
+			grouped = wxT(" ") + grouped;
+		grouped = wxString(digits[i]) + grouped;
+		++placed;
+	}
+	return grouped;
+}
+
+void NoteCleared(ibRestructureInfo* report, const wxString& objectName, const wxString& attributeName, long long count)
+{
+	if (report == nullptr || count <= 0)
+		return;
+	const wxString who = objectName.IsEmpty() ? attributeName
+		: (attributeName.IsEmpty() ? objectName : objectName + wxT(" / ") + attributeName);
+	report->AppendInfo(wxString::Format(_("%s: %s stored values will be cleared"), who, GroupedCount(count)));
+}
+
 } // namespace
 
-int DiffColumnInto(ibStructureBatch& batch, const ibBackendQueryColumn* srcCol, const ibBackendQueryColumn* dstCol)
+int DiffColumnInto(ibStructureBatch& batch, const ibBackendQueryColumn* srcCol, const ibBackendQueryColumn* dstCol,
+	ibRestructureInfo* report, const wxString& objectName, const wxString& attributeName)
 {
 	int retCode = 1;
 
@@ -315,6 +370,7 @@ int DiffColumnInto(ibStructureBatch& batch, const ibBackendQueryColumn* srcCol, 
 
 	const wxString&    tableName = batch.GetTable();
 	const wxString fieldName = srcCol->GetPhysicalName();
+	long long cleared = 0;
 	const std::vector<ibColumnSlot> srcLayout = DescribeColumnLayout(srcCol);
 	const std::vector<ibColumnSlot> dstLayout = DescribeColumnLayout(dstCol);
 
@@ -333,8 +389,11 @@ int DiffColumnInto(ibStructureBatch& batch, const ibBackendQueryColumn* srcCol, 
 		if (s == nullptr) {
 			// gone -> DROP the field; clear the stale _TYPE tag of rows that held this type.
 			batch.DropField(d);
-			if (d.m_role != ibColumnRole::Discriminator)
-				ClearRowsOfType(batch, tableName, fieldName, ibPersistedTypeTag(d.m_role));
+			if (d.m_role != ibColumnRole::Discriminator) {
+				const int tag = ibPersistedTypeTag(d.m_role);
+				cleared += CountOfType(tableName, fieldName, tag);
+				ClearRowsOfType(batch, tableName, fieldName, tag);
+			}
 		}
 		else if (!ibSameFieldType(s->m_type, d.m_type)) {
 			// A date narrowing from Time cannot ALTER in place -> drop + re-add; else ALTER.
@@ -382,7 +441,9 @@ int DiffColumnInto(ibStructureBatch& batch, const ibBackendQueryColumn* srcCol, 
 		// Field LOST all references -> clear the rows that held one + DROP the shared pair (never a row
 		// DELETE — that wipes records). The slots come off the OLD layout — they exist there because
 		// oldHasRef is what this branch means.
-		ClearRowsOfType(batch, tableName, fieldName, ibPersistedTypeTag(ibColumnRole::ReferenceType));
+		const int refTag = ibPersistedTypeTag(ibColumnRole::ReferenceType);
+		cleared += CountOfType(tableName, fieldName, refTag);
+		ClearRowsOfType(batch, tableName, fieldName, refTag);
 		if (const ibColumnSlot* rt = SlotOfRole(dstLayout, ibColumnRole::ReferenceType))
 			batch.DropField(*rt);
 		if (const ibColumnSlot* rr = SlotOfRole(dstLayout, ibColumnRole::ReferenceId))
@@ -395,7 +456,8 @@ int DiffColumnInto(ibStructureBatch& batch, const ibBackendQueryColumn* srcCol, 
 		const wxString refCol  = fieldName + ibFieldSuffix(ibColumnRole::ReferenceType);
 		// Batched for the same reason as the two cleanups above — it reads columns this very apply
 		// may still be creating.
-		for (auto clsid : removedRef)
+		for (auto clsid : removedRef) {
+			cleared += CountOfReference(tableName, fieldName, clsid);
 			batch.Insert([tableName, typeCol, refCol, clsid]() {
 				ibDatabaseQueryBuilder q;
 				// clsid is a 64-bit ibClassID — bind through ibNumber: ibValue has no 64-bit integer ctor.
@@ -404,6 +466,8 @@ int DiffColumnInto(ibStructureBatch& batch, const ibBackendQueryColumn* srcCol, 
 					ibBinOp(ibQueryBinOp::Eq, ibCol(refCol), ibConst(ibValue(ibNumber(clsid))))));
 				return true;
 			});
+		}
 	}
+	NoteCleared(report, objectName, attributeName, cleared);
 	return retCode;   // 1 — success; a real DB error THREW (the affected-row count is not an error signal)
 }

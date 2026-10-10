@@ -123,6 +123,8 @@ add_executable(oes_tests
     test_totalsFold.cpp
     test_accountingTotals.cpp
     test_sequenceBorder.cpp
+    test_typeChangeLedger.cpp
+    test_typeChangeGate.cpp
     test_calcDisplacement.cpp
     test_calcRecalculation.cpp
     test_calcSchedule.cpp
