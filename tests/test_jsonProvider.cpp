@@ -8,10 +8,24 @@
 
 #include <gtest/gtest.h>
 #include <cstring>
+#include <functional>
 #include <string>
 
 #include "core/serialize/jsonProvider.h"
 #include "backend/backend_exception.h"
+
+// After wx: windows.h first would leave its macros in wx's way.
+#if defined(_WIN32)
+#	ifndef NOMINMAX
+#		define NOMINMAX
+#	endif
+#	ifndef WIN32_LEAN_AND_MEAN
+#		define WIN32_LEAN_AND_MEAN
+#	endif
+#	include <windows.h>
+#else
+#	include <pthread.h>
+#endif
 
 namespace {
 
@@ -298,6 +312,30 @@ wxMemoryBuffer NestedObjects(int levels)
 	return Text(text);
 }
 
+// Runs `body` on a thread whose stack is `bytes`, and waits for it.
+void RunOnStack(size_t bytes, const std::function<void()>& body)
+{
+#if defined(_WIN32)
+	struct Call { const std::function<void()>* body; };
+	Call call{ &body };
+	HANDLE thread = ::CreateThread(nullptr, bytes,
+		[](LPVOID arg) -> DWORD { (*static_cast<Call*>(arg)->body)(); return 0; },
+		&call, STACK_SIZE_PARAM_IS_A_RESERVATION, nullptr);
+	ASSERT_NE(thread, nullptr);
+	::WaitForSingleObject(thread, INFINITE);
+	::CloseHandle(thread);
+#else
+	pthread_attr_t attr;
+	ASSERT_EQ(pthread_attr_init(&attr), 0);
+	ASSERT_EQ(pthread_attr_setstacksize(&attr, bytes), 0);
+	pthread_t thread;
+	auto entry = [](void* arg) -> void* { (*static_cast<const std::function<void()>*>(arg))(); return nullptr; };
+	ASSERT_EQ(pthread_create(&thread, &attr, entry, const_cast<std::function<void()>*>(&body)), 0);
+	pthread_join(thread, nullptr);
+	pthread_attr_destroy(&attr);
+#endif
+}
+
 const ibDataValue* InnermostArray(const ibDataNode& node, int arrays)
 {
 	const ibDataValue* v = node.FindField(wxT("v"));
@@ -340,4 +378,37 @@ TEST(JsonProvider, Nesting_OnePastTheLimit_IsRefused) {
 // The request that took the application server down: thousands of brackets, a few kilobytes.
 TEST(JsonProvider, Nesting_TheReportedCrashDepth_IsRefused) {
 	EXPECT_THROW(Parse(NestedArrays(8000)), ibCoreException);
+}
+
+// Two containers at the ceiling side by side. A level that was not released on the way out
+// would count the second one as deeper and refuse it.
+TEST(JsonProvider, Nesting_SiblingsAtTheLimit_AreBothRead) {
+	const int arrays = ibJsonProvider::kMaxNesting - 1;
+	std::string text = "{\"a\":";
+	for (int side = 0; side < 2; ++side) {
+		if (side == 1) text += ",\"b\":";
+		text.append(static_cast<size_t>(arrays), '[');
+		text += '1';
+		text.append(static_cast<size_t>(arrays), ']');
+	}
+	text += '}';
+	const ibDataNode node = Parse(Text(text));
+	EXPECT_NE(node.FindField(wxT("a")), nullptr);
+	EXPECT_NE(node.FindField(wxT("b")), nullptr);
+}
+
+// The deepest legal text on the stack a worker thread has on macOS (512 KB). Each level moves
+// its subtree up rather than copying it, so the depth costs the descent and nothing more.
+TEST(JsonProvider, Nesting_AtTheLimit_FitsASmallThreadStack) {
+	bool read = false;
+	RunOnStack(512 * 1024, [&read] {
+		try {
+			const ibDataNode node = Parse(NestedArrays(ibJsonProvider::kMaxNesting - 1));
+			read = InnermostArray(node, ibJsonProvider::kMaxNesting - 1) != nullptr;
+		}
+		catch (...) {
+			read = false;
+		}
+	});
+	EXPECT_TRUE(read);
 }

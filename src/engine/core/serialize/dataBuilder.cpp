@@ -179,6 +179,9 @@ ibDataValue ibDataValue::Child(const std::shared_ptr<ibDataNode>& child) {
 ibDataValue ibDataValue::Array(const std::vector<ibDataValue>& items) {
 	ibDataValue v; v.m_payload.emplace<std::vector<ibDataValue>>(items); return v;
 }
+ibDataValue ibDataValue::Array(std::vector<ibDataValue>&& items) {
+	ibDataValue v; v.m_payload.emplace<std::vector<ibDataValue>>(std::move(items)); return v;
+}
 
 ////////////////////////////////////////////////////////////////////////////
 // ibDataNode — named-field lookup (optimistic cursor) + dual Field

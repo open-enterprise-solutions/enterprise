@@ -75,6 +75,7 @@ public:
 	static ibDataValue Binary(const wxMemoryBuffer& data);
 	static ibDataValue Child(const std::shared_ptr<ibDataNode>& child);
 	static ibDataValue Array(const std::vector<ibDataValue>& items);
+	static ibDataValue Array(std::vector<ibDataValue>&& items);   // a parser hands its list over instead of copying it
 
 	// Typed accessors — each checks the signature and THROWS (ibBackendException) on
 	// a wrong kind, so a mis-read fails loud instead of returning garbage. Callers
@@ -214,6 +215,9 @@ public:
 	void AddField(const wxString& name, const ibDataValue& value) {
 		m_fields.emplace_back(name, value);
 	}
+	void AddField(const wxString& name, ibDataValue&& value) {
+		m_fields.emplace_back(name, std::move(value));
+	}
 
 	// ⭐ REPLACE-OR-ADD, for a node that is a VIEW rather than a record. AddField appends, which is
 	// right for a blob written once in order — reading it back finds the first and nothing repeats a
@@ -247,6 +251,7 @@ public:
 	// plain (hidden / intrinsic) class field. Stored faithfully (the property's
 	// own SaveData bytes); per-property value-decomposition is a later concern.
 	void SetProperty(const wxString& name, const ibDataValue& value) { m_props.emplace_back(name, value); }
+	void SetProperty(const wxString& name, ibDataValue&& value) { m_props.emplace_back(name, std::move(value)); }
 	const ibDataValue* FindProperty(const wxString& name) const; // optimistic cursor over m_props
 	// value by name (empty if absent) — pass straight into a property's ReadNodeValue
 	ibDataValue GetProperty(const wxString& name) const {
