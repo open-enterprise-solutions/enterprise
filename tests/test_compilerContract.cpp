@@ -339,9 +339,10 @@ TEST(CompilerContract, ComparisonAndLogical) {
 		wxT("r = a < b And b > 0 Or a = b;\n")
 		wxT("r = a <> b;\n")
 		wxT("r = a <= b And a >= b;\n"),
-		16439017368725658409ULL);   // 2026-10-10: and/or short-circuit. `a < b And b > 0 Or a = b`
+		15294174076167625395ULL);   // 2026-10-10: and/or short-circuit. `a < b And b > 0 Or a = b`
 		                           // is (a<b) and (b>0), then or (a=b). Each logical op still ends in one
-		                           // OPER_AND/OPER_OR; a false AND jumps over `b > 0`, a true OR jumps over `a = b`.
+		                           // OPER_AND/OPER_OR. A false AND jumps over `b > 0` (that IF carries
+		                           // p4(-1,1), so a SQL NULL left does not skip). A true OR jumps over `a = b`.
 }
 
 // `x = a op b` emits ONE opcode writing `x`, not an opcode into a temp and a LET
