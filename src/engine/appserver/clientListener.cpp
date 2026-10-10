@@ -377,19 +377,30 @@ bool ibClientListener::Start(const wxString& host, unsigned short& port, bool ch
 		// Timeouts are how a stop is noticed. Until a login, they are also the life of the socket, counted
 		// from when it opened: a message does not move that mark. After a login, the host's half-hour round
 		// is the idle, and this window no longer applies.
+		//
+		// The read itself times out every second, so a quiet socket hits the check below. A socket that
+		// sends faster than that never sees a timeout, and would keep its thread for as long as it liked
+		// if the deadline lived only in the timeout branch. It is therefore asked on every pass, and a
+		// text that arrives past it is closed instead of answered.
 		const auto opened = std::chrono::steady_clock::now();
+		const auto pastLoginDeadline = [&]() {
+			return !clientHost->LoggedIn(&ws)
+				&& std::chrono::steady_clock::now() - opened >= kUnauthenticatedIdle;
+		};
 		for (;;) {
 			const httplib::ws::ReadResult read = ws.read(message);
 			if (read == httplib::ws::Timeout) {
 				if (server->m_stopping.load())
 					break;
-				if (!clientHost->LoggedIn(&ws)
-					&& std::chrono::steady_clock::now() - opened >= kUnauthenticatedIdle)
+				if (pastLoginDeadline())
 					break;
 				continue;
 			}
 			if (read != httplib::ws::Text)
 				break;   // closed — or a binary frame, which this protocol does not speak (yet)
+
+			if (pastLoginDeadline())
+				break;
 
 			const wxString response = clientHost->Call(wxString::FromUTF8(message), &ws, address);
 			if (response.IsEmpty())

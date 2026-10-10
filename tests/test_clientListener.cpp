@@ -532,3 +532,47 @@ TEST(ClientListener, ASocketThatNeverLogsInClosesFifteenSecondsAfterItOpened) {
 
 	listener.Stop();
 }
+
+// A message more often than the one-second read timeout never takes the timeout branch. The deadline
+// still counts from the open, so the socket closes at about fifteen seconds anyway.
+TEST(ClientListener, ASocketThatKeepsSendingClosesFifteenSecondsAfterItOpened) {
+	WxReady();
+	ASSERT_EQ(ibApplicationHost::Get(), nullptr);
+
+	ibClientHost host(nullptr);
+	ibClientListener listener;
+	unsigned short port = 28231;
+	std::string url;
+	ASSERT_TRUE(Bind(listener, host, port, url));
+
+	httplib::ws::WebSocketClient client(url);
+	client.set_connection_timeout(8);
+	client.set_read_timeout(2);
+	ASSERT_TRUE(client.connect());
+
+	const auto opened = std::chrono::steady_clock::now();
+	auto nextSend = opened;
+	bool closed = false;
+	while (std::chrono::steady_clock::now() - opened < std::chrono::seconds(25)) {
+		if (std::chrono::steady_clock::now() >= nextSend) {
+			if (!client.send("x")) {
+				closed = true;
+				break;
+			}
+			nextSend += std::chrono::milliseconds(200);
+		}
+		std::string reply;
+		const auto read = client.read(reply);
+		if (read == httplib::ws::Text || read == httplib::ws::Timeout)
+			continue;
+		closed = true;
+		break;
+	}
+
+	const auto elapsed = std::chrono::steady_clock::now() - opened;
+	EXPECT_TRUE(closed);
+	EXPECT_GE(elapsed, std::chrono::seconds(14));
+	EXPECT_LE(elapsed, std::chrono::seconds(20));
+
+	listener.Stop();
+}
