@@ -3540,6 +3540,13 @@ bool ibCompileCode::CompileForeach(ibCompileContext* context)
 
 bool ibCompileCode::CompileException(ibCompileContext* context)
 {
+	// A Try inside a Try is another compile frame. The same ceiling an
+	// expression already has: the text is refused, the stack is not.
+	if (ibFiber::StackLow()) {
+		SetError(ERROR_EXPRESSION,
+			_("it is nested deeper than the stack allows - split it into steps"));
+		return false;
+	}
 	GETKeyWord(KEY_TRY);
 	ibByteUnit code1;
 	AddLineInfo(code1);

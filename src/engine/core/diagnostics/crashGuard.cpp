@@ -24,7 +24,6 @@
 #ifdef __WXMSW__
 #include <windows.h>
 #include <dbghelp.h>
-#include <malloc.h>          // _resetstkoflw — the guard page, put back after an overflow
 #pragma comment(lib, "dbghelp.lib")
 #else
 // POSIX backtrace — glibc + macOS libSystem. FreeBSD same header.
@@ -127,41 +126,57 @@ void LogTerminateReason(const wxString& reason)
 }
 
 #ifdef __WXMSW__
+struct ibDumpJob {
+	EXCEPTION_POINTERS* ep = nullptr;
+	DWORD tid = 0;
+};
+
+// MiniDumpWriteDump does not fit on a stack that just overflowed. This
+// thread has its own stack. The filter waits, because `ep` is valid only
+// until the filter returns.
+DWORD WINAPI DumpOnFreshStack(void* raw)
+{
+	ibDumpJob* const job = static_cast<ibDumpJob*>(raw);
+	const wxString dumpPath = MakeDumpPath(wxEmptyString, wxT("dmp"));
+	HANDLE hFile = ::CreateFileW(dumpPath.wc_str(), GENERIC_WRITE, 0, nullptr,
+		CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+	if (hFile == INVALID_HANDLE_VALUE)
+		return 1;
+
+	MINIDUMP_EXCEPTION_INFORMATION mei = {};
+	mei.ThreadId = job->tid;
+	mei.ExceptionPointers = job->ep;
+	mei.ClientPointers = FALSE;
+
+	const MINIDUMP_TYPE type = static_cast<MINIDUMP_TYPE>(
+		MiniDumpWithDataSegs |
+		MiniDumpWithHandleData |
+		MiniDumpWithUnloadedModules |
+		MiniDumpWithThreadInfo |
+		MiniDumpWithFullMemory);
+
+	::MiniDumpWriteDump(::GetCurrentProcess(), ::GetCurrentProcessId(),
+		hFile, type, job->ep ? &mei : nullptr, nullptr, nullptr);
+	::CloseHandle(hFile);
+	return 0;
+}
+
 LONG WINAPI PersistentCrashDumpFilter(EXCEPTION_POINTERS* ep)
 {
 	// Persistent minidump fires before any wx-level dialog. wx wipes
 	// its temp directory on dialog close; our dumps survive.
-	const wxString dumpPath = MakeDumpPath(wxEmptyString, wxT("dmp"));
-
-	HANDLE hFile = ::CreateFileW(dumpPath.wc_str(), GENERIC_WRITE, 0, nullptr,
-		CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
-	if (hFile != INVALID_HANDLE_VALUE) {
-		MINIDUMP_EXCEPTION_INFORMATION mei = {};
-		mei.ThreadId = ::GetCurrentThreadId();
-		mei.ExceptionPointers = ep;
-		mei.ClientPointers = FALSE;
-
-		const MINIDUMP_TYPE type = static_cast<MINIDUMP_TYPE>(
-			MiniDumpWithDataSegs |
-			MiniDumpWithHandleData |
-			MiniDumpWithUnloadedModules |
-			MiniDumpWithThreadInfo |
-			MiniDumpWithFullMemory);
-
-		::MiniDumpWriteDump(::GetCurrentProcess(), ::GetCurrentProcessId(),
-			hFile, type, ep ? &mei : nullptr, nullptr, nullptr);
-		::CloseHandle(hFile);
+	ibDumpJob job;
+	job.ep = ep;
+	job.tid = ::GetCurrentThreadId();
+	HANDLE helper = ::CreateThread(nullptr, 0, &DumpOnFreshStack, &job, 0, nullptr);
+	if (helper != nullptr) {
+		::WaitForSingleObject(helper, 60000);
+		::CloseHandle(helper);
 	}
 
-	// A fiber overflow is this exception. The guard page is gone until
-	// something puts it back; a second overflow on the same thread is
-	// then not an exception at all. The dump above is the record. This
-	// is what lets a handler that continues still have a guard.
-	if (ep != nullptr && ep->ExceptionRecord != nullptr
-	    && ep->ExceptionRecord->ExceptionCode == static_cast<DWORD>(EXCEPTION_STACK_OVERFLOW))
-		(void)_resetstkoflw();
-
-	// Chain to the previous filter (wx's, if frontend installed it).
+	// The guard page is restored after an unwind, never here. This filter
+	// runs before any unwind, and _resetstkoflw in that window is what the
+	// recovery function's own contract rules out.
 	return s_prevSehFilter ? s_prevSehFilter(ep) : EXCEPTION_CONTINUE_SEARCH;
 }
 #else
@@ -260,8 +275,9 @@ void OesTerminateHandler()
 void ArmCurrentThread()
 {
 #ifdef __WXMSW__
-	// EXCEPTION_STACK_OVERFLOW reaches PersistentCrashDumpFilter on the
-	// thread's own stack; _resetstkoflw there restores the guard page.
+	// EXCEPTION_STACK_OVERFLOW reaches PersistentCrashDumpFilter. The dump
+	// is written on a helper thread. SetThreadStackGuarantee, armed with
+	// the fiber, is what leaves this filter enough stack to start it.
 #else
 	thread_local bool armed = false;
 	if (armed)

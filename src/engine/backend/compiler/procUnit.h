@@ -164,9 +164,6 @@ public:
 	void Execute(const ibByteCode& bc, ibValue& pvarRetValue, bool delta = true) { ibByteBinder br(bc.m_listVar, delta); Execute(bc, br, &pvarRetValue); }
 
 private:
-#if defined(_MSC_VER)
-	friend void ibCallExecuteBody(void* raw);
-#endif
 	void Execute(const ibByteCode& bc, ibByteBinder& br, ibValue* pvarRetValue);
 	// Probe, then the interpreter. The body commits its frame in the
 	// prologue, which on a tight fiber is the overflow; Execute asks

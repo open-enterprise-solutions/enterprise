@@ -52,8 +52,8 @@ CORE_API void Install(const wxString& exeName);
 // a fiber's guard page arrives as SIGSEGV — can still be written down.
 // The stack is per thread. Install arms the calling thread; a thread
 // that switches fibers arms itself from ibFiber::ConvertThread.
-// No-op on Windows, where the unhandled filter sees
-// EXCEPTION_STACK_OVERFLOW and _resetstkoflw puts the guard page back.
+// On Windows the unhandled filter writes the dump from a helper thread.
+// The guard page is not restored there: that belongs after an unwind.
 CORE_API void ArmCurrentThread();
 
 

@@ -11,6 +11,7 @@
 
 #include <wx/init.h>
 
+#include "core/fiber/fiber.h"
 #include "core/fiber/fiberLocals.h"
 #include "backend/appData.h"
 #include "backend/appHost.h"
@@ -396,6 +397,31 @@ TEST(WorkerPoolFiber, TaskExceptionReachesTheFuture)
 	EXPECT_THROW(f.get(), std::runtime_error);
 
 	// The worker is still there afterwards.
+	std::atomic<bool> ran{ false };
+	std::future<void> next = pool.Submit(session.get(), [&] { ran.store(true); });
+	ASSERT_EQ(next.wait_for(std::chrono::seconds(5)), std::future_status::ready);
+	EXPECT_NO_THROW(next.get());
+	EXPECT_TRUE(ran.load());
+	pool.Stop();
+}
+
+TEST(WorkerPoolFiber, AStackThatDoesNotFitRefusesTheTask)
+{
+	ibWorkerPoolHeadless pool(1);
+	auto session = MakeSession(wxT("no-room"));
+	ibFiber::FailNextCreate();
+	std::future<void> refused = pool.Submit(session.get(), [] {
+		throw std::runtime_error("the task must not run");
+	});
+	ASSERT_EQ(refused.wait_for(std::chrono::seconds(5)), std::future_status::ready);
+	try {
+		refused.get();
+		FAIL() << "a lease that could not be placed ran the task";
+	}
+	catch (const std::runtime_error& err) {
+		EXPECT_NE(std::string(err.what()).find("no room"), std::string::npos) << err.what();
+	}
+
 	std::atomic<bool> ran{ false };
 	std::future<void> next = pool.Submit(session.get(), [&] { ran.store(true); });
 	ASSERT_EQ(next.wait_for(std::chrono::seconds(5)), std::future_status::ready);

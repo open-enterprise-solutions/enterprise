@@ -25,21 +25,20 @@ class CORE_API ibFiber {
 public:
 	using Entry = void (*)(void* arg);
 
-	// The same reserve a thread has (Common.props, StackReserveSize, 8 MB).
+	// 64-bit keeps the thread reserve (Common.props, StackReserveSize, 8 MB).
 	// MAX_REC_COUNT is 200 and ibProcUnit::Execute keeps about 9.4 KB per
-	// interpreted level, so the guard needs roughly 2 MB before it can be
-	// what stops a script. A 1 MB fiber died around depth 75 — the same
-	// measurement that raised the thread reserve — and a server session
-	// now runs on a fiber. The pages commit on touch: a parked question
+	// interpreted level, so that reserve is what lets the count be the
+	// limit a script sees. The pages commit on touch: a parked question
 	// pays for the stack the script used, not for the reserve.
 	//
-	// Win32 x86 (the shipping build) has a 2 GB user address space. The
-	// reserve is virtual, the same 8 MB the thread this fiber replaces
-	// already took. A process with a gigabyte free holds on the order of
-	// a hundred parked fibers; placing one that does not fit throws
-	// bad_alloc. A counted refusal for that limit is the address-space
-	// budget, not a smaller stack that makes the guard unreachable again.
-	static constexpr std::size_t kStackReserve = 8u * 1024u * 1024u;
+	// A 32-bit process has about a gigabyte of user address space, and
+	// every lease takes a fiber, so the reserve there is the 2 MB the
+	// count needs. StackLow is what makes the smaller reserve safe: a
+	// frame that would not fit is refused before the guard page. Placing
+	// a fiber that does not fit throws bad_alloc; the pool refuses the
+	// task instead of claiming the same queue again.
+	static constexpr std::size_t kStackReserve =
+		sizeof(void*) >= 8 ? (8u * 1024u * 1024u) : (2u * 1024u * 1024u);
 
 	// Left below the pointer so the refusal itself still fits. The depth
 	// counters stay the limit a script sees; this fires only when the
@@ -67,6 +66,11 @@ public:
 	}
 
 	static ibFiber* Create(Entry entry, void* arg, std::size_t reserveBytes = kStackReserve);
+
+	// The next Create throws std::bad_alloc and clears the request.
+	// A test uses it to prove a lease that cannot be placed refuses
+	// the queued task instead of trying the same queue again.
+	static void FailNextCreate();
 	static void Destroy(ibFiber* fiber);
 
 	bool Finished() const { return m_finished; }

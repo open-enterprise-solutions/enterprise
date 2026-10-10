@@ -66,6 +66,9 @@ extern "C" void ibFiberSwitch(void** fromSp, void** toSp);
 extern "C" void ibFiberTrampoline();
 #endif
 
+// One shot, for the test that a failed Create refuses the task.
+static std::atomic<int> g_failCreates{ 0 };
+
 namespace {
 
 thread_local ibFiber* tl_currentFiber = nullptr;
@@ -220,6 +223,12 @@ void ibFiber::ConvertThread()
 	// Before the first switch. A fiber's guard page faults on this thread,
 	// and the crash log runs on the alternate stack installed here.
 	ibCrashGuard::ArmCurrentThread();
+#if defined(_WIN32)
+	// Room for the overflow filter to start the dump thread. The dump
+	// itself runs on that thread, not on the stack that ran out.
+	ULONG guarantee = 64u * 1024u;
+	::SetThreadStackGuarantee(&guarantee);
+#endif
 	if (tl_schedulerFiber != nullptr)
 		return;
 	ibFiber* self = new ibFiber();
@@ -323,8 +332,15 @@ std::size_t ibFiber::StackRemaining() noexcept
 	return static_cast<std::size_t>(sp - low);
 }
 
+void ibFiber::FailNextCreate()
+{
+	g_failCreates.store(1, std::memory_order_release);
+}
+
 ibFiber* ibFiber::Create(Entry entry, void* arg, std::size_t reserveBytes)
 {
+	if (g_failCreates.exchange(0, std::memory_order_acq_rel) > 0)
+		throw std::bad_alloc();
 	if (reserveBytes == 0)
 		reserveBytes = kStackReserve;
 	ibFiber* fiber = new ibFiber();
@@ -455,6 +471,11 @@ void ibFiber::SwitchTo(ibFiber* target)
 
 void __stdcall ibFiber::FiberProc(void* arg)
 {
+	// The fiber shares the thread. The guarantee is what lets the overflow
+	// filter run far enough to hand the dump to a thread that still has a stack.
+	ULONG guarantee = 64u * 1024u;
+	::SetThreadStackGuarantee(&guarantee);
+
 	ibFiber* const self = static_cast<ibFiber*>(arg);
 #  if defined(IB_FIBER_ASAN)
 	__sanitizer_finish_switch_fiber(nullptr, nullptr, nullptr);

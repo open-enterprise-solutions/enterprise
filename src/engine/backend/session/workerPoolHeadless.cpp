@@ -8,6 +8,7 @@
 #include <wx/log.h>
 
 #include <chrono>
+#include <new>
 #include <stdexcept>
 
 namespace {
@@ -358,6 +359,12 @@ void ibWorkerPoolHeadless::StartLease(ibSession* session, ibSessionQueue* q)
 	try {
 		fiber = ibFiber::Create(&ibWorkerPoolHeadless::LeaseEntry, args, ibFiber::kStackReserve);
 	}
+	catch (const std::bad_alloc&) {
+		delete args;
+		LogWorkerException(wxT("worker pool lease: no room for the stack"));
+		RefuseQueued(q, "the session could not start: there is no room for its stack");
+		return;
+	}
 	catch (...) {
 		delete args;
 		throw;
@@ -365,6 +372,25 @@ void ibWorkerPoolHeadless::StartLease(ibSession* session, ibSessionQueue* q)
 	ibFiber::Scheduler()->SwitchTo(fiber);
 	if (fiber->Finished())
 		FinishFiber(session, q, fiber);
+}
+
+void ibWorkerPoolHeadless::RefuseQueued(ibSessionQueue* q, const char* reason)
+{
+	std::deque<ibSessionTask> doomed;
+	{
+		std::lock_guard<std::mutex> lk(m_mtx);
+		doomed.swap(q->tasks);
+		q->leased.store(false);
+	}
+	const auto refusal = std::make_exception_ptr(std::runtime_error(reason));
+	for (ibSessionTask& item : doomed) {
+		try {
+			item.promise->set_exception(refusal);
+		}
+		catch (...) {
+			// Already satisfied. The task is still not run again.
+		}
+	}
 }
 
 void ibWorkerPoolHeadless::FinishFiber(ibSession* session, ibSessionQueue* q, ibFiber* fiber)

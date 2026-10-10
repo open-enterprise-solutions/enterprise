@@ -7,6 +7,8 @@
 #include "backend/backend_exception.h"
 #include "backend/compiler/compileCode.h"
 #include "backend/compiler/procUnit.h"
+#include "backend/query/queryParser.h"
+#include "backend/session/session.h"
 #include "core/exception.h"
 #include "core/fiber/fiber.h"
 #include "core/fileSystem/fs.h"
@@ -136,6 +138,16 @@ TEST(FiberStack, Recursion_UnderTheGuard_Returns)
 	EXPECT_EQ(got, 200);
 }
 
+void ExpectCleanInterpreter()
+{
+	// The refusal unwound. A catch that swallowed the overflow would
+	// leave the depth and a run context pointing at a frame that is gone.
+	ibProcUnitState* const state = ibSession::PUStateOf(ibSession::Current());
+	ASSERT_NE(state, nullptr);
+	EXPECT_EQ(state->m_recCount, 0);
+	EXPECT_EQ(state->GetCountRunContext(), 0u);
+}
+
 TEST(FiberStack, Recursion_PastTheGuard_Raises)
 {
 	const wxString why = Refusal([&] {
@@ -143,6 +155,7 @@ TEST(FiberStack, Recursion_PastTheGuard_Raises)
 		RunDepth(400, ignored);
 	});
 	EXPECT_NE(why.Find(wxT("recursive")), wxNOT_FOUND) << why.ToStdString();
+	ExpectCleanInterpreter();
 }
 
 // A reserve that cannot hold 200 frames used to die on the guard page.
@@ -163,6 +176,37 @@ TEST(FiberStack, Recursion_OnATightReserve_Raises)
 		RunDepth(400, ignored);
 	}, tight);
 	EXPECT_NE(why.Find(wxT("native stack")), wxNOT_FOUND) << why.ToStdString();
+	ExpectCleanInterpreter();
+}
+
+TEST(FiberStack, AQueryNestedPastTheStack_Raises)
+{
+	wxString expr = wxT("1");
+	for (int i = 0; i < 400; ++i)
+		expr = wxT("(") + expr + wxT(")");
+	const wxString query = wxT("SELECT ") + expr;
+	const wxString why = Refusal([&] {
+		ibQueryParser parser;
+		parser.Parse(query);
+	}, 256u * 1024u);
+	EXPECT_NE(why.Find(wxT("stack")), wxNOT_FOUND) << why.ToStdString();
+}
+
+TEST(FiberStack, ABinaryValueNestedPastTheStack_Raises)
+{
+	ibDataNode root;
+	ibDataNode* cursor = &root;
+	for (int i = 0; i < 400; ++i)
+		cursor = &cursor->AddChild(1, i);
+	ibWriterMemory writer;
+	ASSERT_TRUE(ibBinaryProvider().Write(root, writer));
+	const wxMemoryBuffer blob = writer.buffer();
+	const wxString why = Refusal([&] {
+		ibDataNode read;
+		ibReaderMemory reader(blob);
+		ibBinaryProvider().Read(reader, read);
+	}, 256u * 1024u);
+	EXPECT_NE(why.Find(wxT("stack")), wxNOT_FOUND) << why.ToStdString();
 }
 
 // 399 parentheses sit on the ceiling (the check is depth > 400, and the
