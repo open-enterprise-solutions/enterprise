@@ -114,9 +114,9 @@ ibHelpCorpus::ibHelpCorpus(const wxString&              locale,
                            std::vector<ibHelpLoadError> loadErrors,
                            std::map<wxString, wxString> categoryNames)
     : m_entries(std::move(entries)),
+      m_categoryNames(std::move(categoryNames)),
       m_locale(locale),
-      m_loadErrors(std::move(loadErrors)),
-      m_categoryNames(std::move(categoryNames)) {
+      m_loadErrors(std::move(loadErrors)) {
 	// Tag every entry with its source so the merging constructor and the
 	// UI can distinguish later. Loader does not set this — keeping the
 	// invariant in one place avoids contradictions.

@@ -3293,9 +3293,6 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 		const ibParamUnit k2Slot = GetExpression(linqCtx);
 		m_numCurrentCompile = savedCursorK2;
 
-		const ibParamUnit buildFoundSlot    = linqCtx->CreateVariable();
-		const ibParamUnit buildNotFoundSlot = linqCtx->CreateVariable();
-
 		// Lookup-or-create the key's bucket, then Add the row into it —
 		// the same emitted shape GROUP BY uses. A repeated key lands in
 		// the existing bucket instead of hitting Container::Insert's

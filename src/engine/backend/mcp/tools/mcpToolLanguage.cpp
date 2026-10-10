@@ -392,7 +392,11 @@ public:
 				case ibCtorObjectMetaType::ibCtorObjectMetaType_Object:        return "object";
 				case ibCtorObjectMetaType::ibCtorObjectMetaType_Selection:     return "selection";
 				case ibCtorObjectMetaType::ibCtorObjectMetaType_TabularSection: return "tabularSection";
+				// An empty word is no role. The test below sets one only when the word is not empty,
+				// and a new word would be a contract the tool does not have.
+				case ibCtorObjectMetaType::ibCtorObjectMetaType_TabularSection_String: return "";
 				case ibCtorObjectMetaType::ibCtorObjectMetaType_RecordSet:     return "recordSet";
+				case ibCtorObjectMetaType::ibCtorObjectMetaType_RecordSet_String: return "";
 				case ibCtorObjectMetaType::ibCtorObjectMetaType_RecordKey:     return "recordKey";
 				case ibCtorObjectMetaType::ibCtorObjectMetaType_RecordManager: return "recordManager";
 				case ibCtorObjectMetaType::ibCtorObjectMetaType_Characteristic: return "characteristic";

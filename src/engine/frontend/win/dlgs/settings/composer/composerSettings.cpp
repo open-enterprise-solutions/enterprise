@@ -2325,8 +2325,6 @@ ibDialogComposerSettings::ibDialogComposerSettings(wxWindow* parent, ibCompositi
 	: wxDialog(parent, wxID_ANY, _("Data composer settings"), wxDefaultPosition, wxSize(900, 620),
 		wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
 {
-	wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
-
 	m_panel = new ibComposerSettingsPanel(this, desc, metaData, settings);
 	BuildAround();
 }

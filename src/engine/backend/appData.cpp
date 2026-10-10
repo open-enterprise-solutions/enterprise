@@ -155,6 +155,7 @@ wxString DescribeSessionKind(ibSessionKind k) {
 	case ibSessionKind::SystemJob:     return wxT("SystemJob");
 	case ibSessionKind::ThinClient:    return wxT("ThinClient");
 	case ibSessionKind::ThinDesigner:  return wxT("ThinDesigner");
+	case ibSessionKind::Unknown:       return wxT("Unknown");
 	}
 	return wxT("Unknown");
 }

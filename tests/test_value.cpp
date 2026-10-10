@@ -37,8 +37,9 @@ TEST(ValueTest, SizeofReport) {
 // Declared at the end of the class it took a word of its own and a value was 32 bytes on x64. Only the
 // 64-bit layout is pinned: a 32-bit one depends on how the ABI aligns the union's 8-byte member.
 TEST(ValueTest, TheCountSitsInThePaddingBeforeTheUnion) {
-    if (sizeof(void*) == 8)
+    if (sizeof(void*) == 8) {
         EXPECT_EQ(sizeof(ibValue), 24u);
+    }
 }
 
 // ===========================================================================
@@ -717,11 +718,12 @@ TEST(ValueOrderAcrossKinds, EqualityUnderOrderIsTransitive) {
     for (const ibValue& a : samples)
         for (const ibValue& b : samples)
             for (const ibValue& c : samples)
-                if (a.CompareValueLS(b) == 0 && b.CompareValueLS(c) == 0)
+                if (a.CompareValueLS(b) == 0 && b.CompareValueLS(c) == 0) {
                     EXPECT_EQ(a.CompareValueLS(c), 0)
                         << "'" << a.GetString().ToStdString() << "' == '"
                         << b.GetString().ToStdString() << "' == '"
                         << c.GetString().ToStdString() << "', but not the first and last";
+                }
 }
 
 TEST(ValueOrderAcrossKinds, EmptySortsBelowEverything) {

@@ -214,8 +214,6 @@ void ibGridEditor::Paste()
 			wxMemoryBuffer buf;
 			if (reader.r_chunk(1, buf)) {
 
-				int i = GetGridCursorRow();
-
 				ibReaderMemory readerData(buf);
 
 				while (!readerData.eof()) {
