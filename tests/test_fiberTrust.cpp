@@ -369,7 +369,13 @@ TEST(FiberTrust, SetSessionParametersPausesTrustWhileItAsks)
 	std::atomic<bool> windowAfter { false };
 	ibAskFrame frame(session, &pool, &answered, &asked, &trustedAfter, &windowAfter);
 
+	// The worker is not the thread that opened the base. The session was built
+	// for the test and was never let in, so it carries no registry, and appData
+	// on that thread would throw. The scope is the base the question runs in.
+	ibApplicationInstance* const application = ibApplicationInstance::Get();
+	ASSERT_NE(application, nullptr);
 	std::future<void> asking = pool.Submit(session.get(), [&] {
+		ibApplicationInstanceScope onBase(application);
 		session->SetSessionParameters();
 	});
 
