@@ -2941,14 +2941,14 @@ TEST(RuntimeTest, AnArrayWalkedAndRewalkedIsLetGoOfOnce) {
 TEST(RuntimeTest, ValueListHoldsItemsAndWalksThem) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	ASSERT_TRUE(TryCompile(cc,
-		wxT("var n public; var val public; var shown public; var mark public;\n")
+		wxT("var n public; var held public; var shown public; var mark public;\n")
 		wxT("var found public; var missing public; var walked public; var left public;\n")
 		wxT("var list; list = New ValueList();\n")
 		wxT("list.Add(1, \"one\", true);\n")
 		wxT("list.Add(2);\n")
 		wxT("n = list.Count();\n")
 		wxT("var item; item = list.Get(0);\n")
-		wxT("val = item.Value;\n")
+		wxT("held = item.Value;\n")
 		wxT("shown = item.Presentation;\n")
 		wxT("mark = item.Check;\n")
 		wxT("found = list.FindByValue(2);\n")
@@ -2967,7 +2967,7 @@ TEST(RuntimeTest, ValueListHoldsItemsAndWalksThem) {
 	ibValue v;
 	ASSERT_TRUE(pu.GetPropVal(wxT("n"), v));
 	EXPECT_EQ(2, v.GetInteger());
-	ASSERT_TRUE(pu.GetPropVal(wxT("val"), v));
+	ASSERT_TRUE(pu.GetPropVal(wxT("held"), v));
 	EXPECT_EQ(1, v.GetInteger());
 	ASSERT_TRUE(pu.GetPropVal(wxT("shown"), v));
 	EXPECT_EQ(wxT("one"), v.GetString());
