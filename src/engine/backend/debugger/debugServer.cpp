@@ -1149,17 +1149,32 @@ void ibDebuggerServer::ibDebuggerServerConnection::EntryClient()
 					}
 				}
 				if (length > 0) {
+					// 🛑 A FRAME THIS END CANNOT READ ENDS THE CONNECTION, NOT THE PROCESS. The reader
+					// refuses a short block and a string with no terminator (fileSystem/fs.cpp), and
+					// that refusal travels up here — on the connection thread, where an escaping
+					// exception takes the debuggee down with it. The client's loop already stops the
+					// same way (debugClient.cpp). A bad frame means the two ends no longer agree
+					// about the wire; the honest thing left is to stop reading it.
+					try {
 #ifdef __WXMSW__
-					ibValueOLE::GetInterfaceAndReleaseStream();
+						ibValueOLE::GetInterfaceAndReleaseStream();
 #endif
 #if _USE_NET_COMPRESSOR == 1
-					BYTE* dest = nullptr; unsigned int dest_sz = 0;
-					_decompressLZ(&dest, &dest_sz, bufferData.GetData(), length);
-					RecvCommand(dest, dest_sz); free(dest);
+						BYTE* dest = nullptr; unsigned int dest_sz = 0;
+						_decompressLZ(&dest, &dest_sz, bufferData.GetData(), length);
+						RecvCommand(dest, dest_sz); free(dest);
 #else
-					RecvCommand(bufferData.GetData(), length);
+						RecvCommand(bufferData.GetData(), length);
 #endif
-					length = 0;
+						length = 0;
+					}
+					catch (const ibCoreException& err) {
+						ibJournalError(wxT("debugger"),
+							wxT("debug server: a frame of %u bytes could not be read, closing the connection: %s"),
+							length, err.GetErrorDescription());
+						leftBy = wxT("a frame this end could not read");
+						break;
+					}
 				}
 			}
 		}

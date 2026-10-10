@@ -164,13 +164,31 @@ protected:
 
 	u32 			advance_term_string() const;
 
+	// The byte length of the C string at the cursor, not counting its NUL.
+	// Does not move the cursor. No NUL in the bytes still left is a refusal.
+	int				MeasureStringZ(const char*& start) const;
+
+	void			RefuseSeek(int ptr) const;
+	void			RefuseAdvance(int cnt) const;
+
 public:
 	inline int			elapsed()	const { return m_size - m_pos; }
 	inline int			tell()	const { return m_pos; }
-	inline void			seek(int ptr) const { m_pos = ptr; wxASSERT((m_pos <= m_size) && (m_pos >= 0)); }
+	// The end itself (ptr == m_size) is a legal place to sit: that is eof().
+	// Past it, or before the start, is a refusal in every build — a wxASSERT
+	// is compiled out of Release, and the next read is then already off the block.
+	inline void			seek(int ptr) const {
+		if (ptr < 0 || ptr > m_size)
+			RefuseSeek(ptr);
+		m_pos = ptr;
+	}
 	inline int			length()	const { return m_size; }
 	inline void* pointer()	const { return &(m_data[m_pos]); }
-	inline void			advance(int cnt) const { m_pos += cnt; wxASSERT((m_pos <= m_size) && (m_pos >= 0)); }
+	inline void			advance(int cnt) const {
+		if (cnt < 0 || (long long)m_pos + cnt > (long long)m_size)
+			RefuseAdvance(cnt);
+		m_pos += cnt;
+	}
 
 public:
 

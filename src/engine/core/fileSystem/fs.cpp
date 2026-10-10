@@ -4,6 +4,8 @@
 #include "core/fstring.h"          // ibString — r_stringZ(ibString&)
 #include "core/exception.h"      // a read past the end of a block is refused, not asserted
 
+#include <cstring>
+
 typedef unsigned char byte_t;
 
 //------------------------------------------------------------------------------------
@@ -296,6 +298,46 @@ void	ibReader::r(void* p, int cnt) const
 	advance(cnt);
 };
 
+void ibReader::RefuseSeek(int ptr) const
+{
+	ibCoreException::Error(
+		_("Seeking to %i would pass the end of a %i-byte block"),
+		ptr, m_size);
+}
+
+void ibReader::RefuseAdvance(int cnt) const
+{
+	ibCoreException::Error(
+		_("Advancing %i bytes from offset %i would pass the end of a %i-byte block"),
+		cnt, m_pos, m_size);
+}
+
+int ibReader::MeasureStringZ(const char*& start) const
+{
+	// 🛑 THE TERMINATOR HAS TO BE INSIDE THE BLOCK. r_stringZ used to construct a std::string
+	// from (char*)(m_data + m_pos), and that constructor is strlen: it walks until a NUL,
+	// whether or not the block still has one. A debugger frame with no terminator (and any
+	// other block this reader walks) kept going into whatever bytes followed the buffer.
+	// The cursor is left where it was, so a caller that catches the refusal has not skipped
+	// a string it never found.
+	if (m_pos < 0 || m_pos > m_size || m_data == nullptr)
+		ibCoreException::Error(
+			_("A zero-terminated string starts at %i, outside a %i-byte block"),
+			m_pos, m_size);
+
+	const int remain = m_size - m_pos;
+	start = m_data + m_pos;
+	const void* const nul = remain > 0
+		? std::memchr(start, '\0', static_cast<size_t>(remain))
+		: nullptr;
+	if (nul == nullptr)
+		ibCoreException::Error(
+			_("A zero-terminated string at offset %i has no terminator in the %i bytes left"),
+			m_pos, remain);
+
+	return static_cast<int>(static_cast<const char*>(nul) - start);
+}
+
 inline bool is_term(const wxUniChar &c) {
 	return (c == 13) || (c == 10);
 };
@@ -346,46 +388,54 @@ void	ibReader::r_string(wxString& dest) const
 
 wxString ibReader::r_stringZ() const
 {
-	std::string destSrc = (char*)m_data + m_pos;
-	m_pos += int(destSrc.size() + 1);
-	return wxString::FromUTF8(destSrc);
+	const char* start = nullptr;
+	const int len = MeasureStringZ(start);
+	m_pos += len + 1;
+	return wxString::FromUTF8(start, len);
 }
 
 void	ibReader::r_stringZ(char* dest, u32 tgt_sz) const
 {
-	char* src = (char*)m_data;
-	u32 sz = strlen(src);
-	wxASSERT(sz < tgt_sz);
-	while ((src[m_pos] != 0) && (!eof())) *dest++ = src[m_pos++];
-	*dest = 0;
-	m_pos++;
+	const char* start = nullptr;
+	const int len = MeasureStringZ(start);
+	if (tgt_sz == 0 || static_cast<u32>(len) >= tgt_sz)
+		ibCoreException::Error(
+			_("A zero-terminated string of %i bytes does not fit a %u-byte buffer"),
+			len, static_cast<unsigned>(tgt_sz));
+	m_pos += len + 1;
+	std::memcpy(dest, start, static_cast<size_t>(len));
+	dest[len] = '\0';
 }
 
 void	ibReader::r_stringZ(std::string& dest) const
 {
-	dest = (char*)(m_data + m_pos);
-	m_pos += int(dest.size() + 1);
+	const char* start = nullptr;
+	const int len = MeasureStringZ(start);
+	m_pos += len + 1;
+	dest.assign(start, static_cast<size_t>(len));
 }
 
 void	ibReader::r_stringZ(wxString& dest) const
 {
-	std::string destSrc = (char*)(m_data + m_pos);
-	m_pos += int(destSrc.size() + 1);
-	dest = wxString::FromUTF8(destSrc);
+	const char* start = nullptr;
+	const int len = MeasureStringZ(start);
+	m_pos += len + 1;
+	dest = wxString::FromUTF8(start, len);
 }
 
 void	ibReader::r_stringZ(ibString& dest) const
 {
-	std::string destSrc = (char*)(m_data + m_pos);
-	m_pos += int(destSrc.size() + 1);
-	dest.SetUtf8(destSrc.data(), destSrc.size());   // native UTF-8 → wchar, no wxString
+	const char* start = nullptr;
+	const int len = MeasureStringZ(start);
+	m_pos += len + 1;
+	dest.SetUtf8(start, static_cast<size_t>(len));
 }
 
 void	ibReader::skip_stringZ() const
 {
-	char* src = (char*)m_data;
-	while ((src[m_pos] != 0) && (!eof())) m_pos++;
-	m_pos++;
+	const char* start = nullptr;
+	const int len = MeasureStringZ(start);
+	m_pos += len + 1;
 }
 
 ibReaderMemory* ibReaderMemory::open_chunk(u64 ID) const 
