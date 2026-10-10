@@ -1423,13 +1423,6 @@ start_label:
 				}
 				lCodeLine = index2 - 1;
 			} break;
-			case OPER_ITER:
-			{
-				if (IsHasValue(cvariable2))
-					CopyValue(variable1, cvariable3);
-				else
-					CopyValue(variable1, cvariable4);
-			}  break;
 			case OPER_NEW:
 			{
 				ibValue* pRetValue = &variable1;

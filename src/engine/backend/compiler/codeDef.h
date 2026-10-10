@@ -24,7 +24,11 @@ enum { //instruction types
 	OPER_NEXT_ITER,
 	OPER_MOD,
 	OPER_INVERT,
-	OPER_ITER,//?
+	// OPER_ITER is gone. It was the ternary, and it ran both branches before
+	// copying one of them. `?(cond, a, b)` is now the same shape as If:
+	// OPER_IF, then the chosen branch writing the result, then OPER_GOTO
+	// over the other. Dropping the enumerator moves every opcode after this
+	// point; the AOT format version moved with it (byteCodeAOT.cpp).
 	OPER_GT,//>
 	OPER_EQ,//=
 	OPER_LS,//<

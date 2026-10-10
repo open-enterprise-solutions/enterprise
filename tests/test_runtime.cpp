@@ -351,6 +351,173 @@ TEST(RuntimeTest, IfElseTakesElseBranch) {
 	EXPECT_EQ(v.GetInteger(), 2);
 }
 
+// ===========================================================================
+// ?(cond, a, b) — only the chosen branch runs
+//
+// It used to compile both values and then copy one (OPER_ITER), so the branch
+// the condition did not pick still ran: a call there raised, and
+// `?(Ref <> Undefined, Ref.Description, "")` died reading Description of
+// Undefined. The chosen value is what the expression answers; the other
+// branch's call does not happen.
+// ===========================================================================
+
+TEST(RuntimeTest, TernaryChoosesAValue) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	const wxString src =
+		wxT("var yes public; var no public;\n")
+		wxT("yes = ?(1 = 1, 10, 20);\n")
+		wxT("no  = ?(1 = 2, 10, 20);\n");
+	ASSERT_TRUE(TryCompile(cc, src));
+
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+
+	ibValue v;
+	ASSERT_TRUE(pu.GetPropVal(wxT("yes"), v));
+	EXPECT_EQ(v.GetInteger(), 10);
+	ASSERT_TRUE(pu.GetPropVal(wxT("no"), v));
+	EXPECT_EQ(v.GetInteger(), 20);
+}
+
+TEST(RuntimeTest, TernaryDoesNotRunTheBranchItDidNotChoose) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	const wxString src =
+		wxT("var calls public; var fromFalse public; var fromTrue public;\n")
+		wxT("Function Touch(n) Public\n")
+		wxT("  calls = calls + 1;\n")
+		wxT("  Return n;\n")
+		wxT("EndFunction\n")
+		wxT("Function Boom() Public\n")
+		wxT("  calls = calls + 1;\n")
+		wxT("  Raise(\"unchosen branch ran\");\n")
+		wxT("  Return 0;\n")
+		wxT("EndFunction\n")
+		wxT("calls = 0;\n")
+		wxT("fromFalse = ?(False, Boom(), Touch(7));\n")
+		wxT("fromTrue  = ?(True, Touch(3), Boom());\n");
+	ASSERT_TRUE(TryCompile(cc, src));
+
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+
+	ibValue v;
+	ASSERT_TRUE(pu.GetPropVal(wxT("fromFalse"), v));
+	EXPECT_EQ(v.GetInteger(), 7);
+	ASSERT_TRUE(pu.GetPropVal(wxT("fromTrue"), v));
+	EXPECT_EQ(v.GetInteger(), 3);
+	ASSERT_TRUE(pu.GetPropVal(wxT("calls"), v));
+	EXPECT_EQ(v.GetInteger(), 2) << "each chosen branch ran once; the raising branch did not";
+}
+
+// The branch that IS chosen still runs, including when it raises. A ternary
+// that skipped both branches would pass the test above.
+TEST(RuntimeTest, TernaryRunsTheBranchItChoosesEvenWhenThatBranchRaises) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	const wxString src =
+		wxT("Function Boom() Public\n")
+		wxT("  Raise(\"chosen branch ran\");\n")
+		wxT("  Return 0;\n")
+		wxT("EndFunction\n")
+		wxT("var result public;\n")
+		wxT("result = ?(True, Boom(), 1);\n");
+	ASSERT_TRUE(TryCompile(cc, src));
+
+	ibProcUnit pu;
+	const auto failed = TryExecute(pu, cc.m_cByteCode);
+	EXPECT_FALSE(failed);
+	EXPECT_NE(std::string(failed.message()).find("chosen branch ran"), std::string::npos)
+		<< failed.message();
+}
+
+// The guard the old ternary could not express: a member of a reference is
+// read only when the reference is there.
+TEST(RuntimeTest, TernaryGuardsAMemberOfUndefined) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	const wxString src =
+		wxT("var Ref public; var missing public; var present public;\n")
+		wxT("Ref = Undefined;\n")
+		wxT("missing = ?(Ref <> Undefined, Ref.Description, \"\");\n")
+		wxT("Ref = New Structure(\"Description\", \"Goods\");\n")
+		wxT("present = ?(Ref <> Undefined, Ref.Description, \"\");\n");
+	ASSERT_TRUE(TryCompile(cc, src));
+
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+
+	ibValue v;
+	ASSERT_TRUE(pu.GetPropVal(wxT("missing"), v));
+	EXPECT_EQ(v.GetString(), wxT(""));
+	ASSERT_TRUE(pu.GetPropVal(wxT("present"), v));
+	EXPECT_EQ(v.GetString(), wxT("Goods"));
+}
+
+// A ternary inside a ternary patches its own jumps. The outer branch that is
+// not taken does not run, and the inner one still chooses.
+TEST(RuntimeTest, TernaryNestedChoosesTheInnerBranch) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	const wxString src =
+		wxT("var calls public; var inner public; var outer public;\n")
+		wxT("Function Touch(n) Public\n")
+		wxT("  calls = calls + 1;\n")
+		wxT("  Return n;\n")
+		wxT("EndFunction\n")
+		wxT("Function Boom() Public\n")
+		wxT("  calls = calls + 1;\n")
+		wxT("  Raise(\"unchosen branch ran\");\n")
+		wxT("  Return 0;\n")
+		wxT("EndFunction\n")
+		wxT("calls = 0;\n")
+		wxT("inner = ?(True, ?(False, Boom(), Touch(2)), Boom());\n")
+		wxT("outer = ?(False, ?(True, Boom(), 1), Touch(4));\n");
+	ASSERT_TRUE(TryCompile(cc, src));
+
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+
+	ibValue v;
+	ASSERT_TRUE(pu.GetPropVal(wxT("inner"), v));
+	EXPECT_EQ(v.GetInteger(), 2);
+	ASSERT_TRUE(pu.GetPropVal(wxT("outer"), v));
+	EXPECT_EQ(v.GetInteger(), 4);
+	ASSERT_TRUE(pu.GetPropVal(wxT("calls"), v));
+	EXPECT_EQ(v.GetInteger(), 2) << "each chosen branch ran once; neither Boom ran";
+}
+
+// A Number condition takes the typed OPER_IF (CorrectTypeDef, TYPE_DELTA1):
+// zero is the branch not taken, any other number is the branch taken.
+TEST(RuntimeTest, TernaryWithANumberConditionUsesTheTypedTest) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	const wxString src =
+		wxT("Number n;\n")
+		wxT("var calls public; var whenZero public; var whenOther public;\n")
+		wxT("Function Touch(k) Public\n")
+		wxT("  calls = calls + 1;\n")
+		wxT("  Return k;\n")
+		wxT("EndFunction\n")
+		wxT("Function Boom() Public\n")
+		wxT("  calls = calls + 1;\n")
+		wxT("  Raise(\"unchosen branch ran\");\n")
+		wxT("  Return 0;\n")
+		wxT("EndFunction\n")
+		wxT("calls = 0;\n")
+		wxT("n = 0;\n")
+		wxT("whenZero = ?(n, Boom(), Touch(20));\n")
+		wxT("n = 4;\n")
+		wxT("whenOther = ?(n, Touch(10), Boom());\n");
+	ASSERT_TRUE(TryCompile(cc, src));
+
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+
+	ibValue v;
+	ASSERT_TRUE(pu.GetPropVal(wxT("whenZero"), v));
+	EXPECT_EQ(v.GetInteger(), 20);
+	ASSERT_TRUE(pu.GetPropVal(wxT("whenOther"), v));
+	EXPECT_EQ(v.GetInteger(), 10);
+	ASSERT_TRUE(pu.GetPropVal(wxT("calls"), v));
+	EXPECT_EQ(v.GetInteger(), 2);
+}
+
 // A BODY WITHOUT BRACES IS ONE STATEMENT, whatever word it opens with. A statement opened by a
 // keyword (`if`, `while`, `try`) used to run on into the next one: `else if (…) { … } b = 7;` put
 // `b = 7` inside the else, and a loop counting its passes that way never ended. The forms that
