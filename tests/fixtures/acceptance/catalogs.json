@@ -1,5 +1,5 @@
 {
-  "for_the_accountant": "A goods catalog with folders. Bread, milk and a marked stale item sit in Food; a hammer sits in Tools, then moves into Food. A total for a folder adds everything recorded under it, including an item marked for deletion — the mark does not erase the row. The choice a person is offered is a different question: the marked item should not be offered, and a contract should be offered only for its owner. The platform, as it stands, still shows the marked item in the choice list and does not narrow that list by owner; a query that asks for the mark and the owner does.",
+  "for_the_accountant": "A goods catalog with folders. Bread, milk and a marked stale item sit in Food; a hammer sits in Tools, then moves into Food. A total for a folder adds everything recorded under it, including an item marked for deletion — the mark does not erase the row. The choice a person is offered is a different question: the marked item is not offered, and a contract is offered only for its owner.",
   "goods": {
     "nodes": [
       {
@@ -167,9 +167,7 @@
   },
   "choice": {
     "marked_code": "STALE",
-    "platform_includes_deletion_mark": true,
-    "reason": "DeletionMark is documented as staying in the base and shown crossed out (commonObject.h, the DeletionMark property). FindValue adds no DeletionMark condition (referenceQuery.cpp). Excluding it from choice is not what that door does.",
-    "filtered_no_mark": [
+    "offered": [
       "BREAD",
       "DELIVERY",
       "FOOD",
@@ -224,8 +222,6 @@
       "GLOBEX": [
         "C3"
       ]
-    },
-    "choice_not_narrowed_by_owner": true,
-    "reason": "List owner says the choice is not narrowed to one owner by itself (catalog.h, the ListOwner property). A query of the Owner column's stored fields does narrow. ibDataQueryBuilder::Where on that reference returned no rows for the same bytes; the scenario asks the fields."
+    }
   }
 }

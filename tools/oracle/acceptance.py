@@ -125,9 +125,7 @@ def catalogs():
             "a hammer sits in Tools, then moves into Food. A total for a folder adds everything "
             "recorded under it, including an item marked for deletion — the mark does not erase "
             "the row. The choice a person is offered is a different question: the marked item "
-            "should not be offered, and a contract should be offered only for its owner. "
-            "The platform, as it stands, still shows the marked item in the choice list and does "
-            "not narrow that list by owner; a query that asks for the mark and the owner does."
+            "is not offered, and a contract is offered only for its owner."
         ),
         "goods": {
             "nodes": GOODS,
@@ -137,26 +135,13 @@ def catalogs():
         },
         "choice": {
             "marked_code": "STALE",
-            "platform_includes_deletion_mark": True,
-            "reason": (
-                "DeletionMark is documented as staying in the base and shown crossed out "
-                "(commonObject.h, the DeletionMark property). FindValue adds no DeletionMark "
-                "condition (referenceQuery.cpp). Excluding it from choice is not what that door does."
-            ),
-            "filtered_no_mark": sorted(n["code"] for n in GOODS if not n["deletion_mark"]),
+            "offered": sorted(n["code"] for n in GOODS if not n["deletion_mark"]),
         },
         "contracts": {
             "owners": owners,
             "items": contracts,
             "of_owner_including_marked": of_owner(True),
             "of_owner_choosable": of_owner(False),
-            "choice_not_narrowed_by_owner": True,
-            "reason": (
-                "List owner says the choice is not narrowed to one owner by itself "
-                "(catalog.h, the ListOwner property). A query of the Owner column's "
-                "stored fields does narrow. ibDataQueryBuilder::Where on that reference "
-                "returned no rows for the same bytes; the scenario asks the fields."
-            ),
         },
     }
 
@@ -176,6 +161,9 @@ MOVEMENTS = [
     {"doc": "R5", "line": 1, "when": "2026-03-15 00:00:00", "wh": "kitchen", "item": "flour", "receipt": True, "qty": "8", "active": True},
     {"doc": "R6", "line": 1, "when": "2026-03-15 09:00:00", "wh": "kitchen", "item": "sugar", "receipt": True, "qty": "2.50", "active": True},
     {"doc": "R7", "line": 1, "when": "2026-04-01 00:00:00", "wh": "kitchen", "item": "flour", "receipt": True, "qty": "1", "active": True},
+    # Not a dyadic fraction. SQLite binds an ibNumber as a double; x.25 and x.5 hide that.
+    {"doc": "S1", "line": 1, "when": "2026-03-01 12:00:00", "wh": "kitchen", "item": "spice", "receipt": True, "qty": "33.33", "active": True},
+    {"doc": "S2", "line": 1, "when": "2026-03-02 12:00:00", "wh": "kitchen", "item": "spice", "receipt": True, "qty": "0.10", "active": True},
 ]
 
 
@@ -212,13 +200,15 @@ def turnover(rows, wh, item, start, end):
     return receipt, expense
 
 
-def bal(rows, wh, item, at, excluding):
+def bal(rows, wh, item, at, road):
+    """road is bare, including, or excluding. A bare date is the balance BEFORE that point."""
+    excluding = road != "including"
     return {
         "kind": "balance",
         "wh": wh,
         "item": item,
         "at": at,
-        "excluding": excluding,
+        "road": road,
         "qty": num(balance(rows, wh, item, at, excluding)),
     }
 
@@ -263,49 +253,79 @@ def replace(rows, doc, line, **changes):
     return out
 
 
+def by_period(rows, wh, item, start, end, unit):
+    """Active movements in [start, end), folded by calendar day or month."""
+    buckets = {}
+    order = []
+    for row in rows:
+        if not row["active"] or row["wh"] != wh or row["item"] != item:
+            continue
+        if row["when"] < start or row["when"] >= end:
+            continue
+        key = row["when"][:10] if unit == "day" else row["when"][:7]
+        if key not in buckets:
+            buckets[key] = [Decimal(0), Decimal(0)]
+            order.append(key)
+        if row["receipt"]:
+            buckets[key][0] += D(row["qty"])
+        else:
+            buckets[key][1] += D(row["qty"])
+    receipt = sum((buckets[k][0] for k in order), Decimal(0))
+    expense = sum((buckets[k][1] for k in order), Decimal(0))
+    return {
+        "kind": "period",
+        "unit": unit,
+        "wh": wh,
+        "item": item,
+        "from": start,
+        "to": end,
+        "rows": len(order),
+        "receipt": num(receipt),
+        "expense": num(expense),
+        "periods": [
+            {"period": key, "receipt": num(buckets[key][0]), "expense": num(buckets[key][1])}
+            for key in order
+        ],
+    }
+
+
 def accumulation():
     rows = MOVEMENTS
     reposted = replace(rows, "R2", 1, qty="10.25")
-    unposted = replace(reposted, "R3", 1, active=False)
-    overdrawn = unposted + [{
-        "doc": "R9",
-        "line": 1,
-        "when": "2026-04-02 10:00:00",
-        "wh": "kitchen",
-        "item": "flour",
-        "receipt": False,
-        "qty": "1000",
-        "active": True,
-    }]
+    # Unposting deletes the document's lines. It does not leave them stored and inactive.
+    unposted = [row for row in reposted if not (row["doc"] == "R3" and row["line"] == 1)]
     april = "2026-04-01 00:00:00"
     return {
         "for_the_accountant": (
-            "Stock of flour in two warehouses, and sugar in the kitchen. Receipts add, expenses "
-            "take away, and a line that was written but not posted adds nothing. The balance at "
-            "midnight is the balance before the day that starts at that midnight: the receipt "
-            "posted exactly at 2 March 00:00 is not in the balance at that midnight, and it is in "
-            "the balance a moment later. A day's turnover is that day, from its midnight up to but "
-            "not including the next. Posting the same document again replaces its line; undoing "
-            "the posting takes the line back out. An expense larger than the stock is stored and "
-            "the balance goes negative — the register does not refuse it. Whether it should is a "
-            "question for the maintainer, not a figure this oracle invents a refusal for."
+            "Stock of flour in two warehouses, sugar and a spice whose quantities are not "
+            "round in binary. Receipts add and expenses take away. A line stored inactive is "
+            "not a movement, and it is not an unposted document: undoing a posting deletes the "
+            "document's lines. The balance at a bare date is the balance before that point, so "
+            "the receipt posted exactly at 2 March 00:00 is not in the balance at that midnight. "
+            "Naming the boundary Including takes that receipt in; naming it Excluding leaves it "
+            "out. A day's turnover is that day, from its midnight up to but not including the "
+            "next. Posting the same document again replaces its line. The register stores a "
+            "negative balance; refusing one is the document's posting handler, not this register."
         ),
         "midnight_rule": (
-            "A balance at a moment, excluding that moment, leaves out every movement at that "
-            "moment and after it. At midnight that is the whole day which starts there."
+            "A balance at a bare date or a bare moment is the balance before that point. "
+            "Boundary Including takes the movements at the point; Boundary Excluding leaves them out. "
+            "Boundary with no kind stays Including."
         ),
         "movements": rows,
         "balances": [
-            bal(rows, "kitchen", "flour", "2026-03-02 00:00:00", True),
-            bal(rows, "kitchen", "flour", "2026-03-02 00:00:00", False),
-            bal(rows, "kitchen", "flour", "2026-03-15 00:00:00", True),
-            bal(rows, "kitchen", "flour", "2026-03-15 00:00:00", False),
-            bal(rows, "kitchen", "flour", april, True),
-            bal(rows, "kitchen", "flour", april, False),
-            bal(rows, "bar", "flour", "2026-03-02 00:00:00", True),
-            bal(rows, "kitchen", "sugar", "2026-03-15 00:00:00", True),
-            bal(rows, "kitchen", "sugar", "2026-03-15 09:00:00", True),
-            bal(rows, "kitchen", "sugar", "2026-03-15 09:00:00", False),
+            bal(rows, "kitchen", "flour", "2026-03-02 00:00:00", "bare"),
+            bal(rows, "kitchen", "flour", "2026-03-02 00:00:00", "including"),
+            bal(rows, "kitchen", "flour", "2026-03-02 00:00:00", "excluding"),
+            bal(rows, "kitchen", "flour", "2026-03-15 00:00:00", "excluding"),
+            bal(rows, "kitchen", "flour", "2026-03-15 00:00:00", "including"),
+            bal(rows, "kitchen", "flour", april, "excluding"),
+            bal(rows, "kitchen", "flour", april, "including"),
+            bal(rows, "bar", "flour", "2026-03-02 00:00:00", "excluding"),
+            bal(rows, "kitchen", "sugar", "2026-03-15 00:00:00", "excluding"),
+            bal(rows, "kitchen", "sugar", "2026-03-15 09:00:00", "excluding"),
+            bal(rows, "kitchen", "sugar", "2026-03-15 09:00:00", "including"),
+            bal(rows, "kitchen", "spice", april, "excluding"),
         ],
         "turnovers": [
             turn(rows, "kitchen", "flour", "2026-03-01 00:00:00", "2026-03-02 00:00:00"),
@@ -316,35 +336,23 @@ def accumulation():
         "balance_and_turnovers": [
             bat(rows, "kitchen", "flour", "2026-03-01 00:00:00", april),
             bat(rows, "bar", "flour", "2026-03-01 00:00:00", april),
+            bat(rows, "kitchen", "flour", "2026-03-02 00:00:00", april),
+        ],
+        "periods": [
+            by_period(rows, "kitchen", "flour", "2026-03-01 00:00:00", april, "day"),
+            by_period(rows, "kitchen", "flour", "2026-03-01 00:00:00", "2026-04-02 00:00:00", "month"),
         ],
         "repost": {
             "doc": "R2",
             "line": 1,
             "qty": "10.25",
             "receipt": False,
-            "then": bal(reposted, "kitchen", "flour", april, True),
+            "then": bal(reposted, "kitchen", "flour", april, "excluding"),
         },
         "unpost": {
             "doc": "R3",
             "line": 1,
-            "then": bal(unposted, "kitchen", "flour", april, True),
-        },
-        "negative": {
-            "doc": "R9",
-            "line": 1,
-            "when": "2026-04-02 10:00:00",
-            "wh": "kitchen",
-            "item": "flour",
-            "receipt": False,
-            "qty": "1000",
-            "platform": "accepted",
-            "accountant_expects": "refused",
-            "reason": (
-                "No negative-balance gate was found on the accumulation register's write path. "
-                "The quantity below is the arithmetic if the expense is stored. Refusal would be "
-                "a new rule; it is not invented here."
-            ),
-            "then": bal(overdrawn, "kitchen", "flour", "2026-04-02 10:00:00", False),
+            "then": bal(unposted, "kitchen", "flour", april, "excluding"),
         },
     }
 

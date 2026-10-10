@@ -1,6 +1,6 @@
 {
-  "for_the_accountant": "Stock of flour in two warehouses, and sugar in the kitchen. Receipts add, expenses take away, and a line that was written but not posted adds nothing. The balance at midnight is the balance before the day that starts at that midnight: the receipt posted exactly at 2 March 00:00 is not in the balance at that midnight, and it is in the balance a moment later. A day's turnover is that day, from its midnight up to but not including the next. Posting the same document again replaces its line; undoing the posting takes the line back out. An expense larger than the stock is stored and the balance goes negative — the register does not refuse it. Whether it should is a question for the maintainer, not a figure this oracle invents a refusal for.",
-  "midnight_rule": "A balance at a moment, excluding that moment, leaves out every movement at that moment and after it. At midnight that is the whole day which starts there.",
+  "for_the_accountant": "Stock of flour in two warehouses, sugar and a spice whose quantities are not round in binary. Receipts add and expenses take away. A line stored inactive is not a movement, and it is not an unposted document: undoing a posting deletes the document's lines. The balance at a bare date is the balance before that point, so the receipt posted exactly at 2 March 00:00 is not in the balance at that midnight. Naming the boundary Including takes that receipt in; naming it Excluding leaves it out. A day's turnover is that day, from its midnight up to but not including the next. Posting the same document again replaces its line. The register stores a negative balance; refusing one is the document's posting handler, not this register.",
+  "midnight_rule": "A balance at a bare date or a bare moment is the balance before that point. Boundary Including takes the movements at the point; Boundary Excluding leaves them out. Boundary with no kind stays Including.",
   "movements": [
     {
       "doc": "R1",
@@ -91,6 +91,26 @@
       "receipt": true,
       "qty": "1",
       "active": true
+    },
+    {
+      "doc": "S1",
+      "line": 1,
+      "when": "2026-03-01 12:00:00",
+      "wh": "kitchen",
+      "item": "spice",
+      "receipt": true,
+      "qty": "33.33",
+      "active": true
+    },
+    {
+      "doc": "S2",
+      "line": 1,
+      "when": "2026-03-02 12:00:00",
+      "wh": "kitchen",
+      "item": "spice",
+      "receipt": true,
+      "qty": "0.10",
+      "active": true
     }
   ],
   "balances": [
@@ -99,7 +119,7 @@
       "wh": "kitchen",
       "item": "flour",
       "at": "2026-03-02 00:00:00",
-      "excluding": true,
+      "road": "bare",
       "qty": "70.25"
     },
     {
@@ -107,15 +127,23 @@
       "wh": "kitchen",
       "item": "flour",
       "at": "2026-03-02 00:00:00",
-      "excluding": false,
+      "road": "including",
       "qty": "75.25"
     },
     {
       "kind": "balance",
       "wh": "kitchen",
       "item": "flour",
+      "at": "2026-03-02 00:00:00",
+      "road": "excluding",
+      "qty": "70.25"
+    },
+    {
+      "kind": "balance",
+      "wh": "kitchen",
+      "item": "flour",
       "at": "2026-03-15 00:00:00",
-      "excluding": true,
+      "road": "excluding",
       "qty": "65.25"
     },
     {
@@ -123,7 +151,7 @@
       "wh": "kitchen",
       "item": "flour",
       "at": "2026-03-15 00:00:00",
-      "excluding": false,
+      "road": "including",
       "qty": "73.25"
     },
     {
@@ -131,7 +159,7 @@
       "wh": "kitchen",
       "item": "flour",
       "at": "2026-04-01 00:00:00",
-      "excluding": true,
+      "road": "excluding",
       "qty": "73.25"
     },
     {
@@ -139,7 +167,7 @@
       "wh": "kitchen",
       "item": "flour",
       "at": "2026-04-01 00:00:00",
-      "excluding": false,
+      "road": "including",
       "qty": "74.25"
     },
     {
@@ -147,7 +175,7 @@
       "wh": "bar",
       "item": "flour",
       "at": "2026-03-02 00:00:00",
-      "excluding": true,
+      "road": "excluding",
       "qty": "20"
     },
     {
@@ -155,7 +183,7 @@
       "wh": "kitchen",
       "item": "sugar",
       "at": "2026-03-15 00:00:00",
-      "excluding": true,
+      "road": "excluding",
       "qty": "0"
     },
     {
@@ -163,7 +191,7 @@
       "wh": "kitchen",
       "item": "sugar",
       "at": "2026-03-15 09:00:00",
-      "excluding": true,
+      "road": "excluding",
       "qty": "0"
     },
     {
@@ -171,8 +199,16 @@
       "wh": "kitchen",
       "item": "sugar",
       "at": "2026-03-15 09:00:00",
-      "excluding": false,
+      "road": "including",
       "qty": "2.5"
+    },
+    {
+      "kind": "balance",
+      "wh": "kitchen",
+      "item": "spice",
+      "at": "2026-04-01 00:00:00",
+      "road": "excluding",
+      "qty": "33.43"
     }
   ],
   "turnovers": [
@@ -239,6 +275,70 @@
       "receipt": "20",
       "expense": "0",
       "closing": "20"
+    },
+    {
+      "kind": "balance_and_turnovers",
+      "wh": "kitchen",
+      "item": "flour",
+      "from": "2026-03-02 00:00:00",
+      "to": "2026-04-01 00:00:00",
+      "opening": "70.25",
+      "receipt": "13",
+      "expense": "10",
+      "closing": "73.25"
+    }
+  ],
+  "periods": [
+    {
+      "kind": "period",
+      "unit": "day",
+      "wh": "kitchen",
+      "item": "flour",
+      "from": "2026-03-01 00:00:00",
+      "to": "2026-04-01 00:00:00",
+      "rows": 3,
+      "receipt": "113.5",
+      "expense": "40.25",
+      "periods": [
+        {
+          "period": "2026-03-01",
+          "receipt": "100.5",
+          "expense": "30.25"
+        },
+        {
+          "period": "2026-03-02",
+          "receipt": "5",
+          "expense": "10"
+        },
+        {
+          "period": "2026-03-15",
+          "receipt": "8",
+          "expense": "0"
+        }
+      ]
+    },
+    {
+      "kind": "period",
+      "unit": "month",
+      "wh": "kitchen",
+      "item": "flour",
+      "from": "2026-03-01 00:00:00",
+      "to": "2026-04-02 00:00:00",
+      "rows": 2,
+      "receipt": "114.5",
+      "expense": "40.25",
+      "periods": [
+        {
+          "period": "2026-03",
+          "receipt": "113.5",
+          "expense": "40.25"
+        },
+        {
+          "period": "2026-04",
+          "receipt": "1",
+          "expense": "0"
+        }
+      ]
     }
   ],
   "repost": {
@@ -251,7 +351,7 @@
       "wh": "kitchen",
       "item": "flour",
       "at": "2026-04-01 00:00:00",
-      "excluding": true,
+      "road": "excluding",
       "qty": "93.25"
     }
   },
@@ -263,28 +363,8 @@
       "wh": "kitchen",
       "item": "flour",
       "at": "2026-04-01 00:00:00",
-      "excluding": true,
+      "road": "excluding",
       "qty": "88.25"
-    }
-  },
-  "negative": {
-    "doc": "R9",
-    "line": 1,
-    "when": "2026-04-02 10:00:00",
-    "wh": "kitchen",
-    "item": "flour",
-    "receipt": false,
-    "qty": "1000",
-    "platform": "accepted",
-    "accountant_expects": "refused",
-    "reason": "No negative-balance gate was found on the accumulation register's write path. The quantity below is the arithmetic if the expense is stored. Refusal would be a new rule; it is not invented here.",
-    "then": {
-      "kind": "balance",
-      "wh": "kitchen",
-      "item": "flour",
-      "at": "2026-04-02 10:00:00",
-      "excluding": false,
-      "qty": "-910.75"
     }
   }
 }

@@ -180,7 +180,10 @@ void ibPreparedStatementSQLite::SetParamBlob(int nPosition, const void* pData, l
 	if (nIndex > -1)
 	{
 		sqlite3_reset(m_Statements[nIndex]);
-		int nReturn = sqlite3_bind_blob(m_Statements[nIndex], nPosition, (const void*)pData, nDataLength, SQLITE_STATIC);
+		// TRANSIENT copies the bytes at bind time. STATIC kept the caller's pointer, and the
+		// plan that owned them (a query expression's blob) was destroyed while the result set
+		// was still stepping — a heap use-after-free in sqlite3BlobCompare.
+		int nReturn = sqlite3_bind_blob(m_Statements[nIndex], nPosition, (const void*)pData, nDataLength, SQLITE_TRANSIENT);
 		if (nReturn != SQLITE_OK)
 		{
 			SetErrorCode(ibDatabaseLayerSQLite::TranslateErrorCode(nReturn));
