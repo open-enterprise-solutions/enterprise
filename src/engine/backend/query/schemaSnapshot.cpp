@@ -669,7 +669,8 @@ int AlterTable(ibStructureBatch& batch, const ibSchemaTable& old, const ibSchema
 	for (const ibSchemaColumn& c : cur.m_columns) {
 		const ibSchemaColumn* o = FindColumn(old.m_columns, c.m_id);
 		const size_t before = batch.StepCount();
-		DiffColumnInto(batch, c.m_column, o != nullptr ? o->m_column : nullptr);   // errors THROW now
+		DiffColumnInto(batch, c.m_column, o != nullptr ? o->m_column : nullptr,
+			report, LedgerName(cur), ColName(c.m_column));   // errors THROW now
 		if (report != nullptr && batch.StepCount() != before) {   // a step was emitted -> a real change
 			if (o == nullptr)
 				report->AppendInfo(_("Add ") + ColName(c.m_column) + _(" to ") + LedgerName(cur));
