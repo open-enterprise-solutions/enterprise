@@ -12,6 +12,7 @@
 #include <wx/filename.h>
 #include <wx/file.h>
 #include <wx/datetime.h>
+#include <wx/log.h>   // wxLogNull - creating the folder says nothing on failure
 
 // IS THIS TRACE ON? Read once, from the environment, so a build does not have to be repeated to
 // answer a question — and so the answer costs one bool test on the hot path rather than a string
@@ -46,6 +47,13 @@ inline void ibTraceToFile(const wxString& text)
 {
 	wxFileName traceFile = wxFileName::DirName(ibDiagnosticFolder());
 	traceFile.SetFullName(wxT("oes-debug.log"));
+
+	// Inside a macOS bundle the folder is ~/Library/Logs/OES, which nothing else may have made yet.
+	// Quietly: a failure here must not become a wx message box in a GUI process.
+	if (!traceFile.DirExists()) {
+		wxLogNull quiet;
+		traceFile.Mkdir(wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
+	}
 
 	const wxString path = traceFile.GetFullPath();
 

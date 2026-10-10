@@ -41,7 +41,7 @@
 #include "backend/logger/logger.h"
 #include "backend/logger/loggerReader.h"
 #include "backend/metadataConfiguration.h"   // activeMetaData - the door that knows configuration types
-#include "core/programFolder.h"          // the journal lives in the program folder
+#include "core/programFolder.h"          // the journal lives in the diagnostic folder
 #include "core/serialize/dataBuilder.h"   // ibDataNode + ibBinaryProvider - the details payload
 
 #include <wx/datetime.h>
@@ -149,7 +149,9 @@ wxString TraceDirectory()
 	if (!own.IsEmpty())
 		return wxFileName(own).GetPath();
 
-	return ibProgramFolder() + wxFILE_SEP_PATH + wxT("journal");
+	// The journal's own rule (journal.cpp): beside the dumps, in the diagnostic folder - which, for a
+	// program inside a macOS bundle, is ~/Library/Logs/OES and not the folder that holds the .app.
+	return ibDiagnosticFolder() + wxFILE_SEP_PATH + wxT("journal");
 }
 
 // `<app>_<yyyymmddThhmmss>_<pid>.log` — the app is the head, the start time is the middle.
