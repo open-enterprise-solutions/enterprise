@@ -110,6 +110,11 @@ public:
 	static int TranslateErrorCode(int nCode, const char* sqlState = nullptr);
 	static bool IsAvailable();
 
+	// SQLSTATE is the classifier. A prepared statement throws from its own
+	// reporter, which never sees this layer's m_lastSqlState, so it calls
+	// this with the state it just read off the result.
+	static ibBackendDatabaseException::Kind ClassifySqlState(const wxString& sqlState);
+
 	// Map the most recent error's SQLSTATE (set in m_lastSqlState by
 	// the result-set / driver helpers when libpq surfaces a structured
 	// error) to a portable Kind. SQLSTATE is the canonical PostgreSQL

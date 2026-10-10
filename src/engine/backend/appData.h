@@ -715,8 +715,9 @@ private:
 #define bytecode_cache_table	wxT("sys_bytecode_cache")
 #define lock_table				wxT("sys_lock")
 // One row per key, primary key (namespace, keyHash). Acquire locks this row for the
-// transaction, then reads and writes sys_lock. It is not deleted when the lock is
-// released — a key that was locked once stays, so the next acquire has a row to wait on.
+// transaction, then reads and writes sys_lock. Release does not delete it. The
+// sweep does, once nobody holds the key. An old binary on the same base still
+// acquires without this row, so the race stays open until every process is upgraded.
 #define lock_key_table			wxT("sys_lock_key")
 // sys_job — one row per scheduled job, holding the LAST RUN as every process on
 // this base sees it. Without it each process keeps its own clock and a job runs

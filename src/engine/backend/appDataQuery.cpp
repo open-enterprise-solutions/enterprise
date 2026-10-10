@@ -91,7 +91,10 @@ void ibApplicationInstance::CreateTableEvent()
 //
 // sys_lock_key is the mutex for one key. It is created on every open, including a
 // base that already has sys_lock: the first acquire of a key inserts the header
-// under the primary key, so nothing is copied out of the old rows.
+// under the primary key, so nothing is copied out of the old rows. The sweep
+// deletes a header once nobody holds the key. An old binary on the same base
+// still acquires without the row, so two processes can both be granted the key
+// until every process is upgraded.
 void ibApplicationInstance::CreateTableLock()
 {
 	ibDatabaseQueryBuilder q;

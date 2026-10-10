@@ -664,11 +664,16 @@ int ibDatabaseLayerPostgres::DoRunQuery(const wxString& strQuery, bool WXUNUSED(
 	// PostgreSQL takes care of parsing the queries itself so bParseQuery is ignored
 
 	ResetErrorCodes();
+	SetLastSqlState(wxString());
 
 	wxCharBuffer sqlBuffer = ConvertToUnicodeStream(strQuery);
 	PGresult* pResultCode = m_pInterface->GetPQexec()((PGconn*)m_pDatabase, sqlBuffer);
 	if ((pResultCode == nullptr) || (m_pInterface->GetPQresultStatus()(pResultCode) != PGRES_COMMAND_OK))
 	{
+		if (pResultCode != nullptr) {
+			const char* state = m_pInterface->GetPQresultErrorField()(pResultCode, PG_DIAG_SQLSTATE);
+			SetLastSqlState(state != nullptr ? wxString::FromAscii(state) : wxString());
+		}
 		SetErrorCode(ibDatabaseLayerPostgres::TranslateErrorCode(m_pInterface->GetPQresultStatus()(pResultCode),
 			m_pInterface->GetPQresultErrorField()(pResultCode, PG_DIAG_SQLSTATE)));
 		SetErrorMessage(ConvertFromUnicodeStream(m_pInterface->GetPQerrorMessage()((PGconn*)m_pDatabase)));
@@ -698,11 +703,16 @@ int ibDatabaseLayerPostgres::DoRunQuery(const wxString& strQuery, bool WXUNUSED(
 ibDatabaseResultSet* ibDatabaseLayerPostgres::DoRunQueryWithResults(const wxString& strQuery)
 {
 	ResetErrorCodes();
+	SetLastSqlState(wxString());
 
 	wxCharBuffer sqlBuffer = ConvertToUnicodeStream(strQuery);
 	PGresult* pResultCode = m_pInterface->GetPQexec()((PGconn*)m_pDatabase, sqlBuffer);
 	if ((pResultCode == nullptr) || (m_pInterface->GetPQresultStatus()(pResultCode) != PGRES_TUPLES_OK))
 	{
+		if (pResultCode != nullptr) {
+			const char* state = m_pInterface->GetPQresultErrorField()(pResultCode, PG_DIAG_SQLSTATE);
+			SetLastSqlState(state != nullptr ? wxString::FromAscii(state) : wxString());
+		}
 		SetErrorCode(ibDatabaseLayerPostgres::TranslateErrorCode(m_pInterface->GetPQstatus()((PGconn*)m_pDatabase),
 			m_pInterface->GetPQresultErrorField()(pResultCode, PG_DIAG_SQLSTATE)));
 		SetErrorMessage(ConvertFromUnicodeStream(m_pInterface->GetPQerrorMessage()((PGconn*)m_pDatabase)));
@@ -1017,14 +1027,8 @@ int ibDatabaseLayerPostgres::TranslateErrorCode(int nCode, const char* sqlState)
 	//return DATABASE_LAYER_ERROR;
 }
 
-ibBackendDatabaseException::Kind ibDatabaseLayerPostgres::ClassifyDatabaseError(int nativeCode) const
+ibBackendDatabaseException::Kind ibDatabaseLayerPostgres::ClassifySqlState(const wxString& sqlState)
 {
-	// PostgreSQL surfaces both a CONNECTION_* status enum (small int,
-	// connection-level only) and SQLSTATE (5-char alphanumeric — the
-	// real classifier). We prefer SQLSTATE when present; the int code
-	// is only used for connection-level failures where libpq doesn't
-	// produce a SQLSTATE at all.
-	//
 	// SQLSTATE classes:
 	//   08*** — connection exception           → ConnectionLost
 	//   23*** — integrity constraint violation → Constraint
@@ -1032,13 +1036,16 @@ ibBackendDatabaseException::Kind ibDatabaseLayerPostgres::ClassifyDatabaseError(
 	//                                            Timeout (40001 serialization fail)
 	//   42*** — syntax / access rule violation → Syntax
 	//   53*** — insufficient resources         → Timeout
+	//   55P03 — lock_not_available             → Timeout (NOWAIT / lock_timeout)
 	//   57*** — operator intervention          → ConnectionLost (admin shutdown)
 	//
 	// See https://www.postgresql.org/docs/current/errcodes-appendix.html
 	using Kind = ibBackendDatabaseException::Kind;
 
-	if (m_lastSqlState.length() >= 2) {
-		const wxString cls = m_lastSqlState.Left(2);
+	if (sqlState == wxT("55P03"))
+		return Kind::Timeout;
+	if (sqlState.length() >= 2) {
+		const wxString cls = sqlState.Left(2);
 		if (cls == wxT("08")) return Kind::ConnectionLost;
 		if (cls == wxT("23")) return Kind::Constraint;
 		if (cls == wxT("42")) return Kind::Syntax;
@@ -1046,15 +1053,28 @@ ibBackendDatabaseException::Kind ibDatabaseLayerPostgres::ClassifyDatabaseError(
 		if (cls == wxT("53")) return Kind::Timeout;
 		if (cls == wxT("40")) {
 			// 40P01 = deadlock_detected, 40001 = serialization_failure
-			if (m_lastSqlState == wxT("40P01")) return Kind::Deadlock;
+			if (sqlState == wxT("40P01")) return Kind::Deadlock;
 			return Kind::Timeout;
 		}
 	}
+	return Kind::Unknown;
+}
+
+ibBackendDatabaseException::Kind ibDatabaseLayerPostgres::ClassifyDatabaseError(int nativeCode) const
+{
+	// PostgreSQL surfaces both a CONNECTION_* status enum (small int,
+	// connection-level only) and SQLSTATE (5-char alphanumeric — the
+	// real classifier). We prefer SQLSTATE when present; the int code
+	// is only used for connection-level failures where libpq doesn't
+	// produce a SQLSTATE at all.
+	const ibBackendDatabaseException::Kind kind = ClassifySqlState(m_lastSqlState);
+	if (kind != ibBackendDatabaseException::Kind::Unknown || m_lastSqlState.length() >= 2)
+		return kind;
 
 	// No SQLSTATE — fall back to the libpq connection-status enum.
 	// CONNECTION_BAD is the only one we surface in error paths today.
 	(void)nativeCode;
-	return Kind::Unknown;
+	return ibBackendDatabaseException::Kind::Unknown;
 }
 
 bool ibDatabaseLayerPostgres::IsAvailable()

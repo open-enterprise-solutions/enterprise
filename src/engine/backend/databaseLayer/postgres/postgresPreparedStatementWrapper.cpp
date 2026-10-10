@@ -7,6 +7,18 @@
 #include <algorithm> // std::max — the highest `$N` of a statement
 #include <cstdlib>   // std::strtol — the affected-row count off libpq's ASCII buffer
 
+namespace {
+
+wxString SqlStateOf(ibInterfacePostgres* iface, PGresult* result)
+{
+	if (iface == nullptr || result == nullptr)
+		return wxString();
+	const char* state = iface->GetPQresultErrorField()(result, PG_DIAG_SQLSTATE);
+	return state != nullptr ? wxString::FromAscii(state) : wxString();
+}
+
+}
+
 ibPreparedStatementPostgresWrapper::ibPreparedStatementPostgresWrapper(ibInterfacePostgres* pInterface, PGconn* pDatabase, const wxString& strSQL, const wxString& strStatementName)
 	: ibDatabaseErrorReporter(), m_strSQL(strSQL), m_strStatementName(strStatementName)
 {
@@ -126,8 +138,15 @@ void ibPreparedStatementPostgresWrapper::Deallocate()
 		m_pInterface->GetPQclear()(pResult);
 }
 
+ibBackendDatabaseException::Kind ibPreparedStatementPostgresWrapper::ClassifyDatabaseError(int nativeCode) const
+{
+	(void)nativeCode;
+	return ibDatabaseLayerPostgres::ClassifySqlState(m_sqlState);
+}
+
 int ibPreparedStatementPostgresWrapper::DoRunQuery()
 {
+	m_sqlState.clear();
 	long nRows = -1;
 	int nParameters = m_Parameters.GetSize();
 	char** paramValues = m_Parameters.GetParamValues();
@@ -141,6 +160,7 @@ int ibPreparedStatementPostgresWrapper::DoRunQuery()
 		ExecStatusType status = m_pInterface->GetPQresultStatus()(pResult);
 		if ((status != PGRES_COMMAND_OK) && (status != PGRES_TUPLES_OK))
 		{
+			m_sqlState = SqlStateOf(m_pInterface, pResult);
 			SetErrorCode(ibDatabaseLayerPostgres::TranslateErrorCode(status, m_pInterface->GetPQresultErrorField()(pResult, PG_DIAG_SQLSTATE)));
 			SetErrorMessage(ConvertFromUnicodeStream(m_pInterface->GetPQresultErrorMessage()(pResult)));
 		}
@@ -171,6 +191,7 @@ int ibPreparedStatementPostgresWrapper::DoRunQuery()
 
 ibDatabaseResultSet* ibPreparedStatementPostgresWrapper::DoRunQueryWithResults()
 {
+	m_sqlState.clear();
 	int nParameters = m_Parameters.GetSize();
 	char** paramValues = m_Parameters.GetParamValues();
 	int* paramLengths = m_Parameters.GetParamLengths();
@@ -183,6 +204,7 @@ ibDatabaseResultSet* ibPreparedStatementPostgresWrapper::DoRunQueryWithResults()
 		ExecStatusType status = m_pInterface->GetPQresultStatus()(pResult);
 		if ((status != PGRES_COMMAND_OK) && (status != PGRES_TUPLES_OK))
 		{
+			m_sqlState = SqlStateOf(m_pInterface, pResult);
 			SetErrorCode(ibDatabaseLayerPostgres::TranslateErrorCode(status, m_pInterface->GetPQresultErrorField()(pResult, PG_DIAG_SQLSTATE)));
 			SetErrorMessage(ConvertFromUnicodeStream(m_pInterface->GetPQresultErrorMessage()(pResult)));
 		}

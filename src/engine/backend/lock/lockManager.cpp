@@ -28,58 +28,79 @@
 #include "backend/backend_exception.h"
 #include "backend/databaseLayer/connectionPool.h"
 #include "backend/databaseLayer/connectionScope.h"
-#include "backend/databaseLayer/databaseLayer.h"            // ibTxOptions (the lock TX still rides the driver's tpb)
-#include "backend/databaseLayer/databaseQueryBuilder.h"     // L2 door
-#include "backend/databaseLayer/databaseLayerException.h"   // a primary-key race arrives as this
 #include "backend/databaseLayer/databaseErrorCodes.h"
-#include <algorithm>
-#include <numeric>
+#include "backend/databaseLayer/databaseLayer.h"            // ibTxOptions (the lock TX still rides the driver's tpb)
+#include "backend/databaseLayer/databaseLayerException.h"   // a primary-key race arrives as this
+#include "backend/databaseLayer/databaseQueryBuilder.h"     // L2 door
 #include "backend/session/session.h"
 #include "backend/userInfo.h"
 
+#include <algorithm>
+#include <numeric>
 #include <set>
 
 namespace {
 
 // Table name kept here so call sites don't drift. Mirrors the
 // session-registry's sys_session table naming.
-const wxString kSysLockTable = wxT("sys_lock");
-const wxString kSysLockKeyTable = wxT("sys_lock_key");
-
 // The header insert lost the primary key. PostgreSQL aborts the transaction
 // on that error, so the caller rolls back and tries the UPDATE, which now
-// finds the row.
+// finds the row. The decision does not read the message: a server whose
+// lc_messages is not English still reports the same failure.
 struct HeaderAlreadyThere {};
 
-bool IsHeaderRace(const ibDatabaseLayerException& err)
+// The header UPDATE met a deadlock or a serialization failure. The caller
+// rolls back and tries again. A noWait acquire does not: it is refused.
+struct HeaderBusy {};
+
+bool HeaderWait(const ibDatabaseLayerException& err)
 {
-	if (err.GetKind() == ibBackendDatabaseException::Kind::Constraint)
+	using Kind = ibBackendDatabaseException::Kind;
+	const Kind kind = err.GetKind();
+	if (kind == Kind::Deadlock || kind == Kind::Timeout)
 		return true;
-	// Firebird reports the SQLCODE (-803) from a prepared statement; the isc
-	// codes are what the connection classifier names for the same failure.
+	const wxString state = err.GetSqlState();
+	// 55P03 is lock_not_available: PostgreSQL's answer to NOWAIT and to lock_timeout.
+	if (state == wxT("40001") || state == wxT("40P01") || state == wxT("55P03"))
+		return true;
+	// Firebird names these even when the statement path did not classify them.
+	// isc_update_conflict is the one a waiter sees on an existing header when
+	// the server is not in read-committed read-consistency.
 	const int code = err.GetDriverErrorCode();
-	if (code == -803 || code == 335544665 || code == 335544349)
-		return true;
-	const wxString text = err.GetErrorDescription().Lower();
-	return text.Find(wxT("unique")) != wxNOT_FOUND
-		|| text.Find(wxT("duplicate")) != wxNOT_FOUND;
+	return code == 335544336    // isc_deadlock
+		|| code == 335544345    // isc_lock_conflict
+		|| code == 335544451    // isc_update_conflict
+		|| code == 335544510;   // isc_lock_timeout
 }
 
 // Hold sys_lock_key for this key until the transaction ends. An UPDATE of the
-// existing row is the lock. A missing row is inserted; the primary key decides
-// the race with the other connection that inserted it first.
-void LockKeyHeader(ibDatabaseQueryBuilder& q, const wxString& ns, const wxString& hash)
+// existing row is the lock. A missing row is inserted; any failure of that
+// insert, on the first attempt, is the other connection having inserted it.
+// The retry updates the row. If that update still finds nothing and the
+// insert fails again, the error is the caller's — it is not "stayed busy".
+void LockKeyHeader(ibDatabaseQueryBuilder& q, const wxString& ns, const wxString& hash,
+	bool noWait, int attempt)
 {
-	const int locked = q.Execute(ibUpdate(kSysLockKeyTable,
-		{ { wxT("namespace"), ibConst(ibValue(ns)) } },
-		ibBinOp(ibQueryBinOp::And,
-			ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("namespace")), ibConst(ibValue(ns))),
-			ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("keyHash")),   ibConst(ibValue(hash))))));
+	int locked = 0;
+	try {
+		locked = q.Execute(ibUpdate(lock_key_table,
+			{ { wxT("namespace"), ibConst(ibValue(ns)) } },
+			ibBinOp(ibQueryBinOp::And,
+				ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("namespace")), ibConst(ibValue(ns))),
+				ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("keyHash")),   ibConst(ibValue(hash))))));
+	}
+	catch (const ibDatabaseLayerException& err) {
+		if (!HeaderWait(err))
+			throw;
+		if (noWait)
+			ibBackendLockException::RowLockTimeoutThrow(ns);
+		throw HeaderBusy();
+	}
 	if (locked >= 1)
 		return;
 
 	try {
-		if (q.Execute(ibInsert(kSysLockKeyTable, {
+		if (q.Execute(ibInsert(lock_key_table, {
 				{ wxT("namespace"), ibConst(ibValue(ns)) },
 				{ wxT("keyHash"),   ibConst(ibValue(hash)) },
 			})) < 1) {
@@ -87,9 +108,10 @@ void LockKeyHeader(ibDatabaseQueryBuilder& q, const wxString& ns, const wxString
 		}
 	}
 	catch (const ibDatabaseLayerException& err) {
-		if (IsHeaderRace(err))
-			throw HeaderAlreadyThere();
-		throw;
+		if (attempt > 0)
+			throw;
+		(void)err;
+		throw HeaderAlreadyThere();
 	}
 }
 
@@ -176,7 +198,8 @@ ibLockHandle ibLockManager::Acquire(const std::vector<ibLockItem>& items,
 		acquired.clear();
 		try {
 			for (std::size_t index : headerOrder)
-				LockKeyHeader(q, items[index].namespaceName, items[index].KeyHash());
+				LockKeyHeader(q, items[index].namespaceName, items[index].KeyHash(),
+					!opts.wait, attempt);
 
 			const wxString ownerGuidStr = ownerGuid.str();
 			const ibDateTime now = ibDateTime::Now();
@@ -191,8 +214,8 @@ ibLockHandle ibLockManager::Acquire(const std::vector<ibLockItem>& items,
 				bool       conflictHit = false;
 				wxString   conflictUser;
 				{
-					ibQueryIR ir(ibProject(
-						ibFilter(ibScan(kSysLockTable),
+					ibQueryIR ir(						ibProject(
+						ibFilter(ibScan(lock_table),
 							ibBinOp(ibQueryBinOp::And,
 								ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("namespace")), ibConst(ibValue(item.namespaceName))),
 								ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("keyHash")),   ibConst(ibValue(keyHash))))),
@@ -236,7 +259,7 @@ ibLockHandle ibLockManager::Acquire(const std::vector<ibLockItem>& items,
 					if (item.lockMode > ownExistingMode && opts.allowUpgrade) {
 						// S → X on the row we already hold. The guid has to be the one
 						// just read — an empty guid updates nothing and leaves the lock shared.
-						const int updated = q.Execute(ibUpdate(kSysLockTable,
+						const int updated = q.Execute(ibUpdate(lock_table,
 							{ { wxT("lockMode"), ibConst(ibValue(static_cast<int>(item.lockMode))) } },
 							ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("lockGuid")),
 							        ibConst(ibValue(ownExistingGuid.str())))));
@@ -248,7 +271,7 @@ ibLockHandle ibLockManager::Acquire(const std::vector<ibLockItem>& items,
 				}
 
 				const ibGuid newGuid = wxNewUniqueGuid;
-				if (q.Execute(ibInsert(kSysLockTable, {
+				if (q.Execute(ibInsert(lock_table, {
 						{ wxT("lockGuid"),    ibConst(ibValue(newGuid.str())) },
 						{ wxT("sessionGuid"), ibConst(ibValue(ownerGuidStr)) },
 						{ wxT("namespace"),   ibConst(ibValue(item.namespaceName)) },
@@ -274,6 +297,12 @@ ibLockHandle ibLockManager::Acquire(const std::vector<ibLockItem>& items,
 			// The other connection inserted the header and may still hold it.
 			// The next attempt updates that row and waits with the transaction.
 		}
+		catch (const HeaderBusy&) {
+			if (q.IsActiveTransaction())
+				q.RollBack();
+			// Deadlock or serialization on the header. The next attempt asks again.
+			// noWait never arrives here: it was refused as a lock exception.
+		}
 		catch (const ibCoreException&) {
 			if (q.IsActiveTransaction())
 				q.RollBack();
@@ -281,7 +310,7 @@ ibLockHandle ibLockManager::Acquire(const std::vector<ibLockItem>& items,
 		}
 	}
 
-	ibBackendCoreException::Error(_("ibLockManager: the lock key stayed busy."));
+	ibBackendCoreException::Error(_("ibLockManager: the lock header stayed busy."));
 	return ibLockHandle();
 }
 
@@ -315,7 +344,7 @@ void ibLockManager::ReleaseRows(const std::vector<ibGuid>& lockGuids)
 			guids.reserve(lockGuids.size());
 			for (const auto& g : lockGuids)
 				guids.push_back(ibConst(ibValue(g.str())));
-			q.Execute(ibDelete(kSysLockTable, ibIn(ibCol(wxT("lockGuid")), std::move(guids))));
+			q.Execute(ibDelete(lock_table, ibIn(ibCol(wxT("lockGuid")), std::move(guids))));
 		}
 		catch (const ibCoreException&) {
 			if (q.IsActiveTransaction())
@@ -349,7 +378,7 @@ void ibLockManager::OnSessionEnd(const ibGuid& sessionGuid)
 
 	q.BeginTransaction();
 	try {
-		q.Execute(ibDelete(kSysLockTable,
+		q.Execute(ibDelete(lock_table,
 			ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("sessionGuid")), ibConst(ibValue(sessionGuid.str())))));
 	}
 	catch (const ibCoreException&) {
@@ -379,7 +408,7 @@ void ibLockManager::SweepOrphans(const std::vector<ibGuid>& liveSessionGuids)
 	// several locks is one DELETE, not one per row.
 	std::set<wxString> orphans;
 	try {
-		ibQueryResult rs = q.ExecuteIR(ibQueryIR(ibProject(ibScan(kSysLockTable),
+		ibQueryResult rs = q.ExecuteIR(ibQueryIR(ibProject(ibScan(lock_table),
 			{ { ibCol(wxT("sessionGuid")), wxEmptyString } })));
 		while (rs.Next()) {
 			const wxString owner = rs.GetResultString(wxT("sessionGuid"));
@@ -393,6 +422,35 @@ void ibLockManager::SweepOrphans(const std::vector<ibGuid>& liveSessionGuids)
 
 	for (const wxString& owner : orphans)
 		OnSessionEnd(ibGuid(owner));
+
+	// A header with nobody holding the key is only a row. Re-creation is the
+	// same insert the first acquire does, and the primary key plus the retry
+	// serialise it, so dropping these cannot grant a key twice.
+	try {
+		std::vector<std::pair<wxString, wxString>> headers;
+		ibQueryResult rs = q.ExecuteIR(ibQueryIR(ibProject(ibScan(lock_key_table),
+			{ { ibCol(wxT("namespace")), wxEmptyString },
+			  { ibCol(wxT("keyHash")),   wxEmptyString } })));
+		while (rs.Next())
+			headers.emplace_back(rs.GetResultString(wxT("namespace")), rs.GetResultString(wxT("keyHash")));
+		for (const auto& header : headers) {
+			ibQueryResult held = q.ExecuteIR(ibQueryIR(ibProject(
+				ibFilter(ibScan(lock_table),
+					ibBinOp(ibQueryBinOp::And,
+						ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("namespace")), ibConst(ibValue(header.first))),
+						ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("keyHash")),   ibConst(ibValue(header.second))))),
+				{ { ibCol(wxT("namespace")), wxT("n") } })));
+			if (held.Next())
+				continue;
+			q.Execute(ibDelete(lock_key_table,
+				ibBinOp(ibQueryBinOp::And,
+					ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("namespace")), ibConst(ibValue(header.first))),
+					ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("keyHash")),   ibConst(ibValue(header.second))))));
+		}
+	}
+	catch (const ibCoreException&) {
+		return;
+	}
 }
 
 std::vector<ibLockSnapshotRow> ibLockManager::GetSnapshot() const
@@ -409,7 +467,7 @@ std::vector<ibLockSnapshotRow> ibLockManager::GetSnapshot() const
 
 	// Read-only — no TX needed; default isolation gives us latest committed state from other processes.
 	try {
-		ibQueryResult rs = q.ExecuteIR(ibQueryIR(ibProject(ibScan(kSysLockTable),
+		ibQueryResult rs = q.ExecuteIR(ibQueryIR(ibProject(ibScan(lock_table),
 			{ { ibCol(wxT("lockGuid")),    wxEmptyString },
 			  { ibCol(wxT("sessionGuid")), wxEmptyString },
 			  { ibCol(wxT("namespace")),   wxEmptyString },

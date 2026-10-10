@@ -171,6 +171,7 @@ add_executable(oes_tests
     test_metadataMove.cpp
     test_sectionInterfaceItems.cpp
     test_socketLock.cpp
+    test_lockRace.cpp
 )
 
 target_link_libraries(oes_tests
@@ -613,7 +614,7 @@ oes_discover_tests(oes_frontend_runtime_test)
 # the layer is absent and the target would not link.
 # ---------------------------------------------------------------------------
 if(OES_USE_POSTGRESQL)
-    add_executable(oes_pg_dialect_test test_postgresDialect.cpp)
+    add_executable(oes_pg_dialect_test test_postgresDialect.cpp test_lockRace.cpp)
 
     target_link_libraries(oes_pg_dialect_test
         PRIVATE
@@ -622,7 +623,7 @@ if(OES_USE_POSTGRESQL)
             GTest::gtest_main
     )
 
-    target_compile_definitions(oes_pg_dialect_test PRIVATE OES_TESTING)
+    target_compile_definitions(oes_pg_dialect_test PRIVATE OES_TESTING OES_LOCK_RACE_POSTGRES_ONLY)
 
     target_include_directories(oes_pg_dialect_test PRIVATE
         "${CMAKE_SOURCE_DIR}/src"
@@ -638,34 +639,4 @@ if(OES_USE_POSTGRESQL)
     )
 
     oes_discover_tests(oes_pg_dialect_test)
-endif()
-
-# Two connections, one sys_lock key. PostgreSQL skips without OES_PG_USER;
-# Firebird skips when the client cannot create a file database.
-if(OES_USE_POSTGRESQL OR OES_USE_FIREBIRD)
-    add_executable(oes_lock_race_test test_lockRace.cpp)
-
-    target_link_libraries(oes_lock_race_test
-        PRIVATE
-            backend
-            GTest::gtest
-            GTest::gtest_main
-    )
-
-    target_compile_definitions(oes_lock_race_test PRIVATE OES_TESTING)
-
-    target_include_directories(oes_lock_race_test PRIVATE
-        "${CMAKE_SOURCE_DIR}/src"
-        "${CMAKE_SOURCE_DIR}/src/engine"
-        "${CMAKE_SOURCE_DIR}/src/engine/backend"
-    )
-
-    set_target_properties(oes_lock_race_test PROPERTIES
-        CXX_STANDARD          17
-        CXX_STANDARD_REQUIRED ON
-        BUILD_RPATH            "${CMAKE_BINARY_DIR}/bin"
-        INSTALL_RPATH          "${CMAKE_BINARY_DIR}/bin"
-    )
-
-    oes_discover_tests(oes_lock_race_test)
 endif()
