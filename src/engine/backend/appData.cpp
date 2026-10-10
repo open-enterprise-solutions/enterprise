@@ -1228,11 +1228,64 @@ bool ibApplicationInstance::AuthenticateUser(const wxString& strUserName,
                                           const wxString& strUserPassword,
                                           ibUserInfo& outInfo)
 {
-	// Open-access mode — no sys_user rows at all AND caller did not
-	// supply a user name. Historical behaviour is "pass through";
-	// outInfo stays default-constructed (IsOk() false).
-	if (strUserName.IsEmpty() && !ibUserInfo::HasAny())
-		return true;
+	// An empty name used to be accepted whenever HasAny() came back false,
+	// and HasAny() came back false both for an empty table and for a
+	// query that threw. A process that serves other clients (the
+	// application server, the web server) does not offer that pass-through.
+	if (strUserName.IsEmpty()) {
+		bool noUsers = false;
+		try {
+			noUsers = !ibUserInfo::HasAny();
+		}
+		catch (const ibBackendException& err) {
+			ibJournalError(wxT("auth"),
+				wxT("login refused: the user list could not be read: %s"),
+				err.GetErrorDescription());
+			if (ibLog) {
+				try {
+					ibLog->Audit(wxT("auth"), wxT("login_failed"),
+						wxT("reason=user_list_unreadable"));
+				}
+				catch (const ibBackendException&) {
+					ibJournalError(wxT("auth"),
+						wxT("the refusal could not be written to the audit log"));
+				}
+			}
+			return false;
+		}
+
+		const bool servesClients = ServiceMode() || WebEnterpriseMode();
+		if (ibOpenAccessPermitted(noUsers, servesClients)) {
+			ibJournalInfo(wxT("auth"),
+				wxT("open access: the user list is empty, and this process is not serving other clients"));
+			if (ibLog) {
+				try {
+					ibLog->Audit(wxT("auth"), wxT("open_access"),
+						wxT("reason=empty_user_list"));
+				}
+				catch (const ibBackendException&) {
+					ibJournalError(wxT("auth"),
+						wxT("open access was granted and the audit row could not be written"));
+				}
+			}
+			return true;
+		}
+		if (noUsers) {
+			ibJournalError(wxT("auth"),
+				wxT("login refused: open access is not offered while this process serves other clients"));
+			if (ibLog) {
+				try {
+					ibLog->Audit(wxT("auth"), wxT("login_failed"),
+						wxT("reason=open_access_refused"));
+				}
+				catch (const ibBackendException&) {
+					ibJournalError(wxT("auth"),
+						wxT("the refusal could not be written to the audit log"));
+				}
+			}
+			return false;
+		}
+	}
 
 	outInfo = ibUserInfo::Read(strUserName);
 	if (!outInfo.IsOk()) {

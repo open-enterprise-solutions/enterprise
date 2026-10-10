@@ -182,13 +182,12 @@ ibUserInfo ibUserInfo::Read(const wxString& userName)
 
 bool ibUserInfo::HasAny()
 {
-	try {
-		ibDatabaseQueryBuilder q;
-		ibQueryResult result = q.ExecuteIR(
-			ibQueryIR(ibProject(ibScan(user_table), { { ibCol(wxT("name")), wxEmptyString } })));
-		return result.Next();
-	}
-	catch (...) { return false; }
+	// No catch. A missing connection or a failed statement used to come back
+	// as false, and an empty name was then accepted as open access.
+	ibDatabaseQueryBuilder q;
+	ibQueryResult result = q.ExecuteIR(
+		ibQueryIR(ibProject(ibScan(user_table), { { ibCol(wxT("name")), wxEmptyString } })));
+	return result.Next();
 }
 
 std::vector<ibUserInfo::Brief> ibUserInfo::ListAll()

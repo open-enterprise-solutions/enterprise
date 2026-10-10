@@ -44,6 +44,13 @@ enum ibRunMode {
 	eSANDBOX_MODE  = 7,   // a sandbox: opens a base, runs, closes (codeRunner)
 };
 
+// An empty user list is open access only on a process that is not serving
+// other people's clients. A list that was not read is not empty.
+inline bool ibOpenAccessPermitted(bool userListEmpty, bool servesClients)
+{
+	return userListEmpty && !servesClients;
+}
+
 //////////////////////////////////////////////////////////////////
 #define _app_start_default_flag 0x0000
 #define _app_start_create_debug_server_flag 0x0080
@@ -329,9 +336,11 @@ public:
 	// Pure credential check used by Login above. Looks up the user, verifies
 	// the password (PBKDF2 with silent MD5→PBKDF2 upgrade via NeedsRehash),
 	// fills `outInfo` on success, and does NOT mutate any session state.
-	// Returns true for open-access mode too (empty sys_user populating +
-	// any creds → pass with outInfo.IsOk()==false). Safe to call from the
-	// registry thread without a ibSessionScope. Exposed as a building block
+	// An empty name is open access only when the user list was read, is
+	// empty, and this process is not the application server or the web
+	// server (outInfo stays empty). A list that could not be read, or an
+	// empty list on a process that serves other clients, returns false.
+	// Safe to call from the registry thread without a ibSessionScope. Exposed as a building block
 	// so registry's ProcessAttach can short-circuit on bad creds before
 	// pinning a session scope.
 	bool AuthenticateUser(const wxString& strUserName,
