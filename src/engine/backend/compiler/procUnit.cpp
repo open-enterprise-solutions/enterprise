@@ -15,6 +15,17 @@
 #include <algorithm>
 #include <utility>   // std::forward — the variadic Raise below
 
+#if defined(_MSC_VER)
+#  ifndef WIN32_LEAN_AND_MEAN
+#    define WIN32_LEAN_AND_MEAN
+#  endif
+#  ifndef NOMINMAX
+#    define NOMINMAX
+#  endif
+#  include <windows.h>
+#  include <malloc.h>   // _resetstkoflw — the guard page, after an overflow
+#endif
+
 // Operand resolution for the bytecode interpreter. Three slot kinds:
 //   slot <= 0           — local frame (mutable).
 //   slot == DEF_VAR_CONST — constant in the bytecode template (read-only).
@@ -526,11 +537,11 @@ struct ibProcStackGuard {
 		m_state = state;
 		wxASSERT(state != nullptr);
 		// The count is the limit a script sees (MAX_REC_COUNT). The stack
-		// check is the overflow that used to kill the process before the
-		// count was reached — a fiber reserved less than this frame costs.
-		// On ibFiber::kStackReserve the count is reached first, and both
-		// roads say the same thing.
-		if (state->m_recCount > MAX_REC_COUNT || ibFiber::StackLow())
+		// probe lives in Execute, ahead of this frame: a check here runs
+		// only after the prologue has committed it, which is the overflow
+		// on a reserve this frame does not fit. On kStackReserve the count
+		// is reached first, and it raises from a frame that fit.
+		if (state->m_recCount > MAX_REC_COUNT)
 			RaiseRecursionLimit(state);
 		state->m_recCount++;
 		m_currentContext = runContext;
@@ -1064,7 +1075,69 @@ inline ibValue GetValue(const ibValue& cValue1)
 //						Construction/Destruction                    //
 //////////////////////////////////////////////////////////////////////
 
-void ibProcUnit::Execute(ibRunContext* pContext, ibValue* pvarRetValue, bool bDelta)
+#if defined(_MSC_VER)
+namespace {
+
+struct ibExecuteArgs {
+	ibProcUnit* self;
+	ibRunContext* ctx;
+	ibValue* ret;
+	bool delta;
+};
+
+} // namespace
+
+void ibCallExecuteBody(void* raw)
+{
+	ibExecuteArgs* const args = static_cast<ibExecuteArgs*>(raw);
+	args->self->ExecuteBody(args->ctx, args->ret, args->delta);
+}
+
+namespace {
+
+// No C++ object with a destructor: __try cannot share a frame with one
+// (C2712). A script error is a C++ exception, not this code, so the filter
+// keeps searching and the catch above the fiber still sees it.
+int RunBodyOrOverflow(void (*fn)(void*), void* arg)
+{
+	__try {
+		fn(arg);
+		return 0;
+	}
+	__except (GetExceptionCode() == static_cast<DWORD>(EXCEPTION_STACK_OVERFLOW)
+		? EXCEPTION_EXECUTE_HANDLER
+		: EXCEPTION_CONTINUE_SEARCH) {
+		return 1;
+	}
+}
+
+} // namespace
+#endif
+
+// Out of line, and kept small. ExecuteBody's prologue commits that whole
+// frame before any of its checks run; on MSVC that commit is _chkstk, and
+// the page past the reserve becomes a stack overflow the check never
+// reaches. Asking here, the refusal still has kRecursionSlack under it.
+IB_NOINLINE void ibProcUnit::Execute(ibRunContext* pContext, ibValue* pvarRetValue, bool bDelta)
+{
+	if (ibFiber::StackLow())
+		RaiseRecursionLimit(ibSession::PUStateOf(ibSession::Current()));
+
+#if defined(_MSC_VER)
+	ibExecuteArgs args{ this, pContext, pvarRetValue, bDelta };
+	if (RunBodyOrOverflow(&ibCallExecuteBody, &args)) {
+		// The probe let a frame through that did not fit. The overflow
+		// ate the guard page; put it back, then refuse from this frame,
+		// which is the one the probe measured.
+		(void)_resetstkoflw();
+		RaiseRecursionLimit(ibSession::PUStateOf(ibSession::Current()));
+	}
+#else
+	ExecuteBody(pContext, pvarRetValue, bDelta);
+#endif
+}
+
+IB_NOINLINE void ibProcUnit::ExecuteBody(ibRunContext* pContext, ibValue* pvarRetValue, bool bDelta)
 {
 	struct ibTryLabel {
 

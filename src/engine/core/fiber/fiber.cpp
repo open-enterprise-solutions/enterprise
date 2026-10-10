@@ -415,8 +415,13 @@ void __stdcall ibFiber::FiberProc(void* arg)
 #  endif
 	// The reservation, not the commit. AllocationBase is the low end;
 	// the regions that share it run up to the top the pointer grows from.
+	// The address and the output buffer are different slots: one buffer
+	// for both aliases the page being described with the place the
+	// description is written.
+	volatile char here = 0;
 	MEMORY_BASIC_INFORMATION info;
-	if (::VirtualQuery(&info, &info, sizeof(info)) != 0 && info.AllocationBase != nullptr) {
+	if (::VirtualQuery(const_cast<char*>(&here), &info, sizeof(info)) != 0
+		&& info.AllocationBase != nullptr) {
 		const char* const base = static_cast<const char*>(info.AllocationBase);
 		const char* end = base;
 		const char* p = base;
