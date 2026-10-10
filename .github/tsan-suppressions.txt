@@ -1,0 +1,12 @@
+# ThreadSanitizer suppressions — third-party races only.
+#
+# A line here is a CLAIM, so each one names whose code it is and why the race
+# is not ours to fix. Our own code never belongs in this file: a race in core,
+# backend or a test is either a missing fiber annotation or a real bug, and a
+# suppression would hide it. The fiber switch tells TSan itself
+# (__tsan_switch_to_fiber in ibFiber::SwitchTo); that path is not suppressed.
+#
+# Format: https://github.com/google/sanitizers/wiki/ThreadSanitizerSuppressions
+#   race:<substring of the stack>
+#   deadlock:<substring>
+#   called_from_lib:<library>

@@ -592,6 +592,102 @@ jobs:
           key: ccache-${{ github.job }}-${{ github.sha }}
 
   # ---------------------------------------------------------------------------
+  # ThreadSanitizer on the suites a fiber can race.
+  #
+  # TSan does not see the assembly switch (fiber_x64.S / fiber_arm64.S).
+  # ibFiber tells it with __tsan_create_fiber / __tsan_switch_to_fiber /
+  # __tsan_destroy_fiber, and the happens-before is the switch itself
+  # (flags 0, not no_sync). Without those calls this job reports a race on
+  # every value that crosses a park, or dies inside the sanitizer.
+  #
+  # The suites are the ones that park, share a session, pool a connection,
+  # take a lock, or run the job manager — not the whole backend. A race in
+  # our code fails the job. Suppressions are third-party only, each with a
+  # reason, in .github/tsan-suppressions.txt.
+  #
+  # GCC 13, not the ubuntu-22.04 default. GCC 11's libtsan reports a double
+  # lock of an already-destroyed mutex when a fiber locks a mutex that lives
+  # on the calling thread's stack, and it prints no previous lock. The same
+  # binary filter on GCC 13 (109 tests, halt_on_error=1) does not. That
+  # report is the sanitizer's fiber stack tracking; a suppression in our
+  # code would hide the next real lock.
+  # ---------------------------------------------------------------------------
+  tests-tsan:
+    name: Tests (Linux, TSan)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      CC: gcc
+      CXX: g++
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 1500M
+      CMAKE_C_COMPILER_LAUNCHER: ccache
+      CMAKE_CXX_COMPILER_LAUNCHER: ccache
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: false
+          fetch-depth: 1
+
+      - run: bash .github/fetch-submodules.sh
+        shell: bash
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake ninja-build ccache pkg-config \
+            libgtk-3-dev libsqlite3-dev uuid-dev
+          g++ --version
+
+      - name: Compiler cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .ccache
+          key: ccache-${{ github.job }}-${{ github.sha }}
+          restore-keys: ccache-${{ github.job }}-
+
+      - name: Configure
+        run: >
+          cmake --preset linux-debug -DBUILD_TESTING=ON -DOES_USE_FIREBIRD=ON -DOES_USE_POSTGRESQL=ON
+          -DOES_SANITIZE=thread -DwxBUILD_PRECOMP=OFF
+
+      # gtest_discover_tests runs the binary to list tests. A race at that
+      # startup fails the build, which is what we want; halt stays off only
+      # so one report does not abort the lister before it has printed.
+      - name: Build the test target
+        env:
+          TSAN_OPTIONS: halt_on_error=0:exit_code=0
+        run: cmake --build --preset linux-debug --target oes_tests
+
+      - name: Run
+        working-directory: build/linux-debug
+        env:
+          TSAN_OPTIONS: halt_on_error=1:suppressions=${{ github.workspace }}/.github/tsan-suppressions.txt
+        run: >
+          ./bin/Debug/oes_tests
+          --gtest_filter=WorkerPool*:FiberTsan.*:SessionHolder.*:SessionDbLayer.*:ConnectionPool.*:SocketLockFix.*:JobManager.*:JobSchedule.*
+
+      - name: Journal on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: journal-linux-tsan
+          path: build/linux-debug/bin/Debug/journal/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Compiler cache statistics
+        if: always()
+        run: ccache -s -v || true
+      - name: Save the compiler cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .ccache
+          key: ccache-${{ github.job }}-${{ github.sha }}
+
+  # ---------------------------------------------------------------------------
   # The GUI harness is a SEPARATE job, and separate on purpose: it links
   # frontend.dll, needs a live wxApp, and runs headless under Xvfb. Its failure
   # mode (a hung modal on an assert) is different in kind from a backend test's,

@@ -10,6 +10,9 @@
  * Pointer authentication (arm64e) is not the ABI this builds: the forged
  * link register is the raw address of the trampoline. The macOS port is
  * the plain arm64 slice.
+ *
+ * TSan does not see this ret. The caller notifies it with
+ * __tsan_switch_to_fiber immediately before the call.
  */
 
 #if defined(__APPLE__)
