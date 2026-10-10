@@ -57,6 +57,9 @@
 #  include <windows.h>
 #  include <psapi.h>
 #  ifdef _MSC_VER
+#    include <intrin.h>   // _AddressOfReturnAddress — DISABLED_StackProbe's baseline
+#  endif
+#  ifdef _MSC_VER
 #    pragma comment(lib, "psapi.lib")
 #  endif
 #elif defined(__linux__)
@@ -68,6 +71,7 @@
 #include "backend/compiler/byteCode.h"
 #include "backend/compiler/codeDef.h"
 #include "backend/compiler/value.h"
+#include "core/fiber/fiber.h"               // DISABLED_StackProbe — the per-call StackRemaining
 #include "core/fnumber.h"
 #include "core/fdatetime.h"                 // DateBench / DISABLED_DateLoop
 #include "backend/appData.h"                   // SessionBench — the application's road
@@ -219,6 +223,26 @@ TEST(RuntimeBench, DISABLED_ArithLoop) {
     volatile int64_t s = 0;
     const double baseTot = BestTotalNs(5, [&]{ s = 0; for (long i = 0; i < n; ++i) s += i; g_sink += (uint64_t)s; });
     Row("arith loop (ns/iter)", oesTot / double(n), baseTot / double(n), "ns", oesTot, baseTot);
+    SUCCEED();
+}
+
+// The check Execute makes before the body. Native is the frame address
+// alone, which is the measurement the probe is built on.
+TEST(RuntimeBench, DISABLED_StackProbe) {
+    ibFiber::ConvertThread();
+    struct Release { ~Release() { ibFiber::ReleaseThread(); } } release;
+    const long n = 1000000;
+    const double oes = TimeNsPerOp(n, [](long) {
+        g_sink += static_cast<uint64_t>(ibFiber::StackRemaining());
+    });
+    const double base = TimeNsPerOp(n, [](long) {
+#if defined(_MSC_VER)
+        g_sink += reinterpret_cast<uintptr_t>(_AddressOfReturnAddress());
+#else
+        g_sink += reinterpret_cast<uintptr_t>(__builtin_frame_address(0));
+#endif
+    });
+    Row("stack probe (ns/call)", oes, base, "ns");
     SUCCEED();
 }
 

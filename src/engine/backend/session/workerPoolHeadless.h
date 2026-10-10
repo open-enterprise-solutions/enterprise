@@ -133,6 +133,9 @@ private:
 	void        DrainLease(ibSessionQueue* q);
 	void        StartLease(ibSession* session, ibSessionQueue* q);
 	void        FinishFiber(ibSession* session, ibSessionQueue* q, ibFiber* fiber);
+	// Create failed. Every task still queued is the refusal, and the
+	// queue is empty afterwards so the worker does not claim it again.
+	void        RefuseQueued(ibSessionQueue* q, const char* reason);
 	bool        ShouldInterrupt(ibSession* session) const;
 	// m_mtx must be held. True when a fiber parked on THIS thread should
 	// be resumed: it was woken, it has queued tasks, the pool is
