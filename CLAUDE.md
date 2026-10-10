@@ -335,8 +335,9 @@ msbuild enterprise.sln /p:Configuration=Debug /p:Platform=x64 /m
 Output lands in `bin\<Platform>\<Configuration>\` — `Platform` is `Win32` (x86)
 or `Win64` (x64), e.g. `bin\Win64\Release\`, `bin\Win32\Debug\`.
 
-`cmake` must be on `PATH` for MSBuild too: before it compiles, the backend project runs
-`compiler/engineFingerprint.cmake` (the engine half of the bytecode cache key, see *Runtime infrastructure*).
+MSBuild needs a cmake too: before it compiles, the backend project runs `compiler/engineFingerprint.cmake`
+(the engine half of the bytecode cache key, see *Runtime infrastructure*) with Visual Studio's own cmake (the
+*C++ CMake tools* component) when installed, else `cmake` from `PATH`.
 
 ### CMake (macOS / Linux)
 

@@ -110,8 +110,8 @@ On a copy of a 40 000-employee payroll base (Release, x86): a month's payroll re
 ### Windows
 
 1. Install [Visual Studio 2019 or 2022](https://visualstudio.microsoft.com/) with the **Desktop development with C++** workload,
-   and [CMake](https://cmake.org/download/) on the system `PATH`: the backend project runs a CMake
-   script before it compiles.
+   and its *C++ CMake tools for Windows* component (or [CMake](https://cmake.org/download/) on the
+   system `PATH`): the backend project runs a CMake script before it compiles.
 2. Clone the repository and initialise the wxWidgets submodule:
    ```cmd
    git clone https://github.com/open-enterprise-solutions/enterprise.git

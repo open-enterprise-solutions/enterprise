@@ -1612,7 +1612,14 @@
     cmake has to be on PATH, as it is for the Windows CI job.
   -->
   <Target Name="EngineFingerprint" BeforeTargets="ClCompile">
+    <!-- Visual Studio's own cmake (its C++ CMake tools) when installed, else cmake from PATH, so a
+         build from the IDE or a plain prompt needs nobody to edit PATH. The hash does not depend
+         on which cmake runs it. -->
+    <PropertyGroup>
+      <OesCMake Condition="'$(OesCMake)' == '' and '$(VsInstallRoot)' != '' and Exists('$(VsInstallRoot)\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe')">&quot;$(VsInstallRoot)\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe&quot;</OesCMake>
+      <OesCMake Condition="'$(OesCMake)' == ''">cmake</OesCMake>
+    </PropertyGroup>
     <MakeDir Directories="$(IntDir)" />
-    <Exec Command="cmake -D OES_COMPILER_DIR=&quot;$(ProjectDir)compiler&quot; -D OES_SYSTEM_DIR=&quot;$(ProjectDir)system&quot; -D OES_BACKEND_DIR=&quot;$(ProjectDir).&quot; -D OES_FINGERPRINT_OUT=&quot;$(IntDir)engineFingerprintBuild.h&quot; -P &quot;$(ProjectDir)compiler\engineFingerprint.cmake&quot;" />
+    <Exec Command="$(OesCMake) -D OES_COMPILER_DIR=&quot;$(ProjectDir)compiler&quot; -D OES_SYSTEM_DIR=&quot;$(ProjectDir)system&quot; -D OES_BACKEND_DIR=&quot;$(ProjectDir).&quot; -D OES_FINGERPRINT_OUT=&quot;$(IntDir)engineFingerprintBuild.h&quot; -P &quot;$(ProjectDir)compiler\engineFingerprint.cmake&quot;" />
   </Target>
 </Project>

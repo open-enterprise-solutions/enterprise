@@ -70,6 +70,15 @@ set(OES_ENGINE_FINGERPRINT_HEADER "${CMAKE_CURRENT_BINARY_DIR}/generated/engineF
 file(GLOB_RECURSE OES_FINGERPRINT_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/compiler/*"
     "${CMAKE_CURRENT_SOURCE_DIR}/system/*")
+# The list of those files is an input too. A file that is DELETED leaves no newer
+# input behind, so the hash would not run again and the old key would stay. The
+# glob reconfigures on an added or removed file; the list is written then, and only
+# when it changed (file(CONFIGURE) keeps the timestamp of an identical file).
+set(OES_FINGERPRINT_INPUTS "${CMAKE_CURRENT_BINARY_DIR}/generated/engineFingerprintInputs.txt")
+set(_oes_fp_sorted ${OES_FINGERPRINT_SOURCES})
+list(SORT _oes_fp_sorted)
+string(REPLACE ";" "\n" _oes_fp_inputs_text "${_oes_fp_sorted}")
+file(CONFIGURE OUTPUT "${OES_FINGERPRINT_INPUTS}" CONTENT "${_oes_fp_inputs_text}\n" @ONLY)
 add_custom_command(
     OUTPUT "${OES_ENGINE_FINGERPRINT_HEADER}"
     COMMAND ${CMAKE_COMMAND}
@@ -78,7 +87,7 @@ add_custom_command(
         -DOES_BACKEND_DIR=${CMAKE_CURRENT_SOURCE_DIR}
         -DOES_FINGERPRINT_OUT=${OES_ENGINE_FINGERPRINT_HEADER}
         -P ${CMAKE_CURRENT_SOURCE_DIR}/compiler/engineFingerprint.cmake
-    DEPENDS ${OES_FINGERPRINT_SOURCES} "${CMAKE_CURRENT_SOURCE_DIR}/compiler/engineFingerprint.cmake"
+    DEPENDS ${OES_FINGERPRINT_SOURCES} "${OES_FINGERPRINT_INPUTS}" "${CMAKE_CURRENT_SOURCE_DIR}/compiler/engineFingerprint.cmake"
     COMMENT "Hashing the compiler and the built-in registry"
     VERBATIM
 )
