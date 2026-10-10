@@ -1445,6 +1445,56 @@ ibQueryRamTable GroupDetail()
 
 } // namespace
 
+// Select(ByGroups) on a query that named no grouping. `SELECT 1 AS A` then
+// Select(QueryResultIteration.ByGroups) used to die in BuildHierarchyTree: the
+// walk was handed no totals, no group columns and no parent key, and the fold
+// dereferenced the key. The records themselves are the walk, the same rows a
+// direct selection hands out, and an empty result is an empty walk.
+TEST(QuerySelector, ByGroupsWithoutAGroupingReadsTheRows)
+{
+	const ibMetaID A = 1;
+	const auto twoRows = [&]() {
+		ibQueryRamTable rows;
+		rows.AddColumn(A, wxT("A"), ibTypeDescription());
+		const auto add = [&](const wxString& v) {
+			const long r = rows.AppendRow();
+			rows.SetCell(r, A, ibValue(v));
+		};
+		add(wxT("1"));
+		add(wxT("2"));
+		return rows;
+	};
+	const auto walked = [](ibSelector& sel) {
+		std::vector<wxString> got;
+		while (sel.Next())
+			got.push_back(sel.GetColumn(wxT("A")).GetString());
+		return got;
+	};
+
+	ibSelector direct(twoRows(), ibSelectKind::ibSelectKind_Direct);
+	const std::vector<wxString> asDirect = walked(direct);
+
+	ibSelector groups(twoRows(), ibSelectKind::ibSelectKind_ByGroups);
+	EXPECT_EQ(groups.NodeCount(), static_cast<long>(asDirect.size()));
+	EXPECT_EQ(walked(groups), asDirect);
+
+	ibSelector hier(twoRows(), ibSelectKind::ibSelectKind_ByGroupsHierarchy);
+	EXPECT_EQ(hier.NodeCount(), static_cast<long>(asDirect.size()));
+	EXPECT_EQ(walked(hier), asDirect);
+
+	// The road result.Select takes: a cursor, and no totals configured on it.
+	ibQueryRamTable held = twoRows();
+	ibSelector fromRead(std::make_unique<ibRamTableCursor>(held), ibSelectKind::ibSelectKind_ByGroups);
+	EXPECT_EQ(fromRead.NodeCount(), static_cast<long>(asDirect.size()));
+	EXPECT_EQ(walked(fromRead), asDirect);
+
+	ibQueryRamTable empty;
+	empty.AddColumn(A, wxT("A"), ibTypeDescription());
+	ibSelector none(std::move(empty), ibSelectKind::ibSelectKind_ByGroups);
+	EXPECT_EQ(none.NodeCount(), 0);
+	EXPECT_FALSE(none.Next());
+}
+
 TEST(QuerySelector, WithNoOrderStatedALevelKeepsFoldOrder)
 {
 	TestCol regionCol(wxT("region"), REGION_ID), amtCol(wxT("amount"), GAMT_ID);
