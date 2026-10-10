@@ -83,6 +83,7 @@ enterprise/
 │       ├── form-engine.md        # RUNTIME forms — build, identity (the form key), open, close
 │       ├── home-page.md          # the start page — one tab, N runtime forms (composite doc/view)
 │       ├── event-dispatcher.md   # events hold a named handler OR a lambda — one CallAsEvent door, polymorphic dispatch
+│       ├── client-event-subscription.md # DESIGN — the thin client sends only what the server listens for; the rest folds into Pending
 │       ├── view-only.md          # read-only forms — rights matryoshka, control read-only, command greying
 │       ├── user-form-editor.md   # "Change form" — the USER re-arranges an open form (whitelisted props, queued commands)
 │       ├── property-system.md    # ibPropertyObject + object inspector — the skeleton (5 surfaces)
