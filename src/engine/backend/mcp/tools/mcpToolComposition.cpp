@@ -34,6 +34,7 @@
 #include "backend/mcp/mcpTool.h"
 
 #include "backend/compositionHelper.h"
+#include "backend/metaCollection/metaCommonAttributeObject.h"
 #include "backend/metaCollection/metaIntrospect.h"
 #include "backend/metaCollection/metaObject.h"
 #include "backend/metadataConfiguration.h"
@@ -163,7 +164,21 @@ public:
 		}
 
 		const bool remove = ArgRemove().Flag(params);
-		composition->SetComposition(declarationId, !remove);
+		// THROUGH THE DECLARATION when it is a common attribute: it is the one that keeps the
+		// flag and the column copy together (metaCommonAttributeObject.h). Setting only the
+		// flag here left the object "checked in" with no column - nothing to apply, nothing
+		// in queries or on the object, while this tool answered "included".
+		if (auto* const commonAttribute = dynamic_cast<ibValueMetaObjectCommonAttribute*>(declaration)) {
+			if (!commonAttribute->SetCompositionObject(carrier, !remove)) {
+				refusal = wxString::Format(
+					ibMcpText("'%s' could not be checked %s '%s'."), carrier->GetName(),
+					remove ? wxString(wxT("out of")) : wxString(wxT("into")), declaration->GetName());
+				return false;
+			}
+		}
+		else {
+			composition->SetComposition(declarationId, !remove);
+		}
 
 		result.SetValue(wxT("declaration"), declaration->GetName());
 		result.SetValue(wxT("included"), !remove);
