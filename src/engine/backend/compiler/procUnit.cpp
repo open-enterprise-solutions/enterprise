@@ -1936,7 +1936,11 @@ start_label:
 			{
 				const long tryCodeLine = index1;
 				const long trySize = tryList.size() - 1;
-				if (trySize >= 0) {
+				// A forward call jumps to the real call at the end of the module and
+				// jumps back. The outbound jump is marked (param2 != 0) so it does not
+				// drop the try it is standing in: the call still runs inside the handler.
+				// ENDTRY and a goto the program wrote still leave the handler.
+				if (trySize >= 0 && !(curCode.m_numOper == OPER_GOTO && index2 != 0)) {
 					if (tryCodeLine >= tryList[trySize].m_lEndLine ||
 						tryCodeLine <= tryList[trySize].m_lStartLine) {
 						tryList.resize(trySize);//exit from try..catch scope

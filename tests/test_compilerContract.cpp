@@ -458,7 +458,7 @@ TEST(CompilerContract, FunctionsAndForwardReference) {
 		wxT("Procedure Entry()\n")
 		wxT("  var r; r = Caller(3);\n")
 		wxT("EndProcedure\n"),
-		6612097246532263492ULL);   // 2026-10-09: OPER_ITER removed; later opcodes and TYPE_DELTA shifted
+		16592719761311645649ULL); // the outbound forward-call goto marks p2, so a try around it stays
 }
 
 TEST(CompilerContract, TypedParametersAndLocals) {

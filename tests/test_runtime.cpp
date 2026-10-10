@@ -553,6 +553,67 @@ TEST(RuntimeTest, ABraceLessBodyIsOneStatementOfAnyKind) {
 	}
 }
 
+// A call compiled before its function exists is a jump to the end of the module,
+// where the real call is appended, and a jump back. The outbound jump used to
+// leave the try, so an exception from a function declared later was not caught.
+// The same call is caught when the callee is declared first, because that call
+// is emitted in place.
+TEST(RuntimeTest, TryCatchesAFunctionDeclaredLater) {
+	struct StyleGuard {
+		const short saved = ibCompileCode::GetCodeStyle();
+		~StyleGuard() { ibCompileCode::SetCodeStyle(saved); }
+	} guard;
+	ibCompileCode::SetCodeStyle(CODE_CES);
+
+	const wxChar* const caught[] = {
+		wxT("function C(d) { try { return N(); } except { return d; } }\n")
+		wxT("function N() { Raise(\"boom\"); return 0; }\n")
+		wxT("var r public; r = C(7);\n"),
+
+		wxT("function C(d) { var v; try { v = N(); return v; } except { return d; } }\n")
+		wxT("function N() { Raise(\"boom\"); return 0; }\n")
+		wxT("var r public; r = C(7);\n"),
+
+		wxT("function C(s, p, d) { try { return N(s, p); } except { return d; } }\n")
+		wxT("function N(s, p) { return s[p]; }\n")
+		wxT("var r public; r = C(New Structure(\"A\", 1), \"NoSuch\", 7);\n"),
+
+		wxT("function N() { Raise(\"boom\"); return 0; }\n")
+		wxT("function C(d) { try { return N(); } except { return d; } }\n")
+		wxT("var r public; r = C(7);\n"),
+	};
+	for (const wxChar* src : caught) {
+		ibCompileCode cc(wxT("test"), wxT("memory"), false);
+		ASSERT_TRUE(TryCompile(cc, src)) << wxString(src).ToStdString();
+
+		ibProcUnit pu;
+		ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode)) << wxString(src).ToStdString();
+
+		ibValue v;
+		ASSERT_TRUE(pu.GetPropVal(wxT("r"), v));
+		EXPECT_EQ(v.GetInteger(), 7) << wxString(src).ToStdString();
+	}
+
+	// The try finishes, then the function calls a callee declared later. That
+	// call is not inside the try. Catching it would mean the handler was left
+	// in place. The try must not return, or the call is never reached.
+	{
+		ibCompileCode cc(wxT("test"), wxT("memory"), false);
+		const wxString src =
+			wxT("function C() { try { var x; x = 1; } except { return 2; } return N(); }\n")
+			wxT("function N() { Raise(\"left the try\"); return 0; }\n")
+			wxT("var r public; r = C();\n");
+		ASSERT_TRUE(TryCompile(cc, src));
+
+		ibProcUnit pu;
+		const ::testing::AssertionResult ran = TryExecute(pu, cc.m_cByteCode);
+		EXPECT_FALSE(ran);
+		if (!ran) {
+			EXPECT_NE(std::string(ran.message()).find("left the try"), std::string::npos) << ran.message();
+		}
+	}
+}
+
 TEST(RuntimeTest, WhileLoopCountsToTen) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	const wxString src =
