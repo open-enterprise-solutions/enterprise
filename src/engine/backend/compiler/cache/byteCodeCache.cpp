@@ -17,7 +17,8 @@
 #include "backend/databaseLayer/databaseQueryBuilder.h"   // L2 door: descriptor pilot
 #include "core/fileSystem/fs.h"
 #include "backend/utils/md5.hpp"   // the key is digested to the width its column declares
-#include "backend/backend_core.h"   // GetBuildId — the engine half of the cache key
+#include "backend/compiler/byteCodeFormat.h"   // kAOTFormatVersion — one half of the engine key
+#include "engineFingerprintBuild.h"            // kEngineFingerprint — the other, generated at build
 
 // Descriptor (ibRuntimeModuleDataObject) AOT-cache DAO, migrated onto the L2
 // query door. The default-ctor ibDatabaseQueryBuilder resolves to
@@ -31,52 +32,42 @@
 // The SAVE is the exception: it writes on a holder of its own, never inside the
 // caller's business transaction (see Save).
 
-// 🛑⭐⭐ THE KEY IS THE PLATFORM AND THE CONFIGURATION, NOT THE CONFIGURATION ALONE.
+// 🛑⭐⭐ THE KEY IS THE ENGINE AND THE CONFIGURATION, NOT THE CONFIGURATION ALONE.
 //
-// Bytecode is compiled BY an engine, against the global API that engine has. The digest said which
-// configuration it came from and nothing at all about which engine — so an engine upgrade left every
-// cached row valid by its key and wrong in fact: modules go on running the bytecode an older build
-// produced, and a global function added by the new one is not there.
+// Bytecode is compiled by an engine. A key of the configuration alone kept serving a blob after
+// the engine that compiled it was gone (2026-09-02): a global function added at noon was invisible
+// for an hour, and touching one module — which changed the configuration digest — made every row
+// unreachable and the function appeared. The symptom is code that quietly stays as it was.
 //
-// ⭐ MEASURED, and it cost an hour before anybody suspected the cache (2026-09-02). `SerializeValue`
-// was added to the language, `script_check` compiled it in the designer, and the SAME BINARY refused
-// it in the running application — "Procedure or function not detected". Nothing was wrong with the
-// registration. Touching one module changed the configuration's digest, every cached row fell out of
-// reach, and the function appeared. The symptom of this defect is not a failure to load; it is code
-// that quietly stays as it was.
+// The first engine half was GetBuildStamp(), the __DATE__/__TIME__ of core/build.cpp. core is its
+// own library and is not rebuilt when the compiler or the interpreter changes, so the stamp stayed
+// put and a stale blob kept running. A hand-bumped version in its place has the same hole from the
+// other side: a built-in added at noon, or a codegen change that keeps the opcodes, is invisible
+// until somebody remembers the bump, and a release that forgets it serves the previous engine's
+// bytecode. A miss costs one recompile. A hit of the wrong blob does not announce itself.
 //
-// The fix is Max's, in four words: *build + configuration hash* (2026-09-02). Kept as one KEY VALUE
-// rather than a second column on purpose — see the note in Load: a row from another platform is then
-// NOT FOUND, instead of found and rejected by a check somebody has to remember to write.
+// So the engine half is two things. kAOTFormatVersion is the number a person bumps when an opcode's
+// meaning changes, and the opcode test refuses a list that moved without it. The other is
+// kEngineFingerprint, a hash of compiler/** and system/** made by compiler/engineFingerprint.cmake
+// when the backend is built — the compiler, the interpreter, and the built-in registry. Nobody
+// writes that hash down. A change in those sources is a different key on the next build.
 //
-// ⚠ THE BUILD NUMBER ALONE IS A DAY COUNT (backend_core.cpp derives it from __DATE__), so two
-// builds of one day answer the same — and development is forty builds a day. Hence the TIME beside
-// it: build + build time + configuration digest (Max, 2026-09-02). The stamp is backend_core.cpp's
-// own compile time, so an incremental build that never touches that file keeps the previous one —
-// it moves for a clean build, a header change reaching it, and every release.
-static wxString CacheKey(const wxString& configDigest)
+// Kept as one KEY VALUE rather than a second column: a row from another engine is then NOT FOUND,
+// instead of found and rejected by a check somebody has to remember to write.
+//
+// ⭐ HASHED DOWN TO 32, because that is what the COLUMN is (`config_md5`, ibTypeString(32)).
+// Returning the raw spelling made the key longer than 32 and every statement touching it died
+// with a string truncation; the misses looked like a cold cache (found 2026-09-04). A wider
+// column would be a schema change for a table whose contents are disposable.
+wxString ibByteCodeCache::EngineFingerprint()
 {
-	// The STAMP already carries the number — it is that number spelled out with the moment it was
-	// compiled — so naming both would be the same fact twice in one key.
-	//
-	// 🛑⭐⭐ AND THE RESULT IS DIGESTED BACK DOWN TO 32, because that is what the COLUMN is
-	// (`config_md5`, ibTypeString(32) — appDataQuery.cpp). Returning "<stamp>.<digest>" raw made the
-	// key about 60 characters, and every statement touching it died on the spot:
-	//
-	//     SQL error code = -303 … string right truncation, expected length 32, actual 60
-	//
-	// The lookup, the prune and the save all failed, so THE CACHE HAS BEEN DEAD since the stamp was
-	// added (2026-09-02) — every run recompiled everything and left three exceptions in the journal
-	// on the way up. Nothing said so: the misses look exactly like a cold cache, and the failures
-	// were swallowed by the catch that exists for "no table yet" (found 2026-09-04, by reading the
-	// engine's journal of an ordinary start).
-	//
-	// ⭐ HASHED RATHER THAN WIDENED, deliberately. A wider column is a schema change every existing
-	// base would have to be migrated through, for a table whose whole content is disposable; a
-	// digest is the same key by a different spelling and fits what is already declared. The value
-	// stays what it must be — different build OR different configuration ⇒ different key.
-	return ibMD5::ComputeMd5(
-		wxString::Format(wxT("%s.%s"), wxString::FromUTF8(GetBuildStamp()), configDigest));
+	return wxString::FromUTF8(kEngineFingerprint);
+}
+
+wxString ibByteCodeCache::CacheKey(const wxString& configDigest)
+{
+	return ibMD5::ComputeMd5(wxString::Format(wxT("%u.%s.%s"),
+		(unsigned)kAOTFormatVersion, EngineFingerprint(), configDigest));
 }
 
 bool ibByteCodeCache::Save(const ibByteCode& bc, const wxString& configDigest)

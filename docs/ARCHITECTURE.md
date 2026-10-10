@@ -76,12 +76,13 @@ reads no base, runs no script, draws no window. `CORE_API` / `CORE_EXPORTS` (`co
 | `anyValue` | `ibAnyValue` — the INTERFACE every value answers (`GetType`, `IsEmpty`, `GetBoolean`, `GetNumber`, `GetDate`, `GetString`). The engine's `ibValue` and the client's derive from it and hold the value each its own way; what only asks these takes either |
 | `clsid.h`, `fstring`, `fnumber`, `fdatetime`, `guid`, `stringUtils.h` | `ibClassID`, `ibString` (+ pool), `ibNumber`, `ibDateTime`, `ibGuid` |
 | `formatString` | `ibFormatString` — the `Format` string as a value: `Parse` / `Render`, `Apply(const ibAnyValue&)`, `FromTypeDesc` (the format a type description gives, over either side's description) |
-| `fileSystem/` | `ibReader` / `ibWriter`, memory readers/writers, `u32`/`u64`…, lz block compression |
-| `serialize/` | `ibDataNode` / `ibDataValue`, binary provider, `ibJsonProvider`, JSON text. A type is named only by the injected resolver (`SetTypeResolver`) |
+| `fileSystem/` | `ibReader` / `ibWriter`, memory readers/writers, `u32`/`u64`…, lz block compression. A read, seek or advance past the end of a block, or a zero-terminated string with no terminator inside it, is refused (`ibCoreException`) in every build |
+| `serialize/` | `ibDataNode` / `ibDataValue`, binary provider, `ibJsonProvider`, JSON text. A type is named only by the injected resolver (`SetTypeResolver`). The JSON reader refuses nesting deeper than 256 objects and arrays (`kMaxNesting`, the root counted) |
 | `exception` | `ibCoreException : std::exception` — the base of every refusal (see [Exception taxonomy](#exception-taxonomy)) |
 | `localization` | `ibLocalization` — template (`ibLocalizationEntryArray` or `en = '…'; ru = '…';`) + a language in, that language's text out; missing language → the first written. The owner passes the language |
 | `diagnostics/` | the technology journal (`ibTechJournal`, `ibJournal*`) — ONE per process, the engine's, the protocol's and the client's lines in one file; `ibCrashGuard` (idempotent `Install`), leak tracker, `debugTrace.h` |
 | `build` | `GetBuildId` / `GetBuildStamp`, the program version |
+| `programFolder` | `ibProgramFolder` — where the files a program shares are looked for (`backend.conf`, `lang/`, `help/`, `plugins/`, `_fb/`, `web/`, `server/`, the other programs): the executable's folder, or on macOS the folder that holds the `.app`. `ibDiagnosticFolder` — where `journal/`, `crashdumps/` and `oes-debug.log` go: the program folder, except for a program running from a macOS bundle, which writes under `~/Library/Logs/OES` |
 | `core.cpp` | `DllMain`: `DLL_THREAD_DETACH` drains the `ibString` pool for every process that holds one, engine or not |
 
 - Links: backend → core (PUBLIC); protocol → core; frmclient → core + protocol; enterprise-thin → core.
@@ -207,7 +208,7 @@ Why a token instead of a friend declaration on each subsystem header? Friends sc
 
 ### The application server (`appserver.exe`, `src/engine/appserver/`)
 
-A headless process that serves the bases of its **server folder** (`--dir`, by default `server` beside the executable):
+A headless process that serves the bases of its **server folder** (`--dir`, by default `server` in the program folder — beside the executable, or beside the `.app` inside a macOS bundle):
 
 ```
 <server folder>/
@@ -343,7 +344,10 @@ Per-driver `ClassifyDatabaseError(int nativeCode)` on each `ibDatabaseErrorRepor
 | `translateCode.h/cpp` | `ibTranslateCode` | Lexer: tokenises source text into `ibLexem` stream |
 | `compileCode.h/cpp` | `ibCompileCode` | Parser and code generator: consumes lexemes, emits `ibByteCode` |
 | `byteCode.h` | `ibByteCode`, `ibByteUnit` | Bytecode container: array of `ibByteUnit` instructions |
-| `byteCodeAOT.cpp` | `ibByteCode::SerializeAOT/DeserializeAOT` | Binary persistence for the AOT cache (`sys_bytecode_cache.bc_blob`); host-endian linear format with magic `'PBC1'` + format version |
+| `byteCodeAOT.cpp` | `ibByteCode::SerializeAOT/DeserializeAOT` | Binary persistence for the AOT cache (`sys_bytecode_cache.bc_blob`); host-endian linear format with magic `'PBC1'` + format version; the history of every version bump |
+| `byteCodeFormat.h` | `kAOTFormatVersion` | The format version (36): written into every blob and into the cache key. Bumped when an opcode is added, removed or renumbered, or changes what it does |
+| `cache/byteCodeCache.h/cpp` | `ibByteCodeCache` | The AOT cache's rows: `Load` / `Save` / `Invalidate` by descriptor, under `CacheKey` |
+| `engineFingerprint.cmake` | — | Build-time script (run by CMake and by `backend.vcxproj`): a SHA-256 of every file under `compiler/` and `system/`, written to the generated `engineFingerprintBuild.h` as `kEngineFingerprint` — only when it changes |
 | `procUnit.h/cpp` | `ibProcUnit` | Interpreter: executes `ibByteCode` against a variable stack |
 | `procContext.h/cpp` | `ibRunContext` | Execution context: local variable frame, call stack |
 | `value.h/cpp` | `ibValue` | Universal value type — tag enum `ibValueTypes` in `core/types.h`: `TYPE_EMPTY` (=0, the "undefined" value), `TYPE_BOOLEAN`, `TYPE_NUMBER` (`ibNumber`), `TYPE_DATE`, `TYPE_STRING`, `TYPE_NULL`, `TYPE_REFFER` / `TYPE_CONST_REFFER`, object kinds `TYPE_VALUE` / `TYPE_ENUM` / `TYPE_OLE` / `TYPE_FUNCTION` / `TYPE_ITERATOR` |
@@ -635,7 +639,7 @@ Metadata serialization runs through a uniform, format-agnostic tree (`src/engine
 - **`ibDataNode`** — one self-similar node of the structure tree (clsid + metaId + field bag + property bag + child nodes). A metaobject contributes its data into a node; a composite value can itself *be* a child node (`ibDataKind::Child`).
 - **`ibFormatProvider`** — abstract `Write(node, writer)` / `Read(reader, node)`. Concrete providers:
   - `ibBinaryProvider` — the internal owned binary format used for DB persistence and form blobs (the `eHeaderBlock` / `eDataBlock` / `eChildBlock` chunk layout). Read + write.
-  - `ibJsonProvider` (`serialize/jsonProvider.{h,cpp}`) — JSON export for Git VCS / AI generation / human reading. `Read` is a full parser but is wired to nothing on purpose: the view is lossy by design (Fields + Properties flatten into one key set, Date → ISO string, synthetic `TypeDesc`), so Write→Read is not a round trip — `ibBinaryProvider` is.
+  - `ibJsonProvider` (`serialize/jsonProvider.{h,cpp}`) — JSON export for Git VCS / AI generation / human reading. `Read` is a full parser that reads messages, never a configuration — the client protocol and MCP parse every JSON-RPC request through it (`rpc/rpcMessage.cpp`, before any login), as does the thin client, so it refuses nesting past 256 containers; the view is lossy by design (Fields + Properties flatten into one key set, Date → ISO string, synthetic `TypeDesc`), so Write→Read is not a round trip — `ibBinaryProvider` is.
 - **`ibDataBuilder`** owns the root node and drives `Save(provider, writer)` / `Load(provider, reader)`.
 
 `ibReaderMemory` / `ibWriterMemory` remain the underlying chunked byte streams; `ibBinaryProvider` emits the node-tree layout into them. Each metadata class registers a `ibClassID` CLSID (e.g. `MD_CAT` for Catalog) used as the per-node type discriminator.
@@ -726,7 +730,7 @@ The registry supports multiple concurrent sessions (N on web, 1 on desktop) thro
 
 ### Runtime ownership
 
-**Compile state — shared, immutable.** `ibCompileCode` produces an `ibByteCode` that lives on the configuration's compile descriptor (`ibCompileModule` on `ibValueMetaObjectModuleBase`). One bytecode per module is shared across all sessions; rebuilt only on Designer edit or metadata reload. AOT cache (`sys_bytecode_cache` via `ibByteCodeCache`) lets `Compile()` skip the parse+emit on cache hits — the cached blob is `ibByteCode::SerializeAOT/DeserializeAOT` (magic `'PBC1'`; see the [compiler module table](#srcenginebackendcompiler)). A hit skips the parser, **not** the preparation: the descriptor still runs `PrepareModuleData()` to build the module's name surface, because a name's address is the number of rungs the resolver walked and a parent with no live compile context is counted differently; the surface it builds is then verified name-for-name against the loaded `m_listVar`, and a row that disagrees is invalidated and recompiled from source. Bytecode compiled under an eval (a watch or the debugger's sandbox) is never written to the cache — its host frame is an extra rung. See [compiler-pipeline.md § 4a](private/compiler-pipeline.md).
+**Compile state — shared, immutable.** `ibCompileCode` produces an `ibByteCode` that lives on the configuration's compile descriptor (`ibCompileModule` on `ibValueMetaObjectModuleBase`). One bytecode per module is shared across all sessions; rebuilt only on Designer edit or metadata reload. AOT cache (`sys_bytecode_cache` via `ibByteCodeCache`) lets `Compile()` skip the parse+emit on cache hits — the cached blob is `ibByteCode::SerializeAOT/DeserializeAOT` (magic `'PBC1'`; see the [compiler module table](#srcenginebackendcompiler)). A row is found only under the key it was written with — an MD5 of the format version (`kAOTFormatVersion`), the engine hash taken at build time (`kEngineFingerprint`: the compiler, the interpreter and the built-in registry) and the configuration's digest — so a saved configuration, a compiler change or a new built-in is a miss and a recompile, never a stale hit. A hit skips the parser, **not** the preparation: the descriptor still runs `PrepareModuleData()` to build the module's name surface, because a name's address is the number of rungs the resolver walked and a parent with no live compile context is counted differently; the surface it builds is then verified name-for-name against the loaded `m_listVar`, and a row that disagrees is invalidated and recompiled from source. Bytecode compiled under an eval (a watch or the debugger's sandbox) is never written to the cache — its host frame is an extra rung. See [compiler-pipeline.md § 4a](private/compiler-pipeline.md).
 
 **Runtime state — per-session, owned via descriptors.** Each session owns its own runtime tree:
 
@@ -932,7 +936,7 @@ Designer                           Enterprise
    │ ◄────────────────────────────────│
 ```
 
-The server runs each connection as a `wxThread` (`ibDebuggerServer::ibDebuggerServerConnection`). Raw binary packets are sent via `SendCommand` / `RecvCommand`.
+The server runs each connection as a `wxThread` (`ibDebuggerServer::ibDebuggerServerConnection`). Raw binary packets are sent via `SendCommand` / `RecvCommand`. A packet that cannot be read — shorter than what it claims to hold, or a string with no terminator — ends that connection, with a line in the technology journal; the debuggee goes on running. The designer's end does the same with a packet it cannot read.
 
 ---
 

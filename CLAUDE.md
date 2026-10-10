@@ -180,7 +180,7 @@ The compiler is a single-pass recursive descent parser with a deferred-call-reso
 
 `backend.dll` has zero UI code. `frontend.dll` owns all wxWidgets code. Communication is through abstract C++ interfaces exported by `backend.dll`. This allows the backend to run headless (daemon, codeRunner, service mode).
 
-Under both sits **`core.dll`** (`src/engine/core/`, `CORE_API` / `CORE_EXPORTS`, wx base only): what the engine and its clients mean by the same words — ids and `ibValueTypes` (`core/types.h`), `ibAnyValue` (the interface every value answers — the engine's and the client's `ibValue` derive from it, each storing its own way), `clsid.h`, `ibString` (+ pool), `ibNumber`, `ibDateTime`, `ibGuid`, `ibFormatString`, `fileSystem/` (`ibReader`/`ibWriter`, lz), `serialize/` (`ibDataNode`, binary + JSON providers), `ibCoreException`, `ibLocalization`, `diagnostics/` (the technology journal — one per process — and the crash guard), `GetBuildId`/`GetBuildStamp`. It reads no base, runs no script, draws no window.
+Under both sits **`core.dll`** (`src/engine/core/`, `CORE_API` / `CORE_EXPORTS`, wx base only): what the engine and its clients mean by the same words — ids and `ibValueTypes` (`core/types.h`), `ibAnyValue` (the interface every value answers — the engine's and the client's `ibValue` derive from it, each storing its own way), `clsid.h`, `ibString` (+ pool), `ibNumber`, `ibDateTime`, `ibGuid`, `ibFormatString`, `fileSystem/` (`ibReader`/`ibWriter`, lz), `serialize/` (`ibDataNode`, binary + JSON providers), `ibCoreException`, `ibLocalization`, `diagnostics/` (the technology journal — one per process — and the crash guard), `ibProgramFolder` (`programFolder.h` — where `backend.conf`, `lang/`, `plugins/`, `_fb/` and the other programs are looked for: the executable's folder, or on macOS the one that holds the `.app`, never `Contents/MacOS`) and `ibDiagnosticFolder` (where the journal, the dumps and `oes-debug.log` go: the same folder, except `~/Library/Logs/OES` for a program running from a macOS bundle), `GetBuildId`/`GetBuildStamp`. It reads no base, runs no script, draws no window.
 
 - Chain: core → backend → frmserver ⇄ protocol ⇄ frmclient → enterprise-thin; fileserver = backend + frmserver inside the client process.
 - backend links core PUBLIC; every project that links `backend.lib` also links `core.lib`; protocol links core; frmclient links core + protocol. `protocol.h` itself stays dependency-free.
@@ -238,7 +238,7 @@ Every class in the metadata and value system is identified by an `ibClassID` (`u
 - **Dynamic metaobject values**: body = the **metaID itself** (constructive, no hash → `(kind, metaID)` unique BY CONSTRUCTION); kind = the metatype (`reference_to_clsid(metaID)` / `object_to_clsid` / `manager_to_clsid` / `list_to_clsid` / … / `externalObject_to_clsid`, mirroring `ibCtorObjectMetaType`). The old `"R_42"` name-hash grammar is gone.
 - `string_to_clsid()` is **removed** — every callsite uses a per-kind generator. `make_clsid(name, kind)` is the common entry; `make_clsid(name, ibClassKind_None)` is the escape for synthetic, unregistered ids (config-compare umbrellas, tool ids).
 
-CLSIDs appear in serialised configuration files and the DB; the kind-typing changed every value, so the AOT cache version was bumped to `kAOTFormatVersion` = 16 (now 21 — 17 for the `restrict`-pushdown-AST fix, 18 for the shortLet-peephole codegen fix, 19 for a parameter default losing its type name, 20 for the session-parameter context member, 21 for two function-record flags: `m_needsHeapFrame`, which was never written at all, and `m_valueCached`, see `docs/private/compiler-pipeline.md` §3.1) and persisted CLSID blobs regenerate. Uniqueness: dynamic is constructive (impossible to collide); static is hash-bodied but collision is only possible WITHIN a kind among the tens of names there (negligible) and is caught by the registry's duplicate-clsid check. Tests: `tests/test_clsid.cpp`.
+CLSIDs appear in serialised configuration files and the DB; the kind-typing changed every value, so the AOT cache version was bumped to `kAOTFormatVersion` = 16 (now 36 — the constant lives in `compiler/byteCodeFormat.h`, every bump is recorded with its reason in the version history of `byteCodeAOT.cpp`, and `tests/test_byteCodeFormat.cpp` fails when the opcode list moves without one) and persisted CLSID blobs regenerate. Uniqueness: dynamic is constructive (impossible to collide); static is hash-bodied but collision is only possible WITHIN a kind among the tens of names there (negligible) and is caught by the registry's duplicate-clsid check. Tests: `tests/test_clsid.cpp`.
 
 ### 7. Metadata open/close — `ibMetaImage`
 
@@ -334,6 +334,9 @@ msbuild enterprise.sln /p:Configuration=Debug /p:Platform=x64 /m
 
 Output lands in `bin\<Platform>\<Configuration>\` — `Platform` is `Win32` (x86)
 or `Win64` (x64), e.g. `bin\Win64\Release\`, `bin\Win32\Debug\`.
+
+`cmake` must be on `PATH` for MSBuild too: before it compiles, the backend project runs
+`compiler/engineFingerprint.cmake` (the engine half of the bytecode cache key, see *Runtime infrastructure*).
 
 ### CMake (macOS / Linux)
 
@@ -522,9 +525,12 @@ that tree to bytes (and reads it back).
 - **`ibBinaryProvider`** (`dataBuilder.{h,cpp}`) — the internal, owned binary
   format. This is the round-trip path (Write + Read).
 - **`ibJsonProvider`** (`serialize/jsonProvider.{h,cpp}`) — JSON. `Write` emits JSON for
-  diff/inspection; `Read` is a full parser but is **wired to nothing on purpose**. The view
-  is lossy by design (Fields + Properties flatten into one key set, Date → ISO string,
-  synthetic `TypeDesc`), so Write→Read is not a round trip — use `ibBinaryProvider` for that.
+  diff/inspection; `Read` is a full parser that reads MESSAGES, never a configuration: the
+  client protocol and MCP parse every JSON-RPC request through it (`rpc/rpcMessage.cpp`, before
+  any login), as does the thin client (`frmclient/backend/serialize/dataProtocol.cpp`), so it
+  refuses nesting past `ibJsonProvider::kMaxNesting` (256). The view is lossy by design (Fields +
+  Properties flatten into one key set, Date → ISO string, synthetic `TypeDesc`), so Write→Read is
+  not a round trip — use `ibBinaryProvider` for that.
   A type is named only by the injected `SetTypeResolver` (no built-in fallback — the
   engine's resolvers, e.g. `ibMetaTypeResolver`, name built-in types from the static
   registry); `SetTypeLookup` supplies the name→clsid inverse. Tests: `tests/test_jsonProvider.cpp`.
@@ -557,7 +563,7 @@ See `docs/private/serialization-io.md` §4a.
 
 ## Compiler Quick Reference
 
-- **Opcodes:** defined in `src/engine/backend/compiler/codeDef.h` as `OPER_*` enumerators. Call-family: `OPER_CALL` (stack-frame named call), `OPER_CALL_CLOSURE` (named call with heap-promoted frame — callee has an inner lambda capturing locals), `OPER_CALL_METHOD` (per-class method dispatched by name string), `OPER_CALL_LINQ` (universal pipeline op dispatched by `ibLinqMethod` enum id, no string lookup), `OPER_CALL_LAMBDA` (dynamic call — target read from a slot at runtime, must wrap an `ibValueFunction`). Lambda body fences `OPER_LFUNC` (the active materialiser) / `OPER_ENDLFUNC`. (`OPER_FUNC_PTR` is retired — `OPER_LFUNC` materialises the lambda value.)
+- **Opcodes:** defined in `src/engine/backend/compiler/codeDef.h` as `OPER_*` enumerators. Call-family: `OPER_CALL` (stack-frame named call), `OPER_CALL_CLOSURE` (named call with heap-promoted frame — callee has an inner lambda capturing locals), `OPER_CALL_METHOD` (per-class method dispatched by name string), `OPER_CALL_LINQ` (universal pipeline op dispatched by `ibLinqMethod` enum id, no string lookup), `OPER_CALL_LAMBDA` (dynamic call — target read from a slot at runtime, must wrap an `ibValueFunction`). Lambda body fences `OPER_LFUNC` (the active materialiser) / `OPER_ENDLFUNC`. (`OPER_FUNC_PTR` is retired — `OPER_LFUNC` materialises the lambda value.) The ternary `?(cond, a, b)` has no opcode of its own: it compiles as If does (`OPER_IF`, the chosen branch writes the result, `OPER_GOTO` over the other), so only the chosen branch runs — a call or a raise in the other one does not happen. (`OPER_ITER`, which computed both, is gone — 2026-10-09.)
 - **Keywords:** 63, defined as `KEY_*` enumerators (`KEY_IF`=0 … `KEY_RESTRICT`) in the same file — includes access modifiers (`Public`/`Private`/`Protected`), the memoisation modifier (`Cached` — a SECOND axis that combines with an access one, legal on a Function only), preprocessor (`#Define`/`#Ifdef`/…), the LINQ block (`From`/`Where`/`Select`/`Join`/`Group`/…) and the access-policy filter (`Restrict`). The matching token strings are `s_listKeyWord[]` in `translateCode.cpp`, in lock-step index order with the enum.
 - **Built-in globals:** 94 functions + 6 procedures = 100 as of 2026-09-04, registered in `ibSystemManager` (`src/engine/backend/system/systemManager.cpp`); count drifts as features land — grep `AppendFunc\|AppendProc` for the live total
 - **Syntax modes:** VES (`If…Then…EndIf`, Visual-Basic-style, a legacy business-scripting dialect) and CES (`if (…) { … }`, C-flavoured); both compile to the same bytecode. Mode is process-global on `ibCompileCode::SetCodeStyle()` / `GetCodeStyle()`. **CES is the default** for new configurations (2026-05-10); existing serialised configs preserve their stored Syntax. Wire token in metadata enum still reads `vbs` for back-compat — user-visible label is `ves`.
@@ -581,7 +587,7 @@ See `docs/private/eval-scope-refactor.md` for the full architecture.
 ### Runtime infrastructure (landed)
 
 - **Worker pool** — `ibWorkerPool` (`src/engine/backend/session/workerPool.h`) + headless implementation (`workerPoolHeadless.{h,cpp}`). Each session has a queue + an atomic "leased" flag (`workerPoolHeadless.h`); sessionless callers fall back to a `thread_local ibProcUnitState ts_fallbackPUState` in `session.cpp` (`ibSession::GetPUState`).
-- **AOT bytecode cache** — `byteCodeAOT.cpp` serialises a compiled `ibByteCode` to a memory stream; deserialisation reverses the compile step without re-running the parser. Persisted in `sys_bytecode_cache`, looked up by **`(descriptor_id, config_md5)`** — the configuration's own digest (`ibMetaData::GetConfigMD5()`), so a save makes every row written under the previous configuration unreachable and `Invalidate()` is hygiene rather than correctness. Written by the RUNTIME lazily on first call to a descriptor; the Designer never writes it. See [docs/private/compiler-pipeline.md](docs/private/compiler-pipeline.md) §4a.
+- **AOT bytecode cache** — `byteCodeAOT.cpp` serialises a compiled `ibByteCode` to a memory stream; deserialisation reverses the compile step without re-running the parser. Persisted in `sys_bytecode_cache`, looked up by **`(descriptor_id, config_md5)`**, where `config_md5` holds `ibByteCodeCache::CacheKey` — an MD5 of three things: `kAOTFormatVersion` (`compiler/byteCodeFormat.h`), `kEngineFingerprint` (a SHA-256 of every file under `backend/compiler/` and `backend/system/` — the compiler, the interpreter, the built-in registry — written at build time by `compiler/engineFingerprint.cmake` into a generated `engineFingerprintBuild.h`, from CMake and from the MSBuild project alike), and the configuration's own digest (`ibMetaData::GetConfigMD5()`). So a configuration save, a compiler change or a new built-in each make every older row unreachable, and `Invalidate()` is hygiene rather than correctness. The build stamp is no longer part of the key (2026-10-10): `core` is not rebuilt when the compiler changes, so a stale blob kept its key. Written by the RUNTIME lazily on first call to a descriptor; the Designer never writes it. See [docs/private/compiler-pipeline.md](docs/private/compiler-pipeline.md) §4a.
 - **Per-session runtime image** — each `ibSession` owns `m_root : ibValuePtr<ibValueModuleManagerRuntimeConfiguration>` (built in `CreateRoot`; `GetManagerModule()`) and `m_lambdaRuntime : std::unique_ptr<ibProcUnit>` (wired to `m_root`'s procUnit on first `GetLambdaRuntime()`). Designer / codeRunner edit-time managers come from `GetEditModuleManager(metaData)` / `EditModuleManagerFor(metaData)`, kept separate from the per-session runtime root.
 
 ---

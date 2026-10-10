@@ -47,8 +47,8 @@ tree, forms, the language, queries and reports, and the pitfalls.
 - **Scripting language** — two dialects over one compiler (**CES**, C-flavoured, the default; **VES**,
   keyword-fenced), procedures and functions, lambdas with closure capture, `try … except`,
   multi-line strings for query texts, **LINQ** (`from … where … join … group by … orderby … select`)
-  compiled into the bytecode, 94 built-in functions and 7 procedures. Bytecode of 82 opcodes, kept
-  in an ahead-of-time cache so a module compiles once per configuration version.
+  compiled into the bytecode, 94 built-in functions and 7 procedures. Bytecode of 81 opcodes, kept
+  in an ahead-of-time cache so a module compiles once per configuration version and engine.
 - **Designer** — metadata tree, form designer (drag a field onto a form and a bound control
   appears), code editor with IntelliSense, a query constructor that edits the query inside the
   literal the caret is in, a spreadsheet template editor, configuration compare, and a git panel.
@@ -109,7 +109,9 @@ On a copy of a 40 000-employee payroll base (Release, x86): a month's payroll re
 
 ### Windows
 
-1. Install [Visual Studio 2019 or 2022](https://visualstudio.microsoft.com/) with the **Desktop development with C++** workload.
+1. Install [Visual Studio 2019 or 2022](https://visualstudio.microsoft.com/) with the **Desktop development with C++** workload,
+   and [CMake](https://cmake.org/download/) on the system `PATH`: the backend project runs a CMake
+   script before it compiles.
 2. Clone the repository and initialise the wxWidgets submodule:
    ```cmd
    git clone https://github.com/open-enterprise-solutions/enterprise.git

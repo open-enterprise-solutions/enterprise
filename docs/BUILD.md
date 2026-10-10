@@ -26,6 +26,7 @@ This document covers how to build OES on Windows (MSBuild), macOS (CMake), and L
 |---|---|---|
 | Visual Studio | 2022 (17.x) | "Desktop development with C++" workload; platform toolset is `v143` |
 | Windows SDK | 10.0 (latest) | Installed by VS workload (`WindowsTargetPlatformVersion=10.0`) |
+| CMake | Any recent | **On `PATH`, for the MSBuild build too**: before it compiles, `backend.vcxproj` runs `cmake -P compiler/engineFingerprint.cmake` (the engine hash in the bytecode cache key), and the build fails without it. Visual Studio's *C++ CMake tools for Windows* component brings one, on the `PATH` of a Developer Command Prompt; for a build from the IDE, put CMake on the system `PATH` or start Visual Studio from that prompt |
 | Git | Any recent | For submodule initialisation |
 
 MSBuild (`enterprise.sln`) is the shipping build on Windows. CMake (`CMakeLists.txt` at repo root) is the build for macOS / Linux — **and it also works on Windows**: `CMakePresets.json` ships four host-conditioned presets (`windows-x64-debug`, `windows-x64-release`, `windows-x86-debug`, `windows-x86-release`), and that is the path the Google Test targets are built through (see [engineering-playbook/10-testing.md](private/engineering-playbook/10-testing.md)).
@@ -282,6 +283,7 @@ cmake --build build --parallel 6
 | `OES_FB_LOCALSERVER` | ON | Firebird out-of-process local server (Phase 6, leader-election); needs `firebird.exe` in `_fb/` at runtime |
 | `OES_USE_TBB` | (undeclared) | Intel TBB parallelism (`USE_TBB_PARALLEL`); **not declared via `option()`** in the root `CMakeLists.txt` — only read by `backend/CMakeLists.txt`, so it never appears in `cmake-gui` / `ccmake`. Pass `-DOES_USE_TBB=ON` explicitly if you want it |
 | `BUILD_TESTING` | OFF | Build the Google Test suite under `tests/` |
+| `OES_SANITIZE` | (empty) | Sanitizers passed to `-fsanitize=`: `address`, `undefined`, `address,undefined`, `thread` (MSVC takes it as `/fsanitize=`, where only `address` applies, without a leak detector). CI builds `address,undefined` and `thread` (see [Continuous integration](#continuous-integration)). Under `thread` the fiber switch reports itself to ThreadSanitizer (`ibFiber::SwitchTo`), since TSan cannot see the assembly switch |
 
 SQLite is always enabled (embedded sources, no option). `OES_USE_FIREBIRD`
 and `OES_USE_POSTGRESQL` link their clients dynamically, so a system library
@@ -328,6 +330,15 @@ the web is not built there.
   icon placed into `Resources` and `Info.plist` filled in (`CFBundleIdentifier`,
   `CFBundleExecutable`, icon name). Treat the `if(APPLE)` branches in the designer /
   enterprise / launcher CMake files as working code, not scaffolding
+- **Inside a bundle, the program folder is the one that holds the `.app`** (`core/programFolder.h`).
+  A program running from `X.app/Contents/MacOS/` looks beside the bundle for everything a Windows
+  or Linux build keeps beside its executable: `backend.conf`, `lang/`, `help/`, `plugins/`, `_fb/`,
+  `web/`, the application server's default `server/`, `libfileserver.dylib`, and the other
+  programs (as `<name>.app` or flat). A binary outside a bundle uses its own folder
+- **A program running from a bundle writes its logs under `~/Library/Logs/OES`**: `journal/`,
+  `crashdumps/` and `oes-debug.log`. The folder beside an installed `.app` is usually
+  `/Applications`, which a normal user cannot write. A binary outside a bundle — and every
+  Windows or Linux program — keeps them in the program folder
 
 ---
 
@@ -413,7 +424,7 @@ Paths use the `oesPlatform` macro (`Win32` for `x86`, `Win64` for `x64`):
 ## Continuous integration
 
 `.github/workflows/ci.yml` (added 2026-08-02) runs on pushes to `develop` / `master`, on PRs into
-`develop`, and on demand (`workflow_dispatch`). Eight jobs:
+`develop`, and on demand (`workflow_dispatch`). Nine jobs:
 
 | Job | Runner | What it proves |
 |---|---|---|
@@ -422,6 +433,7 @@ Paths use the `oesPlatform` macro (`Win32` for `x86`, `Win64` for `x64`):
 | **Dialect (PostgreSQL, Debug)** | ubuntu-22.04 | A second DBMS actually executes, against a `postgres:16` service container. The connection arrives through the environment and the target skips itself when `OES_PG_USER` is unset — which is what lets the same binary be a no-op on a developer machine. |
 | **Firebird (Linux, Debug)** | ubuntu-22.04 | Firebird actually executes. The pinned Firebird 5 kit (`.github/firebird-kit-linux.sh`, the one the nightly package ships) is laid out as `_fb/` beside `oes_tests`, and the `Firebird*` tests run through the embedded engine — no server. The tests skip where no client loads; here a skip FAILS the job, since a kit that stopped loading would otherwise leave it green. Added 2026-09-22. |
 | **Tests (Linux, ASan + UBSan)** | ubuntu-22.04 | The suite of *Tests (Linux, Debug)* built with `-DOES_SANITIZE=address,undefined`: no use after free, no overflow, no undefined behaviour, and — LeakSanitizer rides in with ASan on Linux — no leak at exit. Leak detection is off while BUILDING, because `gtest_discover_tests` runs each binary then. **Not blocking yet** (`continue-on-error`): the first runs are a harvest; the job becomes blocking once it is fixed. Added 2026-09-22. |
+| **Tests (Linux, TSan)** | ubuntu-24.04 | No data race in the code a fiber can race. `oes_tests` built with `-DOES_SANITIZE=thread` and run on the suites that park a fiber, share a session, pool a connection, take a lock or run the job manager (`WorkerPool*`, `FiberTsan`, `SessionHolder`, `SessionDbLayer`, `ConnectionPool`, `SocketLockFix`, `JobManager`, `JobSchedule`) — not the whole backend. The fiber switch is assembly TSan cannot see, so `ibFiber` tells it which fiber runs (`__tsan_switch_to_fiber`). **Blocking**: a race in our code fails the job; `.github/tsan-suppressions.txt` takes third-party code only, each line with its reason. GCC 13, hence the newer runner: GCC 11's libtsan reports a double lock of a destroyed mutex when a fiber locks a mutex on the calling thread's stack, and GCC 13 does not. Added 2026-10-10. |
 | **GUI tests (Linux, Xvfb)** | ubuntu-22.04 | `oes_frontend_runtime_test` — links `frontend.dll`, needs a live wxApp. Separate job: its failure mode (a modal on an assert, or a process that passes every test and then does not exit) is unlike a backend test's. Xvfb is started by the step itself rather than through `xvfb-run`, so `$!` is the process under test — see the § below on what the wrapper cost. |
 | **Tests (macOS 14, arm64, Debug)** | macos-14 | The third toolchain, and a different CPU with it: AArch64 (unsigned `char`, a weaker memory model, its own alignment), Apple libc++ rather than libstdc++, and wx against Cocoa instead of GTK — including the `APPLE` branch of `guid.cpp` (CFUUID) that nothing else compiles. Added 2026-08-03. |
 | **Benchmarks (Linux, Release) — record only** | ubuntu-22.04 | The only job that builds Release. It runs on `develop` and `master` (and on demand), never on a PR, and **gates nothing** — `|| true`, no threshold: a benchmark that fails CI on a shared runner becomes a flaky test nobody trusts. A performance figure is worth what it is worth next to the commit it belongs to, so develop pays the ~16 minutes of building wx from scratch. |
@@ -459,7 +471,9 @@ Five notes on why it is shaped this way — each one paid for by a wasted round:
 
 - **Everything goes through the CMake presets, including Windows.** `enterprise.sln` carries 10
   C++ projects and none is wxWidgets, so MSBuild cannot bootstrap a clean runner — it expects wx
-  libraries to exist already. The preset path builds wx from the submodule.
+  libraries to exist already. The preset path builds wx from the submodule. So CI never builds
+  `enterprise.sln`: a step only the solution runs — `backend.vcxproj`'s call to
+  `engineFingerprint.cmake`, say — is checked by a local build alone.
 - **No build-directory cache.** Caching `build/` keyed on the submodule commit looks obvious and
   is wrong with Ninja: `actions/cache` restores files with the *current* timestamp, so every
   restored object looks newer than its source and the build skips work it needed to do. The
@@ -514,7 +528,8 @@ takes from the system and Ubuntu does not install by default, `libtommath.so.1`,
 package. The kit's libraries find each other on their own — `$ORIGIN/../lib` on Linux, `@rpath/lib/…`
 answered by the programs' rpath to `_fb` on macOS — and the engine loads `_fb/lib/libfbclient` by its
 full path (`firebirdInterface.cpp`; a POSIX loader has no `SetDllDirectory`, so a bare name found the
-system's alone), with `_fb` also looked for beside an application bundle (`firebirdBootstrap.cpp`).
+system's alone), with `_fb` looked for in the program folder — beside the executable, or beside the
+`.app` for a program inside a bundle (`firebirdBootstrap.cpp`, `core/programFolder.h`).
 Each packing script then **creates a UTF8 base embedded, with a case-insensitive Unicode collation, and
 reads a row back** — Firebird's own `isql` put into the kit for that minute — because resolved libraries
 are not a working engine: the engine plugin, the character sets and ICU are loaded at run time.
@@ -583,6 +598,13 @@ General > Platform Toolset** and install the VS 2022 C++ toolset if missing.
 **Symptom:** `LNK2001` errors when building frontend or executables.
 
 **Fix:** Build `backend` first. In the solution, right-click the failing project, select **Project Dependencies**, and ensure `backend` is checked.
+
+### `cmake` not found while MSBuild builds `backend`
+
+**Symptom:** `backend` stops before compiling anything: `MSB3073: The command "cmake -D OES_COMPILER_DIR=…" exited with code 9009`.
+
+**Fix:** Put CMake on `PATH` (see [Prerequisites](#windows)) and build again. The project runs
+`compiler/engineFingerprint.cmake` to write `engineFingerprintBuild.h`, which the bytecode cache includes.
 
 ### CMake cannot find wxWidgets
 

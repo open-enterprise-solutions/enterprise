@@ -55,7 +55,9 @@ If (FunctionalOptions.MultipleWarehouses.Get()) {
   hidden field stays in the settings; the settings window and the quick filters do not show it. What would
   show the field's values is left out when a report, a list, a table of values or a tabular section is
   composed — a grouping by it, a column of it — while a filter or a sort on it still applies. A value
-  computed from a hidden field is hidden with it.
+  computed from a hidden field is hidden with it, a column of a nested query too: arithmetic on the
+  field, and its `PRESENTATION`, `REFPRESENTATION`, `VALUETYPE` or `CAST`, is offered outside only while
+  the field is.
 - **Not a right.** Nothing is refused: a form of a hidden object still opens from a reference to it. Who
   may see what is the roles' question.
 - **The designer shows everything it edits.** A report it composes shows what the base uses, as the

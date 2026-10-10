@@ -34,6 +34,7 @@
 // successful Deserialize).
 
 #include "backend/compiler/byteCode.h"
+#include "backend/compiler/byteCodeFormat.h"   // kAOTFormatVersion — also the cache key
 #include "core/fileSystem/fs.h"
 
 namespace {
@@ -157,9 +158,10 @@ constexpr uint32_t kAOTMagic         = 0x31434250u; // 'PBC1' little-endian
 // while this was being tested.
 //
 // ⭐ THE VERSION IS ABOUT WHETHER THIS ENGINE MAY USE THIS BLOB, not about byte layout.
-// The cache key (byteCodeCache.cpp) is build-stamp + configuration digest, and the stamp
-// only moves when backend_core.cpp is recompiled — a compiler-rule change in another file
-// leaves it untouched. The strict check below is what makes a rule change safe.
+// The cache key (byteCodeCache.cpp) is this number plus the configuration digest. The
+// number lives in byteCodeFormat.h, which is what the compiler rebuilds; the old key
+// used core's build stamp, and core is not rebuilt when an opcode changes. The check
+// below still rejects a blob that was found under the wrong number.
 // v23 (2026-09-05): a function record gained one byte after m_valueCached —
 // `m_valueVariadic`, THE THIRD default-false flag this record has lost on the way back.
 // A built-in registered with a negative arity (`AppendFunc(wxT("Max"), -1, …)`) declares
@@ -245,7 +247,8 @@ constexpr uint32_t kAOTMagic         = 0x31434250u; // 'PBC1' little-endian
 //    branches are no longer computed before the choice. Dropping the enumerator moves every opcode
 //    from OPER_GT through OPER_END, and TYPE_DELTA with them. A v35 blob stores the old numbers and
 //    would dispatch the wrong handler on every instruction after that slot.
-constexpr uint16_t kAOTFormatVersion = 36;
+// The constant itself is kAOTFormatVersion in byteCodeFormat.h. It moved out of this
+// file so the cache key can name the same number the blob header writes.
 [[maybe_unused]] constexpr uint16_t kAOTFlagPortable = 0x0001;   // reserved — host-endian today, no reader yet
 
 // Sentinel for an over-large collection — guards Deserialize against
