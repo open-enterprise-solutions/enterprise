@@ -18,6 +18,7 @@
 #include "backend/compiler/byteCode.h"
 #include "backend/compiler/value.h"
 #include "backend/system/systemManager.h"   // ibValueSystemFunction — IsNull / ValueIsFilled impls
+#include "backend/system/value/valueList.h"
 #include "backend/compiler/procUnitState.h"   // m_errorPlace — which opcode raised
 #include "backend/session/session.h"
 #include "backend/appData.h"                // the built-in dispatcher reads appData on entry
@@ -2935,4 +2936,49 @@ TEST(RuntimeTest, AnArrayWalkedAndRewalkedIsLetGoOfOnce) {
 
 	// The frame goes here, with both arrays in it. That is the moment the nightly
 	// caught: passing under a sanitiser is the whole assertion.
+}
+
+TEST(RuntimeTest, ValueListHoldsItemsAndWalksThem) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("var n public; var held public; var shown public; var mark public;\n")
+		wxT("var found public; var missing public; var walked public; var left public;\n")
+		wxT("var list; list = New ValueList();\n")
+		wxT("list.Add(1, \"one\", true);\n")
+		wxT("list.Add(2);\n")
+		wxT("n = list.Count();\n")
+		wxT("var item; item = list.Get(0);\n")
+		wxT("held = item.Value;\n")
+		wxT("shown = item.Presentation;\n")
+		wxT("mark = item.Check;\n")
+		wxT("found = list.FindByValue(2);\n")
+		wxT("missing = list.FindByValue(9);\n")
+		wxT("walked = 0;\n")
+		wxT("Foreach it In list Do\n")
+		wxT("  walked = walked + it.Value;\n")
+		wxT("EndDo;\n")
+		wxT("list.Delete(0);\n")
+		wxT("left = list.Count();\n")));
+
+	ibProcUnit pu;
+	wxString strError;
+	ASSERT_TRUE(RunBound(cc, pu, strError)) << strError.ToStdString();
+
+	ibValue v;
+	ASSERT_TRUE(pu.GetPropVal(wxT("n"), v));
+	EXPECT_EQ(2, v.GetInteger());
+	ASSERT_TRUE(pu.GetPropVal(wxT("held"), v));
+	EXPECT_EQ(1, v.GetInteger());
+	ASSERT_TRUE(pu.GetPropVal(wxT("shown"), v));
+	EXPECT_EQ(wxT("one"), v.GetString());
+	ASSERT_TRUE(pu.GetPropVal(wxT("mark"), v));
+	EXPECT_TRUE(v.GetBoolean());
+	ASSERT_TRUE(pu.GetPropVal(wxT("found"), v));
+	EXPECT_FALSE(v.IsEmpty());
+	ASSERT_TRUE(pu.GetPropVal(wxT("missing"), v));
+	EXPECT_TRUE(v.IsEmpty());
+	ASSERT_TRUE(pu.GetPropVal(wxT("walked"), v));
+	EXPECT_EQ(3, v.GetInteger());
+	ASSERT_TRUE(pu.GetPropVal(wxT("left"), v));
+	EXPECT_EQ(1, v.GetInteger());
 }
