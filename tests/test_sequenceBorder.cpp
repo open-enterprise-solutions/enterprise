@@ -31,6 +31,8 @@
 #include "backend/metaCollection/metaObject.h"
 #include "backend/metaCollection/dimension/metaDimensionObject.h"
 #include "backend/metaCollection/partial/sequence.h"
+#include "backend/query/schemaSnapshot.h"
+#include "backend/restructureInfo.h"
 #include "backend/metaCollection/partial/reference/reference.h"
 #include "backend/query/columnLayout.h"
 #include "backend/system/value/valuePointInTime.h"
@@ -268,4 +270,91 @@ TEST(SqliteNumberBinding, OnlyANumberADoubleCannotCarryIsBoundAsAnInteger) {
 	EXPECT_EQ(rs->GetResultLong(2), sixtyBits);
 	statement->CloseResultSet(rs);
 	db->CloseStatement(statement);
+}
+
+// A sequence with nothing but its documents is one border. The register save used to refuse that
+// shape ("Doesn't have any dimension, resource or attribute") and the refusal aborted the whole
+// configuration. An information register with the same empty body is still refused: that table
+// really would have no column of its own.
+TEST(SequenceWithoutDimensions, SavesAndKeepsOneBorderWhileAnEmptyRegisterDoesNot) {
+	wxInitializer wx;
+	if (!wx.IsOk())
+		GTEST_SKIP() << "wxBase init failed (no wxApp host)";
+	if (!ibApplicationInstance::CreateAppDataEnv(ibRunMode::eFILE_MODE))
+		GTEST_SKIP() << "appData env unavailable headless";
+
+	std::shared_ptr<ibMetaDataConfigurationFile> cfg = ibMetaData::MakeShared<ibMetaDataConfigurationFile>();
+	ibApplicationInstance::Get()->ReplaceActiveMetaData(cfg);
+	struct Release {
+		~Release() {
+			if (ibApplicationInstance* app = ibApplicationInstance::Get(false))
+				app->ReplaceActiveMetaData(nullptr);
+			ibApplicationInstance::DestroyAppDataEnv();
+		}
+	} release;
+
+	ibValueMetaObjectConfiguration* root = cfg->GetCommonMetaObject();
+	ASSERT_NE(root, nullptr);
+
+	ibValueMetaObject* document = cfg->CreateMetaObject(g_metaDocumentCLSID, root, false);
+	ibValueMetaObjectSequence* seq = dynamic_cast<ibValueMetaObjectSequence*>(
+		cfg->CreateMetaObject(g_metaSequenceCLSID, root, false));
+	ASSERT_NE(document, nullptr);
+	ASSERT_NE(seq, nullptr);
+	ASSERT_TRUE(seq->GetDimensionArrayObject().empty());
+	ASSERT_TRUE(seq->GetResourceArrayObject().empty());
+	ASSERT_TRUE(seq->GetAttributeArrayObject().empty());
+	ASSERT_TRUE(seq->HasBorders());
+
+	// The table is the recorder, the period and the line number. No dimensions does not mean no columns,
+	// and the borders table is the same moment with no key in front of it.
+	ibSchemaSnapshot snapshot;
+	seq->ContributeTables(snapshot);
+	const ibSchemaTable* registrations = nullptr;
+	const ibSchemaTable* borders = nullptr;
+	for (const ibSchemaTable& table : snapshot.Tables()) {
+		if (table.m_name == seq->GetQueryable()->GetQueryTableName())
+			registrations = &table;
+		if (table.m_name == seq->GetBordersTableName())
+			borders = &table;
+	}
+	ASSERT_NE(registrations, nullptr);
+	ASSERT_NE(borders, nullptr);
+	EXPECT_GE(registrations->m_columns.size(), 4u);
+	EXPECT_FALSE(borders->m_columns.empty());
+
+	ibRestructureInfo& ledger = ibMetaDataConfigurationBase::GetRestructureInfo();
+	ledger.Clear();
+
+	// No document bound yet: still a sequence, and the refusal names the recorder, not an empty body.
+	EXPECT_FALSE(seq->OnSaveMetaObject(0));
+	bool namedTheBody = false;
+	bool namedTheRecorder = false;
+	for (const ibRestructureInfo::Entry& entry : ledger) {
+		if (entry.type != ibRestructure::error)
+			continue;
+		if (entry.descr.Contains(wxT("Doesn't have any dimension")))
+			namedTheBody = true;
+		if (entry.descr.Contains(wxT("no recorder")))
+			namedTheRecorder = true;
+	}
+	EXPECT_FALSE(namedTheBody);
+	EXPECT_TRUE(namedTheRecorder);
+
+	seq->GetRegisterRecorder()->GetTypeDesc().AppendMetaType(
+		reference_to_clsid(document->GetMetaID(), clsid_metaclass(document->GetClassType())));
+	ledger.Clear();
+	EXPECT_TRUE(seq->OnSaveMetaObject(0)) << "a sequence with a recorder and no dimensions is one border";
+	EXPECT_FALSE(ledger.HasErrors());
+
+	// The same empty body on an information register is still not a register.
+	ibValueMetaObject* info = cfg->CreateMetaObject(g_metaInformationRegisterCLSID, root, false);
+	ASSERT_NE(info, nullptr);
+	ledger.Clear();
+	EXPECT_FALSE(info->OnSaveMetaObject(0));
+	namedTheBody = false;
+	for (const ibRestructureInfo::Entry& entry : ledger)
+		if (entry.type == ibRestructure::error && entry.descr.Contains(wxT("Doesn't have any dimension")))
+			namedTheBody = true;
+	EXPECT_TRUE(namedTheBody);
 }
