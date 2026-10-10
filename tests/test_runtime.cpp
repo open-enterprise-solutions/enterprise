@@ -2206,6 +2206,63 @@ TEST(RuntimeTest, ALiteralArgumentToAParentModuleFunctionKeepsItsValue) {
 		<< "a WRONG-* value here means the argument was read from the callee's pool";
 }
 
+// An object module and its manager are different methods. The same exported
+// name in both used to be refused while compiling the object module, because
+// the manager's export was treated as a declaration in this module. The
+// object's own function is the one its body calls. Two exports in one module
+// are still one name.
+TEST(RuntimeTest, AnObjectModuleMayExportTheManagersName) {
+	struct StyleGuard {
+		const short saved = ibCompileCode::GetCodeStyle();
+		~StyleGuard() { ibCompileCode::SetCodeStyle(saved); }
+	} guard;
+	ibCompileCode::SetCodeStyle(CODE_VES);
+
+	ParentedCompiler manager(wxT("manager"));
+	ASSERT_TRUE(manager.CompileUnder(nullptr,
+		wxT("Function GetRate() Public\n")
+		wxT("  Return 1;\n")
+		wxT("EndFunction\n")
+		wxT("var mine public;\n")
+		wxT("mine = GetRate();\n")));
+
+	ParentedCompiler object(wxT("object"));
+	ASSERT_TRUE(object.CompileUnder(&manager,
+		wxT("Function GetRate() Public\n")
+		wxT("  Return 2;\n")
+		wxT("EndFunction\n")
+		wxT("var mine public;\n")
+		wxT("mine = GetRate();\n")));
+
+	ibProcUnit puManager;
+	ASSERT_TRUE(TryExecute(puManager, manager.m_cByteCode));
+	ibValue managerValue;
+	ASSERT_TRUE(puManager.GetPropVal(wxT("mine"), managerValue));
+	EXPECT_EQ(managerValue.GetInteger(), 1);
+
+	ibProcUnit puObject;
+	puObject.SetParent(&puManager);
+	wxString strError;
+	ASSERT_TRUE(RunBound(object, puObject, strError)) << strError.ToStdString();
+	ibValue objectValue;
+	ASSERT_TRUE(puObject.GetPropVal(wxT("mine"), objectValue));
+	EXPECT_EQ(objectValue.GetInteger(), 2) << "the object called the manager's function";
+
+	ibCompileCode again(wxT("test"), wxT("memory"), false);
+	const ::testing::AssertionResult duplicate = TryCompile(again,
+		wxT("Function GetRate() Public\n")
+		wxT("  Return 1;\n")
+		wxT("EndFunction\n")
+		wxT("Function GetRate() Public\n")
+		wxT("  Return 2;\n")
+		wxT("EndFunction\n"));
+	EXPECT_FALSE(duplicate);
+	if (!duplicate) {
+		EXPECT_NE(std::string(duplicate.message()).find("already defined"), std::string::npos)
+			<< duplicate.message();
+	}
+}
+
 // ===========================================================================
 // `Mod` AND `%` ARE ONE OPERATOR
 //
