@@ -108,6 +108,23 @@ void ibSessionSnapshot::SetKindsFromMap(
 	}
 }
 
+wxString ibSessionSnapshot::GetActivity(unsigned int idx) const
+{
+	if (idx >= m_listSession.size())
+		return wxEmptyString;
+	return m_listSession[idx].m_activity;
+}
+
+void ibSessionSnapshot::SetActivityFromMap(
+	const std::unordered_map<wxString, wxString>& activityBySession)
+{
+	for (auto& u : m_listSession) {
+		auto it = activityBySession.find(u.m_strSession);
+		if (it != activityBySession.end())
+			u.m_activity = it->second;
+	}
+}
+
 void ibSessionSnapshot::SetExclusiveFromMap(
 	const std::unordered_map<wxString, bool>& exclusiveBySession)
 {

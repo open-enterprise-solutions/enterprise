@@ -9,9 +9,13 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <future>
 #include <memory>
 #include <string>
 #include <thread>
+
+#include "backend/metadataConfiguration.h"
+#include "backend/metaCollection/metaObjectMetadata.h"
 
 #include <wx/filename.h>
 #include <wx/image.h>    // wxInitAllImageHandlers — a new base loads icons, and wx decodes nothing until registered
@@ -535,6 +539,117 @@ TEST_F(SessionFailover, AnotherConnectionDoesNotReadTheCachedAnswer)
 	EXPECT_TRUE(cached.ok) << cached.message;
 	EXPECT_NE(stolenText, cachedText);
 	EXPECT_EQ(cached.result.GetInt(ibProtocolName::Frame), first.result.GetInt(ibProtocolName::Frame));
+}
+
+TEST_F(SessionFailover, ACallDuringDetachIsRefused)
+{
+	int connection = 0;
+	const Rpc login = g_base->Call(Request(100, "login", PasswordLogin()), &connection);
+	ASSERT_TRUE(login.ok) << login.message;
+	const wxString client = login.result.GetString(ibProtocolName::Client);
+
+	int other = 0;
+	Rpc slipped;
+	ibClientHost::SetBetweenDetach([&]() {
+		ibProtocolNode params;
+		params.SetValue(ibProtocolName::Client, client);
+		slipped = g_base->Call(Request(101, "frame", params), &other);
+	});
+	g_base->host->Disconnect(&connection);
+	ibClientHost::SetBetweenDetach(std::function<void()>());
+
+	EXPECT_FALSE(slipped.ok);
+	EXPECT_EQ(slipped.code, 401);
+}
+
+TEST_F(SessionFailover, HttpClientStaysCallableWithoutASocket)
+{
+	const Rpc login = g_base->Call(Request(110, "login", PasswordLogin(false)), nullptr);
+	ASSERT_TRUE(login.ok) << login.message;
+	const wxString client = login.result.GetString(ibProtocolName::Client);
+
+	int other = 0;
+	ibProtocolNode params;
+	params.SetValue(ibProtocolName::Client, client);
+	const Rpc frame = g_base->Call(Request(111, "frame", params), &other);
+	EXPECT_TRUE(frame.ok) << frame.message;
+}
+
+TEST_F(SessionFailover, StartModuleThatAsksDoesNotHangTheLogin)
+{
+	ibMetaDataConfigurationBase* const meta = ibApplicationInstance::GetActiveMetaData(g_base->app);
+	ASSERT_NE(meta, nullptr);
+	ibValueMetaObjectConfiguration* const common = meta->GetCommonMetaObject();
+	ASSERT_NE(common, nullptr);
+	ibValueMetaObjectModule* const module = const_cast<ibValueMetaObjectModule*>(common->GetObjectModule());
+	ASSERT_NE(module, nullptr);
+	struct Restore {
+		ibValueMetaObjectModule* module;
+		wxString                 text;
+		~Restore() { module->SetModuleText(text); }
+	} restore{ module, module->GetModuleText() };
+	module->SetModuleText(
+		wxT("Procedure onStart() {\n")
+		wxT("\tQuestion(\"stay\");\n")
+		wxT("}\n"));
+
+	int connection = 0;
+	const auto pending = std::async(std::launch::async, [&]() {
+		return g_base->Call(Request(120, "login", PasswordLogin()), &connection);
+	});
+	ASSERT_EQ(pending.wait_for(std::chrono::seconds(10)), std::future_status::ready)
+		<< "login hung behind a start module that asks";
+	const Rpc login = pending.get();
+	ASSERT_TRUE(login.ok) << login.message;
+	EXPECT_FALSE(login.result.GetString(ibProtocolName::Token).IsEmpty());
+	const ibProtocolNode request = login.result.FindChild("Request");
+	ASSERT_TRUE(request.IsNode()) << "the start module's question was not on the login answer";
+	EXPECT_EQ(request.GetString("Text"), wxT("stay"));
+
+	const wxString client = login.result.GetString(ibProtocolName::Client);
+	ibProtocolNode response;
+	response.SetValue("Button", static_cast<long long>(wxOK));
+	ibProtocolNode answer;
+	answer.SetValue(ibProtocolName::Client, client);
+	answer.SetValue("Id", request.GetString("Id"));
+	answer.SetValue("Response", response);
+	const Rpc responded = g_base->Call(Request(121, "respond", answer), &connection);
+	EXPECT_TRUE(responded.ok) << responded.message;
+}
+
+TEST_F(SessionFailover, DetachedSessionSaysUntilWhen)
+{
+	int watcher = 0;
+	const Rpc admin = g_base->Call(Request(130, "login", PasswordLogin(false)), &watcher);
+	ASSERT_TRUE(admin.ok) << admin.message;
+	const wxString adminId = admin.result.GetString(ibProtocolName::Client);
+
+	int connection = 0;
+	const Rpc login = g_base->Call(Request(131, "login", PasswordLogin()), &connection);
+	ASSERT_TRUE(login.ok) << login.message;
+	const wxString client = login.result.GetString(ibProtocolName::Client);
+	g_base->host->Disconnect(&connection);
+
+	ibProtocolNode params;
+	params.SetValue(ibProtocolName::Client, adminId);
+	params.SetValue("Schema", static_cast<int>(ibProtocolSchema::ActiveUser));
+
+	bool found = false;
+	wxString last;
+	for (int attempt = 0; attempt < 15 && !found; ++attempt) {
+		std::this_thread::sleep_for(std::chrono::milliseconds(200));
+		const wxString text = g_base->host->Call(Request(140 + attempt, "schema", params), &watcher, wxT("test"));
+		last = text;
+		const Rpc list = ReadRpc(text);
+		if (!list.ok)
+			continue;
+		for (const ibProtocolNode& row : list.result.FindChild("Sessions").Children()) {
+			if (row.GetString("Session") == client
+				&& row.GetString("Activity").Find(wxT("detached until")) != wxNOT_FOUND)
+				found = true;
+		}
+	}
+	EXPECT_TRUE(found) << last;
 }
 
 namespace {

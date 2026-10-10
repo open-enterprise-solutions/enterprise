@@ -64,6 +64,10 @@ public:
 	// The connection closed: the clients logged in through it are logged out.
 	void Disconnect(const void* connection);
 
+	// Tests. Disconnect calls this after the resume deadline is stored and before the connection is
+	// cleared, and without the host mutex held. Empty unless a test set it.
+	static void SetBetweenDetach(std::function<void()> probe);
+
 	// HOW A CONNECTION IS TOLD SOMETHING — a transport that keeps its connection open (a WebSocket, a file base's
 	// program) hands the host the way it sends a text to it; Disconnect forgets it. A connection without one (an
 	// HTTP request) is never told anything: it asks.
@@ -81,8 +85,13 @@ private:
 
 	struct Client {
 		std::shared_ptr<ibClientInstance> instance;
-		// The connection it was logged in through — null when the door had none.
-		const void*                       connection = nullptr;
+		// The connection it was logged in through. Null when the door had none, or after a thin client's
+		// socket has dropped. Atomic: Disconnect and a token login write it under m_mutex, and a call reads
+		// it under the client's own lock.
+		std::atomic<const void*>          connection{ nullptr };
+		// Set at login when the door had no connection, and never changed after. A null connection is also
+		// a thin client in the middle of a drop, so the two are not the same fact.
+		bool                              http = false;
 		// The work that has not settled yet — waiting for the person's response to a request. The next call
 		// that settles the client waits for it too: a response lets it go on.
 		std::shared_future<void>          unsettled;
@@ -113,8 +122,8 @@ private:
 		bool                              hasToken = false;
 		unsigned char                     tokenDigest[32] = {};
 		// Armed when a thin client's connection has dropped: the moment the session ends if nobody returns.
-		// 0 — a connection is attached, or this client never had one (an HTTP call). Atomic: the round reads it
-		// while Disconnect writes it.
+		// 0 — a connection is attached, or this client never had one (an HTTP call, `http`). Stored before
+		// `connection` is cleared, so a call never observes a null connection together with a zero deadline.
 		std::atomic<std::int64_t>         resumeDeadlineMs{ 0 };
 	};
 

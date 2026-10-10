@@ -7,6 +7,8 @@
 #include <string>
 #include <vector>
 
+#include <wx/datetime.h>
+
 #include <cstring>
 
 #include <wx/base64.h>
@@ -39,6 +41,7 @@ namespace {
 
 std::mutex                                                s_hostsMutex;
 std::map<const ibApplicationInstance*, ibClientHost*>     s_hosts;
+std::function<void()>                                     s_betweenDetach;
 
 // An instance nobody has heard from for this long is taken down.
 constexpr std::chrono::minutes kIdleLimit(30);
@@ -71,14 +74,25 @@ bool WindowFor(const void* connection, const ibClientInstance& instance)
 }
 
 // The public Client id is not the bearer of an attached socket. A detached client is reached by login {Token}
-// only. An HTTP client (no connection, and so no window) is unchanged.
-bool MayCall(const void* bound, std::int64_t deadline, const void* connection)
+// only. An HTTP client is the one marked at login, not whatever currently has a null connection: a thin
+// client's socket is also null while it is being dropped.
+bool MayCall(bool http, const void* bound, std::int64_t deadline, const void* connection)
 {
+	if (http)
+		return true;
 	if (deadline != 0)
 		return false;
 	if (bound == nullptr)
-		return true;
+		return false;
 	return bound == connection;
+}
+
+// "detached until 15:04:07" — what Active users shows for the window, fitted to currentActivity.
+wxString DetachedUntil(std::int64_t deadlineMs)
+{
+	// time_t is UTC. Active users reads a local clock.
+	const wxDateTime local = wxDateTime(static_cast<time_t>(deadlineMs / 1000)).ToTimezone(wxDateTime::Local);
+	return wxString::Format(_("detached until %s"), local.Format(wxT("%H:%M:%S")));
 }
 
 bool AskedResume(const ibDataNode& params)
@@ -326,6 +340,7 @@ bool ibClientHost::ResumeByToken(const ibDataNode& params, ibDataNode& result, i
 
 	wxString id;
 	bool expired = false;
+	bool rebound = false;
 	{
 		std::lock_guard<std::mutex> lock(m_mutex);
 		for (const auto& entry : m_clients) {
@@ -346,10 +361,15 @@ bool ibClientHost::ResumeByToken(const ibDataNode& params, ibDataNode& result, i
 		if (NowMs() >= deadline)
 			expired = true;
 		else {
-			client->connection = connection;
+			client->connection.store(connection, std::memory_order_release);
 			client->resumeDeadlineMs.store(0, std::memory_order_release);
 			client->instance->Touch();
+			rebound = true;
 		}
+	}
+	if (rebound) {
+		if (std::shared_ptr<ibSession> session = client->instance->ShareSession())
+			session->SetActivity(wxT("idle"));
 	}
 	if (expired) {
 		RemoveClient(id);
@@ -411,6 +431,11 @@ bool ibClientHost::RememberToken(Client& client, ibDataNode& result, ibProtocolR
 	return true;
 }
 
+void ibClientHost::SetBetweenDetach(std::function<void()> probe)
+{
+	s_betweenDetach = std::move(probe);
+}
+
 void ibClientHost::Disconnect(const void* connection)
 {
 	if (connection == nullptr)
@@ -423,7 +448,7 @@ void ibClientHost::Disconnect(const void* connection)
 		std::lock_guard<std::mutex> lock(m_mutex);
 		m_notifiers.erase(connection);
 		for (const auto& entry : m_clients) {
-			if (entry.second->connection == connection)
+			if (entry.second->connection.load(std::memory_order_acquire) == connection)
 				matched.push_back(entry.second);
 		}
 	}
@@ -435,14 +460,15 @@ void ibClientHost::Disconnect(const void* connection)
 	std::vector<Held> held;
 	held.reserve(matched.size());
 	for (const std::shared_ptr<Client>& client : matched)
-		held.push_back(Held{ client, WindowFor(client->connection, *client->instance) });
+		held.push_back(Held{ client, WindowFor(client->connection.load(std::memory_order_acquire), *client->instance) });
 
 	const std::int64_t deadline = NowMs() + ResumeWindowMs();
 	std::vector<std::shared_ptr<Client>> gone;
+	std::vector<std::shared_ptr<Client>> detaching;
 	{
 		std::lock_guard<std::mutex> lock(m_mutex);
 		for (const Held& one : held) {
-			if (one.client->connection != connection)
+			if (one.client->connection.load(std::memory_order_acquire) != connection)
 				continue;   // returned already, on some other call
 			wxString id;
 			for (const auto& entry : m_clients) {
@@ -452,13 +478,31 @@ void ibClientHost::Disconnect(const void* connection)
 			if (id.IsEmpty())
 				continue;
 			if (one.grace) {
-				one.client->connection = nullptr;
+				// The deadline first. A call that already sees the cleared connection still sees a
+				// deadline, and only a client marked http at login is callable with no connection.
 				one.client->resumeDeadlineMs.store(deadline, std::memory_order_release);
+				detaching.push_back(one.client);
 			}
 			else {
 				gone.push_back(one.client);
 				m_clients.erase(id);
 			}
+		}
+	}
+	for (const std::shared_ptr<Client>& client : detaching) {
+		if (std::shared_ptr<ibSession> session = client->instance->ShareSession())
+			session->SetActivity(DetachedUntil(deadline));
+	}
+	// Outside the host mutex: the probe calls back in (a test's call from another socket).
+	if (s_betweenDetach && !detaching.empty())
+		s_betweenDetach();
+	if (!detaching.empty()) {
+		std::lock_guard<std::mutex> lock(m_mutex);
+		for (const std::shared_ptr<Client>& client : detaching) {
+			// A resume that landed during the probe owns the client again.
+			if (client->connection.load(std::memory_order_acquire) == connection
+				&& client->resumeDeadlineMs.load(std::memory_order_acquire) != 0)
+				client->connection.store(nullptr, std::memory_order_release);
 		}
 	}
 	for (const std::shared_ptr<Client>& client : gone)
@@ -486,7 +530,7 @@ void ibClientHost::NotifyChanged(const ibClientInstance* instance)
 		for (const auto& [clientId, client] : m_clients) {
 			if (client->instance.get() != instance)
 				continue;
-			const auto found = m_notifiers.find(client->connection);
+			const auto found = m_notifiers.find(client->connection.load(std::memory_order_acquire));
 			if (found != m_notifiers.end()) {
 				id = clientId;
 				notify = found->second;
@@ -543,7 +587,8 @@ wxString ibClientHost::Call(const wxString& text, const void* connection, const 
 		slot.client = FindClient(request.m_params.GetValue<wxString>(wxString::FromUTF8(ibProtocolName::Client)));
 		if (slot.client) {
 			std::unique_lock<std::mutex> lock(slot.client->lock);
-			if (!MayCall(slot.client->connection, slot.client->resumeDeadlineMs.load(std::memory_order_acquire), connection)) {
+			if (!MayCall(slot.client->http, slot.client->connection.load(std::memory_order_acquire),
+				slot.client->resumeDeadlineMs.load(std::memory_order_acquire), connection)) {
 				lock.unlock();
 				slot.client.reset();
 				return ibRpcWriteError(request.m_id, static_cast<s32>(ibProtocolRefusal::NoSession), wxT("the client is not connected"));
@@ -647,7 +692,8 @@ bool ibClientHost::Call(ibProtocolMethod method, const ibDataNode& params, ibDat
 		s32 mode = static_cast<s32>(ibProtocolMode::Runtime);
 		params.GetValue(wxT("Mode"), mode);
 		client->instance = std::make_shared<ibClientInstance>(m_applicationInstance, id, address, static_cast<ibProtocolMode>(mode));
-		client->connection = connection;
+		client->http = connection == nullptr;
+		client->connection.store(connection, std::memory_order_relaxed);
 		client->protocol = std::min(protocol, ibProtocolVersion);
 		if (protocol < 1) {
 			refuse(ibProtocolRefusal::BadParameter, wxString::Format(wxT("no protocol version %d"), protocol));
@@ -671,7 +717,7 @@ bool ibClientHost::Call(ibProtocolMethod method, const ibDataNode& params, ibDat
 			}
 			if (!done)
 				RemoveClient(id);
-			else if (!WindowFor(client->connection, *client->instance)) {
+			else if (!WindowFor(client->connection.load(std::memory_order_acquire), *client->instance)) {
 				// No window: no token, and `resume` is not offered. The answer is the frame, as before.
 				result.SetValue(wxT("Client"), id);
 				result.SetValue(wxT("Protocol"), client->protocol);
@@ -700,7 +746,8 @@ bool ibClientHost::Call(ibProtocolMethod method, const ibDataNode& params, ibDat
 			bool allowed = false;
 			{
 				std::lock_guard<std::mutex> clientLock(client->lock);
-				allowed = MayCall(client->connection, client->resumeDeadlineMs.load(std::memory_order_acquire), connection);
+				allowed = MayCall(client->http, client->connection.load(std::memory_order_acquire),
+					client->resumeDeadlineMs.load(std::memory_order_acquire), connection);
 			}
 			if (!allowed)
 				refuse(ibProtocolRefusal::NoSession, wxT("the client is not connected"));
@@ -718,7 +765,8 @@ bool ibClientHost::Call(ibProtocolMethod method, const ibDataNode& params, ibDat
 		else {
 			std::lock_guard<std::mutex> clientLock(client->lock);
 			// Detached, or a socket that is not this client's: the public Client id is not the bearer.
-			if (!MayCall(client->connection, client->resumeDeadlineMs.load(std::memory_order_acquire), connection)) {
+			if (!MayCall(client->http, client->connection.load(std::memory_order_acquire),
+				client->resumeDeadlineMs.load(std::memory_order_acquire), connection)) {
 				refuse(ibProtocolRefusal::NoSession, wxT("the client is not connected"));
 			}
 			else {

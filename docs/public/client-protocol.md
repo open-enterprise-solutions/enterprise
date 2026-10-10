@@ -208,7 +208,8 @@ for its `Commands` — the person's right for a schema.
 
 A client's session is a thin client in the runtime and a designer in the designer, whatever process hosts it.
 Active users shows both columns: the application (Runtime, Designer, Application server, …) and the kind (Thin client,
-Client, Server, Job).
+Client, Server, Job). A thin client whose socket has dropped stays in the list for the resume window, and its
+activity says `detached until HH:MM:SS` — the moment the window ends — so an administrator can end it.
 
 ## A dropped connection
 
@@ -216,7 +217,9 @@ Client, Server, Job).
 once. A value above 30 minutes is 30 minutes. The window is a thin runtime that logged in on a WebSocket. A designer,
 an HTTP client, and `Resume` 0 get no `Token` and no `resume` feature.
 
-While the window is armed, a call that names `Client` is 401. `login` `{Token}` binds the new socket and returns the
+While the window is armed, a call that names `Client` is 401. An HTTP client is the login that arrived with no
+connection; a null connection on a client that had a socket is the drop, and it does not admit another socket.
+`login` `{Token}` binds the new socket and returns the
 same `Client` and no frame. The next `frame` `{Since}` is the patch. A token presented while the client is still
 attached is 401 and does not move the session. An unknown, malformed or expired token is 401. While attached, a
 WebSocket call whose connection is not the one that logged in is 401, including one that repeats the last id.
