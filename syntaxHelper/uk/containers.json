@@ -401,6 +401,21 @@
         "cls.KeyValue.Key"
       ],
       "reviewed": false
+    },
+    {
+      "id": "cls.ValueList",
+      "name_local": "ValueList",
+      "name_en": "ValueList",
+      "kind": "collection",
+      "category_keys": ["value_types", "collections", "containers"],
+      "signature": "New ValueList()",
+      "description": "Список значень. Add(value, presentation, check) додає елемент і повертає його; Insert, Get, Delete, Count і Clear — за індексом від нуля. FindByValue повертає елемент або Невизначено. В елемента є Value, Presentation і Check. Обхід віддає елемент. Запит IN (&list) порівнює значення.",
+      "parameters": "Немає.",
+      "return_descr": "ValueList — порожній.",
+      "example": "list = New ValueList();\nlist.Add(1, \"one\", true);",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": ["cls.Structure"],
+      "reviewed": true
     }
   ]
 }
