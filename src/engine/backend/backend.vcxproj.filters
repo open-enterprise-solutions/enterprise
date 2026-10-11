@@ -2111,6 +2111,9 @@
     <ClCompile Include="metaCollection\metaFunctionalOptionObject.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>
+    <ClCompile Include="metaCollection\metaDocumentJournalObject.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
     <ClCompile Include="metaCollection\metaFunctionalOptionObjectMenu.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>

@@ -659,6 +659,7 @@
     <ClCompile Include="metaCollection\metaSessionParameterObject.cpp" />
     <ClCompile Include="metaCollection\metaSessionParameterObject_res.cpp" />
     <ClCompile Include="metaCollection\metaFunctionalOptionObject.cpp" />
+    <ClCompile Include="metaCollection\metaDocumentJournalObject.cpp" />
     <ClCompile Include="metaCollection\metaFunctionalOptionObjectMenu.cpp" />
     <ClCompile Include="metaCollection\metaFunctionalOptionObject_res.cpp" />
     <ClCompile Include="functionalOption\functionalOptionGate.cpp" />
