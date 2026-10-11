@@ -18,6 +18,7 @@
 #include "backend/compiler/byteCode.h"
 #include "backend/compiler/value.h"
 #include "backend/system/systemManager.h"   // ibValueSystemFunction — IsNull / ValueIsFilled impls
+#include "backend/compiler/enumFactory.h"  // EnumManager — StatusMessage and the other system enumerations
 #include "backend/compiler/procUnitState.h"   // m_errorPlace — which opcode raised
 #include "backend/session/session.h"
 #include "backend/appData.h"                // the built-in dispatcher reads appData on entry
@@ -2940,7 +2941,9 @@ TEST(RuntimeTest, AnArrayWalkedAndRewalkedIsLetGoOfOnce) {
 TEST_F(BuiltInRuntime, WriteLogEventTakesTheRegistrationOrder) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	ibValueSystemFunction valueSystem;
+	ibValueEnumFactory enums;
 	cc.AddContextVariable(wxT("System"), &valueSystem, true);
+	cc.AddContextVariable(wxT("Enums"), &enums, true);
 
 	ASSERT_TRUE(TryCompile(cc,
 		wxT("var ok public;\n")
