@@ -237,6 +237,10 @@ private:
 	ibDocumentJournalQueryable m_rows;
 	wxString m_listed;
 };
+ibValueMetaObjectDocumentJournal::ibValueMetaObjectDocumentJournal()
+	: ibValueMetaObject()
+{
+}
 ibValueMetaObjectDocumentJournal::~ibValueMetaObjectDocumentJournal() = default;
 ibValue ibValueMetaObjectDocumentJournal::Select() const
 {

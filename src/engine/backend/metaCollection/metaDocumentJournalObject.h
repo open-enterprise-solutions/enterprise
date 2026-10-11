@@ -9,7 +9,7 @@ class ibDocumentJournalSource;
 class BACKEND_API ibValueMetaObjectDocumentJournal : public ibValueMetaObject {
 public:
 	static constexpr unsigned s_features = ibMetaFeature_Manager;
-	ibValueMetaObjectDocumentJournal() : ibValueMetaObject() {}
+	ibValueMetaObjectDocumentJournal();
 	virtual ~ibValueMetaObjectDocumentJournal();
 	virtual ibClassID ResolveChild(const ibClassID&) const override { return 0; }
 	wxString GetContent() const { return m_propertyContent->GetValueAsString(); }
