@@ -423,6 +423,15 @@ public:
 	bool IsExclusive() const { return m_exclusive.load(std::memory_order_acquire); }
 	void SetExclusive(bool on);
 
+	// Privileged mode for THIS session. Off unless script turned it on.
+	// While on, GetAccessPolicy() answers null — the same bypass a role
+	// module's trust scope uses — and no other session is affected.
+	// The script flag is not the trust scope: ending a scope does not
+	// clear a mode the script set, and the script cannot clear a scope
+	// that is still on the stack.
+	bool PrivilegedMode() const { return m_accessTrusted || m_scriptPrivileged; }
+	void SetPrivilegedMode(bool on) { m_scriptPrivileged = on; }
+
 	// Compile the root mm — runs CreateMainModule on the allocated
 	// m_root. Called after metadata->RunDatabase() has populated common-
 	// module descriptors in metadata's ibModuleStorage. Returns false
@@ -1024,6 +1033,10 @@ private:
 	// survives a handler throw). Per-session, never process-global: a trusted
 	// window on one web session must not lift enforcement on another.
 	bool m_accessTrusted = false;
+	// SetPrivilegedMode. Default off, so access checks run unless script asked.
+	// Separate from the trust scope above: a scope ending does not clear it,
+	// and script cannot clear a scope that is still on the stack.
+	bool m_scriptPrivileged = false;
 
 	// SESSION PARAMETERS — declared in metadata, filled once by the session module,
 	// read everywhere. Keyed by the parameter's NAME, which is what a script writes.

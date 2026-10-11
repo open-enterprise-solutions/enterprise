@@ -1024,9 +1024,10 @@ const ibAccessPolicy* ibSession::GetAccessPolicy() const
 {
 	// Inside a trusted window (a role module runs privileged) the door must see
 	// no policy even though m_accessPolicy is real — the handler's own queries
-	// must not re-enter RLS. The bypass is CONSTRUCTIVE (ibAccessTrustScope is
-	// the only thing that sets the flag), so it never masks a forgotten policy.
-	if (m_accessTrusted)
+	// must not re-enter RLS. The same answer when script called SetPrivilegedMode:
+	// that flag starts off, and only that call turns it on. Neither one masks a
+	// forgotten policy by itself.
+	if (m_accessTrusted || m_scriptPrivileged)
 		return nullptr;
 	if (m_accessPolicy)
 		return m_accessPolicy.get();
