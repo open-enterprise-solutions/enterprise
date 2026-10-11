@@ -1,0 +1,16 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "uk",
+  "entries": [
+    {
+      "id": "fn.CurrentUniversalDateInMilliseconds",
+      "name_local": "CurrentUniversalDateInMilliseconds",
+      "name_en": "CurrentUniversalDateInMilliseconds",
+      "kind": "system_function",
+      "category_keys": ["global_context", "global_functions"],
+      "signature": "CurrentUniversalDateInMilliseconds()",
+      "description": "Число. Поточний час UTC у мілісекундах від 0001-01-01 — той самий відлік, що зберігає дата. CurrentDate лишається місцевим годинником."
+    }
+  ]
+}

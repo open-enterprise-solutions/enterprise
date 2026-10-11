@@ -70,6 +70,8 @@ public:
 
 	//--- Date and time:
 	static ibValue CurrentDate();
+	// UTC now, as milliseconds from 0001-01-01. CurrentDate stays the local clock.
+	static ibValue CurrentUniversalDateInMilliseconds();
 	static ibValue WorkingDate();
 	static ibValue AddMonth(const ibValue& cData, int nMonthAdd = 1);
 	static ibValue BegOfMonth(const ibValue& cData);

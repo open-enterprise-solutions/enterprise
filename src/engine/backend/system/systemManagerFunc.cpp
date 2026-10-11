@@ -5,6 +5,9 @@
 
 #include "systemManager.h"
 
+#include <chrono>
+#include <ctime>
+
 #include "backend/metaCollection/metaFormObject.h"
 #include "backend/metadataConfiguration.h"
 
@@ -367,6 +370,31 @@ wxString ibValueSystemFunction::TStr(const ibValue& cSource, const ibValue& cLan
 ibValue ibValueSystemFunction::CurrentDate()
 {
 	return ibValue(ibDateTime::Now());   // the machine's clock, read as what it shows (fdatetime.h)
+}
+
+ibValue ibValueSystemFunction::CurrentUniversalDateInMilliseconds()
+{
+	const auto now = std::chrono::system_clock::now();
+	const std::time_t seconds = std::chrono::system_clock::to_time_t(now);
+	long long milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(
+		now.time_since_epoch()).count() % 1000;
+	if (milliseconds < 0)
+		milliseconds += 1000;
+	std::tm utc{};
+#if defined(_WIN32)
+	gmtime_s(&utc, &seconds);
+#else
+	gmtime_r(&seconds, &utc);
+#endif
+	const unsigned second = utc.tm_sec > 59 ? 59u : static_cast<unsigned>(utc.tm_sec);
+	const ibDateTime reading(utc.tm_year + 1900,
+		static_cast<unsigned>(utc.tm_mon) + 1,
+		static_cast<unsigned>(utc.tm_mday),
+		static_cast<unsigned>(utc.tm_hour),
+		static_cast<unsigned>(utc.tm_min),
+		second,
+		static_cast<unsigned>(milliseconds));
+	return ibValue(ibNumber(reading.GetValue()));
 }
 
 ibValue ibValueSystemFunction::WorkingDate() {
