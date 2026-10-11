@@ -1921,6 +1921,57 @@ ibValueRecordDataObject::~ibValueRecordDataObject()
 {
 }
 
+namespace {
+
+enum { eDataExchangeLoad = 0 };
+
+void BindDataExchangeNames(ibValue::ibMemberTable& helper, const ibValue*)
+{
+	helper.AppendProp(wxT("Load"));
+}
+
+// Load is the flag a BeforeWrite handler reads. Sender and Recipients stay absent.
+class ibValueDataExchange : public ibValueStaticMembers<&BindDataExchangeNames> {
+public:
+	bool SetPropVal(const long lPropNum, const ibValue& value) override
+	{
+		if (lPropNum != eDataExchangeLoad)
+			return false;
+		m_load = value.GetBoolean();
+		return true;
+	}
+
+	bool GetPropVal(const long lPropNum, ibValue& out) override
+	{
+		if (lPropNum != eDataExchangeLoad)
+			return false;
+		out = m_load;
+		return true;
+	}
+
+private:
+	bool m_load = false;
+};
+
+ibValue* DataExchangeOf(ibValue& slot)
+{
+	if (!slot.IsReference())
+		slot = new ibValueDataExchange();
+	return slot.GetRef();
+}
+
+}
+
+void ibValueRecordDataObject::BindDataExchange()
+{
+	BindExportVariable(wxT("DataExchange"), DataExchangeOf(m_dataExchange));
+}
+
+void ibValueRecordSetObject::BindDataExchange()
+{
+	BindExportVariable(wxT("DataExchange"), DataExchangeOf(m_dataExchange));
+}
+
 // MY form — the one showing THIS object. Found by SOURCE, not by form key: the key is the
 // form's own identity and a caller may set it to anything (an element placed on the start page
 // gets a fresh one of its own, so several copies never collide). What never changes is that
@@ -2328,6 +2379,7 @@ bool ibValueRecordDataObjectExt::InitializeObject()
 		// pick up parent automatically on creation.
 		ibRuntimeModuleDataObject::SetParent(moduleManager);
 		BindContextVariable(thisObject, this);
+		BindDataExchange();
 		InitializeRuntime();
 
 		try {
@@ -2359,6 +2411,7 @@ bool ibValueRecordDataObjectExt::InitializeObject(ibValueRecordDataObjectExt* so
 
 		ibRuntimeModuleDataObject::SetParent(moduleManager);
 		BindContextVariable(thisObject, this);
+		BindDataExchange();
 		InitializeRuntime();
 
 		try {
@@ -2434,6 +2487,7 @@ bool ibValueRecordDataObjectRef::InitializeObject(const ibGuid& copyGuid)
 
 	ibRuntimeModuleDataObject::SetParent(moduleManager);
 	BindContextVariable(thisObject, this);
+	BindDataExchange();
 	try {
 		Compile();
 	}
@@ -2488,6 +2542,7 @@ bool ibValueRecordDataObjectRef::InitializeObject(ibValueRecordDataObjectRef* so
 
 	ibRuntimeModuleDataObject::SetParent(moduleManager);
 	BindContextVariable(thisObject, this);
+	BindDataExchange();
 
 	try {
 		Compile();
@@ -3833,6 +3888,7 @@ bool ibValueRecordSetObject::InitializeObject(const ibValueRecordSetObject* sour
 	ibRuntimeModuleDataObject::SetParent(moduleManager);
 	BindContextVariable(thisObject, this);                   // contextual
 	BindExportVariable(wxT("Filter"), m_recordSetKeyValue);  // exported — register filter/key
+	BindDataExchange();
 
 	try {
 		Compile();
