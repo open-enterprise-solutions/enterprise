@@ -1,0 +1,25 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "uk",
+  "entries": [
+    {
+      "id": "fn.PutToTempStorage",
+      "name_local": "PutToTempStorage",
+      "name_en": "PutToTempStorage",
+      "kind": "system_function",
+      "category_keys": ["global_context", "global_functions"],
+      "signature": "PutToTempStorage(value[, address])",
+      "description": "Рядок, адреса. Зберігає значення в цьому процесі. Порожня адреса виділяє нову; задана адреса замінює попереднє значення. Це не сховище тимчасових файлів."
+    },
+    {
+      "id": "fn.GetFromTempStorage",
+      "name_local": "GetFromTempStorage",
+      "name_en": "GetFromTempStorage",
+      "kind": "system_function",
+      "category_keys": ["global_context", "global_functions"],
+      "signature": "GetFromTempStorage(address)",
+      "description": "Значення, яке PutToTempStorage зберіг за цією адресою в цьому процесі. Невідома адреса відхиляється."
+    }
+  ]
+}

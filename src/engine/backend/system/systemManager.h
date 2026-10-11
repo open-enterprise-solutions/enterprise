@@ -149,6 +149,10 @@ public:
 	static wxString SerializeValue(const ibValue& cData);
 	static ibValue  DeserializeValue(const wxString& strJson);
 
+	// Process-local. An empty address allocates one. The file store is a different thing.
+	static wxString PutToTempStorage(const ibValue& value, const wxString& address);
+	static ibValue GetFromTempStorage(const wxString& address);
+
 	// (⛔ NO MESSAGE CAPTURE HERE. Getting the lines a run printed is not a new mechanism: the
 	//  debug channel already carries messages from a running application to whoever is attached —
 	//  `CommandId_MessageFromServer`, sent by ibDebuggerServer::SendErrorToClient. It looked like
