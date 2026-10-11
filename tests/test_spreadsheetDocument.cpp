@@ -1142,13 +1142,13 @@ TEST(SpreadsheetDocument, PageOrientationStaysOffTheGrid) {
 	ASSERT_NE(prop, wxNOT_FOUND);
 	ibValue current;
 	ASSERT_TRUE(doc.GetPropVal(prop, current));
-	EXPECT_EQ(current.ConvertToEnumType<PageOrientation>(), Portrait);
+	EXPECT_EQ(current.ConvertToEnumValue<PageOrientation>(), Portrait);
 
 	const ibValue landscape = ibValue::CreateEnumObject<ibValueEnumPageOrientation>(Landscape);
 	ASSERT_TRUE(doc.SetPropVal(prop, landscape));
 	ibValue read;
 	ASSERT_TRUE(doc.GetPropVal(prop, read));
-	EXPECT_EQ(read.ConvertToEnumType<PageOrientation>(), Landscape);
+	EXPECT_EQ(read.ConvertToEnumValue<PageOrientation>(), Landscape);
 	EXPECT_EQ(doc.GetSpreadsheetDocument()->GetPageOrientation(), Landscape);
 	EXPECT_EQ(doc.GetSpreadsheetDocument()->GetCellValue(0, 0), wxString(wxT("kept")));
 	EXPECT_TRUE(doc.GetSpreadsheetDesc() == before);

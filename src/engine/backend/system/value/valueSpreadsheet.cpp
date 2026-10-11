@@ -385,7 +385,7 @@ bool ibValueSpreadsheetDocument::SetPropVal(const long lPropNum, const ibValue& 
 		m_spreadsheetDoc->SetLangCode(varPropVal.GetString());
 		return true;
 	case ePageOrientation:
-		m_spreadsheetDoc->SetPageOrientation(varPropVal.ConvertToEnumType<PageOrientation>());
+		m_spreadsheetDoc->SetPageOrientation(varPropVal.ConvertToEnumValue<PageOrientation>());
 		return true;
 	}
 
