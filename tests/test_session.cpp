@@ -12,8 +12,15 @@
 
 #include "backend/session/session.h"
 #include "backend/databaseLayer/connectionHolder.h"
+#include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
 
+#include <chrono>
 #include <type_traits>
+
+#include <wx/filefn.h>     // wxRemoveFile
+#include <wx/filename.h>   // wxFileName::GetTempDir
+#include <wx/init.h>       // wxInitializer
+#include <wx/utils.h>      // wxGetProcessId
 
 // ---------------------------------------------------------------------------
 // Composition: ibSession owns a holder, does NOT inherit one
@@ -64,4 +71,71 @@ TEST(SessionDbLayer, ThrowsWhenNoCurrentSession) {
     EXPECT_THROW(
         ibSession::DatabaseLayer(),
         ibBackendException);
+}
+
+// The stale sweep deletes on the registry thread, and Add waits behind that thread.
+// A row another transaction still holds must come back at once (noWait), not after
+// the driver's lock wait, or the caller hears "registry did not answer to Add".
+TEST(SessionSweep, ALockedRowIsLeftForTheNextPass)
+{
+	wxInitializer wxInit;
+	ASSERT_TRUE(wxInit.IsOk());
+
+	const wxString path = wxFileName::GetTempDir()
+		+ wxFileName::GetPathSeparator()
+		+ wxString::Format(wxT("oes-session-sweep-%ld.sqlite"), wxGetProcessId());
+	struct Gone {
+		wxString path;
+		std::shared_ptr<ibDatabaseLayerSQLite> holder;
+		std::shared_ptr<ibDatabaseLayerSQLite> sweeper;
+		~Gone() {
+			if (holder) holder->Close();
+			if (sweeper) sweeper->Close();
+			wxRemoveFile(path);
+			wxRemoveFile(path + wxT("-wal"));
+			wxRemoveFile(path + wxT("-shm"));
+		}
+	} gone;
+	gone.path = path;
+	wxRemoveFile(path);
+	wxRemoveFile(path + wxT("-wal"));
+	wxRemoveFile(path + wxT("-shm"));
+
+	gone.holder = std::make_shared<ibDatabaseLayerSQLite>();
+	gone.sweeper = std::make_shared<ibDatabaseLayerSQLite>();
+	ASSERT_TRUE(gone.holder->Open(path));
+	ASSERT_TRUE(gone.sweeper->Open(path));
+
+	gone.holder->RunStatement(wxT("CREATE TABLE sys_session (session TEXT PRIMARY KEY, n INTEGER)"));
+	gone.holder->RunStatement(wxT("INSERT INTO sys_session (session, n) VALUES ('zombie', 1)"));
+
+	gone.holder->BeginTransaction();
+	gone.holder->RunStatement(wxT("UPDATE sys_session SET n = 2 WHERE session = 'zombie'"));
+
+	const auto started = std::chrono::steady_clock::now();
+	bool refused = false;
+	try {
+		ibDbTxOptions opts;
+		opts.noWait = true;
+		gone.sweeper->BeginTransaction(opts);
+		gone.sweeper->RunStatement(wxT("DELETE FROM sys_session WHERE session = 'zombie'"));
+		gone.sweeper->Commit();
+	}
+	catch (const ibBackendException&) {
+		refused = true;
+		if (gone.sweeper->IsActiveTransaction())
+			gone.sweeper->RollBack();
+	}
+	const auto waited = std::chrono::steady_clock::now() - started;
+	EXPECT_TRUE(refused) << "a locked row is skipped, not deleted out from under its owner";
+	EXPECT_LT(waited, std::chrono::seconds(1)) << "the skip does not spend the driver's lock wait";
+
+	gone.holder->RollBack();
+
+	ibDbTxOptions again;
+	again.noWait = true;
+	gone.sweeper->BeginTransaction(again);
+	const int removed = gone.sweeper->RunStatement(wxT("DELETE FROM sys_session WHERE session = 'zombie'"));
+	gone.sweeper->Commit();
+	EXPECT_EQ(removed, 1) << "once the lock is gone the same delete takes the row";
 }

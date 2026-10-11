@@ -985,14 +985,37 @@ static bool UpdateSessionUser(ibDatabaseConnectionHolder& holder, const wxString
 	} catch (...) { return false; }
 }
 
-static bool DeleteSessionRow(ibDatabaseConnectionHolder& holder, const wxString& guidStr)
+static bool DeleteSessionRow(ibDatabaseConnectionHolder& holder, const wxString& guidStr, bool skipIfLocked = false)
 {
+	// The sweep runs on the registry thread, and Add waits behind that thread. A DELETE that
+	// sits in TRA_wait on a row another transaction still holds never comes back, and the
+	// caller is told the registry did not answer. noWait fails that delete at once; the row
+	// stays, and the next pass tries it again.
+	ibDatabaseQueryBuilder q(&holder);
+	bool opened = false;
 	try {
-		ibDatabaseQueryBuilder q(&holder);
+		if (skipIfLocked && !q.IsActiveTransaction()) {
+			ibDbTxOptions opts;
+			opts.noWait = true;
+			q.BeginTransaction(opts);
+			opened = true;
+		}
 		q.Execute(ibDelete(session_table,
 			ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("session")), ibConst(ibValue(guidStr)))));
+		if (opened)
+			q.Commit();
 		return true;
-	} catch (...) { return false; }
+	}
+	catch (...) {
+		if (opened) {
+			try {
+				if (q.IsActiveTransaction())
+					q.RollBack();
+			}
+			catch (...) { /* the row stays; the next sweep asks again */ }
+		}
+		return false;
+	}
 }
 
 void ibSessionRegistry::ProcessAdd(ibRegistryRequest& req)
@@ -1651,7 +1674,13 @@ void ibSessionRegistry::JobSweepStale()
 		          << " zombie row(s) from sys_session");
 	}
 	for (const wxString& g : zombies) {
-		try { DeleteSessionRow(m_writeHolder, g); } catch (...) { /* swallowed: per-row cleanup loop, keep going even if one row's DELETE fails (next sweep retries) */ }
+		// A row still held by its owner's transaction is left alone. Waiting for it is the
+		// registry thread, so the next Add would time out with "registry did not answer".
+		try {
+			if (!DeleteSessionRow(m_writeHolder, g, /*skipIfLocked=*/true))
+				SESSION_LOG("[session sweep] left " << g.ToStdString() << " - its row is locked");
+		}
+		catch (...) { /* swallowed: per-row cleanup loop, keep going even if one row's DELETE fails (next sweep retries) */ }
 	}
 
 	// Cluster-wide sys_lock cleanup — hand over WHO IS ALIVE and let the lock

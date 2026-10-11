@@ -338,27 +338,56 @@ void ibDatabaseLayerSQLite::Cancel()
 
 void ibDatabaseLayerSQLite::DoBeginTransaction(const ibTxOptions& opts)
 {
-	// SQLite is single-writer, file-level locked — no per-TX wait/nowait
-	// knob to honour. Options parameter accepted for interface conformance.
+	// SQLite locks the file, and Open() asks it to wait five seconds (PRAGMA busy_timeout).
+	// A noWait transaction must not spend that wait: the stale-session sweep deletes on the
+	// registry thread, and a locked row has to come back at once so Add can be answered.
+	// Zero disables the busy handler for this transaction; commit and rollback put the five
+	// seconds back.
 	//
-	// `snapshot` needs nothing either, and that is a property rather than an omission: a deferred
+	// `snapshot` needs nothing else, and that is a property rather than an omission: a deferred
 	// transaction takes its read lock at the first read and holds it to the end, so every statement
 	// in it already sees one committed state. SQLite gives for free what the others must be asked for.
-	(void)opts;
+	if (opts.noWait && m_pDatabase != nullptr)
+		sqlite3_busy_timeout((sqlite3*)m_pDatabase, 0);
 	ibJournalInfo(wxT("db.sqlite"),wxT("Beginning transaction"));
-	DoRunQuery(wxT("begin deferred transaction;"), false);
+	try {
+		DoRunQuery(wxT("begin deferred transaction;"), false);
+	}
+	catch (...) {
+		if (opts.noWait && m_pDatabase != nullptr)
+			sqlite3_busy_timeout((sqlite3*)m_pDatabase, 5000);
+		throw;
+	}
 }
 
 void ibDatabaseLayerSQLite::DoCommit()
 {
 	ibJournalInfo(wxT("db.sqlite"),wxT("Commiting transaction"));
-	DoRunQuery(wxT("commit transaction;"), false);
+	try {
+		DoRunQuery(wxT("commit transaction;"), false);
+	}
+	catch (...) {
+		if (m_pDatabase != nullptr)
+			sqlite3_busy_timeout((sqlite3*)m_pDatabase, 5000);
+		throw;
+	}
+	if (m_pDatabase != nullptr)
+		sqlite3_busy_timeout((sqlite3*)m_pDatabase, 5000);
 }
 
 void ibDatabaseLayerSQLite::DoRollBack()
 {
 	ibJournalInfo(wxT("db.sqlite"),wxT("Rolling back transaction"));
-	DoRunQuery(wxT("rollback transaction;"), false);
+	try {
+		DoRunQuery(wxT("rollback transaction;"), false);
+	}
+	catch (...) {
+		if (m_pDatabase != nullptr)
+			sqlite3_busy_timeout((sqlite3*)m_pDatabase, 5000);
+		throw;
+	}
+	if (m_pDatabase != nullptr)
+		sqlite3_busy_timeout((sqlite3*)m_pDatabase, 5000);
 }
 
 // IsActiveTransaction inherits the base-class default (m_txDepth > 0).
