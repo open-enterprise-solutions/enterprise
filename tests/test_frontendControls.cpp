@@ -13,14 +13,20 @@
 #include "frontendFormFix.h"                      // FrontendFormFix + NewForm()
 
 #include "frontend/visualView/ctrl/tableBox.h"   // ibValueModelTableBox + g_controlTableBox*CLSID
-#include "frontend/visualView/ctrl/widgets.h"    // g_controlTextCtrlCLSID
-#include "backend/propertyManager/property/propertyChoiceLink.h"
+#include "frontend/visualView/ctrl/widgets.h"    // g_controlTextCtrlCLSID + the field's Align
 #include "frontend/visualView/ctrl/textBox.h"    // ibValueTextBox
 #include "frontend/visualView/ctrl/gridBox.h"    // ibValueGridBox
 #include "frontend/visualView/ctrl/notebook.h"   // ibValueNotebook + g_controlNotebook*CLSID
 #include "backend/compiler/value.h"
+#include "backend/propertyManager/property/propertyChoiceLink.h"
 
 #include <wx/buffer.h>                            // wxMemoryBuffer (form serialize round-trip)
+
+// The stored member numbers. Auto is ibQuickChoice::Auto, so a second Auto
+// declared beside it (cell alignment) does not rename these.
+static_assert(static_cast<int>(ibQuickChoice::Auto) == 0, "quick choice Auto stays 0");
+static_assert(static_cast<int>(ibQuickChoice::Use) == 1, "quick choice Use stays 1");
+static_assert(static_cast<int>(ibQuickChoice::DontUse) == 2, "quick choice DontUse stays 2");
 
 namespace {
 
@@ -225,6 +231,26 @@ TEST_F(FrontendFormFix, FormSerializeRoundTripPreservesControls)
 		<< "the round-tripped form owns the same controls";
 }
 
+// ------------------------------ clsid kind-typing ----------------------------
+// Pure classification helpers (clsid.h) — no fixture, no wxApp: they read the
+// high byte of the id. Control identity is by kind, never by C++ RTTI.
+
+TEST(FrontendClsidKind, ControlClsidsClassifyAsControl)
+{
+	EXPECT_TRUE(IsControl(control_to_clsid("CT_BUTN")));
+	EXPECT_TRUE(IsControl(g_controlFormCLSID));
+	EXPECT_EQ(clsid_kind(control_to_clsid("CT_BUTN")), ibClassKind_Control);
+}
+
+TEST(FrontendClsidKind, ControlKindExcludesOtherKinds)
+{
+	const ibClassID button = control_to_clsid("CT_BUTN");
+	EXPECT_FALSE(IsMetadata(button));
+	EXPECT_FALSE(IsValue(button));
+	EXPECT_FALSE(IsReference(button));
+	EXPECT_FALSE(IsPrimitive(button));
+}
+
 // A control's own choice rows replace the attribute's row for the same parameter,
 // and a fixed parameter replaces a link of the same parameter.
 TEST_F(FrontendFormFix, AFieldAndAColumnCanNarrowTheirOwnChoice)
@@ -311,24 +337,4 @@ TEST_F(FrontendFormFix, AFieldAndAColumnCanNarrowTheirOwnChoice)
 	ASSERT_NE(row8, nullptr);
 	EXPECT_EQ(row7->m_source.GetLeaf(), 22);
 	EXPECT_EQ(row8->m_source.GetLeaf(), 4);
-}
-
-// ------------------------------ clsid kind-typing ----------------------------
-// Pure classification helpers (clsid.h) — no fixture, no wxApp: they read the
-// high byte of the id. Control identity is by kind, never by C++ RTTI.
-
-TEST(FrontendClsidKind, ControlClsidsClassifyAsControl)
-{
-	EXPECT_TRUE(IsControl(control_to_clsid("CT_BUTN")));
-	EXPECT_TRUE(IsControl(g_controlFormCLSID));
-	EXPECT_EQ(clsid_kind(control_to_clsid("CT_BUTN")), ibClassKind_Control);
-}
-
-TEST(FrontendClsidKind, ControlKindExcludesOtherKinds)
-{
-	const ibClassID button = control_to_clsid("CT_BUTN");
-	EXPECT_FALSE(IsMetadata(button));
-	EXPECT_FALSE(IsValue(button));
-	EXPECT_FALSE(IsReference(button));
-	EXPECT_FALSE(IsPrimitive(button));
 }

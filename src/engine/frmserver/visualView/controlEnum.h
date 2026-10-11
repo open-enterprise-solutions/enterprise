@@ -52,24 +52,6 @@ class FRMSERVER_API ibValueEnumOrientNotebookPage :
 private:
 };
 
-enum ibQuickChoice {
-	Auto = 0,
-	Use,
-	DontUse
-};
-
-class FRMSERVER_API ibValueEnumQuickChoice :
-	public ibValueEnumeration<ibQuickChoice> {
-	public:
-	ibValueEnumQuickChoice() : ibValueEnumeration() {}
-	virtual void CreateEnumeration() {
-		AddEnumeration(ibQuickChoice::Auto, wxT("Auto"), _("Auto"));
-		AddEnumeration(ibQuickChoice::Use, wxT("Use"), _("Use"));
-		AddEnumeration(ibQuickChoice::DontUse, wxT("DontUse"), _("Don't use"));
-	}
-private:
-};
-
 class FRMSERVER_API ibValueEnumHorizontalAlignment :
 	public ibValueEnumeration<wxAlignment> {
 	public:
@@ -114,6 +96,31 @@ class FRMSERVER_API ibValueEnumRepresentation :
 		AddEnumeration(ibRepresentation::ibRepresentation_Text, wxT("Text"), _("Text"));
 		AddEnumeration(ibRepresentation::ibRepresentation_Picture, wxT("Picture"), _("Picture"));
 		AddEnumeration(ibRepresentation::ibRepresentation_PictureAndText, wxT("PictureAndText"), _("Picture and text"));
+	}
+private:
+};
+
+// Auto, Use and DontUse live on this struct, so ibQuickChoice::Auto still
+// names the value. Cell alignment declares Auto in this same header; each
+// Auto belongs to its own type, and the two changes compile together.
+// The block sits after the other enumerations so it does not share an
+// insertion point with that alignment enumeration.
+struct ibQuickChoice {
+	enum Type {
+		Auto = 0,
+		Use,
+		DontUse
+	};
+};
+
+class FRMSERVER_API ibValueEnumQuickChoice :
+	public ibValueEnumeration<ibQuickChoice::Type> {
+	public:
+	ibValueEnumQuickChoice() : ibValueEnumeration() {}
+	virtual void CreateEnumeration() {
+		AddEnumeration(ibQuickChoice::Auto, wxT("Auto"), _("Auto"));
+		AddEnumeration(ibQuickChoice::Use, wxT("Use"), _("Use"));
+		AddEnumeration(ibQuickChoice::DontUse, wxT("DontUse"), _("Don't use"));
 	}
 private:
 };
