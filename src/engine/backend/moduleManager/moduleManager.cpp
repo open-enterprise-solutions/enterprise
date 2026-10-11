@@ -10,6 +10,7 @@
 #include "backend/session/session.h"
 #include "backend/session/sessionRegistry.h"
 #include "backend/metadataConfiguration.h"
+#include "backend/system/value/valuePicture.h"
 
 #define objectManager wxT("Manager")
 #define objectMetadataManager wxT("Metadata")
@@ -370,6 +371,9 @@ bool ibValueModuleManagerRuntimeConfiguration::CreateMainModule()
 		BindScopeVariable(ctor->GetClassName(), created.GetRef());
 	}
 
+	// Named, after every scope container. The name is an identifier; its properties are the pictures.
+	BindContextVariable(wxT("PictureLib"), ibPictureLibrary());
+
 	// Compile only — runtime (ibProcUnit) is created per session by
 	// AttachRuntime(ctx). The manager itself no longer carries
 	// a ProcUnit field.
@@ -424,6 +428,8 @@ bool ibValueModuleManagerRuntimeConfiguration::DestroyMainModule()
 	for (auto ctor : ibValue::GetListCtorsByType(ibCtorObjectType_object_context)) {
 		UnbindVariable(ctor->GetClassName());
 	}
+
+	UnbindVariable(wxT("PictureLib"));
 
 	//reset global module
 	m_compileModule->Reset();
@@ -547,6 +553,8 @@ bool ibValueModuleManagerDesigner::CreateMainModule()
 		BindScopeVariable(ctor->GetClassName(), created.GetRef());
 	}
 
+	BindContextVariable(wxT("PictureLib"), ibPictureLibrary());
+
 	// No unit compilation here — see AddCommonModule. The editor parses common
 	// modules' text for exports; the designer never executes script.
 
@@ -571,6 +579,8 @@ bool ibValueModuleManagerDesigner::DestroyMainModule()
 	for (auto ctor : ibValue::GetListCtorsByType(ibCtorObjectType_object_context)) {
 		UnbindVariable(ctor->GetClassName());
 	}
+
+	UnbindVariable(wxT("PictureLib"));
 
 	m_compileModule->Reset();
 
