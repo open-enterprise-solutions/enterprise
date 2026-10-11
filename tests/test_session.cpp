@@ -10,14 +10,25 @@
 
 #include <gtest/gtest.h>
 
+#include <set>
+#include <vector>
+
+#include <wx/init.h>
+
 #include "backend/session/session.h"
 #include "backend/databaseLayer/connectionHolder.h"
+#include "backend/databaseLayer/connectionPool.h"
+#include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
 #include "backend/system/systemManager.h"
 #include "backend/metadataConfiguration.h"
 #include "backend/metaCollection/metaLanguageObject.h"
 #include "backend/metaCollection/partial/commonObject.h"
 #include "backend/metaCollection/partial/reference/reference.h"
 #include "backend/compiler/compileCode.h"
+#include "backend/appData.h"
+#include "backend/backend_exception.h"
+#include "backend/query/columnLayout.h"
+#include "backend/query/dataQueryBuilder.h"
 
 #include <type_traits>
 
@@ -225,6 +236,69 @@ TEST(PlatformLock, TheNamesCompile) {
     } catch (const ibBackendException& err) {
         FAIL() << err.GetErrorDescription().ToStdString();
     }
+}
+
+TEST(PlatformLock, AVersionIsComparedWithTheStoredRow) {
+    wxInitializer wxInit;
+    if (!wxInit.IsOk())
+        GTEST_SKIP() << "wxBase init failed";
+    if (!ibApplicationInstance::CreateAppDataEnv(ibRunMode::eFILE_MODE))
+        GTEST_SKIP() << "appData env unavailable";
+    struct Stop {
+        ~Stop() {
+            if (ibApplicationInstance::Get() != nullptr)
+                ibApplicationInstance::DestroyAppDataEnv();
+        }
+    } stop;
+
+    auto db = std::make_shared<ibDatabaseLayerSQLite>();
+    if (!db->Open(wxT(":memory:")))
+        GTEST_SKIP() << "in-memory SQLite open failed";
+    ibConnectionPool* pool = ibApplicationInstance::GetConnectionPool();
+    ASSERT_NE(pool, nullptr);
+    pool->Init(db, 1, 0);
+
+    ibMetaDataConfigurationFile cfg;
+    auto* catalog = dynamic_cast<ibValueMetaObjectRecordDataHierarchyMutableRef*>(
+        cfg.CreateMetaObject(g_metaCatalogCLSID, cfg.GetCommonMetaObject(), false));
+    ASSERT_NE(catalog, nullptr);
+    catalog->SetName(wxT("Warehouses"));
+    catalog->AppendPredefinedValue(wxT("Main"), wxT(""), wxT("Main warehouse"));
+    ASSERT_TRUE(cfg.RunDatabase());
+
+    const ibBackendQueryable* table = catalog->GetQueryable();
+    ASSERT_NE(table, nullptr);
+    wxString fields;
+    std::set<wxString> seen;
+    for (const ibBackendQueryColumn* column : table->GetColumns()) {
+        for (const wxString& field : ColumnFieldNames(column)) {
+            if (!seen.insert(field).second)
+                continue;
+            fields << (fields.IsEmpty() ? wxT("") : wxT(", ")) << field;
+        }
+    }
+    ASSERT_FALSE(fields.IsEmpty());
+    db->RunQuery(wxT("%s"), wxT("CREATE TABLE ") + table->GetQueryTableName() + wxT(" (") + fields + wxT(")"));
+
+    auto session = std::make_shared<ibSession>(wxT("lock-version"), ibSessionKind::Enterprise);
+    ibSessionScope scope(session.get());
+    ibValue found = ibValueSystemFunction::PredefinedValue(&cfg, wxT("Catalog.Warehouses.Main"));
+    ibDataQueryBuilder writer;
+    writer.From(table);
+    writer.SetValue(catalog->GetDataReference()->GetQueryColumn(), found);
+    writer.SetValue(catalog->GetDataVersion()->GetQueryColumn(), ibValue(wxT("stamp-1")));
+    ASSERT_TRUE(writer.Insert());
+
+    try {
+        ibValueSystemFunction::LockDataForEdit(found, ibValue(wxT("stamp-2")));
+        FAIL() << "a stale version must be refused";
+    } catch (const ibBackendLockException& err) {
+        EXPECT_EQ(err.GetKind(), ibBackendLockException::Kind::VersionChanged);
+        EXPECT_TRUE(err.GetErrorDescription().Contains(wxT("stamp-2")));
+        EXPECT_TRUE(err.GetErrorDescription().Contains(wxT("stamp-1")));
+    }
+    ibValueSystemFunction::LockDataForEdit(found, ibValue(wxT("stamp-1")));
+    ibValueSystemFunction::UnlockDataForEdit(found);
 }
 
 TEST(SessionDbLayer, ThrowsWhenNoCurrentSession) {

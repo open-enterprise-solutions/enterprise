@@ -28,6 +28,7 @@
 #include "backend/metaCollection/genericData.h"          // ResolveQueryConstant — PredefinedValue
 #include "backend/metaCollection/partial/commonObject.h" // a reference's metadata, for the lock path
 #include "backend/lock/lockManager.h"                    // LockDataForEdit takes the same row the form does
+#include "backend/query/dataQueryBuilder.h"              // the stored DataVersion, read the way a write reads it
 #include "core/stringUtils.h"
 
 #include <map>
@@ -1260,12 +1261,39 @@ const ibValueReferenceDataObject* RequireReference(const ibValue& data, const wx
 
 } // namespace
 
+// A caller that passes the stamp it read must be refused when the stored
+// row has moved on. An omitted stamp (empty) does not ask.
+void RefuseStaleDataVersion(const ibValueReferenceDataObject* ref, const ibValue& version)
+{
+	if (version.IsEmpty())
+		return;
+	const wxString expected = version.GetString();
+	if (expected.IsEmpty())
+		return;
+
+	const ibValueMetaObjectRecordDataMutableRef* meta =
+		dynamic_cast<const ibValueMetaObjectRecordDataMutableRef*>(ref->GetMetaObject());
+	if (meta == nullptr || meta->GetDataVersion() == nullptr || meta->GetQueryable() == nullptr)
+		ibBackendCoreException::Error(_("LockDataForEdit: '%s' has no data version to compare"),
+			ref->GetMetaObject() != nullptr ? ref->GetMetaObject()->GetName() : wxString());
+
+	ibDataQueryBuilder query;
+	query.WithAccessPolicy(nullptr)
+		.From(meta->GetQueryable())
+		.WhereKey(ibGuid(ref->GetGuid()));
+	ibReadPageRequest page;
+	page.m_count = 1;
+	ibDataQueryResult rows = query.Execute(page);
+	const bool found = rows.Next();
+	const wxString stored = found
+		? rows.GetValue(meta->GetDataVersion()->GetQueryColumn()).GetString()
+		: wxString(wxT("<missing>"));
+	if (!found || stored != expected)
+		ibBackendLockException::VersionChangedThrow(meta->GetSynonym(), expected, stored);
+}
+
 void ibValueSystemFunction::LockDataForEdit(const ibValue& data, const ibValue& version, const ibValue& formId)
 {
-	// version is part of the call so existing code compiles. Comparing it
-	// with the stored row needs a read this path does not do.
-	(void)version;
-
 	const ibValueReferenceDataObject* ref = RequireReference(data, wxT("LockDataForEdit"));
 	ibSession* session = ibSession::Current();
 	if (session == nullptr)
@@ -1273,6 +1301,7 @@ void ibValueSystemFunction::LockDataForEdit(const ibValue& data, const ibValue& 
 	const ibValueMetaObjectRecordData* meta = ref->GetMetaObject();
 	if (meta == nullptr)
 		ibBackendCoreException::Error(_("LockDataForEdit: the reference has no metadata"));
+	RefuseStaleDataVersion(ref, version);
 	ibLockManager* locks = ibApplicationInstance::GetLockManager();
 	if (locks == nullptr)
 		ibBackendCoreException::Error(_("LockDataForEdit: the lock manager is not initialised"));
