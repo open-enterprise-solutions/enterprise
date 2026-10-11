@@ -2962,31 +2962,41 @@ TEST_F(BuiltInRuntime, AnObjectModuleSeesDataExchangeLoad) {
 	ASSERT_NE(module, nullptr);
 	module->SetModuleText(wxT("DataExchange.Load = True;\n"));
 
-	auto session = std::make_shared<ibSession>(wxString(wxT("data-exchange")),
-		ibSessionKind::Enterprise);
-	ibSessionScope scope(session.get());
-	ibCompileCode::SetCodeStyle(CODE_CES);
-	ASSERT_NE(session->CreateRoot(&cfg), nullptr);
+	// The object's module is compiled against the session root. A root that has
+	// never run has no parent bytecode, and the copy is created only after the
+	// configuration itself has run.
+	ASSERT_TRUE(cfg.RunDatabase());
+	{
+		auto session = std::make_shared<ibSession>(wxString(wxT("data-exchange")),
+			ibSessionKind::Enterprise);
+		ibSessionScope scope(session.get());
+		ASSERT_NE(session->CreateRoot(&cfg), nullptr);
+		ASSERT_TRUE(session->CompileRoot());
 
-	auto* catalogMeta = dynamic_cast<ibValueMetaObjectCatalog*>(catalog);
-	ASSERT_NE(catalogMeta, nullptr);
+		auto* catalogMeta = dynamic_cast<ibValueMetaObjectCatalog*>(catalog);
+		ASSERT_NE(catalogMeta, nullptr);
 
-	ibValuePtr<ibValueRecordDataObjectHierarchyRef> object;
-	try {
-		object = catalogMeta->CreateObjectValue(ibObjectMode::OBJECT_ITEM);
+		ibValuePtr<ibValueRecordDataObjectHierarchyRef> object;
+		try {
+			object = catalogMeta->CreateObjectValue(ibObjectMode::OBJECT_ITEM);
+		}
+		catch (const ibBackendException& err) {
+			FAIL() << err.GetErrorDescription().ToStdString();
+		}
+
+		ibValueRecordDataObjectHierarchyRef* raw = object;
+		ASSERT_NE(raw, nullptr);
+
+		ibValue* exchange = raw->GetBoundValue(wxT("DataExchange"));
+		ASSERT_NE(exchange, nullptr);
+		const long prop = exchange->FindProp(wxT("Load"));
+		ASSERT_GE(prop, 0);
+		ibValue load;
+		ASSERT_TRUE(exchange->GetPropVal(prop, load));
+		EXPECT_TRUE(load.GetBoolean());
+		object = nullptr;
 	}
-	catch (const ibBackendException& err) {
-		FAIL() << err.GetErrorDescription().ToStdString();
+	if (cfg.IsConfigOpen()) {
+		EXPECT_TRUE(cfg.CloseDatabase());
 	}
-
-	ibValueRecordDataObjectHierarchyRef* raw = object;
-	ASSERT_NE(raw, nullptr);
-
-	ibValue* exchange = raw->GetBoundValue(wxT("DataExchange"));
-	ASSERT_NE(exchange, nullptr);
-	const long prop = exchange->FindProp(wxT("Load"));
-	ASSERT_GE(prop, 0);
-	ibValue load;
-	ASSERT_TRUE(exchange->GetPropVal(prop, load));
-	EXPECT_TRUE(load.GetBoolean());
 }
