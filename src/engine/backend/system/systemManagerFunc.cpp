@@ -1277,10 +1277,18 @@ void RefuseStaleDataVersion(const ibValueReferenceDataObject* ref, const ibValue
 		ibBackendCoreException::Error(_("LockDataForEdit: '%s' has no data version to compare"),
 			ref->GetMetaObject() != nullptr ? ref->GetMetaObject()->GetName() : wxString());
 
+	// The reference column, not WhereKey(guid-as-text). A reference row is stored as
+	// the write spread (_TYPE, _RTRef, _RRRef). WhereKey turns the guid into text and
+	// compares one field, which does not find the row the spread just wrote.
+	const ibValueMetaObjectAttributePredefined* identity = meta->GetDataReference();
+	if (identity == nullptr || identity->GetQueryColumn() == nullptr)
+		ibBackendCoreException::Error(_("LockDataForEdit: '%s' has no reference to look up"),
+			meta->GetName());
+
 	ibDataQueryBuilder query;
 	query.WithAccessPolicy(nullptr)
 		.From(meta->GetQueryable())
-		.WhereKey(ibGuid(ref->GetGuid()));
+		.Where(identity->GetQueryColumn(), ibValue(const_cast<ibValueReferenceDataObject*>(ref)));
 	ibReadPageRequest page;
 	page.m_count = 1;
 	ibDataQueryResult rows = query.Execute(page);

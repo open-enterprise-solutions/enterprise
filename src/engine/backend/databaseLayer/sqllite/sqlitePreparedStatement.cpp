@@ -180,7 +180,10 @@ void ibPreparedStatementSQLite::SetParamBlob(int nPosition, const void* pData, l
 	if (nIndex > -1)
 	{
 		sqlite3_reset(m_Statements[nIndex]);
-		int nReturn = sqlite3_bind_blob(m_Statements[nIndex], nPosition, (const void*)pData, nDataLength, SQLITE_STATIC);
+		// SQLITE_TRANSIENT copies the bytes now. A query's blob constants live in the
+		// rendered statement, which is gone before the cursor steps — STATIC then
+		// compares a freed buffer and a row that is there is not found.
+		int nReturn = sqlite3_bind_blob(m_Statements[nIndex], nPosition, (const void*)pData, nDataLength, SQLITE_TRANSIENT);
 		if (nReturn != SQLITE_OK)
 		{
 			SetErrorCode(ibDatabaseLayerSQLite::TranslateErrorCode(nReturn));

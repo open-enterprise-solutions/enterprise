@@ -288,6 +288,9 @@ TEST(PlatformLock, AVersionIsComparedWithTheStoredRow) {
     writer.SetValue(catalog->GetDataReference()->GetQueryColumn(), found);
     writer.SetValue(catalog->GetDataVersion()->GetQueryColumn(), ibValue(wxT("stamp-1")));
     ASSERT_TRUE(writer.Insert());
+    db->RunQuery(wxT("%s"), wxT(
+        "CREATE TABLE sys_lock (lockGuid TEXT, sessionGuid TEXT, namespace TEXT, "
+        "keyHash TEXT, keyData TEXT, lockMode INTEGER, acquiredAt TEXT, userName TEXT, computer TEXT)"));
 
     try {
         ibValueSystemFunction::LockDataForEdit(found, ibValue(wxT("stamp-2")));
