@@ -35,6 +35,8 @@ public:
 	void Delete(unsigned int index);
 	void Clear() { m_items.clear(); }
 	ibValue FindByValue(const ibValue& value) const;
+	ibValue UnloadValues() const;
+	void LoadValues(const ibValue& source);
 	void AppendValues(std::vector<ibValue>& out) const;
 private:
 	void CheckIndex(unsigned int index) const;

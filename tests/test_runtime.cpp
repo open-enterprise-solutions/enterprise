@@ -2982,3 +2982,53 @@ TEST(RuntimeTest, ValueListHoldsItemsAndWalksThem) {
 	ASSERT_TRUE(pu.GetPropVal(wxT("left"), v));
 	EXPECT_EQ(1, v.GetInteger());
 }
+
+TEST(RuntimeTest, ValueListUnloadsAndLoadsValues) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("var n public; var first public; var second public;\n")
+		wxT("var left public; var held public; var shown public; var mark public;\n")
+		wxT("var list; list = New ValueList();\n")
+		wxT("list.Add(1, \"one\", true);\n")
+		wxT("list.Add(2);\n")
+		wxT("var values; values = list.UnloadValues();\n")
+		wxT("n = values.Count();\n")
+		wxT("first = values.Get(0);\n")
+		wxT("second = values.Get(1);\n")
+		wxT("list.Add(9, \"nine\", true);\n")
+		wxT("list.LoadValues(values);\n")
+		wxT("left = list.Count();\n")
+		wxT("var item; item = list.Get(0);\n")
+		wxT("held = item.Value;\n")
+		wxT("shown = item.Presentation;\n")
+		wxT("mark = item.Check;\n")));
+
+	ibProcUnit pu;
+	wxString strError;
+	ASSERT_TRUE(RunBound(cc, pu, strError)) << strError.ToStdString();
+
+	ibValue v;
+	ASSERT_TRUE(pu.GetPropVal(wxT("n"), v));
+	EXPECT_EQ(2, v.GetInteger());
+	ASSERT_TRUE(pu.GetPropVal(wxT("first"), v));
+	EXPECT_EQ(1, v.GetInteger());
+	ASSERT_TRUE(pu.GetPropVal(wxT("second"), v));
+	EXPECT_EQ(2, v.GetInteger());
+	ASSERT_TRUE(pu.GetPropVal(wxT("left"), v));
+	EXPECT_EQ(2, v.GetInteger());
+	ASSERT_TRUE(pu.GetPropVal(wxT("held"), v));
+	EXPECT_EQ(1, v.GetInteger());
+	ASSERT_TRUE(pu.GetPropVal(wxT("shown"), v));
+	EXPECT_TRUE(v.GetString().IsEmpty());
+	ASSERT_TRUE(pu.GetPropVal(wxT("mark"), v));
+	EXPECT_FALSE(v.GetBoolean());
+
+	ibCompileCode refused(wxT("test"), wxT("memory"), false);
+	ASSERT_TRUE(TryCompile(refused,
+		wxT("var list; list = New ValueList();\n")
+		wxT("list.LoadValues(1);\n")));
+	ibProcUnit refusedUnit;
+	wxString refusedError;
+	EXPECT_FALSE(RunBound(refused, refusedUnit, refusedError));
+	EXPECT_TRUE(refusedError.Contains(wxT("array")));
+}

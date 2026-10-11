@@ -1,6 +1,7 @@
 #include "valueList.h"
 
 #include "backend/backend_exception.h"
+#include "backend/system/value/valueArray.h"
 
 enum { enItemValue = 0, enItemPresentation, enItemCheck };
 
@@ -31,7 +32,8 @@ bool ibValueValueListItem::SetPropVal(const long lPropNum, const ibValue& varPro
 	return false;
 }
 
-enum { enAdd = 0, enInsert, enCount, enGet, enDelete, enClear, enFindByValue };
+enum { enAdd = 0, enInsert, enCount, enGet, enDelete, enClear, enFindByValue,
+	enUnloadValues, enLoadValues };
 
 void ibValueValueList_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
 {
@@ -44,6 +46,8 @@ void ibValueValueList_BindNames(ibValue::ibMemberTable& helper, const ibValue* /
 	helper.AppendFunc(wxT("Delete"), 1, wxT("Delete(index)"));
 	helper.AppendFunc(wxT("Clear"), wxT("Clear()"));
 	helper.AppendFunc(wxT("FindByValue"), 1, wxT("FindByValue(value)"));
+	helper.AppendFunc(wxT("UnloadValues"), wxT("UnloadValues()"));
+	helper.AppendFunc(wxT("LoadValues"), 1, wxT("LoadValues(array)"));
 }
 
 void ibValueValueList::CheckIndex(unsigned int index) const
@@ -97,6 +101,27 @@ ibValue ibValueValueList::FindByValue(const ibValue& value) const
 	return ibValue();
 }
 
+ibValue ibValueValueList::UnloadValues() const
+{
+	ibValueArray* const values = new ibValueArray();
+	for (const ibValue& held : m_items) {
+		const ibValueValueListItem* const item = dynamic_cast<const ibValueValueListItem*>(held.GetRef());
+		if (item != nullptr)
+			values->Add(item->m_value);
+	}
+	return values;
+}
+
+void ibValueValueList::LoadValues(const ibValue& source)
+{
+	const ibValueArray* const values = dynamic_cast<const ibValueArray*>(source.GetRef());
+	if (values == nullptr)
+		ibBackendCoreException::Error(_("LoadValues: the argument is not an array"));
+	Clear();
+	for (const ibValue& value : values->Values())
+		Add(value, ibString(), false);
+}
+
 void ibValueValueList::AppendValues(std::vector<ibValue>& out) const
 {
 	for (const ibValue& held : m_items) {
@@ -124,6 +149,8 @@ bool ibValueValueList::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, 
 	case enDelete: Delete(paParams[0]->GetUInteger()); return true;
 	case enClear: Clear(); return true;
 	case enFindByValue: pvarRetValue = FindByValue(*paParams[0]); return true;
+	case enUnloadValues: pvarRetValue = UnloadValues(); return true;
+	case enLoadValues: LoadValues(*paParams[0]); return true;
 	}
 	return false;
 }
