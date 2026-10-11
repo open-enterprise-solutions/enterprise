@@ -42,7 +42,7 @@ ibValueMetaObjectDocument* FindDocument(const ibValueMetaObjectDocumentJournal* 
 {
 	if (meta == nullptr || meta->GetMetaData() == nullptr)
 		return nullptr;
-	ibValueMetaObject* const root = meta->GetMetaData()->GetCommonMetaObject();
+	const ibValueMetaObject* const root = meta->GetMetaData()->GetCommonMetaObject();
 	if (root == nullptr)
 		return nullptr;
 	return root->FindAnyObjectByFilter<ibValueMetaObjectDocument>(name);
