@@ -428,7 +428,8 @@ public:
 	// module descriptors in metadata's ibModuleStorage. Returns false
 	// if root isn't allocated or compile fails.
 	// Runs the configuration's session module (SetSessionParameters) inside a trusted
-	// window, before the access policy is built — the policy filters by what it sets.
+	// window, before the access policy is built. The module initialises the parameters.
+	// Server code may write them later; a policy filters by the value at the read.
 	// Every kind of session passes through here, including jobs, which never see
 	// beforeStart / onStart.
 	void SetSessionParameters();
@@ -1034,32 +1035,15 @@ private:
 	// anybody has to keep.
 	std::map<wxString, ibValue> m_sessionParameters;
 
-	// WRITABLE ONLY WHILE THE SESSION MODULE RUNS. Not "frozen afterwards" — closed
-	// by default, opened for the length of that one call and closed again:
-	//
-	//     read       — always, from anywhere
-	//     write      — only inside SetSessionParameters
-	//     write else — raises, before and after alike
-	//
-	// This is the whole protection, and it needs no rights to enforce. Row access is
-	// filtered by these values, so a later assignment — from a report a user wrote
-	// themselves, say — would be a way around the policy. "Nobody may write them"
-	// cannot be got around by running under a different role, while "only the right
-	// code may" would have to be checked, and every check has a way past it.
-	//
-	// It RAISES rather than ignoring the write: a silently dropped assignment leaves
-	// a configuration author certain the value was set, and the row filter says
-	// otherwise somewhere far away.
-	bool m_sessionParametersOpen = false;
-
 public:
 
 	// Read one, by the name a script used. Answers an empty value for a name that
 	// was never declared — the caller sees Undefined, which is what an unset
 	// parameter is.
 	ibValue GetSessionParameter(const wxString& name) const;
-	// Write one. Refused (raises) once the session module has returned — see the
-	// freeze note above.
+	// Write one. Server code may do this at any point in the session. The session
+	// module initialises the parameters; it is not the only writer. A policy sees
+	// the value at the moment of the read.
 	void SetSessionParameter(const wxString& name, const ibValue& value);
 
 private:

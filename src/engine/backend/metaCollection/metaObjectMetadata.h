@@ -170,11 +170,11 @@ private:
 
 	ibPropertyInnerModule<ibValueMetaObjectModule>* m_propertyModuleConfiguration = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectModule>>(m_categoryContext, wxT("ConfigurationModule"), _("Configuration module"), _("The interactive client's application module: BeforeStart (may refuse the login), OnStart (opens the desktop), BeforeExit / OnExit, and its exported procedures and variables, visible to every form. Not run for background jobs."));
 
-	// THE SESSION MODULE — a second module on the root, and the only place a session
-	// parameter may be written. It carries one procedure, SetSessionParameters, run
-	// once per session before anything reads data: the values it sets are what row
-	// access is filtered by, so they have to exist before the first query and stay
-	// unchanged after it.
+	// THE SESSION MODULE — a second module on the root. It carries one procedure,
+	// SetSessionParameters, run once per session before anything reads data: it
+	// initialises the parameters row access is filtered by, so they exist before
+	// the first query. Server code may write them again later; the next query
+	// sees the new value.
 	//
 	// Separate from the configuration module rather than another handler inside it,
 	// because the two run at different moments and for different audiences. The
@@ -187,7 +187,7 @@ private:
 	// module would exist in the tree, open in the editor, and quietly do nothing.
 	// A manager module registers (AddCommonModule) and is compiled once with the
 	// session's modules, which is exactly what a scheduled job's handler relies on.
-	ibPropertyInnerModule<ibValueMetaObjectManagerModule>* m_propertyModuleSession = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectManagerModule>>(m_categoryContext, wxT("SessionModule"), _("Session module"), _("Runs SetSessionParameters once per session - interactive or background - before anything reads data. The only place a session parameter may be written; row access is filtered by the values it sets, so they exist before the first query and do not change after it."));
+	ibPropertyInnerModule<ibValueMetaObjectManagerModule>* m_propertyModuleSession = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectManagerModule>>(m_categoryContext, wxT("SessionModule"), _("Session module"), _("Runs SetSessionParameters once per session - interactive or background - before anything reads data. It initialises the session parameters. Server code may write them again later; row access is filtered by the value at the moment of the read."));
 
 	ibPropertyCategory* m_propertyPresetValues = ibPropertyObject::CreatePropertyCategory(wxT("PresetValues"), _("Preset values"));
 	ibPropertyList* m_propertyDefRole = ibPropertyObject::CreateProperty<ibPropertyList>(m_propertyPresetValues, wxT("DefaultRole"), _("Default role"), _("The role meant for users who have none of their own. Saved with the configuration, but no session reads it yet: a user without roles gets each right's own default."), &ibValueMetaObjectConfiguration::FillRoleList);

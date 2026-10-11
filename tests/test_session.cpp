@@ -57,6 +57,18 @@ TEST(SessionHolder, DistinctSessionsHaveDistinctHolders) {
 // DatabaseLayer static — backs the ses_query macro
 // ---------------------------------------------------------------------------
 
+TEST(SessionParameters, AWriteIsKeptWhenTheSessionModuleIsNotRunning) {
+    // The write used to raise unless the session module was on the stack.
+    // Server code updates an error stack and a flag around a write, so a
+    // closed window must still keep the value, and a second write replaces it.
+    ibSession sess(wxT("params"), ibSessionKind::Designer);
+    EXPECT_TRUE(sess.GetSessionParameter(wxT("ErrorStack")).IsEmpty());
+    sess.SetSessionParameter(wxT("ErrorStack"), ibValue(wxT("one")));
+    EXPECT_EQ(sess.GetSessionParameter(wxT("ErrorStack")).GetString(), wxT("one"));
+    sess.SetSessionParameter(wxT("ErrorStack"), ibValue(wxT("two")));
+    EXPECT_EQ(sess.GetSessionParameter(wxT("ErrorStack")).GetString(), wxT("two"));
+}
+
 TEST(SessionDbLayer, ThrowsWhenNoCurrentSession) {
     // No SessionScope active on this thread → ibSession::Current() is
     // null → DatabaseLayer() throws an explicit error rather than

@@ -3,13 +3,16 @@
 ////////////////////////////////////////////////////////////////////////////
 //
 // Kept apart from session.cpp on purpose: this is one small mechanism with its
-// own rule — a value that lives for the length of a session, written in exactly
-// one window and read everywhere — and it has nothing to do with the connection,
+// own rule — a value that lives for the length of a session and can be written
+// from server code at any point — and it has nothing to do with the connection,
 // the pool or the registry that fill the rest of that file.
 //
-// The rule, in three lines of code and one of prose: closed by default, opened
-// around the session module's single call, and a write outside it raises rather
-// than being ignored.
+// The session module still runs once, at the start, and that is where the
+// parameters are initialised. It is not the only place that may write them:
+// server code updates an error stack, the current user, a flag around a write.
+// A policy reads the value at the moment of the query, so a later write changes
+// what the next query is allowed to see. An empty parameter still narrows to
+// nothing, which is the safe direction when nobody has set one.
 //
 // The declaration side (the metatype, the manager and the unit) lives with the
 // metadata: metaCollection/metaSessionParameterObject.h. See
@@ -38,10 +41,8 @@ ibValue ibSession::GetSessionParameter(const wxString& name) const
 
 void ibSession::SetSessionParameter(const wxString& name, const ibValue& value)
 {
-	if (!m_sessionParametersOpen) {
-		ibBackendCoreException::Error(
-			_("Session parameter '%s' can only be set from the session module"), name);
-	}
+	// Server code writes throughout the session. The session module initialises
+	// the parameters; it does not own the only write.
 	m_sessionParameters[name] = value;
 }
 
@@ -73,15 +74,6 @@ void ibSession::SetSessionParameters()
 	// TRUSTED: the module reads data to decide what to set, and what it sets is what
 	// those reads would otherwise be filtered by. The same door the role modules use.
 	ibAccessTrustScope trusted(this);
-
-	// THE WRITE WINDOW, opened exactly around the one call that may write and closed
-	// on every path out of it — including the exceptional ones, which is why it is a
-	// guard object and not two assignments.
-	struct WriteWindow {
-		explicit WriteWindow(bool& flag) : m_flag(flag) { m_flag = true; }
-		~WriteWindow() { m_flag = false; }
-		bool& m_flag;
-	} window(m_sessionParametersOpen);
 
 	try {
 		unit->ExecAsProc(wxT("SetSessionParameters"));

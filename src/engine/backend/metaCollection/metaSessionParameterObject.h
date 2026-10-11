@@ -12,8 +12,8 @@
 // WHAT MAKES IT DIFFERENT from an attribute of a catalog is its OWNER, not its
 // shape. A catalog's attribute is a column: it belongs to a table, it is stored
 // per row, and its value is asked of an object. A session parameter belongs to
-// the SESSION — no table, no column, no row. It is set once, by the session
-// module, and read everywhere:
+// the SESSION — no table, no column, no row. The session module initialises it,
+// and server code may write it again later. It is read everywhere:
 //
 //     // session module
 //     Procedure SetSessionParameters()
@@ -25,8 +25,9 @@
 // handler folds a Where into the source and the lambda CAPTURES the value it
 // compares against, so a captured value reaches the query as a parameter by
 // itself. What was missing was never the substitution — it was somewhere for
-// the value to live for the length of a session, set before the first read and
-// unchanged after. That is what this declares.
+// the value to live for the length of a session, set before the first read.
+// Server code may replace it later; the next query sees the new value. That
+// is what this declares.
 //
 // It stores nothing and creates nothing. No table is generated for it, and no
 // restructuring pass reaches it — not because it says so, but because a table
@@ -51,8 +52,8 @@ class BACKEND_API ibValueMetaObjectSessionParameter : public ibValueMetaObjectAt
 //////////////////////////////////////////////////////////////////////
 //
 // It knows its DECLARATION and manages that parameter's value ON THE SESSION:
-// reading adjusts to the declared type, writing goes through the same door and is
-// refused outside the session module.
+// reading adjusts to the declared type, writing goes through the same door.
+// Server code may write at any point in the session.
 //
 // No copy of the value lives here. The value belongs to the session — two users
 // signed in at the same moment hold different ones — so this is a handle, and
@@ -75,7 +76,7 @@ class BACKEND_API ibValueSessionParameter : public ibValue {
 	// HOLDER back while the setter wrote through to the session. `getThis` keeps its base meaning —
 	// hand back this object rather than what is in it.
 	virtual ibValue GetValue(bool getThis = false) const override;
-	// Through the declaration's AdjustValue, and only while the session module runs.
+	// Through the declaration's AdjustValue. Server code may call it at any point.
 	void SetValue(const ibValue& value) override;
 
 	// Reads AS ITS VALUE: comparing a parameter with a field must compare what is in
@@ -95,7 +96,7 @@ class BACKEND_API ibValueSessionParameter : public ibValue {
 //////////////////////////////////////////////////////////////////////
 //
 //     SessionParameters.Organisation          // read — from anywhere
-//     SessionParameters.Organisation = org;   // write — only in the session module
+//     SessionParameters.Organisation = org;   // write — from server code, at any point
 //
 // The members are whatever the configuration declared, so the name list is read
 // from the metadata every time it is asked: a parameter added in the designer

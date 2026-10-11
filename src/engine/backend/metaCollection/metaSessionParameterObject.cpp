@@ -45,7 +45,7 @@ void ibValueSessionParameter::SetValue(const ibValue& value)
 	// truncation, a reference of the wrong kind. None of those rules is restated
 	// here, because the declaration already carries them.
 	//
-	// The session refuses the write outside its own module, by raising.
+	// Kept for the rest of the session. Server code may set it at any point.
 	session->SetSessionParameter(m_metaObject->GetName(), m_metaObject->AdjustValue(value));
 }
 
@@ -112,8 +112,8 @@ bool ibValueSessionParameters::SetPropVal(const long lPropNum, const ibValue& va
 		ibBackendCoreException::Error(_("There is no session to set a session parameter in"));
 
 	// THROUGH THE DECLARATION: what may be stored is what the metaobject's type says,
-	// and AdjustValue is the door that decides it. The session refuses the write
-	// outside its own module, by raising.
+	// and AdjustValue is the door that decides it. The write is kept; server code
+	// may set a parameter at any point in the session.
 	session->SetSessionParameter(parameter->GetName(), parameter->AdjustValue(varPropVal));
 	return true;
 }
