@@ -1,0 +1,37 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "uk",
+  "entries": [
+    {
+      "id": "fn.NStr",
+      "name_local": "NStr",
+      "name_en": "NStr",
+      "kind": "system_function",
+      "category_keys": ["global_context", "global_functions"],
+      "signature": "NStr(source[, language])",
+      "description": "Текст однієї мови з рядка, у якому їх кілька (НСтр). Пропущена мова — мова користувача. Суфікс регіону відкидається, тому en_US читає en. Текст без позначок мови повертається як є.",
+      "parameters": "source — String. language — String, необов'язковий, наприклад ru або en_US.",
+      "return_descr": "String.",
+      "example": "Message(NStr(\"en = 'Total'; ru = 'Itogo';\", \"ru\"));",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "en.PageOrientation",
+      "name_local": "PageOrientation",
+      "name_en": "PageOrientation",
+      "kind": "enum_type",
+      "category_keys": ["spreadsheet"],
+      "signature": "PageOrientation.Portrait | PageOrientation.Landscape",
+      "description": "Орієнтація сторінки табличного документа. Типово Portrait. У сітку комірок не записується.",
+      "parameters": "Portrait. Landscape.",
+      "return_descr": "PageOrientation.",
+      "example": "Doc.PageOrientation = PageOrientation.Landscape;",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    }
+  ]
+}

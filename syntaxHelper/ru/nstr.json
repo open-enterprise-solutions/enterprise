@@ -1,0 +1,37 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "ru",
+  "entries": [
+    {
+      "id": "fn.NStr",
+      "name_local": "NStr",
+      "name_en": "NStr",
+      "kind": "system_function",
+      "category_keys": ["global_context", "global_functions"],
+      "signature": "NStr(source[, language])",
+      "description": "Текст одного языка из строки, в которой их несколько (НСтр). Пропущенный язык — язык пользователя. Суффикс региона отбрасывается, поэтому en_US читает en. Текст без пометок языка возвращается как есть.",
+      "parameters": "source — String. language — String, необязательный, например ru или en_US.",
+      "return_descr": "String.",
+      "example": "Message(NStr(\"en = 'Total'; ru = 'Itogo';\", \"ru\"));",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "en.PageOrientation",
+      "name_local": "PageOrientation",
+      "name_en": "PageOrientation",
+      "kind": "enum_type",
+      "category_keys": ["spreadsheet"],
+      "signature": "PageOrientation.Portrait | PageOrientation.Landscape",
+      "description": "Ориентация страницы табличного документа. По умолчанию Portrait. В сетку ячеек не записывается.",
+      "parameters": "Portrait. Landscape.",
+      "return_descr": "PageOrientation.",
+      "example": "Doc.PageOrientation = PageOrientation.Landscape;",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    }
+  ]
+}

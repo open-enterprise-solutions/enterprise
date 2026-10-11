@@ -59,6 +59,20 @@ class BACKEND_API ibValueSpreadsheetDocument : public ibValueSpreadsheetModel {
 
 #pragma region enumeration 
 #include "backend/compiler/enumUnit.h"
+class BACKEND_API ibValueEnumPageOrientation :
+	public ibValueEnumeration<PageOrientation> {
+	public:
+
+	ibValueEnumPageOrientation() : ibValueEnumeration() {}
+
+	virtual void CreateEnumeration() {
+		AddEnumeration(Portrait, wxT("Portrait"), _("Portrait"));
+		AddEnumeration(Landscape, wxT("Landscape"), _("Landscape"));
+	}
+
+private:
+};
+
 class BACKEND_API ibValueEnumSpreadsheetOrient :
 	public ibValueEnumeration<ibSpreadsheetOrientation> {
 	public:

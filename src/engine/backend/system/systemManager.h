@@ -67,6 +67,7 @@ public:
 	static wxString Chr(short nCode);
 	static short Asc(const ibValue& cSource);
 	static wxString TStr(const ibValue& cSource, const ibValue& cLanguage);
+	static wxString NStr(const ibValue& cSource, const wxString& cLanguage = wxEmptyString);
 
 	//--- Date and time:
 	static ibValue CurrentDate();
