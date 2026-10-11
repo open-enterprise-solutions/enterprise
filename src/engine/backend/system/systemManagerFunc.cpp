@@ -870,6 +870,26 @@ void ibValueSystemFunction::SetAppTitle(const wxString& sTitle)//SetAppTitle
 		frame->SetTitle(sTitle);
 }
 
+namespace {
+wxString g_applicationCaption;
+}
+
+void ibValueSystemFunction::SetApplicationCaption(const wxString& sTitle)
+{
+	g_applicationCaption = sTitle;
+	SetAppTitle(sTitle);
+}
+
+wxString ibValueSystemFunction::GetApplicationCaption()
+{
+	return g_applicationCaption;
+}
+
+void ibValueSystemFunction::ShowMessageBox(const wxString& strMessage)
+{
+	Alert(strMessage);
+}
+
 wxString ibValueSystemFunction::UserDir() {
 	return wxEmptyString;
 }

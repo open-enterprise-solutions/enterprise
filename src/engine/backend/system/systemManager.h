@@ -165,6 +165,9 @@ public:
 	static wxString ComputerName();
 	static void RunApp(const wxString& sCommand);
 	static void SetAppTitle(const wxString& sTitle);
+	static void SetApplicationCaption(const wxString& sTitle);
+	static wxString GetApplicationCaption();
+	static void ShowMessageBox(const wxString& strMessage);
 	static wxString UserDir();
 	static wxString UserName();
 	static wxString UserPassword();
