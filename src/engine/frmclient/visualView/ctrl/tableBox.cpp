@@ -779,6 +779,7 @@ bool ibValueModelTableBoxColumn::ReadData(const ibDataNode& node)
 	m_propertyTexteditMode->SetNodeValue(node.GetProperty(m_propertyTexteditMode->GetName()));
 	m_propertyFormat->SetNodeValue(node.GetProperty(m_propertyFormat->GetName()));
 	m_propertySelectButton->SetNodeValue(node.GetProperty(m_propertySelectButton->GetName()));
+	m_propertyAlign->SetNodeValue(node.GetProperty(m_propertyAlign->GetName()));
 	m_propertyOpenButton->SetNodeValue(node.GetProperty(m_propertyOpenButton->GetName()));
 	m_propertyClearButton->SetNodeValue(node.GetProperty(m_propertyClearButton->GetName()));
 	m_propertyHeaderAlign->SetNodeValue(node.GetProperty(m_propertyHeaderAlign->GetName()));
@@ -801,6 +802,7 @@ bool ibValueModelTableBoxColumn::WriteData(ibDataNode& node) const
 	node.SetProperty(m_propertyTexteditMode->GetName(), m_propertyTexteditMode->GetNodeValue());
 	node.SetProperty(m_propertyFormat->GetName(), m_propertyFormat->GetNodeValue());
 	node.SetProperty(m_propertySelectButton->GetName(), m_propertySelectButton->GetNodeValue());
+	node.SetProperty(m_propertyAlign->GetName(), m_propertyAlign->GetNodeValue());
 	node.SetProperty(m_propertyOpenButton->GetName(), m_propertyOpenButton->GetNodeValue());
 	node.SetProperty(m_propertyClearButton->GetName(), m_propertyClearButton->GetNodeValue());
 	node.SetProperty(m_propertyHeaderAlign->GetName(), m_propertyHeaderAlign->GetNodeValue());

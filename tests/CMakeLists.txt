@@ -595,6 +595,18 @@ set_target_properties(oes_frontend_runtime_test PROPERTIES
 
 oes_discover_tests(oes_frontend_runtime_test)
 
+# The thin client's copies of the form-control properties. It does not link the
+# engine, so this target links frmclient alone.
+add_executable(oes_frmclient_controls_test test_frmclientControls.cpp)
+target_link_libraries(oes_frmclient_controls_test
+    PRIVATE frmclient wx::core wx::base GTest::gtest GTest::gtest_main)
+target_include_directories(oes_frmclient_controls_test PRIVATE
+    "${CMAKE_SOURCE_DIR}/src" "${CMAKE_SOURCE_DIR}/src/engine")
+set_target_properties(oes_frmclient_controls_test PROPERTIES
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    BUILD_RPATH "${CMAKE_BINARY_DIR}/bin")
+oes_discover_tests(oes_frmclient_controls_test)
+
 # ---------------------------------------------------------------------------
 # PostgreSQL dialect — EXECUTED against a real server (integration scope).
 #

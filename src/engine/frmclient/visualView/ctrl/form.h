@@ -8,6 +8,7 @@
 #include "frmclient/backend/propertyManager/property/propertyColour.h"
 #include "frmclient/backend/propertyManager/property/propertyEnum.h"
 #include "frmclient/backend/propertyManager/property/propertyString.h"
+#include "frmclient/backend/propertyManager/property/propertyNumber.h"
 
 class ibFormVisualDocument;
 
@@ -22,7 +23,7 @@ public:
 
 	// The form draws nothing of its own here — its host draws its look and its command bar.
 	virtual void Create(wxWindow* WXUNUSED(parent), const ibProtocolNode& WXUNUSED(node)) override {}
-	virtual void Update(const ibProtocolNode& WXUNUSED(node)) override {}
+	virtual void Update(const ibProtocolNode& node) override;
 
 	//load & save object in control
 	virtual bool ReadData(const ibDataNode& node) override;
@@ -58,6 +59,15 @@ private:
 	ibPropertyColour* m_propertyFG = ibPropertyObject::CreateProperty<ibPropertyColour>(m_categoryFrame, wxT("ForegroundColour"), _("Foreground"), _("The form's text colour, inherited by controls that have no colour of their own. Default: the system colour."), wxDefaultStypeFGColour);
 	ibPropertyColour* m_propertyBG = ibPropertyObject::CreateProperty<ibPropertyColour>(m_categoryFrame, wxT("BackgroundColour"), _("Background"), _("The form's background colour. Default: the system colour, which follows the user's theme."), wxDefaultStypeBGColour);
 	ibPropertyBoolean* m_propertyEnabled = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryFrame, wxT("Enabled"), _("Enabled"), _("Whether the user can interact with the form. Off: every control on it is greyed out and takes no input - a view-only form."), true);
+	ibPropertyUInteger* m_propertyWidth = ibPropertyObject::CreateProperty<ibPropertyUInteger>(m_categoryFrame, wxT("Width"), _("Width"),
+		_("The form window's width, in pixels. 0 leaves the size to the platform."), 0u);
+	ibPropertyUInteger* m_propertyHeight = ibPropertyObject::CreateProperty<ibPropertyUInteger>(m_categoryFrame, wxT("Height"), _("Height"),
+		_("The form window's height, in pixels. 0 leaves the size to the platform."), 0u);
+	ibPropertyEnum<ibValueEnumWindowOpeningMode>* m_propertyWindowOpeningMode = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumWindowOpeningMode>>(m_categoryFrame, wxT("WindowOpeningMode"), _("Window opening mode"),
+		_("Independent opens the form as its own window. Lock owner window and Lock whole interface open it as a dialog over the interface."),
+		ibWindowOpeningMode::Independent);
+	ibPropertyBoolean* m_propertyScroll = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryFrame, wxT("Scroll"), _("Scroll"),
+		_("Whether the form window scrolls when its contents are larger than it. On by default."), true);
 	ibPropertyCategory* m_categorySizer = ibPropertyObject::CreatePropertyCategory(wxT("Sizer"), _("Sizer"));
 	ibPropertyEnum<ibValueEnumOrient>* m_propertyOrient = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumOrient>>(m_categorySizer, wxT("Orient"), _("Orient"),
 		_("How the form lays out its top-level controls: vertically (the default, one under another) or horizontally (side by side). Groups inside the form have their own orientation."),

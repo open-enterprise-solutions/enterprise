@@ -72,6 +72,16 @@ void ibValueForm::UpdateForm()
 	frame->Respond(response);
 }
 
+void ibValueForm::Update(const ibProtocolNode& node)
+{
+	const int width = (int)node.GetInt(ibProtocolName::Width, 0);
+	const int height = (int)node.GetInt("Height", 0);
+	if (width > 0 && height > 0)
+		m_host.SetSize(width, height);
+	const bool scroll = node.GetBool("Scroll", true);
+	m_host.SetScrollRate(scroll ? 5 : 0, scroll ? 5 : 0);
+}
+
 bool ibValueForm::ReadData(const ibDataNode& node)
 {
 	m_propertyTitle->SetNodeValue(node.GetProperty(m_propertyTitle->GetName()));
@@ -79,6 +89,10 @@ bool ibValueForm::ReadData(const ibDataNode& node)
 	m_propertyFG->SetNodeValue(node.GetProperty(m_propertyFG->GetName()));
 	m_propertyBG->SetNodeValue(node.GetProperty(m_propertyBG->GetName()));
 	m_propertyEnabled->SetNodeValue(node.GetProperty(m_propertyEnabled->GetName()));
+	m_propertyWidth->SetNodeValue(node.GetProperty(m_propertyWidth->GetName()));
+	m_propertyHeight->SetNodeValue(node.GetProperty(m_propertyHeight->GetName()));
+	m_propertyWindowOpeningMode->SetNodeValue(node.GetProperty(m_propertyWindowOpeningMode->GetName()));
+	m_propertyScroll->SetNodeValue(node.GetProperty(m_propertyScroll->GetName()));
 
 	// Its attributes and its commands are the server's — the form here is what is drawn.
 	return ibValueFrame::ReadData(node);
@@ -92,6 +106,10 @@ bool ibValueForm::WriteData(ibDataNode& node) const
 	node.SetProperty(m_propertyFG->GetName(), m_propertyFG->GetNodeValue());
 	node.SetProperty(m_propertyBG->GetName(), m_propertyBG->GetNodeValue());
 	node.SetProperty(m_propertyEnabled->GetName(), m_propertyEnabled->GetNodeValue());
+	node.SetProperty(m_propertyWidth->GetName(), m_propertyWidth->GetNodeValue());
+	node.SetProperty(m_propertyHeight->GetName(), m_propertyHeight->GetNodeValue());
+	node.SetProperty(m_propertyWindowOpeningMode->GetName(), m_propertyWindowOpeningMode->GetNodeValue());
+	node.SetProperty(m_propertyScroll->GetName(), m_propertyScroll->GetNodeValue());
 
 	return ibValueFrame::WriteData(node);
 }

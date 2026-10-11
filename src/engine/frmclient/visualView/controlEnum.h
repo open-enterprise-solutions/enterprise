@@ -87,6 +87,62 @@ class FRMCLIENT_API ibValueEnumTitleLocation :
 private:
 };
 
+enum ibWindowOpeningMode {
+	Independent = 0,
+	LockOwnerWindow,
+	LockWholeInterface
+};
+
+class FRMCLIENT_API ibValueEnumWindowOpeningMode :
+	public ibValueEnumeration<ibWindowOpeningMode> {
+	public:
+	ibValueEnumWindowOpeningMode() : ibValueEnumeration() {}
+	virtual void CreateEnumeration() {
+		AddEnumeration(ibWindowOpeningMode::Independent, wxT("Independent"), _("Independent"));
+		AddEnumeration(ibWindowOpeningMode::LockOwnerWindow, wxT("LockOwnerWindow"), _("Lock owner window"));
+		AddEnumeration(ibWindowOpeningMode::LockWholeInterface, wxT("LockWholeInterface"), _("Lock whole interface"));
+	}
+private:
+};
+
+enum ibCellAlign {
+	Auto = 0,
+	Left,
+	Center,
+	Right
+};
+
+class FRMCLIENT_API ibValueEnumCellAlign :
+	public ibValueEnumeration<ibCellAlign> {
+	public:
+	ibValueEnumCellAlign() : ibValueEnumeration() {}
+	virtual void CreateEnumeration() {
+		AddEnumeration(ibCellAlign::Auto, wxT("Auto"), _("Auto"));
+		AddEnumeration(ibCellAlign::Left, wxT("Left"), _("Left"));
+		AddEnumeration(ibCellAlign::Center, wxT("Center"), _("Center"));
+		AddEnumeration(ibCellAlign::Right, wxT("Right"), _("Right"));
+	}
+private:
+};
+
+enum ibQuickChoice {
+	ibQuickChoice_Auto = 0,
+	ibQuickChoice_Use,
+	ibQuickChoice_DontUse
+};
+
+class FRMCLIENT_API ibValueEnumQuickChoice :
+	public ibValueEnumeration<ibQuickChoice> {
+	public:
+	ibValueEnumQuickChoice() : ibValueEnumeration() {}
+	virtual void CreateEnumeration() {
+		AddEnumeration(ibQuickChoice_Auto, wxT("Auto"), _("Auto"));
+		AddEnumeration(ibQuickChoice_Use, wxT("Use"), _("Use"));
+		AddEnumeration(ibQuickChoice_DontUse, wxT("DontUse"), _("Don't use"));
+	}
+private:
+};
+
 class FRMCLIENT_API ibValueEnumRepresentation :
 	public ibValueEnumeration<ibRepresentation> {
 	public:
