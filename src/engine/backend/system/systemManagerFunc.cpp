@@ -1286,7 +1286,7 @@ void RefuseStaleDataVersion(const ibValueReferenceDataObject* ref, const ibValue
 	ibDataQueryResult rows = query.Execute(page);
 	const bool found = rows.Next();
 	const wxString stored = found
-		? rows.GetValue(meta->GetDataVersion()->GetQueryColumn()).GetString()
+		? wxString(rows.GetValue(meta->GetDataVersion()->GetQueryColumn()).GetString())
 		: wxString(wxT("<missing>"));
 	if (!found || stored != expected)
 		ibBackendLockException::VersionChangedThrow(meta->GetSynonym(), expected, stored);
