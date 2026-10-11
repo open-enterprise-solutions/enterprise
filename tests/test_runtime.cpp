@@ -2936,3 +2936,36 @@ TEST(RuntimeTest, AnArrayWalkedAndRewalkedIsLetGoOfOnce) {
 	// The frame goes here, with both arrays in it. That is the moment the nightly
 	// caught: passing under a sanitiser is the whole assertion.
 }
+
+// NumberInWords — the integer spelled, a subject declined, fractional digits as digits.
+TEST_F(BuiltInRuntime, NumberInWordsSpellsTheSubject) {
+	const wxString rubles = wxT("рубль,рубля,рублей,м,копейка,копейки,копеек,ж,2");
+	ibNumber amount;
+	ASSERT_TRUE(amount.FromString(wxT("123.45")));
+	EXPECT_EQ(ibValueSystemFunction::NumberInWords(ibValue(amount), wxT("L = ru_RU"), rubles),
+		wxString(wxT("Сто двадцать три рубля 45 копеек")));
+
+	EXPECT_EQ(ibValueSystemFunction::NumberInWords(ibValue(21), wxT("L=ru"), wxT("рубль,рубля,рублей,м")),
+		wxString(wxT("Двадцать один рубль")));
+	EXPECT_EQ(ibValueSystemFunction::NumberInWords(ibValue(11), wxT("L=ru"), wxT("рубль,рубля,рублей,м")),
+		wxString(wxT("Одиннадцать рублей")));
+	EXPECT_EQ(ibValueSystemFunction::NumberInWords(ibValue(2), wxT("L=ru"), wxT("тысяча,тысячи,тысяч,ж")),
+		wxString(wxT("Две тысячи")));
+	EXPECT_EQ(ibValueSystemFunction::NumberInWords(ibValue(-1), wxT("L=en"), wxString()),
+		wxString(wxT("Minus one")));
+	EXPECT_EQ(ibValueSystemFunction::NumberInWords(ibValue(0), wxT("Л=uk"), wxString()),
+		wxString(wxT("Нуль")));
+
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ibValueSystemFunction valueSystem;
+	cc.AddContextVariable(wxT("System"), &valueSystem, true);
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("var words public;\n")
+		wxT("words = NumberInWords(21, \"L=ru\", \"рубль,рубля,рублей,м\");\n")));
+	ibProcUnit pu;
+	wxString strError;
+	ASSERT_TRUE(RunBound(cc, pu, strError)) << strError.ToStdString();
+	ibValue words;
+	ASSERT_TRUE(pu.GetPropVal(wxT("words"), words));
+	EXPECT_EQ(words.GetString(), wxString(wxT("Двадцать один рубль")));
+}

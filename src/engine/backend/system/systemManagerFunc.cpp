@@ -24,6 +24,7 @@
 #include "backend/debugger/debugServer.h"            // …and up to whoever is debugging this run
 #include "backend/logger/logger.h"                   // the registration journal — the durable channel
 #include "backend/job/jobManager.h"                  // ibBackgroundRun — keeps what a windowless run says
+#include "backend/backend_localization.h"            // NumberInWords — the language when the format omits L
 
 //--- Basic:
 bool ibValueSystemFunction::Boolean(const ibValue& cValue)
@@ -355,6 +356,297 @@ short ibValueSystemFunction::Asc(const ibValue& cSource)
 wxString ibValueSystemFunction::TStr(const ibValue& cSource, const ibValue& cLanguage)
 {
 	return ibLocalization::GetTranslateGetRawLocText(cLanguage.GetString(), cSource.GetString());
+}
+
+// Number in words. The integer is spelled; a currency subject (the third argument)
+// is declined and, when it asks for them, the fractional digits follow as digits.
+namespace {
+
+struct SpellBook {
+	const wxChar* zero;
+	const wxChar* minus;
+	const wxChar* one[3];     // masculine, feminine, neuter
+	const wxChar* two[3];
+	const wxChar* ones[10];   // 0..9, 0 and 1 and 2 unused (gendered above)
+	const wxChar* teen[10];   // 10..19
+	const wxChar* ten[10];    // 20..90 in [2]..[9]
+	const wxChar* hundred[10];
+	const wxChar* scale[4][3]; // thousand, million, billion, trillion — one, few, many
+	bool english;
+};
+
+const SpellBook& BookFor(const wxString& lang)
+{
+	static const SpellBook ru = {
+		wxT("ноль"), wxT("минус"),
+		{ wxT("один"), wxT("одна"), wxT("одно") },
+		{ wxT("два"), wxT("две"), wxT("два") },
+		{ wxT(""), wxT(""), wxT(""), wxT("три"), wxT("четыре"), wxT("пять"), wxT("шесть"), wxT("семь"), wxT("восемь"), wxT("девять") },
+		{ wxT("десять"), wxT("одиннадцать"), wxT("двенадцать"), wxT("тринадцать"), wxT("четырнадцать"), wxT("пятнадцать"), wxT("шестнадцать"), wxT("семнадцать"), wxT("восемнадцать"), wxT("девятнадцать") },
+		{ wxT(""), wxT(""), wxT("двадцать"), wxT("тридцать"), wxT("сорок"), wxT("пятьдесят"), wxT("шестьдесят"), wxT("семьдесят"), wxT("восемьдесят"), wxT("девяносто") },
+		{ wxT(""), wxT("сто"), wxT("двести"), wxT("триста"), wxT("четыреста"), wxT("пятьсот"), wxT("шестьсот"), wxT("семьсот"), wxT("восемьсот"), wxT("девятьсот") },
+		{ { wxT("тысяча"), wxT("тысячи"), wxT("тысяч") },
+		  { wxT("миллион"), wxT("миллиона"), wxT("миллионов") },
+		  { wxT("миллиард"), wxT("миллиарда"), wxT("миллиардов") },
+		  { wxT("триллион"), wxT("триллиона"), wxT("триллионов") } },
+		false
+	};
+	static const SpellBook uk = {
+		wxT("нуль"), wxT("мінус"),
+		{ wxT("один"), wxT("одна"), wxT("одне") },
+		{ wxT("два"), wxT("дві"), wxT("два") },
+		{ wxT(""), wxT(""), wxT(""), wxT("три"), wxT("чотири"), wxT("п'ять"), wxT("шість"), wxT("сім"), wxT("вісім"), wxT("дев'ять") },
+		{ wxT("десять"), wxT("одинадцять"), wxT("дванадцять"), wxT("тринадцять"), wxT("чотирнадцять"), wxT("п'ятнадцять"), wxT("шістнадцять"), wxT("сімнадцять"), wxT("вісімнадцять"), wxT("дев'ятнадцять") },
+		{ wxT(""), wxT(""), wxT("двадцять"), wxT("тридцять"), wxT("сорок"), wxT("п'ятдесят"), wxT("шістдесят"), wxT("сімдесят"), wxT("вісімдесят"), wxT("дев'яносто") },
+		{ wxT(""), wxT("сто"), wxT("двісті"), wxT("триста"), wxT("чотириста"), wxT("п'ятсот"), wxT("шістсот"), wxT("сімсот"), wxT("вісімсот"), wxT("дев'ятсот") },
+		{ { wxT("тисяча"), wxT("тисячі"), wxT("тисяч") },
+		  { wxT("мільйон"), wxT("мільйони"), wxT("мільйонів") },
+		  { wxT("мільярд"), wxT("мільярди"), wxT("мільярдів") },
+		  { wxT("трильйон"), wxT("трильйони"), wxT("трильйонів") } },
+		false
+	};
+	static const SpellBook en = {
+		wxT("zero"), wxT("minus"),
+		{ wxT("one"), wxT("one"), wxT("one") },
+		{ wxT("two"), wxT("two"), wxT("two") },
+		{ wxT(""), wxT(""), wxT(""), wxT("three"), wxT("four"), wxT("five"), wxT("six"), wxT("seven"), wxT("eight"), wxT("nine") },
+		{ wxT("ten"), wxT("eleven"), wxT("twelve"), wxT("thirteen"), wxT("fourteen"), wxT("fifteen"), wxT("sixteen"), wxT("seventeen"), wxT("eighteen"), wxT("nineteen") },
+		{ wxT(""), wxT(""), wxT("twenty"), wxT("thirty"), wxT("forty"), wxT("fifty"), wxT("sixty"), wxT("seventy"), wxT("eighty"), wxT("ninety") },
+		{ wxT(""), wxT("one hundred"), wxT("two hundred"), wxT("three hundred"), wxT("four hundred"), wxT("five hundred"), wxT("six hundred"), wxT("seven hundred"), wxT("eight hundred"), wxT("nine hundred") },
+		{ { wxT("thousand"), wxT("thousand"), wxT("thousand") },
+		  { wxT("million"), wxT("million"), wxT("million") },
+		  { wxT("billion"), wxT("billion"), wxT("billion") },
+		  { wxT("trillion"), wxT("trillion"), wxT("trillion") } },
+		true
+	};
+	if (lang == wxT("uk")) return uk;
+	if (lang == wxT("en")) return en;
+	return ru;
+}
+
+void AddWord(wxString& out, const wxChar* word)
+{
+	if (word == nullptr || word[0] == 0)
+		return;
+	if (!out.IsEmpty())
+		out += wxT(' ');
+	out += word;
+}
+
+// 0 one, 1 few, 2 many. English: the value 1 is one, everything else is many.
+// Russian and Ukrainian: 11..14 are many, last digit 1 is one, 2..4 is few.
+int FormOf(int n)
+{
+	if (n < 0)
+		n = -n;
+	const int mod100 = n % 100;
+	if (mod100 >= 11 && mod100 <= 14)
+		return 2;
+	const int mod10 = n % 10;
+	if (mod10 == 1)
+		return 0;
+	if (mod10 >= 2 && mod10 <= 4)
+		return 1;
+	return 2;
+}
+
+int FormOfText(const wxString& digits, bool english)
+{
+	wxString trimmed = digits;
+	while (trimmed.length() > 1 && trimmed[0] == wxT('0'))
+		trimmed = trimmed.Mid(1);
+	if (english)
+		return trimmed == wxT("1") ? 0 : 2;
+	return FormOf(wxAtoi(trimmed.Right(2)));
+}
+
+wxString SpellGroup(int n, int gender, const SpellBook& book)
+{
+	wxString out;
+	if (n >= 100) {
+		AddWord(out, book.hundred[n / 100]);
+		n %= 100;
+	}
+	if (n >= 20) {
+		AddWord(out, book.ten[n / 10]);
+		n %= 10;
+	}
+	else if (n >= 10) {
+		AddWord(out, book.teen[n - 10]);
+		return out;
+	}
+	if (n == 1)
+		AddWord(out, book.one[gender]);
+	else if (n == 2)
+		AddWord(out, book.two[gender]);
+	else if (n > 2)
+		AddWord(out, book.ones[n]);
+	return out;
+}
+
+// gender of a scale: the units take the subject's; a thousand is feminine; the rest are masculine.
+int ScaleGender(int scale, int subject)
+{
+	if (scale == 0)
+		return subject;
+	if (scale == 1)
+		return 1;
+	return 0;
+}
+
+wxString SpellInteger(const wxString& digits, int gender, const SpellBook& book)
+{
+	if (digits.IsEmpty() || digits == wxT("0"))
+		return book.zero;
+
+	wxString padded = digits;
+	while (padded.length() % 3 != 0)
+		padded = wxT("0") + padded;
+
+	const int groups = static_cast<int>(padded.length() / 3);
+	wxString out;
+	for (int i = 0; i < groups; ++i) {
+		const int group = wxAtoi(padded.Mid(static_cast<size_t>(i) * 3, 3));
+		const int scale = groups - 1 - i;
+		if (group == 0)
+			continue;
+		const wxString words = SpellGroup(group, ScaleGender(scale, gender), book);
+		if (!words.IsEmpty()) {
+			if (!out.IsEmpty())
+				out += wxT(' ');
+			out += words;
+		}
+		if (scale >= 1 && scale <= 4)
+			AddWord(out, book.scale[scale - 1][book.english ? (group == 1 ? 0 : 2) : FormOf(group)]);
+	}
+	return out.IsEmpty() ? wxString(book.zero) : out;
+}
+
+wxString Stem(wxString code)
+{
+	code.Trim(true).Trim(false);
+	code.MakeLower();
+	const int under = code.Find(wxT('_'));
+	const int dash = code.Find(wxT('-'));
+	int cut = under;
+	if (cut == wxNOT_FOUND || (dash != wxNOT_FOUND && dash < cut))
+		cut = dash;
+	if (cut != wxNOT_FOUND)
+		code = code.Left(cut);
+	return code;
+}
+
+wxString LanguageOf(const wxString& format)
+{
+	wxString compact = format;
+	compact.Replace(wxT(" "), wxT(""));
+	// Split on ';'. A key of L or Л names the language.
+	wxString rest = compact;
+	while (!rest.IsEmpty()) {
+		const int semi = rest.Find(wxT(';'));
+		const wxString part = semi == wxNOT_FOUND ? rest : rest.Left(semi);
+		rest = semi == wxNOT_FOUND ? wxString() : rest.Mid(semi + 1);
+		const int eq = part.Find(wxT('='));
+		if (eq == wxNOT_FOUND)
+			continue;
+		const wxString key = part.Left(eq).Lower();
+		if (key == wxT("l") || key == wxT("л"))
+			return Stem(part.Mid(eq + 1));
+	}
+	return wxString();
+}
+
+int GenderOf(const wxString& mark)
+{
+	const wxString s = mark.Lower().Trim(true).Trim(false);
+	if (s.StartsWith(wxT("ж")) || s.StartsWith(wxT("f")))
+		return 1;
+	if (s.StartsWith(wxT("с")) || s.StartsWith(wxT("n")))
+		return 2;
+	return 0;
+}
+
+void SplitComma(const wxString& params, wxString field[9])
+{
+	int n = 0;
+	wxString cur;
+	for (wxString::const_iterator it = params.begin(); it != params.end() && n < 9; ++it) {
+		if (*it == wxT(',')) {
+			field[n++] = cur;
+			cur.clear();
+		}
+		else {
+			cur += *it;
+		}
+	}
+	if (n < 9)
+		field[n] = cur;
+	for (int i = 0; i < 9; ++i)
+		field[i].Trim(true).Trim(false);
+}
+
+wxString Capitalize(wxString text)
+{
+	if (text.IsEmpty())
+		return text;
+	return text.Mid(0, 1).Upper() + text.Mid(1);
+}
+
+} // namespace
+
+wxString ibValueSystemFunction::NumberInWords(const ibValue& number, const wxString& format, const wxString& params)
+{
+	wxString field[9];
+	SplitComma(params, field);
+
+	int digits = 0;
+	if (!field[8].IsEmpty())
+		digits = wxAtoi(field[8]);
+	else if (!field[4].IsEmpty() || !field[5].IsEmpty() || !field[6].IsEmpty())
+		digits = 2;
+	if (digits < 0)
+		digits = 0;
+	if (digits > 10)
+		digits = 10;
+
+	const ibNumber rounded = number.GetNumber().Round(digits);
+	const bool negative = rounded.IsSign() && !rounded.Abs().IsZero();
+	wxString text = rounded.Abs().ToString();
+	const int dot = text.Find(wxT('.'));
+	const wxString whole = dot == wxNOT_FOUND ? text : text.Left(dot);
+	wxString frac = dot == wxNOT_FOUND ? wxString() : text.Mid(dot + 1);
+	if (static_cast<int>(frac.length()) > digits)
+		frac = frac.Left(digits);
+	while (static_cast<int>(frac.length()) < digits)
+		frac += wxT('0');
+
+	wxString lang = LanguageOf(format);
+	if (lang.IsEmpty())
+		lang = Stem(ibBackendLocalization::GetUserLanguage());
+	const SpellBook& book = BookFor(lang);
+
+	const int gender = GenderOf(field[3]);
+	wxString words = SpellInteger(whole.IsEmpty() ? wxString(wxT("0")) : whole, gender, book);
+
+	const wxString unit = field[FormOfText(whole, book.english)];
+	if (!unit.IsEmpty()) {
+		words += wxT(' ');
+		words += unit;
+	}
+
+	if (digits > 0) {
+		words += wxT(' ');
+		words += frac;
+		const int fracAt = 4 + FormOfText(frac, book.english);
+		if (!field[fracAt].IsEmpty()) {
+			words += wxT(' ');
+			words += field[fracAt];
+		}
+	}
+
+	if (negative)
+		words = wxString(book.minus) + wxT(' ') + words;
+	return Capitalize(words);
 }
 
 //--- Date and time:
