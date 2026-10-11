@@ -2936,3 +2936,27 @@ TEST(RuntimeTest, AnArrayWalkedAndRewalkedIsLetGoOfOnce) {
 	// The frame goes here, with both arrays in it. That is the moment the nightly
 	// caught: passing under a sanitiser is the whole assertion.
 }
+
+TEST_F(BuiltInRuntime, ComparisonTypeNamesTheUsualTests) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ibValueSystemFunction valueSystem;
+	cc.AddContextVariable(wxT("System"), &valueSystem, true);
+
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("var same public; var different public; var shown public;\n")
+		wxT("same = (ComparisonType.Equal = ComparisonType.Equal);\n")
+		wxT("different = (ComparisonType.Equal = ComparisonType.NotEqual);\n")
+		wxT("shown = String(ComparisonType.LessOrEqual);\n")));
+
+	ibProcUnit pu;
+	wxString strError;
+	ASSERT_TRUE(RunBound(cc, pu, strError)) << strError.ToStdString();
+
+	ibValue v;
+	ASSERT_TRUE(pu.GetPropVal(wxT("same"), v));
+	EXPECT_TRUE(v.GetBoolean());
+	ASSERT_TRUE(pu.GetPropVal(wxT("different"), v));
+	EXPECT_FALSE(v.GetBoolean());
+	ASSERT_TRUE(pu.GetPropVal(wxT("shown"), v));
+	EXPECT_EQ(v.GetString(), wxT("LessOrEqual"));
+}

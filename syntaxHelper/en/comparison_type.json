@@ -1,0 +1,16 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "en",
+  "entries": [
+    {
+      "id": "en.ComparisonType",
+      "name_local": "ComparisonType",
+      "name_en": "ComparisonType",
+      "kind": "enum_type",
+      "category_keys": ["global_context", "value_types"],
+      "signature": "ComparisonType.Equal",
+      "description": "How two values are compared (ВидСравнения): Equal, NotEqual, Less, LessOrEqual, Greater, GreaterOrEqual, Contains, NotContains, InList, NotInList. This is not ComparisonKind."
+    }
+  ]
+}
