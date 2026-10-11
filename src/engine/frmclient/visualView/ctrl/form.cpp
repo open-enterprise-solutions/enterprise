@@ -2,6 +2,8 @@
 
 #include <functional>
 
+#include "frmclient/visualView/controlEnumNames.h"
+
 #include "frmclient/backend/serialize/dataProtocol.h"   // ibDataNode — a control's properties, as the wire carries them
 #include "frmclient/mainFrame/mainFrame.h"
 #include "frmclient/visualView/visualHostClient.h"   // ibFormVisualDocument — the tab's document, by the host's tab
@@ -132,4 +134,46 @@ ibValueFrame* ibValueForm::FindControlByID(long long controlId) const
 		return top->GetControlID() == controlId ? top : nullptr;
 	};
 	return find(const_cast<ibValueForm*>(this));
+}
+
+unsigned int ibFormClientCellAlignCount()
+{
+	ibValueEnumCellAlign align;
+	align.Init();
+	return align.GetEnumCount();
+}
+
+wxString ibFormClientCellAlignName(unsigned int index)
+{
+	ibValueEnumCellAlign align;
+	align.Init();
+	return align.GetEnumName(index);
+}
+
+unsigned int ibFormClientWindowOpeningModeCount()
+{
+	ibValueEnumWindowOpeningMode mode;
+	mode.Init();
+	return mode.GetEnumCount();
+}
+
+wxString ibFormClientWindowOpeningModeName(unsigned int index)
+{
+	ibValueEnumWindowOpeningMode mode;
+	mode.Init();
+	return mode.GetEnumName(index);
+}
+
+unsigned int ibFormClientQuickChoiceCount()
+{
+	ibValueEnumQuickChoice choice;
+	choice.Init();
+	return choice.GetEnumCount();
+}
+
+wxString ibFormClientQuickChoiceName(unsigned int index)
+{
+	ibValueEnumQuickChoice choice;
+	choice.Init();
+	return choice.GetEnumName(index);
 }
