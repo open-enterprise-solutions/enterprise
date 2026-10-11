@@ -7,7 +7,6 @@
 #include <wx/log.h>
 #include "backend/appData.h"
 #include "backend/databaseLayer/connectionPool.h"
-#include "backend/databaseLayer/databaseQueryBuilder.h"
 #include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
 #include "backend/metadataConfiguration.h"
 #include "backend/metaCollection/attribute/metaAttributeObject.h"
@@ -16,6 +15,7 @@
 #include "backend/metaCollection/table/metaTableObject.h"
 #include "backend/moduleManager/globalContextManager.h"
 #include "backend/query/columnLayout.h"
+#include "backend/query/dataQueryBuilder.h"
 #include "backend/system/value/valueArray.h"
 struct OpenCriteriaFile : ibMetaDataConfigurationFile {
 	ibMetaData::LoadGuard m_open{ this };
@@ -79,17 +79,6 @@ wxString FieldList(const std::vector<const ibBackendQueryColumn*>& columns) {
 		}
 	}
 	return list;
-}
-
-void Assign(std::vector<ibDmlAssign>& out, const ibMetaData* meta,
-	const ibBackendQueryColumn* column, const ibValue& value) {
-	const std::vector<wxString> fields = ColumnFieldNames(column);
-	ibQueryStatement capture(ibQueryStatement::Kind::Delete, wxString(), fields);
-	int position = 1;
-	ibColumnCodec::WriteValue(column, meta, value, &capture, position);
-	const std::vector<ibQueryExprPtr>& consts = capture.CapturedValues();
-	for (size_t i = 0; i < fields.size(); ++i)
-		out.push_back(ibDmlAssign{ fields[i], (i < consts.size() && consts[i]) ? consts[i] : ibConst(ibValue()) });
 }
 
 } // namespace
@@ -159,8 +148,9 @@ TEST(FilterCriteria, FindThroughATabularSectionReturnsTheOwner) {
 	ASSERT_NE(tabular, nullptr);
 	const std::vector<const ibBackendQueryColumn*> columns = tabular->GetColumns();
 	ASSERT_FALSE(columns.empty());
-	ASSERT_TRUE(db->RunQuery(wxT("%s"), wxT("CREATE TABLE ") + section->GetPhysicalTableName()
-		+ wxT(" (") + FieldList(columns) + wxT(")")));
+	// DDL reports zero rows changed. A failure throws or returns the error sentinel.
+	ASSERT_GE(db->RunStatement(wxT("CREATE TABLE ") + section->GetPhysicalTableName()
+		+ wxT(" (") + FieldList(columns) + wxT(")")), 0);
 
 	const ibValue owner(ibValueReferenceDataObject::Create(&cfg, document->GetMetaID(), ibGuid(ibGuid::newGuid())));
 	const ibValue other(ibValueReferenceDataObject::Create(&cfg, document->GetMetaID(), ibGuid(ibGuid::newGuid())));
@@ -170,15 +160,15 @@ TEST(FilterCriteria, FindThroughATabularSectionReturnsTheOwner) {
 	ASSERT_NE(itemCol, nullptr);
 
 	auto insert = [&](const ibValue& ref, const wxString& item) {
-		std::vector<ibDmlAssign> row;
-		Assign(row, &cfg, refCol, ref);
-		Assign(row, &cfg, itemCol, ibValue(item));
-		ibDatabaseQueryBuilder query;
-		return query.Execute(ibInsert(section->GetPhysicalTableName(), row));
+		ibDataQueryBuilder query;
+		query.From(section->GetQueryable());
+		query.SetValue(refCol, ref);
+		query.SetValue(itemCol, ibValue(item));
+		return query.Insert();
 	};
-	ASSERT_GE(insert(owner, wxT("bolt")), 0);
-	ASSERT_GE(insert(owner, wxT("bolt")), 0);
-	ASSERT_GE(insert(other, wxT("nut")), 0);
+	ASSERT_TRUE(insert(owner, wxT("bolt")));
+	ASSERT_TRUE(insert(owner, wxT("bolt")));
+	ASSERT_TRUE(insert(other, wxT("nut")));
 
 	ibValueGlobalContextManager context(&cfg);
 	const long prop = context.FindProp(wxT("FilterCriteria"));
