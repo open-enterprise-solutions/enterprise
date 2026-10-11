@@ -1934,12 +1934,16 @@ ibValue* AdditionalPropertiesBag(ibValue& slot)
 
 void ibValueRecordDataObject::BindObjectBag()
 {
-	BindExportVariable(wxT("AdditionalProperties"), AdditionalPropertiesBag(m_additionalProperties));
+	AdditionalPropertiesBag(m_additionalProperties);
+	// The slot is the reference the module must see. The structure itself is not a
+	// reference, so a copy of it has no Insert.
+	BindExportVariable(wxT("AdditionalProperties"), &m_additionalProperties);
 }
 
 void ibValueRecordSetObject::BindObjectBag()
 {
-	BindExportVariable(wxT("AdditionalProperties"), AdditionalPropertiesBag(m_additionalProperties));
+	AdditionalPropertiesBag(m_additionalProperties);
+	BindExportVariable(wxT("AdditionalProperties"), &m_additionalProperties);
 }
 
 // MY form — the one showing THIS object. Found by SOURCE, not by form key: the key is the
