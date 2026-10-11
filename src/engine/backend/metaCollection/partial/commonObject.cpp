@@ -1964,12 +1964,16 @@ ibValue* DataExchangeOf(ibValue& slot)
 
 void ibValueRecordDataObject::BindDataExchange()
 {
-	BindExportVariable(wxT("DataExchange"), DataExchangeOf(m_dataExchange));
+	DataExchangeOf(m_dataExchange);
+	// The slot is the reference. Binding the object itself makes the module copy it,
+	// and Load is then written on the copy.
+	BindExportVariable(wxT("DataExchange"), &m_dataExchange);
 }
 
 void ibValueRecordSetObject::BindDataExchange()
 {
-	BindExportVariable(wxT("DataExchange"), DataExchangeOf(m_dataExchange));
+	DataExchangeOf(m_dataExchange);
+	BindExportVariable(wxT("DataExchange"), &m_dataExchange);
 }
 
 // MY form — the one showing THIS object. Found by SOURCE, not by form key: the key is the
