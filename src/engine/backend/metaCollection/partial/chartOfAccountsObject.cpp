@@ -220,7 +220,15 @@ bool ibValueRecordDataObjectChartOfAccounts::SetPropVal(const long lPropNum, con
 bool ibValueRecordDataObjectChartOfAccounts::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
 	const long lPropAlias = m_members.GetPropAlias(lPropNum);
-	if (lPropAlias == eProcUnit) { if (m_procUnit != nullptr) return m_procUnit->GetPropVal(GetPropName(lPropNum), pvarPropVal); }
+	if (lPropAlias == eProcUnit) {
+		if (m_procUnit != nullptr && m_procUnit->GetPropVal(GetPropName(lPropNum), pvarPropVal))
+			return true;
+		if (ibValue* bound = GetBoundValue(GetPropName(lPropNum))) {
+			pvarPropVal = *bound;
+			return true;
+		}
+		return false;
+	}
 	else if (lPropAlias == eProperty || lPropAlias == eTable) {
 		const long lPropData = m_members.GetPropData(lPropNum);
 		if (m_metaObject->IsDataReference(lPropData)) { pvarPropVal = GetReference(); return true; }
