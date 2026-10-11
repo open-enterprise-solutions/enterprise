@@ -124,7 +124,9 @@ enum
 	// everything else — the ordinal IS the method index, so a new name goes at the END or every
 	// later case answers to the wrong verb.
 	enSerializeValue,
-	enDeserializeValue
+	enDeserializeValue,
+	// Appended: the ordinal is the bind-table index.
+	enWriteLogEvent
 };
 
 void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
@@ -251,6 +253,8 @@ void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibVal
 	//--- …and value-as-text last, matching the enSerializeValue / enDeserializeValue tail above.
 	helper.AppendFunc(wxT("SerializeValue"), 1, wxT("SerializeValue(value : any)"));
 	helper.AppendFunc(wxT("DeserializeValue"), 1, wxT("DeserializeValue(json : string)"));
+	helper.AppendProc(wxT("WriteLogEvent"), 6,
+		wxT("WriteLogEvent(eventName, level, metadata, data, comment, mode)"));
 };
 
 #include "backend/compiler/enumUnit.h"
@@ -483,6 +487,9 @@ bool ibValueSystemFunction::CallAsProc(const long lMethodNum, ibValue** paParams
 				lSizeArray > 1 ? paParams[1]->ConvertToEnumValue<ibStatusMessage>() : ibStatusMessage::ibStatusMessage_Information,
 				lSizeArray > 2 ? paParams[2]->GetString() : ibString(),
 				lSizeArray > 3 ? *paParams[3] : ibValue());
+			return true;
+		case enWriteLogEvent:
+			WriteLogEvent(paParams, lSizeArray);
 			return true;
 		case enAlert: Alert(paParams[0]->GetString()); return true;
 		case enSetStatus: SetStatus(paParams[0]->GetString()); return true;

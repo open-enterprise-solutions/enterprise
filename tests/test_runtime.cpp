@@ -2936,3 +2936,36 @@ TEST(RuntimeTest, AnArrayWalkedAndRewalkedIsLetGoOfOnce) {
 	// The frame goes here, with both arrays in it. That is the moment the nightly
 	// caught: passing under a sanitiser is the whole assertion.
 }
+
+TEST_F(BuiltInRuntime, WriteLogEventTakesTheRegistrationOrder) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ibValueSystemFunction valueSystem;
+	cc.AddContextVariable(wxT("System"), &valueSystem, true);
+
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("var ok public;\n")
+		wxT("WriteLogEvent(\"boot\", , , , \"started\");\n")
+		wxT("WriteLogEvent(\"boot\", StatusMessage.Error, \"Catalog.Item\", , \"failed\");\n")
+		wxT("WriteLogEvent(\"boot\", \"Warning\");\n")
+		wxT("ok = 1;\n")));
+
+	ibProcUnit pu;
+	wxString strError;
+	ASSERT_TRUE(RunBound(cc, pu, strError)) << strError.ToStdString();
+	ibValue v;
+	ASSERT_TRUE(pu.GetPropVal(wxT("ok"), v));
+	EXPECT_EQ(v.GetInteger(), 1);
+
+	ibCompileCode none(wxT("test"), wxT("memory"), false);
+	none.AddContextVariable(wxT("System"), &valueSystem, true);
+	ASSERT_TRUE(TryCompile(none, wxT("WriteLogEvent();\n")));
+	ibProcUnit puNone;
+	wxString noneError;
+	EXPECT_FALSE(RunBound(none, puNone, noneError));
+	EXPECT_TRUE(noneError.Contains(wxT("event"))) << noneError.ToStdString();
+
+	ibCompileCode extra(wxT("test"), wxT("memory"), false);
+	extra.AddContextVariable(wxT("System"), &valueSystem, true);
+	EXPECT_FALSE(TryCompile(extra,
+		wxT("WriteLogEvent(1, 2, 3, 4, 5, 6, 7);\n")));
+}

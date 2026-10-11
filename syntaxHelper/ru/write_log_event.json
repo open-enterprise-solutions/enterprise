@@ -1,0 +1,16 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "ru",
+  "entries": [
+    {
+      "id": "fn.WriteLogEvent",
+      "name_local": "WriteLogEvent",
+      "name_en": "WriteLogEvent",
+      "kind": "system_function",
+      "category_keys": ["global_context", "global_functions"],
+      "signature": "WriteLogEvent(eventName, level, metadata, data, comment, mode)",
+      "description": "Пишет строку журнала регистрации (ЗаписьЖурналаРегистрации). Имя события — категория. Комментарий — текст; если его нет, текстом служит имя события. Уровень — StatusMessage либо слова Error и Warning. Имя метаданных добавляется в начало текста. Данные присоединяются так же, как объект в WriteJournalEvent. Режим принимается и не хранится. Если журнала в процессе нет, вызов просто возвращается."
+    }
+  ]
+}
