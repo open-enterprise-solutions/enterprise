@@ -6,6 +6,7 @@
 #include "core/stringUtils.h"
 #include "core/serialize/dataBuilder.h"
 #include "backend/metaCollection/attribute/metaAttributeObject.h"
+#include "backend/metaCollection/table/metaTableObject.h"
 #include "backend/query/dataQueryBuilder.h"
 #include "backend/system/value/valueArray.h"
 #include <vector>
@@ -81,16 +82,14 @@ ibValueMetaObjectAttributeBase* AttributeNamed(ibValueMetaObject* owner, const w
 	}
 	return nullptr;
 }
-void SearchOne(ibValueMetaObjectRecordDataRef* owner, ibValueMetaObjectAttributeBase* attr, const ibValue& value, ibValueArray* found)
+void SearchRows(const ibBackendQueryable* source, const ibBackendQueryColumn* refCol,
+	ibValueMetaObjectAttributeBase* attr, const ibValue& value, ibValueArray* found)
 {
-	if (owner == nullptr || attr == nullptr || attr->GetQueryColumn() == nullptr || owner->GetDataReference() == nullptr)
-		return;
-	const ibBackendQueryColumn* const refCol = owner->GetDataReference()->GetQueryColumn();
-	if (refCol == nullptr || owner->GetQueryable() == nullptr)
+	if (source == nullptr || refCol == nullptr || attr == nullptr || attr->GetQueryColumn() == nullptr)
 		return;
 	try {
 		ibDataQueryBuilder query;
-		query.From(owner->GetQueryable());
+		query.From(source);
 		query.Where(attr->GetQueryColumn(), value);
 		ibReadPageRequest page;
 		page.m_count = 0;
@@ -102,6 +101,35 @@ void SearchOne(ibValueMetaObjectRecordDataRef* owner, ibValueMetaObjectAttribute
 		}
 	}
 	catch (...) {}
+}
+void SearchOne(ibValueMetaObjectRecordDataRef* owner, ibValueMetaObjectAttributeBase* attr, const ibValue& value, ibValueArray* found)
+{
+	if (owner == nullptr || owner->GetDataReference() == nullptr)
+		return;
+	SearchRows(owner->GetQueryable(), owner->GetDataReference()->GetQueryColumn(), attr, value, found);
+}
+// Document.Invoice.Items.Nomenclature — the column lives on the tabular section, and the
+// reference Find returns is the section row's owner, not a row of the section.
+ibValueMetaObjectTableData* SectionNamed(ibValueMetaObjectRecordData* owner, const wxString& name)
+{
+	if (owner == nullptr)
+		return nullptr;
+	for (ibValueMetaObjectTableData* section : owner->GetGenericTableArrayObject()) {
+		if (section != nullptr && stringUtils::CompareString(section->GetName(), name))
+			return section;
+	}
+	return nullptr;
+}
+void SearchSection(ibValueMetaObjectRecordData* owner, const wxString& sectionName,
+	const wxString& attribute, const ibValue& value, ibValueArray* found)
+{
+	ibValueMetaObjectTableDataRef* const section = dynamic_cast<ibValueMetaObjectTableDataRef*>(SectionNamed(owner, sectionName));
+	if (section == nullptr)
+		return;
+	const ibTabularQueryable* const tabular = dynamic_cast<const ibTabularQueryable*>(section->GetQueryable());
+	if (tabular == nullptr)
+		return;
+	SearchRows(section->GetQueryable(), tabular->OwnerRefColumn(), AttributeNamed(section, attribute), value, found);
 }
 ibValue ibValueFilterCriteriaManager::Find(const ibValue& value) const
 {
@@ -126,8 +154,15 @@ ibValue ibValueFilterCriteriaManager::Find(const ibValue& value) const
 		ibMetaData* const meta = m_meta->GetMetaData();
 		const ibClassID kinds[2] = { kind != 0 ? kind : g_metaDocumentCLSID, kind != 0 ? kind : g_metaCatalogCLSID };
 		const int count = kind != 0 ? 1 : 2;
+		// Four parts and more: Kind.Object.Section.Column. The column is not a child of the object.
+		const bool throughSection = parts.size() >= 4;
+		const wxString section = throughSection ? parts[parts.size() - 2] : wxString();
 		for (int i = 0; i < count; ++i) {
 			ibValueMetaObject* const owner = NamedOf(meta, kinds[i], object);
+			if (throughSection) {
+				SearchSection(dynamic_cast<ibValueMetaObjectRecordData*>(owner), section, attribute, value, found);
+				continue;
+			}
 			ibValueMetaObjectRecordDataRef* const record = dynamic_cast<ibValueMetaObjectRecordDataRef*>(owner);
 			SearchOne(record, AttributeNamed(owner, attribute), value, found);
 		}

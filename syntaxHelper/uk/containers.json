@@ -409,7 +409,7 @@
       "kind": "object",
       "category_keys": ["value_types"],
       "signature": "FilterCriteria.<Name>.Find(value)",
-      "description": "Іменований пошук за реквізитами, переліченими в критерії. Find повертає масив посилань, у яких реквізит дорівнює значенню.",
+      "description": "Іменований пошук за реквізитами, переліченими в критерії. Find повертає масив посилань, у яких реквізит дорівнює значенню. Рядок Document.Name.Section.Column шукає колонку табличної частини і повертає посилання власника.",
       "parameters": "value - шукане значення.",
       "return_descr": "Масив посилань.",
       "example": "rows = FilterCriteria.SubordinateDocuments.Find(Ref);",

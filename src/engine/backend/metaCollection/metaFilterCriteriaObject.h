@@ -16,6 +16,6 @@ protected:
 	virtual bool WriteData(ibDataNode& node) const override;
 private:
 	ibPropertyCategory* m_categoryContent = ibPropertyObject::CreatePropertyCategory(wxT("Content"), _("Content"));
-	ibPropertyString* m_propertyContent = ibPropertyObject::CreateProperty<ibPropertyString>(m_categoryContent, wxT("Content"), _("Content"), _("The attributes this criterion searches, one per line. Document.Name.Attribute or Catalog.Name.Attribute. A line may also say Document.Name.Attribute.Field."), wxEmptyString);
+	ibPropertyString* m_propertyContent = ibPropertyObject::CreateProperty<ibPropertyString>(m_categoryContent, wxT("Content"), _("Content"), _("The attributes this criterion searches, one per line. Document.Name.Attribute or Catalog.Name.Attribute. A tabular section is Document.Name.Section.Column, and Find returns the owner reference."), wxEmptyString);
 };
 #endif

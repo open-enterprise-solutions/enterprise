@@ -409,7 +409,7 @@
       "kind": "object",
       "category_keys": ["value_types"],
       "signature": "FilterCriteria.<Name>.Find(value)",
-      "description": "Именованный поиск по реквизитам, перечисленным в критерии. Find возвращает массив ссылок, у которых реквизит равен значению.",
+      "description": "Именованный поиск по реквизитам, перечисленным в критерии. Find возвращает массив ссылок, у которых реквизит равен значению. Строка Document.Name.Section.Column ищет колонку табличной части и возвращает ссылку владельца.",
       "parameters": "value - искомое значение.",
       "return_descr": "Массив ссылок.",
       "example": "rows = FilterCriteria.SubordinateDocuments.Find(Ref);",
