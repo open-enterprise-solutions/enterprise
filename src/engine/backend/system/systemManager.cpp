@@ -399,12 +399,16 @@ bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 			return true;
 		case enSerializeValue: pvarRetValue = SerializeValue(*paParams[0]); return true;
 		case enDeserializeValue: pvarRetValue = DeserializeValue(paParams[0]->GetString()); return true;
-		case enNumberInWords:
+		case enNumberInWords: {
 			if (lSizeArray < 1) { pvarRetValue = wxString(); return true; }
-			pvarRetValue = NumberInWords(*paParams[0],
-				lSizeArray > 1 ? paParams[1]->GetString() : wxString(),
-				lSizeArray > 2 ? paParams[2]->GetString() : wxString());
+			wxString format, subject;
+			if (lSizeArray > 1)
+				format = paParams[1]->GetString();
+			if (lSizeArray > 2)
+				subject = paParams[2]->GetString();
+			pvarRetValue = NumberInWords(*paParams[0], format, subject);
 			return true;
+		}
 		case enEvaluate: pvarRetValue = Evaluate(paParams[0]->GetString()); return true;
 		case enExecute: Execute(paParams[0]->GetString()); return true;
 		case enFormat: pvarRetValue = Format(*paParams[0], paParams[1]->GetString()); return true;
