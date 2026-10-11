@@ -11,6 +11,7 @@ void ibBackendSpreadsheetObject::ClearSpreadsheet(int count)
 {
 	spreadsheetNotify->ClearSpreadsheet();
 	m_spreadsheetDesc.ClearSpreadsheet(count);
+	m_cellPictures.clear();
 }
 
 void ibBackendSpreadsheetObject::EnableEditing(bool edit)
@@ -224,6 +225,8 @@ void ibBackendSpreadsheetObject::PutArea(const wxObjectDataPtr<ibBackendSpreadsh
 		}
 	}
 
+	CopyCellPicturesFrom(*doc, maxRowBrake, 0);
+
 	// A height only where the area's row has one — a row without keeps its automatic height (HasRowSize).
 	for (int row = 0; row < doc->GetNumberRows(); row++)
 		if (doc->GetSpreadsheetDesc().HasRowSize(row))
@@ -273,6 +276,8 @@ void ibBackendSpreadsheetObject::JoinArea(const wxObjectDataPtr<ibBackendSpreads
 			}
 		}
 	}
+
+	CopyCellPicturesFrom(*doc, 0, maxColBrake);
 
 	// a height only where the area's row has one — see PutArea
 	for (int row = 0; row < doc->GetNumberRows(); row++)
@@ -508,6 +513,36 @@ void ibBackendSpreadsheetObject::SetCellValue(int row, int col, const wxString& 
 {
 	spreadsheetNotify->SetCellValue(row, col, s);
 	m_spreadsheetDesc.SetCellValue(row, col, s);
+}
+
+void ibBackendSpreadsheetObject::SetCellPicture(int row, int col, const ibPictureDescription& picture)
+{
+	const std::pair<int, int> key(row, col);
+	if (picture.IsEmptyPicture())
+		m_cellPictures.erase(key);
+	else
+		m_cellPictures[key] = picture;
+}
+
+ibPictureDescription ibBackendSpreadsheetObject::GetCellPicture(int row, int col) const
+{
+	const auto found = m_cellPictures.find(std::pair<int, int>(row, col));
+	if (found == m_cellPictures.end())
+		return ibPictureDescription();
+	return found->second;
+}
+
+void ibBackendSpreadsheetObject::CopyCellPicturesFrom(const ibBackendSpreadsheetObject& src, int rowOffset, int colOffset)
+{
+	const int rows = src.GetNumberRows();
+	const int cols = src.GetNumberCols();
+	for (const auto& entry : src.m_cellPictures) {
+		const int row = entry.first.first;
+		const int col = entry.first.second;
+		if (row < 0 || col < 0 || row >= rows || col >= cols)
+			continue;
+		m_cellPictures[std::pair<int, int>(row + rowOffset, col + colOffset)] = entry.second;
+	}
 }
 
 bool ibBackendSpreadsheetObject::GetParameter(const wxString& strParameter, ibValue& valueParam) const

@@ -1,0 +1,22 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "en",
+  "entries": [
+    {
+      "id": "prop.SpreadsheetArea.Picture",
+      "name_local": "Picture",
+      "name_en": "Picture",
+      "kind": "property",
+      "category_keys": ["value_types", "spreadsheet"],
+      "signature": "Picture",
+      "description": "The picture drawn in this cell (1C: Картинка). An empty picture clears it. It is not stored in the grid description. Putting or joining the area carries the picture to the same cell of the document it lands in.",
+      "parameters": "StoragePicture.",
+      "return_descr": "StoragePicture.",
+      "example": "Area = Sheet.Area(1, 2);\nArea.Picture = Pic;",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": ["cls.SpreadsheetDocument.Area"],
+      "reviewed": false
+    }
+  ]
+}
