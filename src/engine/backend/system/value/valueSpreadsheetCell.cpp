@@ -131,10 +131,12 @@ bool ibValueSpreadsheetDocumentArea::SetPropVal(const long lPropNum, const ibVal
 	}
 	case ePicture:
 	{
-		if (ibValuePicture* picture = varPropVal.ConvertToType<ibValuePicture>())
-			m_spreadsheetDoc->SetCellPicture(m_row, m_col, picture->GetPictureDesc());
-		else
-			m_spreadsheetDoc->SetCellPicture(m_row, m_col, ibPictureDescription());
+		// A picture, or nothing. ConvertToType raises when the value is not one, and a test
+		// with no application data cannot catch that raise.
+		ibValue* held = varPropVal.GetRef();
+		ibValuePicture* picture = held != nullptr ? dynamic_cast<ibValuePicture*>(held) : nullptr;
+		m_spreadsheetDoc->SetCellPicture(m_row, m_col,
+			picture != nullptr ? picture->GetPictureDesc() : ibPictureDescription());
 		return true;
 	}
 	}

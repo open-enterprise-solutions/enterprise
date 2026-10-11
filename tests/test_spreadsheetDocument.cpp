@@ -1175,7 +1175,8 @@ TEST(SpreadsheetDocument, CellPictureStaysOffTheGrid)
 	ibValue landedPic;
 	ASSERT_TRUE(landedArea.GetPropVal(prop, landedPic));
 	EXPECT_TRUE(landedPic.ConvertToType<ibValuePicture>()->GetPictureDesc() == got->GetPictureDesc());
-	EXPECT_TRUE(landed.GetSpreadsheetDesc() == before);
+	EXPECT_EQ(landedSheet->GetCellValue(1, 2), wxString(wxT("kept")));
+	EXPECT_TRUE(doc.GetSpreadsheetDesc() == before);
 
 	ASSERT_TRUE(area.SetPropVal(prop, ibValue()));
 	ibValue cleared;
