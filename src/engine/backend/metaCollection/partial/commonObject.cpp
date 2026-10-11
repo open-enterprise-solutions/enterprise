@@ -1173,6 +1173,16 @@ bool ibValueMetaObjectRecordDataHierarchyMutableRef::WriteData(ibDataNode& node)
 		pv->SetValue(wxT("Code"), value->GetPredefinedCode());
 		pv->SetValue(wxT("Description"), value->GetPredefinedDescription());
 		pv->SetValue(wxT("IsFolder"), (bool)value->IsPredefinedFolder());
+		if (!value->GetAccountingFlags().empty()) {
+			std::vector<ibDataValue> flags;
+			for (const ibPredefinedNamedFlag& flag : value->GetAccountingFlags()) {
+				auto node = std::make_shared<ibDataNode>();
+				node->SetValue(wxT("Name"), flag.m_name);
+				node->SetValue(wxT("Value"), flag.m_on);
+				flags.push_back(ibDataValue::Child(node));
+			}
+			pv->AddField(wxT("AccountingFlags"), ibDataValue::Array(flags));
+		}
 		predefined.push_back(ibDataValue::Child(pv));
 	}
 	node.SetProperty(wxT("Predefined"), ibDataValue::Array(predefined));
@@ -1202,8 +1212,24 @@ bool ibValueMetaObjectRecordDataHierarchyMutableRef::ReadData(const ibDataNode& 
 			wxString valueName = pv->GetValue<wxString>(wxT("Name"));
 			wxString valueCode = pv->GetValue<wxString>(wxT("Code"));
 			wxString valueDescription = pv->GetValue<wxString>(wxT("Description"));
-			m_predefinedObjectVector.emplace_back(
-				new ibPredefinedValueObject(valueGuid, valueName, valueCode, valueDescription));
+			ibPredefinedValueObject* created =
+				new ibPredefinedValueObject(valueGuid, valueName, valueCode, valueDescription);
+			std::vector<ibPredefinedNamedFlag> flags;
+			if (const ibDataValue* stored = pv->FindField(wxT("AccountingFlags"))) {
+				if (stored->Kind() == ibDataKind::Array) {
+					for (const ibDataValue& flagValue : stored->AsArray()) {
+						const std::shared_ptr<ibDataNode>& flagNode = flagValue.AsChild();
+						if (!flagNode)
+							continue;
+						ibPredefinedNamedFlag flag;
+						flag.m_name = flagNode->GetValue<wxString>(wxT("Name"));
+						flag.m_on = flagNode->GetValue<bool>(wxT("Value"));
+						flags.push_back(flag);
+					}
+				}
+			}
+			created->SetAccountingFlags(std::move(flags));
+			m_predefinedObjectVector.emplace_back(created);
 		}
 	}
 
