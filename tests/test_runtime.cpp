@@ -2987,12 +2987,14 @@ TEST_F(BuiltInRuntime, AnObjectModuleSeesDataExchangeLoad) {
 		ibValueRecordDataObjectHierarchyRef* raw = object;
 		ASSERT_NE(raw, nullptr);
 
-		ibValue* exchange = raw->GetBoundValue(wxT("DataExchange"));
-		ASSERT_NE(exchange, nullptr);
-		const long prop = exchange->FindProp(wxT("Load"));
+		const long exchangeProp = raw->FindProp(wxT("DataExchange"));
+		ASSERT_NE(exchangeProp, wxNOT_FOUND);
+		ibValue exchange;
+		ASSERT_TRUE(raw->GetPropVal(exchangeProp, exchange));
+		const long prop = exchange.FindProp(wxT("Load"));
 		ASSERT_GE(prop, 0);
 		ibValue load;
-		ASSERT_TRUE(exchange->GetPropVal(prop, load));
+		ASSERT_TRUE(exchange.GetPropVal(prop, load));
 		EXPECT_TRUE(load.GetBoolean());
 		object = nullptr;
 	}
