@@ -2290,11 +2290,17 @@ bool ibValueRecordDataObject::GetPropVal(const long lPropNum, ibValue& pvarPropV
 {
 	const long lPropAlias = m_members.GetPropAlias(lPropNum);
 	if (lPropAlias == eProcUnit) {
-		if (m_procUnit != nullptr) {
-			return m_procUnit->GetPropVal(
-				GetPropName(lPropNum), pvarPropVal
-			);
+		// A module export answers through the proc unit. An external bind
+		// (DataExchange, RegisterRecords) is on this same table, but the
+		// proc unit only sees kind=Export, so the bind map is what still holds it.
+		if (m_procUnit != nullptr &&
+			m_procUnit->GetPropVal(GetPropName(lPropNum), pvarPropVal))
+			return true;
+		if (ibValue* bound = GetBoundValue(GetPropName(lPropNum))) {
+			pvarPropVal = *bound;
+			return true;
 		}
+		return false;
 	}
 	else if (lPropAlias == eProperty || lPropAlias == eTable) {
 		return GetValueByMetaID(
@@ -3860,7 +3866,9 @@ bool ibValueRecordSetObject::GetPropVal(const long lPropNum, ibValue& pvarPropVa
 		return true;
 
 	if (ibValue* bound = GetBoundValue(GetPropName(lPropNum))) {
-		pvarPropVal = bound;
+		// Copy the slot. A bind may be the object itself (Filter) or a reference
+		// slot (DataExchange); assigning the pointer would wrap the slot.
+		pvarPropVal = *bound;
 		return true;
 	}
 
