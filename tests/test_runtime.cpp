@@ -2989,9 +2989,11 @@ TEST_F(BuiltInRuntime, AnObjectModuleSeesAdditionalProperties) {
 		ibValueRecordDataObjectHierarchyRef* raw = object;
 		ASSERT_NE(raw, nullptr);
 
-		ibValue* bag = raw->GetBoundValue(wxT("AdditionalProperties"));
-		ASSERT_NE(bag, nullptr);
-		auto* structure = dynamic_cast<ibValueStructure*>(bag);
+		const long bagProp = raw->FindProp(wxT("AdditionalProperties"));
+		ASSERT_NE(bagProp, wxNOT_FOUND);
+		ibValue bag;
+		ASSERT_TRUE(raw->GetPropVal(bagProp, bag));
+		auto* structure = dynamic_cast<ibValueStructure*>(bag.GetRef());
 		ASSERT_NE(structure, nullptr);
 
 		ibValue found;
