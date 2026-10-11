@@ -2936,3 +2936,38 @@ TEST(RuntimeTest, AnArrayWalkedAndRewalkedIsLetGoOfOnce) {
 	// The frame goes here, with both arrays in it. That is the moment the nightly
 	// caught: passing under a sanitiser is the whole assertion.
 }
+
+TEST_F(BuiltInRuntime, GetTempFileNameTakesAnExtension) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ibValueSystemFunction valueSystem;
+	cc.AddContextVariable(wxT("System"), &valueSystem, true);
+
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("var named public; var bare public; var dotted public;\n")
+		wxT("named = GetTempFileName(\"txt\");\n")
+		wxT("bare = GetTempFileName();\n")
+		wxT("dotted = GetTempFileName(\".log\");\n")));
+
+	ibProcUnit pu;
+	wxString strError;
+	ASSERT_TRUE(RunBound(cc, pu, strError)) << strError.ToStdString();
+
+	ibValue v;
+	ASSERT_TRUE(pu.GetPropVal(wxT("named"), v));
+	const wxString named = v.GetString();
+	EXPECT_TRUE(named.EndsWith(wxT(".txt"))) << named.ToStdString();
+	EXPECT_TRUE(wxFileExists(named));
+	wxRemoveFile(named);
+
+	ASSERT_TRUE(pu.GetPropVal(wxT("bare"), v));
+	const wxString bare = v.GetString();
+	EXPECT_FALSE(bare.IsEmpty());
+	EXPECT_TRUE(wxFileExists(bare));
+	wxRemoveFile(bare);
+
+	ASSERT_TRUE(pu.GetPropVal(wxT("dotted"), v));
+	const wxString dotted = v.GetString();
+	EXPECT_TRUE(dotted.EndsWith(wxT(".log"))) << dotted.ToStdString();
+	EXPECT_FALSE(dotted.EndsWith(wxT("..log")));
+	wxRemoveFile(dotted);
+}
