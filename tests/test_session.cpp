@@ -88,18 +88,22 @@ TEST(SessionSweep, ALockedRowIsLeftForTheNextPass)
 		wxString path;
 		std::shared_ptr<ibDatabaseLayerSQLite> holder;
 		std::shared_ptr<ibDatabaseLayerSQLite> sweeper;
+		static void Drop(const wxString& file) {
+			if (wxFileExists(file))
+				wxRemoveFile(file);
+		}
 		~Gone() {
 			if (holder) holder->Close();
 			if (sweeper) sweeper->Close();
-			wxRemoveFile(path);
-			wxRemoveFile(path + wxT("-wal"));
-			wxRemoveFile(path + wxT("-shm"));
+			Drop(path);
+			Drop(path + wxT("-wal"));
+			Drop(path + wxT("-shm"));
 		}
 	} gone;
 	gone.path = path;
-	wxRemoveFile(path);
-	wxRemoveFile(path + wxT("-wal"));
-	wxRemoveFile(path + wxT("-shm"));
+	Gone::Drop(path);
+	Gone::Drop(path + wxT("-wal"));
+	Gone::Drop(path + wxT("-shm"));
 
 	gone.holder = std::make_shared<ibDatabaseLayerSQLite>();
 	gone.sweeper = std::make_shared<ibDatabaseLayerSQLite>();
