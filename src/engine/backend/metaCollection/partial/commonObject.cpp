@@ -11,6 +11,7 @@
 #include "backend/session/session.h"
 #include "core/serialize/dataBuilder.h"   // node serialization (WriteData / ReadData)
 #include "backend/choiceLinkResolver.h"      // what narrows a choice, put on the list before it is shown
+#include "backend/system/value/valueMap.h"   // AdditionalProperties is a Structure
 
 #include "backend/metaCollection/partial/reference/reference.h"
 #include "backend/metaCollection/partial/declaredPresentation.h"   // how a reference reads in the designer
@@ -1921,6 +1922,26 @@ ibValueRecordDataObject::~ibValueRecordDataObject()
 {
 }
 
+namespace {
+// The bag is created once and kept by the object. A later bind hands the same structure over.
+ibValue* AdditionalPropertiesBag(ibValue& slot)
+{
+	if (!slot.IsReference())
+		slot = new ibValueStructure();
+	return slot.GetRef();
+}
+}
+
+void ibValueRecordDataObject::BindObjectBag()
+{
+	BindExportVariable(wxT("AdditionalProperties"), AdditionalPropertiesBag(m_additionalProperties));
+}
+
+void ibValueRecordSetObject::BindObjectBag()
+{
+	BindExportVariable(wxT("AdditionalProperties"), AdditionalPropertiesBag(m_additionalProperties));
+}
+
 // MY form — the one showing THIS object. Found by SOURCE, not by form key: the key is the
 // form's own identity and a caller may set it to anything (an element placed on the start page
 // gets a fresh one of its own, so several copies never collide). What never changes is that
@@ -2328,6 +2349,7 @@ bool ibValueRecordDataObjectExt::InitializeObject()
 		// pick up parent automatically on creation.
 		ibRuntimeModuleDataObject::SetParent(moduleManager);
 		BindContextVariable(thisObject, this);
+		BindObjectBag();
 		InitializeRuntime();
 
 		try {
@@ -2359,6 +2381,7 @@ bool ibValueRecordDataObjectExt::InitializeObject(ibValueRecordDataObjectExt* so
 
 		ibRuntimeModuleDataObject::SetParent(moduleManager);
 		BindContextVariable(thisObject, this);
+		BindObjectBag();
 		InitializeRuntime();
 
 		try {
@@ -2434,6 +2457,7 @@ bool ibValueRecordDataObjectRef::InitializeObject(const ibGuid& copyGuid)
 
 	ibRuntimeModuleDataObject::SetParent(moduleManager);
 	BindContextVariable(thisObject, this);
+	BindObjectBag();
 	try {
 		Compile();
 	}
@@ -2488,6 +2512,7 @@ bool ibValueRecordDataObjectRef::InitializeObject(ibValueRecordDataObjectRef* so
 
 	ibRuntimeModuleDataObject::SetParent(moduleManager);
 	BindContextVariable(thisObject, this);
+	BindObjectBag();
 
 	try {
 		Compile();
@@ -3833,6 +3858,7 @@ bool ibValueRecordSetObject::InitializeObject(const ibValueRecordSetObject* sour
 	ibRuntimeModuleDataObject::SetParent(moduleManager);
 	BindContextVariable(thisObject, this);                   // contextual
 	BindExportVariable(wxT("Filter"), m_recordSetKeyValue);  // exported — register filter/key
+	BindObjectBag();
 
 	try {
 		Compile();

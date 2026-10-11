@@ -1,0 +1,24 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "en",
+  "entries": [
+    {
+      "id": "cls.Object.AdditionalProperties",
+      "name_local": "AdditionalProperties",
+      "name_en": "AdditionalProperties",
+      "kind": "property",
+      "category_keys": ["value_types"],
+      "signature": "AdditionalProperties",
+      "description": "A structure that belongs to this one object or record set. The object module and the record-set module can put values into it and read them back for as long as the object lives. Nothing in it is written to the database.",
+      "syntax_block": "AdditionalProperties.Insert(\"Flag\", true);",
+      "syntax_block_ves": "AdditionalProperties.Insert(\"Flag\", True);",
+      "parameters": "None. The structure itself takes Insert, Property and the rest of a Structure.",
+      "return_descr": "Structure.",
+      "example": "AdditionalProperties.Insert(\"Flag\", true);\nIf AdditionalProperties.Property(\"Flag\") Then {\n    // this object only\n}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": ["cls.Structure"],
+      "reviewed": false
+    }
+  ]
+}
