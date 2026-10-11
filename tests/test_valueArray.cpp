@@ -13,6 +13,12 @@
 #include <gtest/gtest.h>
 #include <vector>
 #include "backend/system/value/valueArray.h"
+#include "backend/backend_exception.h"
+#include "backend/appData.h"
+#include "backend/metadataConfiguration.h"
+#include "backend/metaCollection/metaSessionParameterObject.h"
+#include "backend/session/session.h"
+#include "backend/typeDescription.h"
 
 TEST(ValueArray, EmptyByDefault) {
     ibValueArray a;
@@ -89,4 +95,77 @@ TEST(ValueArray, SumNumeric) {
     a.Add(ibValue(ibNumber(20)));
     a.Add(ibValue(ibNumber(30)));
     EXPECT_EQ(a.Sum().GetInteger(), 60);
+}
+
+TEST(ValueArray, AFixedArrayIsACopyAndNewArrayCopiesItBack) {
+    ibValueArray* made = new ibValueArray();
+    made->Add(ibValue(ibNumber(10)));
+    made->Add(ibValue(ibNumber(20)));
+    ibValue source(made);
+
+    ibValue* arg = &source;
+    ibValueFixedArray* fixed = new ibValueFixedArray();
+    ASSERT_TRUE(fixed->Init(&arg, 1));
+    ibValue held(fixed);
+    EXPECT_EQ(fixed->Count(), 2u);
+    ibValue at;
+    ASSERT_TRUE(fixed->GetAt(ibValue(1), at));
+    EXPECT_EQ(at.GetInteger(), 20);
+    EXPECT_THROW(fixed->SetAt(ibValue(0), ibValue(ibNumber(1))), ibBackendException);
+
+    ibValue walked;
+    auto cursor = fixed->CreateIterator();
+    ASSERT_TRUE(cursor->MoveNext(walked));
+    EXPECT_EQ(walked.GetInteger(), 10);
+
+    ibValue* copyArg = &held;
+    ibValueArray copy;
+    ASSERT_TRUE(copy.Init(&copyArg, 1));
+    EXPECT_EQ(copy.Count(), 2u);
+    copy.Add(ibValue(ibNumber(30)));
+    EXPECT_EQ(copy.Count(), 3u);
+    EXPECT_EQ(fixed->Count(), 2u);
+
+    ibValue* again = &source;
+    ibValueArray fromArray;
+    ASSERT_TRUE(fromArray.Init(&again, 1));
+    EXPECT_EQ(fromArray.Count(), 2u);
+}
+
+TEST(ValueArray, ANumberStillSizesTheArray) {
+    ibValue count(3);
+    ibValue* arg = &count;
+    ibValueArray a;
+    ASSERT_TRUE(a.Init(&arg, 1));
+    EXPECT_EQ(a.Count(), 3u);
+}
+
+TEST(ValueArray, NewArrayOfASessionParameterValueCopiesWhatItStores) {
+    struct Env {
+        bool ready;
+        Env() : ready(ibApplicationInstance::CreateAppDataEnv(ibRunMode::eFILE_MODE)) {}
+        ~Env() {
+            if (ibApplicationInstance::Get() != nullptr)
+                ibApplicationInstance::DestroyAppDataEnv();
+        }
+    } env;
+    if (!env.ready)
+        GTEST_SKIP() << "appData env unavailable";
+
+    auto session = std::make_shared<ibSession>(wxT("fixed-array"), ibSessionKind::Designer);
+    ibSessionScope scope(session.get());
+    ibMetaDataConfigurationFile cfg;
+    ibValueMetaObject* created = cfg.CreateMetaObject(
+        g_metaSessionParameterCLSID, cfg.GetCommonMetaObject(), false);
+    ASSERT_NE(created, nullptr);
+    created->SetName(wxT("ErrorStack"));
+    auto* declaration = dynamic_cast<ibValueMetaObjectSessionParameter*>(created);
+    ASSERT_NE(declaration, nullptr);
+    declaration->GetTypeDesc() = ibTypeDescription(g_valueArrayCLSID);
+
+    ibValue holder(new ibValueSessionParameter(declaration));
+    ibValue* arg = &holder;
+    ibValueArray copy;
+    ASSERT_TRUE(copy.Init(&arg, 1));
+    EXPECT_EQ(copy.Count(), 0u);
 }

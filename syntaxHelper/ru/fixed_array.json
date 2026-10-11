@@ -1,0 +1,22 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "ru",
+  "entries": [
+    {
+      "id": "cls.FixedArray",
+      "name_local": "ФиксированныйМассив",
+      "name_en": "FixedArray",
+      "kind": "class",
+      "category_keys": ["value_types", "collections"],
+      "signature": "New FixedArray(source)",
+      "description": "Копия массива, которую нельзя изменить. source — Array, FixedArray, число элементов или SessionParameterValue, в котором хранится такой массив. New Array(fixed) копирует элементы в Array.",
+      "parameters": "source — Array, FixedArray или число пустых элементов.",
+      "return_descr": "FixedArray.",
+      "example": "Items = New Array();\nItems.Add(1);\nFrozen = New FixedArray(Items);\nCopy = New Array(Frozen);",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": ["cls.Array"],
+      "reviewed": false
+    }
+  ]
+}

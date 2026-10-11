@@ -1,0 +1,22 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "en",
+  "entries": [
+    {
+      "id": "cls.FixedArray",
+      "name_local": "FixedArray",
+      "name_en": "FixedArray",
+      "kind": "class",
+      "category_keys": ["value_types", "collections"],
+      "signature": "New FixedArray(source)",
+      "description": "A copy of an array that cannot be changed. source is an Array, a FixedArray, a count, or a SessionParameterValue that stores one of those. New Array(fixed) copies the elements into an Array. Get and Find read an element; assigning to an index raises.",
+      "parameters": "source — an Array, a FixedArray, or a number of empty slots.",
+      "return_descr": "FixedArray.",
+      "example": "Items = New Array();\nItems.Add(1);\nFrozen = New FixedArray(Items);\nCopy = New Array(Frozen);",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": ["cls.Array"],
+      "reviewed": false
+    }
+  ]
+}
