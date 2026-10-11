@@ -1,0 +1,43 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "uk",
+  "entries": [
+    {
+      "id": "fn.StrTemplate",
+      "name_local": "StrTemplate",
+      "name_en": "StrTemplate",
+      "kind": "system_function",
+      "category_keys": ["global_context", "global_functions"],
+      "signature": "StrTemplate(template, value1, ...)",
+      "description": "Рядок. Підставляє %1, %2, … (з одиниці) у шаблон. %% — знак відсотка. Підстановка без аргумента порожня. StrTemplate(\"%1-%2\", \"ab\", 7) дає ab-7."
+    },
+    {
+      "id": "fn.StrConcat",
+      "name_local": "StrConcat",
+      "name_en": "StrConcat",
+      "kind": "system_function",
+      "category_keys": ["global_context", "global_functions"],
+      "signature": "StrConcat(array[, separator])",
+      "description": "Рядок. З'єднує рядкові подання елементів масиву. Роздільник необов'язковий і за замовчуванням порожній. Не масив відхиляється."
+    },
+    {
+      "id": "fn.StrStartsWith",
+      "name_local": "StrStartsWith",
+      "name_en": "StrStartsWith",
+      "kind": "system_function",
+      "category_keys": ["global_context", "global_functions"],
+      "signature": "StrStartsWith(string, search)",
+      "description": "Булево. Істина, коли рядок починається зі зразка. Порівняння без урахування регістру. Порожній зразок підходить."
+    },
+    {
+      "id": "fn.StrEndsWith",
+      "name_local": "StrEndsWith",
+      "name_en": "StrEndsWith",
+      "kind": "system_function",
+      "category_keys": ["global_context", "global_functions"],
+      "signature": "StrEndsWith(string, search)",
+      "description": "Булево. Істина, коли рядок закінчується зразком. Порівняння без урахування регістру. Порожній зразок підходить."
+    }
+  ]
+}

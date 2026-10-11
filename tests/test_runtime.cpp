@@ -2936,3 +2936,61 @@ TEST(RuntimeTest, AnArrayWalkedAndRewalkedIsLetGoOfOnce) {
 	// The frame goes here, with both arrays in it. That is the moment the nightly
 	// caught: passing under a sanitiser is the whole assertion.
 }
+
+TEST_F(BuiltInRuntime, StringTemplateConcatAndEnds) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ibValueSystemFunction valueSystem;
+	cc.AddContextVariable(wxT("System"), &valueSystem, true);
+
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("var filled public; var percent public; var missing public;\n")
+		wxT("var joined public; var joinedPlain public;\n")
+		wxT("var starts public; var startsEmpty public; var startsNo public;\n")
+		wxT("var ends public; var endsNo public;\n")
+		wxT("filled = StrTemplate(\"%1-%2\", \"ab\", 7);\n")
+		wxT("percent = StrTemplate(\"100%%\");\n")
+		wxT("missing = StrTemplate(\"%1:%2\", \"only\");\n")
+		wxT("var parts; parts = New Array;\n")
+		wxT("parts.Add(\"a\"); parts.Add(\"b\"); parts.Add(\"c\");\n")
+		wxT("joined = StrConcat(parts, \", \");\n")
+		wxT("joinedPlain = StrConcat(parts);\n")
+		wxT("starts = StrStartsWith(\"Abc\", \"ab\");\n")
+		wxT("startsEmpty = StrStartsWith(\"abc\", \"\");\n")
+		wxT("startsNo = StrStartsWith(\"abc\", \"z\");\n")
+		wxT("ends = StrEndsWith(\"File.TXT\", \".txt\");\n")
+		wxT("endsNo = StrEndsWith(\"abc\", \"ab\");\n")));
+
+	ibProcUnit pu;
+	wxString strError;
+	ASSERT_TRUE(RunBound(cc, pu, strError)) << strError.ToStdString();
+
+	ibValue v;
+	ASSERT_TRUE(pu.GetPropVal(wxT("filled"), v));
+	EXPECT_EQ(v.GetString(), wxT("ab-7"));
+	ASSERT_TRUE(pu.GetPropVal(wxT("percent"), v));
+	EXPECT_EQ(v.GetString(), wxT("100%"));
+	ASSERT_TRUE(pu.GetPropVal(wxT("missing"), v));
+	EXPECT_EQ(v.GetString(), wxT("only:"));
+	ASSERT_TRUE(pu.GetPropVal(wxT("joined"), v));
+	EXPECT_EQ(v.GetString(), wxT("a, b, c"));
+	ASSERT_TRUE(pu.GetPropVal(wxT("joinedPlain"), v));
+	EXPECT_EQ(v.GetString(), wxT("abc"));
+	ASSERT_TRUE(pu.GetPropVal(wxT("starts"), v));
+	EXPECT_TRUE(v.GetBoolean());
+	ASSERT_TRUE(pu.GetPropVal(wxT("startsEmpty"), v));
+	EXPECT_TRUE(v.GetBoolean());
+	ASSERT_TRUE(pu.GetPropVal(wxT("startsNo"), v));
+	EXPECT_FALSE(v.GetBoolean());
+	ASSERT_TRUE(pu.GetPropVal(wxT("ends"), v));
+	EXPECT_TRUE(v.GetBoolean());
+	ASSERT_TRUE(pu.GetPropVal(wxT("endsNo"), v));
+	EXPECT_FALSE(v.GetBoolean());
+
+	ibCompileCode refused(wxT("test"), wxT("memory"), false);
+	refused.AddContextVariable(wxT("System"), &valueSystem, true);
+	ASSERT_TRUE(TryCompile(refused, wxT("var x; x = StrConcat(1);\n")));
+	ibProcUnit puRefused;
+	wxString refusedError;
+	EXPECT_FALSE(RunBound(refused, puRefused, refusedError));
+	EXPECT_TRUE(refusedError.Contains(wxT("array"))) << refusedError.ToStdString();
+}

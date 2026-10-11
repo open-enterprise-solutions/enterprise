@@ -1,0 +1,43 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "en",
+  "entries": [
+    {
+      "id": "fn.StrTemplate",
+      "name_local": "StrTemplate",
+      "name_en": "StrTemplate",
+      "kind": "system_function",
+      "category_keys": ["global_context", "global_functions"],
+      "signature": "StrTemplate(template, value1, ...)",
+      "description": "String. Substitutes %1, %2, … (numbered from one) into the template. %% is a percent sign. A placeholder with no argument is empty. StrTemplate(\"%1-%2\", \"ab\", 7) is ab-7."
+    },
+    {
+      "id": "fn.StrConcat",
+      "name_local": "StrConcat",
+      "name_en": "StrConcat",
+      "kind": "system_function",
+      "category_keys": ["global_context", "global_functions"],
+      "signature": "StrConcat(array[, separator])",
+      "description": "String. Joins the string form of each array element. The separator is optional and empty when omitted. A value that is not an array is refused."
+    },
+    {
+      "id": "fn.StrStartsWith",
+      "name_local": "StrStartsWith",
+      "name_en": "StrStartsWith",
+      "kind": "system_function",
+      "category_keys": ["global_context", "global_functions"],
+      "signature": "StrStartsWith(string, search)",
+      "description": "Boolean. True when the string starts with the search text. The comparison ignores case. An empty search matches."
+    },
+    {
+      "id": "fn.StrEndsWith",
+      "name_local": "StrEndsWith",
+      "name_en": "StrEndsWith",
+      "kind": "system_function",
+      "category_keys": ["global_context", "global_functions"],
+      "signature": "StrEndsWith(string, search)",
+      "description": "Boolean. True when the string ends with the search text. The comparison ignores case. An empty search matches."
+    }
+  ]
+}
