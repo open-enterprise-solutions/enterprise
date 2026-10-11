@@ -55,5 +55,10 @@ bool ibValuePictureLib::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 ibValue* ibPictureLibrary()
 {
 	static ibValuePictureLib library;
+	// A frame that names PictureLib holds this object and lets go when the frame ends.
+	// The let-go would delete it. One hold keeps the process library alive.
+	static struct Hold {
+		Hold() { library.IncrRef(); }
+	} hold;
 	return &library;
 }
