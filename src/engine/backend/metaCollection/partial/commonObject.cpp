@@ -1183,6 +1183,27 @@ bool ibValueMetaObjectRecordDataHierarchyMutableRef::WriteData(ibDataNode& node)
 			}
 			pv->AddField(wxT("AccountingFlags"), ibDataValue::Array(flags));
 		}
+		if (!value->GetDimensions().empty()) {
+			std::vector<ibDataValue> rows;
+			for (const ibPredefinedDimensionRow& dimension : value->GetDimensions()) {
+				auto node = std::make_shared<ibDataNode>();
+				node->SetValue(wxT("Guid"), dimension.m_id);
+				node->SetValue(wxT("Kind"), dimension.m_kind);
+				node->SetValue(wxT("SummaryOnly"), dimension.m_summaryOnly);
+				if (!dimension.m_flags.empty()) {
+					std::vector<ibDataValue> rowFlags;
+					for (const ibPredefinedNamedFlag& flag : dimension.m_flags) {
+						auto flagNode = std::make_shared<ibDataNode>();
+						flagNode->SetValue(wxT("Name"), flag.m_name);
+						flagNode->SetValue(wxT("Value"), flag.m_on);
+						rowFlags.push_back(ibDataValue::Child(flagNode));
+					}
+					node->AddField(wxT("Flags"), ibDataValue::Array(rowFlags));
+				}
+				rows.push_back(ibDataValue::Child(node));
+			}
+			pv->AddField(wxT("Dimensions"), ibDataValue::Array(rows));
+		}
 		predefined.push_back(ibDataValue::Child(pv));
 	}
 	node.SetProperty(wxT("Predefined"), ibDataValue::Array(predefined));
@@ -1229,6 +1250,35 @@ bool ibValueMetaObjectRecordDataHierarchyMutableRef::ReadData(const ibDataNode& 
 				}
 			}
 			created->SetAccountingFlags(std::move(flags));
+			std::vector<ibPredefinedDimensionRow> dimensions;
+			if (const ibDataValue* storedRows = pv->FindField(wxT("Dimensions"))) {
+				if (storedRows->Kind() == ibDataKind::Array) {
+					for (const ibDataValue& rowValue : storedRows->AsArray()) {
+						const std::shared_ptr<ibDataNode>& rowNode = rowValue.AsChild();
+						if (!rowNode)
+							continue;
+						ibPredefinedDimensionRow row;
+						row.m_id = rowNode->GetValue<ibGuid>(wxT("Guid"));
+						row.m_kind = rowNode->GetValue<wxString>(wxT("Kind"));
+						row.m_summaryOnly = rowNode->GetValue<bool>(wxT("SummaryOnly"));
+						if (const ibDataValue* flagField = rowNode->FindField(wxT("Flags"))) {
+							if (flagField->Kind() == ibDataKind::Array) {
+								for (const ibDataValue& flagValue : flagField->AsArray()) {
+									const std::shared_ptr<ibDataNode>& flagNode = flagValue.AsChild();
+									if (!flagNode)
+										continue;
+									ibPredefinedNamedFlag flag;
+									flag.m_name = flagNode->GetValue<wxString>(wxT("Name"));
+									flag.m_on = flagNode->GetValue<bool>(wxT("Value"));
+									row.m_flags.push_back(flag);
+								}
+							}
+						}
+						dimensions.push_back(row);
+					}
+				}
+			}
+			created->SetDimensions(std::move(dimensions));
 			m_predefinedObjectVector.emplace_back(created);
 		}
 	}

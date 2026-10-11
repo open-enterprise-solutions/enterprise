@@ -75,6 +75,9 @@ struct ibSchemaSeedRow
 	ibGuid                      m_id;      // identity (the row's guid) — the match key
 	wxString                    m_name;    // friendly name for the change ledger
 	std::map<ibMetaID, ibValue> m_values;  // cell map: column metaID -> value (empty for an enum: uuid only)
+	// Set when the row is a line of a tabular section. The scaffold names the OWNER, not the line,
+	// so the apply clears that owner's lines and inserts these. Invalid = an ordinary upsert by m_id.
+	ibGuid                      m_owner;
 
 	// Fluent cell binding: row.Set(qc, value) — the link between a column and its value in this row. The
 	// cell is keyed by the column's model id (== metaID for an attribute), so baseline/target rows from
@@ -89,6 +92,7 @@ struct ibSchemaSeedRow
 			m_values[qc->GetColumnId()] = value;
 		return *this;
 	}
+	ibSchemaSeedRow& OwnedBy(const ibGuid& owner) { m_owner = owner; return *this; }
 };
 
 // ==========================================================================

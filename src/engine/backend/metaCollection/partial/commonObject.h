@@ -1308,6 +1308,14 @@ class BACKEND_API ibValueMetaObjectRecordDataHierarchyMutableRef :
 		wxString m_name;
 		bool m_on = false;
 	};
+	// One analytics slot of a predefined account. m_kind is a predefined item of the bound
+	// chart of characteristic types. summary keeps turnovers and folds the balance.
+	struct ibPredefinedDimensionRow {
+		ibGuid m_id;
+		wxString m_kind;
+		bool m_summaryOnly = false;
+		std::vector<ibPredefinedNamedFlag> m_flags;
+	};
 
 	class ibPredefinedValueObject : public ibDataViewObject {
 	public:
@@ -1359,13 +1367,26 @@ class BACKEND_API ibValueMetaObjectRecordDataHierarchyMutableRef :
 		wxObjectDataPtr<ibPredefinedValueObject> GetPredefinedParent() const { return m_valueParent; }
 
 		const std::vector<ibPredefinedNamedFlag>& GetAccountingFlags() const { return m_accountingFlags; }
+		const std::vector<ibPredefinedDimensionRow>& GetDimensions() const { return m_dimensions; }
 		void SetAccountingFlags(std::vector<ibPredefinedNamedFlag> flags) { m_accountingFlags = std::move(flags); }
+		void SetDimensions(std::vector<ibPredefinedDimensionRow> rows) { m_dimensions = std::move(rows); }
 
 		wxString AccountingFlagsText() const {
 			wxString out;
 			for (const ibPredefinedNamedFlag& flag : m_accountingFlags) {
 				if (!out.IsEmpty()) out += wxT(",");
 				out += flag.m_name + (flag.m_on ? wxT("=true") : wxT("=false"));
+			}
+			return out;
+		}
+		wxString DimensionsText() const {
+			wxString out;
+			for (const ibPredefinedDimensionRow& row : m_dimensions) {
+				if (!out.IsEmpty()) out += wxT(";");
+				out += row.m_kind;
+				if (row.m_summaryOnly) out += wxT(",summary");
+				for (const ibPredefinedNamedFlag& flag : row.m_flags)
+					out += wxT(",") + flag.m_name + (flag.m_on ? wxT("=true") : wxT("=false"));
 			}
 			return out;
 		}
@@ -1385,6 +1406,7 @@ class BACKEND_API ibValueMetaObjectRecordDataHierarchyMutableRef :
 		wxObjectDataPtr<ibPredefinedValueObject> m_valueParent;
 
 		std::vector<ibPredefinedNamedFlag> m_accountingFlags;
+		std::vector<ibPredefinedDimensionRow> m_dimensions;
 	};
 
 	ibValueMetaObjectAttributePredefined* GetDataPredefinedName() const { return m_propertyAttributePredefined->GetMetaObject(); }
@@ -1582,6 +1604,10 @@ class BACKEND_API ibValueMetaObjectRecordDataHierarchyMutableRef :
 	virtual wxString SetPredefinedAccountingFlags(const wxString&, const wxString&) {
 		return wxString::Format(
 			_("Accounting flags belong on a chart of accounts, and '%s' is not one"), GetName());
+	}
+	virtual wxString SetPredefinedDimensions(const wxString&, const wxString&) {
+		return wxString::Format(
+			_("Account dimensions belong on a chart of accounts, and '%s' is not one"), GetName());
 	}
 
 	//find predefined value
