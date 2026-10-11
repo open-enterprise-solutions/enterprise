@@ -1,0 +1,16 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "uk",
+  "entries": [
+    {
+      "id": "fn.XMLString",
+      "name_local": "XMLString",
+      "name_en": "XMLString",
+      "kind": "system_function",
+      "category_keys": ["global_context", "global_functions"],
+      "signature": "XMLString(value)",
+      "description": "Рядок. Лексична форма примітиву для XML: true або false, число без групування, дата як YYYY-MM-DDThh:mm:ss, або сам рядок. Невизначено — порожній рядок. Текст не екранується."
+    }
+  ]
+}
