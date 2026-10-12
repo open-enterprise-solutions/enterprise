@@ -22,6 +22,7 @@
 #include "backend/mcp/mcpTool.h"
 
 #include "backend/metadataConfiguration.h"
+#include "backend/compiler/scriptCheck.h"   // common modules that do not compile, said on a successful apply
 #include "backend/restructureInfo.h"
 #include "backend/metaCollection/metaDiff.h"
 #include "backend/metaCollection/metaObject.h"
@@ -219,7 +220,9 @@ public:
 			"which is the only way to see the schema changes in advance, because the engine has "
 			"no rehearsal mode by design. Saving first costs nothing here - config_save stores the "
 			"configuration without touching the structure, so the ledger this hands back still "
-			"holds everything the base has not got.");
+			"holds everything the base has not got. A successful apply also lists common modules "
+			"that do not compile: the structure is written, and a session will not start until "
+			"each of those modules does.");
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override
@@ -318,8 +321,38 @@ public:
 		result.AddField(wxT("ledger"), ibDataValue::Array(ledger));
 		result.AddField(wxT("applied"), ibDataValue::Bool(applied));
 
-		if (applied)
+		if (applied) {
+			// The structure is in the base. A common module that does not compile is a
+			// separate fact: the session that opens this base will refuse to start, and
+			// until this list existed the only way to learn that was to open it.
+			const std::vector<ibDiagnostic> failed = ibCommonModulesThatDoNotCompile(config);
+			std::vector<ibDataValue> modules;
+			std::vector<wxString> seen;
+			wxString names;
+			for (const ibDiagnostic& diagnostic : failed) {
+				std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
+				entry->SetValue(wxT("module"), diagnostic.m_moduleName);
+				entry->AddField(wxT("line"), ibDataValue::Int((s64)diagnostic.m_line));
+				entry->SetValue(wxT("message"), diagnostic.m_message);
+				modules.push_back(ibDataValue::Child(entry));
+
+				bool known = false;
+				for (const wxString& name : seen)
+					known = known || name == diagnostic.m_moduleName;
+				if (!known) {
+					seen.push_back(diagnostic.m_moduleName);
+					if (!names.empty())
+						names += wxT(", ");
+					names += diagnostic.m_moduleName;
+				}
+			}
+			result.AddField(wxT("moduleDiagnostics"), ibDataValue::Array(modules));
+			if (!names.empty())
+				result.SetValue(wxT("note"), wxString::Format(
+					ibMcpText("Applied. These common modules do not compile, so a session will not start until each one does: %s"),
+					names));
 			return true;
+		}
 
 		// A DECLINE IS NOT A FAILURE, and the ledger above is the whole point of it — so this
 		// answers TRUE with the account, rather than refusing and throwing the account away.

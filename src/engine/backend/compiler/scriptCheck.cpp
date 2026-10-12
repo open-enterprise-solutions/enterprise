@@ -8,6 +8,7 @@
 #include "backend/compiler/compileModule.h"     // ibCompileModule — the contextual compile
 #include "backend/metaData.h"                   // ibCompileValueCache::FindCompileModule
 #include "backend/metaCollection/metaObject.h"  // ibValueMetaObject::GetMetaData
+#include "backend/metaCollection/metaModuleObject.h"  // common modules, the ones a session compiles
 #include "backend/moduleInfo.h"                 // ibRuntimeModuleDataObject::GetCompileModule
 #include "backend/moduleManager/moduleManager.h" // ibValueModuleManager — the context a snippet parents to
 #include "backend/session/session.h"            // ibSession::EditModuleManagerFor
@@ -156,6 +157,34 @@ ibScriptCheckAnswer ibCheckModule(const ibValueMetaObject* metaObject)
 	answer.m_diagnostics = CollectFrom([&] { compileModule->Compile(); });
 	answer.m_outcome = ibScriptCheckOutcome::Checked;
 	return answer;
+}
+
+std::vector<ibDiagnostic> ibCommonModulesThatDoNotCompile(const ibMetaData* metaData)
+{
+	std::vector<ibDiagnostic> failed;
+	if (metaData == nullptr)
+		return failed;
+
+	const ibModuleStorage* storage = metaData->GetModuleStorage();
+	if (storage == nullptr)
+		return failed;
+
+	for (ibValueMetaObjectCommonModule* module : storage->GetCompileModules()) {
+		if (module == nullptr || module->IsDeleted())
+			continue;
+
+		const ibScriptCheckAnswer answer = ibCheckModule(module);
+		if (answer.m_outcome != ibScriptCheckOutcome::Checked)
+			continue;
+
+		for (const ibDiagnostic& diagnostic : answer.m_diagnostics) {
+			ibDiagnostic copy = diagnostic;
+			if (copy.m_moduleName.empty())
+				copy.m_moduleName = module->GetName();
+			failed.push_back(std::move(copy));
+		}
+	}
+	return failed;
 }
 
 // ⚠ THE THIRD DOOR MOVED. `ibOutlineScriptQueries` — the same compile asked what it UNDERSTOOD
