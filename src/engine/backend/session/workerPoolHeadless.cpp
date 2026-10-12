@@ -66,7 +66,7 @@ void ibWorkerPoolHeadless::RegisterFiberLocals()
 	// time a pool exists.
 	static std::once_flag once;
 	std::call_once(once, []() {
-		ibFiberLocals::RegisterTrivial<ibSession*>("workerPool.lease",
+		ibFiberLocals::RegisterTrivial<ibSession*>(
 			[](void* dst) { *static_cast<ibSession**>(dst) = tl_currentLease; },
 			[](const void* src) { tl_currentLease = *static_cast<ibSession* const*>(src); });
 	});

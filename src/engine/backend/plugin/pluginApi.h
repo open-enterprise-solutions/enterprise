@@ -10,9 +10,8 @@
 // Anything else (system DLL, vendor runtime, ibBackendException catch etc.)
 // fails one of these two checks and is skipped silently.
 //
-// A plugin must not call ibFiberLocals::Register or RegisterPerFiber.
-// The host loads it inside a scope that refuses the registration and
-// then unloads the library. The process keeps running.
+// A plugin does not call ibFiberLocals::Register / RegisterPerFiber: the set
+// of fiber locals is core's and backend's (fiberLocals.h).
 /////////////////////////////////////////////////////////////////////////////
 
 #ifndef _IB_PLUGIN_API_H_

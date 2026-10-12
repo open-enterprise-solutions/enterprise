@@ -18,7 +18,7 @@ thread_local ibDatabaseConnectionHolder* t_activeHolder = nullptr;
 struct ibRegisterHolderLocal {
 	ibRegisterHolderLocal()
 	{
-		ibFiberLocals::RegisterPerFiber("connectionPool.holder",
+		ibFiberLocals::RegisterPerFiber(
 			[]() -> void* { return new ibSingleConnectionHolder; },
 			[](void* p) { delete static_cast<ibSingleConnectionHolder*>(p); },
 			[](void* p) { t_activeHolder = static_cast<ibDatabaseConnectionHolder*>(p); });
