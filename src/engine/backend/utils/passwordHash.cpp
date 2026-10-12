@@ -189,8 +189,21 @@ wxString ibPasswordHash::Hash(const wxString& password)
 	return wxString::Format("%s%u$%s$%s", kPrefix, kIterations, saltB64, hashB64);
 }
 
+wxString ibPasswordHash::PasswordToStore(const wxString& stored, bool touched, const wxString& text)
+{
+	// The box never holds the stored password, so whether it was edited is
+	// the only sign: no text the person can type means "keep it".
+	if (!touched)
+		return stored;
+	if (text.IsEmpty())
+		return wxEmptyString;
+	return Hash(text);
+}
+
 bool ibPasswordHash::Verify(const wxString& password, const wxString& storedHash)
 {
+	// An empty column means the account has no password. An empty password
+	// logs that user in. A non-empty password does not.
 	if (storedHash.IsEmpty())
 		return password.IsEmpty();
 

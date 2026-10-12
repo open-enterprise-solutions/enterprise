@@ -17,13 +17,13 @@ bool ibDialogUserItem::ReadUserData(const ibGuid& userGuid, bool copy)
 		m_textName->SetValue(userInfo.m_strUserName);
 		m_textFullName->SetValue(userInfo.m_strUserFullName);
 
-		if (userInfo.IsSetPassword()) {
-			m_bInitialized = false;
-			m_textPassword->SetValue(
-				wxT("12345678")
-			);
-			m_bInitialized = true;
-		}
+		// The box stays empty: a stored password is said by the hint, not by text that could
+		// be typed. Untouched, OK keeps the hash that is stored. A copy starts without a
+		// password; it does not inherit the hash.
+		m_bPasswordTouched = false;
+		m_strUserPassword = copy ? wxString() : userInfo.m_strUserPassword;
+		m_textPassword->SetHint(!copy && userInfo.IsSetPassword()
+			? _("The password is set - type a new one to change it") : wxString());
 
 		if (userInfo.IsSetLanguage()) {
 
@@ -66,7 +66,7 @@ bool ibDialogUserItem::ReadUserData(const ibGuid& userGuid, bool copy)
 #include "backend/metaCollection/metaLanguageObject.h"
 
 ibDialogUserItem::ibDialogUserItem(wxWindow* parent, wxWindowID id, const wxString& title, const wxPoint& pos, const wxSize& size, long style) :
-	wxDialog(parent, id, title, pos, size, style), m_bInitialized(false)
+	wxDialog(parent, id, title, pos, size, style), m_bInitialized(false), m_bPasswordTouched(false)
 {
 	wxDialog::SetSizeHints(wxDefaultSize, wxDefaultSize);
 
@@ -202,17 +202,11 @@ ibDialogUserItem::ibDialogUserItem(wxWindow* parent, wxWindowID id, const wxStri
 
 	m_textPassword->Bind(wxEVT_COMMAND_TEXT_UPDATED,
 		[&](wxCommandEvent& event) {
-			if (m_bInitialized) {
-				const wxString& strUserPassword = m_textPassword->GetValue();
-				if (!strUserPassword.IsEmpty()) {
-					// PBKDF2-SHA256 with a per-user salt; legacy MD5 is still accepted
-					// on login and upgraded lazily in AuthenticateUser (NeedsRehash).
-					m_strUserPassword = ibPasswordHash::Hash(strUserPassword);
-				}
-				else {
-					m_strUserPassword.Clear();
-				}
-			}
+			// Remember that the box was edited. The hash is computed once, on OK:
+			// doing it here ran 600 000 PBKDF2 rounds on every keystroke, and a
+			// box filled with m_bInitialized false must not count.
+			if (m_bInitialized)
+				m_bPasswordTouched = true;
 
 			event.Skip();
 		}
@@ -234,7 +228,8 @@ ibDialogUserItem::ibDialogUserItem(wxWindow* parent, wxWindowID id, const wxStri
 			userInfo.m_strUserGuid = m_userGuid.str();
 			userInfo.m_strUserName = m_textName->GetValue();
 			userInfo.m_strUserFullName = m_textFullName->GetValue();
-			userInfo.m_strUserPassword = m_strUserPassword;
+			userInfo.m_strUserPassword = ibPasswordHash::PasswordToStore(
+				m_strUserPassword, m_bPasswordTouched, m_textPassword->GetValue());
 
 			const ibValueMetaObjectConfiguration* commonObject = activeMetaData->GetCommonMetaObject();
 			wxASSERT(commonObject);
