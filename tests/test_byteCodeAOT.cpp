@@ -143,9 +143,13 @@ TEST(ByteCodeAOT, ListCodeRoundTrip) {
 	ibByteCode src;
 	src.m_id      = MakeGuid(3);
 	src.m_version = MakeGuid(4);
-	src.m_listCode.push_back(MakeUnit(/*OPER_LET*/ 13, 1, wxT("modA")));
-	src.m_listCode.push_back(MakeUnit(/*OPER_ADD*/  1, 2, wxT("modB")));
-	src.m_listCode.push_back(MakeUnit(/*OPER_RET*/  8, 3, wxEmptyString));
+	// The four operands are wire values (array 7/9/11/13, index 8/10/12/14),
+	// not a real frame. OPER_NOP does not read them, so the round-trip can
+	// keep those numbers. A real opcode would refuse them: 13 is OPER_IF,
+	// and its jump of 10 is past a three-instruction tape.
+	src.m_listCode.push_back(MakeUnit(OPER_NOP, 1, wxT("modA")));
+	src.m_listCode.push_back(MakeUnit(OPER_NOP, 2, wxT("modB")));
+	src.m_listCode.push_back(MakeUnit(OPER_NOP, 3, wxEmptyString));
 	src.m_listCode[2].m_strDocPath  = wxT("/Catalog/Object");
 	src.m_listCode[2].m_strFileName = wxT("external.epf");
 
