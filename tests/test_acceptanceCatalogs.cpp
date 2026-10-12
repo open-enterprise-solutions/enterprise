@@ -24,6 +24,7 @@
 #include <nlohmann/json.hpp>
 
 #include "backend/appData.h"
+#include "backend/compiler/compileCode.h"
 #include "backend/databaseLayer/connectionPool.h"
 #include "backend/databaseLayer/databaseQueryBuilder.h"
 #include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
@@ -77,6 +78,9 @@ wxString SqliteTypeOf(const wxString& field)
 
 struct AcceptanceCatalogs : ::testing::Test {
 	wxInitializer m_wxInit;
+	// RunDatabase sets this thread's code style to the configuration's. The binary runs VES
+	// (test_compiler.cpp), so TearDown puts it back, as StyleGuard does.
+	const short m_codeStyle = ibCompileCode::GetCodeStyle();
 	std::shared_ptr<ibDatabaseLayerSQLite> db;
 	wxString dbPath;
 	std::unique_ptr<ibMetaDataConfigurationFile> cfg;
@@ -151,6 +155,7 @@ struct AcceptanceCatalogs : ::testing::Test {
 	void TearDown() override {
 		if (cfg) cfg->CloseDatabase();
 		cfg.reset();
+		ibCompileCode::SetCodeStyle(m_codeStyle);
 		if (ibApplicationInstance::Get() != nullptr)
 			ibApplicationInstance::DestroyAppDataEnv();
 		if (db) db->Close();

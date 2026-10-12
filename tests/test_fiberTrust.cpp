@@ -16,6 +16,7 @@
 #include "backend/appHost.h"
 #include "backend/backend_exception.h"
 #include "backend/backend_mainFrame.h"
+#include "backend/compiler/compileCode.h"
 #include "backend/metadataConfiguration.h"
 #include "backend/metaCollection/metaObject.h"
 #include "backend/metaCollection/metaRoleObject.h"
@@ -72,6 +73,7 @@ public:
 	}
 	~ibBaseForTest()
 	{
+		ibCompileCode::SetCodeStyle(m_codeStyle);
 		if (m_owns)
 			ibApplicationInstance::DestroyAppDataEnv();
 	}
@@ -79,6 +81,9 @@ public:
 private:
 	wxInitializer m_wxInit;
 	bool          m_owns = false;
+	// RunDatabase sets this thread's code style to the configuration's. The binary runs VES
+	// (test_compiler.cpp), so the destructor puts it back, as StyleGuard does.
+	const short   m_codeStyle = ibCompileCode::GetCodeStyle();
 };
 
 class ibRoleSession : public ibSession {
