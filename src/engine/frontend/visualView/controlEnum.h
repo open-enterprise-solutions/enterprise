@@ -52,6 +52,24 @@ class FRONTEND_API ibValueEnumOrientNotebookPage :
 private:
 };
 
+enum ibWindowOpeningMode {
+	Independent = 0,
+	LockOwnerWindow,
+	LockWholeInterface
+};
+
+class FRONTEND_API ibValueEnumWindowOpeningMode :
+	public ibValueEnumeration<ibWindowOpeningMode> {
+	public:
+	ibValueEnumWindowOpeningMode() : ibValueEnumeration() {}
+	virtual void CreateEnumeration() {
+		AddEnumeration(ibWindowOpeningMode::Independent, wxT("Independent"), _("Independent"));
+		AddEnumeration(ibWindowOpeningMode::LockOwnerWindow, wxT("LockOwnerWindow"), _("Lock owner window"));
+		AddEnumeration(ibWindowOpeningMode::LockWholeInterface, wxT("LockWholeInterface"), _("Lock whole interface"));
+	}
+private:
+};
+
 class FRONTEND_API ibValueEnumHorizontalAlignment :
 	public ibValueEnumeration<wxAlignment> {
 	public:

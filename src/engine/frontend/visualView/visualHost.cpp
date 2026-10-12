@@ -654,6 +654,7 @@ void ibVisualHost::ibContentWindow::CreateContent(const ibValueForm* valueForm)
 	// Orientation drives the CONTROLS' sizer; the main sizer stays vertical so the chrome
 	// layers always sit above them.
 	m_host.SetOrientation(valueForm->GetOrient());
+	SetScrollRate(valueForm->FormScrolls() ? 5 : 0, valueForm->FormScrolls() ? 5 : 0);
 
 	// 🛑 A CONTROL THAT FAILED TO BUILD IS NOT ALLOWED TO VANISH QUIETLY (Max, 2026-08-20: "let it at
 	// least tell me there is an error"). The catch below keeps the rest of the form alive — one bad

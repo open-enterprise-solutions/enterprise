@@ -223,6 +223,48 @@ TEST_F(FrontendFormFix, FormSerializeRoundTripPreservesControls)
 		<< "the round-tripped form owns the same controls";
 }
 
+// Width and height of 0 leave the platform to choose. A lock mode is what the child frame reads.
+TEST_F(FrontendFormFix, AFormKeepsItsWindowSizeOpeningModeAndScroll)
+{
+	if (!frameReady)
+		GTEST_SKIP();
+
+	ibValueForm* form = NewForm();
+	ASSERT_NE(form, nullptr);
+	auto* width = dynamic_cast<ibPropertyUInteger*>(form->GetProperty(wxT("Width")));
+	auto* height = dynamic_cast<ibPropertyUInteger*>(form->GetProperty(wxT("Height")));
+	auto* mode = dynamic_cast<ibPropertyEnum<ibValueEnumWindowOpeningMode>*>(form->GetProperty(wxT("WindowOpeningMode")));
+	auto* scroll = dynamic_cast<ibPropertyBoolean*>(form->GetProperty(wxT("Scroll")));
+	ASSERT_NE(width, nullptr);
+	ASSERT_NE(height, nullptr);
+	ASSERT_NE(mode, nullptr);
+	ASSERT_NE(scroll, nullptr);
+	EXPECT_EQ(width->GetValueAsUInteger(), 0u);
+	EXPECT_EQ(mode->GetValueAsEnum(), ibWindowOpeningMode::Independent);
+	EXPECT_TRUE(scroll->GetValueAsBoolean());
+	EXPECT_FALSE(form->LocksTheInterface());
+
+	width->SetValue(480u);
+	height->SetValue(320u);
+	mode->SetValue(ibWindowOpeningMode::LockWholeInterface);
+	scroll->SetValue(false);
+	EXPECT_TRUE(form->LocksTheInterface());
+	EXPECT_EQ(form->GetFormWidth(), 480u);
+	EXPECT_EQ(form->GetFormHeight(), 320u);
+	EXPECT_FALSE(form->FormScrolls());
+
+	ibDataNode saved;
+	ASSERT_TRUE(form->WriteData(saved));
+	width->SetValue(0u);
+	mode->SetValue(ibWindowOpeningMode::Independent);
+	scroll->SetValue(true);
+	ASSERT_TRUE(form->ReadData(saved));
+	EXPECT_EQ(width->GetValueAsUInteger(), 480u);
+	EXPECT_EQ(height->GetValueAsUInteger(), 320u);
+	EXPECT_EQ(mode->GetValueAsEnum(), ibWindowOpeningMode::LockWholeInterface);
+	EXPECT_FALSE(scroll->GetValueAsBoolean());
+}
+
 // ------------------------------ clsid kind-typing ----------------------------
 // Pure classification helpers (clsid.h) — no fixture, no wxApp: they read the
 // high byte of the id. Control identity is by kind, never by C++ RTTI.

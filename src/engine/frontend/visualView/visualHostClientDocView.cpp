@@ -178,6 +178,16 @@ ibView* ibFormVisualDocument::DoCreateView()
 
 /////////////////////////////////////////////////////////////////////////////////////////////
 
+long ibFormVisualDocument::GetChildFrameStyle() const
+{
+	long style = wxDEFAULT_FRAME_STYLE;
+#ifndef OES_USE_WEB
+	if (m_valueForm != nullptr && m_valueForm->LocksTheInterface())
+		style |= wxCREATE_SDI_FRAME;
+#endif
+	return style;
+}
+
 ibFormVisualDocument::ibFormVisualDocument(ibValueForm* valueForm)
 	: m_valueForm(valueForm) {
 
@@ -439,6 +449,18 @@ bool ibFormVisualEditView::OnCreate(ibDocument* doc, long flags)
 			Bind(wxEVT_MENU, &ibFormVisualEditView::OnActiveControlCommand, this);
 			Bind(wxEVT_UPDATE_UI, &ibFormVisualEditView::OnUpdateActiveControlSave, this, wxID_SAVE);
 			Bind(wxEVT_UPDATE_UI, &ibFormVisualEditView::OnUpdateActiveControlSave, this, wxID_SAVEAS);
+		}
+#endif
+#ifndef OES_USE_WEB
+		if (created && m_viewFrame != nullptr && valueForm != nullptr) {
+			const unsigned width = valueForm->GetFormWidth();
+			const unsigned height = valueForm->GetFormHeight();
+			if (width > 0 || height > 0) {
+				const wxSize current = m_viewFrame->GetSize();
+				m_viewFrame->SetSize(m_viewFrame->FromDIP(wxSize(
+					width > 0 ? (int)width : current.GetWidth(),
+					height > 0 ? (int)height : current.GetHeight())));
+			}
 		}
 #endif
 		return created;

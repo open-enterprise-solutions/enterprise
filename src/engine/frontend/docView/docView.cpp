@@ -2655,7 +2655,7 @@ bool ibDocument::OnCreate(const wxString& WXUNUSED(path), long flags)
 			}
 		}
 
-		long style = wxDEFAULT_FRAME_STYLE;
+		long style = GetChildFrameStyle();
 		if (createModal) style = style | wxCREATE_SDI_FRAME;
 
 		ibFrontendMainFrame::CreateChildFrame(view.get(), wxDefaultPosition, wxDefaultSize, style);

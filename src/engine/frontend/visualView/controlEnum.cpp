@@ -14,3 +14,4 @@ ENUM_TYPE_REGISTER(ibValueEnumHorizontalAlignment, "WindowHorizontalAlignment", 
 ENUM_TYPE_REGISTER(ibValueEnumVerticalAlignment, "WindowVerticalAlignment", enum_to_clsid("EN_WAGT"));
 ENUM_TYPE_REGISTER(ibValueEnumTitleLocation, "TitleLocation", enum_to_clsid("EN_TILC"));
 ENUM_TYPE_REGISTER(ibValueEnumRepresentation, "Representation", enum_to_clsid("EN_RPRT"));
+ENUM_TYPE_REGISTER(ibValueEnumWindowOpeningMode, "WindowOpeningMode", enum_to_clsid("EN_WOPN"));

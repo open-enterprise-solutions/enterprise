@@ -183,6 +183,9 @@ public:
     virtual void OnChangeFilename(bool notifyViews);
     virtual bool OnCreate(const wxString& path, long flags);
 
+    // Extra frame bits for this document. A form that locks the interface adds the dialog-child bit.
+    virtual long GetChildFrameStyle() const { return wxDEFAULT_FRAME_STYLE; }
+
     virtual wxCommandProcessor *OnCreateCommandProcessor();
     virtual wxCommandProcessor *GetCommandProcessor() const
         { return m_commandProcessor; }

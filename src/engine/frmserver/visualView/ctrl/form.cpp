@@ -98,6 +98,10 @@ void ibValueForm::OnUpdate(ibDataNode& state, ibVisualHost* host)
 
 	state.SetValue(wxT("Title"), GetControlTitle());
 	state.SetValue(wxT("Enabled"), IsFormEnabled());
+	state.SetValue(wxT("Width"), (s32)GetFormWidth());
+	state.SetValue(wxT("Height"), (s32)GetFormHeight());
+	state.SetValue(wxT("WindowOpeningMode"), (s32)GetWindowOpeningMode());
+	state.SetValue(wxT("Scroll"), FormScrolls());
 	state.SetValue(wxT("ViewOnly"), IsViewOnly());
 	state.SetValue(wxT("Modified"), IsModified());
 	if (!m_lockBadgeHolder.IsEmpty())
@@ -117,6 +121,10 @@ bool ibValueForm::ReadData(const ibDataNode& node)
 	m_propertyFG->SetNodeValue(node.GetProperty(m_propertyFG->GetName()));
 	m_propertyBG->SetNodeValue(node.GetProperty(m_propertyBG->GetName()));
 	m_propertyEnabled->SetNodeValue(node.GetProperty(m_propertyEnabled->GetName()));
+	m_propertyWidth->SetNodeValue(node.GetProperty(m_propertyWidth->GetName()));
+	m_propertyHeight->SetNodeValue(node.GetProperty(m_propertyHeight->GetName()));
+	m_propertyWindowOpeningMode->SetNodeValue(node.GetProperty(m_propertyWindowOpeningMode->GetName()));
+	m_propertyScroll->SetNodeValue(node.GetProperty(m_propertyScroll->GetName()));
 
 	if (!ReadAttributes(node))
 		return false;
@@ -132,6 +140,10 @@ bool ibValueForm::WriteData(ibDataNode& node) const
 	node.SetProperty(m_propertyFG->GetName(), m_propertyFG->GetNodeValue());
 	node.SetProperty(m_propertyBG->GetName(), m_propertyBG->GetNodeValue());
 	node.SetProperty(m_propertyEnabled->GetName(), m_propertyEnabled->GetNodeValue());
+	node.SetProperty(m_propertyWidth->GetName(), m_propertyWidth->GetNodeValue());
+	node.SetProperty(m_propertyHeight->GetName(), m_propertyHeight->GetNodeValue());
+	node.SetProperty(m_propertyWindowOpeningMode->GetName(), m_propertyWindowOpeningMode->GetNodeValue());
+	node.SetProperty(m_propertyScroll->GetName(), m_propertyScroll->GetNodeValue());
 
 	if (!WriteAttributes(node))
 		return false;
