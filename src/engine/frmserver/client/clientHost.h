@@ -62,6 +62,10 @@ public:
 	// The connection closed: the clients logged in through it are logged out.
 	void Disconnect(const void* connection);
 
+	// True when a client has logged in through this connection. The listener uses it to tell a socket that is
+	// only holding a thread from one the half-hour round already watches.
+	bool LoggedIn(const void* connection) const;
+
 	// HOW A CONNECTION IS TOLD SOMETHING — a transport that keeps its connection open (a WebSocket, a file base's
 	// program) hands the host the way it sends a text to it; Disconnect forgets it. A connection without one (an
 	// HTTP request) is never told anything: it asks.
