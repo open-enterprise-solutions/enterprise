@@ -35,12 +35,15 @@ namespace {
 // a lambda has no parent-module frame, so depth ≥ 2 lands on null. The
 // guards convert the segfault into an ibBackendException so the watch
 // panel surfaces an error message instead of taking down the process.
-inline ibRunContext* ResolveOuterFrame(int slot, ibRunContext** ppArrayContext, bool bDelta)
+inline ibRunContext* ResolveOuterFrame(long long slot, ibRunContext** ppArrayContext, bool bDelta, int contextLast)
 {
-	const int depth = slot + (bDelta ? 1 : 0);
-	if (ppArrayContext == nullptr || depth < 0)
+	const long long depth = slot + (bDelta ? 1 : 0);
+	// contextLast is the last index the chain owns (the null terminator).
+	// A depth past it used to read whatever the allocator had placed after
+	// the row — one step past the end was a null, two steps was the heap.
+	if (ppArrayContext == nullptr || depth < 0 || depth > contextLast)
 		return nullptr;
-	return ppArrayContext[depth];
+	return ppArrayContext[(size_t)depth];
 }
 
 // The slot, WITH ITS FRAME'S WIDTH CHECKED — nullptr when the index is not one
@@ -50,11 +53,47 @@ inline ibRunContext* ResolveOuterFrame(int slot, ibRunContext** ppArrayContext, 
 // frame's OWN spare capacity — ten empty ibValue that answered plausibly. The
 // engine only faulted once the spare capacity went away, on a script that had
 // been quietly reading rubbish all along.
-inline ibValue* SlotOfFrame(ibRunContext* frame, int idx)
+inline ibValue* SlotOfFrame(ibRunContext* frame, long long idx)
 {
 	if (frame == nullptr || idx < 0 || idx >= frame->GetLocalCount() || frame->m_pRefLocVars == nullptr)
 		return nullptr;
-	return frame->m_pRefLocVars[idx];
+	return frame->m_pRefLocVars[(size_t)idx];
+}
+
+IB_NOINLINE ibValue& SlotOutOfRange(long long idx, long long localCount)
+{
+	ibBackendCoreException::Error(
+		_("Local index %ld is outside the frame (%ld slots)"), (long)idx, (long)localCount);
+	static ibValue sink;
+	return sink;
+}
+
+IB_NOINLINE void RaiseMissingModule(long long depth)
+{
+	ibBackendCoreException::Error(
+		_("Call targets a module frame this chain does not have (%ld)"), (long)depth);
+}
+
+IB_NOINLINE void RaiseFrameTooSmall(long have, long need)
+{
+	ibBackendCoreException::Error(
+		_("Call frame has %ld slots and was given %ld arguments"), have, need);
+}
+
+IB_NOINLINE const ibValue& ConstOutOfRange(long long idx, long count)
+{
+	ibBackendCoreException::Error(
+		_("Constant index %ld is outside the pool (%ld)"), (long)idx, count);
+	static ibValue sink;
+	return sink;
+}
+
+IB_FORCEINLINE const ibValue& ConstAt(const ibByteCode* bc, long long idx)
+{
+	const long n = (bc != nullptr) ? (long)bc->m_listConst.size() : 0;
+	if (bc != nullptr && idx >= 0 && idx < n)
+		return bc->m_listConst[(size_t)idx];
+	return ConstOutOfRange(idx, n);
 }
 
 // Operand resolution is hot/cold split, and the reason is visible in the
@@ -79,7 +118,7 @@ inline ibValue* SlotOfFrame(ibRunContext* frame, int idx)
 // Defined FIRST so the hot wrappers below can call them without a forward
 // declaration — one signature per function instead of two kept in step by hand.
 
-ibValue& ResolveWriteOuter(int slot, int idx, ibRunContext** ppArrayContext, bool bDelta)
+ibValue& ResolveWriteOuter(long long slot, long long idx, ibRunContext** ppArrayContext, bool bDelta, int contextLast)
 {
 	// WHICH constant, and AT WHICH INSTRUCTION. The bare sentence named neither,
 	// so it could be any operand of any opcode on the line — and the line is only
@@ -95,28 +134,28 @@ ibValue& ResolveWriteOuter(int slot, int idx, ibRunContext** ppArrayContext, boo
 				lAtOpcode = rc->m_lCurLine;
 
 		ibBackendCoreException::Error(
-			_("Attempt to write to a constant value (const index %d, at opcode %ld)"),
-			idx, lAtOpcode);
+			_("Attempt to write to a constant value (const index %ld, at opcode %ld)"),
+			(long)idx, lAtOpcode);
 	}
 
-	ibRunContext* frame = ResolveOuterFrame(slot, ppArrayContext, bDelta);
+	ibRunContext* frame = ResolveOuterFrame(slot, ppArrayContext, bDelta, contextLast);
 	ibValue* pSlot = SlotOfFrame(frame, idx);
 	if (pSlot == nullptr) {
 		ibBackendCoreException::Error(
-			_("Outer frame not bound at depth %d / idx %d (the frame holds %d slots)"),
-			slot + (bDelta ? 1 : 0), idx, frame != nullptr ? (int)frame->GetLocalCount() : -1);
+			_("Outer frame not bound at depth %d / idx %ld (the frame holds %d slots)"),
+			(int)(slot + (bDelta ? 1 : 0)), (long)idx, frame != nullptr ? (int)frame->GetLocalCount() : -1);
 	}
 	return *pSlot;
 }
 
-const ibValue& ResolveReadOuter(int slot, int idx, ibRunContext** ppArrayContext, bool bDelta)
+const ibValue& ResolveReadOuter(long long slot, long long idx, ibRunContext** ppArrayContext, bool bDelta, int contextLast)
 {
-	ibRunContext* frame = ResolveOuterFrame(slot, ppArrayContext, bDelta);
+	ibRunContext* frame = ResolveOuterFrame(slot, ppArrayContext, bDelta, contextLast);
 	ibValue* pSlot = SlotOfFrame(frame, idx);
 	if (pSlot == nullptr) {
 		ibBackendCoreException::Error(
-			_("Outer frame not bound at depth %d / idx %d (the frame holds %d slots)"),
-			slot + (bDelta ? 1 : 0), idx, frame != nullptr ? (int)frame->GetLocalCount() : -1);
+			_("Outer frame not bound at depth %d / idx %ld (the frame holds %d slots)"),
+			(int)(slot + (bDelta ? 1 : 0)), (long)idx, frame != nullptr ? (int)frame->GetLocalCount() : -1);
 	}
 	return *pSlot;
 }
@@ -191,27 +230,37 @@ IB_NOINLINE void RaiseText(const char* text, Args&&... args)
 #define RuntimeError(text, ...) RaiseText(wxTRANSLATE(text), ##__VA_ARGS__)
 
 
-IB_FORCEINLINE ibValue& ResolveWrite(int slot, int idx,
+IB_FORCEINLINE ibValue& ResolveWrite(long long slot, long long idx,
 							  ibValue** pRefLocVars,
+							  long long localCount,
 							  ibRunContext** ppArrayContext,
-							  bool bDelta)
+							  bool bDelta,
+							  int contextLast)
 {
-	if (slot <= 0)
-		return *pRefLocVars[idx];
-	return ResolveWriteOuter(slot, idx, ppArrayContext, bDelta);
+	if (slot <= 0) {
+		if (pRefLocVars != nullptr && idx >= 0 && idx < localCount)
+			return *pRefLocVars[(size_t)idx];
+		return SlotOutOfRange(idx, localCount);
+	}
+	return ResolveWriteOuter(slot, idx, ppArrayContext, bDelta, contextLast);
 }
 
-IB_FORCEINLINE const ibValue& ResolveRead(int slot, int idx,
+IB_FORCEINLINE const ibValue& ResolveRead(long long slot, long long idx,
 								   ibValue** pRefLocVars,
+								   long long localCount,
 								   ibRunContext** ppArrayContext,
 								   const ibByteCode* pByteCode,
-								   bool bDelta)
+								   bool bDelta,
+								   int contextLast)
 {
-	if (slot <= 0)
-		return *pRefLocVars[idx];
+	if (slot <= 0) {
+		if (pRefLocVars != nullptr && idx >= 0 && idx < localCount)
+			return *pRefLocVars[(size_t)idx];
+		return SlotOutOfRange(idx, localCount);
+	}
 	if (slot == DEF_VAR_CONST)
-		return pByteCode->m_listConst[idx];
-	return ResolveReadOuter(slot, idx, ppArrayContext, bDelta);
+		return ConstAt(pByteCode, idx);
+	return ResolveReadOuter(slot, idx, ppArrayContext, bDelta, contextLast);
 }
 
 } // namespace
@@ -233,14 +282,14 @@ IB_FORCEINLINE const ibValue& ResolveRead(int slot, int idx,
 #define locVariable3 *m_pRefLocVars[index3]
 #define locVariable4 *m_pRefLocVars[index4]
 
-#define variable(x)  ResolveWrite(array##x, index##x, pRefLocVars, m_ppArrayContext, bDelta)
+#define variable(x)  ResolveWrite(array##x, index##x, pRefLocVars, pContext->GetLocalCount(), m_ppArrayContext, bDelta, (int)GetParentCount() + 2)
 
 #define variable1 variable(1)
 #define variable2 variable(2)
 #define variable3 variable(3)
 #define variable4 variable(4)
 
-#define cvariable(x) ResolveRead (array##x, index##x, pRefLocVars, m_ppArrayContext, m_pByteCode, bDelta)
+#define cvariable(x) ResolveRead (array##x, index##x, pRefLocVars, pContext->GetLocalCount(), m_ppArrayContext, m_pByteCode, bDelta, (int)GetParentCount() + 2)
 
 #define cvariable1 cvariable(1)
 #define cvariable2 cvariable(2)
@@ -280,10 +329,14 @@ IB_FORCEINLINE const ibValue& ResolveRead(int slot, int idx,
 #define LOAD_ARG_CONST(slot)                                                    \
 	do {                                                                        \
 		if (index1 >= 0) {                                                      \
+			if (array2 < 0 || (unsigned long long)array2 > GetParentCount()    \
+				|| m_ppArrayCode == nullptr)                                    \
+				ibBackendCoreException::Error(                                  \
+					_("Call targets a module frame this chain does not have (%ld)"), (long)array2); \
 			const ibByteCode* const _argPool = (array2 == 0)                    \
 				? m_pByteCode                          /* the SNAPSHOT */       \
 				: m_ppArrayCode[array2]->m_pByteCode;  /* a named parent */     \
-			CopyValue((slot), _argPool->m_listConst[index1]);                   \
+			CopyValue((slot), ConstAt(_argPool, index1));                       \
 		}                                                                       \
 	} while (0)
 
@@ -1253,7 +1306,7 @@ start_label:
 			// (compileCode.cpp ~2955, the check under a second subscript) and OPER_SET_ARRAY_SIZE
 			// (~1075, the dimensions a declaration names). They fall through the same way and are
 			// left for a change of their own: what they should DO is a question, not a label.
-			case OPER_CONST: CopyValue(variable1, m_pByteCode->m_listConst[index2]); break;
+			case OPER_CONST: CopyValue(variable1, ConstAt(m_pByteCode, index2)); break;
 			case OPER_CONSTN: SetTypeNumber(variable1, index2); break;
 			// ⭐ AND WHAT THE DATE AND BOOLEAN TIERS DID WITH A VALUE was write its field and leave the
 			// tag alone, exactly as the comparisons did: `Date dst; dst = src;` came out EMPTY, and so
@@ -1482,7 +1535,7 @@ start_label:
 			{//setting attribute
 				// A member's name lies in the constant pool as a STRING value (the compiler writes it so),
 				// and its text is read where it lies — no copy, nothing converted on the way to FindProp.
-				const ibString& strPropName = m_pByteCode->m_listConst[index2].m_sData;
+				const ibString& strPropName = ConstAt(m_pByteCode, index2).m_sData;
 				const long lPropNum = variable1.FindProp(strPropName);
 				if (lPropNum < 0) CheckAndError(variable1, strPropName);
 				if (!variable1.IsPropWritable(lPropNum)) Raise(ERROR_PROP_NOT_WRITABLE, strPropName);
@@ -1492,7 +1545,7 @@ start_label:
 			case OPER_GET_SCOPE://bare member of a scope binding — identical parent+prop resolve
 			{
 				ibValue* pRetValue = &variable1;
-				const ibString& strPropName = m_pByteCode->m_listConst[index3].m_sData;
+				const ibString& strPropName = ConstAt(m_pByteCode, index3).m_sData;
 				const long lPropNum = variable2.FindProp(strPropName);
 				if (lPropNum < 0) CheckAndError(variable2, strPropName);
 				if (!variable2.IsPropReadable(lPropNum)) Raise(ERROR_PROP_NOT_READABLE, strPropName);
@@ -1536,7 +1589,7 @@ start_label:
 				ibValue* pRetValue = &variable1;
 				ibValue* pVariable2 = &variable2;
 
-				const ibString& funcName = m_pByteCode->m_listConst[index3].m_sData;
+				const ibString& funcName = ConstAt(m_pByteCode, index3).m_sData;
 				// Resolve method number on every call. Bytecode is a const
 				// template at runtime — no opcode-level cache patching.
 				// (The previous "cache" path stored resolved method # /
@@ -1762,7 +1815,7 @@ start_label:
 			// parameter one was built on every row either way — measured 2026-09-09.)
 			case OPER_LINQ_ROW:
 				ibLinqRow(variable1, variable2,
-					m_pByteCode->m_listConst[index3].m_sData, (long)array3);
+					ConstAt(m_pByteCode, index3).m_sData, (long)array3);
 				break;
 
 			case OPER_LINQ_FIELD:
@@ -1837,9 +1890,15 @@ start_label:
 				// has no inner lambda, m_needsHeapFrame=false). Compile
 				// emits OPER_CALL_CLOSURE instead when heap promotion needed.
 				const long lModuleNumber = array2;
+				if (lModuleNumber < 0 || (unsigned long long)lModuleNumber > GetParentCount()
+					|| m_ppArrayCode == nullptr || m_ppArrayCode[lModuleNumber] == nullptr)
+					RaiseMissingModule(lModuleNumber);
 				ibRunContext cRunContext(index3, ibRunLifetime::PerCall);
 				cRunContext.m_lStart = index2;
 				cRunContext.m_lParamCount = array3;
+				if (cRunContext.m_lParamCount > cRunContext.GetLocalCount()
+					|| (cRunContext.m_lParamCount > 0 && cRunContext.m_pRefLocVars == nullptr))
+					RaiseFrameTooSmall(cRunContext.GetLocalCount(), cRunContext.m_lParamCount);
 				cRunContext.m_parentRunContext = pContext;
 				// Function bodies exit via OPER_RET / OPER_ENDFUNC /
 				// OPER_ENDLFUNC (all fall through to lCodeLine = lFinish;
@@ -1888,11 +1947,17 @@ start_label:
 				// can be TAKEN at OPER_LFUNC materialise time and kept
 				// past the return. Operand layout identical to OPER_CALL.
 				const long lModuleNumber = array2;
+				if (lModuleNumber < 0 || (unsigned long long)lModuleNumber > GetParentCount()
+					|| m_ppArrayCode == nullptr || m_ppArrayCode[lModuleNumber] == nullptr)
+					RaiseMissingModule(lModuleNumber);
 				// A captured frame counts its own holders; this hold is the call, and it ends
 				// where the call does — including an exception on the way out.
 				ibRunCallFrame heapCtx(new ibRunCaptureContext(index3));
 				heapCtx->m_lStart = index2;
 				heapCtx->m_lParamCount = array3;
+				if (heapCtx->m_lParamCount > heapCtx->GetLocalCount()
+					|| (heapCtx->m_lParamCount > 0 && heapCtx->m_pRefLocVars == nullptr))
+					RaiseFrameTooSmall(heapCtx->GetLocalCount(), heapCtx->m_lParamCount);
 				heapCtx->m_parentRunContext = pContext;
 				ibValue* pRetValue = &variable1;
 				//load parameters — same SET/SETCONST tape as OPER_CALL
@@ -2221,6 +2286,9 @@ start_label:
 				}
 				pNewCtx->m_lStart          = lambdaEntryIp + 1;  // first body opcode
 				pNewCtx->m_lParamCount     = lambdaParamCount;
+				if (lambdaParamCount > pNewCtx->GetLocalCount()
+					|| (lambdaParamCount > 0 && pNewCtx->m_pRefLocVars == nullptr))
+					RaiseFrameTooSmall(pNewCtx->GetLocalCount(), lambdaParamCount);
 				// Stamp the lambda's ibByteFunction so debugger / call-stack
 				// renders "<lambda@N>" with proper params + locals; eval
 				// host detection uses bfn->m_listLocals to resolve names.
@@ -2281,7 +2349,7 @@ start_label:
 					if (puDef.m_numArray == DEF_VAR_SKIP)
 						RuntimeError("Missing required argument '%s' to function value",
 							bfn->m_listParam[i].m_strName);
-					CopyValue(pNewCtx->m_pLocVars[i], pLocalByteCode->m_listConst[puDef.m_numIndex]);
+					CopyValue(pNewCtx->m_pLocVars[i], ConstAt(pLocalByteCode, puDef.m_numIndex));
 				}
 
 				fn->Execute(pNewCtx, pRetValue, false);
@@ -2657,7 +2725,7 @@ void ibProcUnit::Execute(const ibByteCode& cByteCode, ibByteBinder& br, ibValue*
 		if (byte.m_numOper == OPER_LFUNC) { ++lambdaDepth; continue; }
 		if (byte.m_numOper == OPER_ENDLFUNC) { if (lambdaDepth > 0) --lambdaDepth; continue; }
 		if (lambdaDepth == 0 && byte.m_numOper == OPER_SET_TYPE) {
-			ResolveWrite(byte.m_param1.m_numArray, byte.m_param1.m_numIndex, pRefLocVars, m_ppArrayContext, bDelta)
+			ResolveWrite(byte.m_param1.m_numArray, byte.m_param1.m_numIndex, pRefLocVars, m_cCurContext.GetLocalCount(), m_ppArrayContext, bDelta, (int)GetParentCount() + 2)
 				.SetType(ibValue::GetVTByID(byte.m_param2.m_numArray));
 		}
 	}

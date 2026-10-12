@@ -181,6 +181,7 @@ bool ibByteCodeCache::Load(ibByteCode& outBc, const ibGuid& descId, const wxStri
 	// The same key the row was written under — the platform AND the configuration (see CacheKey).
 	const wxString configMd5 = CacheKey(configDigest);
 
+	bool rejected = false;
 	try {
 		// SELECT bc_blob FROM <t> WHERE descriptor_id = <descId> AND config_md5 = <configMd5>
 		//
@@ -244,11 +245,23 @@ bool ibByteCodeCache::Load(ibByteCode& outBc, const ibGuid& descId, const wxStri
 			res.GetResultBlob(wxT("bc_blob"), blob);
 			if (blob.GetDataLen() > 0) {
 				ibReaderMemory reader(blob);
-				return outBc.DeserializeAOT(reader);
+				if (outBc.DeserializeAOT(reader))
+					return true;
+				// A framed blob the reader refused is not a miss the next
+				// startup should pay for again. Drop the row; the caller
+				// compiles from source and Save writes a fresh one.
+				rejected = true;
 			}
 		}
 	}
 	catch (...) { return false; }
+
+	if (rejected) {
+		ibJournalWarning(wxT("bytecode.cache"),
+			wxT("load %s md5=%s -> rejected; the row is dropped and the module is compiled again"),
+			wxString(descId), configMd5);
+		Invalidate(descId);
+	}
 	return false;
 }
 
