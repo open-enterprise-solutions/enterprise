@@ -124,7 +124,10 @@ enum
 	// everything else — the ordinal IS the method index, so a new name goes at the END or every
 	// later case answers to the wrong verb.
 	enSerializeValue,
-	enDeserializeValue
+	enDeserializeValue,
+	// Appended: the ordinal is the bind-table index.
+	enPutToTempStorage,
+	enGetFromTempStorage
 };
 
 void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
@@ -251,6 +254,8 @@ void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibVal
 	//--- …and value-as-text last, matching the enSerializeValue / enDeserializeValue tail above.
 	helper.AppendFunc(wxT("SerializeValue"), 1, wxT("SerializeValue(value : any)"));
 	helper.AppendFunc(wxT("DeserializeValue"), 1, wxT("DeserializeValue(json : string)"));
+	helper.AppendFunc(wxT("PutToTempStorage"), 2, wxT("PutToTempStorage(value, address)"));
+	helper.AppendFunc(wxT("GetFromTempStorage"), 1, wxT("GetFromTempStorage(address)"));
 };
 
 #include "backend/compiler/enumUnit.h"
@@ -396,6 +401,15 @@ bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 			return true;
 		case enSerializeValue: pvarRetValue = SerializeValue(*paParams[0]); return true;
 		case enDeserializeValue: pvarRetValue = DeserializeValue(paParams[0]->GetString()); return true;
+		case enPutToTempStorage:
+			if (lSizeArray < 1)
+				ibBackendCoreException::Error(_("PutToTempStorage: a value is required"));
+			pvarRetValue = PutToTempStorage(*paParams[0],
+				lSizeArray > 1 && paParams[1] != nullptr ? wxString(paParams[1]->GetString()) : wxString());
+			return true;
+		case enGetFromTempStorage:
+			pvarRetValue = GetFromTempStorage(paParams[0]->GetString());
+			return true;
 		case enEvaluate: pvarRetValue = Evaluate(paParams[0]->GetString()); return true;
 		case enExecute: Execute(paParams[0]->GetString()); return true;
 		case enFormat: pvarRetValue = Format(*paParams[0], paParams[1]->GetString()); return true;

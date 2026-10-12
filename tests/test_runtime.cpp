@@ -2936,3 +2936,42 @@ TEST(RuntimeTest, AnArrayWalkedAndRewalkedIsLetGoOfOnce) {
 	// The frame goes here, with both arrays in it. That is the moment the nightly
 	// caught: passing under a sanitiser is the whole assertion.
 }
+
+TEST_F(BuiltInRuntime, TempStorageKeepsAValueByAddress) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ibValueSystemFunction valueSystem;
+	cc.AddContextVariable(wxT("System"), &valueSystem, true);
+
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("var a public; var b public; var same public;\n")
+		wxT("var one public; var two public; var replaced public;\n")
+		wxT("a = PutToTempStorage(1);\n")
+		wxT("b = PutToTempStorage(2);\n")
+		wxT("same = (a = b);\n")
+		wxT("one = GetFromTempStorage(a);\n")
+		wxT("two = GetFromTempStorage(b);\n")
+		wxT("PutToTempStorage(9, a);\n")
+		wxT("replaced = GetFromTempStorage(a);\n")));
+
+	ibProcUnit pu;
+	wxString strError;
+	ASSERT_TRUE(RunBound(cc, pu, strError)) << strError.ToStdString();
+
+	ibValue v;
+	ASSERT_TRUE(pu.GetPropVal(wxT("same"), v));
+	EXPECT_FALSE(v.GetBoolean());
+	ASSERT_TRUE(pu.GetPropVal(wxT("one"), v));
+	EXPECT_EQ(v.GetInteger(), 1);
+	ASSERT_TRUE(pu.GetPropVal(wxT("two"), v));
+	EXPECT_EQ(v.GetInteger(), 2);
+	ASSERT_TRUE(pu.GetPropVal(wxT("replaced"), v));
+	EXPECT_EQ(v.GetInteger(), 9);
+
+	ibCompileCode missing(wxT("test"), wxT("memory"), false);
+	missing.AddContextVariable(wxT("System"), &valueSystem, true);
+	ASSERT_TRUE(TryCompile(missing, wxT("var x; x = GetFromTempStorage(\"missing\");\n")));
+	ibProcUnit puMissing;
+	wxString missingError;
+	EXPECT_FALSE(RunBound(missing, puMissing, missingError));
+	EXPECT_TRUE(missingError.Contains(wxT("address"))) << missingError.ToStdString();
+}

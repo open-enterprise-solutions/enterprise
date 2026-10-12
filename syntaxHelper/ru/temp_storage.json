@@ -1,0 +1,25 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "ru",
+  "entries": [
+    {
+      "id": "fn.PutToTempStorage",
+      "name_local": "PutToTempStorage",
+      "name_en": "PutToTempStorage",
+      "kind": "system_function",
+      "category_keys": ["global_context", "global_functions"],
+      "signature": "PutToTempStorage(value[, address])",
+      "description": "Строка, адрес. Хранит значение в этом процессе (ПоместитьВоВременноеХранилище). Пустой адрес выделяет новый; заданный адрес заменяет прежнее значение. Это не хранилище временных файлов."
+    },
+    {
+      "id": "fn.GetFromTempStorage",
+      "name_local": "GetFromTempStorage",
+      "name_en": "GetFromTempStorage",
+      "kind": "system_function",
+      "category_keys": ["global_context", "global_functions"],
+      "signature": "GetFromTempStorage(address)",
+      "description": "Значение, которое PutToTempStorage сохранил по этому адресу в этом процессе (ПолучитьИзВременногоХранилища). Неизвестный адрес отклоняется."
+    }
+  ]
+}

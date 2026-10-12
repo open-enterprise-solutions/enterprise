@@ -1,0 +1,25 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "en",
+  "entries": [
+    {
+      "id": "fn.PutToTempStorage",
+      "name_local": "PutToTempStorage",
+      "name_en": "PutToTempStorage",
+      "kind": "system_function",
+      "category_keys": ["global_context", "global_functions"],
+      "signature": "PutToTempStorage(value[, address])",
+      "description": "String, an address. Keeps a value for this process. An empty address allocates a new one; a given address replaces what was there. This is not the temporary-file store."
+    },
+    {
+      "id": "fn.GetFromTempStorage",
+      "name_local": "GetFromTempStorage",
+      "name_en": "GetFromTempStorage",
+      "kind": "system_function",
+      "category_keys": ["global_context", "global_functions"],
+      "signature": "GetFromTempStorage(address)",
+      "description": "The value PutToTempStorage kept at this address in this process. An unknown address is refused."
+    }
+  ]
+}

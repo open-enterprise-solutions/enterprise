@@ -5,6 +5,11 @@
 
 #include "systemManager.h"
 
+#include <map>
+#include <mutex>
+
+#include "core/guid.h"
+
 #include "backend/metaCollection/metaFormObject.h"
 #include "backend/metadataConfiguration.h"
 
@@ -719,6 +724,32 @@ bool ibValueSystemFunction::ValueIsFilled(const ibValue& cData)
 // Printing answers what a value LOOKS like; this answers what it IS. A structure survives the trip,
 // which is the difference between reading a report and reading a sentence about one. Coverage grows
 // with the types: whatever learns to pack itself is in here the day it does, with nothing to add.
+namespace {
+
+std::mutex g_tempValueMutex;
+std::map<wxString, ibValue> g_tempValues;
+
+} // namespace
+
+wxString ibValueSystemFunction::PutToTempStorage(const ibValue& value, const wxString& address)
+{
+	wxString key = address;
+	if (key.IsEmpty())
+		key = ibGuid(ibGuid::newGuid()).str();
+	std::lock_guard<std::mutex> lock(g_tempValueMutex);
+	g_tempValues[key] = value;
+	return key;
+}
+
+ibValue ibValueSystemFunction::GetFromTempStorage(const wxString& address)
+{
+	std::lock_guard<std::mutex> lock(g_tempValueMutex);
+	const auto found = g_tempValues.find(address);
+	if (found == g_tempValues.end())
+		ibBackendCoreException::Error(_("GetFromTempStorage: there is no value at this address"));
+	return found->second;
+}
+
 wxString ibValueSystemFunction::SerializeValue(const ibValue& cData)
 {
 	// THE CONFIGURATION IS THE RUNNING ONE — the same one every other function in this file asks
