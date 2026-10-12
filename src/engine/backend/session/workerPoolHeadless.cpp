@@ -66,27 +66,40 @@ void JoinWorkers(std::vector<std::thread> workers)
 	}
 }
 
-} // namespace
-
-std::vector<std::thread> ibWorkerPoolHeadless::TakeWorkersLocked(bool exitedOnly)
+// Moves the handles `wanted` picks out of `workers`.
+template <typename Worker, typename Wanted>
+std::vector<std::thread> TakeThreads(std::vector<Worker>& workers, Wanted wanted)
 {
 	std::vector<std::thread> out;
 	const auto self = std::this_thread::get_id();
-	auto it = m_workers.begin();
-	while (it != m_workers.end()) {
-		const bool exited = it->exited && it->exited->load(std::memory_order_acquire);
+	auto it = workers.begin();
+	while (it != workers.end()) {
 		// Joining the thread we are on deadlocks. A destructor that
 		// re-enters the pool leaves that handle for the next other
 		// thread, or for Stop.
-		if ((exitedOnly && !exited) || (it->thread.joinable() && it->thread.get_id() == self)) {
+		if (!wanted(*it) || (it->thread.joinable() && it->thread.get_id() == self)) {
 			++it;
 			continue;
 		}
 		if (it->thread.joinable())
 			out.push_back(std::move(it->thread));
-		it = m_workers.erase(it);
+		it = workers.erase(it);
 	}
 	return out;
+}
+
+} // namespace
+
+std::vector<std::thread> ibWorkerPoolHeadless::TakeExitedLocked()
+{
+	return TakeThreads(m_workers, [](const ibWorker& worker) {
+		return worker.exited && worker.exited->load(std::memory_order_acquire);
+	});
+}
+
+std::vector<std::thread> ibWorkerPoolHeadless::TakeJoinableLocked()
+{
+	return TakeThreads(m_workers, [](const ibWorker&) { return true; });
 }
 
 std::vector<ibWorkerPoolHeadless::ibParked>& ibWorkerPoolHeadless::ParkedFibers()
@@ -174,7 +187,7 @@ void ibWorkerPoolHeadless::TrySpawnWorker()
 		    && m_aliveWorkers.load(std::memory_order_acquire) >= m_maxWorkers)
 			return;
 
-		auto finished = TakeWorkersLocked(true);
+		auto finished = TakeExitedLocked();
 		if (!finished.empty())
 			toJoin = std::make_shared<std::vector<std::thread>>(std::move(finished));
 
@@ -763,7 +776,7 @@ void ibWorkerPoolHeadless::Stop()
 	std::vector<std::thread> joining;
 	{
 		std::lock_guard<std::mutex> lk(m_workersMtx);
-		joining = TakeWorkersLocked(false);
+		joining = TakeJoinableLocked();
 	}
 	JoinWorkers(std::move(joining));
 }

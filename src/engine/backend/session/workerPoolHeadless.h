@@ -109,11 +109,14 @@ private:
 	// spawn or for Stop.
 	void TrySpawnWorker();
 
-	// m_workersMtx must be held. Moves handles out so the caller can join
+	// m_workersMtx must be held. Move handles out so the caller can join
 	// them without the lock: a thread_local destructor can call back into
-	// the pool. exitedOnly takes workers whose WorkerLoop has already
-	// returned, so a spawn does not join a thread that is still working.
-	std::vector<std::thread> TakeWorkersLocked(bool exitedOnly);
+	// the pool. The calling thread's own handle stays.
+	// TakeExitedLocked takes only workers whose WorkerLoop has returned,
+	// so a spawn does not join a thread that is still working;
+	// TakeJoinableLocked takes every other one, for Stop.
+	std::vector<std::thread> TakeExitedLocked();
+	std::vector<std::thread> TakeJoinableLocked();
 
 	// Find a session with pending tasks not currently leased and CAS
 	// the lease in. Returns the session pointer + queue, or {nullptr,
