@@ -1012,10 +1012,11 @@ async function netFetch(url, opts){
 
 // Best-effort tab-close cleanup. pagehide (and the legacy beforeunload
 // fallback) fire both on close and on reload/navigation, but the
-// server's GET / mints a fresh session for an unknown id, so a racing
+// server's POST /login registers an unknown id, so a racing
 // reload just lands on a clean slate with the same tabSid — no broken
-// state. sendBeacon is queued by the browser and delivered even after
-// the page unloads; we pass ?sid because beacon can't attach headers.
+// state. The page load itself does not open a session. sendBeacon is
+// queued by the browser and delivered even after the page unloads; we
+// pass ?sid because beacon can't attach headers.
 window.addEventListener('pagehide', () => {
   try {
     navigator.sendBeacon(

@@ -315,6 +315,32 @@ bool ibMetaDataConfigurationFile::ClearDatabase()
 	return true;
 }
 
+bool ibConfigBufferIsReadable(const wxMemoryBuffer& buffer)
+{
+	if (buffer.GetDataLen() == 0)
+		return false;
+
+	try {
+		ibReaderMemory reader(buffer);
+		if (reader.eof())
+			return false;
+
+		std::shared_ptr<ibReaderMemory> header(reader.open_chunk(ibMetaData::eHeaderBlock));
+		if (!header || header->elapsed() < (int)sizeof(u64))
+			return false;
+		if (header->r_u64() != sign_metadata)
+			return false;
+
+		// LoadCommonTree throws when this chunk is missing. A restore must hear
+		// that as "unreadable" while the base is still the one it had.
+		std::shared_ptr<ibReaderMemory> body(reader.open_chunk(g_metaCommonMetadataCLSID));
+		return body != nullptr;
+	}
+	catch (const ibCoreException&) {
+		return false;
+	}
+}
+
 bool ibMetaDataConfigurationFile::LoadConfigFromBuffer(const wxMemoryBuffer& buffer)
 {
 	// Close the old tree's run-state first (unregisters its ctors). For the

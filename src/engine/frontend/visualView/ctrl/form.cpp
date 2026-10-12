@@ -407,6 +407,14 @@ bool ibValueForm::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 		}
 	}
 	else if (lPropAlias == eProperty || lPropAlias == eEvent) {
+		// The tab shows GetControlTitle — the source synonym when Title was never
+		// written. The property itself stays empty, so a script reading ThisForm.Title
+		// saw "" under a titled tab. A later write still stores the property, and
+		// GetControlTitle then prefers that text.
+		if (lPropAlias == eProperty && GetPropName(lPropNum).IsSameAs(wxT("Title"), false)) {
+			pvarPropVal = GetControlTitle();
+			return true;
+		}
 		// Properties + the Events container come from ibValueFrame's surface.
 		return ibValueFrame::GetPropVal(lPropNum, pvarPropVal);
 	}

@@ -21,6 +21,7 @@
 #include "backend/compiler/procUnitState.h"   // m_errorPlace — which opcode raised
 #include "backend/session/session.h"
 #include "backend/appData.h"                // the built-in dispatcher reads appData on entry
+#include "backend/system/value/valueDynamicList.h"
 
 #include <wx/init.h>
 #include <wx/image.h>  // wxInitAllImageHandlers — wx decodes nothing until registered
@@ -3209,4 +3210,20 @@ TEST(RuntimeTest, AnArrayWalkedAndRewalkedIsLetGoOfOnce) {
 
 	// The frame goes here, with both arrays in it. That is the moment the nightly
 	// caught: passing under a sanitiser is the whole assertion.
+}
+
+// A list form's DataSource is a dynamic list. It already knows its source
+// metaobject; the script could not ask, because FillMembers was never bound
+// and named no such method. An empty list (no source) answers empty.
+TEST_F(BuiltInRuntime, DynamicList_GetMetadataIsCallable) {
+	ibValueDynamicList list;
+	const long method = list.FindMethod(wxT("GetMetadata"));
+	ASSERT_GE(method, 0);
+	ibValue result(1);
+	ASSERT_TRUE(list.CallAsFunc(method, result, nullptr, 0));
+	EXPECT_TRUE(result.IsEmpty());
+
+	const long refresh = list.FindMethod(wxT("Refresh"));
+	EXPECT_GE(refresh, 0);
+	EXPECT_NE(refresh, method);
 }

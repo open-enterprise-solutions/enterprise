@@ -84,6 +84,7 @@ add_executable(oes_tests
     test_compositionSettings.cpp
     test_rpcMessage.cpp
     test_mcpToolContract.cpp
+    test_backupRestore.cpp
     test_spreadsheetCompose.cpp
     test_spreadsheetDocument.cpp
     test_spreadsheetDescriptionNode.cpp
@@ -145,6 +146,7 @@ add_executable(oes_tests
     test_valueGeometry.cpp
     test_valueTextFile.cpp
     test_valueHttp.cpp
+    test_pageLoadSession.cpp
     test_valueHttpSecure.cpp
     test_metaDescription.cpp
     test_backendColumnRawDB.cpp
@@ -156,6 +158,7 @@ add_executable(oes_tests
     test_readerWriterMemory.cpp
     test_openAccess.cpp
     test_passwordHash.cpp
+    test_loginName.cpp
     test_programFolder.cpp
     test_md5.cpp
     test_sha256.cpp
