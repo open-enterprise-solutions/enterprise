@@ -60,7 +60,6 @@ TEST(LoginList, AServerDoesNotListUsersUnlessTheBaseAsks)
 
 	const wxString dir = wxFileName::GetTempDir()
 		+ wxFileName::GetPathSeparator() + wxT("oes-login-name-387e");
-	wxFileName::Rmdir(dir);
 	ASSERT_TRUE(wxFileName::Mkdir(dir, 0700, wxPATH_MKDIR_FULL));
 	const wxString path = dir + wxFileName::GetPathSeparator() + wxT("infobase.conf");
 
