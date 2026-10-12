@@ -624,6 +624,17 @@ See `docs/private/eval-scope-refactor.md` for the full architecture.
 
 ---
 
+## Token Economy
+
+Every tool call is a round trip that re-reads the whole context, so cost = turns × context size.
+
+- **One turn, many calls.** Independent edits, reads and checks go out together in one response, not one per turn.
+- **Read pieces, not files.** `Grep` for the place first, then `Read` with `offset`/`limit`; a build goes to a log and only the filtered errors come back.
+- **Wide searches go to an `Explore` agent** — it reads in its own context and returns the conclusion.
+- **One arc, one session.** After an arc is pushed and its lessons are in memory, start fresh (`/clear`).
+
+---
+
 ## AI Agents
 
 Specialized agents for OES development tasks. Defined in `~/.claude/agents/oes-*.md`.
