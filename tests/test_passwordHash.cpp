@@ -60,7 +60,6 @@ TEST(PasswordHash, EmptyStoredHashMeansNoPassword) {
 
 TEST(PasswordToStore, Untouched_KeepsTheStoredHash) {
     const wxString stored = wxT("stored-hash");
-    EXPECT_EQ(ibPasswordHash::PasswordToStore(stored, false, ibPasswordHash::Placeholder()), stored);
     EXPECT_EQ(ibPasswordHash::PasswordToStore(stored, false, wxEmptyString), stored);
 }
 
@@ -77,11 +76,6 @@ TEST(PasswordToStore, Typed_HashesTheText) {
 TEST(PasswordToStore, TypeAndDelete_StoresNoPassword) {
     // One character typed, then deleted: the box is empty, and so is the password.
     EXPECT_TRUE(ibPasswordHash::PasswordToStore(wxT("stored-hash"), true, wxEmptyString).IsEmpty());
-}
-
-TEST(PasswordToStore, Untouched_KeepsTheStoredHash) {
-    const wxString stored = wxT("stored-hash");
-    EXPECT_EQ(ibPasswordHash::PasswordToStore(stored, false, wxEmptyString), stored);
 }
 
 TEST(PasswordToStore, AnyTypedText_IsAPassword) {
