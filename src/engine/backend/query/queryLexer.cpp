@@ -147,6 +147,10 @@ ibQueryScalarFn ibFindQueryScalarFn(const wxString& upperWord)
 		std::map<wxString, ibQueryScalarFn> m;
 		for (const ibQueryScalarFnEntry& e : s_queryScalarFnsEN)
 			m[e.m_text] = e.m_fn;
+		// The same two calls, in the spelling 1C queries use. The canonical text stays English
+		// (ibQueryScalarFnText); only recognition grows.
+		m[wxT("ТИПЗНАЧЕНИЯ")] = ibQueryScalarFn::ValueType;
+		m[wxT("ТИП")]         = ibQueryScalarFn::Type;
 		return m;
 	}();
 	const auto it = s_map.find(upperWord);

@@ -23,6 +23,8 @@
 #include "backend/valueInfo.h"                                    // ibReference (physical reference blob, GetQueryTableId source)
 #include "core/fnumber.h"                                      // ibNumber — the _RTRef type (clsid) keyset tiebreak const
 #include "backend/metaData.h"                                     // ibMetaData (threaded through reads/writes)
+#include "backend/metadataConfiguration.h"                        // activeMetaData — a type name may be a metadata class
+#include "core/types.h"                                           // primitive clsids for TYPE(STRING) / TYPE(СТРОКА)
 #include "backend/objCtor.h"                                      // ibCtorMetaValueType::GetQueryable — reference-target resolution (clsid -> ctor -> queryable, no cast)
 #include "backend/system/value/valueType.h"                      // ibValueTypeDescription::AdjustValue (dot-walk typed empty)
 #include "backend/system/value/valueGuid.h"                      // ibValueGuid — a raw row key reads back AS a guid
@@ -1601,14 +1603,46 @@ ibValue ibTypeValueOf(const ibClassID& clsid)
 	return ibValue(type);
 }
 
+// 1C writes a primitive as TYPE(STRING) or ТИП(СТРОКА). The ctor registry spells the same classes
+// String / Number / Date / Boolean, and asking it for СТРОКА throws "Object is not exist".
+static ibClassID QueryPrimitiveClsid(const wxString& typeName)
+{
+	struct Word { const wxChar* text; ibClassID clsid; };
+	static const Word words[] = {
+		{ wxT("STRING"),  g_valueStringCLSID },
+		{ wxT("СТРОКА"),  g_valueStringCLSID },
+		{ wxT("NUMBER"),  g_valueNumberCLSID },
+		{ wxT("ЧИСЛО"),   g_valueNumberCLSID },
+		{ wxT("DATE"),    g_valueDateCLSID },
+		{ wxT("ДАТА"),    g_valueDateCLSID },
+		{ wxT("BOOLEAN"), g_valueBooleanCLSID },
+		{ wxT("БУЛЕВО"),  g_valueBooleanCLSID },
+	};
+	for (const Word& word : words)
+		if (typeName.IsSameAs(word.text, /*caseSensitive*/ false))
+			return word.clsid;
+	return 0;
+}
+
 ibValue ibTypeValueByName(const wxString& typeName)
 {
 	if (typeName.IsEmpty())
 		return ibValue();
-	ibValuePtr<ibValueType> type(new ibValueType(typeName));
-	// A name nothing answers to yields NOTHING rather than a type with no class: the caller then says
-	// "that is not a type" in its own words, at the position the name was written.
-	return type->GetOwnerTypeClass() != 0 ? ibValue(type) : ibValue();
+	// A primitive is settled here, with no metadata and no throw. The registry name (String) and the
+	// query name (STRING, СТРОКА) are the same class.
+	if (const ibClassID primitive = QueryPrimitiveClsid(typeName))
+		return ibTypeValueOf(primitive);
+
+	// A metadata class (CatalogRef.Goods) or a registered value class. Neither lookup throws: a name
+	// nothing answers to yields nothing, and the caller says "that is not a type" where it was written.
+	ibClassID clsid = 0;
+	if (activeMetaData != nullptr)
+		if (const ibCtorMetaValueType* meta = activeMetaData->GetTypeCtor(typeName))
+			clsid = meta->GetClassType();
+	if (clsid == 0)
+		if (const ibCtorAbstractType* ctor = ibValue::GetAvailableCtor(typeName))
+			clsid = ctor->GetClassType();
+	return clsid != 0 ? ibTypeValueOf(clsid) : ibValue();
 }
 
 bool ibTypeValueClsid(const ibValue& value, ibClassID& outClsid)
