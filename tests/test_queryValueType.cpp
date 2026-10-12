@@ -4,11 +4,24 @@
 
 #include <gtest/gtest.h>
 
+#include <clocale>
+
 #include "backend/query/dbTableProvider.h"
 #include "backend/query/queryParser.h"
 #include "core/types.h"
 
 namespace {
+
+// The query lexer classifies letters with iswalpha, which in the C locale knows
+// only ASCII. A running base has a UTF-8 locale (that is how СТРОКА reaches the
+// type lookup at all). The test process does not, so this asks for one.
+void LettersBeyondAscii()
+{
+	if (std::setlocale(LC_CTYPE, "en_US.UTF-8") == nullptr
+	    && std::setlocale(LC_CTYPE, "en_US.utf8") == nullptr
+	    && std::setlocale(LC_CTYPE, "C.UTF-8") == nullptr)
+		std::setlocale(LC_CTYPE, "C.utf8");
+}
 
 ibQuerySelectPtr Parse(const wxString& text)
 {
@@ -55,6 +68,7 @@ TEST(QueryValueType, EnglishCallParsesAndNamesAString)
 
 TEST(QueryValueType, RussianCallParsesAndNamesAString)
 {
+	LettersBeyondAscii();
 	const ibQuerySelectPtr sel = Parse(wxT(
 		"SELECT PRESENTATION(X.Значение) AS Значение FROM Catalog.T AS X "
 		"WHERE ТИПЗНАЧЕНИЯ(X.Значение) = ТИП(СТРОКА)"));
