@@ -171,6 +171,16 @@ public:
 	static bool ExclusiveMode();
 	static void SetExclusive(bool on);
 	static wxString GeneralLanguage();
+	static ibValue CurrentLanguage();
+	static ibValue LanguageObject(class ibMetaData* meta, const wxString& code);
+	static bool PrivilegedMode();
+	static void SetPrivilegedMode(bool on);
+	static ibValue PredefinedValue(const wxString& path);
+	static ibValue PredefinedValue(class ibMetaData* meta, const wxString& path);
+	// version is accepted and not compared with the stored row. formGiven is
+	// false when the caller omitted formId, which releases every hold.
+	static void LockDataForEdit(const ibValue& data, const ibValue& version = ibValue(), const ibValue& formId = ibValue());
+	static void UnlockDataForEdit(const ibValue& data, const ibValue& formId = ibValue(), bool formGiven = false);
 	static void EndJob(bool force = false);
 
 	static void UserInterruptProcessing();

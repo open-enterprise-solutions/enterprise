@@ -24,6 +24,15 @@
 #include "backend/debugger/debugServer.h"            // …and up to whoever is debugging this run
 #include "backend/logger/logger.h"                   // the registration journal — the durable channel
 #include "backend/job/jobManager.h"                  // ibBackgroundRun — keeps what a windowless run says
+#include "backend/metaCollection/metaLanguageObject.h"  // CurrentLanguage answers a Language object
+#include "backend/metaCollection/genericData.h"          // ResolveQueryConstant — PredefinedValue
+#include "backend/metaCollection/partial/commonObject.h" // a reference's metadata, for the lock path
+#include "backend/lock/lockManager.h"                    // LockDataForEdit takes the same row the form does
+#include "core/stringUtils.h"
+
+#include <map>
+#include <mutex>
+#include <set>
 
 //--- Basic:
 bool ibValueSystemFunction::Boolean(const ibValue& cValue)
@@ -900,6 +909,110 @@ wxString ibValueSystemFunction::GeneralLanguage() {
 	return appData->GetUserLanguageCode();
 }
 
+ibValue ibValueSystemFunction::LanguageObject(ibMetaData* meta, const wxString& code)
+{
+	if (meta == nullptr || code.IsEmpty())
+		return ibValue();
+	for (auto* language : meta->GetAnyArrayObject<ibValueMetaObjectLanguage>(g_metaLanguageCLSID)) {
+		if (language != nullptr && stringUtils::CompareString(language->GetLangCode(), code))
+			return language;
+	}
+	return ibValue();
+}
+
+ibValue ibValueSystemFunction::CurrentLanguage()
+{
+	wxString code;
+	ibMetaData* meta = nullptr;
+	if (ibSession* session = ibSession::Current()) {
+		code = session->GetLanguageCode();
+		meta = session->GetMetaData();
+	}
+	if (code.IsEmpty())
+		code = appData->GetUserLanguageCode();
+	if (meta == nullptr)
+		meta = activeMetaData;
+	return LanguageObject(meta, code);
+}
+
+bool ibValueSystemFunction::PrivilegedMode()
+{
+	ibSession* session = ibSession::Current();
+	return session != nullptr && session->PrivilegedMode();
+}
+
+void ibValueSystemFunction::SetPrivilegedMode(bool on)
+{
+	ibSession* session = ibSession::Current();
+	if (session == nullptr)
+		ibBackendCoreException::Error(_("SetPrivilegedMode: there is no session"));
+	session->SetPrivilegedMode(on);
+}
+
+ibValue ibValueSystemFunction::PredefinedValue(const wxString& path)
+{
+	ibMetaData* meta = nullptr;
+	if (ibSession* session = ibSession::Current())
+		meta = session->GetMetaData();
+	if (meta == nullptr)
+		meta = activeMetaData;
+	return PredefinedValue(meta, path);
+}
+
+ibValue ibValueSystemFunction::PredefinedValue(ibMetaData* meta, const wxString& path)
+{
+	if (path.IsEmpty())
+		ibBackendCoreException::Error(_("PredefinedValue: the path is not given"));
+
+	const wxArrayString parts = wxSplit(path, wxT('.'));
+	if (parts.size() < 3)
+		ibBackendCoreException::Error(_("PredefinedValue: '%s' is not a path of kind, object and name"), path);
+
+	struct Kind { const wxChar* name; ibClassID clsid; };
+	const Kind kinds[] = {
+		{ wxT("Catalog"), g_metaCatalogCLSID },
+		{ wxT("Document"), g_metaDocumentCLSID },
+		{ wxT("Enumeration"), g_metaEnumerationCLSID },
+		{ wxT("ChartOfAccounts"), g_metaChartOfAccountsCLSID },
+		{ wxT("ChartOfCharacteristicTypes"), g_metaChartOfCharacteristicTypesCLSID },
+		{ wxT("ChartOfCalculationTypes"), g_metaChartOfCalculationTypesCLSID },
+	};
+	ibClassID clsid = 0;
+	for (const Kind& kind : kinds) {
+		if (parts[0].CmpNoCase(kind.name) == 0) {
+			clsid = kind.clsid;
+			break;
+		}
+	}
+	if (clsid == 0)
+		ibBackendCoreException::Error(_("PredefinedValue: '%s' is not a metadata kind"), parts[0]);
+	if (meta == nullptr)
+		ibBackendCoreException::Error(_("PredefinedValue: there is no configuration"));
+
+	ibValueMetaObject* object = nullptr;
+	for (auto* candidate : meta->GetAnyArrayObject(clsid)) {
+		if (candidate != nullptr && candidate->GetName().CmpNoCase(parts[1]) == 0) {
+			object = candidate;
+			break;
+		}
+	}
+	if (object == nullptr)
+		ibBackendCoreException::Error(_("PredefinedValue: '%s' is not a %s"), parts[1], parts[0]);
+
+	wxString member;
+	for (size_t i = 2; i < parts.size(); ++i) {
+		if (!member.IsEmpty())
+			member += wxT('.');
+		member += parts[i];
+	}
+
+	auto* data = dynamic_cast<ibValueMetaObjectGenericData*>(object);
+	ibValue out;
+	if (data == nullptr || !data->ResolveQueryConstant(member, out))
+		ibBackendCoreException::Error(_("PredefinedValue: '%s' is not a predefined name of '%s'"), member, parts[1]);
+	return out;
+}
+
 #include "backend/metaData.h"
 
 void ibValueSystemFunction::EndJob(bool force) //EndJob
@@ -1094,4 +1207,117 @@ ibValue ibValueSystemFunction::RunBackground(const wxString& strProcedureName, i
 	// call lands here, on the caller's stack, with the script's try/except as the
 	// natural handling point.
 	return new ibValueBackgroundJob(manager->StartBackground(strProcedureName, args));
+}
+
+namespace {
+
+struct EditLockKey {
+	wxString session;
+	wxString object;
+	bool operator<(const EditLockKey& other) const {
+		if (session != other.session)
+			return session < other.session;
+		return object < other.object;
+	}
+};
+
+struct EditLockHold {
+	ibLockHandle handle;
+	std::set<wxString> forms;
+};
+
+std::mutex& EditLockGate()
+{
+	static std::mutex gate;
+	return gate;
+}
+
+std::map<EditLockKey, EditLockHold>& EditLocks()
+{
+	static std::map<EditLockKey, EditLockHold> held;
+	return held;
+}
+
+ibValueReferenceDataObject* AsReference(const ibValue& data)
+{
+	ibValueReferenceDataObject* ref = nullptr;
+	if (!data.ConvertToValue(ref))
+		return nullptr;
+	return ref;
+}
+
+// The reference is checked before the session, so a bad argument is named
+// even when no session is current.
+const ibValueReferenceDataObject* RequireReference(const ibValue& data, const wxString& verb)
+{
+	const ibValueReferenceDataObject* ref = AsReference(data);
+	if (ref == nullptr)
+		ibBackendCoreException::Error(_("%s: the data is not a reference"), verb);
+	if (!ref->GetGuid().isValid())
+		ibBackendCoreException::Error(_("%s: the reference is empty"), verb);
+	return ref;
+}
+
+} // namespace
+
+void ibValueSystemFunction::LockDataForEdit(const ibValue& data, const ibValue& version, const ibValue& formId)
+{
+	// version is part of the call so existing code compiles. Comparing it
+	// with the stored row needs a read this path does not do.
+	(void)version;
+
+	const ibValueReferenceDataObject* ref = RequireReference(data, wxT("LockDataForEdit"));
+	ibSession* session = ibSession::Current();
+	if (session == nullptr)
+		ibBackendCoreException::Error(_("LockDataForEdit: there is no session"));
+	const ibValueMetaObjectRecordData* meta = ref->GetMetaObject();
+	if (meta == nullptr)
+		ibBackendCoreException::Error(_("LockDataForEdit: the reference has no metadata"));
+	ibLockManager* locks = ibApplicationInstance::GetLockManager();
+	if (locks == nullptr)
+		ibBackendCoreException::Error(_("LockDataForEdit: the lock manager is not initialised"));
+
+	const EditLockKey key{ session->GetId(), wxString(ref->GetGuid()) };
+	const wxString form = formId.GetString();
+	std::lock_guard<std::mutex> gate(EditLockGate());
+	auto& held = EditLocks();
+	auto it = held.find(key);
+	if (it != held.end() && it->second.handle.IsValid()) {
+		it->second.forms.insert(form);
+		return;
+	}
+
+	// Same-owner re-entry (a form already holds the row) answers with an
+	// empty handle and does not insert a second row. Keep that handle only
+	// when it owns a row, so Unlock cannot release a lock it did not take.
+	ibLockHandle handle = locks->Acquire({
+		ibLockItem::ForRef(meta->GetDocPath(), ibGuid(ref->GetGuid()))
+	});
+	EditLockHold created;
+	created.handle = std::move(handle);
+	created.forms.insert(form);
+	held.insert_or_assign(key, std::move(created));
+}
+
+void ibValueSystemFunction::UnlockDataForEdit(const ibValue& data, const ibValue& formId, bool formGiven)
+{
+	const ibValueReferenceDataObject* ref = RequireReference(data, wxT("UnlockDataForEdit"));
+	ibSession* session = ibSession::Current();
+	if (session == nullptr)
+		ibBackendCoreException::Error(_("UnlockDataForEdit: there is no session"));
+
+	const EditLockKey key{ session->GetId(), wxString(ref->GetGuid()) };
+	std::lock_guard<std::mutex> gate(EditLockGate());
+	auto& held = EditLocks();
+	auto it = held.find(key);
+	if (it == held.end())
+		return;
+	if (formGiven)
+		it->second.forms.erase(formId.GetString());
+	else
+		it->second.forms.clear();
+	if (!it->second.forms.empty())
+		return;
+	it->second.handle.Release();
+	held.erase(it);
 }
