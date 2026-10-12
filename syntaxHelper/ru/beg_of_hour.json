@@ -1,0 +1,16 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "ru",
+  "entries": [
+    {
+      "id": "fn.BegOfHour",
+      "name_local": "BegOfHour",
+      "name_en": "BegOfHour",
+      "kind": "system_function",
+      "category_keys": ["global_context", "global_functions"],
+      "signature": "BegOfHour(d : date)",
+      "description": "Дата. Начало часа, которому принадлежит дата (НачалоЧаса): минуты и секунды нулевые, день не меняется. BegOfHour(Date(2024, 3, 15, 14, 40, 7)) — 15 марта 2024 14:00:00."
+    }
+  ]
+}

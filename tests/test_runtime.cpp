@@ -2936,3 +2936,36 @@ TEST(RuntimeTest, AnArrayWalkedAndRewalkedIsLetGoOfOnce) {
 	// The frame goes here, with both arrays in it. That is the moment the nightly
 	// caught: passing under a sanitiser is the whole assertion.
 }
+
+TEST_F(BuiltInRuntime, BegOfHourFloorsToTheHour) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ibValueSystemFunction valueSystem;
+	cc.AddContextVariable(wxT("System"), &valueSystem, true);
+
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("var hour public; var minute public; var second public; var day public;\n")
+		wxT("var keptHour public; var keptMinute public;\n")
+		wxT("var floored; floored = BegOfHour(Date(2024, 3, 15, 14, 40, 7));\n")
+		wxT("hour = GetHour(floored); minute = GetMinute(floored);\n")
+		wxT("second = GetSecond(floored); day = GetDay(floored);\n")
+		wxT("var exact; exact = BegOfHour(Date(2024, 3, 15, 14, 0, 0));\n")
+		wxT("keptHour = GetHour(exact); keptMinute = GetMinute(exact);\n")));
+
+	ibProcUnit pu;
+	wxString strError;
+	ASSERT_TRUE(RunBound(cc, pu, strError)) << strError.ToStdString();
+
+	ibValue v;
+	ASSERT_TRUE(pu.GetPropVal(wxT("hour"), v));
+	EXPECT_EQ(v.GetInteger(), 14);
+	ASSERT_TRUE(pu.GetPropVal(wxT("minute"), v));
+	EXPECT_EQ(v.GetInteger(), 0);
+	ASSERT_TRUE(pu.GetPropVal(wxT("second"), v));
+	EXPECT_EQ(v.GetInteger(), 0);
+	ASSERT_TRUE(pu.GetPropVal(wxT("day"), v));
+	EXPECT_EQ(v.GetInteger(), 15);
+	ASSERT_TRUE(pu.GetPropVal(wxT("keptHour"), v));
+	EXPECT_EQ(v.GetInteger(), 14);
+	ASSERT_TRUE(pu.GetPropVal(wxT("keptMinute"), v));
+	EXPECT_EQ(v.GetInteger(), 0);
+}
