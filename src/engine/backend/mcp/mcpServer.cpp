@@ -417,11 +417,12 @@ private:
 		// the refusal, repeated the call and left three unnamed common modules behind in somebody's
 		// configuration. A false refusal is worse than a slow answer: it makes a caller act.
 		//
-		// Matched to the wait in RunTool, which gives the main thread five minutes before it
-		// answers on its own, plus a margin so the transport never gives up FIRST — whoever times
-		// out should be the one that can explain why.
-		m_server.set_read_timeout(std::chrono::minutes(6));
-		m_server.set_write_timeout(std::chrono::minutes(6));
+		// Matched to the wait in RunTool, which gives the main thread thirty minutes before it
+		// answers on its own, plus a margin so the transport never gives up FIRST - whoever times
+		// out should be the one that can explain why. A long config_apply is that wait; the
+		// progress lines that keep the client alive travel on the listen stream, not this POST.
+		m_server.set_read_timeout(std::chrono::minutes(31));
+		m_server.set_write_timeout(std::chrono::minutes(31));
 
 		// ⚠ AND HOW LONG A CONNECTION MAY SIT IDLE, which is the half that actually bit. httplib
 		// closes a kept-alive connection after FIVE SECONDS of silence
@@ -1351,8 +1352,21 @@ bool ibMcpServer::AskModel(const wxString& question, wxString& refusal)
 // stops US waiting — so the task may still run after this function has returned and its stack is
 // gone. Everything it touches therefore lives in the shared block, and the arguments are COPIED
 // into it rather than pointed at.
+wxString ibMcpProgressNotification(const ibDataValue& token, int progress, const wxString& message)
+{
+	ibDataNode note;
+	note.SetValue(wxT("jsonrpc"), wxString(wxT("2.0")));
+	note.SetValue(wxT("method"), wxString(wxT("notifications/progress")));
+
+	ibDataNode& params = note.Child(wxT("params"));
+	params.AddField(wxT("progressToken"), token);
+	params.AddField(wxT("progress"), ibDataValue::Int(progress));
+	params.SetValue(wxT("message"), message);
+	return ibRpcRenderNode(note);
+}
+
 bool ibMcpServer::RunTool(const class ibMcpTool* tool, const ibDataNode& arguments,
-	ibDataNode& payload, wxString& refusal, bool* outPending)
+	ibDataNode& payload, wxString& refusal, bool* outPending, const ibDataValue* progressToken)
 {
 	if (outPending != nullptr)
 		*outPending = false;
@@ -1396,26 +1410,71 @@ bool ibMcpServer::RunTool(const class ibMcpTool* tool, const ibDataNode& argumen
 	});
 
 	// ⚠ FINITE, AND THE NUMBER IS A COMPROMISE STATED OUT LOUD. The wait is not there to bound the
-	// WORK — applying a configuration legitimately takes minutes and must not be cut off — it is
+	// WORK - applying a configuration legitimately takes many minutes and must not be cut off - it is
 	// there so a MODAL DIALOG cannot wedge the server for the rest of the day: the main thread is
-	// then busy until a person clicks, and nobody is watching this socket. Long enough for real
-	// work, finite so a forgotten dialog is answered instead of hung on.
-	if (done.wait_for(std::chrono::minutes(5)) != std::future_status::ready) {
-		// ⚠ A WARNING — the journal's word for "nobody has to be stopped for this". Written as an error it
+	// then busy until a person clicks, and nobody is watching this socket. Long enough for a real
+	// apply, finite so a forgotten dialog is answered instead of hung on.
+	//
+	// ⚠ THE POST ITSELF STAYS SILENT until this returns, and a client drops a silent call at about
+	// three minutes. The listen stream (GET /) is where a pulse can go. A caller that sent
+	// params._meta.progressToken gets notifications/progress, which is what resets that timeout.
+	// A caller that did not gets a debug notifications/message, so the stream is not idle. A caller
+	// that opened neither the stream nor a token still has only the silent POST.
+	const auto stillRunning = [&](int step) {
+		if (m_listener == nullptr)
+			return;
+		const wxString message = wxString::Format(wxT("%s is still running"), toolName);
+		if (progressToken != nullptr && !progressToken->IsEmpty()) {
+			m_listener->WriteToStream(ibMcpProgressNotification(*progressToken, step, message));
+			return;
+		}
+		if (m_logLevel.load() > ibMcpLevelRank(wxT("debug")))
+			return;
+		ibDataNode note;
+		note.SetValue(wxT("jsonrpc"), wxString(wxT("2.0")));
+		note.SetValue(wxT("method"), wxString(wxT("notifications/message")));
+		ibDataNode& params = note.Child(wxT("params"));
+		params.SetValue(wxT("level"), wxString(wxT("debug")));
+		params.SetValue(wxT("logger"), wxString(wxT("mcp")));
+		params.SetValue(wxT("data"), message);
+		m_listener->WriteToStream(ibRpcRenderNode(note));
+	};
+
+	using clock = std::chrono::steady_clock;
+	const auto cap = std::chrono::duration_cast<clock::duration>(std::chrono::minutes(30));
+	const auto pulseEvery = std::chrono::duration_cast<clock::duration>(std::chrono::seconds(20));
+	const auto started = clock::now();
+	int progress = 0;
+	bool finished = false;
+	while (clock::now() - started < cap) {
+		const auto left = cap - (clock::now() - started);
+		if (left <= clock::duration::zero())
+			break;
+		const auto slice = std::min(left, pulseEvery);
+		if (done.wait_for(slice) == std::future_status::ready) {
+			finished = true;
+			break;
+		}
+		if (clock::now() - started >= cap)
+			break;
+		stillRunning(++progress);
+	}
+	if (!finished) {
+		// ⚠ A WARNING - the journal's word for "nobody has to be stopped for this". Written as an error it
 		// put a modal "Designer Error" box (and a dump) on top of the very dialog the call was waiting
 		// behind, in front of a person who had pressed nothing (2026-09-28).
-		ibJournalWarning(wxT("mcp"), wxT("%s: not finished within five minutes - most likely waiting behind "
+		ibJournalWarning(wxT("mcp"), wxT("%s: not finished within thirty minutes - most likely waiting behind "
 			"a dialog; the call still runs when it is answered"), toolName);
 
 		// 🛑 AND THIS IS NOT A REFUSAL, WHICH IS THE WHOLE POINT OF SAYING SO OUT LOUD. The work is
 		// queued and WILL run; what expired is our patience, not the call. Reported as an error it
 		// reads to a caller as "this did not happen", and the caller then does the one thing that
-		// makes it worse — asks again. That is exactly how three unnamed common modules were left
+		// makes it worse - asks again. That is exactly how three unnamed common modules were left
 		// in somebody's configuration.
 		if (outPending != nullptr)
 			*outPending = true;
 
-		refusal = ibMcpText("The designer did not get to this within five minutes - it is most likely "
+		refusal = ibMcpText("The designer did not get to this within thirty minutes - it is most likely "
 			"showing a dialog and waiting for a person. THE CALL WAS NOT ABANDONED and nothing was "
 			"left half-done: it runs when the window is answered, and the outcome is simply not "
 			"known here yet.\n"
@@ -3056,7 +3115,16 @@ wxString ibMcpServer::Answer(const wxString& request, const ibMcpWireHeaders& he
 					refusal = fault;
 				}
 				else {
-					ok = RunTool(tool, arguments, payload, refusal, &pending);
+					// A long call stays silent on this POST. The token, when the caller sent one,
+					// is what the progress lines on the listen stream are matched against.
+					const ibDataValue* progressToken = nullptr;
+					if (meta != nullptr) {
+						if (const ibDataValue* tok = meta->FindField(wxT("progressToken"))) {
+							if (tok->Kind() == ibDataKind::String || tok->Kind() == ibDataKind::Number)
+								progressToken = tok;
+						}
+					}
+					ok = RunTool(tool, arguments, payload, refusal, &pending, progressToken);
 				}
 			}
 			// The query family FIRST, and the positioned one before its parent:

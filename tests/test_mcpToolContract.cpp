@@ -34,6 +34,7 @@
 
 #include "backend/mcp/mcpTool.h"
 #include "backend/mcp/mcpClipboard.h"
+#include "backend/mcp/mcpServer.h"
 #include "core/serialize/dataBuilder.h"
 
 #include <wx/dir.h>        // the ASCII rule reads the MCP sources themselves
@@ -850,4 +851,23 @@ TEST(McpClipboard, OnlyFilledSlots_AreListed)
 
 	EXPECT_NE(std::find(slots.begin(), slots.end(), wxT("test.listed")), slots.end());
 	EXPECT_EQ(std::find(slots.begin(), slots.end(), wxT("test.notlisted")), slots.end());
+}
+
+// A long tools/call stays silent on its POST. The listen stream carries this line, and a client
+// resets its request timeout when the progressToken matches the one it sent.
+TEST(McpProgress, NotificationNamesTheMethodAndKeepsTheToken)
+{
+	const wxString asText = ibMcpProgressNotification(
+		ibDataValue::String(wxT("apply-1")), 3, wxT("config_apply is still running"));
+	EXPECT_NE(asText.Find(wxT("notifications/progress")), wxNOT_FOUND) << asText.utf8_str();
+	EXPECT_NE(asText.Find(wxT("apply-1")), wxNOT_FOUND) << asText.utf8_str();
+	EXPECT_NE(asText.Find(wxT("config_apply is still running")), wxNOT_FOUND) << asText.utf8_str();
+	EXPECT_EQ(asText.Find(wxT("\"id\"")), wxNOT_FOUND) << asText.utf8_str();
+
+	const wxString asNumber = ibMcpProgressNotification(
+		ibDataValue::Int(42), 1, wxT("config_apply is still running"));
+	EXPECT_NE(asNumber.Find(wxT("notifications/progress")), wxNOT_FOUND) << asNumber.utf8_str();
+	EXPECT_NE(asNumber.Find(wxT("42")), wxNOT_FOUND) << asNumber.utf8_str();
+	EXPECT_EQ(asNumber.Find(wxT("\"42\"")), wxNOT_FOUND)
+		<< "a numeric token stays a number: " << asNumber.utf8_str();
 }

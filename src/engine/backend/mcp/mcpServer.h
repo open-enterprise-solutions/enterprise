@@ -46,6 +46,11 @@
 #include <wx/string.h>
 
 class ibSession;
+class ibDataValue;
+
+// notifications/progress, the line a client uses to keep a long call alive. The token is copied
+// as it arrived (a string or a number). progress climbs by one each time the call is still running.
+BACKEND_API wxString ibMcpProgressNotification(const ibDataValue& token, int progress, const wxString& message);
 
 // WHAT A PERSON SET. Kept apart from the server so the designer's settings page
 // edits a value and hands it over, instead of poking at a running object.
@@ -297,7 +302,8 @@ private:
 	// carry a third state, and the text that explains it is read by a person while the caller is a
 	// machine, for which false is false.
 	bool RunTool(const class ibMcpTool* tool, const class ibDataNode& arguments,
-		class ibDataNode& payload, wxString& refusal, bool* outPending = nullptr);
+		class ibDataNode& payload, wxString& refusal, bool* outPending = nullptr,
+		const ibDataValue* progressToken = nullptr);
 
 	// The configuration its session works in — what every answer here is about. Null while it is stopped.
 	class ibMetaDataConfigurationBase* GetMetaData() const;
