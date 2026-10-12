@@ -82,12 +82,15 @@ public:
 	// useful — they're silently dropped here.
 	void SetMinSize(const wxSize& /*sz*/) {}
 	void Layout() {}
+	void Show(bool show) { m_shown = show; }
+	bool IsShown() const { return m_shown; }
 
 private:
 	void AttachChild(wxObject* child, const AddParams& params);
 
 	wxObject*         m_owner = nullptr;
 	std::vector<Item> m_items;
+	bool              m_shown = true;
 };
 
 class ibWebBoxSizer : public ibWebSizer {

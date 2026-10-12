@@ -86,6 +86,7 @@ nlohmann::json ibWebSizer::ToJSON() const
 {
 	nlohmann::json node = {
 		{ "type", GetSizerType() },
+		{ "visible", m_shown },
 	};
 	if (!m_items.empty()) {
 		nlohmann::json arr = nlohmann::json::array();

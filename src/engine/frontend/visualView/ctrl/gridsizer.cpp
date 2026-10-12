@@ -42,6 +42,11 @@ void ibValueGridSizer::Update(wxObject* wxobject, ibVisualHost* visualHost)
 	gridsizer->SetRows(m_propertyRows->GetValueAsUInteger());
 	gridsizer->SetCols(m_propertyCols->GetValueAsUInteger());
 	gridsizer->SetMinSize(m_propertyMinSize->GetValueAsSize());
+	gridsizer->Show(m_propertyVisible->GetValueAsBoolean() && IsAvailable());
+#ifndef OES_USE_WEB
+	if (wxWindow* owner = gridsizer->GetContainingWindow())
+		owner->Layout();
+#endif
 	UpdateSizer(gridsizer);
 }
 
@@ -57,6 +62,7 @@ bool ibValueGridSizer::ReadData(const ibDataNode& node)
 {
 	m_propertyRows->SetNodeValue(node.GetProperty(m_propertyRows->GetName()));
 	m_propertyCols->SetNodeValue(node.GetProperty(m_propertyCols->GetName()));
+	m_propertyVisible->SetNodeValue(node.GetProperty(m_propertyVisible->GetName()));
 
 	return ibValueSizer::ReadData(node);
 }
@@ -65,6 +71,7 @@ bool ibValueGridSizer::WriteData(ibDataNode& node) const
 {
 	node.SetProperty(m_propertyRows->GetName(), m_propertyRows->GetNodeValue());
 	node.SetProperty(m_propertyCols->GetName(), m_propertyCols->GetNodeValue());
+	node.SetProperty(m_propertyVisible->GetName(), m_propertyVisible->GetNodeValue());
 
 	return ibValueSizer::WriteData(node);
 }

@@ -171,6 +171,8 @@ private:
 	ibPropertyEnum<ibValueEnumOrient>* m_propertyOrient = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumOrient>>(m_categorySizer, wxT("Orient"), _("Orient"),
 		_("How the sizer lays out its controls: vertically (the default, one under another) or horizontally (side by side)."),
 		wxVERTICAL);
+	ibPropertyBoolean* m_propertyVisible = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categorySizer, wxT("Visible"), _("Visible"),
+		_("Whether the group is shown. Hiding it hides everything inside it. The controls keep their data and can be shown again."), true);
 };
 
 #include <wx/wrapsizer.h>
@@ -198,6 +200,8 @@ private:
 	ibPropertyEnum<ibValueEnumOrient>* m_propertyOrient = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumOrient>>(m_categorySizer, wxT("Orient"), _("Orient"),
 		_("The direction controls are laid out in. When a row (or column) has no room for the next control, it wraps to a new one. Horizontal by default."),
 		wxHORIZONTAL);
+	ibPropertyBoolean* m_propertyVisible = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categorySizer, wxT("Visible"), _("Visible"),
+		_("Whether the group is shown. Hiding it hides everything inside it. The controls keep their data and can be shown again."), true);
 };
 
 class ibValueStaticBoxSizer : public ibValueSizer {
@@ -262,6 +266,8 @@ private:
 		_("The number of rows in the grid. 0 (the default): as many as the controls need, given the column count."), 0);
 	ibPropertyUInteger* m_propertyCols = ibPropertyObject::CreateProperty<ibPropertyUInteger>(m_categorySizer, wxT("Cols"), _("Cols"),
 		_("The number of columns in the grid; controls fill it row by row, left to right. All cells get the same size. Default 2."), 2);
+	ibPropertyBoolean* m_propertyVisible = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categorySizer, wxT("Visible"), _("Visible"),
+		_("Whether the group is shown. Hiding it hides everything inside it. The controls keep their data and can be shown again."), true);
 };
 
 #endif 

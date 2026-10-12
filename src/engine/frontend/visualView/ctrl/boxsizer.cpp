@@ -42,6 +42,11 @@ void ibValueBoxSizer::Update(wxObject* wxobject, ibVisualHost *visualHost)
 #endif
 	boxSizer->SetOrientation(m_propertyOrient->GetValueAsInteger());
 	boxSizer->SetMinSize(m_propertyMinSize->GetValueAsSize());
+	boxSizer->Show(m_propertyVisible->GetValueAsBoolean() && IsAvailable());
+#ifndef OES_USE_WEB
+	if (wxWindow* owner = boxSizer->GetContainingWindow())
+		owner->Layout();
+#endif
 	UpdateSizer(boxSizer);
 }
 
@@ -56,12 +61,14 @@ void ibValueBoxSizer::Cleanup(wxObject* obj, ibVisualHost *visualHost)
 bool ibValueBoxSizer::ReadData(const ibDataNode& node)
 {
 	m_propertyOrient->SetNodeValue(node.GetProperty(m_propertyOrient->GetName()));
+	m_propertyVisible->SetNodeValue(node.GetProperty(m_propertyVisible->GetName()));
 	return ibValueSizer::ReadData(node);
 }
 
 bool ibValueBoxSizer::WriteData(ibDataNode& node) const
 {
 	node.SetProperty(m_propertyOrient->GetName(), m_propertyOrient->GetNodeValue());
+	node.SetProperty(m_propertyVisible->GetName(), m_propertyVisible->GetNodeValue());
 	return ibValueSizer::WriteData(node);
 }
 

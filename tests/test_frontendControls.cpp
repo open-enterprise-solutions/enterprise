@@ -16,7 +16,14 @@
 #include "frontend/visualView/ctrl/textBox.h"    // ibValueTextBox
 #include "frontend/visualView/ctrl/gridBox.h"    // ibValueGridBox
 #include "frontend/visualView/ctrl/notebook.h"   // ibValueNotebook + g_controlNotebook*CLSID
+#include "frontend/visualView/ctrl/sizer.h"
 #include "backend/compiler/value.h"
+#include "core/serialize/dataBuilder.h"
+
+#include <wx/button.h>
+#include <wx/frame.h>
+#include <wx/panel.h>
+#include <wx/sizer.h>
 
 #include <wx/buffer.h>                            // wxMemoryBuffer (form serialize round-trip)
 
@@ -221,6 +228,44 @@ TEST_F(FrontendFormFix, FormSerializeRoundTripPreservesControls)
 	ASSERT_TRUE(dst->LoadForm(buffer)) << "LoadForm rebuilds the control tree";
 	EXPECT_EQ(dst->GetControlList().size(), srcCount)
 		<< "the round-tripped form owns the same controls";
+}
+
+TEST_F(FrontendRuntimeFix, AHiddenBoxSizerHidesItsChildAndTheFlagRoundTrips)
+{
+	if (!ready)
+		GTEST_SKIP();
+
+	ibValueBoxSizer box;
+	ibValueWrapSizer wrap;
+	ibValueGridSizer grid;
+	for (ibPropertyObject* owner : { static_cast<ibPropertyObject*>(&box),
+			static_cast<ibPropertyObject*>(&wrap), static_cast<ibPropertyObject*>(&grid) }) {
+		ibPropertyBoolean* vis = dynamic_cast<ibPropertyBoolean*>(owner->GetProperty(wxT("Visible")));
+		ASSERT_NE(vis, nullptr);
+		EXPECT_TRUE(vis->GetValueAsBoolean());
+	}
+
+	ibPropertyBoolean* vis = dynamic_cast<ibPropertyBoolean*>(box.GetProperty(wxT("Visible")));
+	vis->SetValue(false);
+	ibDataNode node;
+	ASSERT_TRUE(box.WriteData(node));
+	ibValueBoxSizer loaded;
+	ASSERT_TRUE(loaded.ReadData(node));
+	ibPropertyBoolean* again = dynamic_cast<ibPropertyBoolean*>(loaded.GetProperty(wxT("Visible")));
+	ASSERT_NE(again, nullptr);
+	EXPECT_FALSE(again->GetValueAsBoolean());
+
+	wxFrame frame(nullptr, wxID_ANY, wxT("sizer"));
+	wxPanel* panel = new wxPanel(&frame);
+	wxBoxSizer* live = static_cast<wxBoxSizer*>(box.Create(nullptr, nullptr));
+	wxButton* child = new wxButton(panel, wxID_ANY, wxT("A"));
+	live->Add(child);
+	panel->SetSizer(live);
+	box.Update(live, nullptr);
+	EXPECT_FALSE(child->IsShown());
+	vis->SetValue(true);
+	box.Update(live, nullptr);
+	EXPECT_TRUE(child->IsShown());
 }
 
 // ------------------------------ clsid kind-typing ----------------------------

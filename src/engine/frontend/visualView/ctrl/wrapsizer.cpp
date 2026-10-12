@@ -41,6 +41,11 @@ void ibValueWrapSizer::Update(wxObject* wxobject, ibVisualHost *visualHost)
 #endif
 	wrapsizer->SetOrientation(m_propertyOrient->GetValueAsInteger());
 	wrapsizer->SetMinSize(m_propertyMinSize->GetValueAsSize());
+	wrapsizer->Show(m_propertyVisible->GetValueAsBoolean() && IsAvailable());
+#ifndef OES_USE_WEB
+	if (wxWindow* owner = wrapsizer->GetContainingWindow())
+		owner->Layout();
+#endif
 	UpdateSizer(wrapsizer);
 }
 
@@ -55,12 +60,14 @@ void ibValueWrapSizer::Cleanup(wxObject* obj, ibVisualHost *visualHost)
 bool ibValueWrapSizer::ReadData(const ibDataNode& node)
 {
 	m_propertyOrient->SetNodeValue(node.GetProperty(m_propertyOrient->GetName()));
+	m_propertyVisible->SetNodeValue(node.GetProperty(m_propertyVisible->GetName()));
 	return ibValueSizer::ReadData(node);
 }
 
 bool ibValueWrapSizer::WriteData(ibDataNode& node) const
 {
 	node.SetProperty(m_propertyOrient->GetName(), m_propertyOrient->GetNodeValue());
+	node.SetProperty(m_propertyVisible->GetName(), m_propertyVisible->GetNodeValue());
 	return ibValueSizer::WriteData(node);
 }
 
