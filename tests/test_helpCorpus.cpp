@@ -345,8 +345,8 @@ TEST(HelpRegistry, AnAuthoredArticleWinsAndArrayIsFound)
 	ASSERT_TRUE(wx.IsOk());
 
 	const wxString root = WriteHelpBucket(
-		R"({ "format": "OES-HELP-1.0", "schema_version": 1, "locale": "en", "entries": [)"
-		R"({ "id": "cls.Query", "name_local": "Query", "name_en": "Query", "kind": "collection", "signature": "the authored query" })] })");
+		R"json({ "format": "OES-HELP-1.0", "schema_version": 1, "locale": "en", "entries": [)json"
+		R"json({ "id": "cls.Query", "name_local": "Query", "name_en": "Query", "kind": "collection", "signature": "the authored query" }] })json");
 
 	const ibHelpLoadResult loaded = LoadHelpCorpus(wxT("en"), root);
 	wxFileName::Rmdir(root, wxPATH_RMDIR_RECURSIVE);
