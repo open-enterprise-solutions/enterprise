@@ -1228,11 +1228,34 @@ bool ibApplicationInstance::AuthenticateUser(const wxString& strUserName,
                                           const wxString& strUserPassword,
                                           ibUserInfo& outInfo)
 {
-	// Open-access mode — no sys_user rows at all AND caller did not
-	// supply a user name. Historical behaviour is "pass through";
-	// outInfo stays default-constructed (IsOk() false).
-	if (strUserName.IsEmpty() && !ibUserInfo::HasAny())
-		return true;
+	// An empty name used to be accepted whenever HasAny() came back false,
+	// and HasAny() came back false both for an empty table and for a
+	// query that threw. An empty list that was actually read is open
+	// access on every host, including the application server and the web
+	// server. A list that could not be read is a refusal.
+	if (strUserName.IsEmpty()) {
+		bool noUsers = false;
+		try {
+			noUsers = !ibUserInfo::HasAny();
+		}
+		catch (const ibBackendInterruptException&) {
+			throw;
+		}
+		catch (const ibCoreException& err) {
+			try {
+				if (ibLog) ibLog->Audit(wxT("auth"), wxT("login_failed"),
+				                        wxString::Format(wxT("reason=user_list_unreadable detail=%s"), err.GetErrorDescription()));
+			} catch (...) {}
+			return false;
+		}
+
+		if (noUsers) {
+			try {
+				if (ibLog) ibLog->Audit(wxT("auth"), wxT("open_access"), wxT("reason=empty_user_list"));
+			} catch (...) {}
+			return true;
+		}
+	}
 
 	outInfo = ibUserInfo::Read(strUserName);
 	if (!outInfo.IsOk()) {
