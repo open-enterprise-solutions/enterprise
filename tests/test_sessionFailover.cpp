@@ -42,23 +42,27 @@
 
 namespace {
 
-// Left out, Resume is 120, which is too long for a test. 0 is off. The file is the process's, written before any
-// base is opened (the host reads it once), and removed when this process goes.
+// Left out, Resume is 120, which is too long for a test. 0 is off. The host reads backend.conf once, before any base
+// is opened, and the working directory's wins over the one beside the program, where the build puts its template.
+// So the process works in a folder of this test's own with that one line in it; both go when the process does.
 struct ResumeFile {
-	bool created = false;
+	std::filesystem::path previous;
+	std::filesystem::path folder;
 	ResumeFile()
 	{
-		std::ifstream existing("backend.conf");
-		if (existing.good())
-			return;
-		std::ofstream out("backend.conf");
-		out << "Resume=2\n";
-		created = out.good();
+		std::error_code error;
+		previous = std::filesystem::current_path(error);
+		folder = std::filesystem::temp_directory_path(error) /
+			("oes-failover-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+		std::filesystem::create_directories(folder, error);
+		std::ofstream(folder / "backend.conf") << "Resume=2\n";
+		std::filesystem::current_path(folder, error);
 	}
 	~ResumeFile()
 	{
-		if (created)
-			std::remove("backend.conf");
+		std::error_code error;
+		std::filesystem::current_path(previous, error);
+		std::filesystem::remove_all(folder, error);
 	}
 };
 
