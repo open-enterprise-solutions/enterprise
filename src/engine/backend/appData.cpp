@@ -247,7 +247,10 @@ static void WriteInfobaseConf(const wxString& folder)
 	if (!file.IsOpened() || !file.Write(
 			wxT("; This base's own settings - read when the base is opened.\n")
 			wxT("; Connections - connections to its DBMS at most; 0 - the default (backend.conf, else 32).\n")
-			wxT("Connections = 0\n"))) {
+			wxT("Connections = 0\n")
+			wxT("; ShowUserListAtLogin - 1 names every user on the login dialog before a password\n")
+			wxT("; is entered, 0 leaves that list empty. Left out: a file base lists them, the\n")
+			wxT("; application server does not.\n"))) {
 		ibTechJournal::Print(ibJournalMark::Warning, wxT("appdata"),
 			wxT("%s cannot be written - the base runs on the defaults"), path);
 	}
@@ -265,6 +268,23 @@ static std::size_t ReadInfobaseConnections(const wxString& folder, std::size_t b
 
 	const wxFileConfig conf(wxT(""), wxT(""), path, wxT(""), wxCONFIG_USE_LOCAL_FILE | wxCONFIG_USE_NO_ESCAPE_CHARACTERS);
 	return ibApplicationHost::ReadCount(conf, path, wxT("Connections"), 2, byDefault);
+}
+
+// THE LOGIN DIALOG LISTS EVERY NAME BEFORE A PASSWORD IS TYPED. A file base does, so a person at the
+// machine can pick. The application server does not: those names would be offered to anyone who can
+// open the dialog. The base's infobase.conf may say ShowUserListAtLogin = 1 or 0; left out, the run
+// mode decides.
+bool ibApplicationInstance::ShowUserListAtLogin(ibRunMode mode, const wxString& folder)
+{
+	const bool byDefault = mode != ibRunMode::eSERVER_MODE;
+	const wxString path = folder + wxFileName::GetPathSeparator() + wxT("infobase.conf");
+	if (folder.IsEmpty() || !wxFileName::FileExists(path))
+		return byDefault;
+
+	const wxFileConfig conf(wxT(""), wxT(""), path, wxT(""), wxCONFIG_USE_LOCAL_FILE | wxCONFIG_USE_NO_ESCAPE_CHARACTERS);
+	if (!conf.HasEntry(wxT("ShowUserListAtLogin")))
+		return byDefault;
+	return conf.ReadBool(wxT("ShowUserListAtLogin"), byDefault);
 }
 
 // ⭐ ASKED OF THE SESSION DOING THE WORK. A person's session says what it works in, whatever process hosts it — a
@@ -1236,6 +1256,10 @@ bool ibApplicationInstance::AuthenticateUser(const wxString& strUserName,
 
 	outInfo = ibUserInfo::Read(strUserName);
 	if (!outInfo.IsOk()) {
+		// An unknown name used to return here, before any hashing, so it was
+		// hundreds of milliseconds faster than a known name with a wrong
+		// password. Spend that same PBKDF2 and then refuse.
+		ibPasswordHash::SpendAsWrongPassword(strUserPassword);
 		try {
 			if (ibLog) ibLog->Audit(wxT("auth"), wxT("login_failed"),
 			                        wxString::Format(wxT("user=%s reason=unknown"), strUserName));

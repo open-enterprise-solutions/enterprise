@@ -230,3 +230,14 @@ bool ibPasswordHash::Verify(const wxString& password, const wxString& storedHash
 
 	return ConstTimeEqual(derived.data(), static_cast<const uint8_t*>(stored.GetData()), derived.size());
 }
+
+void ibPasswordHash::SpendAsWrongPassword(const wxString& password)
+{
+	// Sixteen zero bytes of salt and thirty-two of digest. The digest is not
+	// any password's — Verify still runs every iteration before it compares.
+	// The iteration count is the one Hash() writes, so the two stay together.
+	static const wxString stored = wxString::Format(
+		wxT("%s%u$AAAAAAAAAAAAAAAAAAAAAA==$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="),
+		kPrefix, kIterations);
+	(void)Verify(password, stored);
+}
