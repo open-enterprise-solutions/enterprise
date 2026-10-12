@@ -38,7 +38,9 @@
 #include "backend/commandDescription.h"
 #include "backend/propertyManager/property/propertyCommandSource.h"
 #include "backend/propertyManager/property/propertySource.h"
+#include "backend/propertyManager/property/propertyType.h"
 #include "backend/sourceDescription.h"
+#include "core/types.h"
 #include "backend/backend_localization.h"   // a caption is an array by language
 #include "backend/propertyManager/property/propertyString.h"   // ibPropertyTString
 #include "backend/propertyManager/property/propertyComposition.h"       // a composition, wherever it is held
@@ -55,6 +57,79 @@
 
 namespace {
 using ibArg = ibMcpTool::ibMcpArgument;
+
+ibFormAttributeValue* AttributeNamed(ibValueForm* form, const wxString& name)
+{
+	if (form == nullptr)
+		return nullptr;
+	for (unsigned int index = 0; index < form->GetAttributeCount(); ++index) {
+		ibFormAttributeValue* one = form->GetAttribute(index);
+		if (one != nullptr && one->GetName().IsSameAs(name, false))
+			return one;
+	}
+	return nullptr;
+}
+
+wxString KnownAttributes(ibValueForm* form)
+{
+	wxString known;
+	for (unsigned int index = 0; index < form->GetAttributeCount(); ++index) {
+		if (const ibFormAttributeValue* one = form->GetAttribute(index))
+			known << (known.IsEmpty() ? wxT("") : wxT(", ")) << one->GetName();
+	}
+	return known;
+}
+
+ibClassID ClassOfTypeName(const wxString& typeName, wxString& refusal)
+{
+	const wxString asked = typeName.IsEmpty() ? wxString(wxT("String")) : typeName;
+	if (const ibCtorAbstractType* builtin = ibValue::GetAvailableCtor(asked))
+		return builtin->GetClassType();
+	if (activeMetaData != nullptr) {
+		if (const ibCtorMetaValueType* ctor = activeMetaData->GetTypeCtor(asked))
+			return ctor->GetClassType();
+	}
+	refusal = wxString::Format(
+		ibMcpText("'%s' is not a type this configuration knows. type_list shows the names."), asked);
+	return 0;
+}
+
+bool RetypeAttribute(ibFormAttributeValue* entry, const ibClassID& clsid, wxString& refusal)
+{
+	ibPropertyType* typed = dynamic_cast<ibPropertyType*>(entry->GetProperty(wxT("Type")));
+	if (typed == nullptr) {
+		refusal = ibMcpText("This attribute has no type to set.");
+		return false;
+	}
+	typed->SetValue(ibTypeDescription(clsid));
+	entry->Refresh();
+	return true;
+}
+
+void DescribeAttribute(const ibFormAttributeValue* entry, ibDataNode& result)
+{
+	result.SetValue(wxT("attribute"), entry->GetName());
+	result.AddField(wxT("id"), ibDataValue::Int((s64)entry->GetId()));
+	result.AddField(wxT("main"), ibDataValue::Bool(entry->IsMain()));
+	if (const ibCtorAbstractType* ctor = ibValue::GetAvailableCtor(entry->GetTypeDesc().GetFirstClsid()))
+		result.SetValue(wxT("type"), ctor->GetClassName());
+}
+
+void AppendFormAttributes(ibValueForm* form, std::vector<ibDataValue>& fields, bool includeMain)
+{
+	for (unsigned int index = 0; index < form->GetAttributeCount(); ++index) {
+		const ibFormAttributeValue* one = form->GetAttribute(index);
+		if (one == nullptr || (!includeMain && one->IsMain()))
+			continue;
+		std::shared_ptr<ibDataNode> node = std::make_shared<ibDataNode>();
+		node->SetValue(wxT("name"), one->GetName());
+		node->AddField(wxT("id"), ibDataValue::Int((s64)one->GetId()));
+		node->AddField(wxT("formAttribute"), ibDataValue::Bool(true));
+		if (one->IsMain())
+			node->AddField(wxT("main"), ibDataValue::Bool(true));
+		fields.push_back(ibDataValue::Child(node));
+	}
+}
 
 // The arguments this file's tools take — declared once, and read through the same
 // objects in Call, so the name a caller is told cannot drift from the name looked for.
@@ -1014,27 +1089,51 @@ class ibMcpToolFormAttribute : public ibMcpTool {
 		return s_a;
 	}
 
+	static const ibArg& ArgAction()
+	{
+		static const ibArg s_a(wxT("action"), ibArg::Kind::Text,
+			ibMcpText("What to do with the attribute. main (the default) moves the main flag. "
+				  "add creates one, type changes what it holds, rename changes its name, remove takes it off."),
+			/*required*/ false,
+			{ wxT("main"), wxT("add"), wxT("type"), wxT("rename"), wxT("remove") });
+		return s_a;
+	}
+
+	static const ibArg& ArgType()
+	{
+		static const ibArg s_a(wxT("type"), ibArg::Kind::Text,
+			ibMcpText("The type, by the name type_list shows: String, Number, Boolean, Date, or a "
+				  "reference such as CatalogRef.Goods. add uses String when this is omitted."));
+		return s_a;
+	}
+
 public:
 
 	wxString GetName() const override { return wxT("form_attribute"); }
 
 	wxString GetActivity(const ibDataNode& params) const override
 	{
-		return wxString::Format(ibMcpText("making '%s' the main attribute of '%s'"),
-			ArgAttribute().Text(params), ibMcpNameOf(params, ArgForm().Name()));
+		const wxString action = ArgAction().Given(params) ? ArgAction().Text(params) : wxString(wxT("main"));
+		return wxString::Format(ibMcpText("%s '%s' on '%s'"),
+			action, ArgAttribute().Text(params), ibMcpNameOf(params, ArgForm().Name()));
 	}
 
 	wxString GetDescription() const override
 	{
-		return ibMcpText("Say which attribute the form is ABOUT - its MAIN one, the head of every "
-			"binding and the source its controls render against. form_get lists the "
-			"attributes and marks the current main; this is what moves it. `main: false` on "
-			"the current one clears it.");
+		return ibMcpText("Add, retype, rename or remove a form attribute, or say which one the form is "
+			"ABOUT. A form attribute is local to the form - a flag, a list, a value that is not a "
+			"field of the object. form_get lists them and marks the main one. action is main by "
+			"default (main: false on the current one clears it). add takes the new name in "
+			"attribute and an optional type. rename takes the new name in name. type takes the "
+			"new type. remove takes the attribute off. form_source lists the ones that are not "
+			"the main object, and form_bind binds a control to one by its name.");
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
-		static const std::vector<ibMcpArgument> s_arguments = { ArgForm(), ArgAttribute(), ArgMain() };
+		static const std::vector<ibMcpArgument> s_arguments = {
+			ArgForm(), ArgAttribute(), ArgAction(), ArgType(), ArgName(), ArgMain()
+		};
 		return s_arguments;
 	}
 
@@ -1045,25 +1144,115 @@ public:
 		if (form == nullptr)
 			return false;
 
+		const wxString action = ArgAction().Given(params) ? ArgAction().Text(params) : wxString(wxT("main"));
 		const wxString name = ArgAttribute().Text(params);
-		ibFormAttributeValue* entry = form->GetAttribute(name);
 
-		if (entry == nullptr) {
-
-			// REFUSED WITH WHAT THERE IS — the same shape every other refusal here takes, so a
-			// wrong name costs one call rather than a round trip through form_get.
-			wxString known;
-			for (unsigned int index = 0; index < form->GetAttributeCount(); ++index) {
-				if (const ibFormAttributeValue* one = form->GetAttribute(index))
-					known << (known.IsEmpty() ? wxT("") : wxT(", ")) << one->GetName();
+		auto store = [&](const wxString& failed) -> bool {
+			if (creator == nullptr || !creator->SaveFormData(form)) {
+				refusal = failed;
+				form->DecrRef();
+				return false;
 			}
+			activeMetaData->Modify(true);
+			result.SetValue(wxT("form"), form->GetControlName());
+			result.SetValue(wxT("action"), action);
+			form->DecrRef();
+			return true;
+		};
 
+		auto missing = [&]() {
+			const wxString known = KnownAttributes(form);
 			refusal = known.IsEmpty()
 				? ibMcpText("This form has no attributes at all.")
 				: wxString::Format(ibMcpText("This form has no attribute called '%s'. It has: %s."),
 					name, known);
-
 			form->DecrRef();
+		};
+
+		if (action.IsSameAs(wxT("add"), false)) {
+			if (name.IsEmpty()) {
+				refusal = ibMcpText("An added attribute needs a name.");
+				form->DecrRef();
+				return false;
+			}
+			if (AttributeNamed(form, name) != nullptr) {
+				refusal = wxString::Format(ibMcpText("This form already has an attribute called '%s'."), name);
+				form->DecrRef();
+				return false;
+			}
+			wxString why;
+			const ibClassID clsid = ClassOfTypeName(ArgType().Text(params), why);
+			if (clsid == 0) {
+				refusal = why;
+				form->DecrRef();
+				return false;
+			}
+			ibFormAttributeValue* added = form->AddAttribute(name, clsid, ibValue());
+			if (added == nullptr) {
+				refusal = ibMcpText("The attribute could not be added.");
+				form->DecrRef();
+				return false;
+			}
+			DescribeAttribute(added, result);
+			return store(ibMcpText("The attribute was added but the form could not be stored."));
+		}
+
+		ibFormAttributeValue* entry = AttributeNamed(form, name);
+		if (!action.IsSameAs(wxT("main"), false) && entry == nullptr) {
+			missing();
+			return false;
+		}
+
+		if (action.IsSameAs(wxT("remove"), false)) {
+			const bool wasMain = entry->IsMain();
+			form->DeleteAttribute(entry->GetName());
+			result.AddField(wxT("removed"), ibDataValue::Bool(true));
+			result.SetValue(wxT("attribute"), name);
+			if (wasMain)
+				result.SetValue(wxT("main"), wxString());
+			return store(ibMcpText("The attribute was removed but the form could not be stored."));
+		}
+
+		if (action.IsSameAs(wxT("rename"), false)) {
+			const wxString next = ArgName().Text(params);
+			if (next.IsEmpty() || !form->RenameAttribute(entry, next)) {
+				refusal = wxString::Format(
+					ibMcpText("'%s' cannot be renamed to '%s'. The new name is empty or already used."),
+					entry->GetName(), next);
+				form->DecrRef();
+				return false;
+			}
+			DescribeAttribute(entry, result);
+			return store(ibMcpText("The attribute was renamed but the form could not be stored."));
+		}
+
+		if (action.IsSameAs(wxT("type"), false)) {
+			if (!ArgType().Given(params)) {
+				refusal = ibMcpText("Retyping an attribute needs type.");
+				form->DecrRef();
+				return false;
+			}
+			wxString why;
+			const ibClassID clsid = ClassOfTypeName(ArgType().Text(params), why);
+			if (clsid == 0 || !RetypeAttribute(entry, clsid, refusal)) {
+				if (refusal.IsEmpty())
+					refusal = why;
+				form->DecrRef();
+				return false;
+			}
+			DescribeAttribute(entry, result);
+			return store(ibMcpText("The type was set but the form could not be stored."));
+		}
+
+		if (!action.IsSameAs(wxT("main"), false)) {
+			refusal = wxString::Format(
+				ibMcpText("'%s' is not an action. Use main, add, type, rename or remove."), action);
+			form->DecrRef();
+			return false;
+		}
+
+		if (entry == nullptr) {
+			missing();
 			return false;
 		}
 
@@ -1071,23 +1260,9 @@ public:
 		const bool wanted = !ArgMain().Given(params) || ArgMain().Flag(params);
 		form->SetMainAttribute(wanted ? entry : nullptr);
 
-		if (creator == nullptr || !creator->SaveFormData(form)) {
-			refusal = ibMcpText("The main attribute was set but the form could not be stored.");
-			form->DecrRef();
-			return false;
-		}
-
-		activeMetaData->Modify(true);
-
-		// ⭐ ANSWERED WITH WHAT THE FORM HOLDS NOW, read back rather than echoed: a caller learns
-		// what IS, and a form left with no main says so by naming nothing.
 		const ibFormAttributeValue* now = form->GetMainAttribute();
-
-		result.SetValue(wxT("form"), form->GetControlName());
 		result.SetValue(wxT("main"), now != nullptr ? now->GetName() : wxString());
-
-		form->DecrRef();
-		return true;
+		return store(ibMcpText("The main attribute was set but the form could not be stored."));
 	}
 };
 
@@ -1128,10 +1303,10 @@ public:
 
 	wxString GetDescription() const override
 	{
-		return ibMcpText("What the form's source offers to bind a control to: every field with its "
-			"name, its title and its type, and every TABULAR SECTION with the columns under "
-			"it. Ask this before form_set on a binding - a name that is not here is a name "
-			"the form cannot reach.");
+		return ibMcpText("What a control on this form can be bound to: every field of the source, "
+			"with its name, its title and its type, every TABULAR SECTION with the columns under "
+			"it, and every form attribute that is not the main object (formAttribute: true). "
+			"Ask this before form_bind - a name that is not here is a name the form cannot reach.");
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override
@@ -1151,11 +1326,13 @@ public:
 			source != nullptr ? source->GetSourceExplorer() : nullptr;
 
 		if (explorer == nullptr) {
-			// A COMMON form has no source, and that is a state rather than a fault:
-			// its controls bind to the form's own attributes instead.
+			// A COMMON form has no source. Its controls bind to the form's own attributes,
+			// which is what this list is.
+			std::vector<ibDataValue> own;
+			AppendFormAttributes(form, own, true);
 			result.SetValue(wxT("note"),
 				ibMcpText("This form has no source object - a common form binds to its own attributes."));
-			result.AddField(wxT("fields"), ibDataValue::Array(std::vector<ibDataValue>()));
+			result.AddField(wxT("fields"), ibDataValue::Array(own));
 			form->DecrRef();
 			return true;
 		}
@@ -1225,7 +1402,11 @@ public:
 		if (!walked.IsEmpty())
 			result.SetValue(wxT("path"), walked);
 
-		const std::vector<ibDataValue> fields = Fields(explorer);
+		std::vector<ibDataValue> fields = Fields(explorer);
+		// Form attributes other than the main object sit beside the source's fields. The main
+		// one's contents are the explorer itself, so it is not listed a second time.
+		if (path.IsEmpty())
+			AppendFormAttributes(form, fields, false);
 		result.AddField(wxT("fields"), ibDataValue::Array(fields));
 
 		// A LEAF IS AN ANSWER TOO. A field with nothing under it is where a binding
@@ -1367,10 +1548,11 @@ public:
 
 	wxString GetDescription() const override
 	{
-		return ibMcpText("Bind a control to what the form's source offers, by the dotted path "
-			"form_source unfolds - 'Warehouse.Code' reaches through the reference into the "
-			"catalog it points at, 'Products.Quantity' a column of a tabular section. A "
-			"binding is a chain of hops, so it cannot be set as plain text through form_set.");
+		return ibMcpText("Bind a control to what the form offers, by the dotted path form_source "
+			"unfolds - 'Warehouse.Code' reaches through the reference into the catalog it points "
+			"at, 'Products.Quantity' a column of a tabular section, and a form attribute's own "
+			"name binds the control to that attribute. A binding is a chain of hops, so it cannot "
+			"be set as plain text through form_set.");
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override
@@ -1526,6 +1708,47 @@ public:
 		ibSourceDataObject* source = form->GetSourceObject();
 		const ibSourceExplorer* explorer =
 			source != nullptr ? source->GetSourceExplorer() : nullptr;
+
+		// A form attribute that is not a field of the object is bound by its own name, one hop:
+		// the attribute's id. A name the source already has stays a field of the object.
+		const wxString rawPath = ArgPath().Text(params);
+		wxString head = rawPath;
+		const int dot = rawPath.Find(wxT('.'));
+		if (dot != wxNOT_FOUND)
+			head = rawPath.Left(dot);
+		ibFormAttributeValue* named = AttributeNamed(form, head);
+		const bool sourceHasHead = explorer != nullptr && explorer->FindByName(head) != nullptr;
+		if (named != nullptr && named != form->GetMainAttribute() && !sourceHasHead) {
+			if (dot != wxNOT_FOUND) {
+				refusal = wxString::Format(
+					ibMcpText("'%s' is a form attribute. Bind the control to that name; it has no fields under it."),
+					named->GetName());
+				form->DecrRef();
+				return false;
+			}
+			ibSourceDescription description;
+			description.AppendSource(named->GetId());
+			binding->SetValue(description);
+			if (creator == nullptr || !creator->SaveFormData(form)) {
+				refusal = ibMcpText("The binding was set but the form could not be stored.");
+				form->DecrRef();
+				return false;
+			}
+			activeMetaData->Modify(true);
+			result.AddField(wxT("bound"), ibDataValue::Bool(true));
+			SayControl(control, result);
+			result.SetValue(wxT("property"), name);
+			result.SetValue(wxT("path"), named->GetName());
+			ibDataValue described;
+			if (!ibSourceDescriptionMemory::WriteNode(described, description)) {
+				refusal = ibMcpText("The binding was placed, but could not be read back to confirm it.");
+				form->DecrRef();
+				return false;
+			}
+			result.AddField(wxT("source"), described);
+			form->DecrRef();
+			return true;
+		}
 
 		if (explorer == nullptr) {
 			refusal = ibMcpText("This form has no source object to bind to.");

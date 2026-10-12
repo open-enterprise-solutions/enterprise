@@ -17,6 +17,10 @@
 #include "frontend/visualView/ctrl/gridBox.h"    // ibValueGridBox
 #include "frontend/visualView/ctrl/notebook.h"   // ibValueNotebook + g_controlNotebook*CLSID
 #include "backend/compiler/value.h"
+#include "backend/mcp/mcpTool.h"
+#include "backend/propertyManager/property/propertyType.h"
+#include "frontend/visualView/ctrl/formAttribute.h"
+#include "core/types.h"
 
 #include <wx/buffer.h>                            // wxMemoryBuffer (form serialize round-trip)
 
@@ -221,6 +225,44 @@ TEST_F(FrontendFormFix, FormSerializeRoundTripPreservesControls)
 	ASSERT_TRUE(dst->LoadForm(buffer)) << "LoadForm rebuilds the control tree";
 	EXPECT_EQ(dst->GetControlList().size(), srcCount)
 		<< "the round-tripped form owns the same controls";
+}
+
+// A form attribute is added, retyped, renamed and removed through the same doors
+// form_attribute calls. The verb itself needs a stored configuration to open.
+TEST_F(FrontendFormFix, AFormAttributeCanBeAddedRenamedRetypedAndRemoved)
+{
+	if (!frameReady)
+		GTEST_SKIP();
+
+	ibValueForm* form = NewForm();
+	ASSERT_NE(form, nullptr);
+
+	ibFormAttributeValue* flag = form->AddAttribute(wxT("Flag"), g_valueBooleanCLSID, ibValue());
+	ASSERT_NE(flag, nullptr);
+	EXPECT_EQ(form->GetAttribute(wxT("Flag")), flag);
+	EXPECT_EQ(flag->GetTypeDesc().GetFirstClsid(), g_valueBooleanCLSID);
+
+	ibPropertyType* typed = dynamic_cast<ibPropertyType*>(flag->GetProperty(wxT("Type")));
+	ASSERT_NE(typed, nullptr);
+	typed->SetValue(ibTypeDescription(g_valueStringCLSID));
+	flag->Refresh();
+	EXPECT_EQ(flag->GetTypeDesc().GetFirstClsid(), g_valueStringCLSID);
+
+	ASSERT_TRUE(form->RenameAttribute(flag, wxT("Mark")));
+	EXPECT_EQ(flag->GetName(), wxT("Mark"));
+	EXPECT_EQ(form->GetAttribute(wxT("Flag")), nullptr);
+
+	form->DeleteAttribute(wxT("Mark"));
+	EXPECT_EQ(form->GetAttribute(wxT("Mark")), nullptr);
+
+	const ibMcpTool* tool = ibFindMcpTool(wxT("form_attribute"));
+	ASSERT_NE(tool, nullptr);
+	bool hasAction = false;
+	for (const ibMcpTool::ibMcpArgument& argument : tool->Arguments()) {
+		if (argument.Name() == wxT("action"))
+			hasAction = true;
+	}
+	EXPECT_TRUE(hasAction);
 }
 
 // ------------------------------ clsid kind-typing ----------------------------
