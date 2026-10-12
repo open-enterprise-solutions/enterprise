@@ -112,7 +112,8 @@ TEST(NumberPeriodicity, TheSettingRoundTripsAndAWordIsAccepted)
 	ASSERT_TRUE(doc->LoadNode(named));
 	EXPECT_EQ(ibNumberPeriodicity::eQuarter, doc->GetNumberPeriodicity());
 
-	// Absent from a configuration saved before the setting existed: the series stays the old one.
+	// Absent from a configuration saved before the setting existed. Loaded into a new document,
+	// whose constructor default is nonperiodical: an empty property does not write over that.
 	ibDataNode older;
 	for (const auto& field : saved.Fields())
 		older.AddField(field.first, field.second);
@@ -120,8 +121,10 @@ TEST(NumberPeriodicity, TheSettingRoundTripsAndAWordIsAccepted)
 		if (prop.first != wxT("NumberPeriodicity"))
 			older.SetProperty(prop.first, prop.second);
 	}
-	ASSERT_TRUE(doc->LoadNode(older));
-	EXPECT_EQ(ibNumberPeriodicity::eNonperiodical, doc->GetNumberPeriodicity());
+	ibValueMetaObjectDocument* fresh = MakeDocument(cfg);
+	ASSERT_NE(fresh, nullptr);
+	ASSERT_TRUE(fresh->LoadNode(older));
+	EXPECT_EQ(ibNumberPeriodicity::eNonperiodical, fresh->GetNumberPeriodicity());
 }
 
 namespace {
