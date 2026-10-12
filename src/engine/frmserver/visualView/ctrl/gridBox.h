@@ -8,6 +8,7 @@
 #include "frmserver/visualView/ctrl/typeControl.h"                // ⚠ the Source property needs its owner to BE a source factory
 
 #include <memory>   // the alive token the compose hop carries back
+#include <optional> // the setting the sheet on show was composed with
 #include <vector>
 
 struct ibMenuItem;   // choiceRequest.h — what a click on a cell offers is put to the person as a popup menu
@@ -105,9 +106,9 @@ class ibValueGridBox : public ibValueWindowComposite, public ibTypeControlFactor
 	virtual bool GetControlValue(ibValue& pvarControlVal) const override;
 
 	// ⭐ WHAT THE BOX SHOWS NOW — the window's state, and the SHEET'S Version — a number that moves whenever the sheet
-	// on show is replaced, so a client knows the sheet it holds is stale — and whether a compose is running
-	// (Composing), which the window drew as its progress. The sheet itself is too much for a frame: a client asks for
-	// it (Fetch).
+	// on show is replaced, so a client knows the sheet it holds is stale — and what the sheet is to its report
+	// (ComposeState): being composed, which the window draws as its progress, or outdated by a setting changed since,
+	// which it draws as the word to compose again. The sheet itself is too much for a frame: a client asks for it (Fetch).
 	virtual void OnUpdate(ibDataNode& state, ibVisualHost* host) override;
 
 	// The events this box has: Cell {Row, Col} — a cell clicked, the question "what is this figure made of"
@@ -212,6 +213,11 @@ private:
 	// Composes handed to the background and not yet delivered — the client's progress indicator. A count
 	// rather than a flag: a second Compose cancels the first, and the first is still delivered after it.
 	int m_composeRuns = 0;
+
+	// …and the setting the sheet on show was COMPOSED with — none while no compose was delivered here (the model's sheet
+	// as it came). Asked against what composes now, it says whether the sheet is OUTDATED: the reader changed the setting
+	// (OK in the settings window, a variant, the shelf, a script's Sort) and the report waits for Compose, as a report does.
+	std::optional<ibSettingsDescription> m_composedSettings;
 
 	ibPropertyCategory* m_categoryData = ibPropertyObject::CreatePropertyCategory(wxT("Data"), _("Data"));
 	ibPropertySource*   m_propertySource = ibPropertyObject::CreateProperty<ibPropertySource>(m_categoryData, wxT("Source"), _("Source"),

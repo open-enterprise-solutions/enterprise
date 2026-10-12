@@ -188,7 +188,9 @@
     <ClCompile Include="win\dlgs\formEditor.cpp" />
     <ClCompile Include="win\dlgs\generation.cpp" />
     <ClCompile Include="win\dlgs\settings\savedSettings.cpp" />
+    <ClCompile Include="win\dlgs\settings\settingsRequest.cpp" />
     <ClCompile Include="win\dlgs\settings\list\listSettings.cpp" />
+    <ClCompile Include="win\dlgs\settings\composer\composerSettings.cpp" />
     <ClCompile Include="visualView\layers\commandBar.cpp" />
     <ClCompile Include="visualView\layers\commandReceiver.cpp" />
     <ClCompile Include="visualView\ctrl\boxsizer.cpp" />
@@ -313,7 +315,9 @@
     <ClInclude Include="win\dlgs\formEditor.h" />
     <ClInclude Include="win\dlgs\generation.h" />
     <ClInclude Include="win\dlgs\settings\savedSettings.h" />
+    <ClInclude Include="win\dlgs\settings\settingsRequest.h" />
     <ClInclude Include="win\dlgs\settings\list\listSettings.h" />
+    <ClInclude Include="win\dlgs\settings\composer\composerSettings.h" />
     <ClInclude Include="visualView\layers\commandBar.h" />
     <ClInclude Include="visualView\layers\commandReceiver.h" />
     <ClInclude Include="visualView\ctrl\chartBox.h" />

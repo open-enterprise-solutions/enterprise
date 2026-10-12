@@ -106,6 +106,9 @@
     <ClCompile Include="win\editor\textEditor\textEditor.cpp">
       <Filter>win\editor\textEditor</Filter>
     </ClCompile>
+    <ClCompile Include="win\editor\codeEditor\codeEditor.cpp">
+      <Filter>win\editor\codeEditor</Filter>
+    </ClCompile>
     <ClCompile Include="win\editor\textEditor\textEditorPrintOut.cpp">
       <Filter>win\editor\textEditor</Filter>
     </ClCompile>
@@ -282,6 +285,9 @@
     </ClInclude>
     <ClInclude Include="win\editor\textEditor\textEditor.h">
       <Filter>win\editor\textEditor</Filter>
+    </ClInclude>
+    <ClInclude Include="win\editor\codeEditor\codeEditor.h">
+      <Filter>win\editor\codeEditor</Filter>
     </ClInclude>
     <ClInclude Include="win\editor\textEditor\textEditorPrintOut.h">
       <Filter>win\editor\textEditor</Filter>
@@ -462,6 +468,9 @@
     <Filter Include="backend\metaCollection\partial\reference">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5028}</UniqueIdentifier>
     </Filter>
+    <Filter Include="backend\metaCollection\resource">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5053}</UniqueIdentifier>
+    </Filter>
     <Filter Include="backend\propertyManager">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5029}</UniqueIdentifier>
     </Filter>
@@ -521,6 +530,15 @@
     </Filter>
     <Filter Include="win\dlgs\settings\list">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f503c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\dlgs\settings\composer">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5050}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\dlgs\queryConstructor">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5051}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\editor\codeEditor">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5052}</UniqueIdentifier>
     </Filter>
     <Filter Include="win\dlgs\translateConstructor">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f503d}</UniqueIdentifier>
@@ -587,6 +605,12 @@
     <ClInclude Include="backend\composition\dataComposer.h">
       <Filter>backend\composition</Filter>
     </ClInclude>
+    <ClInclude Include="backend\composition\compositionTheme.h">
+      <Filter>backend\composition</Filter>
+    </ClInclude>
+    <ClCompile Include="backend\composition\compositionTheme.cpp">
+      <Filter>backend\composition</Filter>
+    </ClCompile>
     <ClInclude Include="backend\metaCollection\metaLanguageObject.h">
       <Filter>backend\metaCollection</Filter>
     </ClInclude>
@@ -596,6 +620,15 @@
     <ClInclude Include="backend\metaCollection\metaSpreadsheetObject.h">
       <Filter>backend\metaCollection</Filter>
     </ClInclude>
+    <ClInclude Include="backend\metaCollection\metaComposerObject.h">
+      <Filter>backend\metaCollection</Filter>
+    </ClInclude>
+    <ClInclude Include="backend\metaCollection\resource\metaResourceObject.h">
+      <Filter>backend\metaCollection\resource</Filter>
+    </ClInclude>
+    <ClCompile Include="backend\metaCollection\resource\metaResourceObject_res.cpp">
+      <Filter>backend\metaCollection\resource</Filter>
+    </ClCompile>
     <ClCompile Include="backend\metaCollection\partial\reference\reference.cpp">
       <Filter>backend\metaCollection\partial\reference</Filter>
     </ClCompile>
@@ -677,9 +710,30 @@
     <ClInclude Include="backend\propertyManager\property\variant\variantTranslate.h">
       <Filter>backend\propertyManager\property\variant</Filter>
     </ClInclude>
+    <ClInclude Include="backend\propertyManager\property\variant\variantComposition.h">
+      <Filter>backend\propertyManager\property\variant</Filter>
+    </ClInclude>
     <ClInclude Include="backend\query\queryBalanceRole.h">
       <Filter>backend\query</Filter>
     </ClInclude>
+    <ClInclude Include="backend\query\queryAST.h">
+      <Filter>backend\query</Filter>
+    </ClInclude>
+    <ClInclude Include="backend\query\queryable.h">
+      <Filter>backend\query</Filter>
+    </ClInclude>
+    <ClInclude Include="backend\query\queryKeywords.h">
+      <Filter>backend\query</Filter>
+    </ClInclude>
+    <ClInclude Include="backend\query\queryLowering.h">
+      <Filter>backend\query</Filter>
+    </ClInclude>
+    <ClInclude Include="backend\query\queryConstructorModel.h">
+      <Filter>backend\query</Filter>
+    </ClInclude>
+    <ClCompile Include="backend\query\queryConstructorModel.cpp">
+      <Filter>backend\query</Filter>
+    </ClCompile>
     <ClInclude Include="backend\query\queryUnfold.h">
       <Filter>backend\query</Filter>
     </ClInclude>
@@ -735,6 +789,9 @@
       <Filter>backend\system\value</Filter>
     </ClInclude>
     <ClInclude Include="backend\system\value\valueSize.h">
+      <Filter>backend\system\value</Filter>
+    </ClInclude>
+    <ClInclude Include="backend\system\value\valueDataComposition.h">
       <Filter>backend\system\value</Filter>
     </ClInclude>
     <ClInclude Include="backend\system\value\valueSpreadsheet.h">
@@ -881,6 +938,18 @@
     <ClInclude Include="win\dlgs\settings\list\listSettings.h">
       <Filter>win\dlgs\settings\list</Filter>
     </ClInclude>
+    <ClCompile Include="win\dlgs\settings\composer\composerSettings.cpp">
+      <Filter>win\dlgs\settings\composer</Filter>
+    </ClCompile>
+    <ClInclude Include="win\dlgs\settings\composer\composerSettings.h">
+      <Filter>win\dlgs\settings\composer</Filter>
+    </ClInclude>
+    <ClCompile Include="win\dlgs\settings\settingsOutputParametersEditor.cpp">
+      <Filter>win\dlgs\settings</Filter>
+    </ClCompile>
+    <ClInclude Include="win\dlgs\settings\settingsOutputParametersEditor.h">
+      <Filter>win\dlgs\settings</Filter>
+    </ClInclude>
     <ClCompile Include="win\dlgs\settings\settingsAppearanceEditor.cpp">
       <Filter>win\dlgs\settings</Filter>
     </ClCompile>
@@ -922,6 +991,18 @@
     </ClCompile>
     <ClInclude Include="win\dlgs\translateConstructor\translateConstructor.h">
       <Filter>win\dlgs\translateConstructor</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\queryConstructor\queryConstructor.h">
+      <Filter>win\dlgs\queryConstructor</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\queryConstructor\queryConstructorInternal.h">
+      <Filter>win\dlgs\queryConstructor</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\queryConstructor\queryExpressionDialog.h">
+      <Filter>win\dlgs\queryConstructor</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\typeSelector.h">
+      <Filter>win\dlgs</Filter>
     </ClInclude>
     <ClCompile Include="win\editor\gridEditor\gridCellEditor.cpp">
       <Filter>win\editor\gridEditor</Filter>

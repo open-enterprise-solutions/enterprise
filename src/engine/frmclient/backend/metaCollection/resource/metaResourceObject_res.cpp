@@ -1,0 +1,22 @@
+#include "metaResourceObject.h"
+
+#include "frmclient/win/picture.h"   // ibProtocolPicture — a PNG in base64, as the engine keeps its own
+
+// THE ENGINE'S OWN PICTURE OF A RESOURCE — backend/metaCollection/resource/metaResourceObject_res.cpp, the same PNG: a
+// field of a settings window declared a resource wears it.
+/* PNG */
+static const wxString s_resource_16_png = wxT("iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAElElEQVR4nOya729TVRjHv+e2W9cf2xhly6qSJYPRbWyiZgxwMMHNGDUxJCOIiZoBUSMvfGOI+sJEo4lK/A8UZsREFEyILzQxjsEozKkI21yHnUMxsDXsh2Pt1v1oe30uar2/utHbNrS795M07Xmepzc933POc59zbjnoHA46xxAAOscQADrHEAA6xxAAOscQADrHEAA6xxAAOse8VEDt4aYtHEMrD1RRs5qBOZHB8ODH6c3L6MUj2ta7r6N7sXgWz1H9RXWuOeB6h0JeYSxrZ0qEBDkUdoy86d3tnVcLiNuxnKDLwxg7mMWdFzDRjH09J+A6Gy9AtXP3HmkWRn4jlguM1dceaXpL1SU3bPjo4XpwnGTduF1rsa2yHiX5xbDm5mEhEsbwX36aX1FowZZrRWlhMdJBaH4WNwKj6Bzohs8/JPFFuUhdX2vHBbFNmQQZe0ncdLvW4JmGlli7e+givu5pRzQaQTIUWPNx4JG9sJMYqUQYoDLnajy7dTU+8RzHoP9KzMdFuRfo7UVxvGIJULZ3i9sPVT0o8V/6oy/pzgtMhQLwjQwhneyobpC0eTC3PEbtNlgrbpQUrJI4R4PjSBWTM1NIJ057kdxUJTcoZgBlfoe4bTHnSvz15fcjVdTc40Y6sVmky4sSXok8ZslCSE5zTSNGAxO4PDyo8JlNJjSs2wSOsUWvYcuxovLuCqywFeBOk7AAHOPw1OYn0Xbmc/w5fk3iC0ciuEnTumXjE8gWNBU5Zs5MWXaXIj8IXLr6C9r7zyJb0Fzl5eVYsLdxD1Y6Vih8pwfO4+erfcgGkipzHXl2EuFp2C02he/kT9/gV/9vyHQSzgFyhETWSjPhw46jmA8vxOw8z+NY10kcaG5Fcf6qhK/7xon3E4p/e9er0EJKNjpCWfvc1t1UQZskdiEpnvKeRyaTup0e42GlvKAwM2Q0SS8BAf/NUXzq+RKzC3PSi1NdsENWSmcaSQsglLMfdx5TdJ4qSuzZslPT+hfQuqYTJSkBgrPTaOv8DNNzMwrfzrrH4C5di0xHswDCiLfRyE8EJxW+7TTtHyirRTagSYBwNIyjnhO4MTWm8N1XVoOm9duQLSQsQJROgY53f6XYB9y6GCW9QqoLTnk9i15D2AxVuMrhdBThTpOwAOd8P8B7fVDVJ9z3zwzc5n2/B3j50f2ak2SqUDkR4v3i9sxcKPY5QidBHt+PSBX913xIJ+LfLiDvm4CyEOJxUdwcC07836Bbm1D/pwqnYyXSieS3Q6jV2AV5jMoMYD3iduflrthnE50FtNQ9futUN1kq76qgV3pvk6e956QGJh3cf0wy6Py8nIz99EAh7z/butI1aKza/O+xuIXWehjXJ0doSfDQQpGtEEX2QqSD6fkQxgLjdCzeRcfiV0QePsRHTOt7n//2d3G8aqW+4XDza+R5F8sIGqqDvfu++0Buj7tVoadD35NzE5YBtDXv6t3frropibsbDDuGG+mrh2hbr+3xT2YgrNL3wvkj2+MFLLlZ1e3jcb1g/EUGOscQADrHEAA6xxAAOscQADrHEAA6xxAAOkf3AvwNAAD//+tDnUoAAAAGSURBVAMA9nRTvBXWE6kAAAAASUVORK5CYII=");
+
+wxIcon ibValueMetaObjectResource::GetIconGroup()
+{
+	// …at 16 by 16, as the engine reads it (ibServerPicture(png, wxSize(16, 16))).
+	static const wxIcon icon = [] {
+		wxImage image = ibProtocolPicture(s_resource_16_png).ConvertToImage();
+		if (image.IsOk())
+			image.Rescale(16, 16, wxIMAGE_QUALITY_HIGH);
+		wxIcon made;
+		made.CopyFromBitmap(wxBitmap(image));
+		return made;
+	}();
+	return icon;
+}

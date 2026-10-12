@@ -5,7 +5,7 @@
 
 #include "gridEditor.h"
 
-#include <wx/activityindicator.h>   // the "composing..." spinner — see ShowComposeProgress
+#include <wx/activityindicator.h>   // the "composing..." spinner — see ShowComposeState
 #include <wx/stattext.h>
 
 #include "frmclient/docView/docView.h"
@@ -221,39 +221,51 @@ void ibGridEditor::DockTable()
 
 // See the header. Built on first use and kept: a spinner that is created and destroyed per compose
 // flickers, and the second compose is the common case.
-void ibGridEditor::ShowComposeProgress(bool busy)
+void ibGridEditor::ShowComposeState(ibProtocolComposeState state)
 {
-	if (m_composeProgress == nullptr) {
-		if (!busy)
+	if (m_composeState == nullptr) {
+		if (state == ibProtocolComposeState::Composed)
 			return;   // nothing built, nothing to hide
 
 		wxWindow* const panel = new wxPanel(this, wxID_ANY);
 		panel->SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNFACE));
 
 		wxBoxSizer* const sizer = new wxBoxSizer(wxHORIZONTAL);
-		wxActivityIndicator* const spinner = new wxActivityIndicator(panel);
-		spinner->Start();
-		sizer->Add(spinner, 0, wxALL | wxALIGN_CENTER_VERTICAL, FromDIP(6));
-		sizer->Add(new wxStaticText(panel, wxID_ANY, _("Composing...")),
-			0, wxALL | wxALIGN_CENTER_VERTICAL, FromDIP(6));
-		panel->SetSizerAndFit(sizer);
+		m_composeSpinner = new wxActivityIndicator(panel);
+		sizer->Add(m_composeSpinner, 0, wxALL | wxALIGN_CENTER_VERTICAL, FromDIP(6));
+		m_composeText = new wxStaticText(panel, wxID_ANY, wxEmptyString);
+		sizer->Add(m_composeText, 0, wxALL | wxALIGN_CENTER_VERTICAL, FromDIP(6));
+		panel->SetSizer(sizer);
 
-		m_composeProgress = panel;
+		m_composeState = panel;
 	}
 
-	if (!busy) {
-		m_composeProgress->Hide();
+	if (state == ibProtocolComposeState::Composed) {
+		m_composeSpinner->Stop();
+		m_composeState->Hide();
 		return;
 	}
+
+	// WHICH OF THE TWO — the spinner turns while the report fills; an outdated sheet waits for the person.
+	const bool composing = state == ibProtocolComposeState::Composing;
+	if (composing)
+		m_composeSpinner->Start();
+	else
+		m_composeSpinner->Stop();
+	m_composeSpinner->Show(composing);
+	m_composeText->SetLabel(composing
+		? _("Composing...")
+		: _("The settings have changed. Press Compose to build the report."));
+	m_composeState->GetSizer()->Fit(m_composeState);
 
 	// Centred over the sheet — it belongs to the thing that is filling, and it must not cover the
 	// toolbar the person still uses while it fills.
 	const wxSize client = GetClientSize();
-	const wxSize own    = m_composeProgress->GetSize();
-	m_composeProgress->Move((client.x - own.x) / 2, (client.y - own.y) / 3);
-	m_composeProgress->Show();
-	m_composeProgress->Raise();
-	m_composeProgress->Update();
+	const wxSize own    = m_composeState->GetSize();
+	m_composeState->Move((client.x - own.x) / 2, (client.y - own.y) / 3);
+	m_composeState->Show();
+	m_composeState->Raise();
+	m_composeState->Update();
 }
 
 #pragma endregion

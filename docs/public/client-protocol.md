@@ -79,7 +79,10 @@ A tab's `Kind` says what its view shows when it is no form (2 a text, 3 a spread
 with no `Version` the sheet is read once. A gridbox's `fetch` gives the whole sheet, `Sheet`, in the form a template is
 stored in — `cells` (`row`, `col` from 0, `value` as shown), `rows` and `cols` (`areas`, `breaks`, `sizes`, `groups`),
 `freeze` — the `Version` it was read at, and `ReadOnly` when the document takes no edits; a cell or a field absent is
-the default. A sheet edited on the client goes back whole, in the same form: event `Change {Sheet}`.
+the default. A sheet edited on the client goes back whole, in the same form: event `Change {Sheet}`. A report's gridbox
+says in `ComposeState` what its sheet is to the report: 0 composed (or nothing composed yet), 1 composing — the sheet
+on show stays until the new one is delivered, 2 outdated — the setting changed since the sheet was built, and it is
+composed again when the person says so (Compose).
 
 A picture in the view — a command's, a button's, a column's — is named by its id: a backend picture's number, as a
 decimal, or a configuration picture's guid. The answer that first names it gives it in `Pictures`, once per client;
@@ -155,6 +158,7 @@ A schema the client's application does not have, or the person has no right to, 
 | 10 FormEditor | the active tab's form, as the frame has it: `Picture`, `HasSetting`, `Result` (the act before's: 0 done, 1 no storage, 2 no address, 3 refused), `Classes` (`Name`, `Picture`) | `Act` (1 apply — with `Controls`: each `Control`, its `Position`, the properties a person may arrange; 2 save; 3 reset); none — closed |
 | 11 ListSettings | a table's settings: `Settings` (the setting in force, in the node form the settings schema writes), `Fields` (`Name`, `Presentation`, `Id`, `Type`, `Available`), `References` (`Type` — a class id as text, `Targets` — the metaobjects it points at), `Error` | `Settings` — the setting edited; none — cancelled |
 | 12 SimpleChoice | `Value` — a field's number or date, with its type | `Value` — the one chosen; none — dismissed |
+| 13 ComposerSettings | a report's settings: `Settings` (the setting in force), `Composition` (what the report arranges, in its node form), `Fields` and `References` as ListSettings has them — the fields its query offers, no `Id`; `Error` | `Settings` — the setting edited; none — cancelled |
 
 A SavedSettings window stays open through its acts: each act is a `respond`, done by the server, which asks again with
 the shelf as it now stands and `Done` — how the act went — until the window answers with no `Act`. A FormEditor window
@@ -168,6 +172,9 @@ rows are read again. `Act` 2 Choose — a condition's value of a type of the ser
 the client's number for it): the server opens its quick choice, or its choice form — a tab like any other. The value
 chosen comes back in the window's question, asked again or said anew, as `Chosen` (`Choice`, `Value` with its
 `Presentation`).
+
+A ComposerSettings window acts the same way. The setting taken becomes the report's user setting; the report is not
+composed again — its gridbox says `ComposeState` 2 until the person composes it.
 
 A SimpleChoice is a number's calculator or a date's calendar, dropped under the field pressed. The server asks it from
 the field's Select, after the field's choice event — the event runs on the server, the client only draws.

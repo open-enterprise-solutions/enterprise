@@ -7,6 +7,8 @@
 #include "frmclient/backend/propertyManager/propertyManager.h"
 #include "frmclient/backend/system/value/valueSpreadsheet.h"
 
+#include "protocol/protocol.h"   // ibProtocolComposeState — what the sheet is to its report
+
 static const wxArrayString wxEmptyArrayString;
 
 static const wxString s_strTypeTextOrString = wxT("stringText");
@@ -820,14 +822,16 @@ public:
 	void OnIdle(wxIdleEvent& event);
 	void OnSize(wxSizeEvent& event);
 
-	// ⭐ THE SHEET SAYS IT IS BUSY. A report composes on a background run, so the window stays alive
-	// and usable while it does — and a window that looks finished while it is still filling is worse
+	// ⭐ THE SHEET SAYS WHAT IT IS TO ITS REPORT. A report composes on a background run, so the window stays
+	// alive and usable while it does — and a window that looks finished while it is still filling is worse
 	// than one that waits: the person reads a half-built report as the answer. A small spinner with
 	// a word beside it, centred over the sheet, is the whole story (Max, 2026-08-19: "while the
 	// report is being built the little circle turns, like in the list, and meanwhile we can work").
+	// …and the same plate, without the spinner, says the sheet is OUTDATED: the setting changed since it
+	// was built, and a report is re-formed when the person says Compose (Max, 2026-10-12).
 	//
-	// Idempotent: showing it twice is one spinner, hiding a hidden one does nothing.
-	void ShowComposeProgress(bool busy);
+	// Idempotent: showing it twice is one plate, hiding a hidden one does nothing.
+	void ShowComposeState(ibProtocolComposeState state);
 
 	// ⭐ THE SHEET FILLS THE WINDOW. A document holds as many columns and rows as somebody put into
 	// it — a composed report may hold two — and the space to the right of them is not "outside the
@@ -855,8 +859,11 @@ private:
 	wxObjectDataPtr<ibBackendSpreadsheetObject> m_spreadsheetObject;
 	wxSharedPtr<ibBackendSpreadsheetNotifier> m_notifier;
 
-	// The "composing…" overlay — see ShowComposeProgress. Created on first use, kept hidden after.
-	class wxWindow* m_composeProgress = nullptr;
+	// The plate over the sheet — see ShowComposeState. Created on first use, kept hidden after: its spinner turns
+	// while composing, its text says which.
+	class wxWindow*             m_composeState = nullptr;
+	class wxActivityIndicator*  m_composeSpinner = nullptr;
+	class wxStaticText*         m_composeText = nullptr;
 
 	// The rows waiting for their automatic height (RequestAutoRowHeights) — one span, widened as rows
 	// are marked; -1 when none are.

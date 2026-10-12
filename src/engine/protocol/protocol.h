@@ -98,6 +98,7 @@ namespace ibProtocolName {
 	inline constexpr const char* HasSetting = "HasSetting";   // …a setting of the person's is saved for this form
 	inline constexpr const char* Result     = "Result";       // …how a save or a reset went (ibProtocolFormSettingsResult)
 	inline constexpr const char* Settings   = "Settings";     // a list's settings window: the setting, as the schema writes it
+	inline constexpr const char* Composition = "Composition";   // …a report's: the composition it arranges
 	inline constexpr const char* Fields     = "Fields";       // …the list's fields: Name, Id, Type, Available
 	inline constexpr const char* Available  = "Available";    // …a field the options of the base leave to it
 	inline constexpr const char* Error      = "Error";        // …why the server refused the setting it was given
@@ -231,7 +232,7 @@ namespace ibProtocolName {
 	// A spreadsheet: the version of the sheet on show in the view, the sheet fetched whole — Sheet, in the form a
 	// template is stored in (the engine's ibSpreadsheetDescriptionMemory::WriteNode), ReadOnly beside it; edited here,
 	// it goes back the same way, Change {Sheet}; a cell clicked, Cell {Row, Col}.
-	inline constexpr const char* Composing  = "Composing";
+	inline constexpr const char* ComposeState = "ComposeState";   // the State's: the sheet to its report (ibProtocolComposeState)
 	inline constexpr const char* GridLines  = "GridLines";   // the State's: its grid lines shown — a document's sheet
 	inline constexpr const char* Sheet      = "Sheet";
 	inline constexpr const char* Col        = "Col";
@@ -429,6 +430,11 @@ enum class ibProtocolRequestKind : int {
 	SimpleChoice = 12,   // the desktop's ibTypeControlFactory::SimpleChoice under the field pressed: Value — its value with its
 	                     // type ({t, v}), a number (the calculator) or a date (the calendar) → Value — the one chosen; none —
 	                     // dismissed
+	ComposerSettings = 13,   // the desktop's ibDialogComposerSettings over a report's model: as ListSettings, and Composition —
+	                         // the composition it arranges, as ibCompositionDescriptionMemory writes it; Fields — those its
+	                         // query offers (Presentation — the caption its source gives one) → as ListSettings; the report
+	                         // waits for Compose (ibProtocolComposeState::Outdated). On the way: the same acts
+	                         // (ibProtocolListSettingsAct)
 };
 
 // What a form editor did — its answer's Act.
@@ -571,6 +577,13 @@ enum class ibProtocolViewMode : int {
 	Tree         = 0,   // the whole hierarchy, a folder opened in place
 	Hierarchical = 1,   // one level, a folder entered
 	List         = 2,   // every row, flat
+};
+
+// What a spreadsheet's sheet on show is to the report behind it — its State's ComposeState.
+enum class ibProtocolComposeState : int {
+	Composed  = 0,   // what was built, as the setting in force builds it (or nothing composed yet)
+	Composing = 1,   // a compose is running; the sheet on show stays until it is delivered
+	Outdated  = 2,   // the setting changed since the sheet was built — composed again when the person says so
 };
 
 // How a message to the person is meant — its Level.

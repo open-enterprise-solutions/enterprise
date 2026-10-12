@@ -166,6 +166,7 @@
     <ClCompile Include="mainFrame\settings\fontcolorsettings.cpp" />
     <ClCompile Include="mainFrame\settings\xmlutility.cpp" />
     <ClCompile Include="win\editor\textEditor\textEditor.cpp" />
+    <ClCompile Include="win\editor\codeEditor\codeEditor.cpp" />
     <ClCompile Include="win\editor\textEditor\textEditorPrintOut.cpp" />
     <ClCompile Include="win\picture.cpp" />
     <ClCompile Include="win\dlgs\about.cpp" />
@@ -174,6 +175,8 @@
     <ClCompile Include="win\dlgs\generation.cpp" />
     <ClCompile Include="win\dlgs\settings\savedSettings.cpp" />
     <ClCompile Include="win\dlgs\settings\list\listSettings.cpp" />
+    <ClCompile Include="win\dlgs\settings\composer\composerSettings.cpp" />
+    <ClCompile Include="win\dlgs\settings\settingsOutputParametersEditor.cpp" />
     <ClCompile Include="win\dlgs\settings\settingsFieldTree.cpp" />
     <ClCompile Include="win\dlgs\settings\settingsFilterEditor.cpp" />
     <ClCompile Include="win\dlgs\settings\filterTreeModel.cpp" />
@@ -242,6 +245,7 @@
     <ClCompile Include="backend\backend_localization.cpp" />
     <ClCompile Include="backend\compiler\value_res.cpp" />
     <ClCompile Include="backend\metaCollection\partial\reference\reference.cpp" />
+    <ClCompile Include="backend\metaCollection\resource\metaResourceObject_res.cpp" />
     <ClCompile Include="backend\backend_type.cpp" />
     <ClCompile Include="backend\system\value\valueColour.cpp" />
     <ClCompile Include="backend\system\value\valueFont.cpp" />
@@ -252,6 +256,8 @@
     <ClCompile Include="backend\spreadsheetDescription.cpp" />
     <ClCompile Include="backend\compositionDescription.cpp" />
     <ClCompile Include="backend\typeDescription.cpp" />
+    <ClCompile Include="backend\composition\compositionTheme.cpp" />
+    <ClCompile Include="backend\query\queryConstructorModel.cpp" />
     <ClCompile Include="visualView\ctrl\frame.cpp" />
     <ClCompile Include="visualView\ctrl\control.cpp" />
     <ClCompile Include="visualView\ctrl\window.cpp" />
@@ -282,6 +288,7 @@
     <ClInclude Include="docView\templates\docViewHelp.h" />
     <ClInclude Include="mainFrame\settings\editorsettings.h" />
     <ClInclude Include="win\editor\textEditor\textEditor.h" />
+    <ClInclude Include="win\editor\codeEditor\codeEditor.h" />
     <ClInclude Include="win\editor\textEditor\textEditorPrintOut.h" />
     <ClInclude Include="mainFrame\mainFrame.h" />
     <ClInclude Include="mainFrame\mainFrameChild.h" />
@@ -295,6 +302,8 @@
     <ClInclude Include="win\dlgs\generation.h" />
     <ClInclude Include="win\dlgs\settings\savedSettings.h" />
     <ClInclude Include="win\dlgs\settings\list\listSettings.h" />
+    <ClInclude Include="win\dlgs\settings\composer\composerSettings.h" />
+    <ClInclude Include="win\dlgs\settings\settingsOutputParametersEditor.h" />
     <ClInclude Include="win\dlgs\settings\settingsFieldTree.h" />
     <ClInclude Include="win\dlgs\settings\settingsFilterEditor.h" />
     <ClInclude Include="win\dlgs\settings\filterTreeModel.h" />
@@ -326,6 +335,7 @@
     <ClInclude Include="backend\propertyManager\property\propertyFormat.h" />
     <ClInclude Include="backend\propertyManager\property\propertyNumber.h" />
     <ClInclude Include="backend\propertyManager\property\variant\variantTranslate.h" />
+    <ClInclude Include="backend\propertyManager\property\variant\variantComposition.h" />
     <ClInclude Include="propertyManager\property\private\propertyRegistry.h" />
     <ClInclude Include="propertyManager\property\private\prop.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropNumber.h" />
@@ -333,9 +343,15 @@
     <ClInclude Include="visualView\controlEnum.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropFont.h" />
     <ClInclude Include="win\dlgs\translateConstructor\translateConstructor.h" />
+    <ClInclude Include="win\dlgs\queryConstructor\queryConstructor.h" />
+    <ClInclude Include="win\dlgs\queryConstructor\queryConstructorInternal.h" />
+    <ClInclude Include="win\dlgs\queryConstructor\queryExpressionDialog.h" />
+    <ClInclude Include="win\dlgs\typeSelector.h" />
     <ClInclude Include="win\dlgs\formatConstructor\formatConstructor.h" />
     <ClInclude Include="backend\metadataConfiguration.h" />
     <ClInclude Include="backend\metaCollection\metaSpreadsheetObject.h" />
+    <ClInclude Include="backend\metaCollection\metaComposerObject.h" />
+    <ClInclude Include="backend\metaCollection\resource\metaResourceObject.h" />
     <ClInclude Include="backend\metaCollection\metaObject.h" />
     <ClInclude Include="backend\metaCollection\metaLanguageObject.h" />
     <ClInclude Include="backend\metaData.h" />
@@ -345,6 +361,7 @@
     <ClInclude Include="backend\compiler\enumUnit.h" />
     <ClInclude Include="backend\system\value\valueFont.h" />
     <ClInclude Include="backend\system\value\valueSize.h" />
+    <ClInclude Include="backend\system\value\valueDataComposition.h" />
     <ClInclude Include="backend\propertyManager\property\propertySize.h" />
     <ClInclude Include="backend\propertyManager\property\variant\variantSize.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropSize.h" />
@@ -390,11 +407,17 @@
     <ClInclude Include="backend\backend_localization.h" />
     <ClInclude Include="backend\backend_spreadsheet.h" />
     <ClInclude Include="backend\composition\dataComposer.h" />
+    <ClInclude Include="backend\composition\compositionTheme.h" />
     <ClInclude Include="backend\settings\settingsComposer.h" />
     <ClInclude Include="backend\spreadsheetDescription.h" />
     <ClInclude Include="backend\compositionDescription.h" />
     <ClInclude Include="backend\typeDescription.h" />
     <ClInclude Include="backend\query\queryBalanceRole.h" />
+    <ClInclude Include="backend\query\queryAST.h" />
+    <ClInclude Include="backend\query\queryable.h" />
+    <ClInclude Include="backend\query\queryKeywords.h" />
+    <ClInclude Include="backend\query\queryLowering.h" />
+    <ClInclude Include="backend\query\queryConstructorModel.h" />
     <ClInclude Include="backend\query\queryUnfold.h" />
     <ClInclude Include="backend\compiler\value.h" />
     <ClInclude Include="backend\serialize\dataProtocol.h" />

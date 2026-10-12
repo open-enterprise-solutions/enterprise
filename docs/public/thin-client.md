@@ -77,7 +77,8 @@ same process, and wx keeps one class table.
 - **The form editor** opens over the tab's document window; Apply, Save and Reset answer its request (`FormEditor`).
   The form's root carries its own properties (`Title`, `Orient`, …); the tree's captions are the server's.
 - **The desktop's windows, drawn here, decided there.** The list settings window (`ListSettings`, a table's Filter
-  command) and the calculator and calendar (`SimpleChoice`) are the desktop's, copied. The client draws them over what
+  command), the report's settings window (`ComposerSettings`, a report's Settings command) and the calculator and
+  calendar (`SimpleChoice`) are the desktop's, copied. The client draws them over what
   the request carries; the server reads, checks and puts on what comes back.
 
 ## Spreadsheets

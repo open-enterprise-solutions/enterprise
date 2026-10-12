@@ -32,6 +32,7 @@
 #include "frmclient/win/dlgs/generation.h"
 #include "frmclient/win/dlgs/settings/savedSettings.h"
 #include "frmclient/win/dlgs/settings/list/listSettings.h"
+#include "frmclient/win/dlgs/settings/composer/composerSettings.h"
 #include "frmclient/backend/serialize/dataProtocol.h"   // a value as the server's question carries it
 #include "frmclient/visualView/ctrl/typeControl.h"      // ibTypeControlFactory::SimpleChoice — the calculator, the calendar
 #include "frmclient/visualView/ctrl/frame.h"            // ibControlFrame — what they are drawn over
@@ -209,6 +210,14 @@ wxWindow* FocusedEditor(wxWindow* otherwise)
 			return window;
 	}
 	return wxWindow::FindFocus() != nullptr ? wxWindow::FindFocus() : otherwise;
+}
+
+// A SETTINGS WINDOW'S QUESTION — a list's or a report's: the one a value of the server's choosing is chosen for on the
+// way (ibProtocolListSettingsAct::Choose), and asked again with it.
+bool IsSettingsRequest(const ibProtocolNode& request)
+{
+	const ibProtocolRequestKind kind = static_cast<ibProtocolRequestKind>(request.GetInt(ibProtocolName::Kind));
+	return kind == ibProtocolRequestKind::ListSettings || kind == ibProtocolRequestKind::ComposerSettings;
 }
 
 } // namespace
@@ -1024,8 +1033,7 @@ void ibFrontendMainFrame::TakeChosen(const ibProtocolNode& request)
 bool ibFrontendMainFrame::ChooseValue(ibControlFrame* owner, const ibValue& current)
 {
 	const ibProtocolNode request = GetRequest();
-	if (owner == nullptr || m_asking.empty()
-		|| static_cast<ibProtocolRequestKind>(request.GetInt(ibProtocolName::Kind)) != ibProtocolRequestKind::ListSettings)
+	if (owner == nullptr || m_asking.empty() || !IsSettingsRequest(request))
 		return false;
 
 	m_choosing = ibChoosing{ owner, ++m_choice, m_asking.size() };
@@ -1049,7 +1057,7 @@ bool ibFrontendMainFrame::ChooseValue(ibControlFrame* owner, const ibValue& curr
 		const ibProtocolNode asked = GetRequest();
 		if (!asked.IsNode())
 			return true;
-		if (static_cast<ibProtocolRequestKind>(asked.GetInt(ibProtocolName::Kind)) == ibProtocolRequestKind::ListSettings) {
+		if (IsSettingsRequest(asked)) {
 			TakeChosen(asked);
 			return true;
 		}
@@ -1209,6 +1217,11 @@ void ibFrontendMainFrame::ShowRequest(const ibProtocolNode& request, ibProtocolN
 		// THE DESKTOP'S ibDialogListSettings::ShowUserSettings over a table's model — the model is the server's: the
 		// setting and its fields come in the question, the edited setting is the answer; cancelled — answered with none.
 		ibDialogListSettings::ShowUserSettings(parent, request, response);
+		break;
+	case ibProtocolRequestKind::ComposerSettings:
+		// THE DESKTOP'S ibDialogComposerSettings::ShowUserSettings over a report's model — the same road: the setting, the
+		// composition and its fields come in the question, the edited setting is the answer; cancelled — none.
+		ibDialogComposerSettings::ShowUserSettings(parent, request, response);
 		break;
 	case ibProtocolRequestKind::FormEditor: {
 		// THE DESKTOP'S ibValueForm::ChangeForm — its editor over the form of the active tab, as the form's controls hold
