@@ -43,7 +43,7 @@ public:
 	// Left below the pointer so the refusal itself still fits. The depth
 	// counters stay the limit a script sees; this fires only when the
 	// native stack would run out first.
-	static constexpr std::size_t kRecursionSlack = 128u * 1024u;
+	static constexpr std::size_t kStackSlack = 128u * 1024u;
 
 	// StackRemaining answers this when it cannot see the bounds. Not empty.
 	static constexpr std::size_t kUnknownStack = static_cast<std::size_t>(-1);
@@ -62,15 +62,10 @@ public:
 	static bool StackLow() noexcept
 	{
 		const std::size_t left = StackRemaining();
-		return left != kUnknownStack && left < kRecursionSlack;
+		return left != kUnknownStack && left < kStackSlack;
 	}
 
 	static ibFiber* Create(Entry entry, void* arg, std::size_t reserveBytes = kStackReserve);
-
-	// The next Create throws std::bad_alloc and clears the request.
-	// A test uses it to prove a lease that cannot be placed refuses
-	// the queued task instead of trying the same queue again.
-	static void FailNextCreate();
 	static void Destroy(ibFiber* fiber);
 
 	bool Finished() const { return m_finished; }

@@ -123,7 +123,7 @@ TEST(FiberStack, StackRemaining_OnAFiber_IsInsideTheReserve)
 {
 	std::size_t left = 0;
 	RunOnFiber([&] { left = ibFiber::StackRemaining(); });
-	EXPECT_GT(left, ibFiber::kRecursionSlack);
+	EXPECT_GT(left, ibFiber::kStackSlack);
 	EXPECT_LT(left, ibFiber::kStackReserve);
 }
 
@@ -210,7 +210,7 @@ TEST(FiberStack, ABinaryValueNestedPastTheStack_Raises)
 		ASSERT_TRUE(ibBinaryProvider().Read(reader, read));
 	});
 
-	// Below kRecursionSlack, so the first nested read is already low.
+	// Below kStackSlack, so the first nested read is already low.
 	const wxString why = Refusal([&] {
 		ibDataNode read;
 		ibReaderMemory reader(blob);

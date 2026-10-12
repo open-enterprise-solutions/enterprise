@@ -66,9 +66,6 @@ extern "C" void ibFiberSwitch(void** fromSp, void** toSp);
 extern "C" void ibFiberTrampoline();
 #endif
 
-// One shot, for the test that a failed Create refuses the task.
-static std::atomic<int> g_failCreates{ 0 };
-
 namespace {
 
 thread_local ibFiber* tl_currentFiber = nullptr;
@@ -83,22 +80,25 @@ struct ibStackSpan {
 	const char* high = nullptr;
 };
 
+// Measured once per thread: a failed measurement is not retried.
+enum class ibStackSpanState { Untried, Measured, Failed };
+
 thread_local ibStackSpan tl_threadStack;
-thread_local int tl_spanState = 0;   // 0 untried, 1 measured, 2 failed
+thread_local ibStackSpanState tl_spanState = ibStackSpanState::Untried;
 
 bool ThreadStackSpan(ibStackSpan& out)
 {
-	if (tl_spanState == 1) {
+	if (tl_spanState == ibStackSpanState::Measured) {
 		out = tl_threadStack;
 		return true;
 	}
-	if (tl_spanState == 2)
+	if (tl_spanState == ibStackSpanState::Failed)
 		return false;
 #if defined(_WIN32)
 	char here;
 	MEMORY_BASIC_INFORMATION hereInfo;
 	if (::VirtualQuery(&here, &hereInfo, sizeof(hereInfo)) == 0 || hereInfo.AllocationBase == nullptr) {
-		tl_spanState = 2;
+		tl_spanState = ibStackSpanState::Failed;
 		return false;
 	}
 	const char* base = static_cast<const char*>(hereInfo.AllocationBase);
@@ -116,7 +116,7 @@ bool ThreadStackSpan(ibStackSpan& out)
 			break;
 	}
 	if (end <= base) {
-		tl_spanState = 2;
+		tl_spanState = ibStackSpanState::Failed;
 		return false;
 	}
 	out.low = base;
@@ -125,7 +125,7 @@ bool ThreadStackSpan(ibStackSpan& out)
 	void* const top = pthread_get_stackaddr_np(pthread_self());
 	const std::size_t size = pthread_get_stacksize_np(pthread_self());
 	if (top == nullptr || size == 0) {
-		tl_spanState = 2;
+		tl_spanState = ibStackSpanState::Failed;
 		return false;
 	}
 	out.high = static_cast<const char*>(top);
@@ -133,7 +133,7 @@ bool ThreadStackSpan(ibStackSpan& out)
 #else
 	pthread_attr_t attr;
 	if (pthread_getattr_np(pthread_self(), &attr) != 0) {
-		tl_spanState = 2;
+		tl_spanState = ibStackSpanState::Failed;
 		return false;
 	}
 	void* addr = nullptr;
@@ -141,15 +141,16 @@ bool ThreadStackSpan(ibStackSpan& out)
 	const int rc = pthread_attr_getstack(&attr, &addr, &size);
 	pthread_attr_destroy(&attr);
 	if (rc != 0 || addr == nullptr || size == 0) {
-		tl_spanState = 2;
+		tl_spanState = ibStackSpanState::Failed;
 		return false;
 	}
 	out.low = static_cast<const char*>(addr);
 	out.high = out.low + size;
 #endif
 	tl_threadStack = out;
-	tl_spanState = (out.low != nullptr && out.high > out.low) ? 1 : 2;
-	return tl_spanState == 1;
+	tl_spanState = (out.low != nullptr && out.high > out.low)
+		? ibStackSpanState::Measured : ibStackSpanState::Failed;
+	return tl_spanState == ibStackSpanState::Measured;
 }
 
 } // namespace
@@ -332,15 +333,8 @@ std::size_t ibFiber::StackRemaining() noexcept
 	return static_cast<std::size_t>(sp - low);
 }
 
-void ibFiber::FailNextCreate()
-{
-	g_failCreates.store(1, std::memory_order_release);
-}
-
 ibFiber* ibFiber::Create(Entry entry, void* arg, std::size_t reserveBytes)
 {
-	if (g_failCreates.exchange(0, std::memory_order_acq_rel) > 0)
-		throw std::bad_alloc();
 	if (reserveBytes == 0)
 		reserveBytes = kStackReserve;
 	ibFiber* fiber = new ibFiber();

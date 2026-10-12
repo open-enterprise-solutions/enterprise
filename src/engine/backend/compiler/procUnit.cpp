@@ -14,6 +14,7 @@
 
 #include <algorithm>
 #include <exception>   // std::exception_ptr — a refusal is rethrown after the catch, not inside it
+#include <optional>    // std::optional — whether the core refused, apart from what it said
 #include <utility>   // std::forward — the variadic Raise below
 
 // Operand resolution for the bytecode interpreter. Three slot kinds:
@@ -448,8 +449,8 @@ inline void ResetByteCode() { auto* st = ibSession::GetPUState(); while (EndByte
 // The runaway-recursion refusal, OUT OF LINE. It formats the whole stack, and built inside the guard
 // below it gave every script call a 384-byte frame, seven saved registers and a stack-cookie check (the
 // disassembly, 2026-09-28) — for a message a correct script never reaches. Same shape as the raise
-// helpers above.
-IB_NOINLINE void RaiseRecursionLimit(ibProcUnitState* state, bool nativeStack = false)
+// helpers above. Two reasons share it, each through its own name below.
+IB_NOINLINE void RaiseWithCallStack(ibProcUnitState* state, const wxString& reason)
 {
 	// ⚠ THE REPEAT IS THE WHOLE POINT, SO IT IS COUNTED AND NOT REPRINTED. A runaway is
 	// recursion, so the frame that ran away is BY DEFINITION on the stack hundreds of
@@ -507,10 +508,19 @@ IB_NOINLINE void RaiseRecursionLimit(ibProcUnitState* state, bool nativeStack = 
 	// argument, and a frame carries names the author wrote — a per cent sign in one of them
 	// is a conversion specifier `FormatV` then reads a missing argument for. Same shape as
 	// the compile-error site in backend_exception.cpp; passed as an argument here too.
-	const wxString reason = nativeStack
-		? _("The native stack is too low to continue this call.\nCall stack :")
-		: _("Number of recursive calls exceeded the maximum allowed value!\nCall stack :");
 	ibBackendCoreException::Error(wxT("%s"), reason + strError);
+}
+
+// The count a script sees (MAX_REC_COUNT).
+IB_NOINLINE void RaiseRecursionLimit(ibProcUnitState* state)
+{
+	RaiseWithCallStack(state, _("Number of recursive calls exceeded the maximum allowed value!\nCall stack :"));
+}
+
+// The native stack ran out before the count did (ibFiber::StackLow).
+IB_NOINLINE void RaiseStackLimit(ibProcUnitState* state)
+{
+	RaiseWithCallStack(state, _("The native stack is too low to continue this call.\nCall stack :"));
 }
 
 struct ibProcStackGuard {
@@ -1070,13 +1080,13 @@ inline ibValue GetValue(const ibValue& cValue1)
 // Out of line, and kept small. ExecuteBody's prologue commits that whole
 // frame before any of its checks run; on MSVC that commit is _chkstk, and
 // the page past the reserve becomes a stack overflow the check never
-// reaches. Asking here, the refusal still has kRecursionSlack under it.
+// reaches. Asking here, the refusal still has kStackSlack under it.
 // A native overflow is not turned into a script error from here: that
 // catch skipped the frame guards, and the dump is the record of it.
 IB_NOINLINE void ibProcUnit::Execute(ibRunContext* pContext, ibValue* pvarRetValue, bool bDelta)
 {
 	if (ibFiber::StackLow())
-		RaiseRecursionLimit(ibSession::PUStateOf(ibSession::Current()), true);
+		RaiseStackLimit(ibSession::PUStateOf(ibSession::Current()));
 	ExecuteBody(pContext, pvarRetValue, bDelta);
 }
 
@@ -1161,7 +1171,8 @@ IB_NOINLINE void ibProcUnit::ExecuteBody(ibRunContext* pContext, ibValue* pvarRe
 	// kept for the modules above and the failure said. The same exception is rethrown after this catch has
 	// returned: a throw inside the handler is another frame on MSVC, and a chain of them overflows the slack.
 	std::exception_ptr propagate;
-	wxString pendingCore;
+	// Present when the core refused. Its text may be empty, so the text is not the sign.
+	std::optional<wxString> coreRefusal;
 	const auto catchError = [&](const ibBackendException& err) -> bool {
 
 		const long trySize = tryList.size() - 1;
@@ -1194,7 +1205,7 @@ IB_NOINLINE void ibProcUnit::ExecuteBody(ibRunContext* pContext, ibValue* pvarRe
 
 start_label:
 	propagate = nullptr;
-	pendingCore.clear();
+	coreRefusal.reset();
 
 	// 🛑 NO SCRATCH BUFFERS LIVE HERE, and the attempt that put four of them here is
 	// worth recording rather than repeating.
@@ -2517,12 +2528,12 @@ start_label:
 	// The conversion is thrown after this handler returns. Throwing it here would be a second frame
 	// above the one that already failed.
 	catch (const ibCoreException& core) {
-		pendingCore = core.GetErrorDescription();
+		coreRefusal = core.GetErrorDescription();
 	}
 
-	if (!pendingCore.IsEmpty()) {
+	if (coreRefusal) {
 		try {
-			ibBackendCoreException::Error(wxT("%s"), pendingCore);
+			ibBackendCoreException::Error(wxT("%s"), *coreRefusal);
 		}
 		catch (const ibBackendException& err) {
 			if (catchError(err))
