@@ -1,5 +1,6 @@
-// An unknown name used to return before any hashing, so it was hundreds of
-// milliseconds faster than a known name with a wrong password.
+// The login by name. An unknown name used to return before any hashing, so it was
+// hundreds of milliseconds faster than a known name with a wrong password. The
+// thin client's login window asks the names first (users), as the desktop's lists them.
 
 #include <gtest/gtest.h>
 
@@ -13,6 +14,7 @@
 #include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
 #include "backend/utils/passwordHash.hpp"
 #include "core/guid.h"
+#include "frmserver/client/clientHost.h"
 
 namespace {
 
@@ -65,6 +67,18 @@ struct LoginNameFix : ::testing::Test {
 };
 
 } // namespace
+
+// The thin client's login window lists the names as the desktop's does; it asks before any login, so no Client.
+TEST_F(LoginNameFix, UsersAnswersTheNamesBeforeAnyLogin)
+{
+	Keep(wxT("right-secret"));
+
+	ibClientHost host(nullptr);
+	const wxString answer = host.Call(wxT(R"({"jsonrpc":"2.0","id":1,"method":"users","params":{}})"));
+	EXPECT_FALSE(answer.Contains(wxT("\"error\""))) << answer;
+	EXPECT_TRUE(answer.Contains(wxT("\"Users\""))) << answer;
+	EXPECT_TRUE(answer.Contains(wxT("\"keeper\""))) << answer;
+}
 
 TEST_F(LoginNameFix, AnUnknownNameCostsTheSameAsAWrongPassword)
 {

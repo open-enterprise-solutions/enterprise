@@ -34,6 +34,8 @@ public:
 	// something, or ask).
 	bool Login(const wxString& user, const wxString& password, ibProtocolMode mode, ibProtocolNode& result,
 		ibProtocolRefusal& refusal, wxString& error);
+	// users {} — the names the login window offers, asked before the login.
+	bool Users(std::vector<wxString>& names, ibProtocolRefusal& refusal, wxString& error);
 	void Logout();
 
 	// Any other call, the client and the frame held named for it (Client, Since). An answer that is a frame (it

@@ -12,5 +12,7 @@ constexpr ibPictureID g_picChangeFormCLSID = picture_to_clsid("PC_CHAGF");
 constexpr ibPictureID g_picSelectCLSID = picture_to_clsid("PC_SELVL");
 constexpr ibPictureID g_picFilterSetCLSID = picture_to_clsid("PC_FLTES");
 constexpr ibPictureID g_picFilterClearCLSID = picture_to_clsid("PC_FLTEC");
+constexpr ibPictureID g_picUserCLSID = picture_to_clsid("PC_USER");
+constexpr ibPictureID g_picAuthenticationCLSID = picture_to_clsid("PC_ATTON");
 
 #endif

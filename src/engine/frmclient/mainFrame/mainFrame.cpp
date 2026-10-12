@@ -31,6 +31,7 @@
 #include "frmclient/win/picture.h"
 #include "frmclient/win/dlgs/about.h"
 #include "frmclient/win/dlgs/activeUser.h"
+#include "frmclient/win/dlgs/authorization.h"
 #include "frmclient/win/dlgs/enterpriseOption.h"
 #include "frmclient/win/dlgs/errorDialog.h"
 #include "frmclient/win/dlgs/formEditor.h"
@@ -660,12 +661,38 @@ bool ibFrontendMainFrame::Show(bool show)
 	ibProtocolNode answer;
 	ibProtocolRefusal refusal = ibProtocolRefusal::None;
 	wxString error;
-	const bool loggedIn = m_communicator->Login(m_user, m_password, m_mode, answer, refusal, error);
+	bool loggedIn = m_communicator->Login(m_user, m_password, m_mode, answer, refusal, error);
+
+	// A REFUSED NAME OR PASSWORD ASKS THE PERSON — the desktop's login window, with the names the server offers, asked
+	// again until the login goes through or the person cancels it. A list the server could not read offers none: the
+	// name is typed.
+	bool cancelled = false;
+	std::vector<wxString> users;
+	for (bool asked = false; !loggedIn && refusal == ibProtocolRefusal::LoginRefused; asked = true) {
+		if (asked) {
+			wxMessageBox(_("Wrong user or password entered!"), GetTitle(), wxOK | wxICON_ERROR);
+		}
+		else {
+			ibProtocolRefusal usersRefusal = ibProtocolRefusal::None;
+			wxString usersError;
+			m_communicator->Users(users, usersRefusal, usersError);
+		}
+		ibDialogAuthentication dlg(users);
+		dlg.SetLogin(m_user);
+		if (dlg.ShowModal() == wxID_CANCEL) {
+			cancelled = true;
+			break;
+		}
+		m_user = dlg.GetLogin();
+		m_password = dlg.GetPassword();
+		loggedIn = m_communicator->Login(m_user, m_password, m_mode, answer, refusal, error);
+	}
 	m_password.clear();
 	if (!loggedIn) {
 		// A start that ended the run itself (its BeforeStart cancelled it, a debugger's Stop in it) is no failure to say:
 		// the person ended it, or saw what it said — the desktop's start goes as quietly (enterprise/mainApp.cpp, Cancelled).
-		if (refusal != ibProtocolRefusal::StartRefused)
+		// Nor is a login window the person cancelled.
+		if (!cancelled && refusal != ibProtocolRefusal::StartRefused)
 			wxMessageBox(!error.IsEmpty() ? error : wxString(_("The start was refused.")), GetTitle(), wxOK | wxICON_ERROR);
 		return false;
 	}

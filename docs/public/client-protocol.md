@@ -34,6 +34,7 @@ deflate (RFC 1951 — a browser's `DecompressionStream("deflate-raw")`). A text 
 |---|---|---|
 | `login` | `User`, `Password`, `Mode` (1 runtime — the default, 2 designer), `Protocol` (the newest version the client speaks, 1 if absent), `Features` (what this client accepts; `resume` opts into the slot below) | `Client`, `Protocol` (the version both speak), `Features` (what the server offers; `resume` when a dropped thin runtime is kept), `Token` (that runtime only, once), and the frame |
 | `login` | `Token` and no `User`, only while that client is detached | the same `Client`, `Protocol`, `Features`, and no frame and no new `Token`. The next `frame` `{Since}` is the patch |
+| `users` | — (before the login, no `Client`) | `Users` — the names the login window offers |
 | `logout` | `Client` | — |
 | `frame` | `Client` | the frame |
 | `schema` | `Client`, `Schema` | what the schema shows |

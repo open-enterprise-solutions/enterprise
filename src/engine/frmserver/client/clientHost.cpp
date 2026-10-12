@@ -25,6 +25,7 @@
 #include "core/serialize/dataBuilder.h"
 #include "backend/session/session.h"
 #include "backend/temp/tempStorage.h"   // the client's files
+#include "backend/userInfo.h"           // users — the names the login window offers
 #include "backend/utils/sessionToken.h"
 #include "backend/utils/sha256.hpp"
 
@@ -760,6 +761,19 @@ bool ibClientHost::Call(ibProtocolMethod method, const ibDataNode& params, ibDat
 				OfferResume(result, id, client->protocol, result.GetValue<wxString>(wxString::FromUTF8(ibProtocolName::Token)));
 			}
 		}
+		}
+	}
+	else if (method == ibProtocolMethod::Users) {
+		// The names the login window offers, as the desktop's lists them — asked before any login.
+		try {
+			std::vector<ibDataValue> names;
+			for (const ibUserInfo::Brief& user : ibUserInfo::ListAll())
+				names.push_back(ibDataValue::String(user.m_strUserName));
+			result.AddField(wxString::FromUTF8(ibProtocolName::Users), ibDataValue::Array(std::move(names)));
+			done = true;
+		}
+		catch (const ibCoreException& err) {
+			refuse(ibProtocolRefusal::Failed, err.GetErrorDescription());
 		}
 	}
 	else if (method == ibProtocolMethod::Logout) {

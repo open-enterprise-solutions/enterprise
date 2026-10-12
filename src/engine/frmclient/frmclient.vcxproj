@@ -175,6 +175,7 @@
     <ClCompile Include="win\picture.cpp" />
     <ClCompile Include="win\dlgs\about.cpp" />
     <ClCompile Include="win\dlgs\activeUser.cpp" />
+    <ClCompile Include="win\dlgs\authorization.cpp" />
     <ClCompile Include="win\dlgs\enterpriseOption.cpp" />
     <ClCompile Include="win\dlgs\errorDialog.cpp" />
     <ClCompile Include="win\dlgs\formEditor.cpp" />
@@ -319,6 +320,7 @@
     <ClInclude Include="win\picture.h" />
     <ClInclude Include="win\dlgs\about.h" />
     <ClInclude Include="win\dlgs\activeUser.h" />
+    <ClInclude Include="win\dlgs\authorization.h" />
     <ClInclude Include="win\dlgs\enterpriseOption.h" />
     <ClInclude Include="win\dlgs\errorDialog.h" />
     <ClInclude Include="win\dlgs\formEditor.h" />

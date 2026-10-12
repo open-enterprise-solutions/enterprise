@@ -284,7 +284,7 @@ private:
 
 	std::unique_ptr<ibCommunicator> m_communicator;
 	const ibProtocolMode            m_mode;
-	const wxString                  m_user;
+	wxString                        m_user;       // the login's — the one the login window was told, when refused
 	wxString                        m_password;   // until the login — cleared by it
 	ibFontColorSettings             m_fontColorSettings;
 	ibEditorSettings                m_editorSettings;

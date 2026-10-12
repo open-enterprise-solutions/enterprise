@@ -38,6 +38,7 @@ namespace ibProtocolName {
 	// The login, and what every call names.
 	inline constexpr const char* User     = "User";
 	inline constexpr const char* Password = "Password";
+	inline constexpr const char* Users    = "Users";   // users' answer: the names the login window offers
 	inline constexpr const char* Token    = "Token";   // login's bearer, once, in the password login's answer. The
 	                                                   // database keeps its hash (docs/public/client-protocol.md)
 	inline constexpr const char* Mode     = "Mode";
@@ -333,6 +334,7 @@ enum class ibProtocolMethod {
 	                // (the next frame {Since} is the patch). A token login does not return Token again. Mode:
 	                // ibProtocolMode, Runtime when absent; Protocol: the newest version the client speaks, 1 when
 	                // absent — answered with the one both speak, and the features the server offers at it
+	Users,          // {} → Users: the names the login window offers. Asked before the login, so it names no Client
 	Logout,         // {Client}
 	Frame,          // {Client} → the frame
 	Schema,         // {Client, Schema[, Command[, Args]]} → what that schema shows; with a Command, the schema does it and
@@ -362,6 +364,7 @@ inline const char* ibProtocolMethodName(ibProtocolMethod method)
 	switch (method) {
 	case ibProtocolMethod::Unknown:      return "";
 	case ibProtocolMethod::Login:        return "login";
+	case ibProtocolMethod::Users:        return "users";
 	case ibProtocolMethod::Logout:       return "logout";
 	case ibProtocolMethod::Frame:        return "frame";
 	case ibProtocolMethod::Schema:       return "schema";

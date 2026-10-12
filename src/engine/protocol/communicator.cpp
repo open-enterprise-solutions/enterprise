@@ -122,6 +122,18 @@ bool ibCommunicator::Login(const wxString& user, const wxString& password, ibPro
 	return true;
 }
 
+bool ibCommunicator::Users(std::vector<wxString>& names, ibProtocolRefusal& refusal, wxString& error)
+{
+	std::lock_guard<std::mutex> lock(m_mutex);
+	ibProtocolNode result;
+	if (!CallLocked(ibProtocolMethod::Users, ibProtocolNode(), result, refusal, error))
+		return false;
+
+	for (const ibProtocolNode& name : result.GetList(ibProtocolName::Users))
+		names.push_back(name.AsString());
+	return true;
+}
+
 void ibCommunicator::Logout()
 {
 	std::lock_guard<std::mutex> lock(m_mutex);
@@ -216,7 +228,8 @@ bool ibCommunicator::CallLocked(ibProtocolMethod method, const ibProtocolNode& p
 	// The client, and the frame it holds — a frame answer is then the patch from it. A field a method does not
 	// read is skipped by the server.
 	ibProtocolNode named = params.IsNode() ? params.Clone() : ibProtocolNode();
-	if (method != ibProtocolMethod::Login) {
+	const bool beforeLogin = method == ibProtocolMethod::Login || method == ibProtocolMethod::Users;
+	if (!beforeLogin) {
 		named.SetValue(ibProtocolName::Client, m_client);
 		if (m_number != 0)
 			named.SetValue(ibProtocolName::Since, m_number);
@@ -224,7 +237,7 @@ bool ibCommunicator::CallLocked(ibProtocolMethod method, const ibProtocolNode& p
 	// ⭐ WHAT WAS HELD GOES WITH ANY CALL — the server applies it before the call itself, so the code a press runs reads the
 	// row the cursor stands on. Taken once: a call that does not get through loses it with the session it was of. A
 	// client going says nothing more of where it was.
-	if (method != ibProtocolMethod::Login && method != ibProtocolMethod::Logout) {
+	if (!beforeLogin && method != ibProtocolMethod::Logout) {
 		std::vector<ibProtocolNode> pending;
 		{
 			std::lock_guard<std::mutex> lock(m_pendingMutex);
