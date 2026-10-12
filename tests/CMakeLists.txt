@@ -76,6 +76,7 @@ add_executable(oes_tests
     test_jsonProvider.cpp
     test_valueJson.cpp
     test_queryRenderer.cpp
+    test_queryStringConcat.cpp
     test_queryLifecycle.cpp
     test_queryBuilderShowcase.cpp
     test_queryTotals.cpp

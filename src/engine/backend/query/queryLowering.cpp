@@ -3084,6 +3084,14 @@ static ibTypeDescription TypeOfExpr(const std::vector<ibSourceBinding>& sources,
 		const bool shift = e.m_arith == ibQueryArithOp::Add || e.m_arith == ibQueryArithOp::Sub;
 		if (shift && l.GetClsidCount() == 1 && l.ContainType(ibValueTypes::TYPE_DATE) && rNum)
 			return l;
+		// A string added to a string is a string. One side may be untyped (a carried column this
+		// select cannot see); a number or a date on either side is not concatenation, and stays
+		// unclaimed the way mixed arithmetic always has.
+		const bool lStr = l.GetClsidCount() == 1 && l.ContainType(ibValueTypes::TYPE_STRING);
+		const bool rStr = r.GetClsidCount() == 1 && r.ContainType(ibValueTypes::TYPE_STRING);
+		if (e.m_arith == ibQueryArithOp::Add && (lStr || rStr)
+		    && (lStr || l.GetClsidCount() == 0) && (rStr || r.GetClsidCount() == 0))
+			return ibTypeDescription(g_valueStringCLSID);
 		return ibTypeDescription();
 	}
 

@@ -2070,6 +2070,136 @@ static ibColumnType CastTypeForConst(const ibValue& v)
 	}
 }
 
+// What an operand of '+' IS, so string addition can be spelled as concatenation. Unknown is a
+// carried or computed column this expression cannot type; it concatenates when the other operand
+// is a string, and stays addition when the other operand is a number.
+enum class ibArithValueKind { String, Number, Date, Boolean, Other, Unknown };
+
+static bool IsStringAddition(ibArithValueKind lhs, ibArithValueKind rhs);
+
+static ibArithValueKind KindFromType(const ibTypeDescription& td)
+{
+	if (td.GetClsidCount() != 1)
+		return td.GetClsidCount() == 0 ? ibArithValueKind::Unknown : ibArithValueKind::Other;
+	if (td.ContainType(ibValueTypes::TYPE_STRING))  return ibArithValueKind::String;
+	if (td.ContainType(ibValueTypes::TYPE_NUMBER))  return ibArithValueKind::Number;
+	if (td.ContainType(ibValueTypes::TYPE_DATE))    return ibArithValueKind::Date;
+	if (td.ContainType(ibValueTypes::TYPE_BOOLEAN)) return ibArithValueKind::Boolean;
+	return ibArithValueKind::Other;
+}
+
+// The field the expression will actually project. A composite string is `fld_S`; a carried
+// output keeps the alias it was published under (`out_q_carried0`) and says nothing here.
+static ibArithValueKind KindFromFieldName(const wxString& field)
+{
+	if (field.IsEmpty())
+		return ibArithValueKind::Unknown;
+	const auto ends = [&](ibColumnRole role) {
+		const wxString& suffix = ibFieldSuffix(role);
+		return !suffix.IsEmpty() && field.length() > suffix.length() && field.EndsWith(suffix);
+	};
+	if (ends(ibColumnRole::ReferenceId) || ends(ibColumnRole::ReferenceType)
+	    || ends(ibColumnRole::Discriminator) || ends(ibColumnRole::Schedule)
+	    || ends(ibColumnRole::TypeDescription) || ends(ibColumnRole::Enum))
+		return ibArithValueKind::Other;
+	if (ends(ibColumnRole::String))  return ibArithValueKind::String;
+	if (ends(ibColumnRole::Number))  return ibArithValueKind::Number;
+	if (ends(ibColumnRole::Date))    return ibArithValueKind::Date;
+	if (ends(ibColumnRole::Boolean)) return ibArithValueKind::Boolean;
+	return ibArithValueKind::Unknown;
+}
+
+static ibArithValueKind KindOfColumnExpr(const ibQueryColumnExprPtr& expr)
+{
+	if (!expr)
+		return ibArithValueKind::Unknown;
+	switch (expr->m_kind) {
+	case ibQueryColumnExprKind::Const:
+		switch (expr->m_const.GetType()) {
+		case ibValueTypes::TYPE_STRING:  return ibArithValueKind::String;
+		case ibValueTypes::TYPE_NUMBER:  return ibArithValueKind::Number;
+		case ibValueTypes::TYPE_DATE:    return ibArithValueKind::Date;
+		case ibValueTypes::TYPE_BOOLEAN: return ibArithValueKind::Boolean;
+		default:                         return ibArithValueKind::Unknown;
+		}
+	case ibQueryColumnExprKind::Column: {
+		if (expr->m_col == nullptr)
+			return ibArithValueKind::Unknown;
+		if (const ibBackendColumnRawDB* raw = expr->m_col->AsRawColumn()) {
+			switch (raw->GetRawType()) {
+			case ibBackendColumnRawDB::RawType::String:  return ibArithValueKind::String;
+			case ibBackendColumnRawDB::RawType::Number:  return ibArithValueKind::Number;
+			case ibBackendColumnRawDB::RawType::Date:    return ibArithValueKind::Date;
+			case ibBackendColumnRawDB::RawType::Boolean: return ibArithValueKind::Boolean;
+			default:                                     return ibArithValueKind::Other;
+			}
+		}
+		const wxString field = expr->m_field.IsEmpty() ? FirstSqlFieldOfColumn(expr->m_col) : expr->m_field;
+		const ibArithValueKind named = KindFromFieldName(field);
+		if (named != ibArithValueKind::Unknown)
+			return named;
+		return KindFromType(expr->m_col->GetTypeDesc());
+	}
+	case ibQueryColumnExprKind::Arith: {
+		const ibArithValueKind lhs = KindOfColumnExpr(expr->m_lhs);
+		const ibArithValueKind rhs = KindOfColumnExpr(expr->m_rhs);
+		if (expr->m_arith == ibQueryColumnArithOp::Add && IsStringAddition(lhs, rhs))
+			return ibArithValueKind::String;
+		const bool shift = expr->m_arith == ibQueryColumnArithOp::Add || expr->m_arith == ibQueryColumnArithOp::Sub;
+		if (shift && ((lhs == ibArithValueKind::Date && rhs == ibArithValueKind::Number)
+		              || (lhs == ibArithValueKind::Number && rhs == ibArithValueKind::Date)))
+			return ibArithValueKind::Date;
+		if (lhs == ibArithValueKind::Number || rhs == ibArithValueKind::Number)
+			return ibArithValueKind::Number;
+		return ibArithValueKind::Unknown;
+	}
+	case ibQueryColumnExprKind::Case: {
+		ibArithValueKind agreed = ibArithValueKind::Unknown;
+		bool saw = false;
+		bool mixed = false;
+		const auto take = [&](const ibQueryColumnExprPtr& arm) {
+			if (!arm)
+				return;
+			const ibArithValueKind kind = KindOfColumnExpr(arm);
+			if (!saw) { agreed = kind; saw = true; }
+			else if (kind != agreed) mixed = true;
+		};
+		for (const auto& wt : expr->m_cases)
+			take(wt.second);
+		take(expr->m_else);
+		return (saw && !mixed) ? agreed : ibArithValueKind::Unknown;
+	}
+	case ibQueryColumnExprKind::Substring:
+		return ibArithValueKind::String;
+	case ibQueryColumnExprKind::PeriodTrunc:
+	case ibQueryColumnExprKind::PeriodEnd:
+	case ibQueryColumnExprKind::DateAdd:
+		return ibArithValueKind::Date;
+	case ibQueryColumnExprKind::DateDiff:
+	case ibQueryColumnExprKind::DatePart:
+		return ibArithValueKind::Number;
+	case ibQueryColumnExprKind::WindowAgg:
+	case ibQueryColumnExprKind::OutputRef:
+	case ibQueryColumnExprKind::ValueAsk:
+		return ibArithValueKind::Unknown;
+	}
+	return ibArithValueKind::Unknown;
+}
+
+// True when '+' is concatenation: at least one operand is a string, and neither is a number, a
+// date, a boolean, or some other non-string. An untyped carried column beside a string literal
+// or a `_S` field is concatenation; two untyped columns stay addition.
+static bool IsStringAddition(ibArithValueKind lhs, ibArithValueKind rhs)
+{
+	const auto blocks = [](ibArithValueKind kind) {
+		return kind == ibArithValueKind::Number || kind == ibArithValueKind::Date
+		    || kind == ibArithValueKind::Boolean || kind == ibArithValueKind::Other;
+	};
+	if (blocks(lhs) || blocks(rhs))
+		return false;
+	return lhs == ibArithValueKind::String || rhs == ibArithValueKind::String;
+}
+
 ibQueryExprPtr ibMetaIRBuilder::BuildColumnExpr(const ibBackendQueryable* queryable,
                                                 const ibQueryColumnExprPtr& expr,
                                                 const wxString& mainQual)
@@ -2090,8 +2220,10 @@ ibQueryExprPtr ibMetaIRBuilder::BuildColumnExpr(const ibBackendQueryable* querya
 		return ibCast(ibConst(expr->m_const), CastTypeForConst(expr->m_const));
 
 	case ibQueryColumnExprKind::Arith: {
-		const ibQueryBinOp op =
-			expr->m_arith == ibQueryColumnArithOp::Add ? ibQueryBinOp::Add
+		const bool concat = expr->m_arith == ibQueryColumnArithOp::Add
+			&& IsStringAddition(KindOfColumnExpr(expr->m_lhs), KindOfColumnExpr(expr->m_rhs));
+		const ibQueryBinOp op = concat ? ibQueryBinOp::Concat
+			: expr->m_arith == ibQueryColumnArithOp::Add ? ibQueryBinOp::Add
 			: expr->m_arith == ibQueryColumnArithOp::Sub ? ibQueryBinOp::Sub
 			: expr->m_arith == ibQueryColumnArithOp::Mul ? ibQueryBinOp::Mul
 			: expr->m_arith == ibQueryColumnArithOp::Div ? ibQueryBinOp::Div
