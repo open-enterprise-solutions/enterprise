@@ -308,6 +308,7 @@ enum
 	eReadOnly,
 	ePrinterName,
 	eLanguageCode,
+	ePageOrientation,
 };
 
 enum
@@ -338,6 +339,7 @@ void ibValueSpreadsheetDocument_BindNames(ibValue::ibMemberTable& helper, const 
 	helper.AppendProp(wxT("ReadOnly"), eReadOnly);
 	helper.AppendProp(wxT("PrinterName"), ePrinterName);
 	helper.AppendProp(wxT("LanguageCode"), eLanguageCode);
+	helper.AppendProp(wxT("PageOrientation"), ePageOrientation);
 
 	// 🛑 THE SIGNATURE SAID `string` AND THE BODY READS `GetInteger()`. A caller following the
 	// published shape passed cell names and got row 0 of column 0 — the one cell that always
@@ -382,6 +384,9 @@ bool ibValueSpreadsheetDocument::SetPropVal(const long lPropNum, const ibValue& 
 	case eLanguageCode:
 		m_spreadsheetDoc->SetLangCode(varPropVal.GetString());
 		return true;
+	case ePageOrientation:
+		m_spreadsheetDoc->SetPageOrientation(varPropVal.ConvertToEnumValue<PageOrientation>());
+		return true;
 	}
 
 	return false;
@@ -411,6 +416,9 @@ bool ibValueSpreadsheetDocument::GetPropVal(const long lPropNum, ibValue& pvarPr
 		return true;
 	case eLanguageCode:
 		pvarPropVal = m_spreadsheetDoc->GetLangCode();
+		return true;
+	case ePageOrientation:
+		pvarPropVal = ibValue::CreateEnumObject<ibValueEnumPageOrientation>(m_spreadsheetDoc->GetPageOrientation());
 		return true;
 	}
 
@@ -553,6 +561,7 @@ VALUE_TYPE_REGISTER(ibValueSpreadsheetDocument, "SpreadsheetDocument", g_valueSp
 SYSTEM_TYPE_REGISTER(ibValueSpreadsheetDocumentRange, "SpreadsheetAreaRange", system_to_clsid("SY_SPPRA"));
 SYSTEM_TYPE_REGISTER(ibValueSpreadsheetDocumentAreaCollection, "SpreadsheetAreaCollection", g_valueSpreadsheetAreaCollectionCLSID);
 SYSTEM_TYPE_REGISTER(ibValueSpreadsheetDocumentParameterCollection, "SpreadsheetParameterCollection", system_to_clsid("SY_SPPRM"));
+ENUM_TYPE_REGISTER(ibValueEnumPageOrientation, "PageOrientation", enum_to_clsid("EN_PGORT"));
 ENUM_TYPE_REGISTER(ibValueEnumSpreadsheetOrient, "SpreadsheetOrient", enum_to_clsid("EN_SORNT"));
 ENUM_TYPE_REGISTER(ibValueEnumSpreadsheetHorizontalAlignment, "SpreadsheetHorizontalAlignment", enum_to_clsid("EN_SHOAL"));
 ENUM_TYPE_REGISTER(ibValueEnumSpreadsheetVerticalAlignment, "SpreadsheetVerticalAlignment", enum_to_clsid("EN_SVEAL"));

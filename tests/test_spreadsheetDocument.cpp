@@ -20,6 +20,7 @@
 
 #include "backend/backend_spreadsheet.h"
 #include "backend/backend_localization.h"
+#include "backend/system/value/valueSpreadsheet.h"
 
 namespace {
 
@@ -1129,4 +1130,26 @@ TEST(SpreadsheetDescription, Cells_KeepTheirAddressesAcrossEveryBlockBoundary)
 	desc.ClearSpreadsheet();
 	EXPECT_EQ(0, desc.GetCellCount());
 	EXPECT_EQ(copy.GetCellByIdx(999)->m_value, wxT("r999"));   // the copy outlives the original's cells
+}
+
+// Page orientation is the printer's, beside the printer name. The grid description does not carry it.
+TEST(SpreadsheetDocument, PageOrientationStaysOffTheGrid) {
+	ibValueSpreadsheetDocument doc;
+	doc.GetSpreadsheetDocument()->SetCellValue(0, 0, wxT("kept"));
+	const ibSpreadsheetDescription before = doc.GetSpreadsheetDesc();
+
+	const long prop = doc.FindProp(wxT("PageOrientation"));
+	ASSERT_NE(prop, wxNOT_FOUND);
+	ibValue current;
+	ASSERT_TRUE(doc.GetPropVal(prop, current));
+	EXPECT_EQ(current.ConvertToEnumValue<PageOrientation>(), Portrait);
+
+	const ibValue landscape = ibValue::CreateEnumObject<ibValueEnumPageOrientation>(Landscape);
+	ASSERT_TRUE(doc.SetPropVal(prop, landscape));
+	ibValue read;
+	ASSERT_TRUE(doc.GetPropVal(prop, read));
+	EXPECT_EQ(read.ConvertToEnumValue<PageOrientation>(), Landscape);
+	EXPECT_EQ(doc.GetSpreadsheetDocument()->GetPageOrientation(), Landscape);
+	EXPECT_EQ(doc.GetSpreadsheetDocument()->GetCellValue(0, 0), wxString(wxT("kept")));
+	EXPECT_TRUE(doc.GetSpreadsheetDesc() == before);
 }

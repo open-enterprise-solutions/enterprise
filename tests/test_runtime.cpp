@@ -2936,3 +2936,25 @@ TEST(RuntimeTest, AnArrayWalkedAndRewalkedIsLetGoOfOnce) {
 	// The frame goes here, with both arrays in it. That is the moment the nightly
 	// caught: passing under a sanitiser is the whole assertion.
 }
+
+// NStr is the language pick TStr already does. A region suffix is ignored, and a
+// text that names no language is itself.
+TEST_F(BuiltInRuntime, NStrReadsTheNamedLanguage) {
+	const wxString source = wxT("en = 'Total'; ru = 'Itogo';");
+	EXPECT_EQ(ibValueSystemFunction::NStr(ibValue(source), wxT("ru")), wxString(wxT("Itogo")));
+	EXPECT_EQ(ibValueSystemFunction::NStr(ibValue(source), wxT("en_US")), wxString(wxT("Total")));
+	EXPECT_EQ(ibValueSystemFunction::NStr(ibValue(wxT("Plain caption")), wxT("uk")), wxString(wxT("Plain caption")));
+
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ibValueSystemFunction valueSystem;
+	cc.AddContextVariable(wxT("System"), &valueSystem, true);
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("var words public;\n")
+		wxT("words = NStr(\"en = 'Total'; ru = 'Itogo';\", \"ru\");\n")));
+	ibProcUnit pu;
+	wxString strError;
+	ASSERT_TRUE(RunBound(cc, pu, strError)) << strError.ToStdString();
+	ibValue words;
+	ASSERT_TRUE(pu.GetPropVal(wxT("words"), words));
+	EXPECT_EQ(words.GetString(), wxString(wxT("Itogo")));
+}

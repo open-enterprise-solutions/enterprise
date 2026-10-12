@@ -67,6 +67,12 @@ public:
 	virtual void ColAreaAdded(unsigned int start, unsigned int end, unsigned int level) {}
 };
 
+// Portrait is the page a new document prints on. Kept off the serialized grid.
+enum PageOrientation {
+	Portrait = 0,
+	Landscape = 1
+};
+
 class BACKEND_API ibBackendSpreadsheetObject : public wxRefCounter {
 public:
 
@@ -95,6 +101,10 @@ public:
 	//printer 
 	wxString GetPrinterName() const { return m_docPrinterName; }
 	void SetPrinterName(const wxString& strPrinterName) { m_docPrinterName = strPrinterName; }
+
+	// Page orientation lives beside the printer name, not in the grid description.
+	PageOrientation GetPageOrientation() const { return m_pageLandscape ? Landscape : Portrait; }
+	void SetPageOrientation(PageOrientation orient) { m_pageLandscape = orient == Landscape; }
 
 	//area 
 	ibSpreadsheetDescription GetArea(int rowLeft, int rowRight, int colTop = -1, int colBottom = -1);
@@ -286,6 +296,7 @@ private:
 
 	//printer
 	wxString m_docPrinterName;
+	bool m_pageLandscape = false;
 
 	// assoc with unique id
 	ibGuid m_docGuid;

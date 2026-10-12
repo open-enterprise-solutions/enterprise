@@ -4,6 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "systemManager.h"
+#include "backend/backend_localization.h"
 
 #include "backend/metaCollection/metaFormObject.h"
 #include "backend/metadataConfiguration.h"
@@ -355,6 +356,31 @@ short ibValueSystemFunction::Asc(const ibValue& cSource)
 wxString ibValueSystemFunction::TStr(const ibValue& cSource, const ibValue& cLanguage)
 {
 	return ibLocalization::GetTranslateGetRawLocText(cLanguage.GetString(), cSource.GetString());
+}
+
+namespace {
+wxString LanguageCode(wxString language)
+{
+	if (language.IsEmpty())
+		language = ibBackendLocalization::GetUserLanguage();
+	const int under = language.Find(wxT('_'));
+	const int dash = language.Find(wxT('-'));
+	int cut = wxNOT_FOUND;
+	if (under != wxNOT_FOUND && (dash == wxNOT_FOUND || under < dash))
+		cut = under;
+	else
+		cut = dash;
+	if (cut > 0)
+		language = language.Left(cut);
+	return language;
+}
+}
+
+// NStr is TStr with the language filled in. An omitted language is the user's, and a
+// region suffix is dropped so en_US reads the en entry. A text with no language marks is itself.
+wxString ibValueSystemFunction::NStr(const ibValue& cSource, const wxString& cLanguage)
+{
+	return ibLocalization::GetTranslateGetRawLocText(LanguageCode(cLanguage), cSource.GetString());
 }
 
 //--- Date and time:

@@ -1,0 +1,37 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "en",
+  "entries": [
+    {
+      "id": "fn.NStr",
+      "name_local": "NStr",
+      "name_en": "NStr",
+      "kind": "system_function",
+      "category_keys": ["global_context", "global_functions"],
+      "signature": "NStr(source[, language])",
+      "description": "The text of one language from a string that carries several (en = 'Total'; ru = 'Itogo';). An omitted language is the user's. A region suffix is ignored, so en_US reads en. A text with no language marks is itself.",
+      "parameters": "source — String. language — String, optional, such as ru or en_US.",
+      "return_descr": "String.",
+      "example": "Message(NStr(\"en = 'Total'; ru = 'Itogo';\", \"ru\"));",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "en.PageOrientation",
+      "name_local": "PageOrientation",
+      "name_en": "PageOrientation",
+      "kind": "enum_type",
+      "category_keys": ["spreadsheet"],
+      "signature": "PageOrientation.Portrait | PageOrientation.Landscape",
+      "description": "How a spreadsheet document is printed. Portrait is the default. It is not stored in the grid.",
+      "parameters": "Portrait. Landscape.",
+      "return_descr": "PageOrientation.",
+      "example": "Doc.PageOrientation = PageOrientation.Landscape;",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    }
+  ]
+}
