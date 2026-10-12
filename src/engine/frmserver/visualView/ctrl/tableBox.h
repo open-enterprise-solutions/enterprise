@@ -787,6 +787,19 @@ public:
 	// A column stands on the ROW being edited: its neighbours are the other cells of that row.
 	virtual ibChoiceHolder GetChoiceHolder() const override;
 
+	virtual bool HasQuickChoice() const override {
+		switch (m_propertyQuickChoice->GetValueAsEnum()) {
+		case ibQuickChoice::Use: return true;
+		case ibQuickChoice::DontUse: return false;
+		default: return ibValueFrame::HasQuickChoice();
+		}
+	}
+
+	virtual void ContributeChoiceParameters(ibChoiceParametersDescription& params) const override {
+		params.Overlay(m_propertyChoiceParameterLinks->GetValueAsParametersDesc());
+		params.Overlay(m_propertyChoiceParameters->GetValueAsParametersDesc());
+	}
+
 	//choice processing
 	virtual void ChoiceProcessing(ibValue& vSelected);
 
@@ -830,6 +843,13 @@ private:
 	ibPropertyList* m_propertyChoiceForm = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryData, wxT("ChoiceForm"), _("Choice form"),
 		_("Which form opens when the user presses Select in the cell: one of the forms of the value's type. Empty: the type's default choice form."),
 		&ibValueModelTableBoxColumn::GetChoiceForm);
+	ibPropertyEnum<ibValueEnumQuickChoice>* m_propertyQuickChoice = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumQuickChoice>>(m_categoryData, wxT("QuickChoice"), _("Quick choice"),
+		_("Whether Select opens a short list. Auto follows the value's type. Use always opens the short list. DontUse never does, even when the type would."),
+		ibQuickChoice::Auto);
+	ibPropertyChoiceParameters* m_propertyChoiceParameters = ibPropertyObject::CreateProperty<ibPropertyChoiceParameters>(m_categoryData, wxT("ChoiceParameters"), _("Choice parameters"),
+		_("Fixed values that narrow the list Select opens. A parameter named here replaces the same parameter of the bound attribute."));
+	ibPropertyChoiceParameters* m_propertyChoiceParameterLinks = ibPropertyObject::CreateProperty<ibPropertyChoiceParameters>(m_categoryData, wxT("ChoiceParameterLinks"), _("Choice parameter links"),
+		_("Values taken from neighbouring fields that narrow the list Select opens. A parameter named in Choice parameters replaces the same one here, and either replaces the bound attribute."));
 
 	ibPropertyCategory* m_categoryButton = ibPropertyObject::CreatePropertyCategory(wxT("Button"), _("Button"));
 	ibPropertyBoolean* m_propertySelectButton = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryButton, wxT("ButtonSelect"), _("Select button"),

@@ -176,8 +176,12 @@ bool ibTypeControlFactory::ChooseValue(ibControlFrame* ownerValue,
 			// for a table column — so the list is narrowed by exactly what the person can see beside
 			// the field they are filling.
 			const ibChoiceHolder holder = factory->GetChoiceHolder();
-			const ibChoiceCondition condition = ibChoiceLinkResolver::Resolve(holder,
-				ibChoiceLinkResolver::FieldOf(holder, factory));
+			const ibValueMetaObjectAttributeBase* field = ibChoiceLinkResolver::FieldOf(holder, factory);
+			ibChoiceParametersDescription params = field != nullptr
+				? field->GetChoiceParameters() : ibChoiceParametersDescription();
+			ownerValue->ContributeChoiceParameters(params);
+			ibChoiceCondition condition;
+			ibChoiceLinkResolver::ResolveParameters(params, holder, condition);
 
 			// ⭐ WHAT THE FORM IS MADE WITH: which form the author picked, and — as one named part of
 			// it — the choice. The condition goes in WHOLE, empty or not: "nothing narrows this" is a

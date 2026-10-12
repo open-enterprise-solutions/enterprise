@@ -111,6 +111,12 @@ struct ibChoiceParametersDescription {
 			m_rows.push_back(row);
 	}
 
+	// Rows of extra replace a row of the same parameter. An empty source removes it.
+	void Overlay(const ibChoiceParametersDescription& extra) {
+		for (const ibChoiceParameterRowDescription& row : extra.m_rows)
+			SetRow(row);
+	}
+
 	bool operator==(const ibChoiceParametersDescription& other) const { return m_rows == other.m_rows; }
 	bool operator!=(const ibChoiceParametersDescription& other) const { return !(*this == other); }
 };

@@ -70,6 +70,9 @@ public:
 	virtual ibFormVisualDocument* GetVisualDocument() const { return nullptr; }
 
 	virtual bool HasQuickChoice() const = 0;
+	// Rows this control adds on top of the bound attribute's choice parameters.
+	// Empty: the attribute's table is the whole answer.
+	virtual void ContributeChoiceParameters(ibChoiceParametersDescription& params) const { (void)params; }
 	virtual void ChoiceProcessing(ibValue& vSelected) = 0;
 };
 
