@@ -1,0 +1,22 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "uk",
+  "entries": [
+    {
+      "id": "prop.SpreadsheetArea.Picture",
+      "name_local": "Picture",
+      "name_en": "Picture",
+      "kind": "property",
+      "category_keys": ["value_types", "spreadsheet"],
+      "signature": "Picture",
+      "description": "Картинка, намальована в цій комірці (1C: Картинка). Порожня картинка її знімає. В описі сітки її немає. Put і Join переносять картинку в ту саму комірку документа, куди лягає область.",
+      "parameters": "StoragePicture.",
+      "return_descr": "StoragePicture.",
+      "example": "Area = Sheet.Area(1, 2);\nArea.Picture = Pic;",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": ["cls.SpreadsheetDocument.Area"],
+      "reviewed": false
+    }
+  ]
+}

@@ -19,7 +19,8 @@ enum
 	eSize,
 	eReadOnly,
 
-	eValue
+	eValue,
+	ePicture
 };
 
 void ibValueSpreadsheetDocumentArea::FillMembers(ibMemberTable& helper) const
@@ -40,11 +41,13 @@ void ibValueSpreadsheetDocumentArea::FillMembers(ibMemberTable& helper) const
 	helper.AppendProp(wxT("ReadOnly"));
 
 	helper.AppendProp(wxT("Value"));
+	helper.AppendProp(wxT("Picture"));
 }
 
 #include "valueFont.h"
 #include "valueColour.h"
 #include "valueSize.h"
+#include "valuePicture.h"
 
 bool ibValueSpreadsheetDocumentArea::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 {
@@ -124,6 +127,16 @@ bool ibValueSpreadsheetDocumentArea::SetPropVal(const long lPropNum, const ibVal
 	case eValue:
 	{
 		m_spreadsheetDoc->SetCellValue(m_row, m_col, varPropVal.GetString());
+		return true;
+	}
+	case ePicture:
+	{
+		// A picture, or nothing. ConvertToType raises when the value is not one, and a test
+		// with no application data cannot catch that raise.
+		ibValue* held = varPropVal.GetRef();
+		ibValuePicture* picture = held != nullptr ? dynamic_cast<ibValuePicture*>(held) : nullptr;
+		m_spreadsheetDoc->SetCellPicture(m_row, m_col,
+			picture != nullptr ? picture->GetPictureDesc() : ibPictureDescription());
 		return true;
 	}
 	}
@@ -219,6 +232,11 @@ bool ibValueSpreadsheetDocumentArea::GetPropVal(const long lPropNum, ibValue& pv
 		// a parameter's name, a template's own wording — in the document's language, as it always did.
 		pvarPropVal = m_spreadsheetDoc->ComputeStringValueFromParameters(
 			m_spreadsheetDoc->GetCellValue(m_row, m_col), ibSpreadsheetFillType::ibSpreadsheetFillType_StrText);
+		return true;
+	}
+	case ePicture:
+	{
+		pvarPropVal = new ibValuePicture(m_spreadsheetDoc->GetCellPicture(m_row, m_col));
 		return true;
 	}
 	}

@@ -20,6 +20,9 @@
 
 #include "backend/backend_spreadsheet.h"
 #include "backend/backend_localization.h"
+#include "backend/picturePredefined.h"
+#include "backend/system/value/valuePicture.h"
+#include "backend/system/value/valueSpreadsheet.h"
 
 namespace {
 
@@ -1129,4 +1132,60 @@ TEST(SpreadsheetDescription, Cells_KeepTheirAddressesAcrossEveryBlockBoundary)
 	desc.ClearSpreadsheet();
 	EXPECT_EQ(0, desc.GetCellCount());
 	EXPECT_EQ(copy.GetCellByIdx(999)->m_value, wxT("r999"));   // the copy outlives the original's cells
+}
+
+// A cell picture is the area's Picture. The grid description does not carry it, and Put takes it along.
+TEST(SpreadsheetDocument, CellPictureStaysOffTheGrid)
+{
+	ibValueSpreadsheetDocument doc;
+	wxObjectDataPtr<ibBackendSpreadsheetObject> sheet = doc.GetSpreadsheetDocument();
+	sheet->SetCellValue(1, 2, wxT("kept"));
+	const ibSpreadsheetDescription before = doc.GetSpreadsheetDesc();
+
+	ibValueSpreadsheetDocumentArea area(sheet, 1, 2);
+	const long prop = area.FindProp(wxT("Picture"));
+	ASSERT_NE(prop, wxNOT_FOUND);
+
+	ibValue blank;
+	ASSERT_TRUE(area.GetPropVal(prop, blank));
+	ibValuePicture* emptyPicture = blank.ConvertToType<ibValuePicture>();
+	ASSERT_NE(emptyPicture, nullptr);
+	EXPECT_TRUE(emptyPicture->IsEmpty());
+
+	const ibValue picture(new ibValuePicture(ibPictureDescription(g_picErrorCLSID)));
+	ASSERT_TRUE(area.SetPropVal(prop, picture));
+
+	ibValue read;
+	ASSERT_TRUE(area.GetPropVal(prop, read));
+	ibValuePicture* got = read.ConvertToType<ibValuePicture>();
+	ASSERT_NE(got, nullptr);
+	EXPECT_TRUE(got->GetPictureDesc() == picture.ConvertToType<ibValuePicture>()->GetPictureDesc());
+
+	ibValueSpreadsheetDocumentArea other(sheet, 0, 0);
+	ibValue otherPic;
+	ASSERT_TRUE(other.GetPropVal(other.FindProp(wxT("Picture")), otherPic));
+	EXPECT_TRUE(otherPic.ConvertToType<ibValuePicture>()->IsEmpty());
+	EXPECT_EQ(sheet->GetCellValue(1, 2), wxString(wxT("kept")));
+	EXPECT_TRUE(doc.GetSpreadsheetDesc() == before);
+
+	ibValueSpreadsheetDocument landed;
+	wxObjectDataPtr<ibBackendSpreadsheetObject> landedSheet = landed.GetSpreadsheetDocument();
+	landedSheet->PutArea(sheet);
+	ibValueSpreadsheetDocumentArea landedArea(landedSheet, 1, 2);
+	ibValue landedPic;
+	ASSERT_TRUE(landedArea.GetPropVal(prop, landedPic));
+	EXPECT_TRUE(landedPic.ConvertToType<ibValuePicture>()->GetPictureDesc() == got->GetPictureDesc());
+	EXPECT_EQ(landedSheet->GetCellValue(1, 2), wxString(wxT("kept")));
+	EXPECT_TRUE(doc.GetSpreadsheetDesc() == before);
+
+	ASSERT_TRUE(area.SetPropVal(prop, ibValue()));
+	ibValue cleared;
+	ASSERT_TRUE(area.GetPropVal(prop, cleared));
+	EXPECT_TRUE(cleared.ConvertToType<ibValuePicture>()->IsEmpty());
+
+	ASSERT_TRUE(area.SetPropVal(prop, picture));
+	sheet->ClearSpreadsheet();
+	ibValue afterClear;
+	ASSERT_TRUE(area.GetPropVal(prop, afterClear));
+	EXPECT_TRUE(afterClear.ConvertToType<ibValuePicture>()->IsEmpty());
 }

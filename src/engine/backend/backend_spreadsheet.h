@@ -2,6 +2,7 @@
 #define __BACKEND_CELL_H__
 
 #include "spreadsheetDescription.h"
+#include "pictureDescription.h"   // a cell picture, kept off the grid
 #include "core/stringUtils.h"   // ibCaseFoldLess — the parameters are matched without case
 
 class BACKEND_API ibBackendSpreadsheetNotifier {
@@ -224,6 +225,10 @@ public:
 	//special string return 
 	wxString GetCellValue(int row, int col) const { return m_spreadsheetDesc.GetCellValue(row, col); }
 
+	// A picture drawn in the cell. It lives beside the grid, so saving the description leaves it behind.
+	void SetCellPicture(int row, int col, const ibPictureDescription& picture);
+	ibPictureDescription GetCellPicture(int row, int col) const;
+
 	// ------ cell parameter accessors
 	//
 	bool GetParameter(const wxString& strParameter, ibValue& valueParam) const;
@@ -302,6 +307,10 @@ private:
 
 	//param value
 	std::map<wxString, ibValue, ibCaseFoldLess> m_paramVector;   // matched as GetParameter matches them
+
+	// Pictures, by cell. Not part of ibSpreadsheetDescription.
+	void CopyCellPicturesFrom(const ibBackendSpreadsheetObject& src, int rowOffset, int colOffset);
+	std::map<std::pair<int, int>, ibPictureDescription> m_cellPictures;
 
 	//grid notifier 
 	wxVector<wxSharedPtr<ibBackendSpreadsheetNotifier>> m_spreadsheetNotifiers;
