@@ -46,6 +46,7 @@
     <ClInclude Include="backend_exception.h" />
     <ClInclude Include="backend_diagnostic.h" />
     <ClInclude Include="fileKind.h" />
+    <ClInclude Include="launchTicket.h" />
     <ClInclude Include="session\designerExclusivePolicy.h" />
     <ClInclude Include="session\serviceExclusivePolicy.h" />
     <ClInclude Include="session\sessionException.h" />
@@ -465,6 +466,7 @@
     <ClCompile Include="backend_exception.cpp" />
     <ClCompile Include="backend_diagnostic.cpp" />
     <ClCompile Include="fileKind.cpp" />
+    <ClCompile Include="launchTicket.cpp" />
     <ClCompile Include="session\designerExclusivePolicy.cpp" />
     <ClCompile Include="session\serviceExclusivePolicy.cpp" />
     <ClCompile Include="session\session.cpp" />

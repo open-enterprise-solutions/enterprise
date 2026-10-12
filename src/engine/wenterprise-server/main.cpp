@@ -23,6 +23,7 @@
 #	define _SSIZE_T_DEFINED
 #endif
 
+#include "backend/launchTicket.h"
 #include <cpp-httplib/httplib.h>
 #include "wfrontend.h"
 #include <nlohmann/json.hpp>
@@ -141,6 +142,10 @@ struct CmdArgs {
 	// (technical session + every per-tab WebClient session). Off by
 	// default — production wes runs without a listener.
 	bool debugEnable = false;
+
+	std::string credFile;
+	bool sawDbPassword = false;
+	bool sawIbPassword = false;
 };
 
 bool StartsWith(const std::string& s, const char* prefix)
@@ -160,10 +165,11 @@ CmdArgs ParseArgs(int argc, char** argv)
 		else if (StartsWith(arg, "--server="))    a.server      = arg.substr(9);
 		else if (StartsWith(arg, "--dbport="))    a.dbPort      = arg.substr(9);
 		else if (StartsWith(arg, "--user="))      a.srvUser     = arg.substr(7);
-		else if (StartsWith(arg, "--password="))  a.srvPassword = arg.substr(11);
+		else if (StartsWith(arg, "--password="))  { a.srvPassword = arg.substr(11); a.sawDbPassword = true; }
 		else if (StartsWith(arg, "--db="))        a.database    = arg.substr(5);
 		else if (StartsWith(arg, "--ibuser="))    a.ibUser      = arg.substr(9);
-		else if (StartsWith(arg, "--ibpwd="))     a.ibPassword  = arg.substr(8);
+		else if (StartsWith(arg, "--ibpwd="))     { a.ibPassword = arg.substr(8); a.sawIbPassword = true; }
+		else if (StartsWith(arg, "--cred-file=")) a.credFile    = arg.substr(12);
 		else if (StartsWith(arg, "--locale="))    a.locale      = arg.substr(9);
 		else if (StartsWith(arg, "--url="))       a.urlPrefix   = arg.substr(6);
 		else if (StartsWith(arg, "--manifest="))  a.manifest    = arg.substr(11);
@@ -182,12 +188,13 @@ CmdArgs ParseArgs(int argc, char** argv)
 				"    --server=<host>   DB server host\n"
 				"    --dbport=<N>      DB server port (default 3050)\n"
 				"    --user=<n>        DB server user\n"
-				"    --password=<s>    DB server password\n"
+				"    --password=<s>    DB server password (prefer --cred-file)\n"
 				"    --db=<name>       Database name\n"
 				"\n"
 				"  Configuration (IB) credentials:\n"
 				"    --ibuser=<n>      (default 'admin')\n"
-				"    --ibpwd=<s>\n"
+				"    --ibpwd=<s>       (prefer --cred-file)\n"
+				"    --cred-file=<path>  one-time file of the passwords, deleted on read\n"
 				"\n"
 				"    --locale=<code>   (default 'en')\n";
 			std::exit(0);
@@ -209,6 +216,21 @@ CmdArgs ParseArgs(int argc, char** argv)
 			a.urlPrefix = "default";
 		}
 	}
+
+	std::string credPath = a.credFile;
+	if (credPath.size() >= 2 && credPath.front() == '"' && credPath.back() == '"')
+		credPath = credPath.substr(1, credPath.size() - 2);
+	wxString dbUser = wxString::FromUTF8(a.srvUser);
+	wxString dbPassword = wxString::FromUTF8(a.srvPassword);
+	wxString ibUser = wxString::FromUTF8(a.ibUser);
+	wxString ibPassword = wxString::FromUTF8(a.ibPassword);
+	ibTakeLaunchCredentials(wxString::FromUTF8(credPath),
+		a.sawDbPassword, a.sawIbPassword,
+		dbUser, dbPassword, ibUser, ibPassword);
+	a.srvUser = std::string(dbUser.utf8_str());
+	a.srvPassword = std::string(dbPassword.utf8_str());
+	a.ibUser = std::string(ibUser.utf8_str());
+	a.ibPassword = std::string(ibPassword.utf8_str());
 	return a;
 }
 
