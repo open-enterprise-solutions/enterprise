@@ -37,7 +37,7 @@ public:
 		if (row >= m_aUsersData.size())
 			return;
 		if (col == colUserName)
-			val = m_aUsersData[row].m_strUserName;
+			val = ibUserInfo::NameAsShown(m_aUsersData[row].m_strUserName);
 		else if (col == colUserFullName)
 			val = m_aUsersData[row].m_strUserFullName;
 	}
@@ -82,6 +82,11 @@ ibDialogUserList::ibDialogUserList(wxWindow* parent, wxWindowID id, const wxStri
 
 	sizerList->Add(m_toolbarMain, 0, wxALL | wxEXPAND, 0);
 
+	m_conflictNote = new wxStaticText(this, wxID_ANY, wxEmptyString);
+	m_conflictNote->SetForegroundColour(wxColour(140, 32, 32));
+	m_conflictNote->Hide();
+	sizerList->Add(m_conflictNote, 0, wxALL | wxEXPAND, FromDIP(5));
+
 	ibDataViewColumn* columnName = new ibDataViewColumn(_("Name"), new ibDataViewTextRenderer(wxT("string"), wxDATAVIEW_CELL_INERT), colUserName, FromDIP(200), wxALIGN_LEFT,
 		wxDATAVIEW_COL_SORTABLE);
 	ibDataViewColumn* columnFullName = new ibDataViewColumn(_("Full name"), new ibDataViewTextRenderer(wxT("string"), wxDATAVIEW_CELL_INERT), colUserFullName, FromDIP(200), wxALIGN_LEFT,
@@ -112,7 +117,7 @@ ibDialogUserList::ibDialogUserList(wxWindow* parent, wxWindowID id, const wxStri
 	sizerList->Add(m_dataEditor, 1, wxALL | wxEXPAND, FromDIP(5));
 
 	wxDialog::SetSizer(sizerList);
-	wxDialog::Layout();
+	ShowSharedNames();
 	wxDialog::Centre(wxBOTH);
 
 	wxIcon dlg_icon;
@@ -157,6 +162,8 @@ void ibDialogUserList::OnItemActivated(ibDataViewEvent& event)
 	dlg.ReadUserData(model->GetGuidByRow(event.GetItem()));
 	dlg.ShowModal();
 
+	model->PrepareData();
+	ShowSharedNames();
 	event.Skip();
 }
 
@@ -190,5 +197,25 @@ void ibDialogUserList::OnCommandMenu(wxCommandEvent& event)
 		}
 	}
 
-	model->PrepareData(); event.Skip();
+	model->PrepareData();
+	ShowSharedNames();
+	event.Skip();
+}
+
+void ibDialogUserList::ShowSharedNames()
+{
+	if (m_conflictNote == nullptr)
+		return;
+
+	const wxString warning = ibUserInfo::SharedNameWarning();
+	if (warning.empty()) {
+		m_conflictNote->Hide();
+	}
+	else {
+		// SetLabel replaces a previously wrapped label, so Wrap can run again on the next refresh.
+		m_conflictNote->SetLabel(warning);
+		m_conflictNote->Wrap(FromDIP(580));
+		m_conflictNote->Show();
+	}
+	Layout();
 }

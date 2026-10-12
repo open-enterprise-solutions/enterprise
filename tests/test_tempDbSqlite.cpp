@@ -32,7 +32,7 @@
 
 #include "backend/appData.h"
 #include "backend/userInfo.h"
-#include "backend/backend_exception.h"
+#include "backend/utils/passwordHash.hpp"
 #include "backend/databaseLayer/databaseQueryBuilder.h"
 #include "core/fdatetime.h"
 #include "backend/compiler/value.h"                       // ibValue / ibNumber / g_value*CLSID
@@ -587,6 +587,42 @@ ibUserInfo UserNamed(const wxString& name)
 	return info;
 }
 
+// True when a second row with this folded name can be inserted. That is how the test
+// tells a missing unique index from one that is already there.
+bool NameKeyInsertSucceeds(const wxString& guid, const wxString& key)
+{
+	try {
+		ibDatabaseQueryBuilder q;
+		const char byte = 0;
+		q.Execute(ibInsert(user_table, {
+			{ wxT("guid"),       ibConst(ibValue(guid)) },
+			{ wxT("name"),       ibConst(ibValue(key)) },
+			{ wxT("nameKey"),    ibConst(ibValue(key)) },
+			{ wxT("fullName"),   ibConst(ibValue(key)) },
+			{ wxT("changed"),    ibConst(ibValue(ibDateTime::Now())) },
+			{ wxT("dataSize"),   ibConst(ibValue(static_cast<unsigned int>(1))) },
+			{ wxT("binaryData"), ibConstBlob(&byte, 1) },
+		}));
+		return true;
+	}
+	catch (...) {
+		return false;
+	}
+}
+
+void CreateOldUserTable()
+{
+	ibDatabaseQueryBuilder q;
+	q.Execute(ibCreateTable(user_table, {
+		{ wxT("guid"),       ibTypeString(36),  false, true,  wxEmptyString },
+		{ wxT("name"),       ibTypeString(64),  true,  false, wxEmptyString },
+		{ wxT("fullName"),   ibTypeString(128), true,  false, wxEmptyString },
+		{ wxT("changed"),    ibTypeDate(),      true,  false, wxEmptyString },
+		{ wxT("dataSize"),   ibTypeInteger(),   true,  false, wxEmptyString },
+		{ wxT("binaryData"), ibTypeBlob(),      true,  false, wxEmptyString },
+	}));
+}
+
 TEST_F(TempDbSqliteFix, UserName_SecondSpellingIsRefusedAndTheFirstIsFound)
 {
 	if (!ready) GTEST_SKIP();
@@ -609,18 +645,11 @@ TEST_F(TempDbSqliteFix, UserName_SecondSpellingIsRefusedAndTheFirstIsFound)
 	EXPECT_EQ(ibUserInfo::Read(wxT(" Admin ")).m_strUserFullName, wxT("Administrator"));
 }
 
-TEST_F(TempDbSqliteFix, UserName_SharedNamesStopTheUpgrade)
+TEST_F(TempDbSqliteFix, UserName_SharedNamesStayOpenWithoutTheIndex)
 {
 	if (!ready) GTEST_SKIP();
+	CreateOldUserTable();
 	ibDatabaseQueryBuilder q;
-	q.Execute(ibCreateTable(user_table, {
-		{ wxT("guid"),       ibTypeString(36),  false, true,  wxEmptyString },
-		{ wxT("name"),       ibTypeString(64),  true,  false, wxEmptyString },
-		{ wxT("fullName"),   ibTypeString(128), true,  false, wxEmptyString },
-		{ wxT("changed"),    ibTypeDate(),      true,  false, wxEmptyString },
-		{ wxT("dataSize"),   ibTypeInteger(),   true,  false, wxEmptyString },
-		{ wxT("binaryData"), ibTypeBlob(),      true,  false, wxEmptyString },
-	}));
 	const char byte = 0;
 	auto row = [&](const wxString& guid, const wxString& name) {
 		q.Execute(ibInsert(user_table, {
@@ -635,26 +664,108 @@ TEST_F(TempDbSqliteFix, UserName_SharedNamesStopTheUpgrade)
 	row(wxT("11111111-1111-4111-8111-111111111111"), wxT("Admin"));
 	row(wxT("22222222-2222-4222-8222-222222222222"), wxT("admin"));
 
-	EXPECT_THROW(ibApplicationInstance::MigrateTableUserForTest(), ibBackendException);
-	EXPECT_FALSE(ibUserInfo::Read(wxT("admin")).m_strUserGuid.IsEmpty());
-	ibDatabaseQueryBuilder columns;
-	const wxArrayString cols = columns.GetColumns(user_table);
-	for (std::size_t i = 0; i < cols.GetCount(); ++i)
-		EXPECT_NE(cols[i].CmpNoCase(wxT("nameKey")), 0);
+	EXPECT_NO_THROW(ibApplicationInstance::MigrateTableUserForTest());
+
+	ibQueryResult stored = q.ExecuteIR(ibQueryIR(ibProject(ibScan(user_table),
+		{ { ibCol(wxT("nameKey")), wxEmptyString } })));
+	int folded = 0;
+	while (stored.Next()) {
+		EXPECT_EQ(stored.GetResultString(wxT("nameKey")), wxT("admin"));
+		++folded;
+	}
+	EXPECT_EQ(folded, 2);
+
+	const wxString shared = ibUserInfo::SharedNames();
+	EXPECT_TRUE(shared.Contains(wxT("Admin")));
+	EXPECT_TRUE(shared.Contains(wxT("admin")));
+	EXPECT_FALSE(ibUserInfo::SharedNameWarning().empty());
+	EXPECT_EQ(ibUserInfo::CountByName(wxT(" ADMIN ")), 2u);
+	EXPECT_EQ(ibUserInfo::CountByName(wxT("   ")), 0u);
+
+	ibUserInfo ambiguous;
+	ASSERT_NE(ibApplicationInstance::Get(), nullptr);
+	EXPECT_FALSE(ibApplicationInstance::Get()->AuthenticateUser(wxT("admin"), wxT("secret"), ambiguous));
+	EXPECT_FALSE(ambiguous.IsOk());
+
+	// The index is absent while the names still collide, including on a later open.
+	EXPECT_NO_THROW(ibApplicationInstance::MigrateTableUserForTest());
+	EXPECT_TRUE(NameKeyInsertSucceeds(wxT("44444444-4444-4444-8444-444444444444"), wxT("admin")));
+	EXPECT_TRUE(ibUserInfo::Delete(ibGuid(wxT("44444444-4444-4444-8444-444444444444"))));
+
+	const ibUserInfo kept = ibUserInfo::Read(ibGuid(wxT("11111111-1111-4111-8111-111111111111")));
+	ASSERT_TRUE(kept.IsOk());
+	EXPECT_FALSE(ibUserInfo::NameChangeConflicts(kept));
+	ibUserInfo edited = kept;
+	edited.m_strUserFullName = wxT("Still shared");
+	EXPECT_TRUE(ibUserInfo::Save(edited));
+	EXPECT_EQ(ibUserInfo::Read(ibGuid(edited.m_strUserGuid)).m_strUserFullName, wxT("Still shared"));
+
+	const ibUserInfo again = UserNamed(wxT("ADMIN"));
+	EXPECT_TRUE(ibUserInfo::NameChangeConflicts(again));
+	EXPECT_FALSE(ibUserInfo::Save(again));
+
+	ibUserInfo clerk = UserNamed(wxT("Clerk"));
+	clerk.m_strUserPassword = ibPasswordHash::Hash(wxT("secret"));
+	ASSERT_TRUE(ibUserInfo::Save(clerk));
+	ibUserInfo logged;
+	EXPECT_TRUE(ibApplicationInstance::Get()->AuthenticateUser(wxT("clerk"), wxT("secret"), logged));
+	EXPECT_EQ(logged.m_strUserGuid, clerk.m_strUserGuid);
+
+	ibUserInfo onto = edited;
+	onto.m_strUserName = wxT("clerk");
+	EXPECT_TRUE(ibUserInfo::NameChangeConflicts(onto));
+	EXPECT_FALSE(ibUserInfo::Save(onto));
+
+	edited.m_strUserName = wxT("Supervisor");
+	EXPECT_FALSE(ibUserInfo::NameChangeConflicts(edited));
+	ASSERT_TRUE(ibUserInfo::Save(edited));
+
+	EXPECT_NO_THROW(ibApplicationInstance::MigrateTableUserForTest());
+	EXPECT_TRUE(ibUserInfo::SharedNames().empty());
+	EXPECT_EQ(ibUserInfo::CountByName(wxT("admin")), 1u);
+	EXPECT_FALSE(NameKeyInsertSucceeds(wxT("55555555-5555-4555-8555-555555555555"), wxT("admin")));
+}
+
+TEST_F(TempDbSqliteFix, UserName_BlankNamesStayOpenAndCannotSignIn)
+{
+	if (!ready) GTEST_SKIP();
+	CreateOldUserTable();
+	ibDatabaseQueryBuilder q;
+	const char byte = 0;
+	auto row = [&](const wxString& guid, const wxString& name) {
+		q.Execute(ibInsert(user_table, {
+			{ wxT("guid"),       ibConst(ibValue(guid)) },
+			{ wxT("name"),       ibConst(ibValue(name)) },
+			{ wxT("fullName"),   ibConst(ibValue(name)) },
+			{ wxT("changed"),    ibConst(ibValue(ibDateTime::Now())) },
+			{ wxT("dataSize"),   ibConst(ibValue(static_cast<unsigned int>(1))) },
+			{ wxT("binaryData"), ibConstBlob(&byte, 1) },
+		}));
+	};
+	row(wxT("66666666-6666-4666-8666-666666666666"), wxT(""));
+	row(wxT("77777777-7777-4777-8777-777777777777"), wxT("   "));
+
+	EXPECT_NO_THROW(ibApplicationInstance::MigrateTableUserForTest());
+	EXPECT_TRUE(ibUserInfo::SharedNames().Contains(wxT("(blank)")));
+	EXPECT_EQ(ibUserInfo::CountByName(wxT("")), 0u);
+	EXPECT_EQ(ibUserInfo::CountByName(wxT("   ")), 0u);
+	EXPECT_TRUE(NameKeyInsertSucceeds(wxT("88888888-8888-4888-8888-888888888888"), wxT("")));
+
+	ibUserInfo blank;
+	ASSERT_NE(ibApplicationInstance::Get(), nullptr);
+	EXPECT_FALSE(ibApplicationInstance::Get()->AuthenticateUser(wxT(""), wxT("secret"), blank));
+	EXPECT_FALSE(ibApplicationInstance::Get()->AuthenticateUser(wxT("   "), wxT("secret"), blank));
+
+	const ibUserInfo clerk = UserNamed(wxT("Clerk"));
+	EXPECT_FALSE(ibUserInfo::NameChangeConflicts(clerk));
+	EXPECT_TRUE(ibUserInfo::Save(clerk));
 }
 
 TEST_F(TempDbSqliteFix, UserName_AUniqueOldTableGainsTheFoldedKey)
 {
 	if (!ready) GTEST_SKIP();
+	CreateOldUserTable();
 	ibDatabaseQueryBuilder q;
-	q.Execute(ibCreateTable(user_table, {
-		{ wxT("guid"),       ibTypeString(36),  false, true,  wxEmptyString },
-		{ wxT("name"),       ibTypeString(64),  true,  false, wxEmptyString },
-		{ wxT("fullName"),   ibTypeString(128), true,  false, wxEmptyString },
-		{ wxT("changed"),    ibTypeDate(),      true,  false, wxEmptyString },
-		{ wxT("dataSize"),   ibTypeInteger(),   true,  false, wxEmptyString },
-		{ wxT("binaryData"), ibTypeBlob(),      true,  false, wxEmptyString },
-	}));
 	const char byte = 0;
 	q.Execute(ibInsert(user_table, {
 		{ wxT("guid"),       ibConst(ibValue(wxT("33333333-3333-4333-8333-333333333333"))) },
@@ -675,4 +786,8 @@ TEST_F(TempDbSqliteFix, UserName_AUniqueOldTableGainsTheFoldedKey)
 	const ibUserInfo found = ibUserInfo::Read(wxT("admin"));
 	EXPECT_EQ(found.m_strUserGuid, wxT("33333333-3333-4333-8333-333333333333"));
 	EXPECT_FALSE(ibUserInfo::Save(UserNamed(wxT("ADMIN"))));
+
+	// A later open finds the index already there and still refuses a second spelling.
+	EXPECT_NO_THROW(ibApplicationInstance::MigrateTableUserForTest());
+	EXPECT_FALSE(NameKeyInsertSucceeds(wxT("99999999-9999-4999-8999-999999999999"), wxT("admin")));
 }

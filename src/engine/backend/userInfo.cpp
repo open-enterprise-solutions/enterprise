@@ -5,6 +5,8 @@
 #include "databaseLayer/databaseErrorCodes.h"
 #include "core/fileSystem/fs.h"
 
+#include <map>
+
 namespace {
 
 // Chunk tags inside binaryData (DB) and the per-record blob (export buffer).
@@ -169,6 +171,81 @@ wxString ibUserInfo::NameKey(const wxString& userName)
 	return key.Lower();
 }
 
+wxString ibUserInfo::NameAsShown(const wxString& userName)
+{
+	wxString trimmed = userName;
+	trimmed.Trim(true).Trim(false);
+	if (trimmed.empty())
+		return _("(blank)");
+	return userName;
+}
+
+unsigned ibUserInfo::CountByName(const wxString& userName)
+{
+	const wxString key = NameKey(userName);
+	if (key.empty())
+		return 0;
+
+	unsigned count = 0;
+	for (const Brief& brief : ListAll()) {
+		if (NameKey(brief.m_strUserName) == key)
+			++count;
+	}
+	return count;
+}
+
+wxString ibUserInfo::SharedNames()
+{
+	std::map<wxString, std::vector<wxString>> groups;
+	for (const Brief& brief : ListAll())
+		groups[NameKey(brief.m_strUserName)].push_back(NameAsShown(brief.m_strUserName));
+
+	wxString shared;
+	for (const auto& group : groups) {
+		if (group.second.size() < 2)
+			continue;
+		if (!shared.empty())
+			shared += wxT(", ");
+		for (std::size_t i = 0; i < group.second.size(); ++i) {
+			if (i != 0)
+				shared += wxT(" / ");
+			shared += group.second[i];
+		}
+	}
+	return shared;
+}
+
+wxString ibUserInfo::SharedNameWarning()
+{
+	const wxString shared = SharedNames();
+	if (shared.empty())
+		return wxString();
+	return wxString::Format(
+		_("These users share a name. The base is open, and that name cannot be used to sign in until each one is unique: %s"),
+		shared);
+}
+
+bool ibUserInfo::NameChangeConflicts(const ibUserInfo& info)
+{
+	const wxString key = NameKey(info.m_strUserName);
+	if (key.empty())
+		return false;
+
+	// The row already stored under this guid may keep its folded name. That is how one of
+	// two "Admin" accounts is edited, or renamed, without the save being the conflict.
+	const ibUserInfo stored = Read(ibGuid(info.m_strUserGuid));
+	if (stored.IsOk() && NameKey(stored.m_strUserName) == key)
+		return false;
+
+	for (const Brief& brief : ListAll()) {
+		if (brief.m_strUserGuid == info.m_strUserGuid)
+			continue;
+		if (NameKey(brief.m_strUserName) == key)
+			return true;
+	}
+	return false;
+}
+
 ibUserInfo ibUserInfo::Read(const wxString& userName)
 {
 	ibUserInfo info;
@@ -228,11 +305,9 @@ bool ibUserInfo::Save(const ibUserInfo& info)
 	if (nameKey.empty() || info.m_strUserGuid.IsEmpty())
 		return false;
 
-	// Another account already carries this name, including a different spelling
-	// of it. Saving this one would hide the first: Read returns whichever row
-	// it meets first.
-	const ibUserInfo named = Read(info.m_strUserName);
-	if (named.IsOk() && named.m_strUserGuid != info.m_strUserGuid)
+	// A new account, or a rename onto a name somebody else already holds. An existing
+	// row that keeps its own folded name is not this case: it can still be edited.
+	if (NameChangeConflicts(info))
 		return false;
 
 	// The default-ctor builder resolves to CurrentHolder = the db_query channel's thread holder —

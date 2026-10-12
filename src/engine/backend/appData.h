@@ -453,8 +453,9 @@ private:
 	// jobs had any. Nullable, and a NULL active reads as ON: silence must never switch a job off.
 	static void MigrateTableJob();
 	static void MigrateTableSession();
-	// Gives sys_user its folded name and a unique index on it. A base whose
-	// users already share a name does not open until that is resolved.
+	// Gives sys_user its folded name. The unique index is created only when
+	// every name is already distinct. A base whose users share a name still
+	// opens; that name cannot be used to sign in until each one is unique.
 	static void MigrateTableUser();
 	// Additive — creates sys_settings if missing. One row per saved setting,
 	// addressed by category + object + name + user. Independent table, not part

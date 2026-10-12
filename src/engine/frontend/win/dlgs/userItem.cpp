@@ -287,8 +287,7 @@ ibDialogUserItem::ibDialogUserItem(wxWindow* parent, wxWindowID id, const wxStri
 				return;
 			}
 
-			const ibUserInfo named = ibUserInfo::Read(userInfo.m_strUserName);
-			if (named.IsOk() && named.m_strUserGuid != userInfo.m_strUserGuid) {
+			if (ibUserInfo::NameChangeConflicts(userInfo)) {
 				wxMessageBox(_("A user with this name already exists"));
 				return;
 			}

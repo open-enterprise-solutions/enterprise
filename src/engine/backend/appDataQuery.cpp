@@ -2,10 +2,7 @@
 #include "backend/databaseLayer/databaseQueryBuilder.h"   // L2 door — DDL/DML + TableExists/GetColumns/IsOpen + typed row reads (no raw L1)
 #include "backend/databaseLayer/connectionPool.h"
 
-#include "backend/backend_exception.h"
 #include "backend/userInfo.h"
-
-#include <map>
 
 #include "backend/session/sessionRegistry.h"
 
@@ -54,45 +51,49 @@ void ibApplicationInstance::MigrateTableUser()
 	if (!qi.TableExists(user_table))
 		return;
 
-	wxArrayString cols = qi.GetColumns(user_table);
+	bool hasNameKey = false;
+	const wxArrayString cols = qi.GetColumns(user_table);
 	for (std::size_t i = 0; i < cols.GetCount(); ++i) {
-		if (cols[i].CmpNoCase(wxT("nameKey")) == 0)
-			return;
-	}
-
-	// A base that already has two spellings of one name cannot grow the unique
-	// key. Opening stops here and names them; the rows stay until somebody
-	// renames one.
-	std::map<wxString, wxString> seen;
-	wxString shared;
-	for (const ibUserInfo::Brief& user : ibUserInfo::ListAll()) {
-		// A blank name folds to the same key as another blank. Leaving those
-		// out would let the unique index fail later with a driver error
-		// instead of this list.
-		const wxString key = ibUserInfo::NameKey(user.m_strUserName);
-		const auto found = seen.find(key);
-		if (found == seen.end()) {
-			seen.emplace(key, user.m_strUserName);
-			continue;
+		if (cols[i].CmpNoCase(wxT("nameKey")) == 0) {
+			hasNameKey = true;
+			break;
 		}
-		if (!shared.empty())
-			shared += wxT(", ");
-		shared += found->second + wxT(" / ") + user.m_strUserName;
-	}
-	if (!shared.empty()) {
-		ibBackendCoreException::Error(
-			_("These users share a name and the base cannot open until each name is unique: %s"),
-			shared);
 	}
 
+	// Nullable on purpose. SQLite refuses NOT NULL on a column added to a table that
+	// already has rows, and an old row has no folded name until the fill below.
 	ibDatabaseQueryBuilder q;
-	q.Execute(ibAddColumn(user_table, { wxT("nameKey"), ibTypeString(64), false, false, wxEmptyString }));
-	for (const ibUserInfo::Brief& user : ibUserInfo::ListAll()) {
-		q.Execute(ibUpdate(user_table,
-			{ { wxT("nameKey"), ibConst(ibValue(ibUserInfo::NameKey(user.m_strUserName))) } },
-			ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("guid")), ibConst(ibValue(user.m_strUserGuid)))));
+	if (!hasNameKey) {
+		q.Execute(ibAddColumn(user_table, { wxT("nameKey"), ibTypeString(64), false, false, wxEmptyString }));
+		for (const ibUserInfo::Brief& user : ibUserInfo::ListAll()) {
+			q.Execute(ibUpdate(user_table,
+				{ { wxT("nameKey"), ibConst(ibValue(ibUserInfo::NameKey(user.m_strUserName))) } },
+				ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("guid")), ibConst(ibValue(user.m_strUserGuid)))));
+		}
 	}
-	q.Execute(ibCreateIndex(user_table, wxT("user_name_key"), { wxT("nameKey") }, /*unique*/true));
+
+	// The base opens either way. The unique index is created only when every folded
+	// name is already distinct; two "Admin" rows, or two blanks, would make CREATE
+	// UNIQUE INDEX fail and the failure would look like the base itself is broken.
+	// Asked again on the next open, so renaming them is enough — nothing else has to
+	// remember to build the index.
+	const wxString shared = ibUserInfo::SharedNameWarning();
+	if (!shared.empty()) {
+		// ibJournalWarning is erased in a Release build. This warning is about a base
+		// that just opened, so it has to be in the file then too, and it does not open
+		// a window (a warning here is for whoever reads the journal).
+		if (ibTechJournal::IsOpen())
+			ibTechJournal::Print(ibJournalMark::Warning, wxT("user"), wxT("%s"), shared);
+		return;
+	}
+
+	try {
+		q.Execute(ibCreateIndex(user_table, wxT("user_name_key"), { wxT("nameKey") }, /*unique*/true));
+	}
+	catch (...) {
+		// Already present from the open that first found the names distinct, or from
+		// CreateTableUser on a new base. A later open must not refuse the base for that.
+	}
 }
 
 void ibApplicationInstance::CreateTableSession()

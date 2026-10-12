@@ -22,4 +22,6 @@ TEST(UserNameKey, FoldingIgnoresCaseAndSurroundingSpace)
 	EXPECT_EQ(ibUserInfo::NameKey(wxT("Admin")), wxT("admin"));
 	EXPECT_EQ(ibUserInfo::NameKey(wxT(" ADMIN ")), ibUserInfo::NameKey(wxT("admin")));
 	EXPECT_TRUE(ibUserInfo::NameKey(wxT("   ")).empty());
+	EXPECT_EQ(ibUserInfo::NameAsShown(wxT("Admin")), wxT("Admin"));
+	EXPECT_EQ(ibUserInfo::NameAsShown(wxT("   ")), wxT("(blank)"));
 }
