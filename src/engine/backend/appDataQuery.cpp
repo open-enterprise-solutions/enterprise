@@ -88,6 +88,13 @@ void ibApplicationInstance::CreateTableEvent()
 // session end / on zombie sweep. Index on (namespace, keyHash) drives
 // the per-acquire conflict-check; index on sessionGuid drives the
 // session-end cascade.
+//
+// sys_lock_key is the mutex for one key. It is created on every open, including a
+// base that already has sys_lock: the first acquire of a key inserts the header
+// under the primary key, so nothing is copied out of the old rows. The sweep
+// deletes a header once nobody holds the key. An old binary on the same base
+// still acquires without the row, so two processes can both be granted the key
+// until every process is upgraded.
 void ibApplicationInstance::CreateTableLock()
 {
 	ibDatabaseQueryBuilder q;
@@ -108,6 +115,14 @@ void ibApplicationInstance::CreateTableLock()
 		// sessionGuid drives the session-end cascade. No per-driver fork — see CreateTableSession.
 		q.Execute(ibCreateIndex(lock_table, wxT("lock_index_1"), { wxT("namespace"), wxT("keyHash") }));
 		q.Execute(ibCreateIndex(lock_table, wxT("lock_index_2"), { wxT("sessionGuid") }));
+	}
+
+	// The header outlives the lock. Release does not delete it.
+	if (!q.TableExists(lock_key_table)) {
+		q.Execute(ibCreateTable(lock_key_table, {
+			{ wxT("namespace"), ibTypeString(128), true, true, wxEmptyString },
+			{ wxT("keyHash"),   ibTypeString(64),  true, true, wxEmptyString },
+		}));
 	}
 }
 

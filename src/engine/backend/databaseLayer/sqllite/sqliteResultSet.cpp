@@ -63,7 +63,7 @@ bool ibDatabaseResultSetSQLite::Next()
 
 	if ((nReturn != SQLITE_ROW) && (nReturn != SQLITE_DONE))
 	{
-		SetErrorCode(ibDatabaseLayerSQLite::TranslateErrorCode(nReturn));
+		SetErrorCode(ibDatabaseLayerSQLite::TranslateErrorCode(nReturn), ibDatabaseLayerSQLite::ClassifyDatabaseError(nReturn));
 		if (GetErrorCode() != DATABASE_LAYER_QUERY_CANCELLED)   // a cancel is no error - see firebirdResultSet.cpp
 			ibJournalError(wxT("db.sqlite"),wxT("Error with RunQueryWithResults\n"));
 #if SQLITE_VERSION_NUMBER>=3002002
@@ -222,4 +222,3 @@ ibResultSetMetaData* ibDatabaseResultSetSQLite::GetMetaData()
 	LogMetaDataForCleanup(pMetaData);
 	return pMetaData;
 }
-

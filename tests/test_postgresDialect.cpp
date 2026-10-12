@@ -268,9 +268,9 @@ TEST_F(PostgresDialect, NoWaitDoesNotWaitForAHeldRow)
 			state = wxT("acquired");
 	}
 	catch (const ibDatabaseLayerException& err) {
-		// The driver does not stash SQLSTATE on this path, so the refusal is
-		// recognised by the server's own words: a lock timeout, not a cancel.
-		state = err.GetErrorDescription();
+		// lock_not_available. The statement path records the SQLSTATE, so the
+		// refusal is not guessed from the server's message.
+		state = err.GetSqlState();
 	}
 	catch (const ibBackendInterruptException&) {
 		state = wxT("57014");
@@ -286,7 +286,7 @@ TEST_F(PostgresDialect, NoWaitDoesNotWaitForAHeldRow)
 	holder->Close();
 	s_db->RunQuery(wxT("DROP TABLE IF EXISTS oes_dialect_nowait"));
 
-	EXPECT_NE(state.Lower().Find(wxT("lock")), wxNOT_FOUND)
+	EXPECT_EQ(wxT("55P03"), state)
 		<< "a noWait transaction must be refused for the lock, not cancelled: " << state.utf8_str();
 	EXPECT_LT(waited, 1000) << "waited " << waited << " ms";
 }
