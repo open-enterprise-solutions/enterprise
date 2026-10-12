@@ -284,7 +284,11 @@ void ibLockManager::OnSessionEnd(const ibGuid& sessionGuid)
 	if (!q.IsOpen())
 		return;
 
-	q.BeginTransaction();
+	// Called from the registry thread (Remove and the stale sweep). A delete that waits
+	// for a lock sits in front of Add; a row still held is left for the next tick.
+	ibDbTxOptions opts;
+	opts.noWait = true;
+	q.BeginTransaction(opts);
 	try {
 		q.Execute(ibDelete(kSysLockTable,
 			ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("sessionGuid")), ibConst(ibValue(sessionGuid.str())))));
@@ -314,18 +318,28 @@ void ibLockManager::SweepOrphans(const std::vector<ibGuid>& liveSessionGuids)
 	// Read the owners first, delete after — the DELETE runs per owner through
 	// OnSessionEnd, which owns its own TX. Distinct owners, so a session holding
 	// several locks is one DELETE, not one per row.
+	// The read is on the registry thread too. noWait so preparing it cannot sit
+	// out the driver's lock timeout while an apply holds metadata.
 	std::set<wxString> orphans;
 	try {
-		ibQueryResult rs = q.ExecuteIR(ibQueryIR(ibProject(ibScan(kSysLockTable),
-			{ { ibCol(wxT("sessionGuid")), wxEmptyString } })));
-		while (rs.Next()) {
-			const wxString owner = rs.GetResultString(wxT("sessionGuid"));
-			if (!owner.IsEmpty() && live.find(owner) == live.end())
-				orphans.insert(owner);
+		ibDbTxOptions opts;
+		opts.noWait = true;
+		q.BeginTransaction(opts);
+		{
+			ibQueryResult rs = q.ExecuteIR(ibQueryIR(ibProject(ibScan(kSysLockTable),
+				{ { ibCol(wxT("sessionGuid")), wxEmptyString } })));
+			while (rs.Next()) {
+				const wxString owner = rs.GetResultString(wxT("sessionGuid"));
+				if (!owner.IsEmpty() && live.find(owner) == live.end())
+					orphans.insert(owner);
+			}
 		}
+		q.Commit();
 	}
 	catch (const ibCoreException&) {
-		return;   // transient DB error — the next sweep tick retries
+		if (q.IsActiveTransaction())
+			q.RollBack();
+		return;   // transient DB error, or the table is locked — the next sweep tick retries
 	}
 
 	for (const wxString& owner : orphans)

@@ -9,6 +9,7 @@
 #include "backend/backend_exception.h"
 #include "backend/databaseLayer/connectionPool.h"
 #include "backend/databaseLayer/databaseLayer.h"
+#include "backend/databaseLayer/databaseLayerException.h"   // a missing column is Syntax; a lock is not
 #include "backend/databaseLayer/databaseQueryBuilder.h"   // L2 door — q(&m_writeHolder) resolves to the holder's bound conn (write helpers); snapshot reads still raw
 #include "workerPool.h"
 #include "workerPoolHeadless.h"
@@ -916,6 +917,62 @@ ibSessionWatch ibSessionRegistry::GetActiveDebugTarget() const
 
 // --- Handlers ------------------------------------------------------------
 
+// The registry thread is the one Connect waits on. Firebird's ordinary transaction waits up to
+// 30 seconds for a lock, and Connect gives up at 20, so a statement that waits is what the caller
+// hears as "registry did not answer to Add". A configuration apply holds its transaction open for
+// the whole restructuring, and that lock — a row of sys_session, or the metadata a statement has
+// to prepare against — is what these statements meet on the second apply. Ask, and if somebody
+// else still holds it, leave the work for the next tick.
+struct ibRegistryNoWait {
+	ibDatabaseQueryBuilder m_query;
+	bool                   m_opened = false;
+
+	explicit ibRegistryNoWait(ibDatabaseConnectionHolder& holder)
+		: m_query(&holder)
+	{
+		if (!m_query.IsOpen() || m_query.IsActiveTransaction())
+			return;
+		ibDbTxOptions opts;
+		opts.noWait = true;
+		m_query.BeginTransaction(opts);
+		m_opened = true;
+	}
+
+	ibDatabaseQueryBuilder& Query() { return m_query; }
+
+	void Commit()
+	{
+		if (!m_opened)
+			return;
+		m_opened = false;
+		try {
+			m_query.Commit();
+		}
+		catch (...) {
+			try {
+				if (m_query.IsActiveTransaction())
+					m_query.RollBack();
+			}
+			catch (...) { /* the row stays; the next tick asks again */ }
+			throw;
+		}
+	}
+
+	~ibRegistryNoWait()
+	{
+		if (!m_opened)
+			return;
+		try {
+			if (m_query.IsActiveTransaction())
+				m_query.RollBack();
+		}
+		catch (...) { /* a destructor must not throw; the next tick retries */ }
+	}
+
+	ibRegistryNoWait(const ibRegistryNoWait&) = delete;
+	ibRegistryNoWait& operator=(const ibRegistryNoWait&) = delete;
+};
+
 static bool InsertSessionRow(ibDatabaseConnectionHolder& holder, const ibSession& s, const wxString& userName)
 {
 	const ibSessionIdentity& id = s.Identity();
@@ -928,8 +985,9 @@ static bool InsertSessionRow(ibDatabaseConnectionHolder& holder, const ibSession
 	// INSERT would throw on unknown column and leave the session
 	// unregistered, which breaks Active Users listings across the
 	// cluster).
-	ibDatabaseQueryBuilder q(&holder);   // resolves to the holder's bound conn (= m_writeConn) via GetScopeConn
 	try {
+		ibRegistryNoWait tx(holder);   // the holder's bound conn (= m_writeConn); a locked table comes back at once
+		ibDatabaseQueryBuilder& q = tx.Query();
 		q.Execute(ibInsert(session_table, {
 			{ wxT("session"),     ibConst(ibValue(s.GetId())) },
 			{ wxT("userName"),    ibConst(ibValue(userName)) },
@@ -941,6 +999,27 @@ static bool InsertSessionRow(ibDatabaseConnectionHolder& holder, const ibSession
 		SESSION_LOG("[session INSERT] ok guid=" << s.GetId()
 		          << " user='" << (const char*)userName.ToUTF8().data() << "'"
 		          << " mode=" << int(id.m_appMode));
+
+		// Best-effort population of extension columns — silently skipped
+		// when the schema pre-dates them. MigrateTableSession tries to
+		// add the columns on startup; this is the follow-up writer.
+		try {
+			q.Execute(ibUpdate(session_table, {
+				{ wxT("pid"),     ibConst(ibValue(id.m_pid)) },
+				{ wxT("address"), ibConst(ibValue(id.m_address)) },
+				{ wxT("kind"),    ibConst(ibValue(int(s.GetKind()))) },
+				// …AND `exclusive` = 0, EXPLICITLY. A session that never takes monopoly mode used to leave
+				// this column NULL for its whole life, while one that took it and let it go left 0 — two
+				// spellings of "not exclusive" in one table. Nothing reads them apart TODAY (the driver
+				// reports NULL as 0), but a fact with two spellings is answered by whoever asks NEXT, and
+				// the next asker may be SQL, where `exclusive <> 1` and `IS NULL` part company. The row
+				// says it from birth instead of acquiring the answer later.
+				{ wxT("exclusive"), ibConst(ibValue(0)) },
+			}, ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("session")), ibConst(ibValue(s.GetId())))));
+		} catch (...) { /* legacy schema — fine */ }
+
+		tx.Commit();
+		return true;
 	}
 	catch (const ibCoreException& err) {
 		SESSION_LOG("[session INSERT] FAILED: "
@@ -951,36 +1030,17 @@ static bool InsertSessionRow(ibDatabaseConnectionHolder& holder, const ibSession
 		SESSION_LOG("[session INSERT] FAILED: unknown exception");
 		return false;
 	}
-
-	// Best-effort population of extension columns — silently skipped
-	// when the schema pre-dates them. MigrateTableSession tries to
-	// add the columns on startup; this is the follow-up writer.
-	try {
-		q.Execute(ibUpdate(session_table, {
-			{ wxT("pid"),     ibConst(ibValue(id.m_pid)) },
-			{ wxT("address"), ibConst(ibValue(id.m_address)) },
-			{ wxT("kind"),    ibConst(ibValue(int(s.GetKind()))) },
-			// …AND `exclusive` = 0, EXPLICITLY. A session that never takes monopoly mode used to leave
-			// this column NULL for its whole life, while one that took it and let it go left 0 — two
-			// spellings of "not exclusive" in one table. Nothing reads them apart TODAY (the driver
-			// reports NULL as 0), but a fact with two spellings is answered by whoever asks NEXT, and
-			// the next asker may be SQL, where `exclusive <> 1` and `IS NULL` part company. The row
-			// says it from birth instead of acquiring the answer later.
-			{ wxT("exclusive"), ibConst(ibValue(0)) },
-		}, ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("session")), ibConst(ibValue(s.GetId())))));
-	} catch (...) { /* legacy schema — fine */ }
-
-	return true;
 }
 
 static bool UpdateSessionUser(ibDatabaseConnectionHolder& holder, const wxString& guidStr, const wxString& userName, const wxString& userGuid)
 {
 	(void)userGuid;   // schema currently has no userGuid column — placeholder for when we add it
 	try {
-		ibDatabaseQueryBuilder q(&holder);
-		q.Execute(ibUpdate(session_table,
+		ibRegistryNoWait tx(holder);
+		tx.Query().Execute(ibUpdate(session_table,
 			{ { wxT("userName"), ibConst(ibValue(userName)) } },
 			ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("session")), ibConst(ibValue(guidStr)))));
+		tx.Commit();
 		return true;
 	} catch (...) { return false; }
 }
@@ -988,9 +1048,10 @@ static bool UpdateSessionUser(ibDatabaseConnectionHolder& holder, const wxString
 static bool DeleteSessionRow(ibDatabaseConnectionHolder& holder, const wxString& guidStr)
 {
 	try {
-		ibDatabaseQueryBuilder q(&holder);
-		q.Execute(ibDelete(session_table,
+		ibRegistryNoWait tx(holder);
+		tx.Query().Execute(ibDelete(session_table,
 			ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("session")), ibConst(ibValue(guidStr)))));
+		tx.Commit();
 		return true;
 	} catch (...) { return false; }
 }
@@ -1408,11 +1469,12 @@ void ibSessionRegistry::ProcessSetExclusive(ibRegistryRequest& req)
 	auto writeExclusiveColumn = [&](int value) {
 		if (!m_ownsSysSession || !m_writeConn || !s.Inserted()) return;
 		try {
-			ibDatabaseQueryBuilder q(&m_writeHolder);
-			q.Execute(ibUpdate(session_table,
+			ibRegistryNoWait tx(m_writeHolder);
+			tx.Query().Execute(ibUpdate(session_table,
 				{ { wxT("exclusive"), ibConst(ibValue(value)) } },
 				ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("session")), ibConst(ibValue(s.GetId())))));
-		} catch (...) { /* legacy schema — silent */ }
+			tx.Commit();
+		} catch (...) { /* legacy schema, or the row is locked by the apply — the next tick writes it */ }
 	};
 
 	if (req.exclusiveOn) {
@@ -1561,10 +1623,11 @@ void ibSessionRegistry::ProcessSetActivity(ibRegistryRequest& req)
 	// never showed at all, and the journal took a thrown exception per label (2026-09-29).
 	const wxString label = req.activity.Left(kActivityWidth);
 	try {
-		ibDatabaseQueryBuilder q(&m_writeHolder);
-		q.Execute(ibUpdate(session_table,
+		ibRegistryNoWait tx(m_writeHolder);
+		tx.Query().Execute(ibUpdate(session_table,
 			{ { wxT("currentActivity"), ibConst(ibValue(label)) } },
 			ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("session")), ibConst(ibValue(guidStr)))));
+		tx.Commit();
 	} catch (...) { /* swallowed: SetActivity is a UI-state hint, not a correctness signal — a failed UPDATE just means peer dialogs show a stale label until the next tick */ }
 }
 
@@ -1620,8 +1683,9 @@ void ibSessionRegistry::JobSweepStale()
 	std::vector<wxString> zombies;
 	std::vector<ibGuid>   live;   // everyone that survives this pass — the lock sweep's input
 	try {
-		ibDatabaseQueryBuilder q(&m_writeHolder);
-		ibQueryResult rs = q.ExecuteIR(ibQueryIR(ibProject(ibScan(session_table),
+		ibRegistryNoWait tx(m_writeHolder);
+		{
+		ibQueryResult rs = tx.Query().ExecuteIR(ibQueryIR(ibProject(ibScan(session_table),
 			{ { ibCol(wxT("session")), wxEmptyString }, { ibCol(wxT("lastActive")), wxEmptyString } })));
 
 		while (rs.Next()) {
@@ -1641,9 +1705,11 @@ void ibSessionRegistry::JobSweepStale()
 			else
 				live.emplace_back(guid);
 		}
+		}
+		tx.Commit();
 	}
 	catch (...) {
-		return;  // transient DB error — swallow, try again next tick
+		return;  // transient DB error, or the table is locked by an apply — swallow, try again next tick
 	}
 
 	if (!zombies.empty()) {
@@ -1696,18 +1762,21 @@ void ibSessionRegistry::JobHeartbeatOwn()
 	// m_writeConn would loop forever on the dead TCP socket to the
 	// previous leader's spawned firebird.exe.
 	try {
-		ibDatabaseQueryBuilder q(&m_writeHolder);
 		const ibDateTime now = ibDateTime::Now();
 		for (const auto& kv : m_own) {
 			auto s = kv.second.Share();
 			if (!s || !s->Inserted()) continue;
+			// One transaction per row. A row the apply still holds must not keep the others,
+			// and must not keep this thread: Add is waiting behind it.
 			try {
-				q.Execute(ibUpdate(session_table,
+				ibRegistryNoWait tx(m_writeHolder);
+				tx.Query().Execute(ibUpdate(session_table,
 					{ { wxT("lastActive"), ibConst(ibValue(now)) } },
 					ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("session")),
 					        ibConst(ibValue(wxString::FromUTF8(kv.first.c_str()))))));
+				tx.Commit();
 			}
-			catch (...) { /* transient — next tick retries */ }
+			catch (...) { /* transient, or the row is locked — next tick retries */ }
 		}
 	}
 	catch (...) {
@@ -1746,11 +1815,14 @@ size_t ibSessionRegistry::SettleSilentPeers(const std::vector<wxString>& peers)
 	const auto readBeats = [this](std::map<wxString, ibDateTime>& beats) {
 		beats.clear();
 		try {
-			ibDatabaseQueryBuilder q(&m_writeHolder);
-			ibQueryResult rs = q.ExecuteIR(ibQueryIR(ibProject(ibScan(session_table),
-				{ { ibCol(wxT("session")), wxEmptyString }, { ibCol(wxT("lastActive")), wxEmptyString } })));
-			while (rs.Next())
-				beats[rs.GetResultString(wxT("session"))] = rs.GetResultDate(wxT("lastActive"));
+			ibRegistryNoWait tx(m_writeHolder);
+			{
+				ibQueryResult rs = tx.Query().ExecuteIR(ibQueryIR(ibProject(ibScan(session_table),
+					{ { ibCol(wxT("session")), wxEmptyString }, { ibCol(wxT("lastActive")), wxEmptyString } })));
+				while (rs.Next())
+					beats[rs.GetResultString(wxT("session"))] = rs.GetResultDate(wxT("lastActive"));
+			}
+			tx.Commit();
 			return true;
 		}
 		catch (...) { return false; }
@@ -1851,13 +1923,13 @@ void ibSessionRegistry::JobCheckSignal()
 	// (a handful per tick; parameterised IN isn't portable, so per-row stays simplest).
 	struct Pending { wxString guid; wxString signal; };
 	std::vector<Pending> pending;
-	ibDatabaseQueryBuilder q(&m_writeHolder);   // bound conn = m_writeConn; reused by the act-phase clear below
 	try {
+		ibRegistryNoWait tx(m_writeHolder);
 		for (const auto& kv : m_own) {
 			auto s = kv.second.Share();
 			if (!s || !s->Inserted()) continue;
 			const wxString guid = wxString::FromUTF8(kv.first.c_str());
-			ibQueryResult rs = q.ExecuteIR(ibQueryIR(ibProject(
+			ibQueryResult rs = tx.Query().ExecuteIR(ibQueryIR(ibProject(
 				ibFilter(ibScan(session_table),
 					ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("session")), ibConst(ibValue(guid)))),
 				{ { ibCol(wxT("signal")), wxEmptyString } })));
@@ -1866,7 +1938,8 @@ void ibSessionRegistry::JobCheckSignal()
 			if (sig.IsEmpty()) continue;
 			pending.push_back({ guid, sig });
 		}
-	} catch (...) { /* signal column may be missing on legacy schema */ return; }
+		tx.Commit();
+	} catch (...) { /* signal column may be missing on legacy schema, or the table is locked */ return; }
 
 	if (pending.empty()) return;
 
@@ -1930,10 +2003,12 @@ void ibSessionRegistry::JobCheckSignal()
 		// Future: "refresh" → broadcast SSE prod to client.
 
 		try {
-			q.Execute(ibUpdate(session_table,
+			ibRegistryNoWait clear(m_writeHolder);
+			clear.Query().Execute(ibUpdate(session_table,
 				{ { wxT("signal"), ibConst(ibValue()) } },   // clear (NULL/empty — read-phase treats both as "no signal")
 				ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("session")), ibConst(ibValue(p.guid)))));
-		} catch (...) { /* transient — retries next tick */ }
+			clear.Commit();
+		} catch (...) { /* transient, or the row is locked — retries next tick */ }
 	}
 }
 
@@ -1955,6 +2030,10 @@ void ibSessionRegistry::JobRefreshSnapshot()
 	auto fresh = std::make_unique<ibSessionSnapshot>();
 	unsigned rowCount = 0;
 	try {
+		// One no-wait transaction for the whole read. The builders below join it, so a
+		// metadata lock held by a configuration apply comes back at once instead of the
+		// driver's 30-second wait — longer than Connect is willing to wait for Add.
+		ibRegistryNoWait tx(m_writeHolder);
 		// kind column may be missing on pre-migration schemas — fall back
 		// to reading it via a second pass-tolerant lookup. SELECT itself
 		// stays restricted to core columns so the query parses everywhere;
@@ -1999,8 +2078,12 @@ void ibSessionRegistry::JobRefreshSnapshot()
 						rw.GetResultInt   ("exclusive") != 0 });
 				wideRead = true;
 			}
-			catch (...) {
-				// A column this schema does not have. Said once, then never asked again.
+			catch (const ibBackendDatabaseException& err) {
+				// A column this schema does not have is a syntax error. A lock is not: recording
+				// the schema as legacy because an apply still holds the table would stick for the
+				// life of the process. Said once, then never asked again.
+				if (err.GetKind() != ibBackendDatabaseException::Kind::Syntax)
+					throw;
 				if (m_sessionHasOptionalColumns.exchange(-1, std::memory_order_relaxed) == 0)
 					ibJournalInfo(wxT("session"), wxT("session table has no kind/exclusive ")
 						wxT("- the snapshot refresh falls back to three reads (legacy schema)"));
@@ -2054,7 +2137,11 @@ void ibSessionRegistry::JobRefreshSnapshot()
 					= rsk.GetResultInt("kind");
 			}
 			fresh->SetKindsFromMap(kindBySession);
-		} catch (...) { /* legacy schema — fine, kinds stay 0 */ }
+		} catch (const ibBackendDatabaseException& err) {
+			if (err.GetKind() != ibBackendDatabaseException::Kind::Syntax)
+				throw;
+			/* legacy schema — fine, kinds stay 0 */
+		}
 
 		// Third pass: exclusive flag — same legacy-tolerant pattern as
 		// kind. Pre-migration schemas keep m_exclusive=false everywhere
@@ -2070,8 +2157,13 @@ void ibSessionRegistry::JobRefreshSnapshot()
 					= rsx.GetResultInt("exclusive") != 0;
 			}
 			fresh->SetExclusiveFromMap(exclusiveBySession);
-		} catch (...) { /* legacy schema — fine, exclusive stays false */ }
+		} catch (const ibBackendDatabaseException& err) {
+			if (err.GetKind() != ibBackendDatabaseException::Kind::Syntax)
+				throw;
+			/* legacy schema — fine, exclusive stays false */
+		}
 		}   // !wideRead — the legacy three-pass road
+		tx.Commit();   // cursors above are already dead
 	}
 	catch (const ibCoreException& err) {
 		SESSION_LOG("[session REFRESH] SELECT failed: "
