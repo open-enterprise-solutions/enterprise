@@ -124,7 +124,12 @@ enum
 	// everything else — the ordinal IS the method index, so a new name goes at the END or every
 	// later case answers to the wrong verb.
 	enSerializeValue,
-	enDeserializeValue
+	enDeserializeValue,
+	// Appended at the end: the ordinal is the method index.
+	enCurrentLanguage,
+	enPrivilegedMode,
+	enSetPrivilegedMode,
+	enPredefinedValue
 };
 
 void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
@@ -251,6 +256,10 @@ void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibVal
 	//--- …and value-as-text last, matching the enSerializeValue / enDeserializeValue tail above.
 	helper.AppendFunc(wxT("SerializeValue"), 1, wxT("SerializeValue(value : any)"));
 	helper.AppendFunc(wxT("DeserializeValue"), 1, wxT("DeserializeValue(json : string)"));
+	helper.AppendFunc(wxT("CurrentLanguage"), wxT("CurrentLanguage()"));
+	helper.AppendFunc(wxT("PrivilegedMode"), wxT("PrivilegedMode()"));
+	helper.AppendProc(wxT("SetPrivilegedMode"), 1, wxT("SetPrivilegedMode(on : boolean)"));
+	helper.AppendFunc(wxT("PredefinedValue"), 1, wxT("PredefinedValue(path : string)"));
 };
 
 #include "backend/compiler/enumUnit.h"
@@ -396,6 +405,13 @@ bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 			return true;
 		case enSerializeValue: pvarRetValue = SerializeValue(*paParams[0]); return true;
 		case enDeserializeValue: pvarRetValue = DeserializeValue(paParams[0]->GetString()); return true;
+		case enCurrentLanguage: pvarRetValue = CurrentLanguage(); return true;
+		case enPrivilegedMode: pvarRetValue = PrivilegedMode(); return true;
+		case enPredefinedValue:
+			if (lSizeArray < 1 || paParams == nullptr || paParams[0] == nullptr)
+				ibBackendCoreException::Error(_("PredefinedValue: the path is not given"));
+			pvarRetValue = PredefinedValue(paParams[0]->GetString());
+			return true;
 		case enEvaluate: pvarRetValue = Evaluate(paParams[0]->GetString()); return true;
 		case enExecute: Execute(paParams[0]->GetString()); return true;
 		case enFormat: pvarRetValue = Format(*paParams[0], paParams[1]->GetString()); return true;
@@ -493,6 +509,11 @@ bool ibValueSystemFunction::CallAsProc(const long lMethodNum, ibValue** paParams
 		case enRunApp: RunApp(paParams[0]->GetString()); return true;
 		case enSetAppTitle: SetAppTitle(paParams[0]->GetString()); return true;
 		case enSetExclusive: SetExclusive(paParams[0]->GetBoolean()); return true;
+		case enSetPrivilegedMode:
+			if (lSizeArray < 1 || paParams == nullptr || paParams[0] == nullptr)
+				ibBackendCoreException::Error(_("SetPrivilegedMode: on or off is not given"));
+			SetPrivilegedMode(paParams[0]->GetBoolean());
+			return true;
 		case enEndJob: EndJob(paParams[0]->GetInteger()); return true;
 		case enUserInterruptProcessing: UserInterruptProcessing(); return true;
 		case enShowCommonForm: ShowCommonForm(

@@ -24,6 +24,9 @@
 #include "backend/debugger/debugServer.h"            // …and up to whoever is debugging this run
 #include "backend/logger/logger.h"                   // the registration journal — the durable channel
 #include "backend/job/jobManager.h"                  // ibBackgroundRun — keeps what a windowless run says
+#include "backend/metaCollection/metaLanguageObject.h"  // CurrentLanguage answers a Language object
+#include "backend/metaCollection/genericData.h"          // ResolveQueryConstant — PredefinedValue
+#include "core/stringUtils.h"
 
 //--- Basic:
 bool ibValueSystemFunction::Boolean(const ibValue& cValue)
@@ -898,6 +901,110 @@ void ibValueSystemFunction::SetExclusive(bool on) {
 
 wxString ibValueSystemFunction::GeneralLanguage() {
 	return appData->GetUserLanguageCode();
+}
+
+ibValue ibValueSystemFunction::LanguageObject(ibMetaData* meta, const wxString& code)
+{
+	if (meta == nullptr || code.IsEmpty())
+		return ibValue();
+	for (auto* language : meta->GetAnyArrayObject<ibValueMetaObjectLanguage>(g_metaLanguageCLSID)) {
+		if (language != nullptr && stringUtils::CompareString(language->GetLangCode(), code))
+			return language;
+	}
+	return ibValue();
+}
+
+ibValue ibValueSystemFunction::CurrentLanguage()
+{
+	wxString code;
+	ibMetaData* meta = nullptr;
+	if (ibSession* session = ibSession::Current()) {
+		code = session->GetLanguageCode();
+		meta = session->GetMetaData();
+	}
+	if (code.IsEmpty())
+		code = appData->GetUserLanguageCode();
+	if (meta == nullptr)
+		meta = activeMetaData;
+	return LanguageObject(meta, code);
+}
+
+bool ibValueSystemFunction::PrivilegedMode()
+{
+	ibSession* session = ibSession::Current();
+	return session != nullptr && session->PrivilegedMode();
+}
+
+void ibValueSystemFunction::SetPrivilegedMode(bool on)
+{
+	ibSession* session = ibSession::Current();
+	if (session == nullptr)
+		ibBackendCoreException::Error(_("SetPrivilegedMode: there is no session"));
+	session->SetPrivilegedMode(on);
+}
+
+ibValue ibValueSystemFunction::PredefinedValue(const wxString& path)
+{
+	ibMetaData* meta = nullptr;
+	if (ibSession* session = ibSession::Current())
+		meta = session->GetMetaData();
+	if (meta == nullptr)
+		meta = activeMetaData;
+	return PredefinedValue(meta, path);
+}
+
+ibValue ibValueSystemFunction::PredefinedValue(ibMetaData* meta, const wxString& path)
+{
+	if (path.IsEmpty())
+		ibBackendCoreException::Error(_("PredefinedValue: the path is not given"));
+
+	const wxArrayString parts = wxSplit(path, wxT('.'));
+	if (parts.size() < 3)
+		ibBackendCoreException::Error(_("PredefinedValue: '%s' is not a path of kind, object and name"), path);
+
+	struct Kind { const wxChar* name; ibClassID clsid; };
+	const Kind kinds[] = {
+		{ wxT("Catalog"), g_metaCatalogCLSID },
+		{ wxT("Document"), g_metaDocumentCLSID },
+		{ wxT("Enumeration"), g_metaEnumerationCLSID },
+		{ wxT("ChartOfAccounts"), g_metaChartOfAccountsCLSID },
+		{ wxT("ChartOfCharacteristicTypes"), g_metaChartOfCharacteristicTypesCLSID },
+		{ wxT("ChartOfCalculationTypes"), g_metaChartOfCalculationTypesCLSID },
+	};
+	ibClassID clsid = 0;
+	for (const Kind& kind : kinds) {
+		if (parts[0].CmpNoCase(kind.name) == 0) {
+			clsid = kind.clsid;
+			break;
+		}
+	}
+	if (clsid == 0)
+		ibBackendCoreException::Error(_("PredefinedValue: '%s' is not a metadata kind"), parts[0]);
+	if (meta == nullptr)
+		ibBackendCoreException::Error(_("PredefinedValue: there is no configuration"));
+
+	ibValueMetaObject* object = nullptr;
+	for (auto* candidate : meta->GetAnyArrayObject(clsid)) {
+		if (candidate != nullptr && candidate->GetName().CmpNoCase(parts[1]) == 0) {
+			object = candidate;
+			break;
+		}
+	}
+	if (object == nullptr)
+		ibBackendCoreException::Error(_("PredefinedValue: '%s' is not a %s"), parts[1], parts[0]);
+
+	wxString member;
+	for (size_t i = 2; i < parts.size(); ++i) {
+		if (!member.IsEmpty())
+			member += wxT('.');
+		member += parts[i];
+	}
+
+	auto* data = dynamic_cast<ibValueMetaObjectGenericData*>(object);
+	ibValue out;
+	if (data == nullptr || !data->ResolveQueryConstant(member, out))
+		ibBackendCoreException::Error(_("PredefinedValue: '%s' is not a predefined name of '%s'"), member, parts[1]);
+	return out;
 }
 
 #include "backend/metaData.h"
