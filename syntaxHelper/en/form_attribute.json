@@ -1,0 +1,22 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "en",
+  "entries": [
+    {
+      "id": "cls.FormAttribute",
+      "name_local": "FormAttribute",
+      "name_en": "FormAttribute",
+      "kind": "class",
+      "category_keys": ["value_types"],
+      "signature": "New FormAttribute(name, type)",
+      "description": "The description of a form attribute: a name and a type. New FormAttribute(name, type) builds one. The type is a TypeDescription. Either argument may be omitted. Building the description does not attach it to a form; a form's own attributes are added with the form.",
+      "parameters": "name — how the form module names it. type — a TypeDescription of what it holds.",
+      "return_descr": "FormAttribute.",
+      "example": "attr = New FormAttribute(\"Flag\", New TypeDescription(\"Boolean\"));",
+      "availability": "Designer, enterprise",
+      "see_also": [],
+      "reviewed": true
+    }
+  ]
+}

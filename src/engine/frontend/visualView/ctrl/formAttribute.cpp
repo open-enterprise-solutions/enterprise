@@ -3,6 +3,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "formAttribute.h"
+#include "backend/backend_exception.h"
 #include "formCommand.h"
 #include "form.h"
 
@@ -745,9 +746,20 @@ ibSourceDataType ibFormAttributeValue::ibFormAttribute::GetSourceDataType() cons
 
 void ibFormAttributeValue::ibFormAttribute::FillMembers(ibMemberTable& helper) const
 {
-	// A simple-type attribute surfaces its own value; an assigned source
-	// surfaces the source's members. Member dispatch is staged with the
-	// type-driven dispatch — left minimal for the first slice.
+	helper.AppendConstructor(2, wxT("FormAttribute(name, type)"));
+}
+
+bool ibFormAttributeValue::ibFormAttribute::Init(ibValue** paParams, const long lSizeArray)
+{
+	if (lSizeArray >= 1 && paParams != nullptr && paParams[0] != nullptr)
+		SetAttributeName(paParams[0]->GetString());
+	if (lSizeArray >= 2 && paParams != nullptr && paParams[1] != nullptr && !paParams[1]->IsEmpty()) {
+		ibValueTypeDescription* described = nullptr;
+		if (!paParams[1]->ConvertToValue(described) || described == nullptr)
+			ibBackendCoreException::Error(_("FormAttribute: the type is not a type description"));
+		m_propertyType->SetValue(described->GetTypeDesc());
+	}
+	return true;
 }
 
 //*********************************************************************************************
@@ -860,4 +872,6 @@ bool ibFormAttributeValue::HasClipboardData()
 SYSTEM_TYPE_REGISTER(ibFormAttributeValue, "FormAttributeValue");
 // The nested description is also a runtime property object (the inspector can reach it via GetClassName on a
 // re-select), so it must be registered too — a SYSTEM type (no ctor; the holder creates it programmatically).
-SYSTEM_TYPE_REGISTER(ibFormAttributeValue::ibFormAttributeImpl, "FormAttribute");
+// A value type, so New FormAttribute(name, type) compiles. The class id is the
+// one the system registration already used.
+VALUE_TYPE_REGISTER(ibFormAttributeValue::ibFormAttributeImpl, "FormAttribute", system_to_clsid("FormAttribute"));

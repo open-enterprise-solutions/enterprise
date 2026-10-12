@@ -16,7 +16,12 @@
 #include "frontend/visualView/ctrl/textBox.h"    // ibValueTextBox
 #include "frontend/visualView/ctrl/gridBox.h"    // ibValueGridBox
 #include "frontend/visualView/ctrl/notebook.h"   // ibValueNotebook + g_controlNotebook*CLSID
+#include "frontend/visualView/ctrl/formAttribute.h"
+#include "backend/backend_exception.h"
+#include "backend/compiler/compileCode.h"
 #include "backend/compiler/value.h"
+#include "backend/system/value/valueType.h"
+#include "core/types.h"
 
 #include <wx/buffer.h>                            // wxMemoryBuffer (form serialize round-trip)
 
@@ -221,6 +226,39 @@ TEST_F(FrontendFormFix, FormSerializeRoundTripPreservesControls)
 	ASSERT_TRUE(dst->LoadForm(buffer)) << "LoadForm rebuilds the control tree";
 	EXPECT_EQ(dst->GetControlList().size(), srcCount)
 		<< "the round-tripped form owns the same controls";
+}
+
+TEST_F(FrontendRuntimeFix, AFormAttributeKeepsTheNameAndTheType)
+{
+	if (!ready)
+		GTEST_SKIP();
+	ibValue name(wxT("Flag"));
+	ibValue typeArg(new ibValueTypeDescription(ibTypeDescription(g_valueStringCLSID)));
+	ibValue* args[] = { &name, &typeArg };
+	ibValue made = ibValue::CreateObject(wxT("FormAttribute"), args, 2);
+	ibFormAttributeValue::ibFormAttributeImpl* attr = nullptr;
+	ASSERT_TRUE(made.ConvertToValue(attr));
+	ASSERT_NE(attr, nullptr);
+	EXPECT_EQ(attr->GetName(), wxT("Flag"));
+	EXPECT_EQ(attr->GetTypeDesc().GetFirstClsid(), g_valueStringCLSID);
+
+	const short savedStyle = ibCompileCode::GetCodeStyle();
+	ibCompileCode::SetCodeStyle(CODE_VES);
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	const wxString src =
+		wxT("Procedure Check()\n")
+		wxT("    var attr = New FormAttribute(\"Flag\", New TypeDescription(\"String\"));\n")
+		wxT("EndProcedure\n");
+	bool compiled = false;
+	wxString why;
+	try {
+		compiled = cc.Compile(src);
+	} catch (const ibBackendException& err) {
+		why = err.GetErrorDescription();
+	}
+	ibCompileCode::SetCodeStyle(savedStyle);
+	if (!compiled)
+		FAIL() << why.ToStdString();
 }
 
 // ------------------------------ clsid kind-typing ----------------------------

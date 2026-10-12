@@ -1,0 +1,22 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "uk",
+  "entries": [
+    {
+      "id": "cls.FormAttribute",
+      "name_local": "FormAttribute",
+      "name_en": "FormAttribute",
+      "kind": "class",
+      "category_keys": ["value_types"],
+      "signature": "New FormAttribute(name, type)",
+      "description": "Опис реквізиту форми: ім'я і тип. New FormAttribute(name, type) створює його. Тип — це TypeDescription. Будь-який аргумент можна не вказувати. Створення опису не додає реквізит на форму: реквізити форми додає сама форма.",
+      "parameters": "name — як модуль форми до нього звертається. type — TypeDescription того, що він зберігає.",
+      "return_descr": "FormAttribute.",
+      "example": "attr = New FormAttribute(\"Flag\", New TypeDescription(\"Boolean\"));",
+      "availability": "Designer, enterprise",
+      "see_also": [],
+      "reviewed": true
+    }
+  ]
+}

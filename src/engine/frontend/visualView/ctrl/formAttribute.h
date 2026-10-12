@@ -112,6 +112,8 @@ class FRONTEND_API ibFormAttributeValue :
 		ibValueForm* GetOwnerForm() const { return m_ownerForm; }
 		void SetOwnerForm(ibValueForm* ownerForm) { m_ownerForm = ownerForm; }
 		void FillMembers(ibMemberTable& helper) const;   // bound in ctor
+		// New FormAttribute(name, type). A missing tail is an empty attribute.
+		virtual bool Init(ibValue** paParams, const long lSizeArray) override;
 		virtual bool ReadProperty(const ibDataNode& node) override;
 		virtual bool WriteProperty(ibDataNode& node) const override;
 		void SetAttributeId(const ibMetaID& id) { m_attributeId = id; }
@@ -150,9 +152,9 @@ public:
 
 	// Expose the internal description type so it can be REGISTERED in the class factory. A runtime property
 	// object (one the inspector may show / GetClassName) must be registered, or GetClassType returns 0 and
-	// GetClassName throws "Class not registered". It is a SYSTEM type: no ctor, never created by the factory
-	// (CreateObject → null) — the holder builds it programmatically. (Public alias to the private nested type
-	// so the file-scope SYSTEM_TYPE_REGISTER can name it.)
+	// GetClassName throws "Class not registered". New FormAttribute(name, type) builds one.
+	// The class id stays system_to_clsid("FormAttribute"), which is the id it already had.
+	// (Public alias to the private nested type so the file-scope registration can name it.)
 	using ibFormAttributeImpl = ibFormAttribute;
 
 	// The holder IS the inspector's property-object — a pure ACCUMULATOR. It owns no properties
