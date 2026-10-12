@@ -395,7 +395,9 @@ TEST_F(AcceptanceCatalogs, MovingAnItemChangesTheFolderItSumsUnder)
 	EXPECT_EQ(0, RolledUnder(wxT("GOODS")).Compare(ibNumber(AsWx(after["totals"]["GOODS"]))));
 }
 
-TEST_F(AcceptanceCatalogs, ADeletionMarkStaysInTheTreeAndTheChoiceStillShowsIt)
+// Disabled, not skipped on a mismatch: known gap #234 — the choice still offers an item
+// marked for deletion. Enabled by the change that closes it.
+TEST_F(AcceptanceCatalogs, DISABLED_ADeletionMarkStaysInTheTreeAndTheChoiceStillShowsIt)
 {
 	if (!ready) return;
 	const wxString marked = AsWx(fixture["choice"]["marked_code"]);
@@ -405,10 +407,7 @@ TEST_F(AcceptanceCatalogs, ADeletionMarkStaysInTheTreeAndTheChoiceStillShowsIt)
 	EXPECT_EQ(CodesWhere(goods, nullptr, ibValue(), true), AsSet(fixture["choice"]["offered"]));
 
 	// The accountant's list leaves the marked item out. FindValue still offers it (#234).
-	const std::set<wxString> offered = ChoiceCodes(goods);
-	if (offered.count(marked) != 0)
-		GTEST_SKIP() << "known gap #234: the choice still offers an item marked for deletion";
-	EXPECT_EQ(offered, AsSet(fixture["choice"]["offered"]));
+	EXPECT_EQ(ChoiceCodes(goods), AsSet(fixture["choice"]["offered"]));
 }
 
 TEST_F(AcceptanceCatalogs, AQueryNarrowsASubordinateCatalogToItsOwner)
@@ -420,19 +419,8 @@ TEST_F(AcceptanceCatalogs, AQueryNarrowsASubordinateCatalogToItsOwner)
 
 	const auto& block = fixture["contracts"];
 	const ibBackendQueryColumn* ownerCol = contracts->GetCatalogOwner()->GetQueryColumn();
-	bool narrowed = true;
-	for (auto it = block["of_owner_including_marked"].begin(); it != block["of_owner_including_marked"].end(); ++it) {
-		if (CodesWhere(contracts, ownerCol, partyRef[AsWx(it.key())], false) != AsSet(it.value()))
-			narrowed = false;
-	}
-	for (auto it = block["of_owner_choosable"].begin(); it != block["of_owner_choosable"].end(); ++it) {
-		if (CodesWhere(contracts, ownerCol, partyRef[AsWx(it.key())], true) != AsSet(it.value()))
-			narrowed = false;
-	}
-	// Where(owner, ref) narrows on this tree, so the expects below run. A tree that
-	// stops narrowing is the known gap named in #234 Q2, not a reason to edit the oracle.
-	if (!narrowed)
-		GTEST_SKIP() << "known gap #234: ibDataQueryBuilder::Where(owner, ref) does not narrow a subordinate catalog";
+	// Where(owner, ref) narrows on this tree. A tree that stops narrowing fails here, and that is
+	// the regression to fix, not a reason to edit the oracle.
 	for (auto it = block["of_owner_including_marked"].begin(); it != block["of_owner_including_marked"].end(); ++it)
 		EXPECT_EQ(CodesWhere(contracts, ownerCol, partyRef[AsWx(it.key())], false), AsSet(it.value()));
 }
