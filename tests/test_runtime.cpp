@@ -835,10 +835,14 @@ TEST(RuntimeTest, AMethodCallFromAnotherModuleTakesTheDeclaredDefault) {
 
 	ibProcUnit callee;
 	ASSERT_TRUE(TryExecute(callee, calleeCc.m_cByteCode));
-	ModuleSurface lib(&callee);
+	// Heap, and one count we hold ourselves. Copying the module into a call's
+	// receiver counts it, and the copy lets go when the call is over; a stack
+	// object would be deleted by that.
+	ModuleSurface* lib = new ModuleSurface(&callee);
+	lib->IncrRef();
 
 	ibCompileCode caller(wxT("caller"), wxT("memory"), false);
-	caller.AddContextVariable(wxT("Lib"), &lib, false);
+	caller.AddContextVariable(wxT("Lib"), lib, false);
 	ASSERT_TRUE(TryCompile(caller,
 		wxT("Function Local(a, b = \"local\")\n")
 		wxT("  Return b;\n")
@@ -852,25 +856,28 @@ TEST(RuntimeTest, AMethodCallFromAnotherModuleTakesTheDeclaredDefault) {
 		wxT("shown = Lib.Flag();\n")
 		wxT("localAnswer = Local(1);\n")));
 
-	ibProcUnit callerUnit;
-	wxString error;
-	ASSERT_TRUE(RunBound(caller, callerUnit, error)) << error.ToStdString();
+	{
+		ibProcUnit callerUnit;
+		wxString error;
+		ASSERT_TRUE(RunBound(caller, callerUnit, error)) << error.ToStdString();
 
-	ibValue joined;
-	ASSERT_TRUE(callerUnit.GetPropVal(wxT("joined"), joined));
-	EXPECT_EQ(joined.GetString(), wxT("X,X"));
+		ibValue joined;
+		ASSERT_TRUE(callerUnit.GetPropVal(wxT("joined"), joined));
+		EXPECT_EQ(joined.GetString(), wxT("X,X"));
 
-	ibValue dashed;
-	ASSERT_TRUE(callerUnit.GetPropVal(wxT("dashed"), dashed));
-	EXPECT_EQ(dashed.GetString(), wxT("X-X"));
+		ibValue dashed;
+		ASSERT_TRUE(callerUnit.GetPropVal(wxT("dashed"), dashed));
+		EXPECT_EQ(dashed.GetString(), wxT("X-X"));
 
-	ibValue shown;
-	ASSERT_TRUE(callerUnit.GetPropVal(wxT("shown"), shown));
-	EXPECT_EQ(shown.GetInteger(), 1);
+		ibValue shown;
+		ASSERT_TRUE(callerUnit.GetPropVal(wxT("shown"), shown));
+		EXPECT_EQ(shown.GetInteger(), 1);
 
-	ibValue localAnswer;
-	ASSERT_TRUE(callerUnit.GetPropVal(wxT("localAnswer"), localAnswer));
-	EXPECT_EQ(localAnswer.GetString(), wxT("local"));
+		ibValue localAnswer;
+		ASSERT_TRUE(callerUnit.GetPropVal(wxT("localAnswer"), localAnswer));
+		EXPECT_EQ(localAnswer.GetString(), wxT("local"));
+	}
+	lib->DecrRef();
 }
 
 TEST(RuntimeTest, RecursiveFactorial) {
