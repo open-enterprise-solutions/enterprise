@@ -24,6 +24,7 @@
 #endif
 
 #include <cpp-httplib/httplib.h>
+#include "adminSession.h"
 #include "wfrontend.h"
 #include <nlohmann/json.hpp>
 #include "backend/backend_exception.h"
@@ -270,13 +271,14 @@ bool RequireSessionId(const httplib::Request& req, httplib::Response& res, std::
 // ⭐ THE /admin GATE. These endpoints kick sessions, evict a whole process and force-release other
 // people's locks — and they answered ANYONE who could reach the port. The right asked is the one the
 // designer puts on its own administration menu (DataAdministration), in the caller's session: no
-// session is 401, a session without the right is 403. Nothing in the platform calls these over HTTP
-// (the designer's Active Users reads the same data in-process), so a monitor that wants them logs in
-// like a person does.
+// session is 401, a session without the right is 403. The session id is the X-OES-Session header
+// only. A cookie or ?sid= would ride on a form posted from another site, and on an image URL.
+// Nothing in the platform calls these over HTTP (the designer's Active Users reads the same data
+// in-process), so a monitor that wants them logs in like a person does.
 bool RequireAdministrator(const httplib::Request& req, httplib::Response& res)
 {
 	std::string id;
-	if (!RequireSessionId(req, res, id))
+	if (!AdministrationSessionFromHeader(req, res, id))
 		return false;
 	if (wfrontendSessionMayAdminister(id))
 		return true;
@@ -909,8 +911,7 @@ int main(int argc, char** argv)
 
 	// GET /admin/diag — JSON snapshot of pool / worker / session state.
 	// Cheap: reads atomic counters + the registry's last-refreshed
-	// snapshot. Designed for monitoring agents and the Active Users
-	// dialog; callable freely without rate-limiting at typical loads.
+	// snapshot. An authenticated administrator, named by X-OES-Session.
 	svr.Get(prefix + "/admin/diag",
 		[](const httplib::Request& req, httplib::Response& res) {
 			if (!RequireAdministrator(req, res)) return;
