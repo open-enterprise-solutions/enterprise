@@ -1,6 +1,7 @@
 #include "core/serialize/jsonProvider.h"
 #include "core/serialize/jsonText.h"  // ibJsonText — how a string is spelled in JSON, said once
 #include "core/exception.h"           // ibCoreException — malformed-JSON throw
+#include "core/fiber/fiber.h"         // StackLow — the depth count's backstop when the reserve runs out first
 #include <wx/base64.h>
 #include <cstring>                     // strlen / strncmp — the JSON literal match
 
@@ -338,6 +339,11 @@ bool ibJsonReader::ParseNumber(ibNumber& out)
 
 bool ibJsonReader::ParseValue(ibDataValue& out, const std::function<ibClassID(const wxString&)>& lookupType)
 {
+	// The depth count refuses a document past kMaxNesting. This is the
+	// backstop for a fiber whose reserve runs out before that count.
+	if (ibFiber::StackLow())
+		ibCoreException::Error(_("ibJsonProvider: the JSON is nested deeper than the stack allows"));
+
 	SkipWs();
 	const char c = Peek();
 
@@ -391,6 +397,9 @@ bool ibJsonReader::ParseNode(ibDataNode& node, const std::function<ibClassID(con
 {
 	Depth depth(*this);
 	if (!depth.Held()) return false;
+	if (ibFiber::StackLow())
+		ibCoreException::Error(_("ibJsonProvider: the JSON is nested deeper than the stack allows"));
+
 	if (!Expect('{')) return false;
 	if (Accept('}')) return true;   // {} — a legitimately empty node
 

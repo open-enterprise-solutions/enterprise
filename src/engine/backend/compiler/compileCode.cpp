@@ -9,6 +9,7 @@
 
 #include "system/systemManager.h"
 #include "backend/session/session.h"       // GetCompileState — the code style lives there
+#include "core/fiber/fiber.h"              // StackLow — expression nesting is native recursion
 
 #pragma warning(push)
 #pragma warning(disable : 4018)
@@ -3539,6 +3540,13 @@ bool ibCompileCode::CompileForeach(ibCompileContext* context)
 
 bool ibCompileCode::CompileException(ibCompileContext* context)
 {
+	// A Try inside a Try is another compile frame. The same ceiling an
+	// expression already has: the text is refused, the stack is not.
+	if (ibFiber::StackLow()) {
+		SetError(ERROR_EXPRESSION,
+			_("it is nested deeper than the stack allows - split it into steps"));
+		return false;
+	}
 	GETKeyWord(KEY_TRY);
 	ibByteUnit code1;
 	AddLineInfo(code1);
@@ -3702,6 +3710,13 @@ ibParamUnit ibCompileCode::GetExpression(ibCompileContext* context, int nPriorit
 	if (ts_expressionDepth > gs_maxExpressionDepth) {
 		SetError(ERROR_EXPRESSION, wxString::Format(
 			_("it is nested deeper than %d levels - split it into steps"), gs_maxExpressionDepth));
+		return ibParamUnit();
+	}
+	// The ceiling above is what a module sees. This is the overflow past
+	// it: the frame is already on the stack, and another level would not fit.
+	if (ibFiber::StackLow()) {
+		SetError(ERROR_EXPRESSION,
+			_("it is nested deeper than the stack allows - split it into steps"));
 		return ibParamUnit();
 	}
 

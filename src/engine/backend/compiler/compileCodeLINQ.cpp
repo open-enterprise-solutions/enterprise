@@ -35,6 +35,7 @@
 
 #include "compileCode.h"
 #include "codeDef.h"
+#include "core/fiber/fiber.h"              // StackLow — a nested `from` is another native frame
 
 #include "procUnitLambda.h"                // LINQ_THREE_VALUED_NULL — the mark a filter's instructions carry
 
@@ -2561,6 +2562,13 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 // name.
 void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx)
 {
+	// Nested `from` recurses here. The expression ceiling does not see it.
+	if (ibFiber::StackLow()) {
+		SetError(ERROR_EXPRESSION,
+			_("it is nested deeper than the stack allows - split it into steps"));
+		return;
+	}
+
 	// linqCtx — the fake LINQ context (RETURN_BLOCK kind with non-null
 	// m_linqQuery naming the query, entered once by
 	// CompileLinqExpression). All binding registration +
@@ -2614,6 +2622,12 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx)
 // `g` as a synthetic binding over m_groupsContainer's pair rows.
 void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBinding& preBound)
 {
+	if (ibFiber::StackLow()) {
+		SetError(ERROR_EXPRESSION,
+			_("it is nested deeper than the stack allows - split it into steps"));
+		return;
+	}
+
 	ibLinqQuery& data = *linqCtx->m_linqQuery;
 	ibCompileContext* const context = linqCtx;
 

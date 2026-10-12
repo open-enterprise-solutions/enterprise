@@ -6,6 +6,7 @@
 
 #include "queryException.h"   // ibBackendQuerySourceException — L4 refuses in its own variety
 #include "backend/typeDescription.h"   // ibTypeDescription — what a CAST to a primitive converts to
+#include "core/fiber/fiber.h"          // StackLow — a parenthesized expression is native recursion
 
 #include <algorithm>
 #include <iterator>
@@ -1351,6 +1352,11 @@ ibQueryAstExprPtr ibQueryParser::ParseIsNullCall()
 ibQueryAstExprPtr ibQueryParser::ParsePrimary()
 {
 	const ibQueryToken& tk = Cur();
+	// The frame is already this call. Another parenthesized primary would be
+	// another frame, and a query of nothing but brackets used to run off the
+	// stack with no refusal.
+	if (ibFiber::StackLow())
+		ThrowQueryException(tk, _("it is nested deeper than the stack allows"));
 
 	// ⭐ A LEADING MINUS — `-Quantity`, `SELECT -Amount AS Refund`, `ORDER BY -Total`. It is how a
 	// person writes "the other direction", and the grammar simply had no place for it: the parser
