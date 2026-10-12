@@ -1951,6 +1951,54 @@
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": ["fn.SerializeValue"],
       "reviewed": true
+    },
+    {
+      "id": "fn.CurrentLanguage",
+      "name_local": "CurrentLanguage",
+      "name_en": "CurrentLanguage",
+      "kind": "system_function",
+      "category_keys": ["global_context", "global_functions"],
+      "signature": "CurrentLanguage()",
+      "description": "Объект метаданных Language для языка этой сессии. Undefined, если языка с таким кодом нет.",
+      "syntax_block": "CurrentLanguage()",
+      "parameters": "Нет.",
+      "return_descr": "Language или Undefined.",
+      "example": "lang = CurrentLanguage();",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": ["fn.GeneralLanguage"],
+      "reviewed": true
+    },
+    {
+      "id": "fn.PrivilegedMode",
+      "name_local": "PrivilegedMode",
+      "name_en": "PrivilegedMode",
+      "kind": "system_function",
+      "category_keys": ["global_context", "global_functions"],
+      "signature": "PrivilegedMode()",
+      "description": "Пропускает ли эта сессия проверку доступа к строкам. Выключен, пока SetPrivilegedMode его не включит. На другую сессию не влияет.",
+      "syntax_block": "PrivilegedMode()",
+      "parameters": "Нет.",
+      "return_descr": "Булево.",
+      "example": "was = PrivilegedMode();\nSetPrivilegedMode(True);\nSetPrivilegedMode(was);",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": ["fn.SetPrivilegedMode"],
+      "reviewed": true
+    },
+    {
+      "id": "fn.SetPrivilegedMode",
+      "name_local": "SetPrivilegedMode",
+      "name_en": "SetPrivilegedMode",
+      "kind": "system_function",
+      "category_keys": ["global_context", "global_functions"],
+      "signature": "SetPrivilegedMode(on : boolean)",
+      "description": "Включает или выключает привилегированный режим этой сессии. Включён — следующий запрос не фильтруется доступом к строкам. Без сессии вызов отказывается и называет это.",
+      "syntax_block": "SetPrivilegedMode(on : boolean)",
+      "parameters": "on — True, чтобы не проверять доступ к строкам, False, чтобы вернуть проверки.",
+      "return_descr": "Нет.",
+      "example": "SetPrivilegedMode(True);\nSetPrivilegedMode(False);",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": ["fn.PrivilegedMode"],
+      "reviewed": true
     }
   ]
 }

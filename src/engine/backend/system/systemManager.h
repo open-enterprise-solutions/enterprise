@@ -171,6 +171,10 @@ public:
 	static bool ExclusiveMode();
 	static void SetExclusive(bool on);
 	static wxString GeneralLanguage();
+	static ibValue CurrentLanguage();
+	static ibValue LanguageObject(class ibMetaData* meta, const wxString& code);
+	static bool PrivilegedMode();
+	static void SetPrivilegedMode(bool on);
 	static void EndJob(bool force = false);
 
 	static void UserInterruptProcessing();

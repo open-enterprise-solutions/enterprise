@@ -24,6 +24,8 @@
 #include "backend/debugger/debugServer.h"            // …and up to whoever is debugging this run
 #include "backend/logger/logger.h"                   // the registration journal — the durable channel
 #include "backend/job/jobManager.h"                  // ibBackgroundRun — keeps what a windowless run says
+#include "backend/metaCollection/metaLanguageObject.h"  // CurrentLanguage answers a Language object
+#include "core/stringUtils.h"
 
 //--- Basic:
 bool ibValueSystemFunction::Boolean(const ibValue& cValue)
@@ -898,6 +900,46 @@ void ibValueSystemFunction::SetExclusive(bool on) {
 
 wxString ibValueSystemFunction::GeneralLanguage() {
 	return appData->GetUserLanguageCode();
+}
+
+ibValue ibValueSystemFunction::LanguageObject(ibMetaData* meta, const wxString& code)
+{
+	if (meta == nullptr || code.IsEmpty())
+		return ibValue();
+	for (auto* language : meta->GetAnyArrayObject<ibValueMetaObjectLanguage>(g_metaLanguageCLSID)) {
+		if (language != nullptr && stringUtils::CompareString(language->GetLangCode(), code))
+			return language;
+	}
+	return ibValue();
+}
+
+ibValue ibValueSystemFunction::CurrentLanguage()
+{
+	wxString code;
+	ibMetaData* meta = nullptr;
+	if (ibSession* session = ibSession::Current()) {
+		code = session->GetLanguageCode();
+		meta = session->GetMetaData();
+	}
+	if (code.IsEmpty())
+		code = appData->GetUserLanguageCode();
+	if (meta == nullptr)
+		meta = activeMetaData;
+	return LanguageObject(meta, code);
+}
+
+bool ibValueSystemFunction::PrivilegedMode()
+{
+	ibSession* session = ibSession::Current();
+	return session != nullptr && session->PrivilegedMode();
+}
+
+void ibValueSystemFunction::SetPrivilegedMode(bool on)
+{
+	ibSession* session = ibSession::Current();
+	if (session == nullptr)
+		ibBackendCoreException::Error(_("SetPrivilegedMode: there is no session"));
+	session->SetPrivilegedMode(on);
 }
 
 #include "backend/metaData.h"
