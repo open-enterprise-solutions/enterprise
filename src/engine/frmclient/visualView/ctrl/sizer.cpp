@@ -33,6 +33,7 @@ void ibValueBoxSizer::Update(const ibProtocolNode& node)
 {
 	m_sizer->SetOrientation(static_cast<int>(node.GetInt(ibProtocolName::Orient, wxVERTICAL)));
 	m_sizer->SetMinSize(typeConv::StringToSize(node.GetString(ibProtocolName::MinimumSize)));
+	m_sizer->Show(node.GetBool(ibProtocolName::Visible, true));
 	ibViewUpdateSizer(m_sizer, node);
 }
 
@@ -49,6 +50,7 @@ void ibValueWrapSizer::Update(const ibProtocolNode& node)
 {
 	m_sizer->SetOrientation(static_cast<int>(node.GetInt(ibProtocolName::Orient, wxHORIZONTAL)));
 	m_sizer->SetMinSize(typeConv::StringToSize(node.GetString(ibProtocolName::MinimumSize)));
+	m_sizer->Show(node.GetBool(ibProtocolName::Visible, true));
 	ibViewUpdateSizer(m_sizer, node);
 }
 
@@ -66,6 +68,7 @@ void ibValueGridSizer::Update(const ibProtocolNode& node)
 	m_sizer->SetRows(static_cast<int>(node.GetInt(ibProtocolName::Rows)));
 	m_sizer->SetCols(static_cast<int>(node.GetInt(ibProtocolName::Cols)));
 	m_sizer->SetMinSize(typeConv::StringToSize(node.GetString(ibProtocolName::MinimumSize)));
+	m_sizer->Show(node.GetBool(ibProtocolName::Visible, true));
 	ibViewUpdateSizer(m_sizer, node);
 }
 
@@ -193,24 +196,28 @@ bool ibValueSizerItem::WriteData(ibDataNode& node) const
 bool ibValueBoxSizer::ReadData(const ibDataNode& node)
 {
 	m_propertyOrient->SetNodeValue(node.GetProperty(m_propertyOrient->GetName()));
+	m_propertyVisible->SetNodeValue(node.GetProperty(m_propertyVisible->GetName()));
 	return ibValueSizer::ReadData(node);
 }
 
 bool ibValueBoxSizer::WriteData(ibDataNode& node) const
 {
 	node.SetProperty(m_propertyOrient->GetName(), m_propertyOrient->GetNodeValue());
+	node.SetProperty(m_propertyVisible->GetName(), m_propertyVisible->GetNodeValue());
 	return ibValueSizer::WriteData(node);
 }
 
 bool ibValueWrapSizer::ReadData(const ibDataNode& node)
 {
 	m_propertyOrient->SetNodeValue(node.GetProperty(m_propertyOrient->GetName()));
+	m_propertyVisible->SetNodeValue(node.GetProperty(m_propertyVisible->GetName()));
 	return ibValueSizer::ReadData(node);
 }
 
 bool ibValueWrapSizer::WriteData(ibDataNode& node) const
 {
 	node.SetProperty(m_propertyOrient->GetName(), m_propertyOrient->GetNodeValue());
+	node.SetProperty(m_propertyVisible->GetName(), m_propertyVisible->GetNodeValue());
 	return ibValueSizer::WriteData(node);
 }
 
@@ -218,7 +225,7 @@ bool ibValueGridSizer::ReadData(const ibDataNode& node)
 {
 	m_propertyRows->SetNodeValue(node.GetProperty(m_propertyRows->GetName()));
 	m_propertyCols->SetNodeValue(node.GetProperty(m_propertyCols->GetName()));
-
+	m_propertyVisible->SetNodeValue(node.GetProperty(m_propertyVisible->GetName()));
 	return ibValueSizer::ReadData(node);
 }
 
@@ -226,7 +233,7 @@ bool ibValueGridSizer::WriteData(ibDataNode& node) const
 {
 	node.SetProperty(m_propertyRows->GetName(), m_propertyRows->GetNodeValue());
 	node.SetProperty(m_propertyCols->GetName(), m_propertyCols->GetNodeValue());
-
+	node.SetProperty(m_propertyVisible->GetName(), m_propertyVisible->GetNodeValue());
 	return ibValueSizer::WriteData(node);
 }
 
