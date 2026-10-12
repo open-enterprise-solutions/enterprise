@@ -189,17 +189,11 @@ wxString ibPasswordHash::Hash(const wxString& password)
 	return wxString::Format("%s%u$%s$%s", kPrefix, kIterations, saltB64, hashB64);
 }
 
-const wxString ibPasswordHash::Placeholder()
-{
-	return wxT("12345678");
-}
-
 wxString ibPasswordHash::PasswordToStore(const wxString& stored, bool touched, const wxString& text)
 {
-	// The placeholder is what the box shows for a hash we are keeping.
-	// Typing one character and deleting it used to leave this text, and
-	// OK then stored it as the password.
-	if (!touched || text == Placeholder())
+	// The box never holds the stored password, so whether it was edited is
+	// the only sign: no text the person can type means "keep it".
+	if (!touched)
 		return stored;
 	if (text.IsEmpty())
 		return wxEmptyString;

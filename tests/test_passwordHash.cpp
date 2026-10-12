@@ -75,19 +75,19 @@ TEST(PasswordToStore, Typed_HashesTheText) {
 }
 
 TEST(PasswordToStore, TypeAndDelete_StoresNoPassword) {
-    // One character typed over the placeholder, then deleted: the box is empty.
+    // One character typed, then deleted: the box is empty, and so is the password.
     EXPECT_TRUE(ibPasswordHash::PasswordToStore(wxT("stored-hash"), true, wxEmptyString).IsEmpty());
 }
 
-TEST(PasswordToStore, PlaceholderLeftInTheBox_KeepsTheStoredHash) {
+TEST(PasswordToStore, Untouched_KeepsTheStoredHash) {
     const wxString stored = wxT("stored-hash");
-    EXPECT_EQ(ibPasswordHash::PasswordToStore(stored, true, ibPasswordHash::Placeholder()), stored);
+    EXPECT_EQ(ibPasswordHash::PasswordToStore(stored, false, wxEmptyString), stored);
 }
 
-TEST(PasswordToStore, ReplacingThePlaceholder_HashesTheTypedText) {
-    const wxString stored = ibPasswordHash::PasswordToStore(wxT("stored-hash"), true, wxT("new-secret"));
-    EXPECT_TRUE(ibPasswordHash::Verify(wxT("new-secret"), stored));
-    EXPECT_NE(stored, ibPasswordHash::Placeholder());
+TEST(PasswordToStore, AnyTypedText_IsAPassword) {
+    // The text the box once showed in place of a hash is an ordinary password now.
+    const wxString stored = ibPasswordHash::PasswordToStore(wxT("stored-hash"), true, wxT("12345678"));
+    EXPECT_TRUE(ibPasswordHash::Verify(wxT("12345678"), stored));
 }
 
 TEST(PasswordToStore, NewUserWithAnEmptyBox_StoresNoPassword) {

@@ -36,13 +36,8 @@ public:
 	// use this to drive lazy upgrade — re-hash with Hash() and re-store.
 	static bool NeedsRehash(const wxString& storedHash);
 
-	// What the user dialog shows instead of a stored hash, and what it
-	// must never write back as a password.
-	static const wxString Placeholder();
-
-	// The hash the dialog stores. Untouched, or still the placeholder,
-	// keeps `stored`. A box the person cleared stores no password. Any
-	// other text is hashed once.
+	// The hash the user dialog stores. Untouched keeps `stored`. A box the
+	// person cleared stores no password. Any other text is hashed once.
 	static wxString PasswordToStore(const wxString& stored, bool touched, const wxString& text);
 };
 

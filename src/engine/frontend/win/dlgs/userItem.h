@@ -56,7 +56,7 @@ private:
 	bool m_bInitialized;
 	// Set when the password box changes after the record has been shown.
 	// Untouched, OK writes m_strUserPassword back as it was read.
-	bool m_passwordTouched;
+	bool m_bPasswordTouched;
 
 	wxString m_strUserPassword;
 
