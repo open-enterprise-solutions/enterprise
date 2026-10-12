@@ -12,6 +12,7 @@
 #include <thread>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include <wx/bitmap.h>
@@ -22,6 +23,7 @@
 #include "backend/appData.h"
 #include "backend/appHost.h"   // ibApplicationInstanceScope — the HTTP and sweep threads work for the served base
 #include "backend/session/session.h"
+#include "backend/session/sessionLifetime.h"
 #include "backend/session/sessionRegistry.h"
 #include "backend/backend_exception.h"
 #include "backend/databaseLayer/connectionHolder.h"
@@ -123,6 +125,51 @@ public:
 		auto it = m_sessions.find(id);
 		if (it != m_sessions.end() && it->second)
 			it->second->Touch();
+	}
+
+	// The request may proceed. A missing session, a password that changed
+	// after this login, a deleted user, or a session past its absolute
+	// life answers false and the session is gone, so the verb is a 401.
+	// An unauthenticated session is still a session: login has to reach it.
+	bool Admit(const std::string& id)
+	{
+		std::shared_ptr<ibWebSession> session;
+		{
+			std::lock_guard<std::mutex> lock(m_mutex);
+			auto it = m_sessions.find(id);
+			if (it == m_sessions.end() || !it->second)
+				return false;
+			session = it->second;
+		}
+
+		const ibDateTime now = ibDateTime::Now();
+		const ibSessionLifetime policy = ibSessionLifetimePolicy();
+		const ibDateTime authenticatedAt = session->IsAuthenticated()
+			? session->AuthenticatedAt() : ibDateTime();
+
+		bool passwordOk = true;
+		if (session->IsAuthenticated()) {
+			passwordOk = false;
+			if (ibSession* live = session->Session()) {
+				const wxString guid = live->GetUserInfo().m_strUserGuid;
+				if (guid.empty()) {
+					passwordOk = true;   // open access — no account to have changed
+				} else {
+					const ibUserInfo user = ibUserInfo::Read(ibGuid(guid));
+					passwordOk = user.IsOk()
+						&& ibSessionPasswordStillCurrent(authenticatedAt, user.m_passwordChangedAt);
+				}
+			}
+		}
+
+		const ibSessionEnd end = ibJudgeSessionLifetime(now, session->Born(),
+			authenticatedAt, session->LastActiveAt(), policy);
+		if (!passwordOk || end == ibSessionEnd::Absolute) {
+			Destroy(id);
+			return false;
+		}
+		session->Touch();
+		return true;
 	}
 
 	// Allocate a fresh unauthenticated session. The returned id is
@@ -313,21 +360,15 @@ private:
 	void SweepLoop()
 	{
 		using namespace std::chrono;
-		// Tuning: 30-minute idle cutoff matches a reasonable "user
-		// stepped away" window. Sweep every 15s — coarse enough that
-		// the reaper + metadata watch stay cheap, fine enough that
-		// deployed-config changes propagate within a Designer→try-it
-		// roundtrip.
-		// A closed tab does not wait for this: the JS client fires a
-		// beforeunload beacon to /logout, and the cutoff is only the
-		// backstop for a beacon the browser dropped. It was 2 minutes
-		// for a while, and that evicted a user who was simply READING a
-		// form (or whose background tab had its poll paused): the next
-		// action found no session and every unsaved edit was gone. A
-		// generous backstop costs a stale session for half an hour, a
-		// short one costs somebody's work.
-		constexpr std::int64_t kIdleMs   = 30 * 60 * 1000;
-		constexpr auto         kInterval = seconds(15);
+		// Sweep every 15s — coarse enough that the reaper + metadata
+		// watch stay cheap, fine enough that deployed-config changes
+		// propagate within a Designer→try-it roundtrip.
+		// How long a session may sit, and how long it may live even
+		// while it keeps asking, are ibSessionLifetimePolicy (30 minutes
+		// and 8 hours unless the process says otherwise). A closed tab
+		// does not wait for the idle cutoff: the JS client fires a
+		// beforeunload beacon to /logout.
+		constexpr auto kInterval = seconds(15);
 
 		// Capture the metadata guid observed at server start. Compared
 		// to the live sys_config.file_guid on every tick — any diff
@@ -377,23 +418,29 @@ private:
 				return;
 			ibApplicationInstanceScope serving(server->GetApplicationInstance());
 
-			// 1) Idle eviction.
-			const std::int64_t nowMs = duration_cast<milliseconds>(
-				system_clock::now().time_since_epoch()).count();
-			std::vector<std::string> victims;
+			// 1) Idle eviction, and the absolute life. Activity refreshes
+			// the idle clock and does not move the absolute one.
+			const ibDateTime now = ibDateTime::Now();
+			const ibSessionLifetime policy = ibSessionLifetimePolicy();
+			std::vector<std::pair<std::string, ibSessionEnd>> victims;
 			{
 				std::lock_guard<std::mutex> lock(m_mutex);
 				for (auto& kv : m_sessions) {
-					if (kv.second &&
-						nowMs - kv.second->LastActiveMs() > kIdleMs) {
-						victims.push_back(kv.first);
-					}
+					if (!kv.second)
+						continue;
+					const ibDateTime authenticatedAt = kv.second->IsAuthenticated()
+						? kv.second->AuthenticatedAt() : ibDateTime();
+					const ibSessionEnd end = ibJudgeSessionLifetime(now,
+						kv.second->Born(), authenticatedAt, kv.second->LastActiveAt(), policy);
+					if (end != ibSessionEnd::Keep)
+						victims.emplace_back(kv.first, end);
 				}
 			}
-			for (const std::string& id : victims) {
-				std::cerr << "[sweep] evicting idle session " << id
-					<< std::endl;
-				Destroy(id);
+			for (const auto& victim : victims) {
+				std::cerr << "[sweep] evicting "
+					<< (victim.second == ibSessionEnd::Absolute ? "expired" : "idle")
+					<< " session " << victim.first << std::endl;
+				Destroy(victim.first);
 			}
 
 			// 2) Metadata-change watch. Polling fallback for the FB
@@ -1114,6 +1161,11 @@ WFRONTEND_API bool wfrontendLogin(const std::string& sessionId,
 WFRONTEND_API bool wfrontendSessionExists(const std::string& sessionId)
 {
 	return Sessions().Exists(sessionId);
+}
+
+WFRONTEND_API bool wfrontendAdmitSession(const std::string& sessionId)
+{
+	return Sessions().Admit(sessionId);
 }
 
 WFRONTEND_API void wfrontendDestroySession(const std::string& sessionId)

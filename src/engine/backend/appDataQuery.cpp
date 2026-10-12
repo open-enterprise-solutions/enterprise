@@ -66,6 +66,9 @@ void ibApplicationInstance::CreateTableSession()
 			// than by whoever wrote the row. A nullable flag has two (NULL and 0) and they agree only
 			// as long as every reader remembers to make them agree.
 			{ wxT("exclusive"),       ibTypeInteger(),   true,  false, wxT("0") },
+			// When this row's login began. Empty until Attach. A password
+			// change after this moment ends the login.
+			{ wxT("authAt"),          ibTypeDate(),      false, false, wxEmptyString },
 		}));
 		// Indexes ride with the just-created table — no "if not exists" (redundant here, and
 		// unsupported by Firebird), so the per-driver fork collapses to three plain CREATE INDEX.
@@ -304,6 +307,9 @@ void ibApplicationInstance::MigrateTableSession()
 	// exclusive — process-wide monopoly marker; cluster-aware gate in ProcessAdd /
 	// ProcessSetExclusive reads peer rows to detect another process holding it.
 	if (!has(wxT("exclusive")))       addColumn(wxT("exclusive"),       ibTypeInteger());
+	// authAt — when the row's login began. Nullable: a row that has not
+	// signed in, and every row that predates the column, reads as empty.
+	if (!has(wxT("authAt")))          addColumn(wxT("authAt"),          ibTypeDate());
 
 	// NO BACK-FILL FOR THE ROWS. A column added to a populated table arrives NULL everywhere, which
 	// normally means an old base carries two spellings of one fact for good — but not this table: every

@@ -27,6 +27,7 @@
 #include <wx/string.h>
 
 #include "backend/session/sessionHolder.h"
+#include "core/fdatetime.h"
 
 class ibWebApplication;
 class ibSession;
@@ -63,6 +64,9 @@ public:
 	// Milliseconds since epoch at last request — used later for idle
 	// timeout eviction in the session manager.
 	std::int64_t LastActiveMs() const;
+	ibDateTime   Born() const { return m_born; }
+	ibDateTime   AuthenticatedAt() const;
+	ibDateTime   LastActiveAt() const;
 	void         Touch();
 
 private:
@@ -72,6 +76,9 @@ private:
 
 	mutable std::mutex m_mutex;
 	std::int64_t       m_lastActiveMs;
+	ibDateTime         m_born;
+	ibDateTime         m_authenticatedAt;
+	ibDateTime         m_lastActiveAt;
 	bool               m_initialized = false;
 
 	// Lifecycle serializer — locks Login and OnExit on the same instance

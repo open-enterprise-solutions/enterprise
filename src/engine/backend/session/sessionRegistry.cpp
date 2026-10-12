@@ -973,7 +973,7 @@ static bool InsertSessionRow(ibDatabaseConnectionHolder& holder, const ibSession
 	return true;
 }
 
-static bool UpdateSessionUser(ibDatabaseConnectionHolder& holder, const wxString& guidStr, const wxString& userName, const wxString& userGuid)
+static bool UpdateSessionUser(ibDatabaseConnectionHolder& holder, const wxString& guidStr, const wxString& userName, const wxString& userGuid, const ibDateTime& authAt)
 {
 	(void)userGuid;   // schema currently has no userGuid column — placeholder for when we add it
 	try {
@@ -981,8 +981,17 @@ static bool UpdateSessionUser(ibDatabaseConnectionHolder& holder, const wxString
 		q.Execute(ibUpdate(session_table,
 			{ { wxT("userName"), ibConst(ibValue(userName)) } },
 			ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("session")), ibConst(ibValue(guidStr)))));
-		return true;
 	} catch (...) { return false; }
+
+	// Separate from the name: a base that has not grown authAt yet must
+	// still record who signed in. Empty on detach — the login is over.
+	try {
+		ibDatabaseQueryBuilder q(&holder);
+		q.Execute(ibUpdate(session_table,
+			{ { wxT("authAt"), ibConst(ibValue(authAt)) } },
+			ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("session")), ibConst(ibValue(guidStr)))));
+	} catch (...) { /* column not there yet */ }
+	return true;
 }
 
 static bool DeleteSessionRow(ibDatabaseConnectionHolder& holder, const wxString& guidStr)
@@ -1215,14 +1224,17 @@ void ibSessionRegistry::ProcessAttach(ibRegistryRequest& req)
 	// was already inserted by ProcessAdd.
 	if (m_ownsSysSession && m_writeConn) {
 		const wxString guidStr = s.GetId();
+		const ibDateTime authAt = ibDateTime::Now();
 		if (s.Inserted()) {
-			// Was anonymous, now authenticated — update userName only.
-			UpdateSessionUser(m_writeHolder, guidStr, info.m_strUserName, info.m_strUserGuid);
+			// Was anonymous, now authenticated — the name, and when this login began.
+			UpdateSessionUser(m_writeHolder, guidStr, info.m_strUserName, info.m_strUserGuid, authAt);
 		} else {
 			// Creds-first path — Connect(req) with non-empty user skipped
 			// the anon-phase INSERT. Write the row now.
-			if (InsertSessionRow(m_writeHolder, s, info.m_strUserName))
+			if (InsertSessionRow(m_writeHolder, s, info.m_strUserName)) {
 				s.SetInserted(true);
+				UpdateSessionUser(m_writeHolder, guidStr, info.m_strUserName, info.m_strUserGuid, authAt);
+			}
 		}
 	}
 
@@ -1237,7 +1249,7 @@ void ibSessionRegistry::ProcessDetach(ibRegistryRequest& req)
 
 	if (m_ownsSysSession && m_writeConn && s.Inserted()) {
 		const wxString guidStr = s.GetId();
-		UpdateSessionUser(m_writeHolder, guidStr, wxEmptyString, wxEmptyString);
+		UpdateSessionUser(m_writeHolder, guidStr, wxEmptyString, wxEmptyString, ibDateTime());
 	}
 
 	ibSessionIdentity id = s.Identity();
@@ -1835,6 +1847,21 @@ static bool WriteSessionSignal(const wxString& sessionGuid,
 bool ibSessionRegistry::Kick(const wxString& sessionGuid)
 {
 	return WriteSessionSignal(sessionGuid, wxT("kick"));
+}
+
+void ibSessionRegistry::KickUser(const wxString& userName)
+{
+	if (userName.empty())
+		return;
+	try {
+		ibDatabaseQueryBuilder q;
+		ibQueryResult rs = q.ExecuteIR(ibQueryIR(ibProject(
+			ibFilter(ibScan(session_table),
+				ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("userName")), ibConst(ibValue(userName)))),
+			{ { ibCol(wxT("session")), wxEmptyString } })));
+		while (rs.Next())
+			Kick(rs.GetResultString(wxT("session")));
+	} catch (...) { /* no table, or the signal column is not there yet */ }
 }
 
 bool ibSessionRegistry::Reload(const wxString& sessionGuid)

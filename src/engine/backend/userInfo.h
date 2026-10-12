@@ -13,6 +13,7 @@
 #include "backend/backend.h"
 #include "backend/backend_core.h"
 #include "backend/roleHelper.h"   // ibRoleCompositionMode — how a role combines (the role layer owns it)
+#include "core/fdatetime.h"       // m_passwordChangedAt — when the hash last changed
 
 #include <vector>
 
@@ -47,6 +48,10 @@ struct BACKEND_API ibUserInfo {
 	wxString m_strUserName;
 	wxString m_strUserFullName;
 	wxString m_strUserPassword;
+	// When the stored hash last changed. Empty on a row written before the
+	// stamp. A session that authenticated earlier than this is no longer
+	// this login.
+	ibDateTime m_passwordChangedAt;
 
 	//Role info
 	std::vector<ibUserRole> m_roleArray;

@@ -312,6 +312,10 @@ public:
 	// Both return true on successful UPDATE, false on DB error. Safe to
 	// call from any thread.
 	bool Kick(const wxString& sessionGuid);
+	// Every session signed in as this user. A deleted account has no sessions
+	// left; the signal is the same one Kick writes, so each owning process
+	// closes its own.
+	void KickUser(const wxString& userName);
 	bool Reload(const wxString& sessionGuid);
 
 	// ---- Cluster snapshot ----
