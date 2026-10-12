@@ -124,7 +124,12 @@ enum
 	// everything else — the ordinal IS the method index, so a new name goes at the END or every
 	// later case answers to the wrong verb.
 	enSerializeValue,
-	enDeserializeValue
+	enDeserializeValue,
+	// String family appended here: the ordinal is the bind-table index.
+	enStrTemplate,
+	enStrConcat,
+	enStrStartsWith,
+	enStrEndsWith
 };
 
 void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
@@ -251,6 +256,10 @@ void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibVal
 	//--- …and value-as-text last, matching the enSerializeValue / enDeserializeValue tail above.
 	helper.AppendFunc(wxT("SerializeValue"), 1, wxT("SerializeValue(value : any)"));
 	helper.AppendFunc(wxT("DeserializeValue"), 1, wxT("DeserializeValue(json : string)"));
+	helper.AppendFunc(wxT("StrTemplate"), -1, wxT("StrTemplate(template, value1, ...)"));
+	helper.AppendFunc(wxT("StrConcat"), 2, wxT("StrConcat(array, separator)"));
+	helper.AppendFunc(wxT("StrStartsWith"), 2, wxT("StrStartsWith(string, search)"));
+	helper.AppendFunc(wxT("StrEndsWith"), 2, wxT("StrEndsWith(string, search)"));
 };
 
 #include "backend/compiler/enumUnit.h"
@@ -396,6 +405,22 @@ bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 			return true;
 		case enSerializeValue: pvarRetValue = SerializeValue(*paParams[0]); return true;
 		case enDeserializeValue: pvarRetValue = DeserializeValue(paParams[0]->GetString()); return true;
+		case enStrTemplate: pvarRetValue = StrTemplate(paParams, lSizeArray); return true;
+		case enStrConcat:
+			if (lSizeArray < 1)
+				ibBackendCoreException::Error(_("StrConcat: the first argument is an array"));
+			pvarRetValue = StrConcat(*paParams[0], lSizeArray > 1 ? wxString(paParams[1]->GetString()) : wxString());
+			return true;
+		case enStrStartsWith:
+			if (lSizeArray < 2)
+				ibBackendCoreException::Error(_("StrStartsWith: a string and a search string are required"));
+			pvarRetValue = StrStartsWith(*paParams[0], *paParams[1]);
+			return true;
+		case enStrEndsWith:
+			if (lSizeArray < 2)
+				ibBackendCoreException::Error(_("StrEndsWith: a string and a search string are required"));
+			pvarRetValue = StrEndsWith(*paParams[0], *paParams[1]);
+			return true;
 		case enEvaluate: pvarRetValue = Evaluate(paParams[0]->GetString()); return true;
 		case enExecute: Execute(paParams[0]->GetString()); return true;
 		case enFormat: pvarRetValue = Format(*paParams[0], paParams[1]->GetString()); return true;

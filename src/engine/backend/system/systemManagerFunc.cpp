@@ -4,6 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "systemManager.h"
+#include "backend/system/value/valueArray.h"
 
 #include "backend/metaCollection/metaFormObject.h"
 #include "backend/metadataConfiguration.h"
@@ -355,6 +356,80 @@ short ibValueSystemFunction::Asc(const ibValue& cSource)
 wxString ibValueSystemFunction::TStr(const ibValue& cSource, const ibValue& cLanguage)
 {
 	return ibLocalization::GetTranslateGetRawLocText(cLanguage.GetString(), cSource.GetString());
+}
+
+ibString ibValueSystemFunction::StrTemplate(ibValue** paParams, const long lSizeArray)
+{
+	if (paParams == nullptr || lSizeArray < 1)
+		ibBackendCoreException::Error(_("StrTemplate: a template is required"));
+
+	const ibString templ = paParams[0]->GetString();
+	wxString out;
+	const size_t n = templ.Length();
+	for (size_t i = 0; i < n; ++i) {
+		if (templ[i] != L'%' || i + 1 >= n) {
+			out += templ[i];
+			continue;
+		}
+		if (templ[i + 1] == L'%') {
+			out += wxT('%');
+			++i;
+			continue;
+		}
+		if (templ[i + 1] < L'0' || templ[i + 1] > L'9') {
+			out += templ[i];
+			continue;
+		}
+		size_t j = i + 1;
+		unsigned long index = 0;
+		while (j < n && templ[j] >= L'0' && templ[j] <= L'9') {
+			index = index * 10u + static_cast<unsigned long>(templ[j] - L'0');
+			++j;
+			if (index > 1000000ul)
+				break;
+		}
+		if (index >= 1 && index < static_cast<unsigned long>(lSizeArray))
+			out += String(*paParams[index]);
+		else if (index == 0)
+			out += wxString(templ).Mid(i, j - i);
+		i = j - 1;
+	}
+	return out;
+}
+
+ibString ibValueSystemFunction::StrConcat(const ibValue& source, const wxString& separator)
+{
+	const ibValueArray* const values = dynamic_cast<const ibValueArray*>(source.GetRef());
+	if (values == nullptr)
+		ibBackendCoreException::Error(_("StrConcat: the first argument is an array"));
+
+	wxString out;
+	bool first = true;
+	for (const ibValue& value : values->Values()) {
+		if (!first)
+			out += separator;
+		first = false;
+		out += wxString(value.GetString());
+	}
+	return out;
+}
+
+bool ibValueSystemFunction::StrStartsWith(const ibValue& text, const ibValue& search)
+{
+	const ibString hay = text.GetString();
+	const ibString needle = search.GetString();
+	if (needle.Length() > hay.Length())
+		return false;
+	return hay.Left(needle.Length()).CmpNoCase(needle) == 0;
+}
+
+bool ibValueSystemFunction::StrEndsWith(const ibValue& text, const ibValue& search)
+{
+	const ibString hay = text.GetString();
+	const ibString needle = search.GetString();
+	if (needle.Length() > hay.Length())
+		return false;
+	return hay.Right(needle.Length()).CmpNoCase(needle) == 0;
 }
 
 //--- Date and time:

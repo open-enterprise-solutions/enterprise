@@ -1,0 +1,43 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "ru",
+  "entries": [
+    {
+      "id": "fn.StrTemplate",
+      "name_local": "StrTemplate",
+      "name_en": "StrTemplate",
+      "kind": "system_function",
+      "category_keys": ["global_context", "global_functions"],
+      "signature": "StrTemplate(template, value1, ...)",
+      "description": "Строка. Подставляет %1, %2, … (с единицы) в шаблон — СтрШаблон. %% — знак процента. Подстановка без аргумента пуста. StrTemplate(\"%1-%2\", \"ab\", 7) даёт ab-7."
+    },
+    {
+      "id": "fn.StrConcat",
+      "name_local": "StrConcat",
+      "name_en": "StrConcat",
+      "kind": "system_function",
+      "category_keys": ["global_context", "global_functions"],
+      "signature": "StrConcat(array[, separator])",
+      "description": "Строка. Соединяет строковые представления элементов массива — СтрСоединить. Разделитель необязателен и по умолчанию пуст. Не массив отклоняется."
+    },
+    {
+      "id": "fn.StrStartsWith",
+      "name_local": "StrStartsWith",
+      "name_en": "StrStartsWith",
+      "kind": "system_function",
+      "category_keys": ["global_context", "global_functions"],
+      "signature": "StrStartsWith(string, search)",
+      "description": "Булево. Истина, когда строка начинается с образца — СтрНачинаетсяС. Сравнение без учёта регистра. Пустой образец подходит."
+    },
+    {
+      "id": "fn.StrEndsWith",
+      "name_local": "StrEndsWith",
+      "name_en": "StrEndsWith",
+      "kind": "system_function",
+      "category_keys": ["global_context", "global_functions"],
+      "signature": "StrEndsWith(string, search)",
+      "description": "Булево. Истина, когда строка заканчивается образцом — СтрЗаканчиваетсяНа. Сравнение без учёта регистра. Пустой образец подходит."
+    }
+  ]
+}

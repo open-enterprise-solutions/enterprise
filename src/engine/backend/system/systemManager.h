@@ -149,6 +149,14 @@ public:
 	static wxString SerializeValue(const ibValue& cData);
 	static ibValue  DeserializeValue(const wxString& strJson);
 
+	// %1, %2, … from the following arguments (1-based). %% is a percent sign.
+	static ibString StrTemplate(ibValue** paParams, const long lSizeArray);
+	// Joins an array. The separator is optional and empty when omitted.
+	static ibString StrConcat(const ibValue& source, const wxString& separator);
+	// Case-insensitive. An empty search string matches.
+	static bool StrStartsWith(const ibValue& text, const ibValue& search);
+	static bool StrEndsWith(const ibValue& text, const ibValue& search);
+
 	// (⛔ NO MESSAGE CAPTURE HERE. Getting the lines a run printed is not a new mechanism: the
 	//  debug channel already carries messages from a running application to whoever is attached —
 	//  `CommandId_MessageFromServer`, sent by ibDebuggerServer::SendErrorToClient. It looked like
