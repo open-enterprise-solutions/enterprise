@@ -13,6 +13,7 @@
 #include "frontendFormFix.h"                      // FrontendFormFix + NewForm()
 
 #include "frontend/visualView/ctrl/tableBox.h"   // ibValueModelTableBox + g_controlTableBox*CLSID
+#include "frontend/visualView/ctrl/widgets.h"    // ibValueRadioButton
 #include "frontend/visualView/ctrl/textBox.h"    // ibValueTextBox
 #include "frontend/visualView/ctrl/gridBox.h"    // ibValueGridBox
 #include "frontend/visualView/ctrl/notebook.h"   // ibValueNotebook + g_controlNotebook*CLSID
@@ -221,6 +222,34 @@ TEST_F(FrontendFormFix, FormSerializeRoundTripPreservesControls)
 	ASSERT_TRUE(dst->LoadForm(buffer)) << "LoadForm rebuilds the control tree";
 	EXPECT_EQ(dst->GetControlList().size(), srcCount)
 		<< "the round-tripped form owns the same controls";
+}
+
+// A radio button writes one shared attribute. ChoiceValue is the value of this button.
+TEST_F(FrontendFormFix, ARadioButtonKeepsASourceAndAChoiceValue)
+{
+	if (!frameReady)
+		GTEST_SKIP();
+
+	ibValueForm* form = NewForm();
+	ASSERT_NE(form, nullptr);
+	ibValueFrame* radio = form->NewObject(control_to_clsid("CT_RDBT"), form);
+	ASSERT_NE(radio, nullptr);
+	EXPECT_NE(radio->GetProperty(wxT("Source")), nullptr);
+	EXPECT_NE(radio->GetProperty(wxT("Selected")), nullptr);
+	ibProperty* choice = radio->GetProperty(wxT("ChoiceValue"));
+	ASSERT_NE(choice, nullptr);
+
+	ibPropertyString* text = dynamic_cast<ibPropertyString*>(choice);
+	ASSERT_NE(text, nullptr);
+	text->SetValue(wxT("Ship"));
+
+	auto* button = dynamic_cast<ibValueRadioButton*>(radio);
+	ASSERT_NE(button, nullptr);
+	ibDataNode saved;
+	ASSERT_TRUE(button->WriteData(saved));
+	text->SetValue(wxT(""));
+	ASSERT_TRUE(button->ReadData(saved));
+	EXPECT_EQ(text->GetValueAsString(), wxT("Ship"));
 }
 
 // ------------------------------ clsid kind-typing ----------------------------

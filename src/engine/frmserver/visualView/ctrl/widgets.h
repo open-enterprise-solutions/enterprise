@@ -519,7 +519,7 @@ private:
 	friend class ibValueForm;
 };
 
-class ibValueRadioButton : public ibValueWindow {
+class ibValueRadioButton : public ibValueWindow, public ibTypeControlFactory {
 	public:
 
 	void SetCaption(const wxString& caption) { return m_propertyTitle->SetValue(caption); }
@@ -527,17 +527,26 @@ class ibValueRadioButton : public ibValueWindow {
 
 	ibValueRadioButton();
 
-	//get title
 	virtual wxString GetControlTitle() const { return GetCaption(); }
 
-	// The caption in the session's language.
+	virtual ibSourceObject* GetSourceObject() const;
+	virtual bool GetSourceList(std::vector<ibBackendFormAttributeValue*>& out) const override;
+	virtual ibSourceDescription& GetSourceDesc() const override { return m_propertySource->GetValueAsSourceDesc(); }
+	virtual const ibBackendSourceColumn* GetSourceAttributeObject() const override {
+		return m_propertySource->GetSourceAttributeObject();
+	}
+	virtual ibValueForm* GetOwnerForm() const { return m_formOwner; }
+	virtual const ibMetaData* GetMetaData() const;
+	virtual ibTypeDescription& GetTypeDesc() const override { return m_propertySource->GetValueAsTypeDesc(); }
+	virtual ibSelectorDataType GetFilterDataType() const override {
+		return ibSelectorDataType::ibSelectorDataType_any;
+	}
+
 	virtual void OnUpdate(ibDataNode& state, ibVisualHost* host) override;
 
-	//support icons
 	virtual wxIcon GetIcon() const;
 	static wxIcon GetIconGroup();
 
-	//load & save object in control 
 	virtual bool ReadData(const ibDataNode& node);
 	virtual bool WriteData(ibDataNode& node) const;
 
@@ -546,7 +555,13 @@ private:
 	ibPropertyTString* m_propertyTitle = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryRadioButton, wxT("Title"), _("Title"),
 		_("The radio button's caption. Can be written per language."), wxT("Radio button"));
 	ibPropertyBoolean* m_propertySelected = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryRadioButton, wxT("Selected"), _("Selected"),
-		_("Whether the radio button is shown selected. A radio button has no data source of its own."));
+		_("Whether the radio button is shown selected. With a source, the button is selected when that value equals Choice value."));
+	ibPropertyCategory* m_categorySource = ibPropertyObject::CreatePropertyCategory(wxT("Data"), _("Data"));
+	ibPropertySource* m_propertySource = ibPropertyObject::CreateProperty<ibPropertySource>(m_categorySource, wxT("Source"), _("Source"),
+		_("The form attribute this button writes when it is selected, shared by the buttons of one group. Empty: the button keeps only its own Selected flag."),
+		ibValueTypes::TYPE_STRING);
+	ibPropertyString* m_propertyChoiceValue = ibPropertyObject::CreateProperty<ibPropertyString>(m_categorySource, wxT("ChoiceValue"), _("Choice value"),
+		_("The value written into Source when this button is selected, and the value that selects it."), wxT(""));
 };
 
 class ibValueStaticLine : public ibValueWindow {
