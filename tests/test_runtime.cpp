@@ -21,6 +21,8 @@
 #include "backend/compiler/procUnitState.h"   // m_errorPlace — which opcode raised
 #include "backend/session/session.h"
 #include "backend/appData.h"                // the built-in dispatcher reads appData on entry
+#include "backend/picturePredefined.h"
+#include "backend/system/value/valuePicture.h"
 
 #include <wx/init.h>
 #include <wx/image.h>  // wxInitAllImageHandlers — wx decodes nothing until registered
@@ -2935,4 +2937,32 @@ TEST(RuntimeTest, AnArrayWalkedAndRewalkedIsLetGoOfOnce) {
 
 	// The frame goes here, with both arrays in it. That is the moment the nightly
 	// caught: passing under a sanitiser is the whole assertion.
+}
+
+// PictureLib is a named global. The name is visible (scope context is false), and a property
+// is one registered picture. The library itself is not a context type.
+TEST(RuntimeTest, PictureLibNamesARegisteredPicture) {
+	ibValue* library = ibPictureLibrary();
+	ASSERT_NE(library, nullptr);
+	const long prop = library->FindProp(wxT("Error"));
+	ASSERT_NE(prop, wxNOT_FOUND);
+	ibValue direct;
+	ASSERT_TRUE(library->GetPropVal(prop, direct));
+	ibValuePicture* fromLibrary = direct.ConvertToType<ibValuePicture>();
+	ASSERT_NE(fromLibrary, nullptr);
+	EXPECT_TRUE(fromLibrary->GetPictureDesc() == ibPictureDescription(g_picErrorCLSID));
+
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	cc.AddContextVariable(wxT("PictureLib"), library, false);
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("var pic public;\n")
+		wxT("pic = PictureLib.Error;\n")));
+	ibProcUnit pu;
+	wxString strError;
+	ASSERT_TRUE(RunBound(cc, pu, strError)) << strError.ToStdString();
+	ibValue pic;
+	ASSERT_TRUE(pu.GetPropVal(wxT("pic"), pic));
+	ibValuePicture* got = pic.ConvertToType<ibValuePicture>();
+	ASSERT_NE(got, nullptr);
+	EXPECT_TRUE(got->GetPictureDesc() == ibPictureDescription(g_picErrorCLSID));
 }

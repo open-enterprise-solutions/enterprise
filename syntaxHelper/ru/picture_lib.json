@@ -1,0 +1,22 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "ru",
+  "entries": [
+    {
+      "id": "cls.PictureLib",
+      "name_local": "PictureLib",
+      "name_en": "PictureLib",
+      "kind": "collection",
+      "category_keys": ["global_context"],
+      "signature": "PictureLib.<name>",
+      "description": "Картинки, зарегистрированные в процессе, по имени (1C: БиблиотекаКартинок). Свойство отвечает этой картинкой. Имя — глобальное. Запись в свойство отвергается.",
+      "parameters": "Нет. Имя свойства — зарегистрированное имя картинки, например Error.",
+      "return_descr": "StoragePicture.",
+      "example": "Pic = PictureLib.Error;",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    }
+  ]
+}

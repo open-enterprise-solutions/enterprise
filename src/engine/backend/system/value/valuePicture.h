@@ -22,4 +22,20 @@ protected:
 	ibPictureDescription m_pictureDesc;
 };
 
+// Named global PictureLib. Properties are the pictures registered with the process.
+// Not a context type: it is bound by name, and a script sees the name.
+class BACKEND_API ibValuePictureLib : public ibValueDynamicMembers {
+public:
+
+	ibValuePictureLib();
+
+	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal);
+
+	void FillMembers(ibMemberTable& helper) const;
+
+};
+
+// One library for the process. CreateMainModule binds it; DestroyMainModule unbinds the name.
+BACKEND_API ibValue* ibPictureLibrary();
+
 #endif

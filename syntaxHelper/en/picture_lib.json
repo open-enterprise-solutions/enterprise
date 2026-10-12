@@ -1,0 +1,22 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "en",
+  "entries": [
+    {
+      "id": "cls.PictureLib",
+      "name_local": "PictureLib",
+      "name_en": "PictureLib",
+      "kind": "collection",
+      "category_keys": ["global_context"],
+      "signature": "PictureLib.<name>",
+      "description": "The pictures registered with the process, by name (1C: БиблиотекаКартинок). Each property answers with that picture. The name is a global. Assigning to a property is refused.",
+      "parameters": "None. The property name is the picture's registered name, such as Error.",
+      "return_descr": "StoragePicture.",
+      "example": "Pic = PictureLib.Error;",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    }
+  ]
+}
