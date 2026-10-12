@@ -112,12 +112,13 @@ void ibFiber::InitPosixStack()
 		reinterpret_cast<std::uint64_t>(&ibFiberTrampoline);
 	m_sp = sp;
 #elif defined(__aarch64__)
-	// Ten 16-byte pairs: d8-d15, then x19-x30. x30 (the link register)
-	// is the trampoline. sp stays 16-byte aligned, which is what a call
-	// on the trampoline requires.
-	unsigned char* sp = reinterpret_cast<unsigned char*>(top - 160);
-	std::memset(sp, 0, 160);
-	*reinterpret_cast<std::uint64_t*>(sp + 152) =
+	// Eleven 16-byte slots: FPCR (the low 8 bytes; 0 is the reset
+	// value, RN and no traps), d8-d15, then x19-x30. x30 (the link
+	// register) is the trampoline. sp stays 16-byte aligned, which is
+	// what a call on the trampoline requires.
+	unsigned char* sp = reinterpret_cast<unsigned char*>(top - 176);
+	std::memset(sp, 0, 176);
+	*reinterpret_cast<std::uint64_t*>(sp + 168) =
 		reinterpret_cast<std::uint64_t>(&ibFiberTrampoline);
 	m_sp = sp;
 #else
