@@ -162,20 +162,28 @@ ibUserInfo ibUserInfo::Read(const ibGuid& userGuid)
 	return info;
 }
 
+wxString ibUserInfo::NameKey(const wxString& userName)
+{
+	wxString key = userName;
+	key.Trim(true).Trim(false);
+	return key.Lower();
+}
+
 ibUserInfo ibUserInfo::Read(const wxString& userName)
 {
 	ibUserInfo info;
-	if (userName.IsEmpty())
+	const wxString key = NameKey(userName);
+	if (key.empty())
 		return info;
 
-	try {
-		ibDatabaseQueryBuilder q;
-		ibQueryResult result = q.ExecuteIR(SysUserRowQuery(
-			ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("name")), ibConst(ibValue(userName)))));
-		if (result.Next())
-			FillFromRow(result, info);
+	// The folded name, not the spelling that was stored. "admin" is the account
+	// that was saved as "Admin". The list is the people in the base, not a scan
+	// of the rows they own.
+	for (const Brief& brief : ListAll()) {
+		if (NameKey(brief.m_strUserName) != key)
+			continue;
+		return Read(ibGuid(brief.m_strUserGuid));
 	}
-	catch (...) { /* no table / passive scope — empty info */ }
 
 	return info;
 }
@@ -216,6 +224,17 @@ std::vector<ibUserInfo::Brief> ibUserInfo::ListAll()
 
 bool ibUserInfo::Save(const ibUserInfo& info)
 {
+	const wxString nameKey = NameKey(info.m_strUserName);
+	if (nameKey.empty() || info.m_strUserGuid.IsEmpty())
+		return false;
+
+	// Another account already carries this name, including a different spelling
+	// of it. Saving this one would hide the first: Read returns whichever row
+	// it meets first.
+	const ibUserInfo named = Read(info.m_strUserName);
+	if (named.IsOk() && named.m_strUserGuid != info.m_strUserGuid)
+		return false;
+
 	// The default-ctor builder resolves to CurrentHolder = the db_query channel's thread holder —
 	// the dedicated channel for infra-level writes that must stay out of any user session's TX
 	// (the pool never resolves a session holder here; session work passes its holder explicitly).
@@ -231,6 +250,7 @@ bool ibUserInfo::Save(const ibUserInfo& info)
 		q.Execute(ibUpsert(user_table, {
 			{ wxT("guid"),       ibConst(ibValue(info.m_strUserGuid)) },
 			{ wxT("name"),       ibConst(ibValue(info.m_strUserName)) },
+			{ wxT("nameKey"),    ibConst(ibValue(nameKey)) },
 			{ wxT("fullName"),   ibConst(ibValue(info.m_strUserFullName)) },
 			{ wxT("changed"),    ibConst(ibValue(ibDateTime::Now())) },
 			{ wxT("dataSize"),   ibConst(ibValue(static_cast<unsigned int>(writer.size()))) },

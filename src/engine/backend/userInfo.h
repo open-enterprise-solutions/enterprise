@@ -69,6 +69,8 @@ struct BACKEND_API ibUserInfo {
 	// DB I/O against sys_user via the global db_query layer.
 	// Read returns a default-constructed (IsOk() == false) record on miss
 	// or invalid input; Save does an upsert keyed by m_strUserGuid.
+	// A name is one account: "Admin" and "admin" are the same name.
+	static wxString   NameKey(const wxString& userName);
 	static ibUserInfo Read(const ibGuid& userGuid);
 	static ibUserInfo Read(const wxString& userName);
 	static bool       Save(const ibUserInfo& info);

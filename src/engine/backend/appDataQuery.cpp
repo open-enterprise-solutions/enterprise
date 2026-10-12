@@ -3,6 +3,9 @@
 #include "backend/databaseLayer/connectionPool.h"
 
 #include "backend/backend_exception.h"
+#include "backend/userInfo.h"
+
+#include <map>
 
 #include "backend/session/sessionRegistry.h"
 
@@ -29,6 +32,10 @@ void ibApplicationInstance::CreateTableUser()
 		q.Execute(ibCreateTable(user_table, {
 			{ wxT("guid"),       ibTypeString(36),  /*notNull*/false, /*pk*/true,  wxEmptyString },
 			{ wxT("name"),       ibTypeString(64),  /*notNull*/true,  /*pk*/false, wxEmptyString },
+			// The folded name. "Admin" and "admin" land on one key, and the unique
+			// index below is what a second insert meets even when two saves pass
+			// the check together.
+			{ wxT("nameKey"),    ibTypeString(64),  /*notNull*/true,  /*pk*/false, wxEmptyString },
 			{ wxT("fullName"),   ibTypeString(128), /*notNull*/true,  /*pk*/false, wxEmptyString },
 			{ wxT("changed"),    ibTypeDate(),      /*notNull*/true,  /*pk*/false, wxEmptyString },
 			{ wxT("dataSize"),   ibTypeInteger(),   /*notNull*/true,  /*pk*/false, wxEmptyString },
@@ -37,7 +44,55 @@ void ibApplicationInstance::CreateTableUser()
 		// The index rides with the just-created table, so the old "if not exists" was redundant
 		// (and let Firebird choke on that syntax) — a plain CREATE INDEX is correct here.
 		q.Execute(ibCreateIndex(user_table, wxT("user_index"), { wxT("guid"), wxT("name") }));
+		q.Execute(ibCreateIndex(user_table, wxT("user_name_key"), { wxT("nameKey") }, /*unique*/true));
 	}
+}
+
+void ibApplicationInstance::MigrateTableUser()
+{
+	ibDatabaseQueryBuilder qi;
+	if (!qi.TableExists(user_table))
+		return;
+
+	wxArrayString cols = qi.GetColumns(user_table);
+	for (std::size_t i = 0; i < cols.GetCount(); ++i) {
+		if (cols[i].CmpNoCase(wxT("nameKey")) == 0)
+			return;
+	}
+
+	// A base that already has two spellings of one name cannot grow the unique
+	// key. Opening stops here and names them; the rows stay until somebody
+	// renames one.
+	std::map<wxString, wxString> seen;
+	wxString shared;
+	for (const ibUserInfo::Brief& user : ibUserInfo::ListAll()) {
+		// A blank name folds to the same key as another blank. Leaving those
+		// out would let the unique index fail later with a driver error
+		// instead of this list.
+		const wxString key = ibUserInfo::NameKey(user.m_strUserName);
+		const auto found = seen.find(key);
+		if (found == seen.end()) {
+			seen.emplace(key, user.m_strUserName);
+			continue;
+		}
+		if (!shared.empty())
+			shared += wxT(", ");
+		shared += found->second + wxT(" / ") + user.m_strUserName;
+	}
+	if (!shared.empty()) {
+		ibBackendCoreException::Error(
+			_("These users share a name and the base cannot open until each name is unique: %s"),
+			shared);
+	}
+
+	ibDatabaseQueryBuilder q;
+	q.Execute(ibAddColumn(user_table, { wxT("nameKey"), ibTypeString(64), false, false, wxEmptyString }));
+	for (const ibUserInfo::Brief& user : ibUserInfo::ListAll()) {
+		q.Execute(ibUpdate(user_table,
+			{ { wxT("nameKey"), ibConst(ibValue(ibUserInfo::NameKey(user.m_strUserName))) } },
+			ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("guid")), ibConst(ibValue(user.m_strUserGuid)))));
+	}
+	q.Execute(ibCreateIndex(user_table, wxT("user_name_key"), { wxT("nameKey") }, /*unique*/true));
 }
 
 void ibApplicationInstance::CreateTableSession()

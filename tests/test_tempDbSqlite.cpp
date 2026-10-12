@@ -31,6 +31,10 @@
 #include <wx/init.h>                                       // wxInitializer — bring up wxBase (locale / std paths appData touches)
 
 #include "backend/appData.h"
+#include "backend/userInfo.h"
+#include "backend/backend_exception.h"
+#include "backend/databaseLayer/databaseQueryBuilder.h"
+#include "backend/fdatetime.h"
 #include "backend/compiler/value.h"                       // ibValue / ibNumber / g_value*CLSID
 #include "backend/typeDescription.h"                      // ibTypeDescription
 #include "backend/databaseLayer/connectionPool.h"
@@ -572,4 +576,103 @@ TEST_F(TempDbSqliteFix, RlsSemiJoin_MultipleJoinsCompose)
 	while (sel.Next()) got.push_back(sel.GetValue(sales.k).GetInteger());
 	std::sort(got.begin(), got.end());
 	EXPECT_EQ(got, (std::vector<int>{3, 4})) << "two semi-joins AND-compose: only keys present in BOTH permission sets";
+}
+
+ibUserInfo UserNamed(const wxString& name)
+{
+	ibUserInfo info;
+	info.m_strUserGuid = wxNewUniqueGuid.str();
+	info.m_strUserName = name;
+	info.m_strUserFullName = name;
+	return info;
+}
+
+TEST_F(TempDbSqliteFix, UserName_SecondSpellingIsRefusedAndTheFirstIsFound)
+{
+	if (!ready) GTEST_SKIP();
+	ibApplicationInstance::CreateTableUserForTest();
+
+	const ibUserInfo admin = UserNamed(wxT("Admin"));
+	ASSERT_TRUE(ibUserInfo::Save(admin));
+
+	const ibUserInfo found = ibUserInfo::Read(wxT("admin"));
+	EXPECT_TRUE(found.IsOk());
+	EXPECT_EQ(found.m_strUserGuid, admin.m_strUserGuid);
+	EXPECT_EQ(found.m_strUserName, wxT("Admin"));
+
+	ibUserInfo again = UserNamed(wxT("ADMIN"));
+	EXPECT_FALSE(ibUserInfo::Save(again));
+
+	ibUserInfo renamed = admin;
+	renamed.m_strUserFullName = wxT("Administrator");
+	EXPECT_TRUE(ibUserInfo::Save(renamed));
+	EXPECT_EQ(ibUserInfo::Read(wxT(" Admin ")).m_strUserFullName, wxT("Administrator"));
+}
+
+TEST_F(TempDbSqliteFix, UserName_SharedNamesStopTheUpgrade)
+{
+	if (!ready) GTEST_SKIP();
+	ibDatabaseQueryBuilder q;
+	q.Execute(ibCreateTable(user_table, {
+		{ wxT("guid"),       ibTypeString(36),  false, true,  wxEmptyString },
+		{ wxT("name"),       ibTypeString(64),  true,  false, wxEmptyString },
+		{ wxT("fullName"),   ibTypeString(128), true,  false, wxEmptyString },
+		{ wxT("changed"),    ibTypeDate(),      true,  false, wxEmptyString },
+		{ wxT("dataSize"),   ibTypeInteger(),   true,  false, wxEmptyString },
+		{ wxT("binaryData"), ibTypeBlob(),      true,  false, wxEmptyString },
+	}));
+	const char byte = 0;
+	auto row = [&](const wxString& guid, const wxString& name) {
+		q.Execute(ibInsert(user_table, {
+			{ wxT("guid"),       ibConst(ibValue(guid)) },
+			{ wxT("name"),       ibConst(ibValue(name)) },
+			{ wxT("fullName"),   ibConst(ibValue(name)) },
+			{ wxT("changed"),    ibConst(ibValue(ibDateTime::Now())) },
+			{ wxT("dataSize"),   ibConst(ibValue(static_cast<unsigned int>(1))) },
+			{ wxT("binaryData"), ibConstBlob(&byte, 1) },
+		}));
+	};
+	row(wxT("11111111-1111-4111-8111-111111111111"), wxT("Admin"));
+	row(wxT("22222222-2222-4222-8222-222222222222"), wxT("admin"));
+
+	EXPECT_THROW(ibApplicationInstance::MigrateTableUserForTest(), ibBackendException);
+	EXPECT_FALSE(ibUserInfo::Read(wxT("admin")).m_strUserGuid.IsEmpty());
+	ibDatabaseQueryBuilder columns;
+	const wxArrayString cols = columns.GetColumns(user_table);
+	for (std::size_t i = 0; i < cols.GetCount(); ++i)
+		EXPECT_NE(cols[i].CmpNoCase(wxT("nameKey")), 0);
+}
+
+TEST_F(TempDbSqliteFix, UserName_AUniqueOldTableGainsTheFoldedKey)
+{
+	if (!ready) GTEST_SKIP();
+	ibDatabaseQueryBuilder q;
+	q.Execute(ibCreateTable(user_table, {
+		{ wxT("guid"),       ibTypeString(36),  false, true,  wxEmptyString },
+		{ wxT("name"),       ibTypeString(64),  true,  false, wxEmptyString },
+		{ wxT("fullName"),   ibTypeString(128), true,  false, wxEmptyString },
+		{ wxT("changed"),    ibTypeDate(),      true,  false, wxEmptyString },
+		{ wxT("dataSize"),   ibTypeInteger(),   true,  false, wxEmptyString },
+		{ wxT("binaryData"), ibTypeBlob(),      true,  false, wxEmptyString },
+	}));
+	const char byte = 0;
+	q.Execute(ibInsert(user_table, {
+		{ wxT("guid"),       ibConst(ibValue(wxT("33333333-3333-4333-8333-333333333333"))) },
+		{ wxT("name"),       ibConst(ibValue(wxT("Admin"))) },
+		{ wxT("fullName"),   ibConst(ibValue(wxT("Admin"))) },
+		{ wxT("changed"),    ibConst(ibValue(ibDateTime::Now())) },
+		{ wxT("dataSize"),   ibConst(ibValue(static_cast<unsigned int>(1))) },
+		{ wxT("binaryData"), ibConstBlob(&byte, 1) },
+	}));
+
+	EXPECT_NO_THROW(ibApplicationInstance::MigrateTableUserForTest());
+
+	ibQueryResult stored = q.ExecuteIR(ibQueryIR(ibProject(ibScan(user_table),
+		{ { ibCol(wxT("nameKey")), wxEmptyString } })));
+	ASSERT_TRUE(stored.Next());
+	EXPECT_EQ(stored.GetResultString(wxT("nameKey")), wxT("admin"));
+
+	const ibUserInfo found = ibUserInfo::Read(wxT("admin"));
+	EXPECT_EQ(found.m_strUserGuid, wxT("33333333-3333-4333-8333-333333333333"));
+	EXPECT_FALSE(ibUserInfo::Save(UserNamed(wxT("ADMIN"))));
 }

@@ -422,6 +422,13 @@ public:
 
 	wxString GetDatabaseDescription() const;
 
+#ifdef OES_TESTING
+	// Open is the production caller. The sqlite fixture builds the table the
+	// migration sees and asks these itself.
+	static void CreateTableUserForTest() { CreateTableUser(); }
+	static void MigrateTableUserForTest() { MigrateTableUser(); }
+#endif
+
 private:
 
 	// Buffer-level user-table export / import. Per-record serialization
@@ -446,6 +453,9 @@ private:
 	// jobs had any. Nullable, and a NULL active reads as ON: silence must never switch a job off.
 	static void MigrateTableJob();
 	static void MigrateTableSession();
+	// Gives sys_user its folded name and a unique index on it. A base whose
+	// users already share a name does not open until that is resolved.
+	static void MigrateTableUser();
 	// Additive — creates sys_settings if missing. One row per saved setting,
 	// addressed by category + object + name + user. Independent table, not part
 	// of TableAlreadyCreated()'s init contract, so existing databases pick it up

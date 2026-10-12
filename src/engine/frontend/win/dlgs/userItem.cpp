@@ -221,7 +221,7 @@ ibDialogUserItem::ibDialogUserItem(wxWindow* parent, wxWindowID id, const wxStri
 	m_bottomOK->Bind(wxEVT_COMMAND_BUTTON_CLICKED,
 		[&](wxCommandEvent& event) {
 
-			if (m_textName->IsEmpty())
+			if (ibUserInfo::NameKey(m_textName->GetValue()).empty())
 				return;
 
 			bool access_right = false;
@@ -287,8 +287,16 @@ ibDialogUserItem::ibDialogUserItem(wxWindow* parent, wxWindowID id, const wxStri
 				return;
 			}
 
-			if (!ibUserInfo::Save(userInfo))
+			const ibUserInfo named = ibUserInfo::Read(userInfo.m_strUserName);
+			if (named.IsOk() && named.m_strUserGuid != userInfo.m_strUserGuid) {
+				wxMessageBox(_("A user with this name already exists"));
 				return;
+			}
+
+			if (!ibUserInfo::Save(userInfo)) {
+				wxMessageBox(_("A user with this name already exists"));
+				return;
+			}
 
 			event.Skip();
 		}

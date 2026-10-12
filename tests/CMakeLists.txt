@@ -171,6 +171,7 @@ add_executable(oes_tests
     test_metadataMove.cpp
     test_sectionInterfaceItems.cpp
     test_socketLock.cpp
+    test_userNameKey.cpp
 )
 
 target_link_libraries(oes_tests

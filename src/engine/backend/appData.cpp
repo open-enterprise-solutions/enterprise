@@ -903,6 +903,7 @@ ibApplicationInstance* ibApplicationInstance::Open(std::unique_ptr<ibApplication
 
 		// Additive and idempotent — a base made before any of these picks them up at its next open.
 		MigrateTableSession();         // pid / address / currentActivity, which the registry's INSERT assumes
+		MigrateTableUser();            // one account per name, whichever way it is spelled
 		MigrateTableBytecodeCache();
 		CreateTableLock();             // sys_lock — long-held pessimistic locks
 		CreateTableJob();              // sys_job — the shared last-run clock…
