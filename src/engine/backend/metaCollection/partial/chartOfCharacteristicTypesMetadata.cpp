@@ -5,6 +5,8 @@
 
 #include "chartOfCharacteristicTypes.h"
 #include "core/serialize/dataBuilder.h"
+#include "backend/query/schemaSnapshot.h"          // the seed row a predefined characteristic stamps
+#include "backend/system/value/valueType.h"        // ibValueTypeDescription — the Type column's value
 #include "backend/system/value/valueDynamicList.h"   // ibValueDynamicList — the standard list migrates onto the universal dynamic list
 #include "backend/metaData.h"
 #include "backend/moduleManager/moduleManager.h"
@@ -440,6 +442,18 @@ bool ibValueMetaObjectChartOfCharacteristicTypes::AdjustOutValue(const ibValueDa
 	// And that value narrows the incoming one by itself: a type description takes what it describes,
 	// qualifiers and all (valueType.h). Nothing here knows that is what it is.
 	return declared.AdjustOutValue(varValue, out);
+}
+
+void ibValueMetaObjectChartOfCharacteristicTypes::StampPredefinedSeed(
+	ibSchemaSeedRow& row, const ibPredefinedValueObject& item) const
+{
+	if (!item.HasDeclaredType() || GetDataType() == nullptr)
+		return;
+
+	// A seed cell copies ibValue. Copying a TYPE_VALUE points at the source, so the description
+	// has to live on the heap for as long as the snapshot does.
+	const ibValue held(new ibValueTypeDescription(item.GetDeclaredType()));
+	row.Set(GetDataType()->GetQueryColumn(), held);
 }
 
 //***********************************************************************

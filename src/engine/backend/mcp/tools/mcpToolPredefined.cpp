@@ -89,6 +89,30 @@ const ibArg& ArgDelete()
 	return s_a;
 }
 
+const ibArg& ArgType()
+{
+	static const ibArg s_a(wxT("type"), ibArg::Kind::Text,
+		ibMcpText("The value type of a predefined characteristic: String, String(20), Number(15, 2), "
+		          "Boolean, Date, or a reference such as CatalogRef.Goods. Only a chart of characteristic "
+		          "types has one. The declaration owns the cell; set as data it is blanked by the next apply."));
+	return s_a;
+}
+
+const ibArg& ArgAccountType()
+{
+	static const ibArg s_a(wxT("accountType"), ibArg::Kind::Text,
+		ibMcpText("An account's side: Active, Passive or ActivePassive. Only a chart of accounts has one. "
+		          "The declaration owns the cell."));
+	return s_a;
+}
+
+const ibArg& ArgOffBalance()
+{
+	static const ibArg s_a(wxT("offBalance"), ibArg::Kind::Flag,
+		ibMcpText("Declare the account off-balance. Only a chart of accounts has one. The declaration owns the cell."));
+	return s_a;
+}
+
 typedef ibValueMetaObjectRecordDataHierarchyMutableRef ibPredefinedOwner;
 typedef ibPredefinedOwner::ibPredefinedValueObject     ibPredefinedItem;
 
@@ -124,7 +148,7 @@ ibPredefinedOwner* Owner(const ibDataNode& params, wxString& refusal)
 	return owner;
 }
 
-ibDataValue ItemEntry(const ibPredefinedItem* item)
+ibDataValue ItemEntry(const ibPredefinedOwner* owner, const ibPredefinedItem* item)
 {
 	std::shared_ptr<ibDataNode> node = std::make_shared<ibDataNode>();
 
@@ -142,6 +166,16 @@ ibDataValue ItemEntry(const ibPredefinedItem* item)
 	const wxString parent = item->GetPredefinedParentName();
 	if (!parent.IsEmpty())
 		node->SetValue(wxT("parent"), parent);
+
+	if (item->HasDeclaredType()) {
+		const wxString spelled = owner->SpellPredefinedType(item->GetDeclaredType());
+		if (!spelled.IsEmpty())
+			node->SetValue(wxT("type"), spelled);
+	}
+	if (item->HasAccountSide())
+		node->SetValue(wxT("accountType"), owner->SpellAccountSide(item->GetAccountSide()));
+	if (item->HasOffBalance())
+		node->AddField(wxT("offBalance"), ibDataValue::Bool(item->GetOffBalance()));
 
 	return ibDataValue::Child(node);
 }
@@ -185,7 +219,7 @@ public:
 		std::vector<ibDataValue> items;
 		for (const auto& item : owner->GetPredefinedValueArray()) {
 			if (item != nullptr)
-				items.push_back(ItemEntry(item.get()));
+				items.push_back(ItemEntry(owner, item.get()));
 		}
 
 		result.AddField(wxT("count"), ibDataValue::Int((s64)items.size()));
@@ -222,13 +256,16 @@ public:
 	{
 		return ibMcpText("Declare a predefined item on a catalog or a chart - exactly as adding one in "
 			"the designer would. The name is what code will refer to it by and must be unique "
-			"within the object; the description is what a person sees. To remove one, pass "
-			"delete:true with its name.");
+			"within the object; the description is what a person sees. A chart of characteristic "
+			"types also takes the item's value type, and a chart of accounts its side and whether "
+			"it is off-balance. To remove one, pass delete:true with its name.");
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
-		static const std::vector<ibMcpArgument> s_arguments = { ArgObject(), ArgName(), ArgDescription(), ArgCode(), ArgFolder(), ArgParent(), ArgDelete() };
+		static const std::vector<ibMcpArgument> s_arguments = {
+			ArgObject(), ArgName(), ArgDescription(), ArgCode(), ArgFolder(), ArgParent(),
+			ArgType(), ArgAccountType(), ArgOffBalance(), ArgDelete() };
 		return s_arguments;
 	}
 
@@ -298,6 +335,29 @@ public:
 			}
 		}
 
+		ibTypeDescription declaredType;
+		bool hasType = false;
+		if (ArgType().Given(params) && !ArgType().Text(params).IsEmpty()) {
+			const wxString why = owner->ReadPredefinedType(ArgType().Text(params), declaredType);
+			if (!why.IsEmpty()) {
+				refusal = why;
+				return false;
+			}
+			hasType = true;
+		}
+
+		int side = 0;
+		bool hasSide = false;
+		if (ArgAccountType().Given(params) && !ArgAccountType().Text(params).IsEmpty()) {
+			const wxString why = owner->ReadAccountSide(ArgAccountType().Text(params), side);
+			if (!why.IsEmpty()) {
+				refusal = why;
+				return false;
+			}
+			hasSide = true;
+		}
+		const bool setOffBalance = ArgOffBalance().Given(params);
+
 		const wxString description = ArgDescription().Text(params);
 
 		owner->AppendPredefinedValue(name,
@@ -305,6 +365,20 @@ public:
 			description.IsEmpty() ? name : description,
 			ArgFolder().Flag(params),
 			parent);
+
+		wxString shape;
+		if (hasType)
+			shape = owner->SetPredefinedType(name, declaredType);
+		if (shape.IsEmpty() && hasSide)
+			shape = owner->SetPredefinedAccountSide(name, side);
+		if (shape.IsEmpty() && setOffBalance)
+			shape = owner->SetPredefinedOffBalance(name, ArgOffBalance().Flag(params));
+		if (!shape.IsEmpty()) {
+			if (const auto added = owner->FindPredefinedValue(name))
+				owner->DeletePredefinedValue(added->GetPredefinedGuid());
+			refusal = shape;
+			return false;
+		}
 
 		// WHAT HAPPENED, in the caller's own words. Reporting the name back rather
 		// than a bare success means a caller never has to guess whether the item it
@@ -314,7 +388,7 @@ public:
 		result.SetValue(wxT("object"), owner->GetName());
 
 		if (const auto added = owner->FindPredefinedValue(name))
-			result.AddField(wxT("item"), ItemEntry(added.get()));
+			result.AddField(wxT("item"), ItemEntry(owner, added.get()));
 
 		return true;
 	}

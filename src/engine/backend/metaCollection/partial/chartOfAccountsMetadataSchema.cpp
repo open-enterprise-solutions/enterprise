@@ -78,3 +78,15 @@ void ibValueMetaObjectChartOfAccounts::ContributeTables(ibSchemaSnapshot& out) c
 			return false;
 		};
 }
+
+void ibValueMetaObjectChartOfAccounts::StampPredefinedSeed(
+	ibSchemaSeedRow& row, const ibPredefinedValueObject& item) const
+{
+	if (item.HasAccountSide() && GetAccountType() != nullptr) {
+		const ibValue side = ibValue::CreateEnumObject<ibValueEnumAccountType>(
+			static_cast<ibAccountType>(item.GetAccountSide()));
+		row.Set(GetAccountType()->GetQueryColumn(), side);
+	}
+	if (item.HasOffBalance() && GetOffBalance() != nullptr)
+		row.Set(GetOffBalance()->GetQueryColumn(), ibValue(item.GetOffBalance()));
+}
