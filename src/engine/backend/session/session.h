@@ -344,8 +344,9 @@ public:
 	bool AccessTrusted() const { return m_accessTrusted; }
 	bool SessionParametersOpen() const { return m_sessionParametersOpen; }
 
-	// A role handler (OnAccessRead / OnAccessWrite) may not ask the user. Question and
-	// every modal entry call this. SetSessionParameters is not a role handler and may ask.
+	// A role handler (OnAccessRead / OnAccessWrite) may not ask the user. The frame's two
+	// doors call this (ShowModalMessage, Request). SetSessionParameters is not a role handler
+	// and may ask.
 	void RefuseQuestionFromRoleHandler() const;
 
 	// The module manager whose context (Manager / Catalogs / Documents / globals)

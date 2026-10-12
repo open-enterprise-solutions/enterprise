@@ -74,17 +74,6 @@ public:
 		const wxString& strDocPath, const long line,
 		const wxString& strErrorMessage) override;
 
-	// ⭐ A REQUEST TO THE CLIENT — queued for it and waited for IN THE SESSION'S POOL (ibWorkerPool::Await):
-	// this thread holds the session and goes on running its tasks meanwhile, the one that carries the request
-	// to the client among them. Responded to, cancelled (a kick, a closed tab, the session stopping: the
-	// request is withdrawn and the interruption goes on up), or never — while a request is pending, the frame
-	// refuses everything else a client asks of it (HasPendingRequest).
-	virtual bool Request(const ibDataNode& request, ibDataNode& response) override;
-
-	// A message box is one kind of request (ibProtocolRequestKind::Message: Text, Caption, Style — the wx button
-	// flags; the response's Button is the wx code of the button pressed, 0 for none).
-	virtual int ShowModalMessage(const wxString& message, const wxString& caption, int style) override;
-
 	// A REPAINT the backend asks for, the frame having changed by itself (a report delivered, a debugger stopped): the
 	// client is told so (ibClientHost::NotifyChanged) and asks for it — the next frame it is sent is the repaint.
 	// A raise is a window act.
@@ -238,6 +227,17 @@ protected:
 	// session — no separate logout bookkeeping. Made by a mode's frame, which puts its own doc manager in, and
 	// builds its menu.
 	ibClientFrame(ibSessionHolder&& holder, ibClientInstance* clientInstance);
+
+	// ⭐ A REQUEST TO THE CLIENT — queued for it and waited for IN THE SESSION'S POOL (ibWorkerPool::Await):
+	// this thread holds the session and goes on running its tasks meanwhile, the one that carries the request
+	// to the client among them. Responded to, cancelled (a kick, a closed tab, the session stopping: the
+	// request is withdrawn and the interruption goes on up), or never — while a request is pending, the frame
+	// refuses everything else a client asks of it (HasPendingRequest).
+	virtual bool DoRequest(const ibDataNode& request, ibDataNode& response) override;
+
+	// A message box is one kind of request (ibProtocolRequestKind::Message: Text, Caption, Style — the wx button
+	// flags; the response's Button is the wx code of the button pressed, 0 for none).
+	virtual int DoShowModalMessage(const wxString& message, const wxString& caption, int style) override;
 
 	ibClientMenu m_menu;
 

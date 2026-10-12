@@ -115,8 +115,8 @@ bool Compile(ibSession& session, ibMetaDataConfigurationFile& cfg, wxString& err
 	return true;
 }
 
-// The base frame's modal. Desktop, thin client and web call the same refusal
-// before they show anything; this one reaches that function and stops there.
+// The base frame's modal: the door refuses, and the default host answers 0.
+// Desktop, thin client and web pass the same door before they show anything.
 class ibBaseFrame : public ibBackendDocFrame {
 public:
 	explicit ibBaseFrame(const std::shared_ptr<ibRoleSession>& session)
@@ -134,10 +134,6 @@ public:
 	void SetStatusText(const wxString&, int) override {}
 	void RefreshFrame() override {}
 	void RaiseFrame() override {}
-	int ShowModalMessage(const wxString& message, const wxString& caption, int style) override
-	{
-		return ibBackendDocFrame::ShowModalMessage(message, caption, style);
-	}
 private:
 	ibRoleSession* m_role;
 };
@@ -169,7 +165,8 @@ public:
 	void RefreshFrame() override {}
 	void RaiseFrame() override {}
 
-	int ShowModalMessage(const wxString&, const wxString&, int) override
+protected:
+	int DoShowModalMessage(const wxString&, const wxString&, int) override
 	{
 		m_asked->Signal();
 		m_pool->Await(m_role, [this] { return m_answered->load(); });
@@ -307,9 +304,10 @@ TEST(FiberTrust, ARoleHandlerThatAsksThroughTheGateDoesNotHang)
 		void SetStatusText(const wxString&, int) override {}
 		void RefreshFrame() override {}
 		void RaiseFrame() override {}
+	protected:
 		// Returns at once. A question that reaches here is the failure; parking
 		// the thread would turn that failure into a stuck test.
-		int ShowModalMessage(const wxString&, const wxString&, int) override
+		int DoShowModalMessage(const wxString&, const wxString&, int) override
 		{
 			m_asked->store(true);
 			return wxYES;

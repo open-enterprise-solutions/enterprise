@@ -316,9 +316,9 @@ private:
 				// session (GetAccessPolicy -> null), so reading the very source it restricts does NOT re-enter
 				// RLS. RAII restores enforcement on every exit, including the throw caught just below.
 				ibAccessTrustScope trust(m_session);
-				// OnAccessRead / OnAccessWrite may not ask the user. The scope names the handler so
-				// Question and every modal refuse, in every build, before the handler can park with
-				// m_applyMtx still held. SetSessionParameters is not wrapped here and may still ask.
+				// OnAccessRead / OnAccessWrite may not ask the user. The scope names the handler so the
+				// frame's doors refuse, in every build, before the handler can park with m_applyMtx
+				// still held. SetSessionParameters is not wrapped here and may still ask.
 				ibRoleHandlerScope asking(m_session, handler);
 				// CallAsProc (comma-separated args) returns TRUE only if the procedure was FOUND and RAN; it
 				// returns FALSE — WITHOUT throwing and WITHOUT running anything — when there is no such handler.

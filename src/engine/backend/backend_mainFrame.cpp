@@ -9,18 +9,18 @@
 // their frame through the session pointer that's already in scope.
 // Default ctor/dtor live in the header.
 
-void ibRefuseQuestionFromRoleHandler()
+int ibBackendDocFrame::ShowModalMessage(const wxString& message,
+                                           const wxString& caption,
+                                           int style)
 {
-	if (ibSession* const session = ibSession::Current())
+	if (ibSession* const session = GetSession())
 		session->RefuseQuestionFromRoleHandler();
+	return DoShowModalMessage(message, caption, style);
 }
 
-int ibBackendDocFrame::ShowModalMessage(const wxString& /*message*/,
-                                           const wxString& /*caption*/,
-                                           int /*style*/)
+bool ibBackendDocFrame::Request(const ibDataNode& request, ibDataNode& response)
 {
-	ibRefuseQuestionFromRoleHandler();
-	// Default base body — no UI, so nothing to show. Returns 0 which
-	// maps to wxCANCEL/"aborted" in Question-style callers.
-	return 0;
+	if (ibSession* const session = GetSession())
+		session->RefuseQuestionFromRoleHandler();
+	return DoRequest(request, response);
 }
