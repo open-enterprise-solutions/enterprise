@@ -401,6 +401,21 @@
         "cls.KeyValue.Key"
       ],
       "reviewed": false
+    },
+    {
+      "id": "cls.ValueList",
+      "name_local": "ValueList",
+      "name_en": "ValueList",
+      "kind": "collection",
+      "category_keys": ["value_types", "collections", "containers"],
+      "signature": "New ValueList()",
+      "description": "A list of values. Add(value, presentation, check) appends an item and returns it; Insert, Get, Delete, Count and Clear use an index from zero. FindByValue returns the item or Undefined. Each item has Value, Presentation and Check. Foreach yields the item. A query IN (&list) matches the values.",
+      "parameters": "None.",
+      "return_descr": "ValueList — empty.",
+      "example": "list = New ValueList();\nlist.Add(1, \"one\", true);",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": ["cls.Structure"],
+      "reviewed": true
     }
   ]
 }
