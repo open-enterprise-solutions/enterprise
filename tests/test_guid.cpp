@@ -10,6 +10,7 @@
 
 #include <gtest/gtest.h>
 #include "core/guid.h"
+#include "backend/backend_exception.h"
 #include "backend/system/value/valueGuid.h"
 
 // ---------------------------------------------------------------------------
@@ -121,5 +122,21 @@ TEST(ValueGuid, NilStringIsAnEmptyGuid)
 	ibValue junk(wxT("not-a-guid"));
 	ibValue* bad[] = { &junk };
 	ibValueGuid refused;
-	EXPECT_FALSE(refused.Init(bad, 1));
+	EXPECT_THROW(refused.Init(bad, 1), ibBackendException);
+}
+
+// The text tells a guid from not one; the nil guid's text is one. A refusal leaves the guid as it was.
+TEST(Guid, ParseTellsTheNilGuidFromText)
+{
+	ibGuid parsed(ibGuid::newGuid());
+	const ibGuid before = parsed;
+	EXPECT_FALSE(ibGuid::parse(wxT("not-a-guid"), parsed));
+	EXPECT_FALSE(ibGuid::parse(wxT("6fab82bc-d41d-4664-b0f6"), parsed));
+	EXPECT_EQ(parsed, before);
+
+	EXPECT_TRUE(ibGuid::parse(wxT("00000000-0000-0000-0000-000000000000"), parsed));
+	EXPECT_FALSE(parsed.isValid());
+
+	EXPECT_TRUE(ibGuid::parse(wxT("6fab82bc-d41d-4664-b0f6-bb61b0ed78d8"), parsed));
+	EXPECT_EQ(parsed.str(), wxT("6fab82bc-d41d-4664-b0f6-bb61b0ed78d8"));
 }

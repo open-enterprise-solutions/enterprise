@@ -1301,18 +1301,13 @@ const ibValue& ibValue::operator+(const ibValue& cParam)
 		// (GetDate), a date its own count - the arithmetic a date on the right always had.
 		m_dData = m_dData.AddMilliseconds(cParam.GetDate() - ibDateTime());
 		break;
-	case ibValueTypes::TYPE_STRING: {
-		// A total starts on its first element. '+' on a string used to leave that element as it was, so
-		// Sum() of the text "1", "2", "3" — what UnloadColumn hands back from a column added without a
-		// type — answered 1, and Average() a third of it. A numeric string is that number (GetNumber,
-		// read before the word is reused as a number); text that is not a number raises here instead of
-		// being reported as a total.
-		const ibNumber total = GetNumber() + cParam.GetNumber();
-		*this = total;
+	case ibValueTypes::TYPE_STRING:
+		// Text is joined, as the script's own '+' joins it (procUnit.cpp, AddValue). Without this
+		// branch a string was left as it was, and Sum() of "1", "2", "3" answered "1".
+		m_sData += cParam.GetString();
 		break;
-	}
 	default:
-		break;      // '+' is defined for number, date and numeric text; others unchanged
+		break;      // '+' is defined for number, date and string; others unchanged
 	}
 
 	return *this;
