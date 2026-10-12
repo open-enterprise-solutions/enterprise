@@ -449,7 +449,7 @@
       "syntax_block": "<LeftExpr> Or <RightExpr>",
       "parameters": "",
       "return_descr": "",
-      "example": "",
+      "example": "If Doc = Undefined Or Doc.Posted Then\n    Return;\nEndIf;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": [
         "kw.And",

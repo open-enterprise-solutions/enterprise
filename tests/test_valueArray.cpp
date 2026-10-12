@@ -12,6 +12,7 @@
 
 #include <gtest/gtest.h>
 #include <vector>
+#include "backend/backend_exception.h"
 #include "backend/system/value/valueArray.h"
 
 TEST(ValueArray, EmptyByDefault) {
@@ -89,4 +90,36 @@ TEST(ValueArray, SumNumeric) {
     a.Add(ibValue(ibNumber(20)));
     a.Add(ibValue(ibNumber(30)));
     EXPECT_EQ(a.Sum().GetInteger(), 60);
+}
+
+// A column added without a type stores text, and UnloadColumn hands that text back. Sum used to
+// keep the first element (operator+ ignores a string), so "1","2","3" totalled 1 and averaged a
+// third of it. Numeric text adds as numbers; text that is not a number is refused.
+TEST(ValueArray, SumAndAverageOfNumericText) {
+    ibValueArray a;
+    a.Add(ibValue(wxString(wxT("1"))));
+    a.Add(ibValue(wxString(wxT("2"))));
+    a.Add(ibValue(wxString(wxT("3"))));
+
+    const ibValue sum = a.Sum();
+    EXPECT_EQ(sum.GetType(), ibValueTypes::TYPE_NUMBER);
+    EXPECT_EQ(sum.GetNumber(), ibNumber(6));
+    EXPECT_EQ(a.Average().GetNumber(), ibNumber(2));
+}
+
+TEST(ValueArray, SumOfOneNumericString_IsThatNumber) {
+    ibValueArray a;
+    a.Add(ibValue(wxString(wxT("4"))));
+    const ibValue sum = a.Sum();
+    EXPECT_EQ(sum.GetType(), ibValueTypes::TYPE_NUMBER);
+    EXPECT_EQ(sum.GetNumber(), ibNumber(4));
+    EXPECT_EQ(a.Average().GetNumber(), ibNumber(4));
+}
+
+TEST(ValueArray, SumOfTextThatIsNotANumber_Raises) {
+    ibValueArray a;
+    a.Add(ibValue(wxString(wxT("1"))));
+    a.Add(ibValue(wxString(wxT("twelve"))));
+    EXPECT_THROW(a.Sum(), ibBackendException);
+    EXPECT_THROW(a.Average(), ibBackendException);
 }

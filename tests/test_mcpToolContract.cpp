@@ -35,6 +35,12 @@
 #include "backend/mcp/mcpTool.h"
 #include "backend/mcp/mcpClipboard.h"
 #include "core/serialize/dataBuilder.h"
+#include "backend/appData.h"
+#include "backend/metadataConfiguration.h"
+#include "backend/metaCollection/partial/commonObject.h"
+#include "core/clsid.h"
+
+#include <wx/init.h>
 
 #include <wx/dir.h>        // the ASCII rule reads the MCP sources themselves
 #include <wx/file.h>
@@ -850,4 +856,91 @@ TEST(McpClipboard, OnlyFilledSlots_AreListed)
 
 	EXPECT_NE(std::find(slots.begin(), slots.end(), wxT("test.listed")), slots.end());
 	EXPECT_EQ(std::find(slots.begin(), slots.end(), wxT("test.notlisted")), slots.end());
+}
+
+// Catalog.Cars and AccumulationRegister.Cars share a name. ListRegisterRecord's candidates are
+// registers, so the bare name is the register. A second register of the same name is an ambiguity,
+// and Kind.Name or the id says which one.
+TEST(MetadataBind, ASharedNameResolvesAmongTheBindingsCandidates) {
+	wxInitializer wx;
+	if (!wx.IsOk())
+		GTEST_SKIP() << "wxBase init failed (no wxApp host)";
+	if (!ibApplicationInstance::CreateAppDataEnv(ibRunMode::eFILE_MODE))
+		GTEST_SKIP() << "appData env unavailable headless";
+
+	std::shared_ptr<ibMetaDataConfigurationFile> cfg = ibMetaData::MakeShared<ibMetaDataConfigurationFile>();
+	ibApplicationInstance::Get()->ReplaceActiveMetaData(cfg);
+	struct Release {
+		~Release() { ibApplicationInstance::DestroyAppDataEnv(); }
+	} release;
+
+	ibValueMetaObjectConfiguration* root = cfg->GetCommonMetaObject();
+	ASSERT_NE(root, nullptr);
+
+	ibValueMetaObject* document = cfg->CreateMetaObject(g_metaDocumentCLSID, root, false);
+	ibValueMetaObject* catalog = cfg->CreateMetaObject(g_metaCatalogCLSID, root, false);
+	ibValueMetaObject* registerOne = cfg->CreateMetaObject(g_metaAccumulationRegisterCLSID, root, false);
+	ASSERT_NE(document, nullptr);
+	ASSERT_NE(catalog, nullptr);
+	ASSERT_NE(registerOne, nullptr);
+	catalog->SetName(wxT("Cars"));
+	registerOne->SetName(wxT("Cars"));
+	ASSERT_TRUE(cfg->RunDatabase());
+
+	const ibMcpTool* tool = ibFindMcpTool(wxT("metadata_bind"));
+	ASSERT_NE(tool, nullptr);
+
+	const auto bind = [&](auto setTarget, bool remove, wxString& refusal) {
+		ibDataNode params;
+		ibDataNode result;
+		params.SetValue(wxT("id"), (s32)document->GetMetaID());
+		params.SetValue(wxT("property"), wxString(wxT("ListRegisterRecord")));
+		setTarget(params);
+		if (remove)
+			params.SetValue(wxT("remove"), true);
+		const bool ok = tool->Call(params, result, refusal);
+		return ok;
+	};
+
+	wxString refusal;
+	ASSERT_TRUE(bind([&](ibDataNode& params) {
+		params.SetValue(wxT("target"), wxString(wxT("Cars")));
+	}, false, refusal)) << refusal.ToStdString();
+
+	ibValueMetaObjectRegisterData* asRegister = dynamic_cast<ibValueMetaObjectRegisterData*>(registerOne);
+	ASSERT_NE(asRegister, nullptr);
+	const ibClassID documentRef = reference_to_clsid(document->GetMetaID(), clsid_metaclass(document->GetClassType()));
+	EXPECT_TRUE(asRegister->GetRegisterRecorder()->GetTypeDesc().ContainType(documentRef));
+
+	refusal.clear();
+	EXPECT_TRUE(bind([&](ibDataNode& params) {
+		params.SetValue(wxT("target"), wxString(wxT("AccumulationRegister.Cars")));
+	}, false, refusal)) << refusal.ToStdString();
+
+	ibValueMetaObject* registerTwo = cfg->CreateMetaObject(g_metaAccumulationRegisterCLSID, root, false);
+	ASSERT_NE(registerTwo, nullptr);
+	registerTwo->SetName(wxT("Cars"));
+
+	refusal.clear();
+	EXPECT_FALSE(bind([&](ibDataNode& params) {
+		params.SetValue(wxT("target"), wxString(wxT("Cars")));
+	}, false, refusal));
+	EXPECT_TRUE(refusal.Contains(wxString::Format(wxT("#%ld"), (long)registerOne->GetMetaID())));
+	EXPECT_TRUE(refusal.Contains(wxString::Format(wxT("#%ld"), (long)registerTwo->GetMetaID())));
+	EXPECT_TRUE(refusal.Contains(wxT("AccumulationRegister.Cars")));
+
+	refusal.clear();
+	ASSERT_TRUE(bind([&](ibDataNode& params) {
+		params.SetValue(wxT("target"), wxString::Format(wxT("%ld"), (long)registerTwo->GetMetaID()));
+	}, false, refusal)) << refusal.ToStdString();
+
+	ibValueMetaObjectRegisterData* second = dynamic_cast<ibValueMetaObjectRegisterData*>(registerTwo);
+	ASSERT_NE(second, nullptr);
+	EXPECT_TRUE(second->GetRegisterRecorder()->GetTypeDesc().ContainType(documentRef));
+
+	refusal.clear();
+	ASSERT_TRUE(bind([&](ibDataNode& params) {
+		params.SetValue(wxT("target"), (s32)registerTwo->GetMetaID());
+	}, true, refusal)) << refusal.ToStdString();
+	EXPECT_FALSE(second->GetRegisterRecorder()->GetTypeDesc().ContainType(documentRef));
 }

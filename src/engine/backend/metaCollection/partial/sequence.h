@@ -199,6 +199,11 @@ public:
 	virtual bool HasPeriod() const override { return true; }
 	virtual bool HasRecorder() const override { return true; }
 
+	// No dimensions is the ordinary sequence: one border, and the registrations are still the
+	// recorder, the period and the line number. The register save's empty-body refusal does not
+	// apply, or a sequence with nothing but its documents cannot be saved at all.
+	virtual bool AllowsEmptyBody() const override { return true; }
+
 	// ⭐ A FULL RECORD SET, with the two modules a register's set has (Max, 2026-09-18: "it is a
 	// record set in full"): the set's own code runs for every registration written, whoever writes it,
 	// and the manager's is the sequence as a whole — where a configuration puts what it wants said

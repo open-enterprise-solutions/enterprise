@@ -1948,6 +1948,10 @@ public:
 	//meta events
 	virtual bool OnCreateMetaObject(ibMetaData* metaData, int flags);
 	virtual bool OnLoadMetaObject(ibMetaData* metaData);
+	// A register with no dimension, resource or attribute has no column of its own, and the save
+	// refuses it (an empty table cannot lose its last column). A sequence is the exception: the
+	// recorder, the period and the line number are the row, and no dimensions means one border.
+	virtual bool AllowsEmptyBody() const { return false; }
 	virtual bool OnSaveMetaObject(int flags);
 	virtual bool OnDeleteMetaObject();
 

@@ -5,6 +5,27 @@
 
 #include "valueGuid.h"
 
+namespace {
+
+// 32 hex digits, hyphens ignored — the same alphabet the parser accepts.
+// The nil GUID is well formed and still fails isValid(), which means "not the
+// empty identity", so a script cannot ask isValid() whether the text parsed.
+bool IsWellFormedGuid(const wxString& text)
+{
+	unsigned hex = 0;
+	for (const wxUniChar ch : text) {
+		if (ch == wxT('-'))
+			continue;
+		const unsigned c = ch.GetValue();
+		const bool digit = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+		if (!digit)
+			return false;
+		++hex;
+	}
+	return hex == 32;
+}
+
+} // namespace
 
 ibValueGuid::ibValueGuid() : ibValue(ibValueTypes::TYPE_VALUE, true), m_guid() {}
 
@@ -22,10 +43,14 @@ bool ibValueGuid::Init(ibValue** paParams, const long lSizeArray)
 		return false;
 
 	if (paParams[0]->GetType() == ibValueTypes::TYPE_STRING) {
-		const ibGuid newGuid(paParams[0]->GetString());
-		if (newGuid.isValid())
-			m_guid = newGuid;
-		return newGuid.isValid();
+		const wxString text = paParams[0]->GetString();
+		// The nil GUID parses to all zeros, and isValid() answers "this is not
+		// the empty identity". New Guid("00000000-0000-0000-0000-000000000000")
+		// is that identity. Text that is not a GUID is still refused.
+		if (!IsWellFormedGuid(text))
+			return false;
+		m_guid = ibGuid(text);
+		return true;
 	}
 	return false;
 }

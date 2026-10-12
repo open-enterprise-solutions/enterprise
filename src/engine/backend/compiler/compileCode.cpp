@@ -11,6 +11,11 @@
 #include "backend/session/session.h"       // GetCompileState — the code style lives there
 #include "core/fiber/fiber.h"              // StackLow — expression nesting is native recursion
 
+// The mark a filter writes on a comparison (procUnitLambda.h, LINQ_THREE_VALUED_NULL).
+// Repeated here so the compiler does not include the interpreter. OPER_IF treats a
+// NULL condition as "does not decide" when an `and` sets this on m_param4.
+constexpr long kAndUnknownMark = 1;
+
 #pragma warning(push)
 #pragma warning(disable : 4018)
 
@@ -1503,32 +1508,20 @@ bool ibCompileCode::CompileFunction(ibCompileContext* context)
 	const wxString& strFuncName = createdFunction->m_strRealName;
 	const wxString& strFuncRealName = createdFunction->m_strRealName;
 
-	// Ancestor-chain dedup: declaration cannot collide with an
-	// exported function visible from any enclosing scope. Walk
-	// up via m_parentContext; on collision rewind to errorPlace
-	// (position right after the function name in the source) so
-	// the error highlight points at the conflicting name.
-	int numParent = 0;
-	ibCompileContext* pCurContext = context;
-	while (pCurContext != nullptr) {
-		numParent++;
-		if (numParent > MAX_OBJECTS_LEVEL) {
-			ibValueSystemFunction::Message(pCurContext->m_compileModule->GetModuleName());
-			if (numParent > 2 * MAX_OBJECTS_LEVEL) {
-				ibBackendCoreException::Error(_("Recursive call of modules!"));
-			}
-		}
-
+	// A second declaration in THIS module collides. A function of the same
+	// name in a parent module does not: an object module and its manager are
+	// different methods, and the object's own declaration shadows the
+	// manager's export. The call inside this module sees this declaration.
+	// The highlight stays on the name (errorPlace is the token after it).
+	{
 		std::shared_ptr<ibCompileContext::ibFunction> foundedFunc = nullptr;
-		if (pCurContext->FindFunction(strFuncName, foundedFunc)) { // found
+		if (context->FindFunction(strFuncName, foundedFunc)) {
 			if (foundedFunc != createdFunction && foundedFunc->IsCrossBcVisible()) {
 				m_numCurrentCompile = errorPlace;
 				SetError(ERROR_DEF_FUNCTION, strFuncRealName);
 				return false;
 			}
 		}
-
-		pCurContext = pCurContext->m_parentContext;
 	}
 
 	// Upsert into the vector (was map subscript assign): replace a same-named
@@ -3652,6 +3645,13 @@ ibParamUnit ibCompileCode::GetCallFunction(ibCompileContext* context, const wxSt
 
 
 	code.m_numOper = OPER_GOTO;// jump to the end of the bytecode where the expanded call will be made
+	// The call itself is appended at the end of the module, so this jump leaves
+	// whatever try contains it. A jump to a line outside the try drops the handler
+	// (procUnit, OPER_GOTO). The return jump comes back in, but the handler is
+	// already gone, and an exception from a function declared later is not caught.
+	// param2 stays 0 on every other goto. The interpreter keeps the handler when
+	// this one is set. No new opcode: the operand was already stored, and it was 0.
+	code.m_param2.m_numIndex = 1;
 	m_cByteCode.m_listCode.emplace_back(std::move(code));
 
 	ibParamUnit& puRetValue = callFunc->m_puRetValue;
@@ -4129,11 +4129,93 @@ delimOperation:
 				else if (next_lex.m_numData == KEY_MOD) {
 					SetOper(OPER_MOD);
 				}
-				else if (next_lex.m_numData == KEY_AND) {
-					SetOper(OPER_AND);
-				}
-				else if (next_lex.m_numData == KEY_OR) {
-					SetOper(OPER_OR);
+				// ⭐⭐ `and` / `or` DECIDE BEFORE THE RIGHT SIDE RUNS. Both operands used to be
+				// compiled, and run, and only then combined: `u <> Undefined and u.Property("x")`
+				// raised on Undefined, which is the guard 1C writes everywhere. Same shape as
+				// `?(cond, a, b)`: test the left, jump over the right when it cannot change the
+				// answer. AND skips a false left; OR skips a true left.
+				//
+				// The join is still one OPER_AND / OPER_OR writing the result. A query reads that
+				// instruction back as the logical operator. The cell it reads on the right is filled
+				// with the answer a skipped side would have given (false for AND, true for OR) and
+				// overwritten only by the path that actually evaluates the right operand — so the
+				// last writer of that cell, which is what the query walk finds, is the real operand.
+				else if (next_lex.m_numData == KEY_AND || next_lex.m_numData == KEY_OR) {
+					const bool isOr = next_lex.m_numData == KEY_OR;
+
+					ibParamUnit result = context->CreateVariable();
+					result.m_clsid = g_valueBooleanCLSID;
+					ibParamUnit rhsSlot = context->CreateVariable();
+
+					const ibValue decisive(isOr);
+					{
+						ibByteUnit letDef;
+						AddLineInfo(letDef);
+						letDef.m_numOper = OPER_LET;
+						letDef.m_param1 = rhsSlot;
+						letDef.m_param2 = FindConst(decisive);
+						m_cByteCode.m_listCode.emplace_back(std::move(letDef));
+					}
+
+					code.m_numOper = OPER_IF;
+					code.m_param1 = variable;
+					CorrectTypeDef(variable);
+					// A definite false skips the right side of `and`. SQL NULL does not: UNKNOWN
+					// AND x is not FALSE, and `Not (Null = a And Null = b)` must stay UNKNOWN.
+					// The mark is LINQ_THREE_VALUED_NULL (procUnitLambda.h); OPER_IF reads it
+					// and falls through on NULL. `or` already falls through only on a true left,
+					// and NULL is not true, so its test needs no mark.
+					if (!isOr) {
+						code.m_param4.m_numArray = DEF_VAR_SKIP;
+						code.m_param4.m_numIndex = kAndUnknownMark;
+					}
+					m_cByteCode.m_listCode.emplace_back(std::move(code));
+					const int ifLine = (int)m_cByteCode.m_listCode.size() - 1;
+
+					int gotoLine = -1;
+					if (isOr) {
+						// A true left never enters the right side. A false left jumps to it.
+						ibByteUnit jumpOver;
+						AddLineInfo(jumpOver);
+						jumpOver.m_numOper = OPER_GOTO;
+						m_cByteCode.m_listCode.emplace_back(std::move(jumpOver));
+						gotoLine = (int)m_cByteCode.m_listCode.size() - 1;
+						m_cByteCode.m_listCode[ifLine].m_param2.m_numIndex =
+							(long)m_cByteCode.m_listCode.size();
+					}
+
+					const ibParamUnit right = GetExpression(context, numCurPriority);
+					if (right.m_numArray != DEF_VAR_TEMP && right.m_numArray != DEF_VAR_CONST
+						&& variable.m_clsid == g_valueStringCLSID) {
+						SetError(ERROR_TYPE_OPERATION);
+						return ibParamUnit();
+					}
+					{
+						ibByteUnit letRhs;
+						AddLineInfo(letRhs);
+						letRhs.m_numOper = OPER_LET;
+						letRhs.m_param1 = rhsSlot;
+						letRhs.m_param2 = right;
+						m_cByteCode.m_listCode.emplace_back(std::move(letRhs));
+					}
+
+					if (isOr)
+						m_cByteCode.m_listCode[gotoLine].m_param1.m_numIndex =
+							(long)m_cByteCode.m_listCode.size();
+					else
+						m_cByteCode.m_listCode[ifLine].m_param2.m_numIndex =
+							(long)m_cByteCode.m_listCode.size();
+
+					ibByteUnit join;
+					AddLineInfo(join);
+					join.m_numOper = isOr ? OPER_OR : OPER_AND;
+					join.m_param1 = result;
+					join.m_param2 = variable;
+					join.m_param3 = rhsSlot;
+					m_cByteCode.m_listCode.emplace_back(std::move(join));
+
+					variable = result;
+					goto delimOperation;
 				}
 				else if (next_lex.m_numData == '>') {
 					SetOper(OPER_GT);

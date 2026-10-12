@@ -350,6 +350,37 @@ TEST_F(ValueTableVerbs, Clone_CopiesColumnsAndRows_AndSharesNothing)
     EXPECT_EQ(m_table->GetColumnCollection()->GetColumnCount(), 2u);
 }
 
+// The report: numbers written into a column added with no type come back from UnloadColumn as text,
+// and Sum/Average of that array kept only the first element (1 and 0.333... for 1, 2, 3).
+TEST_F(ValueTableVerbs, UnloadColumnOfAnUntypedColumn_SumsTheNumbersWrittenIntoIt)
+{
+    ibValueModelTable::ibValueModelColumnCollection* const columns = m_table->GetColumnCollection();
+    const long add = columns->FindMethod(wxT("AddColumn"));
+    ASSERT_GE(add, 0);
+    ibValue name = Text(wxT("A")), made;
+    ibValue* args[] = { &name };
+    ASSERT_TRUE(columns->CallAsFunc(add, made, args, 1));
+
+    for (int n = 1; n <= 3; ++n) {
+        ibValue row = Call(wxT("Add"), {});
+        const long prop = row.FindProp(wxT("A"));
+        ASSERT_GE(prop, 0);
+        ASSERT_TRUE(row.SetPropVal(prop, ibValue(n)));
+    }
+
+    const ibValue unloaded = Call(wxT("UnloadColumn"), { Text(wxT("A")) });
+    const ibValueArray* const column = unloaded.ConvertToType<ibValueArray>();
+    ASSERT_NE(column, nullptr);
+    ASSERT_EQ(column->Count(), 3u);
+    ASSERT_EQ(column->Values().front().GetType(), ibValueTypes::TYPE_STRING)
+        << "a column added without a type stores text";
+
+    const ibValue sum = column->Sum();
+    EXPECT_EQ(sum.GetType(), ibValueTypes::TYPE_NUMBER);
+    EXPECT_EQ(sum.GetNumber(), ibNumber(6));
+    EXPECT_EQ(column->Average().GetNumber(), ibNumber(2));
+}
+
 // A column added with no type holds a string of ANY length: it carried the designer's default of ten
 // characters, and a cell kept the first ten of whatever was written into it (2026-09-21).
 TEST_F(ValueTableVerbs, AColumnAddedWithoutAType_KeepsTextOfAnyLength)

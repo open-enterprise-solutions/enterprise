@@ -56,6 +56,8 @@ BACKEND_API const wxString& ibFieldSuffix(ibColumnRole role);
 // ⚠ NOT SOLVED BY QUOTING EITHER. Identifier quotes are off by decision, not omission — in Firebird
 // a quoted name becomes case-sensitive while the schema is written unquoted (m_identQuoteOpen,
 // databaseLayer.h), so quoting trades a refusal for a name that no longer matches itself.
+// A name that is not an unquoted identifier at all (Cyrillic, a hyphen) is spelled `out_<hash>`
+// of the author's whole name, so the statement stays ASCII and the two ends still agree.
 //
 // ⭐ THE AUTHOR'S NAME SURVIVES UNTOUCHED wherever a person reads it — the composition's title, the
 // constructor's cell, the column header, and the name an outer query calls this output by. Only the

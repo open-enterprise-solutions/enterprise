@@ -1376,7 +1376,12 @@ start_label:
 			case OPER_IF: {
 				// A boolean condition — what a comparison leaves — is read where it lies; anything else
 				// asks its own emptiness.
+				//
+				// An `and` marks its test (m_param4 = LINQ_THREE_VALUED_NULL) so a SQL NULL left
+				// side does not skip the right one. UNKNOWN does not decide the conjunction.
 				const ibValue& condition = cvariable1;
+				if (curCode.m_param4.m_numIndex == LINQ_THREE_VALUED_NULL && IsNullOperand(condition))
+					break;
 				if (condition.m_typeClass == ibValueTypes::TYPE_BOOLEAN ? !condition.m_bData : IsEmptyValue(condition))
 					lCodeLine = index2 - 1;
 				break;
@@ -1973,7 +1978,11 @@ start_label:
 			{
 				const long tryCodeLine = index1;
 				const long trySize = tryList.size() - 1;
-				if (trySize >= 0) {
+				// A forward call jumps to the real call at the end of the module and
+				// jumps back. The outbound jump is marked (param2 != 0) so it does not
+				// drop the try it is standing in: the call still runs inside the handler.
+				// ENDTRY and a goto the program wrote still leave the handler.
+				if (trySize >= 0 && !(curCode.m_numOper == OPER_GOTO && index2 != 0)) {
 					if (tryCodeLine >= tryList[trySize].m_lEndLine ||
 						tryCodeLine <= tryList[trySize].m_lStartLine) {
 						tryList.resize(trySize);//exit from try..catch scope
@@ -2485,7 +2494,13 @@ start_label:
 			case OPER_LS + TYPE_DELTA4: SetTypeBoolean(variable1, (cvariable2.m_bData < cvariable3.m_bData)); break;
 			case OPER_GE + TYPE_DELTA4: SetTypeBoolean(variable1, (cvariable2.m_bData >= cvariable3.m_bData)); break;
 			case OPER_LE + TYPE_DELTA4: SetTypeBoolean(variable1, (cvariable2.m_bData <= cvariable3.m_bData)); break;
-			case OPER_IF + TYPE_DELTA4: if (!cvariable1.m_bData) lCodeLine = index2 - 1; break;
+			case OPER_IF + TYPE_DELTA4:
+				// Same mark as the untyped test: a boolean-tier comparison can still be SQL NULL,
+				// and that must not skip the right operand of `and`.
+				if (curCode.m_param4.m_numIndex == LINQ_THREE_VALUED_NULL && IsNullOperand(cvariable1))
+					break;
+				if (!cvariable1.m_bData) lCodeLine = index2 - 1;
+				break;
 			}
 			lCodeLine++;
 		}

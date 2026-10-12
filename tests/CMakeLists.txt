@@ -151,6 +151,7 @@ add_executable(oes_tests
     test_rowValues.cpp
     test_queryRamTable.cpp
     test_physicalFieldName.cpp
+    test_schemaIndex.cpp
     test_databaseStringConverter.cpp
     test_readerWriterMemory.cpp
     test_openAccess.cpp
@@ -159,7 +160,7 @@ add_executable(oes_tests
     test_md5.cpp
     test_sha256.cpp
     test_stringUtils.cpp
-    # test_guid.cpp  # API-rotted (ibGuidImpl::isValid/str/bytes gone) — excluded until updated
+    test_guid.cpp
     test_dbTransaction.cpp
     test_propertyObject.cpp
     test_propertyDefaults.cpp
