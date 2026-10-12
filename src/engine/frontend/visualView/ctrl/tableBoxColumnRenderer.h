@@ -192,21 +192,23 @@ public:
 		// this renderer out of vertical centring and pinned every value to the top of its row.
 		// Columns drawn by a renderer that never calls SetAlignment stayed centred, which is why
 		// the date column looked right next to text that did not.
-		if (value.IsNull()) {
+		const ibValue* cell = value.IsNull() ? nullptr : GetCellValue(value);
+		if (m_tableBoxColumn != nullptr)
+			SetAlignment(m_tableBoxColumn->CellAlignment(cell));
+		else if (cell != nullptr && cell->GetType() == ibValueTypes::TYPE_NUMBER)
+			SetAlignment(wxALIGN_RIGHT | wxALIGN_CENTRE_VERTICAL);
+		else
 			SetAlignment(wxALIGN_LEFT | wxALIGN_CENTRE_VERTICAL);
+		if (value.IsNull())
 			return true;
-		}
 
 		// A variant no table model made — a settings dialog's own text — is shown as it is.
-		const ibValue* cell = GetCellValue(value);
 		if (cell == nullptr) {
-			SetAlignment(wxALIGN_LEFT | wxALIGN_CENTRE_VERTICAL);
 			m_valueText = value.MakeString();
 			return true;
 		}
 
 		// Everything below is asked of the value itself.
-		SetAlignment((cell->GetType() == ibValueTypes::TYPE_NUMBER ? wxALIGN_RIGHT : wxALIGN_LEFT) | wxALIGN_CENTRE_VERTICAL);
 
 		// Built ONCE, here, where the value arrives - drawing and measuring both read it, through the format
 		// of the column: found once for a paint pass over the column (StartColumn), by the cell outside one.

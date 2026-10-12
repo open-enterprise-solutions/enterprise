@@ -204,6 +204,15 @@ void ibValueTextCtrl::Update(wxObject* wxobject, ibVisualHost* visualHost)
 	// Desktop's "if (!DesignerMode()) SetValue" guard is pointless on web
 	// (wfrontend is never in designer mode); the no-op check is cheap.
 	textEditor->SetLabel(GetControlTitle());
+#ifndef OES_USE_WEB
+	long style = textEditor->GetWindowStyleFlag();
+	style &= ~(wxTE_RIGHT | wxTE_CENTRE);
+	if (m_propertyAlign->GetValueAsEnum() == ibCellAlign::Center)
+		style |= wxTE_CENTRE;
+	else if (m_propertyAlign->GetValueAsEnum() == ibCellAlign::Right)
+		style |= wxTE_RIGHT;
+	textEditor->SetWindowStyleFlag(style);
+#endif
 	if (!appData->DesignerMode()) {
 		wxString text;
 		const ibTranslateString& format = m_propertyFormat->GetValueAsFormatString();
@@ -347,6 +356,7 @@ bool ibValueTextCtrl::ReadData(const ibDataNode& node)
 	m_propertyMultilineMode->SetNodeValue(node.GetProperty(m_propertyMultilineMode->GetName()));
 	m_propertyTexteditMode->SetNodeValue(node.GetProperty(m_propertyTexteditMode->GetName()));
 	m_propertyFormat->SetNodeValue(node.GetProperty(m_propertyFormat->GetName()));
+	m_propertyAlign->SetNodeValue(node.GetProperty(m_propertyAlign->GetName()));
 	m_propertySelectButton->SetNodeValue(node.GetProperty(m_propertySelectButton->GetName()));
 	m_propertyOpenButton->SetNodeValue(node.GetProperty(m_propertyOpenButton->GetName()));
 	m_propertyClearButton->SetNodeValue(node.GetProperty(m_propertyClearButton->GetName()));
@@ -371,6 +381,7 @@ bool ibValueTextCtrl::WriteData(ibDataNode& node) const
 	node.SetProperty(m_propertyMultilineMode->GetName(), m_propertyMultilineMode->GetNodeValue());
 	node.SetProperty(m_propertyTexteditMode->GetName(), m_propertyTexteditMode->GetNodeValue());
 	node.SetProperty(m_propertyFormat->GetName(), m_propertyFormat->GetNodeValue());
+	node.SetProperty(m_propertyAlign->GetName(), m_propertyAlign->GetNodeValue());
 	node.SetProperty(m_propertySelectButton->GetName(), m_propertySelectButton->GetNodeValue());
 	node.SetProperty(m_propertyOpenButton->GetName(), m_propertyOpenButton->GetNodeValue());
 	node.SetProperty(m_propertyClearButton->GetName(), m_propertyClearButton->GetNodeValue());

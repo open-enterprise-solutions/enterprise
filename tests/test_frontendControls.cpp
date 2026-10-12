@@ -13,6 +13,7 @@
 #include "frontendFormFix.h"                      // FrontendFormFix + NewForm()
 
 #include "frontend/visualView/ctrl/tableBox.h"   // ibValueModelTableBox + g_controlTableBox*CLSID
+#include "frontend/visualView/ctrl/widgets.h"    // g_controlTextCtrlCLSID + the field's Align
 #include "frontend/visualView/ctrl/textBox.h"    // ibValueTextBox
 #include "frontend/visualView/ctrl/gridBox.h"    // ibValueGridBox
 #include "frontend/visualView/ctrl/notebook.h"   // ibValueNotebook + g_controlNotebook*CLSID
@@ -221,6 +222,42 @@ TEST_F(FrontendFormFix, FormSerializeRoundTripPreservesControls)
 	ASSERT_TRUE(dst->LoadForm(buffer)) << "LoadForm rebuilds the control tree";
 	EXPECT_EQ(dst->GetControlList().size(), srcCount)
 		<< "the round-tripped form owns the same controls";
+}
+
+TEST_F(FrontendFormFix, AColumnAndAFieldCanAlignTheirCells)
+{
+	if (!frameReady)
+		GTEST_SKIP();
+
+	ibValueForm* form = NewForm();
+	ASSERT_NE(form, nullptr);
+	ibValueFrame* field = form->NewObject(g_controlTextCtrlCLSID, form);
+	ibValueFrame* table = form->NewObject(g_controlTableBoxCLSID, form);
+	ASSERT_NE(field, nullptr);
+	ASSERT_NE(table, nullptr);
+	ibValueFrame* column = form->NewObject(g_controlTableBoxColumnCLSID, table);
+	ASSERT_NE(column, nullptr);
+
+	ibProperty* fieldAlign = field->GetProperty(wxT("Align"));
+	ibProperty* columnAlign = column->GetProperty(wxT("Align"));
+	ASSERT_NE(fieldAlign, nullptr);
+	ASSERT_NE(columnAlign, nullptr);
+	EXPECT_NE(column->GetProperty(wxT("HeaderAlign")), nullptr);
+
+	auto* columnEnum = dynamic_cast<ibPropertyEnum<ibValueEnumCellAlign>*>(columnAlign);
+	ASSERT_NE(columnEnum, nullptr);
+	EXPECT_EQ(columnEnum->GetValueAsEnum(), ibCellAlign::Auto);
+	columnEnum->SetValue(ibCellAlign::Right);
+
+	auto* boxColumn = dynamic_cast<ibValueModelTableBoxColumn*>(column);
+	ASSERT_NE(boxColumn, nullptr);
+	ibDataNode saved;
+	ASSERT_TRUE(boxColumn->WriteData(saved));
+	columnEnum->SetValue(ibCellAlign::Auto);
+	ASSERT_TRUE(boxColumn->ReadData(saved));
+	EXPECT_EQ(columnEnum->GetValueAsEnum(), ibCellAlign::Right);
+	ibValue number(ibNumber(12));
+	EXPECT_TRUE((boxColumn->CellAlignment(&number) & wxALIGN_RIGHT) != 0);
 }
 
 // ------------------------------ clsid kind-typing ----------------------------

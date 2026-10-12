@@ -52,6 +52,26 @@ class FRMSERVER_API ibValueEnumOrientNotebookPage :
 private:
 };
 
+enum ibCellAlign {
+	Auto = 0,
+	Left,
+	Center,
+	Right
+};
+
+class FRMSERVER_API ibValueEnumCellAlign :
+	public ibValueEnumeration<ibCellAlign> {
+	public:
+	ibValueEnumCellAlign() : ibValueEnumeration() {}
+	virtual void CreateEnumeration() {
+		AddEnumeration(ibCellAlign::Auto, wxT("Auto"), _("Auto"));
+		AddEnumeration(ibCellAlign::Left, wxT("Left"), _("Left"));
+		AddEnumeration(ibCellAlign::Center, wxT("Center"), _("Center"));
+		AddEnumeration(ibCellAlign::Right, wxT("Right"), _("Right"));
+	}
+private:
+};
+
 class FRMSERVER_API ibValueEnumHorizontalAlignment :
 	public ibValueEnumeration<wxAlignment> {
 	public:

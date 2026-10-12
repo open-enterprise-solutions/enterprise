@@ -842,6 +842,9 @@ private:
 	ibPropertyCategory* m_categoryStyle = ibPropertyObject::CreatePropertyCategory(wxT("Style"), _("Style"));
 	ibPropertyUInteger* m_propertyWidth = ibPropertyObject::CreateProperty<ibPropertyUInteger>(m_categoryStyle, wxT("Width"), _("Width"),
 		_("The column's starting width, in pixels. The user can change it when the column is resizable."), wxDVC_DEFAULT_WIDTH);
+	ibPropertyEnum<ibValueEnumCellAlign>* m_propertyAlign = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumCellAlign>>(m_categoryStyle, wxT("Align"), _("Align"),
+		_("How the cell text is aligned: auto (a number to the right, anything else to the left), left, center or right. The header and the footer keep their own alignment."),
+		ibCellAlign::Auto);
 	ibPropertyEnum<ibValueEnumHorizontalAlignment>* m_propertyHeaderAlign = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumHorizontalAlignment>>(m_categoryStyle, wxT("HeaderAlign"), _("Header align"),
 		_("How the header text is aligned: left (the default), center or right."), wxALIGN_LEFT);
 	ibPropertyEnum<ibValueEnumHorizontalAlignment>* m_propertyFooterAlign = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumHorizontalAlignment>>(m_categoryStyle, wxT("FooterAlign"), _("Footer align"),
