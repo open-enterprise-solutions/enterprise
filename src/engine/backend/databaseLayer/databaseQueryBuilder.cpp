@@ -1127,6 +1127,9 @@ wxString ibQueryRenderer::RenderExpr(const ibQueryExprPtr& expr)
 	}
 
 	case ibQueryExprKind::Func: {
+		// COUNT with no argument is COUNT(*). COUNT() is not SQL.
+		if (expr->m_args.empty() && expr->m_name.IsSameAs(wxT("COUNT"), false) && !expr->m_distinct)
+			return wxT("COUNT(*)");
 		wxString s = expr->m_name + wxT("(");
 		if (expr->m_distinct)
 			s += wxT("DISTINCT ");   // COUNT(DISTINCT col) — one spelling, every dialect

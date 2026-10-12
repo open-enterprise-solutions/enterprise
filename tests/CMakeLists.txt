@@ -124,6 +124,7 @@ add_executable(oes_tests
     test_totalsTypeLoss.cpp
     test_accountingTotals.cpp
     test_sequenceBorder.cpp
+    test_typeChangeLedger.cpp
     test_calcDisplacement.cpp
     test_calcRecalculation.cpp
     test_calcSchedule.cpp

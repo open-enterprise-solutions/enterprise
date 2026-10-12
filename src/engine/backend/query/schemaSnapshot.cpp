@@ -669,12 +669,22 @@ int AlterTable(ibStructureBatch& batch, const ibSchemaTable& old, const ibSchema
 	for (const ibSchemaColumn& c : cur.m_columns) {
 		const ibSchemaColumn* o = FindColumn(old.m_columns, c.m_id);
 		const size_t before = batch.StepCount();
-		DiffColumnInto(batch, c.m_column, o != nullptr ? o->m_column : nullptr);   // errors THROW now
+		const long long cleared = DiffColumnInto(batch, c.m_column, o != nullptr ? o->m_column : nullptr);   // errors THROW now
 		if (report != nullptr && batch.StepCount() != before) {   // a step was emitted -> a real change
 			if (o == nullptr)
 				report->AppendInfo(_("Add ") + ColName(c.m_column) + _(" to ") + LedgerName(cur));
 			else
 				report->AppendInfo(_("Change ") + ColName(c.m_column) + _(" in ") + LedgerName(cur));
+		}
+		// What a removed type costs, said while the person can still refuse the apply: the values
+		// are counted before the batch clears them. A derived table loses nothing — its rows are a
+		// reading of the movements, which say their own loss.
+		if (report != nullptr && cleared > 0 && !cur.m_derived) {
+			ibNumber::Format grouped;
+			grouped.groupSep = wxT(' ');
+			grouped.groupSize = 3;
+			report->AppendWarning(wxString::Format(_("%s in %s: %s stored values will be cleared"),
+				ColName(c.m_column), LedgerName(cur), ibNumber(cleared).ToString(grouped)));
 		}
 	}
 	for (const ibSchemaColumn& o : old.m_columns) {
