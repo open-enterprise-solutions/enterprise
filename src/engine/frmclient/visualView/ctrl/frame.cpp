@@ -7,6 +7,7 @@
 #include "frmclient/visualView/visualHostClient.h"
 
 #include "gridBox.h"
+#include "notebook.h"
 #include "sizer.h"
 #include "tableBox.h"
 #include "widgets.h"
@@ -47,6 +48,20 @@ ibValueFrame* MakeOfType(const wxString& type, ibVisualHostClient& host, long lo
 		return new ibValueGridBox(host, controlId);
 	if (type == ibProtocolType::Textbox)
 		return new ibValueTextBox(host, controlId);
+	if (type == ibProtocolType::Notebook)
+		return new ibValueNotebook(host, controlId);
+	if (type == ibProtocolType::NotebookPage)
+		return new ibValueNotebookPage(host, controlId);
+	if (type == ibProtocolType::Radiobutton)
+		return new ibValueRadioButton(host, controlId);
+	if (type == ibProtocolType::Slider)
+		return new ibValueSlider(host, controlId);
+	if (type == ibProtocolType::Gauge)
+		return new ibValueGauge(host, controlId);
+	if (type == ibProtocolType::Htmlbox)
+		return new ibValueHTMLBox(host, controlId);
+	if (type == ibProtocolType::Chartbox)
+		return new ibValueChartBox(host, controlId);
 	return nullptr;
 }
 

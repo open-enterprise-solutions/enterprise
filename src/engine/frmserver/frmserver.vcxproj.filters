@@ -124,10 +124,16 @@
     <ClCompile Include="schema\activeUser.cpp">
       <Filter>schema</Filter>
     </ClCompile>
+    <ClCompile Include="schema\auditLog.cpp">
+      <Filter>schema</Filter>
+    </ClCompile>
     <ClCompile Include="schema\clientSchema.cpp">
       <Filter>schema</Filter>
     </ClCompile>
     <ClCompile Include="schema\runtime\allFunctions.cpp">
+      <Filter>schema\runtime</Filter>
+    </ClCompile>
+    <ClCompile Include="schema\runtime\debugging.cpp">
       <Filter>schema\runtime</Filter>
     </ClCompile>
     <ClCompile Include="schema\runtime\sections.cpp">
@@ -496,10 +502,16 @@
     <ClInclude Include="schema\activeUser.h">
       <Filter>schema</Filter>
     </ClInclude>
+    <ClInclude Include="schema\auditLog.h">
+      <Filter>schema</Filter>
+    </ClInclude>
     <ClInclude Include="schema\clientSchema.h">
       <Filter>schema</Filter>
     </ClInclude>
     <ClInclude Include="schema\runtime\allFunctions.h">
+      <Filter>schema\runtime</Filter>
+    </ClInclude>
+    <ClInclude Include="schema\runtime\debugging.h">
       <Filter>schema\runtime</Filter>
     </ClInclude>
     <ClInclude Include="schema\runtime\sections.h">

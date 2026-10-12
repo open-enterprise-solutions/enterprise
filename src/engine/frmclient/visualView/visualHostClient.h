@@ -10,6 +10,7 @@
 #include <wx/scrolwin.h>
 
 #include "frmclient/docView/docView.h"
+#include "frmclient/docView/tabDocument.h"
 #include "protocol/protocol.h"
 #include "protocol/protocolNode.h"
 
@@ -159,60 +160,23 @@ private:
 	const ibFrontendView* m_shownControlView = nullptr;   // whose chrome is shown now — compared, never followed
 };
 
-// ⚠ NO TEMPLATE, as the desktop's had none: made by the window for each tab the frame brings.
-class FRMCLIENT_API ibFormVisualDocument : public ibFrontendDocument {
+// The tab of a form — the form's view in it, and the form's undo.
+class FRMCLIENT_API ibFormVisualDocument : public ibTabDocument {
 public:
 
 	explicit ibFormVisualDocument(long long tabId);
-	// …and gone out of the frame's forms (ibFrontendMainFrame::RemoveDocument).
-	virtual ~ibFormVisualDocument();
 
-	long long GetTabId() const { return m_tabId; }
-
-	virtual wxString GetUniqueIdentifier() const override;
-
-	virtual bool OnCloseDocument() override;
-
-	// Closed with the form that owns it when the server closed it too — its tab is gone from the frame; one the server
-	// kept goes on under the doc manager.
-	virtual bool IsCloseOnOwnerClose() const override;
-
-	// ⚠ THE SERVER'S ANSWER: modified is "the tab's form takes Save now".
-	virtual bool IsModified() const override;
-	virtual void Modify(bool WXUNUSED(modify)) override {}
-
-	// The server closes it, asking about what is unsaved — and may keep it; the tab goes when the frame says so. A tab
-	// the frame no longer has was closed there: the document goes with it.
-	virtual bool Close() override;
-	// A form is saved where it is, by the server; a document of a file, where the person keeps it — asked where the first
-	// time (Save as), saved by the server as a file of that name and taken down to it (DoSaveDocument).
-	virtual bool Save() override;
-	virtual bool SaveAs() override;
-	// What it saves as — the server's, the tab's Formats; empty: a form.
-	virtual wxString GetSaveFilter() const override;
-
-	// What is unsaved the server asks about, on its own close.
-	virtual bool OnSaveModified() override { return true; }
-	virtual void OnSaveBeforeForceClose() override {}
-
-	ibFormVisualEditView* GetFirstView() const;
+	// The form drawn — the frame's View, as the patch changed it.
+	virtual void DrawView(const ibProtocolNode& view, const ibProtocolNode& patch) override;
 
 	// While the form's active control is a document of its own, the undo is that document's.
 	virtual wxCommandProcessor* GetCommandProcessor() const override;
 
-	// Does the tab's form take this command now — the server's answer, the tab's Commands.
-	bool IsCommandEnabled(ibProtocolCommand command) const;
-	// The command done to it, by the server — after whatever the window is doing now.
-	void DoCommand(ibProtocolCommand command) const;
+	ibFormVisualEditView* GetFirstView() const;
 
 protected:
 
 	virtual ibFrontendView* DoCreateView() override;
-	virtual bool DoSaveDocument(const wxString& file) override;
-
-private:
-
-	const long long m_tabId;
 };
 
 #endif

@@ -74,7 +74,12 @@ tab it gets what changed there, not the whole form. A client keeps each tab's vi
 makes active in place (keeping the view it holds when it has none for that tab), applies the patch's `View` to it,
 and begins the store again with a frame sent whole.
 
-A tab's `Kind` says what its view shows when it is no form (2 a text, 3 a spreadsheet). A spreadsheet document's
+A tab's `Kind` says what its view shows when it is no form (2 a text, 3 a spreadsheet, 4 the registration journal).
+A text's `View` is a textbox's node, its `State` the `Text` and `ReadOnly`; help is such a tab, read-only. The
+journal's rows are fetched by the tab, newest first: `fetch {Tab, Request}` with the filter `From`, `To` (ms since the
+epoch, 0 — no bound), `Level`, `User`, `Session`, `Source`, `Event`, `Ref`, `Search` (a part of the message), `Offset`,
+`Count`; each row `Time`, `Level`, `Session`, `User`, `Host`, `Source`, `Event`, `Message`, `Ref`, `RefMeta`. A row's
+object is opened by event `Open {Ref, RefMeta}`. A spreadsheet document's
 `View` is a gridbox's node — its `State` with `GridLines` set — and its sheet is fetched by the tab (`fetch {Tab}`);
 with no `Version` the sheet is read once. A gridbox's `fetch` gives the whole sheet, `Sheet`, in the form a template is
 stored in — `cells` (`row`, `col` from 0, `value` as shown), `rows` and `cols` (`areas`, `breaks`, `sizes`, `groups`),
@@ -95,6 +100,12 @@ taken as it is, `Text` is parsed by the field's type.
 
 A table's column dragged in its header is `Move {Column, Holder, Position}`: `Holder` the group it now stands in, 0 the
 table. The client moves the column in its own copy of the form at once; the server's form follows.
+
+A notebook's tabs stand where `OrientPage` says; its `State` names the page selected, `ActivePage` (a page's control
+id). A page picked is event `Page {Page}`, a page's tab dragged `Move {Position}`. A page shown in the notebook carries
+its `Title` and `Picture`; a hidden one is out of it. A slider's ends are `MinValue` and `MaxValue`, a gauge's full
+mark `Range`; an HTML box's `State` has the `Page` it shows, a radio button's `Caption` and `Selected`. A chart box is
+drawn empty.
 
 | Field | Holds |
 |---|---|
@@ -139,6 +150,8 @@ A schema is a dialog of the desktop held as data: the client shows it however it
 | 2 Active users | both | `Sessions` and `Locks` | — | active users |
 | 3 Sections | the runtime | the section panel: `Sections` with their `Blocks` of items | 1 Open `{Item, Type}` | — |
 | 4 About | both | `Build`, `Picture`, `Database`, `Application`, `User`, `Locale`, `Plugins` (`Name`, `Version`) | — | — |
+| 5 Registration journal | both | nothing | 1 Open — opens its tab (`Kind` 4) | active users |
+| 6 Debugging | the runtime | `Debugging` — the session's process listens for the designer; `Allowed` — it may be switched now (not on an application server, not while a start waits for the designer) | 2 Start, 3 Stop | — |
 
 A schema the client's application does not have, or the person has no right to, is refused.
 
@@ -148,7 +161,6 @@ A schema the client's application does not have, or the person has no right to, 
 |---|---|---|
 | 1 Message | `Text`, `Caption`, `Style` | `Button`: 2 Yes, 8 No, 4 OK, 16 Cancel |
 | 2 Choice | `Caption` and items: `Id`, `Caption`, `Picture`, `Selected` | `Id` — one of those offered |
-| 3 Help | `Title`, `Text` | nothing |
 | 4 Edit | `Command` (7–11): done to the field under the client's focus | nothing |
 | 5 File | `Caption` and items: `Title`, `Mask` — a file of the person's chosen and uploaded | `File` — its id; none — cancelled |
 | 6 Generation | `Picture` and items: `Id`, `Caption`, `Picture` — the objects this one generates | `Id` — the one to base a new one on; none — cancelled |
@@ -159,6 +171,9 @@ A schema the client's application does not have, or the person has no right to, 
 | 11 ListSettings | a table's settings: `Settings` (the setting in force, in the node form the settings schema writes), `Fields` (`Name`, `Presentation`, `Id`, `Type`, `Available`), `References` (`Type` — a class id as text, `Targets` — the metaobjects it points at), `Error` | `Settings` — the setting edited; none — cancelled |
 | 12 SimpleChoice | `Value` — a field's number or date, with its type | `Value` — the one chosen; none — dismissed |
 | 13 ComposerSettings | a report's settings: `Settings` (the setting in force), `Composition` (what the report arranges, in its node form), `Fields` and `References` as ListSettings has them — the fields its query offers, no `Id`; `Error` | `Settings` — the setting edited; none — cancelled |
+| 14 Error | a script's failure: `Picture`, `Text` — the error with its call stack | `Act`: 1 close the window, 2 and send it to the designer debugging the base, 3 and close the client — each does the one before it too; none — 1 |
+| 15 Print | a script's sheet: `Sheet`, as a gridbox's `fetch` gives it | `Done` — printed; false — the print dialog cancelled, or the printer failed |
+| 16 Schedule | a form's schedule: `Schedule`, in its stored form | `Schedule` — the one edited, and the form is modified; none — cancelled |
 
 A SavedSettings window stays open through its acts: each act is a `respond`, done by the server, which asks again with
 the shelf as it now stands and `Done` — how the act went — until the window answers with no `Act`. A FormEditor window
@@ -213,7 +228,7 @@ files opened last, shows the file dialogs and the print preview. What is done to
 Redo, Save with `command`, a tab closed with `close`, a file opened with `upload` and `open`. Cut, Copy, Paste, Delete
 and Select all are done by the field under the client's focus. Closing the client's window is Exit.
 
-| Command | Key | Done |
+| Command | Default key | Done |
 |---|---|---|
 | 1 Undo | Ctrl+Z | the active document |
 | 2 Redo | Ctrl+Y | the active document |
@@ -227,7 +242,9 @@ and Select all are done by the field under the client's focus. Closing the clien
 `StockPicture` names one of the client's own pictures, drawn its platform's way: 1 New, 2 Open, 3 Save, 4 Save as,
 5 Close, 6 Quit, 7 Undo, 8 Redo, 9 Cut, 10 Copy, 11 Paste, 12 Delete, 13 Find, 14 Print.
 
-A key is written `Ctrl`/`Alt`/`Shift` + key; the client maps it to its platform (Ctrl to Cmd on a Mac). `Enabled` and
+**A key from the server is a default.** The keys a person presses are theirs, kept by the client in their own
+directory and put over the defaults; the server keeps none. A key is written `Ctrl`/`Alt`/`Shift` + key; the client
+maps it to its platform (Ctrl to Cmd on a Mac). `Enabled` and
 a tab's `Commands` answer the question a call is refused by: the active document for a command — that tab's document
 for its `Commands` — the person's right for a schema.
 

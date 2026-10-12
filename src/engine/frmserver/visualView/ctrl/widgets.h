@@ -533,14 +533,14 @@ class ibValueRadioButton : public ibValueWindow {
 	//get title
 	virtual wxString GetControlTitle() const { return GetCaption(); }
 
-	// The caption in the session's language.
+	// The caption in the session's language, and whether it is shown selected.
 	virtual void OnUpdate(ibDataNode& state, ibVisualHost* host) override;
 
 	//support icons
 	virtual wxIcon GetIcon() const;
 	static wxIcon GetIconGroup();
 
-	//load & save object in control 
+	//load & save object in control
 	virtual bool ReadData(const ibDataNode& node);
 	virtual bool WriteData(ibDataNode& node) const;
 

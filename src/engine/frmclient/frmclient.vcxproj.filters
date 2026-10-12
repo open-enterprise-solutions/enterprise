@@ -73,6 +73,9 @@
     <ClCompile Include="docView\docManager.cpp">
       <Filter>docView</Filter>
     </ClCompile>
+    <ClCompile Include="docView\tabDocument.cpp">
+      <Filter>docView</Filter>
+    </ClCompile>
     <ClCompile Include="docView\print\printPreview.cpp">
       <Filter>docView\print</Filter>
     </ClCompile>
@@ -80,6 +83,9 @@
       <Filter>docView\templates</Filter>
     </ClCompile>
     <ClCompile Include="docView\templates\docViewFile.cpp">
+      <Filter>docView\templates</Filter>
+    </ClCompile>
+    <ClCompile Include="docView\templates\docViewAuditLog.cpp">
       <Filter>docView\templates</Filter>
     </ClCompile>
     <ClCompile Include="docView\templates\docViewHelp.cpp">
@@ -98,6 +104,12 @@
       <Filter>mainFrame\settings</Filter>
     </ClCompile>
     <ClCompile Include="mainFrame\settings\fontcolorsettings.cpp">
+      <Filter>mainFrame\settings</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\settings\keybinder.cpp">
+      <Filter>mainFrame\settings</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\settings\stlutility.cpp">
       <Filter>mainFrame\settings</Filter>
     </ClCompile>
     <ClCompile Include="mainFrame\settings\xmlutility.cpp">
@@ -121,11 +133,20 @@
     <ClCompile Include="win\dlgs\activeUser.cpp">
       <Filter>win\dlgs</Filter>
     </ClCompile>
+    <ClCompile Include="win\dlgs\enterpriseOption.cpp">
+      <Filter>win\dlgs</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\errorDialog.cpp">
+      <Filter>win\dlgs</Filter>
+    </ClCompile>
     <ClCompile Include="win\dlgs\formEditor.cpp">
       <Filter>win\dlgs</Filter>
     </ClCompile>
     <ClCompile Include="win\dlgs\generation.cpp">
       <Filter>win\dlgs</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\jobSchedule\jobScheduleSettings.cpp">
+      <Filter>win\dlgs\jobSchedule</Filter>
     </ClCompile>
     <ClCompile Include="win\dlgs\settings\savedSettings.cpp">
       <Filter>win\dlgs\settings</Filter>
@@ -223,17 +244,38 @@
     <ClCompile Include="visualView\ctrl\button.cpp">
       <Filter>visualView\ctrl</Filter>
     </ClCompile>
+    <ClCompile Include="visualView\ctrl\chartBox.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
     <ClCompile Include="visualView\ctrl\checkbox.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\gauge.cpp">
       <Filter>visualView\ctrl</Filter>
     </ClCompile>
     <ClCompile Include="visualView\ctrl\gridBox.cpp">
       <Filter>visualView\ctrl</Filter>
     </ClCompile>
+    <ClCompile Include="visualView\ctrl\htmlBox.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\notebook.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
     <ClCompile Include="visualView\ctrl\placeholder.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\radiobutton.cpp">
       <Filter>visualView\ctrl</Filter>
     </ClCompile>
     <ClCompile Include="visualView\ctrl\sizer.cpp">
       <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\slider.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\pageWindow.cpp">
+      <Filter>visualView</Filter>
     </ClCompile>
     <ClCompile Include="visualView\ctrl\staticline.cpp">
       <Filter>visualView\ctrl</Filter>
@@ -268,6 +310,9 @@
     <ClInclude Include="docView\docManager.h">
       <Filter>docView</Filter>
     </ClInclude>
+    <ClInclude Include="docView\tabDocument.h">
+      <Filter>docView</Filter>
+    </ClInclude>
     <ClInclude Include="docView\print\printPreview.h">
       <Filter>docView\print</Filter>
     </ClInclude>
@@ -275,6 +320,9 @@
       <Filter>docView\templates</Filter>
     </ClInclude>
     <ClInclude Include="docView\templates\docViewFile.h">
+      <Filter>docView\templates</Filter>
+    </ClInclude>
+    <ClInclude Include="docView\templates\docViewAuditLog.h">
       <Filter>docView\templates</Filter>
     </ClInclude>
     <ClInclude Include="docView\templates\docViewHelp.h">
@@ -304,6 +352,12 @@
     <ClInclude Include="mainFrame\settings\fontcolorsettings.h">
       <Filter>mainFrame\settings</Filter>
     </ClInclude>
+    <ClInclude Include="mainFrame\settings\keybinder.h">
+      <Filter>mainFrame\settings</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\settings\stlutility.h">
+      <Filter>mainFrame\settings</Filter>
+    </ClInclude>
     <ClInclude Include="mainFrame\settings\xmlutility.h">
       <Filter>mainFrame\settings</Filter>
     </ClInclude>
@@ -316,11 +370,20 @@
     <ClInclude Include="win\dlgs\activeUser.h">
       <Filter>win\dlgs</Filter>
     </ClInclude>
+    <ClInclude Include="win\dlgs\enterpriseOption.h">
+      <Filter>win\dlgs</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\errorDialog.h">
+      <Filter>win\dlgs</Filter>
+    </ClInclude>
     <ClInclude Include="win\dlgs\formEditor.h">
       <Filter>win\dlgs</Filter>
     </ClInclude>
     <ClInclude Include="win\dlgs\generation.h">
       <Filter>win\dlgs</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\jobSchedule\jobScheduleSettings.h">
+      <Filter>win\dlgs\jobSchedule</Filter>
     </ClInclude>
     <ClInclude Include="win\dlgs\settings\savedSettings.h">
       <Filter>win\dlgs\settings</Filter>
@@ -439,6 +502,12 @@
     <ClInclude Include="visualView\ctrl\gridBox.h">
       <Filter>visualView\ctrl</Filter>
     </ClInclude>
+    <ClInclude Include="visualView\ctrl\notebook.h">
+      <Filter>visualView\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\pageWindow.h">
+      <Filter>visualView</Filter>
+    </ClInclude>
     <ClInclude Include="visualView\ctrl\sizer.h">
       <Filter>visualView\ctrl</Filter>
     </ClInclude>
@@ -470,6 +539,12 @@
     </Filter>
     <Filter Include="backend\metaCollection\resource">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5053}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="backend\logger">
+      <UniqueIdentifier>{6a1f8b3d-2c4e-4f70-9bac-1d2e3f405164}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="backend\job">
+      <UniqueIdentifier>{6a1f8b3d-2c4e-4f70-9bac-1d2e3f405165}</UniqueIdentifier>
     </Filter>
     <Filter Include="backend\propertyManager">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5029}</UniqueIdentifier>
@@ -542,6 +617,9 @@
     </Filter>
     <Filter Include="win\dlgs\translateConstructor">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f503d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\dlgs\jobSchedule">
+      <UniqueIdentifier>{6a1f8b3d-2c4e-4f70-9bac-1d2e3f405166}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -628,6 +706,21 @@
     </ClInclude>
     <ClCompile Include="backend\metaCollection\resource\metaResourceObject_res.cpp">
       <Filter>backend\metaCollection\resource</Filter>
+    </ClCompile>
+    <ClInclude Include="backend\logger\loggerReader.h">
+      <Filter>backend\logger</Filter>
+    </ClInclude>
+    <ClCompile Include="backend\logger\loggerReader.cpp">
+      <Filter>backend\logger</Filter>
+    </ClCompile>
+    <ClInclude Include="backend\job\jobSchedule.h">
+      <Filter>backend\job</Filter>
+    </ClInclude>
+    <ClCompile Include="backend\job\jobSchedule.cpp">
+      <Filter>backend\job</Filter>
+    </ClCompile>
+    <ClCompile Include="backend\job\jobScheduleRules.cpp">
+      <Filter>backend\job</Filter>
     </ClCompile>
     <ClCompile Include="backend\metaCollection\partial\reference\reference.cpp">
       <Filter>backend\metaCollection\partial\reference</Filter>

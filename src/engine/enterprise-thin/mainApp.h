@@ -49,6 +49,7 @@ protected:
 
 	//global process events:
 	void OnKeyEvent(wxKeyEvent& event);
+	void OnSetFocus(wxFocusEvent& event);
 };
 
 wxDECLARE_APP(ibAppEnterprise);

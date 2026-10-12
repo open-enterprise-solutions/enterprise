@@ -1,6 +1,7 @@
 #include "docViewHelp.h"
 
 #include "backend/temp/tempStorage.h"   // ibTempFile — the document's file
+#include "frmserver/visualView/ctrl/textBox.h"   // the text drawn as a textbox's
 
 // ----------------------------------------------------------------------------
 // ibHelpEditView implementation
@@ -21,11 +22,13 @@ void ibHelpEditView::OnDraw(ibDataNode& frame)
 	if (document == nullptr)
 		return;
 
-	frame.SetValue(wxT("Text"), document->GetText());
+	// Drawn as a text document's is (ibTextEditView::OnDraw): a textbox's node, the text it shows, and whether it takes
+	// typing — help is read, so it does not.
+	frame.SetClsid(g_controlTextBoxCLSID);
+	ibDataNode& state = frame.Child(wxT("State"));
+	state.SetValue(wxT("Text"), document->GetText());
 	if (m_readOnly)
-		frame.SetValue(wxT("ReadOnly"), true);
-	if (document->IsModified())
-		frame.SetValue(wxT("Modified"), true);
+		state.SetValue(wxT("ReadOnly"), true);
 }
 
 // ----------------------------------------------------------------------------

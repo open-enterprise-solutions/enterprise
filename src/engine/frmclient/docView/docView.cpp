@@ -2480,7 +2480,7 @@ ibFrontendView* ibFrontendDocument::DoCreateView()
 
 // Unified doc/view creation pipeline. Lifted up from ibMetaDocument so any
 // document — templated (meta editors, Text/Help/AuditLog) or template-less
-// (ibFormVisualDocument, which overrides DoCreateView) — gets a view + child
+// (a tab's — ibFormVisualDocument, ibAuditLogDocument — each overriding DoCreateView) — gets a view + child
 // frame without needing a document template. Replaces the old one-liner that
 // delegated to ibFrontendDocTemplate::CreateView.
 bool ibFrontendDocument::OnCreate(const wxString& WXUNUSED(path), long flags)

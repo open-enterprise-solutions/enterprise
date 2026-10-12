@@ -70,7 +70,7 @@ namespace ibProtocolName {
 	inline constexpr const char* Separator    = "Separator";
 	inline constexpr const char* Command      = "Command";
 	inline constexpr const char* Schema       = "Schema";
-	inline constexpr const char* Shortcut     = "Shortcut";
+	inline constexpr const char* Shortcut     = "Shortcut";   // a command's default key — the user's own go over it, client-side
 	inline constexpr const char* StockPicture = "StockPicture";
 	inline constexpr const char* Enabled      = "Enabled";
 	inline constexpr const char* Icon      = "Icon";
@@ -91,7 +91,8 @@ namespace ibProtocolName {
 	inline constexpr const char* Ids       = "Ids";
 	inline constexpr const char* Act       = "Act";       // a saved settings' answer: what was done to the shelf
 	inline constexpr const char* Default   = "Default";   // …the entry restored on open
-	inline constexpr const char* Done      = "Done";      // …the shelf asked again: how the act before went
+	inline constexpr const char* Done      = "Done";      // …the shelf asked again: how the act before went; a print's answer
+	inline constexpr const char* Schedule  = "Schedule";  // a schedule's editor: the schedule, in its stored form
 	inline constexpr const char* Controls   = "Controls";     // a form editor's Apply: the form's controls, each by its Control id
 	inline constexpr const char* Classes    = "Classes";      // …the controls' classes: Name, Picture
 	inline constexpr const char* Position   = "Position";     // …where a control stands among its siblings
@@ -140,6 +141,25 @@ namespace ibProtocolName {
 	inline constexpr const char* Build       = "Build";
 	inline constexpr const char* Plugins     = "Plugins";
 
+	// The registration journal — a tab's (Kind AuditLog): its rows fetched by the tab, newest first, by the filter
+	// {From, To, Level, User, Session, Source, Event, Ref, Search, Offset, Count} — each row Time, Level, Session, User,
+	// Host, Source, Event, Message, Ref, RefMeta; a row's object opened as event Open {Ref, RefMeta}.
+	inline constexpr const char* From    = "From";      // ms since the epoch, inclusive — 0: no bound
+	inline constexpr const char* To      = "To";        // …exclusive
+	inline constexpr const char* Source  = "Source";
+	inline constexpr const char* Search  = "Search";    // a part of the message
+	inline constexpr const char* Offset  = "Offset";    // the rows skipped — Count read after them
+	inline constexpr const char* Time    = "Time";      // a row's: ms since the epoch
+	inline constexpr const char* Host    = "Host";
+	inline constexpr const char* Message = "Message";
+	inline constexpr const char* Ref     = "Ref";       // …the object it is about: its guid
+	inline constexpr const char* RefMeta = "RefMeta";   // …and its metaobject's id — 0: a user (sys_user)
+
+	// Debugging in the current session — the schema's (Debugging): whether it is on, and whether it may be switched.
+	inline constexpr const char* Debugging = "Debugging";   // the session's process listens for the designer
+	inline constexpr const char* Allowed   = "Allowed";     // …and may be switched now: not on the application server,
+	                                                        // not while a start waits for the designer
+
 	// A view — a tab's form, its controls as the server writes them (visualView/): what each was saved with, beside its
 	// State, what the server reads it as now; and what the person did with one, back by its id.
 	inline constexpr const char* ControlId        = "ControlId";
@@ -177,6 +197,13 @@ namespace ibProtocolName {
 	inline constexpr const char* ButtonSelect     = "ButtonSelect";
 	inline constexpr const char* ButtonOpen       = "ButtonOpen";
 	inline constexpr const char* ButtonClear      = "ButtonClear";
+	inline constexpr const char* OrientPage       = "OrientPage";   // a notebook's: where its tabs are (wxAUI_NB_TOP, _BOTTOM)
+	inline constexpr const char* ActivePage       = "ActivePage";   // …the State's: the page selected, by its control id; 0 — none
+	inline constexpr const char* Page             = "Page";         // a page picked, by its control id (event Page); an HTML
+	                                                                // box's State: the page it shows
+	inline constexpr const char* Range            = "Range";        // a gauge's: the value it is full at
+	inline constexpr const char* MinValue         = "MinValue";     // a slider's: its ends
+	inline constexpr const char* MaxValue         = "MaxValue";
 
 	// A command bar — the State's CommandBar of a form, a table, a spreadsheet: its entries (Id, Caption, Picture,
 	// Tooltip, Enabled, Kind; a separator; a group's commands as its children), pressed back as Command {Id, Member}.
@@ -272,6 +299,13 @@ namespace ibProtocolType {
 	inline constexpr const char* TableboxColumnGroup = "TableboxColumnGroup";
 	inline constexpr const char* Gridbox             = "Gridbox";
 	inline constexpr const char* Textbox             = "Textbox";
+	inline constexpr const char* Notebook            = "Notebook";
+	inline constexpr const char* NotebookPage        = "NotebookPage";
+	inline constexpr const char* Radiobutton         = "Radiobutton";
+	inline constexpr const char* Slider              = "Slider";
+	inline constexpr const char* Gauge               = "Gauge";
+	inline constexpr const char* Htmlbox             = "Htmlbox";
+	inline constexpr const char* Chartbox            = "Chartbox";
 
 }
 
@@ -391,12 +425,17 @@ enum class ibProtocolSchema : int {
 	Sections     = 3,   // the runtime's section panel: Sections (NodeId, Title, Picture) with their Blocks (Column 1|2,
 	                    // Title, Picture, Tooltip) of items (Item, Title, Icon, Type); command 1 Open {Item, Type}
 	About        = 4,   // both modes': Build, Picture, Database, Application, User, Locale and Plugins (Name, Version)
+	AuditLog     = 5,   // both modes': the registration journal — shows nothing; command 1 Open opens its tab (Kind
+	                    // AuditLog)
+	Debugging    = 6,   // the runtime's options: Debugging, Allowed; commands 2 Start and 3 Stop
 };
 
 // A schema's own commands — `schema {Schema, Command, Args}`. All functions and Sections take the one: Open
-// {Item, Type} — an item they show, opened as the navigation opens it.
+// {Item, Type} — an item they show, opened as the navigation opens it. Debugging takes Start and Stop.
 enum class ibProtocolSchemaCommand : int {
-	Open = 1,
+	Open  = 1,
+	Start = 2,
+	Stop  = 3,
 };
 
 // What the server asks the person — the frame's Request, by its Kind; answered with `respond {Id, Response}`.
@@ -404,7 +443,6 @@ enum class ibProtocolRequestKind : int {
 	Message = 1,   // Text, Caption, Style (wx's button flags) → Button (wx's code: 2 Yes, 8 No, 4 OK, 16 Cancel)
 	Choice  = 2,   // Caption and children Id, Caption, Picture, Selected → Id — one of those offered; none — cancelled.
 	               // With Multiple → Ids — those of them ticked
-	Help    = 3,   // Title, Text → nothing
 	Edit    = 4,   // Command (ibProtocolCommand: Cut … SelectAll) — done to the field under the focus → nothing
 	File    = 5,   // Caption and children Title, Mask — a file of the person's chosen, uploaded → File; none — cancelled
 	Generation = 6,   // the desktop's ibDialogGeneration: Picture (the window's) and children Id, Caption, Picture — the
@@ -435,6 +473,21 @@ enum class ibProtocolRequestKind : int {
 	                         // query offers (Presentation — the caption its source gives one) → as ListSettings; the report
 	                         // waits for Compose (ibProtocolComposeState::Outdated). On the way: the same acts
 	                         // (ibProtocolListSettingsAct)
+	Error = 14,   // the desktop's ibDialogError over a script's failure: Picture (the window's), Text — the error with its
+	              // call stack → Act (ibProtocolErrorAct); none — closed, as Close window
+	Print = 15,   // the desktop's PrintSpreadsheetDocument over a script's sheet: Sheet — as a spreadsheet's fetch writes it →
+	              // Done — whether it was printed (not: the print dialog cancelled, or the printer failed)
+	Schedule = 16,   // the desktop's ibDialogJobSchedule over a form's schedule: Schedule — as
+	                 // ibJobScheduleDescriptionMemory writes it → Schedule — the one edited (the form is modified); none —
+	                 // cancelled
+};
+
+// What the person chose over a script's failure — an Error answer's Act. The answers are CUMULATIVE, as the desktop's
+// were: each one does what the one before it does, and more.
+enum class ibProtocolErrorAct : int {
+	CloseWindow  = 1,   // the error kept in the messages
+	GotoDesigner = 2,   // …and sent to the designer debugging this base
+	CloseProgram = 3,   // …and the client goes
 };
 
 // What a form editor did — its answer's Act.
@@ -512,6 +565,8 @@ enum class ibProtocolViewKind : int {
 	Form        = 1,
 	Text        = 2,   // View: Text, ReadOnly; what was typed handed back as event {Tab, Event: Change, Args: {Text}}
 	Spreadsheet = 3,
+	AuditLog    = 4,   // the registration journal: its rows fetched by the tab (fetch {Tab, Request: the filter}), a
+	                   // row's object opened as event {Tab, Event: Open, Args: {Ref, RefMeta}}
 };
 
 // WHAT A PERSON DID WITH A CONTROL of a view — `event {Control, Event, Args}`, the control named by its ControlId.

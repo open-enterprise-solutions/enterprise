@@ -193,9 +193,9 @@ const ibBackendCommandItem* FindCommand(const ibSession& session, ibMetaID metaI
 	return metaData != nullptr ? dynamic_cast<const ibBackendCommandItem*>(metaData->FindAnyObjectByFilter(metaId)) : nullptr;
 }
 
-// THE MENU AS IT STANDS NOW: each item with what it does, a command with its name, key and picture, and whether it is
-// enabled now (the desktop's EVT_UPDATE_UI): a command by the active tab's document, a schema by its own right — the
-// same questions a call of it is refused by.
+// THE MENU AS IT STANDS NOW: each item with what it does, a command with its name, default key and picture, and whether
+// it is enabled now (the desktop's EVT_UPDATE_UI): a command by the active tab's document, a schema by its own right —
+// the same questions a call of it is refused by.
 void DrawMenu(ibClientFrame* frame, const std::vector<ibClientMenu::Item>& items, ibDataNode& node)
 {
 	const ibDocManager* const manager = frame->GetDocumentManager();

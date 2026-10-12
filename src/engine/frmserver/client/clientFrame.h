@@ -70,6 +70,7 @@ public:
 	// Messages for the client, kept until it takes them. The desktop's message pane is the same thing.
 	virtual void Message(const wxString& strMessage, ibStatusMessage status) override;
 	virtual void ClearMessage() override;
+	// A script's failure — the desktop's error window, asked of the client (ibProtocolRequestKind::Error).
 	virtual void BackendError(const wxString& strFileName,
 		const wxString& strDocPath, const long line,
 		const wxString& strErrorMessage) override;
@@ -103,6 +104,13 @@ public:
 	// A SHEET SHOWN — the desktop's (ibFrontendMainFrame::ShowSpreadsheetDocument): a spreadsheet document of its own
 	// over it, in a tab of its own, under that title. What a list output and a script's Show() reach.
 	virtual bool ShowSpreadsheetDocument(const wxString& strTitle, wxObjectDataPtr<ibBackendSpreadsheetObject>& spreadSheetDocument) override;
+	// …and a script's sheet printed, by the client's printer (ibProtocolRequestKind::Print) — with its print dialog,
+	// as the desktop's always was.
+	virtual bool PrintSpreadsheetDocument(const wxObjectDataPtr<ibBackendSpreadsheetObject>& doc, bool showPrintDlg = true) override;
+
+	// A SCHEDULE EDITED — the desktop's editor, asked of the client (ibProtocolRequestKind::Schedule). OK marks the active
+	// form modified, as the desktop's did: the edit happened in a window of its own, nothing else would notice it.
+	virtual bool ShowScheduleEditor(ibJobScheduleDescription& schedule) override;
 
 	//***************************************************************************************
 	//*                       The client's side of the frame                                *

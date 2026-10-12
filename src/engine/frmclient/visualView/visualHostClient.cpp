@@ -82,7 +82,7 @@ void ReadControl(ibValueFrame* control, const ibProtocolNode& node)
 }
 
 // A view as a list of what it is made of: each node's type and id, in order, nested as they are — and what a control
-// is BUILT with rather than set afterwards: how a sizer item lays its child out, which way a line runs.
+// is BUILT with rather than set afterwards: how a sizer item lays its child out, which way a line, a slider, a gauge runs.
 void ShapeOf(const ibProtocolNode& node, std::string& shape)
 {
 	const wxString type = node.GetType();
@@ -94,7 +94,7 @@ void ShapeOf(const ibProtocolNode& node, std::string& shape)
 		shape += '(' + std::to_string(node.GetInt(ibProtocolName::Proportion)) + '|' + std::to_string(FlagOf(node))
 			+ '|' + std::to_string(node.GetInt(ibProtocolName::BorderSize)) + ')';
 	}
-	else if (type == ibProtocolType::Staticline) {
+	else if (type == ibProtocolType::Staticline || type == ibProtocolType::Slider || type == ibProtocolType::Gauge) {
 		shape += '(' + std::to_string(node.GetInt(ibProtocolName::Orient)) + ')';
 	}
 

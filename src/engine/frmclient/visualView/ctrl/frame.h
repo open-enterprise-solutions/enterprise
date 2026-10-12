@@ -28,7 +28,7 @@ class ibFrontendView;
 #define wxDefaultStypeFGColour wxColour(0x3F, 0x5C, 0x77)  // #3F5C77 deep dusty blue
 #define wxDefaultStypeBGColour wxColour(0xFA, 0xF7, 0xF0)  // #FAF7F0 cream content
 
-class ibFormVisualDocument;
+class ibTabDocument;
 
 // A CONTROL THAT HOLDS A VALUE — the desktop's ibControlFrame (frontend/visualView/ctrl/frame.h): what the shared value
 // choice (ibTypeControlFactory::ChooseValue) reads the current value through and puts the chosen one back through. A
@@ -44,7 +44,7 @@ public:
 
 	virtual ibValueForm* GetOwnerForm() const { return nullptr; }
 	virtual ibClassID GetClassType() const override { return 0; }
-	virtual ibFormVisualDocument* GetVisualDocument() const { return nullptr; }
+	virtual ibTabDocument* GetVisualDocument() const { return nullptr; }
 
 	virtual bool HasQuickChoice() const = 0;
 	virtual void ChoiceProcessing(ibValue& vSelected) = 0;

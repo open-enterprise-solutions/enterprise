@@ -316,6 +316,7 @@ enum class ibClientViewKind : s32 {
     Form        = 1,   // a form — the default, absent from the wire
     Text        = 2,
     Spreadsheet = 3,
+    AuditLog    = 4,
 };
 
 class FRMSERVER_API ibView: public wxObject
@@ -572,7 +573,7 @@ public:
 
     // ⭐ THE COMMANDS THIS APPLICATION'S DOCUMENTS ANSWER TO — registered as the templates and the schemas are: the
     // shared ones by the base's ctor, an application's own by its manager's ctor. What a client is told of each: its
-    // name, its key and its picture, so a thin client knows them without a list of its own.
+    // name, its default key and its picture, so a thin client knows them without a list of its own.
     const std::map<ibDocCommand, ibDocCommandInfo>& GetCommands() const { return m_commands; }
 
 protected:
