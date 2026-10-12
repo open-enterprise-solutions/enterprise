@@ -4,7 +4,7 @@
 #include <wx/filefn.h>
 #include <wx/filename.h>
 
-#include "backend/launchTicket.h"
+#include "core/launchTicket.h"
 
 TEST(LaunchTicket, APasswordRoundTripsAndTheFileIsDeleted) {
 	ibLaunchSecrets in;

@@ -1,6 +1,6 @@
 #include "launcher.h"
 #include "backend/appData.h"
-#include "backend/launchTicket.h"
+#include "core/launchTicket.h"
 #include "core/programFolder.h"
 
 #include <wx/config.h>

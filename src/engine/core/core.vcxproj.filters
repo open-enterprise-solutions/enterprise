@@ -52,6 +52,7 @@
     <ClCompile Include="fstring.cpp" />
     <ClCompile Include="guid.cpp" />
     <ClCompile Include="localization.cpp" />
+    <ClCompile Include="launchTicket.cpp" />
     <ClCompile Include="programFolder.cpp" />
     <ClCompile Include="serialize\dataBuilder.cpp">
       <Filter>serialize</Filter>
@@ -102,6 +103,7 @@
     <ClInclude Include="fstring.h" />
     <ClInclude Include="guid.h" />
     <ClInclude Include="localization.h" />
+    <ClInclude Include="launchTicket.h" />
     <ClInclude Include="programFolder.h" />
     <ClInclude Include="res\resource.h">
       <Filter>res</Filter>

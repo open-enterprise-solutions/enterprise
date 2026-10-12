@@ -5,7 +5,7 @@
 
 #include "mainApp.h"
 #include "backend/appData.h"
-#include "backend/launchTicket.h"
+#include "core/launchTicket.h"
 #include "backend/backend_exception.h"   // DrainLastErrors for the startup-failure dialog
 #include "backend/backend_mainFrame.h"
 #include "frontend/session/guiSession.h"   // transitively pulls backend/session/session.h
