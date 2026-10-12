@@ -170,7 +170,8 @@ TEST(ValueStructure, GetAnswersAFieldInAnyCaseOrUndefined) {
 
 // A small structure is WALKED, a large one is INDEXED — the index exists from kIndexMin entries
 // on (valueMap.h). The two roads must answer alike: every field found in any case, a
-// duplicate refused, on the way up past the threshold and on the way back down by Delete.
+// repeated name replacing the value and not adding a field, on the way up past the threshold
+// and on the way back down by Delete.
 TEST(ValueStructure, FieldsAreFoundTheSameWalkedAndIndexed) {
     ibValueStructure s;
     const int kFields = 20;   // well past the threshold
@@ -186,8 +187,11 @@ TEST(ValueStructure, FieldsAreFoundTheSameWalkedAndIndexed) {
         }
         ibValue out;
         EXPECT_FALSE(s.Property(name(i + 1), out)) << "a field not yet inserted, after " << i + 1;
-        EXPECT_ANY_THROW(s.Insert(upper(i), ibValue())) << "a duplicate in another case, at " << i + 1 << " fields";
-        EXPECT_EQ(s.Count(), static_cast<unsigned int>(i + 1)) << "the duplicate was not added";
+        s.Insert(upper(i), ibValue(ibNumber(i + 1000)));
+        EXPECT_EQ(s.Count(), static_cast<unsigned int>(i + 1)) << "a repeated name was added, at " << i + 1 << " fields";
+        ASSERT_TRUE(s.Property(name(i), out));
+        EXPECT_EQ(out.GetInteger(), i + 1000);
+        s.Insert(name(i), ibValue(ibNumber(i)));
     }
 
     for (int i = kFields - 1; i >= 2; --i) {
@@ -202,16 +206,23 @@ TEST(ValueStructure, FieldsAreFoundTheSameWalkedAndIndexed) {
     EXPECT_EQ(s.Count(), 2u);
 }
 
-// Insert refuses a repeated key in every process, with no question about the designer; an owner for whom a
-// repeat is no error puts it with SetAt — one entry, the later value (the metadata namespaces do).
-TEST(ValueStructure, InsertRefusesARepeatAndSetAtPutsIt) {
+// Insert replaces the value when the field is already there, in any case, and keeps the
+// spelling the field was given. A key that is not a name is still refused. `[key] = v`
+// (SetAt) is the same put.
+TEST(ValueStructure, InsertReplacesARepeatAndKeepsTheName) {
     ibValueStructure s;
     s.Insert(Field(wxT("Name")), ibValue(ibNumber(1)));
-    EXPECT_ANY_THROW(s.Insert(Field(wxT("NAME")), ibValue(ibNumber(2))));
-    EXPECT_TRUE(s.SetAt(Field(wxT("name")), ibValue(ibNumber(3))));
+    s.Insert(Field(wxT("NAME")), ibValue(ibNumber(2)));
+    EXPECT_EQ(s.GetPropName(0), wxString(wxT("Name")));
     ibValue out;
+    ASSERT_TRUE(s.Property(Field(wxT("name")), out));
+    EXPECT_EQ(out.GetInteger(), 2);
+    EXPECT_EQ(s.Count(), 1u);
+    EXPECT_TRUE(s.SetAt(Field(wxT("name")), ibValue(ibNumber(3))));
     ASSERT_TRUE(s.Property(Field(wxT("Name")), out));
     EXPECT_EQ(out.GetInteger(), 3);
+    EXPECT_EQ(s.Count(), 1u);
+    EXPECT_ANY_THROW(s.Insert(ibValue(ibNumber(1)), ibValue(ibNumber(4))));
     EXPECT_EQ(s.Count(), 1u);
 }
 

@@ -421,9 +421,10 @@ void ibValueContainer::Insert(const ibValue& varKeyValue, const ibValue& cValue)
 	// walks after this one compare it, and the index is built from it.
 	const bool indexed = Indexed();
 	const size_t hash = HashOf(varKeyValue);
-	// A repeat is refused, in every process: an owner for whom a repeat is no error says so with SetAt.
+	// A repeat is refused here. A Structure replaces the value instead
+	// (ibValueStructure::Insert). An owner that wants the put uses SetAt.
 	if (FindWithHash(varKeyValue, hash) >= 0) {
-		ibBackendCoreException::Error(_("Key '%s' is already using!"), varKeyValue.GetString());
+		ibBackendCoreException::Error(_("The key '%s' is already in use"), varKeyValue.GetString());
 		return;
 	}
 	m_entries.emplace_back(varKeyValue, cValue, hash);
@@ -468,8 +469,9 @@ std::shared_ptr<ibValueIteratorState> ibValueContainer::CreateIterator()
 
 bool ibValueContainer::SetAt(const ibValue& varKeyValue, const ibValue& varValue)
 {
-	// Assign by key: overwrite an existing entry, create it otherwise. (Insert,
-	// the script verb, still refuses a duplicate; `[key] = v` is the put.)
+	// Assign by key: overwrite an existing entry, create it otherwise.
+	// `[key] = v` is this. A container's Insert still refuses a duplicate;
+	// a structure's Insert is this put.
 	const bool indexed = Indexed();
 	const size_t hash = HashOf(varKeyValue);      // one hash for both branches, kept by a new entry
 	const long idx = FindWithHash(varKeyValue, hash);
@@ -589,7 +591,9 @@ void ibValueStructure::Insert(const ibValue& varKeyValue, const ibValue& cValue)
 		return;
 	}
 
-	ibValueContainer::Insert(varKeyValue, cValue);
+	// Вставить replaces the value when the field is already there. The name
+	// that was stored keeps its spelling.
+	SetAt(varKeyValue, cValue);
 }
 
 bool ibValueStructure::Property(const ibValue& varKeyValue, ibValue& cValueFound)
