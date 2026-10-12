@@ -2936,3 +2936,26 @@ TEST(RuntimeTest, AnArrayWalkedAndRewalkedIsLetGoOfOnce) {
 	// The frame goes here, with both arrays in it. That is the moment the nightly
 	// caught: passing under a sanitiser is the whole assertion.
 }
+
+TEST_F(BuiltInRuntime, ApplicationCaptionIsRemembered) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ibValueSystemFunction valueSystem;
+	cc.AddContextVariable(wxT("System"), &valueSystem, true);
+
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("var title public; var ok public;\n")
+		wxT("SetApplicationCaption(\"Diesel\");\n")
+		wxT("title = GetApplicationCaption();\n")
+		wxT("ShowMessageBox(\"hello\");\n")
+		wxT("ok = 1;\n")));
+
+	ibProcUnit pu;
+	wxString strError;
+	ASSERT_TRUE(RunBound(cc, pu, strError)) << strError.ToStdString();
+
+	ibValue v;
+	ASSERT_TRUE(pu.GetPropVal(wxT("title"), v));
+	EXPECT_EQ(v.GetString(), wxT("Diesel"));
+	ASSERT_TRUE(pu.GetPropVal(wxT("ok"), v));
+	EXPECT_EQ(v.GetInteger(), 1);
+}

@@ -1,0 +1,34 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "ru",
+  "entries": [
+    {
+      "id": "fn.SetApplicationCaption",
+      "name_local": "SetApplicationCaption",
+      "name_en": "SetApplicationCaption",
+      "kind": "system_function",
+      "category_keys": ["global_context", "global_functions"],
+      "signature": "SetApplicationCaption(title)",
+      "description": "Задаёт заголовок, который возвращает GetApplicationCaption, и заголовок окна, если окно открыто (УстановитьЗаголовокПриложения)."
+    },
+    {
+      "id": "fn.GetApplicationCaption",
+      "name_local": "GetApplicationCaption",
+      "name_en": "GetApplicationCaption",
+      "kind": "system_function",
+      "category_keys": ["global_context", "global_functions"],
+      "signature": "GetApplicationCaption()",
+      "description": "Строка. Заголовок, последний раз переданный в SetApplicationCaption (ПолучитьЗаголовокПриложения). До этого пусто."
+    },
+    {
+      "id": "fn.ShowMessageBox",
+      "name_local": "ShowMessageBox",
+      "name_en": "ShowMessageBox",
+      "kind": "system_function",
+      "category_keys": ["global_context", "global_functions"],
+      "signature": "ShowMessageBox(text)",
+      "description": "Показывает текст так же, как Alert (ПоказатьПредупреждение). Если окна нет, ничего не показывается."
+    }
+  ]
+}
