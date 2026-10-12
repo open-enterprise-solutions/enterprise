@@ -2936,3 +2936,40 @@ TEST(RuntimeTest, AnArrayWalkedAndRewalkedIsLetGoOfOnce) {
 	// The frame goes here, with both arrays in it. That is the moment the nightly
 	// caught: passing under a sanitiser is the whole assertion.
 }
+
+TEST_F(BuiltInRuntime, CurrentUniversalDateInMillisecondsIsUtc) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ibValueSystemFunction valueSystem;
+	cc.AddContextVariable(wxT("System"), &valueSystem, true);
+
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("var first public; var second public; var span public;\n")
+		wxT("first = CurrentUniversalDateInMilliseconds();\n")
+		wxT("second = CurrentUniversalDateInMilliseconds();\n")
+		wxT("span = second - first;\n")));
+
+	ibProcUnit pu;
+	wxString strError;
+	ASSERT_TRUE(RunBound(cc, pu, strError)) << strError.ToStdString();
+
+	ibValue v;
+	ASSERT_TRUE(pu.GetPropVal(wxT("first"), v));
+	long long first = 0;
+	ASSERT_EQ(v.GetNumber().ToInt(first), 0);
+	const long long floor = ibDateTime(2020, 1, 1).GetValue();
+	const long long ceil = ibDateTime(2100, 1, 1).GetValue();
+	EXPECT_GT(first, floor);
+	EXPECT_LT(first, ceil);
+
+	ASSERT_TRUE(pu.GetPropVal(wxT("span"), v));
+	long long span = 0;
+	ASSERT_EQ(v.GetNumber().ToInt(span), 0);
+	EXPECT_GE(span, 0);
+	EXPECT_LT(span, 10000);
+
+	const ibValue direct = ibValueSystemFunction::CurrentUniversalDateInMilliseconds();
+	long long again = 0;
+	ASSERT_EQ(direct.GetNumber().ToInt(again), 0);
+	EXPECT_GE(again, first);
+	EXPECT_LT(again - first, 10000);
+}

@@ -1,0 +1,16 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "en",
+  "entries": [
+    {
+      "id": "fn.CurrentUniversalDateInMilliseconds",
+      "name_local": "CurrentUniversalDateInMilliseconds",
+      "name_en": "CurrentUniversalDateInMilliseconds",
+      "kind": "system_function",
+      "category_keys": ["global_context", "global_functions"],
+      "signature": "CurrentUniversalDateInMilliseconds()",
+      "description": "Number. The current UTC time as milliseconds from 0001-01-01, the same count a date stores. CurrentDate stays the local clock."
+    }
+  ]
+}
