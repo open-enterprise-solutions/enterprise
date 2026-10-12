@@ -1324,7 +1324,7 @@ bool ibApplicationInstance::Login(const wxString& strUserName,
 
 namespace {
 
-bool ReadZipEntry(wxZipInputStream& zis, const wxZipEntry& entry, wxMemoryBuffer& out)
+bool ReadZipEntry(wxZipInputStream& zis, wxZipEntry& entry, wxMemoryBuffer& out)
 {
 	if (!zis.OpenEntry(entry))
 		return false;
