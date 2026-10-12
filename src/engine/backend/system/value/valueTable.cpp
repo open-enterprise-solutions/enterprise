@@ -438,7 +438,7 @@ bool ibValueModelTable::ibValueModelTableColumnCollection::CallAsFunc(const long
 				type = *paParams[1]->ConvertToType<ibValueTypeDescription>();
 		}
 		const wxString name = paParams[0]->GetString();
-		const wxString caption = lSizeArray > 2 ? paParams[2]->GetString() : name;
+		const wxString caption = lSizeArray > 2 ? wxString(paParams[2]->GetString()) : name;
 		const int width = lSizeArray > 3 ? paParams[3]->GetInteger() : wxDVC_DEFAULT_WIDTH;
 		pvarRetValue = AddColumn(name, type, caption, width);
 		return true;

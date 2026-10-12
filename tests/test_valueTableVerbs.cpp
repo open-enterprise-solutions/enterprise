@@ -415,7 +415,7 @@ TEST_F(ValueTableVerbs, AColumnAddedWithoutAType_KeepsANumberAsANumber)
     ibValue* args[] = { &name };
     ASSERT_TRUE(columns->CallAsFunc(add, made, args, 1));
     EXPECT_EQ(columns->GetColumnCount(), 1u);
-    EXPECT_FALSE(columns->GetColumnInfo(0)->GetTypeDesc().IsOk());
+    EXPECT_FALSE(columns->GetColumnInfo(0)->GetColumnType().IsOk());
 
     ibValue row = Call(wxT("Add"), {});
     const long prop = row.FindProp(wxT("A"));
@@ -456,7 +456,7 @@ TEST_F(ValueTableVerbs, AStringColumn_NarrowsANumberToText)
     ibValue made;
     ibValue* args[] = { &name, &text };
     ASSERT_TRUE(columns->CallAsFunc(add, made, args, 2));
-    EXPECT_TRUE(columns->GetColumnInfo(0)->GetTypeDesc().ContainType(g_valueStringCLSID));
+    EXPECT_TRUE(columns->GetColumnInfo(0)->GetColumnType().ContainType(g_valueStringCLSID));
 
     ibValue row = Call(wxT("Add"), {});
     const long prop = row.FindProp(wxT("Note"));
