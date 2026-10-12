@@ -3328,6 +3328,15 @@ bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMo
 			SetPosted(writeMode == ibDocumentWriteMode::ibDocumentWriteMode_Posting);
 	}
 
+	// A periodic number is taken from the document's date. An empty date is this moment, and it is
+	// written down before the number so the series and the stored date are the same period. A
+	// nonperiodical document is dated after the number, as it always was.
+	if (newObject && GetMetaObject()->GetNumberPeriodicity() != ibNumberPeriodicity::eNonperiodical) {
+		ibValueMetaObjectAttributePredefined* const date = GetMetaObject()->GetDocumentDate();
+		if (GetValueByMetaID(*date).IsEmpty())
+			SetValueByMetaID(*date, ibValueSystemFunction::CurrentDate());
+	}
+
 	if (!IsSetUniqueIdentifier()) {
 		ibValue prefix = wxEmptyString, standartProcessing = true;
 		ExecAsEvent(wxT("SetNewNumber"), prefix, standartProcessing);

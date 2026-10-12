@@ -12,6 +12,7 @@
 #include "reference/reference.h"
 #include "backend/databaseLayer/connectionPool.h"
 #include "backend/system/systemManager.h"
+#include "backend/query/columnLayout.h"   // the date column the number's period is scanned inside
 
 
 //*********************************************************************************************
@@ -256,5 +257,44 @@ bool ibValueRecordDataObjectDocument::CallAsFunc(const long lMethodNum, ibValue&
 	return ibRuntimeModuleDataObject::ExecAsFunc(
 		GetMethodName(lMethodNum), pvarRetValue, paParams, lSizeArray
 	);
+}
+
+ibValueRecordDataObjectRef::ibNumberSeriesKey ibValueRecordDataObjectDocument::NumberSeriesKey() const
+{
+	ibNumberSeriesKey key;
+	const ibValueMetaObjectRecordDataRecorderRef* meta = GetMetaObject();
+	if (meta == nullptr)
+		return key;
+
+	const ibNumberPeriodicity period = meta->GetNumberPeriodicity();
+	if (period == ibNumberPeriodicity::eNonperiodical)
+		return key;
+
+	// An empty date is this moment: a new document is numbered in the period it will be dated in.
+	ibDateTime when = ibDateTime::Now();
+	const ibValue date = GetValueByMetaID(*meta->GetDocumentDate());
+	if (date.GetType() == ibValueTypes::TYPE_DATE && !date.GetDate().IsEmpty())
+		when = date.GetDate();
+
+	key.m_interval = ibDocumentNumberInterval(period, when);
+
+	const ibTotalsPeriod unit =
+		period == ibNumberPeriodicity::eYear    ? ibTotalsPeriod::Year
+		: period == ibNumberPeriodicity::eQuarter ? ibTotalsPeriod::Quarter
+		: period == ibNumberPeriodicity::eMonth   ? ibTotalsPeriod::Month
+		:                                            ibTotalsPeriod::Day;
+	key.m_from = when.BeginOfPeriod(unit).GetValue();
+	key.m_to   = when.BeginOfNextPeriod(unit).GetValue();
+
+	const ibValueMetaObjectAttributePredefined* dateAttribute = meta->GetDocumentDate();
+	if (dateAttribute != nullptr && dateAttribute->GetQueryColumn() != nullptr) {
+		for (const ibColumnSlot& slot : DescribeColumnLayout(dateAttribute->GetQueryColumn())) {
+			if (slot.m_role == ibColumnRole::Date) {
+				key.m_dateField = slot.m_name;
+				break;
+			}
+		}
+	}
+	return key;
 }
 

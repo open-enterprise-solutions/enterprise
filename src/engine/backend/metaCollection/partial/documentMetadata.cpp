@@ -135,6 +135,7 @@ ibFormPtr<ibBackendValueForm> ibValueMetaObjectDocument::GetSelectForm(const ibF
 
 bool ibValueMetaObjectDocument::WriteData(ibDataNode& node) const
 {
+	node.SetProperty(m_propertyNumberPeriodicity->GetName(), m_propertyNumberPeriodicity->GetNodeValue());
 	node.SetProperty(m_propertyAttributePosted->GetName(), m_propertyAttributePosted->GetNodeValue());
 
 	node.SetProperty(m_propertyObjectModule->GetName(), m_propertyObjectModule->GetNodeValue());
@@ -149,6 +150,14 @@ bool ibValueMetaObjectDocument::WriteData(ibDataNode& node) const
 
 bool ibValueMetaObjectDocument::ReadData(const ibDataNode& node)
 {
+	// A dump writes the word (Year, Quarter, Month, Day). A configuration saved here writes the
+	// number, the same way every other enumeration does. Absent: the default stands.
+	const ibDataValue savedPeriod = node.GetProperty(m_propertyNumberPeriodicity->GetName());
+	if (savedPeriod.Kind() == ibDataKind::String)
+		m_propertyNumberPeriodicity->SetValue(ibNumberPeriodicityFromName(savedPeriod.AsString()));
+	else
+		m_propertyNumberPeriodicity->SetNodeValue(savedPeriod);
+
 	m_propertyAttributePosted->SetNodeValue(node.GetProperty(m_propertyAttributePosted->GetName()));
 
 	m_propertyObjectModule->SetNodeValue(node.GetProperty(m_propertyObjectModule->GetName()));

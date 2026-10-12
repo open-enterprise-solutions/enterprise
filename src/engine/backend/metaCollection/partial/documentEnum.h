@@ -22,6 +22,21 @@ enum ibDocumentRecordsDeletion {
 	ibDocumentRecordsDeletion_Never             // not cleared by the platform on either: the configuration clears them
 };
 
+// When a document's numbers start again. The numbers are what a saved configuration holds, so a new
+// one goes at the end. Nonperiodical is zero: a document saved before the setting existed, and every
+// new document, stays on the one series it already had.
+enum ibNumberPeriodicity {
+	eNonperiodical,
+	eYear,
+	eQuarter,
+	eMonth,
+	eDay,
+};
+
+// The sequence bucket a nonperiodical document — and every catalog — still uses. A periodic
+// document's bucket lives above a billion, so it cannot land on this one and restart that series.
+constexpr int ibNumberSeriesNonperiodical = 20000101;
+
 #pragma region enumeration
 #include "backend/compiler/enumUnit.h"
 
@@ -56,6 +71,22 @@ class ibValueEnumDocumentRecordsDeletion : public ibValueEnumeration<ibDocumentR
 		AddEnumeration(ibDocumentRecordsDeletion::ibDocumentRecordsDeletion_Never, wxT("Never"), _("Do not delete automatically"));
 	}
 };
-#pragma endregion 
+class ibValueEnumNumberPeriodicity : public ibValueEnumeration<ibNumberPeriodicity> {
+	public:
+	ibValueEnumNumberPeriodicity() : ibValueEnumeration() {}
+
+	virtual void CreateEnumeration() {
+		AddEnumeration(ibNumberPeriodicity::eNonperiodical, wxT("Nonperiodical"), _("Nonperiodical"));
+		AddEnumeration(ibNumberPeriodicity::eYear, wxT("Year"), _("Year"));
+		AddEnumeration(ibNumberPeriodicity::eQuarter, wxT("Quarter"), _("Quarter"));
+		AddEnumeration(ibNumberPeriodicity::eMonth, wxT("Month"), _("Month"));
+		AddEnumeration(ibNumberPeriodicity::eDay, wxT("Day"), _("Day"));
+	}
+};
+#pragma endregion
+
+class ibDateTime;
+ibNumberPeriodicity ibNumberPeriodicityFromName(const wxString& name);
+int ibDocumentNumberInterval(ibNumberPeriodicity period, const ibDateTime& when);
 
 #endif // ! _DOCUMENT_EMUN_H_
