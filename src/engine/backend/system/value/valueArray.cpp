@@ -7,10 +7,48 @@
 #include "backend/backend_exception.h"
 #include "backend/compiler/procUnit.h"        // InvokeLambdaWithArg for selector overloads
 #include "backend/compiler/procUnitLambda.h"  // CopyValue / SetTypeNumber / SetTypeBoolean / IsHasValue
+#include "backend/metaCollection/metaSessionParameterObject.h"  // New Array(SessionParameterValue) copies what it stores
 
 #include <algorithm>   // lexicographical_compare / equal — the element walk
 
+namespace {
 
+// Copy the elements of an Array or a FixedArray. A SessionParameterValue is
+// opened once: what it stores is the source, and a holder is not an element.
+bool TakeCopiedElements(std::vector<ibValue>& dest, const ibValue& source, bool unwrap)
+{
+	const ibValue* ref = source.GetRef();
+	if (const ibValueArray* array = dynamic_cast<const ibValueArray*>(ref)) {
+		dest = array->Values();
+		return true;
+	}
+	if (const ibValueFixedArray* fixed = dynamic_cast<const ibValueFixedArray*>(ref)) {
+		dest = fixed->Values();
+		return true;
+	}
+	if (unwrap) {
+		if (const ibValueSessionParameter* parameter = dynamic_cast<const ibValueSessionParameter*>(ref))
+			return TakeCopiedElements(dest, parameter->GetValue(), false);
+	}
+	return false;
+}
+
+bool InitFromCountOrCopy(std::vector<ibValue>& dest, ibValue** paParams, const long lSizeArray)
+{
+	if (lSizeArray < 1 || paParams[0] == nullptr)
+		return false;
+	if (paParams[0]->GetType() == ibValueTypes::TYPE_NUMBER) {
+		const ibNumber& number = paParams[0]->GetNumber();
+		if (number > 0) {
+			dest.resize(number.ToUInt());
+			return true;
+		}
+		return false;
+	}
+	return TakeCopiedElements(dest, *paParams[0], true);
+}
+
+} // namespace
 
 //////////////////////////////////////////////////////////////////////
 
@@ -21,17 +59,7 @@ bool ibValueArray::Init()
 
 bool ibValueArray::Init(ibValue** paParams, const long lSizeArray)
 {
-	if (lSizeArray < 1)
-		return false;
-
-	if (paParams[0]->GetType() == ibValueTypes::TYPE_NUMBER) {
-		const ibNumber& number = paParams[0]->GetNumber();
-		if (number > 0) {
-			m_listValue.resize(number.ToUInt());
-			return true;
-		}
-	}
-	return false;
+	return InitFromCountOrCopy(m_listValue, paParams, lSizeArray);
 }
 
 // Raises when `index` is out of range for ELEMENT ACCESS ([0, size)) — everywhere, the designer included:
@@ -462,3 +490,89 @@ bool ibValueArray::CompareValueEQ(const ibValue& cParam) const
 //**********************************************************************
 
 VALUE_TYPE_REGISTER(ibValueArray, "Array", g_valueArrayCLSID);
+
+void ibValueFixedArray_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
+{
+	helper.AppendConstructor(1, wxT("FixedArray(source : Array)"));
+	helper.AppendFunc(wxT("Count"), wxT("Count()"));
+	helper.AppendFunc(wxT("Get"), 1, wxT("Get(index)"));
+	helper.AppendFunc(wxT("Find"), 1, wxT("Find(value : any)"));
+	helper.AppendFunc(wxT("UBound"), wxT("UBound()"));
+}
+
+bool ibValueFixedArray::Init(ibValue** paParams, const long lSizeArray)
+{
+	return InitFromCountOrCopy(m_listValue, paParams, lSizeArray);
+}
+
+void ibValueFixedArray::CheckIndex(unsigned int index) const
+{
+	if (index >= m_listValue.size())
+		ibBackendCoreException::Error(_("Index goes beyond array"));
+}
+
+ibValue ibValueFixedArray::Find(const ibValue& varValue) const
+{
+	auto it = std::find(m_listValue.begin(), m_listValue.end(), varValue);
+	if (it != m_listValue.end())
+		return ibValue(static_cast<signed int>(std::distance(m_listValue.begin(), it)));
+	return ibValue();
+}
+
+bool ibValueFixedArray::GetAt(const ibValue& varKeyValue, ibValue& pvarValue)
+{
+	const unsigned int index = varKeyValue.GetUInteger();
+	if (index >= m_listValue.size()) {
+		CheckIndex(index);
+		return false;
+	}
+	pvarValue = m_listValue[index];
+	return true;
+}
+
+bool ibValueFixedArray::SetAt(const ibValue&, const ibValue&)
+{
+	ibBackendCoreException::Error(_("A fixed array cannot be changed"));
+	return false;
+}
+
+bool ibValueFixedArray::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long /*lSizeArray*/)
+{
+	switch (lMethodNum) {
+	case enCount:
+		pvarRetValue = Count();
+		return true;
+	case enGet:
+		return GetAt(*paParams[0], pvarRetValue);
+	case enFind:
+		pvarRetValue = Find(*paParams[0]);
+		return true;
+	case enUBound:
+		pvarRetValue = m_listValue.empty() ? ibValue(-1) : ibValue(static_cast<signed int>(m_listValue.size()) - 1);
+		return true;
+	default:
+		return false;
+	}
+}
+
+std::shared_ptr<ibValueIteratorState> ibValueFixedArray::CreateIterator()
+{
+	class State : public ibValueIteratorState {
+	public:
+		explicit State(std::vector<ibValue> list) : m_list(std::move(list)) {}
+		bool MoveNext(ibValue& current) override {
+			if (m_started) ++m_pos; else m_started = true;
+			if (m_pos >= m_list.size()) return false;
+			current = m_list[m_pos];
+			return true;
+		}
+		void Reset() override { m_pos = 0; m_started = false; }
+	private:
+		std::vector<ibValue> m_list;
+		size_t m_pos = 0;
+		bool m_started = false;
+	};
+	return std::make_shared<State>(m_listValue);
+}
+
+VALUE_TYPE_REGISTER(ibValueFixedArray, "FixedArray", g_valueFixedArrayCLSID);

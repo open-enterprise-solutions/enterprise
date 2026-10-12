@@ -295,4 +295,35 @@ public:
 	}
 };
 
+// A copy that cannot grow or change. New Array(fixed) copies the elements back
+// into an Array — the same copy New Array takes from an Array or from a
+// SessionParameterValue whose stored value is one of those.
+constexpr ibClassID g_valueFixedArrayCLSID = value_to_clsid("VL_FARR");
+
+void ibValueFixedArray_BindNames(ibValue::ibMemberTable& helper, const ibValue* ctx);
+
+class BACKEND_API ibValueFixedArray : public ibValueStaticMembers<&ibValueFixedArray_BindNames> {
+public:
+	ibValueFixedArray() : ibValueStaticMembers(ibValueTypes::TYPE_VALUE) {}
+
+	virtual ibClassID GetClassType() const override { return g_valueFixedArrayCLSID; }
+	virtual bool Init() override { return true; }
+	virtual bool Init(ibValue** paParams, const long lSizeArray) override;
+	virtual bool IsEmpty() const override { return m_listValue.empty(); }
+
+	unsigned int Count() const { return (unsigned int)m_listValue.size(); }
+	const std::vector<ibValue>& Values() const { return m_listValue; }
+	ibValue Find(const ibValue& varValue) const;
+
+	virtual bool GetAt(const ibValue& varKeyValue, ibValue& pvarValue) override;
+	virtual bool SetAt(const ibValue& varKeyValue, const ibValue& varValue) override;
+	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray) override;
+	virtual std::shared_ptr<ibValueIteratorState> CreateIterator() override;
+
+private:
+	void CheckIndex(unsigned int index) const;
+	enum Func { enCount = 0, enGet, enFind, enUBound };
+	std::vector<ibValue> m_listValue;
+};
+
 #endif
