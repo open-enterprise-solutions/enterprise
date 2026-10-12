@@ -102,12 +102,10 @@ private:
 //   src == null -> DELETE: DROP every physical field of `dst`.
 //   both         -> UPDATE: a slot diff (ADD new / DROP removed / ALTER changed) + the reference pair's
 //                   per-target row cleanup. Metadata context comes from the batch's queryable.
-// Returns the first DML-cleanup error retCode, or 1 (DDL errors surface at Flush).
-// `report`, when set, gains one line per attribute whose stored values this diff clears:
-// "Catalog.Goods / Code: 1 234 stored values will be cleared". The number is the sum of one
-// COUNT per removed type, on the predicates the clear itself uses. A new or deleted column
-// does not clear rows in place, so it adds no such line.
-BACKEND_API int DiffColumnInto(ibStructureBatch& batch, const ibBackendQueryColumn* srcCol, const ibBackendQueryColumn* dstCol,
-	class ibRestructureInfo* report = nullptr, const wxString& objectName = wxString(), const wxString& attributeName = wxString());
+// Returns how many stored values the UPDATE empties: one COUNT per removed type, on the predicate
+// the clear itself runs, taken before the batch does. A new or deleted column clears nothing in
+// place and returns 0. Errors THROW (DDL ones at Flush). What the caller tells a person about the
+// number is the caller's — the ledger lines live beside "Change …" in AlterTable.
+BACKEND_API long long DiffColumnInto(ibStructureBatch& batch, const ibBackendQueryColumn* srcCol, const ibBackendQueryColumn* dstCol);
 
 #endif // !__STRUCTURE_BATCH_H__
