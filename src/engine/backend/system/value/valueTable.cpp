@@ -151,7 +151,7 @@ bool ibValueModelTable::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 bool ibValueModelTable::CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray)
 {
 	if (lMethodNum == enGroupBy) {
-		GroupBy(lSizeArray > 0 ? paParams[0]->GetString() : wxString(), lSizeArray > 1 ? paParams[1]->GetString() : wxString());
+		GroupBy(lSizeArray > 0 ? wxString(paParams[0]->GetString()) : wxString(), lSizeArray > 1 ? wxString(paParams[1]->GetString()) : wxString());
 		return true;
 	}
 	ibValue ignored;
