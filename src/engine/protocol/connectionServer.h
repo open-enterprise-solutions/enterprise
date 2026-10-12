@@ -16,7 +16,7 @@ namespace httplib { namespace ws { class WebSocketClient; } }
 // its answer the next answer on it. Asked for compressed, as the protocol offers it: an answer of some size comes as a
 // binary message, raw deflate. Between the answers the server may say something unasked — a notification, a message
 // with a method and no id — which goes to whoever listens. A dropped socket is not itself the end of a thin client's
-// session: the communicator opens this socket again and logs in by token (docs/public/session-failover.md).
+// session: the communicator opens this socket again and logs in by token (docs/public/client-protocol.md).
 class PROTOCOL_API ibProtocolConnectionServer : public ibProtocolConnection {
 public:
 

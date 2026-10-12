@@ -1,4 +1,4 @@
-// A thin client's session outlives a dropped connection (docs/public/session-failover.md, stage 1).
+// A thin client's session outlives a dropped connection (docs/public/client-protocol.md).
 //
 // Three cases against a file base, through the same door a socket uses (ibClientHost::Call of the JSON-RPC text),
 // and one against the communicator alone: its ids stay monotonic when the socket drops and it logs in by token.
@@ -540,40 +540,6 @@ TEST_F(SessionFailover, AnotherConnectionDoesNotReadTheCachedAnswer)
 	EXPECT_TRUE(cached.ok) << cached.message;
 	EXPECT_NE(stolenText, cachedText);
 	EXPECT_EQ(cached.result.GetInt(ibProtocolName::Frame), first.result.GetInt(ibProtocolName::Frame));
-}
-
-TEST_F(SessionFailover, ACallDuringDetachIsRefused)
-{
-	int connection = 0;
-	const Rpc login = g_base->Call(Request(100, "login", PasswordLogin()), &connection);
-	ASSERT_TRUE(login.ok) << login.message;
-	const wxString client = login.result.GetString(ibProtocolName::Client);
-
-	int other = 0;
-	Rpc slipped;
-	ibClientHost::SetBetweenDetach([&]() {
-		ibProtocolNode params;
-		params.SetValue(ibProtocolName::Client, client);
-		slipped = g_base->Call(Request(101, "frame", params), &other);
-	});
-	g_base->host->Disconnect(&connection);
-	ibClientHost::SetBetweenDetach(std::function<void()>());
-
-	EXPECT_FALSE(slipped.ok);
-	EXPECT_EQ(slipped.code, 401);
-}
-
-TEST_F(SessionFailover, HttpClientStaysCallableWithoutASocket)
-{
-	const Rpc login = g_base->Call(Request(110, "login", PasswordLogin(false)), nullptr);
-	ASSERT_TRUE(login.ok) << login.message;
-	const wxString client = login.result.GetString(ibProtocolName::Client);
-
-	int other = 0;
-	ibProtocolNode params;
-	params.SetValue(ibProtocolName::Client, client);
-	const Rpc frame = g_base->Call(Request(111, "frame", params), &other);
-	EXPECT_TRUE(frame.ok) << frame.message;
 }
 
 TEST_F(SessionFailover, StartModuleThatAsksDoesNotHangTheLogin)

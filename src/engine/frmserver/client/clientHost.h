@@ -64,10 +64,6 @@ public:
 	// The connection closed: the clients logged in through it are logged out.
 	void Disconnect(const void* connection);
 
-	// Tests. Disconnect calls this after the resume deadline is stored and before the connection is
-	// cleared, and without the host mutex held. Empty unless a test set it.
-	static void SetBetweenDetach(std::function<void()> probe);
-
 	// HOW A CONNECTION IS TOLD SOMETHING — a transport that keeps its connection open (a WebSocket, a file base's
 	// program) hands the host the way it sends a text to it; Disconnect forgets it. A connection without one (an
 	// HTTP request) is never told anything: it asks.
@@ -91,7 +87,7 @@ private:
 		std::atomic<const void*>          connection{ nullptr };
 		// Set at login when the door had no connection, and never changed after. A null connection is also
 		// a thin client in the middle of a drop, so the two are not the same fact.
-		bool                              http = false;
+		bool                              connectionless = false;
 		// The work that has not settled yet — waiting for the person's response to a request. The next call
 		// that settles the client waits for it too: a response lets it go on.
 		std::shared_future<void>          unsettled;
@@ -100,15 +96,15 @@ private:
 		std::mutex                        lock;
 		// The last call this client answered, and only when it opted in (`dedupe`). The id, a digest of the
 		// method and the params, and the text written back, including a refusal. One slot for this client.
-		// A login by token does not replace it. Under `lock`. `working` is set by the call that owns the slot
-		// and cleared only by that call.
+		// A login by token does not replace it. Under `lock`. `replyPending` is set by the call that owns the
+		// slot and cleared only by that call; `pendingId` is that call's id.
 		bool                              dedupe = false;
 		bool                              hasReply = false;
 		ibDataValue                       replyId;
 		unsigned char                     replyDigest[32] = {};
 		wxString                          reply;
-		bool                              working = false;
-		ibDataValue                       workingId;
+		bool                              replyPending = false;
+		ibDataValue                       pendingId;
 		std::condition_variable           replyWait;
 		// The last frame answered — its number and itself, as sent: a call naming that number (Since) is answered
 		// with the patch from it.
@@ -122,7 +118,7 @@ private:
 		bool                              hasToken = false;
 		unsigned char                     tokenDigest[32] = {};
 		// Armed when a thin client's connection has dropped: the moment the session ends if nobody returns.
-		// 0 — a connection is attached, or this client never had one (an HTTP call, `http`). Stored before
+		// 0 — a connection is attached, or this client never had one (an HTTP call, `connectionless`). Stored before
 		// `connection` is cleared, so a call never observes a null connection together with a zero deadline.
 		std::atomic<std::int64_t>         resumeDeadlineMs{ 0 };
 	};

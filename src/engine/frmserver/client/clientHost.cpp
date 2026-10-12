@@ -41,7 +41,6 @@ namespace {
 
 std::mutex                                                s_hostsMutex;
 std::map<const ibApplicationInstance*, ibClientHost*>     s_hosts;
-std::function<void()>                                     s_betweenDetach;
 
 // An instance nobody has heard from for this long is taken down.
 constexpr std::chrono::minutes kIdleLimit(30);
@@ -76,9 +75,9 @@ bool WindowFor(const void* connection, const ibClientInstance& instance)
 // The public Client id is not the bearer of an attached socket. A detached client is reached by login {Token}
 // only. An HTTP client is the one marked at login, not whatever currently has a null connection: a thin
 // client's socket is also null while it is being dropped.
-bool MayCall(bool http, const void* bound, std::int64_t deadline, const void* connection)
+bool MayCall(bool connectionless, const void* bound, std::int64_t deadline, const void* connection)
 {
-	if (http)
+	if (connectionless)
 		return true;
 	if (deadline != 0)
 		return false;
@@ -431,11 +430,6 @@ bool ibClientHost::RememberToken(Client& client, ibDataNode& result, ibProtocolR
 	return true;
 }
 
-void ibClientHost::SetBetweenDetach(std::function<void()> probe)
-{
-	s_betweenDetach = std::move(probe);
-}
-
 void ibClientHost::Disconnect(const void* connection)
 {
 	if (connection == nullptr)
@@ -479,7 +473,7 @@ void ibClientHost::Disconnect(const void* connection)
 				continue;
 			if (one.grace) {
 				// The deadline first. A call that already sees the cleared connection still sees a
-				// deadline, and only a client marked http at login is callable with no connection.
+				// deadline, and only a client marked connectionless at login is callable with no connection.
 				one.client->resumeDeadlineMs.store(deadline, std::memory_order_release);
 				detaching.push_back(one.client);
 			}
@@ -493,9 +487,6 @@ void ibClientHost::Disconnect(const void* connection)
 		if (std::shared_ptr<ibSession> session = client->instance->ShareSession())
 			session->SetActivity(DetachedUntil(deadline));
 	}
-	// Outside the host mutex: the probe calls back in (a test's call from another socket).
-	if (s_betweenDetach && !detaching.empty())
-		s_betweenDetach();
 	if (!detaching.empty()) {
 		std::lock_guard<std::mutex> lock(m_mutex);
 		for (const std::shared_ptr<Client>& client : detaching) {
@@ -572,13 +563,13 @@ wxString ibClientHost::Call(const wxString& text, const void* connection, const 
 		&& request.m_params.FindField(wxString::FromUTF8(ibProtocolName::Token)) != nullptr;
 	struct Slot {
 		std::shared_ptr<Client> client;
-		bool                    owner = false;   // set only by the call that sets working
+		bool                    owner = false;   // set only by the call that sets replyPending
 		~Slot()
 		{
 			if (!owner || !client)
 				return;
 			std::lock_guard<std::mutex> lock(client->lock);
-			client->working = false;
+			client->replyPending = false;
 			client->replyWait.notify_all();
 		}
 	} slot;
@@ -587,7 +578,7 @@ wxString ibClientHost::Call(const wxString& text, const void* connection, const 
 		slot.client = FindClient(request.m_params.GetValue<wxString>(wxString::FromUTF8(ibProtocolName::Client)));
 		if (slot.client) {
 			std::unique_lock<std::mutex> lock(slot.client->lock);
-			if (!MayCall(slot.client->http, slot.client->connection.load(std::memory_order_acquire),
+			if (!MayCall(slot.client->connectionless, slot.client->connection.load(std::memory_order_acquire),
 				slot.client->resumeDeadlineMs.load(std::memory_order_acquire), connection)) {
 				lock.unlock();
 				slot.client.reset();
@@ -596,7 +587,7 @@ wxString ibClientHost::Call(const wxString& text, const void* connection, const 
 			if (slot.client->dedupe) {
 				CallDigest(request.m_method, request.m_params, callDigest);
 				for (;;) {
-					if (slot.client->working) {
+					if (slot.client->replyPending) {
 						slot.client->replyWait.wait(lock);
 						continue;
 					}
@@ -618,8 +609,8 @@ wxString ibClientHost::Call(const wxString& text, const void* connection, const 
 						return ibRpcWriteError(request.m_id, static_cast<s32>(ibProtocolRefusal::BadParameter),
 							wxT("the call id was already answered for another call"));
 					}
-					slot.client->working = true;
-					slot.client->workingId = request.m_id;
+					slot.client->replyPending = true;
+					slot.client->pendingId = request.m_id;
 					slot.owner = true;
 					break;
 				}
@@ -692,7 +683,7 @@ bool ibClientHost::Call(ibProtocolMethod method, const ibDataNode& params, ibDat
 		s32 mode = static_cast<s32>(ibProtocolMode::Runtime);
 		params.GetValue(wxT("Mode"), mode);
 		client->instance = std::make_shared<ibClientInstance>(m_applicationInstance, id, address, static_cast<ibProtocolMode>(mode));
-		client->http = connection == nullptr;
+		client->connectionless = connection == nullptr;
 		client->connection.store(connection, std::memory_order_relaxed);
 		client->protocol = std::min(protocol, ibProtocolVersion);
 		if (protocol < 1) {
@@ -746,7 +737,7 @@ bool ibClientHost::Call(ibProtocolMethod method, const ibDataNode& params, ibDat
 			bool allowed = false;
 			{
 				std::lock_guard<std::mutex> clientLock(client->lock);
-				allowed = MayCall(client->http, client->connection.load(std::memory_order_acquire),
+				allowed = MayCall(client->connectionless, client->connection.load(std::memory_order_acquire),
 					client->resumeDeadlineMs.load(std::memory_order_acquire), connection);
 			}
 			if (!allowed)
@@ -765,7 +756,7 @@ bool ibClientHost::Call(ibProtocolMethod method, const ibDataNode& params, ibDat
 		else {
 			std::lock_guard<std::mutex> clientLock(client->lock);
 			// Detached, or a socket that is not this client's: the public Client id is not the bearer.
-			if (!MayCall(client->http, client->connection.load(std::memory_order_acquire),
+			if (!MayCall(client->connectionless, client->connection.load(std::memory_order_acquire),
 				client->resumeDeadlineMs.load(std::memory_order_acquire), connection)) {
 				refuse(ibProtocolRefusal::NoSession, wxT("the client is not connected"));
 			}

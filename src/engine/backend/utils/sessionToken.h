@@ -1,7 +1,7 @@
 #ifndef __SESSION_TOKEN_H__
 #define __SESSION_TOKEN_H__
 
-// THE BEARER TOKEN of a thin client's session (docs/public/session-failover.md). The database and the
+// THE BEARER TOKEN of a thin client's session (docs/public/client-protocol.md). The database and the
 // process keep the SHA-256 of it, never the token, and a presented token is compared as that digest,
 // in constant time. The bytes come from Mbed TLS's CTR-DRBG — at least 128 bits; this draws 32 bytes.
 
