@@ -193,7 +193,7 @@ void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibVal
 	helper.AppendFunc(wxT("FileCopy"), 2, wxT("FileCopy(fileSrcName : string, fileDstName : string)"));
 	helper.AppendFunc(wxT("FileDelete"), 1, wxT("FileDelete(fileName : string)"));
 	helper.AppendFunc(wxT("GetTempDir"), wxT("GetTempDir()"));
-	helper.AppendFunc(wxT("GetTempFileName"), wxT("GetTempFileName()"));
+	helper.AppendFunc(wxT("GetTempFileName"), 1, wxT("GetTempFileName(extension)"));
 	//--- JSON: the reference system's spelling of JSONReader.ReadValue() / JSONWriter.WriteValue(value).
 	// Order MUST match enReadJSON..enWriteJSON above.
 	helper.AppendFunc(wxT("ReadJSON"), 1, wxT("ReadJSON(reader : JSONReader)"));
@@ -347,7 +347,10 @@ bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 		case enFileCopy: pvarRetValue = CopyFile(paParams[0]->GetString(), paParams[1]->GetString()); return true;
 		case enFileDelete: pvarRetValue = DeleteFile(paParams[0]->GetString()); return true;
 		case enGetTempDir: pvarRetValue = GetTempDir(); return true;
-		case enGetTempFileName: pvarRetValue = GetTempFileName(); return true;
+		case enGetTempFileName:
+			pvarRetValue = GetTempFileName(lSizeArray > 0 && paParams[0] != nullptr
+				? wxString(paParams[0]->GetString()) : wxString());
+			return true;
 			//--- JSON:
 		case enReadJSON: {
 			ibValueJsonReader* const reader = lSizeArray > 0 ? dynamic_cast<ibValueJsonReader*>(paParams[0]->GetRef()) : nullptr;

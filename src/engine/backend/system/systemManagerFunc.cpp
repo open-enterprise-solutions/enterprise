@@ -425,11 +425,18 @@ wxString ibValueSystemFunction::GetTempDir()
 	return wxFileName::GetTempDir();
 }
 
-wxString ibValueSystemFunction::GetTempFileName()
+wxString ibValueSystemFunction::GetTempFileName(const wxString& extension)
 {
-	return wxFileName::CreateTempFileName(
-		wxEmptyString
-	);
+	const wxString path = wxFileName::CreateTempFileName(wxEmptyString);
+	if (extension.IsEmpty())
+		return path;
+	wxString ext = extension;
+	if (!ext.StartsWith(wxT(".")))
+		ext.Prepend(wxT("."));
+	const wxString renamed = path + ext;
+	if (!wxRenameFile(path, renamed, false))
+		return path;
+	return renamed;
 }
 
 //--- Window operations:

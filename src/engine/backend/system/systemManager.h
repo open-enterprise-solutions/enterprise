@@ -97,7 +97,7 @@ public:
 	static bool CopyFile(const wxString& src, const wxString& dst);
 	static bool DeleteFile(const wxString& file);
 	static wxString GetTempDir();
-	static wxString GetTempFileName();
+	static wxString GetTempFileName(const wxString& extension = wxEmptyString);
 
 	//--- Window operations:
 	static class ibBackendValueForm* ActiveWindow();
