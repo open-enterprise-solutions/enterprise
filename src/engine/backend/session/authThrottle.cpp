@@ -59,14 +59,16 @@ struct ibAuthThrottle::State {
 	std::map<wxString, Account> m_accounts;
 	std::map<wxString, Bucket>  m_sources;
 	int                         m_inFlight = 0;
+
+	static void Refill(Bucket& bucket, Clock::time_point now);
+	// Under the lock. Refills the source. 0 means an attempt may start.
+	int RefusalSeconds(const wxString& account, const wxString& source, Clock::time_point now);
 };
 
-namespace {
-
-void Refill(ibAuthThrottle::State::Bucket& bucket, ibAuthThrottle::Clock::time_point now)
+void ibAuthThrottle::State::Refill(Bucket& bucket, Clock::time_point now)
 {
 	if (!bucket.m_seen) {
-		bucket.m_tokens  = ibAuthThrottle::kSourceBurst;
+		bucket.m_tokens  = kSourceBurst;
 		bucket.m_updated = now;
 		bucket.m_seen    = true;
 		return;
@@ -74,34 +76,29 @@ void Refill(ibAuthThrottle::State::Bucket& bucket, ibAuthThrottle::Clock::time_p
 	const double elapsed = std::chrono::duration<double>(now - bucket.m_updated).count();
 	if (elapsed <= 0)
 		return;
-	const double filled = bucket.m_tokens + elapsed * ibAuthThrottle::kSourceRefillPerSec;
-	bucket.m_tokens  = std::min(static_cast<double>(ibAuthThrottle::kSourceBurst), filled);
+	const double filled = bucket.m_tokens + elapsed * kSourceRefillPerSec;
+	bucket.m_tokens  = std::min(static_cast<double>(kSourceBurst), filled);
 	bucket.m_updated = now;
 }
 
-// Under the lock. Refills the source. 0 means an attempt may start.
-int RefusalSeconds(ibAuthThrottle::State& state,
-                   const wxString& account, const wxString& source,
-                   ibAuthThrottle::Clock::time_point now)
+int ibAuthThrottle::State::RefusalSeconds(const wxString& account, const wxString& source, Clock::time_point now)
 {
 	int wait = 0;
-	const auto found = state.m_accounts.find(account);
-	if (found != state.m_accounts.end() && found->second.m_next > now)
+	const auto found = m_accounts.find(account);
+	if (found != m_accounts.end() && found->second.m_next > now)
 		wait = CeilSeconds(found->second.m_next - now);
 
-	ibAuthThrottle::State::Bucket& bucket = state.m_sources[source];
+	Bucket& bucket = m_sources[source];
 	Refill(bucket, now);
 	if (bucket.m_tokens < 1.0) {
-		const double need = (1.0 - bucket.m_tokens) / ibAuthThrottle::kSourceRefillPerSec;
+		const double need = (1.0 - bucket.m_tokens) / kSourceRefillPerSec;
 		const int bucketWait = static_cast<int>(std::ceil(need));
 		wait = std::max(wait, bucketWait > 0 ? bucketWait : 1);
 	}
-	if (state.m_inFlight >= ibAuthThrottle::kMaxInFlightVerifies)
+	if (m_inFlight >= kMaxInFlightVerifies)
 		wait = std::max(wait, 1);
 	return wait;
 }
-
-} // namespace
 
 ibAuthThrottle::ibAuthThrottle()
 	: m_state(std::make_unique<State>())
@@ -143,7 +140,7 @@ ibAuthThrottle::Decision ibAuthThrottle::Begin(const wxString& user, const wxStr
 	const wxString account = AccountKey(user);
 	const wxString from    = SourceKey(source);
 	std::lock_guard<std::mutex> lock(m_state->m_mutex);
-	const int wait = RefusalSeconds(*m_state, account, from, now);
+	const int wait = m_state->RefusalSeconds(account, from, now);
 	Decision decision;
 	if (wait > 0) {
 		decision.m_allowed = false;
@@ -183,7 +180,7 @@ void ibAuthThrottle::Finish(const wxString& user, const wxString& source, bool s
 	row.m_next = now + std::chrono::seconds(DelayAfterFailures(row.m_failures));
 
 	State::Bucket& bucket = m_state->m_sources[from];
-	Refill(bucket, now);
+	State::Refill(bucket, now);
 	if (bucket.m_tokens >= 1.0)
 		bucket.m_tokens -= 1.0;
 	else
@@ -207,7 +204,7 @@ int ibAuthThrottle::SecondsUntil(const wxString& user, const wxString& source, C
 	const wxString account = AccountKey(user);
 	const wxString from    = SourceKey(source);
 	std::lock_guard<std::mutex> lock(m_state->m_mutex);
-	return RefusalSeconds(*m_state, account, from, now);
+	return m_state->RefusalSeconds(account, from, now);
 }
 
 ibAuthSourceScope::ibAuthSourceScope(const wxString& source)
