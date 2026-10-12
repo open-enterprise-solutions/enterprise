@@ -493,4 +493,124 @@ void ibValueMetaObjectChartOfAccounts::OnRemoveMetaForm(ibValueMetaObjectFormBas
 	else if (metaForm->GetTypeForm() == eFormFolderSelect && m_propertyDefFormFolderSelect->GetValueAsInteger() == metaForm->GetMetaID()) m_propertyDefFormFolderSelect->SetValue(wxNOT_FOUND);
 }
 
+ibValueMetaObjectAccountingKind* ibValueMetaObjectChartOfAccounts::FindAccountingKindNamed(const wxString& name) const
+{
+	for (ibValueMetaObjectAccountingKind* kind : GetAccountingKindArrayObject())
+		if (kind != nullptr && !kind->IsDeleted() && kind->GetName().IsSameAs(name))
+			return kind;
+	return nullptr;
+}
+
+ibValueMetaObjectAccountDimensionAccountingKind* ibValueMetaObjectChartOfAccounts::FindDimensionKindNamed(const wxString& name) const
+{
+	for (ibValueMetaObjectAccountDimensionAccountingKind* kind : GetAccountDimensionAccountingKindArrayObject())
+		if (kind != nullptr && !kind->IsDeleted() && kind->GetName().IsSameAs(name))
+			return kind;
+	return nullptr;
+}
+
+ibValueMetaObjectRecordDataHierarchyMutableRef* ibValueMetaObjectChartOfAccounts::BoundCharacteristicChart() const
+{
+	if (m_metaData == nullptr || GetChartOfCharacteristicTypes() == nullptr)
+		return nullptr;
+	const ibMetaDescription& binding = GetChartOfCharacteristicTypes()->GetValueAsMetaDesc();
+	if (binding.GetTypeCount() == 0)
+		return nullptr;
+	return dynamic_cast<ibValueMetaObjectRecordDataHierarchyMutableRef*>(
+		m_metaData->FindAnyObjectByFilter(binding.GetByIdx(0)));
+}
+
+wxString ibValueMetaObjectChartOfAccounts::SetPredefinedAccountingFlags(const wxString& item, const wxString& spelling)
+{
+	wxObjectDataPtr<ibPredefinedValueObject> found = FindPredefinedValue(item);
+	if (found == nullptr)
+		return wxString::Format(_("'%s' has no predefined item named '%s'"), GetName(), item);
+
+	std::vector<ibPredefinedNamedFlag> flags;
+	for (wxString part : wxSplit(spelling, wxT(','))) {
+		part.Trim(true).Trim(false);
+		if (part.IsEmpty())
+			continue;
+		const int eq = part.Find(wxT('='));
+		wxString name = eq == wxNOT_FOUND ? wxString() : part.Left(eq);
+		wxString word = eq == wxNOT_FOUND ? wxString() : part.Mid(eq + 1);
+		name.Trim(true).Trim(false);
+		word.Trim(true).Trim(false);
+		if (name.IsEmpty() || !(word.IsSameAs(wxT("true"), false) || word.IsSameAs(wxT("false"), false)))
+			return wxString::Format(_("'%s' is not an accounting flag. Say Name=true or Name=false"), part);
+		if (FindAccountingKindNamed(name) == nullptr)
+			return wxString::Format(_("'%s' is not an accounting flag of '%s'"), name, GetName());
+		ibPredefinedNamedFlag flag;
+		flag.m_name = name;
+		flag.m_on = word.IsSameAs(wxT("true"), false);
+		flags.push_back(flag);
+	}
+	found->SetAccountingFlags(std::move(flags));
+	if (m_metaData != nullptr)
+		m_metaData->Modify(true);
+	return wxString();
+}
+
+wxString ibValueMetaObjectChartOfAccounts::SetPredefinedDimensions(const wxString& item, const wxString& spelling)
+{
+	wxObjectDataPtr<ibPredefinedValueObject> found = FindPredefinedValue(item);
+	if (found == nullptr)
+		return wxString::Format(_("'%s' has no predefined item named '%s'"), GetName(), item);
+
+	ibValueMetaObjectRecordDataHierarchyMutableRef* chart = BoundCharacteristicChart();
+	std::vector<ibPredefinedDimensionRow> rows;
+	for (wxString rowText : wxSplit(spelling, wxT(';'))) {
+		rowText.Trim(true).Trim(false);
+		if (rowText.IsEmpty())
+			continue;
+		ibPredefinedDimensionRow row;
+		row.m_id = wxNewUniqueGuid;
+		bool kindSeen = false;
+		for (wxString part : wxSplit(rowText, wxT(','))) {
+			part.Trim(true).Trim(false);
+			if (part.IsEmpty())
+				continue;
+			if (!kindSeen) {
+				if (chart == nullptr)
+					return wxString::Format(_("Account dimensions of '%s' need a chart of characteristic types"), GetName());
+				if (chart->FindPredefinedValue(part) == nullptr)
+					return wxString::Format(_("'%s' has no predefined item named '%s' to use as a dimension"), chart->GetName(), part);
+				row.m_kind = part;
+				kindSeen = true;
+				continue;
+			}
+			if (part.IsSameAs(wxT("summary"), false)) {
+				row.m_summaryOnly = true;
+				continue;
+			}
+			const int eq = part.Find(wxT('='));
+			wxString name = eq == wxNOT_FOUND ? wxString() : part.Left(eq);
+			wxString word = eq == wxNOT_FOUND ? wxString() : part.Mid(eq + 1);
+			name.Trim(true).Trim(false);
+			word.Trim(true).Trim(false);
+			if (name.IsEmpty() || !(word.IsSameAs(wxT("true"), false) || word.IsSameAs(wxT("false"), false)))
+				return wxString::Format(_("'%s' is not a dimension flag. Say summary, or Name=true"), part);
+			if (FindDimensionKindNamed(name) == nullptr)
+				return wxString::Format(_("'%s' is not a dimension flag of '%s'"), name, GetName());
+			ibPredefinedNamedFlag flag;
+			flag.m_name = name;
+			flag.m_on = word.IsSameAs(wxT("true"), false);
+			row.m_flags.push_back(flag);
+		}
+		if (!kindSeen)
+			continue;
+		for (const ibPredefinedDimensionRow& earlier : rows)
+			if (earlier.m_kind.IsSameAs(row.m_kind))
+				return wxString::Format(_("Account \"%s\": the analytics kind \"%s\" is declared more than once"), item, row.m_kind);
+		rows.push_back(std::move(row));
+	}
+	if (rows.size() > GetMaxAccountDimensionCount())
+		return wxString::Format(_("Account \"%s\" declares %i analytics, but the chart of accounts allows %i"),
+			item, (int)rows.size(), (int)GetMaxAccountDimensionCount());
+	found->SetDimensions(std::move(rows));
+	if (m_metaData != nullptr)
+		m_metaData->Modify(true);
+	return wxString();
+}
+
 METADATA_TYPE_REGISTER(ibValueMetaObjectChartOfAccounts, "ChartOfAccounts", g_metaChartOfAccountsCLSID);

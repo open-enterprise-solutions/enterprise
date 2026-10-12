@@ -77,4 +77,52 @@ void ibValueMetaObjectChartOfAccounts::ContributeTables(ibSchemaSnapshot& out) c
 					chartName, overfull, (int)ceiling));
 			return false;
 		};
+
+	ibValueMetaObjectRecordDataHierarchyMutableRef* chart = BoundCharacteristicChart();
+	ibSchemaTable& sectionRows = out.Shared(kindsTable->GetMetaID(), tableName);
+	for (const auto& account : GetPredefinedValueArray()) {
+		if (account == nullptr)
+			continue;
+		int line = 1;
+		for (const ibPredefinedDimensionRow& dimension : account->GetDimensions()) {
+			ibSchemaSeedRow& seed = sectionRows.AddRow(dimension.m_id,
+				account->GetPredefinedName() + wxT(".") + dimension.m_kind).OwnedBy(account->GetPredefinedGuid());
+			if (kindsTable->GetNumberLine() != nullptr)
+				seed.Set(kindsTable->GetNumberLine()->GetQueryColumn(), ibValue(line));
+			if (kindsTable->GetSummaryOnly() != nullptr)
+				seed.Set(kindsTable->GetSummaryOnly()->GetQueryColumn(), ibValue(dimension.m_summaryOnly));
+			if (chart != nullptr && kindsTable->GetAccountDimensionKind() != nullptr) {
+				const wxObjectDataPtr<ibPredefinedValueObject> kind = chart->FindPredefinedValue(dimension.m_kind);
+				if (kind != nullptr)
+					seed.Set(kindsTable->GetAccountDimensionKind()->GetQueryColumn(),
+						ibValuePtr<ibValueReferenceDataObject>(ibValueReferenceDataObject::Create(
+							chart, kind->GetPredefinedGuid(), ibReferenceLoad::OnDemand)));
+			}
+			for (const ibPredefinedNamedFlag& flag : dimension.m_flags)
+				if (ibValueMetaObjectAccountDimensionAccountingKind* marked = FindDimensionKindNamed(flag.m_name))
+					seed.Set(marked->GetQueryColumn(), ibValue(flag.m_on));
+			++line;
+		}
+	}
+}
+
+void ibValueMetaObjectChartOfAccounts::StampPredefinedSeed(
+	ibSchemaSeedRow& row, const ibPredefinedValueObject& item) const
+{
+	for (const ibPredefinedNamedFlag& flag : item.GetAccountingFlags()) {
+		if (ibValueMetaObjectAccountingKind* kind = FindAccountingKindNamed(flag.m_name))
+			row.Set(kind->GetQueryColumn(), ibValue(flag.m_on));
+	}
+	ibValueMetaObjectRecordDataHierarchyMutableRef* chart = BoundCharacteristicChart();
+	unsigned int idx = 0;
+	for (const ibPredefinedDimensionRow& dimension : item.GetDimensions()) {
+		ibValueMetaObjectAttributePredefined* column = GetAccountDimensionKindColumn(idx++);
+		if (column == nullptr || chart == nullptr)
+			continue;
+		const wxObjectDataPtr<ibPredefinedValueObject> kind = chart->FindPredefinedValue(dimension.m_kind);
+		if (kind != nullptr)
+			row.Set(column->GetQueryColumn(),
+				ibValuePtr<ibValueReferenceDataObject>(ibValueReferenceDataObject::Create(
+					chart, kind->GetPredefinedGuid(), ibReferenceLoad::OnDemand)));
+	}
 }

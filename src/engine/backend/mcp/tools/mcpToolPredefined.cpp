@@ -89,6 +89,24 @@ const ibArg& ArgDelete()
 	return s_a;
 }
 
+const ibArg& ArgFlags()
+{
+	static const ibArg s_a(wxT("flags"), ibArg::Kind::Text,
+		ibMcpText("Accounting flags of a predefined account, as Name=true,Other=false. Each name is a flag the "
+		          "chart declares. The declaration owns the cells; set as data they are blanked by the next apply."));
+	return s_a;
+}
+
+const ibArg& ArgDimensions()
+{
+	static const ibArg s_a(wxT("dimensions"), ibArg::Kind::Text,
+		ibMcpText("External dimensions of a predefined account, one row per slot separated by ';'. "
+		          "Each row names a predefined item of the bound chart of characteristic types, then summary "
+		          "when balances are not broken down by it, then Flag=true for a dimension flag. "
+		          "Example: Goods,summary,Turnover=true;Contract. The declaration owns the rows."));
+	return s_a;
+}
+
 typedef ibValueMetaObjectRecordDataHierarchyMutableRef ibPredefinedOwner;
 typedef ibPredefinedOwner::ibPredefinedValueObject     ibPredefinedItem;
 
@@ -142,6 +160,10 @@ ibDataValue ItemEntry(const ibPredefinedItem* item)
 	const wxString parent = item->GetPredefinedParentName();
 	if (!parent.IsEmpty())
 		node->SetValue(wxT("parent"), parent);
+	if (!item->AccountingFlagsText().IsEmpty())
+		node->SetValue(wxT("flags"), item->AccountingFlagsText());
+	if (!item->DimensionsText().IsEmpty())
+		node->SetValue(wxT("dimensions"), item->DimensionsText());
 
 	return ibDataValue::Child(node);
 }
@@ -222,13 +244,15 @@ public:
 	{
 		return ibMcpText("Declare a predefined item on a catalog or a chart - exactly as adding one in "
 			"the designer would. The name is what code will refer to it by and must be unique "
-			"within the object; the description is what a person sees. To remove one, pass "
-			"delete:true with its name.");
+			"within the object; the description is what a person sees. A chart of accounts also takes "
+			"its accounting flags and its external dimensions. To remove one, pass delete:true with its name.");
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
-		static const std::vector<ibMcpArgument> s_arguments = { ArgObject(), ArgName(), ArgDescription(), ArgCode(), ArgFolder(), ArgParent(), ArgDelete() };
+		static const std::vector<ibMcpArgument> s_arguments = {
+			ArgObject(), ArgName(), ArgDescription(), ArgCode(), ArgFolder(), ArgParent(),
+			ArgFlags(), ArgDimensions(), ArgDelete() };
 		return s_arguments;
 	}
 
@@ -305,6 +329,18 @@ public:
 			description.IsEmpty() ? name : description,
 			ArgFolder().Flag(params),
 			parent);
+
+		wxString shape;
+		if (ArgFlags().Given(params) && !ArgFlags().Text(params).IsEmpty())
+			shape = owner->SetPredefinedAccountingFlags(name, ArgFlags().Text(params));
+		if (shape.IsEmpty() && ArgDimensions().Given(params) && !ArgDimensions().Text(params).IsEmpty())
+			shape = owner->SetPredefinedDimensions(name, ArgDimensions().Text(params));
+		if (!shape.IsEmpty()) {
+			if (const auto added = owner->FindPredefinedValue(name))
+				owner->DeletePredefinedValue(added->GetPredefinedGuid());
+			refusal = shape;
+			return false;
+		}
 
 		// WHAT HAPPENED, in the caller's own words. Reporting the name back rather
 		// than a bare success means a caller never has to guess whether the item it

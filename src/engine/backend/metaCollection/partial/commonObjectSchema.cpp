@@ -257,7 +257,7 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::ContributeTables(ibSchemaSn
 	for (const auto& object : m_predefinedObjectVector) {
 		const wxObjectDataPtr<ibPredefinedValueObject>& parent = object->GetPredefinedParent();
 
-		t.AddRow(object->GetPredefinedGuid(), object->GetPredefinedName())
+		ibSchemaSeedRow& row = t.AddRow(object->GetPredefinedGuid(), object->GetPredefinedName())
 			.Set(GetDataReference()->GetQueryColumn(),
 				ibValuePtr<ibValueReferenceDataObject>(
 					ibValueReferenceDataObject::Create(this, object->GetPredefinedGuid(), ibReferenceLoad::OnDemand)))
@@ -270,5 +270,6 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::ContributeTables(ibSchemaSn
 				ibValuePtr<ibValueReferenceDataObject>(
 					ibValueReferenceDataObject::Create(this, parent != nullptr ? parent->GetPredefinedGuid() : wxNullGuid,
 						ibReferenceLoad::OnDemand)));
+		StampPredefinedSeed(row, *object);
 	}
 }

@@ -1302,6 +1302,21 @@ class BACKEND_API ibValueMetaObjectRecordDataHierarchyMutableRef :
 	public ibValueMetaObjectRecordDataMutableRef {
 	public:
 
+	// A chart of accounts answers each accounting flag by name. The declaration owns the cell:
+	// a later edit of the row is blanked by the next apply.
+	struct ibPredefinedNamedFlag {
+		wxString m_name;
+		bool m_on = false;
+	};
+	// One analytics slot of a predefined account. m_kind is a predefined item of the bound
+	// chart of characteristic types. summary keeps turnovers and folds the balance.
+	struct ibPredefinedDimensionRow {
+		ibGuid m_id;
+		wxString m_kind;
+		bool m_summaryOnly = false;
+		std::vector<ibPredefinedNamedFlag> m_flags;
+	};
+
 	class ibPredefinedValueObject : public ibDataViewObject {
 	public:
 
@@ -1351,6 +1366,31 @@ class BACKEND_API ibValueMetaObjectRecordDataHierarchyMutableRef :
 		bool IsPredefinedFolder() const { return m_valueIsFolder; }
 		wxObjectDataPtr<ibPredefinedValueObject> GetPredefinedParent() const { return m_valueParent; }
 
+		const std::vector<ibPredefinedNamedFlag>& GetAccountingFlags() const { return m_accountingFlags; }
+		const std::vector<ibPredefinedDimensionRow>& GetDimensions() const { return m_dimensions; }
+		void SetAccountingFlags(std::vector<ibPredefinedNamedFlag> flags) { m_accountingFlags = std::move(flags); }
+		void SetDimensions(std::vector<ibPredefinedDimensionRow> rows) { m_dimensions = std::move(rows); }
+
+		wxString AccountingFlagsText() const {
+			wxString out;
+			for (const ibPredefinedNamedFlag& flag : m_accountingFlags) {
+				if (!out.IsEmpty()) out += wxT(",");
+				out += flag.m_name + (flag.m_on ? wxT("=true") : wxT("=false"));
+			}
+			return out;
+		}
+		wxString DimensionsText() const {
+			wxString out;
+			for (const ibPredefinedDimensionRow& row : m_dimensions) {
+				if (!out.IsEmpty()) out += wxT(";");
+				out += row.m_kind;
+				if (row.m_summaryOnly) out += wxT(",summary");
+				for (const ibPredefinedNamedFlag& flag : row.m_flags)
+					out += wxT(",") + flag.m_name + (flag.m_on ? wxT("=true") : wxT("=false"));
+			}
+			return out;
+		}
+
 		friend class ibValueMetaObjectRecordDataHierarchyMutableRef;
 
 	private:
@@ -1364,6 +1404,9 @@ class BACKEND_API ibValueMetaObjectRecordDataHierarchyMutableRef :
 		bool m_valueIsFolder;
 
 		wxObjectDataPtr<ibPredefinedValueObject> m_valueParent;
+
+		std::vector<ibPredefinedNamedFlag> m_accountingFlags;
+		std::vector<ibPredefinedDimensionRow> m_dimensions;
 	};
 
 	ibValueMetaObjectAttributePredefined* GetDataPredefinedName() const { return m_propertyAttributePredefined->GetMetaObject(); }
@@ -1556,6 +1599,17 @@ class BACKEND_API ibValueMetaObjectRecordDataHierarchyMutableRef :
 
 	void DeletePredefinedValue(const ibGuid& predefinedGuid);
 
+	// Empty is accepted. A refusal names the word, or the object when this kind has no such cell.
+	// A catalog has neither; only a chart of accounts answers them.
+	virtual wxString SetPredefinedAccountingFlags(const wxString&, const wxString&) {
+		return wxString::Format(
+			_("Accounting flags belong on a chart of accounts, and '%s' is not one"), GetName());
+	}
+	virtual wxString SetPredefinedDimensions(const wxString&, const wxString&) {
+		return wxString::Format(
+			_("Account dimensions belong on a chart of accounts, and '%s' is not one"), GetName());
+	}
+
 	//find predefined value
 	wxObjectDataPtr<ibPredefinedValueObject> FindPredefinedValue(const ibGuid& predefinedGuid) const {
 
@@ -1585,6 +1639,10 @@ class BACKEND_API ibValueMetaObjectRecordDataHierarchyMutableRef :
 protected:
 
 	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue) override;
+
+	// Cells this kind owns beyond name, code, description, folder and parent. The base row does not
+	// know them; the kind stamps them so the apply writes the declaration.
+	virtual void StampPredefinedSeed(struct ibSchemaSeedRow&, const ibPredefinedValueObject&) const {}
 
 	// Declare the main table (via the base) + the predefined values as its SEED rows (cells keyed by
 	// column id; the builder diffs by uuid + cells).
