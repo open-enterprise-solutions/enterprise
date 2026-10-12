@@ -38,9 +38,13 @@ namespace ibProtocolName {
 	// The login, and what every call names.
 	inline constexpr const char* User     = "User";
 	inline constexpr const char* Password = "Password";
+	inline constexpr const char* Token    = "Token";   // login's bearer, once, in the password login's answer. The
+	                                                   // database keeps its hash (docs/public/client-protocol.md)
 	inline constexpr const char* Mode     = "Mode";
 	inline constexpr const char* Protocol = "Protocol";
 	inline constexpr const char* Features = "Features";
+	inline constexpr const char* FeatureResume = "resume";   // the same-process window only. A client names it in
+	                                                          // login's Features to opt into the idempotency slot.
 	inline constexpr const char* Client   = "Client";
 	inline constexpr const char* Since    = "Since";
 
@@ -280,9 +284,13 @@ constexpr int ibProtocolVersion = 2;
 // method takes a new one. Every answer but logout's, fetch's, a schema's own and a file's is the client's frame.
 enum class ibProtocolMethod {
 	Unknown,        // a name the protocol does not have
-	Login,          // {User, Password[, Mode][, Protocol]} → Client, Protocol, Features, and the frame (Mode: ibProtocolMode,
-	                // Runtime when absent; Protocol: the newest version the client speaks, 1 when absent — answered with the
-	                // one both speak, and the features the server offers at it)
+	Login,          // {User, Password[, Mode][, Protocol][, Features]} → Client, Protocol, Features, and the frame.
+	                // A thin runtime whose window is on also gets Token, once. Features on the request names what the
+	                // client accepts; `resume` there opts into the idempotency slot. {Token[, Protocol]} and no User,
+	                // only while that client is detached, → the previous Client, Protocol, Features, and no frame
+	                // (the next frame {Since} is the patch). A token login does not return Token again. Mode:
+	                // ibProtocolMode, Runtime when absent; Protocol: the newest version the client speaks, 1 when
+	                // absent — answered with the one both speak, and the features the server offers at it
 	Logout,         // {Client}
 	Frame,          // {Client} → the frame
 	Schema,         // {Client, Schema[, Command[, Args]]} → what that schema shows; with a Command, the schema does it and

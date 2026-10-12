@@ -27,8 +27,9 @@ public:
 	// Logged out, when it was logged in.
 	~ibCommunicator();
 
-	// login {User, Password, Mode, Protocol} — the client's id and the protocol both speak taken, and the first frame;
-	// the answer given back as it came, for its events (a start may say something, or ask).
+	// login {User, Password, Mode, Protocol} — the client's id and the protocol both speak taken, the token when the
+	// server offers one, and the first frame; the answer given back as it came, for its events (a start may say
+	// something, or ask).
 	bool Login(const wxString& user, const wxString& password, ibProtocolMode mode, ibProtocolNode& result,
 		ibProtocolRefusal& refusal, wxString& error);
 	void Logout();
@@ -55,6 +56,9 @@ private:
 
 	bool CallLocked(ibProtocolMethod method, const ibProtocolNode& params, ibProtocolNode& result,
 		ibProtocolRefusal& refusal, wxString& error);
+	// The socket dropped and the server offered to resume: open it again, login {Token} under a new id, and send
+	// `sent` again under the id it already carries. False — the session is gone, or this connection cannot return.
+	bool Resume(const std::string& sent, std::string& answer, ibProtocolRefusal& refusal, wxString& error);
 	// The answer's frame, whole or as a patch, taken into the one kept; an answer that is no frame leaves it.
 	void Take(const ibProtocolNode& answer);
 	// The client is gone (logged out, or its session is): nothing of it is kept.
@@ -62,9 +66,14 @@ private:
 
 	std::unique_ptr<ibProtocolConnection> m_connection;
 	std::mutex                            m_mutex;
+	// Never put back to 0. A dropped socket is the same communicator, and the next call's id is newer than every
+	// id already used, including across the login {Token} that brings the session back.
 	long long                             m_lastId = 0;
 
 	wxString       m_client;
+	wxString       m_token;    // the bearer, kept here. The server stores only its hash.
+	bool           m_resume = false;   // the server listed `resume` — a dropped socket is asked for again
+	ibProtocolMode m_mode = ibProtocolMode::Runtime;
 	int            m_protocol = 1;
 	long long      m_number = 0;
 	ibProtocolNode m_frame;

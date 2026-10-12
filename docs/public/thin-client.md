@@ -106,6 +106,8 @@ over a server.
 
 ## Where it stops
 
+- A thin runtime's socket may drop and the session stay, for `Resume` seconds ([client-protocol.md](client-protocol.md)).
+  A thin designer does not. `Resume` 0 ends the session at the drop.
 - A document saved on the server is saved there; the person's file it came from is written back only by a download.
 - A web client has no document/view of its own: it draws the same frame its own way.
 - Not yet in the list settings window: choosing a reference value in a filter (next: the server's choice form in a

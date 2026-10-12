@@ -970,6 +970,9 @@
     <ClInclude Include="sheetFormat\sheetFormatDocx.h">
       <Filter>sheetFormat</Filter>
     </ClInclude>
+    <ClInclude Include="utils\sessionToken.h">
+      <Filter>utils</Filter>
+    </ClInclude>
     <ClInclude Include="utils\passwordHash.hpp">
       <Filter>utils</Filter>
     </ClInclude>
@@ -2403,6 +2406,9 @@
     </ClCompile>
     <ClCompile Include="sheetFormat\sheetFormatXlsxWrite.cpp">
       <Filter>sheetFormat</Filter>
+    </ClCompile>
+    <ClCompile Include="utils\sessionToken.cpp">
+      <Filter>utils</Filter>
     </ClCompile>
     <ClCompile Include="utils\passwordHash.cpp">
       <Filter>utils</Filter>
