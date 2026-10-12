@@ -506,3 +506,49 @@ TEST(TypeDescriptionList, AnUnknownNameDoesNotInitialise)
     ibValue* one[] = { &unknown };
     EXPECT_FALSE(alone.Init(one, 1));
 }
+
+// ------------------------------------- GroupBy ----------------------------------------
+
+namespace {
+void CallProc(ibValueModelTable* table, const wxString& method, std::vector<ibValue> args)
+{
+    const long number = table->FindMethod(method);
+    ASSERT_GE(number, 0) << method.ToStdString();
+    std::vector<ibValue*> pointers;
+    for (ibValue& arg : args)
+        pointers.push_back(&arg);
+    table->CallAsProc(number, pointers.data(), static_cast<long>(pointers.size()));
+}
+}
+
+// Свернуть: equal group cells become one row, sum columns are added up, other columns go; first-met order.
+TEST_F(ValueTableVerbs, GroupBy_FoldsEqualRows_SumsAndDropsTheRest)
+{
+    Column(wxT("Item")); Column(wxT("Qty")); Column(wxT("Note"));
+    AddRow({ Text(wxT("b")), ibValue(2), Text(wxT("x")) });
+    AddRow({ Text(wxT("a")), ibValue(1), Text(wxT("y")) });
+    AddRow({ Text(wxT("b")), ibValue(3), Text(wxT("z")) });
+    CallProc(m_table, wxT("GroupBy"), { Text(wxT("Item")), Text(wxT("Qty")) });
+    EXPECT_EQ(m_table->GetRowCount(), 2);
+    EXPECT_EQ(Joined(ColumnInOrder(wxT("Item"))), wxT("b,a"));
+    EXPECT_EQ(Joined(ColumnInOrder(wxT("Qty"))), wxT("5,1"));
+    EXPECT_EQ(m_table->GetColumnCollection()->GetColumnByName(wxT("Note")), nullptr);
+}
+
+TEST_F(ValueTableVerbs, GroupBy_WithoutSums_KeepsTheDistinctGroups)
+{
+    Column(wxT("Item")); Column(wxT("Qty"));
+    AddRow({ Text(wxT("a")), ibValue(1) });
+    AddRow({ Text(wxT("a")), ibValue(2) });
+    CallProc(m_table, wxT("GroupBy"), { Text(wxT(" Item ")) });
+    EXPECT_EQ(m_table->GetRowCount(), 1);
+    EXPECT_EQ(m_table->GetColumnCollection()->GetColumnByName(wxT("Qty")), nullptr);
+}
+
+TEST_F(ValueTableVerbs, GroupBy_NamingAMissingColumn_Raises)
+{
+    Column(wxT("Item"));
+    AddRow({ Text(wxT("a")) });
+    EXPECT_ANY_THROW(CallProc(m_table, wxT("GroupBy"), { Text(wxT("Item")), Text(wxT("Nope")) }));
+    EXPECT_EQ(m_table->GetRowCount(), 1);
+}
