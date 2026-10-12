@@ -199,6 +199,9 @@ public:
 	// chartOfAccountsMetadata.cpp.
 	virtual void ContributeTables(class ibSchemaSnapshot& out) const override;
 
+	wxString SetPredefinedAccountingFlags(const wxString& item, const wxString& spelling) override;
+	void StampPredefinedSeed(struct ibSchemaSeedRow& row, const ibPredefinedValueObject& item) const override;
+
 	// Give the analytics-kinds column the reference type its binding names. Called on LOAD, on the user's
 	// PICK and on SAVE — every point the binding can have arrived — because the schema is computed off
 	// these metaobjects and a column typed only at run time made the two disagree.
@@ -255,6 +258,8 @@ protected:
 	virtual void ProcessCommand(unsigned int id);
 
 private:
+
+	ibValueMetaObjectAccountingKind* FindAccountingKindNamed(const wxString& name) const;
 
 	bool FillFormObject(ibPropertyList* prop) {
 		for (auto object : GetFormArrayObject()) {

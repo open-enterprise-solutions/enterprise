@@ -78,3 +78,12 @@ void ibValueMetaObjectChartOfAccounts::ContributeTables(ibSchemaSnapshot& out) c
 			return false;
 		};
 }
+
+void ibValueMetaObjectChartOfAccounts::StampPredefinedSeed(
+	ibSchemaSeedRow& row, const ibPredefinedValueObject& item) const
+{
+	for (const ibPredefinedNamedFlag& flag : item.GetAccountingFlags()) {
+		if (ibValueMetaObjectAccountingKind* kind = FindAccountingKindNamed(flag.m_name))
+			row.Set(kind->GetQueryColumn(), ibValue(flag.m_on));
+	}
+}

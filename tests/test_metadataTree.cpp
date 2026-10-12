@@ -14,6 +14,9 @@
 #include <iterator>
 #include "backend/metadataConfiguration.h"
 #include "backend/metaCollection/metaObject.h"   // ibValueMetaObject + g_meta*CLSID
+#include "backend/metaCollection/partial/chartOfAccounts.h"
+#include "backend/metaCollection/accountingKind/metaAccountingKindObject.h"
+#include "backend/query/schemaSnapshot.h"
 
 TEST(MetadataTree, FreshConfigHasNoBusinessObjects) {
     ibMetaDataConfigurationFile cfg;
@@ -168,4 +171,70 @@ TEST(MetadataTree, CreatingEveryHostedKindTwiceKeepsBothAndNamesThemApart) {
 			<< "two " << candidate.name
 			<< " objects were created with the same name";
 	}
+}
+
+namespace {
+
+const ibValue* SeedCell(const ibSchemaSeedRow& row, const ibBackendQueryColumn* column)
+{
+	if (column == nullptr)
+		return nullptr;
+	const auto found = row.m_values.find(column->GetColumnId());
+	return found == row.m_values.end() ? nullptr : &found->second;
+}
+
+const ibSchemaSeedRow* SeedByName(const ibSchemaSnapshot& snapshot, ibMetaID table, const wxString& name)
+{
+	const ibSchemaTable* found = snapshot.Find(table);
+	if (found == nullptr)
+		return nullptr;
+	for (const ibSchemaSeedRow& row : found->m_seed)
+		if (row.m_name == name)
+			return &row;
+	return nullptr;
+}
+
+} // namespace
+
+TEST(PredefinedShape, AnAccountingFlagIsWhatTheNextApplyWrites) {
+	ibMetaDataConfigurationFile cfg;
+	auto* chart = dynamic_cast<ibValueMetaObjectChartOfAccounts*>(
+		cfg.CreateMetaObject(g_metaChartOfAccountsCLSID, cfg.GetCommonMetaObject(), false));
+	ASSERT_NE(chart, nullptr);
+	chart->SetName(wxT("Balance"));
+
+	auto* quantitative = dynamic_cast<ibValueMetaObjectAccountingKind*>(
+		cfg.CreateMetaObject(g_metaAccountingKindCLSID, chart, false));
+	ASSERT_NE(quantitative, nullptr);
+	quantitative->SetName(wxT("Quantitative"));
+
+	chart->AppendPredefinedValue(wxT("Cash"), wxT("50"), wxT("Cash"));
+	ASSERT_TRUE(chart->SetPredefinedAccountingFlags(wxT("Cash"), wxT("Quantitative=true")).IsEmpty());
+	EXPECT_EQ(chart->GetPredefinedValueArray().front()->AccountingFlagsText(), wxT("Quantitative=true"));
+
+	ibSchemaSnapshot snapshot;
+	cfg.GetCommonMetaObject()->ContributeTables(snapshot);
+	const ibSchemaSeedRow* account = SeedByName(snapshot, chart->GetMetaID(), wxT("Cash"));
+	ASSERT_NE(account, nullptr);
+	const ibValue* flagCell = SeedCell(*account, quantitative->GetQueryColumn());
+	ASSERT_NE(flagCell, nullptr);
+	EXPECT_TRUE(flagCell->GetBoolean());
+
+	ibDataNode saved;
+	ASSERT_TRUE(chart->SaveNode(saved));
+	auto* loaded = dynamic_cast<ibValueMetaObjectChartOfAccounts*>(
+		cfg.CreateMetaObject(g_metaChartOfAccountsCLSID, cfg.GetCommonMetaObject(), false));
+	ASSERT_NE(loaded, nullptr);
+	ASSERT_TRUE(loaded->LoadNode(saved));
+	ASSERT_EQ(loaded->GetPredefinedValueArray().size(), 1u);
+	EXPECT_EQ(loaded->GetPredefinedValueArray().front()->AccountingFlagsText(), wxT("Quantitative=true"));
+
+	auto* catalog = dynamic_cast<ibValueMetaObjectRecordDataHierarchyMutableRef*>(
+		cfg.CreateMetaObject(g_metaCatalogCLSID, cfg.GetCommonMetaObject(), false));
+	ASSERT_NE(catalog, nullptr);
+	catalog->SetName(wxT("Warehouses"));
+	const wxString refused = catalog->SetPredefinedAccountingFlags(wxT("Main"), wxT("Quantitative=true"));
+	EXPECT_TRUE(refused.Contains(wxT("Warehouses"))) << refused.ToStdString();
+	const wxString unknown = chart->SetPredefinedAccountingFlags(wxT("Cash"), wxT("Currency=true"));
+	EXPECT_TRUE(unknown.Contains(wxT("Currency"))) << unknown.ToStdString();
 }

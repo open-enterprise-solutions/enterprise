@@ -493,4 +493,43 @@ void ibValueMetaObjectChartOfAccounts::OnRemoveMetaForm(ibValueMetaObjectFormBas
 	else if (metaForm->GetTypeForm() == eFormFolderSelect && m_propertyDefFormFolderSelect->GetValueAsInteger() == metaForm->GetMetaID()) m_propertyDefFormFolderSelect->SetValue(wxNOT_FOUND);
 }
 
+ibValueMetaObjectAccountingKind* ibValueMetaObjectChartOfAccounts::FindAccountingKindNamed(const wxString& name) const
+{
+	for (ibValueMetaObjectAccountingKind* kind : GetAccountingKindArrayObject())
+		if (kind != nullptr && !kind->IsDeleted() && kind->GetName().IsSameAs(name))
+			return kind;
+	return nullptr;
+}
+
+wxString ibValueMetaObjectChartOfAccounts::SetPredefinedAccountingFlags(const wxString& item, const wxString& spelling)
+{
+	wxObjectDataPtr<ibPredefinedValueObject> found = FindPredefinedValue(item);
+	if (found == nullptr)
+		return wxString::Format(_("'%s' has no predefined item named '%s'"), GetName(), item);
+
+	std::vector<ibPredefinedNamedFlag> flags;
+	for (wxString part : wxSplit(spelling, wxT(','))) {
+		part.Trim(true).Trim(false);
+		if (part.IsEmpty())
+			continue;
+		const int eq = part.Find(wxT('='));
+		wxString name = eq == wxNOT_FOUND ? wxString() : part.Left(eq);
+		wxString word = eq == wxNOT_FOUND ? wxString() : part.Mid(eq + 1);
+		name.Trim(true).Trim(false);
+		word.Trim(true).Trim(false);
+		if (name.IsEmpty() || !(word.IsSameAs(wxT("true"), false) || word.IsSameAs(wxT("false"), false)))
+			return wxString::Format(_("'%s' is not an accounting flag. Say Name=true or Name=false"), part);
+		if (FindAccountingKindNamed(name) == nullptr)
+			return wxString::Format(_("'%s' is not an accounting flag of '%s'"), name, GetName());
+		ibPredefinedNamedFlag flag;
+		flag.m_name = name;
+		flag.m_on = word.IsSameAs(wxT("true"), false);
+		flags.push_back(flag);
+	}
+	found->SetAccountingFlags(std::move(flags));
+	if (m_metaData != nullptr)
+		m_metaData->Modify(true);
+	return wxString();
+}
+
 METADATA_TYPE_REGISTER(ibValueMetaObjectChartOfAccounts, "ChartOfAccounts", g_metaChartOfAccountsCLSID);
