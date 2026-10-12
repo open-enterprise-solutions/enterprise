@@ -3,6 +3,7 @@
 #include "backend/appData.h"
 #include "backend/backend_exception.h"
 #include "backend/metadataConfiguration.h"
+#include "backend/session/authThrottle.h"
 #include "backend/session/session.h"
 #include "backend/session/sessionRegistry.h"
 #include "backend/moduleManager/moduleManager.h"
@@ -93,8 +94,12 @@ bool ibWebSession::OnInit()
 	return true;
 }
 
-bool ibWebSession::Login(const wxString& user, const wxString& password)
+bool ibWebSession::Login(const wxString& user, const wxString& password,
+                         const wxString& source, int* retryAfterSec)
 {
+	if (retryAfterSec != nullptr)
+		*retryAfterSec = 0;
+
 	// Serialize against a concurrent OnExit on this same instance.
 	// SessionManager::Login holds a shared_ptr keeper while we run; if
 	// SessionManager::Destroy fires for the same id at the same time it
@@ -106,6 +111,15 @@ bool ibWebSession::Login(const wxString& user, const wxString& password)
 		return false;
 	if (m_app)
 		return true;  // already logged in — idempotent
+
+	// Already told to wait: do not open a session row for an attempt that
+	// will not check the password.
+	const int waiting = ibAuthThrottle::Shared().SecondsUntil(user, source);
+	if (waiting > 0) {
+		if (retryAfterSec != nullptr)
+			*retryAfterSec = waiting;
+		return false;
+	}
 
 	// Anonymous-phase create through the session registry — same shape as
 	// desktop's appData->CreateSession<ibGUISession>() (see
@@ -154,17 +168,26 @@ bool ibWebSession::Login(const wxString& user, const wxString& password)
 	// ran BESIDE the worker serving this session's polls, two threads in one session, and a question asked at
 	// start waited without holding the session (ibWorkerPool::Await).
 	bool opened = false;
+	int refused = 0;
 	try {
 		sessionRaw->Submit([&]() {
+			// The check runs on this worker, so the source has to be named here.
+			ibAuthSourceScope from(source);
+			ibAuthThrottle::NoteRefusal(0);
 			opened = holder->Open(user, password) == ibSession::OpenResult::Authenticated;
+			if (!opened)
+				refused = ibAuthThrottle::TakeRefusal();
 		}).get();
 	}
 	catch (const ibCoreException& err) {
 		ibJournalError(wxT("web"), wxT("login of '%s' refused: %s"), user, err.GetErrorDescription());
 		return false;
 	}
-	if (!opened)
+	if (!opened) {
+		if (retryAfterSec != nullptr)
+			*retryAfterSec = refused;
 		return false;
+	}
 
 	m_user = user;
 

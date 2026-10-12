@@ -46,7 +46,11 @@ public:
 	//               builds the main frame and calls CreateMainModule.
 	//   OnExit()  — tears the runtime down.
 	bool OnInit();
-	bool Login(const wxString& user, const wxString& password);
+	// source is the client address when the caller has one. retryAfterSec,
+	// when set, receives the seconds a refused attempt must wait — 0 when
+	// the password was simply wrong.
+	bool Login(const wxString& user, const wxString& password,
+	           const wxString& source = wxEmptyString, int* retryAfterSec = nullptr);
 	void OnExit();
 
 	bool IsAuthenticated() const { return m_app != nullptr; }

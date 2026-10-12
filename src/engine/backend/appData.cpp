@@ -18,6 +18,7 @@
 
 #include "core/programFolder.h"
 
+#include "backend/session/authThrottle.h"
 #include "backend/session/session.h"
 #include "backend/session/sessionRegistry.h"
 #include "backend/session/serviceExclusivePolicy.h"   // CanOpen — a base another process holds is refused at open
@@ -1234,12 +1235,46 @@ bool ibApplicationInstance::AuthenticateUser(const wxString& strUserName,
 	if (strUserName.IsEmpty() && !ibUserInfo::HasAny())
 		return true;
 
+	// Before the lookup and before the hash. A name that has just failed, a
+	// source that has failed too often, or a process already checking four
+	// passwords, is answered here — the expensive check does not start.
+	const wxString source = ibAuthThrottle::CurrentSource();
+	const ibAuthThrottle::Decision decision = ibAuthThrottle::Shared().Begin(strUserName, source);
+	if (!decision.m_allowed) {
+		ibAuthThrottle::NoteRefusal(decision.m_retryAfterSec);
+		try {
+			if (ibLog) ibLog->Audit(wxT("auth"), wxT("login_throttled"),
+			                        wxString::Format(wxT("user=%s source=%s retry_after=%d"),
+			                                         strUserName, source, decision.m_retryAfterSec));
+		} catch (...) {}
+		return false;
+	}
+	ibAuthThrottle::NoteRefusal(0);
+
+	// The slot Begin took. Close records the outcome; leaving by a throw
+	// gives the slot back and does not count a failure (a database that
+	// cannot be read is not a wrong password, and must not lock the name).
+	struct Attempt {
+		ibAuthThrottle& m_gate;
+		wxString        m_user;
+		wxString        m_source;
+		bool            m_settled = false;
+		~Attempt() { if (!m_settled) m_gate.ReleaseSlot(); }
+		void Close(bool success)
+		{
+			if (m_settled) return;
+			m_gate.Finish(m_user, m_source, success);
+			m_settled = true;
+		}
+	} attempt{ ibAuthThrottle::Shared(), strUserName, source };
+
 	outInfo = ibUserInfo::Read(strUserName);
 	if (!outInfo.IsOk()) {
 		try {
 			if (ibLog) ibLog->Audit(wxT("auth"), wxT("login_failed"),
 			                        wxString::Format(wxT("user=%s reason=unknown"), strUserName));
 		} catch (...) {}
+		attempt.Close(false);
 		return false;
 	}
 
@@ -1249,6 +1284,7 @@ bool ibApplicationInstance::AuthenticateUser(const wxString& strUserName,
 			                        wxString::Format(wxT("user=%s reason=bad_password"), strUserName),
 			                        outInfo.m_strUserGuid, /*refMetaId=*/0);
 		} catch (...) {}
+		attempt.Close(false);
 		return false;
 	}
 
@@ -1268,6 +1304,7 @@ bool ibApplicationInstance::AuthenticateUser(const wxString& strUserName,
 		}
 	}
 
+	attempt.Close(true);
 	return true;
 }
 
