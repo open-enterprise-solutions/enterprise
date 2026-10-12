@@ -47,7 +47,6 @@ public:
 
 	// The statement throws from here, not from the layer, so the SQLSTATE
 	// has to be on this reporter or the exception leaves with an empty one.
-	ibBackendDatabaseException::Kind ClassifyDatabaseError(int nativeCode) const override;
 	wxString GetSqlState() const override { return m_sqlState; }
 
 	// Frees the statement on the server. Called by its owner's Close, once — not by this dtor: the owner's

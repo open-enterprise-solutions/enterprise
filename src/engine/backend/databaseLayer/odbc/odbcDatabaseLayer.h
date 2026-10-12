@@ -99,8 +99,9 @@ public:
 	// is the same 5-char SQLSTATE as SQL standard / PostgreSQL. Backends
 	// reachable through ODBC (MSSQL, Oracle, DB2, etc.) all funnel their
 	// errors through this format, so the class-digit dispatch is the
-	// portable choice.
-	ibBackendDatabaseException::Kind ClassifyDatabaseError(int nativeCode) const override;
+	// portable choice. Every reporter of the driver — the layer, the
+	// statement, the result set — records this Kind with the code.
+	static ibBackendDatabaseException::Kind ClassifySqlState(const wxString& sqlState, int nativeCode);
 	wxString GetSqlState() const override { return m_lastSqlState; }
 
 	// Stash the most recent SQLSTATE pulled from SQLGetDiagRec so the

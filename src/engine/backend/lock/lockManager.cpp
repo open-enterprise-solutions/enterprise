@@ -53,31 +53,19 @@ struct HeaderAlreadyThere {};
 // rolls back and tries again. A noWait acquire does not: it is refused.
 struct HeaderBusy {};
 
+// The driver says what the failure was (the exception's Kind): a deadlock, a serialization failure,
+// an expired lock wait or NOWAIT refused (PostgreSQL 40P01 / 40001 / 55P03; Firebird isc_deadlock,
+// isc_lock_conflict, isc_update_conflict, isc_lock_timeout) all arrive as Deadlock or Timeout.
 bool HeaderWait(const ibDatabaseLayerException& err)
 {
 	using Kind = ibBackendDatabaseException::Kind;
-	const Kind kind = err.GetKind();
-	if (kind == Kind::Deadlock || kind == Kind::Timeout)
-		return true;
-	const wxString state = err.GetSqlState();
-	// 55P03 is lock_not_available: PostgreSQL's answer to NOWAIT and to lock_timeout.
-	if (state == wxT("40001") || state == wxT("40P01") || state == wxT("55P03"))
-		return true;
-	// Firebird names these even when the statement path did not classify them.
-	// isc_update_conflict is the one a waiter sees on an existing header when
-	// the server is not in read-committed read-consistency.
-	const int code = err.GetDriverErrorCode();
-	return code == 335544336    // isc_deadlock
-		|| code == 335544345    // isc_lock_conflict
-		|| code == 335544451    // isc_update_conflict
-		|| code == 335544510;   // isc_lock_timeout
+	return err.GetKind() == Kind::Deadlock || err.GetKind() == Kind::Timeout;
 }
 
 // Hold sys_lock_key for this key until the transaction ends. An UPDATE of the
-// existing row is the lock. A missing row is inserted; any failure of that
-// insert, on the first attempt, is the other connection having inserted it.
-// The retry updates the row. If that update still finds nothing and the
-// insert fails again, the error is the caller's — it is not "stayed busy".
+// existing row is the lock. A missing row is inserted; a key violation on that
+// insert (Kind::Constraint) is the other connection having inserted it, and the
+// retry updates the row. Any other failure is the caller's, on any attempt.
 void LockKeyHeader(ibDatabaseQueryBuilder& q, const wxString& ns, const wxString& hash,
 	bool noWait, int attempt)
 {
@@ -108,9 +96,8 @@ void LockKeyHeader(ibDatabaseQueryBuilder& q, const wxString& ns, const wxString
 		}
 	}
 	catch (const ibDatabaseLayerException& err) {
-		if (attempt > 0)
+		if (attempt > 0 || err.GetKind() != ibBackendDatabaseException::Kind::Constraint)
 			throw;
-		(void)err;
 		throw HeaderAlreadyThere();
 	}
 }
@@ -214,7 +201,7 @@ ibLockHandle ibLockManager::Acquire(const std::vector<ibLockItem>& items,
 				bool       conflictHit = false;
 				wxString   conflictUser;
 				{
-					ibQueryIR ir(						ibProject(
+					ibQueryIR ir(ibProject(
 						ibFilter(ibScan(lock_table),
 							ibBinOp(ibQueryBinOp::And,
 								ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("namespace")), ibConst(ibValue(item.namespaceName))),

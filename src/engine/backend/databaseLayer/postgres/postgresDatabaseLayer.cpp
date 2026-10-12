@@ -675,7 +675,7 @@ int ibDatabaseLayerPostgres::DoRunQuery(const wxString& strQuery, bool WXUNUSED(
 			SetLastSqlState(state != nullptr ? wxString::FromAscii(state) : wxString());
 		}
 		SetErrorCode(ibDatabaseLayerPostgres::TranslateErrorCode(m_pInterface->GetPQresultStatus()(pResultCode),
-			m_pInterface->GetPQresultErrorField()(pResultCode, PG_DIAG_SQLSTATE)));
+			m_pInterface->GetPQresultErrorField()(pResultCode, PG_DIAG_SQLSTATE)), ClassifySqlState(m_lastSqlState));
 		SetErrorMessage(ConvertFromUnicodeStream(m_pInterface->GetPQerrorMessage()((PGconn*)m_pDatabase)));
 		m_pInterface->GetPQclear()(pResultCode);
 		ThrowDatabaseException();
@@ -714,7 +714,7 @@ ibDatabaseResultSet* ibDatabaseLayerPostgres::DoRunQueryWithResults(const wxStri
 			SetLastSqlState(state != nullptr ? wxString::FromAscii(state) : wxString());
 		}
 		SetErrorCode(ibDatabaseLayerPostgres::TranslateErrorCode(m_pInterface->GetPQstatus()((PGconn*)m_pDatabase),
-			m_pInterface->GetPQresultErrorField()(pResultCode, PG_DIAG_SQLSTATE)));
+			m_pInterface->GetPQresultErrorField()(pResultCode, PG_DIAG_SQLSTATE)), ClassifySqlState(m_lastSqlState));
 		SetErrorMessage(ConvertFromUnicodeStream(m_pInterface->GetPQerrorMessage()((PGconn*)m_pDatabase)));
 		m_pInterface->GetPQclear()(pResultCode);
 		ThrowDatabaseException();
@@ -1058,23 +1058,6 @@ ibBackendDatabaseException::Kind ibDatabaseLayerPostgres::ClassifySqlState(const
 		}
 	}
 	return Kind::Unknown;
-}
-
-ibBackendDatabaseException::Kind ibDatabaseLayerPostgres::ClassifyDatabaseError(int nativeCode) const
-{
-	// PostgreSQL surfaces both a CONNECTION_* status enum (small int,
-	// connection-level only) and SQLSTATE (5-char alphanumeric — the
-	// real classifier). We prefer SQLSTATE when present; the int code
-	// is only used for connection-level failures where libpq doesn't
-	// produce a SQLSTATE at all.
-	const ibBackendDatabaseException::Kind kind = ClassifySqlState(m_lastSqlState);
-	if (kind != ibBackendDatabaseException::Kind::Unknown || m_lastSqlState.length() >= 2)
-		return kind;
-
-	// No SQLSTATE — fall back to the libpq connection-status enum.
-	// CONNECTION_BAD is the only one we surface in error paths today.
-	(void)nativeCode;
-	return ibBackendDatabaseException::Kind::Unknown;
 }
 
 bool ibDatabaseLayerPostgres::IsAvailable()

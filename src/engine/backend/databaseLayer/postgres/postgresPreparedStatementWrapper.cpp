@@ -138,12 +138,6 @@ void ibPreparedStatementPostgresWrapper::Deallocate()
 		m_pInterface->GetPQclear()(pResult);
 }
 
-ibBackendDatabaseException::Kind ibPreparedStatementPostgresWrapper::ClassifyDatabaseError(int nativeCode) const
-{
-	(void)nativeCode;
-	return ibDatabaseLayerPostgres::ClassifySqlState(m_sqlState);
-}
-
 int ibPreparedStatementPostgresWrapper::DoRunQuery()
 {
 	m_sqlState.clear();
@@ -161,7 +155,8 @@ int ibPreparedStatementPostgresWrapper::DoRunQuery()
 		if ((status != PGRES_COMMAND_OK) && (status != PGRES_TUPLES_OK))
 		{
 			m_sqlState = SqlStateOf(m_pInterface, pResult);
-			SetErrorCode(ibDatabaseLayerPostgres::TranslateErrorCode(status, m_pInterface->GetPQresultErrorField()(pResult, PG_DIAG_SQLSTATE)));
+			SetErrorCode(ibDatabaseLayerPostgres::TranslateErrorCode(status, m_pInterface->GetPQresultErrorField()(pResult, PG_DIAG_SQLSTATE)),
+				ibDatabaseLayerPostgres::ClassifySqlState(m_sqlState));
 			SetErrorMessage(ConvertFromUnicodeStream(m_pInterface->GetPQresultErrorMessage()(pResult)));
 		}
 
@@ -205,7 +200,8 @@ ibDatabaseResultSet* ibPreparedStatementPostgresWrapper::DoRunQueryWithResults()
 		if ((status != PGRES_COMMAND_OK) && (status != PGRES_TUPLES_OK))
 		{
 			m_sqlState = SqlStateOf(m_pInterface, pResult);
-			SetErrorCode(ibDatabaseLayerPostgres::TranslateErrorCode(status, m_pInterface->GetPQresultErrorField()(pResult, PG_DIAG_SQLSTATE)));
+			SetErrorCode(ibDatabaseLayerPostgres::TranslateErrorCode(status, m_pInterface->GetPQresultErrorField()(pResult, PG_DIAG_SQLSTATE)),
+				ibDatabaseLayerPostgres::ClassifySqlState(m_sqlState));
 			SetErrorMessage(ConvertFromUnicodeStream(m_pInterface->GetPQresultErrorMessage()(pResult)));
 		}
 		else
