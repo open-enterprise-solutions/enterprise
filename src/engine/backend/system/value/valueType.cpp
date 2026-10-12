@@ -295,6 +295,24 @@ ibValueTypeDescription::~ibValueTypeDescription()
 {
 }
 
+// One name in a type list. A primitive lives in the value registry and needs no configuration.
+// A reference lives in the configuration, and only a thread that has a base can ask it.
+static bool ibTypeNameToClass(const wxString& name, ibClassID& clsid)
+{
+	if (ibValue::IsRegisterCtor(name)) {
+		clsid = ibValue::GetIDObjectFromString(name);
+		return clsid != 0;
+	}
+	ibApplicationInstance* const application = ibApplicationInstance::Get(/*required*/ false);
+	if (application == nullptr)
+		return false;
+	ibMetaData* const metaData = ibApplicationInstance::GetActiveMetaData(application);
+	if (metaData == nullptr || !metaData->IsRegisterCtor(name))
+		return false;
+	clsid = metaData->GetIDObjectFromString(name);
+	return clsid != 0;
+}
+
 bool ibValueTypeDescription::Init(ibValue** paParams, const long lSizeArray)
 {
 	if (lSizeArray < 1)
@@ -304,22 +322,41 @@ bool ibValueTypeDescription::Init(ibValue** paParams, const long lSizeArray)
 	m_typeDesc.m_typeData = Unqualified();
 
 	if (paParams[0]->GetType() == ibValueTypes::TYPE_STRING) {
-		wxString classType = paParams[0]->GetString();
-		if (activeMetaData->IsRegisterCtor(classType)) {
-			ibValueQualifierNumber* qNumber = nullptr;
-			if (lSizeArray > 1 && paParams[1]->ConvertToValue(qNumber))
-				m_typeDesc.m_typeData.m_number = *qNumber;
-			ibValueQualifierDate* qDate = nullptr;
-			if (lSizeArray > 2 && paParams[2]->ConvertToValue(qDate))
-				m_typeDesc.m_typeData.m_date = *qDate;
-			ibValueQualifierString* qString = nullptr;
-			if (lSizeArray > 3 && paParams[3]->ConvertToValue(qString))
-				m_typeDesc.m_typeData.m_string = *qString;
-			m_typeDesc.m_listTypeClass.emplace_back(
-				activeMetaData->GetIDObjectFromString(classType)
-			);
-			return true;
+		// "Number, String" is several types, not one constructor name. A single name is the
+		// one-element case of the same list. A name that is not a type fails the whole description.
+		std::vector<ibClassID> types;
+		wxString rest = paParams[0]->GetString();
+		bool any = false;
+		while (true) {
+			const bool more = rest.Find(wxT(',')) != wxNOT_FOUND;
+			wxString token = more ? rest.BeforeFirst(wxT(',')) : rest;
+			token.Trim(true).Trim(false);
+			if (!token.IsEmpty()) {
+				any = true;
+				ibClassID clsid = 0;
+				if (!ibTypeNameToClass(token, clsid))
+					return false;
+				types.push_back(clsid);
+			}
+			if (!more)
+				break;
+			rest = rest.AfterFirst(wxT(','));
 		}
+		if (!any)
+			return false;
+
+		ibValueQualifierNumber* qNumber = nullptr;
+		if (lSizeArray > 1 && paParams[1]->ConvertToValue(qNumber))
+			m_typeDesc.m_typeData.m_number = *qNumber;
+		ibValueQualifierDate* qDate = nullptr;
+		if (lSizeArray > 2 && paParams[2]->ConvertToValue(qDate))
+			m_typeDesc.m_typeData.m_date = *qDate;
+		ibValueQualifierString* qString = nullptr;
+		if (lSizeArray > 3 && paParams[3]->ConvertToValue(qString))
+			m_typeDesc.m_typeData.m_string = *qString;
+		for (const ibClassID clsid : types)
+			m_typeDesc.m_listTypeClass.push_back(clsid);
+		return true;
 	}
 
 	ibValueArray* valArray = nullptr;
