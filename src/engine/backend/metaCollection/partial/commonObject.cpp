@@ -11,6 +11,7 @@
 #include "backend/session/session.h"
 #include "core/serialize/dataBuilder.h"   // node serialization (WriteData / ReadData)
 #include "backend/choiceLinkResolver.h"      // what narrows a choice, put on the list before it is shown
+#include "backend/system/value/valueMap.h"   // AdditionalProperties is a Structure
 
 #include "backend/metaCollection/partial/reference/reference.h"
 #include "backend/metaCollection/partial/declaredPresentation.h"   // how a reference reads in the designer
@@ -1921,6 +1922,30 @@ ibValueRecordDataObject::~ibValueRecordDataObject()
 {
 }
 
+namespace {
+// The bag is created once and kept by the object. A later bind hands the same structure over.
+ibValue* AdditionalPropertiesBag(ibValue& slot)
+{
+	if (!slot.IsReference())
+		slot = new ibValueStructure();
+	return slot.GetRef();
+}
+}
+
+void ibValueRecordDataObject::BindObjectBag()
+{
+	AdditionalPropertiesBag(m_additionalProperties);
+	// The slot is the reference the module must see. The structure itself is not a
+	// reference, so a copy of it has no Insert.
+	BindExportVariable(wxT("AdditionalProperties"), &m_additionalProperties);
+}
+
+void ibValueRecordSetObject::BindObjectBag()
+{
+	AdditionalPropertiesBag(m_additionalProperties);
+	BindExportVariable(wxT("AdditionalProperties"), &m_additionalProperties);
+}
+
 // MY form — the one showing THIS object. Found by SOURCE, not by form key: the key is the
 // form's own identity and a caller may set it to anything (an element placed on the start page
 // gets a fresh one of its own, so several copies never collide). What never changes is that
@@ -2235,11 +2260,17 @@ bool ibValueRecordDataObject::GetPropVal(const long lPropNum, ibValue& pvarPropV
 {
 	const long lPropAlias = m_members.GetPropAlias(lPropNum);
 	if (lPropAlias == eProcUnit) {
-		if (m_procUnit != nullptr) {
-			return m_procUnit->GetPropVal(
-				GetPropName(lPropNum), pvarPropVal
-			);
+		// A module export answers through the proc unit. An external bind
+		// (AdditionalProperties, RegisterRecords) is on this same table, but the
+		// proc unit only sees kind=Export, so the bind map is what still holds it.
+		if (m_procUnit != nullptr &&
+			m_procUnit->GetPropVal(GetPropName(lPropNum), pvarPropVal))
+			return true;
+		if (ibValue* bound = GetBoundValue(GetPropName(lPropNum))) {
+			pvarPropVal = *bound;
+			return true;
 		}
+		return false;
 	}
 	else if (lPropAlias == eProperty || lPropAlias == eTable) {
 		return GetValueByMetaID(
@@ -2328,6 +2359,7 @@ bool ibValueRecordDataObjectExt::InitializeObject()
 		// pick up parent automatically on creation.
 		ibRuntimeModuleDataObject::SetParent(moduleManager);
 		BindContextVariable(thisObject, this);
+		BindObjectBag();
 		InitializeRuntime();
 
 		try {
@@ -2359,6 +2391,7 @@ bool ibValueRecordDataObjectExt::InitializeObject(ibValueRecordDataObjectExt* so
 
 		ibRuntimeModuleDataObject::SetParent(moduleManager);
 		BindContextVariable(thisObject, this);
+		BindObjectBag();
 		InitializeRuntime();
 
 		try {
@@ -2434,6 +2467,7 @@ bool ibValueRecordDataObjectRef::InitializeObject(const ibGuid& copyGuid)
 
 	ibRuntimeModuleDataObject::SetParent(moduleManager);
 	BindContextVariable(thisObject, this);
+	BindObjectBag();
 	try {
 		Compile();
 	}
@@ -2488,6 +2522,7 @@ bool ibValueRecordDataObjectRef::InitializeObject(ibValueRecordDataObjectRef* so
 
 	ibRuntimeModuleDataObject::SetParent(moduleManager);
 	BindContextVariable(thisObject, this);
+	BindObjectBag();
 
 	try {
 		Compile();
@@ -3801,7 +3836,9 @@ bool ibValueRecordSetObject::GetPropVal(const long lPropNum, ibValue& pvarPropVa
 		return true;
 
 	if (ibValue* bound = GetBoundValue(GetPropName(lPropNum))) {
-		pvarPropVal = bound;
+		// Copy the slot. A bind may be the object itself (Filter) or a reference
+		// slot (AdditionalProperties); assigning the pointer would wrap the slot.
+		pvarPropVal = *bound;
 		return true;
 	}
 
@@ -3833,6 +3870,7 @@ bool ibValueRecordSetObject::InitializeObject(const ibValueRecordSetObject* sour
 	ibRuntimeModuleDataObject::SetParent(moduleManager);
 	BindContextVariable(thisObject, this);                   // contextual
 	BindExportVariable(wxT("Filter"), m_recordSetKeyValue);  // exported — register filter/key
+	BindObjectBag();
 
 	try {
 		Compile();

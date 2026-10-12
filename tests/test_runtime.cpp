@@ -21,6 +21,11 @@
 #include "backend/compiler/procUnitState.h"   // m_errorPlace — which opcode raised
 #include "backend/session/session.h"
 #include "backend/appData.h"                // the built-in dispatcher reads appData on entry
+#include "backend/metadataConfiguration.h"
+#include "backend/metaCollection/metaObject.h"
+#include "backend/metaCollection/metaModuleObject.h"
+#include "backend/metaCollection/partial/catalog.h"
+#include "backend/system/value/valueMap.h"
 
 #include <wx/init.h>
 #include <wx/image.h>  // wxInitAllImageHandlers — wx decodes nothing until registered
@@ -2935,4 +2940,69 @@ TEST(RuntimeTest, AnArrayWalkedAndRewalkedIsLetGoOfOnce) {
 
 	// The frame goes here, with both arrays in it. That is the moment the nightly
 	// caught: passing under a sanitiser is the whole assertion.
+}
+
+// An object module names AdditionalProperties the way it names ThisObject: the
+// structure is bound before the module compiles, and what the module writes is
+// the same structure the object keeps. It is not stored.
+TEST_F(BuiltInRuntime, AnObjectModuleSeesAdditionalProperties) {
+	ibMetaDataConfigurationFile cfg;
+	ibValueMetaObjectConfiguration* root = cfg.GetCommonMetaObject();
+	ASSERT_NE(root, nullptr);
+
+	ibValueMetaObject* catalog = cfg.CreateMetaObject(g_metaCatalogCLSID, root, /*runObject*/ false);
+	ASSERT_NE(catalog, nullptr);
+
+	ibValueMetaObjectModule* module = nullptr;
+	for (unsigned int idx = 0; idx < catalog->GetChildCount(); ++idx) {
+		auto* child = dynamic_cast<ibValueMetaObjectModule*>(catalog->GetChild(idx));
+		if (child != nullptr && child->GetName() == wxT("ObjectModule")) {
+			module = child;
+			break;
+		}
+	}
+	ASSERT_NE(module, nullptr);
+	module->SetModuleText(wxT("AdditionalProperties.Insert(\"Flag\", True);\n"));
+
+	// The object's module is compiled against the session root. A root that has
+	// never run has no parent bytecode, and the copy is created only after the
+	// configuration itself has run.
+	ASSERT_TRUE(cfg.RunDatabase());
+	{
+		auto session = std::make_shared<ibSession>(wxString(wxT("additional-properties")),
+			ibSessionKind::Enterprise);
+		ibSessionScope scope(session.get());
+		ASSERT_NE(session->CreateRoot(&cfg), nullptr);
+		ASSERT_TRUE(session->CompileRoot());
+
+		auto* catalogMeta = dynamic_cast<ibValueMetaObjectCatalog*>(catalog);
+		ASSERT_NE(catalogMeta, nullptr);
+
+		ibValuePtr<ibValueRecordDataObjectHierarchyRef> object;
+		try {
+			object = catalogMeta->CreateObjectValue(ibObjectMode::OBJECT_ITEM);
+		}
+		catch (const ibBackendException& err) {
+			FAIL() << err.GetErrorDescription().ToStdString();
+		}
+
+		ibValueRecordDataObjectHierarchyRef* raw = object;
+		ASSERT_NE(raw, nullptr);
+
+		const long bagProp = raw->FindProp(wxT("AdditionalProperties"));
+		ASSERT_NE(bagProp, wxNOT_FOUND);
+		ibValue bag;
+		ASSERT_TRUE(raw->GetPropVal(bagProp, bag));
+		auto* structure = dynamic_cast<ibValueStructure*>(bag.GetRef());
+		ASSERT_NE(structure, nullptr);
+
+		ibValue found;
+		ASSERT_TRUE(structure->Property(wxString(wxT("Flag")), found))
+			<< "the module wrote into a different structure than the one the object keeps";
+		EXPECT_TRUE(found.GetBoolean());
+		object = nullptr;
+	}
+	if (cfg.IsConfigOpen()) {
+		EXPECT_TRUE(cfg.CloseDatabase());
+	}
 }

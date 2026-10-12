@@ -2337,6 +2337,12 @@ public:
 
 protected:
 	virtual void PrepareEmptyObject();
+
+	// A structure the module can fill and read for this one object. Not stored.
+	// Bound before the module compiles (BindObjectBag).
+	ibValue m_additionalProperties;
+
+	void BindObjectBag();
 protected:
 	friend class ibMetaData;
 	friend class ibValueMetaObjectRecordData;
@@ -3319,6 +3325,10 @@ protected:
 
 	ibValuePtr<ibValueRecordSetObjectRegisterColumnCollection> m_recordColumnCollection;
 	ibValuePtr<ibValueRecordSetObjectRegisterKeyValue> m_recordSetKeyValue;
+
+	// The same bag an object module has. Not stored with the rows.
+	ibValue m_additionalProperties;
+	void BindObjectBag();
 
 };
 
