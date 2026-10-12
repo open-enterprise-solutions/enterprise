@@ -719,6 +719,31 @@ bool ibValueSystemFunction::ValueIsFilled(const ibValue& cData)
 // Printing answers what a value LOOKS like; this answers what it IS. A structure survives the trip,
 // which is the difference between reading a report and reading a sentence about one. Coverage grows
 // with the types: whatever learns to pack itself is in here the day it does, with nothing to add.
+wxString ibValueSystemFunction::XMLString(const ibValue& value)
+{
+	switch (value.GetType()) {
+	case ibValueTypes::TYPE_EMPTY:
+	case ibValueTypes::TYPE_NULL:
+		return wxString();
+	case ibValueTypes::TYPE_BOOLEAN:
+		return value.GetBoolean() ? wxT("true") : wxT("false");
+	case ibValueTypes::TYPE_NUMBER:
+		return value.GetNumber().ToString();
+	case ibValueTypes::TYPE_DATE: {
+		ibDateTimeParts parts;
+		value.GetDate().ToParts(parts);
+		wxString text = wxString::Format(wxT("%04d-%02u-%02uT%02u:%02u:%02u"),
+			parts.m_year, parts.m_month, parts.m_day,
+			parts.m_hour, parts.m_minute, parts.m_second);
+		if (parts.m_millisecond != 0)
+			text += wxString::Format(wxT(".%03u"), parts.m_millisecond);
+		return text;
+	}
+	default:
+		return value.GetString();
+	}
+}
+
 wxString ibValueSystemFunction::SerializeValue(const ibValue& cData)
 {
 	// THE CONFIGURATION IS THE RUNNING ONE — the same one every other function in this file asks

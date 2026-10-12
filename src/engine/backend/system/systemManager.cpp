@@ -124,7 +124,9 @@ enum
 	// everything else — the ordinal IS the method index, so a new name goes at the END or every
 	// later case answers to the wrong verb.
 	enSerializeValue,
-	enDeserializeValue
+	enDeserializeValue,
+	// Appended: the ordinal is the bind-table index.
+	enXMLString
 };
 
 void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
@@ -251,6 +253,7 @@ void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibVal
 	//--- …and value-as-text last, matching the enSerializeValue / enDeserializeValue tail above.
 	helper.AppendFunc(wxT("SerializeValue"), 1, wxT("SerializeValue(value : any)"));
 	helper.AppendFunc(wxT("DeserializeValue"), 1, wxT("DeserializeValue(json : string)"));
+	helper.AppendFunc(wxT("XMLString"), 1, wxT("XMLString(value)"));
 };
 
 #include "backend/compiler/enumUnit.h"
@@ -396,6 +399,7 @@ bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 			return true;
 		case enSerializeValue: pvarRetValue = SerializeValue(*paParams[0]); return true;
 		case enDeserializeValue: pvarRetValue = DeserializeValue(paParams[0]->GetString()); return true;
+		case enXMLString: pvarRetValue = XMLString(*paParams[0]); return true;
 		case enEvaluate: pvarRetValue = Evaluate(paParams[0]->GetString()); return true;
 		case enExecute: Execute(paParams[0]->GetString()); return true;
 		case enFormat: pvarRetValue = Format(*paParams[0], paParams[1]->GetString()); return true;

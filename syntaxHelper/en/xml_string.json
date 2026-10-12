@@ -1,0 +1,16 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "en",
+  "entries": [
+    {
+      "id": "fn.XMLString",
+      "name_local": "XMLString",
+      "name_en": "XMLString",
+      "kind": "system_function",
+      "category_keys": ["global_context", "global_functions"],
+      "signature": "XMLString(value)",
+      "description": "String. The XML lexical form of a primitive: true or false, a number without grouping, a date as YYYY-MM-DDThh:mm:ss, or the string itself. Undefined is empty. The text is not escaped."
+    }
+  ]
+}

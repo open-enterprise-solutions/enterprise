@@ -2936,3 +2936,37 @@ TEST(RuntimeTest, AnArrayWalkedAndRewalkedIsLetGoOfOnce) {
 	// The frame goes here, with both arrays in it. That is the moment the nightly
 	// caught: passing under a sanitiser is the whole assertion.
 }
+
+TEST_F(BuiltInRuntime, XMLStringSpellsPrimitives) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ibValueSystemFunction valueSystem;
+	cc.AddContextVariable(wxT("System"), &valueSystem, true);
+
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("var yes public; var no public; var num public; var when public;\n")
+		wxT("var text public; var blank public;\n")
+		wxT("yes = XMLString(True);\n")
+		wxT("no = XMLString(False);\n")
+		wxT("num = XMLString(10);\n")
+		wxT("when = XMLString(Date(2024, 3, 5, 6, 7, 8));\n")
+		wxT("text = XMLString(\"a<b\");\n")
+		wxT("blank = XMLString(Undefined);\n")));
+
+	ibProcUnit pu;
+	wxString strError;
+	ASSERT_TRUE(RunBound(cc, pu, strError)) << strError.ToStdString();
+
+	ibValue v;
+	ASSERT_TRUE(pu.GetPropVal(wxT("yes"), v));
+	EXPECT_EQ(v.GetString(), wxT("true"));
+	ASSERT_TRUE(pu.GetPropVal(wxT("no"), v));
+	EXPECT_EQ(v.GetString(), wxT("false"));
+	ASSERT_TRUE(pu.GetPropVal(wxT("num"), v));
+	EXPECT_EQ(v.GetString(), wxT("10"));
+	ASSERT_TRUE(pu.GetPropVal(wxT("when"), v));
+	EXPECT_EQ(v.GetString(), wxT("2024-03-05T06:07:08"));
+	ASSERT_TRUE(pu.GetPropVal(wxT("text"), v));
+	EXPECT_EQ(v.GetString(), wxT("a<b"));
+	ASSERT_TRUE(pu.GetPropVal(wxT("blank"), v));
+	EXPECT_TRUE(v.GetString().IsEmpty());
+}

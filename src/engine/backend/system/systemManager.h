@@ -148,6 +148,8 @@ public:
 	// runtime values just by passing JSON"*).
 	static wxString SerializeValue(const ibValue& cData);
 	static ibValue  DeserializeValue(const wxString& strJson);
+	// XML lexical form of a primitive: true/false, a canonical number, xs:dateTime, or the string itself.
+	static wxString XMLString(const ibValue& value);
 
 	// (⛔ NO MESSAGE CAPTURE HERE. Getting the lines a run printed is not a new mechanism: the
 	//  debug channel already carries messages from a running application to whoever is attached —

@@ -1,0 +1,16 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "ru",
+  "entries": [
+    {
+      "id": "fn.XMLString",
+      "name_local": "XMLString",
+      "name_en": "XMLString",
+      "kind": "system_function",
+      "category_keys": ["global_context", "global_functions"],
+      "signature": "XMLString(value)",
+      "description": "Строка. Лексическая форма примитива для XML (XMLСтрока): true или false, число без группировки, дата как YYYY-MM-DDThh:mm:ss, либо сама строка. Неопределено — пустая строка. Текст не экранируется."
+    }
+  ]
+}
