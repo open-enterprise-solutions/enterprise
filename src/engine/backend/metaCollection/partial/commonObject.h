@@ -2337,6 +2337,10 @@ public:
 
 protected:
 	virtual void PrepareEmptyObject();
+
+	// DataExchange.Load — writable, not stored. Bound before the module compiles.
+	ibValue m_dataExchange;
+	void BindDataExchange();
 protected:
 	friend class ibMetaData;
 	friend class ibValueMetaObjectRecordData;
@@ -3319,6 +3323,10 @@ protected:
 
 	ibValuePtr<ibValueRecordSetObjectRegisterColumnCollection> m_recordColumnCollection;
 	ibValuePtr<ibValueRecordSetObjectRegisterKeyValue> m_recordSetKeyValue;
+
+	// The same DataExchange an object module has. Not stored with the rows.
+	ibValue m_dataExchange;
+	void BindDataExchange();
 
 };
 

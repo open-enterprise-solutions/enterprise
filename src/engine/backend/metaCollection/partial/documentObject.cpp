@@ -180,9 +180,10 @@ bool ibValueRecordDataObjectDocument::GetPropVal(const long lPropNum, ibValue& p
 		if (m_procUnit != nullptr &&
 			m_procUnit->GetPropVal(GetPropName(lPropNum), pvarPropVal))
 			return true;
-		// Bound handle (RegisterRecords) — live bind value directly (Designer/runtime).
+		// Bound handle (RegisterRecords, DataExchange). Copy the slot:
+		// assigning the pointer would wrap a reference slot instead of the value.
 		if (ibValue* bound = GetBoundValue(GetPropName(lPropNum))) {
-			pvarPropVal = bound;
+			pvarPropVal = *bound;
 			return true;
 		}
 	}

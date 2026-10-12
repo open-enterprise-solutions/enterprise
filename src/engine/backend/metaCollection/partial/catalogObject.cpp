@@ -176,11 +176,15 @@ bool ibValueRecordDataObjectCatalog::GetPropVal(const long lPropNum, ibValue& pv
 {
 	const long lPropAlias = m_members.GetPropAlias(lPropNum);
 	if (lPropAlias == eProcUnit) {
-		if (m_procUnit != nullptr) {
-			return m_procUnit->GetPropVal(
-				GetPropName(lPropNum), pvarPropVal
-			);
+		if (m_procUnit != nullptr &&
+			m_procUnit->GetPropVal(GetPropName(lPropNum), pvarPropVal))
+			return true;
+		// DataExchange is an external bind, not a module export.
+		if (ibValue* bound = GetBoundValue(GetPropName(lPropNum))) {
+			pvarPropVal = *bound;
+			return true;
 		}
+		return false;
 	}
 	else if (lPropAlias == eProperty || lPropAlias == eTable) {
 		const long lPropData = m_members.GetPropData(lPropNum);

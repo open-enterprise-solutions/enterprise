@@ -1,0 +1,24 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "en",
+  "entries": [
+    {
+      "id": "cls.Object.DataExchange",
+      "name_local": "DataExchange",
+      "name_en": "DataExchange",
+      "kind": "property",
+      "category_keys": ["value_types"],
+      "signature": "DataExchange",
+      "description": "The exchange flag of this one object or record set. Load is true while the object is being read in from an exchange, and a BeforeWrite handler returns without writing when it is. The flag is not stored.",
+      "syntax_block": "if (DataExchange.Load) {\n    return;\n}",
+      "syntax_block_ves": "If DataExchange.Load Then\n    Return;\nEndIf;",
+      "parameters": "Load — Boolean, writable. False until something sets it.",
+      "return_descr": "DataExchange.",
+      "example": "if (DataExchange.Load) {\n    return;\n}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    }
+  ]
+}

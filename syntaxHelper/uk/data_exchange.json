@@ -1,0 +1,24 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "uk",
+  "entries": [
+    {
+      "id": "cls.Object.DataExchange",
+      "name_local": "DataExchange",
+      "name_en": "DataExchange",
+      "kind": "property",
+      "category_keys": ["value_types"],
+      "signature": "DataExchange",
+      "description": "Ознака обміну цього одного об'єкта або набору записів (у 1С — ОбменДанными). Load істинний, поки об'єкт читається з обміну, і обробник BeforeWrite повертається, нічого не записуючи. Ознака не зберігається.",
+      "syntax_block": "if (DataExchange.Load) {\n    return;\n}",
+      "syntax_block_ves": "If DataExchange.Load Then\n    Return;\nEndIf;",
+      "parameters": "Load — Boolean, можна писати. Хибність, поки його не встановили.",
+      "return_descr": "DataExchange.",
+      "example": "if (DataExchange.Load) {\n    return;\n}",
+      "availability": "Конфігуратор, підприємство, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    }
+  ]
+}

@@ -21,6 +21,10 @@
 #include "backend/compiler/procUnitState.h"   // m_errorPlace — which opcode raised
 #include "backend/session/session.h"
 #include "backend/appData.h"                // the built-in dispatcher reads appData on entry
+#include "backend/metadataConfiguration.h"
+#include "backend/metaCollection/metaObject.h"
+#include "backend/metaCollection/metaModuleObject.h"
+#include "backend/metaCollection/partial/catalog.h"
 
 #include <wx/init.h>
 #include <wx/image.h>  // wxInitAllImageHandlers — wx decodes nothing until registered
@@ -2935,4 +2939,66 @@ TEST(RuntimeTest, AnArrayWalkedAndRewalkedIsLetGoOfOnce) {
 
 	// The frame goes here, with both arrays in it. That is the moment the nightly
 	// caught: passing under a sanitiser is the whole assertion.
+}
+
+// BeforeWrite reads DataExchange.Load. The name is bound before the object
+// module compiles, and the flag the module writes is the one the object keeps.
+TEST_F(BuiltInRuntime, AnObjectModuleSeesDataExchangeLoad) {
+	ibMetaDataConfigurationFile cfg;
+	ibValueMetaObjectConfiguration* root = cfg.GetCommonMetaObject();
+	ASSERT_NE(root, nullptr);
+
+	ibValueMetaObject* catalog = cfg.CreateMetaObject(g_metaCatalogCLSID, root, /*runObject*/ false);
+	ASSERT_NE(catalog, nullptr);
+
+	ibValueMetaObjectModule* module = nullptr;
+	for (unsigned int idx = 0; idx < catalog->GetChildCount(); ++idx) {
+		auto* child = dynamic_cast<ibValueMetaObjectModule*>(catalog->GetChild(idx));
+		if (child != nullptr && child->GetName() == wxT("ObjectModule")) {
+			module = child;
+			break;
+		}
+	}
+	ASSERT_NE(module, nullptr);
+	module->SetModuleText(wxT("DataExchange.Load = True;\n"));
+
+	// The object's module is compiled against the session root. A root that has
+	// never run has no parent bytecode, and the copy is created only after the
+	// configuration itself has run.
+	ASSERT_TRUE(cfg.RunDatabase());
+	{
+		auto session = std::make_shared<ibSession>(wxString(wxT("data-exchange")),
+			ibSessionKind::Enterprise);
+		ibSessionScope scope(session.get());
+		ASSERT_NE(session->CreateRoot(&cfg), nullptr);
+		ASSERT_TRUE(session->CompileRoot());
+
+		auto* catalogMeta = dynamic_cast<ibValueMetaObjectCatalog*>(catalog);
+		ASSERT_NE(catalogMeta, nullptr);
+
+		ibValuePtr<ibValueRecordDataObjectHierarchyRef> object;
+		try {
+			object = catalogMeta->CreateObjectValue(ibObjectMode::OBJECT_ITEM);
+		}
+		catch (const ibBackendException& err) {
+			FAIL() << err.GetErrorDescription().ToStdString();
+		}
+
+		ibValueRecordDataObjectHierarchyRef* raw = object;
+		ASSERT_NE(raw, nullptr);
+
+		const long exchangeProp = raw->FindProp(wxT("DataExchange"));
+		ASSERT_NE(exchangeProp, wxNOT_FOUND);
+		ibValue exchange;
+		ASSERT_TRUE(raw->GetPropVal(exchangeProp, exchange));
+		const long prop = exchange.FindProp(wxT("Load"));
+		ASSERT_GE(prop, 0);
+		ibValue load;
+		ASSERT_TRUE(exchange.GetPropVal(prop, load));
+		EXPECT_TRUE(load.GetBoolean());
+		object = nullptr;
+	}
+	if (cfg.IsConfigOpen()) {
+		EXPECT_TRUE(cfg.CloseDatabase());
+	}
 }
