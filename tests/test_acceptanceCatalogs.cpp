@@ -38,7 +38,7 @@
 #include "backend/query/queryHierarchy.h"
 #include "backend/query/queryProvider.h"
 #include "backend/query/queryRamTable.h"
-#include "backend/typeDescription.h"
+#include "core/description/typeDescription.h"
 #include "core/clsid.h"
 
 namespace {

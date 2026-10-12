@@ -12,7 +12,7 @@ ibDialogColWidth::ibDialogColWidth(ibGridEditor* parent, wxWindowID id, const wx
 	// columns keep no width of their own; off, they take the width below. Shown ON when none of the selected
 	// columns has a width of its own — which is how a column starts out.
 	bool defaultWidth = true;
-	wxObjectDataPtr<ibBackendSpreadsheetObject> doc;
+	std::shared_ptr<ibSpreadsheetObject> doc;
 	if (parent->GetActiveDocument(doc) && doc != nullptr) {
 		for (auto cell : parent->GetSelectedBlocks()) {
 			for (int col = cell.GetLeftCol(); col <= cell.GetRightCol() && defaultWidth; col++)

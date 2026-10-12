@@ -53,7 +53,7 @@ public:
 
 extern BACKEND_API const ibValue wxEmptyValue;
 
-// (The packed node's two field names — kValueFieldClsid, kValueFieldData — are the core's: core/types.h.)
+// (The packed node's two field names — kValueFieldClsid, kValueFieldData — are the core's: core/core.h.)
 
 // Forward declarations for template classes used in ConvertToEnumType/ConvertToEnumValue
 template <typename valT> class ibValueEnumerationBase;
@@ -91,7 +91,7 @@ public:
 // rule itself lives in docs/private/ownership-authority.md; on this side it is a rule people keep, not one
 // the compiler keeps for them.
 
-// (The primitives' class ids — g_valueBooleanCLSID … g_valueNullCLSID — are the core's too: core/types.h.)
+// (The primitives' class ids — g_valueBooleanCLSID … g_valueNullCLSID — are the core's too: core/core.h.)
 
 //simple type date
 class BACKEND_API ibValue : public ibAnyValue {
@@ -955,10 +955,17 @@ public:
 	void Reset();
 
 	//ref counter
-	void IncrRef() { m_refCount.fetch_add(1, std::memory_order_relaxed); }
-	void DecrRef() {
+	virtual void IncrRef() override { m_refCount.fetch_add(1, std::memory_order_relaxed); }
+	virtual void DecrRef() override {
 		wxASSERT_MSG(m_refCount.load(std::memory_order_relaxed) > 0, "invalid ref data count");
 		if (m_refCount.fetch_sub(1, std::memory_order_acq_rel) == 1) delete this;
+	}
+
+	// ⭐ THIS VALUE WHERE THE CORE KEEPS ONE (a sheet's parameters) — a copy of it, counted by its own count —
+	// and the value read back out of it: ours, since only we put one in (empty when nothing is held).
+	ibAnyValuePtr<ibValue> ToAnyValue() const { return ibAnyValuePtr<ibValue>(new ibValue(*this)); }
+	static ibValue FromAnyValue(const ibAnyValuePtr<ibAnyValue>& value) {
+		return value ? ibValue(static_cast<const ibValue&>(*value)) : ibValue();
 	}
 
 	// 🛑⭐⭐ THIS OWNERSHIP CANNOT BE FENCED OFF BY ACCESS CONTROL, and the reason is not a detail of

@@ -9,8 +9,8 @@
 
 #include <wx/string.h>
 
-#include "frmclient/backend/typeDescription.h"
-#include "frmclient/backend/query/queryKeywords.h"
+#include "core/description/typeDescription.h"
+#include "core/query/queryKeywords.h"
 
 class ibQueryLowering {
 public:

@@ -54,6 +54,7 @@
 #include "frmclient/win/dlgs/rowValueCell.h"          // ibRowValueCellRenderer — a field and a kind are VALUES
 #include "frmclient/win/dlgs/textWithDotsCell.h"      // ibTextWithDotsRenderer — a text cell with a "..."
 #include "frmclient/win/dlgs/settings/settingsAppearanceEditor.h"   // a field's appearance — the "..." behind it
+#include "frmclient/win/typeconv.h"                    // WxColourToColour — a row's grey is the model view's data
 
 namespace {
 enum {
@@ -414,7 +415,7 @@ public:
 	// which of the two it is showing.
 	bool GetAttrByRow(unsigned row, unsigned col, ibDataViewItemAttr& attr) const override {
 		if ((col == kColTitle && !OwnTitle(row)) || (col == kColRole && !OwnRole(row))) {
-			attr.SetColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
+			attr.SetColour(typeConv::WxColourToColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT)));
 			return true;
 		}
 		return false;
@@ -718,7 +719,7 @@ public:
 		const std::vector<ibVariantDescription>* list = List();
 		if (list == nullptr || col != kColName || row >= list->size() || !(*list)[row].m_name.IsEmpty())
 			return false;
-		attr.SetColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
+		attr.SetColour(typeConv::WxColourToColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT)));
 		return true;
 	}
 	bool SetValueByRow(const wxVariant& variant, unsigned row, unsigned col) override {

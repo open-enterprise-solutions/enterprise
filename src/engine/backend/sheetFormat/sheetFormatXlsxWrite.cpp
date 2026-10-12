@@ -70,9 +70,9 @@ wxString CellRef(int row, int col)
 
 // #RRGGBB -> the ARGB hex Excel wants. Alpha is always FF: our colours have no
 // transparency, and a zero alpha there reads as an invisible fill.
-wxString ArgbOf(const wxColour& colour)
+wxString ArgbOf(const ibColour& colour)
 {
-	return wxString::Format(wxT("FF%02X%02X%02X"), colour.Red(), colour.Green(), colour.Blue());
+	return wxString::Format(wxT("FF%02X%02X%02X"), colour.m_red, colour.m_green, colour.m_blue);
 }
 
 // ⚠ IS THIS TEXT A NUMBER — asked so a number reaches Excel AS a number, which is
@@ -109,11 +109,11 @@ wxString BorderStyleOf(const ibSpreadsheetBorderDescription& border)
 	const bool bold  = border.m_width == 2;
 
 	switch (border.m_style) {
-	case wxPENSTYLE_TRANSPARENT: return wxEmptyString;
-	case wxPENSTYLE_DOT:         return bold || heavy ? wxT("mediumDashDotDot") : wxT("dotted");
-	case wxPENSTYLE_SHORT_DASH:
-	case wxPENSTYLE_LONG_DASH:   return bold || heavy ? wxT("mediumDashed") : wxT("dashed");
-	case wxPENSTYLE_DOT_DASH:    return bold || heavy ? wxT("mediumDashDot") : wxT("dashDot");
+	case ibPenStyle_Transparent: return wxEmptyString;
+	case ibPenStyle_Dot:         return bold || heavy ? wxT("mediumDashDotDot") : wxT("dotted");
+	case ibPenStyle_ShortDash:
+	case ibPenStyle_LongDash:    return bold || heavy ? wxT("mediumDashed") : wxT("dashed");
+	case ibPenStyle_DotDash:     return bold || heavy ? wxT("mediumDashDot") : wxT("dashDot");
 	default: break;
 	}
 	return heavy ? wxT("thick") : (bold ? wxT("medium") : wxT("thin"));
@@ -173,14 +173,14 @@ CellStyle StyleOf(const ibSpreadsheetCellDescription& cell)
 {
 	CellStyle style;
 
-	const wxFont& font = cell.m_font;
+	const ibFont& font = cell.m_font;
 	if (font.IsOk()) {
-		style.m_fontFace   = font.GetFaceName();
-		style.m_fontSize   = font.GetPointSize();
-		style.m_bold       = font.GetWeight() >= wxFONTWEIGHT_BOLD;
-		style.m_italic     = font.GetStyle() == wxFONTSTYLE_ITALIC;
-		style.m_underlined = font.GetUnderlined();
-		style.m_struck     = font.GetStrikethrough();
+		style.m_fontFace   = font.m_faceName;
+		style.m_fontSize   = wxRound(font.m_pointSize);
+		style.m_bold       = font.m_weight >= ibFONTWEIGHT_BOLD;
+		style.m_italic     = font.m_style == ibFONTSTYLE_ITALIC;
+		style.m_underlined = font.m_underlined;
+		style.m_struck     = font.m_strikethrough;
 	}
 
 	if (cell.m_textColour.IsOk())
@@ -300,12 +300,12 @@ wxString Styles(const std::vector<CellStyle>& styles)
 	//
 	// ⚠ TAKEN FROM THE DEFAULT ITSELF rather than written out again: a number repeated in a second
 	// file is a number that stops agreeing the day the first one changes.
-	const wxFont ordinary = ibDefaultSpreadsheetFont();
-	const int defaultSize = ordinary.GetPointSize() > 0
-		? ordinary.GetPointSize() : 8;
+	const ibFont ordinary = ibDefaultSpreadsheetFont();
+	const int defaultSize = ordinary.m_pointSize > 0
+		? wxRound(ordinary.m_pointSize) : 8;
 
-	const wxString defaultFace = ordinary.GetFaceName().IsEmpty()
-		? wxString(wxT("Arial")) : ordinary.GetFaceName();
+	const wxString defaultFace = ordinary.m_faceName.IsEmpty()
+		? wxString(wxT("Arial")) : wxString(ordinary.m_faceName);
 
 	xml += wxString::Format(wxT("<font><sz val=\"%d\"/><name val=\"%s\"/></font>"),
 		defaultSize, XmlText(defaultFace));

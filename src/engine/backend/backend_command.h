@@ -2,7 +2,7 @@
 #define __BACKEND_COMMAND_H__
 
 #include "backend/backend_core.h"          // BACKEND_API
-#include "backend/commandDescription.h"    // ibCommandHop / ibCommandDescription — a command-hop path
+#include "core/description/commandDescription.h"    //ibCommandHop / ibCommandDescription — a command-hop path
 #include "backend/compiler/value.h"        // ibValue (+ ConvertToValue — a value self-describes as command-capable)
 #include <wx/string.h>
 #include <vector>

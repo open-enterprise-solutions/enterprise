@@ -79,8 +79,8 @@ public:
 	virtual bool UpdateFormUniqueKey(const ibUniqueKeyPair& guid) override;
 
 	// Grid support
-	virtual bool ShowSpreadsheetDocument(const wxString& strTitle, wxObjectDataPtr<ibBackendSpreadsheetObject>& spreadSheetDocument) override;
-	virtual bool PrintSpreadsheetDocument(const wxObjectDataPtr<ibBackendSpreadsheetObject>& doc, bool showPrintDlg = true) override;
+	virtual bool ShowSpreadsheetDocument(const wxString& strTitle, std::shared_ptr<ibSpreadsheetObject>& spreadSheetDocument) override;
+	virtual bool PrintSpreadsheetDocument(const std::shared_ptr<ibSpreadsheetObject>& doc, bool showPrintDlg = true) override;
 
 	// Schedule support — the same door the spreadsheet uses: the backend hands the value over, this
 	// side opens the window that knows how to edit it.

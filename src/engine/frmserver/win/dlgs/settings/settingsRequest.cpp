@@ -2,7 +2,7 @@
 
 #include "backend/backend_exception.h"     // a setting the schema refuses — said to the window, which stays open
 #include "backend/backend_mainFrame.h"
-#include "backend/compositionDescription.h"
+#include "backend/backend_composition.h"   // ibValidateSettings — a setting the schema refuses
 #include "backend/metaData.h"              // the cell's value read and made, its type's quick choice
 #include "core/serialize/dataBuilder.h"
 #include "backend/session/session.h"
@@ -29,7 +29,7 @@ void ibWriteSettingsField(ibDataNode& fields, const wxString& name, const wxStri
 	field.SetValue(ibProtocolName::Id, static_cast<s32>(id));
 	field.SetValue(ibProtocolName::Available, available);
 	ibDataValue written;
-	ibTypeDescriptionMemory::WriteNode(written, type, metaData);
+	ibTypeDescriptionMemory::WriteNode(written, type);
 	field.SetProperty(ibProtocolName::Type, written);
 }
 
@@ -289,11 +289,11 @@ bool ibRequestSettings(const ibDataNode& question, ibSettingsDescription& edited
 		if (settings == nullptr)
 			return false;   // …and Cancel leaves the composer exactly as it was: the copy is dropped
 
-		// What the window gave back, read against the configuration — a value of the base's types comes back through its
-		// door — and refused as the desktop's window refuses it: said, and the window stays open.
+		// What the window gave back — its values stay packed, restored by whoever runs them (backend_composition.h) — and
+		// refused as the desktop's window refuses it: said, and the window stays open.
 		ibSettingsDescription given;
 		try {
-			ibSettingsDescriptionMemory::ReadNode(*settings, given, metaData);
+			ibSettingsDescriptionMemory::ReadNode(*settings, given);
 			ibValidateSettings(given);
 		}
 		catch (const ibCoreException& err) {

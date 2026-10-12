@@ -37,7 +37,7 @@ class FRMSERVER_API ibHelpDocument : public ibDocument
 {
 public:
 
-	virtual ibServerPicture GetIcon() const {
+	virtual ibPicture GetIcon() const {
 		return ibBackendPicture::GetServerPicture(g_metaCommonModuleCLSID);
 	}
 

@@ -15,7 +15,7 @@
 
 #include <wx/panel.h>
 
-#include "frmclient/backend/compositionDescription.h"   // ibOutputParametersDescription — what is edited here
+#include "frmclient/backend/backend_composition.h"   // ibOutputParametersDescription — what is edited here; its values, restored
 
 class ibMetaData;
 class ibDataViewCtrl;

@@ -99,6 +99,11 @@ A field's `State` carries `Text`, as shown, and `Value`, the value with its type
 "v": <text>}`, a reference `{"t", "m", "g"}`. An `event` that changes a field (`Change`) gives either: `Value` is
 taken as it is, `Text` is parsed by the field's type.
 
+A table's `fetch` gives rows, each with `Container`, `Group` (a group's caption), `Picture`, and its cells as children
+by column id: `Text`, `Checked` for a flag, `Number`, `Value` when the cell takes an edit; its look, when the server's
+model set one — `TextColour`, `BackgroundColour` (a colour's text, `r,g,b`, as a form's colours), `Bold`, `Italic`,
+`Strikethrough`, `Underlined`, `Face`, `Size`, `Align` (`Left`, `Center`, `Right`).
+
 A table's column dragged in its header is `Move {Column, Holder, Position}`: `Holder` the group it now stands in, 0 the
 table. The client moves the column in its own copy of the form at once; the server's form follows.
 

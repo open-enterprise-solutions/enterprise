@@ -514,7 +514,7 @@ bool ibSpreadsheetEditDocument::SaveAs()
 
 bool ibSpreadsheetEditDocument::DoSaveDocument(const wxString& filename)
 {
-	wxObjectDataPtr<ibBackendSpreadsheetObject>spreadSheetDocument;
+	std::shared_ptr<ibSpreadsheetObject> spreadSheetDocument;
 	if (!GetGridCtrl()->GetActiveDocument(spreadSheetDocument))
 		return false;
 	return spreadSheetDocument->SaveToFile(filename);
@@ -548,7 +548,7 @@ bool ibSpreadsheetGridBoxDocument::SaveAs()
 	return DoSaveDocument(fileName);
 }
 
-void ibSpreadsheetGridBoxDocument::SetSpreadsheetDocument(const wxObjectDataPtr<ibBackendSpreadsheetObject>& spreadSheetDocument)
+void ibSpreadsheetGridBoxDocument::SetSpreadsheetDocument(const std::shared_ptr<ibSpreadsheetObject>& spreadSheetDocument)
 {
 	m_spreadSheetDocument = spreadSheetDocument;
 

@@ -1,6 +1,6 @@
 #include "composerSettings.h"
 
-#include "backend/compositionDescription.h"
+#include "core/description/compositionDescription.h"
 #include "backend/spreadsheetModel.h"                    // the model's composer — the setting in force, and the one set
 #include "backend/system/value/valueDataComposition.h"   // the composition the model is: what it arranges, its configuration
 #include "backend/query/queryConstructorModel.h"         // ibQueryFieldsOfText — the fields its query offers

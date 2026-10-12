@@ -15,7 +15,7 @@ ibValueColour::ibValueColour() :
 {
 }
 
-ibValueColour::ibValueColour(const wxColour& colour) :
+ibValueColour::ibValueColour(const ibColour& colour) :
 	ibValueStaticMembers(ibValueTypes::TYPE_VALUE), m_colour(colour)
 {
 }
@@ -23,14 +23,14 @@ ibValueColour::ibValueColour(const wxColour& colour) :
 bool ibValueColour::Init(ibValue** paParams, const long lSizeArray)
 {
 	if (lSizeArray > 0 && paParams[0]->GetType() == ibValueTypes::TYPE_STRING) {
-		m_colour = typeConv::StringToColour(paParams[0]->GetString());
+		m_colour.FromString(paParams[0]->GetString());
 		return true;
 	}
 	else if (lSizeArray > 2) {
-		m_colour = wxColour(
-			paParams[0]->GetInteger(),
-			paParams[1]->GetInteger(),
-			paParams[2]->GetInteger()
+		m_colour = ibColour(
+			static_cast<unsigned char>(paParams[0]->GetInteger()),
+			static_cast<unsigned char>(paParams[1]->GetInteger()),
+			static_cast<unsigned char>(paParams[2]->GetInteger())
 		);
 		return true;
 	}
@@ -56,13 +56,13 @@ bool ibValueColour::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 	switch (lPropNum)
 	{
 	case enColorRed:
-		m_colour.Set((unsigned char)varPropVal.GetUInteger(), m_colour.Green(), m_colour.Blue());
+		m_colour = ibColour((unsigned char)varPropVal.GetUInteger(), m_colour.m_green, m_colour.m_blue);
 		return true;
 	case enColorGreen:
-		m_colour.Set(m_colour.Red(), (unsigned char)varPropVal.GetUInteger(), m_colour.Blue());
+		m_colour = ibColour(m_colour.m_red, (unsigned char)varPropVal.GetUInteger(), m_colour.m_blue);
 		return true;
 	case enColorBlue:
-		m_colour.Set(m_colour.Red(), m_colour.Green(), (unsigned char)varPropVal.GetUInteger());
+		m_colour = ibColour(m_colour.m_red, m_colour.m_green, (unsigned char)varPropVal.GetUInteger());
 		return true;
 	}
 	return false;
@@ -73,13 +73,13 @@ bool ibValueColour::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 	switch (lPropNum)
 	{
 	case enColorRed:
-		pvarPropVal = m_colour.Red();
+		pvarPropVal = m_colour.m_red;
 		return true;
 	case enColorGreen:
-		pvarPropVal = m_colour.Green();
+		pvarPropVal = m_colour.m_green;
 		return true;
 	case enColorBlue:
-		pvarPropVal = m_colour.Blue();
+		pvarPropVal = m_colour.m_blue;
 		return true;
 	}
 	return false;
@@ -91,13 +91,13 @@ const wxString kColourText = wxT("v");
 
 bool ibValueColour::DoSerialize(ibDataNode& node) const
 {
-	node.SetValue(kColourText, typeConv::ColourToString(m_colour));
+	node.SetValue(kColourText, m_colour.ToString());
 	return true;
 }
 
 bool ibValueColour::DoDeserialize(const ibDataNode& node)
 {
-	m_colour = typeConv::StringToColour(node.GetValue<wxString>(kColourText));
+	m_colour.FromString(node.GetValue<wxString>(kColourText));
 	return true;
 }
 

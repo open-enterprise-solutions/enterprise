@@ -30,7 +30,7 @@
 #include "backend/metaCollection/metaObject.h"
 #include "backend/metadataConfiguration.h"
 #include "core/stringUtils.h"
-#include "backend/typeDescription.h"              // ibMetaDescription — what these properties hold
+#include "core/description/typeDescription.h"              // ibMetaDescription — what these properties hold
 #include "backend/propertyManager/property/variant/variantMetaDesc.h"   // the one shape that holds it
 
 namespace {

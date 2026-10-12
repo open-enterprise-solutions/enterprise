@@ -36,9 +36,9 @@ class FRMSERVER_API ibVisualHost;   // visualHost.h — who holds the form; ever
 // toolbars, dataviews, dialogs. Aligned with interior palette: deep
 // dusty blue text on cream content surface. Was Windows-blue accent
 // (#0078D7) + light off-white grey (#EBEBF1) - both clashed with the
-// powder-blue + cream + terracotta palette.
-#define wxDefaultStypeFGColour wxColour(0x3F, 0x5C, 0x77)  // #3F5C77 deep dusty blue
-#define wxDefaultStypeBGColour wxColour(0xFA, 0xF7, 0xF0)  // #FAF7F0 cream content
+// powder-blue + cream + terracotta palette. The core's colour: the server draws nothing.
+#define ibDefaultStyleFGColour ibColour(0x3F, 0x5C, 0x77)  // #3F5C77 deep dusty blue
+#define ibDefaultStyleBGColour ibColour(0xFA, 0xF7, 0xF0)  // #FAF7F0 cream content
 
 #include "core/fileSystem/fs.h"
 

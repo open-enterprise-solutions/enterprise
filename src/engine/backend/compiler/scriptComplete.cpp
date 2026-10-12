@@ -10,7 +10,7 @@
 #include "backend/moduleInfo.h"                  // ibRuntimeModuleDataObject::GetCompileModule
 #include "backend/moduleManager/moduleManager.h" // ibValueModuleManager — the context a snippet parents to
 #include "backend/session/session.h"             // ibSession::EditModuleManagerFor
-#include "backend/typeDescription.h"             // ibTypeDescription - a type, possibly several
+#include "core/description/typeDescription.h"             // ibTypeDescription - a type, possibly several
 #include "backend/objCtor.h"                     // ibCtorMetaValueType - one door: the metaobject AND the maker
 #include "backend/metaCollection/metaObjectComposite.h"   // where fields live: catalog, document, register, tabular section
 #include "backend/compiler/blockSyntaxLINQ.h"    // ibLinqClausesAfter - which query word may follow which

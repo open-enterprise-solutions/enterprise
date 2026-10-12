@@ -26,7 +26,7 @@
 #include "backend/backend_mainFrame.h"
 #include "backend/uniqueKey.h"
 #include "core/serialize/dataBuilder.h"   // ibDataNode — a request and its response
-#include "backend/pictureDescription.h"     // ibPictureDescription — a picture a frame names (SendPicture)
+#include "core/description/pictureDescription.h"     // ibPictureDescription — a picture a frame names (SendPicture)
 
 #include "frmserver/docView/docView.h"     // ibDocParentFrameAnyBase — the document manager's slot
 
@@ -103,10 +103,10 @@ public:
 
 	// A SHEET SHOWN — the desktop's (ibFrontendMainFrame::ShowSpreadsheetDocument): a spreadsheet document of its own
 	// over it, in a tab of its own, under that title. What a list output and a script's Show() reach.
-	virtual bool ShowSpreadsheetDocument(const wxString& strTitle, wxObjectDataPtr<ibBackendSpreadsheetObject>& spreadSheetDocument) override;
+	virtual bool ShowSpreadsheetDocument(const wxString& strTitle, std::shared_ptr<ibSpreadsheetObject>& spreadSheetDocument) override;
 	// …and a script's sheet printed, by the client's printer (ibProtocolRequestKind::Print) — with its print dialog,
 	// as the desktop's always was.
-	virtual bool PrintSpreadsheetDocument(const wxObjectDataPtr<ibBackendSpreadsheetObject>& doc, bool showPrintDlg = true) override;
+	virtual bool PrintSpreadsheetDocument(const std::shared_ptr<ibSpreadsheetObject>& doc, bool showPrintDlg = true) override;
 
 	// A SCHEDULE EDITED — the desktop's editor, asked of the client (ibProtocolRequestKind::Schedule). OK marks the active
 	// form modified, as the desktop's did: the edit happened in a window of its own, nothing else would notice it.

@@ -21,6 +21,7 @@
 #include <ctime>
 
 #include <wx/file.h>
+#include <wx/filename.h>
 #include <wx/stdpaths.h>
 #include <wx/tokenzr.h>
 #include <wx/regex.h>

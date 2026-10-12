@@ -11,13 +11,13 @@
 #include <wx/string.h>
 
 #include "frmserver/frmserver.h"
-#include "backend/backend_picture.h"    // ibServerPicture — the item's picture as it is sent
+#include "core/graphics/picture.h"      // ibPicture — the item's picture as it is sent
 #include "core/fileSystem/types.h"   // s32
 
 struct ibChoiceItem {
 	s32             id = 0;
 	wxString        caption;
-	ibServerPicture icon;
+	ibPicture       icon;
 	bool            selected = false;
 };
 

@@ -276,7 +276,7 @@ ibDocManager::ibDocManager(long WXUNUSED(flags), bool initialize)
 		CLASSINFO(ibTextFileDocument), CLASSINFO(ibTextEditView),
 		ibTEMPLATE_VISIBLE);
 
-	// EVERY TABLE FORMAT, OURS INCLUDED — asked of the registry (backend/sheetFormat/), not assembled here.
+	// EVERY TABLE FORMAT, OURS INCLUDED — asked of the registry (core/spreadsheet/sheetFormat.h), not assembled here.
 	AddDocTemplate(g_metaTemplateCLSID,
 		_("Spreadsheet document"), ibSheetFormatMask(), ibSheetFormatExtensions(),
 		_("Spreadsheet Doc"), _("Spreadsheet View"),

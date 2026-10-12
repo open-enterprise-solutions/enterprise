@@ -4,7 +4,7 @@
 // THE TYPE PICKER — the desktop's (frontend/win/dlgs/typeSelector.h): the designer's, over the types the configuration
 // has. Here with the desktop's door, and it answers Cancel: `inOut` stays as it was.
 
-#include "frmclient/backend/typeDescription.h"
+#include "core/description/typeDescription.h"
 #include "frmclient/backend/backend_type.h"   // ibSelectorDataType — which shape the picker renders
 
 #include <vector>

@@ -1526,7 +1526,7 @@ TEST(QueryL4Parser, TotalsAggregateOverAPartitionIsRefused)
 // CAST TO A PRIMITIVE — the type a temporary table's field is described by, written in the text.
 // ===========================================================================
 
-#include "backend/typeDescription.h"
+#include "core/description/typeDescription.h"
 
 // The qualifiers ride in the text and come back as the type they say.
 TEST(QueryL4Parser, CastToAPrimitiveReadsItsQualifiers)

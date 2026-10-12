@@ -110,7 +110,7 @@ std::vector<long> ibDataRamComposer::ComputeOrder() const
 			for (size_t i = 0; i < filterFields.size(); ++i)
 				if (filterFields[i].m_resolved)
 					filterCells[i] = m_storage->ResolveField(r, filterFields[i].m_col, filterFields[i].m_tail);
-			if (!ibCompositionFilterHolds(filter, valueOf, subtreeOf, /*whenUnknown*/ true))
+			if (!ibCompositionFilterHolds(filter, m_metaData, valueOf, subtreeOf, /*whenUnknown*/ true))
 				continue;
 		}
 

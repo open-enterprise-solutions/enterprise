@@ -78,10 +78,9 @@ ibCompositionLine HeadAt(int level, ibSelectorNodeKind kind, bool hasChildren, b
 	return line;
 }
 
-// A document the driver writes into. wxObjectDataPtr because the spreadsheet
-// object is ref-counted.
-wxObjectDataPtr<ibBackendSpreadsheetObject> MakeDocument() {
-	return wxObjectDataPtr<ibBackendSpreadsheetObject>(new ibBackendSpreadsheetObject());
+// A document the driver writes into, held as every owner of a sheet holds it.
+std::shared_ptr<ibSpreadsheetObject> MakeDocument() {
+	return std::make_shared<ibSpreadsheetObject>();
 }
 
 // ⭐ A DIMENSION SAYS WHICH LEVEL IT BELONGS TO, and the driver reads that rather than counting
@@ -213,7 +212,7 @@ TEST(SpreadsheetCompose, EveryNonEmptyCell_CarriesItsValue)
 	driver.OnRow(RowAt(0), { ibValue(), ibValue(20) });
 	driver.OnOutputEnd(false);
 
-	wxString details;
+	ibString details;
 	doc->GetCellDetailsParameter(1, 0, details);
 	EXPECT_FALSE(details.IsEmpty());
 	doc->GetCellDetailsParameter(1, 1, details);
@@ -237,11 +236,11 @@ TEST(SpreadsheetCompose, AFigureIsLinkedToItsHeading)
 	driver.OnGroupBegin(HeadAt(1, ibSelectorNodeKind::Group, true, true), { ibValue(wxT("Alpha")), ibValue(100) });
 	driver.OnOutputEnd(true);
 
-	wxString name;
+	ibString name;
 	doc->GetCellDetailsParameter(1, 1, name);   // the figure's own cell
 	ASSERT_FALSE(name.IsEmpty());
 
-	ibValue bound = doc->GetParameter(name);   // held: From returns a pointer INTO it
+	ibValue bound = ibValue::FromAnyValue(doc->GetParameter(name));   // held: From returns a pointer INTO it
 	ibValueSpreadsheetDetails* figure = ibValueSpreadsheetDetails::From(bound);
 	ASSERT_TRUE(figure != nullptr);
 	EXPECT_EQ(wxT("Amount"), figure->GetPath());
@@ -275,11 +274,11 @@ TEST(SpreadsheetCompose, AHeadingIsItsOwnContext)
 	driver.OnGroupBegin(HeadAt(1, ibSelectorNodeKind::Group, true, true), { ibValue(wxT("Alpha")), ibValue(100) });
 	driver.OnOutputEnd(true);
 
-	wxString name;
+	ibString name;
 	doc->GetCellDetailsParameter(1, 0, name);
 	ASSERT_FALSE(name.IsEmpty());
 
-	ibValue bound = doc->GetParameter(name);
+	ibValue bound = ibValue::FromAnyValue(doc->GetParameter(name));
 	ibValueSpreadsheetDetails* heading = ibValueSpreadsheetDetails::From(bound);
 	ASSERT_TRUE(heading != nullptr);
 
@@ -645,11 +644,11 @@ TEST(SpreadsheetCross, ACellIsLinkedToBothItsHeadings)
 	driver.OnGroupBegin(HeadAt(2, ibSelectorNodeKind::Group, false, false), { ibValue(), ibValue(wxT("North")), ibValue(30) });
 	driver.OnOutputEnd(true);
 
-	wxString name;
+	ibString name;
 	doc->GetCellDetailsParameter(1, 1, name);   // where Alpha meets the North
 	ASSERT_FALSE(name.IsEmpty());
 
-	ibValue bound = doc->GetParameter(name);
+	ibValue bound = ibValue::FromAnyValue(doc->GetParameter(name));
 	ibValueSpreadsheetDetails* cell = ibValueSpreadsheetDetails::From(bound);
 	ASSERT_TRUE(cell != nullptr);
 	EXPECT_EQ(size_t(2), cell->GetParents().size());
@@ -996,7 +995,7 @@ TEST(SpreadsheetCross, EveryHeadingGetsItsOwnTotalColumnEvenOverOneChild)
 // code (2026-08-30).
 TEST(SpreadsheetCross, AColumnHeadingFedThroughOnColumn_LandsWhereOnGroupBeginPutsIt)
 {
-	const auto compose = [](bool throughOnColumn, ibBackendSpreadsheetObject* into) {
+	const auto compose = [](bool throughOnColumn, ibSpreadsheetObject* into) {
 		ibSpreadsheetComposeDriver driver(into);
 
 		// Partner reads down the page (level 0), Warehouse across it (level 1).

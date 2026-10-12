@@ -16,7 +16,7 @@
 
 #include <wx/panel.h>
 
-#include "backend/compositionDescription.h"   // ibConditionalAppearanceDescription — what is edited here
+#include "core/description/compositionDescription.h"   // ibConditionalAppearanceDescription — what is edited here
 
 class ibMetaData;
 class ibDataViewCtrl;

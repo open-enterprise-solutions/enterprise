@@ -1252,7 +1252,7 @@ void ibFrontendMainFrame::ShowRequest(const ibProtocolNode& request, ibProtocolN
 	case ibProtocolRequestKind::Print: {
 		// THE DESKTOP'S PrintSpreadsheetDocument over a script's sheet, read into a document of its own as a spreadsheet's
 		// fetch is (ibValueGridBox): the page as the preview was last left, the same as File -> Print.
-		wxObjectDataPtr<ibBackendSpreadsheetObject> document(new ibBackendSpreadsheetObject);
+		auto document = std::make_shared<ibSpreadsheetObject>();
 		auto sheet = std::make_shared<ibDataNode>();
 		ibReadProtocolNode(request.FindChild(ibProtocolName::Sheet), *sheet);
 		ibSpreadsheetDescriptionMemory::ReadNode(ibDataValue::Child(sheet), document->GetSpreadsheetDesc());

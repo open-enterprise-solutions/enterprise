@@ -11,7 +11,7 @@
 #include "frmclient/backend/backend_core.h"   // …as the engine's value.h brings it to those who include it
 #include "core/anyValue.h"   // ibAnyValue — what every value answers, the engine's and the client's
 #include "core/fileSystem/types.h"
-#include "core/types.h"   // kValueFieldClsid / kValueFieldData — the fields a value is written into a node by
+#include "core/core.h"    // kValueFieldClsid / kValueFieldData — the fields a value is written into a node by
 
 template <class T> class ibValuePtr;
 class ibDataNode;
@@ -134,8 +134,15 @@ public:
 	void ShowValue() const {}
 
 	// Counted, as the engine's: whoever holds it (ibValuePtr) keeps it.
-	void IncrRef() { m_refCount++; }
-	void DecrRef() { if (--m_refCount == 0) delete this; }
+	virtual void IncrRef() override { m_refCount++; }
+	virtual void DecrRef() override { if (--m_refCount == 0) delete this; }
+
+	// ⭐ THIS VALUE WHERE THE CORE KEEPS ONE (a sheet's parameters) — a copy of it, counted by its own count —
+	// and the value read back out of it: ours, since only we put one in (empty when nothing is held).
+	ibAnyValuePtr<ibValue> ToAnyValue() const { return ibAnyValuePtr<ibValue>(new ibValue(*this)); }
+	static ibValue FromAnyValue(const ibAnyValuePtr<ibAnyValue>& value) {
+		return value ? ibValue(static_cast<const ibValue&>(*value)) : ibValue();
+	}
 
 	// The engine's own picture of a value (value_res.cpp) — what a field of a settings window wears.
 	static wxIcon GetIconGroup();

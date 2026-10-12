@@ -196,7 +196,7 @@ void ibHomePageView::DrawCell(const ibHomePageCell& cell, ibDataNode& node) cons
 	// falling back to the form's own, and to the page's glyph when the form is gone. An embedded form has no tab
 	// to carry either.
 	const ibValueMetaObjectFormBase* const metaForm = cell.m_metaForm;
-	ibServerPicture headerIcon;
+	ibPicture headerIcon;
 	if (metaForm != nullptr) {
 		const ibValueMetaObject* const owner = metaForm->GetParent();
 		headerIcon = ibBackendPicture::GetServerPicture(owner != nullptr ? owner->GetClassType() : metaForm->GetClassType());

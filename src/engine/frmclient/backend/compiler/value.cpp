@@ -299,20 +299,7 @@ void ibValue::RegisterCtor(const ibClassID& clsid, const wxString& className)
 
 ibClassID ibValue::GetIDByVT(const ibValueTypes& valueType)
 {
-	if (valueType == ibValueTypes::TYPE_EMPTY)
-		return g_valueUndefinedCLSID;
-	else if (valueType == ibValueTypes::TYPE_BOOLEAN)
-		return g_valueBooleanCLSID;
-	else if (valueType == ibValueTypes::TYPE_NUMBER)
-		return g_valueNumberCLSID;
-	else if (valueType == ibValueTypes::TYPE_DATE)
-		return g_valueDateCLSID;
-	else if (valueType == ibValueTypes::TYPE_STRING)
-		return g_valueStringCLSID;
-	else if (valueType == ibValueTypes::TYPE_NULL)
-		return g_valueNullCLSID;
-
-	return 0;
+	return ::GetIDByVT(valueType);   // the core's table (core/core.h)
 }
 
 ibValueTypes ibValue::GetVTByID(const ibClassID& clsid)

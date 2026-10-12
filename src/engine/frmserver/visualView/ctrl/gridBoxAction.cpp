@@ -9,6 +9,7 @@
 #include "backend/settings/settingsComposer.h"            // ibSettingsCategory — which shelf a report's settings sit on
 #include "backend/backend_exception.h"                    // ibBackendInterruptException — a read stopped, not failed
 #include "backend/backend_mainFrame.h"                    // ibBackendDocFrame::ShowModalMessage — a refusal, said to the person
+#include "backend/backend_composition.h"                  // ibVariantCaption — what the picker shows of a variant
 #include "backend/session/session.h"                      // ibSession — whose queue a compose is delivered on
 #include "frmserver/visualView/choiceRequest.h"           // ibRequestMenu — a variant, picked from the popup menu
 #include "frmserver/win/dlgs/settings/savedSettings.h"    // ibDialogSavedSettings — the reader's shelf
@@ -38,7 +39,7 @@ void ibChooseVariant(ibDataComposer& composer)
 		// WHAT THE PICKER SHOWS — the synonym in the configuration's language, else the name, else its place
 		// in the list: not a caption anybody wrote, but what an unnamed variant HAS, and a blank line in a menu
 		// cannot be clicked with any confidence.
-		item.caption = variants[i].GetPresentation();
+		item.caption = ibVariantCaption(variants[i]);
 		if (item.caption.IsEmpty())
 			item.caption = wxString::Format(_("Variant %u"), static_cast<unsigned>(i + 1));
 		// ⭐ AND THE ONE IN FORCE IS TICKED — by COMPARING the settings against what COMPOSES, because there is

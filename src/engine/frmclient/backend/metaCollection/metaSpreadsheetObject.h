@@ -3,7 +3,7 @@
 
 #include <wx/icon.h>
 
-#include "frmclient/backend/backend_spreadsheet.h"
+#include "core/spreadsheet/spreadsheetObject.h"
 #include "core/clsid.h"
 #include "frmclient/backend/backend_picture.h"   // ibBackendPicture — the template's icon, as the server gave it
 

@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 #include <chrono>
-#include "backend/backend_spreadsheet.h"
+#include "core/spreadsheet/spreadsheetObject.h"
 #include "backend/sheetFormat/sheetFormat.h"
 
 #include <wx/filename.h>
@@ -20,7 +20,7 @@ TEST(SpreadsheetDocumentBench, DISABLED_FillCost)
 		(int)sizeof(ibSpreadsheetCellDescription));
 
 	for (int rows : { 100, 200, 400, 800, 1600, 3200 }) {
-		wxObjectDataPtr<ibBackendSpreadsheetObject> doc(new ibBackendSpreadsheetObject());
+		std::shared_ptr<ibSpreadsheetObject> doc = std::make_shared<ibSpreadsheetObject>();
 		const auto t0 = std::chrono::steady_clock::now();
 		for (int r = 0; r < rows; ++r)
 			for (int c = 0; c < 10; ++c)

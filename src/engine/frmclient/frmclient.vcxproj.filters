@@ -187,9 +187,6 @@
     <ClCompile Include="win\ctrls\dataview\datavlayout.cpp">
       <Filter>win\ctrls\dataview</Filter>
     </ClCompile>
-    <ClCompile Include="win\ctrls\dataview\tabularModelView.cpp">
-      <Filter>win\ctrls\dataview</Filter>
-    </ClCompile>
     <ClCompile Include="win\ctrls\grid\gridext.cpp">
       <Filter>win\ctrls\grid</Filter>
     </ClCompile>
@@ -433,9 +430,6 @@
     <ClInclude Include="win\ctrls\dataview\datavgen.window.private.h">
       <Filter>win\ctrls\dataview</Filter>
     </ClInclude>
-    <ClInclude Include="win\ctrls\dataview\tabularModelView.h">
-      <Filter>win\ctrls\dataview</Filter>
-    </ClInclude>
     <ClInclude Include="win\ctrls\grid\gridext.h">
       <Filter>win\ctrls\grid</Filter>
     </ClInclude>
@@ -573,9 +567,6 @@
     <Filter Include="backend\settings">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f502f}</UniqueIdentifier>
     </Filter>
-    <Filter Include="backend\sheetFormat">
-      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5030}</UniqueIdentifier>
-    </Filter>
     <Filter Include="backend\system">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5031}</UniqueIdentifier>
     </Filter>
@@ -656,16 +647,16 @@
     <ClInclude Include="backend\backend_picture.h">
       <Filter>backend</Filter>
     </ClInclude>
-    <ClCompile Include="backend\backend_spreadsheet.cpp">
-      <Filter>backend</Filter>
-    </ClCompile>
-    <ClInclude Include="backend\backend_spreadsheet.h">
-      <Filter>backend</Filter>
-    </ClInclude>
     <ClCompile Include="backend\backend_type.cpp">
       <Filter>backend</Filter>
     </ClCompile>
     <ClInclude Include="backend\backend_type.h">
+      <Filter>backend</Filter>
+    </ClInclude>
+    <ClCompile Include="backend\backend_composition.cpp">
+      <Filter>backend</Filter>
+    </ClCompile>
+    <ClInclude Include="backend\backend_composition.h">
       <Filter>backend</Filter>
     </ClInclude>
     <ClInclude Include="backend\compiler\enumUnit.h">
@@ -680,21 +671,9 @@
     <ClCompile Include="backend\compiler\value_res.cpp">
       <Filter>backend\compiler</Filter>
     </ClCompile>
-    <ClCompile Include="backend\compositionDescription.cpp">
-      <Filter>backend</Filter>
-    </ClCompile>
-    <ClInclude Include="backend\compositionDescription.h">
-      <Filter>backend</Filter>
-    </ClInclude>
     <ClInclude Include="backend\composition\dataComposer.h">
       <Filter>backend\composition</Filter>
     </ClInclude>
-    <ClInclude Include="backend\composition\compositionTheme.h">
-      <Filter>backend\composition</Filter>
-    </ClInclude>
-    <ClCompile Include="backend\composition\compositionTheme.cpp">
-      <Filter>backend\composition</Filter>
-    </ClCompile>
     <ClInclude Include="backend\metaCollection\metaLanguageObject.h">
       <Filter>backend\metaCollection</Filter>
     </ClInclude>
@@ -722,9 +701,6 @@
     <ClInclude Include="backend\job\jobSchedule.h">
       <Filter>backend\job</Filter>
     </ClInclude>
-    <ClCompile Include="backend\job\jobSchedule.cpp">
-      <Filter>backend\job</Filter>
-    </ClCompile>
     <ClCompile Include="backend\job\jobScheduleRules.cpp">
       <Filter>backend\job</Filter>
     </ClCompile>
@@ -812,16 +788,10 @@
     <ClInclude Include="backend\propertyManager\property\variant\variantComposition.h">
       <Filter>backend\propertyManager\property\variant</Filter>
     </ClInclude>
-    <ClInclude Include="backend\query\queryBalanceRole.h">
-      <Filter>backend\query</Filter>
-    </ClInclude>
     <ClInclude Include="backend\query\queryAST.h">
       <Filter>backend\query</Filter>
     </ClInclude>
     <ClInclude Include="backend\query\queryable.h">
-      <Filter>backend\query</Filter>
-    </ClInclude>
-    <ClInclude Include="backend\query\queryKeywords.h">
       <Filter>backend\query</Filter>
     </ClInclude>
     <ClInclude Include="backend\query\queryLowering.h">
@@ -833,9 +803,6 @@
     <ClCompile Include="backend\query\queryConstructorModel.cpp">
       <Filter>backend\query</Filter>
     </ClCompile>
-    <ClInclude Include="backend\query\queryUnfold.h">
-      <Filter>backend\query</Filter>
-    </ClInclude>
     <ClCompile Include="backend\serialize\dataProtocol.cpp">
       <Filter>backend\serialize</Filter>
     </ClCompile>
@@ -850,18 +817,6 @@
     </ClCompile>
     <ClInclude Include="backend\settings\settingsComposer.h">
       <Filter>backend\settings</Filter>
-    </ClInclude>
-    <ClInclude Include="backend\sheetFormat\sheetFormat.h">
-      <Filter>backend\sheetFormat</Filter>
-    </ClInclude>
-    <ClInclude Include="backend\sourceDescription.h">
-      <Filter>backend</Filter>
-    </ClInclude>
-    <ClCompile Include="backend\spreadsheetDescription.cpp">
-      <Filter>backend</Filter>
-    </ClCompile>
-    <ClInclude Include="backend\spreadsheetDescription.h">
-      <Filter>backend</Filter>
     </ClInclude>
     <ClInclude Include="backend\srcObject.h">
       <Filter>backend</Filter>
@@ -901,12 +856,6 @@
     </ClCompile>
     <ClInclude Include="backend\system\value\valueType.h">
       <Filter>backend\system\value</Filter>
-    </ClInclude>
-    <ClCompile Include="backend\typeDescription.cpp">
-      <Filter>backend</Filter>
-    </ClCompile>
-    <ClInclude Include="backend\typeDescription.h">
-      <Filter>backend</Filter>
     </ClInclude>
     <ClCompile Include="docView\templates\docViewSpreadsheet.cpp">
       <Filter>docView\templates</Filter>

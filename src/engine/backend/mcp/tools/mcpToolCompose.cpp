@@ -46,7 +46,7 @@
 
 #include "backend/mcp/mcpTool.h"
 
-#include "backend/compositionDescription.h"
+#include "core/description/compositionDescription.h"
 #include "backend/metaCollection/metaComposerObject.h"
 #include "backend/metadataConfiguration.h"
 #include "backend/composition/dataComposer.h"                    // ibDataDBComposer — folding the settings
@@ -534,7 +534,7 @@ public:
 			subject = ibMcpText("the query given");
 		}
 		else if (givenSchema != nullptr) {
-			if (!ibCompositionDescriptionMemory::ReadNode(*givenSchema, description, activeMetaData)) {
+			if (!ibCompositionDescriptionMemory::ReadNode(*givenSchema, description)) {
 				refusal = ibMcpText("`schema` could not be read as a composition. report_get on any report "
 					"shows the shape one has.");
 				return false;

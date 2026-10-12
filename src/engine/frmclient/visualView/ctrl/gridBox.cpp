@@ -91,7 +91,7 @@ void ibValueGridBox::Update(const ibProtocolNode& node)
 		if (m_fetcher(ibProtocolNode(), answer) && answer.GetInt(ibProtocolName::Version) == version) {
 			m_version = version;
 
-			wxObjectDataPtr<ibBackendSpreadsheetObject> document(new ibBackendSpreadsheetObject);
+			auto document = std::make_shared<ibSpreadsheetObject>();
 			auto sheet = std::make_shared<ibDataNode>();
 			ibReadProtocolNode(answer.FindChild(ibProtocolName::Sheet), *sheet);
 			ibSpreadsheetDescriptionMemory::ReadNode(ibDataValue::Child(sheet), document->GetSpreadsheetDesc());

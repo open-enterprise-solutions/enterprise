@@ -13,7 +13,7 @@
 #include <wx/string.h>
 
 #include "frmserver/frmserver.h"
-#include "core/types.h"   // ibMetaID
+#include "core/core.h"    // ibMetaID
 
 class ibDataNode;
 class ibMetaData;

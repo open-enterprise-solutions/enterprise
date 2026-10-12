@@ -7,8 +7,8 @@
 #include "backend/appData.h"
 #include "backend/logger/logger.h"
 #include "backend/metaCollection/partial/reference/reference.h"   // ibValueReferenceDataObject — a row's object
-#include "backend/pictureDescription.h"
 #include "backend/picturePredefined.h"
+#include "core/description/pictureDescription.h"
 #include "core/serialize/dataBuilder.h"
 
 #include "frmserver/client/clientChildFrame.h"   // ibClientChildFrame — the tab, and the client it is drawn for

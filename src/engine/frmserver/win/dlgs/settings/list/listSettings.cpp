@@ -1,8 +1,10 @@
 #include "listSettings.h"
 
-#include "backend/compositionDescription.h"
+#include "core/description/compositionDescription.h"
 #include "core/serialize/dataBuilder.h"
 #include "backend/tabularModel.h"          // ibValueModel + ibValueModelColumnCollection (the flat field source)
+#include "backend/system/value/valueDynamicList.h"   // ibValueDynamicList — its fields are its source explorer
+#include "backend/srcDataObject.h"         // ibSourceDataObject::ibSourceExplorer
 
 #include "frmserver/win/dlgs/settings/settingsRequest.h"   // ibRequestSettings — the window, asked until it answers
 
@@ -20,7 +22,24 @@ ibDataNode SettingsRequest(ibValueModel* model, const ibMetaData* metaData)
 	// list whose source is a METAOBJECT carries no query text to parse fields out of; its fields are its columns.
 	ibDataNode& fields = request.Child(ibProtocolName::Fields);
 	std::vector<ibTypeDescription> types;
-	if (ibValueModel::ibValueModelColumnCollection* columns = model->GetColumnCollection()) {
+
+	// ⭐⭐ A DYNAMIC LIST — ITS MAIN TABLE'S FIELDS, AND WHAT ITS QUERY ADDS ON TOP: the list's own answer
+	// (GetSourceExplorer), the one the desktop's window reads off the description. Its columns are only what the
+	// query outputs, so with a query the table's other fields went missing (Max, 2026-10-13).
+	if (const ibValueDynamicList* list = dynamic_cast<const ibValueDynamicList*>(model)) {
+		if (const ibSourceDataObject::ibSourceExplorer* explorer = list->GetSourceExplorer()) {
+			for (unsigned int i = 0; i < explorer->GetHelperCount(); ++i) {
+				const ibSourceDataObject::ibSourceExplorer* node = explorer->GetHelper(i);
+				if (node == nullptr || node->IsTableSection())
+					continue;
+				ibWriteSettingsField(fields, node->GetSourceName(), node->GetSourceSynonym(),
+					static_cast<ibMetaID>(node->GetSourceId()), node->GetTypeValueDesc(),
+					node->GetColumn() == nullptr || node->GetColumn()->IsAvailable(), metaData);
+				types.push_back(node->GetTypeValueDesc());
+			}
+		}
+	}
+	else if (ibValueModel::ibValueModelColumnCollection* columns = model->GetColumnCollection()) {
 		for (unsigned int i = 0; i < columns->GetColumnCount(); ++i) {
 			const auto* col = columns->GetColumnInfo(i);
 			if (col == nullptr)

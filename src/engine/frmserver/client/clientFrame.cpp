@@ -366,13 +366,13 @@ bool ibClientFrame::UpdateFormUniqueKey(const ibUniqueKeyPair& guid)
 
 #include "frmserver/docView/templates/docViewSpreadsheet.h"
 
-bool ibClientFrame::ShowSpreadsheetDocument(const wxString& strTitle, wxObjectDataPtr<ibBackendSpreadsheetObject>& spreadSheetDocument)
+bool ibClientFrame::ShowSpreadsheetDocument(const wxString& strTitle, std::shared_ptr<ibSpreadsheetObject>& spreadSheetDocument)
 {
 	class ibSpreadsheetMemoryDocument :
 		public ibSpreadsheetFileDocument {
 	public:
 
-		ibSpreadsheetMemoryDocument(const wxString& strTitle, const wxObjectDataPtr<ibBackendSpreadsheetObject>& spreadSheetDocument) :
+		ibSpreadsheetMemoryDocument(const wxString& strTitle, const std::shared_ptr<ibSpreadsheetObject>& spreadSheetDocument) :
 			ibSpreadsheetFileDocument(spreadSheetDocument)
 		{
 			ibSpreadsheetFileDocument::SetTitle(strTitle);
@@ -402,7 +402,7 @@ bool ibClientFrame::ShowSpreadsheetDocument(const wxString& strTitle, wxObjectDa
 	return false;
 }
 
-bool ibClientFrame::PrintSpreadsheetDocument(const wxObjectDataPtr<ibBackendSpreadsheetObject>& doc, bool WXUNUSED(showPrintDlg))
+bool ibClientFrame::PrintSpreadsheetDocument(const std::shared_ptr<ibSpreadsheetObject>& doc, bool WXUNUSED(showPrintDlg))
 {
 	// THE SHEET AS A SPREADSHEET'S FETCH WRITES IT (ibFetchSpreadsheet) — its texts as shown: the client's sheet holds no
 	// parameters, and prints it as the desktop's printed its own.
@@ -463,7 +463,7 @@ ibClientChildFrame* ibClientFrame::CreateChildFrame(ibView* view)
 	auto tab = std::make_unique<ibClientChildFrame>(frame, ++frame->m_lastTabId, document, view, title);
 
 	// The document's own icon first (a catalog's form shows the catalog's), the form's otherwise.
-	ibServerPicture icon = document != nullptr ? document->GetIcon() : ibServerPicture();
+	ibPicture icon = document != nullptr ? document->GetIcon() : ibPicture();
 	if (!icon.IsOk() && form != nullptr)
 		icon = ibBackendPicture::GetServerPicture(form->GetClassType());
 	if (icon.IsOk())

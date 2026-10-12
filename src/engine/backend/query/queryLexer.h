@@ -18,7 +18,7 @@
 // See docs/private/query-language-arc.md §14 / §23.
 
 #include "backend/compiler/translateCode.h"   // ibTranslateCode (char primitives) + ibValue
-#include "queryKeywords.h"
+#include "core/query/queryKeywords.h"
 
 #include <vector>
 

@@ -4,7 +4,7 @@
 #include "window.h"
 #include "backend/system/value/valueSpreadsheet.h"
 #include "backend/propertyManager/property/propertySource.h"   // the document this box shows
-#include "backend/compositionDescription.h"                    // ibSettingsDescription — the ACTIVE setting is this control's
+#include "core/description/compositionDescription.h"           // ibSettingsDescription — the ACTIVE setting is this control's
 #include "frmserver/visualView/ctrl/typeControl.h"                // ⚠ the Source property needs its owner to BE a source factory
 
 #include <memory>   // the alive token the compose hop carries back
@@ -286,6 +286,6 @@ private:
 // A SHEET AS A CLIENT DRAWS IT — the box's, and a spreadsheet document's in a tab of its own (ibSpreadsheetEditView):
 // the whole of it under Sheet, in the form a template is stored in (ibSpreadsheetDescriptionMemory::WriteNode), each
 // cell's text as the sheet shows it — parameters and templates filled in; ReadOnly when the document takes no edits.
-bool ibFetchSpreadsheet(const ibBackendSpreadsheetObject& document, ibDataNode& response);
+bool ibFetchSpreadsheet(const ibSpreadsheetObject& document, ibDataNode& response);
 
 #endif

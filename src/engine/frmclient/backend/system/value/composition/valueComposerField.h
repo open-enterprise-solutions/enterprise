@@ -7,7 +7,7 @@
 // builds a declared value into a reference: what is left is the data.
 
 #include "frmclient/backend/compiler/value.h"
-#include "frmclient/backend/typeDescription.h"
+#include "core/description/typeDescription.h"
 
 // The field's own class id, named once — the engine's.
 constexpr ibClassID g_compositionFieldCLSID = value_to_clsid("VL_CFLD");

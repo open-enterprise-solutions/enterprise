@@ -56,7 +56,7 @@ m_gridView(new ibSpreadsheetGridBoxView())
 
 	m_members.Bind(this, &ibValueGridBox::FillControlMembers);
 	//set default params
-	m_propertyMinSize->SetValue(wxSize(150, 50));
+	m_propertyMinSize->SetValue(ibSize(150, 50));
 	// ⭐ THE SOURCE TAKES EXACTLY TWO TYPES (Max, 2026-08-19): a **spreadsheet document** — the
 	// hand-filled sheet, a printable form — and a **composition** — the report, which builds its own
 	// document and brings the two verbs with it. Declared here so the picker offers those and
@@ -188,7 +188,7 @@ bool ibValueGridBox::Fetch(const ibDataNode& WXUNUSED(request), ibDataNode& resp
 	return ibFetchSpreadsheet(m_gridDocument->GetSpreadsheet(), response);
 }
 
-bool ibFetchSpreadsheet(const ibBackendSpreadsheetObject& document, ibDataNode& response)
+bool ibFetchSpreadsheet(const ibSpreadsheetObject& document, ibDataNode& response)
 {
 	// THE WHOLE SHEET, IN THE FORM A TEMPLATE IS STORED IN (ibSpreadsheetDescriptionMemory::WriteNode): a client reads
 	// it back the same way into a sheet of its own, and its editor shows that sheet as the desktop's shows its own.

@@ -7,9 +7,10 @@
 
 #include <wx/icon.h>
 
-#include "frmclient/backend/typeDescription.h"
+#include "frmclient/backend/backend_core.h"   // FRMCLIENT_API
+#include "core/description/typeDescription.h"
 #include "frmclient/backend/query/queryAST.h"
-#include "frmclient/backend/query/queryBalanceRole.h"
+#include "core/query/queryBalanceRole.h"
 
 #include <vector>
 

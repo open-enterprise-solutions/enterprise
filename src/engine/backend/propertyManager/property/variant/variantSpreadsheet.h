@@ -1,7 +1,8 @@
 #ifndef __TEMPLATE_VARIANT_H__
 #define __TEMPLATE_VARIANT_H__
 
-#include "backend/backend_spreadsheet.h"
+#include "backend/propertyManager/propertyObject.h"
+#include "core/description/spreadsheetDescription.h"
 
 class BACKEND_API ibVariantDataSpreadsheet : public wxVariantData {
 	wxString MakeString() const;

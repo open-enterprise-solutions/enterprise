@@ -10,11 +10,10 @@
 
 #include "core/build.h"   // GetBuildId / GetBuildStamp
 #include "core/guid.h"
-#include "core/types.h"   // the class ids, the ids of the configuration, the kinds of a value
+#include "core/core.h"    // the class ids, the ids of the configuration, the kinds of a value
 #include "core/fnumber.h"
 #include "core/fdatetime.h"
 #include "core/fstring.h"
-#include "typeconv.h"
 #include "core/stringUtils.h"
 
 //*******************************************************************************************

@@ -6,7 +6,7 @@
 
 #include "frmserver/visualView/ctrl/window.h"
 #include "frmserver/visualView/ctrl/typeControl.h"
-#include "backend/sourceDescription.h"   // ibSourceDescription (full [head, field] binding path)
+#include "core/description/sourceDescription.h"   // ibSourceDescription (full [head, field] binding path)
 
 #include <deque>
 #include <map>

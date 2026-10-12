@@ -21,7 +21,7 @@ protocol between them; neither half is called a frontend.
 |---|---|
 | `protocol` | the contract — `protocol.h`: every name and number of the wire, depending on nothing — and the library of the sides that talk it: the wire's node, the connections (a server's socket, a file base in process), the communicator, the protocol's journal |
 | `frmserver` | the server side: sessions, forms, the configuration's documents, the client host. It includes the contract only |
-| `core` | under both the engine and the client: ids and value kinds, string, number, date, guid, the node with its JSON and binary forms, the refusal (`ibCoreException`), the translation engine (`ibLocalization`); of wx, the base only |
+| `core` | under both the engine and the client: ids and value kinds, string, number, date, guid, the node with its JSON and binary forms, the refusal (`ibCoreException`), the translation engine (`ibLocalization`), the format string, the schemas (`description/`), a colour and a font as data, the table's model view (`tabular/`); of wx, the base only |
 | `frmclient` | the client's graphics library: the main window, the document/view skeleton, the controls, the editors. It links `core` and `protocol` |
 | `fileserver` | a file base in the client's process — the engine loaded beside the window |
 | `enterprise-thin` | the runtime's window and its document manager |
@@ -36,9 +36,8 @@ what the client's windows use. Its `backend_core.h`, `backend.h`, `backend_excep
 
 | Copied | For |
 |---|---|
-| `formatString` | the formats of numbers and dates |
-| `typeDescription`, `backend_type`, `system/value/valueType` | a type, the type factories, a value fitted to its type |
-| `compositionDescription`, `system/value/composition/valueComposerField` | the settings schema; a composition field as a value |
+| `backend_type`, `system/value/valueType` | the type factories, a value fitted to its type |
+| `backend_composition`, `system/value/composition/valueComposerField` | a composition's values restored; a composition field as a value |
 | `metaCollection/partial/reference/reference.h` | a facade: `ConvertToMetaIds` answered from the server's `References` |
 | `job/jobSchedule` | a schedule: its description, its check, its stored form — for the schedule's editor |
 
@@ -46,8 +45,9 @@ The desktop's main-window settings are copied beside the window (`mainFrame/sett
 font and colours, the key binder.
 
 The wire meets the engine's node at one seam, `serialize/dataProtocol.h` (`ibReadProtocolNode`, `ibWriteProtocolNode`),
-through the engine's own JSON — what is a field, a property, a child is the engine's rule. Next into `core`: the settings
-vocabulary and the type description, then the sheet description, then the composition description with a stored value.
+through the engine's own JSON — what is a field, a property, a child is the engine's rule. The schemas both sides read
+and write — type, sheet, composition and its settings — are `core`'s; a side restores what it holds against its own
+types.
 
 ## Who does what
 
@@ -92,6 +92,9 @@ same process, and wx keeps one class table.
 - **The form's tree owns its controls**, as the desktop's: `ibValueFrame` is a value with the property helper; a parent
   holds its children and their order. The host finds a control by its node id and owns none.
 - **A column dragged moves in the tree at once**, and goes to the server as `Move`.
+- **A table is the server's model view, read in portions.** The same `ibDataViewModel` (`core/tabular/`) under the
+  server's tables and the client's: the client's reads its rows over `fetch`, forward or back from a row it has. A cell's
+  look — colours in the engine's text of a colour (`r,g,b`), bold, italic, the rest of a font — is the server's model's.
 - **The form editor** opens over the tab's document window; Apply, Save and Reset answer its request (`FormEditor`).
   The form's root carries its own properties (`Title`, `Orient`, …); the tree's captions are the server's.
 - **The desktop's windows, drawn here, decided there.** The list settings window (`ListSettings`, a table's Filter

@@ -1,7 +1,8 @@
 #ifndef __COMPOSITION_VARIANT_H__
 #define __COMPOSITION_VARIANT_H__
 
-#include "frmclient/backend/compositionDescription.h"
+#include "frmclient/backend/backend_core.h"
+#include "core/description/compositionDescription.h"
 
 class FRMCLIENT_API ibPropertyObject;
 

@@ -5,7 +5,7 @@
 #include "frontend/win/editor/gridEditor/gridEditor.h"
 #include "backend/system/value/valueSpreadsheet.h"
 #include "backend/propertyManager/property/propertySource.h"   // the document this box shows
-#include "backend/compositionDescription.h"                    // ibSettingsDescription — the ACTIVE setting is this control's
+#include "core/description/compositionDescription.h"           // ibSettingsDescription — the ACTIVE setting is this control's
 #include "frontend/visualView/ctrl/typeControl.h"                // ⚠ the Source property needs its owner to BE a source factory
 
 #include <memory>   // the alive token the compose hop carries back

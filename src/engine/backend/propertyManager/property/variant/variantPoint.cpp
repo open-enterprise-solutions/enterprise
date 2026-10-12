@@ -2,5 +2,5 @@
 
 wxString ibVariantDataPoint::MakeString() const
 {
-	return typeConv::PointToString(m_point);
+	return m_point.ToString();
 }

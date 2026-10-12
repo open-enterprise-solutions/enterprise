@@ -3,10 +3,10 @@
 
 #include "backend/uniqueKey.h"
 #include "backend/createRequest.h"   // ibFormRequest — what a form is opened with
-#include "backend/backend_spreadsheet.h"
+#include "core/spreadsheet/spreadsheetObject.h"
 #include "backend/system/systemEnum.h"
 #include "backend/session/sessionHolder.h"   // the frame OWNS its session
-#include "backend/job/jobSchedule.h"          // ibJobScheduleDescription — edited through ShowScheduleEditor
+#include "core/description/jobScheduleDescription.h"   // ibJobScheduleDescription — edited through ShowScheduleEditor
 
 class ibSession;
 
@@ -76,8 +76,8 @@ public:
 	virtual bool UpdateFormUniqueKey(const ibUniqueKeyPair& guid) { return false; }
 
 	// Grid support
-	virtual bool ShowSpreadsheetDocument(const wxString& strTitle, wxObjectDataPtr<ibBackendSpreadsheetObject>& doc) { return false; }
-	virtual bool PrintSpreadsheetDocument(const wxObjectDataPtr<ibBackendSpreadsheetObject>& doc, bool showPrintDlg = true) { return false; }
+	virtual bool ShowSpreadsheetDocument(const wxString& strTitle, std::shared_ptr<ibSpreadsheetObject>& doc) { return false; }
+	virtual bool PrintSpreadsheetDocument(const std::shared_ptr<ibSpreadsheetObject>& doc, bool showPrintDlg = true) { return false; }
 
 	// Open the SCHEDULE editor on `schedule`, editing it IN PLACE; true when the user accepted and
 	// the value actually changed. Same shape as the spreadsheet door above and for the same reason:

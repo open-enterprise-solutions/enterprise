@@ -7,7 +7,7 @@
 // here — its empty value is written as the engine writes one ({t}), and the server reads it so.
 
 #include "frmclient/backend/compiler/value.h"
-#include "frmclient/backend/typeDescription.h"
+#include "core/description/typeDescription.h"
 
 class FRMCLIENT_API ibMetaData;
 

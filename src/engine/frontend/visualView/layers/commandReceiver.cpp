@@ -9,7 +9,7 @@
 #include "backend/backend_picture.h"                // ibBackendPicture::CreatePicture (a standard action's picture)
 #include "backend/srcDataObject.h"                  // ibSourceDataObject — the form's main object (command parameter)
 #include "backend/metaCollection/genericData.h"     // ibValueMetaObjectGenericData::GetMetaID (parameter type match)
-#include "backend/typeDescription.h"                // ibTypeDescription::GetClsidList (command parameter type)
+#include "core/description/typeDescription.h"                // ibTypeDescription::GetClsidList (command parameter type)
 #include "backend/system/value/valueType.h"         // ibValueTypeDescription::AllowValue — a barrier parameter takes its members
 #include "backend/compiler/value.h"                 // ibValue (the resolved command parameter)
 #include "backend/backend_command.h"              // ibBackendCommandSender::ResolveCommandPath — the SERVER walk (starts on the form)

@@ -117,6 +117,9 @@ bool ibProtocolConnectionServer::Open(const wxString& address, wxString& error)
 		error = wxString::Format(_("'%s' is not the address of a base: oes://server[:port]/<base>"), address);
 		return false;
 	}
+	// A request goes out at once, as the server's answers do (appserver's listener): with Nagle's wait on, a small
+	// message behind one not yet acknowledged was held for the server's delayed ACK — up to 200 ms on Windows, per click.
+	socket->set_tcp_nodelay(true);
 	const auto connected = socket->connect();
 	if (!connected) {
 		error = connected.status() > 0
