@@ -22,6 +22,7 @@
 #include <wx/init.h>
 
 #include "backend/appData.h"
+#include "backend/compiler/compileCode.h"
 #include "backend/compiler/value.h"
 #include "backend/databaseLayer/connectionPool.h"
 #include "backend/databaseLayer/connectionHolder.h"
@@ -41,6 +42,9 @@ namespace {
 
 struct SequenceBorderFix : ::testing::Test {
 	wxInitializer                          m_wxInit;
+	// RunDatabase sets this thread's code style to the configuration's. The binary runs VES
+	// (test_compiler.cpp), so TearDown puts it back, as StyleGuard does.
+	const short                            m_codeStyle = ibCompileCode::GetCodeStyle();
 	std::shared_ptr<ibDatabaseLayerSQLite> db;
 
 	std::unique_ptr<ibMetaDataConfigurationFile> cfg;
@@ -99,6 +103,7 @@ struct SequenceBorderFix : ::testing::Test {
 	void TearDown() override {
 		if (cfg) cfg->CloseDatabase();
 		cfg.reset();
+		ibCompileCode::SetCodeStyle(m_codeStyle);
 		if (ibApplicationInstance::Get() != nullptr)
 			ibApplicationInstance::DestroyAppDataEnv();
 	}

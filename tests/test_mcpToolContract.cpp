@@ -36,6 +36,7 @@
 #include "backend/mcp/mcpClipboard.h"
 #include "core/serialize/dataBuilder.h"
 #include "backend/appData.h"
+#include "backend/compiler/compileCode.h"
 #include "backend/metadataConfiguration.h"
 #include "backend/metaCollection/partial/commonObject.h"
 #include "core/clsid.h"
@@ -870,8 +871,15 @@ TEST(MetadataBind, ASharedNameResolvesAmongTheBindingsCandidates) {
 
 	std::shared_ptr<ibMetaDataConfigurationFile> cfg = ibMetaData::MakeShared<ibMetaDataConfigurationFile>();
 	ibApplicationInstance::Get()->ReplaceActiveMetaData(cfg);
+	// RunDatabase sets this thread's code style to the configuration's. The binary runs VES
+	// (test_compiler.cpp), so the release puts it back, as StyleGuard does.
 	struct Release {
-		~Release() { ibApplicationInstance::DestroyAppDataEnv(); }
+		const short codeStyle = ibCompileCode::GetCodeStyle();
+		~Release()
+		{
+			ibCompileCode::SetCodeStyle(codeStyle);
+			ibApplicationInstance::DestroyAppDataEnv();
+		}
 	} release;
 
 	ibValueMetaObjectConfiguration* root = cfg->GetCommonMetaObject();
