@@ -724,6 +724,11 @@ const ibMetaData* ibValueDynamicList::GetSourceMetaData() const
 // surface over it is rebuilt over the settled structure, in
 // system/value/composition/valueComposerSettings.h. Offering a property that hands out nothing would
 // be worse than not offering it: a script would set a filter and be told nothing went wrong.
+enum Func {
+	enRefresh,
+	enGetMetadata,
+};
+
 void ibValueDynamicList::FillMembers(ibMemberTable& helper) const
 {
 	helper.AppendProc(wxT("Refresh"), wxT("Refresh()"));
@@ -732,7 +737,9 @@ void ibValueDynamicList::FillMembers(ibMemberTable& helper) const
 
 bool ibValueDynamicList::CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray)
 {
-	if (lMethodNum == 0) {   // Refresh
+	switch (lMethodNum)
+	{
+	case Func::enRefresh:
 		RefreshComposerSettings();
 		RefetchAll();
 		return true;
@@ -740,11 +747,12 @@ bool ibValueDynamicList::CallAsProc(const long lMethodNum, ibValue** paParams, c
 	return false;
 }
 
-bool ibValueDynamicList::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** /*paParams*/, const long /*lSizeArray*/)
+bool ibValueDynamicList::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
 {
-	if (GetMethodName(lMethodNum).IsSameAs(wxT("GetMetadata"), false)) {
-		// Const on purpose: metadata is not a writable object. Null (no source,
-		// or a custom query) is the empty value.
+	switch (lMethodNum)
+	{
+	case Func::enGetMetadata:
+		// A custom query lists no object: the empty value.
 		pvarRetValue = GetSourceMetaObject();
 		return true;
 	}

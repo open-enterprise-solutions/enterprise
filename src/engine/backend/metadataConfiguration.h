@@ -477,10 +477,4 @@ private:
 
 #define sign_metadata 0x1236F362122FE
 
-// True when `buffer` opens as a configuration this build can read: the header
-// chunk's first word is sign_metadata, and the configuration chunk is present.
-// Empty, foreign and truncated blobs are false. A restore asks this before it
-// clears the base, so the check itself never throws.
-BACKEND_API bool ibConfigBufferIsReadable(const wxMemoryBuffer& buffer);
-
 #endif

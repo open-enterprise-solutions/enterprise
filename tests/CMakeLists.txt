@@ -118,6 +118,7 @@ add_executable(oes_tests
     test_databaseMaterializeBuilder.cpp
     test_periodFold.cpp
     test_registerReadRules.cpp
+    test_informationRegisterGet.cpp
     test_totalsViewParity.cpp
     test_totalsNumericParity.cpp
     test_totalsKeyHash.cpp
@@ -146,7 +147,6 @@ add_executable(oes_tests
     test_valueGeometry.cpp
     test_valueTextFile.cpp
     test_valueHttp.cpp
-    test_pageLoadSession.cpp
     test_valueHttpSecure.cpp
     test_metaDescription.cpp
     test_backendColumnRawDB.cpp

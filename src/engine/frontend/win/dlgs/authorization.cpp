@@ -23,13 +23,8 @@ ibDialogAuthentication::ibDialogAuthentication(wxWindow* parent, wxWindowID id, 
 
 	m_staticTextLogin = new wxStaticText(this, wxID_ANY, _("Login:"));
 	m_comboBoxLogin   = new wxBitmapComboBox(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize);
-	// A file base lists the names so a person at the machine can pick. The application server does
-	// not, unless that base's infobase.conf asks it to (ShowUserListAtLogin).
-	ibApplicationInstance* const base = ibApplicationInstance::Get(/*required*/ false);
-	if (base == nullptr || base->ShowUserListAtLogin()) {
-		for (const auto& userInfo : ibUserInfo::ListAll())
-			m_comboBoxLogin->Append(userInfo.m_strUserName, ibBackendPicture::GetPicture(g_picUserCLSID));
-	}
+	for (const auto& userInfo : ibUserInfo::ListAll())
+		m_comboBoxLogin->Append(userInfo.m_strUserName, ibBackendPicture::GetPicture(g_picUserCLSID));
 
 	m_staticTextPassword = new wxStaticText(this, wxID_ANY, _("Password:"));
 	m_textCtrlPassword   = new wxTextCtrl(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxTE_PASSWORD);

@@ -134,25 +134,6 @@ struct BackupRestore : ::testing::Test {
 	}
 };
 
-TEST(ConfigBuffer, ReadableWhenTheSignAndTheBodyArePresent)
-{
-	wxInitializer wx;
-	if (!wx.IsOk())
-		GTEST_SKIP() << "wxBase init failed";
-	EXPECT_TRUE(ibConfigBufferIsReadable(ConfigBlob(sign_metadata, true)));
-}
-
-TEST(ConfigBuffer, EmptyForeignAndHeaderOnlyAreUnreadable)
-{
-	wxInitializer wx;
-	if (!wx.IsOk())
-		GTEST_SKIP() << "wxBase init failed";
-	EXPECT_FALSE(ibConfigBufferIsReadable(wxMemoryBuffer()));
-	EXPECT_FALSE(ibConfigBufferIsReadable(Bytes("this is not a configuration")));
-	EXPECT_FALSE(ibConfigBufferIsReadable(ConfigBlob(1, true)));
-	EXPECT_FALSE(ibConfigBufferIsReadable(ConfigBlob(sign_metadata, false)));
-}
-
 TEST_F(BackupRestore, EmptyArchiveLeavesTheUser)
 {
 	if (!ready) GTEST_SKIP();

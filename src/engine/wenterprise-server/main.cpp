@@ -24,7 +24,6 @@
 #endif
 
 #include <cpp-httplib/httplib.h>
-#include "pageLoadSession.h"
 #include "wfrontend.h"
 #include <nlohmann/json.hpp>
 #include "backend/backend_exception.h"
@@ -222,8 +221,7 @@ std::string Field(const httplib::Request& req, const std::string& key)
 // Extract the session id preferred by the client. Web tabs generate
 // their own random id in sessionStorage and forward it via the
 // `X-OES-Session` header, so every browser tab — even multiple in
-// the same browser — gets a distinct server session. Cookie lookup
-// is the legacy fallback for non-tab-aware clients.
+// the same browser — gets a distinct server session.
 std::string SessionIdFromReq(const httplib::Request& req)
 {
 	const std::string header = req.get_header_value("X-OES-Session");
@@ -234,25 +232,7 @@ std::string SessionIdFromReq(const httplib::Request& req)
 	// attach custom headers — they carry only cookies. When a per-tab
 	// endpoint (e.g. /tab/N/icon) is reachable via plain GET the client
 	// appends ?sid=<tabSid>; fall back to that when the header is absent.
-	if (req.has_param("sid")) {
-		const std::string sid = req.get_param_value("sid");
-		if (!sid.empty())
-			return sid;
-	}
-
-	const std::string cookie = req.get_header_value("Cookie");
-	const auto pos = cookie.find("oes_session=");
-	if (pos == std::string::npos)
-		return std::string();
-	// oes_session is a dashed UUID (36 chars: 8-4-4-4-12). Slice up to
-	// the next '; ' delimiter instead of assuming a fixed length — gives
-	// us one parser whether the cookie is the first or the tail entry
-	// and survives a future id-format change.
-	const std::size_t start = pos + 12;
-	const std::size_t end   = cookie.find(';', start);
-	return (end == std::string::npos)
-		? cookie.substr(start)
-		: cookie.substr(start, end - start);
+	return req.has_param("sid") ? req.get_param_value("sid") : std::string();
 }
 
 // Extract session id, or emit 401 "no session" and return false. Every
@@ -520,18 +500,9 @@ int main(int argc, char** argv)
 			return;
 		}
 
-		// A page load does not open a session. The navigation cannot send the
-		// tab's id, so the cookie this request can see is not that session.
-		// Opening one here left a row nobody adopted, and a reload then
-		// replaced that row because it had no tabs. The tab's first
-		// POST /login registers the id it already holds.
-		// PageLoadOpensASession is that decision. If it ever stops being
-		// false, refuse rather than mint a session the page does not own.
-		if (PageLoadOpensASession()) {
-			res.status = 500;
-			res.set_content("a page load does not open a session\n", "text/plain");
-			return;
-		}
+		// A page load opens no session: a navigation cannot send the tab's id.
+		// Opening one here left a row nobody adopted, and a reload then replaced
+		// it for having no tabs. The tab's first POST /login registers its id.
 
 		// HTML is generated in-binary; force the browser to pick up
 		// freshly rebuilt server output instead of serving a stale
@@ -807,7 +778,7 @@ int main(int argc, char** argv)
 		const std::string id = SessionIdFromReq(req);
 		if (id.empty()) {
 			res.status = 401;
-			res.set_content("no session - GET / first\n", "text/plain");
+			res.set_content("no session\n", "text/plain");
 			return;
 		}
 		const int metaID = std::atoi(req.matches[1].str().c_str());
@@ -857,13 +828,10 @@ int main(int argc, char** argv)
 		std::string id = SessionIdFromReq(req);
 		if (id.empty()) {
 			res.status = 401;
-			res.set_content("no session - GET / first to obtain one\n", "text/plain");
+			res.set_content("no session - send X-OES-Session\n", "text/plain");
 			return;
 		}
-		// The page load does not register a session. The tab's id arrives
-		// here, on the first request that can carry X-OES-Session, and a
-		// fresh tab's id is one the server has never seen. Register it so
-		// login is not refused for an id the page was never going to mint.
+		// The tab's own id: a fresh tab's is one the server has never seen.
 		if (!wfrontendSessionExists(id))
 			id = wfrontendCreateSessionWithId(id);
 
@@ -879,7 +847,6 @@ int main(int argc, char** argv)
 		const std::string id = SessionIdFromReq(req);
 		if (!id.empty())
 			wfrontendDestroySession(id);
-		res.set_header("Set-Cookie", "oes_session=; Path=/; Max-Age=0");
 		res.set_content("bye\n", "text/plain");
 	});
 

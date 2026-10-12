@@ -296,11 +296,6 @@ public:
 	bool WebEnterpriseMode() const;
 	bool ServiceMode() const;
 
-	// Names on the login dialog, before a password. A file base lists them; the application server
-	// does not, unless the base's infobase.conf says ShowUserListAtLogin. See appData.cpp.
-	static bool ShowUserListAtLogin(ibRunMode mode, const wxString& folder);
-	bool ShowUserListAtLogin() const { return ShowUserListAtLogin(m_runMode, m_strFile); }
-
 	inline wxString GetRunModeDescr(const ibRunMode& mode) const {
 		switch (mode)
 		{

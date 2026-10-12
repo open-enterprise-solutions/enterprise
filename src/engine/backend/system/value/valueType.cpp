@@ -295,24 +295,6 @@ ibValueTypeDescription::~ibValueTypeDescription()
 {
 }
 
-// One name in a type list. A primitive lives in the value registry and needs no configuration.
-// A reference lives in the configuration, and only a thread that has a base can ask it.
-static bool ibTypeNameToClass(const wxString& name, ibClassID& clsid)
-{
-	if (ibValue::IsRegisterCtor(name)) {
-		clsid = ibValue::GetIDObjectFromString(name);
-		return clsid != 0;
-	}
-	ibApplicationInstance* const application = ibApplicationInstance::Get(/*required*/ false);
-	if (application == nullptr)
-		return false;
-	ibMetaData* const metaData = ibApplicationInstance::GetActiveMetaData(application);
-	if (metaData == nullptr || !metaData->IsRegisterCtor(name))
-		return false;
-	clsid = metaData->GetIDObjectFromString(name);
-	return clsid != 0;
-}
-
 bool ibValueTypeDescription::Init(ibValue** paParams, const long lSizeArray)
 {
 	if (lSizeArray < 1)
@@ -324,25 +306,20 @@ bool ibValueTypeDescription::Init(ibValue** paParams, const long lSizeArray)
 	if (paParams[0]->GetType() == ibValueTypes::TYPE_STRING) {
 		// "Number, String" is several types, not one constructor name. A single name is the
 		// one-element case of the same list. A name that is not a type fails the whole description.
+		//
+		// A name is asked of the configuration, which answers its own and the value registry's behind
+		// them (ibMetaData::IsRegisterCtor). A process with no base has the registry alone.
+		const ibMetaData* const metaData = ibApplicationInstance::GetActiveMetaData(ibApplicationInstance::Get(/*required*/ false));
 		std::vector<ibClassID> types;
-		wxString rest = paParams[0]->GetString();
-		bool any = false;
-		while (true) {
-			const bool more = rest.Find(wxT(',')) != wxNOT_FOUND;
-			wxString token = more ? rest.BeforeFirst(wxT(',')) : rest;
-			token.Trim(true).Trim(false);
-			if (!token.IsEmpty()) {
-				any = true;
-				ibClassID clsid = 0;
-				if (!ibTypeNameToClass(token, clsid))
-					return false;
-				types.push_back(clsid);
-			}
-			if (!more)
-				break;
-			rest = rest.AfterFirst(wxT(','));
+		for (wxString name : wxSplit(paParams[0]->GetString(), wxT(','), wxT('\0'))) {
+			name.Trim(true).Trim(false);
+			if (name.IsEmpty())
+				continue;
+			if (metaData != nullptr ? !metaData->IsRegisterCtor(name) : !ibValue::IsRegisterCtor(name))
+				return false;
+			types.push_back(metaData != nullptr ? metaData->GetIDObjectFromString(name) : ibValue::GetIDObjectFromString(name));
 		}
-		if (!any)
+		if (types.empty())
 			return false;
 
 		ibValueQualifierNumber* qNumber = nullptr;

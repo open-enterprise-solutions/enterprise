@@ -28,11 +28,6 @@ public:
 	// should then call IsLegacy() and re-store with Hash() to upgrade.
 	static bool Verify(const wxString& password, const wxString& storedHash);
 
-	// Run the same PBKDF2 a wrong password on a current hash would, and
-	// throw the answer away. An unknown name used to return before any
-	// hashing, so it was hundreds of milliseconds faster than a known one.
-	static void SpendAsWrongPassword(const wxString& password);
-
 	// True if storedHash is a legacy MD5 (32 hex chars) rather than PBKDF2.
 	static bool IsLegacy(const wxString& storedHash);
 
