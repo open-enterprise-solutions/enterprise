@@ -485,6 +485,40 @@ void ibValueSystemFunction::WriteJournalEvent(const wxString& strMessage, ibStat
 	}
 }
 
+void ibValueSystemFunction::WriteLogEvent(ibValue** paParams, const long lSizeArray)
+{
+	if (paParams == nullptr || lSizeArray < 1 || paParams[0] == nullptr)
+		ibBackendCoreException::Error(_("WriteLogEvent: an event name is required"));
+
+	const wxString eventName = paParams[0]->GetString();
+	ibStatusMessage status = ibStatusMessage::ibStatusMessage_Information;
+	if (lSizeArray > 1 && paParams[1] != nullptr && !paParams[1]->IsEmpty()) {
+		const wxString word = paParams[1]->GetString();
+		if (word.CmpNoCase(wxT("Error")) == 0)
+			status = ibStatusMessage::ibStatusMessage_Error;
+		else if (word.CmpNoCase(wxT("Warning")) == 0)
+			status = ibStatusMessage::ibStatusMessage_Warning;
+		else {
+			const ibStatusMessage converted = paParams[1]->ConvertToEnumValue<ibStatusMessage>();
+			if (converted == ibStatusMessage::ibStatusMessage_Information
+				|| converted == ibStatusMessage::ibStatusMessage_Warning
+				|| converted == ibStatusMessage::ibStatusMessage_Error)
+				status = converted;
+		}
+	}
+
+	const wxString metaName = (lSizeArray > 2 && paParams[2] != nullptr)
+		? wxString(paParams[2]->GetString()) : wxString();
+	const ibValue noData;
+	const ibValue& data = (lSizeArray > 3 && paParams[3] != nullptr) ? *paParams[3] : noData;
+	wxString comment = eventName;
+	if (lSizeArray > 4 && paParams[4] != nullptr && !paParams[4]->GetString().IsEmpty())
+		comment = paParams[4]->GetString();
+	if (!metaName.IsEmpty())
+		comment = metaName + wxT(": ") + comment;
+	WriteJournalEvent(comment, status, eventName, data);
+}
+
 void ibValueSystemFunction::Message(const wxString& strMessage, ibStatusMessage status)
 {
 	// 🛑⭐⭐ IN EVAL MODE IT USED TO GO NOWHERE, AND THAT IS WHY A SANDBOX PRINTED INTO SILENCE.

@@ -1,0 +1,16 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "en",
+  "entries": [
+    {
+      "id": "fn.WriteLogEvent",
+      "name_local": "WriteLogEvent",
+      "name_en": "WriteLogEvent",
+      "kind": "system_function",
+      "category_keys": ["global_context", "global_functions"],
+      "signature": "WriteLogEvent(eventName, level, metadata, data, comment, mode)",
+      "description": "Writes one registration-journal line (ЗаписьЖурналаРегистрации). The event name is the category. The comment is the text; when it is omitted the event name is the text. The level is StatusMessage, or the words Error and Warning. A metadata name is prefixed to the text. The data value is attached the same way WriteJournalEvent attaches an object. The mode is accepted and not stored. With no journal in the process the call returns."
+    }
+  ]
+}

@@ -124,6 +124,9 @@ public:
 		ibStatusMessage status = ibStatusMessage::ibStatusMessage_Information,
 		const wxString& strEvent = wxEmptyString,
 		const ibValue& objectValue = ibValue());
+	// 1C argument order: event name, level, metadata name, data, comment, mode.
+	// The comment is the journal text and the event name is the category.
+	static void WriteLogEvent(ibValue** paParams, const long lSizeArray);
 	static void Alert(const wxString& strMessage);
 	static ibValue Question(const wxString& strMessage, ibQuestionMode mode = ibQuestionMode::ibQuestionMode_OK);
 	static void SetStatus(const wxString& sStatus);
