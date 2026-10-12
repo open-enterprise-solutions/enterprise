@@ -40,10 +40,11 @@ public:
 	// What the person did with a control, to the server — after the event that said so: the answer draws the view
 	// again, and a control is not torn down inside its own handler.
 	void Send(long long controlId, ibProtocolEvent event, const ibProtocolNode& args);
+	// …or a state event left for the next call to carry (ibFrontendMainFrame::Hold); false — Send it.
+	bool Hold(long long controlId, ibProtocolEvent event, const ibProtocolNode& args);
 
 	// A control's fetches, of the view drawn now — the form it is on, named by its key; a view that is no form, by its tab.
 	ibViewFetcher MakeFetcher(long long controlId) const;
-
 	// The form drawn — its controls, and the one active now (the desktop's GetValueForm).
 	ibValueForm* GetValueForm() const { return m_valueForm.get(); }
 	// The tab it draws in — whose document the form's is.
@@ -52,6 +53,9 @@ public:
 	ibValueFrame* GetObjectBase(const wxObject* wxobject) const;
 
 private:
+
+	// An event as a call names it — the control, what happened to it, and the view it is of: sent, or held (Send, Hold).
+	ibProtocolNode EventOf(long long controlId, ibProtocolEvent event, const ibProtocolNode& args) const;
 
 	// The form's own: its colours, its controls' orientation, its command bar.
 	void UpdateForm(const ibProtocolNode& form);

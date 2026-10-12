@@ -1,10 +1,12 @@
 #ifndef __PROTOCOL_COMMUNICATOR_H__
 #define __PROTOCOL_COMMUNICATOR_H__
 
+#include <atomic>
 #include <map>
 #include <memory>
 #include <mutex>
 #include <string>
+#include <vector>
 
 #include "connection.h"
 #include "protocolNode.h"
@@ -39,6 +41,10 @@ public:
 	// frame are read from it, and so are a fetch's rows, a schema's tree, a file's part.
 	bool Call(ibProtocolMethod method, const ibProtocolNode& params, ibProtocolNode& result,
 		ibProtocolRefusal& refusal, wxString& error);
+	// ⭐ A STATE EVENT LEFT FOR THE NEXT CALL — an event's params (protocol 3, ibProtocolIsStateEvent): kept, the latest of
+	// its kind per control in place of the one before, and carried by the next call, whatever it is, as Pending, in the
+	// order done. False — the server speaks no protocol that carries it: the caller sends it as its own call.
+	bool Hold(const ibProtocolNode& event);
 
 	// WHAT THE SERVER SAYS UNASKED of this client — its frame changed by itself (`changed {Client}`): `changed` is
 	// called on the connection's thread, never the window's, and the client asks for its frame. Empty — told nothing.
@@ -74,12 +80,17 @@ private:
 	wxString       m_token;    // the bearer, kept here. The server stores only its hash.
 	bool           m_resume = false;   // the server listed `resume` — a dropped socket is asked for again
 	ibProtocolMode m_mode = ibProtocolMode::Runtime;
-	int            m_protocol = 1;
+	std::atomic<int> m_protocol{ 1 };   // read by Hold on the window's thread while a fetch may be in a call
 	long long      m_number = 0;
 	ibProtocolNode m_frame;
 	// (protocol 2) the view last answered for each tab NOT active now, by the tab's id — what a patch to that tab is
 	// applied to when it becomes active; the active tab's is the frame's own View. Moved, never copied.
 	std::map<long long, ibProtocolNode> m_views;
+
+	// (protocol 3) the state events held for the next call, in the order done (Hold). A lock of their own: Hold is the
+	// window's, and must not wait for a fetch's exchange.
+	std::mutex                  m_pendingMutex;
+	std::vector<ibProtocolNode> m_pending;
 };
 
 #endif

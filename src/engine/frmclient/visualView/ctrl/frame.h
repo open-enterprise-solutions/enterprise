@@ -110,6 +110,11 @@ public:
 	virtual wxString GetControlTitle() const { return !m_title.IsEmpty() ? m_title : wxGetTranslation(m_className); }
 	void SetControlTitle(const wxString& title) { m_title = title; }
 
+	// The state events the server is subscribed to on it — its State's Subscribed (protocol 3): something there runs on
+	// them. Any other state event waits for the client's next call (Send).
+	void SetSubscribedEvents(const std::vector<ibProtocolNode>& events);
+	bool IsSubscribed(ibProtocolEvent event) const { return (m_subscribedEvents & (1u << static_cast<int>(event))) != 0; }
+
 	// Open in the object tree; offered at all (the base's functional options are the server's: what it draws is offered).
 	void SetExpanded(bool expanded) { m_expanded = expanded; }
 	bool GetExpanded() const { return m_expanded; }
@@ -176,6 +181,7 @@ private:
 	wxString m_className;      // its node's type — the server's class name
 	wxString m_title;          // what the server says it is called (GetControlTitle)
 	bool     m_expanded = true;
+	unsigned m_subscribedEvents = 0;   // a bit per ibProtocolEvent — its State's Subscribed
 };
 
 #endif

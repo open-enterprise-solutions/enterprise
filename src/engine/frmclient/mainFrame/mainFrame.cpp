@@ -647,6 +647,17 @@ void ibFrontendMainFrame::Post(ibProtocolMethod method, const ibProtocolNode& pa
 	CallAfter(&ibFrontendMainFrame::CallPosted);
 }
 
+bool ibFrontendMainFrame::Hold(const ibProtocolNode& event)
+{
+	// A call posted and not made yet goes first — a text committed as the focus leaves its field: the focus is held once
+	// that call is made (CallPosted).
+	if (!m_posted.empty()) {
+		m_posted.back().held.push_back(event);
+		return true;
+	}
+	return m_communicator->Hold(event);
+}
+
 void ibFrontendMainFrame::CloseTab(long long tabId)
 {
 	// Once — a key held, a second Escape, the button pressed while the first close asks about what is unsaved: the
@@ -1328,6 +1339,16 @@ void ibFrontendMainFrame::CallPosted()
 	// A tab's close answered — closed, or kept by the person: it may be closed again.
 	if (posted.method == ibProtocolMethod::Close)
 		m_tabsClosing.erase(posted.params.GetInt(ibProtocolName::Tab));
+
+	// What was held while it waited, held now — after it, as it was done. A server that takes none held is called with
+	// each, before what was posted later.
+	auto next = m_posted.begin();
+	for (const ibProtocolNode& event : posted.held) {
+		if (m_communicator->Hold(event))
+			continue;
+		next = m_posted.insert(next, ibPostedCall{ ibProtocolMethod::Event, event }) + 1;
+		CallAfter(&ibFrontendMainFrame::CallPosted);
+	}
 }
 
 ibFormVisualDocument* ibFrontendMainFrame::DocumentAt(int page) const

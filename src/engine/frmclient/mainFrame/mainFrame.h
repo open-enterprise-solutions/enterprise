@@ -120,6 +120,9 @@ public:
 	// desktop's modal loop runs the events of the windows over it (a choice form a window opened, CreateChildFrame):
 	// what the person can reach while a window asks is the modal's to say.
 	void Post(ibProtocolMethod method, const ibProtocolNode& params);
+	// …or a state event left for the next call to carry (ibCommunicator::Hold) — after the calls posted before it, which
+	// would carry it ahead of what was done first. False — the server takes none held: it is posted as its own call.
+	bool Hold(const ibProtocolNode& event);
 	// THE QUESTION THE SERVER'S CODE WAITS ON — none (not IsNode): it waits on nothing.
 	ibProtocolNode GetRequest() const;
 	// AN ANSWER THAT LEAVES ITS WINDOW OPEN — a window that acts more than once before it closes (the saved settings'
@@ -137,8 +140,7 @@ public:
 	// A control's fetch — a table's rows, a spreadsheet's cells; `params` — the control, its request, the view it is of:
 	// the answer is no frame, nothing is drawn or asked, and a refusal is only false. It speaks to the communicator alone,
 	// so a control's own thread may make it.
-	bool Fetch(const ibProtocolNode& params, ibProtocolNode& answer);
-	// A file of the person's, up to the server in its parts — `file` the id it was given. False: not read, or refused
+	bool Fetch(const ibProtocolNode& params, ibProtocolNode& answer);	// A file of the person's, up to the server in its parts — `file` the id it was given. False: not read, or refused
 	// (said to the person).
 	bool UploadFile(const wxString& path, wxString& file);
 	// …and a file of the server's down to the person's `path`, in its parts. False: not written, or refused (said to the
@@ -216,8 +218,9 @@ private:
 	};
 
 	struct ibPostedCall {
-		ibProtocolMethod method;
-		ibProtocolNode   params;
+		ibProtocolMethod            method;
+		ibProtocolNode              params;
+		std::vector<ibProtocolNode> held;   // the state events held while it waited — held once it is made (Hold)
 	};
 
 	// What the item node of the frame's Menu does.

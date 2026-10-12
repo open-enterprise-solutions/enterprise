@@ -1127,6 +1127,15 @@ bool ibValueModelTableBox::OnClientEvent(ibProtocolEvent event, const ibDataNode
 	}
 }
 
+bool ibValueModelTableBox::IsSubscribed(ibProtocolEvent event) const
+{
+	switch (event) {
+	case ibProtocolEvent::Input: return true;
+	case ibProtocolEvent::Row:   return HasHandler(m_eventSelection);
+	default:                     return ibValueWindowComposite::IsSubscribed(event);
+	}
+}
+
 bool ibValueModelTableBox::OnCellEvent(ibProtocolEvent event, const ibDataNode& args)
 {
 	const s32 rowHandle = args.GetValue<s32>(wxT("Row"));

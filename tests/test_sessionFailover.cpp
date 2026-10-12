@@ -27,6 +27,7 @@
 #include "backend/appHost.h"
 #include "backend/databaseLayer/connectionPool.h"
 #include "backend/databaseLayer/databaseLayer.h"
+#include "backend/rpc/rpcMessage.h"     // ibRpcParseRequest — a call as the server's port reads it
 #ifdef OES_USE_FIREBIRD
 #include "backend/databaseLayer/firebird/firebirdDatabaseLayer.h"
 #endif
@@ -746,6 +747,126 @@ TEST(SessionFailoverClient, IdsStayMonotonicAcrossReconnect)
 
 	ASSERT_TRUE(communicator.Call(ibProtocolMethod::Frame, params, result, refusal, error)) << error;
 	EXPECT_EQ(IdOf(raw->sent.back()), 4);
+}
+
+namespace {
+
+// A state event as the client's host makes one — {Control, Event, Args}.
+ibProtocolNode StateEvent(int control, ibProtocolEvent event, const char* name = nullptr, int value = 0, int column = 0)
+{
+	ibProtocolNode args;
+	if (name != nullptr)
+		args.SetValue(name, value);
+	if (column != 0)
+		args.SetValue(ibProtocolName::Column, column);
+	ibProtocolNode node;
+	node.SetValue(ibProtocolName::Control, control)
+		.SetValue(ibProtocolName::Event, static_cast<int>(event))
+		.SetValue(ibProtocolName::Args, args);
+	return node;
+}
+
+std::vector<ibProtocolNode> PendingOf(const std::string& text)
+{
+	ibProtocolNode node;
+	EXPECT_TRUE(ibProtocolNode::Read(text, node));
+	return node.FindChild(ibProtocolName::RpcParams).GetList(ibProtocolName::Pending);
+}
+
+std::string LoginAnswer(int protocol)
+{
+	return "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"Client\":\"client-1\",\"Protocol\":" + std::to_string(protocol)
+		+ ",\"Frame\":1,\"Title\":\"Home\"}}";
+}
+
+std::string FrameAnswer(long long id, int number)
+{
+	ibProtocolNode frame;
+	frame.SetValue(ibProtocolName::Frame, number).SetValue(ibProtocolName::Title, wxString(wxT("Home")));
+	return Answer(id, frame);
+}
+
+} // namespace
+
+// A walk down a list is one record: the latest of each state event per control, in the order they were last done, goes
+// with the next call — and only with it.
+TEST(SubscribedEventsClient, HeldEventsGoWithTheNextCall)
+{
+	auto script = std::make_unique<ScriptedConnection>();
+	ScriptedConnection* const raw = script.get();
+	raw->fail = { false, false, false };
+	raw->answers = { LoginAnswer(3), FrameAnswer(2, 2), FrameAnswer(3, 3) };
+
+	ibCommunicator communicator(std::move(script));
+	ibProtocolNode result;
+	ibProtocolRefusal refusal = ibProtocolRefusal::None;
+	wxString error;
+	ASSERT_TRUE(communicator.Login(wxT("user"), wxT("secret"), ibProtocolMode::Runtime, result, refusal, error)) << error;
+
+	for (int row = 1; row <= 100; ++row)
+		EXPECT_TRUE(communicator.Hold(StateEvent(7, ibProtocolEvent::Row, ibProtocolName::Row, row)));
+	for (int focus = 0; focus < 5; ++focus)
+		EXPECT_TRUE(communicator.Hold(StateEvent(3, ibProtocolEvent::Focus)));
+	EXPECT_TRUE(communicator.Hold(StateEvent(7, ibProtocolEvent::Resize, "Width", 80, 21)));
+	EXPECT_TRUE(communicator.Hold(StateEvent(7, ibProtocolEvent::Resize, "Width", 90, 22)));
+	EXPECT_TRUE(communicator.Hold(StateEvent(7, ibProtocolEvent::Resize, "Width", 120, 21)));
+	EXPECT_TRUE(communicator.Hold(StateEvent(7, ibProtocolEvent::Row, ibProtocolName::Row, 500)));
+
+	ibProtocolNode params;
+	ASSERT_TRUE(communicator.Call(ibProtocolMethod::Frame, params, result, refusal, error)) << error;
+	ASSERT_EQ(raw->sent.size(), 2u);
+	const std::vector<ibProtocolNode> pending = PendingOf(raw->sent[1]);
+	ASSERT_EQ(pending.size(), 4u);
+	EXPECT_EQ(pending[0].GetInt(ibProtocolName::Event), static_cast<int>(ibProtocolEvent::Focus));
+	EXPECT_EQ(pending[0].GetInt(ibProtocolName::Control), 3);
+	// Each column's width is its own: 22's stays, 21's is the later one.
+	EXPECT_EQ(pending[1].FindChild(ibProtocolName::Args).GetInt(ibProtocolName::Column), 22);
+	EXPECT_EQ(pending[2].FindChild(ibProtocolName::Args).GetInt(ibProtocolName::Column), 21);
+	EXPECT_EQ(pending[2].FindChild(ibProtocolName::Args).GetInt("Width"), 120);
+	EXPECT_EQ(pending[3].GetInt(ibProtocolName::Event), static_cast<int>(ibProtocolEvent::Row));
+	EXPECT_EQ(pending[3].FindChild(ibProtocolName::Args).GetInt(ibProtocolName::Row), 500);
+
+	// …and the server reads it as the client wrote it: a list of events, each with its Args.
+	ibRpcRequest request;
+	wxString parseError;
+	ASSERT_TRUE(ibRpcParseRequest(wxString::FromUTF8(raw->sent[1]), request, parseError)) << parseError;
+	const ibDataValue* const read = request.m_params.FindField(wxString::FromUTF8(ibProtocolName::Pending));
+	ASSERT_NE(read, nullptr);
+	ASSERT_EQ(read->Kind(), ibDataKind::Array);
+	ASSERT_EQ(read->AsArray().size(), 4u);
+	const ibDataValue& last = read->AsArray()[3];
+	ASSERT_EQ(last.Kind(), ibDataKind::Child);
+	EXPECT_EQ(last.AsChild()->GetValue<s32>(wxString::FromUTF8(ibProtocolName::Event)),
+		static_cast<s32>(ibProtocolEvent::Row));
+	EXPECT_EQ(last.AsChild()->GetValue<s32>(wxString::FromUTF8(ibProtocolName::Control)), 7);
+	const ibDataNode* const args = last.AsChild()->FindChild(wxString::FromUTF8(ibProtocolName::Args));
+	ASSERT_NE(args, nullptr);
+	EXPECT_EQ(args->GetValue<s32>(wxString::FromUTF8(ibProtocolName::Row)), 500);
+
+	// Taken once.
+	ASSERT_TRUE(communicator.Call(ibProtocolMethod::Frame, params, result, refusal, error)) << error;
+	EXPECT_TRUE(PendingOf(raw->sent.back()).empty());
+}
+
+// A server of protocol 2 would never hear a held event: the client sends it at once.
+TEST(SubscribedEventsClient, NothingHeldBelowProtocol3)
+{
+	auto script = std::make_unique<ScriptedConnection>();
+	ScriptedConnection* const raw = script.get();
+	raw->fail = { false, false };
+	raw->answers = { LoginAnswer(2), FrameAnswer(2, 2) };
+
+	ibCommunicator communicator(std::move(script));
+	ibProtocolNode result;
+	ibProtocolRefusal refusal = ibProtocolRefusal::None;
+	wxString error;
+	EXPECT_FALSE(communicator.Hold(StateEvent(7, ibProtocolEvent::Row, ibProtocolName::Row, 1)));
+	ASSERT_TRUE(communicator.Login(wxT("user"), wxT("secret"), ibProtocolMode::Runtime, result, refusal, error)) << error;
+	EXPECT_FALSE(communicator.Hold(StateEvent(7, ibProtocolEvent::Row, ibProtocolName::Row, 1)));
+
+	ibProtocolNode params;
+	ASSERT_TRUE(communicator.Call(ibProtocolMethod::Frame, params, result, refusal, error)) << error;
+	EXPECT_TRUE(PendingOf(raw->sent.back()).empty());
 }
 
 TEST(SessionFailoverResume, AbsentIs120AndZeroIsOff)

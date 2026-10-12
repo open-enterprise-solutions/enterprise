@@ -39,6 +39,22 @@ ibProtocolRefusal RefusalOf(long long code)
 	return ibProtocolRefusal::BadParameter;
 }
 
+// Two held events of one kind — the later stands for both: the same event of the same control of the same view; a
+// column's place and width are each the column's own.
+bool IsSameState(const ibProtocolNode& one, const ibProtocolNode& other)
+{
+	if (one.GetInt(ibProtocolName::Control) != other.GetInt(ibProtocolName::Control)
+		|| one.GetInt(ibProtocolName::Event) != other.GetInt(ibProtocolName::Event)
+		|| one.GetString(ibProtocolName::Form) != other.GetString(ibProtocolName::Form)
+		|| one.GetInt(ibProtocolName::Tab) != other.GetInt(ibProtocolName::Tab))
+		return false;
+	const ibProtocolEvent event = static_cast<ibProtocolEvent>(one.GetInt(ibProtocolName::Event));
+	if (event != ibProtocolEvent::Move && event != ibProtocolEvent::Resize)
+		return true;
+	return one.FindChild(ibProtocolName::Args).GetInt(ibProtocolName::Column)
+		== other.FindChild(ibProtocolName::Args).GetInt(ibProtocolName::Column);
+}
+
 // Password and Token are bearer secrets. The debug journal records the exchange; the release build's macro is empty.
 std::string Redacted(const std::string& text)
 {
@@ -155,6 +171,21 @@ bool ibCommunicator::Call(ibProtocolMethod method, const ibProtocolNode& params,
 	return true;
 }
 
+bool ibCommunicator::Hold(const ibProtocolNode& event)
+{
+	// A server of protocol 2 or older would never hear it — and one not logged in to has nobody to tell.
+	if (m_protocol < 3)
+		return false;
+
+	// The latest of its kind in place of the one before — and at the end: it was done last.
+	ibProtocolNode held = event.Clone();
+	std::lock_guard<std::mutex> lock(m_pendingMutex);
+	m_pending.erase(std::remove_if(m_pending.begin(), m_pending.end(),
+		[&held](const ibProtocolNode& pending) { return IsSameState(pending, held); }), m_pending.end());
+	m_pending.push_back(std::move(held));
+	return true;
+}
+
 bool ibCommunicator::CallLocked(ibProtocolMethod method, const ibProtocolNode& params, ibProtocolNode& result,
 	ibProtocolRefusal& refusal, wxString& error)
 {
@@ -189,6 +220,18 @@ bool ibCommunicator::CallLocked(ibProtocolMethod method, const ibProtocolNode& p
 		named.SetValue(ibProtocolName::Client, m_client);
 		if (m_number != 0)
 			named.SetValue(ibProtocolName::Since, m_number);
+	}
+	// ⭐ WHAT WAS HELD GOES WITH ANY CALL — the server applies it before the call itself, so the code a press runs reads the
+	// row the cursor stands on. Taken once: a call that does not get through loses it with the session it was of. A
+	// client going says nothing more of where it was.
+	if (method != ibProtocolMethod::Login && method != ibProtocolMethod::Logout) {
+		std::vector<ibProtocolNode> pending;
+		{
+			std::lock_guard<std::mutex> lock(m_pendingMutex);
+			pending.swap(m_pending);
+		}
+		for (const ibProtocolNode& event : pending)
+			(*named.Json())[ibProtocolName::Pending].push_back(*event.Json());
 	}
 	const long long id = ++m_lastId;
 	ibProtocolNode request;
@@ -369,4 +412,6 @@ void ibCommunicator::Forget()
 	m_number = 0;
 	m_frame = ibProtocolNode();
 	m_views.clear();
+	std::lock_guard<std::mutex> lock(m_pendingMutex);
+	m_pending.clear();
 }

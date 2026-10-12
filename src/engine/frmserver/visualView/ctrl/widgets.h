@@ -273,6 +273,9 @@ class ibValueTextCtrl : public ibValueWindow,
 	// keystroke); Change — the text as it stands is committed (Text: the client sends it on Enter, or on
 	// leaving a field that was typed into); Select / Open / Clear — the field's three buttons.
 	virtual bool OnClientEvent(ibProtocolEvent event, const ibDataNode& args) override;
+	// Input while the form's object is not modified yet: the first keystroke modifies it, and the «*» of its tab comes
+	// with that frame. Any later one changes nothing until the next call.
+	virtual bool IsSubscribed(ibProtocolEvent event) const override;
 
 	//support icons
 	virtual wxIcon GetIcon() const;

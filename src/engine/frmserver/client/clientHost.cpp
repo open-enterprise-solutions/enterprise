@@ -239,6 +239,27 @@ ibValueForm* FormOfCall(const ibClientFrame* frame, const wxString& key)
 	return key.IsEmpty() ? frame->ActiveForm() : ibFormVisualDocument::FindFormByGuid(ibGuid(key));
 }
 
+// WHAT THE PERSON DID — an Event call's {Control, Event[, Args][, Form][, Tab]}, or one the client held and a later call
+// carries (Pending): to the control of the form it names, or to a tab's own view.
+void DispatchEvent(ibClientFrame* frame, const ibDataNode& call)
+{
+	const ibProtocolEvent event = static_cast<ibProtocolEvent>(call.GetValue<s32>(wxString::FromUTF8(ibProtocolName::Event)));
+	const ibDataNode none;
+	const ibDataNode* const found = call.FindChild(wxString::FromUTF8(ibProtocolName::Args));
+	const ibDataNode& args = found != nullptr ? *found : none;
+	// A TAB'S OWN VIEW, named by the tab — what the person did in a text, not in a control of a form; by the tab, not the
+	// active one, as it may be handed over when the tab is being closed.
+	const s32 tabId = call.GetValue<s32>(wxString::FromUTF8(ibProtocolName::Tab));
+	if (tabId != 0) {
+		if (ibClientChildFrame* const tab = frame->Tab(frame->FindTab(tabId))) {
+			if (ibView* const view = tab->GetView())
+				view->OnClientEvent(event, args);
+		}
+	}
+	else if (ibValueForm* const form = FormOfCall(frame, call.GetValue<wxString>(wxString::FromUTF8(ibProtocolName::Form))))
+		form->DispatchEvent(call.GetValue<s32>(wxString::FromUTF8(ibProtocolName::Control)), event, args);
+}
+
 } // namespace
 
 ibClientHost::ibClientHost(ibApplicationInstance* applicationInstance)
@@ -775,6 +796,31 @@ bool ibClientHost::Call(ibProtocolMethod method, const ibDataNode& params, ibDat
 			}
 			else {
 			client->instance->Touch();
+			// ⭐ WHERE THE PERSON IS, held by the client (protocol 3, Pending) — the latest of each, in the order it came,
+			// done before the call that carries it: a press reads the row the cursor stands on. One that fails is said in
+			// the journal; the call goes on.
+			if (const ibDataValue* const pending = params.FindField(wxString::FromUTF8(ibProtocolName::Pending))) {
+				ibClientFrame* const frame = client->instance->GetFrame();
+				const std::shared_ptr<ibSession> session = client->instance->ShareSession();
+				if (frame != nullptr && session != nullptr && pending->Kind() == ibDataKind::Array) {
+					session->Submit([frame, pending]() {
+						for (const ibDataValue& held : pending->AsArray()) {
+							if (held.Kind() != ibDataKind::Child || held.AsChild() == nullptr)
+								continue;
+							try {
+								DispatchEvent(frame, *held.AsChild());
+							}
+							catch (const std::exception& err) {
+								ibJournalWarning(wxT("client"), wxT("a held event ended with an exception: %s"),
+									wxString::FromUTF8(err.what()));
+							}
+							catch (...) {
+								ibJournalWarning(wxT("client"), wxT("a held event ended with an exception"));
+							}
+						}
+					}).get();
+				}
+			}
 			// The frame the client holds — the number it was last answered with; 0 or absent: none, the frame whole.
 			const s32 since = params.GetValue<s32>(wxT("Since"));
 
@@ -843,24 +889,8 @@ bool ibClientHost::Call(ibProtocolMethod method, const ibDataNode& params, ibDat
 				}
 			}
 			else if (method == ibProtocolMethod::Event) {
-				const ibFormID controlId = params.GetValue<s32>(wxT("Control"));
-				const ibProtocolEvent event = static_cast<ibProtocolEvent>(params.GetValue<s32>(wxT("Event")));
-				const ibDataNode* found = params.FindChild(wxT("Args"));
-				const ibDataNode args = found != nullptr ? *found : ibDataNode();
-				const wxString formKey = params.GetValue<wxString>(wxT("Form"));
-				// A TAB'S OWN VIEW, named by the tab — what the person did in a text, not in a control of a form; by the tab,
-				// not the active one, as it may be handed over when the tab is being closed.
-				const s32 tabId = params.GetValue<s32>(wxT("Tab"));
-				done = Run(*client, [controlId, event, args, formKey, tabId](ibClientFrame* frame) {
-					if (tabId != 0) {
-						if (ibClientChildFrame* const tab = frame->Tab(frame->FindTab(tabId))) {
-							if (ibView* const view = tab->GetView())
-								view->OnClientEvent(event, args);
-						}
-					}
-					else if (ibValueForm* const form = FormOfCall(frame, formKey))
-						form->DispatchEvent(controlId, event, args);
-				}, since, result, refusal, error);
+				done = Run(*client, [params](ibClientFrame* frame) { DispatchEvent(frame, params); }, since, result,
+					refusal, error);
 			}
 			else if (method == ibProtocolMethod::Activate || method == ibProtocolMethod::Close) {
 				// A TAB BY ITS ID — a position shifts the moment a tab closes. One the frame does not have is refused

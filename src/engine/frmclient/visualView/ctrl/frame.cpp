@@ -86,13 +86,27 @@ bool ibValueFrame::ChangeChildPosition(ibValueFrame* obj, unsigned int pos)
 	return ibPropertyObjectHelper::ChangeChildPosition(obj, pos);
 }
 
+void ibValueFrame::SetSubscribedEvents(const std::vector<ibProtocolNode>& events)
+{
+	m_subscribedEvents = 0;
+	for (const ibProtocolNode& event : events) {
+		const long long number = event.AsInt();
+		if (number > 0 && number < 32)
+			m_subscribedEvents |= 1u << number;
+	}
+}
+
 void ibValueFrame::Send(ibProtocolEvent event) const
 {
-	m_host.Send(m_controlId, event, ibProtocolNode());
+	Send(event, ibProtocolNode());
 }
 
 void ibValueFrame::Send(ibProtocolEvent event, const ibProtocolNode& args) const
 {
+	// WHERE THE PERSON IS, the server not subscribed to it: it waits for the next call, whatever that call is — held unless
+	// the server speaks no protocol that carries it.
+	if (ibProtocolIsStateEvent(event) && !IsSubscribed(event) && m_host.Hold(m_controlId, event, args))
+		return;
 	m_host.Send(m_controlId, event, args);
 }
 

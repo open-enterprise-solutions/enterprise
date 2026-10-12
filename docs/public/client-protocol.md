@@ -106,6 +106,26 @@ table. The client moves the column in its own copy of the form at once; the serv
 | `Request` | a question to the person, while one is pending |
 | `View` | the active tab drawn: a form — its `Key` and its controls as the designer saved them, each with a `State` of what it shows now; or the start page |
 
+## Events held until the next call
+
+From protocol 3. A **state event** says where the person is: `Focus` (1), `Input` (4), `Move` (11), `Row` (12),
+`Resize` (15). Every other event is something done and goes at once.
+
+- A control's `State` may carry `Subscribed`: the state events the server is subscribed to on it, by number —
+  something there runs on them. These go at once.
+- Any other state event is held by the client: the latest per control and event (`Move` and `Resize` per column), in
+  the order last done.
+- Every call but `login` and `logout` carries what is held as `Pending`, a list of `{Control, Event, Args, Form | Tab}`,
+  and the client clears it. The server applies `Pending` in order before the call itself.
+
+```
+event {Client, Control: 12, Event: 3,
+       Pending: [{Control: 7, Event: 12, Args: {Row: 841}}, {Control: 9, Event: 1}]}
+```
+
+So a walk down a list with the arrow keys is one record, and the code a press runs reads the row the cursor stands
+on. A client that holds nothing stays correct, only chattier; a server below 3 never gets `Pending`.
+
 ## Schemas
 
 A schema is a dialog of the desktop held as data: the client shows it however it likes.

@@ -47,6 +47,8 @@ namespace ibProtocolName {
 	                                                          // login's Features to opt into the idempotency slot.
 	inline constexpr const char* Client   = "Client";
 	inline constexpr const char* Since    = "Since";
+	inline constexpr const char* Pending  = "Pending";   // (protocol 3) the state events held since the last call, in
+	                                                     // the order done — each as an event's params; applied first
 
 	// The frame — and the answer's own beside it.
 	inline constexpr const char* Frame     = "Frame";
@@ -141,6 +143,8 @@ namespace ibProtocolName {
 	// State, what the server reads it as now; and what the person did with one, back by its id.
 	inline constexpr const char* ControlId        = "ControlId";
 	inline constexpr const char* State            = "State";
+	inline constexpr const char* Subscribed       = "Subscribed";   // a State's: the state events the server is subscribed
+	                                                                // to on it — sent at once, by number
 	inline constexpr const char* Control          = "Control";
 	inline constexpr const char* Event            = "Event";
 	inline constexpr const char* Form             = "Form";
@@ -277,7 +281,10 @@ namespace ibProtocolType {
 //      last frame's, as in 1. A client keeps each tab's view, puts the one of the tab the patch makes active in
 //      place (keeping the view it holds when it has none for that tab), and applies the patch's View to it; a frame
 //      sent whole begins the store again — back on a tab, it is sent what changed there, not the whole form.
-constexpr int ibProtocolVersion = 2;
+//   3  …and a state event (ibProtocolIsStateEvent) its control's State does not list in Subscribed is held by the client,
+//      the latest of each kind per control, and carried by its next call, whatever it is, as Pending — which the
+//      server applies, in order, before the call itself.
+constexpr int ibProtocolVersion = 3;
 
 // WHAT A CLIENT ASKS THE SERVER. On the wire a method is a name, as JSON-RPC has it; in code it is a type: the server
 // reads the name once (ibProtocolMethodFromName) and nothing past it compares strings. A name is never changed; a new
@@ -525,6 +532,24 @@ enum class ibProtocolEvent : int {
 	Action  = 16,   // one of the control's own commands, picked in its context menu (Id: the command's — a table's
 	                // standard commands, its State's ContextMenu)
 };
+
+// ⭐ AN EVENT THAT SAYS WHERE THE PERSON IS — the control in focus, the table's cursor, typing begun, a column's place and
+// width. Nothing on the server has to run for it unless the server is subscribed to it (the State's Subscribed), so it
+// waits for the client's next call (protocol 3, Pending): a walk down a list with the arrow keys is one record, not a
+// call a row. Every other event is something done, and goes at once.
+inline bool ibProtocolIsStateEvent(ibProtocolEvent event)
+{
+	switch (event) {
+	case ibProtocolEvent::Focus:
+	case ibProtocolEvent::Input:
+	case ibProtocolEvent::Row:
+	case ibProtocolEvent::Move:
+	case ibProtocolEvent::Resize:
+		return true;
+	default:
+		return false;
+	}
+}
 
 // What a button shows — its State's Representation (Auto is resolved by the server before it is written).
 enum class ibProtocolRepresentation : int {
