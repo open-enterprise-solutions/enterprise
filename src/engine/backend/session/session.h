@@ -481,6 +481,14 @@ public:
 	// Authenticated before relying on the value.
 	const wxString& GetSessionRawPassword() const { return m_sessionRawPassword; }
 
+	// The child has the password in its ticket. Drop the copy this session
+	// was keeping for the next Designer launch, overwriting it first.
+	void ClearSessionRawPassword() {
+		for (size_t i = 0; i < m_sessionRawPassword.length(); ++i)
+			m_sessionRawPassword[i] = wxT('x');
+		m_sessionRawPassword.clear();
+	}
+
 	// ⭐⭐ THE ONE COMMAND TO STOP: "finish your current operation" — from any thread, from anyone (a closed
 	// window, Ctrl+Break, an administrator's kick, a debugger's Pause, a cancelled job, shutdown). The session
 	// passes it on to everything that is doing its work:
@@ -891,7 +899,6 @@ private:
 		m_translateState.Resolve();
 	}
 	void SetSessionRawPassword(const wxString& pwd) { m_sessionRawPassword = pwd; }
-	void ClearSessionRawPassword() { m_sessionRawPassword.clear(); }
 	void EnableDebug()  { if (!m_debug) m_debug = std::make_unique<ibDebugSession>(); }
 	void DisableDebug() { m_debug.reset(); }
 
