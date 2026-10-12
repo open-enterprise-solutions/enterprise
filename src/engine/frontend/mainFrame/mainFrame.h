@@ -91,14 +91,6 @@ public:
 	virtual void RefreshFrame() override;
 	virtual void RaiseFrame() override;
 
-	// Desktop modal-message primitive — wxMessageBox with this frame
-	// as the parent so the dialog stays attached. Backend callers use
-	// session->GetFrame()->ShowModalMessage(...) instead of raw
-	// wxMessageBox so the backend stays wx-ignorant.
-	int ShowModalMessage(const wxString& message, const wxString& caption, int style) override {
-		return wxMessageBox(message, caption, style, this);
-	}
-
 	// ⭐ ONE IMPLEMENTATION, BOTH WINDOWS. What is being looked at is sometimes a list in the running
 	// client and sometimes a form in the designer, and neither is more the subject than the other —
 	// so it is written where they meet rather than twice (Max, 2026-09-04: *"I say my list displays
@@ -146,6 +138,14 @@ public:
 	}
 
 protected:
+
+	// Desktop modal-message primitive — wxMessageBox with this frame
+	// as the parent so the dialog stays attached. Backend callers use
+	// session->GetFrame()->ShowModalMessage(...) instead of raw
+	// wxMessageBox so the backend stays wx-ignorant.
+	virtual int DoShowModalMessage(const wxString& message, const wxString& caption, int style) override {
+		return wxMessageBox(message, caption, style, this);
+	}
 
 	// hook the document manager into event handling chain here
 	virtual bool TryBefore(wxEvent& event) override {

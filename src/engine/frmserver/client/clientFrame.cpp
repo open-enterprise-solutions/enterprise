@@ -188,7 +188,7 @@ std::vector<ibClientFrame::PendingPicture> ibClientFrame::DrainPendingPictures()
 	return out;
 }
 
-bool ibClientFrame::Request(const ibDataNode& request, ibDataNode& response)
+bool ibClientFrame::DoRequest(const ibDataNode& request, ibDataNode& response)
 {
 	ibSession* const session = GetSession();
 	ibWorkerPool* const pool = session != nullptr ? session->GetWorkerPool() : nullptr;
@@ -221,7 +221,7 @@ bool ibClientFrame::Request(const ibDataNode& request, ibDataNode& response)
 	return true;
 }
 
-int ibClientFrame::ShowModalMessage(const wxString& message, const wxString& caption, int style)
+int ibClientFrame::DoShowModalMessage(const wxString& message, const wxString& caption, int style)
 {
 	ibDataNode request;
 	request.SetValue(wxT("Kind"), static_cast<s32>(ibProtocolRequestKind::Message));
@@ -230,7 +230,7 @@ int ibClientFrame::ShowModalMessage(const wxString& message, const wxString& cap
 	request.SetValue(wxT("Style"), style);
 
 	ibDataNode response;
-	return Request(request, response) ? response.GetValue<s32>(wxT("Button")) : 0;   // 0 — no button: cancelled
+	return DoRequest(request, response) ? response.GetValue<s32>(wxT("Button")) : 0;   // 0 — no button: cancelled
 }
 
 bool ibClientFrame::HasPendingRequest() const

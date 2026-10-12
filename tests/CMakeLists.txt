@@ -168,6 +168,7 @@ add_executable(oes_tests
     test_workerPoolFiber.cpp
     test_fiberStopJoin.cpp
     test_fiberTsan.cpp
+    test_fiberTrust.cpp
     test_typeFamilyAdjust.cpp
     test_eventHandler.cpp
     test_functionalOption.cpp
