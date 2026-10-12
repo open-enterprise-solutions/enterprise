@@ -133,8 +133,10 @@ wxString ScriptFingerprint(const wxString& substituteRel, const wxString& substi
 		+ wxFILE_SEP_PATH + wxT("engineFingerprint.cmake");
 	const wxString out = wxFileName(wxStandardPaths::Get().GetTempDir(),
 		substituteRel.empty() ? wxT("oes-engine-fp.h") : wxT("oes-engine-fp-sub.h")).GetFullPath();
+	// The cmake that configured the build (tests/CMakeLists.txt), not whichever is on PATH.
 	wxString cmd = wxString::Format(
-		wxT("cmake -DOES_COMPILER_DIR=\"%s\" -DOES_SYSTEM_DIR=\"%s\" -DOES_BACKEND_DIR=\"%s\" -DOES_FINGERPRINT_OUT=\"%s\""),
+		wxT("\"%s\" -DOES_COMPILER_DIR=\"%s\" -DOES_SYSTEM_DIR=\"%s\" -DOES_BACKEND_DIR=\"%s\" -DOES_FINGERPRINT_OUT=\"%s\""),
+		wxString::FromUTF8(OES_CMAKE_COMMAND),
 		backend + wxFILE_SEP_PATH + wxT("compiler"),
 		backend + wxFILE_SEP_PATH + wxT("system"),
 		backend,

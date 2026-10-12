@@ -207,6 +207,9 @@ target_sources(oes_tests PRIVATE
 # bring-up). OES_TESTING opens ib::AppDataCtorToken's default ctor; see
 # backend/appDataCtorToken.h.
 target_compile_definitions(oes_tests PRIVATE OES_TESTING)
+# The cmake that configured this tree: test_byteCodeFormat runs the engine fingerprint script with it, the way the
+# build does, and a machine need not have one on PATH.
+target_compile_definitions(oes_tests PRIVATE OES_CMAKE_COMMAND="${CMAKE_COMMAND}")
 
 target_include_directories(oes_tests PRIVATE
     "${CMAKE_SOURCE_DIR}/src"
