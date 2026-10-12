@@ -16,7 +16,7 @@
 #include "backend/compiler/typeCtor.h"
 #include "backend/compiler/value.h"
 
-#include <wx/init.h>
+#include <wx/app.h>   // wxTheApp — a value is built only once wx itself is up
 
 #include <set>
 #include <utility>
@@ -60,7 +60,7 @@ ibHelpEntry Head(const wxString& id, const wxString& name, ibHelpKind kind,
 void AddMembers(const ibCtorAbstractType* ctor, const wxString& name, const wxString& typeId,
                 bool asEnum, std::vector<ibHelpEntry>& out, std::set<wxString>& ids)
 {
-	if (!wxIsInitialized())
+	if (wxTheApp == nullptr)
 		return;
 
 	ibValue value;
