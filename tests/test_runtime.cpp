@@ -21,6 +21,7 @@
 #include "backend/compiler/procUnitState.h"   // m_errorPlace — which opcode raised
 #include "backend/session/session.h"
 #include "backend/appData.h"                // the built-in dispatcher reads appData on entry
+#include "backend/system/value/valueMap.h"  // ibValueStructure — a stand-in for the form's object
 
 #include <wx/init.h>
 #include <wx/image.h>  // wxInitAllImageHandlers — wx decodes nothing until registered
@@ -2935,4 +2936,104 @@ TEST(RuntimeTest, AnArrayWalkedAndRewalkedIsLetGoOfOnce) {
 
 	// The frame goes here, with both arrays in it. That is the moment the nightly
 	// caught: passing under a sanitiser is the whole assertion.
+}
+
+// ===========================================================================
+// A form's DataSource is a cell that holds a reference to the object. Reading
+// it through a const pointer (what the form's GetPropVal did) makes the write
+// throw. ReferToLive copies that reference, so the field write lands, and an
+// embedded object is anchored instead of deleted.
+// ===========================================================================
+
+TEST_F(BuiltInRuntime, ReferToLive_AReferenceCellStaysWritable) {
+	ibValuePtr<ibValueStructure> object(new ibValueStructure());
+	object->Insert(ibValue(wxT("B")), ibValue(0));
+
+	ibValue cell;
+	cell = static_cast<ibValue*>(object);   // the attribute's m_value
+
+	ibValue frozen;
+	frozen = static_cast<const ibValue*>(&cell);
+	const long field = frozen.FindProp(wxT("B"));
+	ASSERT_GE(field, 0);
+	EXPECT_THROW(frozen.SetPropVal(field, ibValue(7)), ibBackendException);
+
+	ibValue live;
+	live.ReferToLive(&cell);
+	ASSERT_TRUE(live.SetPropVal(live.FindProp(wxT("B")), ibValue(7)));
+
+	ibValue got;
+	ASSERT_TRUE(object->GetPropVal(object->FindProp(wxT("B")), got));
+	EXPECT_EQ(got.GetInteger(), 7);
+}
+
+TEST_F(BuiltInRuntime, ReferToLive_AnEmbeddedObjectIsNotDeleted) {
+	ibValueStructure embedded;
+	embedded.Insert(ibValue(wxT("B")), ibValue(1));
+	{
+		ibValue live;
+		live.ReferToLive(&embedded);
+		ASSERT_TRUE(live.SetPropVal(live.FindProp(wxT("B")), ibValue(4)));
+	}
+	ibValue got;
+	ASSERT_TRUE(embedded.GetPropVal(embedded.FindProp(wxT("B")), got));
+	EXPECT_EQ(got.GetInteger(), 4);
+}
+
+// The form module does not see DataSource as its own variable. PrepareModuleData
+// publishes every property of ThisForm, and the bind is one of them, so
+// `DataSource.B = ...` is a property read of the form. That read has to come
+// back mutable.
+namespace {
+
+class DataSourceHost : public ibValueDynamicMembers {
+public:
+	explicit DataSourceHost(ibValue* cell)
+		: ibValueDynamicMembers(ibValueTypes::TYPE_VALUE), m_cell(cell)
+	{
+		m_members.Bind(this, &DataSourceHost::Fill);
+	}
+	ibClassID GetClassType() const override { return 0; }
+	void Fill(ibMemberTable& helper) const { helper.AppendProp(wxT("DataSource")); }
+	bool GetPropVal(const long lPropNum, ibValue& pvarPropVal) override {
+		if (GetPropName(lPropNum).IsSameAs(wxT("DataSource"), false)) {
+			pvarPropVal.ReferToLive(m_cell);
+			return true;
+		}
+		return false;
+	}
+	ibValue* m_cell;
+};
+
+} // namespace
+
+TEST_F(BuiltInRuntime, FormModule_DataSourceFieldWriteGoesThroughTheFormProperty) {
+	struct StyleGuard {
+		const short saved = ibCompileCode::GetCodeStyle();
+		~StyleGuard() { ibCompileCode::SetCodeStyle(saved); }
+	} guard;
+	ibCompileCode::SetCodeStyle(CODE_CES);
+
+	ibValuePtr<ibValueStructure> object(new ibValueStructure());
+	object->Insert(ibValue(wxT("A")), ibValue(3));
+	object->Insert(ibValue(wxT("B")), ibValue(0));
+	ibValue cell;
+	cell = static_cast<ibValue*>(object);
+
+	DataSourceHost host(&cell);
+	ibCompileCode cc(wxT("form"), wxT("memory"), false);
+	cc.AddContextVariable(wxT("ThisForm"), &host);
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("procedure OnOpen() {\n")
+		wxT("    DataSource.B = DataSource.A;\n")
+		wxT("}\n")));
+
+	ibProcUnit pu;
+	wxString err;
+	ASSERT_TRUE(RunBound(cc, pu, err)) << err.ToStdString();
+	ASSERT_TRUE(pu.CallAsProc(wxT("OnOpen")));
+
+	ibValue got;
+	ASSERT_TRUE(object->GetPropVal(object->FindProp(wxT("B")), got));
+	EXPECT_EQ(got.GetInteger(), 3);
 }

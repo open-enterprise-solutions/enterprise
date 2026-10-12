@@ -545,6 +545,30 @@ void ibValue::operator = (const ibValue* pValue)
 	}
 }
 
+void ibValue::ReferToLive(ibValue* target)
+{
+	if (this == target || m_bReadOnly)
+		return;
+	// The cell already points at the object (DataSource's m_value is a reference
+	// to the document). Copy that reference: the script writes the document, and
+	// the cell — an embedded member, refcount 0 — is not itself refcounted.
+	// A const reference stays const. That is metadata, and it must not become writable.
+	if (target != nullptr && target->IsReference()) {
+		*this = *target;
+		return;
+	}
+	Reset();
+	if (target == nullptr)
+		return;
+	// Embedded member, born with no owners. One count stays for its life so this
+	// reference's release cannot `delete` it.
+	if (target->m_refCount.load(std::memory_order_relaxed) == 0)
+		target->IncrRef();
+	m_typeClass = ibValueTypes::TYPE_REFFER;
+	m_pRef = target;
+	m_pRef->IncrRef();
+}
+
 void ibValue::SetValue(const ibValue& varValue)
 {
 	if (this == &varValue)
