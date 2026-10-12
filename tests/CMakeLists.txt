@@ -84,6 +84,7 @@ add_executable(oes_tests
     test_compositionSettings.cpp
     test_rpcMessage.cpp
     test_mcpToolContract.cpp
+    test_backupRestore.cpp
     test_spreadsheetCompose.cpp
     test_spreadsheetDocument.cpp
     test_spreadsheetDescriptionNode.cpp
