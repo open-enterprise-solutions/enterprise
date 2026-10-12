@@ -1,18 +1,13 @@
 ﻿#include "workerPoolHeadless.h"
 
 #include "core/fiber/fiber.h"
-#include "core/fiber/fiberLocals.h"   // AssertClear — a scope that must not outlive a park
 
 #include "backend/session/session.h"   // ibSessionScope
 #include "backend/backend_exception.h" // ibBackendException
-#include "backend/compiler/procContext.h"   // the frame a refusal names
-#include "backend/compiler/byteCode.h"
 
-#include <wx/intl.h>
 #include <wx/log.h>
 
 #include <chrono>
-#include <exception>
 #include <stdexcept>
 
 namespace {
@@ -22,12 +17,6 @@ namespace {
 // this fiber is parked the thread runs someone else, and the value has
 // to come back as it was when the fiber resumes.
 thread_local ibSession* tl_currentLease = nullptr;
-
-// The pool that leased this fiber. The debugger parks through it, and
-// the waker is another thread, so the fiber has to be able to name its
-// own pool. Null on the scheduler: a park must not leave it set for the
-// next session.
-thread_local ibWorkerPool* tl_currentPool = nullptr;
 
 // Idle worker self-exits after this much inactivity, unless it's one
 // of the last kMinIdle survivors which stay alive for fast response
@@ -80,20 +69,7 @@ void ibWorkerPoolHeadless::RegisterFiberLocals()
 		ibFiberLocals::RegisterTrivial<ibSession*>(
 			[](void* dst) { *static_cast<ibSession**>(dst) = tl_currentLease; },
 			[](const void* src) { tl_currentLease = *static_cast<ibSession* const*>(src); });
-		ibFiberLocals::RegisterTrivial<ibWorkerPool*>(
-			[](void* dst) { *static_cast<ibWorkerPool**>(dst) = tl_currentPool; },
-			[](const void* src) { tl_currentPool = *static_cast<ibWorkerPool* const*>(src); });
 	});
-}
-
-ibWorkerPool* ibWorkerPool::Current()
-{
-	return tl_currentPool;
-}
-
-bool ibWorkerPool::Leases(const ibSession* session)
-{
-	return session != nullptr && tl_currentLease == session;
 }
 
 ibWorkerPoolHeadless::ibWorkerPoolHeadless(std::size_t maxWorkers)
@@ -145,11 +121,7 @@ std::future<void> ibWorkerPoolHeadless::Submit(ibSession* session, Task task)
 	// otherwise wait forever for itself to release. A parked fiber has
 	// its lease saved away, so a submit from another session on this
 	// same OS thread does not look reentrant.
-	// A close that arrives while this session is already inside BeforeExit
-	// stays queued. Running it here would lock the runtime mutex again
-	// on this thread.
-	if (tl_currentLease != nullptr && tl_currentLease == session
-	    && (session == nullptr || !session->DefersInlineTasks())) {
+	if (tl_currentLease != nullptr && tl_currentLease == session) {
 		try {
 			task();
 			promise->set_value();
@@ -176,9 +148,7 @@ std::future<void> ibWorkerPoolHeadless::Submit(ibSession* session, Task task)
 		// A script of this session waits in Await on the fiber that holds it. That fiber runs this
 		// task, no other worker may. Its home thread is in m_cv, so the flag and a broadcast are what
 		// resume it: notify_one can be taken by a worker that does not hold the fiber.
-		// A breakpoint, or a close already in progress, does not run this
-		// task on the waiting stack. It stays queued until that wait ends.
-		if (slot->waiting > 0 && slot->drain) {
+		if (slot->waiting > 0) {
 			slot->woken = true;
 			parked = true;
 		}
@@ -230,7 +200,7 @@ bool ibWorkerPoolHeadless::HasRunnableParkedLocked() const
 	for (const ibParked& parked : ParkedFibers()) {
 		if (parked.queue == nullptr)
 			continue;
-		if (parked.queue->woken || (parked.queue->drain && !parked.queue->tasks.empty()))
+		if (parked.queue->woken || !parked.queue->tasks.empty())
 			return true;
 		if (m_stop.load(std::memory_order_acquire))
 			return true;
@@ -279,26 +249,7 @@ void ibWorkerPoolHeadless::DrainLease(ibSessionQueue* q)
 	}
 }
 
-namespace {
-
-// One refusal, Debug and Release. A script Try sees it. The frame's module
-// and line are in the message when the park is asked from a running script.
-void RefusePark(const wxString& why)
-{
-	wxString where;
-	if (ibProcUnitState* const state = ibSession::GetPUState()) {
-		if (ibRunContext* const frame = state->GetCurrentRunContext()) {
-			const ibByteCode* const code = frame->GetByteCode();
-			if (code != nullptr && !code->m_strModuleName.empty())
-				where = wxString::Format(wxT(" (%s:%ld)"), code->m_strModuleName, frame->m_lCurLine);
-		}
-	}
-	ibBackendCoreException::Error(wxT("%s%s"), why, where);
-}
-
-} // namespace
-
-void ibWorkerPoolHeadless::Await(ibSession* session, const std::function<bool()>& done, bool drain)
+void ibWorkerPoolHeadless::Await(ibSession* session, const std::function<bool()>& done)
 {
 	// Only the fiber that holds the session may run its work, so only it may wait this way — anywhere else
 	// the tasks it waits through would be run by nobody (a task of ANOTHER session would also keep that
@@ -321,82 +272,40 @@ void ibWorkerPoolHeadless::Await(ibSession* session, const std::function<bool()>
 	++q->waiting;
 
 	for (;;) {
-		// A breakpoint does not run what arrives, and neither does a close
-		// that is already inside its runtime event. Both stay queued until
-		// this wait returns. Read again each pass: the event can end.
-		q->drain = drain && !session->DefersInlineTasks();
-
 		// The cancel BEFORE the next task, and done() under this lock: a flag read, nothing that calls
 		// back into the pool. A teardown cancels, then submits its barrier, and the barrier must run
 		// after this script is out, not under it. The check and the pop stay in one hold of the lock,
 		// so a barrier submitted after the cancel cannot slip between them.
 		if (ShouldInterrupt(session)) {
 			--q->waiting;
-			q->drain = true;
 			lk.unlock();
 			ibBackendInterruptException::Error();
 		}
 		if (done()) {
 			--q->waiting;
-			q->drain = true;
 			return;
 		}
-		if (!q->tasks.empty() && q->drain) {
-			ibSessionTask item = std::move(q->tasks.front());
-			q->tasks.pop_front();
+		if (q->tasks.empty()) {
+			// A wake that landed in this same hold, with done() still false and nothing queued, is
+			// consumed so it cannot spin the scheduler. A wake that lands after the unlock is the
+			// flag TakeRunnable sees once we have switched.
+			q->woken = false;
 			lk.unlock();
-			// The task shares this stack. It must not resolve through the
-			// waiter's query scopes, and a RequireExclusiveForDDL in it
-			// must not clear the flag the waiter holds. The session stays:
-			// the task was queued for this session.
-			self->CallWithSchedulerLocals([&] {
-				tl_currentLease = session;
-				ibSessionScope scope(session);
-				RunTask(item);
-			});
-			// item dies HERE, outside the lock — its closure may tear something down that takes it.
+
+			ParkedFibers().push_back(ibParked{ session, q, self });
+			self->SwitchTo(ibFiber::Scheduler());
+
 			lk.lock();
 			continue;
 		}
 
-		// A wake that landed in this same hold, with done() still false and nothing this wait
-		// will run, is consumed so it cannot spin the scheduler. A wake that lands after the
-		// unlock is the flag TakeRunnable sees once we have switched.
-		q->woken = false;
-		lk.unlock();
-
-		// Already unwinding. A destructor is noexcept, so a refusal thrown
-		// here would terminate. The park does not happen; the exception
-		// that is in flight goes on.
-		if (std::uncaught_exceptions() != 0) {
-			std::lock_guard<std::mutex> relock(m_mtx);
-			--q->waiting;
-			q->drain = true;
-			return;
+		{
+			ibSessionTask item = std::move(q->tasks.front());
+			q->tasks.pop_front();
+			lk.unlock();
+			RunTask(item);
+			// item dies HERE, outside the lock — its closure may tear something down that takes it.
 		}
-
-		// Before the switch. A catch handler and a mutex are the thread's;
-		// the next fiber would see both. The same refusal in every build,
-		// and one a script Try can catch. A scope that is still installed
-		// belongs to this fiber; leaving it on the thread hands it to the
-		// next session.
-		try {
-			if (std::current_exception() != nullptr)
-				RefusePark(_("a fiber cannot park inside a catch handler"));
-			if (self->LockDepth() != 0)
-				RefusePark(_("a fiber cannot park while a mutex is held"));
-			ibFiberLocals::AssertClear();
-		}
-		catch (...) {
-			std::lock_guard<std::mutex> relock(m_mtx);
-			--q->waiting;
-			q->drain = true;
-			throw;
-		}
-
-		ParkedFibers().push_back(ibParked{ session, q, self });
-		self->SwitchTo(ibFiber::Scheduler());
-
 		lk.lock();
 	}
 }
@@ -433,14 +342,9 @@ void ibWorkerPoolHeadless::LeaseEntry(void* raw)
 	// scope destructor only runs when the lease actually ends.
 	ibSessionScope scope(session);
 	struct ClearLease {
-		~ClearLease()
-		{
-			tl_currentLease = nullptr;
-			tl_currentPool = nullptr;
-		}
+		~ClearLease() { tl_currentLease = nullptr; }
 	} clear;
 	tl_currentLease = session;
-	tl_currentPool = pool;
 	pool->DrainLease(q);
 }
 
@@ -522,7 +426,7 @@ bool ibWorkerPoolHeadless::TakeRunnable(ibParked& out)
 			ibSessionQueue* q = it->queue;
 			if (q == nullptr)
 				continue;
-			run = q->woken || (q->drain && !q->tasks.empty())
+			run = q->woken || !q->tasks.empty()
 				|| m_stop.load(std::memory_order_acquire)
 				|| (it->session != nullptr && ibRunCancelled(it->session->RunState()));
 			if (run)

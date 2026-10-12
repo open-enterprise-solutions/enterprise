@@ -14,7 +14,6 @@
 
 #include <cstddef>
 #include <exception>
-#include <utility>
 
 #if !defined(_WIN32)
 // The asm trampoline calls this. It has to reach RunEntry, which stays
@@ -54,44 +53,11 @@ public:
 	std::exception_ptr TakeException() { return std::move(m_exception); }
 	bool IsScheduler() const { return m_scheduler; }
 
-	// Catch handlers and mutexes held across script, counted on this
-	// fiber. Both belong to the OS thread; Await refuses to park while
-	// either count is open. Read by the pool, written by the scopes below.
-	int HandlerDepth() const noexcept { return m_handlerDepth; }
-	int LockDepth() const noexcept { return m_lockDepth; }
-
 	// Save this fiber's locals, install the target's, switch stacks.
 	void SwitchTo(ibFiber* target);
 
-	// Run `fn` with the scheduler's locals, then put this fiber's back.
-	// A task Await runs inline shares this stack. It must not see the
-	// scopes the waiter has open, and it must not clear them.
-	template <typename Fn>
-	void CallWithSchedulerLocals(Fn&& fn)
-	{
-		m_locals.Capture();
-		if (ibFiber* sched = Scheduler(); sched != nullptr && sched != this)
-			sched->m_locals.Install();
-		try {
-			std::forward<Fn>(fn)();
-		}
-		catch (...) {
-			m_locals.Install();
-			throw;
-		}
-		m_locals.Install();
-	}
-
 private:
-	friend class ibFiberHandlerScope;
-	friend class ibFiberLockScope;
-
 	ibFiber() = default;
-
-	void EnterHandler() noexcept { ++m_handlerDepth; }
-	void LeaveHandler() noexcept { --m_handlerDepth; }
-	void EnterLock() noexcept { ++m_lockDepth; }
-	void LeaveLock() noexcept { --m_lockDepth; }
 
 	Entry m_entry = nullptr;
 	void* m_arg = nullptr;
@@ -105,8 +71,6 @@ private:
 #endif
 	bool m_scheduler = false;
 	bool m_finished = false;
-	int m_handlerDepth = 0;
-	int m_lockDepth = 0;
 	std::exception_ptr m_exception;
 	void* m_asanFake = nullptr;
 	// TSan's context for this fiber. The scheduler holds the thread's own
@@ -127,55 +91,6 @@ private:
 	// no <windows.h>.
 	static void __stdcall FiberProc(void* arg);
 #endif
-};
-
-// Open while a C++ catch handler runs on this fiber. The caught exception
-// lives in the thread's exception state; parking would hand that state to
-// the next fiber on the thread.
-class CORE_API ibFiberHandlerScope {
-public:
-	ibFiberHandlerScope();
-	~ibFiberHandlerScope();
-	ibFiberHandlerScope(const ibFiberHandlerScope&) = delete;
-	ibFiberHandlerScope& operator=(const ibFiberHandlerScope&) = delete;
-private:
-	ibFiber* m_fiber = nullptr;
-};
-
-// Open while a mutex is held across script on this fiber. A std::mutex
-// held across a park deadlocks the thread (the parked fiber is the one
-// that would unlock, and the owner is the thread). A recursive section
-// lets the next fiber enter and the exclusion is gone.
-class CORE_API ibFiberLockScope {
-public:
-	ibFiberLockScope();
-	~ibFiberLockScope();
-	ibFiberLockScope(const ibFiberLockScope&) = delete;
-	ibFiberLockScope& operator=(const ibFiberLockScope&) = delete;
-private:
-	ibFiber* m_fiber = nullptr;
-};
-
-// Locks `mutex` and counts it on the fiber for the same span.
-template<class Mutex>
-class ibFiberMutexLock {
-public:
-	explicit ibFiberMutexLock(Mutex& mutex) : m_mutex(mutex)
-	{
-		m_mutex.lock();
-		m_locked = true;
-	}
-	~ibFiberMutexLock()
-	{
-		if (m_locked)
-			m_mutex.unlock();
-	}
-	ibFiberMutexLock(const ibFiberMutexLock&) = delete;
-	ibFiberMutexLock& operator=(const ibFiberMutexLock&) = delete;
-private:
-	Mutex&           m_mutex;
-	bool             m_locked = false;
-	ibFiberLockScope m_account;
 };
 
 #endif
