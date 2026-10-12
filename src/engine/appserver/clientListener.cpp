@@ -73,14 +73,6 @@ struct ibConnectionOut {
 	bool       open = true;
 };
 
-// How many of the next thread creations fail, the way the operating system refuses one. A test sets it.
-// The server never does. Consumed under the queue's lock, so a single failure is a single refused socket.
-std::atomic<unsigned> g_failNextThreads{ 0 };
-
-// While this is set, an idle thread does not take a job. A test uses it to hold the pool still between
-// two enqueues. The server never sets it.
-std::atomic<bool> g_holdIdle{ false };
-
 // ⭐ THE POOL GROWS FOR A BURST, AND THE THREADS THAT BURST ADDED THEN LEAVE.
 //
 // cpp-httplib's ThreadPool starts a new thread only when its idle count is already zero. A burst that is
@@ -179,11 +171,6 @@ public:
 private:
 	void Spawn(bool extra)
 	{
-		unsigned left = g_failNextThreads.load(std::memory_order_relaxed);
-		while (left > 0) {
-			if (g_failNextThreads.compare_exchange_weak(left, left - 1, std::memory_order_relaxed))
-				throw std::system_error(std::make_error_code(std::errc::resource_unavailable_try_again));
-		}
 		if (extra)
 			m_extra.emplace_back([this] { Worker(true); });
 		else
@@ -233,10 +220,6 @@ private:
 				else {
 					m_cond.wait(lock, [this] { return m_shutdown || !m_jobs.empty(); });
 				}
-				// Still counted idle. A test may be parking the pool between two arrivals; the job stays
-				// queued until the hold lifts, and shutdown is not a hold.
-				while (g_holdIdle.load(std::memory_order_relaxed) && !m_shutdown)
-					m_cond.wait_for(lock, std::chrono::milliseconds(50));
 				--m_idle;
 				if (m_shutdown && m_jobs.empty())
 					return;
@@ -262,16 +245,6 @@ private:
 };
 
 } // namespace
-
-void ibClientListenerFailNextThreads(unsigned count)
-{
-	g_failNextThreads.store(count, std::memory_order_relaxed);
-}
-
-void ibClientListenerHoldIdleThreads(bool hold)
-{
-	g_holdIdle.store(hold, std::memory_order_relaxed);
-}
 
 class ibClientListener::ibServer {
 public:
@@ -382,10 +355,17 @@ bool ibClientListener::Start(const wxString& host, unsigned short& port, bool ch
 		// sends faster than that never sees a timeout, and would keep its thread for as long as it liked
 		// if the deadline lived only in the timeout branch. It is therefore asked on every pass, and a
 		// text that arrives past it is closed instead of answered.
+		//
+		// The clock is asked first, and the host only after the window: LoggedIn walks every client under
+		// the host's lock, and asking it on every message serialised all of them there. Once logged in,
+		// the answer is kept — the window no longer applies.
 		const auto opened = std::chrono::steady_clock::now();
+		bool loggedIn = false;
 		const auto pastLoginDeadline = [&]() {
-			return !clientHost->LoggedIn(&ws)
-				&& std::chrono::steady_clock::now() - opened >= kUnauthenticatedIdle;
+			if (loggedIn || std::chrono::steady_clock::now() - opened < kUnauthenticatedIdle)
+				return false;
+			loggedIn = clientHost->LoggedIn(&ws);
+			return !loggedIn;
 		};
 		for (;;) {
 			const httplib::ws::ReadResult read = ws.read(message);
