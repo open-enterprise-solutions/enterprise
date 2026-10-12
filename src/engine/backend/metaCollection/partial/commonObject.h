@@ -1351,6 +1351,11 @@ class BACKEND_API ibValueMetaObjectRecordDataHierarchyMutableRef :
 		bool IsPredefinedFolder() const { return m_valueIsFolder; }
 		wxObjectDataPtr<ibPredefinedValueObject> GetPredefinedParent() const { return m_valueParent; }
 
+		// What the declaration owns beyond the name. Absent means the cell is not this item's:
+		// a catalog has neither, and an apply must not invent one.
+		bool HasDeclaredType() const { return m_hasDeclaredType; }
+		const ibTypeDescription& GetDeclaredType() const { return m_declaredType; }
+
 		friend class ibValueMetaObjectRecordDataHierarchyMutableRef;
 
 	private:
@@ -1364,6 +1369,9 @@ class BACKEND_API ibValueMetaObjectRecordDataHierarchyMutableRef :
 		bool m_valueIsFolder;
 
 		wxObjectDataPtr<ibPredefinedValueObject> m_valueParent;
+
+		bool m_hasDeclaredType = false;
+		ibTypeDescription m_declaredType;
 	};
 
 	ibValueMetaObjectAttributePredefined* GetDataPredefinedName() const { return m_propertyAttributePredefined->GetMetaObject(); }
@@ -1556,6 +1564,13 @@ class BACKEND_API ibValueMetaObjectRecordDataHierarchyMutableRef :
 
 	void DeletePredefinedValue(const ibGuid& predefinedGuid);
 
+	// The cells a data edit cannot keep: the next apply writes whatever the declaration says,
+	// so a type or a side that lives only in the row is blanked. Empty is accepted. A refusal
+	// names the word, or the object when this kind has no such cell.
+	wxString ReadPredefinedType(const wxString& spelling, ibTypeDescription& type) const;
+	wxString SetPredefinedType(const wxString& item, const ibTypeDescription& type);
+	wxString SpellPredefinedType(const ibTypeDescription& type) const;
+
 	//find predefined value
 	wxObjectDataPtr<ibPredefinedValueObject> FindPredefinedValue(const ibGuid& predefinedGuid) const {
 
@@ -1585,6 +1600,13 @@ class BACKEND_API ibValueMetaObjectRecordDataHierarchyMutableRef :
 protected:
 
 	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue) override;
+
+	// A chart of characteristic types declares each item's value type. A catalog does not.
+	virtual bool PredefinedDeclaresValueType() const { return false; }
+
+	// Cells this kind owns beyond name, code, description, folder and parent. The base row does not
+	// know them; the kind stamps them so the apply writes the declaration.
+	virtual void StampPredefinedSeed(struct ibSchemaSeedRow&, const ibPredefinedValueObject&) const {}
 
 	// Declare the main table (via the base) + the predefined values as its SEED rows (cells keyed by
 	// column id; the builder diffs by uuid + cells).

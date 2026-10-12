@@ -158,6 +158,9 @@ protected:
 	virtual bool ReadData(const ibDataNode& node) override;
 	virtual bool WriteData(ibDataNode& node) const override;
 
+	bool PredefinedDeclaresValueType() const override { return true; }
+	void StampPredefinedSeed(struct ibSchemaSeedRow& row, const ibPredefinedValueObject& item) const override;
+
 	//prepare menu for item
 	virtual bool CollectContextMenu(std::vector<ibMetaMenuItem>& items);
 	virtual void ProcessCommand(unsigned int id);

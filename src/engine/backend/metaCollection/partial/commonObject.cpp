@@ -14,6 +14,7 @@
 
 #include "backend/metaCollection/partial/reference/reference.h"
 #include "backend/metaCollection/partial/declaredPresentation.h"   // how a reference reads in the designer
+#include "backend/typeDescription.h"                               // a predefined characteristic's value type
 
 //***********************************************************************
 //*								 metaData                               *
@@ -1158,6 +1159,114 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::DeletePredefinedValue(const
 	m_metaData->Modify(true);
 }
 
+wxString ibValueMetaObjectRecordDataHierarchyMutableRef::ReadPredefinedType(
+	const wxString& spelling, ibTypeDescription& type) const
+{
+	if (!PredefinedDeclaresValueType())
+		return wxString::Format(
+			_("A value type belongs on a chart of characteristic types, and '%s' is not one"), GetName());
+
+	wxString name = spelling;
+	wxString quals;
+	const int open = spelling.Find(wxT('('));
+	if (open != wxNOT_FOUND) {
+		if (!spelling.EndsWith(wxT(")")))
+			return wxString::Format(_("'%s' is not a type this configuration knows"), spelling);
+		name = spelling.Left(open);
+		quals = spelling.Mid(open + 1, spelling.Length() - open - 2);
+	}
+	name.Trim(true).Trim(false);
+	if (name.IsEmpty())
+		return wxString::Format(_("'%s' is not a type this configuration knows"), spelling);
+
+	ibClassID clsid = 0;
+	if (const ibMetaData* meta = GetMetaData()) {
+		if (ibCtorMetaValueType* ctor = meta->GetTypeCtor(name))
+			clsid = ctor->GetClassType();
+	}
+	if (clsid == 0) {
+		if (ibCtorAbstractType* builtin = ibValue::GetAvailableCtor(name))
+			clsid = builtin->GetClassType();
+	}
+	if (clsid == 0)
+		return wxString::Format(_("'%s' is not a type this configuration knows"), spelling);
+
+	ibTypeDescription described;
+	described.SetDefaultMetaType(clsid);
+	if (!quals.IsEmpty()) {
+		const ibClassID stringId = ibValue::GetIDByVT(ibValueTypes::TYPE_STRING);
+		const ibClassID numberId = ibValue::GetIDByVT(ibValueTypes::TYPE_NUMBER);
+		wxArrayString parts = wxSplit(quals, wxT(','));
+		long first = 0;
+		long second = 0;
+		if (parts.IsEmpty() || !parts[0].Trim(true).Trim(false).ToLong(&first) || first < 0)
+			return wxString::Format(_("'%s' is not a type this configuration knows"), spelling);
+		if (clsid == stringId) {
+			if (first > 65535)
+				return wxString::Format(_("'%s' is not a type this configuration knows"), spelling);
+			described.SetDefaultMetaType(clsid, ibTypeDescription::ibTypeData(static_cast<unsigned short>(first)));
+		}
+		else if (clsid == numberId) {
+			if (first > 255)
+				return wxString::Format(_("'%s' is not a type this configuration knows"), spelling);
+			if (parts.GetCount() > 1) {
+				if (!parts[1].Trim(true).Trim(false).ToLong(&second) || second < 0 || second > 255)
+					return wxString::Format(_("'%s' is not a type this configuration knows"), spelling);
+			}
+			described.SetDefaultMetaType(clsid, ibTypeDescription::ibTypeData(
+				static_cast<unsigned char>(first), static_cast<unsigned char>(second)));
+		}
+		else {
+			return wxString::Format(_("'%s' is not a type this configuration knows"), spelling);
+		}
+	}
+
+	type = described;
+	return wxString();
+}
+
+wxString ibValueMetaObjectRecordDataHierarchyMutableRef::SetPredefinedType(
+	const wxString& item, const ibTypeDescription& type)
+{
+	if (!PredefinedDeclaresValueType())
+		return wxString::Format(
+			_("A value type belongs on a chart of characteristic types, and '%s' is not one"), GetName());
+	wxObjectDataPtr<ibPredefinedValueObject> found = FindPredefinedValue(item);
+	if (found == nullptr)
+		return wxString::Format(_("'%s' has no predefined item named '%s'"), GetName(), item);
+	found->m_hasDeclaredType = true;
+	found->m_declaredType = type;
+	if (m_metaData != nullptr)
+		m_metaData->Modify(true);
+	return wxString();
+}
+
+wxString ibValueMetaObjectRecordDataHierarchyMutableRef::SpellPredefinedType(const ibTypeDescription& type) const
+{
+	const ibClassID clsid = type.GetFirstClsid();
+	if (clsid == 0)
+		return wxString();
+
+	wxString name;
+	if (const ibMetaData* meta = GetMetaData()) {
+		if (ibCtorMetaValueType* ctor = meta->GetTypeCtor(clsid))
+			name = ctor->GetClassName();
+	}
+	if (name.IsEmpty()) {
+		if (ibCtorAbstractType* builtin = ibValue::GetAvailableCtor(clsid))
+			name = builtin->GetClassName();
+	}
+	if (name.IsEmpty())
+		return wxString();
+
+	if (clsid == ibValue::GetIDByVT(ibValueTypes::TYPE_STRING))
+		return wxString::Format(wxT("%s(%u)"), name, static_cast<unsigned>(type.GetLength()));
+	if (clsid == ibValue::GetIDByVT(ibValueTypes::TYPE_NUMBER))
+		return wxString::Format(wxT("%s(%u, %u)"), name,
+			static_cast<unsigned>(type.GetPrecision()), static_cast<unsigned>(type.GetScale()));
+	return name;
+}
+
 //***************************************************************************
 //*                       Save & load metaData                              *
 //***************************************************************************
@@ -1173,6 +1282,11 @@ bool ibValueMetaObjectRecordDataHierarchyMutableRef::WriteData(ibDataNode& node)
 		pv->SetValue(wxT("Code"), value->GetPredefinedCode());
 		pv->SetValue(wxT("Description"), value->GetPredefinedDescription());
 		pv->SetValue(wxT("IsFolder"), (bool)value->IsPredefinedFolder());
+		if (value->HasDeclaredType()) {
+			ibDataValue typeNode;
+			ibTypeDescriptionMemory::WriteNode(typeNode, value->GetDeclaredType(), GetMetaData());
+			pv->AddField(wxT("ValueType"), typeNode);
+		}
 		predefined.push_back(ibDataValue::Child(pv));
 	}
 	node.SetProperty(wxT("Predefined"), ibDataValue::Array(predefined));
@@ -1202,8 +1316,17 @@ bool ibValueMetaObjectRecordDataHierarchyMutableRef::ReadData(const ibDataNode& 
 			wxString valueName = pv->GetValue<wxString>(wxT("Name"));
 			wxString valueCode = pv->GetValue<wxString>(wxT("Code"));
 			wxString valueDescription = pv->GetValue<wxString>(wxT("Description"));
-			m_predefinedObjectVector.emplace_back(
-				new ibPredefinedValueObject(valueGuid, valueName, valueCode, valueDescription));
+			ibPredefinedValueObject* created =
+				new ibPredefinedValueObject(valueGuid, valueName, valueCode, valueDescription);
+			if (const ibDataValue* typeNode = pv->FindField(wxT("ValueType"))) {
+				ibTypeDescription described;
+				if (typeNode->Kind() == ibDataKind::Child
+					&& ibTypeDescriptionMemory::ReadNode(*typeNode, described, GetMetaData())) {
+					created->m_hasDeclaredType = true;
+					created->m_declaredType = described;
+				}
+			}
+			m_predefinedObjectVector.emplace_back(created);
 		}
 	}
 
