@@ -329,10 +329,9 @@ public:
 	// Pure credential check used by Login above. Looks up the user, verifies
 	// the password (PBKDF2 with silent MD5→PBKDF2 upgrade via NeedsRehash),
 	// fills `outInfo` on success, and does NOT mutate any session state.
-	// An empty name is open access only when the user list was read, is
-	// empty, and this process is not the application server or the web
-	// server (outInfo stays empty). A list that could not be read, or an
-	// empty list on a process that serves other clients, returns false.
+	// An empty name is open access only when the user list was read and is
+	// empty, on every host (outInfo stays empty). A list that could not be
+	// read returns false.
 	// Safe to call from the registry thread without a ibSessionScope. Exposed as a building block
 	// so registry's ProcessAttach can short-circuit on bad creds before
 	// pinning a session scope.

@@ -32,7 +32,6 @@
 #include "backend/server/serverConfig.h"      // a server reads where its base lives itself
 
 #include "backend/backend_exception.h"        // ibBackendCoreException — a build with no driver says so
-#include "core/diagnostics/journal.h"         // the refusal is said in Release, where ibJournalError is compiled out
 #include "backend/utils/passwordHash.hpp"
 
 #include "backend/moduleManager/moduleManager.h"
@@ -1235,10 +1234,6 @@ bool ibApplicationInstance::AuthenticateUser(const wxString& strUserName,
 	// access on every host, including the application server and the web
 	// server. A list that could not be read is a refusal.
 	if (strUserName.IsEmpty()) {
-		const auto audit = [](const wxString& action, const wxString& detail) {
-			if (ibLog)
-				ibLog->Audit(wxT("auth"), action, detail);
-		};
 		bool noUsers = false;
 		try {
 			noUsers = !ibUserInfo::HasAny();
@@ -1247,24 +1242,17 @@ bool ibApplicationInstance::AuthenticateUser(const wxString& strUserName,
 			throw;
 		}
 		catch (const ibCoreException& err) {
-			// ibJournalError is compiled out of Release. The person and the
-			// journal both have to see why the door stayed shut.
-			if (ibTechJournal::IsOpen()) {
-				ibTechJournal::Print(ibJournalMark::Error, wxT("auth"),
-					wxT("login refused: the user list could not be read: %s"),
-					err.GetErrorDescription());
-			}
-			audit(wxT("login_failed"),
-				wxString::Format(wxT("reason=user_list_unreadable detail=%s"), err.GetErrorDescription()));
+			try {
+				if (ibLog) ibLog->Audit(wxT("auth"), wxT("login_failed"),
+				                        wxString::Format(wxT("reason=user_list_unreadable detail=%s"), err.GetErrorDescription()));
+			} catch (...) {}
 			return false;
 		}
 
 		if (noUsers) {
-			if (ibTechJournal::IsOpen()) {
-				ibTechJournal::Print(ibJournalMark::Info, wxT("auth"),
-					wxT("open access: the user list is empty"));
-			}
-			audit(wxT("open_access"), wxT("reason=empty_user_list"));
+			try {
+				if (ibLog) ibLog->Audit(wxT("auth"), wxT("open_access"), wxT("reason=empty_user_list"));
+			} catch (...) {}
 			return true;
 		}
 	}

@@ -1050,11 +1050,8 @@ WFRONTEND_API bool wfrontendHasUsers()
 	catch (const ibCoreException& err) {
 		// Ask for credentials. A 500 from an uncaught read is not an answer
 		// the login page can show, and "no users" would be the open door.
-		if (ibTechJournal::IsOpen()) {
-			ibTechJournal::Print(ibJournalMark::Error, wxT("auth"),
-				wxT("the user list could not be read; asking for credentials: %s"),
-				err.GetErrorDescription());
-		}
+		ibJournalError(wxT("auth"), wxT("the user list could not be read; asking for credentials: %s"),
+			err.GetErrorDescription());
 		return true;
 	}
 }
