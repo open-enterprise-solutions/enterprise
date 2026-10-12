@@ -1,0 +1,23 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "ru",
+  "entries": [
+    {
+      "id": "fn.NumberInWords",
+      "name_local": "NumberInWords",
+      "name_en": "NumberInWords",
+      "kind": "system_function",
+      "category_keys": ["global_context", "global_functions"],
+      "signature": "NumberInWords(number[, format[, params]])",
+      "description": "Число прописью (ЧислоПрописью). format задаёт язык (L=ru_RU или Л=uk); суффикс региона отбрасывается. params склоняет предмет: one,few,many,gender и, дальше, дробную часть (рубль,рубля,рублей,м,копейка,копейки,копеек,ж,2). Для русского и украинского форма берётся по двум последним цифрам (11 — many, 21 — one, 2 — few). Первая буква заглавная.",
+      "syntax_block": "NumberInWords(number[, format[, params]])",
+      "parameters": "number — сумма. format — L=язык. params — one,few,many,gender[,fracOne,fracFew,fracMany,fracGender,digits].",
+      "return_descr": "String.",
+      "example": "Message(NumberInWords(123.45, \"L=ru\", \"рубль,рубля,рублей,м,копейка,копейки,копеек,ж,2\"));\nMessage(NumberInWords(21, \"L=ru\", \"рубль,рубля,рублей,м\"));",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": ["fn.Number", "fn.Round"],
+      "reviewed": false
+    }
+  ]
+}

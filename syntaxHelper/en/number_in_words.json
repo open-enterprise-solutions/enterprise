@@ -1,0 +1,23 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "en",
+  "entries": [
+    {
+      "id": "fn.NumberInWords",
+      "name_local": "NumberInWords",
+      "name_en": "NumberInWords",
+      "kind": "system_function",
+      "category_keys": ["global_context", "global_functions"],
+      "signature": "NumberInWords(number[, format[, params]])",
+      "description": "The number spelled out. format names the language (L=ru_RU, or Л=uk); a code's region suffix is ignored. params declines a subject: one,few,many,gender and, after those, the fractional subject and how many digits it keeps (рубль,рубля,рублей,м,копейка,копейки,копеек,ж,2). Russian and Ukrainian use the last two digits (11 is many, 21 is one, 2 is few); English uses one only for 1. The first letter is capital. A negative number is prefixed with minus.",
+      "syntax_block": "NumberInWords(number[, format[, params]])",
+      "parameters": "number — the amount. format — L=language, optional. params — one,few,many,gender[,fracOne,fracFew,fracMany,fracGender,digits], optional.",
+      "return_descr": "String.",
+      "example": "Message(NumberInWords(123.45, \"L=ru\", \"рубль,рубля,рублей,м,копейка,копейки,копеек,ж,2\"));\nMessage(NumberInWords(-1, \"L=en\"));",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": ["fn.Number", "fn.Round"],
+      "reviewed": false
+    }
+  ]
+}

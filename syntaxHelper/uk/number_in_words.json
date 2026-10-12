@@ -1,0 +1,23 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "uk",
+  "entries": [
+    {
+      "id": "fn.NumberInWords",
+      "name_local": "NumberInWords",
+      "name_en": "NumberInWords",
+      "kind": "system_function",
+      "category_keys": ["global_context", "global_functions"],
+      "signature": "NumberInWords(number[, format[, params]])",
+      "description": "Число прописом (ЧислоПрописью). format задає мову (L=uk або Л=ru); суфікс регіону відкидається. params відмінює предмет: one,few,many,gender і, далі, дробову частину. Для української та російської форма береться за двома останніми цифрами. Перша літера велика. Нуль українською — «Нуль».",
+      "syntax_block": "NumberInWords(number[, format[, params]])",
+      "parameters": "number — сума. format — L=мова. params — one,few,many,gender[,fracOne,fracFew,fracMany,fracGender,digits].",
+      "return_descr": "String.",
+      "example": "Message(NumberInWords(0, \"L=uk\"));\nMessage(NumberInWords(2, \"L=uk\", \"тисяча,тисячі,тисяч,ж\"));",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": ["fn.Number", "fn.Round"],
+      "reviewed": false
+    }
+  ]
+}

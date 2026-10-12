@@ -149,6 +149,11 @@ public:
 	static wxString SerializeValue(const ibValue& cData);
 	static ibValue  DeserializeValue(const wxString& strJson);
 
+	// Number in words (ЧислоПрописью). format carries L=ru_RU; params is
+	// one,few,many,gender,fracOne,fracFew,fracMany,fracGender,digits.
+	static wxString NumberInWords(const ibValue& number, const wxString& format = wxEmptyString,
+		const wxString& params = wxEmptyString);
+
 	// (⛔ NO MESSAGE CAPTURE HERE. Getting the lines a run printed is not a new mechanism: the
 	//  debug channel already carries messages from a running application to whoever is attached —
 	//  `CommandId_MessageFromServer`, sent by ibDebuggerServer::SendErrorToClient. It looked like
