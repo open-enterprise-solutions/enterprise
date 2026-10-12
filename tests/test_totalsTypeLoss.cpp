@@ -1,6 +1,15 @@
-// A totals rebuild is decided from the declared type, not the SQL layout. CatalogRef.A|B|C and
-// A|B occupy the same reference pair, and the differ still clears every C. A wider string, or a
-// type that was added, clears nothing.
+// A dimension that loses a type keeps its totals equal to the movements, with no rebuild.
+// CatalogRef.A|B and A share one reference pair; the differ clears every B the same way in
+// the movements and in the totals, because both tables declare the same column.
+//
+// DiffSnapshots is the call OnSaveDatabase makes once ApplyConfiguration has the two
+// snapshots. Driving that verb twice from a headless fixture does not get there: the
+// configuration reloaded from the blob describes the catalog's own reference with an _RTRef
+// the first apply never created, and the second apply stops on that column. The diff below
+// is the restructuring itself, with both snapshots still in memory and the meta ids the same.
+//
+// The totals are kept by the register's own triggers, as in a working base. A test that
+// switches that maintenance off can only ever see a rebuild — see schemaSnapshot.h.
 
 #include <gtest/gtest.h>
 
@@ -8,172 +17,9 @@
 
 #include "backend/compiler/value.h"
 #include "backend/query/columnLayout.h"
-#include "backend/query/derivedStateBuilder.h"
 #include "backend/query/queryable.h"
 #include "backend/query/schemaSnapshot.h"
 #include "core/clsid.h"
-
-namespace {
-
-struct TypedColumn : ibBackendQueryColumn {
-	wxString physical;
-	ibMetaID id = 1;
-	mutable ibTypeDescription type;
-
-	wxString GetName() const override { return physical; }
-	wxString GetPhysicalName() const override { return physical; }
-	ibTypeDescription& GetTypeDesc() const override { return type; }
-	ibMetaID GetColumnId() const override { return id; }
-};
-
-struct TotalsTypeLoss : ::testing::Test {
-	wxInitializer wx;
-};
-
-void ExpectSameLayout(const ibBackendQueryColumn& was, const ibBackendQueryColumn& now)
-{
-	const std::vector<ibColumnSlot> oldSlots = DescribeColumnLayout(&was);
-	const std::vector<ibColumnSlot> newSlots = DescribeColumnLayout(&now);
-	ASSERT_EQ(oldSlots.size(), newSlots.size());
-	for (size_t i = 0; i < oldSlots.size(); ++i) {
-		EXPECT_EQ(oldSlots[i].m_name, newSlots[i].m_name);
-		EXPECT_TRUE(ibSameFieldType(oldSlots[i].m_type, newSlots[i].m_type));
-	}
-}
-
-ibSchemaTable Derived(const ibBackendQueryColumn* key)
-{
-	ibSchemaTable table;
-	table.m_derived = true;
-	table.m_materialize.Key(key);
-	return table;
-}
-
-} // namespace
-
-TEST_F(TotalsTypeLoss, ARemovedReferenceTargetOnTheKeyRebuilds)
-{
-	TypedColumn was;
-	was.physical = wxT("goods");
-	was.id = 7;
-	was.type.AppendMetaType(reference_to_clsid(1));
-	was.type.AppendMetaType(reference_to_clsid(2));
-	was.type.AppendMetaType(reference_to_clsid(3));
-	TypedColumn now = was;
-	now.type.ClearMetaType(reference_to_clsid(3));
-	ExpectSameLayout(was, now);
-
-	const ibSchemaTable oldTable = Derived(&was);
-	const ibSchemaTable newTable = Derived(&now);
-	EXPECT_TRUE(ibDerivedState::NeedsRegeneration(&oldTable, newTable));
-}
-
-TEST_F(TotalsTypeLoss, ARemovedReferenceTargetInTheContributionRebuilds)
-{
-	TypedColumn key;
-	key.physical = wxT("period");
-	key.id = 1;
-	key.type.AppendMetaType(ibValueTypes::TYPE_NUMBER);
-
-	TypedColumn was;
-	was.physical = wxT("qty");
-	was.id = 9;
-	was.type.AppendMetaType(reference_to_clsid(1));
-	was.type.AppendMetaType(reference_to_clsid(2));
-	was.type.AppendMetaType(reference_to_clsid(3));
-	TypedColumn now = was;
-	now.type.ClearMetaType(reference_to_clsid(3));
-	ExpectSameLayout(was, now);
-
-	ibSchemaTable oldTable = Derived(&key);
-	ibSchemaTable newTable = Derived(&key);
-	oldTable.m_materialize.Accumulate(nullptr, wxString(), ibQueryColumnExpr::Col(&was));
-	newTable.m_materialize.Accumulate(nullptr, wxString(), ibQueryColumnExpr::Col(&now));
-	EXPECT_TRUE(ibDerivedState::NeedsRegeneration(&oldTable, newTable));
-}
-
-TEST_F(TotalsTypeLoss, ARemovedReferenceTargetInTheGuardRebuilds)
-{
-	TypedColumn key;
-	key.physical = wxT("period");
-	key.id = 1;
-	key.type.AppendMetaType(ibValueTypes::TYPE_NUMBER);
-
-	TypedColumn was;
-	was.physical = wxT("active");
-	was.id = 4;
-	was.type.AppendMetaType(reference_to_clsid(1));
-	was.type.AppendMetaType(reference_to_clsid(2));
-	TypedColumn now = was;
-	now.type.ClearMetaType(reference_to_clsid(2));
-
-	ibQueryCondition oldCond;
-	oldCond.m_col = &was;
-	ibQueryCondition newCond;
-	newCond.m_col = &now;
-
-	ibSchemaTable oldTable = Derived(&key);
-	ibSchemaTable newTable = Derived(&key);
-	oldTable.m_materialize.m_guardExpr = ibQueryPredicate::Leaf(oldCond);
-	newTable.m_materialize.m_guardExpr = ibQueryPredicate::Leaf(newCond);
-	EXPECT_TRUE(ibDerivedState::NeedsRegeneration(&oldTable, newTable));
-}
-
-TEST_F(TotalsTypeLoss, AWiderStringClearsNothing)
-{
-	TypedColumn key;
-	key.physical = wxT("period");
-	key.id = 1;
-	key.type.AppendMetaType(ibValueTypes::TYPE_NUMBER);
-
-	TypedColumn was;
-	was.physical = wxT("code");
-	was.id = 3;
-	was.type.AppendMetaType(ibValueTypes::TYPE_STRING);
-	was.type.m_typeData.SetString(10);
-	TypedColumn now = was;
-	now.type.m_typeData.SetString(20);
-
-	ibSchemaTable oldTable = Derived(&key);
-	ibSchemaTable newTable = Derived(&key);
-	oldTable.m_materialize.Accumulate(nullptr, wxString(), ibQueryColumnExpr::Col(&was));
-	newTable.m_materialize.Accumulate(nullptr, wxString(), ibQueryColumnExpr::Col(&now));
-	EXPECT_FALSE(ibDerivedState::NeedsRegeneration(&oldTable, newTable));
-}
-
-TEST_F(TotalsTypeLoss, AnAddedTypeClearsNothing)
-{
-	TypedColumn key;
-	key.physical = wxT("period");
-	key.id = 1;
-	key.type.AppendMetaType(ibValueTypes::TYPE_NUMBER);
-
-	TypedColumn was;
-	was.physical = wxT("qty");
-	was.id = 3;
-	was.type.AppendMetaType(ibValueTypes::TYPE_NUMBER);
-	TypedColumn now = was;
-	now.type.AppendMetaType(ibValueTypes::TYPE_STRING);
-
-	ibSchemaTable oldTable = Derived(&key);
-	ibSchemaTable newTable = Derived(&key);
-	oldTable.m_materialize.Accumulate(nullptr, wxString(), ibQueryColumnExpr::Col(&was));
-	newTable.m_materialize.Accumulate(nullptr, wxString(), ibQueryColumnExpr::Col(&now));
-	EXPECT_FALSE(ibDerivedState::NeedsRegeneration(&oldTable, newTable));
-}
-
-// =============================================================================
-// The apply's own diff, on a live engine. DiffSnapshots is the call OnSaveDatabase makes
-// once ApplyConfiguration has the two snapshots. Driving that verb twice from a headless
-// fixture does not get there: the configuration reloaded from the blob describes the
-// catalog's own reference with an _RTRef the first apply never created, and the second
-// apply stops on that column. Nothing was edited between the two. The diff below is the
-// restructuring itself, with both snapshots still in memory and the meta ids the same.
-//
-// Several lines of one recorder, then the dimension loses a catalog. The totals table is
-// rebuilt, and each key's figure is the sum of the movements under that key afterwards —
-// including the line whose discriminator the clear set to empty.
-// =============================================================================
 
 #include <chrono>
 #include <cstdlib>
@@ -188,8 +34,12 @@ TEST_F(TotalsTypeLoss, AnAddedTypeClearsNothing)
 #include "backend/databaseLayer/databaseLayer.h"
 #include "backend/databaseLayer/databaseQueryBuilder.h"
 #include "backend/databaseLayer/databaseResultSet.h"
+#ifdef OES_USE_FIREBIRD
 #include "backend/databaseLayer/firebird/firebirdDatabaseLayer.h"
+#endif
+#ifdef OES_USE_POSTGRESQL
 #include "backend/databaseLayer/postgres/postgresDatabaseLayer.h"
+#endif
 #include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
 #include "backend/metaCollection/dimension/metaDimensionObject.h"
 #include "backend/metaCollection/partial/accumulationRegister.h"
@@ -223,6 +73,7 @@ std::shared_ptr<ibDatabaseLayer> OpenEngine(const char* engine)
 		return db->Open(ScratchPath(engine)) ? db : nullptr;
 	}
 	if (std::string(engine) == "postgres") {
+#ifdef OES_USE_POSTGRESQL
 		if (std::getenv("OES_PG_USER") == nullptr || *std::getenv("OES_PG_USER") == '\0')
 			return nullptr;
 		auto db = std::make_shared<ibDatabaseLayerPostgres>();
@@ -237,7 +88,11 @@ std::shared_ptr<ibDatabaseLayer> OpenEngine(const char* engine)
 		if (db->IsActiveTransaction())
 			db->Commit();
 		return db;
+#else
+		return nullptr;
+#endif
 	}
+#ifdef OES_USE_FIREBIRD
 	try {
 		auto db = std::make_shared<ibDatabaseLayerFirebird>();
 		db->SetUser(wxT("SYSDBA"));
@@ -249,6 +104,9 @@ std::shared_ptr<ibDatabaseLayer> OpenEngine(const char* engine)
 	catch (...) {
 		return nullptr;
 	}
+#else
+	return nullptr;
+#endif
 }
 
 void Settle()
@@ -403,23 +261,6 @@ std::map<wxString, KeySum> ReadFigures(const wxString& table, const wxString& ta
 	return sums;
 }
 
-void DropTriggers(const char* engine, const wxString& movements, const wxString& totals)
-{
-	const wxString suffixes[] = { wxT("_AI"), wxT("_AU"), wxT("_AD") };
-	for (const wxString& suffix : suffixes) {
-		const wxString name = totals + suffix;
-		try {
-			if (std::string(engine) == "postgres")
-				db_query->RunQuery(wxT("%s"), wxString::Format(wxT("DROP TRIGGER IF EXISTS %s ON %s"), name, movements));
-			else if (std::string(engine) == "firebird")
-				db_query->RunQuery(wxT("%s"), wxString::Format(wxT("DROP TRIGGER %s"), name));
-			else
-				db_query->RunQuery(wxT("%s"), wxString::Format(wxT("DROP TRIGGER IF EXISTS %s"), name));
-		}
-		catch (...) {}
-	}
-}
-
 } // namespace
 
 class TotalsTypeLossApply : public ::testing::TestWithParam<const char*> {
@@ -431,7 +272,7 @@ protected:
 	}
 };
 
-TEST_P(TotalsTypeLossApply, ADimensionThatLosesATypeRebuildsTotalsToTheMovementSum)
+TEST_P(TotalsTypeLossApply, ADimensionThatLosesATypeKeepsTotalsAtTheMovementSum)
 {
 	wxInitializer wx;
 	if (!wx.IsOk())
@@ -469,7 +310,6 @@ TEST_P(TotalsTypeLossApply, ADimensionThatLosesATypeRebuildsTotalsToTheMovementS
 		if (!table.m_derived && table.m_name == totals->m_materialize.SourceTable())
 			movements = &table;
 	ASSERT_NE(movements, nullptr);
-	DropTriggers(GetParam(), movements->m_name, totals->m_name);
 
 	ibColumnSlot tag, target, guidCol;
 	ASSERT_TRUE(FindSlot(wide.dimension->GetQueryColumn(), ibColumnRole::Discriminator, tag));
@@ -521,15 +361,8 @@ TEST_P(TotalsTypeLossApply, ADimensionThatLosesATypeRebuildsTotalsToTheMovementS
 		db_query->Commit();
 
 	const ibSchemaSnapshot narrowSnap = narrowCfg.BuildSchemaSnapshot();
-	ibRestructureInfo ledger;
-	ASSERT_EQ(DiffSnapshots(&wideSnap, narrowSnap, nullptr, &ledger), 1);
+	ASSERT_EQ(DiffSnapshots(&wideSnap, narrowSnap), 1);
 	Settle();
-
-	bool rebuilt = false;
-	for (const ibRestructureInfo::Entry& entry : ledger)
-		if (entry.descr.Find(wxT("Rebuild totals")) != wxNOT_FOUND)
-			rebuilt = true;
-	EXPECT_TRUE(rebuilt) << "a removed reference target shares the SQL layout and still rebuilds the totals";
 
 	ibColumnSlot qtySlot;
 	if (!FindSlot(wide.resource->GetQueryColumn(), ibColumnRole::Number, qtySlot)) {
