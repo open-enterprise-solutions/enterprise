@@ -710,6 +710,169 @@ TEST(RuntimeTest, CallFunctionWithMultipleParams) {
 	EXPECT_EQ(ret.GetInteger(), 60);
 }
 
+// A common module is a value. Its methods are the module's exports, and a call
+// from another module arrives here with only the arguments that were written.
+namespace {
+class ModuleSurface : public ibValueDynamicMembers {
+public:
+	explicit ModuleSurface(ibProcUnit* unit)
+		: ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, true), m_unit(unit) {
+		m_members.Bind(this, &ModuleSurface::FillMembers);
+	}
+
+	void FillMembers(ibMemberTable& helper) const {
+		helper.AppendFunc(wxT("Piece"), 2, wxT("Piece(text, sep)"));
+		helper.AppendFunc(wxT("Flag"), 1, wxT("Flag(show)"));
+	}
+
+	bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray) override {
+		return m_unit->CallAsFunc(GetMethodName(lMethodNum), pvarRetValue, paParams, lSizeArray);
+	}
+
+private:
+	ibProcUnit* m_unit;
+};
+} // namespace
+
+// The arguments a caller leaves out are the declaration's defaults. Inside one
+// script that already happened at the call site; a call into the module from
+// outside used to leave the parameter Undefined.
+TEST(RuntimeTest, AnOmittedArgumentTakesTheDeclaredDefault) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	const wxString src =
+		wxT("var same public;\n")
+		wxT("var kept public;\n")
+		wxT("Function Piece(text, sep = \",\") Public\n")
+		wxT("  Return text + sep + text;\n")
+		wxT("EndFunction\n")
+		wxT("Function Flag(show = true) Public\n")
+		wxT("  If show Then\n")
+		wxT("    Return 1;\n")
+		wxT("  EndIf;\n")
+		wxT("  Return 0;\n")
+		wxT("EndFunction\n")
+		wxT("Function Offset(n, delta = 2) Public\n")
+		wxT("  Return n + delta;\n")
+		wxT("EndFunction\n")
+		wxT("Function Both(a, b = \"b\", c = \"c\") Public\n")
+		wxT("  Return b + c;\n")
+		wxT("EndFunction\n")
+		wxT("Function Need(a, b) Public\n")
+		wxT("  Return b;\n")
+		wxT("EndFunction\n")
+		wxT("Function Inner(a, b = \"same\")\n")
+		wxT("  Return b;\n")
+		wxT("EndFunction\n")
+		wxT("Procedure Stamp(name = \"rows\") Public\n")
+		wxT("  kept = name;\n")
+		wxT("EndProcedure\n")
+		wxT("same = Inner(1);\n");
+	ASSERT_TRUE(TryCompile(cc, src));
+
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+
+	ibValue same;
+	ASSERT_TRUE(pu.GetPropVal(wxT("same"), same));
+	EXPECT_EQ(same.GetString(), wxT("same"));
+
+	ibValue ret;
+	ibValue text(wxT("X"));
+	ASSERT_TRUE(pu.CallAsFunc(wxT("Piece"), ret, text));
+	EXPECT_EQ(ret.GetString(), wxT("X,X"));
+
+	ibValue dash(wxT("-"));
+	ASSERT_TRUE(pu.CallAsFunc(wxT("Piece"), ret, text, dash));
+	EXPECT_EQ(ret.GetString(), wxT("X-X"));
+
+	ASSERT_TRUE(pu.CallAsFunc(wxT("Flag"), ret));
+	EXPECT_EQ(ret.GetInteger(), 1);
+
+	ibValue hide(false);
+	ASSERT_TRUE(pu.CallAsFunc(wxT("Flag"), ret, hide));
+	EXPECT_EQ(ret.GetInteger(), 0);
+
+	ibValue ten(10);
+	ASSERT_TRUE(pu.CallAsFunc(wxT("Offset"), ret, ten));
+	EXPECT_EQ(ret.GetInteger(), 12);
+
+	ibValue one(wxT("a"));
+	ASSERT_TRUE(pu.CallAsFunc(wxT("Both"), ret, one));
+	EXPECT_EQ(ret.GetString(), wxT("bc"));
+
+	ibValue ex(wxT("X"));
+	ASSERT_TRUE(pu.CallAsFunc(wxT("Both"), ret, one, ex));
+	EXPECT_EQ(ret.GetString(), wxT("Xc"));
+
+	ASSERT_TRUE(pu.CallAsFunc(wxT("Need"), ret, one));
+	EXPECT_EQ(ret.GetType(), ibValueTypes::TYPE_EMPTY);
+
+	ASSERT_TRUE(pu.CallAsProc(wxT("Stamp")));
+	ibValue kept;
+	ASSERT_TRUE(pu.GetPropVal(wxT("kept"), kept));
+	EXPECT_EQ(kept.GetString(), wxT("rows"));
+
+	ibValue other(wxT("other"));
+	ASSERT_TRUE(pu.CallAsProc(wxT("Stamp"), other));
+	ASSERT_TRUE(pu.GetPropVal(wxT("kept"), kept));
+	EXPECT_EQ(kept.GetString(), wxT("other"));
+}
+
+// `Lib.Piece("X")` is how a common module is called. The receiver is another
+// module's value; the default belongs to the callee, not to this script.
+TEST(RuntimeTest, AMethodCallFromAnotherModuleTakesTheDeclaredDefault) {
+	ibCompileCode calleeCc(wxT("callee"), wxT("memory"), false);
+	ASSERT_TRUE(TryCompile(calleeCc,
+		wxT("Function Piece(text, sep = \",\") Public\n")
+		wxT("  Return text + sep + text;\n")
+		wxT("EndFunction\n")
+		wxT("Function Flag(show = true) Public\n")
+		wxT("  If show Then\n")
+		wxT("    Return 1;\n")
+		wxT("  EndIf;\n")
+		wxT("  Return 0;\n")
+		wxT("EndFunction\n")));
+
+	ibProcUnit callee;
+	ASSERT_TRUE(TryExecute(callee, calleeCc.m_cByteCode));
+	ModuleSurface lib(&callee);
+
+	ibCompileCode caller(wxT("caller"), wxT("memory"), false);
+	caller.AddContextVariable(wxT("Lib"), &lib, false);
+	ASSERT_TRUE(TryCompile(caller,
+		wxT("Function Local(a, b = \"local\")\n")
+		wxT("  Return b;\n")
+		wxT("EndFunction\n")
+		wxT("var joined public;\n")
+		wxT("var dashed public;\n")
+		wxT("var shown public;\n")
+		wxT("var localAnswer public;\n")
+		wxT("joined = Lib.Piece(\"X\");\n")
+		wxT("dashed = Lib.Piece(\"X\", \"-\");\n")
+		wxT("shown = Lib.Flag();\n")
+		wxT("localAnswer = Local(1);\n")));
+
+	ibProcUnit callerUnit;
+	wxString error;
+	ASSERT_TRUE(RunBound(caller, callerUnit, error)) << error.ToStdString();
+
+	ibValue joined;
+	ASSERT_TRUE(callerUnit.GetPropVal(wxT("joined"), joined));
+	EXPECT_EQ(joined.GetString(), wxT("X,X"));
+
+	ibValue dashed;
+	ASSERT_TRUE(callerUnit.GetPropVal(wxT("dashed"), dashed));
+	EXPECT_EQ(dashed.GetString(), wxT("X-X"));
+
+	ibValue shown;
+	ASSERT_TRUE(callerUnit.GetPropVal(wxT("shown"), shown));
+	EXPECT_EQ(shown.GetInteger(), 1);
+
+	ibValue localAnswer;
+	ASSERT_TRUE(callerUnit.GetPropVal(wxT("localAnswer"), localAnswer));
+	EXPECT_EQ(localAnswer.GetString(), wxT("local"));
+}
+
 TEST(RuntimeTest, RecursiveFactorial) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	const wxString src =

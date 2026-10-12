@@ -2796,6 +2796,46 @@ bool ibProcUnit::CallAsFunc(const ibString& funcName, ibValue& pvarRetValue, ibV
 	return false;
 }
 
+// Arguments the caller did not write.
+//
+// A call in the same module substitutes a default at the call site. A call that
+// arrives as Module.Method — and any other CallAsFunc / CallAsProc from C++ —
+// brings only the arguments that were written, and the rest of the frame is an
+// empty local. That empty local is Undefined, so the declared default never
+// arrived: a separator stayed blank, a string default failed a later conversion,
+// a boolean default true arrived false.
+//
+// The default is a constant of THIS module. A parameter with none stays empty,
+// which is what a missing required argument has always been on this road.
+static void FillOmittedParameterDefaults(ibRunContext& frame, const ibByteCode* bytecode,
+	long entry, long suppliedCount)
+{
+	if (bytecode == nullptr || frame.m_pLocVars == nullptr)
+		return;
+
+	const ibByteCode::ibByteFunction* function = bytecode->FindFunctionByEntry(entry);
+	if (function == nullptr)
+		return;
+
+	long supplied = suppliedCount;
+	if (supplied < 0)
+		supplied = 0;
+	if (supplied > frame.m_lParamCount)
+		supplied = frame.m_lParamCount;
+
+	const long declared = static_cast<long>(function->m_listParam.size());
+	const long slots = frame.GetLocalCount();
+	for (long i = supplied; i < declared && i < slots; ++i) {
+		const ibParamRunUnit& def = function->m_listParam[static_cast<size_t>(i)].m_defaultValue;
+		if (def.m_numArray == DEF_VAR_SKIP)
+			continue;
+		if (def.m_numIndex < 0
+			|| static_cast<size_t>(def.m_numIndex) >= bytecode->m_listConst.size())
+			continue;
+		CopyValue(frame.m_pLocVars[i], bytecode->m_listConst[static_cast<size_t>(def.m_numIndex)]);
+	}
+}
+
 //Calling a procedure by its address in the byte code array
 //The call is made incl. and in the parent module
 void ibProcUnit::CallAsProc(const long lCodeLine, ibValue** ppParams, const long lSizeArray)
@@ -2827,6 +2867,7 @@ void ibProcUnit::CallAsProc(const long lCodeLine, ibValue** ppParams, const long
 
 	//load parameters
 	memcpy(&cRunContext.m_pRefLocVars[0], &ppParams[0], std::min(lSizeArray, cRunContext.m_lParamCount) * sizeof(ibValue*));
+	FillOmittedParameterDefaults(cRunContext, m_pByteCode, lCodeLine, lSizeArray);
 
 	//execute arbitrary code
 	Execute(&cRunContext, nullptr, false);
@@ -2859,6 +2900,7 @@ void ibProcUnit::CallAsFunc(const long lCodeLine, ibValue& pvarRetValue, ibValue
 
 	//load parameters
 	memcpy(&cRunContext.m_pRefLocVars[0], &ppParams[0], std::min(lSizeArray, cRunContext.m_lParamCount) * sizeof(ibValue*));
+	FillOmittedParameterDefaults(cRunContext, m_pByteCode, lCodeLine, lSizeArray);
 
 	// `Cached` needs nothing here: the modifier is applied at the function's
 	// ENTRY OPCODE, which this call reaches like every other road into a body.
