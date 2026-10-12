@@ -103,6 +103,7 @@ private:
 //   both         -> UPDATE: a slot diff (ADD new / DROP removed / ALTER changed) + the reference pair's
 //                   per-target row cleanup. Metadata context comes from the batch's queryable.
 // Returns the first DML-cleanup error retCode, or 1 (DDL errors surface at Flush).
+// 🛑 Not the place for a metadata case — see the banner in schemaSnapshot.h.
 BACKEND_API int DiffColumnInto(ibStructureBatch& batch, const ibBackendQueryColumn* srcCol, const ibBackendQueryColumn* dstCol);
 
 #endif // !__STRUCTURE_BATCH_H__

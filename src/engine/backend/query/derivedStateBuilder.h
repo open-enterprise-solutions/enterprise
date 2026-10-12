@@ -184,6 +184,9 @@ BACKEND_API ibTotalsMaintenance MaintainTotals(const ibSchemaSnapshot& target,
 // The asymmetry is load-bearing: "added" is skippable because its effect on existing totals is
 // provably nothing. Everything else is not provably nothing, so it rebuilds — skipping a needed
 // rebuild yields silently wrong totals, running a needless one only costs time.
+//
+// 🛑 A type that leaves a column is not a case here: the differ clears it in the totals exactly as in
+// the movements, and they stay equal. Not the place for a metadata case — see schemaSnapshot.h.
 BACKEND_API bool NeedsRegeneration(const ibSchemaTable* old, const ibSchemaTable& cur);
 
 } // namespace ibDerivedState
