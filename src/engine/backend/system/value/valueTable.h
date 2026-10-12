@@ -438,6 +438,8 @@ public:
 
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal); // attribute value
 	virtual bool CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray);                            // procedure call (GroupBy)
+	// `T.GroupBy("cols", "sums")` compiles as the LINQ verb of the same name; a string first argument means the table's own Свернуть.
+	virtual void DispatchLinqMethod(ibLinqMethod method, ibValue& ret, ibValue** args, long n) override;
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);       // method call
 
 	// implementation of base class virtuals to define model

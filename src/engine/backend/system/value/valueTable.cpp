@@ -148,6 +148,17 @@ bool ibValueModelTable::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 	return false;
 }
 
+void ibValueModelTable::DispatchLinqMethod(ibLinqMethod method, ibValue& ret, ibValue** args, long n)
+{
+	if (method == ibLinqMethod::GroupBy && n >= 1 && args != nullptr && args[0] != nullptr
+		&& args[0]->GetType() == ibValueTypes::TYPE_STRING
+		&& (n < 2 || (args[1] != nullptr && (args[1]->GetType() == ibValueTypes::TYPE_STRING || args[1]->GetType() == ibValueTypes::TYPE_EMPTY)))) {
+		GroupBy(wxString(args[0]->GetString()), n > 1 ? wxString(args[1]->GetString()) : wxString());
+		return;
+	}
+	ibValue::DispatchLinqMethod(method, ret, args, n);
+}
+
 bool ibValueModelTable::CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray)
 {
 	if (lMethodNum == enGroupBy) {

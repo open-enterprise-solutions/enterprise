@@ -552,3 +552,16 @@ TEST_F(ValueTableVerbs, GroupBy_NamingAMissingColumn_Raises)
     EXPECT_ANY_THROW(CallProc(m_table, wxT("GroupBy"), { Text(wxT("Item")), Text(wxT("Nope")) }));
     EXPECT_EQ(m_table->GetRowCount(), 1);
 }
+
+// A script's `T.GroupBy("Item", "Qty")` is compiled as the LINQ verb; with string arguments it is the table's own.
+TEST_F(ValueTableVerbs, GroupBy_AsTheScriptCompilesIt_IsTheTablesOwn)
+{
+    Column(wxT("Item")); Column(wxT("Qty"));
+    AddRow({ Text(wxT("a")), ibValue(1) });
+    AddRow({ Text(wxT("a")), ibValue(2) });
+    ibValue group = Text(wxT("Item")), sums = Text(wxT("Qty")), ret;
+    ibValue* args[] = { &group, &sums };
+    m_table->DispatchLinqMethod(ibValue::ibLinqMethod::GroupBy, ret, args, 2);
+    EXPECT_EQ(m_table->GetRowCount(), 1);
+    EXPECT_EQ(Joined(ColumnInOrder(wxT("Qty"))), wxT("3"));
+}
