@@ -149,6 +149,11 @@ ibValueDynamicList::ibValueDynamicList(const ibBackendQueryable* queryable, ibDy
 
 	if (queryable != nullptr)
 		SetSourceQueryable(queryable);   // null → set later via SetSource
+
+	// Refresh was declared and never bound, so a script could not call it — and
+	// nothing else on the list either. GetMetadata is how a list form learns
+	// which object it is listing (a custom query has none, and answers empty).
+	m_members.Bind(this, &ibValueDynamicList::FillMembers);
 }
 
 // 🛑 THE READ IS WAITED OUT BEFORE THE LIST GOES — here, in the class whose parts it walks, as the
@@ -722,6 +727,7 @@ const ibMetaData* ibValueDynamicList::GetSourceMetaData() const
 void ibValueDynamicList::FillMembers(ibMemberTable& helper) const
 {
 	helper.AppendProc(wxT("Refresh"), wxT("Refresh()"));
+	helper.AppendFunc(wxT("GetMetadata"), wxT("GetMetadata()"));
 }
 
 bool ibValueDynamicList::CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray)
@@ -729,6 +735,17 @@ bool ibValueDynamicList::CallAsProc(const long lMethodNum, ibValue** paParams, c
 	if (lMethodNum == 0) {   // Refresh
 		RefreshComposerSettings();
 		RefetchAll();
+		return true;
+	}
+	return false;
+}
+
+bool ibValueDynamicList::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** /*paParams*/, const long /*lSizeArray*/)
+{
+	if (GetMethodName(lMethodNum).IsSameAs(wxT("GetMetadata"), false)) {
+		// Const on purpose: metadata is not a writable object. Null (no source,
+		// or a custom query) is the empty value.
+		pvarRetValue = GetSourceMetaObject();
 		return true;
 	}
 	return false;

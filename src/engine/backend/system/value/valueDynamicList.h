@@ -283,6 +283,7 @@ public:
 	// --- script member surface (Filter/Order/Group/Settings + Refresh) ------
 	void FillMembers(ibMemberTable& helper) const;
 	virtual bool CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray) override;
+	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray) override;
 
 private:
 	
