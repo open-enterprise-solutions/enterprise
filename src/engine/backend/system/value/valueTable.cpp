@@ -3,6 +3,7 @@
 //	Description : value table and key pair 
 ////////////////////////////////////////////////////////////////////////////
 
+#include <wx/tokenzr.h>
 #include "valueTable.h"
 #include "backend/backend_exception.h"
 
@@ -129,6 +130,7 @@ void ibValueModelTable::FillMembers(ibMemberTable& helper) const
 	helper.AppendFunc(wxT("UnloadColumn"), 1, wxT("UnloadColumn(column : string) : array"));
 	helper.AppendFunc(wxT("Total"), 1, wxT("Total(column : string) : number"));
 	helper.AppendFunc(wxT("FindRows"), 1, wxT("FindRows(filter : structure) : array"));
+	helper.AppendFunc(wxT("FillValues"), 2, wxT("FillValues(value : any, columns = \"\" : string)"));
 
 	helper.AppendProp(wxT("Columns"));
 }
@@ -234,6 +236,10 @@ bool ibValueModelTable::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue,
 		pvarRetValue = FindRows(*filter);
 		return true;
 	}
+
+	case enFillValues:
+		FillValues(*paParams[0], lSizeArray > 1 && paParams[1] != nullptr ? wxString(paParams[1]->GetString()) : wxString());
+		return true;
 	}
 
 	return false;
@@ -796,6 +802,38 @@ void ibValueModelTable::DeleteRow(const ibDataViewItem& row)
 		return;
 	if (!ibBackendException::IsEvalMode())
 		ibValueModelStorage::Remove(node);
+}
+
+void ibValueModelTable::FillValues(const ibValue& value, const wxString& columns)
+{
+	std::vector<ibMetaID> ids;
+	if (m_tableColumnCollection == nullptr)
+		return;
+	wxString list(columns);
+	if (list.Trim().Trim(false).IsEmpty()) {
+		for (unsigned int i = 0; i < m_tableColumnCollection->GetColumnCount(); i++)
+			ids.push_back((ibMetaID)m_tableColumnCollection->GetColumnInfo(i)->GetColumnID());
+	}
+	else {
+		wxStringTokenizer tokens(list, wxT(","));
+		while (tokens.HasMoreTokens()) {
+			wxString name = tokens.GetNextToken();
+			name.Trim().Trim(false);
+			if (name.IsEmpty())
+				continue;
+			const auto* colInfo = m_tableColumnCollection->GetColumnByName(name);
+			if (colInfo == nullptr)
+				ibBackendCoreException::Error(_("Table column '%s' not found"), name);
+			ids.push_back((ibMetaID)colInfo->GetColumnID());
+		}
+	}
+	for (long row = 0; row < GetRowCount(); row++) {
+		ibComposerNode* const node = GetViewData<ibComposerNode>(GetItem(row));
+		if (node == nullptr)
+			continue;
+		for (const ibMetaID id : ids)
+			node->SetValue(id, value);
+	}
 }
 
 void ibValueModelTable::Clear()
