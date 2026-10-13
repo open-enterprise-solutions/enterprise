@@ -55,6 +55,12 @@ struct BuiltInRuntime : ::testing::Test {
 	// "the environment was never started". Same order as test_jobTenancy.cpp.
 	wxInitializer m_wxInit;
 
+	// The code style is process-wide. A test that switches it (CODE_CES / CODE_VES) and then fails
+	// an ASSERT returns before it can switch back, and every later compile reads the wrong grammar.
+	// The fixture puts it back whatever the test did.
+	short m_savedCodeStyle = ibCompileCode::GetCodeStyle();
+	void TearDown() override { ibCompileCode::SetCodeStyle(m_savedCodeStyle); }
+
 	void SetUp() override {
 		if (!m_wxInit.IsOk())
 			GTEST_SKIP() << "wxBase init failed (no wxApp host)";
