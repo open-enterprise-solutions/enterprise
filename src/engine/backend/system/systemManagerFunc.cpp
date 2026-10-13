@@ -4,6 +4,8 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "systemManager.h"
+#include "backend/backend_localization.h"   // NStr - the user's language
+#include "core/localization.h"              // NStr - reading `ru = 'text'; uk = 'text'`
 
 #include "backend/metaCollection/metaFormObject.h"
 #include "backend/metadataConfiguration.h"
@@ -160,6 +162,21 @@ ibValue ibValueSystemFunction::Sqrt(const ibValue& cValue)
 }
 
 //--- Strings:
+// NStr: the text of one language from `ru = 'text'; uk = 'text'` (#432). 1C takes the texts in single or
+// double quotes; the localization reader takes single ones, so a string quoted only with double quotes is
+// read as if it were single-quoted. No language code: the user's language.
+wxString ibValueSystemFunction::NStr(const wxString& text, const wxString& languageCode)
+{
+	wxString raw = text;
+	if (raw.Find(wxT('\'')) == wxNOT_FOUND)
+		raw.Replace(wxT("\""), wxT("'"));
+	wxString lang = languageCode;
+	lang.Trim(true).Trim(false);
+	if (lang.IsEmpty())
+		lang = ibBackendLocalization::GetUserLanguage();
+	return ibLocalization::GetTranslateGetRawLocText(lang, raw);
+}
+
 int ibValueSystemFunction::StrLen(const ibValue& cValue)
 {
 	return static_cast<int>(cValue.GetString().Length());

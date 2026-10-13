@@ -48,6 +48,7 @@ public:
 
 	//--- Strings:
 	static int StrLen(const ibValue& cValue);
+	static wxString NStr(const wxString& text, const wxString& languageCode = wxEmptyString);
 	static bool IsBlankString(const ibValue& cValue);
 	static ibString TrimL(const ibValue& cValue);
 	static ibString TrimR(const ibValue& cValue);

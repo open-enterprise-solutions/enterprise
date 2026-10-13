@@ -23,6 +23,7 @@ enum
 	enSqrt,
 	//--- Strings:
 	enStrLen,
+	enNStr,
 	enIsBlankString,
 	enTrimL,
 	enTrimR,
@@ -145,6 +146,7 @@ void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibVal
 	helper.AppendFunc(wxT("Sqrt"), 1, wxT("Sqrt(num : number)"));
 	//--- Strings:
 	helper.AppendFunc(wxT("StrLen"), 1, wxT("StrLen(str : string)"));
+	helper.AppendFunc(wxT("NStr"), 2, wxT("NStr(text : string, languageCode : string = the user's language)"));
 	helper.AppendFunc(wxT("IsBlankString"), 1, wxT("IsBlankString(str : string)"));
 	helper.AppendFunc(wxT("TrimL"), 1, wxT("TrimL(str : string)"));
 	helper.AppendFunc(wxT("TrimR"), 1, wxT("TrimR(str : string)"));
@@ -300,6 +302,7 @@ bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 		case enSqrt: pvarRetValue = Sqrt(*paParams[0]); return true;
 			//--- Strings:  
 		case enStrLen: pvarRetValue = StrLen(*paParams[0]); return true;
+		case enNStr: pvarRetValue = NStr(wxString(paParams[0]->GetString()), lSizeArray > 1 ? wxString(paParams[1]->GetString()) : wxString()); return true;
 		case enIsBlankString: pvarRetValue = IsBlankString(*paParams[0]); return true;
 		case enTrimL: pvarRetValue = TrimL(*paParams[0]); return true;
 		case enTrimR: pvarRetValue = TrimR(*paParams[0]); return true;
