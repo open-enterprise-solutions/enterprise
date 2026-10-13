@@ -260,6 +260,14 @@ void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibVal
 
 #include "backend/appData.h"
 
+// The rounding mode as 1C takes it: a RoundMode value, or a number - 0 is Round15as10, 1 is Round15as20 (#431).
+static ibRoundMode RoundModeOf(const ibValue& mode)
+{
+	if (mode.GetType() == ibValueTypes::TYPE_NUMBER)
+		return mode.GetInteger() == 0 ? ibRoundMode::ibRoundMode_Round15as10 : ibRoundMode::ibRoundMode_Round15as20;
+	return mode.ConvertToEnumValue<ibRoundMode>();
+}
+
 bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
 {
 	if (!appData->DesignerMode()) {
@@ -289,8 +297,7 @@ bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 			//--- Math:
 		case enRound: pvarRetValue = Round(*paParams[0],
 			lSizeArray > 1 ? paParams[1]->GetInteger() : 0,
-			lSizeArray > 2 ?
-			paParams[2]->ConvertToEnumValue<ibRoundMode>() : ibRoundMode::ibRoundMode_Round15as20
+			lSizeArray > 2 ? RoundModeOf(*paParams[2]) : ibRoundMode::ibRoundMode_Round15as20
 		); return true;
 		case enInt: pvarRetValue = Int(*paParams[0]); return true;
 		case enLog10: pvarRetValue = Log10(*paParams[0]); return true;
