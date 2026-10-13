@@ -315,7 +315,9 @@ bool ibValueRecordDataObjectRef::SaveData()
 	bool fillCheck = true;
 	wxString unfilled;   // the fields that refused, by name — carried up, not only whispered
 	wxASSERT(m_metaObject);
+	// Only when the write asked for it (m_fillCheckOnSave, #424): a Write() from code saves what it has.
 	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
+		if (!m_fillCheckOnSave) break;
 		if (!object->FillCheck()) continue;
 		// A REQUIREMENT ONLY BINDS WHERE THE FIELD APPLIES. An attribute declared for items alone
 		// (a characteristic's Type) is not part of a FOLDER, so demanding it there would make
