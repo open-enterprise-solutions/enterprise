@@ -5,6 +5,7 @@
 
 #include "backend/appData.h"
 #include "backend/appHost.h"
+#include "core/launchTicket.h"
 
 #include <thread>
 #include <algorithm>
@@ -1032,16 +1033,27 @@ long ibApplicationInstance::RunApplication(const wxString& strAppName, bool sear
 		userName    = s->GetUserInfo().m_strUserName;
 		rawPassword = s->GetSessionRawPassword();
 	}
-	return RunApplication(strAppName, userName, rawPassword, searchDebug, useManifest);
+	const long started = RunApplication(strAppName, userName, rawPassword, searchDebug, useManifest);
+	// The session keeps the password. A second launch of this same session
+	// still has it; only the copy on this stack is overwritten.
+	for (size_t i = 0; i < rawPassword.length(); ++i)
+		rawPassword[i] = wxT('x');
+	rawPassword.clear();
+	return started;
 }
 
 long ibApplicationInstance::RunApplication(const wxString& strAppName, const wxString& strUserName, const wxString& strUserPassword, bool searchDebug, bool useManifest) const
 {
 	// All OES binaries spawn with unified `--flag=value` syntax using
-	// wenterprise-server's long-name set (server/dbport/db/user/password/
-	// file/ibuser/ibpwd/locale/debug). enterprise.exe / designer.exe /
-	// appserver.exe declare these as the long name of their legacy short
-	// options, so one builder feeds every parser.
+	// wenterprise-server's long-name set (server/dbport/db/user/
+	// file/ibuser/locale/debug). Passwords go on the child's stdin.
+	// enterprise.exe / designer.exe declare these as the long name of
+	// their legacy short options, so one builder feeds every parser.
+
+	const auto add = [](wxString& cmd, const wxString& name, const wxString& value) {
+		if (value.IsEmpty()) return;
+		cmd += wxT(" --") + name + wxT("=\"") + value + wxT("\"");
+	};
 
 	// Resolve the binary next to this one. A bare "enterprise" is looked up on PATH and in the
 	// working directory, and it is in neither; on macOS it is not even a plain file, since the
@@ -1074,47 +1086,42 @@ long ibApplicationInstance::RunApplication(const wxString& strAppName, const wxS
 		: (strAppName + wxT(' '));
 
 	if (m_strFile.IsEmpty()) {
-
-		if (!m_strServer.IsEmpty())
-			executeCmd += wxString::Format(wxT(" --server=%s"), m_strServer);
-		if (!m_strPort.IsEmpty())
-			executeCmd += wxString::Format(wxT(" --dbport=%s"), m_strPort);
-		if (!m_strDatabase.IsEmpty())
-			executeCmd += wxString::Format(wxT(" --db=%s"), m_strDatabase);
-		if (!m_strUser.IsEmpty())
-			executeCmd += wxString::Format(wxT(" --user=%s"), m_strUser);
-		if (!m_strPassword.IsEmpty())
-			executeCmd += wxString::Format(wxT(" --password=%s"), m_strPassword);
+		add(executeCmd, wxT("server"), m_strServer);
+		add(executeCmd, wxT("dbport"), m_strPort);
+		add(executeCmd, wxT("db"), m_strDatabase);
+		add(executeCmd, wxT("user"), m_strUser);
 	}
 	else {
 		// QUOTED, for the same reason the binary above is: wxExecute splits the command on spaces, so
 		// a base under "C:\My Bases\…" reached the child as two arguments and the second one was not a
 		// flag anything declared. The path is the one thing here a person chooses, so it is the one
 		// most likely to carry a space (2026-08-20).
-		executeCmd += wxString::Format(wxT(" --file=\"%s\""), m_strFile);
+		add(executeCmd, wxT("file"), m_strFile);
 	}
 
 	if (searchDebug)
 		executeCmd += wxT(" --debug");
 
-	if (!strUserName.IsEmpty())
-		executeCmd += wxString::Format(wxT(" --ibuser=%s"), strUserName);
+	add(executeCmd, wxT("ibuser"), strUserName);
 
-	if (!strUserPassword.IsEmpty())
-		executeCmd += wxString::Format(wxT(" --ibpwd=%s"), strUserPassword);
+	ibLaunchSecrets secrets;
+	secrets.m_dbUser     = m_strUser;
+	secrets.m_dbPassword = m_strPassword;
+	secrets.m_ibUser     = strUserName;
+	secrets.m_ibPassword = strUserPassword;
 
 	ibApplicationHost* const host = ibApplicationHost::Get();
-	executeCmd += wxString::Format(wxT(" --locale=%s"), host != nullptr ? host->GetLocaleName() : wxString());
+	add(executeCmd, wxT("locale"), host != nullptr ? host->GetLocaleName() : wxString());
 
 	// Manifest-mode: wes-style spawn. Skip the debug-client handshake —
 	// that's enterprise.exe's in-process debugger attach, not relevant
 	// to a headless wes child.
 	if (useManifest)
-		return SpawnWebServerWithManifest(executeCmd, searchDebug);
+		return SpawnWebServerWithManifest(executeCmd, secrets, searchDebug);
 
-	const long execute = wxExecute(executeCmd);
+	const long execute = ibExecuteWithSecrets(executeCmd, secrets);
 
-	if (searchDebug) {
+	if (searchDebug && execute != 0) {
 		// Scan in rounds, the same way the manifest path below does, and for the same
 		// reason: one sweep races the process that was just started. Its debug server
 		// is created near the end of bootstrap, after the database is open, so the
@@ -1141,7 +1148,7 @@ long ibApplicationInstance::RunApplication(const wxString& strAppName, const wxS
 	return execute;
 }
 
-long ibApplicationInstance::SpawnWebServerWithManifest(wxString cmd, bool searchDebug)
+long ibApplicationInstance::SpawnWebServerWithManifest(wxString cmd, const ibLaunchSecrets& secrets, bool searchDebug)
 {
 	// --port=0 → OS picks an ephemeral port. --manifest=<file> → wes writes
 	// host/port/prefix/url there once it is actually accepting connections.
@@ -1150,7 +1157,7 @@ long ibApplicationInstance::SpawnWebServerWithManifest(wxString cmd, bool search
 	cmd += wxString::Format(wxT(" --port=0 --manifest=\"%s\""), manifestPath);
 
 	// Spawn detached so the caller can exit without killing the server.
-	const long pid = wxExecute(cmd, wxEXEC_ASYNC);
+	const long pid = ibExecuteWithSecrets(cmd, secrets);
 	if (pid == 0) {
 		wxRemoveFile(manifestPath);
 		return 0;

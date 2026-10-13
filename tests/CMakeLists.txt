@@ -158,6 +158,7 @@ add_executable(oes_tests
     test_readerWriterMemory.cpp
     test_openAccess.cpp
     test_passwordHash.cpp
+    test_launchTicket.cpp
     test_loginName.cpp
     test_programFolder.cpp
     test_md5.cpp

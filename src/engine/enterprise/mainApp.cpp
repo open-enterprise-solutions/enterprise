@@ -5,6 +5,7 @@
 
 #include "mainApp.h"
 #include "backend/appData.h"
+#include "core/launchTicket.h"
 #include "backend/backend_exception.h"   // DrainLastErrors for the startup-failure dialog
 #include "backend/backend_mainFrame.h"
 #include "frontend/session/guiSession.h"   // transitively pulls backend/session/session.h
@@ -78,6 +79,17 @@ bool ibAppEnterprise::OnCmdLineParsed(wxCmdLineParser& parser)
 	// USER 
 	parser.Found(wxT("ib_usr"), &m_strIBUser);
 	parser.Found(wxT("ib_pwd"), &m_strIBPassword);
+
+	ibLaunchSecrets line;
+	line.m_dbUser = m_strUser;
+	line.m_dbPassword = m_strPassword;
+	line.m_ibUser = m_strIBUser;
+	line.m_ibPassword = m_strIBPassword;
+	ibApplyLaunchSecrets(line, parser.Found(wxT("pwd")), parser.Found(wxT("ib_pwd")));
+	m_strUser = line.m_dbUser;
+	m_strPassword = line.m_dbPassword;
+	m_strIBUser = line.m_ibUser;
+	m_strIBPassword = line.m_ibPassword;
 
 	// LOCALE
 	parser.Found(wxT("lc"), &m_strLocale);
@@ -156,7 +168,7 @@ int ibAppEnterprise::DoOnRun()
 			_("Cannot start enterprise.exe - no infobase specified.\n\n"
 			  "Provide one of:\n"
 			  "  --file=<path>          (Firebird embedded / SQLite file)\n"
-			  "  --server=<host> --db=<name> [--dbport=...] [--user=...] [--password=...]\n\n"
+			  "  --server=<host> --db=<name> [--dbport=...] [--user=...]\n\n"
 			  "Or launch through launcher.exe to pick a saved infobase."),
 			_("OES Enterprise"),
 			wxOK | wxICON_ERROR

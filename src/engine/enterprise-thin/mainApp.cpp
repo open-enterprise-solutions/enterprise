@@ -8,6 +8,7 @@
 #include <memory>
 
 #include <wx/cmdline.h>
+#include "core/launchTicket.h"
 #include <wx/image.h>
 #include <wx/msgdlg.h>
 
@@ -54,6 +55,17 @@ bool ibAppEnterprise::OnCmdLineParsed(wxCmdLineParser& parser)
 
 	parser.Found(wxT("ib_usr"), &m_strIBUser);
 	parser.Found(wxT("ib_pwd"), &m_strIBPassword);
+
+	ibLaunchSecrets line;
+	line.m_dbUser = m_strUser;
+	line.m_dbPassword = m_strPassword;
+	line.m_ibUser = m_strIBUser;
+	line.m_ibPassword = m_strIBPassword;
+	ibApplyLaunchSecrets(line, parser.Found(wxT("pwd")), parser.Found(wxT("ib_pwd")));
+	m_strUser = line.m_dbUser;
+	m_strPassword = line.m_dbPassword;
+	m_strIBUser = line.m_ibUser;
+	m_strIBPassword = line.m_ibPassword;
 
 	parser.Found(wxT("lc"), &m_strLocale);
 
@@ -128,7 +140,7 @@ bool ibAppEnterprise::OnInit()
 			  "Provide one of:\n"
 			  "  --address=oes://<server>[:port]/<base>   (an application server)\n"
 			  "  --file=<path>          (Firebird embedded / SQLite file)\n"
-			  "  --server=<host> --db=<name> [--dbport=...] [--user=...] [--password=...]"),
+			  "  --server=<host> --db=<name> [--dbport=...] [--user=...]"),
 			_("OES Enterprise"),
 			wxOK | wxICON_ERROR
 		);

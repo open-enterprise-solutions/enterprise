@@ -189,6 +189,7 @@
     <ClCompile Include="graphics\geometry.cpp" />
     <ClCompile Include="guid.cpp" />
     <ClCompile Include="localization.cpp" />
+    <ClCompile Include="launchTicket.cpp" />
     <ClCompile Include="programFolder.cpp" />
     <ClCompile Include="query\queryKeywords.cpp" />
     <ClCompile Include="serialize\dataBuilder.cpp" />
@@ -239,6 +240,7 @@
     <ClInclude Include="graphics\picture.h" />
     <ClInclude Include="guid.h" />
     <ClInclude Include="localization.h" />
+    <ClInclude Include="launchTicket.h" />
     <ClInclude Include="programFolder.h" />
     <ClInclude Include="query\queryBalanceRole.h" />
     <ClInclude Include="query\queryKeywords.h" />
