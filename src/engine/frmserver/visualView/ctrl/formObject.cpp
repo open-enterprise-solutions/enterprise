@@ -617,7 +617,8 @@ bool ibValueForm::CloseForm(bool force)
 
 #include "frmserver/win/dlgs/formEditor.h"        // ibDialogFormEditor — the person's own arrangement of the form
 #include "frmserver/win/dlgs/generation.h"        // ibDialogGeneration — the object to base a new one on
-#include "protocol/protocol.h"       // ibProtocolRequestKind::Help
+#include "frmserver/docView/docManager.h"            // ibDocManager::CreateDocument<T> — the help's tab
+#include "frmserver/docView/templates/docViewHelp.h"  // ibHelpFileDocument
 
 void ibValueForm::HelpForm()
 {
@@ -634,7 +635,7 @@ void ibValueForm::HelpForm()
 	if (frame == nullptr)
 		return;
 
-	// NOTHING WRITTEN IS AN ANSWER, and a better one than an empty page: an empty page leaves a
+	// NOTHING WRITTEN IS AN ANSWER, and a better one than an empty tab: an empty tab leaves a
 	// person wondering whether the help failed to load.
 	if (help.IsEmpty()) {
 		frame->ShowModalMessage(_("Nothing has been written about this yet."),
@@ -642,15 +643,47 @@ void ibValueForm::HelpForm()
 		return;
 	}
 
-	// A text to read: the title and the text, read-only — the user's copy of what a developer wrote.
-	ibDataNode request;
-	request.SetValue(wxT("Kind"), static_cast<s32>(ibProtocolRequestKind::Help));
-	request.SetValue(wxT("Title"), metaObject != nullptr
-		? wxString::Format(_("Help: %s"), metaObject->GetSynonym()) : wxString(_("Help")));
-	request.SetValue(wxT("Text"), help);
+	ibFormVisualDocument* const ownerDocForm = GetVisualDocument();
 
-	ibDataNode response;
-	frame->Request(request, response);
+	// ⚠ NOT `docManager` — that name is a MACRO (docView.h) expanding to the singleton accessor,
+	// so a local of that name is a redefinition rather than a variable. Asked of the OWNING
+	// document anyway, which is the right question: the help belongs in the same manager as the
+	// form it is about, not in whichever one happens to be current.
+	ibDocManager* const documents = ownerDocForm != nullptr
+		? ownerDocForm->GetDocumentManager() : nullptr;
+
+	if (documents == nullptr)
+		return;
+
+	// ⭐ A TAB, AND A CHILD OF THE FORM THAT ASKED — help is read BESIDE the thing it is about,
+	// where a modal box would have to be dismissed before it could be acted on. Being a child
+	// means ibDocument's cascade closes it when that form closes, so help tabs cannot pile up
+	// behind a workspace somebody has moved on from.
+	ibHelpFileDocument* doc = documents->CreateDocument<ibHelpFileDocument>();
+	if (doc == nullptr)
+		return;
+
+	doc->SetDocParent(ownerDocForm);
+	doc->SetTitle(metaObject != nullptr
+		? wxString::Format(_("Help: %s"), metaObject->GetSynonym()) : _("Help"));
+
+	documents->AddDocument(doc);
+
+	// READ-ONLY: this is the user's copy of what a developer wrote, and the view already honours
+	// the flag (docViewHelp.cpp). Editing happens in the designer, on the object.
+	if (!doc->OnCreate(wxEmptyString, ibDOC_READONLY)) {
+		doc->DeleteAllViews();
+		return;
+	}
+
+	doc->SetText(help);
+
+	// 🛑 NOBODY EDITED THIS, so it must not be carried as an edit. Filling the text marks the
+	// document modified — the ordinary signal, arriving here for the wrong reason — and a modified
+	// FILE document with no filename asks to be saved on close, which opens a file dialog over a
+	// tab the person only meant to read. Said after the text is in, because that is what raised it.
+	doc->Modify(false);
+	doc->SetDocumentSaved(true);
 }
 
 void ibValueForm::ChangeForm()

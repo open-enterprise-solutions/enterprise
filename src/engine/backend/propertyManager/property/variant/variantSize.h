@@ -2,17 +2,18 @@
 #define __SIZE_VARIANT_H__
 
 #include "backend/backend_core.h"
+#include "core/graphics/geometry.h"   // ibSize — the size, as data
 
-// wxSize in a variant, our own — see variantPoint.h for why propgrid's
+// A size in a variant, our own — see variantPoint.h for why propgrid's
 // WX_PG_DECLARE_VARIANT_DATA_EXPORTED(wxSize) / `variant << size` is not used.
 class BACKEND_API ibVariantDataSize : public wxVariantData {
 	wxString MakeString() const;
 public:
 
-	void SetSize(const wxSize& size) { m_size = size; }
-	wxSize& GetSize() { return m_size; }
+	void SetSize(const ibSize& size) { m_size = size; }
+	ibSize& GetSize() { return m_size; }
 
-	ibVariantDataSize(const wxSize& size = wxDefaultSize) : m_size(size) {}
+	ibVariantDataSize(const ibSize& size = ibDefaultSize) : m_size(size) {}
 
 	virtual bool Eq(wxVariantData& data) const {
 		ibVariantDataSize* srcData = dynamic_cast<ibVariantDataSize*>(&data);
@@ -37,7 +38,7 @@ public:
 	virtual wxString GetType() const { return wxT("ibVariantDataSize"); }
 
 private:
-	wxSize m_size;
+	ibSize m_size;
 };
 
 #endif

@@ -2,7 +2,7 @@
 #define __PROPERTY_DYNAMIC_LIST_H__
 
 #include "backend/propertyManager/propertyObject.h"
-#include "backend/compositionDescription.h"   // what it stores — the SAME composer a report stores
+#include "core/description/compositionDescription.h"   // what it stores — the SAME composer a report stores
 
 // ---------------------------------------------------------------------------
 // ibPropertyDynamicList — backend half of the "dynamic list settings" designer

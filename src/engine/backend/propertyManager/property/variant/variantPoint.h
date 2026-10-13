@@ -2,8 +2,9 @@
 #define __POINT_VARIANT_H__
 
 #include "backend/backend_core.h"
+#include "core/graphics/geometry.h"   // ibPoint — the point, as data
 
-// wxPoint in a variant, our own.
+// A point in a variant, our own.
 //
 // wxWidgets does ship one — WX_PG_DECLARE_VARIANT_DATA_EXPORTED(wxPoint) in
 // wx/propgrid/propgriddefs.h, reachable through `variant << point`. But it belongs to
@@ -14,10 +15,10 @@ class BACKEND_API ibVariantDataPoint : public wxVariantData {
 	wxString MakeString() const;
 public:
 
-	void SetPoint(const wxPoint& point) { m_point = point; }
-	wxPoint& GetPoint() { return m_point; }
+	void SetPoint(const ibPoint& point) { m_point = point; }
+	ibPoint& GetPoint() { return m_point; }
 
-	ibVariantDataPoint(const wxPoint& point = wxDefaultPosition) : m_point(point) {}
+	ibVariantDataPoint(const ibPoint& point = ibDefaultPosition) : m_point(point) {}
 
 	virtual bool Eq(wxVariantData& data) const {
 		ibVariantDataPoint* srcData = dynamic_cast<ibVariantDataPoint*>(&data);
@@ -42,7 +43,7 @@ public:
 	virtual wxString GetType() const { return wxT("ibVariantDataPoint"); }
 
 private:
-	wxPoint m_point;
+	ibPoint m_point;
 };
 
 #endif

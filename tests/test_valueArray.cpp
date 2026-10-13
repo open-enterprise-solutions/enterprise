@@ -90,3 +90,16 @@ TEST(ValueArray, SumNumeric) {
     a.Add(ibValue(ibNumber(30)));
     EXPECT_EQ(a.Sum().GetInteger(), 60);
 }
+
+// Text is joined, as the script's '+' joins it. Sum kept only the first element (operator+ left a
+// string as it was), so "1","2","3" answered "1".
+TEST(ValueArray, SumOfText_JoinsIt) {
+    ibValueArray a;
+    a.Add(ibValue(wxString(wxT("1"))));
+    a.Add(ibValue(wxString(wxT("2"))));
+    a.Add(ibValue(wxString(wxT("twelve"))));
+
+    const ibValue sum = a.Sum();
+    EXPECT_EQ(sum.GetType(), ibValueTypes::TYPE_STRING);
+    EXPECT_EQ(sum.GetString(), wxT("12twelve"));
+}

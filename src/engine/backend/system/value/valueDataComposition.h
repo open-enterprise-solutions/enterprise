@@ -444,7 +444,7 @@ private:
 	// Nothing outside decides HOW it composes. Not even the settings: they are already on the
 	// composer by the time this runs, put there when the source was built or when somebody accepted
 	// the settings window. A target is a place to write, not an instruction.
-	bool Compose(class ibBackendSpreadsheetObject* target);
+	bool Compose(class ibSpreadsheetObject* target);
 
 	// Rebuild the columns + composer from the current source and query text.
 	void RebuildSource();

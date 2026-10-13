@@ -23,7 +23,7 @@
 
 #include "backend/compiler/scriptCheck.h"        // ibCheckScript — a composed restriction is compiled
 #include "backend/compiler/scriptComplete.h"     // ibOutlineScriptQueries — …and taken apart
-#include "backend/compiler/translateCode.h"      // ibTranslateCode::GetKeyWord — the parser spells its words
+#include "core/compiler/translateCode.h"      // ibTranslateCode::GetKeyWord — the parser spells its words
 #include "backend/metaCollection/metaIntrospect.h"
 #include "backend/metaCollection/metaSectionObject.h"
 #include "backend/metadataConfiguration.h"

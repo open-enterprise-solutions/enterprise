@@ -12,7 +12,7 @@
 
 #include <memory>
 
-#include "backend/compositionDescription.h"
+#include "core/description/compositionDescription.h"
 #include "frontend/win/dlgs/settings/settingsFieldTree.h"   // ibSettingsPlainField — a field, described
 
 // The tabs are model-driven grids, and the value cells are type-driven selectors — both live on the
@@ -57,8 +57,8 @@ public:
 	// ⭐⭐ ON THE BASIS OF A DESCRIPTION ALONE — the only road there is. Nothing
 	// running is handed in: the caller CLONES its variant, this edits the clone in place, and on OK
 	// the caller sets the clone back as the property's value (Max, 2026-08-24). The available fields
-	// come from the query text the description carries, resolved in `metaData` — the same answer
-	// ibQueryFieldsOfText gives the composer's window.
+	// are the main table's and what the query text adds on top, resolved in `metaData` — the answer
+	// the running list gives (ibValueDynamicList::GetSourceExplorer).
 	//
 	// ⚠ THE QUERY IS THE TEXT ITSELF here. A dynamic list keeps "use an arbitrary query" as a
 	// property of its own, outside the description, so on this road the text's presence IS the flag.

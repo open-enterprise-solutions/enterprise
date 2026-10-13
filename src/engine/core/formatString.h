@@ -27,7 +27,7 @@
 
 #include "core/fdatetime.h"
 #include "core/fnumber.h"
-#include "core/types.h"   // ibValueTypes, ibDateFractions — what a type description is asked
+#include "core/core.h"    // ibValueTypes, ibDateFractions — what a type description is asked
 
 class ibAnyValue;
 

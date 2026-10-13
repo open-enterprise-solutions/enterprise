@@ -215,10 +215,10 @@ build one. So — **a backend test constructs no toolkit object.** What cannot b
 toolkit belongs to the GUI suite CI runs in a job of its own; say so in the test rather than leaving
 the gap silent.
 
-⚠ The description types themselves still HOLD a `wxFont` and two `wxColour`
-(`backend/spreadsheetDescription.h`), which is a standing exception to the GUI-free backend rule and
-the reason a sheet cannot be composed headlessly at all. Naming it here because it bounds what
-`appserver` and `codeRunner` can do on Linux; changing it is an arc of its own.
+The description types hold fonts and colours as data — `ibFont` and `ibColour`
+(`core/graphics/`), in `core/description/spreadsheetDescription.h` and in every property cell. The
+backend has no `typeconv`: converting to `wxFont` / `wxColour` is the GUI side's
+(`frontend/win/typeconv.h`, 2026-10-13).
 
 ### 1.8 An initialiser list that disagrees with the declaration order is a lie
 

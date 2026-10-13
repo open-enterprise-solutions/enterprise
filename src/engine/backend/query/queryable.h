@@ -19,14 +19,14 @@
 //
 // See docs/private/query-language-arc.md §18 (name substitution) / §20 (this interface).
 
-#include "backend/tabularModelView.h"   // ibMetaID (via backend.h) — NOT tabularModel.h, so that one can hold
+#include "core/tabular/tabularModelView.h"   // ibMetaID (via core.h) — NOT tabularModel.h, so that one can hold
                                         // ibDataDBComposer BY VALUE (breaks the dataComposer→queryLowering→queryable→
                                         // model include cycle). (ibComparisonType is no longer used here — the
                                         // L3 condition op is ibQueryFilterOp now, defined below.)
 #include "backend/compiler/value.h"     // ibValue
 #include "backend/uniqueKey.h"          // ibUniqueKey — GetQueryTableGuid hands out the source's key
 #include "queryColumn.h"                // ibBackendQueryColumn (the column counterpart)
-#include "queryUnfold.h"                // ibQueryDimUnfold — a condition may carry the word, so a source can FOLD by it
+#include "core/query/queryUnfold.h"     // ibQueryDimUnfold — a condition may carry the word, so a source can FOLD by it
 #include "queryRamTable.h"              // ibQueryRamTable — ComputeRows produces the L3 table (no runtime type)
 #include "backend/databaseLayer/databaseLayer.h"   // ibTotalsPeriod — the unit a PeriodTrunc expression carries
 

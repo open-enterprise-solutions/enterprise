@@ -26,7 +26,7 @@
 #include <functional>
 #include <utility>
 
-#include "frmclient/win/ctrls/dataview/tabularModelView.h"                       // ibDataViewItem
+#include "core/tabular/tabularModelView.h"                       // ibDataViewItem
 #include "frmclient/backend/metaData.h"                               // ibMetaData — the configuration a type is read against
 #include "frmclient/backend/system/value/composition/valueComposerSettings.h"           // ibValueCompositionField — the one value with a picker
 #include "frmclient/backend/system/value/valueType.h"                 // ibValueTypeDescription::AdjustValue — text shaped by the declared type

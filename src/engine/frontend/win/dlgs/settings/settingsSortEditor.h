@@ -25,7 +25,7 @@
 #include <wx/panel.h>
 #include <wx/treectrl.h>
 
-#include "backend/compositionDescription.h"   // ibSortDescription — what is edited here
+#include "core/description/compositionDescription.h"   // ibSortDescription — what is edited here
 #include "frontend/win/ctrls/dataview/dataview.h"
 
 class ibSettingsFieldTree;

@@ -5,6 +5,7 @@
 #include "backend/backend_exception.h"
 
 #include "backend/session/sessionRegistry.h"
+#include "core/diagnostics/journal.h"
 
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -66,12 +67,16 @@ void ibApplicationInstance::CreateTableSession()
 			// than by whoever wrote the row. A nullable flag has two (NULL and 0) and they agree only
 			// as long as every reader remembers to make them agree.
 			{ wxT("exclusive"),       ibTypeInteger(),   true,  false, wxT("0") },
+			// tokenHash — SHA-256 hex of the thin client's bearer token. The token itself is never stored.
+			// Null: a session with nothing to resume (every kind but a thin client that has logged in).
+			{ wxT("tokenHash"),       ibTypeString(64),  false, false, wxEmptyString },
 		}));
 		// Indexes ride with the just-created table — no "if not exists" (redundant here, and
 		// unsupported by Firebird), so the per-driver fork collapses to three plain CREATE INDEX.
 		q.Execute(ibCreateIndex(session_table, wxT("session_index_1"), { wxT("session"), wxT("userName") }));
 		q.Execute(ibCreateIndex(session_table, wxT("session_index_2"), { wxT("session") }));
 		q.Execute(ibCreateIndex(session_table, wxT("session_index_3"), { wxT("lastActive") }));
+		q.Execute(ibCreateIndex(session_table, wxT("session_index_4"), { wxT("tokenHash") }));
 	}
 }
 
@@ -88,6 +93,13 @@ void ibApplicationInstance::CreateTableEvent()
 // session end / on zombie sweep. Index on (namespace, keyHash) drives
 // the per-acquire conflict-check; index on sessionGuid drives the
 // session-end cascade.
+//
+// sys_lock_key is the mutex for one key. It is created on every open, including a
+// base that already has sys_lock: the first acquire of a key inserts the header
+// under the primary key, so nothing is copied out of the old rows. The sweep
+// deletes a header once nobody holds the key. An old binary on the same base
+// still acquires without the row, so two processes can both be granted the key
+// until every process is upgraded.
 void ibApplicationInstance::CreateTableLock()
 {
 	ibDatabaseQueryBuilder q;
@@ -108,6 +120,14 @@ void ibApplicationInstance::CreateTableLock()
 		// sessionGuid drives the session-end cascade. No per-driver fork — see CreateTableSession.
 		q.Execute(ibCreateIndex(lock_table, wxT("lock_index_1"), { wxT("namespace"), wxT("keyHash") }));
 		q.Execute(ibCreateIndex(lock_table, wxT("lock_index_2"), { wxT("sessionGuid") }));
+	}
+
+	// The header outlives the lock. Release does not delete it.
+	if (!q.TableExists(lock_key_table)) {
+		q.Execute(ibCreateTable(lock_key_table, {
+			{ wxT("namespace"), ibTypeString(128), true, true, wxEmptyString },
+			{ wxT("keyHash"),   ibTypeString(64),  true, true, wxEmptyString },
+		}));
 	}
 }
 
@@ -304,6 +324,22 @@ void ibApplicationInstance::MigrateTableSession()
 	// exclusive — process-wide monopoly marker; cluster-aware gate in ProcessAdd /
 	// ProcessSetExclusive reads peer rows to detect another process holding it.
 	if (!has(wxT("exclusive")))       addColumn(wxT("exclusive"),       ibTypeInteger());
+	// tokenHash — the bearer token's SHA-256, never the token. Added with the resume window. Null on a
+	// row that predates it, and that row cannot be resumed.
+	if (!has(wxT("tokenHash"))) {
+		addColumn(wxT("tokenHash"), ibTypeString(64));
+		try {
+			ibDatabaseQueryBuilder q;
+			q.Execute(ibCreateIndex(session_table, wxT("session_index_4"), { wxT("tokenHash") }));
+		}
+		catch (const ibCoreException& err) {
+			// The column is enough to resume. The index is only the lookup, and a driver that refuses it is said.
+			ibJournalWarning(wxT("engine"), wxT("sys_session tokenHash index was not created: %s"), err.GetErrorDescription());
+		}
+		catch (...) {
+			ibJournalWarning(wxT("engine"), wxT("sys_session tokenHash index was not created"));
+		}
+	}
 
 	// NO BACK-FILL FOR THE ROWS. A column added to a populated table arrives NULL everywhere, which
 	// normally means an old base carries two spellings of one fact for good — but not this table: every

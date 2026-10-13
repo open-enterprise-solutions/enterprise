@@ -261,8 +261,29 @@ bool DescContainsClsid(const ibTypeDescription& td, const ibClassID& clsid)
 	return false;
 }
 
-// UPDATE <table> SET <fld>_TYPE = 0 WHERE <fld>_TYPE = <tag> — clear the variant tag of rows whose
-// stored type was just removed (so they read back as undefined, not as a now-missing sub-field).
+// The rows whose stored value a removed type empties: <fld>_TYPE = <tag>. A removed reference TARGET
+// adds <fld>_RTRef = <clsid> — and keeps the tag term, because _RTRef outlives the value it named: a
+// row that holds a number now may still carry the clsid of the reference it held before, and matched
+// on _RTRef alone it lost the number.
+//
+// ONE predicate for the UPDATE that clears and the COUNT the ledger shows, so the number said before
+// the apply is the number the apply empties.
+ibQueryExprPtr OfType(const wxString& fieldName, int typeTag)
+{
+	return ibBinOp(ibQueryBinOp::Eq, ibCol(fieldName + ibFieldSuffix(ibColumnRole::Discriminator)), ibConst(ibValue(typeTag)));
+}
+
+ibQueryExprPtr OfTarget(const wxString& fieldName, ibClassID clsid)
+{
+	// clsid is a 64-bit ibClassID — bind through ibNumber: ibValue has no 64-bit integer ctor.
+	return ibBinOp(ibQueryBinOp::And,
+		OfType(fieldName, ibPersistedTypeTag(ibColumnRole::ReferenceType)),
+		ibBinOp(ibQueryBinOp::Eq, ibCol(fieldName + ibFieldSuffix(ibColumnRole::ReferenceType)), ibConst(ibValue(ibNumber(clsid)))));
+}
+
+// UPDATE <table> SET <fld>_TYPE = 0 WHERE <where> — clear the variant tag of rows whose stored type
+// was just removed (so they read back as undefined, not as a now-missing sub-field). Returns how many
+// rows that empties, counted NOW, while the values are still there.
 //
 // ⭐⭐ POURED INTO THE BATCH, NOT RUN HERE. Every ADD / DROP this diff decides on is ACCUMULATED and
 // reaches the database later, at Flush; a cleanup executed on the spot therefore runs against the
@@ -274,33 +295,37 @@ bool DescContainsClsid(const ibTypeDescription& td, const ibClassID& clsid)
 // through the DDL barrier so they land after the shape is settled. The order the cleanup needs is
 // preserved either way — the discriminator (_TYPE) is never added or dropped, only the per-type data
 // fields around it are, so clearing it after the drop reads the same as clearing it before.
-void ClearRowsOfType(ibStructureBatch& batch, const wxString& tableName, const wxString& fieldName, int typeTag)
+long long ClearRows(ibStructureBatch& batch, const wxString& fieldName, const ibQueryExprPtr& where)
 {
+	const wxString& tableName = batch.GetTable();
+	ibQueryIR count;
+	count.m_root = ibProject(ibFilter(ibScan(tableName), where),
+		{ ibQueryProjItem{ ibFunc(wxT("COUNT"), {}), wxT("n") } });
+	ibQueryResult rows = ibDatabaseQueryBuilder().ExecuteIR(count);
+	const long long cleared = rows.Next() ? rows.GetResultLong(wxT("n")) : 0;
+
 	const wxString typeCol = fieldName + ibFieldSuffix(ibColumnRole::Discriminator);
-	batch.Insert([tableName, typeCol, typeTag]() {
+	batch.Insert([tableName, typeCol, where]() {
 		ibDatabaseQueryBuilder q;
-		q.Execute(ibUpdate(tableName,
-			{ { typeCol, ibConst(ibValue(0)) } },
-			ibBinOp(ibQueryBinOp::Eq, ibCol(typeCol), ibConst(ibValue(typeTag)))));
+		q.Execute(ibUpdate(tableName, { { typeCol, ibConst(ibValue(0)) } }, where));
 		return true;   // a 0-row clear is the ordinary case; a real failure THREW
 	});
+	return cleared;
 }
 
 } // namespace
 
-int DiffColumnInto(ibStructureBatch& batch, const ibBackendQueryColumn* srcCol, const ibBackendQueryColumn* dstCol)
+long long DiffColumnInto(ibStructureBatch& batch, const ibBackendQueryColumn* srcCol, const ibBackendQueryColumn* dstCol)
 {
-	int retCode = 1;
-
 	// CREATE — pour the whole new column (the batch expands its layout: TYPE + per-type data + ref pair).
 	if (dstCol == nullptr) {
 		batch.AddColumn(srcCol);
-		return retCode;
+		return 0;
 	}
 	// DELETE — drop the whole removed column (every physical field).
 	if (srcCol == nullptr) {
 		batch.DropColumn(dstCol);
-		return retCode;
+		return 0;
 	}
 	// UPDATE — only if what the column may HOLD changed: GetTypeValueDesc, the answer its layout is built
 	// from below. Asked of the DECLARATION, a field declared through a chart of characteristic types never
@@ -311,10 +336,10 @@ int DiffColumnInto(ibStructureBatch& batch, const ibBackendQueryColumn* srcCol, 
 	const ibTypeDescription& srcTypeDesc = srcCol->GetTypeValueDesc();
 	const ibTypeDescription& dstTypeDesc = dstCol->GetTypeValueDesc();
 	if (srcTypeDesc == dstTypeDesc)
-		return retCode;
+		return 0;
 
-	const wxString&    tableName = batch.GetTable();
 	const wxString fieldName = srcCol->GetPhysicalName();
+	long long cleared = 0;
 	const std::vector<ibColumnSlot> srcLayout = DescribeColumnLayout(srcCol);
 	const std::vector<ibColumnSlot> dstLayout = DescribeColumnLayout(dstCol);
 
@@ -334,7 +359,7 @@ int DiffColumnInto(ibStructureBatch& batch, const ibBackendQueryColumn* srcCol, 
 			// gone -> DROP the field; clear the stale _TYPE tag of rows that held this type.
 			batch.DropField(d);
 			if (d.m_role != ibColumnRole::Discriminator)
-				ClearRowsOfType(batch, tableName, fieldName, ibPersistedTypeTag(d.m_role));
+				cleared += ClearRows(batch, fieldName, OfType(fieldName, ibPersistedTypeTag(d.m_role)));
 		}
 		else if (!ibSameFieldType(s->m_type, d.m_type)) {
 			// A date narrowing from Time cannot ALTER in place -> drop + re-add; else ALTER.
@@ -382,7 +407,7 @@ int DiffColumnInto(ibStructureBatch& batch, const ibBackendQueryColumn* srcCol, 
 		// Field LOST all references -> clear the rows that held one + DROP the shared pair (never a row
 		// DELETE — that wipes records). The slots come off the OLD layout — they exist there because
 		// oldHasRef is what this branch means.
-		ClearRowsOfType(batch, tableName, fieldName, ibPersistedTypeTag(ibColumnRole::ReferenceType));
+		cleared += ClearRows(batch, fieldName, OfType(fieldName, ibPersistedTypeTag(ibColumnRole::ReferenceType)));
 		if (const ibColumnSlot* rt = SlotOfRole(dstLayout, ibColumnRole::ReferenceType))
 			batch.DropField(*rt);
 		if (const ibColumnSlot* rr = SlotOfRole(dstLayout, ibColumnRole::ReferenceId))
@@ -391,19 +416,8 @@ int DiffColumnInto(ibStructureBatch& batch, const ibBackendQueryColumn* srcCol, 
 	else if (!removedRef.empty()) {
 		// Still a reference, but SOME targets were dropped (incl. a full retarget) -> KEEP the shared pair;
 		// clear the stale _TYPE of rows whose stored target (_RTRef) is gone so they read undefined, not dead.
-		const wxString typeCol = fieldName + ibFieldSuffix(ibColumnRole::Discriminator);
-		const wxString refCol  = fieldName + ibFieldSuffix(ibColumnRole::ReferenceType);
-		// Batched for the same reason as the two cleanups above — it reads columns this very apply
-		// may still be creating.
 		for (auto clsid : removedRef)
-			batch.Insert([tableName, typeCol, refCol, clsid]() {
-				ibDatabaseQueryBuilder q;
-				// clsid is a 64-bit ibClassID — bind through ibNumber: ibValue has no 64-bit integer ctor.
-				q.Execute(ibUpdate(tableName,
-					{ { typeCol, ibConst(ibValue(0)) } },
-					ibBinOp(ibQueryBinOp::Eq, ibCol(refCol), ibConst(ibValue(ibNumber(clsid))))));
-				return true;
-			});
+			cleared += ClearRows(batch, fieldName, OfTarget(fieldName, clsid));
 	}
-	return retCode;   // 1 — success; a real DB error THREW (the affected-row count is not an error signal)
+	return cleared;   // a real DB error THREW
 }

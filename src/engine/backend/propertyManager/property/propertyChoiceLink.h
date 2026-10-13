@@ -2,7 +2,7 @@
 #define __PROPERTY_CHOICE_LINK_H__
 
 #include "backend/propertyManager/propertyObject.h"
-#include "backend/choiceLinkDescription.h"
+#include "core/description/choiceLinkDescription.h"
 
 // Forward, not included: this header is pulled in by propertyManager.h, which the metadata headers
 // themselves include - asking for them back from here is the circle the property family is arranged to

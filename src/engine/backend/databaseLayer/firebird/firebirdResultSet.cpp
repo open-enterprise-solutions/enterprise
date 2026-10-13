@@ -710,8 +710,9 @@ void ibDatabaseResultSetFirebird::InterpretErrorCodes()
 	// printed "I'm in this function" on every fbclient failure
 	// without adding context.
 	long nSqlCode = m_pInterface->GetIscSqlcode()(m_Status);
-	// A system error by its status code, as the layer records one (an interrupted fetch is isc_cancelled).
-	SetErrorCode(ibDatabaseLayerFirebird::TranslateErrorCode(nSqlCode < -900 ? (int)m_Status[1] : (int)nSqlCode));
+	// The primary gds code, as the layer records one (an interrupted fetch is isc_cancelled).
+	const int code = ibDatabaseLayerFirebird::TranslateErrorCode(m_Status);
+	SetErrorCode(code, ibDatabaseLayerFirebird::ClassifyDatabaseError(code));
 	SetErrorMessage(ibDatabaseLayerFirebird::TranslateErrorCodeToString(m_pInterface, nSqlCode, m_Status));
 }
 

@@ -216,7 +216,7 @@ wxString ibFilterValueText(const ibValue& value, const ibFilterOperandDescriptio
 
 wxString ibFilterSideText(const ibFilterOperandDescription& side, const ibFilterOperandDescription& other)
 {
-	return side.IsField() ? ibFieldText(side) : ibFilterValueText(side.m_value, other);
+	return side.IsField() ? ibFieldText(side) : ibFilterValueText(ibStoredValue(side.m_value, nullptr), other);
 }
 
 void ibFilterTreeModel::GetValue(wxVariant& variant, const ibDataViewItem& item, unsigned int col) const
@@ -322,8 +322,8 @@ bool ibFilterTreeModel::SetValue(const wxVariant& variant, const ibDataViewItem&
 			return false;
 
 		line->m_right.m_path.clear();   // typing a value is choosing a value, not a field
-		line->m_right.m_value = ibValueTypeDescription::AdjustValue(
-			line->m_left.m_type, ibValue(variant.GetString()));
+		ibStoreValue(line->m_right.m_value, ibValueTypeDescription::AdjustValue(
+			line->m_left.m_type, ibValue(variant.GetString())));
 		return true;
 	}
 	// The comparison and the display mode are written by their own editor — the

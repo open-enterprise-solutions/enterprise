@@ -84,6 +84,7 @@ add_executable(oes_tests
     test_compositionSettings.cpp
     test_rpcMessage.cpp
     test_mcpToolContract.cpp
+    test_backupRestore.cpp
     test_spreadsheetCompose.cpp
     test_spreadsheetDocument.cpp
     test_spreadsheetDescriptionNode.cpp
@@ -117,12 +118,18 @@ add_executable(oes_tests
     test_databaseMaterializeBuilder.cpp
     test_periodFold.cpp
     test_registerReadRules.cpp
+    test_informationRegisterGet.cpp
     test_totalsViewParity.cpp
     test_totalsNumericParity.cpp
     test_totalsKeyHash.cpp
     test_totalsFold.cpp
+    test_totalsTypeLoss.cpp
     test_accountingTotals.cpp
     test_sequenceBorder.cpp
+    test_typeChangeLedger.cpp
+    test_acceptanceCatalogs.cpp
+    test_acceptanceAccumulation.cpp
+    test_sqliteBlobLifetime.cpp
     test_calcDisplacement.cpp
     test_calcRecalculation.cpp
     test_calcSchedule.cpp
@@ -146,14 +153,17 @@ add_executable(oes_tests
     test_rowValues.cpp
     test_queryRamTable.cpp
     test_physicalFieldName.cpp
+    test_schemaIndex.cpp
     test_databaseStringConverter.cpp
     test_readerWriterMemory.cpp
+    test_openAccess.cpp
     test_passwordHash.cpp
+    test_loginName.cpp
     test_programFolder.cpp
     test_md5.cpp
     test_sha256.cpp
     test_stringUtils.cpp
-    # test_guid.cpp  # API-rotted (ibGuidImpl::isValid/str/bytes gone) — excluded until updated
+    test_guid.cpp
     test_dbTransaction.cpp
     test_propertyObject.cpp
     test_propertyDefaults.cpp
@@ -164,31 +174,48 @@ add_executable(oes_tests
     test_modelFetchDoor.cpp
     test_workerPoolDrop.cpp
     test_workerPoolFiber.cpp
+    test_fiberStopJoin.cpp
     test_fiberTsan.cpp
+    test_fiberTrust.cpp
+    test_fiberFp.cpp
+    test_fiberStack.cpp
     test_typeFamilyAdjust.cpp
     test_eventHandler.cpp
     test_functionalOption.cpp
     test_metadataMove.cpp
     test_sectionInterfaceItems.cpp
     test_socketLock.cpp
+    test_lockRace.cpp
+    test_clientListener.cpp
 )
 
 target_link_libraries(oes_tests
     PRIVATE
         backend
+        frmserver
         GTest::gtest
         GTest::gtest_main
+)
+
+# The client listener is the application server's, not a library. This one file
+# is what accepts the sockets; frmserver is ibClientHost, which answers them.
+target_sources(oes_tests PRIVATE
+    "${CMAKE_SOURCE_DIR}/src/engine/appserver/clientListener.cpp"
 )
 
 # Tests need to construct app-owned subsystems directly (no full appData
 # bring-up). OES_TESTING opens ib::AppDataCtorToken's default ctor; see
 # backend/appDataCtorToken.h.
 target_compile_definitions(oes_tests PRIVATE OES_TESTING)
+# The cmake that configured this tree: test_byteCodeFormat runs the engine fingerprint script with it, the way the
+# build does, and a machine need not have one on PATH.
+target_compile_definitions(oes_tests PRIVATE OES_CMAKE_COMMAND="${CMAKE_COMMAND}")
 
 target_include_directories(oes_tests PRIVATE
     "${CMAKE_SOURCE_DIR}/src"
     "${CMAKE_SOURCE_DIR}/src/engine"
     "${CMAKE_SOURCE_DIR}/src/engine/backend"
+    "${CMAKE_SOURCE_DIR}/src/engine/appserver"
 )
 
 # On non-Windows the backend is a .dylib/.so; ensure the test can find it
@@ -236,7 +263,7 @@ oes_discover_tests(oes_tests)
 # which hour of which March morning does not exist. The hour itself is checked by a test that sets a
 # clock of its own (DriverDates.TheSkippedHourIsHeldEvenWhereTheMachineSkipsIt).
 set(oes_date_suites
-    "ValueTest.*Date*:ValueTest.TheEmptyDate*:ValueTest.AText*:DateTime.*:DriverDates.*:DataNode.ADate*:DataNode.AFormat*:DataMover.*:JobSchedule.Buffer_ReadsAVersion*:PointInTime.*:*ScriptCorpusRun*date_reading*")
+    "ValueTest.*Date*:ValueTest.TheEmptyDate*:ValueTest.AText*:DateTime.*:DriverDates.*:DataNode.ADate*:DataNode.AFormat*:DataMover.*:JobSchedule.Buffer_ReadsAVersion*:PointInTime.*:*ScriptCorpusRun*date_reading*:AcceptanceAccumulation.*")
 foreach(clock IN ITEMS "utc;UTC0" "east;EET-2EEST,M3.5.0/3,M10.5.0/4" "west;CET-1CEST,M3.5.0/2,M10.5.0/3")
     list(GET clock 0 zone_name)
     list(GET clock 1 zone_rule)
@@ -512,7 +539,10 @@ oes_discover_tests(oes_multi_base_test)
 #   cmake --build build --target oes_protocol_test --config Debug
 #   ./bin/oes_protocol_test
 # ---------------------------------------------------------------------------
-add_executable(oes_protocol_test test_clientFrameApply.cpp)
+add_executable(oes_protocol_test
+    test_clientFrameApply.cpp
+    test_sessionFailover.cpp
+)
 
 target_link_libraries(oes_protocol_test
     PRIVATE
@@ -613,7 +643,7 @@ oes_discover_tests(oes_frontend_runtime_test)
 # the layer is absent and the target would not link.
 # ---------------------------------------------------------------------------
 if(OES_USE_POSTGRESQL)
-    add_executable(oes_pg_dialect_test test_postgresDialect.cpp)
+    add_executable(oes_pg_dialect_test test_postgresDialect.cpp test_lockRace.cpp)
 
     target_link_libraries(oes_pg_dialect_test
         PRIVATE
@@ -622,7 +652,7 @@ if(OES_USE_POSTGRESQL)
             GTest::gtest_main
     )
 
-    target_compile_definitions(oes_pg_dialect_test PRIVATE OES_TESTING)
+    target_compile_definitions(oes_pg_dialect_test PRIVATE OES_TESTING OES_LOCK_RACE_POSTGRES_ONLY)
 
     target_include_directories(oes_pg_dialect_test PRIVATE
         "${CMAKE_SOURCE_DIR}/src"

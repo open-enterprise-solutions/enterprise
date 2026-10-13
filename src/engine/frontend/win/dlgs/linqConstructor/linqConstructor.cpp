@@ -6,8 +6,8 @@
 
 #include "backend/backend_exception.h"          // ibEvalModeScope - every probe runs as a completion
 #include "backend/compiler/scriptComplete.h"    // the three IntelliSense doors, and the compiler's outline
-#include "backend/compiler/translateCode.h"     // GetKeyWord - the words are the lexer's
-#include "backend/compiler/codeDef.h"           // KEY_FROM ... KEY_RESTRICT
+#include "core/compiler/translateCode.h"     // GetKeyWord - the words are the lexer's
+#include "core/compiler/codeDef.h"           // KEY_FROM ... KEY_RESTRICT
 #include "backend/compiler/typeCtor.h"          // ibCtorAbstractType::GetClassIcon - a metatype's own picture
 #include "backend/metaData.h"                   // GetAvailableCtor
 #include "backend/metaCollection/metaObject.h"  // the module's name and configuration

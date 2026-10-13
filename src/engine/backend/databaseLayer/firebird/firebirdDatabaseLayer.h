@@ -65,20 +65,17 @@ public:
 	// DoRollBack) are protected — see below.
 
 	static int TranslateErrorCode(int nCode);
+	// …OF A STATUS VECTOR — the code every error path of this driver records: the primary gds code,
+	// status[1], whatever the SQLCODE says. Recording the SQLCODE instead (-803 for a duplicate key)
+	// left ClassifyDatabaseError below nothing to match, so a key violation surfaced as Unknown.
+	static int TranslateErrorCode(const void* status);
+	// The portable Kind of a gds code — recorded with the code wherever the driver reads one
+	// (SetErrorCode(code, kind)): the layer, the prepared statement, its wrapper, the result set and
+	// the blob writes. FB has no SQLSTATE — the gds code is the identifier.
+	static ibBackendDatabaseException::Kind ClassifyDatabaseError(int code);
 	//static wxString TranslateErrorCodeToString(ibInterfaceFirebird* pInterface, int nCode, ISC_STATUS_ARRAY status);
 	static wxString TranslateErrorCodeToString(ibInterfaceFirebird* pInterface, int nCode, void* status);
 	static bool IsAvailable();
-
-	// Map an isc_status[1] value (the FB "primary" gds code stashed
-	// into m_nErrorCode by every error path in this driver) to a
-	// portable Kind. FB doesn't expose SQLSTATE — the gds codes are
-	// the authoritative identifier. Common ones:
-	//   isc_lock_conflict / isc_deadlock              → Deadlock
-	//   isc_lock_timeout                              → Timeout
-	//   isc_network_error / isc_net_*                 → ConnectionLost
-	//   isc_dsql_command_err / isc_dsql_token_unk_err → Syntax
-	//   isc_unique_key_violation / isc_foreign_key    → Constraint
-	ibBackendDatabaseException::Kind ClassifyDatabaseError(int nativeCode) const override;
 
 	void SetServer(const wxString& strServer) { m_strServer = strServer; }
 	void SetDatabase(const wxString& strDatabase) { m_strDatabase = strDatabase; }

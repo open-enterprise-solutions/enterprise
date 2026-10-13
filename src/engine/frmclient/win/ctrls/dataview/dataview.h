@@ -40,7 +40,7 @@ class WXDLLIMPEXP_FWD_CORE wxImageList;
 class wxItemAttr;
 class ibHeaderGenericCtrl;
 
-#include "frmclient/win/ctrls/dataview/tabularModelView.h"
+#include "core/tabular/tabularModelView.h"
 #include "headerctrlg.h"
 #include "frmclient/frmclient.h"
 // The (x, band) geometry a grouped table paints in, and the ORIENTATION a group can
@@ -61,6 +61,9 @@ class ibDataViewCtrlAccessible;
 #endif // wxUSE_ACCESSIBILITY
 
 extern const char ibDataViewCtrlNameStr[];
+
+// The font an item's attribute lays over the view's — the side's, since the model view (core) has no fonts.
+wxFont ibEffectiveFont(const ibDataViewItemAttr& attr, const wxFont& font);
 
 // ----------------------------------------------------------------------------
 // ibDataViewListModel: a model of a list, i.e. flat data structure without any

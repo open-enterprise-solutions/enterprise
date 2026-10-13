@@ -3,9 +3,18 @@
 
 #include <vector>
 
-#include "backend/typeDescription.h"
+#include "core/description/typeDescription.h"
 #include "backend/query/queryColumn.h"     // ibBackendAbstractColumn (name/synonym/comment) + ibBackendSourceColumn
-#include "backend/sourceDescription.h"     // ibSourceDescription — control's bound source path (GetSourceDesc / SetDefaultSourceType)
+#include "core/description/sourceDescription.h"     // ibSourceDescription — control's bound source path (GetSourceDesc / SetDefaultSourceType)
+
+//////////////////////////////////////////////////////////////
+
+// ⭐ A BINDING'S DOOR ON THIS SIDE — the core one writes every id as it is held; this one writes against the
+// configuration the binding belongs to, and asks it which ids still name an object.
+class BACKEND_API ibBackendMetaDescriptionMemory : public ibMetaDescriptionMemory {
+public:
+	static bool WriteNode(ibDataValue& value, const ibMetaDescription& metaDesc, const class ibMetaData* metaData = nullptr);
+};
 
 //////////////////////////////////////////////////////////////
 

@@ -2,7 +2,7 @@
 
 #include "frmclient/docView/docManager.h"   // full ibFrontendDocTemplate type
 #include "frmclient/mainFrame/mainFrame.h"
-#include "frmclient/visualView/visualHostClient.h"   // ibFormVisualDocument — the tab a file opened in
+#include "frmclient/docView/tabDocument.h"   // ibTabDocument — the tab a file opened in
 
 // ----------------------------------------------------------------------------
 // ibFrontendFileDocument
@@ -43,7 +43,7 @@ bool ibFrontendFileDocument::DoOpenDocument(const wxString& filename)
 	params.SetValue(ibProtocolName::File, uploaded);
 	// …and the tab it shows in keeps where it came from: Save puts it back there.
 	if (frame->Call(ibProtocolMethod::Open, params, answer)) {
-		if (ibFormVisualDocument* const opened = frame->FindDocument(frame->GetActiveTab()))
+		if (ibTabDocument* const opened = frame->FindDocument(frame->GetActiveTab()))
 			opened->SetFilename(filename);
 	}
 

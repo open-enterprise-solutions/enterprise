@@ -21,7 +21,8 @@
 // invisible.
 //
 // See docs/private/query-language-arc.md §23.5 (L4-2) and docs/private/linq.md §0.
-#include "translateCode.h"   // ibLexem
+#include "backend/backend.h"                // BACKEND_API
+#include "core/compiler/translateCode.h"   // ibLexem
 
 #include <functional>
 #include <memory>

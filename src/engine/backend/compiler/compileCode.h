@@ -1,7 +1,7 @@
 #ifndef _COMPILE_CODE_H__
 #define _COMPILE_CODE_H__
 
-#include "translateCode.h"
+#include "core/compiler/translateCode.h"
 #include "compileContext.h"
 
 // One entry in a module's context-variable map. scopeContext marks a
@@ -18,7 +18,7 @@ struct ibContextVar {
 //*							  Class: compiler                       *
 //*******************************************************************
 
-class BACKEND_API ibCompileCode : public ibTranslateCode {
+class BACKEND_API ibCompileCode {
 
 	struct ibCallFunction {
 
@@ -68,6 +68,21 @@ public:
 	void RemoveVariable(const wxString& strName);
 
 	void SetParent(ibCompileCode* parent); // setting the parent module and prohibited max. ancestor
+
+	// THE TEXT, through the compiler — the doors a module's owner goes through, so that whoever holds a
+	// compile does not reach for its translator.
+	void Load(const wxString& strCode) { m_translateCode.Load(strCode); }
+
+	// Reads the text in the session's syntax, and puts what could not be read through DoSetError — a
+	// runtime compile raises on the first refusal, a tolerant one notes them all.
+	bool PrepareLexem();
+	void ClearLexem() { m_translateCode.ClearLexem(); }
+
+	// A module read as a part of this one — the global modules under the configuration's module.
+	void AppendModule(ibCompileCode* module) { m_translateCode.AppendModule(&module->m_translateCode); }
+	void RemoveModule(ibCompileCode* module) { m_translateCode.RemoveModule(&module->m_translateCode); }
+
+	wxString GetModuleName() const { return m_translateCode.GetModuleName(); }
 
 	// Base ibCompileCode has no compile-side parent — only the
 	// ibCompileModule subclass holds a typed `m_parentModule` for
@@ -135,6 +150,11 @@ public:
 	//attributes:
 	bool m_onlyFunction; // true - only functions and export functions
 
+	// THE TEXT BEING COMPILED, AS ITS TRANSLATOR READS IT — held, not inherited. The translator is the
+	// core's and reads for others too (the editor, a client that knows no base); the compiler is one
+	// of its readers.
+	ibTranslateCode		m_translateCode;
+
 	// ⭐⭐ THE COMPILER'S FORM, and this declaration is the whole of what makes it one. `ibByteExtCode`
 	// IS an `ibByteCode` plus the tree (byteCode.h): everyone downstream — the runtime, the AOT
 	// cache, the binder — takes the base type and therefore cannot reach the tree at all, while the
@@ -143,7 +163,7 @@ public:
 
 	ibCompileContext* m_rootContext; // root context 
 
-	// Cursor over m_listLexem — "before the first token" is -1, and the
+	// Cursor over the translator's lexems — "before the first token" is -1, and the
 	// INITIALISER is the only thing that says so on the eval path. A module
 	// compile is set up by CompileModule(), which opens by parking the cursor;
 	// ibProcUnit::CompileExpression (watch / Evaluate / Execute) never calls it
@@ -231,7 +251,7 @@ public:
 	// counting.
 	bool IsEndOfProgram() const {
 		const int next = m_numCurrentCompile + 1;
-		return next >= (int)m_listLexem.size() || m_listLexem[next].m_lexType == ENDPROGRAM;
+		return next >= (int)m_translateCode.GetLexCount() || m_translateCode.GetLexAt(next).m_lexType == ENDPROGRAM;
 	}
 
 	// Where the parse has read up TO, in the text — the END of the token just consumed, not its
@@ -241,8 +261,8 @@ public:
 	// comparing against the START lost that caret, the declaration went unclaimed, and the name
 	// search then found a slot of the same number in a table one floor up.
 	long CaretCursor() const {
-		return (m_numCurrentCompile >= 0 && m_numCurrentCompile < (int)m_listLexem.size())
-			? (long)m_listLexem[m_numCurrentCompile].EndPos() : 0;
+		return (m_numCurrentCompile >= 0 && m_numCurrentCompile < (int)m_translateCode.GetLexCount())
+			? (long)m_translateCode.GetLexAt(m_numCurrentCompile).EndPos() : 0;
 	}
 
 	// ⭐⭐ THE DECLARATION A CARET IS STANDING IN, CAUGHT WHILE COMPILING — not read back out of the
@@ -283,9 +303,12 @@ public:
 
 protected:
 
-	virtual void DoSetError(int codeError,
+	// THE ONE DOOR EVERY REFUSAL OF A COMPILE GOES THROUGH — the compiler's own (SetError) and the
+	// translator's (PrepareLexem). `translateCode` holds the text the position points into — a module
+	// read as a part of this one (AppendModule) refuses in its own.
+	void DoSetError(int codeError,
 		const wxString& strFileName, const wxString& strModuleName, const wxString& strDocPath,
-		unsigned int currPos, unsigned int currLine,
+		const ibTranslateCode& translateCode, unsigned int currPos, unsigned int currLine,
 		const wxString& strErrorDesc) const;
 
 	const ibLexem& PreviewGetLexem();

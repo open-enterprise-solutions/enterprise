@@ -68,17 +68,21 @@ Each executable links against both DLLs and provides a `wxApp` subclass that sel
 ### Core Layer (`core.dll`)
 
 `src/engine/core/` — what the engine and its clients mean by the same words. Under `backend` and `frmclient`; wx base only;
-reads no base, runs no script, draws no window. `CORE_API` / `CORE_EXPORTS` (`core/core.h`, also `IB_FORCEINLINE` / `IB_NOINLINE`).
+reads no base, runs no script, draws no window. No metadata, no factories, no checks: a schema stores ids and structure.
 
 | Unit | Holds |
 |---|---|
-| `types.h` | id typedefs (`ibRoleID`, `ibMetaID`, `ibSourceId`, `ibFormID`, `ibActionID`, `ibPictureID`, `ibVersionID`), `ibValueTypes`, `ibDateFractions`, `ibCtorObjectType`, the primitives' class ids (`g_valueUndefinedCLSID`, `g_valueBooleanCLSID` … `g_valueNullCLSID`), `COMPONENT_TYPE_*`, the packed value node's field names `kValueFieldClsid` "t" / `kValueFieldData` "v" |
+| `core.h` | `CORE_API` / `CORE_EXPORTS`, `IB_FORCEINLINE` / `IB_NOINLINE`; id typedefs (`ibRoleID`, `ibMetaID`, `ibSourceId`, `ibFormID`, `ibActionID`, `ibPictureID`, `ibVersionID`), `ibValueTypes`, `ibDateFractions`, `ibCtorObjectType`, the primitives' class ids (`g_valueUndefinedCLSID`, `g_valueBooleanCLSID` … `g_valueNullCLSID`) and `GetIDByVT`, `COMPONENT_TYPE_*`, the packed value node's field names `kValueFieldClsid` "t" / `kValueFieldData` "v" |
 | `anyValue` | `ibAnyValue` — the INTERFACE every value answers (`GetType`, `IsEmpty`, `GetBoolean`, `GetNumber`, `GetDate`, `GetString`). The engine's `ibValue` and the client's derive from it and hold the value each its own way; what only asks these takes either |
 | `clsid.h`, `fstring`, `fnumber`, `fdatetime`, `guid`, `stringUtils.h` | `ibClassID`, `ibString` (+ pool), `ibNumber`, `ibDateTime`, `ibGuid` |
 | `formatString` | `ibFormatString` — the `Format` string as a value: `Parse` / `Render`, `Apply(const ibAnyValue&)`, `FromTypeDesc` (the format a type description gives, over either side's description) |
 | `fileSystem/` | `ibReader` / `ibWriter`, memory readers/writers, `u32`/`u64`…, lz block compression. A read, seek or advance past the end of a block, or a zero-terminated string with no terminator inside it, is refused (`ibCoreException`) in every build |
 | `serialize/` | `ibDataNode` / `ibDataValue`, binary provider, `ibJsonProvider`, JSON text. A type is named only by the injected resolver (`SetTypeResolver`). The JSON reader refuses nesting deeper than 256 objects and arrays (`kMaxNesting`, the root counted) |
 | `exception` | `ibCoreException : std::exception` — the base of every refusal (see [Exception taxonomy](#exception-taxonomy)) |
+| `description/` | the schemas both sides read and write the same way: `ibSourceDescription` (a binding path as hops), `ibCommandDescription` (a command path as hops), `ibCalcScheduleDescription`, `ibChoiceLinkDescription`, `ibCompositionDescription` (what a list and a report are: filter, sort, grouping, structure, parameters, variants — every value in it packed as a node, restored by the side's `backend_composition.h` against its configuration, which also holds the check `ibValidateSettings`), `ibHomePageDescription`, `ibJobScheduleDescription` (when a job is due, as fields and masks — what they mean, and whether they are well formed, is the side's `ibJobScheduleRules`), `ibPictureDescription` (an engine picture's id, a configuration's Guid or the image bytes — whether the engine has that id is asked by whoever reads it), `ibSpreadsheetDescription`, `ibStandardCommandDescription` (the action a tool runs — a system id or a handler's name), `ibTypeDescription` / `ibMetaDescription` (a type as clsids + qualifiers; a binding as metaIDs — the ids alone, no names: an id that names nothing is dropped by whoever reads it). A schema holds ids and nodes, never a value |
+| `graphics/` | a picture, a font, a colour, a point, a size, a rect — as DATA, for both sides and for a page: `ibPicture` (PNG in base64), `ibFont` (face, style, weight, fractional size, family, underlined, struck through), `ibColour` (RGBA or none), `ibPoint` / `ibSize` / `ibRect` (wx's, byte for byte). The conversion to wx is each side's (backend: `ibBackendPicture::FromImage` / `ToBitmap` / `ToIcon`). The backend and frmserver hold fonts, colours, points and sizes only as these (property cells, form defaults, sheet cells); `typeConv` (`Font`/`Colour`/`Point`/`Size` ⇄ wx) lives in `frontend/win/typeconv.h`, with a copy in frmclient |
+| `tabular/` | `tabularModelView` — the table's model view, ONE for the server's tables and the thin client's: `ibDataViewModel` (values, hierarchy, the paged fetch, the notifier, `SubmitFetchAsync` — a thread of the model's own, bare: no session, no base), `ibDataViewItem` / `ibDataViewObject`, `ibDataViewItemAttr` (a row's look — colours as `ibColour`; the font it lays over a view's is the side's, `ibEffectiveFont` beside each data view), `ibFetchDirection`, `s_constIgnoreParent`. The server's models bind the fetch thread to the asker's base in `ibDataViewModelProvider` (`backend/tabularModel.h`) |
+| `query/` | the query language's words: `ibQueryKeyword` + the keyword and scalar-call tables (`queryKeywords`), `ibQueryDimUnfold` (`queryUnfold.h`), `ibBalanceRole` (`queryBalanceRole.h`). The lexer stays in the backend and matches against them |
 | `localization` | `ibLocalization` — template (`ibLocalizationEntryArray` or `en = '…'; ru = '…';`) + a language in, that language's text out; missing language → the first written. The owner passes the language |
 | `diagnostics/` | the technology journal (`ibTechJournal`, `ibJournal*`) — ONE per process, the engine's, the protocol's and the client's lines in one file; `ibCrashGuard` (idempotent `Install`), leak tracker, `debugTrace.h` |
 | `build` | `GetBuildId` / `GetBuildStamp`, the program version |
@@ -86,7 +90,8 @@ reads no base, runs no script, draws no window. `CORE_API` / `CORE_EXPORTS` (`co
 | `core.cpp` | `DllMain`: `DLL_THREAD_DETACH` drains the `ibString` pool for every process that holds one, engine or not |
 
 - Links: backend → core (PUBLIC); protocol → core; frmclient → core + protocol; enterprise-thin → core.
-- Not in core: `typeconv` (fonts/colours/GDI), frmclient's `dataProtocol` seam, the value's storage (each side's own).
+- Not in core: `typeconv` (fonts/colours/GDI; in the GUI sides only, not in backend since 2026-10-13), frmclient's `dataProtocol` seam, the value's storage (each side's own),
+  the data view controls (frmclient's and frontend's).
 - Every library carries a version resource (`res/<name>.rc`).
 
 ### Backend Layer (`backend.dll`)
@@ -114,8 +119,9 @@ Two sibling DLLs share the same form/view/control code paths through `OES_USE_WE
 the contract both keep (`protocol.h`, no dependencies — `frmserver` includes it only) and the talking side's library
 (`frmclient` and the web server link it). **`fileserver`** puts `backend` + `frmserver` into the client's process for a
 file base. `frmclient` does not link `backend`; it links `core` (node and JSON, string, number, date, guid, exception,
-localization — the same classes the engine uses). `frmclient/backend/` keeps reduced copies of the rest — same names and
-classes, only what the client's windows use (type description, settings schema, sheet and composition descriptions) —
+localization — the same classes the engine uses). The schemas (type, settings, sheet, composition) and the table's model view
+are core's, one copy for both sides; `frmclient/backend/` keeps reduced copies of the rest — same names and classes, only
+what the client's windows use (the type factories, a value fitted to its type, a composition's values restored) —
 meeting the wire at `frmclient/backend/serialize/dataProtocol.h`; its `backend_core.h` / `backend.h` /
 `backend_exception.h` just include core. Chain: core → backend → frmserver ⇄ protocol ⇄ frmclient → enterprise-thin.
 See [thin-client.md](public/thin-client.md).
@@ -347,10 +353,10 @@ Per-driver `ClassifyDatabaseError(int nativeCode)` on each `ibDatabaseErrorRepor
 | `byteCodeAOT.cpp` | `ibByteCode::SerializeAOT/DeserializeAOT` | Binary persistence for the AOT cache (`sys_bytecode_cache.bc_blob`); host-endian linear format with magic `'PBC1'` + format version; the history of every version bump |
 | `byteCodeFormat.h` | `kAOTFormatVersion` | The format version (36): written into every blob and into the cache key. Bumped when an opcode is added, removed or renumbered, or changes what it does |
 | `cache/byteCodeCache.h/cpp` | `ibByteCodeCache` | The AOT cache's rows: `Load` / `Save` / `Invalidate` by descriptor, under `CacheKey` |
-| `engineFingerprint.cmake` | — | Build-time script (run by CMake and by `backend.vcxproj`): a SHA-256 of every file under `compiler/` and `system/`, written to the generated `engineFingerprintBuild.h` as `kEngineFingerprint` — only when it changes |
+| `engineFingerprint.cmake` | — | Build-time script (run by CMake and by `backend.vcxproj`): a SHA-256 of every file under `compiler/`, `system/` and `../core/compiler/` (the translator), written to the generated `engineFingerprintBuild.h` as `kEngineFingerprint` — only when it changes |
 | `procUnit.h/cpp` | `ibProcUnit` | Interpreter: executes `ibByteCode` against a variable stack |
 | `procContext.h/cpp` | `ibRunContext` | Execution context: local variable frame, call stack |
-| `value.h/cpp` | `ibValue` | Universal value type — tag enum `ibValueTypes` in `core/types.h`: `TYPE_EMPTY` (=0, the "undefined" value), `TYPE_BOOLEAN`, `TYPE_NUMBER` (`ibNumber`), `TYPE_DATE`, `TYPE_STRING`, `TYPE_NULL`, `TYPE_REFFER` / `TYPE_CONST_REFFER`, object kinds `TYPE_VALUE` / `TYPE_ENUM` / `TYPE_OLE` / `TYPE_FUNCTION` / `TYPE_ITERATOR` |
+| `value.h/cpp` | `ibValue` | Universal value type — tag enum `ibValueTypes` in `core/core.h`: `TYPE_EMPTY` (=0, the "undefined" value), `TYPE_BOOLEAN`, `TYPE_NUMBER` (`ibNumber`), `TYPE_DATE`, `TYPE_STRING`, `TYPE_NULL`, `TYPE_REFFER` / `TYPE_CONST_REFFER`, object kinds `TYPE_VALUE` / `TYPE_ENUM` / `TYPE_OLE` / `TYPE_FUNCTION` / `TYPE_ITERATOR` |
 | `codeDef.h` | enums | Opcode (`OPER_*`) and keyword (`KEY_*`) definitions |
 
 ### `src/engine/backend/databaseLayer/`
@@ -382,7 +388,6 @@ says which file is where.
 | `queryAST.h`, `queryParser.*`, `queryLexer.*`, `queryRender.*`, `queryRewrite.*` | the L4-1 text query — one AST shared with LINQ, its reader, its writer, and the rules that move a term (`WHERE` → `HAVING`) |
 | `queryLowering.*` | L4 → the single L3 door: name resolution, aggregate rules, `DescribeOutput`, package execution |
 | `queryHierarchy.{h,cpp}` | `ibQueryHierarchyScope` — the parent walk and the "whom does this row report under" map, asked of the COLUMN through the provider (one read, not one per node). Left the accounting register in 2026-08-13 |
-| `queryUnfold.h` | `ibQueryDimUnfold` — `Elements` / `Hierarchy` / `HierarchyOnly`, the three words a dimension can be asked for |
 | `queryException.{h,cpp}` | `ibBackendQueryException` (this tier failed) and `ibBackendQuerySourceException` (the query itself does not hold up — carries line + column) |
 | `schemaSnapshot.{h,cpp}` | `ibSchemaSnapshot` + `DiffSnapshots` — projects a configuration into tables / columns / indexes and turns a PAIR of them into DDL. Knows nothing about metadata, and never asks the live database anything ([schema-authority.md](private/schema-authority.md)) |
 | `schemaBuilder.*`, `structureBuilder.*`, `structureBatch.*` | applying that difference: rendering and running the DDL, the deferred second phase, and its compensation |
@@ -493,7 +498,7 @@ Source text (wxString)
 
 ### Opcode Categories
 
-Opcodes are defined as plain integer constants in `src/engine/backend/compiler/codeDef.h`. The opcodes fall into these groups:
+Opcodes are defined as plain integer constants in `src/engine/core/compiler/codeDef.h`. The opcodes fall into these groups:
 
 | Category | Opcodes |
 |---|---|

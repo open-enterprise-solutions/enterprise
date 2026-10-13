@@ -124,14 +124,6 @@ public:
 		m_outputWindow->SharedOutput(strErrorMessage, ibStatusMessage::ibStatusMessage_Error, strFileName, strDocPath, line);
 	}
 
-	// A MODAL BOX IS THE LOUDEST OF THEM, and the only one that never reaches the
-	// pane at all — it is shown to the person in front of it and to nobody else.
-	int ShowModalMessage(const wxString& message, const wxString& caption, int style) override {
-		ibDesignerMessages::Report({ caption.IsEmpty() ? message : caption + wxT(": ") + message,
-			ibStatusMessage::ibStatusMessage_Warning, wxEmptyString, wxNOT_FOUND, true });
-		return ibFrontendMainFrame::ShowModalMessage(message, caption, style);
-	}
-
 	// What the running application says, arriving over the debugger — it used to
 	// be written into the pane directly, past everything else.
 	void RuntimeMessage(const wxString& strMessage, const wxString& strFileName,
@@ -178,6 +170,14 @@ public:
 protected:
 
 	void InitializeDefaultMenu();
+
+	// A MODAL BOX IS THE LOUDEST OF THE MESSAGES, and the only one that never reaches the
+	// pane at all — it is shown to the person in front of it and to nobody else.
+	virtual int DoShowModalMessage(const wxString& message, const wxString& caption, int style) override {
+		ibDesignerMessages::Report({ caption.IsEmpty() ? message : caption + wxT(": ") + message,
+			ibStatusMessage::ibStatusMessage_Warning, wxEmptyString, wxNOT_FOUND, true });
+		return ibFrontendMainFrame::DoShowModalMessage(message, caption, style);
+	}
 
 	virtual void CreateMetadataPane();
 	virtual void CreateGitPane();

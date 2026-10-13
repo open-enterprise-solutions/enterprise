@@ -2,7 +2,7 @@
 #define __COMMAND_SOURCE_DATA_VARIANT_H__
 
 #include "backend/propertyManager/property/variant/variantType.h"
-#include "backend/commandDescription.h"
+#include "core/description/commandDescription.h"
 #include "backend/backend_command.h"   // ibBackendCommandReceiver — the factory the variant WALKS to validate the binding
 
 // The variant behind a command-source property — the command-door twin of ibVariantDataSource. Where the

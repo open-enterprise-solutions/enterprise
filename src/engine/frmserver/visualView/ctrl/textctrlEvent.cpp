@@ -96,6 +96,15 @@ bool ibValueTextCtrl::OnClientEvent(ibProtocolEvent event, const ibDataNode& arg
 	}
 }
 
+bool ibValueTextCtrl::IsSubscribed(ibProtocolEvent event) const
+{
+	if (event != ibProtocolEvent::Input)
+		return ibValueWindow::IsSubscribed(event);
+	// What OnTextUpdated would modify, and only while it is not.
+	ibSourceDataObject* const sourceObject = m_formOwner != nullptr ? m_formOwner->GetSourceObject() : nullptr;
+	return !IsReadOnly() && sourceObject != nullptr && sourceObject->ModifiesData() && !sourceObject->IsModified();
+}
+
 // The text as it stands is committed.
 void ibValueTextCtrl::OnTextEnter(const wxString& text)
 {

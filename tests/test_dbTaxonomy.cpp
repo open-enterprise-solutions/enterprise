@@ -1,41 +1,39 @@
 // =============================================================================
 // OES Enterprise — DB exception taxonomy regression tests
 //
-// Pins the per-driver ClassifyDatabaseError(nativeCode) -> Kind mapping so a
-// driver bump (FB OOTB, libpq, etc.) doesn't silently flip a constraint
-// violation into Kind::Unknown — at which point IsRetryable() == false stops
-// holding and the apply-flow / form save / debugger paths lose their
-// recoverability signal.
+// Pins the per-driver native code -> Kind tables (the static ClassifyDatabaseError
+// of the SQLite and Firebird layers, ClassifySqlState of PostgreSQL) so a driver bump
+// doesn't silently flip a constraint violation into Kind::Unknown — at which
+// point IsRetryable() == false stops holding and the apply-flow / form save /
+// lock manager lose their recoverability signal.
 //
 // Two layers:
-//   1. Unit — call each driver's ClassifyDatabaseError(code) directly with
-//      well-known native codes (no DB needed). Fast, deterministic, runs in
-//      every CI build.
-//   2. Integration — open an in-memory SQLite, fire a duplicate INSERT,
-//      verify the caught ibDatabaseLayerException carries Kind::Constraint
-//      and IsRetryable() == false. Catches drift between driver-internal
-//      classification and the actual end-to-end throw path
-//      (ThrowDatabaseException -> Throw -> caller).
+//   1. Unit — call each driver's table directly with well-known native codes
+//      (no DB needed). Fast, deterministic, runs in every CI build.
+//   2. Integration — a duplicate INSERT on SQLite, through the layer AND
+//      through a prepared statement (the road ibDatabaseQueryBuilder and the
+//      lock manager take): the caught exception carries Kind::Constraint.
+//      The statement road threw Unknown until the Kind was recorded with the
+//      code where the driver reads it (#247).
 // =============================================================================
 
 #include <gtest/gtest.h>
 
 #include "backend/backend_exception.h"
+#include "backend/appData.h"
+#include "backend/databaseLayer/connectionPool.h"
 #include "backend/databaseLayer/databaseLayerException.h"
+#include "backend/databaseLayer/databaseQueryBuilder.h"
 #include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
+
+#include <wx/init.h>
 #include "backend/databaseLayer/databaseResultSet.h"
 
-#ifdef _USE_FIREBIRD_DATABASE_LAYER
+#ifdef OES_USE_FIREBIRD
 #include "backend/databaseLayer/firebird/firebirdDatabaseLayer.h"
 #endif
-#ifdef _USE_POSTGRES_DATABASE_LAYER
+#ifdef OES_USE_POSTGRESQL
 #include "backend/databaseLayer/postgres/postgresDatabaseLayer.h"
-#endif
-#ifdef _USE_MYSQL_DATABASE_LAYER
-#include "backend/databaseLayer/mysql/mysqlDatabaseLayer.h"
-#endif
-#ifdef _USE_ODBC_DATABASE_LAYER
-#include "backend/databaseLayer/odbc/odbcDatabaseLayer.h"
 #endif
 
 using Kind = ibBackendDatabaseException::Kind;
@@ -45,25 +43,23 @@ using Kind = ibBackendDatabaseException::Kind;
 // ---------------------------------------------------------------------------
 
 TEST(DbTaxonomy_SQLite, ConstraintViolation_19) {
-	ibDatabaseLayerSQLite layer;
-	EXPECT_EQ(layer.ClassifyDatabaseError(19), Kind::Constraint)
+	EXPECT_EQ(ibDatabaseLayerSQLite::ClassifyDatabaseError(19), Kind::Constraint)
 		<< "SQLITE_CONSTRAINT (19) must classify as Constraint — IsRetryable=false";
+	// An extended code is the same constraint: SQLITE_CONSTRAINT_PRIMARYKEY.
+	EXPECT_EQ(ibDatabaseLayerSQLite::ClassifyDatabaseError(19 | (6 << 8)), Kind::Constraint);
 }
 
 TEST(DbTaxonomy_SQLite, BusyOrLocked_5_6) {
 	// SQLITE_BUSY / SQLITE_LOCKED — caller can retry after a backoff.
-	ibDatabaseLayerSQLite layer;
-	EXPECT_EQ(layer.ClassifyDatabaseError(5), Kind::Timeout);
-	EXPECT_EQ(layer.ClassifyDatabaseError(6), Kind::Timeout);
+	EXPECT_EQ(ibDatabaseLayerSQLite::ClassifyDatabaseError(5), Kind::Timeout);
+	EXPECT_EQ(ibDatabaseLayerSQLite::ClassifyDatabaseError(6), Kind::Timeout);
 }
 
 TEST(DbTaxonomy_SQLite, GenericError_NotConnectionLost) {
 	// Code 1 (SQLITE_ERROR) is the catch-all for SQL syntax / missing
 	// table / etc. Critical NOT to classify it as ConnectionLost —
 	// recovery code that triggers reconnect on that would loop.
-	ibDatabaseLayerSQLite layer;
-	const Kind k = layer.ClassifyDatabaseError(1);
-	EXPECT_NE(k, Kind::ConnectionLost);
+	EXPECT_NE(ibDatabaseLayerSQLite::ClassifyDatabaseError(1), Kind::ConnectionLost);
 }
 
 // ---------------------------------------------------------------------------
@@ -76,12 +72,25 @@ TEST(DbTaxonomy_SQLite, GenericError_NotConnectionLost) {
 // this, code that branches on Kind (apply-flow, form save) silently
 // misroutes the recovery path.
 
-#ifdef _USE_FIREBIRD_DATABASE_LAYER
+#ifdef OES_USE_FIREBIRD
 TEST(DbTaxonomy_Firebird, UniqueKeyViolationIsConstraint) {
-	ibDatabaseLayerFirebird layer;
 	// isc_unique_key_violation = 335544665 — primary "duplicate key" gds
 	// code FB raises for the canonical PK / unique-index conflict.
-	EXPECT_EQ(layer.ClassifyDatabaseError(335544665), Kind::Constraint);
+	EXPECT_EQ(ibDatabaseLayerFirebird::ClassifyDatabaseError(335544665), Kind::Constraint);
+	EXPECT_EQ(ibDatabaseLayerFirebird::ClassifyDatabaseError(335544349), Kind::Constraint);   // isc_no_dup
+}
+
+TEST(DbTaxonomy_Firebird, AWaiterOnAChangedRowIsALockWait) {
+	EXPECT_EQ(ibDatabaseLayerFirebird::ClassifyDatabaseError(335544451), Kind::Deadlock);   // isc_update_conflict
+	EXPECT_EQ(ibDatabaseLayerFirebird::ClassifyDatabaseError(335544336), Kind::Deadlock);   // isc_deadlock
+}
+#endif
+
+#ifdef OES_USE_POSTGRESQL
+TEST(DbTaxonomy_Postgres, SqlStateClasses) {
+	EXPECT_EQ(ibDatabaseLayerPostgres::ClassifySqlState(wxT("23505")), Kind::Constraint);
+	EXPECT_EQ(ibDatabaseLayerPostgres::ClassifySqlState(wxT("40P01")), Kind::Deadlock);
+	EXPECT_EQ(ibDatabaseLayerPostgres::ClassifySqlState(wxT("55P03")), Kind::Timeout);
 }
 #endif
 
@@ -216,4 +225,36 @@ TEST(DbTaxonomy_Integration_SQLite, DuplicatePkRaisesConstraint) {
 		<< static_cast<int>(kind);
 	EXPECT_FALSE(retryable)
 		<< "Constraint violations are never retryable";
+}
+
+// The same duplicate through a prepared statement — the road ibDatabaseQueryBuilder and the lock
+// manager take. It throws from the statement's own reporter, which used to answer Unknown.
+TEST(DbTaxonomy_Integration_SQLite, DuplicatePkThroughAStatementRaisesConstraint) {
+	wxInitializer wx;
+	if (!wx.IsOk())
+		GTEST_SKIP() << "wxBase init failed";
+	if (!ibApplicationInstance::CreateAppDataEnv(ibRunMode::eFILE_MODE))
+		GTEST_SKIP() << "appData env unavailable headless";
+	auto db = std::make_shared<ibDatabaseLayerSQLite>();
+	ASSERT_TRUE(db->Open(wxT(":memory:")));
+	ibApplicationInstance::GetConnectionPool()->Init(db, /*maxSize=*/1, /*minIdle=*/0);
+	db->RunQuery(wxT("CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT)"));
+
+	const auto insert = []() {
+		return ibDatabaseQueryBuilder().Execute(ibInsert(wxT("t"), {
+			{ wxT("id"),   ibConst(ibValue(1)) },
+			{ wxT("name"), ibConst(ibValue(wxString(wxT("first")))) },
+		}));
+	};
+	ASSERT_EQ(insert(), 1);
+
+	Kind kind = Kind::Unknown;
+	try {
+		insert();
+	}
+	catch (const ibDatabaseLayerException& e) {
+		kind = e.GetKind();
+	}
+	ibApplicationInstance::DestroyAppDataEnv();
+	EXPECT_EQ(kind, Kind::Constraint) << "got Kind=" << static_cast<int>(kind);
 }

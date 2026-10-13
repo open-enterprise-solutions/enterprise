@@ -2,7 +2,7 @@
 #define __CALC_SCHEDULE_VARIANT_H__
 
 #include "backend/propertyManager/propertyObject.h"
-#include "backend/calcScheduleDescription.h"
+#include "core/description/calcScheduleDescription.h"
 
 // The variant of a calculation register's schedule — it holds an ibCalcScheduleDescription, as
 // ibVariantDataAttribute holds an ibTypeDescription.

@@ -10,7 +10,7 @@
 #include "backend/propertyManager/property/variant/variantTranslate.h"   // …and the cell it holds them in
 #include "backend/propertyManager/property/propertyType.h"     // ibPropertyType — the one with a verb of its own
 #include "backend/propertyManager/property/propertyPicture.h"  // ibPropertyPicture — a picture reads in its own shape
-#include "backend/pictureDescription.h"                         // ibPictureDescriptionMemory — that shape
+#include "core/description/pictureDescription.h"                // ibPictureDescriptionMemory — that shape
 #include "backend/propertyManager/property/propertyChoiceLink.h"         // a choice reads in its own shape too
 #include "backend/propertyManager/property/variant/variantChoiceLink.h"  // …named as the inspector names it
 #include "backend/propertyManager/property/variant/variantMetaDesc.h"    // a set of objects, placed whole
@@ -1186,8 +1186,7 @@ void ibMcpSayProperties(const ibPropertyObject* object, ibDataNode& node,
 			// a metaobject answers it, so there is nothing here to recognise first. A reference
 			// type's name is resolved against it.
 			ibDataValue described;
-			if (ibTypeDescriptionMemory::WriteNode(described, typed->GetValueAsTypeDesc(),
-					object->GetMetaData()))
+			if (ibTypeDescriptionMemory::WriteNode(described, typed->GetValueAsTypeDesc()))
 				entry->AddField(wxT("value"), described);
 			else
 				// ⚠ AND A TYPE THAT CANNOT SAY ITSELF SAYS THAT, rather than coming back as an

@@ -10,9 +10,9 @@ wxIcon ibValueMetaObjectForm::GetIcon() const
 
 wxIcon ibValueMetaObjectForm::GetIconGroup()
 {
-	static const ibServerPicture picture(s_form_16_png, wxSize(16, 16));
+	static const ibPicture picture = ibBackendPicture::FromImage(ibBackendPicture::GetImageFromBase64(s_form_16_png, wxSize(16, 16)));
 
-	return picture.ToIcon();
+	return ibBackendPicture::ToIcon(picture);
 }
 
 wxIcon ibValueMetaObjectCommonForm::GetIcon() const
@@ -22,7 +22,7 @@ wxIcon ibValueMetaObjectCommonForm::GetIcon() const
 
 wxIcon ibValueMetaObjectCommonForm::GetIconGroup()
 {
-	static const ibServerPicture picture(s_form_16_png, wxSize(16, 16));
+	static const ibPicture picture = ibBackendPicture::FromImage(ibBackendPicture::GetImageFromBase64(s_form_16_png, wxSize(16, 16)));
 
-	return picture.ToIcon();
+	return ibBackendPicture::ToIcon(picture);
 }

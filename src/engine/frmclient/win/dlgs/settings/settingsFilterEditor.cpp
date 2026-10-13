@@ -360,7 +360,7 @@ private:
 	// a literal is itself. One shape out, so the cell never asks which it got.
 	static ibValue OperandValue(const ibFilterOperandDescription& side) {
 		if (!side.IsField())
-			return side.m_value;
+			return ibStoredValue(side.m_value, nullptr);
 		ibValueCompositionField* field = new ibValueCompositionField(side.m_path, side.m_presentation);
 		field->SetTypeInfo(side.m_leafId, side.m_type);
 		return ibValue(field);
@@ -375,7 +375,7 @@ private:
 			side.m_presentation = field->GetPresentation();
 			side.m_leafId       = field->GetLeafId();
 			side.m_type         = field->GetTypeDescription();
-			side.m_value        = ibValue();
+			side.m_value        = ibDataNode();
 			return;
 		}
 		side = ibFilterOperandDescription();
@@ -393,7 +393,7 @@ private:
 		// it is stored now the way it has always been stored on disk.
 		// On the client a reference IS its identity already — the node the server wrote it as (ibValue::FromNode); there is
 		// no handle to outlive.
-		side.m_value = value;
+		ibStoreValue(side.m_value, value);
 	}
 
 	ibValue SideValue(const ibFilterNodeDescription* item) const {
@@ -425,7 +425,7 @@ private:
 			// for a number — so the row is complete the moment the field is picked.
 			if (before.GetFirstClsid() != after.GetFirstClsid()) {
 				item->m_right = ibFilterOperandDescription();
-				item->m_right.m_value = ibValueTypeDescription::AdjustValue(after, m_editor->GetMetaData());
+				ibStoreValue(item->m_right.m_value, ibValueTypeDescription::AdjustValue(after, m_editor->GetMetaData()));
 			}
 			NotifyRowChanged();
 			return;
@@ -953,7 +953,7 @@ void ibFilterEditor::AddFilterForField(const wxTreeItemId& item)
 		return;
 
 	ibFilterNodeDescription& added = ibFilterDescription::Append(*target,
-		field->GetPath(), ibComparisonKind_Equal, ibValue(), true);
+		field->GetPath(), ibComparisonKind_Equal, ibDataNode(), true);
 	added.m_left.m_presentation = field->GetPresentation();
 	added.m_left.m_leafId       = field->GetLeafId();
 	added.m_left.m_type         = field->GetTypeDescription();
@@ -961,7 +961,7 @@ void ibFilterEditor::AddFilterForField(const wxTreeItemId& item)
 	// with what that type calls empty (False for a Boolean, an empty reference of
 	// the right kind) rather than with nothing. Same rule as re-picking the field
 	// in the Left cell, so both roads leave the row in the same state.
-	added.m_right.m_value = ibValueTypeDescription::AdjustValue(added.m_left.m_type, GetMetaData());
+	ibStoreValue(added.m_right.m_value, ibValueTypeDescription::AdjustValue(added.m_left.m_type, GetMetaData()));
 	RefreshFilterTree(ibAppendedPath(m_model->GetTargetPath(sel), *target));
 }
 
@@ -978,7 +978,7 @@ void ibFilterEditor::OnFilterAdd(wxCommandEvent&)
 	std::vector<ibFilterNodeDescription>* target = m_model->GetTargetChildren(sel);
 	if (target == nullptr)
 		return;
-	ibFilterDescription::Append(*target, wxEmptyString, ibComparisonKind_Equal, ibValue(), true);
+	ibFilterDescription::Append(*target, wxEmptyString, ibComparisonKind_Equal, ibDataNode(), true);
 	RefreshFilterTree(ibAppendedPath(m_model->GetTargetPath(sel), *target));
 }
 

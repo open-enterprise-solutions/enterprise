@@ -1,10 +1,10 @@
 #ifndef __CHOICE_LINK_RESOLVER_H__
 #define __CHOICE_LINK_RESOLVER_H__
 
-#include "backend/choiceLinkDescription.h"
+#include "core/description/choiceLinkDescription.h"
 #include "backend/createRequest.h"   // ibChoiceCondition — what this produces
 #include "backend/tabularDataObject.h"              // the TABLE shape of a source, and its row hop
-#include "backend/tabularModelView.h"               // ibDataViewItem COMPLETE — the holder below keeps one BY VALUE,
+#include "core/tabular/tabularModelView.h"          // ibDataViewItem COMPLETE — the holder below keeps one BY VALUE,
                                                     // and tabularDataObject.h only forward-declares it. It did compile
                                                     // without this, through some other header's chain; a by-value
                                                     // member resting on include order is what the note at the top of

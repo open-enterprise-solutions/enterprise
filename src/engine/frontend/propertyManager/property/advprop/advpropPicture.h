@@ -4,7 +4,7 @@
 #include <wx/propgrid/propgrid.h>
 
 #include "backend/backend_core.h"
-#include "backend/pictureDescription.h"
+#include "core/description/pictureDescription.h"
 
 // -----------------------------------------------------------------------
 // ibPGExternalImageProperty

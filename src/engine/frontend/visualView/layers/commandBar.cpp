@@ -7,7 +7,7 @@
 #include "backend/metaCollection/metaCommandObject.h" // ibValueMetaObjectCommand::GetModifiesData (view-only greying)
 #include "backend/metaData.h"                   // ibMetaData::FindAnyObjectByFilter
 #include "frontend/visualView/ctrl/typeControl.h" // ibTypeControlFactory::GetSourceDesc — find the control a table-command's source hop points at
-#include "backend/sourceDescription.h"          // ibSourceHop — the bound control's source path (source-hop match)
+#include "core/description/sourceDescription.h"          // ibSourceHop — the bound control's source path (source-hop match)
 #include "backend/metaCollection/metaObject.h"  // g_metaCommandCLSID — general (root) commands
 #include "backend/metaCollection/metaSectionObject.h" // ibValueMetaObjectSection — walk sections like the menu builder
 #include "backend/metaCollection/metaCommandGroupObject.h" // the platform's groups + the declared ones, in order
@@ -15,11 +15,11 @@
 #include "frontend/visualView/ctrl/tableBox.h"  // g_controlTableBoxCLSID — the form's tables (their own commands)
 #include "backend/backend_picture.h"            // ibBackendPicture::CreatePicture — an action-command's own picture
 #include "backend/srcDataObject.h"              // ibSourceDataObject / ibSourceExplorer + IsReference — the form's data types (parameterized-command filter)
-#include "backend/typeDescription.h"            // ibTypeDescription::GetClsidList — a command's parameter type
+#include "core/description/typeDescription.h"            // ibTypeDescription::GetClsidList — a command's parameter type
 #include "backend/tabularModel.h"               // ibValueModel::GetModelComposer — the setting a quick filter edits
 #include "backend/composition/dataComposer.h"   // the two settings sections + GetCurrentFilterDesc
 #include "backend/functionalOption/functionalOptionGate.h"   // ibFunctionalOptionGate — commands of a part this base does not use
-#include "backend/compositionDescription.h"     // ibFilterNodeDescription / ibFilterDisplayMode_QuickAccess
+#include "backend/backend_composition.h"        // ibFilterNodeDescription / ibFilterDisplayMode_QuickAccess + ibStoredValue
 #include <set>                                  // std::set — the form's reference-type set
 #ifndef OES_USE_WEB
 #include <wx/menu.h>                           // wxMenu (designer layer menu)
@@ -319,7 +319,7 @@ namespace {
 // HOW ONE LINE READS ON THE BAR — its own wording when a person gave it one, else «field: value».
 // The same rule the settings window and the report heading print a condition by, so one condition
 // is not worded three ways depending on where it is shown.
-wxString ibQuickFilterCaption(const ibFilterNodeDescription& node)
+wxString ibQuickFilterCaption(const ibFilterNodeDescription& node, const ibMetaData* metaData)
 {
 	if (!node.m_presentation.IsEmpty())
 		return node.m_presentation;
@@ -327,7 +327,7 @@ wxString ibQuickFilterCaption(const ibFilterNodeDescription& node)
 		? node.m_left.m_path : node.m_left.m_presentation;
 	const wxString value = node.m_right.IsField()
 		? (node.m_right.m_presentation.IsEmpty() ? node.m_right.m_path : node.m_right.m_presentation)
-		: node.m_right.m_value.GetString().ToWxString();
+		: ibStoredValue(node.m_right.m_value, metaData).GetString().ToWxString();
 	// AN UNSET VALUE STILL READS AS THE FIELD IT NARROWS — a bare field name says "click me to
 	// narrow by this", which is what an unfilled quick filter is for.
 	return value.IsEmpty() ? field : field + wxT(": ") + value;
@@ -373,7 +373,7 @@ void ibValueCommandBar::BuildQuickFilters()
 		 || node.m_display != ibFilterDisplayMode_QuickAccess
 		 || !composer.IsAvailable(node.m_left.m_path) || !composer.IsAvailable(node.m_right.m_path))
 			continue;
-		ibCommandEntry entry(id++, ibQuickFilterCaption(node), ibPictureDescription(),
+		ibCommandEntry entry(id++, ibQuickFilterCaption(node, m_owner->GetMetaData()), ibPictureDescription(),
 			ibRepresentation_Text);
 		entry.kind = ibCommandEntryKind_QuickFilter;
 		entry.filterLine = i;
@@ -621,19 +621,19 @@ public:
 	ibQuickFilterValueFrame(ibFilterNodeDescription& node, ibValueForm* form, const ibMetaData* metaData)
 		: m_node(node), m_form(form), m_metaData(metaData) {}
 
-	virtual bool GetControlValue(ibValue& value) const override { value = m_node.m_right.m_value; return true; }
+	virtual bool GetControlValue(ibValue& value) const override { value = ibStoredValue(m_node.m_right.m_value, m_metaData); return true; }
 	virtual bool SetControlValue(const ibValue& value = ibValue()) override {
-		m_node.m_right.m_value = value; m_node.m_right.m_path.Clear(); return true;
+		ibStoreValue(m_node.m_right.m_value, value); m_node.m_right.m_path.Clear(); return true;
 	}
 	virtual ibValueForm* GetOwnerForm() const override { return m_form; }
-	virtual ibClassID GetClassType() const override { return m_node.m_right.m_value.GetClassType(); }
+	virtual ibClassID GetClassType() const override { return ibStoredValue(m_node.m_right.m_value, m_metaData).GetClassType(); }
 	// ⚠ THE METADATA IS HANDED IN, AND THERE IS NO FALLBACK. Several configurations are open at once
 	// (the base, a compared one, one from a file), so reaching for the "active" one would quietly
 	// answer out of somebody else's — the filter cell still does exactly that. No metadata means no
 	// ctor to ask, which is a truthful "no quick choice" rather than a guess.
 	virtual bool HasQuickChoice() const override {
 		const ibCtorAbstractType* ctor = m_metaData != nullptr
-			? m_metaData->GetAvailableCtor(m_node.m_right.m_value.GetClassType()) : nullptr;
+			? m_metaData->GetAvailableCtor(GetClassType()) : nullptr;
 		return ::HasQuickChoice(ctor);
 	}
 	virtual void ChoiceProcessing(ibValue& selected) override { SetControlValue(selected); }
@@ -676,14 +676,15 @@ bool ibValueCommandBar::ExecuteQuickFilter(const ibActionID& id, ibValueForm* fo
 	if (line >= settings.m_filter.m_nodes.size())
 		return true;
 
-	ibQuickFilterValueFrame holder(settings.m_filter.m_nodes[line], form,
-		form != nullptr ? form->GetMetaData() : nullptr);
+	const ibMetaData* metaData = form != nullptr ? form->GetMetaData() : nullptr;
+	ibQuickFilterValueFrame holder(settings.m_filter.m_nodes[line], form, metaData);
 	if (!ibTypeControlFactory::ChooseValue(&holder))
 		return true;   // the person closed the picker — nothing was chosen, nothing changes
 
 	// A LINE THAT NOW HAS A VALUE IS ON. Picking a value and having to tick the line as well is the
 	// second act nobody expects; clearing it is what turns the line off again.
-	settings.m_filter.m_nodes[line].m_use = !settings.m_filter.m_nodes[line].m_right.m_value.IsEmpty();
+	settings.m_filter.m_nodes[line].m_use =
+		!ibStoredValue(settings.m_filter.m_nodes[line].m_right.m_value, metaData).IsEmpty();
 	model->GetModelComposer().SetUserSettingsDesc(settings);
 	model->RefetchAll();
 	// …AND THE BAR RE-READS ITSELF. The tool's caption IS the line's value, so a pick that refetched

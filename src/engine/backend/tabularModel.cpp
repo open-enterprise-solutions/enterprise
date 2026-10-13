@@ -13,7 +13,9 @@
 #include "backend/session/session.h"            // ibSession — the caller a rented run borrows from
 #include "backend/job/jobManager.h"             // ibJobManager / ibJobTenancy — the rented run a portion reads on
 #include "backend/backend_exception.h"          // ibBackendException — a refusal to rent falls back to inline
-#include "backend/tabularModelView.h"           // ibDataViewModel / ibDataViewItem — the base view types
+#include "backend/appHost.h"                    // ibApplicationInstanceScope — a plain-thread read works for the asker's base
+#include "backend/system/value/valueType.h"     // ibValueTypeDescription (a column's Types), ibBackendTypeConfigFactory (its format)
+#include "core/tabular/tabularModelView.h"      // ibDataViewModel / ibDataViewItem — the base view types
 #include "backend/composition/dataComposer.h"  // ibDataComposer — IsGroupedModel reads GroupCount() off the composer
 #include "backend/uniqueKey.h"                  // ibUniqueKey — GetItemKey return (base default = no key)
 
@@ -187,6 +189,18 @@ void ibValueModel::CancelFetch()
 //  consumers that needed a {col-id, asc} pair — the keyset anchor + the frontend header arrows — now read
 //  m_composer.GetSortAt + GetColumnIDByName inline, each at the point of use. Max: "ibSortModel is either part
 //  of L5, or removed entirely" — L5 is name-based, so it was removed.)
+
+void ibDataViewModelProvider::SubmitFetchAsync(std::function<void()> work)
+{
+	if (!work)
+		return;
+
+	ibApplicationInstance* const applicationInstance = ibApplicationInstance::Get(false);
+	ibDataViewModel::SubmitFetchAsync([work = std::move(work), applicationInstance]() {
+		ibApplicationInstanceScope working(applicationInstance);
+		work();
+	});
+}
 
 void ibValueModel::SubmitFetchAsync(std::function<void()> work)
 {
@@ -387,7 +401,7 @@ bool ibValueModel::GetCompositionAttrByRow(const ibDataViewItem& row, unsigned i
 	};
 	attr = ibCompositionAttr();
 	ibCompositionAttr own;
-	const bool held = ibCompositionSayRules(rules, valueOf, composer.SubtreeOf(), attr,
+	const bool held = ibCompositionSayRules(rules, composer.GetMetaData(), valueOf, composer.SubtreeOf(), attr,
 		[this, col, &own](const wxString& field, const ibCompositionAttr& said) {
 			if (GetColumnIDByName(field) == static_cast<ibMetaID>(col))
 				own.Say(said);

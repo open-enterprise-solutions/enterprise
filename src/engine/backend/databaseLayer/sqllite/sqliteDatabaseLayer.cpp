@@ -283,7 +283,8 @@ bool ibDatabaseLayerSQLite::Open(const wxString& strDatabase)
 
 	if (nReturn != SQLITE_OK)
 	{
-		SetErrorCode(ibDatabaseLayerSQLite::TranslateErrorCode(sqlite3_errcode((sqlite3*)m_pDatabase)));
+		SetErrorCode(ibDatabaseLayerSQLite::TranslateErrorCode(sqlite3_errcode((sqlite3*)m_pDatabase)),
+			ClassifyDatabaseError(sqlite3_errcode((sqlite3*)m_pDatabase)));
 		SetErrorMessage(ConvertFromUnicodeStream(sqlite3_errmsg((sqlite3*)m_pDatabase)));
 		ThrowDatabaseException();
 		return false;
@@ -310,7 +311,8 @@ bool ibDatabaseLayerSQLite::Close()
 		int nReturn = sqlite3_close((sqlite3*)m_pDatabase);
 		if (nReturn != SQLITE_OK)
 		{
-			SetErrorCode(ibDatabaseLayerSQLite::TranslateErrorCode(sqlite3_errcode((sqlite3*)m_pDatabase)));
+			SetErrorCode(ibDatabaseLayerSQLite::TranslateErrorCode(sqlite3_errcode((sqlite3*)m_pDatabase)),
+			ClassifyDatabaseError(sqlite3_errcode((sqlite3*)m_pDatabase)));
 			SetErrorMessage(ConvertFromUnicodeStream(sqlite3_errmsg((sqlite3*)m_pDatabase)));
 			ThrowDatabaseException();
 			return false;
@@ -395,7 +397,8 @@ int ibDatabaseLayerSQLite::DoRunQuery(const wxString& strQuery, bool bParseQuery
 
 		if (nReturn != SQLITE_OK)
 		{
-			SetErrorCode(ibDatabaseLayerSQLite::TranslateErrorCode(sqlite3_errcode((sqlite3*)m_pDatabase)));
+			SetErrorCode(ibDatabaseLayerSQLite::TranslateErrorCode(sqlite3_errcode((sqlite3*)m_pDatabase)),
+			ClassifyDatabaseError(sqlite3_errcode((sqlite3*)m_pDatabase)));
 			SetErrorMessage(strErrorMessage);
 			ThrowDatabaseException();
 			return DATABASE_LAYER_QUERY_RESULT_ERROR;
@@ -423,7 +426,8 @@ ibDatabaseResultSet* ibDatabaseLayerSQLite::DoRunQueryWithResults(const wxString
 
 			if (szErrorMessage != nullptr)
 			{
-				SetErrorCode(ibDatabaseLayerSQLite::TranslateErrorCode(sqlite3_errcode((sqlite3*)m_pDatabase)));
+				SetErrorCode(ibDatabaseLayerSQLite::TranslateErrorCode(sqlite3_errcode((sqlite3*)m_pDatabase)),
+			ClassifyDatabaseError(sqlite3_errcode((sqlite3*)m_pDatabase)));
 				strErrorMessage = ConvertFromUnicodeStream(szErrorMessage);
 				sqlite3_free(szErrorMessage);
 				return nullptr;
@@ -431,7 +435,8 @@ ibDatabaseResultSet* ibDatabaseLayerSQLite::DoRunQueryWithResults(const wxString
 
 			if (nReturn != SQLITE_OK)
 			{
-				SetErrorCode(ibDatabaseLayerSQLite::TranslateErrorCode(sqlite3_errcode((sqlite3*)m_pDatabase)));
+				SetErrorCode(ibDatabaseLayerSQLite::TranslateErrorCode(sqlite3_errcode((sqlite3*)m_pDatabase)),
+			ClassifyDatabaseError(sqlite3_errcode((sqlite3*)m_pDatabase)));
 				SetErrorMessage(strErrorMessage);
 				ThrowDatabaseException();
 				return nullptr;
@@ -496,7 +501,7 @@ ibPreparedStatement* ibDatabaseLayerSQLite::DoPrepareStatement(const wxString& s
 
 				if (nReturn != SQLITE_OK)
 				{
-					SetErrorCode(ibDatabaseLayerSQLite::TranslateErrorCode(nReturn));
+					SetErrorCode(ibDatabaseLayerSQLite::TranslateErrorCode(nReturn), ClassifyDatabaseError(nReturn));
 					SetErrorMessage(ConvertFromUnicodeStream(sqlite3_errmsg((sqlite3*)m_pDatabase)));
 					wxDELETE(pReturnStatement);
 					ThrowDatabaseException();
@@ -733,6 +738,27 @@ wxArrayString ibDatabaseLayerSQLite::GetColumns(const wxString& table)
 	return returnArray;
 }
 
+ibBackendDatabaseException::Kind ibDatabaseLayerSQLite::ClassifyDatabaseError(int code)
+{
+	// Values are SQLite's stable ABI (sqlite3.h SQLITE_*), so the integer literals are safe.
+	using Kind = ibBackendDatabaseException::Kind;
+	switch (code & 0xFF) {
+		case 5:  // SQLITE_BUSY  — database file locked by another process / writer
+		case 6:  // SQLITE_LOCKED — table locked by a concurrent connection
+			return Kind::Timeout;
+
+		case 19: // SQLITE_CONSTRAINT
+			return Kind::Constraint;
+
+		case 1:  // SQLITE_ERROR  — catch-all for SQL errors / missing table
+		case 21: // SQLITE_MISUSE — library used incorrectly (usually a bad prepared statement)
+			return Kind::Syntax;
+
+		default:
+			return Kind::Unknown;
+	}
+}
+
 int ibDatabaseLayerSQLite::TranslateErrorCode(int nCode)
 {
 	// An interrupted statement (Cancel -> sqlite3_interrupt) is the cancel, recorded as the platform's.
@@ -819,26 +845,4 @@ int ibDatabaseLayerSQLite::TranslateErrorCode(int nCode)
 	return nReturn;
 }
 
-ibBackendDatabaseException::Kind ibDatabaseLayerSQLite::ClassifyDatabaseError(int nativeCode) const
-{
-	// SQLite returns a single-int result code via sqlite3_errcode().
-	// The values are part of SQLite's stable ABI (sqlite3.h SQLITE_*
-	// macros) so the integer literals are safe.
-	using Kind = ibBackendDatabaseException::Kind;
-	switch (nativeCode) {
-		case 5:  // SQLITE_BUSY  — database file locked by another process / writer
-		case 6:  // SQLITE_LOCKED — table locked by a concurrent connection
-			return Kind::Timeout;
-
-		case 19: // SQLITE_CONSTRAINT
-			return Kind::Constraint;
-
-		case 1:  // SQLITE_ERROR  — catch-all for SQL errors / missing table
-		case 21: // SQLITE_MISUSE — library used incorrectly (usually a bad prepared statement)
-			return Kind::Syntax;
-
-		default:
-			return Kind::Unknown;
-	}
-}
 

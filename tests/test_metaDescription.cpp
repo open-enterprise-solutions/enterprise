@@ -1,7 +1,7 @@
 // =============================================================================
 // OES Enterprise — ibMetaDescription tests
 //
-// ibMetaDescription (backend/typeDescription.h) is a list of metaIDs — the
+// ibMetaDescription (core/description/typeDescription.h) is a list of metaIDs — the
 // metadata-side "allowed types" for the binding descriptions (Owner, Generation,
 // RegisterRecord, ChartOfAccounts, ChartOfCharacteristicTypes). metaID, not guid,
 // because it lives INSIDE the metadata tree (a guid->id resolve at load would hit
@@ -10,7 +10,7 @@
 
 #include <gtest/gtest.h>
 #include <vector>
-#include "backend/typeDescription.h"   // ibMetaDescription
+#include "core/description/typeDescription.h"   // ibMetaDescription
 
 TEST(MetaDescription, DefaultIsNotOk) {
     ibMetaDescription md;

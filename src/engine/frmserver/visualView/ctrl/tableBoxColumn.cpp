@@ -233,9 +233,9 @@ void ibValueModelTableBoxColumn::UpdateCell(const ibDataViewItem& item, ibDataNo
 	ibDataViewItemAttr attr;
 	if (model->GetAttr(item, modelColumn, attr) && !attr.IsDefault()) {
 		if (attr.HasColour())
-			cell.SetValue(wxT("TextColour"), attr.GetColour().GetAsString(wxC2S_HTML_SYNTAX));
+			cell.SetValue(wxT("TextColour"), attr.GetColour().ToString());
 		if (attr.HasBackgroundColour())
-			cell.SetValue(wxT("BackgroundColour"), attr.GetBackgroundColour().GetAsString(wxC2S_HTML_SYNTAX));
+			cell.SetValue(wxT("BackgroundColour"), attr.GetBackgroundColour().ToString());
 		if (attr.GetBold())
 			cell.SetValue(wxT("Bold"), true);
 		if (attr.GetItalic())

@@ -1,7 +1,7 @@
 #ifndef __TYPE_SELECTOR_DIALOG_H__
 #define __TYPE_SELECTOR_DIALOG_H__
 
-#include "backend/typeDescription.h"
+#include "core/description/typeDescription.h"
 #include "backend/backend_type.h"   // ibSelectorDataType — which shape the picker renders
 
 // THE TYPE PICKER — one dialog, several callers.

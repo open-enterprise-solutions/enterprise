@@ -11,7 +11,7 @@
 #include "tabularModel.h"
 
 #include "backend/backend_exception.h"             // ibBackendException — the fetch's catch/restore-scope guard
-#include "backend/tabularModelView.h"              // s_constIgnoreParent / ibDataViewItem
+#include "core/tabular/tabularModelView.h"         // s_constIgnoreParent / ibDataViewItem
 #include "backend/composition/dataComposer.h"      // ibDataDBComposer — render → SQL
 #include "backend/composition/drivers/listFetchDriver.h"   // ibListFetchDriver — the universal composer-fetch sink
 #include "backend/query/dataQueryBuilder.h"        // ibReadPageRequest — the page envelope

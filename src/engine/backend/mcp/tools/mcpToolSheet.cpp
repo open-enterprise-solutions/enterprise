@@ -22,15 +22,15 @@
 #include "backend/mcp/mcpClipboard.h"   // the caller's own board — copy and paste share it
 
 #include "backend/backend_mainFrame.h"   // ibBackendDocFrame — the window a finished sheet is shown in
-#include "backend/backend_spreadsheet.h" // ibBackendSpreadsheetObject — a description IS a sheet
+#include "core/spreadsheet/spreadsheetObject.h" // ibSpreadsheetObject — a description IS a sheet
 #include "backend/session/session.h"     // ibSession::CurrentFrame — and whether there is one at all
 
 #include "backend/metaCollection/metaIntrospect.h"
 #include "backend/metaCollection/metaSpreadsheetObject.h"
 #include "backend/metadataConfiguration.h"
 #include "backend/sheetFormat/sheetFormat.h"   // a format registers itself and says what it reads
-#include "backend/spreadsheetDescription.h"
-#include "backend/typeconv.h"   // a colour from its name
+#include "core/description/spreadsheetDescription.h"
+#include <wx/colour.h>   // wxColour::Set — a colour from its name
 
 namespace {
 
@@ -918,7 +918,7 @@ public:
 
 		// 🛑⭐⭐ A PARAMETER CELL CARRIES THE NAME AS ITS VALUE — AND THIS WROTE IT SOMEWHERE ELSE.
 		//
-		// ibBackendSpreadsheetObject::Put substitutes with
+		// ibSpreadsheetObject::Put substitutes with
 		//     cell->m_value = ComputeStringValueFromParameters(cell->m_value, cell->m_fillSetType)
 		// so for a Parameter cell the WHOLE TEXT is the name looked up, and for a Template cell the
 		// names are the `[...]` inside that text. The name has to be in m_value or there is nothing
@@ -986,9 +986,9 @@ public:
 		// is what it is on paper — not a row of underscores, which would be text
 		// the module would have to print around.
 		if (ArgUnderline().Flag(params)) {
-			cell->m_borderAt[3].m_style = wxPENSTYLE_SOLID;
+			cell->m_borderAt[3].m_style = ibPenStyle_Solid;
 			cell->m_borderAt[3].m_width = 1;
-			cell->m_borderAt[3].m_colour = *wxBLACK;
+			cell->m_borderAt[3].m_colour = ibColour(0, 0, 0);
 		}
 
 		// ⚠ MERGING IS NOT SETTING A NUMBER. SetCellSize is the grid's own mechanism:
@@ -1011,19 +1011,19 @@ public:
 
 			// A cell that carries no font of its own is shown in the sheet's default
 			// one, so that is what "make it bold" starts from.
-			wxFont font = cell->m_font.IsOk() ? cell->m_font : ibDefaultSpreadsheetFont();
+			ibFont font = cell->m_font.IsOk() ? cell->m_font : ibDefaultSpreadsheetFont();
 
 			if (params.FindField(ArgItalic().Name()) != nullptr)
-				font.SetStyle(ArgItalic().Flag(params)
-					? wxFONTSTYLE_ITALIC : wxFONTSTYLE_NORMAL);
+				font.m_style = ArgItalic().Flag(params)
+					? ibFONTSTYLE_ITALIC : ibFONTSTYLE_NORMAL;
 
 			if (params.FindField(ArgBold().Name()) != nullptr)
-				font.SetWeight(ArgBold().Flag(params)
-					? wxFONTWEIGHT_BOLD : wxFONTWEIGHT_NORMAL);
+				font.m_weight = ArgBold().Flag(params)
+					? ibFONTWEIGHT_BOLD : ibFONTWEIGHT_NORMAL;
 
 			const s32 points = (s32)ArgFontSize().Whole(params);
 			if (points > 0)
-				font.SetPointSize(points);
+				font.m_pointSize = points;
 
 			cell->m_font = font;
 		}
@@ -1049,13 +1049,25 @@ public:
 		// ⚠ AN UNSET COLOUR IS UNSET — the cell says so deliberately, and the
 		// getters resolve it where there IS a screen to ask. So a colour is only
 		// written when one was given, never defaulted here.
+		// A name, `#rrggbb` or `R,G,B` — what the arguments promise, read the way the report's
+		// conditional appearance reads a colour; anything else is refused, not painted black.
+		const auto colourOf = [&refusal](const wxString& word, ibColour& colour) {
+			wxColour parsed;
+			if (!parsed.Set(word.Find(wxT(',')) != wxNOT_FOUND ? wxT("rgb(") + word + wxT(")") : word) || !parsed.IsOk()) {
+				refusal = wxString::Format(ibMcpText("'%s' is not a colour - write it `R,G,B` (`255,235,156`), `#FFEB9C` or a name."), word);
+				return false;
+			}
+			colour = ibColour(parsed.Red(), parsed.Green(), parsed.Blue());
+			return true;
+		};
+
 		const wxString background = ArgBackground().Text(params);
-		if (!background.IsEmpty())
-			cell->m_backgroundColour = typeConv::StringToColour(background);
+		if (!background.IsEmpty() && !colourOf(background, cell->m_backgroundColour))
+			return false;
 
 		const wxString colour = ArgColour().Text(params);
-		if (!colour.IsEmpty())
-			cell->m_textColour = typeConv::StringToColour(colour);
+		if (!colour.IsEmpty() && !colourOf(colour, cell->m_textColour))
+			return false;
 
 		const wxString border = ArgBorder().Text(params);
 		if (!border.IsEmpty()) {
@@ -1082,9 +1094,9 @@ public:
 			for (int side = 0; side < 4; ++side) {
 				if (!sides[side])
 					continue;
-				cell->m_borderAt[side].m_style = weight > 0 ? wxPENSTYLE_SOLID : wxPENSTYLE_TRANSPARENT;
+				cell->m_borderAt[side].m_style = weight > 0 ? ibPenStyle_Solid : ibPenStyle_Transparent;
 				cell->m_borderAt[side].m_width = weight;
-				cell->m_borderAt[side].m_colour = *wxBLACK;
+				cell->m_borderAt[side].m_colour = ibColour(0, 0, 0);
 			}
 		}
 
@@ -1951,7 +1963,7 @@ MCP_TOOL_REGISTER(ibMcpToolSheetPaste);
 // pretending otherwise would be the same lie as a read that agrees with its own write.
 //
 // ⭐ AND IT IS ASSEMBLED FROM WHAT IS ALREADY THERE, not built: a template's description IS a
-// sheet (ibBackendSpreadsheetObject takes one whole), and a sheet already knows how to be shown —
+// sheet (ibSpreadsheetObject takes one whole), and a sheet already knows how to be shown —
 // ShowSpreadsheetDocument makes a document view over it, the same road `Show()` takes at runtime
 // and the list output takes from a form. Three lines of connecting, no new mechanism.
 class ibMcpToolSheetShow : public ibMcpTool {
@@ -1998,8 +2010,8 @@ public:
 			return false;
 		}
 
-		wxObjectDataPtr<ibBackendSpreadsheetObject> shown(
-			new ibBackendSpreadsheetObject(sheet->GetSpreadsheetDesc()));
+		std::shared_ptr<ibSpreadsheetObject> shown(
+			std::make_shared<ibSpreadsheetObject>(sheet->GetSpreadsheetDesc()));
 
 		// ⚠ READ-ONLY, BECAUSE IT IS A COPY. Typing into it would change nothing and look as though
 		// it had - the window holds its own description, not the template's.
