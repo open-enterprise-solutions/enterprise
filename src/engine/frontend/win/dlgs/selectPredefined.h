@@ -21,7 +21,8 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "frontend/frontend.h"
-#include "backend/typeDescription.h"
+#include "backend/backend.h"   // BACKEND_API
+#include "core/description/typeDescription.h"
 
 class BACKEND_API ibMetaData;
 class FRONTEND_API ibControlFrame;

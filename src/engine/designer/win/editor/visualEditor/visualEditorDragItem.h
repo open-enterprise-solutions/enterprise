@@ -12,8 +12,8 @@
 // engine's ibXxxDescription / ibXxxDescriptionMemory pair pattern (each kind wraps its own description + serializer).
 
 #include "visualEditor.h"                // ibVisualEditorNotebook::ibVisualEditor (ApplyDrop target), ibValueFrame
-#include "backend/sourceDescription.h"   // ibSourceDescription / ibSourceDescriptionMemory
-#include "backend/commandDescription.h"  // ibCommandDescription / ibCommandDescriptionMemory
+#include "core/description/sourceDescription.h"   // ibSourceDescription / ibSourceDescriptionMemory
+#include "core/description/commandDescription.h"  //ibCommandDescription / ibCommandDescriptionMemory
 #include "core/fileSystem/fs.h"       // ibWriterMemory / ibReaderMemory (payload buffer)
 
 #include <wx/dnd.h>       // wxDropSource / wxCustomDataObject / wxDataFormat

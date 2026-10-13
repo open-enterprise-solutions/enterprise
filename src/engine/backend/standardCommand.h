@@ -1,33 +1,7 @@
 #ifndef __STANDARD_COMMAND_H__
 #define __STANDARD_COMMAND_H__
 
-struct ibStandardCommandDescription {
-
-	ibActionID m_lAction;
-	wxString m_strAction;
-
-	ibStandardCommandDescription(const ibActionID& lAction) : m_lAction(lAction), m_strAction() {}
-	ibStandardCommandDescription(const wxString& strAction) : m_lAction(wxNOT_FOUND), m_strAction(strAction) {}
-
-	wxString GetCustomAction() const { return m_strAction; }
-	ibActionID GetSystemAction() const { return m_lAction; }
-
-	bool operator == (const ibStandardCommandDescription& rhs) const {
-		if (m_lAction == wxNOT_FOUND)
-			return m_strAction == rhs.m_strAction;
-		return m_lAction == rhs.m_lAction;
-	}
-
-	friend class ibActionDescriptionMemory;
-};
-
-class ibActionDescriptionMemory {
-public:
-	// node form
-	static bool ReadNode(const class ibDataValue& value, ibStandardCommandDescription& actionDesc);
-	static bool WriteNode(class ibDataValue& value, const ibStandardCommandDescription& actionDesc);
-};
-
+#include "core/description/standardCommandDescription.h"   // ibStandardCommandDescription — the action a tool runs, the schema
 #include "backend_picture.h"
 
 struct ibCommandItem {
@@ -217,7 +191,7 @@ public:
 // collection uses — one unified record; a default item, m_actionId == wxNOT_FOUND, is a separator), (2) execute a
 // command by id against the CURRENT ROW + form. The FRONT (TableBox) merges the set into the real action it
 // gives the command bar and routes the execute here with the front-owned row — the model never pulls the widget.
-// A command's id may carry eStartEditingFlag (core/types.h): after the model runs it, the front opens the row's
+// A command's id may carry eStartEditingFlag (core/core.h): after the model runs it, the front opens the row's
 // inline editor — the engine's front and the thin client's alike read the bit there.
 
 class ibStandardCommandTabular {

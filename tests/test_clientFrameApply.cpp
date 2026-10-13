@@ -13,6 +13,7 @@
 #include "core/serialize/dataBuilder.h"
 
 #include "frmserver/client/clientPatch.h"
+#include "protocol/protocol.h"                // ibProtocolName, ibProtocolEvent — the words both halves write
 #include "protocol/protocolNode.h"
 
 namespace {
@@ -156,6 +157,45 @@ TEST(ClientFrameApply, ChildrenWithoutIdsComeWhole)
 	now.AddChild(0, 0).SetValue(wxT("Title"), wxString(wxT("Help")));
 
 	ExpectApplied(from, to);
+}
+
+// A control's subscription, written by the server into its State and read by the client from the frame it holds: it
+// comes with a patch, and a patch takes it away — the form modified, its fields no longer listen to Input.
+TEST(ClientFrameApply, SubscriptionComesAndGoes)
+{
+	const wxString subscribed = wxString::FromUTF8(ibProtocolName::Subscribed);
+	const auto subscribedOf = [](const ibProtocolNode& frame) {
+		std::vector<long long> events;
+		const ibProtocolNode state = frame.Children()[0].FindChild(ibProtocolName::State);
+		for (const ibProtocolNode& event : state.GetList(ibProtocolName::Subscribed))
+			events.push_back(event.AsInt());
+		return events;
+	};
+
+	ibDataNode bare;
+	Ballast(bare);
+	Control(bare, 1, wxT("Number"));
+
+	ibDataNode listening;
+	Ballast(listening);
+	const long long input = static_cast<int>(ibProtocolEvent::Input);
+	const long long row = static_cast<int>(ibProtocolEvent::Row);
+	Control(listening, 1, wxT("Number")).FindChild(wxT("State"))->AddField(subscribed,
+		ibDataValue::Array(std::vector<ibDataValue>{ ibDataValue::Int(input), ibDataValue::Int(row) }));
+
+	ExpectApplied(bare, listening);
+	ExpectApplied(listening, bare);
+
+	ibDataNode came;
+	ASSERT_TRUE(ibClientFramePatch(bare, listening, came));
+	ibProtocolNode held = Wire(bare);
+	held.Apply(Wire(came));
+	EXPECT_EQ(subscribedOf(held), (std::vector<long long>{ input, row }));
+
+	ibDataNode went;
+	ASSERT_TRUE(ibClientFramePatch(listening, bare, went));
+	held.Apply(Wire(went));
+	EXPECT_TRUE(subscribedOf(held).empty());
 }
 
 // The node a client fills reads back as filled — and a handle read from it shares its tree.

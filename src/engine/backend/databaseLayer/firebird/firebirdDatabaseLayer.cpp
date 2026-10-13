@@ -21,6 +21,7 @@
 #include <ctime>
 
 #include <wx/file.h>
+#include <wx/filename.h>
 #include <wx/stdpaths.h>
 #include <wx/tokenzr.h>
 #include <wx/regex.h>
@@ -1546,7 +1547,7 @@ ibDatabaseResultSet* ibDatabaseLayerFirebird::DoRunQueryWithResults(const wxStri
 			ibDatabaseResultSetFirebird* pResultSet = new ibDatabaseResultSetFirebird(m_pInterface.get(), m_pDatabase, pQueryTransaction, pStatement, pOutputSqlda, true, bManageTransaction);
 			if (pResultSet->GetErrorCode() != DATABASE_LAYER_OK)
 			{
-				SetErrorCode(pResultSet->GetErrorCode());
+				SetErrorCode(pResultSet->GetErrorCode(), pResultSet->GetErrorKind());
 				SetErrorMessage(pResultSet->GetErrorMessage());
 
 				// OURS TO CLOSE, or nobody's: bManageTransaction is true only when this call started
@@ -1655,7 +1656,7 @@ ibPreparedStatement* ibDatabaseLayerFirebird::DoPrepareStatement(const wxString&
 	ibPreparedStatementFirebird* pStatement = ibPreparedStatementFirebird::CreateStatement(m_pInterface.get(), m_pDatabase, m_pTransaction, strQuery);
 	if (pStatement && (pStatement->GetErrorCode() != DATABASE_LAYER_OK))
 	{
-		SetErrorCode(pStatement->GetErrorCode());
+		SetErrorCode(pStatement->GetErrorCode(), pStatement->GetErrorKind());
 		SetErrorMessage(pStatement->GetErrorMessage());
 		wxDELETE(pStatement); // This sets the pointer to NULL after deleting it
 
@@ -1913,64 +1914,6 @@ int ibDatabaseLayerFirebird::TranslateErrorCode(int nCode)
 	return nCode;
 }
 
-ibBackendDatabaseException::Kind ibDatabaseLayerFirebird::ClassifyDatabaseError(int nativeCode) const
-{
-	// Firebird stashes the primary `isc_*` gds code into m_nErrorCode
-	// via SetErrorCode(...) at every error path. The full status
-	// vector (isc_status[]) carries detail, but the primary code is
-	// what callers branch on.
-	//
-	// Symbolic names from interbase/ibase.h — we use the raw integer
-	// values to avoid pulling the FB headers into this classifier.
-	// They are part of FB's stable ABI (isc_*. macros are in iberror.h
-	// and don't change between minor versions).
-	using Kind = ibBackendDatabaseException::Kind;
-
-	switch (nativeCode) {
-		// --- ConnectionLost ---
-		case 335544721: // isc_network_error
-		case 335544722: // isc_net_connect_err
-		case 335544723: // isc_net_connect_listen_err
-		case 335544724: // isc_net_event_connect_err
-		case 335544725: // isc_net_event_listen_err
-		case 335544726: // isc_net_read_err
-		case 335544727: // isc_net_write_err
-		case 335544741: // isc_server_misconfigured
-		case 335544856: // isc_att_shutdown
-			return Kind::ConnectionLost;
-
-		// --- Deadlock / lock conflict ---
-		case 335544336: // isc_deadlock
-		case 335544345: // isc_lock_conflict
-		case 335544510: // isc_lock_timeout — but FB labels this as a
-		                // *conflict* (the wait actually expired); we
-		                // surface as Timeout below.
-			return Kind::Deadlock;
-
-		// (isc_cancelled is no failure — TranslateErrorCode records it as the cancel. The number that stood here
-		// under that name, 335544855, is isc_collation_not_installed: it filed a missing collation as a timeout.)
-
-		// --- Constraint violations ---
-		case 335544349: // isc_no_dup
-		case 335544466: // isc_foreign_key
-		case 335544347: // isc_not_valid (CHECK violation)
-		case 335544665: // isc_unique_key_violation
-		case 335544558: // isc_check_constraint
-			return Kind::Constraint;
-
-		// --- Syntax / DSQL parse errors ---
-		case 335544343: // isc_dsql_error
-		case 336397208: // isc_dsql_command_err
-		case 336397210: // isc_dsql_token_unk_err
-		case 336003075: // isc_dsql_relation_err
-		case 336003085: // isc_dsql_field_err
-			return Kind::Syntax;
-
-		default:
-			return Kind::Unknown;
-	}
-}
-
 //wxString ibDatabaseLayerFirebird::TranslateErrorCodeToString(ibInterfaceFirebird* pInterface, int nCode, ISC_STATUS_ARRAY status)
 wxString ibDatabaseLayerFirebird::TranslateErrorCodeToString(ibInterfaceFirebird* pInterface, int nCode, void* status)
 {
@@ -2028,13 +1971,61 @@ void ibDatabaseLayerFirebird::InterpretErrorCodes()
 
 	long nSqlCode = m_pInterface->GetIscSqlcode()(*(ISC_STATUS_ARRAY*)m_pStatus);
 	SetErrorMessage(ibDatabaseLayerFirebird::TranslateErrorCodeToString(m_pInterface.get(), nSqlCode, *(ISC_STATUS_ARRAY*)m_pStatus));
-	if (nSqlCode < -900)  // Error codes less than -900 indicate that it wasn't a SQL error but an ibase system error
-	{
-		SetErrorCode(ibDatabaseLayerFirebird::TranslateErrorCode(*((ISC_STATUS_ARRAY*)m_pStatus)[1]));
-	}
-	else
-	{
-		SetErrorCode(ibDatabaseLayerFirebird::TranslateErrorCode(nSqlCode));
+	const int code = ibDatabaseLayerFirebird::TranslateErrorCode(m_pStatus);
+	SetErrorCode(code, ClassifyDatabaseError(code));
+}
+
+int ibDatabaseLayerFirebird::TranslateErrorCode(const void* status)
+{
+	return TranslateErrorCode(static_cast<int>(static_cast<const ISC_STATUS*>(status)[1]));
+}
+
+ibBackendDatabaseException::Kind ibDatabaseLayerFirebird::ClassifyDatabaseError(int code)
+{
+	// Raw integers from iberror.h, so the classifier pulls no FB headers. They are FB's stable ABI.
+	using Kind = ibBackendDatabaseException::Kind;
+	switch (code) {
+		// --- ConnectionLost ---
+		case 335544721: // isc_network_error
+		case 335544722: // isc_net_connect_err
+		case 335544723: // isc_net_connect_listen_err
+		case 335544724: // isc_net_event_connect_err
+		case 335544725: // isc_net_event_listen_err
+		case 335544726: // isc_net_read_err
+		case 335544727: // isc_net_write_err
+		case 335544741: // isc_server_misconfigured
+		case 335544856: // isc_att_shutdown
+			return Kind::ConnectionLost;
+
+		// --- Deadlock / lock conflict ---
+		case 335544336: // isc_deadlock
+		case 335544345: // isc_lock_conflict
+		case 335544451: // isc_update_conflict — a waiter on a row another transaction changed
+		                // (outside read-committed read-consistency)
+		case 335544510: // isc_lock_timeout — FB labels the expired wait a conflict
+			return Kind::Deadlock;
+
+		// (isc_cancelled is no failure — TranslateErrorCode records it as the cancel. The number that stood here
+		// under that name, 335544855, is isc_collation_not_installed: it filed a missing collation as a timeout.)
+
+		// --- Constraint violations ---
+		case 335544349: // isc_no_dup
+		case 335544466: // isc_foreign_key
+		case 335544347: // isc_not_valid (CHECK violation)
+		case 335544665: // isc_unique_key_violation
+		case 335544558: // isc_check_constraint
+			return Kind::Constraint;
+
+		// --- Syntax / DSQL parse errors ---
+		case 335544343: // isc_dsql_error
+		case 336397208: // isc_dsql_command_err
+		case 336397210: // isc_dsql_token_unk_err
+		case 336003075: // isc_dsql_relation_err
+		case 336003085: // isc_dsql_field_err
+			return Kind::Syntax;
+
+		default:
+			return Kind::Unknown;
 	}
 }
 

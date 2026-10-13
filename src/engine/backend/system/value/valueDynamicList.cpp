@@ -11,6 +11,7 @@
 #include "backend/srcDataObject.h"                      // ibSourceExplorer
 #include "backend/metaCollection/partial/reference/reference.h"   // ibValueReferenceDataObject — GetItemKey row guid
 #include "core/serialize/dataBuilder.h"            // ibDataNode (object-level save/load)
+#include "backend/backend_composition.h"             // ibBackendCompositionDescriptionMemory — read against its configuration
 #include "backend/metadataConfiguration.h"            // ibMetaDataConfigurationBase (GetSourceMetaData)
 #include "backend/picturePredefined.h"                // g_picRowFolderCLSID — what a grouping's heading wears
 
@@ -149,6 +150,11 @@ ibValueDynamicList::ibValueDynamicList(const ibBackendQueryable* queryable, ibDy
 
 	if (queryable != nullptr)
 		SetSourceQueryable(queryable);   // null → set later via SetSource
+
+	// Refresh was declared and never bound, so a script could not call it — and
+	// nothing else on the list either. GetMetadata is how a list form learns
+	// which object it is listing (a custom query has none, and answers empty).
+	m_members.Bind(this, &ibValueDynamicList::FillMembers);
 }
 
 // 🛑 THE READ IS WAITED OUT BEFORE THE LIST GOES — here, in the class whose parts it walks, as the
@@ -188,6 +194,13 @@ void ibValueDynamicList::RebuildSource()
 		if (const ibValueMetaObjectGenericData* mo = queryable->GetSourceMetaObject())
 			m_sourceMetaData = mo->GetMetaData();
 	}
+
+	// ⭐⭐ THE MAIN TABLE LANDS IN THE DESCRIPTION HERE — every road that changes the source passes this
+	// point: the grid's edit (OnChildChanged), the drop-down and the "Select source" dialog (SetSource),
+	// a queryable handed in (SetSourceQueryable). It was written in OnPropertyChanged alone, so a source
+	// picked in the dialog left `m_mainTable` unset: the settings window offered no fields, and the
+	// description went to the file without its anchor (Max, 2026-10-13).
+	GetCompositionDesc().m_mainTable = m_propertySource->GetTableId();
 
 	// Thread the stored source config into the composer so an arbitrary-query source (FromText) resolves its by-name
 	// FROM against THIS config, not the global factory. (A metaobject source binds by queryable below — no lookup.)
@@ -719,16 +732,36 @@ const ibMetaData* ibValueDynamicList::GetSourceMetaData() const
 // surface over it is rebuilt over the settled structure, in
 // system/value/composition/valueComposerSettings.h. Offering a property that hands out nothing would
 // be worse than not offering it: a script would set a filter and be told nothing went wrong.
+enum Func {
+	enRefresh,
+	enGetMetadata,
+};
+
 void ibValueDynamicList::FillMembers(ibMemberTable& helper) const
 {
 	helper.AppendProc(wxT("Refresh"), wxT("Refresh()"));
+	helper.AppendFunc(wxT("GetMetadata"), wxT("GetMetadata()"));
 }
 
 bool ibValueDynamicList::CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray)
 {
-	if (lMethodNum == 0) {   // Refresh
+	switch (lMethodNum)
+	{
+	case Func::enRefresh:
 		RefreshComposerSettings();
 		RefetchAll();
+		return true;
+	}
+	return false;
+}
+
+bool ibValueDynamicList::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
+{
+	switch (lMethodNum)
+	{
+	case Func::enGetMetadata:
+		// A custom query lists no object: the empty value.
+		pvarRetValue = GetSourceMetaObject();
 		return true;
 	}
 	return false;
@@ -740,24 +773,13 @@ bool ibValueDynamicList::CallAsProc(const long lMethodNum, ibValue** paParams, c
 // list re-applies it. The "hook" is a virtual on the property-object, not a function ptr.
 void ibValueDynamicList::OnPropertyChanged(ibProperty* property, const wxVariant& /*oldValue*/, const wxVariant& /*newValue*/)
 {
-	// Source picked — rebuild off it. (The query is not a property any more; the settings window
-	// writes it into the description and asks for the rebuild itself.)
+	// (The source and the settings are rebuilt in OnChildChanged — the change of a child is what
+	//  starts the update, and it travels on up to the holder from there.)
 	//
-	// ⭐⭐ …AND THE ANCHOR LANDS IN THE DESCRIPTION THE MOMENT IT IS PICKED. The main table is the
-	// composition's anchor and lives THERE (Max, 2026-08-24: "the main table is the main source —
-	// everything else joins onto it"); the Source property is a VIEW of that field, the way the
-	// Query tab is a view of `m_query`. So the property answers the change and the description is
-	// written from it, once, here.
-	//
-	// 🛑 IT WAS DONE AT SERIALISE TIME, and that could not even compile: `WriteProperty` is const,
-	// so `GetCompositionDesc()` hands back a const reference there (C3892). Which was the design
-	// saying so out loud — a save must WRITE what is held, not decide it. Doing it on the change
-	// also keeps the in-memory description right between the pick and the save, where everything
-	// that asks `HasMainTable()` was reading wxNOT_FOUND.
-	if (m_propertySource == property) {
-		GetCompositionDesc().m_mainTable = m_propertySource->GetTableId();
-		RebuildSource();
-	}
+	// 🛑 THE ANCHOR WAS WRITTEN AT SERIALISE TIME, and that could not even compile: `WriteProperty`
+	// is const, so `GetCompositionDesc()` hands back a const reference there (C3892). Which was the
+	// design saying so out loud — a save must WRITE what is held, not decide it. It is written on the
+	// change, in RebuildSource, which every change of source passes through.
 	// The source/settings changed; re-commit the settings buffer onto the composer (L5).
 	RefreshComposerSettings();
 	// Toggling DynamicRead switches the fetch path (live keyset cursor ↔ whole-list RAM snapshot). Re-drive the fetch
@@ -765,6 +787,15 @@ void ibValueDynamicList::OnPropertyChanged(ibProperty* property, const wxVariant
 	// resumes. (Nothing to rebuild in the source/composer — only the fetch route changes.)
 	if (m_propertyDynamicRead == property)
 		RefetchAll();
+}
+
+// A child changed — the source picked, or the settings (the query among them) coming back from their
+// window. The columns are the source's plus what the query adds, so they are made again here; the news
+// goes on up to the holder, which shows them (the form's attribute tree).
+void ibValueDynamicList::OnChildChanged()
+{
+	RebuildSource();
+	ibPropertyObject::OnChildChanged();
 }
 
 // Central save/load entry (ibPropertyObject::ReadProperty/WriteProperty override): the
@@ -777,7 +808,7 @@ bool ibValueDynamicList::ReadProperty(const ibDataNode& node)
 	// it does not use come back empty rather than being a second format.
 	// …against its own configuration, like a report's (valueDataComposition.cpp): a saved filter
 	// compares against references, and only the metadata can build those.
-	ibCompositionDescriptionMemory::ReadNode(node, GetCompositionDesc(), GetSourceMetaData());
+	ibBackendCompositionDescriptionMemory::ReadNode(node, GetCompositionDesc(), GetSourceMetaData());
 
 	// ⭐ …AND THE ANCHOR IS PUT BACK ON THE WIDGET THAT SHOWS IT. The main table lives in the
 	// description (see WriteProperty); the Source property is its view, and it is filled here — as an
@@ -812,7 +843,7 @@ bool ibValueDynamicList::WriteProperty(ibDataNode& node) const
 		return false;
 
 	// ⭐⭐ THE MAIN TABLE IS ALREADY IN THE DESCRIPTION — put there when the source was PICKED (see
-	// OnPropertyChanged), because that is when it is decided. A save writes what is held; it does
+	// RebuildSource), because that is when it is decided. A save writes what is held; it does
 	// not decide anything, which is also why this method can be const.
 	//
 	// 🛑 IT REACHED THE FILE THROUGH NEITHER SIDE before: this override writes the description and

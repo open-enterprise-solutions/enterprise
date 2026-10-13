@@ -24,6 +24,7 @@
 #include "backend/session/session.h"
 #include "backend/session/sessionRegistry.h"
 #include "backend/backend_exception.h"
+#include "core/diagnostics/journal.h"
 #include "backend/databaseLayer/connectionHolder.h"
 #include "backend/databaseLayer/connectionPool.h"
 #include "backend/databaseLayer/databaseQueryBuilder.h"   // L2 door — the meta-watch sys_config read (ibQueryResult, no raw L1)
@@ -125,18 +126,9 @@ public:
 			it->second->Touch();
 	}
 
-	// Allocate a fresh unauthenticated session. The returned id is
-	// handed back as a cookie so subsequent requests (in particular
-	// POST /login) can identify the client.
-	std::string Create()
-	{
-		return CreateWith(MakeRandomId());
-	}
-
-	// Same, but the caller supplies the id — used when the JS client
-	// minted a per-tab id in sessionStorage (so every browser tab
-	// gets its own ibWebSession instead of sharing one via cookie).
-	// If the id already exists, reuses; otherwise creates.
+	// Allocate an unauthenticated session under the id the JS client
+	// minted per tab in sessionStorage, so every browser tab gets its
+	// own ibWebSession. If the id already exists, reuses; otherwise creates.
 	std::string CreateWith(const std::string& id)
 	{
 		{
@@ -291,18 +283,6 @@ public:
 	}
 
 private:
-	static std::string MakeRandomId()
-	{
-		// Shared format with ibGuid / sys_session.session — dashed UUID
-		// so browser cookie, X-OES-Session header, SessionManager map
-		// key, and the registry's session guid all read as the same
-		// string (no extra parse step when one crosses layers).
-		// Explicit wxString→std::string conversion: without ToStdString()
-		// MSVC chains two user-defined conversions (wxString → const char*
-		// → std::string) and warns C4927.
-		return ibGuid(ibGuid::newGuid()).str().ToStdString();
-	}
-
 	// Idle-session sweep + metadata-change watch. Wakes every sweep
 	// interval, collects session ids whose LastActiveMs is older than
 	// the idle cutoff, destroys them outside the map-lock (OnExit runs
@@ -1040,7 +1020,19 @@ WFRONTEND_API bool wfrontendHasUsers()
 {
 	if (!g_initialized.load() || appData == nullptr)
 		return false;
-	return ibUserInfo::HasAny();
+	try {
+		return ibUserInfo::HasAny();
+	}
+	catch (const ibBackendInterruptException&) {
+		throw;
+	}
+	catch (const ibCoreException& err) {
+		// Ask for credentials. A 500 from an uncaught read is not an answer
+		// the login page can show, and "no users" would be the open door.
+		ibJournalError(wxT("auth"), wxT("the user list could not be read; asking for credentials: %s"),
+			err.GetErrorDescription());
+		return true;
+	}
 }
 
 namespace {
@@ -1093,11 +1085,6 @@ WFRONTEND_API std::string wfrontendMenuJSON()
 		}},
 	};
 	return root.dump(2);
-}
-
-WFRONTEND_API std::string wfrontendCreateSession()
-{
-	return Sessions().Create();
 }
 
 WFRONTEND_API std::string wfrontendCreateSessionWithId(const std::string& id)

@@ -24,9 +24,15 @@ void ibClientFrameRuntime::InitializeDefaultMenu()
 		m_menu.AppendSubMenu(operations, _("Operations"));
 	}
 
+	ibClientMenu tools;
+	tools.Append(ibProtocolSchema::Debugging, _("Options..."));
+	m_menu.AppendSubMenu(tools, _("Tools"));
+
 	if (IsSchemaAllowed(ibProtocolSchema::ActiveUser)) {
 		ibClientMenu administration;
 		administration.Append(ibProtocolSchema::ActiveUser, _("Active users"));
+		administration.AppendSeparator();
+		administration.Append(ibProtocolSchema::AuditLog, _("Registration journal"));
 		m_menu.AppendSubMenu(administration, _("Administration"));
 	}
 

@@ -309,7 +309,7 @@ void ibDocManager::RegisterDefaultTemplates()
 	// extension to them — the habit fileKind.h exists to end (a list assembled at the point of use
 	// forgets the next entry). What it buys: File → Open takes an .xlsx and shows it in THIS editor,
 	// and Save as offers our format and Excel side by side, the document deciding which by the name
-	// it is given (ibBackendSpreadsheetObject::LoadFromFile / SaveToFile).
+	// it is given (ibSpreadsheetObject::LoadFromFile / SaveToFile).
 	AddDocTemplate(g_metaTemplateCLSID,
 		_("Spreadsheet document"), ibSheetFormatMask(), ibSheetFormatExtensions(),
 		_("Spreadsheet Doc"), _("Spreadsheet View"),

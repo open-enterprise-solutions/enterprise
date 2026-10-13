@@ -46,6 +46,9 @@ class BACKEND_API ibSessionSnapshot {
 		wxString   m_strUserName;
 		wxString   m_strComputerName;
 		wxString   m_strSession;
+		// sys_session.currentActivity. Empty when the column is absent. A dropped thin client
+		// says "detached until HH:MM:SS" for the resume window.
+		wxString   m_activity;
 		// Process-wide exclusive (monopoly) flag — true when this row
 		// holds it. Filled in by JobRefreshSnapshot from sys_session.exclusive.
 		bool       m_exclusive = false;
@@ -67,6 +70,8 @@ public:
 	wxString GetSession     (unsigned int idx) const;
 	wxString GetStartedDate (unsigned int idx) const;
 	wxString GetApplication (unsigned int idx) const;
+	// sys_session.currentActivity, or empty. A detached thin client reads "detached until …".
+	wxString GetActivity    (unsigned int idx) const;
 
 	void ClearSession() {
 		m_sessionArrayHash = wxNewUniqueGuid;
@@ -92,6 +97,7 @@ public:
 	// pattern as kinds, tolerant of pre-migration schemas where the
 	// column doesn't exist yet.
 	void SetExclusiveFromMap(const std::unordered_map<wxString, bool>& exclusiveBySession);
+	void SetActivityFromMap (const std::unordered_map<wxString, wxString>& activityBySession);
 
 	// Per-row exclusive flag accessor — returns the holder session (the
 	// only one with m_exclusive==true), if any. Used by ProcessAdd's

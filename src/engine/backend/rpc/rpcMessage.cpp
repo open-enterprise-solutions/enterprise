@@ -9,7 +9,7 @@
 #include "core/serialize/jsonProvider.h"
 #include "backend/compiler/value.h"            // ibValue::GetAvailableCtor — a built-in's name
 #include "backend/objCtor.h"                   // ibCtorAbstractType::GetClassName
-#include "backend/compositionDescription.h"   // ibCompositionNodeName / …Clsid — a composition's parts, both ways
+#include "core/description/compositionDescription.h"   // ibCompositionNodeName / …Clsid — a composition's parts, both ways
 #include "backend/metadataConfiguration.h"    // activeMetaData — the registered types, for the lookup
 
 // ⭐⭐ THE MIRROR OF THE RESOLVER BELOW, and the pair is what makes a schema READ, EDITED AND SENT

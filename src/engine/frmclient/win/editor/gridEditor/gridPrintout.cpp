@@ -21,7 +21,7 @@ ibGridEditorPrintout::ibGridEditorPrintout(const wxString& title) : wxPrintout(t
 	m_rightMargin = 50;
 }
 
-ibGridEditorPrintout::ibGridEditorPrintout(const wxObjectDataPtr<ibBackendSpreadsheetObject>& doc, int style, const wxString& title) : wxPrintout(title)
+ibGridEditorPrintout::ibGridEditorPrintout(const std::shared_ptr<ibSpreadsheetObject>& doc, int style, const wxString& title) : wxPrintout(title)
 {
 	m_doc = doc;
 	SetStyle(style);
@@ -210,7 +210,7 @@ bool ibGridEditorPrintout::DrawPage(wxDC* dc, int page)
 			dc->SetBrush(*wxLIGHT_GREY_BRUSH);
 			wxString str = m_doc->GetColLabelValue(i);
 			wxRect rect = wxRect(countWidth, 0, m_doc->GetColSize(i), m_doc->GetColLabelSize());
-			wxFont fnt = m_doc->GetLabelFont();
+			wxFont fnt = typeConv::FontToWxFont(m_doc->GetLabelFont());
 			DrawTextInRectangle(*dc, str, rect, fnt, *wxBLACK, wxALIGN_CENTER, wxALIGN_CENTER);
 			countWidth += m_doc->GetColSize(i);
 		}
@@ -226,7 +226,7 @@ bool ibGridEditorPrintout::DrawPage(wxDC* dc, int page)
 			dc->SetBrush(*wxLIGHT_GREY_BRUSH);
 			wxString str = m_doc->GetRowLabelValue(i);
 			wxRect rct = wxRect(0, countHeight, m_doc->GetRowLabelSize(), RowSize(i));
-			wxFont fnt = m_doc->GetLabelFont();
+			wxFont fnt = typeConv::FontToWxFont(m_doc->GetLabelFont());
 			DrawTextInRectangle(*dc, str, rct, fnt, *wxBLACK, wxALIGN_CENTER, wxALIGN_CENTER);
 			countHeight += RowSize(i);
 		}
@@ -260,17 +260,19 @@ bool ibGridEditorPrintout::DrawPage(wxDC* dc, int page)
 				
 				wxRect rect(countWidth, countHeight, colSize, rowSize);
 				
-				dc->SetBrush(m_doc->GetCellBackgroundColour(row, col));
+				const ibColour backgroundColour = m_doc->GetCellBackgroundColour(row, col);
+				dc->SetBrush(backgroundColour.IsOk() ? typeConv::ColourToWxColour(backgroundColour) : wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW));
 				dc->SetPen(*wxTRANSPARENT_PEN);
 				dc->DrawRectangle(rect.x + 1, rect.y, rect.width - 1, rect.height);
 				
 				int horz, vert;
 				m_doc->GetCellAlignment(row, col, &horz, &vert);
 
+				const ibColour textColour = m_doc->GetCellTextColour(row, col);
 				DrawTextInRectangle(*dc, CellText(row, col),
 					rect,
-					m_doc->GetCellFont(row, col),
-					m_doc->GetCellTextColour(row, col),
+					typeConv::FontToWxFont(m_doc->GetCellFont(row, col)),
+					textColour.IsOk() ? typeConv::ColourToWxColour(textColour) : wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT),
 					horz, vert,
 					m_doc->GetCellTextOrient(row, col),
 					m_doc->GetCellFitMode(row, col) == ibSpreadsheetCellDescription::ibFitMode::Mode_Wrap
@@ -280,17 +282,19 @@ bool ibGridEditorPrintout::DrawPage(wxDC* dc, int page)
 				
 				wxRect rect(countWidth, countHeight, m_doc->GetColSize(col), RowSize(row));
 				
-				dc->SetBrush(m_doc->GetCellBackgroundColour(row, col));
+				const ibColour backgroundColour = m_doc->GetCellBackgroundColour(row, col);
+				dc->SetBrush(backgroundColour.IsOk() ? typeConv::ColourToWxColour(backgroundColour) : wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW));
 				dc->SetPen(*wxTRANSPARENT_PEN);
 				dc->DrawRectangle(rect.x + 1, rect.y, rect.width - 1, rect.height);
 				
 				int horz, vert;
 				m_doc->GetCellAlignment(row, col, &horz, &vert);
 
+				const ibColour textColour = m_doc->GetCellTextColour(row, col);
 				DrawTextInRectangle(*dc, CellText(row, col),
 					rect,
-					m_doc->GetCellFont(row, col),
-					m_doc->GetCellTextColour(row, col),
+					typeConv::FontToWxFont(m_doc->GetCellFont(row, col)),
+					textColour.IsOk() ? typeConv::ColourToWxColour(textColour) : wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT),
 					horz, vert,
 					m_doc->GetCellTextOrient(row, col),
 					m_doc->GetCellFitMode(row, col) == ibSpreadsheetCellDescription::ibFitMode::Mode_Wrap
@@ -327,26 +331,26 @@ bool ibGridEditorPrintout::DrawPage(wxDC* dc, int page)
 				wxRect rect(countWidth, countHeight, colSize, rowSize);
 
 				ibSpreadsheetBorderDescription borderLeft = m_doc->GetCellBorderLeft(row, col);
-				if (borderLeft.m_style != wxPenStyle::wxPENSTYLE_TRANSPARENT) {
-					dc->SetPen(wxPen(borderLeft.m_colour, borderLeft.m_width, borderLeft.m_style));
+				if (borderLeft.m_style != ibPenStyle_Transparent) {
+					dc->SetPen(wxPen(typeConv::ColourToWxColour(borderLeft.m_colour), borderLeft.m_width, static_cast<wxPenStyle>(borderLeft.m_style)));
 					dc->DrawLine(rect.GetLeft() + 1, rect.GetTop(), rect.GetLeft() + 1, rect.GetBottom() + 1);
 				}
 
 				ibSpreadsheetBorderDescription borderRight = m_doc->GetCellBorderRight(row, col);
-				if (borderRight.m_style != wxPenStyle::wxPENSTYLE_TRANSPARENT) {
-					dc->SetPen(wxPen(borderLeft.m_colour, borderRight.m_width, borderRight.m_style));
+				if (borderRight.m_style != ibPenStyle_Transparent) {
+					dc->SetPen(wxPen(typeConv::ColourToWxColour(borderRight.m_colour), borderRight.m_width, static_cast<wxPenStyle>(borderRight.m_style)));
 					dc->DrawLine(rect.GetRight() + 2, rect.GetTop(), rect.GetRight() + 2, rect.GetBottom() + 1);
 				}
 
 				ibSpreadsheetBorderDescription borderTop = m_doc->GetCellBorderTop(row, col);
-				if (borderTop.m_style != wxPenStyle::wxPENSTYLE_TRANSPARENT) {
-					dc->SetPen(wxPen(borderTop.m_colour, borderTop.m_width, borderTop.m_style));
+				if (borderTop.m_style != ibPenStyle_Transparent) {
+					dc->SetPen(wxPen(typeConv::ColourToWxColour(borderTop.m_colour), borderTop.m_width, static_cast<wxPenStyle>(borderTop.m_style)));
 					dc->DrawLine(rect.GetLeft() + 1 , rect.GetTop(), rect.GetRight() + 2, rect.GetTop());
 				}
 
 				ibSpreadsheetBorderDescription borderBottom = m_doc->GetCellBorderBottom(row, col);
-				if (borderBottom.m_style != wxPenStyle::wxPENSTYLE_TRANSPARENT) {
-					dc->SetPen(wxPen(borderBottom.m_colour, borderBottom.m_width, borderBottom.m_style));
+				if (borderBottom.m_style != ibPenStyle_Transparent) {
+					dc->SetPen(wxPen(typeConv::ColourToWxColour(borderBottom.m_colour), borderBottom.m_width, static_cast<wxPenStyle>(borderBottom.m_style)));
 					dc->DrawLine(rect.GetLeft() + 1, rect.GetBottom() + 1, rect.GetRight() + 2, rect.GetBottom() + 1);
 				}
 			}
@@ -355,26 +359,26 @@ bool ibGridEditorPrintout::DrawPage(wxDC* dc, int page)
 				wxRect rect(countWidth, countHeight, m_doc->GetColSize(col), RowSize(row));
 
 				ibSpreadsheetBorderDescription borderLeft = m_doc->GetCellBorderLeft(row, col);
-				if (borderLeft.m_style != wxPenStyle::wxPENSTYLE_TRANSPARENT) {
-					dc->SetPen(wxPen(borderLeft.m_colour, borderLeft.m_width, borderLeft.m_style));
+				if (borderLeft.m_style != ibPenStyle_Transparent) {
+					dc->SetPen(wxPen(typeConv::ColourToWxColour(borderLeft.m_colour), borderLeft.m_width, static_cast<wxPenStyle>(borderLeft.m_style)));
 					dc->DrawLine(rect.GetLeft() + 1, rect.GetTop(), rect.GetLeft() + 1, rect.GetBottom() + 1);
 				}
 
 				ibSpreadsheetBorderDescription borderRight = m_doc->GetCellBorderRight(row, col);
-				if (borderRight.m_style != wxPenStyle::wxPENSTYLE_TRANSPARENT) {
-					dc->SetPen(wxPen(borderLeft.m_colour, borderRight.m_width, borderRight.m_style));
+				if (borderRight.m_style != ibPenStyle_Transparent) {
+					dc->SetPen(wxPen(typeConv::ColourToWxColour(borderRight.m_colour), borderRight.m_width, static_cast<wxPenStyle>(borderRight.m_style)));
 					dc->DrawLine(rect.GetRight() + 2, rect.GetTop(), rect.GetRight() + 2, rect.GetBottom() + 1);
 				}
 
 				ibSpreadsheetBorderDescription borderTop = m_doc->GetCellBorderTop(row, col);
-				if (borderTop.m_style != wxPenStyle::wxPENSTYLE_TRANSPARENT) {
-					dc->SetPen(wxPen(borderTop.m_colour, borderTop.m_width, borderTop.m_style));
+				if (borderTop.m_style != ibPenStyle_Transparent) {
+					dc->SetPen(wxPen(typeConv::ColourToWxColour(borderTop.m_colour), borderTop.m_width, static_cast<wxPenStyle>(borderTop.m_style)));
 					dc->DrawLine(rect.GetLeft() + 1, rect.GetTop(), rect.GetRight() + 2, rect.GetTop());
 				}
 
 				ibSpreadsheetBorderDescription borderBottom = m_doc->GetCellBorderBottom(row, col);
-				if (borderBottom.m_style != wxPenStyle::wxPENSTYLE_TRANSPARENT) {
-					dc->SetPen(wxPen(borderBottom.m_colour, borderBottom.m_width, borderBottom.m_style));
+				if (borderBottom.m_style != ibPenStyle_Transparent) {
+					dc->SetPen(wxPen(typeConv::ColourToWxColour(borderBottom.m_colour), borderBottom.m_width, static_cast<wxPenStyle>(borderBottom.m_style)));
 					dc->DrawLine(rect.GetLeft() + 1, rect.GetBottom() + 1, rect.GetRight() + 2, rect.GetBottom() + 1);
 				}
 			}
@@ -427,7 +431,7 @@ void ibGridEditorPrintout::OnPreparePrinting()
 	//
 	// `m_colBrakeAt` holds two kinds of thing: real page breaks (AddColBrake) and an EXTENT MARKER that
 	// SetColBrake writes over the list's maximum — PutArea stamps it on every put
-	// (backend_spreadsheet.cpp), and typing a value stamps it too (gridext.cpp, "set new brake pos").
+	// (spreadsheetObject.cpp), and typing a value stamps it too (gridext.cpp, "set new brake pos").
 	// ⚠ The marker is the LAST column of the content, not the one after it: SetColBrake caps it at
 	// GetNumberCols() - 1.
 	//

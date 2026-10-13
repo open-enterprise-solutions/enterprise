@@ -2,7 +2,7 @@
 #include "frmclient/backend/compiler/value.h"
 #include "frmclient/propertyManager/property/private/propertyRegistry.h"
 #include "frmclient/settings/formSettings.h"   // the setting this window saves and clears
-#include "frmclient/visualView/visualHostClient.h"   // ibFormVisualDocument — the form's document, which this opens over
+#include "frmclient/docView/tabDocument.h"   // ibTabDocument — the form's tab, which this opens over
 
 enum {
 	WXOES_PROPERTY_GRID = wxID_HIGHEST + 1001

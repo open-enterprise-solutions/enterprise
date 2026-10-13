@@ -1,7 +1,7 @@
 // =============================================================================
 // OES Enterprise — ibSourceDescription / ibSourceHop tests
 //
-// ibSourceDescription (backend/sourceDescription.h) is the "passport" of a value's
+// ibSourceDescription (core/description/sourceDescription.h) is the "passport" of a value's
 // address inside a data source: an ordered list of HOPS. Each hop is {id, expected
 // type} — WHERE to step (a form-local attribute id at the head, a source-column id
 // deeper) and the type PINNED there (a composite reference's picked branch, else
@@ -14,7 +14,7 @@
 
 #include <gtest/gtest.h>
 #include <vector>
-#include "backend/sourceDescription.h"          // ibSourceHop / ibSourceDescription / ibSourceDescriptionMemory
+#include "core/description/sourceDescription.h"          // ibSourceHop / ibSourceDescription / ibSourceDescriptionMemory
 #include "core/clsid.h"                       // reference_to_clsid (a pinned reference branch)
 #include "core/fileSystem/fs.h"               // ibReaderMemory / ibWriterMemory (serialize round-trip)
 #include "core/serialize/dataBuilder.h"       // ibDataValue (node-form round-trip)

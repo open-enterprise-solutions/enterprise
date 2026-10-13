@@ -32,7 +32,7 @@
 #include "backend/mcp/mcpTool.h"
 
 #include "backend/metadataConfiguration.h"
-#include "backend/typeDescription.h"
+#include "core/description/typeDescription.h"
 #include "backend/system/value/valueType.h"
 #include "core/stringUtils.h"                // CompareString - how this tree compares text
 

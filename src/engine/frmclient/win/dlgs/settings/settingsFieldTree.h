@@ -26,7 +26,7 @@
 #include <functional>
 
 #include "frmclient/backend/system/value/composition/valueComposerSettings.h"   // ibValueCompositionField — a field IS a value
-#include "frmclient/backend/typeDescription.h"                // ibTypeDescription
+#include "core/description/typeDescription.h"                // ibTypeDescription
 
 class ibSourceDataObject;
 class ibMetaData;

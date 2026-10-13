@@ -10,6 +10,7 @@
 
 #include "dataComposerInternal.h"
 
+#include "backend/backend_composition.h"           // ibStoredValue — a condition's literal and a rule's values, unpacked
 #include "backend/query/queryRender.h"             // ibQueryColumnFromPath — a dotted path becomes its hops, once
 #include "backend/query/queryConstructorModel.h"   // ibQueryConstructorField — the leaf a path walks to (WalkPath)
 #include "backend/query/queryHierarchy.h"          // ibQueryHierarchyScope — what «in hierarchy» admits; how «in» lists
@@ -18,7 +19,7 @@
 #include "backend/system/value/valueColour.h"   // its colours
 #include "backend/system/value/valueFont.h"     // its font
 #include "backend/compiler/enumUnit.h"          // its alignment, an enumeration member…
-#include "backend/spreadsheetDescription.h"     // …in the sheet's own word, ibSpreadsheetAlignmentHorz
+#include "core/description/spreadsheetDescription.h"   // …in the sheet's own word, ibSpreadsheetAlignmentHorz
 #include "backend/backend_localization.h"       // its Text and Format, in every language
 #include "core/formatString.h"               // what its Format writes a value as
 
@@ -86,10 +87,12 @@ bool ibCompositionCompare(const ibValue& cell, ibComparisonKind kind, const ibVa
 namespace {
 enum class ibConditionReading { False, True, Unknown };
 
-// WHAT THE CALLER KNOWS, carried down the tree as one: the row's values, and the subtrees «in hierarchy» names.
+// WHAT THE CALLER KNOWS, carried down the tree as one: the row's values, the subtrees «in hierarchy» names, and the
+// configuration a literal is restored against.
 struct ibConditionRow {
 	const ibCompositionValueOf&   m_valueOf;
 	const ibCompositionSubtreeOf& m_subtreeOf;
+	const ibMetaData*             m_metaData;
 };
 
 ibConditionReading ReadCondition(const ibFilterNodeDescription& node, const ibConditionRow& row);
@@ -138,7 +141,8 @@ ibConditionReading ReadCondition(const ibFilterNodeDescription& node, const ibCo
 		return ibCompositionCompare(*cell, node.m_comparison, ibValue())
 			? ibConditionReading::True : ibConditionReading::False;
 	}
-	const ibValue* value = node.m_right.IsField() ? valueOf(node.m_right.m_path) : &node.m_right.m_value;
+	const ibValue  literal = node.m_right.IsField() ? ibValue() : ibStoredValue(node.m_right.m_value, row.m_metaData);
+	const ibValue* value   = node.m_right.IsField() ? valueOf(node.m_right.m_path) : &literal;
 	if (cell == nullptr || value == nullptr)
 		return ibConditionReading::Unknown;
 	// ⭐ …AND A NULL IS A VALUE THE ROW DOES NOT CARRY — a record's field on a heading (the fold hands a column its
@@ -159,20 +163,22 @@ ibConditionReading ReadCondition(const ibFilterNodeDescription& node, const ibCo
 }
 }   // namespace
 
-bool ibCompositionFilterHolds(const ibFilterDescription& filter, const ibCompositionValueOf& valueOf,
-	const ibCompositionSubtreeOf& subtreeOf, bool whenUnknown)
+bool ibCompositionFilterHolds(const ibFilterDescription& filter, const ibMetaData* metaData,
+	const ibCompositionValueOf& valueOf, const ibCompositionSubtreeOf& subtreeOf, bool whenUnknown)
 {
-	const ibConditionReading reading = ReadGroup(filter.m_rootKind, filter.m_nodes, ibConditionRow{ valueOf, subtreeOf });
+	const ibConditionReading reading = ReadGroup(filter.m_rootKind, filter.m_nodes,
+		ibConditionRow{ valueOf, subtreeOf, metaData });
 	return reading == ibConditionReading::Unknown ? whenUnknown : reading == ibConditionReading::True;
 }
 
-bool ibCompositionSayRules(const std::vector<ibCompositionRule>& rules, const ibCompositionValueOf& valueOf,
-	const ibCompositionSubtreeOf& subtreeOf, ibCompositionAttr& line, const ibCompositionSayField& sayField)
+bool ibCompositionSayRules(const std::vector<ibCompositionRule>& rules, const ibMetaData* metaData,
+	const ibCompositionValueOf& valueOf, const ibCompositionSubtreeOf& subtreeOf, ibCompositionAttr& line,
+	const ibCompositionSayField& sayField)
 {
 	bool any = false;
 	for (const ibCompositionRule& rule : rules) {
 		// A condition this row cannot answer does not mark it: a highlight nobody can explain is noise.
-		if (!ibCompositionFilterHolds(rule.m_rule->m_condition, valueOf, subtreeOf, /*whenUnknown*/ false))
+		if (!ibCompositionFilterHolds(rule.m_rule->m_condition, metaData, valueOf, subtreeOf, /*whenUnknown*/ false))
 			continue;
 		any = true;
 		if (rule.m_rule->m_fields.empty())
@@ -242,12 +248,12 @@ ibCompositionAttr AttrOfAppearance(const ibAppearanceDescription& appearance)
 	}
 	// …AND WHAT THE CELL SAYS — its Text where one is ticked, else the Format its value is written in (applied by
 	// whoever writes the cell — ibCompositionAttr::TextOf), each read in the language in force.
-	const ibValue text = appearance.ValueInForce(ibAppearanceParameter::Text);
+	const ibValue text = ibStoredValue(appearance.ValueInForce(ibAppearanceParameter::Text), nullptr);
 	if (!text.IsEmpty())
 		attr.m_text = ibTranslateString(text.GetString().ToWxString()).GetString();
 	else {
 		const wxString written = ibTranslateString(
-			appearance.ValueInForce(ibAppearanceParameter::Format).GetString().ToWxString()).GetString();
+			ibStoredValue(appearance.ValueInForce(ibAppearanceParameter::Format), nullptr).GetString().ToWxString()).GetString();
 		std::shared_ptr<ibFormatString> format = std::make_shared<ibFormatString>();
 		if (!written.IsEmpty() && ibFormatString::Parse(written, *format))
 			attr.m_format = std::move(format);
@@ -324,8 +330,10 @@ ibDataComposer::ConditionalAppearance ibDataComposer::ConditionalAppearanceFor(c
 			if (!own.empty())
 				ready.m_nodes.emplace(&level, std::move(own));
 		}
-	if (!ready.IsEmpty())
+	if (!ready.IsEmpty()) {
 		ready.m_subtreeOf = SubtreeOf();
+		ready.m_metaData  = m_metaData;
+	}
 	return ready;
 }
 
@@ -354,10 +362,10 @@ bool ibDataComposer::ConditionalAppearance::AttrFor(const GroupNode* node,
 			own->second.Say(said);
 		}
 	};
-	bool any = ibCompositionSayRules(m_rules, valueOf, m_subtreeOf, attr.m_line, sayField);
+	bool any = ibCompositionSayRules(m_rules, m_metaData, valueOf, m_subtreeOf, attr.m_line, sayField);
 	const auto nodeRules = node != nullptr ? m_nodes.find(node) : m_nodes.end();
 	if (nodeRules != m_nodes.end())
-		any = ibCompositionSayRules(nodeRules->second, valueOf, m_subtreeOf, attr.m_line, sayField) || any;
+		any = ibCompositionSayRules(nodeRules->second, m_metaData, valueOf, m_subtreeOf, attr.m_line, sayField) || any;
 	if (!any)
 		return false;
 

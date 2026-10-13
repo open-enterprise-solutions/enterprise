@@ -32,7 +32,7 @@
 // ---------------------------------------------------------------------------
 
 #include "backend/composition/drivers/compositionDriver.h"   // a DRIVER needs the contract, not the composer
-#include "backend/backend_spreadsheet.h"
+#include "core/spreadsheet/spreadsheetObject.h"
 #include "core/formatString.h"   // how a column writes its figures — see m_formats
 
 #include "backend/rowValues.h"   // a cross row's cells — sparse, column key index -> figures
@@ -45,7 +45,7 @@
 class BACKEND_API ibSpreadsheetComposeDriver : public ibCompositionDriver
 {
 public:
-	explicit ibSpreadsheetComposeDriver(ibBackendSpreadsheetObject* document)
+	explicit ibSpreadsheetComposeDriver(ibSpreadsheetObject* document)
 		: m_document(document) {}
 
 	// THE HEADING — what this report is, and under what it was built. A report read a week later
@@ -191,7 +191,7 @@ private:
 	// counting dimension columns instead is how the last level used to disappear.
 	std::vector<int>            m_dimLevel;
 
-	ibBackendSpreadsheetObject* m_document = nullptr;
+	ibSpreadsheetObject*        m_document = nullptr;
 	// ⭐ THE PALETTE — the output's (ibCompositionOutputInfo::m_theme): its header, its foot, and every line whose
 	// node names none of its own. And the GRID's pen, made from it once per output: the lines are the table's,
 	// so a node's own theme tints its rows and never redraws the grid.
@@ -232,7 +232,7 @@ private:
 	void WriteTotalLine(int level, const std::vector<ibValue>& values, bool grand,
 		const ibCompositionLineAttr* attr = nullptr);
 	// …and those attributes applied to the line's cells: the line's on every cell, each column's on its own.
-	void ApplyLineAttr(ibBackendSpreadsheetObject& area, const ibCompositionLineAttr* attr) const;
+	void ApplyLineAttr(ibSpreadsheetObject& area, const ibCompositionLineAttr* attr) const;
 
 	// -----------------------------------------------------------------------
 	//  THE CROSS-TABLE LAYOUT

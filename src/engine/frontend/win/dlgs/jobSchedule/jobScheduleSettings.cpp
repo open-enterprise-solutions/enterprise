@@ -399,7 +399,7 @@ void ibDialogJobSchedule::OnOk(wxCommandEvent& event)
 
 	// Refuse what can never match, HERE, in front of the person who typed it — rather than leaving
 	// it to be debugged later as a job that simply never runs.
-	if (!m_schedule.IsValid()) {
+	if (!ibJobScheduleRules::IsValid(m_schedule)) {
 		wxMessageBox(_("This schedule can never run: check the interval and the time window."),
 		             _("Schedule"), wxOK | wxICON_WARNING, this);
 		return;

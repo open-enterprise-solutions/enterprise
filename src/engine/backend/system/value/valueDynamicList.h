@@ -4,7 +4,7 @@
 #include "backend/tabularModel.h"                // ibValueModelCursor
 #include "backend/metaCollection/partial/commonObject.h"   // ibSourceDataObject
 #include "backend/composition/dataComposer.h"        // L5 — ibDataDBComposer
-#include "backend/compositionDescription.h"   // a list is a composer — the same description
+#include "core/description/compositionDescription.h"   // a list is a composer — the same description
 #include "backend/propertyManager/propertyObject.h"  // ibPropertyObject — the dynamic list IS a property object
 #include "backend/propertyManager/property/propertyDynamicSource.h"  // ibPropertyDynamicSource — the "Source" property
 #include "backend/propertyManager/property/propertyDynamicList.h"  // ibPropertyDynamicList — the "Settings" → "Open" action
@@ -277,12 +277,14 @@ public:
 	virtual wxString GetObjectTypeName() const override { return GetClassName(); }
 	virtual bool IsEditable() const override { return true; }
 	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue) override;
+	virtual void OnChildChanged() override;   // a source / settings change rebuilds the columns, then tells the holder
 	virtual bool ReadProperty(const ibDataNode& node) override;
 	virtual bool WriteProperty(ibDataNode& node) const override;
 
 	// --- script member surface (Filter/Order/Group/Settings + Refresh) ------
 	void FillMembers(ibMemberTable& helper) const;
 	virtual bool CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray) override;
+	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray) override;
 
 private:
 	

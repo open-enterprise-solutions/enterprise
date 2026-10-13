@@ -6,6 +6,9 @@
 
 #include "backend/appData.h"   // ibApplicationInstance::GetTempStorage — a document saved as a file of the client's naming
 #include "backend/backend_form.h"
+#include "backend/backend_picture.h"
+#include "backend/debugger/debugServer.h"   // a script's failure sent to the designer (BackendError)
+#include "backend/picturePredefined.h"
 #include "backend/session/session.h"
 #include "backend/session/workerPool.h"   // Await / Wake — a question waits in the session's pool
 #include "backend/temp/tempStorage.h"     // ibTempFile — a file the client uploaded
@@ -13,6 +16,7 @@
 #include "frmserver/docView/docManager.h"   // ibDocTemplate — what opens a file
 #include "frmserver/visualView/visualHost.h"
 #include "frmserver/visualView/ctrl/form.h"
+#include "frmserver/visualView/ctrl/gridBox.h"   // ibFetchSpreadsheet — a sheet printed goes as a sheet fetched
 
 #include "clientChildFrame.h"
 #include "clientFrameDesigner.h"
@@ -131,12 +135,34 @@ void ibClientFrame::ClearMessage()
 	m_clearPending = true;
 }
 
-void ibClientFrame::BackendError(const wxString& /*strFileName*/,
-	const wxString& /*strDocPath*/, const long /*line*/,
+void ibClientFrame::BackendError(const wxString& strFileName,
+	const wxString& strDocPath, const long line,
 	const wxString& strErrorMessage)
 {
-	std::lock_guard<std::mutex> lock(m_msgMutex);
-	m_pendingMessages.push_back({ ibStatusMessage_Error, strErrorMessage });
+	// THE DESKTOP'S ERROR WINDOW (ibFrontendMainFrameEnterprise::BackendError), asked of the client: the person chooses
+	// what becomes of the failure. Closed without a choice — as Close window.
+	ibDataNode request;
+	request.SetValue(wxT("Kind"), static_cast<s32>(ibProtocolRequestKind::Error));
+	request.SetValue(wxT("Picture"), wxString(ibBackendPicture::GetServerPicture(g_picErrorCLSID).GetData()));
+	request.SetValue(wxT("Text"), strErrorMessage);
+
+	ibDataNode response;
+	const s32 act = DoRequest(request, response) ? response.GetValue<s32>(wxT("Act")) : 0;   // 0 — closed: Close window
+
+	// ⭐ THE ANSWERS ARE CUMULATIVE, as the desktop's: the error stays in the messages whatever was chosen; Go to designer
+	// also sends it to the designer debugging this base; Close program does both, and the client goes.
+	{
+		std::lock_guard<std::mutex> lock(m_msgMutex);
+		m_pendingMessages.push_back({ ibStatusMessage_Error, strErrorMessage });
+	}
+
+	if (act == static_cast<s32>(ibProtocolErrorAct::GotoDesigner) || act == static_cast<s32>(ibProtocolErrorAct::CloseProgram)) {
+		if (ibDebuggerServer* const server = debugServer)
+			server->SendErrorToClient(strFileName, strDocPath, line, strErrorMessage);
+	}
+
+	if (act == static_cast<s32>(ibProtocolErrorAct::CloseProgram))
+		ExitClient(true);
 }
 
 std::vector<ibClientFrame::PendingMessage> ibClientFrame::DrainPendingMessages()
@@ -188,7 +214,7 @@ std::vector<ibClientFrame::PendingPicture> ibClientFrame::DrainPendingPictures()
 	return out;
 }
 
-bool ibClientFrame::Request(const ibDataNode& request, ibDataNode& response)
+bool ibClientFrame::DoRequest(const ibDataNode& request, ibDataNode& response)
 {
 	ibSession* const session = GetSession();
 	ibWorkerPool* const pool = session != nullptr ? session->GetWorkerPool() : nullptr;
@@ -221,7 +247,7 @@ bool ibClientFrame::Request(const ibDataNode& request, ibDataNode& response)
 	return true;
 }
 
-int ibClientFrame::ShowModalMessage(const wxString& message, const wxString& caption, int style)
+int ibClientFrame::DoShowModalMessage(const wxString& message, const wxString& caption, int style)
 {
 	ibDataNode request;
 	request.SetValue(wxT("Kind"), static_cast<s32>(ibProtocolRequestKind::Message));
@@ -230,7 +256,7 @@ int ibClientFrame::ShowModalMessage(const wxString& message, const wxString& cap
 	request.SetValue(wxT("Style"), style);
 
 	ibDataNode response;
-	return Request(request, response) ? response.GetValue<s32>(wxT("Button")) : 0;   // 0 — no button: cancelled
+	return DoRequest(request, response) ? response.GetValue<s32>(wxT("Button")) : 0;   // 0 — no button: cancelled
 }
 
 bool ibClientFrame::HasPendingRequest() const
@@ -340,13 +366,13 @@ bool ibClientFrame::UpdateFormUniqueKey(const ibUniqueKeyPair& guid)
 
 #include "frmserver/docView/templates/docViewSpreadsheet.h"
 
-bool ibClientFrame::ShowSpreadsheetDocument(const wxString& strTitle, wxObjectDataPtr<ibBackendSpreadsheetObject>& spreadSheetDocument)
+bool ibClientFrame::ShowSpreadsheetDocument(const wxString& strTitle, std::shared_ptr<ibSpreadsheetObject>& spreadSheetDocument)
 {
 	class ibSpreadsheetMemoryDocument :
 		public ibSpreadsheetFileDocument {
 	public:
 
-		ibSpreadsheetMemoryDocument(const wxString& strTitle, const wxObjectDataPtr<ibBackendSpreadsheetObject>& spreadSheetDocument) :
+		ibSpreadsheetMemoryDocument(const wxString& strTitle, const std::shared_ptr<ibSpreadsheetObject>& spreadSheetDocument) :
 			ibSpreadsheetFileDocument(spreadSheetDocument)
 		{
 			ibSpreadsheetFileDocument::SetTitle(strTitle);
@@ -376,6 +402,45 @@ bool ibClientFrame::ShowSpreadsheetDocument(const wxString& strTitle, wxObjectDa
 	return false;
 }
 
+bool ibClientFrame::PrintSpreadsheetDocument(const std::shared_ptr<ibSpreadsheetObject>& doc, bool WXUNUSED(showPrintDlg))
+{
+	// THE SHEET AS A SPREADSHEET'S FETCH WRITES IT (ibFetchSpreadsheet) — its texts as shown: the client's sheet holds no
+	// parameters, and prints it as the desktop's printed its own.
+	ibDataNode request;
+	request.SetValue(wxT("Kind"), static_cast<s32>(ibProtocolRequestKind::Print));
+	if (!doc || !ibFetchSpreadsheet(*doc, request))
+		return false;
+
+	ibDataNode response;
+	return DoRequest(request, response) && response.GetValue<bool>(wxT("Done"));
+}
+
+bool ibClientFrame::ShowScheduleEditor(ibJobScheduleDescription& schedule)
+{
+	ibDataValue stored;
+	if (!ibJobScheduleDescriptionMemory::WriteNode(stored, schedule))
+		return false;
+
+	ibDataNode request;
+	request.SetValue(wxT("Kind"), static_cast<s32>(ibProtocolRequestKind::Schedule));
+	request.SetField(wxT("Schedule"), stored);
+
+	// CANCEL IS THE ONLY "NOTHING HAPPENED" — answered with no Schedule.
+	ibDataNode response;
+	if (!DoRequest(request, response))
+		return false;
+	const ibDataValue* const edited = response.FindField(wxT("Schedule"));
+	if (edited == nullptr || !ibJobScheduleDescriptionMemory::ReadNode(*edited, schedule))
+		return false;
+
+	// OK MARKS THE FORM, as the desktop's did (ibFrontendMainFrame::ShowScheduleEditor): the window that did the editing
+	// holds the fact.
+	if (ibBackendValueForm* const form = ActiveWindow())
+		form->Modify(true);
+
+	return true;
+}
+
 ibClientChildFrame* ibClientFrame::CreateChildFrame(ibView* view)
 {
 	ibClientFrame* const frame = GetFrame();
@@ -398,7 +463,7 @@ ibClientChildFrame* ibClientFrame::CreateChildFrame(ibView* view)
 	auto tab = std::make_unique<ibClientChildFrame>(frame, ++frame->m_lastTabId, document, view, title);
 
 	// The document's own icon first (a catalog's form shows the catalog's), the form's otherwise.
-	ibServerPicture icon = document != nullptr ? document->GetIcon() : ibServerPicture();
+	ibPicture icon = document != nullptr ? document->GetIcon() : ibPicture();
 	if (!icon.IsOk() && form != nullptr)
 		icon = ibBackendPicture::GetServerPicture(form->GetClassType());
 	if (icon.IsOk())

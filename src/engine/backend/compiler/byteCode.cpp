@@ -1,6 +1,6 @@
 #include "byteCode.h"
 
-#include "codeDef.h"        // the opcode vocabulary — FindCaret reads the declaration opcodes
+#include "core/compiler/codeDef.h"   // the opcode vocabulary — FindCaret reads the declaration opcodes
 
 #include <shared_mutex>
 #include <unordered_map>
