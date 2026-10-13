@@ -4,6 +4,7 @@
 #include "serviceExclusivePolicy.h"
 
 #include "backend/appData.h"
+#include "backend/session/regionalSettings.h"
 #include "backend/appHost.h"   // SetThreadOwner — the registry thread's journal lines name its base
 #include "sessionSnapshot.h"
 #include "backend/backend_exception.h"
@@ -2165,6 +2166,10 @@ void ibSessionRegistry::ThreadBody() noexcept
 	constexpr auto kSweepInterval   = std::chrono::seconds(3);
 	auto nextRefresh = clock::now() + kRefreshInterval;
 	auto nextSweep   = clock::now() + kSweepInterval;
+	// The base's time zone re-read once a minute (session/regionalSettings.h): a zone named in another
+	// process reaches this one's connections within the minute.
+	constexpr auto kZoneInterval = std::chrono::seconds(60);
+	auto nextZone    = clock::now() + kZoneInterval;
 
 	// Eager initial sweep + snapshot — two reasons:
 	//   - UI (Active Users) gets data immediately instead of waiting
@@ -2256,6 +2261,21 @@ void ibSessionRegistry::ThreadBody() noexcept
 				JobSweepStale();
 					JobCheckSignal();
 				nextSweep = now + kSweepInterval;
+			}
+
+			// On the registry's own holder - its own connection, no wait on the pool: a saturated pool
+			// must not stop the heartbeat of every session this process keeps.
+			if (now >= nextZone) {
+				// Its own try: the loop's is outside the loop, and a zone that could not be read is not a reason
+				// to stop the heartbeat of every session here.
+				try {
+					if (ibRegionalSettings* const regional = ibApplicationInstance::GetRegionalSettings(m_applicationInstance))
+						regional->Refresh(&m_writeHolder);
+				}
+				catch (const std::exception& e) {
+					ibJournalWarning(wxT("session.zone"), wxT("the base's time zone could not be re-read: %s"), wxString::FromUTF8(e.what()));
+				}
+				nextZone = now + kZoneInterval;
 			}
 
 			m_tickCounter.fetch_add(1, std::memory_order_release);

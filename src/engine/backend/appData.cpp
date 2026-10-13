@@ -28,6 +28,7 @@
 #include "backend/mcp/mcpServer.h"            // ibMcpServer (owned via GetMcpServer)
 #include "backend/job/platformJobs.h"         // the engine's own jobs, declared when a database opens
 #include "backend/settings/settingsStorage.h" // ibSettingsStorage (owned via GetSettingsStorage)
+#include "backend/session/regionalSettings.h" // ibRegionalSettings (owned via GetRegionalSettings)
 #include "backend/temp/tempStorage.h"         // ibTempStorage (owned via GetTempStorage)
 #include "backend/server/serverConfig.h"      // a server reads where its base lives itself
 
@@ -329,6 +330,7 @@ ibApplicationInstance::ibApplicationInstance(ibApplicationHost* host, ibRunMode 
 	m_jobManager(std::unique_ptr<ibJobManager>(new ibJobManager(ib::AppDataCtorToken{ this }))),
 	m_mcpServer(std::unique_ptr<ibMcpServer>(new ibMcpServer(ib::AppDataCtorToken{ this }))),
 	m_settingsStorage(std::unique_ptr<ibSettingsStorage>(new ibSettingsStorage(ib::AppDataCtorToken{ this }))),
+	m_regionalSettings(std::unique_ptr<ibRegionalSettings>(new ibRegionalSettings(ib::AppDataCtorToken{ this }))),
 	m_tempStorage(std::unique_ptr<ibTempStorage>(new ibTempStorage(ib::AppDataCtorToken{ this })))
 {
 	// (Plugins are the PROCESS's — loaded once by ibApplicationHost, not per base.)
@@ -605,7 +607,7 @@ void ibApplicationInstance::Close()
 	//    has already completed.
 	if (m_connectionPool) m_connectionPool->Shutdown();
 
-	// 4. The fields, in reverse declaration order: m_activeMetaData → m_tempStorage → m_settingsStorage →
+	// 4. The fields, in reverse declaration order: m_activeMetaData → m_tempStorage → m_regionalSettings → m_settingsStorage →
 	//    m_mcpServer → m_jobManager → m_sessionRegistry → m_logger → m_queryableFactory → m_lockManager →
 	//    m_connectionPool. (The job manager's own dtor calls Stop() again; it is idempotent, so the
 	//    explicit step above only fixes the ORDER.)
@@ -627,6 +629,7 @@ void ibApplicationInstance::Close()
 	};
 	release(m_activeMetaData);
 	release(m_tempStorage);
+	release(m_regionalSettings);
 	release(m_settingsStorage);
 	release(m_mcpServer);
 	release(m_jobManager);
@@ -908,6 +911,10 @@ ibApplicationInstance* ibApplicationInstance::Open(std::unique_ptr<ibApplication
 		CreateTableJob();              // sys_job — the shared last-run clock…
 		MigrateTableJob();             // …and its settings columns
 		CreateTableSettings();         // sys_settings — what people saved on their forms and their lists
+		// The base's time zone, read from its row and recorded for the pool - before anything takes a
+		// connection to work in it.
+		if (ibRegionalSettings* const regional = GetRegionalSettings(applicationInstance))
+			regional->Refresh();
 		CreateTableFile();             // sys_file — the sessions' temporary files
 
 		if (!SetLocaleAppDataEnv(request.m_locale))

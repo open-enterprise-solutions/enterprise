@@ -113,6 +113,8 @@ int CountOtherLiveSessions()
 #include "frontend/mainFrame/settings/fontcolorsettingspanel.h"
 #include "frontend/mainFrame/settings/editorsettingspanel.h"
 #include "frontend/mainFrame/settings/mcpsettingspanel.h"
+#include "frontend/mainFrame/settings/regionalsettingspanel.h"
+#include "backend/session/regionalSettings.h"
 #include "backend/mcp/mcpServer.h"   // the page edits ITS value, and it owns where that is kept
 
 #include "frontend/win/dlgs/applyChange.h"
@@ -793,6 +795,12 @@ void ibFrontendMainFrameDesigner::OnToolsSettings(wxCommandEvent& event)
 		mcpSettings->SetSettings(mcpServer->GetSettings());
 		mcpSettings->SetEndpoint(mcpServer->GetEndpoint());
 	}
+	// THE TIME ZONE belongs to the BASE - every client of it - and is read from and written back to the base
+	// (session/regionalSettings.h), with the names its server knows to choose from.
+	ibPanelRegionalSettings* zoneSettings = dialog.GetRegionalSettingsPanel();
+	ibRegionalSettings* regional = ibApplicationInstance::GetRegionalSettings();
+	if (regional != nullptr)
+		zoneSettings->SetTimeZone(regional->GetTimeZone(), regional->KnownTimeZones());
 
 	if (dialog.ShowModal() == wxID_OK)
 	{
@@ -804,6 +812,14 @@ void ibFrontendMainFrameDesigner::OnToolsSettings(wxCommandEvent& event)
 			// say one thing while a client talks to another and be caught at it.
 			mcpServer->Configure(mcpSettings->GetSettings());
 			mcpServer->SaveSettings(ibSession::Current());
+		}
+		// Saved and in force at once. A name the server refuses is refused HERE, in front of the person,
+		// rather than found at the next start; an OK that changed nothing writes nothing.
+		if (regional != nullptr) {
+			const wxString zone = zoneSettings->GetTimeZone();
+			wxString refusal;
+			if (zone != regional->GetTimeZone() && !regional->SetTimeZone(zone, &refusal))
+				wxMessageBox(refusal, _("Time zone"), wxOK | wxCENTRE | wxICON_ERROR, this);
 		}
 
 		m_keyBinder.ClearCommands();

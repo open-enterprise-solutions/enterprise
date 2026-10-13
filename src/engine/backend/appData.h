@@ -554,6 +554,10 @@ private:
 	// here because it is read at the same moments jobs are: while a base is open.
 	std::unique_ptr<class ibSettingsStorage> m_settingsStorage;
 
+	// The base's time zone (session/regionalSettings.h): read from sys_settings through the storage above,
+	// put on the connections of the pool - so it stands after both, and goes before them.
+	std::unique_ptr<class ibRegionalSettings> m_regionalSettings;
+
 	// The sessions' temporary files (sys_file). Its own connection, taken from the pool above and given
 	// back when the pool shuts down — the lock manager's arrangement, for the lock manager's reason.
 	std::unique_ptr<class ibTempStorage> m_tempStorage;
@@ -659,6 +663,10 @@ public:
 	static class ibSettingsStorage* GetSettingsStorage() { return GetSettingsStorage(Get()); }
 	static class ibSettingsStorage* GetSettingsStorage(const ibApplicationInstance* applicationInstance) {
 		return applicationInstance != nullptr ? applicationInstance->m_settingsStorage.get() : nullptr;
+	}
+	static class ibRegionalSettings* GetRegionalSettings() { return GetRegionalSettings(Get()); }
+	static class ibRegionalSettings* GetRegionalSettings(const ibApplicationInstance* applicationInstance) {
+		return applicationInstance != nullptr ? applicationInstance->m_regionalSettings.get() : nullptr;
 	}
 
 	// The sessions' temporary files. Same nullptr-before-and-after contract. See backend/temp/tempStorage.h.

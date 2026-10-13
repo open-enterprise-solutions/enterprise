@@ -34,6 +34,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "backend/mcp/mcpServer.h"
+#include "backend/session/regionalSettings.h"   // ibRegionalSettings - platform_state names the base's zone
 
 #include "backend/appData.h"                        // GetSettingsStorage — where a person's settings live
 #include "backend/logger/logger.h"                  // …and ibLog — the registration journal
@@ -1628,6 +1629,11 @@ void ibMcpDescribePlatform(const ibApplicationInstance* applicationInstance, ibD
 	into.SetValue(wxT("connection"), applicationInstance->GetDatabaseDescription());
 	if (!applicationInstance->GetFile().IsEmpty())
 		into.SetValue(wxT("base"), applicationInstance->GetFile());
+
+	// …and the zone its readings stand in (session/regionalSettings.h): empty where the base names none, and
+	// each engine stands in its own.
+	if (ibRegionalSettings* const regional = ibApplicationInstance::GetRegionalSettings(applicationInstance))
+		into.SetValue(wxT("timeZone"), regional->GetTimeZone());
 
 	const ibUserInfo& who = applicationInstance->GetUserInfo();
 

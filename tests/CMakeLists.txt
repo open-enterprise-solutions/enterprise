@@ -61,6 +61,8 @@ add_executable(oes_tests
     test_firebirdBatchInsert.cpp
     test_firebirdDates.cpp
     test_firebirdZoneRules.cpp
+    test_firebirdSessionZone.cpp
+    test_regionalSettings.cpp
     test_logger.cpp
     test_dbTaxonomy.cpp
     test_gitService.cpp
