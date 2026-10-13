@@ -16,6 +16,7 @@
 #include <thread>
 
 #include "backend/appData.h"
+#include "backend/backend_exception.h"                  // ibCoreException - why an opening was refused
 #include "backend/databaseLayer/connectionHolder.h"       // ibDatabaseConnectionHolder - a second holder for a second hand-out
 #include "backend/databaseLayer/connectionPool.h"
 #include "backend/databaseLayer/connectionScope.h"        // ibConnectionScope - the door a pooled connection is handed out through
@@ -427,4 +428,63 @@ TEST_F(RegionalFix, ALocaleNobodyKnowsIsRefusedBeforeAnythingIsWritten)
 	EXPECT_EQ(en->GetCanonicalWithRegion(), regional->GetLocale());
 	EXPECT_TRUE(regional->Refresh());
 	EXPECT_EQ(en->GetCanonicalWithRegion(), regional->GetLocale()) << "the row kept what it had";
+}
+
+// A base opened the way a program opens it comes up in the locale it names, ahead of the opener's word:
+// the process's wxLocale is settled from the base's row. Runs where Firebird embedded is laid out beside
+// the binary (CI's Firebird job); skips elsewhere.
+TEST(FirebirdRegionalOpen, ABaseOpensInTheLocaleItNames)
+{
+	wxInitializer init;
+	if (!init.IsOk())
+		GTEST_SKIP() << "wxBase init failed";
+	const wxLanguageInfo* const en = wxUILocale::FindLanguageInfo(wxT("en"));
+	const wxLanguageInfo* const ru = wxUILocale::FindLanguageInfo(wxT("ru_RU"));
+	ASSERT_NE(en, nullptr);
+	ASSERT_NE(ru, nullptr);
+
+	const auto now = std::chrono::steady_clock::now().time_since_epoch().count();
+	const wxString folder = wxFileName(wxStandardPaths::Get().GetTempDir(),
+		wxString::Format(wxT("oes_regional_open_%lld"), (long long)now)).GetFullPath();
+	ASSERT_TRUE(wxFileName::Mkdir(folder));
+	struct Folder { wxString path; ~Folder() { wxFileName::Rmdir(path, wxPATH_RMDIR_RECURSIVE); } } cleanup{ folder };
+	// Whatever stops this test, the base is closed with the process before the folder goes: declared after
+	// the folder, so it runs first.
+	struct Opened { ~Opened() { if (ibApplicationHost::Get() != nullptr) ibApplicationInstance::DestroyAppDataEnv(); } } closing;
+
+	ibFileInstanceRequest opening;
+	opening.m_directory = folder;
+	opening.m_create    = true;
+	opening.m_locale    = wxT("en");   // the opener's word: what a base that names none comes up in
+	wxString reason;
+	const auto open = [&opening, &reason]() -> ibApplicationInstance* {
+		try {
+			const ibApplicationInstanceScope scope(nullptr);
+			return ibApplicationInstance::CreateAppDataEnv(opening);
+		}
+		catch (const ibCoreException& err) { reason = err.GetErrorDescription(); return nullptr; }
+	};
+	ibApplicationInstance* base = open();
+	if (base == nullptr) {
+		// A client that is here and still did not open the base is a failure, not a skip.
+		ASSERT_FALSE(ibDatabaseLayerFirebird::IsAvailable()) << "the base did not open: " << reason.ToStdString();
+		GTEST_SKIP() << "no Firebird client on this machine (" << folder.ToStdString() << ")";
+	}
+	if (wxUILocale::FromTag(en->GetCanonicalWithRegion()).IsSupported())
+		EXPECT_EQ(en->GetCanonicalWithRegion(), ibApplicationHost::Get()->GetLocale()) << "a base that names none: the opener's word";
+	ibRegionalSettings* regional = ibApplicationInstance::GetRegionalSettings(base);
+	ASSERT_NE(regional, nullptr);
+	wxString why;
+	ASSERT_TRUE(regional->SetLocale(wxT("ru_RU"), &why)) << why;
+	ASSERT_TRUE(ibApplicationInstance::DestroyAppDataEnv());   // every base and the process with it: wxLocale is settled again by the next opening
+
+	// Opened again with the same word: the base's own name is ahead of it, and the base answers it as its own
+	// whatever the process speaks. The process speaks it where this machine has the locale; where it has not
+	// (a Linux with ru_RU not generated) the base still opens, in the machine's own, and the journal says so.
+	base = open();
+	ASSERT_NE(base, nullptr) << "a locale this machine cannot grant must not refuse the base: " << reason.ToStdString();
+	EXPECT_EQ(ru->GetCanonicalWithRegion(), base->GetLocale());
+	if (wxUILocale::FromTag(ru->GetCanonicalWithRegion()).IsSupported())
+		EXPECT_EQ(ru->GetCanonicalWithRegion(), ibApplicationHost::Get()->GetLocale());
+	ASSERT_TRUE(ibApplicationInstance::DestroyAppDataEnv());
 }

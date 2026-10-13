@@ -100,9 +100,11 @@ each process measures once a minute, and the minute it steps a peer's beat would
   child, and a thin client on a file base, the engine running in its process; over an application server
   a thin client has no locale of its own (its windows are not translated), and the server speaks the first
   base's. `wxLocale` is process state, settled by the first base a process opens, so a process holding
-  several bases speaks the first one's, and a base that names another is said in the journal. A base
-  asked for its own locale (`ibApplicationInstance::GetLocale`, `platform_state`) answers what it names,
-  whatever the process speaks.
+  several bases speaks the first one's, and a base that names another is said in the journal. A locale
+  this machine cannot grant - not generated on a Linux - does not refuse the base: the process comes up
+  in the machine's own, and the journal says which wish went ungranted. A base asked for its own locale
+  (`ibApplicationInstance::GetLocale`, `platform_state`) answers what it names, whatever the process
+  speaks.
 
 ## Where it stops
 
