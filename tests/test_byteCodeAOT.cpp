@@ -757,7 +757,7 @@ TEST(ByteCodeAOT, AnUnknownOpcodeIsRefused) {
 	EXPECT_FALSE(RoundTrip(src, dst));
 
 	src = LetModule();
-	src.m_listCode[0].m_numOper = 99999;
+	src.m_listCode[0].m_numOper = 30000;
 	EXPECT_FALSE(RoundTrip(src, dst));
 }
 
@@ -780,7 +780,7 @@ TEST(ByteCodeAOT, ACompiledModuleWithALambdaPasses) {
 	ASSERT_TRUE(compiled);
 
 	ibByteCode dst;
-	ASSERT_TRUE(RoundTrip(cc, dst));
+	ASSERT_TRUE(RoundTrip(cc.m_cByteCode, dst));
 	EXPECT_TRUE(dst.m_bCompile);
 	EXPECT_FALSE(dst.m_listCode.empty());
 	EXPECT_FALSE(dst.m_listFunc.empty());
