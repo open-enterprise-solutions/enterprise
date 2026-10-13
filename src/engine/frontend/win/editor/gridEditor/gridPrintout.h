@@ -22,7 +22,7 @@ class FRONTEND_API ibGridEditorPrintout : public wxPrintout, public ibFitToPageW
 public:
 
 	ibGridEditorPrintout(const wxString& title = wxT("ibGridEditorPrintout"));
-	ibGridEditorPrintout(const wxObjectDataPtr<ibBackendSpreadsheetObject>& doc, int style = wxGP_SHOW_NONE, const wxString& title = wxT("ibGridEditorPrintout"));
+	ibGridEditorPrintout(const std::shared_ptr<ibSpreadsheetObject>& doc, int style = wxGP_SHOW_NONE, const wxString& title = wxT("ibGridEditorPrintout"));
 
 	void SetStyle(int style);
 	int GetStyle() const;
@@ -90,7 +90,7 @@ protected:
 
 private:
 
-	wxObjectDataPtr<ibBackendSpreadsheetObject> m_doc;
+	std::shared_ptr<ibSpreadsheetObject> m_doc;
 
 	std::vector<int> m_rowHeights;
 

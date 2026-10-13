@@ -10,7 +10,7 @@ wxIcon ibValueMetaObjectCalculationRegister::ibValueMetaObjectRecalculation::Get
 
 wxIcon ibValueMetaObjectCalculationRegister::ibValueMetaObjectRecalculation::GetIconGroup()
 {
-	static const ibServerPicture picture(s_recalculation_16_png, wxSize(16, 16));
+	static const ibPicture picture = ibBackendPicture::FromImage(ibBackendPicture::GetImageFromBase64(s_recalculation_16_png, wxSize(16, 16)));
 
-	return picture.ToIcon();
+	return ibBackendPicture::ToIcon(picture);
 }

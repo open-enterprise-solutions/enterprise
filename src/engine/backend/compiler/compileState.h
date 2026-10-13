@@ -9,12 +9,13 @@
 // for the session, here — not per module. Not a hot path; a slot of its own for the symmetry with the
 // interpreter's.
 
-#include "backend/backend_core.h"   // ibProgramSyntax
+#include "core/compiler/codeDef.h"   // ibProgramSyntax
 
 struct ibCompileState {
 	// The syntax the session's modules are written in — its configuration's, taken when its runtime is built
-	// (ibSession::CompileRoot); what ibCompileCode::GetCodeStyle answers. A process may hold bases written in
-	// different syntaxes, so it is not the process's.
+	// (ibSession::CompileRoot); what every translator of the session is given before it reads a text
+	// (ibTranslateCode::SetCodeStyle). A process may hold bases written in different syntaxes, so it is not
+	// the process's.
 	ibProgramSyntax m_codeStyle = ibProgramSyntax::syntax_ces;
 };
 

@@ -5,7 +5,8 @@
 #include "queryParser.h"
 
 #include "queryException.h"   // ibBackendQuerySourceException — L4 refuses in its own variety
-#include "backend/typeDescription.h"   // ibTypeDescription — what a CAST to a primitive converts to
+#include "core/description/typeDescription.h"   // ibTypeDescription — what a CAST to a primitive converts to
+#include "core/fiber/fiber.h"          // StackLow — a parenthesized expression is native recursion
 
 #include <algorithm>
 #include <iterator>
@@ -1292,7 +1293,7 @@ ibQueryAstExprPtr ibQueryParser::ParseCase()
 // A SCALAR CALL — the second family of calls, read where a name stands before a `(`.
 //
 // ⭐ THE ARGUMENT COUNT IS THE TABLE'S ANSWER, not a number written here. Each call declares its own
-// range beside its word (queryLexer.cpp), so `DATEADD` needing three is stated in ONE place — the
+// range beside its word (core/query/queryKeywords.cpp), so `DATEADD` needing three is stated in ONE place — the
 // same place the palette writes its skeleton from and the syntax helper reads its signature out of.
 // A count checked here against a literal would be a second authority on the language, free to
 // disagree with the first the day a call gains an optional argument (DATETIME already has four).
@@ -1351,6 +1352,11 @@ ibQueryAstExprPtr ibQueryParser::ParseIsNullCall()
 ibQueryAstExprPtr ibQueryParser::ParsePrimary()
 {
 	const ibQueryToken& tk = Cur();
+	// The frame is already this call. Another parenthesized primary would be
+	// another frame, and a query of nothing but brackets used to run off the
+	// stack with no refusal.
+	if (ibFiber::StackLow())
+		ThrowQueryException(tk, _("it is nested deeper than the stack allows"));
 
 	// ⭐ A LEADING MINUS — `-Quantity`, `SELECT -Amount AS Refund`, `ORDER BY -Total`. It is how a
 	// person writes "the other direction", and the grammar simply had no place for it: the parser

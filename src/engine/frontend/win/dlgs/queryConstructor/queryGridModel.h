@@ -23,7 +23,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "frontend/win/ctrls/dataview/dataview.h"
-#include "backend/tabularModelView.h"   // ibDataViewObject — what a TREE row is (the totals tree below)
+#include "core/tabular/tabularModelView.h"   // ibDataViewObject — what a TREE row is (the totals tree below)
 
 #include <functional>
 #include <memory>

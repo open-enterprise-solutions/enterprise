@@ -319,8 +319,12 @@ void ibValueForm::FillFormMembers(ibMemberTable& helper) const
 	// virtual GetCompileModule() on a possibly half-alive `this` (crash on teardown /
 	// debugger-thread lazy build); the descriptor thunk is dynamic_cast-guarded.
 
+	// A button, a caption, or an HTML box holds no value and is still what a
+	// module names. The compiler already accepts ThisForm.<name>; leaving the
+	// control off this list is the runtime "field not found". An empty name
+	// is not a member.
 	for (auto control : GetControlList()) {
-		if (!control->HasValueInControl())
+		if (control->GetControlName().IsEmpty())
 			continue;
 
 		helper.AppendProp(
@@ -451,8 +455,14 @@ bool ibValueForm::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 				return id == control->GetControlID();
 			}
 		);
-		if (it != list.end())
-			return (*it)->GetControlValue(pvarPropVal);
+		if (it != list.end()) {
+			// The value, when the control has one. Otherwise the control
+			// itself: ThisForm.HelpPane.SetPage reaches the HTML box.
+			if ((*it)->HasValueInControl())
+				return (*it)->GetControlValue(pvarPropVal);
+			pvarPropVal = *it;
+			return !pvarPropVal.IsEmpty();
+		}
 	}
 	else if (lPropAlias == eFormAttribute) {
 		if (ibFormAttributeValue* attr = FindAttributeById(m_members.GetPropData(lPropNum))) {

@@ -304,22 +304,36 @@ bool ibValueTypeDescription::Init(ibValue** paParams, const long lSizeArray)
 	m_typeDesc.m_typeData = Unqualified();
 
 	if (paParams[0]->GetType() == ibValueTypes::TYPE_STRING) {
-		wxString classType = paParams[0]->GetString();
-		if (activeMetaData->IsRegisterCtor(classType)) {
-			ibValueQualifierNumber* qNumber = nullptr;
-			if (lSizeArray > 1 && paParams[1]->ConvertToValue(qNumber))
-				m_typeDesc.m_typeData.m_number = *qNumber;
-			ibValueQualifierDate* qDate = nullptr;
-			if (lSizeArray > 2 && paParams[2]->ConvertToValue(qDate))
-				m_typeDesc.m_typeData.m_date = *qDate;
-			ibValueQualifierString* qString = nullptr;
-			if (lSizeArray > 3 && paParams[3]->ConvertToValue(qString))
-				m_typeDesc.m_typeData.m_string = *qString;
-			m_typeDesc.m_listTypeClass.emplace_back(
-				activeMetaData->GetIDObjectFromString(classType)
-			);
-			return true;
+		// "Number, String" is several types, not one constructor name. A single name is the
+		// one-element case of the same list. A name that is not a type fails the whole description.
+		//
+		// A name is asked of the configuration, which answers its own and the value registry's behind
+		// them (ibMetaData::IsRegisterCtor). A process with no base has the registry alone.
+		const ibMetaData* const metaData = ibApplicationInstance::GetActiveMetaData(ibApplicationInstance::Get(/*required*/ false));
+		std::vector<ibClassID> types;
+		for (wxString name : wxSplit(paParams[0]->GetString(), wxT(','), wxT('\0'))) {
+			name.Trim(true).Trim(false);
+			if (name.IsEmpty())
+				continue;
+			if (metaData != nullptr ? !metaData->IsRegisterCtor(name) : !ibValue::IsRegisterCtor(name))
+				return false;
+			types.push_back(metaData != nullptr ? metaData->GetIDObjectFromString(name) : ibValue::GetIDObjectFromString(name));
 		}
+		if (types.empty())
+			return false;
+
+		ibValueQualifierNumber* qNumber = nullptr;
+		if (lSizeArray > 1 && paParams[1]->ConvertToValue(qNumber))
+			m_typeDesc.m_typeData.m_number = *qNumber;
+		ibValueQualifierDate* qDate = nullptr;
+		if (lSizeArray > 2 && paParams[2]->ConvertToValue(qDate))
+			m_typeDesc.m_typeData.m_date = *qDate;
+		ibValueQualifierString* qString = nullptr;
+		if (lSizeArray > 3 && paParams[3]->ConvertToValue(qString))
+			m_typeDesc.m_typeData.m_string = *qString;
+		for (const ibClassID clsid : types)
+			m_typeDesc.m_listTypeClass.push_back(clsid);
+		return true;
 	}
 
 	ibValueArray* valArray = nullptr;

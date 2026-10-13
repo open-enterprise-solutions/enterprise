@@ -28,7 +28,13 @@ void ibDatabaseErrorReporter::SetErrorMessage(const wxString& strErrorMessage)
 
 void ibDatabaseErrorReporter::SetErrorCode(int nErrorCode)
 {
+	SetErrorCode(nErrorCode, ibBackendDatabaseException::Kind::Unknown);
+}
+
+void ibDatabaseErrorReporter::SetErrorCode(int nErrorCode, ibBackendDatabaseException::Kind kind)
+{
 	m_nErrorCode = nErrorCode;
+	m_errorKind = kind;
 }
 
 void ibDatabaseErrorReporter::ResetErrorCodes()
@@ -39,6 +45,7 @@ void ibDatabaseErrorReporter::ResetErrorCodes()
 	if (!m_strErrorMessage.empty())
 		m_strErrorMessage.Clear();
 	m_nErrorCode = DATABASE_LAYER_OK;
+	m_errorKind = ibBackendDatabaseException::Kind::Unknown;
 }
 
 void ibDatabaseErrorReporter::ThrowDatabaseException()
@@ -55,12 +62,12 @@ void ibDatabaseErrorReporter::ThrowDatabaseException()
 	// ibValueSystemFunction — a frontend dependency from a backend
 	// layer. Removing it leaves one clean responsibility.
 	//
-	// Virtual dispatch into the concrete driver's classifier — FB walks
-	// its isc_status array, PG/ODBC consult SQLSTATE, SQLite stays
-	// with the default Unknown. GetSqlState() comes from the same
-	// per-driver override so admin logs see what the engine actually
-	// reported. Kind / native_code / sqlstate / message all travel on
-	// the exception; the catch site decides what to surface.
+	// The Kind is the one the driver recorded with the code, where it read the error (SetErrorCode).
+	// It used to be asked here of a virtual classifier, which only the layers answered: a statement,
+	// a wrapper or a result set threw Unknown, and a caller that needed "key violation" or "lock
+	// wait" re-read driver codes on its own (#247). GetSqlState() is still the driver's, so admin
+	// logs see what the engine reported. Kind / native_code / sqlstate / message all travel on the
+	// exception; the catch site decides what to surface.
 
 	// ⭐ AN INTERRUPTED STATEMENT IS THE CANCEL, SAID AS ONE — the platform's own interruption. Somebody stopped
 	// it (ibSession::Cancel — a closed report, a cancelled run, an ended session); thrown as a database failure
@@ -72,7 +79,7 @@ void ibDatabaseErrorReporter::ThrowDatabaseException()
 		ibBackendInterruptException::Error();
 
 	ibDatabaseLayerException::Throw(
-		ClassifyDatabaseError(m_nErrorCode),
+		m_errorKind,
 		m_nErrorCode,
 		GetSqlState(),
 		m_strErrorMessage);

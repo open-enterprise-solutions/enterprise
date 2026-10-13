@@ -555,6 +555,7 @@
     <ClInclude Include="propertyManager\property\advprop\advpropChartBinding.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropCalcSchedule.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropChoiceLink.h" />
+    <ClInclude Include="propertyManager\property\advprop\advpropColour.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropPicture.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropPoint.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropRecord.h" />
@@ -595,6 +596,7 @@
     <ClInclude Include="visualView\visualHostClient.h" />
     <ClInclude Include="visualView\visualHost.h" />
     <ClInclude Include="window_ptr.h" />
+    <ClInclude Include="win\typeconv.h" />
     <ClInclude Include="win\ctrls\charts\wxareachart.h" />
     <ClInclude Include="win\ctrls\charts\wxareachartctrl.h" />
     <ClInclude Include="win\ctrls\charts\wxareachartdatasetoptions.h" />

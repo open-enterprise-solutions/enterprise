@@ -6,7 +6,7 @@
 #include "frontend/win/dlgs/jobSchedule/jobScheduleSettings.h"
 
 #include "backend/propertyManager/property/propertySchedule.h"
-#include "backend/job/jobSchedule.h"
+#include "core/description/jobScheduleDescription.h"
 
 // -----------------------------------------------------------------------
 // ibPGScheduleProperty

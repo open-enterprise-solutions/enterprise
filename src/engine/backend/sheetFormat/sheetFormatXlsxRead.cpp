@@ -14,6 +14,7 @@
 // parts are text and small beside its cells.
 
 #include "backend/sheetFormat/sheetFormatXlsx.h"
+#include "core/diagnostics/journal.h"   // ibJournalStopwatch / ibJournalInfo — what a read of a book cost, step by step
 
 #include <wx/wfstream.h>
 #include <wx/zipstrm.h>
@@ -103,10 +104,10 @@ bool IsPartWeRead(const wxString& key)
 // own, so the part is read once into flat tables and the cells then cost a lookup.
 // ---------------------------------------------------------------------------
 struct XlsxStyle {
-	wxFont   m_font;
+	ibFont   m_font;
 	bool     m_hasFont = false;
-	wxColour m_textColour;
-	wxColour m_fillColour;
+	ibColour m_textColour;
+	ibColour m_fillColour;
 	ibSpreadsheetBorderDescription m_border[4];   // left, right, top, bottom
 	bool     m_hasBorder[4] = { false, false, false, false };
 	int      m_alignHorz = ibAlignmentHorz_Left;
@@ -124,47 +125,47 @@ void PenOf(const wxString& name, ibSpreadsheetBorderDescription& border)
 	border.m_width = 1;
 
 	if (name == wxT("dotted") || name == wxT("hair"))
-		border.m_style = wxPENSTYLE_DOT;
+		border.m_style = ibPenStyle_Dot;
 	else if (name == wxT("dashed"))
-		border.m_style = wxPENSTYLE_SHORT_DASH;
+		border.m_style = ibPenStyle_ShortDash;
 	else if (name == wxT("mediumDashed")) {
-		border.m_style = wxPENSTYLE_SHORT_DASH;
+		border.m_style = ibPenStyle_ShortDash;
 		border.m_width = 2;
 	}
 	else if (name == wxT("dashDot") || name == wxT("dashDotDot"))
-		border.m_style = wxPENSTYLE_DOT_DASH;
+		border.m_style = ibPenStyle_DotDash;
 	else if (name == wxT("mediumDashDot") || name == wxT("mediumDashDotDot") || name == wxT("slantDashDot")) {
-		border.m_style = wxPENSTYLE_DOT_DASH;
+		border.m_style = ibPenStyle_DotDash;
 		border.m_width = 2;
 	}
 	else if (name == wxT("medium") || name == wxT("double")) {
-		border.m_style = wxPENSTYLE_SOLID;
+		border.m_style = ibPenStyle_Solid;
 		border.m_width = 2;
 	}
 	else if (name == wxT("thick")) {
-		border.m_style = wxPENSTYLE_SOLID;
+		border.m_style = ibPenStyle_Solid;
 		border.m_width = 3;
 	}
 	else
-		border.m_style = wxPENSTYLE_SOLID;   // "thin", and anything a later Excel invents
+		border.m_style = ibPenStyle_Solid;   // "thin", and anything a later Excel invents
 }
 
 // "FFD4E4D4" / "D4E4D4" -> a colour. An INDEXED or THEME colour is not resolved — those need the
 // workbook's palette and its theme part, and a wrong colour is worse than the default one.
-wxColour ColourOf(const wxXmlNode* node)
+ibColour ColourOf(const wxXmlNode* node)
 {
 	if (node == nullptr)
-		return wxColour();
+		return ibColour();
 
 	const wxString rgb = node->GetAttribute(wxT("rgb"), wxEmptyString);
 	if (rgb.length() < 6)
-		return wxColour();
+		return ibColour();
 
 	unsigned long value = 0;
 	if (!rgb.Right(6).ToULong(&value, 16))
-		return wxColour();
+		return ibColour();
 
-	return wxColour(static_cast<unsigned char>((value >> 16) & 0xFF),
+	return ibColour(static_cast<unsigned char>((value >> 16) & 0xFF),
 	                static_cast<unsigned char>((value >> 8) & 0xFF),
 	                static_cast<unsigned char>(value & 0xFF));
 }
@@ -229,11 +230,11 @@ std::vector<XlsxStyle> ReadStyles(const wxString& xmlText)
 	if (!xml.Load(input) || xml.GetRoot() == nullptr)
 		return byIndex;
 
-	struct Fill  { wxColour m_colour; };
+	struct Fill  { ibColour m_colour; };
 	struct Border { ibSpreadsheetBorderDescription m_side[4]; bool m_has[4] = { false, false, false, false }; };
 
-	std::vector<wxFont>  fonts;
-	std::vector<wxColour> fontColours;
+	std::vector<ibFont>  fonts;
+	std::vector<ibColour> fontColours;
 	std::vector<Fill>    fills;
 	std::vector<Border>  borders;
 
@@ -247,11 +248,13 @@ std::vector<XlsxStyle> ReadStyles(const wxString& xmlText)
 				if (const wxXmlNode* name = ChildNamed(font, wxT("name")))
 					face = name->GetAttribute(wxT("val"), wxEmptyString);
 
-				wxFont made(wxFontInfo(static_cast<int>(size + 0.5)).FaceName(face)
-					.Bold(FontFlag(font, wxT("b")))
-					.Italic(FontFlag(font, wxT("i")))
-					.Underlined(Underlined(font))
-					.Strikethrough(FontFlag(font, wxT("strike"))));
+				ibFont made;
+				made.m_pointSize = static_cast<int>(size + 0.5);
+				made.m_faceName = face;
+				made.m_weight = FontFlag(font, wxT("b")) ? ibFONTWEIGHT_BOLD : ibFONTWEIGHT_NORMAL;
+				made.m_style = FontFlag(font, wxT("i")) ? ibFONTSTYLE_ITALIC : ibFONTSTYLE_NORMAL;
+				made.m_underlined = Underlined(font);
+				made.m_strikethrough = FontFlag(font, wxT("strike"));
 				fonts.push_back(made);
 				fontColours.push_back(ColourOf(ChildNamed(font, wxT("color"))));
 			}
@@ -278,7 +281,7 @@ std::vector<XlsxStyle> ReadStyles(const wxString& xmlText)
 						continue;
 					made.m_has[i] = true;
 					PenOf(line, made.m_side[i]);
-					const wxColour colour = ColourOf(ChildNamed(side, wxT("color")));
+					const ibColour colour = ColourOf(ChildNamed(side, wxT("color")));
 					if (colour.IsOk())
 						made.m_side[i].m_colour = colour;
 				}

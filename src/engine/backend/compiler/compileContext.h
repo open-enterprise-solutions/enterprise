@@ -56,11 +56,6 @@ enum {
 	DEF_VAR_CONST = 1000,//loading constants
 };
 
-enum {
-	CODE_VES = ibProgramSyntax::syntax_ves,
-	CODE_CES = ibProgramSyntax::syntax_ces
-};
-
 // ⭐⭐ WHERE A `return` GOES WHEN THERE IS NO FRAME TO LEAVE.
 //
 // A lambda folded into somebody else's loop has no frame of its own — that IS the fold — so its

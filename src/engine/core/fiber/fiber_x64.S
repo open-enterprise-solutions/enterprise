@@ -46,6 +46,11 @@
     .p2align 4
 SYM(ibFiberSwitch):
     .cfi_startproc
+#if defined(__CET__)
+    /* Harmless, and not required. The switch is called directly, and the
+     * trampoline is reached by ret, which IBT does not check. */
+    endbr64
+#endif
     pushq %rbp
     .cfi_def_cfa_offset 16
     .cfi_offset rbp, -16
@@ -98,6 +103,9 @@ SYM(ibFiberSwitch):
 SYM(ibFiberTrampoline):
     .cfi_startproc
     .cfi_undefined rip
+#if defined(__CET__)
+    endbr64
+#endif
     call PLT(ibFiberEnter)
     ud2
     .cfi_endproc
@@ -107,4 +115,30 @@ SYM(ibFiberTrampoline):
 
 #if defined(__linux__) && defined(__ELF__)
     .section .note.GNU-stack, "", @progbits
+#endif
+
+/* C++ objects in this DSO carry GNU_PROPERTY_X86_FEATURE_1_AND when the
+ * compiler was built with CET (__CET__ is 1 for IBT, 2 for SHSTK, 3 for
+ * both). One assembly file without the same note clears the bit for every
+ * object at link time. SHSTK stays off until the switch saves and restores
+ * the shadow-stack pointer: there is no shadow stack per fiber, and a ret
+ * into the forged trampoline would raise #CP if the note claimed it.
+ * (__CET__ & 1) is IBT only. */
+#if defined(__linux__) && defined(__ELF__) && defined(__CET__)
+    .section .note.gnu.property, "a"
+    .align 8
+    .long 1f - 0f
+    .long 4f - 1f
+    .long 5
+0:
+    .string "GNU"
+1:
+    .align 8
+    .long 0xc0000002
+    .long 3f - 2f
+2:
+    .long (__CET__ & 1)
+3:
+    .align 8
+4:
 #endif

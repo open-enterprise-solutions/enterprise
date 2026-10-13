@@ -1,6 +1,6 @@
 ////////////////////////////////////////////////////////////////////////////
 //	Description : ibSpreadsheetCellDescriptionMemory / ibSpreadsheetDescriptionMemory
-//	              — the NODE form of a sheet (backend/spreadsheetDescription.cpp).
+//	              — the NODE form of a sheet (core/description/spreadsheetDescription.cpp).
 //
 //	              A print layout IS a sheet: the areas a report fills, the
 //	              parameters it substitutes, the fonts and borders a person looks
@@ -23,7 +23,7 @@
 
 #include <gtest/gtest.h>
 
-#include "backend/spreadsheetDescription.h"
+#include "core/description/spreadsheetDescription.h"
 #include "core/serialize/dataBuilder.h"
 
 namespace {
@@ -54,16 +54,16 @@ void FillCell(ibSpreadsheetCellDescription& cell)
 	// suite with a toolkit under it, the GUI job CI runs on its own. What is pinned below
 	// is the shape the two classes OWN, and the rule itself is pinned in
 	// WriteNode_ACellWithNoFont_WritesNone.
-	cell.m_backgroundColour = wxColour(10, 20, 30);
-	cell.m_textColour = wxColour(200, 100, 50);
+	cell.m_backgroundColour = ibColour(10, 20, 30);
+	cell.m_textColour = ibColour(200, 100, 50);
 
-	cell.m_borderAt[0].m_style = wxPENSTYLE_SOLID;      // left
+	cell.m_borderAt[0].m_style = ibPenStyle_Solid;      // left
 	cell.m_borderAt[0].m_width = 2;
-	cell.m_borderAt[0].m_colour = wxColour(1, 2, 3);
+	cell.m_borderAt[0].m_colour = ibColour(1, 2, 3);
 
-	cell.m_borderAt[3].m_style = wxPENSTYLE_DOT;        // bottom
+	cell.m_borderAt[3].m_style = ibPenStyle_Dot;        // bottom
 	cell.m_borderAt[3].m_width = 3;
-	cell.m_borderAt[3].m_colour = wxColour(4, 5, 6);
+	cell.m_borderAt[3].m_colour = ibColour(4, 5, 6);
 
 	// right (1) and top (2) stay transparent — a transparent border is the
 	// ABSENCE of a border and says nothing in the node.
@@ -85,13 +85,13 @@ void FillSheet(ibSpreadsheetDescription& sheet)
 	sheet.SetCellValue(1, 0, wxT("[Partner]"));
 	sheet.SetCellFillType(1, 0, ibSpreadsheetFillType::ibSpreadsheetFillType_StrTemplate);
 	sheet.SetCellDetailsParameter(1, 0, wxT("Cell_1_0"));
-	sheet.SetCellBackgroundColour(1, 0, wxColour(10, 20, 30));
-	sheet.SetCellTextColour(1, 0, wxColour(200, 100, 50));
+	sheet.SetCellBackgroundColour(1, 0, ibColour(10, 20, 30));
+	sheet.SetCellTextColour(1, 0, ibColour(200, 100, 50));
 
 	ibSpreadsheetBorderDescription border;
-	border.m_style = wxPENSTYLE_SOLID;
+	border.m_style = ibPenStyle_Solid;
 	border.m_width = 2;
-	border.m_colour = wxColour(1, 2, 3);
+	border.m_colour = ibColour(1, 2, 3);
 	sheet.SetCellBorderLeft(1, 0, border);
 	sheet.SetCellBorderBottom(1, 0, border);
 
@@ -163,8 +163,8 @@ TEST(SpreadsheetCellDescriptionMemory, WriteNodeReadNode_EverySetField_RoundTrip
 	// borders — the two drawn ones survive, the two undrawn ones stay undrawn
 	EXPECT_TRUE(target.m_borderAt[0] == source.m_borderAt[0]);
 	EXPECT_TRUE(target.m_borderAt[3] == source.m_borderAt[3]);
-	EXPECT_EQ(wxPENSTYLE_TRANSPARENT, target.m_borderAt[1].m_style);
-	EXPECT_EQ(wxPENSTYLE_TRANSPARENT, target.m_borderAt[2].m_style);
+	EXPECT_EQ(ibPenStyle_Transparent, target.m_borderAt[1].m_style);
+	EXPECT_EQ(ibPenStyle_Transparent, target.m_borderAt[2].m_style);
 
 	// the merge
 	int rows = 0, cols = 0;
@@ -409,12 +409,12 @@ TEST(SpreadsheetDescriptionMemory, WriteNodeReadNode_WholeSheet_RoundTrips)
 	// question a headless runner cannot answer.
 	const ibSpreadsheetCellDescription* painted = target.GetCell(1, 0);
 	ASSERT_NE(nullptr, painted);
-	EXPECT_EQ(wxColour(10, 20, 30), painted->m_backgroundColour);
-	EXPECT_EQ(wxColour(200, 100, 50), painted->m_textColour);
+	EXPECT_EQ(ibColour(10, 20, 30), painted->m_backgroundColour);
+	EXPECT_EQ(ibColour(200, 100, 50), painted->m_textColour);
 
 	EXPECT_TRUE(target.GetCellBorderLeft(1, 0) == source.GetCellBorderLeft(1, 0));
 	EXPECT_TRUE(target.GetCellBorderBottom(1, 0) == source.GetCellBorderBottom(1, 0));
-	EXPECT_EQ(wxPENSTYLE_TRANSPARENT, target.GetCellBorderRight(1, 0).m_style);
+	EXPECT_EQ(ibPenStyle_Transparent, target.GetCellBorderRight(1, 0).m_style);
 
 	const ibSpreadsheetCellDescription* titled = target.GetCell(0, 0);
 	const ibSpreadsheetCellDescription* titledSource = source.GetCell(0, 0);

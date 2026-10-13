@@ -7,22 +7,22 @@
 
 //////////////////////////////////////////////////////////////////////
 
-ibValueSize::ibValueSize() : ibValueStaticMembers(ibValueTypes::TYPE_VALUE), m_size(wxDefaultSize)
+ibValueSize::ibValueSize() : ibValueStaticMembers(ibValueTypes::TYPE_VALUE), m_size(ibDefaultSize)
 {
 }
 
-ibValueSize::ibValueSize(const wxSize& size) : ibValueStaticMembers(ibValueTypes::TYPE_VALUE), m_size(size)
+ibValueSize::ibValueSize(const ibSize& size) : ibValueStaticMembers(ibValueTypes::TYPE_VALUE), m_size(size)
 {
 }
 
 bool ibValueSize::Init(ibValue** paParams, const long lSizeArray)
 {
 	if (lSizeArray == 1 && paParams[0]->GetType() == ibValueTypes::TYPE_STRING) {
-		m_size = typeConv::StringToSize(paParams[0]->GetString());
+		m_size.FromString(paParams[0]->GetString());
 		return true;
 	}
 	else if (lSizeArray > 1) {
-		m_size = wxSize(paParams[0]->GetInteger(), paParams[1]->GetInteger());
+		m_size = ibSize(paParams[0]->GetInteger(), paParams[1]->GetInteger());
 		return true;
 	}
 	return false;
@@ -45,10 +45,10 @@ bool ibValueSize::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 	switch (lPropNum)
 	{
 	case eWidth:
-		m_size.x = varPropVal.GetInteger();
+		m_size.m_width = varPropVal.GetInteger();
 		return true;
 	case eHeight:
-		m_size.y = varPropVal.GetInteger();
+		m_size.m_height = varPropVal.GetInteger();
 		return true;
 	}
 	return false;
@@ -59,10 +59,10 @@ bool ibValueSize::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 	switch (lPropNum)
 	{
 	case eWidth:
-		pvarPropVal = m_size.x;
+		pvarPropVal = m_size.m_width;
 		return true;
 	case eHeight:
-		pvarPropVal = m_size.y;
+		pvarPropVal = m_size.m_height;
 		return true;
 	}
 	return false;

@@ -7,6 +7,7 @@
 #include "frontend/visualView/ctrl/form.h"                 // ibValueForm::GetMetaObject — …reached through the grid's form
 #include "backend/backend_localization.h"                  // a title read in the reader's language
 #include "backend/query/queryable.h"                       // ibReadPeriodUnit — the word a period grouping says
+#include "backend/backend_composition.h"                   // ibStoreValue — a context value packed into its condition
 
 #include <algorithm>
 
@@ -28,16 +29,17 @@ namespace {
 // WHAT A CELL WAS COMPOSED FROM — asked TWICE about one click: once to offer the fields worth
 // breaking down by, once to narrow the detail itself. One lookup for both, so the menu and the
 // report it opens can never disagree about the same cell.
-void ibCollectCellContext(const ibBackendSpreadsheetObject* document, int row, int col,
+void ibCollectCellContext(const ibSpreadsheetObject* document, int row, int col,
 	std::vector<ibValueSpreadsheetDetails::ibSpreadsheetDetailsField>& into)
 {
 	if (document == nullptr)
 		return;
 
-	wxString bound;
+	ibString bound;
 	document->GetCellDetailsParameter(row, col, bound);
-	ibValue cellValue;   // held, not a temporary — From returns a pointer INTO it
-	if (!bound.IsEmpty() && document->GetParameter(bound, cellValue)) {
+	ibAnyValuePtr<ibAnyValue> held;
+	if (!bound.IsEmpty() && document->GetParameter(bound, held)) {
+		ibValue cellValue = ibValue::FromAnyValue(held);   // held, not a temporary — From returns a pointer INTO it
 		if (ibValueSpreadsheetDetails* details = ibValueSpreadsheetDetails::From(cellValue))
 			details->CollectContext(into);
 	}
@@ -170,11 +172,11 @@ void ibAppendContextConditions(ibFilterDescription& filter,
 		ibTotalsPeriod unit = ibTotalsPeriod::Month;
 		if (field.m_value.GetType() == ibValueTypes::TYPE_DATE && ibPeriodUnitOfPath(structure, field.m_path, unit)) {
 			const ibDateTime date = field.m_value.GetDate();
-			filter.Append(field.m_path, ibComparisonKind_GreaterEqual, ibValue(date.BeginOfPeriod(unit))).m_left = left;
-			filter.Append(field.m_path, ibComparisonKind_LessEqual, ibValue(date.EndOfPeriod(unit))).m_left = left;
+			filter.Append(field.m_path, ibComparisonKind_GreaterEqual, ibStoreValue(ibValue(date.BeginOfPeriod(unit)))).m_left = left;
+			filter.Append(field.m_path, ibComparisonKind_LessEqual, ibStoreValue(ibValue(date.EndOfPeriod(unit)))).m_left = left;
 		}
 		else
-			filter.Append(field.m_path, ibComparisonKind_Equal, field.m_value).m_left = left;
+			filter.Append(field.m_path, ibComparisonKind_Equal, ibStoreValue(field.m_value)).m_left = left;
 	}
 }
 

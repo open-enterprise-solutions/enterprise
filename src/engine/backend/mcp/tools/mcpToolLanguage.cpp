@@ -20,7 +20,7 @@
 
 #include "backend/mcp/mcpTool.h"
 
-#include "backend/compiler/translateCode.h"  // ibTranslateCode::GetKeyWord — the language spells its own words
+#include "core/compiler/translateCode.h"  // ibTranslateCode::GetKeyWord — the language spells its own words
 #include "backend/metadataConfiguration.h"   // the configuration's own type registry
 #include "backend/objCtor.h"
 

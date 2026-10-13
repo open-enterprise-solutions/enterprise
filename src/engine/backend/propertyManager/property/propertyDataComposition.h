@@ -2,7 +2,7 @@
 #define __PROPERTY_DATA_COMPOSITION_H__
 
 #include "backend/propertyManager/propertyObject.h"
-#include "backend/compositionDescription.h"   // what it stores — the SAME composer a list stores
+#include "core/description/compositionDescription.h"   // what it stores — the SAME composer a list stores
 
 // ---------------------------------------------------------------------------
 // ibPropertyDataComposition — backend half of the "data composer settings"

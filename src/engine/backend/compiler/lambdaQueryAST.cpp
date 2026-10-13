@@ -8,7 +8,7 @@
 #include "backend/query/queryAST.h"   // ibQueryAstExpr — the L4-1 AST the pushdown lowers
 #include "backend/compiler/byteCode.h"       // the instructions the second recorder reads
 #include "backend/compiler/compileContext.h" // DEF_VAR_CONST / DEF_VAR_NORET — how an operand names a pool
-#include "codeDef.h"                  // KEY_* script keyword ids / OPER_* opcodes
+#include "core/compiler/codeDef.h"    // KEY_* script keyword ids / OPER_* opcodes
 
 // ⭐⭐ THE SECOND GRAMMAR IS GONE. Until 2026-09-08 this file also held a recursive-descent parser
 // over the LEXEMES — a whole precedence chain, its own bracket matching, its own re-assembly of

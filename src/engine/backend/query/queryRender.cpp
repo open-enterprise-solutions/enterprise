@@ -4,7 +4,7 @@
 
 #include "queryRender.h"
 
-#include "queryKeywords.h"
+#include "core/query/queryKeywords.h"
 
 #include <set>   // which levels open a branch — read while the BY list is joined
 

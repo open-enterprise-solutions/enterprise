@@ -165,7 +165,11 @@ public:
 
 private:
 	void Execute(const ibByteCode& bc, ibByteBinder& br, ibValue* pvarRetValue);
-	void Execute(ibRunContext* pContext, ibValue* pvarRetValue, bool bDelta); // bDelta=true - flag for executing module operators that come at the end of functions and procedures
+	// Probe, then the interpreter. The body commits its frame in the
+	// prologue, which on a tight fiber is the overflow; Execute asks
+	// StackLow first, from a frame small enough to still raise.
+	void Execute(ibRunContext* pContext, ibValue* pvarRetValue, bool bDelta);
+	void ExecuteBody(ibRunContext* pContext, ibValue* pvarRetValue, bool bDelta);
 public:
 
 	// `evalMode` says WHAT this evaluation is, and everything else follows from it (backend_core.h):

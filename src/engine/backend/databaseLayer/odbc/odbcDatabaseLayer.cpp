@@ -349,7 +349,7 @@ int ibDatabaseLayerODBC::DoRunQuery(const wxString& strQuery, bool bParseQuery)
 		}
 		catch (...)
 		{
-			SetErrorCode(pStatement->GetErrorCode());
+			SetErrorCode(pStatement->GetErrorCode(), pStatement->GetErrorKind());
 			SetErrorMessage(pStatement->GetErrorMessage());
 			wxDELETE(pStatement);
 			ThrowDatabaseException();
@@ -377,7 +377,7 @@ ibDatabaseResultSet* ibDatabaseLayerODBC::DoRunQueryWithResults(const wxString& 
 		}
 		catch (...)
 		{
-			SetErrorCode(pStatement->GetErrorCode());
+			SetErrorCode(pStatement->GetErrorCode(), pStatement->GetErrorKind());
 			SetErrorMessage(pStatement->GetErrorMessage());
 			wxDELETE(pStatement);
 			ThrowDatabaseException();
@@ -702,12 +702,10 @@ void ibDatabaseLayerODBC::InterpretErrorCodes(long nCode, void* stmth_ptr)
 				strBuffer, ERR_BUFFER_LEN, &iMsgLen);
 
 		const wxString strSqlState = ConvertFromUnicodeStream((char*)strState);
-		SetErrorCode(TranslateErrorCode((int)iNativeCode, strSqlState));
+		SetErrorCode(TranslateErrorCode((int)iNativeCode, strSqlState), ClassifySqlState(strSqlState, (int)iNativeCode));
 		//SetErrorMessage(wxString((wxChar*)strBuffer));
 		SetErrorMessage(ConvertFromUnicodeStream((char*)strBuffer));
-		// Stash the 5-char SQLSTATE for ClassifyDatabaseError + the
-		// exception's GetSqlState() — without this the override
-		// returns empty and class-digit dispatch can't fire.
+		// Stash the 5-char SQLSTATE for the exception's GetSqlState().
 		SetLastSqlState(strSqlState);
 	}
 }
@@ -729,28 +727,28 @@ void ibDatabaseLayerODBC::Cancel()
 		m_pInterface->GetSQLCancel()((SQLHSTMT)hstmt);
 }
 
-ibBackendDatabaseException::Kind ibDatabaseLayerODBC::ClassifyDatabaseError(int nativeCode) const
+ibBackendDatabaseException::Kind ibDatabaseLayerODBC::ClassifySqlState(const wxString& sqlState, int nativeCode)
 {
 	// Same SQLSTATE class-digit dispatch as PostgreSQL — ODBC standardises
 	// on the SQL-spec SQLSTATE format, so the classification is portable.
 	// See https://learn.microsoft.com/en-us/sql/odbc/reference/appendixes/appendix-a-odbc-error-codes
 	using Kind = ibBackendDatabaseException::Kind;
-	if (m_lastSqlState.length() >= 2) {
-		const wxString cls = m_lastSqlState.Left(2);
+	if (sqlState.length() >= 2) {
+		const wxString cls = sqlState.Left(2);
 		if (cls == wxT("08")) return Kind::ConnectionLost;
 		if (cls == wxT("23")) return Kind::Constraint;
 		if (cls == wxT("42")) return Kind::Syntax;
 		if (cls == wxT("57")) return Kind::ConnectionLost;
 		if (cls == wxT("HY")) {
 			// HYT00 = ODBC timeout expired; HYT01 = connection timeout
-			if (m_lastSqlState == wxT("HYT00") || m_lastSqlState == wxT("HYT01"))
+			if (sqlState == wxT("HYT00") || sqlState == wxT("HYT01"))
 				return Kind::Timeout;
 		}
 		if (cls == wxT("40")) {
 			// MSSQL surfaces deadlock as native error 1205 with SQLSTATE
 			// 40001 (serialization failure) — we treat both as Deadlock
 			// since the engine already rolled the TX back.
-			if (m_lastSqlState == wxT("40001") || m_lastSqlState == wxT("40P01"))
+			if (sqlState == wxT("40001") || sqlState == wxT("40P01"))
 				return Kind::Deadlock;
 			return Kind::Timeout;
 		}

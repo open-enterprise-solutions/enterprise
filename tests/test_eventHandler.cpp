@@ -26,7 +26,7 @@
 #include "backend/backend_type.h"                                 // GetTypesByFilter
 #include "backend/metaCollection/metaEventHandlerObject.h"        // EventId
 #include "backend/system/value/valueType.h"                       // ibValueTypeDescription::AllowValue
-#include "backend/typeDescription.h"
+#include "core/description/typeDescription.h"
 
 // 1 - the family's name
 TEST(EventHandler, AFamilyIsNamedByItsMetatypeAndKind)

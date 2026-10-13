@@ -3,17 +3,9 @@
 
 #include "backend_core.h"
 #include "core/fileSystem/fs.h"
+#include "core/description/commandDescription.h"   // ibInterfaceCommandType — kept with the description that stores it
 
 #include <set>   // m_interfaces — arrived transitively while propgrid was in backend_core's chain
-
-enum ibInterfaceCommandType {
-
-	ibInterfaceCommandType_Default = 100,
-
-	ibInterfaceCommandType_Create = 150,
-	ibInterfaceCommandType_List,
-	ibInterfaceCommandType_Select,
-};
 
 // The interface AREAS an object / command can occupy inside a section (subsystem) — the command-interface panels:
 // Important (top, with the main items) + Normal make the navigation panel; Create / Reports / Service make the

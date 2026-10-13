@@ -232,6 +232,18 @@ void ibProtocolNode::AddItem(const char* name, long long number)
 	items.push_back(number);
 }
 
+void ibProtocolNode::AddItem(const char* name, const wxString& text)
+{
+	if (m_node == nullptr)
+		return;
+	if (!m_node->is_object())
+		*m_node = json::object();
+	json& items = (*m_node)[name];
+	if (!items.is_array())
+		items = json::array();
+	items.push_back(std::string(text.utf8_str()));
+}
+
 void ibProtocolNode::Remove(const char* name)
 {
 	if (m_node != nullptr && m_node->is_object())

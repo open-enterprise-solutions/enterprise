@@ -182,35 +182,32 @@ ibUserInfo ibUserInfo::Read(const wxString& userName)
 
 bool ibUserInfo::HasAny()
 {
-	try {
-		ibDatabaseQueryBuilder q;
-		ibQueryResult result = q.ExecuteIR(
-			ibQueryIR(ibProject(ibScan(user_table), { { ibCol(wxT("name")), wxEmptyString } })));
-		return result.Next();
-	}
-	catch (...) { return false; }
+	// No catch. A missing connection or a failed statement used to come back
+	// as false, and an empty name was then accepted as open access.
+	ibDatabaseQueryBuilder q;
+	ibQueryResult result = q.ExecuteIR(
+		ibQueryIR(ibProject(ibScan(user_table), { { ibCol(wxT("name")), wxEmptyString } })));
+	return result.Next();
 }
 
 std::vector<ibUserInfo::Brief> ibUserInfo::ListAll()
 {
+	// No catch. A failed read used to come back as an empty vector, and
+	// MCP user_list then said there were no accounts at all.
 	std::vector<Brief> list;
-	try {
-		ibDatabaseQueryBuilder q;
-		ibQueryResult result = q.ExecuteIR(ibQueryIR(ibProject(ibScan(user_table),
-			{ { ibCol(wxT("guid")),     wxEmptyString },
-			  { ibCol(wxT("name")),     wxEmptyString },
-			  { ibCol(wxT("fullName")), wxEmptyString } })));
+	ibDatabaseQueryBuilder q;
+	ibQueryResult result = q.ExecuteIR(ibQueryIR(ibProject(ibScan(user_table),
+		{ { ibCol(wxT("guid")),     wxEmptyString },
+		  { ibCol(wxT("name")),     wxEmptyString },
+		  { ibCol(wxT("fullName")), wxEmptyString } })));
 
-		while (result.Next()) {
-			Brief entry;
-			entry.m_strUserGuid     = result.GetResultString(wxT("guid"));
-			entry.m_strUserName     = result.GetResultString(wxT("name"));
-			entry.m_strUserFullName = result.GetResultString(wxT("fullName"));
-			list.emplace_back(std::move(entry));
-		}
+	while (result.Next()) {
+		Brief entry;
+		entry.m_strUserGuid     = result.GetResultString(wxT("guid"));
+		entry.m_strUserName     = result.GetResultString(wxT("name"));
+		entry.m_strUserFullName = result.GetResultString(wxT("fullName"));
+		list.emplace_back(std::move(entry));
 	}
-	catch (...) { /* best-effort — empty list on failure */ }
-
 	return list;
 }
 

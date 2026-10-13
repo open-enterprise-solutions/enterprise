@@ -2,7 +2,7 @@
 #define __PROPERTY_COMPOSITION_H__
 
 #include "backend/propertyManager/propertyObject.h"
-#include "backend/compositionDescription.h"
+#include "core/description/compositionDescription.h"
 
 // base property for "composition" — the shape ibPropertyType has over an ibTypeDescription.
 //

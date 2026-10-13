@@ -48,9 +48,9 @@ wxString XmlText(const wxString& text)
 	return out;
 }
 
-wxString HexOf(const wxColour& colour)
+wxString HexOf(const ibColour& colour)
 {
-	return wxString::Format(wxT("%02X%02X%02X"), colour.Red(), colour.Green(), colour.Blue());
+	return wxString::Format(wxT("%02X%02X%02X"), colour.m_red, colour.m_green, colour.m_blue);
 }
 
 void AddPart(wxZipOutputStream& zip, const wxString& name, const wxString& body)
@@ -109,7 +109,7 @@ wxString Styles()
 		wxT("</w:pPr></w:pPrDefault>")
 		wxT("</w:docDefaults>")
 		wxT("</w:styles>"),
-		ibDefaultSpreadsheetFont().GetPointSize() * 2);
+		wxRound(ibDefaultSpreadsheetFont().m_pointSize) * 2);
 }
 
 wxString RootRels()
@@ -159,15 +159,15 @@ wxString BordersOf(const ibSpreadsheetCellDescription* cell)
 	wxString edges;
 	for (int i = 0; i < 4; i++) {
 		const ibSpreadsheetBorderDescription& border = cell->m_borderAt[s_ours[i]];
-		if (border.m_style == wxPENSTYLE_TRANSPARENT)
+		if (border.m_style == ibPenStyle_Transparent)
 			continue;
 
 		const wxChar* line = wxT("single");
 		switch (border.m_style) {
-		case wxPENSTYLE_DOT:        line = wxT("dotted");  break;
-		case wxPENSTYLE_SHORT_DASH:
-		case wxPENSTYLE_LONG_DASH:  line = wxT("dashed");  break;
-		case wxPENSTYLE_DOT_DASH:   line = wxT("dotDash"); break;
+		case ibPenStyle_Dot:        line = wxT("dotted");  break;
+		case ibPenStyle_ShortDash:
+		case ibPenStyle_LongDash:   line = wxT("dashed");  break;
+		case ibPenStyle_DotDash:    line = wxT("dotDash"); break;
 		default: break;
 		}
 
@@ -187,17 +187,17 @@ wxString RunOf(const ibSpreadsheetCellDescription* cell, const wxString& text)
 	wxString properties;
 
 	if (cell != nullptr) {
-		const wxFont& font = cell->m_font;
+		const ibFont& font = cell->m_font;
 		if (font.IsOk()) {
-			if (!font.GetFaceName().IsEmpty())
+			if (!font.m_faceName.IsEmpty())
 				properties += wxString::Format(
 					wxT("<w:rFonts w:ascii=\"%s\" w:hAnsi=\"%s\"/>"),
-					XmlText(font.GetFaceName()), XmlText(font.GetFaceName()));
-			if (font.GetWeight() >= wxFONTWEIGHT_BOLD)
+					XmlText(font.m_faceName), XmlText(font.m_faceName));
+			if (font.m_weight >= ibFONTWEIGHT_BOLD)
 				properties += wxT("<w:b/>");
-			if (font.GetStyle() == wxFONTSTYLE_ITALIC)
+			if (font.m_style == ibFONTSTYLE_ITALIC)
 				properties += wxT("<w:i/>");
-			if (font.GetStrikethrough())
+			if (font.m_strikethrough)
 				properties += wxT("<w:strike/>");
 		}
 
@@ -208,9 +208,9 @@ wxString RunOf(const ibSpreadsheetCellDescription* cell, const wxString& text)
 			// WORD COUNTS IN HALF-POINTS — and says nothing where the cell agrees with the size the
 			// styles part already declared for the whole document. On a sheet where every cell is
 			// the default size that is one element saved per cell, out of a hundred thousand.
-			if (font.GetPointSize() > 0 && font.GetPointSize() != ibDefaultSpreadsheetFont().GetPointSize())
-				properties += wxString::Format(wxT("<w:sz w:val=\"%d\"/>"), font.GetPointSize() * 2);
-			if (font.GetUnderlined())
+			if (wxRound(font.m_pointSize) > 0 && wxRound(font.m_pointSize) != wxRound(ibDefaultSpreadsheetFont().m_pointSize))
+				properties += wxString::Format(wxT("<w:sz w:val=\"%d\"/>"), wxRound(font.m_pointSize) * 2);
+			if (font.m_underlined)
 				properties += wxT("<w:u w:val=\"single\"/>");
 		}
 	}

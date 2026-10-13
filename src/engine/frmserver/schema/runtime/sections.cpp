@@ -124,7 +124,7 @@ std::vector<const ibValueMetaObjectSection*> UsedSections(const ibMetaDataConfig
 	return used;
 }
 
-void SetPicture(ibDataNode& node, const wxString& name, const ibServerPicture& picture)
+void SetPicture(ibDataNode& node, const wxString& name, const ibPicture& picture)
 {
 	if (picture.IsOk())
 		node.SetValue(name, wxString(picture.GetData()));

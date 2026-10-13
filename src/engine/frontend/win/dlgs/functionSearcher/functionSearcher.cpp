@@ -11,7 +11,7 @@
 #include "frontend/docView/docView.h"
 
 #include "frontend/win/editor/codeEditor/codeEditor.h"
-#include "backend/compiler/scriptParseCode.h"
+#include "core/compiler/scriptParseCode.h"
 
 #define ICON_SIZE 16
 
@@ -52,7 +52,7 @@ ibFunctionList::ibFunctionList(ibMetaDocument* moduleDoc, ibCodeEditor* parent)
 		? metaModule->GetModuleText()
 		: (m_codeEditor != nullptr ? m_codeEditor->GetText() : wxString());
 
-	ibParseCode moduleParser; std::vector<wxString> arrayProcedures; int maxLine = 0;
+	ibParseCode moduleParser(ibCompileCode::GetCodeStyle()); std::vector<wxString> arrayProcedures; int maxLine = 0;
 
 	if (moduleParser.ParseModule(moduleText)) {
 		for (auto content : moduleParser.GetAllContent()) {

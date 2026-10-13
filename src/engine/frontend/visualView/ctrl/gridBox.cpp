@@ -49,7 +49,7 @@ m_gridView(new ibSpreadsheetGridBoxView())                // empty until Create
 
 	m_members.Bind(this, &ibValueGridBox::FillControlMembers);
 	//set default params
-	m_propertyMinSize->SetValue(wxSize(150, 50));
+	m_propertyMinSize->SetValue(ibSize(150, 50));
 	// ⭐ THE SOURCE TAKES EXACTLY TWO TYPES (Max, 2026-08-19): a **spreadsheet document** — the
 	// hand-filled sheet, a printable form — and a **composition** — the report, which builds its own
 	// document and brings the two verbs with it. Declared here so the picker offers those and

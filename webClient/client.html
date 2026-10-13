@@ -944,13 +944,12 @@ function endRequest(ok){
 // Per-tab session id. Lives in sessionStorage, which is scoped to a
 // single browser tab — every new tab (or window) starts with its own
 // fresh id, so the server can back each tab with a distinct ibWebSession.
-// Cookie-only clients still work via the legacy fallback on the server,
-// but all fetches we make here attach X-OES-Session so the server routes
+// Every fetch we make here attaches X-OES-Session so the server routes
 // us correctly.
 function genTabSid(){
   // Dashed UUID form — identical to ibGuid::str() on the server so
-  // this one string serves as X-OES-Session header, oes_session
-  // cookie, SessionManager map key, and sys_session.session PK.
+  // this one string serves as X-OES-Session header, SessionManager
+  // map key, and sys_session.session PK.
   // crypto.randomUUID is the modern path; the fallback hand-rolls
   // a v4-ish layout so ancient browsers still produce a parsable
   // UUID shape.
@@ -1012,7 +1011,7 @@ async function netFetch(url, opts){
 
 // Best-effort tab-close cleanup. pagehide (and the legacy beforeunload
 // fallback) fire both on close and on reload/navigation, but the
-// server's GET / mints a fresh session for an unknown id, so a racing
+// server's POST /login registers an unknown id, so a racing
 // reload just lands on a clean slate with the same tabSid — no broken
 // state. sendBeacon is queued by the browser and delivered even after
 // the page unloads; we pass ?sid because beacon can't attach headers.

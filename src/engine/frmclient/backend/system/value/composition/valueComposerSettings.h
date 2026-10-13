@@ -18,7 +18,7 @@
 // invisible the other.
 //
 // What is left is the single answer: the DESCRIPTION is the model
-// (backend/compositionDescription.h). Filters, sorts, groupings, resources,
+// (core/description/compositionDescription.h). Filters, sorts, groupings, resources,
 // levels and variants are data with arrays that can be walked, copied, compared
 // and written out. A window edits a COPY of it and puts the copy back on OK; the
 // composer reads it to build the query.
@@ -35,7 +35,7 @@
 // the way the description already does.
 
 #include "frmclient/backend/compiler/enumUnit.h"        // ibValueEnumeration — a registered word IS a picker
-#include "frmclient/backend/compositionDescription.h"   // the words themselves, and the data they describe
+#include "core/description/compositionDescription.h"   // the words themselves, and the data they describe
 #include "frmclient/backend/system/value/composition/valueComposerField.h"   // the other half of the surface
 
 // ============================ the pickers ==================================
@@ -44,8 +44,8 @@
 // offer — which is exactly how a grouping's kind spent a long time being unchangeable. Registered,
 // the same value becomes offerable, writable and script-visible at once.
 //
-// ⚠ THEY LIVE HERE, NOT WITH THE DESCRIPTION. A description holds no runtime at all; a stored value
-// is the only live type it is allowed to know. These are runtime — the first tenants of this file,
+// ⚠ THEY LIVE HERE, NOT WITH THE DESCRIPTION. A description holds no runtime at all — not even a
+// value, which it keeps packed (backend_composition.h restores it). These are runtime — the first tenants of this file,
 // and the part of the old wrapper that had to survive it, because a settings window without its
 // drop-downs is a settings window nobody can use.
 

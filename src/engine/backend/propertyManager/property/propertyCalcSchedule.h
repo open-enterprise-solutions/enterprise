@@ -2,7 +2,7 @@
 #define __PROPERTY_CALC_SCHEDULE_H__
 
 #include "backend/propertyManager/propertyObject.h"
-#include "backend/calcScheduleDescription.h"
+#include "core/description/calcScheduleDescription.h"
 
 class ibValueMetaObjectRegisterData;
 

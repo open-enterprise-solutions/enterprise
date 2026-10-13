@@ -1,13 +1,15 @@
 #ifndef _FILTER_TREE_MODEL_H__
 #define _FILTER_TREE_MODEL_H__
 
-#include "backend/tabularModelView.h"
-#include "backend/compositionDescription.h"   // ibFilterDescription — the filter IS this
+#include "core/tabular/tabularModelView.h"
+#include "backend/compiler/value.h"                      // ibValue — a side's literal
+#include "core/description/compositionDescription.h"   // ibFilterDescription — the filter IS this
 
 #include <map>
 #include <vector>
 
 class ibSettingsFieldTree;   // asked which lines are shown — see GetFirstFetch
+class ibMetaData;
 
 ////////////////////////////////////////////////////////////////////////////
 // The filter as a TREE, for the settings form
@@ -62,8 +64,10 @@ wxString ibFilterValueText(const ibValue& value, const ibFilterOperandDescriptio
 
 // …AND A SIDE AS ITS CELL SHOWS IT — a field as its whole path, a value as the field across the comparison writes
 // it. One reading for the filter's own cells and for a condition read out in one line elsewhere (the conditional
-// appearance's summary), so the two never show one condition two ways.
-wxString ibFilterSideText(const ibFilterOperandDescription& side, const ibFilterOperandDescription& other);
+// appearance's summary), so the two never show one condition two ways. `metaData` — the configuration a value is
+// restored against (it is kept packed).
+wxString ibFilterSideText(const ibFilterOperandDescription& side, const ibFilterOperandDescription& other,
+	const ibMetaData* metaData);
 
 // One row of the tree — a condition or a group, named by WHERE it sits. The
 // model owns these and hands the same one back for the same path, so selection

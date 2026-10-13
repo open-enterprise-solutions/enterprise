@@ -2,6 +2,7 @@
 #define __VALUE_SIZE_H__
 
 #include "backend/compiler/value.h"
+#include "core/graphics/geometry.h"   // ibSize — the size, as data
 
 void ibValueSize_BindNames(ibValue::ibMemberTable& helper, const ibValue* ctx);
 
@@ -9,26 +10,24 @@ class BACKEND_API ibValueSize : public ibValueStaticMembers<&ibValueSize_BindNam
 	public:
 
 	ibValueSize();
-	ibValueSize(const wxSize& size);
+	ibValueSize(const ibSize& size);
 	virtual ~ibValueSize() {}
 
 	virtual bool Init(ibValue** paParams, const long lSizeArray);
 	virtual ibString GetString() const {
-		return typeConv::SizeToString(m_size);
+		return m_size.ToString();
 	}
 
 	virtual bool IsEmpty() const {
-		return m_size == wxDefaultSize;
+		return m_size == ibDefaultSize;
 	}
 
 	virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal);        //setting attribute
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal);                   //attribute value
 	// DoGetPMethods (protected) + Shared<&ibValueSize_BindNames> come from the base.
 
-	operator wxSize() const { return m_size; }
-
 public:
-	wxSize m_size;
+	ibSize m_size;
 };
 
 #endif

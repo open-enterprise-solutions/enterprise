@@ -9,7 +9,7 @@
 
 #include "frontend/visualView/ctrl/window.h"
 #include "frontend/visualView/ctrl/typeControl.h"
-#include "backend/sourceDescription.h"   // ibSourceDescription (full [head, field] binding path)
+#include "core/description/sourceDescription.h"   // ibSourceDescription (full [head, field] binding path)
 
 #ifndef OES_USE_WEB
 // Desktop pulls in the full wxDataView-based viewer. Web build keeps

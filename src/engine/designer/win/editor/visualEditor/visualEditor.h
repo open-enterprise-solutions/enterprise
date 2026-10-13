@@ -10,8 +10,8 @@
 
 #include "frontend/visualView/visualHost.h"
 
-#include "backend/sourceDescription.h"   // ibSourceHop — the attribute-tree node path carries the pinned reference type per hop
-#include "backend/commandDescription.h"  // ibCommandDescription — the command-tree node carries the command-hop path (symmetric to the source path)
+#include "core/description/sourceDescription.h"   // ibSourceHop — the attribute-tree node path carries the pinned reference type per hop
+#include "core/description/commandDescription.h"  //ibCommandDescription — the command-tree node carries the command-hop path (symmetric to the source path)
 
 #include <wx/dnd.h>
 #include <functional>

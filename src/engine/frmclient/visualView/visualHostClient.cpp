@@ -78,10 +78,11 @@ void ReadControl(ibValueFrame* control, const ibProtocolNode& node)
 	const ibProtocolNode state = node.FindChild(ibProtocolName::State);
 	control->SetControlTitle(state.Has(ibProtocolName::Caption) ? state.GetString(ibProtocolName::Caption)
 		: state.GetString(ibProtocolName::Title));
+	control->SetSubscribedEvents(state.GetList(ibProtocolName::Subscribed));
 }
 
 // A view as a list of what it is made of: each node's type and id, in order, nested as they are — and what a control
-// is BUILT with rather than set afterwards: how a sizer item lays its child out, which way a line runs.
+// is BUILT with rather than set afterwards: how a sizer item lays its child out, which way a line, a slider, a gauge runs.
 void ShapeOf(const ibProtocolNode& node, std::string& shape)
 {
 	const wxString type = node.GetType();
@@ -93,7 +94,7 @@ void ShapeOf(const ibProtocolNode& node, std::string& shape)
 		shape += '(' + std::to_string(node.GetInt(ibProtocolName::Proportion)) + '|' + std::to_string(FlagOf(node))
 			+ '|' + std::to_string(node.GetInt(ibProtocolName::BorderSize)) + ')';
 	}
-	else if (type == ibProtocolType::Staticline) {
+	else if (type == ibProtocolType::Staticline || type == ibProtocolType::Slider || type == ibProtocolType::Gauge) {
 		shape += '(' + std::to_string(node.GetInt(ibProtocolName::Orient)) + ')';
 	}
 
@@ -284,20 +285,36 @@ void ibVisualHostClient::Send(long long controlId, ibProtocolEvent event, const 
 	if (IsBeingDeleted())
 		return;
 
-	// The form named by its key, not taken for the active tab's: a field left for another tab commits after the tab
-	// has changed.
-	ibProtocolNode params;
-	params.SetValue(ibProtocolName::Control, controlId)
-		.SetValue(ibProtocolName::Event, static_cast<int>(event))
-		.SetValue(ibProtocolName::Args, args);
-	SetViewOf(params, m_formKey, m_tabId);
-
 	// What it says, as it says it — a sheet handed over whole by its size: written out, it was the sheet again in the
 	// journal at every edit.
 	const std::string said = args.IsNode() ? args.Write() : std::string("{}");
 	ibJournalInfo(wxT("event"), wxT("%d on %lld: %s"), static_cast<int>(event), controlId,
 		said.size() <= 1024 ? wxString::FromUTF8(said) : wxString::Format(wxT("%zu bytes"), said.size()));
-	m_mainFrame.Post(ibProtocolMethod::Event, params);
+	m_mainFrame.Post(ibProtocolMethod::Event, EventOf(controlId, event, args));
+}
+
+bool ibVisualHostClient::Hold(long long controlId, ibProtocolEvent event, const ibProtocolNode& args)
+{
+	// Raised while the view is torn down — no one's, as for Send.
+	if (IsBeingDeleted())
+		return true;
+	if (!m_mainFrame.Hold(EventOf(controlId, event, args)))
+		return false;
+	// Counted as it is said: a walk through a list is the journal's own measure of what the wire was spared.
+	ibJournalInfo(wxT("event"), wxT("%d on %lld held"), static_cast<int>(event), controlId);
+	return true;
+}
+
+ibProtocolNode ibVisualHostClient::EventOf(long long controlId, ibProtocolEvent event, const ibProtocolNode& args) const
+{
+	// The form named by its key, not taken for the active tab's: a field left for another tab commits after the tab
+	// has changed — and a held event is carried after it.
+	ibProtocolNode params;
+	params.SetValue(ibProtocolName::Control, controlId)
+		.SetValue(ibProtocolName::Event, static_cast<int>(event))
+		.SetValue(ibProtocolName::Args, args);
+	SetViewOf(params, m_formKey, m_tabId);
+	return params;
 }
 
 ibViewFetcher ibVisualHostClient::MakeFetcher(long long controlId) const

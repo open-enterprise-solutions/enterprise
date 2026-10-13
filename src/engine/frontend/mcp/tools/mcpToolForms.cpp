@@ -35,16 +35,16 @@
 #include "backend/metadataConfiguration.h"
 #include "backend/objCtor.h"   // ibCtorMetaValueType — what a reference type points at, by its id
 #include "backend/backend_command.h"                            // WalkCommand — the receiver judges a binding
-#include "backend/commandDescription.h"
+#include "core/description/commandDescription.h"
 #include "backend/propertyManager/property/propertyCommandSource.h"
 #include "backend/propertyManager/property/propertySource.h"
-#include "backend/sourceDescription.h"
+#include "core/description/sourceDescription.h"
 #include "backend/backend_localization.h"   // a caption is an array by language
 #include "backend/propertyManager/property/propertyString.h"   // ibPropertyTString
 #include "backend/propertyManager/property/propertyComposition.h"       // a composition, wherever it is held
 #include "backend/propertyManager/property/propertyDataComposition.h"   // …the report's own
 #include "backend/propertyManager/property/propertyDynamicList.h"       // …and the list's, judged by list rules
-#include "backend/compositionDescription.h"
+#include "core/description/compositionDescription.h"
 #include "core/stringUtils.h"   // GenerateSynonym — the caption the platform makes from a name
 
 #include "frontend/visualView/ctrl/form.h"

@@ -16,6 +16,8 @@
 #include "backend/tabularModel.h"                   // ibValueModel + ibValueModelColumnCollection (the flat field source)
 #include "backend/system/value/valueDynamicList.h"  // ibValueDynamicList — the dialog is built on it
 #include "backend/srcDataObject.h"                  // ibSourceDataObject — a source describes itself
+#include "backend/query/queryableFactory.h"         // the main table's descriptor — its fields, as the list has them
+#include "backend/backend_composition.h"            // ibValidateSettings — what cannot be applied is refused
 
 #include <wx/notebook.h>
 #include <wx/panel.h>
@@ -28,6 +30,7 @@
 #include <wx/stattext.h>
 #include <wx/toolbar.h>
 #include <wx/app.h>
+#include <algorithm>
 
 // Group tab dataview columns.
 // COLUMN 0 IS RESERVED by the ibDataViewCtrl fork (a model column 0 paints blank
@@ -199,12 +202,39 @@ void ibListSettingsPanel::BindFieldSource()
 
 	const ibMetaData* metaData = SourceMetaData();
 
-	// ⭐ A QUERY DESCRIBES ITS OWN FIELDS — the same answer the composer's window gets, from the same
-	// function: a text and a configuration, with nothing running in between.
-	if (m_schema != nullptr && m_schema->HasQuery()) {
+	// ⭐⭐ THE MAIN TABLE'S FIELDS, AND WHAT THE QUERY ADDS ON TOP — the answer the running list gives
+	// (ibValueDynamicList::GetSourceExplorer), read here off the description. The query alone used to
+	// be the whole answer: a list over a table showed no fields until a query was written, and with
+	// one it lost every field of the table the query did not name (Max, 2026-10-13).
+	if (m_schema != nullptr && (m_schema->HasMainTable() || m_schema->HasQuery())) {
 		std::vector<ibSettingsPlainField> plain;
-		for (const ibQueryConstructorField& field : ibQueryFieldsOfText(m_schema->m_query, metaData))
-			plain.push_back({ field.m_name, wxNOT_FOUND, field.m_type, field.m_available });
+
+		// The table the list IS — its descriptor, through this configuration's factory.
+		ibQueryableFactory* factory = metaData != nullptr ? metaData->GetSourceFactory() : nullptr;
+		if (const ibQueryableSourceDescriptor* descriptor = (factory != nullptr && m_schema->HasMainTable())
+			? factory->ResolveDescriptorById(m_schema->m_mainTable) : nullptr) {
+			ibSourceDataObject::ibSourceExplorer explorer;
+			descriptor->FillSourceExplorer(explorer);
+			for (unsigned int i = 0; i < explorer.GetHelperCount(); ++i) {
+				const ibSourceDataObject::ibSourceExplorer* node = explorer.GetHelper(i);
+				if (node == nullptr || node->IsTableSection())
+					continue;
+				plain.push_back({ node->GetSourceName(), static_cast<ibMetaID>(node->GetSourceId()),
+					node->GetTypeValueDesc(), node->GetColumn() == nullptr || node->GetColumn()->IsAvailable(),
+					node->GetSourceSynonym() });
+			}
+		}
+
+		// ⭐ A QUERY DESCRIBES ITS OWN FIELDS — the same answer the composer's window gets, from the same
+		// function. A name the table already offers is not added twice.
+		if (m_schema->HasQuery())
+			for (const ibQueryConstructorField& field : ibQueryFieldsOfText(m_schema->m_query, metaData)) {
+				const bool already = std::any_of(plain.begin(), plain.end(),
+					[&field](const ibSettingsPlainField& f) { return f.m_name.IsSameAs(field.m_name, false); });
+				if (!already)
+					plain.push_back({ field.m_name, wxNOT_FOUND, field.m_type, field.m_available });
+			}
+
 		m_fieldSource->SetPlainFields(std::move(plain), metaData);
 		return;
 	}
