@@ -13,6 +13,7 @@
 
 #include <gtest/gtest.h>
 
+#include "backend/backend_exception.h"
 #include "backend/compiler/compileCode.h"
 #include "backend/compiler/procUnit.h"
 #include "backend/compiler/byteCode.h"
@@ -21,6 +22,9 @@
 #include "backend/compiler/procUnitState.h"   // m_errorPlace — which opcode raised
 #include "backend/session/session.h"
 #include "backend/appData.h"                // the built-in dispatcher reads appData on entry
+#include "backend/metadataConfiguration.h"
+#include "backend/metaCollection/metaModuleObject.h"
+#include "backend/moduleManager/moduleManager.h"
 
 #include <wx/init.h>
 #include <wx/image.h>  // wxInitAllImageHandlers — wx decodes nothing until registered
@@ -710,30 +714,6 @@ TEST(RuntimeTest, CallFunctionWithMultipleParams) {
 	EXPECT_EQ(ret.GetInteger(), 60);
 }
 
-// A common module is a value. Its methods are the module's exports, and a call
-// from another module arrives here with only the arguments that were written.
-namespace {
-class ModuleSurface : public ibValueDynamicMembers {
-public:
-	explicit ModuleSurface(ibProcUnit* unit)
-		: ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, true), m_unit(unit) {
-		m_members.Bind(this, &ModuleSurface::FillMembers);
-	}
-
-	void FillMembers(ibMemberTable& helper) const {
-		helper.AppendFunc(wxT("Piece"), 2, wxT("Piece(text, sep)"));
-		helper.AppendFunc(wxT("Flag"), 1, wxT("Flag(show)"));
-	}
-
-	bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray) override {
-		return m_unit->CallAsFunc(GetMethodName(lMethodNum), pvarRetValue, paParams, lSizeArray);
-	}
-
-private:
-	ibProcUnit* m_unit;
-};
-} // namespace
-
 // The arguments a caller leaves out are the declaration's defaults. Inside one
 // script that already happened at the call site; a call into the module from
 // outside used to leave the parameter Undefined.
@@ -804,8 +784,9 @@ TEST(RuntimeTest, AnOmittedArgumentTakesTheDeclaredDefault) {
 	ASSERT_TRUE(pu.CallAsFunc(wxT("Both"), ret, one, ex));
 	EXPECT_EQ(ret.GetString(), wxT("Xc"));
 
-	ASSERT_TRUE(pu.CallAsFunc(wxT("Need"), ret, one));
-	EXPECT_EQ(ret.GetType(), ibValueTypes::TYPE_EMPTY);
+	// The second parameter has no default. The call is refused, rather than
+	// answered with Undefined.
+	EXPECT_THROW(pu.CallAsFunc(wxT("Need"), ret, one), ibBackendCoreException);
 
 	ASSERT_TRUE(pu.CallAsProc(wxT("Stamp")));
 	ibValue kept;
@@ -818,11 +799,20 @@ TEST(RuntimeTest, AnOmittedArgumentTakesTheDeclaredDefault) {
 	EXPECT_EQ(kept.GetString(), wxT("other"));
 }
 
-// `Lib.Piece("X")` is how a common module is called. The receiver is another
-// module's value; the default belongs to the callee, not to this script.
-TEST(RuntimeTest, AMethodCallFromAnotherModuleTakesTheDeclaredDefault) {
-	ibCompileCode calleeCc(wxT("callee"), wxT("memory"), false);
-	ASSERT_TRUE(TryCompile(calleeCc,
+// `Lib.Piece("X")` is a call on a common module's own unit. The default belongs
+// to that module. A hole in the middle is filled there too, and a required
+// argument that was left out is refused.
+TEST_F(BuiltInRuntime, ACommonModuleUnitFillsAHoleInTheMiddle) {
+	ibSession session(wxT("mod-default"), ibSessionKind::Enterprise);
+	ibSessionScope scope(&session);
+
+	ibMetaDataConfigurationFile cfg;
+	ibValueMetaObjectConfiguration* root = cfg.GetCommonMetaObject();
+	ASSERT_NE(root, nullptr);
+	auto* mod = dynamic_cast<ibValueMetaObjectCommonModule*>(
+		cfg.CreateMetaObject(g_metaCommonModuleCLSID, root, false));
+	ASSERT_NE(mod, nullptr);
+	mod->SetModuleText(
 		wxT("Function Piece(text, sep = \",\") Public\n")
 		wxT("  Return text + sep + text;\n")
 		wxT("EndFunction\n")
@@ -831,53 +821,58 @@ TEST(RuntimeTest, AMethodCallFromAnotherModuleTakesTheDeclaredDefault) {
 		wxT("    Return 1;\n")
 		wxT("  EndIf;\n")
 		wxT("  Return 0;\n")
-		wxT("EndFunction\n")));
+		wxT("EndFunction\n")
+		wxT("Function Both(a, b = \"m\", c) Public\n")
+		wxT("  Return \"\" + a + b + c;\n")
+		wxT("EndFunction\n")
+		wxT("Function Need(a, b) Public\n")
+		wxT("  Return b;\n")
+		wxT("EndFunction\n"));
 
-	ibProcUnit callee;
-	ASSERT_TRUE(TryExecute(callee, calleeCc.m_cByteCode));
-	// Heap, and one count we hold ourselves. Copying the module into a call's
-	// receiver counts it, and the copy lets go when the call is over; a stack
-	// object would be deleted by that.
-	ModuleSurface* lib = new ModuleSurface(&callee);
-	lib->IncrRef();
+	ibValueModuleManagerDesigner manager(&cfg, root);
+	ASSERT_TRUE(manager.AddCommonModule(mod));
+	ibValueModuleManager::ibValueModuleUnit* unit = manager.FindCommonModule(mod);
+	ASSERT_NE(unit, nullptr);
+	ASSERT_TRUE(unit->Compile());
+	unit->InitializeRuntime();
+	unit->Run(false);
+	unit->InvalidateNames();
 
 	ibCompileCode caller(wxT("caller"), wxT("memory"), false);
-	caller.AddContextVariable(wxT("Lib"), lib, false);
+	caller.AddContextVariable(wxT("Lib"), unit, false);
 	ASSERT_TRUE(TryCompile(caller,
-		wxT("Function Local(a, b = \"local\")\n")
-		wxT("  Return b;\n")
-		wxT("EndFunction\n")
 		wxT("var joined public;\n")
 		wxT("var dashed public;\n")
 		wxT("var shown public;\n")
-		wxT("var localAnswer public;\n")
+		wxT("var holed public;\n")
 		wxT("joined = Lib.Piece(\"X\");\n")
 		wxT("dashed = Lib.Piece(\"X\", \"-\");\n")
 		wxT("shown = Lib.Flag();\n")
-		wxT("localAnswer = Local(1);\n")));
+		wxT("holed = Lib.Both(1, , 3);\n")));
 
-	{
-		ibProcUnit callerUnit;
-		wxString error;
-		ASSERT_TRUE(RunBound(caller, callerUnit, error)) << error.ToStdString();
+	ibProcUnit callerUnit;
+	wxString error;
+	ASSERT_TRUE(RunBound(caller, callerUnit, error)) << error.ToStdString();
 
-		ibValue joined;
-		ASSERT_TRUE(callerUnit.GetPropVal(wxT("joined"), joined));
-		EXPECT_EQ(joined.GetString(), wxT("X,X"));
+	ibValue joined;
+	ASSERT_TRUE(callerUnit.GetPropVal(wxT("joined"), joined));
+	EXPECT_EQ(joined.GetString(), wxT("X,X"));
 
-		ibValue dashed;
-		ASSERT_TRUE(callerUnit.GetPropVal(wxT("dashed"), dashed));
-		EXPECT_EQ(dashed.GetString(), wxT("X-X"));
+	ibValue dashed;
+	ASSERT_TRUE(callerUnit.GetPropVal(wxT("dashed"), dashed));
+	EXPECT_EQ(dashed.GetString(), wxT("X-X"));
 
-		ibValue shown;
-		ASSERT_TRUE(callerUnit.GetPropVal(wxT("shown"), shown));
-		EXPECT_EQ(shown.GetInteger(), 1);
+	ibValue shown;
+	ASSERT_TRUE(callerUnit.GetPropVal(wxT("shown"), shown));
+	EXPECT_EQ(shown.GetInteger(), 1);
 
-		ibValue localAnswer;
-		ASSERT_TRUE(callerUnit.GetPropVal(wxT("localAnswer"), localAnswer));
-		EXPECT_EQ(localAnswer.GetString(), wxT("local"));
-	}
-	lib->DecrRef();
+	ibValue holed;
+	ASSERT_TRUE(callerUnit.GetPropVal(wxT("holed"), holed));
+	EXPECT_EQ(holed.GetString(), wxT("1m3"));
+
+	ibValue ret;
+	ibValue one(1);
+	EXPECT_THROW(unit->CallAsFunc(unit->FindMethod(wxT("Need")), ret, &one, 1), ibBackendCoreException);
 }
 
 TEST(RuntimeTest, RecursiveFactorial) {
