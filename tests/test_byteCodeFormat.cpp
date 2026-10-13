@@ -40,7 +40,7 @@ wxString CodeDefPath()
 	codeDef.RemoveLastDir();   // tests/ -> the repository root
 	codeDef.AppendDir(wxT("src"));
 	codeDef.AppendDir(wxT("engine"));
-	codeDef.AppendDir(wxT("backend"));
+	codeDef.AppendDir(wxT("core"));
 	codeDef.AppendDir(wxT("compiler"));
 	codeDef.SetFullName(wxT("codeDef.h"));
 	codeDef.Normalize(wxPATH_NORM_DOTS | wxPATH_NORM_ABSOLUTE);
