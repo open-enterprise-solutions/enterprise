@@ -10,6 +10,7 @@
 
 #include "frmclient/backend/serialize/dataProtocol.h"                       // a field's type, as the server writes it
 #include "frmclient/backend/metaCollection/partial/reference/reference.h"   // ibValueReferenceDataObject — what a reference points at
+#include "frmclient/backend/metaCollection/resource/metaResourceObject.h"   // the RESOURCE metatype — its own class icon
 #include "frmclient/mainFrame/mainFrame.h"                                  // ibFrontendMainFrame::Respond — a target's fields asked
 #include "protocol/protocol.h"
 
@@ -66,8 +67,7 @@ static int ibSettingsFieldIcon(wxTreeCtrl* tree, const wxIcon& icon)
 // already has one, and it would drift from the one the metadata tree shows.
 static int ibSettingsResourceIcon(wxTreeCtrl* tree)
 {
-	// The metaobject's own picture is the configuration's: a list has no resources, a composition's are the report's step.
-	return ibSettingsFieldIcon(tree, wxIcon());
+	return ibSettingsFieldIcon(tree, ibValueMetaObjectResource::GetIconGroup());
 }
 
 // THE FIELDS OF A REFERENCE'S TARGETS — asked of the server, which holds the configuration (Act Expand): the window it

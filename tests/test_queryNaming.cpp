@@ -412,7 +412,7 @@ TEST(QueryComposerPrune, ASettingWhoseFieldIsGoneIsDropped)
 
 	const ibFilterNodeDescription& kept = composer.GetCurrentFilterDesc().m_nodes[0];
 	EXPECT_EQ(wxT("Code"), kept.m_left.m_path);
-	EXPECT_EQ(wxT("A-1"), kept.m_right.m_value.GetString()) << "the surviving line must keep its bound value";
+	EXPECT_EQ(wxT("A-1"), ibStoredValue(kept.m_right.m_value, nullptr).GetString()) <<"the surviving line must keep its bound value";
 }
 
 TEST(QueryComposerPrune, AWalkIsJudgedByWhatItSTARTSFrom)

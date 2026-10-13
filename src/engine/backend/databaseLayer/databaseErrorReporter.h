@@ -26,19 +26,11 @@ public:
 
 	const wxString& GetErrorMessage();
 	int GetErrorCode();
+	// The portable Kind recorded with the code, so a catch can pick retry / no-retry without parsing
+	// the message. It travels with the code when one reporter hands its error to another.
+	ibBackendDatabaseException::Kind GetErrorKind() const { return m_errorKind; }
 
 	void ResetErrorCodes();
-
-	// Classify the driver-native error code into a portable Kind so
-	// catch-handlers can pick retry / no-retry without parsing the
-	// message string. Default returns Unknown — subclasses (the
-	// per-driver ibDatabaseLayer*) override with mappings rooted in
-	// their native error space (FB isc_status, PG SQLSTATE int,
-	// ODBC SQLSTATE).
-	virtual ibBackendDatabaseException::Kind ClassifyDatabaseError(int nativeCode) const {
-		(void)nativeCode;
-		return ibBackendDatabaseException::Kind::Unknown;
-	}
 
 	// Driver-native SQLSTATE (5-char) when the engine reports one. PG /
 	// ODBC exposes SQLSTATE; Firebird and SQLite don't, so the
@@ -49,7 +41,13 @@ public:
 protected:
 
 	void SetErrorMessage(const wxString& strErrorMessage);
+	// A code of the platform's own (a library that did not load, no rows) — its Kind is Unknown.
 	void SetErrorCode(int nErrorCode);
+	// …AN ERROR OF THE ENGINE — the driver says what it is where it reads it, through its own
+	// table: FB and SQLite from the native code (static ClassifyDatabaseError of the layer class),
+	// PostgreSQL and ODBC from the SQLSTATE (ClassifySqlState). No default: a driver site that
+	// forgets the Kind does not compile.
+	void SetErrorCode(int nErrorCode, ibBackendDatabaseException::Kind kind);
 
 	void ThrowDatabaseException();
 
@@ -57,6 +55,7 @@ private:
 
 	wxString m_strErrorMessage;
 	int m_nErrorCode;
+	ibBackendDatabaseException::Kind m_errorKind = ibBackendDatabaseException::Kind::Unknown;
 };
 
 #endif // __DATABASE_ERROR_REPORTER_H__

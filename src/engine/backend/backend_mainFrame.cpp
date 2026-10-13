@@ -1,5 +1,7 @@
 #include "backend_mainFrame.h"
 
+#include "backend/session/session.h"
+
 // ibBackendDocFrame no longer owns any process-level / thread-local
 // state — the frame is a member of the ibSession that created it.
 // ms_mainFrame / t_mainFrame / GetDocMDIFrame / InstallOnThread and the
@@ -7,11 +9,18 @@
 // their frame through the session pointer that's already in scope.
 // Default ctor/dtor live in the header.
 
-int ibBackendDocFrame::ShowModalMessage(const wxString& /*message*/,
-                                           const wxString& /*caption*/,
-                                           int /*style*/)
+int ibBackendDocFrame::ShowModalMessage(const wxString& message,
+                                           const wxString& caption,
+                                           int style)
 {
-	// Default base body — no UI, so nothing to show. Returns 0 which
-	// maps to wxCANCEL/"aborted" in Question-style callers.
-	return 0;
+	if (ibSession* const session = GetSession())
+		session->RefuseQuestionFromRoleHandler();
+	return DoShowModalMessage(message, caption, style);
+}
+
+bool ibBackendDocFrame::Request(const ibDataNode& request, ibDataNode& response)
+{
+	if (ibSession* const session = GetSession())
+		session->RefuseQuestionFromRoleHandler();
+	return DoRequest(request, response);
 }

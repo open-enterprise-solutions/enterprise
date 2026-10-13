@@ -2,7 +2,7 @@
 #define __SPREADSHEET_MODEL_H__
 
 #include "backend/compiler/value.h"
-#include "backend/backend_spreadsheet.h"
+#include "core/spreadsheet/spreadsheetObject.h"
 #include "backend/standardCommand.h"   // ibCommandItem — the model is a command STORE, like a table's
 #include "backend/composition/dataComposer.h"   // L5 — every sheet model has one; a drawn document's is empty
 
@@ -60,16 +60,16 @@ public:
 	// what makes something a model of a spreadsheet, so a model without a sheet is not a state that
 	// exists: a composer that has never run and a document nobody typed into both have an empty one.
 	ibValueSpreadsheetModel()
-		: ibValueDynamicMembers(), m_spreadsheetDoc(new ibBackendSpreadsheetObject()) {}
+		: ibValueDynamicMembers(), m_spreadsheetDoc(std::make_shared<ibSpreadsheetObject>()) {}
 	explicit ibValueSpreadsheetModel(const ibSpreadsheetDescription& spreadsheetDesc)
-		: ibValueDynamicMembers(), m_spreadsheetDoc(new ibBackendSpreadsheetObject(spreadsheetDesc)) {}
+		: ibValueDynamicMembers(), m_spreadsheetDoc(std::make_shared<ibSpreadsheetObject>(spreadsheetDesc)) {}
 
 	// ⭐⭐ THE MODEL HOLDS THE BACKEND SHEET AND HANDS IT BACK. That is what the two kinds have in
 	// common and the whole reason this base exists (Max, 2026-08-20: "the model contains the backend
 	// spreadsheet object; its job is to return it, and it knows how to get a value out of it").
 	//
 	// The rendering control asks for it and draws it — it never learns whether a query ran.
-	wxObjectDataPtr<ibBackendSpreadsheetObject> GetSpreadsheetDocument() const { return m_spreadsheetDoc; }
+	std::shared_ptr<ibSpreadsheetObject> GetSpreadsheetDocument() const { return m_spreadsheetDoc; }
 
 	// ⭐ AND THE ONE ACT THAT DIFFERS: produce the data.
 	//
@@ -117,7 +117,7 @@ protected:
 
 	// The sheet itself. Held here because holding it IS what makes something a model of a spreadsheet;
 	// a composer replaces its content on every run, a hand-filled document simply keeps it.
-	wxObjectDataPtr<ibBackendSpreadsheetObject> m_spreadsheetDoc;
+	std::shared_ptr<ibSpreadsheetObject> m_spreadsheetDoc;
 
 	// …and the composer that fills it. EMPTY on a drawn document — no source, no query, nothing set
 	// — which is the honest description of a sheet somebody typed by hand.

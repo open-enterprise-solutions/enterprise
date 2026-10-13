@@ -50,9 +50,9 @@ bool ibValueFrame::CallAsEvent(const ibEvent* event, ibValue** ppParams, const l
 {
 	if (event == nullptr)
 		return false;
-	ibEventDispatcher* dispatcher = event->GetDispatcher();
-	if (dispatcher == nullptr || dispatcher->IsEmpty())
+	if (!HasHandler(event))
 		return true;   // undefined -> no-op, the event just proceeds
+	ibEventDispatcher* const dispatcher = event->GetDispatcher();
 	ibFormVisualDocument* const document = GetVisualDocument();
 	if (ibFormVisualEditView* const host = document != nullptr ? document->GetFirstView() : nullptr)
 		host->UpdateControl(GetOwnerForm());
@@ -80,6 +80,12 @@ bool ibValueFrame::CallAsEvent(const wxString& functionName, ibValue** ppParams,
 		return false;
 	}
 	return true;
+}
+
+bool ibValueFrame::HasHandler(const ibEvent* event) const
+{
+	const ibEventDispatcher* const dispatcher = event != nullptr ? event->GetDispatcher() : nullptr;
+	return dispatcher != nullptr && !dispatcher->IsEmpty();
 }
 
 #include "frmserver/visualView/ctrl/typeControl.h"   // ibTypeControlFactory — a control's bound SOURCE head (command descend)

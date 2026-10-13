@@ -7,7 +7,7 @@
 #include <vector>
 
 #include "frmclient/visualView/ctrl/frame.h"
-#include "frmclient/win/ctrls/dataview/tabularModelView.h"
+#include "core/tabular/tabularModelView.h"
 
 // A CELL of a table's row as the server wrote it: the text, a tick for a boolean, the right side for a number — and
 // how it looks, the conditional appearance the server's model gave it.

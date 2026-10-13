@@ -21,7 +21,8 @@ namespace {
 // ⭐ A CONDITION READ OUT — what its cell shows: the switched-on lines, each side as the filter's own cell shows it
 // (ibFilterSideText: a field by its whole path, a value as its field writes it), the comparison in its own word. A
 // group is bracketed; an empty condition says nothing, and a rule with no condition holds for every row.
-wxString ConditionText(ibFilterGroupKind kind, const std::vector<ibFilterNodeDescription>& nodes)
+wxString ConditionText(ibFilterGroupKind kind, const std::vector<ibFilterNodeDescription>& nodes,
+	const ibMetaData* metaData)
 {
 	const wxString joint = kind == ibFilterGroupKind_Or ? wxString(wxT(" OR ")) : wxString(wxT(" AND "));
 	wxString text;
@@ -30,16 +31,16 @@ wxString ConditionText(ibFilterGroupKind kind, const std::vector<ibFilterNodeDes
 			continue;
 		wxString part;
 		if (node.m_kind == ibFilterNodeKind_Group) {
-			part = ConditionText(node.m_groupKind, node.m_children);
+			part = ConditionText(node.m_groupKind, node.m_children, metaData);
 			if (part.IsEmpty())
 				continue;
 			part = (node.m_groupKind == ibFilterGroupKind_Not ? wxString(wxT("NOT (")) : wxString(wxT("("))) + part + wxT(")");
 		}
 		else {
-			part = ibFilterSideText(node.m_left, node.m_right) + wxT(" ")
+			part = ibFilterSideText(node.m_left, node.m_right, metaData) + wxT(" ")
 				+ ibValue::CreateEnumObject<ibValueEnumComparisonKind>(node.m_comparison).GetString().ToWxString();
 			if (ibComparisonTakesValue(node.m_comparison))
-				part += wxT(" ") + ibFilterSideText(node.m_right, node.m_left);   // «filled» asks the field alone
+				part += wxT(" ") + ibFilterSideText(node.m_right, node.m_left, metaData);   // «filled» asks the field alone
 		}
 		text += (text.IsEmpty() ? wxString() : joint) + part;
 	}
@@ -167,7 +168,8 @@ public:
 		if (col == kColUse)
 			variant = rule->m_use;
 		else if (col == kColCondition)
-			variant = ConditionText(rule->m_condition.m_rootKind, rule->m_condition.m_nodes);
+			variant = ConditionText(rule->m_condition.m_rootKind, rule->m_condition.m_nodes,
+				m_editor->m_metaOf ? m_editor->m_metaOf() : nullptr);
 		else if (col == kColFields)
 			variant = FieldsText(rule->m_fields);
 		else if (col == kColAppearance)
@@ -337,7 +339,7 @@ bool ibConditionalAppearanceEditor::EditCondition(wxString& text)
 	if (dialog.ShowModal() != wxID_OK || m_readOnly || dialog.GetCondition() == rule->m_condition)
 		return false;
 	rule->m_condition = dialog.GetCondition();
-	text = ConditionText(rule->m_condition.m_rootKind, rule->m_condition.m_nodes);
+	text = ConditionText(rule->m_condition.m_rootKind, rule->m_condition.m_nodes, m_metaOf ? m_metaOf() : nullptr);
 	Changed();
 	return true;
 }

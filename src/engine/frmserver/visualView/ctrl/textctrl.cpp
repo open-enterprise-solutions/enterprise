@@ -72,7 +72,7 @@ ibValueTextCtrl::ibValueTextCtrl() :
 {
 	m_members.Bind(this, &ibValueTextCtrl::FillControlMembers);
 	//set default params
-	m_propertyBG->SetValue(wxColour(255, 255, 255));
+	m_propertyBG->SetValue(ibColour(255, 255, 255));
 }
 
 const ibMetaData* ibValueTextCtrl::GetMetaData() const

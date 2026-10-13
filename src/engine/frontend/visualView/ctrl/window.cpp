@@ -43,10 +43,10 @@ void ibValueWindow::UpdateWindow(ibFrontendWindow* window)
 	// SetToolTip API, so one body covers both. Only window->Layout()
 	// at the end is wx-specific — web uses flex layout on the client,
 	// no re-layout call needed.
-	if (m_propertyMinSize->GetValueAsSize() != wxDefaultSize)
-		window->SetMinSize(m_propertyMinSize->GetValueAsSize());
-	if (m_propertyMaxSize->GetValueAsSize() != wxDefaultSize)
-		window->SetMaxSize(m_propertyMaxSize->GetValueAsSize());
+	if (m_propertyMinSize->GetValueAsSize() != ibDefaultSize)
+		window->SetMinSize(typeConv::SizeToWxSize(m_propertyMinSize->GetValueAsSize()));
+	if (m_propertyMaxSize->GetValueAsSize() != ibDefaultSize)
+		window->SetMaxSize(typeConv::SizeToWxSize(m_propertyMaxSize->GetValueAsSize()));
 	
 	ApplyLook(window);   // font / colours (shared with the layer look sync)
 	
@@ -65,8 +65,8 @@ void ibValueWindow::UpdateWindow(ibFrontendWindow* window)
 
 #ifndef OES_USE_WEB
 	// Size changes may require a re-layout; flex handles that on web.
-	if (m_propertyMinSize->GetValueAsSize() != wxDefaultSize ||
-		m_propertyMaxSize->GetValueAsSize() != wxDefaultSize) {
+	if (m_propertyMinSize->GetValueAsSize() != ibDefaultSize ||
+		m_propertyMaxSize->GetValueAsSize() != ibDefaultSize) {
 		window->Layout();
 	}
 #endif
@@ -77,11 +77,11 @@ void ibValueWindow::ApplyLook(ibFrontendWindow* window)
 	if (window == nullptr)
 		return;
 	if (m_propertyFont->IsOk())
-		window->SetFont(m_propertyFont->GetValueAsFont());
+		window->SetFont(typeConv::FontToWxFont(m_propertyFont->GetValueAsFont()));
 	if (m_propertyFG->IsOk())
-		window->SetForegroundColour(m_propertyFG->GetValueAsColour());
+		window->SetForegroundColour(typeConv::ColourToWxColour(m_propertyFG->GetValueAsColour()));
 	if (m_propertyBG->IsOk())
-		window->SetBackgroundColour(m_propertyBG->GetValueAsColour());
+		window->SetBackgroundColour(typeConv::ColourToWxColour(m_propertyBG->GetValueAsColour()));
 }
 
 //**********************************************************************************

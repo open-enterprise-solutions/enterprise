@@ -15,9 +15,9 @@
 
 #include "backend/query/queryParser.h"
 #include "backend/query/queryRender.h"
-#include "backend/query/queryKeywords.h"
+#include "core/query/queryKeywords.h"
 #include "backend/backend_exception.h"
-#include "backend/typeDescription.h"     // a CAST to a primitive, read as the type it converts to
+#include "core/description/typeDescription.h"     // a CAST to a primitive, read as the type it converts to
 
 #include <wx/sizer.h>
 #include <wx/stattext.h>

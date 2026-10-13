@@ -61,18 +61,18 @@ void ibValueStaticBoxSizer::Update(wxObject* wxobject, ibVisualHost* visualHost)
 #endif
 
 	staticboxsizer->SetOrientation(m_propertyOrient->GetValueAsInteger());
-	staticboxsizer->SetMinSize(m_propertyMinSize->GetValueAsSize());
+	staticboxsizer->SetMinSize(typeConv::SizeToWxSize(m_propertyMinSize->GetValueAsSize()));
 
 	target->SetLabel(m_propertyTitle->GetValueAsTranslateString());
-	target->SetMinSize(m_propertyMinSize->GetValueAsSize());
-	target->SetFont(m_propertyFont->GetValueAsFont());
-	target->SetForegroundColour(m_propertyFG->GetValueAsColour());
-	target->SetBackgroundColour(m_propertyBG->GetValueAsColour());
+	target->SetMinSize(typeConv::SizeToWxSize(m_propertyMinSize->GetValueAsSize()));
+	target->SetFont(typeConv::FontToWxFont(m_propertyFont->GetValueAsFont()));
+	target->SetForegroundColour(typeConv::ColourToWxColour(m_propertyFG->GetValueAsColour()));
+	target->SetBackgroundColour(typeConv::ColourToWxColour(m_propertyBG->GetValueAsColour()));
 	target->Enable(m_propertyEnabled->GetValueAsBoolean());
 	target->Show(m_propertyVisible->GetValueAsBoolean() && IsAvailable());
 	target->SetToolTip(m_propertyTooltip->GetValueAsString());
 
-	if (m_propertyMinSize->GetValueAsSize() != wxDefaultSize)
+	if (m_propertyMinSize->GetValueAsSize() != ibDefaultSize)
 		target->Layout();
 
 	UpdateSizer(staticboxsizer);

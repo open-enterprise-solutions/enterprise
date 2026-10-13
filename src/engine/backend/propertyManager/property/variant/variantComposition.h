@@ -1,7 +1,8 @@
 #ifndef __COMPOSITION_VARIANT_H__
 #define __COMPOSITION_VARIANT_H__
 
-#include "backend/compositionDescription.h"
+#include "backend/backend_core.h"
+#include "core/description/compositionDescription.h"
 
 class BACKEND_API ibPropertyObject;
 

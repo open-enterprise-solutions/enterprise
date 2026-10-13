@@ -1,6 +1,45 @@
 #include "backend_type.h"
 #include "backend/compiler/enumUnit.h"
 #include "backend/system/value/valueTable.h"   // g_valueTableCLSID (the _table default); the primitive value clsids come via value.h
+#include "backend/metaData.h"                  // FindAnyObjectByFilter — which ids of a binding still name an object
+#include "core/serialize/dataBuilder.h"        // ibDataValue — the node a binding is written into
+
+//***********************************************************************
+//*                         Meta description                            *
+//***********************************************************************
+
+// ⭐ A BINDING WRITES THE OBJECTS IT NAMES THAT ARE STILL THERE. Deleting an object marks it and leaves
+// it standing until the configuration is saved; nothing took its id out of the bindings that named it,
+// so a document went on posting "into" a register that no longer existed — `#<id> (missing)` in its
+// register list for good, and the same for an owner, a generation target or a chart. This is the one
+// door all six bindings save through, so the rule is said once: an id that names no object, or names
+// one marked deleted, is not written. Nothing in memory changes — a deletion taken back before the
+// save finds its bindings as they were.
+bool ibBackendMetaDescriptionMemory::WriteNode(ibDataValue& value, const ibMetaDescription& metaDesc,
+	const ibMetaData* metaData)
+{
+	if (metaData == nullptr)
+		return ibMetaDescriptionMemory::WriteNode(value, metaDesc);
+
+	ibMetaDescription standing;
+	for (unsigned int idx = 0; idx < metaDesc.GetTypeCount(); idx++) {
+		const ibMetaID id = metaDesc.GetByIdx(idx);
+		// ⭐⭐ LOOKED FOR THROUGH THE WHOLE TREE, not among the top-level objects alone. Every
+		// binding this door had served named something that stands at the top — a register, a
+		// chart, a catalog — so a shallow search answered them all and nobody noticed it was
+		// shallow. An ACCOUNTING KIND lives inside its chart of accounts: not found, its id was
+		// dropped here, and the binding was written as an EMPTY list. Set in the designer, read
+		// back, saved, reopened — and gone, with no error anywhere (found with probes over MCP,
+		// 2026-09-16). The rule this filter states — "an id that names no object is not written" —
+		// is about existence, and existence does not depend on depth. The READING side asks the
+		// same way (ibVariantDataOwner), or a binding that was written is unreadable.
+		const ibValueMetaObject* named = metaData->FindAnyObjectByFilter(id, /*use_child_filter*/ true);
+		if (named == nullptr || named->IsDeleted())
+			continue;
+		standing.AppendMetaType(id);
+	}
+	return ibMetaDescriptionMemory::WriteNode(value, standing);
+}
 
 //***********************************************************************
 //*                         Type factory                                *

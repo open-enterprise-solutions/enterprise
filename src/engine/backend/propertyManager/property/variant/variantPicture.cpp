@@ -1,5 +1,7 @@
 #include "variantPicture.h"
 
+#include <wx/filename.h>
+
 wxString ibVariantDataExternalPicture::MakeString() const
 {
 	if (IsEmptyPicture())

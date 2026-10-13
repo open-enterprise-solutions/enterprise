@@ -62,13 +62,13 @@ void ibViewTableRow::Read(const ibProtocolNode& row)
 		cell.number = node.GetBool(ibProtocolName::Number);
 		cell.editable = node.Has(ibProtocolName::Value);
 
-		// Its look — what of it the server set (wxColour is a plain value here: this row is no one's yet).
-		const wxString colour = node.GetString(ibProtocolName::TextColour);
-		if (!colour.IsEmpty())
-			cell.look.SetColour(wxColour(colour));
-		const wxString background = node.GetString(ibProtocolName::BackgroundColour);
-		if (!background.IsEmpty())
-			cell.look.SetBackgroundColour(wxColour(background));
+		// Its look — what of it the server set, its colours in the engine's text of a colour (ibColour, as a form's).
+		ibColour colour;
+		if (colour.FromString(node.GetString(ibProtocolName::TextColour)))
+			cell.look.SetColour(colour);
+		ibColour background;
+		if (background.FromString(node.GetString(ibProtocolName::BackgroundColour)))
+			cell.look.SetBackgroundColour(background);
 		cell.look.SetBold(node.GetBool(ibProtocolName::Bold));
 		cell.look.SetItalic(node.GetBool(ibProtocolName::Italic));
 		cell.look.SetStrikethrough(node.GetBool(ibProtocolName::Strikethrough));

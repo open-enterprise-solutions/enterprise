@@ -24,6 +24,7 @@
 #include <memory>
 #include <thread>
 
+#include <wx/filename.h>                                // a file the pool's clones all open
 #include <wx/init.h>                                    // wxInitializer — wxBase before appData
 
 #include "backend/appData.h"
@@ -32,23 +33,29 @@
 #include "backend/databaseLayer/connectionPool.h"
 #include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
 #include "backend/session/session.h"
+#include "backend/session/sessionHolder.h"
 
 namespace {
 
 // A base with no database, then a database of its own — an in-memory SQLite in its own pool, set up while
 // this thread works for it. Null when the environment cannot come up.
-ibApplicationInstance* OpenBase()
+// poolSize 1 is the whole base: nothing else borrows a connection. A session
+// registry keeps one, so a login beside it needs a wider pool, and every
+// connection has to be the same database — a clone of :memory: is empty.
+ibApplicationInstance* OpenBase(ibRunMode mode = ibRunMode::eFILE_MODE,
+                                std::size_t poolSize = 1,
+                                const wxString& database = wxT(":memory:"))
 {
-	if (!ibApplicationInstance::CreateAppDataEnv(ibRunMode::eFILE_MODE))
+	if (!ibApplicationInstance::CreateAppDataEnv(mode))
 		return nullptr;
 	ibApplicationInstance* const applicationInstance = ibApplicationHost::GetInstances().back();
 
 	ibApplicationInstanceScope working(applicationInstance);
 	ibConnectionPool* const pool = ibApplicationInstance::GetConnectionPool();
 	auto db = std::make_shared<ibDatabaseLayerSQLite>();
-	if (pool == nullptr || !db->Open(wxT(":memory:")))
+	if (pool == nullptr || !db->Open(database))
 		return nullptr;
-	pool->Init(db, /*maxSize=*/1, /*minIdle=*/0);
+	pool->Init(db, poolSize, /*minIdle=*/0);
 	return applicationInstance;
 }
 
@@ -211,4 +218,67 @@ TEST_F(OneBaseFix, AFreshThreadIsRefusedEvenWithOneBase)
 	});
 	fresh.join();
 	EXPECT_TRUE(refused) << "there is no global current base — not even \"the only one\"";
+}
+
+// An empty sys_user that was actually read is open access, including the
+// application server's own login and the web server's own session. A table
+// that cannot be read is not empty, and the login is refused.
+TEST_F(OneBaseFix, AnEmptyUserListOpensAndAnUnreadableOneRefuses)
+{
+	if (!ready) GTEST_SKIP();
+
+	// ListAll reads guid, name and fullName. A table of only name is not an
+	// empty list: that read fails, and a failed read is the refusal below.
+	const wxString emptyUserList = wxT(
+		"CREATE TABLE sys_user (guid TEXT, name TEXT, fullName TEXT)");
+
+	{
+		ibApplicationInstanceScope working(only);
+		ASSERT_NE(db_query, nullptr);
+		ASSERT_NE(db_query->RunQuery(emptyUserList), -1);
+		ibUserInfo info;
+		EXPECT_TRUE(only->AuthenticateUser(wxEmptyString, wxEmptyString, info));
+		EXPECT_TRUE(ibUserInfo::ListAll().empty());
+
+		ASSERT_NE(db_query->RunQuery(wxT("DROP TABLE sys_user")), -1);
+		EXPECT_FALSE(only->AuthenticateUser(wxEmptyString, wxEmptyString, info));
+		EXPECT_THROW(ibUserInfo::ListAll(), ibCoreException);
+	}
+
+	ibApplicationInstance* const server = OpenBase(ibRunMode::eSERVER_MODE);
+	if (server == nullptr)
+		GTEST_SKIP() << "server env unavailable headless";
+	{
+		ibApplicationInstanceScope working(server);
+		ASSERT_TRUE(server->ServiceMode());
+		ASSERT_NE(db_query->RunQuery(emptyUserList), -1);
+		ibUserInfo info;
+		EXPECT_TRUE(server->AuthenticateUser(wxEmptyString, wxEmptyString, info));
+	}
+
+	// The registry started by the web server's own session holds a connection
+	// for sys_session. On the one-connection :memory: base above, the login's
+	// read then waits until the pool says it is exhausted and the door
+	// refuses. A file and a wider pool let that read see the empty list.
+	const wxString path = wxFileName::CreateTempFileName(wxT("oes-users"));
+	ASSERT_FALSE(path.IsEmpty());
+	ibApplicationInstance* const webBase = OpenBase(ibRunMode::eFILE_MODE, /*poolSize=*/4, path);
+	ASSERT_NE(webBase, nullptr);
+	{
+		ibApplicationInstanceScope working(webBase);
+		ASSERT_NE(db_query->RunQuery(emptyUserList), -1);
+		// The registry writes and re-reads this row on its own connection.
+		ASSERT_NE(db_query->RunQuery(wxT(
+			"CREATE TABLE sys_session ("
+			"session TEXT PRIMARY KEY, userName TEXT, application INTEGER, "
+			"started TEXT, lastActive TEXT, computer TEXT)")), -1);
+		ibSessionHolder web = webBase->CreateSession(ibSessionKind::WebServer);
+		ASSERT_NE(web.Get(), nullptr);
+		ibSessionScope scope(web.Get());
+		EXPECT_TRUE(webBase->WebEnterpriseMode());
+		ibUserInfo info;
+		EXPECT_TRUE(webBase->AuthenticateUser(wxEmptyString, wxEmptyString, info));
+		EXPECT_TRUE(ibUserInfo::ListAll().empty());
+	}
+	wxRemoveFile(path);
 }

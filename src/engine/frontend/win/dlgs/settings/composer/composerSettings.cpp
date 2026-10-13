@@ -32,6 +32,7 @@
 #include "backend/metadataConfiguration.h"                // ibMetaDataConfigurationBase — the active configuration IS one
 #include "backend/moduleInfo.h"                           // ibRuntimeModuleDataObject::GetCompileModule
 #include "backend/backend_exception.h"
+#include "backend/backend_composition.h"                  // ibStoredValue / ibStoreValue, ibVariantCaption, ibValidateSettings
 
 #include <algorithm>   // std::min — MSVC drags it in transitively, libstdc++ does not
 
@@ -54,6 +55,7 @@
 #include "frontend/win/dlgs/rowValueCell.h"          // ibRowValueCellRenderer — a field and a kind are VALUES
 #include "frontend/win/dlgs/textWithDotsCell.h"      // ibTextWithDotsRenderer — a text cell with a "..."
 #include "frontend/win/dlgs/settings/settingsAppearanceEditor.h"   // a field's appearance — the "..." behind it
+#include "frontend/win/typeconv.h"                    // WxColourToColour — a row's grey is the model view's data
 
 namespace {
 enum {
@@ -414,7 +416,7 @@ public:
 	// which of the two it is showing.
 	bool GetAttrByRow(unsigned row, unsigned col, ibDataViewItemAttr& attr) const override {
 		if ((col == kColTitle && !OwnTitle(row)) || (col == kColRole && !OwnRole(row))) {
-			attr.SetColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
+			attr.SetColour(typeConv::WxColourToColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT)));
 			return true;
 		}
 		return false;
@@ -718,7 +720,7 @@ public:
 		const std::vector<ibVariantDescription>* list = List();
 		if (list == nullptr || col != kColName || row >= list->size() || !(*list)[row].m_name.IsEmpty())
 			return false;
-		attr.SetColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
+		attr.SetColour(typeConv::WxColourToColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT)));
 		return true;
 	}
 	bool SetValueByRow(const wxVariant& variant, unsigned row, unsigned col) override {
@@ -2169,10 +2171,10 @@ bool ibDialogComposerSettings::PickVariant(wxWindow* parent, ibDataComposer& com
 		// WHAT THE PICKER SHOWS — the synonym, else the name, else its place in the list. The last is
 		// not a caption anybody wrote; it is what an unnamed variant HAS, and a blank line in a menu
 		// cannot be clicked with any confidence.
-		// …READ IN THE CONFIGURATION'S LANGUAGE, by the variant itself. The synonym is WRITTEN DOWN as
+		// …READ IN THE CONFIGURATION'S LANGUAGE, by ibVariantCaption. The synonym is WRITTEN DOWN as
 		// a translated text, and put in a menu as it stands it showed the reader the whole line -
 		// `en = 'Trial balance'; ru = '…'; uk = '…';` (2026-09-16).
-		wxString caption = variants[i].GetPresentation();
+		wxString caption = ibVariantCaption(variants[i]);
 		if (caption.IsEmpty()) caption = ibUnnamedVariantCaption(i);
 
 		// ⭐ AND THE ONE IN FORCE IS TICKED — by COMPARING the settings, because there is no stored

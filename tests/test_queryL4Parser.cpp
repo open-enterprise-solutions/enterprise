@@ -9,6 +9,7 @@
 #include <functional>
 #include <vector>
 
+#include "backend/backend_exception.h"
 #include "backend/query/queryParser.h"
 // ⚠ AT THE TOP, not beside the round-trip section further down: a test up here renders an AST back
 // to text (ONTO is written where INTO is), and an include that arrives 200 lines later is not
@@ -1526,7 +1527,7 @@ TEST(QueryL4Parser, TotalsAggregateOverAPartitionIsRefused)
 // CAST TO A PRIMITIVE — the type a temporary table's field is described by, written in the text.
 // ===========================================================================
 
-#include "backend/typeDescription.h"
+#include "core/description/typeDescription.h"
 
 // The qualifiers ride in the text and come back as the type they say.
 TEST(QueryL4Parser, CastToAPrimitiveReadsItsQualifiers)

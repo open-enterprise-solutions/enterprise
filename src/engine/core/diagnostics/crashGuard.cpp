@@ -30,6 +30,7 @@
 // Wrap behind a feature check if a future port lacks it.
 #include <execinfo.h>
 #include <fcntl.h>
+#include <sys/mman.h>
 #include <unistd.h>
 #endif
 
@@ -125,33 +126,57 @@ void LogTerminateReason(const wxString& reason)
 }
 
 #ifdef __WXMSW__
+struct ibDumpJob {
+	EXCEPTION_POINTERS* ep = nullptr;
+	DWORD tid = 0;
+};
+
+// MiniDumpWriteDump does not fit on a stack that just overflowed. This
+// thread has its own stack. The filter waits, because `ep` is valid only
+// until the filter returns.
+DWORD WINAPI DumpOnFreshStack(void* raw)
+{
+	ibDumpJob* const job = static_cast<ibDumpJob*>(raw);
+	const wxString dumpPath = MakeDumpPath(wxEmptyString, wxT("dmp"));
+	HANDLE hFile = ::CreateFileW(dumpPath.wc_str(), GENERIC_WRITE, 0, nullptr,
+		CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+	if (hFile == INVALID_HANDLE_VALUE)
+		return 1;
+
+	MINIDUMP_EXCEPTION_INFORMATION mei = {};
+	mei.ThreadId = job->tid;
+	mei.ExceptionPointers = job->ep;
+	mei.ClientPointers = FALSE;
+
+	const MINIDUMP_TYPE type = static_cast<MINIDUMP_TYPE>(
+		MiniDumpWithDataSegs |
+		MiniDumpWithHandleData |
+		MiniDumpWithUnloadedModules |
+		MiniDumpWithThreadInfo |
+		MiniDumpWithFullMemory);
+
+	::MiniDumpWriteDump(::GetCurrentProcess(), ::GetCurrentProcessId(),
+		hFile, type, job->ep ? &mei : nullptr, nullptr, nullptr);
+	::CloseHandle(hFile);
+	return 0;
+}
+
 LONG WINAPI PersistentCrashDumpFilter(EXCEPTION_POINTERS* ep)
 {
 	// Persistent minidump fires before any wx-level dialog. wx wipes
 	// its temp directory on dialog close; our dumps survive.
-	const wxString dumpPath = MakeDumpPath(wxEmptyString, wxT("dmp"));
-
-	HANDLE hFile = ::CreateFileW(dumpPath.wc_str(), GENERIC_WRITE, 0, nullptr,
-		CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
-	if (hFile != INVALID_HANDLE_VALUE) {
-		MINIDUMP_EXCEPTION_INFORMATION mei = {};
-		mei.ThreadId = ::GetCurrentThreadId();
-		mei.ExceptionPointers = ep;
-		mei.ClientPointers = FALSE;
-
-		const MINIDUMP_TYPE type = static_cast<MINIDUMP_TYPE>(
-			MiniDumpWithDataSegs |
-			MiniDumpWithHandleData |
-			MiniDumpWithUnloadedModules |
-			MiniDumpWithThreadInfo |
-			MiniDumpWithFullMemory);
-
-		::MiniDumpWriteDump(::GetCurrentProcess(), ::GetCurrentProcessId(),
-			hFile, type, ep ? &mei : nullptr, nullptr, nullptr);
-		::CloseHandle(hFile);
+	ibDumpJob job;
+	job.ep = ep;
+	job.tid = ::GetCurrentThreadId();
+	HANDLE helper = ::CreateThread(nullptr, 0, &DumpOnFreshStack, &job, 0, nullptr);
+	if (helper != nullptr) {
+		::WaitForSingleObject(helper, 60000);
+		::CloseHandle(helper);
 	}
 
-	// Chain to the previous filter (wx's, if frontend installed it).
+	// The guard page is restored after an unwind, never here. This filter
+	// runs before any unwind, and _resetstkoflw in that window is what the
+	// recovery function's own contract rules out.
 	return s_prevSehFilter ? s_prevSehFilter(ep) : EXCEPTION_CONTINUE_SEARCH;
 }
 #else
@@ -247,6 +272,75 @@ void OesTerminateHandler()
 
 } // namespace
 
+void ArmCurrentThread()
+{
+#ifdef __WXMSW__
+	// EXCEPTION_STACK_OVERFLOW reaches PersistentCrashDumpFilter. The dump
+	// is written on a helper thread. SetThreadStackGuarantee, armed with
+	// the fiber, is what leaves this filter enough stack to start it.
+#else
+	thread_local bool armed = false;
+	if (armed)
+		return;
+
+	// ASan (and anything else that already armed this thread) owns a
+	// page-aligned alternate stack. Replacing it with storage this thread
+	// did not mmap is what makes a later throw abort, and what makes ASan
+	// fail when it frees that stack on the way out. Keep the one in place.
+	stack_t existing;
+	std::memset(&existing, 0, sizeof(existing));
+	if (::sigaltstack(nullptr, &existing) == 0
+	    && existing.ss_sp != nullptr
+	    && (existing.ss_flags & SS_DISABLE) == 0) {
+		armed = true;
+		return;
+	}
+
+	// backtrace_symbols_fd needs more than SIGSTKSZ. mmap, not a
+	// thread_local array: the array lands in static TLS, so every thread
+	// in the process carries it, and a small pthread stack then fails
+	// with EINVAL.
+	const long page = ::sysconf(_SC_PAGESIZE);
+	const std::size_t pageSize = page > 0 ? static_cast<std::size_t>(page) : 4096u;
+	const std::size_t bytes = (static_cast<std::size_t>(64 * 1024) + pageSize - 1) & ~(pageSize - 1);
+	void* const mem = ::mmap(nullptr, bytes, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	if (mem == MAP_FAILED)
+		return;
+
+	stack_t ss;
+	std::memset(&ss, 0, sizeof(ss));
+	ss.ss_sp = mem;
+	ss.ss_size = bytes;
+	ss.ss_flags = 0;
+	if (::sigaltstack(&ss, nullptr) != 0) {
+		::munmap(mem, bytes);
+		return;
+	}
+
+	// Disable the alternate stack before the mapping goes away. Freeing it
+	// while it is still installed is the fault the signal handler would
+	// then run on.
+	struct AltStack {
+		void* mem = nullptr;
+		std::size_t bytes = 0;
+		~AltStack()
+		{
+			if (mem == nullptr)
+				return;
+			stack_t off;
+			std::memset(&off, 0, sizeof(off));
+			off.ss_flags = SS_DISABLE;
+			::sigaltstack(&off, nullptr);
+			::munmap(mem, bytes);
+		}
+	};
+	thread_local AltStack hold;
+	hold.mem = mem;
+	hold.bytes = bytes;
+	armed = true;
+#endif
+}
+
 void Install(const wxString& exeName)
 {
 	// Update the label even on repeat install — frontend might call
@@ -272,6 +366,10 @@ void Install(const wxString& exeName)
 	if (s_prevTerminate == nullptr)
 		s_prevTerminate = std::set_terminate(&OesTerminateHandler);
 
+	// Before the handlers, so a fault in the rest of Install can be logged.
+	// Worker threads arm themselves when they become fiber schedulers.
+	ArmCurrentThread();
+
 #ifdef __WXMSW__
 	if (s_prevSehFilter == nullptr)
 		s_prevSehFilter = ::SetUnhandledExceptionFilter(&PersistentCrashDumpFilter);
@@ -280,7 +378,10 @@ void Install(const wxString& exeName)
 	std::memset(&sa, 0, sizeof(sa));
 	sa.sa_handler = &PosixCrashSignalHandler;
 	sigemptyset(&sa.sa_mask);
-	sa.sa_flags = SA_RESTART;
+	// SA_ONSTACK: the handler runs on the alternate stack ArmCurrentThread
+	// installed. Without it a guard-page fault has nowhere to run and the
+	// process dies with no log.
+	sa.sa_flags = SA_RESTART | SA_ONSTACK;
 	::sigaction(SIGSEGV, &sa, nullptr);
 	::sigaction(SIGABRT, &sa, nullptr);
 	::sigaction(SIGFPE,  &sa, nullptr);

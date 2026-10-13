@@ -37,7 +37,7 @@
 #include "backend/metaCollection/table/metaTableObject.h"  // …or a row of a tabular section
 #include "backend/system/value/valueDynamicList.h"    // …and opens the list a choice form opens
 #include "backend/restructureInfo.h"                  // the ledger an object complains into
-#include "backend/typeDescription.h"                  // …and the description it hides
+#include "core/description/typeDescription.h"                  // …and the description it hides
 
 #include <algorithm>    // std::find — a list offered once
 #include <functional>   // choice_preview — the one write a new record is filled through
@@ -308,7 +308,7 @@ const ibArg& ArgTypeShape()
 		  "what is held. Read one, change it, send it back."),
 		/*required*/ false, std::vector<wxString>(),
 		[](ibDataValue& shape) {
-			return ibTypeDescriptionMemory::WriteNode(shape, ibTypeDescription(), activeMetaData);
+			return ibTypeDescriptionMemory::WriteNode(shape, ibTypeDescription());
 		});
 	return s_a;
 }
@@ -2123,7 +2123,7 @@ public:
 			ibDataValue carried = ibDataValue::Child(copy);
 
 			bool readable = false;
-			try { readable = ibTypeDescriptionMemory::ReadNode(carried, described, metaData); }
+			try { readable = ibTypeDescriptionMemory::ReadNode(carried, described); }
 			catch (...) { readable = false; }   // a value of the wrong kind anywhere in the shape — refused below, in words
 			if (!readable) {
 				refusal = ibMcpText("That is not a type description this platform can read. Send back the "
@@ -2139,8 +2139,7 @@ public:
 
 			ibDataValue placed;
 			if (!ibTypeDescriptionMemory::WriteNode(placed,
-					typeProperty->get_cell_variant<ibVariantDataAttribute>()->GetTypeDesc(),
-					metaData)) {
+					typeProperty->get_cell_variant<ibVariantDataAttribute>()->GetTypeDesc())) {
 				refusal = ibMcpText("The description was placed, but could not be read back to confirm it.");
 				return false;
 			}
@@ -2253,7 +2252,7 @@ public:
 		// ⚠ ASKED WHETHER IT COULD SAY ITSELF. The family answers that, and a dropped answer here
 		// would report a type that was never written as an empty one.
 		ibDataValue described;
-		if (!ibTypeDescriptionMemory::WriteNode(described, now, metaData)) {
+		if (!ibTypeDescriptionMemory::WriteNode(described, now)) {
 			refusal = wxString::Format(
 				ibMcpText("'%s' was set, but the type could not be read back to confirm it."),
 				object->GetName());

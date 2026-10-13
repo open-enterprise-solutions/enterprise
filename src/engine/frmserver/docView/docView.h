@@ -32,7 +32,7 @@
 
 #include "frmserver/docView/commandProcessor.h"   // a document's commands, and their undo
 #include "frmserver/docView/docCommand.h"         // the commands a manager offers
-#include "backend/backend_picture.h"              // ibServerPicture — a document's icon as it is sent
+#include "backend/backend_picture.h"              // ibPicture — a document's icon as it is sent
 
 #if wxUSE_STD_IOSTREAM
   #include "wx/iosfwrap.h"
@@ -253,8 +253,8 @@ public:
     // OES-side adaptations lifted from ibMetaDocument (step-4 collapse).
 
     // Document icon — generic concept (wxDocument has none); as a server sends it.
-    virtual void SetIcon(const ibServerPicture& icon) { m_docIcon = icon; }
-    virtual ibServerPicture GetIcon() const { return m_docIcon; }
+    virtual void SetIcon(const ibPicture& icon) { m_docIcon = icon; }
+    virtual ibPicture GetIcon() const { return m_docIcon; }
 
     // Cascading-close opt-out. Returning false means "this child stays open
     // when its parent closes" — ibDocument::Close re-parents it onto the
@@ -287,7 +287,7 @@ protected:
     ibDocument*           m_documentParent;
     ibCommandProcessor*   m_commandProcessor;
     bool                  m_savedYet;
-    ibServerPicture       m_docIcon;
+    ibPicture             m_docIcon;
 
     virtual bool DoSaveDocument(const wxString& file);
     virtual bool DoOpenDocument(const wxString& file);
@@ -316,6 +316,7 @@ enum class ibClientViewKind : s32 {
     Form        = 1,   // a form — the default, absent from the wire
     Text        = 2,
     Spreadsheet = 3,
+    AuditLog    = 4,
 };
 
 class FRMSERVER_API ibView: public wxObject
@@ -572,7 +573,7 @@ public:
 
     // ⭐ THE COMMANDS THIS APPLICATION'S DOCUMENTS ANSWER TO — registered as the templates and the schemas are: the
     // shared ones by the base's ctor, an application's own by its manager's ctor. What a client is told of each: its
-    // name, its key and its picture, so a thin client knows them without a list of its own.
+    // name, its default key and its picture, so a thin client knows them without a list of its own.
     const std::map<ibDocCommand, ibDocCommandInfo>& GetCommands() const { return m_commands; }
 
 protected:

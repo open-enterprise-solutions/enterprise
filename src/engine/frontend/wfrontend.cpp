@@ -26,6 +26,7 @@
 #include "backend/session/sessionLifetime.h"
 #include "backend/session/sessionRegistry.h"
 #include "backend/backend_exception.h"
+#include "core/diagnostics/journal.h"
 #include "backend/databaseLayer/connectionHolder.h"
 #include "backend/databaseLayer/connectionPool.h"
 #include "backend/databaseLayer/databaseQueryBuilder.h"   // L2 door — the meta-watch sys_config read (ibQueryResult, no raw L1)
@@ -127,63 +128,22 @@ public:
 			it->second->Touch();
 	}
 
-	// The request may proceed. A missing session, a password that changed
-	// after this login, a deleted user, or a session past its absolute
-	// life answers false and the session is gone, so the verb is a 401.
-	// An unauthenticated session is still a session: login has to reach it.
+	// The tab is still here. How long the login may live is decided on the
+	// registry's sweep, from UTC, for every client. This request only
+	// notes that the tab asked.
 	bool Admit(const std::string& id)
 	{
-		std::shared_ptr<ibWebSession> session;
-		{
-			std::lock_guard<std::mutex> lock(m_mutex);
-			auto it = m_sessions.find(id);
-			if (it == m_sessions.end() || !it->second)
-				return false;
-			session = it->second;
-		}
-
-		const ibDateTime now = ibDateTime::Now();
-		const ibSessionLifetime policy = ibSessionLifetimePolicy();
-		const ibDateTime authenticatedAt = session->IsAuthenticated()
-			? session->AuthenticatedAt() : ibDateTime();
-
-		bool passwordOk = true;
-		if (session->IsAuthenticated()) {
-			passwordOk = false;
-			if (ibSession* live = session->Session()) {
-				const wxString guid = live->GetUserInfo().m_strUserGuid;
-				if (guid.empty()) {
-					passwordOk = true;   // open access — no account to have changed
-				} else {
-					const ibUserInfo user = ibUserInfo::Read(ibGuid(guid));
-					passwordOk = user.IsOk()
-						&& ibSessionPasswordStillCurrent(authenticatedAt, user.m_passwordChangedAt);
-				}
-			}
-		}
-
-		const ibSessionEnd end = ibJudgeSessionLifetime(now, session->Born(),
-			authenticatedAt, session->LastActiveAt(), policy);
-		if (!passwordOk || end == ibSessionEnd::Absolute) {
-			Destroy(id);
+		std::lock_guard<std::mutex> lock(m_mutex);
+		auto it = m_sessions.find(id);
+		if (it == m_sessions.end() || !it->second)
 			return false;
-		}
-		session->Touch();
+		it->second->Touch();
 		return true;
 	}
 
-	// Allocate a fresh unauthenticated session. The returned id is
-	// handed back as a cookie so subsequent requests (in particular
-	// POST /login) can identify the client.
-	std::string Create()
-	{
-		return CreateWith(MakeRandomId());
-	}
-
-	// Same, but the caller supplies the id — used when the JS client
-	// minted a per-tab id in sessionStorage (so every browser tab
-	// gets its own ibWebSession instead of sharing one via cookie).
-	// If the id already exists, reuses; otherwise creates.
+	// Allocate an unauthenticated session under the id the JS client
+	// minted per tab in sessionStorage, so every browser tab gets its
+	// own ibWebSession. If the id already exists, reuses; otherwise creates.
 	std::string CreateWith(const std::string& id)
 	{
 		{
@@ -338,18 +298,6 @@ public:
 	}
 
 private:
-	static std::string MakeRandomId()
-	{
-		// Shared format with ibGuid / sys_session.session — dashed UUID
-		// so browser cookie, X-OES-Session header, SessionManager map
-		// key, and the registry's session guid all read as the same
-		// string (no extra parse step when one crosses layers).
-		// Explicit wxString→std::string conversion: without ToStdString()
-		// MSVC chains two user-defined conversions (wxString → const char*
-		// → std::string) and warns C4927.
-		return ibGuid(ibGuid::newGuid()).str().ToStdString();
-	}
-
 	// Idle-session sweep + metadata-change watch. Wakes every sweep
 	// interval, collects session ids whose LastActiveMs is older than
 	// the idle cutoff, destroys them outside the map-lock (OnExit runs
@@ -1087,7 +1035,19 @@ WFRONTEND_API bool wfrontendHasUsers()
 {
 	if (!g_initialized.load() || appData == nullptr)
 		return false;
-	return ibUserInfo::HasAny();
+	try {
+		return ibUserInfo::HasAny();
+	}
+	catch (const ibBackendInterruptException&) {
+		throw;
+	}
+	catch (const ibCoreException& err) {
+		// Ask for credentials. A 500 from an uncaught read is not an answer
+		// the login page can show, and "no users" would be the open door.
+		ibJournalError(wxT("auth"), wxT("the user list could not be read; asking for credentials: %s"),
+			err.GetErrorDescription());
+		return true;
+	}
 }
 
 namespace {
@@ -1140,11 +1100,6 @@ WFRONTEND_API std::string wfrontendMenuJSON()
 		}},
 	};
 	return root.dump(2);
-}
-
-WFRONTEND_API std::string wfrontendCreateSession()
-{
-	return Sessions().Create();
 }
 
 WFRONTEND_API std::string wfrontendCreateSessionWithId(const std::string& id)

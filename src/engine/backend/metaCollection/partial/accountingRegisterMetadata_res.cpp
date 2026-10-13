@@ -10,6 +10,6 @@ wxIcon ibValueMetaObjectAccountingRegister::GetIcon() const
 
 wxIcon ibValueMetaObjectAccountingRegister::GetIconGroup()
 {
-	static const ibServerPicture picture(s_accountingRegister_16_png, wxSize(16, 16));
-	return picture.ToIcon();
+	static const ibPicture picture = ibBackendPicture::FromImage(ibBackendPicture::GetImageFromBase64(s_accountingRegister_16_png, wxSize(16, 16)));
+	return ibBackendPicture::ToIcon(picture);
 }

@@ -17,7 +17,7 @@
 #include <wx/string.h>
 #include <wx/window.h>
 
-#include "frmclient/backend/compositionDescription.h"   // ibAppearanceDescription — what is edited here
+#include "frmclient/backend/backend_composition.h"   // ibAppearanceDescription — what is edited here; its values, restored
 
 class ibMetaData;
 

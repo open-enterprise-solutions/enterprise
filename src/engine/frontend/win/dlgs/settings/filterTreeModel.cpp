@@ -6,6 +6,7 @@
 #include "backend/system/value/valueType.h"   // ibValueTypeDescription::AdjustValue — typed text lands as its type
 #include "backend/system/value/composition/valueComposerSettings.h"   // the pickers a cell offers
 #include "core/formatString.h"   // ibFormatString::FromTypeDesc — a value written as its field's type writes it
+#include "backend/backend_composition.h"   // ibStoredValue / ibStoreValue — a side's value is kept packed
 
 // ===========================================================================
 //  ibFilterTreeNode — a row is a PATH; resolving it is walking that path
@@ -214,9 +215,10 @@ wxString ibFilterValueText(const ibValue& value, const ibFilterOperandDescriptio
 	return value.GetString();
 }
 
-wxString ibFilterSideText(const ibFilterOperandDescription& side, const ibFilterOperandDescription& other)
+wxString ibFilterSideText(const ibFilterOperandDescription& side, const ibFilterOperandDescription& other,
+	const ibMetaData* metaData)
 {
-	return side.IsField() ? ibFieldText(side) : ibFilterValueText(side.m_value, other);
+	return side.IsField() ? ibFieldText(side) : ibFilterValueText(ibStoredValue(side.m_value, metaData), other);
 }
 
 void ibFilterTreeModel::GetValue(wxVariant& variant, const ibDataViewItem& item, unsigned int col) const
@@ -259,10 +261,10 @@ void ibFilterTreeModel::GetValue(wxVariant& variant, const ibDataViewItem& item,
 	// `Price > Cost`, `Amount > 100.00` and the comparison between them all read as
 	// what they are.
 	case kFilterColLeft:
-		variant = ibFilterSideText(line->m_left, line->m_right);
+		variant = ibFilterSideText(line->m_left, line->m_right, m_fields != nullptr ? m_fields->GetMetaData() : nullptr);
 		break;
 	case kFilterColRight:
-		variant = ibFilterSideText(line->m_right, line->m_left);
+		variant = ibFilterSideText(line->m_right, line->m_left, m_fields != nullptr ? m_fields->GetMetaData() : nullptr);
 		break;
 	case kFilterColComparison:
 		variant = ibValue::CreateEnumObject<ibValueEnumComparisonKind>(line->m_comparison).GetString();
@@ -322,8 +324,8 @@ bool ibFilterTreeModel::SetValue(const wxVariant& variant, const ibDataViewItem&
 			return false;
 
 		line->m_right.m_path.clear();   // typing a value is choosing a value, not a field
-		line->m_right.m_value = ibValueTypeDescription::AdjustValue(
-			line->m_left.m_type, ibValue(variant.GetString()));
+		ibStoreValue(line->m_right.m_value, ibValueTypeDescription::AdjustValue(
+			line->m_left.m_type, ibValue(variant.GetString())));
 		return true;
 	}
 	// The comparison and the display mode are written by their own editor — the

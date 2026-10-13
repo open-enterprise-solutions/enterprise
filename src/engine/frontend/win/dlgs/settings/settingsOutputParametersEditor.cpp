@@ -3,8 +3,10 @@
 #include "frontend/win/dlgs/settings/settingsStyle.h"   // ibStyleSettingsGrid — how a settings list looks
 #include "frontend/win/dlgs/textWithDotsCell.h"         // the value cell: typed, or "..." for its own list or window
 #include "frontend/win/dlgs/translateConstructor/translateConstructor.h"   // a title, every language of it
-#include "backend/composition/compositionTheme.h"       // ibCompositionThemes — the palettes a theme is picked from
+#include "core/composition/compositionTheme.h"          // ibCompositionThemes — the palettes a theme is picked from
 #include "backend/backend_localization.h"               // ibTranslateString — a title read in the language in force
+#include "backend/backend_composition.h"                // ibStoredValue / ibStoreValue — a parameter's value, packed
+#include "frontend/win/typeconv.h"                      // WxColourToColour — a row's grey is the model view's data
 
 #include <wx/choicdlg.h>   // wxGetSingleChoiceIndex — the window a theme or a word is picked in
 #include <wx/settings.h>   // wxSystemSettings — an unticked value reads grey
@@ -34,7 +36,7 @@ wxString Presentation(const ibOutputParametersDescription& parameters, ibOutputP
 {
 	const ibValue kept = Kept(parameters, parameter);
 	if (parameter == ibOutputParameter::Theme)
-		return kept.IsEmpty() ? wxString() : ibCompositionThemeById(kept.GetString()).Caption();
+		return kept.IsEmpty() ? ibString() : ibCompositionThemeById(kept.GetString()).Caption();
 	if (ibOutputParameterShows(parameter))
 		return ibShowModeCaption(kept.IsEmpty() ? ibShowMode::Auto : static_cast<ibShowMode>(kept.GetInteger()));
 	return ibTranslateString(kept.GetString()).GetString();
@@ -44,7 +46,7 @@ wxString Presentation(const ibOutputParametersDescription& parameters, ibOutputP
 // on; emptied, the parameter is forgotten (the door's own rule, Say).
 void SayValue(ibOutputParametersDescription& parameters, ibOutputParameter parameter, const ibValue& value)
 {
-	parameters.Say(parameter, !value.IsEmpty(), value);
+	parameters.Say(parameter, !value.IsEmpty(), ibStoreValue(value));
 }
 
 } // namespace
@@ -87,7 +89,7 @@ public:
 		if (col == kColUse) {
 			if (variant.GetBool() == IsTicked(parameters, parameter))
 				return false;
-			parameters.Say(parameter, variant.GetBool(), kept);
+			parameters.Say(parameter, variant.GetBool(), ibStoreValue(kept));
 			m_editor->Changed();
 			return true;
 		}
@@ -142,7 +144,7 @@ public:
 	// AN UNTICKED VALUE READS GREY — kept, not applied.
 	bool GetAttrByRow(unsigned row, unsigned col, ibDataViewItemAttr& attr) const override {
 		if (col == kColValue && IsRow(row) && !IsTicked(*m_editor->m_parameters, ParameterAt(row))) {
-			attr.SetColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
+			attr.SetColour(typeConv::WxColourToColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT)));
 			return true;
 		}
 		return false;

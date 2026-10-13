@@ -410,8 +410,8 @@ bool ibDatabaseParameterFirebird::ResetBlob(isc_db_handle database, isc_tr_handl
 	{
 		const long nSqlCode = m_pInterface->GetIscSqlcode()(status);
 		ibDatabaseLayerException::Throw(
-			ibBackendDatabaseException::Kind::Unknown,
-			ibDatabaseLayerFirebird::TranslateErrorCode(nSqlCode),
+			ibDatabaseLayerFirebird::ClassifyDatabaseError(ibDatabaseLayerFirebird::TranslateErrorCode(status)),
+			ibDatabaseLayerFirebird::TranslateErrorCode(status),
 			/*sqlState*/ wxEmptyString,
 			ibDatabaseLayerFirebird::TranslateErrorCodeToString(m_pInterface, nSqlCode, status));
 	}
@@ -426,8 +426,8 @@ bool ibDatabaseParameterFirebird::ResetBlob(isc_db_handle database, isc_tr_handl
 		{
 			const long nSqlCode = m_pInterface->GetIscSqlcode()(status);
 			ibDatabaseLayerException::Throw(
-				ibBackendDatabaseException::Kind::Unknown,
-				ibDatabaseLayerFirebird::TranslateErrorCode(nSqlCode),
+				ibDatabaseLayerFirebird::ClassifyDatabaseError(ibDatabaseLayerFirebird::TranslateErrorCode(status)),
+				ibDatabaseLayerFirebird::TranslateErrorCode(status),
 				/*sqlState*/ wxEmptyString,
 				ibDatabaseLayerFirebird::TranslateErrorCodeToString(m_pInterface, nSqlCode, status));
 		}
@@ -442,8 +442,8 @@ bool ibDatabaseParameterFirebird::ResetBlob(isc_db_handle database, isc_tr_handl
 	{
 		const long nSqlCode = m_pInterface->GetIscSqlcode()(status);
 		ibDatabaseLayerException::Throw(
-			ibBackendDatabaseException::Kind::Unknown,
-			ibDatabaseLayerFirebird::TranslateErrorCode(nSqlCode),
+			ibDatabaseLayerFirebird::ClassifyDatabaseError(ibDatabaseLayerFirebird::TranslateErrorCode(status)),
+			ibDatabaseLayerFirebird::TranslateErrorCode(status),
 			/*sqlState*/ wxEmptyString,
 			ibDatabaseLayerFirebird::TranslateErrorCodeToString(m_pInterface, nSqlCode, status));
 	}

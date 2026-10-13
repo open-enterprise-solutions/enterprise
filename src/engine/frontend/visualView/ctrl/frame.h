@@ -14,6 +14,8 @@
 #include "backend/backend_localization.h"
 #include "backend/eventDispatcher.h"   // ibEventDispatcher — CallAsEvent dispatches the event's value through it
 
+#include "frontend/win/typeconv.h"   // the properties' colour, font, point and size, as the widgets take them
+
 #include "frontend/visualView/formdefs.h"
 #include "frontend/visualView/controlCtor.h"
 #include "frontend/visualView/visualHost.h"

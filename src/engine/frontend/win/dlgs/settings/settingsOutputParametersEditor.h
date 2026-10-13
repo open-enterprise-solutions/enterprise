@@ -15,7 +15,7 @@
 
 #include <wx/panel.h>
 
-#include "backend/compositionDescription.h"   // ibOutputParametersDescription — what is edited here
+#include "core/description/compositionDescription.h"   // ibOutputParametersDescription — what is edited here
 
 class ibMetaData;
 class ibDataViewCtrl;

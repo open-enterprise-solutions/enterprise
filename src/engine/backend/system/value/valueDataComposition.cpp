@@ -1,5 +1,5 @@
 #include "backend/system/value/valueDataComposition.h"
-#include "backend/compositionDescription.h"   // WHAT a saved composition consists of — the one file
+#include "backend/backend_composition.h"   // WHAT a saved composition consists of — the one file — and its values restored
 #include "backend/composition/composeEvaluate.h"   // …and how a parameter WORKED OUT is worked out
 #include "backend/appData.h"                         // appData / GetActiveMetaData
 #include "backend/query/queryable.h"                 // ibBackendQueryable
@@ -701,11 +701,11 @@ bool ibValueDataComposition::GetResourceAt(size_t idx, wxString& func, wxString&
 // 🛑 IT BUILDS INTO A DOCUMENT OF ITS OWN FIRST, then swaps. Writing into the shown one would fire
 // its notifiers from a worker thread — that is GUI touched off the UI thread — and would show the
 // report half-drawn while it is built. The swap is one move, on a handle: the backend document
-// carries a refcount of its own (wxObjectDataPtr), parallel to the value refcount, so the old sheet
+// carries a refcount of its own (std::shared_ptr), parallel to the value refcount, so the old sheet
 // lives exactly as long as somebody still holds it.
 bool ibValueDataComposition::Compose()
 {
-	wxObjectDataPtr<ibBackendSpreadsheetObject> composed(new ibBackendSpreadsheetObject());
+	std::shared_ptr<ibSpreadsheetObject> composed(std::make_shared<ibSpreadsheetObject>());
 	if (!Compose(composed.get()))
 		return false;
 
@@ -719,7 +719,7 @@ bool ibValueDataComposition::Compose()
 // …AND THE ONE ROUTINE BOTH ENTRANCES USE. The script hands over a document it owns
 // (`Compose(Document)`); the model's own verb hands over a fresh one and installs it. Nothing here
 // knows which of the two it is — and no finished sheet is ever copied afterwards.
-bool ibValueDataComposition::Compose(ibBackendSpreadsheetObject* target)
+bool ibValueDataComposition::Compose(ibSpreadsheetObject* target)
 {
 	if (target == nullptr)
 		return false;
@@ -815,12 +815,12 @@ bool ibValueDataComposition::Compose(ibBackendSpreadsheetObject* target)
 	const auto shows = [&other](ibOutputParameter parameter, bool byItself) {
 		if (!other.Says(parameter))
 			return byItself;
-		const ibShowMode mode = static_cast<ibShowMode>(other.ValueInForce(parameter).GetInteger());
+		const ibShowMode mode = static_cast<ibShowMode>(ibStoredValue(other.ValueInForce(parameter), nullptr).GetInteger());
 		return mode == ibShowMode::Auto ? byItself : mode == ibShowMode::Show;
 	};
 	if (shows(ibOutputParameter::ShowTitle, true)) {
 		// A title a person wrote, read in the reader's language — else what the report is called.
-		const wxString title = other.ValueInForce(ibOutputParameter::Title).GetString();
+		const wxString title = ibStoredValue(other.ValueInForce(ibOutputParameter::Title), nullptr).GetString();
 		driver.SetTitle(title.IsEmpty() ? GetSourceCaption() : ibLocalization::GetTranslateGetRawLocText(ibBackendLocalization::GetUserLanguage(), title));
 	}
 	// …THE VALUES THE READER FILLED IN, as the query was given them — only the ones offered to the reader: a
@@ -857,10 +857,10 @@ bool ibValueDataComposition::Compose(ibBackendSpreadsheetObject* target)
 		// (ibFilterTreeModel::GetValueByRow), so a heading and the window a person set it in cannot
 		// word one condition two ways. A presentation is kept in every language it was written in and
 		// read in the reader's, as the title above is — a heading line is text, not a cell PutArea reads.
-		auto side = [](const ibFilterOperandDescription& operand) {
+		auto side = [this](const ibFilterOperandDescription& operand) {
 			return operand.IsField()
 				? (operand.m_presentation.IsEmpty() ? operand.m_path : ibLocalization::GetTranslateGetRawLocText(ibBackendLocalization::GetUserLanguage(), operand.m_presentation))
-				: operand.m_value.GetString().ToWxString();
+				: ibStoredValue(operand.m_value, GetSourceMetaData()).GetString().ToWxString();
 		};
 		driver.AddHeaderLine(side(node.m_left) + wxT(" ")
 			+ ibValue::CreateEnumObject<ibValueEnumComparisonKind>(node.m_comparison).GetString()
@@ -1081,7 +1081,7 @@ wxString ibValueDataComposition::GetSourceCaption() const
 	// (the payroll demo, 2026-09-10).
 	const ibCompositionDescription& desc = GetCompositionDesc();
 	if (!desc.m_variants.empty() && !desc.m_variants.front().m_synonym.IsEmpty())
-		return desc.m_variants.front().GetPresentation();
+		return ibVariantCaption(desc.m_variants.front());
 
 	return GetClassName();
 }
@@ -1183,7 +1183,7 @@ bool ibValueDataComposition::ReadProperty(const ibDataNode& node)
 	// ⚠ AGAINST ITS OWN CONFIGURATION — the one this composition was made with. The values inside a
 	// saved composition (a filter's right side, a parameter) are references and enum members, and
 	// those are built by the metadata, not by the value factory.
-	return ibCompositionDescriptionMemory::ReadNode(node, GetCompositionDesc(), GetSourceMetaData());
+	return ibBackendCompositionDescriptionMemory::ReadNode(node, GetCompositionDesc(), GetSourceMetaData());
 }
 
 // …AND THE OTHER HALF OF THE TRANSLATION: a description becomes live objects. Nothing here reads a

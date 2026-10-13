@@ -2,6 +2,7 @@
 
 
 #include "backend/propertyManager/property/variant/variantComposition.h"
+#include "backend/backend_composition.h"   // ibBackendCompositionDescriptionMemory — read against the configuration
 
 ////////////////////////////////////////////////////////////////////////
 
@@ -29,11 +30,11 @@ bool ibPropertyDynamicList::ReadNodeValue(const ibDataValue& value)
 	// …and the same door, for the same reason: a list's saved filter compares against references.
 	// CONST owner — the non-const GetMetaData overload answers null (see ibPropertyComposition).
 	const ibPropertyObject* owner = m_owner;
-	return ibCompositionDescriptionMemory::ReadNode(value, GetValueAsCompositionDesc(),
+	return ibBackendCompositionDescriptionMemory::ReadNode(value, GetValueAsCompositionDesc(),
 		owner != nullptr ? owner->GetMetaData() : nullptr);
 }
 
 bool ibPropertyDynamicList::WriteNodeValue(ibDataValue& value) const
 {
-	return ibCompositionDescriptionMemory::WriteNode(value, GetValueAsCompositionDesc());
+	return ibBackendCompositionDescriptionMemory::WriteNode(value, GetValueAsCompositionDesc());
 }

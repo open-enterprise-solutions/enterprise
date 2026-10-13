@@ -4,10 +4,12 @@
 
 #include "backend/session/session.h"   // ibSessionScope
 #include "backend/backend_exception.h" // ibBackendException
+#include "core/diagnostics/journal.h"
 
 #include <wx/log.h>
 
 #include <chrono>
+#include <new>
 #include <stdexcept>
 
 namespace {
@@ -17,6 +19,12 @@ namespace {
 // this fiber is parked the thread runs someone else, and the value has
 // to come back as it was when the fiber resumes.
 thread_local ibSession* tl_currentLease = nullptr;
+
+// Set when this thread's pool is destroyed out from under WorkerLoop.
+// The rest of the loop must not touch the pool again. A destructor that
+// runs on its own worker detaches that handle; the thread then leaves
+// without bookkeeping on a freed object.
+thread_local bool tl_poolAbandoned = false;
 
 // Idle worker self-exits after this much inactivity, unless it's one
 // of the last kMinIdle survivors which stay alive for fast response
@@ -51,7 +59,49 @@ void LogWorkerException(const wxString& location)
 	}
 }
 
+void JoinWorkers(std::vector<std::thread> workers)
+{
+	for (std::thread& worker : workers) {
+		if (worker.joinable())
+			worker.join();
+	}
+}
+
+// Moves the handles `wanted` picks out of `workers`.
+template <typename Worker, typename Wanted>
+std::vector<std::thread> TakeThreads(std::vector<Worker>& workers, Wanted wanted)
+{
+	std::vector<std::thread> out;
+	const auto self = std::this_thread::get_id();
+	auto it = workers.begin();
+	while (it != workers.end()) {
+		// Joining the thread we are on deadlocks. A destructor that
+		// re-enters the pool leaves that handle for the next other
+		// thread, or for Stop.
+		if (!wanted(*it) || (it->thread.joinable() && it->thread.get_id() == self)) {
+			++it;
+			continue;
+		}
+		if (it->thread.joinable())
+			out.push_back(std::move(it->thread));
+		it = workers.erase(it);
+	}
+	return out;
+}
+
 } // namespace
+
+std::vector<std::thread> ibWorkerPoolHeadless::TakeExitedLocked()
+{
+	return TakeThreads(m_workers, [](const ibWorker& worker) {
+		return worker.exited && worker.exited->load(std::memory_order_acquire);
+	});
+}
+
+std::vector<std::thread> ibWorkerPoolHeadless::TakeJoinableLocked()
+{
+	return TakeThreads(m_workers, [](const ibWorker&) { return true; });
+}
 
 std::vector<ibWorkerPoolHeadless::ibParked>& ibWorkerPoolHeadless::ParkedFibers()
 {
@@ -84,23 +134,95 @@ ibWorkerPoolHeadless::ibWorkerPoolHeadless(std::size_t maxWorkers)
 ibWorkerPoolHeadless::~ibWorkerPoolHeadless()
 {
 	Stop();
+
+	// Stop will not join the calling thread: that join would deadlock.
+	// The handle is still in m_workers, and destroying a joinable
+	// std::thread is std::terminate. It can only be this thread.
+	std::vector<std::thread> left;
+	{
+		std::lock_guard<std::mutex> lk(m_workersMtx);
+		for (ibWorker& worker : m_workers) {
+			if (worker.thread.joinable())
+				left.push_back(std::move(worker.thread));
+		}
+		m_workers.clear();
+	}
+	const auto self = std::this_thread::get_id();
+	for (std::thread& worker : left) {
+		if (!worker.joinable())
+			continue;
+		if (worker.get_id() == self) {
+			// ibJournalWarning compiles out of Release. This line is the
+			// only record that a worker detached itself on the way out.
+			if (ibTechJournal::IsOpen()) {
+				ibTechJournal::Print(ibJournalMark::Warning, wxT("session.worker"),
+					wxT("worker pool: detaching the worker that is destroying the pool"));
+			}
+			tl_poolAbandoned = true;
+			worker.detach();
+		}
+		else {
+			worker.join();
+		}
+	}
 }
 
 void ibWorkerPoolHeadless::TrySpawnWorker()
 {
-	std::lock_guard<std::mutex> lk(m_workersMtx);
-	// Re-check inside the lock so two concurrent Submits don't both
-	// spawn past the cap. A question is a parked fiber and its thread is
-	// free, so the cap is the real cap — nothing is added for the waiting.
-	if (m_maxWorkers != 0 && m_aliveWorkers.load(std::memory_order_acquire) >= m_maxWorkers)
-		return;
-	if (m_stop.load(std::memory_order_acquire))
-		return;
-	m_aliveWorkers.fetch_add(1, std::memory_order_acq_rel);
-	// Detached: the thread takes care of its own lifetime; Stop() waits
-	// on m_stopCv until m_aliveWorkers reaches 0. Avoids tracking handles
-	// in a vector that has to be cleaned up when workers self-exit.
-	std::thread(&ibWorkerPoolHeadless::WorkerLoop, this).detach();
+	// Joined by the new worker, before WorkerLoop, so Submit does not wait
+	// out another thread's thread_local destructors. Shared so a failed
+	// std::thread constructor can put the handles back instead of
+	// destroying them joinable (that is std::terminate).
+	std::shared_ptr<std::vector<std::thread>> toJoin;
+	{
+		std::lock_guard<std::mutex> lk(m_workersMtx);
+		// Re-check inside the lock so two concurrent Submits don't both
+		// spawn past the cap. A question is a parked fiber and its thread is
+		// free, so the cap is the real cap — nothing is added for the waiting.
+		// At the cap, or while stopping, idle self-exits stay in m_workers
+		// for the next spawn or for Stop. Taking them here would make this
+		// Submit join them.
+		if (m_stop.load(std::memory_order_acquire))
+			return;
+		if (m_maxWorkers != 0
+		    && m_aliveWorkers.load(std::memory_order_acquire) >= m_maxWorkers)
+			return;
+
+		auto finished = TakeExitedLocked();
+		if (!finished.empty())
+			toJoin = std::make_shared<std::vector<std::thread>>(std::move(finished));
+
+		// No allocation under the push: a throw after the thread
+		// exists would destroy a still-joinable std::thread.
+		m_workers.reserve(m_workers.size() + 1);
+		auto exited = std::make_shared<std::atomic<bool>>(false);
+		m_aliveWorkers.fetch_add(1, std::memory_order_acq_rel);
+		try {
+			m_workers.push_back(ibWorker{
+				exited,
+				std::thread([this, exited, toJoin]() {
+					if (toJoin)
+						JoinWorkers(std::move(*toJoin));
+					WorkerLoop();
+					// Still before thread_local destructors. The next
+					// spawn joins an idle self-exit that has stored
+					// this; Stop joins every handle, and that join is
+					// what waits the destructors out.
+					exited->store(true, std::memory_order_release);
+				})
+			});
+		}
+		catch (...) {
+			m_aliveWorkers.fetch_sub(1, std::memory_order_acq_rel);
+			if (toJoin != nullptr) {
+				for (std::thread& worker : *toJoin) {
+					if (worker.joinable())
+						m_workers.push_back(ibWorker{ nullptr, std::move(worker) });
+				}
+			}
+			throw;
+		}
+	}
 }
 
 std::future<void> ibWorkerPoolHeadless::Submit(ibSession* session, Task task)
@@ -244,6 +366,9 @@ void ibWorkerPoolHeadless::DrainLease(ibSessionQueue* q)
 			q->tasks.pop_front();
 		}
 		RunTask(item);
+		// The task may have destroyed this pool. Nothing below is still there.
+		if (tl_poolAbandoned)
+			return;
 		// item dies HERE, inside the lease — the task's closure may own
 		// the session, and teardown must see tl_currentLease still set.
 	}
@@ -259,6 +384,15 @@ void ibWorkerPoolHeadless::Await(ibSession* session, const std::function<bool()>
 	ibFiber* const self = ibFiber::Current();
 	if (self == nullptr || self->IsScheduler())
 		throw std::logic_error("ibWorkerPool::Await outside a task of its session");
+
+	// SetSessionParameters may ask. Its trust and its write window live on the
+	// session, and the tasks below are that session's, so they would run
+	// privileged — RLS off, parameters writable — for as long as the question
+	// is open. Calls that arrive meanwhile run under RLS with the parameters
+	// not yet set, so they fail closed. The pause clears both flags and puts
+	// them back on every exit, including the cancel. A role handler is refused
+	// at the question and never parks here, so it cannot wait with m_applyMtx held.
+	ibSessionTrustPause pause(session);
 
 	std::unique_lock<std::mutex> lk(m_mtx);
 	const auto it = m_sessions.find(session);
@@ -305,6 +439,8 @@ void ibWorkerPoolHeadless::Await(ibSession* session, const std::function<bool()>
 			lk.unlock();
 			RunTask(item);
 			// item dies HERE, outside the lock — its closure may tear something down that takes it.
+			if (tl_poolAbandoned)
+				return;
 		}
 		lk.lock();
 	}
@@ -358,13 +494,45 @@ void ibWorkerPoolHeadless::StartLease(ibSession* session, ibSessionQueue* q)
 	try {
 		fiber = ibFiber::Create(&ibWorkerPoolHeadless::LeaseEntry, args, ibFiber::kStackReserve);
 	}
+	catch (const std::bad_alloc&) {
+		delete args;
+		LogWorkerException(wxT("worker pool lease: no room for the stack"));
+		RefuseQueued(q, "the session could not start: there is no room for its stack");
+		return;
+	}
 	catch (...) {
 		delete args;
 		throw;
 	}
 	ibFiber::Scheduler()->SwitchTo(fiber);
+	if (tl_poolAbandoned) {
+		// FinishFiber would take the pool's lock. The fiber itself is
+		// done; only its stack is left.
+		if (fiber->Finished())
+			ibFiber::Destroy(fiber);
+		return;
+	}
 	if (fiber->Finished())
 		FinishFiber(session, q, fiber);
+}
+
+void ibWorkerPoolHeadless::RefuseQueued(ibSessionQueue* q, const char* reason)
+{
+	std::deque<ibSessionTask> doomed;
+	{
+		std::lock_guard<std::mutex> lk(m_mtx);
+		doomed.swap(q->tasks);
+		q->leased.store(false);
+	}
+	const auto refusal = std::make_exception_ptr(std::runtime_error(reason));
+	for (ibSessionTask& item : doomed) {
+		try {
+			item.promise->set_exception(refusal);
+		}
+		catch (...) {
+			// Already satisfied. The task is still not run again.
+		}
+	}
 }
 
 void ibWorkerPoolHeadless::FinishFiber(ibSession* session, ibSessionQueue* q, ibFiber* fiber)
@@ -454,6 +622,9 @@ void ibWorkerPoolHeadless::WorkerLoop()
 	struct BookkeepingOnExit {
 		ibWorkerPoolHeadless* self;
 		~BookkeepingOnExit() {
+			// The pool was destroyed on this thread. The counters are gone.
+			if (tl_poolAbandoned)
+				return;
 			self->m_aliveWorkers.fetch_sub(1, std::memory_order_acq_rel);
 			std::lock_guard<std::mutex> lk(self->m_stopMtx);
 			self->m_stopCv.notify_all();
@@ -524,6 +695,8 @@ void ibWorkerPoolHeadless::WorkerLoop()
 			StartLease(session, q);
 		}
 		catch (...) {
+			if (tl_poolAbandoned)
+				break;
 			LogWorkerException(wxT("worker pool lease"));
 			{
 				std::lock_guard<std::mutex> lk(m_mtx);
@@ -531,6 +704,8 @@ void ibWorkerPoolHeadless::WorkerLoop()
 			}
 			m_cv.notify_all();
 		}
+		if (tl_poolAbandoned)
+			break;
 	}
 	}
 	catch (...) {
@@ -587,24 +762,56 @@ void ibWorkerPoolHeadless::Stop()
 		session->Cancel();
 	alive.clear();   // let them go before the wait below — this pool holds no session for longer than a cancel
 
-	// Wait for every detached worker to exit. m_aliveWorkers decrements
-	// at the end of each WorkerLoop and notifies m_stopCv. A parked fiber
-	// is resumed by the notify above, throws on its own stack, and only
-	// then does its home thread leave — Stop does not return while a
-	// fiber is still suspended.
-	//
-	// Timed, and it keeps waiting — leaving early would let a detached
-	// worker run on into session teardown, which is the use-after-free
-	// this drain exists to prevent. What the deadline buys is a VOICE:
-	// a wait that says nothing is indistinguishable from a deadlock, and
-	// reading that difference cost a full-memory dump (2026-08-03: main
-	// parked here while a worker sat in the Firebird sweep poll, which
-	// was passing nullptr for its cancel token).
-	std::unique_lock<std::mutex> lk(m_stopMtx);
-	while (!m_stopCv.wait_for(lk, kStopWaitReport, [this]() {
-		return m_aliveWorkers.load(std::memory_order_acquire) == 0;
-	})) {
-		ibJournalWarning(wxT("session.worker"),wxT("worker pool: still waiting on %lu worker(s) after stop"),
-		             (unsigned long)m_aliveWorkers.load(std::memory_order_acquire));
+	// A Stop from inside a worker cannot wait for that worker: it is this
+	// call. Leave it in m_workers; the destructor detaches it.
+	bool selfHere = false;
+	{
+		std::lock_guard<std::mutex> lk(m_workersMtx);
+		const auto self = std::this_thread::get_id();
+		for (const ibWorker& worker : m_workers) {
+			if (worker.thread.get_id() == self) {
+				selfHere = true;
+				break;
+			}
+		}
 	}
+	const std::size_t leave = selfHere ? 1 : 0;
+
+	// Wait until every WorkerLoop has returned. m_aliveWorkers decrements
+	// in that function's last destructor and notifies m_stopCv. A parked
+	// fiber is resumed by the notify above, throws on its own stack, and
+	// only then does its home thread leave — Stop does not return while
+	// a fiber is still suspended.
+	//
+	// That counter is not the thread. The thread function returns, then
+	// its thread_local destructors run — the per-worker parked-fiber
+	// vector frees its buffer here — and only then is the thread gone.
+	// Returning on the counter left those destructors overlapping the
+	// caller freeing sessions and, on the way out of the process, wx.
+	// macOS arm64 reports that fault as a bus error. The join is the
+	// rest of the wait.
+	//
+	// Timed, and it keeps waiting — leaving early would let a worker run
+	// on into session teardown, which is the use-after-free this drain
+	// exists to prevent. What the deadline buys is a VOICE: a wait that
+	// says nothing is indistinguishable from a deadlock, and reading
+	// that difference cost a full-memory dump (2026-08-03: main parked
+	// here while a worker sat in the Firebird sweep poll, which was
+	// passing nullptr for its cancel token).
+	{
+		std::unique_lock<std::mutex> lk(m_stopMtx);
+		while (!m_stopCv.wait_for(lk, kStopWaitReport, [this, leave]() {
+			return m_aliveWorkers.load(std::memory_order_acquire) <= leave;
+		})) {
+			ibJournalWarning(wxT("session.worker"),wxT("worker pool: still waiting on %lu worker(s) after stop"),
+			             (unsigned long)m_aliveWorkers.load(std::memory_order_acquire));
+		}
+	}
+
+	std::vector<std::thread> joining;
+	{
+		std::lock_guard<std::mutex> lk(m_workersMtx);
+		joining = TakeJoinableLocked();
+	}
+	JoinWorkers(std::move(joining));
 }

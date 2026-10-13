@@ -42,8 +42,8 @@ public:
 
 	// The tab's icon — the document's own when it has one (a catalog's form shows the catalog's), the
 	// form's otherwise. An empty icon tells the client to show the title alone.
-	void                   SetIcon(const ibServerPicture& icon) { m_icon = icon; }
-	const ibServerPicture& GetIcon() const { return m_icon; }
+	void             SetIcon(const ibPicture& icon) { m_icon = icon; }
+	const ibPicture& GetIcon() const { return m_icon; }
 
 	// Locked — the frame keeps it ahead of the normal tabs and lets no close reach it (ibClientFrame::LockTab).
 	void Lock() { m_locked = true; }
@@ -54,7 +54,7 @@ private:
 	ibClientFrame*  m_frame;
 	s32             m_id;
 	wxString        m_title;
-	ibServerPicture m_icon;
+	ibPicture       m_icon;
 	bool            m_locked = false;
 };
 

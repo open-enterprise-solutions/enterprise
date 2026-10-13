@@ -40,7 +40,7 @@ void ibValueWrapSizer::Update(wxObject* wxobject, ibVisualHost *visualHost)
 	wxWrapSizer*    wrapsizer = static_cast<wxWrapSizer*>(wxobject);
 #endif
 	wrapsizer->SetOrientation(m_propertyOrient->GetValueAsInteger());
-	wrapsizer->SetMinSize(m_propertyMinSize->GetValueAsSize());
+	wrapsizer->SetMinSize(typeConv::SizeToWxSize(m_propertyMinSize->GetValueAsSize()));
 	UpdateSizer(wrapsizer);
 }
 

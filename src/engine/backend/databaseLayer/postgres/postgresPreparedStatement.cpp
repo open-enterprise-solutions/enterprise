@@ -69,8 +69,9 @@ ibPreparedStatementPostgres* ibPreparedStatementPostgres::CreateStatement(ibInte
 
 		if (pInterface->GetPQresultStatus()(pResult) != PGRES_COMMAND_OK)
 		{
-			pStatement->SetErrorCode(ibDatabaseLayerPostgres::TranslateErrorCode(pInterface->GetPQresultStatus()(pResult),
-				pInterface->GetPQresultErrorField()(pResult, PG_DIAG_SQLSTATE)));
+			const char* state = pInterface->GetPQresultErrorField()(pResult, PG_DIAG_SQLSTATE);
+			pStatement->SetErrorCode(ibDatabaseLayerPostgres::TranslateErrorCode(pInterface->GetPQresultStatus()(pResult), state),
+				ibDatabaseLayerPostgres::ClassifySqlState(state != nullptr ? wxString::FromAscii(state) : wxString()));
 			pStatement->SetErrorMessage(ibDatabaseStringConverter::ConvertFromUnicodeStream(
 				pInterface->GetPQresultErrorMessage()(pResult)));
 			pInterface->GetPQclear()(pResult);
@@ -180,7 +181,7 @@ int ibPreparedStatementPostgres::RunQuery()
 	for (unsigned int i = 0; i < (m_Statements.size()); i++) {
 		rows = m_Statements[i].DoRunQuery();
 		if (m_Statements[i].GetErrorCode() != DATABASE_LAYER_OK) {
-			SetErrorCode(m_Statements[i].GetErrorCode());
+			SetErrorCode(m_Statements[i].GetErrorCode(), m_Statements[i].GetErrorKind());
 			SetErrorMessage(m_Statements[i].GetErrorMessage());
 			ThrowDatabaseException();
 			return DATABASE_LAYER_QUERY_RESULT_ERROR;
@@ -194,7 +195,7 @@ ibDatabaseResultSet* ibPreparedStatementPostgres::RunQueryWithResults()
 	for (unsigned int i = 0; i < (m_Statements.size() - 1); i++) {
 		m_Statements[i].DoRunQuery();
 		if (m_Statements[i].GetErrorCode() != DATABASE_LAYER_OK) {
-			SetErrorCode(m_Statements[i].GetErrorCode());
+			SetErrorCode(m_Statements[i].GetErrorCode(), m_Statements[i].GetErrorKind());
 			SetErrorMessage(m_Statements[i].GetErrorMessage());
 			ThrowDatabaseException();
 			return nullptr;
@@ -203,7 +204,7 @@ ibDatabaseResultSet* ibPreparedStatementPostgres::RunQueryWithResults()
 	ibPreparedStatementPostgresWrapper* pLastStatement = &(m_Statements[m_Statements.size() - 1]);
 	ibDatabaseResultSet* pResultSet = pLastStatement->DoRunQueryWithResults();
 	if (pLastStatement->GetErrorCode() != DATABASE_LAYER_OK) {
-		SetErrorCode(pLastStatement->GetErrorCode());
+		SetErrorCode(pLastStatement->GetErrorCode(), pLastStatement->GetErrorKind());
 		SetErrorMessage(pLastStatement->GetErrorMessage());
 		ThrowDatabaseException();
 	}

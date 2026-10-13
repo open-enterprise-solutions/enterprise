@@ -1,6 +1,5 @@
 ﻿#include "picturePredefined.h"
-#include "pictureDescription.h"
-#include "backend_picture.h"   // ibBackendPicture::GetImageFromBase64 вЂ” the inactive record, greyed from the active one
+#include "backend_picture.h"   // RegisterBackendPicture; ibBackendPicture::GetImageFromBase64 — the inactive record, greyed from the active one
 
 #pragma region __predefined_png__
 

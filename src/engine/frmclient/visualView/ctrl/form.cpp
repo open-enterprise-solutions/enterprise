@@ -4,7 +4,7 @@
 
 #include "frmclient/backend/serialize/dataProtocol.h"   // ibDataNode — a control's properties, as the wire carries them
 #include "frmclient/mainFrame/mainFrame.h"
-#include "frmclient/visualView/visualHostClient.h"   // ibFormVisualDocument — the tab's document, by the host's tab
+#include "frmclient/visualView/visualHostClient.h"   // the host — the tab's document, by the host's tab
 
 namespace {
 
@@ -96,7 +96,7 @@ bool ibValueForm::WriteData(ibDataNode& node) const
 	return ibValueFrame::WriteData(node);
 }
 
-ibFormVisualDocument* ibValueForm::GetVisualDocument() const
+ibTabDocument* ibValueForm::GetVisualDocument() const
 {
 	// The desktop's finds it by the form's key; a tab here is the form drawn, so by the tab its host draws in.
 	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();

@@ -6,6 +6,7 @@
 
 #include "core/serialize/dataBuilder.h"
 #include "core/exception.h"              // ibCoreException — kind-mismatch throw
+#include "core/fiber/fiber.h"            // StackLow — a nested node is another native frame
 
 #include <cstring>                       // std::memcmp — two packed values compared as bytes
 #include <wx/datetime.h>                  // a format-1 node's instant, read by its local parts (ReadEntry)
@@ -309,7 +310,18 @@ void ibBinaryProvider::WriteValue(ibWriter& writer, const ibDataValue& v) const 
 	}
 }
 
+namespace {
+
+void RefuseIfBinaryStackLow()
+{
+	if (ibFiber::StackLow())
+		ibCoreException::Error(_("ibBinaryProvider: the value is nested deeper than the stack allows"));
+}
+
+}
+
 ibDataValue ibBinaryProvider::ReadEntry(ibReader& reader, u32 version) const {
+	RefuseIfBinaryStackLow();
 	const ibDataKind kind = (ibDataKind)reader.r_u8();
 	switch (kind) {
 	case ibDataKind::String: return ibDataValue::String(reader.r_stringZ());
@@ -416,6 +428,7 @@ void ibBinaryProvider::WriteChildren(const ibDataNode& node, ibWriter& writer) c
 }
 
 void ibBinaryProvider::ReadChildren(ibReader& reader, ibDataNode& node, u32 version) const {
+	RefuseIfBinaryStackLow();
 	const u32 count = reader.r_u32();
 	for (u32 i = 0; i < count; i++) {
 		const ibClassID clsid  = (ibClassID)reader.r_u64();
@@ -464,6 +477,7 @@ void ibBinaryProvider::WriteNode(const ibDataNode& node, ibWriter& writer) const
 }
 
 void ibBinaryProvider::ReadNode(ibReader& reader, ibDataNode& node) const {
+	RefuseIfBinaryStackLow();
 	// `reader` is this node's INNER content { kMetaBlock, kChildBlock }.
 	// Children — each a full form chunk(clsid){chunk(metaId){inner}}. The
 	// iterator self-closes the previous reader on every call (incl. the final
