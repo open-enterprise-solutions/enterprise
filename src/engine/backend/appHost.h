@@ -78,7 +78,6 @@ public:
 	static std::size_t ResumeSeconds(bool present, long configured);
 	ibHelpService*   GetHelpService() const   { return m_helpService.get(); }
 	wxString         GetLocale() const        { return m_locale.GetCanonicalName(); }
-	wxString         GetLocaleName() const    { return m_locale.GetName(); }
 
 	// The platform locale, set once for the process: the first base to ask settles it, and a later base's
 	// wish is not a second locale — wxLocale is process state. False when no catalog could be set at all.

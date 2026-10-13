@@ -34,7 +34,7 @@ ibDialogSettings::ibDialogSettings(wxWindow* parent)
     GetBookCtrl()->AddPage(m_mcpSettingsPanel, _("Assistant access"));
 
     m_regionalSettingsPanel = new ibPanelRegionalSettings(GetBookCtrl());
-    GetBookCtrl()->AddPage(m_regionalSettingsPanel, _("Time zone"));
+    GetBookCtrl()->AddPage(m_regionalSettingsPanel, _("Regional settings"));
 
     LayoutDialog();
 

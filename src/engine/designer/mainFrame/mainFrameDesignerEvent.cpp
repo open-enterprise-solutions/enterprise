@@ -795,12 +795,14 @@ void ibFrontendMainFrameDesigner::OnToolsSettings(wxCommandEvent& event)
 		mcpSettings->SetSettings(mcpServer->GetSettings());
 		mcpSettings->SetEndpoint(mcpServer->GetEndpoint());
 	}
-	// THE TIME ZONE belongs to the BASE - every client of it - and is read from and written back to the base
-	// (session/regionalSettings.h), with the names its server knows to choose from.
-	ibPanelRegionalSettings* zoneSettings = dialog.GetRegionalSettingsPanel();
+	// THE TIME ZONE AND THE LOCALE belong to the BASE - every client of it - and are read from and written
+	// back to the base (session/regionalSettings.h), the zone with the names its server knows to choose from.
+	ibPanelRegionalSettings* regionalPage = dialog.GetRegionalSettingsPanel();
 	ibRegionalSettings* regional = ibApplicationInstance::GetRegionalSettings();
-	if (regional != nullptr)
-		zoneSettings->SetTimeZone(regional->GetTimeZone(), regional->KnownTimeZones());
+	if (regional != nullptr) {
+		regionalPage->SetTimeZone(regional->GetTimeZone(), regional->KnownTimeZones());
+		regionalPage->SetLocale(regional->GetLocale());
+	}
 
 	if (dialog.ShowModal() == wxID_OK)
 	{
@@ -816,10 +818,13 @@ void ibFrontendMainFrameDesigner::OnToolsSettings(wxCommandEvent& event)
 		// Saved and in force at once. A name the server refuses is refused HERE, in front of the person,
 		// rather than found at the next start; an OK that changed nothing writes nothing.
 		if (regional != nullptr) {
-			const wxString zone = zoneSettings->GetTimeZone();
+			const wxString zone = regionalPage->GetTimeZone();
 			wxString refusal;
 			if (zone != regional->GetTimeZone() && !regional->SetTimeZone(zone, &refusal))
-				wxMessageBox(refusal, _("Time zone"), wxOK | wxCENTRE | wxICON_ERROR, this);
+				wxMessageBox(refusal, _("Regional settings"), wxOK | wxCENTRE | wxICON_ERROR, this);
+			const wxString locale = regionalPage->GetLocale();
+			if (locale != regional->GetLocale() && !regional->SetLocale(locale, &refusal))
+				wxMessageBox(refusal, _("Regional settings"), wxOK | wxCENTRE | wxICON_ERROR, this);
 		}
 
 		m_keyBinder.ClearCommands();

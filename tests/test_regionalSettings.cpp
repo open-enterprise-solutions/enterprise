@@ -8,6 +8,7 @@
 #include <wx/filename.h>
 #include <wx/init.h>
 #include <wx/stdpaths.h>
+#include <wx/uilocale.h>
 
 #include <chrono>
 #include <cstdlib>   // std::llabs
@@ -363,4 +364,67 @@ TEST_F(FirebirdRegionalFix, NowIsKyivsClockOnceTheBaseNamesKyiv)
 	const ibApplicationInstanceScope bound(ibApplicationInstance::Get());
 	const long long apart = ibDateTime::Now() - MachineUtc();
 	EXPECT_TRUE(std::llabs(apart - 7200000) < 5000 || std::llabs(apart - 10800000) < 5000) << "Kyiv is UTC+2 or UTC+3, read " << apart;
+}
+
+// The locale stands beside the zone, each in a row of its own: named under the canonical name with its
+// region, read back by every process that opens the base, answered by the base as its own ahead of the
+// process's - and neither setting loses the other when one of them is written.
+TEST_F(RegionalFix, TheLocaleRoundTripsThroughTheBaseBesideTheZone)
+{
+	ibApplicationInstance* const base = ibApplicationInstance::Get();
+	ASSERT_NE(base, nullptr);
+	const ibApplicationHost* const host = ibApplicationHost::Get();
+	ASSERT_NE(host, nullptr);
+	const wxLanguageInfo* const uk = wxUILocale::FindLanguageInfo(wxT("uk"));
+	const wxLanguageInfo* const ru = wxUILocale::FindLanguageInfo(wxT("ru_RU"));
+	ASSERT_NE(uk, nullptr);
+	ASSERT_NE(ru, nullptr);
+	const wxString ukraine = uk->GetCanonicalWithRegion();
+	const wxString russia  = ru->GetCanonicalWithRegion();
+	EXPECT_EQ(wxT("uk_UA"), ukraine);
+
+	EXPECT_TRUE(regional->GetLocale().IsEmpty());
+	EXPECT_EQ(host->GetLocale(), base->GetLocale()) << "a base that names none answers the process's";
+
+	// Four spellings of one language, kept under the name the process will give of itself.
+	wxString why;
+	for (const wxChar* spelling : { wxT("uk"), wxT("uk_UA"), wxT("uk-UA"), wxT("Ukrainian") }) {
+		ASSERT_TRUE(regional->SetLocale(spelling, &why)) << spelling << ": " << why;
+		EXPECT_EQ(ukraine, regional->GetLocale()) << spelling;
+	}
+	EXPECT_EQ(ukraine, base->GetLocale());
+	EXPECT_TRUE(regional->Refresh());
+	EXPECT_EQ(ukraine, regional->GetLocale());
+
+	// The zone written after it keeps it; it written after the zone keeps the zone.
+	ASSERT_TRUE(regional->SetTimeZone(wxT("Europe/Kyiv"), &why)) << why;
+	EXPECT_TRUE(regional->Refresh());
+	EXPECT_EQ(ukraine, regional->GetLocale());
+	EXPECT_EQ(wxT("Europe/Kyiv"), regional->GetTimeZone());
+	ASSERT_TRUE(regional->SetLocale(wxT("ru_RU"), &why)) << why;
+	EXPECT_TRUE(regional->Refresh());
+	EXPECT_EQ(russia, regional->GetLocale());
+	EXPECT_EQ(wxT("Europe/Kyiv"), regional->GetTimeZone());
+
+	// Cleared: the process's again, and the zone still there.
+	ASSERT_TRUE(regional->SetLocale(wxEmptyString, &why)) << why;
+	EXPECT_TRUE(regional->Refresh());
+	EXPECT_TRUE(regional->GetLocale().IsEmpty());
+	EXPECT_EQ(host->GetLocale(), base->GetLocale());
+	EXPECT_EQ(wxT("Europe/Kyiv"), regional->GetTimeZone());
+}
+
+// A name wx knows no language for is refused with the name in the reason, and nothing is written: the
+// row keeps what it had.
+TEST_F(RegionalFix, ALocaleNobodyKnowsIsRefusedBeforeAnythingIsWritten)
+{
+	const wxLanguageInfo* const en = wxUILocale::FindLanguageInfo(wxT("en"));
+	ASSERT_NE(en, nullptr);
+	wxString why;
+	ASSERT_TRUE(regional->SetLocale(wxT("en"), &why)) << why;
+	EXPECT_FALSE(regional->SetLocale(wxT("xx_YY"), &why));
+	EXPECT_TRUE(why.Contains(wxT("xx_YY"))) << why;
+	EXPECT_EQ(en->GetCanonicalWithRegion(), regional->GetLocale());
+	EXPECT_TRUE(regional->Refresh());
+	EXPECT_EQ(en->GetCanonicalWithRegion(), regional->GetLocale()) << "the row kept what it had";
 }

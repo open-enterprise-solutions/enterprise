@@ -1,5 +1,5 @@
 ////////////////////////////////////////////////////////////////////////////
-//	Description : the base's time zone - named on the base, in force on its connections (regionalSettings.h)
+//	Description : the base's time zone and locale - named on the base, in force on its connections and its clients (regionalSettings.h)
 ////////////////////////////////////////////////////////////////////////////
 
 #include "regionalSettings.h"
@@ -14,18 +14,21 @@
 #include "core/diagnostics/journal.h"
 #include "core/serialize/dataBuilder.h"
 
+#include <wx/uilocale.h>
+
 #include <cstdlib>   // std::llabs
 
 
 namespace {
 
-// The one row: a fixed object under the category, shared by everybody (no user in the key).
-const wxChar* const kRegionalSettingsObject = wxT("72656769-6f6e-616c-0000-000000000001");
+// Two rows, one a setting: fixed objects under the category, shared by everybody (no user in the key). The
+// zone's is the row it has had; the locale's stands beside it rather than in it, so that a process writing
+// the one - from a cache up to a minute old - cannot write over the other as somebody just saved it.
+const wxChar* const kZoneObject   = wxT("72656769-6f6e-616c-0000-000000000001");
+const wxChar* const kLocaleObject = wxT("72656769-6f6e-616c-0000-000000000002");
 
-ibSettingsKey KeyOfTheBase()
-{
-	return ibSettingsKey(ibSettingsCategory::Regional, ibGuid(kRegionalSettingsObject));
-}
+ibSettingsKey ZoneKey()   { return ibSettingsKey(ibSettingsCategory::Regional, ibGuid(kZoneObject)); }
+ibSettingsKey LocaleKey() { return ibSettingsKey(ibSettingsCategory::Regional, ibGuid(kLocaleObject)); }
 
 } // namespace
 
@@ -69,7 +72,7 @@ bool ibRegionalSettings::SetTimeZone(const wxString& zone, wxString* refusal)
 	}
 	ibDataNode node;
 	node.SetValue(wxT("timeZone"), zone);
-	if (!storage->Save(KeyOfTheBase(), node, &m_holder)) {
+	if (!storage->Save(ZoneKey(), node, &m_holder)) {
 		if (refusal != nullptr)
 			*refusal = _("The time zone could not be written to the base.");
 		return false;
@@ -85,6 +88,63 @@ bool ibRegionalSettings::SetTimeZone(const wxString& zone, wxString* refusal)
 	if (ibConnectionPool* const pool = ibApplicationInstance::GetConnectionPool(m_owner))
 		pool->SetSessionTimeZone(zone);
 	MeasureClock(*scope.get(), zone);
+	return true;
+}
+
+wxString ibRegionalSettings::GetLocale()
+{
+	std::lock_guard<std::mutex> lock(m_mutex);
+	return m_locale;
+}
+
+bool ibRegionalSettings::SetLocale(const wxString& locale, wxString* refusal)
+{
+	ibSettingsStorage* const storage = ibApplicationInstance::GetSettingsStorage(m_owner);
+	if (storage == nullptr) {
+		if (refusal != nullptr)
+			*refusal = _("The base is not open; the locale was not saved.");
+		return false;
+	}
+	// Under the canonical name with its region - the name the process gives of itself once it speaks it
+	// (wxLocale::GetCanonicalName): "uk", "uk_UA", "uk-UA" and "Ukrainian" are all uk_UA. wx's lookup knows the
+	// underscore and the English name, not BCP 47's hyphen, so that comes off first, as does a codeset. A name
+	// wx knows no language for is refused here, in front of whoever is saving.
+	wxString canonical;
+	if (!locale.IsEmpty()) {
+		wxString asked = locale.BeforeFirst(wxT('.'));
+		asked.Replace(wxT("-"), wxT("_"));
+		const wxLanguageInfo* const info = wxUILocale::FindLanguageInfo(asked);
+		if (info == nullptr) {
+			if (refusal != nullptr)
+				*refusal = wxString::Format(_("'%s' names no language the platform knows (a name such as uk_UA, en_GB or ru_RU); the setting was not saved."), locale);
+			return false;
+		}
+		canonical = info->GetCanonicalWithRegion();
+	}
+	{
+		// An OK that changed nothing writes nothing: the page compares what was typed, this what it means.
+		std::lock_guard<std::mutex> lock(m_mutex);
+		if (m_read && canonical == m_locale)
+			return true;
+	}
+	const std::lock_guard<std::mutex> use(m_holderUse);
+	const ibConnectionScope scope(&m_holder);
+	if (!scope) {
+		if (refusal != nullptr)
+			*refusal = _("No connection to the base; the locale was not saved.");
+		return false;
+	}
+	ibDataNode node;
+	node.SetValue(wxT("locale"), canonical);
+	if (!storage->Save(LocaleKey(), node, &m_holder)) {
+		if (refusal != nullptr)
+			*refusal = _("The locale could not be written to the base.");
+		return false;
+	}
+	std::lock_guard<std::mutex> lock(m_mutex);
+	m_locale = canonical;
+	m_read = true;
+	++m_saves;
 	return true;
 }
 
@@ -114,32 +174,45 @@ bool ibRegionalSettings::Refresh(ibDatabaseConnectionHolder* holder)
 	// A read that FAILED - the base gone for a moment, a statement refused - is not "the base names nothing":
 	// what is in force stays in force, and the next minute asks again. Taking a failure for an empty row would
 	// take every connection out of the base's zone on a hiccup.
-	ibDataNode node;
-	bool failed = false;
-	const bool held = storage->Restore(KeyOfTheBase(), node, through, &failed);
+	ibDataNode zoneRow, localeRow;
+	bool failed = false, localeFailed = false;
+	const bool heldZone   = storage->Restore(ZoneKey(),   zoneRow,   through, &failed);
+	const bool heldLocale = storage->Restore(LocaleKey(), localeRow, through, &localeFailed);
+	failed = failed || localeFailed;
+	const bool held = heldZone || heldLocale;
 	{
 		std::lock_guard<std::mutex> lock(m_mutex);
 		const bool said = m_readFailing;
 		m_readFailing = failed;
 		if (failed && !said)
-			ibJournalWarning(wxT("session.zone"), wxT("the base's time zone could not be read; what is in force stays, and the next minute asks again"));
+			ibJournalWarning(wxT("session.zone"), wxT("the base's regional settings could not be read; what is in force stays, and the next minute asks again"));
 	}
 	if (failed)
 		return false;
-	wxString zone;
-	if (held)
-		node.GetValue(wxT("timeZone"), zone);
+	wxString zone, locale;
+	if (heldZone)
+		zoneRow.GetValue(wxT("timeZone"), zone);
+	if (heldLocale)
+		localeRow.GetValue(wxT("locale"), locale);
 
 	bool first = false;
-	wxString before;
+	wxString before, localeBefore;
 	{
 		std::lock_guard<std::mutex> lock(m_mutex);
 		if (m_saves != savesBefore)
 			return held;   // a save came in between: it is in force, and the next minute reads it back
 		first = !m_read;
 		before = m_timeZone;
+		localeBefore = m_locale;
 		m_read = true;
 		m_timeZone = zone;
+		m_locale = locale;
+	}
+	if (first ? !locale.IsEmpty() : localeBefore != locale) {
+		if (!locale.IsEmpty())
+			ibJournalInfo(wxT("session.locale"), wxT("the base names the locale %s"), locale);
+		else
+			ibJournalInfo(wxT("session.locale"), wxT("the base names no locale any more; the platform's stands"));
 	}
 	// Recorded for the pool at every read - the pool asks each connection its own zone at hand-out, and a zone
 	// a hand-out was refused is tried again once it is recorded again, so once a minute rather than never.

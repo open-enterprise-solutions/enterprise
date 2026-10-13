@@ -13,7 +13,7 @@
 // A date is a wall-clock reading with no zone in it (core/fdatetime.h). What zone the readings of a base
 // stand in - what 09:00 in its documents MEANS - is a property of the BASE: every client of it, wherever
 // it sits, works in the base's zone. So the zone is named once, on the base (the designer's settings),
-// kept as one shared row of sys_settings (ibSettingsCategory::Regional, no user), and put on the
+// kept as a shared row of sys_settings (ibSettingsCategory::Regional, no user), and put on the
 // connections the base's pool hands out (Firebird SET TIME ZONE, PostgreSQL set_config), so what asks the
 // server for its clock or a zone's conversion reads in it. Dates are bound with no zone, and the engine's
 // own statements do not ask; the measurement below does. A base that names none leaves each engine in its
@@ -29,6 +29,15 @@
 // base's zone or not at all: a server with a session zone reads its clock in whatever zone the session
 // stands in - UTC on a Firebird attach - which is nobody's clock for a base that names none; there the
 // difference is zero and "now" is the machine's clock, as before.
+//
+// ⭐ THE BASE'S LOCALE stands beside the zone, in a row of its own: the locale the processes opened on the
+// base come up in. wxLocale is process state, settled by the first base a process opens
+// (ibApplicationHost::InitLocale), so what the base names is what the designer, the thick client and a
+// launcher's child speak once opened on it - and a thin client on a file base, the engine running in its
+// process; over an application server it has no locale of its own, and the server speaks the first base's,
+// as a process that holds several bases does. What asks a base for ITS locale
+// (ibApplicationInstance::GetLocale, platform_state) is answered this one, whatever the process speaks.
+// Empty: the platform's (backend.conf, --locale).
 //
 // One per base, owned by it like the lock manager: several bases in one process are several zones. It
 // reads and writes through a connection of its base - its own holder on the base's pool, or the holder
@@ -46,6 +55,16 @@ public:
 	// every connection into it as it is next handed out. On a driver without a session zone the name is
 	// kept and applies nothing.
 	bool SetTimeZone(const wxString& zone, wxString* refusal = nullptr);
+
+	// The locale in force: the canonical name with its region ("uk_UA"), the one a process gives of itself
+	// once it speaks it; empty = the platform's.
+	wxString GetLocale();
+
+	// Named and kept: a name wx knows no language for is refused with `refusal` and nothing is written; one it
+	// knows ("uk", "uk_UA", "uk-UA", "Ukrainian" - all uk_UA) is kept under the canonical name with its region.
+	// In force for every process that opens the base from now on - the one saving it keeps the locale it came
+	// up in, wxLocale being settled once. The name already in force is not written again.
+	bool SetLocale(const wxString& locale, wxString* refusal = nullptr);
 
 	// The base's row read and put in force - once when the base opens, and once a minute after from the
 	// session registry's thread on its own holder, so a zone saved by one process reaches every other
@@ -67,9 +86,10 @@ private:
 	std::mutex                         m_holderUse;   // ...one call at a time: one holder is one bound connection
 	std::mutex                         m_mutex;
 	wxString                           m_timeZone;
+	wxString                           m_locale;
 	bool                               m_read = false;        // Refresh has read the row once
 	bool                               m_readFailing = false; // the last read of the row failed (said once)
-	unsigned long                      m_saves = 0;           // SetTimeZone calls that wrote: a read begun before one is stale
+	unsigned long                      m_saves = 0;           // SetTimeZone / SetLocale calls that wrote: a read begun before one is stale
 };
 
 #endif // __REGIONAL_SETTINGS_H__

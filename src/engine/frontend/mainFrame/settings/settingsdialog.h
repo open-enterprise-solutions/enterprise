@@ -61,7 +61,7 @@ public:
     ibPanelMcpSettings* GetMcpSettingsPanel() const;
 
     /**
-     * The base's time zone page - the zone every client of the base works in.
+     * The base's regional settings page - the zone and the locale every client of the base works in.
      */
     ibPanelRegionalSettings* GetRegionalSettingsPanel() const;
 

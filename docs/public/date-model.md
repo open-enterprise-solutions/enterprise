@@ -69,7 +69,7 @@ of the clocks between two readings is not an hour of silence. A session's heartb
 are readings of the MACHINE's clock (`MachineNow`): the base's clock is the machine's moved by a distance
 each process measures once a minute, and the minute it steps a peer's beat would read as hours of silence.
 
-## The base's zone and clock
+## The base's zone, clock and locale
 
 - **The zone belongs to the base.** It is named once, on the base (the designer's settings, *Time
   zone*), kept as one shared row of `sys_settings`, and put on the connections the base's pool hands
@@ -93,12 +93,23 @@ each process measures once a minute, and the minute it steps a peer's beat would
   shows for at most the minute to the next measurement.
 - **The zone rules** are the ones laid out beside the engine (`_fb/tzdata`); without them the ICU
   built into Firebird's kit knows 2018's rules and counts a newer name (`Europe/Kyiv`) as UTC.
+- **The locale belongs to the base too.** It is named beside the zone (*Regional settings*), in a row of
+  its own, under the canonical name with its region (`uk_UA` - the name a process gives of itself; `uk`,
+  `uk-UA` and `Ukrainian` are all that); empty is the platform's (`backend.conf`, `--locale`). What the
+  base names is what the processes opened on it come up in - the designer, the thick client, a launcher's
+  child, and a thin client on a file base, the engine running in its process; over an application server
+  a thin client has no locale of its own (its windows are not translated), and the server speaks the first
+  base's. `wxLocale` is process state, settled by the first base a process opens, so a process holding
+  several bases speaks the first one's, and a base that names another is said in the journal. A base
+  asked for its own locale (`ibApplicationInstance::GetLocale`, `platform_state`) answers what it names,
+  whatever the process speaks.
 
 ## Where it stops
 
 - The zone is not in the value: a reading is what the base's clock showed, in the base's zone.
-- A base's locale is the process's (`backend.conf`, the first base's request); there is no locale per
-  base.
+- The locale a base names reaches `_()` - the engine's own words - only through the process it settles:
+  a process of several bases translates in the first one's. A translation per base would need a set of
+  catalogs chosen by the thread's base, which is a decision of its own.
 - Liveness is the machine's clock read through the machine's zone, as before the base had a clock: two
   processes of one base on machines in different zones still read each other's heartbeats hours apart.
   A zone-free reading for the heartbeat (UTC, compared by subtraction) is the change that would close it.

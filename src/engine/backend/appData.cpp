@@ -203,6 +203,12 @@ ibHelpService* ibApplicationInstance::GetHelpService()
 
 wxString ibApplicationInstance::GetLocale() const
 {
+	// The base's own where it names one (session/regionalSettings.h), else the process's.
+	if (ibRegionalSettings* const regional = GetRegionalSettings(this)) {
+		const wxString named = regional->GetLocale();
+		if (!named.IsEmpty())
+			return named;
+	}
 	ibApplicationHost* const host = ibApplicationHost::Get();
 	return host != nullptr ? host->GetLocale() : wxString();
 }
@@ -911,14 +917,25 @@ ibApplicationInstance* ibApplicationInstance::Open(std::unique_ptr<ibApplication
 		CreateTableJob();              // sys_job — the shared last-run clock…
 		MigrateTableJob();             // …and its settings columns
 		CreateTableSettings();         // sys_settings — what people saved on their forms and their lists
-		// The base's time zone, read from its row and recorded for the pool - before anything takes a
-		// connection to work in it.
-		if (ibRegionalSettings* const regional = GetRegionalSettings(applicationInstance))
+		// The base's time zone and locale, read from its row: the zone recorded for the pool before anything
+		// takes a connection to work in it, the locale ahead of the request's word - what the base names is
+		// what its clients come up in; --locale and backend.conf are for a base that names none.
+		wxString namedLocale;
+		if (ibRegionalSettings* const regional = GetRegionalSettings(applicationInstance)) {
 			regional->Refresh();
+			namedLocale = regional->GetLocale();
+		}
 		CreateTableFile();             // sys_file — the sessions' temporary files
 
-		if (!SetLocaleAppDataEnv(request.m_locale))
+		if (!SetLocaleAppDataEnv(!namedLocale.IsEmpty() ? namedLocale : request.m_locale))
 			return refuse();
+		// A process speaks one locale, settled once: a base that names another is read and answered as its own,
+		// and the difference is said here, the one place it shows.
+		if (!namedLocale.IsEmpty())
+			if (const ibApplicationHost* const host = ibApplicationHost::Get())
+				if (host->GetLocale() != namedLocale)
+					ibJournalWarning(wxT("session.locale"), wxT("the base names the locale %s; this process speaks %s (settled once, by the base it opened first, or by what this machine supports)"),
+						namedLocale, host->GetLocale());
 
 		// Audit + trace logger — built after pool + tables so the
 		// first Audit row (session.opened) can fire on the next
@@ -1110,8 +1127,9 @@ long ibApplicationInstance::RunApplication(const wxString& strAppName, const wxS
 	if (!strUserPassword.IsEmpty())
 		executeCmd += wxString::Format(wxT(" --ibpwd=%s"), strUserPassword);
 
-	ibApplicationHost* const host = ibApplicationHost::Get();
-	executeCmd += wxString::Format(wxT(" --locale=%s"), host != nullptr ? host->GetLocaleName() : wxString());
+	// The base's locale - its own where it names one, else the process's - so the child comes up as this
+	// base's clients do.
+	executeCmd += wxString::Format(wxT(" --locale=%s"), GetLocale());
 
 	// Manifest-mode: wes-style spawn. Skip the debug-client handshake —
 	// that's enterprise.exe's in-process debugger attach, not relevant

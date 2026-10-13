@@ -2,7 +2,7 @@
 #define __REGIONAL_SETTINGS_PANEL_H__
 
 ////////////////////////////////////////////////////////////////////////////
-// THE BASE'S TIME ZONE - a page of the designer's settings dialog.
+// THE BASE'S TIME ZONE AND LOCALE - a page of the designer's settings dialog.
 //
 // Unlike the editor pages, and like the assistant's, this is not the frame's own state: it belongs to the
 // BASE, to every client of it, and is read from and written back to the base (ibRegionalSettings). The
@@ -14,6 +14,7 @@
 #include <wx/panel.h>
 #include <wx/combobox.h>
 #include <wx/stattext.h>
+#include <wx/textctrl.h>
 
 #include <vector>
 
@@ -30,12 +31,18 @@ public:
 	// What the page says now - read off the control, so the caller sees the person's edit.
 	wxString GetTimeZone() const;
 
+	// The locale the base names (a canonical name, "uk_UA"; empty: the platform's).
+	void SetLocale(const wxString& locale);
+	wxString GetLocale() const;
+
 private:
 	wxString              m_zone;
 	std::vector<wxString> m_known;
+	wxString              m_locale;
 
 	wxComboBox*   m_zoneCtrl = nullptr;
 	wxStaticText* m_zoneNote = nullptr;
+	wxTextCtrl*   m_localeCtrl = nullptr;
 };
 
 #endif
