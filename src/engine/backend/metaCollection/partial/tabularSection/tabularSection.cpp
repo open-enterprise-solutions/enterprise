@@ -4,6 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "tabularSection.h"
+#include "backend/system/value/valueTable.h"   // Total: the rows are totalled as a table of values
 
 #include "backend/metaCollection/partial/commonObject.h"
 #include "backend/metaCollection/partial/reference/reference.h"
@@ -212,6 +213,17 @@ bool ibValueTabularSectionDataObjectBase::CallAsFunc(const long lMethodNum, ibVa
 	case enGetMetadata:
 		pvarRetValue = m_metaTable;
 		return true;
+	case enTotal: {
+		// The total of a column, as a table of values answers it (Table.Total): the rows are unloaded
+		// into a table and that table adds them up, so a tabular section and a table total the same way.
+		const wxString column = paParams[0]->GetString();
+		ibValue table = SaveDataToTable();
+		ibValueModelTable* valueTable = nullptr;
+		if (!table.ConvertToValue(valueTable) || valueTable == nullptr)
+			ibBackendCoreException::Error(_("Tabular section column '%s' cannot be totalled"), column);
+		pvarRetValue = valueTable->TotalOf(column);
+		return true;
+	}
 	}
 
 	return false;
@@ -587,6 +599,7 @@ void ibValueTabularSectionDataObjectBase::FillMembers(ibMemberTable& helper) con
 		helper.AppendFunc(wxT("Find"), 2, wxT("Find(value : any, columnName : string)"), enFind, eTabularSection);
 		helper.AppendFunc(wxT("Unload"), wxT("Unload()"), enUnload, eTabularSection);
 		helper.AppendFunc(wxT("GetMetadata"), wxT("GetMetadata()"), enGetMetadata, eTabularSection);
+		helper.AppendFunc(wxT("Total"), 1, wxT("Total(columnName : string)"), enTotal, eTabularSection);
 	}
 	else {
 		helper.AppendFunc(wxT("Add"), wxT("Add()"), enAddValue, eTabularSection);
@@ -597,6 +610,7 @@ void ibValueTabularSectionDataObjectBase::FillMembers(ibMemberTable& helper) con
 		helper.AppendFunc(wxT("Load"), 1, wxT("Load(table : any table)"), enLoad, eTabularSection);
 		helper.AppendFunc(wxT("Unload"), wxT("Unload()"), enUnload, eTabularSection);
 		helper.AppendFunc(wxT("GetMetadata"), wxT("GetMetadata()"), enGetMetadata, eTabularSection);
+		helper.AppendFunc(wxT("Total"), 1, wxT("Total(columnName : string)"), enTotal, eTabularSection);
 	}
 }
 
