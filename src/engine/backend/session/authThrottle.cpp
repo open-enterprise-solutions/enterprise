@@ -7,21 +7,26 @@
 
 namespace {
 
-thread_local wxString tl_source;
-thread_local int      tl_refusalSec = 0;
-
 wxString AccountKey(wxString user)
 {
 	user.Trim(true).Trim(false);
 	return user.Lower();
 }
 
-wxString SourceKey(wxString source)
+// An address that is missing, or that is this machine, is not a shared bucket.
+// "127.0.0.1:8080" and "::1" are the same case as an empty string.
+bool AddressIsThisMachine(const wxString& address)
 {
-	source.Trim(true).Trim(false);
-	if (source.IsEmpty())
-		return wxT("local");
-	return source;
+	wxString host = address;
+	host.Trim(true).Trim(false);
+	host.MakeLower();
+	if (host.IsEmpty())
+		return true;
+	return host.StartsWith(wxT("127."))
+		|| host.StartsWith(wxT("0.0.0.0"))
+		|| host.StartsWith(wxT("localhost"))
+		|| host.StartsWith(wxT("::1"))
+		|| host.StartsWith(wxT("[::1]"));
 }
 
 int CeilSeconds(ibAuthThrottle::Clock::duration d)
@@ -45,7 +50,7 @@ int DelayAfterFailures(int failures)
 
 struct ibAuthThrottle::State {
 	struct Account {
-		int            m_failures = 0;
+		int               m_failures = 0;
 		Clock::time_point m_next{};
 		Clock::time_point m_lastFailure{};
 	};
@@ -57,12 +62,12 @@ struct ibAuthThrottle::State {
 
 	std::mutex                  m_mutex;
 	std::map<wxString, Account> m_accounts;
-	std::map<wxString, Bucket>  m_sources;
-	int                         m_inFlight = 0;
+	std::map<wxString, Bucket>  m_addresses;
 
 	static void Refill(Bucket& bucket, Clock::time_point now);
-	// Under the lock. Refills the source. 0 means an attempt may start.
-	int RefusalSeconds(const wxString& account, const wxString& source, Clock::time_point now);
+	void BoundAccounts(Clock::time_point now);
+	void BoundAddresses();
+	Decision Decide(const wxString& account, const wxString& address, Clock::time_point now);
 };
 
 void ibAuthThrottle::State::Refill(Bucket& bucket, Clock::time_point now)
@@ -81,23 +86,74 @@ void ibAuthThrottle::State::Refill(Bucket& bucket, Clock::time_point now)
 	bucket.m_updated = now;
 }
 
-int ibAuthThrottle::State::RefusalSeconds(const wxString& account, const wxString& source, Clock::time_point now)
+void ibAuthThrottle::State::BoundAccounts(Clock::time_point now)
 {
-	int wait = 0;
-	const auto found = m_accounts.find(account);
-	if (found != m_accounts.end() && found->second.m_next > now)
-		wait = CeilSeconds(found->second.m_next - now);
+	while (m_accounts.size() > kMaxTracked) {
+		auto drop = m_accounts.end();
+		for (auto it = m_accounts.begin(); it != m_accounts.end(); ++it) {
+			if (drop == m_accounts.end()) {
+				drop = it;
+				continue;
+			}
+			const bool expired = it->second.m_next <= now;
+			const bool dropExpired = drop->second.m_next <= now;
+			if (expired != dropExpired) {
+				if (expired)
+					drop = it;
+				continue;
+			}
+			if (it->second.m_lastFailure < drop->second.m_lastFailure)
+				drop = it;
+		}
+		if (drop == m_accounts.end())
+			break;
+		m_accounts.erase(drop);
+	}
+}
 
-	Bucket& bucket = m_sources[source];
+void ibAuthThrottle::State::BoundAddresses()
+{
+	while (m_addresses.size() > kMaxTracked) {
+		auto drop = m_addresses.end();
+		for (auto it = m_addresses.begin(); it != m_addresses.end(); ++it) {
+			if (drop == m_addresses.end() || it->second.m_updated < drop->second.m_updated)
+				drop = it;
+		}
+		if (drop == m_addresses.end())
+			break;
+		m_addresses.erase(drop);
+	}
+}
+
+ibAuthThrottle::Decision ibAuthThrottle::State::Decide(const wxString& account, const wxString& address,
+	Clock::time_point now)
+{
+	Decision decision;
+	decision.m_allowed = true;
+
+	const auto found = m_accounts.find(account);
+	if (found != m_accounts.end() && found->second.m_next > now) {
+		decision.m_allowed = false;
+		decision.m_retryAfterSec = CeilSeconds(found->second.m_next - now);
+		decision.m_reason = Reason::Account;
+	}
+
+	if (AddressIsThisMachine(address))
+		return decision;
+
+	Bucket& bucket = m_addresses[address];
 	Refill(bucket, now);
 	if (bucket.m_tokens < 1.0) {
 		const double need = (1.0 - bucket.m_tokens) / kSourceRefillPerSec;
 		const int bucketWait = static_cast<int>(std::ceil(need));
-		wait = std::max(wait, bucketWait > 0 ? bucketWait : 1);
+		const int wait = bucketWait > 0 ? bucketWait : 1;
+		if (wait > decision.m_retryAfterSec) {
+			decision.m_allowed = false;
+			decision.m_retryAfterSec = wait;
+			decision.m_reason = Reason::Address;
+		}
 	}
-	if (m_inFlight >= kMaxInFlightVerifies)
-		wait = std::max(wait, 1);
-	return wait;
+	return decision;
 }
 
 ibAuthThrottle::ibAuthThrottle()
@@ -107,64 +163,17 @@ ibAuthThrottle::ibAuthThrottle()
 
 ibAuthThrottle::~ibAuthThrottle() = default;
 
-ibAuthThrottle& ibAuthThrottle::Shared()
-{
-	static ibAuthThrottle gate;
-	return gate;
-}
-
-wxString ibAuthThrottle::CurrentSource()
-{
-	return tl_source.IsEmpty() ? wxString(wxT("local")) : tl_source;
-}
-
-void ibAuthThrottle::NoteRefusal(int retryAfterSec)
-{
-	tl_refusalSec = retryAfterSec > 0 ? retryAfterSec : 0;
-}
-
-int ibAuthThrottle::TakeRefusal()
-{
-	const int seconds = tl_refusalSec;
-	tl_refusalSec = 0;
-	return seconds;
-}
-
-ibAuthThrottle::Decision ibAuthThrottle::Begin(const wxString& user, const wxString& source)
-{
-	return Begin(user, source, Clock::now());
-}
-
-ibAuthThrottle::Decision ibAuthThrottle::Begin(const wxString& user, const wxString& source, Clock::time_point now)
+ibAuthThrottle::Decision ibAuthThrottle::Begin(const wxString& user, const wxString& address, Clock::time_point now)
 {
 	const wxString account = AccountKey(user);
-	const wxString from    = SourceKey(source);
 	std::lock_guard<std::mutex> lock(m_state->m_mutex);
-	const int wait = m_state->RefusalSeconds(account, from, now);
-	Decision decision;
-	if (wait > 0) {
-		decision.m_allowed = false;
-		decision.m_retryAfterSec = wait;
-		return decision;
-	}
-	++m_state->m_inFlight;
-	decision.m_allowed = true;
-	decision.m_retryAfterSec = 0;
-	return decision;
+	return m_state->Decide(account, address, now);
 }
 
-void ibAuthThrottle::Finish(const wxString& user, const wxString& source, bool success)
-{
-	Finish(user, source, success, Clock::now());
-}
-
-void ibAuthThrottle::Finish(const wxString& user, const wxString& source, bool success, Clock::time_point now)
+void ibAuthThrottle::Finish(const wxString& user, const wxString& address, bool success, Clock::time_point now)
 {
 	const wxString account = AccountKey(user);
-	const wxString from    = SourceKey(source);
 	std::lock_guard<std::mutex> lock(m_state->m_mutex);
-	if (m_state->m_inFlight > 0)
-		--m_state->m_inFlight;
 
 	if (success) {
 		m_state->m_accounts.erase(account);
@@ -173,47 +182,21 @@ void ibAuthThrottle::Finish(const wxString& user, const wxString& source, bool s
 
 	State::Account& row = m_state->m_accounts[account];
 	const auto window = std::chrono::seconds(kFailureWindowSec);
-	if (row.m_failures > 0 && now - row.m_lastFailure > window)
+	if (row.m_failures > 0 && now - row.m_lastFailure >= window)
 		row.m_failures = 0;
 	++row.m_failures;
 	row.m_lastFailure = now;
 	row.m_next = now + std::chrono::seconds(DelayAfterFailures(row.m_failures));
+	m_state->BoundAccounts(now);
 
-	State::Bucket& bucket = m_state->m_sources[from];
+	if (AddressIsThisMachine(address))
+		return;
+
+	State::Bucket& bucket = m_state->m_addresses[address];
 	State::Refill(bucket, now);
 	if (bucket.m_tokens >= 1.0)
 		bucket.m_tokens -= 1.0;
 	else
 		bucket.m_tokens = 0.0;
-}
-
-void ibAuthThrottle::ReleaseSlot()
-{
-	std::lock_guard<std::mutex> lock(m_state->m_mutex);
-	if (m_state->m_inFlight > 0)
-		--m_state->m_inFlight;
-}
-
-int ibAuthThrottle::SecondsUntil(const wxString& user, const wxString& source)
-{
-	return SecondsUntil(user, source, Clock::now());
-}
-
-int ibAuthThrottle::SecondsUntil(const wxString& user, const wxString& source, Clock::time_point now)
-{
-	const wxString account = AccountKey(user);
-	const wxString from    = SourceKey(source);
-	std::lock_guard<std::mutex> lock(m_state->m_mutex);
-	return m_state->RefusalSeconds(account, from, now);
-}
-
-ibAuthSourceScope::ibAuthSourceScope(const wxString& source)
-	: m_previous(tl_source)
-{
-	tl_source = source;
-}
-
-ibAuthSourceScope::~ibAuthSourceScope()
-{
-	tl_source = m_previous;
+	m_state->BoundAddresses();
 }

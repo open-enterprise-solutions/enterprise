@@ -330,7 +330,8 @@ ibApplicationInstance::ibApplicationInstance(ibApplicationHost* host, ibRunMode 
 	m_jobManager(std::unique_ptr<ibJobManager>(new ibJobManager(ib::AppDataCtorToken{ this }))),
 	m_mcpServer(std::unique_ptr<ibMcpServer>(new ibMcpServer(ib::AppDataCtorToken{ this }))),
 	m_settingsStorage(std::unique_ptr<ibSettingsStorage>(new ibSettingsStorage(ib::AppDataCtorToken{ this }))),
-	m_tempStorage(std::unique_ptr<ibTempStorage>(new ibTempStorage(ib::AppDataCtorToken{ this })))
+	m_tempStorage(std::unique_ptr<ibTempStorage>(new ibTempStorage(ib::AppDataCtorToken{ this }))),
+	m_loginGate(std::unique_ptr<ibAuthThrottle>(new ibAuthThrottle()))
 {
 	// (Plugins are the PROCESS's — loaded once by ibApplicationHost, not per base.)
 
@@ -1235,38 +1236,43 @@ bool ibApplicationInstance::AuthenticateUser(const wxString& strUserName,
 	if (strUserName.IsEmpty() && !ibUserInfo::HasAny())
 		return true;
 
-	// Before the lookup and before the hash. A name that has just failed, a
-	// source that has failed too often, or a process already checking four
-	// passwords, is answered here — the expensive check does not start.
-	const wxString source = ibAuthThrottle::CurrentSource();
-	const ibAuthThrottle::Decision decision = ibAuthThrottle::Shared().Begin(strUserName, source);
+	// Before the lookup and before the hash. A name that has just failed, or
+	// an address that has failed too often, is answered here. The gate is
+	// this base's. The address is the session's own; an empty one, or this
+	// machine, does not share a bucket with anyone else.
+	const wxString address = (ibSession::Current() != nullptr)
+		? ibSession::Current()->Identity().m_address
+		: wxString();
+	const auto now = ibAuthThrottle::Clock::now();
+	const ibAuthThrottle::Decision decision = m_loginGate->Begin(strUserName, address, now);
+	if (ibSession* const here = ibSession::Current())
+		here->NoteLoginWait(decision.m_allowed ? 0 : decision.m_retryAfterSec);
 	if (!decision.m_allowed) {
-		ibAuthThrottle::NoteRefusal(decision.m_retryAfterSec);
+		const wxString why = decision.m_reason == ibAuthThrottle::Reason::Address
+			? wxString(wxT("address")) : wxString(wxT("account"));
 		try {
 			if (ibLog) ibLog->Audit(wxT("auth"), wxT("login_throttled"),
-			                        wxString::Format(wxT("user=%s source=%s retry_after=%d"),
-			                                         strUserName, source, decision.m_retryAfterSec));
+			                        wxString::Format(wxT("user=%s address=%s reason=%s retry_after=%d"),
+			                                         strUserName, address, why, decision.m_retryAfterSec));
 		} catch (...) {}
 		return false;
 	}
-	ibAuthThrottle::NoteRefusal(0);
 
-	// The slot Begin took. Close records the outcome; leaving by a throw
-	// gives the slot back and does not count a failure (a database that
-	// cannot be read is not a wrong password, and must not lock the name).
+	// Close records the outcome. Leaving by a throw does not count a failure:
+	// a database that cannot be read is not a wrong password.
 	struct Attempt {
-		ibAuthThrottle& m_gate;
-		wxString        m_user;
-		wxString        m_source;
-		bool            m_settled = false;
-		~Attempt() { if (!m_settled) m_gate.ReleaseSlot(); }
+		ibAuthThrottle&            m_gate;
+		wxString                   m_user;
+		wxString                   m_address;
+		ibAuthThrottle::Clock::time_point m_now;
+		bool                       m_settled = false;
 		void Close(bool success)
 		{
 			if (m_settled) return;
-			m_gate.Finish(m_user, m_source, success);
+			m_gate.Finish(m_user, m_address, success, m_now);
 			m_settled = true;
 		}
-	} attempt{ ibAuthThrottle::Shared(), strUserName, source };
+	} attempt{ *m_loginGate, strUserName, address, now };
 
 	outInfo = ibUserInfo::Read(strUserName);
 	if (!outInfo.IsOk()) {

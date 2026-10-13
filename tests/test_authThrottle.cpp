@@ -12,11 +12,11 @@ Clock::time_point At(int seconds)
 }
 
 ibAuthThrottle::Decision Fail(ibAuthThrottle& gate, const wxString& user,
-                              const wxString& source, Clock::time_point now)
+                              const wxString& address, Clock::time_point now)
 {
-	const ibAuthThrottle::Decision started = gate.Begin(user, source, now);
+	const ibAuthThrottle::Decision started = gate.Begin(user, address, now);
 	if (started.m_allowed)
-		gate.Finish(user, source, false, now);
+		gate.Finish(user, address, false, now);
 	return started;
 }
 
@@ -25,45 +25,65 @@ ibAuthThrottle::Decision Fail(ibAuthThrottle& gate, const wxString& user,
 TEST(AuthThrottle, AFailedNameWaitsLongerEachTimeAndThenAMinute)
 {
 	ibAuthThrottle gate;
-	const int want[] = { 1, 2, 4, 8, 16, 32, 60, 60 };
+	const int want[] = { 1, 2, 4, 8, 16, 32, 60 };
 	int t = 0;
-	for (const int delay : want) {
-		const ibAuthThrottle::Decision started = Fail(gate, wxT("Ada"), wxT("local"), At(t));
+	for (int i = 0; i < 7; ++i) {
+		const ibAuthThrottle::Decision started = Fail(gate, wxT("Ada"), wxT("10.0.0.1"), At(t));
 		ASSERT_TRUE(started.m_allowed) << "t=" << t;
-		const ibAuthThrottle::Decision again = gate.Begin(wxT("Ada"), wxT("local"), At(t));
+		const ibAuthThrottle::Decision again = gate.Begin(wxT("Ada"), wxT("10.0.0.1"), At(t));
 		EXPECT_FALSE(again.m_allowed);
-		EXPECT_EQ(again.m_retryAfterSec, delay);
-		EXPECT_EQ(gate.SecondsUntil(wxT("Ada"), wxT("local"), At(t)), delay);
-		t += delay;
+		EXPECT_EQ(again.m_retryAfterSec, want[i]);
+		EXPECT_EQ(again.m_reason, ibAuthThrottle::Reason::Account);
+		if (i + 1 < 7)
+			t += want[i];
+	}
+
+	// Still inside the minute the last failure asked for.
+	const ibAuthThrottle::Decision held = gate.Begin(wxT("Ada"), wxT("10.0.0.1"), At(t + 59));
+	EXPECT_FALSE(held.m_allowed);
+	EXPECT_EQ(held.m_retryAfterSec, 60);
+	EXPECT_EQ(held.m_reason, ibAuthThrottle::Reason::Account);
+}
+
+TEST(AuthThrottle, AWrongPasswordOnceAMinuteStaysAtOneSecond)
+{
+	ibAuthThrottle gate;
+	int t = 0;
+	for (int i = 0; i < 5; ++i) {
+		ASSERT_TRUE(Fail(gate, wxT("Ada"), wxT("10.0.0.1"), At(t)).m_allowed);
+		const ibAuthThrottle::Decision again = gate.Begin(wxT("Ada"), wxT("10.0.0.1"), At(t));
+		EXPECT_FALSE(again.m_allowed);
+		EXPECT_EQ(again.m_retryAfterSec, 1) << "attempt " << i;
+		t += 60;
 	}
 }
 
 TEST(AuthThrottle, ASuccessStartsTheWaitAgain)
 {
 	ibAuthThrottle gate;
-	ASSERT_TRUE(Fail(gate, wxT("Ada"), wxT("local"), At(0)).m_allowed);
-	EXPECT_FALSE(gate.Begin(wxT("Ada"), wxT("local"), At(0)).m_allowed);
+	ASSERT_TRUE(Fail(gate, wxT("Ada"), wxT("10.0.0.1"), At(0)).m_allowed);
+	EXPECT_FALSE(gate.Begin(wxT("Ada"), wxT("10.0.0.1"), At(0)).m_allowed);
 
-	ASSERT_TRUE(gate.Begin(wxT("Ada"), wxT("local"), At(1)).m_allowed);
-	gate.Finish(wxT("Ada"), wxT("local"), true, At(1));
+	ASSERT_TRUE(gate.Begin(wxT("Ada"), wxT("10.0.0.1"), At(1)).m_allowed);
+	gate.Finish(wxT("Ada"), wxT("10.0.0.1"), true, At(1));
 
-	ASSERT_TRUE(Fail(gate, wxT("Ada"), wxT("local"), At(1)).m_allowed);
-	const ibAuthThrottle::Decision again = gate.Begin(wxT("Ada"), wxT("local"), At(1));
+	ASSERT_TRUE(Fail(gate, wxT("Ada"), wxT("10.0.0.1"), At(1)).m_allowed);
+	const ibAuthThrottle::Decision again = gate.Begin(wxT("Ada"), wxT("10.0.0.1"), At(1));
 	EXPECT_FALSE(again.m_allowed);
 	EXPECT_EQ(again.m_retryAfterSec, 1);
 }
 
-TEST(AuthThrottle, AQuietQuarterHourStartsTheWaitAgain)
+TEST(AuthThrottle, AQuietMinuteStartsTheWaitAgain)
 {
 	ibAuthThrottle gate;
-	ASSERT_TRUE(Fail(gate, wxT("Ada"), wxT("local"), At(0)).m_allowed);
-	ASSERT_TRUE(gate.Begin(wxT("Ada"), wxT("local"), At(1)).m_allowed);
-	gate.Finish(wxT("Ada"), wxT("local"), false, At(1));
-	EXPECT_EQ(gate.Begin(wxT("Ada"), wxT("local"), At(1)).m_retryAfterSec, 2);
+	ASSERT_TRUE(Fail(gate, wxT("Ada"), wxT("10.0.0.1"), At(0)).m_allowed);
+	ASSERT_TRUE(gate.Begin(wxT("Ada"), wxT("10.0.0.1"), At(1)).m_allowed);
+	gate.Finish(wxT("Ada"), wxT("10.0.0.1"), false, At(1));
+	EXPECT_EQ(gate.Begin(wxT("Ada"), wxT("10.0.0.1"), At(1)).m_retryAfterSec, 2);
 
-	const int later = 1 + ibAuthThrottle::kFailureWindowSec + 1;
-	ASSERT_TRUE(Fail(gate, wxT("Ada"), wxT("local"), At(later)).m_allowed);
-	EXPECT_EQ(gate.Begin(wxT("Ada"), wxT("local"), At(later)).m_retryAfterSec, 1);
+	const int later = 1 + ibAuthThrottle::kFailureWindowSec;
+	ASSERT_TRUE(Fail(gate, wxT("Ada"), wxT("10.0.0.1"), At(later)).m_allowed);
+	EXPECT_EQ(gate.Begin(wxT("Ada"), wxT("10.0.0.1"), At(later)).m_retryAfterSec, 1);
 }
 
 TEST(AuthThrottle, TheNameIsTheSameInEitherCase)
@@ -73,6 +93,7 @@ TEST(AuthThrottle, TheNameIsTheSameInEitherCase)
 	const ibAuthThrottle::Decision again = gate.Begin(wxT(" admin "), wxT("10.0.0.2"), At(0));
 	EXPECT_FALSE(again.m_allowed);
 	EXPECT_EQ(again.m_retryAfterSec, 1);
+	EXPECT_EQ(again.m_reason, ibAuthThrottle::Reason::Account);
 }
 
 TEST(AuthThrottle, OneAddressCannotGuessEveryName)
@@ -85,8 +106,8 @@ TEST(AuthThrottle, OneAddressCannotGuessEveryName)
 	const ibAuthThrottle::Decision blocked = gate.Begin(wxT("u-next"), wxT("10.0.0.1"), At(0));
 	EXPECT_FALSE(blocked.m_allowed);
 	EXPECT_GE(blocked.m_retryAfterSec, 1);
+	EXPECT_EQ(blocked.m_reason, ibAuthThrottle::Reason::Address);
 
-	// Another address still may, and a success never spent a failure.
 	ibAuthThrottle fresh;
 	for (int i = 0; i < ibAuthThrottle::kSourceBurst; ++i) {
 		const wxString name = wxString::Format(wxT("ok%d"), i);
@@ -111,48 +132,36 @@ TEST(AuthThrottle, ASourceRegainsOneFailureASecond)
 	EXPECT_FALSE(gate.Begin(wxT("after"), wxT("10.1.0.1"), At(1)).m_allowed);
 }
 
-TEST(AuthThrottle, OnlyFourChecksRunAtOnce)
+TEST(AuthThrottle, AnEmptyAddressDoesNotLockAnyoneElse)
 {
 	ibAuthThrottle gate;
-	for (int i = 0; i < ibAuthThrottle::kMaxInFlightVerifies; ++i) {
-		const ibAuthThrottle::Decision started = gate.Begin(wxString::Format(wxT("p%d"), i), wxT("local"), At(0));
-		ASSERT_TRUE(started.m_allowed);
-	}
-	const ibAuthThrottle::Decision fifth = gate.Begin(wxT("p-extra"), wxT("local"), At(0));
-	EXPECT_FALSE(fifth.m_allowed);
-	EXPECT_EQ(fifth.m_retryAfterSec, 1);
-
-	gate.ReleaseSlot();
-	const ibAuthThrottle::Decision after = gate.Begin(wxT("p-extra"), wxT("local"), At(0));
-	EXPECT_TRUE(after.m_allowed);
-	gate.Finish(wxT("p-extra"), wxT("local"), true, At(0));
-}
-
-TEST(AuthThrottle, AnEmptySourceIsTheLocalOne)
-{
-	ibAuthThrottle gate;
-	for (int i = 0; i < ibAuthThrottle::kSourceBurst; ++i)
+	for (int i = 0; i < ibAuthThrottle::kSourceBurst + 2; ++i)
 		ASSERT_TRUE(Fail(gate, wxString::Format(wxT("e%d"), i), wxEmptyString, At(0)).m_allowed);
-	EXPECT_FALSE(gate.Begin(wxT("e-next"), wxT("local"), At(0)).m_allowed);
+	EXPECT_TRUE(gate.Begin(wxT("e-next"), wxEmptyString, At(0)).m_allowed);
+	EXPECT_TRUE(gate.Begin(wxT("desk"), wxT("127.0.0.1:9"), At(0)).m_allowed);
+	EXPECT_TRUE(gate.Begin(wxT("v6"), wxT("::1"), At(0)).m_allowed);
+	EXPECT_TRUE(gate.Begin(wxT("local-name"), wxT("localhost"), At(0)).m_allowed);
 }
 
-TEST(AuthThrottle, TheCallingThreadNamesItsSource)
+TEST(AuthThrottle, TwoGatesDoNotShareAFailure)
 {
-	EXPECT_EQ(ibAuthThrottle::CurrentSource(), wxT("local"));
-	{
-		ibAuthSourceScope outer(wxT("10.2.0.1"));
-		EXPECT_EQ(ibAuthThrottle::CurrentSource(), wxT("10.2.0.1"));
-		{
-			ibAuthSourceScope inner(wxT("10.2.0.2"));
-			EXPECT_EQ(ibAuthThrottle::CurrentSource(), wxT("10.2.0.2"));
-		}
-		EXPECT_EQ(ibAuthThrottle::CurrentSource(), wxT("10.2.0.1"));
-	}
-	EXPECT_EQ(ibAuthThrottle::CurrentSource(), wxT("local"));
+	ibAuthThrottle one;
+	ibAuthThrottle other;
+	ASSERT_TRUE(Fail(one, wxT("Ada"), wxT("10.0.0.1"), At(0)).m_allowed);
+	const ibAuthThrottle::Decision onTheOther = other.Begin(wxT("Ada"), wxT("10.0.0.1"), At(0));
+	EXPECT_TRUE(onTheOther.m_allowed);
+	EXPECT_EQ(onTheOther.m_reason, ibAuthThrottle::Reason::None);
+}
 
-	ibAuthThrottle::NoteRefusal(0);
-	EXPECT_EQ(ibAuthThrottle::TakeRefusal(), 0);
-	ibAuthThrottle::NoteRefusal(12);
-	EXPECT_EQ(ibAuthThrottle::TakeRefusal(), 12);
-	EXPECT_EQ(ibAuthThrottle::TakeRefusal(), 0);
+TEST(AuthThrottle, TheMapsDoNotGrowWithoutABound)
+{
+	ibAuthThrottle gate;
+	const int past = static_cast<int>(ibAuthThrottle::kMaxTracked) + 50;
+	for (int i = 0; i < past; ++i) {
+		const wxString name = wxString::Format(wxT("n%d"), i);
+		const wxString address = wxString::Format(wxT("10.9.%d.%d"), (i / 250) % 250, i % 250);
+		ASSERT_TRUE(Fail(gate, name, address, At(i)).m_allowed);
+	}
+	// A name from the start has been evicted: its wait is not still standing.
+	EXPECT_TRUE(gate.Begin(wxT("n0"), wxT("10.8.0.1"), At(past)).m_allowed);
 }

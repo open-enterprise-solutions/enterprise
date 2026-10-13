@@ -3,7 +3,6 @@
 #include "backend/appData.h"
 #include "backend/backend_exception.h"
 #include "backend/metadataConfiguration.h"
-#include "backend/session/authThrottle.h"
 #include "backend/session/session.h"
 #include "backend/session/sessionRegistry.h"
 #include "backend/moduleManager/moduleManager.h"
@@ -112,15 +111,6 @@ bool ibWebSession::Login(const wxString& user, const wxString& password,
 	if (m_app)
 		return true;  // already logged in — idempotent
 
-	// Already told to wait: do not open a session row for an attempt that
-	// will not check the password.
-	const int waiting = ibAuthThrottle::Shared().SecondsUntil(user, source);
-	if (waiting > 0) {
-		if (retryAfterSec != nullptr)
-			*retryAfterSec = waiting;
-		return false;
-	}
-
 	// Anonymous-phase create through the session registry — same shape as
 	// desktop's appData->CreateSession<ibGUISession>() (see
 	// enterprise/mainApp.cpp). The anonymous row lands in sys_session
@@ -133,7 +123,12 @@ bool ibWebSession::Login(const wxString& user, const wxString& password,
 	// just rejects the Attach; the anonymous row can be retried with new
 	// creds without re-creating the ticket.
 	const wxString& presetGuid = m_id;
-	const wxString  address    = wxString::FromUTF8(wfrontendServerAddress().c_str());
+	// The client's address, when the request carried one. The server's own
+	// bind is what a row shows when the request did not: it is not a bucket
+	// every login shares.
+	const wxString  address    = source.IsEmpty()
+		? wxString::FromUTF8(wfrontendServerAddress().c_str())
+		: source;
 	// CreateSession throws via ibBackendCoreException::Error on registry
 	// Connect failure; web HTTP handlers expect bool
 	// false instead of an exception escaping into httplib's loop.
@@ -168,15 +163,9 @@ bool ibWebSession::Login(const wxString& user, const wxString& password,
 	// ran BESIDE the worker serving this session's polls, two threads in one session, and a question asked at
 	// start waited without holding the session (ibWorkerPool::Await).
 	bool opened = false;
-	int refused = 0;
 	try {
 		sessionRaw->Submit([&]() {
-			// The check runs on this worker, so the source has to be named here.
-			ibAuthSourceScope from(source);
-			ibAuthThrottle::NoteRefusal(0);
 			opened = holder->Open(user, password) == ibSession::OpenResult::Authenticated;
-			if (!opened)
-				refused = ibAuthThrottle::TakeRefusal();
 		}).get();
 	}
 	catch (const ibCoreException& err) {
@@ -184,8 +173,10 @@ bool ibWebSession::Login(const wxString& user, const wxString& password,
 		return false;
 	}
 	if (!opened) {
+		// The wait, when there is one, was written on the session by the
+		// check itself. A wrong password leaves it at 0.
 		if (retryAfterSec != nullptr)
-			*retryAfterSec = refused;
+			*retryAfterSec = sessionRaw->LoginWaitSec();
 		return false;
 	}
 
