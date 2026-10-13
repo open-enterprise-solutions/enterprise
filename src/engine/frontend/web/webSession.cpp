@@ -292,7 +292,11 @@ ibDateTime ibWebSession::LastActiveAt() const
 
 void ibWebSession::Touch()
 {
-	std::lock_guard<std::mutex> lock(m_mutex);
-	m_lastActiveMs = NowMs();
-	m_lastActiveAt = ibDateTime::Now();
+	{
+		std::lock_guard<std::mutex> lock(m_mutex);
+		m_lastActiveMs = NowMs();
+		m_lastActiveAt = ibDateTime::Now();
+	}
+	if (std::shared_ptr<ibSession> session = m_session.Share())
+		session->NoteActivity();
 }

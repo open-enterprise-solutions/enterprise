@@ -23,7 +23,6 @@
 #include "backend/appData.h"
 #include "backend/appHost.h"   // ibApplicationInstanceScope — the HTTP and sweep threads work for the served base
 #include "backend/session/session.h"
-#include "backend/session/sessionLifetime.h"
 #include "backend/session/sessionRegistry.h"
 #include "backend/backend_exception.h"
 #include "core/diagnostics/journal.h"
@@ -311,11 +310,9 @@ private:
 		// Sweep every 15s — coarse enough that the reaper + metadata
 		// watch stay cheap, fine enough that deployed-config changes
 		// propagate within a Designer→try-it roundtrip.
-		// How long a session may sit, and how long it may live even
-		// while it keeps asking, are ibSessionLifetimePolicy (30 minutes
-		// and 8 hours unless the process says otherwise). A closed tab
-		// does not wait for the idle cutoff: the JS client fires a
-		// beforeunload beacon to /logout.
+		// A closed tab does not wait for the registry's idle cutoff: the
+		// JS client fires a beforeunload beacon to /logout. How long a
+		// login may live is the registry's sweep, not this thread.
 		constexpr auto kInterval = seconds(15);
 
 		// Capture the metadata guid observed at server start. Compared
@@ -365,31 +362,6 @@ private:
 			if (server == nullptr)
 				return;
 			ibApplicationInstanceScope serving(server->GetApplicationInstance());
-
-			// 1) Idle eviction, and the absolute life. Activity refreshes
-			// the idle clock and does not move the absolute one.
-			const ibDateTime now = ibDateTime::Now();
-			const ibSessionLifetime policy = ibSessionLifetimePolicy();
-			std::vector<std::pair<std::string, ibSessionEnd>> victims;
-			{
-				std::lock_guard<std::mutex> lock(m_mutex);
-				for (auto& kv : m_sessions) {
-					if (!kv.second)
-						continue;
-					const ibDateTime authenticatedAt = kv.second->IsAuthenticated()
-						? kv.second->AuthenticatedAt() : ibDateTime();
-					const ibSessionEnd end = ibJudgeSessionLifetime(now,
-						kv.second->Born(), authenticatedAt, kv.second->LastActiveAt(), policy);
-					if (end != ibSessionEnd::Keep)
-						victims.emplace_back(kv.first, end);
-				}
-			}
-			for (const auto& victim : victims) {
-				std::cerr << "[sweep] evicting "
-					<< (victim.second == ibSessionEnd::Absolute ? "expired" : "idle")
-					<< " session " << victim.first << std::endl;
-				Destroy(victim.first);
-			}
 
 			// 2) Metadata-change watch. Polling fallback for the FB
 			//    event-based notifier (isc_que_events) that will ship

@@ -3,6 +3,7 @@
 #include <cerrno>
 #include <cstdint>
 #include <cstdlib>
+#include <ctime>
 
 #include <wx/string.h>
 #include <wx/utils.h>
@@ -43,28 +44,49 @@ ibSessionLifetime ibSessionLifetimePolicy()
 	return policy;
 }
 
-ibSessionEnd ibJudgeSessionLifetime(const ibDateTime& now,
-	const ibDateTime& born,
-	const ibDateTime& authenticatedAt,
-	const ibDateTime& lastActive,
+long long ibWallUnixMs(const ibDateTime& reading)
+{
+	if (reading.IsEmpty())
+		return 0;
+	ibDateTimeParts parts;
+	reading.ToParts(parts);
+	std::tm local{};
+	local.tm_year = parts.m_year - 1900;
+	local.tm_mon = static_cast<int>(parts.m_month) - 1;
+	local.tm_mday = static_cast<int>(parts.m_day);
+	local.tm_hour = static_cast<int>(parts.m_hour);
+	local.tm_min = static_cast<int>(parts.m_minute);
+	local.tm_sec = static_cast<int>(parts.m_second);
+	local.tm_isdst = -1;
+	const std::time_t placed = std::mktime(&local);
+	if (placed == static_cast<std::time_t>(-1))
+		return 0;
+	return static_cast<long long>(placed) * 1000LL + static_cast<long long>(parts.m_millisecond);
+}
+
+ibSessionEnd ibJudgeSessionLifetime(long long nowMs,
+	long long bornMs,
+	long long authenticatedAtMs,
+	long long lastActiveMs,
 	const ibSessionLifetime& policy)
 {
-	const ibDateTime& anchor = authenticatedAt.IsEmpty() ? born : authenticatedAt;
-	if (!anchor.IsEmpty() && policy.m_absoluteMs > 0
-		&& now.ElapsedSince(anchor) > policy.m_absoluteMs)
+	const long long anchor = authenticatedAtMs > 0 ? authenticatedAtMs : bornMs;
+	if (anchor > 0 && policy.m_absoluteMs > 0 && nowMs - anchor > policy.m_absoluteMs)
 		return ibSessionEnd::Absolute;
-	if (!lastActive.IsEmpty() && policy.m_idleMs > 0
-		&& now.ElapsedSince(lastActive) > policy.m_idleMs)
+	if (lastActiveMs > 0 && policy.m_idleMs > 0 && nowMs - lastActiveMs > policy.m_idleMs)
 		return ibSessionEnd::Idle;
 	return ibSessionEnd::Keep;
 }
 
-bool ibSessionPasswordStillCurrent(const ibDateTime& authenticatedAt,
+bool ibSessionPasswordStillCurrent(long long authenticatedAtMs,
 	const ibDateTime& passwordChangedAt)
 {
 	if (passwordChangedAt.IsEmpty())
 		return true;
-	if (authenticatedAt.IsEmpty())
+	const long long changedMs = ibWallUnixMs(passwordChangedAt);
+	if (changedMs == 0)
+		return true;
+	if (authenticatedAtMs <= 0)
 		return false;
-	return authenticatedAt.GetValue() >= passwordChangedAt.GetValue();
+	return authenticatedAtMs >= changedMs;
 }

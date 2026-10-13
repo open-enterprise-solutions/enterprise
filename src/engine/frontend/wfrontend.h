@@ -146,10 +146,8 @@ WFRONTEND_API std::string wfrontendCreateSessionWithId(const std::string& id);
 WFRONTEND_API bool        wfrontendLogin(const std::string& sessionId,
 	const std::string& user, const std::string& password);
 WFRONTEND_API bool        wfrontendSessionExists(const std::string& sessionId);
-// The verb may use this session. False — and the session is destroyed —
-// when it is unknown, its user was deleted, its password changed after
-// login, or its absolute life is over. An unauthenticated session is admitted:
-// login still has to reach it.
+// The tab is still here. False when the id is unknown. How long the login
+// may live is the registry's sweep.
 WFRONTEND_API bool        wfrontendAdmitSession(const std::string& sessionId);
 WFRONTEND_API void        wfrontendDestroySession(const std::string& sessionId);
 WFRONTEND_API std::size_t wfrontendSessionCount();

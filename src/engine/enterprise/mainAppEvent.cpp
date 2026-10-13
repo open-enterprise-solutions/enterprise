@@ -9,6 +9,7 @@
 #include "frontend/mainFrame/mainFrameChild.h"
 
 #include "backend/backend_exception.h"
+#include "backend/session/session.h"
 
 #include <wx/weakref.h>
 
@@ -62,6 +63,12 @@ void ibAppEnterprise::OnSetFocus(wxFocusEvent& event)
 
 int ibAppEnterprise::FilterEvent(wxEvent& event)
 {
+	const wxEventType type = event.GetEventType();
+	if (type == wxEVT_KEY_DOWN || type == wxEVT_LEFT_DOWN || type == wxEVT_RIGHT_DOWN
+		|| type == wxEVT_MOUSEWHEEL) {
+		if (ibSession* session = ibSession::Current())
+			session->NoteActivity();
+	}
 	if (event.GetEventType() == wxEVT_KEY_DOWN) {
 		OnKeyEvent(
 			static_cast<wxKeyEvent&>(event)

@@ -1286,7 +1286,7 @@ bool ibApplicationInstance::AuthenticateUser(const wxString& strUserName,
 	if (ibPasswordHash::NeedsRehash(outInfo.m_strUserPassword)) {
 		try {
 			outInfo.m_strUserPassword = ibPasswordHash::Hash(strUserPassword);
-			(void)ibUserInfo::Save(outInfo);
+			(void)ibUserInfo::Save(outInfo, /*passwordChanged=*/false);
 			if (ibLog) ibLog->Audit(wxT("auth"), wxT("password_rehash"),
 			                        wxString::Format(wxT("user=%s"), strUserName),
 			                        outInfo.m_strUserGuid, /*refMetaId=*/0);

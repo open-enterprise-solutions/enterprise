@@ -395,6 +395,13 @@ public:
 	// `sys_session.currentActivity`; admin UI sees it on the next snapshot.
 	void SetActivity(const wxString& activity);
 
+	// The person did something. The registry's sweep reads this, in UTC
+	// milliseconds, when it decides whether the session has gone idle.
+	void NoteActivity() noexcept;
+	long long BornMs() const noexcept { return m_bornMs.load(std::memory_order_relaxed); }
+	long long AuthenticatedAtMs() const noexcept { return m_authenticatedAtMs.load(std::memory_order_relaxed); }
+	long long LastActiveMs() const noexcept { return m_lastActiveMs.load(std::memory_order_relaxed); }
+
 	// Server session — back-link from a server-spawned client to the
 	// session that hosts it. Set by the holder right after the client is
 	// registered in the registry (e.g. wes's WebClient session points to
@@ -1133,6 +1140,13 @@ private:
 	// Script-visible "working date" — see GetWorkDate/SetWorkDate.
 	// Initialized to the session-creation wall-clock in the ctor.
 	ibDateTime                m_workDate;
+
+	// UTC milliseconds (system_clock). The lifetime sweep reads these.
+	// m_authenticatedAtMs is 0 until the first transition to Authenticated,
+	// and 0 again after detach. m_lastActiveMs moves on NoteActivity.
+	std::atomic<long long>    m_bornMs{ 0 };
+	std::atomic<long long>    m_authenticatedAtMs{ 0 };
+	std::atomic<long long>    m_lastActiveMs{ 0 };
 
 	// Force-exit request flag — see RequestForceExit / IsForceExit.
 	// One-shot: set once, never cleared. The script thread observes it

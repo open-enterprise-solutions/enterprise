@@ -158,8 +158,12 @@ std::int64_t ibClientInstance::LastActiveMs() const
 
 void ibClientInstance::Touch()
 {
-	std::lock_guard<std::mutex> lock(m_mutex);
-	m_lastActiveMs = NowMs();
+	{
+		std::lock_guard<std::mutex> lock(m_mutex);
+		m_lastActiveMs = NowMs();
+	}
+	if (std::shared_ptr<ibSession> session = ShareSession())
+		session->NoteActivity();
 }
 
 bool ibClientInstance::RequestClose()
