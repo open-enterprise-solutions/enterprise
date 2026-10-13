@@ -60,12 +60,12 @@ TEST(FormatString, AnEmptyCodeIsNotAnAbsentOne)
 // A code this engine does not read was written by somebody; a window rewriting the string keeps it.
 TEST(FormatString, ACodeNotReadIsKeptAndWrittenBack)
 {
-	const ibFormatString format = ibFormatString::Parse(wxT("NLZ=1; NFD=2"));
+	const ibFormatString format = ibFormatString::Parse(wxT("NN=1; NFD=2"));
 
 	ASSERT_EQ(1u, format.m_other.size());
-	EXPECT_EQ(wxT("NLZ"), format.m_other[0].first);
+	EXPECT_EQ(wxT("NN"), format.m_other[0].first);
 	EXPECT_EQ(wxT("1"), format.m_other[0].second);
-	EXPECT_EQ(wxT("NFD=2; NLZ=1"), format.Render());
+	EXPECT_EQ(wxT("NFD=2; NN=1"), format.Render());
 }
 
 // As when the pairs went into a map: a later pair of the same code wins.
@@ -228,7 +228,7 @@ TEST(FormatString, OneCodeAtATime)
 		EXPECT_EQ(code, found);
 	}
 	ibFormatCode none;
-	EXPECT_FALSE(ibFormatString::FindCode(wxT("NLZ"), none));
+	EXPECT_FALSE(ibFormatString::FindCode(wxT("NN"), none));
 	EXPECT_FALSE(ibFormatString::FindCode(wxT("nfd"), none));   // capitals, as Format reads them
 }
 
