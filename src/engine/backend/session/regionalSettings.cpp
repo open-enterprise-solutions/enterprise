@@ -14,6 +14,10 @@
 #include "core/diagnostics/journal.h"
 #include "core/serialize/dataBuilder.h"
 
+#include <cstdlib>   // std::llabs
+
+#include <wx/datetime.h>   // wxDateTime::UNow - this machine's own clock, to measure against
+
 namespace {
 
 // The one row: a fixed object under the category, shared by everybody (no user in the key).
@@ -75,9 +79,11 @@ bool ibRegionalSettings::SetTimeZone(const wxString& zone, wxString* refusal)
 		m_timeZone = zone;
 		m_read = true;
 	}
-	// In force at once: every other connection takes the zone as it is next handed out.
+	// In force at once: every other connection takes the zone as it is next handed out, and the clock is
+	// measured in it - on this connection, which stands in it already.
 	if (ibConnectionPool* const pool = ibApplicationInstance::GetConnectionPool(m_owner))
 		pool->SetSessionTimeZone(zone);
+	MeasureClock(*scope.get(), zone);
 	return true;
 }
 
@@ -128,7 +134,53 @@ bool ibRegionalSettings::Refresh(ibDatabaseConnectionHolder* holder)
 	if (scope->HasSessionTimeZone() && scope->GetSessionTimeZone() != zone && !scope->SetSessionTimeZone(zone)
 		&& (first || before != zone))
 		ibJournalError(wxT("session.zone"), wxT("the base names the time zone %s, and a connection could not be put into it (the server refused the name, or the connection was lost)"), zone);
+	MeasureClock(*scope.get(), zone);
 	return held;
+}
+
+void ibRegionalSettings::MeasureClock(ibDatabaseLayer& connection, const wxString& zone)
+{
+	const ibDialectDictionary& dialect = connection.GetDialect();
+	// In the base's zone, or not at all (the header): a server that reads its clock in the session's zone is
+	// asked only in a zone the base named, through a connection standing in it. A dialect with no word for
+	// its clock has the machine's.
+	if (dialect.m_localTimestamp.IsEmpty()
+		|| (connection.HasSessionTimeZone() && (zone.IsEmpty() || connection.GetSessionTimeZone() != zone))) {
+		if (m_clockOffset.exchange(0, std::memory_order_relaxed) != 0)
+			ibJournalInfo(wxT("session.clock"), wxT("the base's clock is not measured (no zone it stands in); 'now' is this machine's clock"));
+		return;
+	}
+	wxString sql = wxT("SELECT ") + dialect.m_localTimestamp + wxT(" AS server_now");
+	if (!dialect.m_selectFromDual.IsEmpty())
+		sql += wxT(" FROM ") + dialect.m_selectFromDual;
+	ibDateTime server;
+	try {
+		// As the one argument of "%s": the statement doors are printf-shaped, and SQLite's word holds '%'.
+		ibDatabaseResultSet* rs = connection.RunQueryWithResults(wxT("%s"), sql);
+		if (rs == nullptr)
+			return;
+		if (rs->Next())
+			server = rs->GetResultDate(1);
+		connection.CloseResultSet(rs);
+	}
+	catch (const ibBackendException&) {
+		return;   // the question failed; the difference measured before still stands
+	}
+	if (server.IsEmpty())
+		return;
+	// The two readings compared at the resolution the server answered in: a server that says its clock to the
+	// second (Firebird through struct tm) is set against this machine's clock to the second, or every
+	// measurement would run up to a second behind. The machine's reading is the bridge of its own clock -
+	// never ibDateTime::Now(), which is what this measurement moves.
+	ibDateTime machine = ibDateTime::OfWxDateTime(wxDateTime::UNow());
+	if (server.GetValue() % 1000 == 0)
+		machine = ibDateTime(machine.GetValue() - machine.GetValue() % 1000);
+	const long long measured = server - machine;
+	const long long before = m_clockOffset.exchange(measured, std::memory_order_relaxed);
+	// Said when it matters: a base whose clock stands a minute or more from this machine's is worth a line;
+	// the drift of a second between two measurements is not.
+	if (std::llabs(measured - before) >= 60000)
+		ibJournalInfo(wxT("session.clock"), wxT("the base's clock reads %lld ms from this machine's (was %lld)"), measured, before);
 }
 
 std::vector<wxString> ibRegionalSettings::KnownTimeZones()

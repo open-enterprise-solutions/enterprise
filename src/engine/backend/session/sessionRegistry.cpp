@@ -936,7 +936,7 @@ static bool InsertSessionRow(ibDatabaseConnectionHolder& holder, const ibSession
 			{ wxT("userName"),    ibConst(ibValue(userName)) },
 			{ wxT("application"), ibConst(ibValue(int(id.m_appMode))) },
 			{ wxT("started"),     ibConst(ibValue(id.m_started)) },
-			{ wxT("lastActive"),  ibConst(ibValue(id.m_started)) },
+			{ wxT("lastActive"),  ibConst(ibValue(ibDateTime::MachineNow())) },   // a beat: the machine's clock (JobSweepStale)
 			{ wxT("computer"),    ibConst(ibValue(id.m_computer)) },
 		}));
 		SESSION_LOG("[session INSERT] ok guid=" << s.GetId()
@@ -1614,8 +1614,11 @@ void ibSessionRegistry::JobSweepStale()
 
 	// Aged in REAL time (ElapsedSince, through the machine's zone): on the morning the clocks go forward a
 	// beat written at 01:59:59 is a second old at 03:00:00, and a live peer must not be swept - its row and
-	// then its locks - for the hour the wall skipped.
-	const ibDateTime now = ibDateTime::Now();
+	// then its locks - for the hour the wall skipped. On the MACHINE's clock, as the beats are written: the
+	// base's clock is this machine's moved by a distance each process measures once a minute, and the minute
+	// a distance steps (a zone named, the base's clocks changed) a peer's beat under the old one would read as
+	// hours of silence.
+	const ibDateTime now = ibDateTime::MachineNow();
 	const long long staleAfter = kStaleCutoffSec * 1000ll;
 
 	std::vector<wxString> zombies;
@@ -1698,7 +1701,7 @@ void ibSessionRegistry::JobHeartbeatOwn()
 	// previous leader's spawned firebird.exe.
 	try {
 		ibDatabaseQueryBuilder q(&m_writeHolder);
-		const ibDateTime now = ibDateTime::Now();
+		const ibDateTime now = ibDateTime::MachineNow();   // a beat is the machine's clock (JobSweepStale says why)
 		for (const auto& kv : m_own) {
 			auto s = kv.second.Share();
 			if (!s || !s->Inserted()) continue;
@@ -1771,7 +1774,7 @@ size_t ibSessionRegistry::SettleSilentPeers(const std::vector<wxString>& peers)
 	std::set<wxString> silent;   // stood still until its last beat was older than the silence
 	for (;;) {
 		// Settled by age where the age already says it — the sweep's own rule, asked now.
-		const ibDateTime at = ibDateTime::Now();
+		const ibDateTime at = ibDateTime::MachineNow();   // beats are the machine's clock (JobSweepStale)
 		for (auto it = still.begin(); it != still.end(); ) {
 			const ibDateTime& beat = first[*it];   // no beat recorded at all: only the watch can settle it
 			if (!beat.IsEmpty() && at.ElapsedSince(beat) >= silence) {

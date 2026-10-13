@@ -338,6 +338,10 @@ struct ibDialectDictionary
 	// requires a one-row dummy table -> "RDB$DATABASE". Set per driver; empty = emit no FROM at all.
 	wxString m_selectFromDual = wxEmptyString;
 
+	// THE SERVER'S OWN CLOCK, as a wall-clock reading in the session's zone - what a base's regional
+	// settings measure "now" by (LOCALTIMESTAMP on Firebird and PostgreSQL; on SQLite, which has no server,
+	// the process's own local time). Empty = the dialect has no word for it, and the machine's clock stands.
+	wxString m_localTimestamp = wxEmptyString;
 	// THE ZONES THE SERVER KNOWS BY NAME, one per row of this statement (Firebird: RDB$TIME_ZONES,
 	// PostgreSQL: pg_timezone_names) - what the designer's regional page lists. Empty = it cannot say.
 	wxString m_timeZoneNames = wxEmptyString;

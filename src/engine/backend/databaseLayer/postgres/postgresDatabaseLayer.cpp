@@ -21,6 +21,7 @@ const ibDialectDictionary& ibDatabaseLayerPostgres::Dialect()
 		d.m_pagination = ibPagination::LimitOffset;
 		d.m_boolForm   = ibBoolForm::TrueFalse;
 		d.m_groupByPosition = true;                   // GROUP BY 2 — a key that binds a value is named by its position
+		d.m_localTimestamp = wxT("LOCALTIMESTAMP");   // the server's clock in the session's TimeZone
 		d.m_timeZoneNames  = wxT("SELECT name FROM pg_timezone_names ORDER BY name");
 		d.m_features.m_window        = true;
 		d.m_features.m_cte           = true;

@@ -10,13 +10,17 @@
 #include <wx/stdpaths.h>
 
 #include <chrono>
+#include <cstdlib>   // std::llabs
 #include <memory>
+#include <thread>
 
 #include "backend/appData.h"
 #include "backend/databaseLayer/connectionHolder.h"       // ibDatabaseConnectionHolder - a second holder for a second hand-out
 #include "backend/databaseLayer/connectionPool.h"
 #include "backend/databaseLayer/connectionScope.h"        // ibConnectionScope - the door a pooled connection is handed out through
 #include "backend/databaseLayer/databaseQueryBuilder.h"   // ibCreateTable - the settings table, as the base makes it
+#include "backend/appHost.h"                         // SetThreadOwner - a base's service thread
+#include "backend/databaseLayer/firebird/firebirdDatabaseLayer.h"
 #include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
 #include "backend/session/regionalSettings.h"
 
@@ -52,13 +56,40 @@ wxString ZonedFakeBase::s_path;
 int ZonedFakeBase::s_asked = 0;
 int ZonedFakeBase::s_taken = 0;
 
+// ...and one whose server's clock stands elsewhere - years from this machine's - so that the distance
+// measured, and a measurement dropped, are plain to see.
+class FrozenZonedBase : public ZonedFakeBase {
+public:
+	static ibDialectDictionary s_dialect;
+	const ibDialectDictionary& GetDialect() const override { return s_dialect; }
+	ibDatabaseLayer* Clone() override {
+		FrozenZonedBase* clone = new FrozenZonedBase();
+		clone->Open(s_path);
+		return clone;
+	}
+};
+ibDialectDictionary FrozenZonedBase::s_dialect = [] {
+	ibDialectDictionary d = ibDatabaseLayerSQLite::Dialect();
+	d.m_localTimestamp = wxT("'2030-01-01 12:00:00'");
+	return d;
+}();
+const ibDateTime kFrozen(2030, 1, 1, 12);
+
+// This machine's own clock, and its clock in UTC - the oracles, outside the measurement.
+ibDateTime MachineNow() { return ibDateTime::OfWxDateTime(wxDateTime::Now()); }
+ibDateTime MachineUtc() {
+	const wxDateTime::Tm tm = wxDateTime::Now().GetTm(wxDateTime::UTC);
+	return ibDateTime(tm.year, static_cast<unsigned>(tm.mon) + 1, tm.mday, tm.hour, tm.min, tm.sec, tm.msec);
+}
+
 // A base over a SQLite file of its own, with sys_settings made as the base makes it.
 struct RegionalFix : ::testing::Test {
 	wxInitializer                          m_wxInit;
-	std::shared_ptr<ibDatabaseLayerSQLite> db;
+	std::shared_ptr<ibDatabaseLayer>       db;
 	wxString                               dbPath;
 	ibRegionalSettings*                    regional = nullptr;
-	virtual std::shared_ptr<ibDatabaseLayerSQLite> MakeBase() { return std::make_shared<ibDatabaseLayerSQLite>(); }
+	virtual std::shared_ptr<ibDatabaseLayer> MakeBase() { return std::make_shared<ibDatabaseLayerSQLite>(); }
+	virtual const wxChar* Extension() { return wxT("db"); }
 	virtual std::size_t PoolSize() { return 1; }
 	void SetUp() override {
 		if (!m_wxInit.IsOk())
@@ -68,11 +99,17 @@ struct RegionalFix : ::testing::Test {
 		ibConnectionPool* pool = ibApplicationInstance::GetConnectionPool();
 		ASSERT_NE(pool, nullptr);
 		const auto now = std::chrono::steady_clock::now().time_since_epoch().count();
-		dbPath = wxFileName(wxStandardPaths::Get().GetTempDir(), wxString::Format(wxT("oes_regional_%s_%lld.db"),
-			::testing::UnitTest::GetInstance()->current_test_info()->name(), (long long)now)).GetFullPath();
+		dbPath = wxFileName(wxStandardPaths::Get().GetTempDir(), wxString::Format(wxT("oes_regional_%s_%lld.%s"),
+			::testing::UnitTest::GetInstance()->current_test_info()->name(), (long long)now, Extension())).GetFullPath();
 		ZonedFakeBase::s_path = dbPath;
-		db = MakeBase();
-		ASSERT_TRUE(db->Open(dbPath));
+		try {
+			db = MakeBase();
+			if (db && !db->Open(dbPath))
+				db.reset();
+		}
+		catch (...) { db.reset(); }
+		if (!db)
+			GTEST_SKIP() << "the base's driver is not on this machine (" << dbPath.ToStdString() << ")";
 		pool->Init(db, PoolSize(), /*minIdle=*/0);
 		ibDatabaseQueryBuilder q;
 		q.Execute(ibCreateTable(settings_table, {
@@ -102,7 +139,25 @@ struct RegionalFix : ::testing::Test {
 
 // The same base with a session zone, and room for a second connection.
 struct ZonedRegionalFix : RegionalFix {
-	std::shared_ptr<ibDatabaseLayerSQLite> MakeBase() override { return std::make_shared<ZonedFakeBase>(); }
+	std::shared_ptr<ibDatabaseLayer> MakeBase() override { return std::make_shared<ZonedFakeBase>(); }
+	std::size_t PoolSize() override { return 2; }
+};
+
+// ...with a server's clock years away.
+struct FrozenRegionalFix : RegionalFix {
+	std::shared_ptr<ibDatabaseLayer> MakeBase() override { return std::make_shared<FrozenZonedBase>(); }
+	std::size_t PoolSize() override { return 2; }
+};
+
+// ...and a real Firebird base, where the kit is beside the binary (CI's Firebird job); skips elsewhere.
+struct FirebirdRegionalFix : RegionalFix {
+	std::shared_ptr<ibDatabaseLayer> MakeBase() override {
+		auto layer = std::make_shared<ibDatabaseLayerFirebird>();
+		layer->SetUser(wxT("SYSDBA"));
+		layer->SetPassword(wxT("masterkey"));
+		return layer;
+	}
+	const wxChar* Extension() override { return wxT("fdb"); }
 	std::size_t PoolSize() override { return 2; }
 };
 
@@ -238,4 +293,59 @@ TEST_F(ZonedRegionalFix, AFailedReadOfTheRowKeepsWhatIsInForce)
 	}
 	EXPECT_FALSE(regional->Refresh());
 	EXPECT_EQ(wxT("Europe/Kyiv"), regional->GetTimeZone()) << "kept";
+}
+
+// "NOW" IS THE BASE'S CLOCK on every thread that works for the base - a thread bound to it, and a thread its
+// own service runs on (the registry's, the job tick's) - and the machine's on a thread that works for none.
+TEST_F(FrozenRegionalFix, NowIsTheBasesClockOnEveryThreadThatWorksForIt)
+{
+	ibApplicationInstance* const base = ibApplicationInstance::Get();
+	ASSERT_NE(base, nullptr);
+	ASSERT_TRUE(regional->SetTimeZone(wxT("Europe/Kyiv")));
+	EXPECT_LT(std::llabs(MachineNow().AddMilliseconds(regional->GetClockOffset()) - kFrozen), 5000);
+
+	{
+		const ibApplicationInstanceScope bound(base);
+		EXPECT_LT(std::llabs(ibDateTime::Now() - kFrozen), 5000) << "a thread bound to the base";
+	}
+	ibDateTime service, none;
+	std::thread([&] {
+		ibApplicationHost::SetThreadOwner(base);
+		service = ibDateTime::Now();
+		ibApplicationHost::SetThreadOwner(nullptr);
+	}).join();
+	std::thread([&] { none = ibDateTime::Now(); }).join();
+	EXPECT_LT(std::llabs(service - kFrozen), 5000) << "the base's own service";
+	EXPECT_LT(std::llabs(none - MachineNow()), 5000) << "a thread that works for no base";
+}
+
+// Measured in the base's zone or not at all: on a driver with a session zone nothing is measured until a
+// zone is named, and a zone taken away takes the measurement with it - "now" is the machine's clock again,
+// not the last zone's.
+TEST_F(FrozenRegionalFix, TheClockIsMeasuredOnlyInAZoneTheBaseNames)
+{
+	regional->Refresh();
+	EXPECT_EQ(0, regional->GetClockOffset()) << "no zone named";
+	wxString why;
+	EXPECT_FALSE(regional->SetTimeZone(wxT("Nowhere/Nowhere"), &why));
+	EXPECT_EQ(0, regional->GetClockOffset()) << "a zone the server refuses";
+
+	ASSERT_TRUE(regional->SetTimeZone(wxT("Europe/Kyiv"), &why)) << why;
+	EXPECT_NE(0, regional->GetClockOffset());
+	EXPECT_TRUE(regional->Refresh());
+	EXPECT_LT(std::llabs(MachineNow().AddMilliseconds(regional->GetClockOffset()) - kFrozen), 5000) << "measured again, the same";
+
+	ASSERT_TRUE(regional->SetTimeZone(wxEmptyString));
+	EXPECT_EQ(0, regional->GetClockOffset()) << "no zone any more";
+}
+
+// A real server: Kyiv's clock is two or three hours ahead of UTC, wherever this machine stands - and "now"
+// on a thread working for the base reads it.
+TEST_F(FirebirdRegionalFix, NowIsKyivsClockOnceTheBaseNamesKyiv)
+{
+	wxString why;
+	ASSERT_TRUE(regional->SetTimeZone(wxT("Europe/Kyiv"), &why)) << why;
+	const ibApplicationInstanceScope bound(ibApplicationInstance::Get());
+	const long long apart = ibDateTime::Now() - MachineUtc();
+	EXPECT_TRUE(std::llabs(apart - 7200000) < 5000 || std::llabs(apart - 10800000) < 5000) << "Kyiv is UTC+2 or UTC+3, read " << apart;
 }

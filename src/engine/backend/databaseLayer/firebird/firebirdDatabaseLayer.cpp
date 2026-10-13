@@ -38,6 +38,7 @@ const ibDialectDictionary& ibDatabaseLayerFirebird::Dialect()
 		d.m_pagination  = ibPagination::FirstSkip;    // SELECT FIRST n SKIP m
 		d.m_boolForm    = ibBoolForm::Smallint;       // no native boolean pre-FB3
 		d.m_selectFromDual = wxT("RDB$DATABASE");     // FB has no bare FROM-less SELECT — the WITH-CHECK one-row source needs a dummy table
+		d.m_localTimestamp = wxT("LOCALTIMESTAMP");   // the server's clock in the session's zone (FB 4+; the vendored engine is 5)
 		d.m_timeZoneNames  = wxT("SELECT RDB$TIME_ZONE_NAME FROM RDB$TIME_ZONES ORDER BY RDB$TIME_ZONE_NAME");
 		// 🛑 THE BOUND IS ON THE PATH, NOT ON ONE ALIAS. A relation inside nested derived tables is named in the BLR by
 		// the aliases of every table around it, joined — and that string has a length of one byte: past ~210 characters

@@ -44,8 +44,8 @@ public:
 	static bool HasPool(const class ibConnectionPool* pool);
 
 	// A base's OWN SERVICE names the thread it runs on — the registry thread, the job tick — so the journal can
-	// say which base their lines are about. For the journal only: the service holds its base and asks IT; this
-	// answers nothing else.
+	// say which base their lines are about, and "now" on that thread is that base's clock (ibDateTime::Now). For
+	// those two only: the service holds its base and asks IT; this answers nothing else.
 	static void SetThreadOwner(const ibApplicationInstance* applicationInstance);
 
 	// --- the core family ---

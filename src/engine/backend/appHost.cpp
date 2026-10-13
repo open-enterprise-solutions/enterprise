@@ -17,6 +17,7 @@
 #include "core/fiber/fiberLocals.h"
 #include "core/programFolder.h"   // backend.conf and lang/ sit in the program folder, not inside a bundle
 #include "backend/session/session.h"   // ibSession::CurrentCached — the journal's first question
+#include "backend/session/regionalSettings.h"   // the base's clock, for ibDateTime::Now
 #include "backend/session/workerPoolHeadless.h"   // the process's worker pool
 #include "backend/syntaxHelper/helpService.h"
 
@@ -31,7 +32,8 @@ static thread_local ibApplicationInstance* t_instance = nullptr;
 // …and the configuration it works in, held by its innermost ibApplicationInstanceScope.
 static thread_local ibMetaDataConfigurationBase* t_metaData = nullptr;
 
-// The base whose service runs on this thread (SetThreadOwner) — for the journal's lines only.
+// The base whose service runs on this thread (SetThreadOwner) — for the journal's lines, and for the clock its
+// timestamps are taken by (OffsetOfThisThreadsBase, below).
 static thread_local const ibApplicationInstance* t_owner = nullptr;
 
 namespace {
@@ -52,6 +54,20 @@ struct ibRegisterAppHostLocal {
 			[](const void* src) { t_owner = *static_cast<const ibApplicationInstance* const*>(src); });
 	}
 } s_registerAppHostLocal;
+
+// ⭐ "NOW" FOR THIS THREAD (ibDateTime::Now, core/fdatetime.h): the distance of the clock of the base it works for
+// from this machine's (session/regionalSettings.h) — the session's base, else the base the thread is bound to,
+// else the base whose service runs on it. The last is what makes the registry's heartbeats and the job tick's
+// last runs readings of the base's clock: those threads work for one base and are bound to none. A thread that
+// works for no base: 0, the machine's clock.
+long long OffsetOfThisThreadsBase() noexcept
+{
+	const ibApplicationInstance* base = ibApplicationInstance::Get(/*required*/ false);
+	if (base == nullptr)
+		base = t_owner;
+	const ibRegionalSettings* const regional = ibApplicationInstance::GetRegionalSettings(base);
+	return regional != nullptr ? regional->GetClockOffset() : 0;
+}
 
 } // namespace
 
@@ -110,6 +126,7 @@ ibApplicationHost* ibApplicationHost::Ensure(ibRunMode runMode)
 	if (s_applicationHost == nullptr) {
 		s_applicationHost.reset(new ibApplicationHost(runMode));
 		ibTechJournal::SetContext(&ibApplicationHost::GetJournalContext);
+		ibDateTime::SetNowOffset(&OffsetOfThisThreadsBase);
 	}
 
 	// …WITH ROOM FOR ONE MORE — as many bases as its config allows (backend.conf, Bases). Refused out loud and
@@ -222,6 +239,7 @@ void ibApplicationHost::CloseAll()
 	}
 
 	ibTechJournal::SetContext(nullptr);
+	ibDateTime::SetNowOffset(nullptr);   // core outlives this library; its Now() must not call back into it
 	s_applicationHost.reset();
 }
 
