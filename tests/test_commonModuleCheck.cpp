@@ -8,10 +8,14 @@
 
 #include <gtest/gtest.h>
 
+#include <memory>
+
 #include <wx/init.h>
 
 #include "backend/appData.h"
 #include "backend/compiler/compileCode.h"
+#include "backend/databaseLayer/connectionPool.h"
+#include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
 #include "backend/mcp/mcpTool.h"
 #include "backend/metaCollection/metaModuleObject.h"
 #include "backend/metadataConfiguration.h"
@@ -21,6 +25,7 @@ namespace {
 
 struct CommonModuleCheck : ::testing::Test {
 	wxInitializer m_wxInit;
+	std::shared_ptr<ibDatabaseLayerSQLite> m_db;
 	bool m_ownsApp = false;
 
 	void SetUp() override {
@@ -31,6 +36,15 @@ struct CommonModuleCheck : ::testing::Test {
 				GTEST_SKIP() << "appData env unavailable headless";
 			m_ownsApp = true;
 		}
+		// The configuration the designer opens lives in the base. An
+		// in-memory SQLite is that base for this test.
+		ibConnectionPool* pool = ibApplicationInstance::GetConnectionPool();
+		if (pool == nullptr)
+			GTEST_SKIP() << "no connection pool after CreateAppDataEnv";
+		m_db = std::make_shared<ibDatabaseLayerSQLite>();
+		if (!m_db->Open(wxT(":memory:")))
+			GTEST_SKIP() << "in-memory SQLite open failed";
+		pool->Init(m_db, /*maxSize=*/1, /*minIdle=*/0);
 	}
 
 	void TearDown() override {
