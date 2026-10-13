@@ -3255,21 +3255,23 @@ TEST_F(BuiltInRuntime, AFormScriptWritesThroughDataSource) {
 	session->Attach(&frame);
 	ibSessionScope scope(session.get());
 
-	ReadableForm form;
+	// The call holds ThisForm and releases it when the frame goes. A form on
+	// the stack would be deleted by that release.
+	ReadableForm* form = new ReadableForm();
 	ibValuePtr<ibValueStructure> object(new ibValueStructure());
 	object->Insert(ibValue(wxT("A")), ibValue(3));
 	object->Insert(ibValue(wxT("B")), ibValue(0));
 
 	ibValue held;
 	held = static_cast<ibValue*>(static_cast<ibValueStructure*>(object));
-	ibFormAttributeValue* attr = form.AddAttribute(wxT("Src"), g_valueStructureCLSID, held);
+	ibFormAttributeValue* attr = form->AddAttribute(wxT("Src"), g_valueStructureCLSID, held);
 	ASSERT_NE(attr, nullptr);
 	attr->SetHeldValue(held);
-	form.BindExportVariable(wxT("DataSource"), attr->GetBindValue());
+	form->BindExportVariable(wxT("DataSource"), attr->GetBindValue());
 
 	ibValue stale(wxT("stale"));
 	stale.m_bReadOnly = true;
-	EXPECT_FALSE(form.ReadBound(wxT("DataSource"), stale));
+	EXPECT_FALSE(form->ReadBound(wxT("DataSource"), stale));
 	EXPECT_EQ(stale.GetString(), wxT("stale"));
 
 	const short savedStyle = ibCompileCode::GetCodeStyle();
@@ -3280,7 +3282,7 @@ TEST_F(BuiltInRuntime, AFormScriptWritesThroughDataSource) {
 	} styleRestore{ savedStyle };
 
 	ibCompileCode cc(wxT("caller"), wxT("memory"), false);
-	cc.AddContextVariable(wxT("ThisForm"), &form);
+	cc.AddContextVariable(wxT("ThisForm"), form);
 	ASSERT_TRUE(TryCompile(cc,
 		wxT("Procedure Write()\n")
 		wxT("  ThisForm.DataSource.B = ThisForm.DataSource.A;\n")
