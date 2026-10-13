@@ -13,6 +13,7 @@
 #if wxUSE_DATAVIEWCTRL
 
 #include "dataview.h"
+#include "frmclient/win/typeconv.h"  // ColourToWxColour — an item's colours are the model's data
 
 #ifndef WX_PRECOMP
 #include <wx/dc.h>
@@ -38,6 +39,28 @@
 //#define DEBUG_RENDER_EXTENTS
 
 const char ibDataViewCtrlNameStr[] = "dataviewCtrl";
+
+wxFont ibEffectiveFont(const ibDataViewItemAttr& attr, const wxFont& font)
+{
+	if (!attr.HasFont())
+		return font;
+
+	wxFont f(font);
+	if (attr.GetBold())
+		f.MakeBold();
+	if (attr.GetItalic())
+		f.MakeItalic();
+	if (attr.GetStrikethrough())
+		f.MakeStrikethrough();
+	if (attr.GetUnderlined())
+		f.MakeUnderlined();
+	if (attr.GetPointSize() > 0)
+		f.SetPointSize(attr.GetPointSize());
+	if (!attr.GetFaceName().IsEmpty())
+		f.SetFaceName(attr.GetFaceName());
+
+	return f;
+}
 
 namespace
 {
@@ -627,7 +650,7 @@ void ibDataViewCustomRendererBase::RenderBackground(wxDC* dc, const wxRect& rect
 	if (!m_attr.HasBackgroundColour())
 		return;
 
-	const wxColour& colour = m_attr.GetBackgroundColour();
+	const wxColour colour = typeConv::ColourToWxColour(m_attr.GetBackgroundColour());
 	wxDCPenChanger changePen(*dc, colour);
 	wxDCBrushChanger changeBrush(*dc, colour);
 
@@ -685,7 +708,7 @@ ibDataViewCustomRendererBase::WXCallRender(wxRect rectCell, wxDC* dc, int state)
 	if (state & wxDATAVIEW_CELL_SELECTED)
 		col = wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHTTEXT);
 	else if (m_attr.HasColour())
-		col = m_attr.GetColour();
+		col = typeConv::ColourToWxColour(m_attr.GetColour());
 	else // use default foreground
 		col = GetOwner()->GetOwner()->GetForegroundColour();
 
@@ -693,7 +716,7 @@ ibDataViewCustomRendererBase::WXCallRender(wxRect rectCell, wxDC* dc, int state)
 
 	wxDCFontChanger changeFont(*dc);
 	if (m_attr.HasFont())
-		changeFont.Set(m_attr.GetEffectiveFont(dc->GetFont()));
+		changeFont.Set(ibEffectiveFont(m_attr, dc->GetFont()));
 
 #ifdef DEBUG_RENDER_EXTENTS
 	{
@@ -717,7 +740,7 @@ wxSize ibDataViewCustomRendererBase::GetTextExtent(const wxString& str) const
 	const ibDataViewCtrl* view = GetView();
 
 	const wxFont font = m_attr.HasFont()
-		? m_attr.GetEffectiveFont(view->GetFont())
+		? ibEffectiveFont(m_attr, view->GetFont())
 		: view->GetFont();
 
 	// ⭐ ASKED TWICE FOR THE SAME CELL, ANSWERED ONCE. WXCallRender measures to place the text and

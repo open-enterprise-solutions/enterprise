@@ -398,16 +398,16 @@ bool ibDataViewMetaDiffModel::GetAttr(const ibDataViewItem& item,
 	case ibMetaDiffStatus::Same:
 		return false;
 	case ibMetaDiffStatus::Reordered:
-		attr.SetBackgroundColour(wxColour(0xE6, 0xEE, 0xF5));
+		attr.SetBackgroundColour(ibColour(0xE6, 0xEE, 0xF5));
 		return true;
 	case ibMetaDiffStatus::Changed:
-		attr.SetBackgroundColour(wxColour(0xF8, 0xE3, 0xD5));
+		attr.SetBackgroundColour(ibColour(0xF8, 0xE3, 0xD5));
 		return true;
 	case ibMetaDiffStatus::OnlyInLeft:
-		attr.SetBackgroundColour(wxColour(0xF5, 0xE8, 0xD5));
+		attr.SetBackgroundColour(ibColour(0xF5, 0xE8, 0xD5));
 		return true;
 	case ibMetaDiffStatus::OnlyInRight:
-		attr.SetBackgroundColour(wxColour(0xD8, 0xE2, 0xEB));
+		attr.SetBackgroundColour(ibColour(0xD8, 0xE2, 0xEB));
 		return true;
 	}
 	return false;

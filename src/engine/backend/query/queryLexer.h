@@ -10,15 +10,15 @@
 // UTF-8 / Unicode aware, Cyrillic metaobject / attribute identifiers
 // (Goods, Warehouse) tokenize for free.
 //
-// On a malformed literal the primitives signal through SetError -> DoSetError
-// (whose base body is a no-op the script path overrides); we override DoSetError
-// to THROW ibBackendCoreException with line / position, so a lex error aborts
-// loudly. Throw-by-value, catch-by-const-ref.
+// On a malformed literal the primitives note a refusal and read on (ibTranslateRefusal);
+// the query asks for it right after each primitive (RaiseRefusal) and THROWS with line /
+// position, so a lex error aborts loudly. Throw-by-value, catch-by-const-ref.
 //
 // See docs/private/query-language-arc.md §14 / §23.
 
-#include "backend/compiler/translateCode.h"   // ibTranslateCode (char primitives) + ibValue
-#include "queryKeywords.h"
+#include "core/compiler/translateCode.h"   // ibTranslateCode (char primitives)
+#include "backend/compiler/value.h"
+#include "core/query/queryKeywords.h"
 
 #include <vector>
 
@@ -56,7 +56,9 @@ struct ibQueryToken
 class BACKEND_API ibQueryLexer : protected ibTranslateCode
 {
 public:
-	ibQueryLexer() = default;
+	// A query is not a module: the lexer reads its words with GetWord and matches them against the
+	// query's own keywords, so the script's syntax is never asked. CES is only what the translator holds.
+	ibQueryLexer() : ibTranslateCode(CODE_CES) {}
 
 	// Tokenize the whole query text into a token vector terminated by one
 	// End token. Throws ibBackendCoreException (line / position) on a lex error.
@@ -84,15 +86,11 @@ public:
 	// a window asking "what would I need here" is not the place a syntax error is reported.
 	static std::vector<wxString> ParamNames(const wxString& queryText);
 
-protected:
-	// The base body is a no-op (the script compiler overrides it). We THROW so a
-	// malformed numeric / string / date literal does not silently return false.
-	void DoSetError(int codeError,
-		const wxString& strFileName, const wxString& strModuleName, const wxString& strDocPath,
-		unsigned int currPos, unsigned int currLine,
-		const wxString& errorDesc = wxEmptyString) const override;
-
 private:
+	// The first refusal the primitives noted, raised — so a malformed numeric / string / date
+	// literal does not silently come back as a token. Nothing noted, nothing raised.
+	void RaiseRefusal() const;
+
 	// Immediate next char WITHOUT skipping whitespace — so multi-char operators
 	// (<=, >=, <>, !=) only glue when contiguous. 0 at end of buffer.
 	wxChar PeekRawByte() const;

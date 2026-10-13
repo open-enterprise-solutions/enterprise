@@ -7,7 +7,7 @@
 #include <memory>   // std::shared_ptr (CreateIterator)
 #include <utility>  // std::forward — the two handovers below; transitive on MSVC, not on GCC/Clang
 
-#include "backend/tabularModelView.h"
+#include "core/tabular/tabularModelView.h"
 
 #include "backend/standardCommand.h"
 #include "backend/tabularDataObject.h"   // ibTabularDataObject — ibValueModel IS one (the table hop gate)
@@ -81,6 +81,10 @@ class BACKEND_API ibDataViewModelProvider : public ibDataViewModel {
 public:
 	virtual ~ibDataViewModelProvider() {}
 	virtual class ibValueModel* GetOwnerValueModel() const = 0;
+
+	// The thread is the model's, the base is the asker's: a fresh thread has no session and no base, and a
+	// read that reaches the database (a presentation, db_query) must reach the one the asking thread works for.
+	virtual void SubmitFetchAsync(std::function<void()> work) override;
 };
 #pragma endregion 
 
@@ -1835,14 +1839,14 @@ public:
 	// A RAM READ TAKES THE PLAIN THREAD, not a rented run: there is no database on
 	// the other end, so a session and a pooled connection would be minted for
 	// nothing. What it wants is exactly what a plain model gets —
-	// ibDataViewModel::SubmitFetchAsync, the model's own thread, under the same
-	// door lock.
+	// ibDataViewModelProvider::SubmitFetchAsync, the model's own thread working
+	// for the asker's base, under the same door lock.
 	//
 	// Reached through the bridge and QUALIFIED: ibValueModel does not derive
 	// ibDataViewModel, it owns a provider that does — and that provider's override
 	// forwards straight back here, so an unqualified call would loop forever.
 	void SubmitFetchAsync(std::function<void()> work) override {
-		GetDataViewModel()->ibDataViewModel::SubmitFetchAsync(std::move(work));
+		GetDataViewModel()->ibDataViewModelProvider::SubmitFetchAsync(std::move(work));
 	}
 
 	// RAM paged fetch: ComputeOrder over the storage's nodes → window by the anchor → return the LIVE nodes.

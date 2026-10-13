@@ -1,8 +1,8 @@
 #ifndef _FILTER_TREE_MODEL_H__
 #define _FILTER_TREE_MODEL_H__
 
-#include "frmclient/win/ctrls/dataview/tabularModelView.h"
-#include "frmclient/backend/compositionDescription.h"   // ibFilterDescription — the filter IS this
+#include "core/tabular/tabularModelView.h"
+#include "frmclient/backend/backend_composition.h"   // ibFilterDescription — the filter IS this; its literal, restored
 
 #include <map>
 #include <vector>

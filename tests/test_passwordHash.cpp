@@ -45,9 +45,47 @@ TEST(PasswordHash, VerifyRejectsEmptyAgainstNonEmpty) {
 }
 
 TEST(PasswordHash, EmptyPasswordRoundTrips) {
+    // An empty password that was actually hashed is a real PHC string.
+    // That is a different value from a row whose hash column is blank.
     const wxString h = ibPasswordHash::Hash(wxEmptyString);
+    EXPECT_FALSE(h.IsEmpty());
     EXPECT_TRUE(ibPasswordHash::Verify(wxEmptyString, h));
     EXPECT_FALSE(ibPasswordHash::Verify(wxT("x"), h));
+}
+
+TEST(PasswordHash, EmptyStoredHashMeansNoPassword) {
+    EXPECT_TRUE(ibPasswordHash::Verify(wxEmptyString, wxEmptyString));
+    EXPECT_FALSE(ibPasswordHash::Verify(wxT("x"), wxEmptyString));
+}
+
+TEST(PasswordToStore, Untouched_KeepsTheStoredHash) {
+    const wxString stored = wxT("stored-hash");
+    EXPECT_EQ(ibPasswordHash::PasswordToStore(stored, false, wxEmptyString), stored);
+}
+
+TEST(PasswordToStore, Cleared_StoresNoPassword) {
+    EXPECT_TRUE(ibPasswordHash::PasswordToStore(wxT("stored-hash"), true, wxEmptyString).IsEmpty());
+}
+
+TEST(PasswordToStore, Typed_HashesTheText) {
+    const wxString stored = ibPasswordHash::PasswordToStore(wxT("stored-hash"), true, wxT("secret"));
+    EXPECT_TRUE(ibPasswordHash::Verify(wxT("secret"), stored));
+    EXPECT_FALSE(ibPasswordHash::Verify(wxT("stored-hash"), stored));
+}
+
+TEST(PasswordToStore, TypeAndDelete_StoresNoPassword) {
+    // One character typed, then deleted: the box is empty, and so is the password.
+    EXPECT_TRUE(ibPasswordHash::PasswordToStore(wxT("stored-hash"), true, wxEmptyString).IsEmpty());
+}
+
+TEST(PasswordToStore, AnyTypedText_IsAPassword) {
+    // The text the box once showed in place of a hash is an ordinary password now.
+    const wxString stored = ibPasswordHash::PasswordToStore(wxT("stored-hash"), true, wxT("12345678"));
+    EXPECT_TRUE(ibPasswordHash::Verify(wxT("12345678"), stored));
+}
+
+TEST(PasswordToStore, NewUserWithAnEmptyBox_StoresNoPassword) {
+    EXPECT_TRUE(ibPasswordHash::PasswordToStore(wxEmptyString, false, wxEmptyString).IsEmpty());
 }
 
 // ---------------------------------------------------------------------------

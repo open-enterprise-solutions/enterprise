@@ -5,10 +5,12 @@
 #include "frontend/win/dlgs/translateConstructor/translateConstructor.h"   // a text parameter, every language of it
 #include "frontend/win/dlgs/formatConstructor/formatConstructor.h"         // ibFormatBoxEditor — a format, a language at a time
 #include "backend/backend_localization.h"               // ibTranslateString — a text read in the language in force
+#include "backend/backend_composition.h"                // ibStoredValue / ibStoreValue — a parameter's value, packed
 #include "backend/system/value/valueColour.h"            // a colour parameter, kept as a value
 #include "backend/system/value/valueFont.h"              // …and a font
 #include "backend/system/value/valueSpreadsheet.h"       // …and an alignment, the sheet's own enumeration
-#include "backend/spreadsheetDescription.h"              // ibDefaultSpreadsheetFont() — the font a font is chosen from
+#include "core/description/spreadsheetDescription.h"              // ibDefaultSpreadsheetFont() — the font a font is chosen from
+#include "frontend/win/typeconv.h"                                // WxColourToColour — a row's grey is the model view's data
 
 #include <wx/choicdlg.h>   // wxGetSingleChoiceIndex — an alignment is one of three words
 #include <wx/colordlg.h>   // wxColourDialog — a colour is chosen in the system's window
@@ -39,7 +41,7 @@ bool IsTicked(const ibAppearanceDescription& appearance, ibAppearanceParameter p
 // setting switches it on; emptied, the parameter is forgotten (the door's own rule, Say).
 void SayText(ibAppearanceDescription& appearance, ibAppearanceParameter parameter, const wxString& raw)
 {
-	appearance.Say(parameter, !raw.IsEmpty(), raw.IsEmpty() ? ibValue() : ibValue(raw));
+	appearance.Say(parameter, !raw.IsEmpty(), raw.IsEmpty() ? ibDataNode() : ibStoreValue(ibValue(raw)));
 }
 
 // WHICH PARAMETERS ARE WRITTEN AS TEXT — typed into the cell, in every language. The others are a colour, a font
@@ -85,8 +87,7 @@ public:
 				return false;
 			// THE TICK KEEPS THE VALUE AS IT IS — a colour stays a colour; only the word "in force" changes.
 			const ibAppearanceValueDescription* said = m_appearance->Find(parameter);
-			m_appearance->Say(parameter, variant.GetBool(),
-				said != nullptr ? ibStoredValue(said->m_value, nullptr) : ibValue());
+			m_appearance->Say(parameter, variant.GetBool(), said != nullptr ? said->m_value : ibDataNode());
 			return true;
 		}
 		if (col != kColValue)
@@ -99,7 +100,7 @@ public:
 		if (!IsTyped(parameter)) {
 			if (!text.IsEmpty() || kept.IsEmpty())
 				return false;
-			m_appearance->Say(parameter, false, ibValue());
+			m_appearance->Say(parameter, false, ibDataNode());
 			return true;
 		}
 
@@ -119,7 +120,7 @@ public:
 	// AN UNTICKED VALUE READS GREY — kept, not applied.
 	bool GetAttrByRow(unsigned row, unsigned col, ibDataViewItemAttr& attr) const override {
 		if (col == kColValue && IsRow(row) && !IsTicked(*m_appearance, ParameterAt(row))) {
-			attr.SetColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
+			attr.SetColour(typeConv::WxColourToColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT)));
 			return true;
 		}
 		return false;
@@ -224,28 +225,28 @@ private:
 				ibValue kept = ibStoredValue(said->m_value, nullptr);
 				ibValueColour* colour = nullptr;
 				if (kept.ConvertToValue(colour) && colour != nullptr && colour->m_colour.IsOk())
-					data.SetColour(colour->m_colour);
+					data.SetColour(typeConv::ColourToWxColour(colour->m_colour));
 			}
 			wxColourDialog dialog(this, &data);
 			if (dialog.ShowModal() != wxID_OK)
 				return false;
-			return Choose(parameter, ibValue(new ibValueColour(dialog.GetColourData().GetColour())), text);
+			return Choose(parameter, ibValue(new ibValueColour(typeConv::WxColourToColour(dialog.GetColourData().GetColour()))), text);
 		}
 		// A FONT — the system's own font window, standing on the font kept, else on the REPORT'S own: what is chosen
 		// is read as what it changes of that one (ibCompositionFont::Of), so ticking italic says italic and nothing more.
 		case ibAppearanceParameter::Font: {
 			wxFontData data;
-			data.SetInitialFont(ibDefaultSpreadsheetFont());
+			data.SetInitialFont(typeConv::FontToWxFont(ibDefaultSpreadsheetFont()));
 			if (const ibAppearanceValueDescription* said = m_edited.Find(parameter)) {
 				ibValue kept = ibStoredValue(said->m_value, nullptr);
 				ibValueFont* font = nullptr;
 				if (kept.ConvertToValue(font) && font != nullptr && font->m_font.IsOk())
-					data.SetInitialFont(font->m_font);
+					data.SetInitialFont(typeConv::FontToWxFont(font->m_font));
 			}
 			wxFontDialog dialog(this, data);
 			if (dialog.ShowModal() != wxID_OK)
 				return false;
-			return Choose(parameter, ibValue(new ibValueFont(dialog.GetFontData().GetChosenFont())), text);
+			return Choose(parameter, ibValue(new ibValueFont(typeConv::WxFontToFont(dialog.GetFontData().GetChosenFont()))), text);
 		}
 		// AN ALIGNMENT — one of three words, picked in a small window of its own (the way the other settings pick
 		// a theme), in the sheet's own vocabulary.
@@ -269,7 +270,7 @@ private:
 
 	// A VALUE CHOSEN IN ITS WINDOW — said ticked, and shown as its own text.
 	bool Choose(ibAppearanceParameter parameter, const ibValue& value, wxString& text) {
-		m_edited.Say(parameter, true, value);
+		m_edited.Say(parameter, true, ibStoreValue(value));
 		text = KeptText(m_edited, parameter);
 		m_view->Refresh();
 		return true;

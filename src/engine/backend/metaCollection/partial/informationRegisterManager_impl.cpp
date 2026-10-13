@@ -42,6 +42,12 @@ ibValue ibValueManagerDataObjectInformationRegister::Get(const ibValue& cPeriod,
 {
 	ibRequireOpenBase();
 
+	// A period not given — omitted or Undefined — names no period, on every register: the filter alone
+	// decides, as Get(Filter). Keyed on it, a periodic register looked for the empty date and a
+	// non-periodic one answered its empty table: either way "no record" for a record that is there.
+	if (cPeriod.GetType() == ibValueTypes::TYPE_EMPTY)
+		return Get(cFilter);
+
 	// A register with neither a period nor a recorder keeps no record AT a period: the answer is its
 	// columns and no rows, as its slices answer (ComputeSlice) — an empty selection on the same road.
 	if (m_metaObject->GetPeriodicity() == ibPeriodicity::eNonPeriodic &&

@@ -1,6 +1,15 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
+    <Filter Include="compiler">
+      <UniqueIdentifier>{62ae2c4b-b98b-425e-9e38-1eed289b6b90}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="composition">
+      <UniqueIdentifier>{7b2e4c91-3f58-4a0d-b6e2-9c1d8a5f3e47}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="description">
+      <UniqueIdentifier>{5fd91569-04e3-42cc-a2eb-ab6104edba35}</UniqueIdentifier>
+    </Filter>
     <Filter Include="diagnostics">
       <UniqueIdentifier>{b908aefe-25b6-4f92-822f-12cb5562e048}</UniqueIdentifier>
     </Filter>
@@ -13,17 +22,74 @@
     <Filter Include="fileSystem\lz">
       <UniqueIdentifier>{a606016d-466d-412e-ab20-5490f6a2e37f}</UniqueIdentifier>
     </Filter>
+    <Filter Include="graphics">
+      <UniqueIdentifier>{1c39467f-583e-4ee5-9fda-86472983e336}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="query">
+      <UniqueIdentifier>{a4a3bd23-8265-4eae-9b38-c123e23b3d1c}</UniqueIdentifier>
+    </Filter>
     <Filter Include="res">
       <UniqueIdentifier>{3be40a77-37b2-4932-b674-ea437eebb065}</UniqueIdentifier>
     </Filter>
     <Filter Include="serialize">
       <UniqueIdentifier>{8708f6ac-1c30-4368-8d4f-7555b0b5d7bf}</UniqueIdentifier>
     </Filter>
+    <Filter Include="spreadsheet">
+      <UniqueIdentifier>{e4a19d36-82c7-4f5b-a0d3-6f2b7c8e91a5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="tabular">
+      <UniqueIdentifier>{9c3f5e21-7a4d-4b86-8e1f-2d6b0a9c4f73}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="anyValue.cpp" />
     <ClCompile Include="build.cpp" />
+    <ClCompile Include="compiler\lexValue.cpp">
+      <Filter>compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\scriptParseCode.cpp">
+      <Filter>compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\translateCode.cpp">
+      <Filter>compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="composition\compositionTheme.cpp">
+      <Filter>composition</Filter>
+    </ClCompile>
     <ClCompile Include="core.cpp" />
+    <ClCompile Include="description\calcScheduleDescription.cpp">
+      <Filter>description</Filter>
+    </ClCompile>
+    <ClCompile Include="description\choiceLinkDescription.cpp">
+      <Filter>description</Filter>
+    </ClCompile>
+    <ClCompile Include="description\commandDescription.cpp">
+      <Filter>description</Filter>
+    </ClCompile>
+    <ClCompile Include="description\compositionDescription.cpp">
+      <Filter>description</Filter>
+    </ClCompile>
+    <ClCompile Include="description\homePageDescription.cpp">
+      <Filter>description</Filter>
+    </ClCompile>
+    <ClCompile Include="description\jobScheduleDescription.cpp">
+      <Filter>description</Filter>
+    </ClCompile>
+    <ClCompile Include="description\pictureDescription.cpp">
+      <Filter>description</Filter>
+    </ClCompile>
+    <ClCompile Include="description\sourceDescription.cpp">
+      <Filter>description</Filter>
+    </ClCompile>
+    <ClCompile Include="description\spreadsheetDescription.cpp">
+      <Filter>description</Filter>
+    </ClCompile>
+    <ClCompile Include="description\standardCommandDescription.cpp">
+      <Filter>description</Filter>
+    </ClCompile>
+    <ClCompile Include="description\typeDescription.cpp">
+      <Filter>description</Filter>
+    </ClCompile>
     <ClCompile Include="diagnostics\crashGuard.cpp">
       <Filter>diagnostics</Filter>
     </ClCompile>
@@ -50,9 +116,21 @@
     <ClCompile Include="fnumber.cpp" />
     <ClCompile Include="formatString.cpp" />
     <ClCompile Include="fstring.cpp" />
+    <ClCompile Include="graphics\colour.cpp">
+      <Filter>graphics</Filter>
+    </ClCompile>
+    <ClCompile Include="graphics\font.cpp">
+      <Filter>graphics</Filter>
+    </ClCompile>
+    <ClCompile Include="graphics\geometry.cpp">
+      <Filter>graphics</Filter>
+    </ClCompile>
     <ClCompile Include="guid.cpp" />
     <ClCompile Include="localization.cpp" />
     <ClCompile Include="programFolder.cpp" />
+    <ClCompile Include="query\queryKeywords.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
     <ClCompile Include="serialize\dataBuilder.cpp">
       <Filter>serialize</Filter>
     </ClCompile>
@@ -62,12 +140,69 @@
     <ClCompile Include="serialize\jsonText.cpp">
       <Filter>serialize</Filter>
     </ClCompile>
+    <ClCompile Include="spreadsheet\sheetFormat.cpp">
+      <Filter>spreadsheet</Filter>
+    </ClCompile>
+    <ClCompile Include="spreadsheet\spreadsheetObject.cpp">
+      <Filter>spreadsheet</Filter>
+    </ClCompile>
+    <ClCompile Include="tabular\tabularModelView.cpp">
+      <Filter>tabular</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="anyValue.h" />
     <ClInclude Include="build.h" />
     <ClInclude Include="clsid.h" />
+    <ClInclude Include="compiler\codeDef.h">
+      <Filter>compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\lexValue.h">
+      <Filter>compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\scriptParseCode.h">
+      <Filter>compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\translateCode.h">
+      <Filter>compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="composition\compositionTheme.h">
+      <Filter>composition</Filter>
+    </ClInclude>
     <ClInclude Include="core.h" />
+    <ClInclude Include="description\calcScheduleDescription.h">
+      <Filter>description</Filter>
+    </ClInclude>
+    <ClInclude Include="description\choiceLinkDescription.h">
+      <Filter>description</Filter>
+    </ClInclude>
+    <ClInclude Include="description\commandDescription.h">
+      <Filter>description</Filter>
+    </ClInclude>
+    <ClInclude Include="description\compositionDescription.h">
+      <Filter>description</Filter>
+    </ClInclude>
+    <ClInclude Include="description\homePageDescription.h">
+      <Filter>description</Filter>
+    </ClInclude>
+    <ClInclude Include="description\jobScheduleDescription.h">
+      <Filter>description</Filter>
+    </ClInclude>
+    <ClInclude Include="description\pictureDescription.h">
+      <Filter>description</Filter>
+    </ClInclude>
+    <ClInclude Include="description\sourceDescription.h">
+      <Filter>description</Filter>
+    </ClInclude>
+    <ClInclude Include="description\spreadsheetDescription.h">
+      <Filter>description</Filter>
+    </ClInclude>
+    <ClInclude Include="description\standardCommandDescription.h">
+      <Filter>description</Filter>
+    </ClInclude>
+    <ClInclude Include="description\typeDescription.h">
+      <Filter>description</Filter>
+    </ClInclude>
     <ClInclude Include="diagnostics\crashGuard.h">
       <Filter>diagnostics</Filter>
     </ClInclude>
@@ -100,9 +235,30 @@
     <ClInclude Include="fnumber.h" />
     <ClInclude Include="formatString.h" />
     <ClInclude Include="fstring.h" />
+    <ClInclude Include="graphics\colour.h">
+      <Filter>graphics</Filter>
+    </ClInclude>
+    <ClInclude Include="graphics\font.h">
+      <Filter>graphics</Filter>
+    </ClInclude>
+    <ClInclude Include="graphics\geometry.h">
+      <Filter>graphics</Filter>
+    </ClInclude>
+    <ClInclude Include="graphics\picture.h">
+      <Filter>graphics</Filter>
+    </ClInclude>
     <ClInclude Include="guid.h" />
     <ClInclude Include="localization.h" />
     <ClInclude Include="programFolder.h" />
+    <ClInclude Include="query\queryBalanceRole.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\queryKeywords.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\queryUnfold.h">
+      <Filter>query</Filter>
+    </ClInclude>
     <ClInclude Include="res\resource.h">
       <Filter>res</Filter>
     </ClInclude>
@@ -115,8 +271,16 @@
     <ClInclude Include="serialize\jsonText.h">
       <Filter>serialize</Filter>
     </ClInclude>
+    <ClInclude Include="spreadsheet\sheetFormat.h">
+      <Filter>spreadsheet</Filter>
+    </ClInclude>
+    <ClInclude Include="spreadsheet\spreadsheetObject.h">
+      <Filter>spreadsheet</Filter>
+    </ClInclude>
     <ClInclude Include="stringUtils.h" />
-    <ClInclude Include="types.h" />
+    <ClInclude Include="tabular\tabularModelView.h">
+      <Filter>tabular</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="res\core.rc">

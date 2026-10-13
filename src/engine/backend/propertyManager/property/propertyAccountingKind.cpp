@@ -74,12 +74,12 @@ bool ibPropertyAccountingKind::GetDataValue(ibValue& pvarPropVal) const
 
 bool ibPropertyAccountingKind::ReadNodeValue(const ibDataValue& value)
 {
-	ibMetaDescriptionMemory::ReadNode(value, GetValueAsMetaDesc());
+	ibBackendMetaDescriptionMemory::ReadNode(value, GetValueAsMetaDesc());
 	return true;
 }
 
 bool ibPropertyAccountingKind::WriteNodeValue(ibDataValue& value) const
 {
-	const ibPropertyObject* owner = m_owner;   // CONST overload — see propertyObject.h
-	return ibMetaDescriptionMemory::WriteNode(value, GetValueAsMetaDesc(), owner->GetMetaData());
+	const ibPropertyObject* owner = m_owner;   // CONST overload — the non-const one returns null (see propertyObject.h)
+	return ibBackendMetaDescriptionMemory::WriteNode(value, GetValueAsMetaDesc(), owner->GetMetaData());
 }

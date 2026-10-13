@@ -14,6 +14,72 @@
 // the day's place - its month, its day and how far the month's end is, which of its weekday it is, the minute
 // of the day. Every mask below counts from bit 0 the way the date counts from 1: January, the 1st, Monday.
 
+bool ibJobScheduleRules::IsValid(const ibJobScheduleDescription& self)
+{
+	if (self.m_intervalSeconds <= 0)
+		return false;
+
+	// A half-declared window is not a window — but a window with an out-of-range
+	// bound is a mistake, and one that would quietly gate the job forever.
+	const bool hasWindow = self.m_startMinute >= 0 || self.m_endMinute >= 0;
+	if (hasWindow) {
+		if (self.m_startMinute < 0 || self.m_endMinute < 0)
+			return false;
+		if (self.m_startMinute >= 24 * 60 || self.m_endMinute > 24 * 60)
+			return false;
+		if (self.m_startMinute == self.m_endMinute)
+			return false;   // empty range — matches no minute
+	}
+
+	// A day-of-month mask that names only days beyond 31 can never match.
+	if (self.m_daysOfMonth != 0 && (self.m_daysOfMonth & 0x7FFFFFFFu) == 0)
+		return false;
+	if (self.m_daysOfMonthFromEnd != 0 && (self.m_daysOfMonthFromEnd & 0x7FFFFFFFu) == 0)
+		return false;
+
+	// An ordinal counts occurrences of ONE weekday; with several named there is nothing to count,
+	// and with none the ordinal has no subject at all.
+	if (self.m_weekdayOrdinal != ibJobOrdinal_None) {
+		if (self.m_weekdayOrdinal > ibJobOrdinal_Fifth && self.m_weekdayOrdinal != ibJobOrdinal_Last)
+			return false;
+		const std::uint8_t days = (self.m_daysOfWeek == 0) ? ibJobWeekDay_Any : self.m_daysOfWeek;
+		const bool exactlyOne = days != 0 && (days & (days - 1)) == 0;
+		if (!exactlyOne)
+			return false;
+	}
+
+	// "Every N" with a stop-after that precedes the window start would gate the job forever.
+	if (self.m_stopAfterMinute >= 0) {
+		if (self.m_stopAfterMinute > 24 * 60)
+			return false;
+		if (self.m_startMinute >= 0 && self.m_stopAfterMinute <= self.m_startMinute)
+			return false;
+	}
+
+	// Months beyond December, likewise.
+	if (self.m_months != 0 && (self.m_months & 0x0FFFu) == 0)
+		return false;
+
+	// An inverted validity range names no moment at all.
+	if (!self.m_activeFrom.IsEmpty() && !self.m_activeTo.IsEmpty() && self.m_activeTo < self.m_activeFrom)
+		return false;
+
+	return true;
+}
+
+bool ibJobScheduleRules::IsInsideWindow(int startMinute, int endMinute, int nowMinute)
+{
+	if (startMinute < 0 || endMinute < 0)
+		return true;   // no window declared — always inside
+
+	// start <= end is the plain daytime range. start > end WRAPS midnight, which
+	// is what a night window (22:00–05:00) means; read as a plain range it would
+	// match no minute at all.
+	if (startMinute <= endMinute)
+		return nowMinute >= startMinute && nowMinute < endMinute;
+	return nowMinute >= startMinute || nowMinute < endMinute;
+}
+
 bool ibJobScheduleRules::IsAllowed(const ibJobScheduleDescription& self, const ibDateTime& moment)
 {
 	if (moment.IsEmpty())
@@ -79,7 +145,7 @@ bool ibJobScheduleRules::IsAllowed(const ibJobScheduleDescription& self, const i
 
 	// Time of day.
 	const int nowMinute = static_cast<int>(parts.MinuteOfDay());
-	if (!ibJobScheduleDescription::IsInsideWindow(self.m_startMinute, self.m_endMinute, nowMinute))
+	if (!IsInsideWindow(self.m_startMinute, self.m_endMinute, nowMinute))
 		return false;
 
 	// TOO LATE TO BEGIN. The window says when work may happen; this says when starting something

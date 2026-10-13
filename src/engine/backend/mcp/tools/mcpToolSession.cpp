@@ -26,6 +26,7 @@
 #include "backend/mcp/mcpTool.h"
 
 #include "backend/appData.h"
+#include "backend/backend_exception.h"
 #include "backend/session/session.h"          // Current() — the one session we must not kick
 #include "backend/session/sessionRegistry.h"
 #include "backend/session/sessionSnapshot.h"
@@ -101,8 +102,21 @@ public:
 
 			const bool full = ArgFull().Flag(params);
 
+			std::vector<ibUserInfo::Brief> accounts;
+			try {
+				accounts = ibUserInfo::ListAll();
+			}
+			catch (const ibBackendInterruptException&) {
+				throw;
+			}
+			catch (const ibCoreException& err) {
+				refusal = wxString::Format(
+					_("The user list could not be read: %s"), err.GetErrorDescription());
+				return false;
+			}
+
 			std::vector<ibDataValue> users;
-			for (const ibUserInfo::Brief& brief : ibUserInfo::ListAll()) {
+			for (const ibUserInfo::Brief& brief : accounts) {
 				std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
 				entry->SetValue(wxT("name"), brief.m_strUserName);
 				if (!brief.m_strUserFullName.IsEmpty()

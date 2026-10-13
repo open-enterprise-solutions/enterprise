@@ -2,29 +2,30 @@
 #define __PROPERTY_POINT_H__
 
 #include "backend/propertyManager/propertyObject.h"
+#include "core/graphics/geometry.h"   // ibPoint — the point, as data
 
 //base property for "point"
 class BACKEND_API ibPropertyPoint : public ibProperty {
-	static wxVariantData* CreateVariantData(const wxPoint& val);
+	static wxVariantData* CreateVariantData(const ibPoint& val);
 public:
 
-	wxPoint GetValueAsPoint() const;
-	wxString GetValueAsString() const { return typeConv::PointToString(GetValueAsPoint()); }
+	ibPoint GetValueAsPoint() const;
+	wxString GetValueAsString() const { return GetValueAsPoint().ToString(); }
 
-	void SetValue(const wxPoint& val) { m_propValue = CreateVariantData(val); }
-	void SetValue(const wxString& val) { SetValue(typeConv::StringToPoint(val)); }
+	void SetValue(const ibPoint& val) { m_propValue = CreateVariantData(val); }
+	void SetValue(const wxString& val) { ibPoint point = ibDefaultPosition; point.FromString(val); SetValue(point); }
 
-	ibPropertyPoint(ibPropertyCategory* cat, const wxString& name, const wxPoint& p = wxDefaultPosition)
+	ibPropertyPoint(ibPropertyCategory* cat, const wxString& name, const ibPoint& p = ibDefaultPosition)
 		: ibProperty(cat, name, CreateVariantData(p))
 	{
 	}
 
-	ibPropertyPoint(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxPoint& p = wxDefaultPosition)
+	ibPropertyPoint(ibPropertyCategory* cat, const wxString& name, const wxString& label, const ibPoint& p = ibDefaultPosition)
 		: ibProperty(cat, name, label, CreateVariantData(p))
 	{
 	}
 
-	ibPropertyPoint(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString, const wxPoint& p = wxDefaultPosition)
+	ibPropertyPoint(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString, const ibPoint& p = ibDefaultPosition)
 		: ibProperty(cat, name, label, helpString, CreateVariantData(p))
 	{
 	}

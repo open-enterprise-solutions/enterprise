@@ -3,12 +3,12 @@
 
 #include "backend/srcObject.h"   // ibTabularObject (minimal base) + BACKEND_API
 #include "backend/compiler/value.h"     // ibValue (inline GetValueByPath default-constructs one)
-#include "backend/sourceDescription.h"  // ibSourceHop — a binding path is {id, expected type} per hop
-#include "backend/typeDescription.h"    // ibTypeDescription — what a column accepts, the table's own answer
+#include "core/description/sourceDescription.h"  // ibSourceHop — a binding path is {id, expected type} per hop
+#include "core/description/typeDescription.h"    // ibTypeDescription — what a column accepts, the table's own answer
 
 // Fwd — the hop gate takes these BY REF, so declarations suffice here (full types come in the .cpp's that
-// implement it): ibSourceHop (sourceDescription.h), ibDataViewItem (modelView.h), ibValue (compiler/value.h).
-class BACKEND_API ibDataViewItem;
+// implement it): ibSourceHop (sourceDescription.h), ibDataViewItem (tabularModelView.h), ibValue (compiler/value.h).
+class CORE_API ibDataViewItem;
 
 // ibTabularDataObject — the FULL tabular source: the TABLE mirror of ibSourceDataObject (the full SCALAR source
 // over ibSourceObject). It is ibTabularObject + THE table hop gate. A table value is PER-ROW, so the hop gate

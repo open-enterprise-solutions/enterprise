@@ -21,7 +21,7 @@
 
 #include "backend/compiler/compileCode.h"
 #include "backend/compiler/compileContext.h"   // CODE_VES / CODE_CES
-#include "backend/compiler/codeDef.h"
+#include "core/compiler/codeDef.h"
 #include "backend/compiler/byteCode.h"
 #include "backend/compiler/value.h"
 
@@ -162,7 +162,7 @@ TEST(LexerTest, EmptySourceProducesEndProgramOnly) {
 	ASSERT_TRUE(cc.PrepareLexem());
 	// At least the ENDPROGRAM sentinel — exact number depends on lexer
 	// implementation, but it must be non-empty.
-	EXPECT_GE(cc.GetLexemCount(), 1u);
+	EXPECT_GE(cc.m_translateCode.GetLexCount(), 1u);
 }
 
 TEST(LexerTest, SimpleAssignmentTokenizes) {
@@ -170,14 +170,14 @@ TEST(LexerTest, SimpleAssignmentTokenizes) {
 	cc.Load(wxT("a = 1;"));
 	ASSERT_TRUE(cc.PrepareLexem());
 	// Identifier 'a', '=', number '1', ';', ENDPROGRAM — at least 5.
-	EXPECT_GE(cc.GetLexemCount(), 4u);
+	EXPECT_GE(cc.m_translateCode.GetLexCount(), 4u);
 }
 
 TEST(LexerTest, StringLiteralLexes) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	cc.Load(wxT("s = \"hello\";"));
 	ASSERT_TRUE(cc.PrepareLexem());
-	EXPECT_GE(cc.GetLexemCount(), 4u);
+	EXPECT_GE(cc.m_translateCode.GetLexCount(), 4u);
 }
 
 // ===========================================================================
@@ -1276,7 +1276,7 @@ TEST(TypedEmpty, ATypeNobodyHasIsTheEmptyValueNotARefusal) {
 // ===========================================================================
 
 #include "backend/system/value/composition/valueComposerField.h"
-#include "backend/compositionDescription.h"
+#include "backend/backend_composition.h"
 #include "backend/composition/dataComposer.h"
 #include "backend/query/queryRender.h"   // ibRenderQueryExpr — the text IS the expression rendered
 
@@ -1372,7 +1372,7 @@ TEST(FilterTree, GroupsAreTheOnlyNodes) {
 	// Conditions are leaves. Only a group can hold children — which is what
 	// makes the shape a tree rather than a list of lists.
 	ibFilterDescription filter;
-	filter.Append(wxT("Amount"), ibComparisonKind_Greater, ibValue(100));
+	filter.Append(wxT("Amount"), ibComparisonKind_Greater, ibStoreValue(ibValue(100)));
 	ibFilterDescription::AppendGroup(filter.m_nodes, ibFilterGroupKind_Or);
 
 	ASSERT_EQ(2u, filter.m_nodes.size());
@@ -1386,10 +1386,10 @@ TEST(FilterTree, AGroupOwnsItsChildren) {
 	// parent and the two can never disagree. Copying the filter deep-copies the whole tree, which is
 	// what every window relies on — edit a copy, put it back on OK.
 	ibFilterDescription filter;
-	filter.Append(wxT("A"), ibComparisonKind_Equal, ibValue(1));
+	filter.Append(wxT("A"), ibComparisonKind_Equal, ibStoreValue(ibValue(1)));
 	ibFilterNodeDescription& either = ibFilterDescription::AppendGroup(filter.m_nodes, ibFilterGroupKind_Or);
-	ibFilterDescription::Append(either.m_children, wxT("B"), ibComparisonKind_Equal, ibValue(2));
-	ibFilterDescription::Append(either.m_children, wxT("C"), ibComparisonKind_Equal, ibValue(3));
+	ibFilterDescription::Append(either.m_children, wxT("B"), ibComparisonKind_Equal, ibStoreValue(ibValue(2)));
+	ibFilterDescription::Append(either.m_children, wxT("C"), ibComparisonKind_Equal, ibStoreValue(ibValue(3)));
 
 	ASSERT_EQ(2u, filter.m_nodes.size()) << "the children landed beside the group instead of inside it";
 	ASSERT_EQ(2u, filter.m_nodes[1].m_children.size());
@@ -1404,14 +1404,14 @@ TEST(FilterTree, ASideIsAFieldOrAValue) {
 	// `Price > Cost` — both sides are the same shape, which is what lets a condition compare two
 	// fields and not only a field with a literal.
 	ibFilterDescription filter;
-	ibFilterNodeDescription& node = filter.Append(wxT("Price"), ibComparisonKind_Greater, ibValue());
+	ibFilterNodeDescription& node = filter.Append(wxT("Price"), ibComparisonKind_Greater, ibDataNode());
 	node.m_right.m_path = wxT("Cost");
 
 	EXPECT_TRUE(node.m_left.IsField());
 	EXPECT_TRUE(node.m_right.IsField());
 
 	ibFilterDescription other;
-	ibFilterNodeDescription& literal = other.Append(wxT("Price"), ibComparisonKind_Greater, ibValue(100));
+	ibFilterNodeDescription& literal = other.Append(wxT("Price"), ibComparisonKind_Greater, ibStoreValue(ibValue(100)));
 	EXPECT_TRUE(literal.m_left.IsField());
 	EXPECT_FALSE(literal.m_right.IsField()) << "a literal side must not read as a path";
 }
@@ -1420,7 +1420,7 @@ TEST(FilterTree, ALineHoldsWhatThePickerResolved) {
 	// What the picker resolved must survive being put into a condition: the leaf id and the type are
 	// what make the OTHER side editable, and the presentation is what a person reads.
 	ibFilterDescription filter;
-	ibFilterNodeDescription& node = filter.Append(wxT("Amount"), ibComparisonKind_Greater, ibValue(100));
+	ibFilterNodeDescription& node = filter.Append(wxT("Amount"), ibComparisonKind_Greater, ibStoreValue(ibValue(100)));
 	node.m_left.m_leafId       = 7;
 	node.m_left.m_type         = ibTypeDescription(g_valueNumberCLSID);
 	node.m_left.m_presentation = wxT("Sum");
@@ -1437,13 +1437,13 @@ TEST(FilterTree, ALineHoldsWhatThePickerResolved) {
 
 TEST(FilterTreePersist, ANestedTreeSurvivesTheRoundTrip) {
 	ibFilterDescription filter;
-	ibFilterNodeDescription& first = filter.Append(wxT("Amount"), ibComparisonKind_Greater, ibValue(100));
+	ibFilterNodeDescription& first = filter.Append(wxT("Amount"), ibComparisonKind_Greater, ibStoreValue(ibValue(100)));
 	first.m_left.m_presentation = wxT("Sum");
 
 	ibFilterNodeDescription& either = ibFilterDescription::AppendGroup(filter.m_nodes, ibFilterGroupKind_Or);
-	ibFilterDescription::Append(either.m_children, wxT("Region"), ibComparisonKind_Equal, ibValue(wxT("north")));
+	ibFilterDescription::Append(either.m_children, wxT("Region"), ibComparisonKind_Equal, ibStoreValue(ibValue(wxT("north"))));
 	ibFilterNodeDescription& pair =
-		ibFilterDescription::Append(either.m_children, wxT("Price"), ibComparisonKind_Greater, ibValue());
+		ibFilterDescription::Append(either.m_children, wxT("Price"), ibComparisonKind_Greater, ibDataNode());
 	pair.m_right.m_path = wxT("Cost");
 
 	ibDataNode node(make_clsid("CompositionFilter", ibClassKind_None), 0);
@@ -1488,7 +1488,7 @@ TEST(FilterTreePersist, ARecordWithoutATreeReadsAsAnEmptyFilter) {
 TEST(FilterAst, AConditionBecomesACompareNode) {
 	ibDataDBComposer composer;
 	ibFilterDescription filter;
-	filter.Append(wxT("Amount"), ibComparisonKind_Greater, ibValue(100));
+	filter.Append(wxT("Amount"), ibComparisonKind_Greater, ibStoreValue(ibValue(100)));
 
 	const ibQueryAstExprPtr ast = composer.BuildFilterAst(filter);
 	ASSERT_TRUE(ast != nullptr);
@@ -1511,7 +1511,7 @@ TEST(FilterAst, AConditionBecomesACompareNode) {
 TEST(FilterAst, ADottedPathTravelsAsSegments) {
 	ibDataDBComposer composer;
 	ibFilterDescription filter;
-	filter.Append(wxT("Supplier.Region.Country"), ibComparisonKind_Equal, ibValue(wxT("PL")));
+	filter.Append(wxT("Supplier.Region.Country"), ibComparisonKind_Equal, ibStoreValue(ibValue(wxT("PL"))));
 
 	const ibQueryAstExprPtr ast = composer.BuildFilterAst(filter);
 	ASSERT_TRUE(ast != nullptr && ast->m_lhs != nullptr);
@@ -1524,11 +1524,11 @@ TEST(FilterAst, GroupsBecomeLogicalNodes) {
 	ibDataDBComposer composer;
 	ibFilterDescription filter;
 	filter.m_rootKind = ibFilterGroupKind_And;
-	filter.Append(wxT("Amount"), ibComparisonKind_Greater, ibValue(100));
+	filter.Append(wxT("Amount"), ibComparisonKind_Greater, ibStoreValue(ibValue(100)));
 
 	ibFilterNodeDescription& either = ibFilterDescription::AppendGroup(filter.m_nodes, ibFilterGroupKind_Or);
-	ibFilterDescription::Append(either.m_children, wxT("A"), ibComparisonKind_Equal, ibValue(1));
-	ibFilterDescription::Append(either.m_children, wxT("B"), ibComparisonKind_Equal, ibValue(2));
+	ibFilterDescription::Append(either.m_children, wxT("A"), ibComparisonKind_Equal, ibStoreValue(ibValue(1)));
+	ibFilterDescription::Append(either.m_children, wxT("B"), ibComparisonKind_Equal, ibStoreValue(ibValue(2)));
 
 	const ibQueryAstExprPtr ast = composer.BuildFilterAst(filter);
 	ASSERT_TRUE(ast != nullptr);
@@ -1547,7 +1547,7 @@ TEST(FilterAst, NotWrapsTheWholeGroup) {
 	ibFilterDescription filter;
 	ibFilterNodeDescription& negated =
 		ibFilterDescription::AppendGroup(filter.m_nodes, ibFilterGroupKind_Not);
-	ibFilterDescription::Append(negated.m_children, wxT("Deleted"), ibComparisonKind_Equal, ibValue(true));
+	ibFilterDescription::Append(negated.m_children, wxT("Deleted"), ibComparisonKind_Equal, ibStoreValue(ibValue(true)));
 
 	const ibQueryAstExprPtr ast = composer.BuildFilterAst(filter);
 	ASSERT_TRUE(ast != nullptr);
@@ -1561,7 +1561,7 @@ TEST(FilterAst, ContainsIsALikeNotAComparison) {
 	// has no meaning for would push the problem one layer down.
 	ibDataDBComposer composer;
 	ibFilterDescription filter;
-	filter.Append(wxT("Name"), ibComparisonKind_Contains, ibValue(wxT("ab")));
+	filter.Append(wxT("Name"), ibComparisonKind_Contains, ibStoreValue(ibValue(wxT("ab"))));
 
 	const ibQueryAstExprPtr ast = composer.BuildFilterAst(filter);
 	ASSERT_TRUE(ast != nullptr);
@@ -1575,14 +1575,14 @@ TEST(FilterAst, InAndInHierarchyAreOneNodeAndAWord) {
 	ibDataDBComposer composer;
 
 	ibFilterDescription plain;
-	plain.Append(wxT("Item"), ibComparisonKind_In, ibValue(wxT("x")));
+	plain.Append(wxT("Item"), ibComparisonKind_In, ibStoreValue(ibValue(wxT("x"))));
 	const ibQueryAstExprPtr flat = composer.BuildFilterAst(plain);
 	ASSERT_TRUE(flat != nullptr);
 	EXPECT_EQ(ibQueryAstExprKind::In, flat->m_kind);
 	EXPECT_EQ(ibQueryDimUnfold::Elements, flat->m_unfold);
 
 	ibFilterDescription deep;
-	deep.Append(wxT("Item"), ibComparisonKind_InHierarchy, ibValue(wxT("x")));
+	deep.Append(wxT("Item"), ibComparisonKind_InHierarchy, ibStoreValue(ibValue(wxT("x"))));
 	const ibQueryAstExprPtr tree = composer.BuildFilterAst(deep);
 	ASSERT_TRUE(tree != nullptr);
 	EXPECT_EQ(ibQueryAstExprKind::In, tree->m_kind) << "a second node kind for one question";
@@ -1593,7 +1593,7 @@ TEST(FilterAst, ASwitchedOffLineSaysNothing) {
 	// Not written, rather than written and then ignored: a condition switched off narrows nothing.
 	ibDataDBComposer composer;
 	ibFilterDescription filter;
-	filter.Append(wxT("Amount"), ibComparisonKind_Greater, ibValue(100), /*use*/ false);
+	filter.Append(wxT("Amount"), ibComparisonKind_Greater, ibStoreValue(ibValue(100)), /*use*/ false);
 
 	EXPECT_TRUE(composer.BuildFilterAst(filter) == nullptr);
 }
@@ -1606,11 +1606,11 @@ TEST(FilterAst, NestedGroupsRenderWithParentheses) {
 	ibDataDBComposer composer;
 	ibFilterDescription filter;
 	filter.m_rootKind = ibFilterGroupKind_And;
-	filter.Append(wxT("Amount"), ibComparisonKind_Greater, ibValue(100));
+	filter.Append(wxT("Amount"), ibComparisonKind_Greater, ibStoreValue(ibValue(100)));
 
 	ibFilterNodeDescription& either = ibFilterDescription::AppendGroup(filter.m_nodes, ibFilterGroupKind_Or);
-	ibFilterDescription::Append(either.m_children, wxT("Region"), ibComparisonKind_Equal, ibValue(wxT("north")));
-	ibFilterDescription::Append(either.m_children, wxT("Region"), ibComparisonKind_Equal, ibValue(wxT("south")));
+	ibFilterDescription::Append(either.m_children, wxT("Region"), ibComparisonKind_Equal, ibStoreValue(ibValue(wxT("north"))));
+	ibFilterDescription::Append(either.m_children, wxT("Region"), ibComparisonKind_Equal, ibStoreValue(ibValue(wxT("south"))));
 
 	const ibQueryAstExprPtr ast = composer.BuildFilterAst(filter);
 	ASSERT_TRUE(ast != nullptr);
@@ -1627,7 +1627,7 @@ TEST(FilterAst, AFieldOnBothSidesRendersAsTwoPaths) {
 	// `Price > Cost` — no parameter at all, because neither side is a value.
 	ibDataDBComposer composer;
 	ibFilterDescription filter;
-	ibFilterNodeDescription& node = filter.Append(wxT("Price"), ibComparisonKind_Greater, ibValue());
+	ibFilterNodeDescription& node = filter.Append(wxT("Price"), ibComparisonKind_Greater, ibDataNode());
 	node.m_right.m_path = wxT("Cost");
 
 	const ibQueryAstExprPtr ast = composer.BuildFilterAst(filter);
@@ -1643,7 +1643,7 @@ TEST(FilterAst, AValueRendersAsAParameter) {
 	// in somebody's locale.
 	ibDataDBComposer composer;
 	ibFilterDescription filter;
-	filter.Append(wxT("Name"), ibComparisonKind_Equal, ibValue(wxT("O'Brien")));
+	filter.Append(wxT("Name"), ibComparisonKind_Equal, ibStoreValue(ibValue(wxT("O'Brien"))));
 
 	const ibQueryAstExprPtr ast = composer.BuildFilterAst(filter);
 	ASSERT_TRUE(ast != nullptr);
@@ -1693,7 +1693,7 @@ TEST(ListSettingsLines, AGroupingLineCarriesItsUnfoldKind) {
 
 TEST(ListSettingsLines, SettingsCarryAllThreeParts) {
 	ibSettingsDescription settings;
-	settings.m_filter.Append(wxT("Number"), ibComparisonKind_Equal, ibValue(wxT("00001")));
+	settings.m_filter.Append(wxT("Number"), ibComparisonKind_Equal, ibStoreValue(ibValue(wxT("00001"))));
 	settings.m_sort.Append(wxT("Date"), false);
 	settings.m_group.Append(wxT("Warehouse"), ibQueryDimUnfold::Hierarchy);
 

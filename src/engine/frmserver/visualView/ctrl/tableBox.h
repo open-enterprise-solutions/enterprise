@@ -6,7 +6,7 @@
 
 #include "frmserver/visualView/ctrl/window.h"
 #include "frmserver/visualView/ctrl/typeControl.h"
-#include "backend/sourceDescription.h"   // ibSourceDescription (full [head, field] binding path)
+#include "core/description/sourceDescription.h"   // ibSourceDescription (full [head, field] binding path)
 
 #include <deque>
 #include <map>
@@ -245,6 +245,10 @@ public:
 	// column's, the field's events on a row (OnCellEvent). Everything else is the composite's (the
 	// command bar).
 	virtual bool OnClientEvent(ibProtocolEvent event, const ibDataNode& args) override;
+	// Input always — a cell's editor opens only when the table takes it (Edit in the frame that answers); Row while
+	// the script handles Selection. Nothing on the server reads the current row until the next call, which brings the
+	// held Row first.
+	virtual bool IsSubscribed(ibProtocolEvent event) const override;
 
 	// ⭐ THE ROWS A CLIENT SHOWS, written by the table itself. `request`: Direction (s32: 0 reset,
 	// 1 forward, -1 backward), Anchor (s32 row handle; 0 none), Count (s32, 1..500), Parent (s32 handle

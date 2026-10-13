@@ -268,7 +268,7 @@ ibApplicationHost::~ibApplicationHost()
 #define BACKEND_CONF wxT("backend.conf")
 
 std::size_t ibApplicationHost::ReadCount(const wxConfigBase& conf, const wxString& file, const wxString& key, long least,
-	std::size_t byDefault)
+	std::size_t byDefault, std::size_t most)
 {
 	long configured = 0;
 	if (!conf.Read(key, &configured) || configured == 0)   // left out, or 0 — the default, on purpose
@@ -278,6 +278,35 @@ std::size_t ibApplicationHost::ReadCount(const wxConfigBase& conf, const wxStrin
 		ibTechJournal::Print(ibJournalMark::Warning, wxT("engine"),
 			wxT("%s: %s = %ld is less than %ld - the default is used"), file, key, configured, least);
 		return byDefault;
+	}
+	if (most != 0 && configured > static_cast<long>(most)) {
+		ibTechJournal::Print(ibJournalMark::Warning, wxT("engine"),
+			wxT("%s: %s = %ld is more than %ld - %ld is used"), file, key, configured,
+			static_cast<long>(most), static_cast<long>(most));
+		return most;
+	}
+	return static_cast<std::size_t>(configured);
+}
+
+std::size_t ibApplicationHost::ResumeSeconds(bool present, long configured)
+{
+	// The same 30 minutes a client already dies by when nobody calls (kIdleLimit). A window longer than that
+	// would hold locks and a seat past the idle limit the process already has.
+	constexpr long kMost = 30 * 60;
+	constexpr std::size_t kDefault = 120;
+	if (!present)
+		return kDefault;
+	if (configured == 0)
+		return 0;
+	if (configured < 0) {
+		ibTechJournal::Print(ibJournalMark::Warning, wxT("engine"),
+			wxT("%s: Resume = %ld is not a duration - 120 is used"), BACKEND_CONF, configured);
+		return kDefault;
+	}
+	if (configured > kMost) {
+		ibTechJournal::Print(ibJournalMark::Warning, wxT("engine"),
+			wxT("%s: Resume = %ld is above %ld seconds - %ld is used"), BACKEND_CONF, configured, kMost, kMost);
+		return static_cast<std::size_t>(kMost);
 	}
 	return static_cast<std::size_t>(configured);
 }
@@ -304,9 +333,18 @@ void ibApplicationHost::ReadBackendConf()
 	// may be: left out, or 0, no limit.
 	m_configWorkers = ReadCount(fc, BACKEND_CONF, wxT("Workers"), 1, 0);
 	m_configBases   = ReadCount(fc, BACKEND_CONF, wxT("Bases"), 1, 0);
+	// The application server's client ceiling. Left out, or 0: a thousand — not "no limit", which is what
+	// Workers and Bases mean by 0. Above the most, the most is used. See clientListener.cpp — a connection
+	// holds a thread, and this is how many of those threads the process will make.
+	m_configClientConnections = ReadCount(fc, BACKEND_CONF, wxT("ClientConnections"), 1,
+		kDefaultClientConnections, kMostClientConnections);
 	// The connections are a base's own — its infobase.conf says them; this is only the default for a base that does
 	// not. Two at least: the registry holds one for its writes, a session needs another.
 	m_configConnections = ReadCount(fc, BACKEND_CONF, wxT("Connections"), 2, 0);
+	// Resume is not ReadCount: there 0 means the default, and here 0 means the window is off.
+	long resume = 0;
+	const bool resumePresent = fc.Read(wxT("Resume"), &resume);
+	m_configResume = ResumeSeconds(resumePresent, resume);
 
 	// (THE MCP SERVER'S SETTINGS ARE NOT HERE. They belong to a PERSON in a
 	//  BASE — the server is started from an authenticated designer session and

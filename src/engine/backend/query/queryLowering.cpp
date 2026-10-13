@@ -26,6 +26,7 @@
 #include "backend/metaCollection/genericData.h"  // ibValueMetaObjectGenericData::ResolveQueryConstant (value(...) resolution)
 #include "backend/tabularModel.h"     // ibComparisonType
 #include "backend/backend_exception.h"    // ibBackendCoreException
+#include "core/fiber/fiber.h"             // StackLow — a nested query is native recursion with no count
 #include "backend/system/value/valueType.h"   // ibValueTypeDescription::AdjustValue — a field's empty value, for a NULL key
 
 // ⚠ NAMED, NOT INHERITED. std::find / std::remove_if arrived in this file with the grouping and
@@ -191,6 +192,14 @@ template <typename... Args>
 void ThrowQueryException(unsigned int line, unsigned int col, const wxString& fmt, Args&&... args)
 {
 	ThrowQueryException(line, col, wxString::Format(fmt, std::forward<Args>(args)...));
+}
+
+// A nested predicate, expression or subquery is native recursion. The
+// interpreter's count does not see it. Refuse while the refusal still fits.
+static void RefuseIfQueryStackLow(unsigned int line, unsigned int col)
+{
+	if (ibFiber::StackLow())
+		ThrowQueryException(line, col, _("it is nested deeper than the stack allows"));
 }
 
 ibValue EvalValue(const ibQueryAstExpr& e, const std::map<wxString, ibValue>& params);   // defined below
@@ -1436,6 +1445,7 @@ std::map<wxString, ibValue> WithEveryParameter(const wxString& text, const std::
 
 ibValue EvalValue(const ibQueryAstExpr& e, const std::map<wxString, ibValue>& params)
 {
+	RefuseIfQueryStackLow(e.m_line, e.m_col);
 	if (e.m_kind == ibQueryAstExprKind::Literal) return e.m_literal;
 	if (e.m_kind == ibQueryAstExprKind::Param) {
 		const ibValue* v = FindParam(params, e.m_paramName);
@@ -1673,6 +1683,7 @@ void GateComputedExpr(const std::vector<ibSourceBinding>& sources, const ibQuery
 // Does this side of a comparison read a field of the row — anywhere inside it, not only as itself?
 bool NamesAField(const ibQueryAstExpr& e)
 {
+	RefuseIfQueryStackLow(e.m_line, e.m_col);
 	if (e.m_kind == ibQueryAstExprKind::Column)
 		return true;
 	bool found = false;
@@ -1712,6 +1723,7 @@ bool IsConstantSide(const ibQueryAstExpr& e)
 
 std::optional<bool> KnownBeforeRows(const ibQueryAstExpr& e, const std::map<wxString, ibValue>& params)
 {
+	RefuseIfQueryStackLow(e.m_line, e.m_col);
 	switch (e.m_kind) {
 	case ibQueryAstExprKind::Compare: {
 		if (!e.m_lhs || !e.m_rhs || !IsConstantSide(*e.m_lhs) || !IsConstantSide(*e.m_rhs))
@@ -1914,6 +1926,7 @@ ibQueryPredicatePtr BuildWherePredicate(const std::vector<ibSourceBinding>& sour
                                         const ibQueryAstExpr& e, const std::map<wxString, ibValue>& params,
                                         bool allowDotWalk, ibHierarchyAnswer answer)
 {
+	RefuseIfQueryStackLow(e.m_line, e.m_col);
 	// A condition known before any row is read is one of the two answers (KnownBeforeRows).
 	if (const std::optional<bool> known = KnownBeforeRows(e, params))
 		return ibQueryPredicate::Leaf(ConditionThatIs(*known));
@@ -2626,6 +2639,7 @@ bool IsFlatAndWhere(const ibQueryAstExpr& e)
 ibQueryColumnExprPtr BuildWindowExprFromAst(const std::vector<ibSourceBinding>& sources,
                                             const ibQueryAstExpr& e, const std::map<wxString, ibValue>& params)
 {
+	RefuseIfQueryStackLow(e.m_line, e.m_col);
 	std::vector<ibQueryColumnExprPtr> partition;
 	std::vector<std::pair<ibQueryColumnExprPtr, bool>> order;
 	ibQueryWindowFrame frame = ibQueryWindowFrame::Whole;
@@ -2787,6 +2801,7 @@ ibQueryColumnExprPtr BuildScalarCallFromAst(const std::vector<ibSourceBinding>& 
 ibQueryColumnExprPtr BuildColumnExprFromAst(const std::vector<ibSourceBinding>& sources,
                                             const ibQueryAstExpr& e, const std::map<wxString, ibValue>& params)
 {
+	RefuseIfQueryStackLow(e.m_line, e.m_col);
 	switch (e.m_kind) {
 	case ibQueryAstExprKind::Column: {
 		const std::vector<const ibBackendQueryColumn*> cols = ResolvePath(sources, e);
@@ -7966,6 +7981,7 @@ ibDataQueryResult ibQueryLowering::ExecuteImpl(const ibQuerySelect& astIn,
                                                const ibReadPageRequest& pageIn,
                                                ibRenderedPageCache* cache, const ibPageSignature* signature)
 {
+	RefuseIfQueryStackLow(0, 0);
 	// Optimizer pass — negation normalization + FROM-subquery flattening. Works on a
 	// deep clone; the Query value object's cached parse is never mutated. (queryRewrite.h)
 	const ibQuerySelectPtr astOpt = ibQueryRewrite::Rewrite(astIn);

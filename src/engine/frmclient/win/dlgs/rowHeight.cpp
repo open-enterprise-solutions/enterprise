@@ -12,7 +12,7 @@ ibDialogRowHeight::ibDialogRowHeight(ibGridEditor* parent, wxWindowID id, const 
 	// and follow their text; off, they take the height below. Shown ON when none of the selected rows has a
 	// height of its own — which is how a row starts out.
 	bool autoHeight = true;
-	wxObjectDataPtr<ibBackendSpreadsheetObject> doc;
+	std::shared_ptr<ibSpreadsheetObject> doc;
 	if (parent->GetActiveDocument(doc) && doc != nullptr) {
 		for (auto cell : parent->GetSelectedBlocks()) {
 			for (int row = cell.GetTopRow(); row <= cell.GetBottomRow() && autoHeight; row++)

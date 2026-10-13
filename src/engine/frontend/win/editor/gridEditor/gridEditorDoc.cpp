@@ -37,7 +37,7 @@ void GridApplyCellSpan(ibGrid& grid, int row, int col, int rowSpan, int colSpan)
 
 } // namespace
 
-int ibSpreadsheetRowHeight(const ibBackendSpreadsheetObject& doc, int row, wxDC& dc, const wxString& langCode)
+int ibSpreadsheetRowHeight(const ibSpreadsheetObject& doc, int row, wxDC& dc, const wxString& langCode)
 {
 	const ibSpreadsheetDescription& desc = doc.GetSpreadsheetDesc();
 	if (desc.HasRowSize(row))
@@ -51,7 +51,7 @@ int ibSpreadsheetRowHeight(const ibBackendSpreadsheetObject& doc, int row, wxDC&
 	// in the default font never makes a row grow, whatever the platform's font metrics come to. It may come
 	// out below nothing (a scaled display, where that line is taller than the row): the row still does not
 	// grow for it, and a larger line grows it by what it adds.
-	const wxFont ordinary = ibDefaultSpreadsheetFont();
+	const wxFont ordinary = typeConv::FontToWxFont(ibDefaultSpreadsheetFont());
 	dc.SetFont(ordinary);
 	const int padding = s_defaultRowHeight - dc.GetCharHeight();
 	const double defaultPoints = ordinary.GetFractionalPointSize();
@@ -78,7 +78,7 @@ int ibSpreadsheetRowHeight(const ibBackendSpreadsheetObject& doc, int row, wxDC&
 			continue;
 
 		const bool wrap = cell->m_fitMode == ibSpreadsheetCellDescription::ibFitMode::Mode_Wrap;
-		const wxFont font = cell->m_font.IsOk() ? cell->m_font : ordinary;
+		const wxFont font = cell->m_font.IsOk() ? typeConv::FontToWxFont(cell->m_font) : ordinary;
 
 		// The quick answer, which is most cells of most sheets: one line in a font no larger than the
 		// default fits the default row. Nothing is measured for it.
@@ -111,7 +111,7 @@ int ibSpreadsheetRowHeight(const ibBackendSpreadsheetObject& doc, int row, wxDC&
 	return height;
 }
 
-int ibSpreadsheetColWidth(const ibBackendSpreadsheetObject& doc, int col, wxDC& dc, const wxString& langCode)
+int ibSpreadsheetColWidth(const ibSpreadsheetObject& doc, int col, wxDC& dc, const wxString& langCode)
 {
 	const ibSpreadsheetDescription& desc = doc.GetSpreadsheetDesc();
 
@@ -119,7 +119,7 @@ int ibSpreadsheetColWidth(const ibBackendSpreadsheetObject& doc, int col, wxDC& 
 	// pixel on each side and the one margin the text starts from (gridextctrl.cpp, DrawTextRectangle). A
 	// line being BROKEN has a margin at each side — see chromeWrapping above.
 	const int chrome = 4;
-	const wxFont ordinary = ibDefaultSpreadsheetFont();
+	const wxFont ordinary = typeConv::FontToWxFont(ibDefaultSpreadsheetFont());
 
 	int width = 0;
 	for (int row = 0; row < desc.GetNumberRows(); row++) {
@@ -140,7 +140,7 @@ int ibSpreadsheetColWidth(const ibBackendSpreadsheetObject& doc, int col, wxDC& 
 		if (text.IsEmpty())
 			continue;
 
-		dc.SetFont(cell->m_font.IsOk() ? cell->m_font : ordinary);
+		dc.SetFont(cell->m_font.IsOk() ? typeConv::FontToWxFont(cell->m_font) : ordinary);
 
 		wxArrayString lines;
 		ibGrid::ParseLines(text, lines);
@@ -155,7 +155,7 @@ int ibSpreadsheetColWidth(const ibBackendSpreadsheetObject& doc, int col, wxDC& 
 	return width > 0 ? wxMax(width, WXGRID_MIN_COL_WIDTH) : desc.GetColSize(col);
 }
 
-bool ibGridEditor::AssociateDocument(const wxObjectDataPtr<ibBackendSpreadsheetObject>& doc)
+bool ibGridEditor::AssociateDocument(const std::shared_ptr<ibSpreadsheetObject>& doc)
 {
 	if (m_spreadsheetObject != doc) {
 
@@ -169,7 +169,7 @@ bool ibGridEditor::AssociateDocument(const wxObjectDataPtr<ibBackendSpreadsheetO
 	return true;
 }
 
-bool ibGridEditor::GetActiveDocument(wxObjectDataPtr<ibBackendSpreadsheetObject>& doc) const
+bool ibGridEditor::GetActiveDocument(std::shared_ptr<ibSpreadsheetObject>& doc) const
 {
 	doc = m_spreadsheetObject;
 	return true;
@@ -225,15 +225,15 @@ bool ibGridEditor::LoadDocument(const ibSpreadsheetDescription& spreadsheetDesc)
 	if (!LoadSpreadsheet(spreadsheetDesc))
 		return false;
 
-	wxObjectDataPtr<ibBackendSpreadsheetObject> doc(
-		new ibBackendSpreadsheetObject(spreadsheetDesc));
+	std::shared_ptr<ibSpreadsheetObject> doc =
+		std::make_shared<ibSpreadsheetObject>(spreadsheetDesc);
 
 	const bool associated = AssociateDocument(doc);
 	FitAutoRowHeights();   // against the document just associated — the one the rows are asked of
 	return associated;
 }
 
-bool ibGridEditor::LoadDocument(const wxObjectDataPtr<ibBackendSpreadsheetObject>& doc)
+bool ibGridEditor::LoadDocument(const std::shared_ptr<ibSpreadsheetObject>& doc)
 {
 	const ibSpreadsheetDescription& spreadsheetDesc = doc->GetSpreadsheetDesc();
 
@@ -258,14 +258,14 @@ bool ibGridEditor::LoadDocument(const wxObjectDataPtr<ibBackendSpreadsheetObject
 				GridApplyCellSpan(*this, row, col, cell->m_row_size, cell->m_col_size);
 
 				attr->SetTextOrient(cell->m_textOrient);
-				attr->SetFont(cell->m_font);
-				attr->SetBackgroundColour(cell->m_backgroundColour);
-				attr->SetTextColour(cell->m_textColour);
+				attr->SetFont(typeConv::FontToWxFont(cell->m_font));
+				attr->SetBackgroundColour(typeConv::ColourToWxColour(cell->m_backgroundColour));
+				attr->SetTextColour(typeConv::ColourToWxColour(cell->m_textColour));
 
-				attr->SetBorderLeft(cell->m_borderAt[0].m_style, cell->m_borderAt[0].m_colour, cell->m_borderAt[0].m_width);
-				attr->SetBorderRight(cell->m_borderAt[1].m_style, cell->m_borderAt[1].m_colour, cell->m_borderAt[1].m_width);
-				attr->SetBorderTop(cell->m_borderAt[2].m_style, cell->m_borderAt[2].m_colour, cell->m_borderAt[2].m_width);
-				attr->SetBorderBottom(cell->m_borderAt[3].m_style, cell->m_borderAt[3].m_colour, cell->m_borderAt[3].m_width);
+				attr->SetBorderLeft(static_cast<wxPenStyle>(cell->m_borderAt[0].m_style), typeConv::ColourToWxColour(cell->m_borderAt[0].m_colour), cell->m_borderAt[0].m_width);
+				attr->SetBorderRight(static_cast<wxPenStyle>(cell->m_borderAt[1].m_style), typeConv::ColourToWxColour(cell->m_borderAt[1].m_colour), cell->m_borderAt[1].m_width);
+				attr->SetBorderTop(static_cast<wxPenStyle>(cell->m_borderAt[2].m_style), typeConv::ColourToWxColour(cell->m_borderAt[2].m_colour), cell->m_borderAt[2].m_width);
+				attr->SetBorderBottom(static_cast<wxPenStyle>(cell->m_borderAt[3].m_style), typeConv::ColourToWxColour(cell->m_borderAt[3].m_colour), cell->m_borderAt[3].m_width);
 
 				attr->SetFitMode(ibToGridFitMode(cell->m_fitMode));
 				attr->SetReadOnly(cell->m_isReadOnly);
@@ -387,12 +387,12 @@ bool ibGridEditor::SaveDocument(ibSpreadsheetDescription& spreadsheetDesc) const
 	return SaveSpreadsheet(spreadsheetDesc);
 }
 
-bool ibGridEditor::SaveDocument(wxObjectDataPtr<ibBackendSpreadsheetObject>& doc) const
+bool ibGridEditor::SaveDocument(std::shared_ptr<ibSpreadsheetObject>& doc) const
 {
 	return SaveSpreadsheet(doc->GetSpreadsheetDesc());
 }
 
-void ibGridEditor::PutDocument(const wxObjectDataPtr<ibBackendSpreadsheetObject>& doc, unsigned int groupLevel)
+void ibGridEditor::PutDocument(const std::shared_ptr<ibSpreadsheetObject>& doc, unsigned int groupLevel)
 {
 	ibGrid::SetEvtHandlerEnabled(false);
 
@@ -407,7 +407,7 @@ void ibGridEditor::PutDocument(const wxObjectDataPtr<ibBackendSpreadsheetObject>
 	// ⭐ THE AREA IS READ IN THE LANGUAGE OF THE DOCUMENT IT LANDS IN — the language the document's own
 	// PutArea renders the same cells in, through the same door, so the grid and the stored cell say
 	// one thing.
-	const wxString langCode = m_spreadsheetObject != nullptr ? m_spreadsheetObject->GetLangCode() : wxString();
+	const wxString langCode = m_spreadsheetObject != nullptr ? m_spreadsheetObject->GetLangCode() : ibString();
 
 	ibGrid::AppendRows(doc->GetNumberRows());
 	if (doc->GetNumberCols() > m_table->GetNumberCols())
@@ -430,14 +430,14 @@ void ibGridEditor::PutDocument(const wxObjectDataPtr<ibBackendSpreadsheetObject>
 			GridApplyCellSpan(*this, maxRowBrake + row, col, cell->m_row_size, cell->m_col_size);
 
 			attr->SetTextOrient(cell->m_textOrient);
-			attr->SetFont(cell->m_font);
-			attr->SetBackgroundColour(cell->m_backgroundColour);
-			attr->SetTextColour(cell->m_textColour);
+			attr->SetFont(typeConv::FontToWxFont(cell->m_font));
+			attr->SetBackgroundColour(typeConv::ColourToWxColour(cell->m_backgroundColour));
+			attr->SetTextColour(typeConv::ColourToWxColour(cell->m_textColour));
 
-			attr->SetBorderLeft(cell->m_borderAt[0].m_style, cell->m_borderAt[0].m_colour, cell->m_borderAt[0].m_width);
-			attr->SetBorderRight(cell->m_borderAt[1].m_style, cell->m_borderAt[1].m_colour, cell->m_borderAt[1].m_width);
-			attr->SetBorderTop(cell->m_borderAt[2].m_style, cell->m_borderAt[2].m_colour, cell->m_borderAt[2].m_width);
-			attr->SetBorderBottom(cell->m_borderAt[3].m_style, cell->m_borderAt[3].m_colour, cell->m_borderAt[3].m_width);
+			attr->SetBorderLeft(static_cast<wxPenStyle>(cell->m_borderAt[0].m_style), typeConv::ColourToWxColour(cell->m_borderAt[0].m_colour), cell->m_borderAt[0].m_width);
+			attr->SetBorderRight(static_cast<wxPenStyle>(cell->m_borderAt[1].m_style), typeConv::ColourToWxColour(cell->m_borderAt[1].m_colour), cell->m_borderAt[1].m_width);
+			attr->SetBorderTop(static_cast<wxPenStyle>(cell->m_borderAt[2].m_style), typeConv::ColourToWxColour(cell->m_borderAt[2].m_colour), cell->m_borderAt[2].m_width);
+			attr->SetBorderBottom(static_cast<wxPenStyle>(cell->m_borderAt[3].m_style), typeConv::ColourToWxColour(cell->m_borderAt[3].m_colour), cell->m_borderAt[3].m_width);
 
 			attr->SetFitMode(ibToGridFitMode(cell->m_fitMode));
 			attr->SetReadOnly(cell->m_isReadOnly);
@@ -472,7 +472,7 @@ void ibGridEditor::PutDocument(const wxObjectDataPtr<ibBackendSpreadsheetObject>
 	ibGrid::SetEvtHandlerEnabled(true);
 }
 
-void ibGridEditor::JoinDocument(const wxObjectDataPtr<ibBackendSpreadsheetObject>& doc, unsigned int groupLevel)
+void ibGridEditor::JoinDocument(const std::shared_ptr<ibSpreadsheetObject>& doc, unsigned int groupLevel)
 {
 	ibGrid::SetEvtHandlerEnabled(false);
 
@@ -485,7 +485,7 @@ void ibGridEditor::JoinDocument(const wxObjectDataPtr<ibBackendSpreadsheetObject
 	const int maxColBrake = GetMaxColBrake();
 
 	// the language of the document the area lands in — see PutDocument
-	const wxString langCode = m_spreadsheetObject != nullptr ? m_spreadsheetObject->GetLangCode() : wxString();
+	const wxString langCode = m_spreadsheetObject != nullptr ? m_spreadsheetObject->GetLangCode() : ibString();
 
 	if (doc->GetNumberRows() > m_table->GetNumberRows())
 		ibGrid::AppendRows(doc->GetNumberRows() - m_table->GetNumberRows());
@@ -508,14 +508,14 @@ void ibGridEditor::JoinDocument(const wxObjectDataPtr<ibBackendSpreadsheetObject
 			GridApplyCellSpan(*this, row, maxColBrake + col, cell->m_row_size, cell->m_col_size);
 
 			attr->SetTextOrient(cell->m_textOrient);
-			attr->SetFont(cell->m_font);
-			attr->SetBackgroundColour(cell->m_backgroundColour);
-			attr->SetTextColour(cell->m_textColour);
+			attr->SetFont(typeConv::FontToWxFont(cell->m_font));
+			attr->SetBackgroundColour(typeConv::ColourToWxColour(cell->m_backgroundColour));
+			attr->SetTextColour(typeConv::ColourToWxColour(cell->m_textColour));
 
-			attr->SetBorderLeft(cell->m_borderAt[0].m_style, cell->m_borderAt[0].m_colour, cell->m_borderAt[0].m_width);
-			attr->SetBorderRight(cell->m_borderAt[1].m_style, cell->m_borderAt[1].m_colour, cell->m_borderAt[1].m_width);
-			attr->SetBorderTop(cell->m_borderAt[2].m_style, cell->m_borderAt[2].m_colour, cell->m_borderAt[2].m_width);
-			attr->SetBorderBottom(cell->m_borderAt[3].m_style, cell->m_borderAt[3].m_colour, cell->m_borderAt[3].m_width);
+			attr->SetBorderLeft(static_cast<wxPenStyle>(cell->m_borderAt[0].m_style), typeConv::ColourToWxColour(cell->m_borderAt[0].m_colour), cell->m_borderAt[0].m_width);
+			attr->SetBorderRight(static_cast<wxPenStyle>(cell->m_borderAt[1].m_style), typeConv::ColourToWxColour(cell->m_borderAt[1].m_colour), cell->m_borderAt[1].m_width);
+			attr->SetBorderTop(static_cast<wxPenStyle>(cell->m_borderAt[2].m_style), typeConv::ColourToWxColour(cell->m_borderAt[2].m_colour), cell->m_borderAt[2].m_width);
+			attr->SetBorderBottom(static_cast<wxPenStyle>(cell->m_borderAt[3].m_style), typeConv::ColourToWxColour(cell->m_borderAt[3].m_colour), cell->m_borderAt[3].m_width);
 
 			attr->SetFitMode(ibToGridFitMode(cell->m_fitMode));
 			attr->SetReadOnly(cell->m_isReadOnly);
@@ -589,14 +589,14 @@ bool ibGridEditor::LoadSpreadsheet(const ibSpreadsheetDescription& spreadsheetDe
 				GridApplyCellSpan(*this, row, col, cell->m_row_size, cell->m_col_size);
 
 				attr->SetTextOrient(cell->m_textOrient);
-				attr->SetFont(cell->m_font);
-				attr->SetBackgroundColour(cell->m_backgroundColour);
-				attr->SetTextColour(cell->m_textColour);
+				attr->SetFont(typeConv::FontToWxFont(cell->m_font));
+				attr->SetBackgroundColour(typeConv::ColourToWxColour(cell->m_backgroundColour));
+				attr->SetTextColour(typeConv::ColourToWxColour(cell->m_textColour));
 
-				attr->SetBorderLeft(cell->m_borderAt[0].m_style, cell->m_borderAt[0].m_colour, cell->m_borderAt[0].m_width);
-				attr->SetBorderRight(cell->m_borderAt[1].m_style, cell->m_borderAt[1].m_colour, cell->m_borderAt[1].m_width);
-				attr->SetBorderTop(cell->m_borderAt[2].m_style, cell->m_borderAt[2].m_colour, cell->m_borderAt[2].m_width);
-				attr->SetBorderBottom(cell->m_borderAt[3].m_style, cell->m_borderAt[3].m_colour, cell->m_borderAt[3].m_width);
+				attr->SetBorderLeft(static_cast<wxPenStyle>(cell->m_borderAt[0].m_style), typeConv::ColourToWxColour(cell->m_borderAt[0].m_colour), cell->m_borderAt[0].m_width);
+				attr->SetBorderRight(static_cast<wxPenStyle>(cell->m_borderAt[1].m_style), typeConv::ColourToWxColour(cell->m_borderAt[1].m_colour), cell->m_borderAt[1].m_width);
+				attr->SetBorderTop(static_cast<wxPenStyle>(cell->m_borderAt[2].m_style), typeConv::ColourToWxColour(cell->m_borderAt[2].m_colour), cell->m_borderAt[2].m_width);
+				attr->SetBorderBottom(static_cast<wxPenStyle>(cell->m_borderAt[3].m_style), typeConv::ColourToWxColour(cell->m_borderAt[3].m_colour), cell->m_borderAt[3].m_width);
 
 				attr->SetFitMode(ibToGridFitMode(cell->m_fitMode));
 				attr->SetReadOnly(cell->m_isReadOnly);

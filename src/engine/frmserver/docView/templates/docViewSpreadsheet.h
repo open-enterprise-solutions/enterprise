@@ -2,8 +2,8 @@
 #define __GRID_H__
 
 #include "frmserver/docView/docView.h"
-#include "backend/backend_spreadsheet.h"       // ibBackendSpreadsheetObject — the sheet the document holds
-#include "backend/sheetFormat/sheetFormat.h"   // which formats this document can be saved as
+#include "core/spreadsheet/spreadsheetObject.h"   // ibSpreadsheetObject — the sheet the document holds
+#include "backend/sheetFormat/sheetFormat.h"      // which formats this document can be saved as
 
 // ----------------------------------------------------------------------------
 // Edit form classes
@@ -35,14 +35,14 @@ public:
 class FRMSERVER_API ibSpreadsheetDocument : public ibMetaDocument {
 public:
 
-	virtual ibServerPicture GetIcon() const {
+	virtual ibPicture GetIcon() const {
 		return ibBackendPicture::GetServerPicture(g_metaCommonTemplateCLSID);
 	}
 
 	ibSpreadsheetDocument() : ibMetaDocument() {}
 
 	// The sheet the document holds…
-	virtual const ibBackendSpreadsheetObject& GetSpreadsheet() const = 0;
+	virtual const ibSpreadsheetObject& GetSpreadsheet() const = 0;
 	// …changed: the sheet the person left, the document's from then on — modified.
 	virtual void SetSpreadsheetDesc(ibSpreadsheetDescription&& spreadsheetDesc) = 0;
 
@@ -58,7 +58,7 @@ private:
 class FRMSERVER_API ibSpreadsheetFileDocument : public ibSpreadsheetDocument {
 public:
 
-	ibSpreadsheetFileDocument(const wxObjectDataPtr<ibBackendSpreadsheetObject>& spreadSheetDocument = wxObjectDataPtr<ibBackendSpreadsheetObject>(new ibBackendSpreadsheetObject)) : ibSpreadsheetDocument(), m_spreadSheetDocument(spreadSheetDocument) { m_childDoc = false; }
+	ibSpreadsheetFileDocument(const std::shared_ptr<ibSpreadsheetObject>& spreadSheetDocument = std::make_shared<ibSpreadsheetObject>()) : ibSpreadsheetDocument(), m_spreadSheetDocument(spreadSheetDocument) { m_childDoc = false; }
 
 	virtual bool OnNewDocument() override {
 
@@ -80,13 +80,13 @@ public:
 		return true;
 	}
 
-	virtual const ibBackendSpreadsheetObject& GetSpreadsheet() const override { return *m_spreadSheetDocument; }
+	virtual const ibSpreadsheetObject& GetSpreadsheet() const override { return *m_spreadSheetDocument; }
 	virtual void SetSpreadsheetDesc(ibSpreadsheetDescription&& spreadsheetDesc) override {
 		m_spreadSheetDocument->GetSpreadsheetDesc() = std::move(spreadsheetDesc);
 		Modify(true);
 	}
 
-	// Every table format it writes — ours, a workbook, a Word document (backend/sheetFormat/).
+	// Every table format it writes — ours, a workbook, a Word document (core/spreadsheet/sheetFormat.h).
 	virtual wxString GetSaveFilter() const override;
 
 protected:
@@ -94,7 +94,7 @@ protected:
 	virtual bool DoSaveDocument(const wxString& filename) override;
 	virtual bool DoOpenDocument(const wxString& filename) override;
 
-	wxObjectDataPtr<ibBackendSpreadsheetObject> m_spreadSheetDocument;
+	std::shared_ptr<ibSpreadsheetObject> m_spreadSheetDocument;
 
 private:
 
@@ -114,8 +114,8 @@ public:
 	ibSpreadsheetGridBoxDocument();
 
 	// The one door a sheet is shown through.
-	void SetSpreadsheetDocument(const wxObjectDataPtr<ibBackendSpreadsheetObject>& spreadSheetDocument) { m_spreadSheetDocument = spreadSheetDocument; }
-	const wxObjectDataPtr<ibBackendSpreadsheetObject>& GetSpreadsheetDocument() const { return m_spreadSheetDocument; }
+	void SetSpreadsheetDocument(const std::shared_ptr<ibSpreadsheetObject>& spreadSheetDocument) { m_spreadSheetDocument = spreadSheetDocument; }
+	const std::shared_ptr<ibSpreadsheetObject>& GetSpreadsheetDocument() const { return m_spreadSheetDocument; }
 
 	// The box holds this document, not its views — none of them going takes it along.
 	virtual void OnChangedViewList() override {}

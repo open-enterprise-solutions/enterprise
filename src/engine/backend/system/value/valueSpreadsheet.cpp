@@ -107,21 +107,21 @@ public:
 	{
 	}
 
-	ibValueSpreadsheetDocumentAreaCollection(const wxObjectDataPtr<ibBackendSpreadsheetObject>& spreadsheetDoc) :
+	ibValueSpreadsheetDocumentAreaCollection(const std::shared_ptr<ibSpreadsheetObject>& spreadsheetDoc) :
 		ibValueStructure(true), m_spreadsheetDoc(spreadsheetDoc)
 	{
 		for (int idx = 0; idx < spreadsheetDoc->GetSpreadsheetDesc().GetAreaNumberRows(); idx++) {
 			const ibSpreadsheetAreaDescription* area = spreadsheetDoc->GetSpreadsheetDesc().GetRowAreaByIdx(idx);
 			if (area == nullptr)
 				continue;
-			ibValueStructure::Insert(area->m_label,
+			ibValueStructure::Insert(area->m_label.ToWxString(),
 				new ibValueSpreadsheetDocumentRange(area->m_label, area->m_start, area->m_end));
 		}
 	}
 
 private:
 
-	wxObjectDataPtr<ibBackendSpreadsheetObject> m_spreadsheetDoc;
+	std::shared_ptr<ibSpreadsheetObject> m_spreadsheetDoc;
 };
 
 class ibValueSpreadsheetDocumentParameterCollection : public ibValueDynamicMembers {
@@ -182,7 +182,7 @@ public:
 		// No doc → no parameters; leave the helper empty (no binder).
 	}
 
-	ibValueSpreadsheetDocumentParameterCollection(const wxObjectDataPtr<ibBackendSpreadsheetObject>& spreadsheetDoc) :
+	ibValueSpreadsheetDocumentParameterCollection(const std::shared_ptr<ibSpreadsheetObject>& spreadsheetDoc) :
 		ibValueDynamicMembers(ibValueTypes::TYPE_VALUE), m_spreadsheetDoc(spreadsheetDoc)
 	{
 		m_members.Bind(this, &ibValueSpreadsheetDocumentParameterCollection::FillMembers);
@@ -193,13 +193,12 @@ public:
 	virtual bool IsEmpty() const { return false; }
 
 	virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal) {
-		m_spreadsheetDoc->SetParameter(m_members.GetPropName(lPropNum), varPropVal);
+		m_spreadsheetDoc->SetParameter(m_members.GetPropName(lPropNum), varPropVal.ToAnyValue());
 		return true;
 	}
 
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal) {
-		if (!m_spreadsheetDoc->GetParameter(m_members.GetPropName(lPropNum), pvarPropVal))
-			pvarPropVal = ibValue();   // see Get below
+		pvarPropVal = ibValue::FromAnyValue(m_spreadsheetDoc->GetParameter(m_members.GetPropName(lPropNum)));   // see Get below
 		return true;
 	}
 
@@ -215,8 +214,7 @@ public:
 			// found it on a miss, and the slot is the caller's: a script asking for a missing parameter
 			// got whatever the PREVIOUS call had answered — a figure in a column that has none (found
 			// 2026-09-12, reading a composed payroll sheet back).
-			if (!m_spreadsheetDoc->GetParameter(paParams[0]->GetString(), pvarRetValue))
-				pvarRetValue = ibValue();
+			pvarRetValue = ibValue::FromAnyValue(m_spreadsheetDoc->GetParameter(paParams[0]->GetString()));
 			return true;
 		}
 
@@ -241,14 +239,14 @@ public:
 						continue;
 					ibValue pvarRetValue;
 					paParams[0]->GetPropVal(lPropNum, pvarRetValue);
-					m_spreadsheetDoc->SetParameter(strPropName, pvarRetValue);
+					m_spreadsheetDoc->SetParameter(strPropName, pvarRetValue.ToAnyValue());
 				}
 				return true;
 			}
 			return false;
 		}
 		case enSet:
-			m_spreadsheetDoc->SetParameter(paParams[0]->GetString(), *paParams[1]);
+			m_spreadsheetDoc->SetParameter(paParams[0]->GetString(), paParams[1]->ToAnyValue());
 			return true;
 		}
 
@@ -291,7 +289,7 @@ public:
 
 private:
 
-	wxObjectDataPtr<ibBackendSpreadsheetObject> m_spreadsheetDoc;
+	std::shared_ptr<ibSpreadsheetObject> m_spreadsheetDoc;
 };
 
 
@@ -407,10 +405,10 @@ bool ibValueSpreadsheetDocument::GetPropVal(const long lPropNum, ibValue& pvarPr
 		pvarPropVal = !m_spreadsheetDoc->IsEditable();
 		return true;
 	case ePrinterName:
-		pvarPropVal = m_spreadsheetDoc->GetPrinterName();
+		pvarPropVal = m_spreadsheetDoc->GetPrinterName().ToWxString();
 		return true;
 	case eLanguageCode:
-		pvarPropVal = m_spreadsheetDoc->GetLangCode();
+		pvarPropVal = m_spreadsheetDoc->GetLangCode().ToWxString();
 		return true;
 	}
 

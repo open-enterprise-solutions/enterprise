@@ -294,7 +294,7 @@ protected:
 
     // View factory for the OnCreate pipeline. Default pulls the view class from
     // the document template (the wx-style path used by every templated doc).
-    // Template-less docs (e.g. ibFormVisualDocument, created directly without a
+    // Template-less docs (a tab's — ibFormVisualDocument, ibAuditLogDocument — created directly without a
     // template) override this to construct their view explicitly.
     virtual ibFrontendView* DoCreateView();
 

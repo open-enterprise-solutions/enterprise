@@ -73,7 +73,7 @@ void ibSchemaAllFunctions::Build(const ibSession& session, ibDataNode& tree) con
 	for (std::size_t i = 0; i < groups.size(); ++i) {
 		ibDataNode& group = nodes.AddChild(0, static_cast<ibMetaID>(i));
 		group.SetValue(wxT("Title"), groups[i].title);
-		const ibServerPicture groupIcon = ibBackendPicture::GetServerPicture(groups[i].clsid);
+		const ibPicture groupIcon =ibBackendPicture::GetServerPicture(groups[i].clsid);
 		if (groupIcon.IsOk())
 			group.SetValue(wxT("Icon"), wxString(groupIcon.GetData()));
 
@@ -81,7 +81,7 @@ void ibSchemaAllFunctions::Build(const ibSession& session, ibDataNode& tree) con
 			ibDataNode& item = group.AddChild(0, object->GetMetaID());
 			item.SetValue(wxT("Item"), static_cast<s32>(object->GetMetaID()));
 			item.SetValue(wxT("Title"), object->GetSynonym());
-			const ibServerPicture icon = ibBackendPicture::GetServerPicture(object->GetClassType());
+			const ibPicture icon =ibBackendPicture::GetServerPicture(object->GetClassType());
 			if (icon.IsOk())
 				item.SetValue(wxT("Icon"), wxString(icon.GetData()));
 		}

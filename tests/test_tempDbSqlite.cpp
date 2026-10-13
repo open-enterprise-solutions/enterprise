@@ -32,7 +32,7 @@
 
 #include "backend/appData.h"
 #include "backend/compiler/value.h"                       // ibValue / ibNumber / g_value*CLSID
-#include "backend/typeDescription.h"                      // ibTypeDescription
+#include "core/description/typeDescription.h"                      // ibTypeDescription
 #include "backend/databaseLayer/connectionPool.h"
 #include "backend/databaseLayer/connectionHolder.h"
 #include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"

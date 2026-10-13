@@ -12,7 +12,7 @@
 #include <array>
 #include <map>
 
-#include "backend/compiler/translateCode.h"   // the lexem stream, and what the caret stands in
+#include "core/compiler/translateCode.h"   // the lexem stream, and what the caret stands in
 #include "backend/compiler/scriptComplete.h"  // ibValueAtCaret / ibNamesAtCaret - the two answers
 
 #include "frontend/mainFrame/settings/editorsettings.h"
@@ -295,9 +295,9 @@ private:
 			// Mode is read from ibCompileCode (process-global).
 			const bool isCES = (ibCompileCode::GetCodeStyle() == CODE_CES);
 
-			const auto& lexems = m_codeEditor->m_tc.GetLexems();
-			for (size_t i = 0; i < lexems.size(); ++i) {
-				const ibLexem& lex = lexems[i];
+			const ibTranslateCode& tc = m_codeEditor->m_tc;
+			for (size_t i = 0; i < tc.GetLexCount(); ++i) {
+				const ibLexem& lex = tc.GetLexAt(i);
 
 				if (isCES && lex.m_lexType == DELIMITER) {
 					if (lex.m_numData == '{')
@@ -364,8 +364,8 @@ private:
 				// as non-terminal and skip the close.
 				if (lex.m_numData == KEY_GROUP) {
 					bool terminal = true;
-					for (size_t j = i + 1; j < lexems.size(); ++j) {
-						const ibLexem& nxt = lexems[j];
+					for (size_t j = i + 1; j < tc.GetLexCount(); ++j) {
+						const ibLexem& nxt = tc.GetLexAt(j);
 						// Stop on statement-terminator or another LINQ
 						// open/close — we're past the group's clause.
 						if (nxt.m_lexType == DELIMITER &&

@@ -12,6 +12,16 @@
 //
 // Identity, not name, is the match key: a table is its metaID, a column its model id. So a renamed /
 // retyped object is an ALTER (matched by id), and a vanished id is a DROP. (docs/private/query-language-arc.md)
+//
+// 🛑 THE DIFFER IS NOT WHERE A METADATA CASE IS FIXED. It compares two DECLARED snapshots — the old
+// configuration and the new one — and knows nothing about metadata. A type, a column or a table that
+// leaves the declaration is cleared or dropped the same way in EVERY table that declares it, derived
+// tables included. So when an apply goes wrong, suspect the DECLARATION first: something one snapshot
+// declares and should not, or misses (DescribeTable). The signs of a fix in the wrong place: a rule
+// here that names a kind of metadata, and a test that has to switch the engine's own maintenance off
+// (drop the totals triggers, write around the door) before it can show the defect — such a test can
+// only ever see the patch. Both have happened: the hierarchy attribute, and totals after a dimension
+// lost a type (#252, measured 2026-10-12: with the triggers in place the totals already matched).
 
 #include "backend/backend.h"
 #include "backend/query/queryColumn.h"   // ibBackendColumnRawDB (the snapshot OWNS its scaffold raw columns)
@@ -438,6 +448,11 @@ private:
 // column is silent). This is what the apply-change dialog shows; pass null to diff without reporting.
 BACKEND_API int DiffSnapshots(const ibSchemaSnapshot* baseline, const ibSchemaSnapshot& target,
                               ibDatabaseConnectionHolder* holder = nullptr, ibRestructureInfo* report = nullptr);
+
+// The predicate the differ uses for "this index can stay". False when a covered column changed
+// type: the model id is the same, the physical fields are not, and the index has to come down
+// before that column is altered.
+BACKEND_API bool ibSameSchemaIndex(const ibSchemaIndex& a, const ibSchemaIndex& b);
 
 // Do these two snapshots describe the SAME physical structure? Tables by id, their columns by id + type,
 // their indexes, and a derived table's materialisation spec. Answers the one question the apply flow asks

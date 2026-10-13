@@ -70,11 +70,11 @@ void ibValueGridBox::OnCellLeftClick(int row, int col)
 	// nothing a reader can follow — a caption, a blank — and a menu over it would be commands that
 	// do nothing. The click then means nothing. Asked of the sheet ON SHOW: the cell clicked is one
 	// the person was shown.
-	const wxObjectDataPtr<ibBackendSpreadsheetObject> document = m_gridDocument->GetSpreadsheetDocument();
+	const std::shared_ptr<ibSpreadsheetObject> document = m_gridDocument->GetSpreadsheetDocument();
 	if (!document)
 		return;
 
-	wxString detailsParameter;
+	ibString detailsParameter;
 	document->GetCellDetailsParameter(row, col, detailsParameter);
 	if (detailsParameter.IsEmpty())
 		return;
@@ -107,9 +107,11 @@ void ibValueGridBox::OnCellLeftClick(int row, int col)
 	// and that value is shown. The document used to have a verb for this, which was the same two
 	// lines with a door in front of them — and the door belonged to the value, not to the sheet.
 	case idOpenValue: {
-		ibValue bound;
-		if (document->GetParameter(detailsParameter, bound))
+		ibAnyValuePtr<ibAnyValue> held;
+		if (document->GetParameter(detailsParameter, held)) {
+			ibValue bound = ibValue::FromAnyValue(held);
 			bound.ShowValue();
+		}
 		break;
 	}
 	case idShowDetail:

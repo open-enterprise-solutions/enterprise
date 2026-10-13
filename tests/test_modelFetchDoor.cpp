@@ -21,7 +21,7 @@
 
 #include <gtest/gtest.h>
 
-#include "backend/tabularModelView.h"
+#include "core/tabular/tabularModelView.h"
 
 #include <atomic>
 #include <chrono>

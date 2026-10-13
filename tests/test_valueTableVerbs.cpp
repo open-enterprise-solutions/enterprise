@@ -23,6 +23,8 @@
 
 #include "backend/backend_exception.h"
 #include "backend/system/value/valueTable.h"
+#include "backend/system/value/valueType.h"
+#include "core/core.h"
 
 #include <string>
 #include <vector>
@@ -350,8 +352,9 @@ TEST_F(ValueTableVerbs, Clone_CopiesColumnsAndRows_AndSharesNothing)
     EXPECT_EQ(m_table->GetColumnCollection()->GetColumnCount(), 2u);
 }
 
-// A column added with no type holds a string of ANY length: it carried the designer's default of ten
-// characters, and a cell kept the first ten of whatever was written into it (2026-09-21).
+// A column added with no type keeps a string of ANY length. It used to be a string column, and before
+// that the designer's ten-character default, so a cell kept the first ten of whatever was written
+// (2026-09-21). Text written into an untyped column is still that text.
 TEST_F(ValueTableVerbs, AColumnAddedWithoutAType_KeepsTextOfAnyLength)
 {
     ibValueModelTable::ibValueModelColumnCollection* const columns = m_table->GetColumnCollection();
@@ -388,4 +391,118 @@ TEST(ValueTableColumns, OutliveTheTableThatMadeThem)
     ASSERT_NE(columns, nullptr);
     EXPECT_EQ(columns->GetColumnCount(), 2u) << "the collection still answers for its own columns";
     held = ibValue();   // the collection and its columns go now - after the table, without touching it
+}
+
+// What a script reads back from a cell.
+static ibValue CellValue(ibValue row, const wxString& column)
+{
+    ibValue cell;
+    const long prop = row.FindProp(column);
+    EXPECT_GE(prop, 0);
+    if (prop >= 0)
+        row.GetPropVal(prop, cell);
+    return cell;
+}
+
+// `Columns.AddColumn("A")` named a string, so a number written there came back as text. An omitted
+// type names no type, and the cell keeps the value.
+TEST_F(ValueTableVerbs, AColumnAddedWithoutAType_KeepsANumberAsANumber)
+{
+    ibValueModelTable::ibValueModelColumnCollection* const columns = m_table->GetColumnCollection();
+    const long add = columns->FindMethod(wxT("AddColumn"));
+    ASSERT_GE(add, 0);
+    ibValue name = Text(wxT("A")), made;
+    ibValue* args[] = { &name };
+    ASSERT_TRUE(columns->CallAsFunc(add, made, args, 1));
+    EXPECT_EQ(columns->GetColumnCount(), 1u);
+    EXPECT_FALSE(columns->GetColumnInfo(0)->GetColumnType().IsOk());
+
+    ibValue row = Call(wxT("Add"), {});
+    const long prop = row.FindProp(wxT("A"));
+    ASSERT_GE(prop, 0);
+    ASSERT_TRUE(row.SetPropVal(prop, ibValue(5)));
+    const ibValue cell = CellValue(row, wxT("A"));
+    EXPECT_EQ(cell.GetType(), ibValueTypes::TYPE_NUMBER);
+    EXPECT_EQ(cell.GetInteger(), 5);
+}
+
+// `AddColumn("U", Undefined)` refused the call. Undefined is the same as leaving the type out.
+TEST_F(ValueTableVerbs, AColumnAddedWithUndefined_KeepsANumberAsANumber)
+{
+    ibValueModelTable::ibValueModelColumnCollection* const columns = m_table->GetColumnCollection();
+    const long add = columns->FindMethod(wxT("AddColumn"));
+    ASSERT_GE(add, 0);
+    ibValue name = Text(wxT("U")), omitted, made;
+    ibValue* args[] = { &name, &omitted };
+    ASSERT_TRUE(columns->CallAsFunc(add, made, args, 2));
+
+    ibValue row = Call(wxT("Add"), {});
+    const long prop = row.FindProp(wxT("U"));
+    ASSERT_GE(prop, 0);
+    ASSERT_TRUE(row.SetPropVal(prop, ibValue(5)));
+    const ibValue cell = CellValue(row, wxT("U"));
+    EXPECT_EQ(cell.GetType(), ibValueTypes::TYPE_NUMBER);
+    EXPECT_EQ(cell.GetInteger(), 5);
+}
+
+// A caller who still wants text comparison says so. A number written into that column comes back text.
+TEST_F(ValueTableVerbs, AStringColumn_NarrowsANumberToText)
+{
+    ibValueModelTable::ibValueModelColumnCollection* const columns = m_table->GetColumnCollection();
+    const long add = columns->FindMethod(wxT("AddColumn"));
+    ASSERT_GE(add, 0);
+    ibValue name = Text(wxT("Note"));
+    ibValueTypeDescription text(std::vector<ibClassID>{ g_valueStringCLSID });
+    ibValue made;
+    ibValue* args[] = { &name, &text };
+    ASSERT_TRUE(columns->CallAsFunc(add, made, args, 2));
+    EXPECT_TRUE(columns->GetColumnInfo(0)->GetColumnType().ContainType(g_valueStringCLSID));
+
+    ibValue row = Call(wxT("Add"), {});
+    const long prop = row.FindProp(wxT("Note"));
+    ASSERT_GE(prop, 0);
+    ASSERT_TRUE(row.SetPropVal(prop, ibValue(5)));
+    const ibValue cell = CellValue(row, wxT("Note"));
+    EXPECT_EQ(cell.GetType(), ibValueTypes::TYPE_STRING);
+    EXPECT_EQ(cell.GetString(), wxT("5"));
+}
+
+// `New TypeDescription("Number, String")` was one constructor name and failed to initialise.
+TEST(TypeDescriptionList, ACommaSeparatedStringNamesEachType)
+{
+    ibValueTypeDescription described;
+    ibValue names(wxT("Number, String"));
+    ibValue* args[] = { &names };
+    ASSERT_TRUE(described.Init(args, 1));
+    EXPECT_EQ(described.GetTypeDesc().GetClsidCount(), 2u);
+    EXPECT_TRUE(described.GetTypeDesc().ContainType(g_valueNumberCLSID));
+    EXPECT_TRUE(described.GetTypeDesc().ContainType(g_valueStringCLSID));
+}
+
+// One name, with the qualifier that belongs to it, is the same description it was.
+TEST(TypeDescriptionList, ASingleNameStillTakesItsQualifier)
+{
+    ibValueTypeDescription described;
+    ibValue name(wxT("Number"));
+    ibValueQualifierNumber qualifier(15, 2);
+    ibValue* args[] = { &name, &qualifier };
+    ASSERT_TRUE(described.Init(args, 2));
+    EXPECT_EQ(described.GetTypeDesc().GetClsidCount(), 1u);
+    EXPECT_TRUE(described.GetTypeDesc().ContainType(g_valueNumberCLSID));
+    EXPECT_EQ(described.GetTypeDesc().GetPrecision(), 15);
+    EXPECT_EQ(described.GetTypeDesc().GetScale(), 2);
+}
+
+TEST(TypeDescriptionList, AnUnknownNameDoesNotInitialise)
+{
+    ibValueTypeDescription described;
+    ibValue name(wxT("Number, NotAType"));
+    ibValue* args[] = { &name };
+    EXPECT_FALSE(described.Init(args, 1));
+    EXPECT_EQ(described.GetTypeDesc().GetClsidCount(), 0u);
+
+    ibValueTypeDescription alone;
+    ibValue unknown(wxT("NotAType"));
+    ibValue* one[] = { &unknown };
+    EXPECT_FALSE(alone.Init(one, 1));
 }

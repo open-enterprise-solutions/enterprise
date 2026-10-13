@@ -7,7 +7,7 @@
 
 ///////////////////////////////////////////////////////////////////////////
 #include "backend/backend_type.h"
-#include "backend/sourceDescription.h"   // ibSourceDescription::GetPath (GetSourceAbstractColumn inline)
+#include "core/description/sourceDescription.h"   // ibSourceDescription::GetPath (GetSourceAbstractColumn inline)
 #include "backend/compiler/value.h"
 #include "backend/createRequest.h"   // ibSelectMode (GetSelectMode's return type)
 #include "backend/choiceLinkResolver.h"             // ibChoiceHolder — who holds this control's field

@@ -36,9 +36,9 @@ class FRMSERVER_API ibVisualHost;   // visualHost.h — who holds the form; ever
 // toolbars, dataviews, dialogs. Aligned with interior palette: deep
 // dusty blue text on cream content surface. Was Windows-blue accent
 // (#0078D7) + light off-white grey (#EBEBF1) - both clashed with the
-// powder-blue + cream + terracotta palette.
-#define wxDefaultStypeFGColour wxColour(0x3F, 0x5C, 0x77)  // #3F5C77 deep dusty blue
-#define wxDefaultStypeBGColour wxColour(0xFA, 0xF7, 0xF0)  // #FAF7F0 cream content
+// powder-blue + cream + terracotta palette. The core's colour: the server draws nothing.
+#define ibDefaultStyleFGColour ibColour(0x3F, 0x5C, 0x77)  // #3F5C77 deep dusty blue
+#define ibDefaultStyleBGColour ibColour(0xFA, 0xF7, 0xF0)  // #FAF7F0 cream content
 
 #include "core/fileSystem/fs.h"
 
@@ -259,6 +259,13 @@ public:
 	// only through the form's door (ibValueForm::DispatchEvent), which has already refused a control that is not
 	// enabled or not shown.
 	virtual bool OnClientEvent(ibProtocolEvent event, const ibDataNode& args);
+	// …and of the state events (ibProtocolIsStateEvent), the ones it is subscribed to: something here runs on them, so
+	// the client sends them at once (its State's Subscribed); any other one waits for the client's next call. Asked
+	// at each frame, so a handler a script hangs on at run time subscribes with the frame it draws. The base: Focus, on
+	// a control with a view of its own — the form's menu and toolbar become that view's.
+	virtual bool IsSubscribed(ibProtocolEvent event) const {
+		return event == ibProtocolEvent::Focus && GetControlView() != nullptr;
+	}
 
 	// ⭐ A PART OF WHAT THIS CONTROL SHOWS, written when the client asks for it — what is too large to travel in
 	// the frame: a table's rows, a spreadsheet's cells. `request` says which part, `response` gets it. False —
@@ -285,6 +292,8 @@ public:
 	// ⭐ A HANDLER RUN UPDATES THE FORM WHOLE (ibVisualHost::UpdateControl) — whatever it changed, the next frame draws.
 	bool CallAsEvent(const ibEvent* event, ibValue** ppParams, const long lSizeArray) const;
 	bool CallAsEvent(const wxString& functionName, ibValue** ppParams, const long lSizeArray) const;
+	// …something to run: a named handler or a lambda — what CallAsEvent dispatches, and IsSubscribed asks.
+	bool HasHandler(const ibEvent* event) const;
 
 public:
 

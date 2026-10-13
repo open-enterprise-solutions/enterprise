@@ -1,6 +1,7 @@
 #include "core/serialize/jsonProvider.h"
 #include "core/serialize/jsonText.h"  // ibJsonText — how a string is spelled in JSON, said once
 #include "core/exception.h"           // ibCoreException — malformed-JSON throw
+#include "core/fiber/fiber.h"         // StackLow — the depth count's backstop when the reserve runs out first
 #include <wx/base64.h>
 #include <cstring>                     // strlen / strncmp — the JSON literal match
 
@@ -225,21 +226,26 @@ private:
 	// Past kMaxNesting the text is refused: every level is a frame of the descent,
 	// and a few thousand brackets overflow the stack (measured near 5000 on a Linux
 	// Debug build, when each level also copied its subtree; it moves it now).
+	// A stack that runs low first refuses here too — the backstop for a fiber whose
+	// reserve runs out before the count. Every level enters through here, so it is asked once a level.
+	// Each refusal raises with its own reason: the text is not malformed, it is too deep.
 	class Depth {
 	public:
 		explicit Depth(ibJsonReader& reader)
-			: m_reader(reader), m_held(reader.m_depth < ibJsonProvider::kMaxNesting)
+			: m_reader(reader)
 		{
-			if (m_held)
-				++m_reader.m_depth;
+			if (m_reader.m_depth >= ibJsonProvider::kMaxNesting)
+				ibCoreException::Error(_("ibJsonProvider: the JSON is nested deeper than %d levels at byte %d"),
+					ibJsonProvider::kMaxNesting, (int)m_reader.Offset());
+			if (ibFiber::StackLow())
+				ibCoreException::Error(_("ibJsonProvider: the JSON is nested deeper than the stack allows"));
+			++m_reader.m_depth;
 		}
-		~Depth() { if (m_held) --m_reader.m_depth; }
-		bool Held() const { return m_held; }
+		~Depth() { --m_reader.m_depth; }
 		Depth(const Depth&) = delete;
 		Depth& operator=(const Depth&) = delete;
 	private:
 		ibJsonReader& m_reader;
-		bool m_held;
 	};
 
 	bool Eof() const { return m_p >= m_end; }
@@ -255,6 +261,8 @@ private:
 	bool ParseString(wxString& out);
 	bool ParseNumber(ibNumber& out);
 	bool ParseValue(ibDataValue& out, const std::function<ibClassID(const wxString&)>& lookupType);
+	bool ParseArray(ibDataValue& out, const std::function<ibClassID(const wxString&)>& lookupType);
+	bool ParseScalar(ibDataValue& out);
 	bool ParseLiteral(const char* text) {
 		SkipWs();
 		const size_t n = strlen(text);
@@ -336,12 +344,51 @@ bool ibJsonReader::ParseNumber(ibNumber& out)
 	return out.FromString(wxString::FromUTF8(start, (size_t)(m_p - start)));
 }
 
+// ⭐ A LEVEL OF THE DESCENT WEIGHS WHAT A CONTAINER NEEDS, NOT WHAT EVERY KIND NEEDS. Without the
+// optimiser (and more so under ASan) a function keeps a slot for every local and temporary of every
+// branch, taken or not; when the scalars were read in here, each level of [[[…]]] carried a string, a
+// number and the literals' values, and the deepest legal text no longer fit a 512 KB thread once
+// the stack check kept its slack (CI, Linux Debug + ASan, 2026-10-13). So the kinds are read apart.
 bool ibJsonReader::ParseValue(ibDataValue& out, const std::function<ibClassID(const wxString&)>& lookupType)
 {
 	SkipWs();
 	const char c = Peek();
 
-	if (c == '\"') {
+	if (c == '{') {
+		std::shared_ptr<ibDataNode> child = std::make_shared<ibDataNode>();
+		if (!ParseNode(*child, lookupType)) return false;
+		out = ibDataValue::Child(child);
+		return true;
+	}
+	if (c == '[')
+		return ParseArray(out, lookupType);
+	return ParseScalar(out);
+}
+
+bool ibJsonReader::ParseArray(ibDataValue& out, const std::function<ibClassID(const wxString&)>& lookupType)
+{
+	Depth depth(*this);
+	if (!Accept('[')) return false;
+	std::vector<ibDataValue> items;
+	if (!Accept(']')) {
+		for (;;) {
+			ibDataValue item;
+			if (!ParseValue(item, lookupType)) return false;
+			items.push_back(std::move(item));
+			if (Accept(',')) continue;
+			if (Accept(']')) break;
+			return false;
+		}
+	}
+	out = ibDataValue::Array(std::move(items));
+	return true;
+}
+
+// A string, a literal or a number — a value with nothing inside it.
+bool ibJsonReader::ParseScalar(ibDataValue& out)
+{
+	SkipWs();
+	if (Peek() == '\"') {
 		wxString s;
 		if (!ParseString(s)) return false;
 		// "base64:<...>" is how EmitValue renders Binary — the one string shape that is
@@ -352,29 +399,6 @@ bool ibJsonReader::ParseValue(ibDataValue& out, const std::function<ibClassID(co
 			out = ibDataValue::Binary(wxBase64Decode(s.Mid(kB64.length())));
 		else
 			out = ibDataValue::String(s);
-		return true;
-	}
-	if (c == '{') {
-		std::shared_ptr<ibDataNode> child = std::make_shared<ibDataNode>();
-		if (!ParseNode(*child, lookupType)) return false;
-		out = ibDataValue::Child(child);
-		return true;
-	}
-	if (c == '[') {
-		Depth depth(*this);
-		if (!depth.Held()) return false;
-		if (!Accept('[')) return false;
-		std::vector<ibDataValue> items;
-		if (Accept(']')) { out = ibDataValue::Array(items); return true; }
-		for (;;) {
-			ibDataValue item;
-			if (!ParseValue(item, lookupType)) return false;
-			items.push_back(std::move(item));
-			if (Accept(',')) continue;
-			if (Accept(']')) break;
-			return false;
-		}
-		out = ibDataValue::Array(std::move(items));
 		return true;
 	}
 	if (ParseLiteral("true"))  { out = ibDataValue::Bool(true);  return true; }
@@ -390,7 +414,7 @@ bool ibJsonReader::ParseValue(ibDataValue& out, const std::function<ibClassID(co
 bool ibJsonReader::ParseNode(ibDataNode& node, const std::function<ibClassID(const wxString&)>& lookupType)
 {
 	Depth depth(*this);
-	if (!depth.Held()) return false;
+
 	if (!Expect('{')) return false;
 	if (Accept('}')) return true;   // {} — a legitimately empty node
 

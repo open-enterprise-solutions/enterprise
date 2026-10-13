@@ -17,7 +17,7 @@
 #include <wx/string.h>
 #include <wx/window.h>
 
-#include "backend/compositionDescription.h"   // ibAppearanceDescription — what is edited here
+#include "core/description/compositionDescription.h"   // ibAppearanceDescription — what is edited here
 
 class ibMetaData;
 

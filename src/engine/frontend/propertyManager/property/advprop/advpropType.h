@@ -1,6 +1,8 @@
 #ifndef __ADVPROP_TYPE_H__
 #define __ADVPROP_TYPE_H__
 
+#include <map>
+
 #include <wx/propgrid/propgrid.h>
 #include "backend/backend_type.h"
 

@@ -14,7 +14,7 @@
 #include "frontend/visualView/ctrl/gridBox.h"                           // g_controlGridBoxCLSID
 #include "backend/metaCollection/attribute/metaAttributeObject.h"      // GetIconGroup (default attribute icon)
 #include "backend/srcDataObject.h"                                      // ibSourceDataObject / ibSourceExplorer / ConvertToMetaIds
-#include "backend/sourceDescription.h"                                   // ibSourceDescription / ibSourceDescriptionMemory (drag payload = the source path, unified serialize)
+#include "core/description/sourceDescription.h"                          // ibSourceDescription / ibSourceDescriptionMemory (drag payload = the source path, unified serialize)
 #include "core/fileSystem/fs.h"                                       // ibWriterMemory (drag payload buffer)
 #include "backend/metaCollection/partial/reference/reference.h"        // ibValueReferenceDataObject::Create (reference-as-source)
 #include "backend/system/value/valueTable.h"                           // ibValueModelTable — value-table attribute column add

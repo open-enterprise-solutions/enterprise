@@ -76,11 +76,13 @@ struct BACKEND_API ibUserInfo {
 	static bool       Delete(const ibGuid& userGuid);
 
 	// Table-wide queries.
-	// HasAny  — `SELECT 1 FROM sys_user LIMIT 1` semantics; true on any row.
-	//           Used to distinguish open-access mode (empty sys_user) from
-	//           normal auth flow.
+	// HasAny — true when sys_user has a row. A failure to read the table is
+	// thrown: an unreadable list is not an empty one, and login must not
+	// treat it as open access.
 	// ListAll — every row projected to Brief. Cheap by design — does NOT
-	//           crack the binaryData blob.
+	//           crack the binaryData blob. A failure to read is thrown,
+	//           the same as HasAny: an empty vector means the table was
+	//           read and had no rows.
 	static bool                HasAny();
 	static std::vector<Brief>  ListAll();
 

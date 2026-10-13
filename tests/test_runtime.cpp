@@ -21,6 +21,7 @@
 #include "backend/compiler/procUnitState.h"   // m_errorPlace — which opcode raised
 #include "backend/session/session.h"
 #include "backend/appData.h"                // the built-in dispatcher reads appData on entry
+#include "backend/system/value/valueDynamicList.h"
 
 #include <wx/init.h>
 #include <wx/image.h>  // wxInitAllImageHandlers — wx decodes nothing until registered
@@ -518,6 +519,162 @@ TEST(RuntimeTest, TernaryWithANumberConditionUsesTheTypedTest) {
 	EXPECT_EQ(v.GetInteger(), 2);
 }
 
+// `and` / `or` used to run both operands, so a guard written the 1C way
+// (`u <> Undefined and u.Property(...)`) raised on the reference it had just
+// tested. The side that cannot change the answer does not run; the side that
+// can still does, including when it raises.
+TEST(RuntimeTest, AndOrDoesNotRunTheOperandItDidNotChoose) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	const wxString src =
+		wxT("var calls public; var fromAnd public; var fromOr public;\n")
+		wxT("var guarded public; var took public; var present public;\n")
+		wxT("Function Touch(n) Public\n")
+		wxT("  calls = calls + 1;\n")
+		wxT("  Return n;\n")
+		wxT("EndFunction\n")
+		wxT("Function Boom() Public\n")
+		wxT("  calls = calls + 1;\n")
+		wxT("  Raise(\"unchosen operand ran\");\n")
+		wxT("  Return 0;\n")
+		wxT("EndFunction\n")
+		wxT("calls = 0;\n")
+		wxT("fromAnd = False And Boom();\n")
+		wxT("fromOr  = True Or Boom();\n")
+		wxT("fromAnd = fromAnd Or Touch(1);\n")
+		wxT("fromOr  = True And Touch(1);\n")
+		wxT("var Ref;\n")
+		wxT("Ref = Undefined;\n")
+		wxT("guarded = Ref <> Undefined And Ref.Description;\n")
+		wxT("If Ref = Undefined Or Ref.Description Then\n")
+		wxT("  took = 1;\n")
+		wxT("EndIf;\n")
+		wxT("Ref = New Structure(\"Description\", \"Goods\");\n")
+		wxT("present = Ref <> Undefined And Ref.Description;\n");
+	ASSERT_TRUE(TryCompile(cc, src));
+
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+
+	ibValue v;
+	ASSERT_TRUE(pu.GetPropVal(wxT("fromAnd"), v));
+	EXPECT_TRUE(v.GetBoolean());
+	ASSERT_TRUE(pu.GetPropVal(wxT("fromOr"), v));
+	EXPECT_TRUE(v.GetBoolean());
+	ASSERT_TRUE(pu.GetPropVal(wxT("guarded"), v));
+	EXPECT_EQ(ibValueTypes::TYPE_BOOLEAN, v.GetType());
+	EXPECT_FALSE(v.GetBoolean());
+	ASSERT_TRUE(pu.GetPropVal(wxT("took"), v));
+	EXPECT_EQ(v.GetInteger(), 1);
+	ASSERT_TRUE(pu.GetPropVal(wxT("present"), v));
+	EXPECT_EQ(ibValueTypes::TYPE_BOOLEAN, v.GetType());
+	EXPECT_TRUE(v.GetBoolean());
+	ASSERT_TRUE(pu.GetPropVal(wxT("calls"), v));
+	EXPECT_EQ(v.GetInteger(), 2) << "each chosen Touch ran once; neither Boom ran";
+}
+
+TEST(RuntimeTest, AndOrRunsTheOperandItChoosesEvenWhenThatOperandRaises) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	const wxString src =
+		wxT("Function Boom() Public\n")
+		wxT("  Raise(\"chosen operand ran\");\n")
+		wxT("  Return 0;\n")
+		wxT("EndFunction\n")
+		wxT("var result public;\n")
+		wxT("result = True And Boom();\n");
+	ASSERT_TRUE(TryCompile(cc, src));
+
+	ibProcUnit pu;
+	const auto failed = TryExecute(pu, cc.m_cByteCode);
+	EXPECT_FALSE(failed);
+	EXPECT_NE(std::string(failed.message()).find("chosen operand ran"), std::string::npos)
+		<< failed.message();
+}
+
+// `a and b and c` is (a and b) and c, and `a or b and c` is a or (b and c).
+// A false and-chain never reaches the later calls; a true or never enters the
+// and that follows it.
+TEST(RuntimeTest, AndOrNestedShortCircuit) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	const wxString src =
+		wxT("var calls public; var chain public; var mixed public;\n")
+		wxT("Function Touch(n) Public\n")
+		wxT("  calls = calls + 1;\n")
+		wxT("  Return n;\n")
+		wxT("EndFunction\n")
+		wxT("Function Boom() Public\n")
+		wxT("  calls = calls + 1;\n")
+		wxT("  Raise(\"unchosen operand ran\");\n")
+		wxT("  Return 0;\n")
+		wxT("EndFunction\n")
+		wxT("calls = 0;\n")
+		wxT("chain = False And Boom() And Touch(1);\n")
+		wxT("mixed = True Or False And Boom();\n")
+		wxT("chain = chain Or Touch(1);\n");
+	ASSERT_TRUE(TryCompile(cc, src));
+
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+
+	ibValue v;
+	ASSERT_TRUE(pu.GetPropVal(wxT("chain"), v));
+	EXPECT_TRUE(v.GetBoolean());
+	ASSERT_TRUE(pu.GetPropVal(wxT("mixed"), v));
+	EXPECT_TRUE(v.GetBoolean());
+	ASSERT_TRUE(pu.GetPropVal(wxT("calls"), v));
+	EXPECT_EQ(v.GetInteger(), 1) << "only the chosen Touch ran";
+}
+
+// A declared Number or Boolean used to make `if (a And b)` read the operand's
+// own field: And's answer was typed as the left side, and a non-zero number
+// then took the branch. The answer is Boolean, and a zero / False left still
+// does not run the right side.
+TEST(RuntimeTest, AndOrTypedConditionsShortCircuit) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	const wxString src =
+		wxT("Number a; Number b; Number n;\n")
+		wxT("Boolean t; Boolean f;\n")
+		wxT("var branch public; var both public; var calls public;\n")
+		wxT("var whenZero public; var whenOther public;\n")
+		wxT("Function Boom() Public\n")
+		wxT("  calls = calls + 1;\n")
+		wxT("  Raise(\"unchosen operand ran\");\n")
+		wxT("  Return 0;\n")
+		wxT("EndFunction\n")
+		wxT("calls = 0;\n")
+		wxT("a = 1; b = 0;\n")
+		wxT("If a And b Then\n")
+		wxT("  branch = 1;\n")
+		wxT("Else\n")
+		wxT("  branch = 2;\n")
+		wxT("EndIf;\n")
+		wxT("t = True; f = False;\n")
+		wxT("If t And Not f Then\n")
+		wxT("  both = 1;\n")
+		wxT("Else\n")
+		wxT("  both = 0;\n")
+		wxT("EndIf;\n")
+		wxT("n = 0;\n")
+		wxT("whenZero = n And Boom();\n")
+		wxT("n = 4;\n")
+		wxT("whenOther = n Or Boom();\n");
+	ASSERT_TRUE(TryCompile(cc, src));
+
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+
+	ibValue v;
+	ASSERT_TRUE(pu.GetPropVal(wxT("branch"), v));
+	EXPECT_EQ(v.GetInteger(), 2) << "1 And 0 is false, so If takes Else";
+	ASSERT_TRUE(pu.GetPropVal(wxT("both"), v));
+	EXPECT_EQ(v.GetInteger(), 1);
+	ASSERT_TRUE(pu.GetPropVal(wxT("whenZero"), v));
+	EXPECT_FALSE(v.GetBoolean());
+	ASSERT_TRUE(pu.GetPropVal(wxT("whenOther"), v));
+	EXPECT_TRUE(v.GetBoolean());
+	ASSERT_TRUE(pu.GetPropVal(wxT("calls"), v));
+	EXPECT_EQ(v.GetInteger(), 0) << "a zero and a non-zero or both skip Boom";
+}
+
 // A BODY WITHOUT BRACES IS ONE STATEMENT, whatever word it opens with. A statement opened by a
 // keyword (`if`, `while`, `try`) used to run on into the next one: `else if (…) { … } b = 7;` put
 // `b = 7` inside the else, and a loop counting its passes that way never ended. The forms that
@@ -550,6 +707,67 @@ TEST(RuntimeTest, ABraceLessBodyIsOneStatementOfAnyKind) {
 		ibValue v;
 		ASSERT_TRUE(pu.GetPropVal(wxT("a"), v)); EXPECT_EQ(v.GetInteger(), c.a) << body;
 		ASSERT_TRUE(pu.GetPropVal(wxT("b"), v)); EXPECT_EQ(v.GetInteger(), c.b) << body;
+	}
+}
+
+// A call compiled before its function exists is a jump to the end of the module,
+// where the real call is appended, and a jump back. The outbound jump used to
+// leave the try, so an exception from a function declared later was not caught.
+// The same call is caught when the callee is declared first, because that call
+// is emitted in place.
+TEST(RuntimeTest, TryCatchesAFunctionDeclaredLater) {
+	struct StyleGuard {
+		const short saved = ibCompileCode::GetCodeStyle();
+		~StyleGuard() { ibCompileCode::SetCodeStyle(saved); }
+	} guard;
+	ibCompileCode::SetCodeStyle(CODE_CES);
+
+	const wxChar* const caught[] = {
+		wxT("function C(d) { try { return N(); } except { return d; } }\n")
+		wxT("function N() { Raise(\"boom\"); return 0; }\n")
+		wxT("var r public; r = C(7);\n"),
+
+		wxT("function C(d) { var v; try { v = N(); return v; } except { return d; } }\n")
+		wxT("function N() { Raise(\"boom\"); return 0; }\n")
+		wxT("var r public; r = C(7);\n"),
+
+		wxT("function C(s, p, d) { try { return N(s, p); } except { return d; } }\n")
+		wxT("function N(s, p) { return s[p]; }\n")
+		wxT("var r public; r = C(New Structure(\"A\", 1), \"NoSuch\", 7);\n"),
+
+		wxT("function N() { Raise(\"boom\"); return 0; }\n")
+		wxT("function C(d) { try { return N(); } except { return d; } }\n")
+		wxT("var r public; r = C(7);\n"),
+	};
+	for (const wxChar* src : caught) {
+		ibCompileCode cc(wxT("test"), wxT("memory"), false);
+		ASSERT_TRUE(TryCompile(cc, src)) << wxString(src).ToStdString();
+
+		ibProcUnit pu;
+		ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode)) << wxString(src).ToStdString();
+
+		ibValue v;
+		ASSERT_TRUE(pu.GetPropVal(wxT("r"), v));
+		EXPECT_EQ(v.GetInteger(), 7) << wxString(src).ToStdString();
+	}
+
+	// The try finishes, then the function calls a callee declared later. That
+	// call is not inside the try. Catching it would mean the handler was left
+	// in place. The try must not return, or the call is never reached.
+	{
+		ibCompileCode cc(wxT("test"), wxT("memory"), false);
+		const wxString src =
+			wxT("function C() { try { var x; x = 1; } except { return 2; } return N(); }\n")
+			wxT("function N() { Raise(\"left the try\"); return 0; }\n")
+			wxT("var r public; r = C();\n");
+		ASSERT_TRUE(TryCompile(cc, src));
+
+		ibProcUnit pu;
+		const ::testing::AssertionResult ran = TryExecute(pu, cc.m_cByteCode);
+		EXPECT_FALSE(ran);
+		if (!ran) {
+			EXPECT_NE(std::string(ran.message()).find("left the try"), std::string::npos) << ran.message();
+		}
 	}
 }
 
@@ -2206,6 +2424,63 @@ TEST(RuntimeTest, ALiteralArgumentToAParentModuleFunctionKeepsItsValue) {
 		<< "a WRONG-* value here means the argument was read from the callee's pool";
 }
 
+// An object module and its manager are different methods. The same exported
+// name in both used to be refused while compiling the object module, because
+// the manager's export was treated as a declaration in this module. The
+// object's own function is the one its body calls. Two exports in one module
+// are still one name.
+TEST(RuntimeTest, AnObjectModuleMayExportTheManagersName) {
+	struct StyleGuard {
+		const short saved = ibCompileCode::GetCodeStyle();
+		~StyleGuard() { ibCompileCode::SetCodeStyle(saved); }
+	} guard;
+	ibCompileCode::SetCodeStyle(CODE_VES);
+
+	ParentedCompiler manager(wxT("manager"));
+	ASSERT_TRUE(manager.CompileUnder(nullptr,
+		wxT("Function GetRate() Public\n")
+		wxT("  Return 1;\n")
+		wxT("EndFunction\n")
+		wxT("var managerResult public;\n")
+		wxT("managerResult = GetRate();\n")));
+
+	ParentedCompiler object(wxT("object"));
+	ASSERT_TRUE(object.CompileUnder(&manager,
+		wxT("Function GetRate() Public\n")
+		wxT("  Return 2;\n")
+		wxT("EndFunction\n")
+		wxT("var objectResult public;\n")
+		wxT("objectResult = GetRate();\n")));
+
+	ibProcUnit puManager;
+	ASSERT_TRUE(TryExecute(puManager, manager.m_cByteCode));
+	ibValue managerValue;
+	ASSERT_TRUE(puManager.GetPropVal(wxT("managerResult"), managerValue));
+	EXPECT_EQ(managerValue.GetInteger(), 1);
+
+	ibProcUnit puObject;
+	puObject.SetParent(&puManager);
+	wxString strError;
+	ASSERT_TRUE(RunBound(object, puObject, strError)) << strError.ToStdString();
+	ibValue objectValue;
+	ASSERT_TRUE(puObject.GetPropVal(wxT("objectResult"), objectValue));
+	EXPECT_EQ(objectValue.GetInteger(), 2) << "the object called the manager's function";
+
+	ibCompileCode again(wxT("test"), wxT("memory"), false);
+	const ::testing::AssertionResult duplicate = TryCompile(again,
+		wxT("Function GetRate() Public\n")
+		wxT("  Return 1;\n")
+		wxT("EndFunction\n")
+		wxT("Function GetRate() Public\n")
+		wxT("  Return 2;\n")
+		wxT("EndFunction\n"));
+	EXPECT_FALSE(duplicate);
+	if (!duplicate) {
+		EXPECT_NE(std::string(duplicate.message()).find("already defined"), std::string::npos)
+			<< duplicate.message();
+	}
+}
+
 // ===========================================================================
 // `Mod` AND `%` ARE ONE OPERATOR
 //
@@ -2935,4 +3210,20 @@ TEST(RuntimeTest, AnArrayWalkedAndRewalkedIsLetGoOfOnce) {
 
 	// The frame goes here, with both arrays in it. That is the moment the nightly
 	// caught: passing under a sanitiser is the whole assertion.
+}
+
+// A list form's DataSource is a dynamic list. It already knows its source
+// metaobject; the script could not ask, because FillMembers was never bound
+// and named no such method. An empty list (no source) answers empty.
+TEST_F(BuiltInRuntime, DynamicList_GetMetadataIsCallable) {
+	ibValueDynamicList list;
+	const long method = list.FindMethod(wxT("GetMetadata"));
+	ASSERT_GE(method, 0);
+	ibValue result(1);
+	ASSERT_TRUE(list.CallAsFunc(method, result, nullptr, 0));
+	EXPECT_TRUE(result.IsEmpty());
+
+	const long refresh = list.FindMethod(wxT("Refresh"));
+	EXPECT_GE(refresh, 0);
+	EXPECT_NE(refresh, method);
 }

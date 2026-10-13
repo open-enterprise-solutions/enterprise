@@ -490,7 +490,7 @@ bool ibJobManager::Register(ibJobDescription desc)
 	// A schedule that can never match is refused HERE rather than left to be
 	// debugged as silence — an empty window, an inverted validity range or a
 	// non-positive interval all produce a job that simply never runs.
-	if (!desc.m_schedule.IsValid()) {
+	if (!ibJobScheduleRules::IsValid(desc.m_schedule)) {
 		ibJournalInfo(wxT("job"),wxT("job '%s' rejected: the schedule can never match"), desc.m_name);
 		return false;
 	}
@@ -529,7 +529,7 @@ bool ibJobManager::Register(ibJobDescription desc)
 			desc.m_active = stored.m_active;
 			// An empty stored schedule (a row written by an older build) is not an opinion —
 			// keeping the declaration's is better than scheduling nothing.
-			if (stored.m_schedule.IsValid())
+			if (ibJobScheduleRules::IsValid(stored.m_schedule))
 				desc.m_schedule = stored.m_schedule;
 		}
 		else {

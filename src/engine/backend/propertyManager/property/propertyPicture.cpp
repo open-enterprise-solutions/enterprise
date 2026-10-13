@@ -54,10 +54,10 @@ bool ibPropertyPicture::GetDataValue(ibValue& pvarPropVal) const
 
 bool ibPropertyPicture::ReadNodeValue(const ibDataValue& value)
 {
-	return ibPictureDescriptionMemory::ReadNode(value, GetValueAsPictureDesc());
+	return ibBackendPictureDescriptionMemory::ReadNode(value, GetValueAsPictureDesc());
 }
 
 bool ibPropertyPicture::WriteNodeValue(ibDataValue& value) const
 {
-	return ibPictureDescriptionMemory::WriteNode(value, GetValueAsPictureDesc());
+	return ibBackendPictureDescriptionMemory::WriteNode(value, GetValueAsPictureDesc());
 }

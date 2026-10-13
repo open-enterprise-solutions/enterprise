@@ -248,6 +248,7 @@ enterprise/
         ├── fileserver/       # A file base in the thin client's process
         ├── enterprise/       # Enterprise runtime executable
         ├── enterprise-thin/  # The thin client runtime executable
+        ├── designer-thin/    # The thin designer executable
         ├── designer/         # Designer/IDE executable
         ├── wenterprise-server/ # Web server (wes process)
         ├── launcher/         # Launcher (connection chooser)
