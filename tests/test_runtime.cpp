@@ -1024,6 +1024,15 @@ TEST_F(BuiltInRuntime, ACommonModuleUnitFillsAHoleInTheMiddle) {
 	ibSession session(wxT("mod-default"), ibSessionKind::Enterprise);
 	ibSessionScope scope(&session);
 
+	// The module is written with Procedure/EndFunction. The process default
+	// is CES, and under that those words are identifiers.
+	const short savedStyle = ibCompileCode::GetCodeStyle();
+	ibCompileCode::SetCodeStyle(CODE_VES);
+	struct StyleRestore {
+		short saved;
+		~StyleRestore() { ibCompileCode::SetCodeStyle(saved); }
+	} styleRestore{ savedStyle };
+
 	ibMetaDataConfigurationFile cfg;
 	ibValueMetaObjectConfiguration* root = cfg.GetCommonMetaObject();
 	ASSERT_NE(root, nullptr);
