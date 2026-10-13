@@ -61,13 +61,10 @@ if (s.name <> 7) { Raise("s.name: " + s.name); }
 if (s.NAME <> 7) { Raise("s.NAME: " + s.NAME); }
 if (s["nAmE"] <> 7) { Raise("s[nAmE]: " + s["nAmE"]); }
 s.Insert("Other", 1);
-var twice = False;
-try {
-	s.Insert("OTHER", 2);
-} except {
-	twice = True;
-}
-if (Not twice) { Raise("a Structure took the same field twice in another case"); }
+// Insert of a field that is already there (in any case) replaces its value, as in 1C.
+s.Insert("OTHER", 2);
+if (s.Count() <> 2) { Raise("a Structure took the same field twice in another case: " + s.Count()); }
+if (s.Other <> 2) { Raise("Insert of an existing field did not replace it: " + s.Other); }
 Message("structure fields: " + s.Count());
 
 // 4
