@@ -1099,7 +1099,8 @@ TEST_F(BuiltInRuntime, ACommonModuleUnitFillsAHoleInTheMiddle) {
 
 	ibValue ret;
 	ibValue one(1);
-	EXPECT_THROW(unit->CallAsFunc(unit->FindMethod(wxT("Need")), ret, &one, 1), ibBackendCoreException);
+	ibValue* args[] = { &one };
+	EXPECT_THROW(unit->CallAsFunc(unit->FindMethod(wxT("Need")), ret, args, 1), ibBackendCoreException);
 }
 
 TEST(RuntimeTest, RecursiveFactorial) {
