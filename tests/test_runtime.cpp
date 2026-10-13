@@ -3230,7 +3230,7 @@ TEST_F(BuiltInRuntime, AFormScriptWritesThroughDataSource) {
 	object->Insert(ibValue(wxT("B")), ibValue(0));
 
 	ibValue held;
-	held = static_cast<ibValue*>(object.get());
+	held = static_cast<ibValue*>(static_cast<ibValueStructure*>(object));
 	ibFormAttributeValue* attr = form.AddAttribute(wxT("Src"), g_valueStructureCLSID, held);
 	ASSERT_NE(attr, nullptr);
 	attr->SetHeldValue(held);
