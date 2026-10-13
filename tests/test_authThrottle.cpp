@@ -38,10 +38,11 @@ TEST(AuthThrottle, AFailedNameWaitsLongerEachTimeAndThenAMinute)
 			t += want[i];
 	}
 
-	// Still inside the minute the last failure asked for.
+	// One second of that minute is still left. The answer is the time
+	// remaining, which is what a client waits.
 	const ibAuthThrottle::Decision held = gate.Begin(wxT("Ada"), wxT("10.0.0.1"), At(t + 59));
 	EXPECT_FALSE(held.m_allowed);
-	EXPECT_EQ(held.m_retryAfterSec, 60);
+	EXPECT_EQ(held.m_retryAfterSec, 1);
 	EXPECT_EQ(held.m_reason, ibAuthThrottle::Reason::Account);
 }
 
