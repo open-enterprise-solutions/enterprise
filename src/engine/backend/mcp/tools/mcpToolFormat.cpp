@@ -38,7 +38,7 @@ const ibArg& ArgSet()
 {
 	static const ibArg s_a(wxT("set"), ibArg::Kind::Node,
 		ibMcpText("Codes to write over it, as an object of code to value: {\"NFD\": 2, \"NGS\": \" \", "
-			  "\"DF\": \"dd.mm.yyyy\"}. A number or a string each. An EMPTY string is a value, not a "
+			  "\"DF\": \"dd.MM.yyyy\"}. A number or a string each. An EMPTY string is a value, not a "
 			  "removal - {\"NZ\": \"\"} prints a zero as nothing; take a code out with `clear`. Only the "
 			  "codes Format reads are taken."));
 	return s_a;
@@ -119,12 +119,14 @@ public:
 			"always that many (1250.5 at NFD=2 prints 1250.50); NDS the decimal separator; NGS the group "
 			"separator - groups of three unless NG says otherwise; NG digits per group; NZ what a zero "
 			"prints as.\n"
-			"  DATE    DF the pattern; DE what an empty date prints as.\n"
+			"  DATE    DF the pattern; DE what an empty date prints as; DLF a preset (D, DD, T, DT, DDT) used "
+			"when there is no DF; L the language of month and day names (en, ru, uk).\n"
 			"  BOOLEAN BT and BF what True and False print as.\n"
 			  "\n"
-			"STOP: IN A DATE PATTERN `mm` IS THE MONTH AND `MM` THE MINUTES. yyyy or yy the year, mm or m "
-			"the month, dd or d the day, HH or H the hours, MM or M the minutes, SS or S the seconds - "
-			"'dd.mm.yyyy HH:MM'. The other way round reads fine and prints the minutes as the month.\n"
+			"STOP: A DATE PATTERN IS READ AS 1C READS IT: `MM` IS THE MONTH AND `mm` THE MINUTES. yyyy or yy "
+			"the year, MMMM/MMM/MM/M the month, dddd/ddd/dd/d the day, HH or H the hours (hh/h 12-hour), "
+			"mm or m the minutes, ss or s the seconds - 'dd.MM.yyyy HH:mm'. The Russian code names 1C "
+			"accepts are read too and written back in English.\n"
 			  "\n"
 			"KEY: AN ABSENT CODE AND AN EMPTY ONE ARE DIFFERENT. No NZ prints a zero as a number; NZ= "
 			"prints it as nothing. A value that is all space IS a space (NGS= groups with one); any other "

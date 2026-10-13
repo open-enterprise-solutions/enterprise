@@ -46,22 +46,27 @@ enum class ibFormatCode {
 	NumberGroupSeparator,      // NGS - the character between digit groups (groups of three unless NG)
 	NumberGroupSize,           // NG  - digits per group
 	NumberZero,                // NZ  - what a zero prints as
-	DatePattern,               // DF  - yyyy/yy year, mm/m month, dd/d day, HH/H hours, MM/M minutes, SS/S seconds
+	DatePattern,               // DF  - as 1C reads it: yyyy/yy/y year, MMMM/MMM/MM/M month, dddd/ddd/dd/d day,
+	                           //       HH/H hours (hh/h on a 12-hour clock), mm/m minutes, ss/s seconds, tt AM/PM
 	DateEmpty,                 // DE  - what an empty date prints as
 	BooleanTrue,               // BT  - what True prints as
 	BooleanFalse,              // BF  - what False prints as
+	// Appended, never inserted: a code's position is the order of the constructor's tabs.
+	NumberLeadingZero,         // NLZ - pad the whole part with zeros up to ND - NFD digits
+	DateLocalFormat,           // DLF - a preset: D, DD, T, DT, DDT (date, long date, time, both, long date and time)
+	Language,                  // L   - the language of month and day names: en, ru, uk (en when absent)
 };
 
 // The patterns a date pattern is usually one of. `Custom` is any other.
 enum class ibDatePreset {
 	Custom,
-	Date,                      // dd.mm.yyyy
-	DateTime,                  // dd.mm.yyyy HH:MM:SS
-	Time,                      // HH:MM:SS
-	HoursMinutes,              // HH:MM
-	MonthYear,                 // mm.yyyy
+	Date,                      // dd.MM.yyyy
+	DateTime,                  // dd.MM.yyyy HH:mm:ss
+	Time,                      // HH:mm:ss
+	HoursMinutes,              // HH:mm
+	MonthYear,                 // MM.yyyy
 	Year,                      // yyyy
-	Sortable,                  // yyyy-mm-dd
+	Sortable,                  // yyyy-MM-dd
 };
 
 struct CORE_API ibNumberFormat {
@@ -71,6 +76,7 @@ struct CORE_API ibNumberFormat {
 	std::optional<wxUniChar> m_groupSeparator;     // NGS
 	std::optional<int>       m_groupSize;          // NG
 	std::optional<wxString>  m_zero;               // NZ
+	std::optional<wxString>  m_leadingZero;        // NLZ (present = pad; the value is not read)
 
 	bool operator == (const ibNumberFormat& other) const;
 };
@@ -78,6 +84,7 @@ struct CORE_API ibNumberFormat {
 struct CORE_API ibDateFormat {
 	std::optional<wxString>  m_pattern;            // DF
 	std::optional<wxString>  m_empty;              // DE
+	std::optional<wxString>  m_localFormat;        // DLF - used when DF is absent
 
 	bool operator == (const ibDateFormat& other) const;
 };
@@ -95,6 +102,7 @@ public:
 	ibNumberFormat  m_number;
 	ibDateFormat    m_date;
 	ibBooleanFormat m_boolean;
+	std::optional<wxString> m_language;   // L
 
 	// The codes Format does not read, each as written - kept, and written back after the others.
 	std::vector<std::pair<wxString, wxString>> m_other;
@@ -163,8 +171,9 @@ public:
 	void Set(ibFormatCode code, const wxString& value);
 	void Clear(ibFormatCode code);
 
-	// Every code, in the order of the tabs; a code by the name it is written with; its spelling; the
-	// values it applies to.
+	// Every code, in the order of the tabs; a code by the name it is written with (the English name or
+	// the Russian one 1C also reads; a string is always written back in English);
+	// its spelling; the values it applies to.
 	static const std::vector<ibFormatCode>& Codes();
 	static bool FindCode(const wxString& name, ibFormatCode& code);
 	static const wxChar* CodeName(ibFormatCode code);
