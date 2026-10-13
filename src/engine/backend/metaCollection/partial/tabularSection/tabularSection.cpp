@@ -502,8 +502,8 @@ namespace {
 // A filter line DETERMINES a value only when it SAYS one: an equality, switched on, on a plain column (a
 // dotted path walks into a reference — there is no cell of this table to write it into), against a literal
 // rather than another field. `>` / `LIKE` / `IN` narrow without deciding, and an OR-group decides nothing at
-// all — so neither contributes, and an OR is not walked into.
-void ibCollectFilterDefaults(const std::vector<ibFilterNodeDescription>& nodes,
+// all — so neither contributes, and an OR is not walked into. The literal is restored against `metaData`.
+void ibCollectFilterDefaults(const std::vector<ibFilterNodeDescription>& nodes, const ibMetaData* metaData,
 	std::vector<std::pair<wxString, ibValue>>& out)
 {
 	for (const ibFilterNodeDescription& node : nodes) {
@@ -511,13 +511,13 @@ void ibCollectFilterDefaults(const std::vector<ibFilterNodeDescription>& nodes,
 			continue;
 		if (node.m_kind == ibFilterNodeKind_Group) {
 			if (node.m_groupKind == ibFilterGroupKind_And)
-				ibCollectFilterDefaults(node.m_children, out);
+				ibCollectFilterDefaults(node.m_children, metaData, out);
 			continue;
 		}
 		if (node.m_comparison != ibComparisonKind_Equal) continue;
 		if (!node.m_left.IsField() || node.m_right.IsField()) continue;
 		if (node.m_left.m_path.Find(wxT('.')) != wxNOT_FOUND) continue;
-		out.emplace_back(node.m_left.m_path, node.m_right.m_value);
+		out.emplace_back(node.m_left.m_path, ibStoredValue(node.m_right.m_value, metaData));
 	}
 }
 }   // namespace
@@ -556,7 +556,7 @@ long ibValueTabularSectionDataObjectBase::AppendRow(unsigned int before, const i
 	// because it falls out at once"*). So it is filled HERE, before the notify, and the first order computed
 	// after the insert already contains the row.
 	std::vector<std::pair<wxString, ibValue>> defaults;
-	ibCollectFilterDefaults(GetModelComposer().GetCurrentFilterDesc().m_nodes, defaults);
+	ibCollectFilterDefaults(GetModelComposer().GetCurrentFilterDesc().m_nodes, GetModelComposer().GetMetaData(), defaults);
 	for (const std::pair<wxString, ibValue>& one : defaults) {
 		const ibMetaID col = GetColumnIDByName(one.first);
 		if (col != wxNOT_FOUND)

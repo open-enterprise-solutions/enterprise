@@ -6,7 +6,7 @@
 // compiler or the interpreter changes, so a stale blob kept its key.
 //
 // The key is kAOTFormatVersion, the hash compiler/engineFingerprint.cmake
-// writes at build time from compiler/** and system/**, and the configuration
+// writes at build time from compiler/**, system/** and core/compiler/**, and the configuration
 // digest. The opcode fingerprint stays as a second guard: it fails when
 // codeDef.h moves and the version does not. A separate test shows that a
 // changed built-in source is a different hash, and therefore a different key.
@@ -133,10 +133,14 @@ wxString ScriptFingerprint(const wxString& substituteRel, const wxString& substi
 		+ wxFILE_SEP_PATH + wxT("engineFingerprint.cmake");
 	const wxString out = wxFileName(wxStandardPaths::Get().GetTempDir(),
 		substituteRel.empty() ? wxT("oes-engine-fp.h") : wxT("oes-engine-fp-sub.h")).GetFullPath();
+	// The cmake that configured the build (tests/CMakeLists.txt), not whichever is on PATH.
 	wxString cmd = wxString::Format(
-		wxT("cmake -DOES_COMPILER_DIR=\"%s\" -DOES_SYSTEM_DIR=\"%s\" -DOES_BACKEND_DIR=\"%s\" -DOES_FINGERPRINT_OUT=\"%s\""),
+		wxT("\"%s\" -DOES_COMPILER_DIR=\"%s\" -DOES_SYSTEM_DIR=\"%s\" -DOES_CORE_COMPILER_DIR=\"%s\" -DOES_BACKEND_DIR=\"%s\" -DOES_FINGERPRINT_OUT=\"%s\""),
+		wxString::FromUTF8(OES_CMAKE_COMMAND),
 		backend + wxFILE_SEP_PATH + wxT("compiler"),
 		backend + wxFILE_SEP_PATH + wxT("system"),
+		root + wxFILE_SEP_PATH + wxT("src") + wxFILE_SEP_PATH + wxT("engine") + wxFILE_SEP_PATH
+			+ wxT("core") + wxFILE_SEP_PATH + wxT("compiler"),
 		backend,
 		out);
 	if (!substituteRel.empty())

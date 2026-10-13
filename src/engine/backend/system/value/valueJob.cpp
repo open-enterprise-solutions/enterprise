@@ -85,7 +85,7 @@ bool ibValueSchedule::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, i
 		pvarRetValue = ibJobScheduleRules::Describe(m_schedule);
 		return true;
 	case enIsValid:
-		pvarRetValue = m_schedule.IsValid();
+		pvarRetValue = ibJobScheduleRules::IsValid(m_schedule);
 		return true;
 	}
 
@@ -213,7 +213,7 @@ bool ibValuePredefinedJobs::ibValueJobRow::ReadSettings()
 	m_active = stored.m_active;
 	m_lastRun = stored.m_lastRun;
 	m_computer = stored.m_computer;
-	if (stored.m_schedule.IsValid())
+	if (ibJobScheduleRules::IsValid(stored.m_schedule))
 		m_schedule = stored.m_schedule;
 
 	return stored.m_found;

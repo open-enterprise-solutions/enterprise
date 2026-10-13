@@ -1,5 +1,11 @@
+#if !defined(_WIN32) && !defined(_GNU_SOURCE)
+#  define _GNU_SOURCE
+#endif
 #include "core/fiber/fiber.h"
 
+#include "core/diagnostics/crashGuard.h"   // ArmCurrentThread — the overflow log needs an alternate stack
+
+#include <atomic>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -17,7 +23,11 @@
 #    define _WIN32_WINNT 0x0600
 #  endif
 #  include <windows.h>
+#  if defined(_MSC_VER)
+#    include <intrin.h>   // _AddressOfReturnAddress — the frame, not a local ASan moved
+#  endif
 #else
+#  include <pthread.h>
 #  include <sys/mman.h>
 #  include <unistd.h>
 #endif
@@ -60,6 +70,88 @@ namespace {
 
 thread_local ibFiber* tl_currentFiber = nullptr;
 thread_local ibFiber* tl_schedulerFiber = nullptr;
+
+// The OS thread's stack, measured once. A fiber has its own span and
+// does not use this. Low is the bottom of the reservation (the guard
+// sits there); high is the top. Remaining is the distance down to low,
+// which is how much the stack can still grow, not how much is committed.
+struct ibStackSpan {
+	const char* low = nullptr;
+	const char* high = nullptr;
+};
+
+// Measured once per thread: a failed measurement is not retried.
+enum class ibStackSpanState { Untried, Measured, Failed };
+
+thread_local ibStackSpan tl_threadStack;
+thread_local ibStackSpanState tl_spanState = ibStackSpanState::Untried;
+
+bool ThreadStackSpan(ibStackSpan& out)
+{
+	if (tl_spanState == ibStackSpanState::Measured) {
+		out = tl_threadStack;
+		return true;
+	}
+	if (tl_spanState == ibStackSpanState::Failed)
+		return false;
+#if defined(_WIN32)
+	char here;
+	MEMORY_BASIC_INFORMATION hereInfo;
+	if (::VirtualQuery(&here, &hereInfo, sizeof(hereInfo)) == 0 || hereInfo.AllocationBase == nullptr) {
+		tl_spanState = ibStackSpanState::Failed;
+		return false;
+	}
+	const char* base = static_cast<const char*>(hereInfo.AllocationBase);
+	const char* end = base;
+	const char* p = base;
+	for (;;) {
+		MEMORY_BASIC_INFORMATION region;
+		if (::VirtualQuery(p, &region, sizeof(region)) == 0)
+			break;
+		if (region.AllocationBase != hereInfo.AllocationBase)
+			break;
+		end = static_cast<const char*>(region.BaseAddress) + region.RegionSize;
+		p = end;
+		if (static_cast<std::size_t>(end - base) > 64u * 1024u * 1024u)
+			break;
+	}
+	if (end <= base) {
+		tl_spanState = ibStackSpanState::Failed;
+		return false;
+	}
+	out.low = base;
+	out.high = end;
+#elif defined(__APPLE__)
+	void* const top = pthread_get_stackaddr_np(pthread_self());
+	const std::size_t size = pthread_get_stacksize_np(pthread_self());
+	if (top == nullptr || size == 0) {
+		tl_spanState = ibStackSpanState::Failed;
+		return false;
+	}
+	out.high = static_cast<const char*>(top);
+	out.low = out.high - size;
+#else
+	pthread_attr_t attr;
+	if (pthread_getattr_np(pthread_self(), &attr) != 0) {
+		tl_spanState = ibStackSpanState::Failed;
+		return false;
+	}
+	void* addr = nullptr;
+	std::size_t size = 0;
+	const int rc = pthread_attr_getstack(&attr, &addr, &size);
+	pthread_attr_destroy(&attr);
+	if (rc != 0 || addr == nullptr || size == 0) {
+		tl_spanState = ibStackSpanState::Failed;
+		return false;
+	}
+	out.low = static_cast<const char*>(addr);
+	out.high = out.low + size;
+#endif
+	tl_threadStack = out;
+	tl_spanState = (out.low != nullptr && out.high > out.low)
+		? ibStackSpanState::Measured : ibStackSpanState::Failed;
+	return tl_spanState == ibStackSpanState::Measured;
+}
 
 } // namespace
 
@@ -112,12 +204,13 @@ void ibFiber::InitPosixStack()
 		reinterpret_cast<std::uint64_t>(&ibFiberTrampoline);
 	m_sp = sp;
 #elif defined(__aarch64__)
-	// Ten 16-byte pairs: d8-d15, then x19-x30. x30 (the link register)
-	// is the trampoline. sp stays 16-byte aligned, which is what a call
-	// on the trampoline requires.
-	unsigned char* sp = reinterpret_cast<unsigned char*>(top - 160);
-	std::memset(sp, 0, 160);
-	*reinterpret_cast<std::uint64_t*>(sp + 152) =
+	// Eleven 16-byte slots: FPCR (the low 8 bytes; 0 is the reset
+	// value, RN and no traps), d8-d15, then x19-x30. x30 (the link
+	// register) is the trampoline. sp stays 16-byte aligned, which is
+	// what a call on the trampoline requires.
+	unsigned char* sp = reinterpret_cast<unsigned char*>(top - 176);
+	std::memset(sp, 0, 176);
+	*reinterpret_cast<std::uint64_t*>(sp + 168) =
 		reinterpret_cast<std::uint64_t>(&ibFiberTrampoline);
 	m_sp = sp;
 #else
@@ -129,6 +222,15 @@ void ibFiber::InitPosixStack()
 
 void ibFiber::ConvertThread()
 {
+	// Before the first switch. A fiber's guard page faults on this thread,
+	// and the crash log runs on the alternate stack installed here.
+	ibCrashGuard::ArmCurrentThread();
+#if defined(_WIN32)
+	// Room for the overflow filter to start the dump thread. The dump
+	// itself runs on that thread, not on the stack that ran out.
+	ULONG guarantee = 64u * 1024u;
+	::SetThreadStackGuarantee(&guarantee);
+#endif
 	if (tl_schedulerFiber != nullptr)
 		return;
 	ibFiber* self = new ibFiber();
@@ -175,6 +277,63 @@ void ibFiber::ReleaseThread()
 ibFiber* ibFiber::Current() { return tl_currentFiber; }
 ibFiber* ibFiber::Scheduler() { return tl_schedulerFiber; }
 
+namespace {
+
+const char* FrameAddress() noexcept
+{
+#if defined(_MSC_VER)
+	return static_cast<const char*>(_AddressOfReturnAddress());
+#else
+	return static_cast<const char*>(__builtin_frame_address(0));
+#endif
+}
+
+void LogUnknownFiberBoundsOnce() noexcept
+{
+#ifndef NDEBUG
+	static std::atomic<bool> logged{ false };
+	if (!logged.exchange(true, std::memory_order_relaxed))
+		std::fprintf(stderr, "ibFiber::StackRemaining: fiber stack bounds are unknown\n");
+#else
+	// Release has nothing to say. The caller treats the answer as unknown.
+#endif
+}
+
+} // namespace
+
+std::size_t ibFiber::StackRemaining() noexcept
+{
+	// The frame address, not the address of a local. With
+	// detect_stack_use_after_return a local lives on ASan's fake stack, and
+	// the distance from there to the fiber is not a remaining budget.
+	const char* const sp = FrameAddress();
+
+	const char* low = nullptr;
+	const char* high = nullptr;
+	const ibFiber* const cur = tl_currentFiber;
+	if (cur != nullptr && !cur->m_scheduler && cur->m_stackBottom != nullptr && cur->m_stackSize != 0) {
+		low = static_cast<const char*>(cur->m_stackBottom);
+		high = low + cur->m_stackSize;
+	}
+	else {
+		if (cur != nullptr && !cur->m_scheduler)
+			LogUnknownFiberBoundsOnce();
+		ibStackSpan span;
+		if (!ThreadStackSpan(span))
+			return kUnknownStack;
+		low = span.low;
+		high = span.high;
+	}
+	// Outside the span is a measurement we do not trust. Refusing on it
+	// would turn a healthy script into a recursion error.
+	if (sp == nullptr || sp <= low || sp > high) {
+		if (cur != nullptr && !cur->m_scheduler)
+			LogUnknownFiberBoundsOnce();
+		return kUnknownStack;
+	}
+	return static_cast<std::size_t>(sp - low);
+}
+
 ibFiber* ibFiber::Create(Entry entry, void* arg, std::size_t reserveBytes)
 {
 	if (reserveBytes == 0)
@@ -186,8 +345,11 @@ ibFiber* ibFiber::Create(Entry entry, void* arg, std::size_t reserveBytes)
 		fiber->m_locals = ibFiberLocals::ForFiber();
 #if defined(_WIN32)
 		fiber->m_stackSize = reserveBytes;
+		// The commit stays below the reserve: at or above it, Windows rounds the reserve up to a whole
+		// megabyte, and a fiber asked for 64 KB got one.
+		const std::size_t commitBytes = reserveBytes > 64u * 1024u ? 64u * 1024u : reserveBytes / 2;
 		void* handle = CreateFiberEx(
-			64u * 1024u, reserveBytes, FIBER_FLAG_FLOAT_SWITCH, &ibFiber::FiberProc, fiber);
+			commitBytes, reserveBytes, FIBER_FLAG_FLOAT_SWITCH, &ibFiber::FiberProc, fiber);
 		if (handle == nullptr)
 			throw std::bad_alloc();
 		fiber->m_osFiber = handle;
@@ -197,7 +359,13 @@ ibFiber* ibFiber::Create(Entry entry, void* arg, std::size_t reserveBytes)
 		const std::size_t usable = (reserveBytes + pageSize - 1) & ~(pageSize - 1);
 		const std::size_t total = usable + pageSize;
 		int flags = MAP_PRIVATE | MAP_ANONYMOUS;
-#  ifdef MAP_STACK
+		// Linux MAP_STACK is a hint. Where the flag really means "this
+		// mapping is a kernel stack" (the BSDs that implement it),
+		// munmap of the region raises SIGBUS, and macOS arm64 reports
+		// that fault as a bus error — including from a thread that is
+		// still leaving. Darwin does not define the macro; do not pass
+		// it if an SDK grows it.
+#  if defined(MAP_STACK) && !defined(__APPLE__)
 		flags |= MAP_STACK;
 #  endif
 		void* mem = ::mmap(nullptr, total, PROT_NONE, flags, -1, 0);
@@ -307,13 +475,42 @@ void ibFiber::SwitchTo(ibFiber* target)
 
 void __stdcall ibFiber::FiberProc(void* arg)
 {
+	// The fiber shares the thread. The guarantee is what lets the overflow
+	// filter run far enough to hand the dump to a thread that still has a stack.
+	ULONG guarantee = 64u * 1024u;
+	::SetThreadStackGuarantee(&guarantee);
+
 	ibFiber* const self = static_cast<ibFiber*>(arg);
 #  if defined(IB_FIBER_ASAN)
 	__sanitizer_finish_switch_fiber(nullptr, nullptr, nullptr);
 #  endif
+	// The reservation, not the commit. AllocationBase is the low end;
+	// the regions that share it run up to the top the pointer grows from.
+	// The address and the output buffer are different slots: one buffer
+	// for both aliases the page being described with the place the
+	// description is written.
+	volatile char here = 0;
 	MEMORY_BASIC_INFORMATION info;
-	if (::VirtualQuery(&info, &info, sizeof(info)) != 0)
+	if (::VirtualQuery(const_cast<char*>(&here), &info, sizeof(info)) != 0
+		&& info.AllocationBase != nullptr) {
+		const char* const base = static_cast<const char*>(info.AllocationBase);
+		const char* end = base;
+		const char* p = base;
+		for (;;) {
+			MEMORY_BASIC_INFORMATION region;
+			if (::VirtualQuery(p, &region, sizeof(region)) == 0)
+				break;
+			if (region.AllocationBase != info.AllocationBase)
+				break;
+			end = static_cast<const char*>(region.BaseAddress) + region.RegionSize;
+			p = end;
+			if (static_cast<std::size_t>(end - base) > 64u * 1024u * 1024u)
+				break;
+		}
 		self->m_stackBottom = info.AllocationBase;
+		if (end > base)
+			self->m_stackSize = static_cast<std::size_t>(end - base);
+	}
 	self->RunEntry();
 	self->SwitchTo(tl_schedulerFiber);
 	std::abort();

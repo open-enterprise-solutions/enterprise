@@ -2,7 +2,7 @@
 #define __VALUE_SPREADSHEET_DOC_H__
 
 #include "backend/compiler/value.h"
-#include "backend/backend_spreadsheet.h"
+#include "core/spreadsheet/spreadsheetObject.h"
 #include "backend/spreadsheetModel.h"   // ibValueSpreadsheetModel — a document IS one
 
 // The document a GRIDBOX shows, and an attribute type in its own right: creating the control creates
@@ -31,7 +31,7 @@ class BACKEND_API ibValueSpreadsheetDocument : public ibValueSpreadsheetModel {
 	// Which is what a composition needs: it builds into a document of its own (off the UI thread, so
 	// the shown one is not being written to while it is painted) and then this puts that document in
 	// place, complete.
-	void SetSpreadsheetDocument(const wxObjectDataPtr<ibBackendSpreadsheetObject>& doc) {
+	void SetSpreadsheetDocument(const std::shared_ptr<ibSpreadsheetObject>& doc) {
 		if (doc) m_spreadsheetDoc = doc;
 	}
 
@@ -161,7 +161,7 @@ class BACKEND_API ibValueSpreadsheetDocumentArea :
 	ibValueSpreadsheetDocumentArea() : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE), m_row(-1), m_col(-1), m_spreadsheetDoc() {
 		m_members.Bind(this, &ibValueSpreadsheetDocumentArea::FillMembers);
 	}
-	ibValueSpreadsheetDocumentArea(wxObjectDataPtr<ibBackendSpreadsheetObject>& spreadsheetDoc, int row, int col) :
+	ibValueSpreadsheetDocumentArea(std::shared_ptr<ibSpreadsheetObject>& spreadsheetDoc, int row, int col) :
 		ibValueDynamicMembers(ibValueTypes::TYPE_VALUE), m_row(row), m_col(col), m_spreadsheetDoc(spreadsheetDoc) {
 		m_members.Bind(this, &ibValueSpreadsheetDocumentArea::FillMembers);
 	}
@@ -179,7 +179,7 @@ class BACKEND_API ibValueSpreadsheetDocumentArea :
 private:
 
 	int m_row, m_col;
-	wxObjectDataPtr<ibBackendSpreadsheetObject> m_spreadsheetDoc;
+	std::shared_ptr<ibSpreadsheetObject> m_spreadsheetDoc;
 
 };
 
@@ -196,11 +196,11 @@ class BACKEND_API ibValueSpreadsheetDocumentBorder :
 
 public:
 
-	wxPenStyle GetStyle() const { return m_style; }
-	wxColour GetColour() const { return m_colour; }
+	ibSpreadsheetPenStyle GetStyle() const { return m_style; }
+	const ibColour& GetColour() const { return m_colour; }
 	int GetWidth() const { return m_width; }
 
-	ibValueSpreadsheetDocumentBorder(wxPenStyle style = wxPENSTYLE_TRANSPARENT, const wxColour& colour = *wxBLACK, int width = 1) :
+	ibValueSpreadsheetDocumentBorder(ibSpreadsheetPenStyle style = ibPenStyle_Transparent, const ibColour& colour = ibColour(0, 0, 0), int width = 1) :
 		ibValueDynamicMembers(ibValueTypes::TYPE_VALUE), m_style(style), m_colour(colour), m_width(width) {
 		m_members.Bind(this, &ibValueSpreadsheetDocumentBorder::FillMembers);
 	}
@@ -213,8 +213,8 @@ public:
 	void FillMembers(ibMemberTable& helper) const;   // bound in ctor (was PrepareNames)
 
 private:
-	wxPenStyle m_style = wxPENSTYLE_TRANSPARENT;
-	wxColour m_colour = *wxBLACK;
+	ibSpreadsheetPenStyle m_style = ibPenStyle_Transparent;
+	ibColour m_colour = ibColour(0, 0, 0);
 	int m_width = 1;
 
 };

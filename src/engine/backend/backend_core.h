@@ -10,11 +10,10 @@
 
 #include "core/build.h"   // GetBuildId / GetBuildStamp
 #include "core/guid.h"
-#include "core/types.h"   // the class ids, the ids of the configuration, the kinds of a value
+#include "core/core.h"    // the class ids, the ids of the configuration, the kinds of a value
 #include "core/fnumber.h"
 #include "core/fdatetime.h"
 #include "core/fstring.h"
-#include "typeconv.h"
 #include "core/stringUtils.h"
 
 //*******************************************************************************************
@@ -104,9 +103,8 @@ typedef ibRowValues<ibMetaID, class BACKEND_API ibValue> ibRowMetaValues;
 #define MAX_PRECISION_NUMBER 32
 //max precision 
 #define MAX_LENGTH_STRING 1024
-//stack guard
-#define MAX_OBJECTS_LEVEL 100
-//max record level 
+// (The stack guard — MAX_OBJECTS_LEVEL — is the translator's, in the core: core/compiler/codeDef.h.)
+//max record level
 #define MAX_REC_COUNT 200
 
 #if defined(_LP64) || defined(__LP64__) || defined(__arch64__) || defined(_WIN64)
@@ -117,10 +115,7 @@ typedef ibRowValues<ibMetaID, class BACKEND_API ibValue> ibRowMetaValues;
 
 // (The program's version — ibProgramVersion, version_oes_last — is the core's, beside its build: core/build.h.)
 
-enum ibProgramSyntax {
-	syntax_ves,    // Visual Basic-style ES, a legacy business-scripting dialect — keyword-fenced (Then/Do/EndIf/...).
-	syntax_ces,    // C-style ES — paren conditions, brace bodies, `;` terminators (default).
-};
+// (The program's syntax — ibProgramSyntax — is the core's, beside the language it chooses: core/compiler/codeDef.h.)
 
 // ⭐⭐ WHAT KIND OF EVALUATION IS RUNNING — one value rather than a flag per capability.
 //

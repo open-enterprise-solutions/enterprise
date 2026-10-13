@@ -10,10 +10,13 @@
 #include "frontend/visualView/ctrl/formAttribute.h"                   // ibFormAttributeValue — the attach-owner to refresh the attribute tree
 #include "backend/appData.h"
 #include "backend/query/queryableFactory.h"
+#include "backend/query/queryable.h"                     // GetSourceMetaObject — whose picture a source wears
+#include "backend/metaCollection/genericData.h"          // ibValueMetaObjectGenericData::GetIcon
 #include "backend/metaData.h"   // ibMetaData full def — owner->GetMetaData() gives a bare pointer without it, but ->GetSourceFactory() dereferences it
 
 #include <wx/dialog.h>
-#include <wx/listbox.h>
+#include <wx/listctrl.h>
+#include <wx/imaglist.h>
 #include <wx/sizer.h>
 #include <wx/button.h>
 
@@ -57,7 +60,12 @@ ibPGDynamicSourceProperty::ibPGDynamicSourceProperty(ibPropertyObject* property,
 		for (ibQueryableSourceDescriptor* d : factory->GetDescriptors()) {
 			if (d == nullptr)
 				continue;
-			m_choices.Add(d->GetNamespace() + wxT(".") + d->GetName());
+			// THE PICTURE OF THE TYPE — the metaobject's own, as the type cell shows it (ibPGTypeProperty).
+			// A source with no metaobject behind it (temp, computed) goes without.
+			const ibBackendQueryable* queryable = factory->Resolve(d->GetNamespace(), d->GetName());
+			const ibValueMetaObjectGenericData* metaObject = queryable != nullptr ? queryable->GetSourceMetaObject() : nullptr;
+			m_choices.Add(d->GetNamespace() + wxT(".") + d->GetName(),
+				metaObject != nullptr ? wxBitmapBundle(metaObject->GetIcon()) : wxBitmapBundle());
 			m_sources.emplace_back(d->GetNamespace(), d->GetName());
 		}
 	}
@@ -119,29 +127,39 @@ wxPGEditorDialogAdapter* ibPGDynamicSourceProperty::GetEditorDialog() const
 			wxDialog dlg(pg, wxID_ANY, _("Select source"), wxDefaultPosition, wxSize(400, 320),
 				wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER);
 			wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
-			wxListBox* listBox = new wxListBox(&dlg, wxID_ANY);
-			sizer->Add(listBox, 1, wxALL | wxEXPAND, 8);
+			// ONE COLUMN, NO HEADER, A PICTURE BY EACH NAME — a list box draws no pictures.
+			wxListCtrl* listCtrl = new wxListCtrl(&dlg, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+				wxLC_REPORT | wxLC_SINGLE_SEL | wxLC_NO_HEADER);
+			listCtrl->InsertColumn(0, wxEmptyString, wxLIST_FORMAT_LEFT, dlg.FromDIP(360));
+			sizer->Add(listCtrl, 1, wxALL | wxEXPAND, 8);
 			sizer->Add(dlg.CreateStdDialogButtonSizer(wxOK | wxCANCEL), 0, wxALL | wxALIGN_RIGHT, 8);
 			dlg.SetSizer(sizer);
+			listCtrl->Bind(wxEVT_LIST_ITEM_ACTIVATED, [&dlg](wxListEvent&) { dlg.EndModal(wxID_OK); });
 
-			// Options = every registered source (namespace.name) — straight from the factory.
+			// Options = the cell's own choices — the same names and pictures its drop-down shows, and
+			// m_sources beside them, index for index.
+			const wxPGChoices& choices = dlgProp->GetChoices();
+			const std::vector<std::pair<wxString, wxString>>& sources = dlgProp->m_sources;   // (ns, name)
+			wxImageList* images = new wxImageList(16, 16);
+			listCtrl->AssignImageList(images, wxIMAGE_LIST_SMALL);
 			const ibBackendQueryable* current = list->GetSourceQueryable();
-			std::vector<std::pair<wxString, wxString>> sources;   // (ns, name)
-			for (ibQueryableSourceDescriptor* d : factory->GetDescriptors()) {
-				if (d == nullptr)
-					continue;
-				const int idx = listBox->Append(d->GetNamespace() + wxT(".") + d->GetName());
-				sources.emplace_back(d->GetNamespace(), d->GetName());
+			for (unsigned int i = 0; i < choices.GetCount() && i < sources.size(); ++i) {
+				const wxBitmapBundle& bitmap = choices.Item(i).GetBitmap();
+				const int icon = bitmap.IsOk() ? images->Add(bitmap.GetBitmap(wxSize(16, 16))) : -1;
+				const long idx = listCtrl->InsertItem(i, choices.GetLabel(i), icon);
 				// Pre-select the source already chosen on the list (re-open lands on it).
-				if (current != nullptr && current == factory->Resolve(d->GetNamespace(), d->GetName()))
-					listBox->SetSelection(idx);
+				if (current != nullptr && current == factory->Resolve(sources[i].first, sources[i].second)) {
+					listCtrl->SetItemState(idx, wxLIST_STATE_SELECTED | wxLIST_STATE_FOCUSED,
+						wxLIST_STATE_SELECTED | wxLIST_STATE_FOCUSED);
+					listCtrl->EnsureVisible(idx);
+				}
 			}
 
 			if (dlg.ShowModal() != wxID_OK)
 				return false;
 
-			const int sel = listBox->GetSelection();
-			if (sel < 0 || sel >= (int)sources.size())
+			const long sel = listCtrl->GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
+			if (sel < 0 || sel >= (long)sources.size())
 				return false;
 
 			// Facade: stores the queryable into the property variant AND rebuilds (gated on a

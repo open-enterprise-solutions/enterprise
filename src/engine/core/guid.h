@@ -81,6 +81,12 @@ public:
 	// (the type is the _RTRef column); ibGuid stays a primitive that mints guids, it does not know metaIDs.
 	static ibGuidImpl newGuid(short version = GUID_RANDOM);
 
+#if __WXWINDOWS__
+	// Read a guid from its text: 32 hex digits, hyphens anywhere. False, and `guid` untouched, when the text
+	// is not a guid; the nil guid's text is one. The constructor from text answers the nil guid for both.
+	static bool parse(const wxString& text, ibGuid& guid);
+#endif
+
 	bool operator > (const ibGuid& other) const;
 	bool operator >= (const ibGuid& other) const;
 	bool operator < (const ibGuid& other) const;

@@ -58,6 +58,8 @@ ibFileBase* ibFileBaseOpen(const std::string& request, wxString& error)
 	opening.m_user      = text("User");
 	opening.m_password  = text("Password");
 	opening.m_database  = text("Database");
+	const auto create = where.find("Create");
+	opening.m_create = create != where.end() && create->is_boolean() && create->get<bool>();
 	const auto debug = where.find("Debug");
 	const bool debugEnable = debug != where.end() && debug->is_boolean() && debug->get<bool>();
 

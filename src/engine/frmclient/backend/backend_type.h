@@ -7,8 +7,9 @@
 
 #include <vector>
 
-#include "frmclient/backend/typeDescription.h"
-#include "frmclient/backend/sourceDescription.h"   // ibSourceDescription — control's bound source path (GetSourceDesc)
+#include "frmclient/backend/compiler/value.h"      // ibValue — what a factory makes and adjusts; FRMCLIENT_API
+#include "core/description/typeDescription.h"
+#include "core/description/sourceDescription.h"    // ibSourceDescription — control's bound source path (GetSourceDesc)
 
 class FRMCLIENT_API ibMetaData;
 class ibBackendSourceColumn;

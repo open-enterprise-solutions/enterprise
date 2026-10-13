@@ -14,6 +14,7 @@
 
 #include "dataview.h"
 #include "frmclient/win/picture.h"   // ibProtocolPictureById — a row's state picture, by its id, as the client was sent it
+#include "frmclient/win/typeconv.h"  // ColourToWxColour — an item's colours are the model's data
 #ifndef WX_PRECOMP
 #ifdef __WXMSW__
 #include <wx/app.h>          // GetRegisteredClassName()
@@ -1268,7 +1269,7 @@ wxSize ibDataViewTextRenderer::GetSize() const
 			ibDataViewCtrl* const view = GetView();
 			wxClientDC dc(view);
 			if (GetAttr().HasFont())
-				dc.SetFont(GetAttr().GetEffectiveFont(view->GetFont()));
+				dc.SetFont(ibEffectiveFont(GetAttr(), view->GetFont()));
 
 			return m_markupText->Measure(dc);
 		}
@@ -1496,7 +1497,7 @@ ibDataViewProgressRenderer::Render(wxRect rect, wxDC* dc, int WXUNUSED(state))
 {
 	const ibDataViewItemAttr& attr = GetAttr();
 	if (attr.HasColour())
-		dc->SetBackground(attr.GetColour());
+		dc->SetBackground(typeConv::ColourToWxColour(attr.GetColour()));
 
 	// This is a hack, but native renderers don't support using custom colours,
 	// but typically gauge colour is important (e.g. it's commonly green/red to
@@ -7717,14 +7718,14 @@ void ibDataViewCtrl::DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindo
 					ibDataViewItemAttr attr;
 					GetModel()->GetAttr(gitem, expander->GetModelColumn(), attr);
 					const wxColour fg = sel ? wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHTTEXT)
-					                  : attr.HasColour() ? attr.GetColour()
+					                  : attr.HasColour() ? typeConv::ColourToWxColour(attr.GetColour())
 					                  : GetForegroundColour();
 					int flags = 0;
 					if (sel)          flags |= wxCONTROL_SELECTED;
 					if (!IsEnabled()) flags |= wxCONTROL_DISABLED;
 					const wxRect capRect(capX, grp_line, rightX - capX, lh);
 					wxDCClipper     clip(dc, capRect);
-					wxDCFontChanger fontChg(dc, attr.HasFont() ? attr.GetEffectiveFont(GetFont()) : GetFont());
+					wxDCFontChanger fontChg(dc, attr.HasFont() ? ibEffectiveFont(attr, GetFont()) : GetFont());
 					dc.SetTextForeground(fg);
 					wxRendererNative::Get().DrawItemText(this, dc, grpCaption, capRect,
 						wxALIGN_LEFT | wxALIGN_CENTRE_VERTICAL, flags, wxELLIPSIZE_END);

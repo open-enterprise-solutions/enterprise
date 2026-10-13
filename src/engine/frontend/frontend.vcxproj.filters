@@ -1715,6 +1715,9 @@
     <ClInclude Include="win\ctrls\charts\wxtimeserieschartoptions.h">
       <Filter>win\ctrls\charts</Filter>
     </ClInclude>
+    <ClInclude Include="win\typeconv.h">
+      <Filter>win</Filter>
+    </ClInclude>
     <ClInclude Include="win\ctrls\charts\wxareachart.h">
       <Filter>win\ctrls\charts</Filter>
     </ClInclude>
@@ -1939,6 +1942,9 @@
       <Filter>propertyManager\property\advprop</Filter>
     </ClInclude>
     <ClInclude Include="propertyManager\property\advprop\advpropChoiceLink.h">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClInclude>
+    <ClInclude Include="propertyManager\property\advprop\advpropColour.h">
       <Filter>propertyManager\property\advprop</Filter>
     </ClInclude>
     <ClInclude Include="session\workerPoolGUI.h">

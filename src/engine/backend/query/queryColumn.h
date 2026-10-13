@@ -23,7 +23,7 @@
 // See docs/private/ownership-authority.md. Nothing on THIS side changed — every tier below the L3 door
 // still meets a plain ibBackendQueryColumn and knows nothing about where it came from.
 
-#include "backend/typeDescription.h"    // ibTypeDescription (the column's L3 type)
+#include "core/description/typeDescription.h"    // ibTypeDescription (the column's L3 type)
 #include "backend/databaseLayer/columnType.h"   // ibColumnType — the canonical type a column's field declares
 
 // ⚠ NOT <wx/icon.h> — FORWARD-DECLARED. backend.dll is GUI-free (CLAUDE.md), and this header is
@@ -32,7 +32,7 @@
 // two files that DEFINE such a body need the real header, and they already include it.
 class wxIcon;
 
-#include "backend/query/queryBalanceRole.h"   // ibBalanceRole — what a column is in a balance (GetBalanceRole)
+#include "core/query/queryBalanceRole.h"      // ibBalanceRole — what a column is in a balance (GetBalanceRole)
 
 #include <limits>   // numeric_limits — the ceiling a composed id may not pass (CanComposeSyntheticId)
 #include <memory>   // enable_shared_from_this — a column carries its own control block (see below)

@@ -30,7 +30,7 @@
 #include <wx/toolbar.h>
 #include <wx/treectrl.h>
 
-#include "backend/compositionDescription.h"   // ibFilterDescription — what is edited here
+#include "core/description/compositionDescription.h"   // ibFilterDescription — what is edited here
 #include "frontend/win/ctrls/dataview/dataview.h"
 #include "frontend/win/dlgs/settings/filterTreeModel.h"   // ibFilterTreeModel + ibFilterPath — a row IS a path
 

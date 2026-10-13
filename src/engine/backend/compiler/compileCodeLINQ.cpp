@@ -34,7 +34,8 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "compileCode.h"
-#include "codeDef.h"
+#include "core/compiler/codeDef.h"
+#include "core/fiber/fiber.h"              // StackLow — a nested `from` is another native frame
 
 #include "procUnitLambda.h"                // LINQ_THREE_VALUED_NULL — the mark a filter's instructions carry
 
@@ -67,7 +68,7 @@
 // is emitted, so both roads that bracket a query can ask it at the moment they finish reading one.
 unsigned int ibCompileCode::FindQueryTextEnd() const
 {
-	if (m_numCurrentCompile < 0 || (size_t)m_numCurrentCompile >= m_listLexem.size())
+	if (m_numCurrentCompile < 0 || (size_t)m_numCurrentCompile >= m_translateCode.GetLexCount())
 		return 0;
 
 	// The first token the query did not read — INCLUDING the end-of-text marker. It stands where the
@@ -77,13 +78,13 @@ unsigned int ibCompileCode::FindQueryTextEnd() const
 	// `var q = from o in Data.Catalogs.Goods |` ended at 37 with the caret at 38, so the clause
 	// keywords that position exists for were not offered.
 	const size_t next = (size_t)m_numCurrentCompile + 1;
-	if (next < m_listLexem.size())
-		return m_listLexem[next].m_numString;
+	if (next < m_translateCode.GetLexCount())
+		return m_translateCode.GetLexAt(next).m_numString;
 
 	// ⚠ AT LEAST ONE CHARACTER WIDE. A token's text is its own for an identifier or a literal and
 	// EMPTY for a delimiter — which is what a query often ends on — so a span taken from the length
 	// alone would stop one character short of the last `)` it read.
-	const ibLexem& last = m_listLexem[(size_t)m_numCurrentCompile];
+	const ibLexem& last = m_translateCode.GetLexAt((size_t)m_numCurrentCompile);
 	const size_t width = last.m_strData.length();
 	return last.m_numString + (unsigned int)(width > 0 ? width : 1);
 }
@@ -113,8 +114,8 @@ ibParamUnit ibCompileCode::CompileLinqExpression(ibCompileContext* context)
 
 	// Where the query starts in the text — the `from` token itself, which the cursor is standing on.
 	// See ibLinqQuery::m_textFrom for why the compiler writes this down.
-	if (m_numCurrentCompile >= 0 && (size_t)m_numCurrentCompile < m_listLexem.size())
-		data.m_textFrom = m_listLexem[(size_t)m_numCurrentCompile].m_numString;
+	if (m_numCurrentCompile >= 0 && (size_t)m_numCurrentCompile < m_translateCode.GetLexCount())
+		data.m_textFrom = m_translateCode.GetLexAt((size_t)m_numCurrentCompile).m_numString;
 
 
 	// Diagnostic: walk parent chain to see how far visibility reaches.
@@ -293,8 +294,8 @@ ibParamUnit ibCompileCode::CompileRestrictExpression(ibCompileContext* context)
 	m_cByteCode.m_listLinq.emplace_back();
 	ibLinqQuery& data = m_cByteCode.m_listLinq.back();
 	data.m_restrict = true;
-	if (m_numCurrentCompile >= 0 && (size_t)m_numCurrentCompile < m_listLexem.size())
-		data.m_textFrom = m_listLexem[(size_t)m_numCurrentCompile].m_numString;
+	if (m_numCurrentCompile >= 0 && (size_t)m_numCurrentCompile < m_translateCode.GetLexCount())
+		data.m_textFrom = m_translateCode.GetLexAt((size_t)m_numCurrentCompile).m_numString;
 
 	GETKeyWord(KEY_RESTRICT);
 	const wxString srcAlias = GETIdentifier(true);   // the source row alias (`s`)
@@ -457,28 +458,28 @@ struct ibLinqChainLink {
 // A pure read over the lexemes from `at`: every `.Verb( … )` link that follows, with balanced
 // parentheses. Consumes nothing and emits nothing — both roads decide from this and then read the
 // chain for real with the ordinary GET* helpers, so positions and diagnostics stay what they were.
-void FindLinqChain(const std::vector<ibLexem>& lexems, size_t at, std::vector<ibLinqChainLink>& out)
+void FindLinqChain(const ibTranslateCode& translateCode, size_t at, std::vector<ibLinqChainLink>& out)
 {
 	out.clear();
 
 	const auto isDelim = [&](size_t i, wxUniChar c) {
-		return i < lexems.size() && lexems[i].m_lexType == DELIMITER
-			&& (wxUniChar)lexems[i].m_numData == c;
+		return i < translateCode.GetLexCount() && translateCode.GetLexAt(i).m_lexType == DELIMITER
+			&& (wxUniChar)translateCode.GetLexAt(i).m_numData == c;
 	};
 
 	size_t p = at;
 
 	while (isDelim(p, wxT('.'))) {
 		const size_t nameAt = p + 1;
-		if (nameAt >= lexems.size())
+		if (nameAt >= translateCode.GetLexCount())
 			return;
-		const short kind = lexems[nameAt].m_lexType;
+		const short kind = translateCode.GetLexAt(nameAt).m_lexType;
 		if (kind != IDENTIFIER && kind != KEYWORD)
 			return;
 
 		// A pipeline verb by NAME, off the one table the emitter resolves against — the same
 		// lookup OPER_CALL_LINQ does, so this cannot drift away from what the chain means.
-		const long verb = ibValue::FindLinqMethodByName(lexems[nameAt].m_strData);
+		const long verb = ibValue::FindLinqMethodByName(translateCode.GetLexAt(nameAt).m_strData);
 		if (verb < 0)
 			return;
 
@@ -490,14 +491,14 @@ void FindLinqChain(const std::vector<ibLexem>& lexems, size_t at, std::vector<ib
 		// enter it at all.
 		size_t q = nameAt + 1;
 		int depth = 0;
-		for (; q < lexems.size(); ++q) {
-			if (lexems[q].m_lexType != DELIMITER)
+		for (; q < translateCode.GetLexCount(); ++q) {
+			if (translateCode.GetLexAt(q).m_lexType != DELIMITER)
 				continue;
-			const wxUniChar c = (wxUniChar)lexems[q].m_numData;
+			const wxUniChar c = (wxUniChar)translateCode.GetLexAt(q).m_numData;
 			if (c == wxT('(')) ++depth;
 			else if (c == wxT(')') && --depth == 0) break;
 		}
-		if (q >= lexems.size())
+		if (q >= translateCode.GetLexCount())
 			return;
 
 		ibLinqChainLink link;
@@ -603,24 +604,24 @@ bool IsLinqVerbCompiled(long verb)
 // loop's, so the walk up finds it — while the same tokens on the dispatcher road are a refusal
 // ("outside a loop"), a lambda being its own function there. One text, two meanings, and the faster
 // road the one that quietly changes it. Refused here, the text keeps the road that says no.
-bool IsFoldableLambdaBody(const std::vector<ibLexem>& lexems, size_t brace, bool& singleReturn)
+bool IsFoldableLambdaBody(const ibTranslateCode& translateCode, size_t brace, bool& singleReturn)
 {
 	singleReturn = false;
 
 	const auto isDelim = [&](size_t i, wxUniChar c) {
-		return i < lexems.size() && lexems[i].m_lexType == DELIMITER
-			&& (wxUniChar)lexems[i].m_numData == c;
+		return i < translateCode.GetLexCount() && translateCode.GetLexAt(i).m_lexType == DELIMITER
+			&& (wxUniChar)translateCode.GetLexAt(i).m_numData == c;
 	};
 	const auto isKey = [&](size_t i, long key) {
-		return i < lexems.size() && lexems[i].m_lexType == KEYWORD && lexems[i].m_numData == key;
+		return i < translateCode.GetLexCount() && translateCode.GetLexAt(i).m_lexType == KEYWORD && translateCode.GetLexAt(i).m_numData == key;
 	};
 
 	if (!isDelim(brace, wxT('{')))
 		return false;                        // the braces dialect folds; the other never reaches here
 
 	size_t end = 0, firstSemi = 0, semis = 0;
-	for (size_t i = brace + 1, depth = 0; i < lexems.size(); ++i) {
-		if (lexems[i].m_lexType == ENDPROGRAM)
+	for (size_t i = brace + 1, depth = 0; i < translateCode.GetLexCount(); ++i) {
+		if (translateCode.GetLexAt(i).m_lexType == ENDPROGRAM)
 			break;
 		if (isDelim(i, wxT('{')) || isDelim(i, wxT('(')) || isDelim(i, wxT('['))) { ++depth; continue; }
 		if (isDelim(i, wxT(')')) || isDelim(i, wxT(']'))) { if (depth > 0) --depth; continue; }
@@ -647,37 +648,37 @@ bool IsFoldableLambdaBody(const std::vector<ibLexem>& lexems, size_t brace, bool
 // `Function(<name>) { … }` written right here, at `at` — the shape a one-parameter lambda has when
 // it is text rather than a value held in a variable. Only text can be folded; a variable has no body
 // to fold, which is what the dispatcher road is for.
-bool IsLinqLambdaHere(const std::vector<ibLexem>& lexems, size_t at)
+bool IsLinqLambdaHere(const ibTranslateCode& translateCode, size_t at)
 {
 	const auto isDelim = [&](size_t i, wxUniChar c) {
-		return i < lexems.size() && lexems[i].m_lexType == DELIMITER
-			&& (wxUniChar)lexems[i].m_numData == c;
+		return i < translateCode.GetLexCount() && translateCode.GetLexAt(i).m_lexType == DELIMITER
+			&& (wxUniChar)translateCode.GetLexAt(i).m_numData == c;
 	};
 
-	if (!(at + 3 < lexems.size()
-		&& lexems[at].m_lexType == KEYWORD && lexems[at].m_numData == KEY_FUNCTION
+	if (!(at + 3 < translateCode.GetLexCount()
+		&& translateCode.GetLexAt(at).m_lexType == KEYWORD && translateCode.GetLexAt(at).m_numData == KEY_FUNCTION
 		&& isDelim(at + 1, wxT('('))
-		&& lexems[at + 2].m_lexType == IDENTIFIER
+		&& translateCode.GetLexAt(at + 2).m_lexType == IDENTIFIER
 		&& isDelim(at + 3, wxT(')'))))
 		return false;
 
 	bool singleReturn = false;              // the fold reads the body itself; here only "can it"
-	return IsFoldableLambdaBody(lexems, at + 4, singleReturn);
+	return IsFoldableLambdaBody(translateCode, at + 4, singleReturn);
 }
 
 // `Aggregate(seed, Function(acc, row) { return … })` — the shape, asked of the tokens because there
 // is nothing else to ask yet: this decides whether to compile the chain as a loop at all, and no
 // instruction has been emitted. The seed can be any expression, so the body is looked for after the
 // first comma that is not inside brackets of its own.
-bool IsAggregateBodyInline(const std::vector<ibLexem>& lexems, const ibLinqChainLink& tail)
+bool IsAggregateBodyInline(const ibTranslateCode& translateCode, const ibLinqChainLink& tail)
 {
 	const auto isDelim = [&](size_t i, wxUniChar c) {
-		return i < lexems.size() && lexems[i].m_lexType == DELIMITER
-			&& (wxUniChar)lexems[i].m_numData == c;
+		return i < translateCode.GetLexCount() && translateCode.GetLexAt(i).m_lexType == DELIMITER
+			&& (wxUniChar)translateCode.GetLexAt(i).m_numData == c;
 	};
 
 	size_t comma = 0;
-	for (size_t i = tail.m_numLexArg, depth = 0; i < tail.m_numLexClose && i < lexems.size(); ++i) {
+	for (size_t i = tail.m_numLexArg, depth = 0; i < tail.m_numLexClose && i < translateCode.GetLexCount(); ++i) {
 		if (isDelim(i, wxT('(')) || isDelim(i, wxT('['))) { ++depth; continue; }
 		if (isDelim(i, wxT(')')) || isDelim(i, wxT(']'))) { if (depth > 0) --depth; continue; }
 		if (depth == 0 && isDelim(i, wxT(','))) { comma = i; break; }
@@ -686,17 +687,17 @@ bool IsAggregateBodyInline(const std::vector<ibLexem>& lexems, const ibLinqChain
 		return false;                        // one argument only — not this verb's shape
 
 	const size_t f = comma + 1;
-	if (!(f + 6 < lexems.size()
-		&& lexems[f].m_lexType == KEYWORD && lexems[f].m_numData == KEY_FUNCTION
+	if (!(f + 6 < translateCode.GetLexCount()
+		&& translateCode.GetLexAt(f).m_lexType == KEYWORD && translateCode.GetLexAt(f).m_numData == KEY_FUNCTION
 		&& isDelim(f + 1, wxT('('))
-		&& lexems[f + 2].m_lexType == IDENTIFIER
+		&& translateCode.GetLexAt(f + 2).m_lexType == IDENTIFIER
 		&& isDelim(f + 3, wxT(','))
-		&& lexems[f + 4].m_lexType == IDENTIFIER
+		&& translateCode.GetLexAt(f + 4).m_lexType == IDENTIFIER
 		&& isDelim(f + 5, wxT(')'))))
 		return false;
 
 	bool singleReturn = false;              // the fold reads the body itself; here only "can it"
-	return IsFoldableLambdaBody(lexems, f + 6, singleReturn);
+	return IsFoldableLambdaBody(translateCode, f + 6, singleReturn);
 }
 
 // 🛑 WHAT CAN BE FOLDED INTO A FOREACH THE PERSON ALREADY WROTE — a narrower question than what the
@@ -721,12 +722,12 @@ bool IsLinqVerbFoldedIntoForeach(long verb)
 // Only a lambda WRITTEN HERE can become the loop's own instructions — a lambda held in a variable
 // has no text to fold, and that is what the dispatcher road is for. The BODY may be any block:
 // IsFoldableLambdaBody says which ones, and why the few it refuses have to be refused.
-bool IsLinqChainInline(const std::vector<ibLexem>& lexems,
+bool IsLinqChainInline(const ibTranslateCode& translateCode,
 	const std::vector<ibLinqChainLink>& links, size_t count)
 {
 	const auto isDelim = [&](size_t i, wxUniChar c) {
-		return i < lexems.size() && lexems[i].m_lexType == DELIMITER
-			&& (wxUniChar)lexems[i].m_numData == c;
+		return i < translateCode.GetLexCount() && translateCode.GetLexAt(i).m_lexType == DELIMITER
+			&& (wxUniChar)translateCode.GetLexAt(i).m_numData == c;
 	};
 
 	for (size_t i = 0; i < count; ++i) {
@@ -737,12 +738,12 @@ bool IsLinqChainInline(const std::vector<ibLexem>& lexems,
 		if (!IsLinqVerbLambda(links[i].m_numVerb))
 			continue;                        // `Take(n)` / `Skip(n)` — an ordinary expression
 		const size_t a = links[i].m_numLexArg;
-		if (a >= lexems.size()
-			|| lexems[a].m_lexType != KEYWORD
-			|| lexems[a].m_numData != KEY_FUNCTION)
+		if (a >= translateCode.GetLexCount()
+			|| translateCode.GetLexAt(a).m_lexType != KEYWORD
+			|| translateCode.GetLexAt(a).m_numData != KEY_FUNCTION)
 			return false;
-		if (!isDelim(a + 1, wxT('(')) || a + 2 >= lexems.size()
-			|| lexems[a + 2].m_lexType != IDENTIFIER)
+		if (!isDelim(a + 1, wxT('(')) || a + 2 >= translateCode.GetLexCount()
+			|| translateCode.GetLexAt(a + 2).m_lexType != IDENTIFIER)
 			return false;                    // a first parameter, named
 
 		// ⭐ THE INDEXED PAIR TAKES A SECOND PARAMETER — `Function(row, i)` — and that is the whole
@@ -751,8 +752,8 @@ bool IsLinqChainInline(const std::vector<ibLexem>& lexems,
 		// cell.
 		const size_t body = IsLinqVerbIndexed(links[i].m_numVerb) ? a + 6 : a + 4;
 		if (IsLinqVerbIndexed(links[i].m_numVerb)) {
-			if (!isDelim(a + 3, wxT(',')) || a + 4 >= lexems.size()
-				|| lexems[a + 4].m_lexType != IDENTIFIER
+			if (!isDelim(a + 3, wxT(',')) || a + 4 >= translateCode.GetLexCount()
+				|| translateCode.GetLexAt(a + 4).m_lexType != IDENTIFIER
 				|| !isDelim(a + 5, wxT(')')))
 				return false;                // exactly two parameters, both named
 		}
@@ -760,7 +761,7 @@ bool IsLinqChainInline(const std::vector<ibLexem>& lexems,
 			return false;                    // exactly one parameter, named
 
 		bool singleReturn = false;           // decided again at emit time, from the same tokens
-		if (!IsFoldableLambdaBody(lexems, body, singleReturn))
+		if (!IsFoldableLambdaBody(translateCode, body, singleReturn))
 			return false;
 	}
 	return true;
@@ -969,7 +970,7 @@ ibParamUnit ibCompileCode::EmitLambdaBody(ibCompileContext* context, bool* outSi
 	// one comparison is cheaper than being sure it stays unreachable.
 	bool singleReturn = false;
 	const bool foldable = m_numCurrentCompile >= 0
-		&& IsFoldableLambdaBody(m_listLexem, (size_t)m_numCurrentCompile + 1, singleReturn);
+		&& IsFoldableLambdaBody(m_translateCode, (size_t)m_numCurrentCompile + 1, singleReturn);
 	if (outSingleReturn != nullptr)
 		*outSingleReturn = singleReturn || !foldable;
 
@@ -1012,7 +1013,7 @@ bool ibCompileCode::TryFoldLinqChainSource(ibCompileContext* context, const ibPa
 		return false;
 
 	std::vector<ibLinqChainLink> links;
-	FindLinqChain(m_listLexem, (size_t)m_numCurrentCompile + 1, links);
+	FindLinqChain(m_translateCode, (size_t)m_numCurrentCompile + 1, links);
 	if (links.empty())
 		return false;
 
@@ -1036,7 +1037,7 @@ bool ibCompileCode::TryFoldLinqChainSource(ibCompileContext* context, const ibPa
 		if (!IsLinqVerbFoldedIntoForeach(link.m_numVerb))
 			return false;
 
-	if (!IsLinqChainInline(m_listLexem, links, links.size()))
+	if (!IsLinqChainInline(m_translateCode, links, links.size()))
 		return false;
 
 
@@ -1060,7 +1061,7 @@ void ibCompileCode::EmitLinqChainClauses(ibCompileContext* context, const ibPara
 		return;
 
 	std::vector<ibLinqChainLink> links;
-	FindLinqChain(m_listLexem, (size_t)m_numLinqChainAt, links);
+	FindLinqChain(m_translateCode, (size_t)m_numLinqChainAt, links);
 	m_numLinqChainAt = -1;                     // one statement's worth, and then gone
 	if (links.empty())
 		return;
@@ -1092,7 +1093,7 @@ void ibCompileCode::EmitLinqChainClauses(ibCompileContext* context, const ibPara
 	for (const ibLinqChainLink& link : links) {
 		const size_t a = link.m_numLexArg;
 
-		const wxString paramName = m_listLexem[a + 2].m_valData.GetString();
+		const wxString paramName = m_translateCode.GetLexAt(a + 2).m_valData.GetString();
 		const ibParamUnit bound  = BindParamToOwnCell(foldCtx, paramName);
 		{
 			ibByteUnit c; AddLineInfo(c);
@@ -1137,7 +1138,7 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 {
 	// ---- 1. LOOK, DECIDE NOTHING YET -------------------------------------------------------
 	std::vector<ibLinqChainLink> links;
-	FindLinqChain(m_listLexem, (size_t)m_numCurrentCompile + 1, links);
+	FindLinqChain(m_translateCode, (size_t)m_numCurrentCompile + 1, links);
 
 	// ---- 2. IS IT A SHAPE THIS COMPILES? ---------------------------------------------------
 	// Deliberately narrow. Everything refused here still works — it takes the OPER_CALL_LINQ road,
@@ -1211,15 +1212,15 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 		return false;                       // the shape has to match the verb, either way
 
 	// The key is a lambda written HERE, like every other body this road compiles.
-	if (terminalGroup && !IsLinqLambdaHere(m_listLexem, tail.m_numLexArg))
+	if (terminalGroup && !IsLinqLambdaHere(m_translateCode, tail.m_numLexArg))
 		return false;
 
 	// The fold's body has to be written HERE, like every other body this road compiles — a lambda
 	// held in a variable has no text to fold, and that is the road the dispatcher is for.
-	if (terminalFold && !IsAggregateBodyInline(m_listLexem, tail))
+	if (terminalFold && !IsAggregateBodyInline(m_translateCode, tail))
 		return false;
 
-	if (!IsLinqChainInline(m_listLexem, links, links.size() - 1))
+	if (!IsLinqChainInline(m_translateCode, links, links.size() - 1))
 		return false;
 
 	// ---- 2a. A TERMINAL THE DOOR ANSWERS BY ITSELF — LEAVE IT ALONE ------------------------
@@ -1597,7 +1598,7 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 	// The first verb's parameter IS the loop variable — no binding step, no argument, no frame.
 	// The name is taken the way GETIdentifier takes it (m_valData holds the source casing), so the
 	// binding is registered under the name the person wrote.
-	const wxString firstRowName = m_listLexem[links[0].m_numLexArg + 2].m_valData.GetString();
+	const wxString firstRowName = m_translateCode.GetLexAt(links[0].m_numLexArg + 2).m_valData.GetString();
 	// A CELL OF ITS OWN, with the written name bound to it in this loop's scope: the row is an
 	// ordinary local of the frame the loop runs in — which is the whole point — and it cannot be the
 	// caller's variable that happens to share the name.
@@ -2561,6 +2562,13 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 // name.
 void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx)
 {
+	// Nested `from` recurses here. The expression ceiling does not see it.
+	if (ibFiber::StackLow()) {
+		SetError(ERROR_EXPRESSION,
+			_("it is nested deeper than the stack allows - split it into steps"));
+		return;
+	}
+
 	// linqCtx — the fake LINQ context (RETURN_BLOCK kind with non-null
 	// m_linqQuery naming the query, entered once by
 	// CompileLinqExpression). All binding registration +
@@ -2614,6 +2622,12 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx)
 // `g` as a synthetic binding over m_groupsContainer's pair rows.
 void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBinding& preBound)
 {
+	if (ibFiber::StackLow()) {
+		SetError(ERROR_EXPRESSION,
+			_("it is nested deeper than the stack allows - split it into steps"));
+		return;
+	}
+
 	ibLinqQuery& data = *linqCtx->m_linqQuery;
 	ibCompileContext* const context = linqCtx;
 
@@ -2752,9 +2766,9 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 				// through to an out-of-bounds read instead of stopping it.
 				if (m_numCurrentCompile < 0) break;
 				const size_t pos = (size_t)m_numCurrentCompile;
-				if (pos + 1 >= m_listLexem.size()) break;
-				const ibLexem& l0 = m_listLexem[pos];
-				const ibLexem& l1 = m_listLexem[pos + 1];
+				if (pos + 1 >= m_translateCode.GetLexCount()) break;
+				const ibLexem& l0 = m_translateCode.GetLexAt(pos);
+				const ibLexem& l1 = m_translateCode.GetLexAt(pos + 1);
 				if (l0.m_lexType != IDENTIFIER) break;
 				if (l1.m_lexType != DELIMITER || l1.m_numData != '=') break;
 			}

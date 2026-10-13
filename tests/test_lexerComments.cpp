@@ -41,7 +41,7 @@ TEST(LexerComments, ALongRunOfCommentLines_DoesNotOverflowTheStack)
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	cc.Load(source);
 	ASSERT_TRUE(cc.PrepareLexem());
-	EXPECT_GE(cc.GetLexemCount(), 4u) << "the statement after the comments must still lex";
+	EXPECT_GE(cc.m_translateCode.GetLexCount(), 4u) << "the statement after the comments must still lex";
 }
 
 // The same with Windows line ends and indented comments - the paths that reach the recursion differently.
@@ -52,7 +52,7 @@ TEST(LexerComments, CommentLinesWithCarriageReturnsAndIndent_AlsoSurvive)
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	cc.Load(source);
 	ASSERT_TRUE(cc.PrepareLexem());
-	EXPECT_GE(cc.GetLexemCount(), 4u);
+	EXPECT_GE(cc.m_translateCode.GetLexCount(), 4u);
 }
 
 // A comment on the last line, with no line end after it, is a comment and nothing else.
@@ -61,7 +61,7 @@ TEST(LexerComments, ACommentOnTheLastLine_WithNoLineEnd_IsFine)
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	cc.Load(wxT("a = 1;\n// the end"));
 	ASSERT_TRUE(cc.PrepareLexem());
-	EXPECT_GE(cc.GetLexemCount(), 4u);
+	EXPECT_GE(cc.m_translateCode.GetLexCount(), 4u);
 }
 
 // Comments do not change what surrounds them.
@@ -75,7 +75,7 @@ TEST(LexerComments, CommentsBetweenStatements_LeaveTheStatementsAlone)
 	without.Load(wxT("a = 1;\nb = 2;"));
 	ASSERT_TRUE(without.PrepareLexem());
 
-	EXPECT_EQ(with.GetLexemCount(), without.GetLexemCount());
+	EXPECT_EQ(with.m_translateCode.GetLexCount(), without.m_translateCode.GetLexCount());
 }
 
 // ---- what the walk reports AFTER comments: the line, and the character/UTF-8 offset ----------------
@@ -87,9 +87,11 @@ namespace {
 
 const ibLexem* FindIdentifier(const ibCompileCode& cc, const wxString& name)
 {
-	for (const ibLexem& lexem : cc.GetLexems())
+	for (size_t i = 0; i < cc.m_translateCode.GetLexCount(); ++i) {
+		const ibLexem& lexem = cc.m_translateCode.GetLexAt(i);
 		if (lexem.m_lexType == IDENTIFIER && lexem.m_strData.CmpNoCase(name) == 0)   // identifiers are stored upper-cased
 			return &lexem;
+	}
 	return nullptr;
 }
 

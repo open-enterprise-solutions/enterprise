@@ -41,7 +41,7 @@ void ibValueGridSizer::Update(wxObject* wxobject, ibVisualHost* visualHost)
 #endif
 	gridsizer->SetRows(m_propertyRows->GetValueAsUInteger());
 	gridsizer->SetCols(m_propertyCols->GetValueAsUInteger());
-	gridsizer->SetMinSize(m_propertyMinSize->GetValueAsSize());
+	gridsizer->SetMinSize(typeConv::SizeToWxSize(m_propertyMinSize->GetValueAsSize()));
 	UpdateSizer(gridsizer);
 }
 

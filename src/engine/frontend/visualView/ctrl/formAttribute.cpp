@@ -9,9 +9,9 @@
 #include "backend/metaCollection/partial/commonObject.h"   // ibSourceDataObject
 #include "core/serialize/dataBuilder.h"
 #include "backend/system/value/valueType.h"                 // ibValueTypeDescription::AdjustValue
-#include "backend/compositionDescription.h"                 // ibCompositionDescription (list settings form)
+#include "core/description/compositionDescription.h"        // ibCompositionDescription (list settings form)
 #include "backend/tabularModel.h"                        // ibValueModel (table-source check)
-#include "backend/typeDescription.h"                          // ibTypeDescription::GetFirstClsid (value materialise)
+#include "core/description/typeDescription.h"                          // ibTypeDescription::GetFirstClsid (value materialise)
 #include "backend/system/systemManager.h"                    // ibValueSystemFunction::Message — the filling check reports
 #include "backend/metaData.h"                                // GetTypeCtor
 #include "backend/objCtor.h"                                 // ibCtorMetaValueType / ibCtorObjectMetaType

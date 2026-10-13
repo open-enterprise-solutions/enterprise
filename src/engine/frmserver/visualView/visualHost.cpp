@@ -155,6 +155,15 @@ bool ibVisualHost::RefreshControl(ibValueFrame* control, ibDataNode& node)
 
 	ibDataNode& state = node.Child(wxT("State"));
 	control->OnUpdate(state, this);
+	// The state events the server is subscribed to on it — the client sends these at once, and holds the others.
+	std::vector<ibDataValue> subscribed;
+	for (int number = 1; number < 32; ++number) {
+		const ibProtocolEvent event = static_cast<ibProtocolEvent>(number);
+		if (ibProtocolIsStateEvent(event) && control->IsSubscribed(event))
+			subscribed.push_back(ibDataValue::Int(number));
+	}
+	if (!subscribed.empty())
+		state.AddField(wxString::FromUTF8(ibProtocolName::Subscribed), ibDataValue::Array(std::move(subscribed)));
 	const long long updated = NowUs() - updating;
 	s_drawTimes.statesUs += updated;
 	if (updated > 2000)

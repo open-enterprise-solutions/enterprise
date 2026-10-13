@@ -40,7 +40,7 @@ void ibValueGridBox::OnCellLeftClick(ibGridEvent& event)
 	// ⚠ ONLY WHERE THERE IS SOMETHING TO ANSWER. A cell with no details parameter was composed from
 	// nothing a reader can follow — a caption, a blank — and a menu over it would be commands that
 	// do nothing. The click then means what it always meant, and the editor handles it.
-	wxObjectDataPtr<ibBackendSpreadsheetObject> document;
+	std::shared_ptr<ibSpreadsheetObject> document;
 	if (m_spreadsheetModel)
 		document = m_spreadsheetModel->GetSpreadsheetDocument();
 	wxWindow* grid = dynamic_cast<wxWindow*>(GetInnerWx());
@@ -49,7 +49,7 @@ void ibValueGridBox::OnCellLeftClick(ibGridEvent& event)
 		return;
 	}
 
-	wxString detailsParameter;
+	ibString detailsParameter;
 	document->GetCellDetailsParameter(event.GetRow(), event.GetCol(), detailsParameter);
 	if (detailsParameter.IsEmpty()) {
 		event.Skip();
@@ -81,9 +81,11 @@ void ibValueGridBox::OnCellLeftClick(ibGridEvent& event)
 	// and that value is shown. The document used to have a verb for this, which was the same two
 	// lines with a door in front of them — and the door belonged to the value, not to the sheet.
 	case idOpenValue: {
-		ibValue bound;
-		if (document->GetParameter(detailsParameter, bound))
+		ibAnyValuePtr<ibAnyValue> held;
+		if (document->GetParameter(detailsParameter, held)) {
+			ibValue bound = ibValue::FromAnyValue(held);
 			bound.ShowValue();
+		}
 		break;
 	}
 	case idShowDetail:

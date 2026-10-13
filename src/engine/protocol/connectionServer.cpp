@@ -117,6 +117,9 @@ bool ibProtocolConnectionServer::Open(const wxString& address, wxString& error)
 		error = wxString::Format(_("'%s' is not the address of a base: oes://server[:port]/<base>"), address);
 		return false;
 	}
+	// A request goes out at once, as the server's answers do (appserver's listener): with Nagle's wait on, a small
+	// message behind one not yet acknowledged was held for the server's delayed ACK — up to 200 ms on Windows, per click.
+	socket->set_tcp_nodelay(true);
 	const auto connected = socket->connect();
 	if (!connected) {
 		error = connected.status() > 0
@@ -138,6 +141,7 @@ bool ibProtocolConnectionServer::Open(const wxString& address, wxString& error)
 	}
 	m_stopping = false;
 	m_reader = std::thread(&ibProtocolConnectionServer::ReadMessages, this);
+	m_address = address;
 	return true;
 }
 
@@ -157,6 +161,17 @@ void ibProtocolConnectionServer::Close()
 ibProtocolConnectionServer::~ibProtocolConnectionServer()
 {
 	Close();
+}
+
+bool ibProtocolConnectionServer::Reconnect(wxString& error)
+{
+	// A copy: Open closes the socket first, and the address it parses must not be the member it may clear.
+	const wxString address = m_address;
+	if (address.IsEmpty()) {
+		error = wxT("no server to return to");
+		return false;
+	}
+	return Open(address, error);
 }
 
 bool ibProtocolConnectionServer::Exchange(const std::string& request, std::string& answer,

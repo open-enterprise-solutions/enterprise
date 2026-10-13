@@ -23,7 +23,7 @@
 #include "backend/backend_exception.h"        // ibBackendCoreException
 #include "backend/query/queryReadState.h"     // ibQueryReadState — one build, one state of the data
 #include "backend/query/queryRender.h"        // ibQueryColumnFromPath
-#include "backend/query/queryKeywords.h"      // ibQueryKeywordText
+#include "core/query/queryKeywords.h"         // ibQueryKeywordText
 #include "backend/query/queryLexer.h"         // ibQueryLexer::IsIdentifier
 #include "backend/session/session.h"          // ibSession::RunState — the walk hears a cancel
 #include "backend/backend_localization.h"     // a column title written in several languages, read in the reader's
@@ -157,8 +157,8 @@ bool ibDataDBComposer::LevelShows(const Output& output, int depth, ibSelectorNod
 		return true;   // …and a level that hides on nothing asks nothing of the row
 
 	// A condition this row cannot answer does not hide it: hiding for a reason nobody can see is worse.
-	return ibCompositionFilterHolds(found->m_settings.m_filter, ibComposerRowValueOf(schema, row), SubtreeOf(),
-		/*whenUnknown*/ true);
+	return ibCompositionFilterHolds(found->m_settings.m_filter, m_metaData, ibComposerRowValueOf(schema, row),
+		SubtreeOf(), /*whenUnknown*/ true);
 }
 
 // (…and the row's conditional appearance — ConditionalAppearanceFor, made ready once per output — is the RAM

@@ -2,28 +2,29 @@
 #define __PROPERTY_FONT_H__
 
 #include "backend/propertyManager/propertyObject.h"
+#include "core/graphics/font.h"   // ibFont — the font, as data
 
 //base property for "font"
 class BACKEND_API ibPropertyFont : public ibProperty {
 public:
 
-	wxFont GetValueAsFont() const { return typeConv::StringToFont(m_propValue); }
+	ibFont GetValueAsFont() const { ibFont font; font.FromString(m_propValue.GetString()); return font; }
 	wxString GetValueAsString() const { return m_propValue; }
-	void SetValue(const wxFont& val) { m_propValue = typeConv::FontToString(val); }
+	void SetValue(const ibFont& val) { m_propValue = wxString(val.ToString()); }
 	void SetValue(const wxString& val) { m_propValue = val; }
 
-	ibPropertyFont(ibPropertyCategory* cat, const wxString& name, const wxFont& f = wxNullFont)
-		: ibProperty(cat, name, typeConv::FontToString(f))
+	ibPropertyFont(ibPropertyCategory* cat, const wxString& name, const ibFont& f = ibFont())
+		: ibProperty(cat, name, wxString(f.ToString()))
 	{
 	}
 
-	ibPropertyFont(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxFont& f = wxNullFont)
-		: ibProperty(cat, name, label, typeConv::FontToString(f))
+	ibPropertyFont(ibPropertyCategory* cat, const wxString& name, const wxString& label, const ibFont& f = ibFont())
+		: ibProperty(cat, name, label, wxString(f.ToString()))
 	{
 	}
 
-	ibPropertyFont(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString, const wxFont& f = wxNullFont)
-		: ibProperty(cat, name, label, helpString, typeConv::FontToString(f))
+	ibPropertyFont(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString, const ibFont& f = ibFont())
+		: ibProperty(cat, name, label, helpString, wxString(f.ToString()))
 	{
 	}
 

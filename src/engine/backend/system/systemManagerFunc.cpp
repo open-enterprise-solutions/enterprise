@@ -11,7 +11,7 @@
 #include "backend/backend_mainFrame.h"
 #include "backend/backend_form.h"
 
-#include "backend/compiler/translateCode.h"
+#include "core/compiler/translateCode.h"
 #include "backend/compiler/procUnit.h"
 #include "backend/appData.h"
 #include "backend/session/session.h"

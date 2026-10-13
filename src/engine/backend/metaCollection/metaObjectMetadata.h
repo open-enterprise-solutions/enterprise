@@ -5,7 +5,7 @@
 #include "metaObjectMetadataEnum.h"
 
 #include "metaModuleObject.h"
-#include "backend/homePageDescription.h"   // ibHomePageDescription — the start-page workspace
+#include "core/description/homePageDescription.h"   // ibHomePageDescription — the start-page workspace
 
 //*****************************************************************************************
 //*                                  metaData object                                      *

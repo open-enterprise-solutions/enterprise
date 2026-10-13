@@ -234,22 +234,25 @@ ibGuid::ibGuid(const std::string_view& fromString)
 // create a guid from string
 ibGuid::ibGuid(const wxString& fromString)
 {
+	if (!parse(fromString, *this))
+		zeroify();
+}
+
+bool ibGuid::parse(const wxString& text, ibGuid& guid)
+{
+	std::array<unsigned char, 16> bytes{};
 	char charOne = '\0';
 	char charTwo = '\0';
 	bool lookingForFirstChar = true;
 	unsigned nextByte = 0;
 
-	for (const wxUniChar& ch : fromString)
+	for (const wxUniChar& ch : text)
 	{
 		if (ch == '-')
 			continue;
 
 		if (nextByte >= 16 || !isValidHexChar(ch))
-		{
-			// Invalid string so bail
-			zeroify();
-			return;
-		}
+			return false;
 
 		if (lookingForFirstChar)
 		{
@@ -259,18 +262,17 @@ ibGuid::ibGuid(const wxString& fromString)
 		else
 		{
 			charTwo = ch;
-			auto byte = hexPairToChar(charOne, charTwo);
-			_bytes[nextByte++] = byte;
+			bytes[nextByte++] = hexPairToChar(charOne, charTwo);
 			lookingForFirstChar = true;
 		}
 	}
 
 	// if there were fewer than 16 bytes in the string then guid is bad
 	if (nextByte < 16)
-	{
-		zeroify();
-		return;
-	}
+		return false;
+
+	guid._bytes = bytes;
+	return true;
 }
 #endif
 

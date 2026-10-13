@@ -24,6 +24,7 @@
 #include "backend/mcp/mcpTool.h"
 
 #include "backend/backend_exception.h"              // ibEvalModeScope - which kind of evaluation this call is
+#include "backend/compiler/compileCode.h"           // GetCodeStyle - the syntax the text is read in
 #include "backend/compiler/scriptComplete.h"        // ibValueAtCaret / ibFieldTypesOf - off the bytecode and the metadata
 #include "backend/metaCollection/metaIntrospect.h"
 #include "backend/metaCollection/metaModuleObject.h"
@@ -32,8 +33,8 @@
 #include "backend/moduleManager/moduleManager.h"   // ibValueModuleManagerDesigner - AddCommonModule
 #include "backend/value_ptr.h"                     // ibValuePtr - metaobjects are reference-counted
 
-#include "backend/compiler/translateCode.h"        // the lexem stream - what the caret stands in
-#include "backend/compiler/scriptParseCode.h"
+#include "core/compiler/translateCode.h"        // the lexem stream - what the caret stands in
+#include "core/compiler/scriptParseCode.h"
 
 #include <memory>
 
@@ -396,7 +397,7 @@ public:
 		// configuration is available.
 		//
 		// A lexer, not a compiler: what the text MEANS is asked below, of the compiler itself.
-		ibTranslateCode lexem;
+		ibTranslateCode lexem(ibCompileCode::GetCodeStyle());
 		lexem.SetLexemMode(ibLexemMode::Editing);
 		lexem.Load(text);
 		lexem.PrepareLexem();
@@ -627,7 +628,7 @@ public:
 			text = module->GetModuleText();
 		}
 
-		ibParseCode parser;
+		ibParseCode parser(ibCompileCode::GetCodeStyle());
 		if (!parser.ParseModule(text)) {
 			refusal = ibMcpText("The text could not be read far enough to list what it declares.");
 			return false;

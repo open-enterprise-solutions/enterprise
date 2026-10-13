@@ -8,7 +8,7 @@
 
 #include "frmclient/frmclient.h"
 #include "core/guid.h"
-#include "core/types.h"
+#include "core/core.h"
 #include "core/fnumber.h"
 #include "core/fdatetime.h"
 #include "core/fstring.h"

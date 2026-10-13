@@ -5,7 +5,7 @@
 
 #include "codeEditor.h"
 #include "backend/backend_exception.h"   // ibEvalModeScope — which kind of evaluation the dropdown is
-#include "backend/compiler/scriptParseCode.h"
+#include "core/compiler/scriptParseCode.h"
 
 #include "backend/metaCollection/partial/commonObject.h"
 
@@ -97,28 +97,28 @@ void ibCodeEditor::PrepareTooTipExpression(unsigned int currPos, wxString& expre
 {
 	bool hasPoint = false;
 
-	for (unsigned int i = 0; i < m_tc.GetLexems().size(); i++)
+	for (unsigned int i = 0; i < m_tc.GetLexCount(); i++)
 	{
-		if (m_tc.GetLexems()[i].m_numString > currPos
+		if (m_tc.GetLexAt(i).m_numString > currPos
 			&& !hasPoint) break;
 
-		if (m_tc.GetLexems()[i].m_lexType == IDENTIFIER)
+		if (m_tc.GetLexAt(i).m_lexType == IDENTIFIER)
 		{
-			if (hasPoint) expression += m_tc.GetLexems()[i].m_valData.GetString();
-			else expression = m_tc.GetLexems()[i].m_valData.GetString();
+			if (hasPoint) expression += m_tc.GetLexAt(i).m_valData.GetString();
+			else expression = m_tc.GetLexAt(i).m_valData.GetString();
 
-			currentWord = m_tc.GetLexems()[i].m_valData.GetString();
+			currentWord = m_tc.GetLexAt(i).m_valData.GetString();
 
-			if (i < m_tc.GetLexems().size() - 1) {
-				const ibLexem& lex = m_tc.GetLexems()[i + 1];
+			if (i < m_tc.GetLexCount() - 1) {
+				const ibLexem& lex = m_tc.GetLexAt(i + 1);
 				if (lex.m_lexType == DELIMITER && lex.m_numData == '(')
 					expression = wxEmptyString;
 				hasPoint = lex.m_lexType == DELIMITER && lex.m_numData == '.';
 			}
 			else hasPoint = false;
 		}
-		else if (m_tc.GetLexems()[i].m_lexType == DELIMITER
-			&& m_tc.GetLexems()[i].m_numData == '.')
+		else if (m_tc.GetLexAt(i).m_lexType == DELIMITER
+			&& m_tc.GetLexAt(i).m_numData == '.')
 		{
 			if (!expression.IsEmpty())
 				expression += '.';

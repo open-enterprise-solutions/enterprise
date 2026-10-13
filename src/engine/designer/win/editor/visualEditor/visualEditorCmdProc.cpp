@@ -8,6 +8,7 @@
 
 #include "frontend/mainFrame/mainFrame.h"
 #include "frontend/mainFrame/objinspect/objinspect.h"
+#include "frontend/win/typeconv.h"   // _STDSTR — a class name as the factory takes it
 
 #include "backend/backend_exception.h"   // ibBackendException — caught explicitly; it is NOT a std::exception
 #include "backend/propertyManager/propertyManager.h"

@@ -2,7 +2,7 @@
 
 #include "backend/appData.h"                        // the session's user + GetSettingsStorage
 #include "backend/composition/dataComposer.h"       // the settings themselves
-#include "backend/compositionDescription.h"         // ibSettingsDescriptionMemory — the pair that writes them
+#include "backend/backend_composition.h"         // ibBackendSettingsDescriptionMemory — the pair that writes them
 #include "core/serialize/dataBuilder.h"          // ibDataNode
 
 #include <algorithm>
@@ -81,7 +81,7 @@ bool ibRestoreComposerSettings(ibSettingsCategory category, const ibGuid& object
 		return false;
 
 	ibSettingsDescription settings;
-	if (!ibSettingsDescriptionMemory::ReadNode(*settingsNode, settings, metaData))
+	if (!ibBackendSettingsDescriptionMemory::ReadNode(*settingsNode, settings, metaData))
 		return false;
 
 	// …AND THAT IS THE WHOLE ACT — the one door there is, the same one the variant picker and the

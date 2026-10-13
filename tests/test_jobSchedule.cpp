@@ -72,7 +72,7 @@ TEST(JobSchedule, StopAfter_BeforeWindowStartIsRefusedAtValidation)
 {
 	ibJobScheduleDescription s = ibJobScheduleDescription::Nightly(2, 6);
 	s.m_stopAfterMinute = ibJobScheduleDescription::AtTime(1);   // would gate the job forever
-	EXPECT_FALSE(s.IsValid());
+	EXPECT_FALSE(ibJobScheduleRules::IsValid(s));
 }
 
 // ---------------------------------------------------------------------------
@@ -147,7 +147,7 @@ TEST(JobSchedule, WeekdayOrdinal_NeedsExactlyOneWeekday)
 	ibJobScheduleDescription s = ibJobScheduleDescription::EverySeconds(7 * 24 * 3600);
 	s.m_daysOfWeek     = ibJobWeekDay_Tuesday | ibJobWeekDay_Friday;
 	s.m_weekdayOrdinal = ibJobOrdinal_Second;
-	EXPECT_FALSE(s.IsValid());
+	EXPECT_FALSE(ibJobScheduleRules::IsValid(s));
 }
 
 // ---------------------------------------------------------------------------

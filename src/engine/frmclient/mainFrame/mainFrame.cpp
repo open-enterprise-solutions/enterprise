@@ -15,23 +15,32 @@
 #include <wx/file.h>
 #include <wx/filedlg.h>
 #include <wx/filename.h>
+#include <wx/stdpaths.h>
 #include <wx/wupdlock.h>   // wxWindowUpdateLocker — the tabs held still while one is switched to
 #include <wx/evtloop.h>   // wxGUIEventLoop — a server's question waits for the calculator or the calendar
 
 #include "output/outputWindow.h"
 #include "objinspect/objinspect.h"
+#include "settings/xmlutility.h"
 
 #include "frmclient/docView/docManager.h"
 #include "frmclient/docView/templates/docViewFile.h"
+#include "frmclient/docView/templates/docViewAuditLog.h"   // the journal's tab — a view of its own (the tab's Kind)
 #include "frmclient/artProvider/artProvider.h"
 #include "frmclient/visualView/visualHostClient.h"
 #include "frmclient/win/picture.h"
 #include "frmclient/win/dlgs/about.h"
 #include "frmclient/win/dlgs/activeUser.h"
+#include "frmclient/win/dlgs/authorization.h"
+#include "frmclient/win/dlgs/enterpriseOption.h"
+#include "frmclient/win/dlgs/errorDialog.h"
 #include "frmclient/win/dlgs/formEditor.h"
 #include "frmclient/win/dlgs/generation.h"
+#include "frmclient/win/dlgs/jobSchedule/jobScheduleSettings.h"
+#include "frmclient/win/editor/gridEditor/gridPrintout.h"   // a script's sheet printed — and the preview's page (ApplyFitToPageWidth)
 #include "frmclient/win/dlgs/settings/savedSettings.h"
 #include "frmclient/win/dlgs/settings/list/listSettings.h"
+#include "frmclient/win/dlgs/settings/composer/composerSettings.h"
 #include "frmclient/backend/serialize/dataProtocol.h"   // a value as the server's question carries it
 #include "frmclient/visualView/ctrl/typeControl.h"      // ibTypeControlFactory::SimpleChoice — the calculator, the calendar
 #include "frmclient/visualView/ctrl/frame.h"            // ibControlFrame — what they are drawn over
@@ -44,9 +53,14 @@
 
 namespace {
 
-// The wx ids the server's menus take — a range of their own, given out anew each time the menu is built.
-constexpr int kFirstMenuId = wxID_HIGHEST + 5000;
-constexpr int kLastMenuId  = wxID_HIGHEST + 5999;
+// The wx ids the server's menus take — a range of their own: a command's by its number, a schema's by its own past the
+// commands', so an item has the same id each run and a key the person gave it holds (UpdateHotKeys).
+constexpr int kFirstMenuId       = wxID_HIGHEST + 5000;
+constexpr int kFirstSchemaMenuId = wxID_HIGHEST + 5500;
+constexpr int kLastMenuId        = wxID_HIGHEST + 5999;
+
+// The person's options file, beside the desktop designer's options.xml: the thin client's commands go by other ids.
+constexpr const wxChar* kOptionsFile = wxT("options-thin.xml");
 
 // A file goes up in parts of at most this — what the server keeps one part as (ibTempStorage::kPartSize).
 constexpr std::size_t kUploadPartSize = 1024 * 1024;
@@ -127,6 +141,14 @@ void ShapeOf(const ibProtocolNode& menu, std::string& shape)
 		ShapeOf(item, shape);
 		shape += ']';
 	}
+}
+
+// The wx id of a command or a schema of the server's menu — by its number in the protocol.
+int MenuIdOf(const ibProtocolNode& item)
+{
+	if (item.Has(ibProtocolName::Schema))
+		return kFirstSchemaMenuId + static_cast<int>(item.GetInt(ibProtocolName::Schema));
+	return kFirstMenuId + static_cast<int>(item.GetInt(ibProtocolName::Command));
 }
 
 // A MENU REQUEST'S ITEMS, put into a popup menu as the desktop built it: an item with items of its own is a submenu,
@@ -211,6 +233,14 @@ wxWindow* FocusedEditor(wxWindow* otherwise)
 	return wxWindow::FindFocus() != nullptr ? wxWindow::FindFocus() : otherwise;
 }
 
+// A SETTINGS WINDOW'S QUESTION — a list's or a report's: the one a value of the server's choosing is chosen for on the
+// way (ibProtocolListSettingsAct::Choose), and asked again with it.
+bool IsSettingsRequest(const ibProtocolNode& request)
+{
+	const ibProtocolRequestKind kind = static_cast<ibProtocolRequestKind>(request.GetInt(ibProtocolName::Kind));
+	return kind == ibProtocolRequestKind::ListSettings || kind == ibProtocolRequestKind::ComposerSettings;
+}
+
 } // namespace
 
 //***********************************************************************************
@@ -241,7 +271,7 @@ ibFrontendMainFrame::ibFrontendMainFrame(std::unique_ptr<ibCommunicator> communi
 
 	SetArtProvider(new wxAuiLunaTabArt());
 
-	// A tab chosen is told the server, which draws it; a tab closed is its document's close (ibFormVisualDocument::Close).
+	// A tab chosen is told the server, which draws it; a tab closed is its document's close (ibTabDocument::Close).
 	if (wxAuiMDIClientWindow* const client = GetClientWindow())
 		client->Bind(wxEVT_AUINOTEBOOK_PAGE_CHANGED, &ibFrontendMainFrame::OnTabChanged, this);
 
@@ -404,6 +434,9 @@ bool ibFrontendMainFrame::SetProperty(ibPropertyObject* prop)
 
 void ibFrontendMainFrame::CreateGUI()
 {
+	// The person's options first: the panes below show code and messages in their font, the menu takes their keys.
+	LoadOptions();
+
 	// The toolbar under the menu — the desktop's main toolbar (CreateWideGui): the doc manager's commands, enabled as it
 	// answers.
 	m_mainFrameToolbar = new wxAuiToolBar(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxAUI_TB_HORZ_LAYOUT);
@@ -496,6 +529,31 @@ void ibFrontendMainFrame::CreateGUI()
 	m_mgr.Update();
 }
 
+void ibFrontendMainFrame::LoadOptions()
+{
+	// Disable logging since it's ok if the options file is not there.
+	wxLogNull logNo;
+
+	// The person's directory, where the desktop designer keeps its options.xml — the thin client's file beside it. Only
+	// read here: the thin designer is the one to write it.
+	wxFileName fileName(wxStandardPaths::Get().GetUserDir(wxStandardPaths::Dir::Dir_Cache), kOptionsFile);
+	fileName.AppendDir(wxT("OES"));
+
+	wxXmlDocument document;
+	if (!document.Load(fileName.GetFullPath()) || document.GetRoot()->GetName() != wxT("options"))
+		return;
+
+	for (wxXmlNode* node = document.GetRoot()->GetChildren(); node != nullptr; node = node->GetNext()) {
+		if (node->GetName() == wxT("editor"))
+			m_editorSettings.Load(node);
+		else if (node->GetName() == wxT("fontcolor"))
+			m_fontColorSettings.Load(node);
+	}
+
+	// …and the keys kept as read: they go over the defaults each time the menu is built (UpdateHotKeys).
+	m_options = document;
+}
+
 void ibFrontendMainFrame::InitializeDefaultMenu()
 {
 	// ONE COMMAND, ONE PICTURE, wherever it is pressed from — wx's own stock pictures, and wx's own stock labels and keys.
@@ -543,6 +601,48 @@ void ibFrontendMainFrame::InitializeDefaultMenu()
 	bar->Append(m_menuFile, wxGetStockLabel(wxID_FILE));
 	bar->Append(m_menuEdit, wxGetStockLabel(wxID_EDIT));
 	SetMenuBar(bar);
+	UpdateHotKeys();
+}
+
+void ibFrontendMainFrame::SetDefaultHotKeys()
+{
+	// Setup the hotkeys.
+	m_keyBinder.SetShortcut(wxID_NEW, wxT("Ctrl+N"));
+	m_keyBinder.SetShortcut(wxID_SAVE, wxT("Ctrl+S"));
+	m_keyBinder.SetShortcut(wxID_UNDO, wxT("Ctrl+Z"));
+	m_keyBinder.SetShortcut(wxID_REDO, wxT("Ctrl+Y"));
+
+	m_keyBinder.SetShortcut(wxID_CUT, wxT("Ctrl+X"));
+	m_keyBinder.SetShortcut(wxID_COPY, wxT("Ctrl+C"));
+	m_keyBinder.SetShortcut(wxID_PASTE, wxT("Ctrl+V"));
+	m_keyBinder.SetShortcut(wxID_SELECTALL, wxT("Ctrl+A"));
+	m_keyBinder.SetShortcut(wxID_FIND, wxT("Ctrl+F"));
+}
+
+void ibFrontendMainFrame::UpdateHotKeys()
+{
+	wxMenuBar* const bar = GetMenuBar();
+	if (bar == nullptr)
+		return;
+
+	// Built anew with the bar: its commands, every default — and then the person's keys over them, as the desktop
+	// designer's LoadOptions puts them (a command they changed takes theirs, the rest keep the default).
+	m_keyBinder.ClearCommands();
+	m_keyBinder.AddCommandsFromMenuBar(bar);
+
+	SetDefaultHotKeys();
+	for (const auto& item : m_menuItems) {
+		if (!item.second.shortcut.IsEmpty())
+			m_keyBinder.SetShortcut(item.first, item.second.shortcut);
+	}
+
+	wxXmlNode* const root = m_options.GetRoot();
+	wxXmlNode* const shortcuts = root != nullptr ? FindChildNode(root, wxT("shortcuts")) : nullptr;
+	if (shortcuts != nullptr)
+		m_keyBinder.Load(shortcuts);
+
+	m_keyBinder.UpdateWindow(this);
+	m_keyBinder.UpdateMenuBar(bar);
 }
 
 bool ibFrontendMainFrame::Show(bool show)
@@ -561,12 +661,38 @@ bool ibFrontendMainFrame::Show(bool show)
 	ibProtocolNode answer;
 	ibProtocolRefusal refusal = ibProtocolRefusal::None;
 	wxString error;
-	const bool loggedIn = m_communicator->Login(m_user, m_password, m_mode, answer, refusal, error);
+	bool loggedIn = m_communicator->Login(m_user, m_password, m_mode, answer, refusal, error);
+
+	// A REFUSED NAME OR PASSWORD ASKS THE PERSON — the desktop's login window, with the names the server offers, asked
+	// again until the login goes through or the person cancels it. A list the server could not read offers none: the
+	// name is typed.
+	bool cancelled = false;
+	std::vector<wxString> users;
+	for (bool asked = false; !loggedIn && refusal == ibProtocolRefusal::LoginRefused; asked = true) {
+		if (asked) {
+			wxMessageBox(_("Wrong user or password entered!"), GetTitle(), wxOK | wxICON_ERROR);
+		}
+		else {
+			ibProtocolRefusal usersRefusal = ibProtocolRefusal::None;
+			wxString usersError;
+			m_communicator->Users(users, usersRefusal, usersError);
+		}
+		ibDialogAuthentication dlg(users);
+		dlg.SetLogin(m_user);
+		if (dlg.ShowModal() == wxID_CANCEL) {
+			cancelled = true;
+			break;
+		}
+		m_user = dlg.GetLogin();
+		m_password = dlg.GetPassword();
+		loggedIn = m_communicator->Login(m_user, m_password, m_mode, answer, refusal, error);
+	}
 	m_password.clear();
 	if (!loggedIn) {
 		// A start that ended the run itself (its BeforeStart cancelled it, a debugger's Stop in it) is no failure to say:
 		// the person ended it, or saw what it said — the desktop's start goes as quietly (enterprise/mainApp.cpp, Cancelled).
-		if (refusal != ibProtocolRefusal::StartRefused)
+		// Nor is a login window the person cancelled.
+		if (!cancelled && refusal != ibProtocolRefusal::StartRefused)
 			wxMessageBox(!error.IsEmpty() ? error : wxString(_("The start was refused.")), GetTitle(), wxOK | wxICON_ERROR);
 		return false;
 	}
@@ -604,7 +730,7 @@ bool ibFrontendMainFrame::Destroy()
 	m_communicator->Logout();
 
 	// …and the tabs' documents here with it: the frame has no tab any more, so none of them asks the server
-	// (ibFormVisualDocument::Close). The files opened last stay for the next run.
+	// (ibTabDocument::Close). The files opened last stay for the next run.
 	if (m_docManager != nullptr) {
 		m_docManager->CloseDocuments(true);
 #if wxUSE_CONFIG
@@ -647,6 +773,17 @@ void ibFrontendMainFrame::Post(ibProtocolMethod method, const ibProtocolNode& pa
 	CallAfter(&ibFrontendMainFrame::CallPosted);
 }
 
+bool ibFrontendMainFrame::Hold(const ibProtocolNode& event)
+{
+	// A call posted and not made yet goes first — a text committed as the focus leaves its field: the focus is held once
+	// that call is made (CallPosted).
+	if (!m_posted.empty()) {
+		m_posted.back().held.push_back(event);
+		return true;
+	}
+	return m_communicator->Hold(event);
+}
+
 void ibFrontendMainFrame::CloseTab(long long tabId)
 {
 	// Once — a key held, a second Escape, the button pressed while the first close asks about what is unsaved: the
@@ -674,6 +811,10 @@ void ibFrontendMainFrame::ShowSchema(ibProtocolSchema schema, const ibProtocolNo
 	}
 	else if (schema == ibProtocolSchema::About) {
 		ibDialogAbout dialog(this, shown);
+		dialog.ShowModal();
+	}
+	else if (schema == ibProtocolSchema::Debugging) {
+		ibDialogEnterpriseOption dialog(this, shown);
 		dialog.ShowModal();
 	}
 }
@@ -739,18 +880,17 @@ void ibFrontendMainFrame::DrawMenu(const ibProtocolNode& menu)
 	std::string shape;
 	ShapeOf(menu, shape);
 	if (shape == m_menuShape) {
-		std::function<void(const ibProtocolNode&, int&)> enable = [this, &enable](const ibProtocolNode& items, int& id) {
+		std::function<void(const ibProtocolNode&)> enable = [this, &enable](const ibProtocolNode& items) {
 			for (const ibProtocolNode& item : items.Children()) {
 				if (item.GetBool(ibProtocolName::Separator))
 					continue;
 				if (item.Has(ibProtocolName::Command) || item.Has(ibProtocolName::Schema))
-					GetMenuBar()->Enable(id++, item.GetBool(ibProtocolName::Enabled));
+					GetMenuBar()->Enable(MenuIdOf(item), item.GetBool(ibProtocolName::Enabled));
 				else
-					enable(item, id);
+					enable(item);
 			}
 		};
-		int id = kFirstMenuId;
-		enable(menu, id);
+		enable(menu);
 		return;
 	}
 
@@ -758,12 +898,11 @@ void ibFrontendMainFrame::DrawMenu(const ibProtocolNode& menu)
 	if (m_pMyMenuBar != nullptr)
 		SetChildMenuBar(nullptr);
 
-	// Each command and schema under an id of the menu's range, its key written after its title the way wx reads one
-	// (Ctrl is Cmd on a Mac — wx's own reading), its picture the art provider's (the desktop's stockPicture).
+	// Each command and schema under its id of the menu's range (MenuIdOf), its picture the art provider's (the
+	// desktop's stockPicture); its key is put on once the bar is up (UpdateHotKeys).
 	m_menuShape = shape;
 	m_menuItems.clear();
-	int next = kFirstMenuId;
-	std::function<void(wxMenu*, const ibProtocolNode&)> fill = [this, &fill, &next](wxMenu* into, const ibProtocolNode& items) {
+	std::function<void(wxMenu*, const ibProtocolNode&)> fill = [this, &fill](wxMenu* into, const ibProtocolNode& items) {
 		for (const ibProtocolNode& item : items.Children()) {
 			if (item.GetBool(ibProtocolName::Separator)) {
 				into->AppendSeparator();
@@ -771,11 +910,8 @@ void ibFrontendMainFrame::DrawMenu(const ibProtocolNode& menu)
 			}
 			const wxString title = item.GetString(ibProtocolName::Title);
 			if (item.Has(ibProtocolName::Command) || item.Has(ibProtocolName::Schema)) {
-				if (next > kLastMenuId)
-					continue;
-				const wxString shortcut = item.GetString(ibProtocolName::Shortcut);
-				const int id = next++;
-				wxMenuItem* const added = into->Append(id, shortcut.IsEmpty() ? title : title + wxT("\t") + shortcut);
+				const int id = MenuIdOf(item);
+				wxMenuItem* const added = into->Append(id, title);
 				const wxArtID art = ArtOf(item.GetInt(ibProtocolName::StockPicture));
 				if (!art.IsEmpty())
 					added->SetBitmap(wxArtProvider::GetBitmapBundle(art, wxART_MENU, wxSize(16, 16)));
@@ -810,6 +946,7 @@ void ibFrontendMainFrame::DrawMenu(const ibProtocolNode& menu)
 	}
 	SetMenuBar(bar);
 	delete previous;
+	UpdateHotKeys();
 
 	// The active view's own menu, merged into the new bar.
 	if (ibFrontendView* const view = m_docManager->GetCurrentView())
@@ -821,6 +958,7 @@ ibFrontendMainFrame::ibMenuItem ibFrontendMainFrame::MenuItemOf(const ibProtocol
 	ibMenuItem what;
 	what.schema = item.Has(ibProtocolName::Schema);
 	what.number = static_cast<int>(what.schema ? item.GetInt(ibProtocolName::Schema) : item.GetInt(ibProtocolName::Command));
+	what.shortcut = item.GetString(ibProtocolName::Shortcut);
 	return what;
 }
 
@@ -854,15 +992,15 @@ void ibFrontendMainFrame::DrawTabs(const ibProtocolNode& tabs)
 	m_drawing = true;
 	client->Freeze();
 
-	// EACH TAB A FORM THE SERVER RAISED — its document made here, with no template (ibFormVisualDocument): its view in a tab
-	// of the window (CreateChildFrame).
+	// EACH TAB A DOCUMENT THE SERVER RAISED — made here, with no template (ibTabDocument), by the tab's Kind: a form, or a
+	// view of its own; its view in a tab of the window (CreateChildFrame).
 	std::set<long long> drawn;
 	for (const ibProtocolNode& tab : tabs.Children()) {
 		const long long id = tab.GetId();
 		drawn.insert(id);
 		const wxString title = tab.GetString(ibProtocolName::Title);
 
-		ibFormVisualDocument* const document = FindDocument(id);
+		ibTabDocument* const document = FindDocument(id);
 		if (document != nullptr) {
 			if (document->GetTitle() != title) {
 				document->SetTitle(title);
@@ -873,7 +1011,12 @@ void ibFrontendMainFrame::DrawTabs(const ibProtocolNode& tabs)
 		// …and a tab closing is not opened again — its form went with the window it was shown in (ibDialogDocChildFrame).
 		if (m_tabsClosing.count(id) != 0)
 			continue;
-		ibFormVisualDocument* const opened = new ibFormVisualDocument(id);
+		const ibProtocolViewKind kind = static_cast<ibProtocolViewKind>(tab.GetInt(ibProtocolName::Kind));
+		ibTabDocument* opened = nullptr;
+		if (kind == ibProtocolViewKind::AuditLog)
+			opened = new ibAuditLogDocument(id);
+		else
+			opened = new ibFormVisualDocument(id);
 		m_documents[id] = opened;
 		opened->SetTitle(title);
 		const wxBitmap icon = ibProtocolPicture(tab.GetString(ibProtocolName::Icon));
@@ -884,7 +1027,7 @@ void ibFrontendMainFrame::DrawTabs(const ibProtocolNode& tabs)
 		}
 		// Under the form that owns it, when the server says it is owned — it goes with that one; the doc manager's
 		// otherwise.
-		if (ibFormVisualDocument* const owner = FindDocument(tab.GetInt(ibProtocolName::Parent)))
+		if (ibTabDocument* const owner = FindDocument(tab.GetInt(ibProtocolName::Parent)))
 			opened->SetDocParent(owner);
 		else
 			m_docManager->AddDocument(opened);
@@ -904,7 +1047,7 @@ void ibFrontendMainFrame::DrawTabs(const ibProtocolNode& tabs)
 		}
 	}
 
-	// The tabs the frame no longer has — closed by the server: their documents go here (ibFormVisualDocument::Close), each
+	// The tabs the frame no longer has — closed by the server: their documents go here (ibTabDocument::Close), each
 	// once. Looked for afresh before each: a form closed takes the forms it owns with it.
 	std::vector<long long> gone;
 	for (const auto& kept : m_documents) {
@@ -912,7 +1055,7 @@ void ibFrontendMainFrame::DrawTabs(const ibProtocolNode& tabs)
 			gone.push_back(kept.first);
 	}
 	for (const long long id : gone) {
-		if (ibFormVisualDocument* const document = FindDocument(id)) {
+		if (ibTabDocument* const document = FindDocument(id)) {
 			document->Close();
 			document->DeleteAllViews();
 		}
@@ -925,8 +1068,8 @@ void ibFrontendMainFrame::DrawTabs(const ibProtocolNode& tabs)
 void ibFrontendMainFrame::DrawView(long long active, const ibProtocolNode& view, const ibProtocolNode& patch)
 {
 	wxAuiMDIClientWindow* const client = GetClientWindow();
-	ibFormVisualDocument* const chosen = FindDocument(active);
-	ibFormVisualEditView* const shown = chosen != nullptr ? chosen->GetFirstView() : nullptr;
+	ibTabDocument* const chosen = FindDocument(active);
+	ibFrontendView* const shown = chosen != nullptr ? chosen->GetFirstView() : nullptr;
 	if (client == nullptr || shown == nullptr)
 		return;
 
@@ -951,7 +1094,7 @@ void ibFrontendMainFrame::DrawView(long long active, const ibProtocolNode& view,
 	// whole; a patch that leaves it as it was changes nothing (a node with no entries) — and a view not built yet is built
 	// all the same: a tab just opened is patched from the view the client kept, another tab's, and two alike leave no View
 	// in the patch. The other tabs keep what was drawn in them last.
-	shown->Draw(view, !patch.IsNode() || patch.Has(ibProtocolName::View) ? patch.FindChild(ibProtocolName::View) : ibProtocolNode());
+	chosen->DrawView(view,!patch.IsNode() || patch.Has(ibProtocolName::View) ? patch.FindChild(ibProtocolName::View) : ibProtocolNode());
 
 	m_drawing = false;
 }
@@ -1013,8 +1156,7 @@ void ibFrontendMainFrame::TakeChosen(const ibProtocolNode& request)
 bool ibFrontendMainFrame::ChooseValue(ibControlFrame* owner, const ibValue& current)
 {
 	const ibProtocolNode request = GetRequest();
-	if (owner == nullptr || m_asking.empty()
-		|| static_cast<ibProtocolRequestKind>(request.GetInt(ibProtocolName::Kind)) != ibProtocolRequestKind::ListSettings)
+	if (owner == nullptr || m_asking.empty() || !IsSettingsRequest(request))
 		return false;
 
 	m_choosing = ibChoosing{ owner, ++m_choice, m_asking.size() };
@@ -1038,7 +1180,7 @@ bool ibFrontendMainFrame::ChooseValue(ibControlFrame* owner, const ibValue& curr
 		const ibProtocolNode asked = GetRequest();
 		if (!asked.IsNode())
 			return true;
-		if (static_cast<ibProtocolRequestKind>(asked.GetInt(ibProtocolName::Kind)) == ibProtocolRequestKind::ListSettings) {
+		if (IsSettingsRequest(asked)) {
 			TakeChosen(asked);
 			return true;
 		}
@@ -1082,7 +1224,7 @@ void ibFrontendMainFrame::ShowRequest(const ibProtocolNode& request, ibProtocolN
 	// Over the window of the form it is asked from — the desktop's: a table's settings over the table's own window — the
 	// active tab's: the main window for a tab, the dialog for a form opened over a modal one (CreateChildFrame).
 	wxWindow* parent = IsShown() ? static_cast<wxWindow*>(this) : nullptr;
-	if (ibFormVisualDocument* const document = FindDocument(GetActiveTab())) {
+	if (ibTabDocument* const document = FindDocument(GetActiveTab())) {
 		if (wxWindow* const window = document->GetDocumentWindow())
 			parent = wxGetTopLevelParent(window);
 	}
@@ -1093,6 +1235,49 @@ void ibFrontendMainFrame::ShowRequest(const ibProtocolNode& request, ibProtocolN
 		const int button = wxMessageBox(request.GetString(ibProtocolName::Text), request.GetString(ibProtocolName::Caption),
 			static_cast<int>(request.GetInt(ibProtocolName::Style, wxOK)), parent);
 		response.SetValue(ibProtocolName::Button, button);
+		break;
+	}
+	case ibProtocolRequestKind::Error: {
+		// THE DESKTOP'S ERROR WINDOW over a script's failure — the act chosen is the answer (ibProtocolErrorAct); closed —
+		// answered with no Act, which the server takes for Close window.
+		ibProtocolPictureKeep(g_picErrorCLSID, ibProtocolPicture(request.GetString(ibProtocolName::Picture)));
+		ibDialogError dialog(this);
+		dialog.SetErrorMessage(request.GetString(ibProtocolName::Text));
+		const int act = dialog.ShowModal();
+		if (act == static_cast<int>(ibProtocolErrorAct::CloseWindow) || act == static_cast<int>(ibProtocolErrorAct::GotoDesigner)
+			|| act == static_cast<int>(ibProtocolErrorAct::CloseProgram))
+			response.SetValue(ibProtocolName::Act, act);
+		break;
+	}
+	case ibProtocolRequestKind::Print: {
+		// THE DESKTOP'S PrintSpreadsheetDocument over a script's sheet, read into a document of its own as a spreadsheet's
+		// fetch is (ibValueGridBox): the page as the preview was last left, the same as File -> Print.
+		auto document = std::make_shared<ibSpreadsheetObject>();
+		auto sheet = std::make_shared<ibDataNode>();
+		ibReadProtocolNode(request.FindChild(ibProtocolName::Sheet), *sheet);
+		ibSpreadsheetDescriptionMemory::ReadNode(ibDataValue::Child(sheet), document->GetSpreadsheetDesc());
+
+		wxScopedPtr<ibGridEditorPrintout> printout(new ibGridEditorPrintout(document));
+		ibPrintPreviewFrame::ApplyFitToPageWidth(printout.get());
+		wxPrintDialogData printDialogData(m_docManager->GetPageSetupDialogData().GetPrintData());
+		wxPrinter printer(&printDialogData);
+		response.SetValue(ibProtocolName::Done, printer.Print(parent, printout.get(), true));
+		break;
+	}
+	case ibProtocolRequestKind::Schedule: {
+		// THE DESKTOP'S ibDialogJobSchedule — it edits a buffer, the schedule as it came; OK answers the one edited,
+		// cancelled — none.
+		ibDataNode stored;
+		ibReadProtocolNode(request.FindChild(ibProtocolName::Schedule), stored);
+		ibJobScheduleDescription schedule;
+		ibJobScheduleDescriptionMemory::ReadNode(ibDataValue::Child(std::make_shared<ibDataNode>(stored)), schedule);
+
+		ibDialogJobSchedule dialog(parent, schedule);
+		if (dialog.ShowModal() != wxID_OK)
+			break;
+		ibDataValue edited;
+		if (ibJobScheduleDescriptionMemory::WriteNode(edited, dialog.GetSchedule()) && edited.AsChild() != nullptr)
+			ibWriteProtocolNode(*edited.AsChild(), response.Child(ibProtocolName::Schedule));
 		break;
 	}
 	case ibProtocolRequestKind::Choice: {
@@ -1129,9 +1314,6 @@ void ibFrontendMainFrame::ShowRequest(const ibProtocolNode& request, ibProtocolN
 			response.SetValue(ibProtocolName::Id, items[dialog.GetSelection()].GetInt(ibProtocolName::Id));
 		break;
 	}
-	case ibProtocolRequestKind::Help:
-		wxMessageBox(request.GetString(ibProtocolName::Text), request.GetString(ibProtocolName::Title), wxOK | wxICON_INFORMATION, parent);
-		break;
 	case ibProtocolRequestKind::Edit:
 		// Answered with nothing: a field changed sends its Change as it does when typed into.
 		EditFocused(EditCommandOf(request.GetInt(ibProtocolName::Command)));
@@ -1199,11 +1381,17 @@ void ibFrontendMainFrame::ShowRequest(const ibProtocolNode& request, ibProtocolN
 		// setting and its fields come in the question, the edited setting is the answer; cancelled — answered with none.
 		ibDialogListSettings::ShowUserSettings(parent, request, response);
 		break;
+	case ibProtocolRequestKind::ComposerSettings:
+		// THE DESKTOP'S ibDialogComposerSettings::ShowUserSettings over a report's model — the same road: the setting, the
+		// composition and its fields come in the question, the edited setting is the answer; cancelled — none.
+		ibDialogComposerSettings::ShowUserSettings(parent, request, response);
+		break;
 	case ibProtocolRequestKind::FormEditor: {
 		// THE DESKTOP'S ibValueForm::ChangeForm — its editor over the form of the active tab, as the form's controls hold
 		// their properties (the frame's, read by ReadData). Its acts are answered on the way (UpdateForm, the setting's
 		// doors); closed — answered with no Act.
-		ibFormVisualDocument* const document = FindDocument(GetActiveTab());
+		// ⚠ Asked only of a form's tab (ibValueForm::ChangeForm), so the active tab's document is a form's.
+		ibFormVisualDocument* const document = dynamic_cast<ibFormVisualDocument*>(FindDocument(GetActiveTab()));
 		ibFormVisualEditView* const view = document != nullptr ? document->GetFirstView() : nullptr;
 		ibValueForm* const form = view != nullptr && view->GetVisualHost() != nullptr ? view->GetVisualHost()->GetValueForm() : nullptr;
 		if (form == nullptr)
@@ -1328,9 +1516,19 @@ void ibFrontendMainFrame::CallPosted()
 	// A tab's close answered — closed, or kept by the person: it may be closed again.
 	if (posted.method == ibProtocolMethod::Close)
 		m_tabsClosing.erase(posted.params.GetInt(ibProtocolName::Tab));
+
+	// What was held while it waited, held now — after it, as it was done. A server that takes none held is called with
+	// each, before what was posted later.
+	auto next = m_posted.begin();
+	for (const ibProtocolNode& event : posted.held) {
+		if (m_communicator->Hold(event))
+			continue;
+		next = m_posted.insert(next, ibPostedCall{ ibProtocolMethod::Event, event }) + 1;
+		CallAfter(&ibFrontendMainFrame::CallPosted);
+	}
 }
 
-ibFormVisualDocument* ibFrontendMainFrame::DocumentAt(int page) const
+ibTabDocument* ibFrontendMainFrame::DocumentAt(int page) const
 {
 	wxAuiMDIClientWindow* const client = GetClientWindow();
 	if (client == nullptr || page == wxNOT_FOUND)
@@ -1344,7 +1542,7 @@ ibFormVisualDocument* ibFrontendMainFrame::DocumentAt(int page) const
 	return nullptr;
 }
 
-void ibFrontendMainFrame::RemoveDocument(const ibFormVisualDocument* document)
+void ibFrontendMainFrame::RemoveDocument(const ibTabDocument* document)
 {
 	m_documents.erase(document->GetTabId());
 }
@@ -1363,7 +1561,7 @@ long long ibFrontendMainFrame::GetActiveTab() const
 	return m_communicator->GetFrame().GetInt(ibProtocolName::ActiveTab);
 }
 
-ibFormVisualDocument* ibFrontendMainFrame::FindDocument(long long tabId) const
+ibTabDocument* ibFrontendMainFrame::FindDocument(long long tabId) const
 {
 	// The frame's own — a tab's, or a dialog's over a modal (CreateChildFrame).
 	const auto found = m_documents.find(tabId);
@@ -1569,7 +1767,12 @@ void ibFrontendMainFrame::OnMenu(wxCommandEvent& event)
 	ibProtocolNode params, answer;
 	if (what.schema) {
 		params.SetValue(ibProtocolName::Schema, what.number);
-		if (Call(ibProtocolMethod::Schema, params, answer))
+		// The journal shows nothing of its own: its command opens its tab, which the frame brings.
+		if (what.number == static_cast<int>(ibProtocolSchema::AuditLog)) {
+			params.SetValue(ibProtocolName::Command, static_cast<long long>(ibProtocolSchemaCommand::Open));
+			Call(ibProtocolMethod::Schema, params, answer);
+		}
+		else if (Call(ibProtocolMethod::Schema, params, answer))
 			ShowSchema(static_cast<ibProtocolSchema>(what.number), answer);
 	}
 	else {
@@ -1590,7 +1793,7 @@ void ibFrontendMainFrame::OnTabChanged(wxAuiNotebookEvent& event)
 	if (m_drawing)
 		return;
 
-	const ibFormVisualDocument* const document = DocumentAt(event.GetSelection());
+	const ibTabDocument* const document = DocumentAt(event.GetSelection());
 	if (document == nullptr || document->GetTabId() == GetActiveTab())
 		return;
 

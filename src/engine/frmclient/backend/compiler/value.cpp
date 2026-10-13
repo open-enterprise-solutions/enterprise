@@ -11,21 +11,8 @@
 #include "frmclient/win/picture.h"
 #include "protocol/protocol.h"
 
-ibValue::ibValue(const ibNumber& number)
-	: m_typeClass(ibValueTypes::TYPE_NUMBER), m_text(number.ToString()), m_numeric(number)
-{
-	long long whole = 0;
-	if (number.ToInt(whole) == 0)   // 0 — it fits
-		m_number = static_cast<long>(whole);
-}
-
-ibValue::ibValue(const ibDateTime& date)
-	: m_typeClass(ibValueTypes::TYPE_DATE), m_text(date.ToString()), m_date(date)
-{
-}
-
 ibValue::ibValue(ibValue* pParam)
-	: m_typeClass(pParam != nullptr ? ibValueTypes::TYPE_REFFER : ibValueTypes::TYPE_EMPTY), m_pRef(pParam)
+	: ibLexValue(pParam != nullptr ? ibValueTypes::TYPE_REFFER : ibValueTypes::TYPE_EMPTY), m_pRef(pParam)
 {
 	if (m_pRef != nullptr)
 		m_pRef->IncrRef();
@@ -33,12 +20,8 @@ ibValue::ibValue(ibValue* pParam)
 
 void ibValue::Assign(const ibValue& rhs)
 {
-	m_typeClass = rhs.m_typeClass;
+	ibLexValue::operator=(rhs);   // the primitive, without the count
 	m_classType = rhs.m_classType;
-	m_text = rhs.m_text;
-	m_number = rhs.m_number;
-	m_numeric = rhs.m_numeric;
-	m_date = rhs.m_date;
 	m_stored = rhs.m_stored;
 	m_pRef = rhs.m_pRef;
 	if (IsReference() && m_pRef != nullptr)
@@ -52,41 +35,6 @@ void ibValue::Release()
 		m_pRef = nullptr;
 		held->DecrRef();
 	}
-}
-
-bool ibValue::GetBoolean() const
-{
-	if (m_typeClass == ibValueTypes::TYPE_STRING)
-		return m_text.IsSameAs(wxT("true"), false) || m_text.IsSameAs(_("True"), false) || m_text == wxT("1");
-	if (m_typeClass == ibValueTypes::TYPE_NUMBER)
-		return !m_numeric.IsZero();
-	return m_number != 0;
-}
-
-ibNumber ibValue::GetNumber() const
-{
-	if (m_typeClass == ibValueTypes::TYPE_STRING) {
-		// A decimal comma reads as the point — what a person types in the locale's way.
-		wxString text = m_text;
-		text.Trim().Trim(false);
-		text.Replace(wxT(","), wxT("."));
-		text.Replace(wxT(" "), wxEmptyString);
-		ibNumber number;
-		return number.FromString(text) ? number : ibNumber();
-	}
-	if (m_typeClass == ibValueTypes::TYPE_BOOLEAN)
-		return ibNumber(m_number != 0 ? 1 : 0);
-	return m_numeric;
-}
-
-ibDateTime ibValue::GetDate() const
-{
-	if (m_typeClass == ibValueTypes::TYPE_STRING) {
-		ibDateTime date;
-		date.FromString(m_text);
-		return date;
-	}
-	return m_date;
 }
 
 bool ibValue::FindValue(const wxString& findData, std::vector<ibValue>& foundedObjects) const
@@ -124,7 +72,7 @@ ibString ibValue::GetString() const
 {
 	if (m_pRef != nullptr && IsReference())
 		return m_pRef->GetString();
-	return m_text;
+	return ibLexValue::GetString();
 }
 
 bool ibValue::IsEmpty() const
@@ -136,11 +84,11 @@ bool ibValue::IsEmpty() const
 	// empty when the server wrote it so — it is not asked here, where nothing reads a base.
 	switch (m_typeClass) {
 	case ibValueTypes::TYPE_EMPTY:
-	case ibValueTypes::TYPE_NULL:    return true;
-	case ibValueTypes::TYPE_BOOLEAN: return m_number == 0;
-	case ibValueTypes::TYPE_NUMBER:  return m_numeric.IsZero();
-	case ibValueTypes::TYPE_DATE:    return m_date.IsEmpty();
-	case ibValueTypes::TYPE_STRING:  return m_text.IsEmpty();
+	case ibValueTypes::TYPE_NULL:
+	case ibValueTypes::TYPE_BOOLEAN:
+	case ibValueTypes::TYPE_NUMBER:
+	case ibValueTypes::TYPE_DATE:
+	case ibValueTypes::TYPE_STRING:  return ibLexValue::IsEmpty();   // a primitive — the base's
 	case ibValueTypes::TYPE_ENUM:    return m_number < 0;   // the negative range is "no member" — the engine's
 	default:                         return m_stored == nullptr;
 	}
@@ -299,20 +247,7 @@ void ibValue::RegisterCtor(const ibClassID& clsid, const wxString& className)
 
 ibClassID ibValue::GetIDByVT(const ibValueTypes& valueType)
 {
-	if (valueType == ibValueTypes::TYPE_EMPTY)
-		return g_valueUndefinedCLSID;
-	else if (valueType == ibValueTypes::TYPE_BOOLEAN)
-		return g_valueBooleanCLSID;
-	else if (valueType == ibValueTypes::TYPE_NUMBER)
-		return g_valueNumberCLSID;
-	else if (valueType == ibValueTypes::TYPE_DATE)
-		return g_valueDateCLSID;
-	else if (valueType == ibValueTypes::TYPE_STRING)
-		return g_valueStringCLSID;
-	else if (valueType == ibValueTypes::TYPE_NULL)
-		return g_valueNullCLSID;
-
-	return 0;
+	return ::GetIDByVT(valueType);   // the core's table (core/core.h)
 }
 
 ibValueTypes ibValue::GetVTByID(const ibClassID& clsid)

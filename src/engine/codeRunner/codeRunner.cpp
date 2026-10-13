@@ -1,6 +1,7 @@
 #include "codeRunner.h"
 #include "backend/compiler/compileCode.h"
 #include "backend/compiler/procUnit.h"
+#include "core/exception.h"   // ibCoreException — what a refused compile or run throws
 #include "frontend/artProvider/artProvider.h"
 #include "frontend/mainFrame/settings/editorsettings.h"
 #include "frontend/mainFrame/settings/fontcolorsettings.h"

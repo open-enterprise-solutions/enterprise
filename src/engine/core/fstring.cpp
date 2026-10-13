@@ -157,7 +157,7 @@ void Drain() noexcept { detail::t_pool.Release(); }
 } // namespace ibFStringPool
 
 // ⚠ AND ONCE MORE, LAST OF ALL. A store of strings as long-lived as the process — the pictures a server sends, made
-// once and kept in statics (ibServerPicture) — hands its blocks back during static destruction, after every Drain
+// once and kept in statics (ibPicture) — hands its blocks back during static destruction, after every Drain
 // above; there they would sit in the pool past the end and read as leaks. So a drain is registered before every
 // ordinary static of this module and runs after all of them: the runtime keeps static destructors and atexit
 // handlers in one LIFO list (docs/private/engineering-playbook/25-memory-leaks.md, "Ordering: running a cleanup last").
@@ -535,7 +535,9 @@ ibString ibString::BeforeFirst(wchar_t c, ibString* rest) const
 {
 	const std::wstring_view text = View();
 	const size_t at = text.find(c);
-	if (at == npos) { if (rest != nullptr) rest->Clear(); return *this; }
+	// The answer is taken BEFORE `rest` is touched: `rest` may be this very string (s.BeforeFirst(c, &s), the walk
+	// along a list), and clearing it first answered an empty string for the list's last item.
+	if (at == npos) { ibString whole = *this; if (rest != nullptr) rest->Clear(); return whole; }
 	ibString before = Slice(text.substr(0, at));
 	if (rest != nullptr) *rest = Slice(text.substr(at + 1));
 	return before;

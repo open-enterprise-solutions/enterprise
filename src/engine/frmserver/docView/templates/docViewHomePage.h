@@ -31,7 +31,7 @@
 #include "frmserver/docView/docView.h"
 #include "frmserver/visualView/ctrl/form.h"   // ibValuePtr<ibValueForm> — a cell holds its form
 
-#include "backend/homePageDescription.h"
+#include "core/description/homePageDescription.h"
 
 #include <vector>
 

@@ -2,7 +2,7 @@
 #define __PROPERTY_TEMPLATE_H__
 
 #include "backend/propertyManager/propertyObject.h"
-#include "backend/spreadsheetDescription.h"
+#include "core/description/spreadsheetDescription.h"
 
 //base property for "spreadsheet"
 class BACKEND_API ibPropertySpreadsheet : public ibProperty {
