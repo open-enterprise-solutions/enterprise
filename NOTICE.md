@@ -44,6 +44,7 @@ These keep their own licenses. Nothing in LICENSE.md changes or overrides them.
 | cpp-httplib | `src/3rdparty/cpp-httplib` (submodule) | MIT |
 | Mbed TLS | `src/3rdparty/mbedtls` (submodule) | Apache-2.0 |
 | nlohmann/json | `src/3rdparty/nlohmann` | MIT |
+| ICU time zone data (Firebird's zone rules) | `src/engine/backend/databaseLayer/firebird/engine/dll/tzdata` | Unicode License v3 |
 
 ## wxWidgets-derived sources inside the engine
 

@@ -266,7 +266,7 @@ oes_discover_tests(oes_tests)
 # which hour of which March morning does not exist. The hour itself is checked by a test that sets a
 # clock of its own (DriverDates.TheSkippedHourIsHeldEvenWhereTheMachineSkipsIt).
 set(oes_date_suites
-    "ValueTest.*Date*:ValueTest.TheEmptyDate*:ValueTest.AText*:DateTime.*:DriverDates.*:DataNode.ADate*:DataNode.AFormat*:DataMover.*:JobSchedule.Buffer_ReadsAVersion*:PointInTime.*:*ScriptCorpusRun*date_reading*:AcceptanceAccumulation.*")
+    "ValueTest.*Date*:ValueTest.TheEmptyDate*:ValueTest.AText*:DateTime.*:DriverDates.*:DataNode.ADate*:DataNode.AFormat*:DataMover.*:JobSchedule.Buffer_ReadsAVersion*:PointInTime.*:*ScriptCorpusRun*date_reading*:AcceptanceAccumulation.*:FrozenRegionalFix.*:FirebirdRegionalFix.*")
 foreach(clock IN ITEMS "utc;UTC0" "east;EET-2EEST,M3.5.0/3,M10.5.0/4" "west;CET-1CEST,M3.5.0/2,M10.5.0/3")
     list(GET clock 0 zone_name)
     list(GET clock 1 zone_rule)

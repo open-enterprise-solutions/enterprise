@@ -12,9 +12,9 @@ ibPanelRegionalSettings::ibPanelRegionalSettings(wxWindow* parent, int id, wxPoi
 		new wxStaticBox(this, -1, _("Time zone of this base")), wxVERTICAL);
 
 	wxStaticText* what = new wxStaticText(this, wxID_ANY,
-		_("Every client of this base works in the base's time zone, wherever it sits: the base's connections "
-		  "stand in it, and the base's server does the zone arithmetic. Dates themselves are kept as written, "
-		  "with no zone in them."),
+		_("Every client of this base works in the base's time zone, wherever it sits: 'now' is the base's "
+		  "server's clock in it, and the connections the base hands out stand in it. Dates themselves are kept "
+		  "as written, with no zone in them."),
 		wxDefaultPosition, wxDefaultSize, 0);
 	what->Wrap(420);
 	box->Add(what, 0, wxALL, 5);

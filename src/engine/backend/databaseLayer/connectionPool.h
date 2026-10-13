@@ -82,11 +82,10 @@ public:
 	// captured master ref in their deleter.
 	void Init(std::shared_ptr<ibDatabaseLayer> primary, std::size_t maxSize, std::size_t minIdle = 2);
 
-	// ⭐ THE BASE'S ZONE ON EVERY CONNECTION (session/regionalSettings.h): recorded here, and put on
-	// each connection whose own zone differs the moment it is next handed out - a connection somebody
-	// is working on is not touched from here. False when the driver has no session zone at all; the
-	// name itself is checked by the server on the caller's own connection (ibRegionalSettings::Save,
-	// ApplyFromBase), not here.
+	// ⭐ THE BASE'S ZONE ON THE CONNECTIONS IT HANDS OUT (session/regionalSettings.h): recorded here, and
+	// put on each connection whose own zone differs the moment it is next handed out - a connection
+	// somebody is working on is not touched from here. False when the driver has no session zone at all;
+	// the name itself is checked by the server on the caller's own connection (ibRegionalSettings), not here.
 	bool SetSessionTimeZone(const wxString& zone);
 
 	// Close and drop every connection the pool holds. Idle and
@@ -285,9 +284,10 @@ private:
 	};
 	std::vector<ibConnectionEntry>  m_entries;
 	// The base's zone, as SetSessionTimeZone last recorded it; a connection whose own zone differs is
-	// put into it as it is handed out (Checkout). The refusal of a name is said once, and remembered here.
+	// put into it as it is handed out (Checkout) - unless a hand-out was refused it since it was recorded.
 	wxString                        m_sessionTimeZone;
-	wxString                        m_zoneRefusalSaid;
+	bool                            m_zoneWasRefused = false;   // a hand-out was refused it since it was recorded
+	wxString                        m_zoneRefusalSaid;          // the last name whose refusal the journal holds
 	static constexpr std::chrono::seconds kIdleTimeout { 60 };
 
 	std::size_t                     m_maxSize   = 0;

@@ -16,7 +16,6 @@
 
 #include <cstdlib>   // std::llabs
 
-#include <wx/datetime.h>   // wxDateTime::UNow - this machine's own clock, to measure against
 
 namespace {
 
@@ -53,6 +52,7 @@ bool ibRegionalSettings::SetTimeZone(const wxString& zone, wxString* refusal)
 		return false;
 	}
 	// A connection of this base for the whole call: the zone is put on it, and the row is written through it.
+	const std::lock_guard<std::mutex> use(m_holderUse);
 	const ibConnectionScope scope(&m_holder);
 	if (!scope) {
 		if (refusal != nullptr)
@@ -64,7 +64,7 @@ bool ibRegionalSettings::SetTimeZone(const wxString& zone, wxString* refusal)
 	// to refuse it with; the name is kept.
 	if (scope->HasSessionTimeZone() && !scope->SetSessionTimeZone(zone)) {
 		if (refusal != nullptr)
-			*refusal = wxString::Format(_("The base's server refused the time zone '%s' - it does not know the name, or it has no session zone (Firebird 4 or later, PostgreSQL); the setting was not saved."), zone);
+			*refusal = wxString::Format(_("The time zone '%s' could not be put on a connection to the base - its server does not know the name or has no session zone (Firebird 4 or later, PostgreSQL), or the connection was lost; the setting was not saved."), zone);
 		return false;
 	}
 	ibDataNode node;
@@ -78,6 +78,7 @@ bool ibRegionalSettings::SetTimeZone(const wxString& zone, wxString* refusal)
 		std::lock_guard<std::mutex> lock(m_mutex);
 		m_timeZone = zone;
 		m_read = true;
+		++m_saves;
 	}
 	// In force at once: every other connection takes the zone as it is next handed out, and the clock is
 	// measured in it - on this connection, which stands in it already.
@@ -93,18 +94,36 @@ bool ibRegionalSettings::Refresh(ibDatabaseConnectionHolder* holder)
 	if (storage == nullptr)
 		return false;
 	ibDatabaseConnectionHolder* const through = holder != nullptr ? holder : &m_holder;
+	// Its own holder one call at a time (a caller's holder is the caller's business).
+	std::unique_lock<std::mutex> use(m_holderUse, std::defer_lock);
+	if (holder == nullptr)
+		use.lock();
 	// One connection for the whole call, FIRST: the row is read through it and the zone put on it. The
 	// registry's thread names its holder and works on the connection that holder keeps - a connection the
 	// pool handed out long ago, before the zone was named, which no hand-out will put into it.
 	const ibConnectionScope scope(through);
 	if (!scope)
 		return false;
+	// A save on another thread between this read and what is done with it would be undone by it - the row read
+	// before the save committed, put in force after - so what is read is taken only if no save came in between.
+	unsigned long savesBefore = 0;
+	{
+		std::lock_guard<std::mutex> lock(m_mutex);
+		savesBefore = m_saves;
+	}
 	// A read that FAILED - the base gone for a moment, a statement refused - is not "the base names nothing":
 	// what is in force stays in force, and the next minute asks again. Taking a failure for an empty row would
 	// take every connection out of the base's zone on a hiccup.
 	ibDataNode node;
 	bool failed = false;
 	const bool held = storage->Restore(KeyOfTheBase(), node, through, &failed);
+	{
+		std::lock_guard<std::mutex> lock(m_mutex);
+		const bool said = m_readFailing;
+		m_readFailing = failed;
+		if (failed && !said)
+			ibJournalWarning(wxT("session.zone"), wxT("the base's time zone could not be read; what is in force stays, and the next minute asks again"));
+	}
 	if (failed)
 		return false;
 	wxString zone;
@@ -115,15 +134,18 @@ bool ibRegionalSettings::Refresh(ibDatabaseConnectionHolder* holder)
 	wxString before;
 	{
 		std::lock_guard<std::mutex> lock(m_mutex);
+		if (m_saves != savesBefore)
+			return held;   // a save came in between: it is in force, and the next minute reads it back
 		first = !m_read;
 		before = m_timeZone;
 		m_read = true;
 		m_timeZone = zone;
 	}
+	// Recorded for the pool at every read - the pool asks each connection its own zone at hand-out, and a zone
+	// a hand-out was refused is tried again once it is recorded again, so once a minute rather than never.
+	if (ibConnectionPool* const pool = ibApplicationInstance::GetConnectionPool(m_owner))
+		pool->SetSessionTimeZone(zone);
 	if (first || before != zone) {
-		// Recorded for the pool whenever it changed; the pool asks each connection its own zone at hand-out.
-		if (ibConnectionPool* const pool = ibApplicationInstance::GetConnectionPool(m_owner))
-			pool->SetSessionTimeZone(zone);
 		if (!zone.IsEmpty())
 			ibJournalInfo(wxT("session.zone"), wxT("the base names the time zone %s"), zone);
 		else if (!first)
@@ -144,9 +166,19 @@ void ibRegionalSettings::MeasureClock(ibDatabaseLayer& connection, const wxStrin
 	// In the base's zone, or not at all (the header): a server that reads its clock in the session's zone is
 	// asked only in a zone the base named, through a connection standing in it. A dialect with no word for
 	// its clock has the machine's.
+	if (m_owner == nullptr)
+		return;
 	if (dialect.m_localTimestamp.IsEmpty()
 		|| (connection.HasSessionTimeZone() && (zone.IsEmpty() || connection.GetSessionTimeZone() != zone))) {
-		if (m_clockOffset.exchange(0, std::memory_order_relaxed) != 0)
+		bool dropped = false;
+		{
+			std::lock_guard<std::mutex> lock(m_mutex);   // as below: only for the zone still in force
+			if (m_timeZone == zone && m_owner->GetClockOffset() != 0) {
+				m_owner->SetClockOffset(0);
+				dropped = true;
+			}
+		}
+		if (dropped)
 			ibJournalInfo(wxT("session.clock"), wxT("the base's clock is not measured (no zone it stands in); 'now' is this machine's clock"));
 		return;
 	}
@@ -170,15 +202,27 @@ void ibRegionalSettings::MeasureClock(ibDatabaseLayer& connection, const wxStrin
 		return;
 	// The two readings compared at the resolution the server answered in: a server that says its clock to the
 	// second (Firebird through struct tm) is set against this machine's clock to the second, or every
-	// measurement would run up to a second behind. The machine's reading is the bridge of its own clock -
-	// never ibDateTime::Now(), which is what this measurement moves.
-	ibDateTime machine = ibDateTime::OfWxDateTime(wxDateTime::UNow());
+	// measurement would run up to a second behind. The machine's reading is its own clock - never
+	// ibDateTime::Now(), which is what this measurement moves.
+	ibDateTime machine = ibDateTime::MachineNow();
 	if (server.GetValue() % 1000 == 0)
 		machine = ibDateTime(machine.GetValue() - machine.GetValue() % 1000);
 	const long long measured = server - machine;
-	const long long before = m_clockOffset.exchange(measured, std::memory_order_relaxed);
-	// Said when it matters: a base whose clock stands a minute or more from this machine's is worth a line;
-	// the drift of a second between two measurements is not.
+	long long before = 0;
+	{
+		// Kept only for the zone still in force - checked and kept under one lock, so a save that replaces the
+		// zone cannot come between: a distance measured in the zone that was replaced is the distance of nothing.
+		std::lock_guard<std::mutex> lock(m_mutex);
+		if (m_timeZone != zone)
+			return;
+		// A step under two seconds is the servers' resolution and this machine's tick, not the clocks moving:
+		// kept as it was, or Now() would step back and forth by a second from one minute to the next.
+		before = m_owner->GetClockOffset();
+		if (std::llabs(measured - before) < 2000)
+			return;
+		m_owner->SetClockOffset(measured);
+	}
+	// Said when it matters: a base whose clock stands a minute or more from this machine's is worth a line.
 	if (std::llabs(measured - before) >= 60000)
 		ibJournalInfo(wxT("session.clock"), wxT("the base's clock reads %lld ms from this machine's (was %lld)"), measured, before);
 }
@@ -186,6 +230,7 @@ void ibRegionalSettings::MeasureClock(ibDatabaseLayer& connection, const wxStrin
 std::vector<wxString> ibRegionalSettings::KnownTimeZones()
 {
 	std::vector<wxString> zones;
+	const std::lock_guard<std::mutex> use(m_holderUse);
 	const ibConnectionScope scope(&m_holder);
 	if (!scope || !scope->HasSessionTimeZone())
 		return zones;

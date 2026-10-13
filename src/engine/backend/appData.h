@@ -372,6 +372,13 @@ public:
 	// The platform locale — the PROCESS's (ibApplicationHost), asked here so its readers need not know that.
 	wxString GetLocale() const;
 
+	// How far the base's clock stands from this machine's, in milliseconds (session/regionalSettings.h measures
+	// it); what ibDateTime::Now() moves a reading by on a thread that works for this base. Kept HERE, on the
+	// base itself, because it is read from any thread without a lock, and the base outlives the fields it
+	// closes.
+	long long GetClockOffset() const noexcept { return m_clockOffset.load(std::memory_order_relaxed); }
+	void SetClockOffset(long long milliseconds) noexcept { m_clockOffset.store(milliseconds, std::memory_order_relaxed); }
+
 #pragma region session
 
 	// Cluster-wide sys_session snapshot — readers go through
@@ -477,6 +484,7 @@ private:
 	// subsystems below so it dies after them: they still write lines while they are destroyed, and those lines
 	// ask for it.
 	wxString m_strInstance;
+	std::atomic<long long> m_clockOffset{ 0 };   // GetClockOffset
 
 	// Subsystem ownership — order below is THE teardown contract.
 	// C++ destroys members in reverse declaration order, so the last

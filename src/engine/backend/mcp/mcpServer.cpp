@@ -1630,13 +1630,12 @@ void ibMcpDescribePlatform(const ibApplicationInstance* applicationInstance, ibD
 	if (!applicationInstance->GetFile().IsEmpty())
 		into.SetValue(wxT("base"), applicationInstance->GetFile());
 
-	// …and the zone its readings stand in (session/regionalSettings.h): empty where the base names none, and
-	// each engine stands in its own.
-	// …and how far the base's clock stands from this machine's, so a reader knows which "now" it is looking at.
-	if (ibRegionalSettings* const regional = ibApplicationInstance::GetRegionalSettings(applicationInstance)) {
+	// …the zone its readings stand in (session/regionalSettings.h; empty where the base names none, and each
+	// engine stands in its own), and how far the base's clock stands from this machine's, so a reader knows
+	// which "now" it is looking at.
+	if (ibRegionalSettings* const regional = ibApplicationInstance::GetRegionalSettings(applicationInstance))
 		into.SetValue(wxT("timeZone"), regional->GetTimeZone());
-		into.AddField(wxT("clockOffsetMs"), ibDataValue::Int(static_cast<s64>(regional->GetClockOffset())));
-	}
+	into.AddField(wxT("clockOffsetMs"), ibDataValue::Int(static_cast<s64>(applicationInstance->GetClockOffset())));
 
 	const ibUserInfo& who = applicationInstance->GetUserInfo();
 

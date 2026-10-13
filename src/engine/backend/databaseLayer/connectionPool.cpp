@@ -503,7 +503,7 @@ std::shared_ptr<ibDatabaseLayer> ibConnectionPool::Checkout(std::chrono::millise
 				it->inUse    = true;
 				it->lastUsed = std::chrono::steady_clock::now();
 				leased   = it->conn;
-				intoZone = it->conn->GetSessionTimeZone() != m_sessionTimeZone;
+				intoZone = it->conn->GetSessionTimeZone() != m_sessionTimeZone && !m_zoneWasRefused;
 				break;
 			}
 		}
@@ -524,7 +524,7 @@ std::shared_ptr<ibDatabaseLayer> ibConnectionPool::Checkout(std::chrono::millise
 			e.inUse    = true;
 			e.lastUsed = std::chrono::steady_clock::now();
 			m_entries.push_back(std::move(e));
-			intoZone = sp->GetSessionTimeZone() != m_sessionTimeZone;   // a clone is born in the engine's own zone
+			intoZone = sp->GetSessionTimeZone() != m_sessionTimeZone && !m_zoneWasRefused;   // a clone is born in the engine's own zone
 			leased   = std::move(sp);
 			break;
 		}
@@ -552,18 +552,20 @@ std::shared_ptr<ibDatabaseLayer> ibConnectionPool::Checkout(std::chrono::millise
 	// of the zone rules, and a reconnect if the leader moved) runs with m_mutex released - a driver
 	// call never runs under it, or every other checkout in the process would stand behind it - and
 	// on a connection leased to this caller already, so nobody else touches it meanwhile. A name the
-	// server refuses is said once in the journal; the connection goes out in the zone it has, and is
-	// asked again at its next hand-out.
+	// server refuses is said in the journal and not tried again on the hand-outs that follow - a failing
+	// statement on every hand-out, forever, would be the price of one typo - until the zone is recorded
+	// again (SetSessionTimeZone: the base re-reads its zone once a minute).
 	std::shared_ptr<ibDatabaseLayer> handout = WrapHandout(leased);
 	if (intoZone && !leased->SetSessionTimeZone(zone)) {
 		bool say = false;
 		{
 			std::lock_guard<std::mutex> again(m_mutex);
-			say = m_zoneRefusalSaid != zone;
+			m_zoneWasRefused = true;
+			say = m_zoneRefusalSaid != zone;   // said once per name, not at every re-record of it
 			m_zoneRefusalSaid = zone;
 		}
 		if (say)
-			ibJournalError(wxT("session.clock"), wxT("a connection could not be put into the zone '%s'; it works in the engine's own zone until its next hand-out"), zone);
+			ibJournalError(wxT("session.zone"), wxT("a connection could not be put into the zone '%s' (the server refused the name, or the connection was lost); connections work in the engine's own zone until the zone is next recorded"), zone);
 	}
 	return handout;
 }
@@ -607,8 +609,10 @@ bool ibConnectionPool::SetSessionTimeZone(const wxString& zone)
 		return false;
 	// Recorded, and every connection takes it the next time it is handed out - never from here, on a
 	// connection some other thread is working on. The caller puts its OWN connection into the zone
-	// itself (ibRegionalSettings::Save), which is also where the server's refusal is heard.
+	// itself (ibRegionalSettings), which is also where the server's refusal is heard. Recorded again, a
+	// zone refused at a hand-out is tried again.
 	m_sessionTimeZone = zone;
+	m_zoneWasRefused = false;
 	return true;
 }
 

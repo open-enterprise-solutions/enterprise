@@ -65,25 +65,31 @@ date form this build does not know is refused, not guessed.
 
 Jobs, sessions, locks and settings keep `ibDateTime`. Where a span has to be real time - a session's
 liveness, a job's last run - it is `ElapsedSince`, measured through this machine's zone, so a change
-of the clocks between two readings is not an hour of silence.
+of the clocks between two readings is not an hour of silence. A session's heartbeat and the watch on it
+are readings of the MACHINE's clock (`MachineNow`): the base's clock is the machine's moved by a distance
+each process measures once a minute, and the minute it steps a peer's beat would read as hours of silence.
 
 ## The base's zone and clock
 
 - **The zone belongs to the base.** It is named once, on the base (the designer's settings, *Time
-  zone*), kept as one shared row of `sys_settings`, and put on every connection the base's pool hands
-  out - Firebird and PostgreSQL `SET TIME ZONE` - so the base's server does the zone arithmetic for
-  every client of it. A base that names none leaves each engine in its own: UTC on a Firebird attach,
-  the server's setting on PostgreSQL. Each process reads the row when the base opens and once a minute
+  zone*), kept as one shared row of `sys_settings`, and put on the connections the base's pool hands
+  out - Firebird `SET TIME ZONE`, PostgreSQL `set_config('TimeZone', …)` - so what asks the server for
+  its clock or for a zone's conversion reads in the base's zone. Dates themselves are bound with no zone,
+  and the engine's own statements do not ask it; the measurement below does, and so may SQL a script
+  writes. A base that names none leaves each engine in its own: UTC on a Firebird attach, the server's
+  setting on PostgreSQL. Each process reads the row when the base opens and once a minute
   after; a zone named in one reaches every other within the minute (`session/regionalSettings.h`).
 - **"Now" is the base's clock.** Each time the zone is read the server is asked its local time
-  (`LOCALTIMESTAMP`) through a connection standing in the base's zone, and the distance from this
+  (`LOCALTIMESTAMP`; on PostgreSQL the statement's moment) through a connection standing in the base's zone, and the distance from this
   machine's clock is kept; `Now()` is the machine's reading moved by it. Core knows no base, so the
   distance comes through `ibDateTime::SetNowOffset`, which the backend fills with "the base this thread
   works for": the session's, the one it is bound to, or the one whose own service runs on it (the
   session registry, the job tick). A thread that works for no base has the machine's clock.
 - **In the base's zone or not at all.** A server reads its clock in whatever zone the session stands
   in, which is nobody's clock for a base that names none: there nothing is measured and "now" is the
-  machine's clock. The distance is one of two wall readings, so a change of the clocks on either side
+  machine's clock. (SQLite has no server and no session zone; its clock is the process's own, so the
+  distance measured there is nothing.) A step under two seconds is the servers' resolution, not the
+  clocks moving, and is not taken. The distance is one of two wall readings, so a change of the clocks on either side
   shows for at most the minute to the next measurement.
 - **The zone rules** are the ones laid out beside the engine (`_fb/tzdata`); without them the ICU
   built into Firebird's kit knows 2018's rules and counts a newer name (`Europe/Kyiv`) as UTC.
@@ -93,6 +99,9 @@ of the clocks between two readings is not an hour of silence.
 - The zone is not in the value: a reading is what the base's clock showed, in the base's zone.
 - A base's locale is the process's (`backend.conf`, the first base's request); there is no locale per
   base.
+- Liveness is the machine's clock read through the machine's zone, as before the base had a clock: two
+  processes of one base on machines in different zones still read each other's heartbeats hours apart.
+  A zone-free reading for the heartbeat (UTC, compared by subtraction) is the change that would close it.
 - A reading before year 1 or past 9999 is counted and printed, by the general formatter.
 
 ## Tested across clocks

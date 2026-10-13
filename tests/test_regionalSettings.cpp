@@ -221,8 +221,9 @@ TEST_F(ZonedRegionalFix, ANameIsRefusedByTheServerBeforeAnythingIsWritten)
 	EXPECT_EQ(wxT("Europe/Kyiv"), second->GetSessionTimeZone());
 }
 
-// A hand-out the server would not put into the zone goes out as it is and is asked again at its next
-// hand-out; one standing in the zone is not asked; one that lost its zone (a reconnect) is put back.
+// A hand-out the server would not put into the zone goes out as it is, and the name is not tried on the
+// hand-outs that follow until the zone is recorded again (once a minute, by the base's re-read); one standing
+// in the zone is not asked; one that lost its zone (a reconnect) is put back.
 TEST_F(ZonedRegionalFix, AHandOutIsPutIntoTheZoneItIsNotIn)
 {
 	ibConnectionPool* pool = ibApplicationInstance::GetConnectionPool();
@@ -238,8 +239,14 @@ TEST_F(ZonedRegionalFix, AHandOutIsPutIntoTheZoneItIsNotIn)
 	{
 		const ibConnectionScope handed;
 		ASSERT_TRUE(static_cast<bool>(handed));
-		EXPECT_EQ(asked + 2, ZonedFakeBase::s_asked) << "asked again at the next hand-out, not marked done";
+		EXPECT_EQ(asked + 1, ZonedFakeBase::s_asked) << "a refused name is not tried on every hand-out";
 		EXPECT_TRUE(handed->GetSessionTimeZone().IsEmpty());
+	}
+	ASSERT_TRUE(pool->SetSessionTimeZone(wxT("Nowhere/Nowhere")));   // recorded again: tried again
+	{
+		const ibConnectionScope handed;
+		ASSERT_TRUE(static_cast<bool>(handed));
+		EXPECT_EQ(asked + 2, ZonedFakeBase::s_asked);
 	}
 	ASSERT_TRUE(pool->SetSessionTimeZone(wxT("Europe/Kyiv")));
 	const int before = ZonedFakeBase::s_taken;
@@ -261,6 +268,14 @@ TEST_F(ZonedRegionalFix, AHandOutIsPutIntoTheZoneItIsNotIn)
 		ASSERT_TRUE(static_cast<bool>(back));
 		EXPECT_EQ(wxT("Europe/Kyiv"), back->GetSessionTimeZone()) << "put back at the next hand-out";
 		EXPECT_EQ(before + 2, ZonedFakeBase::s_taken);
+	}
+	// The zone cleared: a connection standing in the old one is put back into the engine's own as it is handed out.
+	ASSERT_TRUE(pool->SetSessionTimeZone(wxEmptyString));
+	{
+		const ibConnectionScope cleared;
+		ASSERT_TRUE(static_cast<bool>(cleared));
+		EXPECT_TRUE(cleared->GetSessionTimeZone().IsEmpty()) << "out of the zone the base no longer names";
+		EXPECT_EQ(before + 3, ZonedFakeBase::s_taken);
 	}
 }
 
@@ -302,7 +317,7 @@ TEST_F(FrozenRegionalFix, NowIsTheBasesClockOnEveryThreadThatWorksForIt)
 	ibApplicationInstance* const base = ibApplicationInstance::Get();
 	ASSERT_NE(base, nullptr);
 	ASSERT_TRUE(regional->SetTimeZone(wxT("Europe/Kyiv")));
-	EXPECT_LT(std::llabs(MachineNow().AddMilliseconds(regional->GetClockOffset()) - kFrozen), 5000);
+	EXPECT_LT(std::llabs(MachineNow().AddMilliseconds(ibApplicationInstance::Get()->GetClockOffset()) - kFrozen), 5000);
 
 	{
 		const ibApplicationInstanceScope bound(base);
@@ -325,18 +340,18 @@ TEST_F(FrozenRegionalFix, NowIsTheBasesClockOnEveryThreadThatWorksForIt)
 TEST_F(FrozenRegionalFix, TheClockIsMeasuredOnlyInAZoneTheBaseNames)
 {
 	regional->Refresh();
-	EXPECT_EQ(0, regional->GetClockOffset()) << "no zone named";
+	EXPECT_EQ(0, ibApplicationInstance::Get()->GetClockOffset()) << "no zone named";
 	wxString why;
 	EXPECT_FALSE(regional->SetTimeZone(wxT("Nowhere/Nowhere"), &why));
-	EXPECT_EQ(0, regional->GetClockOffset()) << "a zone the server refuses";
+	EXPECT_EQ(0, ibApplicationInstance::Get()->GetClockOffset()) << "a zone the server refuses";
 
 	ASSERT_TRUE(regional->SetTimeZone(wxT("Europe/Kyiv"), &why)) << why;
-	EXPECT_NE(0, regional->GetClockOffset());
+	EXPECT_NE(0, ibApplicationInstance::Get()->GetClockOffset());
 	EXPECT_TRUE(regional->Refresh());
-	EXPECT_LT(std::llabs(MachineNow().AddMilliseconds(regional->GetClockOffset()) - kFrozen), 5000) << "measured again, the same";
+	EXPECT_LT(std::llabs(MachineNow().AddMilliseconds(ibApplicationInstance::Get()->GetClockOffset()) - kFrozen), 5000) << "measured again, the same";
 
 	ASSERT_TRUE(regional->SetTimeZone(wxEmptyString));
-	EXPECT_EQ(0, regional->GetClockOffset()) << "no zone any more";
+	EXPECT_EQ(0, ibApplicationInstance::Get()->GetClockOffset()) << "no zone any more";
 }
 
 // A real server: Kyiv's clock is two or three hours ahead of UTC, wherever this machine stands - and "now"

@@ -1,4 +1,6 @@
 #include "postgresDatabaseLayer.h"
+#include "backend/databaseLayer/preparedStatement.h"   // set_config binds the session's zone
+#include "backend/databaseLayer/databaseResultSet.h"
 #include "postgresInterface.h"
 #include "postgresResultSet.h"
 #include "postgresPreparedStatement.h"
@@ -21,7 +23,9 @@ const ibDialectDictionary& ibDatabaseLayerPostgres::Dialect()
 		d.m_pagination = ibPagination::LimitOffset;
 		d.m_boolForm   = ibBoolForm::TrueFalse;
 		d.m_groupByPosition = true;                   // GROUP BY 2 — a key that binds a value is named by its position
-		d.m_localTimestamp = wxT("LOCALTIMESTAMP");   // the server's clock in the session's TimeZone
+		// The server's clock in the session's TimeZone - the STATEMENT's moment: LOCALTIMESTAMP is the
+		// transaction's start, which a measurement made inside a long transaction would read stale.
+		d.m_localTimestamp = wxT("CAST(statement_timestamp() AS TIMESTAMP)");
 		d.m_timeZoneNames  = wxT("SELECT name FROM pg_timezone_names ORDER BY name");
 		d.m_features.m_window        = true;
 		d.m_features.m_cte           = true;
@@ -415,11 +419,21 @@ bool ibDatabaseLayerPostgres::SetSessionTimeZone(const wxString& zone)
 {
 	if (!IsOpen())
 		return false;
-	if (zone.Contains(wxT("'")))
-		return false;
 	try {
-		// As the one argument of "%s": the statement doors are printf-shaped, and a statement is data.
-		RunQuery(wxT("%s"), zone.IsEmpty() ? wxString(wxT("SET TIME ZONE DEFAULT")) : wxT("SET TIME ZONE '") + zone + wxT("'"));
+		// The name BOUND, not spelled into the statement: set_config takes it as a parameter (SET TIME ZONE
+		// would not). Empty: the server's own setting.
+		if (zone.IsEmpty())
+			RunQuery(wxT("%s"), wxT("SET TIME ZONE DEFAULT"));
+		else {
+			ibPreparedStatement* statement = PrepareStatement(wxT("%s"), wxT("SELECT set_config('TimeZone', ?, false)"));
+			if (statement == nullptr)
+				return false;
+			statement->SetParamString(1, zone);
+			ibDatabaseResultSet* rs = statement->RunQueryWithResults();
+			if (rs != nullptr)
+				statement->CloseResultSet(rs);
+			CloseStatement(statement);
+		}
 	}
 	catch (const ibBackendException&) {
 		return false;

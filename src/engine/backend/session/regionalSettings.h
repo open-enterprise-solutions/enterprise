@@ -5,23 +5,24 @@
 #include "backend/appDataCtorToken.h"
 #include "backend/databaseLayer/connectionHolder.h"
 
-#include <atomic>
 #include <mutex>
 #include <vector>
 
-// ⭐⭐ THE BASE'S TIME ZONE - named on the base, kept in the base, in force on every connection to it.
+// ⭐⭐ THE BASE'S TIME ZONE - named on the base, kept in the base, put on the connections its pool hands out.
 //
 // A date is a wall-clock reading with no zone in it (core/fdatetime.h). What zone the readings of a base
 // stand in - what 09:00 in its documents MEANS - is a property of the BASE: every client of it, wherever
-// it sits, works in the base's zone, and the base's server does the zone arithmetic. So the zone is
-// named once, on the base (the designer's settings), kept as one shared row of sys_settings
-// (ibSettingsCategory::Regional, no user), and put on every connection the base's pool hands out
-// (Firebird and PostgreSQL: SET TIME ZONE). A base that names none leaves each engine in its own: UTC on
-// a Firebird attach, the server's setting on PostgreSQL.
+// it sits, works in the base's zone. So the zone is named once, on the base (the designer's settings),
+// kept as one shared row of sys_settings (ibSettingsCategory::Regional, no user), and put on the
+// connections the base's pool hands out (Firebird SET TIME ZONE, PostgreSQL set_config), so what asks the
+// server for its clock or a zone's conversion reads in it. Dates are bound with no zone, and the engine's
+// own statements do not ask; the measurement below does. A base that names none leaves each engine in its
+// own: UTC on a Firebird attach, the server's setting on PostgreSQL.
 //
 // ⭐ "NOW" IS THE BASE'S CLOCK. Every client that writes a date it took from "now" - a document's date, a
-// session's heartbeat, a job's last run - writes what the base's clock shows, or two clients in two zones
-// write two "nows" into one base and nobody can order them. The clock is not asked for every date: it is
+// job's last run - writes what the base's clock shows, or two clients in two zones write two "nows" into
+// one base and nobody can order them. (A session's heartbeat is not such a date: it is the machine's clock,
+// MachineNow, so that a distance stepping between two measurements is not read as silence.) The clock is not asked for every date: it is
 // MEASURED here - each time the zone is read (once when the base opens, once a minute after) the server is
 // asked its local time through a connection standing in the base's zone - and ibDateTime::Now() is this
 // machine's reading moved by the difference (appHost.cpp puts the source of it into core). Measured in the
@@ -52,10 +53,6 @@ public:
 	// force as it was; false then, and when the base holds no row.
 	bool Refresh(ibDatabaseConnectionHolder* holder = nullptr);
 
-	// How far the base's clock stands from this machine's, in milliseconds, as last measured; 0 before a
-	// measurement, and where none can be made.
-	long long GetClockOffset() const noexcept { return m_clockOffset.load(std::memory_order_relaxed); }
-
 	// The zones this base's server knows by name (the dialect's word for the list: Firebird and PostgreSQL
 	// have one); empty on an engine that cannot say, which the designer's page reads as "type it".
 	std::vector<wxString> KnownTimeZones();
@@ -66,11 +63,13 @@ private:
 	void MeasureClock(class ibDatabaseLayer& connection, const wxString& zone);
 
 	class ibApplicationInstance* const m_owner;
-	ibSingleConnectionHolder           m_holder;   // a connection of THIS base's pool, for its own calls
+	ibSingleConnectionHolder           m_holder;      // a connection of THIS base's pool, for its own calls...
+	std::mutex                         m_holderUse;   // ...one call at a time: one holder is one bound connection
 	std::mutex                         m_mutex;
 	wxString                           m_timeZone;
-	bool                               m_read = false;   // Refresh has read the row once
-	std::atomic<long long>             m_clockOffset{ 0 };
+	bool                               m_read = false;        // Refresh has read the row once
+	bool                               m_readFailing = false; // the last read of the row failed (said once)
+	unsigned long                      m_saves = 0;           // SetTimeZone calls that wrote: a read begun before one is stale
 };
 
 #endif // __REGIONAL_SETTINGS_H__

@@ -20,12 +20,14 @@
 #include <atomic>
 #include <ctime>
 #include <mutex>
+#include <set>
 
 #include <wx/file.h>
 #include <wx/filename.h>
 #include <wx/stdpaths.h>
 #include <wx/tokenzr.h>
 #include <wx/regex.h>
+#include <wx/wxcrt.h>   // wxIsalnum - what a zone name may be made of
 
 // Firebird SQL dialect — owned by the driver. Static holds the definition (a
 // test reads it without constructing the driver); virtual GetDialect() exposes
@@ -496,11 +498,13 @@ bool ibDatabaseLayerFirebird::SetSessionTimeZone(const wxString& zone)
 {
 	if (!IsOpen())
 		return false;
-	// The name goes in as a literal; a zone name is letters, digits, '/', '_', '+', '-' and a quote
-	// in it is not a zone. UTC by name when the base names nothing - the attach's own zone.
+	// The name goes in as a literal - Firebird binds no parameter to SET TIME ZONE - so it is let through
+	// only as what a zone name is: letters, digits and / _ + - : (an IANA name, or an offset like +02:00).
+	// UTC by name when the base names nothing - the attach's own zone.
 	const wxString name = zone.IsEmpty() ? wxString(wxT("UTC")) : zone;
-	if (name.Contains(wxT("'")))
-		return false;
+	for (const wxUniChar c : name)
+		if (!(c.IsAscii() && wxIsalnum(c)) && wxString(wxT("/_+-:")).Find(c) == wxNOT_FOUND)
+			return false;
 	try {
 		// As the one argument of "%s": the statement doors are printf-shaped, and a statement is data.
 		RunQuery(wxT("%s"), wxT("SET TIME ZONE '") + name + wxT("'"));
@@ -517,13 +521,11 @@ bool ibDatabaseLayerFirebird::SetSessionTimeZone(const wxString& zone)
 	// Said once per zone name in this process - the pool puts every clone into the zone, and clones
 	// come and go all day, on every thread of every base; the rules do not change between them.
 	static std::mutex s_rulesMutex;
-	static wxString s_rulesSaidFor;
+	static std::set<wxString> s_rulesSaidFor;   // every name said, for every base the process holds
 	bool say = false;
 	if (!zone.IsEmpty()) {
 		std::lock_guard<std::mutex> lock(s_rulesMutex);
-		say = zone != s_rulesSaidFor;
-		if (say)
-			s_rulesSaidFor = zone;
+		say = s_rulesSaidFor.insert(zone).second;
 	}
 	if (say) {
 		wxString rules;

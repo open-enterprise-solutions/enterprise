@@ -17,7 +17,6 @@
 #include "core/fiber/fiberLocals.h"
 #include "core/programFolder.h"   // backend.conf and lang/ sit in the program folder, not inside a bundle
 #include "backend/session/session.h"   // ibSession::CurrentCached — the journal's first question
-#include "backend/session/regionalSettings.h"   // the base's clock, for ibDateTime::Now
 #include "backend/session/workerPoolHeadless.h"   // the process's worker pool
 #include "backend/syntaxHelper/helpService.h"
 
@@ -60,13 +59,21 @@ struct ibRegisterAppHostLocal {
 // else the base whose service runs on it. The last is what makes the registry's heartbeats and the job tick's
 // last runs readings of the base's clock: those threads work for one base and are bound to none. A thread that
 // works for no base: 0, the machine's clock.
+//
+// THE JOURNAL'S ORDER AND THE JOURNAL'S MANNER (GetJournalContext, below): each without a lock - "now" is asked
+// from anywhere, under anybody's locks (the lock manager's loop, a session being built) - and the distance is
+// read off the base itself, which outlives the fields it closes.
 long long OffsetOfThisThreadsBase() noexcept
 {
-	const ibApplicationInstance* base = ibApplicationInstance::Get(/*required*/ false);
+	if (ibApplicationHost::IsEmpty())
+		return 0;   // no base is open: the machine's clock, and nothing to read a distance off
+	const ibSession* const session = ibSession::CurrentCached();
+	const ibApplicationInstance* base = session != nullptr ? session->GetApplicationInstance() : nullptr;
+	if (base == nullptr)
+		base = t_instance;
 	if (base == nullptr)
 		base = t_owner;
-	const ibRegionalSettings* const regional = ibApplicationInstance::GetRegionalSettings(base);
-	return regional != nullptr ? regional->GetClockOffset() : 0;
+	return base != nullptr ? base->GetClockOffset() : 0;
 }
 
 } // namespace
