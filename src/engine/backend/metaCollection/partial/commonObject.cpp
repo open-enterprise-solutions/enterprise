@@ -3328,10 +3328,10 @@ bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMo
 			SetPosted(writeMode == ibDocumentWriteMode::ibDocumentWriteMode_Posting);
 	}
 
-	// A periodic number is taken from the document's date. An empty date is this moment, and it is
-	// written down before the number so the series and the stored date are the same period. A
-	// nonperiodical document is dated after the number, as it always was.
-	if (newObject && GetMetaObject()->GetNumberPeriodicity() != ibNumberPeriodicity::eNonperiodical) {
+	// One dating, before the number. The series and the stored date are the same period, for a
+	// periodic document and for one that is not. The date is the recorder's own (its metaobject
+	// declares it beside the number), so no leaf is asked.
+	if (newObject) {
 		ibValueMetaObjectAttributePredefined* const date = GetMetaObject()->GetDocumentDate();
 		if (GetValueByMetaID(*date).IsEmpty())
 			SetValueByMetaID(*date, ibValueSystemFunction::CurrentDate());
@@ -3342,14 +3342,6 @@ bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMo
 		ExecAsEvent(wxT("SetNewNumber"), prefix, standartProcessing);
 		if (standartProcessing.GetBoolean())
 			GenerateUniqueIdentifier(prefix.GetString());
-	}
-
-	// A new recorder written without a date is dated by the write. The date is the recorder's own
-	// (its metaobject declares it beside the number), so no leaf is asked.
-	if (newObject) {
-		ibValueMetaObjectAttributePredefined* const date = GetMetaObject()->GetDocumentDate();
-		if (GetValueByMetaID(*date).IsEmpty())
-			SetValueByMetaID(*date, ibValueSystemFunction::CurrentDate());
 	}
 
 	if (!SaveData())

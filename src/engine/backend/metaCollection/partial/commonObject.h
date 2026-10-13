@@ -1199,7 +1199,7 @@ public:
 	ibValueMetaObjectAttributePredefined* GetDocumentNumber() const { return m_propertyAttributeNumber->GetMetaObject(); }
 	ibValueMetaObjectAttributePredefined* GetDocumentDate() const { return m_propertyAttributeDate->GetMetaObject(); }
 	// A document says which period its numbers restart in. Anything else that records a fact has one series.
-	virtual ibNumberPeriodicity GetNumberPeriodicity() const { return ibNumberPeriodicity::eNonperiodical; }
+	virtual ibNumberPeriodicity GetNumberPeriodicity() const { return ibNumberPeriodicity::ibNumberPeriodicity_Nonperiodical; }
 	bool IsDocumentDate(const ibMetaID& id) const { return id == (*m_propertyAttributeDate)->GetMetaID(); }
 
 	// ⚠ IT REACHES THE QUERY AND NOTHING ELSE. Deliberately absent from

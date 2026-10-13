@@ -40,7 +40,7 @@ public:
 	// Year / quarter / month / day: the next number is the next one inside that period of the
 	// document's date. Nonperiodical (the default, and every document saved before the setting
 	// existed) keeps the one series the document already had.
-	ibNumberPeriodicity GetNumberPeriodicity() const override {
+	virtual ibNumberPeriodicity GetNumberPeriodicity() const override {
 		return m_propertyNumberPeriodicity->GetValueAsEnum();
 	}
 
@@ -192,7 +192,7 @@ private:
 	//create default attributes
 	ibPropertyContainer<>* m_propertyAttributePosted = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateBoolean(wxT("Posted"), _("Posted"), _("Set by the platform while the document is posted - its movements stand in the registers. Written by posting and by undoing it, never by hand.")));
 
-	ibPropertyEnum<ibValueEnumNumberPeriodicity>* m_propertyNumberPeriodicity = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumNumberPeriodicity>>(m_categoryData, wxT("NumberPeriodicity"), _("Number periodicity"), _("When the document's numbers start again. Nonperiodical (the default): one series for the life of the document. Year, quarter, month or day: the next number is the next one inside that period of the document's date, and a new period starts again at one. A document saved before this setting existed stays nonperiodical, on the series it already has."), ibNumberPeriodicity::eNonperiodical);
+	ibPropertyEnum<ibValueEnumNumberPeriodicity>* m_propertyNumberPeriodicity = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumNumberPeriodicity>>(m_categoryData, wxT("NumberPeriodicity"), _("Number periodicity"), _("When the document's numbers start again. Nonperiodical (the default): one series for the life of the document. Year, quarter, month or day: the next number is the next one inside that period of the document's date, and a new period starts again at one. A document saved before this setting existed stays nonperiodical, on the series it already has."), ibNumberPeriodicity::ibNumberPeriodicity_Nonperiodical);
 
 	friend class ibValueRecordDataObjectDocument;
 	friend class ibMetaData;
@@ -248,7 +248,7 @@ protected:
 	}
 
 	// The series the next number is taken from: the document's date, folded to its periodicity.
-	ibNumberSeriesKey NumberSeriesKey() const override;
+	virtual ibNumberSeriesKey NumberSeriesKey() const override;
 public:
 
 	//support actionData

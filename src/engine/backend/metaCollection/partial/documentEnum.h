@@ -26,11 +26,11 @@ enum ibDocumentRecordsDeletion {
 // one goes at the end. Nonperiodical is zero: a document saved before the setting existed, and every
 // new document, stays on the one series it already had.
 enum ibNumberPeriodicity {
-	eNonperiodical,
-	eYear,
-	eQuarter,
-	eMonth,
-	eDay,
+	ibNumberPeriodicity_Nonperiodical,
+	ibNumberPeriodicity_Year,
+	ibNumberPeriodicity_Quarter,
+	ibNumberPeriodicity_Month,
+	ibNumberPeriodicity_Day,
 };
 
 // The sequence bucket a nonperiodical document — and every catalog — still uses. A periodic
@@ -76,17 +76,16 @@ class ibValueEnumNumberPeriodicity : public ibValueEnumeration<ibNumberPeriodici
 	ibValueEnumNumberPeriodicity() : ibValueEnumeration() {}
 
 	virtual void CreateEnumeration() {
-		AddEnumeration(ibNumberPeriodicity::eNonperiodical, wxT("Nonperiodical"), _("Nonperiodical"));
-		AddEnumeration(ibNumberPeriodicity::eYear, wxT("Year"), _("Year"));
-		AddEnumeration(ibNumberPeriodicity::eQuarter, wxT("Quarter"), _("Quarter"));
-		AddEnumeration(ibNumberPeriodicity::eMonth, wxT("Month"), _("Month"));
-		AddEnumeration(ibNumberPeriodicity::eDay, wxT("Day"), _("Day"));
+		AddEnumeration(ibNumberPeriodicity::ibNumberPeriodicity_Nonperiodical, wxT("Nonperiodical"), _("Nonperiodical"));
+		AddEnumeration(ibNumberPeriodicity::ibNumberPeriodicity_Year, wxT("Year"), _("Year"));
+		AddEnumeration(ibNumberPeriodicity::ibNumberPeriodicity_Quarter, wxT("Quarter"), _("Quarter"));
+		AddEnumeration(ibNumberPeriodicity::ibNumberPeriodicity_Month, wxT("Month"), _("Month"));
+		AddEnumeration(ibNumberPeriodicity::ibNumberPeriodicity_Day, wxT("Day"), _("Day"));
 	}
 };
 #pragma endregion
 
 class ibDateTime;
-ibNumberPeriodicity ibNumberPeriodicityFromName(const wxString& name);
 int ibDocumentNumberInterval(ibNumberPeriodicity period, const ibDateTime& when);
 
 #endif // ! _DOCUMENT_EMUN_H_

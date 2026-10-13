@@ -267,21 +267,21 @@ ibValueRecordDataObjectRef::ibNumberSeriesKey ibValueRecordDataObjectDocument::N
 		return key;
 
 	const ibNumberPeriodicity period = meta->GetNumberPeriodicity();
-	if (period == ibNumberPeriodicity::eNonperiodical)
+	if (period == ibNumberPeriodicity::ibNumberPeriodicity_Nonperiodical)
 		return key;
 
-	// An empty date is this moment: a new document is numbered in the period it will be dated in.
-	ibDateTime when = ibDateTime::Now();
+	// The write dates the document before it asks for a number. An empty date has no period.
 	const ibValue date = GetValueByMetaID(*meta->GetDocumentDate());
-	if (date.GetType() == ibValueTypes::TYPE_DATE && !date.GetDate().IsEmpty())
-		when = date.GetDate();
+	if (date.GetType() != ibValueTypes::TYPE_DATE || date.GetDate().IsEmpty())
+		return key;
+	const ibDateTime when = date.GetDate();
 
 	key.m_interval = ibDocumentNumberInterval(period, when);
 
 	const ibTotalsPeriod unit =
-		period == ibNumberPeriodicity::eYear    ? ibTotalsPeriod::Year
-		: period == ibNumberPeriodicity::eQuarter ? ibTotalsPeriod::Quarter
-		: period == ibNumberPeriodicity::eMonth   ? ibTotalsPeriod::Month
+		period == ibNumberPeriodicity::ibNumberPeriodicity_Year    ? ibTotalsPeriod::Year
+		: period == ibNumberPeriodicity::ibNumberPeriodicity_Quarter ? ibTotalsPeriod::Quarter
+		: period == ibNumberPeriodicity::ibNumberPeriodicity_Month   ? ibTotalsPeriod::Month
 		:                                            ibTotalsPeriod::Day;
 	key.m_from = when.BeginOfPeriod(unit).GetValue();
 	key.m_to   = when.BeginOfNextPeriod(unit).GetValue();

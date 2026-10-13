@@ -56,24 +56,22 @@ TEST(NumberPeriodicity, TheWordsFoldToTheBucketsAboveTheOldSeries)
 {
 	const ibDateTime march(2026, 3, 31);
 	const ibDateTime april(2026, 4, 1);
-	EXPECT_EQ(ibNumberSeriesNonperiodical, ibDocumentNumberInterval(ibNumberPeriodicity::eNonperiodical, march));
-	EXPECT_EQ(ibDocumentNumberInterval(ibNumberPeriodicity::eYear, march),
-	          ibDocumentNumberInterval(ibNumberPeriodicity::eYear, april));
-	EXPECT_NE(ibDocumentNumberInterval(ibNumberPeriodicity::eYear, march), ibNumberSeriesNonperiodical);
-	EXPECT_EQ(ibDocumentNumberInterval(ibNumberPeriodicity::eQuarter, march),
-	          ibDocumentNumberInterval(ibNumberPeriodicity::eQuarter, ibDateTime(2026, 1, 1)));
-	EXPECT_NE(ibDocumentNumberInterval(ibNumberPeriodicity::eQuarter, march),
-	          ibDocumentNumberInterval(ibNumberPeriodicity::eQuarter, april));
-	EXPECT_EQ(ibDocumentNumberInterval(ibNumberPeriodicity::eMonth, march),
-	          ibDocumentNumberInterval(ibNumberPeriodicity::eMonth, ibDateTime(2026, 3, 1)));
-	EXPECT_NE(ibDocumentNumberInterval(ibNumberPeriodicity::eMonth, march),
-	          ibDocumentNumberInterval(ibNumberPeriodicity::eMonth, april));
-	EXPECT_EQ(ibDocumentNumberInterval(ibNumberPeriodicity::eDay, march),
-	          ibDocumentNumberInterval(ibNumberPeriodicity::eDay, ibDateTime(2026, 3, 31, 23, 59, 59)));
-	EXPECT_NE(ibDocumentNumberInterval(ibNumberPeriodicity::eDay, march),
-	          ibDocumentNumberInterval(ibNumberPeriodicity::eDay, april));
-	EXPECT_EQ(ibNumberPeriodicity::eYear, ibNumberPeriodicityFromName(wxT("Year")));
-	EXPECT_EQ(ibNumberPeriodicity::eNonperiodical, ibNumberPeriodicityFromName(wxT("NoSuchPeriod")));
+	EXPECT_EQ(ibNumberSeriesNonperiodical, ibDocumentNumberInterval(ibNumberPeriodicity::ibNumberPeriodicity_Nonperiodical, march));
+	EXPECT_EQ(ibDocumentNumberInterval(ibNumberPeriodicity::ibNumberPeriodicity_Year, march),
+	          ibDocumentNumberInterval(ibNumberPeriodicity::ibNumberPeriodicity_Year, april));
+	EXPECT_NE(ibDocumentNumberInterval(ibNumberPeriodicity::ibNumberPeriodicity_Year, march), ibNumberSeriesNonperiodical);
+	EXPECT_EQ(ibDocumentNumberInterval(ibNumberPeriodicity::ibNumberPeriodicity_Quarter, march),
+	          ibDocumentNumberInterval(ibNumberPeriodicity::ibNumberPeriodicity_Quarter, ibDateTime(2026, 1, 1)));
+	EXPECT_NE(ibDocumentNumberInterval(ibNumberPeriodicity::ibNumberPeriodicity_Quarter, march),
+	          ibDocumentNumberInterval(ibNumberPeriodicity::ibNumberPeriodicity_Quarter, april));
+	EXPECT_EQ(ibDocumentNumberInterval(ibNumberPeriodicity::ibNumberPeriodicity_Month, march),
+	          ibDocumentNumberInterval(ibNumberPeriodicity::ibNumberPeriodicity_Month, ibDateTime(2026, 3, 1)));
+	EXPECT_NE(ibDocumentNumberInterval(ibNumberPeriodicity::ibNumberPeriodicity_Month, march),
+	          ibDocumentNumberInterval(ibNumberPeriodicity::ibNumberPeriodicity_Month, april));
+	EXPECT_EQ(ibDocumentNumberInterval(ibNumberPeriodicity::ibNumberPeriodicity_Day, march),
+	          ibDocumentNumberInterval(ibNumberPeriodicity::ibNumberPeriodicity_Day, ibDateTime(2026, 3, 31, 23, 59, 59)));
+	EXPECT_NE(ibDocumentNumberInterval(ibNumberPeriodicity::ibNumberPeriodicity_Day, march),
+	          ibDocumentNumberInterval(ibNumberPeriodicity::ibNumberPeriodicity_Day, april));
 }
 
 TEST(NumberPeriodicity, ANewDocumentReadsNonperiodical)
@@ -81,36 +79,23 @@ TEST(NumberPeriodicity, ANewDocumentReadsNonperiodical)
 	ibMetaDataConfigurationFile cfg;
 	ibValueMetaObjectDocument* doc = MakeDocument(cfg);
 	ASSERT_NE(doc, nullptr);
-	EXPECT_EQ(ibNumberPeriodicity::eNonperiodical, doc->GetNumberPeriodicity());
-	EXPECT_TRUE(SameEnum(ReadPeriod(doc), ibNumberPeriodicity::eNonperiodical));
+	EXPECT_EQ(ibNumberPeriodicity::ibNumberPeriodicity_Nonperiodical, doc->GetNumberPeriodicity());
+	EXPECT_TRUE(SameEnum(ReadPeriod(doc), ibNumberPeriodicity::ibNumberPeriodicity_Nonperiodical));
 }
 
-TEST(NumberPeriodicity, TheSettingRoundTripsAndAWordIsAccepted)
+TEST(NumberPeriodicity, TheSettingRoundTrips)
 {
 	ibMetaDataConfigurationFile cfg;
 	ibValueMetaObjectDocument* doc = MakeDocument(cfg);
 	ASSERT_NE(doc, nullptr);
-	SetPeriod(doc, ibNumberPeriodicity::eYear);
+	SetPeriod(doc, ibNumberPeriodicity::ibNumberPeriodicity_Year);
 
 	ibDataNode saved;
 	ASSERT_TRUE(doc->SaveNode(saved));
-	SetPeriod(doc, ibNumberPeriodicity::eNonperiodical);
+	SetPeriod(doc, ibNumberPeriodicity::ibNumberPeriodicity_Nonperiodical);
 	ASSERT_TRUE(doc->LoadNode(saved));
-	EXPECT_EQ(ibNumberPeriodicity::eYear, doc->GetNumberPeriodicity());
-	EXPECT_TRUE(SameEnum(ReadPeriod(doc), ibNumberPeriodicity::eYear));
-
-	// A configuration dump writes the word, not the number the node stores.
-	ibDataNode named;
-	for (const auto& field : saved.Fields())
-		named.AddField(field.first, field.second);
-	for (const auto& prop : saved.Properties()) {
-		if (prop.first == wxT("NumberPeriodicity"))
-			named.SetProperty(prop.first, ibDataValue::String(wxT("Quarter")));
-		else
-			named.SetProperty(prop.first, prop.second);
-	}
-	ASSERT_TRUE(doc->LoadNode(named));
-	EXPECT_EQ(ibNumberPeriodicity::eQuarter, doc->GetNumberPeriodicity());
+	EXPECT_EQ(ibNumberPeriodicity::ibNumberPeriodicity_Year, doc->GetNumberPeriodicity());
+	EXPECT_TRUE(SameEnum(ReadPeriod(doc), ibNumberPeriodicity::ibNumberPeriodicity_Year));
 
 	// Absent from a configuration saved before the setting existed. Loaded into a new document,
 	// whose constructor default is nonperiodical: an empty property does not write over that.
@@ -124,7 +109,7 @@ TEST(NumberPeriodicity, TheSettingRoundTripsAndAWordIsAccepted)
 	ibValueMetaObjectDocument* fresh = MakeDocument(cfg);
 	ASSERT_NE(fresh, nullptr);
 	ASSERT_TRUE(fresh->LoadNode(older));
-	EXPECT_EQ(ibNumberPeriodicity::eNonperiodical, fresh->GetNumberPeriodicity());
+	EXPECT_EQ(ibNumberPeriodicity::ibNumberPeriodicity_Nonperiodical, fresh->GetNumberPeriodicity());
 }
 
 namespace {
@@ -222,7 +207,7 @@ struct NumberSeries : ::testing::Test {
 // The row already in this year is seen; the next year starts again, and then continues on its own.
 TEST_F(NumberSeries, AYearStartsAgainAndThenContinues)
 {
-	Use(ibNumberPeriodicity::eYear);
+	Use(ibNumberPeriodicity::ibNumberPeriodicity_Year);
 	Plant(ibDateTime(2024, 6, 1), 5);
 	EXPECT_EQ(Padded(6), Next(ibDateTime(2024, 8, 1)));
 	EXPECT_EQ(Padded(7), Next(ibDateTime(2024, 9, 1)));
@@ -232,7 +217,7 @@ TEST_F(NumberSeries, AYearStartsAgainAndThenContinues)
 
 TEST_F(NumberSeries, AQuarterStartsAgainInApril)
 {
-	Use(ibNumberPeriodicity::eQuarter);
+	Use(ibNumberPeriodicity::ibNumberPeriodicity_Quarter);
 	Plant(ibDateTime(2026, 3, 15), 4);
 	EXPECT_EQ(Padded(5), Next(ibDateTime(2026, 3, 20)));
 	EXPECT_EQ(Padded(1), Next(ibDateTime(2026, 4, 1)));
@@ -241,7 +226,7 @@ TEST_F(NumberSeries, AQuarterStartsAgainInApril)
 // No period: a later year continues the same series, including a number already stored.
 TEST_F(NumberSeries, NonperiodicalKeepsOneSeriesAcrossYears)
 {
-	Use(ibNumberPeriodicity::eNonperiodical);
+	Use(ibNumberPeriodicity::ibNumberPeriodicity_Nonperiodical);
 	Plant(ibDateTime(2024, 6, 1), 5);
 	EXPECT_EQ(Padded(6), Next(ibDateTime(2026, 1, 1)));
 	EXPECT_EQ(Padded(7), Next(ibDateTime(2024, 1, 1)));
