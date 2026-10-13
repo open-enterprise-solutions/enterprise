@@ -835,7 +835,14 @@ int main(int argc, char** argv)
 		if (!wfrontendSessionExists(id))
 			id = wfrontendCreateSessionWithId(id);
 
-		if (!wfrontendLogin(id, user, pass)) {
+		int retryAfter = 0;
+		if (!wfrontendLogin(id, user, pass, req.remote_addr, &retryAfter)) {
+			if (retryAfter > 0) {
+				res.status = 429;
+				res.set_header("Retry-After", std::to_string(retryAfter));
+				res.set_content("login throttled\n", "text/plain");
+				return;
+			}
 			res.status = 401;
 			res.set_content("login failed\n", "text/plain");
 			return;

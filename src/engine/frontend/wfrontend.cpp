@@ -145,7 +145,8 @@ public:
 		return id;
 	}
 
-	bool Login(const std::string& id, const std::string& user, const std::string& password)
+	bool Login(const std::string& id, const std::string& user, const std::string& password,
+	           const std::string& source = std::string(), int* retryAfterSec = nullptr)
 	{
 		// shared_ptr copy under lock keeps the session alive for the
 		// whole Login — a racing Destroy (e.g. pagehide beacon on
@@ -159,7 +160,9 @@ public:
 			s = it->second;
 		}
 		return s->Login(wxString::FromUTF8(user.c_str()),
-		                wxString::FromUTF8(password.c_str()));
+		                wxString::FromUTF8(password.c_str()),
+		                wxString::FromUTF8(source.c_str()),
+		                retryAfterSec);
 	}
 
 	bool Exists(const std::string& id) const
@@ -1093,9 +1096,10 @@ WFRONTEND_API std::string wfrontendCreateSessionWithId(const std::string& id)
 }
 
 WFRONTEND_API bool wfrontendLogin(const std::string& sessionId,
-	const std::string& user, const std::string& password)
+	const std::string& user, const std::string& password,
+	const std::string& source, int* retryAfterSec)
 {
-	return Sessions().Login(sessionId, user, password);
+	return Sessions().Login(sessionId, user, password, source, retryAfterSec);
 }
 
 WFRONTEND_API bool wfrontendSessionExists(const std::string& sessionId)

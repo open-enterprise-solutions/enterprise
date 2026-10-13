@@ -93,8 +93,12 @@ bool ibWebSession::OnInit()
 	return true;
 }
 
-bool ibWebSession::Login(const wxString& user, const wxString& password)
+bool ibWebSession::Login(const wxString& user, const wxString& password,
+                         const wxString& source, int* retryAfterSec)
 {
+	if (retryAfterSec != nullptr)
+		*retryAfterSec = 0;
+
 	// Serialize against a concurrent OnExit on this same instance.
 	// SessionManager::Login holds a shared_ptr keeper while we run; if
 	// SessionManager::Destroy fires for the same id at the same time it
@@ -119,7 +123,12 @@ bool ibWebSession::Login(const wxString& user, const wxString& password)
 	// just rejects the Attach; the anonymous row can be retried with new
 	// creds without re-creating the ticket.
 	const wxString& presetGuid = m_id;
-	const wxString  address    = wxString::FromUTF8(wfrontendServerAddress().c_str());
+	// The client's address, when the request carried one. The server's own
+	// bind is what a row shows when the request did not: it is not a bucket
+	// every login shares.
+	const wxString  address    = source.IsEmpty()
+		? wxString::FromUTF8(wfrontendServerAddress().c_str())
+		: source;
 	// CreateSession throws via ibBackendCoreException::Error on registry
 	// Connect failure; web HTTP handlers expect bool
 	// false instead of an exception escaping into httplib's loop.
@@ -163,8 +172,13 @@ bool ibWebSession::Login(const wxString& user, const wxString& password)
 		ibJournalError(wxT("web"), wxT("login of '%s' refused: %s"), user, err.GetErrorDescription());
 		return false;
 	}
-	if (!opened)
+	if (!opened) {
+		// The wait, when there is one, was written on the session by the
+		// check itself. A wrong password leaves it at 0.
+		if (retryAfterSec != nullptr)
+			*retryAfterSec = sessionRaw->LoginWaitSec();
 		return false;
+	}
 
 	m_user = user;
 

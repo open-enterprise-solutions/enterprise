@@ -143,8 +143,12 @@ WFRONTEND_API std::string wfrontendMenuJSON();
 //                          to serve form requests.
 //   SessionExists/Destroy/Count — bookkeeping.
 WFRONTEND_API std::string wfrontendCreateSessionWithId(const std::string& id);
+// source is the client address. retryAfterSec, when set, receives the
+// seconds a refused attempt must wait; 0 means the password was wrong.
 WFRONTEND_API bool        wfrontendLogin(const std::string& sessionId,
-	const std::string& user, const std::string& password);
+	const std::string& user, const std::string& password,
+	const std::string& source = std::string(),
+	int* retryAfterSec = nullptr);
 WFRONTEND_API bool        wfrontendSessionExists(const std::string& sessionId);
 WFRONTEND_API void        wfrontendDestroySession(const std::string& sessionId);
 WFRONTEND_API std::size_t wfrontendSessionCount();

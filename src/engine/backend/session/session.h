@@ -493,6 +493,11 @@ public:
 	// Authenticated before relying on the value.
 	const wxString& GetSessionRawPassword() const { return m_sessionRawPassword; }
 
+	// How long the last login on this session was told to wait, in seconds.
+	// 0 when the attempt was allowed to check the password.
+	void NoteLoginWait(int seconds) { m_loginWaitSec = seconds > 0 ? seconds : 0; }
+	int  LoginWaitSec() const { return m_loginWaitSec; }
+
 	// ⭐⭐ THE ONE COMMAND TO STOP: "finish your current operation" — from any thread, from anyone (a closed
 	// window, Ctrl+Break, an administrator's kick, a debugger's Pause, a cancelled job, shutdown). The session
 	// passes it on to everything that is doing its work:
@@ -1128,6 +1133,7 @@ private:
 	// "Start debugging" — handed to spawned child processes so they can
 	// re-authenticate without prompting.
 	wxString                  m_sessionRawPassword;
+	int                       m_loginWaitSec = 0;
 	ibUserInfo 				  m_userInfo;
 
 	// Script-visible "working date" — see GetWorkDate/SetWorkDate.

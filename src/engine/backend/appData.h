@@ -558,6 +558,10 @@ private:
 	// back when the pool shuts down — the lock manager's arrangement, for the lock manager's reason.
 	std::unique_ptr<class ibTempStorage> m_tempStorage;
 
+	// Login refusals for THIS base. Not a process-wide gate: two bases open
+	// in one process do not share a wait.
+	std::unique_ptr<class ibAuthThrottle> m_loginGate;
+
 	// ⭐ THE ACTIVE CONFIGURATION — held FOR THE SESSIONS STILL TO COME (Max, 2026-10-06: *"the active metadata
 	// holds for new sessions"*). A session let in takes its own reference to it (ibSession::GetMetaData, +1) and
 	// works in that one for its whole life, so an update that puts another one here leaves every working session

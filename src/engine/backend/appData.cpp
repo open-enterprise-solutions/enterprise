@@ -18,6 +18,7 @@
 
 #include "core/programFolder.h"
 
+#include "backend/session/authThrottle.h"
 #include "backend/session/session.h"
 #include "backend/session/sessionRegistry.h"
 #include "backend/session/serviceExclusivePolicy.h"   // CanOpen — a base another process holds is refused at open
@@ -329,7 +330,8 @@ ibApplicationInstance::ibApplicationInstance(ibApplicationHost* host, ibRunMode 
 	m_jobManager(std::unique_ptr<ibJobManager>(new ibJobManager(ib::AppDataCtorToken{ this }))),
 	m_mcpServer(std::unique_ptr<ibMcpServer>(new ibMcpServer(ib::AppDataCtorToken{ this }))),
 	m_settingsStorage(std::unique_ptr<ibSettingsStorage>(new ibSettingsStorage(ib::AppDataCtorToken{ this }))),
-	m_tempStorage(std::unique_ptr<ibTempStorage>(new ibTempStorage(ib::AppDataCtorToken{ this })))
+	m_tempStorage(std::unique_ptr<ibTempStorage>(new ibTempStorage(ib::AppDataCtorToken{ this }))),
+	m_loginGate(std::unique_ptr<ibAuthThrottle>(new ibAuthThrottle()))
 {
 	// (Plugins are the PROCESS's — loaded once by ibApplicationHost, not per base.)
 
@@ -1257,6 +1259,44 @@ bool ibApplicationInstance::AuthenticateUser(const wxString& strUserName,
 		}
 	}
 
+	// Before the lookup and before the hash. A name that has just failed, or
+	// an address that has failed too often, is answered here. The gate is
+	// this base's. The address is the session's own; an empty one, or this
+	// machine, does not share a bucket with anyone else.
+	const wxString address = (ibSession::Current() != nullptr)
+		? ibSession::Current()->Identity().m_address
+		: wxString();
+	const auto now = ibAuthThrottle::Clock::now();
+	const ibAuthThrottle::Decision decision = m_loginGate->Begin(strUserName, address, now);
+	if (ibSession* const here = ibSession::Current())
+		here->NoteLoginWait(decision.m_allowed ? 0 : decision.m_retryAfterSec);
+	if (!decision.m_allowed) {
+		const wxString why = decision.m_reason == ibAuthThrottle::Reason::Address
+			? wxString(wxT("address")) : wxString(wxT("account"));
+		try {
+			if (ibLog) ibLog->Audit(wxT("auth"), wxT("login_throttled"),
+			                        wxString::Format(wxT("user=%s address=%s reason=%s retry_after=%d"),
+			                                         strUserName, address, why, decision.m_retryAfterSec));
+		} catch (...) {}
+		return false;
+	}
+
+	// Close records the outcome. Leaving by a throw does not count a failure:
+	// a database that cannot be read is not a wrong password.
+	struct Attempt {
+		ibAuthThrottle&            m_gate;
+		wxString                   m_user;
+		wxString                   m_address;
+		ibAuthThrottle::Clock::time_point m_now;
+		bool                       m_settled = false;
+		void Close(bool success)
+		{
+			if (m_settled) return;
+			m_gate.Finish(m_user, m_address, success, m_now);
+			m_settled = true;
+		}
+	} attempt{ *m_loginGate, strUserName, address, now };
+
 	outInfo = ibUserInfo::Read(strUserName);
 	if (!outInfo.IsOk()) {
 		// An unknown name refuses no sooner than a wrong password: refused before any hashing, it
@@ -1267,6 +1307,7 @@ bool ibApplicationInstance::AuthenticateUser(const wxString& strUserName,
 			if (ibLog) ibLog->Audit(wxT("auth"), wxT("login_failed"),
 			                        wxString::Format(wxT("user=%s reason=unknown"), strUserName));
 		} catch (...) {}
+		attempt.Close(false);
 		return false;
 	}
 
@@ -1276,6 +1317,7 @@ bool ibApplicationInstance::AuthenticateUser(const wxString& strUserName,
 			                        wxString::Format(wxT("user=%s reason=bad_password"), strUserName),
 			                        outInfo.m_strUserGuid, /*refMetaId=*/0);
 		} catch (...) {}
+		attempt.Close(false);
 		return false;
 	}
 
@@ -1295,6 +1337,7 @@ bool ibApplicationInstance::AuthenticateUser(const wxString& strUserName,
 		}
 	}
 
+	attempt.Close(true);
 	return true;
 }
 
