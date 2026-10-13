@@ -49,6 +49,9 @@ struct CodeStyleRestore {
 TEST_F(CommonModuleCheck, ConfigCheckReportsABrokenModuleAndOneThatWasNeverCompiled)
 {
 	CodeStyleRestore style;
+	// The modules are written with Procedure/EndProcedure. The process
+	// default is CES, and under that those words are identifiers.
+	ibCompileCode::SetCodeStyle(CODE_VES);
 	ibSession session(wxT("module-check"), ibSessionKind::Designer);
 	ibSessionScope scope(&session);
 
@@ -69,16 +72,15 @@ TEST_F(CommonModuleCheck, ConfigCheckReportsABrokenModuleAndOneThatWasNeverCompi
 		cfg->CreateMetaObject(g_metaCommonModuleCLSID, root, false));
 	ASSERT_NE(clean, nullptr);
 	ASSERT_NE(broken, nullptr);
-	clean->SetModuleText(wxT("Procedure Clean()\na = 1;\nEndProcedure\n"));
-	broken->SetModuleText(wxT("Procedure Broken()\na = Nope;\nEndProcedure\n"));
+	clean->SetModuleText(wxT("Procedure Clean()\nvar a;\na = 1;\nEndProcedure\n"));
+	broken->SetModuleText(wxT("Procedure Broken()\nvar a;\na = Nope;\nEndProcedure\n"));
 
 	ASSERT_TRUE(cfg->RunDatabase());
-	ibCompileCode::SetCodeStyle(style.m_saved);
 
 	auto* never = dynamic_cast<ibValueMetaObjectCommonModule*>(
 		cfg->CreateMetaObject(g_metaCommonModuleCLSID, root, false));
 	ASSERT_NE(never, nullptr);
-	never->SetModuleText(wxT("Procedure Never()\na = 1;\nEndProcedure\n"));
+	never->SetModuleText(wxT("Procedure Never()\nvar a;\na = 1;\nEndProcedure\n"));
 
 	const ibMcpTool* check = ibFindMcpTool(wxT("config_check"));
 	ASSERT_NE(check, nullptr);
