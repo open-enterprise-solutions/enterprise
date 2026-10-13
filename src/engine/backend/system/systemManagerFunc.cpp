@@ -556,6 +556,28 @@ wxString LanguageOf(const wxString& format)
 	return wxString();
 }
 
+// FS (ДП in Russian) = True asks for the fraction in words instead of digits.
+bool FractionInWords(const wxString& format)
+{
+	wxString compact = format;
+	compact.Replace(wxT(" "), wxT(""));
+	wxString rest = compact;
+	while (!rest.IsEmpty()) {
+		const int semi = rest.Find(wxT(';'));
+		const wxString part = semi == wxNOT_FOUND ? rest : rest.Left(semi);
+		rest = semi == wxNOT_FOUND ? wxString() : rest.Mid(semi + 1);
+		const int eq = part.Find(wxT('='));
+		if (eq == wxNOT_FOUND)
+			continue;
+		const wxString key = part.Left(eq).Lower();
+		if (key == wxT("fs") || key == wxT("дп")) {
+			const wxString v = part.Mid(eq + 1).Lower();
+			return v == wxT("true") || v == wxT("истина") || v == wxT("1");
+		}
+	}
+	return false;
+}
+
 int GenderOf(const wxString& mark)
 {
 	const wxString s = mark.Lower().Trim(true).Trim(false);
@@ -636,7 +658,15 @@ wxString ibValueSystemFunction::NumberInWords(const ibValue& number, const wxStr
 
 	if (digits > 0) {
 		words += wxT(' ');
-		words += frac;
+		if (FractionInWords(format)) {
+			wxString digitsOnly = frac;
+			while (digitsOnly.length() > 1 && digitsOnly[0] == wxT('0'))
+				digitsOnly = digitsOnly.Mid(1);
+			words += SpellInteger(digitsOnly, GenderOf(field[7]), book);
+		}
+		else {
+			words += frac;
+		}
 		const int fracAt = 4 + FormOfText(frac, book.english);
 		if (!field[fracAt].IsEmpty()) {
 			words += wxT(' ');
