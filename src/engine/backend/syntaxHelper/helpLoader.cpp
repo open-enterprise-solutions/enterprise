@@ -543,24 +543,6 @@ ResolveSource(const wxString& sourceRoot, const wxString& localeCode) {
 	return nullptr;
 }
 
-// Names the type registry already holds, added under ids the files did not use.
-// A written article wins: its prose is the one a person edited.
-void AddTheTypeRegistry(std::vector<ibHelpEntry>& entries)
-{
-	std::set<wxString> have;
-	for (const ibHelpEntry& e : entries)
-		have.insert(e.id);
-
-	try {
-		for (ibHelpEntry& extra : HelpEntriesFromTypeRegistry()) {
-			if (have.insert(extra.id).second)
-				entries.push_back(std::move(extra));
-		}
-	} catch (...) {
-		// A registry that cannot be read leaves the written articles standing.
-	}
-}
-
 // Build a single-source corpus from any HelpBucketSource. The loader
 // collects entries + errors locally, then constructs the corpus once
 // with everything in hand — no partial corpus exists at any point.
@@ -592,8 +574,6 @@ LoadSource(const wxString&               localeCode,
 		std::vector<ibHelpLoadError> errs;
 		errs.push_back(std::move(err));
 		std::vector<ibHelpEntry> entries;
-		if (sourceTag == ibHelpCorpus::Source::kPlatform)
-			AddTheTypeRegistry(entries);
 		return std::make_shared<ibHelpCorpus>(
 		    localeCode, sourceTag, std::move(entries),
 		    std::move(errs));
@@ -648,10 +628,6 @@ LoadSource(const wxString&               localeCode,
 		seenAt[e.id] = deduped.size();
 		deduped.push_back(std::move(e));
 	}
-
-	// Written articles keep their ids. The registry fills the names the files do not carry.
-	if (sourceTag == ibHelpCorpus::Source::kPlatform)
-		AddTheTypeRegistry(deduped);
 
 	// Errors live INSIDE the corpus snapshot — there is no parallel
 	// errors-on-result vector. Callers see one canonical source via

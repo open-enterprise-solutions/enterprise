@@ -4,7 +4,8 @@
 // The corpus files describe keywords and global functions. Array, Structure,
 // AccumulationRecordType and the values the platform hands out are registered
 // the same way, and a search that never asks the registry answers that they
-// do not exist. These entries are that question, asked once at load.
+// do not exist. A search asks this when it runs. The corpus files are not a
+// second copy of the registry.
 //
 // A member's call form is read off a value built for the purpose. Building
 // one asks wx (a font, a point), so it waits until wx is up. The name of the
@@ -53,7 +54,6 @@ ibHelpEntry Head(const wxString& id, const wxString& name, ibHelpKind kind,
 	e.syntaxBlock  = signature;
 	e.description  = description;
 	e.categoryKeys = { wxT("value_types") };
-	e.reviewed     = true;
 	return e;
 }
 

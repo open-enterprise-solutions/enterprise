@@ -37,6 +37,7 @@
 #include <cstdint>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <unordered_map>
 #include <vector>
 
@@ -166,9 +167,17 @@ private:
 	wxString                     m_locale;
 	std::vector<ibHelpLoadError> m_loadErrors;
 
+	// Types the registry knows, asked the first time a search needs them.
+	// Not copied into m_entries at load: a written article with the same id
+	// wins, and the corpus digest stays the files. The answer is kept so the
+	// pointers a search returns stay valid for this snapshot.
+	mutable std::once_flag           m_registryOnce;
+	mutable std::vector<ibHelpEntry> m_registry;
+
 	// Internal helpers — used by the constructors only.
 	void BuildIndexes();
 	void BuildCategoryTree();
+	void AskRegistry() const;
 
 	// Free-function accessor used by helpResolver — keeps the resolver
 	// independent of the corpus's internal storage layout. BACKEND_API

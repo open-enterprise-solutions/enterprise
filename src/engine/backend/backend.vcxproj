@@ -450,6 +450,7 @@
     <ClCompile Include="appEnv.cpp" />
     <ClCompile Include="syntaxHelper\helpCorpus.cpp" />
     <ClCompile Include="syntaxHelper\helpLoader.cpp" />
+    <ClCompile Include="syntaxHelper\helpFromRegistry.cpp" />
     <ClCompile Include="syntaxHelper\helpResolver.cpp" />
     <ClCompile Include="syntaxHelper\helpService.cpp" />
     <ClCompile Include="logger\logger.cpp" />
