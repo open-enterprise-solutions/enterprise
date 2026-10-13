@@ -573,8 +573,10 @@ bool JumpOk(long long target, long nCode)
 bool InstructionFits(const ibByteUnit& u, long frame, long ip, long nCode, long nConst, long nFunc)
 {
 	const int op = BaseOpcode(u.m_numOper);
+	// A number this interpreter does not run is not a module. Passing it
+	// used to publish the blob and then miss the cache on every start.
 	if (op < 0)
-		return true;
+		return false;
 
 	const ibParamRunUnit& p1 = u.m_param1;
 	const ibParamRunUnit& p2 = u.m_param2;
@@ -704,8 +706,22 @@ bool InstructionFits(const ibByteUnit& u, long frame, long ip, long nCode, long 
 	case OPER_LINQ_FIELD:
 		return ValueSlotOk(p1, frame, nConst) && ValueSlotOk(p2, frame, nConst) && p3.m_numIndex >= 0;
 
-	default:
+	// Markers. They name no slot. A typed tier of one of them is not a
+	// marker (BaseOpcode already folded those back to the base).
+	case OPER_NOP:
+	case OPER_RAISE:
+	case OPER_FUNC:
+	case OPER_ENDFUNC:
+	case OPER_ENDLFUNC:
+	case OPER_END:
+	case OPER_CTX_BEGIN:
+	case OPER_CTX_END:
 		return true;
+
+	default:
+		// A known number with no layout here is still unknown to this check.
+		// Refuse it. A new opcode has to say which of its operands are slots.
+		return false;
 	}
 }
 

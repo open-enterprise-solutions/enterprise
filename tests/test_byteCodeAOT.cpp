@@ -22,8 +22,10 @@
 
 #include "backend/compiler/byteCode.h"
 #include "backend/compiler/codeDef.h"
+#include "backend/compiler/compileCode.h"
 #include "backend/compiler/compileContext.h"
 #include "backend/compiler/value.h"
+#include "backend/backend_exception.h"
 #include "core/fileSystem/fs.h"
 #include "core/guid.h"
 
@@ -746,6 +748,42 @@ TEST(ByteCodeAOT, AFunctionBodyIsCheckedAgainstItsOwnFrame) {
 	src.m_listCode[0].m_numOper = OPER_NOP;
 	ibByteCode dst;
 	EXPECT_FALSE(RoundTrip(src, dst));
+}
+
+TEST(ByteCodeAOT, AnUnknownOpcodeIsRefused) {
+	ibByteCode src = LetModule();
+	src.m_listCode[0].m_numOper = -1;
+	ibByteCode dst;
+	EXPECT_FALSE(RoundTrip(src, dst));
+
+	src = LetModule();
+	src.m_listCode[0].m_numOper = 99999;
+	EXPECT_FALSE(RoundTrip(src, dst));
+}
+
+// The reader used to refuse a hand-built tape and the fixture was rewritten
+// to NOP so the round-trip would pass. A module the compiler actually emits,
+// including a lambda and a pipeline, has to pass the same check.
+TEST(ByteCodeAOT, ACompiledModuleWithALambdaPasses) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	bool compiled = false;
+	try {
+		compiled = cc.Compile(
+			wxT("Function Pick(arr)\n")
+			wxT("  Return arr.Where(Function(x) Return x > 1 EndFunction).Count();\n")
+			wxT("EndFunction\n")
+			wxT("Procedure Note(a, b = 2)\n")
+			wxT("EndProcedure\n"));
+	} catch (const ibBackendException& err) {
+		FAIL() << err.GetErrorDescription().ToStdString();
+	}
+	ASSERT_TRUE(compiled);
+
+	ibByteCode dst;
+	ASSERT_TRUE(RoundTrip(cc, dst));
+	EXPECT_TRUE(dst.m_bCompile);
+	EXPECT_FALSE(dst.m_listCode.empty());
+	EXPECT_FALSE(dst.m_listFunc.empty());
 }
 
 TEST(ByteCodeAOT, DependencyListsOfDifferentLengthsAreRefused) {
