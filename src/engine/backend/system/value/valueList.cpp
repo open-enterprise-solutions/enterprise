@@ -43,7 +43,7 @@ void ibValueValueList_BindNames(ibValue::ibMemberTable& helper, const ibValue* /
 	helper.AppendFunc(wxT("Insert"), 5, wxT("Insert(index, value, presentation, check, picture)"));
 	helper.AppendFunc(wxT("Count"), wxT("Count()"));
 	helper.AppendFunc(wxT("Get"), 1, wxT("Get(index)"));
-	helper.AppendFunc(wxT("Delete"), 1, wxT("Delete(item or index)"));
+	helper.AppendFunc(wxT("Delete"), 1, wxT("Delete(item)"));
 	helper.AppendFunc(wxT("IndexOf"), 1, wxT("IndexOf(item)"));
 	helper.AppendFunc(wxT("Clear"), wxT("Clear()"));
 	helper.AppendFunc(wxT("FindByValue"), 1, wxT("FindByValue(value)"));
@@ -94,8 +94,8 @@ void ibValueValueList::Delete(unsigned int index)
 
 long ibValueValueList::IndexOf(const ibValue& item) const
 {
-	const ibValueValueListItem* const wanted = dynamic_cast<const ibValueValueListItem*>(item.GetRef());
-	if (wanted == nullptr)
+	ibValueValueListItem* wanted = nullptr;
+	if (!item.ConvertToValue(wanted) || wanted == nullptr)
 		return -1;
 	for (size_t at = 0; at < m_items.size(); ++at)
 		if (m_items[at].GetRef() == wanted)
@@ -103,18 +103,22 @@ long ibValueValueList::IndexOf(const ibValue& item) const
 	return -1;
 }
 
-void ibValueValueList::Delete(const ibValue& which)
+void ibValueValueList::Delete(const ibValue& item)
 {
 	// An item is not a number. Reading it as an index answered 0, so Delete(item)
-	// always removed the first element.
-	if (dynamic_cast<const ibValueValueListItem*>(which.GetRef()) != nullptr) {
-		const long at = IndexOf(which);
+	// always removed the first element. A string or Undefined does the same, so
+	// only an item or a number is accepted.
+	ibValueValueListItem* held = nullptr;
+	if (item.ConvertToValue(held)) {
+		const long at = IndexOf(item);
 		if (at < 0)
 			ibBackendCoreException::Error(_("The item is not in the list"));
 		Delete(static_cast<unsigned int>(at));
 		return;
 	}
-	Delete(which.GetUInteger());
+	if (item.GetType() != ibValueTypes::TYPE_NUMBER)
+		ibBackendCoreException::Error(_("Delete expects an item or an index"));
+	Delete(item.GetUInteger());
 }
 
 ibValue ibValueValueList::FindByValue(const ibValue& value) const

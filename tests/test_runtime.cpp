@@ -3040,6 +3040,30 @@ TEST(RuntimeTest, ValueListDeleteRemovesTheItemThatWasPassed)
 	ibProcUnit missingUnit;
 	EXPECT_FALSE(RunBound(missing, missingUnit, strError));
 	EXPECT_TRUE(strError.Contains(wxT("not in the list")));
+
+	// A value, or Undefined, is neither an item nor an index. Reading either as
+	// a number answered 0 and removed the first element.
+	ibCompileCode byValue(wxT("test"), wxT("memory"), false);
+	ASSERT_TRUE(TryCompile(byValue,
+		wxT("var n public;\n")
+		wxT("var list; list = New ValueList();\n")
+		wxT("list.Add(\"a\"); list.Add(\"b\");\n")
+		wxT("list.Delete(\"b\");\n")
+		wxT("n = list.Count();\n")));
+	ibProcUnit valueUnit;
+	EXPECT_FALSE(RunBound(byValue, valueUnit, strError));
+	EXPECT_TRUE(strError.Contains(wxT("item or an index")));
+
+	ibCompileCode byEmpty(wxT("test"), wxT("memory"), false);
+	ASSERT_TRUE(TryCompile(byEmpty,
+		wxT("var n public;\n")
+		wxT("var list; list = New ValueList();\n")
+		wxT("list.Add(\"a\");\n")
+		wxT("list.Delete(Undefined);\n")
+		wxT("n = list.Count();\n")));
+	ibProcUnit emptyUnit;
+	EXPECT_FALSE(RunBound(byEmpty, emptyUnit, strError));
+	EXPECT_TRUE(strError.Contains(wxT("item or an index")));
 }
 
 TEST(RuntimeTest, ValueListUnloadsAndLoadsValues) {

@@ -33,8 +33,8 @@ public:
 	unsigned int Count() const { return static_cast<unsigned int>(m_items.size()); }
 	ibValue Get(unsigned int index) const;
 	void Delete(unsigned int index);
-	// An item removes that item. Anything else is an index, as Delete(1) already was.
-	void Delete(const ibValue& which);
+	// An item removes that item. A number is an index. Anything else is refused.
+	void Delete(const ibValue& item);
 	// Where this item sits, or -1 when it is not one of this list's items.
 	long IndexOf(const ibValue& item) const;
 	void Clear() { m_items.clear(); }
