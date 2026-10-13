@@ -35,6 +35,8 @@
 #include "backend/mcp/mcpTool.h"
 #include "backend/mcp/mcpClipboard.h"
 #include "backend/mcp/mcpServer.h"
+#include "backend/appData.h"
+#include "backend/restructureInfo.h"
 #include "core/serialize/dataBuilder.h"
 
 #include <wx/dir.h>        // the ASCII rule reads the MCP sources themselves
@@ -853,21 +855,70 @@ TEST(McpClipboard, OnlyFilledSlots_AreListed)
 	EXPECT_EQ(std::find(slots.begin(), slots.end(), wxT("test.notlisted")), slots.end());
 }
 
-// A long tools/call stays silent on its POST. The listen stream carries this line, and a client
-// resets its request timeout when the progressToken matches the one it sent.
-TEST(McpProgress, NotificationNamesTheMethodAndKeepsTheToken)
+// An apply step is a line in the rebuild journal. It is written onto the call
+// that is running, as notifications/progress, and a step after that call has
+// ended is not. Nothing in the frame is a timer saying the tool is still running.
+TEST(McpProgress, AnApplyStepReachesThatCall)
 {
-	const wxString asText = ibMcpProgressNotification(
-		ibDataValue::String(wxT("apply-1")), 3, wxT("config_apply is still running"));
-	EXPECT_NE(asText.Find(wxT("notifications/progress")), wxNOT_FOUND) << asText.utf8_str();
-	EXPECT_NE(asText.Find(wxT("apply-1")), wxNOT_FOUND) << asText.utf8_str();
-	EXPECT_NE(asText.Find(wxT("config_apply is still running")), wxNOT_FOUND) << asText.utf8_str();
-	EXPECT_EQ(asText.Find(wxT("\"id\"")), wxNOT_FOUND) << asText.utf8_str();
+	const bool created = ibApplicationInstance::Get() == nullptr;
+	if (created && !ibApplicationInstance::CreateAppDataEnv(ibRunMode::eFILE_MODE))
+		GTEST_SKIP() << "appData env unavailable headless";
+	struct Guard {
+		bool created;
+		~Guard()
+		{
+			if (created && ibApplicationInstance::Get() != nullptr)
+				ibApplicationInstance::DestroyAppDataEnv();
+		}
+	} guard{ created };
 
-	const wxString asNumber = ibMcpProgressNotification(
-		ibDataValue::Int(42), 1, wxT("config_apply is still running"));
-	EXPECT_NE(asNumber.Find(wxT("notifications/progress")), wxNOT_FOUND) << asNumber.utf8_str();
-	EXPECT_NE(asNumber.Find(wxT("42")), wxNOT_FOUND) << asNumber.utf8_str();
-	EXPECT_EQ(asNumber.Find(wxT("\"42\"")), wxNOT_FOUND)
-		<< "a numeric token stays a number: " << asNumber.utf8_str();
+	ibMcpServer* server = ibApplicationInstance::GetMcpServer();
+	ASSERT_NE(server, nullptr);
+
+	auto tell = [](const wxString& what, void* cookie) {
+		static_cast<ibMcpServer*>(cookie)->NoteApplyStep(what);
+	};
+
+	auto out = std::make_shared<ibMcpCallOut>();
+	server->BindCallOut(out);
+	const ibDataValue token = ibDataValue::String(wxT("apply-1"));
+	server->BeginCallProgress(&token);
+
+	ibRestructureInfo journal;
+	journal.SetStep(tell, server);
+	journal.AppendInfo(wxT("CREATE TABLE goods"));
+	journal.SetStep(nullptr, nullptr);
+	server->EndCallProgress();
+
+	journal.SetStep(tell, server);
+	journal.AppendInfo(wxT("should stay off the call"));
+	journal.SetStep(nullptr, nullptr);
+	server->BindCallOut(nullptr);
+
+	const std::vector<wxString> notes = out->Notes();
+	ASSERT_EQ(notes.size(), 1u);
+	EXPECT_NE(notes[0].Find(wxT("notifications/progress")), wxNOT_FOUND) << notes[0].utf8_str();
+	EXPECT_NE(notes[0].Find(wxT("apply-1")), wxNOT_FOUND) << notes[0].utf8_str();
+	EXPECT_NE(notes[0].Find(wxT("CREATE TABLE goods")), wxNOT_FOUND) << notes[0].utf8_str();
+	EXPECT_EQ(notes[0].Find(wxT("still running")), wxNOT_FOUND) << notes[0].utf8_str();
+	EXPECT_EQ(notes[0].Find(wxT("\"id\"")), wxNOT_FOUND) << notes[0].utf8_str();
+
+	auto numbered = std::make_shared<ibMcpCallOut>();
+	server->BindCallOut(numbered);
+	const ibDataValue number = ibDataValue::Int(42);
+	server->BeginCallProgress(&number);
+	ibRestructureInfo again;
+	again.SetStep(tell, server);
+	again.AppendWarning(wxT("column widened"));
+	again.SetStep(nullptr, nullptr);
+	server->EndCallProgress();
+	server->BindCallOut(nullptr);
+
+	const std::vector<wxString> more = numbered->Notes();
+	ASSERT_EQ(more.size(), 1u);
+	EXPECT_NE(more[0].Find(wxT("notifications/progress")), wxNOT_FOUND) << more[0].utf8_str();
+	EXPECT_NE(more[0].Find(wxT("42")), wxNOT_FOUND) << more[0].utf8_str();
+	EXPECT_EQ(more[0].Find(wxT("\"42\"")), wxNOT_FOUND) << more[0].utf8_str();
+	EXPECT_NE(more[0].Find(wxT("column widened")), wxNOT_FOUND) << more[0].utf8_str();
+	EXPECT_EQ(more[0].Find(wxT("still running")), wxNOT_FOUND) << more[0].utf8_str();
 }

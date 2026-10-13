@@ -21,6 +21,8 @@
 
 #include "backend/mcp/mcpTool.h"
 
+#include "backend/appData.h"
+#include "backend/mcp/mcpServer.h"
 #include "backend/metadataConfiguration.h"
 #include "backend/restructureInfo.h"
 #include "backend/metaCollection/metaDiff.h"
@@ -278,6 +280,19 @@ public:
 			line->SetValue(wxT("what"), entry.descr);
 			ledger.push_back(ibDataValue::Child(line));
 		};
+
+		// Each line the apply writes is this call's progress. The hook is the active
+		// ledger, which is where OnSave and the structure builder land their steps.
+		// Cleared on the way out so a later save does not keep talking to this call.
+		ibRestructureInfo& journal = ibMetaDataConfigurationBase::GetRestructureInfo();
+		journal.SetStep([](const wxString& what, void*) {
+			if (ibMcpServer* server = ibApplicationInstance::GetMcpServer())
+				server->NoteApplyStep(what);
+		}, nullptr);
+		struct ClearStep {
+			ibRestructureInfo& journal;
+			~ClearStep() { journal.SetStep(nullptr, nullptr); }
+		} clearStep{ journal };
 
 		const bool applied = config->ApplyConfiguration(refusal,
 			[&appendEntry, &capturedUpTo, &sawErrors, &decisionReached, commit](const ibRestructureInfo& info) {
