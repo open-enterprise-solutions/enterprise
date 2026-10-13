@@ -129,6 +129,7 @@ void ibValueModelTable::FillMembers(ibMemberTable& helper) const
 	helper.AppendFunc(wxT("UnloadColumn"), 1, wxT("UnloadColumn(column : string) : array"));
 	helper.AppendFunc(wxT("Total"), 1, wxT("Total(column : string) : number"));
 	helper.AppendFunc(wxT("FindRows"), 1, wxT("FindRows(filter : structure) : array"));
+	helper.AppendFunc(wxT("Index"), 1, wxT("Index(row : tableRow) : number"));
 
 	helper.AppendProp(wxT("Columns"));
 }
@@ -177,6 +178,17 @@ bool ibValueModelTable::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue,
 			ibComposerNode* node = GetViewData<ibComposerNode>(GetItem(paParams[0]->GetInteger()));
 			if (node != nullptr) ibValueModelStorage::Remove(node);
 		}
+		return true;
+	}
+	case enIndex: {
+		long index = -1;
+		ibValueModelTableReturnLine* retLine = nullptr;
+		if (paParams[0]->ConvertToValue(retLine) && retLine != nullptr) {
+			ibComposerNode* node = GetViewData<ibComposerNode>(retLine->GetLineItem());
+			if (node != nullptr)
+				index = Storage().IndexOf(node);
+		}
+		pvarRetValue = static_cast<int>(index);
 		return true;
 	}
 	case enClear:

@@ -51,6 +51,8 @@ private:
 		// the numbers are positions in the member table (FillMembers), which is listed in this order.
 		enTotal,
 		enFindRows,
+		// The position of a row (0-based), as 1C's Индекс(row) answers it; -1 for a row of another table.
+		enIndex,
 	};
 	//attributes:
 	enum Prop {
