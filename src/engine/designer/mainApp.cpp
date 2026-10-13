@@ -61,7 +61,6 @@ void ibAppDesigner::OnInitCmdLine(wxCmdLineParser& parser)
 	parser.AddOption(wxT("pwd"),    wxT("password"), "Database password",       wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL);
 	parser.AddOption(wxT("ib_usr"), wxT("ibuser"),   "IB user",                 wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL);
 	parser.AddOption(wxT("ib_pwd"), wxT("ibpwd"),    "IB password",             wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL);
-	parser.AddOption(wxT("credfile"), wxT("cred-file"), "One-time credential file", wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL);
 	parser.AddOption(wxT("lc"),     wxT("locale"),   "UI locale",               wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL);
 
 	return wxApp::OnInitCmdLine(parser);
@@ -83,11 +82,16 @@ bool ibAppDesigner::OnCmdLineParsed(wxCmdLineParser& parser)
 	parser.Found(wxT("ib_usr"), &m_strIBUser);
 	parser.Found(wxT("ib_pwd"), &m_strIBPassword);
 
-	wxString credFile;
-	parser.Found(wxT("credfile"), &credFile);
-	ibTakeLaunchCredentials(credFile,
-		parser.Found(wxT("pwd")), parser.Found(wxT("ib_pwd")),
-		m_strUser, m_strPassword, m_strIBUser, m_strIBPassword);
+	ibLaunchSecrets line;
+	line.m_dbUser = m_strUser;
+	line.m_dbPassword = m_strPassword;
+	line.m_ibUser = m_strIBUser;
+	line.m_ibPassword = m_strIBPassword;
+	ibApplyLaunchSecrets(line, parser.Found(wxT("pwd")), parser.Found(wxT("ib_pwd")));
+	m_strUser = line.m_dbUser;
+	m_strPassword = line.m_dbPassword;
+	m_strIBUser = line.m_ibUser;
+	m_strIBPassword = line.m_ibPassword;
 
 	// LOCALE
 	parser.Found(wxT("lc"), &m_strLocale);

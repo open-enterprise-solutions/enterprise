@@ -1034,10 +1034,8 @@ long ibApplicationInstance::RunApplication(const wxString& strAppName, bool sear
 		rawPassword = s->GetSessionRawPassword();
 	}
 	const long started = RunApplication(strAppName, userName, rawPassword, searchDebug, useManifest);
-	// The child has the password in its ticket. The session does not keep
-	// a copy for the rest of its life.
-	if (auto* s = ibSession::Current())
-		s->ClearSessionRawPassword();
+	// The session keeps the password. A second launch of this same session
+	// still has it; only the copy on this stack is overwritten.
 	for (size_t i = 0; i < rawPassword.length(); ++i)
 		rawPassword[i] = wxT('x');
 	rawPassword.clear();
@@ -1048,7 +1046,7 @@ long ibApplicationInstance::RunApplication(const wxString& strAppName, const wxS
 {
 	// All OES binaries spawn with unified `--flag=value` syntax using
 	// wenterprise-server's long-name set (server/dbport/db/user/
-	// file/ibuser/locale/debug/cred-file). Passwords go in the cred file.
+	// file/ibuser/locale/debug). Passwords go on the child's stdin.
 	// enterprise.exe / designer.exe declare these as the long name of
 	// their legacy short options, so one builder feeds every parser.
 
@@ -1111,7 +1109,6 @@ long ibApplicationInstance::RunApplication(const wxString& strAppName, const wxS
 	secrets.m_dbPassword = m_strPassword;
 	secrets.m_ibUser     = strUserName;
 	secrets.m_ibPassword = strUserPassword;
-	const wxString ticket = ibAppendLaunchTicket(executeCmd, secrets);
 
 	ibApplicationHost* const host = ibApplicationHost::Get();
 	add(executeCmd, wxT("locale"), host != nullptr ? host->GetLocaleName() : wxString());
@@ -1119,19 +1116,12 @@ long ibApplicationInstance::RunApplication(const wxString& strAppName, const wxS
 	// Manifest-mode: wes-style spawn. Skip the debug-client handshake —
 	// that's enterprise.exe's in-process debugger attach, not relevant
 	// to a headless wes child.
-	if (useManifest) {
-		const long pid = SpawnWebServerWithManifest(executeCmd, searchDebug);
-		// 0 means the process never started, so nothing will read the ticket.
-		if (pid == 0 && !ticket.IsEmpty())
-			wxRemoveFile(ticket);
-		return pid;
-	}
+	if (useManifest)
+		return SpawnWebServerWithManifest(executeCmd, secrets, searchDebug);
 
-	const long execute = wxExecute(executeCmd);
-	if (execute == 0 && !ticket.IsEmpty())
-		wxRemoveFile(ticket);
+	const long execute = ibExecuteWithSecrets(executeCmd, secrets);
 
-	if (searchDebug) {
+	if (searchDebug && execute != 0) {
 		// Scan in rounds, the same way the manifest path below does, and for the same
 		// reason: one sweep races the process that was just started. Its debug server
 		// is created near the end of bootstrap, after the database is open, so the
@@ -1158,7 +1148,7 @@ long ibApplicationInstance::RunApplication(const wxString& strAppName, const wxS
 	return execute;
 }
 
-long ibApplicationInstance::SpawnWebServerWithManifest(wxString cmd, bool searchDebug)
+long ibApplicationInstance::SpawnWebServerWithManifest(wxString cmd, const ibLaunchSecrets& secrets, bool searchDebug)
 {
 	// --port=0 → OS picks an ephemeral port. --manifest=<file> → wes writes
 	// host/port/prefix/url there once it is actually accepting connections.
@@ -1167,7 +1157,7 @@ long ibApplicationInstance::SpawnWebServerWithManifest(wxString cmd, bool search
 	cmd += wxString::Format(wxT(" --port=0 --manifest=\"%s\""), manifestPath);
 
 	// Spawn detached so the caller can exit without killing the server.
-	const long pid = wxExecute(cmd, wxEXEC_ASYNC);
+	const long pid = ibExecuteWithSecrets(cmd, secrets);
 	if (pid == 0) {
 		wxRemoveFile(manifestPath);
 		return 0;
