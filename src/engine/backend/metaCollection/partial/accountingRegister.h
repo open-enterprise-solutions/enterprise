@@ -1453,6 +1453,14 @@ class ibValueRecordSetObjectAccountingRegister : public ibValueRecordSetObject {
 		// and as the meaning of assigning nothing to the collection.
 		void Clear();
 
+		// Issue #436: `Delete(kind)` empties the slot holding that kind (both halves of the pair).
+		// Returns false when the line carries no such kind.
+		bool Delete(const ibValue& kind);
+
+		// Issue #436: `For Each Item In row.AccountDimensionDr` yields Key (kind) / Value pairs, the
+		// filled slots in slot order, as a Map does. A snapshot: deleting while walking is safe.
+		virtual std::shared_ptr<ibValueIteratorState> CreateIterator() override;
+
 	private:
 		// The account THIS ROW names on this side — the debit account on the debit side, the credit one on
 		// the credit side, the only one in a one-sided register. Empty until the row names one.
