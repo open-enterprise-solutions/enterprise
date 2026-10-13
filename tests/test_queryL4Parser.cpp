@@ -9,6 +9,7 @@
 #include <functional>
 #include <vector>
 
+#include "backend/backend_exception.h"
 #include "backend/query/queryParser.h"
 // ⚠ AT THE TOP, not beside the round-trip section further down: a test up here renders an AST back
 // to text (ONTO is written where INTO is), and an include that arrives 200 lines later is not

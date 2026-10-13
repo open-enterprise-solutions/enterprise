@@ -37,6 +37,7 @@
 
 #include <gtest/gtest.h>
 
+#include "backend/backend_exception.h"
 #include "backend/compiler/compileCode.h"
 #include "backend/system/systemManager.h"
 #include "core/compiler/codeDef.h"

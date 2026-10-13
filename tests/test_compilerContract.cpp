@@ -96,6 +96,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "backend/backend_exception.h"
 #include "backend/compiler/compileCode.h"
 #include "backend/compiler/compileContext.h"   // CODE_VES / CODE_CES
 #include "core/compiler/codeDef.h"
