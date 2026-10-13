@@ -40,15 +40,17 @@ bool ibSpreadsheetEditView::OnClientEvent(ibProtocolEvent event, const ibDataNod
 		// A CELL BOUND TO A VALUE OPENS IT — the desktop editor's double click (ibGridEditor::OnMouseLeftDown): asked of
 		// the sheet, opened by the runtime; on a sheet being edited the click is the edit's. The cell as Fetch wrote it —
 		// from 1.
-		const ibBackendSpreadsheetObject& spreadsheet = document->GetSpreadsheet();
+		const ibSpreadsheetObject& spreadsheet = document->GetSpreadsheet();
 		const int row = args.GetValue<s32>(wxT("Row")) - 1, col = args.GetValue<s32>(wxT("Col")) - 1;
 		if (spreadsheet.IsEditable() || row < 0 || col < 0)
 			return true;
-		wxString bound;
+		ibString bound;
 		spreadsheet.GetCellDetailsParameter(row, col, bound);
-		ibValue boundValue;
-		if (!bound.IsEmpty() && spreadsheet.GetParameter(bound, boundValue))
+		ibAnyValuePtr<ibAnyValue> held;
+		if (!bound.IsEmpty() && spreadsheet.GetParameter(bound, held)) {
+			ibValue boundValue = ibValue::FromAnyValue(held);
 			boundValue.ShowValue();
+		}
 		return true;
 	}
 	case ibProtocolEvent::Change: {

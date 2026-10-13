@@ -81,16 +81,6 @@ public:
 	virtual void BackendError(const wxString& strFileName,
 		const wxString& strDocPath, const long line,
 		const wxString& strErrorMessage) override;
-	// Blocking modal message box. Mirrors desktop wxMessageBox via
-	// frame->ShowModalMessage(message, caption, style). The script's
-	// thread waits in its pool's Await, running the session's work
-	// meanwhile — so the /session poll that carries the modal to the
-	// client gets through; the client renders a dialog with buttons
-	// derived from `style` (wxOK / wxYES_NO / wxCANCEL), POSTs the
-	// chosen wx button code to /modal-reply/<id>, ResolveModal records
-	// it and wakes the waiter, and the selected button code is returned.
-	virtual int ShowModalMessage(const wxString& message,
-		const wxString& caption, int style) override;
 
 	// Modal queue accessors. Used by:
 	//   • SessionInfoFromSession — TakePendingModalForClient() returns
@@ -212,6 +202,18 @@ public:
 	// when they call SetIcon(nullptr) explicitly.
 	void          SetIcon(const wxIcon& icon) { m_icon = icon; }
 	const wxIcon& GetIcon() const             { return m_icon; }
+
+protected:
+	// Blocking modal message box. Mirrors desktop wxMessageBox via
+	// frame->ShowModalMessage(message, caption, style). The script's
+	// thread waits in its pool's Await, running the session's work
+	// meanwhile — so the /session poll that carries the modal to the
+	// client gets through; the client renders a dialog with buttons
+	// derived from `style` (wxOK / wxYES_NO / wxCANCEL), POSTs the
+	// chosen wx button code to /modal-reply/<id>, ResolveModal records
+	// it and wakes the waiter, and the selected button code is returned.
+	virtual int DoShowModalMessage(const wxString& message,
+		const wxString& caption, int style) override;
 
 private:
 	ibWebApplication*   m_app = nullptr;  // borrowed; app owns us

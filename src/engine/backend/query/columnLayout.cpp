@@ -17,7 +17,6 @@
 // the attribute header (metaAttributeObject.h), only on the shared L3 column vocabulary.
 
 
-#include <algorithm>  // std::max — the longest field suffix a bounded label leaves room for
 #include <map>
 #include <optional>   // ibColumnCodec::WriteValue — a blob buffer only for the value that has one
 
@@ -64,47 +63,28 @@ wxString ibSqlAliasOf(const wxString& outputName)
 	//     SILENTLY there — an empty value, not a refusal. Prefixing everything makes the same
 	//     mistake break loudly, on the first query anyone runs.
 	//
-	// ⭐ INJECTIVE, so distinct outputs stay distinct: `Date` -> `out_Date`, and an output actually
-	// named `out_Date` -> `out_out_Date`. Stable, so the writer and the reader agree by computing it
-	// rather than by passing the spelling between them.
+	// ⭐ ONE SPELLING FOR EVERY NAME: `out_` and the FNV-1a hash of the author's whole name, Latin or not
+	// (a Cyrillic alias is a token Firebird does not know, and quoting is off). Stable, so the writer and
+	// the reader agree by computing it rather than by passing the spelling between them. Distinct outputs
+	// stay distinct as far as a 32-bit hash keeps them apart.
 	// An unnamed output has nothing to qualify — it is read by position, not by name.
 	if (outputName.IsEmpty())
 		return outputName;
 
 	// 🛑 …AND IT HAS TO COME BACK. A result is read by its labels, and the Firebird driver keeps 31 characters
 	// of a label (XSQLDA): `out_CurrencyAmountCorrTurnoverCr` is 32, came back cut, was found by no reader and
-	// read as an EMPTY sum — while `out_QuantityCorrTurnoverCr`, the same figure of a shorter resource, was
-	// right (measured 2026-09-16, the corresponding turnovers of the ledger). Bounded here, where writer and
-	// reader both ask, the label stays one spelling (ibDialectDictionary::BoundedName).
+	// read as an EMPTY sum (measured 2026-09-16, the corresponding turnovers of the ledger). The label is
+	// twelve characters whatever the name.
 	//
-	// ⚠ …WITH ROOM FOR A FIELD SUFFIX. An object-valued output is spread under this name as a PREFIX
-	// (`<label>_RTRef`, `<label>_RRRef` — dbTableProvider, the grouped walk), so the name is bounded short of
-	// the driver's limit by the longest suffix the role table spells, and every field of it fits too.
-	static const size_t kResultLabelLimit = 31;   // the Firebird driver's XSQLDA label
-	static const std::initializer_list<ibColumnRole> kFieldRoles = {
-		ibColumnRole::Discriminator, ibColumnRole::Boolean, ibColumnRole::Number,
-		ibColumnRole::Date, ibColumnRole::String, ibColumnRole::Enum,
-		ibColumnRole::ReferenceType, ibColumnRole::ReferenceId,
-		ibColumnRole::Schedule, ibColumnRole::TypeDescription };
-	static const size_t kLongestSuffix = [] {
-		size_t longest = 0;
-		for (const ibColumnRole role : kFieldRoles)
-			longest = std::max(longest, ibFieldSuffix(role).length());
-		return longest;
-	}();
-
-	// ⚠ A FIELD NAMED ON ITS OWN IS STILL ITS OUTPUT'S FIELD. A value is read back as the prefix's label plus
-	// the suffix (dbTableProvider, `Column(prefix, col)`), and a writer that spells each field as an output of
-	// its own — the breakdown by kind, `AccountDimension1_TYPE` — has to land on that same label. Bounded
-	// whole, `out_AccountDimension1_TYPE` became a hash no reader asked for, every breakdown value read empty
-	// and a balance by kind folded into one row (2026-09-17).
-	for (const ibColumnRole role : kFieldRoles) {
-		const wxString& suffix = ibFieldSuffix(role);
-		if (!suffix.IsEmpty() && outputName.length() > suffix.length() && outputName.EndsWith(suffix))
-			return ibSqlAliasOf(outputName.Left(outputName.length() - suffix.length())) + suffix;
+	// ⚠ A FIELD OF AN OUTPUT IS THE OUTPUT'S LABEL AND THE FIELD'S SUFFIX (`<label>_RTRef`, `<label>_RRRef`),
+	// composed by whoever spreads it or reads it (dbTableProvider, `Column(prefix, col)`) — never asked here as
+	// a name of its own: `AccountDimension1_TYPE` hashed whole is a label no reader asks for (2026-09-17).
+	unsigned long hash = 2166136261UL;
+	for (const wxUniChar ch : outputName) {
+		hash ^= static_cast<unsigned long>(ch.GetValue());
+		hash = (hash * 16777619UL) & 0xFFFFFFFFUL;
 	}
-
-	return ibDialectDictionary::BoundedName(wxT("out_") + outputName, kResultLabelLimit - kLongestSuffix);
+	return wxString::Format(wxT("out_%08lx"), hash);
 }
 
 bool ibIsPlainScalarType(const ibTypeDescription& type)

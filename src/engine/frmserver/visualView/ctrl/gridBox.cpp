@@ -6,6 +6,8 @@
 #include "frmserver/visualView/visualHost.h"              // IsDesignerHost — a form being drawn neither restores nor composes
 #include "frmserver/docView/templates/docViewSpreadsheet.h"   // the document it holds, and its view
 
+#include "protocol/protocol.h"   // ibProtocolComposeState — what the sheet is to its report
+
 //***********************************************************************************
 //*                           IMPLEMENT_DYNAMIC_CLASS                               *
 //***********************************************************************************
@@ -29,6 +31,7 @@ bool ibValueGridBox::SetControlValue(const ibValue& varControlVal)
 	// moves, so a client drops the sheet it holds and fetches the new one.
 	m_gridDocument->SetSpreadsheetDocument(model->GetSpreadsheetDocument());
 	++m_documentVersion;
+	m_composedSettings.reset();   // …composed elsewhere, if at all: nothing to say it is outdated against
 
 	return true;
 }
@@ -53,7 +56,7 @@ m_gridView(new ibSpreadsheetGridBoxView())
 
 	m_members.Bind(this, &ibValueGridBox::FillControlMembers);
 	//set default params
-	m_propertyMinSize->SetValue(wxSize(150, 50));
+	m_propertyMinSize->SetValue(ibSize(150, 50));
 	// ⭐ THE SOURCE TAKES EXACTLY TWO TYPES (Max, 2026-08-19): a **spreadsheet document** — the
 	// hand-filled sheet, a printable form — and a **composition** — the report, which builds its own
 	// document and brings the two verbs with it. Declared here so the picker offers those and
@@ -100,7 +103,16 @@ void ibValueGridBox::OnUpdate(ibDataNode& state, ibVisualHost* host)
 	ibValueWindowComposite::OnUpdate(state, host);
 
 	state.SetValue(wxT("Version"), m_documentVersion);
-	state.SetValue(wxT("Composing"), m_composeRuns > 0);
+
+	// WHAT THE SHEET IS TO ITS REPORT — read each time, never kept: a run under way, else the setting it was composed
+	// with against the one that composes now.
+	ibProtocolComposeState composeState = ibProtocolComposeState::Composed;
+	if (m_composeRuns > 0)
+		composeState = ibProtocolComposeState::Composing;
+	else if (m_composedSettings.has_value() && m_spreadsheetModel != nullptr
+		&& !(*m_composedSettings == m_spreadsheetModel->GetModelComposer().GetCurrentSettingsDesc()))
+		composeState = ibProtocolComposeState::Outdated;
+	state.SetValue(wxT("ComposeState"), static_cast<s32>(composeState));
 }
 
 void ibValueGridBox::OnCreated(ibVisualHost* host)
@@ -176,7 +188,7 @@ bool ibValueGridBox::Fetch(const ibDataNode& WXUNUSED(request), ibDataNode& resp
 	return ibFetchSpreadsheet(m_gridDocument->GetSpreadsheet(), response);
 }
 
-bool ibFetchSpreadsheet(const ibBackendSpreadsheetObject& document, ibDataNode& response)
+bool ibFetchSpreadsheet(const ibSpreadsheetObject& document, ibDataNode& response)
 {
 	// THE WHOLE SHEET, IN THE FORM A TEMPLATE IS STORED IN (ibSpreadsheetDescriptionMemory::WriteNode): a client reads
 	// it back the same way into a sheet of its own, and its editor shows that sheet as the desktop's shows its own.

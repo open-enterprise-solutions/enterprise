@@ -25,7 +25,7 @@
 #include "backend/metaCtor.h"                  // ib_find_meta_any_kind / ibCtorMetaAnyKind
 #include "backend/metaCollection/metaObject.h" // g_metaDocumentCLSID / g_metaCatalogCLSID — the metaclasses the ids carry
 #include "backend/system/value/valueType.h"    // ibValueTypeDescription::AdjustValue
-#include "backend/typeDescription.h"           // ibTypeDescription
+#include "core/description/typeDescription.h"           // ibTypeDescription
 
 namespace {
 

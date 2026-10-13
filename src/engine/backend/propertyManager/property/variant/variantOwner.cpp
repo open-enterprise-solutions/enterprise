@@ -7,7 +7,7 @@
 // inspector drew an EMPTY value for a property that was set, and a script reading it got an array with
 // a hole in it (Max saw the blank cell, 2026-09-16). An id is unique across the tree, so the depth
 // costs the answer nothing; it only decides whether there is one. The writing side searches the same
-// way (ibMetaDescriptionMemory::WriteNode), or a binding that was written is unreadable.
+// way (ibBackendMetaDescriptionMemory::WriteNode), or a binding that was written is unreadable.
 wxString ibVariantDataOwner::MakeString() const
 {
     const ibMetaData* metaData = m_ownerProperty->GetMetaData();

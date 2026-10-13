@@ -16,6 +16,8 @@ public:
 	virtual bool OnCreate(ibDocument* doc, long flags) override;
 	virtual void OnDraw(ibDataNode& frame) override;
 
+	virtual ibClientViewKind GetViewKind() const override { return ibClientViewKind::Text; }
+
 private:
 
 	bool m_readOnly = false;
@@ -35,7 +37,7 @@ class FRMSERVER_API ibHelpDocument : public ibDocument
 {
 public:
 
-	virtual ibServerPicture GetIcon() const {
+	virtual ibPicture GetIcon() const {
 		return ibBackendPicture::GetServerPicture(g_metaCommonModuleCLSID);
 	}
 
@@ -43,6 +45,13 @@ public:
 
 	// The text — the document's own: it is what the desktop's editor held.
 	const wxString& GetText() const { return m_text; }
+	// …changed: modified, when it is another text.
+	void SetText(const wxString& text) {
+		if (text == m_text)
+			return;
+		m_text = text;
+		Modify(true);
+	}
 
 protected:
 

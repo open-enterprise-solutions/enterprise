@@ -52,8 +52,9 @@ enum class ibClientStockPicture : s32 {
 	Print  = 14,   // wxART_PRINT
 };
 
-// What a client is told of a command: its name, the key that gives it — modifiers Ctrl / Alt / Shift and the key,
-// "Ctrl+Z"; a client maps them to its own platform's (Ctrl to Cmd on a Mac) — and its picture.
+// What a client is told of a command: its name, the key it gives it BY DEFAULT — modifiers Ctrl / Alt / Shift and the
+// key, "Ctrl+Z"; a client maps them to its own platform's (Ctrl to Cmd on a Mac) — and its picture. The key a person
+// actually presses is theirs: the client puts what they chose, kept in their own directory, over this default.
 struct ibDocCommandInfo {
 	wxString             title;
 	wxString             shortcut;

@@ -29,7 +29,7 @@
 
 #include "backend/mcp/mcpTool.h"
 
-#include "backend/compositionDescription.h"
+#include "core/description/compositionDescription.h"
 #include "backend/metaCollection/metaFormObject.h"
 #include "backend/metadataConfiguration.h"
 
@@ -274,7 +274,7 @@ public:
 		// stored perfectly happily and fail later, in a form somebody opens, with no trace of where
 		// it came from.
 		ibCompositionDescription check;
-		if (!ibCompositionDescriptionMemory::ReadNode(*given, check, activeMetaData)) {
+		if (!ibCompositionDescriptionMemory::ReadNode(*given, check)) {
 			refusal = ibMcpText("`schema` could not be read as a composition, so it was not written. "
 				"schema_read and report_get both answer with the shape one has.");
 			return false;

@@ -24,7 +24,7 @@
 
 #include "metaModuleObject.h"   // ibPropertyInnerModule + ibValueMetaObjectManagerModule
 #include "backend/propertyManager/property/propertySchedule.h"
-#include "backend/job/jobSchedule.h"
+#include "core/description/jobScheduleDescription.h"
 
 class BACKEND_API ibValueMetaObjectScheduledJob : public ibValueMetaObject {
 public:
@@ -37,7 +37,7 @@ public:
 	// which is also what lets the same handler be exercised by hand while debugging.
 	const ibValueMetaObjectManagerModule* GetJobModule() const { return m_propertyJobModule->GetMetaObject(); }
 
-	// WHEN it is due. The description is the engine's own (backend/job/jobSchedule.h), so the
+	// WHEN it is due. The description is the core's (core/description/jobScheduleDescription.h), so the
 	// designer edits exactly the structure the manager evaluates.
 	ibJobScheduleDescription& GetSchedule() const { return m_propertySchedule->GetValueAsSchedule(); }
 

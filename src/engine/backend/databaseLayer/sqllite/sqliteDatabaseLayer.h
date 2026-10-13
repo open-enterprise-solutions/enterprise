@@ -81,18 +81,11 @@ public:
 	virtual const ibMaterializationDialect* GetMaterializationDialect() const override;
 
 	static int TranslateErrorCode(int nCode);
-
-	// SQLite has no SQLSTATE — classification reads its single-int
-	// SQLITE_* result code (m_nErrorCode is the raw sqlite3_errcode()).
-	// Common codes:
-	//   SQLITE_BUSY (5) / SQLITE_LOCKED (6) → Timeout (single-process
-	//       lock contention — under our wxThread / worker-pool model
-	//       this is effectively a wait timeout)
-	//   SQLITE_CONSTRAINT (19)              → Constraint
-	//   SQLITE_ERROR (1) / SQLITE_MISUSE (21) → Syntax (best-effort —
-	//       SQLITE_ERROR is the catch-all "SQL error or missing
-	//       database", most often a parse/schema issue)
-	ibBackendDatabaseException::Kind ClassifyDatabaseError(int nativeCode) const override;
+	// The portable Kind of an SQLite result code, recorded with it wherever the driver reads one
+	// (SetErrorCode(code, kind)) — the layer, the prepared statement and the result set. SQLite has
+	// no SQLSTATE. BUSY / LOCKED is a lock wait under our thread model; ERROR is the catch-all "SQL
+	// error or missing table". An extended code (SQLITE_CONSTRAINT_PRIMARYKEY = 1555) is its low byte.
+	static ibBackendDatabaseException::Kind ClassifyDatabaseError(int code);
 
 protected:
 

@@ -18,6 +18,7 @@
 // …and the shared schemas.
 #include "frmserver/schema/about.h"
 #include "frmserver/schema/activeUser.h"
+#include "frmserver/schema/auditLog.h"
 
 #include "backend/backend_picture.h"
 #include "backend/metadataConfiguration.h"
@@ -275,7 +276,7 @@ ibDocManager::ibDocManager(long WXUNUSED(flags), bool initialize)
 		CLASSINFO(ibTextFileDocument), CLASSINFO(ibTextEditView),
 		ibTEMPLATE_VISIBLE);
 
-	// EVERY TABLE FORMAT, OURS INCLUDED — asked of the registry (backend/sheetFormat/), not assembled here.
+	// EVERY TABLE FORMAT, OURS INCLUDED — asked of the registry (core/spreadsheet/sheetFormat.h), not assembled here.
 	AddDocTemplate(g_metaTemplateCLSID,
 		_("Spreadsheet document"), ibSheetFormatMask(), ibSheetFormatExtensions(),
 		_("Spreadsheet Doc"), _("Spreadsheet View"),
@@ -307,11 +308,14 @@ ibDocManager::ibDocManager(long WXUNUSED(flags), bool initialize)
 
 	// Active users — the sessions and the locks; the designer's dialog and the runtime's showed the same tables.
 	RegisterSchema(ibProtocolSchema::ActiveUser, std::make_unique<ibSchemaActiveUser>());
+	// The registration journal — a tab its command opens; both applications' Administration had it.
+	RegisterSchema(ibProtocolSchema::AuditLog, std::make_unique<ibSchemaAuditLog>());
 	// About — what the client works in; both applications' Help showed it.
 	RegisterSchema(ibProtocolSchema::About, std::make_unique<ibSchemaAbout>());
 
 	// The commands every document answers to — and the window's besides, Open, Exit and the edit commands — with the
-	// keys the desktop's windows gave them (SetDefaultHotKeys) and the pictures its menu showed them with.
+	// default keys the desktop's windows gave them (SetDefaultHotKeys) and the pictures its menu showed them with. A
+	// person's own keys are the client's to keep, over these.
 	RegisterCommand(ibDocCommand::Undo,      _("Undo"),       wxT("Ctrl+Z"), ibClientStockPicture::Undo);
 	RegisterCommand(ibDocCommand::Redo,      _("Redo"),       wxT("Ctrl+Y"), ibClientStockPicture::Redo);
 	RegisterCommand(ibDocCommand::Save,      _("Save"),       wxT("Ctrl+S"), ibClientStockPicture::Save);

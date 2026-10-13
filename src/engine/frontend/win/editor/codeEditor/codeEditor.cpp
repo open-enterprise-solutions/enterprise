@@ -33,13 +33,13 @@ wxString ibCodeEditor::MakeProcedureTemplate(const wxString& name, const wxStrin
 }
 
 ibCodeEditor::ibCodeEditor()
-	: wxStyledTextCtrl(), m_ac(this), m_ct(this), m_fp(this)
+	: wxStyledTextCtrl(), m_ac(this), m_ct(this), m_tc(ibCompileCode::GetCodeStyle()), m_fp(this)
 {
 }
 
 ibCodeEditor::ibCodeEditor(ibMetaDocument* document, wxWindow* parent, wxWindowID id, const wxPoint& pos, const wxSize& size, long style, const wxString& name)
 	: wxStyledTextCtrl(parent, id, pos, size, style, name),
-	  m_document(document), m_ac(this), m_ct(this), m_fp(this)
+	  m_document(document), m_ac(this), m_ct(this), m_tc(ibCompileCode::GetCodeStyle()), m_fp(this)
 {
 	// initialize styles
 	StyleClearAll();
@@ -451,6 +451,7 @@ bool ibCodeEditor::LoadModule()
 				SetReadOnly(true);
 			}
 
+			m_tc.SetCodeStyle(ibCompileCode::GetCodeStyle());
 			m_tc.Load(moduleObject->GetModuleText());
 
 			try {
@@ -655,6 +656,7 @@ ibCodeEditor::SetStyling(fromPos + m_tc.GetCurrentPos() - currPos, style);
 
 void ibCodeEditor::HighlightSyntaxAndCalculateFoldLevel(const int fromPos, const int toPos)
 {
+	m_tc.SetCodeStyle(ibCompileCode::GetCodeStyle());
 	m_tc.Load(ibCodeEditor::GetTextRange(fromPos, toPos));
 
 	//remove old styling
@@ -673,7 +675,7 @@ void ibCodeEditor::HighlightSyntaxAndCalculateFoldLevel(const int fromPos, const
 #endif 
 		if (m_tc.IsWord()) {
 			(void)m_tc.GetWord(word, false, true);
-			const short keyWord = ibTranslateCode::IsKeyWord(word);
+			const short keyWord = m_tc.IsKeyWord(word);
 			// A keyword right after a member-access `.` is a MEMBER NAME, not a keyword
 			// (`q.Execute().Select()` — `Select` is the method): style it as a plain identifier.
 			if (keyWord != wxNOT_FOUND && !prevWasDot) {
@@ -800,6 +802,7 @@ void ibCodeEditor::OnTextChange(wxStyledTextEvent& event)
 
 	// Re-lex — fires for every host (codeRunner included). The stream feeds folding, brace
 	// matching and the caret question; nothing here compiles anything.
+	m_tc.SetCodeStyle(ibCompileCode::GetCodeStyle());
 	m_tc.Load(codeText);
 
 	if (event.m_linesAdded != 0) {
@@ -995,7 +998,7 @@ ibCodeEditor::StringLiteralSpan ibCodeEditor::GetStringLiteralUnderCursor()
 	// asked on a click, not a keystroke, so the text is simply read again by the same lexer in the same
 	// mode; the patching is a question of its own, for the colouring and the folds that read it.
 	const int caret = GetCurrentPos();
-	ibTranslateCode stream;
+	ibTranslateCode stream(ibCompileCode::GetCodeStyle());
 	stream.SetLexemMode(ibLexemMode::Editing);
 	stream.Load(GetText());
 	try {
@@ -1004,18 +1007,16 @@ ibCodeEditor::StringLiteralSpan ibCodeEditor::GetStringLiteralUnderCursor()
 	catch (...) {
 		return span;
 	}
-	const std::vector<ibLexem>& lexems = stream.GetLexems();
-
 	// The last token that starts at or before the caret. A token's recorded position is where the token
 	// itself starts - the lexer skips the whitespace and comments in front first - so a caret just past a
 	// closing quote, or in the gap after it, still falls to the literal until the next token begins.
-	size_t at = lexems.size();
-	for (size_t i = 0; i < lexems.size(); ++i) {
-		if (lexems[i].m_lexType == ENDPROGRAM || static_cast<int>(lexems[i].m_numUtf8String) > caret)
+	size_t at = stream.GetLexCount();
+	for (size_t i = 0; i < stream.GetLexCount(); ++i) {
+		if (stream.GetLexAt(i).m_lexType == ENDPROGRAM || static_cast<int>(stream.GetLexAt(i).m_numUtf8String) > caret)
 			break;
 		at = i;
 	}
-	if (at == lexems.size())
+	if (at == stream.GetLexCount())
 		return span;
 
 	// WHERE IT OPENS, WHERE IT CLOSES AND WHAT IT SAYS, read by the lexer from the token's start - so
@@ -1024,7 +1025,7 @@ ibCodeEditor::StringLiteralSpan ibCodeEditor::GetStringLiteralUnderCursor()
 		if (lex.m_lexType != CONSTANT || lex.m_valData.GetType() != ibValueTypes::TYPE_STRING)
 			return false;
 		const int from = static_cast<int>(lex.m_numUtf8String);
-		ibTranslateCode reader;
+		ibTranslateCode reader(ibCompileCode::GetCodeStyle());
 		reader.Load(GetTextRange(from, GetLength()));
 		try {
 			if (!reader.IsString())
@@ -1051,8 +1052,8 @@ ibCodeEditor::StringLiteralSpan ibCodeEditor::GetStringLiteralUnderCursor()
 	};
 
 	// A caret just past a closing quote already stands in the NEXT token's stretch.
-	if (!readLiteral(lexems[at]) && at > 0)
-		readLiteral(lexems[at - 1]);
+	if (!readLiteral(stream.GetLexAt(at)) && at > 0)
+		readLiteral(stream.GetLexAt(at - 1));
 	return span;
 }
 

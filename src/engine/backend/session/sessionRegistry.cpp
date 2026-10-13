@@ -2072,6 +2072,20 @@ void ibSessionRegistry::JobRefreshSnapshot()
 			fresh->SetExclusiveFromMap(exclusiveBySession);
 		} catch (...) { /* legacy schema — fine, exclusive stays false */ }
 		}   // !wideRead — the legacy three-pass road
+
+		// currentActivity is optional on a base created before the column. A missing column must not
+		// throw away the snapshot just built. A detached thin client writes "detached until HH:MM:SS".
+		try {
+			ibDatabaseQueryBuilder qa(&m_writeHolder);
+			ibQueryResult rsa = qa.From(session_table)
+				.Select({ wxT("session"), wxT("currentActivity") })
+				.Execute();
+			std::unordered_map<wxString, wxString> activityBySession;
+			while (rsa.Next())
+				activityBySession[rsa.GetResultString(wxT("session"))]
+					= rsa.GetResultString(wxT("currentActivity"));
+			fresh->SetActivityFromMap(activityBySession);
+		} catch (...) { /* legacy schema — the row shows no activity */ }
 	}
 	catch (const ibCoreException& err) {
 		SESSION_LOG("[session REFRESH] SELECT failed: "

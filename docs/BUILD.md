@@ -180,6 +180,7 @@ bin\
       fileserver.dll
       enterprise-thin.exe
       enterprise.exe
+      designer-thin.exe
       designer.exe
       launcher.exe
       appserver.exe
@@ -192,8 +193,8 @@ bin\
 `core.dll` is the shared layer under `backend.dll` and `frmclient.dll` (wx base only); every
 project that links `backend.lib` also links `core.lib`.
 `wfrontend.dll` + `wenterprise-server.exe` are the web runtime (headless
-server + web frontend). `protocol.dll`, `frmserver.dll`, `frmclient.dll`, `fileserver.dll` and `enterprise-thin.exe`
-are the thin client and its server side ([thin-client.md](public/thin-client.md)). `simplePlugin.dll` is the plugin example; it builds into
+server + web frontend). `protocol.dll`, `frmserver.dll`, `frmclient.dll`, `fileserver.dll`, `enterprise-thin.exe` and
+`designer-thin.exe` are the thin client and its server side ([thin-client.md](public/thin-client.md)). `simplePlugin.dll` is the plugin example; it builds into
 `bin\<Platform>\<Configuration>\plugins\` — the directory the plugin manager scans at
 startup.
 
@@ -296,7 +297,7 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release -DOES_USE_POSTGRESQL=ON
 
 ### Build Targets
 
-The root `CMakeLists.txt` adds fourteen engine subdirectories, each with its own
+The root `CMakeLists.txt` adds fifteen engine subdirectories, each with its own
 `CMakeLists.txt`, in this order — `core` first, `backend` second:
 
 | Target | Type |
@@ -312,6 +313,7 @@ The root `CMakeLists.txt` adds fourteen engine subdirectories, each with its own
 | enterprise | executable (GUI) |
 | enterprise-thin | executable (GUI) — the thin client |
 | designer | executable (GUI) |
+| designer-thin | executable (GUI) — the thin designer |
 | launcher | executable (GUI) |
 | codeRunner | executable (GUI) |
 | simplePlugin | shared lib (plugin example) |

@@ -125,8 +125,8 @@ ibGridEditor::ibGridEditor(ibMetaDocument* document,
 	m_selectionBackground.Set(211, 217, 239);
 	m_selectionForeground.Set(0, 0, 0);
 
-	ibGrid::SetLabelFont(ibDefaultSpreadsheetFont());
-	ibGrid::SetDefaultCellFont(ibDefaultSpreadsheetFont());
+	ibGrid::SetLabelFont(typeConv::FontToWxFont(ibDefaultSpreadsheetFont()));
+	ibGrid::SetDefaultCellFont(typeConv::FontToWxFont(ibDefaultSpreadsheetFont()));
 
 	ibGrid::SetDefaultEditor(new ibGridEditorCellTextEditor);
 
@@ -262,8 +262,11 @@ void ibGridEditor::ShowComposeProgress(bool busy)
 
 void ibGridEditor::GetCellDetailsParameter(int row, int col, wxString& s) const
 {
-	if (m_spreadsheetObject != nullptr)
-		m_spreadsheetObject->GetCellDetailsParameter(row, col, s);
+	if (m_spreadsheetObject != nullptr) {
+		ibString detailsParameter;
+		m_spreadsheetObject->GetCellDetailsParameter(row, col, detailsParameter);
+		s = detailsParameter;
+	}
 }
 
 void ibGridEditor::SetCellDetailsParameter(int row, int col, const wxString& s)
@@ -312,11 +315,13 @@ void ibGridEditor::OnMouseLeftDown(ibGridEvent& event)
 	// A CELL BOUND TO A VALUE OPENS IT — asked of the sheet, opened by the runtime. Which window a
 	// value has is the value's own business, so there is nothing here to decide.
 	if (m_spreadsheetObject != nullptr && !IsEditable()) {
-		wxString bound;
+		ibString bound;
 		m_spreadsheetObject->GetCellDetailsParameter(event.GetRow(), event.GetCol(), bound);
-		ibValue boundValue;
-		if (!bound.IsEmpty() && m_spreadsheetObject->GetParameter(bound, boundValue))
+		ibAnyValuePtr<ibAnyValue> held;
+		if (!bound.IsEmpty() && m_spreadsheetObject->GetParameter(bound, held)) {
+			ibValue boundValue = ibValue::FromAnyValue(held);
 			boundValue.ShowValue();
+		}
 	}
 
 	event.Skip();
@@ -789,21 +794,21 @@ void ibGridEditor::OnGridTableAttrModified(ibGridEvent& event)
 
 			ibSpreadsheetDescription& spreadsheetDescription = creator->GetSpreadsheetDesc();
 
-			spreadsheetDescription.SetCellBackgroundColour(event.GetRow(), event.GetCol(), GetCellBackgroundColour(event.GetRow(), event.GetCol()));
-			spreadsheetDescription.SetCellTextColour(event.GetRow(), event.GetCol(), GetCellTextColour(event.GetRow(), event.GetCol()));
+			spreadsheetDescription.SetCellBackgroundColour(event.GetRow(), event.GetCol(), typeConv::WxColourToColour(GetCellBackgroundColour(event.GetRow(), event.GetCol())));
+			spreadsheetDescription.SetCellTextColour(event.GetRow(), event.GetCol(), typeConv::WxColourToColour(GetCellTextColour(event.GetRow(), event.GetCol())));
 			spreadsheetDescription.SetCellTextOrient(event.GetRow(), event.GetCol(), GetCellTextOrient(event.GetRow(), event.GetCol()));
-			spreadsheetDescription.SetCellFont(event.GetRow(), event.GetCol(), GetCellFont(event.GetRow(), event.GetCol()));
+			spreadsheetDescription.SetCellFont(event.GetRow(), event.GetCol(), typeConv::WxFontToFont(GetCellFont(event.GetRow(), event.GetCol())));
 			spreadsheetDescription.SetCellAlignment(event.GetRow(), event.GetCol(), horiz, vert);
 
 			//border 
 			const ibGridCellBorder& borderLeft = GetCellBorderLeft(event.GetRow(), event.GetCol());
-			spreadsheetDescription.SetCellBorderLeft(event.GetRow(), event.GetCol(), { borderLeft.m_style, borderLeft.m_colour, borderLeft.m_width });
+			spreadsheetDescription.SetCellBorderLeft(event.GetRow(), event.GetCol(), { static_cast<ibSpreadsheetPenStyle>(borderLeft.m_style), typeConv::WxColourToColour(borderLeft.m_colour), borderLeft.m_width });
 			const ibGridCellBorder& borderRight = GetCellBorderRight(event.GetRow(), event.GetCol());
-			spreadsheetDescription.SetCellBorderRight(event.GetRow(), event.GetCol(), { borderRight.m_style, borderRight.m_colour, borderRight.m_width });
+			spreadsheetDescription.SetCellBorderRight(event.GetRow(), event.GetCol(), { static_cast<ibSpreadsheetPenStyle>(borderRight.m_style), typeConv::WxColourToColour(borderRight.m_colour), borderRight.m_width });
 			const ibGridCellBorder& borderTop = GetCellBorderTop(event.GetRow(), event.GetCol());
-			spreadsheetDescription.SetCellBorderTop(event.GetRow(), event.GetCol(), { borderTop.m_style, borderTop.m_colour, borderTop.m_width });
+			spreadsheetDescription.SetCellBorderTop(event.GetRow(), event.GetCol(), { static_cast<ibSpreadsheetPenStyle>(borderTop.m_style), typeConv::WxColourToColour(borderTop.m_colour), borderTop.m_width });
 			const ibGridCellBorder& borderBottom = GetCellBorderBottom(event.GetRow(), event.GetCol());
-			spreadsheetDescription.SetCellBorderBottom(event.GetRow(), event.GetCol(), { borderBottom.m_style, borderBottom.m_colour, borderBottom.m_width });
+			spreadsheetDescription.SetCellBorderBottom(event.GetRow(), event.GetCol(), { static_cast<ibSpreadsheetPenStyle>(borderBottom.m_style), typeConv::WxColourToColour(borderBottom.m_colour), borderBottom.m_width });
 
 			//size 
 			spreadsheetDescription.SetCellSize(event.GetRow(), event.GetCol(), num_rows, num_cols);
@@ -823,21 +828,21 @@ void ibGridEditor::OnGridTableAttrModified(ibGridEvent& event)
 
 		ibSpreadsheetDescription& spreadsheetDescription = m_spreadsheetObject->GetSpreadsheetDesc();
 
-		spreadsheetDescription.SetCellBackgroundColour(event.GetRow(), event.GetCol(), GetCellBackgroundColour(event.GetRow(), event.GetCol()));
-		spreadsheetDescription.SetCellTextColour(event.GetRow(), event.GetCol(), GetCellTextColour(event.GetRow(), event.GetCol()));
+		spreadsheetDescription.SetCellBackgroundColour(event.GetRow(), event.GetCol(), typeConv::WxColourToColour(GetCellBackgroundColour(event.GetRow(), event.GetCol())));
+		spreadsheetDescription.SetCellTextColour(event.GetRow(), event.GetCol(), typeConv::WxColourToColour(GetCellTextColour(event.GetRow(), event.GetCol())));
 		spreadsheetDescription.SetCellTextOrient(event.GetRow(), event.GetCol(), GetCellTextOrient(event.GetRow(), event.GetCol()));
-		spreadsheetDescription.SetCellFont(event.GetRow(), event.GetCol(), GetCellFont(event.GetRow(), event.GetCol()));
+		spreadsheetDescription.SetCellFont(event.GetRow(), event.GetCol(), typeConv::WxFontToFont(GetCellFont(event.GetRow(), event.GetCol())));
 		spreadsheetDescription.SetCellAlignment(event.GetRow(), event.GetCol(), horiz, vert);
 
 		//border 
 		const ibGridCellBorder& borderLeft = GetCellBorderLeft(event.GetRow(), event.GetCol());
-		spreadsheetDescription.SetCellBorderLeft(event.GetRow(), event.GetCol(), { borderLeft.m_style, borderLeft.m_colour, borderLeft.m_width });
+		spreadsheetDescription.SetCellBorderLeft(event.GetRow(), event.GetCol(), { static_cast<ibSpreadsheetPenStyle>(borderLeft.m_style), typeConv::WxColourToColour(borderLeft.m_colour), borderLeft.m_width });
 		const ibGridCellBorder& borderRight = GetCellBorderRight(event.GetRow(), event.GetCol());
-		spreadsheetDescription.SetCellBorderRight(event.GetRow(), event.GetCol(), { borderRight.m_style, borderRight.m_colour, borderRight.m_width });
+		spreadsheetDescription.SetCellBorderRight(event.GetRow(), event.GetCol(), { static_cast<ibSpreadsheetPenStyle>(borderRight.m_style), typeConv::WxColourToColour(borderRight.m_colour), borderRight.m_width });
 		const ibGridCellBorder& borderTop = GetCellBorderTop(event.GetRow(), event.GetCol());
-		spreadsheetDescription.SetCellBorderTop(event.GetRow(), event.GetCol(), { borderTop.m_style, borderTop.m_colour, borderTop.m_width });
+		spreadsheetDescription.SetCellBorderTop(event.GetRow(), event.GetCol(), { static_cast<ibSpreadsheetPenStyle>(borderTop.m_style), typeConv::WxColourToColour(borderTop.m_colour), borderTop.m_width });
 		const ibGridCellBorder& borderBottom = GetCellBorderBottom(event.GetRow(), event.GetCol());
-		spreadsheetDescription.SetCellBorderBottom(event.GetRow(), event.GetCol(), { borderBottom.m_style, borderBottom.m_colour, borderBottom.m_width });
+		spreadsheetDescription.SetCellBorderBottom(event.GetRow(), event.GetCol(), { static_cast<ibSpreadsheetPenStyle>(borderBottom.m_style), typeConv::WxColourToColour(borderBottom.m_colour), borderBottom.m_width });
 
 		//size 
 		spreadsheetDescription.SetCellSize(event.GetRow(), event.GetCol(), num_rows, num_cols);

@@ -142,7 +142,7 @@ std::string MakeModalId()
 }
 } // namespace
 
-int ibWebFrame::ShowModalMessage(const wxString& message,
+int ibWebFrame::DoShowModalMessage(const wxString& message,
 	const wxString& caption, int style)
 {
 	// Queue the question and WAIT IN THE SESSION'S POOL (ibWorkerPool::Await). This thread holds the session, so

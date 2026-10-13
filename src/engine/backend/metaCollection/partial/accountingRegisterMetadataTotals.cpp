@@ -3045,7 +3045,7 @@ ibQueryRelPtr ibValueMetaObjectAccountingRegister::BuildDrCrTurnoverRelation(
 			if (column.m_byKind) {
 				if (const ibBackendQueryColumn* out = published->ResolveColumnByName(column.m_alias))
 					for (const ibColumnSlot& slot : DescribeColumnLayout(out))
-						labelOf[slot.m_name] = ibSqlAliasOf(slot.m_name);
+						labelOf[slot.m_name] = ibSqlAliasOf(out->GetPhysicalName()) + ibFieldSuffix(slot.m_role);
 				continue;
 			}
 			if (column.m_kindSlot != nullptr)

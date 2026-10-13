@@ -37,7 +37,7 @@
 #include "backend/query/queryRewrite.h"    // Clone — the engine's own deep copy of a select
 #include "backend/query/queryLowering.h"   // CheckNames — the engine resolves the names, we only ask
 #include "backend/query/queryable.h"       // ibSourceMetaDataScope — WHICH config the names resolve against
-#include "backend/query/queryKeywords.h"   // the ACTIVE keyword table — the one spelling of a keyword, and the highlighter's word set
+#include "core/query/queryKeywords.h"      // the ACTIVE keyword table — the one spelling of a keyword, and the highlighter's word set
 #include "backend/backend_exception.h"
 #include "backend/metaData.h"
 #include "artProvider/artProvider.h"    // wxART_FRONTEND — the product's own pictures, asked for first

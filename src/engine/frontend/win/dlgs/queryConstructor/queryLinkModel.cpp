@@ -8,6 +8,8 @@
 #include "backend/query/queryParser.h"   // a condition typed into a cell is read by the ENGINE
 #include "backend/query/queryRewrite.h"  // ibQueryTrueLiteral / ibQueryIsTrueLiteral — "no link", spelled
 
+#include "core/exception.h"   // ibCoreException — what a refused condition throws
+
 namespace {
 
 // The two boxes ↔ the kind now live in the HEADER (ibJoinAllFromLeft / ibJoinAllFromRight /

@@ -14,7 +14,7 @@
 #include "backend/backend_exception.h"        // ibBackendCoreException
 #include "backend/query/queryReadState.h"  // ibQueryReadState — one build, one state of the data
 #include "backend/query/queryRender.h"        // ibQueryColumnFromPath — a dotted path becomes a column, once
-#include "backend/query/queryKeywords.h"      // ibQueryKeywordText — a grouping line is written in the query's own words
+#include "core/query/queryKeywords.h"         // ibQueryKeywordText — a grouping line is written in the query's own words
 #include "backend/query/queryLexer.h"         // ibQueryLexer::IsIdentifier — what a NAME is, asked of the tier that defines it
 #include "backend/query/queryConstructorModel.h"   // ibQueryFieldsOfText / WalkPath — the author's fields and a path's walk, as the pickers read them
 #include "backend/functionalOption/functionalOptionGate.h"   // AnyUnavailable, AsApplication — a run shows what the base uses
@@ -279,7 +279,7 @@ ibDataComposer& ibDataComposer::Filter(const wxString& path, const wxString& op,
 {
 	if (path.IsEmpty())
 		return *this;
-	UserSettings().m_filter.Append(path, ibComparisonFromOpText(op), value);
+	UserSettings().m_filter.Append(path, ibComparisonFromOpText(op), ibStoreValue(value));
 	return *this;
 }
 
@@ -306,7 +306,7 @@ ibQueryAstExprPtr ibBuildFilterSide(ibDataComposer& composer, const ibFilterOper
 		return ibQueryColumnFromPath(side.m_path);
 
 	ibQueryAstExprPtr e = ibQueryAstExpr::Make(ibQueryAstExprKind::Param);
-	e->m_paramName = composer.AddParam(side.m_value);
+	e->m_paramName = composer.AddParam(ibStoredValue(side.m_value, composer.GetMetaData()));
 	return e;
 }
 

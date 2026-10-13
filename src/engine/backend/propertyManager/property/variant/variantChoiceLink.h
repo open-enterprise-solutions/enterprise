@@ -2,7 +2,7 @@
 #define __CHOICE_LINK_VARIANT_H__
 
 #include "backend/propertyManager/propertyObject.h"
-#include "backend/choiceLinkDescription.h"
+#include "core/description/choiceLinkDescription.h"
 
 #include <atomic>
 #include <mutex>

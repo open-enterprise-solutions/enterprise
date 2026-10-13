@@ -1,7 +1,7 @@
 #include "propertyType.h"
 #include "backend/propertyManager/property/variant/variantType.h"
 #include "core/serialize/dataBuilder.h"   // ibDataNode / ibDataValue (Child + Array)
-#include "backend/typeDescription.h"        // ibTypeDescription + qualifiers
+#include "core/description/typeDescription.h"   // ibTypeDescription + qualifiers
 
 
 ////////////////////////////////////////////////////////////////////////
@@ -75,12 +75,10 @@ bool ibPropertyType::GetDataValue(ibValue& pvarPropVal) const
 // The conversion lives once on ibTypeDescriptionMemory (shared with predefined attrs).
 bool ibPropertyType::ReadNodeValue(const ibDataValue& value)
 {
-	const ibPropertyObject* owner = m_owner;   // CONST overload — the non-const one returns null (see propertyObject.h)
-	return ibTypeDescriptionMemory::ReadNode(value, GetValueAsTypeDesc(), owner->GetMetaData());
+	return ibTypeDescriptionMemory::ReadNode(value, GetValueAsTypeDesc());
 }
 
 bool ibPropertyType::WriteNodeValue(ibDataValue& value) const
 {
-	const ibPropertyObject* owner = m_owner;
-	return ibTypeDescriptionMemory::WriteNode(value, GetValueAsTypeDesc(), owner->GetMetaData());
+	return ibTypeDescriptionMemory::WriteNode(value, GetValueAsTypeDesc());
 }

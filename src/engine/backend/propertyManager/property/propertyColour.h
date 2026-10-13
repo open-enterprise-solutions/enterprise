@@ -2,38 +2,35 @@
 #define __PROPERTY_COLOUR_H__
 
 #include "backend/propertyManager/propertyObject.h"
+#include "core/graphics/colour.h"   // ibColour — the colour, as data
 
-//base property for "colour"
+// Base property for "colour" — kept as the colour's text (`r,g,b`, ibColour's), as a font is kept as its own.
 class BACKEND_API ibPropertyColour : public ibProperty {
-	static wxVariant CreateVariantData(const wxColour& val) {
-		wxVariant newValue;
-		newValue << val;
-		return newValue;
-	}
+	static wxVariant CreateVariantData(const ibColour& val) { return wxVariant(wxString(val.ToString())); }
 public:
 
-	wxColour GetValueAsColour() const {
-		wxColour colour;
-		colour << m_propValue;
+	ibColour GetValueAsColour() const {
+		ibColour colour;
+		colour.FromString(m_propValue.GetString());
 		return colour;
 	}
 
-	wxString GetValueAsString() const { return typeConv::ColourToString(GetValueAsColour()); }
+	wxString GetValueAsString() const { return m_propValue.GetString(); }
 
-	void SetValue(const wxColour& val) { ibProperty::SetValue(CreateVariantData(val)); }
-	void SetValue(const wxString& val) { SetValue(typeConv::StringToColour(val)); }
+	void SetValue(const ibColour& val) { ibProperty::SetValue(CreateVariantData(val)); }
+	void SetValue(const wxString& val) { ibColour colour; colour.FromString(val); SetValue(colour); }
 
-	ibPropertyColour(ibPropertyCategory* cat, const wxString& name, const wxColour& c = wxNullColour)
+	ibPropertyColour(ibPropertyCategory* cat, const wxString& name, const ibColour& c = ibColour())
 		: ibProperty(cat, name, CreateVariantData(c))
 	{
 	}
 
-	ibPropertyColour(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxColour& c = wxNullColour)
+	ibPropertyColour(ibPropertyCategory* cat, const wxString& name, const wxString& label, const ibColour& c = ibColour())
 		: ibProperty(cat, name, label, CreateVariantData(c))
 	{
 	}
 
-	ibPropertyColour(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString, const wxColour& c = wxNullColour)
+	ibPropertyColour(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString, const ibColour& c = ibColour())
 		: ibProperty(cat, name, label, helpString, CreateVariantData(c))
 	{
 	}

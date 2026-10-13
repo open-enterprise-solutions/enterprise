@@ -2,6 +2,7 @@
 #define __METAOBJECT_METADATA_ENUM_H__
 
 #include "backend/compiler/enumUnit.h"
+#include "core/compiler/codeDef.h"   // ibProgramSyntax
 class ibValueEnumVersion : public ibValueEnumeration<ibProgramVersion> {
 	public:
 

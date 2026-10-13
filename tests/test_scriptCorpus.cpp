@@ -23,6 +23,7 @@
 #include <wx/filename.h>
 #include <wx/textfile.h>
 
+#include "backend/backend_exception.h"
 #include "backend/compiler/compileCode.h"
 #include "backend/compiler/procUnit.h"
 #include "backend/system/systemManager.h"

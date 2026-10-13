@@ -337,10 +337,13 @@ void ibBackendException::ProcessError(const ibBackendException& err, const ibByt
 		err.m_errorHandled = true;
 	}
 
-	// Rethrow the in-flight exception — ProcessError is always called from a
-	// catch block in procUnit, so `throw;` keeps the same object propagating
-	// (preserving m_errorHandled) without allocating a new copy.
-	throw;
+	// The caller rethrows, and it rethrows after its catch has returned.
+	// `throw;` here is a throw inside the handler. On MSVC that handler is
+	// a funclet above the frame, and each interpreter level that rethrows
+	// from there nests another one — the slack is gone after a few dozen,
+	// and the overflow then skips the frame guards. The same object is what
+	// has to travel, so m_errorHandled stays set; the caller holds it with
+	// std::current_exception() and rethrows that.
 }
 
 void ibBackendException::ProcessError(const wxString& strFileName,

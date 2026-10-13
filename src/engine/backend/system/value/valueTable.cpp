@@ -259,7 +259,7 @@ bool ibValueModelTable::GetAt(const ibValue& varKeyValue, ibValue& pvarValue)
 //////////////////////////////////////////////////////////////////////
 
 #include "core/serialize/dataBuilder.h"   // ibDataNode — column collection round-trip
-#include "backend/typeDescription.h"         // ibTypeDescriptionMemory — column type node round-trip
+#include "core/description/typeDescription.h"         // ibTypeDescriptionMemory — column type node round-trip
 #include "backend/metadataConfiguration.h"   // ibMetaDataConfigurationBase : ibMetaData — GetActiveMetaData() base cast
 
 const ibMetaData* ibValueModelTable::GetSourceMetaData() const
@@ -390,10 +390,8 @@ ibValueModelTable::ibValueModelTableColumnCollection::~ibValueModelTableColumnCo
 
 void ibValueModelTable::ibValueModelTableColumnCollection::FillMembers(ibMemberTable& helper) const
 {
-	// The verb's own name, and the DEFAULT said out loud: without a type the column holds text, and a
-	// filter over it compares as text. Both halves were missing — the text named `Add`, and nothing
-	// said what an omitted type means.
-	helper.AppendFunc(wxT("AddColumn"), 4, wxT("AddColumn(name : string, type : typeDescription = string, caption, width)"));
+	// The verb's own name. An omitted type names no type: the cell keeps whatever is written.
+	helper.AppendFunc(wxT("AddColumn"), 4, wxT("AddColumn(name : string, type : typeDescription = any, caption, width)"));
 	helper.AppendProc(wxT("RemoveColumn"), 1, wxT("RemoveColumn(name : string)"));
 }
 
@@ -420,32 +418,29 @@ bool ibValueModelTable::ibValueModelTableColumnCollection::CallAsFunc(const long
 	{
 	case enAddColumn:
 	{
-		ibValueType* valueType = nullptr;
-		if (lSizeArray > 1)
-			paParams[1]->ConvertToValue(valueType);
-		if (lSizeArray > 3)
-			pvarRetValue = AddColumn(paParams[0]->GetString(), valueType ? ibTypeDescription(valueType->GetOwnerTypeDescription()) : ibTypeDescription(*paParams[1]->ConvertToType<ibValueTypeDescription>()), paParams[2]->GetString(), paParams[3]->GetInteger());
-		else if (lSizeArray > 2)
-			pvarRetValue = AddColumn(paParams[0]->GetString(), valueType ? ibTypeDescription(valueType->GetOwnerTypeDescription()) : ibTypeDescription(*paParams[1]->ConvertToType<ibValueTypeDescription>()), paParams[2]->GetString(), wxDVC_DEFAULT_WIDTH);
-		else if (lSizeArray > 1)
-			pvarRetValue = AddColumn(paParams[0]->GetString(), valueType ? ibTypeDescription(valueType->GetOwnerTypeDescription()) : ibTypeDescription(*paParams[1]->ConvertToType<ibValueTypeDescription>()), paParams[0]->GetString(), wxDVC_DEFAULT_WIDTH);
-		else
-			// ⚠ NO TYPE GIVEN MEANS A STRING COLUMN, and that is a DECISION with consequences a
-			// caller has to know about: whatever is written into the cell, the column keeps saying
-			// it holds text, and everything that compares by the COLUMN's type then compares as
-			// text. `AddColumn("N")` + `row.N = 5` + `Where(x.N > 100)` keeps the row, because "5"
-			// sorts after "100" (measured 2026-09-04 — it reads as a broken filter and is not one).
-			//
-			// Left as it is on purpose: changing the default would change what every existing table
-			// holds. Say it in the signature instead, so the caller passes a type when they mean a
-			// number — `AddColumn("N", New TypeDescription("Number"))` compares as a number.
-			//
-			// ⚠ AND A STRING OF ANY LENGTH (Unqualified). The bare string type carried the designer's
-			// default of ten characters, so a cell kept the first ten of whatever was written into it
-			// (measured 2026-09-21).
-			pvarRetValue = AddColumn(paParams[0]->GetString(),
-				ibTypeDescription(g_valueStringCLSID, ibValueTypeDescription::Unqualified()),
-				paParams[0]->GetString(), wxDVC_DEFAULT_WIDTH);
+		// ⚠ NO TYPE GIVEN MEANS NO TYPE. `AddColumn("A")` used to build a string column, so a number
+		// written into the cell came back as text, and a filter compared it as text. A table built
+		// that way — the usual way in ported code — then stringified every number and date.
+		//
+		// An omitted type, and Undefined passed as the type, name nothing: the cell keeps the value
+		// that was written. A caller who wants the old text comparison passes
+		// `TypeDescription("String")`. A type that is neither a Type nor a TypeDescription still
+		// refuses, as it did.
+		ibTypeDescription type;
+		if (lSizeArray > 1 && paParams[1]->GetType() != ibValueTypes::TYPE_EMPTY) {
+			ibValueType* valueType = nullptr;
+			ibValueTypeDescription* described = nullptr;
+			if (paParams[1]->ConvertToValue(valueType))
+				type = valueType->GetOwnerTypeDescription();
+			else if (paParams[1]->ConvertToValue(described))
+				type = described->GetTypeDesc();
+			else
+				type = *paParams[1]->ConvertToType<ibValueTypeDescription>();
+		}
+		const wxString name = paParams[0]->GetString();
+		const wxString caption = lSizeArray > 2 ? wxString(paParams[2]->GetString()) : name;
+		const int width = lSizeArray > 3 ? paParams[3]->GetInteger() : wxDVC_DEFAULT_WIDTH;
+		pvarRetValue = AddColumn(name, type, caption, width);
 		return true;
 	}
 	}
@@ -567,8 +562,8 @@ namespace {
 // A filter line DETERMINES a value only when it SAYS one: an equality, switched on, on a plain column (a
 // dotted path walks into a reference — there is no cell of this table to write it into), against a literal
 // rather than another field. `>` / `LIKE` / `IN` narrow without deciding, and an OR-group decides nothing at
-// all — so neither contributes, and an OR is not walked into.
-void ibCollectFilterDefaults(const std::vector<ibFilterNodeDescription>& nodes,
+// all — so neither contributes, and an OR is not walked into. The literal is restored against `metaData`.
+void ibCollectFilterDefaults(const std::vector<ibFilterNodeDescription>& nodes, const ibMetaData* metaData,
 	std::vector<std::pair<wxString, ibValue>>& out)
 {
 	for (const ibFilterNodeDescription& node : nodes) {
@@ -576,13 +571,13 @@ void ibCollectFilterDefaults(const std::vector<ibFilterNodeDescription>& nodes,
 			continue;
 		if (node.m_kind == ibFilterNodeKind_Group) {
 			if (node.m_groupKind == ibFilterGroupKind_And)
-				ibCollectFilterDefaults(node.m_children, out);
+				ibCollectFilterDefaults(node.m_children, metaData, out);
 			continue;
 		}
 		if (node.m_comparison != ibComparisonKind_Equal) continue;
 		if (!node.m_left.IsField() || node.m_right.IsField()) continue;
 		if (node.m_left.m_path.Find(wxT('.')) != wxNOT_FOUND) continue;
-		out.emplace_back(node.m_left.m_path, node.m_right.m_value);
+		out.emplace_back(node.m_left.m_path, ibStoredValue(node.m_right.m_value, metaData));
 	}
 }
 }   // namespace
@@ -611,7 +606,7 @@ long ibValueModelTable::AppendRow(unsigned int before, const ibDataViewItem& con
 	// added is gone before they see it. Filled HERE, before the notify, so the first order computed after the
 	// insert already contains the row. Adjusted to the COLUMN's type, like every other cell of this table.
 	std::vector<std::pair<wxString, ibValue>> defaults;
-	ibCollectFilterDefaults(GetModelComposer().GetCurrentFilterDesc().m_nodes, defaults);
+	ibCollectFilterDefaults(GetModelComposer().GetCurrentFilterDesc().m_nodes, GetModelComposer().GetMetaData(), defaults);
 	for (const std::pair<wxString, ibValue>& one : defaults) {
 		const ibMetaID col = GetColumnIDByName(one.first);
 		if (col != wxNOT_FOUND)

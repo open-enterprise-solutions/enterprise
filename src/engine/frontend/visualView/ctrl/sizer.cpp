@@ -22,10 +22,10 @@ void ibValueSizer::UpdateSizer(ibFrontendSizer* sizer)
 	// the web build — CSS handles the actual layout. Desktop body:
 	// push MinSize onto the wxSizer and relayout. Historically only
 	// wrapped in #ifndef; unified via ibFrontendSizer typedef.
-	if (m_propertyMinSize->GetValueAsSize() != wxDefaultSize)
-		sizer->SetMinSize(m_propertyMinSize->GetValueAsSize());
+	if (m_propertyMinSize->GetValueAsSize() != ibDefaultSize)
+		sizer->SetMinSize(typeConv::SizeToWxSize(m_propertyMinSize->GetValueAsSize()));
 
-	if (m_propertyMinSize->GetValueAsSize() != wxDefaultSize)
+	if (m_propertyMinSize->GetValueAsSize() != ibDefaultSize)
 		sizer->Layout();
 }
 

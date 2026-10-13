@@ -561,7 +561,9 @@ void ibDatabaseResultSetODBC::InterpretErrorCodes(long nCode, SQLHSTMT stmth_ptr
 		m_pInterface->GetSQLGetDiagRec()(SQL_HANDLE_STMT, stmth_ptr, 1, strState, &iNativeCode,
 			strBuffer, ERR_BUFFER_LEN, &iMsgLen);
 
-		SetErrorCode(ibDatabaseLayerODBC::TranslateErrorCode((int)iNativeCode, ConvertFromUnicodeStream((char*)strState)));
+		const wxString strSqlState = ConvertFromUnicodeStream((char*)strState);
+		SetErrorCode(ibDatabaseLayerODBC::TranslateErrorCode((int)iNativeCode, strSqlState),
+			ibDatabaseLayerODBC::ClassifySqlState(strSqlState, (int)iNativeCode));
 		//SetErrorMessage(ConvertFromUnicodeStream((char*)strBuffer));
 		SetErrorMessage(wxString((wxChar*)strBuffer));
 	}

@@ -9,7 +9,7 @@
 #include "backend/compiler/cache/byteCodeCache.h"              // AOT cache Load / Save
 #include "backend/metaCollection/metaModuleObject.h"  // ibValueMetaObjectModuleBase full type for GetGuid/GetClassType
 #include "backend/metaData.h"                         // ibMetaData::GetConfigMD5 — the cache key's second half
-#include "backend/compiler/scriptParseCode.h"          // ibParseCode — the export names a TEXT declares
+#include "core/compiler/scriptParseCode.h"          // ibParseCode — the export names a TEXT declares
 // DEF_VAR_SKIP — the sentinel a parameter's default-value slot carries when there is NO default.
 // ⚠ It lives on the COMPILE side while the field it marks (ibByteParam::m_defaultValue) lives in
 // byteCode.h, which describes it in a comment and cannot see it. Included rather than duplicated;
@@ -192,7 +192,7 @@ static void ibExportNamesFromText(const ibValueMetaObjectModuleBase* moduleObjec
 	if (moduleObject == nullptr)
 		return;
 
-	ibParseCode parser;
+	ibParseCode parser(ibCompileCode::GetCodeStyle());
 
 	// A refusal is ordinary and says nothing: the text is somebody's work in progress, and half a
 	// declaration is what a module looks like while it is being typed. No names, no noise.

@@ -4,7 +4,7 @@
 #include "backend/compiler/value.h"
 #include "backend/valueInfo.h"
 #include "backend/srcDataObject.h"   // ibSourceDataObject base — a reference IS a source object (vends its target's explorer)
-#include "backend/typeDescription.h"   // ibTypeDescription — CoerceHopType validates the pin against a field's CURRENT type filter
+#include "core/description/typeDescription.h"   // ibTypeDescription — CoerceHopType validates the pin against a field's CURRENT type filter
 
 //********************************************************************************************
 //*                                     Defines                                              *

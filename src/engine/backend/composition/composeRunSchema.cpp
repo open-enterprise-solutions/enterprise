@@ -8,7 +8,7 @@
 
 #include "backend/composition/composeEvaluate.h"   // a parameter WORKED OUT where the data is
 
-#include "backend/compositionDescription.h"
+#include "backend/backend_composition.h"
 #include "backend/metadataConfiguration.h"
 #include "backend/composition/dataComposer.h"                 // ibDataDBComposer - the composer this builds
 #include "backend/composition/drivers/tableComposeDriver.h"   // ...and the two readers of its walk
@@ -193,7 +193,8 @@ bool ibComposeRunSchema::Run(const ibDataNode& request, ibDataNode& result, wxSt
 	//
 	// `activeMetaData` is still needed, and only for the setting's own VALUES: a filter's right-hand
 	// side may be a reference or an enum member, and those live in a configuration's registry rather
-	// than in the node.
+	// than in the node. The read keeps them packed; the composer restores them against the
+	// configuration it is given below.
 	const ibDataNode* schemaNode = request.FindChild(kComposeSchema);
 	if (schemaNode == nullptr) {
 		refusal = ibComposeText("No schema came with the request. Nothing was composed.");
@@ -201,7 +202,7 @@ bool ibComposeRunSchema::Run(const ibDataNode& request, ibDataNode& result, wxSt
 	}
 
 	ibCompositionDescription description;
-	if (!ibCompositionDescriptionMemory::ReadNode(*schemaNode, description, activeMetaData)) {
+	if (!ibCompositionDescriptionMemory::ReadNode(*schemaNode, description)) {
 		refusal = ibComposeText("The schema that arrived could not be read as a composition.");
 		return false;
 	}
@@ -242,7 +243,7 @@ bool ibComposeRunSchema::Run(const ibDataNode& request, ibDataNode& result, wxSt
 	// to get wrong on this side.
 	if (const ibDataNode* settingsNode = request.FindChild(kComposeSettings)) {
 		ibSettingsDescription settings;
-		if (!ibSettingsDescriptionMemory::ReadNode(*settingsNode, settings, activeMetaData)) {
+		if (!ibSettingsDescriptionMemory::ReadNode(*settingsNode, settings)) {
 			refusal = ibComposeText("The settings that arrived could not be read.");
 			return false;
 		}

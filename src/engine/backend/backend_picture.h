@@ -1,39 +1,15 @@
 #ifndef __BACKEND_PICTURE_H__
 #define __BACKEND_PICTURE_H__
 
-#include "pictureDescription.h"
+#include "core/graphics/picture.h"   // ibPicture — a picture as data, what the server keeps and sends
+
+#include "core/description/pictureDescription.h"
 #include "picturePredefined.h"
 
 struct ibBackendPictureEntry {
 	wxString m_name;
 	wxBitmap m_data;
 	ibPictureID m_id;
-};
-
-// ⭐ A PICTURE AS THE SERVER KEEPS IT — PNG, base64, as the wire carries it. Made once and copied freely: ibString
-// counts its owners atomically, so sessions on worker threads share one with no wx object between them. A wx image
-// counts its references in a plain int (wxRefCounter::m_count, and wx stays as it is upstream): four sessions copying
-// the same class icon freed it under each other (2026-10-06). A window makes its wx image from this one anew.
-class BACKEND_API ibServerPicture {
-public:
-
-	ibServerPicture() = default;
-	// From a picture's source as it is kept — a master in base64 — at the size it is shown.
-	ibServerPicture(const wxString& base64, const wxSize& size);
-	// From an image made just now, shared with nobody.
-	explicit ibServerPicture(const wxImage& image);
-
-	bool IsOk() const { return !m_data.IsEmpty(); }
-
-	// PNG, base64 — what a frame carries.
-	const ibString& GetData() const { return m_data; }
-
-	// For a window: made anew every time, its own.
-	wxBitmap ToBitmap() const;
-	wxIcon   ToIcon() const;
-
-private:
-	ibString m_data;
 };
 
 class BACKEND_API ibBackendPicture {
@@ -51,7 +27,7 @@ public:
 
 	// THE PICTURE A SERVER SENDS, by its description — never a wx image on a worker thread. A backend one (a registered
 	// picture, a class's icon) is made once and kept here; a configuration's and a file's are made from what they keep.
-	static ibServerPicture GetServerPicture(const ibPictureDescription& pictureDesc, const class ibMetaData* metaData = nullptr);
+	static ibPicture GetServerPicture(const ibPictureDescription& pictureDesc, const class ibMetaData* metaData = nullptr);
 
 #pragma region __picture_factory_h__
 	static bool IsRegisterPicture(const ibPictureID& id);
@@ -65,7 +41,33 @@ public:
 	static wxImage GetImageFromBase64(const wxString& src, const wxSize& size = wxDefaultSize);
 	static wxBitmap GetBitmapFromBase64(const wxString& src, const wxSize& size = wxDefaultSize);
 	static wxIcon GetIconFromBase64(const wxString& src, const wxSize& size = wxDefaultSize);
-#pragma endregion 
+
+	// A PICTURE AS DATA (core/graphics/picture.h) and a wx one: from an image made just now, shared with nobody —
+	// a master kept in base64 is read at the size it is shown first (GetImageFromBase64); and for a window, made
+	// anew every time, its own.
+	static ibPicture FromImage(const wxImage& image);
+	static wxBitmap ToBitmap(const ibPicture& picture);
+	static wxIcon ToIcon(const ibPicture& picture);
+#pragma endregion
 };
+
+// ⭐ A PICTURE'S DOOR ON THIS SIDE — the core one reads the id as it was written; this one also asks the
+// engine's registry whether it has that picture.
+class BACKEND_API ibBackendPictureDescriptionMemory : public ibPictureDescriptionMemory {
+public:
+	static bool ReadNode(const class ibDataValue& value, ibPictureDescription& pictureDesc);
+};
+
+// Initialize with XPM data
+extern BACKEND_API bool RegisterBackendPicture(const wxString name,
+	const ibPictureID& id, const char* const* data);
+
+// Initialize with Base-64 + PNG data
+extern BACKEND_API bool RegisterBackendPicture(const wxString name,
+	const ibPictureID& id, const wxString& base64);
+
+// Initialize with BMP
+extern BACKEND_API bool RegisterBackendPicture(const wxString name,
+	const ibPictureID& id, const wxBitmap& bitmap);
 
 #endif

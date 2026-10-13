@@ -110,14 +110,12 @@ public:
 	static int TranslateErrorCode(int nCode, const char* sqlState = nullptr);
 	static bool IsAvailable();
 
-	// Map the most recent error's SQLSTATE (set in m_lastSqlState by
-	// the result-set / driver helpers when libpq surfaces a structured
-	// error) to a portable Kind. SQLSTATE is the canonical PostgreSQL
-	// error identifier — class digits (first two) drive most of the
-	// classification (23 = integrity violation → Constraint, 40 =
-	// transaction rollback → Deadlock, 42 = syntax/access → Syntax, 08
-	// = connection exception → ConnectionLost).
-	ibBackendDatabaseException::Kind ClassifyDatabaseError(int nativeCode) const override;
+	// SQLSTATE is the classifier — the class digits drive most of it (23 integrity violation →
+	// Constraint, 40P01 → Deadlock, 40 / 55P03 → Timeout, 42 → Syntax, 08 → ConnectionLost). Every
+	// reporter of the driver records this Kind with the code, from the state it just read off the
+	// result (SetErrorCode(code, kind)).
+	static ibBackendDatabaseException::Kind ClassifySqlState(const wxString& sqlState);
+
 	wxString GetSqlState() const override { return m_lastSqlState; }
 
 	// Internal hook for libpq error paths — called from places that

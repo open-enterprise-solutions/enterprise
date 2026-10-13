@@ -519,8 +519,8 @@ m_tableModel(nullptr), m_tableCurrentLine(nullptr)
 	m_propertySource->SetValue(ibTypeDescription(g_valueTableCLSID));
 
 	//set default params
-	m_propertyMinSize->SetValue(wxSize(150, 75));
-	m_propertyBG->SetValue(wxColour(255, 255, 255));
+	m_propertyMinSize->SetValue(ibSize(150, 75));
+	m_propertyBG->SetValue(ibColour(255, 255, 255));
 }
 
 /////////////////////////////////////////////////////////////////////////////////////

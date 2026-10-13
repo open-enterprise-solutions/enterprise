@@ -4,7 +4,7 @@
 #include "backend/propertyManager/property/propertyComposition.h"   // the composer metatype's own — editor-less
 #include "backend/propertyManager/property/propertyDynamicList.h"   // the OTHER registration — same cell, other window
 #include "backend/propertyManager/property/variant/variantComposition.h"
-#include "backend/compositionDescription.h"                          // what a door is handed
+#include "core/description/compositionDescription.h"                 // what a door is handed
 
 #include "frontend/win/dlgs/settings/composer/composerSettings.h"   // one door…
 #include "frontend/win/dlgs/settings/list/listSettings.h"           // …and the other — see the two registrations

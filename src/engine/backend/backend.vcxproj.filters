@@ -60,9 +60,6 @@
     <ClInclude Include="compiler\blockSyntaxLINQ.h">
       <Filter>compiler</Filter>
     </ClInclude>
-    <ClInclude Include="compiler\scriptParseCode.h">
-      <Filter>compiler</Filter>
-    </ClInclude>
     <ClInclude Include="appData.h" />
     <ClInclude Include="appDataCtorToken.h" />
     <ClInclude Include="appHost.h" />
@@ -196,9 +193,6 @@
     <ClInclude Include="compiler\procUnitLambda.h">
       <Filter>compiler</Filter>
     </ClInclude>
-    <ClInclude Include="compiler\translateCode.h">
-      <Filter>compiler</Filter>
-    </ClInclude>
     <ClInclude Include="compiler\typeCtor.h">
       <Filter>compiler</Filter>
     </ClInclude>
@@ -211,9 +205,6 @@
     <None Include="compiler\engineFingerprint.cmake">
       <Filter>compiler</Filter>
     </None>
-    <ClInclude Include="compiler\codeDef.h">
-      <Filter>compiler</Filter>
-    </ClInclude>
     <ClInclude Include="compiler\compileCode.h">
       <Filter>compiler</Filter>
     </ClInclude>
@@ -321,7 +312,6 @@
     <ClInclude Include="backend_exception.h" />
     <ClInclude Include="backend_diagnostic.h" />
     <ClInclude Include="fileKind.h" />
-    <ClInclude Include="typeconv.h" />
     <ClInclude Include="metadataConfiguration.h" />
     <ClInclude Include="roleHelper.h" />
     <ClInclude Include="databaseLayer\postgres\engine\libpq-fe.h">
@@ -595,12 +585,8 @@
       <Filter>propertyManager\property</Filter>
     </ClInclude>
     <ClInclude Include="backend_type.h" />
-    <ClInclude Include="commandDescription.h" />
-    <ClInclude Include="sourceDescription.h" />
-    <ClInclude Include="calcScheduleDescription.h" />
-    <ClInclude Include="choiceLinkDescription.h" />
+    <ClInclude Include="backend_composition.h" />
     <ClInclude Include="choiceLinkResolver.h" />
-    <ClInclude Include="typeDescription.h" />
     <ClInclude Include="propertyManager\property\eventAction.h">
       <Filter>propertyManager\property</Filter>
     </ClInclude>
@@ -765,7 +751,6 @@
     </ClInclude>
     <ClInclude Include="metadataDataProcessor.h" />
     <ClInclude Include="metadataReport.h" />
-    <ClInclude Include="pictureDescription.h" />
     <ClInclude Include="propertyManager\property\variant\variantAction.h">
       <Filter>propertyManager\property\variant</Filter>
     </ClInclude>
@@ -833,14 +818,12 @@
     <ClInclude Include="res\resource.h">
       <Filter>res</Filter>
     </ClInclude>
-    <ClInclude Include="backend_spreadsheet.h" />
     <ClInclude Include="system\value\valueSpreadsheet.h">
       <Filter>system\value</Filter>
     </ClInclude>
     <ClInclude Include="system\value\valueSpreadsheetDetails.h">
       <Filter>system\value</Filter>
     </ClInclude>
-    <ClInclude Include="spreadsheetDescription.h" />
     <ClInclude Include="spreadsheetModel.h" />
     <ClInclude Include="propertyManager\property\variant\variantSpreadsheet.h">
       <Filter>propertyManager\property\variant</Filter>
@@ -854,7 +837,6 @@
     </ClInclude>
     <ClInclude Include="value_ptr.h" />
     <ClInclude Include="restructureInfo.h" />
-    <ClInclude Include="tabularModelView.h" />
     <ClInclude Include="propertyManager\property\propertyChartOfCharacteristicTypes.h">
       <Filter>propertyManager\property</Filter>
     </ClInclude>
@@ -969,6 +951,9 @@
     </ClInclude>
     <ClInclude Include="sheetFormat\sheetFormatDocx.h">
       <Filter>sheetFormat</Filter>
+    </ClInclude>
+    <ClInclude Include="utils\sessionToken.h">
+      <Filter>utils</Filter>
     </ClInclude>
     <ClInclude Include="utils\passwordHash.hpp">
       <Filter>utils</Filter>
@@ -1148,9 +1133,6 @@
     <ClCompile Include="compiler\blockSyntaxLINQ.cpp">
       <Filter>compiler</Filter>
     </ClCompile>
-    <ClCompile Include="compiler\scriptParseCode.cpp">
-      <Filter>compiler</Filter>
-    </ClCompile>
     <ClCompile Include="appData.cpp" />
     <ClCompile Include="appHost.cpp" />
     <ClCompile Include="cipher\fieldCipher.cpp">
@@ -1248,9 +1230,6 @@
       <Filter>compiler</Filter>
     </ClCompile>
     <ClCompile Include="compiler\procUnitLINQ.cpp">
-      <Filter>compiler</Filter>
-    </ClCompile>
-    <ClCompile Include="compiler\translateCode.cpp">
       <Filter>compiler</Filter>
     </ClCompile>
     <ClCompile Include="compiler\byteCode.cpp">
@@ -1959,6 +1938,7 @@
       <Filter>propertyManager\property</Filter>
     </ClCompile>
     <ClCompile Include="backend_type.cpp" />
+    <ClCompile Include="backend_composition.cpp" />
     <ClCompile Include="propertyManager\property\eventAction.cpp">
       <Filter>propertyManager\property</Filter>
     </ClCompile>
@@ -1981,12 +1961,7 @@
     <ClCompile Include="compiler\valueFactory.cpp">
       <Filter>compiler</Filter>
     </ClCompile>
-    <ClCompile Include="commandDescription.cpp" />
-    <ClCompile Include="sourceDescription.cpp" />
-    <ClCompile Include="calcScheduleDescription.cpp" />
-    <ClCompile Include="choiceLinkDescription.cpp" />
     <ClCompile Include="choiceLinkResolver.cpp" />
-    <ClCompile Include="typeDescription.cpp" />
     <ClCompile Include="system\systemManager.cpp">
       <Filter>system</Filter>
     </ClCompile>
@@ -2217,7 +2192,6 @@
     <ClCompile Include="propertyManager\property\variant\variantType.cpp">
       <Filter>propertyManager\property\variant</Filter>
     </ClCompile>
-    <ClCompile Include="pictureDescription.cpp" />
     <ClCompile Include="system\value\valuePicture.cpp">
       <Filter>system\value</Filter>
     </ClCompile>
@@ -2254,8 +2228,6 @@
     <ClCompile Include="system\value\valueSpreadsheetDetails.cpp">
       <Filter>system\value</Filter>
     </ClCompile>
-    <ClCompile Include="backend_spreadsheet.cpp" />
-    <ClCompile Include="spreadsheetDescription.cpp" />
     <ClCompile Include="propertyManager\property\variant\variantSpreadsheet.cpp">
       <Filter>propertyManager\property\variant</Filter>
     </ClCompile>
@@ -2285,7 +2257,6 @@
     <ClCompile Include="system\value\valueSpreadsheetCell.cpp">
       <Filter>system\value</Filter>
     </ClCompile>
-    <ClCompile Include="tabularModelView.cpp" />
     <ClCompile Include="propertyManager\property\propertyAccountingKind.cpp">
       <Filter>propertyManager\property</Filter>
     </ClCompile>
@@ -2371,9 +2342,6 @@
     <ClCompile Include="job\platformJobs.cpp">
       <Filter>job</Filter>
     </ClCompile>
-    <ClCompile Include="job\jobSchedule.cpp">
-      <Filter>job</Filter>
-    </ClCompile>
     <ClCompile Include="job\jobScheduleRules.cpp">
       <Filter>job</Filter>
     </ClCompile>
@@ -2403,6 +2371,9 @@
     </ClCompile>
     <ClCompile Include="sheetFormat\sheetFormatXlsxWrite.cpp">
       <Filter>sheetFormat</Filter>
+    </ClCompile>
+    <ClCompile Include="utils\sessionToken.cpp">
+      <Filter>utils</Filter>
     </ClCompile>
     <ClCompile Include="utils\passwordHash.cpp">
       <Filter>utils</Filter>
@@ -2770,9 +2741,6 @@
     <ClCompile Include="composition\compositionCondition.cpp">
       <Filter>composition</Filter>
     </ClCompile>
-    <ClCompile Include="composition\compositionTheme.cpp">
-      <Filter>composition</Filter>
-    </ClCompile>
     <ClCompile Include="system\value\valueComposer.cpp">
       <Filter>system\value</Filter>
     </ClCompile>
@@ -2887,9 +2855,6 @@
     <ClInclude Include="query\queryRowCursor.h">
       <Filter>query</Filter>
     </ClInclude>
-    <ClInclude Include="query\queryKeywords.h">
-      <Filter>query</Filter>
-    </ClInclude>
     <ClInclude Include="query\queryLexer.h">
       <Filter>query</Filter>
     </ClInclude>
@@ -2915,12 +2880,6 @@
       <Filter>query</Filter>
     </ClInclude>
     <ClInclude Include="query\queryHierarchy.h">
-      <Filter>query</Filter>
-    </ClInclude>
-    <ClInclude Include="query\queryUnfold.h">
-      <Filter>query</Filter>
-    </ClInclude>
-    <ClInclude Include="query\queryBalanceRole.h">
       <Filter>query</Filter>
     </ClInclude>
     <ClInclude Include="query\queryRewrite.h">
@@ -2959,9 +2918,6 @@
     <ClInclude Include="composition\compositionCondition.h">
       <Filter>composition</Filter>
     </ClInclude>
-    <ClInclude Include="composition\compositionTheme.h">
-      <Filter>composition</Filter>
-    </ClInclude>
     <ClInclude Include="system\value\valueComposer.h">
       <Filter>system\value</Filter>
     </ClInclude>
@@ -2980,12 +2936,10 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="appEnv.cpp" />
-    <ClCompile Include="compositionDescription.cpp" />
     <ClCompile Include="databaseLayer\preparedStatement.cpp">
       <Filter>databaseLayer</Filter>
     </ClCompile>
     <ClCompile Include="eventDispatcher.cpp" />
-    <ClCompile Include="homePageDescription.cpp" />
     <ClCompile Include="metaCollection\metaObjectEnum.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>
@@ -3015,9 +2969,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="appEnv.h" />
-    <ClInclude Include="compositionDescription.h" />
     <ClInclude Include="eventDispatcher.h" />
-    <ClInclude Include="homePageDescription.h" />
     <ClInclude Include="metaCollection\createRequest.h">
       <Filter>metaCollection</Filter>
     </ClInclude>
