@@ -63,11 +63,10 @@ struct CodeStyleRestore {
 TEST_F(CommonModuleCheck, ConfigCheckReportsABrokenModuleAndOneThatWasNeverCompiled)
 {
 	CodeStyleRestore style;
-	// The modules are written with Procedure/EndProcedure. The process
-	// default is CES, and under that those words are identifiers.
-	ibCompileCode::SetCodeStyle(CODE_VES);
-	ibSession session(wxT("module-check"), ibSessionKind::Designer);
-	ibSessionScope scope(&session);
+	// A session on the stack is not current: the scope keeps a weak
+	// pointer, and a designer that is not current builds no compile cache.
+	auto session = std::make_shared<ibSession>(wxT("module-check"), ibSessionKind::Designer);
+	ibSessionScope scope(session.get());
 
 	ASSERT_TRUE(ibApplicationInstance::CreateActiveMetaData(
 		ibApplicationInstance::Get(), ibSessionKind::Designer, 0));
@@ -95,6 +94,11 @@ TEST_F(CommonModuleCheck, ConfigCheckReportsABrokenModuleAndOneThatWasNeverCompi
 		cfg->CreateMetaObject(g_metaCommonModuleCLSID, root, false));
 	ASSERT_NE(never, nullptr);
 	never->SetModuleText(wxT("Procedure Never()\nvar a;\na = 1;\nEndProcedure\n"));
+
+	// RunDatabase pins the configuration's own syntax, which is CES. The
+	// modules are written with Procedure/EndProcedure, and under CES those
+	// words are identifiers.
+	ibCompileCode::SetCodeStyle(CODE_VES);
 
 	const ibMcpTool* check = ibFindMcpTool(wxT("config_check"));
 	ASSERT_NE(check, nullptr);
@@ -128,18 +132,6 @@ TEST_F(CommonModuleCheck, ConfigCheckReportsABrokenModuleAndOneThatWasNeverCompi
 			&& one.AsChild()->GetValue<wxString>(wxT("says")).Contains(wxT("does not compile")));
 	}
 
-	if (brokenProblem == nullptr) {
-		std::string dump;
-		for (const ibDataValue& one : problems->AsArray()) {
-			if (one.Kind() != ibDataKind::Child || !one.AsChild())
-				continue;
-			dump += one.AsChild()->GetValue<wxString>(wxT("name")).ToStdString();
-			dump += " | ";
-			dump += one.AsChild()->GetValue<wxString>(wxT("says")).ToStdString();
-			dump += "\n";
-		}
-		ADD_FAILURE() << "problems:\n" << dump;
-	}
 	ASSERT_NE(brokenProblem, nullptr);
 	const ibDataValue* diagnostics = brokenProblem->AsChild()->FindField(wxT("diagnostics"));
 	ASSERT_NE(diagnostics, nullptr);
