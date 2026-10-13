@@ -128,6 +128,18 @@ TEST_F(CommonModuleCheck, ConfigCheckReportsABrokenModuleAndOneThatWasNeverCompi
 			&& one.AsChild()->GetValue<wxString>(wxT("says")).Contains(wxT("does not compile")));
 	}
 
+	if (brokenProblem == nullptr) {
+		std::string dump;
+		for (const ibDataValue& one : problems->AsArray()) {
+			if (one.Kind() != ibDataKind::Child || !one.AsChild())
+				continue;
+			dump += one.AsChild()->GetValue<wxString>(wxT("name")).ToStdString();
+			dump += " | ";
+			dump += one.AsChild()->GetValue<wxString>(wxT("says")).ToStdString();
+			dump += "\n";
+		}
+		ADD_FAILURE() << "problems:\n" << dump;
+	}
 	ASSERT_NE(brokenProblem, nullptr);
 	const ibDataValue* diagnostics = brokenProblem->AsChild()->FindField(wxT("diagnostics"));
 	ASSERT_NE(diagnostics, nullptr);
