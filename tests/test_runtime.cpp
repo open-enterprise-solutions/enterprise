@@ -3230,7 +3230,10 @@ struct KeyFrame : ibBackendDocFrame {
 	ibUniqueKey CreateFormUniqueKey(const ibBackendControlFrame*,
 		const ibSourceDataObject*, const ibUniqueKey& formGuid) override
 	{
-		return formGuid.isValid() ? formGuid : wxNewUniqueGuid;
+		if (formGuid.isValid())
+			return formGuid;
+		ibUniqueKey made = wxNewUniqueGuid;
+		return made;
 	}
 };
 
@@ -3247,7 +3250,8 @@ struct ReadableForm : ibValueForm {
 
 TEST_F(BuiltInRuntime, AFormScriptWritesThroughDataSource) {
 	auto session = std::make_shared<FramedSession>(wxT("form-write"), ibSessionKind::Enterprise);
-	KeyFrame frame(ibSessionHolder(session));
+	ibSessionHolder holder(session);
+	KeyFrame frame(std::move(holder));
 	session->Attach(&frame);
 	ibSessionScope scope(session.get());
 
