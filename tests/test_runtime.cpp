@@ -25,6 +25,7 @@
 #include "frmserver/visualView/ctrl/form.h"          // a real form, DataSource bound on it
 #include "frmserver/visualView/ctrl/formAttribute.h" // the attribute cell the bind points at
 #include "backend/backend_mainFrame.h"               // a frame so the form can be born
+#include "backend/metaCollection/metaModuleObject.h" // a form module, so the bind has somewhere to live
 #include "backend/system/value/valueDynamicList.h"
 
 #include <wx/init.h>
@@ -3245,6 +3246,10 @@ struct FramedSession : ibSession {
 };
 
 struct ReadableForm : ibValueForm {
+	// A form with no module meta cannot keep a bind: EnsureCompileModule
+	// has nothing to compile against and BindExportVariable does nothing.
+	ibValueMetaObjectModule m_module{ wxT("Form") };
+	const ibValueMetaObjectModuleBase* GetMetaForCompile() const override { return &m_module; }
 	bool ReadBound(const wxString& name, ibValue& out) { return GetBoundValue(name, out); }
 };
 
@@ -3258,16 +3263,21 @@ TEST_F(BuiltInRuntime, AFormScriptWritesThroughDataSource) {
 	// The call holds ThisForm and releases it when the frame goes. A form on
 	// the stack would be deleted by that release.
 	ReadableForm* form = new ReadableForm();
+	// Binding ThisForm is what a live form does first. That creates the
+	// compile module, and only then can the main attribute point DataSource
+	// at its cell.
+	form->BindContextVariable(wxT("ThisForm"), form);
+
 	ibValuePtr<ibValueStructure> object(new ibValueStructure());
 	object->Insert(ibValue(wxT("A")), ibValue(3));
 	object->Insert(ibValue(wxT("B")), ibValue(0));
 
 	ibValue held;
 	held = static_cast<ibValue*>(static_cast<ibValueStructure*>(object));
-	ibFormAttributeValue* attr = form->AddAttribute(wxT("Src"), g_valueStructureCLSID, held);
+	ibFormAttributeValue* attr = form->AddAttribute(wxT("Src"), g_valueStructureCLSID, ibValue());
 	ASSERT_NE(attr, nullptr);
+	form->SetMainAttribute(attr);
 	attr->SetHeldValue(held);
-	form->BindExportVariable(wxT("DataSource"), attr->GetBindValue());
 
 	ibValue stale(wxT("stale"));
 	stale.m_bReadOnly = true;
