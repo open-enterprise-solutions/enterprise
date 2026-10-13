@@ -1017,12 +1017,6 @@ public:
 	// operator=(bool) (const ptr → bool) and the object became a Boolean.
 	void operator = (const ibValue* pParam);
 
-	// A script slot bound to a live cell. A cell that already holds a reference is
-	// copied, so a mutable reference stays mutable and a const one stays const, and
-	// the cell itself is not refcounted. An embedded object (born at refcount 0) is
-	// anchored once, so releasing the script reference cannot delete the member.
-	void ReferToLive(ibValue* target);
-
 	//Implementation of comparison operators:
 	bool operator > (const ibValue& cParam) const { return CompareValueGT(cParam) > 0; }
 	bool operator >= (const ibValue& cParam) const { return CompareValueGE(cParam); }

@@ -313,6 +313,21 @@ ibValue* ibRuntimeModuleDataObject::GetBoundValue(const wxString& name) const
 	return (it != cm->m_listExternValue.end()) ? it->second : nullptr;
 }
 
+bool ibRuntimeModuleDataObject::GetBoundValue(const wxString& name, ibValue& out) const
+{
+	// A slot that cannot be written must not answer true and leave `out` stale.
+	if (out.m_bReadOnly)
+		return false;
+	ibValue* bound = GetBoundValue(name);
+	if (bound == nullptr)
+		return false;
+	// Copy what the cell holds. When the cell is a reference, that copy is the
+	// object it points at: the document stays writable, a const reference stays
+	// const, and the cell itself (an embedded member, refcount 0) is not counted.
+	out = *bound;
+	return true;
+}
+
 // Named context variable — name VISIBLE in the editor (ThisObject / ThisForm).
 void ibRuntimeModuleDataObject::BindContextVariable(const wxString& name, ibValue* value)
 {

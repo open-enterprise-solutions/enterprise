@@ -3800,10 +3800,8 @@ bool ibValueRecordSetObject::GetPropVal(const long lPropNum, ibValue& pvarPropVa
 	if (m_procUnit != nullptr && m_procUnit->GetPropVal(GetPropName(lPropNum), pvarPropVal))
 		return true;
 
-	if (ibValue* bound = GetBoundValue(GetPropName(lPropNum))) {
-		pvarPropVal = bound;
+	if (GetBoundValue(GetPropName(lPropNum), pvarPropVal))
 		return true;
-	}
 
 	return false;
 }

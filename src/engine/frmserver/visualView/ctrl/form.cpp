@@ -401,16 +401,12 @@ bool ibValueForm::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 		// Bound handle (Controls / DataSource) — resolve the live bind value directly. Works in the
 		// Designer (no ProcUnit) and as a runtime fallback.
 		//
-		// The form module compiles DataSource as a property of ThisForm (PrepareModuleData walks
-		// ThisForm's properties and the export thunk publishes the bind), so `DataSource.B = ...`
-		// arrives HERE, and so does `ThisForm.DataSource` from another module. The cell is an
-		// embedded member (refcount 0). A const pointer made a TYPE_CONST_REFFER, and the write
-		// threw "read-only (const)". ReferToLive copies a reference the cell already holds — the
-		// document stays mutable — and anchors an embedded object so the script cannot delete it.
-		if (ibValue* bound = GetBoundValue(GetPropName(lPropNum))) {
-			pvarPropVal.ReferToLive(bound);
+		// The form module compiles DataSource as a property of ThisForm, so
+		// `DataSource.B = ...` arrives here, and so does `ThisForm.DataSource`.
+		// The cell is an embedded member. Copy the reference it already holds;
+		// a read-only slot answers false instead of leaving the previous value.
+		if (GetBoundValue(GetPropName(lPropNum), pvarPropVal))
 			return true;
-		}
 	}
 	else if (lPropAlias == eProperty || lPropAlias == eEvent) {
 		// Properties + the Events container come from ibValueFrame's surface.

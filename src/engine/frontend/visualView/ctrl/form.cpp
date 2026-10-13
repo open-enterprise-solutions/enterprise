@@ -390,14 +390,15 @@ bool ibValueForm::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 		// Bound handle (Controls / DataSource) — resolve the live bind value directly. Works in the
 		// Designer (no ProcUnit) and as a runtime fallback.
 		//
-		// The form module compiles DataSource as a property of ThisForm (PrepareModuleData walks
-		// ThisForm's properties and the export thunk publishes the bind), so `DataSource.B = ...`
-		// arrives HERE, and so does `ThisForm.DataSource` from another module. The cell is an
-		// embedded member (refcount 0). A const pointer made a TYPE_CONST_REFFER, and the write
-		// threw "read-only (const)". ReferToLive copies a reference the cell already holds — the
-		// document stays mutable — and anchors an embedded object so the script cannot delete it.
-		if (ibValue* bound = GetBoundValue(GetPropName(lPropNum))) {
-			pvarPropVal.ReferToLive(bound);
+		// The bound cell is an EMBEDDED member, NOT a heap object with its own ref count: ThisForm =
+		// the form itself; Controls = m_formCollectionControl; DataSource / <attr> = &m_value of the
+		// attribute wrapper. Its ref count is 0. So take `bound` as a CONST pointer — the assignment
+		// then binds a NON-owning reference (operator=(const ibValue*) -> TYPE_CONST_REFFER). An owning
+		// ibValue* (IncrRef now, DecrRef -> delete this on destruct) would drive the member to 0 and
+		// `delete` a member pointer, corrupting the heap (crash: expanding thisForm.DataSource in the
+		// debugger watch).
+		if (const ibValue* bound = GetBoundValue(GetPropName(lPropNum))) {
+			pvarPropVal = bound;
 			return true;
 		}
 	}

@@ -21,7 +21,9 @@
 #include "backend/compiler/procUnitState.h"   // m_errorPlace — which opcode raised
 #include "backend/session/session.h"
 #include "backend/appData.h"                // the built-in dispatcher reads appData on entry
-#include "backend/system/value/valueMap.h"  // ibValueStructure — a stand-in for the form's object
+#include "backend/system/value/valueMap.h"  // ibValueStructure, g_valueStructureCLSID
+#include "frmserver/visualView/ctrl/form.h"          // a real form, DataSource bound on it
+#include "frmserver/visualView/ctrl/formAttribute.h" // the attribute cell the bind points at
 
 #include <wx/init.h>
 #include <wx/image.h>  // wxInitAllImageHandlers — wx decodes nothing until registered
@@ -2938,100 +2940,43 @@ TEST(RuntimeTest, AnArrayWalkedAndRewalkedIsLetGoOfOnce) {
 	// caught: passing under a sanitiser is the whole assertion.
 }
 
-// ===========================================================================
-// A form's DataSource is a cell that holds a reference to the object. Reading
-// it through a const pointer (what the form's GetPropVal did) makes the write
-// throw. ReferToLive copies that reference, so the field write lands, and an
-// embedded object is anchored instead of deleted.
-// ===========================================================================
-
-TEST_F(BuiltInRuntime, ReferToLive_AReferenceCellStaysWritable) {
-	ibValuePtr<ibValueStructure> object(new ibValueStructure());
-	object->Insert(ibValue(wxT("B")), ibValue(0));
-
-	ibValue cell;
-	cell = static_cast<ibValue*>(object);   // the attribute's m_value
-
-	ibValue frozen;
-	frozen = static_cast<const ibValue*>(&cell);
-	const long field = frozen.FindProp(wxT("B"));
-	ASSERT_GE(field, 0);
-	EXPECT_THROW(frozen.SetPropVal(field, ibValue(7)), ibBackendException);
-
-	ibValue live;
-	live.ReferToLive(&cell);
-	ASSERT_TRUE(live.SetPropVal(live.FindProp(wxT("B")), ibValue(7)));
-
-	ibValue got;
-	ASSERT_TRUE(object->GetPropVal(object->FindProp(wxT("B")), got));
-	EXPECT_EQ(got.GetInteger(), 7);
-}
-
-TEST_F(BuiltInRuntime, ReferToLive_AnEmbeddedObjectIsNotDeleted) {
-	ibValueStructure embedded;
-	embedded.Insert(ibValue(wxT("B")), ibValue(1));
-	{
-		ibValue live;
-		live.ReferToLive(&embedded);
-		ASSERT_TRUE(live.SetPropVal(live.FindProp(wxT("B")), ibValue(4)));
-	}
-	ibValue got;
-	ASSERT_TRUE(embedded.GetPropVal(embedded.FindProp(wxT("B")), got));
-	EXPECT_EQ(got.GetInteger(), 4);
-}
-
-// The form module does not see DataSource as its own variable. PrepareModuleData
-// publishes every property of ThisForm, and the bind is one of them, so
-// `DataSource.B = ...` is a property read of the form. That read has to come
-// back mutable.
-namespace {
-
-class DataSourceHost : public ibValueDynamicMembers {
-public:
-	explicit DataSourceHost(ibValue* cell)
-		: ibValueDynamicMembers(ibValueTypes::TYPE_VALUE), m_cell(cell)
-	{
-		m_members.Bind(this, &DataSourceHost::Fill);
-	}
-	ibClassID GetClassType() const override { return 0; }
-	void Fill(ibMemberTable& helper) const { helper.AppendProp(wxT("DataSource")); }
-	bool GetPropVal(const long lPropNum, ibValue& pvarPropVal) override {
-		if (GetPropName(lPropNum).IsSameAs(wxT("DataSource"), false)) {
-			pvarPropVal.ReferToLive(m_cell);
-			return true;
-		}
-		return false;
-	}
-	ibValue* m_cell;
+// A form's DataSource is the main attribute's cell. The cell holds a reference
+// to the object. A script that writes DataSource.B must change that object,
+// and a read-only slot must not answer as if the read had succeeded.
+// GetBoundValue is the form's own read; the test reaches it through a form.
+struct ReadableForm : ibValueForm {
+	bool ReadBound(const wxString& name, ibValue& out) { return GetBoundValue(name, out); }
 };
 
-} // namespace
-
-TEST_F(BuiltInRuntime, FormModule_DataSourceFieldWriteGoesThroughTheFormProperty) {
-	struct StyleGuard {
-		const short saved = ibCompileCode::GetCodeStyle();
-		~StyleGuard() { ibCompileCode::SetCodeStyle(saved); }
-	} guard;
-	ibCompileCode::SetCodeStyle(CODE_CES);
-
+TEST_F(BuiltInRuntime, AFormScriptWritesThroughDataSource) {
+	ReadableForm form;
 	ibValuePtr<ibValueStructure> object(new ibValueStructure());
 	object->Insert(ibValue(wxT("A")), ibValue(3));
 	object->Insert(ibValue(wxT("B")), ibValue(0));
-	ibValue cell;
-	cell = static_cast<ibValue*>(object);
 
-	DataSourceHost host(&cell);
-	ibCompileCode cc(wxT("form"), wxT("memory"), false);
-	cc.AddContextVariable(wxT("ThisForm"), &host);
+	ibValue held;
+	held = static_cast<ibValue*>(object.get());
+	ibFormAttributeValue* attr = form.AddAttribute(wxT("Src"), g_valueStructureCLSID, held);
+	ASSERT_NE(attr, nullptr);
+	attr->SetHeldValue(held);
+	form.BindExportVariable(wxT("DataSource"), attr->GetBindValue());
+
+	ibValue stale(wxT("stale"));
+	stale.m_bReadOnly = true;
+	EXPECT_FALSE(form.ReadBound(wxT("DataSource"), stale));
+	EXPECT_EQ(stale.GetString(), wxT("stale"));
+
+	ibCompileCode cc(wxT("caller"), wxT("memory"), false);
+	cc.AddContextVariable(wxT("ThisForm"), &form);
 	ASSERT_TRUE(TryCompile(cc,
-		wxT("procedure OnOpen() {\n")
-		wxT("    DataSource.B = DataSource.A;\n")
-		wxT("}\n")));
+		wxT("Procedure Write()\n")
+		wxT("  ThisForm.DataSource.B = ThisForm.DataSource.A;\n")
+		wxT("EndProcedure\n")));
 
 	ibProcUnit pu;
 	wxString err;
 	ASSERT_TRUE(RunBound(cc, pu, err)) << err.ToStdString();
-	ASSERT_TRUE(pu.CallAsProc(wxT("OnOpen")));
+	ASSERT_TRUE(pu.CallAsProc(wxT("Write")));
 
 	ibValue got;
 	ASSERT_TRUE(object->GetPropVal(object->FindProp(wxT("B")), got));
