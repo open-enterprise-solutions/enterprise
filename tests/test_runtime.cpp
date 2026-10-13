@@ -24,6 +24,7 @@
 #include "backend/system/value/valueMap.h"  // ibValueStructure, g_valueStructureCLSID
 #include "frmserver/visualView/ctrl/form.h"          // a real form, DataSource bound on it
 #include "frmserver/visualView/ctrl/formAttribute.h" // the attribute cell the bind points at
+#include "backend/backend_mainFrame.h"               // a frame so the form can be born
 #include "backend/system/value/valueDynamicList.h"
 
 #include <wx/init.h>
@@ -3219,11 +3220,37 @@ TEST(RuntimeTest, AnArrayWalkedAndRewalkedIsLetGoOfOnce) {
 // to the object. A script that writes DataSource.B must change that object,
 // and a read-only slot must not answer as if the read had succeeded.
 // GetBoundValue is the form's own read; the test reaches it through a form.
+// A form is born against the session's frame. This one only has to name a key.
+struct KeyFrame : ibBackendDocFrame {
+	explicit KeyFrame(ibSessionHolder&& holder) : ibBackendDocFrame(std::move(holder)) {}
+	void SetTitle(const wxString&) override {}
+	void SetStatusText(const wxString&, int) override {}
+	void RefreshFrame() override {}
+	void RaiseFrame() override {}
+	ibUniqueKey CreateFormUniqueKey(const ibBackendControlFrame*,
+		const ibSourceDataObject*, const ibUniqueKey& formGuid) override
+	{
+		return formGuid.isValid() ? formGuid : wxNewUniqueGuid;
+	}
+};
+
+struct FramedSession : ibSession {
+	using ibSession::ibSession;
+	ibBackendDocFrame* GetFrame() const override { return m_frame; }
+	void Attach(ibBackendDocFrame* frame) { m_frame = frame; }
+	ibBackendDocFrame* m_frame = nullptr;
+};
+
 struct ReadableForm : ibValueForm {
 	bool ReadBound(const wxString& name, ibValue& out) { return GetBoundValue(name, out); }
 };
 
 TEST_F(BuiltInRuntime, AFormScriptWritesThroughDataSource) {
+	auto session = std::make_shared<FramedSession>(wxT("form-write"), ibSessionKind::Enterprise);
+	KeyFrame frame(ibSessionHolder(session));
+	session->Attach(&frame);
+	ibSessionScope scope(session.get());
+
 	ReadableForm form;
 	ibValuePtr<ibValueStructure> object(new ibValueStructure());
 	object->Insert(ibValue(wxT("A")), ibValue(3));
