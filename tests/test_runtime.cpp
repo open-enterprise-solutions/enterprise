@@ -1057,10 +1057,16 @@ TEST_F(BuiltInRuntime, ACommonModuleUnitFillsAHoleInTheMiddle) {
 		wxT("EndFunction\n"));
 
 	ibValueModuleManagerDesigner manager(&cfg, root);
+	// The common module is compiled against the configuration module, so that
+	// module has to be compiled and running before the common module's own
+	// frame will accept it.
+	ASSERT_TRUE(manager.Compile());
 	ASSERT_TRUE(manager.AddCommonModule(mod));
 	ibValueModuleManager::ibValueModuleUnit* unit = manager.FindCommonModule(mod);
 	ASSERT_NE(unit, nullptr);
 	ASSERT_TRUE(unit->Compile());
+	manager.InitializeRuntime();
+	manager.Run(false);
 	unit->InitializeRuntime();
 	unit->Run(false);
 	unit->InvalidateNames();
