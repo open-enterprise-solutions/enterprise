@@ -46,6 +46,9 @@
     <Filter Include="win\dlgs\settings\list">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f400f}</UniqueIdentifier>
     </Filter>
+    <Filter Include="win\dlgs\settings\composer">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f4010}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="frmserver.cpp" />
@@ -121,10 +124,16 @@
     <ClCompile Include="schema\activeUser.cpp">
       <Filter>schema</Filter>
     </ClCompile>
+    <ClCompile Include="schema\auditLog.cpp">
+      <Filter>schema</Filter>
+    </ClCompile>
     <ClCompile Include="schema\clientSchema.cpp">
       <Filter>schema</Filter>
     </ClCompile>
     <ClCompile Include="schema\runtime\allFunctions.cpp">
+      <Filter>schema\runtime</Filter>
+    </ClCompile>
+    <ClCompile Include="schema\runtime\debugging.cpp">
       <Filter>schema\runtime</Filter>
     </ClCompile>
     <ClCompile Include="schema\runtime\sections.cpp">
@@ -157,8 +166,14 @@
     <ClCompile Include="win\dlgs\settings\savedSettings.cpp">
       <Filter>win\dlgs\settings</Filter>
     </ClCompile>
+    <ClCompile Include="win\dlgs\settings\settingsRequest.cpp">
+      <Filter>win\dlgs\settings</Filter>
+    </ClCompile>
     <ClCompile Include="win\dlgs\settings\list\listSettings.cpp">
       <Filter>win\dlgs\settings\list</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\settings\composer\composerSettings.cpp">
+      <Filter>win\dlgs\settings\composer</Filter>
     </ClCompile>
     <ClCompile Include="visualView\layers\commandBar.cpp">
       <Filter>visualView\layers</Filter>
@@ -487,10 +502,16 @@
     <ClInclude Include="schema\activeUser.h">
       <Filter>schema</Filter>
     </ClInclude>
+    <ClInclude Include="schema\auditLog.h">
+      <Filter>schema</Filter>
+    </ClInclude>
     <ClInclude Include="schema\clientSchema.h">
       <Filter>schema</Filter>
     </ClInclude>
     <ClInclude Include="schema\runtime\allFunctions.h">
+      <Filter>schema\runtime</Filter>
+    </ClInclude>
+    <ClInclude Include="schema\runtime\debugging.h">
       <Filter>schema\runtime</Filter>
     </ClInclude>
     <ClInclude Include="schema\runtime\sections.h">
@@ -526,8 +547,14 @@
     <ClInclude Include="win\dlgs\settings\savedSettings.h">
       <Filter>win\dlgs\settings</Filter>
     </ClInclude>
+    <ClInclude Include="win\dlgs\settings\settingsRequest.h">
+      <Filter>win\dlgs\settings</Filter>
+    </ClInclude>
     <ClInclude Include="win\dlgs\settings\list\listSettings.h">
       <Filter>win\dlgs\settings\list</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\settings\composer\composerSettings.h">
+      <Filter>win\dlgs\settings\composer</Filter>
     </ClInclude>
     <ClInclude Include="visualView\layers\commandBar.h">
       <Filter>visualView\layers</Filter>

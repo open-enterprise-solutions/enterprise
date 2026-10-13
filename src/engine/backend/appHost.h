@@ -61,6 +61,21 @@ public:
 	// The connections to its DBMS a base may hold when its own infobase.conf does not say — backend.conf
 	// (Connections), else the built-in 32. A base's connections are its own; this is only their default.
 	std::size_t      GetDefaultConnections() const;
+
+	// How many client connections the application server will hold at once — backend.conf
+	// (ClientConnections). Left out, or 0, that is kDefaultClientConnections, not "no limit".
+	// Above kMostClientConnections the most is used, and the journal says so. Each one keeps a
+	// thread until the network core is asynchronous.
+	static constexpr std::size_t kDefaultClientConnections = 1000;
+	static constexpr std::size_t kMostClientConnections    = 10000;
+	std::size_t      GetClientConnections() const { return m_configClientConnections; }
+
+	// How long a thin client's session outlives a dropped connection — backend.conf (Resume), seconds.
+	// Left out is 120. 0 is off: the drop ends the session, its locks and its seat, as before this window.
+	// Above 30 minutes — the idle limit a client already dies by — is that limit.
+	std::size_t      GetResumeSeconds() const { return m_configResume; }
+	// `present` is false when the key is absent. 0 present is off, not the default.
+	static std::size_t ResumeSeconds(bool present, long configured);
 	ibHelpService*   GetHelpService() const   { return m_helpService.get(); }
 	wxString         GetLocale() const        { return m_locale.GetCanonicalName(); }
 	wxString         GetLocaleName() const    { return m_locale.GetName(); }
@@ -70,9 +85,10 @@ public:
 	bool InitLocale(const wxString& locale);
 
 	// A count from a settings file — backend.conf, a base's infobase.conf: left out or 0 means the default, and
-	// one below `least` is said in the journal and the default is used.
+	// one below `least` is said in the journal and the default is used. `most` of 0 is no ceiling; a number
+	// above `most` is said and `most` is used.
 	static std::size_t ReadCount(const class wxConfigBase& conf, const wxString& file, const wxString& key, long least,
-		std::size_t byDefault);
+		std::size_t byDefault, std::size_t most = 0);
 
 private:
 
@@ -118,11 +134,14 @@ private:
 
 	// backend.conf — read once for the process: the locale, how much the process may consume, and the default
 	// a base's own infobase.conf overrides (Workers and Bases: the most there may be, 0 = no limit; Connections 0 =
-	// the built-in value).
+	// the built-in value). ClientConnections is the application server's own ceiling: 0 means
+	// kDefaultClientConnections, and a number above kMostClientConnections is that most.
 	wxString    m_configLocale;
-	std::size_t m_configWorkers     = 0;
-	std::size_t m_configBases       = 0;
-	std::size_t m_configConnections = 0;
+	std::size_t m_configWorkers            = 0;
+	std::size_t m_configBases              = 0;
+	std::size_t m_configConnections        = 0;
+	std::size_t m_configClientConnections  = kDefaultClientConnections;
+	std::size_t m_configResume             = 120;
 
 	wxLocale m_locale;
 	int      m_localeLang;

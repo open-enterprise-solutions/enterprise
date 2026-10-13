@@ -5378,6 +5378,14 @@ ibSelectorTree ibQueryComposer::BuildHierarchyTree(const ibQueryRamTable& detail
 
 	const long n = detail.RowCount();
 
+	// No row key or parent key: there is no tree. Select(ByGroups) on a query without
+	// TOTALS arrives here with both null, and reading them is a null dereference.
+	// The records themselves are the walk — the Elements placement, which does not
+	// use the keys. A by-groups walk of a result that named no grouping reads like
+	// the direct walk.
+	if (rowKeyCol == nullptr || parentKeyCol == nullptr)
+		mode = ibDimensionKind::Elements;
+
 	// Elements: every row as a leaf NODE under the root, in order, no nesting. A grand total (if
 	// aggregates) on the root. (The tree carries no flat rows — a leaf is a one-level node.)
 	if (mode == ibDimensionKind::Elements) {

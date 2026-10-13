@@ -2,7 +2,7 @@
 #define __SOURCE_DATA_VARIANT_H__
 
 #include "variantType.h"
-#include "backend/sourceDescription.h"
+#include "core/description/sourceDescription.h"
 
 class BACKEND_API ibBackendSourceColumn;   // queryColumn.h — neutral source-column the dot returns
 

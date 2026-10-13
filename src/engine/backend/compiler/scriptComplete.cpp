@@ -10,7 +10,7 @@
 #include "backend/moduleInfo.h"                  // ibRuntimeModuleDataObject::GetCompileModule
 #include "backend/moduleManager/moduleManager.h" // ibValueModuleManager — the context a snippet parents to
 #include "backend/session/session.h"             // ibSession::EditModuleManagerFor
-#include "backend/typeDescription.h"             // ibTypeDescription - a type, possibly several
+#include "core/description/typeDescription.h"             // ibTypeDescription - a type, possibly several
 #include "backend/objCtor.h"                     // ibCtorMetaValueType - one door: the metaobject AND the maker
 #include "backend/metaCollection/metaObjectComposite.h"   // where fields live: catalog, document, register, tabular section
 #include "backend/compiler/blockSyntaxLINQ.h"    // ibLinqClausesAfter - which query word may follow which
@@ -1576,7 +1576,7 @@ public:
 	// The tokens this compile read, for the one question that is about the GRAMMAR of a position
 	// rather than about a value: which clause the caret is being typed into. Nothing is re-lexed —
 	// the stream is the one the compile just used.
-	const std::vector<ibLexem>& Lexems() const { return m_compiler.GetLexems(); }
+	const ibTranslateCode& TranslateCode() const { return m_compiler.m_translateCode; }
 
 	// ⭐ THE SAME TAPE, NOT SLICED. The question above wants the instructions, which the base type
 	// carries; the LINQ tree lives only on the compiler's own full form (byteCode.h), and a reader
@@ -2224,7 +2224,9 @@ bool ibNamesAtCaret(const wxString& text, unsigned int caret,
 			// the whole of what this needs, and it is read off the compile's own token stream.
 			const int spoken = [&]() -> int {
 				int last = -1;
-				for (const ibLexem& lex : compiled.Lexems()) {
+				const ibTranslateCode& translateCode = compiled.TranslateCode();
+				for (size_t i = 0; i < translateCode.GetLexCount(); ++i) {
+					const ibLexem& lex = translateCode.GetLexAt(i);
 					if (lex.m_numString >= at)
 						break;
 					if (lex.m_lexType != KEYWORD)

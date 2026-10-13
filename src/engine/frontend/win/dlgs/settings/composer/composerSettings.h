@@ -18,7 +18,7 @@
 // (NO valueDataComposition.h. The panel holds no running composition; only the modal host below
 //  takes one, as a pointer, and a name is all that needs.)
 class ibValueDataComposition;
-#include "backend/compositionDescription.h"   // the snapshot Cancel puts back — a DESCRIPTION, not a node
+#include "core/description/compositionDescription.h"   // the snapshot Cancel puts back — a DESCRIPTION, not a node
 // WHICH SHELF a saved setting sits on — an argument of the shelf's door below, so the same menu
 // serves a report and a list. (The storage itself is the backend's; only the word travels here.)
 enum class ibSettingsCategory : int;

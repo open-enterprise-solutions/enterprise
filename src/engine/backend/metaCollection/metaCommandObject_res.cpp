@@ -11,7 +11,7 @@ wxIcon ibValueMetaObjectCommand::GetIcon() const
 
 wxIcon ibValueMetaObjectCommand::GetIconGroup()
 {
-	static const ibServerPicture picture(s_command_64_png, wxSize(16, 16));
+	static const ibPicture picture = ibBackendPicture::FromImage(ibBackendPicture::GetImageFromBase64(s_command_64_png, wxSize(16, 16)));
 
-	return picture.ToIcon();
+	return ibBackendPicture::ToIcon(picture);
 }

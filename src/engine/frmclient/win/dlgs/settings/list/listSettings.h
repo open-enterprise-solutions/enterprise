@@ -12,7 +12,7 @@
 
 #include <memory>
 
-#include "frmclient/backend/compositionDescription.h"
+#include "frmclient/backend/backend_composition.h"
 #include "frmclient/win/dlgs/settings/settingsFieldTree.h"   // ibSettingsPlainField — a field, described
 
 // The tabs are model-driven grids, and the value cells are type-driven selectors — both live on the

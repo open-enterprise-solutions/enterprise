@@ -2,7 +2,7 @@
 #define _FRMCLIENT_TYPECONV_H__
 
 // WHAT A PROPERTY'S VALUE IS WRITTEN AS, READ BACK — the server writes a control's size, colour and font as text
-// (its typeConv: SizeToString, ColourToString, FontToString); these are its readers, copied from backend/typeconv.h
+// (its typeConv: SizeToString, ColourToString, FontToString); these are its readers, copied from frontend/win/typeconv.h
 // line for line — and the writers a sheet saves itself with.
 
 #include <wx/colour.h>
@@ -12,6 +12,9 @@
 #include <wx/tokenzr.h>
 
 #include "fontcontainer.h"
+
+#include "core/graphics/colour.h"   // ibColour — ColourToWxColour / WxColourToColour
+#include "core/graphics/font.h"     // ibFont — FontToWxFont / WxFontToFont
 
 #define ElseIfSystemColourConvert( NAME, value )	\
 	else if ( value == wxT(#NAME) )					\
@@ -305,6 +308,48 @@ namespace typeConv
 
 	inline wxString ColourToString(const wxColour& colour) {
 		return wxString::Format(wxT("%d,%d,%d"), colour.Red(), colour.Green(), colour.Blue());
+	}
+
+	// ⭐ THE CORE'S FONT AND COLOUR AS wx's, and back — field by field (core/graphics/font.h, colour.h: the
+	// words are wx's, with wx's numbers). An unset one is an unset one on either side.
+	inline wxFont FontToWxFont(const ibFont& font) {
+		if (!font.IsOk())
+			return wxNullFont;
+		return wxFont(wxFontInfo(font.m_pointSize)
+			.FaceName(font.m_faceName)
+			.Family(static_cast<wxFontFamily>(font.m_family))
+			.Style(static_cast<wxFontStyle>(font.m_style))
+			.Weight(font.m_weight)
+			.Underlined(font.m_underlined)
+			.Strikethrough(font.m_strikethrough));
+	}
+
+	inline ibFont WxFontToFont(const wxFont& font) {
+		ibFont result;
+		if (!font.IsOk())
+			return result;
+		result.m_faceName = font.GetFaceName();
+		result.m_style = static_cast<ibFontStyle>(font.GetStyle());
+		result.m_weight = font.GetNumericWeight();
+		result.m_pointSize = font.GetFractionalPointSize();
+		const wxFontFamily family = font.GetFamily();
+		result.m_family = family >= wxFONTFAMILY_DEFAULT && family <= wxFONTFAMILY_TELETYPE
+			? static_cast<ibFontFamily>(family) : ibFONTFAMILY_DEFAULT;
+		result.m_underlined = font.GetUnderlined();
+		result.m_strikethrough = font.GetStrikethrough();
+		return result;
+	}
+
+	inline wxColour ColourToWxColour(const ibColour& colour) {
+		if (!colour.IsOk())
+			return wxNullColour;
+		return wxColour(colour.m_red, colour.m_green, colour.m_blue, colour.m_alpha);
+	}
+
+	inline ibColour WxColourToColour(const wxColour& colour) {
+		if (!colour.IsOk())
+			return ibColour();
+		return ibColour(colour.Red(), colour.Green(), colour.Blue(), colour.Alpha());
 	}
 
 }

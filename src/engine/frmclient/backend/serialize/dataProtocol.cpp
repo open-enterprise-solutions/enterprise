@@ -1,7 +1,7 @@
 #include "dataProtocol.h"
 
 #include "core/serialize/jsonProvider.h"
-#include "frmclient/backend/compositionDescription.h"   // ibCompositionNodeClsid — a composition's part by its name
+#include "core/description/compositionDescription.h"   // ibCompositionNodeClsid — a composition's part by its name
 
 bool ibReadProtocolNode(const ibProtocolNode& wire, ibDataNode& node)
 {

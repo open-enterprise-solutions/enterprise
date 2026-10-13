@@ -15,6 +15,10 @@
 // Owners register a save/restore once, at static initialisation. The pool
 // does not name them. Registration after the first snapshot is a fault:
 // a slot that appears late would be missing from fibers already parked.
+//
+// The set is closed: only core and backend register. A plugin, fileserver
+// or any other module has no fiber locals - state that belongs to one call
+// is an argument of the engine API, not a slot here.
 
 #include "core/core.h"
 

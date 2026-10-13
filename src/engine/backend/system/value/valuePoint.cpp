@@ -7,22 +7,22 @@
 
 //////////////////////////////////////////////////////////////////////
 
-ibValuePoint::ibValuePoint() : ibValueStaticMembers(ibValueTypes::TYPE_VALUE), m_point(wxDefaultPosition)
+ibValuePoint::ibValuePoint() : ibValueStaticMembers(ibValueTypes::TYPE_VALUE), m_point(ibDefaultPosition)
 {
 }
 
-ibValuePoint::ibValuePoint(const wxPoint& point) : ibValueStaticMembers(ibValueTypes::TYPE_VALUE), m_point(point)
+ibValuePoint::ibValuePoint(const ibPoint& point) : ibValueStaticMembers(ibValueTypes::TYPE_VALUE), m_point(point)
 {
 }
 
 bool ibValuePoint::Init(ibValue** paParams, const long lSizeArray)
 {
 	if (lSizeArray == 1 && paParams[0]->GetType() == ibValueTypes::TYPE_STRING) {
-		m_point = typeConv::StringToPoint(paParams[0]->GetString());
+		m_point.FromString(paParams[0]->GetString());
 		return true;
 	}
 	else if (lSizeArray > 1) {
-		m_point = wxPoint(paParams[0]->GetInteger(), paParams[1]->GetInteger());
+		m_point = ibPoint(paParams[0]->GetInteger(), paParams[1]->GetInteger());
 		return true;
 	}
 	return false;
@@ -45,10 +45,10 @@ bool ibValuePoint::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 	switch (lPropNum)
 	{
 	case eLeft:
-		m_point.x = varPropVal.GetInteger();
+		m_point.m_x = varPropVal.GetInteger();
 		return true;
 	case eTop:
-		m_point.y = varPropVal.GetInteger();
+		m_point.m_y = varPropVal.GetInteger();
 		return true;
 	}
 
@@ -60,10 +60,10 @@ bool ibValuePoint::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 	switch (lPropNum)
 	{
 	case eLeft:
-		pvarPropVal = m_point.x;
+		pvarPropVal = m_point.m_x;
 		return true;
 	case eTop:
-		pvarPropVal = m_point.y;
+		pvarPropVal = m_point.m_y;
 		return true;
 	}
 

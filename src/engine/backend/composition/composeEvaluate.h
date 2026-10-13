@@ -11,7 +11,7 @@
 // other. Two copies of "where does an expression evaluate" is two places for the answer to drift,
 // and it drifted: one had learnt the designer's edit manager and the other had not.
 //
-// ⚠ NOT IN `compositionDescription.{h,cpp}`, though ibStoredValue lives there and looks like a
+// ⚠ NOT IN `backend_composition.{h,cpp}`, though ibStoredValue lives there and looks like a
 // neighbour. A DESCRIPTION IS DATA — it is read while a configuration is still loading — and this
 // needs the runtime: a session, a module manager, a ProcUnit, a frame. Putting the two together
 // would drag the runtime into the load, which is the mistake that file's own notes are about.

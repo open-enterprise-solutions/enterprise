@@ -19,8 +19,9 @@
 #include <wx/choice.h>
 #include <wx/stattext.h>
 
+#include "backend/backend.h"   // BACKEND_API
 #include "frontend/win/ctrls/dataview/dataview.h"
-#include "backend/choiceLinkDescription.h"
+#include "core/description/choiceLinkDescription.h"
 
 class BACKEND_API ibPropertyChoiceLink;
 

@@ -19,7 +19,7 @@
 #include "backend/mcp/mcpTool.h"
 
 #include "backend/backend_picture.h"                        // ibBackendPicture — engine registry + resolver
-#include "backend/pictureDescription.h"                     // ibPictureDescription — the tagged value
+#include "core/description/pictureDescription.h"            // ibPictureDescription — the tagged value
 #include "backend/propertyManager/property/propertyPicture.h"
 #include "backend/metaCollection/metaObject.h"              // ibValueMetaObject::GetGuid
 #include "backend/metaCollection/metaIntrospect.h"          // ibListMetaObjectNames / ibFindMetaObject — the shared road
@@ -769,7 +769,7 @@ public:
 		}
 		else if (read) {
 			ibMcpPictureIdAsNumber(given);   // the digits this door sends out come back as digits — mcpTool.h
-			read = ibPictureDescriptionMemory::ReadNode(given, description);
+			read = ibBackendPictureDescriptionMemory::ReadNode(given, description);
 		}
 
 		if (!read) {

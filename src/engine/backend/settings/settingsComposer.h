@@ -42,8 +42,7 @@ class ibMetaData;
 //  *"we have no suitable file for it, and it would be a metadata leak"*).
 //
 //  So the ADDRESS is the caller's, computed where the metadata already is — a control knows its own
-//  binding, its own form and its own configuration. `metaData` below stays an opaque pointer that is
-//  handed straight to the settings' own pair, which is a different thing from reaching into it.)
+//  binding, its own form and its own configuration.)
 
 // ONE SAVED SETTING as a shelf shows it — the identity, the caption, and when it
 // was written. The caption comes out of the NODE, which is why this lives here
@@ -82,10 +81,9 @@ BACKEND_API ibGuid ibSaveComposerSettings(ibSettingsCategory category, const ibG
 // variant or pressing OK in the settings window. False when there is no such
 // row or the node cannot be read as settings.
 //
-// `metaData` is the configuration the SETTING's own values are read through (a
-// filter's right-hand side may be a reference or an enum member, and those live
-// only in a configuration's registry). It belongs to the caller — several are
-// open at once — and the pair takes it as an argument for exactly this reason.
+// `metaData` is NOT READ ANY MORE: the setting's own values (a filter's right-hand
+// side may be a reference or an enum member) stay packed in the description and
+// are restored by the composer, against the configuration it runs in.
 BACKEND_API bool ibRestoreComposerSettings(ibSettingsCategory category, const ibGuid& objectKey,
                                            const ibGuid& id, ibDataComposer& composer,
                                            const ibMetaData* metaData, const ibUserInfo* user = nullptr);

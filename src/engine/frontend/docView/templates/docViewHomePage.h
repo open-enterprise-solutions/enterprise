@@ -34,7 +34,7 @@
 // docView.h first — it pulls in wx/app.h + wx/docview.h (see docViewAuditLog.h).
 #include "frontend/docView/docView.h"
 
-#include "backend/homePageDescription.h"
+#include "core/description/homePageDescription.h"
 
 #include <vector>
 

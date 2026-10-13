@@ -4,11 +4,17 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "compileCode.h"
-#include "codeDef.h"
+#include "core/compiler/codeDef.h"
 #include "lambdaQueryAST.h"   // L4-2 — lambda body -> L4 query AST (pushdown)
 
 #include "system/systemManager.h"
 #include "backend/session/session.h"       // GetCompileState — the code style lives there
+#include "core/fiber/fiber.h"              // StackLow — expression nesting is native recursion
+
+// The mark a filter writes on a comparison (procUnitLambda.h, LINQ_THREE_VALUED_NULL).
+// Repeated here so the compiler does not include the interpreter. OPER_IF treats a
+// NULL condition as "does not decide" when an `and` sets this on m_param4.
+constexpr long kAndUnknownMark = 1;
 
 #pragma warning(push)
 #pragma warning(disable : 4018)
@@ -75,14 +81,14 @@ static constexpr std::array<int, 256> gs_operPriority = MakeOperPriority();
 //////////////////////////////////////////////////////////////////////
 
 // The initialiser lists below follow the DECLARATION order in compileCode.h
-// (m_onlyFunction, m_cByteCode, m_rootContext, m_numCurrentCompile, m_changedCode).
+// (m_onlyFunction, m_translateCode, m_cByteCode, m_rootContext, m_numCurrentCompile, m_changedCode).
 // Members are constructed in declaration order regardless of what the list says, so a
 // list in any other order reads as a promise the language does not keep — and
 // ibCompileContext's ctor takes `this`.
 
 ibCompileCode::ibCompileCode() :
-	ibTranslateCode(),
 	m_onlyFunction(false),
+	m_translateCode(GetCodeStyle()),
 	m_rootContext(new ibCompileContext(this)),
 	m_changedCode(false)
 {
@@ -91,8 +97,8 @@ ibCompileCode::ibCompileCode() :
 }
 
 ibCompileCode::ibCompileCode(const wxString& strModuleName, const wxString& strDocPath, bool onlyFunction) :
-	ibTranslateCode(strModuleName, strDocPath),
 	m_onlyFunction(onlyFunction),
+	m_translateCode(GetCodeStyle(), strModuleName, strDocPath),
 	m_rootContext(new ibCompileContext(this)),
 	m_changedCode(false)
 {
@@ -101,8 +107,8 @@ ibCompileCode::ibCompileCode(const wxString& strModuleName, const wxString& strD
 }
 
 ibCompileCode::ibCompileCode(const wxString& strFileName) :
-	ibTranslateCode(strFileName),
 	m_onlyFunction(false),
+	m_translateCode(GetCodeStyle(), strFileName),
 	m_rootContext(new ibCompileContext(this)),
 	m_changedCode(false)
 {
@@ -130,31 +136,6 @@ void ibCompileCode::SetCodeStyle(short codeStyle)
 {
 	ibSession::GetCompileState()->m_codeStyle = static_cast<ibProgramSyntax>(codeStyle);
 }
-
-// Definition of ibTranslateCode::IsAllowedKey — declared on the base
-// (translateCode.h), bodied here so the gate can ask GetCodeStyle
-// without forcing translateCode.cpp to include compileCode.h. The
-// include chain stays one-way (compile → translate). In CES, block-
-// fence keywords (Then / Do / EndIf / EndDo / EndFunction /
-// EndProcedure / EndTry) are filtered out — they have no syntactic
-// place in brace-style sources. VES leaves every keyword in.
-bool ibTranslateCode::IsAllowedKey(int keywordId)
-{
-	if (ibCompileCode::GetCodeStyle() == CODE_CES) {
-		switch (keywordId) {
-			case KEY_THEN:
-			case KEY_DO:
-			case KEY_ENDIF:
-			case KEY_ENDDO:
-			case KEY_ENDFUNCTION:
-			case KEY_ENDPROCEDURE:
-			case KEY_ENDTRY:
-				return false;
-		}
-	}
-	return true;
-}
-
 
 short ibCompileCode::GetCodeStyle()
 {
@@ -277,29 +258,29 @@ void ibCompileCode::SetError(int codeError, const wxString& errorDesc)
 {
 	wxString strFileName, strModuleName, strDocPath; int currPos = 0, currLine = 0;
 
-	if (m_numCurrentCompile >= m_listLexem.size()) {
-		m_numCurrentCompile = m_listLexem.size() - 1;
+	if (m_numCurrentCompile >= m_translateCode.GetLexCount()) {
+		m_numCurrentCompile = m_translateCode.GetLexCount() - 1;
 	}
 
-	if (m_numCurrentCompile >= 0 && m_numCurrentCompile < m_listLexem.size()) {
+	if (m_numCurrentCompile >= 0 && m_numCurrentCompile < m_translateCode.GetLexCount()) {
 
-		strFileName = m_listLexem[m_numCurrentCompile].GetFileName();
-		strModuleName = m_listLexem[m_numCurrentCompile].GetModuleName();
-		strDocPath = m_listLexem[m_numCurrentCompile].GetDocPath();
+		strFileName = m_translateCode.GetLexAt(m_numCurrentCompile).GetFileName();
+		strModuleName = m_translateCode.GetLexAt(m_numCurrentCompile).GetModuleName();
+		strDocPath = m_translateCode.GetLexAt(m_numCurrentCompile).GetDocPath();
 
-		if (m_listLexem[m_numCurrentCompile].m_lexType != ENDPROGRAM) {
-			currLine = m_listLexem[m_numCurrentCompile].GetLine();
-			currPos = m_listLexem[m_numCurrentCompile].EndPos();
+		if (m_translateCode.GetLexAt(m_numCurrentCompile).m_lexType != ENDPROGRAM) {
+			currLine = m_translateCode.GetLexAt(m_numCurrentCompile).GetLine();
+			currPos = m_translateCode.GetLexAt(m_numCurrentCompile).EndPos();
 		}
 		else {
-			currLine = m_listLexem[m_numCurrentCompile - 1].GetLine();
-			currPos = m_listLexem[m_numCurrentCompile - 1].EndPos();
+			currLine = m_translateCode.GetLexAt(m_numCurrentCompile - 1).GetLine();
+			currPos = m_translateCode.GetLexAt(m_numCurrentCompile - 1).EndPos();
 		}
 	}
 
-	ibTranslateCode::SetError(codeError,
+	DoSetError(codeError,
 		strFileName, strModuleName, strDocPath,
-		currPos, currLine,
+		m_translateCode, currPos, currLine,
 		errorDesc);
 }
 
@@ -322,7 +303,7 @@ void ibCompileCode::SetError(int nErr, const wxUniChar& c)
 
 void ibCompileCode::DoSetError(int codeError,
 	const wxString& strFileName, const wxString& strModuleName, const wxString& strDocPath,
-	unsigned int currPos, unsigned int currLine,
+	const ibTranslateCode& translateCode, unsigned int currPos, unsigned int currLine,
 	const wxString& strErrorDesc) const
 {
 	// ⭐⭐ THE SENTENCE IS KEPT EITHER WAY — this is where refusals accumulate. It used to travel on
@@ -345,7 +326,7 @@ void ibCompileCode::DoSetError(int codeError,
 		return;
 
 	const wxString& strCodeError =
-		ibBackendException::FindErrorCodeLine(m_strBuffer, currPos);
+		ibBackendException::FindErrorCodeLine(translateCode.GetBuffer(), currPos);
 
 	ibBackendException::ProcessError(
 		strFileName,
@@ -353,6 +334,23 @@ void ibCompileCode::DoSetError(int codeError,
 		currPos, currLine,
 		strCodeError, codeError, strErrorDesc
 	);
+}
+
+// The translator reads on past what it could not read; here each refusal becomes the compile's.
+bool ibCompileCode::PrepareLexem()
+{
+	m_translateCode.SetCodeStyle(GetCodeStyle());
+
+	const bool prepared = m_translateCode.PrepareLexem();
+	for (size_t i = 0; i < m_translateCode.GetRefusalCount(); ++i) {
+		const ibTranslateRefusal& refusal = m_translateCode.GetRefusalAt(i);
+		const ibTranslateCode& translateCode = *refusal.m_translateCode;
+		DoSetError(refusal.m_codeError,
+			translateCode.GetFileName(), translateCode.GetModuleName(), translateCode.GetDocPath(),
+			translateCode, refusal.m_currPos, refusal.m_currLine,
+			refusal.m_errorDesc);
+	}
+	return prepared;
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -365,18 +363,18 @@ void ibCompileCode::DoSetError(int codeError,
 
 void ibCompileCode::AddLineInfo(ibByteUnit& code)
 {
-	code.m_strModuleName = m_strModuleName;
-	code.m_strDocPath = m_strDocPath;
-	code.m_strFileName = m_strFileName;
+	code.m_strModuleName = m_translateCode.GetModuleName();
+	code.m_strDocPath = m_translateCode.GetDocPath();
+	code.m_strFileName = m_translateCode.GetFileName();
 
-	if (m_numCurrentCompile >= 0 && m_numCurrentCompile < m_listLexem.size()) {
-		if (m_listLexem[m_numCurrentCompile].m_lexType != ENDPROGRAM) {
-			code.m_strModuleName = m_listLexem[m_numCurrentCompile].GetModuleName();
-			code.m_strDocPath = m_listLexem[m_numCurrentCompile].GetDocPath();
-			code.m_strFileName = m_listLexem[m_numCurrentCompile].GetFileName();
+	if (m_numCurrentCompile >= 0 && m_numCurrentCompile < m_translateCode.GetLexCount()) {
+		if (m_translateCode.GetLexAt(m_numCurrentCompile).m_lexType != ENDPROGRAM) {
+			code.m_strModuleName = m_translateCode.GetLexAt(m_numCurrentCompile).GetModuleName();
+			code.m_strDocPath = m_translateCode.GetLexAt(m_numCurrentCompile).GetDocPath();
+			code.m_strFileName = m_translateCode.GetLexAt(m_numCurrentCompile).GetFileName();
 		}
-		code.m_numString = m_listLexem[m_numCurrentCompile].m_numString;
-		code.m_numLine = m_listLexem[m_numCurrentCompile].m_numLine;
+		code.m_numString = m_translateCode.GetLexAt(m_numCurrentCompile).m_numString;
+		code.m_numLine = m_translateCode.GetLexAt(m_numCurrentCompile).m_numLine;
 	}
 }
 
@@ -390,8 +388,8 @@ void ibCompileCode::AddLineInfo(ibByteUnit& code)
 
 const ibLexem& ibCompileCode::GetLexem()
 {
-	if (m_numCurrentCompile + 1 < m_listLexem.size())
-		return m_listLexem[++m_numCurrentCompile];
+	if (m_numCurrentCompile + 1 < m_translateCode.GetLexCount())
+		return m_translateCode.GetLexAt(++m_numCurrentCompile);
 	return gs_nullLexem;
 }
 
@@ -461,8 +459,8 @@ void ibCompileCode::GETDelimeter(const wxUniChar& c)
 
 bool ibCompileCode::IsKeyWord(int k)
 {
-	if (m_numCurrentCompile + 1 < m_listLexem.size()) {
-		const ibLexem& lex = m_listLexem[m_numCurrentCompile];
+	if (m_numCurrentCompile + 1 < m_translateCode.GetLexCount()) {
+		const ibLexem& lex = m_translateCode.GetLexAt(m_numCurrentCompile);
 		if (lex.m_lexType == KEYWORD && lex.m_numData == k)
 			return true;
 	}
@@ -479,8 +477,8 @@ bool ibCompileCode::IsKeyWord(int k)
 
 bool ibCompileCode::IsNextKeyWord(int k)
 {
-	if (m_numCurrentCompile + 1 < m_listLexem.size()) {
-		const ibLexem& lex = m_listLexem[m_numCurrentCompile + 1];
+	if (m_numCurrentCompile + 1 < m_translateCode.GetLexCount()) {
+		const ibLexem& lex = m_translateCode.GetLexAt(m_numCurrentCompile + 1);
 		if (lex.m_lexType == KEYWORD && k == lex.m_numData)
 			return true;
 	}
@@ -497,8 +495,8 @@ bool ibCompileCode::IsNextKeyWord(int k)
 
 bool ibCompileCode::IsDelimeter(const wxUniChar& c)
 {
-	if (m_numCurrentCompile + 1 < m_listLexem.size()) {
-		const ibLexem& lex = m_listLexem[m_numCurrentCompile];
+	if (m_numCurrentCompile + 1 < m_translateCode.GetLexCount()) {
+		const ibLexem& lex = m_translateCode.GetLexAt(m_numCurrentCompile);
 		if (lex.m_lexType == DELIMITER && c == lex.m_numData)
 			return true;
 	}
@@ -515,8 +513,8 @@ bool ibCompileCode::IsDelimeter(const wxUniChar& c)
 
 bool ibCompileCode::IsNextDelimeter(const wxUniChar& c)
 {
-	if (m_numCurrentCompile + 1 < m_listLexem.size()) {
-		const ibLexem& lex = m_listLexem[m_numCurrentCompile + 1];
+	if (m_numCurrentCompile + 1 < m_translateCode.GetLexCount()) {
+		const ibLexem& lex = m_translateCode.GetLexAt(m_numCurrentCompile + 1);
 		if (lex.m_lexType == DELIMITER && c == lex.m_numData)
 			return true;
 	}
@@ -617,11 +615,11 @@ ibValue ibCompileCode::GETConstant()
 
 		// change sign for minus
 		if (iNumRequire == -1) {
-			lex.m_valData.m_fData = -lex.m_valData.m_fData;
+			lex.m_valData = ibLexValue(-lex.m_valData.GetNumber());
 		}
 	}
 
-	return lex.m_valData;
+	return ibValue(lex.m_valData);
 }
 
 // getting the number with a string constant (to determine the method number)
@@ -882,7 +880,7 @@ bool ibCompileCode::IsTypeVar(const wxString& strType)
 	// Array. Deciding on the type name alone was safe while five reserved words
 	// qualified, and stops being safe the moment every registered class does.
 	const int first = m_numCurrentCompile + 1;
-	const int count = static_cast<int>(m_listLexem.size());
+	const int count = static_cast<int>(m_translateCode.GetLexCount());
 	if (first + 1 >= count)
 		return false;
 
@@ -891,20 +889,20 @@ bool ibCompileCode::IsTypeVar(const wxString& strType)
 	// (CatalogRef)", measured 2026-09-17). `A.B name` is nothing else in the language — two expressions do not
 	// stand side by side — so the shape is a declaration, and GetTypeVar names a type the registry does not know.
 	if (first + 3 < count
-	 && m_listLexem[first].m_lexType == IDENTIFIER
-	 && m_listLexem[first + 1].m_lexType == DELIMITER && m_listLexem[first + 1].m_numData == '.'
-	 && m_listLexem[first + 2].m_lexType == IDENTIFIER
-	 && m_listLexem[first + 3].m_lexType == IDENTIFIER)
+	 && m_translateCode.GetLexAt(first).m_lexType == IDENTIFIER
+	 && m_translateCode.GetLexAt(first + 1).m_lexType == DELIMITER && m_translateCode.GetLexAt(first + 1).m_numData == '.'
+	 && m_translateCode.GetLexAt(first + 2).m_lexType == IDENTIFIER
+	 && m_translateCode.GetLexAt(first + 3).m_lexType == IDENTIFIER)
 		return true;
 
-	if (m_listLexem[first].m_lexType != IDENTIFIER
-	 || m_listLexem[first + 1].m_lexType != IDENTIFIER)
+	if (m_translateCode.GetLexAt(first).m_lexType != IDENTIFIER
+	 || m_translateCode.GetLexAt(first + 1).m_lexType != IDENTIFIER)
 		return false;
 
 	// `AnyRef`, `CatalogRef`, `AnyControl` need no special case: they are
 	// REGISTERED types like any other (typeAny.cpp, metaCtor.h), differing only in
 	// that they create nothing and admit a whole family.
-	return ibValue::IsRegisterCtor(m_listLexem[first].m_strData);
+	return ibValue::IsRegisterCtor(m_translateCode.GetLexAt(first).m_strData);
 }
 
 ibClassID ibCompileCode::GetTypeVar(const wxString& strType)
@@ -1300,7 +1298,7 @@ bool ibCompileCode::CompileModule()
 			fn.m_parentRef = static_cast<long>(std::distance(m_cByteCode.m_listVar.begin(), pIt));
 	}
 
-	if (m_numCurrentCompile + 1 < m_listLexem.size() - 1) {
+	if (m_numCurrentCompile + 1 < m_translateCode.GetLexCount() - 1) {
 		SetError(ERROR_END_PROGRAM);
 		return false;
 	}
@@ -1502,32 +1500,20 @@ bool ibCompileCode::CompileFunction(ibCompileContext* context)
 	const wxString& strFuncName = createdFunction->m_strRealName;
 	const wxString& strFuncRealName = createdFunction->m_strRealName;
 
-	// Ancestor-chain dedup: declaration cannot collide with an
-	// exported function visible from any enclosing scope. Walk
-	// up via m_parentContext; on collision rewind to errorPlace
-	// (position right after the function name in the source) so
-	// the error highlight points at the conflicting name.
-	int numParent = 0;
-	ibCompileContext* pCurContext = context;
-	while (pCurContext != nullptr) {
-		numParent++;
-		if (numParent > MAX_OBJECTS_LEVEL) {
-			ibValueSystemFunction::Message(pCurContext->m_compileModule->GetModuleName());
-			if (numParent > 2 * MAX_OBJECTS_LEVEL) {
-				ibBackendCoreException::Error(_("Recursive call of modules!"));
-			}
-		}
-
+	// A second declaration in THIS module collides. A function of the same
+	// name in a parent module does not: an object module and its manager are
+	// different methods, and the object's own declaration shadows the
+	// manager's export. The call inside this module sees this declaration.
+	// The highlight stays on the name (errorPlace is the token after it).
+	{
 		std::shared_ptr<ibCompileContext::ibFunction> foundedFunc = nullptr;
-		if (pCurContext->FindFunction(strFuncName, foundedFunc)) { // found
+		if (context->FindFunction(strFuncName, foundedFunc)) {
 			if (foundedFunc != createdFunction && foundedFunc->IsCrossBcVisible()) {
 				m_numCurrentCompile = errorPlace;
 				SetError(ERROR_DEF_FUNCTION, strFuncRealName);
 				return false;
 			}
 		}
-
-		pCurContext = pCurContext->m_parentContext;
 	}
 
 	// Upsert into the vector (was map subscript assign): replace a same-named
@@ -1584,9 +1570,10 @@ bool ibCompileCode::ParseFunctionSignature(ibCompileContext* context,
 
 	wxString strShortDescription;
 	const int numLine = lex.m_numLine;
-	int numRes = m_strBuffer.find('\n', lex.m_numLine);
+	const wxString strBuffer = m_translateCode.GetBuffer();
+	int numRes = strBuffer.find('\n', lex.m_numLine);
 	if (numRes >= 0) {
-		strShortDescription = m_strBuffer.substr(lex.m_numLine, numRes - lex.m_numLine - 1);
+		strShortDescription = strBuffer.substr(lex.m_numLine, numRes - lex.m_numLine - 1);
 		numRes = strShortDescription.find_first_of('/');
 		if (numRes > 0) {
 			if (strShortDescription[numRes - 1] == '/') { // so this is a comment
@@ -1857,9 +1844,9 @@ bool ibCompileCode::EmitFunctionBody(ibCompileContext* /*context*/,
 	// CompileBlock CONSUMES the `}` that closes a body, so resting anywhere else means the text ran
 	// out first.
 	const auto bodyWasClosed = [this]() {
-		if (m_numCurrentCompile < 0 || m_numCurrentCompile >= (int)m_listLexem.size())
+		if (m_numCurrentCompile < 0 || m_numCurrentCompile >= (int)m_translateCode.GetLexCount())
 			return false;
-		const ibLexem& last = m_listLexem[(size_t)m_numCurrentCompile];
+		const ibLexem& last = m_translateCode.GetLexAt((size_t)m_numCurrentCompile);
 		if (last.m_lexType == DELIMITER)
 			return last.m_numData == wxT('}');
 		return last.m_lexType == KEYWORD
@@ -2032,7 +2019,7 @@ ibParamUnit ibCompileCode::CompileLambdaExpression(ibCompileContext* context)
 		// mojibake, and a diagnostic nobody can read is worse than a plainer one.
 		ibJournalInfo(wxT("linq"), wxT("lambda `%s` at %d: %s"),
 			createdFunction->m_listParam[0].m_strName,
-			(int)m_listLexem[lambdaBodyFrom].m_numString,
+			(int)m_translateCode.GetLexAt(lambdaBodyFrom).m_numString,
 			tree ? wxT("query tree recorded: ") + ibDescribeQueryAst(tree)
 				: wxString::Format(wxT("runs in RAM: %s"),
 					refused.IsEmpty() ? wxString(wxT("no query tree")) : refused));
@@ -3424,14 +3411,14 @@ int ibCompileCode::FindForeachHeaderEnd(int at) const
 		return wxNOT_FOUND;
 
 	const auto isDelim = [&](size_t i, wxUniChar c) {
-		return i < m_listLexem.size() && m_listLexem[i].m_lexType == DELIMITER
-			&& (wxUniChar)m_listLexem[i].m_numData == c;
+		return i < m_translateCode.GetLexCount() && m_translateCode.GetLexAt(i).m_lexType == DELIMITER
+			&& (wxUniChar)m_translateCode.GetLexAt(i).m_numData == c;
 	};
 
 	int depth = 0;
-	for (size_t i = (size_t)at + 1; i < m_listLexem.size(); ++i) {
+	for (size_t i = (size_t)at + 1; i < m_translateCode.GetLexCount(); ++i) {
 
-		if (m_listLexem[i].m_lexType == ENDPROGRAM)
+		if (m_translateCode.GetLexAt(i).m_lexType == ENDPROGRAM)
 			break;
 
 		if (isDelim(i, wxT('(')) || isDelim(i, wxT('['))) { ++depth; continue; }
@@ -3443,7 +3430,7 @@ int ibCompileCode::FindForeachHeaderEnd(int at) const
 			continue;
 		}
 		if (depth == 0 && GetCodeStyle() != CODE_CES
-			&& m_listLexem[i].m_lexType == KEYWORD && m_listLexem[i].m_numData == KEY_DO)
+			&& m_translateCode.GetLexAt(i).m_lexType == KEYWORD && m_translateCode.GetLexAt(i).m_numData == KEY_DO)
 			return (int)i;
 	}
 	return wxNOT_FOUND;
@@ -3539,6 +3526,13 @@ bool ibCompileCode::CompileForeach(ibCompileContext* context)
 
 bool ibCompileCode::CompileException(ibCompileContext* context)
 {
+	// A Try inside a Try is another compile frame. The same ceiling an
+	// expression already has: the text is refused, the stack is not.
+	if (ibFiber::StackLow()) {
+		SetError(ERROR_EXPRESSION,
+			_("it is nested deeper than the stack allows - split it into steps"));
+		return false;
+	}
 	GETKeyWord(KEY_TRY);
 	ibByteUnit code1;
 	AddLineInfo(code1);
@@ -3644,6 +3638,13 @@ ibParamUnit ibCompileCode::GetCallFunction(ibCompileContext* context, const wxSt
 
 
 	code.m_numOper = OPER_GOTO;// jump to the end of the bytecode where the expanded call will be made
+	// The call itself is appended at the end of the module, so this jump leaves
+	// whatever try contains it. A jump to a line outside the try drops the handler
+	// (procUnit, OPER_GOTO). The return jump comes back in, but the handler is
+	// already gone, and an exception from a function declared later is not caught.
+	// param2 stays 0 on every other goto. The interpreter keeps the handler when
+	// this one is set. No new opcode: the operand was already stored, and it was 0.
+	code.m_param2.m_numIndex = 1;
 	m_cByteCode.m_listCode.emplace_back(std::move(code));
 
 	ibParamUnit& puRetValue = callFunc->m_puRetValue;
@@ -3702,6 +3703,13 @@ ibParamUnit ibCompileCode::GetExpression(ibCompileContext* context, int nPriorit
 	if (ts_expressionDepth > gs_maxExpressionDepth) {
 		SetError(ERROR_EXPRESSION, wxString::Format(
 			_("it is nested deeper than %d levels - split it into steps"), gs_maxExpressionDepth));
+		return ibParamUnit();
+	}
+	// The ceiling above is what a module sees. This is the overflow past
+	// it: the frame is already on the stack, and another level would not fit.
+	if (ibFiber::StackLow()) {
+		SetError(ERROR_EXPRESSION,
+			_("it is nested deeper than the stack allows - split it into steps"));
 		return ibParamUnit();
 	}
 
@@ -3891,13 +3899,13 @@ ibParamUnit ibCompileCode::GetExpression(ibCompileContext* context, int nPriorit
 		// array GET-temps (`obj.a++`, `arr[i]++`) fall through to a normal read,
 		// and `a - -b` (spaced) is not mistaken for `a--`.
 		wxUniChar incOp = 0;
-		if (m_numCurrentCompile + 2 < m_listLexem.size()
-			&& m_listLexem[m_numCurrentCompile + 1].m_lexType == DELIMITER
-			&& m_listLexem[m_numCurrentCompile + 2].m_lexType == DELIMITER
-			&& (m_listLexem[m_numCurrentCompile + 1].m_numData == '+' || m_listLexem[m_numCurrentCompile + 1].m_numData == '-')
-			&& m_listLexem[m_numCurrentCompile + 1].m_numData == m_listLexem[m_numCurrentCompile + 2].m_numData
-			&& m_listLexem[m_numCurrentCompile + 2].m_numString == m_listLexem[m_numCurrentCompile + 1].m_numString + 1)
-			incOp = (wxUniChar)m_listLexem[m_numCurrentCompile + 1].m_numData;
+		if (m_numCurrentCompile + 2 < m_translateCode.GetLexCount()
+			&& m_translateCode.GetLexAt(m_numCurrentCompile + 1).m_lexType == DELIMITER
+			&& m_translateCode.GetLexAt(m_numCurrentCompile + 2).m_lexType == DELIMITER
+			&& (m_translateCode.GetLexAt(m_numCurrentCompile + 1).m_numData == '+' || m_translateCode.GetLexAt(m_numCurrentCompile + 1).m_numData == '-')
+			&& m_translateCode.GetLexAt(m_numCurrentCompile + 1).m_numData == m_translateCode.GetLexAt(m_numCurrentCompile + 2).m_numData
+			&& m_translateCode.GetLexAt(m_numCurrentCompile + 2).m_numString == m_translateCode.GetLexAt(m_numCurrentCompile + 1).m_numString + 1)
+			incOp = (wxUniChar)m_translateCode.GetLexAt(m_numCurrentCompile + 1).m_numData;
 
 		if (incOp != 0) {
 			const wxString strRealName = lex.m_valData.GetString();
@@ -3929,7 +3937,7 @@ ibParamUnit ibCompileCode::GetExpression(ibCompileContext* context, int nPriorit
 		}
 	}
 	else if (lex.m_lexType == CONSTANT) {
-		variable = FindConst(lex.m_valData);
+		variable = FindConst(ibValue(lex.m_valData));
 	}
 	else if ((lex.m_lexType == DELIMITER && lex.m_numData == '+') || (lex.m_lexType == DELIMITER && lex.m_numData == '-')) {
 
@@ -3938,10 +3946,10 @@ ibParamUnit ibCompileCode::GetExpression(ibCompileContext* context, int nPriorit
 		// else `++x` parses as `+(+x)` and silently no-ops. Require the two
 		// signs ADJACENT in source (m_numString) so `a - -b` (spaced) stays a
 		// binary minus + unary minus, not a phantom `a--`.
-		if (m_numCurrentCompile + 1 < m_listLexem.size()
-			&& m_listLexem[m_numCurrentCompile + 1].m_lexType == DELIMITER
-			&& m_listLexem[m_numCurrentCompile + 1].m_numData == lex.m_numData
-			&& m_listLexem[m_numCurrentCompile + 1].m_numString == m_listLexem[m_numCurrentCompile].m_numString + 1) {
+		if (m_numCurrentCompile + 1 < m_translateCode.GetLexCount()
+			&& m_translateCode.GetLexAt(m_numCurrentCompile + 1).m_lexType == DELIMITER
+			&& m_translateCode.GetLexAt(m_numCurrentCompile + 1).m_numData == lex.m_numData
+			&& m_translateCode.GetLexAt(m_numCurrentCompile + 1).m_numString == m_translateCode.GetLexAt(m_numCurrentCompile).m_numString + 1) {
 			const wxUniChar incOp = lex.m_numData;
 			GETDelimeter(incOp); // consume the second +/-
 			const wxString strRealName = GETIdentifier(true); // target — a bare variable
@@ -4114,11 +4122,93 @@ delimOperation:
 				else if (next_lex.m_numData == KEY_MOD) {
 					SetOper(OPER_MOD);
 				}
-				else if (next_lex.m_numData == KEY_AND) {
-					SetOper(OPER_AND);
-				}
-				else if (next_lex.m_numData == KEY_OR) {
-					SetOper(OPER_OR);
+				// ⭐⭐ `and` / `or` DECIDE BEFORE THE RIGHT SIDE RUNS. Both operands used to be
+				// compiled, and run, and only then combined: `u <> Undefined and u.Property("x")`
+				// raised on Undefined, which is the guard 1C writes everywhere. Same shape as
+				// `?(cond, a, b)`: test the left, jump over the right when it cannot change the
+				// answer. AND skips a false left; OR skips a true left.
+				//
+				// The join is still one OPER_AND / OPER_OR writing the result. A query reads that
+				// instruction back as the logical operator. The cell it reads on the right is filled
+				// with the answer a skipped side would have given (false for AND, true for OR) and
+				// overwritten only by the path that actually evaluates the right operand — so the
+				// last writer of that cell, which is what the query walk finds, is the real operand.
+				else if (next_lex.m_numData == KEY_AND || next_lex.m_numData == KEY_OR) {
+					const bool isOr = next_lex.m_numData == KEY_OR;
+
+					ibParamUnit result = context->CreateVariable();
+					result.m_clsid = g_valueBooleanCLSID;
+					ibParamUnit rhsSlot = context->CreateVariable();
+
+					const ibValue decisive(isOr);
+					{
+						ibByteUnit letDef;
+						AddLineInfo(letDef);
+						letDef.m_numOper = OPER_LET;
+						letDef.m_param1 = rhsSlot;
+						letDef.m_param2 = FindConst(decisive);
+						m_cByteCode.m_listCode.emplace_back(std::move(letDef));
+					}
+
+					code.m_numOper = OPER_IF;
+					code.m_param1 = variable;
+					CorrectTypeDef(variable);
+					// A definite false skips the right side of `and`. SQL NULL does not: UNKNOWN
+					// AND x is not FALSE, and `Not (Null = a And Null = b)` must stay UNKNOWN.
+					// The mark is LINQ_THREE_VALUED_NULL (procUnitLambda.h); OPER_IF reads it
+					// and falls through on NULL. `or` already falls through only on a true left,
+					// and NULL is not true, so its test needs no mark.
+					if (!isOr) {
+						code.m_param4.m_numArray = DEF_VAR_SKIP;
+						code.m_param4.m_numIndex = kAndUnknownMark;
+					}
+					m_cByteCode.m_listCode.emplace_back(std::move(code));
+					const int ifLine = (int)m_cByteCode.m_listCode.size() - 1;
+
+					int gotoLine = -1;
+					if (isOr) {
+						// A true left never enters the right side. A false left jumps to it.
+						ibByteUnit jumpOver;
+						AddLineInfo(jumpOver);
+						jumpOver.m_numOper = OPER_GOTO;
+						m_cByteCode.m_listCode.emplace_back(std::move(jumpOver));
+						gotoLine = (int)m_cByteCode.m_listCode.size() - 1;
+						m_cByteCode.m_listCode[ifLine].m_param2.m_numIndex =
+							(long)m_cByteCode.m_listCode.size();
+					}
+
+					const ibParamUnit right = GetExpression(context, numCurPriority);
+					if (right.m_numArray != DEF_VAR_TEMP && right.m_numArray != DEF_VAR_CONST
+						&& variable.m_clsid == g_valueStringCLSID) {
+						SetError(ERROR_TYPE_OPERATION);
+						return ibParamUnit();
+					}
+					{
+						ibByteUnit letRhs;
+						AddLineInfo(letRhs);
+						letRhs.m_numOper = OPER_LET;
+						letRhs.m_param1 = rhsSlot;
+						letRhs.m_param2 = right;
+						m_cByteCode.m_listCode.emplace_back(std::move(letRhs));
+					}
+
+					if (isOr)
+						m_cByteCode.m_listCode[gotoLine].m_param1.m_numIndex =
+							(long)m_cByteCode.m_listCode.size();
+					else
+						m_cByteCode.m_listCode[ifLine].m_param2.m_numIndex =
+							(long)m_cByteCode.m_listCode.size();
+
+					ibByteUnit join;
+					AddLineInfo(join);
+					join.m_numOper = isOr ? OPER_OR : OPER_AND;
+					join.m_param1 = result;
+					join.m_param2 = variable;
+					join.m_param3 = rhsSlot;
+					m_cByteCode.m_listCode.emplace_back(std::move(join));
+
+					variable = result;
+					goto delimOperation;
 				}
 				else if (next_lex.m_numData == '>') {
 					SetOper(OPER_GT);
@@ -4238,7 +4328,7 @@ void ibCompileCode::SetParent(ibCompileCode* setParent)
 		AddDependency(&setParent->m_cByteCode);
 	}
 
-	OnSetParent(setParent);
+	m_translateCode.OnSetParent(setParent != nullptr ? &setParent->m_translateCode : nullptr);
 }
 
 #pragma warning(pop)

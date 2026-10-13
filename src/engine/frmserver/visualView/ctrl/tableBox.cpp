@@ -415,8 +415,8 @@ m_modelView(nullptr), m_nextRowHandle(1), m_currentColumn(0), m_clientRow(0), m_
 	m_propertySource->SetValue(ibTypeDescription(g_valueTableCLSID));
 
 	//set default params
-	m_propertyMinSize->SetValue(wxSize(150, 75));
-	m_propertyBG->SetValue(wxColour(255, 255, 255));
+	m_propertyMinSize->SetValue(ibSize(150, 75));
+	m_propertyBG->SetValue(ibColour(255, 255, 255));
 }
 
 ibValueModelTableBox::~ibValueModelTableBox()
@@ -1006,7 +1006,7 @@ bool ibValueModelTableBox::Fetch(const ibDataNode& request, ibDataNode& response
 			const wxString pictureId = wxString::Format(wxT("%llu"), static_cast<unsigned long long>(picture));
 			row.SetValue(wxT("Picture"), pictureId);
 			if (m_sentPictures.insert(picture).second) {
-				const ibServerPicture sentPicture = ibBackendPicture::GetServerPicture(ibPictureDescription(picture));
+				const ibPicture sentPicture =ibBackendPicture::GetServerPicture(ibPictureDescription(picture));
 				if (!sentPicture.IsOk())
 					ibJournalWarning(wxT("client"), wxT("row picture %s has no server picture: the client draws none"), pictureId);
 				if (pictures == nullptr)
@@ -1124,6 +1124,15 @@ bool ibValueModelTableBox::OnClientEvent(ibProtocolEvent event, const ibDataNode
 	}
 	default:
 		return ibValueWindowComposite::OnClientEvent(event, args);
+	}
+}
+
+bool ibValueModelTableBox::IsSubscribed(ibProtocolEvent event) const
+{
+	switch (event) {
+	case ibProtocolEvent::Input: return true;
+	case ibProtocolEvent::Row:   return HasHandler(m_eventSelection);
+	default:                     return ibValueWindowComposite::IsSubscribed(event);
 	}
 }
 

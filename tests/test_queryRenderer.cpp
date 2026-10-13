@@ -369,6 +369,20 @@ TEST(QueryDdlRenderer, Sqlite_CreateTable)
 		"Price_N DECIMAL(18,2), Active_B INTEGER)");
 }
 
+TEST(QueryDdlRenderer, CompositePrimaryKeyIsOneConstraint)
+{
+	const ibDdlStatement table = ibCreateTable(wxT("sys_lock_key"), {
+		ibDdlColumn{ wxT("namespace"), ibTypeString(128), true, true },
+		ibDdlColumn{ wxT("keyHash"),   ibTypeString(64),  true, true },
+	});
+	const std::string expected =
+		"CREATE TABLE sys_lock_key (namespace VARCHAR(128) NOT NULL, keyHash VARCHAR(64) NOT NULL, "
+		"PRIMARY KEY (namespace, keyHash))";
+	EXPECT_EQ(ibQueryRenderer(FbDialect()).RenderDDL(table).ToStdString(), expected);
+	EXPECT_EQ(ibQueryRenderer(PgDialect()).RenderDDL(table).ToStdString(), expected);
+	EXPECT_EQ(ibQueryRenderer(SqliteDialect()).RenderDDL(table).ToStdString(), expected);
+}
+
 TEST(QueryDdlRenderer, Postgres_CreateTable)
 {
 	ibQueryRenderer r(PgDialect());

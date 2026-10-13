@@ -34,6 +34,7 @@ void ibDialogActiveUser::RefreshActiveUserTable()
 		m_activeTable->AppendColumn(_("Started"), wxLIST_FORMAT_LEFT, 120);
 		m_activeTable->AppendColumn(_("Computer"), wxLIST_FORMAT_LEFT, 145);
 		m_activeTable->AppendColumn(_("Session"), wxLIST_FORMAT_LEFT, 0); //hide
+		m_activeTable->AppendColumn(_("State"), wxLIST_FORMAT_LEFT, 160);
 
 		m_activeTable->AssignImageList(imageList, wxIMAGE_LIST_SMALL);
 
@@ -50,6 +51,7 @@ void ibDialogActiveUser::RefreshActiveUserTable()
 			m_activeTable->SetItem(index, 3, arr.GetStartedDate(idx));
 			m_activeTable->SetItem(index, 4, arr.GetComputerName(idx));
 			m_activeTable->SetItem(index, 5, arr.GetSession(idx));
+			m_activeTable->SetItem(index, 6, arr.GetActivity(idx));
 
 			if (current_session == arr.GetSession(idx))
 				m_activeTable->SetItemState(index, wxLIST_STATE_SELECTED | wxLIST_STATE_FOCUSED, wxLIST_STATE_SELECTED | wxLIST_STATE_FOCUSED);

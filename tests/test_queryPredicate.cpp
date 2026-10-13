@@ -9,7 +9,7 @@
 
 #include <gtest/gtest.h>
 #include "backend/compiler/value.h"
-#include "backend/typeDescription.h"
+#include "core/description/typeDescription.h"
 #include "backend/query/queryColumn.h"   // ibBackendQueryColumn
 #include "backend/query/queryable.h"     // ibQueryPredicate / ibQueryCondition / ibQueryPredicateKind
 

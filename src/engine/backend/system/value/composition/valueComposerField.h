@@ -4,10 +4,10 @@
 // The FIELD a composer setting points at — the runtime value behind every condition, sort line
 // and grouping level. Part of the composer's RUNTIME surface (see valueComposerSettings.h for
 // what that surface is and why it is being rebuilt); the DATA it describes lives in
-// backend/compositionDescription.h and knows nothing about this.
+// core/description/compositionDescription.h and knows nothing about this.
 
 #include "backend/compiler/value.h"
-#include "backend/typeDescription.h"
+#include "core/description/typeDescription.h"
 
 
 ////////////////////////////////////////////////////////////////////////////

@@ -96,9 +96,10 @@
 #include <cstdint>
 #include <vector>
 
+#include "backend/backend_exception.h"
 #include "backend/compiler/compileCode.h"
 #include "backend/compiler/compileContext.h"   // CODE_VES / CODE_CES
-#include "backend/compiler/codeDef.h"
+#include "core/compiler/codeDef.h"
 #include "backend/compiler/byteCode.h"
 #include "backend/compiler/value.h"
 
@@ -339,7 +340,10 @@ TEST(CompilerContract, ComparisonAndLogical) {
 		wxT("r = a < b And b > 0 Or a = b;\n")
 		wxT("r = a <> b;\n")
 		wxT("r = a <= b And a >= b;\n"),
-		11249210784232419991ULL);   // 2026-10-09: OPER_ITER removed; later opcodes and TYPE_DELTA shifted
+		15294174076167625395ULL);   // 2026-10-10: and/or short-circuit. `a < b And b > 0 Or a = b`
+		                           // is (a<b) and (b>0), then or (a=b). Each logical op still ends in one
+		                           // OPER_AND/OPER_OR. A false AND jumps over `b > 0` (that IF carries
+		                           // p4(-1,1), so a SQL NULL left does not skip). A true OR jumps over `a = b`.
 }
 
 // `x = a op b` emits ONE opcode writing `x`, not an opcode into a temp and a LET
@@ -458,7 +462,7 @@ TEST(CompilerContract, FunctionsAndForwardReference) {
 		wxT("Procedure Entry()\n")
 		wxT("  var r; r = Caller(3);\n")
 		wxT("EndProcedure\n"),
-		6612097246532263492ULL);   // 2026-10-09: OPER_ITER removed; later opcodes and TYPE_DELTA shifted
+		16592719761311645649ULL); // the outbound forward-call goto marks p2, so a try around it stays
 }
 
 TEST(CompilerContract, TypedParametersAndLocals) {

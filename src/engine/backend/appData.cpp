@@ -1228,14 +1228,41 @@ bool ibApplicationInstance::AuthenticateUser(const wxString& strUserName,
                                           const wxString& strUserPassword,
                                           ibUserInfo& outInfo)
 {
-	// Open-access mode — no sys_user rows at all AND caller did not
-	// supply a user name. Historical behaviour is "pass through";
-	// outInfo stays default-constructed (IsOk() false).
-	if (strUserName.IsEmpty() && !ibUserInfo::HasAny())
-		return true;
+	// An empty name used to be accepted whenever HasAny() came back false,
+	// and HasAny() came back false both for an empty table and for a
+	// query that threw. An empty list that was actually read is open
+	// access on every host, including the application server and the web
+	// server. A list that could not be read is a refusal.
+	if (strUserName.IsEmpty()) {
+		bool noUsers = false;
+		try {
+			noUsers = !ibUserInfo::HasAny();
+		}
+		catch (const ibBackendInterruptException&) {
+			throw;
+		}
+		catch (const ibCoreException& err) {
+			try {
+				if (ibLog) ibLog->Audit(wxT("auth"), wxT("login_failed"),
+				                        wxString::Format(wxT("reason=user_list_unreadable detail=%s"), err.GetErrorDescription()));
+			} catch (...) {}
+			return false;
+		}
+
+		if (noUsers) {
+			try {
+				if (ibLog) ibLog->Audit(wxT("auth"), wxT("open_access"), wxT("reason=empty_user_list"));
+			} catch (...) {}
+			return true;
+		}
+	}
 
 	outInfo = ibUserInfo::Read(strUserName);
 	if (!outInfo.IsOk()) {
+		// An unknown name refuses no sooner than a wrong password: refused before any hashing, it
+		// answered hundreds of milliseconds faster and told which names exist. Hash runs the same
+		// PBKDF2 that Verify runs on a stored hash; its answer is thrown away.
+		(void)ibPasswordHash::Hash(strUserPassword);
 		try {
 			if (ibLog) ibLog->Audit(wxT("auth"), wxT("login_failed"),
 			                        wxString::Format(wxT("user=%s reason=unknown"), strUserName));
@@ -1320,6 +1347,63 @@ bool ibApplicationInstance::Login(const wxString& strUserName,
 #include <wx/mstream.h>
 #include <wx/filename.h>
 
+#include "core/fileSystem/fs.h"   // ibReaderMemory — a user/data member is walked before the base is touched
+
+namespace {
+
+bool ReadZipEntry(wxZipInputStream& zis, wxZipEntry& entry, wxMemoryBuffer& out)
+{
+	if (!zis.OpenEntry(entry))
+		return false;
+
+	wxMemoryOutputStream fos;
+	if (!fos.IsOk())
+		return false;
+
+	zis.Read(fos);
+	const wxStreamError err = zis.GetLastError();
+	if (err != wxSTREAM_NO_ERROR && err != wxSTREAM_EOF)
+		return false;
+
+	const size_t n = fos.GetSize();
+	out.SetDataLen(0);
+	if (n > 0)
+		fos.CopyTo(out.GetAppendBuf(n), n);
+	out.SetDataLen(n);
+	return true;
+}
+
+// The same walk LoadUserInfoFromBuffer uses. A member whose chunk header does
+// not fit is a truncated backup: false, and the caller has not cleared anything.
+// An empty member is a real backup (no users, or no rows).
+bool BufferWalks(const wxMemoryBuffer& buffer)
+{
+	if (buffer.GetDataLen() == 0)
+		return true;
+
+	try {
+		ibReaderMemory reader(buffer);
+		u64 id = 0;
+		ibReaderMemory* last = nullptr;
+		while (!reader.eof()) {
+			// The iterator closes `last` itself before reading the next header.
+			ibReaderMemory* chunk = reader.open_chunk_iterator(id, last);
+			last = nullptr;
+			if (chunk == nullptr)
+				break;
+			last = chunk;
+		}
+		if (last != nullptr)
+			last->close();
+		return true;
+	}
+	catch (const ibCoreException&) {
+		return false;
+	}
+}
+
+} // namespace
+
 bool ibApplicationInstance::LoadDatabase(const wxString& strFullPath)
 {
 	wxFileInputStream fis(strFullPath);
@@ -1328,107 +1412,130 @@ bool ibApplicationInstance::LoadDatabase(const wxString& strFullPath)
 		return false;
 	}
 
-	if (!ClearDatabase() && !ClearTableUser())
-		return false;
-
+	// The archive is read to the end, and refused, before either clear. An empty
+	// zip, a file that is not a zip, or a backup this build cannot read used to
+	// drop the configuration tables and every user, then return success.
 	wxZipInputStream zis(fis);
+	if (!zis.IsOk()) {
+		ibJournalError(wxT("appdata"), "The file '%s' is not a readable archive. Nothing was cleared.", strFullPath);
+		return false;
+	}
+
+	wxMemoryBuffer config;
+	wxMemoryBuffer user;
+	wxMemoryBuffer data;
+	bool sawConfig = false;
+	bool sawUser = false;
+	bool sawData = false;
+	bool duplicate = false;
+	bool dataBeforeConfig = false;
+
 	std::unique_ptr<wxZipEntry> entry;
-
-	// The entries are READ IN FILE ORDER, and the order carries meaning: rows can only be written once
-	// the structure holding them exists. Our own writer emits config before data, so this is a guard
-	// against a file that says otherwise — answered with a refusal rather than with rows quietly
-	// landing in whatever structure the database happened to have.
-	bool configLoaded = false;
-
-	// Iterate through all entries in the zip file
 	while (entry.reset(zis.GetNextEntry()), entry) {
+		if (entry->IsDir())
+			continue;
 
-		if (!entry->IsDir() && entry->GetName() == wxT("config")) {
+		const wxString name = entry->GetName();
+		const bool isConfig = name == wxT("config");
+		const bool isUser = name == wxT("user");
+		const bool isData = name == wxT("data");
+		if (!isConfig && !isUser && !isData)
+			continue;
 
-			// Open the entry for reading and write its data to a new file
-			if (zis.OpenEntry(*entry)) {
-				wxMemoryOutputStream fos;
-				if (fos.IsOk()) {
-					zis.Read(fos); // Read from zip stream, write to file stream
-				}
-				else {
-					return false;
-				}
-
-				//load configuration 
-				wxMemoryBuffer buffer;
-				fos.CopyTo(buffer.GetAppendBuf(fos.GetSize()), fos.GetSize());
-				buffer.SetDataLen(fos.GetSize());
-
-				// LoadConfigFromBuffer already RUNs the loaded tree (the
-				// ibMetaDataConfiguration override) — no separate RunDatabase
-				// here, that would be a double-run (asserts !m_configOpened).
-				if (!activeMetaData->LoadConfigFromBuffer(buffer))
-					return false;
-
-				// ⭐⭐ THE STRUCTURE IS BUILT FIRST, AND THE LOAD STOPS IF IT WAS NOT.
-				//
-				// This is the whole shape of a load: the file carries the configuration and the rows, so
-				// the configuration is applied — creating the very tables, with the very column ids, the
-				// rows are about to be written into — and only then does `data` arrive. The answer used
-				// to be discarded. A failed apply therefore went unnoticed and the load carried on,
-				// pouring rows into tables that were not there or were still the shape of the database
-				// being overwritten: no rows restored, no word said, and a base left half-replaced.
-				if (!activeMetaData->SaveDatabase(saveConfigFlag)) {
-					ibJournalError(wxT("appdata"),_("The configuration from the file could not be applied - the data was not loaded"));
-					return false;
-				}
-				configLoaded = true;
-			}
+		wxMemoryBuffer buffer;
+		if (!ReadZipEntry(zis, *entry, buffer)) {
+			ibJournalError(wxT("appdata"), "The archive entry '%s' could not be read. Nothing was cleared.", name);
+			return false;
 		}
-		else if (!entry->IsDir() && entry->GetName() == wxT("user")) {
 
-			// Open the entry for reading and write its data to a new file
-			if (zis.OpenEntry(*entry)) {
-				wxMemoryOutputStream fos;
-				if (fos.IsOk()) {
-					zis.Read(fos); // Read from zip stream, write to file stream
-				}
-				else {
-					return false;
-				}
-
-				//load user 
-				wxMemoryBuffer buffer;
-				fos.CopyTo(buffer.GetAppendBuf(fos.GetSize()), fos.GetSize());
-				buffer.SetDataLen(fos.GetSize());
-
-				if (!LoadUserInfoFromBuffer(buffer))
-					return false;
-			}
+		if (isConfig) {
+			duplicate = duplicate || sawConfig;
+			config = buffer;
+			sawConfig = true;
 		}
-		else if (!entry->IsDir() && entry->GetName() == wxT("data")) {
-
-			// Open the entry for reading and write its data to a new file
-			if (zis.OpenEntry(*entry)) {
-				wxMemoryOutputStream fos;
-				if (fos.IsOk()) {
-					zis.Read(fos); // Read from zip stream, write to file stream
-				}
-				else {
-					return false;
-				}
-
-				//load data 
-				wxMemoryBuffer buffer;
-				fos.CopyTo(buffer.GetAppendBuf(fos.GetSize()), fos.GetSize());
-				buffer.SetDataLen(fos.GetSize());
-
-				if (!configLoaded) {
-					ibJournalError(wxT("appdata"),_("The file carries data before the configuration - it cannot be loaded"));
-					return false;
-				}
-
-				if (!activeMetaData->RestoreDataFromBuffer(buffer))
-					return false;
-			}
+		else if (isUser) {
+			duplicate = duplicate || sawUser;
+			user = buffer;
+			sawUser = true;
+		}
+		else {
+			duplicate = duplicate || sawData;
+			if (!sawConfig)
+				dataBeforeConfig = true;
+			data = buffer;
+			sawData = true;
 		}
 	}
+
+	if (duplicate) {
+		ibJournalError(wxT("appdata"), "The archive repeats config, user or data. Nothing was cleared.");
+		return false;
+	}
+
+	// Rows can only be written once the structure holding them exists. Our own
+	// writer emits config before data; a file that says otherwise is refused
+	// rather than landing rows in whatever structure the database already has.
+	if (dataBeforeConfig) {
+		ibJournalError(wxT("appdata"), _("The file carries data before the configuration - it cannot be loaded"));
+		return false;
+	}
+
+	if (!sawConfig || !sawUser || !sawData) {
+		ibJournalError(wxT("appdata"), "The archive must contain config, user and data. Nothing was cleared.");
+		return false;
+	}
+
+	if (!BufferWalks(user) || !BufferWalks(data)) {
+		ibJournalError(wxT("appdata"), "The archive's user or data entry is truncated. Nothing was cleared.");
+		return false;
+	}
+
+	if (activeMetaData == nullptr) {
+		ibJournalError(wxT("appdata"), "There is no configuration to load the file into. Nothing was cleared.");
+		return false;
+	}
+
+	// The configuration is read first by the very reader that applies it below, into a
+	// separate configuration that nothing runs: a blob that reader refuses leaves the
+	// base untouched.
+	try {
+		if (!ibMetaData::MakeShared<ibMetaDataConfigurationFile>()->LoadConfigFromBuffer(config)) {
+			ibJournalError(wxT("appdata"), "The file has no configuration this build can read. Nothing was cleared.");
+			return false;
+		}
+	}
+	catch (const ibCoreException& err) {
+		ibJournalError(wxT("appdata"), "%s Nothing was cleared.", err.GetErrorDescription());
+		return false;
+	}
+
+	// Both clears. The old `&&` ran the user clear only when the schema clear
+	// had already failed, so a restored base kept every user the archive did
+	// not name. A schema clear that fails leaves the users where they were.
+	if (!ClearDatabase())
+		return false;
+	if (!ClearTableUser())
+		CreateTableUser();
+
+	// LoadConfigFromBuffer already RUNs the loaded tree (the
+	// ibMetaDataConfiguration override). No separate RunDatabase here,
+	// that would be a double-run (asserts !m_configOpened).
+	if (!activeMetaData->LoadConfigFromBuffer(config))
+		return false;
+
+	// The configuration is applied before the rows: it creates the tables,
+	// with the column ids, that `data` is about to be written into. A failed
+	// apply stops the load.
+	if (!activeMetaData->SaveDatabase(saveConfigFlag)) {
+		ibJournalError(wxT("appdata"),_("The configuration from the file could not be applied - the data was not loaded"));
+		return false;
+	}
+
+	if (!LoadUserInfoFromBuffer(user))
+		return false;
+
+	if (!activeMetaData->RestoreDataFromBuffer(data))
+		return false;
 
 	return true;
 }
@@ -1448,13 +1555,13 @@ bool ibApplicationInstance::SaveDatabase(const wxString& strFullPath)
 
 	// PutNextEntry sets up the new entry in the archive
 	if (zip.PutNextEntry(wxT("config"))) {
-		//save configuration 
+		//save configuration — a backup without it restores nothing, so it is not written
 		wxMemoryBuffer bufferConfig;
-		if (activeMetaData->SaveConfigToBuffer(bufferConfig)) {
-			// Wrap the content in an input stream to write it easily
-			wxMemoryInputStream contentStream(bufferConfig.GetData(), bufferConfig.GetDataLen());
-			zip.Write(contentStream); // Write the data from the content stream
-		}
+		if (!activeMetaData->SaveConfigToBuffer(bufferConfig))
+			return false;
+		// Wrap the content in an input stream to write it easily
+		wxMemoryInputStream contentStream(bufferConfig.GetData(), bufferConfig.GetDataLen());
+		zip.Write(contentStream); // Write the data from the content stream
 	}
 
 	if (zip.PutNextEntry(wxT("user"))) {

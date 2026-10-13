@@ -3,7 +3,7 @@
 
 #include "frmserver/visualView/ctrl/control.h"
 #include "frmserver/docView/docView.h"   // ibDocument / ibMetaDocument — the doc-parent a form opens under
-#include "backend/sourceDescription.h"   // ibSourceDescription — the binding-path wrapper (Get/SetValueByAttributePath)
+#include "core/description/sourceDescription.h"   // ibSourceDescription — the binding-path wrapper (Get/SetValueByAttributePath)
 #include "backend/backend_command.h"   // ibBackendCommandSender — the form IS-A command-hop source (entry gate)
 
 #include <chrono>   // an attached procedure's interval and due time
@@ -87,8 +87,8 @@ public:
 	const wxString& GetLockBadgeHolder() const { return m_lockBadgeHolder; }
 	void RefreshLockBadge();
 
-	wxColour GetForegroundColour() const { return m_propertyFG->GetValueAsColour(); }
-	wxColour GetBackgroundColour() const { return m_propertyBG->GetValueAsColour(); }
+	ibColour GetForegroundColour() const { return m_propertyFG->GetValueAsColour(); }
+	ibColour GetBackgroundColour() const { return m_propertyBG->GetValueAsColour(); }
 
 	bool IsFormEnabled() const { return m_propertyEnabled->GetValueAsBoolean(); }
 
@@ -597,8 +597,8 @@ private:
 	ibPropertyTString* m_propertyTitle = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryFrame, wxT("Title"), _("Title"),
 		_("The form window's title. Empty: the synonym of the object the form shows (or of the form itself) is used. Can be written per language and changed from code while the form is open."),
 		wxT(""));
-	ibPropertyColour* m_propertyFG = ibPropertyObject::CreateProperty<ibPropertyColour>(m_categoryFrame, wxT("ForegroundColour"), _("Foreground"), _("The form's text colour, inherited by controls that have no colour of their own. Default: the system colour."), wxDefaultStypeFGColour);
-	ibPropertyColour* m_propertyBG = ibPropertyObject::CreateProperty<ibPropertyColour>(m_categoryFrame, wxT("BackgroundColour"), _("Background"), _("The form's background colour. Default: the system colour, which follows the user's theme."), wxDefaultStypeBGColour);
+	ibPropertyColour* m_propertyFG = ibPropertyObject::CreateProperty<ibPropertyColour>(m_categoryFrame, wxT("ForegroundColour"), _("Foreground"), _("The form's text colour, inherited by controls that have no colour of their own. Default: the system colour."), ibDefaultStyleFGColour);
+	ibPropertyColour* m_propertyBG = ibPropertyObject::CreateProperty<ibPropertyColour>(m_categoryFrame, wxT("BackgroundColour"), _("Background"), _("The form's background colour. Default: the system colour, which follows the user's theme."), ibDefaultStyleBGColour);
 	ibPropertyBoolean* m_propertyEnabled = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryFrame, wxT("Enabled"), _("Enabled"), _("Whether the user can interact with the form. Off: every control on it is greyed out and takes no input - a view-only form."), true);
 	ibPropertyCategory* m_categorySizer = ibPropertyObject::CreatePropertyCategory(wxT("Sizer"), _("Sizer"));
 	ibPropertyEnum<ibValueEnumOrient>* m_propertyOrient = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumOrient>>(m_categorySizer, wxT("Orient"), _("Orient"),

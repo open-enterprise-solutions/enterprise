@@ -3,9 +3,11 @@
 
 #include "frmclient/frmclient.h"
 
-#include "frmclient/backend/backend_spreadsheet.h"
+#include "core/spreadsheet/spreadsheetObject.h"
 #include "frmclient/backend/propertyManager/propertyManager.h"
 #include "frmclient/backend/system/value/valueSpreadsheet.h"
+
+#include "protocol/protocol.h"   // ibProtocolComposeState — what the sheet is to its report
 
 static const wxArrayString wxEmptyArrayString;
 
@@ -52,7 +54,7 @@ inline ibSpreadsheetCellDescription::ibFitMode ibFromGridFitMode(ibGridFitMode m
 // that shows a sheet: the grid sizes its rows by it and the printout lays its pages out by it, so the paper
 // keeps the rows the screen has. `dc` is a SCREEN's: a row height is drawn as that many screen pixels, by the
 // grid and by the printout alike; the text is read in `langCode`, as the showing side reads it.
-FRMCLIENT_API int ibSpreadsheetRowHeight(const ibBackendSpreadsheetObject& doc, int row, wxDC& dc,
+FRMCLIENT_API int ibSpreadsheetRowHeight(const ibSpreadsheetObject& doc, int row, wxDC& dc,
 	const wxString& langCode = wxEmptyString);
 
 // ⭐ THE WIDTH THE COLUMN'S CONTENT ASKS FOR — the widest thing written in it, plus what the cell's chrome
@@ -60,12 +62,12 @@ FRMCLIENT_API int ibSpreadsheetRowHeight(const ibBackendSpreadsheetObject& doc, 
 // width, because what does not fit is the cell's placement to answer and a width worked out at show time
 // would move the page breaks about (spreadsheetDescription.h, HasColSize). Cells that wrap, cells a merge
 // spans and text on its side are not asked — none of them says what one column should be.
-FRMCLIENT_API int ibSpreadsheetColWidth(const ibBackendSpreadsheetObject& doc, int col, wxDC& dc,
+FRMCLIENT_API int ibSpreadsheetColWidth(const ibSpreadsheetObject& doc, int col, wxDC& dc,
 	const wxString& langCode = wxEmptyString);
 
 class FRMCLIENT_API ibGridEditor : public ibGrid {
 
-	class ibGenericSpreadsheetNotifier : public ibBackendSpreadsheetNotifier {
+	class ibGenericSpreadsheetNotifier : public ibSpreadsheetNotifier {
 	public:
 
 		ibGenericSpreadsheetNotifier(ibGridEditor* view) : m_view(view) {}
@@ -83,11 +85,11 @@ class FRMCLIENT_API ibGridEditor : public ibGrid {
 		// ------ row and col formatting
 		//
 
-		virtual void SetCellBackgroundColour(int row, int col, const wxColour& colour) { GetOrCreateCell(row, col)->SetCellBackgroundColour(row, col, colour, false); }
-		virtual void SetCellTextColour(int row, int col, const wxColour& colour) { GetOrCreateCell(row, col)->SetCellTextColour(row, col, colour, false); }
+		virtual void SetCellBackgroundColour(int row, int col, const ibColour& colour) { GetOrCreateCell(row, col)->SetCellBackgroundColour(row, col, typeConv::ColourToWxColour(colour), false); }
+		virtual void SetCellTextColour(int row, int col, const ibColour& colour) { GetOrCreateCell(row, col)->SetCellTextColour(row, col, typeConv::ColourToWxColour(colour), false); }
 		// What changes the height a row's text needs also marks the row for its automatic height.
 		virtual void SetCellTextOrient(int row, int col, const int orient) { GetOrCreateCell(row, col)->SetCellTextOrient(row, col, orient, false); m_view->RequestAutoRowHeights(row, row); }
-		virtual void SetCellFont(int row, int col, const wxFont& font) { GetOrCreateCell(row, col)->SetCellFont(row, col, font, false); m_view->RequestAutoRowHeights(row, row); }
+		virtual void SetCellFont(int row, int col, const ibFont& font) { GetOrCreateCell(row, col)->SetCellFont(row, col, typeConv::FontToWxFont(font), false); m_view->RequestAutoRowHeights(row, row); }
 		virtual void SetCellAlignment(int row, int col, const int horiz, const int vert) { GetOrCreateCell(row, col)->SetCellAlignment(row, col, horiz, vert, false); }
 		virtual void SetCellBorderLeft(int row, int col, const ibSpreadsheetBorderDescription& desc) {}
 		virtual void SetCellBorderRight(int row, int col, const ibSpreadsheetBorderDescription& desc) {}
@@ -111,18 +113,18 @@ class FRMCLIENT_API ibGridEditor : public ibGrid {
 
 		// ------ cell value accessors
 		//
-		virtual void SetCellValue(int row, int col, const wxString& s) { GetOrCreateCell(row, col)->SetCellValue(row, col, s, false); m_view->RequestAutoRowHeights(row, row); }
+		virtual void SetCellValue(int row, int col, const ibString& s) { GetOrCreateCell(row, col)->SetCellValue(row, col, s, false); m_view->RequestAutoRowHeights(row, row); }
 
 		// ------ area value accessors
 		//
 		virtual void PutArea(
-			const wxObjectDataPtr<class ibBackendSpreadsheetObject>& doc,
+			const std::shared_ptr<ibSpreadsheetObject>& doc,
 			unsigned int groupLevel = 0) override {
 			m_view->PutDocument(doc, groupLevel);
 		}
 
 		virtual void JoinArea(
-			const wxObjectDataPtr<class ibBackendSpreadsheetObject>& doc,
+			const std::shared_ptr<ibSpreadsheetObject>& doc,
 			unsigned int groupLevel = 0) override {
 			m_view->JoinDocument(doc, groupLevel);
 		}
@@ -703,20 +705,20 @@ public:
 	void Copy();
 	void Paste();
 
-	bool AssociateDocument(const wxObjectDataPtr<ibBackendSpreadsheetObject>& doc);
-	bool GetActiveDocument(wxObjectDataPtr<ibBackendSpreadsheetObject>& doc) const;
+	bool AssociateDocument(const std::shared_ptr<ibSpreadsheetObject>& doc);
+	bool GetActiveDocument(std::shared_ptr<ibSpreadsheetObject>& doc) const;
 
 #pragma region file
 
 	bool LoadDocument(const ibSpreadsheetDescription& spreadsheetDesc);
-	bool LoadDocument(const wxObjectDataPtr<ibBackendSpreadsheetObject>& doc);
+	bool LoadDocument(const std::shared_ptr<ibSpreadsheetObject>& doc);
 	bool SaveDocument(ibSpreadsheetDescription& spreadsheetDesc) const;
-	bool SaveDocument(wxObjectDataPtr<ibBackendSpreadsheetObject>& doc) const;
+	bool SaveDocument(std::shared_ptr<ibSpreadsheetObject>& doc) const;
 
-#pragma endregion 
+#pragma endregion
 
-	void PutDocument(const wxObjectDataPtr<ibBackendSpreadsheetObject>& doc, unsigned int groupLevel = 0);
-	void JoinDocument(const wxObjectDataPtr<ibBackendSpreadsheetObject>& doc, unsigned int groupLevel = 0);
+	void PutDocument(const std::shared_ptr<ibSpreadsheetObject>& doc, unsigned int groupLevel = 0);
+	void JoinDocument(const std::shared_ptr<ibSpreadsheetObject>& doc, unsigned int groupLevel = 0);
 
 	// ⭐ AUTOMATIC ROW HEIGHT, APPLIED — the rows without a height of their own, sized to their text
 	// (ibSpreadsheetRowHeight) from the document this editor shows. What is worked out here is never written
@@ -725,7 +727,7 @@ public:
 	void FitAutoRowHeights(int fromRow = 0, int toRow = -1);
 
 	// …and the same, once the document has caught up. A change that arrives through the notifier is told
-	// to the grid BEFORE the document stores it (ibBackendSpreadsheetObject's setters), so the rows are
+	// to the grid BEFORE the document stores it (ibSpreadsheetObject's setters), so the rows are
 	// only marked here and fitted when the window is next idle.
 	void RequestAutoRowHeights(int fromRow, int toRow);
 
@@ -820,14 +822,16 @@ public:
 	void OnIdle(wxIdleEvent& event);
 	void OnSize(wxSizeEvent& event);
 
-	// ⭐ THE SHEET SAYS IT IS BUSY. A report composes on a background run, so the window stays alive
-	// and usable while it does — and a window that looks finished while it is still filling is worse
+	// ⭐ THE SHEET SAYS WHAT IT IS TO ITS REPORT. A report composes on a background run, so the window stays
+	// alive and usable while it does — and a window that looks finished while it is still filling is worse
 	// than one that waits: the person reads a half-built report as the answer. A small spinner with
 	// a word beside it, centred over the sheet, is the whole story (Max, 2026-08-19: "while the
 	// report is being built the little circle turns, like in the list, and meanwhile we can work").
+	// …and the same plate, without the spinner, says the sheet is OUTDATED: the setting changed since it
+	// was built, and a report is re-formed when the person says Compose (Max, 2026-10-12).
 	//
-	// Idempotent: showing it twice is one spinner, hiding a hidden one does nothing.
-	void ShowComposeProgress(bool busy);
+	// Idempotent: showing it twice is one plate, hiding a hidden one does nothing.
+	void ShowComposeState(ibProtocolComposeState state);
 
 	// ⭐ THE SHEET FILLS THE WINDOW. A document holds as many columns and rows as somebody put into
 	// it — a composed report may hold two — and the space to the right of them is not "outside the
@@ -852,11 +856,14 @@ private:
 	ibPropertyGridEditorSpreadsheet* m_propertySpreadsheet;
 
 	//grid doc
-	wxObjectDataPtr<ibBackendSpreadsheetObject> m_spreadsheetObject;
-	wxSharedPtr<ibBackendSpreadsheetNotifier> m_notifier;
+	std::shared_ptr<ibSpreadsheetObject> m_spreadsheetObject;
+	std::shared_ptr<ibSpreadsheetNotifier> m_notifier;
 
-	// The "composing…" overlay — see ShowComposeProgress. Created on first use, kept hidden after.
-	class wxWindow* m_composeProgress = nullptr;
+	// The plate over the sheet — see ShowComposeState. Created on first use, kept hidden after: its spinner turns
+	// while composing, its text says which.
+	class wxWindow*             m_composeState = nullptr;
+	class wxActivityIndicator*  m_composeSpinner = nullptr;
+	class wxStaticText*         m_composeText = nullptr;
 
 	// The rows waiting for their automatic height (RequestAutoRowHeights) — one span, widened as rows
 	// are marked; -1 when none are.

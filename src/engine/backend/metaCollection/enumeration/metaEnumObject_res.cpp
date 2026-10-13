@@ -10,7 +10,7 @@ wxIcon ibValueMetaObjectEnum::GetIcon() const
 
 wxIcon ibValueMetaObjectEnum::GetIconGroup()
 {
-	static const ibServerPicture picture(s_enumeration_16_png, wxSize(16, 16));
+	static const ibPicture picture = ibBackendPicture::FromImage(ibBackendPicture::GetImageFromBase64(s_enumeration_16_png, wxSize(16, 16)));
 
-	return picture.ToIcon();
+	return ibBackendPicture::ToIcon(picture);
 }

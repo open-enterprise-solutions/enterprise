@@ -11,12 +11,14 @@
 #include <wx/wx.h>
 #include <wx/aui/aui.h>
 #include <wx/splash.h>
+#include <wx/xml/xml.h>
 
 #include "frmclient/backend/backend_mainFrame.h"   // the frame an object asks for its inspector's selection
 #include "frmclient/docView/docView.h"
 #include "protocol/communicator.h"
 #include "frmclient/mainFrame/settings/editorsettings.h"
 #include "frmclient/mainFrame/settings/fontcolorsettings.h"
+#include "frmclient/mainFrame/settings/keybinder.h"
 
 // The main window is created by the exe that has the holder, shown with
 // Show() and destroyed by wx — only the lookup remains.
@@ -26,7 +28,7 @@
 
 class ibOutputWindow;
 class ibObjectInspector;
-class ibFormVisualDocument;
+class ibTabDocument;
 
 //pane
 #define wxAUI_PANE_BOTTOM   wxT("bottomWindow")
@@ -40,7 +42,7 @@ class ibFormVisualDocument;
 //
 // ⭐ THE ROUTINE IS THE WINDOW'S, THE DOCUMENTS ARE THE SERVER'S. The doc manager answers the File and Edit menus, the
 // toolbars and what may be pressed, as the desktop's did, and asks the server nothing for that; what is done to a
-// document is a call (ibFormVisualDocument, frmclient/visualView/visualHostClient.h).
+// document is a call (ibTabDocument, frmclient/docView/tabDocument.h).
 //
 // Each mode's window is a class of its own on top of it — the runtime's (enterprise-thin) and the designer's (designer-thin),
 // as on the desktop and as the server's ibClientFrameRuntime / ibClientFrameDesigner.
@@ -120,6 +122,9 @@ public:
 	// desktop's modal loop runs the events of the windows over it (a choice form a window opened, CreateChildFrame):
 	// what the person can reach while a window asks is the modal's to say.
 	void Post(ibProtocolMethod method, const ibProtocolNode& params);
+	// …or a state event left for the next call to carry (ibCommunicator::Hold) — after the calls posted before it, which
+	// would carry it ahead of what was done first. False — the server takes none held: it is posted as its own call.
+	bool Hold(const ibProtocolNode& event);
 	// THE QUESTION THE SERVER'S CODE WAITS ON — none (not IsNode): it waits on nothing.
 	ibProtocolNode GetRequest() const;
 	// AN ANSWER THAT LEAVES ITS WINDOW OPEN — a window that acts more than once before it closes (the saved settings'
@@ -137,8 +142,7 @@ public:
 	// A control's fetch — a table's rows, a spreadsheet's cells; `params` — the control, its request, the view it is of:
 	// the answer is no frame, nothing is drawn or asked, and a refusal is only false. It speaks to the communicator alone,
 	// so a control's own thread may make it.
-	bool Fetch(const ibProtocolNode& params, ibProtocolNode& answer);
-	// A file of the person's, up to the server in its parts — `file` the id it was given. False: not read, or refused
+	bool Fetch(const ibProtocolNode& params, ibProtocolNode& answer);	// A file of the person's, up to the server in its parts — `file` the id it was given. False: not read, or refused
 	// (said to the person).
 	bool UploadFile(const wxString& path, wxString& file);
 	// …and a file of the server's down to the person's `path`, in its parts. False: not written, or refused (said to the
@@ -150,8 +154,8 @@ public:
 	ibProtocolNode FindTab(long long tabId) const;
 	// The tab the frame has active now — 0: none.
 	long long GetActiveTab() const;
-	// The form of that tab — none: no such tab drawn.
-	ibFormVisualDocument* FindDocument(long long tabId) const;
+	// The document of that tab — none: no such tab drawn.
+	ibTabDocument* FindDocument(long long tabId) const;
 
 protected:
 
@@ -209,22 +213,32 @@ protected:
 
 private:
 
-	// What a menu item of the server's does: a command, or a schema.
+	// What a menu item of the server's does: a command, or a schema — and the key the server gives it by default.
 	struct ibMenuItem {
-		bool schema = false;
-		int  number = 0;
+		bool     schema = false;
+		int      number = 0;
+		wxString shortcut;
 	};
 
 	struct ibPostedCall {
-		ibProtocolMethod method;
-		ibProtocolNode   params;
+		ibProtocolMethod            method;
+		ibProtocolNode              params;
+		std::vector<ibProtocolNode> held;   // the state events held while it waited — held once it is made (Hold)
 	};
 
 	// What the item node of the frame's Menu does.
 	static ibMenuItem MenuItemOf(const ibProtocolNode& item);
 
+	// THE PERSON'S OPTIONS — the font and colours code is shown in, how its editors edit, the keys they chose: read once,
+	// from their own directory (the desktop designer's LoadOptions). A server keeps none of them.
+	void LoadOptions();
 	// The File and Edit menus — the desktop's, the doc manager's commands.
 	void InitializeDefaultMenu();
+	// The keys of the window's own commands, File's and Edit's — the desktop's defaults.
+	void SetDefaultHotKeys();
+	// THE KEYS OF THE MENU AS IT NOW STANDS: each command's default — the window's own, the one the server gives its
+	// own — and the person's over them (LoadOptions), onto the window and the menu's labels.
+	void UpdateHotKeys();
 
 	// The frame the communicator holds, onto the window — what the answer's patch changed in it (all of it, sent whole);
 	// the answer's events with it.
@@ -251,11 +265,11 @@ private:
 	// The first call posted, made — unless a call is under way: that one makes it when it has settled.
 	void CallPosted();
 
-	// The form whose tab is that page of the notebook.
-	ibFormVisualDocument* DocumentAt(int page) const;
-	// A form gone — out of the frame's (~ibFormVisualDocument).
-	void RemoveDocument(const ibFormVisualDocument* document);
-	friend class ibFormVisualDocument;
+	// The document whose tab is that page of the notebook.
+	ibTabDocument* DocumentAt(int page) const;
+	// A tab's document gone — out of the frame's (~ibTabDocument).
+	void RemoveDocument(const ibTabDocument* document);
+	friend class ibTabDocument;
 
 	void UpdateFrameManager();
 
@@ -270,21 +284,24 @@ private:
 
 	std::unique_ptr<ibCommunicator> m_communicator;
 	const ibProtocolMode            m_mode;
-	const wxString                  m_user;
+	wxString                        m_user;       // the login's — the one the login window was told, when refused
 	wxString                        m_password;   // until the login — cleared by it
 	ibFontColorSettings             m_fontColorSettings;
 	ibEditorSettings                m_editorSettings;
+	ibKeyBinder                     m_keyBinder;
+	wxXmlDocument                   m_options;     // the person's options as read (LoadOptions) — their keys put over the
+	                                               // defaults each time the menu is built
 
 	wxAuiToolBar* m_mainFrameToolbar = nullptr;   // the window's: the doc manager's commands
 	wxAuiToolBar* m_docToolbar = nullptr;         // the active view's own (ibFrontendView::OnCreateToolbar)
 	wxMenu*       m_menuFile = nullptr;           // the window's File, with the files opened last
 	wxMenu*       m_menuEdit = nullptr;           // …and its Edit
 
-	std::map<int, ibMenuItem>             m_menuItems;     // the server's commands and schemas, by the wx ids given them
+	std::map<int, ibMenuItem>             m_menuItems;     // the server's commands and schemas, by their wx ids (MenuIdOf)
 	std::string                           m_menuShape;     // the server's menu as last built, less what is enabled
 	std::deque<ibPostedCall>              m_posted;        // the calls posted, not made yet
 	std::set<long long>                   m_tabsClosing;   // the tabs a close was posted for and not answered yet
-	std::map<long long, ibFormVisualDocument*> m_documents;          // the forms the frame raised (DrawTabs), by their tabs' ids
+	std::map<long long, ibTabDocument*>   m_documents;   // the tabs' documents the frame raised (DrawTabs), by their ids
 	std::size_t                           m_calling = 0;             // calls under way — a posted call waits for them
 	// The windows up asking, the newest last — each by the id of the question it answers, the one it was asked again
 	// with when it answered along the way (Respond). A call standing at one lets a posted call go.

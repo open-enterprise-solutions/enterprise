@@ -14,24 +14,24 @@ private:
 
 	ibGridCellBorder GetCellGridBorder(const ibSpreadsheetBorderDescription& rhs) const {
 		ibGridCellBorder border;
-		border.m_colour = rhs.m_colour;
-		border.m_style = rhs.m_style;
+		border.m_colour = typeConv::ColourToWxColour(rhs.m_colour);
+		border.m_style = static_cast<wxPenStyle>(rhs.m_style);
 		border.m_width = rhs.m_width;
 		return border;
 	}
 
 	void AppendCellCommand(ibGrid* view, int row, int col, const ibSpreadsheetCellDescription& cell)
 	{
-		AppendCommand<ibGridCommandAttrBackgroundColour>(row, col, cell.m_backgroundColour,
+		AppendCommand<ibGridCommandAttrBackgroundColour>(row, col, typeConv::ColourToWxColour(cell.m_backgroundColour),
 			ibGridCommandAttrBackgroundColour::GetAttrValue(view->GetOrCreateCellAttrPtr(row, col)));
 
-		AppendCommand<ibGridCommandAttrTextColour>(row, col, cell.m_textColour,
+		AppendCommand<ibGridCommandAttrTextColour>(row, col, typeConv::ColourToWxColour(cell.m_textColour),
 			ibGridCommandAttrTextColour::GetAttrValue(view->GetOrCreateCellAttrPtr(row, col)));
 
 		AppendCommand<ibGridCommandAttrTextOrient>(row, col, cell.m_textOrient,
 			ibGridCommandAttrTextOrient::GetAttrValue(view->GetOrCreateCellAttrPtr(row, col)));
 
-		AppendCommand<ibGridCommandAttrFont>(row, col, cell.m_font,
+		AppendCommand<ibGridCommandAttrFont>(row, col, typeConv::FontToWxFont(cell.m_font),
 			ibGridCommandAttrFont::GetAttrValue(view->GetOrCreateCellAttrPtr(row, col)));
 
 		AppendCommand<ibGridCommandAttrAlignment>(row, col, wxSize(cell.m_alignHorz, cell.m_alignVert),
@@ -249,14 +249,14 @@ void ibGridEditor::Paste()
 						SetCellSize(cell.m_row, cell.m_col, cell.m_row_size, cell.m_col_size, false);
 
 					SetCellTextOrient(cell.m_row, cell.m_col, cell.m_textOrient, false);
-					SetCellFont(cell.m_row, cell.m_col, cell.m_font, false);
-					SetCellBackgroundColour(cell.m_row, cell.m_col, cell.m_backgroundColour, false);
-					SetCellTextColour(cell.m_row, cell.m_col, cell.m_textColour, false);
+					SetCellFont(cell.m_row, cell.m_col, typeConv::FontToWxFont(cell.m_font), false);
+					SetCellBackgroundColour(cell.m_row, cell.m_col, typeConv::ColourToWxColour(cell.m_backgroundColour), false);
+					SetCellTextColour(cell.m_row, cell.m_col, typeConv::ColourToWxColour(cell.m_textColour), false);
 
-					SetCellBorderLeft(cell.m_row, cell.m_col, cell.m_borderAt[0].m_style, cell.m_borderAt[0].m_colour, cell.m_borderAt[0].m_width, false);
-					SetCellBorderRight(cell.m_row, cell.m_col, cell.m_borderAt[1].m_style, cell.m_borderAt[1].m_colour, cell.m_borderAt[1].m_width, false);
-					SetCellBorderTop(cell.m_row, cell.m_col, cell.m_borderAt[2].m_style, cell.m_borderAt[2].m_colour, cell.m_borderAt[2].m_width, false);
-					SetCellBorderBottom(cell.m_row, cell.m_col, cell.m_borderAt[3].m_style, cell.m_borderAt[3].m_colour, cell.m_borderAt[3].m_width, false);
+					SetCellBorderLeft(cell.m_row, cell.m_col, static_cast<wxPenStyle>(cell.m_borderAt[0].m_style), typeConv::ColourToWxColour(cell.m_borderAt[0].m_colour), cell.m_borderAt[0].m_width, false);
+					SetCellBorderRight(cell.m_row, cell.m_col, static_cast<wxPenStyle>(cell.m_borderAt[1].m_style), typeConv::ColourToWxColour(cell.m_borderAt[1].m_colour), cell.m_borderAt[1].m_width, false);
+					SetCellBorderTop(cell.m_row, cell.m_col, static_cast<wxPenStyle>(cell.m_borderAt[2].m_style), typeConv::ColourToWxColour(cell.m_borderAt[2].m_colour), cell.m_borderAt[2].m_width, false);
+					SetCellBorderBottom(cell.m_row, cell.m_col, static_cast<wxPenStyle>(cell.m_borderAt[3].m_style), typeConv::ColourToWxColour(cell.m_borderAt[3].m_colour), cell.m_borderAt[3].m_width, false);
 
 					SetCellFitMode(cell.m_row, cell.m_col, ibToGridFitMode(cell.m_fitMode), false);
 					SetCellReadOnly(cell.m_row, cell.m_col, cell.m_isReadOnly, false);

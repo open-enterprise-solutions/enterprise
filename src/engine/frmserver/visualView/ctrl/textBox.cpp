@@ -8,7 +8,7 @@
 ibValueTextBox::ibValueTextBox() : ibValueWindow()
 {
 	//set default params
-	m_propertyMinSize->SetValue(wxSize(150, 50));
+	m_propertyMinSize->SetValue(ibSize(150, 50));
 }
 
 //**********************************************************************************

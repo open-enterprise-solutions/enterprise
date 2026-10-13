@@ -26,7 +26,7 @@
 #include "backend/backend_mainFrame.h"
 #include "backend/uniqueKey.h"
 #include "core/serialize/dataBuilder.h"   // ibDataNode — a request and its response
-#include "backend/pictureDescription.h"     // ibPictureDescription — a picture a frame names (SendPicture)
+#include "core/description/pictureDescription.h"     // ibPictureDescription — a picture a frame names (SendPicture)
 
 #include "frmserver/docView/docView.h"     // ibDocParentFrameAnyBase — the document manager's slot
 
@@ -70,20 +70,10 @@ public:
 	// Messages for the client, kept until it takes them. The desktop's message pane is the same thing.
 	virtual void Message(const wxString& strMessage, ibStatusMessage status) override;
 	virtual void ClearMessage() override;
+	// A script's failure — the desktop's error window, asked of the client (ibProtocolRequestKind::Error).
 	virtual void BackendError(const wxString& strFileName,
 		const wxString& strDocPath, const long line,
 		const wxString& strErrorMessage) override;
-
-	// ⭐ A REQUEST TO THE CLIENT — queued for it and waited for IN THE SESSION'S POOL (ibWorkerPool::Await):
-	// this thread holds the session and goes on running its tasks meanwhile, the one that carries the request
-	// to the client among them. Responded to, cancelled (a kick, a closed tab, the session stopping: the
-	// request is withdrawn and the interruption goes on up), or never — while a request is pending, the frame
-	// refuses everything else a client asks of it (HasPendingRequest).
-	virtual bool Request(const ibDataNode& request, ibDataNode& response) override;
-
-	// A message box is one kind of request (ibProtocolRequestKind::Message: Text, Caption, Style — the wx button
-	// flags; the response's Button is the wx code of the button pressed, 0 for none).
-	virtual int ShowModalMessage(const wxString& message, const wxString& caption, int style) override;
 
 	// A REPAINT the backend asks for, the frame having changed by itself (a report delivered, a debugger stopped): the
 	// client is told so (ibClientHost::NotifyChanged) and asks for it — the next frame it is sent is the repaint.
@@ -113,7 +103,14 @@ public:
 
 	// A SHEET SHOWN — the desktop's (ibFrontendMainFrame::ShowSpreadsheetDocument): a spreadsheet document of its own
 	// over it, in a tab of its own, under that title. What a list output and a script's Show() reach.
-	virtual bool ShowSpreadsheetDocument(const wxString& strTitle, wxObjectDataPtr<ibBackendSpreadsheetObject>& spreadSheetDocument) override;
+	virtual bool ShowSpreadsheetDocument(const wxString& strTitle, std::shared_ptr<ibSpreadsheetObject>& spreadSheetDocument) override;
+	// …and a script's sheet printed, by the client's printer (ibProtocolRequestKind::Print) — with its print dialog,
+	// as the desktop's always was.
+	virtual bool PrintSpreadsheetDocument(const std::shared_ptr<ibSpreadsheetObject>& doc, bool showPrintDlg = true) override;
+
+	// A SCHEDULE EDITED — the desktop's editor, asked of the client (ibProtocolRequestKind::Schedule). OK marks the active
+	// form modified, as the desktop's did: the edit happened in a window of its own, nothing else would notice it.
+	virtual bool ShowScheduleEditor(ibJobScheduleDescription& schedule) override;
 
 	//***************************************************************************************
 	//*                       The client's side of the frame                                *
@@ -238,6 +235,17 @@ protected:
 	// session — no separate logout bookkeeping. Made by a mode's frame, which puts its own doc manager in, and
 	// builds its menu.
 	ibClientFrame(ibSessionHolder&& holder, ibClientInstance* clientInstance);
+
+	// ⭐ A REQUEST TO THE CLIENT — queued for it and waited for IN THE SESSION'S POOL (ibWorkerPool::Await):
+	// this thread holds the session and goes on running its tasks meanwhile, the one that carries the request
+	// to the client among them. Responded to, cancelled (a kick, a closed tab, the session stopping: the
+	// request is withdrawn and the interruption goes on up), or never — while a request is pending, the frame
+	// refuses everything else a client asks of it (HasPendingRequest).
+	virtual bool DoRequest(const ibDataNode& request, ibDataNode& response) override;
+
+	// A message box is one kind of request (ibProtocolRequestKind::Message: Text, Caption, Style — the wx button
+	// flags; the response's Button is the wx code of the button pressed, 0 for none).
+	virtual int DoShowModalMessage(const wxString& message, const wxString& caption, int style) override;
 
 	ibClientMenu m_menu;
 

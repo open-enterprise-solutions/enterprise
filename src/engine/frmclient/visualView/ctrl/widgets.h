@@ -1,6 +1,10 @@
 ﻿#ifndef _FRMCLIENT_VIEW_WIDGETS_H__
 #define _FRMCLIENT_VIEW_WIDGETS_H__
 
+#include <wx/gauge.h>
+#include <wx/html/htmlwin.h>
+#include <wx/radiobut.h>
+#include <wx/slider.h>
 #include <wx/statline.h>
 
 #include "frmclient/visualView/ctrl/window.h"
@@ -160,6 +164,113 @@ private:
 		ibTitleLocation::eLeft);
 
 	ibControlCheckbox* m_checkbox = nullptr;
+};
+
+// A radio button — shown selected as the State says; it has no data source, and its click stays on the client, as the
+// desktop's did.
+class ibValueRadioButton : public ibValueWindow {
+public:
+	ibValueRadioButton(ibVisualHostClient& host, long long controlId) : ibValueWindow(host, controlId) {}
+
+	virtual void Create(wxWindow* parent, const ibProtocolNode& node) override;
+	virtual void Update(const ibProtocolNode& node) override;
+	virtual wxWindow* GetWindow() const override { return m_radioButton; }
+
+	//load & save object in control
+	virtual bool ReadData(const ibDataNode& node) override;
+	virtual bool WriteData(ibDataNode& node) const override;
+
+private:
+
+	ibPropertyCategory* m_categoryRadioButton = ibPropertyObject::CreatePropertyCategory(wxT("RadioButton"), _("Radio button"));
+	ibPropertyTString* m_propertyTitle = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryRadioButton, wxT("Title"), _("Title"),
+		_("The radio button's caption. Can be written per language."), wxT("Radio button"));
+	ibPropertyBoolean* m_propertySelected = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryRadioButton, wxT("Selected"), _("Selected"),
+		_("Whether the radio button is shown selected. A radio button has no data source of its own."));
+
+	wxRadioButton* m_radioButton = nullptr;
+};
+
+// A slider between its ends, its thumb where the form put it; moved, it stays on the client, as the desktop's did. Its
+// orientation is what it is built with — turned, it is built anew (ibVisualHostClient's shape).
+class ibValueSlider : public ibValueWindow {
+public:
+	ibValueSlider(ibVisualHostClient& host, long long controlId) : ibValueWindow(host, controlId) {}
+
+	virtual void Create(wxWindow* parent, const ibProtocolNode& node) override;
+	virtual void Update(const ibProtocolNode& node) override;
+	virtual wxWindow* GetWindow() const override { return m_slider; }
+
+	//load & save object in control
+	virtual bool ReadData(const ibDataNode& node) override;
+	virtual bool WriteData(ibDataNode& node) const override;
+
+private:
+
+	ibPropertyCategory* m_categorySlider = ibPropertyObject::CreatePropertyCategory(wxT("Slider"), _("Slider"));
+	ibPropertyInteger* m_propertyMinValue = ibPropertyObject::CreateProperty<ibPropertyInteger>(m_categorySlider, wxT("MinValue"), _("Min value"),
+		_("The slider's smallest value, at its start. Default 0."), 0);
+	ibPropertyInteger* m_propertyMaxValue = ibPropertyObject::CreateProperty<ibPropertyInteger>(m_categorySlider, wxT("MaxValue"), _("Max value"),
+		_("The slider's largest value, at its end. Default 100."), 100);
+	ibPropertyInteger* m_propertyValue = ibPropertyObject::CreateProperty<ibPropertyInteger>(m_categorySlider, wxT("Value"), _("Value"),
+		_("Where the slider's thumb starts, between the min and max values. Default 50."), 50);
+	ibPropertyEnum<ibValueEnumOrient>* m_propertyOrient = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumOrient>>(m_categorySlider, wxT("Orient"), _("Orient"),
+		_("The slider's direction: horizontal (the default) or vertical."), wxHORIZONTAL);
+
+	wxSlider* m_slider = nullptr;
+};
+
+// A progress bar, filled to its value of its range. Its orientation is what it is built with, as a slider's is.
+class ibValueGauge : public ibValueWindow {
+public:
+	ibValueGauge(ibVisualHostClient& host, long long controlId) : ibValueWindow(host, controlId) {}
+
+	virtual void Create(wxWindow* parent, const ibProtocolNode& node) override;
+	virtual void Update(const ibProtocolNode& node) override;
+	virtual wxWindow* GetWindow() const override { return m_gauge; }
+
+	//load & save object in control
+	virtual bool ReadData(const ibDataNode& node) override;
+	virtual bool WriteData(ibDataNode& node) const override;
+
+private:
+
+	ibPropertyCategory* m_categoryGauge = ibPropertyObject::CreatePropertyCategory(wxT("Gauge"), _("Gauge"));
+	ibPropertyInteger* m_propertyRange = ibPropertyObject::CreateProperty<ibPropertyInteger>(m_categoryGauge, wxT("Range"), _("Range"),
+		_("The value at which the progress bar is full. Default 100, so the value reads as a percentage."), 100);
+	ibPropertyInteger* m_propertyValue = ibPropertyObject::CreateProperty<ibPropertyInteger>(m_categoryGauge, wxT("Value"), _("Value"),
+		_("How far the progress bar is filled, from 0 to the range. Default 30."), 30);
+	ibPropertyEnum<ibValueEnumOrient>* m_propertyOrient = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumOrient>>(m_categoryGauge, wxT("Orient"), _("Orient"),
+		_("The progress bar's direction: horizontal (the default, filling left to right) or vertical."), wxHORIZONTAL);
+
+	wxGauge* m_gauge = nullptr;
+};
+
+// An HTML box — the page its form's code set (the State's Page), the box's whole content.
+class ibValueHTMLBox : public ibValueWindow {
+public:
+	ibValueHTMLBox(ibVisualHostClient& host, long long controlId) : ibValueWindow(host, controlId) {}
+
+	virtual void Create(wxWindow* parent, const ibProtocolNode& node) override;
+	virtual void Update(const ibProtocolNode& node) override;
+	virtual wxWindow* GetWindow() const override;
+
+private:
+	wxHtmlWindow* m_htmlBox = nullptr;
+	wxString      m_page;   // shown — set again only when the server's is another
+};
+
+// A chart box — its place in the layout, empty: the desktop's chart was a sample, drawn from no data of the form's.
+class ibValueChartBox : public ibValueWindow {
+public:
+	ibValueChartBox(ibVisualHostClient& host, long long controlId) : ibValueWindow(host, controlId) {}
+
+	virtual void Create(wxWindow* parent, const ibProtocolNode& node) override;
+	virtual void Update(const ibProtocolNode& node) override;
+	virtual wxWindow* GetWindow() const override { return m_chartBox; }
+
+private:
+	wxPanel* m_chartBox = nullptr;
 };
 
 // A control of a type this client does not draw yet: its place in the layout kept, and said so in the middle of it.

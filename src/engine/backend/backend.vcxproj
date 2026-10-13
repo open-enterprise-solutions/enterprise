@@ -42,7 +42,6 @@
     <ClInclude Include="logger\loggerSinkSqlite.h" />
     <ClInclude Include="logger\loggerSweep.h" />
     <ClInclude Include="logger\loggerWriter.h" />
-    <ClInclude Include="backend_spreadsheet.h" />
     <ClInclude Include="backend_exception.h" />
     <ClInclude Include="backend_diagnostic.h" />
     <ClInclude Include="fileKind.h" />
@@ -83,16 +82,15 @@
     <ClInclude Include="backend_mainFrame.h" />
     <ClInclude Include="backend_picture.h" />
     <ClInclude Include="backend_type.h" />
+    <ClInclude Include="backend_composition.h" />
     <ClInclude Include="characteristicCtor.h" />
     <ClInclude Include="constantCtor.h" />
     <ClInclude Include="moduleManager\globalContextManager.h" />
     <ClInclude Include="restructureInfo.h" />
-    <ClInclude Include="spreadsheetDescription.h" />
     <ClInclude Include="spreadsheetModel.h" />
     <ClInclude Include="compiler\cache\byteCodeCache.h" />
     <ClInclude Include="compiler\byteCode.h" />
     <ClInclude Include="compiler\byteCodeFormat.h" />
-    <ClInclude Include="compiler\codeDef.h" />
     <ClInclude Include="compiler\compileCode.h" />
     <ClInclude Include="compiler\compileState.h" />
     <ClInclude Include="compiler\compileContext.h" />
@@ -100,14 +98,12 @@
     <ClInclude Include="compiler\compileModule.h" />
     <ClInclude Include="compiler\scriptComplete.h" />
     <ClInclude Include="compiler\blockSyntaxLINQ.h" />
-    <ClInclude Include="compiler\scriptParseCode.h" />
     <ClInclude Include="compiler\scriptCheck.h" />
     <ClInclude Include="compiler\enumFactory.h" />
     <ClInclude Include="compiler\enumUnit.h" />
     <ClInclude Include="compiler\procContext.h" />
     <ClInclude Include="compiler\procUnit.h" />
     <ClInclude Include="compiler\procUnitLambda.h" />
-    <ClInclude Include="compiler\translateCode.h" />
     <ClInclude Include="compiler\typeCtor.h" />
     <ClInclude Include="compiler\value.h" />
     <ClInclude Include="compiler\valueSerialization.h" />
@@ -189,8 +185,6 @@
     <ClInclude Include="translateState.h" />
     <ClInclude Include="metaCollection\metaLanguageObject.h" />
     <ClInclude Include="metaCollection\metaPictureObject.h" />
-    <ClInclude Include="homePageDescription.h" />
-    <ClInclude Include="pictureDescription.h" />
     <ClInclude Include="metaCollection\attribute\metaAttributeObject.h" />
     <ClInclude Include="metaCollection\attribute\metaAttributeObjectEnum.h" />
     <ClInclude Include="metaCollection\accountingKind\metaAccountingKindObject.h" />
@@ -278,7 +272,6 @@
     <ClInclude Include="query\tempTableManager.h" />
     <ClInclude Include="query\queryRamTable.h" />
     <ClInclude Include="query\queryRowCursor.h" />
-    <ClInclude Include="query\queryKeywords.h" />
     <ClInclude Include="query\queryLexer.h" />
     <ClInclude Include="query\queryAST.h" />
     <ClInclude Include="query\queryRender.h" />
@@ -288,8 +281,6 @@
     <ClInclude Include="query\queryLowering.h" />
     <ClInclude Include="query\queryException.h" />
     <ClInclude Include="query\queryHierarchy.h" />
-    <ClInclude Include="query\queryUnfold.h" />
-    <ClInclude Include="query\queryBalanceRole.h" />
     <ClInclude Include="query\queryRewrite.h" />
     <ClInclude Include="compiler\lambdaQueryAST.h" />
     <ClInclude Include="query\queryableFactory.h" />
@@ -302,8 +293,6 @@
     <ClInclude Include="composition\composeEvaluate.h" />
     <ClInclude Include="composition\composeRunSchema.h" />
     <ClInclude Include="composition\compositionCondition.h" />
-    <ClInclude Include="composition\compositionTheme.h" />
-    <ClInclude Include="compositionDescription.h" />
     <ClInclude Include="system\value\composition\valueComposerField.h" />
     <ClInclude Include="system\value\composition\valueComposerSettings.h" />
     <ClInclude Include="system\value\valueComposer.h" />
@@ -421,14 +410,7 @@
     <ClInclude Include="system\value\valueTable.h" />
     <ClInclude Include="system\value\valueType.h" />
     <ClInclude Include="tabularModel.h" />
-    <ClInclude Include="tabularModelView.h" />
-    <ClInclude Include="commandDescription.h" />
-    <ClInclude Include="sourceDescription.h" />
-    <ClInclude Include="calcScheduleDescription.h" />
-    <ClInclude Include="choiceLinkDescription.h" />
     <ClInclude Include="choiceLinkResolver.h" />
-    <ClInclude Include="typeconv.h" />
-    <ClInclude Include="typeDescription.h" />
     <ClInclude Include="uniqueKey.h" />
     <ClInclude Include="vcs\gitService.h" />
     <ClInclude Include="plugin\pluginApi.h" />
@@ -437,6 +419,7 @@
     <ClInclude Include="utils\md5.hpp" />
     <ClInclude Include="utils\sha256.hpp" />
     <ClInclude Include="utils\passwordHash.hpp" />
+    <ClInclude Include="utils\sessionToken.h" />
     <ClInclude Include="utils\dataVersion.hpp" />
     <ClInclude Include="valueInfo.h" />
     <ClInclude Include="value_cast.h" />
@@ -461,7 +444,6 @@
     <ClCompile Include="logger\loggerWriter.cpp" />
     <ClCompile Include="userInfo.cpp" />
     <ClCompile Include="backend.cpp" />
-    <ClCompile Include="backend_spreadsheet.cpp" />
     <ClCompile Include="backend_exception.cpp" />
     <ClCompile Include="backend_diagnostic.cpp" />
     <ClCompile Include="fileKind.cpp" />
@@ -522,7 +504,6 @@
     <ClCompile Include="job\jobRunByteCode.cpp" />
     <ClCompile Include="job\jobRegister.cpp" />
     <ClCompile Include="job\platformJobs.cpp" />
-    <ClCompile Include="job\jobSchedule.cpp" />
     <ClCompile Include="job\jobScheduleRules.cpp" />
     <ClCompile Include="query\queryable.cpp" />
     <ClCompile Include="settings\settingsStorage.cpp" />
@@ -545,16 +526,14 @@
     <ClCompile Include="constantCtor.cpp" />
     <ClCompile Include="metadataSerialization.cpp" />
     <ClCompile Include="moduleManager\globalContextManager.cpp" />
-    <ClCompile Include="spreadsheetDescription.cpp" />
     <ClCompile Include="metaCollection\metaLanguageObjectProperty.cpp" />
     <ClCompile Include="metaCollection\metaLanguageObject_res.cpp" />
     <ClCompile Include="metaCollection\metaLanguageObject.cpp" />
     <ClCompile Include="metaCollection\metaObjectMetadataProperty.cpp" />
     <ClCompile Include="metaCollection\metaPictureObject.cpp" />
     <ClCompile Include="metaCollection\metaPictureObject_res.cpp" />
-    <ClCompile Include="homePageDescription.cpp" />
-    <ClCompile Include="pictureDescription.cpp" />
     <ClCompile Include="backend_type.cpp" />
+    <ClCompile Include="backend_composition.cpp" />
     <ClCompile Include="compiler\byteCode.cpp" />
     <ClCompile Include="compiler\compileCode.cpp" />
     <ClCompile Include="compiler\compileCodeLINQ.cpp" />
@@ -562,14 +541,12 @@
     <ClCompile Include="compiler\compileModule.cpp" />
     <ClCompile Include="compiler\scriptComplete.cpp" />
     <ClCompile Include="compiler\blockSyntaxLINQ.cpp" />
-    <ClCompile Include="compiler\scriptParseCode.cpp" />
     <ClCompile Include="compiler\scriptCheck.cpp" />
     <ClCompile Include="compiler\enumUnit.cpp" />
     <ClCompile Include="compiler\enumFactory.cpp" />
     <ClCompile Include="compiler\procContext.cpp" />
     <ClCompile Include="compiler\procUnit.cpp" />
     <ClCompile Include="compiler\procUnitLINQ.cpp" />
-    <ClCompile Include="compiler\translateCode.cpp" />
     <ClCompile Include="compiler\value.cpp" />
     <ClCompile Include="compiler\valueFactory.cpp" />
     <ClCompile Include="compiler\value_res.cpp" />
@@ -833,8 +810,6 @@
     <ClCompile Include="composition\composeEvaluate.cpp" />
     <ClCompile Include="composition\composeRunSchema.cpp" />
     <ClCompile Include="composition\compositionCondition.cpp" />
-    <ClCompile Include="composition\compositionTheme.cpp" />
-    <ClCompile Include="compositionDescription.cpp" />
     <ClCompile Include="system\value\composition\valueComposerField.cpp" />
     <ClCompile Include="system\value\composition\valueComposerSettings.cpp" />
     <ClCompile Include="system\value\valueComposer.cpp" />
@@ -990,13 +965,7 @@
     <ClCompile Include="tabularModel.cpp" />
     <ClCompile Include="tabularModelDb.cpp" />
     <ClCompile Include="tabularModelRam.cpp" />
-    <ClCompile Include="commandDescription.cpp" />
-    <ClCompile Include="sourceDescription.cpp" />
-    <ClCompile Include="calcScheduleDescription.cpp" />
-    <ClCompile Include="choiceLinkDescription.cpp" />
     <ClCompile Include="choiceLinkResolver.cpp" />
-    <ClCompile Include="tabularModelView.cpp" />
-    <ClCompile Include="typeDescription.cpp" />
     <ClCompile Include="uniqueKey.cpp" />
     <ClCompile Include="compiler\typeAny.cpp" />
     <ClCompile Include="vcs\gitService.cpp" />
@@ -1005,6 +974,7 @@
     <ClCompile Include="utils\md5.cpp" />
     <ClCompile Include="utils\sha256.cpp" />
     <ClCompile Include="utils\passwordHash.cpp" />
+    <ClCompile Include="utils\sessionToken.cpp" />
     <ClCompile Include="utils\dataVersion.cpp" />
     <ClCompile Include="value_cast.cpp" />
   </ItemGroup>
@@ -1608,8 +1578,8 @@
   <!--
     The bytecode cache key's engine hash, computed by MSBuild itself: no cmake is needed to build on
     Windows. The rule is compiler/engineFingerprint.cmake's, byte for byte, so a CMake build and an
-    MSBuild build of one tree write one hash: every file under compiler\ and system\ by its path
-    relative to backend\ (forward slashes, ordinal order, CMakeFiles skipped), each as
+    MSBuild build of one tree write one hash: every file under compiler\, system\ and ..\core\compiler\
+    (the translator) by its path relative to backend\ (forward slashes, ordinal order, CMakeFiles skipped), each as
     "<path>\n<lowercase hex of its bytes>\n", SHA-256 over all of it. Written to
     $(IntDir)engineFingerprintBuild.h only when the hash moved. Change one, change the other.
   -->
@@ -1623,14 +1593,14 @@
       <Code Type="Fragment" Language="cs"><![CDATA[
         string backend = Path.GetFullPath(BackendDir).TrimEnd('\\', '/');
         var rels = new List<string>();
-        foreach (string part in new[] { "compiler", "system" }) {
-          string root = Path.Combine(backend, part);
+        foreach (string part in new[] { "compiler", "system", "../core/compiler" }) {
+          string root = Path.GetFullPath(Path.Combine(backend, part)).TrimEnd('\\', '/');
           if (!Directory.Exists(root)) {
             Log.LogError("EngineFingerprint: {0} does not exist", root);
             return false;
           }
           foreach (string file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories)) {
-            string rel = Path.GetFullPath(file).Substring(backend.Length + 1).Replace('\\', '/');
+            string rel = part + "/" + Path.GetFullPath(file).Substring(root.Length + 1).Replace('\\', '/');
             if (rel.StartsWith("CMakeFiles/") || rel.Contains("/CMakeFiles/"))
               continue;
             rels.Add(rel);
@@ -1665,8 +1635,8 @@
         string body = "#ifndef __ENGINE_FINGERPRINT_BUILD_H__\n"
           + "#define __ENGINE_FINGERPRINT_BUILD_H__\n\n"
           + "// Generated by backend.vcxproj (EngineFingerprint), the rule of compiler/engineFingerprint.cmake. Do not edit.\n"
-          + "// The hash is every file under compiler/ and system/. The bytecode cache key\n"
-          + "// carries it, so a compiler change or a new built-in misses the old rows.\n\n"
+          + "// The hash is every file under compiler/, system/ and ../core/compiler/. The bytecode\n"
+          + "// cache key carries it, so a compiler change or a new built-in misses the old rows.\n\n"
           + "inline constexpr char kEngineFingerprint[] = \"" + hash + "\";\n\n"
           + "#endif\n";
         string output = Path.GetFullPath(OutputFile);

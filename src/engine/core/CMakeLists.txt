@@ -48,6 +48,10 @@ target_link_libraries(core
         wx::base
 )
 
+# pthread_getattr_np (fiber.cpp, the thread-stack bound). On Windows this is empty.
+find_package(Threads REQUIRED)
+target_link_libraries(core PRIVATE Threads::Threads)
+
 # guid.cpp picks its generator by toolkit: Windows -> CoCreateGuid, macOS -> CFUUID
 # (CoreFoundation), everything else -> libuuid's uuid_generate. Only the last one is a
 # separate library, and only on non-Apple UNIX; Apple's CFUUID rides in CoreFoundation.

@@ -2,7 +2,7 @@
 #define _FRMCLIENT_BACKEND_VALUE_SPREADSHEET_H__
 
 #include "frmclient/backend/compiler/value.h"
-#include "frmclient/backend/backend_spreadsheet.h"
+#include "core/spreadsheet/spreadsheetObject.h"
 #include "frmclient/backend/backend_localization.h"   // …and the reading of a sheet's texts, as the engine's brought it
 #include "core/fileSystem/fs.h"          // …and the sheet's byte form (the clipboard's)
 

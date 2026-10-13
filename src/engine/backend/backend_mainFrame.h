@@ -3,10 +3,10 @@
 
 #include "backend/uniqueKey.h"
 #include "backend/createRequest.h"   // ibFormRequest — what a form is opened with
-#include "backend/backend_spreadsheet.h"
+#include "core/spreadsheet/spreadsheetObject.h"
 #include "backend/system/systemEnum.h"
 #include "backend/session/sessionHolder.h"   // the frame OWNS its session
-#include "backend/job/jobSchedule.h"          // ibJobScheduleDescription — edited through ShowScheduleEditor
+#include "core/description/jobScheduleDescription.h"   // ibJobScheduleDescription — edited through ShowScheduleEditor
 
 class ibSession;
 
@@ -76,8 +76,8 @@ public:
 	virtual bool UpdateFormUniqueKey(const ibUniqueKeyPair& guid) { return false; }
 
 	// Grid support
-	virtual bool ShowSpreadsheetDocument(const wxString& strTitle, wxObjectDataPtr<ibBackendSpreadsheetObject>& doc) { return false; }
-	virtual bool PrintSpreadsheetDocument(const wxObjectDataPtr<ibBackendSpreadsheetObject>& doc, bool showPrintDlg = true) { return false; }
+	virtual bool ShowSpreadsheetDocument(const wxString& strTitle, std::shared_ptr<ibSpreadsheetObject>& doc) { return false; }
+	virtual bool PrintSpreadsheetDocument(const std::shared_ptr<ibSpreadsheetObject>& doc, bool showPrintDlg = true) { return false; }
 
 	// Open the SCHEDULE editor on `schedule`, editing it IN PLACE; true when the user accepted and
 	// the value actually changed. Same shape as the spreadsheet door above and for the same reason:
@@ -121,31 +121,41 @@ public:
 	virtual void Message(const wxString& strMessage, ibStatusMessage status) {}
 	virtual void ClearMessage() {}
 
+	virtual void RefreshFrame() = 0;
+	virtual void RaiseFrame() = 0;
+
+	// THE TWO DOORS A QUESTION TO THE PERSON PASSES — a message box and a request. Not virtual:
+	// each asks the frame's session first and only then hands the question to the host
+	// (DoShowModalMessage / DoRequest below). A role handler (OnAccessRead / OnAccessWrite) is
+	// refused here — it runs under the policy's lock before every query, and a question there
+	// would park with the lock held. A script Try catches the refusal. Bodies are out-of-line in
+	// backend_mainFrame.cpp so backend.dll exports a concrete symbol for the other DLLs.
+
 	// Frontend-facing modal-message primitive. Backend code routes every
 	// wxMessageBox call through here so the GUI-only dependency stays on
 	// the frontend side — desktop frame calls wxMessageBox with itself
-	// as parent; web frame (future) emits an HTTP notification / toast.
-	// Default base: do nothing, returns 0 (Cancel-equivalent). `style` is
-	// the wx bitmask (wxOK / wxYES_NO / wxICON_WARNING …); the returned
-	// int is the wx pressed-button code.
+	// as parent; web frame emits an HTTP notification / toast.
+	// `style` is the wx bitmask (wxOK / wxYES_NO / wxICON_WARNING …); the
+	// returned int is the wx pressed-button code.
 	//
 	// Not named `MessageBox` — the Win32 header defines that as a macro
-	// mapping to MessageBoxW, which renames the virtual and breaks the
+	// mapping to MessageBoxW, which renames the function and breaks the
 	// backend/frontend link across the wfrontend DLL boundary.
-	// Body is out-of-line in backend_mainFrame.cpp so backend.dll exports
-	// a concrete symbol that wfrontend.dll can pick up via dllimport.
-	virtual int ShowModalMessage(const wxString& message, const wxString& caption, int style);
-
-	virtual void RefreshFrame() = 0;
-	virtual void RaiseFrame() = 0;
+	int ShowModalMessage(const wxString& message, const wxString& caption, int style);
 
 	// ⭐ A REQUEST TO THE CLIENT, and its response — the server's half of the request/response pair, as a
 	// protocol carries it: `request` names its kind (Kind — the protocol's, not this frame's) and holds what the
 	// person is shown — a type to pick among several, a quick-choice list, a template, a composer's settings — and
 	// `response` comes back in the shape that kind defines. One door for every dialog a form on the server opens:
 	// each kind is a small protocol of its own, the client draws it, and the caller waits the way ShowModalMessage
-	// waits. False — no response: declined, cancelled, or (the default here) a host with nobody to ask.
-	virtual bool Request(const class ibDataNode& request, class ibDataNode& response) { return false; }
+	// waits. False — no response: declined, cancelled, or a host with nobody to ask.
+	bool Request(const class ibDataNode& request, class ibDataNode& response);
+
+protected:
+	// What each host does once a door let the question through. The defaults are a host with
+	// nobody to ask: 0 (Cancel-equivalent) and no response.
+	virtual int DoShowModalMessage(const wxString& message, const wxString& caption, int style) { return 0; }
+	virtual bool DoRequest(const class ibDataNode& request, class ibDataNode& response) { return false; }
 
 private:
 	// The thread of life. Filled at construction — there is no other way

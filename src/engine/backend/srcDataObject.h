@@ -9,7 +9,7 @@
 #include "backend/lock/lockHandle.h"    // ibLockHandle (m_formLockHandle)
 #include "backend/lock/lockTypes.h"     // ibLockMode (TryAcquireFormLock)
 #include "backend/compiler/value.h"     // ibValue (inline GetValueByPath default-constructs one)
-#include "backend/sourceDescription.h"  // ibSourceHop — a binding path is {id, expected type} per hop
+#include "core/description/sourceDescription.h"  // ibSourceHop — a binding path is {id, expected type} per hop
 
 #include "backend/metaCollection/genericData.h"   // ibValueMetaObjectGenericData COMPLETE -> the covariant GetSourceMetaObject() -> GenericData* compiles (no casts). genericData.h fwd-declares ibSourceDataObject, so no cycle.
 

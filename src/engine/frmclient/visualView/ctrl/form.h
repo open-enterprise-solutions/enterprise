@@ -9,7 +9,7 @@
 #include "frmclient/backend/propertyManager/property/propertyEnum.h"
 #include "frmclient/backend/propertyManager/property/propertyString.h"
 
-class ibFormVisualDocument;
+class ibTabDocument;
 
 // THE FORM — the desktop's ibValueForm (frontend/visualView/ctrl/form.h) as its view asks it: the frame its controls
 // are drawn in, and the one of them active now. The form itself is the server's: the control made active is told
@@ -39,7 +39,7 @@ public:
 	// The document of the tab the form is drawn in — the desktop's visual document; its window is what the editor opens
 	// over. ⚠ Not the host: the host's children are torn down when the form is drawn anew (an Apply that moved a
 	// control), and a window opened over it went with them.
-	ibFormVisualDocument* GetVisualDocument() const;
+	ibTabDocument* GetVisualDocument() const;
 	// The person's arrangement put on: the form as its controls stand now is the editor's answer (Apply); the server lays
 	// it over its own form and draws it again, and its controls are described anew (ibRestoreFormSettings).
 	void UpdateForm();

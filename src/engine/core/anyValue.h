@@ -17,7 +17,8 @@
 #include "core/fdatetime.h"
 #include "core/fnumber.h"
 #include "core/fstring.h"
-#include "core/types.h"
+
+#include <utility>   // std::swap — ibAnyValuePtr's assignment
 
 class CORE_API ibAnyValue {
 public:
@@ -35,6 +36,43 @@ public:
 	virtual ibNumber GetNumber() const = 0;
 	virtual ibDateTime GetDate() const = 0;
 	virtual ibString GetString() const = 0;
+
+	// Counted, as each side counts its own: whoever holds one keeps it, and the last to let go frees it.
+	virtual void IncrRef() = 0;
+	virtual void DecrRef() = 0;
+};
+
+////////////////////////////////////////////////////////////////////////////
+// ibAnyValuePtr — A VALUE OF EITHER SIDE, HELD BY THE CORE: what a store of the core's keeps (a sheet's
+// parameters, ibAnyValuePtr<ibAnyValue>). Counted through the value's own count — the runtime's, not a
+// second owner beside it — the way a side's ibValuePtr holds one. The side puts in a value of its own
+// (ibAnyValuePtr<ibValue>, which passes for the core's as a derived pointer passes for its base) and reads
+// back its own.
+////////////////////////////////////////////////////////////////////////////
+
+template <class T>
+class ibAnyValuePtr {
+public:
+
+	ibAnyValuePtr() = default;
+	explicit ibAnyValuePtr(T* value) : m_value(value) { if (m_value != nullptr) m_value->IncrRef(); }
+	ibAnyValuePtr(const ibAnyValuePtr& rhs) : m_value(rhs.m_value) { if (m_value != nullptr) m_value->IncrRef(); }
+	ibAnyValuePtr(ibAnyValuePtr&& rhs) noexcept : m_value(rhs.m_value) { rhs.m_value = nullptr; }
+	template <class U>
+	ibAnyValuePtr(const ibAnyValuePtr<U>& rhs) : m_value(rhs.m_value) { if (m_value != nullptr) m_value->IncrRef(); }
+	template <class U>
+	ibAnyValuePtr(ibAnyValuePtr<U>&& rhs) noexcept : m_value(rhs.m_value) { rhs.m_value = nullptr; }
+	ibAnyValuePtr& operator=(ibAnyValuePtr rhs) noexcept { std::swap(m_value, rhs.m_value); return *this; }
+	~ibAnyValuePtr() { if (m_value != nullptr) m_value->DecrRef(); }
+
+	const T& operator*() const { return *m_value; }
+	const T* operator->() const { return m_value; }
+	explicit operator bool() const noexcept { return m_value != nullptr; }
+
+private:
+	template <class U> friend class ibAnyValuePtr;
+
+	T* m_value = nullptr;
 };
 
 #endif

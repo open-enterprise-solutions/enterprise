@@ -7,12 +7,12 @@
 #include <wx/image.h>
 #include <wx/string.h>
 
-#include "core/types.h"   // ibPictureID — a backend picture's number, the id of a row's picture
+#include "core/core.h"    // ibPictureID — a backend picture's number, the id of a row's picture
 #include "frmclient/frmclient.h"
 
 // A PICTURE AS THE WIRE CARRIES IT — by its id, as a frame names a picture the client was given once (a command's,
 // a button's, a column's: the answer's Pictures, kept here), or a PNG in base64 itself (a tab's Icon, a choice's
-// Picture, a schema item's Icon: the server's ibServerPicture), made a bitmap; an empty one when there is none.
+// Picture, a schema item's Icon: an ibPicture's data), made a bitmap; an empty one when there is none.
 FRMCLIENT_API wxBitmap ibProtocolPicture(const wxString& value);
 // …and as an image, to be scaled first — what the art provider makes its pictures of (artProvider/).
 FRMCLIENT_API wxImage ibProtocolImage(const wxString& base64);

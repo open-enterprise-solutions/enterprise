@@ -7,7 +7,7 @@
 // builds a declared value into a reference: what is left is the data.
 
 #include "frmclient/backend/compiler/value.h"
-#include "frmclient/backend/typeDescription.h"
+#include "core/description/typeDescription.h"
 
 // The field's own class id, named once — the engine's.
 constexpr ibClassID g_compositionFieldCLSID = value_to_clsid("VL_CFLD");
@@ -42,6 +42,13 @@ private:
 	ibGuid   m_guid;                   // which of its declared values — empty = the empty reference
 	wxString m_written;                // how it reads: `CatalogRef.Goods.Chair`
 };
+
+// THE RUNTIME IS MADE HERE — the engine's: a declaration becomes a live reference against the configuration, which is
+// the server's. Here every value comes back untouched, a declaration as it reads.
+inline ibValue ibMaterializeCompositionValue(const ibValue& stored, const class ibMetaData* WXUNUSED(metaData))
+{
+	return stored;
+}
 
 class FRMCLIENT_API ibValueCompositionField : public ibValue {
 public:
