@@ -5,6 +5,7 @@
 
 #include "value.h"
 #include "backend/backend_exception.h"
+#include "core/compiler/lexValue.h"
 
 
 //**********************************************************************
@@ -189,6 +190,32 @@ ibValue::ibValue(ibString&& cParam)   // native — takes the text over (runtime
 	: m_typeClass(ibValueTypes::TYPE_STRING), m_bReadOnly(false), m_refCount(0), m_dData()
 {
 	m_sData = std::move(cParam);
+	DEBUG_VALUE_CREATE();
+}
+
+// The kinds a text can write — each into its own slot; Undefined and Null hold nothing.
+ibValue::ibValue(const ibLexValue& lexValue)
+	: m_typeClass(lexValue.GetType()), m_bReadOnly(false), m_refCount(0), m_dData()
+{
+	switch (m_typeClass)
+	{
+	case TYPE_BOOLEAN:
+		m_bData = lexValue.GetBoolean();
+		break;
+	case TYPE_NUMBER:
+		m_fData = lexValue.GetNumber();
+		break;
+	case TYPE_DATE:
+		m_dData = lexValue.GetDate();
+		break;
+	case TYPE_STRING:
+		m_sData = lexValue.GetString();
+		break;
+	default:
+		m_pRef = nullptr;
+		break;
+	}
+
 	DEBUG_VALUE_CREATE();
 }
 

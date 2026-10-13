@@ -5,6 +5,8 @@
 
 #include "translateCode.h"
 
+#include "core/exception.h"
+
 //////////////////////////////////////////////////////////////////////
 //                           Constants
 //////////////////////////////////////////////////////////////////////
@@ -131,7 +133,7 @@ const ibLexemList* ibTranslateCode::ibDefineCollection::FindDefine(const wxStrin
 	// every thread, and left incremented when the throw below unwound past it.
 	int nLevel = 0;
 	for (const ibDefineCollection* scope = this; scope != nullptr; scope = scope->m_parentDefine) {
-		if (++nLevel > MAX_OBJECTS_LEVEL) ibBackendCoreException::Error(_("Recursive module call (#3)"));
+		if (++nLevel > MAX_OBJECTS_LEVEL) ibCoreException::Error(_("Recursive module call (#3)"));
 		auto iterator = scope->m_defineList.find(strName);
 		if (iterator != scope->m_defineList.end()) return &iterator->second;
 	}
@@ -202,25 +204,28 @@ const wxString& ibLexem::GetFileName() const {
 // Construction/Destruction
 //////////////////////////////////////////////////////////////////////
 
-ibTranslateCode::ibTranslateCode() : m_current_lex(this),
-m_defineList(nullptr),
-m_bAutoDeleteDefList(false),
-m_nModePreparing(LEXEM_ADD)
-{
-}
-
-ibTranslateCode::ibTranslateCode(const wxString& strModuleName, const wxString& strDocPath) : m_current_lex(this),
+ibTranslateCode::ibTranslateCode(short codeStyle) : m_current_lex(this),
 m_defineList(nullptr),
 m_bAutoDeleteDefList(false),
 m_nModePreparing(LEXEM_ADD),
+m_codeStyle(codeStyle)
+{
+}
+
+ibTranslateCode::ibTranslateCode(short codeStyle, const wxString& strModuleName, const wxString& strDocPath) : m_current_lex(this),
+m_defineList(nullptr),
+m_bAutoDeleteDefList(false),
+m_nModePreparing(LEXEM_ADD),
+m_codeStyle(codeStyle),
 m_strModuleName(strModuleName), m_strDocPath(strDocPath)
 {
 }
 
-ibTranslateCode::ibTranslateCode(const wxString& strFileName) : m_current_lex(this),
+ibTranslateCode::ibTranslateCode(short codeStyle, const wxString& strFileName) : m_current_lex(this),
 m_defineList(nullptr),
 m_bAutoDeleteDefList(false),
 m_nModePreparing(LEXEM_ADD),
+m_codeStyle(codeStyle),
 m_strFileName(strFileName)
 {
 }
@@ -229,13 +234,6 @@ ibTranslateCode::~ibTranslateCode()
 {
 	if (m_bAutoDeleteDefList) wxDELETE(m_defineList);
 }
-
-// `IsAllowedKey` is declared on ibTranslateCode but its body lives in
-// compileCode.cpp — the gate needs the active code-style (GetCodeStyle,
-// owned by ibCompileCode), and putting the body there keeps the include
-// chain one-way (compile → translate, never the reverse). `IsKeyWord`
-// below dispatches through it so lexer / highlighter / autocomplete /
-// parser all inherit the CES-vs-VES filter from one place.
 
 //////////////////////////////////////////////////////////////////////
 // Translating
@@ -258,6 +256,8 @@ void ibTranslateCode::Clear()
 	//m_listTranslateCode.Clear();
 
 	if (m_defineList != nullptr) m_defineList->Clear();
+
+	m_listRefusal.clear();
 
 #ifdef UTF8_LEXEM_TRANSLATE
 	m_bufferSize = m_currentPos = m_currentLine = m_currentUtf8Pos = 0;
@@ -326,11 +326,7 @@ void ibTranslateCode::SetError(int codeError, unsigned int currPos, const wxStri
 	const int currLine = 1 + std::count(
 		m_strBuffer.begin(), m_strBuffer.begin() + start_pos, wxT('\n'));
 
-	ibTranslateCode::SetError(codeError,
-		m_strFileName, m_strModuleName, m_strDocPath,
-		currPos, currLine,
-		errorDesc
-	);
+	m_listRefusal.emplace_back(codeError, currPos, currLine, errorDesc, this);
 }
 
 /**
@@ -1033,7 +1029,7 @@ bool ibTranslateCode::IsEnd() const
 * greater than or equal to 0: number in the list of service words
 */
 
-int ibTranslateCode::IsKeyWord(const wxString& strKeyWord)
+int ibTranslateCode::IsKeyWord(const wxString& strKeyWord) const
 {
 	// The inverse of s_listKeyWord: spelling -> the number this returns. Built ONCE,
 	// on first use, and const from then on.
@@ -1056,17 +1052,36 @@ int ibTranslateCode::IsKeyWord(const wxString& strKeyWord)
 	if (it != s_keyWordNumber.end()) {
 		const int idx = it->second;
 		// Code-style gate: hides VES-only block-fence keywords (Then /
-		// Do / End*) when CES is active. Body lives in compileCode.cpp
-		// so the gate asks GetCodeStyle without flipping the include
-		// chain. Hidden keywords look like plain identifiers to every
-		// consumer of IsKeyWord — lexer, syntax highlighter, the CES
-		// parser (which then rejects them as unknown identifiers).
+		// Do / End*) when CES is active. Hidden keywords look like plain
+		// identifiers to every consumer of IsKeyWord — lexer, syntax
+		// highlighter, the CES parser (which then rejects them as
+		// unknown identifiers).
 		if (!IsAllowedKey(idx))
 			return wxNOT_FOUND;
 		return idx;
 	}
 
 	return wxNOT_FOUND;
+}
+
+// In CES, block-fence keywords (Then / Do / EndIf / EndDo / EndFunction /
+// EndProcedure / EndTry) are filtered out — they have no syntactic place in
+// brace-style sources. VES leaves every keyword in.
+bool ibTranslateCode::IsAllowedKey(int keywordId) const
+{
+	if (m_codeStyle == CODE_CES) {
+		switch (keywordId) {
+			case KEY_THEN:
+			case KEY_DO:
+			case KEY_ENDIF:
+			case KEY_ENDDO:
+			case KEY_ENDFUNCTION:
+			case KEY_ENDPROCEDURE:
+			case KEY_ENDTRY:
+				return false;
+		}
+	}
+	return true;
 }
 
 wxString ibTranslateCode::GetKeyWord(int k)
@@ -1090,6 +1105,7 @@ wxString ibTranslateCode::GetKeyWord(int k)
 bool ibTranslateCode::PrepareLexem()
 {
 	m_listLexem.clear();
+	m_listRefusal.clear();
 
 	// Reserve capacity here (after clear) instead of in Load — that way
 	// the reserve grows from an empty vector with no per-element move
@@ -1116,8 +1132,11 @@ bool ibTranslateCode::PrepareLexem()
 
 	for (auto& translateCode : m_listTranslateCode) {
 		translateCode->m_currentLine = translateCode->m_currentPos = 0;
+		translateCode->m_codeStyle = m_codeStyle;   // one text, one syntax
 		if (!translateCode->PrepareLexem())
 			return false;
+		m_listRefusal.insert(m_listRefusal.end(),
+			translateCode->m_listRefusal.begin(), translateCode->m_listRefusal.end());
 		for (auto& m_current_lex : translateCode->m_listLexem) {
 			if (m_current_lex.m_lexType != ENDPROGRAM) {
 				m_listLexem.push_back(m_current_lex);
@@ -1190,7 +1209,7 @@ bool ibTranslateCode::PrepareLexem()
 				//undefined
 				if (k == KEY_UNDEFINED && !member) {
 					m_current_lex.m_lexType = CONSTANT;
-					m_current_lex.m_valData.SetType(ibValueTypes::TYPE_EMPTY);
+					m_current_lex.m_valData = ibLexValue();
 				}
 				//boolean
 				else if ((k == KEY_TRUE || k == KEY_FALSE) && !member) {
@@ -1200,7 +1219,7 @@ bool ibTranslateCode::PrepareLexem()
 				//null
 				else if (k == KEY_NULL && !member) {
 					m_current_lex.m_lexType = CONSTANT;
-					m_current_lex.m_valData.SetType(ibValueTypes::TYPE_NULL);
+					m_current_lex.m_valData = ibLexValue(ibValueTypes::TYPE_NULL);
 				}
 				else {
 
@@ -1248,7 +1267,7 @@ bool ibTranslateCode::PrepareLexem()
 									m_listLexem[n].m_numData == wxT('='))) {
 								n++;
 								if (m_listLexem[n].m_numData == wxT('-'))
-									m_current_lex.m_valData.m_fData = -m_current_lex.m_valData.m_fData;
+									m_current_lex.m_valData = ibLexValue(-m_current_lex.m_valData.GetNumber());
 								m_listLexem[n] = m_current_lex;
 								continue;
 							}
@@ -1526,7 +1545,7 @@ void ibTranslateCode::PrepareLexem(const ibTextEdit& edit)
 				//undefined
 				if (k == KEY_UNDEFINED && !member) {
 					m_current_lex.m_lexType = CONSTANT;
-					m_current_lex.m_valData.SetType(ibValueTypes::TYPE_EMPTY);
+					m_current_lex.m_valData = ibLexValue();
 				}
 				//boolean
 				else if ((k == KEY_TRUE || k == KEY_FALSE) && !member) {
@@ -1536,7 +1555,7 @@ void ibTranslateCode::PrepareLexem(const ibTextEdit& edit)
 				//null
 				else if (k == KEY_NULL && !member) {
 					m_current_lex.m_lexType = CONSTANT;
-					m_current_lex.m_valData.SetType(ibValueTypes::TYPE_NULL);
+					m_current_lex.m_valData = ibLexValue(ibValueTypes::TYPE_NULL);
 				}
 				else {
 
@@ -1568,7 +1587,7 @@ void ibTranslateCode::PrepareLexem(const ibTextEdit& edit)
 					auto prev = std::prev(hint, 1);
 					if (prev != m_listLexem.begin() && prev->m_lexType == DELIMITER && (prev->m_numData == '[' || prev->m_numData == '(' || prev->m_numData == ',' || prev->m_numData == '<' || prev->m_numData == '>' || prev->m_numData == '=')) {
 						if (hint->m_numData == '-')
-							m_current_lex.m_valData.m_fData = -m_current_lex.m_valData.m_fData;
+							m_current_lex.m_valData = ibLexValue(-m_current_lex.m_valData.GetNumber());
 						*hint = std::move(m_current_lex);
 						continue;
 					}
@@ -1796,7 +1815,7 @@ wxString ibTranslateCode::ExpressionEndingAt(size_t dotAt) const
 
 void ibTranslateCode::PrepareFromCurrent(int nMode, const wxString& strName)
 {
-	ibTranslateCode translate;
+	ibTranslateCode translate(m_codeStyle);
 
 	translate.m_defineList = m_defineList;
 	translate.m_nModePreparing = nMode;

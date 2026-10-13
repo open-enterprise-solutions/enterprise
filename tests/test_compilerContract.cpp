@@ -98,7 +98,7 @@
 
 #include "backend/compiler/compileCode.h"
 #include "backend/compiler/compileContext.h"   // CODE_VES / CODE_CES
-#include "backend/compiler/codeDef.h"
+#include "core/compiler/codeDef.h"
 #include "backend/compiler/byteCode.h"
 #include "backend/compiler/value.h"
 

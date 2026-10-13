@@ -5,9 +5,13 @@
 
 #include "scriptParseCode.h"
 
+#include "core/exception.h"
+
 #pragma warning(disable : 4018)
 
-ibParseCode::ibParseCode() = default;
+ibParseCode::ibParseCode(short codeStyle) : ibTranslateCode(codeStyle)
+{
+}
 
 bool ibParseCode::ParseModule(const wxString& sModule)
 {
@@ -71,10 +75,10 @@ bool ibParseCode::ParseModule(const wxString& sModule)
 					nArrayCount = 0;
 					ExpectDelimeter('[');
 					if (!IsNextDelimeter(']')) {
-						ibValue vConst = ExpectConstant();
+						const ibLexValue vConst = ExpectConstant();
 						if (vConst.GetType() != ibValueTypes::TYPE_NUMBER || vConst.GetNumber() < 0)
 							continue;
-						nArrayCount = vConst.GetInteger();
+						nArrayCount = vConst.GetNumber().ToInt();
 					}
 					ExpectDelimeter(']');
 				}
@@ -223,7 +227,7 @@ bool ibParseCode::ParseModule(const wxString& sModule)
 					else if (IsNextDelimeter('='))
 					{
 						ExpectDelimeter('=');
-						ibValue vConstant = ExpectConstant();
+						ExpectConstant();
 						param.m_optional = true;
 					}
 
@@ -470,7 +474,7 @@ wxString ibParseCode::ExpectIdentifier(bool strRealName)
  *   Consume the next lexem as a (possibly signed) numeric constant.
  *   Handles unary +/- prefix and flips the sign on negation.
  */
-ibValue ibParseCode::ExpectConstant()
+ibLexValue ibParseCode::ExpectConstant()
 {
 	ibLexem lex;
 	int sign = 0;
@@ -492,7 +496,7 @@ ibValue ibParseCode::ExpectConstant()
 			return lex.m_valData;
 		// change sign for minus
 		if (sign == -1)
-			lex.m_valData.m_fData = -lex.m_valData.m_fData;
+			lex.m_valData = ibLexValue(-lex.m_valData.GetNumber());
 	}
 	return lex.m_valData;
 }

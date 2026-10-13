@@ -1,6 +1,9 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
+    <Filter Include="compiler">
+      <UniqueIdentifier>{62ae2c4b-b98b-425e-9e38-1eed289b6b90}</UniqueIdentifier>
+    </Filter>
     <Filter Include="composition">
       <UniqueIdentifier>{7b2e4c91-3f58-4a0d-b6e2-9c1d8a5f3e47}</UniqueIdentifier>
     </Filter>
@@ -41,6 +44,15 @@
   <ItemGroup>
     <ClCompile Include="anyValue.cpp" />
     <ClCompile Include="build.cpp" />
+    <ClCompile Include="compiler\lexValue.cpp">
+      <Filter>compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\scriptParseCode.cpp">
+      <Filter>compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\translateCode.cpp">
+      <Filter>compiler</Filter>
+    </ClCompile>
     <ClCompile Include="composition\compositionTheme.cpp">
       <Filter>composition</Filter>
     </ClCompile>
@@ -142,6 +154,18 @@
     <ClInclude Include="anyValue.h" />
     <ClInclude Include="build.h" />
     <ClInclude Include="clsid.h" />
+    <ClInclude Include="compiler\codeDef.h">
+      <Filter>compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\lexValue.h">
+      <Filter>compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\scriptParseCode.h">
+      <Filter>compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\translateCode.h">
+      <Filter>compiler</Filter>
+    </ClInclude>
     <ClInclude Include="composition\compositionTheme.h">
       <Filter>composition</Filter>
     </ClInclude>

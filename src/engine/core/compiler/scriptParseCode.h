@@ -4,7 +4,7 @@
 // WHAT A MODULE TEXT DECLARES, read WITHOUT compiling it — the walk that fills the designer's
 // "Procedures and functions" window, the editor's autocomplete, and module_outline.
 //
-// ⭐ IT LIVES IN THE BACKEND BECAUSE THE ANSWER IS NEEDED ON BOTH SIDES. It began in the code
+// ⭐ IT LIVES BELOW EVERY READER BECAUSE THE ANSWER IS NEEDED ON EVERY SIDE. It began in the code
 // editor, and by location it looked like an editor concern; it is not. A module's exports are ALSO
 // its own value's member surface (ibRuntimeModuleDataObject::ExportMethodsToHelper), and that
 // surface reads BYTECODE — which the designer does not have, because it compiles nothing. So the
@@ -12,8 +12,8 @@
 // nothing at all on the other: `StockManagement.` offered nothing while module_outline listed its
 // exports from the very same text.
 //
-// One walk, one answer, both readers. It derives from ibTranslateCode, which was always a backend
-// class, and it touches no widget — the move is where it belonged.
+// One walk, one answer, every reader. It derives from ibTranslateCode and touches no widget and no
+// runtime, so it sits in the core with it.
 
 #include "translateCode.h"
 
@@ -109,7 +109,7 @@ inline wxString ibModuleCallForm(const ibModuleElement& element)
 	return form + wxT(")");
 }
 
-class BACKEND_API ibParseCode : public ibTranslateCode
+class CORE_API ibParseCode : public ibTranslateCode
 {
 	int                          m_cursor = wxNOT_FOUND;  // current position in the lexem array
 	std::vector<ibModuleElement> m_content;
@@ -125,11 +125,11 @@ protected:
 	bool           IsNextKeyWord(int keyword);
 	void           ExpectKeyword(int keyword);
 	wxString       ExpectIdentifier(bool strRealName = false);
-	ibValue        ExpectConstant();
+	ibLexValue     ExpectConstant();
 
 public:
 
-	ibParseCode();
+	explicit ibParseCode(short codeStyle);
 	bool ParseModule(const wxString& sModule);
 
 	// Module elements collected by ParseModule — list of every

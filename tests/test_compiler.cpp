@@ -21,7 +21,7 @@
 
 #include "backend/compiler/compileCode.h"
 #include "backend/compiler/compileContext.h"   // CODE_VES / CODE_CES
-#include "backend/compiler/codeDef.h"
+#include "core/compiler/codeDef.h"
 #include "backend/compiler/byteCode.h"
 #include "backend/compiler/value.h"
 
@@ -162,7 +162,7 @@ TEST(LexerTest, EmptySourceProducesEndProgramOnly) {
 	ASSERT_TRUE(cc.PrepareLexem());
 	// At least the ENDPROGRAM sentinel — exact number depends on lexer
 	// implementation, but it must be non-empty.
-	EXPECT_GE(cc.GetLexemCount(), 1u);
+	EXPECT_GE(cc.m_translateCode.GetLexCount(), 1u);
 }
 
 TEST(LexerTest, SimpleAssignmentTokenizes) {
@@ -170,14 +170,14 @@ TEST(LexerTest, SimpleAssignmentTokenizes) {
 	cc.Load(wxT("a = 1;"));
 	ASSERT_TRUE(cc.PrepareLexem());
 	// Identifier 'a', '=', number '1', ';', ENDPROGRAM — at least 5.
-	EXPECT_GE(cc.GetLexemCount(), 4u);
+	EXPECT_GE(cc.m_translateCode.GetLexCount(), 4u);
 }
 
 TEST(LexerTest, StringLiteralLexes) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	cc.Load(wxT("s = \"hello\";"));
 	ASSERT_TRUE(cc.PrepareLexem());
-	EXPECT_GE(cc.GetLexemCount(), 4u);
+	EXPECT_GE(cc.m_translateCode.GetLexCount(), 4u);
 }
 
 // ===========================================================================

@@ -10,10 +10,8 @@
 #include <vector>
 #include <wctype.h>
 
-#include "backend/backend_exception.h"
-
-#include "codeDef.h"
-#include "value.h"
+#include "core/compiler/codeDef.h"
+#include "core/compiler/lexValue.h"   // a constant as the text writes it — a lexer reads values, never references
 // The lexer's name tables — keywords and #Define alike — are matched case-insensitively and consulted for
 // EVERY identifier the lexer meets, so the folding belongs in their comparator (ibCaseFoldLess): the
 // alternative is upper-casing the query into a throw-away wxString once per token, per table.
@@ -25,7 +23,7 @@ struct ibKeyWords {
 	wxString m_strShortDescription;
 };
 
-extern BACKEND_API struct ibKeyWords s_listKeyWord[];
+extern CORE_API struct ibKeyWords s_listKeyWord[];
 
 enum {
 	LEXEM_ADD = 0,
@@ -52,10 +50,10 @@ enum class ibLexemMode {
 //definitions
 #define UTF8_LEXEM_TRANSLATE 
 
-class BACKEND_API ibTranslateCode;
+class CORE_API ibTranslateCode;
 
 //storing one primitive from the source code
-struct ibLexem {
+struct CORE_API ibLexem {
 
 	//lexem type:
 	short m_lexType;
@@ -63,7 +61,7 @@ struct ibLexem {
 	//lexem content:
 	short m_numData;			// keyword number (KEYWORD) or delimiter symbol (DELIMITER)
 	wxString m_strData;			// or identifier name (variable, function, etc.)
-	ibValue m_valData;			// value, if it is a constant or real identifier name
+	ibLexValue m_valData;		// value, if it is a constant or real identifier name
 
 	// Per-lexem source attribution lives on the owning ibTranslateCode —
 	// every lexem of one module shares the same module name / doc-path /
@@ -156,7 +154,7 @@ public:
 	}
 
 	// noexcept move so vector<ibLexem>::reserve / emplace_back use moves
-	// (pointer-swap of wxString internals, ibValue tagged-union move) on
+	// (pointer-swap of wxString internals, the constant's move) on
 	// realloc instead of falling back to copy for strong-exception
 	// guarantee.
 	ibLexem(ibLexem&& src) noexcept :
@@ -227,6 +225,29 @@ public:
 
 typedef std::vector<ibLexem> ibLexemList;
 
+// ONE THING THE TEXT COULD NOT BE READ AS — a malformed number, date or string, a directive out of
+// place. The translator does not stop on it and does not decide what it means: it notes it and reads
+// on, so the stream is whole however broken the text, and its owner says what a refusal is to it —
+// a compile raises, an editor colours what it has, an outside client shows a diagnostic.
+struct ibTranslateRefusal {
+
+	ibTranslateRefusal(int codeError, unsigned int currPos, unsigned int currLine,
+		const wxString& errorDesc, const ibTranslateCode* translateCode) :
+		m_codeError(codeError), m_currPos(currPos), m_currLine(currLine),
+		m_errorDesc(errorDesc), m_translateCode(translateCode)
+	{
+	}
+
+	int          m_codeError;            // ERROR_* (codeDef.h)
+	unsigned int m_currPos;              // in the text of the translator that raised it
+	unsigned int m_currLine;             // 1-based
+	wxString     m_errorDesc;
+
+	// Who raised it — the attribution and the text it points into, as on ibLexem. A module read as a
+	// part of another (AppendModule) raises in its own text.
+	const ibTranslateCode* m_translateCode;
+};
+
 /***************************************************
 ibTranslateCode-stage of source code parsing
 The entry point is the Load() and TranslateModule() procedures.
@@ -235,7 +256,7 @@ the text of the executable code, the second procedure performs translation
 (parsing the code). As a result, an array of "raw" bytecode in the cByteCode variable is filled in the class structure.
 ****************************************************/
 
-class BACKEND_API ibTranslateCode {
+class CORE_API ibTranslateCode {
 	// ibLexem reads m_strModuleName / m_strDocPath / m_strFileName via
 	// its back-pointer accessors (GetModuleName / GetDocPath / GetFileName)
 	// — those fields are protected, so grant friendship.
@@ -283,9 +304,10 @@ class BACKEND_API ibTranslateCode {
 
 public:
 
-	ibTranslateCode();
-	ibTranslateCode(const wxString& strModuleName, const wxString& strDocPath);
-	ibTranslateCode(const wxString& strFileName);
+	// The syntax comes first and has no default: no owner reads a text without saying how it is spelled.
+	explicit ibTranslateCode(short codeStyle);
+	ibTranslateCode(short codeStyle, const wxString& strModuleName, const wxString& strDocPath);
+	ibTranslateCode(short codeStyle, const wxString& strFileName);
 
 	virtual ~ibTranslateCode();
 
@@ -305,16 +327,23 @@ public:
 
 	virtual void Clear();
 	void ClearLexem() { m_listLexem.resize(0); } // resetting and free data to reuse an object
-	size_t GetLexemCount() const { return m_listLexem.size(); } // token count after PrepareLexem (diagnostics / tests)
-	const std::vector<ibLexem>& GetLexems() const { return m_listLexem; } // read-only lexem stream (lambda expr recorder / tests)
+	size_t GetLexCount() const { return m_listLexem.size(); } // token count after PrepareLexem
+	const ibLexem& GetLexAt(size_t index) const { return m_listLexem.at(index); } // out of range throws
 
 	// HAS IT BEEN LEXED. The question a caller actually asks — the editor asks it before patching,
-	// because a patch has no baseline without a full pass first. Reaching through GetLexems() to
-	// call empty() says HOW the answer is stored; this says what is being asked.
+	// because a patch has no baseline without a full pass first. Comparing GetLexCount() with
+	// zero says HOW the answer is stored; this says what is being asked.
 	bool HasLexem() const { return !m_listLexem.empty(); }
 
 	// What this pass is for — see ibLexemMode. Set before lexing; a compile never touches it.
 	void SetLexemMode(ibLexemMode mode) { m_lexemMode = mode; }
+
+	// THE SYNTAX THE TEXT IS WRITTEN IN — the owner's to say: the session's compile state holds it
+	// (ibCompileState), and whoever reads a text of that session gives it to the constructor. An owner that
+	// lives across texts (the compiler, the editor) says it again here before lexing — the designer may
+	// have switched it since. It decides which words are keywords (IsAllowedKey).
+	void SetCodeStyle(short codeStyle) { m_codeStyle = codeStyle; }
+	short GetCodeStyle() const { return m_codeStyle; }
 
 	bool PrepareLexem();
 
@@ -381,17 +410,8 @@ public:
 	}
 
 protected:
+	// Notes a refusal at `currPos` and returns — the read goes on (see ibTranslateRefusal).
 	void SetError(int codeError, unsigned int currPos, const wxString& errorDesc = wxEmptyString) const;
-	void SetError(int codeError,
-		const wxString& strFileName, const wxString& strModuleName, const wxString& strDocPath,
-		int currPos, int currLine,
-		const wxString& errorDesc = wxEmptyString) const
-	{
-		DoSetError(codeError,
-			strFileName, strModuleName, strDocPath,
-			currPos, currLine, errorDesc
-		);
-	}
 public:
 
 	inline void SkipSpaces() const;
@@ -443,7 +463,7 @@ public:
 
 	bool IsEnd() const;
 
-	static int IsKeyWord(const wxString& sKeyWord);
+	int IsKeyWord(const wxString& sKeyWord) const;
 
 	// The words the preprocessor owns. Asked from the full pass and from the patch, written out
 	// once — a ninth directive must not be able to reach only one of them.
@@ -458,8 +478,21 @@ public:
 	wxString GetStrToEndLine() const;
 	void PrepareFromCurrent(int nMode, const wxString& strName = wxEmptyString);
 
+	// WHOSE TEXT THIS IS — what every lexem and every refusal is attributed to. The owner says it
+	// before the text is read; a module says it again whenever it is compiled from its metaobject.
+	void SetModuleName(const wxString& strModuleName) { m_strModuleName = strModuleName; }
 	wxString GetModuleName() const { return m_strModuleName; }
+	void SetDocPath(const wxString& strDocPath) { m_strDocPath = strDocPath; }
+	wxString GetDocPath() const { return m_strDocPath; }
+	void SetFileName(const wxString& strFileName) { m_strFileName = strFileName; }
+	wxString GetFileName() const { return m_strFileName; }
 
+	// What the last full PrepareLexem could not read, in the order met — see ibTranslateRefusal. A module
+	// read as a part of this one (AppendModule) adds its own.
+	size_t GetRefusalCount() const { return m_listRefusal.size(); }
+	const ibTranslateRefusal& GetRefusalAt(size_t index) const { return m_listRefusal.at(index); } // out of range throws
+
+	wxString GetBuffer() const { return m_strBuffer; }
 	unsigned int GetBufferSize() const { return m_strBuffer.size(); }
 
 	unsigned int GetCurrentLine() const { return m_currentLine; }
@@ -476,13 +509,13 @@ public:
 	// It is derived from s_listKeyWord and nothing else, and has exactly one reader,
 	// so it is now a build-once immutable table living inside IsKeyWord itself.
 
-	// Per-keyword availability gate. Reads the active code-style and
+	// Per-keyword availability gate. Reads this translator's code style and
 	// hides VES-only block-fence keywords (Then / Do / EndIf / EndDo /
 	// EndFunction / EndProcedure / EndTry) when CES is active — brace-
 	// style sources have no place for them. `IsKeyWord` consults this
 	// itself, so lexer / highlighter / autocomplete / parser inherit
 	// the filter without per-callsite plumbing.
-	static bool IsAllowedKey(int keywordId);
+	bool IsAllowedKey(int keywordId) const;
 
 protected:
 
@@ -523,13 +556,6 @@ protected:
 
 #endif // UTF8_LEXEM_TRANSLATE
 
-	virtual void DoSetError(int codeError,
-		const wxString& strFileName, const wxString& strModuleName, const wxString& strDocPath,
-		unsigned int currPos, unsigned int currLine,
-		const wxString& errorDesc = wxEmptyString) const
-	{
-	}
-
 	size_t CalcAllocSize() const;
 
 	//current lexem
@@ -546,6 +572,9 @@ protected:
 
 	// See ibLexemMode. Compile by default: everything that becomes bytecode wants the whole language.
 	ibLexemMode m_lexemMode = ibLexemMode::Compile;
+
+	// See SetCodeStyle. Given by the owner at construction, refreshed by one that lives across texts.
+	short m_codeStyle;
 
 	//attributes:
 	wxString m_strModuleName;//name of the compiled module (to display information in case of errors)
@@ -570,9 +599,13 @@ protected:
 
 	//intermediate array with lexemes:
 	std::vector<ibLexem> m_listLexem;
+
+	// See GetRefusalCount. Mutable because SetError is const — the scanners that raise are const
+	// over the text, and noting what they could not read does not change it.
+	mutable std::vector<ibTranslateRefusal> m_listRefusal;
 };
 
 //empty lexem  
-extern BACKEND_API const ibLexem gs_nullLexem;
+extern CORE_API const ibLexem gs_nullLexem;
 
 #endif

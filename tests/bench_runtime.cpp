@@ -69,7 +69,7 @@
 #include "backend/compiler/compileCode.h"
 #include "backend/compiler/procUnit.h"
 #include "backend/compiler/byteCode.h"
-#include "backend/compiler/codeDef.h"
+#include "core/compiler/codeDef.h"
 #include "backend/compiler/value.h"
 #include "core/fiber/fiber.h"               // DISABLED_StackProbe — the per-call StackRemaining
 #include "core/fnumber.h"

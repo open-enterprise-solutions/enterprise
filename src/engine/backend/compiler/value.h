@@ -926,6 +926,10 @@ public:
 	ibValue(const wxString& sParam); //string
 	ibValue(ibString&& sParam); //string — native move (runtime string functions)
 
+	// A CONSTANT AS THE TRANSLATOR READ IT (ibLexem::m_valData) — the door through which the compiler
+	// puts one into the bytecode. Explicit: a lexem's value is not an engine value until it is asked to be.
+	explicit ibValue(const class ibLexValue& lexValue);
+
 	// ⭐⭐ ANY OTHER POINTER IS A MISTAKE, AND IT USED TO BECOME `TRUE`.
 	//
 	// Pointer-to-bool is a STANDARD conversion, so an unrelated `Foo*` handed to anything taking an

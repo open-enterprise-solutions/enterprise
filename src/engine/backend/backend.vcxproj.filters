@@ -60,9 +60,6 @@
     <ClInclude Include="compiler\blockSyntaxLINQ.h">
       <Filter>compiler</Filter>
     </ClInclude>
-    <ClInclude Include="compiler\scriptParseCode.h">
-      <Filter>compiler</Filter>
-    </ClInclude>
     <ClInclude Include="appData.h" />
     <ClInclude Include="appDataCtorToken.h" />
     <ClInclude Include="appHost.h" />
@@ -196,9 +193,6 @@
     <ClInclude Include="compiler\procUnitLambda.h">
       <Filter>compiler</Filter>
     </ClInclude>
-    <ClInclude Include="compiler\translateCode.h">
-      <Filter>compiler</Filter>
-    </ClInclude>
     <ClInclude Include="compiler\typeCtor.h">
       <Filter>compiler</Filter>
     </ClInclude>
@@ -211,9 +205,6 @@
     <None Include="compiler\engineFingerprint.cmake">
       <Filter>compiler</Filter>
     </None>
-    <ClInclude Include="compiler\codeDef.h">
-      <Filter>compiler</Filter>
-    </ClInclude>
     <ClInclude Include="compiler\compileCode.h">
       <Filter>compiler</Filter>
     </ClInclude>
@@ -1142,9 +1133,6 @@
     <ClCompile Include="compiler\blockSyntaxLINQ.cpp">
       <Filter>compiler</Filter>
     </ClCompile>
-    <ClCompile Include="compiler\scriptParseCode.cpp">
-      <Filter>compiler</Filter>
-    </ClCompile>
     <ClCompile Include="appData.cpp" />
     <ClCompile Include="appHost.cpp" />
     <ClCompile Include="cipher\fieldCipher.cpp">
@@ -1242,9 +1230,6 @@
       <Filter>compiler</Filter>
     </ClCompile>
     <ClCompile Include="compiler\procUnitLINQ.cpp">
-      <Filter>compiler</Filter>
-    </ClCompile>
-    <ClCompile Include="compiler\translateCode.cpp">
       <Filter>compiler</Filter>
     </ClCompile>
     <ClCompile Include="compiler\byteCode.cpp">

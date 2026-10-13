@@ -13,11 +13,16 @@
 // ibQueryLexer
 //////////////////////////////////////////////////////////////////////
 
-void ibQueryLexer::DoSetError(int /*codeError*/,
-	const wxString& /*strFileName*/, const wxString& /*strModuleName*/, const wxString& /*strDocPath*/,
-	unsigned int currPos, unsigned int currLine,
-	const wxString& errorDesc) const
+void ibQueryLexer::RaiseRefusal() const
 {
+	if (GetRefusalCount() == 0)
+		return;
+
+	const ibTranslateRefusal& refusal = GetRefusalAt(0);
+	const unsigned int currPos = refusal.m_currPos;
+	const unsigned int currLine = refusal.m_currLine;
+	const wxString& errorDesc = refusal.m_errorDesc;
+
 	// L4 refuses in its OWN variety, carrying the position as data — the text is what is wrong here,
 	// not the machinery, and the caller that shows this is the one editing the query.
 	if (errorDesc.empty())
@@ -120,7 +125,7 @@ std::vector<ibQueryToken> ibQueryLexer::Tokenize(const wxString& queryText)
 		// Silently: nothing downstream can tell "the author wrote nothing" from "the author wrote
 		// something this could not read". The token knows its own text and position, so it refuses here.
 		else if (IsNumber()) {
-			sUpper.clear(); GetNumber(&sUpper);
+			sUpper.clear(); GetNumber(&sUpper); RaiseRefusal();
 			t.m_kind = ibQueryTokenKind::Number;
 			if (!t.m_literal.SetNumber(sUpper))
 				ibBackendQuerySyntaxException::ErrorAt(GetCurrentLine() + 1, GetCurrentPos(),
@@ -129,7 +134,7 @@ std::vector<ibQueryToken> ibQueryLexer::Tokenize(const wxString& queryText)
 			t.m_text = sUpper;
 		}
 		else if (IsString()) {
-			sUpper.clear(); GetString(&sUpper);
+			sUpper.clear(); GetString(&sUpper); RaiseRefusal();
 			t.m_kind = ibQueryTokenKind::String;
 			if (!t.m_literal.SetString(sUpper))
 				ibBackendQuerySyntaxException::ErrorAt(GetCurrentLine() + 1, GetCurrentPos(),
@@ -138,7 +143,7 @@ std::vector<ibQueryToken> ibQueryLexer::Tokenize(const wxString& queryText)
 			t.m_text = sUpper;
 		}
 		else if (IsDate()) {
-			sUpper.clear(); GetDate(&sUpper);
+			sUpper.clear(); GetDate(&sUpper); RaiseRefusal();
 			t.m_kind = ibQueryTokenKind::Date;
 			if (!t.m_literal.SetDate(sUpper))
 				ibBackendQuerySyntaxException::ErrorAt(GetCurrentLine() + 1, GetCurrentPos(),
@@ -188,6 +193,7 @@ std::vector<ibQueryToken> ibQueryLexer::Tokenize(const wxString& queryText)
 			}
 		}
 
+		RaiseRefusal();   // whatever else a primitive could not read
 		out.push_back(std::move(t));
 	}
 

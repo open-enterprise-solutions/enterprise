@@ -353,7 +353,7 @@ Per-driver `ClassifyDatabaseError(int nativeCode)` on each `ibDatabaseErrorRepor
 | `byteCodeAOT.cpp` | `ibByteCode::SerializeAOT/DeserializeAOT` | Binary persistence for the AOT cache (`sys_bytecode_cache.bc_blob`); host-endian linear format with magic `'PBC1'` + format version; the history of every version bump |
 | `byteCodeFormat.h` | `kAOTFormatVersion` | The format version (36): written into every blob and into the cache key. Bumped when an opcode is added, removed or renumbered, or changes what it does |
 | `cache/byteCodeCache.h/cpp` | `ibByteCodeCache` | The AOT cache's rows: `Load` / `Save` / `Invalidate` by descriptor, under `CacheKey` |
-| `engineFingerprint.cmake` | — | Build-time script (run by CMake and by `backend.vcxproj`): a SHA-256 of every file under `compiler/` and `system/`, written to the generated `engineFingerprintBuild.h` as `kEngineFingerprint` — only when it changes |
+| `engineFingerprint.cmake` | — | Build-time script (run by CMake and by `backend.vcxproj`): a SHA-256 of every file under `compiler/`, `system/` and `../core/compiler/` (the translator), written to the generated `engineFingerprintBuild.h` as `kEngineFingerprint` — only when it changes |
 | `procUnit.h/cpp` | `ibProcUnit` | Interpreter: executes `ibByteCode` against a variable stack |
 | `procContext.h/cpp` | `ibRunContext` | Execution context: local variable frame, call stack |
 | `value.h/cpp` | `ibValue` | Universal value type — tag enum `ibValueTypes` in `core/core.h`: `TYPE_EMPTY` (=0, the "undefined" value), `TYPE_BOOLEAN`, `TYPE_NUMBER` (`ibNumber`), `TYPE_DATE`, `TYPE_STRING`, `TYPE_NULL`, `TYPE_REFFER` / `TYPE_CONST_REFFER`, object kinds `TYPE_VALUE` / `TYPE_ENUM` / `TYPE_OLE` / `TYPE_FUNCTION` / `TYPE_ITERATOR` |
@@ -498,7 +498,7 @@ Source text (wxString)
 
 ### Opcode Categories
 
-Opcodes are defined as plain integer constants in `src/engine/backend/compiler/codeDef.h`. The opcodes fall into these groups:
+Opcodes are defined as plain integer constants in `src/engine/core/compiler/codeDef.h`. The opcodes fall into these groups:
 
 | Category | Opcodes |
 |---|---|
