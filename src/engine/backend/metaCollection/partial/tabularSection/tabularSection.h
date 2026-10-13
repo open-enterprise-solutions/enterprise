@@ -19,6 +19,8 @@ protected:
 		enLoad,
 		enUnload,
 		enGetMetadata,
+		// The position of a row (0-based), as 1C's Индекс(row) answers it; -1 for a row of another section.
+		enIndex,
 	};
 
 	enum {
