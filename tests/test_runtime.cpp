@@ -26,6 +26,7 @@
 #include "frmserver/visualView/ctrl/formAttribute.h" // the attribute cell the bind points at
 #include "backend/backend_mainFrame.h"               // a frame so the form can be born
 #include "backend/metaCollection/metaModuleObject.h" // a form module, so the bind has somewhere to live
+#include "backend/metadataConfiguration.h"           // the module's file name is asked of its metadata
 #include "backend/system/value/valueDynamicList.h"
 
 #include <wx/init.h>
@@ -3261,8 +3262,11 @@ TEST_F(BuiltInRuntime, AFormScriptWritesThroughDataSource) {
 	ibSessionScope scope(session.get());
 
 	// The call holds ThisForm and releases it when the frame goes. A form on
-	// the stack would be deleted by that release.
+	// the stack would be deleted by that release. The configuration outlives
+	// that release: the compile module asks it for a file name.
+	ibMetaDataConfigurationFile cfg;
 	ReadableForm* form = new ReadableForm();
+	form->m_module.SetMetaData(&cfg);
 	// Binding ThisForm is what a live form does first. That creates the
 	// compile module, and only then can the main attribute point DataSource
 	// at its cell.
