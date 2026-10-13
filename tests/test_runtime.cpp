@@ -3272,6 +3272,13 @@ TEST_F(BuiltInRuntime, AFormScriptWritesThroughDataSource) {
 	EXPECT_FALSE(form.ReadBound(wxT("DataSource"), stale));
 	EXPECT_EQ(stale.GetString(), wxT("stale"));
 
+	const short savedStyle = ibCompileCode::GetCodeStyle();
+	ibCompileCode::SetCodeStyle(CODE_VES);
+	struct StyleRestore {
+		short saved;
+		~StyleRestore() { ibCompileCode::SetCodeStyle(saved); }
+	} styleRestore{ savedStyle };
+
 	ibCompileCode cc(wxT("caller"), wxT("memory"), false);
 	cc.AddContextVariable(wxT("ThisForm"), &form);
 	ASSERT_TRUE(TryCompile(cc,
