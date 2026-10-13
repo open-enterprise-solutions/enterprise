@@ -607,8 +607,30 @@ class BACKEND_API ibMcpAudit {
 public:
 	virtual ~ibMcpAudit() = default;
 
-	// Says a fault by naming the OBJECT it is about — a fault with no address cannot be acted on.
-	typedef std::function<void(const class ibValueMetaObject*, const wxString&)> ibComplain;
+	// Says a fault by naming the OBJECT it is about. The third argument carries
+	// fields the problem keeps beside `says` (a module's `diagnostics`). A
+	// caller that has only the sentence uses the two-argument form.
+	class ibComplain {
+	public:
+		using Handler = std::function<void(const class ibValueMetaObject*, const wxString&, const ibDataValue&)>;
+
+		explicit ibComplain(Handler handler) : m_handler(std::move(handler)) {}
+
+		void operator()(const class ibValueMetaObject* about, const wxString& says) const
+		{
+			(*this)(about, says, ibDataValue());
+		}
+
+		void operator()(const class ibValueMetaObject* about, const wxString& says,
+			const ibDataValue& extra) const
+		{
+			if (m_handler)
+				m_handler(about, says, extra);
+		}
+
+	private:
+		Handler m_handler;
+	};
 
 	virtual void Check(class ibMetaData* metaData, const ibComplain& complain) const = 0;
 };

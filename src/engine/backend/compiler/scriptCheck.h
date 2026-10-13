@@ -77,12 +77,6 @@ struct ibScriptCheckAnswer {
 
 BACKEND_API ibScriptCheckAnswer ibCheckModule(const class ibValueMetaObject* metaObject);
 
-// The common modules of this configuration that were compiled and refused. A module
-// that has no compile unit yet is not in the list: nothing was checked, which is
-// not the same as a module that does not compile. A session will not start while
-// any of these stand.
-BACKEND_API std::vector<ibDiagnostic> ibCommonModulesThatDoNotCompile(const class ibMetaData* metaData);
-
 // ⚠ THE THIRD QUESTION — what the compiler UNDERSTOOD about a query rather than what it refused —
 // is `ibOutlineScriptQueries`, and it lives in scriptComplete.h. It belongs beside the walk over
 // the instructions, because the half worth having is what each bound name OFFERS, and that walk is
