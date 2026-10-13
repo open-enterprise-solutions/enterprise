@@ -1145,6 +1145,9 @@
     <ClCompile Include="syntaxHelper\helpLoader.cpp">
       <Filter>syntaxHelper</Filter>
     </ClCompile>
+    <ClCompile Include="syntaxHelper\helpFromRegistry.cpp">
+      <Filter>syntaxHelper</Filter>
+    </ClCompile>
     <ClCompile Include="syntaxHelper\helpResolver.cpp">
       <Filter>syntaxHelper</Filter>
     </ClCompile>

@@ -177,10 +177,8 @@ public:
 	// The language is a body of text like any other. Answering here costs one search and makes the
 	// difference between "there is craft written about this" and "there are also WORDS for it".
 	//
-	// ⚠ IT ANSWERS WHAT IS THERE, AND NO MORE. Two families are not in this corpus yet - the
-	// creatable types outside the Query family, and the platform enumerations - so a hint about
-	// them still comes back empty. That is a gap in the CORPUS, not in this road, and it is stated
-	// where a caller meets it (the `nothing` line of a search).
+	// The creatable types, the platform enumerations and the values the platform hands out are
+	// part of this corpus: the loader reads them from the type registry. A miss is a miss.
 	void FindInside(const wxString& query, std::vector<ibDataValue>& places) const override
 	{
 		if (query.IsEmpty())
@@ -270,24 +268,12 @@ public:
 		//
 		// So a miss says where the other two live, rather than looking like a platform with no such
 		// word in it.
-		//
-		// ⚠ AND THE ISSUE NUMBER STAYS HERE, OUT OF THE ANSWER. What crosses the wire is read by a
-		// client that cannot open our tracker; the two missing families are NAMED below, which is
-		// the part a caller can act on, and a number would only stop being true the day the issue
-		// closes. See open-enterprise-solutions/enterprise#83.
 		if (entries.empty())
 			result.SetValue(wxT("nothing"),
 				ibMcpText("Nothing in the syntax helper by that name. This is the LANGUAGE reference - "
-				  "functions, keywords, types. For what THIS configuration holds ask metadata_tree / "
-				  "metadata_get / query_fields; for how such a thing is usually built, pattern_read.\n"
-				  "AND TWO FAMILIES ARE NOT IN THIS CORPUS, so a miss on one of them is the wrong "
-				  "DOOR rather than a wrong word: the CREATABLE TYPES apart from the Query family "
-				  "(Array, Structure, Container, Table, TypeDescription, ...), the PLATFORM "
-				  "ENUMERATIONS (AccumulationRecordType, DocumentWriteMode, HierarchyType, ...), and "
-				  "the values the platform HANDS you rather than lets you build (SpreadsheetArea, "
-				  "QueryResult, LinqRow, ...). They are declared in the backend registries, not "
-				  "written up here - so ASK type_list FOR THE NAME AND type_members FOR WHAT IT "
-				  "OFFERS, which answers for all three with the members and their call forms."));
+				  "functions, keywords, types, and the platform enumerations. For what THIS configuration "
+				  "holds ask metadata_tree / metadata_get / query_fields; for how such a thing is usually "
+				  "built, pattern_read. type_members reads the call forms of one type."));
 
 		// The corpus's own digest. A caller that caches answers can tell whether
 		// what it remembers is still what the platform would say.

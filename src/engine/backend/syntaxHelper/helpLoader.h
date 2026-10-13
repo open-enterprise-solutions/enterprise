@@ -23,7 +23,10 @@
 
 #include "backend/backend.h"
 
+#include "backend/syntaxHelper/helpEntry.h"
 #include "backend/syntaxHelper/helpLoadError.h"
+
+#include <vector>
 
 // Current on-disk schema version the loader produces and accepts. Bump
 // rule: new optional field = no bump; rename / remove / semantics change
@@ -62,5 +65,10 @@ LoadHelpCorpus(const wxString& localeCode,
 // throughout its lifetime — single source of truth for what counts
 // as "the locale" inside this subsystem.
 BACKEND_API wxString CanonicaliseLocale(const wxString& raw);
+
+// The creatable value types, the platform enumerations and the values the
+// platform hands out, read from the type registry. A written article with
+// the same id is kept; these fill the names the corpus files do not carry.
+BACKEND_API std::vector<ibHelpEntry> HelpEntriesFromTypeRegistry();
 
 #endif // _IB_HELP_LOADER_H_

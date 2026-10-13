@@ -24,6 +24,7 @@
 
 #include <wx/file.h>
 #include <wx/filename.h>
+#include <wx/init.h>
 #include <wx/stdpaths.h>
 #include <wx/utils.h>
 
@@ -267,4 +268,96 @@ TEST(HelpLoader, EveryKindTheCorpusWritesArrivesAsItself)
 	EXPECT_EQ(kindOf(wxT("kw.Silent")), ibHelpKind::kKeyword);
 	EXPECT_FALSE(SaysSomethingAbout(said, wxT("kw.Silent")))
 		<< "a MISSING kind is the documented default, not a mistake to report";
+}
+
+// =============================================================================
+// The type registry, asked by the same search as a keyword
+// =============================================================================
+
+namespace {
+
+const ibHelpEntry* Listed(const std::vector<ibHelpEntry>& entries, const wxString& id)
+{
+	for (const ibHelpEntry& e : entries)
+		if (e.id == id)
+			return &e;
+	return nullptr;
+}
+
+bool SearchHits(const ibHelpCorpus& corpus, const wxString& prefix, const wxString& id)
+{
+	for (const ibHelpEntry* e : corpus.SearchPrefix(prefix))
+		if (e != nullptr && e->id == id)
+			return true;
+	return false;
+}
+
+} // namespace
+
+// Array, Structure and AccumulationRecordType are registered types. A search
+// that only reads the corpus files answers that none of them exist.
+TEST(HelpRegistry, CreatableTypesAndEnumerationsAreListed)
+{
+	wxInitializer wx;
+	ASSERT_TRUE(wx.IsOk());
+
+	const std::vector<ibHelpEntry> entries = HelpEntriesFromTypeRegistry();
+
+	const ibHelpEntry* array = Listed(entries, wxT("cls.Array"));
+	ASSERT_NE(array, nullptr);
+	EXPECT_EQ(array->kind, ibHelpKind::kCollection);
+	EXPECT_EQ(array->signature, wxT("New Array"));
+	EXPECT_NE(array->classId, 0u);
+
+	ASSERT_NE(Listed(entries, wxT("cls.Structure")), nullptr);
+	ASSERT_NE(Listed(entries, wxT("cls.Container")), nullptr);
+	ASSERT_NE(Listed(entries, wxT("cls.Table")), nullptr);
+	ASSERT_NE(Listed(entries, wxT("cls.TypeDescription")), nullptr);
+
+	const ibHelpEntry* insert = Listed(entries, wxT("cls.Structure.Insert"));
+	ASSERT_NE(insert, nullptr);
+	EXPECT_EQ(insert->kind, ibHelpKind::kMethod);
+	EXPECT_EQ(insert->signature, wxT("Insert(key : any, value : any)"));
+
+	const ibHelpEntry* recordType = Listed(entries, wxT("enum.AccumulationRecordType"));
+	ASSERT_NE(recordType, nullptr);
+	EXPECT_EQ(recordType->kind, ibHelpKind::kEnumType);
+
+	const ibHelpEntry* receipt = Listed(entries, wxT("enum.AccumulationRecordType.Receipt"));
+	ASSERT_NE(receipt, nullptr);
+	EXPECT_EQ(receipt->kind, ibHelpKind::kSystemEnum);
+	EXPECT_EQ(receipt->signature, wxT("AccumulationRecordType.Receipt"));
+
+	ASSERT_NE(Listed(entries, wxT("enum.DocumentWriteMode")), nullptr);
+
+	const ibHelpEntry* area = Listed(entries, wxT("cls.SpreadsheetArea"));
+	ASSERT_NE(area, nullptr);
+	EXPECT_EQ(area->description, wxT("A value the platform hands you."));
+	ASSERT_NE(Listed(entries, wxT("cls.QueryResult")), nullptr);
+	ASSERT_NE(Listed(entries, wxT("cls.LinqRow")), nullptr);
+}
+
+// A file that already describes Query keeps that article. Array, which the
+// file never mentions, is still found by the same prefix search.
+TEST(HelpRegistry, AnAuthoredArticleWinsAndArrayIsFound)
+{
+	wxInitializer wx;
+	ASSERT_TRUE(wx.IsOk());
+
+	const wxString root = WriteHelpBucket(
+		R"json({ "format": "OES-HELP-1.0", "schema_version": 1, "locale": "en", "entries": [)json"
+		R"json({ "id": "cls.Query", "name_local": "Query", "name_en": "Query", "kind": "collection", "signature": "the authored query" }] })json");
+
+	const ibHelpLoadResult loaded = LoadHelpCorpus(wxT("en"), root);
+	wxFileName::Rmdir(root, wxPATH_RMDIR_RECURSIVE);
+	ASSERT_TRUE(loaded.ok());
+	ASSERT_NE(loaded.corpus, nullptr);
+
+	const ibHelpEntry* query = loaded.corpus->FindById(wxT("cls.Query"));
+	ASSERT_NE(query, nullptr);
+	EXPECT_EQ(query->signature, wxT("the authored query"));
+
+	EXPECT_TRUE(SearchHits(*loaded.corpus, wxT("Array"), wxT("cls.Array")));
+	EXPECT_TRUE(SearchHits(*loaded.corpus, wxT("AccumulationRecordType"), wxT("enum.AccumulationRecordType")));
+	EXPECT_TRUE(SearchHits(*loaded.corpus, wxT("Receipt"), wxT("enum.AccumulationRecordType.Receipt")));
 }

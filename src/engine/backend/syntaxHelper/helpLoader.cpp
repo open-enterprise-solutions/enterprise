@@ -24,6 +24,8 @@
 #include <exception>
 #include <map>
 #include <memory>
+#include <set>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -571,8 +573,9 @@ LoadSource(const wxString&               localeCode,
 		    localeCode, sourceRoot);
 		std::vector<ibHelpLoadError> errs;
 		errs.push_back(std::move(err));
+		std::vector<ibHelpEntry> entries;
 		return std::make_shared<ibHelpCorpus>(
-		    localeCode, sourceTag, std::vector<ibHelpEntry>{},
+		    localeCode, sourceTag, std::move(entries),
 		    std::move(errs));
 	}
 

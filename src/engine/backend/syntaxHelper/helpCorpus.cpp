@@ -8,6 +8,7 @@
 /////////////////////////////////////////////////////////////////////////////
 
 #include "backend/syntaxHelper/helpCorpus.h"
+#include "backend/syntaxHelper/helpLoader.h"    // HelpEntriesFromTypeRegistry — asked at search, not at load
 #include "backend/syntaxHelper/helpResolver.h"
 
 #include <wx/sstream.h>
@@ -298,10 +299,30 @@ const ibHelpCategory* ibHelpCorpus::GetRoot() const {
 	return m_root.get();
 }
 
+void ibHelpCorpus::AskRegistry() const
+{
+	std::call_once(m_registryOnce, [this] {
+		try {
+			for (ibHelpEntry& extra : HelpEntriesFromTypeRegistry()) {
+				if (m_byId.find(extra.id) != m_byId.end())
+					continue;
+				m_registry.push_back(std::move(extra));
+			}
+		} catch (...) {
+			// A registry that cannot be read leaves the written articles standing.
+		}
+	});
+}
+
 const ibHelpEntry* ibHelpCorpus::FindById(const wxString& id) const {
 	auto it = m_byId.find(id);
-	if (it == m_byId.end()) return nullptr;
-	return &m_entries[it->second];
+	if (it != m_byId.end())
+		return &m_entries[it->second];
+	AskRegistry();
+	for (const ibHelpEntry& extra : m_registry)
+		if (extra.id == id)
+			return &extra;
+	return nullptr;
 }
 
 std::vector<const ibHelpEntry*> ibHelpCorpus::AllEntries() const {
@@ -324,6 +345,14 @@ ibHelpCorpus::SearchPrefix(const wxString& prefix) const {
 		if (!it->first.StartsWith(key)) break;
 		for (ibHelpEntryIndex idx : it->second)
 			out.push_back(&m_entries[idx]);
+	}
+	// The files were asked above. Names they do not carry are asked of the
+	// type registry now, the same list type_list walks, not a copy taken at load.
+	AskRegistry();
+	for (const ibHelpEntry& extra : m_registry) {
+		if (NormaliseKey(extra.nameLocal).StartsWith(key)
+			|| NormaliseKey(extra.nameEn).StartsWith(key))
+			out.push_back(&extra);
 	}
 	return out;
 }
@@ -364,6 +393,19 @@ ibHelpCorpus::SearchText(const wxString& query) const {
 	std::vector<const ibHelpEntry*> out;
 	out.reserve(ranked.size());
 	for (const auto& p : ranked) out.push_back(&m_entries[p.second]);
+
+	AskRegistry();
+	for (const ibHelpEntry& extra : m_registry) {
+		std::set<wxString> have;
+		for (const wxString& text : { extra.nameLocal, extra.nameEn, extra.signature, extra.description })
+			for (const wxString& t : Tokenise(text))
+				have.insert(t);
+		bool all = true;
+		for (const wxString& t : tokens)
+			all = all && have.count(t) != 0;
+		if (all)
+			out.push_back(&extra);
+	}
 	return out;
 }
 
