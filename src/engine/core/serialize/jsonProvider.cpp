@@ -228,23 +228,24 @@ private:
 	// Debug build, when each level also copied its subtree; it moves it now).
 	// A stack that runs low first refuses here too — the backstop for a fiber whose
 	// reserve runs out before the count. Every level enters through here, so it is asked once a level.
+	// Each refusal raises with its own reason: the text is not malformed, it is too deep.
 	class Depth {
 	public:
 		explicit Depth(ibJsonReader& reader)
-			: m_reader(reader), m_held(reader.m_depth < ibJsonProvider::kMaxNesting)
+			: m_reader(reader)
 		{
+			if (m_reader.m_depth >= ibJsonProvider::kMaxNesting)
+				ibCoreException::Error(_("ibJsonProvider: the JSON is nested deeper than %d levels at byte %d"),
+					ibJsonProvider::kMaxNesting, (int)m_reader.Offset());
 			if (ibFiber::StackLow())
 				ibCoreException::Error(_("ibJsonProvider: the JSON is nested deeper than the stack allows"));
-			if (m_held)
-				++m_reader.m_depth;
+			++m_reader.m_depth;
 		}
-		~Depth() { if (m_held) --m_reader.m_depth; }
-		bool Held() const { return m_held; }
+		~Depth() { --m_reader.m_depth; }
 		Depth(const Depth&) = delete;
 		Depth& operator=(const Depth&) = delete;
 	private:
 		ibJsonReader& m_reader;
-		bool m_held;
 	};
 
 	bool Eof() const { return m_p >= m_end; }
@@ -367,7 +368,6 @@ bool ibJsonReader::ParseValue(ibDataValue& out, const std::function<ibClassID(co
 bool ibJsonReader::ParseArray(ibDataValue& out, const std::function<ibClassID(const wxString&)>& lookupType)
 {
 	Depth depth(*this);
-	if (!depth.Held()) return false;
 	if (!Accept('[')) return false;
 	std::vector<ibDataValue> items;
 	if (!Accept(']')) {
@@ -414,7 +414,6 @@ bool ibJsonReader::ParseScalar(ibDataValue& out)
 bool ibJsonReader::ParseNode(ibDataNode& node, const std::function<ibClassID(const wxString&)>& lookupType)
 {
 	Depth depth(*this);
-	if (!depth.Held()) return false;
 
 	if (!Expect('{')) return false;
 	if (Accept('}')) return true;   // {} — a legitimately empty node

@@ -252,9 +252,9 @@ TEST(FiberStack, Json_ShallowOnAFiber_Reads)
 
 TEST(FiberStack, Json_DeeperThanTheStack_Raises)
 {
-	// The depth count refuses first and Read returns false. A reserve that
-	// runs out before the count still raises. Either answer is the refusal.
-	bool refused = false;
+	// Whichever comes first refuses: the depth count (kMaxNesting) or a reserve
+	// that runs out before it — which one depends on how heavy a level of the
+	// descent is on this build. Both raise, and both say the text is too deep.
 	wxString why;
 	try {
 		RunOnFiber([&] {
@@ -263,8 +263,7 @@ TEST(FiberStack, Json_DeeperThanTheStack_Raises)
 			ibReaderMemory reader(bytes.data(), static_cast<int>(bytes.size()));
 			ibDataNode root;
 			ibJsonProvider provider;
-			if (!provider.Read(reader, root))
-				refused = true;
+			provider.Read(reader, root);
 		}, 256u * 1024u);
 	}
 	catch (const ibBackendException& err) {
@@ -273,7 +272,5 @@ TEST(FiberStack, Json_DeeperThanTheStack_Raises)
 	catch (const ibCoreException& err) {
 		why = err.GetErrorDescription();
 	}
-	if (why.Find(wxT("nested deeper than the stack")) != wxNOT_FOUND)
-		refused = true;
-	EXPECT_TRUE(refused) << why.ToStdString();
+	EXPECT_NE(why.Find(wxT("nested deeper than")), wxNOT_FOUND) << why.ToStdString();
 }
