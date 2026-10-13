@@ -1,16 +1,17 @@
 # The thin client
 
 **What.** The desktop client that runs nothing of the configuration: a window, its document/view skeleton and its
-editors, talking to a base through the [client protocol](client-protocol.md). The runtime's is `enterprise-thin`; the
-thin designer will stand on the same library.
+editors, talking to a base through the [client protocol](client-protocol.md). The runtime's is `enterprise-thin`, the
+designer's `designer-thin`.
 
 **Why.** The configuration's code runs on the server only, so one platform serves many clients. The client keeps the
 routine the desktop window always kept — menus, toolbars, what may be pressed, file dialogs, recent files, print
 preview — so the server is not asked for it on every move.
 
-**Status.** The thin runtime is done: it does what the desktop runtime does. Next is the thin designer, on the same
-library. Once it works, the desktop `frontend` and the thick applications built on it are removed; until then nothing
-new is built on them.
+**Status.** The thin runtime is done: it does what the desktop runtime does. The thin designer is started: its window
+logs in as the designer and has the document/view skeleton; the designer's own panes and editors come next. Once it
+works, the desktop `frontend` and the thick applications built on it are removed; until then nothing new is built on
+them.
 
 ## Parts
 
@@ -25,6 +26,7 @@ protocol between them; neither half is called a frontend.
 | `frmclient` | the client's graphics library: the main window, the document/view skeleton, the controls, the editors. It links `core` and `protocol` |
 | `fileserver` | a file base in the client's process — the engine loaded beside the window |
 | `enterprise-thin` | the runtime's window and its document manager |
+| `designer-thin` | the designer's window and its document manager |
 
 Chain: core → backend → frmserver ⇄ protocol ⇄ frmclient → enterprise-thin; `fileserver` = backend + frmserver in the
 client's process. `protocol` does not link `core` — `protocol.h` stays dependency-free.

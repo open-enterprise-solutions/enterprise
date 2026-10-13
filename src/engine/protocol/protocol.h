@@ -276,6 +276,8 @@ namespace ibProtocolName {
 	inline constexpr const char* Server    = "Server";
 	inline constexpr const char* Port      = "Port";
 	inline constexpr const char* Database  = "Database";
+	// …whether it is made there when there is none yet (the designer's)…
+	inline constexpr const char* Create    = "Create";
 	// …and whether the engine in the client's process brings its debug server up (the designer's Start debugging).
 	inline constexpr const char* Debug     = "Debug";
 

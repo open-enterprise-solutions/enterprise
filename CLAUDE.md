@@ -135,6 +135,7 @@ enterprise/
         ├── enterprise-thin/ # enterprise-thin.exe (thin client)
         ├── enterprise/      # enterprise.exe (thick client)
         ├── wenterprise-server/ # web server (wes process)
+        ├── designer-thin/   # designer-thin.exe (thin designer)
         ├── designer/        # designer.exe  (IDE)
         ├── launcher/        # launcher.exe  (connection chooser)
         ├── appserver/       # appserver.exe (the application server)
