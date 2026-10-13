@@ -1,6 +1,7 @@
 #include "docManagerRuntime.h"
 
 #include "frmserver/schema/runtime/allFunctions.h"
+#include "frmserver/schema/runtime/debugging.h"
 #include "frmserver/schema/runtime/sections.h"
 
 //files
@@ -22,4 +23,6 @@ ibDocManagerRuntime::ibDocManagerRuntime()
 	RegisterSchema(ibProtocolSchema::AllFunctions, std::make_unique<ibSchemaAllFunctions>());
 	// …and the section panel, from which the same runtime opens what a section offers.
 	RegisterSchema(ibProtocolSchema::Sections, std::make_unique<ibSchemaSections>());
+	// …and debugging it, switched in its Options.
+	RegisterSchema(ibProtocolSchema::Debugging, std::make_unique<ibSchemaDebugging>());
 }

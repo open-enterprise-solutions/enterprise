@@ -38,8 +38,8 @@
 #include "backend/query/queryTempStore.h"  // ibQueryTempTableStore — what the preparing statements made
 #include "drivers/compositionDriver.h"             // ibCompositionDriver / ibCompositionOutputInfo — the contract, cut out on 2026-08-28
 #include "compositionCondition.h"                  // the evaluator — how a row in hand is read against a condition (SubtreeOf feeds it)
-#include "backend/compositionDescription.h"   // ibFilterDescription — a level's filter is the stored one
-#include "compositionTheme.h"                 // ibCompositionTheme — the palette a run hands its driver
+#include "backend/backend_composition.h"   // ibFilterDescription — a level's filter is the stored one; ibStoredValue
+#include "core/composition/compositionTheme.h"   // ibCompositionTheme — the palette a run hands its driver
 #include "backend/functionalOption/functionalOptionGate.h"   // AsApplication — a run shows what the base uses
 
 // A LEVEL'S ORDER IS THE SELECTION'S — declared, not included: querySelector.h drags the whole query
@@ -291,10 +291,10 @@ public:
 	// caller answers with the platform's own. `node` may be null — the output itself is asked.
 	ibValue OutputParameterFor(const Output& output, const GroupNode* node, ibOutputParameter parameter) const {
 		if (node != nullptr && node->m_settings.m_outputParameters.Says(parameter))
-			return node->m_settings.m_outputParameters.ValueInForce(parameter);
+			return ibStoredValue(node->m_settings.m_outputParameters.ValueInForce(parameter), nullptr);
 		if (output.m_settings.m_outputParameters.Says(parameter))
-			return output.m_settings.m_outputParameters.ValueInForce(parameter);
-		return GetCurrentOutputParametersDesc().ValueInForce(parameter);
+			return ibStoredValue(output.m_settings.m_outputParameters.ValueInForce(parameter), nullptr);
+		return ibStoredValue(GetCurrentOutputParametersDesc().ValueInForce(parameter), nullptr);
 	}
 	// …and the one a painter asks: the THEME in force there — the platform's first when nobody named one.
 	const ibCompositionTheme& ThemeFor(const Output& output, const GroupNode* node) const {
@@ -987,6 +987,7 @@ public:
 		std::vector<ibCompositionRule>                             m_rules;       // the setting's, then the output's
 		std::map<const GroupNode*, std::vector<ibCompositionRule>> m_nodes;       // each node's own
 		ibCompositionSubtreeOf                                     m_subtreeOf;   // «in hierarchy», as the composer reads it
+		const class ibMetaData*                                    m_metaData = nullptr;   // …and the configuration it reads in
 
 		bool IsEmpty() const { return m_rules.empty() && m_nodes.empty(); }
 

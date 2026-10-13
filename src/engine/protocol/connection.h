@@ -22,6 +22,10 @@ public:
 	virtual bool Exchange(const std::string& request, std::string& answer,
 		ibProtocolRefusal& refusal, wxString& error) = 0;
 
+	// Open this connection again after it has closed. False when there is nowhere to return to — a file base has
+	// no socket. The default is false, so a connection that cannot return does not pretend to.
+	virtual bool Reconnect(wxString& error) { (void)error; return false; }
+
 	// WHAT THE SERVER SAYS UNASKED — a JSON-RPC notification (`changed {Client}`: a client's frame changed by itself),
 	// handed to `notified` as text on the connection's thread, not the window's; empty — told nothing.
 	virtual void Listen(std::function<void(const std::string& text)> notified) = 0;

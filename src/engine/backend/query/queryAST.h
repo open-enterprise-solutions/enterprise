@@ -18,9 +18,9 @@
 // See docs/private/query-language-arc.md §14 / §23.
 
 #include "backend/compiler/value.h"   // ibValue
-#include "queryKeywords.h"            // ibQueryKeyword (aggregate func tag)
-#include "queryUnfold.h"              // ibQueryDimUnfold — the three unfold words, shared with L3
-#include "queryBalanceRole.h"         // ibBalanceRole — what a projected field is in a balance (ROLE)
+#include "core/query/queryKeywords.h"     // ibQueryKeyword (aggregate func tag)
+#include "core/query/queryUnfold.h"       // ibQueryDimUnfold — the three unfold words, shared with L3
+#include "core/query/queryBalanceRole.h"  // ibBalanceRole — what a projected field is in a balance (ROLE)
 
 #include <vector>
 #include <memory>

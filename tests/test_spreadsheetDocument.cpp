@@ -1,5 +1,5 @@
 ////////////////////////////////////////////////////////////////////////////
-//	Description : ibBackendSpreadsheetObject — the SERVER-SIDE spreadsheet
+//	Description : ibSpreadsheetObject — the SERVER-SIDE spreadsheet
 //	              document. No window, no database, no wxApp: the document IS
 //	              the result, and a view is a subscriber to it.
 //
@@ -18,7 +18,8 @@
 
 #include <gtest/gtest.h>
 
-#include "backend/backend_spreadsheet.h"
+#include "core/spreadsheet/spreadsheetObject.h"
+#include "backend/compiler/value.h"   // ibValue — what a test puts into a parameter and reads back
 #include "backend/backend_localization.h"
 
 namespace {
@@ -33,13 +34,13 @@ wxString Translated(const wxString& raw) {
 	return ibLocalization::GetTranslateGetRawLocText(ibBackendLocalization::GetUserLanguage(), raw);
 }
 
-wxObjectDataPtr<ibBackendSpreadsheetObject> MakeDocument() {
-	return wxObjectDataPtr<ibBackendSpreadsheetObject>(new ibBackendSpreadsheetObject());
+std::shared_ptr<ibSpreadsheetObject> MakeDocument() {
+	return std::make_shared<ibSpreadsheetObject>();
 }
 
 // A notifier that counts what it was told. The document's whole contract with a
 // renderer is these calls, so a test asserts the CALLS rather than any drawing.
-class ibCountingNotifier : public ibBackendSpreadsheetNotifier {
+class ibCountingNotifier : public ibSpreadsheetNotifier {
 public:
 	int m_cleared = 0, m_values = 0, m_rowFreeze = -1, m_areasPut = 0;
 
@@ -49,10 +50,10 @@ public:
 	void SetColSize(int, int) override {}
 	void SetRowFreeze(int row) override { m_rowFreeze = row; }
 	void SetColFreeze(int) override {}
-	void SetCellBackgroundColour(int, int, const wxColour&) override {}
-	void SetCellTextColour(int, int, const wxColour&) override {}
+	void SetCellBackgroundColour(int, int, const ibColour&) override {}
+	void SetCellTextColour(int, int, const ibColour&) override {}
 	void SetCellTextOrient(int, int, const int) override {}
-	void SetCellFont(int, int, const wxFont&) override {}
+	void SetCellFont(int, int, const ibFont&) override {}
 	void SetCellAlignment(int, int, const int, const int) override {}
 	void SetCellBorderLeft(int, int, const ibSpreadsheetBorderDescription&) override {}
 	void SetCellBorderRight(int, int, const ibSpreadsheetBorderDescription&) override {}
@@ -67,9 +68,9 @@ public:
 	void DeleteColBrake(int) override {}
 	void SetRowBrake(int) override {}
 	void SetColBrake(int) override {}
-	void SetCellValue(int, int, const wxString&) override { ++m_values; }
-	void PutArea(const wxObjectDataPtr<ibBackendSpreadsheetObject>&, unsigned int) override { ++m_areasPut; }
-	void JoinArea(const wxObjectDataPtr<ibBackendSpreadsheetObject>&, unsigned int) override {}
+	void SetCellValue(int, int, const ibString&) override { ++m_values; }
+	void PutArea(const std::shared_ptr<ibSpreadsheetObject>&, unsigned int) override { ++m_areasPut; }
+	void JoinArea(const std::shared_ptr<ibSpreadsheetObject>&, unsigned int) override {}
 };
 
 } // namespace
@@ -131,11 +132,11 @@ TEST(SpreadsheetDocument, Clear_EmptiesTheDocument)
 TEST(SpreadsheetDocument, Parameter_RoundTrips)
 {
 	auto doc = MakeDocument();
-	doc->SetParameter(wxT("Partner"), ibValue(wxT("Alpha")));
+	doc->SetParameter(wxT("Partner"), ibValue(wxT("Alpha")).ToAnyValue());
 
-	ibValue out;
-	EXPECT_TRUE(doc->GetParameter(wxT("Partner"), out));
-	EXPECT_EQ(wxT("Alpha"), out.GetString());
+	ibAnyValuePtr<ibAnyValue> held;
+	EXPECT_TRUE(doc->GetParameter(wxT("Partner"), held));
+	EXPECT_EQ(wxT("Alpha"), ibValue::FromAnyValue(held).GetString());
 }
 
 // A MISSING PARAMETER ANSWERS FALSE, not an empty value that reads like a set one.
@@ -144,8 +145,8 @@ TEST(SpreadsheetDocument, Parameter_RoundTrips)
 TEST(SpreadsheetDocument, MissingParameter_AnswersFalse)
 {
 	auto doc = MakeDocument();
-	ibValue out;
-	EXPECT_FALSE(doc->GetParameter(wxT("Nobody"), out));
+	ibAnyValuePtr<ibAnyValue> held;
+	EXPECT_FALSE(doc->GetParameter(wxT("Nobody"), held));
 }
 
 // A NAME IS FOUND WITHOUT CASE — the rule this lookup always had when it walked every name with
@@ -153,13 +154,13 @@ TEST(SpreadsheetDocument, MissingParameter_AnswersFalse)
 TEST(SpreadsheetDocument, Parameter_IsFoundWithoutCase)
 {
 	auto doc = MakeDocument();
-	doc->SetParameter(wxT("Partner"), ibValue(wxT("Alpha")));
+	doc->SetParameter(wxT("Partner"), ibValue(wxT("Alpha")).ToAnyValue());
 
-	ibValue out;
-	EXPECT_TRUE(doc->GetParameter(wxT("PARTNER"), out));
-	EXPECT_EQ(wxT("Alpha"), out.GetString());
-	EXPECT_TRUE(doc->GetParameter(wxT("partner"), out));
-	EXPECT_EQ(wxT("Alpha"), out.GetString());
+	ibAnyValuePtr<ibAnyValue> held;
+	EXPECT_TRUE(doc->GetParameter(wxT("PARTNER"), held));
+	EXPECT_EQ(wxT("Alpha"), ibValue::FromAnyValue(held).GetString());
+	EXPECT_TRUE(doc->GetParameter(wxT("partner"), held));
+	EXPECT_EQ(wxT("Alpha"), ibValue::FromAnyValue(held).GetString());
 }
 
 // …and so ONE NAME IN TWO CASES IS ONE PARAMETER: the second write replaces the first rather than
@@ -167,12 +168,12 @@ TEST(SpreadsheetDocument, Parameter_IsFoundWithoutCase)
 TEST(SpreadsheetDocument, Parameter_SameNameInAnotherCase_IsTheSameParameter)
 {
 	auto doc = MakeDocument();
-	doc->SetParameter(wxT("Partner"), ibValue(wxT("Alpha")));
-	doc->SetParameter(wxT("PARTNER"), ibValue(wxT("Beta")));
+	doc->SetParameter(wxT("Partner"), ibValue(wxT("Alpha")).ToAnyValue());
+	doc->SetParameter(wxT("PARTNER"), ibValue(wxT("Beta")).ToAnyValue());
 
-	ibValue out;
-	EXPECT_TRUE(doc->GetParameter(wxT("Partner"), out));
-	EXPECT_EQ(wxT("Beta"), out.GetString());
+	ibAnyValuePtr<ibAnyValue> held;
+	EXPECT_TRUE(doc->GetParameter(wxT("Partner"), held));
+	EXPECT_EQ(wxT("Beta"), ibValue::FromAnyValue(held).GetString());
 }
 
 // NAMES WRITTEN OUT OF ORDER ARE STILL FOUND — the write is hinted at the end for a writer that names
@@ -181,20 +182,20 @@ TEST(SpreadsheetDocument, Parameter_SameNameInAnotherCase_IsTheSameParameter)
 TEST(SpreadsheetDocument, Parameter_WrittenOutOfOrder_AllFound)
 {
 	auto doc = MakeDocument();
-	doc->SetParameter(wxT("Link_00000002_0001"), ibValue(wxT("second")));
-	doc->SetParameter(wxT("Link_00000001_0001"), ibValue(wxT("first")));
-	doc->SetParameter(wxT("Link_00000003_0001"), ibValue(wxT("third")));
+	doc->SetParameter(wxT("Link_00000002_0001"), ibValue(wxT("second")).ToAnyValue());
+	doc->SetParameter(wxT("Link_00000001_0001"), ibValue(wxT("first")).ToAnyValue());
+	doc->SetParameter(wxT("Link_00000003_0001"), ibValue(wxT("third")).ToAnyValue());
 
-	EXPECT_EQ(wxT("first"),  doc->GetParameter(wxT("Link_00000001_0001")).GetString());
-	EXPECT_EQ(wxT("second"), doc->GetParameter(wxT("Link_00000002_0001")).GetString());
-	EXPECT_EQ(wxT("third"),  doc->GetParameter(wxT("Link_00000003_0001")).GetString());
+	EXPECT_EQ(wxT("first"),  ibValue::FromAnyValue(doc->GetParameter(wxT("Link_00000001_0001"))).GetString());
+	EXPECT_EQ(wxT("second"), ibValue::FromAnyValue(doc->GetParameter(wxT("Link_00000002_0001"))).GetString());
+	EXPECT_EQ(wxT("third"),  ibValue::FromAnyValue(doc->GetParameter(wxT("Link_00000003_0001"))).GetString());
 }
 
 // FILL TYPE "PARAMETER": the cell's whole text IS the parameter name.
 TEST(SpreadsheetDocument, FillTypeParameter_ResolvesWholeText)
 {
 	auto doc = MakeDocument();
-	doc->SetParameter(wxT("Total"), ibValue(wxT("42")));
+	doc->SetParameter(wxT("Total"), ibValue(wxT("42")).ToAnyValue());
 
 	EXPECT_EQ(wxT("42"), doc->ComputeStringValueFromParameters(
 		wxT("Total"), ibSpreadsheetFillType::ibSpreadsheetFillType_StrParameter));
@@ -208,8 +209,8 @@ TEST(SpreadsheetDocument, FillTypeParameter_ResolvesWholeText)
 TEST(SpreadsheetDocument, FillTypeTemplate_ReplacesBracketedTokens)
 {
 	auto doc = MakeDocument();
-	doc->SetParameter(wxT("Name"), ibValue(wxT("Alpha")));
-	doc->SetParameter(wxT("Sum"), ibValue(wxT("10")));
+	doc->SetParameter(wxT("Name"), ibValue(wxT("Alpha")).ToAnyValue());
+	doc->SetParameter(wxT("Sum"), ibValue(wxT("10")).ToAnyValue());
 
 	// A template typed plainly is its own text — it used to translate to NOTHING, and
 	// the cell came out blank.
@@ -247,7 +248,7 @@ TEST(SpreadsheetDocument, FillTypeParameter_AValueInEveryLanguageIsReadInOne)
 {
 	auto doc = MakeDocument();
 	doc->SetLangCode(wxT("uk"));
-	doc->SetParameter(wxT("Title"), ibValue(wxT("en = 'Total'; uk = 'Razom';")));
+	doc->SetParameter(wxT("Title"), ibValue(wxT("en = 'Total'; uk = 'Razom';")).ToAnyValue());
 
 	EXPECT_EQ(wxT("Razom"), doc->ComputeStringValueFromParameters(
 		wxT("Title"), ibSpreadsheetFillType::ibSpreadsheetFillType_StrParameter));
@@ -260,7 +261,7 @@ TEST(SpreadsheetDocument, FillTypeParameter_AValueInEveryLanguageIsReadInOne)
 TEST(SpreadsheetDocument, FillTypeParameter_KeepsAnApostrophe)
 {
 	auto doc = MakeDocument();
-	doc->SetParameter(wxT("Name"), ibValue(wxT("O'Brien")));
+	doc->SetParameter(wxT("Name"), ibValue(wxT("O'Brien")).ToAnyValue());
 
 	EXPECT_EQ(wxT("O'Brien"), doc->ComputeStringValueFromParameters(
 		wxT("Name"), ibSpreadsheetFillType::ibSpreadsheetFillType_StrParameter));
@@ -296,7 +297,7 @@ TEST(SpreadsheetDocument, FillTypeTemplate_UnknownTokenRendersEmpty)
 TEST(SpreadsheetDocument, FillTypeText_IsLeftAlone)
 {
 	auto doc = MakeDocument();
-	doc->SetParameter(wxT("Name"), ibValue(wxT("Alpha")));
+	doc->SetParameter(wxT("Name"), ibValue(wxT("Alpha")).ToAnyValue());
 	EXPECT_EQ(wxT("[Name]"), doc->ComputeStringValueFromParameters(
 		wxT("[Name]"), ibSpreadsheetFillType::ibSpreadsheetFillType_StrText));
 }
@@ -311,7 +312,7 @@ TEST(SpreadsheetDocument, DetailsParameter_RoundTrips)
 	doc->SetCellValue(1, 1, wxT("Alpha"));
 	doc->SetCellDetailsParameter(1, 1, wxT("Cell_1_1"));
 
-	wxString name;
+	ibString name;
 	doc->GetCellDetailsParameter(1, 1, name);
 	EXPECT_EQ(wxT("Cell_1_1"), name);
 }
@@ -564,7 +565,7 @@ TEST(SpreadsheetDocument, PutArea_ResolvesTemplateCellsFromTheAreaParameters)
 	auto area = MakeDocument();
 	area->SetCellValue(0, 0, wxT("[Name]"));
 	area->SetCellFillType(0, 0, ibSpreadsheetFillType::ibSpreadsheetFillType_StrTemplate);
-	area->SetParameter(wxT("Name"), ibValue(wxT("Alpha")));
+	area->SetParameter(wxT("Name"), ibValue(wxT("Alpha")).ToAnyValue());
 
 	doc->PutArea(area);
 
@@ -603,23 +604,23 @@ TEST(SpreadsheetDocument, PutAreaTwice_KeepsBothDrillDowns)
 	auto area = MakeDocument();
 	area->SetCellValue(0, 0, wxT("row"));
 	area->SetCellDetailsParameter(0, 0, wxT("Ref"));
-	area->SetParameter(wxT("Ref"), ibValue(wxT("first")));
+	area->SetParameter(wxT("Ref"), ibValue(wxT("first")).ToAnyValue());
 
 	doc->PutArea(area);
 	const int secondRow = doc->GetNumberRows();
 
-	area->SetParameter(wxT("Ref"), ibValue(wxT("second")));
+	area->SetParameter(wxT("Ref"), ibValue(wxT("second")).ToAnyValue());
 	doc->PutArea(area);
 
-	wxString firstName, secondName;
+	ibString firstName, secondName;
 	doc->GetCellDetailsParameter(0, 0, firstName);
 	doc->GetCellDetailsParameter(secondRow, 0, secondName);
 
 	EXPECT_FALSE(firstName.IsEmpty());
 	EXPECT_FALSE(secondName.IsEmpty());
 	EXPECT_NE(firstName, secondName);                       // one name per position
-	EXPECT_EQ(wxT("first"), doc->GetParameter(firstName).GetString());
-	EXPECT_EQ(wxT("second"), doc->GetParameter(secondName).GetString());
+	EXPECT_EQ(wxT("first"), ibValue::FromAnyValue(doc->GetParameter(firstName)).GetString());
+	EXPECT_EQ(wxT("second"), ibValue::FromAnyValue(doc->GetParameter(secondName)).GetString());
 }
 
 // A group level on the put wraps exactly the rows that landed.
@@ -764,7 +765,7 @@ wxString CellText(int row, int col) {
 // nobody writes into, content in rows 1..10 across columns 1..12, and NO page
 // break declared anywhere — a template is authored by placing cells, not by
 // saying where the paper ends. Extent: 11 rows, 13 columns.
-wxObjectDataPtr<ibBackendSpreadsheetObject> MakePrintForm() {
+std::shared_ptr<ibSpreadsheetObject> MakePrintForm() {
 	auto doc = MakeDocument();
 	for (int row = 1; row <= 10; row++)
 		for (int col = 1; col <= 12; col++)
@@ -773,7 +774,7 @@ wxObjectDataPtr<ibBackendSpreadsheetObject> MakePrintForm() {
 }
 
 // Ten written rows in column 0 — a known extent for the break verbs to clamp against.
-wxObjectDataPtr<ibBackendSpreadsheetObject> MakeSheetOfRows(int count) {
+std::shared_ptr<ibSpreadsheetObject> MakeSheetOfRows(int count) {
 	auto doc = MakeDocument();
 	for (int row = 0; row < count; row++)
 		doc->SetCellValue(row, 0, CellText(row, 0));

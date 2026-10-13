@@ -176,8 +176,10 @@
     <ClCompile Include="mcp\tools\mcpToolProtocol.cpp" />
     <ClCompile Include="schema\about.cpp" />
     <ClCompile Include="schema\activeUser.cpp" />
+    <ClCompile Include="schema\auditLog.cpp" />
     <ClCompile Include="schema\clientSchema.cpp" />
     <ClCompile Include="schema\runtime\allFunctions.cpp" />
+    <ClCompile Include="schema\runtime\debugging.cpp" />
     <ClCompile Include="schema\runtime\sections.cpp" />
     <ClCompile Include="settings\formSettings.cpp" />
     <ClCompile Include="visualView\choiceRequest.cpp" />
@@ -188,7 +190,9 @@
     <ClCompile Include="win\dlgs\formEditor.cpp" />
     <ClCompile Include="win\dlgs\generation.cpp" />
     <ClCompile Include="win\dlgs\settings\savedSettings.cpp" />
+    <ClCompile Include="win\dlgs\settings\settingsRequest.cpp" />
     <ClCompile Include="win\dlgs\settings\list\listSettings.cpp" />
+    <ClCompile Include="win\dlgs\settings\composer\composerSettings.cpp" />
     <ClCompile Include="visualView\layers\commandBar.cpp" />
     <ClCompile Include="visualView\layers\commandReceiver.cpp" />
     <ClCompile Include="visualView\ctrl\boxsizer.cpp" />
@@ -300,8 +304,10 @@
     <ClInclude Include="docView\templates\docViewText.h" />
     <ClInclude Include="schema\about.h" />
     <ClInclude Include="schema\activeUser.h" />
+    <ClInclude Include="schema\auditLog.h" />
     <ClInclude Include="schema\clientSchema.h" />
     <ClInclude Include="schema\runtime\allFunctions.h" />
+    <ClInclude Include="schema\runtime\debugging.h" />
     <ClInclude Include="schema\runtime\sections.h" />
     <ClInclude Include="settings\formSettings.h" />
     <ClInclude Include="visualView\choiceRequest.h" />
@@ -313,7 +319,9 @@
     <ClInclude Include="win\dlgs\formEditor.h" />
     <ClInclude Include="win\dlgs\generation.h" />
     <ClInclude Include="win\dlgs\settings\savedSettings.h" />
+    <ClInclude Include="win\dlgs\settings\settingsRequest.h" />
     <ClInclude Include="win\dlgs\settings\list\listSettings.h" />
+    <ClInclude Include="win\dlgs\settings\composer\composerSettings.h" />
     <ClInclude Include="visualView\layers\commandBar.h" />
     <ClInclude Include="visualView\layers\commandReceiver.h" />
     <ClInclude Include="visualView\ctrl\chartBox.h" />

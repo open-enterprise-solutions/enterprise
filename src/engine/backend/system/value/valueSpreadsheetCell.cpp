@@ -52,12 +52,12 @@ bool ibValueSpreadsheetDocumentArea::SetPropVal(const long lPropNum, const ibVal
 	{
 	case eBackgroundColour:
 	{
-		m_spreadsheetDoc->SetCellBackgroundColour(m_row, m_col, *varPropVal.ConvertToType<ibValueColour>());
+		m_spreadsheetDoc->SetCellBackgroundColour(m_row, m_col, varPropVal.ConvertToType<ibValueColour>()->m_colour);
 		return true;
 	}
 	case eTextColour:
 	{
-		m_spreadsheetDoc->SetCellTextColour(m_row, m_col, *varPropVal.ConvertToType<ibValueColour>());
+		m_spreadsheetDoc->SetCellTextColour(m_row, m_col, varPropVal.ConvertToType<ibValueColour>()->m_colour);
 		return true;
 	}
 	case eTextOrient:
@@ -67,7 +67,7 @@ bool ibValueSpreadsheetDocumentArea::SetPropVal(const long lPropNum, const ibVal
 	}
 	case eFont:
 	{
-		m_spreadsheetDoc->SetCellFont(m_row, m_col, *varPropVal.ConvertToType<ibValueFont>());
+		m_spreadsheetDoc->SetCellFont(m_row, m_col, varPropVal.ConvertToType<ibValueFont>()->m_font);
 		return true;
 	}
 	case eAlignmentHorz:
@@ -113,7 +113,7 @@ bool ibValueSpreadsheetDocumentArea::SetPropVal(const long lPropNum, const ibVal
 	case eSize:
 	{
 		ibValuePtr<ibValueSize> valueSize(varPropVal.ConvertToType<ibValueSize>());
-		m_spreadsheetDoc->SetCellSize(m_row, m_col, valueSize->m_size.x, valueSize->m_size.y);
+		m_spreadsheetDoc->SetCellSize(m_row, m_col, valueSize->m_size.m_width, valueSize->m_size.m_height);
 		return true;
 	}
 	case eReadOnly:
@@ -199,7 +199,7 @@ bool ibValueSpreadsheetDocumentArea::GetPropVal(const long lPropNum, ibValue& pv
 	case eSize:
 	{
 		ibValuePtr<ibValueSize> valueSize(new ibValueSize());
-		m_spreadsheetDoc->GetCellSize(m_row, m_col, &valueSize->m_size.x, &valueSize->m_size.y);
+		m_spreadsheetDoc->GetCellSize(m_row, m_col, &valueSize->m_size.m_width, &valueSize->m_size.m_height);
 		pvarPropVal = valueSize;
 		return true;
 	}
@@ -218,7 +218,7 @@ bool ibValueSpreadsheetDocumentArea::GetPropVal(const long lPropNum, ibValue& pv
 		// text once an area has landed, and a template's cell answers with what is written in it —
 		// a parameter's name, a template's own wording — in the document's language, as it always did.
 		pvarPropVal = m_spreadsheetDoc->ComputeStringValueFromParameters(
-			m_spreadsheetDoc->GetCellValue(m_row, m_col), ibSpreadsheetFillType::ibSpreadsheetFillType_StrText);
+			m_spreadsheetDoc->GetCellValue(m_row, m_col), ibSpreadsheetFillType::ibSpreadsheetFillType_StrText).ToWxString();
 		return true;
 	}
 	}

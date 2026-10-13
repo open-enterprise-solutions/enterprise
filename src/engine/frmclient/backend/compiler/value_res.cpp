@@ -8,7 +8,7 @@ static const wxString s_value_16_png = wxT("iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYA
 
 wxIcon ibValue::GetIconGroup()
 {
-	// …at 16 by 16, as the engine reads it (ibServerPicture(png, wxSize(16, 16))).
+	// …at 16 by 16, as the engine reads it (ibBackendPicture::GetImageFromBase64(png, wxSize(16, 16))).
 	static const wxIcon icon = [] {
 		wxImage image = ibProtocolPicture(s_value_16_png).ConvertToImage();
 		if (image.IsOk())

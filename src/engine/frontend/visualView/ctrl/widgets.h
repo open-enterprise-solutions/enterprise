@@ -3,7 +3,7 @@
 
 #include "window.h"
 #include "typeControl.h"
-#include "backend/sourceDescription.h"   // ibSourceDescription (full [head, field] binding path)
+#include "core/description/sourceDescription.h"   // ibSourceDescription (full [head, field] binding path)
 #include "backend/propertyManager/property/propertyCommandSource.h"   // ibPropertyCommandSource — assign a COMMAND to the button
 #include "frontend/visualView/layers/commandReceiver.h"             // ibFrontendCommandReceiver — the command door the button IS-A (IS-A ibBackendCommandReceiver too)
 

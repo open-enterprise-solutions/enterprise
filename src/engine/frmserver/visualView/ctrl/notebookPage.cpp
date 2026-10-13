@@ -1,5 +1,6 @@
 #include "notebook.h"
 #include "core/serialize/dataBuilder.h"   // ibDataNode (control -> node)
+#include "frmserver/visualView/visualHost.h"   // ibVisualHost::SendPicture — the tab's picture, by its id
 
 //***********************************************************************************
 //*                              ibValueNotebookPage                                 *
@@ -22,6 +23,10 @@ void ibValueNotebookPage::OnUpdate(ibDataNode& state, ibVisualHost* host)
     state.SetValue(wxT("Title"), representation != ibRepresentation::ibRepresentation_Picture ?
         m_propertyTitle->GetValueAsTranslateString() : wxString());
     state.SetValue(wxT("PictureVisible"), representation != ibRepresentation::ibRepresentation_Text);
+    // The picture travels by its id (the host sends it once), and only when the tab shows one.
+    const ibPictureDescription picture = m_propertyPicture->GetValueAsPictureDesc();
+    if (representation != ibRepresentation::ibRepresentation_Text && !picture.IsEmptyPicture())
+        state.SetValue(wxT("Picture"), host->SendPicture(picture));
 }
 
 void ibValueNotebookPage::OnSelected(ibVisualHost* host)

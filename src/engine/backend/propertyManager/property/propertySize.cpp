@@ -6,12 +6,12 @@
 
 ////////////////////////////////////////////////////////////////////////
 
-wxVariantData* ibPropertySize::CreateVariantData(const wxSize& val)
+wxVariantData* ibPropertySize::CreateVariantData(const ibSize& val)
 {
 	return new ibVariantDataSize(val);
 }
 
-wxSize ibPropertySize::GetValueAsSize() const
+ibSize ibPropertySize::GetValueAsSize() const
 {
 	return get_cell_variant<ibVariantDataSize>()->GetSize();
 }

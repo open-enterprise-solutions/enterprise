@@ -3,8 +3,8 @@
 
 #include "frmserver/frmserver.h"            // FRMSERVER_API
 #include "backend/backend_command.h"      // ibBackendCommandReceiver — the door EXTENDS the backend receiver (one chain)
-#include "backend/commandDescription.h"   // ibCommandDescription / ibCommandHop
-#include "backend/pictureDescription.h"   // ibPictureDescription (ResolveValueByPath out-picture)
+#include "core/description/commandDescription.h"   //ibCommandDescription / ibCommandHop
+#include "core/description/pictureDescription.h"   // ibPictureDescription (ResolveValueByPath out-picture)
 #include <wx/string.h>                     // wxString (ResolveValueByPath out-caption)
 #include <vector>                          // std::vector (ResolveSubCommands out-list)
 

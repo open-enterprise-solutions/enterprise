@@ -2,7 +2,7 @@
 #define __PROPERTY_COMMAND_SOURCE_H__
 
 #include "backend/propertyManager/propertyObject.h"
-#include "backend/commandDescription.h"
+#include "core/description/commandDescription.h"
 
 // The button's COMMAND-source property — the command-door twin of ibPropertySource. It holds an
 // ibCommandDescription (a command-hop path: own object / main attribute / table / general) and, like the

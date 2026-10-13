@@ -91,7 +91,7 @@ void ibValueGridBox::Update(const ibProtocolNode& node)
 		if (m_fetcher(ibProtocolNode(), answer) && answer.GetInt(ibProtocolName::Version) == version) {
 			m_version = version;
 
-			wxObjectDataPtr<ibBackendSpreadsheetObject> document(new ibBackendSpreadsheetObject);
+			auto document = std::make_shared<ibSpreadsheetObject>();
 			auto sheet = std::make_shared<ibDataNode>();
 			ibReadProtocolNode(answer.FindChild(ibProtocolName::Sheet), *sheet);
 			ibSpreadsheetDescriptionMemory::ReadNode(ibDataValue::Child(sheet), document->GetSpreadsheetDesc());
@@ -100,8 +100,9 @@ void ibValueGridBox::Update(const ibProtocolNode& node)
 		}
 	}
 
-	// A report being built — «Composing…» over the sheet until it is delivered.
-	gridWindow->ShowComposeProgress(state.GetBool(ibProtocolName::Composing));
+	// What the sheet is to its report — «Composing…» over it until it is delivered, or the word to compose again once
+	// the setting changed since it was built.
+	gridWindow->ShowComposeState(static_cast<ibProtocolComposeState>(state.GetInt(ibProtocolName::ComposeState)));
 	// The grid lines a document's sheet shows; a report's are its cells' borders.
 	gridWindow->EnableGridLines(state.GetBool(ibProtocolName::GridLines));
 

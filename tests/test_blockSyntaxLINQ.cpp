@@ -9,7 +9,7 @@
 
 #include <gtest/gtest.h>
 #include "backend/compiler/blockSyntaxLINQ.h"
-#include "backend/compiler/codeDef.h"
+#include "core/compiler/codeDef.h"
 
 #include <algorithm>
 

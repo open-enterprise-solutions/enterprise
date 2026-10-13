@@ -18,7 +18,7 @@ m_textView(new ibTextBoxView())            // empty until Create
 	m_textView->SetDocument(m_textDocument);
 
 	//set default params
-	m_propertyMinSize->SetValue(wxSize(150, 50));
+	m_propertyMinSize->SetValue(ibSize(150, 50));
 }
 
 #include "frontend/visualView/ctrl/form.h"

@@ -10,7 +10,7 @@ wxIcon ibValueMetaObjectLanguage::GetIcon() const
 
 wxIcon ibValueMetaObjectLanguage::GetIconGroup()
 {
-	static const ibServerPicture picture(s_translation_64_png, wxSize(16, 16));
+	static const ibPicture picture = ibBackendPicture::FromImage(ibBackendPicture::GetImageFromBase64(s_translation_64_png, wxSize(16, 16)));
 
-	return picture.ToIcon();
+	return ibBackendPicture::ToIcon(picture);
 }

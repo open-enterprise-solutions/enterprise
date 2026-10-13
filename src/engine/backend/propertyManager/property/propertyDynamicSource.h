@@ -44,8 +44,15 @@ public:
 	// ⭐ THE SOURCE AS THE ID IT IS — see the variant. Reading and writing both go through this, so a
 	// source that cannot be resolved AT THIS MOMENT is still carried: the number is the source, and
 	// resolving it is a question asked later, by whoever needs the object.
+	//
+	// 🛑 …AND IT IS RESOLVED THROUGH THE OWNER'S CONFIGURATION, the way SetQueryable's is. The id
+	// used to go into the cell the property was created with — made before it had an owner, so with
+	// no configuration at all: after a reopen the number was there, the list's query was there, and
+	// the Source showed nothing, because the id was asked of the empty global factory (Max, 2026-10-13).
 	void SetTableId(const ibMetaID& tableId) {
-		get_cell_variant<ibVariantDataDynamicSource>()->SetTableId(tableId);
+		ibVariantDataDynamicSource* source = new ibVariantDataDynamicSource(nullptr, m_owner);
+		source->SetTableId(tableId);
+		m_propValue = source;
 	}
 	ibMetaID GetTableId() const {
 		return get_cell_variant<ibVariantDataDynamicSource>()->GetTableId();

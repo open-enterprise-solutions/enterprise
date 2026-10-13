@@ -22,7 +22,7 @@
 #include <memory>
 #include <variant>
 
-#include "core/types.h"                  // ibMetaID, ibClassID
+#include "core/core.h"                   // ibMetaID, ibClassID
 #include "core/fdatetime.h"              // ibDateTime — the Date scalar
 #include "core/fstring.h"                // ibString — codec specialization
 #include "core/guid.h"                   // ibGuid — codec specialization

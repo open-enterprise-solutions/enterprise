@@ -25,5 +25,7 @@ void ibClientFrameDesigner::InitializeDefaultMenu()
 	// right switches its item off (as drawn).
 	ibClientMenu administration;
 	administration.Append(ibProtocolSchema::ActiveUser, _("Active users"));
+	administration.AppendSeparator();
+	administration.Append(ibProtocolSchema::AuditLog, _("Registration journal"));
 	m_menu.AppendSubMenu(administration, _("Administration"));
 }

@@ -1,7 +1,7 @@
 #include "tableBox.h"
 #include "tableBoxColumnRenderer.h"             // ibDataViewColumnObject — the current column carries its control
 #include "backend/composition/drivers/spreadsheetComposeDriver.h"   // the SAME driver a report's sheet is drawn by
-#include "backend/backend_spreadsheet.h"        // ibBackendSpreadsheetObject — the document the list is printed into
+#include "core/spreadsheet/spreadsheetObject.h"   // ibSpreadsheetObject — the document the list is printed into
 #include "backend/session/session.h"            // ibSession::CurrentFrame — the door a finished document is shown through
 #include "backend/system/systemManager.h"       // ibValueSystemFunction::Message — the platform's own way to speak
 #include "backend/backend_mainFrame.h"          // ibBackendDocFrame — ShowSpreadsheetDocument lives on it
@@ -10,7 +10,7 @@
 #include <wx/choicdlg.h>
 #include "backend/metaCollection/partial/commonObject.h"
 #include "backend/picturePredefined.h"          // g_pic*CLSID — the TableBox composes the standard command band
-#include "backend/compositionDescription.h"     // the description the quick filter writes into
+#include "backend/backend_composition.h"        // the description the quick filter writes into + ibStoreValue
 #include "backend/appData.h"
 #include "frontend/win/dlgs/settings/list/listSettings.h"   // the ONE door a model's settings are opened by
 #include "frontend/win/dlgs/settings/composer/composerSettings.h"   // the saved-settings shelf — shared with the report's world
@@ -318,7 +318,7 @@ void ibValueModelTableBox::Command_FilterByCurrentColumn()
 		// condition, and hand the whole of it back as the user's. The list's own description, what the
 		// configuration saved, is untouched.
 		ibSettingsDescription settings = m_tableModel->GetModelComposer().GetCurrentSettingsDesc();
-		settings.m_filter.Append(name, ibComparisonKind_Equal, value);
+		settings.m_filter.Append(name, ibComparisonKind_Equal, ibStoreValue(value));
 		m_tableModel->GetModelComposer().SetUserSettingsDesc(settings);
 		m_tableModel->RefetchAll();
 		KeepInView(ctrl, sel);   // the row whose value this filter is — it stays in view
@@ -518,7 +518,7 @@ void ibValueModelTableBox::Command_OutputList()
 			for (size_t at = 0; at < path.size() && at < rungs.size(); ++at) {
 				if (rungs[at].m_path.IsEmpty())
 					continue;
-				settings.m_filter.Append(rungs[at].m_path, ibComparisonKind_Equal, path[at]);
+				settings.m_filter.Append(rungs[at].m_path, ibComparisonKind_Equal, ibStoreValue(path[at]));
 				fixed++;
 			}
 
@@ -549,7 +549,7 @@ void ibValueModelTableBox::Command_OutputList()
 						ibValuePtr<ibValueModel::ibValueModelReturnLine> folder(m_tableModel->GetRowAt(drilled));
 						if (folder != nullptr)
 							settings.m_filter.Append(key.front()->GetName(),
-								ibComparisonKind_InHierarchy, folder->GetSelectValue());
+								ibComparisonKind_InHierarchy, ibStoreValue(folder->GetSelectValue()));
 					}
 				}
 		}
@@ -574,7 +574,7 @@ void ibValueModelTableBox::Command_OutputList()
 	const wxString title = m_formOwner != nullptr && !m_formOwner->GetCaption().IsEmpty()
 		? m_formOwner->GetCaption() : wxString(_("List"));
 
-	wxObjectDataPtr<ibBackendSpreadsheetObject> sheet(new ibBackendSpreadsheetObject());
+	std::shared_ptr<ibSpreadsheetObject> sheet = std::make_shared<ibSpreadsheetObject>();
 	ibSpreadsheetComposeDriver driver(sheet.get());
 	driver.SetTitle(title);
 

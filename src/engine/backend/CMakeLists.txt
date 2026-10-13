@@ -69,7 +69,8 @@ add_library(backend SHARED ${BACKEND_SOURCES})
 set(OES_ENGINE_FINGERPRINT_HEADER "${CMAKE_CURRENT_BINARY_DIR}/generated/engineFingerprintBuild.h")
 file(GLOB_RECURSE OES_FINGERPRINT_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/compiler/*"
-    "${CMAKE_CURRENT_SOURCE_DIR}/system/*")
+    "${CMAKE_CURRENT_SOURCE_DIR}/system/*"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../core/compiler/*")
 # The list of those files is an input too. A file that is DELETED leaves no newer
 # input behind, so the hash would not run again and the old key would stay. The
 # glob reconfigures on an added or removed file; the list is written then, and only
@@ -84,6 +85,7 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND}
         -DOES_COMPILER_DIR=${CMAKE_CURRENT_SOURCE_DIR}/compiler
         -DOES_SYSTEM_DIR=${CMAKE_CURRENT_SOURCE_DIR}/system
+        -DOES_CORE_COMPILER_DIR=${CMAKE_CURRENT_SOURCE_DIR}/../core/compiler
         -DOES_BACKEND_DIR=${CMAKE_CURRENT_SOURCE_DIR}
         -DOES_FINGERPRINT_OUT=${OES_ENGINE_FINGERPRINT_HEADER}
         -P ${CMAKE_CURRENT_SOURCE_DIR}/compiler/engineFingerprint.cmake

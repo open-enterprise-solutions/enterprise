@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="mainFrame">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f7a03}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="mainApp.cpp" />
+    <ClCompile Include="mainAppEvent.cpp" />
+    <ClCompile Include="mainFrame\mainFrameDesigner.cpp">
+      <Filter>mainFrame</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="mainApp.h" />
+    <ClInclude Include="mainFrame\mainFrameDesigner.h">
+      <Filter>mainFrame</Filter>
+    </ClInclude>
+    <ClInclude Include="resource.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="designer.ico" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="designer-thin.rc" />
+  </ItemGroup>
+</Project>

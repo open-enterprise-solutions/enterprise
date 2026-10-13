@@ -9,45 +9,45 @@
 #include <wx/icon.h>
 
 #include "frmclient/backend/backend_core.h"   // …as the engine's value.h brings it to those who include it
-#include "core/anyValue.h"   // ibAnyValue — what every value answers, the engine's and the client's
+#include "core/compiler/lexValue.h"   // ibLexValue — the primitive a value of the client's is, and holds
 #include "core/fileSystem/types.h"
-#include "core/types.h"   // kValueFieldClsid / kValueFieldData — the fields a value is written into a node by
+#include "core/core.h"    // kValueFieldClsid / kValueFieldData — the fields a value is written into a node by
 
 template <class T> class ibValuePtr;
 class ibDataNode;
 class ibCtorAbstractType;
 
-// THE VALUE — the engine's ibValue (backend/compiler/value.h) as the client holds one. There is no runtime here and no
-// base: a PRIMITIVE — a text, a number, a date, a flag — is data a person types, and is held as it is; a value of a type
-// the SERVER has (a reference, an enum member) is held as the server wrote it — its node, carried and given back
-// untouched — and read as the server presents it. An object of the client's own a property reads its choices from (an
-// enumeration) is one too. What it answers is what every value answers (core/anyValue.h); how it holds it, its own.
-class ibValue : public ibAnyValue {
+// THE VALUE — the engine's ibValue (backend/compiler/value.h) as the client holds one. There is no runtime here: a
+// PRIMITIVE — a text, a number, a date, a flag — is data a person types, and is held as the lexer holds a constant (its
+// base, ibLexValue: the fields, the reading of a text as a number or a date, the count); a value of a type the SERVER has
+// (a reference, an enum member) is held as the server wrote it — its node, carried and given back untouched — and read
+// as the server presents it. An object of the client's own a property reads its choices from (an enumeration) is one
+// too. What it answers is what every value answers (core/anyValue.h); what it holds beyond a primitive, its own.
+class ibValue : public ibLexValue {
 public:
 
 	ibValue() = default;
-	ibValue(const wxString& text) : m_typeClass(ibValueTypes::TYPE_STRING), m_text(text) {}
-	ibValue(const wxChar* text) : m_typeClass(ibValueTypes::TYPE_STRING), m_text(text) {}
+	ibValue(const wxString& text) : ibLexValue(text) {}
+	ibValue(const wxChar* text) : ibLexValue(text) {}
 	// A narrow literal is a text too — without this one `ibValue("x")` is the flag TRUE (pointer-to-bool beats the
 	// conversion to wxString), the trap the engine's ctors name.
-	ibValue(const char* text) : m_typeClass(ibValueTypes::TYPE_STRING), m_text(text) {}
-	ibValue(bool flag) : m_typeClass(ibValueTypes::TYPE_BOOLEAN), m_text(flag ? wxT("True") : wxT("False")), m_number(flag ? 1 : 0) {}
-	ibValue(int number) : m_typeClass(ibValueTypes::TYPE_NUMBER), m_text(wxString::Format(wxT("%d"), number)), m_number(number), m_numeric(number) {}
-	ibValue(long number) : m_typeClass(ibValueTypes::TYPE_NUMBER), m_text(wxString::Format(wxT("%ld"), number)), m_number(number), m_numeric(number) {}
-	ibValue(unsigned int number) : m_typeClass(ibValueTypes::TYPE_NUMBER), m_text(wxString::Format(wxT("%u"), number)), m_number(static_cast<long>(number)), m_numeric(number) {}
-	ibValue(const ibNumber& number);
-	ibValue(const ibDateTime& date);
+	ibValue(const char* text) : ibLexValue(text) {}
+	ibValue(bool flag) : ibLexValue(flag) {}
+	ibValue(int number) : ibLexValue(ibNumber(number)) {}
+	ibValue(long number) : ibLexValue(ibNumber(number)) {}
+	ibValue(unsigned int number) : ibLexValue(ibNumber(number)) {}
+	ibValue(const ibNumber& number) : ibLexValue(number) {}
+	ibValue(const ibDateTime& date) : ibLexValue(date) {}
 	// AN OBJECT HELD — the engine's TYPE_REFFER: a value of the client's own kind (a field of a composition) carried in a
 	// value, counted while it is.
 	ibValue(ibValue* pParam);
 	// …and the base of such an object, of its kind.
-	ibValue(ibValueTypes nType, bool WXUNUSED(readOnly) = false) : m_typeClass(nType) {}
+	ibValue(ibValueTypes nType, bool WXUNUSED(readOnly) = false) : ibLexValue(nType) {}
 	ibValue(const ibValue& rhs) { Assign(rhs); }
 	ibValue& operator=(const ibValue& rhs) { Release(); Assign(rhs); return *this; }
 	virtual ~ibValue() { Release(); }
 
 	// What it is — a primitive, Undefined, or a type of the server's (GetClassType says which).
-	virtual ibValueTypes GetType() const override { return m_typeClass; }
 	virtual ibClassID GetClassType() const;
 	virtual bool IsEmpty() const override;
 
@@ -78,13 +78,10 @@ public:
 	T* ConvertToType() const { T* ptr = nullptr; return ConvertToValue(ptr) ? ptr : nullptr; }
 
 	virtual ibString GetString() const override;
-	// …and AS another primitive — the engine's conversions: a text typed into a cell read as the number, the date or the
-	// flag it spells.
-	virtual bool GetBoolean() const override;
+	// …and AS another primitive (GetBoolean / GetNumber / GetDate) — the base's: a text typed into a cell read as the
+	// number, the date or the flag it spells.
 	long GetInteger() const { return m_number; }
 	unsigned int GetUInteger() const { return static_cast<unsigned int>(m_number); }
-	virtual ibNumber GetNumber() const override;
-	virtual ibDateTime GetDate() const override;
 
 	// INTO A NODE AND BACK — the engine's form ({t, v}): a primitive writes its payload, a value of the server's writes
 	// back the node it came in; FromNode makes a primitive of a primitive's node and keeps any other as it was written.
@@ -133,9 +130,12 @@ public:
 	// Opened — a cell's details drilled into: the server's to do (the grid box sends the cell it was asked on).
 	void ShowValue() const {}
 
-	// Counted, as the engine's: whoever holds it (ibValuePtr) keeps it.
-	void IncrRef() { m_refCount++; }
-	void DecrRef() { if (--m_refCount == 0) delete this; }
+	// ⭐ THIS VALUE WHERE THE CORE KEEPS ONE (a sheet's parameters) — a copy of it, counted by its own count —
+	// and the value read back out of it: ours, since only we put one in (empty when nothing is held).
+	ibAnyValuePtr<ibValue> ToAnyValue() const { return ibAnyValuePtr<ibValue>(new ibValue(*this)); }
+	static ibValue FromAnyValue(const ibAnyValuePtr<ibAnyValue>& value) {
+		return value ? ibValue(static_cast<const ibValue&>(*value)) : ibValue();
+	}
 
 	// The engine's own picture of a value (value_res.cpp) — what a field of a settings window wears.
 	static wxIcon GetIconGroup();
@@ -152,7 +152,11 @@ protected:
 
 	// A member of an enumeration — the base of one (ibValueEnumerationVariant, enumUnit.h).
 	ibValue(const ibClassID& enumClass, long member, const wxString& word)
-		: m_typeClass(ibValueTypes::TYPE_ENUM), m_classType(enumClass), m_text(word), m_number(member) {}
+		: ibLexValue(ibValueTypes::TYPE_ENUM), m_classType(enumClass)
+	{
+		m_text = word;
+		m_number = member;
+	}
 
 private:
 
@@ -160,15 +164,9 @@ private:
 	void Assign(const ibValue& rhs);
 	void Release();
 
-	ibValueTypes m_typeClass = ibValueTypes::TYPE_EMPTY;
 	ibClassID    m_classType = 0;   // a type of the server's — its node is kept in m_stored
-	wxString     m_text;            // the text, or how the value reads
-	long         m_number = 0;
-	ibNumber     m_numeric;
-	ibDateTime   m_date;
 	std::shared_ptr<const ibDataNode> m_stored;   // a value of the server's type, as it wrote it
 	ibValue*     m_pRef = nullptr;  // TYPE_REFFER — the object held
-	unsigned     m_refCount = 0;
 };
 
 // A REGISTERED TYPE — the engine's ibCtorAbstractType (backend/compiler/typeCtor.h) as far as a window lists one: its

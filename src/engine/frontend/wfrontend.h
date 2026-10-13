@@ -11,7 +11,7 @@
 //
 //   wfrontendInit(...)                          // once per process
 //     │
-//     ├─ wfrontendCreateSession(user, pw) ─┐    // per connected user
+//     ├─ wfrontendCreateSessionWithId(id) ─┐    // per browser tab
 //     ├─ wfrontendFindSession(id)          │
 //     ├─ wfrontendDestroySession(id)       ┘
 //     │
@@ -132,21 +132,16 @@ WFRONTEND_API std::string wfrontendMenuJSON();
 
 // Session management.
 //
-//   CreateSession()      — allocate an anonymous session (no user yet).
-//                          The returned id is what the host puts into
-//                          the oes_session cookie.
+//   CreateSessionWithId(id) — allocate an anonymous session (no user yet)
+//                          under the id the browser tab minted in
+//                          sessionStorage and sends as `X-OES-Session`,
+//                          so every tab has a distinct ibWebSession.
+//                          Reuses the session if the id already exists.
 //   Login(id, user, pw)  — authenticate the given session. On success
 //                          the session spins up its ibWebApplication
 //                          (main frame + CreateMainModule) and is ready
 //                          to serve form requests.
 //   SessionExists/Destroy/Count — bookkeeping.
-WFRONTEND_API std::string wfrontendCreateSession();
-
-// Create (or reuse) a session with a caller-supplied id. Used by the
-// web client: each browser tab mints its own random id in
-// sessionStorage and passes it via the `X-OES-Session` header, so
-// every tab has a distinct ibWebSession instead of sharing one
-// session across all tabs via the cookie jar.
 WFRONTEND_API std::string wfrontendCreateSessionWithId(const std::string& id);
 WFRONTEND_API bool        wfrontendLogin(const std::string& sessionId,
 	const std::string& user, const std::string& password);

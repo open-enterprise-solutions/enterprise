@@ -31,18 +31,18 @@
 
 #include "backend/mcp/mcpTool.h"
 
-#include "backend/compositionDescription.h"
-#include "backend/composition/compositionTheme.h"   // ibCompositionThemes — the palettes report_other_settings offers
+#include "backend/backend_composition.h"
+#include "core/composition/compositionTheme.h"      // ibCompositionThemes — the palettes report_other_settings offers
 #include "backend/system/value/valueColour.h"        // report_conditional_appearance — a colour, kept as the value it is
 #include "backend/system/value/valueFont.h"          // …a font
-#include "backend/spreadsheetDescription.h"                   // …said against the report's own (ibDefaultSpreadsheetFont())
+#include "core/description/spreadsheetDescription.h"             // …said against the report's own (ibDefaultSpreadsheetFont())
 #include "backend/composition/drivers/compositionDriver.h"    // …as the parts it changes (ibCompositionFont)
 #include "backend/system/value/valueSpreadsheet.h"   // …and an alignment, the sheet's own enumeration
 #include "backend/metaCollection/metaComposerObject.h"
 #include "backend/metaCollection/metaIntrospect.h"
 #include "backend/metaCollection/genericData.h"   // ResolveQueryConstant — a named item as a value
 #include "backend/objCtor.h"                      // ibCtorMetaValueType — a type looked up by name
-#include "backend/typeDescription.h"              // …and the description a parameter carries
+#include "core/description/typeDescription.h"              // …and the description a parameter carries
 #include "backend/metadataConfiguration.h"
 #include "backend/query/queryConstructorModel.h"   // ibQueryFieldsOfText — what the TEXT offers
 #include "backend/query/queryException.h"          // …and the judge that refuses one
@@ -51,6 +51,7 @@
 #include "backend/query/queryable.h"
 
 #include <algorithm>   // std::remove_if — taking a grouping level back out
+#include <wx/fontenum.h>   // wxFontEnumerator — a face the rule names must exist here
 
 namespace {
 
@@ -858,7 +859,7 @@ bool ConditionFromTree(const ibCompositionDescription& composition, const ibData
 		ibComparisonKind comparison = ibComparisonKind_Equal;
 		if (!ComparisonFromWord(word, comparison, refusal))
 			return false;
-		ibFilterNodeDescription& added = ibFilterDescription::Append(into, path, comparison, ibValue(), on);
+		ibFilterNodeDescription& added = ibFilterDescription::Append(into, path, comparison, ibDataNode(), on);
 		if (!ibComparisonTakesValue(comparison))
 			continue;   // «filled» asks the field alone
 		const ibDataValue* valuePath = line.FindField(wxT("valuePath"));
@@ -867,15 +868,19 @@ bool ConditionFromTree(const ibCompositionDescription& composition, const ibData
 				return false;
 			added.m_right.m_path = valuePath->AsString();   // a field of the same row
 		}
-		else if (!ValueForPath(composition, path, line, added.m_right.m_value, refusal))
-			return false;
+		else {
+			ibValue value;
+			if (!ValueForPath(composition, path, line, value, refusal))
+				return false;
+			ibStoreValue(added.m_right.m_value, value);
+		}
 	}
 	return true;
 }
 
 // …AND READ BACK IN THE SAME SHAPE — a group as a group, a switched-off entry as one, a root that is not an AND as
-// the one group it stands for.
-std::vector<ibDataValue> TreeOfCondition(const std::vector<ibFilterNodeDescription>& nodes)
+// the one group it stands for. A value is read through the configuration the composition belongs to.
+std::vector<ibDataValue> TreeOfCondition(const std::vector<ibFilterNodeDescription>& nodes, const ibMetaData* metaData)
 {
 	std::vector<ibDataValue> entries;
 	for (const ibFilterNodeDescription& node : nodes) {
@@ -884,7 +889,7 @@ std::vector<ibDataValue> TreeOfCondition(const std::vector<ibFilterNodeDescripti
 			for (const auto& known : GroupWords())
 				if (known.second == node.m_groupKind)
 					entry->SetValue(wxT("group"), wxString(known.first));
-			entry->AddField(wxT("lines"), ibDataValue::Array(TreeOfCondition(node.m_children)));
+			entry->AddField(wxT("lines"), ibDataValue::Array(TreeOfCondition(node.m_children, metaData)));
 		}
 		else {
 			entry->SetValue(wxT("path"), node.m_left.m_path);
@@ -894,7 +899,7 @@ std::vector<ibDataValue> TreeOfCondition(const std::vector<ibFilterNodeDescripti
 			else if (node.m_right.IsField())
 				entry->SetValue(wxT("valuePath"), node.m_right.m_path);
 			else
-				entry->SetValue(wxT("value"), wxString(node.m_right.m_value.GetString()));
+				entry->SetValue(wxT("value"), wxString(ibStoredValue(node.m_right.m_value, metaData).GetString()));
 		}
 		if (!node.m_use)
 			entry->AddField(wxT("use"), ibDataValue::Bool(false));
@@ -903,15 +908,15 @@ std::vector<ibDataValue> TreeOfCondition(const std::vector<ibFilterNodeDescripti
 	return entries;
 }
 
-ibDataValue TreeOfCondition(const ibFilterDescription& filter)
+ibDataValue TreeOfCondition(const ibFilterDescription& filter, const ibMetaData* metaData)
 {
 	if (filter.m_rootKind == ibFilterGroupKind_And)
-		return ibDataValue::Array(TreeOfCondition(filter.m_nodes));
+		return ibDataValue::Array(TreeOfCondition(filter.m_nodes, metaData));
 	ibFilterNodeDescription root;
 	root.m_kind = ibFilterNodeKind_Group;
 	root.m_groupKind = filter.m_rootKind;
 	root.m_children = filter.m_nodes;
-	return ibDataValue::Array(TreeOfCondition(std::vector<ibFilterNodeDescription>{ root }));
+	return ibDataValue::Array(TreeOfCondition(std::vector<ibFilterNodeDescription>{ root }, metaData));
 }
 
 // (⭐ THIS WARNING GREW INTO ibMcpSayComposerComplaints above, and for a reason worth keeping: it
@@ -1117,10 +1122,10 @@ public:
 			if (found != nodes.end()) {
 				found->m_comparison = comparison;
 				found->m_right = ibFilterOperandDescription();   // a value said now, not the field it may have been
-				found->m_right.m_value = value;
+				ibStoreValue(found->m_right.m_value, value);
 			}
 			else {
-				ibFilterDescription::Append(nodes, path, comparison, value);
+				ibFilterDescription::Append(nodes, path, comparison, ibStoreValue(value));
 			}
 		}
 
@@ -1132,7 +1137,7 @@ public:
 		// THE CONDITION AS IT STANDS NOW — the whole tree, in the shape `condition` takes (groups and switched-off
 		// lines included: a list of paths hid both).
 		result.SetValue(wxT("settingsOf"), wxString(ArgNodeOutput().Given(params) ? wxT("node") : wxT("report")));
-		result.AddField(wxT("condition"), TreeOfCondition(filter));
+		result.AddField(wxT("condition"), TreeOfCondition(filter, composer->GetMetaData()));
 		ibMcpSayComposerComplaints(composition, result);
 		return true;
 	}
@@ -1393,7 +1398,7 @@ public:
 			words.emplace_back(word.first, value);
 		}
 		for (const auto& word : words)
-			said->Say(word.first, !word.second.IsEmpty(), word.second);
+			said->Say(word.first, !word.second.IsEmpty(), ibStoreValue(word.second));
 
 		if (!words.empty()) {
 			composer->SetCompositionDesc(composition);
@@ -1405,7 +1410,7 @@ public:
 		for (const auto& word : Words()) {
 			if (!said->Says(word.first))
 				continue;
-			const ibValue value = said->ValueInForce(word.first);
+			const ibValue value = ibStoredValue(said->ValueInForce(word.first), nullptr);
 			result.SetValue(word.second->Name(), ibOutputParameterShows(word.first)
 				? ShowWords()[std::min<size_t>(static_cast<size_t>(std::max(0, value.GetInteger())), 2)]
 				: wxString(value.GetString()));
@@ -1514,35 +1519,38 @@ class ibMcpToolReportConditionalAppearance : public ibMcpTool {
 				refusal = wxString::Format(ibMcpText("'%s' is not a colour - write it `R,G,B` (`255,235,156`) or `#FFEB9C`."), word);
 				return false;
 			}
-			value = ibValue(new ibValueColour(colour));
+			value = ibValue(new ibValueColour(ibColour(colour.Red(), colour.Green(), colour.Blue())));
 			return true;
 		}
 		case ibAppearanceParameter::Font: {
 			// OVER THE REPORT'S OWN FONT, word by word — what the words do not say stays that font's, so the rule
 			// says exactly the words (ibCompositionFont::Of reads them back out of it).
-			wxFont font = ibDefaultSpreadsheetFont();
+			ibFont font = ibDefaultSpreadsheetFont();
 			wxString face;
 			for (const wxString& one : wxSplit(word, wxT(' '), wxT('\0'))) {
 				long size = 0;
 				if (one.IsEmpty())
 					continue;
 				if (one.IsSameAs(wxT("bold"), false))
-					font.SetWeight(wxFONTWEIGHT_BOLD);
+					font.m_weight = ibFONTWEIGHT_BOLD;
 				else if (one.IsSameAs(wxT("italic"), false))
-					font.SetStyle(wxFONTSTYLE_ITALIC);
+					font.m_style = ibFONTSTYLE_ITALIC;
 				else if (one.IsSameAs(wxT("underlined"), false))
-					font.SetUnderlined(true);
+					font.m_underlined = true;
 				else if (one.IsSameAs(wxT("strikethrough"), false))
-					font.SetStrikethrough(true);
+					font.m_strikethrough = true;
 				else if (one.ToLong(&size) && size > 0)
-					font.SetPointSize(static_cast<int>(size));
+					font.m_pointSize = size;
 				else
 					face << (face.IsEmpty() ? wxT("") : wxT(" ")) << one;
 			}
-			if (!face.IsEmpty() && !font.SetFaceName(face)) {
-				refusal = wxString::Format(ibMcpText("'%s' is not a font face here - say the font in words: `bold`, "
-					"`italic 12`, `bold 10 Arial`."), face);
-				return false;
+			if (!face.IsEmpty()) {
+				if (!wxFontEnumerator::IsValidFacename(face)) {
+					refusal = wxString::Format(ibMcpText("'%s' is not a font face here - say the font in words: `bold`, "
+						"`italic 12`, `bold 10 Arial`."), face);
+					return false;
+				}
+				font.m_faceName = face;
 			}
 			value = ibValue(new ibValueFont(font));
 			return true;
@@ -1701,7 +1709,7 @@ public:
 					ibValue value;   // …none for «filled»: it asks the field alone
 					if (ibComparisonTakesValue(comparison) && !ValueForPath(composition, path, params, value, refusal))
 						return false;
-					ibFilterDescription::Append(rule.m_condition.m_nodes, path, comparison, value);
+					ibFilterDescription::Append(rule.m_condition.m_nodes, path, comparison, ibStoreValue(value));
 				}
 			}
 
@@ -1730,7 +1738,7 @@ public:
 				ibValue value;   // empty — taken away
 				if (!text.IsEmpty() && !ValueOfWord(word.first, text, value, refusal))
 					return false;
-				rule.m_appearance.Say(word.first, !value.IsEmpty(), value);
+				rule.m_appearance.Say(word.first, !value.IsEmpty(), ibStoreValue(value));
 			}
 
 			if (says) {
@@ -1763,14 +1771,15 @@ public:
 				entry->AddField(wxT("use"), ibDataValue::Bool(false));
 			// THE WHOLE CONDITION, groups included, in the shape `condition` takes. (It read the lines of the top only,
 			// and a rule built in the window with a group came back as an EMPTY condition — one that holds everywhere.)
-			entry->AddField(wxT("condition"), TreeOfCondition(rule.m_condition));
+			entry->AddField(wxT("condition"), TreeOfCondition(rule.m_condition, composer->GetMetaData()));
 			std::vector<ibDataValue> fields;
 			for (const wxString& field : rule.m_fields)
 				fields.push_back(ibDataValue::String(field));
 			entry->AddField(wxT("fields"), ibDataValue::Array(fields));
 			for (const auto& word : Words())
 				if (rule.m_appearance.Says(word.first))
-					entry->SetValue(word.second->Name(), WordOfValue(word.first, rule.m_appearance.ValueInForce(word.first)));
+					entry->SetValue(word.second->Name(),
+						WordOfValue(word.first, ibStoredValue(rule.m_appearance.ValueInForce(word.first), nullptr)));
 			shown.push_back(ibDataValue::Child(entry));
 		}
 		result.AddField(wxT("rules"), ibDataValue::Array(shown));
@@ -2257,7 +2266,7 @@ public:
 		if (ArgFormat().Given(params)) {
 			const wxString format = ArgFormat().Text(params);
 			field->m_appearance.Say(ibAppearanceParameter::Format, !format.IsEmpty(),
-				format.IsEmpty() ? ibValue() : ibValue(format));
+				format.IsEmpty() ? ibDataNode() : ibStoreValue(ibValue(format)));
 		}
 
 		composer->SetCompositionDesc(composition);
@@ -2268,7 +2277,8 @@ public:
 		result.SetValue(wxT("role"), wxString(ibBalanceRoleWord(field->RoleInForce(sourceRole))).Lower());
 		if (field->m_useRole && field->m_periodRank > 0)
 			result.SetValue(wxT("period_number"), static_cast<s32>(field->m_periodRank));
-		result.SetValue(wxT("format"), wxString(field->m_appearance.ValueInForce(ibAppearanceParameter::Format).GetString()));
+		result.SetValue(wxT("format"),
+			wxString(ibStoredValue(field->m_appearance.ValueInForce(ibAppearanceParameter::Format), nullptr).GetString()));
 		ibMcpSayComposerComplaints(composition, result);
 		return true;
 	}
@@ -3066,7 +3076,7 @@ public:
 		// and a partly-read report is the kind of wrong that looks like an edit.
 		ibCompositionDescription composition;
 
-		if (!ibCompositionDescriptionMemory::ReadNode(*given, composition, activeMetaData)) {
+		if (!ibCompositionDescriptionMemory::ReadNode(*given, composition)) {
 			refusal = ibMcpText("That is not a composition this platform can read. Send back the shape "
 				"report_get gives, with your changes in it.");
 			return false;

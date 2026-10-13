@@ -3,7 +3,7 @@
 
 #include "frontend/frontend.h"            // FRONTEND_API
 #include "backend/backend_command.h"      // ibBackendCommandReceiver — the door EXTENDS the backend receiver (one chain)
-#include "backend/commandDescription.h"   // ibCommandDescription / ibCommandHop
+#include "core/description/commandDescription.h"   //ibCommandDescription / ibCommandHop
 #include <wx/string.h>                     // wxString (ResolveValueByPath out-caption)
 #include <wx/bitmap.h>                     // wxBitmap (ResolveValueByPath out-icon)
 #include <vector>                          // std::vector (ResolveSubCommands out-list)
