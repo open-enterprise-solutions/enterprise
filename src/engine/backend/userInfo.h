@@ -88,7 +88,10 @@ struct BACKEND_API ibUserInfo {
 	static bool       NameChangeConflicts(const ibUserInfo& info);
 	static ibUserInfo Read(const ibGuid& userGuid);
 	static ibUserInfo Read(const wxString& userName);
-	static bool       Save(const ibUserInfo& info);
+	// Saved, the name already belongs to someone else, or the write failed.
+	// A conflict and a database error are not the same answer.
+	enum class SaveReason { Saved, NameTaken, Failed };
+	static SaveReason Save(const ibUserInfo& info);
 	// Remove the sys_user row keyed by guid. True on success (or no-op miss).
 	static bool       Delete(const ibGuid& userGuid);
 

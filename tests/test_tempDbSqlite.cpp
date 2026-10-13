@@ -629,7 +629,7 @@ TEST_F(TempDbSqliteFix, UserName_SecondSpellingIsRefusedAndTheFirstIsFound)
 	ibApplicationInstance::CreateTableUserForTest();
 
 	const ibUserInfo admin = UserNamed(wxT("Admin"));
-	ASSERT_TRUE(ibUserInfo::Save(admin));
+	ASSERT_EQ(ibUserInfo::Save(admin), ibUserInfo::SaveReason::Saved);
 
 	const ibUserInfo found = ibUserInfo::Read(wxT("admin"));
 	EXPECT_TRUE(found.IsOk());
@@ -637,11 +637,11 @@ TEST_F(TempDbSqliteFix, UserName_SecondSpellingIsRefusedAndTheFirstIsFound)
 	EXPECT_EQ(found.m_strUserName, wxT("Admin"));
 
 	ibUserInfo again = UserNamed(wxT("ADMIN"));
-	EXPECT_FALSE(ibUserInfo::Save(again));
+	EXPECT_EQ(ibUserInfo::Save(again), ibUserInfo::SaveReason::NameTaken);
 
 	ibUserInfo renamed = admin;
 	renamed.m_strUserFullName = wxT("Administrator");
-	EXPECT_TRUE(ibUserInfo::Save(renamed));
+	EXPECT_EQ(ibUserInfo::Save(renamed), ibUserInfo::SaveReason::Saved);
 	EXPECT_EQ(ibUserInfo::Read(wxT(" Admin ")).m_strUserFullName, wxT("Administrator"));
 }
 
@@ -680,6 +680,7 @@ TEST_F(TempDbSqliteFix, UserName_SharedNamesStayOpenWithoutTheIndex)
 	EXPECT_TRUE(shared.Contains(wxT("admin")));
 	EXPECT_FALSE(ibUserInfo::SharedNameWarning().empty());
 	EXPECT_EQ(ibUserInfo::CountByName(wxT(" ADMIN ")), 2u);
+	EXPECT_FALSE(ibUserInfo::Read(wxT("admin")).IsOk());
 	EXPECT_EQ(ibUserInfo::CountByName(wxT("   ")), 0u);
 
 	ibUserInfo ambiguous;
@@ -697,16 +698,16 @@ TEST_F(TempDbSqliteFix, UserName_SharedNamesStayOpenWithoutTheIndex)
 	EXPECT_FALSE(ibUserInfo::NameChangeConflicts(kept));
 	ibUserInfo edited = kept;
 	edited.m_strUserFullName = wxT("Still shared");
-	EXPECT_TRUE(ibUserInfo::Save(edited));
+	EXPECT_EQ(ibUserInfo::Save(edited), ibUserInfo::SaveReason::Saved);
 	EXPECT_EQ(ibUserInfo::Read(ibGuid(edited.m_strUserGuid)).m_strUserFullName, wxT("Still shared"));
 
 	const ibUserInfo again = UserNamed(wxT("ADMIN"));
 	EXPECT_TRUE(ibUserInfo::NameChangeConflicts(again));
-	EXPECT_FALSE(ibUserInfo::Save(again));
+	EXPECT_EQ(ibUserInfo::Save(again), ibUserInfo::SaveReason::NameTaken);
 
 	ibUserInfo clerk = UserNamed(wxT("Clerk"));
 	clerk.m_strUserPassword = ibPasswordHash::Hash(wxT("secret"));
-	ASSERT_TRUE(ibUserInfo::Save(clerk));
+	ASSERT_EQ(ibUserInfo::Save(clerk), ibUserInfo::SaveReason::Saved);
 	ibUserInfo logged;
 	EXPECT_TRUE(ibApplicationInstance::Get()->AuthenticateUser(wxT("clerk"), wxT("secret"), logged));
 	EXPECT_EQ(logged.m_strUserGuid, clerk.m_strUserGuid);
@@ -714,11 +715,11 @@ TEST_F(TempDbSqliteFix, UserName_SharedNamesStayOpenWithoutTheIndex)
 	ibUserInfo onto = edited;
 	onto.m_strUserName = wxT("clerk");
 	EXPECT_TRUE(ibUserInfo::NameChangeConflicts(onto));
-	EXPECT_FALSE(ibUserInfo::Save(onto));
+	EXPECT_EQ(ibUserInfo::Save(onto), ibUserInfo::SaveReason::NameTaken);
 
 	edited.m_strUserName = wxT("Supervisor");
 	EXPECT_FALSE(ibUserInfo::NameChangeConflicts(edited));
-	ASSERT_TRUE(ibUserInfo::Save(edited));
+	ASSERT_EQ(ibUserInfo::Save(edited), ibUserInfo::SaveReason::Saved);
 
 	EXPECT_NO_THROW(ibApplicationInstance::MigrateTableUserForTest());
 	EXPECT_TRUE(ibUserInfo::SharedNames().empty());
@@ -758,7 +759,7 @@ TEST_F(TempDbSqliteFix, UserName_BlankNamesStayOpenAndCannotSignIn)
 
 	const ibUserInfo clerk = UserNamed(wxT("Clerk"));
 	EXPECT_FALSE(ibUserInfo::NameChangeConflicts(clerk));
-	EXPECT_TRUE(ibUserInfo::Save(clerk));
+	EXPECT_EQ(ibUserInfo::Save(clerk), ibUserInfo::SaveReason::Saved);
 }
 
 TEST_F(TempDbSqliteFix, UserName_AUniqueOldTableGainsTheFoldedKey)
@@ -785,7 +786,7 @@ TEST_F(TempDbSqliteFix, UserName_AUniqueOldTableGainsTheFoldedKey)
 
 	const ibUserInfo found = ibUserInfo::Read(wxT("admin"));
 	EXPECT_EQ(found.m_strUserGuid, wxT("33333333-3333-4333-8333-333333333333"));
-	EXPECT_FALSE(ibUserInfo::Save(UserNamed(wxT("ADMIN"))));
+	EXPECT_EQ(ibUserInfo::Save(UserNamed(wxT("ADMIN"))), ibUserInfo::SaveReason::NameTaken);
 
 	// A later open finds the index already there and still refuses a second spelling.
 	EXPECT_NO_THROW(ibApplicationInstance::MigrateTableUserForTest());

@@ -287,13 +287,13 @@ ibDialogUserItem::ibDialogUserItem(wxWindow* parent, wxWindowID id, const wxStri
 				return;
 			}
 
-			if (ibUserInfo::NameChangeConflicts(userInfo)) {
+			const ibUserInfo::SaveReason saved = ibUserInfo::Save(userInfo);
+			if (saved == ibUserInfo::SaveReason::NameTaken) {
 				wxMessageBox(_("A user with this name already exists"));
 				return;
 			}
-
-			if (!ibUserInfo::Save(userInfo)) {
-				wxMessageBox(_("A user with this name already exists"));
+			if (saved != ibUserInfo::SaveReason::Saved) {
+				wxMessageBox(_("The user could not be saved"));
 				return;
 			}
 

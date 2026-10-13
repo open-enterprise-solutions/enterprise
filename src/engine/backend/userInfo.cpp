@@ -186,19 +186,33 @@ unsigned ibUserInfo::CountByName(const wxString& userName)
 	if (key.empty())
 		return 0;
 
-	unsigned count = 0;
-	for (const Brief& brief : ListAll()) {
-		if (NameKey(brief.m_strUserName) == key)
+	try {
+		ibDatabaseQueryBuilder q;
+		ibQueryResult result = q.ExecuteIR(ibQueryIR(ibProject(
+			ibFilter(ibScan(user_table),
+				ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("nameKey")), ibConst(ibValue(key)))),
+			{ { ibCol(wxT("guid")), wxEmptyString } })));
+		unsigned count = 0;
+		while (result.Next())
 			++count;
+		return count;
 	}
-	return count;
+	catch (...) { return 0; }
 }
 
 wxString ibUserInfo::SharedNames()
 {
 	std::map<wxString, std::vector<wxString>> groups;
-	for (const Brief& brief : ListAll())
-		groups[NameKey(brief.m_strUserName)].push_back(NameAsShown(brief.m_strUserName));
+	try {
+		ibDatabaseQueryBuilder q;
+		ibQueryResult result = q.ExecuteIR(ibQueryIR(ibProject(ibScan(user_table),
+			{ { ibCol(wxT("name")),    wxEmptyString },
+			  { ibCol(wxT("nameKey")), wxEmptyString } })));
+		while (result.Next())
+			groups[result.GetResultString(wxT("nameKey"))].push_back(
+				NameAsShown(result.GetResultString(wxT("name"))));
+	}
+	catch (...) { return wxString(); }
 
 	wxString shared;
 	for (const auto& group : groups) {
@@ -237,12 +251,18 @@ bool ibUserInfo::NameChangeConflicts(const ibUserInfo& info)
 	if (stored.IsOk() && NameKey(stored.m_strUserName) == key)
 		return false;
 
-	for (const Brief& brief : ListAll()) {
-		if (brief.m_strUserGuid == info.m_strUserGuid)
-			continue;
-		if (NameKey(brief.m_strUserName) == key)
-			return true;
+	try {
+		ibDatabaseQueryBuilder q;
+		ibQueryResult result = q.ExecuteIR(ibQueryIR(ibProject(
+			ibFilter(ibScan(user_table),
+				ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("nameKey")), ibConst(ibValue(key)))),
+			{ { ibCol(wxT("guid")), wxEmptyString } })));
+		while (result.Next()) {
+			if (result.GetResultString(wxT("guid")) != info.m_strUserGuid)
+				return true;
+		}
 	}
+	catch (...) { return false; }
 	return false;
 }
 
@@ -253,14 +273,19 @@ ibUserInfo ibUserInfo::Read(const wxString& userName)
 	if (key.empty())
 		return info;
 
-	// The folded name, not the spelling that was stored. "admin" is the account
-	// that was saved as "Admin". The list is the people in the base, not a scan
-	// of the rows they own.
-	for (const Brief& brief : ListAll()) {
-		if (NameKey(brief.m_strUserName) != key)
-			continue;
-		return Read(ibGuid(brief.m_strUserGuid));
+	// The folded name, asked of the index. Two rows is not a login: the first
+	// match is not an answer, and the caller gets an empty record.
+	try {
+		ibDatabaseQueryBuilder q;
+		ibQueryResult result = q.ExecuteIR(SysUserRowQuery(
+			ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("nameKey")), ibConst(ibValue(key)))));
+		if (!result.Next())
+			return info;
+		FillFromRow(result, info);
+		if (result.Next())
+			return ibUserInfo();
 	}
+	catch (...) { return ibUserInfo(); }
 
 	return info;
 }
@@ -299,16 +324,16 @@ std::vector<ibUserInfo::Brief> ibUserInfo::ListAll()
 	return list;
 }
 
-bool ibUserInfo::Save(const ibUserInfo& info)
+ibUserInfo::SaveReason ibUserInfo::Save(const ibUserInfo& info)
 {
 	const wxString nameKey = NameKey(info.m_strUserName);
 	if (nameKey.empty() || info.m_strUserGuid.IsEmpty())
-		return false;
+		return SaveReason::Failed;
 
 	// A new account, or a rename onto a name somebody else already holds. An existing
 	// row that keeps its own folded name is not this case: it can still be edited.
 	if (NameChangeConflicts(info))
-		return false;
+		return SaveReason::NameTaken;
 
 	// The default-ctor builder resolves to CurrentHolder = the db_query channel's thread holder —
 	// the dedicated channel for infra-level writes that must stay out of any user session's TX
@@ -331,9 +356,9 @@ bool ibUserInfo::Save(const ibUserInfo& info)
 			{ wxT("dataSize"),   ibConst(ibValue(static_cast<unsigned int>(writer.size()))) },
 			{ wxT("binaryData"), ibConstBlob(writer.pointer(), writer.size()) },
 		}, { wxT("guid") }));
-		return true;   // a real failure THROWS (caught below); the affected-row count is not an error
+		return SaveReason::Saved;   // a real failure THROWS (caught below)
 	}
-	catch (...) { return false; }
+	catch (...) { return SaveReason::Failed; }
 }
 
 bool ibUserInfo::Delete(const ibGuid& userGuid)

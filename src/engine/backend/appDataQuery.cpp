@@ -442,18 +442,20 @@ bool ibApplicationInstance::LoadUserInfoFromBuffer(wxMemoryBuffer& buffer)
 
 	ibReaderMemory* prevReaderMemory = nullptr; u64 meta_id = 0;
 
+	bool saved = true;
 	while (!reader.eof()) {
 
 		ibReaderMemory* readerMemory = reader.open_chunk_iterator(meta_id, &*prevReaderMemory);
 		if (!readerMemory)
 			break;
 
-		ibUserInfo::Save(ibUserInfo::Deserialize(*readerMemory));
+		if (ibUserInfo::Save(ibUserInfo::Deserialize(*readerMemory)) != ibUserInfo::SaveReason::Saved)
+			saved = false;
 
 		prevReaderMemory = readerMemory;
 	};
 
-	return true;
+	return saved;
 }
 
 bool ibApplicationInstance::SaveUserInfoToBuffer(wxMemoryBuffer& buffer) const
