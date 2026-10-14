@@ -1,5 +1,5 @@
 #include "debugItem.h"
-#include "frmclient/backend/debugger/debugClient.h"
+#include "designer-thin/backend/debugger/debugClient.h"
 #include "core/stringUtils.h"
 
 void ibDialogDebugItem::RefreshDebugList()

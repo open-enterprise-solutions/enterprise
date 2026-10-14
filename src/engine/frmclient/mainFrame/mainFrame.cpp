@@ -363,6 +363,18 @@ void ibFrontendMainFrame::Raise()
 	wxAuiMDIParentFrame::Raise();
 }
 
+void ibFrontendMainFrame::RaiseFrame()
+{
+	if (!m_callRaiseFrame && ibFrontendMainFrame::IsFocusable()) {
+		CallAfter([&]() {
+			ibFrontendMainFrame::Raise();
+			m_callRaiseFrame = false;
+			}
+		);
+		m_callRaiseFrame = true;
+	}
+}
+
 #if wxUSE_MENUS
 void ibFrontendMainFrame::SetMenuBar(wxMenuBar* pMenuBar)
 {

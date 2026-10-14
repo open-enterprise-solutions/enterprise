@@ -74,6 +74,14 @@ public:
 
 	ibCodeEditor* GetCodeEditor() const;
 
+	// THE MODULE'S ADDRESS — the State's Module: what its breakpoints are kept by and a runtime stops at.
+	const wxString& GetDocPath() const { return m_docPath; }
+
+	// The debugger's, as the desktop's document took them (ibModuleEditDocument): the line shown — the run line
+	// (setBreakpoint) or a failure's; and the value of what is under the cursor while stopped.
+	void SetCurrentLine(int lineBreakpoint, bool setBreakpoint);
+	void SetToolTip(const wxString& resultStr);
+
 protected:
 
 	virtual ibFrontendView* DoCreateView() override;
@@ -82,6 +90,8 @@ private:
 
 	// The State's Modified — set at the first key already, before the server's answer says it.
 	bool m_modified = false;
+	// The State's Module.
+	wxString m_docPath;
 
 	wxDECLARE_NO_COPY_CLASS(ibModuleEditDocument);
 };

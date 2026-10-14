@@ -115,6 +115,8 @@ public:
 			CallAfter(&ibFrontendMainFrame::UpdateFrameManager);
 		}
 	}
+	// …and the window brought to the front, once the work under way is done — the desktop's (a stop, a failure sent over).
+	void RaiseFrame();
 
 	// A call of the window's, through the communicator: the frame drawn again after it, its messages shown, a
 	// question it asks put to the person until the work settles. The answer as it came — a schema's tree, a fetch's
@@ -357,6 +359,7 @@ private:
 	bool                                  m_closingWindow = false;
 	bool                                  m_exitGranted = false;     // the server's Exit done: every tab closed, the client goes
 	bool                                  m_callUpdateFrameManager = false;
+	bool                                  m_callRaiseFrame = false;
 };
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////

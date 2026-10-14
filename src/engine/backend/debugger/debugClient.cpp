@@ -229,31 +229,15 @@ bool ibDebuggerClient::SaveModule(const wxString& strModuleName, unsigned int li
 		list_breakpoint = std::move(moduleBreakpointsNew);
 	}
 
-	//initialize offsets 
+	// THE MODULE'S LENGTH IS THE TEXT SAVED (line_count), not one worked out from the offsets map: the map knows where
+	// the committed lines went, not the lines added after the last of them — and in a server's client, where nobody
+	// edits, it never moved at all, so a module kept the length it was loaded with and every line past it was refused
+	// as "the running application does not have this line" (2026-10-14).
 	auto module_offset_iterator = std::find_if(m_listOffsetBreakpoint.begin(), m_listOffsetBreakpoint.end(),
 		[&strModuleName](const auto& pair) { return stringUtils::CompareString(pair.first, strModuleName); });
 
-	if (module_offset_iterator != m_listOffsetBreakpoint.end()) {
-
-		std::map<unsigned int, int>& list_module_offset = module_offset_iterator->second;
-		std::map<unsigned int, int> ::iterator it = list_module_offset.begin();
-
-		if (it != list_module_offset.end()) {
-			std::advance(it, list_module_offset.size() - 1);
-			if (it != list_module_offset.end()) {
-				InitializeModule(module_offset_iterator->first, it->first + it->second + 1);
-			}
-			else {
-				InitializeModule(module_offset_iterator->first, line_count);
-			}
-		}
-		else {
-			InitializeModule(module_offset_iterator->first, line_count);
-		}
-	}
-	else {
-		InitializeModule(strModuleName, line_count);
-	}
+	InitializeModule(module_offset_iterator != m_listOffsetBreakpoint.end() ? module_offset_iterator->first : strModuleName,
+		line_count);
 
 	ibWriterMemory commandChannel;
 	commandChannel.w_u16(CommandId_PatchComplete);

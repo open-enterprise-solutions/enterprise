@@ -6,6 +6,7 @@
 #include "mainFrameDesigner.h"
 
 #include "frmclient/artProvider/artProvider.h"   // the debugger's pictures, Update database's
+#include "designer-thin/backend/debugger/debugClient.h"
 #include "designer-thin/mainFrame/local/localWindow.h"
 #include "designer-thin/mainFrame/stack/stackWindow.h"
 #include "designer-thin/mainFrame/watch/watchWindow.h"
@@ -31,6 +32,12 @@ ibFrontendMainFrameDesigner::ibFrontendMainFrameDesigner(std::unique_ptr<ibCommu
 {
 	// Its templates are the server's — the designer's doc manager's (DrawTemplates).
 	m_docManager = new ibFrontendDocManager;
+}
+
+ibFrontendMainFrameDesigner::~ibFrontendMainFrameDesigner()
+{
+	// The debugger first — its sockets let go and its bridges with it, while the panes they write into still stand.
+	m_debugClient.reset();
 }
 
 void ibFrontendMainFrameDesigner::CreateGUI()
@@ -100,6 +107,17 @@ void ibFrontendMainFrameDesigner::DrawFrame(const ibProtocolNode& frame, const i
 	}
 }
 
+#pragma region debugger
+void ibFrontendMainFrameDesigner::Debugger_OnStateChanged()
+{
+	// Asked again now, and not left to the next time the menu is opened: a shortcut goes through the
+	// menu item (wxFrameBase::ProcessCommand refuses a disabled one), and on Windows the menu is only
+	// brought up to date when it opens.
+	if (m_menuDebug != nullptr)
+		m_menuDebug->UpdateUI();
+}
+#pragma endregion
+
 #include "designer-thin/docManager/templates/docViewDataProcessorFile.h"
 #include "designer-thin/docManager/templates/docViewDataReportFile.h"
 #include "designer-thin/docManager/templates/docViewModuleEditor.h"
@@ -123,6 +141,11 @@ bool ibFrontendMainFrameDesigner::Show(bool show)
 {
 	bool ret = ibFrontendMainFrame::Show(show);
 	if (ret && show) {
+		// The debugger, over the configuration now logged in to — the desktop's was made with its configuration
+		// (ibMetaDataConfigurationStorage::OnInitialize).
+		if (m_debugClient == nullptr)
+			m_debugClient.reset(new ibDebuggerClient);
+
 		// ⭐ THE ASSISTANT COMES UP WITH THE DESIGNER, when it is switched on.
 		//
 		// The setting already said so: `m_enabled` means "assistant access is on", and pressing

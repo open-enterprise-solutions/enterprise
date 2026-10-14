@@ -188,6 +188,12 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="mainApp.cpp" />
+    <ClCompile Include="backend\debugger\debugClient.cpp" />
+    <ClCompile Include="backend\debugger\debugClientAsync.cpp" />
+    <ClCompile Include="backend\debugger\debugClientBridge.cpp" />
+    <ClCompile Include="backend\debugger\debugClientQuery.cpp" />
+    <ClCompile Include="mainFrame\debugger\debugClientImpl.cpp" />
+    <ClCompile Include="win\editor\codeEditor\codeEditorDesigner.cpp" />
     <ClCompile Include="mainAppEvent.cpp" />
     <ClCompile Include="docManager\templates\docViewDataProcessorFile.cpp" />
     <ClCompile Include="docManager\templates\docViewDataReportFile.cpp" />
@@ -224,6 +230,11 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="mainApp.h" />
+    <ClInclude Include="backend\debugger\debugClient.h" />
+    <ClInclude Include="backend\debugger\debugClientBridge.h" />
+    <ClInclude Include="backend\debugger\debugDefs.h" />
+    <ClInclude Include="mainFrame\debugger\debugClientImpl.h" />
+    <ClInclude Include="win\editor\codeEditor\codeEditorDesigner.h" />
     <ClInclude Include="docManager\templates\docViewDataProcessorFile.h" />
     <ClInclude Include="docManager\templates\docViewDataReportFile.h" />
     <ClInclude Include="docManager\templates\docViewModuleEditor.h" />

@@ -34,10 +34,43 @@
     <Filter Include="win\dlg\debugItem">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f7a0d}</UniqueIdentifier>
     </Filter>
+    <Filter Include="backend">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f7a10}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="backend\debugger">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f7a11}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="mainFrame\debugger">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f7a12}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\editor">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f7a13}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\editor\codeEditor">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f7a14}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="mainApp.cpp" />
     <ClCompile Include="mainAppEvent.cpp" />
+    <ClCompile Include="backend\debugger\debugClient.cpp">
+      <Filter>backend\debugger</Filter>
+    </ClCompile>
+    <ClCompile Include="backend\debugger\debugClientAsync.cpp">
+      <Filter>backend\debugger</Filter>
+    </ClCompile>
+    <ClCompile Include="backend\debugger\debugClientBridge.cpp">
+      <Filter>backend\debugger</Filter>
+    </ClCompile>
+    <ClCompile Include="backend\debugger\debugClientQuery.cpp">
+      <Filter>backend\debugger</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\debugger\debugClientImpl.cpp">
+      <Filter>mainFrame\debugger</Filter>
+    </ClCompile>
+    <ClCompile Include="win\editor\codeEditor\codeEditorDesigner.cpp">
+      <Filter>win\editor\codeEditor</Filter>
+    </ClCompile>
     <ClCompile Include="mainFrame\mainFrameDesigner.cpp">
       <Filter>mainFrame</Filter>
     </ClCompile>
@@ -137,6 +170,21 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="mainApp.h" />
+    <ClInclude Include="backend\debugger\debugClient.h">
+      <Filter>backend\debugger</Filter>
+    </ClInclude>
+    <ClInclude Include="backend\debugger\debugClientBridge.h">
+      <Filter>backend\debugger</Filter>
+    </ClInclude>
+    <ClInclude Include="backend\debugger\debugDefs.h">
+      <Filter>backend\debugger</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\debugger\debugClientImpl.h">
+      <Filter>mainFrame\debugger</Filter>
+    </ClInclude>
+    <ClInclude Include="win\editor\codeEditor\codeEditorDesigner.h">
+      <Filter>win\editor\codeEditor</Filter>
+    </ClInclude>
     <ClInclude Include="mainFrame\mainFrameDesigner.h">
       <Filter>mainFrame</Filter>
     </ClInclude>

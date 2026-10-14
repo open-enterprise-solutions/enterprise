@@ -27,18 +27,36 @@ long ibApplicationData::RunApplication(const wxString& strAppName, bool searchDe
 		? (wxT('"') + binary.GetFullPath() + wxT('"'))
 		: strAppName;
 
-	// THIS PROCESS'S COMMAND LINE — the engine's built it from the connection it held; the options are the same set
-	// (--file, --address, --server…, --ibuser, --ibpwd, --locale), so the child opens the base this one did. Each quoted,
-	// for the same reason the binary is; a `--debug` of this one's is not passed on, the child's is asked for below.
-	for (int idx = 1; idx < wxTheApp->argc; idx++) {
-		const wxString arg = wxTheApp->argv[idx];
-		if (arg == wxT("--debug"))
-			continue;
-		executeCmd += wxT(" \"") + arg + wxT('"');
+	// THE BASE THIS ONE OPENED, as the engine's built it from the connection it held — the fields, not this process's
+	// command line: a base the person picked (the folder dialog) is on none. Quoted, for the same reason the binary is.
+	if (!m_strAddress.IsEmpty()) {
+		executeCmd += wxString::Format(wxT(" --address=\"%s\""), m_strAddress);
+	}
+	else if (m_strFile.IsEmpty()) {
+		if (!m_strServer.IsEmpty())
+			executeCmd += wxString::Format(wxT(" --server=%s"), m_strServer);
+		if (!m_strPort.IsEmpty())
+			executeCmd += wxString::Format(wxT(" --dbport=%s"), m_strPort);
+		if (!m_strDatabase.IsEmpty())
+			executeCmd += wxString::Format(wxT(" --db=%s"), m_strDatabase);
+		if (!m_strUser.IsEmpty())
+			executeCmd += wxString::Format(wxT(" --user=%s"), m_strUser);
+		if (!m_strPassword.IsEmpty())
+			executeCmd += wxString::Format(wxT(" --password=%s"), m_strPassword);
+	}
+	else {
+		executeCmd += wxString::Format(wxT(" --file=\"%s\""), m_strFile);
 	}
 
 	if (searchDebug)
 		executeCmd += wxT(" --debug");
+
+	if (!m_strIBUser.IsEmpty())
+		executeCmd += wxString::Format(wxT(" --ibuser=%s"), m_strIBUser);
+	if (!m_strIBPassword.IsEmpty())
+		executeCmd += wxString::Format(wxT(" --ibpwd=%s"), m_strIBPassword);
+	if (!m_strLocale.IsEmpty())
+		executeCmd += wxString::Format(wxT(" --locale=%s"), m_strLocale);
 
 	return wxExecute(executeCmd);
 }

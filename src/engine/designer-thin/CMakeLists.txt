@@ -5,6 +5,12 @@ cmake_minimum_required(VERSION 3.16)
 set(DESIGNER_THIN_SOURCES
     mainApp.cpp
     mainAppEvent.cpp
+    backend/debugger/debugClient.cpp
+    backend/debugger/debugClientAsync.cpp
+    backend/debugger/debugClientBridge.cpp
+    backend/debugger/debugClientQuery.cpp
+    mainFrame/debugger/debugClientImpl.cpp
+    win/editor/codeEditor/codeEditorDesigner.cpp
     docManager/templates/docViewDataProcessorFile.cpp
     docManager/templates/docViewDataReportFile.cpp
     docManager/templates/docViewModuleEditor.cpp
@@ -34,6 +40,9 @@ set(DESIGNER_THIN_SOURCES
     syntaxHelper/helpSearchView.cpp
     syntaxHelper/helpTreeView.cpp
     win/dlg/debugItem/debugItem.cpp
+    win/dlg/homePageEditor.cpp
+    win/dlg/predefinedEditor.cpp
+    win/dlg/textEditor.cpp
 )
 
 add_executable(designer-thin ${DESIGNER_THIN_SOURCES})
@@ -68,4 +77,5 @@ target_link_libraries(designer-thin PRIVATE
     protocol
     frmclient
     wx::core wx::aui wx::stc wx::adv wx::html wx::xml wx::base
+    wx::net   # the debugger's connections to the runtimes (backend/debugger)
 )

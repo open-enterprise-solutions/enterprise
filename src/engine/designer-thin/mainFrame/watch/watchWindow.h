@@ -5,7 +5,7 @@
 #include "watchctrl.h"
 
 #include "frmclient/frmclient.h"
-#include "frmclient/backend/debugger/debugDefs.h"
+#include "designer-thin/backend/debugger/debugDefs.h"
 
 //
 // Forward declarations.

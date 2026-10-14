@@ -82,6 +82,17 @@ std::function<void()> ibSchemaMetaData::Command(const ibSession& session, s32 co
 
 	switch (static_cast<ibProtocolMetaDataCommand>(command)) {
 	case ibProtocolMetaDataCommand::Open: {
+		// …or by the module's address — where a runtime stopped or failed (the desktop's ibConfigurationTree::EditModule).
+		const wxString module = args.GetValue<wxString>(wxT("Module"));
+		if (!module.IsEmpty()) {
+			ibValueMetaObject* const object = metaData->FindAnyObjectByFilter(ibGuid(module), true);
+			if (object == nullptr || object->IsDeleted()) {
+				refusal = ibProtocolRefusal::NotFound;
+				error = wxString::Format(wxT("nothing in the configuration is the module %s"), module);
+				return nullptr;
+			}
+			return [object]() { docManager->OpenForm(object); };
+		}
 		ibValueMetaObject* const object = FindObject(metaData, args, wxT("Id"), refusal, error);
 		if (object == nullptr)
 			return nullptr;

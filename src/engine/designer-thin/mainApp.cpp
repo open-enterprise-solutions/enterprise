@@ -11,15 +11,18 @@
 #include <wx/dirdlg.h>
 #include <wx/image.h>
 #include <wx/msgdlg.h>
+#include <wx/socket.h>
 #include <wx/stdpaths.h>
 
 #include "core/diagnostics/crashGuard.h"   // ibCrashGuard::Install — the process's journal and dumps
 #include "frmclient/artProvider/splash/splashLogo.h"   // the splash's picture, the desktop's
+#include "frmclient/backend/appData.h"                 // the base it opens — held there, as the engine's appData held it
 #include "frmclient/win/picture.h"                     // ibProtocolPicture — a PNG in base64, made a bitmap
 #include "protocol/connectionFile.h"
 #include "protocol/connectionServer.h"
 
 #include "mainFrame/mainFrameDesigner.h"
+#include "mainFrame/debugger/debugClientImpl.h"
 
 wxIMPLEMENT_APP(ibAppDesigner);
 
@@ -43,20 +46,20 @@ void ibAppDesigner::OnInitCmdLine(wxCmdLineParser& parser)
 
 bool ibAppDesigner::OnCmdLineParsed(wxCmdLineParser& parser)
 {
-	parser.Found(wxT("address"), &m_strAddress);
+	parser.Found(wxT("address"), &appData->m_strAddress);
 
-	parser.Found(wxT("file"), &m_strFile);
+	parser.Found(wxT("file"), &appData->m_strFile);
 
-	parser.Found(wxT("srv"), &m_strServer);
-	parser.Found(wxT("p"), &m_strPort);
-	parser.Found(wxT("db"), &m_strDatabase);
-	parser.Found(wxT("usr"), &m_strUser);
-	parser.Found(wxT("pwd"), &m_strPassword);
+	parser.Found(wxT("srv"), &appData->m_strServer);
+	parser.Found(wxT("p"), &appData->m_strPort);
+	parser.Found(wxT("db"), &appData->m_strDatabase);
+	parser.Found(wxT("usr"), &appData->m_strUser);
+	parser.Found(wxT("pwd"), &appData->m_strPassword);
 
-	parser.Found(wxT("ib_usr"), &m_strIBUser);
-	parser.Found(wxT("ib_pwd"), &m_strIBPassword);
+	parser.Found(wxT("ib_usr"), &appData->m_strIBUser);
+	parser.Found(wxT("ib_pwd"), &appData->m_strIBPassword);
 
-	parser.Found(wxT("lc"), &m_strLocale);
+	parser.Found(wxT("lc"), &appData->m_strLocale);
 
 	return wxApp::OnCmdLineParsed(parser);
 }
@@ -70,6 +73,10 @@ bool ibAppDesigner::OnInit()
 	// and a file base's engine's lines in it alike.
 	ibCrashGuard::Install(wxT("designer-thin"));
 
+	// THE SOCKETS ON THIS THREAD, as the desktop's (ibWxApp::DoOnInit): the debugger's connections open theirs on their
+	// own threads, and a file base has none here before them — wx does not start the socket layer from a worker thread.
+	wxSocketBase::Initialize();
+
 	// THE COMMAND LINE FIRST, then the connection: wx calls OnExit only after an OnInit that succeeded, so nothing is
 	// opened before a refusal here could leave it behind (the codeRunner exit crash, 2026-10-07).
 	if (!wxApp::OnInit())
@@ -79,13 +86,13 @@ bool ibAppDesigner::OnInit()
 
 	// NO BASE NAMED — the desktop designer's: the person picks the folder of a file base, which is made there when
 	// there is none yet.
-	if (m_strAddress.IsEmpty() && m_strFile.IsEmpty() && m_strServer.IsEmpty()) {
+	if (appData->m_strAddress.IsEmpty() && appData->m_strFile.IsEmpty() && appData->m_strServer.IsEmpty()) {
 		wxDirDialog dlg(nullptr, _("Select configuration database folder"),
 			wxStandardPaths::Get().GetDocumentsDir(),
 			wxDD_DEFAULT_STYLE | wxDD_DIR_MUST_EXIST | wxDD_NEW_DIR_BUTTON);
 		if (dlg.ShowModal() != wxID_OK)
 			return false;
-		m_strFile = dlg.GetPath();
+		appData->m_strFile = dlg.GetPath();
 	}
 
 	// THE SPLASH — the desktop's (designer/mainApp.cpp): up while the base opens and the client logs in, gone with the
@@ -97,36 +104,37 @@ bool ibAppDesigner::OnInit()
 	std::unique_ptr<ibProtocolConnection> connection;
 	wxString error;
 
-	if (!m_strAddress.IsEmpty()) {
+	if (!appData->m_strAddress.IsEmpty()) {
 		// An application server — over its port.
 		auto server = std::make_unique<ibProtocolConnectionServer>();
-		if (!server->Open(m_strAddress, error)) {
+		if (!server->Open(appData->m_strAddress, error)) {
 			splash.reset();
 			wxMessageBox(error, _("OES Designer - startup error"), wxOK | wxICON_ERROR);
 			return false;
 		}
 		connection = std::move(server);
 	}
-	else if (!m_strFile.IsEmpty() || (!m_strServer.IsEmpty() && !m_strDatabase.IsEmpty())) {
+	else if (!appData->m_strFile.IsEmpty() || (!appData->m_strServer.IsEmpty() && !appData->m_strDatabase.IsEmpty())) {
 		// A file base — opened in this process, by the library that brings the server in; the designer's is made
 		// where there is none yet, as the desktop designer made it.
 		ibProtocolNode request;
-		request.SetValue(ibProtocolName::Locale, m_strLocale)
+		request.SetValue(ibProtocolName::Locale, appData->m_strLocale)
 			.SetValue(ibProtocolName::Create, true);
-		if (!m_strFile.IsEmpty()) {
-			request.SetValue(ibProtocolName::Directory, m_strFile);
+		if (!appData->m_strFile.IsEmpty()) {
+			request.SetValue(ibProtocolName::Directory, appData->m_strFile);
 		}
 		else {
-			request.SetValue(ibProtocolName::Server, m_strServer)
-				.SetValue(ibProtocolName::Port, m_strPort)
-				.SetValue(ibProtocolName::User, m_strUser)
-				.SetValue(ibProtocolName::Password, m_strPassword)
-				.SetValue(ibProtocolName::Database, m_strDatabase);
+			request.SetValue(ibProtocolName::Server, appData->m_strServer)
+				.SetValue(ibProtocolName::Port, appData->m_strPort)
+				.SetValue(ibProtocolName::User, appData->m_strUser)
+				.SetValue(ibProtocolName::Password, appData->m_strPassword)
+				.SetValue(ibProtocolName::Database, appData->m_strDatabase);
 		}
 		auto file = std::make_unique<ibProtocolConnectionFile>();
 		if (!file->Open(request.Write(), error)) {
 			splash.reset();
-			wxMessageBox(error + wxT("\n\n") + (m_strFile.IsEmpty() ? m_strServer + wxT(" / ") + m_strDatabase : m_strFile),
+			wxMessageBox(error + wxT("\n\n") + (appData->m_strFile.IsEmpty()
+				? appData->m_strServer + wxT(" / ") + appData->m_strDatabase : appData->m_strFile),
 				_("OES Designer - startup error"), wxOK | wxICON_ERROR);
 			return false;
 		}
@@ -149,10 +157,15 @@ bool ibAppDesigner::OnInit()
 	// The window holds the client from here: it logs in as it is shown, and a refused start takes it down again —
 	// the communicator with it, and a file base's connection closes the base.
 	auto* frame = new ibFrontendMainFrameDesigner(
-		std::make_unique<ibCommunicator>(std::move(connection)), m_strIBUser, m_strIBPassword);
+		std::make_unique<ibCommunicator>(std::move(connection)), appData->m_strIBUser, appData->m_strIBPassword);
 	if (!frame->Show()) {
 		frame->Destroy();
 		return false;
 	}
+
+	// The designer's bridge onto its debugger, as the desktop's wired it after its login — the frame made the debugger
+	// as it logged in (Show).
+	ibDebuggerClientBridge::SetDebuggerClientBridge(
+		new ibDebuggerClientBridgeDesigner);
 	return true;
 }

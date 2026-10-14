@@ -6,7 +6,7 @@
 #include "watchWindow.h"
 #include "watchdroptarget.h"
 
-#include "frmclient/backend/debugger/debugClient.h"
+#include "designer-thin/backend/debugger/debugClient.h"
 #include "core/fileSystem/fs.h"
 
 #include <functional>

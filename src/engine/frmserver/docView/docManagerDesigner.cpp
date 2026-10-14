@@ -1,5 +1,6 @@
 #include "docManagerDesigner.h"
 
+#include "frmserver/schema/designer/debugger.h"
 #include "frmserver/schema/designer/mcpServer.h"
 #include "frmserver/schema/designer/metaData.h"
 #include "frmserver/schema/designer/homePage.h"
@@ -39,6 +40,8 @@ ibDocManagerDesigner::ibDocManagerDesigner()
 	RegisterSchema(ibProtocolSchema::ObjectText, std::make_unique<ibSchemaObjectText>());
 	// …and the configuration's home page workspace.
 	RegisterSchema(ibProtocolSchema::HomePage, std::make_unique<ibSchemaHomePage>());
+	// The debugger's store — the configuration's modules and their breakpoints; the debugger is the client's.
+	RegisterSchema(ibProtocolSchema::Debugger, std::make_unique<ibSchemaDebugger>());
 	// The inspector's edit — the object it shows, a form's control or a metaobject alike, its property given a value.
 	RegisterSchema(ibProtocolSchema::Properties, std::make_unique<ibSchemaProperties>());
 	// The designer's Administration → Users — the base's users.

@@ -10,7 +10,7 @@
 //********************************************************************************
 
 #include "frmclient/backend/appData.h"
-#include "frmclient/backend/debugger/debugClient.h"
+#include "designer-thin/backend/debugger/debugClient.h"
 #include "designer-thin/mainFrame/metaTree/treeConfiguration.h"
 
 // Common shape for the three places that save the configuration before
@@ -44,7 +44,10 @@ void ibFrontendMainFrameDesigner::OnStartDebug(wxCommandEvent& WXUNUSED(event))
 	if (!SaveBeforeChildLaunch(this, m_metaWindow))
 		return;
 
-	appData->RunApplication(wxT("enterprise"));
+	// …and the child's debug server looked for, as the desktop's RunApplication did with the debugger it held — once,
+	// and not waited for: the connections keep trying on their own threads while the child boots (SearchServer(true)).
+	if (appData->RunApplication(wxT("enterprise")) != 0)
+		debugClient->SearchServer(true);
 }
 
 void ibFrontendMainFrameDesigner::OnStartDebugWithoutDebug(wxCommandEvent& WXUNUSED(event))
@@ -67,7 +70,8 @@ void ibFrontendMainFrameDesigner::OnStartDebugThin(wxCommandEvent& WXUNUSED(even
 	if (!SaveBeforeChildLaunch(this, m_metaWindow))
 		return;
 
-	appData->RunApplication(wxT("enterprise-thin"));
+	if (appData->RunApplication(wxT("enterprise-thin")) != 0)
+		debugClient->SearchServer(true);
 }
 
 void ibFrontendMainFrameDesigner::OnStartDebugWithoutDebugThin(wxCommandEvent& WXUNUSED(event))
@@ -151,7 +155,10 @@ void ibFrontendMainFrameDesigner::OnUpdateConfiguration(wxCommandEvent& WXUNUSED
 	// it when the exclusive cannot be taken — the desktop's Try again / Update dynamically choice is not ported).
 
 	// …and the last question is the ledger itself, which the server puts to the person (ShowRequest, ApplyChange).
-	m_metaWindow->ApplyConfiguration();
+	// Applied — the configuration no longer differs from the base's — the breakpoints are written at the lines they
+	// moved to, as the desktop's modules wrote theirs on the apply (ibValueMetaObjectModuleBase::OnSaveMetaObject).
+	if (m_metaWindow->ApplyConfiguration() && !m_metaWindow->IsModified() && debugClient != nullptr)
+		debugClient->SaveAllBreakpoints();
 }
 
 void ibFrontendMainFrameDesigner::OnConfiguration(wxCommandEvent& event)

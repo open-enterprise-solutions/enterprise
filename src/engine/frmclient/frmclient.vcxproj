@@ -434,8 +434,6 @@
     <ClInclude Include="backend\metaCollection\metaObjectMetadata.h" />
     <ClInclude Include="backend\metaData.h" />
     <ClInclude Include="backend\appData.h" />
-    <ClInclude Include="backend\debugger\debugClient.h" />
-    <ClInclude Include="backend\debugger\debugDefs.h" />
     <ClInclude Include="backend\backend_mainFrame.h" />
     <ClInclude Include="backend\session\session.h" />
     <ClInclude Include="backend\compiler\enumUnit.h" />

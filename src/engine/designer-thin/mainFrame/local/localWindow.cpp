@@ -4,7 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "localWindow.h"
-#include "frmclient/backend/debugger/debugClient.h"
+#include "designer-thin/backend/debugger/debugClient.h"
 
 #ifdef __WXMSW__
 #include <windows.h>

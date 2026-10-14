@@ -1,5 +1,6 @@
 #include "docViewModuleEditor.h"
 #include "frmclient/mainFrame/mainFrame.h"
+#include "designer-thin/win/editor/codeEditor/codeEditorDesigner.h"
 
 enum {
 	wxID_ADD_COMMENTS = wxID_HIGHEST + 10000,
@@ -36,8 +37,8 @@ wxEND_EVENT_TABLE()
 
 bool ibModuleEditView::OnCreate(ibFrontendDocument* docBase, long flags)
 {
-	ibTabDocument* doc = dynamic_cast<ibTabDocument*>(docBase);
-	m_codeEditor = new ibCodeEditor(doc, m_viewFrame, wxID_ANY,
+	// The desktop's designer editor — the debugger's margin, its patches, its values (ibCodeEditorDesigner).
+	m_codeEditor = new ibCodeEditorDesigner(dynamic_cast<ibModuleEditDocument*>(docBase), m_viewFrame, wxID_ANY,
 		wxDefaultPosition, wxDefaultSize, wxBORDER_THEME);
 
 	m_codeEditor->SetReadOnly(flags == ibDOC_READONLY);
@@ -197,6 +198,10 @@ void ibModuleEditDocument::DrawView(const ibProtocolNode& view, const ibProtocol
 	const ibProtocolNode state = view.FindChild(ibProtocolName::State);
 	m_modified = state.GetBool(ibProtocolName::Modified);
 
+	const wxString docPath = state.GetString(ibProtocolName::Module);
+	const bool docPathChanged = docPath != m_docPath;
+	m_docPath = docPath;
+
 	ibCodeEditor* codeEditor = GetCodeEditor();
 	if (codeEditor == nullptr)
 		return;
@@ -205,6 +210,26 @@ void ibModuleEditDocument::DrawView(const ibProtocolNode& view, const ibProtocol
 	// the document (ibCompileCode::GetCodeStyle, ibDOC_READONLY).
 	codeEditor->SetCodeStyle(static_cast<short>(state.GetInt(ibProtocolName::Syntax)));
 	codeEditor->SetReadOnly(state.GetBool(ibProtocolName::ReadOnly));
+
+	// Its breakpoints, drawn once the address they are kept by is known.
+	if (docPathChanged)
+		codeEditor->RefreshBreakpoint();
+}
+
+void ibModuleEditDocument::SetCurrentLine(int lineBreakpoint, bool setBreakpoint)
+{
+	ibCodeEditor* codeEditor = GetCodeEditor();
+	if (codeEditor != nullptr)
+		codeEditor->SetCurrentLine(lineBreakpoint, setBreakpoint);
+}
+
+void ibModuleEditDocument::SetToolTip(const wxString& resultStr)
+{
+	ibCodeEditor* codeEditor = GetCodeEditor();
+	if (codeEditor != nullptr) {
+		// The editor's own door, not the window's: it keeps the answer as well as showing it.
+		codeEditor->SetDebugValue(resultStr);
+	}
 }
 
 wxCommandProcessor* ibModuleEditDocument::OnCreateCommandProcessor()

@@ -7,6 +7,8 @@
 #undef mainFrame
 #endif
 
+class ibConfigurationTree;
+class ibDebuggerClient;
 class ibStackWindow;
 class ibWatchWindow;
 class ibLocalWindow;
@@ -82,14 +84,24 @@ public:
 		const wxString& title = _("Designer"),
 		const wxPoint& pos = wxDefaultPosition,
 		const wxSize& size = wxDefaultSize);
+	virtual ~ibFrontendMainFrameDesigner();
 
-	// Shown — logged in — and the person's assistant access started with it when they switched it on (the desktop's).
+	// Shown — logged in — its debugger made over the configuration logged in to, and the person's assistant access
+	// started with it when they switched it on (the desktop's).
 	virtual bool Show(bool show = true) override;
+
+	// The configuration's tree and the messages — the desktop's, where the debugger shows a stop and what was said.
+	ibConfigurationTree* GetMetaWindow() const { return m_metaWindow; }
+	ibOutputWindow* GetOutputWindow() const { return m_outputWindow; }
 
 	// The debugger's panes along the bottom — the desktop's, beside the messages.
 	ibStackWindow* GetStackWindow() const { return m_stackWindow; }
 	ibWatchWindow* GetWatchWindow() const { return m_watchWindow; }
 	ibLocalWindow* GetLocalWindow() const { return m_localWindow; }
+
+	// The debugger's state changed (attached, detached, stopped, running): the Debug menu asks again
+	// (OnUpdateDebugCommand) - it does not carry a state of its own.
+	void Debugger_OnStateChanged();
 
 protected:
 
@@ -148,8 +160,12 @@ private:
 	void OnRunDebugCommand(wxCommandEvent& event);
 	void OnUpdateDebugCommand(wxUpdateUIEvent& event);
 
-	class ibConfigurationTree* m_metaWindow = nullptr;
+	ibConfigurationTree* m_metaWindow = nullptr;
 	class ibHelpPaneView* m_helpPane = nullptr;
+
+	// THE DEBUGGER — the engine's client, the designer's own (designer-thin/backend/debugger): its sockets go straight to
+	// the runtimes; its breakpoints are kept by the server. Made when the frame logged in, gone with the frame.
+	std::unique_ptr<ibDebuggerClient> m_debugClient;
 
 	wxAuiToolBar* m_debugToolbar = nullptr;
 

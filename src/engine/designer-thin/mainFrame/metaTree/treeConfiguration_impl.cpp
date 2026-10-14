@@ -13,6 +13,7 @@
 #include <wx/wupdlock.h>
 
 #include "clipboardLock.h"   // the Open/Close pair, taken as a guard — the desktop's
+#include "designer-thin/docManager/templates/docViewModuleEditor.h"   // a module's tab — the line a stop shows
 #include "frmclient/artProvider/artProvider.h"
 #include "frmclient/backend/metaCollection/metaObjectMetadata.h"      // the objects a modal editor of its menu is over
 #include "frmclient/backend/metaCollection/partial/commonObject.h"
@@ -390,6 +391,23 @@ void ibMetaTreeBase::EditItem()
 	ibProtocolNode args;
 	args.SetValue(ibProtocolName::Id, id);
 	Command(ibProtocolMetaDataCommand::Open, args);
+}
+
+void ibMetaTreeBase::EditModule(const ibGuid& moduleName, int line, bool setRunLine)
+{
+	ibProtocolNode args;
+	args.SetValue(ibProtocolName::Module, moduleName.str());
+	if (!Command(ibProtocolMetaDataCommand::Open, args))
+		return;
+
+	// The tab is drawn by now — the frame came with the answer; its module found by the address its State says.
+	for (ibFrontendDocument* const doc : docManager->GetDocumentsVector()) {
+		ibModuleEditDocument* const moduleDoc = dynamic_cast<ibModuleEditDocument*>(doc);
+		if (moduleDoc != nullptr && ibGuid(moduleDoc->GetDocPath()) == moduleName) {
+			moduleDoc->SetCurrentLine(line, setRunLine);
+			return;
+		}
+	}
 }
 
 void ibMetaTreeBase::RemoveItem()

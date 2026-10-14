@@ -43,6 +43,8 @@ void ibModuleTextView::OnDraw(ibDataNode& frame)
 	// while this is false (event Input).
 	const ibMetaData* const metaData = creator->GetMetaData();
 	state.SetValue(wxT("Modified"), metaData != nullptr && metaData->IsModified());
+	// The module's address the debugger knows it by — its breakpoints' key, the place a runtime stops at.
+	state.SetValue(wxT("Module"), creator->GetDocPath());
 }
 
 // ----------------------------------------------------------------------------

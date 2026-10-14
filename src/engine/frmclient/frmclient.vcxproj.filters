@@ -500,12 +500,6 @@
     <ClInclude Include="win\dlgs\applyChange.h">
       <Filter>win\dlgs</Filter>
     </ClInclude>
-    <ClInclude Include="backend\debugger\debugClient.h">
-      <Filter>backend\debugger</Filter>
-    </ClInclude>
-    <ClInclude Include="backend\debugger\debugDefs.h">
-      <Filter>backend\debugger</Filter>
-    </ClInclude>
     <ClInclude Include="win\dlgs\userItem.h">
       <Filter>win\dlgs</Filter>
     </ClInclude>
@@ -687,9 +681,6 @@
     </Filter>
     <Filter Include="backend\job">
       <UniqueIdentifier>{6a1f8b3d-2c4e-4f70-9bac-1d2e3f405165}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="backend\debugger">
-      <UniqueIdentifier>{6a1f8b3d-2c4e-4f70-9bac-1d2e3f405168}</UniqueIdentifier>
     </Filter>
     <Filter Include="backend\mcp">
       <UniqueIdentifier>{6a1f8b3d-2c4e-4f70-9bac-1d2e3f405167}</UniqueIdentifier>

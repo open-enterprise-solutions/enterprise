@@ -175,6 +175,9 @@
     <ClCompile Include="schema\designer\objectText.cpp">
       <Filter>schema\designer</Filter>
     </ClCompile>
+    <ClCompile Include="schema\designer\debugger.cpp">
+      <Filter>schema\designer</Filter>
+    </ClCompile>
     <ClCompile Include="schema\designer\predefined.cpp">
       <Filter>schema\designer</Filter>
     </ClCompile>
@@ -602,6 +605,9 @@
       <Filter>schema\designer</Filter>
     </ClInclude>
     <ClInclude Include="schema\designer\objectText.h">
+      <Filter>schema\designer</Filter>
+    </ClInclude>
+    <ClInclude Include="schema\designer\debugger.h">
       <Filter>schema\designer</Filter>
     </ClInclude>
     <ClInclude Include="schema\designer\predefined.h">

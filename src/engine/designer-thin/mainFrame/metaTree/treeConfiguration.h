@@ -35,6 +35,11 @@ public:
 	// Its tab became the active one — the inspector shows what is selected in it (the desktop's).
 	void ActivateTree() { SelectItem(); }
 
+	// THE MODULE, SHOWN — the desktop's (ibConfigurationTree::EditModule), by the address a runtime stopped or failed
+	// at: its editor opened by the server (Open {Module}), the line put before the person — the run line (setRunLine)
+	// or a failure's.
+	void EditModule(const ibGuid& moduleName, int line, bool setRunLine = true);
+
 protected:
 
 	ibMetaTreeBase(wxWindow* parent, long long tab, bool search);

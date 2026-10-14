@@ -210,6 +210,13 @@ namespace ibProtocolName {
 	inline constexpr const char* Allowed   = "Allowed";     // …and may be switched now: not on the application server,
 	                                                        // not while a start waits for the designer
 
+	// The designer's debugger's store (ibProtocolSchema::Debugger): a module by its address — Module, its lines, and its
+	// Breakpoints (Line, Condition). A module view's State says its Module too.
+	inline constexpr const char* Module      = "Module";
+	inline constexpr const char* Line        = "Line";
+	inline constexpr const char* Breakpoints = "Breakpoints";
+	inline constexpr const char* Condition   = "Condition";
+
 	// The designer's assistant access — the schema's (McpServer), beside Enabled, Port and Token: where it listens,
 	// whether it does, and what a person hands their tool.
 	inline constexpr const char* Address  = "Address";
@@ -523,6 +530,10 @@ enum class ibProtocolSchema : int {
 	                    // HomePage — as the root writes it (ibHomePageDescription), ReadOnly — when it takes no edit, and
 	                    // Forms (Id, Name, FullName, Picture, Common; a form's owner: Owner, OwnerName, OwnerPicture) — what
 	                    // it may show; command 4 Save {Id, HomePage}
+	Debugger     = 15,  // the designer's debugger's store — the debugger is the thin designer's own, the engine's client
+	                    // carried over; the configuration and its sys_dbg are here: shows the configuration's Guid and
+	                    // Rows (Module, Count — its lines); `Args: {Module}` — that module's Breakpoints. Its commands
+	                    // ibProtocolDebuggerCommand
 };
 
 // A schema's own commands — `schema {Schema, Command, Args}`. All functions and Sections take the one: Open
@@ -546,7 +557,7 @@ enum class ibProtocolSchemaCommand : int {
 // THE DESIGNER'S TREE'S COMMANDS — `schema {Schema: MetaData, Command, Args}`, its doors by an object's id, each with Tab
 // in an external file's tree. Numbered of their own: the schema reads them, no other.
 enum class ibProtocolMetaDataCommand : int {
-	Open     = 1,    // {Id} — the object's editor
+	Open     = 1,    // {Id} — the object's editor; or {Module} — the module of that address (a stop, a failure)
 	Create   = 2,    // {Type, Parent} — a new one of that class under that object (0: the configuration's own), opened
 	Remove   = 3,    // {Id}
 	Move     = 4,    // {Id, Position} — put at that place among its parent's children
@@ -559,6 +570,14 @@ enum class ibProtocolMetaDataCommand : int {
 	Apply    = 10,   // written and the base restructured, its ledger asked first (Request ApplyChange)
 	Load     = 11,   // {File} — read from that uploaded file
 	Unload   = 12,   // {File} — written into that one (uploaded empty)
+};
+
+// THE DEBUGGER'S STORE'S COMMANDS — `schema {Schema: Debugger, Command, Args}`: the engine's ibDebuggerClient's rows of
+// sys_dbg (debugClientQuery.cpp), a breakpoint by its module and its committed line. Numbered of their own, as the tree's.
+enum class ibProtocolDebuggerCommand : int {
+	ToggleBreakpoint    = 1,    // {Module, Line, Condition} — set, or its condition replaced
+	RemoveBreakpoint    = 2,    // {Module, Line}
+	RemoveAllBreakpoint = 3,
 };
 
 // What the server asks the person — the frame's Request, by its Kind; answered with `respond {Id, Response}`.
