@@ -37,6 +37,7 @@
 
 #include "backend/appData.h"                        // GetSettingsStorage — where a person's settings live
 #include "backend/server/listener.h"                // the listener: TLS when backend.conf names a certificate
+#include "backend/utils/sessionToken.h"             // TextEqual - the token compared in constant time
 #include "backend/logger/logger.h"                  // …and ibLog — the registration journal
 #include "backend/backend_exception.h"              // an engine refusal arrives as an exception
 #include "backend/query/queryException.h"           // …and the query family says WHERE
@@ -312,7 +313,10 @@ private:
 		if (!given.StartsWith(wxT("Bearer ")))
 			return false;
 
-		return given.Mid(7).Trim(true).Trim(false) == expected;
+		// In constant time, as the session's token is compared: a comparison that stops at the first wrong
+		// byte tells a caller timing it how many bytes were right.
+		return ibSessionToken::TextEqual(std::string(given.Mid(7).Trim(true).Trim(false).utf8_str()),
+			std::string(expected.utf8_str()));
 	}
 
 	// ⭐⭐ THE REFUSAL SAYS WHAT IS MISSING AND WHERE IT LIVES — because this is the FIRST thing a

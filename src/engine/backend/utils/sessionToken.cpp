@@ -98,4 +98,11 @@ bool DigestEqual(const unsigned char* left, const unsigned char* right)
 	return mbedtls_ct_memcmp(left, right, kDigest) == 0;
 }
 
+bool TextEqual(const std::string& presented, const std::string& expected)
+{
+	if (expected.empty() || presented.size() != expected.size())
+		return false;
+	return mbedtls_ct_memcmp(presented.data(), expected.data(), expected.size()) == 0;
+}
+
 } // namespace ibSessionToken
