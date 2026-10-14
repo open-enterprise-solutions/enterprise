@@ -308,7 +308,6 @@
     <ClInclude Include="moduleManager\moduleManager.h" />
     <ClInclude Include="moduleManager\moduleManagerExt.h" />
     <ClInclude Include="objCtor.h" />
-    <ClInclude Include="picturePredefined.h" />
     <ClInclude Include="propertyManager\propertyManager.h" />
     <ClInclude Include="propertyManager\propertyObject.h" />
     <ClInclude Include="propertyManager\property\eventControl.h" />
@@ -858,7 +857,6 @@
     <ClCompile Include="objCtor.cpp" />
     <ClCompile Include="srcDataObject.cpp" />
     <ClCompile Include="tabularDataObject.cpp" />
-    <ClCompile Include="picturePredefined.cpp" />
     <ClCompile Include="propertyManager\propertyObject.cpp" />
     <ClCompile Include="propertyManager\property\eventControl.cpp" />
     <ClCompile Include="propertyManager\property\eventAction.cpp" />

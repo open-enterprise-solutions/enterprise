@@ -13,7 +13,7 @@
 
 #include "frontend/docView/docView.h"
 #include "frontend/docView/templates/docViewAuditLog.h"
-#include "backend/picturePredefined.h"
+#include "core/picturePredefined.h"
 
 void ibFrontendMainFrameEnterprise::OnClickAllOperation(wxCommandEvent& event)
 {

@@ -39,6 +39,11 @@ protected:
 
 	ibMetaTreeBase(wxWindow* parent, long long tab, bool search);
 
+	// THE MODAL EDITOR over an object, the desktop's — its row's menu opens it (the engine's ProcessCommand, by the item's
+	// Name). A tree that has none answers by doing nothing: an external file's.
+	virtual void EditPredefinedValues(class ibValueMetaObjectRecordDataHierarchyMutableRef* WXUNUSED(metaObject)) {}
+	virtual void EditHomePage(class ibValueMetaObjectConfiguration* WXUNUSED(metaObject)) {}
+
 	// THE DOORS — schema MetaData's parameters: the command, its arguments, the tab's id with them; and the command
 	// asked, the frame drawn after it. False: refused (said to the person).
 	ibProtocolNode GetParams(ibProtocolMetaDataCommand command, ibProtocolNode args) const;
@@ -132,6 +137,8 @@ private:
 	void OnExpanded(wxTreeEvent& event);
 	void OnCollapsed(wxTreeEvent& event);
 	void OnItemMenu(wxTreeEvent& event);
+	void OnEditHelp(wxCommandEvent& event);
+	void OnEditNotes(wxCommandEvent& event);
 	void OnStartSearch(wxCommandEvent& event);
 	void OnCancelSearch(wxCommandEvent& event);
 
@@ -156,6 +163,11 @@ private:
 class ibConfigurationTree : public ibMetaTreeBase {
 public:
 	explicit ibConfigurationTree(wxWindow* parent) : ibMetaTreeBase(parent, 0, true) {}
+
+	// The predefined values editor over the object (ibDialogPredefinedEditor), its items read from the server as it opens.
+	virtual void EditPredefinedValues(class ibValueMetaObjectRecordDataHierarchyMutableRef* metaObject) override;
+	// The home page workspace editor over the root (ibDialogHomePageEditor), its workspace and forms read as it opens.
+	virtual void EditHomePage(class ibValueMetaObjectConfiguration* metaObject) override;
 
 	// THE CONFIGURATION ITSELF, as the desktop's window asked it (ibMetaDataConfigurationBase) — whether it differs from
 	// the base's (ibMetaData::IsModified: what Rollback and Update have to do), whether somebody edited it, and its name,

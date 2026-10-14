@@ -2,6 +2,9 @@
 
 #include "frmserver/schema/designer/mcpServer.h"
 #include "frmserver/schema/designer/metaData.h"
+#include "frmserver/schema/designer/homePage.h"
+#include "frmserver/schema/designer/objectText.h"
+#include "frmserver/schema/designer/predefined.h"
 #include "frmserver/schema/designer/properties.h"
 #include "frmserver/schema/designer/userList.h"
 
@@ -30,6 +33,12 @@ ibDocManagerDesigner::ibDocManagerDesigner()
 
 	// The configuration tree — its doors; the rows are the frame's (ibClientFrameDesigner).
 	RegisterSchema(ibProtocolSchema::MetaData, std::make_unique<ibSchemaMetaData>());
+	// …and its predefined values editor — what an object declares, and its edits.
+	RegisterSchema(ibProtocolSchema::Predefined, std::make_unique<ibSchemaPredefined>());
+	// …and its texts — an object's help and technical information.
+	RegisterSchema(ibProtocolSchema::ObjectText, std::make_unique<ibSchemaObjectText>());
+	// …and the configuration's home page workspace.
+	RegisterSchema(ibProtocolSchema::HomePage, std::make_unique<ibSchemaHomePage>());
 	// The inspector's edit — the object it shows, a form's control or a metaobject alike, its property given a value.
 	RegisterSchema(ibProtocolSchema::Properties, std::make_unique<ibSchemaProperties>());
 	// The designer's Administration → Users — the base's users.

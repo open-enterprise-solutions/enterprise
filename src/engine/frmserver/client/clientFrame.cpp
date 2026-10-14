@@ -8,7 +8,7 @@
 #include "backend/backend_form.h"
 #include "backend/backend_picture.h"
 #include "backend/debugger/debugServer.h"   // a script's failure sent to the designer (BackendError)
-#include "backend/picturePredefined.h"
+#include "core/picturePredefined.h"
 #include "backend/session/session.h"
 #include "backend/session/workerPool.h"   // Await / Wake — a question waits in the session's pool
 #include "backend/temp/tempStorage.h"     // ibTempFile — a file the client uploaded

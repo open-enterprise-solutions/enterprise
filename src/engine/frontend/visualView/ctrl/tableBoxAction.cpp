@@ -9,7 +9,7 @@
 #include <memory>
 #include <wx/choicdlg.h>
 #include "backend/metaCollection/partial/commonObject.h"
-#include "backend/picturePredefined.h"          // g_pic*CLSID — the TableBox composes the standard command band
+#include "core/picturePredefined.h"          // g_pic*CLSID — the TableBox composes the standard command band
 #include "backend/backend_composition.h"        // the description the quick filter writes into + ibStoreValue
 #include "backend/appData.h"
 #include "frontend/win/dlgs/settings/list/listSettings.h"   // the ONE door a model's settings are opened by

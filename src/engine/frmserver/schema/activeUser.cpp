@@ -2,7 +2,7 @@
 
 #include "backend/appData.h"
 #include "backend/backend_picture.h"   // the dialog's pictures, as the desktop's drew them
-#include "backend/picturePredefined.h"
+#include "core/picturePredefined.h"
 #include "backend/lock/lockManager.h"
 #include "backend/metadataConfiguration.h"
 #include "core/diagnostics/journal.h"   // ibJournalWarning — a command that failed, as the desktop's dialog had it

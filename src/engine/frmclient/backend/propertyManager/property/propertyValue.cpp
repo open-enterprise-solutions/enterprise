@@ -18,8 +18,21 @@ ibPropertyValue::ibPropertyValue(ibPropertyCategory* cat, const ibDataNode& row)
 	else
 		m_value = row.GetProperty(wxT("Value"));
 
-	// What it may be set to — its children with an Id (a type's children name the types it may hold, not choices).
+	// What it may be set to — its children with an Id; a type's, the types it may hold (Type — the class id, named and
+	// drawn as the server offered it: what the picker and the cell read it by, ibValue::GetAvailableCtor).
 	for (const ibDataNode& choice : row.Children()) {
+		if (const ibDataValue* const type = choice.FindField(wxT("Type"))) {
+			unsigned long long clsid = 0;
+			type->AsString().ToULongLong(&clsid);
+			const wxString title = choice.GetValue<wxString>(wxT("Title"));
+			const wxBitmap picture = ibProtocolPicture(choice.GetValue<wxString>(wxT("Picture")));
+			wxIcon icon;
+			if (picture.IsOk())
+				icon.CopyFromBitmap(picture);
+			ibValue::RegisterCtor(clsid, title, icon);
+			m_choices.Add(m_choices.GetCount(), title, wxEmptyString, wxVariant(wxULongLong(clsid)));
+			continue;
+		}
 		if (choice.FindField(wxT("Id")) == nullptr)
 			continue;
 		m_choices.Add(choice.GetValue<wxString>(wxT("Title")), choice.GetValue<s32>(wxT("Id")),

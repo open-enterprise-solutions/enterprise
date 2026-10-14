@@ -18,6 +18,11 @@
 
 #define oes_clipboard_template	wxT("oes_clipboard_template")
 
+//max precision
+#define MAX_PRECISION_NUMBER 32
+//max precision
+#define MAX_LENGTH_STRING 1024
+
 class ibValue;   // frmclient/backend/compiler/value.h
 
 #endif

@@ -858,7 +858,7 @@ void ibFrontendMainFrameDesigner::OnUpdateMcpAssistant(wxUpdateUIEvent& event)
 }
 
 #include "docManager/templates/docViewAssistant.h"
-#include "backend/picturePredefined.h"   // the assistant's own icon, from the picture registry
+#include "core/picturePredefined.h"   // the assistant's own icon, from the picture registry
 
 void ibFrontendMainFrameDesigner::OnMcpAssistant(wxCommandEvent& WXUNUSED(event))
 {
@@ -911,7 +911,7 @@ void ibFrontendMainFrameDesigner::OnActiveUsers(wxCommandEvent& event)
 
 #include "frontend/docView/docView.h"
 #include "frontend/docView/templates/docViewAuditLog.h"
-#include "backend/picturePredefined.h"
+#include "core/picturePredefined.h"
 
 void ibFrontendMainFrameDesigner::OnAuditLog(wxCommandEvent& event)
 {

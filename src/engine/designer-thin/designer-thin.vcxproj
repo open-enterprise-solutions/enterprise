@@ -218,6 +218,9 @@
     <ClCompile Include="syntaxHelper\helpSearchView.cpp" />
     <ClCompile Include="syntaxHelper\helpTreeView.cpp" />
     <ClCompile Include="win\dlg\debugItem\debugItem.cpp" />
+    <ClCompile Include="win\dlg\homePageEditor.cpp" />
+    <ClCompile Include="win\dlg\predefinedEditor.cpp" />
+    <ClCompile Include="win\dlg\textEditor.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="mainApp.h" />
@@ -242,6 +245,9 @@
     <ClInclude Include="syntaxHelper\helpSearchView.h" />
     <ClInclude Include="syntaxHelper\helpTreeView.h" />
     <ClInclude Include="win\dlg\debugItem\debugItem.h" />
+    <ClInclude Include="win\dlg\homePageEditor.h" />
+    <ClInclude Include="win\dlg\predefinedEditor.h" />
+    <ClInclude Include="win\dlg\textEditor.h" />
     <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>

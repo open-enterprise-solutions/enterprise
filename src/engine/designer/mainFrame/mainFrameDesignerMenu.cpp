@@ -4,7 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "mainFrameDesigner.h"
-#include "backend/picturePredefined.h"   // the assistant's icon, from the picture registry
+#include "core/picturePredefined.h"   // the assistant's icon, from the picture registry
 
 //********************************************************************************
 //*                                Hotkey support                                *

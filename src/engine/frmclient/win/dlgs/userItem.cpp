@@ -2,7 +2,7 @@
 
 #include "frmclient/backend/userInfo.h"   // the user — the server's schema behind the desktop's calls
 #include "frmclient/backend/backend_picture.h"
-#include "frmclient/backend/picturePredefined.h"
+#include "core/picturePredefined.h"
 
 bool ibDialogUserItem::ReadUserData(const ibGuid& userGuid, bool copy)
 {

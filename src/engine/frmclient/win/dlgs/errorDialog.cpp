@@ -6,7 +6,7 @@
 #include "errorDialog.h"
 
 #include "frmclient/backend/backend_picture.h"
-#include "frmclient/backend/picturePredefined.h"
+#include "core/picturePredefined.h"
 #include "frmclient/mainFrame/mainFrame.h"
 #include "protocol/protocol.h"
 

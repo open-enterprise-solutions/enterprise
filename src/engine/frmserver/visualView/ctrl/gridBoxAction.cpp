@@ -3,7 +3,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "gridBox.h"
-#include "backend/picturePredefined.h"                   // the standard pictures for this control's two verbs
+#include "core/picturePredefined.h"                   // the standard pictures for this control's two verbs
 #include "backend/system/value/valueDataComposition.h"   // the composition the Generate verb runs
 #include "backend/spreadsheetModel.h"   // the model this control is moving onto
 #include "backend/settings/settingsComposer.h"            // ibSettingsCategory — which shelf a report's settings sit on

@@ -13,7 +13,7 @@
 #include "backend/choiceLinkResolver.h"      // a row added in a narrowed list is born matching it
 #include "backend/srcDataObject.h"            // ibSourceDataObject::ibSourceExplorer — FillSourceExplorer's out-param
 #include "backend/system/systemManager.h"     // ibValueSystemFunction::Alert
-#include "backend/picturePredefined.h"        // g_picAdd/Copy/Edit/Delete/MarkAsDelete/AddFolderCLSID — the command band
+#include "core/picturePredefined.h"        // g_picAdd/Copy/Edit/Delete/MarkAsDelete/AddFolderCLSID — the command band
 #include "backend/rowValues.h"                // ibRowMetaValues::find — reading the reference cell for GetSelectValue
 #include "backend/metaCollection/partial/reference/reference.h"   // ibValueReferenceDataObject::GetGuid — GetItemKey's row guid
 

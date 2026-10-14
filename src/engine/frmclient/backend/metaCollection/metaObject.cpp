@@ -16,6 +16,67 @@ wxString ibValueMetaObject::GetSynonym() const
 	return property != nullptr ? property->GetValue().GetString() : wxString();
 }
 
+namespace {
+
+// The object's texts' params — its id, in its tree's tab — `args` filled.
+ibProtocolNode ObjectTextParams(ibMetaID id, const ibMetaData& metaData, ibProtocolNode args)
+{
+	args.SetValue(ibProtocolName::Id, static_cast<long long>(id));
+	args.SetValue(ibProtocolName::Tab, metaData.GetTabId());
+
+	ibProtocolNode params;
+	params.SetValue(ibProtocolName::Schema, static_cast<long long>(ibProtocolSchema::ObjectText));
+	params.SetValue(ibProtocolName::Args, args);
+	return params;
+}
+
+// …the one named, as the server has it now.
+wxString ReadObjectText(ibMetaID id, const ibMetaData& metaData, const char* name)
+{
+	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
+	ibProtocolNode answer;
+	if (frame == nullptr || !frame->Call(ibProtocolMethod::Schema, ObjectTextParams(id, metaData, ibProtocolNode()), answer))
+		return wxString();
+	return answer.GetString(name);
+}
+
+// …given. Refused: the person told why.
+void SaveObjectText(ibMetaID id, const ibMetaData& metaData, const char* name, const wxString& text)
+{
+	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
+	if (frame == nullptr)
+		return;
+
+	ibProtocolNode args;
+	args.SetValue(name, text);
+	ibProtocolNode params = ObjectTextParams(id, metaData, args);
+	params.SetValue(ibProtocolName::Command, static_cast<long long>(ibProtocolSchemaCommand::Save));
+	ibProtocolNode answer;
+	frame->Call(ibProtocolMethod::Schema, params, answer);
+}
+
+} // namespace
+
+wxString ibValueMetaObject::GetHelpContent() const
+{
+	return ReadObjectText(m_metaId, m_metaData, ibProtocolName::Help);
+}
+
+void ibValueMetaObject::SetHelpContent(const wxString& strHelpContent)
+{
+	SaveObjectText(m_metaId, m_metaData, ibProtocolName::Help, strHelpContent);
+}
+
+wxString ibValueMetaObject::GetNoteContent() const
+{
+	return ReadObjectText(m_metaId, m_metaData, ibProtocolName::Note);
+}
+
+void ibValueMetaObject::SetNoteContent(const wxString& strNoteContent)
+{
+	SaveObjectText(m_metaId, m_metaData, ibProtocolName::Note, strNoteContent);
+}
+
 bool ibValueMetaObject::ReadProperty()
 {
 	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();

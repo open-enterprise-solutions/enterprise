@@ -52,18 +52,18 @@ class ibHeaderGenericCtrl;
 // ----------------------------------------------------------------------------
 
 class ibDataViewModel;
-class ibDataViewCtrl;
-class ibDataViewColumn;
-class ibDataViewRenderer;
+class FRMCLIENT_API ibDataViewCtrl;
+class FRMCLIENT_API ibDataViewColumn;
+class FRMCLIENT_API ibDataViewRenderer;
 class ibDataViewModelNotifier;
 #if wxUSE_ACCESSIBILITY
-class ibDataViewCtrlAccessible;
+class FRMCLIENT_API ibDataViewCtrlAccessible;
 #endif // wxUSE_ACCESSIBILITY
 
-extern const char ibDataViewCtrlNameStr[];
+extern const char FRMCLIENT_API ibDataViewCtrlNameStr[];
 
 // The font an item's attribute lays over the view's — the side's, since the model view (core) has no fonts.
-wxFont ibEffectiveFont(const ibDataViewItemAttr& attr, const wxFont& font);
+FRMCLIENT_API wxFont ibEffectiveFont(const ibDataViewItemAttr& attr, const wxFont& font);
 
 // ----------------------------------------------------------------------------
 // ibDataViewListModel: a model of a list, i.e. flat data structure without any
@@ -71,7 +71,7 @@ wxFont ibEffectiveFont(const ibDataViewItemAttr& attr, const wxFont& font);
 //      ibDataViewVirtualListModel
 // ----------------------------------------------------------------------------
 
-class ibDataViewListModel : public ibDataViewModel
+class FRMCLIENT_API ibDataViewListModel : public ibDataViewModel
 {
 public:
 	// derived classes should override these methods instead of
@@ -149,7 +149,7 @@ public:
 // ibDataViewIndexListModel
 // ---------------------------------------------------------
 
-class ibDataViewIndexListModel : public ibDataViewListModel
+class FRMCLIENT_API ibDataViewIndexListModel : public ibDataViewListModel
 {
 public:
 	ibDataViewIndexListModel(unsigned int initial_size = 0);
@@ -193,7 +193,7 @@ private:
 typedef ibDataViewIndexListModel ibDataViewVirtualListModel;
 #else
 
-class ibDataViewVirtualListModel : public ibDataViewListModel
+class FRMCLIENT_API ibDataViewVirtualListModel : public ibDataViewListModel
 {
 public:
 	ibDataViewVirtualListModel(unsigned int initial_size = 0);
@@ -251,7 +251,7 @@ enum ibDataViewColumnFlags
 	wxDATAVIEW_COL_HIDDEN = wxCOL_HIDDEN
 };
 
-class ibDataViewColumnBase : public wxSettableHeaderColumn
+class FRMCLIENT_API ibDataViewColumnBase : public wxSettableHeaderColumn
 {
 public:
 	// ctor for the text columns: takes ownership of renderer
@@ -403,7 +403,7 @@ struct ibColumnMember {
 	bool IsGroup() const { return group != nullptr; }
 };
 
-class ibDataViewColumnGroup : public wxObject {
+class FRMCLIENT_API ibDataViewColumnGroup : public wxObject {
 public:
 
 	// Defaults to VERTICAL, like the control that creates it: a group is added in
@@ -637,7 +637,7 @@ private:
 	std::vector<ibColumnMember> m_members;
 };
 
-class ibDataViewCtrlBase : public wxSystemThemedControl<wxControl>
+class FRMCLIENT_API ibDataViewCtrlBase : public wxSystemThemedControl<wxControl>
 {
 public:
 
@@ -863,7 +863,7 @@ protected:
 // ibDataViewEvent - the event class for the ibDataViewCtrl notifications
 // ----------------------------------------------------------------------------
 
-class ibDataViewEvent : public wxNotifyEvent
+class FRMCLIENT_API ibDataViewEvent : public wxNotifyEvent
 {
 public:
 	// Default ctor, normally shouldn't be used and mostly exists only for
@@ -1022,39 +1022,39 @@ private:
 	wxDECLARE_DYNAMIC_CLASS_NO_ASSIGN(ibDataViewEvent);
 };
 
-wxDECLARE_EVENT(wxEVT_DATAVIEW_SELECTION_CHANGED, ibDataViewEvent);
+wxDECLARE_EXPORTED_EVENT(FRMCLIENT_API, wxEVT_DATAVIEW_SELECTION_CHANGED, ibDataViewEvent);
 
-wxDECLARE_EVENT(wxEVT_DATAVIEW_ITEM_ACTIVATED, ibDataViewEvent);
-wxDECLARE_EVENT(wxEVT_DATAVIEW_ITEM_COLLAPSED, ibDataViewEvent);
-wxDECLARE_EVENT(wxEVT_DATAVIEW_ITEM_EXPANDED, ibDataViewEvent);
-wxDECLARE_EVENT(wxEVT_DATAVIEW_ITEM_COLLAPSING, ibDataViewEvent);
-wxDECLARE_EVENT(wxEVT_DATAVIEW_ITEM_EXPANDING, ibDataViewEvent);
-wxDECLARE_EVENT(wxEVT_DATAVIEW_ITEM_START_EDITING, ibDataViewEvent);
-wxDECLARE_EVENT(wxEVT_DATAVIEW_ITEM_EDITING_STARTED, ibDataViewEvent);
-wxDECLARE_EVENT(wxEVT_DATAVIEW_ITEM_EDITING_DONE, ibDataViewEvent);
-wxDECLARE_EVENT(wxEVT_DATAVIEW_ITEM_VALUE_CHANGED, ibDataViewEvent);
+wxDECLARE_EXPORTED_EVENT(FRMCLIENT_API, wxEVT_DATAVIEW_ITEM_ACTIVATED, ibDataViewEvent);
+wxDECLARE_EXPORTED_EVENT(FRMCLIENT_API, wxEVT_DATAVIEW_ITEM_COLLAPSED, ibDataViewEvent);
+wxDECLARE_EXPORTED_EVENT(FRMCLIENT_API, wxEVT_DATAVIEW_ITEM_EXPANDED, ibDataViewEvent);
+wxDECLARE_EXPORTED_EVENT(FRMCLIENT_API, wxEVT_DATAVIEW_ITEM_COLLAPSING, ibDataViewEvent);
+wxDECLARE_EXPORTED_EVENT(FRMCLIENT_API, wxEVT_DATAVIEW_ITEM_EXPANDING, ibDataViewEvent);
+wxDECLARE_EXPORTED_EVENT(FRMCLIENT_API, wxEVT_DATAVIEW_ITEM_START_EDITING, ibDataViewEvent);
+wxDECLARE_EXPORTED_EVENT(FRMCLIENT_API, wxEVT_DATAVIEW_ITEM_EDITING_STARTED, ibDataViewEvent);
+wxDECLARE_EXPORTED_EVENT(FRMCLIENT_API, wxEVT_DATAVIEW_ITEM_EDITING_DONE, ibDataViewEvent);
+wxDECLARE_EXPORTED_EVENT(FRMCLIENT_API, wxEVT_DATAVIEW_ITEM_VALUE_CHANGED, ibDataViewEvent);
 
-wxDECLARE_EVENT(wxEVT_DATAVIEW_ITEM_START_INSERTING, ibDataViewEvent);
+wxDECLARE_EXPORTED_EVENT(FRMCLIENT_API, wxEVT_DATAVIEW_ITEM_START_INSERTING, ibDataViewEvent);
 // "Add" pathway (AppendRow) — distinct from _START_INSERTING which fires on
 // Insert / Copy. Lets handlers tell GUI-driven "Add new row" apart from
 // "insert at position / clone existing row".
-wxDECLARE_EVENT(wxEVT_DATAVIEW_ITEM_START_ADDING, ibDataViewEvent);
-wxDECLARE_EVENT(wxEVT_DATAVIEW_ITEM_START_DELETING, ibDataViewEvent);
+wxDECLARE_EXPORTED_EVENT(FRMCLIENT_API, wxEVT_DATAVIEW_ITEM_START_ADDING, ibDataViewEvent);
+wxDECLARE_EXPORTED_EVENT(FRMCLIENT_API, wxEVT_DATAVIEW_ITEM_START_DELETING, ibDataViewEvent);
 
-wxDECLARE_EVENT(wxEVT_DATAVIEW_ITEM_CONTEXT_MENU, ibDataViewEvent);
+wxDECLARE_EXPORTED_EVENT(FRMCLIENT_API, wxEVT_DATAVIEW_ITEM_CONTEXT_MENU, ibDataViewEvent);
 
-wxDECLARE_EVENT(wxEVT_DATAVIEW_COLUMN_HEADER_CLICK, ibDataViewEvent);
-wxDECLARE_EVENT(wxEVT_DATAVIEW_COLUMN_HEADER_RIGHT_CLICK, ibDataViewEvent);
-wxDECLARE_EVENT(wxEVT_DATAVIEW_COLUMN_SORTED, ibDataViewEvent);
-wxDECLARE_EVENT(wxEVT_DATAVIEW_COLUMN_REORDERED, ibDataViewEvent);
+wxDECLARE_EXPORTED_EVENT(FRMCLIENT_API, wxEVT_DATAVIEW_COLUMN_HEADER_CLICK, ibDataViewEvent);
+wxDECLARE_EXPORTED_EVENT(FRMCLIENT_API, wxEVT_DATAVIEW_COLUMN_HEADER_RIGHT_CLICK, ibDataViewEvent);
+wxDECLARE_EXPORTED_EVENT(FRMCLIENT_API, wxEVT_DATAVIEW_COLUMN_SORTED, ibDataViewEvent);
+wxDECLARE_EXPORTED_EVENT(FRMCLIENT_API, wxEVT_DATAVIEW_COLUMN_REORDERED, ibDataViewEvent);
 
-wxDECLARE_EVENT(wxEVT_DATAVIEW_CACHE_HINT, ibDataViewEvent);
+wxDECLARE_EXPORTED_EVENT(FRMCLIENT_API, wxEVT_DATAVIEW_CACHE_HINT, ibDataViewEvent);
 
-wxDECLARE_EVENT(wxEVT_DATAVIEW_ITEM_BEGIN_DRAG, ibDataViewEvent);
-wxDECLARE_EVENT(wxEVT_DATAVIEW_ITEM_DROP_POSSIBLE, ibDataViewEvent);
-wxDECLARE_EVENT(wxEVT_DATAVIEW_ITEM_DROP, ibDataViewEvent);
+wxDECLARE_EXPORTED_EVENT(FRMCLIENT_API, wxEVT_DATAVIEW_ITEM_BEGIN_DRAG, ibDataViewEvent);
+wxDECLARE_EXPORTED_EVENT(FRMCLIENT_API, wxEVT_DATAVIEW_ITEM_DROP_POSSIBLE, ibDataViewEvent);
+wxDECLARE_EXPORTED_EVENT(FRMCLIENT_API, wxEVT_DATAVIEW_ITEM_DROP, ibDataViewEvent);
 
-wxDECLARE_EVENT(wxEVT_DATAVIEW_VIEW_SET, ibDataViewEvent);
+wxDECLARE_EXPORTED_EVENT(FRMCLIENT_API, wxEVT_DATAVIEW_VIEW_SET, ibDataViewEvent);
 
 typedef void (wxEvtHandler::* ibDataViewEventFunction)(ibDataViewEvent&);
 
@@ -1097,7 +1097,7 @@ typedef void (wxEvtHandler::* ibDataViewEventFunction)(ibDataViewEvent&);
 // ibDataViewListStore
 //-----------------------------------------------------------------------------
 
-class ibDataViewListStoreLine
+class FRMCLIENT_API ibDataViewListStoreLine
 {
 public:
 	ibDataViewListStoreLine(wxUIntPtr data = 0)
@@ -1120,7 +1120,7 @@ private:
 	wxUIntPtr m_data;
 };
 
-class ibDataViewListStore : public ibDataViewIndexListModel
+class FRMCLIENT_API ibDataViewListStore : public ibDataViewIndexListModel
 {
 public:
 	ibDataViewListStore();
@@ -1158,7 +1158,7 @@ public:
 
 //-----------------------------------------------------------------------------
 
-class ibDataViewListCtrl : public ibDataViewCtrl
+class FRMCLIENT_API ibDataViewListCtrl : public ibDataViewCtrl
 {
 public:
 	ibDataViewListCtrl();
@@ -1307,7 +1307,7 @@ private:
 // ibDataViewTreeStore
 //-----------------------------------------------------------------------------
 
-class ibDataViewTreeStoreNode
+class FRMCLIENT_API ibDataViewTreeStoreNode
 {
 public:
 	ibDataViewTreeStoreNode(ibDataViewTreeStoreNode* parent,
@@ -1369,7 +1369,7 @@ private:
 
 typedef wxVector<ibDataViewTreeStoreNode*> ibDataViewTreeStoreNodes;
 
-class ibDataViewTreeStoreContainerNode : public ibDataViewTreeStoreNode
+class FRMCLIENT_API ibDataViewTreeStoreContainerNode : public ibDataViewTreeStoreNode
 {
 public:
 	ibDataViewTreeStoreContainerNode(ibDataViewTreeStoreNode* parent,
@@ -1427,7 +1427,7 @@ private:
 
 //-----------------------------------------------------------------------------
 
-class ibDataViewTreeStore : public ibDataViewModel
+class FRMCLIENT_API ibDataViewTreeStore : public ibDataViewModel
 {
 public:
 	ibDataViewTreeStore();
@@ -1510,7 +1510,7 @@ public:
 
 //-----------------------------------------------------------------------------
 
-class ibDataViewTreeCtrl : public ibDataViewCtrl,
+class FRMCLIENT_API ibDataViewTreeCtrl : public ibDataViewCtrl,
 	public wxWithImages
 {
 public:

@@ -1,7 +1,7 @@
 #ifndef _VALUETABLEPART_H__
 
 #include "backend/tabularModel.h"
-#include "backend/picturePredefined.h"                 // g_pic*CLSID — this model emits its own standard command icons
+#include "core/picturePredefined.h"                 // g_pic*CLSID — this model emits its own standard command icons
 #include "backend/valueInfo.h"
 
 #include "backend/metaCollection/table/metaTableObject.h"

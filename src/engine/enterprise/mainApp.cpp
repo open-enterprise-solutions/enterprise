@@ -199,7 +199,7 @@ int ibAppEnterprise::DoOnRun()
 		);
 
 	// Image handlers are already up: backend.dll registers them ALL from its picture
-	// auto-loader (picturePredefined.cpp), which runs at DLL load — before this. Calling
+	// auto-loader (backend_picture.cpp), which runs at DLL load — before this. Calling
 	// wxInitAllImageHandlers again only produced a screenful of "Adding duplicate image
 	// handler" in the debug log (wx deletes the duplicate and logs it).
 	wxXmlResource::Get()->InitAllHandlers();

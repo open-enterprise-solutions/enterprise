@@ -3,7 +3,7 @@
 #include "backend/backend_mainFrame.h"
 #include "backend/backend_picture.h"
 #include "backend/compiler/value.h"
-#include "backend/picturePredefined.h"
+#include "core/picturePredefined.h"
 #include "core/serialize/dataBuilder.h"
 #include "backend/session/session.h"
 

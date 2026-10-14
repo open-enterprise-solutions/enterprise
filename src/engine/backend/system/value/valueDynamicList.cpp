@@ -13,7 +13,7 @@
 #include "core/serialize/dataBuilder.h"            // ibDataNode (object-level save/load)
 #include "backend/backend_composition.h"             // ibBackendCompositionDescriptionMemory — read against its configuration
 #include "backend/metadataConfiguration.h"            // ibMetaDataConfigurationBase (GetSourceMetaData)
-#include "backend/picturePredefined.h"                // g_picRowFolderCLSID — what a grouping's heading wears
+#include "core/picturePredefined.h"                // g_picRowFolderCLSID — what a grouping's heading wears
 
 namespace {
 // (ibDynamicListProvider DELETED — the dynamic list fetches through the base ibValueModel::RunComposerPage now,

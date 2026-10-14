@@ -787,7 +787,6 @@
     <ClInclude Include="metaCollection\metaPictureObject.h">
       <Filter>metaCollection</Filter>
     </ClInclude>
-    <ClInclude Include="picturePredefined.h" />
     <ClInclude Include="metaCollection\metaLanguageObject.h">
       <Filter>metaCollection</Filter>
     </ClInclude>
@@ -2170,7 +2169,6 @@
       <Filter>propertyManager\property</Filter>
     </ClCompile>
     <ClCompile Include="backend_picture.cpp" />
-    <ClCompile Include="picturePredefined.cpp" />
     <ClCompile Include="metaCollection\metaLanguageObject_res.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>

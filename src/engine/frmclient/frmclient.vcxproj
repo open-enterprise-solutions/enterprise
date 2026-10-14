@@ -215,6 +215,7 @@
     <ClCompile Include="win\dlgs\settings\settingsAppearanceEditor.cpp" />
     <ClCompile Include="visualView\ctrl\typeControl.cpp" />
     <ClCompile Include="win\dlgs\selectData.cpp" />
+    <ClCompile Include="win\dlgs\typeSelector.cpp" />
     <ClCompile Include="visualView\ctrl\tableBoxColumnRenderer.cpp" />
     <ClCompile Include="backend\system\value\composition\valueComposerField.cpp" />
     <ClCompile Include="win\editor\gridEditor\gridEditor.cpp" />
@@ -227,6 +228,7 @@
     <ClCompile Include="backend\propertyManager\property\propertyBoolean.cpp" />
     <ClCompile Include="backend\propertyManager\property\propertyValue.cpp" />
     <ClCompile Include="backend\metaCollection\metaObject.cpp" />
+    <ClCompile Include="backend\metaCollection\metaObjectMetadata.cpp" />
     <ClCompile Include="backend\propertyManager\property\propertyString.cpp" />
     <ClCompile Include="backend\propertyManager\property\propertyStringExt.cpp" />
     <ClCompile Include="backend\propertyManager\property\propertyEnum.cpp" />
@@ -245,6 +247,7 @@
     <ClCompile Include="propertyManager\property\advprop\advpropColour.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropSize.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropList.cpp" />
+    <ClCompile Include="propertyManager\property\advprop\advpropType.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropHyperLink.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropModule.cpp" />
     <ClCompile Include="propertyManager\propertyEditor.cpp" />
@@ -280,6 +283,7 @@
     <ClCompile Include="visualView\tableModel.cpp" />
     <ClCompile Include="backend\backend_localization.cpp" />
     <ClCompile Include="backend\compiler\value_res.cpp" />
+    <ClCompile Include="backend\metaCollection\partial\commonObject.cpp" />
     <ClCompile Include="backend\metaCollection\partial\reference\reference.cpp" />
     <ClCompile Include="backend\metaCollection\resource\metaResourceObject_res.cpp" />
     <ClCompile Include="backend\logger\loggerReader.cpp" />
@@ -408,6 +412,7 @@
     <ClInclude Include="backend\propertyManager\property\propertyNumber.h" />
     <ClInclude Include="backend\propertyManager\property\variant\variantTranslate.h" />
     <ClInclude Include="backend\propertyManager\property\variant\variantComposition.h" />
+    <ClInclude Include="backend\propertyManager\property\variant\variantType.h" />
     <ClInclude Include="propertyManager\property\private\propertyRegistry.h" />
     <ClInclude Include="propertyManager\property\private\prop.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropNumber.h" />
@@ -426,6 +431,7 @@
     <ClInclude Include="backend\logger\loggerReader.h" />
     <ClInclude Include="backend\job\jobSchedule.h" />
     <ClInclude Include="backend\metaCollection\metaObject.h" />
+    <ClInclude Include="backend\metaCollection\metaObjectMetadata.h" />
     <ClInclude Include="backend\metaData.h" />
     <ClInclude Include="backend\appData.h" />
     <ClInclude Include="backend\debugger\debugClient.h" />
@@ -440,6 +446,8 @@
     <ClInclude Include="backend\propertyManager\property\variant\variantSize.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropSize.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropList.h" />
+    <ClInclude Include="propertyManager\property\advprop\advpropType.h" />
+    <ClInclude Include="propertyManager\property\advprop\advpropValuePicture.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropHyperLink.h" />
     <ClInclude Include="propertyManager\propertyEditor.h" />
     <ClInclude Include="settings\formSettings.h" />
@@ -490,12 +498,12 @@
     <ClInclude Include="backend\compiler\value.h" />
     <ClInclude Include="backend\serialize\dataProtocol.h" />
     <ClInclude Include="backend\backend.h" />
+    <ClInclude Include="backend\metaCollection\partial\commonObject.h" />
     <ClInclude Include="backend\metaCollection\partial\reference\reference.h" />
     <ClInclude Include="backend\backend_type.h" />
     <ClInclude Include="backend\backend_composition.h" />
     <ClInclude Include="backend\backend_form.h" />
     <ClInclude Include="backend\backend_picture.h" />
-    <ClInclude Include="backend\picturePredefined.h" />
     <ClInclude Include="backend\srcObject.h" />
     <ClInclude Include="backend\system\value\valueType.h" />
     <ClInclude Include="visualView\ctrl\frame.h" />

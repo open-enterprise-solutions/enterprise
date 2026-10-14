@@ -105,7 +105,7 @@ public:
 		delete wxLog::SetActiveTarget(new wxLogStderr());
 
 		// Image handlers are NOT registered here. backend.dll already does it from
-		// a static ctor at DLL load (picturePredefined.cpp), and the initializer
+		// a static ctor at DLL load (backend_picture.cpp), and the initializer
 		// above is what makes that hold — with wx up for the whole run, nothing
 		// calls wxEntryCleanup mid-suite to wipe them. Registering again only
 		// prints a screenful of "Adding duplicate image handler".

@@ -236,13 +236,13 @@ ibCtorAbstractType* ibValue::GetAvailableCtor(const ibClassID& clsid)
 	return found != NamedTypes().end() ? found->second.get() : nullptr;
 }
 
-void ibValue::RegisterCtor(const ibClassID& clsid, const wxString& className)
+void ibValue::RegisterCtor(const ibClassID& clsid, const wxString& className, const wxIcon& classIcon)
 {
 	if (clsid == 0 || className.IsEmpty())
 		return;
-	// The server names a type and draws no picture of it — it wears a value's own (value_res.cpp): a list of types puts up
-	// a picture for each, and an empty one is refused.
-	NamedTypes()[clsid] = std::make_unique<ibCtorAbstractType>(className, GetIconGroup());
+	// A type the server drew no picture of wears a value's own (value_res.cpp): a list of types puts up a picture for
+	// each, and an empty one is refused.
+	NamedTypes()[clsid] = std::make_unique<ibCtorAbstractType>(className, classIcon.IsOk() ? classIcon : GetIconGroup());
 }
 
 ibClassID ibValue::GetIDByVT(const ibValueTypes& valueType)

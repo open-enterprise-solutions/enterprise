@@ -7,7 +7,7 @@
 #include "backend/appData.h"
 #include "backend/logger/logger.h"
 #include "backend/metaCollection/partial/reference/reference.h"   // ibValueReferenceDataObject — a row's object
-#include "backend/picturePredefined.h"
+#include "core/picturePredefined.h"
 #include "core/description/pictureDescription.h"
 #include "core/serialize/dataBuilder.h"
 

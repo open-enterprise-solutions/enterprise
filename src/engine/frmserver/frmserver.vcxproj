@@ -188,6 +188,9 @@
     <ClCompile Include="schema\languages.cpp" />
     <ClCompile Include="schema\designer\mcpServer.cpp" />
     <ClCompile Include="schema\designer\metaData.cpp" />
+    <ClCompile Include="schema\designer\homePage.cpp" />
+    <ClCompile Include="schema\designer\objectText.cpp" />
+    <ClCompile Include="schema\designer\predefined.cpp" />
     <ClCompile Include="schema\designer\properties.cpp" />
     <ClCompile Include="schema\designer\userList.cpp" />
     <ClCompile Include="schema\runtime\allFunctions.cpp" />
@@ -330,6 +333,9 @@
     <ClInclude Include="schema\languages.h" />
     <ClInclude Include="schema\designer\mcpServer.h" />
     <ClInclude Include="schema\designer\metaData.h" />
+    <ClInclude Include="schema\designer\homePage.h" />
+    <ClInclude Include="schema\designer\objectText.h" />
+    <ClInclude Include="schema\designer\predefined.h" />
     <ClInclude Include="schema\designer\properties.h" />
     <ClInclude Include="schema\designer\userList.h" />
     <ClInclude Include="schema\runtime\allFunctions.h" />

@@ -188,8 +188,10 @@
     <ClCompile Include="graphics\colour.cpp" />
     <ClCompile Include="graphics\font.cpp" />
     <ClCompile Include="graphics\geometry.cpp" />
+    <ClCompile Include="picturePredefined.cpp" />
     <ClCompile Include="guid.cpp" />
     <ClCompile Include="localization.cpp" />
+    <ClCompile Include="pictureRegistry.cpp" />
     <ClCompile Include="programFolder.cpp" />
     <ClCompile Include="query\queryKeywords.cpp" />
     <ClCompile Include="serialize\dataBuilder.cpp" />
@@ -244,8 +246,10 @@
     <ClInclude Include="graphics\font.h" />
     <ClInclude Include="graphics\geometry.h" />
     <ClInclude Include="graphics\picture.h" />
+    <ClInclude Include="picturePredefined.h" />
     <ClInclude Include="guid.h" />
     <ClInclude Include="localization.h" />
+    <ClInclude Include="pictureRegistry.h" />
     <ClInclude Include="programFolder.h" />
     <ClInclude Include="query\queryBalanceRole.h" />
     <ClInclude Include="query\queryKeywords.h" />

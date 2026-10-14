@@ -4,7 +4,7 @@
 #include "backend/logger/logger.h"
 #include "backend/metaCollection/partial/reference/reference.h"
 #include "backend/metadataConfiguration.h"
-#include "backend/picturePredefined.h"
+#include "core/picturePredefined.h"
 
 #include "frontend/visualView/ctrl/frame.h"
 #include "frontend/win/dlgs/userItem.h"

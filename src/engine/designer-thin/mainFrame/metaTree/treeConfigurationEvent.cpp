@@ -60,6 +60,62 @@ void ibMetaTreeBase::OnItemMenu(wxTreeEvent& event)
 	ShowContextMenu(item, event.GetPoint());
 }
 
+#include "designer-thin/win/dlg/textEditor.h"
+
+// The two texts a metaobject carries. One dialog serves both — the caption is what differs, and
+// the object is asked for its own text rather than a copy being kept anywhere.
+//
+// Written back ONLY on OK and ONLY when it actually changed: marking a configuration modified
+// because somebody opened a note and closed it is how a save prompt appears for no reason, and a
+// prompt that appears for no reason is one a person learns to dismiss without reading. The server
+// marks it, as it takes the text.
+static void EditOneText(ibValueMetaObject* metaObject, wxWindow* parent, bool help)
+{
+	if (metaObject == nullptr)
+		return;
+
+	const wxString before = help ? metaObject->GetHelpContent() : metaObject->GetNoteContent();
+
+	ibDialogTextEditor dlg(parent,
+		help ? _("Help information") : _("Technical information"),
+		metaObject->GetName(), before);
+
+	if (dlg.ShowModal() != wxID_OK)
+		return;
+
+	const wxString after = dlg.GetText();
+	if (after == before)
+		return;
+
+	if (help) metaObject->SetHelpContent(after);
+	else      metaObject->SetNoteContent(after);
+}
+
+// The selected row's object, made of what the server says of it now — as SelectItem makes the inspector's.
+void ibMetaTreeBase::OnEditHelp(wxCommandEvent& event)
+{
+	const long long id = GetObject(m_metaTreeCtrl->GetSelection());
+	if (id != 0) {
+		ibValueMetaObject metaObject(static_cast<ibMetaID>(id), ibMetaData(m_tab));
+		metaObject.ReadProperty();
+		EditOneText(&metaObject, this, /*help*/ true);
+	}
+
+	event.Skip();
+}
+
+void ibMetaTreeBase::OnEditNotes(wxCommandEvent& event)
+{
+	const long long id = GetObject(m_metaTreeCtrl->GetSelection());
+	if (id != 0) {
+		ibValueMetaObject metaObject(static_cast<ibMetaID>(id), ibMetaData(m_tab));
+		metaObject.ReadProperty();
+		EditOneText(&metaObject, this, /*help*/ false);
+	}
+
+	event.Skip();
+}
+
 void ibMetaTreeBase::OnStartSearch(wxCommandEvent& event)
 {
 	Search(event.GetString());

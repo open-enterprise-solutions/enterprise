@@ -93,10 +93,10 @@ public:
 	static ibValueTypes GetVTByID(const ibClassID& clsid);
 	// The client has no registry of types: a primitive's is known, the rest are the server's.
 	static bool IsRegisterCtor(const ibClassID& clsid) { return GetVTByID(clsid) != ibValueTypes::TYPE_VALUE; }
-	// …and their NAMES are the ones the server wrote with them (a type description's TypeName) — kept as they come, what
-	// a type is offered by (the type picker).
+	// …and their NAMES and PICTURES are the ones the server wrote with them (a type property's offer) — kept as they come,
+	// what a type is offered by (the type picker). No picture: a value's own.
 	static ibCtorAbstractType* GetAvailableCtor(const ibClassID& clsid);
-	static void RegisterCtor(const ibClassID& clsid, const wxString& className);
+	static void RegisterCtor(const ibClassID& clsid, const wxString& className, const wxIcon& classIcon = wxNullIcon);
 	template <typename valT>
 	valT ConvertToEnumValue() const {
 		if (IsReference() && m_pRef != nullptr)

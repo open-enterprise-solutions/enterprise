@@ -47,6 +47,9 @@ constexpr ibClassID g_valueStringCLSID = primitive_to_clsid("VL_STRI");
 
 constexpr ibClassID g_valueNullCLSID = primitive_to_clsid("VL_NULL");
 
+// …and the value table's — the one table a type selector offers (ibSelectorDataType_table), on both sides.
+constexpr ibClassID g_valueTableCLSID = value_to_clsid("VL_TABL");
+
 //*******************************************************************************************
 //*                                 Special structures                                      *
 //*******************************************************************************************

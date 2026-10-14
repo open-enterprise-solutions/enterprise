@@ -2,7 +2,7 @@
 #include "frmclient/backend/userInfo.h"   // the users — the server's schema behind the desktop's calls
 #include "frmclient/win/theme/luna_toolbarart.h"
 #include "frmclient/backend/backend_picture.h"
-#include "frmclient/backend/picturePredefined.h"
+#include "core/picturePredefined.h"
 
 #include <wx/menu.h>
 

@@ -169,6 +169,15 @@
     <ClCompile Include="schema\designer\metaData.cpp">
       <Filter>schema\designer</Filter>
     </ClCompile>
+    <ClCompile Include="schema\designer\homePage.cpp">
+      <Filter>schema\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="schema\designer\objectText.cpp">
+      <Filter>schema\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="schema\designer\predefined.cpp">
+      <Filter>schema\designer</Filter>
+    </ClCompile>
     <ClCompile Include="schema\designer\properties.cpp">
       <Filter>schema\designer</Filter>
     </ClCompile>
@@ -587,6 +596,15 @@
       <Filter>schema\designer</Filter>
     </ClInclude>
     <ClInclude Include="schema\designer\metaData.h">
+      <Filter>schema\designer</Filter>
+    </ClInclude>
+    <ClInclude Include="schema\designer\homePage.h">
+      <Filter>schema\designer</Filter>
+    </ClInclude>
+    <ClInclude Include="schema\designer\objectText.h">
+      <Filter>schema\designer</Filter>
+    </ClInclude>
+    <ClInclude Include="schema\designer\predefined.h">
       <Filter>schema\designer</Filter>
     </ClInclude>
     <ClInclude Include="schema\designer\properties.h">

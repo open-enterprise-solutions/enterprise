@@ -14,6 +14,8 @@
 
 #include "clipboardLock.h"   // the Open/Close pair, taken as a guard — the desktop's
 #include "frmclient/artProvider/artProvider.h"
+#include "frmclient/backend/metaCollection/metaObjectMetadata.h"      // the objects a modal editor of its menu is over
+#include "frmclient/backend/metaCollection/partial/commonObject.h"
 #include "frmclient/mainFrame/mainFrame.h"
 #include "frmclient/mainFrame/objinspect/objinspect.h"   // the inspector the row's object is shown in
 #include "frmclient/win/picture.h"
@@ -662,9 +664,26 @@ bool ibMetaTreeBase::AppendMetaMenu(wxMenu& menu, const ibProtocolNode& row)
 			menuItem->SetBitmap(bitmap);
 
 		// ⭐⭐ THE ITEM CARRIES ITS OWN ACTION — what it opens, by its id (a module's carries its Command too). A modal
-		// editor — a Command with nothing to open — has no door on the server yet: shown, shut.
+		// editor — a Command with nothing to open — is the tree's, over the row's object (the engine's ProcessCommand
+		// called it so), by the item's Name; one this tree does not have: shown, shut.
 		if (object == 0) {
-			menuItem->Enable(false);
+			const wxString name = entry.GetString(ibProtocolName::Name);
+			const ibMetaID owner = static_cast<ibMetaID>(row.GetId());
+			if (name == wxT("PredefinedValues")) {
+				menu.Bind(wxEVT_MENU, [this, owner](wxCommandEvent&) {
+					ibValueMetaObjectRecordDataHierarchyMutableRef metaObject(owner, ibMetaData(m_tab));
+					EditPredefinedValues(&metaObject);
+				}, id);
+			}
+			else if (name == wxT("HomePage")) {
+				menu.Bind(wxEVT_MENU, [this, owner](wxCommandEvent&) {
+					ibValueMetaObjectConfiguration metaObject(owner, ibMetaData(m_tab));
+					EditHomePage(&metaObject);
+				}, id);
+			}
+			else {
+				menuItem->Enable(false);
+			}
 			continue;
 		}
 		menu.Bind(wxEVT_MENU, [this, object](wxCommandEvent&) {
@@ -701,11 +720,10 @@ void ibMetaTreeBase::ShowContextMenu(const wxTreeItemId& item, const wxPoint& po
 			menuItem->SetBitmap(wxArtProvider::GetBitmapBundle(wxART_DELETE, wxART_FRONTEND, wxSize(16, 16)));
 		}
 
-		// ⭐ THE TWO TEXTS AND PROPERTIES ALWAYS APPLY — every object has them, the configuration root included. The texts
-		// have no door on the server yet: shown, shut.
+		// ⭐ THE TWO TEXTS AND PROPERTIES ALWAYS APPLY — every object has them, the configuration root included.
 		ibAppendSeparator(&menu);
-		menu.Append(ID_METATREE_HELP, _("Help information..."))->Enable(false);
-		menu.Append(ID_METATREE_NOTES, _("Technical information..."))->Enable(false);
+		menu.Append(ID_METATREE_HELP, _("Help information..."));
+		menu.Append(ID_METATREE_NOTES, _("Technical information..."));
 		menu.AppendSeparator();
 		wxMenuItem* propertyItem = menu.Append(ID_METATREE_PROPERTY, _("Properties"));
 		propertyItem->SetBitmap(wxArtProvider::GetBitmapBundle(wxART_PROPERTY, wxART_SERVICE));

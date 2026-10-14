@@ -149,7 +149,8 @@ public:
 	// A control's fetch — a table's rows, a spreadsheet's cells; `params` — the control, its request, the view it is of:
 	// the answer is no frame, nothing is drawn or asked, and a refusal is only false. It speaks to the communicator alone,
 	// so a control's own thread may make it.
-	bool Fetch(const ibProtocolNode& params, ibProtocolNode& answer);	// A file of the person's, up to the server in its parts — `file` the id it was given. False: not read, or refused
+	bool Fetch(const ibProtocolNode& params, ibProtocolNode& answer);
+	// A file of the person's, up to the server in its parts — `file` the id it was given. False: not read, or refused
 	// (said to the person).
 	bool UploadFile(const wxString& path, wxString& file);
 	// …and a file of the server's down to the person's `path`, in its parts. False: not written, or refused (said to the

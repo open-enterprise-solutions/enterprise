@@ -11,6 +11,30 @@
 #include "frmclient/win/theme/luna_toolbarart.h"
 
 //**********************************************************************************
+
+#include "designer-thin/win/dlg/predefinedEditor.h"
+
+void ibConfigurationTree::EditPredefinedValues(ibValueMetaObjectRecordDataHierarchyMutableRef* valueMetaObjectHierarchy)
+{
+	// What the object declares is the server's — read as the editor opens.
+	valueMetaObjectHierarchy->ReadPredefinedValues();
+
+	ibDialogPredefinedEditor dlg(this, valueMetaObjectHierarchy);
+	dlg.ShowModal();
+}
+
+#include "designer-thin/win/dlg/homePageEditor.h"
+
+void ibConfigurationTree::EditHomePage(ibValueMetaObjectConfiguration* metaObjectConfiguration)
+{
+	// The workspace and the forms it may show are the server's — read as the editor opens.
+	metaObjectConfiguration->ReadHomePage();
+
+	ibDialogHomePageEditor dlg(this, metaObjectConfiguration);
+	dlg.ShowModal();
+}
+
+//**********************************************************************************
 //*                                  metaTree									   *
 //**********************************************************************************
 
@@ -77,6 +101,8 @@ ibMetaTreeBase::ibMetaTreeBase(wxWindow* parent, long long tab, bool search)
 	Bind(wxEVT_MENU, [this](wxCommandEvent&) { EditItem(); }, ID_METATREE_EDIT);
 	Bind(wxEVT_MENU, [this](wxCommandEvent&) { RemoveItem(); }, ID_METATREE_DELETE);
 	Bind(wxEVT_MENU, [this](wxCommandEvent&) { PropertyItem(); }, ID_METATREE_PROPERTY);
+	Bind(wxEVT_MENU, &ibMetaTreeBase::OnEditHelp, this, ID_METATREE_HELP);
+	Bind(wxEVT_MENU, &ibMetaTreeBase::OnEditNotes, this, ID_METATREE_NOTES);
 
 	Bind(wxEVT_MENU, [this](wxCommandEvent&) { UpItem(); }, ID_METATREE_UP);
 	Bind(wxEVT_MENU, [this](wxCommandEvent&) { DownItem(); }, ID_METATREE_DOWM);

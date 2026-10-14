@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <Filter Include="compiler">
@@ -131,6 +131,8 @@
     </ClCompile>
     <ClCompile Include="guid.cpp" />
     <ClCompile Include="localization.cpp" />
+    <ClCompile Include="picturePredefined.cpp" />
+    <ClCompile Include="pictureRegistry.cpp" />
     <ClCompile Include="programFolder.cpp" />
     <ClCompile Include="typeName.cpp" />
     <ClCompile Include="query\queryKeywords.cpp">
@@ -267,6 +269,8 @@
     <ClInclude Include="guid.h" />
     <ClInclude Include="fileKind.h" />
     <ClInclude Include="localization.h" />
+    <ClInclude Include="picturePredefined.h" />
+    <ClInclude Include="pictureRegistry.h" />
     <ClInclude Include="programFolder.h" />
     <ClInclude Include="typeName.h" />
     <ClInclude Include="query\queryBalanceRole.h">

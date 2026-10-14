@@ -6,7 +6,7 @@
 #include "form.h"
 #include "backend/appData.h"
 #include "backend/srcDataObject.h"        // ibSourceDataObject COMPLETE — the dynamic_cast<ibStandardCommandSource*>(GetSourceObject())
-#include "backend/picturePredefined.h"    // g_pic*FormCLSID — the form-level chrome commands
+#include "core/picturePredefined.h"    // g_pic*FormCLSID — the form-level chrome commands
 
 enum
 {

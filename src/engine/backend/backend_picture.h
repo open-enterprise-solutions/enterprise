@@ -4,7 +4,9 @@
 #include "core/graphics/picture.h"   // ibPicture — a picture as data, what the server keeps and sends
 
 #include "core/description/pictureDescription.h"
-#include "picturePredefined.h"
+#include "core/picturePredefined.h"
+
+#include "backend/backend_core.h"
 
 struct ibBackendPictureEntry {
 	wxString m_name;

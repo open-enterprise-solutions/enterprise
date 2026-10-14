@@ -1,7 +1,7 @@
 #include "authorization.h"
 
 #include "frmclient/backend/backend_picture.h"
-#include "frmclient/backend/picturePredefined.h"
+#include "core/picturePredefined.h"
 
 ///////////////////////////////////////////////////////////////////////////
 

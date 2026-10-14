@@ -1,5 +1,5 @@
 ﻿#include "picturePredefined.h"
-#include "backend_picture.h"   // RegisterBackendPicture; ibBackendPicture::GetImageFromBase64 — the inactive record, greyed from the active one
+#include "core/pictureRegistry.h"   // RegisterPicture
 
 #pragma region __predefined_png__
 
@@ -119,6 +119,7 @@ static const wxString s_rowDocument_16_png = "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACA
 static const wxString s_rowDocumentPosted_16_png = "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";
 static const wxString s_rowDocumentDeleted_16_png = "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAE/UlEQVR4nOybXWgUVxTHz2wiMabZj0ALaZqqb00KfbAfxAQxpRTaxKbNR7GaNZi4KcYouCaS0r6VCoXGTUFikCRSohFpa2LrF4qioqIgCvqgrz4ogi8xq4kKmvGca2acnZ2de9cds3fc/cEwM3fOXvb8995z7z131gMZjgcynKwAkOHk8gw+qaxuUlX1V0VRyiCN4He4qarKtquXzoyCg+TwDIrfW/gPOl8OaQa/w9uKAg3FJYvu3L196yo4BLcLyOC8EcUDgx9XVIfAIVwZA2ZFWA8OoPAMMAaoxvvLF07DXPJp1ecJn6kz0H7l0pkhSAFXjwJOdAfXD4OpiuA6AX7u6YorS0UE1wlQX7fCURFc2QWcFMG1McApEVwdBJ0QgbsWkA27eYEREmFJRfUj3trhjV4N4tphG8/GdS0gGVCAhTybbD4AJCfZtYdojNDIpsQgw8nGAHCImvofwEmOju+HuSDbBSDDycYAcIi56rNOk+0CkAHgrtJHeFjubL2xAnxYXga7d/WT85TWv4bHDfUFF/H4TLOTYh7Q8O0KWBtcBbm51jt1T58+g90jo3Dw0FG9zC7mBFethM71IazP0r0KPM6jCD2469WX9sXQd998DaG1QVsbEubHthYoebcY+ncN29r+1B2Gxvo64DAPjwiKUJpWAcih1pbmmLJHZ8/Cw2PH2PVbtbWQv2yZ/qz2qy/Z2U4Es/N29SHhtApQX1cL8wzNdHJ4GO739+v30ydOgG/dOvB3duplmggiUF1Up7E+/8aN4Gtr08uk2RukX+peOGz5zLtmDQQSPEvERCQC0b17LZ+9s2MH5FdVsWtpRoEHBw4kfBbdswcmentBFLJN5DzxcGxMv3ZNTjC6bx87B7q7be2Y87O2IkjTAgobG7k25Bg17URMbN8u5HxhU5N+LY0A+cuXs4DHg5r2RF9fXDnr86P814d87e0wf+lS/V6qmSBFe+/q1Vw7c0zg9XkNqtvf0RFTJl0MYH3c4+E6xJo6DaEzM0LN3tvSAoHNm83FESmDYGDLFiHHoiMjIAL98hbO78SpcJe0o4AW7ZOJ6FYw5+NHjgF0ns2upB4GUxXBxvkN2o3084BXFUHEecIVE6FkRRB1nnBNQkRZsICNDlzQRikosHoStTQHF0Dj/OTQEBsZuKDN5OCg1dqhB9f/O82F0guQ7Nxeg02b40XoMIsgtQCv6ryGiAjSCpCq8xo8EaQcBURXdRTtVezzD/bbb8qwujA4shnmS0iEx9IJIPrLG4c6hdYOvGkzrS1QLNPwGJaqC1AOT8j5YDDGEbr2NjdzP0d13x8YiClLOifoJH+P/gWLF714kcsuJ2jELj9olwc0IkVO0FtYqDtP2OUE9c9Qs7cRifq4SD7BmBPkCoCB4ga8BvLy8pKyt5rejh08BOP/H44pY91BQAQN7r/GSt5ffA9315YoChSBg0xPT8PK7xtg/qwQHpzqTh0/bmnLmn1X7DvB/47/B7/39sG5CxehqCgA5WUf6M/yKytBnZqCJ9evW9ZXtHUr5JaWsmtuDHidYOs6iacvtHvzxgjhC4XAvyFuDROzsMF6yA/6YEy+y7wxQvg3bQJfa6t+n24BqvF0CgxdkW1lHTkCSk4OFNTUmLeyCMtVXSIRePWlVQACv/gvePpN0NzSeVN9NM6J/qUukvZ5ADpEb3T/KWD6B8/52fo6kqiv6zkAAAD//wKDKxsAAAAGSURBVAMAcKrvQKaIvfcAAAAASUVORK5CYII=";
 static const wxString s_rowRecord_16_png = "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAB1UlEQVR4nOyZvy9DURTHv0fUSljEZGA2GFRsRKx+rIRBDIanQf8Jv6r1D5DoJn6s2l0NIp0ZLH4NrcbYVI/3BnK9dzXF4r1zPsvNPfe0OfeT3tuXd1ognBYIRwVAOCoAwlEBEI4KgHBUAISjAiAcFQDhtDZaXHNSc0SYJEYchB6ECcYDEwpA/WQrvXb4XRrZgsnljW6OxbLu4iiiQa4KmkunE8/+BfsRiMWOIrR5j/E2rmdtCwEBSSe16A4jiBpEY8lEasEfttwBPGOejL7+XsSHB9DZ2YFmyOwefJk7iXn8hd9+X7lcQeGiiNubu88Y13naHfbNPNsRGDYnQ/HmN/+f8Gr2ajch0KA/L/gLIGo3p11d4dv8B4HaLf9k+iAE4agACEcFQDgqAMJRARCOCoBwVACEowIgHBUA4aiAQIT5yZyWShWEFX/tDDz6cwICmOjanF8Wiqi8vCJseK/FvdpNCHzlzwu0xtadnSkiOkYUqfPE5t7quRmy9wadnbzXSUGEYOazrczqpD9uvwRrtVlm5BEdcqi+LdkWqNGn1le2Z91LYdrtqAyFrT3O4Ht3cwV3PP1xe1wS+hwA4agACEcFQDgqAMJRARCOCoBwVACEI17AOwAAAP//H04jxQAAAAZJREFUAwCRkm4BwXD3jgAAAABJRU5ErkJggg==";
+static const wxString s_rowRecordInactive_16_png = "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAB20lEQVR4nOyZz0sCQRTHv2NeskMQQREF4r/QISPokEZQgVZ2U+gQ/V0d8hLaD9JLKkEnL9F/IEL2Q4hubkHl9JYg1t1JrC7tvve5jPPmucx8nB2XfSEwJwTmiAAwRwSAOSIAzBEBYI4IAHNEAJgjAsCccL/BYrmW00BaaR2HUlPwE1rfaaXq1B5n1pMH36UpU/CwfDE5hG6ePi4hGFTCbzqXSiXb7gHjLUCLLyA4i7dZfh1SedOARwBt+11qFhAwlEKC1rbjjhvOAL3lvDMmxscQi85gJDKMQahe1nv6ycU4/sJvr9exntFo3qD9+PQVo/Nsk5p9Z55nB1DSvLMfi04PvPj/hD1ne+5O6DCfded5doCCGu29UAR+xTN3wz+ZPAiBOSIAzBEBYI4IAHNEAJgjAsAcEQDmiAAwRwSAOSLAHaCXog/Ofsey4Fe8c9f37hzTDrh2dhrNFizrBX7j87V4qydGP+6VO89TGiue1TZIyxECSFdhZXs1ce6MGWuDhVKtaldSECA09GlmLZl2x42HYFeFslRVrSI4VELh9z3TgOr3rUKpmqVCCZWT9JzfyuNa45ZKQVQex8mPy+OckOcAMEcEgDkiAMwRAWCOCABzRACYIwLAHPYCPgAAAP//n53pTQAAAAZJREFUAwC5629c8xc/iAAAAABJRU5ErkJggg==";
 
 // THE COMPOSER'S OWN FOUR вЂ” drawn in the debug toolbar's manner (Max, 2026-09-25: "redraw them in that
 // style"): flat solid shapes with no keyline, one colour each, from the palette those icons already use
@@ -136,93 +137,78 @@ static const wxString s_saveSettings_16_png = "iVBORw0KGgoAAAANSUhEUgAAAEAAAABAC
 
 #pragma endregion
 
-void RegisterAllBackendPicture()
+void RegisterAllPicture()
 {
-	::RegisterBackendPicture(wxT("Structure"), g_picStructureCLSID, s_structure_16_png);
-	::RegisterBackendPicture(wxT("Error"), g_picErrorCLSID, s_error_16_png);
+	::RegisterPicture(wxT("Structure"), g_picStructureCLSID, s_structure_16_png);
+	::RegisterPicture(wxT("Error"), g_picErrorCLSID, s_error_16_png);
 
-	::RegisterBackendPicture(wxT("CloseForm"), g_picCloseFormCLSID, s_closeForm_16_png);
-	::RegisterBackendPicture(wxT("UpdateForm"), g_picUpdateFormCLSID, s_updateForm_16_png);
-	::RegisterBackendPicture(wxT("HelpForm"), g_picHelpFormCLSID, s_helpForm_16_png);
+	::RegisterPicture(wxT("CloseForm"), g_picCloseFormCLSID, s_closeForm_16_png);
+	::RegisterPicture(wxT("UpdateForm"), g_picUpdateFormCLSID, s_updateForm_16_png);
+	::RegisterPicture(wxT("HelpForm"), g_picHelpFormCLSID, s_helpForm_16_png);
 
-	::RegisterBackendPicture(wxT("ChangeForm"), g_picChangeFormCLSID, s_changeForm_16_png);
+	::RegisterPicture(wxT("ChangeForm"), g_picChangeFormCLSID, s_changeForm_16_png);
 
-	::RegisterBackendPicture(wxT("Add"), g_picAddCLSID, s_add_16_png);
-	::RegisterBackendPicture(wxT("Edit"), g_picEditCLSID, s_edit_16_png);
-	::RegisterBackendPicture(wxT("Copy"), g_picCopyCLSID, s_copy_16_png);
-	::RegisterBackendPicture(wxT("Delete"), g_picDeleteCLSID, s_delete_16_png);
+	::RegisterPicture(wxT("Add"), g_picAddCLSID, s_add_16_png);
+	::RegisterPicture(wxT("Edit"), g_picEditCLSID, s_edit_16_png);
+	::RegisterPicture(wxT("Copy"), g_picCopyCLSID, s_copy_16_png);
+	::RegisterPicture(wxT("Delete"), g_picDeleteCLSID, s_delete_16_png);
 
-	::RegisterBackendPicture(wxT("AddFolder"), g_picAddFolderCLSID, s_addFolder_16_png);
-	::RegisterBackendPicture(wxT("Select"), g_picSelectCLSID, s_select_16_png);
+	::RegisterPicture(wxT("AddFolder"), g_picAddFolderCLSID, s_addFolder_16_png);
+	::RegisterPicture(wxT("Select"), g_picSelectCLSID, s_select_16_png);
 
-	::RegisterBackendPicture(wxT("Compose"), g_picComposeCLSID, s_compose_16_png);
-	::RegisterBackendPicture(wxT("ComposerSettings"), g_picComposerSettingsCLSID, s_composerSettings_16_png);
-	::RegisterBackendPicture(wxT("Variants"), g_picVariantsCLSID, s_variants_16_png);
-	::RegisterBackendPicture(wxT("RestoreSettings"), g_picRestoreSettingsCLSID, s_restoreSettings_16_png);
-	::RegisterBackendPicture(wxT("SaveSettings"), g_picSaveSettingsCLSID, s_saveSettings_16_png);
+	::RegisterPicture(wxT("Compose"), g_picComposeCLSID, s_compose_16_png);
+	::RegisterPicture(wxT("ComposerSettings"), g_picComposerSettingsCLSID, s_composerSettings_16_png);
+	::RegisterPicture(wxT("Variants"), g_picVariantsCLSID, s_variants_16_png);
+	::RegisterPicture(wxT("RestoreSettings"), g_picRestoreSettingsCLSID, s_restoreSettings_16_png);
+	::RegisterPicture(wxT("SaveSettings"), g_picSaveSettingsCLSID, s_saveSettings_16_png);
 
-	::RegisterBackendPicture(wxT("Filter"), g_picFilterCLSID, s_filter_16_png);
-	::RegisterBackendPicture(wxT("FilterSet"), g_picFilterSetCLSID, s_filterSet_16_png);
-	::RegisterBackendPicture(wxT("FilterClear"), g_picFilterClearCLSID, s_filterClear_16_png);
+	::RegisterPicture(wxT("Filter"), g_picFilterCLSID, s_filter_16_png);
+	::RegisterPicture(wxT("FilterSet"), g_picFilterSetCLSID, s_filterSet_16_png);
+	::RegisterPicture(wxT("FilterClear"), g_picFilterClearCLSID, s_filterClear_16_png);
 
-	::RegisterBackendPicture(wxT("MoveUp"), g_picMoveUpCLSID, s_moveUp_16_png);
-	::RegisterBackendPicture(wxT("MoveDown"), g_picMoveDownCLSID, s_moveDown_16_png);
-	::RegisterBackendPicture(wxT("SortAsc"), g_picSortAscCLSID, s_sortAsc_16_png);
-	::RegisterBackendPicture(wxT("SortDesc"), g_picSortDescCLSID, s_sortDesc_16_png);
+	::RegisterPicture(wxT("MoveUp"), g_picMoveUpCLSID, s_moveUp_16_png);
+	::RegisterPicture(wxT("MoveDown"), g_picMoveDownCLSID, s_moveDown_16_png);
+	::RegisterPicture(wxT("SortAsc"), g_picSortAscCLSID, s_sortAsc_16_png);
+	::RegisterPicture(wxT("SortDesc"), g_picSortDescCLSID, s_sortDesc_16_png);
 
-	::RegisterBackendPicture(wxT("Clone"), g_picCloneCLSID, s_clone_16_png);
-	::RegisterBackendPicture(wxT("Save"), g_picSaveCLSID, s_save_16_png);
-	::RegisterBackendPicture(wxT("Post"), g_picPostCLSID, s_post_16_png);
-	::RegisterBackendPicture(wxT("MarkAsDelete"), g_picMarkAsDeleteCLSID, s_markAsDelete_16_png);
-	::RegisterBackendPicture(wxT("Generate"), g_picGenerateCLSID, s_generate_16_png);
-	::RegisterBackendPicture(wxT("ExecuteJob"), g_picExecuteJobCLSID, s_executeJob_16_png);
-	::RegisterBackendPicture(wxT("Print"), g_picPrintCLSID, s_print_16_png);
-	::RegisterBackendPicture(wxT("Hierarchy"), g_picHierarchyCLSID, s_hierarchy_16_png);
-	::RegisterBackendPicture(wxT("Event"), g_picEventCLSID, s_event_16_png);
+	::RegisterPicture(wxT("Clone"), g_picCloneCLSID, s_clone_16_png);
+	::RegisterPicture(wxT("Save"), g_picSaveCLSID, s_save_16_png);
+	::RegisterPicture(wxT("Post"), g_picPostCLSID, s_post_16_png);
+	::RegisterPicture(wxT("MarkAsDelete"), g_picMarkAsDeleteCLSID, s_markAsDelete_16_png);
+	::RegisterPicture(wxT("Generate"), g_picGenerateCLSID, s_generate_16_png);
+	::RegisterPicture(wxT("ExecuteJob"), g_picExecuteJobCLSID, s_executeJob_16_png);
+	::RegisterPicture(wxT("Print"), g_picPrintCLSID, s_print_16_png);
+	::RegisterPicture(wxT("Hierarchy"), g_picHierarchyCLSID, s_hierarchy_16_png);
+	::RegisterPicture(wxT("Event"), g_picEventCLSID, s_event_16_png);
 
-	::RegisterBackendPicture(wxT("HomePage"), g_picHomePageCLSID, s_homePage_16_png);
-	::RegisterBackendPicture(wxT("Assistant"), g_picAssistantCLSID, s_assistant_16_png);
+	::RegisterPicture(wxT("HomePage"), g_picHomePageCLSID, s_homePage_16_png);
+	::RegisterPicture(wxT("Assistant"), g_picAssistantCLSID, s_assistant_16_png);
 
-	::RegisterBackendPicture(wxT("User"), g_picUserCLSID, s_user_16_png);
-	::RegisterBackendPicture(wxT("UserActive"), g_picUserActiveCLSID, s_activeUser_16_png);
-	::RegisterBackendPicture(wxT("UserList"), g_picUserListCLSID, s_userList_16_png);
+	::RegisterPicture(wxT("User"), g_picUserCLSID, s_user_16_png);
+	::RegisterPicture(wxT("UserActive"), g_picUserActiveCLSID, s_activeUser_16_png);
+	::RegisterPicture(wxT("UserList"), g_picUserListCLSID, s_userList_16_png);
 
-	::RegisterBackendPicture(wxT("Authentication"), g_picAuthenticationCLSID, s_authentication_16_png);
+	::RegisterPicture(wxT("Authentication"), g_picAuthenticationCLSID, s_authentication_16_png);
 
-	::RegisterBackendPicture(wxT("RowItem"), g_picRowItemCLSID, s_rowItem_16_png);
-	::RegisterBackendPicture(wxT("RowItemDeleted"), g_picRowItemDeletedCLSID, s_rowItemDeleted_16_png);
-	::RegisterBackendPicture(wxT("RowFolder"), g_picRowFolderCLSID, s_rowFolder_16_png);
-	::RegisterBackendPicture(wxT("RowFolderDeleted"), g_picRowFolderDeletedCLSID, s_rowFolderDeleted_16_png);
-	::RegisterBackendPicture(wxT("RowDocument"), g_picRowDocumentCLSID, s_rowDocument_16_png);
-	::RegisterBackendPicture(wxT("RowDocumentPosted"), g_picRowDocumentPostedCLSID, s_rowDocumentPosted_16_png);
-	::RegisterBackendPicture(wxT("RowDocumentDeleted"), g_picRowDocumentDeletedCLSID, s_rowDocumentDeleted_16_png);
-	::RegisterBackendPicture(wxT("RowRecord"), g_picRowRecordCLSID, s_rowRecord_16_png);
-	// вЂ¦and the same record greyed, for one that is not active: one drawing, not a second one kept beside it.
-	::RegisterBackendPicture(wxT("RowRecordInactive"), g_picRowRecordInactiveCLSID,
-		wxBitmap(ibBackendPicture::GetImageFromBase64(s_rowRecord_16_png, wxSize(16, 16)).ConvertToDisabled()));
+	::RegisterPicture(wxT("RowItem"), g_picRowItemCLSID, s_rowItem_16_png);
+	::RegisterPicture(wxT("RowItemDeleted"), g_picRowItemDeletedCLSID, s_rowItemDeleted_16_png);
+	::RegisterPicture(wxT("RowFolder"), g_picRowFolderCLSID, s_rowFolder_16_png);
+	::RegisterPicture(wxT("RowFolderDeleted"), g_picRowFolderDeletedCLSID, s_rowFolderDeleted_16_png);
+	::RegisterPicture(wxT("RowDocument"), g_picRowDocumentCLSID, s_rowDocument_16_png);
+	::RegisterPicture(wxT("RowDocumentPosted"), g_picRowDocumentPostedCLSID, s_rowDocumentPosted_16_png);
+	::RegisterPicture(wxT("RowDocumentDeleted"), g_picRowDocumentDeletedCLSID, s_rowDocumentDeleted_16_png);
+	::RegisterPicture(wxT("RowRecord"), g_picRowRecordCLSID, s_rowRecord_16_png);
+	::RegisterPicture(wxT("RowRecordInactive"), g_picRowRecordInactiveCLSID, s_rowRecordInactive_16_png);
 }
 
-class ibBackendPictureAutoLoader {
+class ibPictureAutoLoader {
 public:
 
-	ibBackendPictureAutoLoader() {
+	ibPictureAutoLoader() {
 
-		// Init handlers
-		wxInitAllImageHandlers();
-
-		// Register all picture 
-		RegisterAllBackendPicture();
-	}
-
-	~ibBackendPictureAutoLoader()
-	{
-		// WHAT THIS OBJECT CREATED, IT LETS GO OF. `wxInitAllImageHandlers` puts one handler per
-		// format on wx's own list, and in an application wxApp takes them down at exit - but a test
-		// binary has no wxApp, so they stayed, and LeakSanitizer reported them on every process
-		// exit (2026-09-22). The empty body was not "nothing to do": it was the half of a pair
-		// that nobody had needed to write while the only host cleaned up after us.
-		wxImage::CleanUpHandlers();
+		// Register all picture
+		RegisterAllPicture();
 	}
 };
 
-ibBackendPictureAutoLoader m_autoLoader;
+ibPictureAutoLoader m_autoLoader;

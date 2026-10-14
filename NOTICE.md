@@ -77,7 +77,7 @@ free tier, which requires attribution:
 | *ai* | the assistant — tab and menu item | icons8 |
 
 Both are downscaled to 16px and embedded as base64 in
-`src/engine/backend/picturePredefined.cpp`, where each carries a comment pointing here.
+`src/engine/core/picturePredefined.cpp`, where each carries a comment pointing here.
 
 ⚠ This section was missing until 2026-08-31 even though the code had said for months that the
 credit "is kept in the docs" — the note existed, the attribution did not. It is here rather

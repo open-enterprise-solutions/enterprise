@@ -125,6 +125,15 @@
     <ClCompile Include="win\dlg\debugItem\debugItem.cpp">
       <Filter>win\dlg\debugItem</Filter>
     </ClCompile>
+    <ClCompile Include="win\dlg\homePageEditor.cpp">
+      <Filter>win\dlg</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlg\predefinedEditor.cpp">
+      <Filter>win\dlg</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlg\textEditor.cpp">
+      <Filter>win\dlg</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="mainApp.h" />
@@ -190,6 +199,15 @@
     </ClInclude>
     <ClInclude Include="win\dlg\debugItem\debugItem.h">
       <Filter>win\dlg\debugItem</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlg\homePageEditor.h">
+      <Filter>win\dlg</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlg\predefinedEditor.h">
+      <Filter>win\dlg</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlg\textEditor.h">
+      <Filter>win\dlg</Filter>
     </ClInclude>
     <ClInclude Include="resource.h" />
   </ItemGroup>

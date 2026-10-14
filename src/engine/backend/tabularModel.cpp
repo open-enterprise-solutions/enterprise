@@ -517,7 +517,7 @@ std::shared_ptr<ibValueIteratorState> ibValueModel::CreateIterator()
 	return ibValue::CreateIterator();
 }
 
-#include "backend/picturePredefined.h"   // g_pic*CLSID — the standard command icons
+#include "core/picturePredefined.h"   // g_pic*CLSID — the standard command icons
 
 ///////////////////////////////////////////////////////////////////////////////////////
 

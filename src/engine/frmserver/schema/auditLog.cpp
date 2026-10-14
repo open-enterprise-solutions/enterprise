@@ -2,7 +2,7 @@
 
 #include "backend/backend_picture.h"
 #include "backend/metadataConfiguration.h"
-#include "backend/picturePredefined.h"
+#include "core/picturePredefined.h"
 #include "backend/session/session.h"
 
 #include "frmserver/docView/docManager.h"

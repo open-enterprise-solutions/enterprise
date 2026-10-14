@@ -40,7 +40,7 @@ ibValueMetaObject* GetInnerModule(const ibBackendProperty* property)
 
 // WHAT A TYPE'S PROPERTY MAY HOLD — the desktop's picker's offer (ibShowTypeSelector): the types the configuration offers
 // a field of its shape, and those the value holds already — an editor does not drop what it was opened on; each by its
-// class id, named as it is offered. Several at once, but in a table's shape, which takes one.
+// class id, named and drawn as it is offered. Several at once, but in a table's shape, which takes one.
 void AppendTypes(ibDataNode& row, const ibPropertyType* property)
 {
 	const ibSelectorDataType filter = property->GetFilterDataType();
@@ -64,6 +64,9 @@ void AppendTypes(ibDataNode& row, const ibPropertyType* property)
 		ibDataNode& type = row.AddChild(0, static_cast<ibMetaID>(row.Children().size() + 1));
 		type.SetValue(ibProtocolName::Type, wxString::Format(wxT("%llu"), static_cast<unsigned long long>(clsid)));
 		type.SetValue(ibProtocolName::Title, so->GetClassName());
+		const wxIcon icon = so->GetClassIcon();
+		if (icon.IsOk())
+			type.SetValue(ibProtocolName::Picture, wxString(ibBackendPicture::FromImage(wxBitmap(icon).ConvertToImage()).GetData()));
 	}
 }
 

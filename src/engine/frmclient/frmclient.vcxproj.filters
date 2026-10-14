@@ -843,6 +843,12 @@
     <ClCompile Include="backend\metaCollection\metaObject.cpp">
       <Filter>backend\metaCollection</Filter>
     </ClCompile>
+    <ClInclude Include="backend\metaCollection\metaObjectMetadata.h">
+      <Filter>backend\metaCollection</Filter>
+    </ClInclude>
+    <ClCompile Include="backend\metaCollection\metaObjectMetadata.cpp">
+      <Filter>backend\metaCollection</Filter>
+    </ClCompile>
     <ClInclude Include="backend\metaCollection\metaSpreadsheetObject.h">
       <Filter>backend\metaCollection</Filter>
     </ClInclude>
@@ -867,6 +873,12 @@
     <ClCompile Include="backend\job\jobScheduleRules.cpp">
       <Filter>backend\job</Filter>
     </ClCompile>
+    <ClCompile Include="backend\metaCollection\partial\commonObject.cpp">
+      <Filter>backend\metaCollection\partial</Filter>
+    </ClCompile>
+    <ClInclude Include="backend\metaCollection\partial\commonObject.h">
+      <Filter>backend\metaCollection\partial</Filter>
+    </ClInclude>
     <ClCompile Include="backend\metaCollection\partial\reference\reference.cpp">
       <Filter>backend\metaCollection\partial\reference</Filter>
     </ClCompile>
@@ -877,9 +889,6 @@
       <Filter>backend</Filter>
     </ClInclude>
     <ClInclude Include="backend\metadataConfiguration.h">
-      <Filter>backend</Filter>
-    </ClInclude>
-    <ClInclude Include="backend\picturePredefined.h">
       <Filter>backend</Filter>
     </ClInclude>
     <ClInclude Include="backend\propertyManager\propertyManager.h">
@@ -948,6 +957,9 @@
     <ClCompile Include="backend\propertyManager\property\variant\variantSize.cpp">
       <Filter>backend\propertyManager\property\variant</Filter>
     </ClCompile>
+    <ClInclude Include="backend\propertyManager\property\variant\variantType.h">
+      <Filter>backend\propertyManager\property\variant</Filter>
+    </ClInclude>
     <ClInclude Include="backend\propertyManager\property\variant\variantSize.h">
       <Filter>backend\propertyManager\property\variant</Filter>
     </ClInclude>
@@ -1071,6 +1083,15 @@
     <ClInclude Include="propertyManager\property\advprop\advpropList.h">
       <Filter>propertyManager\property\advprop</Filter>
     </ClInclude>
+    <ClCompile Include="propertyManager\property\advprop\advpropType.cpp">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClCompile>
+    <ClInclude Include="propertyManager\property\advprop\advpropType.h">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClInclude>
+    <ClInclude Include="propertyManager\property\advprop\advpropValuePicture.h">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClInclude>
     <ClCompile Include="propertyManager\property\advprop\advpropHyperLink.cpp">
       <Filter>propertyManager\property\advprop</Filter>
     </ClCompile>
@@ -1150,6 +1171,9 @@
       <Filter>win\dlgs</Filter>
     </ClInclude>
     <ClCompile Include="win\dlgs\selectData.cpp">
+      <Filter>win\dlgs</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\typeSelector.cpp">
       <Filter>win\dlgs</Filter>
     </ClCompile>
     <ClInclude Include="win\dlgs\selectData.h">

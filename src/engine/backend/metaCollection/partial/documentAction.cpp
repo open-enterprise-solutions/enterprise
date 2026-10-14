@@ -5,7 +5,7 @@
 
 #include "document.h"
 #include "backend/system/systemManager.h"   // ibValueSystemFunction::Alert
-#include "backend/picturePredefined.h"       // g_picPostCLSID / g_picSaveCLSID — the command band
+#include "core/picturePredefined.h"       // g_picPostCLSID / g_picSaveCLSID — the command band
 
 enum action {
 	eDefActionAndClose = 1,

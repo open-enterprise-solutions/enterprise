@@ -49,6 +49,9 @@ class FRMCLIENT_API ibBackendTypeConfigFactory :
 	public ibBackendTypeFactory {
 public:
 
+	// The type a field of the shape holds when nothing was chosen — the engine's, by the shape alone.
+	static ibClassID GetDefaultTypeByFilter(ibSelectorDataType filterDataType);
+
 	virtual ibSelectorDataType GetFilterDataType() const {
 		return ibSelectorDataType::ibSelectorDataType_reference;
 	}

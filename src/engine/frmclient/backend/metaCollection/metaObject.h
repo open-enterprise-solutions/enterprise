@@ -4,6 +4,11 @@
 #include "frmclient/backend/metaData.h"   // the link — the tab the object was opened from
 #include "frmclient/backend/propertyManager/propertyObject.h"   // a metaobject IS a property object, as the engine's
 
+#include "core/clsid.h"
+
+//ADVANCED OBJECTS
+constexpr ibClassID g_metaAttributeCLSID = metadata_to_clsid("MD_ATTR");
+
 // ⭐ A METAOBJECT OF THE CONFIGURATION — the engine's ibValueMetaObject (backend/metaCollection/metaObject.h), as the
 // thin client holds it: ONE CLASS for every kind, no heir. What it is made of — its properties, how they read, what they
 // may be set to — is the server's to say (Max, 2026-10-14): it holds only its id and the link to the configuration it
@@ -23,6 +28,14 @@ public:
 	wxString GetName() const;
 	wxString GetSynonym() const;
 	wxBitmap GetIcon() const { return wxNullBitmap; }
+
+	// ITS TWO TEXTS, the engine's — help, what its user is told, and the note, what its designers are: the server's (schema
+	// ObjectText), read when asked and given back at once.
+	wxString GetHelpContent() const;
+	void SetHelpContent(const wxString& strHelpContent);
+
+	wxString GetNoteContent() const;
+	void SetNoteContent(const wxString& strNoteContent);
 
 	// Its properties as the server has them now — one batch (schema Properties: Id, Tab), in place of the ones it holds
 	// (ibPropertyObject::ReadProperty). False: the server answered none.

@@ -8,7 +8,7 @@
 #include "backend/objCtor.h"                    // ibCtorMetaValueType::GetEventModule
 #include "backend/system/value/valueType.h"     // ibValueTypeDescription::AllowValue — the source's gates
 #include "backend/backend_picture.h"            // ibBackendPicture::GetPicture — an event's picture in the Event list
-#include "backend/picturePredefined.h"          // g_picEventCLSID
+#include "core/picturePredefined.h"          // g_picEventCLSID
 
 //***********************************************************************
 //*                            Event handler                            *

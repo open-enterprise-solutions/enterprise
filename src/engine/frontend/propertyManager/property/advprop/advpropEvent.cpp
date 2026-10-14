@@ -4,7 +4,7 @@
 #include "backend/propertyManager/property/eventControl.h"
 #include "core/stringUtils.h"
 #include "backend/backend_picture.h"      // ibBackendPicture::GetPicture
-#include "backend/picturePredefined.h"    // g_picEventCLSID — an event's picture
+#include "core/picturePredefined.h"    // g_picEventCLSID — an event's picture
 
 #include "frontend/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
 #include "frontend/propertyManager/property/private/propertyRegistry.h"

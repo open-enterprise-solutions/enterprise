@@ -64,7 +64,7 @@ them, and CI refuses a header that brings `#pragma once`.
 
 **A picture is a PNG in Base64, in the source file that reads it; never XPM.** It is a string
 (`static const wxString s_<name>_png = "..."`) beside the code that uses it — the art provider's in
-`frontend/artProvider/private/picturePredefined.h`, a control's in its `_res.cpp`, a metatype's in its
+`frontend/artProvider/private/picturePredefined.h`, the engine's own in `core/picturePredefined.cpp`, a control's in its `_res.cpp`, a metatype's in its
 `_res.cpp` — kept as a MASTER four times the size it is drawn at, and scaled down by whoever reads it to
 the size it shows it at. Its source is an SVG in `tools/pictures/render.js`, which draws the PNG and
 writes the string: to change a picture, change its SVG there and run the script; to add one, add the SVG,

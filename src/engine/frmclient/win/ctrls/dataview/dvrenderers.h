@@ -27,13 +27,13 @@
 	rest of the renderer classes.
  */
 
-class ibDataViewCustomRenderer;
+class FRMCLIENT_API ibDataViewCustomRenderer;
 
 // ----------------------------------------------------------------------------
 // ibDataViewIconText: helper class used by ibDataViewIconTextRenderer
 // ----------------------------------------------------------------------------
 
-class ibDataViewIconText : public wxObject
+class FRMCLIENT_API ibDataViewIconText : public wxObject
 {
 public:
 	ibDataViewIconText(const wxString& text = wxEmptyString,
@@ -75,13 +75,13 @@ private:
 	wxDECLARE_DYNAMIC_CLASS(ibDataViewIconText);
 };
 
-DECLARE_VARIANT_OBJECT(ibDataViewIconText)
+DECLARE_VARIANT_OBJECT_EXPORTED(ibDataViewIconText, FRMCLIENT_API)
 
 // ----------------------------------------------------------------------------
 // ibDataViewCheckIconText: value class used by ibDataViewCheckIconTextRenderer
 // ----------------------------------------------------------------------------
 
-class ibDataViewCheckIconText : public ibDataViewIconText
+class FRMCLIENT_API ibDataViewCheckIconText : public ibDataViewIconText
 {
 public:
 	ibDataViewCheckIconText(const wxString& text = wxString(),
@@ -101,7 +101,7 @@ private:
 	wxDECLARE_DYNAMIC_CLASS(ibDataViewCheckIconText);
 };
 
-DECLARE_VARIANT_OBJECT(ibDataViewCheckIconText)
+DECLARE_VARIANT_OBJECT_EXPORTED(ibDataViewCheckIconText, FRMCLIENT_API)
 
 // ----------------------------------------------------------------------------
 // ibDataViewRendererBase
@@ -123,7 +123,7 @@ enum ibDataViewCellRenderState
 };
 
 // helper for fine-tuning rendering of values depending on row's state
-class ibDataViewValueAdjuster
+class FRMCLIENT_API ibDataViewValueAdjuster
 {
 public:
 	virtual ~ibDataViewValueAdjuster() {}
@@ -132,7 +132,7 @@ public:
 	virtual wxVariant MakeHighlighted(const wxVariant& value) const { return value; }
 };
 
-class ibDataViewRendererBase : public wxObject
+class FRMCLIENT_API ibDataViewRendererBase : public wxObject
 {
 public:
 	ibDataViewRendererBase(const wxString& varianttype,
@@ -331,7 +331,7 @@ private:
 // ibDataViewCustomRendererBase
 // ----------------------------------------------------------------------------
 
-class ibDataViewCustomRendererBase
+class FRMCLIENT_API ibDataViewCustomRendererBase
 	: public ibDataViewCustomRendererRealBase
 {
 public:
@@ -438,7 +438,7 @@ private:
 // wxDataViewRenderer
 // ----------------------------------------------------------------------------
 
-class ibDataViewRenderer : public ibDataViewCustomRendererBase
+class FRMCLIENT_API ibDataViewRenderer : public ibDataViewCustomRendererBase
 {
 public:
 	ibDataViewRenderer(const wxString& varianttype,
@@ -510,7 +510,7 @@ private:
 // ibDataViewCustomRenderer
 // ---------------------------------------------------------
 
-class ibDataViewCustomRenderer : public ibDataViewRenderer
+class FRMCLIENT_API ibDataViewCustomRenderer : public ibDataViewRenderer
 {
 public:
 	static wxString GetDefaultType() { return wxS("string"); }
@@ -544,7 +544,7 @@ private:
 // ibDataViewTextRenderer
 // ---------------------------------------------------------
 
-class ibDataViewTextRenderer : public ibDataViewRenderer
+class FRMCLIENT_API ibDataViewTextRenderer : public ibDataViewRenderer
 {
 public:
 	static wxString GetDefaultType() { return wxS("string"); }
@@ -588,7 +588,7 @@ private:
 // ibDataViewBitmapRenderer
 // ---------------------------------------------------------
 
-class ibDataViewBitmapRenderer : public ibDataViewRenderer
+class FRMCLIENT_API ibDataViewBitmapRenderer : public ibDataViewRenderer
 {
 public:
 	static wxString GetDefaultType() { return wxS("wxBitmapBundle"); }
@@ -621,7 +621,7 @@ protected:
 // ibDataViewToggleRenderer
 // ---------------------------------------------------------
 
-class ibDataViewToggleRenderer : public ibDataViewRenderer
+class FRMCLIENT_API ibDataViewToggleRenderer : public ibDataViewRenderer
 {
 public:
 	static wxString GetDefaultType() { return wxS("bool"); }
@@ -659,7 +659,7 @@ protected:
 // ibDataViewProgressRenderer
 // ---------------------------------------------------------
 
-class ibDataViewProgressRenderer : public ibDataViewRenderer
+class FRMCLIENT_API ibDataViewProgressRenderer : public ibDataViewRenderer
 {
 public:
 	static wxString GetDefaultType() { return wxS("long"); }
@@ -690,7 +690,7 @@ protected:
 // ibDataViewIconTextRenderer
 // ---------------------------------------------------------
 
-class ibDataViewIconTextRenderer : public ibDataViewRenderer
+class FRMCLIENT_API ibDataViewIconTextRenderer : public ibDataViewRenderer
 {
 public:
 	static wxString GetDefaultType() { return wxS("ibDataViewIconText"); }
@@ -726,7 +726,7 @@ protected:
 // ibDataViewSpinRenderer
 // ----------------------------------------------------------------------------
 
-class ibDataViewSpinRenderer : public ibDataViewCustomRenderer
+class FRMCLIENT_API ibDataViewSpinRenderer : public ibDataViewCustomRenderer
 {
 public:
 	ibDataViewSpinRenderer(int min, int max,
@@ -754,7 +754,7 @@ private:
 // ibDataViewChoiceRenderer
 // ----------------------------------------------------------------------------
 
-class ibDataViewChoiceRenderer : public ibDataViewCustomRenderer
+class FRMCLIENT_API ibDataViewChoiceRenderer : public ibDataViewCustomRenderer
 {
 public:
 	ibDataViewChoiceRenderer(const wxArrayString& choices,
@@ -783,7 +783,7 @@ private:
 // ibDataViewChoiceByIndexRenderer
 // ----------------------------------------------------------------------------
 
-class ibDataViewChoiceByIndexRenderer : public ibDataViewChoiceRenderer
+class FRMCLIENT_API ibDataViewChoiceByIndexRenderer : public ibDataViewChoiceRenderer
 {
 public:
 	ibDataViewChoiceByIndexRenderer(const wxArrayString& choices,
@@ -805,7 +805,7 @@ public:
 // ----------------------------------------------------------------------------
 
 #if wxUSE_DATEPICKCTRL
-class ibDataViewDateRenderer : public ibDataViewCustomRenderer
+class FRMCLIENT_API ibDataViewDateRenderer : public ibDataViewCustomRenderer
 {
 public:
 	static wxString GetDefaultType() { return wxS("datetime"); }
@@ -838,7 +838,7 @@ typedef ibDataViewTextRenderer ibDataViewDateRenderer;
 // ibDataViewCheckIconTextRenderer: 3-state checkbox + text + optional icon
 // ----------------------------------------------------------------------------
 
-class ibDataViewCheckIconTextRenderer
+class FRMCLIENT_API ibDataViewCheckIconTextRenderer
 	: public ibDataViewCustomRenderer
 {
 public:

@@ -1,7 +1,7 @@
 #include "docViewAuditLog.h"
 
 #include "frmclient/backend/backend_picture.h"
-#include "frmclient/backend/picturePredefined.h"
+#include "core/picturePredefined.h"
 #include "frmclient/mainFrame/mainFrame.h"   // a row's object — opened by the server (Post)
 #include "protocol/protocol.h"
 

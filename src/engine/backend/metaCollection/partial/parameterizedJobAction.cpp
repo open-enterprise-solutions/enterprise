@@ -5,7 +5,7 @@
 #include "parameterizedJob.h"
 
 #include "backend/system/systemManager.h"   // ibValueSystemFunction::Alert
-#include "backend/picturePredefined.h"       // the command band's pictures
+#include "core/picturePredefined.h"       // the command band's pictures
 
 enum action {
 	eExecute = 1,

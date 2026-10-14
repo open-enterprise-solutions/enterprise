@@ -180,6 +180,17 @@ namespace ibProtocolName {
 	inline constexpr const char* Roles       = "Roles";
 	inline constexpr const char* Code        = "Code";
 
+	// The predefined items of an object (ibProtocolSchema::Predefined) — Items, each as the engine stores it
+	// (ibValueMetaObjectRecordDataHierarchyMutableRef::WriteData): Guid, Name, Code, Description, IsFolder, Parent (the
+	// Guid of the item it sits under; absent: the top).
+	inline constexpr const char* Items       = "Items";
+	inline constexpr const char* Description = "Description";
+	inline constexpr const char* IsFolder    = "IsFolder";
+
+	// The two texts of an object (ibProtocolSchema::ObjectText) — Help, what its user is told (the name a property row's
+	// help has too), and Note, what its designers are.
+	inline constexpr const char* Note        = "Note";
+
 	// The registration journal — a tab's (Kind AuditLog): its rows fetched by the tab, newest first, by the filter
 	// {From, To, Level, User, Session, Source, Event, Ref, Search, Offset, Count} — each row Time, Level, Session, User,
 	// Host, Source, Event, Message, Ref, RefMeta; a row's object opened as event Open {Ref, RefMeta}.
@@ -424,8 +435,7 @@ inline const char* ibProtocolMethodName(ibProtocolMethod method)
 	case ibProtocolMethod::Download:     return "download";
 	case ibProtocolMethod::Open:         return "open";
 	case ibProtocolMethod::Command:      return "command";
-	case ibProtocolMethod::Presentation: return "presentation";
-	}
+	case ibProtocolMethod::Presentation: return "presentation";	}
 	return "";
 }
 
@@ -501,12 +511,25 @@ enum class ibProtocolSchema : int {
 	                    // that object's property or event given that value
 	Languages    = 11,  // both modes': the configuration's Languages (Guid, Title, Code) — what a translated text is
 	                    // written in (the translation window's boxes, a user's record's choice)
+	Predefined   = 12,  // the desktop's predefined values editor over an object of the designer's tree: `schema {Schema,
+	                    // Args: {Id[, Tab]}}` shows Type (the object's class) and Items (Guid, Name, Code, Description,
+	                    // IsFolder, Parent); commands 9 Create {Id, Name, Code, Description, IsFolder, Parent}, 10 Set {Id,
+	                    // Guid, …} — the item of that Guid given these (none of it: one more, of that Guid), 8 Remove {Id,
+	                    // Guid}. Each with Tab — an external file's tree, as MetaData's
+	ObjectText   = 13,  // the desktop's help and technical information editors over an object of the designer's tree:
+	                    // `Args: {Id[, Tab]}` shows Help and Note — its two texts; command 4 Save {Id, Help} or {Id,
+	                    // Note} — the one given set. Each with Tab, as Predefined's
+	HomePage     = 14,  // the desktop's home page workspace editor over the configuration's root: `Args: {Id}` shows
+	                    // HomePage — as the root writes it (ibHomePageDescription), ReadOnly — when it takes no edit, and
+	                    // Forms (Id, Name, FullName, Picture, Common; a form's owner: Owner, OwnerName, OwnerPicture) — what
+	                    // it may show; command 4 Save {Id, HomePage}
 };
 
 // A schema's own commands — `schema {Schema, Command, Args}`. All functions and Sections take the one: Open
 // {Item, Type} — an item they show, opened as the navigation opens it. Debugging takes Start and Stop; McpServer takes
 // them and Save; Active users, the designer's, Kick, Reload and Release; the users Save and Remove; the designer's
-// inspector (Properties) Save. The designer's tree has its own (ibProtocolMetaDataCommand).
+// inspector (Properties) Save; its predefined values editor Create, Set and Remove; its texts (ObjectText) Save, and so the
+// home page (HomePage). The designer's tree has its own (ibProtocolMetaDataCommand).
 enum class ibProtocolSchemaCommand : int {
 	Open    = 1,
 	Start   = 2,
@@ -516,6 +539,8 @@ enum class ibProtocolSchemaCommand : int {
 	Reload  = 6,
 	Release = 7,
 	Remove  = 8,
+	Create  = 9,
+	Set     = 10,
 };
 
 // THE DESIGNER'S TREE'S COMMANDS — `schema {Schema: MetaData, Command, Args}`, its doors by an object's id, each with Tab
