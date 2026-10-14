@@ -2,9 +2,6 @@
 
 #include <wx/propgrid/props.h>   // wxStringProperty — what a property of no registered type is shown by
 
-#include "core/typeName.h"   // ibTypeInfoName — a local property's class, named as the server names one
-#include "frmclient/backend/propertyManager/property/propertyValue.h"
-
 namespace {
 
 // A PROPERTY OF NO REGISTERED TYPE — a string, read-only, as it reads. A property is never dropped, and never guessed
@@ -50,34 +47,24 @@ void ibPropertyRegistry::Register(const wxString& type, ibPropertyMaker maker, i
 wxPGProperty* ibPropertyRegistry::Create(ibBackendProperty* property)
 {
 	wxPGProperty* result = nullptr;
-	const auto found = GetEntries().find(GetType(property));
+	const auto found = GetEntries().find(property->GetType());
 	if (found != GetEntries().end())
 		result = found->second.m_maker(property);
 	if (result == nullptr)
 		result = CreateAsString(property);
 
 	result->SetHelpString(property->GetHelp());
-	const ibPropertyValue* const value = dynamic_cast<const ibPropertyValue*>(property);
-	if (!property->IsEditable() || (value != nullptr && value->IsReadOnly()))
+	if (!property->IsEditable())
 		result->ChangeFlag(wxPGFlags::ReadOnly, true);
 	return result;
 }
 
 ibDataValue ibPropertyRegistry::GetNodeValue(const ibBackendProperty* property, const wxVariant& value)
 {
-	const auto found = GetEntries().find(GetType(property));
+	const auto found = GetEntries().find(property->GetType());
 	if (found != GetEntries().end() && found->second.m_writer)
 		return found->second.m_writer(value);
 	return GetNodeValueByKind(value);
-}
-
-wxString ibPropertyRegistry::GetType(const ibBackendProperty* property)
-{
-	// ⚠ TWO KINDS ONLY WHILE A FORM'S CONTROLS DECLARE THEIR OWN (CreateProperty<T>): once they load theirs from the
-	// server as a metaobject does, every property shown is an ibPropertyValue, and the class name goes.
-	if (const ibPropertyValue* const value = dynamic_cast<const ibPropertyValue*>(property))
-		return value->GetType();
-	return ibTypeInfoName(typeid(*property));
 }
 
 wxPGChoices ibPropertyRegistry::GetChoices(ibBackendProperty* property)

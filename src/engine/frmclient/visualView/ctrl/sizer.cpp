@@ -5,7 +5,6 @@
 
 #include "sizer.h"
 
-#include "core/serialize/dataBuilder.h"
 #include "frmclient/win/typeconv.h"
 
 void ibViewUpdateSizer(wxSizer* sizer, const ibProtocolNode& node)
@@ -104,25 +103,11 @@ void ibValueStaticBoxSizer::Update(const ibProtocolNode& node)
 	ibViewUpdateSizer(m_sizer, node);
 }
 
-//*******************************************************************************************
-//*                  The properties — the desktop's ReadData / WriteData, as they are             *
-//*******************************************************************************************
+//*******************************************************************
+//*                            SizerItem                            *
+//*******************************************************************
 
-bool ibValueSizer::ReadData(const ibDataNode& node)
-{
-	m_propertyMinSize->SetNodeValue(node.GetProperty(m_propertyMinSize->GetName()));
-
-	return ibValueControl::ReadData(node);
-}
-
-bool ibValueSizer::WriteData(ibDataNode& node) const
-{
-	node.SetProperty(m_propertyMinSize->GetName(), m_propertyMinSize->GetNodeValue());
-
-	return ibValueControl::WriteData(node);
-}
-
-void ibValueSizerItem::Update(const ibProtocolNode& WXUNUSED(node))
+void ibValueSizerItem::Update(const ibProtocolNode& node)
 {
 	// Its child is in the sizer already (the host's Generate) — the item it stands in is found, not added again: a window
 	// knows its sizer, a sizer the window it is laid out in.
@@ -143,124 +128,22 @@ void ibValueSizerItem::Update(const ibProtocolNode& WXUNUSED(node))
 	if (item == nullptr)
 		return;
 
-	item->SetProportion(GetProportion());
-	item->SetFlag(GetFlagBorder() | GetFlagState());
-	item->SetBorder(GetBorder());
+	item->SetProportion(static_cast<int>(node.GetInt(ibProtocolName::Proportion)));
+	item->SetFlag(GetFlag(node));
+	item->SetBorder(static_cast<int>(node.GetInt(ibProtocolName::BorderSize)));
 }
 
-bool ibValueSizerItem::ReadData(const ibDataNode& node)
+int ibValueSizerItem::GetFlag(const ibProtocolNode& node)
 {
-	//m_propertyProportion->SetNodeValue(node.GetProperty(m_propertyProportion->GetName()));
-	//m_propertyFlagBorder->SetNodeValue(node.GetProperty(m_propertyFlagBorder->GetName()));
-	//m_propertyFlagState->SetNodeValue(node.GetProperty(m_propertyFlagState->GetName()));
-	//m_propertyBorder->SetNodeValue(node.GetProperty(m_propertyBorder->GetName()));
-
-	m_propertyProportion->SetNodeValue(node.GetProperty(m_propertyProportion->GetName()));
-	//m_propertyFlagBorder->SetNodeValue(node.GetProperty(m_propertyFlagBorder->GetName()));
-
-	m_propertyFlagBorderLeft->SetNodeValue(node.GetProperty(m_propertyFlagBorderLeft->GetName()));
-	m_propertyFlagBorderRight->SetNodeValue(node.GetProperty(m_propertyFlagBorderRight->GetName()));
-	m_propertyFlagBorderTop->SetNodeValue(node.GetProperty(m_propertyFlagBorderTop->GetName()));
-	m_propertyFlagBorderBottom->SetNodeValue(node.GetProperty(m_propertyFlagBorderBottom->GetName()));
-
-	m_propertyFlagState->SetNodeValue(node.GetProperty(m_propertyFlagState->GetName()));
-	m_propertyBorder->SetNodeValue(node.GetProperty(m_propertyBorder->GetName()));
-
-	return ibValueFrame::ReadData(node);
-}
-
-bool ibValueSizerItem::WriteData(ibDataNode& node) const
-{
-	//node.SetProperty(m_propertyProportion->GetName(), m_propertyProportion->GetNodeValue());
-	//node.SetProperty(m_propertyFlagBorder->GetName(), m_propertyFlagBorder->GetNodeValue());
-	//node.SetProperty(m_propertyFlagState->GetName(), m_propertyFlagState->GetNodeValue());
-	//node.SetProperty(m_propertyBorder->GetName(), m_propertyBorder->GetNodeValue());
-
-	node.SetProperty(m_propertyProportion->GetName(), m_propertyProportion->GetNodeValue());
-	//node.SetProperty(m_propertyFlagBorder->GetName(), m_propertyFlagBorder->GetNodeValue());
-
-	node.SetProperty(m_propertyFlagBorderLeft->GetName(), m_propertyFlagBorderLeft->GetNodeValue());
-	node.SetProperty(m_propertyFlagBorderRight->GetName(), m_propertyFlagBorderRight->GetNodeValue());
-	node.SetProperty(m_propertyFlagBorderTop->GetName(), m_propertyFlagBorderTop->GetNodeValue());
-	node.SetProperty(m_propertyFlagBorderBottom->GetName(), m_propertyFlagBorderBottom->GetNodeValue());
-
-	node.SetProperty(m_propertyFlagState->GetName(), m_propertyFlagState->GetNodeValue());
-	node.SetProperty(m_propertyBorder->GetName(), m_propertyBorder->GetNodeValue());
-
-	return ibValueFrame::WriteData(node);
-}
-
-bool ibValueBoxSizer::ReadData(const ibDataNode& node)
-{
-	m_propertyOrient->SetNodeValue(node.GetProperty(m_propertyOrient->GetName()));
-	return ibValueSizer::ReadData(node);
-}
-
-bool ibValueBoxSizer::WriteData(ibDataNode& node) const
-{
-	node.SetProperty(m_propertyOrient->GetName(), m_propertyOrient->GetNodeValue());
-	return ibValueSizer::WriteData(node);
-}
-
-bool ibValueWrapSizer::ReadData(const ibDataNode& node)
-{
-	m_propertyOrient->SetNodeValue(node.GetProperty(m_propertyOrient->GetName()));
-	return ibValueSizer::ReadData(node);
-}
-
-bool ibValueWrapSizer::WriteData(ibDataNode& node) const
-{
-	node.SetProperty(m_propertyOrient->GetName(), m_propertyOrient->GetNodeValue());
-	return ibValueSizer::WriteData(node);
-}
-
-bool ibValueGridSizer::ReadData(const ibDataNode& node)
-{
-	m_propertyRows->SetNodeValue(node.GetProperty(m_propertyRows->GetName()));
-	m_propertyCols->SetNodeValue(node.GetProperty(m_propertyCols->GetName()));
-
-	return ibValueSizer::ReadData(node);
-}
-
-bool ibValueGridSizer::WriteData(ibDataNode& node) const
-{
-	node.SetProperty(m_propertyRows->GetName(), m_propertyRows->GetNodeValue());
-	node.SetProperty(m_propertyCols->GetName(), m_propertyCols->GetNodeValue());
-
-	return ibValueSizer::WriteData(node);
-}
-
-bool ibValueStaticBoxSizer::ReadData(const ibDataNode& node)
-{
-	m_propertyOrient->SetNodeValue(node.GetProperty(m_propertyOrient->GetName()));	
-	m_propertyTitle->SetNodeValue(node.GetProperty(m_propertyTitle->GetName()));
-	m_propertyFont->SetNodeValue(node.GetProperty(m_propertyFont->GetName()));
-	m_propertyFG->SetNodeValue(node.GetProperty(m_propertyFG->GetName()));
-	m_propertyBG->SetNodeValue(node.GetProperty(m_propertyBG->GetName()));
-
-	m_propertyTooltip->SetNodeValue(node.GetProperty(m_propertyTooltip->GetName()));
-	m_propertyContextHelp->SetNodeValue(node.GetProperty(m_propertyContextHelp->GetName()));
-
-	m_propertyContextMenu->SetNodeValue(node.GetProperty(m_propertyContextMenu->GetName()));
-	m_propertyEnabled->SetNodeValue(node.GetProperty(m_propertyEnabled->GetName()));
-	m_propertyVisible->SetNodeValue(node.GetProperty(m_propertyVisible->GetName()));
-
-	return ibValueSizer::ReadData(node);
-}
-
-bool ibValueStaticBoxSizer::WriteData(ibDataNode& node) const
-{
-	node.SetProperty(m_propertyOrient->GetName(), m_propertyOrient->GetNodeValue());
-	node.SetProperty(m_propertyTitle->GetName(), m_propertyTitle->GetNodeValue());
-	node.SetProperty(m_propertyFont->GetName(), m_propertyFont->GetNodeValue());
-	node.SetProperty(m_propertyFG->GetName(), m_propertyFG->GetNodeValue());
-	node.SetProperty(m_propertyBG->GetName(), m_propertyBG->GetNodeValue());
-	node.SetProperty(m_propertyTooltip->GetName(), m_propertyTooltip->GetNodeValue());
-	node.SetProperty(m_propertyContextHelp->GetName(), m_propertyContextHelp->GetNodeValue());
-	node.SetProperty(m_propertyContextMenu->GetName(), m_propertyContextMenu->GetNodeValue());
-	node.SetProperty(m_propertyEnabled->GetName(), m_propertyEnabled->GetNodeValue());
-	node.SetProperty(m_propertyVisible->GetName(), m_propertyVisible->GetNodeValue());
-
-	return ibValueSizer::WriteData(node);
+	int flag = static_cast<int>(node.GetInt(ibProtocolName::Stretch));
+	if (node.GetBool(ibProtocolName::BorderLeft))
+		flag |= wxLEFT;
+	if (node.GetBool(ibProtocolName::BorderRight))
+		flag |= wxRIGHT;
+	if (node.GetBool(ibProtocolName::BorderTop))
+		flag |= wxUP;
+	if (node.GetBool(ibProtocolName::BorderBottom))
+		flag |= wxDOWN;
+	return flag;
 }
 

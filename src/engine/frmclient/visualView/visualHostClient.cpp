@@ -7,30 +7,15 @@
 #include "ctrl/frame.h"
 #include "commandBar.h"
 #include "ctrl/widgets.h"   // ibViewPlaceholder — in the place of a control not drawn yet
+#include "ctrl/sizer.h"     // ibValueSizerItem — how a sizer item lays its child out
 
 #include <wx/wupdlock.h>   // wxWindowUpdateLocker — RAII Freeze/Thaw
 
-#include "frmclient/backend/serialize/dataProtocol.h"   // a control's node read as the engine reads its JSON
 #include "frmclient/mainFrame/mainFrame.h"
 #include "frmclient/win/typeconv.h"
 #include "frmclient/win/ctrls/dynamicBorder.h"
 
 namespace {
-
-// How a sizer item lays its child out — the desktop's ibValueSizerItem: the borders it has, and how it stretches.
-int FlagOf(const ibProtocolNode& item)
-{
-	int flag = static_cast<int>(item.GetInt(ibProtocolName::Stretch));
-	if (item.GetBool(ibProtocolName::BorderLeft))
-		flag |= wxLEFT;
-	if (item.GetBool(ibProtocolName::BorderRight))
-		flag |= wxRIGHT;
-	if (item.GetBool(ibProtocolName::BorderTop))
-		flag |= wxUP;
-	if (item.GetBool(ibProtocolName::BorderBottom))
-		flag |= wxDOWN;
-	return flag;
-}
 
 // THE VIEW A CALL IS OF — a form by its key; a view that is no form (no key), by the tab it is drawn in.
 void SetViewOf(ibProtocolNode& params, const wxString& formKey, long long tabId)
@@ -49,31 +34,11 @@ ibProtocolNode WithoutChildren(const ibProtocolNode& node)
 	return bare;
 }
 
-// THE NODE A CONTROL'S ReadData READS — the desktop's form node of it: its entries as the server's WriteData wrote them,
-// less what is in it (controls of their own) and its State (the runtime's, beside its properties).
-ibDataNode DataOf(const ibProtocolNode& node)
-{
-	// Read as the engine reads its JSON — and then all of it as properties: the server wrote them as its control's
-	// properties (WriteData), and the wire keeps fields and properties in one set.
-	ibDataNode read;
-	ibReadProtocolNode(node, read);
-
-	ibDataNode data;
-	for (const auto& [name, value] : read.Fields())
-		data.SetProperty(name, value);
-	for (const auto& [name, value] : read.Properties()) {
-		if (name != ibProtocolName::State)
-			data.SetProperty(name, value);
-	}
-	return data;
-}
-
-// …read by the control: its name, then its properties — the desktop's LoadNode, as a control is built or patched — and
-// what the server says it is called (a form's, a page's — its Title).
+// A NODE READ BY ITS CONTROL — its name, and what the server says it is called (a form's, a page's — its Title); its
+// properties are the server's (ibValueFrame).
 void ReadControl(ibValueFrame* control, const ibProtocolNode& node)
 {
 	control->SetControlName(node.GetString(ibProtocolName::Name));
-	control->ReadData(DataOf(node));
 
 	const ibProtocolNode state = node.FindChild(ibProtocolName::State);
 	control->SetControlTitle(state.Has(ibProtocolName::Caption) ? state.GetString(ibProtocolName::Caption)
@@ -91,7 +56,7 @@ void ShapeOf(const ibProtocolNode& node, std::string& shape)
 	shape += std::to_string(node.GetId());
 
 	if (type == ibProtocolType::SizerItem) {
-		shape += '(' + std::to_string(node.GetInt(ibProtocolName::Proportion)) + '|' + std::to_string(FlagOf(node))
+		shape += '(' + std::to_string(node.GetInt(ibProtocolName::Proportion)) + '|' + std::to_string(ibValueSizerItem::GetFlag(node))
 			+ '|' + std::to_string(node.GetInt(ibProtocolName::BorderSize)) + ')';
 	}
 	else if (type == ibProtocolType::Staticline || type == ibProtocolType::Slider || type == ibProtocolType::Gauge) {
@@ -417,7 +382,7 @@ void ibVisualHostClient::Generate(const ibProtocolNode& node, wxWindow* parent, 
 	control->Create(parent, node);
 
 	const int proportion = static_cast<int>(item.GetInt(ibProtocolName::Proportion));
-	const int flag = FlagOf(item);
+	const int flag = ibValueSizerItem::GetFlag(item);
 	const int border = static_cast<int>(item.GetInt(ibProtocolName::BorderSize));
 	if (wxWindow* const window = control->GetWindow()) {
 		if (sizer != nullptr)

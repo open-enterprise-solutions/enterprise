@@ -691,40 +691,6 @@ void ibValueModelTableBox::OnHeaderEndResize(ibHeaderGenericCtrlEvent& event)
 	});
 }
 
-bool ibValueModelTableBox::ReadData(const ibDataNode& node)
-{
-	m_propertyHeader->SetNodeValue(node.GetProperty(m_propertyHeader->GetName()));
-	m_propertyHeaderHeight->SetNodeValue(node.GetProperty(m_propertyHeaderHeight->GetName()));
-	m_propertyFooter->SetNodeValue(node.GetProperty(m_propertyFooter->GetName()));
-	m_propertyFooterHeight->SetNodeValue(node.GetProperty(m_propertyFooterHeight->GetName()));
-
-	m_propertyFreezeRow->SetNodeValue(node.GetProperty(m_propertyFreezeRow->GetName()));
-	m_propertyFreezeCol->SetNodeValue(node.GetProperty(m_propertyFreezeCol->GetName()));
-
-	m_propertyRowSelectionMode->SetNodeValue(node.GetProperty(m_propertyRowSelectionMode->GetName()));
-	m_propertyChoiceMode->SetNodeValue(node.GetProperty(m_propertyChoiceMode->GetName()));
-	m_propertyViewMode->SetNodeValue(node.GetProperty(m_propertyViewMode->GetName()));
-
-	return ibValueWindow::ReadData(node);
-}
-
-bool ibValueModelTableBox::WriteData(ibDataNode& node) const
-{
-	node.SetProperty(m_propertyHeader->GetName(), m_propertyHeader->GetNodeValue());
-	node.SetProperty(m_propertyHeaderHeight->GetName(), m_propertyHeaderHeight->GetNodeValue());
-	node.SetProperty(m_propertyFooter->GetName(), m_propertyFooter->GetNodeValue());
-	node.SetProperty(m_propertyFooterHeight->GetName(), m_propertyFooterHeight->GetNodeValue());
-
-	node.SetProperty(m_propertyFreezeRow->GetName(), m_propertyFreezeRow->GetNodeValue());
-	node.SetProperty(m_propertyFreezeCol->GetName(), m_propertyFreezeCol->GetNodeValue());
-
-	node.SetProperty(m_propertyRowSelectionMode->GetName(), m_propertyRowSelectionMode->GetNodeValue());
-	node.SetProperty(m_propertyChoiceMode->GetName(), m_propertyChoiceMode->GetNodeValue());
-	node.SetProperty(m_propertyViewMode->GetName(), m_propertyViewMode->GetNodeValue());
-
-	return ibValueWindow::WriteData(node);
-}
-
 //***********************************************************************************
 //*                                    Column                                       *
 //***********************************************************************************
@@ -758,7 +724,13 @@ void ibValueModelTableBoxColumn::Update(const ibProtocolNode& node)
 	m_column->SetResizeable(node.GetBool(ibProtocolName::Resizable, true));
 	m_column->SetReorderable(node.GetBool(ibProtocolName::Reorderable, true));
 
-	// How its cells are typed into is its properties' (ReadData); the server says whether the column may be written.
+	// How its cells are typed into is its node's; the server says whether the column may be written.
+	m_passwordMode = node.GetBool(ibProtocolName::PasswordMode);
+	m_multilineMode = node.GetBool(ibProtocolName::MultilineMode);
+	m_textEditMode = node.GetBool(ibProtocolName::TexteditMode, true);
+	m_selectButton = node.GetBool(ibProtocolName::ButtonSelect, true);
+	m_openButton = node.GetBool(ibProtocolName::ButtonOpen);
+	m_clearButton = node.GetBool(ibProtocolName::ButtonClear, true);
 	m_readOnly = state.GetBool(ibProtocolName::ReadOnly);
 
 	// The sort the server keeps, shown by the arrow; a click asks it for another.
@@ -767,50 +739,6 @@ void ibValueModelTableBoxColumn::Update(const ibProtocolNode& node)
 		m_column->SetSortOrder(m_sort > 0);
 	else if (m_column->IsSortKey())
 		m_column->UnsetAsSortKey();
-}
-
-bool ibValueModelTableBoxColumn::ReadData(const ibDataNode& node)
-{
-	m_propertyTitle->SetNodeValue(node.GetProperty(m_propertyTitle->GetName()));
-	m_propertyRepresentation->SetNodeValue(node.GetProperty(m_propertyRepresentation->GetName()));
-	m_propertyFooterText->SetNodeValue(node.GetProperty(m_propertyFooterText->GetName()));
-	m_propertyPasswordMode->SetNodeValue(node.GetProperty(m_propertyPasswordMode->GetName()));
-	m_propertyMultilineMode->SetNodeValue(node.GetProperty(m_propertyMultilineMode->GetName()));
-	m_propertyTexteditMode->SetNodeValue(node.GetProperty(m_propertyTexteditMode->GetName()));
-	m_propertyFormat->SetNodeValue(node.GetProperty(m_propertyFormat->GetName()));
-	m_propertySelectButton->SetNodeValue(node.GetProperty(m_propertySelectButton->GetName()));
-	m_propertyOpenButton->SetNodeValue(node.GetProperty(m_propertyOpenButton->GetName()));
-	m_propertyClearButton->SetNodeValue(node.GetProperty(m_propertyClearButton->GetName()));
-	m_propertyHeaderAlign->SetNodeValue(node.GetProperty(m_propertyHeaderAlign->GetName()));
-	m_propertyFooterAlign->SetNodeValue(node.GetProperty(m_propertyFooterAlign->GetName()));
-	m_propertyWidth->SetNodeValue(node.GetProperty(m_propertyWidth->GetName()));
-	m_propertyVisible->SetNodeValue(node.GetProperty(m_propertyVisible->GetName()));
-	m_propertyResizable->SetNodeValue(node.GetProperty(m_propertyResizable->GetName()));
-	m_propertyReorderable->SetNodeValue(node.GetProperty(m_propertyReorderable->GetName()));
-
-	return ibValueControl::ReadData(node);
-}
-
-bool ibValueModelTableBoxColumn::WriteData(ibDataNode& node) const
-{
-	node.SetProperty(m_propertyTitle->GetName(), m_propertyTitle->GetNodeValue());
-	node.SetProperty(m_propertyRepresentation->GetName(), m_propertyRepresentation->GetNodeValue());
-	node.SetProperty(m_propertyFooterText->GetName(), m_propertyFooterText->GetNodeValue());
-	node.SetProperty(m_propertyPasswordMode->GetName(), m_propertyPasswordMode->GetNodeValue());
-	node.SetProperty(m_propertyMultilineMode->GetName(), m_propertyMultilineMode->GetNodeValue());
-	node.SetProperty(m_propertyTexteditMode->GetName(), m_propertyTexteditMode->GetNodeValue());
-	node.SetProperty(m_propertyFormat->GetName(), m_propertyFormat->GetNodeValue());
-	node.SetProperty(m_propertySelectButton->GetName(), m_propertySelectButton->GetNodeValue());
-	node.SetProperty(m_propertyOpenButton->GetName(), m_propertyOpenButton->GetNodeValue());
-	node.SetProperty(m_propertyClearButton->GetName(), m_propertyClearButton->GetNodeValue());
-	node.SetProperty(m_propertyHeaderAlign->GetName(), m_propertyHeaderAlign->GetNodeValue());
-	node.SetProperty(m_propertyFooterAlign->GetName(), m_propertyFooterAlign->GetNodeValue());
-	node.SetProperty(m_propertyWidth->GetName(), m_propertyWidth->GetNodeValue());
-	node.SetProperty(m_propertyVisible->GetName(), m_propertyVisible->GetNodeValue());
-	node.SetProperty(m_propertyResizable->GetName(), m_propertyResizable->GetNodeValue());
-	node.SetProperty(m_propertyReorderable->GetName(), m_propertyReorderable->GetNodeValue());
-
-	return ibValueControl::WriteData(node);
 }
 
 //***********************************************************************************
@@ -839,26 +767,4 @@ void ibValueModelTableBoxColumnGroup::Update(const ibProtocolNode& node)
 	// The geometry the group decides is the data view's to work out again — asked of the group.
 	if (ibDataViewCtrl* const dataView = m_group->GetOwner())
 		dataView->InvalidateColumnLayout();
-}
-
-bool ibValueModelTableBoxColumnGroup::ReadData(const ibDataNode& node)
-{
-	m_propertyTitle->SetNodeValue(node.GetProperty(m_propertyTitle->GetName()));
-	m_propertyGrouping->SetNodeValue(node.GetProperty(m_propertyGrouping->GetName()));
-	m_propertyShowTitle->SetNodeValue(node.GetProperty(m_propertyShowTitle->GetName()));
-	m_propertyHeaderAlign->SetNodeValue(node.GetProperty(m_propertyHeaderAlign->GetName()));
-	m_propertyVisible->SetNodeValue(node.GetProperty(m_propertyVisible->GetName()));
-
-	return ibValueControl::ReadData(node);
-}
-
-bool ibValueModelTableBoxColumnGroup::WriteData(ibDataNode& node) const
-{
-	node.SetProperty(m_propertyTitle->GetName(), m_propertyTitle->GetNodeValue());
-	node.SetProperty(m_propertyGrouping->GetName(), m_propertyGrouping->GetNodeValue());
-	node.SetProperty(m_propertyShowTitle->GetName(), m_propertyShowTitle->GetNodeValue());
-	node.SetProperty(m_propertyHeaderAlign->GetName(), m_propertyHeaderAlign->GetNodeValue());
-	node.SetProperty(m_propertyVisible->GetName(), m_propertyVisible->GetNodeValue());
-
-	return ibValueControl::WriteData(node);
 }

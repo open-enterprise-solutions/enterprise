@@ -228,7 +228,11 @@ public:
 	virtual ~ibBackendProperty() {}
 public:
 
-	bool IsEditable() const;
+	virtual bool IsEditable() const;
+
+	// The type it is shown by (ibPropertyRegistry): its class, named as the server names one — the server's row says
+	// its own (ibPropertyValue).
+	virtual wxString GetType() const;
 
 	////////////////////
 
@@ -632,11 +636,10 @@ public:
 	*/
 	virtual int GetComponentType() const { return COMPONENT_TYPE_ABSTRACT; }
 
-	// Central VIRTUAL entry for object-level node save/load. A type OVERRIDES it to do its
-	// OWN data: meta / controls call their LoadNode/SaveNode inside (their per-type
-	// ReadData/WriteData stays THEIR method, NOT on this base); the dynamic list writes
-	// its Source + settings. Base default routes through attached objects (their data is
-	// part of us) — an override calls the base to include attached.
+	// ⭐ THE ROWS — its properties as the server has them (frmserver ibPropertyInspector, the schema Properties): its
+	// categories (Name, Title, their rows) and properties (an ibPropertyValue each), in place of those it had. The server
+	// sends what is to be seen, no more and no less. The client knows no property of its own: whoever shows one — a
+	// metaobject, a form's control — asks the server through a door of its own and reads the answer here.
 	virtual bool ReadProperty(const ibDataNode& node);
 	virtual bool WriteProperty(ibDataNode& node) const;
 
@@ -753,6 +756,9 @@ protected:
 	ibPropertyCategory* m_category;
 
 private:
+
+	// One category's rows, into `category` — its properties and its categories.
+	void ReadCategory(ibPropertyCategory* category, const ibDataNode& node);
 
 	std::map<wxString, ibProperty*> m_properties;
 	std::map<wxString, ibEvent*> m_events;

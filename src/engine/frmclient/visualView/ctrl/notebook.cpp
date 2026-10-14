@@ -4,7 +4,6 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "notebook.h"
-#include "core/serialize/dataBuilder.h"   // the properties, as the frame carries them
 
 #include "frmclient/visualView/pageWindow.h"
 #include "frmclient/win/picture.h"
@@ -89,20 +88,6 @@ void ibValueNotebook::OnEndDrag(wxAuiNotebookEvent& event)
 	Send(ibProtocolEvent::Move, args);
 }
 
-bool ibValueNotebook::ReadData(const ibDataNode& node)
-{
-	m_propertyOrient->SetNodeValue(node.GetProperty(m_propertyOrient->GetName()));
-
-	return ibValueWindow::ReadData(node);
-}
-
-bool ibValueNotebook::WriteData(ibDataNode& node) const
-{
-	node.SetProperty(m_propertyOrient->GetName(), m_propertyOrient->GetNodeValue());
-
-	return ibValueWindow::WriteData(node);
-}
-
 //***********************************************************************************
 //*                                 Notebook page                                   *
 //***********************************************************************************
@@ -169,24 +154,4 @@ wxSizer* ibValueNotebookPage::GetSizer() const
 ibValueNotebook* ibValueNotebookPage::GetNotebook() const
 {
 	return dynamic_cast<ibValueNotebook*>(GetParent());
-}
-
-bool ibValueNotebookPage::ReadData(const ibDataNode& node)
-{
-	m_propertyTitle->SetNodeValue(node.GetProperty(m_propertyTitle->GetName()));
-	m_propertyRepresentation->SetNodeValue(node.GetProperty(m_propertyRepresentation->GetName()));
-	m_propertyVisible->SetNodeValue(node.GetProperty(m_propertyVisible->GetName()));
-	m_propertyOrient->SetNodeValue(node.GetProperty(m_propertyOrient->GetName()));
-
-	return ibValueControl::ReadData(node);
-}
-
-bool ibValueNotebookPage::WriteData(ibDataNode& node) const
-{
-	node.SetProperty(m_propertyTitle->GetName(), m_propertyTitle->GetNodeValue());
-	node.SetProperty(m_propertyRepresentation->GetName(), m_propertyRepresentation->GetNodeValue());
-	node.SetProperty(m_propertyVisible->GetName(), m_propertyVisible->GetNodeValue());
-	node.SetProperty(m_propertyOrient->GetName(), m_propertyOrient->GetNodeValue());
-
-	return ibValueControl::WriteData(node);
 }

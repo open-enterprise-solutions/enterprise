@@ -4,7 +4,6 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "widgets.h"
-#include "core/serialize/dataBuilder.h"   // the properties, as the frame carries them
 
 void ibValueSlider::Create(wxWindow* parent, const ibProtocolNode& node)
 {
@@ -24,28 +23,4 @@ void ibValueSlider::Update(const ibProtocolNode& node)
 	m_slider->SetValue(static_cast<int>(node.GetInt(ibProtocolName::Value, 50)));
 
 	UpdateWindow(m_slider, node);
-}
-
-//*******************************************************************************************
-//*                  The properties — the desktop's ReadData / WriteData                    *
-//*******************************************************************************************
-
-bool ibValueSlider::ReadData(const ibDataNode& node)
-{
-	m_propertyMinValue->SetNodeValue(node.GetProperty(m_propertyMinValue->GetName()));
-	m_propertyMaxValue->SetNodeValue(node.GetProperty(m_propertyMaxValue->GetName()));
-	m_propertyValue->SetNodeValue(node.GetProperty(m_propertyValue->GetName()));
-	m_propertyOrient->SetNodeValue(node.GetProperty(m_propertyOrient->GetName()));
-
-	return ibValueWindow::ReadData(node);
-}
-
-bool ibValueSlider::WriteData(ibDataNode& node) const
-{
-	node.SetProperty(m_propertyMinValue->GetName(), m_propertyMinValue->GetNodeValue());
-	node.SetProperty(m_propertyMaxValue->GetName(), m_propertyMaxValue->GetNodeValue());
-	node.SetProperty(m_propertyValue->GetName(), m_propertyValue->GetNodeValue());
-	node.SetProperty(m_propertyOrient->GetName(), m_propertyOrient->GetNodeValue());
-
-	return ibValueWindow::WriteData(node);
 }

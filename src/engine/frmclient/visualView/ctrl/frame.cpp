@@ -75,26 +75,6 @@ ibValueFrame* ibValueFrame::Make(const wxString& type, ibVisualHostClient& host,
 	return made;
 }
 
-wxArrayString ibValueFrame::GetAllowedUserProperty()
-{
-	wxArrayString arr;
-
-	arr.Add(wxT("title"));
-	arr.Add(wxT("minimum_size"));
-	arr.Add(wxT("maximum_size"));
-	arr.Add(wxT("font"));
-	arr.Add(wxT("fg"));
-	arr.Add(wxT("bg"));
-	arr.Add(wxT("align"));
-	arr.Add(wxT("stretch"));
-	arr.Add(wxT("proportion"));
-	arr.Add(wxT("orient"));
-	arr.Add(wxT("tooltip"));
-	arr.Add(wxT("visible"));
-
-	return arr;
-}
-
 bool ibValueFrame::ChangeChildPosition(ibValueFrame* obj, unsigned int pos)
 {
 	// The desktop's re-lays its controls here (OnChangeChildPosition); this one's are laid out by the server's answer.

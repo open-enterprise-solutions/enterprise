@@ -84,26 +84,17 @@ public:
 
 	virtual ~ibValueFrame() = default;
 
-	// — THE DESKTOP'S CONTROL AS ITS FORM EDITOR ASKS IT (win/dlgs/formEditor) —
-	// The properties a person may arrange for themselves — the desktop's list.
-	static wxArrayString GetAllowedUserProperty();
+	// ⭐ ITS PROPERTIES ARE THE SERVER'S — which a control has, and which a person may arrange: the client declares none
+	// (Max, 2026-10-14). The form's editor is asked with them, a control's rows each (ibProtocolRequestKind::FormEditor),
+	// and reads them in (ibPropertyObject::ReadProperty).
 
 	virtual wxString GetClassName() const override { return m_className; }
 	virtual wxString GetObjectTypeName() const override { return m_className; }
 	virtual bool IsEditable() const override { return true; }
 
-	// Its name — the desktop's: a control keeps it as its Name property (ibValueControl).
-	wxString GetControlName() const {
-		wxString result;
-		GetControlNameAsString(result);
-		return result;
-	}
-	void SetControlName(const wxString& name) { SetControlNameAsString(name); }
-	virtual bool GetControlNameAsString(wxString& result) const {
-		result = GetObjectTypeName();
-		return true;
-	}
-	virtual bool SetControlNameAsString(const wxString& WXUNUSED(result)) const { return false; }
+	// Its name, as the frame says it (the node's Name).
+	const wxString& GetControlName() const { return m_name; }
+	void SetControlName(const wxString& name) { m_name = name; }
 	// What a person reads it as in the form's tree — the desktop's GetControlTitle, answered by the server where the
 	// metadata is (its State's Caption, a form's or a page's Title: the synonym of what it is bound to when no Title is
 	// set); none said — its class.
@@ -119,11 +110,6 @@ public:
 	void SetExpanded(bool expanded) { m_expanded = expanded; }
 	bool GetExpanded() const { return m_expanded; }
 	virtual bool IsAvailable() const { return true; }
-
-	// ITS PROPERTIES AS THE FRAME CARRIES THEM — the desktop's SaveNode shape, written by the server's control
-	// (WriteData) and read here by the same per-type code; the form editor's Apply writes them back.
-	virtual bool ReadData(const ibDataNode& WXUNUSED(node)) { return true; }
-	virtual bool WriteData(ibDataNode& WXUNUSED(node)) const { return true; }
 
 	// A child moved among the others — the helper's mechanism, opened by the owner (ibPropertyObjectHelper).
 	bool ChangeChildPosition(ibValueFrame* obj, unsigned int pos);
@@ -179,6 +165,7 @@ private:
 	long long           m_controlId;   // a form's — the view's, as it is drawn (ibValueForm::SetControlID)
 
 	wxString m_className;      // its node's type — the server's class name
+	wxString m_name;           // its node's Name (GetControlName)
 	wxString m_title;          // what the server says it is called (GetControlTitle)
 	bool     m_expanded = true;
 	unsigned m_subscribedEvents = 0;   // a bit per ibProtocolEvent — its State's Subscribed

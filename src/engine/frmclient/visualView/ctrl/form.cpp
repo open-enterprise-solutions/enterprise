@@ -9,8 +9,9 @@
 namespace {
 
 // THE FORM AS IT STANDS NOW — itself and each control under it, under its id: where it stands among its siblings (the
-// form among none), and what the properties a person may arrange hold — the server's own setting's shape
-// (frmserver/settings/formSettings.cpp, ibSaveFormSettings, which walks the form itself too).
+// form among none), and what the properties a person may arrange hold — those the server's question gave it (the
+// form's editor reads them in) — the server's own setting's shape (frmserver/settings/formSettings.cpp,
+// ibSaveFormSettings, which walks the form itself too).
 void WriteControl(const ibValueFrame* control, long long position, ibProtocolNode controls)
 {
 	ibProtocolNode node = controls.AddChild();
@@ -18,7 +19,9 @@ void WriteControl(const ibValueFrame* control, long long position, ibProtocolNod
 		.SetValue(ibProtocolName::Position, position);
 
 	ibDataNode properties;
-	for (const wxString& name : ibValueFrame::GetAllowedUserProperty()) {
+	const ibPropertyCategory* const category = control->GetCategory();
+	for (unsigned int idx = 0; idx < category->GetPropertyCount(); idx++) {
+		const wxString name = category->GetPropertyName(idx);
 		const ibProperty* const property = control->GetProperty(name);
 		ibDataValue value;
 		if (property != nullptr && property->CopyNodeValue(value))
@@ -70,30 +73,6 @@ void ibValueForm::UpdateForm()
 
 	// …and drawn anew by the answer: the controls read what they hold from the frame, as they always do.
 	frame->Respond(response);
-}
-
-bool ibValueForm::ReadData(const ibDataNode& node)
-{
-	m_propertyTitle->SetNodeValue(node.GetProperty(m_propertyTitle->GetName()));
-	m_propertyOrient->SetNodeValue(node.GetProperty(m_propertyOrient->GetName()));
-	m_propertyFG->SetNodeValue(node.GetProperty(m_propertyFG->GetName()));
-	m_propertyBG->SetNodeValue(node.GetProperty(m_propertyBG->GetName()));
-	m_propertyEnabled->SetNodeValue(node.GetProperty(m_propertyEnabled->GetName()));
-
-	// Its attributes and its commands are the server's — the form here is what is drawn.
-	return ibValueFrame::ReadData(node);
-}
-
-bool ibValueForm::WriteData(ibDataNode& node) const
-{
-	node.SetProperty(m_propertyTitle->GetName(), m_propertyTitle->GetNodeValue());
-	node.SetProperty(m_propertyOrient->GetName(), m_propertyOrient->GetNodeValue());
-
-	node.SetProperty(m_propertyFG->GetName(), m_propertyFG->GetNodeValue());
-	node.SetProperty(m_propertyBG->GetName(), m_propertyBG->GetNodeValue());
-	node.SetProperty(m_propertyEnabled->GetName(), m_propertyEnabled->GetNodeValue());
-
-	return ibValueFrame::WriteData(node);
 }
 
 ibTabDocument* ibValueForm::GetVisualDocument() const

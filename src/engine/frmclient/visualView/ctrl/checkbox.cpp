@@ -4,7 +4,6 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "widgets.h"
-#include "core/serialize/dataBuilder.h"   // the properties, as the frame carries them
 
 #include "frmclient/win/ctrls/controlCheckboxEditor.h"
 
@@ -37,25 +36,5 @@ void ibValueCheckbox::Update(const ibProtocolNode& node)
 wxWindow* ibValueCheckbox::GetWindow() const
 {
 	return m_checkbox;
-}
-
-//*******************************************************************************************
-//*                  The properties — the desktop's ReadData / WriteData                          *
-//*******************************************************************************************
-
-bool ibValueCheckbox::ReadData(const ibDataNode& node)
-{
-	m_propertyTitle->SetNodeValue(node.GetProperty(m_propertyTitle->GetName()));
-	m_propertyTitleLocation->SetNodeValue(node.GetProperty(m_propertyTitleLocation->GetName()));
-
-	return ibValueWindow::ReadData(node);
-}
-
-bool ibValueCheckbox::WriteData(ibDataNode& node) const
-{
-	node.SetProperty(m_propertyTitle->GetName(), m_propertyTitle->GetNodeValue());
-	node.SetProperty(m_propertyTitleLocation->GetName(), m_propertyTitleLocation->GetNodeValue());
-
-	return ibValueWindow::WriteData(node);
 }
 

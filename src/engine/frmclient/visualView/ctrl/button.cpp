@@ -4,7 +4,6 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "widgets.h"
-#include "core/serialize/dataBuilder.h"   // the properties, as the frame carries them
 
 #include <functional>
 
@@ -101,25 +100,5 @@ void ibValueButton::OnButtonPressed(wxCommandEvent& WXUNUSED(event))
 	ibProtocolNode args;
 	args.SetValue(ibProtocolName::Member, chosen - kFirstMemberId);
 	Send(ibProtocolEvent::Press, args);
-}
-
-//*******************************************************************************************
-//*                  The properties — the desktop's ReadData / WriteData                          *
-//*******************************************************************************************
-
-bool ibValueButton::ReadData(const ibDataNode& node)
-{
-	m_propertyTitle->SetNodeValue(node.GetProperty(m_propertyTitle->GetName()));
-	m_propertyRepresentation->SetNodeValue(node.GetProperty(m_propertyRepresentation->GetName()));
-
-	return ibValueWindow::ReadData(node);
-}
-
-bool ibValueButton::WriteData(ibDataNode& node) const
-{
-	node.SetProperty(m_propertyTitle->GetName(), m_propertyTitle->GetNodeValue());
-	node.SetProperty(m_propertyRepresentation->GetName(), m_propertyRepresentation->GetNodeValue());
-
-	return ibValueWindow::WriteData(node);
 }
 

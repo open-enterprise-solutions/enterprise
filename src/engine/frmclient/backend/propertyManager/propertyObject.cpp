@@ -5,8 +5,10 @@
 
 #include "propertyObject.h"
 #include "core/serialize/dataBuilder.h"   // ibDataValue — property node serialization
+#include "core/typeName.h"                // ibTypeInfoName — a property's class, named as the server names one
 #include "frmclient/backend/metaData.h"                                        // GetAnyArrayObject — the candidates
 #include "frmclient/backend/metaCollection/metaObject.h"                       // …each one's id, name, synonym
+#include "frmclient/backend/propertyManager/property/propertyValue.h"          // a row's property
 #include "frmclient/backend/propertyManager/property/variant/variantOwner.h"   // the variant a relationship holds
 
 #define propBlock 0x00023456
@@ -189,6 +191,11 @@ ibPropertyChoiceMode ibBackendProperty::CreateValueList(ibPropertyChoiceList& li
 bool ibBackendProperty::IsEditable() const
 {
 	return m_owner ? m_owner->IsEditable() : false;
+}
+
+wxString ibBackendProperty::GetType() const
+{
+	return ibTypeInfoName(typeid(*this));
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -471,11 +478,29 @@ void ibPropertyObject::RemoveAttachedObject(ibPropertyObject* other)
 
 bool ibPropertyObject::ReadProperty(const ibDataNode& node)
 {
-	// Base default: route through attached objects — their data is part of us. A type
-	// with own data overrides, does its own, then calls this base to include attached.
-	for (ibPropertyObject* other : m_attachedObjects)
-		other->ReadProperty(node);
+	// IN PLACE OF WHAT IT HAD — the rows are all of it.
+	for (ibPropertyCategory*& category : m_category->m_categories)
+		wxDELETE(category);
+	m_category->m_categories.clear();
+	m_category->m_properties.clear();
+	for (auto& property : m_properties)
+		wxDELETE(property.second);
+	m_properties.clear();
+
+	ReadCategory(m_category, node);
 	return true;
+}
+
+void ibPropertyObject::ReadCategory(ibPropertyCategory* category, const ibDataNode& node)
+{
+	for (const ibDataNode& row : node.Children()) {
+		// A CATEGORY — a row with no class, its rows within.
+		if (row.FindField(wxT("Class")) == nullptr)
+			ReadCategory(CreatePropertyCategory(category, row.GetValue<wxString>(wxT("Name")),
+				row.GetValue<wxString>(wxT("Title"))), row);
+		else
+			CreateProperty<ibPropertyValue>(category, row);
+	}
 }
 
 bool ibPropertyObject::WriteProperty(ibDataNode& node) const

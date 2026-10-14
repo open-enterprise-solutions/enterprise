@@ -1107,12 +1107,6 @@
     <ClInclude Include="settings\formSettings.h">
       <Filter>settings</Filter>
     </ClInclude>
-    <ClInclude Include="visualView\controlEnum.h">
-      <Filter>visualView</Filter>
-    </ClInclude>
-    <ClCompile Include="visualView\ctrl\control.cpp">
-      <Filter>visualView\ctrl</Filter>
-    </ClCompile>
     <ClInclude Include="visualView\ctrl\control.h">
       <Filter>visualView\ctrl</Filter>
     </ClInclude>
@@ -1128,9 +1122,6 @@
     <ClInclude Include="visualView\ctrl\typeControl.h">
       <Filter>visualView\ctrl</Filter>
     </ClInclude>
-    <ClCompile Include="visualView\ctrl\window.cpp">
-      <Filter>visualView\ctrl</Filter>
-    </ClCompile>
     <ClInclude Include="visualView\ctrl\window.h">
       <Filter>visualView\ctrl</Filter>
     </ClInclude>

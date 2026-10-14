@@ -293,8 +293,6 @@
     <ClCompile Include="backend\settings\settingsComposer.cpp" />
     <ClCompile Include="backend\query\queryConstructorModel.cpp" />
     <ClCompile Include="visualView\ctrl\frame.cpp" />
-    <ClCompile Include="visualView\ctrl\control.cpp" />
-    <ClCompile Include="visualView\ctrl\window.cpp" />
     <ClCompile Include="visualView\ctrl\form.cpp" />
     <ClCompile Include="visualView\visualHostClient.cpp" />
     <ClCompile Include="visualView\visualHostClientDocView.cpp" />
@@ -414,7 +412,6 @@
     <ClInclude Include="propertyManager\property\private\prop.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropNumber.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropString.h" />
-    <ClInclude Include="visualView\controlEnum.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropFont.h" />
     <ClInclude Include="win\dlgs\translateConstructor\translateConstructor.h" />
     <ClInclude Include="win\dlgs\queryConstructor\queryConstructor.h" />

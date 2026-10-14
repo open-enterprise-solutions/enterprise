@@ -137,17 +137,19 @@ void ibApplyFormSettings(ibValueForm* form, const ibDataNode& root)
 		// off — so the loop walks the LIST, not whatever the row happens to hold.
 		for (const wxString& name : ibValueFrame::GetAllowedUserProperty()) {
 
-			// The value where the setting keeps it — its properties; a node read from the wire (the editor's Apply) has
-			// it among its fields: JSON has one key set, and a plain value is read back as a field (ibJsonReader).
-			const ibDataValue* value = stored.FindProperty(name);
-			if (value == nullptr)
-				value = stored.FindField(name);
-			if (value == nullptr)
-				continue;
-
 			ibProperty* property = control->GetProperty(name);
 			if (property == nullptr)
 				continue;   // the author renamed or dropped it
+
+			// The value where the setting keeps it — its properties, under the list's name (the desktop's too: one
+			// storage); a node read from the wire (the editor's Apply) has it among its fields, under the property's
+			// own name — the row the editor was asked with (AppendControl): JSON has one key set, and a plain value is
+			// read back as a field (ibJsonReader).
+			const ibDataValue* value = stored.FindProperty(name);
+			if (value == nullptr)
+				value = stored.FindField(property->GetName());
+			if (value == nullptr)
+				continue;
 
 			// 🛑 ONE PROPERTY AT A TIME, GUARDED — a value written by an older shape of this form
 			// may no longer be of the kind the property expects, and this runs inside the form's

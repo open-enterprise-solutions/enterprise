@@ -4,33 +4,25 @@
 
 ibPropertyValue::ibPropertyValue(ibPropertyCategory* cat, const ibDataNode& row) :
 	ibProperty(cat, row.GetValue<wxString>(wxT("Name")), row.GetValue<wxString>(wxT("Title")),
-		row.GetValue<wxString>(wxT("Help")), wxVariant(row.GetValue<wxString>(wxT("Presentation"))))
+		row.GetValue<wxString>(wxT("Help")), wxVariant(row.GetValue<wxString>(wxT("Presentation")))),
+	m_type(row.GetValue<wxString>(wxT("Class"))),
+	m_readOnly(row.GetValue<bool>(wxT("ReadOnly"))),
+	m_objectId(row.GetValue<s32>(wxT("Object")))
 {
-	ReadProperty(row);
-}
-
-void ibPropertyValue::ReadProperty(const ibDataNode& row)
-{
-	const wxString title = row.GetValue<wxString>(wxT("Title"));
-	m_propLabel = title.IsEmpty() ? m_propName : title;
-	m_propHelp = row.GetValue<wxString>(wxT("Help"));
-	m_type = row.GetValue<wxString>(wxT("Class"));
-	m_readOnly = row.GetValue<bool>(wxT("ReadOnly"));
-	m_objectId = static_cast<ibMetaID>(row.GetValue<s32>(wxT("Object")));
+	if (m_propLabel.IsEmpty())
+		m_propLabel = m_propName;
 
 	// …as the server wrote it (ibPropertyInspector): a scalar a field, a composite a node.
 	if (const ibDataValue* const scalar = row.FindField(wxT("Value")))
 		m_value = *scalar;
 	else
 		m_value = row.GetProperty(wxT("Value"));
-	m_propValue = wxVariant(row.GetValue<wxString>(wxT("Presentation")));
 
 	// What it may be set to — its children with an Id (a type's children name the types it may hold, not choices).
-	m_choices = ibPropertyChoiceList();
 	for (const ibDataNode& choice : row.Children()) {
 		if (choice.FindField(wxT("Id")) == nullptr)
 			continue;
-		m_choices.Add(choice.GetValue<wxString>(wxT("Title")), static_cast<long>(choice.GetValue<s32>(wxT("Id"))),
+		m_choices.Add(choice.GetValue<wxString>(wxT("Title")), choice.GetValue<s32>(wxT("Id")),
 			ibProtocolPicture(choice.GetValue<wxString>(wxT("Picture"))));
 	}
 	m_mode = row.GetValue<bool>(wxT("Multiple")) ? ibPropertyChoiceMode::Mult

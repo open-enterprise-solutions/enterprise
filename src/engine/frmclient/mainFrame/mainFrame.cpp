@@ -1473,8 +1473,8 @@ void ibFrontendMainFrame::ShowRequest(const ibProtocolNode& request, ibProtocolN
 		ibDialogComposerSettings::ShowUserSettings(parent, request, response);
 		break;
 	case ibProtocolRequestKind::FormEditor: {
-		// THE DESKTOP'S ibValueForm::ChangeForm — its editor over the form of the active tab, as the form's controls hold
-		// their properties (the frame's, read by ReadData). Its acts are answered on the way (UpdateForm, the setting's
+		// THE DESKTOP'S ibValueForm::ChangeForm — its editor over the form of the active tab; what a person may arrange of
+		// each control comes in the question (Controls). Its acts are answered on the way (UpdateForm, the setting's
 		// doors); closed — answered with no Act.
 		// ⚠ Asked only of a form's tab (ibValueForm::ChangeForm), so the active tab's document is a form's.
 		ibFormVisualDocument* const document = dynamic_cast<ibFormVisualDocument*>(FindDocument(GetActiveTab()));

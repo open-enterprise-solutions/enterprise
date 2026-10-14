@@ -7,10 +7,31 @@
 #include "core/serialize/dataBuilder.h"
 #include "backend/session/session.h"
 
+#include "frmserver/client/propertyInspector.h"   // a property's row, as the inspector writes it
 #include "frmserver/settings/formSettings.h"
 #include "frmserver/visualView/ctrl/form.h"
 
 #include "protocol/protocol.h"   // ibProtocolRequestKind::FormEditor, ibProtocolFormEditorAct
+
+namespace {
+
+// WHAT A PERSON MAY ARRANGE — cut here, by the desktop's list (ibValueFrame::GetAllowedUserProperty): each control
+// under its id, the rows of those it has (a sizer item's are its own), and the controls in it. The client's controls
+// declare none: they show what this says.
+void AppendControl(ibDataNode& controls, ibValueFrame* control)
+{
+	ibDataNode& described = controls.AddChild(0, 0);
+	described.SetValue(ibProtocolName::Control, control->GetControlID());
+	for (const wxString& name : ibValueFrame::GetAllowedUserProperty()) {
+		if (ibProperty* const property = control->GetProperty(name))
+			ibPropertyInspector::AppendProperty(described, property);
+	}
+
+	for (unsigned int idx = 0; idx < control->GetChildCount(); idx++)
+		AppendControl(controls, control->GetChild(idx));
+}
+
+} // namespace
 
 ibDialogFormEditor::ibDialogFormEditor(ibValueForm* valueForm) : m_owner(valueForm)
 {
@@ -40,6 +61,8 @@ int ibDialogFormEditor::ShowModal()
 			described.SetValue(ibProtocolName::Name, ctor->GetClassName());
 			described.SetValue(ibProtocolName::Picture, wxString(ibBackendPicture::GetServerPicture(ctor->GetClassType()).GetData()));
 		}
+		// …and the form's controls, what a person may arrange of each — as they stand now: asked again after each act.
+		AppendControl(request.Child(ibProtocolName::Controls), m_owner);
 
 		ibDataNode response;
 		if (!frame->Request(request, response) || response.FindField(ibProtocolName::Act) == nullptr)

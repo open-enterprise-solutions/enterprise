@@ -13,8 +13,8 @@
 
 // THE PROPERTY'S TYPE -> ITS PRESENTATION, held entirely on the client.
 //
-// A property shown is the server's (ibPropertyValue — a metaobject's, filled from its rows): its TYPE is the class the
-// server names it by (ibPropertyBoolean; a template without its arguments: ibPropertyEnum), its value is as the server
+// A property shown is the server's (ibPropertyValue — a metaobject's, filled from its rows): its TYPE (GetType) is the
+// class the server names it by (ibPropertyBoolean; a template without its arguments: ibPropertyEnum), its value is as the server
 // stores it (GetNodeValue: a scalar, or a composite), its choices are what it may be set to (GetValueList). The client
 // is told, per type, which widget shows it and how the widget's value goes back as the property's node holds it.
 //
@@ -43,9 +43,6 @@ public:
 	// The value an edit gives back, as the property's node holds it.
 	static ibDataValue GetNodeValue(const ibBackendProperty* property, const wxVariant& value);
 
-	// The property's type — the server's (ibPropertyValue::GetType); a property of the client's own object (a
-	// spreadsheet's cell, a form's control), its class, named as the server names one.
-	static wxString GetType(const ibBackendProperty* property);
 	// The choices it offers, as the grid lists them: label, id.
 	static wxPGChoices GetChoices(ibBackendProperty* property);
 

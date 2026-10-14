@@ -9,22 +9,19 @@
 // server stores it, how it reads (Presentation), what it may be set to. No class per kind: a client that grows one holds
 // the server's model a second time, and is a thick one again (Max, 2026-10-14).
 //
-// Its owner fills it and keeps it (ibValueMetaObject::ReadProperty): a row sent again — after every edit — is read
-// into the same property, so an edit running through it outlives the answer that brings the rows back.
+// Its owner makes it of the row and holds it till the next rows come (ibPropertyObject::ReadProperty).
 class FRMCLIENT_API ibPropertyValue : public ibProperty {
 public:
 
 	ibPropertyValue(ibPropertyCategory* cat, const ibDataNode& row);
 
-	// The row again, as the server sent it now.
-	void ReadProperty(const ibDataNode& row);
-
-	// Its type, as the server names it — the key its presentation is registered by.
-	const wxString& GetType() const { return m_type; }
-	bool IsReadOnly() const { return m_readOnly; }
 	// The metaobject it opens — a module its owner holds (the row's Object); none: 0.
 	ibMetaID GetObjectId() const { return m_objectId; }
 
+	// …unless the server says it is not (its own IsEditable — the row's ReadOnly).
+	virtual bool IsEditable() const override { return !m_readOnly && ibProperty::IsEditable(); }
+	// Its type, as the server names it — the key its presentation is registered by.
+	virtual wxString GetType() const override { return m_type; }
 	virtual ibPropertyChoiceMode GetValueList(ibPropertyChoiceList& list) override;
 
 	// Not a value of the engine's — the server holds that.

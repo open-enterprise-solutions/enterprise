@@ -1,5 +1,7 @@
 ﻿#include "formEditor.h"
 #include "frmclient/backend/compiler/value.h"
+#include "frmclient/backend/serialize/dataProtocol.h"   // ibReadProtocolNode — a control's rows, as the question carries them
+#include "frmclient/mainFrame/mainFrame.h"              // the question this window answers
 #include "frmclient/propertyManager/property/private/propertyRegistry.h"
 #include "frmclient/settings/formSettings.h"   // the setting this window saves and clears
 #include "frmclient/docView/tabDocument.h"   // ibTabDocument — the form's tab, which this opens over
@@ -68,6 +70,24 @@ static void SetSettingStatus(wxWindow* dialog, const wxString& text)
 {
 	if (wxWindow* label = dialog->FindWindow(LABEL_SETTING_STATUS))
 		label->SetLabel(text);
+}
+
+// ⭐ WHAT A PERSON MAY ARRANGE OF EACH CONTROL — the server's to say: its question carries it (Controls, a control's rows
+// each, by its id), cut to what a person may arrange; the controls read it (ibPropertyObject::ReadProperty), declaring
+// none of their own. Asked again after each act, so what they hold is the form as it stands.
+static void ReadControlProperty(ibValueForm* form)
+{
+	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
+	if (frame == nullptr)
+		return;
+	for (const ibProtocolNode& described : frame->GetRequest().FindChild(ibProtocolName::Controls).Children()) {
+		ibValueFrame* const control = form->FindControlByID(described.GetInt(ibProtocolName::Control));
+		if (control == nullptr)
+			continue;
+		ibDataNode rows;
+		ibReadProtocolNode(described, rows);
+		control->ReadProperty(rows);
+	}
 }
 
 #define ICON_SIZE 16
@@ -260,6 +280,7 @@ ibDialogFormEditor::ibDialogFormEditor(ibValueForm* valueForm) :
 
 	commonSizer->Add(m_sdbSizer, 0, wxALIGN_RIGHT, FromDIP(5));
 
+	ReadControlProperty(m_owner);
 	RebuildTree();
 	SetSizer(commonSizer);
 	Centre(wxBOTH);
@@ -308,6 +329,7 @@ void ibDialogFormEditor::OnButtonEvent(wxCommandEvent& e)
 		for (auto& cmd : m_cmdArray)
 			cmd->Execute();
 		UpdateForm();
+		ReadControlProperty(m_owner);
 		m_cmdArray.clear();
 		RebuildTree();
 
@@ -360,6 +382,7 @@ void ibDialogFormEditor::OnButtonEvent(wxCommandEvent& e)
 			cmd->Execute();
 		}
 		UpdateForm();
+		ReadControlProperty(m_owner);
 	}
 
 	if (e.GetId() != wxID_APPLY) m_parent->SetFocus();
@@ -397,26 +420,26 @@ void ibDialogFormEditor::OnSelChanged(wxTreeEvent& event)
 			static void FillPropertyByFrameValue(wxPropertyGridPage* propertyGridPage, ibValueFrame* obj, std::map<wxPGProperty*, ibProperty*>& pgArray) {
 				pgArray.clear(); propertyGridPage->Clear();
 
-				for (auto strProperty : ibValueFrame::GetAllowedUserProperty()) {
-
-					ibProperty* prop = obj->GetProperty(strProperty);
-					if (prop == nullptr) {
-
-						ibValueFrame* parent = obj->GetParent();
-						if (parent != nullptr && parent->GetComponentType() == COMPONENT_TYPE_SIZERITEM) {
-							prop = parent->GetProperty(strProperty);
-						}
-
+				// The rows it holds, in the order the server sent them — and its sizer item's, which lays it out.
+				const auto append = [&](ibValueFrame* holder) {
+					const ibPropertyCategory* const category = holder->GetCategory();
+					for (unsigned int idx = 0; idx < category->GetPropertyCount(); idx++) {
+						ibProperty* const prop = holder->GetProperty(category->GetPropertyName(idx));
 						if (prop == nullptr)
 							continue;
+
+						wxPGProperty* pg = ibPropertyRegistry::Create(prop);
+						propertyGridPage->Append(pg);
+						pg->RefreshChildren();
+
+						pgArray.emplace(pg, prop);
 					}
+				};
 
-					wxPGProperty* pg = ibPropertyRegistry::Create(prop);
-					propertyGridPage->Append(pg);
-					pg->RefreshChildren();
-
-					pgArray.emplace(pg, prop);
-				}
+				append(obj);
+				ibValueFrame* parent = obj->GetParent();
+				if (parent != nullptr && parent->GetComponentType() == COMPONENT_TYPE_SIZERITEM)
+					append(parent);
 
 				propertyGridPage->SetPropertyAttributeAll(wxPG_BOOL_USE_CHECKBOX, (long)1);
 			}

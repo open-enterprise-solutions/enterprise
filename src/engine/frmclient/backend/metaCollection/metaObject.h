@@ -1,8 +1,6 @@
 #ifndef _FRMCLIENT_BACKEND_META_OBJECT_H__
 #define _FRMCLIENT_BACKEND_META_OBJECT_H__
 
-#include <set>
-
 #include "frmclient/backend/metaData.h"   // the link — the tab the object was opened from
 #include "frmclient/backend/propertyManager/propertyObject.h"   // a metaobject IS a property object, as the engine's
 
@@ -26,8 +24,8 @@ public:
 	wxString GetSynonym() const;
 	wxBitmap GetIcon() const { return wxNullBitmap; }
 
-	// Its properties as the server has them now — one batch (schema Properties: Id, Tab), read into the ones it holds.
-	// False: the server answered none.
+	// Its properties as the server has them now — one batch (schema Properties: Id, Tab), in place of the ones it holds
+	// (ibPropertyObject::ReadProperty). False: the server answered none.
 	bool ReadProperty();
 
 	virtual wxString GetClassName() const override { return wxT("metaObject"); }
@@ -37,27 +35,14 @@ public:
 	virtual const ibMetaData* GetMetaData() const override { return &m_metaData; }
 	virtual ibMetaData* GetMetaData() override { return &m_metaData; }
 
-	// THE ROWS — its categories (Name, Title, their rows) and properties (ibPropertyValue's), as the server wrote them
-	// (frmserver ibPropertyInspector): one met again read in place, one new made, one the rows no longer have hidden.
-	virtual bool ReadProperty(const ibDataNode& node) override;
-
-	// What the last rows did not have is hidden — the server sends none of what the object's state hides.
-	virtual void OnPropertyRefresh() override;
-
 	// ⭐ AN EDIT GOES TO THE SERVER — the property named, given the value an edit gave it (its node), on the object of this
 	// id in the configuration it was opened from: schema Properties, Save. Refused: vetoed — the value stays.
 	virtual bool OnPropertyChanging(ibProperty* property, const wxVariant& newValue) override;
-	// …and what it changed comes back: the rows read again.
-	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue) override;
 
 private:
 
-	// One category's rows, into `category` — its properties and its categories, each found by its name or made.
-	void ReadCategory(ibPropertyCategory* category, const ibDataNode& node);
-
 	const ibMetaID m_metaId;
 	ibMetaData m_metaData;
-	std::set<wxString> m_shown;   // the properties the last rows had
 };
 
 #endif

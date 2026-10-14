@@ -3,12 +3,6 @@
 
 #include "frame.h"
 
-#include "frmclient/visualView/controlEnum.h"   // the form's orient
-#include "frmclient/backend/propertyManager/property/propertyBoolean.h"
-#include "frmclient/backend/propertyManager/property/propertyColour.h"
-#include "frmclient/backend/propertyManager/property/propertyEnum.h"
-#include "frmclient/backend/propertyManager/property/propertyString.h"
-
 class ibTabDocument;
 
 // THE FORM — the desktop's ibValueForm (frontend/visualView/ctrl/form.h) as its view asks it: the frame its controls
@@ -23,10 +17,6 @@ public:
 	// The form draws nothing of its own here — its host draws its look and its command bar.
 	virtual void Create(wxWindow* WXUNUSED(parent), const ibProtocolNode& WXUNUSED(node)) override {}
 	virtual void Update(const ibProtocolNode& WXUNUSED(node)) override {}
-
-	//load & save object in control
-	virtual bool ReadData(const ibDataNode& node) override;
-	virtual bool WriteData(ibDataNode& node) const override;
 
 	// Its id is the view's — named as the view is drawn.
 	void SetControlID(long long controlId) { m_controlId = controlId; }
@@ -50,18 +40,6 @@ public:
 	void ClearChildren() { RemoveAllChildren(); m_activeControl = nullptr; }
 
 private:
-
-	ibPropertyCategory* m_categoryFrame = ibPropertyObject::CreatePropertyCategory(wxT("Frame"), _("Frame"));
-	ibPropertyTString* m_propertyTitle = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryFrame, wxT("Title"), _("Title"),
-		_("The form window's title. Empty: the synonym of the object the form shows (or of the form itself) is used. Can be written per language and changed from code while the form is open."),
-		wxT(""));
-	ibPropertyColour* m_propertyFG = ibPropertyObject::CreateProperty<ibPropertyColour>(m_categoryFrame, wxT("ForegroundColour"), _("Foreground"), _("The form's text colour, inherited by controls that have no colour of their own. Default: the system colour."), wxDefaultStypeFGColour);
-	ibPropertyColour* m_propertyBG = ibPropertyObject::CreateProperty<ibPropertyColour>(m_categoryFrame, wxT("BackgroundColour"), _("Background"), _("The form's background colour. Default: the system colour, which follows the user's theme."), wxDefaultStypeBGColour);
-	ibPropertyBoolean* m_propertyEnabled = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryFrame, wxT("Enabled"), _("Enabled"), _("Whether the user can interact with the form. Off: every control on it is greyed out and takes no input - a view-only form."), true);
-	ibPropertyCategory* m_categorySizer = ibPropertyObject::CreatePropertyCategory(wxT("Sizer"), _("Sizer"));
-	ibPropertyEnum<ibValueEnumOrient>* m_propertyOrient = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumOrient>>(m_categorySizer, wxT("Orient"), _("Orient"),
-		_("How the form lays out its top-level controls: vertically (the default, one under another) or horizontally (side by side). Groups inside the form have their own orientation."),
-		wxVERTICAL);
 
 	ibValueFrame* m_activeControl = nullptr;
 };
