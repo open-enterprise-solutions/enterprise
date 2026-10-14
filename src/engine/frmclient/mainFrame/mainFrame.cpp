@@ -294,6 +294,11 @@ ibFrontendMainFrame::~ibFrontendMainFrame()
 	if (s_instance == this)
 		s_instance = nullptr;
 
+	// ⚠ THE SLOT GOES BEFORE THE CHILDREN: they die after this body (~wxWindow), the inspector among them and in any
+	// order — a metaobject the designer's tree holds asks the slot as it dies (~ibPropertyObject → GetProperty), and met
+	// an inspector already freed (an exit, 2026-10-14). Unhooked, the two settle it between them (the notifier).
+	m_objectInspector = nullptr;
+
 	wxDELETE(m_docManager);
 
 	// deinitialize the valueForm manager
