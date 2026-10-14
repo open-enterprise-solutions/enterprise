@@ -120,6 +120,7 @@ void ibDialogConnection::SaveConnectionData()
 #ifdef OES_USE_POSTGRESQL
 #include "backend/databaseLayer/postgres/postgresDatabaseLayer.h"
 #include <memory>   // the probe OWNS its driver — see TestConnectionOnButtonClick
+#include "core/localization/translations.h"   // _() - the engine's own catalogs
 #endif
 
 void ibDialogConnection::TestConnectionOnButtonClick(wxCommandEvent& event)

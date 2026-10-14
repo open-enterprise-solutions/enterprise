@@ -35,6 +35,10 @@ target_include_directories(core
 target_compile_definitions(core
     PRIVATE
         NOPCH
+    # wx's _() stays off for every target that links core: the engine's _() is core/localization/translations.h,
+    # and a unit that reaches for _() without it fails to compile rather than translating through wx unseen.
+    PUBLIC
+        WXINTL_NO_GETTEXT_MACRO
 )
 
 # CORE_API resolves to dllexport only when CORE_EXPORTS is defined (core.h) — frontend's rule.

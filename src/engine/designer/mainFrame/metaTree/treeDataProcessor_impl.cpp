@@ -395,7 +395,7 @@ void ibDataProcessorTree::InitTree()
 	m_groups.clear();
 	for (const ibExternalGroupDef& def : s_dataProcessorGroups)
 		m_groups[def.m_clsid] = AppendGroupItem(m_treeRoot, def.m_clsid,
-			wxGetTranslation(wxString::FromUTF8(def.m_label)));
+			ibTranslations::Translate(wxString::FromUTF8(def.m_label)));
 }
 
 void ibDataProcessorTree::ActivateTree()

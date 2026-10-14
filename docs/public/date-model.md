@@ -109,9 +109,9 @@ each process measures once a minute, and the minute it steps a peer's beat would
 ## Where it stops
 
 - The zone is not in the value: a reading is what the base's clock showed, in the base's zone.
-- The locale a base names reaches `_()` - the engine's own words - only through the process it settles:
-  a process of several bases translates in the first one's. A translation per base would need a set of
-  catalogs chosen by the thread's base, which is a decision of its own.
+- The locale a base names reaches the engine's own words through the engine's own catalogs
+  ([translations.md](translations.md)): every thread that works for the base speaks its language. wx's own
+  windows speak the process's, settled by the first base.
 - Liveness is the machine's clock read through the machine's zone, as before the base had a clock: two
   processes of one base on machines in different zones still read each other's heartbeats hours apart.
   A zone-free reading for the heartbeat (UTC, compared by subtraction) is the change that would close it.

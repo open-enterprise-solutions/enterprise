@@ -14,6 +14,7 @@
 #include <wx/sizer.h>
 #include <wx/button.h>
 #include <wx/dialog.h>
+#include "core/localization/translations.h"   // _() - the engine's own catalogs
 
 class ibGridEditor;
 

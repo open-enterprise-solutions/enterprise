@@ -2,7 +2,6 @@
 
 #include "backend/metaCollection/metaObject.h"   // the g_meta*CLSID constants
 
-#include <wx/intl.h>
 
 namespace {
 
@@ -99,7 +98,7 @@ const ibMetaGroupRow* RowFor(const ibClassID& clsid)
 wxString ibMetaGroupCaption(const ibClassID& clsid)
 {
 	const ibMetaGroupRow* row = RowFor(clsid);
-	return row != nullptr ? wxGetTranslation(wxString::FromUTF8(row->m_caption)) : wxString();
+	return row != nullptr ? ibTranslations::Translate(wxString::FromUTF8(row->m_caption)) : wxString();
 }
 
 int ibMetaGroupOrder(const ibClassID& clsid)

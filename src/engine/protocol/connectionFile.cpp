@@ -4,8 +4,8 @@
 
 #include <wx/dynlib.h>
 #include <wx/filename.h>
-#include <wx/intl.h>   // _() — what a refusal says to a person
 #include <wx/log.h>
+#include "core/localization/translations.h"   // _() - the engine's own catalogs
 
 namespace {
 

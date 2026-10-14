@@ -185,7 +185,7 @@ IB_NOINLINE void Raise(int code, const ibValue& value)
 template <class... Args>
 IB_NOINLINE void RaiseText(const char* text, Args&&... args)
 {
-	ibBackendCoreException::Error(wxGetTranslation(wxTRANS_INPUT_STR(text)), std::forward<Args>(args)...);   // what `_()` expands to
+	ibBackendCoreException::Error(ibTranslations::Translate(wxString(text)), std::forward<Args>(args)...);   // what `_()` comes to, for a literal that is not one here
 }
 
 // …and at the call site in one word: `RuntimeError("…", args)` is RaiseText with its literal marked for the

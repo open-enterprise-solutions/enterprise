@@ -5,6 +5,7 @@
 #include "backend/appDataCtorToken.h"
 #include "backend/databaseLayer/connectionHolder.h"
 
+#include <atomic>
 #include <mutex>
 #include <vector>
 
@@ -59,6 +60,10 @@ public:
 	// The locale in force: the canonical name with its region ("uk_UA"), the one a process gives of itself
 	// once it speaks it; empty = the platform's.
 	wxString GetLocale();
+	// Stepped whenever the locale in force changes, to a value no other base of the process has had: a reader
+	// that keeps a copy keyed by the base and this (the translations of a thread, appHost.cpp) asks it, lock-free,
+	// before asking GetLocale again.
+	unsigned LocaleGeneration() const noexcept { return m_localeGeneration.load(std::memory_order_acquire); }
 
 	// Named and kept: a name wx knows no language for is refused with `refusal` and nothing is written; one it
 	// knows ("uk", "uk_UA", "uk-UA", "Ukrainian" - all uk_UA) is kept under the canonical name with its region.
@@ -87,6 +92,7 @@ private:
 	std::mutex                         m_mutex;
 	wxString                           m_timeZone;
 	wxString                           m_locale;
+	std::atomic<unsigned>              m_localeGeneration{ 0 };
 	bool                               m_read = false;        // Refresh has read the row once
 	bool                               m_readFailing = false; // the last read of the row failed (said once)
 	unsigned long                      m_saves = 0;           // SetTimeZone / SetLocale calls that wrote: a read begun before one is stale

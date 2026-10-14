@@ -56,6 +56,10 @@ bool ibAppEnterprise::OnCmdLineParsed(wxCmdLineParser& parser)
 	parser.Found(wxT("ib_pwd"), &m_strIBPassword);
 
 	parser.Found(wxT("lc"), &m_strLocale);
+	// The windows speak what --locale says - by any of its names, and the machine's own language when it says
+	// nothing - through the engine's own catalogs (core/localization/translations.h).
+	ibTranslations::AddDomain(wxT("open_es"));
+	ibTranslations::SetProcessLanguage(ibTranslations::CanonicalLanguage(m_strLocale));
 
 	m_debugEnable = parser.FoundSwitch(wxT("debug")) == wxCMD_SWITCH_ON;
 

@@ -60,6 +60,7 @@
 
 // Required for wxIs... functions
 #include <ctype.h>
+#include "core/localization/translations.h"   // _() - the engine's own catalogs
 
 const char ibGridNameStr[] = "gridext";
 

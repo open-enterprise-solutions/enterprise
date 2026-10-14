@@ -28,6 +28,7 @@
 
 #include <wx/rearrangectrl.h>
 #include <wx/renderer.h>
+#include "core/localization/translations.h"   // _() - the engine's own catalogs
 
 namespace
 {

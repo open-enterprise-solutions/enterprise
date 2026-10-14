@@ -542,7 +542,7 @@ wxString ibBackendException::DoFormatUtf8(const wxChar* format, ...)
 wxString ibBackendException::FormatV(const wxString& format, va_list& list)
 {
 	wxString strErrorBuffer =
-		wxString::FormatV(wxGetTranslation(format), list);
+		wxString::FormatV(ibTranslations::Translate(format), list);
 
 	va_end(list);
 

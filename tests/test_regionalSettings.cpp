@@ -430,6 +430,38 @@ TEST_F(RegionalFix, ALocaleNobodyKnowsIsRefusedBeforeAnythingIsWritten)
 	EXPECT_EQ(en->GetCanonicalWithRegion(), regional->GetLocale()) << "the row kept what it had";
 }
 
+// The engine's own words follow the base's locale on every thread that works for it: _() goes through the
+// engine's catalogs (core/localization/translations.h), the language read off the base; a thread that works
+// for no base speaks the process's. The catalogs are the tree's own (lang/uk, lang/ru), found by the walk up
+// from the executable - a build tree inside the repository.
+TEST_F(RegionalFix, TheEnginesWordsSpeakTheBasesLanguage)
+{
+	const wxString processLanguage = ibTranslations::GetProcessLanguage();
+	const wxString failedUk = wxString::FromUTF8(" \xD0\xBD\xD0\xB5 \xD0\xB2\xD0\xB4\xD0\xB0\xD0\xBB\xD0\xBE\xD1\x81\xD1\x8F");   // " не вдалося"
+	const wxString failedRu = wxString::FromUTF8(" \xD0\xBD\xD0\xB5 \xD1\x83\xD0\xB4\xD0\xB0\xD0\xBB\xD0\xBE\xD1\x81\xD1\x8C");   // " не удалось"
+	const ibTranslations* const uk = ibTranslations::ForLanguage(wxT("uk_UA"));
+	ASSERT_NE(uk, nullptr);
+	ASSERT_TRUE(uk->IsLoaded(wxT("open_es"))) << "lang/uk/open_es.mo was not found from the executable";
+
+	wxString why;
+	ASSERT_TRUE(regional->SetLocale(wxT("uk_UA"), &why)) << why;
+	EXPECT_EQ(failedUk, _(" failed"));
+	ASSERT_TRUE(regional->SetLocale(wxT("ru_RU"), &why)) << why;
+	EXPECT_EQ(failedRu, _(" failed")) << "the base's locale changed: its threads follow at once";
+
+	// A thread that works for no base speaks the process's language, whatever this base names.
+	ibTranslations::SetProcessLanguage(wxT("uk_UA"));
+	wxString elsewhere;
+	std::thread([&elsewhere]() { elsewhere = _(" failed"); }).join();
+	EXPECT_EQ(failedUk, elsewhere);
+	EXPECT_EQ(failedRu, _(" failed"));
+
+	// A base that names none: the process's.
+	ASSERT_TRUE(regional->SetLocale(wxEmptyString, &why)) << why;
+	EXPECT_EQ(failedUk, _(" failed"));
+	ibTranslations::SetProcessLanguage(processLanguage);
+}
+
 // A base opened the way a program opens it comes up in the locale it names, ahead of the opener's word:
 // the process's wxLocale is settled from the base's row. Runs where Firebird embedded is laid out beside
 // the binary (CI's Firebird job); skips elsewhere.

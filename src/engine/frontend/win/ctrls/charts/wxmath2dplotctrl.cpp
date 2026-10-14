@@ -35,6 +35,7 @@
 
 #include "wxmath2dplotctrl.h"
 #include <wx/filedlg.h>
+#include "core/localization/translations.h"   // _() - the engine's own catalogs
 
 wxMath2DPlotCtrl::wxMath2DPlotCtrl(wxWindow *parent,
                                    wxWindowID id,

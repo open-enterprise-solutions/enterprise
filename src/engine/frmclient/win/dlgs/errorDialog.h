@@ -20,6 +20,7 @@
 #include "frmclient/frmclient.h"
 #include "frmclient/mainFrame/settings/editorsettings.h"
 #include "frmclient/mainFrame/settings/fontcolorsettings.h"
+#include "core/localization/translations.h"   // _() - the engine's own catalogs
 
 // A SCRIPT'S FAILURE — the desktop's dialog (frontend/win/dlgs/errorDialog), asked by the server
 // (ibProtocolRequestKind::Error). ShowModal answers the act chosen (ibProtocolErrorAct); closed — wxID_CANCEL.

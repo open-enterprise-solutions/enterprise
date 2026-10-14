@@ -35,6 +35,7 @@
 
 #include "wxareachartctrl.h"
 #include <wx/filedlg.h>
+#include "core/localization/translations.h"   // _() - the engine's own catalogs
 
 wxAreaChartCtrl::wxAreaChartCtrl(wxWindow *parent,
                                  wxWindowID id,

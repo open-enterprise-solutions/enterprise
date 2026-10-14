@@ -19,6 +19,7 @@
 
 #include "frmclient/frmclient.h"
 #include "protocol/protocolNode.h"
+#include "core/localization/translations.h"   // _() - the engine's own catalogs
 
 // OPTIONS — the enterprise's dialog (enterprise/win/dlg/enterpriseOption) as it is: its debugging box read from the
 // server's schema (frmserver/schema/runtime/debugging.cpp) where it asked the debug server itself, and switched by the

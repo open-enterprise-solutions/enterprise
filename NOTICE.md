@@ -50,7 +50,8 @@ These keep their own licenses. Nothing in LICENSE.md changes or overrides them.
 
 Some of the widget layer is a **fork** of wxWidgets code rather than a use of it: the
 data-view control, the grid, the tree control and the document/view layer were taken from
-wxWidgets and changed in place. Those files carry the original notices and remain under
+wxWidgets and changed in place - and so were the engine's reader of a message catalog and its
+plural-forms calculator, in core. Those files carry the original notices and remain under
 the **wxWindows Library Licence**, whatever the rest of this repository is licensed under.
 A derivative of a library cannot be relicensed by the party deriving it, and this notice
 is here so that no one has to reconstruct that from file headers.
@@ -63,6 +64,7 @@ They live in:
 | `src/engine/frontend/win/ctrls/dataview` | 8 |
 | `src/engine/frontend/docView` | 2 |
 | `src/engine/frontend/uikit/ctrl` | 2 |
+| `src/engine/core/localization` | 1 (`translations.cpp`: the `.mo` reader and the plural-forms calculator of `src/common/translation.cpp`) |
 
 The per-file notices are authoritative; the table is a map, not a substitute. See
 `docs/private/wx-fork.md` (private) for what was changed and why.

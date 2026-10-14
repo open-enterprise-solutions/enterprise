@@ -2,6 +2,7 @@
 
 #include <wx/sizer.h>
 #include <wx/statbox.h>
+#include "core/localization/translations.h"   // _() - the engine's own catalogs
 
 ibPanelRegionalSettings::ibPanelRegionalSettings(wxWindow* parent, int id, wxPoint pos, wxSize size, int style)
 	: wxPanel(parent, id, pos, size, style)

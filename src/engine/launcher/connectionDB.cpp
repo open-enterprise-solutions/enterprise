@@ -164,6 +164,7 @@ void ibDialogConnection::OnModeChanged(wxCommandEvent& event)
 #endif
 #ifdef OES_USE_FIREBIRD
 #include "backend/databaseLayer/firebird/firebirdDatabaseLayer.h"
+#include "core/localization/translations.h"   // _() - the engine's own catalogs
 #endif
 
 void ibDialogConnection::TestConnectionOnButtonClick(wxCommandEvent& event)

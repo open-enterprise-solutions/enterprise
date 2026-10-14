@@ -3,6 +3,7 @@
 #include <iterator>
 
 #include <wx/intl.h>
+#include "core/localization/translations.h"   // _() - the engine's own catalogs
 
 // ----------------------------------------------------------------------------
 // ibCommandProcessor — the bodies of wx's, the list of nodes made a list of owned commands

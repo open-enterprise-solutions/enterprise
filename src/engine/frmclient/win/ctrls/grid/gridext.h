@@ -24,6 +24,7 @@
 #endif
 
 #include "frmclient/frmclient.h"
+#include "core/localization/translations.h"   // _() - the engine's own catalogs
 
 // ----------------------------------------------------------------------------
 // constants

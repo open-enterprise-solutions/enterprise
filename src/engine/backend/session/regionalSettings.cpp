@@ -14,8 +14,7 @@
 #include "core/diagnostics/journal.h"
 #include "core/serialize/dataBuilder.h"
 
-#include <wx/uilocale.h>
-
+#include <atomic>
 #include <cstdlib>   // std::llabs
 
 
@@ -30,6 +29,12 @@ const wxChar* const kLocaleObject = wxT("72656769-6f6e-616c-0000-000000000002");
 ibSettingsKey ZoneKey()   { return ibSettingsKey(ibSettingsCategory::Regional, ibGuid(kZoneObject)); }
 ibSettingsKey LocaleKey() { return ibSettingsKey(ibSettingsCategory::Regional, ibGuid(kLocaleObject)); }
 
+// The locale's generation, unique for the process rather than per base: a reader that keys a copy by the
+// base's address and the generation (the translations of a thread, appHost.cpp) must tell a base made at a
+// closed one's address from the one it knew.
+std::atomic<unsigned> s_localeGenerations{ 0 };
+unsigned NextLocaleGeneration() { return s_localeGenerations.fetch_add(1, std::memory_order_acq_rel) + 1; }
+
 } // namespace
 
 ibRegionalSettings::ibRegionalSettings(ib::AppDataCtorToken owner)
@@ -38,6 +43,7 @@ ibRegionalSettings::ibRegionalSettings(ib::AppDataCtorToken owner)
 	// Its holder takes connections from ITS base's pool - named once, here (the base builds the pool first),
 	// never asked of "the current one": the lock manager's arrangement, for the lock manager's reason.
 	m_holder.SetPool(ibApplicationInstance::GetConnectionPool(m_owner));
+	m_localeGeneration.store(NextLocaleGeneration(), std::memory_order_release);
 }
 
 wxString ibRegionalSettings::GetTimeZone()
@@ -106,20 +112,17 @@ bool ibRegionalSettings::SetLocale(const wxString& locale, wxString* refusal)
 		return false;
 	}
 	// Under the canonical name with its region - the name the process gives of itself once it speaks it
-	// (wxLocale::GetCanonicalName): "uk", "uk_UA", "uk-UA" and "Ukrainian" are all uk_UA. wx's lookup knows the
-	// underscore and the English name, not BCP 47's hyphen, so that comes off first, as does a codeset. A name
-	// wx knows no language for is refused here, in front of whoever is saving.
+	// (wxLocale::GetCanonicalName): "uk", "uk_UA", "uk-UA" and "Ukrainian" are all uk_UA (the translations'
+	// one door for a name, ibTranslations::CanonicalLanguage). A name wx knows no language for is refused
+	// here, in front of whoever is saving.
 	wxString canonical;
 	if (!locale.IsEmpty()) {
-		wxString asked = locale.BeforeFirst(wxT('.'));
-		asked.Replace(wxT("-"), wxT("_"));
-		const wxLanguageInfo* const info = wxUILocale::FindLanguageInfo(asked);
-		if (info == nullptr) {
+		canonical = ibTranslations::CanonicalLanguage(locale);
+		if (canonical.IsEmpty()) {
 			if (refusal != nullptr)
 				*refusal = wxString::Format(_("'%s' names no language the platform knows (a name such as uk_UA, en_GB or ru_RU); the setting was not saved."), locale);
 			return false;
 		}
-		canonical = info->GetCanonicalWithRegion();
 	}
 	{
 		// An OK that changed nothing writes nothing: the page compares what was typed, this what it means.
@@ -143,6 +146,7 @@ bool ibRegionalSettings::SetLocale(const wxString& locale, wxString* refusal)
 	}
 	std::lock_guard<std::mutex> lock(m_mutex);
 	m_locale = canonical;
+	m_localeGeneration.store(NextLocaleGeneration(), std::memory_order_release);
 	m_read = true;
 	++m_saves;
 	return true;
@@ -206,7 +210,10 @@ bool ibRegionalSettings::Refresh(ibDatabaseConnectionHolder* holder)
 		localeBefore = m_locale;
 		m_read = true;
 		m_timeZone = zone;
-		m_locale = locale;
+		if (m_locale != locale) {
+			m_locale = locale;
+			m_localeGeneration.store(NextLocaleGeneration(), std::memory_order_release);
+		}
 	}
 	if (first ? !locale.IsEmpty() : localeBefore != locale) {
 		if (!locale.IsEmpty())

@@ -19,6 +19,7 @@
 
 #include "frontend/mainFrame/settings/editorsettings.h"
 #include "frontend/mainFrame/settings/fontcolorsettings.h"
+#include "core/localization/translations.h"   // _() - the engine's own catalogs
 
 class FRONTEND_API ibDialogError : public wxDialog {
 public:
