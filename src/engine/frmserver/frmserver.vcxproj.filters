@@ -19,6 +19,9 @@
     <Filter Include="schema">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f4009}</UniqueIdentifier>
     </Filter>
+    <Filter Include="schema\designer">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f4011}</UniqueIdentifier>
+    </Filter>
     <Filter Include="schema\runtime">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f400a}</UniqueIdentifier>
     </Filter>
@@ -129,6 +132,12 @@
     </ClCompile>
     <ClCompile Include="schema\clientSchema.cpp">
       <Filter>schema</Filter>
+    </ClCompile>
+    <ClCompile Include="schema\designer\mcpServer.cpp">
+      <Filter>schema\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="schema\designer\userList.cpp">
+      <Filter>schema\designer</Filter>
     </ClCompile>
     <ClCompile Include="schema\runtime\allFunctions.cpp">
       <Filter>schema\runtime</Filter>
@@ -507,6 +516,12 @@
     </ClInclude>
     <ClInclude Include="schema\clientSchema.h">
       <Filter>schema</Filter>
+    </ClInclude>
+    <ClInclude Include="schema\designer\mcpServer.h">
+      <Filter>schema\designer</Filter>
+    </ClInclude>
+    <ClInclude Include="schema\designer\userList.h">
+      <Filter>schema\designer</Filter>
     </ClInclude>
     <ClInclude Include="schema\runtime\allFunctions.h">
       <Filter>schema\runtime</Filter>

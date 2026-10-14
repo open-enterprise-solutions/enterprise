@@ -6,6 +6,16 @@ set(DESIGNER_THIN_SOURCES
     mainApp.cpp
     mainAppEvent.cpp
     mainFrame/mainFrameDesigner.cpp
+    mainFrame/mainFrameDesignerEvent.cpp
+    mainFrame/mainFrameDesignerMenu.cpp
+    mainFrame/mainFrameDesignerParts.cpp
+    syntaxHelper/helpChooserDialog.cpp
+    syntaxHelper/helpDetailView.cpp
+    syntaxHelper/helpDragSource.cpp
+    syntaxHelper/helpIndexView.cpp
+    syntaxHelper/helpPaneView.cpp
+    syntaxHelper/helpSearchView.cpp
+    syntaxHelper/helpTreeView.cpp
 )
 
 add_executable(designer-thin ${DESIGNER_THIN_SOURCES})
@@ -39,5 +49,5 @@ target_include_directories(designer-thin PRIVATE
 target_link_libraries(designer-thin PRIVATE
     protocol
     frmclient
-    wx::core wx::aui wx::stc wx::adv wx::base
+    wx::core wx::aui wx::stc wx::adv wx::html wx::xml wx::base
 )

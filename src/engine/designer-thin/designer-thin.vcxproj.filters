@@ -4,6 +4,9 @@
     <Filter Include="mainFrame">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f7a03}</UniqueIdentifier>
     </Filter>
+    <Filter Include="syntaxHelper">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f7a04}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="mainApp.cpp" />
@@ -11,11 +14,62 @@
     <ClCompile Include="mainFrame\mainFrameDesigner.cpp">
       <Filter>mainFrame</Filter>
     </ClCompile>
+    <ClCompile Include="mainFrame\mainFrameDesignerEvent.cpp">
+      <Filter>mainFrame</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\mainFrameDesignerMenu.cpp">
+      <Filter>mainFrame</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\mainFrameDesignerParts.cpp">
+      <Filter>mainFrame</Filter>
+    </ClCompile>
+    <ClCompile Include="syntaxHelper\helpChooserDialog.cpp">
+      <Filter>syntaxHelper</Filter>
+    </ClCompile>
+    <ClCompile Include="syntaxHelper\helpDetailView.cpp">
+      <Filter>syntaxHelper</Filter>
+    </ClCompile>
+    <ClCompile Include="syntaxHelper\helpDragSource.cpp">
+      <Filter>syntaxHelper</Filter>
+    </ClCompile>
+    <ClCompile Include="syntaxHelper\helpIndexView.cpp">
+      <Filter>syntaxHelper</Filter>
+    </ClCompile>
+    <ClCompile Include="syntaxHelper\helpPaneView.cpp">
+      <Filter>syntaxHelper</Filter>
+    </ClCompile>
+    <ClCompile Include="syntaxHelper\helpSearchView.cpp">
+      <Filter>syntaxHelper</Filter>
+    </ClCompile>
+    <ClCompile Include="syntaxHelper\helpTreeView.cpp">
+      <Filter>syntaxHelper</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="mainApp.h" />
     <ClInclude Include="mainFrame\mainFrameDesigner.h">
       <Filter>mainFrame</Filter>
+    </ClInclude>
+    <ClInclude Include="syntaxHelper\helpChooserDialog.h">
+      <Filter>syntaxHelper</Filter>
+    </ClInclude>
+    <ClInclude Include="syntaxHelper\helpDetailView.h">
+      <Filter>syntaxHelper</Filter>
+    </ClInclude>
+    <ClInclude Include="syntaxHelper\helpDragSource.h">
+      <Filter>syntaxHelper</Filter>
+    </ClInclude>
+    <ClInclude Include="syntaxHelper\helpIndexView.h">
+      <Filter>syntaxHelper</Filter>
+    </ClInclude>
+    <ClInclude Include="syntaxHelper\helpPaneView.h">
+      <Filter>syntaxHelper</Filter>
+    </ClInclude>
+    <ClInclude Include="syntaxHelper\helpSearchView.h">
+      <Filter>syntaxHelper</Filter>
+    </ClInclude>
+    <ClInclude Include="syntaxHelper\helpTreeView.h">
+      <Filter>syntaxHelper</Filter>
     </ClInclude>
     <ClInclude Include="resource.h" />
   </ItemGroup>

@@ -132,7 +132,7 @@ void SetPicture(ibDataNode& node, const wxString& name, const ibPicture& picture
 
 } // namespace
 
-void ibSchemaSections::Build(const ibSession& session, ibDataNode& result) const
+void ibSchemaSections::Build(const ibSession& session, const ibDataNode& WXUNUSED(args), ibDataNode& result) const
 {
 	const ibMetaDataConfigurationBase* const metaData = session.GetMetaData();
 	if (metaData == nullptr)

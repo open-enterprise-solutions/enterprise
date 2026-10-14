@@ -190,10 +190,27 @@
     <ClCompile Include="mainApp.cpp" />
     <ClCompile Include="mainAppEvent.cpp" />
     <ClCompile Include="mainFrame\mainFrameDesigner.cpp" />
+    <ClCompile Include="mainFrame\mainFrameDesignerEvent.cpp" />
+    <ClCompile Include="mainFrame\mainFrameDesignerMenu.cpp" />
+    <ClCompile Include="mainFrame\mainFrameDesignerParts.cpp" />
+    <ClCompile Include="syntaxHelper\helpChooserDialog.cpp" />
+    <ClCompile Include="syntaxHelper\helpDetailView.cpp" />
+    <ClCompile Include="syntaxHelper\helpDragSource.cpp" />
+    <ClCompile Include="syntaxHelper\helpIndexView.cpp" />
+    <ClCompile Include="syntaxHelper\helpPaneView.cpp" />
+    <ClCompile Include="syntaxHelper\helpSearchView.cpp" />
+    <ClCompile Include="syntaxHelper\helpTreeView.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="mainApp.h" />
     <ClInclude Include="mainFrame\mainFrameDesigner.h" />
+    <ClInclude Include="syntaxHelper\helpChooserDialog.h" />
+    <ClInclude Include="syntaxHelper\helpDetailView.h" />
+    <ClInclude Include="syntaxHelper\helpDragSource.h" />
+    <ClInclude Include="syntaxHelper\helpIndexView.h" />
+    <ClInclude Include="syntaxHelper\helpPaneView.h" />
+    <ClInclude Include="syntaxHelper\helpSearchView.h" />
+    <ClInclude Include="syntaxHelper\helpTreeView.h" />
     <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>

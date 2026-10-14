@@ -534,8 +534,8 @@ void ibFrontendMainFrame::LoadOptions()
 	// Disable logging since it's ok if the options file is not there.
 	wxLogNull logNo;
 
-	// The person's directory, where the desktop designer keeps its options.xml — the thin client's file beside it. Only
-	// read here: the thin designer is the one to write it.
+	// The person's directory, where the desktop designer keeps its options.xml — the thin client's file beside it. The
+	// thin designer writes it (SaveOptions).
 	wxFileName fileName(wxStandardPaths::Get().GetUserDir(wxStandardPaths::Dir::Dir_Cache), kOptionsFile);
 	fileName.AppendDir(wxT("OES"));
 
@@ -551,6 +551,29 @@ void ibFrontendMainFrame::LoadOptions()
 	}
 
 	// …and the keys kept as read: they go over the defaults each time the menu is built (UpdateHotKeys).
+	m_options = document;
+}
+
+void ibFrontendMainFrame::SaveOptions()
+{
+	// Disable logging since it's ok if the options file saving isn't successful.
+	wxLogNull logNo;
+
+	wxXmlDocument document;
+	wxXmlNode* const root = new wxXmlNode(wxXML_ELEMENT_NODE, wxT("options"));
+	document.SetRoot(root);
+
+	root->AddChild(m_fontColorSettings.Save(wxT("fontcolor")));
+	root->AddChild(m_editorSettings.Save(wxT("editor")));
+	root->AddChild(m_keyBinder.Save(wxT("shortcuts")));
+
+	// Make sure the directory exists.
+	wxFileName fileName(wxStandardPaths::Get().GetUserDir(wxStandardPaths::Dir::Dir_Cache), kOptionsFile);
+	fileName.AppendDir(wxT("OES"));
+	fileName.Mkdir(wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
+	document.Save(fileName.GetFullPath());
+
+	// Kept as written: the keys go over the defaults each time the menu is built (UpdateHotKeys).
 	m_options = document;
 }
 
@@ -600,6 +623,8 @@ void ibFrontendMainFrame::InitializeDefaultMenu()
 	wxMenuBar* const bar = new wxMenuBar();
 	bar->Append(m_menuFile, wxGetStockLabel(wxID_FILE));
 	bar->Append(m_menuEdit, wxGetStockLabel(wxID_EDIT));
+	if (m_menuHelp != nullptr)
+		bar->Append(m_menuHelp, wxGetStockLabel(wxID_HELP, wxSTOCK_NOFLAGS));
 	SetMenuBar(bar);
 	UpdateHotKeys();
 }
@@ -755,6 +780,27 @@ bool ibFrontendMainFrame::Call(ibProtocolMethod method, const ibProtocolNode& pa
 		Refused(refusal, error);
 	--m_calling;
 
+	CallSettled();
+	return called;
+}
+
+bool ibFrontendMainFrame::Call(ibProtocolMethod method, const ibProtocolNode& params, ibProtocolNode& answer,
+	ibProtocolRefusal& refusal, wxString& error)
+{
+	++m_calling;
+	const bool called = m_communicator->Call(method, params, answer, refusal, error);
+	if (called)
+		Settle(answer);
+	else if (refusal == ibProtocolRefusal::NoSession)
+		Refused(refusal, error);
+	--m_calling;
+
+	CallSettled();
+	return called;
+}
+
+void ibFrontendMainFrame::CallSettled()
+{
 	// Exit done — the client goes, once nothing is under way; a close of the window that asked for it goes on by itself.
 	if (m_exitGranted && m_calling == 0 && !m_closingWindow)
 		CallAfter([this]() {
@@ -764,7 +810,6 @@ bool ibFrontendMainFrame::Call(ibProtocolMethod method, const ibProtocolNode& pa
 
 	if (m_calling == m_asking.size() && !m_posted.empty())
 		CallAfter(&ibFrontendMainFrame::CallPosted);
-	return called;
 }
 
 void ibFrontendMainFrame::Post(ibProtocolMethod method, const ibProtocolNode& params)
@@ -925,9 +970,10 @@ void ibFrontendMainFrame::DrawMenu(const ibProtocolNode& menu)
 		}
 	};
 
-	// File and Edit first — the window's own, moved over as they are: the files opened last are kept in File's.
+	// File and Edit first — the window's own, moved over as they are: the files opened last are kept in File's. A mode's
+	// Help goes over with them, last.
 	wxMenuBar* const previous = GetMenuBar();
-	for (wxMenu* const own : { m_menuFile, m_menuEdit }) {
+	for (wxMenu* const own : { m_menuFile, m_menuEdit, m_menuHelp }) {
 		for (size_t pos = 0; previous != nullptr && pos < previous->GetMenuCount(); ++pos) {
 			if (previous->GetMenu(pos) == own) {
 				previous->Remove(pos);
@@ -944,6 +990,8 @@ void ibFrontendMainFrame::DrawMenu(const ibProtocolNode& menu)
 		fill(submenu, top);
 		bar->Append(submenu, top.GetString(ibProtocolName::Title));
 	}
+	if (m_menuHelp != nullptr)
+		bar->Append(m_menuHelp, wxGetStockLabel(wxID_HELP, wxSTOCK_NOFLAGS));
 	SetMenuBar(bar);
 	delete previous;
 	UpdateHotKeys();
@@ -1764,21 +1812,27 @@ void ibFrontendMainFrame::OnMenu(wxCommandEvent& event)
 	}
 
 	const ibMenuItem what = found->second;
-	ibProtocolNode params, answer;
 	if (what.schema) {
-		params.SetValue(ibProtocolName::Schema, what.number);
-		// The journal shows nothing of its own: its command opens its tab, which the frame brings.
-		if (what.number == static_cast<int>(ibProtocolSchema::AuditLog)) {
-			params.SetValue(ibProtocolName::Command, static_cast<long long>(ibProtocolSchemaCommand::Open));
-			Call(ibProtocolMethod::Schema, params, answer);
-		}
-		else if (Call(ibProtocolMethod::Schema, params, answer))
-			ShowSchema(static_cast<ibProtocolSchema>(what.number), answer);
+		OpenSchema(static_cast<ibProtocolSchema>(what.number));
 	}
 	else {
+		ibProtocolNode params, answer;
 		params.SetValue(ibProtocolName::Command, what.number);
 		Call(ibProtocolMethod::Command, params, answer);
 	}
+}
+
+void ibFrontendMainFrame::OpenSchema(ibProtocolSchema schema)
+{
+	ibProtocolNode params, answer;
+	params.SetValue(ibProtocolName::Schema, static_cast<long long>(schema));
+	// The journal shows nothing of its own: its command opens its tab, which the frame brings.
+	if (schema == ibProtocolSchema::AuditLog) {
+		params.SetValue(ibProtocolName::Command, static_cast<long long>(ibProtocolSchemaCommand::Open));
+		Call(ibProtocolMethod::Schema, params, answer);
+	}
+	else if (Call(ibProtocolMethod::Schema, params, answer))
+		ShowSchema(schema, answer);
 }
 
 void ibFrontendMainFrame::OnEditCommand(wxCommandEvent& event)

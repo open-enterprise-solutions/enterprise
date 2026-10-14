@@ -135,12 +135,22 @@ namespace ibProtocolName {
 	inline constexpr const char* Started     = "Started";
 	inline constexpr const char* Computer    = "Computer";
 	inline constexpr const char* Session     = "Session";
+	inline constexpr const char* Activity    = "Activity";
 	inline constexpr const char* Namespace   = "Namespace";
 	inline constexpr const char* Key         = "Key";
 	inline constexpr const char* Acquired    = "Acquired";
 	inline constexpr const char* Lock        = "Lock";
 	inline constexpr const char* Build       = "Build";
 	inline constexpr const char* Plugins     = "Plugins";
+
+	// The base's users (ibProtocolSchema::UserList) — a user's record as the engine's ibUserInfo holds it, and the
+	// configuration's roles and languages it is chosen from.
+	inline constexpr const char* Guid        = "Guid";
+	inline constexpr const char* FullName    = "FullName";
+	inline constexpr const char* Language    = "Language";
+	inline constexpr const char* Languages   = "Languages";
+	inline constexpr const char* Roles       = "Roles";
+	inline constexpr const char* Code        = "Code";
 
 	// The registration journal — a tab's (Kind AuditLog): its rows fetched by the tab, newest first, by the filter
 	// {From, To, Level, User, Session, Source, Event, Ref, Search, Offset, Count} — each row Time, Level, Session, User,
@@ -160,6 +170,12 @@ namespace ibProtocolName {
 	inline constexpr const char* Debugging = "Debugging";   // the session's process listens for the designer
 	inline constexpr const char* Allowed   = "Allowed";     // …and may be switched now: not on the application server,
 	                                                        // not while a start waits for the designer
+
+	// The designer's assistant access — the schema's (McpServer), beside Enabled, Port and Token: where it listens,
+	// whether it does, and what a person hands their tool.
+	inline constexpr const char* Address  = "Address";
+	inline constexpr const char* Running  = "Running";
+	inline constexpr const char* Endpoint = "Endpoint";   // empty while it is not running
 
 	// A view — a tab's form, its controls as the server writes them (visualView/): what each was saved with, beside its
 	// State, what the server reads it as now; and what the person did with one, back by its id.
@@ -425,22 +441,39 @@ enum class ibProtocolMode : int {
 // picked in it. Which of them a client's application offers is the frame's Schemas.
 enum class ibProtocolSchema : int {
 	AllFunctions = 1,   // the runtime's: Groups (Title, Icon) of items (Item, Title, Icon); command 1 Open {Item, Type}
-	ActiveUser   = 2,   // both modes': Sessions (User, Application, Type, Started, Computer, Session) and Locks
-	                    // (Namespace, Key, Mode, User, Acquired, Lock)
+	ActiveUser   = 2,   // both modes': Sessions (User, Application, Type, Started, Computer, Session, Activity) and
+	                    // Locks (Namespace, Key, Mode, User, Acquired, Lock); the designer's commands 5 Kick {Session}
+	                    // — that session closed, 6 Reload {Session} — its clients reloaded, 7 Release {Lock} — that
+	                    // lock released by force
 	Sections     = 3,   // the runtime's section panel: Sections (NodeId, Title, Picture) with their Blocks (Column 1|2,
 	                    // Title, Picture, Tooltip) of items (Item, Title, Icon, Type); command 1 Open {Item, Type}
 	About        = 4,   // both modes': Build, Picture, Database, Application, User, Locale and Plugins (Name, Version)
 	AuditLog     = 5,   // both modes': the registration journal — shows nothing; command 1 Open opens its tab (Kind
 	                    // AuditLog)
 	Debugging    = 6,   // the runtime's options: Debugging, Allowed; commands 2 Start and 3 Stop
+	McpServer    = 7,   // the designer's assistant access, the person's: Enabled, Address, Port, Token, Running,
+	                    // Endpoint, Allowed; commands 2 Start {Enabled, Address, Port, Token} — started on those, 3 Stop,
+	                    // 4 Save {…} — kept as the person's
+	UserList     = 8,   // the designer's users of the base: Users (Guid, Name, FullName), and what a user's record is
+	                    // chosen from — the configuration's Roles (Guid, Name, Title, Mode) and Languages (Guid, Title,
+	                    // Code); `Args: {Guid}` — that one's User {Guid, Name, FullName, Password — whether one is stored
+	                    // (never the stored one), Language — its guid, Roles (Guid)}; commands 4 Save {Guid, Name,
+	                    // FullName, Language, Roles (Guid)[, Password — a new one, hashed by the server; absent: the
+	                    // stored one kept]}, 8 Remove {Guid}
 };
 
 // A schema's own commands — `schema {Schema, Command, Args}`. All functions and Sections take the one: Open
-// {Item, Type} — an item they show, opened as the navigation opens it. Debugging takes Start and Stop.
+// {Item, Type} — an item they show, opened as the navigation opens it. Debugging takes Start and Stop; McpServer takes
+// them and Save; Active users, the designer's, Kick, Reload and Release; the users Save and Remove.
 enum class ibProtocolSchemaCommand : int {
-	Open  = 1,
-	Start = 2,
-	Stop  = 3,
+	Open    = 1,
+	Start   = 2,
+	Stop    = 3,
+	Save    = 4,
+	Kick    = 5,
+	Reload  = 6,
+	Release = 7,
+	Remove  = 8,
 };
 
 // What the server asks the person — the frame's Request, by its Kind; answered with `respond {Id, Response}`.

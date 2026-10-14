@@ -167,6 +167,17 @@
     <ClCompile Include="mainFrame\settings\editorsettings.cpp" />
     <ClCompile Include="mainFrame\settings\fontcolorsettings.cpp" />
     <ClCompile Include="mainFrame\settings\keybinder.cpp" />
+    <ClCompile Include="mainFrame\settings\editorsettingspanel.cpp" />
+    <ClCompile Include="mainFrame\settings\fontcolorsettingspanel.cpp" />
+    <ClCompile Include="mainFrame\settings\keybinderdialog.cpp" />
+    <ClCompile Include="mainFrame\settings\keymonitortextctrl.cpp" />
+    <ClCompile Include="mainFrame\settings\mcpsettingspanel.cpp" />
+    <ClCompile Include="mainFrame\settings\settingsdialog.cpp" />
+    <ClCompile Include="mainFrame\settings\showhelpevent.cpp" />
+    <ClCompile Include="mainFrame\settings\statictextex.cpp" />
+    <ClCompile Include="backend\appData.cpp" />
+    <ClCompile Include="backend\mcp\mcpServer.cpp" />
+    <ClCompile Include="backend\userInfo.cpp" />
     <ClCompile Include="mainFrame\settings\stlutility.cpp" />
     <ClCompile Include="mainFrame\settings\xmlutility.cpp" />
     <ClCompile Include="win\editor\textEditor\textEditor.cpp" />
@@ -175,6 +186,8 @@
     <ClCompile Include="win\picture.cpp" />
     <ClCompile Include="win\dlgs\about.cpp" />
     <ClCompile Include="win\dlgs\activeUser.cpp" />
+    <ClCompile Include="win\dlgs\userItem.cpp" />
+    <ClCompile Include="win\dlgs\userList.cpp" />
     <ClCompile Include="win\dlgs\authorization.cpp" />
     <ClCompile Include="win\dlgs\enterpriseOption.cpp" />
     <ClCompile Include="win\dlgs\errorDialog.cpp" />
@@ -289,6 +302,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="frmclient.h" />
+    <ClInclude Include="window_ptr.h" />
     <ClInclude Include="artProvider\artProvider.h" />
     <ClInclude Include="artProvider\private\picturePredefined.h" />
     <ClInclude Include="artProvider\splash\splashLogo.h" />
@@ -309,11 +323,24 @@
     <ClInclude Include="mainFrame\output\outputWindow.h" />
     <ClInclude Include="mainFrame\settings\fontcolorsettings.h" />
     <ClInclude Include="mainFrame\settings\keybinder.h" />
+    <ClInclude Include="mainFrame\settings\editorsettingspanel.h" />
+    <ClInclude Include="mainFrame\settings\fontcolorsettingspanel.h" />
+    <ClInclude Include="mainFrame\settings\keybinderdialog.h" />
+    <ClInclude Include="mainFrame\settings\keymonitortextctrl.h" />
+    <ClInclude Include="mainFrame\settings\mcpsettingspanel.h" />
+    <ClInclude Include="mainFrame\settings\settingsdialog.h" />
+    <ClInclude Include="mainFrame\settings\showhelpevent.h" />
+    <ClInclude Include="mainFrame\settings\statictextex.h" />
+    <ClInclude Include="backend\mcp\mcpServer.h" />
+    <ClInclude Include="backend\roleHelper.h" />
+    <ClInclude Include="backend\userInfo.h" />
     <ClInclude Include="mainFrame\settings\stlutility.h" />
     <ClInclude Include="mainFrame\settings\xmlutility.h" />
     <ClInclude Include="win\picture.h" />
     <ClInclude Include="win\dlgs\about.h" />
     <ClInclude Include="win\dlgs\activeUser.h" />
+    <ClInclude Include="win\dlgs\userItem.h" />
+    <ClInclude Include="win\dlgs\userList.h" />
     <ClInclude Include="win\dlgs\authorization.h" />
     <ClInclude Include="win\dlgs\enterpriseOption.h" />
     <ClInclude Include="win\dlgs\errorDialog.h" />

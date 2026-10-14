@@ -22,7 +22,7 @@ ibDebuggerServer* SwitchableServer(const ibSession& session)
 
 }
 
-void ibSchemaDebugging::Build(const ibSession& session, ibDataNode& result) const
+void ibSchemaDebugging::Build(const ibSession& session, const ibDataNode& WXUNUSED(args), ibDataNode& result) const
 {
 	const ibDebuggerServer* const server = debugServer;
 	result.SetValue(wxT("Debugging"), server != nullptr && server->EnableDebugging());

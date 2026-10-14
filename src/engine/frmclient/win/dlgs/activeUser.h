@@ -39,6 +39,19 @@ public:
 
 protected:
 	void OnIdleHandler(wxTimerEvent& event);
+	// Right-click on a row → context menu with Kick / Reload. Both are the
+	// schema's commands; the server writes them to sys_session.signal via
+	// ibSessionRegistry, and the owning process picks the directive up on
+	// its next JobCheckSignal tick.
+	void OnContextMenu(wxListEvent& event);
+	void OnKickSelected(wxCommandEvent& event);
+	void OnReloadSelected(wxCommandEvent& event);
+
+	// Locks tab: right-click → force-release. Designer-only admin path,
+	// drops the named sys_lock row regardless of owner. Use when a
+	// zombie session left a lock behind.
+	void OnLocksContextMenu(wxListEvent& event);
+	void OnForceReleaseSelected(wxCommandEvent& event);
 };
 
 #endif

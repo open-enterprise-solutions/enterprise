@@ -178,6 +178,8 @@
     <ClCompile Include="schema\activeUser.cpp" />
     <ClCompile Include="schema\auditLog.cpp" />
     <ClCompile Include="schema\clientSchema.cpp" />
+    <ClCompile Include="schema\designer\mcpServer.cpp" />
+    <ClCompile Include="schema\designer\userList.cpp" />
     <ClCompile Include="schema\runtime\allFunctions.cpp" />
     <ClCompile Include="schema\runtime\debugging.cpp" />
     <ClCompile Include="schema\runtime\sections.cpp" />
@@ -306,6 +308,8 @@
     <ClInclude Include="schema\activeUser.h" />
     <ClInclude Include="schema\auditLog.h" />
     <ClInclude Include="schema\clientSchema.h" />
+    <ClInclude Include="schema\designer\mcpServer.h" />
+    <ClInclude Include="schema\designer\userList.h" />
     <ClInclude Include="schema\runtime\allFunctions.h" />
     <ClInclude Include="schema\runtime\debugging.h" />
     <ClInclude Include="schema\runtime\sections.h" />

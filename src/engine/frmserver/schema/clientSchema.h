@@ -37,8 +37,9 @@ public:
 	virtual bool AccessRight(const ibSession& WXUNUSED(session)) const { return true; }
 
 	// What the schema shows, into `result` — of the client's session, handed in: the configuration it works in, the
-	// base it works in. Asked on that session: what a schema lists may depend on the person's rights.
-	virtual void Build(const ibSession& session, ibDataNode& result) const = 0;
+	// base it works in — and of what its arguments name (the predefined items of that object), as Command takes them.
+	// Asked on that session: what a schema lists may depend on the person's rights.
+	virtual void Build(const ibSession& session, const ibDataNode& args, ibDataNode& result) const = 0;
 
 	// WHAT A PERSON DID IN IT — one of the schema's own commands (a number of its own on the wire), with its
 	// arguments: the dialog's own handler on the desktop (a double click in All functions opens the item). Asked on
@@ -48,6 +49,14 @@ public:
 	// not with these arguments — a schema acts only on what it offered; nothing is done then.
 	virtual std::function<void()> Command(const ibSession& session, s32 command,
 		const ibDataNode& args, ibProtocolRefusal& refusal, wxString& error) const;
+
+protected:
+
+	// WHAT WENT WRONG, in the base's own words — the chain the desktop's ShowBackendErrorChain (designer/mainFrame) put
+	// under its heading: `detail` (an exception's own text, an engine's refusal) and what the base pushed on the way, each
+	// once, a repeat counted, the first twenty shown. Drained whatever it says — the chain is the thread's, and must not
+	// leak into the next asking.
+	static wxString BackendErrorChain(const wxString& detail = wxEmptyString);
 };
 
 #endif

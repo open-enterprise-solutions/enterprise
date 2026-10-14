@@ -24,8 +24,13 @@ void ibClientFrameDesigner::InitializeDefaultMenu()
 	// File and Edit are the client's doc manager's. The designer's items stand whatever the rights; the schema's own
 	// right switches its item off (as drawn).
 	ibClientMenu administration;
+	administration.Append(ibProtocolSchema::UserList, _("Users"));
 	administration.Append(ibProtocolSchema::ActiveUser, _("Active users"));
 	administration.AppendSeparator();
 	administration.Append(ibProtocolSchema::AuditLog, _("Registration journal"));
 	m_menu.AppendSubMenu(administration, _("Administration"));
+
+	ibClientMenu tools;
+	tools.Append(ibProtocolSchema::McpServer, _("Options..."));
+	m_menu.AppendSubMenu(tools, _("Tools"));
 }

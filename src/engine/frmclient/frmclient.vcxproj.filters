@@ -109,6 +109,39 @@
     <ClCompile Include="mainFrame\settings\keybinder.cpp">
       <Filter>mainFrame\settings</Filter>
     </ClCompile>
+    <ClCompile Include="mainFrame\settings\editorsettingspanel.cpp">
+      <Filter>mainFrame\settings</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\settings\fontcolorsettingspanel.cpp">
+      <Filter>mainFrame\settings</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\settings\keybinderdialog.cpp">
+      <Filter>mainFrame\settings</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\settings\keymonitortextctrl.cpp">
+      <Filter>mainFrame\settings</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\settings\mcpsettingspanel.cpp">
+      <Filter>mainFrame\settings</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\settings\settingsdialog.cpp">
+      <Filter>mainFrame\settings</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\settings\showhelpevent.cpp">
+      <Filter>mainFrame\settings</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\settings\statictextex.cpp">
+      <Filter>mainFrame\settings</Filter>
+    </ClCompile>
+    <ClCompile Include="backend\appData.cpp">
+      <Filter>backend</Filter>
+    </ClCompile>
+    <ClCompile Include="backend\mcp\mcpServer.cpp">
+      <Filter>backend\mcp</Filter>
+    </ClCompile>
+    <ClCompile Include="backend\userInfo.cpp">
+      <Filter>backend</Filter>
+    </ClCompile>
     <ClCompile Include="mainFrame\settings\stlutility.cpp">
       <Filter>mainFrame\settings</Filter>
     </ClCompile>
@@ -131,6 +164,12 @@
       <Filter>win\dlgs</Filter>
     </ClCompile>
     <ClCompile Include="win\dlgs\activeUser.cpp">
+      <Filter>win\dlgs</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\userItem.cpp">
+      <Filter>win\dlgs</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\userList.cpp">
       <Filter>win\dlgs</Filter>
     </ClCompile>
     <ClCompile Include="win\dlgs\authorization.cpp">
@@ -295,6 +334,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="frmclient.h" />
+    <ClInclude Include="window_ptr.h" />
     <ClInclude Include="artProvider\artProvider.h">
       <Filter>artProvider</Filter>
     </ClInclude>
@@ -355,6 +395,39 @@
     <ClInclude Include="mainFrame\settings\keybinder.h">
       <Filter>mainFrame\settings</Filter>
     </ClInclude>
+    <ClInclude Include="mainFrame\settings\editorsettingspanel.h">
+      <Filter>mainFrame\settings</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\settings\fontcolorsettingspanel.h">
+      <Filter>mainFrame\settings</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\settings\keybinderdialog.h">
+      <Filter>mainFrame\settings</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\settings\keymonitortextctrl.h">
+      <Filter>mainFrame\settings</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\settings\mcpsettingspanel.h">
+      <Filter>mainFrame\settings</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\settings\settingsdialog.h">
+      <Filter>mainFrame\settings</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\settings\showhelpevent.h">
+      <Filter>mainFrame\settings</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\settings\statictextex.h">
+      <Filter>mainFrame\settings</Filter>
+    </ClInclude>
+    <ClInclude Include="backend\mcp\mcpServer.h">
+      <Filter>backend\mcp</Filter>
+    </ClInclude>
+    <ClInclude Include="backend\roleHelper.h">
+      <Filter>backend</Filter>
+    </ClInclude>
+    <ClInclude Include="backend\userInfo.h">
+      <Filter>backend</Filter>
+    </ClInclude>
     <ClInclude Include="mainFrame\settings\stlutility.h">
       <Filter>mainFrame\settings</Filter>
     </ClInclude>
@@ -368,6 +441,12 @@
       <Filter>win\dlgs</Filter>
     </ClInclude>
     <ClInclude Include="win\dlgs\activeUser.h">
+      <Filter>win\dlgs</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\userItem.h">
+      <Filter>win\dlgs</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\userList.h">
       <Filter>win\dlgs</Filter>
     </ClInclude>
     <ClInclude Include="win\dlgs\authorization.h">
@@ -545,6 +624,9 @@
     </Filter>
     <Filter Include="backend\job">
       <UniqueIdentifier>{6a1f8b3d-2c4e-4f70-9bac-1d2e3f405165}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="backend\mcp">
+      <UniqueIdentifier>{6a1f8b3d-2c4e-4f70-9bac-1d2e3f405167}</UniqueIdentifier>
     </Filter>
     <Filter Include="backend\propertyManager">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5029}</UniqueIdentifier>

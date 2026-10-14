@@ -37,7 +37,7 @@ deflate (RFC 1951 — a browser's `DecompressionStream("deflate-raw")`). A text 
 | `users` | — (before the login, no `Client`) | `Users` — the names the login window offers |
 | `logout` | `Client` | — |
 | `frame` | `Client` | the frame |
-| `schema` | `Client`, `Schema` | what the schema shows |
+| `schema` | `Client`, `Schema`, `Args` (what of it, when the schema takes it) | what the schema shows |
 | `schema` | `Client`, `Schema`, `Command`, `Args` | the frame — the schema did it |
 | `execute` | `Client`, `Command` (an object's metadata id), `Type` (100 default, 150 create, 151 list, 152 select) | the frame — the object opened as the navigation opens it |
 | `event` | `Client`, `Control`, `Event`, `Args`, `Form` — or `Tab` for a tab's view that is no form | the frame |
@@ -153,11 +153,13 @@ A schema is a dialog of the desktop held as data: the client shows it however it
 | Schema | In | Shows | Commands | Right |
 |---|---|---|---|---|
 | 1 All functions | the runtime | the objects the person may open, grouped by kind, each by its `Item` | 1 Open `{Item, Type}` | the mode of all functions |
-| 2 Active users | both | `Sessions` and `Locks` | — | active users |
+| 2 Active users | both | `Sessions` and `Locks` | the designer's: 5 Kick `{Session}`, 6 Reload `{Session}`, 7 Release `{Lock}` | active users |
 | 3 Sections | the runtime | the section panel: `Sections` with their `Blocks` of items | 1 Open `{Item, Type}` | — |
 | 4 About | both | `Build`, `Picture`, `Database`, `Application`, `User`, `Locale`, `Plugins` (`Name`, `Version`) | — | — |
 | 5 Registration journal | both | nothing | 1 Open — opens its tab (`Kind` 4) | active users |
 | 6 Debugging | the runtime | `Debugging` — the session's process listens for the designer; `Allowed` — it may be switched now (not on an application server, not while a start waits for the designer) | 2 Start, 3 Stop | — |
+| 7 Assistant access | the designer | the person's MCP server: `Enabled`, `Address`, `Port`, `Token`, `Running`, `Endpoint`, `Allowed` | 2 Start `{Enabled, Address, Port, Token}`, 3 Stop, 4 Save `{…}` | — |
+| 8 Users | the designer | `Users` (`Guid`, `Name`, `FullName`), and what a record is chosen from: `Roles` (`Guid`, `Name`, `Title`, `Mode`), `Languages` (`Guid`, `Title`, `Code`); with `Args {Guid}` — that one's `User` (`Guid`, `Name`, `FullName`, `Password` — whether one is stored, `Language`, `Roles`) | 4 Save `{Guid, Name, FullName, Language, Roles[, Password]}` — the password hashed by the server, absent: kept; 8 Remove `{Guid}` | data administration |
 
 A schema the client's application does not have, or the person has no right to, is refused.
 

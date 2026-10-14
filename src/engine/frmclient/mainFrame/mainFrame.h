@@ -117,6 +117,10 @@ public:
 	// question it asks put to the person until the work settles. The answer as it came — a schema's tree, a fetch's
 	// rows are read from it. False — refused, and the person told why.
 	bool Call(ibProtocolMethod method, const ibProtocolNode& params, ibProtocolNode& answer);
+	// …the same, its refusal handed back and said to nobody: the caller says it where it belongs (a settings page, beside
+	// the control that fixes it). A session gone closes the client all the same.
+	bool Call(ibProtocolMethod method, const ibProtocolNode& params, ibProtocolNode& answer,
+		ibProtocolRefusal& refusal, wxString& error);
 	// A call nobody waits on — what the person did in a view, a tab chosen or closed: made after the event that
 	// raised it, in the order posted, and never inside another call — but inside a question a call is asking, as the
 	// desktop's modal loop runs the events of the windows over it (a choice form a window opened, CreateChildFrame):
@@ -187,6 +191,13 @@ protected:
 	// mode's window shows its own (the runtime's All functions) and leaves the rest to the base.
 	virtual void ShowSchema(ibProtocolSchema schema, const ibProtocolNode& shown);
 
+	// The File and Edit menus — the desktop's, the doc manager's commands — and the bar they start it. A mode's window
+	// makes its own menu (the designer's Help) and calls this.
+	virtual void InitializeDefaultMenu();
+	// The keys of the window's own commands, File's and Edit's — the desktop's defaults; a mode's window adds its own
+	// commands' and calls this.
+	virtual void SetDefaultHotKeys();
+
 	// The communicator comes in with the window and the window holds it — and with it the client — from then on. The
 	// login is the window's (Show), so the start's messages and questions are drawn into it.
 	ibFrontendMainFrame(std::unique_ptr<ibCommunicator> communicator, ibProtocolMode mode,
@@ -195,6 +206,14 @@ protected:
 		long style = wxDEFAULT_FRAME_STYLE, const wxString& name = wxASCII_STR(wxFrameNameStr));
 
 	ibCommunicator& GetCommunicator() const { return *m_communicator; }
+
+	// A schema of the menu opened — asked for and shown (ShowSchema); the journal's tab opened by its command. What an
+	// item of the server's menu does, and of the window's own (the designer's About).
+	void OpenSchema(ibProtocolSchema schema);
+
+	// THE PERSON'S OPTIONS WRITTEN BACK — the designer's Options: the font and colours, how editors edit, the keys as
+	// they stand, into the file LoadOptions reads; and kept as read, so a menu built again keeps the keys.
+	void SaveOptions();
 
 	class ibFrameManager : public wxAuiManager {
 	public:
@@ -207,9 +226,14 @@ protected:
 	};
 
 	// Create frame manager
-	ibFrameManager     m_mgr;
-	ibOutputWindow*    m_outputWindow = nullptr;
-	ibObjectInspector* m_objectInspector = nullptr;
+	ibFrameManager      m_mgr;
+	ibOutputWindow*     m_outputWindow = nullptr;
+	ibObjectInspector*  m_objectInspector = nullptr;
+
+	wxMenu*             m_menuHelp = nullptr;   // a mode's own Help (the designer's): last on the bar, after the server's
+	ibKeyBinder         m_keyBinder;            // the keys of the bar's commands (UpdateHotKeys)
+	ibFontColorSettings m_fontColorSettings;    // the person's options (LoadOptions, SaveOptions)
+	ibEditorSettings    m_editorSettings;
 
 private:
 
@@ -232,10 +256,6 @@ private:
 	// THE PERSON'S OPTIONS — the font and colours code is shown in, how its editors edit, the keys they chose: read once,
 	// from their own directory (the desktop designer's LoadOptions). A server keeps none of them.
 	void LoadOptions();
-	// The File and Edit menus — the desktop's, the doc manager's commands.
-	void InitializeDefaultMenu();
-	// The keys of the window's own commands, File's and Edit's — the desktop's defaults.
-	void SetDefaultHotKeys();
 	// THE KEYS OF THE MENU AS IT NOW STANDS: each command's default — the window's own, the one the server gives its
 	// own — and the person's over them (LoadOptions), onto the window and the menu's labels.
 	void UpdateHotKeys();
@@ -262,6 +282,8 @@ private:
 	void ShowRequest(const ibProtocolNode& request, ibProtocolNode& response);
 	// A call refused, said to the person — and a client whose session is gone, closed.
 	void Refused(ibProtocolRefusal refusal, const wxString& error);
+	// …and once a call has settled: the client gone when the server's Exit was done, the calls posted made.
+	void CallSettled();
 	// The first call posted, made — unless a call is under way: that one makes it when it has settled.
 	void CallPosted();
 
@@ -286,9 +308,6 @@ private:
 	const ibProtocolMode            m_mode;
 	wxString                        m_user;       // the login's — the one the login window was told, when refused
 	wxString                        m_password;   // until the login — cleared by it
-	ibFontColorSettings             m_fontColorSettings;
-	ibEditorSettings                m_editorSettings;
-	ibKeyBinder                     m_keyBinder;
 	wxXmlDocument                   m_options;     // the person's options as read (LoadOptions) — their keys put over the
 	                                               // defaults each time the menu is built
 

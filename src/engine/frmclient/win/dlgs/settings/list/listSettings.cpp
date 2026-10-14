@@ -118,8 +118,10 @@ void ibListSettingsPanel::BuildPages()
 	//
 	// THE QUERY TAB IS A DEVELOPER TOOL — writing the source query is configuring the form, not
 	// using it; an end user opening "Filter" has no business being offered it.
-	if ((m_pages & Page_Query) != 0 && m_desc != nullptr && appData->DesignerMode())
-		notebook->AddPage(BuildQueryPage(notebook), _("Query"), true, ibSettingsTabArt(ibSettingsTab::Query));
+	if ((m_pages & Page_Query) != 0 && m_desc != nullptr && appData->DesignerMode()) {
+		if (wxWindow* const query = BuildQueryPage(notebook))
+			notebook->AddPage(query, _("Query"), true, ibSettingsTabArt(ibSettingsTab::Query));
+	}
 
 	// ⭐ THE TWO SHARED EDITORS. Built, not written: the composer's window builds the very same
 	// pair over its own buffer, which is the whole point of them living one level up.
@@ -212,8 +214,8 @@ void ibListSettingsPanel::BindFieldSource()
 // UseCustomQuery / CustomQuery properties (serialised), NOT the settings buffer; applied to the list on OK.
 wxWindow* ibListSettingsPanel::BuildQueryPage(wxWindow* WXUNUSED(parent))
 {
-	// THE DESIGNER'S TAB — the query a list reads, and its constructor. The client is never the designer (BuildPages asks
-	// appData->DesignerMode()), so it is never built here.
+	// THE DESIGNER'S TAB — the query a list reads, and its constructor. Not ported (the query constructor is not on the
+	// client): none, and the thin designer's list settings open without it (BuildPages).
 	return nullptr;
 }
 

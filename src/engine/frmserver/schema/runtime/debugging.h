@@ -12,7 +12,7 @@ class FRMSERVER_API ibSchemaDebugging : public ibClientSchema {
 public:
 
 	// Debugging — on; Allowed — it may be switched now.
-	virtual void Build(const ibSession& session, ibDataNode& result) const override;
+	virtual void Build(const ibSession& session, const ibDataNode& args, ibDataNode& result) const override;
 
 	// Start and Stop — only where it may be switched; anything else is refused.
 	virtual std::function<void()> Command(const ibSession& session, s32 command,
