@@ -1,10 +1,16 @@
 ﻿#include "advpropString.h"
 
-#include "frmclient/backend/propertyManager/property/propertyString.h"
-#include "frmclient/backend/propertyManager/property/propertyFormat.h"
+#include "frmclient/backend/propertyManager/propertyObject.h"                     // property_cast, ibPropertyObject
 #include "frmclient/backend/propertyManager/property/variant/variantTranslate.h"
 #include "frmclient/propertyManager/property/private/prop.h"                 // wxPGPropertyFlags_*
 #include "frmclient/propertyManager/property/private/propertyRegistry.h"
+
+// A TRANSLATED STRING goes back in its raw form — every language, as the server stores it (ibPropertyTString).
+static ibDataValue GetTranslateNodeValue(const wxVariant& value)
+{
+	ibVariantDataTranslate* const translateVariant = property_cast(value, ibVariantDataTranslate);
+	return ibDataValue::String(translateVariant != nullptr ? translateVariant->GetTranslate().GetRawText() : value.GetString());
+}
 
 // register frontend property
 class ibPropertyStringLoader
@@ -12,28 +18,29 @@ class ibPropertyStringLoader
 public:
 	ibPropertyStringLoader()
 	{
-		ibPropertyRegistry::Register([](ibPropertyString* prop) -> wxPGProperty* {
-			return new wxStringProperty(prop->GetLabel(), prop->GetName(), prop->GetValueAsString());
+		ibPropertyRegistry::Register(wxT("ibPropertyString"), [](const ibDataNode& row) -> wxPGProperty* {
+			return new wxStringProperty(ibPropertyRegistry::GetLabel(row), ibPropertyRegistry::GetName(row),
+				ibPropertyRegistry::GetValue(row).AsString());
 		});
-		// ibPropertyUEString DERIVES from ibPropertyUString, so the base must be tried after
-		// it — otherwise the UString maker would swallow every UEString.
-		ibPropertyRegistry::Register([](ibPropertyUEString* prop) -> wxPGProperty* {
-			return new ibUEStringProperty(prop->GetLabel(), prop->GetName(), prop->GetValueAsString());
+		ibPropertyRegistry::Register(wxT("ibPropertyUEString"), [](const ibDataNode& row) -> wxPGProperty* {
+			return new ibUEStringProperty(ibPropertyRegistry::GetLabel(row), ibPropertyRegistry::GetName(row),
+				ibPropertyRegistry::GetValue(row).AsString());
 		});
-		ibPropertyRegistry::Register([](ibPropertyUString* prop) -> wxPGProperty* {
-			return new ibUStringProperty(prop->GetLabel(), prop->GetName(), prop->GetValueAsString());
-		}, ibPropertyRegistry::Priority_Base);
-		// ibPropertyFormat DERIVES from ibPropertyTString — the same order as the two above.
-		ibPropertyRegistry::Register([](ibPropertyFormat* prop) -> wxPGProperty* {
-			return new wxFormatStringProperty(prop->GetPropertyObject(), prop->GetLabel(), prop->GetName(),
-				prop->GetValueAsFormatString());
+		ibPropertyRegistry::Register(wxT("ibPropertyUString"), [](const ibDataNode& row) -> wxPGProperty* {
+			return new ibUStringProperty(ibPropertyRegistry::GetLabel(row), ibPropertyRegistry::GetName(row),
+				ibPropertyRegistry::GetValue(row).AsString());
 		});
-		ibPropertyRegistry::Register([](ibPropertyTString* prop) -> wxPGProperty* {
-			return new wxTStringProperty(prop->GetPropertyObject(), prop->GetLabel(), prop->GetName(),
-				prop->GetValueAsTranslate());
-		}, ibPropertyRegistry::Priority_Base);
-		ibPropertyRegistry::Register([](ibPropertyMString* prop) -> wxPGProperty* {
-			return new wxMStringProperty(prop->GetLabel(), prop->GetName(), prop->GetValueAsString());
+		ibPropertyRegistry::Register(wxT("ibPropertyFormat"), [](const ibDataNode& row) -> wxPGProperty* {
+			return new wxFormatStringProperty(nullptr, ibPropertyRegistry::GetLabel(row), ibPropertyRegistry::GetName(row),
+				ibTranslateString(ibPropertyRegistry::GetValue(row).AsString()));
+		}, GetTranslateNodeValue);
+		ibPropertyRegistry::Register(wxT("ibPropertyTString"), [](const ibDataNode& row) -> wxPGProperty* {
+			return new wxTStringProperty(nullptr, ibPropertyRegistry::GetLabel(row), ibPropertyRegistry::GetName(row),
+				ibTranslateString(ibPropertyRegistry::GetValue(row).AsString()));
+		}, GetTranslateNodeValue);
+		ibPropertyRegistry::Register(wxT("ibPropertyMString"), [](const ibDataNode& row) -> wxPGProperty* {
+			return new wxMStringProperty(ibPropertyRegistry::GetLabel(row), ibPropertyRegistry::GetName(row),
+				ibPropertyRegistry::GetValue(row).AsString());
 		});
 	}
 }g_stringLoader;
@@ -153,13 +160,12 @@ bool wxTStringProperty::DisplayEditorDialog(wxPropertyGrid* pg, wxVariant& value
 	ibVariantDataTranslate* translateVariant = property_cast(value, ibVariantDataTranslate);
 	wxASSERT_MSG(translateVariant, "Function called for incompatible property");
 
-	if (m_ownerProperty == nullptr)
-		return false;
-
 	// THE SAME WINDOW the code editor opens on a string literal — see translateConstructor.h for what
-	// OK does to the text, and the three rules the window this one replaced broke quietly.
+	// OK does to the text, and the three rules the window this one replaced broke quietly. A row from the server has no
+	// object here: the window then offers the languages the text already holds.
 	ibDialogTranslateConstructor dlg(pg->GetPanel(), m_dlgTitle.empty() ? GetLabel() : m_dlgTitle,
-		translateVariant->GetTranslate(), m_ownerProperty->GetMetaData(), HasFlag(wxPGFlags::ReadOnly), m_maxLen,
+		translateVariant->GetTranslate(), m_ownerProperty != nullptr ? m_ownerProperty->GetMetaData() : nullptr,
+		HasFlag(wxPGFlags::ReadOnly), m_maxLen,
 		GetBoxEditor());
 	if (!wxPropertyGrid::IsSmallScreen())
 		dlg.Move(pg->GetGoodEditorDialogPosition(this, dlg.GetSize()));

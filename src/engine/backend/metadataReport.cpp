@@ -360,15 +360,7 @@ bool ibMetaDataReport::SaveToFile(const wxString& strFileName)
 {
 	//common data
 	ibWriterMemory writerData;
-
-	m_fullPath = strFileName;
-
-	//Save common object (header is written inside SaveCommonTree)
-	if (!SaveCommonTree(g_metaExternalReportCLSID, writerData, saveConfigFlag))
-		return false;
-
-	//Delete common object
-	if (!DeleteCommonTree(g_metaExternalReportCLSID))
+	if (!SaveToBuffer(writerData, strFileName))
 		return false;
 
 	// Atomic export: write to a sibling temp file, then rename over the target
@@ -403,6 +395,35 @@ bool ibMetaDataReport::SaveToFile(const wxString& strFileName)
 		fs::remove(tmpPath, rmEc);
 		return false;
 	}
+
+	return true;
+}
+
+bool ibMetaDataReport::SaveToTempFile(const wxString& id)
+{
+	// The file, made anew of the name it was given — written as the disk's file is, whole.
+	ibTempFile file;
+	if (!file.Create(id, true))
+		return false;
+
+	ibWriterMemory writerData;
+	if (!SaveToBuffer(writerData, file.GetName()))
+		return false;
+
+	return file.Write(writerData.pointer(), writerData.size());
+}
+
+bool ibMetaDataReport::SaveToBuffer(ibWriterMemory& writerData, const wxString& fullPath)
+{
+	m_fullPath = fullPath;
+
+	//Save common object (header is written inside SaveCommonTree)
+	if (!SaveCommonTree(g_metaExternalReportCLSID, writerData, saveConfigFlag))
+		return false;
+
+	//Delete common object
+	if (!DeleteCommonTree(g_metaExternalReportCLSID))
+		return false;
 
 	return true;
 }

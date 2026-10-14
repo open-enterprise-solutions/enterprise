@@ -43,7 +43,7 @@
 #include <wx/filename.h>
 #include <wx/scopeguard.h>
 #include <memory>
-#include "backend/fileKind.h"   // extensions live in one table, not at each call site
+#include "core/fileKind.h"   // extensions live in one table, not at each call site
 #include "backend/sheetFormat/sheetFormat.h"   // …and the foreign tables the spreadsheet template also opens
 
 wxIMPLEMENT_ABSTRACT_CLASS(ibDocTemplate, wxObject);

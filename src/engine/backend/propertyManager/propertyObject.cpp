@@ -57,6 +57,47 @@ bool SetValue(ibPropertyObject* asked, ibProperty* property, const wxVariant& ne
 	return true;
 }
 
+// A VALUE ARRIVING AS A NODE, for a property and an event alike. THE PROPERTY READS THE NODE ITSELF — only it knows its
+// shape — and what it read is put back as it was, to be placed through the four steps of `door`: the owner asked first,
+// as with a value from the grid.
+template <typename typeProperty, typename typeDoor, typename typeTelling>
+static bool SetNodeValue(ibPropertyObject* asked, typeProperty* property, const ibDataValue& newValue, wxString* refusal,
+	typeDoor door, typeTelling telling)
+{
+	if (property == nullptr)
+		return false;
+
+	const wxVariant oldValue = property->GetValue();
+	if (!property->SetNodeValue(newValue)) {
+		Refuse(refusal, wxString::Format(_("'%s' would not take that value."), property->GetName()));
+		return false;
+	}
+	const wxVariant readValue = property->GetValue();
+	if (readValue.GetData() != oldValue.GetData()) {
+		property->SetValue(oldValue);
+		return door(asked, property, readValue, refusal);
+	}
+
+	// …A CELL READ IN PLACE: the value before it is the value after it, and there is nothing to put before the owner as
+	// what is coming — the veto cannot be offered. What can be honoured is the telling.
+	if (asked == nullptr)
+		asked = property->GetPropertyObject();
+	if (asked != nullptr)
+		telling(asked, property, oldValue, readValue);
+	if (ibPropertyObject* owner = property->GetPropertyObject())
+		owner->OnChildChanged();
+	return true;
+}
+
+bool SetValue(ibPropertyObject* asked, ibProperty* property, const ibDataValue& newValue, wxString* refusal)
+{
+	return SetNodeValue(asked, property, newValue, refusal,
+		[](ibPropertyObject* asked, ibProperty* property, const wxVariant& value, wxString* refusal) {
+			return SetValue(asked, property, value, refusal); },
+		[](ibPropertyObject* asked, ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue) {
+			asked->OnPropertyChanged(property, oldValue, newValue); });
+}
+
 bool SetEvent(ibPropertyObject* asked, ibEvent* event, const wxVariant& newValue, wxString* refusal)
 {
 	if (event == nullptr)
@@ -87,6 +128,15 @@ bool SetEvent(ibPropertyObject* asked, ibEvent* event, const wxVariant& newValue
 		owner->OnChildChanged();
 
 	return true;
+}
+
+bool SetEvent(ibPropertyObject* asked, ibEvent* event, const ibDataValue& newValue, wxString* refusal)
+{
+	return SetNodeValue(asked, event, newValue, refusal,
+		[](ibPropertyObject* asked, ibEvent* event, const wxVariant& value, wxString* refusal) {
+			return SetEvent(asked, event, value, refusal); },
+		[](ibPropertyObject* asked, ibEvent* event, const wxVariant& oldValue, const wxVariant& newValue) {
+			asked->OnEventChanged(event, oldValue, newValue); });
 }
 
 } // namespace ibPropertyGate

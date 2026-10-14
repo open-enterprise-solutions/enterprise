@@ -373,7 +373,7 @@ namespace {
 
 struct ibExternalGroupDef {
 	ibClassID   m_clsid;
-	const char* m_label;   // SOURCE string, translated when the node is made (backend/fileKind.cpp rule)
+	const char* m_label;   // SOURCE string, translated when the node is made (core/fileKind.cpp rule)
 };
 
 const ibExternalGroupDef s_dataProcessorGroups[] = {

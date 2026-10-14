@@ -1,13 +1,37 @@
 #include "docManagerDesigner.h"
 
 #include "frmserver/schema/designer/mcpServer.h"
+#include "frmserver/schema/designer/metaData.h"
+#include "frmserver/schema/designer/properties.h"
 #include "frmserver/schema/designer/userList.h"
+
+//files
+#include "frmserver/docView/templates/designer/docViewDataProcessorEdit.h"
+#include "frmserver/docView/templates/designer/docViewDataReportEdit.h"
+
+//objects
+#include "frmserver/docView/templates/designer/docViewModuleEdit.h"
+#include "core/fileKind.h"   // extensions live in one table, not at each call site
 
 wxIMPLEMENT_DYNAMIC_CLASS(ibDocManagerDesigner, ibDocManager);
 
 ibDocManagerDesigner::ibDocManagerDesigner()
 	: ibDocManager()
 {
+	// The external data processor and report, as the desktop's designer edited them — made anew or opened from a client's
+	// file (the session's temporary storage), kept open, their trees drawn for the client and saved back to a file.
+	AddDocTemplate(g_metaExternalDataProcessorCLSID, _("External data processor"), ibFileMask(ibFileKind::Tool), ibFileExtension(ibFileKind::Tool), _("Data processor Doc"), _("Data processor View"), CLASSINFO(ibDataProcessorEditDocument), CLASSINFO(ibDataProcessorTreeView), ibTEMPLATE_VISIBLE);
+	AddDocTemplate(g_metaExternalReportCLSID, _("External report"), ibFileMask(ibFileKind::Report), ibFileExtension(ibFileKind::Report), _("Report Doc"), _("Report View"), CLASSINFO(ibReportEditDocument), CLASSINFO(ibReportTreeView), ibTEMPLATE_VISIBLE);
+
+	// A module's text — a common module, an object's and a manager's, as the desktop's designer registered them.
+	AddDocTemplate(g_metaCommonModuleCLSID, CLASSINFO(ibModuleTextDocument), CLASSINFO(ibModuleTextView));
+	AddDocTemplate(g_metaModuleCLSID, CLASSINFO(ibModuleTextDocument), CLASSINFO(ibModuleTextView));
+	AddDocTemplate(g_metaManagerCLSID, CLASSINFO(ibModuleTextDocument), CLASSINFO(ibModuleTextView));
+
+	// The configuration tree — its doors; the rows are the frame's (ibClientFrameDesigner).
+	RegisterSchema(ibProtocolSchema::MetaData, std::make_unique<ibSchemaMetaData>());
+	// The inspector's edit — the object it shows, a form's control or a metaobject alike, its property given a value.
+	RegisterSchema(ibProtocolSchema::Properties, std::make_unique<ibSchemaProperties>());
 	// The designer's Administration → Users — the base's users.
 	RegisterSchema(ibProtocolSchema::UserList, std::make_unique<ibSchemaUserList>());
 	// The designer's options — the person's assistant access (its MCP page).

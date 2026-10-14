@@ -502,16 +502,6 @@ BACKEND_API void ibMcpSayChoiceParameters(const class ibPropertyObject* field,
 //
 // `params` supplies "value"; `result` is filled with what the property now holds,
 // read back rather than echoed. False means refused, with words in `refusal`.
-// ⭐ THE CLOSING HALF OF THE INSPECTOR'S SEQUENCE, for a caller that had to set the value through
-// the property's OWN typed setter — a binding takes an ibMetaDescription, which no wxVariant a
-// caller can build will carry.
-//
-// The telling still belongs in one place: the owner learns what changed and the property's real
-// owner learns a child changed, exactly as ibObjectInspector::ModifyProperty does it. Without this
-// the value lands and the object never reacts — and for a BINDING that means the far end of the
-// relationship is never updated.
-BACKEND_API void ibMcpNotifyChanged(class ibProperty* property, const wxVariant& oldValue);
-
 // ⭐ THE WHOLE SEQUENCE, IN ONE CALL — ask the owner, set, tell the owner, tell the property's real
 // owner. Exported because it stopped being one tool's private business: every verb that places a
 // value now goes through it (a choice, a type description, a caption's language cell, a register

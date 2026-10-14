@@ -317,6 +317,9 @@ enum class ibClientViewKind : s32 {
     Text        = 2,
     Spreadsheet = 3,
     AuditLog    = 4,
+    DataProcessor = 5,
+    Report        = 6,
+    Module        = 7,
 };
 
 class FRMSERVER_API ibView: public wxObject
@@ -805,6 +808,12 @@ protected:
 
 	ibValueMetaObject* m_metaObject;	// current metadata object
 	bool m_childDoc;
+};
+
+class FRMSERVER_API ibMetaDataDocument : public ibMetaDocument {
+	wxDECLARE_ABSTRACT_CLASS(ibMetaDataDocument);
+public:
+	virtual class ibMetaData* GetMetaData() const = 0;
 };
 
 // Step-4 collapse note: ShowFrame moved up into ibView. Empty OnUpdate and

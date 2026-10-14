@@ -7,7 +7,7 @@
 #include "frmserver/docView/docManagerDesigner.h"
 
 ibClientFrameDesigner::ibClientFrameDesigner(ibSessionHolder&& holder, ibClientInstance* clientInstance)
-	: ibClientFrame(std::move(holder), clientInstance)
+	: ibClientFrame(std::move(holder), clientInstance), m_metaTree(this)
 {
 	m_docManager = new ibDocManagerDesigner;
 	InitializeDefaultMenu();
@@ -15,8 +15,25 @@ ibClientFrameDesigner::ibClientFrameDesigner(ibSessionHolder&& holder, ibClientI
 
 bool ibClientFrameDesigner::AllowRun()
 {
-	const ibMetaDataConfigurationBase* const metaData = GetSession()->GetMetaData();
-	return metaData != nullptr && metaData->AccessRight_Administration();
+	ibMetaDataConfigurationBase* const metaData = GetSession()->GetMetaData();
+	if (metaData == nullptr || !metaData->AccessRight_Administration())
+		return false;
+	return m_metaTree.Load(std::static_pointer_cast<ibMetaDataConfigurationBase>(metaData->shared_from_this()));
+}
+
+void ibClientFrameDesigner::OnDraw(ibDataNode& state)
+{
+	m_metaTree.OnDraw(state.Child(wxT("MetaData")));
+	m_propertyInspector.OnDraw(state.Child(wxT("Properties")));
+}
+
+void ibClientFrameDesigner::BackendError(const wxString& WXUNUSED(strFileName),
+	const wxString& WXUNUSED(strDocPath), const long WXUNUSED(line),
+	const wxString& strErrorMessage)
+{
+	// ⚠ Without its place yet: the desktop's line opened the module at the error (ibOutputWindow), a message here is its
+	// text alone.
+	Message(strErrorMessage, ibStatusMessage::ibStatusMessage_Error);
 }
 
 void ibClientFrameDesigner::InitializeDefaultMenu()

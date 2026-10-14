@@ -10,20 +10,26 @@
     <Filter Include="docView\templates">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f4008}</UniqueIdentifier>
     </Filter>
+    <Filter Include="docView\templates\designer">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f4020}</UniqueIdentifier>
+    </Filter>
     <Filter Include="mcp">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f4003}</UniqueIdentifier>
     </Filter>
     <Filter Include="mcp\tools">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f400b}</UniqueIdentifier>
     </Filter>
+    <Filter Include="metaTree">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f4012}</UniqueIdentifier>
+    </Filter>
     <Filter Include="schema">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f4009}</UniqueIdentifier>
     </Filter>
-    <Filter Include="schema\designer">
-      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f4011}</UniqueIdentifier>
-    </Filter>
     <Filter Include="schema\runtime">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f400a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="schema\designer">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f4011}</UniqueIdentifier>
     </Filter>
     <Filter Include="settings">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f4004}</UniqueIdentifier>
@@ -62,6 +68,9 @@
       <Filter>client</Filter>
     </ClCompile>
     <ClCompile Include="client\clientFrameDesigner.cpp">
+      <Filter>client</Filter>
+    </ClCompile>
+    <ClCompile Include="client\propertyInspector.cpp">
       <Filter>client</Filter>
     </ClCompile>
     <ClCompile Include="client\clientFrameRuntime.cpp">
@@ -106,6 +115,15 @@
     <ClCompile Include="docView\templates\docViewDataReportFile.cpp">
       <Filter>docView\templates</Filter>
     </ClCompile>
+    <ClCompile Include="docView\templates\designer\docViewDataProcessorEdit.cpp">
+      <Filter>docView\templates\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="docView\templates\designer\docViewDataReportEdit.cpp">
+      <Filter>docView\templates\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="docView\templates\designer\docViewModuleEdit.cpp">
+      <Filter>docView\templates\designer</Filter>
+    </ClCompile>
     <ClCompile Include="docView\templates\docViewHelp.cpp">
       <Filter>docView\templates</Filter>
     </ClCompile>
@@ -121,6 +139,15 @@
     <ClCompile Include="mcp\tools\mcpToolProtocol.cpp">
       <Filter>mcp\tools</Filter>
     </ClCompile>
+    <ClCompile Include="metaTree\treeConfiguration.cpp">
+      <Filter>metaTree</Filter>
+    </ClCompile>
+    <ClCompile Include="metaTree\treeDataProcessor.cpp">
+      <Filter>metaTree</Filter>
+    </ClCompile>
+    <ClCompile Include="metaTree\treeDataReport.cpp">
+      <Filter>metaTree</Filter>
+    </ClCompile>
     <ClCompile Include="schema\about.cpp">
       <Filter>schema</Filter>
     </ClCompile>
@@ -134,6 +161,12 @@
       <Filter>schema</Filter>
     </ClCompile>
     <ClCompile Include="schema\designer\mcpServer.cpp">
+      <Filter>schema\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="schema\designer\metaData.cpp">
+      <Filter>schema\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="schema\designer\properties.cpp">
       <Filter>schema\designer</Filter>
     </ClCompile>
     <ClCompile Include="schema\designer\userList.cpp">
@@ -166,7 +199,13 @@
     <ClCompile Include="visualView\visualHostDocView.cpp">
       <Filter>visualView</Filter>
     </ClCompile>
+    <ClCompile Include="win\dlgs\applyChange.cpp">
+      <Filter>win\dlgs</Filter>
+    </ClCompile>
     <ClCompile Include="win\dlgs\formEditor.cpp">
+      <Filter>win\dlgs</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\formSelector.cpp">
       <Filter>win\dlgs</Filter>
     </ClCompile>
     <ClCompile Include="win\dlgs\generation.cpp">
@@ -448,6 +487,9 @@
     <ClInclude Include="client\clientFrameDesigner.h">
       <Filter>client</Filter>
     </ClInclude>
+    <ClInclude Include="client\propertyInspector.h">
+      <Filter>client</Filter>
+    </ClInclude>
     <ClInclude Include="client\clientFrameRuntime.h">
       <Filter>client</Filter>
     </ClInclude>
@@ -493,6 +535,15 @@
     <ClInclude Include="docView\templates\docViewDataReportFile.h">
       <Filter>docView\templates</Filter>
     </ClInclude>
+    <ClInclude Include="docView\templates\designer\docViewDataProcessorEdit.h">
+      <Filter>docView\templates\designer</Filter>
+    </ClInclude>
+    <ClInclude Include="docView\templates\designer\docViewDataReportEdit.h">
+      <Filter>docView\templates\designer</Filter>
+    </ClInclude>
+    <ClInclude Include="docView\templates\designer\docViewModuleEdit.h">
+      <Filter>docView\templates\designer</Filter>
+    </ClInclude>
     <ClInclude Include="docView\templates\docViewHelp.h">
       <Filter>docView\templates</Filter>
     </ClInclude>
@@ -504,6 +555,15 @@
     </ClInclude>
     <ClInclude Include="docView\templates\docViewText.h">
       <Filter>docView\templates</Filter>
+    </ClInclude>
+    <ClInclude Include="metaTree\treeConfiguration.h">
+      <Filter>metaTree</Filter>
+    </ClInclude>
+    <ClInclude Include="metaTree\treeDataProcessor.h">
+      <Filter>metaTree</Filter>
+    </ClInclude>
+    <ClInclude Include="metaTree\treeDataReport.h">
+      <Filter>metaTree</Filter>
     </ClInclude>
     <ClInclude Include="schema\about.h">
       <Filter>schema</Filter>
@@ -518,6 +578,12 @@
       <Filter>schema</Filter>
     </ClInclude>
     <ClInclude Include="schema\designer\mcpServer.h">
+      <Filter>schema\designer</Filter>
+    </ClInclude>
+    <ClInclude Include="schema\designer\metaData.h">
+      <Filter>schema\designer</Filter>
+    </ClInclude>
+    <ClInclude Include="schema\designer\properties.h">
       <Filter>schema\designer</Filter>
     </ClInclude>
     <ClInclude Include="schema\designer\userList.h">
@@ -553,7 +619,13 @@
     <ClInclude Include="visualView\visualHost.h">
       <Filter>visualView</Filter>
     </ClInclude>
+    <ClInclude Include="win\dlgs\applyChange.h">
+      <Filter>win\dlgs</Filter>
+    </ClInclude>
     <ClInclude Include="win\dlgs\formEditor.h">
+      <Filter>win\dlgs</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\formSelector.h">
       <Filter>win\dlgs</Filter>
     </ClInclude>
     <ClInclude Include="win\dlgs\generation.h">

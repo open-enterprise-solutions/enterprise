@@ -56,6 +56,12 @@ public:
 	// The command done to it, by the server — after whatever the window is doing now.
 	void DoCommand(ibProtocolCommand command) const;
 
+	// WHAT THE TAB'S VIEW IS ASKED, AND TOLD — the view of a tab that is no form, named by the tab: what it answers
+	// (fetch {Tab, Request}; false — refused, or no frame), and what the person did in it (event {Tab, Event, Args}),
+	// posted as the person's acts are.
+	bool Fetch(const ibProtocolNode& request, ibProtocolNode& answer) const;
+	void Post(ibProtocolEvent event, const ibProtocolNode& args = ibProtocolNode()) const;
+
 protected:
 
 	virtual bool DoSaveDocument(const wxString& file) override;

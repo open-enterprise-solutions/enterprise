@@ -100,6 +100,9 @@ public:
 
 	// The window's own menu of that id — File, Edit: a document's undo names its commands in Edit (the desktop's).
 	wxMenu* GetDefaultMenu(int idMenu) const;
+	// …and its toolbar: the doc manager's commands — a mode's window puts its own after them (the designer's Update
+	// database).
+	wxAuiToolBar* GetMainFrameToolbar() const { return m_mainFrameToolbar; }
 
 	// A view activated — its own menu merged into the window's and its toolbar shown; deactivated, both disabled (the
 	// desktop's ActivateView).
@@ -176,6 +179,13 @@ protected:
 	virtual void CreateGUI();
 	// …the properties pane among them, on the right (the desktop's).
 	virtual void CreatePropertyPane();
+	// …and the notebook along the bottom, the messages' (the desktop's CreateBottomPane); the designer's adds the
+	// debugger's panes beside them.
+	virtual void CreateBottomPane();
+
+	// WHAT A MODE'S FRAME CARRIES BESIDE THE BASE'S — drawn by what the patch changed in it (not IsNode: the frame sent
+	// whole). Default: nothing; the designer draws its configuration's tree (MetaData).
+	virtual void DrawFrame(const ibProtocolNode& WXUNUSED(frame), const ibProtocolNode& WXUNUSED(patch)) {}
 
 	// What the window builds BY ITSELF once the start has run — the desktop's slot of the same name (its home page;
 	// the server opens that one now). Called from Show after the login has settled: what is built here may ask the
@@ -190,6 +200,14 @@ protected:
 	// A schema of the menu, asked for and answered, shown. The base shows what both modes have (Active users, About); a
 	// mode's window shows its own (the runtime's All functions) and leaves the rest to the base.
 	virtual void ShowSchema(ibProtocolSchema schema, const ibProtocolNode& shown);
+	// A question, put to the person; what they answered in `response` (nothing — cancelled). The base asks what both
+	// modes are asked; a mode's window asks its own (the designer's restructure ledger) and leaves the rest to the base.
+	virtual void ShowRequest(const ibProtocolNode& request, ibProtocolNode& response);
+
+	// THE DOCUMENT OF A TAB THE SERVER RAISED, by the tab's Kind (DrawTabs) — the desktop doc template's CreateDocument for
+	// a tab, as it has no template. The base makes what both modes have (a form, the journal); a mode's window makes its
+	// own (the designer's tree of an external file) and leaves the rest to the base.
+	virtual ibTabDocument* CreateDocument(ibProtocolViewKind kind, long long tabId);
 
 	// The File and Edit menus — the desktop's, the doc manager's commands — and the bar they start it. A mode's window
 	// makes its own menu (the designer's Help) and calls this.
@@ -230,6 +248,8 @@ protected:
 	ibOutputWindow*     m_outputWindow = nullptr;
 	ibObjectInspector*  m_objectInspector = nullptr;
 
+	wxMenu*             m_menuConfiguration = nullptr;   // a mode's own (the designer's): after Edit, before the server's
+	wxMenu*             m_menuDebug = nullptr;
 	wxMenu*             m_menuHelp = nullptr;   // a mode's own Help (the designer's): last on the bar, after the server's
 	ibKeyBinder         m_keyBinder;            // the keys of the bar's commands (UpdateHotKeys)
 	ibFontColorSettings m_fontColorSettings;    // the person's options (LoadOptions, SaveOptions)
@@ -271,6 +291,8 @@ private:
 	void DrawTabs(const ibProtocolNode& tabs);
 	// The active tab, and its view drawn by what the patch changed in it (none: whole).
 	void DrawView(long long active, const ibProtocolNode& view, const ibProtocolNode& patch);
+	// The designer's inspector — the rows of the object a person selected on the server, an edit of one given back.
+	void DrawProperties(const ibProtocolNode& properties);
 	// Drawn — and the questions the frame carries put to the person, each answered back, until none is pending.
 	void Settle(const ibProtocolNode& answer);
 	// …the questions alone (Settle): each put to the person until none is pending — or the one pending is the window's
@@ -278,8 +300,6 @@ private:
 	void Ask();
 	// A value chosen for the cell of the window asking (ChooseValue), when the question says one was — handed to it once.
 	void TakeChosen(const ibProtocolNode& request);
-	// A question, put to the person; what they answered in `response` (nothing — cancelled).
-	void ShowRequest(const ibProtocolNode& request, ibProtocolNode& response);
 	// A call refused, said to the person — and a client whose session is gone, closed.
 	void Refused(ibProtocolRefusal refusal, const wxString& error);
 	// …and once a call has settled: the client gone when the server's Exit was done, the calls posted made.
@@ -362,6 +382,13 @@ public:
 	}
 
 	virtual int FilterEvent(wxEvent& event) wxOVERRIDE { return Event_Skip; }
+};
+
+// The desktop's (frontend/mainFrame/mainFrame.h): the host frame's command ids the editor posts upward — the syntax
+// helper, and the word under the caret looked up in it (the code editor's context menu). The values are the desktop's.
+enum {
+	wxID_FRONTEND_SYNTAX_HELPER        = wxID_HIGHEST + 4500,
+	wxID_FRONTEND_SYNTAX_HELPER_LOOKUP = wxID_HIGHEST + 4501,
 };
 
 #endif

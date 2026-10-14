@@ -1345,6 +1345,10 @@ void ibClientHost::DrawFrame(ibClientFrame* frame, ibDataNode& state, ibDataNode
 	DrawMenu(frame, frame->GetMenu().GetItems(), state.Child(wxT("Menu")));
 	const std::int64_t menus = NowMs();
 
+	// …and the mode's own part of it, beside the tabs — the designer's configuration tree.
+	frame->OnDraw(state);
+	const std::int64_t frameDrawn = NowMs();
+
 	// ⚠ THE ACTIVE VIEW BEFORE THE TABS: drawing it puts its form's caption on its document (ibVisualHost::
 	// UpdateVisualHost → SetCaption) — the tab's title. Drawn after them, a title changed by this answer (the form editor's
 	// Apply) reached the tab one frame late.
@@ -1424,8 +1428,8 @@ void ibClientHost::DrawFrame(ibClientFrame* frame, ibDataNode& state, ibDataNode
 		request.SetValue(wxT("Id"), wxString::FromUTF8(pending.id.c_str()));
 	}
 
-	ibJournalInfo(wxT("client"), wxT("    the frame: menus %lld ms, tabs %lld ms, the view %lld ms"), menus - began,
-		tabsDrawn - viewDrawn, viewDrawn - menus);
+	ibJournalInfo(wxT("client"), wxT("    the frame: menus %lld ms, its own %lld ms, tabs %lld ms, the view %lld ms"),
+		menus - began, frameDrawn - menus, tabsDrawn - viewDrawn, viewDrawn - frameDrawn);
 
 	// …AND THE PICTURES THE FRAME NAMES THAT THE CLIENT WAS NOT GIVEN YET — beside the events, never patched: given once,
 	// the client keeps them, and the frame names them by their ids (ibClientFrame::SendPicture).

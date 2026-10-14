@@ -142,3 +142,28 @@ void ibTabDocument::DoCommand(ibProtocolCommand command) const
 	params.SetValue(ibProtocolName::Command, static_cast<long long>(command));
 	frame->Post(ibProtocolMethod::Command, params);
 }
+
+bool ibTabDocument::Fetch(const ibProtocolNode& request, ibProtocolNode& answer) const
+{
+	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
+	if (frame == nullptr)
+		return false;
+
+	ibProtocolNode params;
+	params.SetValue(ibProtocolName::Tab, m_tabId)
+		.SetValue(ibProtocolName::Request, request);
+	return frame->Fetch(params, answer);
+}
+
+void ibTabDocument::Post(ibProtocolEvent event, const ibProtocolNode& args) const
+{
+	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
+	if (frame == nullptr)
+		return;
+
+	ibProtocolNode params;
+	params.SetValue(ibProtocolName::Tab, m_tabId)
+		.SetValue(ibProtocolName::Event, static_cast<int>(event))
+		.SetValue(ibProtocolName::Args, args);
+	frame->Post(ibProtocolMethod::Event, params);
+}

@@ -22,6 +22,8 @@
 #include "core/syntaxHelper/helpLoader.h"
 #include "core/syntaxHelper/helpLoadError.h"
 
+#include "backend/compiler/value.h"   // ibValue::IsRegisterCtor / GetNameObjectFromID - the registry an article's class_id is checked by
+
 #include <wx/file.h>
 #include <wx/filename.h>
 #include <wx/stdpaths.h>
@@ -187,7 +189,10 @@ TEST(HelpLoader, AClassIdIsCheckedAgainstTheRegistry)
 		R"({ "id": "kw.Plain",     "name_local": "Plain",   "name_en": "Plain",   "kind": "keyword" })"
 		R"(] })");
 
-	const ibHelpLoadResult loaded = LoadHelpCorpus(wxT("en"), root);
+	// The registry the backend's host hands in (ibApplicationHost::InitLocale) - the core keeps none.
+	const ibHelpLoadResult loaded = LoadHelpCorpus(wxT("en"), root, wxEmptyString, [](ibClassID id) {
+		return ibValue::IsRegisterCtor(id) ? ibValue::GetNameObjectFromID(id) : wxString();
+	});
 	wxFileName::Rmdir(root, wxPATH_RMDIR_RECURSIVE);
 	ASSERT_TRUE(loaded.ok());
 	ASSERT_NE(loaded.corpus, nullptr);

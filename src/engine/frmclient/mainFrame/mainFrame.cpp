@@ -394,6 +394,36 @@ void ibFrontendMainFrame::CreatePropertyPane()
 	m_mgr.AddPane(m_objectInspector, paneInfo);
 }
 
+void ibFrontendMainFrame::CreateBottomPane()
+{
+	if (m_mgr.GetPane(wxAUI_PANE_BOTTOM).IsOk())
+		return;
+
+	wxAuiPaneInfo paneInfo;
+	paneInfo.Name(wxAUI_PANE_BOTTOM);
+	paneInfo.Bottom();
+	paneInfo.PinButton(false);
+	paneInfo.CloseButton(false);
+	paneInfo.Resizable(false);
+	paneInfo.Movable(false);
+	paneInfo.MinSize(-1, 30);
+
+	ibFloatingNotebook* auiNotebook = new ibFloatingNotebook(&m_mgr, paneInfo.name,
+		wxID_ANY,
+		wxDefaultPosition,
+		wxDefaultSize,
+		wxAUI_NB_BOTTOM | wxAUI_NB_TAB_MOVE | wxAUI_NB_SCROLL_BUTTONS);
+
+	auiNotebook->SetArtProvider(new wxAuiLunaTabArt());
+	{
+		wxWindowUpdateLocker freeze(auiNotebook);
+		auiNotebook->AddPage(m_outputWindow, _("Messages"), false, wxArtProvider::GetBitmapBundle(wxART_MESSAGE, wxART_SERVICE, wxSize(16, 16)));
+		auiNotebook->SetNullSelection();
+	}
+
+	m_mgr.AddPane(auiNotebook, paneInfo);
+}
+
 bool ibFrontendMainFrame::IsShownInspector()
 {
 	const wxAuiPaneInfo propertyPane = m_mgr.GetPane(wxAUI_PANE_PROPERTY);
@@ -487,32 +517,9 @@ void ibFrontendMainFrame::CreateGUI()
 
 	InitializeDefaultMenu();
 
-	// The messages — every mode's: a tab along the bottom, as the desktop's (CreateBottomPane).
+	// The messages — every mode's: a tab along the bottom, as the desktop's.
 	m_outputWindow = new ibOutputWindow(this);
-
-	wxAuiPaneInfo paneInfo;
-	paneInfo.Name(wxAUI_PANE_BOTTOM);
-	paneInfo.Bottom();
-	paneInfo.PinButton(false);
-	paneInfo.CloseButton(false);
-	paneInfo.Resizable(false);
-	paneInfo.Movable(false);
-	paneInfo.MinSize(-1, 30);
-
-	ibFloatingNotebook* auiNotebook = new ibFloatingNotebook(&m_mgr, paneInfo.name,
-		wxID_ANY,
-		wxDefaultPosition,
-		wxDefaultSize,
-		wxAUI_NB_BOTTOM | wxAUI_NB_TAB_MOVE | wxAUI_NB_SCROLL_BUTTONS);
-
-	auiNotebook->SetArtProvider(new wxAuiLunaTabArt());
-	{
-		wxWindowUpdateLocker freeze(auiNotebook);
-		auiNotebook->AddPage(m_outputWindow, _("Messages"), false, wxArtProvider::GetBitmapBundle(wxART_MESSAGE, wxART_SERVICE, wxSize(16, 16)));
-		auiNotebook->SetNullSelection();
-	}
-
-	m_mgr.AddPane(auiNotebook, paneInfo);
+	CreateBottomPane();
 
 	// The bar along the bottom — the light dusty one of the desktop, its ink the deep dusty blue.
 	wxStatusBar* const statusBar = CreateStatusBar();
@@ -623,6 +630,10 @@ void ibFrontendMainFrame::InitializeDefaultMenu()
 	wxMenuBar* const bar = new wxMenuBar();
 	bar->Append(m_menuFile, wxGetStockLabel(wxID_FILE));
 	bar->Append(m_menuEdit, wxGetStockLabel(wxID_EDIT));
+	if (m_menuConfiguration != nullptr)
+		bar->Append(m_menuConfiguration, _("Configuration"));
+	if (m_menuDebug != nullptr)
+		bar->Append(m_menuDebug, _("Debug"));
 	if (m_menuHelp != nullptr)
 		bar->Append(m_menuHelp, wxGetStockLabel(wxID_HELP, wxSTOCK_NOFLAGS));
 	SetMenuBar(bar);
@@ -904,7 +915,11 @@ void ibFrontendMainFrame::Draw(const ibProtocolNode& answer)
 		DrawTemplates(frame.FindChild(ibProtocolName::Templates));
 	if (whole || patch.Has(ibProtocolName::Tabs))
 		DrawTabs(frame.FindChild(ibProtocolName::Tabs));
+	DrawFrame(frame, patch);
 	DrawView(frame.GetInt(ibProtocolName::ActiveTab), frame.FindChild(ibProtocolName::View), patch);
+	// …the designer's inspector, when the frame has one: what the client's own objects show is left as it is elsewhere.
+	if (frame.Has(ibProtocolName::Properties) && (whole || patch.Has(ibProtocolName::Properties)))
+		DrawProperties(frame.FindChild(ibProtocolName::Properties));
 
 	// THE EVENTS — what happened since the last answer: read from the answer, never kept in the frame. Exit done: the
 	// client goes once its call has settled (Call, AllowClose).
@@ -971,9 +986,9 @@ void ibFrontendMainFrame::DrawMenu(const ibProtocolNode& menu)
 	};
 
 	// File and Edit first — the window's own, moved over as they are: the files opened last are kept in File's. A mode's
-	// Help goes over with them, last.
+	// Configuration and Debug go over with them, after Edit; its Help, last.
 	wxMenuBar* const previous = GetMenuBar();
-	for (wxMenu* const own : { m_menuFile, m_menuEdit, m_menuHelp }) {
+	for (wxMenu* const own : { m_menuFile, m_menuEdit, m_menuConfiguration, m_menuDebug, m_menuHelp }) {
 		for (size_t pos = 0; previous != nullptr && pos < previous->GetMenuCount(); ++pos) {
 			if (previous->GetMenu(pos) == own) {
 				previous->Remove(pos);
@@ -985,6 +1000,10 @@ void ibFrontendMainFrame::DrawMenu(const ibProtocolNode& menu)
 	wxMenuBar* const bar = new wxMenuBar();
 	bar->Append(m_menuFile, wxGetStockLabel(wxID_FILE));
 	bar->Append(m_menuEdit, wxGetStockLabel(wxID_EDIT));
+	if (m_menuConfiguration != nullptr)
+		bar->Append(m_menuConfiguration, _("Configuration"));
+	if (m_menuDebug != nullptr)
+		bar->Append(m_menuDebug, _("Debug"));
 	for (const ibProtocolNode& top : menu.Children()) {
 		wxMenu* const submenu = new wxMenu();
 		fill(submenu, top);
@@ -1030,6 +1049,13 @@ void ibFrontendMainFrame::DrawTemplates(const ibProtocolNode& templates)
 	}
 }
 
+ibTabDocument* ibFrontendMainFrame::CreateDocument(ibProtocolViewKind kind, long long tabId)
+{
+	if (kind == ibProtocolViewKind::AuditLog)
+		return new ibAuditLogDocument(tabId);
+	return new ibFormVisualDocument(tabId);
+}
+
 void ibFrontendMainFrame::DrawTabs(const ibProtocolNode& tabs)
 {
 	wxAuiMDIClientWindow* const client = GetClientWindow();
@@ -1059,12 +1085,7 @@ void ibFrontendMainFrame::DrawTabs(const ibProtocolNode& tabs)
 		// …and a tab closing is not opened again — its form went with the window it was shown in (ibDialogDocChildFrame).
 		if (m_tabsClosing.count(id) != 0)
 			continue;
-		const ibProtocolViewKind kind = static_cast<ibProtocolViewKind>(tab.GetInt(ibProtocolName::Kind));
-		ibTabDocument* opened = nullptr;
-		if (kind == ibProtocolViewKind::AuditLog)
-			opened = new ibAuditLogDocument(id);
-		else
-			opened = new ibFormVisualDocument(id);
+		ibTabDocument* const opened = CreateDocument(static_cast<ibProtocolViewKind>(tab.GetInt(ibProtocolName::Kind)), id);
 		m_documents[id] = opened;
 		opened->SetTitle(title);
 		const wxBitmap icon = ibProtocolPicture(tab.GetString(ibProtocolName::Icon));
@@ -1086,6 +1107,9 @@ void ibFrontendMainFrame::DrawTabs(const ibProtocolNode& tabs)
 			opened->DeleteAllViews();
 			continue;
 		}
+		// The command processor after the views, as the template's documents get theirs (InitDocument): a view's own
+		// undo (the code editor's) needs the view built.
+		opened->SetCommandProcessor(opened->OnCreateCommandProcessor());
 
 		// The start page — first, and never closed: a locked tab, which wx keeps ahead of the others.
 		if (tab.GetBool(ibProtocolName::Locked)) {
@@ -1145,6 +1169,35 @@ void ibFrontendMainFrame::DrawView(long long active, const ibProtocolNode& view,
 	chosen->DrawView(view,!patch.IsNode() || patch.Has(ibProtocolName::View) ? patch.FindChild(ibProtocolName::View) : ibProtocolNode());
 
 	m_drawing = false;
+}
+
+void ibFrontendMainFrame::DrawProperties(const ibProtocolNode& properties)
+{
+	if (m_objectInspector == nullptr)
+		return;
+
+	// The rows as the engine reads a node — the server wrote them so (ibPropertyInspector) — and the object they are of.
+	ibDataNode rows;
+	ibReadProtocolNode(properties, rows);
+	const long long id = static_cast<long long>(rows.GetMetaId());
+
+	// ONE DOOR BACK, whatever the object: the schema's (Properties), the object named, the property given the value as
+	// its row carries it. The rows it changed come back with the frame.
+	m_objectInspector->SelectObject(rows, [this, id](const wxString& name, const ibDataValue& value) {
+		ibDataNode args;
+		args.SetValue(wxT("Id"), static_cast<s32>(id));
+		args.SetValue(wxT("Name"), name);
+		if (value.Kind() == ibDataKind::Child)
+			args.SetProperty(wxT("Value"), value);
+		else
+			args.AddField(wxT("Value"), value);
+
+		ibProtocolNode params, answer;
+		params.SetValue(ibProtocolName::Schema, static_cast<long long>(ibProtocolSchema::Properties));
+		params.SetValue(ibProtocolName::Command, static_cast<long long>(ibProtocolSchemaCommand::Save));
+		ibWriteProtocolNode(args, params.Child(ibProtocolName::Args));
+		return Call(ibProtocolMethod::Schema, params, answer);
+	});
 }
 
 void ibFrontendMainFrame::Settle(const ibProtocolNode& answer)

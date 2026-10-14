@@ -1,4 +1,4 @@
-#include "backend/fileKind.h"
+#include "core/fileKind.h"
 
 #include <wx/filename.h>
 #include <wx/intl.h>

@@ -75,6 +75,9 @@ ibClientFrame::ibClientFrame(ibSessionHolder&& holder, ibClientInstance* clientI
 	// holder (tests) has no session to tell.
 	if (ibClientSession* const session = Session())
 		session->SetFrame(this);
+
+	// The status bar's first words — the desktop window's, both modes' (CreateWideGui); the client draws what is here.
+	SetStatusText(_("Ready"));
 }
 
 ibClientSession* ibClientFrame::Session() const

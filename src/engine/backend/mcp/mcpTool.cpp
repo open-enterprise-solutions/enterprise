@@ -1543,33 +1543,8 @@ bool ibMcpApplyByHand(ibProperty* property, const wxVariant& newValue, wxString&
 	return ibPropertyGate::SetValue(property->GetPropertyObject(), property, newValue, &refusal);
 }
 
-namespace {
-
-// (The event twin lived here too and is gone the same way: ibPropertyGate::SetEvent. It had no
-// caller left in this file — writing a handler goes through the same door as writing a value.)
-
-// ⚠ THE CLOSING HALF ALONE, for the one road that cannot ask first. A value arriving as a NODE is
-// not a wxVariant until the property has taken it, so there is nothing to put before the owner as
-// "this is what is coming" — the veto genuinely cannot be offered here. What CAN be honoured is
-// the telling, and it is, from the same place as everywhere else.
-//
-// Said out loud rather than quietly skipped: a caller writing a composite value gets the side
-// effects and not the refusal, and that is a real difference from writing a scalar.
-} // namespace
-
-void ibMcpNotifyChanged(ibProperty* property, const wxVariant& oldValue)
-{
-	if (property == nullptr)
-		return;
-
-	ibPropertyObject* owner = property->GetPropertyObject();
-
-	if (owner == nullptr)
-		return;
-
-	owner->OnPropertyChanged(property, oldValue, property->GetValue());
-	owner->OnChildChanged();
-}
+// (The event twin lived here too and is gone the same way: ibPropertyGate::SetEvent; and the closing half alone, for a
+// value arriving as a node, is the gate's too — ibPropertyGate::SetValue takes the node.)
 
 namespace {
 
@@ -1944,16 +1919,14 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 	    && !ibMcpCaptionInEveryLanguage(owner, value.AsString(), wxString::Format(wxT("'%s'"), name), refusal))
 		return false;
 
-	// Held before the write so the closing half can report what it replaced — the same two facts
-	// the other roads carry, taken the only way this one allows.
-	const wxVariant before = property->GetValue();
-
 	// ⭐ THE PROPERTY JUDGES, AND THE REFUSAL CARRIES THE SHAPE. Nothing here decides whether a
-	// value is legal — SetNodeValue is the property comparing what it was handed against what it
-	// holds, which is the only place that knows. But "would not take that value" on its own leaves
-	// a caller guessing at the difference, and the answer was in reach the whole time: the property
-	// can be asked what it holds NOW, and its kind is the shape a value has to arrive in.
-	if (!property->SetNodeValue(value)) {
+	// value is legal — the gate hands the node to the property, the only place that knows, and puts
+	// what it read before its owner (ibPropertyGate::SetValue, the node's door — the designer's
+	// inspector comes by it too). But "would not take that value" on its own leaves a caller guessing
+	// at the difference, and the answer was in reach the whole time: the property can be asked what
+	// it holds NOW, and its kind is the shape a value has to arrive in.
+	wxString refused;
+	if (!ibPropertyGate::SetValue(nullptr, property, value, &refused)) {
 
 		// ⭐⭐ WHERE THERE IS A VERB FOR IT, THE REFUSAL NAMES THE VERB. "It holds a structure - send
 		// one of that shape" is true and leaves the caller to assemble a type description by hand
@@ -2000,13 +1973,11 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 		// …and only the OTHER road needs to know what shape it holds.
 		const ibDataValue held = property->GetNodeValue();
 
-		refusal = wxString::Format(
-			ibMcpText("'%s' would not take that value. It holds a %s - send one of that shape, or read "
-			  "metadata_properties for what it has now."), name, KindOf(held));
+		refusal = refused + wxT(' ') + wxString::Format(
+			ibMcpText("It holds a %s - send one of that shape, or read metadata_properties for what it "
+			  "has now."), KindOf(held));
 		return false;
 	}
-
-	ibMcpNotifyChanged(property, before);
 
 	// ANSWERED WITH WHAT IT NOW HOLDS, read back through the property rather than
 	// echoed from the request: what was asked for and what was taken are different

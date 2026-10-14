@@ -1,8 +1,8 @@
 #include "advpropSize.h"
 
-#include "frmclient/backend/propertyManager/property/propertySize.h"
 #include "frmclient/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
 #include "frmclient/propertyManager/property/private/propertyRegistry.h"
+#include "frmclient/win/typeconv.h"   // the size as the server writes it
 
 // -----------------------------------------------------------------------
 // ibPGSizeProperty
@@ -19,8 +19,14 @@ class ibPropertySizeLoader
 public:
 	ibPropertySizeLoader()
 	{
-		ibPropertyRegistry::Register([](ibPropertySize* prop) -> wxPGProperty* {
-			return new ibPGSizeProperty(prop->GetLabel(), prop->GetName(), prop->GetValueAsSize());
+		ibPropertyRegistry::Register(wxT("ibPropertySize"), [](const ibDataNode& row) -> wxPGProperty* {
+			return new ibPGSizeProperty(ibPropertyRegistry::GetLabel(row), ibPropertyRegistry::GetName(row),
+				typeConv::StringToSize(ibPropertyRegistry::GetValue(row).AsString()));
+		},
+		[](const wxVariant& value) {
+			wxSize size;
+			size << value;
+			return ibDataValue::String(typeConv::SizeToString(size));
 		});
 	}
 }g_sizeLoader;

@@ -5,7 +5,7 @@
 
 #include "treeConfiguration.h"
 #include <wx/wupdlock.h>   // wxWindowUpdateLocker — the Freeze/Thaw pair taken as a guard
-#include "backend/fileKind.h"   // extensions live in one table, not at each call site
+#include "core/fileKind.h"   // extensions live in one table, not at each call site
 
 #include "mainFrame/mainFrameDesigner.h"   // the documents are the window's — see the verbs below
 #include "backend/backend_exception.h"     // an engine refusal arrives as an exception

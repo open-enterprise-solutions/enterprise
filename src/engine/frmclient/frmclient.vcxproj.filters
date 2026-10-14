@@ -154,6 +154,30 @@
     <ClCompile Include="win\editor\codeEditor\codeEditor.cpp">
       <Filter>win\editor\codeEditor</Filter>
     </ClCompile>
+    <ClCompile Include="win\editor\codeEditor\codeEditorLoader.cpp">
+      <Filter>win\editor\codeEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="win\editor\codeEditor\components\autoComplete.cpp">
+      <Filter>win\editor\codeEditor\components</Filter>
+    </ClCompile>
+    <ClCompile Include="win\editor\codeEditor\components\callTip.cpp">
+      <Filter>win\editor\codeEditor\components</Filter>
+    </ClCompile>
+    <ClCompile Include="win\editor\codeEditor\components\helpers\listBoxVisualData.cpp">
+      <Filter>win\editor\codeEditor\components\helpers</Filter>
+    </ClCompile>
+    <ClCompile Include="win\editor\codeEditor\components\helpers\listBoxWnd.cpp">
+      <Filter>win\editor\codeEditor\components\helpers</Filter>
+    </ClCompile>
+    <ClCompile Include="win\editor\codeEditor\components\helpers\popupWnd.cpp">
+      <Filter>win\editor\codeEditor\components\helpers</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\lineInput\lineInput.cpp">
+      <Filter>win\dlgs\lineInput</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\functionSearcher\functionSearcher.cpp">
+      <Filter>win\dlgs\functionSearcher</Filter>
+    </ClCompile>
     <ClCompile Include="win\editor\textEditor\textEditorPrintOut.cpp">
       <Filter>win\editor\textEditor</Filter>
     </ClCompile>
@@ -164,6 +188,9 @@
       <Filter>win\dlgs</Filter>
     </ClCompile>
     <ClCompile Include="win\dlgs\activeUser.cpp">
+      <Filter>win\dlgs</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\applyChange.cpp">
       <Filter>win\dlgs</Filter>
     </ClCompile>
     <ClCompile Include="win\dlgs\userItem.cpp">
@@ -377,6 +404,33 @@
     <ClInclude Include="win\editor\codeEditor\codeEditor.h">
       <Filter>win\editor\codeEditor</Filter>
     </ClInclude>
+    <ClInclude Include="win\editor\codeEditor\components\autoComplete.h">
+      <Filter>win\editor\codeEditor\components</Filter>
+    </ClInclude>
+    <ClInclude Include="win\editor\codeEditor\components\callTip.h">
+      <Filter>win\editor\codeEditor\components</Filter>
+    </ClInclude>
+    <ClInclude Include="win\editor\codeEditor\components\helpers\fontAscent.h">
+      <Filter>win\editor\codeEditor\components\helpers</Filter>
+    </ClInclude>
+    <ClInclude Include="win\editor\codeEditor\components\helpers\listBoxVisualData.h">
+      <Filter>win\editor\codeEditor\components\helpers</Filter>
+    </ClInclude>
+    <ClInclude Include="win\editor\codeEditor\components\helpers\listBoxWnd.h">
+      <Filter>win\editor\codeEditor\components\helpers</Filter>
+    </ClInclude>
+    <ClInclude Include="win\editor\codeEditor\components\helpers\popupWnd.h">
+      <Filter>win\editor\codeEditor\components\helpers</Filter>
+    </ClInclude>
+    <ClInclude Include="win\editor\codeEditor\res\bitmaps_res.h">
+      <Filter>win\editor\codeEditor\res</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\lineInput\lineInput.h">
+      <Filter>win\dlgs\lineInput</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\functionSearcher\functionSearcher.h">
+      <Filter>win\dlgs\functionSearcher</Filter>
+    </ClInclude>
     <ClInclude Include="win\editor\textEditor\textEditorPrintOut.h">
       <Filter>win\editor\textEditor</Filter>
     </ClInclude>
@@ -442,6 +496,15 @@
     </ClInclude>
     <ClInclude Include="win\dlgs\activeUser.h">
       <Filter>win\dlgs</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\applyChange.h">
+      <Filter>win\dlgs</Filter>
+    </ClInclude>
+    <ClInclude Include="backend\debugger\debugClient.h">
+      <Filter>backend\debugger</Filter>
+    </ClInclude>
+    <ClInclude Include="backend\debugger\debugDefs.h">
+      <Filter>backend\debugger</Filter>
     </ClInclude>
     <ClInclude Include="win\dlgs\userItem.h">
       <Filter>win\dlgs</Filter>
@@ -625,6 +688,9 @@
     <Filter Include="backend\job">
       <UniqueIdentifier>{6a1f8b3d-2c4e-4f70-9bac-1d2e3f405165}</UniqueIdentifier>
     </Filter>
+    <Filter Include="backend\debugger">
+      <UniqueIdentifier>{6a1f8b3d-2c4e-4f70-9bac-1d2e3f405168}</UniqueIdentifier>
+    </Filter>
     <Filter Include="backend\mcp">
       <UniqueIdentifier>{6a1f8b3d-2c4e-4f70-9bac-1d2e3f405167}</UniqueIdentifier>
     </Filter>
@@ -693,6 +759,21 @@
     </Filter>
     <Filter Include="win\editor\codeEditor">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5052}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\editor\codeEditor\components">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5055}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\editor\codeEditor\components\helpers">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5056}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\editor\codeEditor\res">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5057}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\dlgs\lineInput">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5058}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\dlgs\functionSearcher">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5059}</UniqueIdentifier>
     </Filter>
     <Filter Include="win\dlgs\translateConstructor">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f503d}</UniqueIdentifier>
@@ -1118,6 +1199,9 @@
     </ClInclude>
     <ClCompile Include="win\dlgs\translateConstructor\translateConstructor.cpp">
       <Filter>win\dlgs\translateConstructor</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\formatConstructor\formatConstructor.cpp">
+      <Filter>win\dlgs\formatConstructor</Filter>
     </ClCompile>
     <ClInclude Include="win\dlgs\translateConstructor\translateConstructor.h">
       <Filter>win\dlgs\translateConstructor</Filter>

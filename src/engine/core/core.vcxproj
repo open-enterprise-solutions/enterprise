@@ -181,6 +181,7 @@
     <ClCompile Include="fiber\fiberLocals.cpp" />
     <ClCompile Include="fileSystem\fs.cpp" />
     <ClCompile Include="fileSystem\lz\lzhuf.cpp" />
+    <ClCompile Include="fileKind.cpp" />
     <ClCompile Include="fnumber.cpp" />
     <ClCompile Include="formatString.cpp" />
     <ClCompile Include="fstring.cpp" />
@@ -201,6 +202,7 @@
     <ClCompile Include="syntaxHelper\helpResolver.cpp" />
     <ClCompile Include="syntaxHelper\helpService.cpp" />
     <ClCompile Include="tabular\tabularModelView.cpp" />
+    <ClCompile Include="typeName.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="anyValue.h" />
@@ -234,6 +236,7 @@
     <ClInclude Include="fileSystem\fs.h" />
     <ClInclude Include="fileSystem\lz\lzhuf.h" />
     <ClInclude Include="fileSystem\types.h" />
+    <ClInclude Include="fileKind.h" />
     <ClInclude Include="fnumber.h" />
     <ClInclude Include="formatString.h" />
     <ClInclude Include="fstring.h" />
@@ -261,6 +264,7 @@
     <ClInclude Include="syntaxHelper\helpResolver.h" />
     <ClInclude Include="syntaxHelper\helpService.h" />
     <ClInclude Include="tabular\tabularModelView.h" />
+    <ClInclude Include="typeName.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

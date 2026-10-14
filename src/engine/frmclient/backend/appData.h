@@ -10,10 +10,16 @@ class ibMetaData;
 
 // THE APPLICATION'S DATA as the copied windows ask it — it holds no configuration of its own: what an active one would
 // answer is the server's (a window is handed what it needs, or asks).
-class ibApplicationData {
+class FRMCLIENT_API ibApplicationData {
 public:
 	// The designer — the frame logged in as one (ibProtocolMode::Designer): the thin designer is.
 	bool DesignerMode() const;
+
+	// A client of the same base started beside this one — `strAppName` the binary next to this one, given this process's
+	// own command line (the base it opened, the user it logged in as; `--debug` when `searchDebug`). Its pid; 0 — not
+	// started. ⚠ The debugger's search for it, and the web server's manifest (`useManifest`), are not ported: the second
+	// answers 0.
+	long RunApplication(const wxString& strAppName, bool searchDebug = true, bool useManifest = false) const;
 };
 
 // THE APPLICATION INSTANCE as the copied windows reach the base's parts through it — the server's: asked of their

@@ -7,7 +7,7 @@
 //files
 #include "frmserver/docView/templates/docViewDataProcessorFile.h"
 #include "frmserver/docView/templates/docViewDataReportFile.h"
-#include "backend/fileKind.h"   // extensions live in one table, not at each call site
+#include "core/fileKind.h"   // extensions live in one table, not at each call site
 
 wxIMPLEMENT_DYNAMIC_CLASS(ibDocManagerRuntime, ibDocManager);
 

@@ -116,6 +116,7 @@
     <ClCompile Include="fileSystem\lz\lzhuf.cpp">
       <Filter>fileSystem\lz</Filter>
     </ClCompile>
+    <ClCompile Include="fileKind.cpp" />
     <ClCompile Include="fnumber.cpp" />
     <ClCompile Include="formatString.cpp" />
     <ClCompile Include="fstring.cpp" />
@@ -131,6 +132,7 @@
     <ClCompile Include="guid.cpp" />
     <ClCompile Include="localization.cpp" />
     <ClCompile Include="programFolder.cpp" />
+    <ClCompile Include="typeName.cpp" />
     <ClCompile Include="query\queryKeywords.cpp">
       <Filter>query</Filter>
     </ClCompile>
@@ -263,8 +265,10 @@
       <Filter>graphics</Filter>
     </ClInclude>
     <ClInclude Include="guid.h" />
+    <ClInclude Include="fileKind.h" />
     <ClInclude Include="localization.h" />
     <ClInclude Include="programFolder.h" />
+    <ClInclude Include="typeName.h" />
     <ClInclude Include="query\queryBalanceRole.h">
       <Filter>query</Filter>
     </ClInclude>

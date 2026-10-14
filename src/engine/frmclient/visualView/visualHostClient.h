@@ -129,9 +129,6 @@ public:
 	virtual bool OnClose(bool deleteWindow = true) override;
 	virtual void OnDraw(wxDC* WXUNUSED(dc)) override {}
 
-	// The title as the server writes it — a modified form's ends with `*` already.
-	virtual void OnChangeFilename() override;
-
 	ibVisualHostClient* GetVisualHost() const { return m_visualHost; }
 
 	// ⭐ THE SAME DOC/VIEW, A FACADE OVER THE FORM'S ACTIVE CONTROL (ibValueForm::GetActiveControl, which this view
@@ -171,6 +168,8 @@ public:
 
 	// While the form's active control is a document of its own, the undo is that document's.
 	virtual wxCommandProcessor* GetCommandProcessor() const override;
+	// The form's undo is the server's (ibProtocolCommand::Undo).
+	virtual wxCommandProcessor* OnCreateCommandProcessor() override;
 
 	ibFormVisualEditView* GetFirstView() const;
 

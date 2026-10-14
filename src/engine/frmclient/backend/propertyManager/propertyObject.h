@@ -1015,11 +1015,21 @@ namespace ibPropertyGate {
 	FRMCLIENT_API bool SetValue(ibPropertyObject* asked, ibProperty* property,
 		const wxVariant& newValue, wxString* refusal = nullptr);
 
+	// …A VALUE AS THE PROPERTY'S NODE HOLDS IT (GetNodeValue) — what an inspector's row hands back: the property reads
+	// it, and what it read is placed as above. A cell the property reads in place leaves nothing to ask the owner about
+	// first; it is told only.
+	FRMCLIENT_API bool SetValue(ibPropertyObject* asked, ibProperty* property,
+		const ibDataValue& newValue, wxString* refusal = nullptr);
+
 	// THE TWIN, AND IT IS A TWIN ON PURPOSE. An event is an ibBackendProperty like a property is,
 	// and ibPropertyObject declares OnEventChanging / OnEventChanged beside the property pair for
 	// exactly this reason. The only difference is WHICH pair is asked.
 	FRMCLIENT_API bool SetEvent(ibPropertyObject* asked, ibEvent* event,
 		const wxVariant& newValue, wxString* refusal = nullptr);
+
+	// …and its value as the event's node holds it, read as SetValue reads a property's.
+	FRMCLIENT_API bool SetEvent(ibPropertyObject* asked, ibEvent* event,
+		const ibDataValue& newValue, wxString* refusal = nullptr);
 }
 
 #include "frmclient/backend/compiler/value.h"

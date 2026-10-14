@@ -29,19 +29,19 @@ enum {
 #pragma region __command_h__
 class ibModifyPropertyCmd : public ibFormEditorCmd {
 public:
-	ibModifyPropertyCmd(ibValueFrame* object, ibProperty* prop, const wxVariant& newValue)
+	ibModifyPropertyCmd(ibValueFrame* object, ibProperty* prop, const ibDataValue& newValue)
 		: m_object(object), m_property(prop), m_newValue(newValue)
 	{
 	}
 protected:
 	virtual void DoExecute() override {
-		// Get the ibValueFrame from the event
-		m_property->SetValue(m_newValue);
+		// …as the row carried it back: the property reads its own node.
+		m_property->SetNodeValue(m_newValue);
 	}
 private:
 	ibValueFrame* m_object = nullptr;
 	ibProperty* m_property;
-	wxVariant m_newValue;
+	ibDataValue m_newValue;
 };
 
 class ibShiftChildCmd : public ibFormEditorCmd {
@@ -411,9 +411,9 @@ void ibDialogFormEditor::OnSelChanged(wxTreeEvent& event)
 							continue;
 					}
 
-					wxPGProperty* pg = ibPropertyRegistry::Create(prop);
+					ibDataNode rows;
+					wxPGProperty* pg = ibPropertyRegistry::Create(ibPropertyRegistry::AppendProperty(rows, prop));
 					propertyGridPage->Append(pg);
-					pg->SetHelpString(prop->GetHelp());
 					pg->RefreshChildren();
 
 					pgArray.emplace(pg, prop);
@@ -508,8 +508,12 @@ void ibDialogFormEditor::OnPropertyGridChanging(wxPropertyGridEvent& event)
 {
 	auto it = m_pgArray.find(event.GetProperty());
 	if (it != m_pgArray.end()) {
+		// The widget's value as the property's row carries it — the row written again: only its class is read.
+		ibDataNode rows;
+		const ibDataValue value = ibPropertyRegistry::GetNodeValue(
+			ibPropertyRegistry::AppendProperty(rows, it->second), event.GetValue());
 		ExecuteCommand(
-			new ibModifyPropertyCmd(m_selectedControl, it->second, event.GetValue())
+			new ibModifyPropertyCmd(m_selectedControl, it->second, value)
 		);
 	}
 

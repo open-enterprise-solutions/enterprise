@@ -12,7 +12,7 @@ wxIMPLEMENT_DYNAMIC_CLASS(ibDocManagerEnterprise, ibDocManager);
 //files
 #include "templates/docViewDataProcessorFile.h"
 #include "templates/docViewDataReportFile.h"
-#include "backend/fileKind.h"   // extensions live in one table, not at each call site
+#include "core/fileKind.h"   // extensions live in one table, not at each call site
 
 ibDocManagerEnterprise::ibDocManagerEnterprise()
 	: ibDocManager()
