@@ -20,7 +20,7 @@ public:
 	// with its Column (1 — the navigation's, on the left; 2 — the actions', on the right), its Title (none for the
 	// section's own items at the top), a declared group's Picture and Tooltip, and its items — Item, Title, Icon and
 	// Type: what the link opens it as (Create in the Create group, the default anywhere else).
-	virtual void Build(const ibSession& session, ibDataNode& result) const override;
+	virtual void Build(const ibSession& session, const ibDataNode& args, ibDataNode& result) const override;
 
 	// Open — only an item a page offers this person, as that page offers it; anything else is refused.
 	virtual std::function<void()> Command(const ibSession& session, s32 command,

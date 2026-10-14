@@ -1164,7 +1164,7 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::DeletePredefinedValue(const
 
 bool ibValueMetaObjectRecordDataHierarchyMutableRef::WriteData(ibDataNode& node) const
 {
-	// predefined values -> an Array of Child{ guid, name, code, description, isFolder }
+	// predefined values -> an Array of Child{ guid, name, code, description, isFolder, parent — its guid, absent at the top }
 	std::vector<ibDataValue> predefined;
 	for (const auto& value : m_predefinedObjectVector) {
 		auto pv = std::make_shared<ibDataNode>();
@@ -1173,6 +1173,8 @@ bool ibValueMetaObjectRecordDataHierarchyMutableRef::WriteData(ibDataNode& node)
 		pv->SetValue(wxT("Code"), value->GetPredefinedCode());
 		pv->SetValue(wxT("Description"), value->GetPredefinedDescription());
 		pv->SetValue(wxT("IsFolder"), (bool)value->IsPredefinedFolder());
+		if (value->GetPredefinedParent() != nullptr)
+			pv->SetValue(wxT("Parent"), value->GetPredefinedParent()->GetPredefinedGuid());
 		predefined.push_back(ibDataValue::Child(pv));
 	}
 	node.SetProperty(wxT("Predefined"), ibDataValue::Array(predefined));
@@ -1194,6 +1196,8 @@ bool ibValueMetaObjectRecordDataHierarchyMutableRef::ReadData(const ibDataNode& 
 {
 	const ibDataValue predefinedVal = node.GetProperty(wxT("Predefined"));
 	if (predefinedVal.Kind() == ibDataKind::Array) {
+		// The parent is linked once every item is read: an item edited to sit under a later one stands before it.
+		std::vector<std::pair<wxObjectDataPtr<ibPredefinedValueObject>, ibGuid>> parents;
 		for (const ibDataValue& item : predefinedVal.AsArray()) {
 			const std::shared_ptr<ibDataNode>& pv = item.AsChild();
 			if (!pv)
@@ -1202,9 +1206,14 @@ bool ibValueMetaObjectRecordDataHierarchyMutableRef::ReadData(const ibDataNode& 
 			wxString valueName = pv->GetValue<wxString>(wxT("Name"));
 			wxString valueCode = pv->GetValue<wxString>(wxT("Code"));
 			wxString valueDescription = pv->GetValue<wxString>(wxT("Description"));
+			const bool valueIsFolder = pv->GetValue<bool>(wxT("IsFolder"));
 			m_predefinedObjectVector.emplace_back(
-				new ibPredefinedValueObject(valueGuid, valueName, valueCode, valueDescription));
+				new ibPredefinedValueObject(valueGuid, valueName, valueCode, valueDescription, valueIsFolder));
+			if (pv->FindField(wxT("Parent")) != nullptr)
+				parents.emplace_back(m_predefinedObjectVector.back(), pv->GetValue<ibGuid>(wxT("Parent")));
 		}
+		for (const auto& parent : parents)
+			parent.first->m_valueParent = FindPredefinedValue(parent.second);
 	}
 
 	m_propertyAttributePredefined->SetNodeValue(node.GetProperty(m_propertyAttributePredefined->GetName()));

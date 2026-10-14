@@ -25,9 +25,9 @@
 #include "backend/appData.h"
 #include "backend/metaCollection/metaIntrospect.h"   // ibConfigurationWritesInWords — the dialect this configuration uses
 #include "backend/metadataConfiguration.h"
-#include "backend/syntaxHelper/helpCorpus.h"
-#include "backend/syntaxHelper/helpEntry.h"
-#include "backend/syntaxHelper/helpService.h"
+#include "core/syntaxHelper/helpCorpus.h"
+#include "core/syntaxHelper/helpEntry.h"
+#include "core/syntaxHelper/helpService.h"
 
 namespace {
 

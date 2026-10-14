@@ -878,12 +878,8 @@ void ibFrontendView::OnChangeFilename()
     ibFrontendDocument *doc = GetDocument();
     if (!doc) return;
 
-    wxString label = doc->GetUserReadableName();
-    if (doc->IsModified())
-    {
-       label += "*";
-    }
-    win->SetLabel(label);
+    // ⚠ AS GIVEN — a tab's title is the server's, its "*" already in it (ibClientChildFrame::GetTitle).
+    win->SetLabel(doc->GetUserReadableName());
 }
 
 void ibFrontendView::SetDocument(ibFrontendDocument *doc)

@@ -214,14 +214,6 @@ void ibFormVisualEditView::OnActiveControlCommand(wxCommandEvent& event)
 		event.Skip();
 }
 
-void ibFormVisualEditView::OnChangeFilename()
-{
-	wxWindow* const win = GetFrame();
-	ibFrontendDocument* const doc = GetDocument();
-	if (win != nullptr && doc != nullptr)
-		win->SetLabel(doc->GetUserReadableName());
-}
-
 // ----------------------------------------------------------------------------
 // ibFormVisualDocument
 // ----------------------------------------------------------------------------
@@ -229,7 +221,6 @@ void ibFormVisualEditView::OnChangeFilename()
 ibFormVisualDocument::ibFormVisualDocument(long long tabId)
 	: ibTabDocument(tabId)
 {
-	SetCommandProcessor(new ibFormVisualCommandProcessor(*this));
 }
 
 void ibFormVisualDocument::DrawView(const ibProtocolNode& view, const ibProtocolNode& patch)
@@ -250,6 +241,11 @@ wxCommandProcessor* ibFormVisualDocument::GetCommandProcessor() const
 	if (const ibFrontendView* const view = formView != nullptr ? formView->GetActiveControlView() : nullptr)
 		return view->GetDocument()->GetCommandProcessor();
 	return ibFrontendDocument::GetCommandProcessor();
+}
+
+wxCommandProcessor* ibFormVisualDocument::OnCreateCommandProcessor()
+{
+	return new ibFormVisualCommandProcessor(*this);
 }
 
 ibFrontendView* ibFormVisualDocument::DoCreateView()

@@ -4,7 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "mainFrameDesigner.h"
-#include "backend/fileKind.h"   // extensions live in one table, not at each call site
+#include "core/fileKind.h"   // extensions live in one table, not at each call site
 
 #include "backend/appData.h"
 #include "backend/backend_exception.h"

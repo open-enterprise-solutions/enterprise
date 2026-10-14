@@ -15,8 +15,8 @@
 
 #include "frontend/syntaxHelper/helpPaneView.h"
 
-#include "backend/syntaxHelper/helpCorpus.h"
-#include "backend/syntaxHelper/helpEntry.h"
+#include "core/syntaxHelper/helpCorpus.h"
+#include "core/syntaxHelper/helpEntry.h"
 #include "backend/compiler/compileCode.h"
 
 #include <wx/clipbrd.h>

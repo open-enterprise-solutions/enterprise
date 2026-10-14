@@ -1,0 +1,231 @@
+#include "propertyInspector.h"
+
+#include <algorithm>
+
+#include "core/typeName.h"   // ibTypeInfoName — a property's class, named as the client registers it
+
+#include "backend/metaData.h"   // what a type's property may hold, named as its configuration names it
+#include "backend/backend_picture.h"   // ibBackendPicture::FromImage — a choice's picture, as the wire carries it
+#include "backend/objCtor.h"
+#include "backend/metaCollection/metaObject.h"
+#include "backend/metaCollection/metaModuleObject.h"      // ibPropertyInnerModule — a module its owner holds
+#include "backend/metaCollection/metaObjectComposite.h"   // ibPropertyContainer — an inner attribute, a table
+#include "backend/metaCollection/partial/chartOfAccountsDimensionKindsTable.h"
+#include "backend/metaCollection/partial/chartOfCalculationTypesRelationTable.h"
+#include "backend/propertyManager/property/propertyType.h"   // ibPropertyType — a type description, and what it may hold
+#include "core/serialize/dataBuilder.h"
+
+namespace {
+
+// A PROPERTY THAT CARRIES COMPOSITION — an inner attribute (Ref, Code, Description, …), a table — not a value to edit:
+// the desktop's grid has no editor for it (advpropModule.cpp, RegisterNoEditor) and draws no row, nor does this.
+// ibPropertyContainer is a template with no non-template base, so each instantiation is named, as there.
+bool IsComposition(const ibProperty* property)
+{
+	return dynamic_cast<const ibPropertyContainer<>*>(property) != nullptr
+		|| dynamic_cast<const ibPropertyContainer<ibValueMetaObjectAccountDimensionKindsTable>*>(property) != nullptr
+		|| dynamic_cast<const ibPropertyContainer<ibValueMetaObjectCalculationTypeRelationTable>*>(property) != nullptr;
+}
+
+// THE MODULE AN INNER MODULE'S PROPERTY HOLDS — opened from the desktop's grid by a link (advpropModule.cpp,
+// ibPGHyperLinkProperty), not edited; none for any other property. A template too, each instantiation named as there.
+ibValueMetaObject* GetInnerModule(const ibBackendProperty* property)
+{
+	if (const auto* module = dynamic_cast<const ibPropertyInnerModule<ibValueMetaObjectModule>*>(property))
+		return module->GetMetaObject();
+	if (const auto* module = dynamic_cast<const ibPropertyInnerModule<ibValueMetaObjectManagerModule>*>(property))
+		return module->GetMetaObject();
+	return nullptr;
+}
+
+// WHAT A TYPE'S PROPERTY MAY HOLD — the desktop's picker's offer (ibShowTypeSelector): the types the configuration offers
+// a field of its shape, and those the value holds already — an editor does not drop what it was opened on; each by its
+// class id, named as it is offered. Several at once, but in a table's shape, which takes one.
+void AppendTypes(ibDataNode& row, const ibPropertyType* property)
+{
+	const ibSelectorDataType filter = property->GetFilterDataType();
+	const ibBackendTypeConfigFactory* const factory =
+		dynamic_cast<const ibBackendTypeConfigFactory*>(property->GetPropertyObject());
+	const ibMetaData* const metaData = factory != nullptr ? factory->GetMetaData() : nullptr;
+
+	std::vector<ibClassID> offered;
+	ibBackendTypeConfigFactory::GetTypesByFilter(filter, metaData, offered);
+	for (const ibClassID& held : property->GetValueAsTypeDesc().GetClsidList()) {
+		if (std::find(offered.begin(), offered.end(), held) == offered.end())
+			offered.push_back(held);
+	}
+
+	row.SetValue(ibProtocolName::Multiple, filter != ibSelectorDataType::ibSelectorDataType_table);
+	for (const ibClassID& clsid : offered) {
+		const ibCtorAbstractType* const so = metaData != nullptr
+			? metaData->GetAvailableCtor(clsid) : ibValue::GetAvailableCtor(clsid);
+		if (so == nullptr)
+			continue;
+		ibDataNode& type = row.AddChild(0, static_cast<ibMetaID>(row.Children().size() + 1));
+		type.SetValue(ibProtocolName::Type, wxString::Format(wxT("%llu"), static_cast<unsigned long long>(clsid)));
+		type.SetValue(ibProtocolName::Title, so->GetClassName());
+	}
+}
+
+} // namespace
+
+// ONE PROPERTY'S ROW — a property's or an event's, of any object, a form's control or a metaobject: its name and its
+// class, its value as it is stored (GetNodeValue), and what it may be set to. The client shows it by its class
+// (ibPropertyRegistry), knowing no property of its own.
+void ibPropertyInspector::AppendProperty(ibDataNode& parent, ibBackendProperty* property)
+{
+	ibDataNode& row = parent.AddChild(0, static_cast<ibMetaID>(parent.Children().size() + 1));
+	row.SetValue(ibProtocolName::Name, property->GetName());
+	row.SetValue(ibProtocolName::Title, property->GetLabel());
+	if (!property->GetHelp().IsEmpty())
+		row.SetValue(ibProtocolName::Help, property->GetHelp());
+	row.SetValue(ibProtocolName::Class, ibTypeInfoName(typeid(*property)));
+
+	// …as it is stored: a scalar a field, a composite (a type description) a node of its own.
+	const ibDataValue value = property->GetNodeValue();
+	if (value.Kind() == ibDataKind::Child)
+		row.SetProperty(ibProtocolName::Value, value);
+	else
+		row.AddField(ibProtocolName::Value, value);
+	// …and what it reads as — what the client shows where it has no editor of its own for the class.
+	row.SetValue(ibProtocolName::Presentation, property->GetValue().MakeString());
+
+	// A MODULE its owner holds — opened from the desktop's grid by a link, not edited: the module itself, by its id.
+	if (const ibValueMetaObject* const module = GetInnerModule(property))
+		row.SetValue(ibProtocolName::Object, static_cast<s32>(module->GetMetaID()));
+
+	// A TYPE — what it may hold, as the desktop's picker offered it.
+	if (const ibPropertyType* const type = dynamic_cast<const ibPropertyType*>(property))
+		AppendTypes(row, type);
+
+	// WHAT IT MAY BE SET TO — one of them (Multiple: several at once), by its id, with its picture as the desktop's list
+	// drew it beside its label (a language's icon).
+	ibPropertyChoiceList choices;
+	const ibPropertyChoiceMode mode = property->GetValueList(choices);
+	if (mode == ibPropertyChoiceMode::Mult)
+		row.SetValue(ibProtocolName::Multiple, true);
+	for (unsigned int index = 0; index < choices.GetCount(); ++index) {
+		ibDataNode& choice = row.AddChild(0, static_cast<ibMetaID>(index + 1));
+		choice.SetValue(ibProtocolName::Id, static_cast<s32>(choices.GetId(index)));
+		choice.SetValue(ibProtocolName::Title, choices.GetLabel(index));
+		const wxBitmap& bitmap = choices.GetBitmap(index);
+		if (bitmap.IsOk())
+			choice.SetValue(ibProtocolName::Picture, wxString(ibBackendPicture::FromImage(bitmap.ConvertToImage()).GetData()));
+	}
+
+	if (!property->IsEditable())
+		row.SetValue(ibProtocolName::ReadOnly, true);
+}
+
+namespace {
+
+// ONE CATEGORY'S ROWS — as the desktop's inspector laid it out (ibObjectInspector::AddItems): its properties, then its
+// categories, each a row with its Title and its own; a property met before is not met again. ⭐ WHAT THE OBJECT'S STATE
+// HIDES IS NOT SENT — nor a category left with nothing: the rows ride every frame, so one shown again comes back with
+// it.
+void AppendCategory(ibDataNode& parent, ibPropertyObject* object, const ibPropertyCategory* category,
+	const std::set<const ibProperty*>& hidden, std::set<wxString>& met)
+{
+	for (unsigned int index = 0; index < category->GetPropertyCount(); ++index) {
+		ibProperty* const property = object->GetProperty(category->GetPropertyName(index));
+		if (property == nullptr || IsComposition(property) || hidden.find(property) != hidden.end()
+			|| !met.insert(property->GetName()).second)
+			continue;
+		ibPropertyInspector::AppendProperty(parent, property);
+	}
+	// …and its events, as the desktop's grid drew them on their own page: a row each, of the event's class.
+	for (unsigned int index = 0; index < category->GetEventCount(); ++index) {
+		ibEvent* const event = object->GetEvent(category->GetEventName(index));
+		if (event == nullptr || !met.insert(event->GetName()).second)
+			continue;
+		ibPropertyInspector::AppendProperty(parent, event);
+	}
+
+	for (unsigned int index = 0; index < category->GetCategoryCount(); ++index) {
+		const ibPropertyCategory* const nextCategory = category->GetCategory(index);
+		if (nextCategory == nullptr)
+			continue;
+		ibDataNode& row = parent.AddChild(0, static_cast<ibMetaID>(parent.Children().size() + 1));
+		row.SetValue(ibProtocolName::Name, nextCategory->GetName());
+		row.SetValue(ibProtocolName::Title, nextCategory->GetLabel());
+		AppendCategory(row, object, nextCategory, hidden, met);
+		if (row.Children().empty())
+			parent.Children().pop_back();
+	}
+}
+
+} // namespace
+
+ibPropertyInspector::~ibPropertyInspector()
+{
+	if (ibPropertyObject* const object = GetSelectedObject())
+		object->RemoveNotifier(this);
+}
+
+bool ibPropertyInspector::PropertyHidden(const ibProperty* property, bool hide)
+{
+	if (hide)
+		m_hidden.insert(property);
+	else
+		m_hidden.erase(property);
+	return true;
+}
+
+void ibPropertyInspector::SelectObject(ibPropertyObject* object, ibMetaID id, s32 tabId)
+{
+	if (ibPropertyObject* const shown = GetSelectedObject())
+		shown->RemoveNotifier(this);
+
+	m_currentSel = object;
+	m_currentId = id;
+	m_tabId = tabId;
+	m_hidden.clear();
+
+	// …and asked, as the desktop's grid asked it once its rows were built: what its state hides is pushed back.
+	if (object != nullptr) {
+		object->AddNotifier(this);
+		object->OnRefresh();
+	}
+}
+
+void ibPropertyInspector::SelectObject(ibValueMetaObject* object, s32 tabId)
+{
+	SelectObject(object, object != nullptr ? object->GetMetaID() : 0, tabId);
+}
+
+ibPropertyObject* ibPropertyInspector::GetSelectedObject() const
+{
+	return m_currentSel != nullptr && GetOwner() == m_currentSel ? m_currentSel : nullptr;
+}
+
+bool ibPropertyInspector::SetValue(const wxString& name, const ibDataValue& value)
+{
+	ibPropertyObject* const object = GetSelectedObject();
+	if (object == nullptr)
+		return false;
+
+	bool done = false;
+	if (ibProperty* const property = object->GetProperty(name))
+		done = ibPropertyGate::SetValue(object, property, value);
+	else if (ibEvent* const event = object->GetEvent(name))
+		done = ibPropertyGate::SetEvent(object, event, value);
+
+	// …the edit may have changed what its state hides; the object is asked again — if it is still the one shown.
+	if (GetSelectedObject() == object)
+		object->OnRefresh();
+	return done;
+}
+
+void ibPropertyInspector::OnDraw(ibDataNode& node) const
+{
+	ibPropertyObject* const object = GetSelectedObject();
+	if (object == nullptr)
+		return;
+
+	node.SetMetaId(m_currentId);
+	if (m_tabId != 0)
+		node.SetValue(ibProtocolName::Tab, m_tabId);
+
+	std::set<wxString> met;
+	AppendCategory(node, object, object->GetCategory(), m_hidden, met);
+}

@@ -848,6 +848,8 @@ bool ibClientHost::Call(ibProtocolMethod method, const ibDataNode& params, ibDat
 				ibClientFrame* const frame = client->instance->GetFrame();
 				std::shared_ptr<ibSession> session = client->instance->ShareSession();
 				const ibClientSchema* const schema = frame != nullptr ? frame->GetDocumentManager()->FindSchema(kind) : nullptr;
+				const ibDataNode* found = params.FindChild(wxT("Args"));
+				const ibDataNode args = found != nullptr ? *found : ibDataNode();
 				if (frame == nullptr || session == nullptr) {
 					refuse(ibProtocolRefusal::NoSession, wxT("the client has no session"));
 				}
@@ -856,12 +858,19 @@ bool ibClientHost::Call(ibProtocolMethod method, const ibDataNode& params, ibDat
 				}
 				else if (params.FindField(wxT("Command")) == nullptr) {
 					// Without the right to it, the person gets an error, not the schema.
-					session->Submit([schema, &session, &result, &done, &refuse]() {
+					session->Submit([schema, &session, &args, &result, &done, &refuse]() {
 						if (!schema->AccessRight(*session))
 							refuse(ibProtocolRefusal::NoRight, wxT("no right to this schema"));
 						else {
-							schema->Build(*session, result);
-							done = true;
+							// What the schema could not read is the person's refusal, in the base's words — an
+							// unreadable list is not an empty one (the users' ListAll throws it).
+							try {
+								schema->Build(*session, args, result);
+								done = true;
+							}
+							catch (const ibCoreException& err) {
+								refuse(ibProtocolRefusal::Failed, err.GetErrorDescription());
+							}
 						}
 					}).get();
 				}
@@ -869,8 +878,6 @@ bool ibClientHost::Call(ibProtocolMethod method, const ibDataNode& params, ibDat
 					// What a person did in it: refused before anything is done, or the work that does it — run as the
 					// client's work, so the answer is the frame, with what it opened.
 					const s32 command = params.GetValue<s32>(wxT("Command"));
-					const ibDataNode* found = params.FindChild(wxT("Args"));
-					const ibDataNode args = found != nullptr ? *found : ibDataNode();
 					std::function<void()> work;
 					session->Submit([schema, &session, command, &args, &work, &refuse, &refusal, &error]() {
 						if (!schema->AccessRight(*session))
@@ -1338,6 +1345,10 @@ void ibClientHost::DrawFrame(ibClientFrame* frame, ibDataNode& state, ibDataNode
 	DrawMenu(frame, frame->GetMenu().GetItems(), state.Child(wxT("Menu")));
 	const std::int64_t menus = NowMs();
 
+	// …and the mode's own part of it, beside the tabs — the designer's configuration tree.
+	frame->OnDraw(state);
+	const std::int64_t frameDrawn = NowMs();
+
 	// ⚠ THE ACTIVE VIEW BEFORE THE TABS: drawing it puts its form's caption on its document (ibVisualHost::
 	// UpdateVisualHost → SetCaption) — the tab's title. Drawn after them, a title changed by this answer (the form editor's
 	// Apply) reached the tab one frame late.
@@ -1417,8 +1428,8 @@ void ibClientHost::DrawFrame(ibClientFrame* frame, ibDataNode& state, ibDataNode
 		request.SetValue(wxT("Id"), wxString::FromUTF8(pending.id.c_str()));
 	}
 
-	ibJournalInfo(wxT("client"), wxT("    the frame: menus %lld ms, tabs %lld ms, the view %lld ms"), menus - began,
-		tabsDrawn - viewDrawn, viewDrawn - menus);
+	ibJournalInfo(wxT("client"), wxT("    the frame: menus %lld ms, its own %lld ms, tabs %lld ms, the view %lld ms"),
+		menus - began, frameDrawn - menus, tabsDrawn - viewDrawn, viewDrawn - frameDrawn);
 
 	// …AND THE PICTURES THE FRAME NAMES THAT THE CLIENT WAS NOT GIVEN YET — beside the events, never patched: given once,
 	// the client keeps them, and the frame names them by their ids (ibClientFrame::SendPicture).

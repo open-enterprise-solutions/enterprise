@@ -11,7 +11,7 @@ namespace {
 struct ibMetaGroupRow {
 	ibClassID       m_clsid;
 	// The SOURCE string, marked for extraction and left untranslated here: this table is static
-	// data, built before a locale is loaded (the same rule as backend/fileKind.cpp). Translating at
+	// data, built before a locale is loaded (the same rule as core/fileKind.cpp). Translating at
 	// the point of use is what lets one table answer in whatever language the session runs in.
 	const char*     m_caption;
 	ibMetaGroupBand m_band;

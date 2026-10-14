@@ -7,7 +7,7 @@
 
 #include "frontend/syntaxHelper/helpChooserDialog.h"
 
-#include "backend/syntaxHelper/helpEntry.h"
+#include "core/syntaxHelper/helpEntry.h"
 
 #include <wx/button.h>
 #include <wx/sizer.h>

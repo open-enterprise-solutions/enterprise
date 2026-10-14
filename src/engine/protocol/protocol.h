@@ -66,6 +66,34 @@ namespace ibProtocolName {
 	inline constexpr const char* Templates = "Templates";
 	inline constexpr const char* Request   = "Request";
 	inline constexpr const char* View      = "View";
+	inline constexpr const char* MetaData  = "MetaData";   // the designer's: its configuration's tree, the node itself its
+	                                                       // root row (ibProtocolSchema::MetaData)
+	// …the root row's: the configuration's state, as the engine answers it — Modified (ibMetaData::IsModified), Edited
+	// (IsEdited: somebody edited it), ConfigSave (ibMetaDataConfigurationBase::IsConfigSave: the database holds it),
+	// Syntax — the code style its modules are written in.
+	inline constexpr const char* Modified   = "Modified";
+	inline constexpr const char* Edited     = "Edited";
+	inline constexpr const char* ConfigSave = "ConfigSave";
+	inline constexpr const char* Syntax     = "Syntax";
+	inline constexpr const char* Synonym   = "Synonym";    // …a row's: its object's synonym, when it has one
+	inline constexpr const char* FormType  = "FormType";   // …a form's row: its kind (the owner's form type)
+	inline constexpr const char* Comment   = "Comment";    // …an external file's root row: its comment
+	inline constexpr const char* DefaultFormObject = "DefaultFormObject";   // …the default form's id (none: wxNOT_FOUND)
+	inline constexpr const char* DefaultComposer   = "DefaultComposer";     // …a report's default composer's id
+	// …a row's Menu: what its object offers to open (the engine's ibValueMetaObject::CollectContextMenu) — its children
+	// the items: Kind (ibMetaMenuKind: 0 a module, 1 an object, 2 a modal editor), Name, Title, Object and Type,
+	// Picture (none: the object's class's), Command (the editor's number, ProcessCommand; none: an object opened).
+	inline constexpr const char* Object    = "Object";     // …an item's: the metaobject it opens, by its id
+	inline constexpr const char* Standard  = "Standard";   // …the Menu's: false — the tree's New / Edit / Remove /
+	                                                       // Properties do not apply to the row (absent: they do)
+	// The designer's inspector: the object it shows (NodeId, Tab — an edit goes back by schema Properties), its categories
+	// (Name, Title) and property rows — Name, Title, Help, Class, Value, Presentation, ReadOnly, and what a property may
+	// be set to (its children Id, Title, Picture; Multiple — several at once). What its object's state hides is not sent.
+	// …and an external file's root row's: the header above its tree — its object's rows, as the inspector's.
+	inline constexpr const char* Properties = "Properties";
+	inline constexpr const char* Help       = "Help";     // …a property row's: what it is for, as the inspector says it
+	inline constexpr const char* Class      = "Class";    // …a property row's: the server's property class by name
+	                                                      // (ibPropertyBoolean) — what the client's registry shows it by
 
 	// What the frame's parts carry: a menu item, a tab, a message, a question and its answer.
 	inline constexpr const char* Separator    = "Separator";
@@ -135,12 +163,22 @@ namespace ibProtocolName {
 	inline constexpr const char* Started     = "Started";
 	inline constexpr const char* Computer    = "Computer";
 	inline constexpr const char* Session     = "Session";
+	inline constexpr const char* Activity    = "Activity";
 	inline constexpr const char* Namespace   = "Namespace";
 	inline constexpr const char* Key         = "Key";
 	inline constexpr const char* Acquired    = "Acquired";
 	inline constexpr const char* Lock        = "Lock";
 	inline constexpr const char* Build       = "Build";
 	inline constexpr const char* Plugins     = "Plugins";
+
+	// The base's users (ibProtocolSchema::UserList) — a user's record as the engine's ibUserInfo holds it, and the
+	// configuration's roles and languages it is chosen from.
+	inline constexpr const char* Guid        = "Guid";
+	inline constexpr const char* FullName    = "FullName";
+	inline constexpr const char* Language    = "Language";
+	inline constexpr const char* Languages   = "Languages";
+	inline constexpr const char* Roles       = "Roles";
+	inline constexpr const char* Code        = "Code";
 
 	// The registration journal — a tab's (Kind AuditLog): its rows fetched by the tab, newest first, by the filter
 	// {From, To, Level, User, Session, Source, Event, Ref, Search, Offset, Count} — each row Time, Level, Session, User,
@@ -160,6 +198,12 @@ namespace ibProtocolName {
 	inline constexpr const char* Debugging = "Debugging";   // the session's process listens for the designer
 	inline constexpr const char* Allowed   = "Allowed";     // …and may be switched now: not on the application server,
 	                                                        // not while a start waits for the designer
+
+	// The designer's assistant access — the schema's (McpServer), beside Enabled, Port and Token: where it listens,
+	// whether it does, and what a person hands their tool.
+	inline constexpr const char* Address  = "Address";
+	inline constexpr const char* Running  = "Running";
+	inline constexpr const char* Endpoint = "Endpoint";   // empty while it is not running
 
 	// A view — a tab's form, its controls as the server writes them (visualView/): what each was saved with, beside its
 	// State, what the server reads it as now; and what the person did with one, back by its id.
@@ -425,22 +469,71 @@ enum class ibProtocolMode : int {
 // picked in it. Which of them a client's application offers is the frame's Schemas.
 enum class ibProtocolSchema : int {
 	AllFunctions = 1,   // the runtime's: Groups (Title, Icon) of items (Item, Title, Icon); command 1 Open {Item, Type}
-	ActiveUser   = 2,   // both modes': Sessions (User, Application, Type, Started, Computer, Session) and Locks
-	                    // (Namespace, Key, Mode, User, Acquired, Lock)
+	ActiveUser   = 2,   // both modes': Sessions (User, Application, Type, Started, Computer, Session, Activity) and
+	                    // Locks (Namespace, Key, Mode, User, Acquired, Lock); the designer's commands 5 Kick {Session}
+	                    // — that session closed, 6 Reload {Session} — its clients reloaded, 7 Release {Lock} — that
+	                    // lock released by force
 	Sections     = 3,   // the runtime's section panel: Sections (NodeId, Title, Picture) with their Blocks (Column 1|2,
 	                    // Title, Picture, Tooltip) of items (Item, Title, Icon, Type); command 1 Open {Item, Type}
 	About        = 4,   // both modes': Build, Picture, Database, Application, User, Locale and Plugins (Name, Version)
 	AuditLog     = 5,   // both modes': the registration journal — shows nothing; command 1 Open opens its tab (Kind
 	                    // AuditLog)
 	Debugging    = 6,   // the runtime's options: Debugging, Allowed; commands 2 Start and 3 Stop
+	McpServer    = 7,   // the designer's assistant access, the person's: Enabled, Address, Port, Token, Running,
+	                    // Endpoint, Allowed; commands 2 Start {Enabled, Address, Port, Token} — started on those, 3 Stop,
+	                    // 4 Save {…} — kept as the person's
+	UserList     = 8,   // the designer's users of the base: Users (Guid, Name, FullName), and what a user's record is
+	                    // chosen from — the configuration's Roles (Guid, Name, Title, Mode) and Languages (Guid, Title,
+	                    // Code); `Args: {Guid}` — that one's User {Guid, Name, FullName, Password — whether one is stored
+	                    // (never the stored one), Language — its guid, Roles (Guid)}; commands 4 Save {Guid, Name,
+	                    // FullName, Language, Roles (Guid)[, Password — a new one, hashed by the server; absent: the
+	                    // stored one kept]}, 8 Remove {Guid}
+	MetaData     = 9,   // the designer's configuration tree — shows nothing: its rows ride the frame (MetaData, each
+	                    // row NodeId — its object's id, or below 0 a group row's place among its siblings; Title,
+	                    // Picture, Group — what New makes under it, Type, Synonym, Position, Guid — its object's; a
+	                    // language's Code, a role's Mode). Its commands are its own (ibProtocolMetaDataCommand), each
+	                    // with Tab in that tab's tree — an external file's (ViewKind DataProcessor, Report)
+	Properties   = 10,  // the designer's inspector — shows nothing: its rows ride the frame (Properties: NodeId — the
+	                    // object shown, Tab; categories Name, Title; properties Name, Title, Help, Class — the property's
+	                    // class as the source names it, Value as its node holds it, Presentation, ReadOnly, what it may
+	                    // be set to — children Id, Title, Picture; Multiple; what the object's state hides not sent).
+	                    // Save `{Id, Name, Value}` — the object shown, if it is still Id, given that value; one door for
+	                    // a form's control and a metaobject alike. Not shown — the metaobject of that id in the tab's
+	                    // tree (Tab: an external file's, its header's rows; none: the configuration's)
 };
 
 // A schema's own commands — `schema {Schema, Command, Args}`. All functions and Sections take the one: Open
-// {Item, Type} — an item they show, opened as the navigation opens it. Debugging takes Start and Stop.
+// {Item, Type} — an item they show, opened as the navigation opens it. Debugging takes Start and Stop; McpServer takes
+// them and Save; Active users, the designer's, Kick, Reload and Release; the users Save and Remove; the designer's
+// inspector (Properties) Save. The designer's tree has its own (ibProtocolMetaDataCommand).
 enum class ibProtocolSchemaCommand : int {
-	Open  = 1,
-	Start = 2,
-	Stop  = 3,
+	Open    = 1,
+	Start   = 2,
+	Stop    = 3,
+	Save    = 4,
+	Kick    = 5,
+	Reload  = 6,
+	Release = 7,
+	Remove  = 8,
+};
+
+// THE DESIGNER'S TREE'S COMMANDS — `schema {Schema: MetaData, Command, Args}`, its doors by an object's id, each with Tab
+// in an external file's tree. Numbered of their own: the schema reads them, no other.
+enum class ibProtocolMetaDataCommand : int {
+	Open     = 1,    // {Id} — the object's editor
+	Create   = 2,    // {Type, Parent} — a new one of that class under that object (0: the configuration's own), opened
+	Remove   = 3,    // {Id}
+	Move     = 4,    // {Id, Position} — put at that place among its parent's children
+	Copy     = 5,    // {Id, File} — written into that file (uploaded empty)
+	Paste    = 6,    // {Type, Parent, File} — read from that one
+	Select   = 7,    // {Id} — the object the inspector shows (the frame's Properties; an edit — schema Properties); 0 — none
+	Save     = 8,    // the configuration written
+	// …the configuration's own (the desktop's Configuration menu), each said to the person by the server; refused in an
+	// external file's tree:
+	Rollback = 9,    // taken back from the base
+	Apply    = 10,   // written and the base restructured, its ledger asked first (Request ApplyChange)
+	Load     = 11,   // {File} — read from that uploaded file
+	Unload   = 12,   // {File} — written into that one (uploaded empty)
 };
 
 // What the server asks the person — the frame's Request, by its Kind; answered with `respond {Id, Response}`.
@@ -485,6 +578,13 @@ enum class ibProtocolRequestKind : int {
 	Schedule = 16,   // the desktop's ibDialogJobSchedule over a form's schedule: Schedule — as
 	                 // ibJobScheduleDescriptionMemory writes it → Schedule — the one edited (the form is modified); none —
 	                 // cancelled
+	ApplyChange = 17,   // the desktop's ibDialogApplyChange over the restructure's ledger, the base held until it is
+	                    // answered: Picture (the window's) and children Level (ibRestructure: 0 info, 1 warning, 2 error),
+	                    // Text → Done — applied; none — cancelled, everything rolled back
+	FormType = 18,   // the desktop's ibDialogSelectTypeForm over a form just made, asked inside the Create that made it:
+	                 // Caption, Name, Synonym, Comment — the form's — and children Id, Caption, Name — the kinds its owner
+	                 // offers, each with the name the form takes with it → Id, Name, Synonym, Comment — the kind chosen and
+	                 // what the person typed; none — cancelled, and the form taken away again before the Create answers
 };
 
 // What the person chose over a script's failure — an Error answer's Act. The answers are CUMULATIVE, as the desktop's
@@ -572,6 +672,28 @@ enum class ibProtocolViewKind : int {
 	Spreadsheet = 3,
 	AuditLog    = 4,   // the registration journal: its rows fetched by the tab (fetch {Tab, Request: the filter}), a
 	                   // row's object opened as event {Tab, Event: Open, Args: {Ref, RefMeta}}
+	DataProcessor = 5, // the designer's tree of an external file — of a data processor, of a report: View.MetaData — its
+	Report        = 6, // rows, as the frame's MetaData; its doors — schema MetaData with the Tab
+	Module        = 7, // the designer's editor of a module: View.State {Syntax, ReadOnly, Modified — the configuration the
+	                   // module is in}; the text fetched by the tab (fetch {Tab} — {Text}; what else —
+	                   // ibProtocolModuleRequest); what was typed — event {Tab, Event: Input} on the first key while not
+	                   // Modified, then {Tab, Event: Change, Args: {Text}}; its commands —
+	                   // event {Tab, Event: Command, Args: {Id}} (ibProtocolModuleCommand)
+};
+
+// WHAT A MODULE'S TAB IS ASKED besides its text — `fetch {Tab, Request: {Kind, Text, Position}}`: what the desktop's code
+// editor asked the configuration itself. Text — the editor's text as it is now (not handed back yet), Position — the caret
+// in it, in characters.
+enum class ibProtocolModuleRequest : int {
+	Text       = 0,   // {Text} — the module's, as the server holds it (the request may be absent)
+	Complete   = 1,   // rows {Kind (ibContentType), Name, Help} — what may be written at the caret
+	CallTip    = 2,   // {Text} — the call form of what is being written at the caret; empty: none
+	Procedures = 3,   // rows {Name, Args} — the module's default procedures, its handlers (no Text)
+};
+
+// A module tab's commands — event {Tab, Event: Command, Args: {Id}}.
+enum class ibProtocolModuleCommand : int {
+	SyntaxControl = 1,   // the module checked: "no errors" to the messages, or the error
 };
 
 // WHAT A PERSON DID WITH A CONTROL of a view — `event {Control, Event, Args}`, the control named by its ControlId.

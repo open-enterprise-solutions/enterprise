@@ -189,11 +189,59 @@
   <ItemGroup>
     <ClCompile Include="mainApp.cpp" />
     <ClCompile Include="mainAppEvent.cpp" />
+    <ClCompile Include="docManager\templates\docViewDataProcessorFile.cpp" />
+    <ClCompile Include="docManager\templates\docViewDataReportFile.cpp" />
+    <ClCompile Include="docManager\templates\docViewModuleEditor.cpp" />
+    <ClCompile Include="mainFrame\local\localWindow.cpp" />
     <ClCompile Include="mainFrame\mainFrameDesigner.cpp" />
+    <ClCompile Include="mainFrame\mainFrameDesignerEvent.cpp" />
+    <ClCompile Include="mainFrame\mainFrameDesignerMenu.cpp" />
+    <ClCompile Include="mainFrame\mainFrameDesignerParts.cpp" />
+    <ClCompile Include="mainFrame\metaTree\treeConfiguration.cpp" />
+    <ClCompile Include="mainFrame\metaTree\treeConfigurationEvent.cpp" />
+    <ClCompile Include="mainFrame\metaTree\treeConfiguration_impl.cpp" />
+    <ClCompile Include="mainFrame\metaTree\treeDataProcessor.cpp" />
+    <ClCompile Include="mainFrame\metaTree\treeDataProcessorEvent.cpp" />
+    <ClCompile Include="mainFrame\metaTree\treeDataProcessor_impl.cpp" />
+    <ClCompile Include="mainFrame\metaTree\treeDataReport.cpp" />
+    <ClCompile Include="mainFrame\metaTree\treeDataReportEvent.cpp" />
+    <ClCompile Include="mainFrame\metaTree\treeDataReport_impl.cpp" />
+    <ClCompile Include="mainFrame\stack\stackWindow.cpp" />
+    <ClCompile Include="mainFrame\watch\watchctrl.cpp" />
+    <ClCompile Include="mainFrame\watch\watchdroptarget.cpp" />
+    <ClCompile Include="mainFrame\watch\watchWindow.cpp" />
+    <ClCompile Include="syntaxHelper\helpChooserDialog.cpp" />
+    <ClCompile Include="syntaxHelper\helpDetailView.cpp" />
+    <ClCompile Include="syntaxHelper\helpDragSource.cpp" />
+    <ClCompile Include="syntaxHelper\helpIndexView.cpp" />
+    <ClCompile Include="syntaxHelper\helpPaneView.cpp" />
+    <ClCompile Include="syntaxHelper\helpSearchView.cpp" />
+    <ClCompile Include="syntaxHelper\helpTreeView.cpp" />
+    <ClCompile Include="win\dlg\debugItem\debugItem.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="mainApp.h" />
+    <ClInclude Include="docManager\templates\docViewDataProcessorFile.h" />
+    <ClInclude Include="docManager\templates\docViewDataReportFile.h" />
+    <ClInclude Include="docManager\templates\docViewModuleEditor.h" />
+    <ClInclude Include="mainFrame\local\localWindow.h" />
     <ClInclude Include="mainFrame\mainFrameDesigner.h" />
+    <ClInclude Include="mainFrame\metaTree\clipboardLock.h" />
+    <ClInclude Include="mainFrame\metaTree\treeConfiguration.h" />
+    <ClInclude Include="mainFrame\metaTree\treeDataProcessor.h" />
+    <ClInclude Include="mainFrame\metaTree\treeDataReport.h" />
+    <ClInclude Include="mainFrame\stack\stackWindow.h" />
+    <ClInclude Include="mainFrame\watch\watchctrl.h" />
+    <ClInclude Include="mainFrame\watch\watchdroptarget.h" />
+    <ClInclude Include="mainFrame\watch\watchWindow.h" />
+    <ClInclude Include="syntaxHelper\helpChooserDialog.h" />
+    <ClInclude Include="syntaxHelper\helpDetailView.h" />
+    <ClInclude Include="syntaxHelper\helpDragSource.h" />
+    <ClInclude Include="syntaxHelper\helpIndexView.h" />
+    <ClInclude Include="syntaxHelper\helpPaneView.h" />
+    <ClInclude Include="syntaxHelper\helpSearchView.h" />
+    <ClInclude Include="syntaxHelper\helpTreeView.h" />
+    <ClInclude Include="win\dlg\debugItem\debugItem.h" />
     <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>

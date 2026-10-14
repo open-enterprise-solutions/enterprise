@@ -5,7 +5,35 @@ cmake_minimum_required(VERSION 3.16)
 set(DESIGNER_THIN_SOURCES
     mainApp.cpp
     mainAppEvent.cpp
+    docManager/templates/docViewDataProcessorFile.cpp
+    docManager/templates/docViewDataReportFile.cpp
+    docManager/templates/docViewModuleEditor.cpp
+    mainFrame/local/localWindow.cpp
     mainFrame/mainFrameDesigner.cpp
+    mainFrame/mainFrameDesignerEvent.cpp
+    mainFrame/mainFrameDesignerMenu.cpp
+    mainFrame/mainFrameDesignerParts.cpp
+    mainFrame/metaTree/treeConfiguration.cpp
+    mainFrame/metaTree/treeConfigurationEvent.cpp
+    mainFrame/metaTree/treeConfiguration_impl.cpp
+    mainFrame/metaTree/treeDataProcessor.cpp
+    mainFrame/metaTree/treeDataProcessorEvent.cpp
+    mainFrame/metaTree/treeDataProcessor_impl.cpp
+    mainFrame/metaTree/treeDataReport.cpp
+    mainFrame/metaTree/treeDataReportEvent.cpp
+    mainFrame/metaTree/treeDataReport_impl.cpp
+    mainFrame/stack/stackWindow.cpp
+    mainFrame/watch/watchctrl.cpp
+    mainFrame/watch/watchdroptarget.cpp
+    mainFrame/watch/watchWindow.cpp
+    syntaxHelper/helpChooserDialog.cpp
+    syntaxHelper/helpDetailView.cpp
+    syntaxHelper/helpDragSource.cpp
+    syntaxHelper/helpIndexView.cpp
+    syntaxHelper/helpPaneView.cpp
+    syntaxHelper/helpSearchView.cpp
+    syntaxHelper/helpTreeView.cpp
+    win/dlg/debugItem/debugItem.cpp
 )
 
 add_executable(designer-thin ${DESIGNER_THIN_SOURCES})
@@ -39,5 +67,5 @@ target_include_directories(designer-thin PRIVATE
 target_link_libraries(designer-thin PRIVATE
     protocol
     frmclient
-    wx::core wx::aui wx::stc wx::adv wx::base
+    wx::core wx::aui wx::stc wx::adv wx::html wx::xml wx::base
 )

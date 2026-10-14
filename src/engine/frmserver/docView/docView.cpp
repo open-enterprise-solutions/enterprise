@@ -1380,6 +1380,7 @@ bool ibTransferStreamToFile(wxInputStream& stream, const wxString& filename)
 
 
 wxIMPLEMENT_CLASS(ibMetaDocument, ibDocument);
+wxIMPLEMENT_CLASS(ibMetaDataDocument, ibMetaDocument);
 
 wxIMPLEMENT_CLASS(ibMetaView, ibView);
 

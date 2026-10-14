@@ -60,6 +60,10 @@ public:
 	// The mode's own tabs, after the start — the runtime's start page.
 	virtual void CreateStartupPage() {}
 
+	// THE MODE'S OWN PART OF THE FRAME, beside its tabs — the designer's configuration tree: written into the frame's
+	// state with every answer (ibClientHost::DrawFrame), as a view writes its own (ibView::OnDraw). Nothing by default.
+	virtual void OnDraw(ibDataNode& WXUNUSED(state)) {}
+
 	//***************************************************************************************
 	//*           ibBackendDocFrame — the backend's door into this client                   *
 	//***************************************************************************************

@@ -100,6 +100,9 @@ public:
 
 	// The window's own menu of that id — File, Edit: a document's undo names its commands in Edit (the desktop's).
 	wxMenu* GetDefaultMenu(int idMenu) const;
+	// …and its toolbar: the doc manager's commands — a mode's window puts its own after them (the designer's Update
+	// database).
+	wxAuiToolBar* GetMainFrameToolbar() const { return m_mainFrameToolbar; }
 
 	// A view activated — its own menu merged into the window's and its toolbar shown; deactivated, both disabled (the
 	// desktop's ActivateView).
@@ -117,6 +120,10 @@ public:
 	// question it asks put to the person until the work settles. The answer as it came — a schema's tree, a fetch's
 	// rows are read from it. False — refused, and the person told why.
 	bool Call(ibProtocolMethod method, const ibProtocolNode& params, ibProtocolNode& answer);
+	// …the same, its refusal handed back and said to nobody: the caller says it where it belongs (a settings page, beside
+	// the control that fixes it). A session gone closes the client all the same.
+	bool Call(ibProtocolMethod method, const ibProtocolNode& params, ibProtocolNode& answer,
+		ibProtocolRefusal& refusal, wxString& error);
 	// A call nobody waits on — what the person did in a view, a tab chosen or closed: made after the event that
 	// raised it, in the order posted, and never inside another call — but inside a question a call is asking, as the
 	// desktop's modal loop runs the events of the windows over it (a choice form a window opened, CreateChildFrame):
@@ -172,6 +179,13 @@ protected:
 	virtual void CreateGUI();
 	// …the properties pane among them, on the right (the desktop's).
 	virtual void CreatePropertyPane();
+	// …and the notebook along the bottom, the messages' (the desktop's CreateBottomPane); the designer's adds the
+	// debugger's panes beside them.
+	virtual void CreateBottomPane();
+
+	// WHAT A MODE'S FRAME CARRIES BESIDE THE BASE'S — drawn by what the patch changed in it (not IsNode: the frame sent
+	// whole). Default: nothing; the designer draws its configuration's tree (MetaData).
+	virtual void DrawFrame(const ibProtocolNode& WXUNUSED(frame), const ibProtocolNode& WXUNUSED(patch)) {}
 
 	// What the window builds BY ITSELF once the start has run — the desktop's slot of the same name (its home page;
 	// the server opens that one now). Called from Show after the login has settled: what is built here may ask the
@@ -186,6 +200,21 @@ protected:
 	// A schema of the menu, asked for and answered, shown. The base shows what both modes have (Active users, About); a
 	// mode's window shows its own (the runtime's All functions) and leaves the rest to the base.
 	virtual void ShowSchema(ibProtocolSchema schema, const ibProtocolNode& shown);
+	// A question, put to the person; what they answered in `response` (nothing — cancelled). The base asks what both
+	// modes are asked; a mode's window asks its own (the designer's restructure ledger) and leaves the rest to the base.
+	virtual void ShowRequest(const ibProtocolNode& request, ibProtocolNode& response);
+
+	// THE DOCUMENT OF A TAB THE SERVER RAISED, by the tab's Kind (DrawTabs) — the desktop doc template's CreateDocument for
+	// a tab, as it has no template. The base makes what both modes have (a form, the journal); a mode's window makes its
+	// own (the designer's tree of an external file) and leaves the rest to the base.
+	virtual ibTabDocument* CreateDocument(ibProtocolViewKind kind, long long tabId);
+
+	// The File and Edit menus — the desktop's, the doc manager's commands — and the bar they start it. A mode's window
+	// makes its own menu (the designer's Help) and calls this.
+	virtual void InitializeDefaultMenu();
+	// The keys of the window's own commands, File's and Edit's — the desktop's defaults; a mode's window adds its own
+	// commands' and calls this.
+	virtual void SetDefaultHotKeys();
 
 	// The communicator comes in with the window and the window holds it — and with it the client — from then on. The
 	// login is the window's (Show), so the start's messages and questions are drawn into it.
@@ -195,6 +224,14 @@ protected:
 		long style = wxDEFAULT_FRAME_STYLE, const wxString& name = wxASCII_STR(wxFrameNameStr));
 
 	ibCommunicator& GetCommunicator() const { return *m_communicator; }
+
+	// A schema of the menu opened — asked for and shown (ShowSchema); the journal's tab opened by its command. What an
+	// item of the server's menu does, and of the window's own (the designer's About).
+	void OpenSchema(ibProtocolSchema schema);
+
+	// THE PERSON'S OPTIONS WRITTEN BACK — the designer's Options: the font and colours, how editors edit, the keys as
+	// they stand, into the file LoadOptions reads; and kept as read, so a menu built again keeps the keys.
+	void SaveOptions();
 
 	class ibFrameManager : public wxAuiManager {
 	public:
@@ -207,9 +244,16 @@ protected:
 	};
 
 	// Create frame manager
-	ibFrameManager     m_mgr;
-	ibOutputWindow*    m_outputWindow = nullptr;
-	ibObjectInspector* m_objectInspector = nullptr;
+	ibFrameManager      m_mgr;
+	ibOutputWindow*     m_outputWindow = nullptr;
+	ibObjectInspector*  m_objectInspector = nullptr;
+
+	wxMenu*             m_menuConfiguration = nullptr;   // a mode's own (the designer's): after Edit, before the server's
+	wxMenu*             m_menuDebug = nullptr;
+	wxMenu*             m_menuHelp = nullptr;   // a mode's own Help (the designer's): last on the bar, after the server's
+	ibKeyBinder         m_keyBinder;            // the keys of the bar's commands (UpdateHotKeys)
+	ibFontColorSettings m_fontColorSettings;    // the person's options (LoadOptions, SaveOptions)
+	ibEditorSettings    m_editorSettings;
 
 private:
 
@@ -232,10 +276,6 @@ private:
 	// THE PERSON'S OPTIONS — the font and colours code is shown in, how its editors edit, the keys they chose: read once,
 	// from their own directory (the desktop designer's LoadOptions). A server keeps none of them.
 	void LoadOptions();
-	// The File and Edit menus — the desktop's, the doc manager's commands.
-	void InitializeDefaultMenu();
-	// The keys of the window's own commands, File's and Edit's — the desktop's defaults.
-	void SetDefaultHotKeys();
 	// THE KEYS OF THE MENU AS IT NOW STANDS: each command's default — the window's own, the one the server gives its
 	// own — and the person's over them (LoadOptions), onto the window and the menu's labels.
 	void UpdateHotKeys();
@@ -251,6 +291,8 @@ private:
 	void DrawTabs(const ibProtocolNode& tabs);
 	// The active tab, and its view drawn by what the patch changed in it (none: whole).
 	void DrawView(long long active, const ibProtocolNode& view, const ibProtocolNode& patch);
+	// The designer's inspector — the rows of the object a person selected on the server, an edit of one given back.
+	void DrawProperties(const ibProtocolNode& properties);
 	// Drawn — and the questions the frame carries put to the person, each answered back, until none is pending.
 	void Settle(const ibProtocolNode& answer);
 	// …the questions alone (Settle): each put to the person until none is pending — or the one pending is the window's
@@ -258,10 +300,10 @@ private:
 	void Ask();
 	// A value chosen for the cell of the window asking (ChooseValue), when the question says one was — handed to it once.
 	void TakeChosen(const ibProtocolNode& request);
-	// A question, put to the person; what they answered in `response` (nothing — cancelled).
-	void ShowRequest(const ibProtocolNode& request, ibProtocolNode& response);
 	// A call refused, said to the person — and a client whose session is gone, closed.
 	void Refused(ibProtocolRefusal refusal, const wxString& error);
+	// …and once a call has settled: the client gone when the server's Exit was done, the calls posted made.
+	void CallSettled();
 	// The first call posted, made — unless a call is under way: that one makes it when it has settled.
 	void CallPosted();
 
@@ -286,9 +328,6 @@ private:
 	const ibProtocolMode            m_mode;
 	wxString                        m_user;       // the login's — the one the login window was told, when refused
 	wxString                        m_password;   // until the login — cleared by it
-	ibFontColorSettings             m_fontColorSettings;
-	ibEditorSettings                m_editorSettings;
-	ibKeyBinder                     m_keyBinder;
 	wxXmlDocument                   m_options;     // the person's options as read (LoadOptions) — their keys put over the
 	                                               // defaults each time the menu is built
 
@@ -343,6 +382,13 @@ public:
 	}
 
 	virtual int FilterEvent(wxEvent& event) wxOVERRIDE { return Event_Skip; }
+};
+
+// The desktop's (frontend/mainFrame/mainFrame.h): the host frame's command ids the editor posts upward — the syntax
+// helper, and the word under the caret looked up in it (the code editor's context menu). The values are the desktop's.
+enum {
+	wxID_FRONTEND_SYNTAX_HELPER        = wxID_HIGHEST + 4500,
+	wxID_FRONTEND_SYNTAX_HELPER_LOOKUP = wxID_HIGHEST + 4501,
 };
 
 #endif

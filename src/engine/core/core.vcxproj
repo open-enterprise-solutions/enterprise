@@ -181,6 +181,7 @@
     <ClCompile Include="fiber\fiberLocals.cpp" />
     <ClCompile Include="fileSystem\fs.cpp" />
     <ClCompile Include="fileSystem\lz\lzhuf.cpp" />
+    <ClCompile Include="fileKind.cpp" />
     <ClCompile Include="fnumber.cpp" />
     <ClCompile Include="formatString.cpp" />
     <ClCompile Include="fstring.cpp" />
@@ -197,7 +198,12 @@
     <ClCompile Include="serialize\jsonText.cpp" />
     <ClCompile Include="spreadsheet\sheetFormat.cpp" />
     <ClCompile Include="spreadsheet\spreadsheetObject.cpp" />
+    <ClCompile Include="syntaxHelper\helpCorpus.cpp" />
+    <ClCompile Include="syntaxHelper\helpLoader.cpp" />
+    <ClCompile Include="syntaxHelper\helpResolver.cpp" />
+    <ClCompile Include="syntaxHelper\helpService.cpp" />
     <ClCompile Include="tabular\tabularModelView.cpp" />
+    <ClCompile Include="typeName.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="anyValue.h" />
@@ -231,6 +237,7 @@
     <ClInclude Include="fileSystem\fs.h" />
     <ClInclude Include="fileSystem\lz\lzhuf.h" />
     <ClInclude Include="fileSystem\types.h" />
+    <ClInclude Include="fileKind.h" />
     <ClInclude Include="fnumber.h" />
     <ClInclude Include="formatString.h" />
     <ClInclude Include="fstring.h" />
@@ -251,7 +258,15 @@
     <ClInclude Include="spreadsheet\sheetFormat.h" />
     <ClInclude Include="spreadsheet\spreadsheetObject.h" />
     <ClInclude Include="stringUtils.h" />
+    <ClInclude Include="syntaxHelper\helpCategory.h" />
+    <ClInclude Include="syntaxHelper\helpCorpus.h" />
+    <ClInclude Include="syntaxHelper\helpEntry.h" />
+    <ClInclude Include="syntaxHelper\helpLoader.h" />
+    <ClInclude Include="syntaxHelper\helpLoadError.h" />
+    <ClInclude Include="syntaxHelper\helpResolver.h" />
+    <ClInclude Include="syntaxHelper\helpService.h" />
     <ClInclude Include="tabular\tabularModelView.h" />
+    <ClInclude Include="typeName.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

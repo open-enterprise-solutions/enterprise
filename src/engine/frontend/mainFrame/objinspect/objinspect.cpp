@@ -307,9 +307,10 @@ bool ibObjectInspector::PropertyHidden(const ibProperty* property, bool hide)
 	// step (Clear() rebuilds it wholesale) than this walk costs to run.
 	for (const auto& prop : m_propMap) {
 		if (prop.second == property)
-			return HideProperty(prop.first, hide);   // recursive, as the wxPG default: these are
-	}                                                // the object's OWN leaf properties, and a
-	return false;                                    // composite's children stay its editor's business
+			return HideProperty(prop.first, hide,    // NOT recursive: the object's own property, and a
+				wxPGPropertyValuesFlags::DontRecurse); // composite's children stay its editor's business —
+	}                                                // a type revealed showed every qualifier, not its own
+	return false;                                    // (RefreshChildren hides those the type does not take)
 }
 
 wxPGProperty* ibObjectInspector::GetProperty(ibProperty* prop) const

@@ -4,6 +4,36 @@
     <Filter Include="mainFrame">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f7a03}</UniqueIdentifier>
     </Filter>
+    <Filter Include="mainFrame\metaTree">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f7a05}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="syntaxHelper">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f7a04}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="docManager">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f7a06}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="docManager\templates">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f7a07}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="mainFrame\local">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f7a08}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="mainFrame\stack">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f7a09}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="mainFrame\watch">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f7a0a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f7a0b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\dlg">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f7a0c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\dlg\debugItem">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f7a0d}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="mainApp.cpp" />
@@ -11,11 +41,155 @@
     <ClCompile Include="mainFrame\mainFrameDesigner.cpp">
       <Filter>mainFrame</Filter>
     </ClCompile>
+    <ClCompile Include="mainFrame\mainFrameDesignerEvent.cpp">
+      <Filter>mainFrame</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\mainFrameDesignerMenu.cpp">
+      <Filter>mainFrame</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\mainFrameDesignerParts.cpp">
+      <Filter>mainFrame</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\metaTree\treeConfiguration.cpp">
+      <Filter>mainFrame\metaTree</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\metaTree\treeConfigurationEvent.cpp">
+      <Filter>mainFrame\metaTree</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\metaTree\treeConfiguration_impl.cpp">
+      <Filter>mainFrame\metaTree</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\metaTree\treeDataProcessor.cpp">
+      <Filter>mainFrame\metaTree</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\metaTree\treeDataProcessorEvent.cpp">
+      <Filter>mainFrame\metaTree</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\metaTree\treeDataProcessor_impl.cpp">
+      <Filter>mainFrame\metaTree</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\metaTree\treeDataReport.cpp">
+      <Filter>mainFrame\metaTree</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\metaTree\treeDataReportEvent.cpp">
+      <Filter>mainFrame\metaTree</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\metaTree\treeDataReport_impl.cpp">
+      <Filter>mainFrame\metaTree</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\local\localWindow.cpp">
+      <Filter>mainFrame\local</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\stack\stackWindow.cpp">
+      <Filter>mainFrame\stack</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\watch\watchctrl.cpp">
+      <Filter>mainFrame\watch</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\watch\watchdroptarget.cpp">
+      <Filter>mainFrame\watch</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\watch\watchWindow.cpp">
+      <Filter>mainFrame\watch</Filter>
+    </ClCompile>
+    <ClCompile Include="docManager\templates\docViewDataProcessorFile.cpp">
+      <Filter>docManager\templates</Filter>
+    </ClCompile>
+    <ClCompile Include="docManager\templates\docViewDataReportFile.cpp">
+      <Filter>docManager\templates</Filter>
+    </ClCompile>
+    <ClCompile Include="docManager\templates\docViewModuleEditor.cpp">
+      <Filter>docManager\templates</Filter>
+    </ClCompile>
+    <ClCompile Include="syntaxHelper\helpChooserDialog.cpp">
+      <Filter>syntaxHelper</Filter>
+    </ClCompile>
+    <ClCompile Include="syntaxHelper\helpDetailView.cpp">
+      <Filter>syntaxHelper</Filter>
+    </ClCompile>
+    <ClCompile Include="syntaxHelper\helpDragSource.cpp">
+      <Filter>syntaxHelper</Filter>
+    </ClCompile>
+    <ClCompile Include="syntaxHelper\helpIndexView.cpp">
+      <Filter>syntaxHelper</Filter>
+    </ClCompile>
+    <ClCompile Include="syntaxHelper\helpPaneView.cpp">
+      <Filter>syntaxHelper</Filter>
+    </ClCompile>
+    <ClCompile Include="syntaxHelper\helpSearchView.cpp">
+      <Filter>syntaxHelper</Filter>
+    </ClCompile>
+    <ClCompile Include="syntaxHelper\helpTreeView.cpp">
+      <Filter>syntaxHelper</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlg\debugItem\debugItem.cpp">
+      <Filter>win\dlg\debugItem</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="mainApp.h" />
     <ClInclude Include="mainFrame\mainFrameDesigner.h">
       <Filter>mainFrame</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\metaTree\clipboardLock.h">
+      <Filter>mainFrame\metaTree</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\metaTree\treeConfiguration.h">
+      <Filter>mainFrame\metaTree</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\metaTree\treeDataProcessor.h">
+      <Filter>mainFrame\metaTree</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\metaTree\treeDataReport.h">
+      <Filter>mainFrame\metaTree</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\local\localWindow.h">
+      <Filter>mainFrame\local</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\stack\stackWindow.h">
+      <Filter>mainFrame\stack</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\watch\watchctrl.h">
+      <Filter>mainFrame\watch</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\watch\watchdroptarget.h">
+      <Filter>mainFrame\watch</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\watch\watchWindow.h">
+      <Filter>mainFrame\watch</Filter>
+    </ClInclude>
+    <ClInclude Include="docManager\templates\docViewDataProcessorFile.h">
+      <Filter>docManager\templates</Filter>
+    </ClInclude>
+    <ClInclude Include="docManager\templates\docViewDataReportFile.h">
+      <Filter>docManager\templates</Filter>
+    </ClInclude>
+    <ClInclude Include="docManager\templates\docViewModuleEditor.h">
+      <Filter>docManager\templates</Filter>
+    </ClInclude>
+    <ClInclude Include="syntaxHelper\helpChooserDialog.h">
+      <Filter>syntaxHelper</Filter>
+    </ClInclude>
+    <ClInclude Include="syntaxHelper\helpDetailView.h">
+      <Filter>syntaxHelper</Filter>
+    </ClInclude>
+    <ClInclude Include="syntaxHelper\helpDragSource.h">
+      <Filter>syntaxHelper</Filter>
+    </ClInclude>
+    <ClInclude Include="syntaxHelper\helpIndexView.h">
+      <Filter>syntaxHelper</Filter>
+    </ClInclude>
+    <ClInclude Include="syntaxHelper\helpPaneView.h">
+      <Filter>syntaxHelper</Filter>
+    </ClInclude>
+    <ClInclude Include="syntaxHelper\helpSearchView.h">
+      <Filter>syntaxHelper</Filter>
+    </ClInclude>
+    <ClInclude Include="syntaxHelper\helpTreeView.h">
+      <Filter>syntaxHelper</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlg\debugItem\debugItem.h">
+      <Filter>win\dlg\debugItem</Filter>
     </ClInclude>
     <ClInclude Include="resource.h" />
   </ItemGroup>

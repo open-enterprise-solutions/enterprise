@@ -224,10 +224,10 @@ void ibFrontendMainFrameDesigner::UpdateEditorOptions()
 #include "frontend/syntaxHelper/helpChooserDialog.h"
 #include "frontend/win/editor/codeEditor/codeEditor.h"
 #include "backend/appData.h"
-#include "backend/syntaxHelper/helpService.h"
-#include "backend/syntaxHelper/helpCorpus.h"
-#include "backend/syntaxHelper/helpResolver.h"
-#include "backend/syntaxHelper/helpEntry.h"
+#include "core/syntaxHelper/helpService.h"
+#include "core/syntaxHelper/helpCorpus.h"
+#include "core/syntaxHelper/helpResolver.h"
+#include "core/syntaxHelper/helpEntry.h"
 
 void ibFrontendMainFrameDesigner::EnsureHelpPane()
 {

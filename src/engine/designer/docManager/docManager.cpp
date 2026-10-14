@@ -27,7 +27,7 @@
 #include "templates/docViewDataProcessorFile.h"
 #include "templates/docViewDataReportFile.h"
 #include "templates/docViewMetaFile.h"
-#include "backend/fileKind.h"   // extensions live in one table, not at each call site
+#include "core/fileKind.h"   // extensions live in one table, not at each call site
 
 wxBEGIN_EVENT_TABLE(ibDocManagerDesigner, ibDocManager)
 EVT_UPDATE_UI(wxID_DESIGNER_CONFIGURATION_ROLLBACK_DATABASE, ibDocManagerDesigner::OnUpdateSaveMetadata)

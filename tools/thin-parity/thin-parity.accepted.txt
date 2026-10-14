@@ -1,0 +1,45 @@
+# What the thin designer does not take over from the desktop, on purpose — one -like pattern a line, the reason after '#'.
+# Read by thin-parity.ps1; a finding that matches no line here is printed.
+
+FILE  frontend/win/ctrls/charts/*     # not ported (Max, 2026-10-14)
+CLASS * (frontend/win/ctrls/charts/*  # not ported (Max, 2026-10-14)
+FILE  frontend/uikit/*                # not ported (Max, 2026-10-14)
+CLASS * (frontend/uikit/*             # not ported (Max, 2026-10-14)
+
+# The configuration's tree draws the server's rows (frmserver/metaTree, ibMetaTreeBase::FillData); what built the rows
+# from the metadata on the desktop is the server's, and a row is one ibTreeRow.
+CLASS ibTreeData* (designer/mainFrame/metaTree/treeConfiguration.h)       # the row: ibTreeRow, the server's node
+CLASS ibTreeItem* (designer/mainFrame/metaTree/treeConfiguration.h)       # the row: ibTreeRow, the server's node
+CLASS ibMetaTreeCtrl (designer/mainFrame/metaTree/treeConfiguration.h)    # a plain wxTreeCtrl; Copy/Paste on the panel
+CLASS ibMetaTreeView (designer/mainFrame/metaTree/treeConfiguration.h)    # the view of the tree's document is the server's
+CLASS ibEventsOff (designer/mainFrame/metaTree/treeConfiguration.h)       # m_drawing: a drawing tells the server nothing
+MEMBER ibMetaTreeBase.~ibMetaTreeBase()            # nothing to release: the rows are values
+MEMBER ibMetaTreeBase.FillData()                   # the server's (rows); Draw
+MEMBER ibMetaTreeBase.FillItem()                   # the server's (rows); DrawRow
+MEMBER ibMetaTreeBase.AppendGroupItem()            # the server's (rows); InsertRow
+MEMBER ibMetaTreeBase.AppendCommandNode()          # the server's (rows)
+MEMBER ibMetaTreeBase.AskFormKind()                # the server's (the Create door asks)
+MEMBER ibMetaTreeBase.ClearTree()                  # Draw: another root drawn anew
+MEMBER ibMetaTreeBase.EraseItem()                  # DrawRow: an item no row stands for is taken out
+MEMBER ibMetaTreeBase.FindItemByMetaObject()       # FindItem, by the row's place
+MEMBER ibMetaTreeBase.CompareItemsByPosition()     # the rows come in their order
+MEMBER ibMetaTreeBase.SortItemsByName()            # SortItem: Move doors
+MEMBER ibMetaTreeBase.OpenObjectForm()             # the Open door
+MEMBER ibMetaTreeBase.MetaDataChanged()            # the frame's redraw brings the rows
+MEMBER ibMetaTreeBase.MetaObjectChanged()          # the frame's redraw brings the rows
+MEMBER ibMetaTreeBase.WatchMetaData()              # the frame's redraw brings the rows
+MEMBER ibMetaTreeBase.Modify()                     # the caption's marks: ibFrontendMainFrameDesigner::DrawFrame
+MEMBER ibMetaTreeBase.GetDocument()                # the tree's document is the server's
+MEMBER ibMetaTreeBase.NotifyDocuments()            # the editors are the server's documents
+MEMBER ibMetaTreeBase.CloseDocuments()             # the editors are the server's documents
+
+# An external file's tree is the same panel in its tab (tab != 0): its rows the server's (frmserver ibDataProcessorTree,
+# ibDataReportTree), its verbs ibMetaTreeBase's; the class holds only its header. Its file is the server's document.
+MEMBER ibDataProcessorTree.*                       # the base's verbs over the server's rows; the header is its own
+MEMBER ibDataReportTree.*                          # the base's verbs over the server's rows; the header is its own
+CLASS ibDataProcessorTreeCtrl (designer/mainFrame/metaTree/treeDataProcessor.h)   # a plain wxTreeCtrl, the base's
+CLASS ibDataReportTreeCtrl (designer/mainFrame/metaTree/treeDataReport.h)         # a plain wxTreeCtrl, the base's
+MEMBER ibDataProcessorFileDocument.*               # the file is the server's (ibDataProcessorEditDocument); the tab's: ibTabDocument
+MEMBER ibReportFileDocument.*                      # the file is the server's (ibReportEditDocument); the tab's: ibTabDocument
+MEMBER ibDataProcessorEditView.OnClose()           # the tree is a child of the view's frame — it goes with it
+MEMBER ibReportEditView.OnClose()                  # the tree is a child of the view's frame — it goes with it

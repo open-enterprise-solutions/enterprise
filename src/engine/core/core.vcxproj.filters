@@ -37,6 +37,9 @@
     <Filter Include="spreadsheet">
       <UniqueIdentifier>{e4a19d36-82c7-4f5b-a0d3-6f2b7c8e91a5}</UniqueIdentifier>
     </Filter>
+    <Filter Include="syntaxHelper">
+      <UniqueIdentifier>{1a4f8e02-7b66-4f9b-9d3a-6c2e8b1d5f04}</UniqueIdentifier>
+    </Filter>
     <Filter Include="tabular">
       <UniqueIdentifier>{9c3f5e21-7a4d-4b86-8e1f-2d6b0a9c4f73}</UniqueIdentifier>
     </Filter>
@@ -113,6 +116,7 @@
     <ClCompile Include="fileSystem\lz\lzhuf.cpp">
       <Filter>fileSystem\lz</Filter>
     </ClCompile>
+    <ClCompile Include="fileKind.cpp" />
     <ClCompile Include="fnumber.cpp" />
     <ClCompile Include="formatString.cpp" />
     <ClCompile Include="fstring.cpp" />
@@ -129,6 +133,7 @@
     <ClCompile Include="localization.cpp" />
     <ClCompile Include="localization\translations.cpp" />
     <ClCompile Include="programFolder.cpp" />
+    <ClCompile Include="typeName.cpp" />
     <ClCompile Include="query\queryKeywords.cpp">
       <Filter>query</Filter>
     </ClCompile>
@@ -146,6 +151,18 @@
     </ClCompile>
     <ClCompile Include="spreadsheet\spreadsheetObject.cpp">
       <Filter>spreadsheet</Filter>
+    </ClCompile>
+    <ClCompile Include="syntaxHelper\helpCorpus.cpp">
+      <Filter>syntaxHelper</Filter>
+    </ClCompile>
+    <ClCompile Include="syntaxHelper\helpLoader.cpp">
+      <Filter>syntaxHelper</Filter>
+    </ClCompile>
+    <ClCompile Include="syntaxHelper\helpResolver.cpp">
+      <Filter>syntaxHelper</Filter>
+    </ClCompile>
+    <ClCompile Include="syntaxHelper\helpService.cpp">
+      <Filter>syntaxHelper</Filter>
     </ClCompile>
     <ClCompile Include="tabular\tabularModelView.cpp">
       <Filter>tabular</Filter>
@@ -249,9 +266,11 @@
       <Filter>graphics</Filter>
     </ClInclude>
     <ClInclude Include="guid.h" />
+    <ClInclude Include="fileKind.h" />
     <ClInclude Include="localization.h" />
     <ClInclude Include="localization\translations.h" />
     <ClInclude Include="programFolder.h" />
+    <ClInclude Include="typeName.h" />
     <ClInclude Include="query\queryBalanceRole.h">
       <Filter>query</Filter>
     </ClInclude>
@@ -280,6 +299,27 @@
       <Filter>spreadsheet</Filter>
     </ClInclude>
     <ClInclude Include="stringUtils.h" />
+    <ClInclude Include="syntaxHelper\helpCategory.h">
+      <Filter>syntaxHelper</Filter>
+    </ClInclude>
+    <ClInclude Include="syntaxHelper\helpCorpus.h">
+      <Filter>syntaxHelper</Filter>
+    </ClInclude>
+    <ClInclude Include="syntaxHelper\helpEntry.h">
+      <Filter>syntaxHelper</Filter>
+    </ClInclude>
+    <ClInclude Include="syntaxHelper\helpLoader.h">
+      <Filter>syntaxHelper</Filter>
+    </ClInclude>
+    <ClInclude Include="syntaxHelper\helpLoadError.h">
+      <Filter>syntaxHelper</Filter>
+    </ClInclude>
+    <ClInclude Include="syntaxHelper\helpResolver.h">
+      <Filter>syntaxHelper</Filter>
+    </ClInclude>
+    <ClInclude Include="syntaxHelper\helpService.h">
+      <Filter>syntaxHelper</Filter>
+    </ClInclude>
     <ClInclude Include="tabular\tabularModelView.h">
       <Filter>tabular</Filter>
     </ClInclude>

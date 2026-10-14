@@ -8,7 +8,7 @@
 #include "core/serialize/dataBuilder.h"
 #include "backend/session/session.h"
 
-void ibSchemaAbout::Build(const ibSession& session, ibDataNode& result) const
+void ibSchemaAbout::Build(const ibSession& session, const ibDataNode& WXUNUSED(args), ibDataNode& result) const
 {
 	const ibApplicationInstance* const applicationInstance = session.GetApplicationInstance();
 

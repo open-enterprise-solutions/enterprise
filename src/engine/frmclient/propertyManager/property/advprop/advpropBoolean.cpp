@@ -1,7 +1,6 @@
 ﻿
 #include <wx/propgrid/advprops.h>
 
-#include "frmclient/backend/propertyManager/property/propertyBoolean.h"
 #include "frmclient/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
 #include "frmclient/propertyManager/property/private/propertyRegistry.h"
 
@@ -11,8 +10,9 @@ class ibPropertyBooleanLoader
 public:
 	ibPropertyBooleanLoader()
 	{
-		ibPropertyRegistry::Register([](ibPropertyBoolean* prop) -> wxPGProperty* {
-			return new wxBoolProperty(prop->GetLabel(), prop->GetName(), prop->GetValueAsBoolean());
+		ibPropertyRegistry::Register(wxT("ibPropertyBoolean"), [](const ibDataNode& row) -> wxPGProperty* {
+			return new wxBoolProperty(ibPropertyRegistry::GetLabel(row), ibPropertyRegistry::GetName(row),
+				ibPropertyRegistry::GetValue(row).AsBool());
 		});
 	}
 }g_boolLoader;

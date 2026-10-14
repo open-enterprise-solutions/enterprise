@@ -1,6 +1,5 @@
 ﻿#include "advpropFont.h"
 
-#include "frmclient/backend/propertyManager/property/propertyFont.h"
 #include "frmclient/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
 #include "frmclient/propertyManager/property/private/propertyRegistry.h"
 
@@ -58,18 +57,19 @@ wxPG_IMPLEMENT_PROPERTY_CLASS(ibPGFontProperty, wxPGProperty, TextCtrlAndButton)
 WX_PG_IMPLEMENT_PROPERTY_CLASS(ibPGFontProperty, wxPGProperty, wxFont, const wxFont&, TextCtrlAndButton)
 #endif
 
-// register frontend property 
+#include "frmclient/win/typeconv.h"
+
+// register frontend property — the cell holds the font as the server writes it, so it goes back as it is
 class ibPropertyFontLoader
 {
 public:
 	ibPropertyFontLoader() {
-		ibPropertyRegistry::Register([](ibPropertyFont* prop) -> wxPGProperty* {
-			return new ibPGFontProperty(prop->GetLabel(), prop->GetName(), prop->GetValueAsFont());
+		ibPropertyRegistry::Register(wxT("ibPropertyFont"), [](const ibDataNode& row) -> wxPGProperty* {
+			return new ibPGFontProperty(ibPropertyRegistry::GetLabel(row), ibPropertyRegistry::GetName(row),
+				typeConv::StringToFont(ibPropertyRegistry::GetValue(row).AsString()));
 		});
 	}
 } g_fontLoader;
-
-#include "frmclient/win/typeconv.h"
 
 ibPGFontProperty::ibPGFontProperty(const wxString& label, const wxString& strName,
 	const wxFontContainer& value)
