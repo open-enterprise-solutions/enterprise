@@ -4,8 +4,7 @@
 
 #include "translateConstructor.h"
 
-#include "frmclient/backend/metaData.h"
-#include "frmclient/backend/metaCollection/metaLanguageObject.h"
+#include "frmclient/backend/userInfo.h"   // ibUserInfo::ListLanguages — the configuration's languages, the server's
 #include "core/stringUtils.h"
 
 #include <wx/button.h>
@@ -26,17 +25,12 @@ ibDialogTranslateConstructor::ibDialogTranslateConstructor(wxWindow* parent, con
 	: wxDialog(parent, wxID_ANY, title, wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER),
 	m_original(text)
 {
-	// The configuration's languages, in its own order. A language of an extension is its owner's.
+	// The configuration's languages, in its own order — the server's (an extension's are its owner's).
 	std::vector<std::pair<wxString, wxString>> languages;   // code, what a person calls it
-	if (metaData != nullptr) {
-		ibMetaData* ownerRaw = nullptr;
-		metaData->GetOwner(ownerRaw);
-		const ibMetaData* owner = ownerRaw != nullptr ? ownerRaw : metaData;
-		for (const auto language : owner->GetAnyArrayObject<ibValueMetaObjectLanguage>(g_metaLanguageCLSID))
-			languages.emplace_back(language->GetLangCode(), language->GetSynonym());
-	}
-	// No configuration behind the text (a code runner's editor): the language in force is the one box
-	// every text has.
+	for (const ibUserInfo::LanguageBrief& language : ibUserInfo::ListLanguages(metaData))
+		languages.emplace_back(language.m_strLanguageCode, language.m_strLanguageTitle);
+	const bool hasConfiguration = !languages.empty();
+	// No configuration behind the text: the language in force is the one box every text has.
 	if (languages.empty())
 		languages.emplace_back(ibBackendLocalization::GetUserLanguage(), wxString());
 
@@ -98,7 +92,7 @@ ibDialogTranslateConstructor::ibDialogTranslateConstructor(wxWindow* parent, con
 		if (isLanguage(entry.m_code))
 			continue;
 		if (other == nullptr) {
-			top->Add(new wxStaticText(this, wxID_ANY, metaData != nullptr
+			top->Add(new wxStaticText(this, wxID_ANY, hasConfiguration
 					? _("Also in this text, for codes this configuration has no language for. They are kept:")
 					: _("Also in this text:")),
 				wxSizerFlags().Border(wxLEFT | wxRIGHT, gap * 2));

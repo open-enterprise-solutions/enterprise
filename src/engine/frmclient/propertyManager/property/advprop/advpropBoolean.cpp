@@ -10,9 +10,8 @@ class ibPropertyBooleanLoader
 public:
 	ibPropertyBooleanLoader()
 	{
-		ibPropertyRegistry::Register(wxT("ibPropertyBoolean"), [](const ibDataNode& row) -> wxPGProperty* {
-			return new wxBoolProperty(ibPropertyRegistry::GetLabel(row), ibPropertyRegistry::GetName(row),
-				ibPropertyRegistry::GetValue(row).AsBool());
+		ibPropertyRegistry::Register(wxT("ibPropertyBoolean"), [](ibBackendProperty* property) -> wxPGProperty* {
+			return new wxBoolProperty(property->GetLabel(), property->GetName(), property->GetNodeValue().AsBool());
 		});
 	}
 }g_boolLoader;

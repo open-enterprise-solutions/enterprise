@@ -64,9 +64,9 @@ class ibPropertyFontLoader
 {
 public:
 	ibPropertyFontLoader() {
-		ibPropertyRegistry::Register(wxT("ibPropertyFont"), [](const ibDataNode& row) -> wxPGProperty* {
-			return new ibPGFontProperty(ibPropertyRegistry::GetLabel(row), ibPropertyRegistry::GetName(row),
-				typeConv::StringToFont(ibPropertyRegistry::GetValue(row).AsString()));
+		ibPropertyRegistry::Register(wxT("ibPropertyFont"), [](ibBackendProperty* property) -> wxPGProperty* {
+			return new ibPGFontProperty(property->GetLabel(), property->GetName(),
+				typeConv::StringToFont(property->GetNodeValue().AsString()));
 		});
 	}
 } g_fontLoader;

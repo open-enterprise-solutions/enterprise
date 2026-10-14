@@ -18,29 +18,25 @@ class ibPropertyStringLoader
 public:
 	ibPropertyStringLoader()
 	{
-		ibPropertyRegistry::Register(wxT("ibPropertyString"), [](const ibDataNode& row) -> wxPGProperty* {
-			return new wxStringProperty(ibPropertyRegistry::GetLabel(row), ibPropertyRegistry::GetName(row),
-				ibPropertyRegistry::GetValue(row).AsString());
+		ibPropertyRegistry::Register(wxT("ibPropertyString"), [](ibBackendProperty* property) -> wxPGProperty* {
+			return new wxStringProperty(property->GetLabel(), property->GetName(), property->GetNodeValue().AsString());
 		});
-		ibPropertyRegistry::Register(wxT("ibPropertyUEString"), [](const ibDataNode& row) -> wxPGProperty* {
-			return new ibUEStringProperty(ibPropertyRegistry::GetLabel(row), ibPropertyRegistry::GetName(row),
-				ibPropertyRegistry::GetValue(row).AsString());
+		ibPropertyRegistry::Register(wxT("ibPropertyUEString"), [](ibBackendProperty* property) -> wxPGProperty* {
+			return new ibUEStringProperty(property->GetLabel(), property->GetName(), property->GetNodeValue().AsString());
 		});
-		ibPropertyRegistry::Register(wxT("ibPropertyUString"), [](const ibDataNode& row) -> wxPGProperty* {
-			return new ibUStringProperty(ibPropertyRegistry::GetLabel(row), ibPropertyRegistry::GetName(row),
-				ibPropertyRegistry::GetValue(row).AsString());
+		ibPropertyRegistry::Register(wxT("ibPropertyUString"), [](ibBackendProperty* property) -> wxPGProperty* {
+			return new ibUStringProperty(property->GetLabel(), property->GetName(), property->GetNodeValue().AsString());
 		});
-		ibPropertyRegistry::Register(wxT("ibPropertyFormat"), [](const ibDataNode& row) -> wxPGProperty* {
-			return new wxFormatStringProperty(nullptr, ibPropertyRegistry::GetLabel(row), ibPropertyRegistry::GetName(row),
-				ibTranslateString(ibPropertyRegistry::GetValue(row).AsString()));
+		ibPropertyRegistry::Register(wxT("ibPropertyFormat"), [](ibBackendProperty* property) -> wxPGProperty* {
+			return new wxFormatStringProperty(property->GetPropertyObject(), property->GetLabel(), property->GetName(),
+				ibTranslateString(property->GetNodeValue().AsString()));
 		}, GetTranslateNodeValue);
-		ibPropertyRegistry::Register(wxT("ibPropertyTString"), [](const ibDataNode& row) -> wxPGProperty* {
-			return new wxTStringProperty(nullptr, ibPropertyRegistry::GetLabel(row), ibPropertyRegistry::GetName(row),
-				ibTranslateString(ibPropertyRegistry::GetValue(row).AsString()));
+		ibPropertyRegistry::Register(wxT("ibPropertyTString"), [](ibBackendProperty* property) -> wxPGProperty* {
+			return new wxTStringProperty(property->GetPropertyObject(), property->GetLabel(), property->GetName(),
+				ibTranslateString(property->GetNodeValue().AsString()));
 		}, GetTranslateNodeValue);
-		ibPropertyRegistry::Register(wxT("ibPropertyMString"), [](const ibDataNode& row) -> wxPGProperty* {
-			return new wxMStringProperty(ibPropertyRegistry::GetLabel(row), ibPropertyRegistry::GetName(row),
-				ibPropertyRegistry::GetValue(row).AsString());
+		ibPropertyRegistry::Register(wxT("ibPropertyMString"), [](ibBackendProperty* property) -> wxPGProperty* {
+			return new wxMStringProperty(property->GetLabel(), property->GetName(), property->GetNodeValue().AsString());
 		});
 	}
 }g_stringLoader;
@@ -161,8 +157,8 @@ bool wxTStringProperty::DisplayEditorDialog(wxPropertyGrid* pg, wxVariant& value
 	wxASSERT_MSG(translateVariant, "Function called for incompatible property");
 
 	// THE SAME WINDOW the code editor opens on a string literal — see translateConstructor.h for what
-	// OK does to the text, and the three rules the window this one replaced broke quietly. A row from the server has no
-	// object here: the window then offers the languages the text already holds.
+	// OK does to the text, and the three rules the window this one replaced broke quietly. Its languages are those of
+	// the configuration the property's owner holds (a metaobject: the one it was opened from).
 	ibDialogTranslateConstructor dlg(pg->GetPanel(), m_dlgTitle.empty() ? GetLabel() : m_dlgTitle,
 		translateVariant->GetTranslate(), m_ownerProperty != nullptr ? m_ownerProperty->GetMetaData() : nullptr,
 		HasFlag(wxPGFlags::ReadOnly), m_maxLen,

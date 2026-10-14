@@ -411,8 +411,7 @@ void ibDialogFormEditor::OnSelChanged(wxTreeEvent& event)
 							continue;
 					}
 
-					ibDataNode rows;
-					wxPGProperty* pg = ibPropertyRegistry::Create(ibPropertyRegistry::AppendProperty(rows, prop));
+					wxPGProperty* pg = ibPropertyRegistry::Create(prop);
 					propertyGridPage->Append(pg);
 					pg->RefreshChildren();
 
@@ -508,10 +507,8 @@ void ibDialogFormEditor::OnPropertyGridChanging(wxPropertyGridEvent& event)
 {
 	auto it = m_pgArray.find(event.GetProperty());
 	if (it != m_pgArray.end()) {
-		// The widget's value as the property's row carries it — the row written again: only its class is read.
-		ibDataNode rows;
-		const ibDataValue value = ibPropertyRegistry::GetNodeValue(
-			ibPropertyRegistry::AppendProperty(rows, it->second), event.GetValue());
+		// The widget's value as the property's node holds it.
+		const ibDataValue value = ibPropertyRegistry::GetNodeValue(it->second, event.GetValue());
 		ExecuteCommand(
 			new ibModifyPropertyCmd(m_selectedControl, it->second, value)
 		);

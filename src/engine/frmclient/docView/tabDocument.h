@@ -1,6 +1,7 @@
 #ifndef _FRMCLIENT_TAB_DOCUMENT_H__
 #define _FRMCLIENT_TAB_DOCUMENT_H__
 
+#include "frmclient/backend/metaData.h"   // the configuration the tab shows — the door it hands on
 #include "frmclient/docView/docView.h"
 #include "protocol/protocol.h"
 #include "protocol/protocolNode.h"
@@ -20,6 +21,9 @@ public:
 	virtual ~ibTabDocument();
 
 	long long GetTabId() const { return m_tabId; }
+	// …and the configuration it shows, as a door to hand on: what the server answers asked with this tab (a tree's
+	// file, a form's or a module's configuration).
+	ibMetaData GetMetaData() const { return ibMetaData(m_tabId); }
 
 	virtual wxString GetUniqueIdentifier() const override;
 

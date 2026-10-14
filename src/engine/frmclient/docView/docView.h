@@ -50,6 +50,7 @@
 #include <map>
 
 #include "frmclient/frmclient.h"          // FRMCLIENT_API
+#include "core/core.h"                    // ibMetaID
 
 // ----------------------------------------------------------------------------
 // Forward declarations
@@ -66,6 +67,7 @@ class FRMCLIENT_API ibFrontendDocTemplate;
 class FRMCLIENT_API ibFrontendDocManager;
 class ibDocChildFrameAnyBase;
 class WXDLLIMPEXP_FWD_AUI wxAuiToolBar;
+class ibMetaData;
 
 // ============================================================================
 //                          PART 1 — FORKED DOC/VIEW
@@ -512,6 +514,11 @@ public:
     const wxPageSetupDialogData& GetPageSetupDialogData() const
         { return m_pageSetupDialogData; }
 #endif
+
+    // A METAOBJECT OPENS ON THE SERVER — the desktop's door (ibDocManager::OpenForm), by what the client holds of the
+    // object: its id and the configuration it is in (the tab); the server opens it as the tree's Edit does (schema
+    // MetaData, Open) and its document comes with the frame. False: not sent.
+    bool OpenForm(ibMetaID id, const ibMetaData& metaData);
 
     ibFrontendDocTemplate*     FindTemplateByDocClassInfo(const wxClassInfo* classInfo) const;
 

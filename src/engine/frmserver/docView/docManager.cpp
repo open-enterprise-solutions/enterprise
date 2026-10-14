@@ -19,6 +19,7 @@
 #include "frmserver/schema/about.h"
 #include "frmserver/schema/activeUser.h"
 #include "frmserver/schema/auditLog.h"
+#include "frmserver/schema/languages.h"
 
 #include "backend/backend_picture.h"
 #include "backend/metadataConfiguration.h"
@@ -312,6 +313,8 @@ ibDocManager::ibDocManager(long WXUNUSED(flags), bool initialize)
 	RegisterSchema(ibProtocolSchema::AuditLog, std::make_unique<ibSchemaAuditLog>());
 	// About — what the client works in; both applications' Help showed it.
 	RegisterSchema(ibProtocolSchema::About, std::make_unique<ibSchemaAbout>());
+	// The configuration's languages — what a translated text is written in; both applications' translation window.
+	RegisterSchema(ibProtocolSchema::Languages, std::make_unique<ibSchemaLanguages>());
 
 	// The commands every document answers to — and the window's besides, Open, Exit and the edit commands — with the
 	// default keys the desktop's windows gave them (SetDefaultHotKeys) and the pictures its menu showed them with. A

@@ -291,8 +291,6 @@ private:
 	void DrawTabs(const ibProtocolNode& tabs);
 	// The active tab, and its view drawn by what the patch changed in it (none: whole).
 	void DrawView(long long active, const ibProtocolNode& view, const ibProtocolNode& patch);
-	// The designer's inspector — the rows of the object a person selected on the server, an edit of one given back.
-	void DrawProperties(const ibProtocolNode& properties);
 	// Drawn — and the questions the frame carries put to the person, each answered back, until none is pending.
 	void Settle(const ibProtocolNode& answer);
 	// …the questions alone (Settle): each put to the person until none is pending — or the one pending is the window's

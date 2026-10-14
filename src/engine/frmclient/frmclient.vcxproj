@@ -225,6 +225,8 @@
     <ClCompile Include="win\editor\gridEditor\gridProperty.cpp" />
     <ClCompile Include="backend\propertyManager\propertyObject.cpp" />
     <ClCompile Include="backend\propertyManager\property\propertyBoolean.cpp" />
+    <ClCompile Include="backend\propertyManager\property\propertyValue.cpp" />
+    <ClCompile Include="backend\metaCollection\metaObject.cpp" />
     <ClCompile Include="backend\propertyManager\property\propertyString.cpp" />
     <ClCompile Include="backend\propertyManager\property\propertyStringExt.cpp" />
     <ClCompile Include="backend\propertyManager\property\propertyEnum.cpp" />
@@ -242,6 +244,10 @@
     <ClCompile Include="propertyManager\property\advprop\advpropFont.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropColour.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropSize.cpp" />
+    <ClCompile Include="propertyManager\property\advprop\advpropList.cpp" />
+    <ClCompile Include="propertyManager\property\advprop\advpropHyperLink.cpp" />
+    <ClCompile Include="propertyManager\property\advprop\advpropModule.cpp" />
+    <ClCompile Include="propertyManager\propertyEditor.cpp" />
     <ClCompile Include="mainFrame\objinspect\objinspect.cpp" />
     <ClCompile Include="win\dlgs\translateConstructor\translateConstructor.cpp" />
     <ClCompile Include="win\dlgs\formatConstructor\formatConstructor.cpp" />
@@ -395,6 +401,7 @@
     <ClInclude Include="mainFrame\objinspect\objinspect.h" />
     <ClInclude Include="backend\propertyManager\propertyObject.h" />
     <ClInclude Include="backend\propertyManager\property\propertyBoolean.h" />
+    <ClInclude Include="backend\propertyManager\property\propertyValue.h" />
     <ClInclude Include="backend\propertyManager\property\propertyString.h" />
     <ClInclude Include="backend\propertyManager\property\propertyEnum.h" />
     <ClInclude Include="backend\propertyManager\property\propertyFont.h" />
@@ -422,7 +429,6 @@
     <ClInclude Include="backend\logger\loggerReader.h" />
     <ClInclude Include="backend\job\jobSchedule.h" />
     <ClInclude Include="backend\metaCollection\metaObject.h" />
-    <ClInclude Include="backend\metaCollection\metaLanguageObject.h" />
     <ClInclude Include="backend\metaData.h" />
     <ClInclude Include="backend\appData.h" />
     <ClInclude Include="backend\debugger\debugClient.h" />
@@ -436,6 +442,9 @@
     <ClInclude Include="backend\propertyManager\property\propertySize.h" />
     <ClInclude Include="backend\propertyManager\property\variant\variantSize.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropSize.h" />
+    <ClInclude Include="propertyManager\property\advprop\advpropList.h" />
+    <ClInclude Include="propertyManager\property\advprop\advpropHyperLink.h" />
+    <ClInclude Include="propertyManager\propertyEditor.h" />
     <ClInclude Include="settings\formSettings.h" />
     <ClInclude Include="backend\system\value\valueColour.h" />
     <ClInclude Include="backend\propertyManager\property\variant\variantOwner.h" />

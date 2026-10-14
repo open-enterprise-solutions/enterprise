@@ -1139,14 +1139,14 @@ void ibCodeEditor::OnContextMenu(wxContextMenuEvent& event)
 
 	// AND THE TRANSLATION CONSTRUCTOR, on the same literal and by the same rule: a module's messages
 	// are texts a person reads, written once per language like any caption — and the window is the
-	// caption's own (ibDialogTranslateConstructor). The desktop's took the languages of the configuration THIS
-	// module belongs to, of its document; the configuration is the server's, so the window has none — the language in
-	// force, as for a code runner.
+	// caption's own (ibDialogTranslateConstructor), over the languages of the configuration THIS module belongs to —
+	// of its document, the tab it is in (none, a query's text: the session's).
 	wxMenuItem* miTranslate = menu.Append(wxID_ANY, _("Translation constructor"));
 	miTranslate->SetBitmap(wxArtProvider::GetBitmap(wxART_TRANSLATION_CONSTRUCTOR, wxART_FRONTEND, FromDIP(wxSize(16, 16))));
 	menu.Bind(wxEVT_MENU, [this, literal, caret](wxCommandEvent&) {
 		const ibTranslateString before(literal.m_text);
-		ibDialogTranslateConstructor dialog(this, _("Translation constructor"), before, nullptr, !IsEditable());
+		const ibMetaData metaData = m_document != nullptr ? m_document->GetMetaData() : ibMetaData();
+		ibDialogTranslateConstructor dialog(this, _("Translation constructor"), before, &metaData, !IsEditable());
 		if (dialog.ShowModal() != wxID_OK)
 			return;
 		const ibTranslateString after = dialog.GetTranslate();

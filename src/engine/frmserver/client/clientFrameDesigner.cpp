@@ -24,7 +24,6 @@ bool ibClientFrameDesigner::AllowRun()
 void ibClientFrameDesigner::OnDraw(ibDataNode& state)
 {
 	m_metaTree.OnDraw(state.Child(wxT("MetaData")));
-	m_propertyInspector.OnDraw(state.Child(wxT("Properties")));
 }
 
 void ibClientFrameDesigner::BackendError(const wxString& WXUNUSED(strFileName),

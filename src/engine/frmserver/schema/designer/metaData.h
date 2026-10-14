@@ -33,8 +33,8 @@ public:
 		const ibDataNode& args, ibProtocolRefusal& refusal, wxString& error) const override;
 
 	// WHOSE TREE THE DOOR IS IN — the tab's, by its id (Tab): the file its document holds, an external data processor's or
-	// report's; none — the configuration's. Refused, null, when there is no such. The tree's dialogs ask the same
-	// (ibSchemaPredefined).
+	// report's; a metaobject's tab (a form, a module) — the configuration it is in; none — the session's. Refused, null,
+	// when there is no such. The tree's dialogs ask the same (ibSchemaPredefined), and the languages (ibSchemaLanguages).
 	static ibMetaData* FindMetaData(const ibSession& session, const ibDataNode& args, ibProtocolRefusal& refusal,
 		wxString& error);
 

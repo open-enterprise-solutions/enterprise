@@ -22,7 +22,8 @@ void ibSchemaUserList::Build(const ibSession& session, const ibDataNode& args, i
 	const wxString guid = args.GetValue<wxString>(wxT("Guid"));
 
 	// The list — the rows ibUserListModel::PrepareData read, a Brief each — and what a user's record is chosen from:
-	// the roles and the languages ibDialogUserItem listed off the configuration, which the client does not hold.
+	// the roles ibDialogUserItem listed off the configuration, which the client does not hold (its languages are
+	// every translation's — ibSchemaLanguages).
 	if (guid.IsEmpty()) {
 		ibDataNode& users = result.Child(wxT("Users"));
 		const std::vector<ibUserInfo::Brief> list = ibUserInfo::ListAll();
@@ -45,15 +46,6 @@ void ibSchemaUserList::Build(const ibSession& session, const ibDataNode& args, i
 			row.SetValue(wxT("Name"), object->GetName());
 			row.SetValue(wxT("Title"), object->GetSynonym());
 			row.SetValue(wxT("Mode"), static_cast<s32>(object->GetRoleCompositionMode()));
-		}
-
-		ibDataNode& languages = result.Child(wxT("Languages"));
-		idx = 0;
-		for (const auto object : metaData->GetAnyArrayObject<ibValueMetaObjectLanguage>(g_metaLanguageCLSID)) {
-			ibDataNode& row = languages.AddChild(0, idx++);
-			row.SetValue(wxT("Guid"), object->GetDocPath());
-			row.SetValue(wxT("Title"), object->GetSynonym());
-			row.SetValue(wxT("Code"), object->GetLangCode());
 		}
 		return;
 	}

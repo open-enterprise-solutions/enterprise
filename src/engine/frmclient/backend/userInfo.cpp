@@ -1,5 +1,6 @@
 #include "userInfo.h"
 
+#include "frmclient/backend/metaData.h"   // the door a language list is asked through — its tab
 #include "frmclient/mainFrame/mainFrame.h"
 #include "protocol/protocol.h"
 #include "protocol/protocolNode.h"
@@ -111,7 +112,7 @@ std::vector<ibUserInfo::RoleBrief> ibUserInfo::ListRoles()
 	return list;
 }
 
-std::vector<ibUserInfo::LanguageBrief> ibUserInfo::ListLanguages()
+std::vector<ibUserInfo::LanguageBrief> ibUserInfo::ListLanguages(const ibMetaData* metaData)
 {
 	std::vector<LanguageBrief> list;
 	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
@@ -119,7 +120,9 @@ std::vector<ibUserInfo::LanguageBrief> ibUserInfo::ListLanguages()
 		return list;
 
 	ibProtocolNode params, answer;
-	params.SetValue(ibProtocolName::Schema, static_cast<long long>(ibProtocolSchema::UserList));
+	params.SetValue(ibProtocolName::Schema, static_cast<long long>(ibProtocolSchema::Languages));
+	if (metaData != nullptr)
+		params.Child(ibProtocolName::Args).SetValue(ibProtocolName::Tab, metaData->GetTabId());
 	if (!frame->Call(ibProtocolMethod::Schema, params, answer))
 		return list;
 

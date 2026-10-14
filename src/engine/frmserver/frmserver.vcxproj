@@ -185,6 +185,7 @@
     <ClCompile Include="schema\activeUser.cpp" />
     <ClCompile Include="schema\auditLog.cpp" />
     <ClCompile Include="schema\clientSchema.cpp" />
+    <ClCompile Include="schema\languages.cpp" />
     <ClCompile Include="schema\designer\mcpServer.cpp" />
     <ClCompile Include="schema\designer\metaData.cpp" />
     <ClCompile Include="schema\designer\properties.cpp" />
@@ -326,6 +327,7 @@
     <ClInclude Include="schema\activeUser.h" />
     <ClInclude Include="schema\auditLog.h" />
     <ClInclude Include="schema\clientSchema.h" />
+    <ClInclude Include="schema\languages.h" />
     <ClInclude Include="schema\designer\mcpServer.h" />
     <ClInclude Include="schema\designer\metaData.h" />
     <ClInclude Include="schema\designer\properties.h" />

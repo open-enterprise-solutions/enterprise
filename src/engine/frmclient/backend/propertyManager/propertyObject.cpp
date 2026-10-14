@@ -6,6 +6,7 @@
 #include "propertyObject.h"
 #include "core/serialize/dataBuilder.h"   // ibDataValue — property node serialization
 #include "frmclient/backend/metaData.h"                                        // GetAnyArrayObject — the candidates
+#include "frmclient/backend/metaCollection/metaObject.h"                       // …each one's id, name, synonym
 #include "frmclient/backend/propertyManager/property/variant/variantOwner.h"   // the variant a relationship holds
 
 #define propBlock 0x00023456

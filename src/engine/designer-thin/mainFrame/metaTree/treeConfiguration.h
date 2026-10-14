@@ -2,6 +2,7 @@
 #define _METATREE_H__
 
 #include <map>
+#include <memory>
 #include <set>
 
 #include <wx/aui/aui.h>
@@ -9,6 +10,7 @@
 #include <wx/srchctrl.h>
 #include <wx/treectrl.h>
 
+#include "frmclient/backend/metaCollection/metaObject.h"   // the object the inspector shows
 #include "protocol/protocol.h"
 #include "protocol/protocolNode.h"
 
@@ -134,6 +136,10 @@ private:
 	void OnCancelSearch(wxCommandEvent& event);
 
 	const long long m_tab;
+
+	// THE OBJECT THE INSPECTOR SHOWS — made when a row is selected, of the server's rows for it, and linked to this tree's
+	// tab (an edit goes to the configuration it came from); the next row selected makes the next.
+	std::unique_ptr<ibValueMetaObject> m_object;
 
 	wxAuiToolBar* m_metaTreeToolbar = nullptr;
 	wxTreeCtrl* m_metaTreeCtrl = nullptr;

@@ -15,6 +15,7 @@
 #include "clipboardLock.h"   // the Open/Close pair, taken as a guard — the desktop's
 #include "frmclient/artProvider/artProvider.h"
 #include "frmclient/mainFrame/mainFrame.h"
+#include "frmclient/mainFrame/objinspect/objinspect.h"   // the inspector the row's object is shown in
 #include "frmclient/win/picture.h"
 
 // The clipboard's format of a copied metaobject — the desktop's (backend/backend_core.h): the copy's bytes are the
@@ -411,23 +412,26 @@ void ibMetaTreeBase::PropertyItem()
 	if (!frame->IsShownInspector())
 		frame->ShowInspector();
 
-	ibProtocolNode args;
-	args.SetValue(ibProtocolName::Id, GetObject(m_metaTreeCtrl->GetSelection()));
-	Command(ibProtocolMetaDataCommand::Select, args);
+	SelectItem();
 }
 
 void ibMetaTreeBase::SelectItem()
 {
 	UpdateToolbar();
 
-	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
-	if (frame == nullptr)
+	// WHAT THE INSPECTOR SHOWS — the row's object, made of what the server says of it now; a group row shows nothing.
+	// Asked only while the inspector is shown: Properties shows it and asks again.
+	ibObjectInspector* const inspector = objectInspector;
+	if (inspector == nullptr || !inspector->IsShownInspector())
 		return;
-
-	// What the inspector shows — the server's, said without waiting: a group row shows nothing.
-	ibProtocolNode args;
-	args.SetValue(ibProtocolName::Id, GetObject(m_metaTreeCtrl->GetSelection()));
-	frame->Post(ibProtocolMethod::Schema, GetParams(ibProtocolMetaDataCommand::Select, args));
+	const long long id = GetObject(m_metaTreeCtrl->GetSelection());
+	std::unique_ptr<ibValueMetaObject> object;
+	if (id != 0) {
+		object = std::make_unique<ibValueMetaObject>(static_cast<ibMetaID>(id), ibMetaData(m_tab));
+		object->ReadProperty();
+	}
+	m_object = std::move(object);
+	inspector->SelectObject(m_object.get());
 }
 
 void ibMetaTreeBase::UpItem()

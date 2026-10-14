@@ -198,24 +198,6 @@ ibPropertyObject* ibPropertyInspector::GetSelectedObject() const
 	return m_currentSel != nullptr && GetOwner() == m_currentSel ? m_currentSel : nullptr;
 }
 
-bool ibPropertyInspector::SetValue(const wxString& name, const ibDataValue& value)
-{
-	ibPropertyObject* const object = GetSelectedObject();
-	if (object == nullptr)
-		return false;
-
-	bool done = false;
-	if (ibProperty* const property = object->GetProperty(name))
-		done = ibPropertyGate::SetValue(object, property, value);
-	else if (ibEvent* const event = object->GetEvent(name))
-		done = ibPropertyGate::SetEvent(object, event, value);
-
-	// …the edit may have changed what its state hides; the object is asked again — if it is still the one shown.
-	if (GetSelectedObject() == object)
-		object->OnRefresh();
-	return done;
-}
-
 void ibPropertyInspector::OnDraw(ibDataNode& node) const
 {
 	ibPropertyObject* const object = GetSelectedObject();

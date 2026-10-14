@@ -136,7 +136,8 @@ ibDialogUserItem::ibDialogUserItem(wxWindow* parent, wxWindowID id, const wxStri
 		m_roleArray.insert_or_assign(id, entry);
 	}
 
-	for (const ibUserInfo::LanguageBrief& language : ibUserInfo::ListLanguages()) {
+	// The base's users choose among the session's configuration's languages — the one they log in to.
+	for (const ibUserInfo::LanguageBrief& language : ibUserInfo::ListLanguages(nullptr)) {
 
 		ibDataUserLanguageItem entry;
 		entry.m_strLanguageGuid = language.m_strLanguageGuid;

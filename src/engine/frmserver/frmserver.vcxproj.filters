@@ -160,6 +160,9 @@
     <ClCompile Include="schema\clientSchema.cpp">
       <Filter>schema</Filter>
     </ClCompile>
+    <ClCompile Include="schema\languages.cpp">
+      <Filter>schema</Filter>
+    </ClCompile>
     <ClCompile Include="schema\designer\mcpServer.cpp">
       <Filter>schema\designer</Filter>
     </ClCompile>
@@ -575,6 +578,9 @@
       <Filter>schema</Filter>
     </ClInclude>
     <ClInclude Include="schema\clientSchema.h">
+      <Filter>schema</Filter>
+    </ClInclude>
+    <ClInclude Include="schema\languages.h">
       <Filter>schema</Filter>
     </ClInclude>
     <ClInclude Include="schema\designer\mcpServer.h">

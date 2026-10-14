@@ -19,9 +19,9 @@ class ibPropertySizeLoader
 public:
 	ibPropertySizeLoader()
 	{
-		ibPropertyRegistry::Register(wxT("ibPropertySize"), [](const ibDataNode& row) -> wxPGProperty* {
-			return new ibPGSizeProperty(ibPropertyRegistry::GetLabel(row), ibPropertyRegistry::GetName(row),
-				typeConv::StringToSize(ibPropertyRegistry::GetValue(row).AsString()));
+		ibPropertyRegistry::Register(wxT("ibPropertySize"), [](ibBackendProperty* property) -> wxPGProperty* {
+			return new ibPGSizeProperty(property->GetLabel(), property->GetName(),
+				typeConv::StringToSize(property->GetNodeValue().AsString()));
 		},
 		[](const wxVariant& value) {
 			wxSize size;

@@ -11,7 +11,6 @@
 #include "frmserver/docView/docView.h"   // docManager — the client's, where its editors open
 #include "frmserver/client/clientChildFrame.h"
 #include "frmserver/client/clientFrame.h"   // the tab an external file's tree is in
-#include "frmserver/client/clientFrameDesigner.h"   // the inspector the frame holds — Select
 #include "frmserver/win/dlgs/applyChange.h"   // the restructure's ledger, put to the person — Apply
 
 namespace {
@@ -167,23 +166,6 @@ std::function<void()> ibSchemaMetaData::Command(const ibSession& session, s32 co
 			metaData->PasteMetaObject(clsid, parent, reader);
 		};
 	}
-	case ibProtocolMetaDataCommand::Select: {
-		// The object the inspector shows — the frame's (ibClientFrameDesigner); Id 0: none.
-		ibClientFrameDesigner* const frame = dynamic_cast<ibClientFrameDesigner*>(session.GetFrame());
-		if (frame == nullptr) {
-			refusal = ibProtocolRefusal::NotFound;
-			error = wxT("the session has no designer's frame");
-			return nullptr;
-		}
-		ibValueMetaObject* object = nullptr;
-		if (args.GetValue<s32>(wxT("Id")) != 0) {
-			object = FindObject(metaData, args, wxT("Id"), refusal, error);
-			if (object == nullptr)
-				return nullptr;
-		}
-		const s32 tabId = args.GetValue<s32>(wxT("Tab"));
-		return [frame, object, tabId]() { frame->GetPropertyInspector().SelectObject(object, tabId); };
-	}
 	case ibProtocolMetaDataCommand::Save: {
 		// The designer's Save (ibConfigurationTree::Save) — the configuration written into its base. An external file is
 		// saved by its tab's Save, as the desktop's document saved it: into the file the person keeps (ibTabDocument::Save).
@@ -302,11 +284,16 @@ ibMetaData* ibSchemaMetaData::FindMetaData(const ibSession& session, const ibDat
 
 	const ibClientFrame* const frame = dynamic_cast<const ibClientFrame*>(session.GetFrame());
 	const ibClientChildFrame* const tab = frame != nullptr ? frame->Tab(frame->FindTab(tabId)) : nullptr;
-	const ibMetaDataDocument* const document = tab != nullptr ? dynamic_cast<const ibMetaDataDocument*>(tab->GetDocument()) : nullptr;
-	ibMetaData* const metaData = document != nullptr ? document->GetMetaData() : nullptr;
+	// A tree's tab — the file its document holds; a tab of a metaobject (its form, its module) — the configuration that
+	// object is in.
+	ibMetaData* metaData = nullptr;
+	if (const ibMetaDataDocument* const tree = tab != nullptr ? dynamic_cast<const ibMetaDataDocument*>(tab->GetDocument()) : nullptr)
+		metaData = tree->GetMetaData();
+	else if (const ibMetaDocument* const document = tab != nullptr ? dynamic_cast<const ibMetaDocument*>(tab->GetDocument()) : nullptr)
+		metaData = document->GetMetaObject() != nullptr ? document->GetMetaObject()->GetMetaData() : nullptr;
 	if (metaData == nullptr) {
 		refusal = ibProtocolRefusal::NotFound;
-		error = wxString::Format(wxT("no tab %d shows a metadata tree"), tabId);
+		error = wxString::Format(wxT("no tab %d shows a configuration"), tabId);
 	}
 	return metaData;
 }

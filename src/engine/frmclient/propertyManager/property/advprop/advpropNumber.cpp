@@ -11,17 +11,17 @@ class ibPropertyNumberLoader
 public:
 	ibPropertyNumberLoader()
 	{
-		ibPropertyRegistry::Register(wxT("ibPropertyInteger"), [](const ibDataNode& row) -> wxPGProperty* {
-			return new wxIntProperty(ibPropertyRegistry::GetLabel(row), ibPropertyRegistry::GetName(row),
-				static_cast<long>(ibPropertyRegistry::GetValue(row).AsInt()));
+		ibPropertyRegistry::Register(wxT("ibPropertyInteger"), [](ibBackendProperty* property) -> wxPGProperty* {
+			return new wxIntProperty(property->GetLabel(), property->GetName(),
+				static_cast<long>(property->GetNodeValue().AsInt()));
 		});
-		ibPropertyRegistry::Register(wxT("ibPropertyUInteger"), [](const ibDataNode& row) -> wxPGProperty* {
-			return new wxUIntProperty(ibPropertyRegistry::GetLabel(row), ibPropertyRegistry::GetName(row),
-				static_cast<unsigned long>(ibPropertyRegistry::GetValue(row).AsInt()));
+		ibPropertyRegistry::Register(wxT("ibPropertyUInteger"), [](ibBackendProperty* property) -> wxPGProperty* {
+			return new wxUIntProperty(property->GetLabel(), property->GetName(),
+				static_cast<unsigned long>(property->GetNodeValue().AsInt()));
 		});
-		ibPropertyRegistry::Register(wxT("ibPropertyNumber"), [](const ibDataNode& row) -> wxPGProperty* {
-			return new wxStringProperty(ibPropertyRegistry::GetLabel(row), ibPropertyRegistry::GetName(row),
-				ibPropertyRegistry::GetValue(row).AsNumber().ToString());
+		ibPropertyRegistry::Register(wxT("ibPropertyNumber"), [](ibBackendProperty* property) -> wxPGProperty* {
+			return new wxStringProperty(property->GetLabel(), property->GetName(),
+				property->GetNodeValue().AsNumber().ToString());
 		},
 		[](const wxVariant& value) {
 			ibNumber number;

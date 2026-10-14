@@ -16,6 +16,7 @@
 #include "backend/appData.h"
 #include "backend/appHost.h"
 #include "backend/backend_exception.h"   // ibBackendException — a value the configuration cannot make
+#include "backend/backend_localization.h"   // the session's language — said with the frame
 #include "core/exception.h"
 #include "core/formatString.h"        // ibFormatString — a value presented through Format()'s codes
 #include "backend/databaseLayer/databaseQueryBuilder.h"
@@ -1315,6 +1316,9 @@ void ibClientHost::DrawFrame(ibClientFrame* frame, ibDataNode& state, ibDataNode
 	const std::int64_t began = NowMs();
 	state.SetValue(wxT("Title"), frame->GetTitle());
 	state.SetValue(wxT("Status"), frame->GetStatusText());
+	// The language the session reads text in — drawn on its worker, so its own: a caption sent whole (an inspector's
+	// Synonym) is read by the client in it, as the desktop's grid read it in the configuration's.
+	state.SetValue(ibProtocolName::Language, ibBackendLocalization::GetUserLanguage());
 	// The active tab by its id, as every tab is named on the wire; 0 — none.
 	const ibClientChildFrame* const active = frame->Tab(frame->ActiveTab());
 	state.SetValue(wxT("ActiveTab"), active != nullptr ? active->GetId() : 0);

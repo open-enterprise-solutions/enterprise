@@ -19,6 +19,10 @@
 // m_viewFrame on every view going through the template path.
 #include "frmclient/mainFrame/mainFrame.h"
 
+#include "frmclient/backend/metaData.h"   // the configuration a metaobject opens in — its tab
+#include "protocol/protocol.h"
+#include "protocol/protocolNode.h"
+
 #if wxUSE_DOC_VIEW_ARCHITECTURE
 
 #include <wx/tokenzr.h>
@@ -244,6 +248,24 @@ void ibFrontendDocManager::OnFind(wxFindDialogEvent& event)
 			firstView->ProcessEvent(event);
 		}
 	}
+}
+
+bool ibFrontendDocManager::OpenForm(ibMetaID id, const ibMetaData& metaData)
+{
+	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
+	if (frame == nullptr)
+		return false;
+
+	ibProtocolNode args;
+	args.SetValue(ibProtocolName::Id, static_cast<long long>(id));
+	if (metaData.GetTabId() != 0)
+		args.SetValue(ibProtocolName::Tab, metaData.GetTabId());
+
+	ibProtocolNode params, answer;
+	params.SetValue(ibProtocolName::Schema, static_cast<long long>(ibProtocolSchema::MetaData));
+	params.SetValue(ibProtocolName::Command, static_cast<long long>(ibProtocolMetaDataCommand::Open));
+	params.SetValue(ibProtocolName::Args, args);
+	return frame->Call(ibProtocolMethod::Schema, params, answer);
 }
 
 ibFrontendDocTemplate* ibFrontendDocManager::FindTemplateByDocClassInfo(const wxClassInfo* classInfo) const

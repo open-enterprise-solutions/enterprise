@@ -46,8 +46,9 @@ public:
 	// This window knows nothing about what the text is.
 	using ibBoxEditor = std::function<bool(wxWindow* parent, const wxString& language, wxString& text)>;
 
-	// `metaData` names the languages (an extension's are its owner's); without one there is a single
-	// box, for the language in force, beside whatever codes the text already holds.
+	// `metaData` names the languages — the server's answer for the configuration it is the door to (an extension's
+	// are its owner's; null — the session's); without any there is a single box, for the language in force, beside
+	// whatever codes the text already holds.
 	ibDialogTranslateConstructor(wxWindow* parent, const wxString& title, const ibTranslateString& text,
 		const ibMetaData* metaData, bool readOnly, int maxLength = 0, const ibBoxEditor& boxEditor = ibBoxEditor());
 

@@ -1,4 +1,4 @@
-﻿#ifndef __PROPERTY_REGISTRY_H__
+#ifndef __PROPERTY_REGISTRY_H__
 #define __PROPERTY_REGISTRY_H__
 
 #include <wx/propgrid/propgrid.h>
@@ -7,58 +7,47 @@
 #include <map>
 
 #include "core/serialize/dataBuilder.h"
+#include "frmclient/backend/propertyManager/propertyObject.h"
 
 #include "frmclient/frmclient.h"
 
-class ibBackendProperty;
-
-// THE PROPERTY'S CLASS -> ITS EDITOR, held entirely on the client.
+// THE PROPERTY'S TYPE -> ITS PRESENTATION, held entirely on the client.
 //
-// The server draws every property of the object a person selected as a ROW (frmserver ibPropertyInspector): its
-// Name, Title, Help, its CLASS — the backend type's name as the source writes it (ibPropertyBoolean; a template
-// without its arguments: ibPropertyEnum) — its Value as the property stores it (GetNodeValue: a scalar a field, a
-// composite a node), its Presentation, and what it may be set to (children: Id, Title, Picture; Multiple). The client
-// keeps no property of its own: it is told, per class, which widget shows that row and how the widget's value goes
-// back as the row carries it.
+// A property shown is the server's (ibPropertyValue — a metaobject's, filled from its rows): its TYPE is the class the
+// server names it by (ibPropertyBoolean; a template without its arguments: ibPropertyEnum), its value is as the server
+// stores it (GetNodeValue: a scalar, or a composite), its choices are what it may be set to (GetValueList). The client
+// is told, per type, which widget shows it and how the widget's value goes back as the property's node holds it.
 //
 //   ibPropertyRegistry::Register(wxT("ibPropertyBoolean"),
-//       [](const ibDataNode& row) -> wxPGProperty* {
-//           return new wxBoolProperty(ibPropertyRegistry::GetLabel(row), ibPropertyRegistry::GetName(row),
-//               ibPropertyRegistry::GetValue(row).AsBool());
+//       [](ibBackendProperty* property) -> wxPGProperty* {
+//           return new wxBoolProperty(property->GetLabel(), property->GetName(), property->GetNodeValue().AsBool());
 //       },
 //       [](const wxVariant& value) { return ibDataValue::Bool(value.GetBool()); });
 //
 // The widgets are the advprop classes, one copy: the common ones here in frmclient (the designer's and the runtime's),
-// the designer's own registered by designer-thin. A class nobody registered is shown by the row's shape — its choices a
-// list, its value by its kind — and failing that read-only, as its Presentation.
+// the designer's own registered by designer-thin. ⚠ A TYPE NOBODY REGISTERED IS A STRING — read-only, as it reads
+// (Max, 2026-10-14): never guessed from the value's shape, so what the client has not been taught shows as not done.
 class FRMCLIENT_API ibPropertyRegistry {
 public:
 
-	// The widget showing the row.
-	using ibPropertyMaker = std::function<wxPGProperty* (const ibDataNode& row)>;
-	// …and what it holds, as the row carries it back (the server's WriteNodeValue shape). None: by the value's kind.
+	// The widget showing the property — a window it opens asks the property's owner what it needs (a translated
+	// string's languages: the configuration the owner holds).
+	using ibPropertyMaker = std::function<wxPGProperty* (ibBackendProperty* property)>;
+	// …and what it holds, as the property's node holds it. None: by the value's kind.
 	using ibPropertyWriter = std::function<ibDataValue (const wxVariant& value)>;
 
-	static void Register(const wxString& className, ibPropertyMaker maker, ibPropertyWriter writer = ibPropertyWriter());
+	static void Register(const wxString& type, ibPropertyMaker maker, ibPropertyWriter writer = ibPropertyWriter());
 
-	// The widget for a row — its help and its read-only already said. Null: a row that is not a property (a category).
-	static wxPGProperty* Create(const ibDataNode& row);
-	// The value an edit gives back, as the row's class carries it.
-	static ibDataValue GetNodeValue(const ibDataNode& row, const wxVariant& value);
+	// The widget for the property — its help and its read-only already said.
+	static wxPGProperty* Create(ibBackendProperty* property);
+	// The value an edit gives back, as the property's node holds it.
+	static ibDataValue GetNodeValue(const ibBackendProperty* property, const wxVariant& value);
 
-	// A PROPERTY OF THE CLIENT'S OWN OBJECT — a spreadsheet's cell, a form a person re-arranges — written as the server
-	// writes its rows (frmserver ibPropertyInspector: Name, Title, Help, Class, Value, Presentation, choices,
-	// ReadOnly), so the same makers show it.
-	static ibDataNode& AppendProperty(ibDataNode& parent, ibBackendProperty* property);
-
-	// — what a maker reads of its row —
-	static wxString GetName(const ibDataNode& row);
-	static wxString GetLabel(const ibDataNode& row);
-	static wxString GetClass(const ibDataNode& row);
-	// Its value as it is stored: a scalar, or a composite (Child) — empty when the row has none.
-	static ibDataValue GetValue(const ibDataNode& row);
+	// The property's type — the server's (ibPropertyValue::GetType); a property of the client's own object (a
+	// spreadsheet's cell, a form's control), its class, named as the server names one.
+	static wxString GetType(const ibBackendProperty* property);
 	// The choices it offers, as the grid lists them: label, id.
-	static wxPGChoices GetChoices(const ibDataNode& row);
+	static wxPGChoices GetChoices(ibBackendProperty* property);
 
 private:
 

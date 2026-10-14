@@ -11,9 +11,9 @@ class ibPropertyColourLoader
 public:
 	ibPropertyColourLoader()
 	{
-		ibPropertyRegistry::Register(wxT("ibPropertyColour"), [](const ibDataNode& row) -> wxPGProperty* {
-			return new wxColourProperty(ibPropertyRegistry::GetLabel(row), ibPropertyRegistry::GetName(row),
-				typeConv::StringToColour(ibPropertyRegistry::GetValue(row).AsString()));
+		ibPropertyRegistry::Register(wxT("ibPropertyColour"), [](ibBackendProperty* property) -> wxPGProperty* {
+			return new wxColourProperty(property->GetLabel(), property->GetName(),
+				typeConv::StringToColour(property->GetNodeValue().AsString()));
 		},
 		[](const wxVariant& value) {
 			wxColour colour;

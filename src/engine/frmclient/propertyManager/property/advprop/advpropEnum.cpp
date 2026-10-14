@@ -12,10 +12,10 @@ public:
 	{
 		// ibPropertyEnum, whatever it enumerates: the server names a template without its arguments. The choices are the
 		// row's (the family's verb, GetValueList, asked on the server), so this editor does not know it is an enumeration.
-		ibPropertyRegistry::Register(wxT("ibPropertyEnum"), [](const ibDataNode& row) -> wxPGProperty* {
-			wxPGChoices choices = ibPropertyRegistry::GetChoices(row);
-			return new wxEnumProperty(ibPropertyRegistry::GetLabel(row), ibPropertyRegistry::GetName(row),
-				choices, static_cast<int>(ibPropertyRegistry::GetValue(row).AsInt()));
+		ibPropertyRegistry::Register(wxT("ibPropertyEnum"), [](ibBackendProperty* property) -> wxPGProperty* {
+			wxPGChoices choices = ibPropertyRegistry::GetChoices(property);
+			return new wxEnumProperty(property->GetLabel(), property->GetName(),
+				choices, static_cast<int>(property->GetNodeValue().AsInt()));
 		});
 	}
 }g_enumLoader;

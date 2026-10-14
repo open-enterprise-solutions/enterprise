@@ -14,6 +14,7 @@
 #include <wx/string.h>
 
 class ibGuid;
+class ibMetaData;
 
 struct FRMCLIENT_API ibUserInfo {
 
@@ -82,9 +83,11 @@ struct FRMCLIENT_API ibUserInfo {
 	// ListAll — every row projected to Brief. A list the server could not read is refused to the person, and comes back
 	// empty.
 	static std::vector<Brief>  ListAll();
-	// …and the roles and the languages a record is chosen from.
+	// …and the roles and the languages a record is chosen from — the languages every translated text is written in too
+	// (ibDialogTranslateConstructor), asked of the server's schema Languages in every mode: of the configuration
+	// `metaData` is the door to (the tab that shows it); null — the session's.
 	static std::vector<RoleBrief>     ListRoles();
-	static std::vector<LanguageBrief> ListLanguages();
+	static std::vector<LanguageBrief> ListLanguages(const ibMetaData* metaData);
 };
 
 #endif

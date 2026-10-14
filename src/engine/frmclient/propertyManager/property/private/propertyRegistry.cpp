@@ -1,35 +1,18 @@
-﻿#include "propertyRegistry.h"
+#include "propertyRegistry.h"
 
-#include <wx/propgrid/props.h>   // wxEnumProperty, wxBoolProperty — what a row of no registered class is shown by
+#include <wx/propgrid/props.h>   // wxStringProperty — what a property of no registered type is shown by
 
 #include "core/typeName.h"   // ibTypeInfoName — a local property's class, named as the server names one
-#include "frmclient/backend/propertyManager/propertyObject.h"
+#include "frmclient/backend/propertyManager/property/propertyValue.h"
 
 namespace {
 
-// A ROW OF NO REGISTERED CLASS, shown by its shape — its choices a list, its value by its kind; failing that, read-only,
-// as it reads (Presentation). A row is never dropped: a class nobody taught the client still says what it holds.
-wxPGProperty* CreateByShape(const ibDataNode& row)
+// A PROPERTY OF NO REGISTERED TYPE — a string, read-only, as it reads. A property is never dropped, and never guessed
+// from its shape: a type nobody taught the client says what it holds, and shows that it is not done.
+wxPGProperty* CreateAsString(ibBackendProperty* property)
 {
-	const wxString label = ibPropertyRegistry::GetLabel(row), name = ibPropertyRegistry::GetName(row);
-	const ibDataValue value = ibPropertyRegistry::GetValue(row);
-
-	wxPGChoices choices = ibPropertyRegistry::GetChoices(row);
-	if (choices.GetCount() > 0 && value.Kind() == ibDataKind::Number)
-		return new wxEnumProperty(label, name, choices, static_cast<int>(value.AsInt()));
-
-	switch (value.Kind()) {
-	case ibDataKind::Bool:
-		return new wxBoolProperty(label, name, value.AsBool());
-	case ibDataKind::Number:
-		return new wxIntProperty(label, name, static_cast<long>(value.AsInt()));
-	case ibDataKind::String:
-		return new wxStringProperty(label, name, value.AsString());
-	default:
-		break;
-	}
-
-	wxPGProperty* const shown = new wxStringProperty(label, name, row.GetValue<wxString>(wxT("Presentation")));
+	wxPGProperty* const shown = new wxStringProperty(property->GetLabel(), property->GetName(),
+		property->GetValue().GetString());
 	shown->ChangeFlag(wxPGFlags::ReadOnly, true);
 	return shown;
 }
@@ -57,102 +40,52 @@ std::map<wxString, ibPropertyRegistry::ibPropertyEntry>& ibPropertyRegistry::Get
 	return s_entries;
 }
 
-void ibPropertyRegistry::Register(const wxString& className, ibPropertyMaker maker, ibPropertyWriter writer)
+void ibPropertyRegistry::Register(const wxString& type, ibPropertyMaker maker, ibPropertyWriter writer)
 {
-	wxASSERT_MSG(GetEntries().find(className) == GetEntries().end(),
-		wxString::Format(wxT("ibPropertyRegistry: '%s' is registered twice"), className));
-	GetEntries()[className] = { std::move(maker), std::move(writer) };
+	wxASSERT_MSG(GetEntries().find(type) == GetEntries().end(),
+		wxString::Format(wxT("ibPropertyRegistry: '%s' is registered twice"), type));
+	GetEntries()[type] = { std::move(maker), std::move(writer) };
 }
 
-wxPGProperty* ibPropertyRegistry::Create(const ibDataNode& row)
+wxPGProperty* ibPropertyRegistry::Create(ibBackendProperty* property)
 {
-	const wxString className = GetClass(row);
-	if (className.IsEmpty())
-		return nullptr;   // a category
-
 	wxPGProperty* result = nullptr;
-	const auto found = GetEntries().find(className);
+	const auto found = GetEntries().find(GetType(property));
 	if (found != GetEntries().end())
-		result = found->second.m_maker(row);
+		result = found->second.m_maker(property);
 	if (result == nullptr)
-		result = CreateByShape(row);
+		result = CreateAsString(property);
 
-	result->SetHelpString(row.GetValue<wxString>(wxT("Help")));
-	if (row.GetValue<bool>(wxT("ReadOnly")))
+	result->SetHelpString(property->GetHelp());
+	const ibPropertyValue* const value = dynamic_cast<const ibPropertyValue*>(property);
+	if (!property->IsEditable() || (value != nullptr && value->IsReadOnly()))
 		result->ChangeFlag(wxPGFlags::ReadOnly, true);
 	return result;
 }
 
-ibDataValue ibPropertyRegistry::GetNodeValue(const ibDataNode& row, const wxVariant& value)
+ibDataValue ibPropertyRegistry::GetNodeValue(const ibBackendProperty* property, const wxVariant& value)
 {
-	const auto found = GetEntries().find(GetClass(row));
+	const auto found = GetEntries().find(GetType(property));
 	if (found != GetEntries().end() && found->second.m_writer)
 		return found->second.m_writer(value);
 	return GetNodeValueByKind(value);
 }
 
-ibDataNode& ibPropertyRegistry::AppendProperty(ibDataNode& parent, ibBackendProperty* property)
+wxString ibPropertyRegistry::GetType(const ibBackendProperty* property)
 {
-	ibDataNode& row = parent.AddChild(0, static_cast<ibMetaID>(parent.Children().size() + 1));
-	row.SetValue(wxT("Name"), property->GetName());
-	row.SetValue(wxT("Title"), property->GetLabel());
-	if (!property->GetHelp().IsEmpty())
-		row.SetValue(wxT("Help"), property->GetHelp());
-	row.SetValue(wxT("Class"), ibTypeInfoName(typeid(*property)));
-
-	// …as it is stored: a scalar a field, a composite a node of its own.
-	const ibDataValue value = property->GetNodeValue();
-	if (value.Kind() == ibDataKind::Child)
-		row.SetProperty(wxT("Value"), value);
-	else
-		row.AddField(wxT("Value"), value);
-	row.SetValue(wxT("Presentation"), property->GetValue().MakeString());
-
-	ibPropertyChoiceList choices;
-	if (property->GetValueList(choices) == ibPropertyChoiceMode::Mult)
-		row.SetValue(wxT("Multiple"), true);
-	for (unsigned int index = 0; index < choices.GetCount(); ++index) {
-		ibDataNode& choice = row.AddChild(0, static_cast<ibMetaID>(index + 1));
-		choice.SetValue(wxT("Id"), static_cast<s32>(choices.GetId(index)));
-		choice.SetValue(wxT("Title"), choices.GetLabel(index));
-	}
-
-	if (!property->IsEditable())
-		row.SetValue(wxT("ReadOnly"), true);
-	return row;
+	// ⚠ TWO KINDS ONLY WHILE A FORM'S CONTROLS DECLARE THEIR OWN (CreateProperty<T>): once they load theirs from the
+	// server as a metaobject does, every property shown is an ibPropertyValue, and the class name goes.
+	if (const ibPropertyValue* const value = dynamic_cast<const ibPropertyValue*>(property))
+		return value->GetType();
+	return ibTypeInfoName(typeid(*property));
 }
 
-wxString ibPropertyRegistry::GetName(const ibDataNode& row)
+wxPGChoices ibPropertyRegistry::GetChoices(ibBackendProperty* property)
 {
-	return row.GetValue<wxString>(wxT("Name"));
-}
-
-wxString ibPropertyRegistry::GetLabel(const ibDataNode& row)
-{
-	const wxString title = row.GetValue<wxString>(wxT("Title"));
-	return title.IsEmpty() ? GetName(row) : title;
-}
-
-wxString ibPropertyRegistry::GetClass(const ibDataNode& row)
-{
-	return row.GetValue<wxString>(wxT("Class"));
-}
-
-ibDataValue ibPropertyRegistry::GetValue(const ibDataNode& row)
-{
-	// …as the server wrote it (ibPropertyInspector): a scalar a field, a composite a node.
-	if (const ibDataValue* const scalar = row.FindField(wxT("Value")))
-		return *scalar;
-	return row.GetProperty(wxT("Value"));
-}
-
-wxPGChoices ibPropertyRegistry::GetChoices(const ibDataNode& row)
-{
+	ibPropertyChoiceList list;
+	property->GetValueList(list);
 	wxPGChoices choices;
-	for (const ibDataNode& choice : row.Children()) {
-		if (choice.FindField(wxT("Id")) == nullptr)
-			continue;   // a type the row may hold (Type), not a choice
-		choices.Add(choice.GetValue<wxString>(wxT("Title")), static_cast<int>(choice.GetValue<s32>(wxT("Id"))));
-	}
+	for (unsigned int index = 0; index < list.GetCount(); ++index)
+		choices.Add(list.GetLabel(index), static_cast<int>(list.GetId(index)));
 	return choices;
 }

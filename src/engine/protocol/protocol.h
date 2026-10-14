@@ -482,9 +482,9 @@ enum class ibProtocolSchema : int {
 	McpServer    = 7,   // the designer's assistant access, the person's: Enabled, Address, Port, Token, Running,
 	                    // Endpoint, Allowed; commands 2 Start {Enabled, Address, Port, Token} — started on those, 3 Stop,
 	                    // 4 Save {…} — kept as the person's
-	UserList     = 8,   // the designer's users of the base: Users (Guid, Name, FullName), and what a user's record is
-	                    // chosen from — the configuration's Roles (Guid, Name, Title, Mode) and Languages (Guid, Title,
-	                    // Code); `Args: {Guid}` — that one's User {Guid, Name, FullName, Password — whether one is stored
+	UserList     = 8,   // the designer's users of the base: Users (Guid, Name, FullName), and the configuration's Roles
+	                    // (Guid, Name, Title, Mode) a user's record is chosen from (its languages — schema Languages);
+	                    // `Args: {Guid}` — that one's User {Guid, Name, FullName, Password — whether one is stored
 	                    // (never the stored one), Language — its guid, Roles (Guid)}; commands 4 Save {Guid, Name,
 	                    // FullName, Language, Roles (Guid)[, Password — a new one, hashed by the server; absent: the
 	                    // stored one kept]}, 8 Remove {Guid}
@@ -493,13 +493,14 @@ enum class ibProtocolSchema : int {
 	                    // Picture, Group — what New makes under it, Type, Synonym, Position, Guid — its object's; a
 	                    // language's Code, a role's Mode). Its commands are its own (ibProtocolMetaDataCommand), each
 	                    // with Tab in that tab's tree — an external file's (ViewKind DataProcessor, Report)
-	Properties   = 10,  // the designer's inspector — shows nothing: its rows ride the frame (Properties: NodeId — the
-	                    // object shown, Tab; categories Name, Title; properties Name, Title, Help, Class — the property's
-	                    // class as the source names it, Value as its node holds it, Presentation, ReadOnly, what it may
-	                    // be set to — children Id, Title, Picture; Multiple; what the object's state hides not sent).
-	                    // Save `{Id, Name, Value}` — the object shown, if it is still Id, given that value; one door for
-	                    // a form's control and a metaobject alike. Not shown — the metaobject of that id in the tab's
-	                    // tree (Tab: an external file's, its header's rows; none: the configuration's)
+	Properties   = 10,  // the designer's inspector: `Args: {Id, Tab}` — the metaobject of that id in the tab's tree (Tab:
+	                    // an external file's; none: the configuration's), its Properties (NodeId, Tab; categories Name,
+	                    // Title; properties Name, Title, Help, Class — the property's class as the source names it, Value
+	                    // as its node holds it, Presentation, ReadOnly, what it may be set to — children Id, Title,
+	                    // Picture; Multiple; what the object's state hides not sent). Save `{Id, Tab, Name, Value}` —
+	                    // that object's property or event given that value
+	Languages    = 11,  // both modes': the configuration's Languages (Guid, Title, Code) — what a translated text is
+	                    // written in (the translation window's boxes, a user's record's choice)
 };
 
 // A schema's own commands — `schema {Schema, Command, Args}`. All functions and Sections take the one: Open
@@ -526,7 +527,6 @@ enum class ibProtocolMetaDataCommand : int {
 	Move     = 4,    // {Id, Position} — put at that place among its parent's children
 	Copy     = 5,    // {Id, File} — written into that file (uploaded empty)
 	Paste    = 6,    // {Type, Parent, File} — read from that one
-	Select   = 7,    // {Id} — the object the inspector shows (the frame's Properties; an edit — schema Properties); 0 — none
 	Save     = 8,    // the configuration written
 	// …the configuration's own (the desktop's Configuration menu), each said to the person by the server; refused in an
 	// external file's tree:

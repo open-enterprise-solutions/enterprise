@@ -2,7 +2,6 @@
 #define __CLIENT_FRAME_DESIGNER_H__
 
 #include "clientFrame.h"
-#include "propertyInspector.h"
 
 #include "frmserver/metaTree/treeConfiguration.h"
 
@@ -18,7 +17,7 @@ public:
 	// tree is loaded with it, as the desktop's AllowRun loaded its navigator.
 	virtual bool AllowRun() override;
 
-	// The configuration tree, as the frame's MetaData; the inspector's object, as its Properties.
+	// The configuration tree, as the frame's MetaData.
 	virtual void OnDraw(ibDataNode& state) override;
 
 	// A script's failure — a module checked, compiled: the desktop designer's (ibFrontendMainFrameDesigner::BackendError),
@@ -27,9 +26,6 @@ public:
 		const wxString& strDocPath, const long line,
 		const wxString& strErrorMessage) override;
 
-	// The inspector's half the frame holds — what it shows (schema MetaData's Select).
-	ibPropertyInspector& GetPropertyInspector() { return m_propertyInspector; }
-
 private:
 
 	// The menu, as the desktop's designer built its menu bar — what the server does of it: its Configuration and Debug
@@ -37,7 +33,6 @@ private:
 	void InitializeDefaultMenu();
 
 	ibConfigurationTree m_metaTree;
-	ibPropertyInspector m_propertyInspector;
 };
 
 #endif

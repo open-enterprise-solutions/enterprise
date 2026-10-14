@@ -42,6 +42,7 @@
 #include "frmclient/win/dlgs/settings/list/listSettings.h"
 #include "frmclient/win/dlgs/settings/composer/composerSettings.h"
 #include "frmclient/backend/serialize/dataProtocol.h"   // a value as the server's question carries it
+#include "frmclient/backend/backend_localization.h"     // the session's language — the frame says it
 #include "frmclient/visualView/ctrl/typeControl.h"      // ibTypeControlFactory::SimpleChoice — the calculator, the calendar
 #include "frmclient/visualView/ctrl/frame.h"            // ibControlFrame — what they are drawn over
 #include "frmclient/win/ctrls/controlTextEditor.h"      // ibControlTextEditor — the field they drop under
@@ -894,12 +895,23 @@ void ibFrontendMainFrame::Draw(const ibProtocolNode& answer)
 	for (const ibProtocolNode& picture : answer.FindChild(ibProtocolName::Pictures).Children())
 		ibProtocolPictureKeep(picture.GetString(ibProtocolName::Id), ibProtocolPicture(picture.GetString(ibProtocolName::Picture)));
 
+	// ⭐ AN ANSWER THAT IS NOT A FRAME — a schema's tree, a fetch's rows — CHANGED NOTHING IN THE WINDOW: the frame held
+	// stays (ibCommunicator::Take asks the same). Drawn whole, it rebuilt the inspector under the property window that
+	// asked it (Synonym's "..." → its languages) — the grid's rows freed under the button still dispatching (2026-10-14).
+	if (!answer.Has(ibProtocolName::Frame))
+		return;
+
 	const ibProtocolNode& frame = m_communicator->GetFrame();
 
 	// ⭐ WHAT THE ANSWER CHANGED IS DRAWN — its patch names it, and a part it does not name is as it was; a frame sent
-	// whole, or none (a refusal's settling), is drawn whole.
+	// whole is drawn whole.
 	const ibProtocolNode patch = answer.FindChild(ibProtocolName::Patch);
 	const bool whole = !patch.IsNode();
+
+	// THE LANGUAGE TEXT IS READ IN — the session's, as the server says it, before anything is drawn: a caption held
+	// whole (a property's Synonym) reads in it, as the desktop's read in its configuration's.
+	if (whole || patch.Has(ibProtocolName::Language))
+		ibBackendLocalization::SetUserLanguage(frame.GetString(ibProtocolName::Language));
 
 	if (whole || patch.Has(ibProtocolName::Title)) {
 		const wxString title = frame.GetString(ibProtocolName::Title);
@@ -917,9 +929,6 @@ void ibFrontendMainFrame::Draw(const ibProtocolNode& answer)
 		DrawTabs(frame.FindChild(ibProtocolName::Tabs));
 	DrawFrame(frame, patch);
 	DrawView(frame.GetInt(ibProtocolName::ActiveTab), frame.FindChild(ibProtocolName::View), patch);
-	// …the designer's inspector, when the frame has one: what the client's own objects show is left as it is elsewhere.
-	if (frame.Has(ibProtocolName::Properties) && (whole || patch.Has(ibProtocolName::Properties)))
-		DrawProperties(frame.FindChild(ibProtocolName::Properties));
 
 	// THE EVENTS — what happened since the last answer: read from the answer, never kept in the frame. Exit done: the
 	// client goes once its call has settled (Call, AllowClose).
@@ -1169,35 +1178,6 @@ void ibFrontendMainFrame::DrawView(long long active, const ibProtocolNode& view,
 	chosen->DrawView(view,!patch.IsNode() || patch.Has(ibProtocolName::View) ? patch.FindChild(ibProtocolName::View) : ibProtocolNode());
 
 	m_drawing = false;
-}
-
-void ibFrontendMainFrame::DrawProperties(const ibProtocolNode& properties)
-{
-	if (m_objectInspector == nullptr)
-		return;
-
-	// The rows as the engine reads a node — the server wrote them so (ibPropertyInspector) — and the object they are of.
-	ibDataNode rows;
-	ibReadProtocolNode(properties, rows);
-	const long long id = static_cast<long long>(rows.GetMetaId());
-
-	// ONE DOOR BACK, whatever the object: the schema's (Properties), the object named, the property given the value as
-	// its row carries it. The rows it changed come back with the frame.
-	m_objectInspector->SelectObject(rows, [this, id](const wxString& name, const ibDataValue& value) {
-		ibDataNode args;
-		args.SetValue(wxT("Id"), static_cast<s32>(id));
-		args.SetValue(wxT("Name"), name);
-		if (value.Kind() == ibDataKind::Child)
-			args.SetProperty(wxT("Value"), value);
-		else
-			args.AddField(wxT("Value"), value);
-
-		ibProtocolNode params, answer;
-		params.SetValue(ibProtocolName::Schema, static_cast<long long>(ibProtocolSchema::Properties));
-		params.SetValue(ibProtocolName::Command, static_cast<long long>(ibProtocolSchemaCommand::Save));
-		ibWriteProtocolNode(args, params.Child(ibProtocolName::Args));
-		return Call(ibProtocolMethod::Schema, params, answer);
-	});
 }
 
 void ibFrontendMainFrame::Settle(const ibProtocolNode& answer)
