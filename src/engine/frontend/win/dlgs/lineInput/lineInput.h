@@ -16,6 +16,7 @@
 #include <wx/icon.h>
 #include <wx/button.h>
 #include <wx/dialog.h>
+#include "core/localization/translations.h"   // _() - the engine's own catalogs
 
 class ibDialogLineInput : public wxDialog
 {

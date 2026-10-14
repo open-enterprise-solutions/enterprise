@@ -9,6 +9,7 @@
 #include <wx/sizer.h>
 
 #include <functional>
+#include "core/localization/translations.h"   // _() - the engine's own catalogs
 
 // The choice outlives the window it was made in: the next preview of this session opens the way the last
 // one was left. A plain flag - nothing here is a toolkit object, so a file-scope static is safe.

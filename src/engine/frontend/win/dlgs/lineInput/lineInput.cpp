@@ -4,6 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "lineInput.h"
+#include "core/localization/translations.h"   // _() - the engine's own catalogs
 
 ibDialogLineInput::ibDialogLineInput(wxWindow* parent, wxWindowID id, const wxString& title, const wxPoint& pos, const wxSize& size, long style) : wxDialog(parent, id, title, pos, size, style)
 {

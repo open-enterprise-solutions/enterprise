@@ -521,7 +521,7 @@ void ibDialogFormEditor::OnPropertyGridItemSelected(wxPropertyGridEvent& event)
 
 	// Update displayed description for the new selection
 	const wxString& helpString = propPtr->GetHelpString();
-	const wxString& localized = wxGetTranslation(helpString);
+	const wxString& localized = ibTranslations::Translate(helpString);
 
 	m_propertyGridManager->SetPropertyHelpString(propPtr, localized);
 	m_propertyGridManager->SetDescription(propPtr->GetLabel(), localized);

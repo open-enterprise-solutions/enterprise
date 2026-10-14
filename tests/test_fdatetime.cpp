@@ -18,6 +18,7 @@
 #include <wx/datetime.h>
 
 #include <cstdio>    // snprintf - the text of a reading in a failure message
+#include <cstdlib>   // std::llabs
 #include <string>
 #include <vector>
 
@@ -221,6 +222,27 @@ TEST(DateTime, NowIsWhatTheWallClockShows)
 	EXPECT_FALSE(now.IsEmpty());
 	EXPECT_LE(before.AddMilliseconds(-1000), now);   // a second's slack: wx reads the clock by its own road
 	EXPECT_LE(now, after.AddMilliseconds(1000));
+}
+
+namespace {
+long long AnHourAhead() noexcept { return 3600000; }
+} // namespace
+
+// "Now" is the machine's reading moved by the distance the source put into core answers - the base's clock
+// (backend puts the source; regionalSettings.h measures it); MachineNow is never moved - a heartbeat's clock.
+// No source: the machine's clock. The source put before is handed back, and goes back.
+TEST(DateTime, NowIsMovedByTheDistanceItsSourceAnswers)
+{
+	const ibDateTime::OffsetSource before = ibDateTime::SetNowOffset(&AnHourAhead);
+	const ibDateTime machine = ibDateTime::OfWxDateTime(wxDateTime::Now());
+	const ibDateTime moved = ibDateTime::Now();
+	const ibDateTime unmoved = ibDateTime::MachineNow();
+	EXPECT_EQ(&AnHourAhead, ibDateTime::SetNowOffset(nullptr));
+	const ibDateTime plain = ibDateTime::Now();
+	ibDateTime::SetNowOffset(before);
+	EXPECT_LE(std::llabs((moved - machine) - 3600000), 1000) << moved - machine;
+	EXPECT_LE(std::llabs(plain - machine), 1000) << plain - machine;
+	EXPECT_LE(std::llabs(unmoved - machine), 1000) << "the machine's clock is never moved: " << unmoved - machine;
 }
 
 // Real time between two readings of this machine's clock counts the hour its clocks skip as the hour it

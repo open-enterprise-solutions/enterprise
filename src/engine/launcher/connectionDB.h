@@ -21,6 +21,7 @@
 #include <wx/filepicker.h>
 
 #include "frontend/frontend.h"
+#include "core/localization/translations.h"   // _() - the engine's own catalogs
 
 class ibDialogConnection : public wxDialog {
 	wxStaticText* m_staticTextName;

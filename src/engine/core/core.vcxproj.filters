@@ -127,6 +127,7 @@
     </ClCompile>
     <ClCompile Include="guid.cpp" />
     <ClCompile Include="localization.cpp" />
+    <ClCompile Include="localization\translations.cpp" />
     <ClCompile Include="programFolder.cpp" />
     <ClCompile Include="query\queryKeywords.cpp">
       <Filter>query</Filter>
@@ -249,6 +250,7 @@
     </ClInclude>
     <ClInclude Include="guid.h" />
     <ClInclude Include="localization.h" />
+    <ClInclude Include="localization\translations.h" />
     <ClInclude Include="programFolder.h" />
     <ClInclude Include="query\queryBalanceRole.h">
       <Filter>query</Filter>

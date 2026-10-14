@@ -8,6 +8,7 @@
 #include <wx/treectrl.h>
 
 #include "protocol/protocolNode.h"
+#include "core/localization/translations.h"   // _() - the engine's own catalogs
 
 // ALL FUNCTIONS — the objects this person may open, grouped by kind: the desktop's dialog (enterprise/win/dlg), drawn
 // from the server's schema (frmserver/schema/runtime/allFunctions.cpp) instead of reading the configuration itself.

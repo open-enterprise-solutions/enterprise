@@ -4,6 +4,7 @@
 #include "fontcolorsettingspanel.h"
 #include "editorsettingspanel.h"
 #include "mcpsettingspanel.h"
+#include "regionalsettingspanel.h"
 #include "showhelpevent.h"
 
 #include <wx/bookctrl.h>
@@ -32,6 +33,9 @@ ibDialogSettings::ibDialogSettings(wxWindow* parent)
     m_mcpSettingsPanel = new ibPanelMcpSettings(GetBookCtrl());
     GetBookCtrl()->AddPage(m_mcpSettingsPanel, _("Assistant access"));
 
+    m_regionalSettingsPanel = new ibPanelRegionalSettings(GetBookCtrl());
+    GetBookCtrl()->AddPage(m_regionalSettingsPanel, _("Regional settings"));
+
     LayoutDialog();
 
 }
@@ -42,6 +46,7 @@ void ibDialogSettings::OnInitDialog(wxInitDialogEvent& event)
     m_fontColorSettingsPanel->Initialize();
     m_editorSettingsPanel->Initialize();
     m_mcpSettingsPanel->Initialize();
+    m_regionalSettingsPanel->Initialize();
 }
 
 ibDialogKeyBinder* ibDialogSettings::GetKeyBinderDialog() const
@@ -62,6 +67,11 @@ ibPanelEditorSettings* ibDialogSettings::GetEditorSettingsPanel() const
 ibPanelMcpSettings* ibDialogSettings::GetMcpSettingsPanel() const
 {
     return m_mcpSettingsPanel;
+}
+
+ibPanelRegionalSettings* ibDialogSettings::GetRegionalSettingsPanel() const
+{
+    return m_regionalSettingsPanel;
 }
 
 void ibDialogSettings::OnHelp(wxHelpEvent&)

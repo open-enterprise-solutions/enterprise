@@ -18,6 +18,7 @@
 
 #include "frmclient/frmclient.h"
 #include "protocol/protocolNode.h"
+#include "core/localization/translations.h"   // _() - the engine's own catalogs
 
 // ACTIVE USERS — the desktop's dialog (frontend/win/dlgs/activeUser) as it is: its sessions and its locks read from
 // the server's schema (frmserver/schema/activeUser.cpp) where it read the registry and the lock manager itself, asked

@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <functional>
 #include <assert.h>
+#include "core/localization/translations.h"   // _() - the engine's own catalogs
 
 BEGIN_EVENT_TABLE(ibDialogKeyBinder, wxPanel)
 EVT_TREE_SEL_CHANGED(ibDialogKeyBinder::ID_CommandTree, ibDialogKeyBinder::OnCommandTreeSelectionChanged)

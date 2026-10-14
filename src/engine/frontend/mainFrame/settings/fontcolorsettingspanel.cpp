@@ -6,6 +6,7 @@
 
 #include "fontcolorsettingspanel.h"
 #include "statictextex.h"
+#include "core/localization/translations.h"   // _() - the engine's own catalogs
 
 BEGIN_EVENT_TABLE(ibPanelFontColorSettings, wxPanel)
 EVT_BUTTON(ibPanelFontColorSettings::ID_SelectFont, ibPanelFontColorSettings::OnSelectFont)

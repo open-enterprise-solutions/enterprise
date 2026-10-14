@@ -181,7 +181,7 @@ public:
 
 	// get control caption
 	virtual wxString GetControlTitle() const {
-		return wxGetTranslation(stringUtils::GenerateSynonym(GetClassName()));
+		return ibTranslations::Translate(stringUtils::GenerateSynonym(GetClassName()));
 	}
 
 	virtual ibGuid GetControlGuid() const { return m_controlGuid; }

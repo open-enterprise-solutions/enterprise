@@ -33,6 +33,7 @@
 #include "frontend/uikit/renderer.h"
 #include "frontend/uikit/inputHandler.h"
 #include "frontend/uikit/theme.h"
+#include "core/localization/translations.h"   // _() - the engine's own catalogs
 
 // ============================================================================
 // implementation

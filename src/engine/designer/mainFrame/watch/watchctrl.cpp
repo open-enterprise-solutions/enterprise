@@ -9,6 +9,7 @@
 #include <wx/wx.h>
 #include <wx/sstream.h>
 #include <wx/xml/xml.h>
+#include "core/localization/translations.h"   // _() - the engine's own catalogs
 
 wxBEGIN_EVENT_TABLE(ibWatchCtrl, ibTreeListCtrl)
 EVT_SIZE(ibWatchCtrl::OnSize)

@@ -19,6 +19,7 @@
 #include <wx/frame.h>
 
 #include "frontend/frontend.h"
+#include "core/localization/translations.h"   // _() - the engine's own catalogs
 
 class FRONTEND_API ibDialogConnection : public wxDialog {
 	wxStaticText* m_staticTextServer;

@@ -3,6 +3,7 @@
 #include "xmlutility.h"
 
 #include <wx/xml/xml.h>
+#include "core/localization/translations.h"   // _() - the engine's own catalogs
 
 const wxString ibFontColorSettings::s_displayItemName[] = { _("Default"), _("Comment"), _("Preprocessor"), _("Keyword"), _("Operator"), _("String"), _("Number"), _("Error"), _("Warning"), _("Selection") };
 

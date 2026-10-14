@@ -143,7 +143,22 @@ public:
 	// NOW: what the machine's clock on the wall shows - the clock's reading in the machine's zone, by its
 	// parts, to the millisecond, with no wx on the way. The one door the engine asks "now" through, so the
 	// day "now" becomes the base's clock it changes here and nowhere else.
+	//
+	// …and it has: a base whose clock is measured (backend, session/regionalSettings.h) stands some
+	// milliseconds from this machine's, and Now() is the machine's reading moved by that much - the base's
+	// clock, in the base's zone, for every client of it wherever it sits. Core knows no base, so the
+	// distance is asked of the one function the library that knows them puts here; none put, or a thread
+	// that works for no base, and it is the machine's clock as before. SetNowOffset answers the function it
+	// replaces, so whoever puts one can give the old one back.
 	static ibDateTime Now();
+	using OffsetSource = long long (*)() noexcept;
+	static OffsetSource SetNowOffset(OffsetSource source) noexcept;
+
+	// THE MACHINE'S OWN CLOCK, never moved: what Now() was. For a span that must be real time between two
+	// readings of THIS machine's kind - a session's heartbeat against its silence (ElapsedSince, below) -
+	// where a distance measured once a minute per process would step between the two readings and read as
+	// hours of silence. A date that goes into the base's data asks Now().
+	static ibDateTime MachineNow();
 
 	// The bridge (above): the reading of an instant's LOCAL parts, and the wxDateTime whose local parts
 	// are this reading's. The empty date and an invalid wxDateTime are each other's - "no date" on

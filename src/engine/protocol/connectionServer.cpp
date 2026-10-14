@@ -2,7 +2,6 @@
 
 #include <string>
 
-#include <wx/intl.h>   // _() — what a refusal says to a person
 #include <wx/mstream.h>
 #include <wx/zstream.h>
 
@@ -17,6 +16,7 @@
 #include <cpp-httplib/httplib.h>
 
 #include "protocolNode.h"   // a short message read, to tell a notification from an answer
+#include "core/localization/translations.h"   // _() - the engine's own catalogs
 
 namespace {
 

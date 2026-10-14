@@ -3,6 +3,8 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "backend/appHost.h"
+#include "backend/session/regionalSettings.h"   // the base's locale: the language its threads speak
+#include "core/diagnostics/journal.h"   // a locale this machine cannot grant is said, not refused
 
 #include <algorithm>
 
@@ -31,7 +33,8 @@ static thread_local ibApplicationInstance* t_instance = nullptr;
 // …and the configuration it works in, held by its innermost ibApplicationInstanceScope.
 static thread_local ibMetaDataConfigurationBase* t_metaData = nullptr;
 
-// The base whose service runs on this thread (SetThreadOwner) — for the journal's lines only.
+// The base whose service runs on this thread (SetThreadOwner) — for the journal's lines, and for the clock its
+// timestamps are taken by (OffsetOfThisThreadsBase, below).
 static thread_local const ibApplicationInstance* t_owner = nullptr;
 
 namespace {
@@ -52,6 +55,63 @@ struct ibRegisterAppHostLocal {
 			[](const void* src) { t_owner = *static_cast<const ibApplicationInstance* const*>(src); });
 	}
 } s_registerAppHostLocal;
+
+// ⭐ "NOW" FOR THIS THREAD (ibDateTime::Now, core/fdatetime.h): the distance of the clock of the base it works for
+// from this machine's (session/regionalSettings.h) — the session's base, else the base the thread is bound to,
+// else the base whose service runs on it. The last is what makes the registry's heartbeats and the job tick's
+// last runs readings of the base's clock: those threads work for one base and are bound to none. A thread that
+// works for no base: 0, the machine's clock.
+//
+// THE JOURNAL'S ORDER AND THE JOURNAL'S MANNER (GetJournalContext, below): each without a lock - "now" is asked
+// from anywhere, under anybody's locks (the lock manager's loop, a session being built) - and the distance is
+// read off the base itself, which outlives the fields it closes.
+long long OffsetOfThisThreadsBase() noexcept
+{
+	if (ibApplicationHost::IsEmpty())
+		return 0;   // no base is open: the machine's clock, and nothing to read a distance off
+	const ibSession* const session = ibSession::CurrentCached();
+	const ibApplicationInstance* base = session != nullptr ? session->GetApplicationInstance() : nullptr;
+	if (base == nullptr)
+		base = t_instance;
+	if (base == nullptr)
+		base = t_owner;
+	return base != nullptr ? base->GetClockOffset() : 0;
+}
+
+// ⭐ THE WORDS THIS THREAD SPEAKS (ibTranslations, core/localization/translations.h): the set of the locale of
+// the base it works for - found as "now" is found above - and null for a thread that works for no base, or
+// for a base that names none: the process's language then. Read off the base's regional settings through a
+// per-thread copy keyed by the base and its locale's generation (unique for the process, so a base made at a
+// closed one's address is told apart), so that a translation takes no lock on its way: _() is said a dozen
+// times per control made, on every thread at once. The copy holds pointers only: it is read from static
+// destructors too, after a thread's own objects are gone.
+const ibTranslations* TranslationsOfThisThreadsBase()
+{
+	if (ibApplicationHost::IsEmpty())
+		return nullptr;
+	const ibSession* const session = ibSession::CurrentCached();
+	const ibApplicationInstance* base = session != nullptr ? session->GetApplicationInstance() : nullptr;
+	if (base == nullptr)
+		base = t_instance;
+	if (base == nullptr)
+		base = t_owner;
+	if (base == nullptr)
+		return nullptr;
+	ibRegionalSettings* const regional = ibApplicationInstance::GetRegionalSettings(base);
+	if (regional == nullptr)
+		return nullptr;
+	const unsigned generation = regional->LocaleGeneration();
+	thread_local const ibApplicationInstance* t_base = nullptr;
+	thread_local unsigned t_generation = 0;
+	thread_local const ibTranslations* t_set = nullptr;
+	if (t_base != base || t_generation != generation) {
+		const wxString locale = regional->GetLocale();
+		t_set = locale.IsEmpty() ? nullptr : ibTranslations::ForLanguage(locale);
+		t_base = base;
+		t_generation = generation;
+	}
+	return t_set;
+}
 
 } // namespace
 
@@ -110,6 +170,9 @@ ibApplicationHost* ibApplicationHost::Ensure(ibRunMode runMode)
 	if (s_applicationHost == nullptr) {
 		s_applicationHost.reset(new ibApplicationHost(runMode));
 		ibTechJournal::SetContext(&ibApplicationHost::GetJournalContext);
+		ibDateTime::SetNowOffset(&OffsetOfThisThreadsBase);
+		ibTranslations::SetSource(&TranslationsOfThisThreadsBase);
+		ibTranslations::AddDomain(wxT("open_es"));   // declared before any base opens: a set made later has it
 	}
 
 	// …WITH ROOM FOR ONE MORE — as many bases as its config allows (backend.conf, Bases). Refused out loud and
@@ -222,6 +285,8 @@ void ibApplicationHost::CloseAll()
 	}
 
 	ibTechJournal::SetContext(nullptr);
+	ibDateTime::SetNowOffset(nullptr);   // core outlives this library; its Now() must not call back into it
+	ibTranslations::SetSource(nullptr);
 	s_applicationHost.reset();
 }
 
@@ -410,14 +475,44 @@ bool ibApplicationHost::InitLocale(const wxString& locale)
 		}
 	}
 
+	// A WISH THIS MACHINE CANNOT GRANT IS NOT A REFUSAL TO OPEN THE BASE. A base names its locale on one machine
+	// and is opened on every other (session/regionalSettings.h); a Linux with that locale not generated cannot
+	// set it. The process then comes up in what it speaks with no wish - the system's language - else in
+	// English, and the journal says which wish went ungranted. Refusing here left the base unopenable on that
+	// machine by a setting made on another.
+	//
+	// Settled BEFORE the one Init: wxLocale::Init is once per object - a second call asserts, and leaves wx's
+	// global locale pointer at this object twice over, to dangle when it goes - so the language is probed
+	// first (wxLocale::IsAvailable, the same probe through wxUILocale), and Init is asked once.
+	int ungranted = wxLanguage::wxLANGUAGE_UNKNOWN;
+	if (!wxLocale::IsAvailable(m_localeLang)) {
+		ungranted = m_localeLang;
+		m_localeLang = wxLocale::GetSystemLanguage();
+		if (m_localeLang == wxLanguage::wxLANGUAGE_UNKNOWN)
+			m_localeLang = wxLanguage::wxLANGUAGE_DEFAULT;
+		if (m_localeLang == ungranted || !wxLocale::IsAvailable(m_localeLang))
+			m_localeLang = wxLanguage::wxLANGUAGE_ENGLISH;
+	}
 	if (!m_locale.Init(m_localeLang)) {
-		if (!m_locale.Init(wxLanguage::wxLANGUAGE_ENGLISH))
-			return false;
-		m_localeLang = wxLanguage::wxLANGUAGE_ENGLISH;
+		// Said, not answered with a bare false: the opening would otherwise refuse the base with no reason given.
+		const wxLanguageInfo* const info = wxLocale::GetLanguageInfo(m_localeLang);
+		ibBackendCoreException::Error(_("The locale %s cannot be set on this machine; the base was not opened."),
+			info != nullptr ? info->GetCanonicalWithRegion() : wxString(wxT("(default)")));
+	}
+	if (ungranted != wxLanguage::wxLANGUAGE_UNKNOWN) {
+		const wxLanguageInfo* const wished = wxLocale::GetLanguageInfo(ungranted);
+		ibJournalWarning(wxT("session.locale"), wxT("the locale %s is not supported on this machine; the process speaks %s"),
+			wished != nullptr ? wished->GetCanonicalWithRegion() : wxString::Format(wxT("#%d"), ungranted),
+			m_locale.GetCanonicalName());
 	}
 
 	// Initialize the catalogs we'll be using.
 	m_locale.AddCatalog(wxT("open_es"));
+	// THE ENGINE'S OWN WORDS come through its own catalogs (core/localization/translations.h): one set per
+	// language, chosen per thread by the base it works for (the domain is declared in Ensure, before any base
+	// opens); the process's language is this one. wxLocale keeps its copy of the catalog above for wx's own
+	// windows.
+	ibTranslations::SetProcessLanguage(m_locale.GetCanonicalName());
 
 	// ⭐ NO CATALOG OF OURS FOR THE LANGUAGE — NOTHING TO ASK. The engine's strings stay as they are written (English
 	// has no catalog: it is what they are written in), and a translations object with nothing of ours misses on every

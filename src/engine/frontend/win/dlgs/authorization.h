@@ -9,6 +9,7 @@
 #include <wx/stattext.h>
 
 #include "frontend/frontend.h"
+#include "core/localization/translations.h"   // _() - the engine's own catalogs
 
 class FRONTEND_API ibDialogAuthentication : public wxDialog {
 public:

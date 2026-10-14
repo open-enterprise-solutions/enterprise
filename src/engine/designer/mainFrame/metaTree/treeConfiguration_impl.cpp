@@ -22,7 +22,6 @@
 #include "backend/metaCollection/metaComposerObject.h"  // the report's composers, as tree items
 #include "backend/metaCollection/metaGroups.h"          // what a group is called, and where it stands
 
-#include <wx/intl.h>  // wxGetTranslation — the layout table holds SOURCE strings, translated on use
 
 #include <algorithm>  // std::stable_sort — the rows are drawn in the declared order
 #include <vector>

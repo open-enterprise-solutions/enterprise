@@ -34,8 +34,10 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "backend/mcp/mcpServer.h"
+#include "backend/session/regionalSettings.h"   // ibRegionalSettings - platform_state names the base's zone
 
 #include "backend/appData.h"                        // GetSettingsStorage — where a person's settings live
+#include "backend/appHost.h"                        // the platform's locale, beside the base's
 #include "backend/logger/logger.h"                  // …and ibLog — the registration journal
 #include "backend/backend_exception.h"              // an engine refusal arrives as an exception
 #include "backend/query/queryException.h"           // …and the query family says WHERE
@@ -1628,6 +1630,18 @@ void ibMcpDescribePlatform(const ibApplicationInstance* applicationInstance, ibD
 	into.SetValue(wxT("connection"), applicationInstance->GetDatabaseDescription());
 	if (!applicationInstance->GetFile().IsEmpty())
 		into.SetValue(wxT("base"), applicationInstance->GetFile());
+
+	// …the zone its readings stand in (session/regionalSettings.h; empty where the base names none, and each
+	// engine stands in its own), and how far the base's clock stands from this machine's, so a reader knows
+	// which "now" it is looking at.
+	if (ibRegionalSettings* const regional = ibApplicationInstance::GetRegionalSettings(applicationInstance))
+		into.SetValue(wxT("timeZone"), regional->GetTimeZone());
+	into.AddField(wxT("clockOffsetMs"), ibDataValue::Int(static_cast<s64>(applicationInstance->GetClockOffset())));
+	// …and the locale its clients come up in: the base's own where it names one, else the platform's, which
+	// is said beside it so a reader can tell the two apart.
+	into.SetValue(wxT("locale"), applicationInstance->GetLocale());
+	if (const ibApplicationHost* const host = ibApplicationHost::Get())
+		into.SetValue(wxT("platformLocale"), host->GetLocale());
 
 	const ibUserInfo& who = applicationInstance->GetUserInfo();
 

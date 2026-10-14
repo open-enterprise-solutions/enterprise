@@ -19,12 +19,15 @@
 
 #include <atomic>
 #include <ctime>
+#include <mutex>
+#include <set>
 
 #include <wx/file.h>
 #include <wx/filename.h>
 #include <wx/stdpaths.h>
 #include <wx/tokenzr.h>
 #include <wx/regex.h>
+#include <wx/wxcrt.h>   // wxIsalnum - what a zone name may be made of
 
 // Firebird SQL dialect — owned by the driver. Static holds the definition (a
 // test reads it without constructing the driver); virtual GetDialect() exposes
@@ -37,6 +40,8 @@ const ibDialectDictionary& ibDatabaseLayerFirebird::Dialect()
 		d.m_pagination  = ibPagination::FirstSkip;    // SELECT FIRST n SKIP m
 		d.m_boolForm    = ibBoolForm::Smallint;       // no native boolean pre-FB3
 		d.m_selectFromDual = wxT("RDB$DATABASE");     // FB has no bare FROM-less SELECT — the WITH-CHECK one-row source needs a dummy table
+		d.m_localTimestamp = wxT("LOCALTIMESTAMP");   // the server's clock in the session's zone (FB 4+; the vendored engine is 5)
+		d.m_timeZoneNames  = wxT("SELECT RDB$TIME_ZONE_NAME FROM RDB$TIME_ZONES ORDER BY RDB$TIME_ZONE_NAME");
 		// 🛑 THE BOUND IS ON THE PATH, NOT ON ONE ALIAS. A relation inside nested derived tables is named in the BLR by
 		// the aliases of every table around it, joined — and that string has a length of one byte: past ~210 characters
 		// the request is refused as "invalid request BLR … expected record selection expression clause", the offending
@@ -334,7 +339,6 @@ ibDatabaseLayerFirebird::ibDatabaseLayerFirebird()
 	m_pDatabase = 0;
 	m_pTransaction = 0;
 
-	m_pStatus = new ISC_STATUS_ARRAY();
 #if _USE_DYNAMIC_DATABASE_LAYER_LINKING == 1
 	m_pInterface = std::make_shared<ibInterfaceFirebird>();
 	
@@ -347,6 +351,7 @@ ibDatabaseLayerFirebird::ibDatabaseLayerFirebird()
 	}
 
 #endif
+	m_pStatus = new ISC_STATUS_ARRAY();
 
 	m_strServer = wxT("");  // assume embedded database in this case
 	m_strUser = wxT("sysdba");
@@ -361,7 +366,6 @@ ibDatabaseLayerFirebird::ibDatabaseLayerFirebird(const wxString& strDatabase)
 	m_pDatabase = 0;
 	m_pTransaction = 0;
 
-	m_pStatus = new ISC_STATUS_ARRAY();
 #if _USE_DYNAMIC_DATABASE_LAYER_LINKING == 1
 	m_pInterface = std::make_shared<ibInterfaceFirebird>();
 	
@@ -374,6 +378,7 @@ ibDatabaseLayerFirebird::ibDatabaseLayerFirebird(const wxString& strDatabase)
 	}
 
 #endif
+	m_pStatus = new ISC_STATUS_ARRAY();
 
 	m_strServer = wxT("");  // assume embedded database in this case
 	m_strUser = wxT("sysdba");
@@ -389,7 +394,6 @@ ibDatabaseLayerFirebird::ibDatabaseLayerFirebird(const wxString& strDatabase, co
 	m_pDatabase = 0;
 	m_pTransaction = 0;
 
-	m_pStatus = new ISC_STATUS_ARRAY();
 #if _USE_DYNAMIC_DATABASE_LAYER_LINKING == 1
 	m_pInterface = std::make_shared<ibInterfaceFirebird>();
 	if (!m_pInterface->Init())
@@ -400,6 +404,7 @@ ibDatabaseLayerFirebird::ibDatabaseLayerFirebird(const wxString& strDatabase, co
 		return;
 	}
 #endif
+	m_pStatus = new ISC_STATUS_ARRAY();
 
 	m_strServer = wxT("");  // assume embedded database in this case
 	m_strUser = strUser;
@@ -415,7 +420,6 @@ ibDatabaseLayerFirebird::ibDatabaseLayerFirebird(const wxString& strServer, cons
 	m_pDatabase = 0;
 	m_pTransaction = 0;
 
-	m_pStatus = new ISC_STATUS_ARRAY();
 #if _USE_DYNAMIC_DATABASE_LAYER_LINKING == 1
 	m_pInterface = std::make_shared<ibInterfaceFirebird>();
 	if (!m_pInterface->Init())
@@ -426,6 +430,7 @@ ibDatabaseLayerFirebird::ibDatabaseLayerFirebird(const wxString& strServer, cons
 		return;
 	}
 #endif
+	m_pStatus = new ISC_STATUS_ARRAY();
 
 	m_strServer = strServer;
 	m_strUser = strUser;
@@ -441,7 +446,6 @@ ibDatabaseLayerFirebird::ibDatabaseLayerFirebird(const wxString& strServer, cons
 	m_pDatabase = 0;
 	m_pTransaction = 0;
 
-	m_pStatus = new ISC_STATUS_ARRAY();
 #if _USE_DYNAMIC_DATABASE_LAYER_LINKING == 1
 	m_pInterface = std::make_shared<ibInterfaceFirebird>();
 	if (!m_pInterface->Init())
@@ -452,6 +456,7 @@ ibDatabaseLayerFirebird::ibDatabaseLayerFirebird(const wxString& strServer, cons
 		return;
 	}
 #endif
+	m_pStatus = new ISC_STATUS_ARRAY();
 
 	m_strServer = strServer;
 	m_strUser = strUser;
@@ -466,7 +471,6 @@ ibDatabaseLayerFirebird::ibDatabaseLayerFirebird(const ibDatabaseLayerFirebird& 
 	m_pDatabase = 0;
 	m_pTransaction = 0;
 
-	m_pStatus = new ISC_STATUS_ARRAY();
 #if _USE_DYNAMIC_DATABASE_LAYER_LINKING == 1
 	m_pInterface = std::make_shared<ibInterfaceFirebird>();
 	if (!m_pInterface->Init())
@@ -477,6 +481,7 @@ ibDatabaseLayerFirebird::ibDatabaseLayerFirebird(const ibDatabaseLayerFirebird& 
 		return;
 	}
 #endif
+	m_pStatus = new ISC_STATUS_ARRAY();
 
 	m_strServer = src.m_strServer;
 	m_strUser = src.m_strUser;
@@ -484,6 +489,51 @@ ibDatabaseLayerFirebird::ibDatabaseLayerFirebird(const ibDatabaseLayerFirebird& 
 	m_strRole = src.m_strRole;
 
 	Open(src.m_strDatabase);
+	// NOT put into the source's zone here: a statement needs the connection to be held (RunQuery
+	// registers through shared_from_this), and a clone is owned by nobody yet. The pool puts a
+	// connection whose own zone differs from the base's into it as it hands it out (Checkout).
+}
+
+bool ibDatabaseLayerFirebird::SetSessionTimeZone(const wxString& zone)
+{
+	if (!IsOpen())
+		return false;
+	// The name goes in as a literal - Firebird binds no parameter to SET TIME ZONE - so it is let through
+	// only as what a zone name is: letters, digits and / _ + - : (an IANA name, or an offset like +02:00).
+	// UTC by name when the base names nothing - the attach's own zone.
+	const wxString name = zone.IsEmpty() ? wxString(wxT("UTC")) : zone;
+	for (const wxUniChar c : name)
+		if (!(c.IsAscii() && wxIsalnum(c)) && wxString(wxT("/_+-:")).Find(c) == wxNOT_FOUND)
+			return false;
+	try {
+		// As the one argument of "%s": the statement doors are printf-shaped, and a statement is data.
+		RunQuery(wxT("%s"), wxT("SET TIME ZONE '") + name + wxT("'"));
+	}
+	catch (const ibBackendException&) {
+		return false;   // the server does not know the name; the zone in force stays
+	}
+	m_sessionTimeZone = zone;
+	// ⚠ A NAME THE SERVER KNOWS IS NOT YET A ZONE IT CAN COUNT IN. The engine's list of names is its
+	// own; the rules behind them are ICU's, read from `tzdata/` beside the engine - and without that
+	// folder the ICU built into the kit knows 2018's rules, under which Europe/Kyiv (named 2022) is
+	// accepted and counted as UTC, silently (measured 2026-09-26). The version of the rules is said in
+	// the journal beside the zone, so a base reading its clock an hour off has the cause in one line.
+	// Said once per zone name in this process - the pool puts every clone into the zone, and clones
+	// come and go all day, on every thread of every base; the rules do not change between them.
+	static std::mutex s_rulesMutex;
+	static std::set<wxString> s_rulesSaidFor;   // every name said, for every base the process holds
+	bool say = false;
+	if (!zone.IsEmpty()) {
+		std::lock_guard<std::mutex> lock(s_rulesMutex);
+		say = s_rulesSaidFor.insert(zone).second;
+	}
+	if (say) {
+		wxString rules;
+		try { rules = GetSingleResultString(wxT("SELECT RDB$TIME_ZONE_UTIL.DATABASE_VERSION() FROM RDB$DATABASE"), 1); }
+		catch (const ibBackendException&) { rules = wxT("?"); }
+		ibJournalInfo(wxT("db.firebird"), wxT("session time zone %s (zone rules %s)"), zone, rules);
+	}
+	return true;
 }
 
 // dtor()
@@ -963,6 +1013,9 @@ bool ibDatabaseLayerFirebird::Close()
 
 	CloseResultSets();
 	CloseStatements();
+	// The session's zone goes with the attachment: the next attach stands at UTC (Open), and a
+	// connection reporting a zone it no longer stands in would be measured in the wrong one.
+	m_sessionTimeZone.clear();
 
 	if (m_pDatabase)
 	{
@@ -2085,6 +2138,10 @@ bool ibDatabaseLayerFirebird::ReconnectIfLeaderChanged()
 	           wxT("(was %s, now %s); reconnecting"),
 	           m_currentConnectUrl, currentLeaderUrl);
 
+	// The zone the session stood in, to put back on the fresh attachment: Close forgets it, and an
+	// attach is at UTC.
+	const wxString zone = m_sessionTimeZone;
+
 	// Tear down the existing handle — best-effort. If the underlying
 	// TCP socket is already dead (leader process gone), Close will
 	// fail; we ignore that and march on to the fresh Open. CloseResultSets
@@ -2115,6 +2172,11 @@ bool ibDatabaseLayerFirebird::ReconnectIfLeaderChanged()
 		           wxT("leader URL %s failed"), currentLeaderUrl);
 		return false;
 	}
+	// The session's zone put back, or the loss said: a reconnected connection that works in UTC
+	// while its holder believes it in the base's zone would measure the clock hours off.
+	if (!zone.IsEmpty() && !SetSessionTimeZone(zone))
+		ibJournalError(wxT("db.firebird"), wxT("ibDatabaseLayerFirebird: reconnected against %s, and the session zone %s could not be put back"),
+		           currentLeaderUrl, zone);
 	return true;
 }
 

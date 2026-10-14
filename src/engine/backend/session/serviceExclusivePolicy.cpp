@@ -118,7 +118,7 @@ bool ibServiceExclusivePolicy::CanOpen(ibRunMode runMode, wxString& reason)
 		std::map<wxString, ibRowInTheWay> watched, seen;
 		readRows(watched);
 		for (;;) {
-			const ibDateTime now = ibDateTime::Now();
+			const ibDateTime now = ibDateTime::MachineNow();   // beats are the machine's clock (the registry's JobSweepStale)
 			for (auto it = watched.begin(); it != watched.end(); ) {
 				if (it->second.beat.IsEmpty() || now.ElapsedSince(it->second.beat) >= silence)
 					it = watched.erase(it);

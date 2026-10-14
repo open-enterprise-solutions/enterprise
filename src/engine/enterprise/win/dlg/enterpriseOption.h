@@ -16,6 +16,7 @@
 #include <wx/sizer.h>
 #include <wx/dialog.h>
 #include <wx/checkbox.h>
+#include "core/localization/translations.h"   // _() - the engine's own catalogs
 
 class ibDialogEnterpriseOption : public wxDialog {
 	wxAuiNotebook* m_mainNotebook;

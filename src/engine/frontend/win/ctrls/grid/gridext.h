@@ -24,6 +24,7 @@
 #endif
 
 #include "frontend/frontend.h"
+#include "core/localization/translations.h"   // _() - the engine's own catalogs
 
 // ----------------------------------------------------------------------------
 // constants

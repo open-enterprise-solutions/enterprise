@@ -1,5 +1,6 @@
 
 #include "editorsettingspanel.h"
+#include "core/localization/translations.h"   // _() - the engine's own catalogs
 
 BEGIN_EVENT_TABLE(ibPanelEditorSettings, wxPanel)
 

@@ -1,7 +1,6 @@
 #include "backend/fileKind.h"
 
 #include <wx/filename.h>
-#include <wx/intl.h>
 
 namespace {
 
@@ -56,7 +55,7 @@ wxString ibFileFilter(ibFileKind kind)
 		return wxString();
 
 	const wxString mask = ibFileMask(kind);
-	const wxString description = wxGetTranslation(wxString::FromUTF8(row->description));
+	const wxString description = ibTranslations::Translate(wxString::FromUTF8(row->description));
 	return wxString::Format(wxT("%s (%s)|%s"), description, mask, mask);
 }
 

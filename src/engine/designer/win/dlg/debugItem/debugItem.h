@@ -14,6 +14,7 @@
 #include <wx/dialog.h>
 
 #include <wx/timer.h>
+#include "core/localization/translations.h"   // _() - the engine's own catalogs
 
 class ibDialogDebugItem : public wxDialog {
 public:

@@ -11,6 +11,7 @@
 #include <wx/stattext.h>
 
 #include "frmclient/frmclient.h"
+#include "core/localization/translations.h"   // _() - the engine's own catalogs
 
 // THE LOGIN WINDOW — the desktop's (frontend/win/dlgs/authorization), handed the names the server offers (users) instead
 // of reading the base itself. It asks; the main window logs in with what it was told, and asks again when refused.

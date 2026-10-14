@@ -35,6 +35,7 @@
 
 #include "wxlinechartctrl.h"
 #include <wx/filedlg.h>
+#include "core/localization/translations.h"   // _() - the engine's own catalogs
 
 wxLineChartCtrl::wxLineChartCtrl(wxWindow *parent,
                                  wxWindowID id,

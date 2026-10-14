@@ -267,7 +267,7 @@ private:
 				wxPGProperty* eg = GetEvent(event);
 				if (eg != nullptr) {
 					wxPGProperty* id = m_pg->Append(eg);
-					m_pg->SetPropertyHelpString(id, wxGetTranslation(event->GetHelp()));
+					m_pg->SetPropertyHelpString(id, ibTranslations::Translate(event->GetHelp()));
 					if (m_style != wxOES_OI_MULTIPAGE_STYLE) {
 						// Per-class tint — interior palette (see above).
 						if (stringUtils::CompareString(name, wxT("window")))
@@ -345,7 +345,7 @@ private:
 				ibProperty* prop_ptr = itProperty->second;
 				// Update displayed description for the new selection
 				const wxString& helpString = prop_ptr->GetHelp();
-				const wxString& localized = wxGetTranslation(helpString);
+				const wxString& localized = ibTranslations::Translate(helpString);
 				m_pg->SetPropertyHelpString(propPtr, localized);
 				m_pg->SetDescription(propPtr->GetLabel(), localized);
 				return;
@@ -356,7 +356,7 @@ private:
 				ibEvent* event_ptr = itEvent->second;
 				// Update displayed description for the new selection
 				const wxString& helpString = event_ptr->GetHelp();
-				const wxString& localized = wxGetTranslation(helpString);
+				const wxString& localized = ibTranslations::Translate(helpString);
 				m_pg->SetPropertyHelpString(propPtr, localized);
 				m_pg->SetDescription(propPtr->GetLabel(), localized);
 				return;

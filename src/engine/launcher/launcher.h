@@ -17,6 +17,7 @@
 #include <wx/button.h>
 #include <wx/frame.h>
 #include <wx/bmpbndl.h>
+#include "core/localization/translations.h"   // _() - the engine's own catalogs
 
 // ⭐ THE LAUNCHER'S OWN PICTURES. It links the backend alone, so the frontend's art provider — which answers the
 // stock ids in the set's manner in the designer and the running application — never reaches it, and a stock id

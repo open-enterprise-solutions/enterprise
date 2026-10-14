@@ -564,7 +564,7 @@
         "global_functions"
       ],
       "signature": "CurrentDate()",
-      "description": "The current date and time of the machine the code runs on. For the date a person is POSTING under — which may deliberately differ — use WorkingDate.",
+      "description": "The current date and time of the base's clock: its server's local time in the base's time zone, wherever the code runs (set in the designer's settings, Time zone). A base that names no zone answers with the clock of the machine the code runs on. For the date a person is POSTING under — which may deliberately differ — use WorkingDate.",
       "syntax_block": "CurrentDate()",
       "parameters": "None.",
       "return_descr": "Date, with the time of day.",

@@ -35,6 +35,7 @@
 
 #include "wxhistogramctrl.h"
 #include <wx/filedlg.h>
+#include "core/localization/translations.h"   // _() - the engine's own catalogs
 
 wxHistogramCtrl::wxHistogramCtrl(wxWindow *parent,
                                  wxWindowID id,

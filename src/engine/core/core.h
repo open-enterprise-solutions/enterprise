@@ -166,4 +166,7 @@ inline const wxChar* const kValueFieldData  = wxT("v");   // the payload
 #define COMPONENT_TYPE_ABSTRACT		 0
 #define COMPONENT_TYPE_METADATA		 COMPONENT_TYPE_ABSTRACT
 
+// _() and its kin over the engine's own catalogs - every unit that says _() includes this one.
+#include "core/localization/translations.h"
+
 #endif
