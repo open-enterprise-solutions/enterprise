@@ -3,10 +3,9 @@
 /////////////////////////////////////////////////////////////////////////////
 
 #include <atomic>   // std::atomic — MSVC supplied this transitively
-#include "backend/syntaxHelper/helpService.h"
+#include "core/syntaxHelper/helpService.h"
 
-#include "backend/syntaxHelper/helpCorpus.h"
-#include "backend/syntaxHelper/helpLoader.h"
+#include "core/syntaxHelper/helpCorpus.h"
 
 #include "core/programFolder.h"
 
@@ -78,8 +77,8 @@ wxString ResolvePlatformDir(const wxString& locale)
 
 }   // namespace
 
-ibHelpService::ibHelpService(ib::AppDataCtorToken, const wxString& locale)
-	: m_locale(CanonicaliseLocale(locale))
+ibHelpService::ibHelpService(const wxString& locale, const ibHelpClassName& className)
+	: m_locale(CanonicaliseLocale(locale)), m_className(className)
 {
 	Rebuild();
 }
@@ -117,7 +116,7 @@ void ibHelpService::Rebuild()
 
 	const wxString platformDir = ResolvePlatformDir(m_locale);
 	ibHelpLoadResult result =
-	    LoadHelpCorpus(m_locale, platformDir, wxEmptyString);
+	    LoadHelpCorpus(m_locale, platformDir, wxEmptyString, m_className);
 
 	// Errors live inside the corpus snapshot — readers reach them via
 	// GetCorpus()->LoadErrors(). No parallel error vector on the

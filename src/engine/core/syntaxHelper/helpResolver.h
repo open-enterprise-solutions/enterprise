@@ -16,7 +16,9 @@
 #ifndef _IB_HELP_RESOLVER_H_
 #define _IB_HELP_RESOLVER_H_
 
-#include "backend/backend.h"
+#include "core/core.h"
+
+#include <wx/string.h>
 
 #include <vector>
 
@@ -26,7 +28,7 @@ struct ibHelpEntry;
 // Surrounding-token context for disambiguating identifiers. Optional —
 // a default-constructed hint produces a kind-agnostic name match across
 // every locale-equivalent identifier in the corpus.
-struct BACKEND_API ibHelpResolveHint {
+struct CORE_API ibHelpResolveHint {
 	enum class Role {
 		kUnknown,         // no context — match any kind
 		kTypeName,        // identifier appears as a type annotation
@@ -67,7 +69,7 @@ struct BACKEND_API ibHelpResolveHint {
 // stable for the corpus's lifetime — the caller must keep its
 // shared_ptr<const ibHelpCorpus> snapshot through any operation that
 // uses these pointers (§3.4 lifetime contract).
-BACKEND_API std::vector<const ibHelpEntry*>
+CORE_API std::vector<const ibHelpEntry*>
 ResolveByName(const ibHelpCorpus&      corpus,
               const wxString&          identifier,
               const ibHelpResolveHint& hint = {});

@@ -21,9 +21,17 @@
 #ifndef _IB_HELP_LOADER_H_
 #define _IB_HELP_LOADER_H_
 
-#include "backend/backend.h"
+#include "core/core.h"
 
-#include "backend/syntaxHelper/helpLoadError.h"
+#include "core/syntaxHelper/helpLoadError.h"
+
+#include <functional>
+
+// WHAT A CLASS IS REGISTERED AS — its name in the side's registry of classes, empty for a class not registered. An
+// article's class_id is checked by it at load (the article names a class the build has, under the name it is about);
+// the registry is the side's — the core keeps none — so the side that has one passes it, and without it the class_id
+// is taken as written.
+using ibHelpClassName = std::function<wxString(ibClassID)>;
 
 // Current on-disk schema version the loader produces and accepts. Bump
 // rule: new optional field = no bump; rename / remove / semantics change
@@ -50,10 +58,14 @@ constexpr int kIbHelpSchemaVersion = 1;
 // The loader is responsible for normalising any platform-locale string
 // (wxLocale returns "en" or "en_US") to one of the canonical forms via
 // helpers in the loader implementation.
-BACKEND_API ibHelpLoadResult
+//
+// `className` — the side's registry of classes, an article's class_id checked by it (ibHelpClassName); none — taken
+// as written.
+CORE_API ibHelpLoadResult
 LoadHelpCorpus(const wxString& localeCode,
                const wxString& platformDir,
-               const wxString& configCacheDir = wxEmptyString);
+               const wxString& configCacheDir = wxEmptyString,
+               const ibHelpClassName& className = ibHelpClassName());
 
 // Normalise any platform-locale string to the corpus's directory
 // naming convention (bare 2-char language code, lowercase). Empty /
@@ -61,6 +73,6 @@ LoadHelpCorpus(const wxString& localeCode,
 // canonicalise the locale once at startup and use the same string
 // throughout its lifetime — single source of truth for what counts
 // as "the locale" inside this subsystem.
-BACKEND_API wxString CanonicaliseLocale(const wxString& raw);
+CORE_API wxString CanonicaliseLocale(const wxString& raw);
 
 #endif // _IB_HELP_LOADER_H_

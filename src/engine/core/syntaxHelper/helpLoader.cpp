@@ -6,11 +6,10 @@
 // runtime exception path.
 /////////////////////////////////////////////////////////////////////////////
 
-#include "backend/syntaxHelper/helpLoader.h"
+#include "core/syntaxHelper/helpLoader.h"
 
-#include "backend/syntaxHelper/helpCorpus.h"
-#include "backend/syntaxHelper/helpEntry.h"
-#include "backend/compiler/value.h"   // ibValue::IsRegisterCtor / GetNameObjectFromID — an article's class_id, checked
+#include "core/syntaxHelper/helpCorpus.h"
+#include "core/syntaxHelper/helpEntry.h"
 #include "core/stringUtils.h"
 
 #include <wx/dir.h>
@@ -205,6 +204,7 @@ std::map<wxString, wxString> ParseCategories(const std::string&            raw,
 
 void ParseBucket(const std::string&            raw,
                  const wxString&               bucketPath,
+                 const ibHelpClassName&        className,
                  std::vector<ibHelpEntry>&     out,
                  std::vector<ibHelpLoadError>& errors) {
 	json doc;
@@ -317,24 +317,25 @@ void ParseBucket(const std::string&            raw,
 			e.seeAlso        = SafeStrArray(obj, "see_also");
 			e.reviewed       = SafeBool(obj, "reviewed", false);
 
-			// The hidden class id (helpEntry.h), checked against the registry HERE: an article whose
-			// class was renamed or removed says so at load instead of pointing at nothing. The entry
-			// still loads - the prose is right even when the join key is not.
+			// The hidden class id (helpEntry.h), checked against the side's registry HERE (className): an
+			// article whose class was renamed or removed says so at load instead of pointing at nothing.
+			// The entry still loads - the prose is right even when the join key is not. No registry - the
+			// id as written.
 			const auto classIt = obj.find("class_id");
 			if (classIt != obj.end()) {
 				ibHelpLoadError warn;
 				warn.bucketPath = bucketPath;
 				warn.severity   = ibHelpLoadSeverity::kWarning;
 				const ibClassID asked = classIt->is_number_unsigned() ? classIt->get<ibClassID>() : 0;
-				if (asked == 0 || !ibValue::IsRegisterCtor(asked)) {
+				const wxString registered = asked != 0 && className ? className(asked) : wxString();
+				if (asked == 0 || (className && registered.IsEmpty())) {
 					warn.message = wxString::Format(
 						wxT("%s: class_id %s names no registered class."), e.id, Utf8(classIt->dump()));
 					errors.push_back(std::move(warn));
 				}
 				else {
 					e.classId = asked;
-					const wxString registered = ibValue::GetNameObjectFromID(asked);
-					if (!stringUtils::CompareString(registered, e.nameEn)) {
+					if (className && !stringUtils::CompareString(registered, e.nameEn)) {
 						warn.message = wxString::Format(
 							wxT("%s: class_id %s is registered as '%s', but the article is about '%s'."),
 							e.id, Utf8(classIt->dump()), registered, e.nameEn);
@@ -552,6 +553,7 @@ std::shared_ptr<const ibHelpCorpus>
 LoadSource(const wxString&               localeCode,
            const wxString&               sourceRoot,
            ibHelpCorpus::Source          sourceTag,
+           const ibHelpClassName&        className,
            std::vector<ibHelpLoadError>& errorsOut) {
 	std::unique_ptr<HelpBucketSource> source =
 	    ResolveSource(sourceRoot, localeCode);
@@ -591,7 +593,7 @@ LoadSource(const wxString&               localeCode,
 			localErrors.push_back(std::move(e));
 			continue;
 		}
-		ParseBucket(raw, displayPath, entries, localErrors);
+		ParseBucket(raw, displayPath, className, entries, localErrors);
 	}
 	if (bucketNames.empty()) {
 		ibHelpLoadError err;
@@ -654,7 +656,8 @@ LoadSource(const wxString&               localeCode,
 
 ibHelpLoadResult LoadHelpCorpus(const wxString& localeCode,
                                 const wxString& platformDir,
-                                const wxString& configCacheDir) {
+                                const wxString& configCacheDir,
+                                const ibHelpClassName& className) {
 	ibHelpLoadResult result;
 	wxString locale = CanonicaliseLocale(localeCode);
 
@@ -683,13 +686,13 @@ ibHelpLoadResult LoadHelpCorpus(const wxString& localeCode,
 	try {
 		std::shared_ptr<const ibHelpCorpus> platform =
 		    LoadSource(locale, platformDir,
-		               ibHelpCorpus::Source::kPlatform, result.errors);
+		               ibHelpCorpus::Source::kPlatform, className, result.errors);
 
 		std::shared_ptr<const ibHelpCorpus> perConfig;
 		if (!configCacheDir.empty()) {
 			perConfig = LoadSource(locale, configCacheDir,
 			                        ibHelpCorpus::Source::kPerConfiguration,
-			                        result.errors);
+			                        className, result.errors);
 		}
 
 		if (perConfig) {

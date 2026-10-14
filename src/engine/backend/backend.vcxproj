@@ -26,13 +26,6 @@
     <ClInclude Include="cipher\fieldCipher.h" />
     <ClInclude Include="appEnv.h" />
     <ClInclude Include="backend.h" />
-    <ClInclude Include="syntaxHelper\helpCategory.h" />
-    <ClInclude Include="syntaxHelper\helpCorpus.h" />
-    <ClInclude Include="syntaxHelper\helpEntry.h" />
-    <ClInclude Include="syntaxHelper\helpLoader.h" />
-    <ClInclude Include="syntaxHelper\helpLoadError.h" />
-    <ClInclude Include="syntaxHelper\helpResolver.h" />
-    <ClInclude Include="syntaxHelper\helpService.h" />
     <ClInclude Include="logger\logger.h" />
     <ClInclude Include="logger\loggerEntry.h" />
     <ClInclude Include="logger\loggerQueue.h" />
@@ -431,10 +424,6 @@
     <ClCompile Include="cipher\fieldCipher.cpp" />
     <ClCompile Include="appDataQuery.cpp" />
     <ClCompile Include="appEnv.cpp" />
-    <ClCompile Include="syntaxHelper\helpCorpus.cpp" />
-    <ClCompile Include="syntaxHelper\helpLoader.cpp" />
-    <ClCompile Include="syntaxHelper\helpResolver.cpp" />
-    <ClCompile Include="syntaxHelper\helpService.cpp" />
     <ClCompile Include="logger\logger.cpp" />
     <ClCompile Include="logger\loggerDiagnosticSink.cpp" />
     <ClCompile Include="logger\loggerQueue.cpp" />

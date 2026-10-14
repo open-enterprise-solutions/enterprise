@@ -24,7 +24,9 @@
 #ifndef _IB_HELP_LOAD_ERROR_H_
 #define _IB_HELP_LOAD_ERROR_H_
 
-#include "backend/backend.h"
+#include "core/core.h"
+
+#include <wx/string.h>
 
 #include <memory>
 #include <vector>
@@ -37,7 +39,7 @@ enum class ibHelpLoadSeverity {
 	kWarning,
 };
 
-struct BACKEND_API ibHelpLoadError {
+struct CORE_API ibHelpLoadError {
 	wxString           bucketPath; // absolute path of the offending file
 	int                line = 0;   // 1-based; 0 if not localizable to a line
 	ibHelpLoadSeverity severity = ibHelpLoadSeverity::kEntrySkipped;
@@ -47,7 +49,7 @@ struct BACKEND_API ibHelpLoadError {
 // Outcome of LoadHelpCorpus(). `corpus` is never null — on total failure
 // it points to an empty corpus snapshot so call sites can keep their
 // `appData->GetHelpCorpus()` invariant (returns non-null shared_ptr).
-struct BACKEND_API ibHelpLoadResult {
+struct CORE_API ibHelpLoadResult {
 	std::shared_ptr<const ibHelpCorpus> corpus;
 	std::vector<ibHelpLoadError>        errors;
 

@@ -15,14 +15,16 @@
 #ifndef _IB_HELP_CATEGORY_H_
 #define _IB_HELP_CATEGORY_H_
 
-#include "backend/backend.h"
+#include "core/core.h"
+
+#include <wx/string.h>
 
 #include <memory>
 #include <vector>
 
 struct ibHelpEntry;
 
-// NOTE: deliberately NOT BACKEND_API. The struct holds
+// NOTE: deliberately NOT CORE_API. The struct holds
 // std::unique_ptr<ibHelpCategory> children — under __declspec(dllexport)
 // MSVC eagerly instantiates the implicit copy ops, which fail because
 // unique_ptr is move-only. Consumers reach this type only through

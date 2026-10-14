@@ -7,10 +7,11 @@
 // swapping the published shared_ptr on appData.
 /////////////////////////////////////////////////////////////////////////////
 
-#include "backend/syntaxHelper/helpCorpus.h"
-#include "backend/syntaxHelper/helpResolver.h"
+#include "core/syntaxHelper/helpCorpus.h"
+#include "core/syntaxHelper/helpResolver.h"
 
 #include <wx/sstream.h>
+#include <wx/wxcrt.h>   // wxIsalnum — the backend's precompiled header supplied this
 
 #include <algorithm>
 #include <cstdint>

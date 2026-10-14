@@ -16,11 +16,11 @@
 
 #include <gtest/gtest.h>
 
-#include "backend/syntaxHelper/helpCorpus.h"
-#include "backend/syntaxHelper/helpCategory.h"
-#include "backend/syntaxHelper/helpEntry.h"
-#include "backend/syntaxHelper/helpLoader.h"
-#include "backend/syntaxHelper/helpLoadError.h"
+#include "core/syntaxHelper/helpCorpus.h"
+#include "core/syntaxHelper/helpCategory.h"
+#include "core/syntaxHelper/helpEntry.h"
+#include "core/syntaxHelper/helpLoader.h"
+#include "core/syntaxHelper/helpLoadError.h"
 
 #include <wx/file.h>
 #include <wx/filename.h>

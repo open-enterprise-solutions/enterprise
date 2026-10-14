@@ -18,7 +18,8 @@
 #include "core/programFolder.h"   // backend.conf and lang/ sit in the program folder, not inside a bundle
 #include "backend/session/session.h"   // ibSession::CurrentCached — the journal's first question
 #include "backend/session/workerPoolHeadless.h"   // the process's worker pool
-#include "backend/syntaxHelper/helpService.h"
+#include "backend/compiler/value.h"   // ibValue::IsRegisterCtor / GetNameObjectFromID — the registry the help corpus checks by
+#include "core/syntaxHelper/helpService.h"
 
 std::unique_ptr<ibApplicationHost>                  ibApplicationHost::s_applicationHost;
 std::mutex                                          ibApplicationHost::s_mutex;
@@ -435,8 +436,11 @@ bool ibApplicationHost::InitLocale(const wxString& locale)
 	//Set default time
 	wxDateTime::SetCountry(wxDateTime::Country::Country_Default);
 
-	// Syntax-helper corpus comes up here — locale is settled.
-	m_helpService.reset(new ibHelpService(ib::AppDataCtorToken{}, m_locale.GetCanonicalName()));
+	// Syntax-helper corpus comes up here — locale is settled. An article's class_id is checked by the backend's
+	// registry of classes.
+	m_helpService.reset(new ibHelpService(m_locale.GetCanonicalName(), [](ibClassID id) {
+		return ibValue::IsRegisterCtor(id) ? ibValue::GetNameObjectFromID(id) : wxString();
+	}));
 
 	return true;
 }

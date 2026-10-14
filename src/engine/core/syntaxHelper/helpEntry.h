@@ -17,8 +17,12 @@
 #ifndef _IB_HELP_ENTRY_H_
 #define _IB_HELP_ENTRY_H_
 
-#include "backend/backend.h"
+#include "core/core.h"
 #include "core/clsid.h"   // ibClassID — the class an article is about
+
+#include <wx/string.h>
+#include <wx/arrstr.h>   // wxbase exports std::vector<wxString> (wxArrayString's base) — seen here, a unit imports it
+                         // instead of defining its own (LNK2005 in core.dll; the backend's precompiled header had it)
 
 #include <vector>
 
@@ -60,7 +64,7 @@ enum class ibHelpKind {
 // One help topic in a single locale. Locales are stored in side-by-side
 // directories (data/help/<locale>/), one ibHelpEntry per locale per id —
 // the corpus held by appData reflects one locale at a time.
-struct BACKEND_API ibHelpEntry {
+struct CORE_API ibHelpEntry {
 	// Canonical, locale-independent. Loader rejects duplicates within a
 	// single source corpus (platform OR per-config); cross-source
 	// collisions become overlays (§3.6).

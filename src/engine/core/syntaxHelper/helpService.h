@@ -29,22 +29,23 @@
 #ifndef _IB_HELP_SERVICE_H_
 #define _IB_HELP_SERVICE_H_
 
-#include "backend/backend.h"
-#include "backend/appDataCtorToken.h"
+#include "core/core.h"
+
+#include "core/syntaxHelper/helpLoader.h"
 
 #include <memory>
 #include <mutex>
 
-class BACKEND_API ibHelpCorpus;
+class ibHelpCorpus;
 
-class BACKEND_API ibHelpService {
+class CORE_API ibHelpService {
 public:
-	// ib::AppDataCtorToken gate — appData is the owning coordinator;
-	// no external code constructs the service directly. Same pattern as
-	// ibLockManager / ibPluginManager / ibSessionRegistry. `locale` is
-	// the canonical OES locale code ("ru-RU" / "uk-UA" / "en-US"). Ctor
-	// publishes an initial corpus snapshot synchronously.
-	ibHelpService(ib::AppDataCtorToken, const wxString& locale);
+	// `locale` is the canonical OES locale code ("ru-RU" / "uk-UA" /
+	// "en-US"); `className` — the side's registry of classes, an article's
+	// class_id checked by it (ibHelpClassName). The backend's appData owns
+	// one; a thin client owns its own. Ctor publishes an initial corpus
+	// snapshot synchronously.
+	ibHelpService(const wxString& locale, const ibHelpClassName& className = ibHelpClassName());
 	~ibHelpService();
 
 	ibHelpService(const ibHelpService&)            = delete;
@@ -68,6 +69,7 @@ private:
 	void Rebuild();   // body of Reload() + ctor — assumes lock held.
 
 	wxString m_locale;
+	ibHelpClassName m_className;
 	mutable std::shared_ptr<const ibHelpCorpus> m_corpus;
 	mutable std::mutex m_mutex;
 };

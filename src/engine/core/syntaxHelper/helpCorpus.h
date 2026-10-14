@@ -29,10 +29,10 @@
 #ifndef _IB_HELP_CORPUS_H_
 #define _IB_HELP_CORPUS_H_
 
-#include "backend/backend.h"
-#include "backend/syntaxHelper/helpCategory.h"
-#include "backend/syntaxHelper/helpEntry.h"
-#include "backend/syntaxHelper/helpLoadError.h"
+#include "core/core.h"
+#include "core/syntaxHelper/helpCategory.h"
+#include "core/syntaxHelper/helpEntry.h"
+#include "core/syntaxHelper/helpLoadError.h"
 
 #include <cstdint>
 #include <map>
@@ -45,7 +45,7 @@
 // index implementation.
 using ibHelpEntryIndex = std::uint32_t;
 
-class BACKEND_API ibHelpCorpus final {
+class CORE_API ibHelpCorpus final {
 public:
 	// Source tag for the merging constructor. The platform corpus ships
 	// with OES (data/help/<locale>/), the per-config corpus is rebuilt
@@ -171,12 +171,12 @@ private:
 	void BuildCategoryTree();
 
 	// Free-function accessor used by helpResolver — keeps the resolver
-	// independent of the corpus's internal storage layout. BACKEND_API
+	// independent of the corpus's internal storage layout. CORE_API
 	// on the friend declaration must match the linkage on the real
 	// declaration in helpResolver.h, otherwise MSVC raises C2375 on
 	// a dllexport build. clang/gcc accept either form, but matching is
 	// the portable spelling.
-	friend BACKEND_API std::vector<const ibHelpEntry*> ResolveByName(
+	friend CORE_API std::vector<const ibHelpEntry*> ResolveByName(
 	    const ibHelpCorpus&, const wxString&, const struct ibHelpResolveHint&);
 };
 

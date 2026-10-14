@@ -51,7 +51,7 @@ enum ibRunMode {
 
 class BACKEND_API ibDatabaseLayer;
 class BACKEND_API ibSession;
-class BACKEND_API ibHelpService;  // defined in backend/help/helpService.h
+class ibHelpService;  // defined in core/syntaxHelper/helpService.h
 
 enum class ibSessionKind : int;   // defined in backend/session/session.h
 

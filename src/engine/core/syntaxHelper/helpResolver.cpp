@@ -7,11 +7,12 @@
 // can substitute a mock corpus by satisfying the same friend contract.
 /////////////////////////////////////////////////////////////////////////////
 
-#include "backend/syntaxHelper/helpResolver.h"
+#include "core/syntaxHelper/helpResolver.h"
 
-#include "backend/syntaxHelper/helpCorpus.h"
-#include "backend/syntaxHelper/helpEntry.h"
+#include "core/syntaxHelper/helpCorpus.h"
+#include "core/syntaxHelper/helpEntry.h"
 
+#include <algorithm>   // std::stable_partition — the backend's precompiled header supplied this
 #include <unordered_map>
 #include <vector>
 
