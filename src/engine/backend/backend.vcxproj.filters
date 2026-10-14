@@ -914,6 +914,9 @@
     <ClInclude Include="temp\tempStorage.h">
       <Filter>temp</Filter>
     </ClInclude>
+    <ClInclude Include="server\listener.h">
+      <Filter>server</Filter>
+    </ClInclude>
     <ClInclude Include="server\serverConfig.h">
       <Filter>server</Filter>
     </ClInclude>
@@ -2316,6 +2319,9 @@
     </ClCompile>
     <ClCompile Include="temp\tempStorage.cpp">
       <Filter>temp</Filter>
+    </ClCompile>
+    <ClCompile Include="server\listener.cpp">
+      <Filter>server</Filter>
     </ClCompile>
     <ClCompile Include="server\serverConfig.cpp">
       <Filter>server</Filter>

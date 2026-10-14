@@ -36,6 +36,7 @@
 #include "backend/mcp/mcpServer.h"
 
 #include "backend/appData.h"                        // GetSettingsStorage — where a person's settings live
+#include "backend/server/listener.h"                // the listener: TLS when backend.conf names a certificate
 #include "backend/logger/logger.h"                  // …and ibLog — the registration journal
 #include "backend/backend_exception.h"              // an engine refusal arrives as an exception
 #include "backend/query/queryException.h"           // …and the query family says WHERE
@@ -166,8 +167,23 @@ public:
 	// listen_after_bind is what the thread then runs.
 	bool Bind(wxString& refusal)
 	{
-		m_server.set_payload_max_length(kMaxRequestBytes);
-		m_server.set_tcp_nodelay(true);
+		// THE TRANSPORT IS THE PROCESS'S (server/listener.h): TLS when backend.conf names a certificate, plain
+		// on this machine's own addresses only - an assistant edits a configuration, and a token sent in the
+		// clear across a network is a token given away.
+		const ibTlsFiles tls = ibTlsFiles::FromBackendConf();
+		wxString why;
+		m_server = ibMakeListener(m_settings.m_address, tls, &why);
+		if (!m_server) {
+			refusal = wxString::Format(_("Assistant access did not start: %s"), why);
+			// Said in the journal as well as to the caller: the designer shows it in its messages pane, the
+			// application server writes its own line - and the transport refusing is the one start-up fact
+			// an operator reads the journal for.
+			ibJournalWarning(wxT("mcp"), wxT("assistant access did not start: %s"), why);
+			return false;
+		}
+		m_tls = tls.IsNamed();
+		m_server->set_payload_max_length(kMaxRequestBytes);
+		m_server->set_tcp_nodelay(true);
 
 		// 🛑🛑 ONE LISTENER PER PORT, SAID TO THE OPERATING SYSTEM — because on Windows the default
 		// does NOT say it. httplib asks for SO_REUSEADDR (there is no SO_REUSEPORT there), and on
@@ -188,7 +204,7 @@ public:
 		// The socket type is httplib's own and is not spelled here: a generic lambda converts to its
 		// SocketOptions whatever that turns out to be, and the option itself is the OPERATING
 		// SYSTEM's, asked for directly rather than through a helper of the library's.
-		m_server.set_socket_options([](auto sock) {
+		m_server->set_socket_options([](auto sock) {
 			const int yes = 1;
 			::setsockopt((SOCKET)sock, SOL_SOCKET, SO_EXCLUSIVEADDRUSE,
 				reinterpret_cast<const char*>(&yes), sizeof(yes));
@@ -207,7 +223,7 @@ public:
 		//
 		// ⚠ AND IT NAMES THE LIKELY HOLDER. Another designer already open is the ordinary reason,
 		// not a fault, so the message says so rather than leaving a person looking for one.
-		if (!m_server.bind_to_port(host, (int)m_settings.m_port)) {
+		if (!m_server->bind_to_port(host, (int)m_settings.m_port)) {
 			refusal = wxString::Format(
 				_("Assistant access did not start: port %u on %s is already taken.\n\n"
 				  "Another designer is probably open and holding it - only one can. "
@@ -223,8 +239,9 @@ public:
 	// thread that serves the bound socket cannot half-succeed.
 	void Run()
 	{
-		m_thread = std::thread([this] { m_server.listen_after_bind(); });
+		m_thread = std::thread([this] { m_server->listen_after_bind(); });
 	}
+	bool IsTls() const { return m_tls; }
 
 	// STOPPED IN THE ORDER THAT LETS EVERYTHING LEAVE.
 	//
@@ -240,7 +257,8 @@ public:
 		}
 		m_streamWake.notify_all();
 
-		m_server.stop();
+		if (m_server)
+			m_server->stop();
 
 		if (m_thread.joinable())
 			m_thread.join();
@@ -420,8 +438,8 @@ private:
 		// Matched to the wait in RunTool, which gives the main thread five minutes before it
 		// answers on its own, plus a margin so the transport never gives up FIRST — whoever times
 		// out should be the one that can explain why.
-		m_server.set_read_timeout(std::chrono::minutes(6));
-		m_server.set_write_timeout(std::chrono::minutes(6));
+		m_server->set_read_timeout(std::chrono::minutes(6));
+		m_server->set_write_timeout(std::chrono::minutes(6));
 
 		// ⚠ AND HOW LONG A CONNECTION MAY SIT IDLE, which is the half that actually bit. httplib
 		// closes a kept-alive connection after FIVE SECONDS of silence
@@ -433,9 +451,9 @@ private:
 		//
 		// This server exists to be addressed occasionally and thought about in between. Idle is its
 		// normal state, not a sign the caller has gone.
-		m_server.set_keep_alive_timeout(std::chrono::minutes(10));
+		m_server->set_keep_alive_timeout(std::chrono::minutes(10));
 		// A POST IS A QUESTION: one JSON-RPC message in, one answer out.
-		m_server.Post("/", [this](const httplib::Request& req, httplib::Response& res) {
+		m_server->Post("/", [this](const httplib::Request& req, httplib::Response& res) {
 
 			// ⭐ WHO IS SPEAKING, ASKED FIRST AND ASKED HERE. Before a message is parsed, before a
 			// tool is looked up — an unauthorised caller must not be able to learn what exists,
@@ -521,7 +539,7 @@ private:
 
 		// A GET IS AN OFFER TO LISTEN. It asks nothing — it hands the server
 		// somewhere to speak, and is kept open until one side goes away.
-		m_server.Get("/", [this](const httplib::Request& req, httplib::Response& res) {
+		m_server->Get("/", [this](const httplib::Request& req, httplib::Response& res) {
 
 			// ⚠ THE STREAM IS GUARDED TOO, and it matters more here than on the other verb: this
 			// one hands over everything the platform says from the moment it is opened — what is
@@ -602,7 +620,8 @@ private:
 	ibMcpSettings m_settings;
 	ibSession*    m_session = nullptr;
 
-	httplib::Server m_server;
+	std::unique_ptr<httplib::Server> m_server;   // the listener (server/listener.h): TLS or plain, made in Bind
+	bool            m_tls = false;
 	std::thread     m_thread;
 
 	// The way out. Filled by whoever has something to say (the UI thread, a tool)
@@ -953,6 +972,7 @@ bool ibMcpServer::Start(ibSession* session, wxString& refusal)
 	m_session  = session;
 	m_listener = std::move(listener);
 	m_running.store(true);
+	ibJournalInfo(wxT("mcp"), wxT("assistant access listens on %s"), GetEndpoint());
 
 	// ⭐ WATCHING FROM THE MOMENT IT IS UP, not from the first question somebody asks it. The
 	// subscription is also refreshed at every dispatch, because a configuration can be opened and
@@ -1053,7 +1073,8 @@ wxString ibMcpServer::GetEndpoint() const
 	if (!IsRunning())
 		return wxEmptyString;
 
-	return wxString::Format(wxT("http://%s:%u/"), m_settings.m_address, (unsigned)m_settings.m_port);
+	return wxString::Format(wxT("%s://%s:%u/"), m_listener && m_listener->IsTls() ? wxT("https") : wxT("http"),
+		m_settings.m_address, (unsigned)m_settings.m_port);
 }
 
 void ibMcpServer::AddNotifier(ibMcpNotifier* notifier)

@@ -90,6 +90,11 @@ public:
 	static std::size_t ReadCount(const class wxConfigBase& conf, const wxString& file, const wxString& key, long least,
 		std::size_t byDefault, std::size_t most = 0);
 
+	// Where backend.conf is: the working folder's, else the one beside the program (inside a bundle, the folder
+	// that holds the .app); empty when neither is there. The one place the file is looked for - the listeners
+	// (server/listener.h) read their certificate from it before any host exists.
+	static wxString BackendConfPath();
+
 private:
 
 	// Opening and closing a base is ibApplicationInstance's own lifecycle; it drives these.
