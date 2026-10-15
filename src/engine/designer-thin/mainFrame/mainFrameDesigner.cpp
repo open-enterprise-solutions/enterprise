@@ -60,10 +60,10 @@ void ibFrontendMainFrameDesigner::CreateGUI()
 }
 
 #include "frmclient/win/dlgs/applyChange.h"
+#include "frmclient/win/dlgs/formSelector/formSelector.h"
 
 void ibFrontendMainFrameDesigner::ShowRequest(const ibProtocolNode& request, ibProtocolNode& response)
 {
-	// ⚠ FormType (the desktop's ibDialogSelectTypeForm) waits for the form editor — until it is, the base's default.
 	switch (static_cast<ibProtocolRequestKind>(request.GetInt(ibProtocolName::Kind))) {
 	case ibProtocolRequestKind::ApplyChange:
 		// THE DESKTOP'S ibDialogApplyChange over the restructure's ledger — the base held on the server while it is open.
@@ -71,6 +71,13 @@ void ibFrontendMainFrameDesigner::ShowRequest(const ibProtocolNode& request, ibP
 		if (ibDialogApplyChange::ShowApplyChange(request, this))
 			response.SetValue(ibProtocolName::Done, true);
 		break;
+	case ibProtocolRequestKind::FormType: {
+		// THE DESKTOP'S ibDialogSelectTypeForm over a form just made. Cancelled — answered with no Id: the form taken
+		// away again.
+		ibDialogSelectTypeForm dialog(request);
+		dialog.ShowModal(response);
+		break;
+	}
 	default:
 		ibFrontendMainFrame::ShowRequest(request, response);
 		break;

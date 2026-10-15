@@ -8,21 +8,19 @@
 class BACKEND_API ibEventAction : public ibEvent {
 public:
 
-	// Public + fires its own functor, same as ibPropertyList::GetValueList — the front
-	// builds the editor now and reads the actions from here. NOT const: the functor
-	// refills m_listPropValue, so this mutates.
-	ibPropertyChoiceList GetEventList() {
-		ibPropertyChoiceList constants;
+	// The actions it may run — the family's own verb, as ibPropertyList::GetValueList answers it: the front builds the
+	// editor of them, the server sends them with the row. NOT const: the functor refills m_listPropValue.
+	virtual ibPropertyChoiceMode GetValueList(ibPropertyChoiceList& list) override {
 		if (!m_functor->Invoke(this))
-			return constants;
+			return ibPropertyChoiceMode::None;
 		for (unsigned int idx = 0; idx < m_listPropValue.GetItemCount(); idx++) {
-			constants.Add(
+			list.Add(
 				m_listPropValue.GetItemLabel(idx),
 				m_listPropValue.GetItemId(idx),
 				m_listPropValue.GetItemBitmap(idx)
 			);
 		}
-		return constants;
+		return ibPropertyChoiceMode::Single;
 	}
 
 private:

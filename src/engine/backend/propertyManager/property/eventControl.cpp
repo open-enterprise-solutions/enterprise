@@ -67,14 +67,14 @@ bool ibEventControl::GetDataValue(ibValue& pvarPropVal) const
 	return true;
 }
 
-// A child node with named properties (Name + handler Value) — no opaque bytes.
+// A child node with named properties (Name + handler Value) — no opaque bytes. Only the handler is read: the name is
+// the event's own, given when it was made and keyed by in its owner's events — a node pasted from another event, or a
+// client's edit that carries the handler alone, must not rename it.
 bool ibEventControl::ReadNodeValue(const ibDataValue& value)
 {
 	const std::shared_ptr<ibDataNode>& node = value.AsChild();
-	if (node) {
-		m_propName = node->GetValue<wxString>(wxT("Name"));
+	if (node)
 		m_propValue = node->GetValue<wxString>(wxT("Value"));
-	}
 	return true;
 }
 

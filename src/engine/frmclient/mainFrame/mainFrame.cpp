@@ -55,10 +55,13 @@
 namespace {
 
 // The wx ids the server's menus take — a range of their own: a command's by its number, a schema's by its own past the
-// commands', so an item has the same id each run and a key the person gave it holds (UpdateHotKeys).
-constexpr int kFirstMenuId       = wxID_HIGHEST + 5000;
-constexpr int kFirstSchemaMenuId = wxID_HIGHEST + 5500;
-constexpr int kLastMenuId        = wxID_HIGHEST + 5999;
+// commands', a schema's command by both past those, so an item has the same id each run and a key the person gave it
+// holds (UpdateHotKeys).
+constexpr int kFirstMenuId              = wxID_HIGHEST + 5000;
+constexpr int kFirstSchemaMenuId        = wxID_HIGHEST + 5500;
+constexpr int kFirstSchemaCommandMenuId = wxID_HIGHEST + 6000;
+constexpr int kSchemaCommandMenuIds     = 32;   // the ids a schema's commands take — past the most a schema has
+constexpr int kLastMenuId               = wxID_HIGHEST + 6999;
 
 // The person's options file, beside the desktop designer's options.xml: the thin client's commands go by other ids.
 constexpr const wxChar* kOptionsFile = wxT("options-thin.xml");
@@ -147,6 +150,9 @@ void ShapeOf(const ibProtocolNode& menu, std::string& shape)
 // The wx id of a command or a schema of the server's menu — by its number in the protocol.
 int MenuIdOf(const ibProtocolNode& item)
 {
+	if (item.Has(ibProtocolName::Schema) && item.Has(ibProtocolName::Command))
+		return kFirstSchemaCommandMenuId + static_cast<int>(item.GetInt(ibProtocolName::Schema)) * kSchemaCommandMenuIds
+			+ static_cast<int>(item.GetInt(ibProtocolName::Command));
 	if (item.Has(ibProtocolName::Schema))
 		return kFirstSchemaMenuId + static_cast<int>(item.GetInt(ibProtocolName::Schema));
 	return kFirstMenuId + static_cast<int>(item.GetInt(ibProtocolName::Command));
@@ -1051,6 +1057,7 @@ ibFrontendMainFrame::ibMenuItem ibFrontendMainFrame::MenuItemOf(const ibProtocol
 	ibMenuItem what;
 	what.schema = item.Has(ibProtocolName::Schema);
 	what.number = static_cast<int>(what.schema ? item.GetInt(ibProtocolName::Schema) : item.GetInt(ibProtocolName::Command));
+	what.command = what.schema ? static_cast<int>(item.GetInt(ibProtocolName::Command)) : 0;
 	what.shortcut = item.GetString(ibProtocolName::Shortcut);
 	return what;
 }
@@ -1425,8 +1432,18 @@ void ibFrontendMainFrame::ShowRequest(const ibProtocolNode& request, ibProtocolN
 				wildcard += wxT("|");
 			wildcard += item.GetString(ibProtocolName::Title) + wxT(" (") + mask + wxT(")|") + mask;
 		}
+		// A file of the server's named — taken down where the person chooses (the desktop's save dialog); none — one of
+		// the person's chosen and uploaded (its open dialog).
+		const wxString taken = request.GetString(ibProtocolName::File);
 		wxFileDialog dialog(parent, request.GetString(ibProtocolName::Caption), wxEmptyString, wxEmptyString,
-			!wildcard.IsEmpty() ? wildcard : wxString(wxFileSelectorDefaultWildcardStr), wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+			!wildcard.IsEmpty() ? wildcard : wxString(wxFileSelectorDefaultWildcardStr),
+			taken.IsEmpty() ? (wxFD_OPEN | wxFD_FILE_MUST_EXIST) : (wxFD_SAVE | wxFD_OVERWRITE_PROMPT));
+		if (!taken.IsEmpty()) {
+			// Cancelled, or not taken down — answered with no Done.
+			if (dialog.ShowModal() == wxID_OK && DownloadFile(taken, dialog.GetPath()))
+				response.SetValue(ibProtocolName::Done, true);
+			break;
+		}
 		// Cancelled, or not uploaded — answered with no File: the server takes that for nothing chosen.
 		wxString file;
 		if (dialog.ShowModal() == wxID_OK && UploadFile(dialog.GetPath(), file))
@@ -1862,7 +1879,14 @@ void ibFrontendMainFrame::OnMenu(wxCommandEvent& event)
 	}
 
 	const ibMenuItem what = found->second;
-	if (what.schema) {
+	if (what.schema && what.command != 0) {
+		// The schema's command — done by the server, which asks the person what it needs to.
+		ibProtocolNode params, answer;
+		params.SetValue(ibProtocolName::Schema, static_cast<long long>(what.number));
+		params.SetValue(ibProtocolName::Command, static_cast<long long>(what.command));
+		Call(ibProtocolMethod::Schema, params, answer);
+	}
+	else if (what.schema) {
 		OpenSchema(static_cast<ibProtocolSchema>(what.number));
 	}
 	else {

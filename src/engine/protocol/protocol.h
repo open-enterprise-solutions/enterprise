@@ -97,7 +97,8 @@ namespace ibProtocolName {
 
 	// What the frame's parts carry: a menu item, a tab, a message, a question and its answer.
 	inline constexpr const char* Separator    = "Separator";
-	inline constexpr const char* Command      = "Command";
+	inline constexpr const char* Command      = "Command";    // …a menu item's beside its Schema: that schema's
+	                                                          // command, done as `schema {Schema, Command}` does it
 	inline constexpr const char* Schema       = "Schema";
 	inline constexpr const char* Shortcut     = "Shortcut";   // a command's default key — the user's own go over it, client-side
 	inline constexpr const char* StockPicture = "StockPicture";
@@ -324,6 +325,7 @@ namespace ibProtocolName {
 	// it goes back the same way, Change {Sheet}; a cell clicked, Cell {Row, Col}.
 	inline constexpr const char* ComposeState = "ComposeState";   // the State's: the sheet to its report (ibProtocolComposeState)
 	inline constexpr const char* GridLines  = "GridLines";   // the State's: its grid lines shown — a document's sheet
+	inline constexpr const char* GridArea   = "GridArea";    // the State's: its areas shown — a template's sheet
 	inline constexpr const char* Sheet      = "Sheet";
 	inline constexpr const char* Col        = "Col";
 	inline constexpr const char* Bold       = "Bold";
@@ -534,13 +536,18 @@ enum class ibProtocolSchema : int {
 	                    // carried over; the configuration and its sys_dbg are here: shows the configuration's Guid and
 	                    // Rows (Module, Count — its lines); `Args: {Module}` — that module's Breakpoints. Its commands
 	                    // ibProtocolDebuggerCommand
+	Database     = 16,  // the designer's base as a whole (Administration → Restore, Dump, Clear database) — shows nothing;
+	                    // commands 11 Load — restored from a file the person is asked for (Request File), every session
+	                    // of the base closed after; 4 Save — dumped, and taken down where the person chooses; 12 Clear —
+	                    // asked first. Each said to the person by the server
 };
 
 // A schema's own commands — `schema {Schema, Command, Args}`. All functions and Sections take the one: Open
 // {Item, Type} — an item they show, opened as the navigation opens it. Debugging takes Start and Stop; McpServer takes
 // them and Save; Active users, the designer's, Kick, Reload and Release; the users Save and Remove; the designer's
 // inspector (Properties) Save; its predefined values editor Create, Set and Remove; its texts (ObjectText) Save, and so the
-// home page (HomePage). The designer's tree has its own (ibProtocolMetaDataCommand).
+// home page (HomePage); the base (Database) Load, Save and Clear. The designer's tree has its own
+// (ibProtocolMetaDataCommand).
 enum class ibProtocolSchemaCommand : int {
 	Open    = 1,
 	Start   = 2,
@@ -552,6 +559,8 @@ enum class ibProtocolSchemaCommand : int {
 	Remove  = 8,
 	Create  = 9,
 	Set     = 10,
+	Load    = 11,
+	Clear   = 12,
 };
 
 // THE DESIGNER'S TREE'S COMMANDS — `schema {Schema: MetaData, Command, Args}`, its doors by an object's id, each with Tab
@@ -586,7 +595,8 @@ enum class ibProtocolRequestKind : int {
 	Choice  = 2,   // Caption and children Id, Caption, Picture, Selected → Id — one of those offered; none — cancelled.
 	               // With Multiple → Ids — those of them ticked
 	Edit    = 4,   // Command (ibProtocolCommand: Cut … SelectAll) — done to the field under the focus → nothing
-	File    = 5,   // Caption and children Title, Mask — a file of the person's chosen, uploaded → File; none — cancelled
+	File    = 5,   // Caption and children Title, Mask — a file of the person's chosen, uploaded → File; none — cancelled.
+	               // With File — that one of the server's taken down where the person chose → Done; none — cancelled
 	Generation = 6,   // the desktop's ibDialogGeneration: Picture (the window's) and children Id, Caption, Picture — the
 	                  // objects this one generates → Id — the one to base a new one on; none — cancelled
 	ViewMode   = 7,   // the desktop's wxTableViewModeDialog: Picture (the window's), Mode (ibProtocolViewMode) — the one in

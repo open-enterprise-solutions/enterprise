@@ -124,6 +124,9 @@
     <ClCompile Include="docView\templates\designer\docViewModuleEdit.cpp">
       <Filter>docView\templates\designer</Filter>
     </ClCompile>
+    <ClCompile Include="docView\templates\designer\docViewSpreadsheetEdit.cpp">
+      <Filter>docView\templates\designer</Filter>
+    </ClCompile>
     <ClCompile Include="docView\templates\docViewHelp.cpp">
       <Filter>docView\templates</Filter>
     </ClCompile>
@@ -173,6 +176,9 @@
       <Filter>schema\designer</Filter>
     </ClCompile>
     <ClCompile Include="schema\designer\objectText.cpp">
+      <Filter>schema\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="schema\designer\database.cpp">
       <Filter>schema\designer</Filter>
     </ClCompile>
     <ClCompile Include="schema\designer\debugger.cpp">
@@ -559,6 +565,9 @@
     <ClInclude Include="docView\templates\designer\docViewModuleEdit.h">
       <Filter>docView\templates\designer</Filter>
     </ClInclude>
+    <ClInclude Include="docView\templates\designer\docViewSpreadsheetEdit.h">
+      <Filter>docView\templates\designer</Filter>
+    </ClInclude>
     <ClInclude Include="docView\templates\docViewHelp.h">
       <Filter>docView\templates</Filter>
     </ClInclude>
@@ -605,6 +614,9 @@
       <Filter>schema\designer</Filter>
     </ClInclude>
     <ClInclude Include="schema\designer\objectText.h">
+      <Filter>schema\designer</Filter>
+    </ClInclude>
+    <ClInclude Include="schema\designer\database.h">
       <Filter>schema\designer</Filter>
     </ClInclude>
     <ClInclude Include="schema\designer\debugger.h">

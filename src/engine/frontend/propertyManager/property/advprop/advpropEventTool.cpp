@@ -20,7 +20,9 @@ public:
 	ibPropertyToolLoader()
 	{
 		ibPropertyRegistry::Register([](ibEventAction* evt) -> wxPGProperty* {
-			return new ibPGEventToolProperty(evt->GetLabel(), evt->GetName(), evt->GetEventList(),
+			ibPropertyChoiceList choices;
+			evt->GetValueList(choices);
+			return new ibPGEventToolProperty(evt->GetLabel(), evt->GetName(), choices,
 				evt->GetValue());
 		});
 	}

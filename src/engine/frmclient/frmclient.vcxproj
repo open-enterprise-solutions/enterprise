@@ -201,6 +201,7 @@
     <ClCompile Include="win\dlgs\enterpriseOption.cpp" />
     <ClCompile Include="win\dlgs\errorDialog.cpp" />
     <ClCompile Include="win\dlgs\formEditor.cpp" />
+    <ClCompile Include="win\dlgs\formSelector\formSelector.cpp" />
     <ClCompile Include="win\dlgs\generation.cpp" />
     <ClCompile Include="win\dlgs\jobSchedule\jobScheduleSettings.cpp" />
     <ClCompile Include="win\dlgs\settings\savedSettings.cpp" />
@@ -236,6 +237,7 @@
     <ClCompile Include="backend\propertyManager\property\propertyColour.cpp" />
     <ClCompile Include="backend\propertyManager\property\propertySize.cpp" />
     <ClCompile Include="backend\propertyManager\property\variant\variantSize.cpp" />
+    <ClCompile Include="backend\propertyManager\property\variant\variantAction.cpp" />
     <ClCompile Include="backend\compiler\value.cpp" />
     <ClCompile Include="settings\formSettings.cpp" />
     <ClCompile Include="propertyManager\property\private\propertyRegistry.cpp" />
@@ -247,6 +249,8 @@
     <ClCompile Include="propertyManager\property\advprop\advpropColour.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropSize.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropList.cpp" />
+    <ClCompile Include="propertyManager\property\advprop\advpropEvent.cpp" />
+    <ClCompile Include="propertyManager\property\advprop\advpropEventTool.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropType.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropHyperLink.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropModule.cpp" />
@@ -373,6 +377,7 @@
     <ClInclude Include="win\dlgs\enterpriseOption.h" />
     <ClInclude Include="win\dlgs\errorDialog.h" />
     <ClInclude Include="win\dlgs\formEditor.h" />
+    <ClInclude Include="win\dlgs\formSelector\formSelector.h" />
     <ClInclude Include="win\dlgs\generation.h" />
     <ClInclude Include="win\dlgs\jobSchedule\jobScheduleSettings.h" />
     <ClInclude Include="win\dlgs\settings\savedSettings.h" />
@@ -442,7 +447,10 @@
     <ClInclude Include="backend\system\value\valueDataComposition.h" />
     <ClInclude Include="backend\propertyManager\property\propertySize.h" />
     <ClInclude Include="backend\propertyManager\property\variant\variantSize.h" />
+    <ClInclude Include="backend\propertyManager\property\variant\variantAction.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropSize.h" />
+    <ClInclude Include="propertyManager\property\advprop\advpropEvent.h" />
+    <ClInclude Include="propertyManager\property\advprop\advpropEventTool.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropList.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropType.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropValuePicture.h" />

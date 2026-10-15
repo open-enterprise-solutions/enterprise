@@ -44,6 +44,11 @@ void ibClientFrameDesigner::InitializeDefaultMenu()
 	administration.Append(ibProtocolSchema::ActiveUser, _("Active users"));
 	administration.AppendSeparator();
 	administration.Append(ibProtocolSchema::AuditLog, _("Registration journal"));
+	administration.AppendSeparator();
+	administration.Append(ibProtocolSchema::Database, ibProtocolSchemaCommand::Load, _("Restore database"));
+	administration.Append(ibProtocolSchema::Database, ibProtocolSchemaCommand::Save, _("Dump database"));
+	administration.AppendSeparator();
+	administration.Append(ibProtocolSchema::Database, ibProtocolSchemaCommand::Clear, _("Clear database"));
 	m_menu.AppendSubMenu(administration, _("Administration"));
 
 	ibClientMenu tools;

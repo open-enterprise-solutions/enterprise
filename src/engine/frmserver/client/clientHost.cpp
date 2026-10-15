@@ -223,6 +223,8 @@ void DrawMenu(ibClientFrame* frame, const std::vector<ibClientMenu::Item>& items
 		}
 		else if (item.kind == ibClientMenuItemKind::Schema) {
 			child.SetValue(wxT("Schema"), static_cast<s32>(item.schema));
+			if (item.schemaCommand != ibProtocolSchemaCommand{})
+				child.SetValue(wxT("Command"), static_cast<s32>(item.schemaCommand));
 			child.SetValue(wxT("Title"), item.title);
 			enabled = frame->IsSchemaAllowed(item.schema);
 		}

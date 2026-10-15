@@ -260,10 +260,12 @@ protected:
 
 private:
 
-	// What a menu item of the server's does: a command, or a schema — and the key the server gives it by default.
+	// What a menu item of the server's does: a command, or a schema — shown, or its command done — and the key the server
+	// gives it by default.
 	struct ibMenuItem {
 		bool     schema = false;
 		int      number = 0;
+		int      command = 0;   // a schema's: the command it does (0: the schema shown)
 		wxString shortcut;
 	};
 

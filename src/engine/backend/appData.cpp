@@ -1412,12 +1412,17 @@ bool ibApplicationInstance::LoadDatabase(const wxString& strFullPath)
 		return false;
 	}
 
+	return LoadDatabase(fis);
+}
+
+bool ibApplicationInstance::LoadDatabase(wxInputStream& stream)
+{
 	// The archive is read to the end, and refused, before either clear. An empty
 	// zip, a file that is not a zip, or a backup this build cannot read used to
 	// drop the configuration tables and every user, then return success.
-	wxZipInputStream zis(fis);
+	wxZipInputStream zis(stream);
 	if (!zis.IsOk()) {
-		ibJournalError(wxT("appdata"), "The file '%s' is not a readable archive. Nothing was cleared.", strFullPath);
+		ibJournalError(wxT("appdata"), "The file is not a readable archive. Nothing was cleared.");
 		return false;
 	}
 
@@ -1550,6 +1555,11 @@ bool ibApplicationInstance::SaveDatabase(const wxString& strFullPath)
 		return false;
 	}
 
+	return SaveDatabase(out);
+}
+
+bool ibApplicationInstance::SaveDatabase(wxOutputStream& out)
+{
 	// 2. Wrap it in a wxZipOutputStream for compression
 	wxZipOutputStream zip(out);
 

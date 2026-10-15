@@ -211,6 +211,9 @@
     <ClCompile Include="win\dlgs\formEditor.cpp">
       <Filter>win\dlgs</Filter>
     </ClCompile>
+    <ClCompile Include="win\dlgs\formSelector\formSelector.cpp">
+      <Filter>win\dlgs\formSelector</Filter>
+    </ClCompile>
     <ClCompile Include="win\dlgs\generation.cpp">
       <Filter>win\dlgs</Filter>
     </ClCompile>
@@ -518,6 +521,9 @@
     <ClInclude Include="win\dlgs\formEditor.h">
       <Filter>win\dlgs</Filter>
     </ClInclude>
+    <ClInclude Include="win\dlgs\formSelector\formSelector.h">
+      <Filter>win\dlgs\formSelector</Filter>
+    </ClInclude>
     <ClInclude Include="win\dlgs\generation.h">
       <Filter>win\dlgs</Filter>
     </ClInclude>
@@ -766,6 +772,9 @@
     <Filter Include="win\dlgs\functionSearcher">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5059}</UniqueIdentifier>
     </Filter>
+    <Filter Include="win\dlgs\formSelector">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f505a}</UniqueIdentifier>
+    </Filter>
     <Filter Include="win\dlgs\translateConstructor">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f503d}</UniqueIdentifier>
     </Filter>
@@ -954,6 +963,12 @@
     <ClInclude Include="backend\propertyManager\property\variant\variantSize.h">
       <Filter>backend\propertyManager\property\variant</Filter>
     </ClInclude>
+    <ClCompile Include="backend\propertyManager\property\variant\variantAction.cpp">
+      <Filter>backend\propertyManager\property\variant</Filter>
+    </ClCompile>
+    <ClInclude Include="backend\propertyManager\property\variant\variantAction.h">
+      <Filter>backend\propertyManager\property\variant</Filter>
+    </ClInclude>
     <ClInclude Include="backend\propertyManager\property\variant\variantTranslate.h">
       <Filter>backend\propertyManager\property\variant</Filter>
     </ClInclude>
@@ -1102,6 +1117,18 @@
       <Filter>propertyManager\property\advprop</Filter>
     </ClCompile>
     <ClInclude Include="propertyManager\property\advprop\advpropString.h">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClInclude>
+    <ClCompile Include="propertyManager\property\advprop\advpropEvent.cpp">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClCompile>
+    <ClInclude Include="propertyManager\property\advprop\advpropEvent.h">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClInclude>
+    <ClCompile Include="propertyManager\property\advprop\advpropEventTool.cpp">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClCompile>
+    <ClInclude Include="propertyManager\property\advprop\advpropEventTool.h">
       <Filter>propertyManager\property\advprop</Filter>
     </ClInclude>
     <ClInclude Include="propertyManager\property\private\prop.h">

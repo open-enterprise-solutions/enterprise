@@ -173,6 +173,7 @@
     <ClCompile Include="docView\templates\designer\docViewDataProcessorEdit.cpp" />
     <ClCompile Include="docView\templates\designer\docViewDataReportEdit.cpp" />
     <ClCompile Include="docView\templates\designer\docViewModuleEdit.cpp" />
+    <ClCompile Include="docView\templates\designer\docViewSpreadsheetEdit.cpp" />
     <ClCompile Include="docView\templates\docViewHelp.cpp" />
     <ClCompile Include="docView\templates\docViewHomePage.cpp" />
     <ClCompile Include="docView\templates\docViewSpreadsheet.cpp" />
@@ -190,6 +191,7 @@
     <ClCompile Include="schema\designer\metaData.cpp" />
     <ClCompile Include="schema\designer\homePage.cpp" />
     <ClCompile Include="schema\designer\objectText.cpp" />
+    <ClCompile Include="schema\designer\database.cpp" />
     <ClCompile Include="schema\designer\debugger.cpp" />
     <ClCompile Include="schema\designer\predefined.cpp" />
     <ClCompile Include="schema\designer\properties.cpp" />
@@ -320,6 +322,7 @@
     <ClInclude Include="docView\templates\designer\docViewDataProcessorEdit.h" />
     <ClInclude Include="docView\templates\designer\docViewDataReportEdit.h" />
     <ClInclude Include="docView\templates\designer\docViewModuleEdit.h" />
+    <ClInclude Include="docView\templates\designer\docViewSpreadsheetEdit.h" />
     <ClInclude Include="docView\templates\docViewHelp.h" />
     <ClInclude Include="docView\templates\docViewHomePage.h" />
     <ClInclude Include="docView\templates\docViewSpreadsheet.h" />
@@ -336,6 +339,7 @@
     <ClInclude Include="schema\designer\metaData.h" />
     <ClInclude Include="schema\designer\homePage.h" />
     <ClInclude Include="schema\designer\objectText.h" />
+    <ClInclude Include="schema\designer\database.h" />
     <ClInclude Include="schema\designer\debugger.h" />
     <ClInclude Include="schema\designer\predefined.h" />
     <ClInclude Include="schema\designer\properties.h" />

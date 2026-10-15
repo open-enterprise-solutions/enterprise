@@ -19,6 +19,13 @@ ibClientMenu::Item& ibClientMenu::Append(ibProtocolSchema schema, const wxString
 	return m_items.back();
 }
 
+ibClientMenu::Item& ibClientMenu::Append(ibProtocolSchema schema, ibProtocolSchemaCommand command, const wxString& title)
+{
+	Item& item = Append(schema, title);
+	item.schemaCommand = command;
+	return item;
+}
+
 ibClientMenu::Item& ibClientMenu::AppendSubMenu(const ibClientMenu& menu, const wxString& title)
 {
 	Item item;

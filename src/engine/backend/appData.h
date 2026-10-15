@@ -417,6 +417,11 @@ public:
 	bool LoadDatabase(const wxString& strFullPath);
 	bool SaveDatabase(const wxString& strFullPath);
 
+	// The same, over a stream — a file of the session's temporary storage, which a client uploaded or takes down
+	// (ibTempFileInputStream / ibTempFileOutputStream). The stream is the caller's to close.
+	bool LoadDatabase(class wxInputStream& stream);
+	bool SaveDatabase(class wxOutputStream& stream);
+
 	bool ClearDatabase();
 
 #pragma endregion 

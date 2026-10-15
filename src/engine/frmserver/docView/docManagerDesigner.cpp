@@ -1,5 +1,6 @@
 #include "docManagerDesigner.h"
 
+#include "frmserver/schema/designer/database.h"
 #include "frmserver/schema/designer/debugger.h"
 #include "frmserver/schema/designer/mcpServer.h"
 #include "frmserver/schema/designer/metaData.h"
@@ -15,6 +16,7 @@
 
 //objects
 #include "frmserver/docView/templates/designer/docViewModuleEdit.h"
+#include "frmserver/docView/templates/designer/docViewSpreadsheetEdit.h"
 #include "core/fileKind.h"   // extensions live in one table, not at each call site
 
 wxIMPLEMENT_DYNAMIC_CLASS(ibDocManagerDesigner, ibDocManager);
@@ -31,6 +33,9 @@ ibDocManagerDesigner::ibDocManagerDesigner()
 	AddDocTemplate(g_metaCommonModuleCLSID, CLASSINFO(ibModuleTextDocument), CLASSINFO(ibModuleTextView));
 	AddDocTemplate(g_metaModuleCLSID, CLASSINFO(ibModuleTextDocument), CLASSINFO(ibModuleTextView));
 	AddDocTemplate(g_metaManagerCLSID, CLASSINFO(ibModuleTextDocument), CLASSINFO(ibModuleTextView));
+	// …and a template's sheet — a common template and an object's.
+	AddDocTemplate(g_metaCommonTemplateCLSID, CLASSINFO(ibSpreadsheetTemplateDocument), CLASSINFO(ibSpreadsheetTemplateView));
+	AddDocTemplate(g_metaTemplateCLSID, CLASSINFO(ibSpreadsheetTemplateDocument), CLASSINFO(ibSpreadsheetTemplateView));
 
 	// The configuration tree — its doors; the rows are the frame's (ibClientFrameDesigner).
 	RegisterSchema(ibProtocolSchema::MetaData, std::make_unique<ibSchemaMetaData>());
@@ -46,6 +51,8 @@ ibDocManagerDesigner::ibDocManagerDesigner()
 	RegisterSchema(ibProtocolSchema::Properties, std::make_unique<ibSchemaProperties>());
 	// The designer's Administration → Users — the base's users.
 	RegisterSchema(ibProtocolSchema::UserList, std::make_unique<ibSchemaUserList>());
+	// …and Restore, Dump and Clear database — the base as a whole.
+	RegisterSchema(ibProtocolSchema::Database, std::make_unique<ibSchemaDatabase>());
 	// The designer's options — the person's assistant access (its MCP page).
 	RegisterSchema(ibProtocolSchema::McpServer, std::make_unique<ibSchemaMcpServer>());
 }

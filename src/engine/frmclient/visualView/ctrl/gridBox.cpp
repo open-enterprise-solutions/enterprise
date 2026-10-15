@@ -105,6 +105,8 @@ void ibValueGridBox::Update(const ibProtocolNode& node)
 	gridWindow->ShowComposeState(static_cast<ibProtocolComposeState>(state.GetInt(ibProtocolName::ComposeState)));
 	// The grid lines a document's sheet shows; a report's are its cells' borders.
 	gridWindow->EnableGridLines(state.GetBool(ibProtocolName::GridLines));
+	// …and the areas a template's sheet shows, as the desktop's editor of one did.
+	gridWindow->EnableGridArea(state.GetBool(ibProtocolName::GridArea));
 
 	UpdateWindow(m_panel, node);
 	// …and its command bar takes the box's look (the desktop's ApplyLook(part)).
