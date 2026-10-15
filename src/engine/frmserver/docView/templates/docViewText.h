@@ -16,7 +16,7 @@ public:
 	virtual bool OnCreate(ibDocument* doc, long flags) override;
 	virtual void OnDraw(ibDataNode& frame) override;
 
-	virtual ibClientViewKind GetViewKind() const override { return ibClientViewKind::Text; }
+	virtual ibProtocolViewKind GetViewKind() const override { return ibProtocolViewKind::Text; }
 	// The text the person typed on the client, handed over (Change {Text}) — the document's text from then on.
 	virtual bool OnClientEvent(ibProtocolEvent event, const ibDataNode& args) override;
 
@@ -39,8 +39,8 @@ class FRMSERVER_API ibTextDocument : public ibDocument
 {
 public:
 
-	virtual ibPicture GetIcon() const {
-		return ibBackendPicture::GetServerPicture(g_metaCommonModuleCLSID);
+	virtual ibPictureDescription GetIcon() const {
+		return ibPictureDescription(g_metaCommonModuleCLSID);
 	}
 
 	ibTextDocument() : ibDocument() {}

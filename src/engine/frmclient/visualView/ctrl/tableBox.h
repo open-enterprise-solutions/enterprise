@@ -31,6 +31,7 @@ public:
 	virtual void Update(const ibProtocolNode& node, const ibProtocolNode& patch) override;
 	virtual wxWindow* GetWindow() const override;
 	virtual ibDataViewColumnGroup* GetColumnHolder() const override;
+	virtual ibViewCommandBar* GetCommandBar() const override { return m_commandBar.get(); }
 
 	// The desktop's says the source it shows; its source is the server's — here, its name.
 	virtual wxString GetControlTitle() const override { return _("TableBox") + wxT(": ") + GetControlName(); }
@@ -66,12 +67,13 @@ private:
 	void OnItemEditingStarted(ibDataViewEvent& event);
 	void OnItemEditingDone(ibDataViewEvent& event);
 	void OnEditorButton(wxCommandEvent& event);
-	void OnColumnHeaderClick(ibDataViewEvent& event);
+	void OnColumnClick(ibDataViewEvent& event);
 	void OnColumnReordered(ibDataViewEvent& event);
 	void OnContextMenu(ibDataViewEvent& event);
 	void OnHeaderEndResize(ibHeaderGenericCtrlEvent& event);
+	void OnMainWindowClick(wxMouseEvent& event);
 
-	wxPanel*                          m_panel = nullptr;
+	wxPanel*                         m_panel = nullptr;
 	ibTableViewCtrl*                  m_dataView = nullptr;
 	std::unique_ptr<ibViewCommandBar> m_commandBar;
 	ibProtocolNode                    m_contextMenu;   // the State's ContextMenu — what a right click offers

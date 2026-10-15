@@ -15,10 +15,13 @@
 #include "frmserver/client/clientFrame.h"
 #include "frmserver/docView/docView.h"
 #include "frmserver/win/dlgs/formSelector.h"   // ibDialogSelectTypeForm — the form's kind, asked
+#include "protocol/protocol.h"                  // ibProtocolName::FormType — the form's kind, its property
 
 #include <algorithm>    // std::stable_sort — the groups in the declared order
 #include <functional>   // std::function — a group fills its nested groups first
 #include <vector>
+
+#include <wx/scopeguard.h>   // wxON_BLOCK_EXIT_NULL — the form asked is shown again, however the asking ends
 
 // The COMMON row is not a metatype's group — it is the band itself, so its label stays here, and the client draws it
 // with its folder.
@@ -223,9 +226,12 @@ void ibMetaTreeBase::MetaObjectChanged(ibMetaDataNotifier::ibMetaStage stage, ib
 // client's call answers once it is answered. Only a form that has no kind yet: a paste, a copy and a tool-made form
 // already know what they are.
 //
-// ⚠ REFUSED IS ANYTHING BUT A KIND THE OWNER OFFERED — the form is not wanted, and it goes again, through the door a
-// Delete takes, before the Create answers. The desktop's "Generic form" button is not offered: its id is the
-// dialog's Cancel (wxNOT_FOUND), so the desktop took it away as well.
+// ⚠ REFUSED IS ANYTHING BUT A KIND THE OWNER OFFERED, or a generic form — the form is not wanted, and it goes again,
+// through the door a Delete takes, before the Create answers. A generic form's kind is the one it was made with
+// (wxNOT_FOUND): nothing is put on it.
+//
+// ⚠ AND NO ROW FOR IT WHILE IT IS ASKED — the question goes with a frame, whose rows are read from the metadata, where
+// the form already is; the desktop's tree drew its row once the wizard was answered.
 bool ibMetaTreeBase::AskFormKind(ibValueMetaObject* object)
 {
 	if (object == nullptr)
@@ -245,14 +251,20 @@ bool ibMetaTreeBase::AskFormKind(ibValueMetaObject* object)
 	for (unsigned int idx = 0; idx < optList.GetItemCount(); idx++)
 		dlg.AppendTypeForm(optList.GetItemName(idx), optList.GetItemLabel(idx), optList.GetItemId(idx));
 
-	const ibFormID chosen = dlg.ShowModal();
-	if (chosen == wxNOT_FOUND) {
-		GetMetaData()->RemoveMetaObject(form);
-		return false;
+	int chosen = defaultFormType;
+	{
+		m_askedForm = form;
+		wxON_BLOCK_EXIT_NULL(m_askedForm);
+		if (!dlg.ShowModal(chosen)) {
+			GetMetaData()->RemoveMetaObject(form);
+			return false;
+		}
 	}
 
-	// Placed the way the object inspector places one: ask the owner, set, tell the owner.
-	if (ibProperty* kind = form->GetProperty(wxT("FormType"))) {
+	// Placed the way the object inspector places one: ask the owner, set, tell the owner. A generic form keeps the kind
+	// it was made with.
+	ibProperty* const kind = form->GetProperty(ibProtocolName::FormType);
+	if (kind != nullptr && chosen != defaultFormType) {
 		const wxVariant before = kind->GetValue();
 		if (form->OnPropertyChanging(kind, wxVariant((long)chosen))) {
 			kind->SetValue(wxVariant((long)chosen));
@@ -326,7 +338,7 @@ ibDataNode& ibMetaTreeBase::AppendGroupItem(ibDataNode& parent, const ibClassID&
 	const ibMetaID place = -static_cast<ibMetaID>(parent.Children().size() + 1);
 	ibDataNode& item = parent.AddChild(0, place);
 	item.SetValue(wxT("Title"), name);
-	item.SetValue(wxT("Picture"), m_frame->SendPicture(ibPictureDescription(clsid), GetMetaData()));
+	item.SetValue(wxT("Picture"), ibClientFrame::SendPicture(clsid));
 	item.SetValue(wxT("Group"), ClsidText(clsid));
 	return item;
 }
@@ -343,7 +355,7 @@ ibDataNode& ibMetaTreeBase::AppendItem(ibDataNode& parent, ibValueMetaObject* me
 	ibDataNode& item = parent.AddChild(0, metaObject->GetMetaID());
 	item.SetValue(wxT("Title"), metaObject->GetName());
 	// Every metaobject's icon is its class's.
-	item.SetValue(wxT("Picture"), m_frame->SendPicture(ibPictureDescription(metaObject->GetClassType()), GetMetaData()));
+	item.SetValue(wxT("Picture"), ibClientFrame::SendPicture(metaObject->GetClassType()));
 	item.SetValue(wxT("Type"), ClsidText(metaObject->GetClassType()));
 	item.SetValue(wxT("Synonym"), metaObject->GetSynonym());
 	// …and its guid — what a record of the base keeps it by (a user's roles and language: ibDialogUserItem).
@@ -378,9 +390,9 @@ void ibMetaTreeBase::AppendMenu(ibDataNode& item, ibValueMetaObject* metaObject)
 		}
 		// Its picture — of what it opens, else its own (the desktop's AppendMetaMenu).
 		if (entry.m_metaObject != nullptr)
-			row.SetValue(wxT("Picture"), m_frame->SendPicture(ibPictureDescription(entry.m_metaObject->GetClassType()), GetMetaData()));
+			row.SetValue(wxT("Picture"), ibClientFrame::SendPicture(entry.m_metaObject->GetClassType()));
 		else if (entry.m_picture != 0)
-			row.SetValue(wxT("Picture"), m_frame->SendPicture(ibPictureDescription(entry.m_picture), GetMetaData()));
+			row.SetValue(wxT("Picture"), ibClientFrame::SendPicture(entry.m_picture));
 		if (entry.m_id != wxNOT_FOUND)
 			row.SetValue(wxT("Command"), static_cast<s32>(entry.m_id));
 	}
@@ -429,6 +441,8 @@ void ibConfigurationTree::AppendObjectGroup(ibDataNode& parent, const ibClassID&
 	ibDataNode& group = AppendGroupItem(parent, groupClsid, label);
 	for (auto object : objects) {
 		if (!object->IsAcceptedByParent())   // gone, or a kind its owner does not host — one question
+			continue;
+		if (object == m_askedForm)            // not made yet: the person is asked what kind it is
 			continue;
 		AppendItem(group, object);
 	}
@@ -701,7 +715,7 @@ void ibConfigurationTree::FillData(ibDataNode& root)
 
 	root.SetMetaId(commonMetadata->GetMetaID());
 	root.SetValue(wxT("Title"), m_metaData->GetConfigName());
-	root.SetValue(wxT("Picture"), m_frame->SendPicture(ibPictureDescription(g_metaCommonMetadataCLSID), GetMetaData()));
+	root.SetValue(wxT("Picture"), ibClientFrame::SendPicture(g_metaCommonMetadataCLSID));
 	root.SetValue(wxT("Type"), ClsidText(commonMetadata->GetClassType()));
 	// …the dialect its modules are written in — what the desktop's process held (ibCompileCode::GetCodeStyle).
 	root.SetValue(wxT("Syntax"), static_cast<s32>(m_metaData->GetCommonMetaObject()->GetCompileSyntax()));

@@ -49,6 +49,12 @@
     <Filter Include="win\editor\codeEditor">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f7a14}</UniqueIdentifier>
     </Filter>
+    <Filter Include="win\editor\visualEditor">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f7a15}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\editor\visualEditor\res">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f7a16}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="mainApp.cpp" />
@@ -70,6 +76,36 @@
     </ClCompile>
     <ClCompile Include="win\editor\codeEditor\codeEditorDesigner.cpp">
       <Filter>win\editor\codeEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="win\editor\visualEditor\innerFrame.cpp">
+      <Filter>win\editor\visualEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="win\editor\visualEditor\titleFrame.cpp">
+      <Filter>win\editor\visualEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="win\editor\visualEditor\visualEditor.cpp">
+      <Filter>win\editor\visualEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="win\editor\visualEditor\visualEditorAttributeTree.cpp">
+      <Filter>win\editor\visualEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="win\editor\visualEditor\visualEditorCmdProc.cpp">
+      <Filter>win\editor\visualEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="win\editor\visualEditor\visualEditorCommandTree.cpp">
+      <Filter>win\editor\visualEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="win\editor\visualEditor\visualEditorEvent.cpp">
+      <Filter>win\editor\visualEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="win\editor\visualEditor\visualEditorNotebook.cpp">
+      <Filter>win\editor\visualEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="win\editor\visualEditor\visualEditorObjectTree.cpp">
+      <Filter>win\editor\visualEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="win\editor\visualEditor\visualEditorPanel.cpp">
+      <Filter>win\editor\visualEditor</Filter>
     </ClCompile>
     <ClCompile Include="mainFrame\mainFrameDesigner.cpp">
       <Filter>mainFrame</Filter>
@@ -134,6 +170,9 @@
     <ClCompile Include="docManager\templates\docViewModuleEditor.cpp">
       <Filter>docManager\templates</Filter>
     </ClCompile>
+    <ClCompile Include="docManager\templates\docViewFormEditor.cpp">
+      <Filter>docManager\templates</Filter>
+    </ClCompile>
     <ClCompile Include="syntaxHelper\helpChooserDialog.cpp">
       <Filter>syntaxHelper</Filter>
     </ClCompile>
@@ -185,6 +224,27 @@
     <ClInclude Include="win\editor\codeEditor\codeEditorDesigner.h">
       <Filter>win\editor\codeEditor</Filter>
     </ClInclude>
+    <ClInclude Include="win\editor\visualEditor\designerTreeCtrl.h">
+      <Filter>win\editor\visualEditor</Filter>
+    </ClInclude>
+    <ClInclude Include="win\editor\visualEditor\innerFrame.h">
+      <Filter>win\editor\visualEditor</Filter>
+    </ClInclude>
+    <ClInclude Include="win\editor\visualEditor\res\visualResource.h">
+      <Filter>win\editor\visualEditor\res</Filter>
+    </ClInclude>
+    <ClInclude Include="win\editor\visualEditor\titleFrame.h">
+      <Filter>win\editor\visualEditor</Filter>
+    </ClInclude>
+    <ClInclude Include="win\editor\visualEditor\visualEditor.h">
+      <Filter>win\editor\visualEditor</Filter>
+    </ClInclude>
+    <ClInclude Include="win\editor\visualEditor\visualEditorDragItem.h">
+      <Filter>win\editor\visualEditor</Filter>
+    </ClInclude>
+    <ClInclude Include="win\editor\visualEditor\printout\formPrintOut.h">
+      <Filter>win\editor\visualEditor</Filter>
+    </ClInclude>
     <ClInclude Include="mainFrame\mainFrameDesigner.h">
       <Filter>mainFrame</Filter>
     </ClInclude>
@@ -222,6 +282,9 @@
       <Filter>docManager\templates</Filter>
     </ClInclude>
     <ClInclude Include="docManager\templates\docViewModuleEditor.h">
+      <Filter>docManager\templates</Filter>
+    </ClInclude>
+    <ClInclude Include="docManager\templates\docViewFormEditor.h">
       <Filter>docManager\templates</Filter>
     </ClInclude>
     <ClInclude Include="syntaxHelper\helpChooserDialog.h">

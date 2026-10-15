@@ -14,6 +14,8 @@
 #include "protocol/protocol.h"
 #include "protocol/protocolNode.h"
 
+class ibMetaView;
+
 // THE DESIGNER'S TREES — the desktop's ibMetaTreeBase and its heirs (designer/mainFrame/metaTree): the panel, its
 // toolbar, its search, its menus and keys. The ROWS are the server's: its ibConfigurationTree (frmserver/metaTree)
 // writes them into the frame's MetaData, an external file's tree into its tab's View; a row is NodeId — its object's
@@ -24,6 +26,8 @@
 class ibMetaTreeBase : public wxPanel {
 public:
 
+	virtual ~ibMetaTreeBase() override;
+
 	// THE ROWS, as the frame has them now — `root` the metadata's own row, everything under it. Drawn over what is shown,
 	// row by row by their ids: what was open, selected and scrolled to stays so. An external file's tree draws its header
 	// too.
@@ -32,8 +36,9 @@ public:
 	// The tree's tab — 0: the configuration's (the frame's MetaData), else an external file's.
 	long long GetTab() const { return m_tab; }
 
-	// Its tab became the active one — the inspector shows what is selected in it (the desktop's).
-	void ActivateTree() { SelectItem(); }
+	// Its tab became the active one, or the tree the focus — the object it holds is sent to the inspector, received anew
+	// only where another was shown (the desktop's ibMetaTreeView::OnActivateView).
+	void ActivateTree();
 
 	// THE MODULE, SHOWN — the desktop's (ibConfigurationTree::EditModule), by the address a runtime stopped or failed
 	// at: its editor opened by the server (Open {Module}), the line put before the person — the run line (setRunLine)
@@ -53,9 +58,6 @@ protected:
 	// asked, the frame drawn after it. False: refused (said to the person).
 	ibProtocolNode GetParams(ibProtocolMetaDataCommand command, ibProtocolNode args) const;
 	bool Command(ibProtocolMetaDataCommand command, ibProtocolNode args) const;
-	// …and an object's property of that name given the Value of `args` — the inspector's door (schema Properties, Save),
-	// by the object's id and the tab: the header above an external file's rows.
-	bool SaveProperty(long long id, const wxString& name, ibProtocolNode args) const;
 	// …and a header's choice drawn from its property's row: "<not selected>", what may be chosen (its children: Title,
 	// Id), the one chosen by its Value.
 	void UpdateChoiceSelection(wxChoice* choice, const ibProtocolNode& property);
@@ -72,6 +74,11 @@ private:
 		ibProtocolNode m_row;
 		const wxString m_path;
 	};
+
+	// THE TREE'S VIEW — the desktop's (ibMetaTreeCtrl::ibMetaTreeView): no document, no frame. The configuration's tree
+	// given the focus is the current view in the editor's place, the editor's menu and toolbar shut
+	// (ibFrontendMainFrame::ActivateView); its activation is the tree's (ActivateTree).
+	class ibMetaTreeView;
 
 	enum {
 		ID_METATREE_NEW = 15000,
@@ -124,8 +131,8 @@ private:
 	void PasteItem();
 	// …the row put where its sibling stands (Up, Down).
 	void MoveItem(const wxTreeItemId& item, const wxTreeItemId& sibling);
-	// …the row of the object not among `drawn` selected and opened (Create, Paste).
-	void SelectCreated(const std::set<long long>& drawn);
+	// …the row of the object not among `drawn` selected and opened (Create, Paste); false — there is none.
+	bool SelectCreated(const std::set<long long>& drawn);
 
 	void UpdateToolbar();
 	void ShowContextMenu(const wxTreeItemId& item, const wxPoint& pos);
@@ -136,6 +143,8 @@ private:
 	void Search(const wxString& search);
 
 	// events:
+	void OnLeftDown(wxMouseEvent& event);
+	void OnLeftDClick(wxMouseEvent& event);
 	void OnItemActivated(wxTreeEvent& event);
 	void OnSelected(wxTreeEvent& event);
 	void OnSetFocus(wxFocusEvent& event);
@@ -150,8 +159,14 @@ private:
 	const long long m_tab;
 
 	// THE OBJECT THE INSPECTOR SHOWS — made when a row is selected, of the server's rows for it, and linked to this tree's
-	// tab (an edit goes to the configuration it came from); the next row selected makes the next.
-	std::unique_ptr<ibValueMetaObject> m_object;
+	// tab (an edit goes to the configuration it came from); the next row selected makes the next. Shared: an editor opened
+	// while it is shown keeps it too (ibCodeEditor).
+	std::shared_ptr<ibValueMetaObject> m_object;
+
+	ibMetaView* m_metaView = nullptr;
+	// ⭐ TRUE WHILE OnSetFocus IS ITSELF MOVING THE ACTIVATION — the desktop's: on Cocoa a focus moved tells the window
+	// that held it inside SetFocus, and the handler answered its own move until the stack ran out.
+	bool m_switchingActivation = false;
 
 	wxAuiToolBar* m_metaTreeToolbar = nullptr;
 	wxTreeCtrl* m_metaTreeCtrl = nullptr;

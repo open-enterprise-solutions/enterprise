@@ -1,5 +1,6 @@
 #include "advpropList.h"
 #include "backend/propertyManager/property/propertyList.h"
+#include "backend/backend_picture.h"   // ibBackendPicture::CreatePicture — a choice's picture, by its id
 #include "frontend/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
 #include "frontend/propertyManager/property/private/propertyRegistry.h"
 #include "frontend/propertyManager/propertyEditor.h"
@@ -21,20 +22,21 @@ public:
 		ibPropertyRegistry::Register([](ibPropertyList* prop) -> wxPGProperty* {
 			ibPropertyChoiceList choices;
 			prop->GetValueList(choices);
-			return new ibPGListProperty(prop->GetLabel(), prop->GetName(), choices,
+			return new ibPGListProperty(prop->GetPropertyObject(), prop->GetLabel(), prop->GetName(), choices,
 				prop->GetValueAsInteger());
 		});
 	}
 }g_listLoader;
 
-ibPGListProperty::ibPGListProperty(const wxString& label, const wxString& strName,
+ibPGListProperty::ibPGListProperty(const ibPropertyObject* property, const wxString& label, const wxString& strName,
 	const ibPropertyChoiceList& choices, int value)
 	: wxPGProperty(label, strName)
 {
+	const ibMetaData* const metaData = property != nullptr ? property->GetMetaData() : nullptr;
 	wxPGChoices ch;
 	for (unsigned int idx = 0; idx < choices.GetCount(); idx++) {
 		wxPGChoiceEntry item(choices.GetLabel(idx), choices.GetId(idx));
-		item.SetBitmap(choices.GetBitmap(idx));
+		item.SetBitmap(ibBackendPicture::CreatePicture(choices.GetPicture(idx), metaData));
 		ch.Add(item);
 	}
 	m_choices.Assign(ch);

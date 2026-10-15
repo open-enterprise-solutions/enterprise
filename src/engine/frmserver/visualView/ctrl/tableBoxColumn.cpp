@@ -2,7 +2,7 @@
 #include "core/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "form.h"
 #include "backend/choiceLinkResolver.h"   // ibChoiceHolder — where this column's link reads its neighbours
-#include "frmserver/visualView/visualHost.h"   // ibVisualHost::SendPicture — a header picture, by its id
+#include "frmserver/client/clientFrame.h"      // ibClientFrame::SendPicture — a header picture, by its id
 #include "backend/composition/dataComposer.h"   // the composer's active sort — the header's arrow
 #include "core/formatString.h"         // ibFormatString — what a cell is shown through
 #include "backend/appData.h"
@@ -39,7 +39,7 @@ bool ibValueModelTableBoxColumn::GetChoiceForm(ibPropertyList* property)
 				property->AppendItem(
 					form->GetSynonym(),
 					form->GetMetaID(),
-					form->GetIcon(),
+					form->GetClassType(),
 					form
 				);
 			}
@@ -165,10 +165,10 @@ void ibValueModelTableBoxColumn::OnUpdate(ibDataNode& state, ibVisualHost* host)
 	state.SetValue(wxT("FooterText"), m_propertyFooterText->GetValueAsTranslateString());
 	state.SetValue(wxT("Representation"), static_cast<s32>(rep));
 	if (rep != ibRepresentation::ibRepresentation_Text) {
-		const wxString header = host->SendPicture(m_propertyHeaderPicture->GetValueAsPictureDesc());
+		const ibString header = ibClientFrame::SendPicture(m_propertyHeaderPicture->GetValueAsPictureDesc());
 		if (!header.IsEmpty())
 			state.SetValue(wxT("HeaderPicture"), header);
-		const wxString footer = host->SendPicture(m_propertyFooterPicture->GetValueAsPictureDesc());
+		const ibString footer = ibClientFrame::SendPicture(m_propertyFooterPicture->GetValueAsPictureDesc());
 		if (!footer.IsEmpty())
 			state.SetValue(wxT("FooterPicture"), footer);
 	}

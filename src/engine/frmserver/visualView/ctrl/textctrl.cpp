@@ -38,7 +38,7 @@ bool ibValueTextCtrl::GetChoiceForm(ibPropertyList* property)
 				property->AppendItem(
 					form->GetSynonym(),
 					form->GetMetaID(),
-					form->GetIcon(), 
+					form->GetClassType(),
 					form
 				);
 			}
@@ -144,6 +144,14 @@ const ibTranslateString& ibValueTextCtrl::GetSourceFormat() const
 	static const ibTranslateString s_none;
 	const ibValueMetaObjectAttributeBase* attribute = ibChoiceLinkResolver::FieldOf(GetChoiceHolder(), this);
 	return attribute != nullptr ? attribute->GetFormat() : s_none;
+}
+
+void ibValueTextCtrl::OnCreated(ibVisualHost* host, bool firstCreated)
+{
+	// A just-dropped textbox with no source auto-binds to a fresh attribute (control-side helper) so it
+	// renders bound, not hidden. firstCreated is set ONLY by the designer's add, never on a form open.
+	if (firstCreated)
+		AutoBindNewSource(this);   // `this` upcasts to ibTypeControlFactory* — the source-set side
 }
 
 void ibValueTextCtrl::OnUpdate(ibDataNode& state, ibVisualHost* host)

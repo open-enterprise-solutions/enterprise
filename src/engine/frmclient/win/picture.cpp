@@ -3,15 +3,19 @@
 #include <cstring>
 #include <map>
 #include <mutex>
+#include <set>
 
 #include <wx/base64.h>
 #include <wx/image.h>
 #include <wx/mstream.h>
 
+#include "core/pictureRegistry.h"              // the engine's own pictures, as the core registered them
+#include "frmclient/mainFrame/mainFrame.h"     // ibFrontendMainFrame::Fetch — the pictures asked of the server
+
 namespace {
 
-// The pictures the client was sent, by id — kept by the answer that gave them (the window's thread) and by a list's
-// read, and drawn by whoever names them.
+// The pictures the client has, by the id the wire names them with — the engine's, read from the core once, and the
+// server's, given once — and drawn by whoever names them.
 std::mutex                          s_picturesLock;
 std::map<wxString, wxBitmap>&       Pictures()
 {
@@ -25,39 +29,86 @@ wxString IdOf(ibPictureID id)
 	return wxString::Format(wxT("%llu"), static_cast<unsigned long long>(id));
 }
 
+// A picture's data itself, not its id — a PNG's base64 begins with its signature's.
+bool IsPictureData(const wxString& value)
+{
+	return value.StartsWith(wxT("iVBORw0KGgo"));
+}
+
+// THE ENGINE'S OWN, by its number — the core's master, shown at 16 (tools/pictures/render.js); none: not the engine's.
+wxBitmap EnginePicture(const wxString& id)
+{
+	unsigned long long number = 0;
+	if (!id.ToULongLong(&number))
+		return wxBitmap();
+	const ibPicture registered = ibPictureRegistry::GetPicture(static_cast<ibPictureID>(number));
+	const wxImage image = registered.IsOk() ? ibProtocolImage(registered.GetData()) : wxImage();
+	return image.IsOk() ? wxBitmap(image.Scale(16, 16, wxIMAGE_QUALITY_HIGH)) : wxBitmap();
+}
+
 } // namespace
-
-void ibProtocolPictureKeep(const wxString& id, const wxBitmap& picture)
-{
-	std::lock_guard<std::mutex> lock(s_picturesLock);
-	Pictures()[id] = picture;
-}
-
-void ibProtocolPictureKeep(ibPictureID id, const wxBitmap& picture)
-{
-	ibProtocolPictureKeep(IdOf(id), picture);
-}
-
-wxBitmap ibProtocolPictureById(ibPictureID id)
-{
-	const wxString key = IdOf(id);
-	std::lock_guard<std::mutex> lock(s_picturesLock);
-	const auto found = Pictures().find(key);
-	return found != Pictures().end() ? found->second : wxBitmap();
-}
 
 wxBitmap ibProtocolPicture(const wxString& value)
 {
-	// By its id, as a frame names a picture the client was given once…
+	if (value.IsEmpty())
+		return wxBitmap();
+	// A picture with no id of its own is its data — a file's, an art of the client's own (the splash's logo).
+	if (IsPictureData(value)) {
+		const wxImage image = ibProtocolImage(value);
+		return image.IsOk() ? wxBitmap(image) : wxBitmap();
+	}
 	{
 		std::lock_guard<std::mutex> lock(s_picturesLock);
 		const auto found = Pictures().find(value);
 		if (found != Pictures().end())
 			return found->second;
 	}
-	// …or the picture itself — what a schema's answer, a choice's items and a picture with no id of its own carry.
-	const wxImage image = ibProtocolImage(value);
-	return image.IsOk() ? wxBitmap(image) : wxBitmap();
+	ibProtocolPictureReceive({ value });
+	std::lock_guard<std::mutex> lock(s_picturesLock);
+	const auto found = Pictures().find(value);
+	return found != Pictures().end() ? found->second : wxBitmap();
+}
+
+wxBitmap ibProtocolPictureById(ibPictureID id)
+{
+	return id != 0 ? ibProtocolPicture(IdOf(id)) : wxBitmap();
+}
+
+void ibProtocolPictureReceive(const std::vector<wxString>& ids)
+{
+	// Only what the client has not got, each once: one kept is not asked for, the engine's own is read from the core.
+	std::set<wxString> asked;
+	ibProtocolNode params;
+	for (const wxString& id : ids) {
+		if (id.IsEmpty() || IsPictureData(id) || asked.count(id) != 0)
+			continue;
+		{
+			std::lock_guard<std::mutex> lock(s_picturesLock);
+			if (Pictures().count(id) != 0)
+				continue;
+		}
+		const wxBitmap engine = EnginePicture(id);
+		if (engine.IsOk()) {
+			std::lock_guard<std::mutex> lock(s_picturesLock);
+			Pictures()[id] = engine;
+			continue;
+		}
+		asked.insert(id);
+		params.AddItem(ibProtocolName::Pictures, id);
+	}
+	if (asked.empty())
+		return;
+
+	// Not answered — no window yet, refused: nothing is kept, and it is asked again the next time it is named.
+	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
+	ibProtocolNode answer;
+	if (frame == nullptr || !frame->Fetch(ibProtocolMethod::Picture, params, answer))
+		return;
+	for (const ibProtocolNode& picture : answer.FindChild(ibProtocolName::Pictures).Children()) {
+		const wxImage image = ibProtocolImage(picture.GetString(ibProtocolName::Picture));
+		std::lock_guard<std::mutex> lock(s_picturesLock);
+		Pictures()[picture.GetString(ibProtocolName::Id)] = image.IsOk() ? wxBitmap(image) : wxBitmap();
+	}
 }
 
 wxImage ibProtocolImage(const wxString& base64)
@@ -65,7 +116,7 @@ wxImage ibProtocolImage(const wxString& base64)
 	if (base64.IsEmpty())
 		return wxImage();
 	const wxMemoryBuffer png = wxBase64Decode(base64);
-	// A PNG or nothing — an id the client was not given reads as no picture, not as a damaged file said to the person.
+	// A PNG or nothing — data that is not one reads as no picture, not as a damaged file said to the person.
 	static const char s_signature[] = "\x89PNG\r\n\x1a\n";
 	if (png.GetDataLen() < sizeof(s_signature) - 1 || std::memcmp(png.GetData(), s_signature, sizeof(s_signature) - 1) != 0)
 		return wxImage();

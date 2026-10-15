@@ -10,7 +10,7 @@ namespace {
 
 // THE FORM AS IT STANDS NOW — itself and each control under it, under its id: where it stands among its siblings (the
 // form among none), and what the properties a person may arrange hold — those the server's question gave it (the
-// form's editor reads them in) — the server's own setting's shape (frmserver/settings/formSettings.cpp,
+// controls receive them, ibPropertyObject::Receive) — the server's own setting's shape (frmserver/settings/formSettings.cpp,
 // ibSaveFormSettings, which walks the form itself too).
 void WriteControl(const ibValueFrame* control, long long position, ibProtocolNode controls)
 {
@@ -34,6 +34,11 @@ void WriteControl(const ibValueFrame* control, long long position, ibProtocolNod
 }
 
 } // namespace
+
+ibViewCommandBar* ibValueForm::GetCommandBar() const
+{
+	return GetVisualHost().GetCommandBar();
+}
 
 ibValueFrame* ibValueForm::GetActiveControl() const
 {

@@ -442,6 +442,14 @@ void ibDialogHomePageFormSelect::FillTree()
 	std::map<s32, wxTreeItemId> groups;
 	wxTreeItemId commonGroup;
 
+	// Every form's picture and its owner's asked for at once — not a call per form.
+	std::vector<wxString> pictures;
+	for (const ibDataNode& metaForm : m_metaObject->GetFormArray()) {
+		pictures.push_back(metaForm.GetValue<wxString>(wxT("Picture")));
+		pictures.push_back(metaForm.GetValue<wxString>(wxT("OwnerPicture")));
+	}
+	ibProtocolPictureReceive(pictures);
+
 	for (const ibDataNode& metaForm : m_metaObject->GetFormArray()) {
 
 		wxTreeItemId parentNode;

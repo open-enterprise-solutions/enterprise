@@ -90,6 +90,14 @@ bool ibValueCheckbox::IsReadOnly() const
 
 #include "backend/appData.h"
 
+void ibValueCheckbox::OnCreated(ibVisualHost* host, bool firstCreated)
+{
+	// A just-dropped checkbox with no source auto-binds to a fresh attribute (control-side helper) so it
+	// renders bound, not hidden. firstCreated is set ONLY by the designer's add, never on a form open.
+	if (firstCreated)
+		AutoBindNewSource(this);   // `this` upcasts to ibTypeControlFactory* — the source-set side
+}
+
 void ibValueCheckbox::OnUpdate(ibDataNode& state, ibVisualHost* host)
 {
 	ibValueWindow::OnUpdate(state, host);

@@ -47,7 +47,7 @@ ibPropertyChoiceMode ibPropertyAccountingKind::GetValueList(ibPropertyChoiceList
 			return;
 		list.Add((long)kind->GetMetaID(), kind->GetName(), kind->GetSynonym(),
 			wxVariant(new ibVariantDataOwner(owner, ibMetaDescription(kind->GetMetaID()))),
-			kind->GetIcon());
+			kind->GetClassType());
 	};
 
 	if (m_level == Level::Account) {

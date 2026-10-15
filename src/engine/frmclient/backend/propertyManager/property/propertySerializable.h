@@ -1,5 +1,5 @@
-#ifndef __PROPERTY_VALUE_H__
-#define __PROPERTY_VALUE_H__
+#ifndef __PROPERTY_SERIALIZABLE_H__
+#define __PROPERTY_SERIALIZABLE_H__
 
 #include "frmclient/backend/propertyManager/propertyObject.h"
 #include "core/serialize/dataBuilder.h"   // ibDataNode — the row it is filled from, ibDataValue — its value
@@ -9,14 +9,16 @@
 // server stores it, how it reads (Presentation), what it may be set to. No class per kind: a client that grows one holds
 // the server's model a second time, and is a thick one again (Max, 2026-10-14).
 //
-// Its owner makes it of the row and holds it till the next rows come (ibPropertyObject::ReadProperty).
-class FRMCLIENT_API ibPropertyValue : public ibProperty {
+// Its owner makes it of the row and holds it till the next rows come (ibPropertyObject::Receive).
+class FRMCLIENT_API ibPropertySerializable : public ibProperty {
 public:
 
-	ibPropertyValue(ibPropertyCategory* cat, const ibDataNode& row);
+	ibPropertySerializable(ibPropertyCategory* cat, const ibDataNode& row);
 
 	// The metaobject it opens — a module its owner holds (the row's Object); none: 0.
 	ibMetaID GetObjectId() const { return m_objectId; }
+	// An event's: its procedure's parameters, as the desktop's ibEvent has them (the row's Args); none: empty.
+	const wxArrayString& GetArgs() const { return m_args; }
 
 	// …unless the server says it is not (its own IsEditable — the row's ReadOnly).
 	virtual bool IsEditable() const override { return !m_readOnly && ibProperty::IsEditable(); }
@@ -42,6 +44,7 @@ private:
 	ibPropertyChoiceMode m_mode = ibPropertyChoiceMode::None;
 	bool m_readOnly = false;
 	ibMetaID m_objectId = 0;
+	wxArrayString m_args;
 };
 
 #endif

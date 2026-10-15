@@ -91,14 +91,14 @@ bool ibFormVisualDocument::OnCreate(const wxString& path, long flags)
 	if (sourceObject != nullptr && !IsVisualDemonstrationDoc()) {
 		const ibValueMetaObjectGenericData* genericObject = sourceObject->GetSourceMetaObject();
 		if (genericObject != nullptr) {
-			ibFormVisualDocument::SetIcon(ibBackendPicture::GetServerPicture(genericObject->GetClassType()));
+			ibFormVisualDocument::SetIcon(ibPictureDescription(genericObject->GetClassType()));
 			ibFormVisualDocument::SetFilename(genericObject->GetFileName());
 		}
 	}
 	else {
 		const ibValueMetaObjectFormBase* creator = m_valueForm->GetFormMetaObject();
 		if (creator != nullptr) {
-			ibFormVisualDocument::SetIcon(ibBackendPicture::GetServerPicture(creator->GetClassType()));
+			ibFormVisualDocument::SetIcon(ibPictureDescription(creator->GetClassType()));
 			ibFormVisualDocument::SetFilename(creator->GetFileName());
 		}
 	}
@@ -359,18 +359,6 @@ void ibFormVisualEditView::SetCaption(const wxString& strCaption)
 		m_document->SetTitle(strCaption);
 		m_document->SetFilename(wxEmptyString, true);
 	}
-}
-
-#include "frmserver/client/clientChildFrame.h"   // ibClientChildFrame — the tab, and the client it is drawn for
-#include "frmserver/client/clientFrame.h"        // ibClientFrame::SendPicture
-
-wxString ibFormVisualEditView::SendPicture(const ibPictureDescription& picture)
-{
-	// The tab this view is drawn in — its own, or the start page's for a form composed into it.
-	const ibClientChildFrame* const tab = dynamic_cast<const ibClientChildFrame*>(GetDocChildFrame());
-	ibClientFrame* const frame = tab != nullptr ? tab->GetFrame() : nullptr;
-	const ibValueForm* const form = GetValueForm();
-	return frame != nullptr ? frame->SendPicture(picture, form != nullptr ? form->GetMetaData() : nullptr) : wxString();
 }
 
 void ibFormVisualEditView::OnUpdate(ibView* WXUNUSED(sender), wxObject* WXUNUSED(hint))

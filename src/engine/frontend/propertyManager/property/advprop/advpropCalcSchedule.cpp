@@ -2,6 +2,7 @@
 
 #include "backend/propertyManager/property/propertyCalcSchedule.h"
 #include "backend/propertyManager/property/variant/variantCalcSchedule.h"
+#include "backend/backend_picture.h"   // ibBackendPicture::CreatePicture — a choice's picture, by its id
 
 #include "frontend/mainFrame/objinspect/objinspect.h"                  // the rebuild another set of link rows needs
 #include "frontend/propertyManager/property/private/prop.h"
@@ -31,7 +32,7 @@ wxPGChoices ibPGCalcScheduleProperty::GetChoices(const ibPropertyChoiceList& lis
 	wxPGChoices choices;
 	choices.Add(_("<not set>"), 0);
 	for (unsigned int idx = 0; idx < list.GetCount(); idx++)
-		choices.Add(list.GetName(idx), list.GetBitmap(idx), list.GetId(idx));   // names, as the type row names its types
+		choices.Add(list.GetName(idx), ibBackendPicture::CreatePicture(list.GetPicture(idx)), list.GetId(idx));   // names, as the type row names its types
 	return choices;
 }
 

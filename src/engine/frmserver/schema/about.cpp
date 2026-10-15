@@ -2,18 +2,18 @@
 
 #include "backend/appData.h"
 #include "backend/backend_core.h"   // GetBuildId
-#include "backend/backend_picture.h"
 #include "backend/metaCollection/metaObject.h"   // g_metaCommonMetadataCLSID — the configuration's picture
 #include "backend/plugin/pluginManager.h"
 #include "core/serialize/dataBuilder.h"
 #include "backend/session/session.h"
+#include "frmserver/client/clientFrame.h"   // ibClientFrame::SendPicture — the picture, by its id
 
 void ibSchemaAbout::Build(const ibSession& session, const ibDataNode& WXUNUSED(args), ibDataNode& result) const
 {
 	const ibApplicationInstance* const applicationInstance = session.GetApplicationInstance();
 
 	result.SetValue(wxT("Build"), static_cast<s32>(GetBuildId()));
-	result.SetValue(wxT("Picture"), wxString(ibBackendPicture::GetServerPicture(g_metaCommonMetadataCLSID).GetData()));
+	result.SetValue(wxT("Picture"), ibClientFrame::SendPicture(g_metaCommonMetadataCLSID));
 	result.SetValue(wxT("User"), session.GetUserInfo().m_strUserName);
 	if (applicationInstance == nullptr)
 		return;

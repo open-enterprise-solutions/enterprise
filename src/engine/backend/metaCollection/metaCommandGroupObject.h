@@ -50,8 +50,8 @@ BACKEND_API wxString ibCommandGroupCaption(ibInterfaceCommandSection area);
 // tools and the inspector cannot name one group two ways.
 BACKEND_API wxString ibCommandGroupCategoryCaption(ibCommandGroupCategory category);
 BACKEND_API wxString ibCommandGroupLabel(ibInterfaceCommandSection area);
-// …and a platform group's picture, drawn once (commandGroup/* in tools/pictures/render.js). 16 x 16.
-BACKEND_API wxBitmap ibCommandGroupPicture(ibInterfaceCommandSection area);
+// …and a platform group's picture — the engine's, by its id (core/picturePredefined.h).
+BACKEND_API ibPictureID ibCommandGroupPicture(ibInterfaceCommandSection area);
 
 //********************************************************************************************
 //*                         Command group — a place in the command interface                 *

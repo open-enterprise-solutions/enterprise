@@ -876,11 +876,11 @@ void ibFrontendMainFrame::CloseTab(long long tabId)
 	Post(ibProtocolMethod::Close, params);
 }
 
-bool ibFrontendMainFrame::Fetch(const ibProtocolNode& params, ibProtocolNode& answer)
+bool ibFrontendMainFrame::Fetch(ibProtocolMethod method, const ibProtocolNode& params, ibProtocolNode& answer)
 {
 	ibProtocolRefusal refusal = ibProtocolRefusal::None;
 	wxString error;
-	return m_communicator->Call(ibProtocolMethod::Fetch, params, answer, refusal, error);
+	return m_communicator->Call(method, params, answer, refusal, error);
 }
 
 void ibFrontendMainFrame::ShowSchema(ibProtocolSchema schema, const ibProtocolNode& shown)
@@ -914,10 +914,6 @@ bool ibFrontendMainFrame::AllowClose()
 
 void ibFrontendMainFrame::Draw(const ibProtocolNode& answer)
 {
-	// THE PICTURES THE FRAME NAMES, given once — kept before anything is drawn: the frame names them by their ids.
-	for (const ibProtocolNode& picture : answer.FindChild(ibProtocolName::Pictures).Children())
-		ibProtocolPictureKeep(picture.GetString(ibProtocolName::Id), ibProtocolPicture(picture.GetString(ibProtocolName::Picture)));
-
 	// ⭐ AN ANSWER THAT IS NOT A FRAME — a schema's tree, a fetch's rows — CHANGED NOTHING IN THE WINDOW: the frame held
 	// stays (ibCommunicator::Take asks the same). Drawn whole, it rebuilt the inspector under the property window that
 	// asked it (Synonym's "..." → its languages) — the grid's rows freed under the button still dispatching (2026-10-14).
@@ -1065,10 +1061,15 @@ ibFrontendMainFrame::ibMenuItem ibFrontendMainFrame::MenuItemOf(const ibProtocol
 void ibFrontendMainFrame::DrawTemplates(const ibProtocolNode& templates)
 {
 	// THE SERVER'S TEMPLATES, AND NO OTHERS — each opens its file on the server, or has the server make a new one; its
-	// picture by its id, kept from the answer's Pictures before the frame is drawn.
+	// picture by its id, the pictures of all asked for at once.
 	for (ibFrontendDocTemplate* const temp : m_docManager->GetTemplatesVector())
 		delete temp;
-	for (const ibProtocolNode& item : templates.Children()) {
+	const std::vector<ibProtocolNode> items = templates.Children();
+	std::vector<wxString> pictures;
+	for (const ibProtocolNode& item : items)
+		pictures.push_back(item.GetString(ibProtocolName::Picture));
+	ibProtocolPictureReceive(pictures);
+	for (const ibProtocolNode& item : items) {
 		const wxString title = item.GetString(ibProtocolName::Title);
 		const long flags = ibTEMPLATE_VISIBLE | (item.GetBool(ibProtocolName::OnlyOpen) ? ibTEMPLATE_ONLY_OPEN : 0);
 		ibFrontendDocTemplate* const temp = new ibFrontendDocTemplate(m_docManager, title, item.GetString(ibProtocolName::Mask),
@@ -1345,7 +1346,6 @@ void ibFrontendMainFrame::ShowRequest(const ibProtocolNode& request, ibProtocolN
 	case ibProtocolRequestKind::Error: {
 		// THE DESKTOP'S ERROR WINDOW over a script's failure — the act chosen is the answer (ibProtocolErrorAct); closed —
 		// answered with no Act, which the server takes for Close window.
-		ibProtocolPictureKeep(g_picErrorCLSID, ibProtocolPicture(request.GetString(ibProtocolName::Picture)));
 		ibDialogError dialog(this);
 		dialog.SetErrorMessage(request.GetString(ibProtocolName::Text));
 		const int act = dialog.ShowModal();
@@ -1511,8 +1511,6 @@ void ibFrontendMainFrame::ShowRequest(const ibProtocolNode& request, ibProtocolN
 		ibValueForm* const form = view != nullptr && view->GetVisualHost() != nullptr ? view->GetVisualHost()->GetValueForm() : nullptr;
 		if (form == nullptr)
 			break;
-		// The window's own picture, kept by its number — the one the desktop's editor asks for.
-		ibProtocolPictureKeep(g_picChangeFormCLSID, ibProtocolPicture(request.GetString(ibProtocolName::Picture)));
 		ibDialogFormEditor dlg(form);
 		dlg.ShowModal();
 		break;

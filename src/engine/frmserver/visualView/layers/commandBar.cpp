@@ -13,7 +13,7 @@
 #include "backend/metaCollection/metaCommandGroupObject.h" // the platform's groups + the declared ones, in order
 #include <functional>                            // std::function — the recursive section walk
 #include "frmserver/visualView/ctrl/tableBox.h"  // g_controlTableBoxCLSID — the form's tables (their own commands)
-#include "frmserver/visualView/visualHost.h"    // ibVisualHost::SendPicture — every command's picture, by its id
+#include "frmserver/client/clientFrame.h"       // ibClientFrame::SendPicture — every command's picture, by its id
 #include "backend/srcDataObject.h"              // ibSourceDataObject / ibSourceExplorer + IsReference — the form's data types (parameterized-command filter)
 #include "core/description/typeDescription.h"            // ibTypeDescription::GetClsidList — a command's parameter type
 #include "backend/tabularModel.h"               // ibValueModel::GetModelComposer — the setting a quick filter edits
@@ -684,25 +684,38 @@ void ibValueCommandBar::ExecuteCommand(const ibActionID& id, size_t member)
 		ExecuteValueByPath(desc);
 }
 
-void ibValueCommandBar::Update(ibDataNode& state, ibVisualHost* host)
+void ibValueCommandBar::Update(ibDataNode& state)
 {
 	ibValueForm* form = m_owner != nullptr ? m_owner->GetOwnerForm() : nullptr;
 	const bool viewOnly = form != nullptr && form->IsViewOnly();
 
 	for (const ibCommandEntry& c : BuildCommands()) {
 		ibDataNode& entry = state.AddChild(0, 0);
-		entry.SetValue(wxT("Id"), c.id);
+		entry.SetValue(ibProtocolName::Id, c.id);
 		if (c.id == wxNOT_FOUND) {
-			entry.SetValue(wxT("Separator"), true);
+			entry.SetValue(ibProtocolName::Separator, true);
 			continue;
 		}
 
 		// The representation decides which of the two a client shows — said here once, not left to each client.
-		entry.SetValue(wxT("Caption"), c.representation == ibRepresentation_Picture ? wxString() : c.caption);
-		entry.SetValue(wxT("Picture"), c.representation == ibRepresentation_Text ? wxString() : host->SendPicture(c.picture));
-		entry.SetValue(wxT("Tooltip"), c.tooltip.IsEmpty() ? c.caption : c.tooltip);
-		entry.SetValue(wxT("Enabled"), c.enabled);
-		entry.SetValue(wxT("Kind"), static_cast<s32>(c.kind));
+		entry.SetValue(ibProtocolName::Caption, c.representation == ibRepresentation_Picture ? wxString() : c.caption);
+		entry.SetValue(ibProtocolName::Picture, c.representation == ibRepresentation_Text ? ibString() : ibClientFrame::SendPicture(c.picture));
+		entry.SetValue(ibProtocolName::Tooltip, c.tooltip.IsEmpty() ? c.caption : c.tooltip);
+		entry.SetValue(ibProtocolName::Enabled, c.enabled);
+		entry.SetValue(ibProtocolName::Kind, static_cast<s32>(c.kind));
+
+		// An item of the bar's own — its place among them, as its node is written (WriteData): what the designer selects
+		// it by when its tool is pressed (the desktop's FindItemByCommandId).
+		if (c.item != nullptr) {
+			s32 position = 0;
+			for (const auto& item : m_items) {
+				if (item == c.item)
+					break;
+				if (item != nullptr)
+					++position;
+			}
+			entry.SetValue(ibProtocolName::Position, position);
+		}
 
 		// A GROUP carries its submenu: its commands in the order they were gathered, each with the caption,
 		// picture and "modifies data" the command itself answers — the same resolve every projection uses.
@@ -710,11 +723,11 @@ void ibValueCommandBar::Update(ibDataNode& state, ibVisualHost* host)
 			wxString caption; ibPictureDescription picture; bool modifies = true;
 			ibDataNode& member = entry.AddChild(0, 0);
 			const bool resolved = ResolveCommand(item->GetBindingDesc(), caption, picture, &modifies);
-			member.SetValue(wxT("Caption"), caption);
-			member.SetValue(wxT("Picture"), host->SendPicture(picture));
+			member.SetValue(ibProtocolName::Caption, caption);
+			member.SetValue(ibProtocolName::Picture, ibClientFrame::SendPicture(picture));
 			// A member gone since the bar was built is listed, disabled, so the places stay the places
 			// ExecuteCommand(id, member) counts.
-			member.SetValue(wxT("Enabled"), resolved && !(viewOnly && modifies));
+			member.SetValue(ibProtocolName::Enabled, resolved && !(viewOnly && modifies));
 		}
 	}
 }

@@ -5,6 +5,7 @@
 
 #include "treeDataProcessor.h"
 
+#include "core/serialize/dataBuilder.h"   // ibDataValue — what an edit gives
 #include "core/stringUtils.h"
 
 void ibDataProcessorTree::OnEditCaptionName(wxCommandEvent& WXUNUSED(event))
@@ -22,9 +23,8 @@ void ibDataProcessorTree::OnEditCaptionName(wxCommandEvent& WXUNUSED(event))
 
 	// …its synonym made from it by the server: a renamed object's (ibValueMetaObject::OnPropertyChanged).
 	m_nameValue->SetModified(false);
-	ibProtocolNode args;
-	args.SetValue(ibProtocolName::Value, systemName);
-	SaveProperty(m_root.GetId(), wxT("Name"), args);
+	ibValueMetaObject(static_cast<ibMetaID>(m_root.GetId()), ibMetaData(GetTab()))
+		.Send(wxT("Name"), ibDataValue::String(systemName));
 }
 
 void ibDataProcessorTree::OnEditCaptionSynonym(wxCommandEvent& WXUNUSED(event))
@@ -33,9 +33,8 @@ void ibDataProcessorTree::OnEditCaptionSynonym(wxCommandEvent& WXUNUSED(event))
 		return;
 
 	m_synonymValue->SetModified(false);
-	ibProtocolNode args;
-	args.SetValue(ibProtocolName::Value, m_synonymValue->GetValue());
-	SaveProperty(m_root.GetId(), wxT("Synonym"), args);
+	ibValueMetaObject(static_cast<ibMetaID>(m_root.GetId()), ibMetaData(GetTab()))
+		.Send(wxT("Synonym"), ibDataValue::String(m_synonymValue->GetValue()));
 }
 
 void ibDataProcessorTree::OnEditCaptionComment(wxCommandEvent& WXUNUSED(event))
@@ -44,9 +43,8 @@ void ibDataProcessorTree::OnEditCaptionComment(wxCommandEvent& WXUNUSED(event))
 		return;
 
 	m_commentValue->SetModified(false);
-	ibProtocolNode args;
-	args.SetValue(ibProtocolName::Value, m_commentValue->GetValue());
-	SaveProperty(m_root.GetId(), wxT("Comment"), args);
+	ibValueMetaObject(static_cast<ibMetaID>(m_root.GetId()), ibMetaData(GetTab()))
+		.Send(wxT("Comment"), ibDataValue::String(m_commentValue->GetValue()));
 }
 
 void ibDataProcessorTree::OnChoiceDefForm(wxCommandEvent& event)
@@ -54,9 +52,8 @@ void ibDataProcessorTree::OnChoiceDefForm(wxCommandEvent& event)
 	// The offer's id — none: <not selected>.
 	const long long id = static_cast<long long>(reinterpret_cast<intptr_t>(event.GetClientData()));
 
-	ibProtocolNode args;
-	args.SetValue(ibProtocolName::Value, id > 0 ? id : static_cast<long long>(wxNOT_FOUND));
-	SaveProperty(m_root.GetId(), wxT("DefaultFormObject"), args);
+	ibValueMetaObject(static_cast<ibMetaID>(m_root.GetId()), ibMetaData(GetTab()))
+		.Send(wxT("DefaultFormObject"), ibDataValue::Int(id > 0 ? id : wxNOT_FOUND));
 }
 
 void ibDataProcessorTree::OnButtonModuleClicked(wxCommandEvent& WXUNUSED(event))

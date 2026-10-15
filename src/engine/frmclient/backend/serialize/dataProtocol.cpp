@@ -31,5 +31,5 @@ void ibWriteProtocolNode(const ibDataNode& node, ibProtocolNode wire)
 	if (!ibProtocolNode::Read(std::string(reinterpret_cast<const char*>(writer.pointer()), writer.size()), written))
 		return;
 	for (const auto& [name, entry] : written.Entries())
-		wire.SetValue(name.utf8_str(), entry);
+		wire.SetValue(name.c_str(), entry);
 }

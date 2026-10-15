@@ -101,4 +101,17 @@ constexpr ibPictureID g_picRowDocumentDeletedCLSID = picture_to_clsid("PC_ROWDOC
 constexpr ibPictureID g_picRowRecordCLSID = picture_to_clsid("PC_ROWREC");
 constexpr ibPictureID g_picRowRecordInactiveCLSID = picture_to_clsid("PC_ROWRECOFF");
 
+// THE COMMAND BAR AND ITS COMMAND — what a form editor's "Command interface" node and the commands under it are shown
+// with (the desktop drew them with its toolbar's and tool's class pictures).
+constexpr ibPictureID g_picCommandBarCLSID = picture_to_clsid("PC_CMDBAR");
+constexpr ibPictureID g_picCommandBarItemCLSID = picture_to_clsid("PC_CMDITEM");
+
+// THE PLATFORM'S OWN COMMAND GROUPS — what a command's Group list and a section's page show each with
+// (ibCommandGroupPicture), the navigation panel's two and the actions panel's three.
+constexpr ibPictureID g_picCommandGroupImportantCLSID = picture_to_clsid("PC_CMDGRPIMP");
+constexpr ibPictureID g_picCommandGroupNormalCLSID = picture_to_clsid("PC_CMDGRPNRM");
+constexpr ibPictureID g_picCommandGroupCreateCLSID = picture_to_clsid("PC_CMDGRPNEW");
+constexpr ibPictureID g_picCommandGroupReportsCLSID = picture_to_clsid("PC_CMDGRPREP");
+constexpr ibPictureID g_picCommandGroupServiceCLSID = picture_to_clsid("PC_CMDGRPSRV");
+
 #endif 

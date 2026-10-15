@@ -216,7 +216,8 @@ public:
 
 	// ⭐ CREATED — the form has opened: the model taken again, the reader's own setting marked "restore on open"
 	// put on it, and a choice form's list standing on the value it was opened for. The window's OnCreated.
-	virtual void OnCreated(ibVisualHost* host) override;
+	// Just made by the designer (firstCreated), with no source — bound to a fresh attribute first (the desktop's).
+	virtual void OnCreated(ibVisualHost* host, bool firstCreated) override;
 	// …and the form closed: the table lets go of its model's view (the window's Cleanup).
 	virtual void OnCleanup(ibVisualHost* host) override;
 
@@ -493,8 +494,6 @@ private:
 	s32 m_rowsVersion = 1;
 	bool m_fetching = false;
 	unsigned int m_formUpdates = 0;   // the form's updates this table has had its rows read again for
-	// The rows' pictures the client was sent — each once, with the first row of it handed out.
-	std::set<ibPictureID> m_sentPictures;
 
 	// (NO SETTING KEPT HERE — see the gridbox: the ACTIVE one lives on the model, in its composer.)
 };

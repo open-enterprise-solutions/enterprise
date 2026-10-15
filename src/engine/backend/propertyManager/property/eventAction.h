@@ -17,7 +17,7 @@ public:
 			list.Add(
 				m_listPropValue.GetItemLabel(idx),
 				m_listPropValue.GetItemId(idx),
-				m_listPropValue.GetItemBitmap(idx)
+				m_listPropValue.GetItemPicture(idx)
 			);
 		}
 		return ibPropertyChoiceMode::Single;
@@ -36,23 +36,23 @@ private:
 			{
 			}
 
-			ibEventOptionItem(const wxString& name, const ibActionID& l, const wxBitmap& b, const ibValue& v) :
-				m_isOk(true), m_strName(name), m_strLabel(name), m_bmp(b), m_id(l), m_value(v)
+			ibEventOptionItem(const wxString& name, const ibActionID& l, const ibPictureDescription& p, const ibValue& v) :
+				m_isOk(true), m_strName(name), m_strLabel(name), m_picture(p), m_id(l), m_value(v)
 			{
 			}
 
-			ibEventOptionItem(const wxString& name, const wxString& label, const ibActionID& l, const wxBitmap& b, const ibValue& v) :
-				m_isOk(true), m_strName(name), m_strLabel(label), m_bmp(b), m_id(l), m_value(v)
+			ibEventOptionItem(const wxString& name, const wxString& label, const ibActionID& l, const ibPictureDescription& p, const ibValue& v) :
+				m_isOk(true), m_strName(name), m_strLabel(label), m_picture(p), m_id(l), m_value(v)
 			{
 			}
 
-			ibEventOptionItem(const wxString& name, const wxString& label, const wxString& help, const ibActionID& l, const wxBitmap& b, const ibValue& v) :
-				m_isOk(true), m_strName(name), m_strLabel(label), m_strHelp(help), m_bmp(b), m_id(l), m_value(v)
+			ibEventOptionItem(const wxString& name, const wxString& label, const wxString& help, const ibActionID& l, const ibPictureDescription& p, const ibValue& v) :
+				m_isOk(true), m_strName(name), m_strLabel(label), m_strHelp(help), m_picture(p), m_id(l), m_value(v)
 			{
 			}
 
 			ibEventOptionItem(const ibEventOptionItem& item) :
-				m_isOk(true), m_strName(item.m_strName), m_strLabel(item.m_strLabel), m_strHelp(item.m_strHelp), m_bmp(item.m_bmp), m_id(item.m_id), m_value(item.m_value)
+				m_isOk(true), m_strName(item.m_strName), m_strLabel(item.m_strLabel), m_strHelp(item.m_strHelp), m_picture(item.m_picture), m_id(item.m_id), m_value(item.m_value)
 			{
 			}
 
@@ -60,7 +60,7 @@ private:
 				m_strName = src.m_strName;
 				m_strLabel = src.m_strLabel;
 				m_strHelp = src.m_strHelp;
-				m_bmp = src.m_bmp;
+				m_picture = src.m_picture;
 				m_id = src.m_id;
 				m_value = src.m_value;
 				return *this;
@@ -72,7 +72,7 @@ private:
 			wxString m_strName;
 			wxString m_strLabel;
 			wxString m_strHelp;
-			wxBitmap m_bmp;
+			ibPictureDescription m_picture;
 			ibActionID m_id;
 			ibValue m_value;
 		};
@@ -89,14 +89,14 @@ private:
 
 		void ResetListItem() { m_listValue.clear(); }
 
-		void AppendItem(const wxString& name, const ibActionID& l, const wxBitmap& b, const ibValue& v) { (void)m_listValue.emplace_back(name, l, b, v); }
-		void AppendItem(const wxString& name, const wxString& label, const ibActionID& l, const wxBitmap& b, const ibValue& v) { (void)m_listValue.emplace_back(name, label, l, b, v); }
-		void AppendItem(const wxString& name, const wxString& label, const wxString& help, const ibActionID& l, const wxBitmap& b, const ibValue& v) { (void)m_listValue.emplace_back(label, help, l, b, v); }
+		void AppendItem(const wxString& name, const ibActionID& l, const ibPictureDescription& p, const ibValue& v) { (void)m_listValue.emplace_back(name, l, p, v); }
+		void AppendItem(const wxString& name, const wxString& label, const ibActionID& l, const ibPictureDescription& p, const ibValue& v) { (void)m_listValue.emplace_back(name, label, l, p, v); }
+		void AppendItem(const wxString& name, const wxString& label, const wxString& help, const ibActionID& l, const ibPictureDescription& p, const ibValue& v) { (void)m_listValue.emplace_back(label, help, l, p, v); }
 
 		wxString GetItemName(const unsigned int idx) const { return GetItemAt(idx).m_strName; }
 		wxString GetItemLabel(const unsigned int idx) const { return GetItemAt(idx).m_strLabel; }
 		wxString GetItemHelp(const unsigned int idx) const { return GetItemAt(idx).m_strHelp; }
-		wxBitmap GetItemBitmap(const unsigned int idx) const { return GetItemAt(idx).m_bmp; }
+		ibPictureDescription GetItemPicture(const unsigned int idx) const { return GetItemAt(idx).m_picture; }
 		ibActionID GetItemId(const unsigned int idx) const { return GetItemAt(idx).m_id; }
 		ibValue GetItemValue(const unsigned int idx) const { return GetItemAt(idx).m_value; }
 
@@ -142,9 +142,9 @@ public:
 #pragma endregion 
 
 #pragma region item
-	void AppendItem(const wxString& name, const ibActionID& l, const wxBitmap& b, const ibValue& v) { (void)m_listPropValue.AppendItem(name, l, b, v); }
-	void AppendItem(const wxString& name, const wxString& label, const ibActionID& l, const wxBitmap& b, const ibValue& v) { (void)m_listPropValue.AppendItem(name, label, l, b, v); }
-	void AppendItem(const wxString& name, const wxString& label, const wxString& help, const ibActionID& l, const wxBitmap& b, const ibValue& v) { (void)m_listPropValue.AppendItem(name, label, help, l, b, v); }
+	void AppendItem(const wxString& name, const ibActionID& l, const ibPictureDescription& p, const ibValue& v) { (void)m_listPropValue.AppendItem(name, l, p, v); }
+	void AppendItem(const wxString& name, const wxString& label, const ibActionID& l, const ibPictureDescription& p, const ibValue& v) { (void)m_listPropValue.AppendItem(name, label, l, p, v); }
+	void AppendItem(const wxString& name, const wxString& label, const wxString& help, const ibActionID& l, const ibPictureDescription& p, const ibValue& v) { (void)m_listPropValue.AppendItem(name, label, help, l, p, v); }
 #pragma endregion
 
 	template <typename optClass>

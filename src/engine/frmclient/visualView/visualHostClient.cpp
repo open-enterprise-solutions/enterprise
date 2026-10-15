@@ -11,6 +11,7 @@
 
 #include <wx/wupdlock.h>   // wxWindowUpdateLocker — RAII Freeze/Thaw
 
+#include "frmclient/backend/appData.h"   // DesignerMode — no table's rows are read there
 #include "frmclient/mainFrame/mainFrame.h"
 #include "frmclient/win/typeconv.h"
 #include "frmclient/win/ctrls/dynamicBorder.h"
@@ -246,8 +247,9 @@ void ibVisualHostClient::Draw(const ibProtocolNode& view, const ibProtocolNode& 
 
 void ibVisualHostClient::Send(long long controlId, ibProtocolEvent event, const ibProtocolNode& args)
 {
-	// Raised while the view is torn down — a focus going with a closing tab — it is no one's.
-	if (IsBeingDeleted())
+	// Raised while the view is torn down — a focus going with a closing tab — it is no one's; in a designer's — the
+	// editor's.
+	if (IsBeingDeleted() || IsDesignerHost())
 		return;
 
 	// What it says, as it says it — a sheet handed over whole by its size: written out, it was the sheet again in the
@@ -260,8 +262,8 @@ void ibVisualHostClient::Send(long long controlId, ibProtocolEvent event, const 
 
 bool ibVisualHostClient::Hold(long long controlId, ibProtocolEvent event, const ibProtocolNode& args)
 {
-	// Raised while the view is torn down — no one's, as for Send.
-	if (IsBeingDeleted())
+	// Raised while the view is torn down — no one's, as for Send; the editor's in a designer's.
+	if (IsBeingDeleted() || IsDesignerHost())
 		return true;
 	if (!m_mainFrame.Hold(EventOf(controlId, event, args)))
 		return false;
@@ -288,12 +290,18 @@ ibViewFetcher ibVisualHostClient::MakeFetcher(long long controlId) const
 	ibFrontendMainFrame* const frame = &m_mainFrame;
 	const wxString form = m_formKey;
 	const long long tab = m_tabId;
-	return [frame, controlId, form, tab](const ibProtocolNode& request, ibProtocolNode& answer) {
+	// …none in the designer — its tables have no rows to show, the server reads none there (ibValueModelTableBox::Fetch):
+	// the editor's tab answered the ask with the whole form and its classes — some 280 KB, a second on every drawing of a
+	// form with a table; a form tried out in it was refused (404), each of its tables (2026-10-15).
+	const bool designer = appData->DesignerMode();
+	return [frame, controlId, form, tab, designer](const ibProtocolNode& request, ibProtocolNode& answer) {
+		if (designer)
+			return false;
 		ibProtocolNode params;
 		params.SetValue(ibProtocolName::Control, controlId)
 			.SetValue(ibProtocolName::Request, request);
 		SetViewOf(params, form, tab);
-		return frame->Fetch(params, answer);
+		return frame->Fetch(ibProtocolMethod::Fetch, params, answer);
 	};
 }
 
@@ -306,36 +314,38 @@ void ibVisualHostClient::UpdateForm(const ibProtocolNode& form)
 	m_commandBar->Update(form.FindChild(ibProtocolName::State).FindChild(ibProtocolName::CommandBar));
 
 	// The form's colours — onto its command bar as well (the desktop's UpdateFormLayers).
+	wxWindow* const window = GetBackgroundWindow();
 	const wxString foreground = form.GetString(ibProtocolName::ForegroundColour);
 	if (!foreground.IsEmpty()) {
-		SetForegroundColour(typeConv::StringToColour(foreground));
-		m_commandBar->GetWindow()->SetForegroundColour(GetForegroundColour());
+		window->SetForegroundColour(typeConv::StringToColour(foreground));
+		m_commandBar->GetWindow()->SetForegroundColour(window->GetForegroundColour());
 	}
 	const wxString background = form.GetString(ibProtocolName::BackgroundColour);
 	if (!background.IsEmpty()) {
-		SetBackgroundColour(typeConv::StringToColour(background));
-		m_commandBar->GetWindow()->SetBackgroundColour(GetBackgroundColour());
+		window->SetBackgroundColour(typeConv::StringToColour(background));
+		m_commandBar->GetWindow()->SetBackgroundColour(window->GetBackgroundColour());
 	}
 }
 
 void ibVisualHostClient::Build(const ibProtocolNode& form)
 {
 	// The desktop's chrome: the command bar at the top, above the controls (CreateFormLayers).
+	wxWindow* const window = GetBackgroundWindow();
 	m_sizer = new wxBoxSizer(wxVERTICAL);
-	m_commandBar = std::make_unique<ibViewCommandBar>(this, [this](const ibProtocolNode& args) {
+	m_commandBar = std::make_unique<ibViewCommandBar>(window, *this, [this](const ibProtocolNode& args) {
 		Send(m_valueForm->GetControlID(), ibProtocolEvent::Command, args);
 	});
 	m_sizer->Add(m_commandBar->GetWindow(), 0, wxEXPAND);
 	m_content = new wxBoxSizer(wxVERTICAL);
 	m_sizer->Add(m_content, 1, wxEXPAND);
-	SetSizer(m_sizer);
+	window->SetSizer(m_sizer);
 
 	// A VIEW THAT IS NO FORM IS ONE CONTROL, filling the tab — with no commands of a form's.
 	if (form.GetType() != ibProtocolType::ClientForm) {
 		m_commandBar->Update(ibProtocolNode());
 		ibProtocolNode item;
 		item.SetValue(ibProtocolName::Proportion, 1).SetValue(ibProtocolName::Stretch, static_cast<long long>(wxEXPAND));
-		Generate(form, this, m_content, item, nullptr);
+		Generate(form, window, m_content, item, nullptr);
 		return;
 	}
 
@@ -343,7 +353,7 @@ void ibVisualHostClient::Build(const ibProtocolNode& form)
 	UpdateForm(form);
 
 	for (const ibProtocolNode& child : form.Children())
-		Generate(child, this, m_content, ibProtocolNode(), nullptr);
+		Generate(child, window, m_content, ibProtocolNode(), nullptr);
 }
 
 void ibVisualHostClient::Generate(const ibProtocolNode& node, wxWindow* parent, wxSizer* sizer, const ibProtocolNode& item,
@@ -459,8 +469,9 @@ void ibVisualHostClient::UpdateNode(const ibProtocolNode& node, const ibProtocol
 void ibVisualHostClient::Clear()
 {
 	// The windows first, while the controls that handle their events are still there; the sizers with them.
-	DestroyChildren();
-	SetSizer(nullptr);
+	wxWindow* const window = GetBackgroundWindow();
+	window->DestroyChildren();
+	window->SetSizer(nullptr);
 	m_sizer = nullptr;
 	m_content = nullptr;
 	m_commandBar.reset();

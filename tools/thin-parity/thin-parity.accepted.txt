@@ -43,3 +43,10 @@ MEMBER ibDataProcessorFileDocument.*               # the file is the server's (i
 MEMBER ibReportFileDocument.*                      # the file is the server's (ibReportEditDocument); the tab's: ibTabDocument
 MEMBER ibDataProcessorEditView.OnClose()           # the tree is a child of the view's frame — it goes with it
 MEMBER ibReportEditView.OnClose()                  # the tree is a child of the view's frame — it goes with it
+CLASS ibFormDocument (designer/docManager/templates/docViewFormEditor.h)   # its open/save/modify are the server's (ibModuleEditDocument); its one heir, ibFormEditDocument, holds the rest
+
+# A control is put on the form by the server's form (frmserver ibFormDesignView) — made, dropped and pasted there, its
+# id from the one numbering; the editor asks (a Control request) and draws the answer.
+MEMBER ibVisualEditor.CreateControlOfClass()       # the server's (ibFormDesignView::CreateControlOfClass)
+MEMBER ibVisualEditor.InsertObject()               # the server's (ibFormDesignView::InsertObject)
+MEMBER ibVisualEditor.CalcPositionOfInsertion()    # the server's (ibFormDesignView::CalcPositionOfInsertion)

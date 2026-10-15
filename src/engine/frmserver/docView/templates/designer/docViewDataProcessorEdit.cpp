@@ -4,15 +4,13 @@
 
 #include "backend/backend_picture.h"
 
-#include "frmserver/client/clientChildFrame.h"   // ibClientChildFrame — the tab, and the client it is drawn for
-
 wxIMPLEMENT_DYNAMIC_CLASS(ibDataProcessorTreeView, ibMetaView);
 
 bool ibDataProcessorTreeView::OnCreate(ibDocument* doc, long flags)
 {
 	// Drawn for the client whose tab it is.
-	const ibClientChildFrame* const tab = dynamic_cast<const ibClientChildFrame*>(GetDocChildFrame());
-	m_metaTree = std::make_unique<ibDataProcessorTree>(tab != nullptr ? tab->GetFrame() : nullptr, GetDocument());
+	m_metaTree = std::make_unique<ibDataProcessorTree>(GetDocChildFrame() != nullptr ? GetDocChildFrame()->GetFrame() : nullptr,
+		GetDocument());
 
 	return ibView::OnCreate(doc, flags);
 }
@@ -27,12 +25,12 @@ wxIMPLEMENT_DYNAMIC_CLASS(ibDataProcessorEditDocument, ibMetaDataDocument);
 // A new one named as the desktop named it — its class and a number.
 static int s_defaultDataProcessorNameCounter = 1;
 
-ibPicture ibDataProcessorEditDocument::GetIcon() const
+ibPictureDescription ibDataProcessorEditDocument::GetIcon() const
 {
 	if (m_metaData != nullptr) {
 		ibValueMetaObject* metaObject = m_metaData->GetCommonMetaObject();
 		wxASSERT(metaObject);
-		return ibBackendPicture::GetServerPicture(metaObject->GetClassType());
+		return ibPictureDescription(metaObject->GetClassType());
 	}
 	return ibMetaDataDocument::GetIcon();
 }

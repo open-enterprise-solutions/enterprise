@@ -48,10 +48,35 @@ public:
 	ibViewFetcher MakeFetcher(long long controlId) const;
 	// The form drawn — its controls, and the one active now (the desktop's GetValueForm).
 	ibValueForm* GetValueForm() const { return m_valueForm.get(); }
+	// …and its command bar, drawn above its controls (the server's form's GetCommandBar).
+	ibViewCommandBar* GetCommandBar() const { return m_commandBar.get(); }
 	// The tab it draws in — whose document the form's is.
 	long long GetTabId() const { return m_tabId; }
 	// The control a window drawn is — none: no control's (the desktop's GetObjectBase).
 	ibValueFrame* GetObjectBase(const wxObject* wxobject) const;
+
+	// THE DESIGNER'S HOST — the desktop's: the form drawn for its editor, what the person does with a control the
+	// editor's — nothing of it goes to the server (Send, Hold).
+	virtual bool IsDesignerHost() const { return false; }
+	// The window the controls are built in — this one; a designer's host, its card's.
+	virtual wxWindow* GetBackgroundWindow() const { return const_cast<ibVisualHostClient*>(this); }
+	// A click into it, as the application saw it before the window clicked did — a designer's host selects by it.
+	virtual void OnClickFromApp(wxWindow* WXUNUSED(currentWindow), wxMouseEvent& WXUNUSED(event)) {}
+	// …and a part of a control clicked that is a control of its own — a table's column by its header, the table by its
+	// rows (the desktop's g_visualHostContext->SelectControl): a designer's host selects it in its editor.
+	virtual void SelectControl(ibValueFrame* WXUNUSED(control)) {}
+	// A property of a control edited (ibValueFrame::OnPropertyChanged) — a designer's host gives it to its editor, which
+	// draws it; nothing of it is the runtime's.
+	virtual void ModifyProperty(ibProperty* WXUNUSED(property), const wxVariant& WXUNUSED(oldValue),
+		const wxVariant& WXUNUSED(newValue)) {}
+	// …and a control moved under `parent`, at `pos` among its children — a table's column by its header: a designer's
+	// host gives it to its editor, whose command it is; the runtime's table tells the server itself (Send).
+	virtual void MovePosition(ibValueFrame* WXUNUSED(control), ibValueFrame* WXUNUSED(parent), unsigned int WXUNUSED(pos)) {}
+
+protected:
+
+	// The scrolling fitted to what is drawn — a designer's host fits its card first.
+	virtual void UpdateVirtualSize();
 
 private:
 
@@ -72,16 +97,15 @@ private:
 	void UpdateNode(const ibProtocolNode& node, const ibProtocolNode& patch);
 	void Clear();
 
-	// The label columns lined up (the desktop's CalculateLabelSize), and the scrolling fitted to what is drawn.
+	// The label columns lined up (the desktop's CalculateLabelSize).
 	void AlignLabels();
-	void UpdateVirtualSize();
 
 	ibFrontendMainFrame& m_mainFrame;
 	const long long      m_tabId;      // the tab it draws in — what a view that is no form is named by
 
 	wxString    m_formKey;             // the form drawn, as an event names it; empty — a view that is no form
 	std::string m_shape;               // the view as last built
-	wxBoxSizer* m_sizer = nullptr;     // this window's own: the command bar above the controls (the desktop's chrome)
+	wxBoxSizer* m_sizer = nullptr;     // the background window's: the command bar above the controls (the desktop's chrome)
 	wxBoxSizer* m_content = nullptr;   // the form's controls', laid out as the form says
 
 	std::unique_ptr<ibViewCommandBar> m_commandBar;   // its window is this one's child

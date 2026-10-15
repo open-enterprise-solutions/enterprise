@@ -14,7 +14,7 @@
 #include "formAttribute.h"                              // the attribute this box is bound to — its source IS the address
 #include "backend/srcDataObject.h"                      // …and the source answers with the guid of what it reads
 #include "backend/appData.h"
-#include "backend/backend_picture.h"                    // ibBackendPicture::GetServerPicture — a row's picture, as the wire carries it
+#include "frmserver/client/clientFrame.h"               // ibClientFrame::SendPicture — a row's picture, by its id
 #include "frmserver/visualView/visualHost.h"            // IsDesignerHost — what the form is held by
 
 #include <algorithm>
@@ -433,8 +433,15 @@ ResolveLineByValue(ibValueModel* model, const ibValue& value)
 	return item.IsOk() ? model->GetRowAt(item) : nullptr;
 }
 
-void ibValueModelTableBox::OnCreated(ibVisualHost* host)
+void ibValueModelTableBox::OnCreated(ibVisualHost* host, bool firstCreated)
 {
+	// Bind the source FIRST (a just-dropped tablebox auto-binds a fresh value-table attribute — control-side
+	// helper — so it renders bound, not hidden; its type comes from the source-type generator, _table ->
+	// value table). Then CreateModel reads that bound value-table into m_tableModel. The value-table starts
+	// with NO columns — they come from the bound source or the user's explicit "Add column", never auto-added.
+	if (firstCreated)
+		AutoBindNewSource(this);
+
 	ibValueModelTableBox::CreateModel();
 
 	// ⚠ NOT FOR THE DESIGNER'S PICTURE OF THE FORM: there the box is a picture of itself, and the person
@@ -724,7 +731,7 @@ void ibValueModelTableBox::OnUpdate(ibDataNode& state, ibVisualHost* host)
 			ibDataNode& entry = menu.AddChild(0, 0);
 			entry.SetValue(wxT("Id"), static_cast<s32>(id));
 			entry.SetValue(wxT("Caption"), actions.GetCaptionByID(id));
-			entry.SetValue(wxT("Picture"), host->SendPicture(actions.GetPictureByID(id)));
+			entry.SetValue(wxT("Picture"), ibClientFrame::SendPicture(actions.GetPictureByID(id)));
 			entry.SetValue(wxT("Enabled"), !(viewOnly && actions.GetModifiesDataByID(id)));
 		}
 	}
@@ -967,10 +974,6 @@ bool ibValueModelTableBox::Fetch(const ibDataNode& request, ibDataNode& response
 	s32 currentHandle = 0, firstHandle = 0;
 	std::vector<s32> newTopRows;
 
-	// The pictures handed with this read — made once, at the first: Child makes its node anew at every call, so a
-	// second picture in one read wiped the first (a folder read with its first element went without its picture).
-	ibDataNode* pictures = nullptr;
-
 	for (size_t idx = 0; idx < items.GetCount(); idx++) {
 
 		const ibDataViewItem& item = items[idx];
@@ -999,23 +1002,10 @@ bool ibValueModelTableBox::Fetch(const ibDataNode& request, ibDataNode& response
 		if (item.GetGroupCaption(groupCaption))
 			row.SetValue(wxT("Group"), groupCaption);
 
-		// The row's state picture, by its id — a decimal string: a u64 is past what a JSON number keeps. The
-		// picture itself goes with the first row of it the client is handed.
+		// The row's state picture, by its id — the picture itself the client loads apart.
 		const ibPictureID picture = m_tableModel->GetRowPicture(item);
-		if (picture != 0) {
-			const wxString pictureId = wxString::Format(wxT("%llu"), static_cast<unsigned long long>(picture));
-			row.SetValue(wxT("Picture"), pictureId);
-			if (m_sentPictures.insert(picture).second) {
-				const ibPicture sentPicture =ibBackendPicture::GetServerPicture(ibPictureDescription(picture));
-				if (!sentPicture.IsOk())
-					ibJournalWarning(wxT("client"), wxT("row picture %s has no server picture: the client draws none"), pictureId);
-				if (pictures == nullptr)
-					pictures = &response.Child(wxT("Pictures"));
-				ibDataNode& sent = pictures->AddChild(0, 0);
-				sent.SetValue(wxT("Id"), pictureId);
-				sent.SetValue(wxT("Picture"), wxString(sentPicture.GetData()));
-			}
-		}
+		if (picture != 0)
+			row.SetValue(wxT("Picture"), ibClientFrame::SendPicture(picture));
 
 		// A row none of whose shown cells can be edited (a list row, a group heading) — the client opens
 		// no inline editor on it, and a double-click goes to the table (OnRowActivated).

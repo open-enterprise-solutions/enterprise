@@ -72,15 +72,17 @@ public:
 
 	virtual wxCommandProcessor* OnCreateCommandProcessor() override;
 
-	ibCodeEditor* GetCodeEditor() const;
+	// The module's editor — the view's own; a form's tab has it on its notebook's Code page (ibFormEditDocument).
+	virtual ibCodeEditor* GetCodeEditor() const;
+
+	// The debugger's, as the desktop's document took them (ibModuleEditDocument): the line shown — the run line
+	// (setBreakpoint) or a failure's (a form's tab turns to its Code page first); and the value of what is under the
+	// cursor while stopped.
+	virtual void SetCurrentLine(int lineBreakpoint, bool setBreakpoint);
+	virtual void SetToolTip(const wxString& resultStr);
 
 	// THE MODULE'S ADDRESS — the State's Module: what its breakpoints are kept by and a runtime stops at.
 	const wxString& GetDocPath() const { return m_docPath; }
-
-	// The debugger's, as the desktop's document took them (ibModuleEditDocument): the line shown — the run line
-	// (setBreakpoint) or a failure's; and the value of what is under the cursor while stopped.
-	void SetCurrentLine(int lineBreakpoint, bool setBreakpoint);
-	void SetToolTip(const wxString& resultStr);
 
 protected:
 

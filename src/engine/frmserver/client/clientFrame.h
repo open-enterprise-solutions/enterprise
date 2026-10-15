@@ -129,6 +129,11 @@ public:
 	// GetFrame, in a process that holds many clients.
 	static ibClientFrame* GetFrame();
 
+	// ⭐ A PICTURE BY ITS ID — all an answer names a picture by: a backend picture's number, a configuration picture's
+	// guid. The picture itself the client loads apart, by the id (ibProtocolMethod::Picture), and keeps; one held as a
+	// file's bytes has no id of its own and goes as itself. Empty: no picture.
+	static ibString SendPicture(const ibPictureDescription& picture);
+
 	// The client is leaving: whatever is still open goes down unconditionally, as the desktop window's Destroy
 	// closed its documents. The forced close still ASKS each view (DeleteAllViews → Close(false)), so the
 	// documents that belong to the frame — the start page — see that it is the frame closing them
@@ -171,16 +176,6 @@ public:
 	// nothing is asked, and a client at rest is called for it (RefreshFrame) — it hears Exit in the next answer, or in
 	// the answer of the call it is in, and goes as from its own Exit: its logout takes the session.
 	bool                        ExitClient(bool force);
-
-	// ⭐ A PICTURE BY ITS ID — what a frame names a picture by: a backend picture's number, a configuration picture's
-	// guid. The picture itself goes to the client once, with the next answer (DrainPendingPictures), and the client keeps
-	// it; one held as a file's bytes has no id of its own and goes as itself. Empty: no picture.
-	wxString SendPicture(const ibPictureDescription& picture, const ibMetaData* metaData);
-	struct PendingPicture {
-		wxString id;
-		wxString picture;   // PNG, base64
-	};
-	std::vector<PendingPicture> DrainPendingPictures();
 
 	struct PendingRequest {
 		std::string id;
@@ -288,11 +283,6 @@ private:
 	std::vector<PendingMessage> m_pendingMessages;
 	bool                        m_clearPending = false;
 	bool                        m_exitPending = false;
-
-	// The pictures the client was given, by their ids, and those it is to be given with the next answer — named and
-	// drained on the session's worker, which draws the frame.
-	std::set<wxString>          m_sentPictures;
-	std::vector<PendingPicture> m_pendingPictures;
 
 	// The requests waiting, oldest first. A response is a slot of its own, shared with the waiting script —
 	// responded to, the script reads the slot and not the frame.

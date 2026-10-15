@@ -155,7 +155,7 @@ private:
 				prop->AppendItem(
 					child->GetName(),
 					child->GetMetaID(),
-					child->GetIcon(),
+					child->GetClassType(),
 					child);
 			}
 			return true;

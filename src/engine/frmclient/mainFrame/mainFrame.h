@@ -148,10 +148,10 @@ public:
 	// A tab closed — by the server, which asks about what is unsaved; the tab goes when the frame says so. Whatever
 	// closes it comes here: its button, its window closed (Escape, the application's), the window menu, File → Close.
 	void CloseTab(long long tabId);
-	// A control's fetch — a table's rows, a spreadsheet's cells; `params` — the control, its request, the view it is of:
-	// the answer is no frame, nothing is drawn or asked, and a refusal is only false. It speaks to the communicator alone,
-	// so a control's own thread may make it.
-	bool Fetch(const ibProtocolNode& params, ibProtocolNode& answer);
+	// A fetch — a control's (Fetch: a table's rows, a spreadsheet's cells; `params` — the control, its request, the view
+	// it is of) or the pictures of their ids (Picture): the answer is no frame, nothing is drawn or asked, and a refusal is
+	// only false. It speaks to the communicator alone, so a control's own thread may make it.
+	bool Fetch(ibProtocolMethod method, const ibProtocolNode& params, ibProtocolNode& answer);
 	// A file of the person's, up to the server in its parts — `file` the id it was given. False: not read, or refused
 	// (said to the person).
 	bool UploadFile(const wxString& path, wxString& file);

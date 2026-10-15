@@ -13,8 +13,9 @@ class ibPGListProperty : public wxPGProperty {
 
 public:
 	// Takes the backend's choice list and turns it into wxPGChoices here — the conversion
-	// belongs on this side of the seam (see ibPropertyChoiceList in propertyObject.h).
-	ibPGListProperty(const wxString& label = wxPG_LABEL,
+	// belongs on this side of the seam (see ibPropertyChoiceList in propertyObject.h). Its pictures are by id; a
+	// configuration's is read in the configuration of the object the property belongs to.
+	ibPGListProperty(const ibPropertyObject* property = nullptr, const wxString& label = wxPG_LABEL,
 		const wxString& name = wxPG_LABEL, const ibPropertyChoiceList& choices = ibPropertyChoiceList(), int value = 0);
 
 	virtual wxString ValueToString(wxVariant& value,

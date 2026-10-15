@@ -5,10 +5,10 @@
 
 #include "docViewHomePage.h"
 
-#include "frmserver/client/clientFrame.h"                 // IsClosingWindow — the client leaving vs a tab's cross
+#include "frmserver/client/clientFrame.h"                 // IsClosingWindow — the client leaving vs a tab's cross; SendPicture
 #include "frmserver/visualView/visualHost.h"
 
-#include "backend/backend_picture.h"                       // a cell's header icon, as it travels
+#include "core/picturePredefined.h"                       // g_picHomePageCLSID — the page's glyph
 #include "core/fnumber.h"                               // the column's share, a fraction
 #include "backend/metaCollection/metaObjectMetadata.h"     // GetHomePage()
 #include "backend/metaCollection/metaFormObject.h"         // ibValueMetaObjectFormBase / ibValueMetaObjectCommonForm
@@ -70,7 +70,7 @@ ibHomePageDocument* ibHomePageDocument::ShowHomePage(const ibValueMetaObjectConf
 	}
 
 	homeDoc->SetTitle(_("Home page"));
-	homeDoc->SetIcon(ibBackendPicture::GetServerPicture(g_picHomePageCLSID));
+	homeDoc->SetIcon(ibPictureDescription(g_picHomePageCLSID));
 	documentManager->AddDocument(homeDoc);
 
 	if (!homeDoc->OnCreate(wxEmptyString, 0)) {
@@ -196,17 +196,10 @@ void ibHomePageView::DrawCell(const ibHomePageCell& cell, ibDataNode& node) cons
 	// falling back to the form's own, and to the page's glyph when the form is gone. An embedded form has no tab
 	// to carry either.
 	const ibValueMetaObjectFormBase* const metaForm = cell.m_metaForm;
-	ibPicture headerIcon;
-	if (metaForm != nullptr) {
-		const ibValueMetaObject* const owner = metaForm->GetParent();
-		headerIcon = ibBackendPicture::GetServerPicture(owner != nullptr ? owner->GetClassType() : metaForm->GetClassType());
-		if (!headerIcon.IsOk())
-			headerIcon = ibBackendPicture::GetServerPicture(metaForm->GetClassType());
-	}
-	if (!headerIcon.IsOk())
-		headerIcon = ibBackendPicture::GetServerPicture(g_picHomePageCLSID);
-	if (headerIcon.IsOk())
-		node.SetValue(wxT("Icon"), wxString(headerIcon.GetData()));
+	const ibValueMetaObject* const owner = metaForm != nullptr ? metaForm->GetParent() : nullptr;
+	const ibPictureID headerIcon = owner != nullptr ? owner->GetClassType()
+		: metaForm != nullptr ? metaForm->GetClassType() : g_picHomePageCLSID;
+	node.SetValue(wxT("Icon"), ibClientFrame::SendPicture(headerIcon));
 
 	const ibFormVisualDocument* const formDoc = cell.m_valueForm ? cell.m_valueForm->GetVisualDocument() : nullptr;
 	ibFormVisualEditView* const formView = formDoc != nullptr ? formDoc->GetFirstView() : nullptr;

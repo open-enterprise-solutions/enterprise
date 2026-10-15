@@ -24,7 +24,7 @@ bool ibValueToolBarItem::GetToolAction(ibEventAction* evtList)
 				data.GetNameByID(id),
 				data.GetCaptionByID(id),
 				id,
-				pictureDesc.IsEmptyPicture() ? wxNullBitmap : ibBackendPicture::CreatePicture(pictureDesc, GetMetaData()),
+				pictureDesc,
 				ibValue::CreateObjectValue<ibValueActionEvent>(data.GetNameByID(id), id)
 			);
 		}

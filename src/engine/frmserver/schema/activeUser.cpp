@@ -1,7 +1,6 @@
 #include "activeUser.h"
 
 #include "backend/appData.h"
-#include "backend/backend_picture.h"   // the dialog's pictures, as the desktop's drew them
 #include "core/picturePredefined.h"
 #include "backend/lock/lockManager.h"
 #include "backend/metadataConfiguration.h"
@@ -10,6 +9,7 @@
 #include "backend/session/session.h"
 #include "backend/session/sessionRegistry.h"
 #include "backend/session/sessionSnapshot.h"
+#include "frmserver/client/clientFrame.h"   // ibClientFrame::SendPicture — the dialog's pictures, by their ids
 
 bool ibSchemaActiveUser::AccessRight(const ibSession& session) const
 {
@@ -22,8 +22,8 @@ void ibSchemaActiveUser::Build(const ibSession& session, const ibDataNode& WXUNU
 	const ibApplicationInstance* const applicationInstance = session.GetApplicationInstance();
 
 	// The dialog's pictures, as the desktop's drew them — the window's, and the one beside each user.
-	result.SetValue(wxT("Icon"), wxString(ibBackendPicture::GetServerPicture(g_picUserActiveCLSID).GetData()));
-	result.SetValue(wxT("Picture"), wxString(ibBackendPicture::GetServerPicture(g_picUserCLSID).GetData()));
+	result.SetValue(wxT("Icon"), ibClientFrame::SendPicture(g_picUserActiveCLSID));
+	result.SetValue(wxT("Picture"), ibClientFrame::SendPicture(g_picUserCLSID));
 
 	// The sessions — every process's in the base, not this server's alone.
 	ibDataNode& sessions = result.Child(wxT("Sessions"));

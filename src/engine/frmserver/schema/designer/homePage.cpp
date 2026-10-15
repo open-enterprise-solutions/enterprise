@@ -1,12 +1,12 @@
 #include "homePage.h"
 
-#include "backend/backend_picture.h"                       // the forms' pictures, as they travel
 #include "backend/metadataConfiguration.h"
 #include "backend/metaCollection/metaFormObject.h"         // ibValueMetaObjectFormBase — what the start page shows
 #include "backend/metaCollection/metaObjectMetadata.h"     // ibValueMetaObjectConfiguration — whose workspace it is
 #include "backend/session/session.h"
 #include "core/serialize/dataBuilder.h"
 
+#include "frmserver/client/clientFrame.h"         // ibClientFrame::SendPicture — the forms' pictures, by their ids
 #include "frmserver/schema/designer/metaData.h"   // ibSchemaMetaData — whose tree, which object
 
 namespace {
@@ -27,13 +27,6 @@ ibValueMetaObjectConfiguration* FindRoot(const ibSession& session, const ibDataN
 		error = wxString::Format(wxT("'%s' has no home page"), object->GetName());
 	}
 	return root;
-}
-
-void SetPicture(ibDataNode& node, const wxString& name, const ibClassID& clsid)
-{
-	const ibPicture picture = ibBackendPicture::GetServerPicture(clsid);
-	if (picture.IsOk())
-		node.SetValue(name, wxString(picture.GetData()));
 }
 
 } // namespace
@@ -72,7 +65,7 @@ void ibSchemaHomePage::Build(const ibSession& session, const ibDataNode& args, i
 		row.SetValue(wxT("Id"), static_cast<s32>(metaForm->GetMetaID()));
 		row.SetValue(wxT("Name"), metaForm->GetName());
 		row.SetValue(wxT("FullName"), metaForm->GetFullName());
-		SetPicture(row, wxT("Picture"), metaForm->GetClassType());
+		row.SetValue(wxT("Picture"), ibClientFrame::SendPicture(metaForm->GetClassType()));
 		if (metaForm->GetClassType() == g_metaCommonFormCLSID) {
 			row.SetValue(wxT("Common"), true);
 			continue;
@@ -80,7 +73,7 @@ void ibSchemaHomePage::Build(const ibSession& session, const ibDataNode& args, i
 		if (const ibValueMetaObject* const owner = metaForm->GetParent()) {
 			row.SetValue(wxT("Owner"), static_cast<s32>(owner->GetMetaID()));
 			row.SetValue(wxT("OwnerName"), owner->GetFullName());
-			SetPicture(row, wxT("OwnerPicture"), owner->GetClassType());
+			row.SetValue(wxT("OwnerPicture"), ibClientFrame::SendPicture(owner->GetClassType()));
 		}
 	}
 }

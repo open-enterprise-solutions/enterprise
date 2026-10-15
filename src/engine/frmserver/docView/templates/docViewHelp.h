@@ -16,7 +16,7 @@ public:
 	virtual bool OnCreate(ibDocument* doc, long flags) override;
 	virtual void OnDraw(ibDataNode& frame) override;
 
-	virtual ibClientViewKind GetViewKind() const override { return ibClientViewKind::Text; }
+	virtual ibProtocolViewKind GetViewKind() const override { return ibProtocolViewKind::Text; }
 
 private:
 
@@ -37,8 +37,8 @@ class FRMSERVER_API ibHelpDocument : public ibDocument
 {
 public:
 
-	virtual ibPicture GetIcon() const {
-		return ibBackendPicture::GetServerPicture(g_metaCommonModuleCLSID);
+	virtual ibPictureDescription GetIcon() const {
+		return ibPictureDescription(g_metaCommonModuleCLSID);
 	}
 
 	ibHelpDocument() : ibDocument() {}

@@ -8,7 +8,9 @@
 #include <wx/itemattr.h>   // wxItemAttr — the header's look
 #include <wx/renderer.h>   // wxRendererNative::DrawCheckMark — a boolean cell
 
+#include "core/serialize/dataBuilder.h"              // ibDataValue — a column's width, as its property takes it
 #include "frmclient/visualView/commandBar.h"
+#include "frmclient/visualView/visualHostClient.h"   // a designer's host selects and moves by it
 #include "frmclient/win/picture.h"
 #include "frmclient/win/ctrls/controlTextEditor.h"
 #include "frmclient/win/ctrls/dataview/dataview.h"
@@ -186,7 +188,7 @@ void ibValueModelTableBox::Create(wxWindow* parent, const ibProtocolNode& /*node
 	wxBoxSizer* const sizer = new wxBoxSizer(wxVERTICAL);
 
 	// The chrome: its command bar above it.
-	m_commandBar = std::make_unique<ibViewCommandBar>(m_panel, [this](const ibProtocolNode& args) {
+	m_commandBar = std::make_unique<ibViewCommandBar>(m_panel, GetVisualHost(), [this](const ibProtocolNode& args) {
 		CallAsAction(ibProtocolEvent::Command, args);
 	});
 	sizer->Add(m_commandBar->GetWindow(), 0, wxEXPAND);
@@ -214,6 +216,7 @@ void ibValueModelTableBox::Create(wxWindow* parent, const ibProtocolNode& /*node
 	m_dataView->Bind(wxEVT_DATAVIEW_SELECTION_CHANGED, &ibValueModelTableBox::OnSelectionChanged, this);
 	m_dataView->GetMainWindow()->Bind(wxEVT_LEFT_UP, &ibValueModelTableBox::OnCellCursor, this);
 	m_dataView->GetMainWindow()->Bind(wxEVT_KEY_UP, &ibValueModelTableBox::OnCellCursor, this);
+	m_dataView->GetMainWindow()->Bind(wxEVT_LEFT_DOWN, &ibValueModelTableBox::OnMainWindowClick, this);
 	m_dataView->Bind(wxEVT_DATAVIEW_ITEM_ACTIVATED, &ibValueModelTableBox::OnItemActivated, this);
 	m_dataView->Bind(wxEVT_DATAVIEW_ITEM_START_EDITING, &ibValueModelTableBox::OnItemStartEditing, this);
 	m_dataView->Bind(wxEVT_DATAVIEW_ITEM_EDITING_STARTED, &ibValueModelTableBox::OnItemEditingStarted, this);
@@ -222,7 +225,7 @@ void ibValueModelTableBox::Create(wxWindow* parent, const ibProtocolNode& /*node
 	m_dataView->Bind(wxEVT_CONTROL_BUTTON_SELECT, &ibValueModelTableBox::OnEditorButton, this);
 	m_dataView->Bind(wxEVT_CONTROL_BUTTON_OPEN, &ibValueModelTableBox::OnEditorButton, this);
 	m_dataView->Bind(wxEVT_CONTROL_BUTTON_CLEAR, &ibValueModelTableBox::OnEditorButton, this);
-	m_dataView->Bind(wxEVT_DATAVIEW_COLUMN_HEADER_CLICK, &ibValueModelTableBox::OnColumnHeaderClick, this);
+	m_dataView->Bind(wxEVT_DATAVIEW_COLUMN_HEADER_CLICK, &ibValueModelTableBox::OnColumnClick, this);
 	m_dataView->Bind(wxEVT_DATAVIEW_COLUMN_REORDERED, &ibValueModelTableBox::OnColumnReordered, this);
 	m_dataView->Bind(wxEVT_DATAVIEW_ITEM_CONTEXT_MENU, &ibValueModelTableBox::OnContextMenu, this);
 	m_dataView->GenericGetHeader()->Bind(wxEVT_HEADER_END_RESIZE, &ibValueModelTableBox::OnHeaderEndResize, this);
@@ -419,12 +422,6 @@ void ibValueModelTableBox::SendCell(ibProtocolEvent event, const ibProtocolNode&
 
 void ibValueModelTableBox::OnAnswered(const ibViewTableModel::ibAnswer& answer)
 {
-	// The pictures first — the rows they are of are drawn next.
-	for (const auto& [id, picture] : answer.pictures)
-		ibProtocolPictureKeep(id, ibProtocolPicture(picture));
-	if (!answer.pictures.empty())
-		m_dataView->Refresh();
-
 	if (answer.currentRow != 0)
 		SelectRow(answer.currentRow);
 }
@@ -578,12 +575,20 @@ void ibValueModelTableBox::OnEditorButton(wxCommandEvent& event)
 		: type == wxEVT_CONTROL_BUTTON_OPEN ? ibProtocolEvent::Open : ibProtocolEvent::Clear, ibProtocolNode());
 }
 
-void ibValueModelTableBox::OnColumnHeaderClick(ibDataViewEvent& event)
+void ibValueModelTableBox::OnColumnClick(ibDataViewEvent& event)
 {
 	// The sort is the server's: asked of it, the arrow and the rows come back with its answer. Not passed on — the
 	// data view would turn its arrow by itself.
 	const ibDataViewColumn* const column = event.GetDataViewColumn();
-	if (column == nullptr || !column->IsSortable())
+	if (column == nullptr)
+		return;
+
+	// The designer's: the column selected in its editor (the desktop's) — there are no rows to sort.
+	if (GetVisualHost().IsDesignerHost()) {
+		GetVisualHost().SelectControl(GetVisualHost().GetValueForm()->FindControlByID(column->GetModelColumn()));
+		return;
+	}
+	if (!column->IsSortable())
 		return;
 
 	// The rows come back in another order: the read after it starts at the top, not at the row that was the top
@@ -631,12 +636,16 @@ void ibValueModelTableBox::OnColumnReordered(ibDataViewEvent& event)
 	if (ibValueFrame* oldHolder = columnObject->GetParent())
 		oldHolder->RemoveChild(columnObject);
 
+	const unsigned int pos = at != wxNOT_FOUND ? wxMin((unsigned int)at, holder->GetChildCount()) : holder->GetChildCount();
 	columnObject->SetParent(holder);
-	holder->AddChild(at != wxNOT_FOUND
-		? wxMin((unsigned int)at, holder->GetChildCount()) : holder->GetChildCount(),
-		columnObject);
+	holder->AddChild(pos, columnObject);
 
-	// …and in the server's, which is the form: the same move there (OnColumnMoved).
+	// …and in the form: the designer's, its editor's command (the desktop's RefreshEditor over its tree so moved); the
+	// runtime's is the server's — the same move there (OnColumnMoved).
+	if (GetVisualHost().IsDesignerHost()) {
+		GetVisualHost().MovePosition(columnObject, holder, pos);
+		return;
+	}
 	ibProtocolNode args;
 	args.SetValue(ibProtocolName::Column, columnObject->GetControlID())
 		.SetValue(ibProtocolName::Holder, holder != this ? holder->GetControlID() : 0)
@@ -684,11 +693,31 @@ void ibValueModelTableBox::OnHeaderEndResize(ibHeaderGenericCtrlEvent& event)
 	if (column == nullptr)
 		return;
 	m_dataView->CallAfter([this, column]() {
+		// The designer's: the width the column's property in the form, and the column selected (the desktop's
+		// SetWidthColumn and SelectControl).
+		if (GetVisualHost().IsDesignerHost()) {
+			ibValueFrame* const control = GetVisualHost().GetValueForm()->FindControlByID(column->GetModelColumn());
+			if (control == nullptr)
+				return;
+			ibPropertyGate::SetValue(control, control->GetProperty(ibProtocolName::Width),
+				ibDataValue::UInt(static_cast<u64>(column->WXGetSpecifiedWidth())));
+			GetVisualHost().SelectControl(control);
+			return;
+		}
 		ibProtocolNode args;
 		args.SetValue(ibProtocolName::Column, static_cast<long long>(column->GetModelColumn()))
 			.SetValue(ibProtocolName::Width, column->WXGetSpecifiedWidth());
 		Send(ibProtocolEvent::Resize, args);
 	});
+}
+
+void ibValueModelTableBox::OnMainWindowClick(wxMouseEvent& event)
+{
+	// The designer's: a click on the rows selects the table, its column selected or not (the desktop's) — the
+	// application's click leaves the selection on a column, a table's part.
+	if (GetVisualHost().IsDesignerHost())
+		GetVisualHost().SelectControl(this);
+	event.Skip();
 }
 
 //***********************************************************************************

@@ -4,6 +4,7 @@
 #include "core/serialize/dataBuilder.h"
 #include "backend/session/session.h"
 
+#include "frmserver/client/clientFrame.h"   // ibClientFrame::SendPicture — an item's picture, by its id
 #include "protocol/protocol.h"      // ibProtocolRequestKind::Choice
 
 namespace {
@@ -18,8 +19,8 @@ ibDataNode ChoiceRequest(const wxString& caption, const std::vector<ibChoiceItem
 		ibDataNode& node = request.AddChild(0, 0);
 		node.SetValue(wxT("Id"), item.id);
 		node.SetValue(wxT("Caption"), item.caption);
-		if (item.icon.IsOk())
-			node.SetValue(wxT("Picture"), wxString(item.icon.GetData()));
+		if (!item.icon.IsEmptyPicture())
+			node.SetValue(wxT("Picture"), ibClientFrame::SendPicture(item.icon));
 		if (item.selected)
 			node.SetValue(wxT("Selected"), true);
 	}

@@ -117,13 +117,13 @@ std::vector<ibProtocolNode> ibProtocolNode::GetList(const char* name) const
 	return items;
 }
 
-std::vector<std::pair<wxString, ibProtocolNode>> ibProtocolNode::Entries() const
+std::vector<std::pair<std::string, ibProtocolNode>> ibProtocolNode::Entries() const
 {
-	std::vector<std::pair<wxString, ibProtocolNode>> entries;
+	std::vector<std::pair<std::string, ibProtocolNode>> entries;
 	if (m_node != nullptr && m_node->is_object()) {
 		entries.reserve(m_node->size());
 		for (auto entry = m_node->begin(); entry != m_node->end(); ++entry)
-			entries.emplace_back(wxString::FromUTF8(entry.key()), ibProtocolNode(m_root, &entry.value()));
+			entries.emplace_back(entry.key(), ibProtocolNode(m_root, &entry.value()));
 	}
 	return entries;
 }

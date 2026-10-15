@@ -8,11 +8,24 @@
 #include "core/typeName.h"                // ibTypeInfoName — a property's class, named as the server names one
 #include "frmclient/backend/metaData.h"                                        // GetAnyArrayObject — the candidates
 #include "frmclient/backend/metaCollection/metaObject.h"                       // …each one's id, name, synonym
-#include "frmclient/backend/propertyManager/property/propertyValue.h"          // a row's property
+#include "frmclient/backend/propertyManager/property/propertySerializable.h"          // a row's property
 #include "frmclient/backend/propertyManager/property/variant/variantOwner.h"   // the variant a relationship holds
+#include "frmclient/backend/serialize/dataProtocol.h"                         // ibReadProtocolNode — the answer's rows
+#include "frmclient/win/picture.h"                                            // ibProtocolPictureReceive — the choices' pictures
+#include "protocol/protocol.h"                                                // ibProtocolName — the rows' keys
 
 #define propBlock 0x00023456
 #define eventBlock 0x00023457
+
+// The pictures the rows name — a choice's, a type's — by their ids, at any depth.
+static void PicturesOf(const ibDataNode& rows, std::vector<wxString>& pictures)
+{
+	for (const ibDataNode& row : rows.Children()) {
+		if (const ibDataValue* const picture = row.FindField(ibProtocolName::Picture))
+			pictures.push_back(picture->AsString());
+		PicturesOf(row, pictures);
+	}
+}
 
 namespace ibPropertyGate {
 
@@ -476,7 +489,7 @@ void ibPropertyObject::RemoveAttachedObject(ibPropertyObject* other)
 		other->m_attachOwner = nullptr;
 }
 
-bool ibPropertyObject::ReadProperty(const ibDataNode& node)
+bool ibPropertyObject::Receive(const ibProtocolNode& answer)
 {
 	// IN PLACE OF WHAT IT HAD — the rows are all of it.
 	for (ibPropertyCategory*& category : m_category->m_categories)
@@ -487,27 +500,26 @@ bool ibPropertyObject::ReadProperty(const ibDataNode& node)
 		wxDELETE(property.second);
 	m_properties.clear();
 
-	ReadCategory(m_category, node);
+	ibDataNode rows;
+	ibReadProtocolNode(answer, rows);
+	// Every choice's and type's picture asked for at once — not a call per choice read.
+	std::vector<wxString> pictures;
+	PicturesOf(rows, pictures);
+	ibProtocolPictureReceive(pictures);
+	Receive(m_category, rows);
 	return true;
 }
 
-void ibPropertyObject::ReadCategory(ibPropertyCategory* category, const ibDataNode& node)
+void ibPropertyObject::Receive(ibPropertyCategory* category, const ibDataNode& rows)
 {
-	for (const ibDataNode& row : node.Children()) {
+	for (const ibDataNode& row : rows.Children()) {
 		// A CATEGORY — a row with no class, its rows within.
-		if (row.FindField(wxT("Class")) == nullptr)
-			ReadCategory(CreatePropertyCategory(category, row.GetValue<wxString>(wxT("Name")),
-				row.GetValue<wxString>(wxT("Title"))), row);
+		if (row.FindField(ibProtocolName::Class) == nullptr)
+			Receive(CreatePropertyCategory(category, row.GetValue<wxString>(ibProtocolName::Name),
+				row.GetValue<wxString>(ibProtocolName::Title)), row);
 		else
-			CreateProperty<ibPropertyValue>(category, row);
+			CreateProperty<ibPropertySerializable>(category, row);
 	}
-}
-
-bool ibPropertyObject::WriteProperty(ibDataNode& node) const
-{
-	for (ibPropertyObject* other : m_attachedObjects)
-		other->WriteProperty(node);
-	return true;
 }
 
 unsigned int ibPropertyObject::GetPropertyIndex(const wxString& nameParam) const {

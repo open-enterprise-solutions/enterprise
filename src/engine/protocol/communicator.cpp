@@ -23,7 +23,7 @@ using json = nlohmann::json;
 bool IsAnswerWord(const std::string& name)
 {
 	return name == ibProtocolName::Frame || name == ibProtocolName::Since || name == ibProtocolName::Patch
-		|| name == ibProtocolName::Messages || name == ibProtocolName::Clear || name == ibProtocolName::Pictures
+		|| name == ibProtocolName::Messages || name == ibProtocolName::Clear
 		|| name == ibProtocolName::Client || name == ibProtocolName::Protocol || name == ibProtocolName::Features
 		|| name == ibProtocolName::Token;
 }

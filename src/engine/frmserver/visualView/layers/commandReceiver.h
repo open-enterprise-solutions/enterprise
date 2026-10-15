@@ -13,7 +13,7 @@
 // the command bar / a bar item). A projection INHERITS this so it IS-A door: it HOPS a command id path from the form
 // gate and, at the leaf, RUNS or READS a command; it supplies its own gate form (GetCommandGateForm), so there is no
 // temporary door and no form passed twice. It stays on the FRONTEND (it hands out the look a client draws — the
-// picture as described, which the host sends by its id: ibVisualHost::SendPicture); the backend base is the slice the
+// picture as described, sent by its id: ibClientFrame::SendPicture); the backend base is the slice the
 // command-source variant casts to, and this door IMPLEMENTS its WalkCommand (a walk that reads the leaf).
 class FRMSERVER_API ibFrontendCommandReceiver : public ibBackendCommandReceiver {
 public:

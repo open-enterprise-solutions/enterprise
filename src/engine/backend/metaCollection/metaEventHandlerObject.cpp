@@ -7,8 +7,7 @@
 #include "backend/metaData.h"
 #include "backend/objCtor.h"                    // ibCtorMetaValueType::GetEventModule
 #include "backend/system/value/valueType.h"     // ibValueTypeDescription::AllowValue — the source's gates
-#include "backend/backend_picture.h"            // ibBackendPicture::GetPicture — an event's picture in the Event list
-#include "core/picturePredefined.h"          // g_picEventCLSID
+#include "core/picturePredefined.h"          // g_picEventCLSID — an event's picture in the Event list
 
 //***********************************************************************
 //*                            Event handler                            *
@@ -87,9 +86,8 @@ std::map<wxString, ibValueMetaObjectEventHandler::ibSourceEvent> ibValueMetaObje
 
 bool ibValueMetaObjectEventHandler::FillEventList(ibPropertyList* prop)
 {
-	const wxBitmap picture = ibBackendPicture::GetPicture(g_picEventCLSID);   // the platform's picture of an event
-	for (const auto& event : GetSourceEvents())
-		prop->AppendItem(event.first, EventId(event.first), picture);
+	for (const auto& event : GetSourceEvents())   // each with the platform's picture of an event
+		prop->AppendItem(event.first, EventId(event.first), g_picEventCLSID);
 	return true;
 }
 

@@ -46,7 +46,7 @@ void ibDataReportTree::FillData(ibDataNode& root)
 
 	root.SetMetaId(commonMetadata->GetMetaID());
 	root.SetValue(wxT("Title"), commonMetadata->GetName());
-	root.SetValue(wxT("Picture"), m_frame->SendPicture(ibPictureDescription(g_metaReportCLSID), GetMetaData()));
+	root.SetValue(wxT("Picture"), ibClientFrame::SendPicture(g_metaReportCLSID));
 	root.SetValue(wxT("Type"), ClsidText(commonMetadata->GetClassType()));
 	root.SetValue(wxT("Synonym"), commonMetadata->GetSynonym());
 	// …and its header, the fields above the rows — its properties' rows, as the inspector writes them.
@@ -81,7 +81,7 @@ void ibDataReportTree::FillData(ibDataNode& root)
 	// forms
 	ibDataNode& forms = AppendGroupItem(root, g_metaFormCLSID, _("Forms"));
 	for (auto metaForm : commonMetadata->GetFormArrayObject()) {
-		if (metaForm->IsDeleted())
+		if (metaForm->IsDeleted() || metaForm == m_askedForm)   // gone, or not made yet: its kind is being asked
 			continue;
 		AppendItem(forms, metaForm);
 	}

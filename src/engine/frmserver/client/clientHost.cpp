@@ -17,6 +17,7 @@
 #include "backend/appHost.h"
 #include "backend/backend_exception.h"   // ibBackendException — a value the configuration cannot make
 #include "backend/backend_localization.h"   // the session's language — said with the frame
+#include "backend/backend_picture.h"   // ibBackendPicture::GetServerPicture — a picture asked for by its id
 #include "core/exception.h"
 #include "core/formatString.h"        // ibFormatString — a value presented through Format()'s codes
 #include "backend/databaseLayer/databaseQueryBuilder.h"
@@ -98,10 +99,10 @@ wxString DetachedUntil(std::int64_t deadlineMs)
 
 bool AskedResume(const ibDataNode& params)
 {
-	const ibDataValue* features = params.FindField(wxString::FromUTF8(ibProtocolName::Features));
+	const ibDataValue* features = params.FindField(ibProtocolName::Features);
 	if (features == nullptr || features->Kind() != ibDataKind::Array)
 		return false;
-	const wxString resume = wxString::FromUTF8(ibProtocolName::FeatureResume);
+	const wxString resume = ibProtocolName::FeatureResume;
 	for (const ibDataValue& item : features->AsArray()) {
 		if (item.Kind() == ibDataKind::String && item.AsString() == resume)
 			return true;
@@ -179,9 +180,9 @@ void OfferResume(ibDataNode& result, const wxString& id, int protocol, const wxS
 	result.SetValue(wxT("Client"), id);
 	result.SetValue(wxT("Protocol"), protocol);
 	result.AddField(wxT("Features"), ibDataValue::Array(std::vector<ibDataValue>{
-		ibDataValue::String(wxString::FromUTF8(ibProtocolName::FeatureResume)) }));
+		ibDataValue::String(ibProtocolName::FeatureResume) }));
 	if (!token.IsEmpty())
-		result.SetValue(wxString::FromUTF8(ibProtocolName::Token), token);
+		result.SetValue(ibProtocolName::Token, token);
 }
 
 // WHAT A CLIENT EXECUTES IS WHAT THE DESKTOP'S NAVIGATION DOES: an object of the configuration — a catalog, a
@@ -247,21 +248,21 @@ ibValueForm* FormOfCall(const ibClientFrame* frame, const wxString& key)
 // carries (Pending): to the control of the form it names, or to a tab's own view.
 void DispatchEvent(ibClientFrame* frame, const ibDataNode& call)
 {
-	const ibProtocolEvent event = static_cast<ibProtocolEvent>(call.GetValue<s32>(wxString::FromUTF8(ibProtocolName::Event)));
+	const ibProtocolEvent event = static_cast<ibProtocolEvent>(call.GetValue<s32>(ibProtocolName::Event));
 	const ibDataNode none;
-	const ibDataNode* const found = call.FindChild(wxString::FromUTF8(ibProtocolName::Args));
+	const ibDataNode* const found = call.FindChild(ibProtocolName::Args);
 	const ibDataNode& args = found != nullptr ? *found : none;
 	// A TAB'S OWN VIEW, named by the tab — what the person did in a text, not in a control of a form; by the tab, not the
 	// active one, as it may be handed over when the tab is being closed.
-	const s32 tabId = call.GetValue<s32>(wxString::FromUTF8(ibProtocolName::Tab));
+	const s32 tabId = call.GetValue<s32>(ibProtocolName::Tab);
 	if (tabId != 0) {
 		if (ibClientChildFrame* const tab = frame->Tab(frame->FindTab(tabId))) {
 			if (ibView* const view = tab->GetView())
 				view->OnClientEvent(event, args);
 		}
 	}
-	else if (ibValueForm* const form = FormOfCall(frame, call.GetValue<wxString>(wxString::FromUTF8(ibProtocolName::Form))))
-		form->DispatchEvent(call.GetValue<s32>(wxString::FromUTF8(ibProtocolName::Control)), event, args);
+	else if (ibValueForm* const form = FormOfCall(frame, call.GetValue<wxString>(ibProtocolName::Form)))
+		form->DispatchEvent(call.GetValue<s32>(ibProtocolName::Control), event, args);
 }
 
 } // namespace
@@ -346,7 +347,7 @@ bool ibClientHost::ResumeByToken(const ibDataNode& params, ibDataNode& result, i
 {
 	unsigned char raw[ibSessionToken::kBytes];
 	unsigned char digest[ibSessionToken::kDigest];
-	const wxString token = params.GetValue<wxString>(wxString::FromUTF8(ibProtocolName::Token));
+	const wxString token = params.GetValue<wxString>(ibProtocolName::Token);
 	const auto refuse = [&refusal, &error](const wxString& text) {
 		refusal = ibProtocolRefusal::LoginRefused;
 		error = text;
@@ -451,7 +452,7 @@ bool ibClientHost::RememberToken(Client& client, ibDataNode& result, ibProtocolR
 		client.hasToken = true;
 	}
 	// The plaintext, once, on this answer. It is not kept.
-	result.SetValue(wxString::FromUTF8(ibProtocolName::Token), ibSessionToken::Hex(raw.data(), raw.size()));
+	result.SetValue(ibProtocolName::Token, ibSessionToken::Hex(raw.data(), raw.size()));
 	return true;
 }
 
@@ -580,10 +581,21 @@ void ibClientHost::NotifyChanged(const ibClientInstance* instance)
 
 wxString ibClientHost::Call(const wxString& text, const void* connection, const wxString& address)
 {
+	// ⭐⭐ A CALL'S TYPES ARE ITS SESSION'S (Max, 2026-10-15: the metadata is taken from the session). A node a client hands back
+	// names its type by word (NodeType) — the form editor's form, whole — and the word is a class of the configuration
+	// the CALLER's session works in. This thread works for none yet: the thread's lookup (activeMetaData) threw "works
+	// for no base" at every such call. So the call is read first for who calls (its Client), then read again in the
+	// configuration of that client's session.
 	ibRpcRequest request;
 	wxString error;
-	if (!ibRpcParseRequest(text, request, error))
+	if (!ibRpcParseRequest(text, request, error, nullptr))
 		return ibRpcWriteError(ibDataValue(), ibRpcError::Parse, error);
+	if (const std::shared_ptr<Client> caller = FindClient(request.m_params.GetValue<wxString>(ibProtocolName::Client))) {
+		if (const std::shared_ptr<ibSession> session = caller->instance->ShareSession()) {
+			if (!ibRpcParseRequest(text, request, error, session->GetMetaData()))
+				return ibRpcWriteError(ibDataValue(), ibRpcError::Parse, error);
+		}
+	}
 
 	const ibProtocolMethod method = ibProtocolMethodFromName(request.m_method.utf8_str());
 	if (method == ibProtocolMethod::Unknown) {
@@ -597,8 +609,8 @@ wxString ibClientHost::Call(const wxString& text, const void* connection, const 
 	// does not take the slot: the lost call is retried after login {Token}, with its own id. Who may call is
 	// decided before the slot is read, so a detached client does not hand its last answer to whoever names it.
 	const bool tokenLogin = method == ibProtocolMethod::Login
-		&& request.m_params.FindField(wxString::FromUTF8(ibProtocolName::User)) == nullptr
-		&& request.m_params.FindField(wxString::FromUTF8(ibProtocolName::Token)) != nullptr;
+		&& request.m_params.FindField(ibProtocolName::User) == nullptr
+		&& request.m_params.FindField(ibProtocolName::Token) != nullptr;
 	struct Slot {
 		std::shared_ptr<Client> client;
 		bool                    owner = false;   // set only by the call that sets replyPending
@@ -613,7 +625,7 @@ wxString ibClientHost::Call(const wxString& text, const void* connection, const 
 	} slot;
 	unsigned char callDigest[32] = {};
 	if (request.WantsAnswer() && !tokenLogin && method != ibProtocolMethod::Login) {
-		slot.client = FindClient(request.m_params.GetValue<wxString>(wxString::FromUTF8(ibProtocolName::Client)));
+		slot.client = FindClient(request.m_params.GetValue<wxString>(ibProtocolName::Client));
 		if (slot.client) {
 			std::unique_lock<std::mutex> lock(slot.client->lock);
 			if (!MayCall(slot.client->connectionless, slot.client->connection.load(std::memory_order_acquire),
@@ -705,8 +717,8 @@ bool ibClientHost::Call(ibProtocolMethod method, const ibDataNode& params, ibDat
 		refuse(ibProtocolRefusal::NotFound, wxT("no such method"));
 	}
 	else if (method == ibProtocolMethod::Login) {
-		const bool byToken = params.FindField(wxString::FromUTF8(ibProtocolName::User)) == nullptr
-			&& params.FindField(wxString::FromUTF8(ibProtocolName::Token)) != nullptr;
+		const bool byToken = params.FindField(ibProtocolName::User) == nullptr
+			&& params.FindField(ibProtocolName::Token) != nullptr;
 		if (byToken) {
 			// The same client. No frame is drawn, and the frame number stays, so the next frame {Since} is a patch.
 			done = ResumeByToken(params, result, refusal, error, connection);
@@ -761,7 +773,7 @@ bool ibClientHost::Call(ibProtocolMethod method, const ibDataNode& params, ibDat
 				// the slot. RememberToken has put Token on the answer, once.
 				if (AskedResume(params))
 					client->dedupe = true;
-				OfferResume(result, id, client->protocol, result.GetValue<wxString>(wxString::FromUTF8(ibProtocolName::Token)));
+				OfferResume(result, id, client->protocol, result.GetValue<wxString>(ibProtocolName::Token));
 			}
 		}
 		}
@@ -772,7 +784,7 @@ bool ibClientHost::Call(ibProtocolMethod method, const ibDataNode& params, ibDat
 			std::vector<ibDataValue> names;
 			for (const ibUserInfo::Brief& user : ibUserInfo::ListAll())
 				names.push_back(ibDataValue::String(user.m_strUserName));
-			result.AddField(wxString::FromUTF8(ibProtocolName::Users), ibDataValue::Array(std::move(names)));
+			result.AddField(ibProtocolName::Users, ibDataValue::Array(std::move(names)));
 			done = true;
 		}
 		catch (const ibCoreException& err) {
@@ -816,7 +828,7 @@ bool ibClientHost::Call(ibProtocolMethod method, const ibDataNode& params, ibDat
 			// ⭐ WHERE THE PERSON IS, held by the client (protocol 3, Pending) — the latest of each, in the order it came,
 			// done before the call that carries it: a press reads the row the cursor stands on. One that fails is said in
 			// the journal; the call goes on.
-			if (const ibDataValue* const pending = params.FindField(wxString::FromUTF8(ibProtocolName::Pending))) {
+			if (const ibDataValue* const pending = params.FindField(ibProtocolName::Pending)) {
 				ibClientFrame* const frame = client->instance->GetFrame();
 				const std::shared_ptr<ibSession> session = client->instance->ShareSession();
 				if (frame != nullptr && session != nullptr && pending->Kind() == ibDataKind::Array) {
@@ -971,11 +983,12 @@ bool ibClientHost::Call(ibProtocolMethod method, const ibDataNode& params, ibDat
 							ibClientChildFrame* const tab = frame->Tab(frame->FindTab(tabId));
 							ibView* const view = tab != nullptr ? tab->GetView() : nullptr;
 							done = view != nullptr && view->Fetch(fetchRequest, result);
-							return;
 						}
-						ibValueForm* const form = FormOfCall(frame, formKey);
-						ibValueFrame* const control = form != nullptr ? form->FindControlByID(controlId) : nullptr;
-						done = control != nullptr && control->Fetch(fetchRequest, result);
+						else {
+							ibValueForm* const form = FormOfCall(frame, formKey);
+							ibValueFrame* const control = form != nullptr ? form->FindControlByID(controlId) : nullptr;
+							done = control != nullptr && control->Fetch(fetchRequest, result);
+						}
 					}).get();
 				}
 				if (!done)
@@ -1013,6 +1026,34 @@ bool ibClientHost::Call(ibProtocolMethod method, const ibDataNode& params, ibDat
 					}).get();
 					if (done)
 						result.SetValue(wxT("Text"), text);
+				}
+			}
+			else if (method == ibProtocolMethod::Picture) {
+				// THE PICTURES OF THOSE IDS — an answer names a picture by its id alone (ibClientFrame::SendPicture), and a
+				// client that has not got it asks for it here, several at once: a backend one by its number, a configuration's
+				// by its guid, of the session's configuration; made on the session's worker. One there is none of comes back
+				// empty — the client keeps that too, and does not ask again.
+				std::shared_ptr<ibSession> session = client->instance->ShareSession();
+				const ibDataValue* const asked = params.FindField(ibProtocolName::Pictures);
+				if (session == nullptr)
+					refuse(ibProtocolRefusal::NoSession, wxT("the client has no session"));
+				else if (asked == nullptr || asked->Kind() != ibDataKind::Array)
+					refuse(ibProtocolRefusal::BadParameter, wxT("pictures are asked for by a list of their ids"));
+				else {
+					session->Submit([&session, asked, &result]() {
+						const ibMetaData* const metaData = session->GetMetaData();
+						ibDataNode& pictures = result.Child(ibProtocolName::Pictures);
+						for (const ibDataValue& id : asked->AsArray()) {
+							const wxString text = id.AsString();
+							unsigned long long number = 0;
+							const ibPictureDescription picture = text.ToULongLong(&number)
+								? ibPictureDescription(static_cast<ibPictureID>(number)) : ibPictureDescription(ibGuid(text));
+							ibDataNode& sent = pictures.AddChild(0, 0);
+							sent.AddField(ibProtocolName::Id, id);
+							sent.SetValue(ibProtocolName::Picture, ibBackendPicture::GetServerPicture(picture, metaData).GetData());
+						}
+					}).get();
+					done = true;
 				}
 			}
 			else if (method == ibProtocolMethod::Upload) {
@@ -1342,7 +1383,7 @@ void ibClientHost::DrawFrame(ibClientFrame* frame, ibDataNode& state, ibDataNode
 		node.SetValue(wxT("Title"), temp->GetDescription());
 		node.SetValue(wxT("Mask"), temp->GetFileFilter());
 		node.SetValue(wxT("Extension"), temp->GetDefaultExtension());
-		node.SetValue(wxT("Picture"), frame->SendPicture(ibPictureDescription(temp->GetPictureID()), nullptr));
+		node.SetValue(wxT("Picture"), ibClientFrame::SendPicture(temp->GetPictureID()));
 		if ((temp->GetFlags() & ibTEMPLATE_ONLY_OPEN) != 0)
 			node.SetValue(wxT("OnlyOpen"), true);
 	}
@@ -1371,13 +1412,13 @@ void ibClientHost::DrawFrame(ibClientFrame* frame, ibDataNode& state, ibDataNode
 		ibClientChildFrame* const tab = frame->Tab(i);
 		ibDataNode& node = tabs.AddChild(0, tab->GetId());
 		node.SetValue(wxT("Title"), tab->GetTitle());
-		if (tab->GetIcon().IsOk())
-			node.SetValue(wxT("Icon"), wxString(tab->GetIcon().GetData()));
+		if (!tab->GetIcon().IsEmptyPicture())
+			node.SetValue(wxT("Icon"), ibClientFrame::SendPicture(tab->GetIcon()));
 		if (tab->IsLocked())
 			node.SetValue(wxT("Locked"), true);
 		// What its view shows, when it is no form — the client draws it with the view of its own it has for that.
 		if (const ibView* const view = tab->GetView()) {
-			if (view->GetViewKind() != ibClientViewKind::Form)
+			if (view->GetViewKind() != ibProtocolViewKind::Form)
 				node.SetValue(wxT("Kind"), static_cast<s32>(view->GetViewKind()));
 		}
 		// What its document saves as — the named lines of a file dialog, Title and Mask each, as Templates are — and its
@@ -1436,18 +1477,6 @@ void ibClientHost::DrawFrame(ibClientFrame* frame, ibDataNode& state, ibDataNode
 
 	ibJournalInfo(wxT("client"), wxT("    the frame: menus %lld ms, its own %lld ms, tabs %lld ms, the view %lld ms"),
 		menus - began, frameDrawn - menus, tabsDrawn - viewDrawn, viewDrawn - frameDrawn);
-
-	// …AND THE PICTURES THE FRAME NAMES THAT THE CLIENT WAS NOT GIVEN YET — beside the events, never patched: given once,
-	// the client keeps them, and the frame names them by their ids (ibClientFrame::SendPicture).
-	const std::vector<ibClientFrame::PendingPicture> pictures = frame->DrainPendingPictures();
-	if (!pictures.empty()) {
-		ibDataNode& sent = events.Child(wxT("Pictures"));
-		for (const ibClientFrame::PendingPicture& picture : pictures) {
-			ibDataNode& node = sent.AddChild(0, 0);
-			node.SetValue(wxT("Id"), picture.id);
-			node.SetValue(wxT("Picture"), picture.picture);
-		}
-	}
 }
 
 //*******************************************************************************************

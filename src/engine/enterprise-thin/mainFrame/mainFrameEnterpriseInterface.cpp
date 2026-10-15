@@ -38,6 +38,20 @@ static wxIcon IconOf(const wxString& base64)
 	return icon;
 }
 
+// The pictures the sections name — each section's, its blocks', their items' — by their ids: asked of the server at
+// once, not a call per link drawn.
+static void PicturesOf(const ibProtocolNode& sections, std::vector<wxString>& pictures)
+{
+	for (const ibProtocolNode& section : sections.Children()) {
+		pictures.push_back(section.GetString(ibProtocolName::Picture));
+		for (const ibProtocolNode& block : section.FindChild(ibProtocolName::Blocks).Children()) {
+			pictures.push_back(block.GetString(ibProtocolName::Picture));
+			for (const ibProtocolNode& item : block.Children())
+				pictures.push_back(item.GetString(ibProtocolName::Icon));
+		}
+	}
+}
+
 class ibSubSystemWindow : public wxWindow {
 
 	// ----------------------------------------------------------------------------
@@ -868,6 +882,9 @@ public:
 		m_open(std::move(open))
 	{
 		// The sections the server shows this person — only those they may use come.
+		std::vector<wxString> pictures;
+		PicturesOf(shown.FindChild(ibProtocolName::Sections), pictures);
+		ibProtocolPictureReceive(pictures);
 		for (const ibProtocolNode& section : shown.FindChild(ibProtocolName::Sections).Children())
 			CreateSubMenu(section);
 

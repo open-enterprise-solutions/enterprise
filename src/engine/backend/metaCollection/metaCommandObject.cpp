@@ -203,7 +203,7 @@ bool ibValueMetaObjectCommand::FillGroupList(ibPropertyList* prop)
 			continue;
 		// The group's own picture when it has one — the one it will stand with; otherwise the kind's.
 		prop->AppendItem(group->GetName(), group->GetLabel(), group->GetMetaID(),
-			group->IsEmptyPicture() ? wxBitmap(group->GetIcon()) : group->GetPictureAsBitmap(), group);
+			group->IsEmptyPicture() ? ibPictureDescription(group->GetClassType()) : group->GetPictureDesc(), group);
 	}
 	return true;
 }

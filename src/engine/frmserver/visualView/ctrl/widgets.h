@@ -51,11 +51,10 @@ private:
 	void OnButtonPressed(size_t member);
 
 	// ⭐ THE GROUP'S SUBMENU, walked ONCE for both ends: the frame (`node` given — the tree with captions and
-	// pictures, sent by the host, a nested group as a sub-node, a leaf carrying its `Member` place) and the press
-	// (`node` null, no host — only the leaves, in the same order). Two walks would be two orders, and a press would
-	// run a neighbour.
+	// pictures by their ids, a nested group as a sub-node, a leaf carrying its `Member` place) and the press (`node`
+	// null — only the leaves, in the same order). Two walks would be two orders, and a press would run a neighbour.
 	void WalkGroup(const std::vector<ibFrontendCommandReceiver::ibCommandSubItem>& subs,
-		std::vector<ibCommandDescription>& leaves, ibDataNode* node, class ibVisualHost* host) const;
+		std::vector<ibCommandDescription>& leaves, ibDataNode* node) const;
 
 	ibPropertyCategory* m_categoryButton = ibPropertyObject::CreatePropertyCategory(wxT("Button"), _("Button"));
 	ibPropertyTString* m_propertyTitle = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryButton, wxT("Title"), _("Title"),
@@ -266,6 +265,8 @@ class ibValueTextCtrl : public ibValueWindow,
 	//get title
 	virtual wxString GetControlTitle() const;
 
+	// Just made by the designer, with no source — bound to a fresh attribute (the desktop's).
+	virtual void OnCreated(ibVisualHost* host, bool firstCreated) override;
 	// The caption as resolved, the value as text through the field's format, and whether it is read-only.
 	virtual void OnUpdate(ibDataNode& state, ibVisualHost* host) override;
 
@@ -467,6 +468,8 @@ class ibValueCheckbox : public ibValueWindow,
 	//get title
 	virtual wxString GetControlTitle() const;
 
+	// Just made by the designer, with no source — bound to a fresh attribute (the desktop's).
+	virtual void OnCreated(ibVisualHost* host, bool firstCreated) override;
 	// The caption as resolved, whether the box is checked and whether it is read-only.
 	virtual void OnUpdate(ibDataNode& state, ibVisualHost* host) override;
 

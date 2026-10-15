@@ -2,7 +2,7 @@
 #include "core/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "frmserver/visualView/ctrl/form.h"           // ibValueForm — GetOwnerForm (the command-door gate)
 #include "frmserver/visualView/layers/commandBar.h"   // GatherFormCommands — the icon/caption source the navigator uses
-#include "frmserver/visualView/visualHost.h"          // ibVisualHost::SendPicture — the picture, by its id
+#include "frmserver/client/clientFrame.h"             // ibClientFrame::SendPicture — the picture, by its id
 
 
 //****************************************************************************
@@ -51,12 +51,11 @@ void ibValueButton::OnUpdate(ibDataNode& state, ibVisualHost* host)
 		                                      : ibRepresentation::ibRepresentation_PictureAndText;
 
 	// The caption is always written — it names the button even when only the picture is shown; the
-	// representation says which of the two are shown. The picture travels by its id (the host sends it once), and
-	// only when it is shown at all.
+	// representation says which of the two are shown. The picture travels by its id, and only when it is shown at all.
 	state.SetValue(wxT("Caption"), title);
 	state.SetValue(wxT("Representation"), static_cast<s32>(rep));
 	if (rep != ibRepresentation::ibRepresentation_Text && !picture.IsEmptyPicture())
-		state.SetValue(wxT("Picture"), host->SendPicture(picture));
+		state.SetValue(wxT("Picture"), ibClientFrame::SendPicture(picture));
 
 	// A button carries ONLY a command — with none bound, OR the bound command DELETED (its path no longer resolves
 	// through the door), it has nothing to do, so it is NOT shown. The orphaned control still lives in the object
@@ -74,23 +73,23 @@ void ibValueButton::OnUpdate(ibDataNode& state, ibVisualHost* host)
 	std::vector<ibFrontendCommandReceiver::ibCommandSubItem> subs;
 	if (cmdResolved && ResolveSubCommands(cmdDesc, subs)) {
 		std::vector<ibCommandDescription> leaves;
-		WalkGroup(subs, leaves, &state.Child(wxT("Members")), host);
+		WalkGroup(subs, leaves, &state.Child(wxT("Members")));
 	}
 }
 
 void ibValueButton::WalkGroup(const std::vector<ibFrontendCommandReceiver::ibCommandSubItem>& subs,
-	std::vector<ibCommandDescription>& leaves, ibDataNode* node, ibVisualHost* host) const
+	std::vector<ibCommandDescription>& leaves, ibDataNode* node) const
 {
 	for (const ibFrontendCommandReceiver::ibCommandSubItem& sub : subs) {
 		ibDataNode* member = node != nullptr ? &node->AddChild(0, 0) : nullptr;
 		if (member != nullptr) {
 			member->SetValue(wxT("Caption"), sub.caption);
 			if (!sub.picture.IsEmptyPicture())
-				member->SetValue(wxT("Picture"), host->SendPicture(sub.picture));
+				member->SetValue(wxT("Picture"), ibClientFrame::SendPicture(sub.picture));
 		}
 		std::vector<ibFrontendCommandReceiver::ibCommandSubItem> nested;
 		if (ResolveSubCommands(sub.desc, nested)) {   // a GROUP -> its own submenu
-			WalkGroup(nested, leaves, member, host);
+			WalkGroup(nested, leaves, member);
 			continue;
 		}
 		if (member != nullptr)                        // a LEAF -> a place the press names

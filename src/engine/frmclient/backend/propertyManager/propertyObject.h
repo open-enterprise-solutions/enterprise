@@ -14,6 +14,7 @@ class FRMCLIENT_API ibProperty;
 class FRMCLIENT_API ibEvent;
 class FRMCLIENT_API ibDataNode;   // serialize/dataBuilder.h — universal structure node
 class FRMCLIENT_API ibDataValue;  // serialize/dataBuilder.h — a node value (scalar / Child)
+class ibProtocolNode;             // protocol/protocolNode.h — what the server answered
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -28,6 +29,8 @@ template <class T> class ibValuePtr;
 
 #include "core/fileSystem/fs.h"
 #include "frmclient/backend/backend_exception.h"   // ibBackendCoreException — a cell that is not what it is asked for raises
+
+#include <memory>   // enable_shared_from_this — a reference to the one shown, kept by an editor
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -231,7 +234,7 @@ public:
 	virtual bool IsEditable() const;
 
 	// The type it is shown by (ibPropertyRegistry): its class, named as the server names one — the server's row says
-	// its own (ibPropertyValue).
+	// its own (ibPropertySerializable).
 	virtual wxString GetType() const;
 
 	////////////////////
@@ -502,7 +505,9 @@ private:
 	ibPropertyObject* m_owner;
 };
 
-class FRMCLIENT_API ibPropertyObject {
+// Held by a shared pointer where more than one keeps it — a tree's metaobject, kept too by the editor opened from it
+// (ibCodeEditor): the reference is taken from the pointer the inspector shows (weak_from_this); a control's is none.
+class FRMCLIENT_API ibPropertyObject : public std::enable_shared_from_this<ibPropertyObject> {
 protected:
 
 	template <typename typeProp, typename... Args>
@@ -624,6 +629,12 @@ public:
 		return (*properties_iterator).second;
 	}
 
+	// ⭐ THE SERVER'S ANSWER TAKEN IN — its rows as the server's inspector writes them (frmserver ibPropertyInspector, the
+	// schema Properties): its categories (Name, Title, their rows) and properties (an ibPropertySerializable each), in
+	// place of those it had. The server sends what is to be seen, no more and no less; the client knows no property of its
+	// own.
+	bool Receive(const ibProtocolNode& answer);
+
 	/**
 	* Returns the type of the object.
 	*
@@ -636,12 +647,10 @@ public:
 	*/
 	virtual int GetComponentType() const { return COMPONENT_TYPE_ABSTRACT; }
 
-	// ⭐ THE ROWS — its properties as the server has them (frmserver ibPropertyInspector, the schema Properties): its
-	// categories (Name, Title, their rows) and properties (an ibPropertyValue each), in place of those it had. The server
-	// sends what is to be seen, no more and no less. The client knows no property of its own: whoever shows one — a
-	// metaobject, a form's control — asks the server through a door of its own and reads the answer here.
-	virtual bool ReadProperty(const ibDataNode& node);
-	virtual bool WriteProperty(ibDataNode& node) const;
+	// ⭐ WHAT THE SERVER SAYS OF IT, received as it is shown (the inspector's Create): one that asks the server of its own —
+	// a metaobject, a form's attribute — asks here and takes the answer in (Receive(answer)); one whose rows came with its
+	// form's answer has nothing to ask. False: no answer.
+	virtual bool Receive() { return true; }
 
 	// The front's ONE refresh entry — sent per render and after an edit, NOT per property.
 	// Default fans out to both halves; override a half to push what that kind's state
@@ -757,8 +766,8 @@ protected:
 
 private:
 
-	// One category's rows, into `category` — its properties and its categories.
-	void ReadCategory(ibPropertyCategory* category, const ibDataNode& node);
+	// …the rows under one category, into it — its properties and its categories.
+	void Receive(ibPropertyCategory* category, const ibDataNode& rows);
 
 	std::map<wxString, ibProperty*> m_properties;
 	std::map<wxString, ibEvent*> m_events;

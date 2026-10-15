@@ -21,7 +21,7 @@ public:
 	// THE ROWS, into the frame's MetaData — the tree as it stands.
 	virtual void OnDraw(ibDataNode& frame) override;
 
-	virtual ibClientViewKind GetViewKind() const override { return ibClientViewKind::DataProcessor; }
+	virtual ibProtocolViewKind GetViewKind() const override { return ibProtocolViewKind::DataProcessor; }
 
 	ibDataProcessorTree* GetMetaTree() const { return m_metaTree.get(); }
 
@@ -37,7 +37,7 @@ class FRMSERVER_API ibDataProcessorEditDocument : public ibMetaDataDocument {
 public:
 
 	// Its object's picture — its tab's (the desktop's).
-	virtual ibPicture GetIcon() const override;
+	virtual ibPictureDescription GetIcon() const override;
 
 	ibDataProcessorEditDocument() : ibMetaDataDocument() { m_childDoc = false; }
 

@@ -123,8 +123,36 @@ namespace ibProtocolName {
 	inline constexpr const char* Default   = "Default";   // …the entry restored on open
 	inline constexpr const char* Done      = "Done";      // …the shelf asked again: how the act before went; a print's answer
 	inline constexpr const char* Schedule  = "Schedule";  // a schedule's editor: the schedule, in its stored form
-	inline constexpr const char* Controls   = "Controls";     // a form editor's Apply: the form's controls, each by its Control id
-	inline constexpr const char* Classes    = "Classes";      // …the controls' classes: Name, Picture
+	inline constexpr const char* Controls   = "Controls";     // a form designer's tab (ibProtocolViewKind::FormDesigner):
+	                                                          // the form's controls' rows, each by its Control id
+	inline constexpr const char* Classes    = "Classes";      // …the classes a control may be made of, as that tab's fetch
+	                                                          // writes them
+	inline constexpr const char* Node       = "Node";         // …a class's new control, as it is put on the form
+	// A form designer's attribute tree — the form's attributes, a row each (its node's id the attribute's) — Name, Main,
+	// Path, Targets, TableSection, DropControl, HasComposition; a row under one (the tab's Fetch Composition) the same,
+	// and UnderList. A door about one names it by Attribute (0: a new one).
+	inline constexpr const char* AttributeTree  = "AttributeTree";
+	inline constexpr const char* Attribute      = "Attribute";
+	inline constexpr const char* Main           = "Main";             // …the form's main attribute
+	inline constexpr const char* Path           = "Path";             // …the hops from the attribute — children Id, Type
+	inline constexpr const char* TableSection   = "TableSection";     // …a table or a section: its fields are columns
+	inline constexpr const char* DropControl    = "DropControl";      // …the class a drop of it makes (text, a clsid)
+	inline constexpr const char* HasComposition = "HasComposition";   // …it has rows under it, asked for when opened
+	inline constexpr const char* UnderList      = "UnderList";        // …it is in a list: a column, not a source
+	// …and its command tree — the desktop's three sections (the form's own commands first, then the standard and the
+	// global ones), a row each with its Name; under one, a source's sub-group rows and the command rows — Name, Picture,
+	// CommandPath, Kind (ibInterfaceCommandType), a form command's row its node id the command's. A door about a form
+	// command names it by FormCommand (0: a new one).
+	inline constexpr const char* CommandTree    = "CommandTree";
+	inline constexpr const char* FormCommand    = "FormCommand";
+	inline constexpr const char* CommandPath    = "CommandPath";      // …the hops of a command — children Id
+	// …and where the form's node keeps them, as the engine writes it (ibValueForm::WriteAttributes, WriteFormCommands):
+	// a node each, its id the attribute's, the command's — what a copy of one is.
+	inline constexpr const char* Attributes     = "Attributes";
+	inline constexpr const char* FormCommands   = "FormCommands";
+	// …and a control's node, its layers (ibValueWindowComposite::WriteData): the command bar (CommandBar — its AutoFill,
+	// a child per command).
+	inline constexpr const char* Layers         = "Layers";
 	inline constexpr const char* Position   = "Position";     // …where a control stands among its siblings
 	inline constexpr const char* HasSetting = "HasSetting";   // …a setting of the person's is saved for this form
 	inline constexpr const char* Result     = "Result";       // …how a save or a reset went (ibProtocolFormSettingsResult)
@@ -272,12 +300,15 @@ namespace ibProtocolName {
 	// A command bar — the State's CommandBar of a form, a table, a spreadsheet: its entries (Id, Caption, Picture,
 	// Tooltip, Enabled, Kind; a separator; a group's commands as its children), pressed back as Command {Id, Member}.
 	inline constexpr const char* CommandBar  = "CommandBar";
+	// …and in a form editor's control rows (Controls), the bar's rows (CommandBar — and Items, each command's of it by its
+	// Name) and a new command's, with the node it is (Node) — the bar's commands the client adds.
+	inline constexpr const char* CommandBarItem = "CommandBarItem";
 	inline constexpr const char* ContextMenu = "ContextMenu";   // a table's: its standard commands (Id, Caption, Picture,
 	                                                            // Enabled), picked back as Action {Id}
 
 	// A table: its columns (and their groups) in the view, its rows fetched — {Direction, Anchor, Parent, Count} → rows
-	// by their handles (Container, Group, ReadOnly, Picture) of cells by the columns' ids (Text, Checked, Number), End,
-	// CurrentRow; Pictures the rows' pictures the client is given once (Id, Picture).
+	// by their handles (Container, Group, ReadOnly, Picture — by its id) of cells by the columns' ids (Text, Checked,
+	// Number), End, CurrentRow.
 	inline constexpr const char* Header           = "Header";
 	inline constexpr const char* HeaderHeight     = "HeaderHeight";
 	inline constexpr const char* Footer           = "Footer";
@@ -411,7 +442,7 @@ enum class ibProtocolMethod {
 	                // when it is not the tab's own (a start page's cell)
 	Respond,        // {Client, Id, Response} — Id: the pending request's
 	Fetch,          // {Client, Control, Request[, Form]} → what the control's Fetch writes: a table's rows, a sheet
-	Activate,       // {Client, Tab} — Tab: the tab's id, its NodeId in the frame's Tabs
+	Activate,      // {Client, Tab} — Tab: the tab's id, its NodeId in the frame's Tabs
 	Close,          // {Client, Tab}
 	Upload,         // {Client, Name, Data} → File: a new temporary file, Data its first part; {Client, File, Data} → File:
 	                // its next part (Data: base64)
@@ -422,6 +453,11 @@ enum class ibProtocolMethod {
 	                // (Command: ibProtocolCommand); one not enabled now is refused
 	Presentation,   // {Client, Value[, Format]} → Text: a value as a person reads it, the server formatting it — Value:
 	                // as the server serialises a value (a field's state carries one); Format: the codes Format() takes
+	// ⭐ A PICTURE IS NAMED BY ITS ID, EVERYWHERE — an answer carries the id alone, and the picture is loaded by this, apart:
+	Picture,        // {Client, Pictures} → Pictures: the pictures of those ids, each {Id, Picture} (PNG, base64) — a backend
+	                // one by its number (a registered picture, a class's own: its class id), a configuration's by its guid;
+	                // several at once, asked by a client that has not got them and kept by it. One there is none of comes
+	                // back empty, not refused
 };
 
 // The name a method goes by on the wire.
@@ -444,14 +480,16 @@ inline const char* ibProtocolMethodName(ibProtocolMethod method)
 	case ibProtocolMethod::Download:     return "download";
 	case ibProtocolMethod::Open:         return "open";
 	case ibProtocolMethod::Command:      return "command";
-	case ibProtocolMethod::Presentation: return "presentation";	}
+	case ibProtocolMethod::Presentation: return "presentation";
+	case ibProtocolMethod::Picture:      return "picture";
+	}
 	return "";
 }
 
 // …and the method a name means; Unknown for a name the protocol does not have.
 inline ibProtocolMethod ibProtocolMethodFromName(const char* name)
 {
-	for (int method = static_cast<int>(ibProtocolMethod::Login); method <= static_cast<int>(ibProtocolMethod::Presentation); ++method) {
+	for (int method = static_cast<int>(ibProtocolMethod::Login); method <= static_cast<int>(ibProtocolMethod::Picture); ++method) {
 		if (std::strcmp(name, ibProtocolMethodName(static_cast<ibProtocolMethod>(method))) == 0)
 			return static_cast<ibProtocolMethod>(method);
 	}
@@ -733,6 +771,54 @@ enum class ibProtocolViewKind : int {
 	                   // ibProtocolModuleRequest); what was typed — event {Tab, Event: Input} on the first key while not
 	                   // Modified, then {Tab, Event: Change, Args: {Text}}; its commands —
 	                   // event {Tab, Event: Command, Args: {Id}} (ibProtocolModuleCommand)
+	FormDesigner  = 8, // the designer's editor of a form — a module's tab (State, its requests, its Input and Change {Text})
+	                   // whose form the CLIENT edits, as the desktop's editor did: fetch {Tab} — {Text, Form — the form's
+	                   // node as a frame draws it, Controls — each control's rows (Control, as the inspector writes them),
+	                   // Classes — the classes a control may be made of (Name, Picture, Type; Visible false — not offered
+	                   // to place; Menu — the classes a control of it adds in itself, Name and Title each): a control is
+	                   // made and pasted by the server (ibProtocolFormDesignerRequest Control), AttributeTree,
+	                   // CommandTree}; what else —
+	                   // ibProtocolFormDesignerRequest; the form handed back whole — event {Tab, Event: Change, Args: {Form}}
+};
+
+// WHAT A FORM'S TAB IS ASKED besides its module's — `fetch {Tab, Request: {Kind, …}}`, numbered past the module's
+// (ibProtocolModuleRequest), whose requests the same tab answers: what only the server knows of a form edited on the
+// client. Where the answer carries the form, it is the form as the server made it — {Form, Controls, AttributeTree,
+// CommandTree} as the tab's fetch writes them, and Selected, the control to work on — and the client puts it in as an
+// edit of its own: undone on the client.
+enum class ibProtocolFormDesignerRequest : int {
+	BoundControl   = 11,   // {Form, Control, Path} — a control bound to the source at the path's end, dropped on that
+	                       // control → the form
+	CommandControl = 12,   // {Form, Control, Value — {CommandPath, Kind}, as the command tree's row [, CommandBar]} — a
+	                       // control running the command, dropped on that control (CommandBar: on its bar — an item of
+	                       // it) → the form
+	Rows           = 13,   // {Form — the form as it stands, Control} — that control after an edit of its properties: Node
+	                       // — as the server draws it (its State — enabled, shown), Controls — its rows (some shown or
+	                       // hidden)
+	Composition    = 14,   // {Path, Targets, UnderList} of an attribute row → Rows, the rows under it (AttributeTree's)
+	Attribute      = 15,   // {Form, Command (ibProtocolFormDesignerCommand), Attribute, Column, Name, Value} — a door of
+	                       // the attribute tree (Column — of a value table's column) → the form, Attribute and Column —
+	                       // the one to show
+	FormCommand    = 16,   // {Form, Command, FormCommand, Name, Value} — a door of the command tree → the form,
+	                       // FormCommand — the one to show
+	Properties     = 17,   // {Form, Attribute [, Column] | FormCommand} — its rows, as the inspector writes them
+	Form           = 18,   // {Form} → the form as the server draws it — after an edit of the client's that changes what
+	                       // the server draws of it (a command bar's commands)
+	Control        = 19,   // {Form, Control, Class} — a control of that class made in that control (none: the form), as
+	                       // the desktop's palette made it: one that binds to a source, bound to a fresh attribute; {Form,
+	                       // Control, Command Paste, Value} — the copied one put there → the form, Selected — the one put
+};
+
+// A door of a form designer's tree — an attribute's, a form command's (ibProtocolFormDesignerRequest Attribute, FormCommand);
+// a control's paste (Control).
+enum class ibProtocolFormDesignerCommand : int {
+	Create  = 1,   // a new one, uniquely named
+	Remove  = 2,
+	Paste   = 3,   // {Value — a node the client copied of the form's Attributes, FormCommands; a control's, as the form
+	               // draws it, in its sizer item} — a new one of it: its ids the server's, its names unique on the form
+	Set     = 4,   // {Name, Value} — its property (or event) of that name given that value, as the property's node holds it
+	SetMain = 5,   // the form's main attribute — the attribute's
+	AddColumn = 6, // a column of the value table the attribute holds (its row's Menu has Column) — uniquely named
 };
 
 // WHAT A MODULE'S TAB IS ASKED besides its text — `fetch {Tab, Request: {Kind, Text, Position}}`: what the desktop's code
@@ -748,6 +834,7 @@ enum class ibProtocolModuleRequest : int {
 // A module tab's commands — event {Tab, Event: Command, Args: {Id}}.
 enum class ibProtocolModuleCommand : int {
 	SyntaxControl = 1,   // the module checked: "no errors" to the messages, or the error
+	TestForm      = 2,   // {Form} — a form designer's: the form opened as the runtime shows it, a tab of its own
 };
 
 // WHAT A PERSON DID WITH A CONTROL of a view — `event {Control, Event, Args}`, the control named by its ControlId.

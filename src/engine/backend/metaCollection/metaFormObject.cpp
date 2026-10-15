@@ -270,7 +270,7 @@ bool ibValueMetaObjectForm::FillGenericFormType(ibPropertyList* prop)
 				formList.GetItemLabel(idx),
 				formList.GetItemHelp(idx),
 				formList.GetItemId(idx),
-				GetIcon(),
+				GetClassType(),
 				formList.GetItemName(idx)
 			);
 		}

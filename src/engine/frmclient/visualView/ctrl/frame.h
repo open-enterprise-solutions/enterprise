@@ -19,6 +19,7 @@ class ibVisualHostClient;
 class ibValueForm;
 class ibDataViewColumnGroup;
 class ibFrontendView;
+class ibViewCommandBar;
 
 // Default foreground / background for designer-created form controls,
 // toolbars, dataviews, dialogs. Aligned with interior palette: deep
@@ -74,7 +75,7 @@ using ibViewFetcher = std::function<bool(const ibProtocolNode& request, ibProtoc
 //
 // THE FORM'S TREE HOLDS ITS CONTROLS, as the desktop's does (ibPropertyObjectHelper): a parent holds its children — their
 // order, where one moves to — and lets them go with it.
-class ibValueFrame : public ibValue,
+class FRMCLIENT_API ibValueFrame : public ibValue,
 	public ibPropertyObjectHelper<ibValueFrame> {
 public:
 
@@ -86,15 +87,21 @@ public:
 
 	// ⭐ ITS PROPERTIES ARE THE SERVER'S — which a control has, and which a person may arrange: the client declares none
 	// (Max, 2026-10-14). The form's editor is asked with them, a control's rows each (ibProtocolRequestKind::FormEditor),
-	// and reads them in (ibPropertyObject::ReadProperty).
+	// and receives them (ibPropertyObject::Receive).
 
 	virtual wxString GetClassName() const override { return m_className; }
 	virtual wxString GetObjectTypeName() const override { return m_className; }
 	virtual bool IsEditable() const override { return true; }
 
+	// One of them edited — the desktop's, told to the editor the form is drawn for (g_visualHostContext there; its host
+	// here, which a designer's host passes on).
+	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue) override;
+
 	// Its name, as the frame says it (the node's Name).
 	const wxString& GetControlName() const { return m_name; }
 	void SetControlName(const wxString& name) { m_name = name; }
+	// The control of its form with that name — none: nullptr (the desktop's).
+	ibValueFrame* FindControlByName(const wxString& controlName) const;
 	// What a person reads it as in the form's tree — the desktop's GetControlTitle, answered by the server where the
 	// metadata is (its State's Caption, a form's or a page's Title: the synonym of what it is bound to when no Title is
 	// set); none said — its class.
@@ -132,6 +139,8 @@ public:
 	// The view it holds of its own — a grid box's sheet, a text box's text (the desktop's GetControlView): what the
 	// form's view hands its menu, toolbar, commands and undo to while it is the active control. None — a bare control.
 	virtual ibFrontendView* GetControlView() const { return nullptr; }
+	// The command bar it holds — a table's, a grid box's (the server's GetCommandBar); none — no bar of its own.
+	virtual ibViewCommandBar* GetCommandBar() const { return nullptr; }
 
 	// An edit under way, carried over a rebuild into the control built anew for the same node: a frame that changes
 	// the form under the person's hands loses nothing of what is typed, and commits nothing of it.
@@ -144,6 +153,9 @@ public:
 protected:
 
 	ibValueFrame(ibVisualHostClient& host, long long controlId) : m_host(host), m_controlId(controlId) {}
+
+	// The host it is drawn in — the desktop's visualHost its Create was given.
+	ibVisualHostClient& GetVisualHost() const { return m_host; }
 
 	// What the person did, to the server — Args, what the event says with it.
 	void Send(ibProtocolEvent event) const;
@@ -160,6 +172,8 @@ protected:
 private:
 
 	friend class ibValueForm;   // the control made active is told to the server as its own event
+
+	ibValueFrame* DoFindControlByName(const wxString& controlName, ibValueFrame* top) const;
 
 	ibVisualHostClient& m_host;
 	long long           m_controlId;   // a form's — the view's, as it is drawn (ibValueForm::SetControlID)

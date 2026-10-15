@@ -7,6 +7,7 @@
 #include <wx/wx.h>
 #include <wx/aui/auibar.h>
 
+#include "frmclient/frmclient.h"
 #include "protocol/protocolNode.h"
 
 class ibAuiToolBar;
@@ -17,15 +18,18 @@ class ibAuiToolBar;
 // `sendCommand` sends it.
 //
 // The tools take ids of the bar's own, by the entries' places: the server's ids are its numbers, not wx's.
-class ibViewCommandBar {
+class FRMCLIENT_API ibViewCommandBar {
 public:
 
 	// How the bar's owner sends a command pressed — Command {Id[, Member]}, to the control the bar is.
 	using ibSendCommand = std::function<void(const ibProtocolNode& args)>;
 
-	ibViewCommandBar(wxWindow* parent, ibSendCommand sendCommand);
+	// The host it is drawn in says whether it is edited — there it shows its real width (the desktop's SetDesignerMode).
+	ibViewCommandBar(wxWindow* parent, const class ibVisualHostClient& host, ibSendCommand sendCommand);
 
 	wxWindow* GetWindow() const;
+	// The entry drawn at that point of its window — none: no tool there (wx's FindToolByPosition).
+	ibProtocolNode FindEntryByPosition(const wxPoint& point) const;
 
 	// The entries drawn — built anew when they are others, only enabled or not when they are the same; the bar is
 	// hidden while it has none.

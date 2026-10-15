@@ -172,6 +172,10 @@
     <ClCompile Include="docView\templates\docViewDataReportFile.cpp" />
     <ClCompile Include="docView\templates\designer\docViewDataProcessorEdit.cpp" />
     <ClCompile Include="docView\templates\designer\docViewDataReportEdit.cpp" />
+    <ClCompile Include="docView\templates\designer\docViewFormEdit.cpp" />
+    <ClCompile Include="docView\templates\designer\docViewFormEditAttribute.cpp" />
+    <ClCompile Include="docView\templates\designer\docViewFormEditCmd.cpp" />
+    <ClCompile Include="docView\templates\designer\docViewFormEditCommand.cpp" />
     <ClCompile Include="docView\templates\designer\docViewModuleEdit.cpp" />
     <ClCompile Include="docView\templates\designer\docViewSpreadsheetEdit.cpp" />
     <ClCompile Include="docView\templates\docViewHelp.cpp" />
@@ -321,6 +325,7 @@
     <ClInclude Include="docView\templates\docViewDataReportFile.h" />
     <ClInclude Include="docView\templates\designer\docViewDataProcessorEdit.h" />
     <ClInclude Include="docView\templates\designer\docViewDataReportEdit.h" />
+    <ClInclude Include="docView\templates\designer\docViewFormEdit.h" />
     <ClInclude Include="docView\templates\designer\docViewModuleEdit.h" />
     <ClInclude Include="docView\templates\designer\docViewSpreadsheetEdit.h" />
     <ClInclude Include="docView\templates\docViewHelp.h" />

@@ -71,8 +71,7 @@ bool ibVisualHost::UpdateVisualHost(ibDataNode& frame)
 				break;
 			}
 			*node = ibDataNode(control->GetClassType(), id);
-			if (!RefreshControl(control, *node))
-				return false;
+			RefreshControl(control, *node);
 		}
 		if (!whole)
 			frame = std::move(drawn);
@@ -80,8 +79,7 @@ bool ibVisualHost::UpdateVisualHost(ibDataNode& frame)
 	if (whole) {
 		frame.SetClsid(form->GetClassType());
 		frame.SetMetaId(form->EnsureControlID());
-		if (!RefreshControl(form, frame))
-			return false;
+		RefreshControl(form, frame);
 	}
 	ibJournalInfo(wxT("client"), wxT("      the view %s: %u controls drawn, properties written %lld ms, states %lld ms"),
 		whole ? wxT("whole") : wxT("in part"), s_drawTimes.controls, s_drawTimes.propertiesUs / 1000,
@@ -100,10 +98,10 @@ void ibVisualHost::ClearVisualHost()
 }
 
 // Added or taken off, the next frame draws the form whole: where the others stand is new.
-void ibVisualHost::CreateControl(ibValueFrame* control)
+void ibVisualHost::CreateControl(ibValueFrame* control, bool firstCreated)
 {
 	if (control != nullptr) {
-		GenerateControl(control);
+		GenerateControl(control, firstCreated);
 		UpdateControl(GetValueForm());
 	}
 }
@@ -128,32 +126,37 @@ void ibVisualHost::SelectControl(ibValueFrame* control)
 		control->OnSelected(this);
 }
 
-void ibVisualHost::GenerateControl(ibValueFrame* control)
+void ibVisualHost::GenerateControl(ibValueFrame* control, bool firstCreated)
 {
 	control->OnCreate(this);
 	for (unsigned int idx = 0; idx < control->GetChildCount(); idx++) {
 		if (ibValueFrame* const child = control->GetChild(idx))
-			GenerateControl(child);
+			GenerateControl(child, firstCreated);
 	}
-	control->OnCreated(this);
+	control->OnCreated(this, firstCreated);
 }
 
 // ⭐ THE FRAME OF A CONTROL AND ITS SUBTREE — SaveNode's shape (the header, the properties as saved, the children
 // as nodes of their class) with each control's State beside its properties (OnUpdate): what a client draws from.
 // Not saved anywhere — a reading of the form as it stands.
-bool ibVisualHost::RefreshControl(ibValueFrame* control, ibDataNode& node)
+void ibVisualHost::RefreshControl(ibValueFrame* control, ibDataNode& node)
 {
 	// The id is what an event comes back naming, so a control that never had one gets one now.
-	node.SetValue(wxT("ControlId"), control->EnsureControlID());
-	node.SetValue(wxT("Name"), control->GetControlName());
+	node.SetValue(ibProtocolName::ControlId, control->EnsureControlID());
+	node.SetValue(ibProtocolName::Name, control->GetControlName());
+	// …and, for the designer, whether it is open in its tree — the header's last field: the form it edits is handed
+	// back as drawn and loaded by LoadNode, which reads it.
+	if (IsDesignerHost())
+		node.SetValue(ibProtocolName::Expanded, control->GetExpanded());
+	// A reading, not a save: what a save refuses (an attribute not finished — a dynamic list with no source) is drawn
+	// all the same, its refusal is the save's (SaveNode). Stopping here sent the form without its controls (2026-10-15).
 	const long long writing = NowUs();
-	if (!control->WriteData(node))
-		return false;
+	control->WriteData(node);
 	const long long updating = NowUs();
 	s_drawTimes.propertiesUs += updating - writing;
 	++s_drawTimes.controls;
 
-	ibDataNode& state = node.Child(wxT("State"));
+	ibDataNode& state = node.Child(ibProtocolName::State);
 	control->OnUpdate(state, this);
 	// The state events the server is subscribed to on it — the client sends these at once, and holds the others.
 	std::vector<ibDataValue> subscribed;
@@ -163,7 +166,7 @@ bool ibVisualHost::RefreshControl(ibValueFrame* control, ibDataNode& node)
 			subscribed.push_back(ibDataValue::Int(number));
 	}
 	if (!subscribed.empty())
-		state.AddField(wxString::FromUTF8(ibProtocolName::Subscribed), ibDataValue::Array(std::move(subscribed)));
+		state.AddField(ibProtocolName::Subscribed, ibDataValue::Array(std::move(subscribed)));
 	const long long updated = NowUs() - updating;
 	s_drawTimes.statesUs += updated;
 	if (updated > 2000)
@@ -174,12 +177,10 @@ bool ibVisualHost::RefreshControl(ibValueFrame* control, ibDataNode& node)
 		if (child == nullptr)
 			continue;
 		ibDataNode& childNode = node.AddChild(child->GetClassType(), child->EnsureControlID());
-		if (!RefreshControl(child, childNode))
-			return false;
+		RefreshControl(child, childNode);
 	}
 
 	control->OnUpdated(state, this);
-	return true;
 }
 
 // Children first: a control's cleanup may still reach what it holds.

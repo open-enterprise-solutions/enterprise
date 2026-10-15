@@ -10,7 +10,7 @@
 #include <memory>
 #include "backend/metaCollection/partial/commonObject.h"
 #include "core/picturePredefined.h"          // g_pic*CLSID — the TableBox composes the standard command band
-#include "backend/backend_picture.h"           // ibBackendPicture::GetServerPicture — a request's picture as it is sent
+#include "frmserver/client/clientFrame.h"      // ibClientFrame::SendPicture — a request's picture, by its id
 #include "backend/backend_composition.h"        // the description the quick filter writes into + ibStoreValue
 #include "backend/appData.h"
 #include "backend/settings/settingsComposer.h"  // the reader's shelf — ibSettingsCategory::List, restore / save
@@ -542,7 +542,7 @@ void ibValueModelTableBox::Command_ShowViewMode()
 
 	ibDataNode request;
 	request.SetValue(wxT("Kind"), static_cast<s32>(ibProtocolRequestKind::ViewMode));
-	request.SetValue(wxT("Picture"), wxString(ibBackendPicture::GetServerPicture(g_picHierarchyCLSID).GetData()));
+	request.SetValue(wxT("Picture"), ibClientFrame::SendPicture(g_picHierarchyCLSID));
 	request.SetValue(wxT("Mode"), static_cast<s32>(m_propertyViewMode->GetValueAsEnum()));
 
 	ibDataNode response;

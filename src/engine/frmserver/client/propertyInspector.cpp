@@ -5,7 +5,6 @@
 #include "core/typeName.h"   // ibTypeInfoName — a property's class, named as the client registers it
 
 #include "backend/metaData.h"   // what a type's property may hold, named as its configuration names it
-#include "backend/backend_picture.h"   // ibBackendPicture::FromImage — a choice's picture, as the wire carries it
 #include "backend/objCtor.h"
 #include "backend/metaCollection/metaObject.h"
 #include "backend/metaCollection/metaModuleObject.h"      // ibPropertyInnerModule — a module its owner holds
@@ -14,6 +13,8 @@
 #include "backend/metaCollection/partial/chartOfCalculationTypesRelationTable.h"
 #include "backend/propertyManager/property/propertyType.h"   // ibPropertyType — a type description, and what it may hold
 #include "core/serialize/dataBuilder.h"
+
+#include "clientFrame.h"   // ibClientFrame::SendPicture — a type's, a choice's picture, by its id
 
 namespace {
 
@@ -64,9 +65,8 @@ void AppendTypes(ibDataNode& row, const ibPropertyType* property)
 		ibDataNode& type = row.AddChild(0, static_cast<ibMetaID>(row.Children().size() + 1));
 		type.SetValue(ibProtocolName::Type, wxString::Format(wxT("%llu"), static_cast<unsigned long long>(clsid)));
 		type.SetValue(ibProtocolName::Title, so->GetClassName());
-		const wxIcon icon = so->GetClassIcon();
-		if (icon.IsOk())
-			type.SetValue(ibProtocolName::Picture, wxString(ibBackendPicture::FromImage(wxBitmap(icon).ConvertToImage()).GetData()));
+		// Its picture is its class's: by the class id.
+		type.SetValue(ibProtocolName::Picture, ibClientFrame::SendPicture(clsid));
 	}
 }
 
@@ -101,6 +101,15 @@ void ibPropertyInspector::AppendProperty(ibDataNode& parent, ibBackendProperty* 
 	if (const ibPropertyType* const type = dynamic_cast<const ibPropertyType*>(property))
 		AppendTypes(row, type);
 
+	// AN EVENT — the parameters of its procedure, as the desktop's editor wrote the procedure's template.
+	if (const ibEvent* const event = dynamic_cast<const ibEvent*>(property)) {
+		std::vector<ibDataValue> args;
+		for (const wxString& arg : event->GetArgs())
+			args.push_back(ibDataValue::String(arg));
+		if (!args.empty())
+			row.AddField(ibProtocolName::Args, ibDataValue::Array(std::move(args)));
+	}
+
 	// WHAT IT MAY BE SET TO — one of them (Multiple: several at once), by its id, with its picture as the desktop's list
 	// drew it beside its label (a language's icon).
 	ibPropertyChoiceList choices;
@@ -111,9 +120,9 @@ void ibPropertyInspector::AppendProperty(ibDataNode& parent, ibBackendProperty* 
 		ibDataNode& choice = row.AddChild(0, static_cast<ibMetaID>(index + 1));
 		choice.SetValue(ibProtocolName::Id, static_cast<s32>(choices.GetId(index)));
 		choice.SetValue(ibProtocolName::Title, choices.GetLabel(index));
-		const wxBitmap& bitmap = choices.GetBitmap(index);
-		if (bitmap.IsOk())
-			choice.SetValue(ibProtocolName::Picture, wxString(ibBackendPicture::FromImage(bitmap.ConvertToImage()).GetData()));
+		const ibPictureDescription& picture = choices.GetPicture(index);
+		if (!picture.IsEmptyPicture())
+			choice.SetValue(ibProtocolName::Picture, ibClientFrame::SendPicture(picture));
 	}
 
 	if (!property->IsEditable())

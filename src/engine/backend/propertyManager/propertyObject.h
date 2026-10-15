@@ -27,6 +27,7 @@ template <class T> class ibValuePtr;
 ///////////////////////////////////////////////////////////////////////////////
 
 #include "core/fileSystem/fs.h"
+#include "core/description/pictureDescription.h"   // ibPictureDescription — a choice's picture, by its id
 #include "backend/backend_exception.h"   // ibBackendCoreException — a cell that is not what it is asked for raises
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -116,7 +117,7 @@ private:
 
 ///////////////////////////////////////////////////////////////////////////////
 
-// The choices a property offers — label + id + optional bitmap, in backend terms.
+// The choices a property offers — label + id + optional picture (by its id), in backend terms.
 //
 // This is what a list / enum / event-action property HANDS OVER; turning it into the
 // editor's own choice type is the front's job. It exists because the three of them used
@@ -157,13 +158,13 @@ class BACKEND_API ibPropertyChoiceList {
 	// just been shown, or showing a person an identifier.
 	struct ibPropertyChoiceItem {
 		ibPropertyChoiceItem(long id, const wxString& name, const wxString& synonym,
-			const wxVariant& value, const wxBitmap& bmp)
-			: m_id(id), m_name(name), m_synonym(synonym), m_value(value), m_bmp(bmp) {}
-		long      m_id;
-		wxString  m_name;
-		wxString  m_synonym;
-		wxVariant m_value;
-		wxBitmap  m_bmp;
+			const wxVariant& value, const ibPictureDescription& picture)
+			: m_id(id), m_name(name), m_synonym(synonym), m_value(value), m_picture(picture) {}
+		long                  m_id;
+		wxString              m_name;
+		wxString              m_synonym;
+		wxVariant             m_value;
+		ibPictureDescription  m_picture;
 	};
 
 	std::vector<ibPropertyChoiceItem> m_items;
@@ -171,14 +172,14 @@ class BACKEND_API ibPropertyChoiceList {
 public:
 
 	// The plain form — a number IS the value, which is what an enumeration and a list offer.
-	void Add(const wxString& name, long id, const wxBitmap& bmp = wxNullBitmap) {
-		m_items.emplace_back(id, name, wxEmptyString, wxVariant(id), bmp);
+	void Add(const wxString& name, long id, const ibPictureDescription& picture = ibPictureDescription()) {
+		m_items.emplace_back(id, name, wxEmptyString, wxVariant(id), picture);
 	}
 
 	// The full form — the number says which, the variant is what to place.
 	void Add(long id, const wxString& name, const wxString& synonym,
-		const wxVariant& value, const wxBitmap& bmp = wxNullBitmap) {
-		m_items.emplace_back(id, name, synonym, value, bmp);
+		const wxVariant& value, const ibPictureDescription& picture = ibPictureDescription()) {
+		m_items.emplace_back(id, name, synonym, value, picture);
 	}
 
 	unsigned int GetCount() const { return (unsigned int)m_items.size(); }
@@ -186,7 +187,8 @@ public:
 	wxString GetName(unsigned int idx) const { return m_items[idx].m_name; }
 	wxString GetSynonym(unsigned int idx) const { return m_items[idx].m_synonym; }
 	const wxVariant& GetValue(unsigned int idx) const { return m_items[idx].m_value; }
-	const wxBitmap& GetBitmap(unsigned int idx) const { return m_items[idx].m_bmp; }
+	// Its picture, by its id — a window makes the image of it (ibBackendPicture::CreatePicture), a server sends the id.
+	const ibPictureDescription& GetPicture(unsigned int idx) const { return m_items[idx].m_picture; }
 
 
 	// The label a person reads: the synonym when there is one, the name otherwise. One place, so

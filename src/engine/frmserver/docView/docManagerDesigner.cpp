@@ -15,6 +15,7 @@
 #include "frmserver/docView/templates/designer/docViewDataReportEdit.h"
 
 //objects
+#include "frmserver/docView/templates/designer/docViewFormEdit.h"
 #include "frmserver/docView/templates/designer/docViewModuleEdit.h"
 #include "frmserver/docView/templates/designer/docViewSpreadsheetEdit.h"
 #include "core/fileKind.h"   // extensions live in one table, not at each call site
@@ -33,6 +34,9 @@ ibDocManagerDesigner::ibDocManagerDesigner()
 	AddDocTemplate(g_metaCommonModuleCLSID, CLASSINFO(ibModuleTextDocument), CLASSINFO(ibModuleTextView));
 	AddDocTemplate(g_metaModuleCLSID, CLASSINFO(ibModuleTextDocument), CLASSINFO(ibModuleTextView));
 	AddDocTemplate(g_metaManagerCLSID, CLASSINFO(ibModuleTextDocument), CLASSINFO(ibModuleTextView));
+	// …and a form — a common form and an object's: its module's text and the form itself, edited by the client.
+	AddDocTemplate(g_metaCommonFormCLSID, CLASSINFO(ibFormDesignDocument), CLASSINFO(ibFormDesignView));
+	AddDocTemplate(g_metaFormCLSID, CLASSINFO(ibFormDesignDocument), CLASSINFO(ibFormDesignView));
 	// …and a template's sheet — a common template and an object's.
 	AddDocTemplate(g_metaCommonTemplateCLSID, CLASSINFO(ibSpreadsheetTemplateDocument), CLASSINFO(ibSpreadsheetTemplateView));
 	AddDocTemplate(g_metaTemplateCLSID, CLASSINFO(ibSpreadsheetTemplateDocument), CLASSINFO(ibSpreadsheetTemplateView));

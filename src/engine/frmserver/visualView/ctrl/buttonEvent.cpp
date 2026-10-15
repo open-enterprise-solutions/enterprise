@@ -40,7 +40,7 @@ void ibValueButton::OnButtonPressed(size_t member)
 	if (!ResolveSubCommands(GetCommandDesc(), subs))
 		return;
 	std::vector<ibCommandDescription> leaves;
-	WalkGroup(subs, leaves, nullptr, nullptr);
+	WalkGroup(subs, leaves, nullptr);
 	if (member < leaves.size())
 		ExecuteValueByPath(leaves[member]);
 

@@ -1,6 +1,5 @@
 #include "auditLog.h"
 
-#include "backend/backend_picture.h"
 #include "backend/metadataConfiguration.h"
 #include "core/picturePredefined.h"
 #include "backend/session/session.h"
@@ -32,7 +31,7 @@ std::function<void()> ibSchemaAuditLog::Command(const ibSession& session, s32 co
 			ibAuditLogDocument* doc = documentManager->CreateDocument<ibAuditLogDocument>(metaData);
 			if (doc != nullptr) {
 				doc->SetTitle(_("Registration journal"));
-				doc->SetIcon(ibBackendPicture::GetServerPicture(g_picUserActiveCLSID));
+				doc->SetIcon(ibPictureDescription(g_picUserActiveCLSID));
 				documentManager->AddDocument(doc);
 				if (!doc->OnCreate(wxEmptyString, 0))
 					doc->DeleteAllViews();

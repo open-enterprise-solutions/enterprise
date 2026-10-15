@@ -227,7 +227,7 @@
     <ClCompile Include="win\editor\gridEditor\gridProperty.cpp" />
     <ClCompile Include="backend\propertyManager\propertyObject.cpp" />
     <ClCompile Include="backend\propertyManager\property\propertyBoolean.cpp" />
-    <ClCompile Include="backend\propertyManager\property\propertyValue.cpp" />
+    <ClCompile Include="backend\propertyManager\property\propertySerializable.cpp" />
     <ClCompile Include="backend\metaCollection\metaObject.cpp" />
     <ClCompile Include="backend\metaCollection\metaObjectMetadata.cpp" />
     <ClCompile Include="backend\propertyManager\property\propertyString.cpp" />
@@ -408,7 +408,7 @@
     <ClInclude Include="mainFrame\objinspect\objinspect.h" />
     <ClInclude Include="backend\propertyManager\propertyObject.h" />
     <ClInclude Include="backend\propertyManager\property\propertyBoolean.h" />
-    <ClInclude Include="backend\propertyManager\property\propertyValue.h" />
+    <ClInclude Include="backend\propertyManager\property\propertySerializable.h" />
     <ClInclude Include="backend\propertyManager\property\propertyString.h" />
     <ClInclude Include="backend\propertyManager\property\propertyEnum.h" />
     <ClInclude Include="backend\propertyManager\property\propertyFont.h" />

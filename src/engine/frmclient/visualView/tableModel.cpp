@@ -202,13 +202,11 @@ unsigned int ibViewTableModel::Fetch(int direction, const ibDataViewItem& parent
 	// atomic, and the rows are the data view's to hand to the UI.
 	ibAnswer done;
 	done.currentRow = answer.GetInt(ibProtocolName::CurrentRow);
-	for (const ibProtocolNode& picture : answer.FindChild(ibProtocolName::Pictures).Children())
-		done.pictures.emplace_back(PictureIdOf(picture.GetString(ibProtocolName::Id)), picture.GetString(ibProtocolName::Picture));
 
-	ibJournalInfo(wxT("table"), wxT("read %d from %lld under %lld, %d asked: %u rows%s, current %lld, %u pictures"),
+	ibJournalInfo(wxT("table"), wxT("read %d from %lld under %lld, %d asked: %u rows%s, current %lld"),
 		direction, HandleOf(anchor), HandleOf(level), asked, read, answer.GetBool(ibProtocolName::End) ? wxT(", the end") : wxT(""),
-		done.currentRow, static_cast<unsigned>(done.pictures.size()));
-	if (done.currentRow != 0 || !done.pictures.empty())
+		done.currentRow);
+	if (done.currentRow != 0)
 		m_answered(done);
 
 	// As many as the server's model read — fewer than asked is the end that way, for the data view as for it.

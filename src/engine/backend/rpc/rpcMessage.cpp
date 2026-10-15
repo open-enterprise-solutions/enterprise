@@ -23,39 +23,51 @@
 // ⚠ CHAINED, NOT CHOSEN — the same mistake the resolver below made once and says so. The metadata
 // answers for registered types; a composition's own parts are registered nowhere, so they are the
 // FLOOR under it. Asking only one of the two is how a lookup exists and never fires.
+namespace {
+
+ibClassID LookupType(const wxString& name, const ibMetaData* metaData)
+{
+	// ⚠ THE COMPOSITION'S OWN PARTS FIRST, AND NOT ONLY FOR SPEED. A lookup runs INSIDE the JSON
+	// parse, and `GetIDObjectFromString` does not answer 0 for a name it does not know — it
+	// THROWS ("Object '%s' is not exist"). Asked first, it threw on `CompositionVariant`, the
+	// parse unwound, and the error reply was then assembled with no request id: a MALFORMED
+	// ENVELOPE, which the far end reports as the server having broken rather than as a request
+	// having failed. Every request carrying a node type the metadata does not know would have
+	// done it (measured 2026-09-06, sending a hand-built schema).
+	//
+	// 🛑 I WROTE "CHAINED, NOT CHOSEN" AND CHAINED THEM THE WRONG WAY ROUND. The order of a
+	// fallback chain is not a detail when one of its links can throw: the one that answers
+	// quietly goes first, and the one that raises is wrapped.
+	if (const ibClassID part = ibCompositionNodeClsid(name); part != ibClassID(0))
+		return part;
+
+	// ⭐⭐ AND IT IS THE METADATA'S LOOKUP, NOT THE VALUE FACTORY'S — the two are not
+	// interchangeable and the order between them is the point (Max, 2026-09-06). `ibMetaData::
+	// GetIDObjectFromString` searches the METAOBJECTS first and only then falls through to
+	// `ibValue::GetIDObjectFromString`: reference types live in the metaobjects, so asking the
+	// value factory alone finds no reference at all, and neither stage may be skipped.
+	if (metaData != nullptr) {
+		try {
+			return metaData->GetIDObjectFromString(name);
+		}
+		catch (const ibCoreException&) {
+			// Neither stage knew it — which is where that call raises. A node keeps clsid 0 and
+			// is read as an untyped one, which is what an unknown name has always meant here.
+		}
+	}
+	return ibClassID(0);
+}
+
+} // namespace
+
 void ibRpcInstallTypeLookup(ibJsonProvider& provider)
 {
-	provider.SetTypeLookup([](const wxString& name) -> ibClassID {
-		// ⚠ THE COMPOSITION'S OWN PARTS FIRST, AND NOT ONLY FOR SPEED. A lookup runs INSIDE the JSON
-		// parse, and `GetIDObjectFromString` does not answer 0 for a name it does not know — it
-		// THROWS ("Object '%s' is not exist"). Asked first, it threw on `CompositionVariant`, the
-		// parse unwound, and the error reply was then assembled with no request id: a MALFORMED
-		// ENVELOPE, which the far end reports as the server having broken rather than as a request
-		// having failed. Every request carrying a node type the metadata does not know would have
-		// done it (measured 2026-09-06, sending a hand-built schema).
-		//
-		// 🛑 I WROTE "CHAINED, NOT CHOSEN" AND CHAINED THEM THE WRONG WAY ROUND. The order of a
-		// fallback chain is not a detail when one of its links can throw: the one that answers
-		// quietly goes first, and the one that raises is wrapped.
-		if (const ibClassID part = ibCompositionNodeClsid(name); part != ibClassID(0))
-			return part;
+	provider.SetTypeLookup([](const wxString& name) -> ibClassID { return LookupType(name, activeMetaData); });
+}
 
-		// ⭐⭐ AND IT IS THE METADATA'S LOOKUP, NOT THE VALUE FACTORY'S — the two are not
-		// interchangeable and the order between them is the point (Max, 2026-09-06). `ibMetaData::
-		// GetIDObjectFromString` searches the METAOBJECTS first and only then falls through to
-		// `ibValue::GetIDObjectFromString`: reference types live in the metaobjects, so asking the
-		// value factory alone finds no reference at all, and neither stage may be skipped.
-		if (activeMetaData != nullptr) {
-			try {
-				return activeMetaData->GetIDObjectFromString(name);
-			}
-			catch (const ibCoreException&) {
-				// Neither stage knew it — which is where that call raises. A node keeps clsid 0 and
-				// is read as an untyped one, which is what an unknown name has always meant here.
-			}
-		}
-		return ibClassID(0);
-	});
+void ibRpcInstallTypeLookup(ibJsonProvider& provider, const ibMetaData* metaData)
+{
+	provider.SetTypeLookup([metaData](const wxString& name) -> ibClassID { return LookupType(name, metaData); });
 }
 
 wxString ibRpcRenderNode(const ibDataNode& node, const std::function<wxString(ibClassID)>& typeResolver)
@@ -113,9 +125,8 @@ ibDataNode Envelope(const ibDataValue& id)
 	return root;
 }
 
-} // namespace
-
-bool ibRpcParseRequest(const wxString& text, ibRpcRequest& request, wxString& error)
+// One request read by a provider whose type lookup is installed already — whose types it knows is the caller's.
+bool ReadRequest(const wxString& text, ibJsonProvider& provider, ibRpcRequest& request, wxString& error)
 {
 	const wxScopedCharBuffer utf8 = text.utf8_str();
 
@@ -128,8 +139,6 @@ bool ibRpcParseRequest(const wxString& text, ibRpcRequest& request, wxString& er
 
 	try {
 		ibReaderMemory reader(buffer);
-		ibJsonProvider provider;
-		ibRpcInstallTypeLookup(provider);
 		if (!provider.Read(reader, root)) {
 			error = wxT("the request could not be read as JSON");
 			return false;
@@ -161,6 +170,22 @@ bool ibRpcParseRequest(const wxString& text, ibRpcRequest& request, wxString& er
 		request.m_params = *params;
 
 	return true;
+}
+
+} // namespace
+
+bool ibRpcParseRequest(const wxString& text, ibRpcRequest& request, wxString& error)
+{
+	ibJsonProvider provider;
+	ibRpcInstallTypeLookup(provider);
+	return ReadRequest(text, provider, request, error);
+}
+
+bool ibRpcParseRequest(const wxString& text, ibRpcRequest& request, wxString& error, const ibMetaData* metaData)
+{
+	ibJsonProvider provider;
+	ibRpcInstallTypeLookup(provider, metaData);
+	return ReadRequest(text, provider, request, error);
 }
 
 bool ibRpcParseResponse(const wxString& text, ibDataValue& id, wxString& payload, bool& isError)

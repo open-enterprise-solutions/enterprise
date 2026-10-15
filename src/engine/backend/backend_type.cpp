@@ -322,6 +322,25 @@ void ibBackendTypeConfigFactory::GetTypesByFilter(ibSelectorDataType filterDataT
 		out.push_back(g_valueSpreadsheetCLSID);
 	}
 
+	// ⭐ AN OBJECT — what a form edits (an object form's attribute is `CatalogObject.Goods`). A slot of any kind takes
+	// the objects of every metaclass that keeps their FAMILY (`CatalogObject` — catalogs, documents, the charts, data
+	// processors, reports: the desktop's own list in the cell, ibPGTypeProperty::FillByClsid), before the references;
+	// the picker and the thin's offer, asked here, had lost them (Max, 2026-10-15: "a form's attributes must be with
+	// objects"). Offered as an event's source is — the family first, the picker puts its members under it ("the
+	// objects are not grouped"); a value of the family itself is any of them.
+	if (anyType && metaData != nullptr) {
+		std::vector<ibClassID> members;
+		for (auto so : metaData->GetListCtorsByType(ibCtorObjectMetaType::ibCtorObjectMetaType_Object)) {
+			const ibClassID family = clsid_any_of(so->GetClassType());
+			if (!ibValue::IsRegisterCtor(family))
+				continue;
+			if (std::find(out.begin(), out.end(), family) == out.end())
+				out.push_back(family);
+			members.push_back(so->GetClassType());
+		}
+		out.insert(out.end(), members.begin(), members.end());
+	}
+
 	// ⭐ THE FAMILIES OF REFERENCES — `CatalogRef`, `DocumentRef`… — a reference to any object of the metatype,
 	// the ones added later included. Each comes before its members, which the picker puts under it.
 	const bool references = anyType || filterDataType == ibSelectorDataType::ibSelectorDataType_reference;

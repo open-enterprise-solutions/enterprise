@@ -493,7 +493,7 @@ ibMetaDocument* ibDocManager::OpenForm(ibValueMetaObject* metaObject, long flags
 
 		AddDocument(newDocument);
 
-		newDocument->SetIcon(ibBackendPicture::GetServerPicture(metaObject->GetClassType()));
+		newDocument->SetIcon(ibPictureDescription(metaObject->GetClassType()));
 
 		if (newDocument->OnCreate(metaObject->GetModuleName(), flags | ibDOC_NEW)) {
 			newDocument->SetCommandProcessor(newDocument->OnCreateCommandProcessor());

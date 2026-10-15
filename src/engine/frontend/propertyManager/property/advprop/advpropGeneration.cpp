@@ -1,6 +1,7 @@
 #include "advpropGeneration.h"
 
 #include "backend/propertyManager/property/variant/variantGen.h"
+#include "backend/backend_picture.h"   // ibBackendPicture::CreatePicture — a choice's picture, by its id
 
 #include "frontend/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
 #include "frontend/propertyManager/property/private/propertyRegistry.h"
@@ -35,7 +36,7 @@ ibPGGenerationProperty::ibPGGenerationProperty(const ibPropertyObject* property,
     : wxPGProperty(label, strName), m_ownerProperty(property)
 {
     for (unsigned int idx = 0; idx < choices.GetCount(); idx++)
-        m_choices.Add(choices.GetLabel(idx), choices.GetBitmap(idx), choices.GetId(idx));
+        m_choices.Add(choices.GetLabel(idx), ibBackendPicture::CreatePicture(choices.GetPicture(idx)), choices.GetId(idx));
 
     //m_flags |= wxPGFlags::ReadOnly;
     m_flags |= wxPGPropertyFlags_ActiveButton; // Property button always enabled.

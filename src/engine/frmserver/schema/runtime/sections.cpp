@@ -1,6 +1,5 @@
 #include "sections.h"
 
-#include "backend/backend_picture.h"                          // the pictures, as they travel
 #include "backend/interfaceHelper.h"                          // ibInterfaceCommandSection, ibInterfaceCommandType
 #include "backend/metaCollection/metaCommandGroupObject.h"    // the platform's groups + the declared ones, in order
 #include "backend/metaCollection/metaFormObject.h"            // ibBackendCommandItem — what a link executes
@@ -8,6 +7,7 @@
 #include "backend/metadataConfiguration.h"
 #include "core/serialize/dataBuilder.h"
 #include "backend/session/session.h"                          // the configuration the session works in
+#include "frmserver/client/clientFrame.h"                     // ibClientFrame::SendPicture — the pictures, by their ids
 
 #include <vector>
 
@@ -124,12 +124,6 @@ std::vector<const ibValueMetaObjectSection*> UsedSections(const ibMetaDataConfig
 	return used;
 }
 
-void SetPicture(ibDataNode& node, const wxString& name, const ibPicture& picture)
-{
-	if (picture.IsOk())
-		node.SetValue(name, wxString(picture.GetData()));
-}
-
 } // namespace
 
 void ibSchemaSections::Build(const ibSession& session, const ibDataNode& WXUNUSED(args), ibDataNode& result) const
@@ -143,9 +137,8 @@ void ibSchemaSections::Build(const ibSession& session, const ibDataNode& WXUNUSE
 		ibDataNode& node = sections.AddChild(0, section->GetMetaID());
 		node.SetValue(wxT("Title"), section->GetSynonym());
 		// Its own picture, or the configuration's — as its button drew it.
-		SetPicture(node, wxT("Picture"), section->IsEmptyPicture()
-			? ibBackendPicture::GetServerPicture(g_metaCommonMetadataCLSID)
-			: ibBackendPicture::GetServerPicture(section->GetPictureDesc(), metaData));
+		node.SetValue(wxT("Picture"), ibClientFrame::SendPicture(section->IsEmptyPicture()
+			? ibPictureDescription(g_metaCommonMetadataCLSID) : section->GetPictureDesc()));
 
 		ibDataNode& blocks = node.Child(wxT("Blocks"));
 		for (const ibSectionBlock& block : PageOf(section)) {
@@ -155,7 +148,7 @@ void ibSchemaSections::Build(const ibSession& session, const ibDataNode& WXUNUSE
 				blockNode.SetValue(wxT("Title"), block.title);
 			if (block.group != nullptr) {
 				if (!block.group->IsEmptyPicture())
-					SetPicture(blockNode, wxT("Picture"), ibBackendPicture::GetServerPicture(block.group->GetPictureDesc(), metaData));
+					blockNode.SetValue(wxT("Picture"), ibClientFrame::SendPicture(block.group->GetPictureDesc()));
 				const wxString tooltip = block.group->GetToolTip();
 				if (!tooltip.IsEmpty())
 					blockNode.SetValue(wxT("Tooltip"), tooltip);
@@ -165,7 +158,7 @@ void ibSchemaSections::Build(const ibSession& session, const ibDataNode& WXUNUSE
 				item.SetValue(wxT("Item"), static_cast<s32>(object->GetMetaID()));
 				item.SetValue(wxT("Title"), object->GetSynonym());
 				item.SetValue(wxT("Type"), static_cast<s32>(TypeOf(block.area)));
-				SetPicture(item, wxT("Icon"), ibBackendPicture::GetServerPicture(object->GetClassType()));
+				item.SetValue(wxT("Icon"), ibClientFrame::SendPicture(object->GetClassType()));
 			}
 		}
 	}

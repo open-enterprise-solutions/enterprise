@@ -77,7 +77,29 @@ void ibValueMetaObject::SetNoteContent(const wxString& strNoteContent)
 	SaveObjectText(m_metaId, m_metaData, ibProtocolName::Note, strNoteContent);
 }
 
-bool ibValueMetaObject::ReadProperty()
+bool ibValueMetaObject::Send(const wxString& name, const ibDataValue& value) const
+{
+	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
+	if (frame == nullptr)
+		return false;
+
+	ibDataNode args;
+	args.SetValue(ibProtocolName::Id, static_cast<s32>(m_metaId));
+	args.SetValue(ibProtocolName::Name, name);
+	args.SetValue(ibProtocolName::Tab, static_cast<s32>(m_metaData.GetTabId()));
+	if (value.Kind() == ibDataKind::Child)
+		args.SetProperty(ibProtocolName::Value, value);
+	else
+		args.AddField(ibProtocolName::Value, value);
+
+	ibProtocolNode params, answer;
+	params.SetValue(ibProtocolName::Schema, static_cast<long long>(ibProtocolSchema::Properties));
+	params.SetValue(ibProtocolName::Command, static_cast<long long>(ibProtocolSchemaCommand::Save));
+	ibWriteProtocolNode(args, params.Child(ibProtocolName::Args));
+	return frame->Call(ibProtocolMethod::Schema, params, answer);
+}
+
+bool ibValueMetaObject::Receive()
 {
 	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
 	if (frame == nullptr)
@@ -88,34 +110,12 @@ bool ibValueMetaObject::ReadProperty()
 	ibProtocolNode args = params.Child(ibProtocolName::Args);
 	args.SetValue(ibProtocolName::Id, static_cast<long long>(m_metaId));
 	args.SetValue(ibProtocolName::Tab, m_metaData.GetTabId());
-	if (!frame->Call(ibProtocolMethod::Schema, params, answer))
-		return false;
-
-	ibDataNode rows;
-	ibReadProtocolNode(answer.FindChild(ibProtocolName::Properties), rows);
-	return ibPropertyObject::ReadProperty(rows);
+	return frame->Call(ibProtocolMethod::Schema, params, answer) &&
+		ibPropertyObject::Receive(answer.FindChild(ibProtocolName::Properties));
 }
 
 bool ibValueMetaObject::OnPropertyChanging(ibProperty* property, const wxVariant& WXUNUSED(newValue))
 {
-	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
-	if (frame == nullptr)
-		return false;
-
 	// …the value as the property's node holds it now: the door (ibPropertyGate) gave it before asking.
-	ibDataNode args;
-	args.SetValue(wxT("Id"), static_cast<s32>(m_metaId));
-	args.SetValue(wxT("Name"), property->GetName());
-	args.SetValue(wxT("Tab"), static_cast<s32>(m_metaData.GetTabId()));
-	const ibDataValue value = property->GetNodeValue();
-	if (value.Kind() == ibDataKind::Child)
-		args.SetProperty(wxT("Value"), value);
-	else
-		args.AddField(wxT("Value"), value);
-
-	ibProtocolNode params, answer;
-	params.SetValue(ibProtocolName::Schema, static_cast<long long>(ibProtocolSchema::Properties));
-	params.SetValue(ibProtocolName::Command, static_cast<long long>(ibProtocolSchemaCommand::Save));
-	ibWriteProtocolNode(args, params.Child(ibProtocolName::Args));
-	return frame->Call(ibProtocolMethod::Schema, params, answer);
+	return Send(property->GetName(), property->GetNodeValue());
 }

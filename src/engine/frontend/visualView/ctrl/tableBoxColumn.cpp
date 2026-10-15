@@ -49,7 +49,7 @@ bool ibValueModelTableBoxColumn::GetChoiceForm(ibPropertyList* property)
 				property->AppendItem(
 					form->GetSynonym(),
 					form->GetMetaID(),
-					form->GetIcon(),
+					form->GetClassType(),
 					form
 				);
 			}

@@ -7,6 +7,30 @@
 
 #include "frmclient/mainFrame/mainFrame.h"
 #include "frmclient/mainFrame/mainFrameChild.h"
+#include "frmclient/visualView/visualHostClient.h"
+
+void ibAppDesigner::OnMouseEvent(wxMouseEvent& event)
+{
+	// A CLICK IN A FORM'S EDITOR SELECTS WHAT IT IS ON — the desktop designer's: a control's window takes the click
+	// itself, so the host it is drawn in is told from here (the runtime's host does nothing with it).
+	if (event.LeftIsDown() || event.RightIsDown()) {
+		wxWindow* currentWindow = dynamic_cast<wxWindow*>(event.GetEventObject()); wxWindow* windowFocus = currentWindow;
+		while (windowFocus && dynamic_cast<ibVisualHostClient*>(windowFocus) == nullptr) {
+			windowFocus = windowFocus->GetParent();
+		}
+		if (windowFocus) {
+			ibVisualHostClient* visualEditor = dynamic_cast<ibVisualHostClient*>(windowFocus);
+			if (visualEditor != nullptr) {
+				if (event.GetEventType() == wxEVT_LEFT_DOWN
+					|| event.GetEventType() == wxEVT_RIGHT_DOWN) {
+					visualEditor->OnClickFromApp(currentWindow, event);
+				}
+			}
+		}
+	}
+
+	event.Skip();
+}
 
 void ibAppDesigner::OnSetFocus(wxFocusEvent& event)
 {
@@ -29,7 +53,12 @@ void ibAppDesigner::OnSetFocus(wxFocusEvent& event)
 
 int ibAppDesigner::FilterEvent(wxEvent& event)
 {
-	if (event.GetEventType() == wxEVT_SET_FOCUS) {
+	if (event.GetEventType() == wxEVT_LEFT_DOWN || event.GetEventType() == wxEVT_RIGHT_DOWN) {
+		OnMouseEvent(
+			static_cast<wxMouseEvent&>(event)
+		);
+	}
+	else if (event.GetEventType() == wxEVT_SET_FOCUS) {
 		OnSetFocus(
 			static_cast<wxFocusEvent&>(event)
 		);

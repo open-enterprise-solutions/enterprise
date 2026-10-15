@@ -26,6 +26,7 @@ public:
 protected:
 
 	//global process events:
+	void OnMouseEvent(wxMouseEvent& event);
 	void OnSetFocus(wxFocusEvent& event);
 };
 

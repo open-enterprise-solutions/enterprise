@@ -45,7 +45,7 @@ ibPropertyChoiceMode ibPropertyCalcSchedule::GetValueList(ibPropertyChoiceList& 
 		scheduleDesc.SetSchedule(schedule->GetMetaID(), 0, 0);
 		list.Add(schedule->GetMetaID(), schedule->GetName(), schedule->GetSynonym(),
 			wxVariant(new ibVariantDataCalcSchedule(owner, scheduleDesc)),
-			schedule->GetIcon());
+			schedule->GetClassType());
 	}
 
 	return ibPropertyChoiceMode::Single;
@@ -66,7 +66,7 @@ void ibPropertyCalcSchedule::GetScheduleValueList(const ibCalcScheduleDescriptio
 	if (const ibValueMetaObjectRegisterData* schedule = GetScheduleRegister(scheduleDesc)) {
 		for (const ibValueMetaObjectResource* resource : schedule->GetResourceArrayObject()) {
 			if (!resource->IsDeleted() && resource->GetTypeDesc().ContainType(g_valueNumberCLSID))
-				list.Add(resource->GetMetaID(), resource->GetName(), resource->GetSynonym(), wxVariant(resource->GetMetaID()), resource->GetIcon());
+				list.Add(resource->GetMetaID(), resource->GetName(), resource->GetSynonym(), wxVariant(resource->GetMetaID()), resource->GetClassType());
 		}
 	}
 }
@@ -76,7 +76,7 @@ void ibPropertyCalcSchedule::GetScheduleDateList(const ibCalcScheduleDescription
 	if (const ibValueMetaObjectRegisterData* schedule = GetScheduleRegister(scheduleDesc)) {
 		for (const ibValueMetaObjectDimension* dimension : schedule->GetDimensionArrayObject()) {
 			if (!dimension->IsDeleted() && dimension->GetTypeDesc().ContainType(g_valueDateCLSID))
-				list.Add(dimension->GetMetaID(), dimension->GetName(), dimension->GetSynonym(), wxVariant(dimension->GetMetaID()), dimension->GetIcon());
+				list.Add(dimension->GetMetaID(), dimension->GetName(), dimension->GetSynonym(), wxVariant(dimension->GetMetaID()), dimension->GetClassType());
 		}
 	}
 }
@@ -86,7 +86,7 @@ void ibPropertyCalcSchedule::GetScheduleLinkList(const ibCalcScheduleDescription
 	if (const ibValueMetaObjectRegisterData* schedule = GetScheduleRegister(scheduleDesc)) {
 		for (const ibValueMetaObjectDimension* dimension : schedule->GetDimensionArrayObject()) {
 			if (!dimension->IsDeleted() && dimension->GetMetaID() != scheduleDesc.GetDate())
-				list.Add(dimension->GetMetaID(), dimension->GetName(), dimension->GetSynonym(), wxVariant(dimension->GetMetaID()), dimension->GetIcon());
+				list.Add(dimension->GetMetaID(), dimension->GetName(), dimension->GetSynonym(), wxVariant(dimension->GetMetaID()), dimension->GetClassType());
 		}
 	}
 }
@@ -107,7 +107,7 @@ void ibPropertyCalcSchedule::GetScheduleFieldList(ibMetaID dimension, ibProperty
 			return;
 		for (const ibClassID& clsid : field->GetTypeDesc().GetClsidList()) {
 			if (wanted.ContainType(clsid)) {
-				list.Add(field->GetMetaID(), field->GetName(), field->GetSynonym(), wxVariant(field->GetMetaID()), field->GetIcon());
+				list.Add(field->GetMetaID(), field->GetName(), field->GetSynonym(), wxVariant(field->GetMetaID()), field->GetClassType());
 				return;
 			}
 		}

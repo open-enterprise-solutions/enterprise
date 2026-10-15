@@ -80,6 +80,10 @@ enum class ibRpcError {
 // Reads one request. Answers false and fills `error` when the text is not a
 // JSON-RPC request — malformed JSON, or well-formed JSON that is not one.
 BACKEND_API bool ibRpcParseRequest(const wxString& text, ibRpcRequest& request, wxString& error);
+// …its node types turned back into classes by THAT configuration — the caller's session's; none: only a
+// composition's own parts are known (what a call is read with before its caller is).
+BACKEND_API bool ibRpcParseRequest(const wxString& text, ibRpcRequest& request, wxString& error,
+	const class ibMetaData* metaData);
 
 // A MESSAGE THAT IS AN ANSWER, not a call. Once the server can ask the client
 // something (sampling), the same endpoint starts receiving both — and they are
@@ -104,6 +108,8 @@ BACKEND_API wxString ibRpcRenderNode(const ibDataNode& node,
 // every typed part it was made of — silently, since an untyped node parses perfectly well and simply
 // means nothing. Registered types first, a composition's own parts under them.
 BACKEND_API void ibRpcInstallTypeLookup(class ibJsonProvider& provider);
+// …by the configuration handed in, not the thread's — a thread that works for no base has none to ask.
+BACKEND_API void ibRpcInstallTypeLookup(class ibJsonProvider& provider, const class ibMetaData* metaData);
 
 // The two answers. `id` is the request's, verbatim: the protocol matches a
 // reply to its call by that value and by nothing else.

@@ -196,8 +196,14 @@ ibPicture ibBackendPicture::GetServerPicture(const ibPictureDescription& picture
 		if (found != s_made.end())
 			return found->second;
 		const wxBitmap bitmap = GetPicture(pictureDesc.m_class_identifier);
-		return s_made.emplace(pictureDesc.m_class_identifier,
-			bitmap.IsOk() ? FromImage(bitmap.ConvertToImage()) : ibPicture()).first->second;
+		if (bitmap.IsOk() || metaData == nullptr)
+			return s_made.emplace(pictureDesc.m_class_identifier,
+				bitmap.IsOk() ? FromImage(bitmap.ConvertToImage()) : ibPicture()).first->second;
+		// …a type of the configuration's own (a catalog's reference) — its class's icon, as the configuration's
+		// constructor of it gives it: made anew, the configuration's only.
+		const ibCtorAbstractType* const ctor = metaData->GetAvailableCtor(pictureDesc.m_class_identifier);
+		const wxIcon icon = ctor != nullptr ? ctor->GetClassIcon() : wxNullIcon;
+		return icon.IsOk() ? FromImage(wxBitmap(icon).ConvertToImage()) : ibPicture();
 	}
 
 	// A configuration's picture and a file's are made from the bytes they keep — anew, shared with nobody.

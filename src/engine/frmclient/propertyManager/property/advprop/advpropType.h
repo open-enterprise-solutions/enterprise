@@ -13,7 +13,7 @@
 
 // THE DESKTOP'S TYPE EDITOR (frontend/propertyManager/property/advprop/advpropType.h): the list of types, the qualifiers
 // under it, the picker behind its button. What it lists is the property's — the types the server offered it (the
-// row's, ibPropertyValue::GetValueList) — where the desktop's asked the configuration for them (FillByClsid).
+// row's, ibPropertySerializable::GetValueList) — where the desktop's asked the configuration for them (FillByClsid).
 class ibPGTypeProperty : public wxPGProperty {
 	WX_PG_DECLARE_PROPERTY_CLASS(ibPGTypeProperty);
 private:

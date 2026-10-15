@@ -18,7 +18,7 @@ public:
 	ibModuleTextView() : ibMetaView() {}
 
 	virtual void OnDraw(ibDataNode& frame) override;
-	virtual ibClientViewKind GetViewKind() const override { return ibClientViewKind::Module; }
+	virtual ibProtocolViewKind GetViewKind() const override { return ibProtocolViewKind::Module; }
 	// The text as the metaobject keeps it ({Text}); what the desktop's code editor asked the configuration, by the
 	// request's Kind (ibProtocolModuleRequest) — the names at the editor's caret, a call's form, the default procedures.
 	virtual bool Fetch(const ibDataNode& request, ibDataNode& response) override;

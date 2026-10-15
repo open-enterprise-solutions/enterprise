@@ -32,7 +32,8 @@
 
 #include "frmserver/docView/commandProcessor.h"   // a document's commands, and their undo
 #include "frmserver/docView/docCommand.h"         // the commands a manager offers
-#include "backend/backend_picture.h"              // ibPicture — a document's icon as it is sent
+#include "backend/backend_picture.h"
+#include "core/description/pictureDescription.h"  // ibPictureDescription — a document's icon, sent by its id
 
 #if wxUSE_STD_IOSTREAM
   #include "wx/iosfwrap.h"
@@ -62,6 +63,7 @@ class FRMSERVER_API ibMetaDocTemplate;
 class FRMSERVER_API ibDocManager;
 class FRMSERVER_API ibMetaDocument;
 class ibDocChildFrameAnyBase;
+class ibClientFrame;
 
 class BACKEND_API ibDataNode;
 class BACKEND_API ibValue;
@@ -252,9 +254,9 @@ public:
 
     // OES-side adaptations lifted from ibMetaDocument (step-4 collapse).
 
-    // Document icon — generic concept (wxDocument has none); as a server sends it.
-    virtual void SetIcon(const ibPicture& icon) { m_docIcon = icon; }
-    virtual ibPicture GetIcon() const { return m_docIcon; }
+    // Document icon — generic concept (wxDocument has none); the picture it is, sent by its id.
+    virtual void SetIcon(const ibPictureDescription& icon) { m_docIcon = icon; }
+    virtual ibPictureDescription GetIcon() const { return m_docIcon; }
 
     // Cascading-close opt-out. Returning false means "this child stays open
     // when its parent closes" — ibDocument::Close re-parents it onto the
@@ -287,7 +289,7 @@ protected:
     ibDocument*           m_documentParent;
     ibCommandProcessor*   m_commandProcessor;
     bool                  m_savedYet;
-    ibPicture             m_docIcon;
+    ibPictureDescription  m_docIcon;
 
     virtual bool DoSaveDocument(const wxString& file);
     virtual bool DoOpenDocument(const wxString& file);
@@ -308,18 +310,6 @@ protected:
 private:
     wxDECLARE_ABSTRACT_CLASS(ibDocument);
     wxDECLARE_NO_COPY_CLASS(ibDocument);
-};
-
-// WHAT A VIEW SHOWS, as a client draws it — a tab's Kind on the wire, a number never renumbered: a client takes the
-// view of its own it has registered for it.
-enum class ibClientViewKind : s32 {
-    Form        = 1,   // a form — the default, absent from the wire
-    Text        = 2,
-    Spreadsheet = 3,
-    AuditLog    = 4,
-    DataProcessor = 5,
-    Report        = 6,
-    Module        = 7,
 };
 
 class FRMSERVER_API ibView: public wxObject
@@ -347,8 +337,9 @@ public:
     // client draws from.
     virtual void OnDraw(ibDataNode& frame) = 0;
 
-    // What it shows — the view of its own a client draws it with (the tab's Kind).
-    virtual ibClientViewKind GetViewKind() const { return ibClientViewKind::Form; }
+    // What it shows — the view of its own a client draws it with (the tab's Kind; a form — the default, absent from
+    // the wire).
+    virtual ibProtocolViewKind GetViewKind() const { return ibProtocolViewKind::Form; }
     // WHAT A CLIENT READS OF THE VIEW ITSELF, a part at a time — a spreadsheet's cells, as a control of a form is read
     // (ibValueFrame::Fetch). False: this view has nothing to read.
     virtual bool Fetch(const ibDataNode& WXUNUSED(request), ibDataNode& WXUNUSED(response)) { return false; }
@@ -658,6 +649,10 @@ public:
     // to the end of the request); false when it cannot, and the caller closes
     // the view itself.
     virtual bool Close() { return false; }
+
+    // The client whose tab it is. The base is no client's tab and answers
+    // none; a tab overrides it.
+    virtual ibClientFrame* GetFrame() const { return nullptr; }
 
 protected:
     ibDocument*       m_childDocument;

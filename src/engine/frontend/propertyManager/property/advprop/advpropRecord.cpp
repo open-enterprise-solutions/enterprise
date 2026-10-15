@@ -1,6 +1,7 @@
 #include "advpropRecord.h"
 
 #include "backend/propertyManager/property/variant/variantRecord.h"
+#include "backend/backend_picture.h"   // ibBackendPicture::CreatePicture — a choice's picture, by its id
 
 #include "frontend/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
 #include "frontend/propertyManager/property/private/propertyRegistry.h"
@@ -35,7 +36,7 @@ ibPGRecordProperty::ibPGRecordProperty(const ibPropertyObject* property, const w
     // The classes AND the has-a-recorder rule both moved into ibPropertyRecord::GetValueList, so the
     // list here is the same one every other caller now sees.
     for (unsigned int idx = 0; idx < choices.GetCount(); idx++)
-        m_choices.Add(choices.GetLabel(idx), choices.GetBitmap(idx), choices.GetId(idx));
+        m_choices.Add(choices.GetLabel(idx), ibBackendPicture::CreatePicture(choices.GetPicture(idx)), choices.GetId(idx));
 
     //m_flags |= wxPGFlags::ReadOnly;
     m_flags |= wxPGPropertyFlags_ActiveButton; // Property button always enabled.

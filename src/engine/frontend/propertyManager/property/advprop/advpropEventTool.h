@@ -42,8 +42,9 @@ public:
 	long GetNumber() const { return m_actionData.GetNumber(); }
 	wxString GetString() const { return m_actionData.GetString(); }
 
-	// Backend's choice list in, wxPGChoices built here — see ibPropertyChoiceList.
-	ibPGEventToolProperty(const wxString& label = wxPG_LABEL,
+	// Backend's choice list in, wxPGChoices built here — see ibPropertyChoiceList. Its pictures are by id; a
+	// configuration's is read in the configuration of the object the property belongs to.
+	ibPGEventToolProperty(const ibPropertyObject* property = nullptr, const wxString& label = wxPG_LABEL,
 		const wxString& name = wxPG_LABEL, const ibPropertyChoiceList& choices = ibPropertyChoiceList(),
 		const wxVariant& value = wxNullVariant);
 

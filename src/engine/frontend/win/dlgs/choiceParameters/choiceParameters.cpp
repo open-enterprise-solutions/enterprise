@@ -4,6 +4,7 @@
 #include "backend/propertyManager/property/variant/variantChoiceLink.h"   // ibChoiceHolderName — what the fields belong to
 #include "backend/metaData.h"
 #include "backend/objCtorDefs.h"   // ibCtorObjectMetaType_Reference — the kind a type row's reference is registered as
+#include "backend/backend_picture.h"   // ibBackendPicture::CreatePicture — a choice's picture, by its id
 
 #include "frontend/win/dlgs/queryConstructor/queryGridModel.h"   // the one grid model for a plain list
 #include "frontend/win/ctrls/dataview/dataviewEditOnActivate.h"  // …and the one way a cell opens on a double-click
@@ -86,7 +87,7 @@ void ibDialogChoiceParameters::BuildCatalogue()
 			offered.m_id = (ibMetaID)list.GetId(idx);
 			offered.m_path = path;
 			offered.m_label = list.GetName(idx);
-			const wxBitmap& picture = list.GetBitmap(idx);
+			const wxBitmap picture = ibBackendPicture::CreatePicture(list.GetPicture(idx));
 			if (picture.IsOk())
 				offered.m_icon.CopyFromBitmap(picture);
 			into.push_back(offered);

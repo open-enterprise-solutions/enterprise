@@ -46,10 +46,10 @@ class FRMSERVER_API ibAuditLogView : public ibView {
 public:
 	ibAuditLogView() : ibView() {}
 
-	// Nothing of the journal is drawn — the client's view is its own; only the pictures of its toolbar are sent.
-	virtual void OnDraw(ibDataNode& frame) override;
+	// Nothing of the journal is drawn — the client's view is its own, its toolbar's pictures the engine's.
+	virtual void OnDraw(ibDataNode& WXUNUSED(frame)) override {}
 
-	virtual ibClientViewKind GetViewKind() const override { return ibClientViewKind::AuditLog; }
+	virtual ibProtocolViewKind GetViewKind() const override { return ibProtocolViewKind::AuditLog; }
 	// The rows the filter selects, newest first: {From, To, Level, User, Session, Source, Event, Ref, Search, Offset,
 	// Count} → a child a row {Time, Level, Session, User, Host, Source, Event, Message, Ref, RefMeta}.
 	virtual bool Fetch(const ibDataNode& request, ibDataNode& response) override;

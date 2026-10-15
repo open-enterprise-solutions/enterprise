@@ -73,8 +73,8 @@ bool ibValueForm::DispatchEvent(const ibFormID& controlId, ibProtocolEvent event
 	for (ibValueFrame* node = control; node != nullptr; node = node->GetParent()) {
 		ibDataNode state;
 		node->OnUpdate(state, host);
-		const ibDataValue* enabled = state.FindField(wxT("Enabled"));
-		const ibDataValue* visible = state.FindField(wxT("Visible"));
+		const ibDataValue* enabled = state.FindField(ibProtocolName::Enabled);
+		const ibDataValue* visible = state.FindField(ibProtocolName::Visible);
 		if ((enabled != nullptr && !enabled->AsBool()) || (visible != nullptr && !visible->AsBool()))
 			return false;
 	}
@@ -96,14 +96,14 @@ void ibValueForm::OnUpdate(ibDataNode& state, ibVisualHost* host)
 	// update of the form has its tables read their rows again (UpdateForm), which no frame drawn means.
 	RefreshLockBadge();
 
-	state.SetValue(wxT("Title"), GetControlTitle());
-	state.SetValue(wxT("Enabled"), IsFormEnabled());
+	state.SetValue(ibProtocolName::Title, GetControlTitle());
+	state.SetValue(ibProtocolName::Enabled, IsFormEnabled());
 	state.SetValue(wxT("ViewOnly"), IsViewOnly());
-	state.SetValue(wxT("Modified"), IsModified());
+	state.SetValue(ibProtocolName::Modified, IsModified());
 	if (!m_lockBadgeHolder.IsEmpty())
 		state.SetValue(wxT("LockedBy"), m_lockBadgeHolder);
 	if (HasCommandBar())
-		GetCommandBar()->Update(state.Child(wxT("CommandBar")), host);
+		GetCommandBar()->Update(state.Child(ibProtocolName::CommandBar));
 }
 
 //**********************************************************************************
@@ -121,6 +121,14 @@ bool ibValueForm::ReadData(const ibDataNode& node)
 	if (!ReadAttributes(node))
 		return false;
 	ReadFormCommands(node);
+	// Its command bar — the "Layers" block a composite control keeps it in (ibValueWindowComposite::ReadData); a form
+	// saved without it keeps the bar it is made with.
+	if (ibValueCommandBar* bar = GetCommandBar()) {
+		if (const ibDataNode* layers = node.FindChild(ibProtocolName::Layers)) {
+			if (const ibDataNode* barNode = layers->FindChild(ibProtocolName::CommandBar))
+				bar->ReadData(*barNode);
+		}
+	}
 	return ibValueFrame::ReadData(node);
 }
 
@@ -133,10 +141,14 @@ bool ibValueForm::WriteData(ibDataNode& node) const
 	node.SetProperty(m_propertyBG->GetName(), m_propertyBG->GetNodeValue());
 	node.SetProperty(m_propertyEnabled->GetName(), m_propertyEnabled->GetNodeValue());
 
-	if (!WriteAttributes(node))
-		return false;
+	// An incomplete attribute refuses the write — after the form is written whole (WriteAttributes).
+	const bool attributes = WriteAttributes(node);
 	WriteFormCommands(node);
-	return ibValueFrame::WriteData(node);
+	// …and its command bar, as a composite control writes its own (ibValueWindowComposite::WriteData): a command put on
+	// it was lost with the next drawing of the form (2026-10-15).
+	if (ibValueCommandBar* bar = GetCommandBar())
+		bar->WriteData(node.Child(ibProtocolName::Layers).Child(ibProtocolName::CommandBar));
+	return ibValueFrame::WriteData(node) && attributes;
 }
 
 // Copy/paste carries ONLY the attribute store — the form's own properties (Title/Orient/…)

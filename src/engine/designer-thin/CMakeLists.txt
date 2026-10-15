@@ -11,9 +11,20 @@ set(DESIGNER_THIN_SOURCES
     backend/debugger/debugClientQuery.cpp
     mainFrame/debugger/debugClientImpl.cpp
     win/editor/codeEditor/codeEditorDesigner.cpp
+    win/editor/visualEditor/innerFrame.cpp
+    win/editor/visualEditor/titleFrame.cpp
+    win/editor/visualEditor/visualEditor.cpp
+    win/editor/visualEditor/visualEditorAttributeTree.cpp
+    win/editor/visualEditor/visualEditorCmdProc.cpp
+    win/editor/visualEditor/visualEditorCommandTree.cpp
+    win/editor/visualEditor/visualEditorEvent.cpp
+    win/editor/visualEditor/visualEditorNotebook.cpp
+    win/editor/visualEditor/visualEditorObjectTree.cpp
+    win/editor/visualEditor/visualEditorPanel.cpp
     docManager/templates/docViewDataProcessorFile.cpp
     docManager/templates/docViewDataReportFile.cpp
     docManager/templates/docViewModuleEditor.cpp
+    docManager/templates/docViewFormEditor.cpp
     mainFrame/local/localWindow.cpp
     mainFrame/mainFrameDesigner.cpp
     mainFrame/mainFrameDesignerEvent.cpp

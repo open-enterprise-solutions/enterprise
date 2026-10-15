@@ -12,6 +12,7 @@
 #include "tableBox.h"
 #include "widgets.h"
 
+#include "core/stringUtils.h"   // stringUtils::CompareString — a name found as the desktop's finds it
 #include "frmclient/win/typeconv.h"
 
 namespace {
@@ -79,6 +80,43 @@ bool ibValueFrame::ChangeChildPosition(ibValueFrame* obj, unsigned int pos)
 {
 	// The desktop's re-lays its controls here (OnChangeChildPosition); this one's are laid out by the server's answer.
 	return ibPropertyObjectHelper::ChangeChildPosition(obj, pos);
+}
+
+void ibValueFrame::OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue)
+{
+	m_host.ModifyProperty(property, oldValue, newValue);
+}
+
+ibValueFrame* ibValueFrame::DoFindControlByName(const wxString& controlName, ibValueFrame* top) const
+{
+	for (unsigned int idx = 0; idx < top->GetChildCount(); idx++) {
+		ibValueFrame* child = top->GetChild(idx);
+		wxASSERT(child);
+		ibValueFrame* foundedMeta = DoFindControlByName(controlName, child);
+		if (foundedMeta) {
+			return foundedMeta;
+		}
+	}
+
+	if (stringUtils::CompareString(controlName, top->GetControlName())) {
+		return top;
+	}
+
+	return nullptr;
+}
+
+ibValueFrame* ibValueFrame::FindControlByName(const wxString& controlName) const
+{
+	ibValueForm* const valueForm = m_host.GetValueForm();
+	return valueForm != nullptr ? DoFindControlByName(controlName, valueForm) : nullptr;
+}
+
+bool ibValueControl::OnPropertyChanging(ibProperty* property, const wxVariant& newValue)
+{
+	if (property->GetName() == ibProtocolName::Name && FindControlByName(newValue.GetString()) != nullptr)
+		return false;
+
+	return true;
 }
 
 void ibValueFrame::SetSubscribedEvents(const std::vector<ibProtocolNode>& events)

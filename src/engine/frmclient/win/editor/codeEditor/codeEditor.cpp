@@ -6,6 +6,7 @@
 #include "codeEditor.h"
 #include "frmclient/mainFrame/mainFrame.h"
 #include "frmclient/docView/tabDocument.h"   // the module's tab — what the text is fetched from and handed back to
+#include "frmclient/mainFrame/objinspect/objinspect.h"   // the inspector — what it shows as it is made, and activated
 #include "res/bitmaps_res.h"
 
 #include <wx/artprov.h>
@@ -182,6 +183,13 @@ ibCodeEditor::ibCodeEditor(ibTabDocument* document, wxWindow* parent, wxWindowID
 	// re-lexes right away.
 	if (m_document == nullptr)
 		m_initialized = true;
+
+	// ⭐ WHAT IT SHOWS IN THE INSPECTOR AS IT IS ACTIVATED — the desktop's showed its document's metaobject, which the thin
+	// one does not have: the property the inspector holds as it is made, shown or hidden (the row of the tree it was opened
+	// from), held with the tree — the tree's next row makes the next one, this stays.
+	ibObjectInspector* const inspector = objectInspector;
+	if (m_document != nullptr && inspector != nullptr && inspector->GetSelectedObject() != nullptr)
+		m_property = inspector->GetSelectedObject()->weak_from_this().lock();
 }
 
 // The desktop's cleared its module's lexems in the compile cache here — the cache is the server's.
@@ -426,43 +434,50 @@ void ibCodeEditor::SetFontColorSettings(const ibFontColorSettings& settings)
 
 bool ibCodeEditor::LoadModule()
 {
-	ClearAll();
-
-	if (m_document != nullptr) {
-
-		// The text the tab's view holds (ibProtocolModuleRequest::Text): what the desktop's read of the metaobject.
-		ibProtocolNode answer;
-		const bool loaded = m_document->Fetch(ibProtocolNode(), answer);
-		if (loaded) {
-
-			m_moduleText = answer.GetString(ibProtocolName::Text);
-
-			if (IsEditable()) {
-				SetText(m_moduleText); m_initialized = true;
-			}
-			else {
-				SetReadOnly(false);
-				SetText(m_moduleText); m_initialized = true;
-				SetReadOnly(true);
-			}
-
-			m_tc.Load(m_moduleText);
-
-			try {
-				m_tc.PrepareLexem();
-			}
-			catch (...) {
-			}
-
-			EmptyUndoBuffer();
-		}
-
-		m_fp.RecalcFoldLevel();
-		RefreshEditor();
-		return loaded;
+	if (m_document == nullptr) {
+		ClearAll();
+		return false;
 	}
 
-	return m_document != nullptr;
+	// The text the tab's view holds (ibProtocolModuleRequest::Text): what the desktop's read of the metaobject.
+	ibProtocolNode answer;
+	if (!m_document->Fetch(ibProtocolNode(), answer)) {
+		ClearAll();
+		m_fp.RecalcFoldLevel();
+		RefreshEditor();
+		return false;
+	}
+	return LoadModule(answer);
+}
+
+bool ibCodeEditor::LoadModule(const ibProtocolNode& answer)
+{
+	ClearAll();
+
+	m_moduleText = answer.GetString(ibProtocolName::Text);
+
+	if (IsEditable()) {
+		SetText(m_moduleText); m_initialized = true;
+	}
+	else {
+		SetReadOnly(false);
+		SetText(m_moduleText); m_initialized = true;
+		SetReadOnly(true);
+	}
+
+	m_tc.Load(m_moduleText);
+
+	try {
+		m_tc.PrepareLexem();
+	}
+	catch (...) {
+	}
+
+	EmptyUndoBuffer();
+
+	m_fp.RecalcFoldLevel();
+	RefreshEditor();
+	return true;
 }
 
 bool ibCodeEditor::SaveModule()
@@ -540,10 +555,13 @@ void ibCodeEditor::RefreshEditor()
 	ibCodeEditor::RefreshBreakpoint();
 }
 
-// The desktop's showed the module's object in the inspector here — the inspector is the designer's, its door the
-// server's Select; not asked from a module's tab yet.
+// The inspector is sent the property held, as the desktop's was its document's metaobject here (an object's or a
+// manager's module: its owner) — and receives it anew.
 void ibCodeEditor::ActivateEditor()
 {
+	if (m_document != nullptr && objectInspector != nullptr)
+		objectInspector->SelectObject(m_property.get());
+
 	ibCodeEditor::SetSTCFocus(true);
 	ibCodeEditor::SetFocus();
 }

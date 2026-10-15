@@ -29,6 +29,7 @@ public:
 	// The view of the document this box holds — the form's view is a facade over it while the box is the active
 	// control (menu, toolbar, commands, printing, saving).
 	virtual ibFrontendView* GetControlView() const override;
+	virtual ibViewCommandBar* GetCommandBar() const override { return m_commandBar.get(); }
 
 private:
 

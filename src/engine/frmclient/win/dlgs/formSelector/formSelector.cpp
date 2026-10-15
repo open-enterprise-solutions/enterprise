@@ -5,11 +5,16 @@
 
 #include "formSelector.h"
 
-#include <algorithm>
-
 #include "core/stringUtils.h"
 #include "frmclient/mainFrame/mainFrame.h"
 #include "protocol/protocol.h"
+
+namespace {
+
+// The id of the first kind's button — the others follow it in their places.
+constexpr int kFirstChoiceId = wxID_HIGHEST + 1;
+
+} // namespace
 
 ibDialogSelectTypeForm::ibDialogSelectTypeForm(const ibProtocolNode& request)
 	: wxDialog(ibFrontendMainFrame::GetFrame(), wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE | wxDIALOG_ADAPTATION_ANY_SIZER)
@@ -24,8 +29,10 @@ ibDialogSelectTypeForm::ibDialogSelectTypeForm(const ibProtocolNode& request)
 	wxBoxSizer* bSizerMain = new wxBoxSizer(wxVERTICAL);
 	wxStaticBoxSizer* sbSizerMain = new wxStaticBoxSizer(new wxStaticBox(this, wxID_ANY, _("Select form type")), wxVERTICAL);
 
-	for (auto choice : m_listChoice) {
-		wxRadioButton* radioButton = new wxRadioButton(sbSizerMain->GetStaticBox(), choice.m_value, choice.m_label, wxDefaultPosition, wxDefaultSize);
+	// A button's id is its place: a generic form's kind (wxNOT_FOUND) is wxID_ANY to a window.
+	for (std::size_t idx = 0; idx < m_listChoice.size(); ++idx) {
+		wxRadioButton* radioButton = new wxRadioButton(sbSizerMain->GetStaticBox(), kFirstChoiceId + static_cast<int>(idx),
+			m_listChoice[idx].m_label, wxDefaultPosition, wxDefaultSize);
 		radioButton->Connect(wxEVT_RADIOBUTTON, wxCommandEventHandler(ibDialogSelectTypeForm::OnFormTypeChanged), nullptr, this);
 		sbSizerMain->Add(radioButton, 1, wxALL | wxEXPAND, FromDIP(5));
 	}
@@ -85,7 +92,7 @@ ibDialogSelectTypeForm::ibDialogSelectTypeForm(const ibProtocolNode& request)
 	// The first kind is the one checked — and the one an OK without a click answers, named as a click on it names it
 	// (the desktop's answered a kind it never set).
 	if (!m_listChoice.empty()) {
-		wxCommandEvent event(wxEVT_RADIOBUTTON, m_listChoice.front().m_value);
+		wxCommandEvent event(wxEVT_RADIOBUTTON, kFirstChoiceId);
 		OnFormTypeChanged(event);
 	}
 }
@@ -138,18 +145,14 @@ void ibDialogSelectTypeForm::OnButtonCancel(wxCommandEvent& event)
 
 void ibDialogSelectTypeForm::OnFormTypeChanged(wxCommandEvent& event)
 {
-	unsigned int choice = event.GetId();
-	auto founded_choice = std::find_if(m_listChoice.begin(), m_listChoice.end(),
-		[choice](auto& v) {return choice == v.m_value; }
-	);
-
-	m_choice = choice;
+	const std::size_t idx = static_cast<std::size_t>(event.GetId() - kFirstChoiceId);
 
 	// The name the kind gives the form — the server's (GetNewName there).
-	if (founded_choice != m_listChoice.end()) {
-		m_textCtrlName->SetValue(founded_choice->m_name);
+	if (idx < m_listChoice.size()) {
+		m_choice = m_listChoice[idx].m_value;
+		m_textCtrlName->SetValue(m_listChoice[idx].m_name);
 		m_textCtrlSynonym->SetValue(
-			stringUtils::GenerateSynonym(founded_choice->m_name)
+			stringUtils::GenerateSynonym(m_listChoice[idx].m_name)
 		);
 	}
 

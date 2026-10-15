@@ -42,7 +42,7 @@ void ibValueGridBox::Create(wxWindow* parent, const ibProtocolNode& /*node*/)
 	wxBoxSizer* const sizer = new wxBoxSizer(wxVERTICAL);
 
 	// The chrome: its command bar above it.
-	m_commandBar = std::make_unique<ibViewCommandBar>(m_panel, [this](const ibProtocolNode& args) {
+	m_commandBar = std::make_unique<ibViewCommandBar>(m_panel, GetVisualHost(), [this](const ibProtocolNode& args) {
 		Send(ibProtocolEvent::Command, args);
 	});
 	sizer->Add(m_commandBar->GetWindow(), 0, wxEXPAND);

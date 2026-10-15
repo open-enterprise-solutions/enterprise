@@ -25,7 +25,7 @@ enum {
 
 // THE DESKTOP'S INSPECTOR (frontend/mainFrame/objinspect), one road: the object shown and its properties, each by the
 // widget registered for its type (ibPropertyRegistry). A metaobject's properties are the server's — the object holds
-// them, filled from its rows (ibValueMetaObject, ibPropertyValue); the inspector knows no metadata and no server, and an
+// them, filled from its rows (ibValueMetaObject, ibPropertySerializable); the inspector knows no metadata and no server, and an
 // edit goes through the object's door (ibPropertyGate), as on the desktop.
 class FRMCLIENT_API ibObjectInspector final : public wxPanel {
 
@@ -61,7 +61,8 @@ public:
 	// Services for the observers
 	void SelectObject(ibPropertyObject* selobj, bool force = false) {
 
-		if (IsShownInspector() && (force || m_currentSel != selobj)) {
+		// …hidden as well: it holds the object, and draws it as it is shown (Create).
+		if (force || m_currentSel != selobj) {
 			Create(selobj, force);
 		}
 
@@ -101,6 +102,7 @@ protected:
 
 	void OnBitmapPropertyChanged(wxCommandEvent& event);
 	void OnChildFocus(wxChildFocusEvent& event);
+	void OnShow(wxShowEvent& event);
 
 private:
 

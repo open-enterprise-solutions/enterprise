@@ -11,6 +11,7 @@
 #include "frmclient/win/picture.h"
 #include "frmclient/win/ctrls/toolBar.h"
 #include "frmclient/win/theme/luna_toolbarart.h"
+#include "frmclient/visualView/visualHostClient.h"   // ibVisualHostClient::IsDesignerHost — the bar's real width in the editor
 
 namespace {
 
@@ -43,12 +44,13 @@ std::string ShapeOf(const ibProtocolNode& commandBar)
 //*                                  commandBar                                     *
 //***********************************************************************************
 
-ibViewCommandBar::ibViewCommandBar(wxWindow* parent, ibSendCommand sendCommand)
+ibViewCommandBar::ibViewCommandBar(wxWindow* parent, const ibVisualHostClient& host, ibSendCommand sendCommand)
 	: m_sendCommand(std::move(sendCommand))
 {
 	m_bar = new ibAuiToolBar(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxAUI_TB_NO_AUTORESIZE | wxAUI_TB_HORZ_TEXT | wxAUI_TB_OVERFLOW);
 	m_bar->SetArtProvider(new wxAuiLunaToolBarArt());
+	m_bar->SetDesignerMode(host.IsDesignerHost());   // show real width in the editor (no overflow collapse)
 
 	// Hidden until it has a command: an empty strip takes no room.
 	m_bar->Hide();
@@ -60,6 +62,14 @@ ibViewCommandBar::ibViewCommandBar(wxWindow* parent, ibSendCommand sendCommand)
 wxWindow* ibViewCommandBar::GetWindow() const
 {
 	return m_bar;
+}
+
+ibProtocolNode ibViewCommandBar::FindEntryByPosition(const wxPoint& point) const
+{
+	const wxAuiToolBarItem* const tool = m_bar->FindToolByPosition(point.x, point.y);
+	const std::vector<ibProtocolNode> entries = m_entries.Children();
+	const std::size_t idx = tool != nullptr ? static_cast<std::size_t>(tool->GetId() - kFirstToolId) : entries.size();
+	return idx < entries.size() ? entries[idx] : ibProtocolNode();
 }
 
 void ibViewCommandBar::Update(const ibProtocolNode& commandBar)
@@ -82,6 +92,14 @@ void ibViewCommandBar::Update(const ibProtocolNode& commandBar)
 	// it, a command not enabled greyed but there.
 	m_shape = shape;
 	m_entries = commandBar.IsNode() ? commandBar.Clone() : ibProtocolNode();
+	// The pictures of the bar and of its groups' members asked for at once — not a call per tool.
+	std::vector<wxString> pictures;
+	for (const ibProtocolNode& entry : entries) {
+		pictures.push_back(entry.GetString(ibProtocolName::Picture));
+		for (const ibProtocolNode& member : entry.Children())
+			pictures.push_back(member.GetString(ibProtocolName::Picture));
+	}
+	ibProtocolPictureReceive(pictures);
 	m_bar->ClearTools();
 
 	bool anyTool = false;

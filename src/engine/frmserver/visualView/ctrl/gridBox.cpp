@@ -115,8 +115,14 @@ void ibValueGridBox::OnUpdate(ibDataNode& state, ibVisualHost* host)
 	state.SetValue(wxT("ComposeState"), static_cast<s32>(composeState));
 }
 
-void ibValueGridBox::OnCreated(ibVisualHost* host)
+void ibValueGridBox::OnCreated(ibVisualHost* host, bool firstCreated)
 {
+	// A JUST-DROPPED BOX PROVISIONS ITS OWN ATTRIBUTE — the same door every source control uses. Its
+	// TYPE is the first type this box DECLARES it accepts (spreadsheet document), so there is nothing
+	// to state twice.
+	if (firstCreated)
+		AutoBindNewSource(this);
+
 	// THE BINDING IS HONOURED HERE TOO — the same moment every other source control takes its value
 	// (a checkbox, a textbox, a table all read the bound attribute as they are shown). The form has
 	// already handed it over at InitializeControl; taking it again is idempotent.

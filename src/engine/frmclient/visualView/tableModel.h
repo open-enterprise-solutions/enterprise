@@ -57,11 +57,10 @@ private:
 class ibViewTableModel : public ibDataViewModel {
 public:
 
-	// What an answer leaves the UI to do — the current row it named, the pictures it carried (id, base64), drawn there:
-	// a wx image is made on the UI thread only.
+	// What an answer leaves the UI to do — the current row it named. A row's picture is its id alone, drawn from the
+	// client's pictures (ibProtocolPictureById) on the UI thread.
 	struct ibAnswer {
-		long long                                     currentRow = 0;
-		std::vector<std::pair<ibPictureID, wxString>> pictures;
+		long long currentRow = 0;
 	};
 	using ibAnswered = std::function<void(const ibAnswer& answer)>;
 

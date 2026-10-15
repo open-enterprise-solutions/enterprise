@@ -41,7 +41,7 @@ class FRMCLIENT_API ibDialogSelectTypeForm : public wxDialog {
 	};
 
 	std::vector<choiceData_t> m_listChoice;
-	unsigned int m_choice;
+	int m_choice = 0;   // a generic form's is wxNOT_FOUND
 
 public:
 

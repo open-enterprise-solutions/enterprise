@@ -36,9 +36,9 @@ bool ibValueForm::ReadAttributes(const ibDataNode& node)
 		else { DropAttributeBinds(*it); it = m_attributes.erase(it); }
 	}
 
-	if (const ibDataNode* attrsNode = node.FindChild(wxT("Attributes"))) {
+	if (const ibDataNode* attrsNode = node.FindChild(ibProtocolName::Attributes)) {
 		for (const ibDataNode& attrNode : attrsNode->Children()) {
-			const bool isMain = attrNode.GetValue<bool>(wxT("Main"));
+			const bool isMain = attrNode.GetValue<bool>(ibProtocolName::Main);
 			if (isMain && hasMain)
 				continue;   // the source-reconstructed main wins — never load a second one
 			ibValuePtr<ibFormAttributeValue> holder(new ibFormAttributeValue(this));   // builds its description
@@ -58,16 +58,19 @@ bool ibValueForm::WriteAttributes(ibDataNode& node) const
 	// redundant there; but a common form has NO source — without the stored main it loses its primary
 	// attribute on copy AND on a plain save/load. Keeping it also lets a sourceless form later be
 	// reconstructed into an object form by re-homing that main onto a real object.
-	ibDataNode& attrsNode = node.Child(wxT("Attributes"));
+	ibDataNode& attrsNode = node.Child(ibProtocolName::Attributes);
+	bool complete = true;
 	for (const auto& av : m_attributes) {
 		ibDataNode& attrNode = attrsNode.AddChild(av->GetClassType(), av->GetId());
 		// WriteProperty returns false when the attribute is INCOMPLETE (a dynamic list with no
 		// source picked) — FAIL the whole write so a broken definition is never persisted (the
-		// form's save is refused, not silently partial).
+		// form's save is refused, not silently partial). The node is still written whole: the thin
+		// designer carries the form under edit as this node, and one unfinished list wiped every
+		// control of it (2026-10-15).
 		if (!av->WriteProperty(attrNode))
-			return false;
+			complete = false;
 	}
-	return true;
+	return complete;
 }
 
 ibMetaID ibValueForm::NextAttributeId() const
@@ -307,7 +310,7 @@ bool ibValueForm::RenameFormCommand(ibFormCommandValue* entry, const wxString& n
 
 bool ibValueForm::WriteFormCommands(ibDataNode& node) const
 {
-	ibDataNode& cmdsNode = node.Child(wxT("FormCommands"));
+	ibDataNode& cmdsNode = node.Child(ibProtocolName::FormCommands);
 	for (const auto& fc : m_formCommands) {
 		ibDataNode& cmdNode = cmdsNode.AddChild(fc->GetClassType(), fc->GetId());
 		fc->WriteProperty(cmdNode);
@@ -318,7 +321,7 @@ bool ibValueForm::WriteFormCommands(ibDataNode& node) const
 bool ibValueForm::ReadFormCommands(const ibDataNode& node)
 {
 	m_formCommands.clear();
-	if (const ibDataNode* cmdsNode = node.FindChild(wxT("FormCommands"))) {
+	if (const ibDataNode* cmdsNode = node.FindChild(ibProtocolName::FormCommands)) {
 		for (const ibDataNode& cmdNode : cmdsNode->Children()) {
 			ibValuePtr<ibFormCommandValue> holder(new ibFormCommandValue(this));
 			if (!holder->ReadProperty(cmdNode))   // like ReadAttributes: a failed read is a failed load, not a silent drop

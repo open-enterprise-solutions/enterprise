@@ -22,7 +22,7 @@ public:
 
 // A SIZER ITEM — the desktop's ibValueSizerItem: how its one control sits in the sizer above — its share of the room,
 // its stretch, its border, as its node says. Built by the host's walk as the desktop's was; it draws nothing.
-class ibValueSizerItem : public ibValueFrame {
+class FRMCLIENT_API ibValueSizerItem : public ibValueFrame {
 public:
 
 	ibValueSizerItem(ibVisualHostClient& host, long long controlId) : ibValueFrame(host, controlId) {}
@@ -37,6 +37,8 @@ public:
 
 	// The flag its node lays its child out with — the borders it has, and how it stretches (wxSizerItem::GetFlag).
 	static int GetFlag(const ibProtocolNode& node);
+	// The item a control is laid out in — what Update sets; the editor's highlight is drawn out to its border.
+	static wxSizerItem* GetItem(const ibValueFrame* child);
 };
 
 class ibValueBoxSizer : public ibValueSizer {

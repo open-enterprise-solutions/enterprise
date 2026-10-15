@@ -6,6 +6,7 @@
 #include "backend/propertyManager/property/propertyChartOfCalculationTypes.h"
 #include "backend/propertyManager/property/propertyAccountingKind.h"
 #include "backend/propertyManager/property/propertyFunctionalOptions.h"
+#include "backend/backend_picture.h"   // ibBackendPicture::CreatePicture — a choice's picture, by its id
 
 #include "frontend/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
 #include "frontend/propertyManager/property/private/propertyRegistry.h"
@@ -56,7 +57,7 @@ ibPGChartBindingProperty::ibPGChartBindingProperty(const ibPropertyObject* prope
 	: wxPGProperty(label, strName), m_ownerProperty(property), m_choiceMode(mode)
 {
 	for (unsigned int idx = 0; idx < choices.GetCount(); idx++)
-		m_choices.Add(choices.GetLabel(idx), choices.GetBitmap(idx), choices.GetId(idx));
+		m_choices.Add(choices.GetLabel(idx), ibBackendPicture::CreatePicture(choices.GetPicture(idx)), choices.GetId(idx));
 
 	m_flags |= wxPGPropertyFlags_ActiveButton; // Property button always enabled.
 

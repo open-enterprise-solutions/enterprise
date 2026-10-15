@@ -45,8 +45,8 @@ public:
 	// A sub-node — an empty one (IsEmpty) when there is none; a list's items.
 	ibProtocolNode              FindChild(const char* name) const;
 	std::vector<ibProtocolNode> GetList(const char* name) const;
-	// All of its entries, by name — a node read whole (ibDataValue::Read).
-	std::vector<std::pair<wxString, ibProtocolNode>> Entries() const;
+	// All of its entries, by name as the wire has it — what SetValue takes back — a node read whole (ibDataValue::Read).
+	std::vector<std::pair<std::string, ibProtocolNode>> Entries() const;
 	// The node itself as a value — a list's item.
 	wxString  AsString() const;
 	long long AsInt() const;

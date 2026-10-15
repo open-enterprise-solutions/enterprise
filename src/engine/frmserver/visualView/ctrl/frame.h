@@ -234,7 +234,9 @@ public:
 	// …and OnSelected: the control picked out (the client's Focus). What holds the form is asked of the host
 	// (IsDesignerHost), as the window's events asked it.
 	virtual void OnCreate(ibVisualHost* host) {}
-	virtual void OnCreated(ibVisualHost* host) {}
+	// firstCreated — the designer has just made it (the desktop's), never on a form opened: a source control with no
+	// source binds to a fresh attribute (ibValueControl::AutoBindNewSource).
+	virtual void OnCreated(ibVisualHost* host, bool firstCreated) {}
 	virtual void OnSelected(ibVisualHost* host) {}
 	virtual void OnCleanup(ibVisualHost* host) {}
 

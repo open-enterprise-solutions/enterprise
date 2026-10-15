@@ -7,12 +7,9 @@
 #include "backend/appData.h"
 #include "backend/logger/logger.h"
 #include "backend/metaCollection/partial/reference/reference.h"   // ibValueReferenceDataObject — a row's object
-#include "core/picturePredefined.h"
-#include "core/description/pictureDescription.h"
 #include "core/serialize/dataBuilder.h"
 
-#include "frmserver/client/clientChildFrame.h"   // ibClientChildFrame — the tab, and the client it is drawn for
-#include "frmserver/client/clientFrame.h"        // ibClientFrame::SendPicture, Message
+#include "frmserver/client/clientFrame.h"        // ibClientFrame::Message
 
 // ============================================================
 //   ibAuditLogDocument
@@ -40,8 +37,7 @@ wxIMPLEMENT_DYNAMIC_CLASS(ibAuditLogView, ibView);
 // The client this view's tab is drawn for.
 static ibClientFrame* ClientOf(const ibView* view)
 {
-	const ibClientChildFrame* const tab = dynamic_cast<const ibClientChildFrame*>(view->GetDocChildFrame());
-	return tab != nullptr ? tab->GetFrame() : nullptr;
+	return view->GetDocChildFrame() != nullptr ? view->GetDocChildFrame()->GetFrame() : nullptr;
 }
 
 // A time on the wire — ms since the epoch, past what an s32 keeps.
@@ -50,16 +46,6 @@ static wxLongLong_t MsOf(const ibDataNode& node, const wxString& name)
 	long long ms = 0;
 	node.GetValue<ibNumber>(name).ToInt(ms);
 	return ms;
-}
-
-void ibAuditLogView::OnDraw(ibDataNode& WXUNUSED(frame))
-{
-	// THE TOOLBAR'S PICTURES, by their numbers — the client's view takes them as the desktop's did
-	// (ibBackendPicture::GetPicture); the frame gives each once.
-	if (ibClientFrame* const client = ClientOf(this)) {
-		for (const ibPictureID id : { g_picFilterSetCLSID, g_picFilterClearCLSID, g_picUpdateFormCLSID, g_picSelectCLSID })
-			client->SendPicture(ibPictureDescription(id), nullptr);
-	}
 }
 
 bool ibAuditLogView::Fetch(const ibDataNode& request, ibDataNode& response)

@@ -16,6 +16,7 @@
 #include <vector>
 #include <array>
 #include <map>
+#include <memory>
 
 #include "core/compiler/translateCode.h"   // the lexem stream, and what the caret stands in
 #include "core/compiler/codeDef.h"   // CODE_VES / CODE_CES — the syntax the stream reads in, for fold-mode dispatch
@@ -30,6 +31,7 @@
 #include "frmclient/win/editor/codeEditor/components/callTip.h"
 
 class ibTabDocument;
+class ibPropertyObject;
 class ibReaderMemory;
 
 // Forwards wxCommandProcessor's undo/redo stack to the underlying
@@ -483,6 +485,8 @@ public:
 	// The module's text, fetched from its tab — and handed back to it ({Change {Text}}) when it differs from what the
 	// server holds.
 	bool LoadModule();
+	// …from an answer already fetched — a form's tab opens its form and its module in one (Text).
+	bool LoadModule(const ibProtocolNode& answer);
 	bool SaveModule();
 
 	// THE SYNTAX THE MODULE IS WRITTEN IN — the desktop's editor read it of the process (ibCompileCode::GetCodeStyle); here
@@ -642,6 +646,8 @@ protected:
 private:
 	// The text as the server holds it — loaded, or last handed back: what is not different is not sent.
 	wxString          m_moduleText;
+	// What the inspector shows as it is activated — the property shown as it was made, held (ActivateEditor).
+	std::shared_ptr<ibPropertyObject> m_property;
 
 	ibAutoComplete    m_ac;
 	ibCallTip         m_ct;

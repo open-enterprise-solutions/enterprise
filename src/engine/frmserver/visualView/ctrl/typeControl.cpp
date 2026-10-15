@@ -7,7 +7,6 @@
 
 #include "frmserver/visualView/ctrl/frame.h"
 #include "frmserver/visualView/choiceRequest.h"                      // ibRequestChoice — "pick one of these"
-#include "backend/backend_picture.h"                                   // ibBackendPicture::FromImage — a type's picture as it is sent
 #include "backend/backend_mainFrame.h"                                    // the frame a request to the person goes through
 #include "core/serialize/dataBuilder.h"                                // the request and its answer
 #include "protocol/protocol.h"                                            // ibProtocolRequestKind::SimpleChoice
@@ -121,7 +120,7 @@ bool ibTypeControlFactory::QuickChoice(ibControlFrame* ownerValue, const ibClass
 
 	std::vector<ibChoiceItem> items;
 	for (size_t idx = 0; idx < values.size(); idx++)
-		items.push_back(ibChoiceItem{ static_cast<s32>(idx), values[idx].GetString(), ibPicture(), values[idx] == current });
+		items.push_back(ibChoiceItem{ static_cast<s32>(idx), values[idx].GetString(), ibPictureDescription(), values[idx] == current });
 
 	s32 chosen = 0;
 	if (ibRequestChoice(wxString(), items, chosen))
@@ -150,7 +149,7 @@ void ibTypeControlFactory::QuickChoice(ibControlFrame* controlValue, ibValue& ne
 
 	std::vector<ibChoiceItem> items;
 	for (size_t idx = 0; idx < values.size(); idx++)
-		items.push_back(ibChoiceItem{ static_cast<s32>(idx), values[idx].GetString(), ibPicture(), values[idx] == newValue });
+		items.push_back(ibChoiceItem{ static_cast<s32>(idx), values[idx].GetString(), ibPictureDescription(), values[idx] == newValue });
 
 	ibBackendDocFrame* const frame = ibSession::CurrentFrame();
 	if (frame == nullptr)
@@ -224,13 +223,13 @@ ibClassID ibTypeControlFactory::ShowSelectType(const ibMetaData* metaData, const
 	}
 	if (offered.size() < 2) return offered.empty() ? 0 : offered.front();
 
-	// Several: the person picks one — each type by the name and picture its constructor gives it.
+	// Several: the person picks one — each type by the name its constructor gives it, and its class's picture.
 	std::vector<ibChoiceItem> items;
 	for (size_t idx = 0; idx < offered.size(); idx++) {
 		const ibCtorAbstractType* ctor = metaData != nullptr ? metaData->GetAvailableCtor(offered[idx]) : nullptr;
 		items.push_back(ibChoiceItem{ static_cast<s32>(idx),
 			ctor != nullptr ? ctor->GetClassName() : wxString(),
-			ctor != nullptr ? ibBackendPicture::FromImage(wxBitmap(ctor->GetClassIcon()).ConvertToImage()) : ibPicture() });
+			ctor != nullptr ? ibPictureDescription(offered[idx]) : ibPictureDescription() });
 	}
 
 	s32 chosen = 0;

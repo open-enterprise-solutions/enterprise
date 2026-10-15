@@ -26,7 +26,7 @@ std::vector<ibLogRow> ibLoggerReader::Query(const ibLogFilter& filter)
 	ibProtocolNode params, answer;
 	params.SetValue(ibProtocolName::Tab, m_tabId)
 		.SetValue(ibProtocolName::Request, request);
-	if (!frame->Fetch(params, answer))
+	if (!frame->Fetch(ibProtocolMethod::Fetch, params, answer))
 		return rows;
 
 	for (const ibProtocolNode& entry : answer.Children()) {

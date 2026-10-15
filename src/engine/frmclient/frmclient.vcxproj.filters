@@ -906,10 +906,10 @@
     <ClInclude Include="backend\propertyManager\property\propertyBoolean.h">
       <Filter>backend\propertyManager\property</Filter>
     </ClInclude>
-    <ClCompile Include="backend\propertyManager\property\propertyValue.cpp">
+    <ClCompile Include="backend\propertyManager\property\propertySerializable.cpp">
       <Filter>backend\propertyManager\property</Filter>
     </ClCompile>
-    <ClInclude Include="backend\propertyManager\property\propertyValue.h">
+    <ClInclude Include="backend\propertyManager\property\propertySerializable.h">
       <Filter>backend\propertyManager\property</Filter>
     </ClInclude>
     <ClCompile Include="backend\propertyManager\property\propertyColour.cpp">

@@ -8,6 +8,7 @@
 #include <wx/statbox.h>
 
 #include "frmclient/artProvider/artProvider.h"
+#include "frmclient/docView/docView.h"   // ibMetaView — the tree's view
 #include "frmclient/win/theme/luna_toolbarart.h"
 
 //**********************************************************************************
@@ -40,6 +41,16 @@ void ibConfigurationTree::EditHomePage(ibValueMetaObjectConfiguration* metaObjec
 
 #define ICON_SIZE 16
 
+class ibMetaTreeBase::ibMetaTreeView : public ibMetaView {
+public:
+
+	ibMetaTreeView(ibMetaTreeBase* tree) : m_ownerTree(tree) {}
+	virtual void OnActivateView(bool activate, ibFrontendView* activeView, ibFrontendView* deactiveView) override;
+
+private:
+	ibMetaTreeBase* m_ownerTree;
+};
+
 void ibMetaTreeBase::CreateToolBar(wxWindow* parent)
 {
 	m_metaTreeToolbar = new wxAuiToolBar(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxAUI_TB_HORZ_LAYOUT);
@@ -57,7 +68,7 @@ void ibMetaTreeBase::CreateToolBar(wxWindow* parent)
 }
 
 ibMetaTreeBase::ibMetaTreeBase(wxWindow* parent, long long tab, bool search)
-	: wxPanel(parent, wxID_ANY), m_tab(tab)
+	: wxPanel(parent, wxID_ANY), m_tab(tab), m_metaView(new ibMetaTreeView(this))
 {
 	// …an external file's toolbar and rows framed in a box, under its header (the desktop's).
 	wxStaticBoxSizer* const treeBox = tab != 0 ? new wxStaticBoxSizer(new wxStaticBox(this, wxID_ANY, wxT("")), wxVERTICAL) : nullptr;
@@ -89,9 +100,12 @@ ibMetaTreeBase::ibMetaTreeBase(wxWindow* parent, long long tab, bool search)
 	wxAcceleratorTable accel(2, entries);
 	m_metaTreeCtrl->SetAcceleratorTable(accel);
 
+	m_metaTreeCtrl->Bind(wxEVT_LEFT_DOWN, &ibMetaTreeBase::OnLeftDown, this);
+	m_metaTreeCtrl->Bind(wxEVT_LEFT_DCLICK, &ibMetaTreeBase::OnLeftDClick, this);
 	m_metaTreeCtrl->Bind(wxEVT_TREE_ITEM_ACTIVATED, &ibMetaTreeBase::OnItemActivated, this);
 	m_metaTreeCtrl->Bind(wxEVT_TREE_SEL_CHANGED, &ibMetaTreeBase::OnSelected, this);
 	m_metaTreeCtrl->Bind(wxEVT_SET_FOCUS, &ibMetaTreeBase::OnSetFocus, this);
+	m_metaTreeCtrl->Bind(wxEVT_KILL_FOCUS, &ibMetaTreeBase::OnSetFocus, this);
 	m_metaTreeCtrl->Bind(wxEVT_TREE_ITEM_EXPANDED, &ibMetaTreeBase::OnExpanded, this);
 	m_metaTreeCtrl->Bind(wxEVT_TREE_ITEM_COLLAPSED, &ibMetaTreeBase::OnCollapsed, this);
 	m_metaTreeCtrl->Bind(wxEVT_TREE_ITEM_MENU, &ibMetaTreeBase::OnItemMenu, this);
@@ -135,4 +149,21 @@ ibMetaTreeBase::ibMetaTreeBase(wxWindow* parent, long long tab, bool search)
 	SetSizer(panelSizer);
 
 	UpdateToolbar();
+}
+
+ibMetaTreeBase::~ibMetaTreeBase()
+{
+	// …the manager not left holding it as its current view: a view lets go of itself there only when it has a document.
+	if (docManager != nullptr)
+		docManager->ActivateView(m_metaView, false);
+	wxDELETE(m_metaView);
+}
+
+/////////////////////////////////////////////////////////////////
+
+void ibMetaTreeBase::ibMetaTreeView::OnActivateView(bool activate, ibFrontendView* WXUNUSED(activeView),
+	ibFrontendView* WXUNUSED(deactiveView))
+{
+	if (activate)
+		m_ownerTree->ActivateTree();
 }

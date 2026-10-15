@@ -232,7 +232,7 @@ private:
 
 	bool FillGenericFormType(ibPropertyList* prop);
 	bool FillFormType(ibPropertyList* prop) {
-		prop->AppendItem(formDefaultName, defaultFormType, GetIcon());
+		prop->AppendItem(formDefaultName, defaultFormType, GetClassType());
 		return FillGenericFormType(prop);
 	}
 

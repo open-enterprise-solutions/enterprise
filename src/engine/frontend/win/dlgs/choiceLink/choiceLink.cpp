@@ -3,6 +3,7 @@
 #include "backend/propertyManager/property/propertyChoiceLink.h"
 #include "backend/metaData.h"      // ibMetaData::GetIDObjectFromMetaID — the class a type row's metaobject is registered under
 #include "backend/objCtorDefs.h"   // ibCtorObjectMetaType_Reference
+#include "backend/backend_picture.h"   // ibBackendPicture::CreatePicture — a choice's picture, by its id
 
 #include "frontend/win/dlgs/queryConstructor/queryGridModel.h"   // the one grid model for a plain list
 
@@ -59,7 +60,7 @@ void ibDialogChoiceLink::BuildCatalogue()
 		ibCandidate candidate;
 		candidate.m_id = (ibMetaID)list.GetId(idx);
 		candidate.m_label = list.GetName(idx);
-		const wxBitmap& picture = list.GetBitmap(idx);
+		const wxBitmap picture = ibBackendPicture::CreatePicture(list.GetPicture(idx));
 		if (picture.IsOk())
 			candidate.m_icon.CopyFromBitmap(picture);
 		into.push_back(candidate);

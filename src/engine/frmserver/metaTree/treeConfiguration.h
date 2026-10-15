@@ -78,6 +78,9 @@ protected:
 
 	ibClientFrame* const m_frame;   // borrowed: it outlives the tree
 
+	// The form whose kind the person is being asked (AskFormKind) — no row until it is answered.
+	const ibValueMetaObject* m_askedForm = nullptr;
+
 private:
 
 	// The subscription — declared here, defined in the module; and whose list it is on.

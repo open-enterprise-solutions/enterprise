@@ -22,8 +22,8 @@ public:
 		m_listChoice.emplace_back(name, label, index);
 	}
 
-	// The kind chosen; wxNOT_FOUND — cancelled, or nobody to ask.
-	int ShowModal();
+	// The kind chosen — a generic form's is wxNOT_FOUND (defaultFormType); false — cancelled, or nobody to ask.
+	bool ShowModal(int& chosen);
 
 private:
 

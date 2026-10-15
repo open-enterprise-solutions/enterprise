@@ -11,14 +11,14 @@
 #include <wx/string.h>
 
 #include "frmserver/frmserver.h"
-#include "core/graphics/picture.h"      // ibPicture — the item's picture as it is sent
+#include "core/description/pictureDescription.h"   // ibPictureDescription — the item's picture, sent by its id
 #include "core/fileSystem/types.h"   // s32
 
 struct ibChoiceItem {
-	s32             id = 0;
-	wxString        caption;
-	ibPicture       icon;
-	bool            selected = false;
+	s32                   id = 0;
+	wxString              caption;
+	ibPictureDescription  icon;
+	bool                  selected = false;
 };
 
 // False: nothing chosen — cancelled, or nobody to ask. Only what was offered can come back: a response naming

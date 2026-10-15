@@ -170,7 +170,7 @@ ibPropertyChoiceMode ibBackendProperty::CreateValueList(ibPropertyChoiceList& li
 		// stands and nothing downstream has to turn a number back into a relationship.
 		list.Add((long)object->GetMetaID(), object->GetName(), object->GetSynonym(),
 			wxVariant(new ibVariantDataOwner(owner, ibMetaDescription(object->GetMetaID()))),
-			object->GetIcon());
+			object->GetClassType());
 	}
 
 	// THE MODE EVEN WHEN THE LIST CAME OUT EMPTY. "There is nothing of that kind in this

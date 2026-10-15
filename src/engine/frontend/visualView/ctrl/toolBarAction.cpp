@@ -14,7 +14,7 @@ bool ibValueToolbar::GetActionSource(ibPropertyList* property)
 		wxT("form"),
 		_("Form"),
 		FORM_ACTION,
-		m_formOwner->GetIcon(),
+		m_formOwner->GetClassType(),
 		(ibValueFrame*)m_formOwner
 	);
 
@@ -26,7 +26,7 @@ bool ibValueToolbar::GetActionSource(ibPropertyList* property)
 					element->GetControlName(),
 					stringUtils::GenerateSynonym(element->GetControlName()),
 					element->GetControlID(),
-					element->GetIcon(),
+					element->GetClassType(),
 					element);
 			}
 

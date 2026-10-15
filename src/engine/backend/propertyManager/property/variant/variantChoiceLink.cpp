@@ -206,7 +206,7 @@ wxString ibChoiceTargetFieldName(const ibPropertyObject* owner, const ibMetaID& 
 void ibFieldReferenceTypes(const ibPropertyObject* owner, ibPropertyChoiceList& list)
 {
 	for (const ibValueMetaObject* named : ReferencedObjects<ibValueMetaObject>(owner))
-		list.Add(named->GetMetaID(), named->GetName(), named->GetSynonym(), wxVariant(named->GetMetaID()), named->GetIcon());
+		list.Add(named->GetMetaID(), named->GetName(), named->GetSynonym(), wxVariant(named->GetMetaID()), named->GetClassType());
 }
 
 // ⭐ THE OWNER'S ROW — the whole of "link by owner", and the reason there is no property for it. Three
@@ -317,7 +317,7 @@ ibPropertyChoiceMode ibVariantDataChoiceLink::GetValueList(ibPropertyChoiceList&
 
 		list.Add(field->GetMetaID(), NeighbourName(owner, field), field->GetSynonym(),
 			wxVariant(new ibVariantDataChoiceLink(owner, linkDesc)),
-			field->GetIcon());
+			field->GetClassType());
 	}
 
 	return ibPropertyChoiceMode::Single;
@@ -393,7 +393,7 @@ void ibVariantDataChoiceParameters::GetParameterList(const ibClassID& ofType, ib
 
 	for (const ibValueMetaObjectAttributeBase* field : target->GetGenericAttributeArrayObject()) {
 		if (!field->IsDeleted())
-			list.Add(field->GetMetaID(), field->GetName(), field->GetSynonym(), wxVariant(field->GetMetaID()), field->GetIcon());
+			list.Add(field->GetMetaID(), field->GetName(), field->GetSynonym(), wxVariant(field->GetMetaID()), field->GetClassType());
 	}
 }
 
@@ -411,6 +411,6 @@ void ibVariantDataChoiceParameters::GetSourceList(ibPropertyChoiceList& list) co
 	for (const ibValueMetaObjectAttributeBase* field : HolderAttributes(owner)) {
 		if (field->GetMetaID() == selfId)
 			continue;   // a field does not narrow itself
-		list.Add(field->GetMetaID(), NeighbourName(owner, field), field->GetSynonym(), wxVariant(field->GetMetaID()), field->GetIcon());
+		list.Add(field->GetMetaID(), NeighbourName(owner, field), field->GetSynonym(), wxVariant(field->GetMetaID()), field->GetClassType());
 	}
 }

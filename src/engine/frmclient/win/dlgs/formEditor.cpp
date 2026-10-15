@@ -1,6 +1,6 @@
 ﻿#include "formEditor.h"
 #include "frmclient/backend/compiler/value.h"
-#include "frmclient/backend/serialize/dataProtocol.h"   // ibReadProtocolNode — a control's rows, as the question carries them
+#include "core/serialize/dataBuilder.h"   // ibDataValue — what an edit gives
 #include "frmclient/mainFrame/mainFrame.h"              // the question this window answers
 #include "frmclient/propertyManager/property/private/propertyRegistry.h"
 #include "frmclient/settings/formSettings.h"   // the setting this window saves and clears
@@ -73,20 +73,17 @@ static void SetSettingStatus(wxWindow* dialog, const wxString& text)
 }
 
 // ⭐ WHAT A PERSON MAY ARRANGE OF EACH CONTROL — the server's to say: its question carries it (Controls, a control's rows
-// each, by its id), cut to what a person may arrange; the controls read it (ibPropertyObject::ReadProperty), declaring
-// none of their own. Asked again after each act, so what they hold is the form as it stands.
-static void ReadControlProperty(ibValueForm* form)
+// each, by its id), cut to what a person may arrange; the controls receive it (ibPropertyObject::Receive), declaring
+// none of their own. Received again after each act, so what they hold is the form as it stands.
+static void Receive(ibValueForm* form)
 {
 	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
 	if (frame == nullptr)
 		return;
 	for (const ibProtocolNode& described : frame->GetRequest().FindChild(ibProtocolName::Controls).Children()) {
 		ibValueFrame* const control = form->FindControlByID(described.GetInt(ibProtocolName::Control));
-		if (control == nullptr)
-			continue;
-		ibDataNode rows;
-		ibReadProtocolNode(described, rows);
-		control->ReadProperty(rows);
+		if (control != nullptr)
+			control->Receive(described);
 	}
 }
 
@@ -280,7 +277,7 @@ ibDialogFormEditor::ibDialogFormEditor(ibValueForm* valueForm) :
 
 	commonSizer->Add(m_sdbSizer, 0, wxALIGN_RIGHT, FromDIP(5));
 
-	ReadControlProperty(m_owner);
+	Receive(m_owner);
 	RebuildTree();
 	SetSizer(commonSizer);
 	Centre(wxBOTH);
@@ -329,7 +326,7 @@ void ibDialogFormEditor::OnButtonEvent(wxCommandEvent& e)
 		for (auto& cmd : m_cmdArray)
 			cmd->Execute();
 		UpdateForm();
-		ReadControlProperty(m_owner);
+		Receive(m_owner);
 		m_cmdArray.clear();
 		RebuildTree();
 
@@ -382,7 +379,7 @@ void ibDialogFormEditor::OnButtonEvent(wxCommandEvent& e)
 			cmd->Execute();
 		}
 		UpdateForm();
-		ReadControlProperty(m_owner);
+		Receive(m_owner);
 	}
 
 	if (e.GetId() != wxID_APPLY) m_parent->SetFocus();

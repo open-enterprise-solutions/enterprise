@@ -103,13 +103,9 @@ std::function<void()> ibSchemaMetaData::Command(const ibSession& session, s32 co
 		ibClassID clsid = 0;
 		if (!FindPlace(metaData, args, parent, clsid, refusal, error))
 			return nullptr;
-		// …and what only a click means — the new object's editor opened (ibConfigurationTree::CreateItem). A form whose
-		// kind the person refused is taken away again before the create returns: nothing to open.
-		return [metaData, clsid, parent]() {
-			ibValueMetaObject* const createdObject = metaData->CreateMetaObject(clsid, parent);
-			if (createdObject != nullptr && !createdObject->IsDeleted())
-				docManager->OpenForm(createdObject);
-		};
+		// Made, and no more: its editor is the click's to open once its row is selected (the client's CreateItem, the
+		// desktop's ibConfigurationTree::CreateItem — NewItem, then OpenObjectForm).
+		return [metaData, clsid, parent]() { metaData->CreateMetaObject(clsid, parent); };
 	}
 	case ibProtocolMetaDataCommand::Remove: {
 		ibValueMetaObject* const object = FindObject(metaData, args, wxT("Id"), refusal, error);

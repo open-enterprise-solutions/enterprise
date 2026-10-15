@@ -36,7 +36,7 @@ public:
 			list.Add(
 				m_listPropValue.GetItemLabel(idx),
 				m_listPropValue.GetItemId(idx),
-				m_listPropValue.GetItemBitmap(idx)
+				m_listPropValue.GetItemPicture(idx)
 			);
 		}
 		return ibPropertyChoiceMode::Single;
@@ -94,23 +94,23 @@ private:
 			{
 			}
 
-			ibPropertyOptionItem(const wxString& name, const long& l, const wxBitmap& b, const ibPropertyOptionValue& v) :
-				m_isOk(true), m_strName(name), m_strLabel(name), m_bmp(b), m_id(l), m_value(v)
+			ibPropertyOptionItem(const wxString& name, const long& l, const ibPictureDescription& p, const ibPropertyOptionValue& v) :
+				m_isOk(true), m_strName(name), m_strLabel(name), m_picture(p), m_id(l), m_value(v)
 			{
 			}
 
-			ibPropertyOptionItem(const wxString& name, const wxString& label, const long& l, const wxBitmap& b, const ibPropertyOptionValue& v) :
-				m_isOk(true), m_strName(name), m_strLabel(label), m_bmp(b), m_id(l), m_value(v)
+			ibPropertyOptionItem(const wxString& name, const wxString& label, const long& l, const ibPictureDescription& p, const ibPropertyOptionValue& v) :
+				m_isOk(true), m_strName(name), m_strLabel(label), m_picture(p), m_id(l), m_value(v)
 			{
 			}
 
-			ibPropertyOptionItem(const wxString& name, const wxString& label, const wxString& help, const long& l, const wxBitmap& b, const ibPropertyOptionValue& v) :
-				m_isOk(true), m_strName(name), m_strLabel(label), m_strHelp(help), m_bmp(b), m_id(l), m_value(v)
+			ibPropertyOptionItem(const wxString& name, const wxString& label, const wxString& help, const long& l, const ibPictureDescription& p, const ibPropertyOptionValue& v) :
+				m_isOk(true), m_strName(name), m_strLabel(label), m_strHelp(help), m_picture(p), m_id(l), m_value(v)
 			{
 			}
 
 			ibPropertyOptionItem(const ibPropertyOptionItem& item) :
-				m_isOk(true), m_strName(item.m_strName), m_strLabel(item.m_strLabel), m_strHelp(item.m_strHelp), m_bmp(item.m_bmp), m_id(item.m_id), m_value(item.m_value)
+				m_isOk(true), m_strName(item.m_strName), m_strLabel(item.m_strLabel), m_strHelp(item.m_strHelp), m_picture(item.m_picture), m_id(item.m_id), m_value(item.m_value)
 			{
 			}
 
@@ -118,6 +118,7 @@ private:
 				m_strName = src.m_strName;
 				m_strLabel = src.m_strLabel;
 				m_strHelp = src.m_strHelp;
+				m_picture = src.m_picture;
 				m_id = src.m_id;
 				m_value = src.m_value;
 				return *this;
@@ -129,13 +130,12 @@ private:
 			wxString m_strName;
 			wxString m_strLabel;
 			wxString m_strHelp;
-			wxBitmap m_bmp;
+			ibPictureDescription m_picture;
 			long m_id;
 			ibPropertyOptionValue m_value;
 		};
 
-		// The item itself, not a copy: a copy copied its bitmap, and a bitmap's reference count in wx is a plain int —
-		// readers of one list on several threads counted it up and down under each other.
+		// The item itself, not a copy: a read copies nothing of it.
 		const ibPropertyOptionItem& GetItemAt(const unsigned int idx) const {
 			static const ibPropertyOptionItem s_none;
 			return idx < m_listValue.size() ? m_listValue[idx] : s_none;
@@ -145,14 +145,14 @@ private:
 
 		void ResetListItem() { m_listValue.clear(); }
 
-		void AppendItem(const wxString& name, const int& l, const wxBitmap& b, const ibPropertyOptionValue& v) { (void)m_listValue.emplace_back(name, name, l, b, v); }
-		void AppendItem(const wxString& name, const wxString& label, const int& l, const wxBitmap& b, const ibPropertyOptionValue& v) { (void)m_listValue.emplace_back(name, label, l, b, v); }
-		void AppendItem(const wxString& name, const wxString& label, const wxString& help, const int& l, const wxBitmap& b, const ibPropertyOptionValue& v) { (void)m_listValue.emplace_back(name, label, help, l, b, v); }
+		void AppendItem(const wxString& name, const int& l, const ibPictureDescription& p, const ibPropertyOptionValue& v) { (void)m_listValue.emplace_back(name, name, l, p, v); }
+		void AppendItem(const wxString& name, const wxString& label, const int& l, const ibPictureDescription& p, const ibPropertyOptionValue& v) { (void)m_listValue.emplace_back(name, label, l, p, v); }
+		void AppendItem(const wxString& name, const wxString& label, const wxString& help, const int& l, const ibPictureDescription& p, const ibPropertyOptionValue& v) { (void)m_listValue.emplace_back(name, label, help, l, p, v); }
 
 		wxString GetItemName(const unsigned int idx) const { return GetItemAt(idx).m_strName; }
 		wxString GetItemLabel(const unsigned int idx) const { return GetItemAt(idx).m_strLabel; }
 		wxString GetItemHelp(const unsigned int idx) const { return GetItemAt(idx).m_strHelp; }
-		wxBitmap GetItemBitmap(const unsigned int idx) const { return GetItemAt(idx).m_bmp; }
+		const ibPictureDescription& GetItemPicture(const unsigned int idx) const { return GetItemAt(idx).m_picture; }
 		long GetItemId(const unsigned int idx) const { return GetItemAt(idx).m_id; }
 		ibValue* GetItemValue(const unsigned int idx) const { return GetItemAt(idx).m_value; }
 
@@ -225,9 +225,9 @@ public:
 	}
 
 #pragma region item 
-	void AppendItem(const wxString& name, const int& l, const wxBitmap& b, const ibPropertyOptionValue& v = ibPropertyOptionValue()) { (void)m_listPropValue.AppendItem(name, l, b, v); }
-	void AppendItem(const wxString& name, const wxString& label, const int& l, const wxBitmap& b, const ibPropertyOptionValue& v = ibPropertyOptionValue()) { (void)m_listPropValue.AppendItem(name, label, l, b, v); }
-	void AppendItem(const wxString& name, const wxString& label, const wxString& help, const int& l, const wxBitmap& b, const ibPropertyOptionValue& v = ibPropertyOptionValue()) { (void)m_listPropValue.AppendItem(name, label, help, l, b, v); }
+	void AppendItem(const wxString& name, const int& l, const ibPictureDescription& p, const ibPropertyOptionValue& v = ibPropertyOptionValue()) { (void)m_listPropValue.AppendItem(name, l, p, v); }
+	void AppendItem(const wxString& name, const wxString& label, const int& l, const ibPictureDescription& p, const ibPropertyOptionValue& v = ibPropertyOptionValue()) { (void)m_listPropValue.AppendItem(name, label, l, p, v); }
+	void AppendItem(const wxString& name, const wxString& label, const wxString& help, const int& l, const ibPictureDescription& p, const ibPropertyOptionValue& v = ibPropertyOptionValue()) { (void)m_listPropValue.AppendItem(name, label, help, l, p, v); }
 #pragma endregion
 
 	template <typename optClass>

@@ -246,8 +246,8 @@ public:
 	// caption and picture as the representation chooses them, whether it is enabled, its tooltip, its kind —
 	// and for a group, its members with the same, greyed where a view-only form forbids a command that changes
 	// data. Everything a client needs to draw the bar and its submenus without asking again — the pictures by their
-	// ids, as the host sends them (ibVisualHost::SendPicture).
-	void Update(ibDataNode& state, class ibVisualHost* host);
+	// ids (ibClientFrame::SendPicture).
+	void Update(ibDataNode& state);
 
 	// Reverse-lookup the child that produced the command with this id (built by BuildCommands).
 	// nullptr for an AutoFill command (no child). Used by the designer to select on tool click.

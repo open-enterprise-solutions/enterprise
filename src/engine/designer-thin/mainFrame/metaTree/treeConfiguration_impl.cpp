@@ -65,6 +65,14 @@ void ibObjectIds(const ibProtocolNode& row, std::set<long long>& ids)
 		ibObjectIds(child, ids);
 }
 
+// The pictures of `row` and the rows under it, by their ids — asked of the server at once, not a call per row drawn.
+void ibRowPictures(const ibProtocolNode& row, std::vector<wxString>& pictures)
+{
+	pictures.push_back(row.GetString(ibProtocolName::Picture));
+	for (const ibProtocolNode& child : row.Children())
+		ibRowPictures(child, pictures);
+}
+
 // The places of the rows under `row` (at `path`) — what an external file's tree opens the first time.
 void ibRowPaths(const ibProtocolNode& row, const wxString& path, std::set<wxString>& paths)
 {
@@ -99,6 +107,10 @@ void ibMetaTreeBase::Draw(const ibProtocolNode& root)
 
 	const bool shown = root.IsNode() && root.GetId() != 0;
 	m_root = shown ? root.Clone() : ibProtocolNode();
+
+	std::vector<wxString> pictures;
+	ibRowPictures(m_root, pictures);
+	ibProtocolPictureReceive(pictures);
 
 	// ⭐ FROZEN FOR THE WHOLE OF IT — the control is what freezes, not the panel around it (the desktop's).
 	wxWindowUpdateLocker freeze(m_metaTreeCtrl);
@@ -327,23 +339,6 @@ bool ibMetaTreeBase::Command(ibProtocolMetaDataCommand command, ibProtocolNode a
 	return frame != nullptr && frame->Call(ibProtocolMethod::Schema, GetParams(command, args), answer);
 }
 
-bool ibMetaTreeBase::SaveProperty(long long id, const wxString& name, ibProtocolNode args) const
-{
-	args.SetValue(ibProtocolName::Id, id);
-	args.SetValue(ibProtocolName::Name, name);
-	if (m_tab != 0)
-		args.SetValue(ibProtocolName::Tab, m_tab);
-
-	ibProtocolNode params;
-	params.SetValue(ibProtocolName::Schema, static_cast<long long>(ibProtocolSchema::Properties));
-	params.SetValue(ibProtocolName::Command, static_cast<long long>(ibProtocolSchemaCommand::Save));
-	params.SetValue(ibProtocolName::Args, args);
-
-	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
-	ibProtocolNode answer;
-	return frame != nullptr && frame->Call(ibProtocolMethod::Schema, params, answer);
-}
-
 void ibMetaTreeBase::UpdateChoiceSelection(wxChoice* choice, const ibProtocolNode& property)
 {
 	choice->Clear();
@@ -372,14 +367,15 @@ void ibMetaTreeBase::CreateItem()
 	if (!GetPlace(m_metaTreeCtrl->GetSelection(), type, parent))
 		return;
 
-	// ASK — the new object's row comes back with the frame, its editor opened by the server (as the desktop's click did).
+	// ASK — the new object's row comes back with the frame and is selected, the inspector showing it; then its editor is
+	// opened, as the desktop's click did (NewItem, then OpenObjectForm): made while the row is shown, it shows its own.
 	ibProtocolNode args;
 	args.SetValue(ibProtocolName::Type, type);
 	args.SetValue(ibProtocolName::Parent, parent);
 	std::set<long long> drawn;
 	ibObjectIds(m_root, drawn);
-	if (Command(ibProtocolMetaDataCommand::Create, args))
-		SelectCreated(drawn);
+	if (Command(ibProtocolMetaDataCommand::Create, args) && SelectCreated(drawn))
+		EditItem();
 }
 
 void ibMetaTreeBase::EditItem()
@@ -432,26 +428,29 @@ void ibMetaTreeBase::PropertyItem()
 	if (!frame->IsShownInspector())
 		frame->ShowInspector();
 
-	SelectItem();
+	ActivateTree();
 }
 
 void ibMetaTreeBase::SelectItem()
 {
 	UpdateToolbar();
 
-	// WHAT THE INSPECTOR SHOWS — the row's object, made of what the server says of it now; a group row shows nothing.
-	// Asked only while the inspector is shown: Properties shows it and asks again.
-	ibObjectInspector* const inspector = objectInspector;
-	if (inspector == nullptr || !inspector->IsShownInspector())
-		return;
+	// WHAT THE INSPECTOR SHOWS — the row's object, made as the row is selected, what the server says of it asked as it is
+	// shown; a group row shows nothing.
 	const long long id = GetObject(m_metaTreeCtrl->GetSelection());
-	std::unique_ptr<ibValueMetaObject> object;
-	if (id != 0) {
-		object = std::make_unique<ibValueMetaObject>(static_cast<ibMetaID>(id), ibMetaData(m_tab));
-		object->ReadProperty();
-	}
+	std::shared_ptr<ibValueMetaObject> object;
+	if (id != 0)
+		object = std::make_shared<ibValueMetaObject>(static_cast<ibMetaID>(id), ibMetaData(m_tab));
 	m_object = std::move(object);
-	inspector->SelectObject(m_object.get());
+	ActivateTree();
+}
+
+void ibMetaTreeBase::ActivateTree()
+{
+	// Hidden, the inspector holds it all the same — Properties shows what it holds.
+	ibObjectInspector* const inspector = objectInspector;
+	if (inspector != nullptr)
+		inspector->SelectObject(m_object.get());
 }
 
 void ibMetaTreeBase::UpItem()
@@ -483,20 +482,21 @@ void ibMetaTreeBase::MoveItem(const wxTreeItemId& item, const wxTreeItemId& sibl
 
 // A NEW OBJECT IS LEFT SELECTED AND OPENED, as the desktop's create and paste left it — its row the one the frame brought
 // back that was not drawn before. Opened first, so the shape is final before the selection aims at it.
-void ibMetaTreeBase::SelectCreated(const std::set<long long>& drawn)
+bool ibMetaTreeBase::SelectCreated(const std::set<long long>& drawn)
 {
 	const wxTreeItemId root = m_metaTreeCtrl->GetRootItem();
 	const ibTreeRow* const row = GetRow(root);
 	if (row == nullptr)
-		return;
+		return false;
 
 	const wxString path = ibCreatedPath(m_root, row->m_path, drawn);
 	const wxTreeItemId item = path.IsEmpty() ? wxTreeItemId() : FindItem(root, path);
 	if (!item.IsOk())
-		return;
+		return false;
 
 	m_metaTreeCtrl->Expand(item);
 	m_metaTreeCtrl->SelectItem(item);
+	return true;
 }
 
 // The sort button: the group's objects by name, each put where the object at its place in the group stands now (the
@@ -664,6 +664,11 @@ bool ibMetaTreeBase::AppendMetaMenu(wxMenu& menu, const ibProtocolNode& row)
 	const std::vector<ibProtocolNode> entries = items.Children();
 	if (entries.empty())
 		return standard;
+
+	std::vector<wxString> pictures;
+	for (const ibProtocolNode& entry : entries)
+		pictures.push_back(entry.GetString(ibProtocolName::Picture));
+	ibProtocolPictureReceive(pictures);
 
 	for (size_t idx = 0; idx < entries.size(); idx++) {
 

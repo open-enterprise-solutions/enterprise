@@ -152,7 +152,7 @@ bool ibTabDocument::Fetch(const ibProtocolNode& request, ibProtocolNode& answer)
 	ibProtocolNode params;
 	params.SetValue(ibProtocolName::Tab, m_tabId)
 		.SetValue(ibProtocolName::Request, request);
-	return frame->Fetch(params, answer);
+	return frame->Fetch(ibProtocolMethod::Fetch, params, answer);
 }
 
 void ibTabDocument::Post(ibProtocolEvent event, const ibProtocolNode& args) const

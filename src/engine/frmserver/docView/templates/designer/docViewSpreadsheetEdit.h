@@ -16,7 +16,7 @@ public:
 	ibSpreadsheetTemplateView() : ibMetaView() {}
 
 	virtual void OnDraw(ibDataNode& frame) override;
-	virtual ibClientViewKind GetViewKind() const override { return ibClientViewKind::Spreadsheet; }
+	virtual ibProtocolViewKind GetViewKind() const override { return ibProtocolViewKind::Spreadsheet; }
 	virtual bool Fetch(const ibDataNode& request, ibDataNode& response) override;
 	// The sheet the person edited on the client, handed over (Change {Sheet}) — the template's from then on.
 	virtual bool OnClientEvent(ibProtocolEvent event, const ibDataNode& args) override;

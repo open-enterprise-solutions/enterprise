@@ -13,7 +13,7 @@
 
 // THE PROPERTY'S TYPE -> ITS PRESENTATION, held entirely on the client.
 //
-// A property shown is the server's (ibPropertyValue — a metaobject's, filled from its rows): its TYPE (GetType) is the
+// A property shown is the server's (ibPropertySerializable — a metaobject's, filled from its rows): its TYPE (GetType) is the
 // class the server names it by (ibPropertyBoolean; a template without its arguments: ibPropertyEnum), its value is as the server
 // stores it (GetNodeValue: a scalar, or a composite), its choices are what it may be set to (GetValueList). The client
 // is told, per type, which widget shows it and how the widget's value goes back as the property's node holds it.

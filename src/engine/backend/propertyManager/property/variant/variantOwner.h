@@ -71,7 +71,7 @@ inline ibPropertyChoiceMode CreateValueList(ibPropertyObject* owner, ibPropertyC
 		// Mult-mode property composes the set from the ones that were picked.
 		list.Add((long)object->GetMetaID(), object->GetName(), object->GetSynonym(),
 			wxVariant(new ibVariantDataOwner(factory, ibMetaDescription(object->GetMetaID()))),
-			object->GetIcon());
+			object->GetClassType());
 	}
 
 	// THE MODE EVEN WHEN THE LIST CAME OUT EMPTY. "There is nothing of that kind in this

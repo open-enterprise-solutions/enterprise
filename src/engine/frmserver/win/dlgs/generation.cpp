@@ -1,10 +1,11 @@
 #include "generation.h"
 
 #include "backend/backend_mainFrame.h"
-#include "backend/backend_picture.h"
+#include "core/picturePredefined.h"
 #include "core/serialize/dataBuilder.h"
 #include "backend/session/session.h"
 
+#include "frmserver/client/clientFrame.h"   // ibClientFrame::SendPicture — the pictures, by their ids
 #include "protocol/protocol.h"   // ibProtocolRequestKind::Generation
 
 bool ibDialogGeneration::ShowModal(ibMetaID& id)
@@ -17,7 +18,7 @@ bool ibDialogGeneration::ShowModal(ibMetaID& id)
 	// window's own picture.
 	ibDataNode request;
 	request.SetValue(wxT("Kind"), static_cast<s32>(ibProtocolRequestKind::Generation));
-	request.SetValue(wxT("Picture"), wxString(ibBackendPicture::GetServerPicture(g_picGenerateCLSID).GetData()));
+	request.SetValue(wxT("Picture"), ibClientFrame::SendPicture(g_picGenerateCLSID));
 	for (unsigned int idx = 0; idx < m_metaDesc.GetTypeCount(); idx++) {
 		const ibValueMetaObject* typeCtor = m_metaData->FindAnyObjectByFilter(m_metaDesc.GetByIdx(idx));
 		if (typeCtor == nullptr)
@@ -25,7 +26,7 @@ bool ibDialogGeneration::ShowModal(ibMetaID& id)
 		ibDataNode& item = request.AddChild(0, 0);
 		item.SetValue(wxT("Id"), static_cast<s32>(m_metaDesc.GetByIdx(idx)));
 		item.SetValue(wxT("Caption"), typeCtor->GetSynonym());
-		item.SetValue(wxT("Picture"), wxString(ibBackendPicture::GetServerPicture(typeCtor->GetClassType()).GetData()));
+		item.SetValue(wxT("Picture"), ibClientFrame::SendPicture(typeCtor->GetClassType()));
 	}
 
 	ibDataNode response;

@@ -340,7 +340,7 @@ bool ibValueModelTable::WriteProperty(ibDataNode& node) const
 	node.SetProp(wxT("Guid"), m_guid.GetGuid());
 
 	// One child node per column; the column-info serializes ITSELF through the unified property mechanism
-	// (its own WriteProperty — Name / Caption / Type via each property's GetNodeValue, + id / width). No
+	// (its own WriteProperty — Name / Caption / Type / Indexing via each property's GetNodeValue, + id / width). No
 	// hand-rolled field writing / ibTypeDescriptionMemory here — the same path ibFormAttribute uses.
 	for (auto& col : m_tableColumnCollection->m_listColumnInfo) {
 		if (col == nullptr)
@@ -511,6 +511,7 @@ bool ibValueModelTable::ibValueModelTableColumnCollection::ibValueModelTableColu
 	node.SetProperty(m_propertyName->GetName(), m_propertyName->GetNodeValue());
 	node.SetProperty(m_propertyCaption->GetName(), m_propertyCaption->GetNodeValue());
 	node.SetProperty(m_propertyType->GetName(), m_propertyType->GetNodeValue());
+	node.SetProperty(m_propertyIndexed->GetName(), m_propertyIndexed->GetNodeValue());
 	return ibPropertyObject::WriteProperty(node);
 }
 
@@ -521,6 +522,7 @@ bool ibValueModelTable::ibValueModelTableColumnCollection::ibValueModelTableColu
 	m_propertyName->SetNodeValue(node.GetProperty(m_propertyName->GetName()));
 	m_propertyCaption->SetNodeValue(node.GetProperty(m_propertyCaption->GetName()));
 	m_propertyType->SetNodeValue(node.GetProperty(m_propertyType->GetName()));
+	m_propertyIndexed->SetNodeValue(node.GetProperty(m_propertyIndexed->GetName()));
 	return ibPropertyObject::ReadProperty(node);
 }
 

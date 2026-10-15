@@ -28,7 +28,9 @@ public:
 		const class ibMetaData* metaData = nullptr, const wxSize& size = wxSize(16, 16));
 
 	// THE PICTURE A SERVER SENDS, by its description — never a wx image on a worker thread. A backend one (a registered
-	// picture, a class's icon) is made once and kept here; a configuration's and a file's are made from what they keep.
+	// picture, a class's icon) is made once and kept here; a type of the configuration's own (a catalog's reference),
+	// which no global class knows, is its constructor's icon in the configuration given; a configuration's picture and
+	// a file's are made from what they keep.
 	static ibPicture GetServerPicture(const ibPictureDescription& pictureDesc, const class ibMetaData* metaData = nullptr);
 
 #pragma region __picture_factory_h__

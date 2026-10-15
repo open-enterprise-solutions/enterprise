@@ -109,28 +109,31 @@ void ibValueStaticBoxSizer::Update(const ibProtocolNode& node)
 
 void ibValueSizerItem::Update(const ibProtocolNode& node)
 {
-	// Its child is in the sizer already (the host's Generate) — the item it stands in is found, not added again: a window
-	// knows its sizer, a sizer the window it is laid out in.
 	if (GetChildCount() == 0)
 		return;
-
-	const ibValueFrame* const child = GetChild(0);
-	wxSizerItem* item = nullptr;
-	if (wxWindow* const window = child->GetWindow()) {
-		if (wxSizer* const holder = window->GetContainingSizer())
-			item = holder->GetItem(window);
-	}
-	else if (wxSizer* const sizer = child->GetSizer()) {
-		wxWindow* const owner = sizer->GetContainingWindow();
-		if (owner != nullptr && owner->GetSizer() != nullptr)
-			item = owner->GetSizer()->GetItem(sizer, true);
-	}
+	wxSizerItem* const item = GetItem(GetChild(0));
 	if (item == nullptr)
 		return;
 
 	item->SetProportion(static_cast<int>(node.GetInt(ibProtocolName::Proportion)));
 	item->SetFlag(GetFlag(node));
 	item->SetBorder(static_cast<int>(node.GetInt(ibProtocolName::BorderSize)));
+}
+
+wxSizerItem* ibValueSizerItem::GetItem(const ibValueFrame* child)
+{
+	// The child is in the sizer already (the host's Generate) — the item it stands in is found, not added again: a window
+	// knows its sizer, a sizer the window it is laid out in.
+	if (wxWindow* const window = child->GetWindow()) {
+		if (wxSizer* const holder = window->GetContainingSizer())
+			return holder->GetItem(window);
+	}
+	else if (wxSizer* const sizer = child->GetSizer()) {
+		wxWindow* const owner = sizer->GetContainingWindow();
+		if (owner != nullptr && owner->GetSizer() != nullptr)
+			return owner->GetSizer()->GetItem(sizer, true);
+	}
+	return nullptr;
 }
 
 int ibValueSizerItem::GetFlag(const ibProtocolNode& node)

@@ -146,7 +146,7 @@ void ibClientFrame::BackendError(const wxString& strFileName,
 	// what becomes of the failure. Closed without a choice — as Close window.
 	ibDataNode request;
 	request.SetValue(wxT("Kind"), static_cast<s32>(ibProtocolRequestKind::Error));
-	request.SetValue(wxT("Picture"), wxString(ibBackendPicture::GetServerPicture(g_picErrorCLSID).GetData()));
+	request.SetValue(wxT("Picture"), SendPicture(g_picErrorCLSID));
 	request.SetValue(wxT("Text"), strErrorMessage);
 
 	ibDataNode response;
@@ -192,30 +192,6 @@ bool ibClientFrame::TakeExitPending()
 	return was;
 }
 
-wxString ibClientFrame::SendPicture(const ibPictureDescription& picture, const ibMetaData* metaData)
-{
-	if (picture.IsEmptyPicture())
-		return wxString();
-	// A picture held as a file's bytes has no name of its own: it goes as itself.
-	if (picture.m_type == ibPictureType::eFromFile)
-		return wxString(ibBackendPicture::GetServerPicture(picture, metaData).GetData());
-
-	// A backend picture's number as a decimal — a u64 is past what a JSON number keeps, and a list's row names its
-	// picture the same way; a configuration picture's guid.
-	const wxString id = picture.m_type == ibPictureType::eFromBackend
-		? wxString::Format(wxT("%llu"), static_cast<unsigned long long>(picture.m_class_identifier))
-		: picture.m_meta_guid.str();
-	if (m_sentPictures.insert(id).second)
-		m_pendingPictures.push_back({ id, wxString(ibBackendPicture::GetServerPicture(picture, metaData).GetData()) });
-	return id;
-}
-
-std::vector<ibClientFrame::PendingPicture> ibClientFrame::DrainPendingPictures()
-{
-	std::vector<PendingPicture> out;
-	out.swap(m_pendingPictures);
-	return out;
-}
 
 bool ibClientFrame::DoRequest(const ibDataNode& request, ibDataNode& response)
 {
@@ -466,11 +442,10 @@ ibClientChildFrame* ibClientFrame::CreateChildFrame(ibView* view)
 	auto tab = std::make_unique<ibClientChildFrame>(frame, ++frame->m_lastTabId, document, view, title);
 
 	// The document's own icon first (a catalog's form shows the catalog's), the form's otherwise.
-	ibPicture icon = document != nullptr ? document->GetIcon() : ibPicture();
-	if (!icon.IsOk() && form != nullptr)
-		icon = ibBackendPicture::GetServerPicture(form->GetClassType());
-	if (icon.IsOk())
-		tab->SetIcon(icon);
+	ibPictureDescription icon = document != nullptr ? document->GetIcon() : ibPictureDescription();
+	if (icon.IsEmptyPicture() && form != nullptr)
+		icon = ibPictureDescription(form->GetClassType());
+	tab->SetIcon(icon);
 
 	ibClientChildFrame* const raw = tab.get();
 	frame->m_tabs.push_back(std::move(tab));
@@ -483,6 +458,20 @@ ibClientFrame* ibClientFrame::GetFrame()
 	// The server's own session (kind Service) has no frame.
 	ibSession* const session = ibSession::Current();
 	return session != nullptr ? dynamic_cast<ibClientFrame*>(session->GetFrame()) : nullptr;
+}
+
+ibString ibClientFrame::SendPicture(const ibPictureDescription& picture)
+{
+	if (picture.IsEmptyPicture())
+		return ibString();
+	// A picture held as a file's bytes has no name of its own: it goes as itself.
+	if (picture.m_type == ibPictureType::eFromFile)
+		return ibBackendPicture::GetServerPicture(picture).GetData();
+
+	// A backend picture's number as a decimal — a u64 is past what a JSON number keeps; a configuration picture's guid.
+	return picture.m_type == ibPictureType::eFromBackend
+		? ibString::Format(wxT("%llu"), static_cast<unsigned long long>(picture.m_class_identifier))
+		: ibString(picture.m_meta_guid.str());
 }
 
 void ibClientFrame::CloseDocuments()

@@ -80,7 +80,7 @@ bool ibFormAttributeValue::ibFormAttribute::FillFillCheck(ibPropertyList* prop)
 	// THE KINDS THEMSELVES, not the numbers they happen to have — the list is a VIEW of the
 	// enumeration, so adding a third answer is one enumerator and one line here rather than a hunt
 	// for every place a literal 1 stood for "show an error".
-	prop->AppendItem(_("Don't check"), ibFormAttributeFillCheck_DontCheck, wxBitmap());
-	prop->AppendItem(_("Show error"),  ibFormAttributeFillCheck_ShowError, wxBitmap());
+	prop->AppendItem(_("Don't check"), ibFormAttributeFillCheck_DontCheck, ibPictureDescription());
+	prop->AppendItem(_("Show error"),  ibFormAttributeFillCheck_ShowError, ibPictureDescription());
 	return true;
 }

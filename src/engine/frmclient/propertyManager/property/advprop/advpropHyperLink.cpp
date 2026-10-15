@@ -45,7 +45,7 @@ bool ibPGHyperLinkProperty::StringToValue(wxVariant& variant,
 	return false;
 }
 
-#include "frmclient/backend/propertyManager/property/propertyValue.h"   // GetObjectId — the module the row names
+#include "frmclient/backend/propertyManager/property/propertySerializable.h"   // GetObjectId — the module the row names
 #include "frmclient/docView/docView.h"   // docManager — the door that opens a metaobject
 
 void ibPGHyperLinkProperty::OnSetValue()
@@ -62,8 +62,8 @@ void ibPGHyperLinkProperty::OnSetValue()
 		// opened from; the server opens it. Taken now, by value: the owner is the inspector's, and goes with the next
 		// selection.
 		const ibPropertyObject* const owner = m_ownerProperty;
-		const ibPropertyValue* const property = owner != nullptr
-			? dynamic_cast<const ibPropertyValue*>(owner->GetProperty(GetName())) : nullptr;
+		const ibPropertySerializable* const property = owner != nullptr
+			? dynamic_cast<const ibPropertySerializable*>(owner->GetProperty(GetName())) : nullptr;
 		const ibMetaData* const metaData = owner != nullptr ? owner->GetMetaData() : nullptr;
 		if (property != nullptr && property->GetObjectId() != 0 && metaData != nullptr) {
 

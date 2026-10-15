@@ -1,12 +1,12 @@
 #include "formEditor.h"
 
 #include "backend/backend_mainFrame.h"
-#include "backend/backend_picture.h"
 #include "backend/compiler/value.h"
 #include "core/picturePredefined.h"
 #include "core/serialize/dataBuilder.h"
 #include "backend/session/session.h"
 
+#include "frmserver/client/clientFrame.h"         // ibClientFrame::SendPicture — the pictures, by their ids
 #include "frmserver/client/propertyInspector.h"   // a property's row, as the inspector writes it
 #include "frmserver/settings/formSettings.h"
 #include "frmserver/visualView/ctrl/form.h"
@@ -49,7 +49,7 @@ int ibDialogFormEditor::ShowModal()
 	for (;;) {
 		ibDataNode request;
 		request.SetValue(ibProtocolName::Kind, static_cast<s32>(ibProtocolRequestKind::FormEditor));
-		request.SetValue(ibProtocolName::Picture, wxString(ibBackendPicture::GetServerPicture(g_picChangeFormCLSID).GetData()));
+		request.SetValue(ibProtocolName::Picture, ibClientFrame::SendPicture(g_picChangeFormCLSID));
 		request.SetValue(ibProtocolName::HasSetting, ibHasFormSettings(m_owner));
 		if (result != wxNOT_FOUND)
 			request.SetValue(ibProtocolName::Result, static_cast<s32>(result));
@@ -59,7 +59,7 @@ int ibDialogFormEditor::ShowModal()
 		for (const ibCtorAbstractType* ctor : ibValue::GetListCtorsByType(ibCtorObjectType::ibCtorObjectType_object_control)) {
 			ibDataNode& described = classes.AddChild(0, 0);
 			described.SetValue(ibProtocolName::Name, ctor->GetClassName());
-			described.SetValue(ibProtocolName::Picture, wxString(ibBackendPicture::GetServerPicture(ctor->GetClassType()).GetData()));
+			described.SetValue(ibProtocolName::Picture, ibClientFrame::SendPicture(ctor->GetClassType()));
 		}
 		// …and the form's controls, what a person may arrange of each — as they stand now: asked again after each act.
 		AppendControl(request.Child(ibProtocolName::Controls), m_owner);

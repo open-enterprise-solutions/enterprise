@@ -49,6 +49,7 @@ deflate (RFC 1951 — a browser's `DecompressionStream("deflate-raw")`). A text 
 | `open` | `Client`, `File` or `Extension` | the frame — the file opened as a document; without a file, a new document of the template that opens `Extension` (File → New) |
 | `command` | `Client`, `Command` | the frame — the command done on the active tab's document |
 | `presentation` | `Client`, `Value`, `Format` | `Text` — the value as a person reads it, formatted by the server (`Format`: the codes `Format()` takes) |
+| `picture` | `Client`, `Pictures` — the ids | `Pictures` — each `Id`, `Picture` (PNG, base64; empty when there is none of that id) |
 
 A method name is never changed; a new method takes a new name. Every number below is the protocol's: never
 renumbered, a new one takes the next. A field a side does not know is skipped; an absent field is its default — so
@@ -59,7 +60,7 @@ the protocol grows by new fields, methods and numbers, never by a new format.
 Every answer that is a frame is numbered: `Frame`. A call may name the frame the client holds — `Since`, the number
 it was last answered with — and is then answered with `Patch`, what turns that frame into the one drawn now, instead
 of the whole. A call without `Since`, or naming another number, gets the frame whole. The events — `Messages`,
-`Clear`, `Pictures` — come beside either: they are what happened, not what the frame is.
+`Clear` — come beside either: they are what happened, not what the frame is.
 
 A patch is a node of the frame's shape carrying only what changed. A client applies it to its copy:
 
@@ -90,10 +91,14 @@ says in `ComposeState` what its sheet is to the report: 0 composed (or nothing c
 on show stays until the new one is delivered, 2 outdated — the setting changed since the sheet was built, and it is
 composed again when the person says so (Compose).
 
-A picture in the view — a command's, a button's, a column's — is named by its id: a backend picture's number, as a
-decimal, or a configuration picture's guid. The answer that first names it gives it in `Pictures`, once per client;
-the client keeps it for the session. A picture with no id of its own (one held as a file's bytes) comes as itself, a
-PNG in base64, as do a tab's `Icon` and the pictures of schemas and requests.
+A picture is named by its id everywhere — in the view, a tab's `Icon`, a schema, a request, a list of choices: a
+backend picture's number, as a decimal (a class's own: its class id), or a configuration picture's guid. No answer
+carries the picture itself:
+
+- the platform's own pictures are compiled into the client — it never asks for them;
+- any other it asks for with `picture`, the ids of a whole list in one call, and keeps for the session — an id there
+  is none of too, so it is not asked again;
+- only a picture with no id (one held as a file's bytes) comes as itself, a PNG in base64.
 
 A field's `State` carries `Text`, as shown, and `Value`, the value with its type: `{"t": <type id>, "type": <name>,
 "v": <text>}`, a reference `{"t", "m", "g"}`. An `event` that changes a field (`Change`) gives either: `Value` is
@@ -102,7 +107,8 @@ taken as it is, `Text` is parsed by the field's type.
 A table's `fetch` gives rows, each with `Container`, `Group` (a group's caption), `Picture`, and its cells as children
 by column id: `Text`, `Checked` for a flag, `Number`, `Value` when the cell takes an edit; its look, when the server's
 model set one — `TextColour`, `BackgroundColour` (a colour's text, `r,g,b`, as a form's colours), `Bold`, `Italic`,
-`Strikethrough`, `Underlined`, `Face`, `Size`, `Align` (`Left`, `Center`, `Right`).
+`Strikethrough`, `Underlined`, `Face`, `Size`, `Align` (`Left`, `Center`, `Right`). In the designer (`login` `Mode` 2)
+a table reads no rows — its `fetch` is refused, and a designer's client does not ask.
 
 A table's column dragged in its header is `Move {Column, Holder, Position}`: `Holder` the group it now stands in, 0 the
 table. The client moves the column in its own copy of the form at once; the server's form follows.
@@ -121,7 +127,6 @@ drawn empty.
 | `Menu` | the application's menus, as a tree — beside the client's own File and Edit |
 | `Tabs`, `ActiveTab` | the tabs, each by its id (`NodeId`, given when it opens, never another tab's): `Title` (a modified document's ends with `*`), `Icon`, `Locked` (the start page — first, never closed), `Commands` (the commands its document takes now), `Formats` (what its document saves as: `Title`, `Mask`), `File` (its document's file, once it has one), `Parent` (the tab whose document owns this one's — raised under it, closed with it); the active one by its id |
 | `Messages`, `Clear` | messages to the person since the last answer — events, never in a patch |
-| `Pictures` | the pictures the frame names that the client was not given yet: `Id`, `Picture` (PNG, base64) — an event, never in a patch |
 | `Exit` | the client is to go: Exit done, every tab closed — an event, never in a patch |
 | `Request` | a question to the person, while one is pending |
 | `View` | the active tab drawn: a form — its `Key` and its controls as the designer saved them, each with a `State` of what it shows now; or the start page |

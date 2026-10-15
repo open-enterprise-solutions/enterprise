@@ -1,10 +1,11 @@
 #include "applyChange.h"
 
 #include "backend/backend_mainFrame.h"
-#include "backend/backend_picture.h"
+#include "core/picturePredefined.h"
 #include "core/serialize/dataBuilder.h"
 #include "backend/session/session.h"
 
+#include "frmserver/client/clientFrame.h"   // ibClientFrame::SendPicture — the picture, by its id
 #include "protocol/protocol.h"   // ibProtocolRequestKind::ApplyChange
 
 bool ibDialogApplyChange::ShowApplyChange(const ibRestructureInfo& info)
@@ -20,7 +21,7 @@ bool ibDialogApplyChange::ShowApplyChange(const ibRestructureInfo& info)
 	// there) — and the window's own picture.
 	ibDataNode request;
 	request.SetValue(wxT("Kind"), static_cast<s32>(ibProtocolRequestKind::ApplyChange));
-	request.SetValue(wxT("Picture"), wxString(ibBackendPicture::GetServerPicture(g_picStructureCLSID).GetData()));
+	request.SetValue(wxT("Picture"), ibClientFrame::SendPicture(g_picStructureCLSID));
 	for (const ibRestructureInfo::Entry& entry : info) {
 		ibDataNode& item = request.AddChild(0, 0);
 		item.SetValue(wxT("Level"), static_cast<s32>(entry.type));

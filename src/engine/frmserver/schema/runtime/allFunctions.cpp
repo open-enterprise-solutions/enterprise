@@ -1,11 +1,11 @@
 #include "allFunctions.h"
 
-#include "backend/backend_picture.h"                       // the icons, as they travel
 #include "backend/functionalOption/functionalOptionGate.h"  // ibFunctionalOptionGate::IsAvailable
 #include "backend/metaCollection/genericData.h"
 #include "backend/metadataConfiguration.h"
 #include "core/serialize/dataBuilder.h"
 #include "backend/session/session.h"                       // the configuration the session works in
+#include "frmserver/client/clientFrame.h"                  // ibClientFrame::SendPicture — the icons, by their ids
 
 #include <vector>
 
@@ -73,17 +73,13 @@ void ibSchemaAllFunctions::Build(const ibSession& session, const ibDataNode& WXU
 	for (std::size_t i = 0; i < groups.size(); ++i) {
 		ibDataNode& group = nodes.AddChild(0, static_cast<ibMetaID>(i));
 		group.SetValue(wxT("Title"), groups[i].title);
-		const ibPicture groupIcon =ibBackendPicture::GetServerPicture(groups[i].clsid);
-		if (groupIcon.IsOk())
-			group.SetValue(wxT("Icon"), wxString(groupIcon.GetData()));
+		group.SetValue(wxT("Icon"), ibClientFrame::SendPicture(groups[i].clsid));
 
 		for (const ibValueMetaObjectGenericData* object : OfferedObjects(metaData, groups[i].clsid)) {
 			ibDataNode& item = group.AddChild(0, object->GetMetaID());
 			item.SetValue(wxT("Item"), static_cast<s32>(object->GetMetaID()));
 			item.SetValue(wxT("Title"), object->GetSynonym());
-			const ibPicture icon =ibBackendPicture::GetServerPicture(object->GetClassType());
-			if (icon.IsOk())
-				item.SetValue(wxT("Icon"), wxString(icon.GetData()));
+			item.SetValue(wxT("Icon"), ibClientFrame::SendPicture(object->GetClassType()));
 		}
 	}
 }

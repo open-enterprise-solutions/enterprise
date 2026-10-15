@@ -128,6 +128,7 @@ void ibFrontendMainFrameDesigner::Debugger_OnStateChanged()
 #include "designer-thin/docManager/templates/docViewDataProcessorFile.h"
 #include "designer-thin/docManager/templates/docViewDataReportFile.h"
 #include "designer-thin/docManager/templates/docViewModuleEditor.h"
+#include "designer-thin/docManager/templates/docViewFormEditor.h"
 
 ibTabDocument* ibFrontendMainFrameDesigner::CreateDocument(ibProtocolViewKind kind, long long tabId)
 {
@@ -137,6 +138,8 @@ ibTabDocument* ibFrontendMainFrameDesigner::CreateDocument(ibProtocolViewKind ki
 		return new ibReportFileDocument(tabId);
 	if (kind == ibProtocolViewKind::Module)
 		return new ibModuleEditDocument(tabId);
+	if (kind == ibProtocolViewKind::FormDesigner)
+		return new ibFormEditDocument(tabId);
 	return ibFrontendMainFrame::CreateDocument(kind, tabId);
 }
 

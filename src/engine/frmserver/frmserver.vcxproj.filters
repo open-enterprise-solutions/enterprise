@@ -121,6 +121,18 @@
     <ClCompile Include="docView\templates\designer\docViewDataReportEdit.cpp">
       <Filter>docView\templates\designer</Filter>
     </ClCompile>
+    <ClCompile Include="docView\templates\designer\docViewFormEdit.cpp">
+      <Filter>docView\templates\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="docView\templates\designer\docViewFormEditAttribute.cpp">
+      <Filter>docView\templates\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="docView\templates\designer\docViewFormEditCmd.cpp">
+      <Filter>docView\templates\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="docView\templates\designer\docViewFormEditCommand.cpp">
+      <Filter>docView\templates\designer</Filter>
+    </ClCompile>
     <ClCompile Include="docView\templates\designer\docViewModuleEdit.cpp">
       <Filter>docView\templates\designer</Filter>
     </ClCompile>
@@ -560,6 +572,9 @@
       <Filter>docView\templates\designer</Filter>
     </ClInclude>
     <ClInclude Include="docView\templates\designer\docViewDataReportEdit.h">
+      <Filter>docView\templates\designer</Filter>
+    </ClInclude>
+    <ClInclude Include="docView\templates\designer\docViewFormEdit.h">
       <Filter>docView\templates\designer</Filter>
     </ClInclude>
     <ClInclude Include="docView\templates\designer\docViewModuleEdit.h">
