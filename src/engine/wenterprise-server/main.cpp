@@ -7,6 +7,7 @@
 
 #include <cstdlib>
 #include <iostream>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -28,6 +29,7 @@
 #include <nlohmann/json.hpp>
 #include "backend/backend_exception.h"
 #include "backend/databaseLayer/databaseLayerException.h"
+#include "backend/server/listener.h"   // the listener: TLS when backend.conf names a certificate
 #include "frontend/diagnostics/oesConsole.h"
 
 #if defined(_WIN32)
@@ -105,7 +107,9 @@ struct CmdArgs {
 	// (bind_to_any_port). Operator sees the actual bound port in the
 	// startup banner. Explicit `--port=N` forces N; conflict kills
 	// startup rather than silently coexisting on the same port.
-	std::string host = "0.0.0.0";
+	// This machine's own address unless said otherwise: any other needs
+	// the certificate backend.conf names (backend/server/listener.h).
+	std::string host = "127.0.0.1";
 	int         port = 0;
 
 	// Optional: write a tiny manifest (one key=value per line) with the
@@ -171,7 +175,7 @@ CmdArgs ParseArgs(int argc, char** argv)
 		else if (arg == "--help" || arg == "-h") {
 			std::cout <<
 				"Usage: wenterprise-server [options]\n"
-				"  --host=<addr>       HTTP bind address (default 0.0.0.0)\n"
+				"  --host=<addr>       bind address (default 127.0.0.1; any other needs Certificate and PrivateKey in backend.conf)\n"
 				"  --port=<N>          HTTP port (default 8080)\n"
 				"  --url=<segment>     URL prefix segment after /w/ (default derived from --file / --db)\n"
 				"\n"
@@ -410,7 +414,18 @@ int main(int argc, char** argv)
 	// derived the same way.
 	const std::string prefix = "/w/" + args.urlPrefix;
 
-	httplib::Server svr;
+	// The transport is the process's (backend/server/listener.h): TLS when backend.conf names a certificate,
+	// plain on this machine's own address only - an address off it without a certificate is a refusal.
+	const ibTlsFiles tls = ibTlsFiles::FromBackendConf();
+	wxString why;
+	std::unique_ptr<httplib::Server> listener = ibMakeListener(wxString::FromUTF8(args.host), tls, &why);
+	if (!listener) {
+		std::cerr << "OES wenterprise-server did not start: " << why.utf8_str() << std::endl;
+		return 1;
+	}
+	const bool secure = tls.IsNamed();
+	const char* const scheme = secure ? "https://" : "http://";
+	httplib::Server& svr = *listener;
 	g_svr = &svr;
 	svr.new_task_queue = [] { return new ServedTaskQueue(); };
 #if defined(_WIN32)
@@ -483,7 +498,7 @@ int main(int argc, char** argv)
 		res.set_content(body, "application/json; charset=utf-8");
 	});
 
-	svr.Get(prefix + "/", [prefix](const httplib::Request& req, httplib::Response& res) {
+	svr.Get(prefix + "/", [prefix, scheme, secure](const httplib::Request& req, httplib::Response& res) {
 		// Windows IPv6-first "localhost" fallback adds ~200ms cold
 		// connect per request, which stacks up on every tab switch /
 		// click. If the browser came in via `Host: localhost...`,
@@ -491,10 +506,12 @@ int main(int argc, char** argv)
 		// IPv4 literal skips the ::1 try. One-time 302 on GET /; the
 		// new origin then services all subsequent resource fetches
 		// with millisecond connect times.
+		// Not over TLS: the certificate names what the browser asked for, and a bounce to another name
+		// is a bounce to a name it may not carry.
 		const std::string host = req.get_header_value("Host");
-		if (host.size() >= 9 && host.compare(0, 9, "localhost") == 0
+		if (!secure && host.size() >= 9 && host.compare(0, 9, "localhost") == 0
 			&& (host.size() == 9 || host[9] == ':')) {
-			std::string target = "http://127.0.0.1" + host.substr(9) + prefix + "/";
+			std::string target = scheme + ("127.0.0.1" + host.substr(9) + prefix + "/");
 			res.status = 302;
 			res.set_header("Location", target);
 			return;
@@ -969,7 +986,7 @@ int main(int argc, char** argv)
 	// while still binding all interfaces.
 	const std::string displayHost =
 		(args.host == "0.0.0.0" || args.host == "::") ? "localhost" : args.host;
-	std::cout << "OES wenterprise-server listening on http://"
+	std::cout << "OES wenterprise-server listening on " << scheme
 		<< displayHost << ":" << boundPort << prefix << "/"
 		<< "  (bind: " << args.host << ")" << std::endl;
 
@@ -988,8 +1005,8 @@ int main(int argc, char** argv)
 			fprintf(f, "host=%s\n",   args.host.c_str());
 			fprintf(f, "port=%d\n",   boundPort);
 			fprintf(f, "prefix=%s\n", prefix.c_str());
-			fprintf(f, "url=http://%s:%d%s/\n",
-				displayHostForManifest.c_str(), boundPort, prefix.c_str());
+			fprintf(f, "url=%s%s:%d%s/\n",
+				scheme, displayHostForManifest.c_str(), boundPort, prefix.c_str());
 			fclose(f);
 		}
 	}

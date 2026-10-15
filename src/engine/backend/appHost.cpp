@@ -313,20 +313,20 @@ std::size_t ibApplicationHost::ResumeSeconds(bool present, long configured)
 	return static_cast<std::size_t>(configured);
 }
 
+wxString ibApplicationHost::BackendConfPath()
+{
+	const wxString& workingDir = wxGetCwd();
+	if (wxFileName::FileExists(workingDir + wxFILE_SEP_PATH + BACKEND_CONF))
+		return workingDir + wxFILE_SEP_PATH + BACKEND_CONF;
+	// Beside the program. Inside a bundle that is the folder that contains the .app,
+	// which is where the file is shipped; the working directory above still wins.
+	const wxString beside = ibProgramFolder() + wxFILE_SEP_PATH + BACKEND_CONF;
+	return wxFileName::FileExists(beside) ? beside : wxString();
+}
+
 void ibApplicationHost::ReadBackendConf()
 {
-	const wxString& workingDir = wxGetCwd(); wxString strConfigFile;
-	if (wxFileName::FileExists(workingDir + wxFILE_SEP_PATH + BACKEND_CONF)) {
-		strConfigFile = workingDir +
-			wxFILE_SEP_PATH + BACKEND_CONF;
-	}
-	else {
-		// Beside the program. Inside a bundle that is the folder that contains the .app,
-		// which is where the file is shipped; the working directory above still wins.
-		const wxString beside = ibProgramFolder() + wxFILE_SEP_PATH + BACKEND_CONF;
-		if (wxFileName::FileExists(beside))
-			strConfigFile = beside;
-	}
+	const wxString strConfigFile = BackendConfPath();
 
 	wxFileConfig fc(wxT(""), wxT(""), wxT(""), strConfigFile);
 	fc.Read(wxT("Locale"), &m_configLocale);

@@ -14,8 +14,9 @@
  * compiled in at all). Two inclusions in one module would hand the mutexes over twice and leak the first set.
  *
  * Today that is valueHttp.cpp (the engine) and tests/test_valueHttpSecure.cpp (the test binary). The web
- * server compiles httplib.h too and links Mbed TLS through the engine, but builds only a plain Server and
- * never creates a TLS context; the day it wants one, this header belongs in it as well.
+ * server compiles httplib.h too and links Mbed TLS through the engine, and its TLS listener - as the
+ * assistant's - is made INSIDE the engine (server/listener.cpp), on the engine's copy, whose mutexes are
+ * already given; it needs no copy of this header until it makes a TLS context of its own.
  */
 
 #if defined(CPPHTTPLIB_SSL_ENABLED) && defined(_WIN32)

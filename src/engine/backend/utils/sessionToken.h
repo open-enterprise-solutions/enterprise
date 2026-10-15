@@ -8,6 +8,7 @@
 #include "backend/backend.h"
 
 #include <cstddef>
+#include <string>
 #include <vector>
 
 #include <wx/string.h>
@@ -34,6 +35,11 @@ BACKEND_API bool ParseHex(const wxString& hex, unsigned char out[kBytes]);
 
 // Constant-time compare of two digests. False when either pointer is null.
 BACKEND_API bool DigestEqual(const unsigned char* left, const unsigned char* right);
+
+// A presented text against the expected one, in constant time over the expected one's length - the length
+// itself is compared first and is no secret (a token's is fixed). False for an empty expected text: nothing
+// presented matches a token that was never minted.
+BACKEND_API bool TextEqual(const std::string& presented, const std::string& expected);
 
 } // namespace ibSessionToken
 
