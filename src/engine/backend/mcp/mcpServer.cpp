@@ -417,11 +417,12 @@ private:
 		// the refusal, repeated the call and left three unnamed common modules behind in somebody's
 		// configuration. A false refusal is worse than a slow answer: it makes a caller act.
 		//
-		// Matched to the wait in RunTool, which gives the main thread five minutes before it
-		// answers on its own, plus a margin so the transport never gives up FIRST — whoever times
-		// out should be the one that can explain why.
-		m_server.set_read_timeout(std::chrono::minutes(6));
-		m_server.set_write_timeout(std::chrono::minutes(6));
+		// Matched to the wait in RunTool, which gives the main thread thirty minutes before it
+		// answers on its own, plus a margin so the transport never gives up FIRST - whoever times
+		// out should be the one that can explain why. A long config_apply is that wait. When the
+		// client accepts an event stream, that call's own response carries the apply steps.
+		m_server.set_read_timeout(std::chrono::minutes(31));
+		m_server.set_write_timeout(std::chrono::minutes(31));
 
 		// ⚠ AND HOW LONG A CONNECTION MAY SIT IDLE, which is the half that actually bit. httplib
 		// closes a kept-alive connection after FIVE SECONDS of silence
@@ -487,6 +488,58 @@ private:
 			wire.m_name            = headerOf("Mcp-Name");
 
 			const wxString request = wxString::FromUTF8(req.body.data(), req.body.size());
+
+			// A tools/call that asked for an event stream gets its progress on THIS response.
+			// The frames are the apply steps, written while the call runs. The worker binds the
+			// session itself: this handler returns to the provider before the call is finished.
+			const std::string accept = req.get_header_value("Accept");
+			const bool wantsEvents = accept.find("text/event-stream") != std::string::npos;
+			const bool toolsCall = request.Find(wxT("\"tools/call\"")) != wxNOT_FOUND
+				|| wire.m_method == wxT("tools/call");
+			if (wantsEvents && toolsCall) {
+				auto out = std::make_shared<ibMcpCallOut>();
+				m_owner->BindCallOut(out);
+				ibMcpServer* const owner = m_owner;
+				ibSession* const session = m_session;
+				std::thread([owner, session, request, wire, out]() {
+					wxString answer;
+					try {
+						const ibSessionScope inThisSession(session);
+						int refusalCode = 0;
+						answer = owner->Answer(request, wire, &refusalCode);
+					}
+					catch (const std::exception& err) {
+						answer = ibRpcWriteError(ibDataValue(), ibRpcError::Internal,
+							wxString::FromUTF8(err.what()));
+					}
+					catch (...) {
+						answer = ibRpcWriteError(ibDataValue(), ibRpcError::Internal,
+							wxT("The call failed in a way it does not describe."));
+					}
+					owner->BindCallOut(nullptr);
+					out->Finish(answer);
+				}).detach();
+
+				res.set_chunked_content_provider("text/event-stream",
+					[out](std::size_t /*offset*/, httplib::DataSink& sink) {
+						wxString frame;
+						bool final = false;
+						if (!out->Pop(frame, final) || frame.IsEmpty()) {
+							sink.done();
+							return false;
+						}
+						const wxScopedCharBuffer utf8 = frame.utf8_str();
+						std::string sse("data: ");
+						sse.append(utf8.data(), utf8.length());
+						sse.append("\n\n");
+						if (!sink.write(sse.data(), sse.size()) || final) {
+							sink.done();
+							return false;
+						}
+						return true;
+					});
+				return;
+			}
 
 			// 🛑 THE VERDICT IS ASKED FOR, NOT RECOGNISED. The first version read the status out
 			// of the emitted JSON by looking for `"code":-32020` — and got 200 on every refusal,
@@ -1098,6 +1151,109 @@ static int ibMcpLevelRank(const wxString& level)
 // What Say() sends on the stream. Named so the gate reads as a comparison, not as a number.
 static const int kChatNoteLevel = 1;   // info
 
+void ibMcpCallOut::Push(const wxString& json)
+{
+	{
+		std::lock_guard<std::mutex> lock(m_mu);
+		m_notes.push_back(json);
+	}
+	m_cv.notify_one();
+}
+
+void ibMcpCallOut::Finish(const wxString& answer)
+{
+	{
+		std::lock_guard<std::mutex> lock(m_mu);
+		m_answer = answer;
+		m_finished = true;
+	}
+	m_cv.notify_one();
+}
+
+bool ibMcpCallOut::Pop(wxString& frame, bool& final)
+{
+	std::unique_lock<std::mutex> lock(m_mu);
+	m_cv.wait(lock, [this] { return !m_notes.empty() || m_finished; });
+	if (!m_notes.empty()) {
+		frame = m_notes.front();
+		m_notes.pop_front();
+		final = false;
+		return true;
+	}
+	frame = m_answer;
+	final = true;
+	return !frame.IsEmpty();
+}
+
+std::vector<wxString> ibMcpCallOut::Notes() const
+{
+	std::lock_guard<std::mutex> lock(m_mu);
+	return std::vector<wxString>(m_notes.begin(), m_notes.end());
+}
+
+void ibMcpServer::BindCallOut(const std::shared_ptr<ibMcpCallOut>& out)
+{
+	std::lock_guard<std::mutex> lock(m_callOutMutex);
+	m_callOut = out;
+}
+
+void ibMcpServer::Notify(const wxString& method, const ibDataNode& params)
+{
+	ibDataNode note;
+	note.SetValue(wxT("jsonrpc"), wxString(wxT("2.0")));
+	note.SetValue(wxT("method"), method);
+	note.Child(wxT("params")) = params;
+
+	const wxString json = ibRpcRenderNode(note);
+	if (method == wxT("notifications/progress")) {
+		std::shared_ptr<ibMcpCallOut> out;
+		{
+			std::lock_guard<std::mutex> lock(m_callOutMutex);
+			out = m_callOut;
+		}
+		if (out)
+			out->Push(json);
+		return;
+	}
+	if (m_listener)
+		m_listener->WriteToStream(json);
+}
+
+void ibMcpServer::BeginCallProgress(const ibDataValue* token)
+{
+	std::lock_guard<std::mutex> lock(m_callOutMutex);
+	m_progress = 0;
+	if (token == nullptr || token->IsEmpty())
+		m_progressToken.reset();
+	else
+		m_progressToken.reset(new ibDataValue(*token));
+}
+
+void ibMcpServer::EndCallProgress()
+{
+	std::lock_guard<std::mutex> lock(m_callOutMutex);
+	m_progressToken.reset();
+	m_progress = 0;
+}
+
+void ibMcpServer::NoteApplyStep(const wxString& what)
+{
+	ibDataValue token;
+	int step = 0;
+	{
+		std::lock_guard<std::mutex> lock(m_callOutMutex);
+		if (m_progressToken == nullptr || m_progressToken->IsEmpty() || what.IsEmpty())
+			return;
+		token = *m_progressToken;
+		step = ++m_progress;
+	}
+	ibDataNode params;
+	params.AddField(wxT("progressToken"), token);
+	params.AddField(wxT("progress"), ibDataValue::Int(step));
+	params.SetValue(wxT("message"), what);
+	Notify(wxT("notifications/progress"), params);
+}
+
 void ibMcpServer::Say(const wxString& text)
 {
 	if (text.IsEmpty())
@@ -1126,16 +1282,11 @@ void ibMcpServer::Say(const wxString& text)
 	// would be advertising something we do not honour. The WINDOW is unaffected — a person
 	// watching their own designer is not the audience a client's log level is about.
 	if (m_listener && kChatNoteLevel >= m_logLevel.load()) {
-		ibDataNode note;
-		note.SetValue(wxT("jsonrpc"), wxString(wxT("2.0")));
-		note.SetValue(wxT("method"), wxString(wxT("notifications/message")));
-
-		ibDataNode& params = note.Child(wxT("params"));
+		ibDataNode params;
 		params.SetValue(wxT("level"), wxString(wxT("info")));
 		params.SetValue(wxT("logger"), wxString(wxT("chat")));
 		params.SetValue(wxT("data"), text);
-
-		m_listener->WriteToStream(ibRpcRenderNode(note));
+		Notify(wxT("notifications/message"), params);
 	}
 }
 
@@ -1160,16 +1311,11 @@ void ibMcpServer::Note(const wxString& text)
 
 	// The listener still learns of it at once — see the note in Say() about the log level.
 	if (m_listener && kChatNoteLevel >= m_logLevel.load()) {
-		ibDataNode note;
-		note.SetValue(wxT("jsonrpc"), wxString(wxT("2.0")));
-		note.SetValue(wxT("method"), wxString(wxT("notifications/message")));
-
-		ibDataNode& params = note.Child(wxT("params"));
+		ibDataNode params;
 		params.SetValue(wxT("level"), wxString(wxT("info")));
 		params.SetValue(wxT("logger"), wxString(wxT("metadata")));
 		params.SetValue(wxT("data"), text);
-
-		m_listener->WriteToStream(ibRpcRenderNode(note));
+		Notify(wxT("notifications/message"), params);
 	}
 }
 
@@ -1351,8 +1497,9 @@ bool ibMcpServer::AskModel(const wxString& question, wxString& refusal)
 // stops US waiting — so the task may still run after this function has returned and its stack is
 // gone. Everything it touches therefore lives in the shared block, and the arguments are COPIED
 // into it rather than pointed at.
+
 bool ibMcpServer::RunTool(const class ibMcpTool* tool, const ibDataNode& arguments,
-	ibDataNode& payload, wxString& refusal, bool* outPending)
+	ibDataNode& payload, wxString& refusal, bool* outPending, const ibDataValue* progressToken)
 {
 	if (outPending != nullptr)
 		*outPending = false;
@@ -1361,6 +1508,15 @@ bool ibMcpServer::RunTool(const class ibMcpTool* tool, const ibDataNode& argumen
 	// passes and a configuration can be opened, closed and reopened while the server runs. A
 	// pointer compare when nothing has changed, which is almost always.
 	WatchMetadata();
+
+	// The token lasts for this call, including the inline path. Apply steps read it from
+	// whichever thread writes the ledger. Cleared on every return, including a throw.
+	struct ProgressLife {
+		ibMcpServer* self;
+		~ProgressLife() { self->EndCallProgress(); }
+	};
+	BeginCallProgress(progressToken);
+	ProgressLife progressLife{ this };
 
 	// ⚠ …UNLESS THE TOOL MUST NOT BE THERE. See ibMcpTool::NeedsMainThread: a verb that WAITS for
 	// something the main thread delivers cannot be run on it, and the debugger's evaluation is one.
@@ -1396,26 +1552,33 @@ bool ibMcpServer::RunTool(const class ibMcpTool* tool, const ibDataNode& argumen
 	});
 
 	// ⚠ FINITE, AND THE NUMBER IS A COMPROMISE STATED OUT LOUD. The wait is not there to bound the
-	// WORK — applying a configuration legitimately takes minutes and must not be cut off — it is
+	// WORK - applying a configuration legitimately takes many minutes and must not be cut off - it is
 	// there so a MODAL DIALOG cannot wedge the server for the rest of the day: the main thread is
-	// then busy until a person clicks, and nobody is watching this socket. Long enough for real
-	// work, finite so a forgotten dialog is answered instead of hung on.
-	if (done.wait_for(std::chrono::minutes(5)) != std::future_status::ready) {
-		// ⚠ A WARNING — the journal's word for "nobody has to be stopped for this". Written as an error it
+	// then busy until a person clicks, and nobody is watching this socket. Long enough for a real
+	// apply, finite so a forgotten dialog is answered instead of hung on.
+	//
+	// Progress, when the caller sent a token and accepts an event stream, is each line the apply
+	// writes into the rebuild journal. It goes out on this call's own response. There is no timer
+	// and nothing is written to the listen stream to keep the socket awake.
+	using clock = std::chrono::steady_clock;
+	const auto cap = std::chrono::duration_cast<clock::duration>(std::chrono::minutes(30));
+	const bool finished = done.wait_for(cap) == std::future_status::ready;
+	if (!finished) {
+		// ⚠ A WARNING - the journal's word for "nobody has to be stopped for this". Written as an error it
 		// put a modal "Designer Error" box (and a dump) on top of the very dialog the call was waiting
 		// behind, in front of a person who had pressed nothing (2026-09-28).
-		ibJournalWarning(wxT("mcp"), wxT("%s: not finished within five minutes - most likely waiting behind "
+		ibJournalWarning(wxT("mcp"), wxT("%s: not finished within thirty minutes - most likely waiting behind "
 			"a dialog; the call still runs when it is answered"), toolName);
 
 		// 🛑 AND THIS IS NOT A REFUSAL, WHICH IS THE WHOLE POINT OF SAYING SO OUT LOUD. The work is
 		// queued and WILL run; what expired is our patience, not the call. Reported as an error it
 		// reads to a caller as "this did not happen", and the caller then does the one thing that
-		// makes it worse — asks again. That is exactly how three unnamed common modules were left
+		// makes it worse - asks again. That is exactly how three unnamed common modules were left
 		// in somebody's configuration.
 		if (outPending != nullptr)
 			*outPending = true;
 
-		refusal = ibMcpText("The designer did not get to this within five minutes - it is most likely "
+		refusal = ibMcpText("The designer did not get to this within thirty minutes - it is most likely "
 			"showing a dialog and waiting for a person. THE CALL WAS NOT ABANDONED and nothing was "
 			"left half-done: it runs when the window is answered, and the outcome is simply not "
 			"known here yet.\n"
@@ -3056,7 +3219,16 @@ wxString ibMcpServer::Answer(const wxString& request, const ibMcpWireHeaders& he
 					refusal = fault;
 				}
 				else {
-					ok = RunTool(tool, arguments, payload, refusal, &pending);
+					// The token, when the caller sent one, is what each apply step is matched
+					// against on this call's own response.
+					const ibDataValue* progressToken = nullptr;
+					if (meta != nullptr) {
+						if (const ibDataValue* tok = meta->FindField(wxT("progressToken"))) {
+							if (tok->Kind() == ibDataKind::String || tok->Kind() == ibDataKind::Number)
+								progressToken = tok;
+						}
+					}
+					ok = RunTool(tool, arguments, payload, refusal, &pending, progressToken);
 				}
 			}
 			// The query family FIRST, and the positioned one before its parent:

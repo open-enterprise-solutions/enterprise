@@ -33,15 +33,26 @@ public:
 		wxString      descr;
 	};
 
+	// Told each step, as the step is written. The apply's own progress reads
+	// this. Empty when nobody is listening.
+	void SetStep(void (*step)(const wxString& what, void* cookie), void* cookie)
+	{
+		m_step = step;
+		m_stepCookie = cookie;
+	}
+
 	// ---- mutators ------------------------------------------------------------
-	void AppendInfo   (const wxString& s) { m_entries.push_back({ ibRestructure::info,    s }); }
-	void AppendWarning(const wxString& s) { m_entries.push_back({ ibRestructure::warning, s }); ++m_warnings; }
-	void AppendError  (const wxString& s) { m_entries.push_back({ ibRestructure::error,   s }); ++m_errors;   }
+	void AppendInfo   (const wxString& s) { m_entries.push_back({ ibRestructure::info,    s }); Note(s); }
+	void AppendWarning(const wxString& s) { m_entries.push_back({ ibRestructure::warning, s }); ++m_warnings; Note(s); }
+	void AppendError  (const wxString& s) { m_entries.push_back({ ibRestructure::error,   s }); ++m_errors;   Note(s); }
 
 	// Append all of another ledger's entries (preserving type + counters) — e.g. the config-save flow
 	// reads the structure builder's change log into the active config's ledger for the apply-change UI.
 	void Absorb(const ibRestructureInfo& other) {
-		m_entries.insert(m_entries.end(), other.m_entries.begin(), other.m_entries.end());
+		for (const Entry& entry : other.m_entries) {
+			m_entries.push_back(entry);
+			Note(entry.descr);
+		}
 		m_warnings += other.m_warnings;
 		m_errors   += other.m_errors;
 	}
@@ -75,9 +86,17 @@ public:
 	static void ReleaseAutoExclusive();
 
 private:
+	void Note(const wxString& what) const
+	{
+		if (m_step != nullptr)
+			m_step(what, m_stepCookie);
+	}
+
 	std::vector<Entry> m_entries;
 	size_t             m_warnings = 0;
 	size_t             m_errors   = 0;
+	void             (*m_step)(const wxString& what, void* cookie) = nullptr;
+	void*              m_stepCookie = nullptr;
 };
 
 #endif // !__RESTRUCT_INFO_H__

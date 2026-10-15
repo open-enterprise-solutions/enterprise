@@ -38,6 +38,8 @@
 #include "backend/appDataCtorToken.h"
 
 #include <atomic>
+#include <condition_variable>
+#include <deque>
 #include <memory>
 #include <mutex>
 #include <set>
@@ -46,6 +48,26 @@
 #include <wx/string.h>
 
 class ibSession;
+class ibDataValue;
+class ibDataNode;
+
+// The frames of one call, written while the call runs and read by the POST
+// that asked for them. Progress of that call lives here, not on the listen stream.
+class BACKEND_API ibMcpCallOut {
+public:
+	void Push(const wxString& json);
+	void Finish(const wxString& answer);
+	// One frame. `final` is the call's own answer, after the notes.
+	bool Pop(wxString& frame, bool& final);
+	std::vector<wxString> Notes() const;
+
+private:
+	mutable std::mutex      m_mu;
+	std::condition_variable m_cv;
+	std::deque<wxString>    m_notes;
+	wxString                m_answer;
+	bool                    m_finished = false;
+};
 
 // WHAT A PERSON SET. Kept apart from the server so the designer's settings page
 // edits a value and hands it over, instead of poking at a running object.
@@ -200,6 +222,17 @@ public:
 	void Note(const wxString& text);
 	std::vector<wxString> TakeNoted();
 
+	// One notification, built in one place. `notifications/progress` goes on
+	// the call that is running. Everything else goes to the listen stream.
+	void Notify(const wxString& method, const ibDataNode& params);
+
+	// The call's progress token, for as long as RunTool is inside it.
+	void BeginCallProgress(const ibDataValue* token);
+	void EndCallProgress();
+	void NoteApplyStep(const wxString& what);
+
+	void BindCallOut(const std::shared_ptr<ibMcpCallOut>& out);
+
 	// ⭐ HAS ANYBODY PICKED IT UP — asked WITHOUT taking, which TakeSaid cannot do. The window
 	// needs it to tell two silences apart: a message nobody has collected means nothing is
 	// listening, and one that was collected means an answer is being worked on. Both look like
@@ -297,7 +330,8 @@ private:
 	// carry a third state, and the text that explains it is read by a person while the caller is a
 	// machine, for which false is false.
 	bool RunTool(const class ibMcpTool* tool, const class ibDataNode& arguments,
-		class ibDataNode& payload, wxString& refusal, bool* outPending = nullptr);
+		class ibDataNode& payload, wxString& refusal, bool* outPending = nullptr,
+		const ibDataValue* progressToken = nullptr);
 
 	// The configuration its session works in — what every answer here is about. Null while it is stopped.
 	class ibMetaDataConfigurationBase* GetMetaData() const;
@@ -397,6 +431,11 @@ private:
 	// WHAT WAS SAID, kept. Guarded by the same mutex: the two are written in one breath and a
 	// second lock would only be a second thing to forget.
 	std::vector<Turn>            m_conversation;
+
+	std::mutex                   m_callOutMutex;
+	std::shared_ptr<ibMcpCallOut> m_callOut;
+	std::unique_ptr<ibDataValue> m_progressToken;
+	int                          m_progress = 0;
 };
 
 #endif // _IB_MCP_SERVER_H_
