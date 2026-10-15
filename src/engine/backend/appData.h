@@ -372,6 +372,13 @@ public:
 	// The platform locale — the PROCESS's (ibApplicationHost), asked here so its readers need not know that.
 	wxString GetLocale() const;
 
+	// How far the base's clock stands from this machine's, in milliseconds (session/regionalSettings.h measures
+	// it); what ibDateTime::Now() moves a reading by on a thread that works for this base. Kept HERE, on the
+	// base itself, because it is read from any thread without a lock, and the base outlives the fields it
+	// closes.
+	long long GetClockOffset() const noexcept { return m_clockOffset.load(std::memory_order_relaxed); }
+	void SetClockOffset(long long milliseconds) noexcept { m_clockOffset.store(milliseconds, std::memory_order_relaxed); }
+
 #pragma region session
 
 	// Cluster-wide sys_session snapshot — readers go through
@@ -482,6 +489,7 @@ private:
 	// subsystems below so it dies after them: they still write lines while they are destroyed, and those lines
 	// ask for it.
 	wxString m_strInstance;
+	std::atomic<long long> m_clockOffset{ 0 };   // GetClockOffset
 
 	// Subsystem ownership — order below is THE teardown contract.
 	// C++ destroys members in reverse declaration order, so the last
@@ -558,6 +566,10 @@ private:
 	// opens its own builder — so its position among the others is free; it stands
 	// here because it is read at the same moments jobs are: while a base is open.
 	std::unique_ptr<class ibSettingsStorage> m_settingsStorage;
+
+	// The base's time zone (session/regionalSettings.h): read from sys_settings through the storage above,
+	// put on the connections of the pool - so it stands after both, and goes before them.
+	std::unique_ptr<class ibRegionalSettings> m_regionalSettings;
 
 	// The sessions' temporary files (sys_file). Its own connection, taken from the pool above and given
 	// back when the pool shuts down — the lock manager's arrangement, for the lock manager's reason.
@@ -664,6 +676,10 @@ public:
 	static class ibSettingsStorage* GetSettingsStorage() { return GetSettingsStorage(Get()); }
 	static class ibSettingsStorage* GetSettingsStorage(const ibApplicationInstance* applicationInstance) {
 		return applicationInstance != nullptr ? applicationInstance->m_settingsStorage.get() : nullptr;
+	}
+	static class ibRegionalSettings* GetRegionalSettings() { return GetRegionalSettings(Get()); }
+	static class ibRegionalSettings* GetRegionalSettings(const ibApplicationInstance* applicationInstance) {
+		return applicationInstance != nullptr ? applicationInstance->m_regionalSettings.get() : nullptr;
 	}
 
 	// The sessions' temporary files. Same nullptr-before-and-after contract. See backend/temp/tempStorage.h.

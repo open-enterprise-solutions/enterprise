@@ -20,6 +20,7 @@ const ibDialectDictionary& ibDatabaseLayerSQLite::Dialect()
 		d.m_pagination = ibPagination::LimitOffset;  // LIMIT n OFFSET m
 		d.m_boolForm   = ibBoolForm::OneZero;
 		d.m_groupByPosition = true;                   // GROUP BY 2 — a key that binds a value is named by its position
+		d.m_localTimestamp = wxT("strftime('%Y-%m-%d %H:%M:%f', 'now', 'localtime')");   // no server: the process's clock, to the ms
 		d.m_features.m_window = true;                 // SQLite 3.25+
 		d.m_features.m_cte    = true;                 // WITH … AS (…) — SQLite 3.8.3+
 		d.m_features.m_recursiveCte      = true;      // WITH RECURSIVE — SQLite 3.8.3+

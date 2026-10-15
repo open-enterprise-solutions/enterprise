@@ -366,7 +366,7 @@ wxString ibValueSystemFunction::TStr(const ibValue& cSource, const ibValue& cLan
 // the 31st of January is the last day of February, at the same time of day.
 ibValue ibValueSystemFunction::CurrentDate()
 {
-	return ibValue(ibDateTime::Now());   // the machine's clock, read as what it shows (fdatetime.h)
+	return ibValue(ibDateTime::Now());   // the base's clock, read as what it shows (fdatetime.h, regionalSettings.h)
 }
 
 ibValue ibValueSystemFunction::WorkingDate() {

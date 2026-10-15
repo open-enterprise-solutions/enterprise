@@ -6,6 +6,7 @@
 #include "fstring.h"
 
 #include <algorithm>   // std::min - the day a shorter month clamps to
+#include <atomic>      // Now - the source of the base's distance, put by another thread
 #include <chrono>      // Now - the machine's clock
 #include <cwchar>      // std::swprintf - the text of a date outside years 1..9999
 #include <ctime>       // Now - the clock's reading in the machine's zone
@@ -114,7 +115,28 @@ wchar_t* PutFour(wchar_t* at, unsigned value) noexcept
 
 } // namespace
 
+namespace {
+
+// The distance of the base's clock from this machine's, asked per call (Now, above in the header).
+std::atomic<ibDateTime::OffsetSource> s_offsetSource{ nullptr };
+
+} // namespace
+
+ibDateTime::OffsetSource ibDateTime::SetNowOffset(OffsetSource source) noexcept
+{
+	return s_offsetSource.exchange(source, std::memory_order_acq_rel);
+}
+
 ibDateTime ibDateTime::Now()
+{
+	const ibDateTime machine = MachineNow();
+	// …moved to the base's clock where the calling thread works for a base whose clock is measured.
+	const OffsetSource source = s_offsetSource.load(std::memory_order_acquire);
+	const long long offset = source != nullptr ? source() : 0;
+	return offset != 0 ? machine.AddMilliseconds(offset) : machine;
+}
+
+ibDateTime ibDateTime::MachineNow()
 {
 	// The clock's reading in the machine's zone, by its parts: what the clock on the wall shows here.
 	const auto now = std::chrono::system_clock::now();

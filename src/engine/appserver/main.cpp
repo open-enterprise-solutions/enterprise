@@ -24,7 +24,7 @@
 
 static const wxCmdLineEntryDesc s_cmdLineDesc[] = {
 	{ wxCMD_LINE_OPTION, "d",  "dir",          "Server folder: server.conf, server.key and a folder per base (default: server beside the executable)", wxCMD_LINE_VAL_STRING, 0 },
-	{ wxCMD_LINE_OPTION, "lc", "locale",       "UI locale",               wxCMD_LINE_VAL_STRING, 0 },
+	{ wxCMD_LINE_OPTION, "lc", "locale",       "The platform's locale for a base that names none (default: backend.conf's Locale, else the system's)", wxCMD_LINE_VAL_STRING, 0 },
 	{ wxCMD_LINE_OPTION, "sp", "set-password", "Seal a password into the config: <base>/Password or <base>/IbPassword, typed at the keyboard", wxCMD_LINE_VAL_STRING, 0 },
 	{ wxCMD_LINE_SWITCH, "h",  "help",         "Show this help message.", wxCMD_LINE_VAL_NONE,   wxCMD_LINE_OPTION_HELP },
 	{ wxCMD_LINE_NONE,   nullptr, nullptr,     nullptr,                   wxCMD_LINE_VAL_NONE,   0 }
@@ -136,7 +136,8 @@ int main(int argc, char** argv)
 	if (parser.Parse() != 0)
 		return 1;
 
-	wxString folder = DefaultServerDir(), locale = wxT("en"), sealTarget;
+	// The locale left out is the platform's own: a base's, then backend.conf's Locale, then the system's (InitLocale).
+	wxString folder = DefaultServerDir(), locale, sealTarget;
 	parser.Found(wxT("dir"), &folder);
 	parser.Found(wxT("locale"), &locale);
 	ibServerConfig config(folder);
