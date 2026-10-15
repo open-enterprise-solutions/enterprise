@@ -534,8 +534,8 @@ enum class ibProtocolSchema : int {
 	                    // it may show; command 4 Save {Id, HomePage}
 	Debugger     = 15,  // the designer's debugger's store — the debugger is the thin designer's own, the engine's client
 	                    // carried over; the configuration and its sys_dbg are here: shows the configuration's Guid and
-	                    // Rows (Module, Count — its lines); `Args: {Module}` — that module's Breakpoints. Its commands
-	                    // ibProtocolDebuggerCommand
+	                    // Rows (Module, Count — its lines, Breakpoints); `Args: {Module}` — that module's Breakpoints. Its
+	                    // commands ibProtocolDebuggerCommand
 	Database     = 16,  // the designer's base as a whole (Administration → Restore, Dump, Clear database) — shows nothing;
 	                    // commands 11 Load — restored from a file the person is asked for (Request File), every session
 	                    // of the base closed after; 4 Save — dumped, and taken down where the person chooses; 12 Clear —

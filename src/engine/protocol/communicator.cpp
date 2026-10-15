@@ -1,8 +1,11 @@
 #include "communicator.h"
 
 #include <algorithm>
+#include <chrono>
+#include <cstdlib>
 #include <iterator>
 #include <set>
+#include <thread>
 
 #include <nlohmann/json.hpp>
 
@@ -53,6 +56,25 @@ bool IsSameState(const ibProtocolNode& one, const ibProtocolNode& other)
 		return true;
 	return one.FindChild(ibProtocolName::Args).GetInt(ibProtocolName::Column)
 		== other.FindChild(ibProtocolName::Args).GetInt(ibProtocolName::Column);
+}
+
+// A NETWORK BETWEEN, put on by hand — OES_PROTOCOL_DELAY, in milliseconds, slept once per exchange as the way there and
+// back: what a client far from its server waits, seen with the base beside it (a designer's, a thin client's — how many
+// exchanges an action costs). Unset — none; a debug build's only, said once in its journal.
+int ExchangeDelay()
+{
+#ifdef NDEBUG
+	return 0;
+#else
+	static const int delay = []() {
+		const char* const value = std::getenv("OES_PROTOCOL_DELAY");
+		const int ms = value != nullptr ? std::atoi(value) : 0;
+		if (ms > 0)
+			ibJournalWarning(wxT("protocol"), wxT("every exchange delayed by %d ms (OES_PROTOCOL_DELAY)"), ms);
+		return ms;
+	}();
+	return delay;
+#endif
 }
 
 // Password and Token are bearer secrets. The debug journal records the exchange; the release build's macro is empty.
@@ -260,6 +282,8 @@ bool ibCommunicator::CallLocked(ibProtocolMethod method, const ibProtocolNode& p
 
 	std::string answer;
 	const wxLongLong exchanging = wxGetUTCTimeMillis();
+	if (ExchangeDelay() > 0)
+		std::this_thread::sleep_for(std::chrono::milliseconds(ExchangeDelay()));
 	if (!m_connection->Exchange(sent, answer, refusal, error) && !Resume(sent, answer, refusal, error))
 		return false;
 	exchanged = wxGetUTCTimeMillis() - exchanging;

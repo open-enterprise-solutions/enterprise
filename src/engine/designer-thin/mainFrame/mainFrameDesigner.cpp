@@ -140,10 +140,6 @@ ibTabDocument* ibFrontendMainFrameDesigner::CreateDocument(ibProtocolViewKind ki
 	return ibFrontendMainFrame::CreateDocument(kind, tabId);
 }
 
-#include "frmclient/backend/appData.h"
-#include "frmclient/backend/mcp/mcpServer.h"
-#include "frmclient/mainFrame/output/outputWindow.h"
-
 bool ibFrontendMainFrameDesigner::Show(bool show)
 {
 	bool ret = ibFrontendMainFrame::Show(show);
@@ -153,28 +149,8 @@ bool ibFrontendMainFrameDesigner::Show(bool show)
 		if (m_debugClient == nullptr)
 			m_debugClient.reset(new ibDebuggerClient);
 
-		// ⭐ THE ASSISTANT COMES UP WITH THE DESIGNER, when it is switched on.
-		//
-		// The setting already said so: `m_enabled` means "assistant access is on", and pressing
-		// Start afterwards was asking the same question twice — a switch that has to be re-thrown
-		// at every launch is a switch that does not mean what it says.
-		//
-		// HERE, and not in the constructor: Start needs a SESSION, and there is none until the base
-		// Show has logged in. Show returning true is exactly the statement that it has.
-		//
-		// ⚠ A REFUSAL IS NOT FATAL AND IS NOT SILENT. The port may be taken by a designer already
-		// open on another base, which is an ordinary thing to happen and no reason to hold up the
-		// window — so it is said in the messages and the designer carries on. Nothing here starts
-		// a server the settings did not ask for: Start refuses on its own when the access is
-		// switched off, and that refusal is not worth showing at every launch.
-		if (ibMcpServer* server = ibApplicationInstance::GetMcpServer()) {
-			if (server->GetSettings().m_enabled && !server->IsRunning()) {
-
-				wxString refusal;
-				if (!server->Start(ibSession::Current(), refusal) && !refusal.IsEmpty() && m_outputWindow != nullptr)
-					m_outputWindow->Output(refusal, ibProtocolMessageLevel::Warning);
-			}
-		}
+		// The assistant comes up with the designer where the desktop's window started it — on the server, as the
+		// designer's session starts (ibClientFrameDesigner::CreateStartupPage); its refusal comes in the messages.
 	}
 
 	return ret;

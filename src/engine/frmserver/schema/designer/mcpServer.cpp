@@ -7,19 +7,6 @@
 
 namespace {
 
-// THE MCP SERVER THE PERSON MAY SWITCH — their base's, where the process is theirs (a file base, opened in their own
-// process, as the desktop designer's). Not on the application server: the settings it holds are read at a login only
-// where the session is the process's own (ibApplicationInstance), and a port opened there would be the server
-// machine's. None: neither.
-ibMcpServer* SwitchableServer(const ibSession& session)
-{
-	const ibApplicationInstance* const applicationInstance = session.GetApplicationInstance();
-	if (applicationInstance == nullptr || applicationInstance->ServiceMode())
-		return nullptr;
-
-	return ibApplicationInstance::GetMcpServer(applicationInstance);
-}
-
 // The settings a page holds — Start's and Save's arguments, as Build gave them.
 ibMcpSettings SettingsOf(const ibDataNode& args)
 {
@@ -81,4 +68,13 @@ std::function<void()> ibSchemaMcpServer::Command(const ibSession& session, s32 c
 	refusal = ibProtocolRefusal::NotFound;
 	error = wxString::Format(wxT("assistant access has no command %d"), command);
 	return nullptr;
+}
+
+ibMcpServer* ibSchemaMcpServer::SwitchableServer(const ibSession& session)
+{
+	const ibApplicationInstance* const applicationInstance = session.GetApplicationInstance();
+	if (applicationInstance == nullptr || applicationInstance->ServiceMode())
+		return nullptr;
+
+	return ibApplicationInstance::GetMcpServer(applicationInstance);
 }

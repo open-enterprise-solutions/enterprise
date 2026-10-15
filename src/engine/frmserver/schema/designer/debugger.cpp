@@ -8,6 +8,21 @@
 
 #include <algorithm>
 
+namespace {
+
+// A module's breakpoints, as the store keeps them — a row each: Line, Condition.
+void WriteBreakpoints(const wxString& module, ibDataNode& node)
+{
+	ibDataNode& breakpoints = node.Child(wxT("Breakpoints"));
+	for (const auto& breakpoint : debugClient->GetDebugList(module)) {
+		ibDataNode& row = breakpoints.AddChild(0, 0);
+		row.SetValue(wxT("Line"), static_cast<s32>(breakpoint.first));
+		row.SetValue(wxT("Condition"), breakpoint.second);
+	}
+}
+
+}
+
 bool ibSchemaDebugger::AccessRight(const ibSession& session) const
 {
 	const ibMetaDataConfigurationBase* const metaData = session.GetMetaData();
@@ -21,12 +36,7 @@ void ibSchemaDebugger::Build(const ibSession& session, const ibDataNode& args, i
 
 	const wxString module = args.GetValue<wxString>(wxT("Module"));
 	if (!module.IsEmpty()) {
-		ibDataNode& breakpoints = result.Child(wxT("Breakpoints"));
-		for (const auto& breakpoint : debugClient->GetDebugList(module)) {
-			ibDataNode& row = breakpoints.AddChild(0, 0);
-			row.SetValue(wxT("Line"), static_cast<s32>(breakpoint.first));
-			row.SetValue(wxT("Condition"), breakpoint.second);
-		}
+		WriteBreakpoints(module, result);
 		return;
 	}
 
@@ -35,13 +45,15 @@ void ibSchemaDebugger::Build(const ibSession& session, const ibDataNode& args, i
 		return;
 	result.SetValue(wxT("Guid"), metaData->GetConfigGuid().str());
 
-	// Each module with its lines, as the desktop's tree told its debugger at load (OnBeforeRunMetaObject).
+	// Each module with its lines, as the desktop's tree told its debugger at load (OnBeforeRunMetaObject) — and its
+	// breakpoints, so the client's load is one exchange, not one more for each module.
 	ibDataNode& modules = result.Child(wxT("Rows"));
 	for (const ibValueMetaObjectModuleBase* moduleObject : metaData->GetAnyArrayObject<ibValueMetaObjectModuleBase>(true)) {
 		const wxString& text = moduleObject->GetModuleText();
 		ibDataNode& row = modules.AddChild(0, 0);
 		row.SetValue(wxT("Module"), moduleObject->GetDocPath());
 		row.SetValue(wxT("Count"), static_cast<s32>(1 + std::count(text.begin(), text.end(), wxT('\n'))));
+		WriteBreakpoints(moduleObject->GetDocPath(), row);
 	}
 }
 

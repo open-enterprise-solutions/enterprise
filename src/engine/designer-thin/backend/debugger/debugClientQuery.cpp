@@ -32,6 +32,15 @@ namespace {
 		ibProtocolNode answer;
 		return AskStore(args, answer, static_cast<int>(command));
 	}
+
+	// A module's breakpoints as the store says them (Breakpoints — Line, Condition), in place of those held.
+	void ReadBreakpoints(const ibProtocolNode& node, std::map<unsigned int, ibDebuggerClient::ibBreakpoint>& breakpoints)
+	{
+		breakpoints.clear();
+		for (const ibProtocolNode& breakpoint : node.FindChild(ibProtocolName::Breakpoints).Children())
+			breakpoints[static_cast<unsigned int>(breakpoint.GetInt(ibProtocolName::Line))] =
+				ibDebuggerClient::ibBreakpoint{ 0, breakpoint.GetString(ibProtocolName::Condition) };
+	}
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////
@@ -71,22 +80,25 @@ void ibDebuggerClient::LoadModuleCollection()
 	if (!AskStore(ibProtocolNode(), answer))
 		return;
 	m_configGuid = ibGuid(answer.GetString(ibProtocolName::Guid));
-	for (const ibProtocolNode& module : answer.FindChild(ibProtocolName::Rows).Children())
-		InitializeModule(module.GetString(ibProtocolName::Module),
-			static_cast<unsigned int>(module.GetInt(ibProtocolName::Count)));
+	// InitializeModule over the one answer: each row brings its module's breakpoints, where InitializeModule would ask
+	// the store for them a module at a time — a call each, 71 at a designer's start: ten seconds 130 ms from the
+	// server (2026-10-15).
+	for (const ibProtocolNode& module : answer.FindChild(ibProtocolName::Rows).Children()) {
+		const wxString strModuleName = module.GetString(ibProtocolName::Module);
+		std::map<unsigned int, int>& list_module_offset = m_listOffsetBreakpoint[strModuleName];
+		list_module_offset.clear();
+		for (unsigned int i = 0; i < static_cast<unsigned int>(module.GetInt(ibProtocolName::Count)); i++)
+			list_module_offset.emplace(i, 0);
+		ReadBreakpoints(module, m_listBreakpoint[strModuleName]);
+	}
 }
 
 void ibDebuggerClient::LoadBreakpointCollection(const wxString& strModuleName)
 {
-	m_listBreakpoint[strModuleName].clear();
-
 	ibProtocolNode args, answer;
 	args.SetValue(ibProtocolName::Module, strModuleName);
-	if (!AskStore(args, answer))
-		return;
-	for (const ibProtocolNode& breakpoint : answer.FindChild(ibProtocolName::Breakpoints).Children())
-		m_listBreakpoint[strModuleName][static_cast<unsigned int>(breakpoint.GetInt(ibProtocolName::Line))] =
-			ibBreakpoint{ 0, breakpoint.GetString(ibProtocolName::Condition) };
+	AskStore(args, answer);   // not answered — none held
+	ReadBreakpoints(answer, m_listBreakpoint[strModuleName]);
 }
 
 bool ibDebuggerClient::ToggleBreakpointInDB(const wxString& strModuleName, unsigned int line, const wxString& condition)
