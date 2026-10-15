@@ -197,6 +197,27 @@ ibCodeEditor::~ibCodeEditor()
 {
 }
 
+bool ibCodeEditor::TryBefore(wxEvent& event)
+{
+	wxEventType type = event.GetEventType();
+	if (type == wxEVT_PAINT ||
+		type == wxEVT_NC_PAINT ||
+		type == wxEVT_ERASE_BACKGROUND) {
+		return wxStyledTextCtrl::TryBefore(event);
+	}
+	if (m_ct.Active()) {
+		if (type == wxEVT_KEY_DOWN) {
+			m_ct.CallEvent(event); return wxStyledTextCtrl::TryBefore(event);
+		}
+	}
+
+	if (m_ac.CallEvent(event))
+		return true;
+	if (m_ct.CallEvent(event))
+		return true;
+	else return wxStyledTextCtrl::TryBefore(event);
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void ibCodeEditor::EditDebugPoint(int line_to_edit)

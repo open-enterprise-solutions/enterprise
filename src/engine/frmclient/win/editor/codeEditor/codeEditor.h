@@ -482,6 +482,12 @@ public:
 		const wxString& strName = wxSTCNameStr);
 	virtual ~ibCodeEditor();
 
+	// hook the document manager into event handling chain here
+	// ⚠ Out of line, unlike the desktop's: frmclient hides every symbol it does not export, and an editor derived outside
+	// it (designer-thin's ibCodeEditorDesigner) emitted this body and could not reach ibAutoComplete / ibCallTip (CI's
+	// macOS link, 2026-10-15).
+	virtual bool TryBefore(wxEvent& event) override;
+
 	// The module's text, fetched from its tab — and handed back to it ({Change {Text}}) when it differs from what the
 	// server holds.
 	bool LoadModule();
@@ -554,27 +560,6 @@ public:
 	// landed four lines above the call it described. This is the SECOND caller that had it; the
 	// other is LoadCallTip.
 	void ShowCallTip(const wxString& title) { m_ct.Show(GetCurrentPos(), title); }
-
-	// hook the document manager into event handling chain here
-	virtual bool TryBefore(wxEvent& event) override {
-		wxEventType type = event.GetEventType();
-		if (type == wxEVT_PAINT ||
-			type == wxEVT_NC_PAINT ||
-			type == wxEVT_ERASE_BACKGROUND) {
-			return wxStyledTextCtrl::TryBefore(event);
-		}
-		if (m_ct.Active()) {
-			if (type == wxEVT_KEY_DOWN) {
-				m_ct.CallEvent(event); return wxStyledTextCtrl::TryBefore(event);
-			}
-		}
-
-		if (m_ac.CallEvent(event))
-			return true;
-		if (m_ct.CallEvent(event))
-			return true;
-		else return wxStyledTextCtrl::TryBefore(event);
-	}
 
 protected:
 
