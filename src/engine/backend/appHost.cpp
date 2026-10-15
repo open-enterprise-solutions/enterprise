@@ -372,11 +372,15 @@ bool ibApplicationHost::InitLocale(const wxString& locale)
 	if (m_localeLang == wxLanguage::wxLANGUAGE_UNKNOWN)
 		m_localeLang = wxLanguage::wxLANGUAGE_DEFAULT;
 
-	// The base's word, else backend.conf's.
+	// The base's word, else backend.conf's — when this machine can set it. A wish it cannot grant is not a refusal to
+	// open the base (a base names its locale on one machine and is opened on every other): the process speaks the
+	// system's language, else English, and the journal says which wish went ungranted.
 	const wxString& wanted = !locale.IsEmpty() ? locale : m_configLocale;
-	if (!wanted.IsEmpty())
-		if (const wxLanguageInfo* const info = wxLocale::FindLanguageInfo(wanted))
-			m_localeLang = info->Language;
+	const wxLanguageInfo* const wish = !wanted.IsEmpty() ? wxLocale::FindLanguageInfo(wanted) : nullptr;
+	if (wish != nullptr && wxLocale::IsAvailable(wish->Language))
+		m_localeLang = wish->Language;
+	else if (!wxLocale::IsAvailable(m_localeLang))
+		m_localeLang = wxLanguage::wxLANGUAGE_ENGLISH;
 
 	// Independently of whether we succeeded to set the locale or not, try
 	// to load the translations (for the default system language) here.
@@ -412,36 +416,16 @@ bool ibApplicationHost::InitLocale(const wxString& locale)
 		}
 	}
 
-	// A WISH THIS MACHINE CANNOT GRANT IS NOT A REFUSAL TO OPEN THE BASE. A base names its locale on one machine
-	// and is opened on every other (session/regionalSettings.h); a Linux with that locale not generated cannot
-	// set it. The process then comes up in what it speaks with no wish - the system's language - else in
-	// English, and the journal says which wish went ungranted. Refusing here left the base unopenable on that
-	// machine by a setting made on another.
-	//
-	// Settled BEFORE the one Init: wxLocale::Init is once per object - a second call asserts, and leaves wx's
-	// global locale pointer at this object twice over, to dangle when it goes - so the language is probed
-	// first (wxLocale::IsAvailable, the same probe through wxUILocale), and Init is asked once.
-	int ungranted = wxLanguage::wxLANGUAGE_UNKNOWN;
-	if (!wxLocale::IsAvailable(m_localeLang)) {
-		ungranted = m_localeLang;
-		m_localeLang = wxLocale::GetSystemLanguage();
-		if (m_localeLang == wxLanguage::wxLANGUAGE_UNKNOWN)
-			m_localeLang = wxLanguage::wxLANGUAGE_DEFAULT;
-		if (m_localeLang == ungranted || !wxLocale::IsAvailable(m_localeLang))
-			m_localeLang = wxLanguage::wxLANGUAGE_ENGLISH;
-	}
+	// Init once — a second call on the object asserts and leaves wx's locale pointer dangling — so the language is
+	// settled above; a refusal says why instead of a bare false.
 	if (!m_locale.Init(m_localeLang)) {
-		// Said, not answered with a bare false: the opening would otherwise refuse the base with no reason given.
 		const wxLanguageInfo* const info = wxLocale::GetLanguageInfo(m_localeLang);
 		ibBackendCoreException::Error(_("The locale %s cannot be set on this machine; the base was not opened."),
 			info != nullptr ? info->GetCanonicalWithRegion() : wxString(wxT("(default)")));
 	}
-	if (ungranted != wxLanguage::wxLANGUAGE_UNKNOWN) {
-		const wxLanguageInfo* const wished = wxLocale::GetLanguageInfo(ungranted);
+	if (wish != nullptr && wish->Language != m_localeLang)
 		ibJournalWarning(wxT("session.locale"), wxT("the locale %s is not supported on this machine; the process speaks %s"),
-			wished != nullptr ? wished->GetCanonicalWithRegion() : wxString::Format(wxT("#%d"), ungranted),
-			m_locale.GetCanonicalName());
-	}
+			wish->GetCanonicalWithRegion(), m_locale.GetCanonicalName());
 
 	// Initialize the catalogs we'll be using.
 	m_locale.AddCatalog(wxT("open_es"));
