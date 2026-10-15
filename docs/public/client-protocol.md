@@ -89,7 +89,9 @@ stored in — `cells` (`row`, `col` from 0, `value` as shown), `rows` and `cols`
 the default. A sheet edited on the client goes back whole, in the same form: event `Change {Sheet}`. A report's gridbox
 says in `ComposeState` what its sheet is to the report: 0 composed (or nothing composed yet), 1 composing — the sheet
 on show stays until the new one is delivered, 2 outdated — the setting changed since the sheet was built, and it is
-composed again when the person says so (Compose).
+composed again when the person says so (Compose). When a composed sheet's `Version` is new, that frame's `State` may
+also carry `Sheet` (and `ReadOnly`) — the same as `fetch` would give — so the client need not fetch; a server that
+does not put `Sheet` in the state is answered with `fetch`, as before.
 
 A picture is named by its id everywhere — in the view, a tab's `Icon`, a schema, a request, a list of choices: a
 backend picture's number, as a decimal (a class's own: its class id), or a configuration picture's guid. No answer

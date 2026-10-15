@@ -87,8 +87,12 @@ void ibValueGridBox::Update(const ibProtocolNode& node)
 	// editor then shows as the desktop's shows the one its model holds.
 	const long long version = state.GetInt(ibProtocolName::Version);
 	if (version != m_version) {
-		ibProtocolNode answer;
-		if (m_fetcher(ibProtocolNode(), answer) && answer.GetInt(ibProtocolName::Version) == version) {
+		// Sheet may already ride in this State's frame (composed report). Else Fetch, as before.
+		ibProtocolNode answer = state;
+		bool have = state.Has(ibProtocolName::Sheet);
+		if (!have)
+			have = m_fetcher(ibProtocolNode(), answer) && answer.GetInt(ibProtocolName::Version) == version;
+		if (have) {
 			m_version = version;
 
 			auto document = std::make_shared<ibSpreadsheetObject>();
