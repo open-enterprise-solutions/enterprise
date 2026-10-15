@@ -36,6 +36,7 @@
 #include "backend/mcp/mcpServer.h"
 
 #include "backend/appData.h"                        // GetSettingsStorage — where a person's settings live
+#include "backend/appHost.h"                        // the process's backend.conf: the certificate the listener speaks TLS over
 #include "backend/server/listener.h"                // the listener: TLS when backend.conf names a certificate
 #include "backend/utils/sessionToken.h"             // TextEqual - the token compared in constant time
 #include "backend/logger/logger.h"                  // …and ibLog — the registration journal
@@ -171,18 +172,17 @@ public:
 		// THE TRANSPORT IS THE PROCESS'S (server/listener.h): TLS when backend.conf names a certificate, plain
 		// on this machine's own addresses only - an assistant edits a configuration, and a token sent in the
 		// clear across a network is a token given away.
-		const ibTlsFiles tls = ibTlsFiles::FromBackendConf();
-		wxString why;
-		m_server = ibMakeListener(m_settings.m_address, tls, &why);
-		if (!m_server) {
-			refusal = wxString::Format(_("Assistant access did not start: %s"), why);
+		try {
+			m_server = ibMakeListener(m_settings.m_address, ibApplicationHost::Get()->GetTlsFiles());
+		}
+		catch (const ibBackendException& err) {
+			refusal = wxString::Format(_("Assistant access did not start: %s"), err.GetErrorDescription());
 			// Said in the journal as well as to the caller: the designer shows it in its messages pane, the
 			// application server writes its own line - and the transport refusing is the one start-up fact
 			// an operator reads the journal for.
-			ibJournalWarning(wxT("mcp"), wxT("assistant access did not start: %s"), why);
+			ibJournalWarning(wxT("mcp"), wxT("assistant access did not start: %s"), err.GetErrorDescription());
 			return false;
 		}
-		m_tls = tls.IsNamed();
 		m_server->set_payload_max_length(kMaxRequestBytes);
 		m_server->set_tcp_nodelay(true);
 
@@ -242,7 +242,6 @@ public:
 	{
 		m_thread = std::thread([this] { m_server->listen_after_bind(); });
 	}
-	bool IsTls() const { return m_tls; }
 
 	// STOPPED IN THE ORDER THAT LETS EVERYTHING LEAVE.
 	//
@@ -625,7 +624,6 @@ private:
 	ibSession*    m_session = nullptr;
 
 	std::unique_ptr<httplib::Server> m_server;   // the listener (server/listener.h): TLS or plain, made in Bind
-	bool            m_tls = false;
 	std::thread     m_thread;
 
 	// The way out. Filled by whoever has something to say (the UI thread, a tool)
@@ -1077,7 +1075,7 @@ wxString ibMcpServer::GetEndpoint() const
 	if (!IsRunning())
 		return wxEmptyString;
 
-	return wxString::Format(wxT("%s://%s:%u/"), m_listener && m_listener->IsTls() ? wxT("https") : wxT("http"),
+	return wxString::Format(wxT("%s://%s:%u/"), ibApplicationHost::Get()->GetTlsFiles().IsNamed() ? wxT("https") : wxT("http"),
 		m_settings.m_address, (unsigned)m_settings.m_port);
 }
 

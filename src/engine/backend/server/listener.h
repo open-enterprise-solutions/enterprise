@@ -28,19 +28,17 @@ struct BACKEND_API ibTlsFiles {
 
 	// backend.conf's word: Certificate and PrivateKey, each resolved against `folder` when relative. `conf` is
 	// read as written (wxCONFIG_USE_NO_ESCAPE_CHARACTERS, the caller's to set): a Windows path keeps its backslashes.
+	// Read once for the process, with the rest of the file (ibApplicationHost::GetTlsFiles).
 	static ibTlsFiles FromConf(const class wxConfigBase& conf, const wxString& folder);
-	// The process's backend.conf (ibApplicationHost::BackendConfPath); nothing named when there is none.
-	static ibTlsFiles FromBackendConf();
 };
 
 // The listener for `address`: an SSLServer over the files when they are named, a plain Server when they
-// are not. Null, with the reason in `refusal`, when only one of the files is named, when a named file is
-// not there or not readable, or when nothing is named and `address` is not this machine's own. The caller
-// binds it.
+// are not. Refused - an ibBackendException with the reason - when only one of the files is named, when a
+// named file is not there or not readable, or when nothing is named and `address` is not this machine's
+// own. The caller binds it.
 //
 // This machine's own addresses are known as written: 127.0.0.0/8 by number, ::1, localhost - not a name
 // that resolves there, since a name resolves wherever its owner says.
-BACKEND_API std::unique_ptr<httplib::Server> ibMakeListener(const wxString& address, const ibTlsFiles& tls,
-	wxString* refusal);
+BACKEND_API std::unique_ptr<httplib::Server> ibMakeListener(const wxString& address, const ibTlsFiles& tls);
 
 #endif // __BACKEND_LISTENER_H__

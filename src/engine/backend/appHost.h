@@ -14,6 +14,7 @@
 // session's application data, else the base the thread is bound to).
 
 #include "backend/appData.h"
+#include "backend/server/listener.h"   // ibTlsFiles - the listeners' transport, said in backend.conf
 
 #include <atomic>
 #include <memory>
@@ -76,6 +77,11 @@ public:
 	std::size_t      GetResumeSeconds() const { return m_configResume; }
 	// `present` is false when the key is absent. 0 present is off, not the default.
 	static std::size_t ResumeSeconds(bool present, long configured);
+
+	// The certificate the listeners speak TLS over — backend.conf (Certificate, PrivateKey); nothing named, they
+	// listen plain on this machine's own addresses only (server/listener.h).
+	const ibTlsFiles& GetTlsFiles() const     { return m_configTls; }
+
 	ibHelpService*   GetHelpService() const   { return m_helpService.get(); }
 	wxString         GetLocale() const        { return m_locale.GetCanonicalName(); }
 	wxString         GetLocaleName() const    { return m_locale.GetName(); }
@@ -89,11 +95,6 @@ public:
 	// above `most` is said and `most` is used.
 	static std::size_t ReadCount(const class wxConfigBase& conf, const wxString& file, const wxString& key, long least,
 		std::size_t byDefault, std::size_t most = 0);
-
-	// Where backend.conf is: the working folder's, else the one beside the program (inside a bundle, the folder
-	// that holds the .app); empty when neither is there. The one place the file is looked for - the listeners
-	// (server/listener.h) read their certificate from it before any host exists.
-	static wxString BackendConfPath();
 
 private:
 
@@ -140,13 +141,15 @@ private:
 	// backend.conf — read once for the process: the locale, how much the process may consume, and the default
 	// a base's own infobase.conf overrides (Workers and Bases: the most there may be, 0 = no limit; Connections 0 =
 	// the built-in value). ClientConnections is the application server's own ceiling: 0 means
-	// kDefaultClientConnections, and a number above kMostClientConnections is that most.
+	// kDefaultClientConnections, and a number above kMostClientConnections is that most. The certificate the
+	// listeners speak TLS over.
 	wxString    m_configLocale;
 	std::size_t m_configWorkers            = 0;
 	std::size_t m_configBases              = 0;
 	std::size_t m_configConnections        = 0;
 	std::size_t m_configClientConnections  = kDefaultClientConnections;
 	std::size_t m_configResume             = 120;
+	ibTlsFiles  m_configTls;
 
 	wxLocale m_locale;
 	int      m_localeLang;

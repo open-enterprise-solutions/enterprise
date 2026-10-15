@@ -28,6 +28,7 @@
 
 #include <cpp-httplib/httplib.h>
 
+#include "backend/backend_exception.h"
 #include "backend/server/listener.h"
 
 namespace {
@@ -48,6 +49,18 @@ ibTlsFiles TestIdentity()
 	files.m_certificate = CertPath(wxT("server.pem"));
 	files.m_privateKey  = CertPath(wxT("server.key"));
 	return files;
+}
+
+// The door's refusal for `address` over `files` - empty when it made the listener.
+wxString Refusal(const wxString& address, const ibTlsFiles& files)
+{
+	try {
+		ibMakeListener(address, files);
+	}
+	catch (const ibBackendException& err) {
+		return err.GetErrorDescription();
+	}
+	return wxString();
 }
 
 // A listener brought up on a free port of 127.0.0.1, answering "ok" at /, and taken down with the test.
@@ -76,10 +89,7 @@ struct Up {
 TEST(Listener, NamedFilesMakeATlsListener)
 {
 	wxInitializer init;
-	wxString why;
-	std::unique_ptr<httplib::Server> server = ibMakeListener(wxT("127.0.0.1"), TestIdentity(), &why);
-	ASSERT_NE(server, nullptr) << why.ToStdString();
-	const Up up(std::move(server));
+	const Up up(ibMakeListener(wxT("127.0.0.1"), TestIdentity()));
 	ASSERT_GT(up.m_port, 0);
 
 	// The TLS server was made in backend.dll and is served through it (its virtuals), the client here is this
@@ -103,10 +113,7 @@ TEST(Listener, NamedFilesMakeATlsListener)
 TEST(Listener, NoFilesMakeAPlainListenerOnLoopback)
 {
 	wxInitializer init;
-	wxString why;
-	std::unique_ptr<httplib::Server> server = ibMakeListener(wxT("127.0.0.1"), ibTlsFiles(), &why);
-	ASSERT_NE(server, nullptr) << why.ToStdString();
-	const Up up(std::move(server));
+	const Up up(ibMakeListener(wxT("127.0.0.1"), ibTlsFiles()));
 	ASSERT_GT(up.m_port, 0);
 	httplib::Client client("127.0.0.1", up.m_port);
 	const auto answer = client.Get("/");
@@ -119,14 +126,14 @@ TEST(Listener, NoFilesMakeAPlainListenerOnLoopback)
 TEST(Listener, ThePlainListenerStaysOnLoopback)
 {
 	wxInitializer init;
-	wxString why;
-	EXPECT_EQ(nullptr, ibMakeListener(wxT("0.0.0.0"), ibTlsFiles(), &why));
+	const wxString why = Refusal(wxT("0.0.0.0"), ibTlsFiles());
 	EXPECT_TRUE(why.Contains(wxT("backend.conf"))) << why.ToStdString();
 	EXPECT_TRUE(why.Contains(wxT("0.0.0.0"))) << why.ToStdString();
-	EXPECT_EQ(nullptr, ibMakeListener(wxT("192.168.1.10"), ibTlsFiles(), &why));
-	EXPECT_NE(nullptr, ibMakeListener(wxT("0.0.0.0"), TestIdentity(), &why)) << why.ToStdString();
-	EXPECT_NE(nullptr, ibMakeListener(wxT("localhost"), ibTlsFiles(), &why));
-	EXPECT_NE(nullptr, ibMakeListener(wxT("::1"), ibTlsFiles(), &why));
+	EXPECT_FALSE(Refusal(wxT("192.168.1.10"), ibTlsFiles()).IsEmpty());
+	const wxString named = Refusal(wxT("0.0.0.0"), TestIdentity());
+	EXPECT_TRUE(named.IsEmpty()) << named.ToStdString();
+	EXPECT_TRUE(Refusal(wxT("localhost"), ibTlsFiles()).IsEmpty());
+	EXPECT_TRUE(Refusal(wxT("::1"), ibTlsFiles()).IsEmpty());
 }
 
 // A certificate mislaid is a refusal that names the file - never a listener in the clear; one file
@@ -134,29 +141,28 @@ TEST(Listener, ThePlainListenerStaysOnLoopback)
 TEST(Listener, MislaidFilesAreARefusalNotAFallback)
 {
 	wxInitializer init;
-	wxString why;
 	ibTlsFiles files = TestIdentity();
 	files.m_certificate = CertPath(wxT("nobody-wrote-this.pem"));
-	EXPECT_EQ(nullptr, ibMakeListener(wxT("127.0.0.1"), files, &why));
+	wxString why = Refusal(wxT("127.0.0.1"), files);
 	EXPECT_TRUE(why.Contains(wxT("nobody-wrote-this.pem"))) << why.ToStdString();
 	EXPECT_TRUE(why.Contains(wxT("is not there"))) << why.ToStdString();   // said before any reader is asked
 
 	ibTlsFiles half = TestIdentity();
 	half.m_privateKey.clear();
-	EXPECT_EQ(nullptr, ibMakeListener(wxT("127.0.0.1"), half, &why));
+	why = Refusal(wxT("127.0.0.1"), half);
 	EXPECT_TRUE(why.Contains(wxT("PrivateKey"))) << why.ToStdString();
 
 	// A key that is there, well formed, and not the certificate's: refused by the one who reads the pair.
 	ibTlsFiles wrong = TestIdentity();
 	wrong.m_privateKey = CertPath(wxT("stranger.key"));
-	EXPECT_EQ(nullptr, ibMakeListener(wxT("127.0.0.1"), wrong, &why));
+	why = Refusal(wxT("127.0.0.1"), wrong);
 	EXPECT_TRUE(why.Contains(wxT("stranger.key"))) << why.ToStdString();
 	EXPECT_TRUE(why.Contains(wxT("not the certificate's"))) << why.ToStdString();
 
 	// A file that is there and is not a key at all: refused the same way.
 	ibTlsFiles notAKey = TestIdentity();
 	notAKey.m_privateKey = CertPath(wxT("other.pem"));
-	EXPECT_EQ(nullptr, ibMakeListener(wxT("127.0.0.1"), notAKey, &why));
+	why = Refusal(wxT("127.0.0.1"), notAKey);
 	EXPECT_TRUE(why.Contains(wxT("other.pem"))) << why.ToStdString();
 
 	// A file longer than any certificate is - not read into memory, refused by name.
@@ -176,7 +182,7 @@ TEST(Listener, MislaidFilesAreARefusalNotAFallback)
 	}
 	ibTlsFiles tooBig = TestIdentity();
 	tooBig.m_certificate = huge.m_path;
-	EXPECT_EQ(nullptr, ibMakeListener(wxT("127.0.0.1"), tooBig, &why));
+	why = Refusal(wxT("127.0.0.1"), tooBig);
 	EXPECT_TRUE(why.Contains(wxT("larger than a certificate"))) << why.ToStdString();
 }
 
@@ -185,15 +191,16 @@ TEST(Listener, MislaidFilesAreARefusalNotAFallback)
 TEST(Listener, LoopbackIsKnownByItsNames)
 {
 	wxInitializer init;
-	wxString why;
-	for (const wxChar* own : { wxT("127.0.0.1"), wxT("127.5.5.5"), wxT("127.255.255.255"), wxT(" 127.0.0.1 "), wxT("localhost"), wxT("LocalHost"), wxT("::1") })
-		EXPECT_NE(nullptr, ibMakeListener(own, ibTlsFiles(), &why)) << own << ": " << why.ToStdString();
+	for (const wxChar* own : { wxT("127.0.0.1"), wxT("127.5.5.5"), wxT("127.255.255.255"), wxT(" 127.0.0.1 "), wxT("localhost"), wxT("LocalHost"), wxT("::1") }) {
+		const wxString why = Refusal(own, ibTlsFiles());
+		EXPECT_TRUE(why.IsEmpty()) << own << ": " << why.ToStdString();
+	}
 	// By number, not by the look of a name: what begins with "127." and is not an address resolves wherever
 	// its owner says, and a name that resolves to loopback today is still a name. [::1] is not how a listener
 	// binds the address, so it is not how it is written here.
 	for (const wxChar* other : { wxT("0.0.0.0"), wxT("::"), wxT("192.168.1.10"), wxT("10.0.0.1"), wxT("example.com"), wxT(""),
 			wxT("127.example.com"), wxT("127.0.0.1.evil"), wxT("127"), wxT("127.0.0"), wxT("127.0.0.256"), wxT("127.0.0.+1"), wxT("1270.0.0.1"), wxT("localhost."), wxT("[::1]") })
-		EXPECT_EQ(nullptr, ibMakeListener(other, ibTlsFiles(), &why)) << other;
+		EXPECT_FALSE(Refusal(other, ibTlsFiles()).IsEmpty()) << other;
 }
 
 // backend.conf's two keys, a relative name resolved against the file's folder, an absolute one kept.
@@ -219,35 +226,30 @@ TEST(Listener, TheConfNamesTheFilesRelativeToItsFolder)
 	EXPECT_FALSE(ibTlsFiles::FromConf(bare, folder).IsNamed());
 }
 
-// The process's own file: backend.conf in the working directory, read as the engine reads its settings,
-// with every backslash of a Windows path kept - C:\oes\tests\certs\server.key is a path, not a tab in it.
-TEST(Listener, TheProcessConfIsReadFromTheWorkingDirectoryAsWritten)
+// A backend.conf file read as the host reads it (ibApplicationHost::ReadBackendConf: no escape characters), with
+// every backslash of a Windows path kept - C:\oes\tests\certs\server.key is a path, not a tab in it.
+TEST(Listener, TheConfFileIsReadAsWritten)
 {
 	wxInitializer init;
-	// Back where the process was, and the folder gone, on every way out - a fatal assertion's too.
-	struct ibInFolder {
-		wxString m_was, m_folder;
-		ibInFolder() : m_was(wxGetCwd()),
-			m_folder(wxFileName::GetTempDir() + wxFILE_SEP_PATH + wxString::Format(wxT("oes-listener-%lu"), wxGetProcessId())) {}
-		~ibInFolder() {
-			wxSetWorkingDirectory(m_was);
-			wxRemoveFile(m_folder + wxFILE_SEP_PATH + wxT("backend.conf"));
-			wxRmdir(m_folder);
-		}
-	};
-	const ibInFolder here;
-	ASSERT_TRUE(wxFileName::Mkdir(here.m_folder, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL)) << here.m_folder.ToStdString();
-	ASSERT_TRUE(wxSetWorkingDirectory(here.m_folder)) << here.m_folder.ToStdString();
+	// The file gone on every way out - a fatal assertion's too.
+	struct ibTempFile {
+		wxString m_path;
+		~ibTempFile() { if (!m_path.IsEmpty()) wxRemoveFile(m_path); }
+	} conf;
+	conf.m_path = wxFileName::CreateTempFileName(wxT("oes-listener-"));
+	ASSERT_FALSE(conf.m_path.IsEmpty());
 	{
-		wxFFile conf(here.m_folder + wxFILE_SEP_PATH + wxT("backend.conf"), wxT("w"));
-		ASSERT_TRUE(conf.IsOpened());
-		conf.Write(wxT("Locale = en\nCertificate = ") + CertPath(wxT("server.pem")) + wxT("\nPrivateKey = ") + CertPath(wxT("server.key")) + wxT("\n"));
+		wxFFile out(conf.m_path, wxT("w"));
+		ASSERT_TRUE(out.IsOpened());
+		out.Write(wxT("Locale = en\nCertificate = ") + CertPath(wxT("server.pem")) + wxT("\nPrivateKey = ") + CertPath(wxT("server.key")) + wxT("\n"));
 	}
-	const ibTlsFiles files = ibTlsFiles::FromBackendConf();
+	wxFileConfig read(wxT(""), wxT(""), wxT(""), conf.m_path,
+		wxCONFIG_USE_LOCAL_FILE | wxCONFIG_USE_GLOBAL_FILE | wxCONFIG_USE_NO_ESCAPE_CHARACTERS);
+	const ibTlsFiles files = ibTlsFiles::FromConf(read, wxFileName(conf.m_path).GetPath());
 	EXPECT_EQ(CertPath(wxT("server.pem")), files.m_certificate);
 	EXPECT_EQ(CertPath(wxT("server.key")), files.m_privateKey);
 
 	// And the listener made over what the file names is the TLS one.
-	wxString why;
-	EXPECT_NE(nullptr, ibMakeListener(wxT("0.0.0.0"), files, &why)) << why.ToStdString();
+	const wxString why = Refusal(wxT("0.0.0.0"), files);
+	EXPECT_TRUE(why.IsEmpty()) << why.ToStdString();
 }

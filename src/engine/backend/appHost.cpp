@@ -313,22 +313,24 @@ std::size_t ibApplicationHost::ResumeSeconds(bool present, long configured)
 	return static_cast<std::size_t>(configured);
 }
 
-wxString ibApplicationHost::BackendConfPath()
-{
-	const wxString& workingDir = wxGetCwd();
-	if (wxFileName::FileExists(workingDir + wxFILE_SEP_PATH + BACKEND_CONF))
-		return workingDir + wxFILE_SEP_PATH + BACKEND_CONF;
-	// Beside the program. Inside a bundle that is the folder that contains the .app,
-	// which is where the file is shipped; the working directory above still wins.
-	const wxString beside = ibProgramFolder() + wxFILE_SEP_PATH + BACKEND_CONF;
-	return wxFileName::FileExists(beside) ? beside : wxString();
-}
-
 void ibApplicationHost::ReadBackendConf()
 {
-	const wxString strConfigFile = BackendConfPath();
+	const wxString& workingDir = wxGetCwd(); wxString strConfigFile;
+	if (wxFileName::FileExists(workingDir + wxFILE_SEP_PATH + BACKEND_CONF)) {
+		strConfigFile = workingDir +
+			wxFILE_SEP_PATH + BACKEND_CONF;
+	}
+	else {
+		// Beside the program. Inside a bundle that is the folder that contains the .app,
+		// which is where the file is shipped; the working directory above still wins.
+		const wxString beside = ibProgramFolder() + wxFILE_SEP_PATH + BACKEND_CONF;
+		if (wxFileName::FileExists(beside))
+			strConfigFile = beside;
+	}
 
-	wxFileConfig fc(wxT(""), wxT(""), wxT(""), strConfigFile);
+	// Read as written, as infobase.conf is: a Windows path keeps its backslashes (the \t of C:\tls\server.key is not a tab).
+	wxFileConfig fc(wxT(""), wxT(""), wxT(""), strConfigFile,
+		wxCONFIG_USE_LOCAL_FILE | wxCONFIG_USE_GLOBAL_FILE | wxCONFIG_USE_NO_ESCAPE_CHARACTERS);
 	fc.Read(wxT("Locale"), &m_configLocale);
 
 	// HOW MUCH THE PROCESS MAY CONSUME — said by whoever runs it, not compiled in. Workers and Bases are the most there
@@ -347,6 +349,8 @@ void ibApplicationHost::ReadBackendConf()
 	long resume = 0;
 	const bool resumePresent = fc.Read(wxT("Resume"), &resume);
 	m_configResume = ResumeSeconds(resumePresent, resume);
+	// The certificate the listeners speak TLS over, named relative to this file's folder (server/listener.h).
+	m_configTls = ibTlsFiles::FromConf(fc, wxFileName(strConfigFile).GetPath());
 
 	// (THE MCP SERVER'S SETTINGS ARE NOT HERE. They belong to a PERSON in a
 	//  BASE — the server is started from an authenticated designer session and

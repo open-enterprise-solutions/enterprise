@@ -29,6 +29,7 @@
 #include <nlohmann/json.hpp>
 #include "backend/backend_exception.h"
 #include "backend/databaseLayer/databaseLayerException.h"
+#include "backend/appHost.h"           // the process: its backend.conf, read once
 #include "backend/server/listener.h"   // the listener: TLS when backend.conf names a certificate
 #include "frontend/diagnostics/oesConsole.h"
 
@@ -400,31 +401,36 @@ int main(int argc, char** argv)
 		return 1;
 	}
 
-	// Bind the HTTP server FIRST so we know the real port before the
-	// backend comes up — InitBackend's call chain creates the
-	// wenterprise-server's own ibSession (registry.Connect), and that
-	// session stamps `sys_session.address` from wfrontendServerAddress().
-	// If we called wfrontendSetServerAddress with args.port=0 (default
-	// OS-picks-port mode) the row would land with "host:0" and designer
-	// would show a bad URL. Two-phase bind solves this: determine the
-	// port here, stamp the address, then bring up the backend.
 	// URL prefix is whatever the operator / spawning process specified
 	// via --url, --db, or --file basename (see ParseArgs). Consistent
 	// between CLI and designer-spawn — designer passes --url=<name>
 	// derived the same way.
 	const std::string prefix = "/w/" + args.urlPrefix;
 
-	// The transport is the process's (backend/server/listener.h): TLS when backend.conf names a certificate,
-	// plain on this machine's own address only - an address off it without a certificate is a refusal.
-	const ibTlsFiles tls = ibTlsFiles::FromBackendConf();
-	wxString why;
-	std::unique_ptr<httplib::Server> listener = ibMakeListener(wxString::FromUTF8(args.host), tls, &why);
-	if (!listener) {
-		std::cerr << "OES wenterprise-server did not start: " << why.utf8_str() << std::endl;
+	// THE BASE FIRST — the process comes up with it, its backend.conf read once. The address a browser's session
+	// records (wfrontendServerAddress, read by ibWebSession::Login) is set after the bind below, before anyone
+	// can log in: the server's own session records none.
+	if (!InitBackend(args)) {
+		const std::string err = wfrontendLastError();
+		std::cerr << "Failed to open the database";
+		if (!err.empty()) std::cerr << ": " << err;
+		std::cerr << std::endl;
 		return 1;
 	}
-	const bool secure = tls.IsNamed();
-	const char* const scheme = secure ? "https://" : "http://";
+
+	// The transport is the process's (backend/server/listener.h): TLS over the certificate backend.conf names,
+	// plain on this machine's own address only - an address off it without a certificate is a refusal.
+	const ibTlsFiles& tls = ibApplicationHost::Get()->GetTlsFiles();
+	std::unique_ptr<httplib::Server> listener;
+	try {
+		listener = ibMakeListener(wxString::FromUTF8(args.host), tls);
+	}
+	catch (const ibBackendException& err) {
+		std::cerr << "OES wenterprise-server did not start: " << err.GetErrorDescription().utf8_str() << std::endl;
+		wfrontendShutdown();
+		return 1;
+	}
+	const char* const scheme = tls.IsNamed() ? "https://" : "http://";
 	httplib::Server& svr = *listener;
 	g_svr = &svr;
 	svr.new_task_queue = [] { return new ServedTaskQueue(); };
@@ -498,7 +504,7 @@ int main(int argc, char** argv)
 		res.set_content(body, "application/json; charset=utf-8");
 	});
 
-	svr.Get(prefix + "/", [prefix, scheme, secure](const httplib::Request& req, httplib::Response& res) {
+	svr.Get(prefix + "/", [prefix, scheme, &tls](const httplib::Request& req, httplib::Response& res) {
 		// Windows IPv6-first "localhost" fallback adds ~200ms cold
 		// connect per request, which stacks up on every tab switch /
 		// click. If the browser came in via `Host: localhost...`,
@@ -509,7 +515,7 @@ int main(int argc, char** argv)
 		// Not over TLS: the certificate names what the browser asked for, and a bounce to another name
 		// is a bounce to a name it may not carry.
 		const std::string host = req.get_header_value("Host");
-		if (!secure && host.size() >= 9 && host.compare(0, 9, "localhost") == 0
+		if (!tls.IsNamed() && host.size() >= 9 && host.compare(0, 9, "localhost") == 0
 			&& (host.size() == 9 || host[9] == ':')) {
 			std::string target = scheme + ("127.0.0.1" + host.substr(9) + prefix + "/");
 			res.status = 302;
@@ -930,16 +936,15 @@ int main(int argc, char** argv)
 
 	std::cout << wfrontendVersion() << std::endl;
 
-	// Two-phase bind — we need the real port BEFORE InitBackend so
-	// the technical session the backend creates stamps
-	// sys_session.address with the true "host:boundPort" string.
 	// bind_to_any_port returns the OS-picked port when args.port==0;
-	// bind_to_port takes an explicit one.
+	// bind_to_port takes an explicit one. The base is open by now: a
+	// refusal here closes it on the way out.
 	int boundPort = 0;
 	if (args.port == 0) {
 		boundPort = svr.bind_to_any_port(args.host.c_str());
 		if (boundPort == 0) {
 			std::cerr << "Failed to bind to any free port on " << args.host << std::endl;
+			wfrontendShutdown();
 			return 1;
 		}
 	}
@@ -951,26 +956,20 @@ int main(int argc, char** argv)
 			std::cerr << "Port " << args.port << " is already in use on " << args.host
 			          << ". Drop --port to let the OS pick a free one, or pass another --port=N."
 			          << std::endl;
+			wfrontendShutdown();
 			return 1;
 		}
 		if (!svr.bind_to_port(args.host.c_str(), args.port)) {
 			std::cerr << "Failed to bind " << args.host << ":" << args.port << std::endl;
+			wfrontendShutdown();
 			return 1;
 		}
 		boundPort = args.port;
 	}
 
-	// Stamp address with the real port BEFORE InitBackend so the
-	// technical-session INSERT records "host:boundPort" in sys_session.address.
+	// The address a browser's session records in sys_session.address (ibWebSession::Login) — "host:boundPort",
+	// set before listen_after_bind lets the first one in.
 	wfrontendSetServerAddress(args.host, boundPort);
-
-	if (!InitBackend(args)) {
-		const std::string err = wfrontendLastError();
-		std::cerr << "Failed to open the database";
-		if (!err.empty()) std::cerr << ": " << err;
-		std::cerr << std::endl;
-		return 1;
-	}
 
 	// Unify backend's ForceExit() with wes's main loop: instead of
 	// posting to wxTheApp (which has no event loop in the httplib
