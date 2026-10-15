@@ -334,7 +334,6 @@ ibDatabaseLayerFirebird::ibDatabaseLayerFirebird()
 	m_pDatabase = 0;
 	m_pTransaction = 0;
 
-	m_pStatus = new ISC_STATUS_ARRAY();
 #if _USE_DYNAMIC_DATABASE_LAYER_LINKING == 1
 	m_pInterface = std::make_shared<ibInterfaceFirebird>();
 	
@@ -347,6 +346,7 @@ ibDatabaseLayerFirebird::ibDatabaseLayerFirebird()
 	}
 
 #endif
+	m_pStatus = new ISC_STATUS_ARRAY();
 
 	m_strServer = wxT("");  // assume embedded database in this case
 	m_strUser = wxT("sysdba");
@@ -361,7 +361,6 @@ ibDatabaseLayerFirebird::ibDatabaseLayerFirebird(const wxString& strDatabase)
 	m_pDatabase = 0;
 	m_pTransaction = 0;
 
-	m_pStatus = new ISC_STATUS_ARRAY();
 #if _USE_DYNAMIC_DATABASE_LAYER_LINKING == 1
 	m_pInterface = std::make_shared<ibInterfaceFirebird>();
 	
@@ -374,6 +373,7 @@ ibDatabaseLayerFirebird::ibDatabaseLayerFirebird(const wxString& strDatabase)
 	}
 
 #endif
+	m_pStatus = new ISC_STATUS_ARRAY();
 
 	m_strServer = wxT("");  // assume embedded database in this case
 	m_strUser = wxT("sysdba");
@@ -389,7 +389,6 @@ ibDatabaseLayerFirebird::ibDatabaseLayerFirebird(const wxString& strDatabase, co
 	m_pDatabase = 0;
 	m_pTransaction = 0;
 
-	m_pStatus = new ISC_STATUS_ARRAY();
 #if _USE_DYNAMIC_DATABASE_LAYER_LINKING == 1
 	m_pInterface = std::make_shared<ibInterfaceFirebird>();
 	if (!m_pInterface->Init())
@@ -400,6 +399,7 @@ ibDatabaseLayerFirebird::ibDatabaseLayerFirebird(const wxString& strDatabase, co
 		return;
 	}
 #endif
+	m_pStatus = new ISC_STATUS_ARRAY();
 
 	m_strServer = wxT("");  // assume embedded database in this case
 	m_strUser = strUser;
@@ -415,7 +415,6 @@ ibDatabaseLayerFirebird::ibDatabaseLayerFirebird(const wxString& strServer, cons
 	m_pDatabase = 0;
 	m_pTransaction = 0;
 
-	m_pStatus = new ISC_STATUS_ARRAY();
 #if _USE_DYNAMIC_DATABASE_LAYER_LINKING == 1
 	m_pInterface = std::make_shared<ibInterfaceFirebird>();
 	if (!m_pInterface->Init())
@@ -426,6 +425,7 @@ ibDatabaseLayerFirebird::ibDatabaseLayerFirebird(const wxString& strServer, cons
 		return;
 	}
 #endif
+	m_pStatus = new ISC_STATUS_ARRAY();
 
 	m_strServer = strServer;
 	m_strUser = strUser;
@@ -441,7 +441,6 @@ ibDatabaseLayerFirebird::ibDatabaseLayerFirebird(const wxString& strServer, cons
 	m_pDatabase = 0;
 	m_pTransaction = 0;
 
-	m_pStatus = new ISC_STATUS_ARRAY();
 #if _USE_DYNAMIC_DATABASE_LAYER_LINKING == 1
 	m_pInterface = std::make_shared<ibInterfaceFirebird>();
 	if (!m_pInterface->Init())
@@ -452,6 +451,7 @@ ibDatabaseLayerFirebird::ibDatabaseLayerFirebird(const wxString& strServer, cons
 		return;
 	}
 #endif
+	m_pStatus = new ISC_STATUS_ARRAY();
 
 	m_strServer = strServer;
 	m_strUser = strUser;
@@ -466,7 +466,6 @@ ibDatabaseLayerFirebird::ibDatabaseLayerFirebird(const ibDatabaseLayerFirebird& 
 	m_pDatabase = 0;
 	m_pTransaction = 0;
 
-	m_pStatus = new ISC_STATUS_ARRAY();
 #if _USE_DYNAMIC_DATABASE_LAYER_LINKING == 1
 	m_pInterface = std::make_shared<ibInterfaceFirebird>();
 	if (!m_pInterface->Init())
@@ -477,6 +476,7 @@ ibDatabaseLayerFirebird::ibDatabaseLayerFirebird(const ibDatabaseLayerFirebird& 
 		return;
 	}
 #endif
+	m_pStatus = new ISC_STATUS_ARRAY();
 
 	m_strServer = src.m_strServer;
 	m_strUser = src.m_strUser;
