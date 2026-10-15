@@ -902,7 +902,7 @@ bool ibValueModelTableBox::Fetch(const ibDataNode& request, ibDataNode& response
 	// (A read that fails throws, and the throw is the caller's to put in front of the person — the rows
 	// already handed out stay as they were.)
 	ibDataViewItemArray items;
-	unsigned int fetched = 0;
+	unsigned int fetched = 0, ahead = 0;   // ahead — the rows read before the page (Before), first in `items`
 
 	// THE ROWS HANDED OUT BEFORE A READ ANEW — kept alive through it, so no object freed meanwhile comes back at the
 	// same address as another row: one read again as the SAME object (a table in memory hands out its own rows) keeps
@@ -947,6 +947,21 @@ bool ibValueModelTableBox::Fetch(const ibDataNode& request, ibDataNode& response
 			items.Clear();
 			fetched = m_tableModel->GetFirstFetch(scope, ibDataViewItem(), count, items);
 		}
+		// (protocol 4) …AND THE ROWS AHEAD OF THE PAGE, when the client asks for them (Before) — in the same answer, first,
+		// so a row kept mid-view costs no second fetch.
+		const int before = std::clamp<int>(request.GetValue<s32>(wxT("Before")), 0, s_maxFetchCount);
+		if (before > 0) {
+			unsigned int above = 0;
+			if (fetched > 0) {
+				ibDataViewItemArray rows;
+				above = m_tableModel->GetPrevFetch(scope, items[0], before, rows);
+				for (unsigned int idx = 0; idx < items.GetCount(); idx++)
+					rows.Add(items[idx]);
+				items = rows;
+				ahead = above;
+			}
+			response.SetValue(wxT("Before"), static_cast<s32>(above));
+		}
 		break;
 	}
 	}
@@ -984,8 +999,8 @@ bool ibValueModelTableBox::Fetch(const ibDataNode& request, ibDataNode& response
 		const s32 handle = HandRow(item, parentHandle, added, &handlesBefore);
 		if (added && parentHandle == 0)
 			newTopRows.push_back(handle);
-		if (firstHandle == 0)
-			firstHandle = handle;
+		if (firstHandle == 0 && idx >= ahead)
+			firstHandle = handle;   // the page's first, not a row read ahead of it
 
 		// The current row handed out. Known only by its key (a restore stub) or by an older object, it
 		// becomes this row — the current line reads what was just read.
