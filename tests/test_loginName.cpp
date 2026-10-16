@@ -50,6 +50,7 @@ struct LoginNameFix : ::testing::Test {
 		q.Execute(ibCreateTable(user_table, {
 			{ wxT("guid"),       ibTypeString(36),  /*notNull*/false, /*pk*/true,  wxEmptyString },
 			{ wxT("name"),       ibTypeString(64),  /*notNull*/true,  /*pk*/false, wxEmptyString },
+			{ wxT("nameKey"),    ibTypeString(64),  /*notNull*/true,  /*pk*/false, wxEmptyString },
 			{ wxT("fullName"),   ibTypeString(128), /*notNull*/true,  /*pk*/false, wxEmptyString },
 			{ wxT("changed"),    ibTypeDate(),      /*notNull*/true,  /*pk*/false, wxEmptyString },
 			{ wxT("dataSize"),   ibTypeInteger(),   /*notNull*/true,  /*pk*/false, wxEmptyString },
@@ -62,7 +63,7 @@ struct LoginNameFix : ::testing::Test {
 		keeper.m_strUserFullName = wxT("Keeper");
 		keeper.m_strUserPassword = ibPasswordHash::Hash(password);
 		ASSERT_TRUE(keeper.m_strUserPassword.StartsWith(wxT("$pbkdf2-sha256$")));
-		ASSERT_TRUE(ibUserInfo::Save(keeper));
+		ASSERT_EQ(ibUserInfo::Save(keeper), ibUserInfo::SaveReason::Saved);
 	}
 };
 

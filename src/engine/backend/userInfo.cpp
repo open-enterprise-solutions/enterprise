@@ -5,6 +5,8 @@
 #include "databaseLayer/databaseErrorCodes.h"
 #include "core/fileSystem/fs.h"
 
+#include <map>
+
 namespace {
 
 // Chunk tags inside binaryData (DB) and the per-record blob (export buffer).
@@ -162,20 +164,128 @@ ibUserInfo ibUserInfo::Read(const ibGuid& userGuid)
 	return info;
 }
 
-ibUserInfo ibUserInfo::Read(const wxString& userName)
+wxString ibUserInfo::NameKey(const wxString& userName)
 {
-	ibUserInfo info;
-	if (userName.IsEmpty())
-		return info;
+	wxString key = userName;
+	key.Trim(true).Trim(false);
+	return key.Lower();
+}
+
+wxString ibUserInfo::NameAsShown(const wxString& userName)
+{
+	wxString trimmed = userName;
+	trimmed.Trim(true).Trim(false);
+	if (trimmed.empty())
+		return _("(blank)");
+	return userName;
+}
+
+unsigned ibUserInfo::CountByName(const wxString& userName)
+{
+	const wxString key = NameKey(userName);
+	if (key.empty())
+		return 0;
 
 	try {
 		ibDatabaseQueryBuilder q;
-		ibQueryResult result = q.ExecuteIR(SysUserRowQuery(
-			ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("name")), ibConst(ibValue(userName)))));
-		if (result.Next())
-			FillFromRow(result, info);
+		ibQueryResult result = q.ExecuteIR(ibQueryIR(ibProject(
+			ibFilter(ibScan(user_table),
+				ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("nameKey")), ibConst(ibValue(key)))),
+			{ { ibCol(wxT("guid")), wxEmptyString } })));
+		unsigned count = 0;
+		while (result.Next())
+			++count;
+		return count;
 	}
-	catch (...) { /* no table / passive scope — empty info */ }
+	catch (...) { return 0; }
+}
+
+wxString ibUserInfo::SharedNames()
+{
+	std::map<wxString, std::vector<wxString>> groups;
+	try {
+		ibDatabaseQueryBuilder q;
+		ibQueryResult result = q.ExecuteIR(ibQueryIR(ibProject(ibScan(user_table),
+			{ { ibCol(wxT("name")),    wxEmptyString },
+			  { ibCol(wxT("nameKey")), wxEmptyString } })));
+		while (result.Next())
+			groups[result.GetResultString(wxT("nameKey"))].push_back(
+				NameAsShown(result.GetResultString(wxT("name"))));
+	}
+	catch (...) { return wxString(); }
+
+	wxString shared;
+	for (const auto& group : groups) {
+		if (group.second.size() < 2)
+			continue;
+		if (!shared.empty())
+			shared += wxT(", ");
+		for (std::size_t i = 0; i < group.second.size(); ++i) {
+			if (i != 0)
+				shared += wxT(" / ");
+			shared += group.second[i];
+		}
+	}
+	return shared;
+}
+
+wxString ibUserInfo::SharedNameWarning()
+{
+	const wxString shared = SharedNames();
+	if (shared.empty())
+		return wxString();
+	return wxString::Format(
+		_("These users share a name. The base is open, and that name cannot be used to sign in until each one is unique: %s"),
+		shared);
+}
+
+bool ibUserInfo::NameChangeConflicts(const ibUserInfo& info)
+{
+	const wxString key = NameKey(info.m_strUserName);
+	if (key.empty())
+		return false;
+
+	// The row already stored under this guid may keep its folded name. That is how one of
+	// two "Admin" accounts is edited, or renamed, without the save being the conflict.
+	const ibUserInfo stored = Read(ibGuid(info.m_strUserGuid));
+	if (stored.IsOk() && NameKey(stored.m_strUserName) == key)
+		return false;
+
+	try {
+		ibDatabaseQueryBuilder q;
+		ibQueryResult result = q.ExecuteIR(ibQueryIR(ibProject(
+			ibFilter(ibScan(user_table),
+				ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("nameKey")), ibConst(ibValue(key)))),
+			{ { ibCol(wxT("guid")), wxEmptyString } })));
+		while (result.Next()) {
+			if (result.GetResultString(wxT("guid")) != info.m_strUserGuid)
+				return true;
+		}
+	}
+	catch (...) { return false; }
+	return false;
+}
+
+ibUserInfo ibUserInfo::Read(const wxString& userName)
+{
+	ibUserInfo info;
+	const wxString key = NameKey(userName);
+	if (key.empty())
+		return info;
+
+	// The folded name, asked of the index. Two rows is not a login: the first
+	// match is not an answer, and the caller gets an empty record.
+	try {
+		ibDatabaseQueryBuilder q;
+		ibQueryResult result = q.ExecuteIR(SysUserRowQuery(
+			ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("nameKey")), ibConst(ibValue(key)))));
+		if (!result.Next())
+			return info;
+		FillFromRow(result, info);
+		if (result.Next())
+			return ibUserInfo();
+	}
+	catch (...) { return ibUserInfo(); }
 
 	return info;
 }
@@ -211,8 +321,17 @@ std::vector<ibUserInfo::Brief> ibUserInfo::ListAll()
 	return list;
 }
 
-bool ibUserInfo::Save(const ibUserInfo& info)
+ibUserInfo::SaveReason ibUserInfo::Save(const ibUserInfo& info)
 {
+	const wxString nameKey = NameKey(info.m_strUserName);
+	if (nameKey.empty() || info.m_strUserGuid.IsEmpty())
+		return SaveReason::Failed;
+
+	// A new account, or a rename onto a name somebody else already holds. An existing
+	// row that keeps its own folded name is not this case: it can still be edited.
+	if (NameChangeConflicts(info))
+		return SaveReason::NameTaken;
+
 	// The default-ctor builder resolves to CurrentHolder = the db_query channel's thread holder —
 	// the dedicated channel for infra-level writes that must stay out of any user session's TX
 	// (the pool never resolves a session holder here; session work passes its holder explicitly).
@@ -228,14 +347,15 @@ bool ibUserInfo::Save(const ibUserInfo& info)
 		q.Execute(ibUpsert(user_table, {
 			{ wxT("guid"),       ibConst(ibValue(info.m_strUserGuid)) },
 			{ wxT("name"),       ibConst(ibValue(info.m_strUserName)) },
+			{ wxT("nameKey"),    ibConst(ibValue(nameKey)) },
 			{ wxT("fullName"),   ibConst(ibValue(info.m_strUserFullName)) },
 			{ wxT("changed"),    ibConst(ibValue(ibDateTime::Now())) },
 			{ wxT("dataSize"),   ibConst(ibValue(static_cast<unsigned int>(writer.size()))) },
 			{ wxT("binaryData"), ibConstBlob(writer.pointer(), writer.size()) },
 		}, { wxT("guid") }));
-		return true;   // a real failure THROWS (caught below); the affected-row count is not an error
+		return SaveReason::Saved;   // a real failure THROWS (caught below)
 	}
-	catch (...) { return false; }
+	catch (...) { return SaveReason::Failed; }
 }
 
 bool ibUserInfo::Delete(const ibGuid& userGuid)

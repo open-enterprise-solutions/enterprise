@@ -2,7 +2,7 @@
 #include "backend/databaseLayer/databaseQueryBuilder.h"   // L2 door — DDL/DML + TableExists/GetColumns/IsOpen + typed row reads (no raw L1)
 #include "backend/databaseLayer/connectionPool.h"
 
-#include "backend/backend_exception.h"
+#include "backend/userInfo.h"
 
 #include "backend/session/sessionRegistry.h"
 #include "core/diagnostics/journal.h"
@@ -30,6 +30,10 @@ void ibApplicationInstance::CreateTableUser()
 		q.Execute(ibCreateTable(user_table, {
 			{ wxT("guid"),       ibTypeString(36),  /*notNull*/false, /*pk*/true,  wxEmptyString },
 			{ wxT("name"),       ibTypeString(64),  /*notNull*/true,  /*pk*/false, wxEmptyString },
+			// The folded name. "Admin" and "admin" land on one key, and the unique
+			// index below is what a second insert meets even when two saves pass
+			// the check together.
+			{ wxT("nameKey"),    ibTypeString(64),  /*notNull*/true,  /*pk*/false, wxEmptyString },
 			{ wxT("fullName"),   ibTypeString(128), /*notNull*/true,  /*pk*/false, wxEmptyString },
 			{ wxT("changed"),    ibTypeDate(),      /*notNull*/true,  /*pk*/false, wxEmptyString },
 			{ wxT("dataSize"),   ibTypeInteger(),   /*notNull*/true,  /*pk*/false, wxEmptyString },
@@ -38,6 +42,58 @@ void ibApplicationInstance::CreateTableUser()
 		// The index rides with the just-created table, so the old "if not exists" was redundant
 		// (and let Firebird choke on that syntax) — a plain CREATE INDEX is correct here.
 		q.Execute(ibCreateIndex(user_table, wxT("user_index"), { wxT("guid"), wxT("name") }));
+		q.Execute(ibCreateIndex(user_table, wxT("user_name_key"), { wxT("nameKey") }, /*unique*/true));
+	}
+}
+
+void ibApplicationInstance::MigrateTableUser()
+{
+	ibDatabaseQueryBuilder qi;
+	if (!qi.TableExists(user_table))
+		return;
+
+	bool hasNameKey = false;
+	const wxArrayString cols = qi.GetColumns(user_table);
+	for (std::size_t i = 0; i < cols.GetCount(); ++i) {
+		if (cols[i].CmpNoCase(wxT("nameKey")) == 0) {
+			hasNameKey = true;
+			break;
+		}
+	}
+
+	// Nullable on purpose. SQLite refuses NOT NULL on a column added to a table that
+	// already has rows, and an old row has no folded name until the fill below.
+	ibDatabaseQueryBuilder q;
+	if (!hasNameKey) {
+		q.Execute(ibAddColumn(user_table, { wxT("nameKey"), ibTypeString(64), false, false, wxEmptyString }));
+		for (const ibUserInfo::Brief& user : ibUserInfo::ListAll()) {
+			q.Execute(ibUpdate(user_table,
+				{ { wxT("nameKey"), ibConst(ibValue(ibUserInfo::NameKey(user.m_strUserName))) } },
+				ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("guid")), ibConst(ibValue(user.m_strUserGuid)))));
+		}
+	}
+
+	// The base opens either way. The unique index is created only when every folded
+	// name is already distinct; two "Admin" rows, or two blanks, would make CREATE
+	// UNIQUE INDEX fail and the failure would look like the base itself is broken.
+	// Asked again on the next open, so renaming them is enough — nothing else has to
+	// remember to build the index.
+	const wxString shared = ibUserInfo::SharedNameWarning();
+	if (!shared.empty()) {
+		// ibJournalWarning is erased in a Release build. This warning is about a base
+		// that just opened, so it has to be in the file then too, and it does not open
+		// a window (a warning here is for whoever reads the journal).
+		if (ibTechJournal::IsOpen())
+			ibTechJournal::Print(ibJournalMark::Warning, wxT("user"), wxT("%s"), shared);
+		return;
+	}
+
+	try {
+		q.Execute(ibCreateIndex(user_table, wxT("user_name_key"), { wxT("nameKey") }, /*unique*/true));
+	}
+	catch (...) {
+		// Already present from the open that first found the names distinct, or from
+		// CreateTableUser on a new base. A later open must not refuse the base for that.
 	}
 }
 
@@ -422,18 +478,20 @@ bool ibApplicationInstance::LoadUserInfoFromBuffer(wxMemoryBuffer& buffer)
 
 	ibReaderMemory* prevReaderMemory = nullptr; u64 meta_id = 0;
 
+	bool saved = true;
 	while (!reader.eof()) {
 
 		ibReaderMemory* readerMemory = reader.open_chunk_iterator(meta_id, &*prevReaderMemory);
 		if (!readerMemory)
 			break;
 
-		ibUserInfo::Save(ibUserInfo::Deserialize(*readerMemory));
+		if (ibUserInfo::Save(ibUserInfo::Deserialize(*readerMemory)) != ibUserInfo::SaveReason::Saved)
+			saved = false;
 
 		prevReaderMemory = readerMemory;
 	};
 
-	return true;
+	return saved;
 }
 
 bool ibApplicationInstance::SaveUserInfoToBuffer(wxMemoryBuffer& buffer) const

@@ -103,6 +103,7 @@ struct BackupRestore : ::testing::Test {
 		q.Execute(ibCreateTable(user_table, {
 			{ wxT("guid"),       ibTypeString(36),  false, true,  wxEmptyString },
 			{ wxT("name"),       ibTypeString(64),  true,  false, wxEmptyString },
+			{ wxT("nameKey"),    ibTypeString(64),  true,  false, wxEmptyString },
 			{ wxT("fullName"),   ibTypeString(128), true,  false, wxEmptyString },
 			{ wxT("changed"),    ibTypeDate(),      true,  false, wxEmptyString },
 			{ wxT("dataSize"),   ibTypeInteger(),   true,  false, wxEmptyString },
@@ -123,7 +124,7 @@ struct BackupRestore : ::testing::Test {
 		info.m_strUserGuid = wxT("11111111-1111-1111-1111-111111111111");
 		info.m_strUserName = wxT("keeper");
 		info.m_strUserFullName = wxT("Keeper");
-		ASSERT_TRUE(ibUserInfo::Save(info));
+		ASSERT_EQ(ibUserInfo::Save(info), ibUserInfo::SaveReason::Saved);
 	}
 
 	void ExpectUserKept()

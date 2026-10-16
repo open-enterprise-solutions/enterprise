@@ -15,6 +15,7 @@
 #include <wx/settings.h>
 #include <wx/sizer.h>
 #include <wx/dialog.h>
+#include <wx/stattext.h>
 #include <wx/itemattr.h>
 
 #include "frontend/frontend.h"
@@ -30,6 +31,9 @@ class FRONTEND_API ibDialogUserList : public wxDialog
 	wxAuiToolBarItem* m_toolDelete;
 
 	ibDataViewCtrl* m_dataEditor;
+	wxStaticText* m_conflictNote = nullptr;
+
+	void ShowSharedNames();
 
 public:
 

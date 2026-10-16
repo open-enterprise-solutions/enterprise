@@ -903,6 +903,7 @@ ibApplicationInstance* ibApplicationInstance::Open(std::unique_ptr<ibApplication
 
 		// Additive and idempotent — a base made before any of these picks them up at its next open.
 		MigrateTableSession();         // pid / address / currentActivity, which the registry's INSERT assumes
+		MigrateTableUser();            // folded name; the unique index waits until every name is distinct
 		MigrateTableBytecodeCache();
 		CreateTableLock();             // sys_lock — long-held pessimistic locks
 		CreateTableJob();              // sys_job — the shared last-run clock…
@@ -917,6 +918,14 @@ ibApplicationInstance* ibApplicationInstance::Open(std::unique_ptr<ibApplication
 		// first Audit row (session.opened) can fire on the next
 		// Authenticate.
 		applicationInstance->CreateLogger();
+
+		// The same warning MigrateTableUser wrote to the technology journal, now that the
+		// activity log exists. An administrator reads this one; the journal may not be open.
+		{
+			const wxString sharedNames = ibUserInfo::SharedNameWarning();
+			if (!sharedNames.empty() && ibLog)
+				ibLog->Warn(wxT("user"), wxT("shared_names"), sharedNames);
+		}
 
 		// ⚠⚠ DECLARED AFTER ITS TABLE EXISTS, and that is the whole point of the position.
 		//
@@ -1257,15 +1266,21 @@ bool ibApplicationInstance::AuthenticateUser(const wxString& strUserName,
 		}
 	}
 
-	outInfo = ibUserInfo::Read(strUserName);
-	if (!outInfo.IsOk()) {
+	// More than one account folds to this name, so neither of them may sign in as it.
+	// Checked before the password: a correct password must not pick a winner. Zero
+	// means there is no such account. A blank name folds to nothing, so it counts as
+	// zero and cannot sign in either.
+	const unsigned named = ibUserInfo::CountByName(strUserName);
+	outInfo = named == 1 ? ibUserInfo::Read(strUserName) : ibUserInfo();
+	if (named != 1 || !outInfo.IsOk()) {
 		// An unknown name refuses no sooner than a wrong password: refused before any hashing, it
 		// answered hundreds of milliseconds faster and told which names exist. Hash runs the same
 		// PBKDF2 that Verify runs on a stored hash; its answer is thrown away.
 		(void)ibPasswordHash::Hash(strUserPassword);
 		try {
 			if (ibLog) ibLog->Audit(wxT("auth"), wxT("login_failed"),
-			                        wxString::Format(wxT("user=%s reason=unknown"), strUserName));
+			                        wxString::Format(wxT("user=%s reason=%s"), strUserName,
+			                                         named > 1 ? wxT("ambiguous") : wxT("unknown")));
 		} catch (...) {}
 		return false;
 	}
