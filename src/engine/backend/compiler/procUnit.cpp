@@ -289,6 +289,9 @@ IB_FORCEINLINE const ibValue& ResolveRead(int slot, int idx,
 		}                                                                       \
 	} while (0)
 
+static void FillLambdaDefaults(ibRunContext& frame, const ibByteCode::ibByteFunction* function,
+	const ibByteCode* bytecode);
+
 //**************************************************************************************************************
 //*                                              support error place                                           *
 //**************************************************************************************************************
@@ -1702,6 +1705,15 @@ start_label:
 					}
 				}
 
+				// A hole is an empty slot of this temporary, not an argument.
+				// Handed over as null, the callee fills its own local from
+				// the declaration. A value the caller wrote keeps its pointer.
+				for (long i = 0; i < cRunContext.m_lParamCount; ++i) {
+					if (cRunContext.m_pRefLocVars[i] == &cRunContext.m_pLocVars[i]
+						&& cRunContext.m_pLocVars[i].IsEmpty())
+						cRunContext.m_pRefLocVars[i] = nullptr;
+				}
+
 				if (pVariable2->HasRetVal(lMethodNum)) {
 					// ⭐ A METHOD THAT ANSWERED NOTHING ANSWERS UNDEFINED — never the previous call's value. This slot is
 					// the one calls write their answers into; a method that returned false without writing it left
@@ -2068,6 +2080,11 @@ start_label:
 							: m_pByteCode->FindFunctionByEntry(lCodeLine);
 				}
 
+				// Defaults, once, before the cached key is built from the
+				// arguments. A hole in the middle is an empty own slot, the
+				// same as a tail the caller did not write.
+				FillLambdaDefaults(*pContext, pContext->m_currentFunction, m_pByteCode);
+
 				// `Cached` — DECIDED HERE, and here only.
 				//
 				// ⭐ THIS IS WHERE EVERY ROAD INTO A BODY ARRIVES. A direct call
@@ -2316,19 +2333,9 @@ start_label:
 					}
 				}
 
-				// Phase 2 — fill missing tail params from compile-time
-				// defaults on the lambda's m_listParam (same structure
-				// named-function calls read from at PushCallFunction).
-				for (long i = callerArgCount; i < lambdaParamCount; i++) {
-					if (i >= (long)bfn->m_listParam.size())
-						RuntimeError("Lambda call: m_listParam shorter than paramCount at param %ld", i);
-					const ibParamRunUnit& puDef = bfn->m_listParam[i].m_defaultValue;
-					// The parameter's own name: the line above has already refused an index past the list.
-					if (puDef.m_numArray == DEF_VAR_SKIP)
-						RuntimeError("Missing required argument '%s' to function value",
-							bfn->m_listParam[i].m_strName);
-					CopyValue(pNewCtx->m_pLocVars[i], pLocalByteCode->m_listConst[puDef.m_numIndex]);
-				}
+				// Phase 2 — the same fill a named body does at entry, including
+				// a hole between two arguments the caller did write.
+				FillLambdaDefaults(*pNewCtx, bfn, pLocalByteCode);
 
 				fn->Execute(pNewCtx, pRetValue, false);
 				break;
@@ -2856,6 +2863,48 @@ bool ibProcUnit::CallAsFunc(const ibString& funcName, ibValue& pvarRetValue, ibV
 		}
 	}
 	return false;
+}
+
+// The arguments a body was entered without. One place, for every road: a
+// direct call, a call through a module, a lambda. A slot that still points
+// at the frame's own empty local was not written — a tail the caller left
+// off, or a hole in the middle. A slot that names another value was passed,
+// even when that value is empty.
+//
+// A parameter with no default is refused. A default whose constant is not
+// in this module's pool is refused. The same-module compiler already wrote
+// the default at the call site, so this does not write it a second time.
+static void FillLambdaDefaults(ibRunContext& frame, const ibByteCode::ibByteFunction* function,
+	const ibByteCode* bytecode)
+{
+	if (function == nullptr || bytecode == nullptr || frame.m_pLocVars == nullptr)
+		return;
+
+	const long declared = static_cast<long>(function->m_listParam.size());
+	const long slots = frame.GetLocalCount();
+	for (long i = 0; i < declared && i < slots; ++i) {
+		// Null is a hole a method call handed over. The frame's own empty
+		// local is a tail, or a hole, that nobody wrote. A pointer at some
+		// other value was passed, and stays passed even when it is empty.
+		ibValue* slot = frame.m_pRefLocVars[i];
+		const bool omitted = slot == nullptr
+			|| (slot == &frame.m_pLocVars[i] && slot->IsEmpty());
+		if (!omitted)
+			continue;
+		frame.m_pRefLocVars[i] = &frame.m_pLocVars[i];
+		slot = frame.m_pRefLocVars[i];
+
+		const ibByteCode::ibByteParam& param = function->m_listParam[static_cast<size_t>(i)];
+		const ibParamRunUnit& def = param.m_defaultValue;
+		if (def.m_numArray == DEF_VAR_SKIP) {
+			ibBackendCoreException::Error(_("Missing required argument '%s'"), param.m_strName);
+		}
+		if (def.m_numIndex < 0
+			|| static_cast<size_t>(def.m_numIndex) >= bytecode->m_listConst.size()) {
+			ibBackendCoreException::Error(_("Default for '%s' is not a constant"), param.m_strName);
+		}
+		CopyValue(*slot, bytecode->m_listConst[static_cast<size_t>(def.m_numIndex)]);
+	}
 }
 
 //Calling a procedure by its address in the byte code array
