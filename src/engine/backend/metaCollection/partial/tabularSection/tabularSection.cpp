@@ -212,6 +212,17 @@ bool ibValueTabularSectionDataObjectBase::CallAsFunc(const long lMethodNum, ibVa
 	case enGetMetadata:
 		pvarRetValue = m_metaTable;
 		return true;
+	case enIndex: {
+		long index = -1;
+		ibValueTabularSectionDataObjectReturnLine* retLine = nullptr;
+		if (paParams[0]->ConvertToValue(retLine) && retLine != nullptr) {
+			ibComposerNode* node = GetViewData<ibComposerNode>(retLine->GetLineItem());
+			if (node != nullptr)
+				index = Storage().IndexOf(node);
+		}
+		pvarRetValue = static_cast<int>(index);
+		return true;
+	}
 	}
 
 	return false;
@@ -587,6 +598,7 @@ void ibValueTabularSectionDataObjectBase::FillMembers(ibMemberTable& helper) con
 		helper.AppendFunc(wxT("Find"), 2, wxT("Find(value : any, columnName : string)"), enFind, eTabularSection);
 		helper.AppendFunc(wxT("Unload"), wxT("Unload()"), enUnload, eTabularSection);
 		helper.AppendFunc(wxT("GetMetadata"), wxT("GetMetadata()"), enGetMetadata, eTabularSection);
+		helper.AppendFunc(wxT("Index"), 1, wxT("Index(row : tabularSectionRow) : number"), enIndex, eTabularSection);
 	}
 	else {
 		helper.AppendFunc(wxT("Add"), wxT("Add()"), enAddValue, eTabularSection);
@@ -597,6 +609,7 @@ void ibValueTabularSectionDataObjectBase::FillMembers(ibMemberTable& helper) con
 		helper.AppendFunc(wxT("Load"), 1, wxT("Load(table : any table)"), enLoad, eTabularSection);
 		helper.AppendFunc(wxT("Unload"), wxT("Unload()"), enUnload, eTabularSection);
 		helper.AppendFunc(wxT("GetMetadata"), wxT("GetMetadata()"), enGetMetadata, eTabularSection);
+		helper.AppendFunc(wxT("Index"), 1, wxT("Index(row : tabularSectionRow) : number"), enIndex, eTabularSection);
 	}
 }
 
