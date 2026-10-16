@@ -506,3 +506,33 @@ TEST(TypeDescriptionList, AnUnknownNameDoesNotInitialise)
     ibValue* one[] = { &unknown };
     EXPECT_FALSE(alone.Init(one, 1));
 }
+
+// ---- FillValues (issue #435) -------------------------------------------------------------------------
+
+TEST_F(ValueTableVerbs, FillValues_FillsOnlyTheListedColumns)
+{
+    Column(wxT("A")); Column(wxT("B")); Column(wxT("C"));
+    AddRow({ ibValue(wxT("a1")), ibValue(wxT("b1")), ibValue(wxT("c1")) });
+    AddRow({ ibValue(wxT("a2")), ibValue(wxT("b2")), ibValue(wxT("c2")) });
+    Call(wxT("FillValues"), { ibValue(wxT("x")), ibValue(wxT(" A , C")) });
+    EXPECT_EQ(ColumnInOrder(wxT("A")), (std::vector<wxString>{ wxT("x"), wxT("x") }));
+    EXPECT_EQ(ColumnInOrder(wxT("B")), (std::vector<wxString>{ wxT("b1"), wxT("b2") }));
+    EXPECT_EQ(ColumnInOrder(wxT("C")), (std::vector<wxString>{ wxT("x"), wxT("x") }));
+}
+
+TEST_F(ValueTableVerbs, FillValues_WithoutColumns_FillsEveryColumn)
+{
+    Column(wxT("A")); Column(wxT("B"));
+    AddRow({ ibValue(wxT("a1")), ibValue(wxT("b1")) });
+    Call(wxT("FillValues"), { ibValue(wxT("y")) });
+    EXPECT_EQ(ColumnInOrder(wxT("A")), (std::vector<wxString>{ wxT("y") }));
+    EXPECT_EQ(ColumnInOrder(wxT("B")), (std::vector<wxString>{ wxT("y") }));
+}
+
+TEST_F(ValueTableVerbs, FillValues_UnknownColumn_RaisesAndWritesNothing)
+{
+    Column(wxT("A"));
+    AddRow({ ibValue(wxT("a1")) });
+    EXPECT_ANY_THROW(Call(wxT("FillValues"), { ibValue(wxT("z")), ibValue(wxT("A, Missing")) }));
+    EXPECT_EQ(ColumnInOrder(wxT("A")), (std::vector<wxString>{ wxT("a1") }));
+}

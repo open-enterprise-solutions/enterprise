@@ -49,6 +49,8 @@ private:
 		// the numbers are positions in the member table (FillMembers), which is listed in this order.
 		enTotal,
 		enFindRows,
+		// Issue #435: one value into the listed columns of every row (all columns when none are listed).
+		enFillValues,
 	};
 	//attributes:
 	enum Prop {
@@ -378,6 +380,10 @@ public:
 	// empty filter matches every row. A column the filter names that is not there raises rather than
 	// matching nothing: a typo in a filter would otherwise read as "no such rows".
 	ibValue FindRows(const ibValueContainer& filter);
+
+	// FillValues(value, columns): `columns` is a comma-separated list of names; empty means every column.
+	// A name that is not a column raises before any cell is written.
+	void FillValues(const ibValue& value, const wxString& columns);
 
 	// Command store (ibStandardCommandTabular): a table of values defines its OWN Add / Copy / Edit / Delete and runs
 	// them by id on the front-passed row (no shared base set — each model ships its own).
