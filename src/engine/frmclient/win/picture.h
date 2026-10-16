@@ -22,6 +22,10 @@ FRMCLIENT_API wxBitmap ibProtocolPictureById(ibPictureID id);
 // …and the pictures a list names, before it is drawn — a tree's, a palette's, a choice list's: those not kept yet asked
 // of the server in ONE call, and kept.
 FRMCLIENT_API void     ibProtocolPictureReceive(const std::vector<wxString>& ids);
+// …and every picture an answer names (a frame, a patch: its Picture, Icon, …Picture fields, however deep), before any of
+// it is drawn — in ONE call, so the parts drawn after it (the templates, the tree, a command bar) find theirs kept and
+// ask nothing each.
+FRMCLIENT_API void     ibProtocolPictureReceiveAll(const class ibProtocolNode& answer);
 
 // A picture's data as an image, to be scaled first — what the art provider makes its pictures of (artProvider/).
 FRMCLIENT_API wxImage ibProtocolImage(const wxString& base64);
