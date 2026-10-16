@@ -146,13 +146,23 @@ class BACKEND_API ibValueMetaObjectCommonAttributeColumn : public ibValueMetaObj
 		return ibValueMetaObjectAttribute::IsAllowed() && src != nullptr && src->IsAllowed();
 	}
 
-	// Deleted WITH its declaration, and asked as such everywhere — the designer tree,
-	// configuration-compare and the schema snapshot all read this rather than IsAllowed.
-	// An unbound copy (declaration gone, or pasted in from another configuration) reads as
-	// deleted too, which is what makes its column disappear with no sweep to write.
+	// Deleted WITH its declaration. The designer tree, configuration-compare and the
+	// schema snapshot all read this rather than IsAllowed.
+	//
+	// Not-yet-bound is not the same as gone. After a load the pointer is null and only
+	// the source id remains; RunSubtree skips a deleted node and never calls
+	// OnBeforeRun, which is the only place that pointer is filled in. Reading "no
+	// pointer" as deleted meant a fresh start never saw the field, while the column
+	// was already in the database from the session that created the copy. An id of
+	// zero is the orphan (pasted in, or the declaration was gone when the run looked)
+	// and that one stays deleted.
 	virtual bool IsDeleted() const override {
+		if (ibValueMetaObjectAttribute::IsDeleted())
+			return true;
 		const ibValueMetaObjectCommonAttribute* const src = GetSource();
-		return ibValueMetaObjectAttribute::IsDeleted() || src == nullptr || src->IsDeleted();
+		if (src != nullptr)
+			return src->IsDeleted();
+		return m_sourceMetaId == 0;
 	}
 
 	//support icons
