@@ -1,0 +1,67 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "en",
+  "entries": [
+    {
+      "id": "enum.FormFieldType",
+      "name_local": "FormFieldType",
+      "name_en": "FormFieldType",
+      "kind": "enum_type",
+      "category_keys": ["value_types"],
+      "signature": "FormFieldType.<Member>",
+      "description": "The kind of a form field. Members: InputField, LabelField, CheckBoxField, PictureField, RadioButtonField, CalendarField, SpreadsheetDocumentField, TextDocumentField, FormattedDocumentField, HTMLDocumentField, PeriodField, ProgressBarField, TrackBarField, ChartField, GanttChartField, DendrogramField, GraphicalSchemaField, GeographicalSchemaField, PDFDocumentField, PlannerField.",
+      "parameters": "",
+      "return_descr": "",
+      "example": "kind = FormFieldType.InputField;",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": true
+    },
+    {
+      "id": "enum.ButtonRepresentation",
+      "name_local": "ButtonRepresentation",
+      "name_en": "ButtonRepresentation",
+      "kind": "enum_type",
+      "category_keys": ["value_types"],
+      "signature": "ButtonRepresentation.<Member>",
+      "description": "How a button is drawn. Members: Auto, Text, Picture, PictureAndText.",
+      "parameters": "",
+      "return_descr": "",
+      "example": "look = ButtonRepresentation.PictureAndText;",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": true
+    },
+    {
+      "id": "enum.ColumnsGroup",
+      "name_local": "ColumnsGroup",
+      "name_en": "ColumnsGroup",
+      "kind": "enum_type",
+      "category_keys": ["value_types"],
+      "signature": "ColumnsGroup.<Member>",
+      "description": "How columns in a group share a cell. Members: Horizontal, Vertical, InCell.",
+      "parameters": "",
+      "return_descr": "",
+      "example": "group = ColumnsGroup.InCell;",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": true
+    },
+    {
+      "id": "enum.StandardPeriodVariant",
+      "name_local": "StandardPeriodVariant",
+      "name_en": "StandardPeriodVariant",
+      "kind": "enum_type",
+      "category_keys": ["value_types"],
+      "signature": "StandardPeriodVariant.<Member>",
+      "description": "A named period. Members: Custom, Today, ThisWeek, ThisTenDays, ThisMonth, ThisQuarter, ThisHalfYear, ThisYear, FromBeginningOfThisWeek, FromBeginningOfThisTenDays, FromBeginningOfThisMonth, FromBeginningOfThisQuarter, FromBeginningOfThisHalfYear, FromBeginningOfThisYear, Yesterday, LastWeek, LastTenDays, LastMonth, LastQuarter, LastHalfYear, LastYear, LastWeekTillSameWeekDay, LastTenDaysTillSameDayNumber, LastMonthTillSameDate, LastQuarterTillSameDate, LastHalfYearTillSameDate, LastYearTillSameDate, Tomorrow, NextWeek, NextTenDays, NextMonth, NextQuarter, NextHalfYear, NextYear, NextWeekTillSameWeekDay, NextTenDaysTillSameDayNumber, NextMonthTillSameDate, NextQuarterTillSameDate, NextHalfYearTillSameDate, NextYearTillSameDate, TillEndOfThisWeek, TillEndOfThisTenDays, TillEndOfThisMonth, TillEndOfThisQuarter, TillEndOfThisHalfYear, TillEndOfThisYear, Last7Days, Next7Days, Month.",
+      "parameters": "",
+      "return_descr": "",
+      "example": "period = StandardPeriodVariant.Today;",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": true
+    }
+  ]
+}

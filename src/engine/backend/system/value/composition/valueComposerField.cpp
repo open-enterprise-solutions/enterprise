@@ -143,7 +143,34 @@ ibValue ibMaterializeCompositionValue(const ibValue& stored, const ibMetaData* m
 //*                       Runtime register                             *
 //**********************************************************************
 
+// The 1C name of the same value. A second registration of CompositionField is
+// refused (one class id, one name), so this is its own type with the same
+// path and presentation.
+class ibValueDataCompositionField : public ibValueCompositionField {
+public:
+	ibValueDataCompositionField() {
+		BindOwn();
+	}
+	explicit ibValueDataCompositionField(const wxString& path, const wxString& presentation = wxEmptyString)
+		: ibValueCompositionField(path, presentation) {
+		BindOwn();
+	}
+
+	void FillOwnMembers(ibMemberTable& helper) const {
+		helper.AppendConstructor(2, wxT("DataCompositionField(path : string, presentation? : string)"));
+		helper.AppendProp(wxT("Path"));
+		helper.AppendProp(wxT("Presentation"));
+	}
+
+private:
+	void BindOwn() {
+		m_members.Unbind(this, &ibValueCompositionField::FillMembers);
+		m_members.Bind(this, &ibValueDataCompositionField::FillOwnMembers);
+	}
+};
+
 VALUE_TYPE_REGISTER(ibValueCompositionField, "CompositionField", g_compositionFieldCLSID);
+VALUE_TYPE_REGISTER(ibValueDataCompositionField, "DataCompositionField", value_to_clsid("VL_DCFL"));
 
 // ⭐ REGISTERED TO BE NAMED, not to be created — the designer's type list renders whatever the
 // registry can name, and this entry is how "one of the declared values" gets a line there beside
