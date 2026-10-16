@@ -49,6 +49,8 @@ private:
 		// the numbers are positions in the member table (FillMembers), which is listed in this order.
 		enTotal,
 		enFindRows,
+		// GroupBy (Свернуть): rows that agree on the group columns become one, the sum columns added up.
+		enGroupBy,
 	};
 	//attributes:
 	enum Prop {
@@ -378,6 +380,8 @@ public:
 	// empty filter matches every row. A column the filter names that is not there raises rather than
 	// matching nothing: a typo in a filter would otherwise read as "no such rows".
 	ibValue FindRows(const ibValueContainer& filter);
+	// In place, as the table-of-values verb does: only the group and the sum columns remain.
+	void GroupBy(const wxString& groupColumns, const wxString& sumColumns);
 
 	// Command store (ibStandardCommandTabular): a table of values defines its OWN Add / Copy / Edit / Delete and runs
 	// them by id on the front-passed row (no shared base set — each model ships its own).
@@ -432,6 +436,9 @@ public:
 	void FillMembers(ibMemberTable& helper) const;   // bound in ctor (was PrepareNames)
 
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal); // attribute value
+	virtual bool CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray);                            // procedure call (GroupBy)
+	// `T.GroupBy("cols", "sums")` compiles as the LINQ verb of the same name; a string first argument means the table's own Свернуть.
+	virtual void DispatchLinqMethod(ibLinqMethod method, ibValue& ret, ibValue** args, long n) override;
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);       // method call
 
 	// implementation of base class virtuals to define model
