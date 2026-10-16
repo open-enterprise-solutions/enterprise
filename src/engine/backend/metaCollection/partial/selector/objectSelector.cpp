@@ -109,8 +109,15 @@ void ibValueSelectorRecordDataObject::FillMembers(ibMemberTable& helper) const
 	//set object name
 	wxString objectName;
 
-	for (const auto object : m_metaObject->GetAttributeArrayObject()) {
+	// Standard attributes live with the custom ones. GetAttributeArrayObject is
+	// only what a person added, so Code, Description, DeletionMark and IsFolder
+	// were missing and a script read of them was "field not found". The
+	// reference itself is published below as Ref: its attribute id is not the
+	// object's id, and GetPropVal looks the row's reference up by the latter.
+	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
 		if (object->IsDeleted())
+			continue;
+		if (m_metaObject->IsDataReference(object->GetMetaID()))
 			continue;
 		if (!object->GetObjectNameAsString(objectName))
 			continue;
