@@ -403,6 +403,38 @@
       "reviewed": true
     },
     {
+      "id": "fn.StrSplit",
+      "name_local": "StrSplit",
+      "name_en": "StrSplit",
+      "kind": "system_function",
+      "category_keys": ["global_context", "global_functions"],
+      "signature": "StrSplit(string, separator, includeEmpty : boolean)",
+      "description": "Масив частин рядка. Кожен символ роздільника — окремий роздільник, тому \",;\" ділить за будь-яким із них. Порожній роздільник нічого не ділить: увесь рядок — один елемент. includeEmpty за замовчуванням істина: роздільники поспіль, а також роздільник на початку і в кінці, дають порожні рядки. Хибність відкидає ці порожні рядки.",
+      "syntax_block": "StrSplit(string, separator, includeEmpty : boolean)",
+      "parameters": "string — вихідний рядок. separator — символи-роздільники. includeEmpty — лишати порожні частини (за замовчуванням: істина).",
+      "return_descr": "Масив рядків.",
+      "example": "Message(StrSplit(\"a,b;c\", \",;\").Count());   // 3\nMessage(StrSplit(\"a,,b\", \",\", false).Count());   // 2",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": ["fn.StrReplace", "fn.FillPropertyValues"],
+      "reviewed": true
+    },
+    {
+      "id": "fn.FillPropertyValues",
+      "name_local": "FillPropertyValues",
+      "name_en": "FillPropertyValues",
+      "kind": "system_procedure",
+      "category_keys": ["global_context", "global_functions"],
+      "signature": "FillPropertyValues(receiver, source, list : string, exclude : string)",
+      "description": "Копіює значення властивостей із джерела в приймач, зіставляючи за іменем. Порожній список копіює кожну властивість джерела, яка є і в приймача. Список — імена через кому: пробіли навколо імені та порожні елементи ігноруються, копіюються лише вони. Виключення — такий самий список, і ці імена пропускаються. Імені, якого немає на одному з боків, просто немає в копіюванні, помилки немає, і нові властивості не створюються. Імена зіставляються так, як платформа шукає властивість.",
+      "syntax_block": "FillPropertyValues(receiver, source, list : string, exclude : string)",
+      "parameters": "receiver — куди пишуться значення. source — звідки їх читають. list — які імена копіювати (за замовчуванням: усі спільні). exclude — які пропустити (за замовчуванням: жодні).",
+      "return_descr": "",
+      "example": "dst = New Structure(\"A, B\", 1, 2);\nsrc = New Structure(\"B, C\", 9, 8);\nFillPropertyValues(dst, src);\nMessage(dst.B);   // 9",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": ["fn.StrSplit", "cls.Structure"],
+      "reviewed": true
+    },
+    {
       "id": "fn.StrCountOccur",
       "name_local": "StrCountOccur",
       "name_en": "StrCountOccur",

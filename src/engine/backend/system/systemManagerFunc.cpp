@@ -5,6 +5,8 @@
 
 #include "systemManager.h"
 
+#include <vector>
+
 #include "backend/metaCollection/metaFormObject.h"
 #include "backend/metadataConfiguration.h"
 
@@ -24,6 +26,7 @@
 #include "backend/debugger/debugServer.h"            // …and up to whoever is debugging this run
 #include "backend/logger/logger.h"                   // the registration journal — the durable channel
 #include "backend/job/jobManager.h"                  // ibBackgroundRun — keeps what a windowless run says
+#include "backend/system/value/valueArray.h"         // StrSplit answers with one
 
 //--- Basic:
 bool ibValueSystemFunction::Boolean(const ibValue& cValue)
@@ -219,6 +222,99 @@ ibString ibValueSystemFunction::StrReplace(const ibValue& cSource, const ibValue
 	ibString result(cSource.GetString());   // mutable copy of the source
 	result.Replace(cValue1.GetString(), cValue2.GetString());
 	return result;
+}
+
+// Each character of the separator is a delimiter. An empty separator does not split.
+ibValue ibValueSystemFunction::StrSplit(const ibValue& text, const ibValue& separators, bool includeEmpty)
+{
+	const ibString src = text.GetString();
+	const ibString seps = separators.GetString();
+	ibValueArray* const parts = new ibValueArray();
+
+	if (seps.Length() == 0) {
+		parts->Add(ibValue(src));
+		return parts;
+	}
+
+	ibString current;
+	const size_t n = src.Length();
+	for (size_t i = 0; i < n; ++i) {
+		const wchar_t ch = src[i];
+		if (seps.find(ch) == ibString::npos) {
+			current += ch;
+			continue;
+		}
+		if (includeEmpty || current.Length() != 0)
+			parts->Add(ibValue(current));
+		current = ibString();
+	}
+	if (includeEmpty || current.Length() != 0)
+		parts->Add(ibValue(current));
+	return parts;
+}
+
+namespace {
+
+void SplitCommaNames(const ibString& text, std::vector<ibString>& out)
+{
+	ibString token;
+	const size_t n = text.Length();
+	for (size_t i = 0; i <= n; ++i) {
+		if (i < n && text[i] != L',') {
+			token += text[i];
+			continue;
+		}
+		token.Trim(true).Trim(false);
+		if (token.Length() != 0)
+			out.push_back(token);
+		token = ibString();
+	}
+}
+
+// The exclude list names the same property when the platform's own lookup says so.
+bool Excluded(const ibValue& host, long propIndex, const std::vector<ibString>& names)
+{
+	if (propIndex < 0)
+		return false;
+	for (const ibString& listed : names) {
+		if (host.FindProp(listed) == propIndex)
+			return true;
+	}
+	return false;
+}
+
+void CopyOneProperty(ibValue& receiver, ibValue& source, const ibString& name, const std::vector<ibString>& exclude)
+{
+	const long src = source.FindProp(name);
+	if (src < 0 || Excluded(source, src, exclude))
+		return;
+	const long dst = receiver.FindProp(name);
+	if (dst < 0)
+		return;
+	ibValue value;
+	if (!source.GetPropVal(src, value))
+		return;
+	receiver.SetPropVal(dst, value);
+}
+
+} // namespace
+
+void ibValueSystemFunction::FillPropertyValues(ibValue& receiver, ibValue& source, const ibString& list, const ibString& exclude)
+{
+	std::vector<ibString> excluded;
+	SplitCommaNames(exclude, excluded);
+
+	std::vector<ibString> listed;
+	SplitCommaNames(list, listed);
+	if (!listed.empty()) {
+		for (const ibString& name : listed)
+			CopyOneProperty(receiver, source, name, excluded);
+		return;
+	}
+
+	const long n = source.GetNProps();
+	for (long i = 0; i < n; ++i)
+		CopyOneProperty(receiver, source, source.GetPropName(i), excluded);
 }
 
 // ⚠ THIS COUNTED NOTHING. It was `return Find(sub);` — the POSITION of the first

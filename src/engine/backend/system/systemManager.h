@@ -67,6 +67,11 @@ public:
 	static wxString Chr(short nCode);
 	static short Asc(const ibValue& cSource);
 	static wxString TStr(const ibValue& cSource, const ibValue& cLanguage);
+	// Each character of the separator is a delimiter. An empty separator does not split.
+	static ibValue StrSplit(const ibValue& text, const ibValue& separators, bool includeEmpty = true);
+	// Copies properties by name. An empty list means every shared name. Neither side grows.
+	static void FillPropertyValues(ibValue& receiver, ibValue& source,
+		const ibString& list = ibString(), const ibString& exclude = ibString());
 
 	//--- Date and time:
 	static ibValue CurrentDate();

@@ -124,7 +124,10 @@ enum
 	// everything else — the ordinal IS the method index, so a new name goes at the END or every
 	// later case answers to the wrong verb.
 	enSerializeValue,
-	enDeserializeValue
+	enDeserializeValue,
+	// Appended at the end: the ordinal is the method index. A new name goes here.
+	enStrSplit,
+	enFillPropertyValues
 };
 
 void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
@@ -251,6 +254,8 @@ void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibVal
 	//--- …and value-as-text last, matching the enSerializeValue / enDeserializeValue tail above.
 	helper.AppendFunc(wxT("SerializeValue"), 1, wxT("SerializeValue(value : any)"));
 	helper.AppendFunc(wxT("DeserializeValue"), 1, wxT("DeserializeValue(json : string)"));
+	helper.AppendFunc(wxT("StrSplit"), 3, wxT("StrSplit(string, separator, includeEmpty : boolean)"));
+	helper.AppendProc(wxT("FillPropertyValues"), 4, wxT("FillPropertyValues(receiver, source, list : string, exclude : string)"));
 };
 
 #include "backend/compiler/enumUnit.h"
@@ -396,6 +401,10 @@ bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 			return true;
 		case enSerializeValue: pvarRetValue = SerializeValue(*paParams[0]); return true;
 		case enDeserializeValue: pvarRetValue = DeserializeValue(paParams[0]->GetString()); return true;
+		case enStrSplit:
+			pvarRetValue = StrSplit(*paParams[0], *paParams[1],
+				lSizeArray > 2 ? paParams[2]->GetBoolean() : true);
+			return true;
 		case enEvaluate: pvarRetValue = Evaluate(paParams[0]->GetString()); return true;
 		case enExecute: Execute(paParams[0]->GetString()); return true;
 		case enFormat: pvarRetValue = Format(*paParams[0], paParams[1]->GetString()); return true;
@@ -504,6 +513,11 @@ bool ibValueSystemFunction::CallAsProc(const long lMethodNum, ibValue** paParams
 		case enBeginTransaction: BeginTransaction(); return true;
 		case enCommitTransaction: CommitTransaction(); return true;
 		case enRollBackTransaction: RollBackTransaction(); return true;
+		case enFillPropertyValues:
+			FillPropertyValues(*paParams[0], *paParams[1],
+				lSizeArray > 2 ? paParams[2]->GetString() : ibString(),
+				lSizeArray > 3 ? paParams[3]->GetString() : ibString());
+			return true;
 		}
 	}
 	else
