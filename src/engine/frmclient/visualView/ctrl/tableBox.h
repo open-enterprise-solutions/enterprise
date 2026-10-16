@@ -80,6 +80,8 @@ private:
 	ibProtocolNode                    m_properties;    // the table's own properties as last laid on (PropertiesOf)
 
 	long long m_version = -1;            // the rows' version read last — -1: none yet
+	ibProtocolNode m_firstDraw;          // State's Rows for this Version — served once by the fetcher, then cleared
+	bool      m_hasFirstDraw = false;    // m_firstDraw holds a page
 	long long m_currentRow = 0;          // the row the server has current
 	long long m_currentColumn = 0;       // the column the server was told the cursor stands on — 0: none
 	bool      m_selecting = false;       // the cursor put by the server — no event of the person's

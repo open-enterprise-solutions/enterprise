@@ -285,7 +285,8 @@ namespace ibProtocolName {
 	inline constexpr const char* BorderTop        = "BorderTop";
 	inline constexpr const char* BorderBottom     = "BorderBottom";
 	inline constexpr const char* Stretch          = "Stretch";
-	inline constexpr const char* Rows             = "Rows";
+	inline constexpr const char* Rows             = "Rows";   // a sizer's: how many; (protocol 5) a table State's: the first page
+	                                                            // — same shape as fetch (rows as children, End, Before, Pictures)
 	inline constexpr const char* Cols             = "Cols";
 	inline constexpr const char* TitleLocation    = "TitleLocation";
 	inline constexpr const char* PasswordMode     = "PasswordMode";
@@ -341,6 +342,8 @@ namespace ibProtocolName {
 	inline constexpr const char* Anchor           = "Anchor";
 	inline constexpr const char* Parent           = "Parent";
 	inline constexpr const char* Count            = "Count";
+	inline constexpr const char* Before           = "Before";   // (protocol 4) a reset fetch's: the rows wanted ahead of
+	                                                            // the page — answered with how many stand first
 	inline constexpr const char* End              = "End";
 	inline constexpr const char* Container        = "Container";
 	inline constexpr const char* Group            = "Group";
@@ -421,7 +424,13 @@ namespace ibProtocolType {
 //   3  …and a state event (ibProtocolIsStateEvent) its control's State does not list in Subscribed is held by the client,
 //      the latest of each kind per control, and carried by its next call, whatever it is, as Pending — which the
 //      server applies, in order, before the call itself.
-constexpr int ibProtocolVersion = 3;
+//   4  …and a reset fetch (Direction 0) may name Before: the server reads up to that many rows ahead of the page too,
+//      puts them first, and answers Before — how many of the rows stand ahead of it. An answer without Before is a
+//      server below 4: the client reads them itself, a second fetch.
+//   5  …and a table's State may carry Rows with the Version: the first page, as fetch would give it (rows as children,
+//      End, Before, Pictures), so the frame that opens the tab need not be followed by a fetch. A server below 5, or
+//      one that omits Rows, is answered with fetch, as before.
+constexpr int ibProtocolVersion = 5;
 
 // WHAT A CLIENT ASKS THE SERVER. On the wire a method is a name, as JSON-RPC has it; in code it is a type: the server
 // reads the name once (ibProtocolMethodFromName) and nothing past it compares strings. A name is never changed; a new

@@ -201,9 +201,23 @@ void ibValueModelTableBox::Create(wxWindow* parent, const ibProtocolNode& /*node
 	m_panel->SetMinSize(m_panel->FromDIP(wxSize(150, 75)));
 
 	// The rows — read once the table has its size and its columns (the data view's bootstrap, on the next idle), on
-	// its thread; what an answer leaves to the UI comes back here, if this is still here.
+	// its thread; what an answer leaves to the UI comes back here, if this is still here. State's Rows (the first page)
+	// is served here once when the reset asks from the top — no wire call.
 	std::weak_ptr<bool> alive = m_alive;
-	ibViewTableModel* const model = new ibViewTableModel(MakeFetcher(), [this, alive](const ibViewTableModel::ibAnswer& answer) {
+	ibViewFetcher wire = MakeFetcher();
+	ibViewFetcher fetcher = [this, wire](const ibProtocolNode& request, ibProtocolNode& answer) -> bool {
+		if (m_hasFirstDraw
+			&& request.GetInt(ibProtocolName::Direction) == 0
+			&& request.GetInt(ibProtocolName::Anchor) == 0
+			&& request.GetInt(ibProtocolName::Parent) == 0) {
+			answer = std::move(m_firstDraw);
+			m_hasFirstDraw = false;
+			m_firstDraw = ibProtocolNode();
+			return true;
+		}
+		return wire(request, answer);
+	};
+	ibViewTableModel* const model = new ibViewTableModel(std::move(fetcher), [this, alive](const ibViewTableModel::ibAnswer& answer) {
 		wxTheApp->CallAfter([this, alive, answer]() {
 			if (alive.lock())
 				OnAnswered(answer);
@@ -297,7 +311,15 @@ void ibValueModelTableBox::UpdateState(const ibProtocolNode& state, const ibProt
 		m_dataView->SetViewMode(static_cast<ibDataViewViewMode>(state.GetInt(ibProtocolName::ViewMode,
 			static_cast<int>(ibProtocolViewMode::Hierarchical))));
 
-	// The rows read anew when the server has — the first time, the data view reads them by itself.
+	// The first page may already ride in this State's frame (Rows). Else the data view fetches, as before.
+	if (whole || changed->Has(ibProtocolName::Rows)) {
+		if (state.Has(ibProtocolName::Rows)) {
+			m_firstDraw = state.FindChild(ibProtocolName::Rows).Clone();
+			m_hasFirstDraw = true;
+		}
+	}
+
+	// The rows read anew when the server has — the first time, the data view reads them by itself (or from Rows above).
 	if (whole || changed->Has(ibProtocolName::Version)) {
 		const long long version = state.GetInt(ibProtocolName::Version);
 		if (m_version != -1 && version != m_version)

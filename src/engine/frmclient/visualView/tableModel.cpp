@@ -168,6 +168,27 @@ unsigned int ibViewTableModel::GetPrevFetch(const ibDataViewItem& parent, const 
 	return Fetch(-1, parent, anchor, count, out);
 }
 
+unsigned int ibViewTableModel::GetAroundFetch(const ibDataViewItem& parent, const ibDataViewItem& anchor, int count,
+	int before, ibDataViewItemArray& out, unsigned int& above) const
+{
+	int said = 0;
+	const unsigned int read = Fetch(0, parent, anchor, count, out, before, &said);
+	if (said >= 0) {
+		above = static_cast<unsigned int>(said);
+		return read - above;
+	}
+	// A server below 4 sent the page alone: the rows ahead of it are a second fetch, as before.
+	above = 0;
+	if (before <= 0 || read == 0)
+		return read;
+	ibDataViewItemArray ahead;
+	above = Fetch(-1, parent, out[0], before, ahead);
+	for (unsigned int idx = 0; idx < out.GetCount(); idx++)
+		ahead.Add(out[idx]);
+	out = ahead;
+	return read;
+}
+
 ibPictureID ibViewTableModel::GetRowPicture(const ibDataViewItem& item) const
 {
 	const ibViewTableRow* const row = RowOf(item);
@@ -175,7 +196,7 @@ ibPictureID ibViewTableModel::GetRowPicture(const ibDataViewItem& item) const
 }
 
 unsigned int ibViewTableModel::Fetch(int direction, const ibDataViewItem& parent, const ibDataViewItem& anchor,
-	int count, ibDataViewItemArray& out) const
+	int count, ibDataViewItemArray& out, int before, int* above) const
 {
 	// The level read: a row opened or entered — none at the top, the flat list's marker included (the server knows
 	// its own view mode).
@@ -187,8 +208,12 @@ unsigned int ibViewTableModel::Fetch(int direction, const ibDataViewItem& parent
 		.SetValue(ibProtocolName::Anchor, HandleOf(anchor))
 		.SetValue(ibProtocolName::Parent, HandleOf(level))
 		.SetValue(ibProtocolName::Count, asked);
+	if (before > 0)
+		request.SetValue(ibProtocolName::Before, std::min(before, kMaxFetchCount));
 	if (!m_fetcher(request, answer))
 		return 0;
+	if (above != nullptr)
+		*above = static_cast<int>(answer.GetInt(ibProtocolName::Before, -1));
 
 	unsigned int read = 0;
 	for (const ibProtocolNode& node : answer.Children()) {
