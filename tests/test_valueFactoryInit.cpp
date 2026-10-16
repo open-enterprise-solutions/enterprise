@@ -9,7 +9,9 @@
 #include <string>
 
 #include "backend/backend_exception.h"
+#include "backend/compiler/compileCode.h"
 #include "backend/compiler/value.h"
+#include "backend/system/systemManager.h"
 
 namespace {
 
@@ -53,4 +55,36 @@ TEST(ValueFactory, AnInitThatAnswersFalseIsStillCleanedUpAfter) {
 	ibValue* params[] = { &quiet };
 	EXPECT_THROW(ibValue::CreateObject(wxT("TestRefusingInit"), params, 1), ibBackendException);
 	EXPECT_EQ(g_alive, 0);
+}
+
+TEST(CompositionField, APathIsKeptUnderBothNames) {
+	ibValue path(wxT("Amount"));
+	ibValue* args[] = { &path };
+	ibValue field = ibValue::CreateObject(wxT("CompositionField"), args, 1);
+	ibValue alias = ibValue::CreateObject(wxT("DataCompositionField"), args, 1);
+	ibValue got;
+	ASSERT_TRUE(field.GetPropVal(field.FindProp(wxT("Path")), got));
+	EXPECT_EQ(got.GetString(), wxT("Amount"));
+	ASSERT_NE(alias.FindProp(wxT("Path")), wxNOT_FOUND);
+	ASSERT_TRUE(alias.GetPropVal(alias.FindProp(wxT("Path")), got));
+	EXPECT_EQ(got.GetString(), wxT("Amount"));
+	EXPECT_NE(field.GetClassType(), alias.GetClassType());
+}
+
+TEST(CompositionField, TheNamesCompile) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ibValueSystemFunction valueSystem;
+	cc.AddContextVariable(wxT("System"), &valueSystem, true);
+	const wxString src =
+		wxT("Procedure Check()\n")
+		wxT("    var field;\n")
+		wxT("    var alias;\n")
+		wxT("    field = New CompositionField(\"Amount\");\n")
+		wxT("    alias = New DataCompositionField(\"Amount\", \"Sum\");\n")
+		wxT("EndProcedure\n");
+	try {
+		ASSERT_TRUE(cc.Compile(src));
+	} catch (const ibBackendException& err) {
+		FAIL() << err.GetErrorDescription().ToStdString();
+	}
 }

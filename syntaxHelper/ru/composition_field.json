@@ -1,0 +1,39 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "ru",
+  "entries": [
+    {
+      "id": "cls.DataCompositionField",
+      "name_local": "DataCompositionField",
+      "name_en": "DataCompositionField",
+      "kind": "class",
+      "category_keys": ["value_types"],
+      "signature": "New DataCompositionField(path, presentation)",
+      "description": "Поле источника компоновки данных. То же значение, что и CompositionField: путь и представление, если оно задано. Отбор, сортировка и условное оформление ссылаются на такое поле. Представление можно не указывать.",
+      "syntax_block": "New DataCompositionField(path, presentation)",
+      "parameters": "path — поле, например \"Amount\" или \"Supplier.Region\". presentation — текст вместо пути. Можно не указывать.",
+      "return_descr": "DataCompositionField.",
+      "example": "field = New DataCompositionField(\"Amount\");\nalias = New CompositionField(\"Amount\", \"Sum\");",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": ["cls.CompositionField"],
+      "reviewed": true
+    },
+    {
+      "id": "cls.CompositionField",
+      "name_local": "CompositionField",
+      "name_en": "CompositionField",
+      "kind": "class",
+      "category_keys": ["value_types"],
+      "signature": "New CompositionField(path, presentation)",
+      "description": "Поле источника компоновки данных. New CompositionField(path, presentation) хранит путь и необязательное представление. DataCompositionField — то же значение под именем, которое уже использует перенесённый код.",
+      "syntax_block": "New CompositionField(path, presentation)",
+      "parameters": "path — поле. presentation — необязательный текст вместо пути.",
+      "return_descr": "CompositionField.",
+      "example": "field = New CompositionField(\"Supplier.Region\");",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": ["cls.DataCompositionField"],
+      "reviewed": true
+    }
+  ]
+}

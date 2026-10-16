@@ -1,0 +1,39 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "en",
+  "entries": [
+    {
+      "id": "cls.DataCompositionField",
+      "name_local": "DataCompositionField",
+      "name_en": "DataCompositionField",
+      "kind": "class",
+      "category_keys": ["value_types"],
+      "signature": "New DataCompositionField(path, presentation)",
+      "description": "A field of a data composition source. It is the same kind of value as CompositionField: a path, and a presentation when one was given. A filter, a sort and a conditional appearance point at one of these. The presentation may be omitted.",
+      "syntax_block": "New DataCompositionField(path, presentation)",
+      "parameters": "path — the field, such as \"Amount\" or \"Supplier.Region\". presentation — the words shown instead of the path. May be omitted.",
+      "return_descr": "DataCompositionField.",
+      "example": "field = New DataCompositionField(\"Amount\");\nalias = New CompositionField(\"Amount\", \"Sum\");",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": ["cls.CompositionField"],
+      "reviewed": true
+    },
+    {
+      "id": "cls.CompositionField",
+      "name_local": "CompositionField",
+      "name_en": "CompositionField",
+      "kind": "class",
+      "category_keys": ["value_types"],
+      "signature": "New CompositionField(path, presentation)",
+      "description": "A field of a data composition source. New CompositionField(path, presentation) keeps the path and an optional presentation. DataCompositionField is the same value under the name ported code already uses.",
+      "syntax_block": "New CompositionField(path, presentation)",
+      "parameters": "path — the field. presentation — optional words shown instead of the path.",
+      "return_descr": "CompositionField.",
+      "example": "field = New CompositionField(\"Supplier.Region\");",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": ["cls.DataCompositionField"],
+      "reviewed": true
+    }
+  ]
+}
