@@ -297,8 +297,8 @@ Bug reports and feature requests are welcome as GitHub Issues.
 ## License
 
 OES is **source-available, not open source**, under the
-[PolyForm Noncommercial License 1.0.0](LICENSE.md). Copyright is held by Open Enterprise
-Solutions.
+[PolyForm Noncommercial License 1.0.0](LICENSE.md). Copyright is held by Maksym Korniienko,
+acting as Open Enterprise Solutions until it is registered as a company ([NOTICE.md](NOTICE.md)).
 
 **Free, and meant to be used:** clone it, build it, break it, change it, run it on your own
 machine, write configurations for it, teach a course from it, write a thesis about it, publish

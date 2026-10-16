@@ -18,12 +18,13 @@ grant from you, an accepted contribution would sit inside code we sell commercia
 for while we hold no right to license it that way. That is not a theoretical tidiness
 problem: it would make the commercial license untrue for every customer.
 
-So, by opening a pull request, you grant Open Enterprise Solutions (who holds its rights until
-it is registered as a company: [NOTICE.md](NOTICE.md)) a perpetual,
-worldwide, irrevocable, royalty-free license to use, reproduce, modify and distribute your
-contribution, **and to sublicense it**, including under commercial terms and under future
-versions of the project's license. You keep your copyright; you are giving permission, not
-giving it away, and you remain free to use your own contribution however you like elsewhere.
+So, by opening a pull request, you grant Maksym Korniienko, acting as Open Enterprise Solutions,
+and his successors and assigns — the company, once it is registered ([NOTICE.md](NOTICE.md)) —
+a perpetual, worldwide, irrevocable, royalty-free license to use, reproduce, modify and
+distribute your contribution, **and to sublicense it**, including under commercial terms and
+under future versions of the project's license. You keep your copyright; you are giving
+permission, not giving it away, and you remain free to use your own contribution however you
+like elsewhere.
 
 You also confirm that the contribution is yours to give: that you wrote it, or have the right
 to submit it, and that it does not carry obligations from somebody else's license.
@@ -40,11 +41,11 @@ already says; there is nothing extra in it.
 It is worth being blunt about this, because the usual assumption on GitHub is the opposite
 one and nobody should discover it afterwards.
 
-This is not a commons. The platform stays owned by Open Enterprise Solutions and is sold
-commercially. A change you contribute goes into something that earns money for someone else,
-and you are not paid for it. If that is not what you want, do not send it — fork the project
-for your own noncommercial work instead, which the license expressly allows and which owes us
-nothing.
+This is not a commons. The platform stays owned by Maksym Korniienko as Open Enterprise
+Solutions and is sold commercially. A change you contribute goes into something that earns
+money for someone else, and you are not paid for it. If that is not what you want, do not send
+it — fork the project for your own noncommercial work instead, which the license expressly
+allows and which owes us nothing.
 
 What we offer in return is not money, and we would rather say so than imply otherwise.
 

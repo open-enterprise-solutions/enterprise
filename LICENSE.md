@@ -2,8 +2,10 @@
 
 **OES Enterprise is source-available, not open source.**
 
-Copyright (C) 2022-2026 Open Enterprise Solutions.
-Licensor: Open Enterprise Solutions — <https://github.com/open-enterprise-solutions>
+Required Notice: Copyright (C) 2022-2026 Maksym Korniienko.
+
+Licensor: Maksym Korniienko, acting as Open Enterprise Solutions —
+<https://github.com/open-enterprise-solutions>. See [NOTICE.md](NOTICE.md).
 
 The source is published so that it can be read, studied, built and experimented with.
 Ownership stays with the licensor.

@@ -55,13 +55,13 @@ BEGIN
     BEGIN
         BLOCK "200004b0"
         BEGIN
-            VALUE "CompanyName", "OES community"
+            VALUE "CompanyName", "Open Enterprise Solutions"
             VALUE "FileDescription", "code runner"
             VALUE "FileVersion", "1.0.0.0"
             VALUE "InternalName", "backend.dll"
-            VALUE "LegalCopyright", "Copyright (C) 2026"
+            VALUE "LegalCopyright", "Copyright (C) 2022-2026 Maksym Korniienko"
             VALUE "OriginalFilename", "backend.dll"
-            VALUE "ProductName", "Open enterprise solutIons"
+            VALUE "ProductName", "OES Enterprise"
             VALUE "ProductVersion", "1.0.0.0"
         END
     END
