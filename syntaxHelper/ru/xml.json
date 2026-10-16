@@ -1,0 +1,23 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "ru",
+  "entries": [
+    {
+      "id": "cls.XMLWriter",
+      "name_local": "XMLWriter",
+      "name_en": "XMLWriter",
+      "kind": "class",
+      "category_keys": ["value_types"],
+      "signature": "New XMLWriter()",
+      "description": "Пишет XML в строку. SetString() начинает строку, вызовы Write дописывают её, Close() возвращает её. FastInfoset нет: в движке нет библиотеки Fast Infoset. XMLReader — следующий шаг.",
+      "syntax_block": "New XMLWriter()",
+      "parameters": "Нет.",
+      "return_descr": "XMLWriter.",
+      "example": "writer = New XMLWriter();\nwriter.SetString();\nwriter.WriteStartElement(\"root\");\ntext = writer.Close();",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": true
+    }
+  ]
+}
