@@ -2494,6 +2494,11 @@ protected:
 	virtual bool ReadData();
 	virtual bool ReadData(const ibGuid& srcGuid);
 	virtual bool SaveData();
+
+	// FILL CHECKING IS ASKED FOR, as in 1C: an interactive write from the object's open form and a
+	// document write that posts run it; a Write() from code does not (#424). Set by WriteObject
+	// right before SaveData, read by SaveData.
+	bool m_fillCheckOnSave = false;
 	virtual bool DeleteData();
 
 	// WHICH SHAPE THIS RECORD IS. A plain reference object has only one, so it answers ITEM and

@@ -2972,6 +2972,7 @@ bool ibValueRecordDataObjectHierarchyRef::WriteObject()
 			GenerateUniqueIdentifier(prefix.GetString());
 	}
 
+	m_fillCheckOnSave = valueForm != nullptr;
 	if (!SaveData())
 		return refuse(_("%s: failed to save the object data"));
 
@@ -3347,6 +3348,7 @@ bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMo
 			SetValueByMetaID(*date, ibValueSystemFunction::CurrentDate());
 	}
 
+	m_fillCheckOnSave = valueForm != nullptr || writeMode == ibDocumentWriteMode::ibDocumentWriteMode_Posting;
 	if (!SaveData())
 		return refuse(_("%s: failed to save the object data"));
 
