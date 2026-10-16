@@ -223,6 +223,10 @@ notification — no id, no answer:
 A connection that stays open (a WebSocket, a file base in the client's process) is told; an HTTP request is not — it
 asks.
 
+What a call's own work changes is not told: its answer carries it. A question the work asks while the call is
+answered — a confirmation answered No — comes in that answer, with no `changed` and no empty frame after it; a change
+made after the answer's frame was drawn (a report composed in the background) is told as before.
+
 ## Files
 
 A file the client hands over is kept in the session's temporary storage, in parts of at most 1 MB, and named by an
