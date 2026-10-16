@@ -6,6 +6,7 @@
 #include <wx/string.h>
 
 #include "frmclient/frmclient.h"
+#include "protocol/protocolNode.h"
 
 class ibSession;
 
@@ -27,6 +28,13 @@ struct FRMCLIENT_API ibMcpSettings {
 class FRMCLIENT_API ibMcpServer {
 public:
 
+	// What the schema showed, from an answer already at hand (the menu item's) — read from then on without an exchange
+	// of its own, until a command changes what the server holds.
+	void Take(const ibProtocolNode& shown) const { m_shown = shown; }
+	// The schema's answer: the one held, or asked for once and held. An empty node when refused (the person told why),
+	// and that is not held: the next read asks again.
+	const ibProtocolNode& Shown() const;
+
 	// The settings the next Start or SaveSettings takes — sent with them, as the page's value.
 	void          Configure(const ibMcpSettings& settings) { m_settings = settings; }
 	// The settings in force — the server's.
@@ -47,6 +55,9 @@ private:
 
 	// What Configure was given — none: the settings in force are sent.
 	std::optional<ibMcpSettings> m_settings;
+	// ONE EXCHANGE PER ACT, not one per getter: the settings, Running and the Endpoint are one schema's answer. Opening
+	// Options was four exchanges (the menu's, Allowed, the settings, the endpoint) — the first answered them all.
+	mutable std::optional<ibProtocolNode> m_shown;
 };
 
 #endif

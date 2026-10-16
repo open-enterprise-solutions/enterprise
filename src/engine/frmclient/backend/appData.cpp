@@ -61,7 +61,7 @@ long ibApplicationData::RunApplication(const wxString& strAppName, bool searchDe
 	return wxExecute(executeCmd);
 }
 
-ibMcpServer* ibApplicationInstance::GetMcpServer()
+ibMcpServer* ibApplicationInstance::GetMcpServer(const ibProtocolNode* shown)
 {
 	// The schema says whether the person may switch it here (Allowed): not on the application server, nor where the
 	// mode has no such schema (the runtime) — refused, and said to nobody.
@@ -70,10 +70,8 @@ ibMcpServer* ibApplicationInstance::GetMcpServer()
 	if (frame == nullptr)
 		return nullptr;
 
-	ibProtocolNode params, shown;
-	params.SetValue(ibProtocolName::Schema, static_cast<long long>(ibProtocolSchema::McpServer));
-	ibProtocolRefusal refusal = ibProtocolRefusal::None;
-	wxString error;
-	return frame->Call(ibProtocolMethod::Schema, params, shown, refusal, error) && shown.GetBool(ibProtocolName::Allowed)
-		? &server : nullptr;
+	// The schema's answer the server holds — the one at hand, else asked for once (ibMcpServer::Shown).
+	if (shown != nullptr)
+		server.Take(*shown);
+	return server.Shown().GetBool(ibProtocolName::Allowed) ? &server : nullptr;
 }
