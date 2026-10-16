@@ -345,7 +345,11 @@ private:
 	// The base this server belongs to — its owner, asked instead of "the current one".
 	ibApplicationInstance* const     m_applicationInstance;
 
+	// ⚠ ADDED AND REMOVED ON ONE THREAD, CALLED ON ANOTHER — a window's (the thin designer's: whichever thread serves
+	// its client) against the server's and Say's. Held for the whole of Publish, so once RemoveNotifier returns no call
+	// to that notifier is in flight and it may go.
 	std::vector<ibMcpNotifier*>  m_notifiers;
+	std::mutex                   m_notifiersMutex;
 
 	// WHAT WAS TYPED AND NOT YET COLLECTED. Written on the UI thread (the Send
 	// button), drained on the server's (a tool call), so it is guarded — the one

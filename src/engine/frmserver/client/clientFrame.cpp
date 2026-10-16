@@ -552,6 +552,18 @@ bool ibClientFrame::CloseTab(std::size_t i)
 	return tab == nullptr || tab->Close();
 }
 
+bool ibClientFrame::CloseAll()
+{
+	// Each tab closed the one road every close goes — its form asks about what is unsaved, and the person may keep it:
+	// then the rest stay too. The indices hold: a tab closed is only marked, and erased after the request
+	// (DrainPendingCloses).
+	for (std::size_t i = 0; i < m_tabs.size(); ++i) {
+		if (!m_tabs[i]->IsLocked() && !CloseTab(i))
+			return false;
+	}
+	return true;
+}
+
 bool ibClientFrame::IsSchemaAllowed(ibProtocolSchema kind) const
 {
 	const ibClientSchema* const schema = GetDocumentManager() != nullptr ? GetDocumentManager()->FindSchema(kind) : nullptr;
@@ -560,10 +572,17 @@ bool ibClientFrame::IsSchemaAllowed(ibProtocolSchema kind) const
 
 bool ibClientFrame::IsCommandEnabled(ibDocCommand command) const
 {
-	// The window's own, with or without a document: the client gone; a file opened — when something here opens one (a
-	// template a person picks, the frame's Templates).
+	// The window's own, with or without a document: the client gone; its tabs closed — while one may be; a file opened —
+	// when something here opens one (a template a person picks, the frame's Templates).
 	if (command == ibDocCommand::Exit)
 		return true;
+	if (command == ibDocCommand::CloseAll) {
+		for (const auto& tab : m_tabs) {
+			if (!tab->IsLocked())
+				return true;
+		}
+		return false;
+	}
 	if (command == ibDocCommand::Open) {
 		for (const ibDocTemplate* const temp : m_docManager->GetTemplatesVector()) {
 			if (temp->IsVisible())
@@ -631,6 +650,8 @@ bool ibClientFrame::DoCommand(ibDocCommand command, const wxString& name)
 		return OpenChosenFile();
 	case ibDocCommand::Exit:
 		return ExitClient(false);
+	case ibDocCommand::CloseAll:
+		return CloseAll();
 	case ibDocCommand::Cut:
 	case ibDocCommand::Copy:
 	case ibDocCommand::Paste:
@@ -672,15 +693,11 @@ bool ibClientFrame::DoCommand(ibDocCommand command, const wxString& name)
 
 bool ibClientFrame::ExitClient(bool force)
 {
-	// Each tab closed the one road every close goes — its form asks about what is unsaved, and the person may keep it:
-	// then the client stays, as the desktop window stayed when a document was kept. The start page goes with the client.
-	// A forced exit asks nothing: the session's work is already stopped (ibSession::Close).
-	if (!force) {
-		for (std::size_t i = 0; i < m_tabs.size(); ++i) {
-			if (!m_tabs[i]->IsLocked() && !CloseTab(i))
-				return false;
-		}
-	}
+	// Each tab closed (CloseAll) — one the person keeps keeps the client, as the desktop window stayed when a document was
+	// kept. The start page goes with the client. A forced exit asks nothing: the session's work is already stopped
+	// (ibSession::Close).
+	if (!force && !CloseAll())
+		return false;
 
 	{
 		std::lock_guard<std::mutex> lock(m_msgMutex);

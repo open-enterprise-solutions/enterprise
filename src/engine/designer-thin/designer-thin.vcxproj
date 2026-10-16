@@ -194,6 +194,10 @@
     <ClCompile Include="backend\debugger\debugClientQuery.cpp" />
     <ClCompile Include="mainFrame\debugger\debugClientImpl.cpp" />
     <ClCompile Include="win\editor\codeEditor\codeEditorDesigner.cpp" />
+    <ClCompile Include="win\editor\commonAttributeEditor\commonAttributeEditor.cpp" />
+    <ClCompile Include="win\editor\functionalOptionEditor\functionalOptionEditor.cpp" />
+    <ClCompile Include="win\editor\interfaceEditor\interfaceEditor.cpp" />
+    <ClCompile Include="win\editor\roleEditor\roleEditor.cpp" />
     <ClCompile Include="win\editor\visualEditor\innerFrame.cpp" />
     <ClCompile Include="win\editor\visualEditor\titleFrame.cpp" />
     <ClCompile Include="win\editor\visualEditor\visualEditor.cpp" />
@@ -209,6 +213,11 @@
     <ClCompile Include="docManager\templates\docViewDataReportFile.cpp" />
     <ClCompile Include="docManager\templates\docViewModuleEditor.cpp" />
     <ClCompile Include="docManager\templates\docViewFormEditor.cpp" />
+    <ClCompile Include="docManager\templates\docViewAssistant.cpp" />
+    <ClCompile Include="docManager\templates\docViewCommonAttribute.cpp" />
+    <ClCompile Include="docManager\templates\docViewFunctionalOption.cpp" />
+    <ClCompile Include="docManager\templates\docViewInterface.cpp" />
+    <ClCompile Include="docManager\templates\docViewRole.cpp" />
     <ClCompile Include="mainFrame\local\localWindow.cpp" />
     <ClCompile Include="mainFrame\mainFrameDesigner.cpp" />
     <ClCompile Include="mainFrame\mainFrameDesignerEvent.cpp" />
@@ -246,6 +255,10 @@
     <ClInclude Include="backend\debugger\debugDefs.h" />
     <ClInclude Include="mainFrame\debugger\debugClientImpl.h" />
     <ClInclude Include="win\editor\codeEditor\codeEditorDesigner.h" />
+    <ClInclude Include="win\editor\commonAttributeEditor\commonAttributeEditor.h" />
+    <ClInclude Include="win\editor\functionalOptionEditor\functionalOptionEditor.h" />
+    <ClInclude Include="win\editor\interfaceEditor\interfaceEditor.h" />
+    <ClInclude Include="win\editor\roleEditor\roleEditor.h" />
     <ClInclude Include="win\editor\visualEditor\designerTreeCtrl.h" />
     <ClInclude Include="win\editor\visualEditor\innerFrame.h" />
     <ClInclude Include="win\editor\visualEditor\res\visualResource.h" />
@@ -257,6 +270,11 @@
     <ClInclude Include="docManager\templates\docViewDataReportFile.h" />
     <ClInclude Include="docManager\templates\docViewModuleEditor.h" />
     <ClInclude Include="docManager\templates\docViewFormEditor.h" />
+    <ClInclude Include="docManager\templates\docViewAssistant.h" />
+    <ClInclude Include="docManager\templates\docViewCommonAttribute.h" />
+    <ClInclude Include="docManager\templates\docViewFunctionalOption.h" />
+    <ClInclude Include="docManager\templates\docViewInterface.h" />
+    <ClInclude Include="docManager\templates\docViewRole.h" />
     <ClInclude Include="mainFrame\local\localWindow.h" />
     <ClInclude Include="mainFrame\mainFrameDesigner.h" />
     <ClInclude Include="mainFrame\metaTree\clipboardLock.h" />

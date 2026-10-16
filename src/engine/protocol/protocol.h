@@ -49,7 +49,9 @@ namespace ibProtocolName {
 	inline constexpr const char* Client   = "Client";
 	inline constexpr const char* Since    = "Since";
 	inline constexpr const char* Pending  = "Pending";   // (protocol 3) the state events held since the last call, in
-	                                                     // the order done — each as an event's params; applied first
+	                                                     // the order done — each as an event's params; applied first.
+	                                                     // An assistant tab's State: the messages left for an assistant
+	                                                     // that none has collected yet
 
 	// The frame — and the answer's own beside it.
 	inline constexpr const char* Frame     = "Frame";
@@ -101,7 +103,7 @@ namespace ibProtocolName {
 	                                                          // command, done as `schema {Schema, Command}` does it
 	inline constexpr const char* Schema       = "Schema";
 	inline constexpr const char* Shortcut     = "Shortcut";   // a command's default key — the user's own go over it, client-side
-	inline constexpr const char* StockPicture = "StockPicture";
+	inline constexpr const char* StockPicture = "StockPicture";   // …or the item's Picture, by its id
 	inline constexpr const char* Enabled      = "Enabled";
 	inline constexpr const char* Icon      = "Icon";
 	inline constexpr const char* Locked    = "Locked";
@@ -251,6 +253,8 @@ namespace ibProtocolName {
 	inline constexpr const char* Address  = "Address";
 	inline constexpr const char* Running  = "Running";
 	inline constexpr const char* Endpoint = "Endpoint";   // empty while it is not running
+	inline constexpr const char* Waiting  = "Waiting";    // an assistant tab's State: what the person sent has no answer
+	                                                      // yet (ViewKind Assistant)
 
 	// A view — a tab's form, its controls as the server writes them (visualView/): what each was saved with, beside its
 	// State, what the server reads it as now; and what the person did with one, back by its id.
@@ -578,14 +582,16 @@ enum class ibProtocolSchema : int {
 	                    // commands 11 Load — restored from a file the person is asked for (Request File), every session
 	                    // of the base closed after; 4 Save — dumped, and taken down where the person chooses; 12 Clear —
 	                    // asked first. Each said to the person by the server
+	Assistant    = 17,  // the designer's assistant window (Administration) — shows nothing; command 1 Open opens its tab
+	                    // (ViewKind Assistant). Allowed while the base's assistant access is running
 };
 
 // A schema's own commands — `schema {Schema, Command, Args}`. All functions and Sections take the one: Open
 // {Item, Type} — an item they show, opened as the navigation opens it. Debugging takes Start and Stop; McpServer takes
 // them and Save; Active users, the designer's, Kick, Reload and Release; the users Save and Remove; the designer's
 // inspector (Properties) Save; its predefined values editor Create, Set and Remove; its texts (ObjectText) Save, and so the
-// home page (HomePage); the base (Database) Load, Save and Clear. The designer's tree has its own
-// (ibProtocolMetaDataCommand).
+// home page (HomePage); the base (Database) Load, Save and Clear; the assistant window (Assistant) Open. The designer's
+// tree has its own (ibProtocolMetaDataCommand).
 enum class ibProtocolSchemaCommand : int {
 	Open    = 1,
 	Start   = 2,
@@ -723,7 +729,7 @@ enum class ibProtocolSettingsAct : int {
 // The commands — `command {Command}`, each done by the server; those whose subject is the client's (the field under the
 // focus) the server asks back of it (an Edit request). Named here the ones this client names itself: a document's, which
 // its doc manager does through the server (Undo, Redo, Save — a tab's Commands say which its document takes now), Exit,
-// which closing its window is, and those an Edit request names.
+// which closing its window is, CloseAll, which its Window menu's Close All is, and those an Edit request names.
 enum class ibProtocolCommand : int {
 	Undo      = 1,
 	Redo      = 2,
@@ -736,6 +742,7 @@ enum class ibProtocolCommand : int {
 	Delete    = 10,
 	SelectAll = 11,
 	SaveAs    = 12,   // {Name}: saved as a file of that name — the tab's File, taken down to where the person keeps it
+	CloseAll  = 13,   // every tab but the locked ones closed in one call — one kept keeps the rest
 };
 
 // The picture a menu item or a tool is shown with — one of the client's stock pictures, by number (StockPicture).
@@ -779,6 +786,19 @@ enum class ibProtocolViewKind : int {
 	                   // made and pasted by the server (ibProtocolFormDesignerRequest Control), AttributeTree,
 	                   // CommandTree}; what else —
 	                   // ibProtocolFormDesignerRequest; the form handed back whole — event {Tab, Event: Change, Args: {Form}}
+	// THE DESIGNER'S CHECKABLE TREES over a metaobject — what it applies to, ticked: View.State {ReadOnly — the object
+	// takes no edit}, View.Rows — the configuration's row, and under it its groups and under them its objects, each NodeId
+	// — its object's id (a group: below 0, its place among its siblings), Title, Picture; an object's Checked, ReadOnly
+	// (its box greyed); a tick — event {Tab, Event: Toggle, Args: {NodeId, Checked}}
+	Interface        = 9,    // a section's — the objects in it
+	CommonAttribute  = 10,   // a common attribute's — the objects that carry it
+	FunctionalOption = 11,   // a functional option's — the objects and their fields and tables it hides while off
+	Role             = 12,   // a role's — every object that has rights, with its Roles (Name, Title, Checked — the right
+	                         // given by the role, ReadOnly); a tick names the right — Args: {NodeId, Name, Checked}
+	Assistant        = 13,   // the designer's assistant window — the exchange with the assistant access: View.State
+	                         // {Waiting — what the person sent has no answer yet, Pending — the messages no assistant has
+	                         // collected}, View.Rows — the transcript, an entry a row (Text); what the person writes —
+	                         // event {Tab, Event: Change, Args: {Text}}
 };
 
 // WHAT A FORM'S TAB IS ASKED besides its module's — `fetch {Tab, Request: {Kind, …}}`, numbered past the module's

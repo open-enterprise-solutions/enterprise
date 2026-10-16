@@ -1,5 +1,6 @@
 #include "docManagerDesigner.h"
 
+#include "frmserver/schema/designer/assistant.h"
 #include "frmserver/schema/designer/database.h"
 #include "frmserver/schema/designer/debugger.h"
 #include "frmserver/schema/designer/mcpServer.h"
@@ -15,10 +16,19 @@
 #include "frmserver/docView/templates/designer/docViewDataReportEdit.h"
 
 //objects
+#include "frmserver/docView/templates/designer/docViewCommonAttributeEdit.h"
 #include "frmserver/docView/templates/designer/docViewFormEdit.h"
+#include "frmserver/docView/templates/designer/docViewFunctionalOptionEdit.h"
+#include "frmserver/docView/templates/designer/docViewInterfaceEdit.h"
 #include "frmserver/docView/templates/designer/docViewModuleEdit.h"
+#include "frmserver/docView/templates/designer/docViewRoleEdit.h"
 #include "frmserver/docView/templates/designer/docViewSpreadsheetEdit.h"
+
+//tools
+#include "frmserver/docView/templates/designer/docViewAssistant.h"
+
 #include "core/fileKind.h"   // extensions live in one table, not at each call site
+#include "core/picturePredefined.h"   // the assistant's picture — its tool template's key
 
 wxIMPLEMENT_DYNAMIC_CLASS(ibDocManagerDesigner, ibDocManager);
 
@@ -40,6 +50,20 @@ ibDocManagerDesigner::ibDocManagerDesigner()
 	// …and a template's sheet — a common template and an object's.
 	AddDocTemplate(g_metaCommonTemplateCLSID, CLASSINFO(ibSpreadsheetTemplateDocument), CLASSINFO(ibSpreadsheetTemplateView));
 	AddDocTemplate(g_metaTemplateCLSID, CLASSINFO(ibSpreadsheetTemplateDocument), CLASSINFO(ibSpreadsheetTemplateView));
+	// …and the checkable trees over a metaobject — a section's objects; a common attribute opens on its composition and
+	// a functional option on its members, the same gesture; a role on its rights.
+	AddDocTemplate(g_metaSectionCLSID, CLASSINFO(ibInterfaceCompositionDocument), CLASSINFO(ibInterfaceCompositionView));
+	AddDocTemplate(g_metaCommonAttributeCLSID, CLASSINFO(ibCommonAttributeCompositionDocument), CLASSINFO(ibCommonAttributeCompositionView));
+	AddDocTemplate(g_metaFunctionalOptionCLSID, CLASSINFO(ibFunctionalOptionMembersDocument), CLASSINFO(ibFunctionalOptionMembersView));
+	AddDocTemplate(g_metaRoleCLSID, CLASSINFO(ibRoleRightsDocument), CLASSINFO(ibRoleRightsView));
+
+	// The assistant window — no metaobject, the registration journal's shape: an invisible template reached through
+	// CreateDocument<ibAssistantTranscriptDocument>() from its schema's Open.
+	AddDocTemplate(g_picAssistantCLSID,
+		_("Assistant"), wxEmptyString, wxEmptyString,
+		_("Assistant Doc"), _("Assistant View"),
+		CLASSINFO(ibAssistantTranscriptDocument), CLASSINFO(ibAssistantTranscriptView),
+		ibTEMPLATE_INVISIBLE);
 
 	// The configuration tree — its doors; the rows are the frame's (ibClientFrameDesigner).
 	RegisterSchema(ibProtocolSchema::MetaData, std::make_unique<ibSchemaMetaData>());
@@ -59,4 +83,6 @@ ibDocManagerDesigner::ibDocManagerDesigner()
 	RegisterSchema(ibProtocolSchema::Database, std::make_unique<ibSchemaDatabase>());
 	// The designer's options — the person's assistant access (its MCP page).
 	RegisterSchema(ibProtocolSchema::McpServer, std::make_unique<ibSchemaMcpServer>());
+	// …and the window onto it — Administration → Assistant window.
+	RegisterSchema(ibProtocolSchema::Assistant, std::make_unique<ibSchemaAssistant>());
 }

@@ -674,13 +674,14 @@ public:
 
 	void Watch(ibMetaData* metaData)
 	{
-		if (m_watched == metaData)
+		if (m_watched.get() == metaData)
 			return;
 
 		if (m_watched != nullptr)
 			m_watched->RemoveNotifier(this);
 
-		m_watched = metaData;
+		// Off its list first, then let go — the last holder closes it (ibMetaData::MakeShared).
+		m_watched = metaData != nullptr ? metaData->shared_from_this() : nullptr;
 
 		if (m_watched != nullptr)
 			m_watched->AddNotifier(this);
@@ -800,7 +801,9 @@ private:
 	}
 
 	ibMcpServer* const m_server;
-	ibMetaData*        m_watched = nullptr;
+	// The configuration whose list it is on — HELD, as whoever works in a metadata holds it (metaData.h), so it goes
+	// after the bridge lets go of it, never under it: the session that opened it may leave first.
+	std::shared_ptr<ibMetaData> m_watched;
 
 	// The stage not yet said, waiting to learn whether it stands alone — see MetaObjectChanged.
 	ibMetaID           m_heldId = 0;
@@ -1011,24 +1014,17 @@ bool ibMcpServer::Start(ibSession* session, wxString& refusal)
 
 void ibMcpServer::Stop()
 {
-	// 🛑 OFF THE METADATA FIRST, AND BEFORE THE `IsRunning` GATE. The bridge holds a bare pointer to
-	// the configuration it watches, and the process tears down in the other order:
-	// `~ibApplicationInstance` releases `m_activeMetaData` (it needs db_query on the way out, so it goes
-	// early) and reaches `m_mcpServer` several fields later — where the bridge's own destructor
-	// called `RemoveNotifier` on a vector that had been freed, and the designer died on every exit
-	// with a configuration open (crash dump 2026-09-08 09:43, `_Adopt_unlocked` inside
-	// `ibMetaData::RemoveNotifier`).
+	// 🛑 OFF THE METADATA FIRST, AND BEFORE THE `IsRunning` GATE. The bridge HOLDS the configuration it
+	// watches, so the configuration goes after the server, never before it. While it held a bare pointer
+	// it was outlived twice: by the base's own release order (crash dump 2026-09-08 09:43,
+	// `_Adopt_unlocked` inside `ibMetaData::RemoveNotifier`), and by the session that opened it — the
+	// thin designer's logout let go of its configuration before the base closed, and this line called
+	// `RemoveNotifier` on a freed list (2026-10-16).
 	//
-	// The subscription comes off HERE because this is the pre-dtor hook `~ibApplicationInstance` already
-	// calls first (step 0), while everything the server points at is still alive — the same
-	// arrangement the file's teardown contract uses for every other subsystem. Unconditional and
+	// Let go HERE because this is the pre-dtor hook `ibApplicationInstance::Close` calls first (step 0),
+	// while the pool and the registry a closing configuration still asks for are alive. Unconditional and
 	// idempotent: the server can be watching a configuration while switched off, so the gate below
 	// must not be able to skip it.
-	//
-	// ⚠ The third instance this week of an owner outlived by a bare back-pointer (the value table's
-	// row, its column collection, and now this). Where the owner cannot hold the watcher and the
-	// watcher cannot hold the owner, someone has to SAY GOODBYE — and it must be said at a moment
-	// that is reached on every road, not only the tidy one.
 	if (m_metaBridge != nullptr)
 		m_metaBridge->Watch(nullptr);
 
@@ -1084,6 +1080,7 @@ void ibMcpServer::AddNotifier(ibMcpNotifier* notifier)
 	if (notifier == nullptr)
 		return;
 
+	std::lock_guard<std::mutex> lock(m_notifiersMutex);
 	for (const ibMcpNotifier* registered : m_notifiers)
 		if (registered == notifier)
 			return;
@@ -1093,6 +1090,7 @@ void ibMcpServer::AddNotifier(ibMcpNotifier* notifier)
 
 void ibMcpServer::RemoveNotifier(ibMcpNotifier* notifier)
 {
+	std::lock_guard<std::mutex> lock(m_notifiersMutex);
 	m_notifiers.erase(
 		std::remove(m_notifiers.begin(), m_notifiers.end(), notifier),
 		m_notifiers.end());
@@ -1207,12 +1205,20 @@ std::vector<wxString> ibMcpServer::TakeNoted()
 
 std::vector<wxString> ibMcpServer::TakeSaid()
 {
-	std::lock_guard<std::mutex> lock(m_saidMutex);
-
-	// TAKEN, not read: two clients asking would otherwise both answer the same
-	// question, and the person would get two replies to one message.
 	std::vector<wxString> taken;
-	taken.swap(m_said);
+	{
+		std::lock_guard<std::mutex> lock(m_saidMutex);
+
+		// TAKEN, not read: two clients asking would otherwise both answer the same
+		// question, and the person would get two replies to one message.
+		taken.swap(m_said);
+	}
+
+	// ⭐ AND THE WINDOWS ARE TOLD IT WAS — "waiting for an assistant to collect it" ends the moment one has. A window
+	// that is drawn only when its client asks (the thin designer's) has no timer to ask PendingCount by, and hears it
+	// here. Nothing to show: not a line of the transcript.
+	if (!taken.empty())
+		Publish(wxT("taken"), wxEmptyString, wxEmptyString);
 	return taken;
 }
 
@@ -1468,6 +1474,7 @@ bool ibMcpServer::RunTool(const class ibMcpTool* tool, const ibDataNode& argumen
 
 void ibMcpServer::Publish(const wxString& method, const wxString& request, const wxString& answer)
 {
+	std::lock_guard<std::mutex> lock(m_notifiersMutex);
 	for (ibMcpNotifier* notifier : m_notifiers) {
 		try {
 			notifier->OnMcpExchange(method, request, answer);

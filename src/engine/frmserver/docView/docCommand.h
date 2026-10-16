@@ -29,6 +29,8 @@ enum class ibDocCommand : s32 {
 	SelectAll = 11,   // …wxID_SELECTALL
 	SaveAs    = 12,   // the document saved as a file of the name the client chose (Name) — in the session's temporary
 	                  // storage, its tab's File, taken down by the client to where the person keeps it
+	CloseAll  = 13,   // every tab but the locked ones closed — each may keep itself, and the rest stay with it: the
+	                  // desktop's Window → Close All (wxAuiMDIParentFrame::CloseAll); Exit's first half
 };
 
 // THE PICTURE A COMMAND IS SHOWN WITH — one of the client's own stock pictures (the desktop's wxArtProvider ids, which

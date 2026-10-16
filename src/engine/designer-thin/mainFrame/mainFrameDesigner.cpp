@@ -129,6 +129,11 @@ void ibFrontendMainFrameDesigner::Debugger_OnStateChanged()
 #include "designer-thin/docManager/templates/docViewDataReportFile.h"
 #include "designer-thin/docManager/templates/docViewModuleEditor.h"
 #include "designer-thin/docManager/templates/docViewFormEditor.h"
+#include "designer-thin/docManager/templates/docViewInterface.h"
+#include "designer-thin/docManager/templates/docViewCommonAttribute.h"
+#include "designer-thin/docManager/templates/docViewFunctionalOption.h"
+#include "designer-thin/docManager/templates/docViewRole.h"
+#include "designer-thin/docManager/templates/docViewAssistant.h"
 
 ibTabDocument* ibFrontendMainFrameDesigner::CreateDocument(ibProtocolViewKind kind, long long tabId)
 {
@@ -140,6 +145,16 @@ ibTabDocument* ibFrontendMainFrameDesigner::CreateDocument(ibProtocolViewKind ki
 		return new ibModuleEditDocument(tabId);
 	if (kind == ibProtocolViewKind::FormDesigner)
 		return new ibFormEditDocument(tabId);
+	if (kind == ibProtocolViewKind::Interface)
+		return new ibInterfaceEditDocument(tabId);
+	if (kind == ibProtocolViewKind::CommonAttribute)
+		return new ibCommonAttributeEditDocument(tabId);
+	if (kind == ibProtocolViewKind::FunctionalOption)
+		return new ibFunctionalOptionEditDocument(tabId);
+	if (kind == ibProtocolViewKind::Role)
+		return new ibRoleEditDocument(tabId);
+	if (kind == ibProtocolViewKind::Assistant)
+		return new ibAssistantDocument(tabId);
 	return ibFrontendMainFrame::CreateDocument(kind, tabId);
 }
 

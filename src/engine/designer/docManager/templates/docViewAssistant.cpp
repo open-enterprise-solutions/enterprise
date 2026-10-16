@@ -47,6 +47,10 @@ public:
 
 	void OnMcpExchange(const wxString& method, const wxString& request, const wxString& answer) override
 	{
+		// A message collected — not a line: the waiting strip asks PendingCount on its own tick (RefreshWaiting).
+		if (method == wxT("taken"))
+			return;
+
 		// ⚠ THIS RUNS ON THE SERVER'S THREAD. A widget belongs to the main one,
 		// so nothing here touches it: the line is built and handed over, and the
 		// append happens where it is legal.

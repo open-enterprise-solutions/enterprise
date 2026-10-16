@@ -55,6 +55,18 @@
     <Filter Include="win\editor\visualEditor\res">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f7a16}</UniqueIdentifier>
     </Filter>
+    <Filter Include="win\editor\commonAttributeEditor">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f7a17}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\editor\functionalOptionEditor">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f7a18}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\editor\interfaceEditor">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f7a19}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\editor\roleEditor">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f7a1a}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="mainApp.cpp" />
@@ -76,6 +88,18 @@
     </ClCompile>
     <ClCompile Include="win\editor\codeEditor\codeEditorDesigner.cpp">
       <Filter>win\editor\codeEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="win\editor\commonAttributeEditor\commonAttributeEditor.cpp">
+      <Filter>win\editor\commonAttributeEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="win\editor\functionalOptionEditor\functionalOptionEditor.cpp">
+      <Filter>win\editor\functionalOptionEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="win\editor\interfaceEditor\interfaceEditor.cpp">
+      <Filter>win\editor\interfaceEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="win\editor\roleEditor\roleEditor.cpp">
+      <Filter>win\editor\roleEditor</Filter>
     </ClCompile>
     <ClCompile Include="win\editor\visualEditor\innerFrame.cpp">
       <Filter>win\editor\visualEditor</Filter>
@@ -173,6 +197,21 @@
     <ClCompile Include="docManager\templates\docViewFormEditor.cpp">
       <Filter>docManager\templates</Filter>
     </ClCompile>
+    <ClCompile Include="docManager\templates\docViewAssistant.cpp">
+      <Filter>docManager\templates</Filter>
+    </ClCompile>
+    <ClCompile Include="docManager\templates\docViewCommonAttribute.cpp">
+      <Filter>docManager\templates</Filter>
+    </ClCompile>
+    <ClCompile Include="docManager\templates\docViewFunctionalOption.cpp">
+      <Filter>docManager\templates</Filter>
+    </ClCompile>
+    <ClCompile Include="docManager\templates\docViewInterface.cpp">
+      <Filter>docManager\templates</Filter>
+    </ClCompile>
+    <ClCompile Include="docManager\templates\docViewRole.cpp">
+      <Filter>docManager\templates</Filter>
+    </ClCompile>
     <ClCompile Include="syntaxHelper\helpChooserDialog.cpp">
       <Filter>syntaxHelper</Filter>
     </ClCompile>
@@ -223,6 +262,18 @@
     </ClInclude>
     <ClInclude Include="win\editor\codeEditor\codeEditorDesigner.h">
       <Filter>win\editor\codeEditor</Filter>
+    </ClInclude>
+    <ClInclude Include="win\editor\commonAttributeEditor\commonAttributeEditor.h">
+      <Filter>win\editor\commonAttributeEditor</Filter>
+    </ClInclude>
+    <ClInclude Include="win\editor\functionalOptionEditor\functionalOptionEditor.h">
+      <Filter>win\editor\functionalOptionEditor</Filter>
+    </ClInclude>
+    <ClInclude Include="win\editor\interfaceEditor\interfaceEditor.h">
+      <Filter>win\editor\interfaceEditor</Filter>
+    </ClInclude>
+    <ClInclude Include="win\editor\roleEditor\roleEditor.h">
+      <Filter>win\editor\roleEditor</Filter>
     </ClInclude>
     <ClInclude Include="win\editor\visualEditor\designerTreeCtrl.h">
       <Filter>win\editor\visualEditor</Filter>
@@ -285,6 +336,21 @@
       <Filter>docManager\templates</Filter>
     </ClInclude>
     <ClInclude Include="docManager\templates\docViewFormEditor.h">
+      <Filter>docManager\templates</Filter>
+    </ClInclude>
+    <ClInclude Include="docManager\templates\docViewAssistant.h">
+      <Filter>docManager\templates</Filter>
+    </ClInclude>
+    <ClInclude Include="docManager\templates\docViewCommonAttribute.h">
+      <Filter>docManager\templates</Filter>
+    </ClInclude>
+    <ClInclude Include="docManager\templates\docViewFunctionalOption.h">
+      <Filter>docManager\templates</Filter>
+    </ClInclude>
+    <ClInclude Include="docManager\templates\docViewInterface.h">
+      <Filter>docManager\templates</Filter>
+    </ClInclude>
+    <ClInclude Include="docManager\templates\docViewRole.h">
       <Filter>docManager\templates</Filter>
     </ClInclude>
     <ClInclude Include="syntaxHelper\helpChooserDialog.h">

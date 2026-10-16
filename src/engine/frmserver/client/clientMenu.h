@@ -13,6 +13,7 @@
 
 #include <wx/string.h>
 
+#include "core/core.h"   // ibPictureID
 #include "frmserver/docView/docCommand.h"
 #include "frmserver/schema/clientSchema.h"
 #include "frmserver/frmserver.h"
@@ -34,6 +35,8 @@ public:
 		ibProtocolSchema   schema{};    // a schema's
 		ibProtocolSchemaCommand schemaCommand{};   // …and the schema's command it does (none: the schema shown)
 		wxString             title;       // a schema's and a menu's — a command's is its own
+		ibPictureID          picture = 0; // …the same, wx's SetBitmap on the item: an engine's, by its id — the client
+		                                  // keeps it (core/picturePredefined); 0: drawn without one
 		std::vector<Item>    items;       // a menu's
 	};
 

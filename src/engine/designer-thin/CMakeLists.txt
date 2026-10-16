@@ -11,6 +11,10 @@ set(DESIGNER_THIN_SOURCES
     backend/debugger/debugClientQuery.cpp
     mainFrame/debugger/debugClientImpl.cpp
     win/editor/codeEditor/codeEditorDesigner.cpp
+    win/editor/commonAttributeEditor/commonAttributeEditor.cpp
+    win/editor/functionalOptionEditor/functionalOptionEditor.cpp
+    win/editor/interfaceEditor/interfaceEditor.cpp
+    win/editor/roleEditor/roleEditor.cpp
     win/editor/visualEditor/innerFrame.cpp
     win/editor/visualEditor/titleFrame.cpp
     win/editor/visualEditor/visualEditor.cpp
@@ -25,6 +29,11 @@ set(DESIGNER_THIN_SOURCES
     docManager/templates/docViewDataReportFile.cpp
     docManager/templates/docViewModuleEditor.cpp
     docManager/templates/docViewFormEditor.cpp
+    docManager/templates/docViewAssistant.cpp
+    docManager/templates/docViewCommonAttribute.cpp
+    docManager/templates/docViewFunctionalOption.cpp
+    docManager/templates/docViewInterface.cpp
+    docManager/templates/docViewRole.cpp
     mainFrame/local/localWindow.cpp
     mainFrame/mainFrameDesigner.cpp
     mainFrame/mainFrameDesignerEvent.cpp

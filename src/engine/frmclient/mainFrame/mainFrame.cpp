@@ -63,6 +63,10 @@ constexpr int kFirstSchemaCommandMenuId = wxID_HIGHEST + 6000;
 constexpr int kSchemaCommandMenuIds     = 32;   // the ids a schema's commands take — past the most a schema has
 constexpr int kLastMenuId               = wxID_HIGHEST + 6999;
 
+// The Window menu's Close All — wxAuiMDIParentFrame's own id, which tabmdi.cpp keeps to itself (the desktop designer's
+// mainFrameDesignerMenu.cpp names it as well).
+constexpr int kWindowCloseAllId = 4002;
+
 // The person's options file, beside the desktop designer's options.xml: the thin client's commands go by other ids.
 constexpr const wxChar* kOptionsFile = wxT("options-thin.xml");
 
@@ -272,6 +276,7 @@ ibFrontendMainFrame::ibFrontendMainFrame(std::unique_ptr<ibCommunicator> communi
 
 	Bind(wxEVT_CLOSE_WINDOW, &ibFrontendMainFrame::OnCloseWindow, this);
 	Bind(wxEVT_MENU, &ibFrontendMainFrame::OnExit, this, wxID_EXIT);
+	Bind(wxEVT_MENU, &ibFrontendMainFrame::OnCloseAll, this, kWindowCloseAllId);
 	Bind(wxEVT_MENU, &ibFrontendMainFrame::OnMenu, this, kFirstMenuId, kLastMenuId);
 	for (const int edit : { wxID_CUT, wxID_COPY, wxID_PASTE, wxID_DELETE, wxID_SELECTALL })
 		Bind(wxEVT_MENU, &ibFrontendMainFrame::OnEditCommand, this, edit);
@@ -545,10 +550,8 @@ void ibFrontendMainFrame::CreateGUI()
 	m_outputWindow = new ibOutputWindow(this);
 	CreateBottomPane();
 
-	// The bar along the bottom — the light dusty one of the desktop, its ink the deep dusty blue.
-	wxStatusBar* const statusBar = CreateStatusBar();
-	statusBar->SetBackgroundColour(wxColour(0xC8, 0xD6, 0xDF));
-	statusBar->SetForegroundColour(wxColour(0x3F, 0x5C, 0x77));
+	// The bar along the bottom — the desktop's.
+	SetStatusBar(new ibDocBottomStatusBar(this));
 
 	// The workspace — the same powder blue the tabs sit on.
 	GetNotebook()->GetAuiManager().GetArtProvider()->SetColour(
@@ -939,6 +942,14 @@ void ibFrontendMainFrame::Draw(const ibProtocolNode& answer)
 	}
 	if (GetStatusBar() != nullptr && (whole || patch.Has(ibProtocolName::Status)))
 		SetStatusText(frame.GetString(ibProtocolName::Status));
+	// …and beside it the assistant's lamp. The endpoint, not just the word: when an assistant cannot connect, the first
+	// question is always which address and port it should have used, and the answer is then already on screen. Empty
+	// when it is off — its absence says the same thing.
+	if (GetStatusBar() != nullptr && (whole || patch.Has(ibProtocolName::Endpoint))) {
+		const wxString endpoint = frame.GetString(ibProtocolName::Endpoint);
+		SetStatusText(endpoint.IsEmpty() ? wxString() : wxString::Format(wxT("Assistant  %s"), endpoint),
+			ibDocBottomStatusBar::FieldAssistant);
+	}
 
 	if (whole || patch.Has(ibProtocolName::Menu))
 		DrawMenu(frame.FindChild(ibProtocolName::Menu));
@@ -987,7 +998,8 @@ void ibFrontendMainFrame::DrawMenu(const ibProtocolNode& menu)
 		SetChildMenuBar(nullptr);
 
 	// Each command and schema under its id of the menu's range (MenuIdOf), its picture the art provider's (the
-	// desktop's stockPicture); its key is put on once the bar is up (UpdateHotKeys).
+	// desktop's stockPicture) or its own by its id (the desktop's SetBitmap — an engine's, kept here); its key is put on
+	// once the bar is up (UpdateHotKeys).
 	m_menuShape = shape;
 	m_menuItems.clear();
 	std::function<void(wxMenu*, const ibProtocolNode&)> fill = [this, &fill](wxMenu* into, const ibProtocolNode& items) {
@@ -1003,6 +1015,11 @@ void ibFrontendMainFrame::DrawMenu(const ibProtocolNode& menu)
 				const wxArtID art = ArtOf(item.GetInt(ibProtocolName::StockPicture));
 				if (!art.IsEmpty())
 					added->SetBitmap(wxArtProvider::GetBitmapBundle(art, wxART_MENU, wxSize(16, 16)));
+				else if (item.Has(ibProtocolName::Picture)) {
+					const wxBitmap picture = ibProtocolPicture(item.GetString(ibProtocolName::Picture));
+					if (picture.IsOk())
+						added->SetBitmap(picture);
+				}
 				added->Enable(item.GetBool(ibProtocolName::Enabled));
 				m_menuItems[id] = MenuItemOf(item);
 				continue;
@@ -1867,6 +1884,15 @@ void ibFrontendMainFrame::OnExit(wxCommandEvent& WXUNUSED(event))
 	Close();
 }
 
+void ibFrontendMainFrame::OnCloseAll(wxCommandEvent& WXUNUSED(event))
+{
+	// The server closes them, in one call — not the base's loop over the active child (wxAuiMDIParentFrame::CloseAll):
+	// a tab's Close only posts its close, which that loop took for a refusal, and it stopped at the first.
+	ibProtocolNode params, answer;
+	params.SetValue(ibProtocolName::Command, static_cast<long long>(ibProtocolCommand::CloseAll));
+	Call(ibProtocolMethod::Command, params, answer);
+}
+
 void ibFrontendMainFrame::OnMenu(wxCommandEvent& event)
 {
 	// An item of the server's menus — a command or a schema, by the wx id given it.
@@ -1928,3 +1954,79 @@ void ibFrontendMainFrame::OnTabChanged(wxAuiNotebookEvent& event)
 	params.SetValue(ibProtocolName::Tab, document->GetTabId());
 	Post(ibProtocolMethod::Activate, params);
 }
+
+// ---------------------------------------------------------------------------
+// ibDocBottomStatusBar — the bar along the bottom.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+// The interior palette, spelled where it is used — the same values the rest of the
+// chrome carries (see luna_dockart.cpp).
+const wxColour kStatusBarGround(0xC8, 0xD6, 0xDF);   // #C8D6DF light dusty
+const wxColour kStatusBarInk   (0x3F, 0x5C, 0x77);   // #3F5C77 deep dusty blue
+
+// The lamp. Muted rather than a signal green: it reports a steady state, and the
+// bar it sits in is a quiet one.
+const wxColour kAssistantLampOn(0x4F, 0x8A, 0x53);   // #4F8A53 sage
+
+// Sized to the longest thing the field ever says, so the message beside it does
+// not jump when the assistant starts.
+const int kAssistantFieldWidth = 210;
+
+} // namespace
+
+ibDocBottomStatusBar::ibDocBottomStatusBar(wxWindow* parent, wxWindowID id, long style, const wxString& name)
+	: wxStatusBar(parent, id, style, name)
+{
+	// Light dusty bar — sits between the powder-blue workspace and the cream content
+	// panes; deep-blue text reads cleanly against it.
+	SetBackgroundColour(kStatusBarGround);
+	SetForegroundColour(kStatusBarInk);
+
+	// -1 is "share what is left"; a positive number is a fixed width. So the message
+	// grows with the window and the lamp keeps its place at the right-hand end.
+	const int widths[FieldCount] = { -1, kAssistantFieldWidth };
+	SetFieldsCount(FieldCount);
+	SetStatusWidths(FieldCount, widths);
+
+	// wxSB_FLAT for the lamp: a sunken border around a field that is usually empty
+	// draws a box on the bar for no reason.
+	const int styles[FieldCount] = { wxSB_NORMAL, wxSB_FLAT };
+	SetStatusStyles(FieldCount, styles);
+}
+
+#if OES_STATUSBAR_CUSTOM_INK
+
+void ibDocBottomStatusBar::DrawFieldText(wxDC& dc, const wxRect& rect, int i, int textHeight)
+{
+	// ⭐ THE ONE LINE THE OLD wxStaticText EXISTED FOR. The generic bar never sets a text
+	// colour, so the field is drawn in the DC's default — black — whatever the window's
+	// foreground says.
+	dc.SetTextForeground(GetForegroundColour());
+
+	if (i != FieldAssistant || GetStatusText(FieldAssistant).IsEmpty()) {
+		wxStatusBar::DrawFieldText(dc, rect, i, textHeight);
+		return;
+	}
+
+	// A lit lamp, then the text moved clear of it. The rectangle handed to the base is
+	// narrowed rather than the text indented, so ellipsizing and clipping still measure
+	// against the space the text actually has.
+	const int diameter = wxMax(6, textHeight / 2);
+	const int cx = rect.x + 8 + diameter / 2;
+	const int cy = rect.y + rect.height / 2;
+
+	dc.SetBrush(wxBrush(kAssistantLampOn));
+	dc.SetPen(wxPen(kAssistantLampOn));
+	dc.DrawCircle(cx, cy, diameter / 2);
+
+	wxRect textRect(rect);
+	const int taken = (cx + diameter / 2 + 4) - rect.x;
+	textRect.x     += taken;
+	textRect.width -= taken;
+
+	wxStatusBar::DrawFieldText(dc, textRect, i, textHeight);
+}
+
+#endif // OES_STATUSBAR_CUSTOM_INK

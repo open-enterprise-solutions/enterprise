@@ -21,6 +21,7 @@
 #include "core/exception.h"
 #include "core/formatString.h"        // ibFormatString — a value presented through Format()'s codes
 #include "backend/databaseLayer/databaseQueryBuilder.h"
+#include "backend/mcp/mcpServer.h"      // the base's assistant access — where it listens, with the frame
 #include "backend/metadataConfiguration.h"
 #include "backend/metaCollection/metaFormObject.h"   // ibBackendCommandItem::Execute
 #include "backend/rpc/rpcMessage.h"
@@ -233,6 +234,9 @@ void DrawMenu(ibClientFrame* frame, const std::vector<ibClientMenu::Item>& items
 			child.SetValue(wxT("Title"), item.title);
 			DrawMenu(frame, item.items, child);
 		}
+		// Its own picture, its id alone — the client draws it from the core, as the backend does.
+		if (item.picture != 0)
+			child.SetValue(ibProtocolName::Picture, ibClientFrame::SendPicture(item.picture));
 		if (enabled)
 			child.SetValue(wxT("Enabled"), true);
 	}
@@ -1359,6 +1363,12 @@ void ibClientHost::DrawFrame(ibClientFrame* frame, ibDataNode& state, ibDataNode
 	const std::int64_t began = NowMs();
 	state.SetValue(wxT("Title"), frame->GetTitle());
 	state.SetValue(wxT("Status"), frame->GetStatusText());
+	// …and the base's assistant access by where it listens, empty while it does not — the bottom bar's lamp, the
+	// McpServer schema's Endpoint.
+	const ibApplicationInstance* const applicationInstance = frame->GetSession()->GetApplicationInstance();
+	const ibMcpServer* const assistant = applicationInstance != nullptr
+		? ibApplicationInstance::GetMcpServer(applicationInstance) : nullptr;
+	state.SetValue(ibProtocolName::Endpoint, assistant != nullptr ? assistant->GetEndpoint() : wxString());
 	// The language the session reads text in — drawn on its worker, so its own: a caption sent whole (an inspector's
 	// Synonym) is read by the client in it, as the desktop's grid read it in the configuration's.
 	state.SetValue(ibProtocolName::Language, ibBackendLocalization::GetUserLanguage());

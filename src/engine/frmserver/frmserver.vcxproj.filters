@@ -139,6 +139,21 @@
     <ClCompile Include="docView\templates\designer\docViewSpreadsheetEdit.cpp">
       <Filter>docView\templates\designer</Filter>
     </ClCompile>
+    <ClCompile Include="docView\templates\designer\docViewAssistant.cpp">
+      <Filter>docView\templates\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="docView\templates\designer\docViewCommonAttributeEdit.cpp">
+      <Filter>docView\templates\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="docView\templates\designer\docViewFunctionalOptionEdit.cpp">
+      <Filter>docView\templates\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="docView\templates\designer\docViewInterfaceEdit.cpp">
+      <Filter>docView\templates\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="docView\templates\designer\docViewRoleEdit.cpp">
+      <Filter>docView\templates\designer</Filter>
+    </ClCompile>
     <ClCompile Include="docView\templates\docViewHelp.cpp">
       <Filter>docView\templates</Filter>
     </ClCompile>
@@ -179,6 +194,9 @@
       <Filter>schema</Filter>
     </ClCompile>
     <ClCompile Include="schema\designer\mcpServer.cpp">
+      <Filter>schema\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="schema\designer\assistant.cpp">
       <Filter>schema\designer</Filter>
     </ClCompile>
     <ClCompile Include="schema\designer\metaData.cpp">
@@ -583,6 +601,21 @@
     <ClInclude Include="docView\templates\designer\docViewSpreadsheetEdit.h">
       <Filter>docView\templates\designer</Filter>
     </ClInclude>
+    <ClInclude Include="docView\templates\designer\docViewAssistant.h">
+      <Filter>docView\templates\designer</Filter>
+    </ClInclude>
+    <ClInclude Include="docView\templates\designer\docViewCommonAttributeEdit.h">
+      <Filter>docView\templates\designer</Filter>
+    </ClInclude>
+    <ClInclude Include="docView\templates\designer\docViewFunctionalOptionEdit.h">
+      <Filter>docView\templates\designer</Filter>
+    </ClInclude>
+    <ClInclude Include="docView\templates\designer\docViewInterfaceEdit.h">
+      <Filter>docView\templates\designer</Filter>
+    </ClInclude>
+    <ClInclude Include="docView\templates\designer\docViewRoleEdit.h">
+      <Filter>docView\templates\designer</Filter>
+    </ClInclude>
     <ClInclude Include="docView\templates\docViewHelp.h">
       <Filter>docView\templates</Filter>
     </ClInclude>
@@ -620,6 +653,9 @@
       <Filter>schema</Filter>
     </ClInclude>
     <ClInclude Include="schema\designer\mcpServer.h">
+      <Filter>schema\designer</Filter>
+    </ClInclude>
+    <ClInclude Include="schema\designer\assistant.h">
       <Filter>schema\designer</Filter>
     </ClInclude>
     <ClInclude Include="schema\designer\metaData.h">

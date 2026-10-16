@@ -11,6 +11,7 @@
 #include <wx/wx.h>
 #include <wx/aui/aui.h>
 #include <wx/splash.h>
+#include <wx/generic/statusbr.h>   // the bottom bar derives from the GENERIC one — see ibDocBottomStatusBar
 #include <wx/xml/xml.h>
 
 #include "frmclient/backend/backend_mainFrame.h"   // the frame an object asks for its inspector's selection
@@ -320,6 +321,8 @@ private:
 
 	void OnCloseWindow(wxCloseEvent& event);
 	void OnExit(wxCommandEvent& event);
+	// Window → Close All — every tab, the server's CloseAll.
+	void OnCloseAll(wxCommandEvent& event);
 	void OnMenu(wxCommandEvent& event);
 	// Cut, Copy, Paste, Delete, Select all — the field under the focus does them.
 	void OnEditCommand(wxCommandEvent& event);
@@ -362,6 +365,51 @@ private:
 	bool                                  m_exitGranted = false;     // the server's Exit done: every tab closed, the client goes
 	bool                                  m_callUpdateFrameManager = false;
 	bool                                  m_callRaiseFrame = false;
+};
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// The desktop's (frontend/mainFrame/mainFrame.h): the bar along the bottom — what the application is doing on the left,
+// whether an assistant can reach it on the right. Both fields are the frame's, drawn with its answer (DrawFrame): the
+// server's Status, and the base's assistant access by where it listens (Endpoint). The desktop's bar asked the server
+// once a second; here that is a call a second, and the frame's patch already says when it changed.
+//
+// ⭐⭐ THE INK IS OURS WHERE THE PLATFORM LETS IT BE. The generic status bar draws its field text
+// with the DC's default foreground and never consults SetForegroundColour, so the colour has to be
+// set in DrawFieldText — which exists only where wxStatusBar is the generic one. wx/statusbr.h
+// picks that per platform: generic under macOS and GTK, NATIVE under MSW, different again under
+// wxUniversal and Qt. So the override is compiled where the hook exists, and where it does not the
+// native bar draws its own text in the system colour, which is what a user of that platform
+// expects anyway. OES_STATUSBAR_CUSTOM_INK below is that condition, spelled once.
+#if !defined(__WXUNIVERSAL__) && !defined(__WXQT__) && !(defined(__WXMSW__) && wxUSE_NATIVE_STATUSBAR)
+	#define OES_STATUSBAR_CUSTOM_INK 1
+#else
+	#define OES_STATUSBAR_CUSTOM_INK 0
+#endif
+
+class FRMCLIENT_API ibDocBottomStatusBar : public wxStatusBar {
+public:
+
+	// The fields, left to right. Message takes what is left; Assistant is sized to its content.
+	enum {
+		FieldMessage   = 0,
+		FieldAssistant = 1,
+		FieldCount
+	};
+
+	ibDocBottomStatusBar() : wxStatusBar() {}
+	ibDocBottomStatusBar(wxWindow* parent,
+		wxWindowID id = wxID_ANY,
+		long style = wxSTB_DEFAULT_STYLE,
+		const wxString& name = wxStatusBarNameStr);
+
+protected:
+
+#if OES_STATUSBAR_CUSTOM_INK
+	// Both halves of the fix: the colour the bar would otherwise ignore, and the lamp that only
+	// the assistant field draws — lit while it says something.
+	virtual void DrawFieldText(wxDC& dc, const wxRect& rect, int i, int textHeight) override;
+#endif
 };
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////

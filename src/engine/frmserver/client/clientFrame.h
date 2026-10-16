@@ -171,10 +171,10 @@ public:
 	bool                        TakeClearPending();
 	// The client is to go — Exit done: every tab closed. A one-shot flag, as Clear, told with the next answer.
 	bool                        TakeExitPending();
-	// ⭐ THE CLIENT TOLD TO GO — its own Exit (DoCommand): every tab but the locked ones closed, each may keep itself, and
-	// then the client stays. FORCED — the session closed under it (a debugger's Stop, an administrator's kick: OnClose):
-	// nothing is asked, and a client at rest is called for it (RefreshFrame) — it hears Exit in the next answer, or in
-	// the answer of the call it is in, and goes as from its own Exit: its logout takes the session.
+	// ⭐ THE CLIENT TOLD TO GO — its own Exit (DoCommand): every tab but the locked ones closed (CloseAll), each may keep
+	// itself, and then the client stays. FORCED — the session closed under it (a debugger's Stop, an administrator's
+	// kick: OnClose): nothing is asked, and a client at rest is called for it (RefreshFrame) — it hears Exit in the next
+	// answer, or in the answer of the call it is in, and goes as from its own Exit: its logout takes the session.
 	bool                        ExitClient(bool force);
 
 	struct PendingRequest {
@@ -201,6 +201,10 @@ public:
 	// Close the tab's form the way its own Close does — the form's BeforeClose may refuse, and then the tab
 	// stays. The tab itself is erased later, by DrainPendingCloses.
 	bool CloseTab(std::size_t i);
+	// …and every tab but the locked ones, each that road — one kept keeps the rest, as the desktop's Window → Close All
+	// (wxAuiMDIParentFrame::CloseAll) stopped at a child that refused. In one call: the client's AUI loop closed one per
+	// press, its tab's Close only posted. Exit begins with it (ExitClient).
+	bool CloseAll();
 
 	// The tabs that closed go now — at the end of a request, when nothing on the stack is still inside them:
 	// each one's view first, and with the last view the document (ibDocument::DeleteAllViews), then the tab.
@@ -208,13 +212,14 @@ public:
 
 	// A COMMAND ON THE ACTIVE TAB'S DOCUMENT — what the desktop's doc manager did with its current document from the
 	// menu (OnUndo, OnFileSave, …) and what it enabled there (OnUpdate…): the active tab is the frame's, so it is
-	// asked here. Close goes the one road every close goes (CloseTab). The window's own — Open, Exit, the edit
+	// asked here. Close goes the one road every close goes (CloseTab). The window's own — Open, Exit, Close All, the edit
 	// commands — are done here too: what of them is the client's, the frame asks of the client (a request).
 	bool IsCommandEnabled(ibDocCommand command) const;
 	// `name` — Save as's: the file's, as the client chose it.
 	bool DoCommand(ibDocCommand command, const wxString& name);
 	// …and the same question of any tab's document — what the frame tells the client of each tab (its Commands), so the
-	// client's own doc manager enables its File and Edit without asking. The window's own (Open, Exit) are no tab's.
+	// client's own doc manager enables its File and Edit without asking. The window's own (Open, Exit, Close All) are no
+	// tab's.
 	bool IsCommandEnabled(ibDocCommand command, std::size_t tab) const;
 	// THE DOCUMENT SAVE AS IS ASKED OF — the desktop's (ibFormVisualEditView::OnActiveControlCommand): the one behind the
 	// form's active control while it holds a view of its own, a grid box's sheet; the tab's otherwise.

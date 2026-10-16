@@ -50,3 +50,28 @@ CLASS ibFormDocument (designer/docManager/templates/docViewFormEditor.h)   # its
 MEMBER ibVisualEditor.CreateControlOfClass()       # the server's (ibFormDesignView::CreateControlOfClass)
 MEMBER ibVisualEditor.InsertObject()               # the server's (ibFormDesignView::InsertObject)
 MEMBER ibVisualEditor.CalcPositionOfInsertion()    # the server's (ibFormDesignView::CalcPositionOfInsertion)
+
+# The four composition editors (2026-10-16): the object is the server's document (frmserver ibInterfaceComposition*,
+# ibCommonAttributeComposition*, ibFunctionalOptionMembers*, ibRoleRights*) and its view draws the rows; the editor
+# draws them whole on every answer that changed them (DrawView), so no view is told to update.
+CLASS ibInterfaceDocument (designer/docManager/templates/docViewInterface.h)                 # open/save/modify are the server's; the tab's: ibTabDocument
+CLASS ibCommonAttributeDocument (designer/docManager/templates/docViewCommonAttribute.h)     # open/save/modify are the server's; the tab's: ibTabDocument
+CLASS ibFunctionalOptionDocument (designer/docManager/templates/docViewFunctionalOption.h)   # open/save/modify are the server's; the tab's: ibTabDocument
+CLASS ibRoleDocument (designer/docManager/templates/docViewRole.h)                           # open/save/modify are the server's; the tab's: ibTabDocument
+MEMBER ibInterfaceEditView.OnUpdate()              # the document's DrawView redraws the editor
+MEMBER ibCommonAttributeEditView.OnUpdate()        # the document's DrawView redraws the editor
+MEMBER ibFunctionalOptionEditView.OnUpdate()       # the document's DrawView redraws the editor
+MEMBER ibRoleEditView.OnUpdate()                   # the document's DrawView redraws the editor
+
+# The assistant window: the transcript and the waiting are the server's (ibAssistantTranscriptView, an MCP notifier);
+# it is opened by the Administration menu's schema command (Assistant / Open), which the server allows only while its
+# MCP server runs.
+MEMBER ibAssistantDocument.DoOpenDocument()        # nothing is a file; the tab's: ibTabDocument
+MEMBER ibAssistantDocument.DoSaveDocument()        # nothing is a file; the tab's: ibTabDocument
+MEMBER ibAssistantView.OnUpdate()                  # Draw, from the document's DrawView
+MEMBER ibFrontendMainFrameDesigner.OnMcpAssistant()         # the menu's schema command goes to the server (ibSchemaAssistant)
+MEMBER ibFrontendMainFrameDesigner.OnUpdateMcpAssistant()   # the server's AccessRight: its MCP server running
+
+# The bottom bar's lamp: the frame carries where the base's assistant access listens (Endpoint), and the frame's patch
+# says when it changed — the desktop's timer asked the server once a second, here a call a second.
+MEMBER ibDocBottomStatusBar.OnAssistantPoll()      # drawn with the frame's answer (DrawFrame, Endpoint)

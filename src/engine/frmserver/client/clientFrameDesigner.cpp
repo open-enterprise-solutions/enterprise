@@ -5,6 +5,8 @@
 #include "backend/metadataConfiguration.h"
 #include "backend/session/session.h"
 
+#include "core/picturePredefined.h"   // the assistant's item's picture
+
 #include "frmserver/docView/docManagerDesigner.h"
 #include "frmserver/schema/designer/mcpServer.h"   // SwitchableServer — the assistant the person may switch here
 
@@ -64,6 +66,10 @@ void ibClientFrameDesigner::InitializeDefaultMenu()
 	administration.Append(ibProtocolSchema::Database, ibProtocolSchemaCommand::Save, _("Dump database"));
 	administration.AppendSeparator();
 	administration.Append(ibProtocolSchema::Database, ibProtocolSchemaCommand::Clear, _("Clear database"));
+	administration.AppendSeparator();
+	ibClientMenu::Item& assistant = administration.Append(ibProtocolSchema::Assistant, ibProtocolSchemaCommand::Open,
+		_("Assistant window"));
+	assistant.picture = g_picAssistantCLSID;
 	m_menu.AppendSubMenu(administration, _("Administration"));
 
 	ibClientMenu tools;

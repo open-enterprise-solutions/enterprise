@@ -323,6 +323,7 @@ ibDocManager::ibDocManager(long WXUNUSED(flags), bool initialize)
 	RegisterCommand(ibDocCommand::Redo,      _("Redo"),       wxT("Ctrl+Y"), ibClientStockPicture::Redo);
 	RegisterCommand(ibDocCommand::Save,      _("Save"),       wxT("Ctrl+S"), ibClientStockPicture::Save);
 	RegisterCommand(ibDocCommand::Close,     _("Close"),      wxEmptyString, ibClientStockPicture::Close);
+	RegisterCommand(ibDocCommand::CloseAll,  _("Close All"),  wxEmptyString, ibClientStockPicture::None);
 	RegisterCommand(ibDocCommand::Open,      _("Open..."),    wxEmptyString, ibClientStockPicture::Open);
 	RegisterCommand(ibDocCommand::Exit,      _("Exit"),       wxEmptyString, ibClientStockPicture::Quit);
 	RegisterCommand(ibDocCommand::Cut,       _("Cut"),        wxT("Ctrl+X"), ibClientStockPicture::Cut);
