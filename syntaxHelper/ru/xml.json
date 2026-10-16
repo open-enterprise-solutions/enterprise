@@ -1,0 +1,39 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "ru",
+  "entries": [
+    {
+      "id": "cls.XMLWriter",
+      "name_local": "XMLWriter",
+      "name_en": "XMLWriter",
+      "kind": "class",
+      "category_keys": ["value_types"],
+      "signature": "New XMLWriter()",
+      "description": "Пишет XML в строку. SetString() начинает строку, вызовы Write дописывают её, Close() возвращает её. FastInfoset нет: в движке нет библиотеки Fast Infoset.",
+      "syntax_block": "New XMLWriter()",
+      "parameters": "Нет.",
+      "return_descr": "XMLWriter.",
+      "example": "writer = New XMLWriter();\nwriter.SetString();\nwriter.WriteStartElement(\"root\");\ntext = writer.Close();",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": ["cls.XMLReader"],
+      "reviewed": true
+    },
+    {
+      "id": "cls.XMLReader",
+      "name_local": "XMLReader",
+      "name_en": "XMLReader",
+      "kind": "class",
+      "category_keys": ["value_types"],
+      "signature": "New XMLReader()",
+      "description": "Читает XML из строки, по одному узлу. NodeType — это StartElement, EndElement или Text. Перечисления XMLNodeType нет.",
+      "syntax_block": "New XMLReader()",
+      "parameters": "Нет.",
+      "return_descr": "XMLReader.",
+      "example": "reader = New XMLReader();\nreader.SetString(text);\nWhile (reader.Read()) {\n    Message(reader.NodeType);\n}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": ["cls.XMLWriter"],
+      "reviewed": true
+    }
+  ]
+}

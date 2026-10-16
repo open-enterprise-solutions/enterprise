@@ -1,0 +1,39 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "en",
+  "entries": [
+    {
+      "id": "cls.XMLWriter",
+      "name_local": "XMLWriter",
+      "name_en": "XMLWriter",
+      "kind": "class",
+      "category_keys": ["value_types"],
+      "signature": "New XMLWriter()",
+      "description": "Writes XML into a string. SetString() starts the string, the Write calls add to it, and Close() returns it. FastInfoset is not available: the engine has no Fast Infoset library.",
+      "syntax_block": "New XMLWriter()",
+      "parameters": "None.",
+      "return_descr": "XMLWriter.",
+      "example": "writer = New XMLWriter();\nwriter.SetString();\nwriter.WriteStartElement(\"root\");\ntext = writer.Close();",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": ["cls.XMLReader"],
+      "reviewed": true
+    },
+    {
+      "id": "cls.XMLReader",
+      "name_local": "XMLReader",
+      "name_en": "XMLReader",
+      "kind": "class",
+      "category_keys": ["value_types"],
+      "signature": "New XMLReader()",
+      "description": "Reads XML from a string, one node at a time. NodeType is StartElement, EndElement or Text. There is no XMLNodeType enumeration.",
+      "syntax_block": "New XMLReader()",
+      "parameters": "None.",
+      "return_descr": "XMLReader.",
+      "example": "reader = New XMLReader();\nreader.SetString(text);\nWhile (reader.Read()) {\n    Message(reader.NodeType);\n}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": ["cls.XMLWriter"],
+      "reviewed": true
+    }
+  ]
+}

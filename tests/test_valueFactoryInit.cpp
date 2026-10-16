@@ -9,6 +9,7 @@
 #include <string>
 
 #include "backend/backend_exception.h"
+#include "backend/compiler/compileCode.h"
 #include "backend/compiler/value.h"
 
 namespace {
@@ -45,6 +46,91 @@ TEST(ValueFactory, AnInitThatRaisesDoesNotLeakTheObject) {
 		EXPECT_NE(std::string(e.what()).find("this is why"), std::string::npos) << "the type's own words, not a generic sentence";
 	}
 	EXPECT_EQ(g_alive, 0) << "an object whose Init raised is nobody's - the factory lets go of it";
+}
+
+TEST(XmlString, AWriterEscapesTextAndClosesElements) {
+	ibValue writer = ibValue::CreateObject(wxT("XMLWriter"));
+	const long setString = writer.FindMethod(wxT("SetString"));
+	const long declaration = writer.FindMethod(wxT("WriteXMLDeclaration"));
+	const long start = writer.FindMethod(wxT("WriteStartElement"));
+	const long attribute = writer.FindMethod(wxT("WriteAttribute"));
+	const long text = writer.FindMethod(wxT("WriteText"));
+	const long end = writer.FindMethod(wxT("WriteEndElement"));
+	const long close = writer.FindMethod(wxT("Close"));
+	ASSERT_NE(setString, wxNOT_FOUND);
+	writer.CallAsProc(setString, nullptr, 0);
+	writer.CallAsProc(declaration, nullptr, 0);
+	ibValue root(wxT("root"));
+	ibValue child(wxT("child"));
+	ibValue id(wxT("id"));
+	ibValue one(wxT("1"));
+	ibValue body(wxT("a<b"));
+	ibValue* rootArg[] = { &root };
+	ibValue* childArg[] = { &child };
+	ibValue* attrArg[] = { &id, &one };
+	ibValue* textArg[] = { &body };
+	writer.CallAsProc(start, rootArg, 1);
+	writer.CallAsProc(attribute, attrArg, 2);
+	writer.CallAsProc(start, childArg, 1);
+	writer.CallAsProc(text, textArg, 1);
+	writer.CallAsProc(end, nullptr, 0);
+	writer.CallAsProc(end, nullptr, 0);
+	ibValue written;
+	ASSERT_TRUE(writer.CallAsFunc(close, written, nullptr, 0));
+	EXPECT_EQ(written.GetString(), wxT("<?xml version=\"1.0\" encoding=\"UTF-8\"?><root id=\"1\"><child>a&lt;b</child></root>"));
+}
+
+TEST(XmlString, AReaderWalksElementsAndAttributes) {
+	const wxString text = wxT("<?xml version=\"1.0\" encoding=\"UTF-8\"?><root id=\"1\"><child>a&lt;b</child></root>");
+	ibValue reader = ibValue::CreateObject(wxT("XMLReader"));
+	const long setString = reader.FindMethod(wxT("SetString"));
+	const long read = reader.FindMethod(wxT("Read"));
+	const long attribute = reader.FindMethod(wxT("GetAttribute"));
+	ASSERT_NE(setString, wxNOT_FOUND);
+	ibValue source(text);
+	ibValue* sourceArg[] = { &source };
+	reader.CallAsProc(setString, sourceArg, 1);
+
+	ibValue ok;
+	ASSERT_TRUE(reader.CallAsFunc(read, ok, nullptr, 0));
+	EXPECT_TRUE(ok.GetBoolean());
+	ibValue node;
+	ASSERT_TRUE(reader.GetPropVal(reader.FindProp(wxT("NodeType")), node));
+	EXPECT_EQ(node.GetString(), wxT("StartElement"));
+	ibValue id(wxT("id"));
+	ibValue* idArg[] = { &id };
+	ibValue attr;
+	ASSERT_TRUE(reader.CallAsFunc(attribute, attr, idArg, 1));
+	EXPECT_EQ(attr.GetString(), wxT("1"));
+
+	ASSERT_TRUE(reader.CallAsFunc(read, ok, nullptr, 0));
+	ASSERT_TRUE(reader.GetPropVal(reader.FindProp(wxT("Name")), node));
+	EXPECT_EQ(node.GetString(), wxT("child"));
+	ASSERT_TRUE(reader.CallAsFunc(read, ok, nullptr, 0));
+	ASSERT_TRUE(reader.GetPropVal(reader.FindProp(wxT("Value")), node));
+	EXPECT_EQ(node.GetString(), wxT("a<b"));
+	ASSERT_TRUE(reader.CallAsFunc(read, ok, nullptr, 0));
+	EXPECT_TRUE(ok.GetBoolean());
+	ASSERT_TRUE(reader.CallAsFunc(read, ok, nullptr, 0));
+	EXPECT_TRUE(ok.GetBoolean());
+	ASSERT_TRUE(reader.CallAsFunc(read, ok, nullptr, 0));
+	EXPECT_FALSE(ok.GetBoolean());
+}
+
+TEST(XmlString, TheNameCompiles) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	const wxString src =
+		wxT("Procedure Check()\n")
+		wxT("    var writer;\n")
+		wxT("    var reader;\n")
+		wxT("    writer = New XMLWriter();\n")
+		wxT("    reader = New XMLReader();\n")
+		wxT("EndProcedure\n");
+	try {
+		ASSERT_TRUE(cc.Compile(src));
+	} catch (const ibBackendException& err) {
+		FAIL() << err.GetErrorDescription().ToStdString();
+	}
 }
 
 TEST(ValueFactory, AnInitThatAnswersFalseIsStillCleanedUpAfter) {
