@@ -257,12 +257,24 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::ContributeTables(ibSchemaSn
 	for (const auto& object : m_predefinedObjectVector) {
 		const wxObjectDataPtr<ibPredefinedValueObject>& parent = object->GetPredefinedParent();
 
+		// Named here, before the database is asked. A code longer than the column is otherwise
+		// "string right truncation" with no object and no item in it.
+		EnsureCodeFits(object->GetPredefinedCode(), object->GetPredefinedName());
+
+		// A number code is stored as the number. "000000001" is 1; the length is how many digits
+		// it may have, and how it is shown.
+		ibValue codeValue(object->GetPredefinedCode());
+		if (GetCodeType() == ibCodeType_Number) {
+			const wxString code = object->GetPredefinedCode();
+			codeValue = code.IsEmpty() ? ibValue(ibNumber(0)) : ibValue(ibNumber(code));
+		}
+
 		t.AddRow(object->GetPredefinedGuid(), object->GetPredefinedName())
 			.Set(GetDataReference()->GetQueryColumn(),
 				ibValuePtr<ibValueReferenceDataObject>(
 					ibValueReferenceDataObject::Create(this, object->GetPredefinedGuid(), ibReferenceLoad::OnDemand)))
 			.Set(m_propertyAttributePredefined->GetMetaObject()->GetQueryColumn(), ibValue(object->GetPredefinedName()))
-			.Set(m_propertyAttributeCode->GetMetaObject()->GetQueryColumn(), ibValue(object->GetPredefinedCode()))
+			.Set(m_propertyAttributeCode->GetMetaObject()->GetQueryColumn(), codeValue)
 			.Set(m_propertyAttributeDescription->GetMetaObject()->GetQueryColumn(), ibValue(object->GetPredefinedDescription()))
 			.Set(m_propertyAttributeIsFolder->GetMetaObject()->GetQueryColumn(), ibValue(object->IsPredefinedFolder()))
 			.Set(m_propertyAttributeDeletionMark->GetMetaObject()->GetQueryColumn(), ibValue(false))

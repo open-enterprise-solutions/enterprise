@@ -9,7 +9,7 @@ void ibValueMetaObjectChartOfCalculationTypes::OnPropertyCreated(ibProperty* pro
 
 bool ibValueMetaObjectChartOfCalculationTypes::OnPropertyChanging(ibProperty* property, const wxVariant& newValue)
 {
-	return ibValueMetaObjectRecordDataMutableRef::OnPropertyChanging(property, newValue);
+	return ibValueMetaObjectRecordDataHierarchyMutableRef::OnPropertyChanging(property, newValue);
 }
 
 void ibValueMetaObjectChartOfCalculationTypes::OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue)
@@ -18,5 +18,5 @@ void ibValueMetaObjectChartOfCalculationTypes::OnPropertyChanged(ibProperty* pro
 	if (property == m_propertyBaseCharts)
 		TypeBaseAndLeading();
 
-	ibValueMetaObjectRecordDataMutableRef::OnPropertyChanged(property, oldValue, newValue);
+	ibValueMetaObjectRecordDataHierarchyMutableRef::OnPropertyChanged(property, oldValue, newValue);
 }

@@ -58,6 +58,24 @@ class ibValueEnumDataPresentation : public ibValueEnumeration<ibDataPresentation
 		AddEnumeration(ibDataPresentation_Code, wxT("Code"), _("Code"));
 	}
 };
+
+// WHAT A CODE IS. String: up to CodeLength characters, which is how every catalog created before the
+// setting existed stores one (a fixed String(8)). Number: a non-negative integer of at most that many
+// digits. The two are the choice 1C offers on a catalog and a chart.
+enum ibCodeType {
+	ibCodeType_String = 0,
+	ibCodeType_Number,
+};
+
+class ibValueEnumCodeType : public ibValueEnumeration<ibCodeType> {
+	public:
+	ibValueEnumCodeType() : ibValueEnumeration() {}
+
+	virtual void CreateEnumeration() {
+		AddEnumeration(ibCodeType_String, wxT("String"), _("String"));
+		AddEnumeration(ibCodeType_Number, wxT("Number"), _("Number"));
+	}
+};
 #pragma endregion
 
 #endif

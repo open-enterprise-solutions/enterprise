@@ -1111,11 +1111,79 @@ ibValuePtr<ibValueRecordDataObjectHierarchyRef> ibValueMetaObjectRecordDataHiera
 
 #define predefinedBlock 0x1234532
 
+wxString ibValueMetaObjectRecordDataHierarchyMutableRef::CodeRefusal(const wxString& code, const wxString& item) const
+{
+	if (code.IsEmpty())
+		return wxString();
+
+	unsigned limit = GetCodeLength();
+	if (limit < 1 || limit > 50)
+		limit = 8;
+
+	if (GetCodeType() == ibCodeType_Number) {
+		for (wxUniChar c : code) {
+			if (c < wxT('0') || c > wxT('9'))
+				return wxString::Format(
+					_("The code of '%s' is not a number, and '%s' numbers its codes"), item, GetName());
+		}
+		unsigned digits = 0;
+		bool seen = false;
+		for (wxUniChar c : code) {
+			if (c == wxT('0') && !seen)
+				continue;
+			seen = true;
+			++digits;
+		}
+		if (digits > limit)
+			return wxString::Format(
+				_("The code of '%s' has %u digits and '%s' allows %u"), item, digits, GetName(), limit);
+		return wxString();
+	}
+
+	if (code.Length() > limit)
+		return wxString::Format(
+			_("The code of '%s' is %u characters and '%s' allows %u"),
+			item, static_cast<unsigned>(code.Length()), GetName(), limit);
+	return wxString();
+}
+
+void ibValueMetaObjectRecordDataHierarchyMutableRef::EnsureCodeFits(const wxString& code, const wxString& item) const
+{
+	const wxString refusal = CodeRefusal(code, item);
+	if (!refusal.IsEmpty())
+		ibBackendCoreException::Error(wxT("%s"), refusal);
+}
+
+void ibValueMetaObjectRecordDataHierarchyMutableRef::ApplyCodeShape()
+{
+	ibValueMetaObjectAttributePredefined* code = GetDataCode();
+	if (code == nullptr)
+		return;
+
+	unsigned length = GetCodeLength();
+	if (length < 1 || length > 50) {
+		length = 8;
+		m_propertyCodeLength->SetValue(8u);
+	}
+
+	ibTypeDescription& type = code->GetTypeDesc();
+	if (GetCodeType() == ibCodeType_Number) {
+		type.SetDefaultMetaType(ibValue::GetIDByVT(ibValueTypes::TYPE_NUMBER),
+			ibTypeDescription::ibTypeData(static_cast<unsigned char>(length), 0, true));
+	}
+	else {
+		type.SetDefaultMetaType(ibValue::GetIDByVT(ibValueTypes::TYPE_STRING),
+			ibTypeDescription::ibTypeData(static_cast<unsigned short>(length)));
+	}
+}
+
 //append predefined value
 void ibValueMetaObjectRecordDataHierarchyMutableRef::AppendPredefinedValue(const wxString& strPredefinedName,
 	const wxString& strCode, const wxString& strDescription,
 	bool valueIsFolder, const wxObjectDataPtr<ibPredefinedValueObject>& valueParent)
 {
+	EnsureCodeFits(strCode, strPredefinedName);
+
 	m_predefinedObjectVector.emplace_back(
 		new ibPredefinedValueObject(wxNewUniqueGuid, strPredefinedName,
 			strCode, strDescription, valueIsFolder, valueParent));
@@ -1128,6 +1196,8 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::SetPredefinedValue(const ib
 	const wxString& strCode, const wxString& strDescription,
 	bool valueIsFolder, const wxObjectDataPtr<ibPredefinedValueObject>& valueParent)
 {
+	EnsureCodeFits(strCode, strPredefinedName);
+
 	wxObjectDataPtr<ibPredefinedValueObject> foundedPredefinedValue = FindPredefinedValue(predefinedGuid);
 
 	if (foundedPredefinedValue != nullptr) {
@@ -1188,6 +1258,8 @@ bool ibValueMetaObjectRecordDataHierarchyMutableRef::WriteData(ibDataNode& node)
 	// silent because the default keeps working.
 	node.SetProperty(m_propertyHierarchyType->GetName(), m_propertyHierarchyType->GetNodeValue());
 	node.SetProperty(m_propertyDataPresentation->GetName(), m_propertyDataPresentation->GetNodeValue());
+	node.SetProperty(m_propertyCodeType->GetName(), m_propertyCodeType->GetNodeValue());
+	node.SetProperty(m_propertyCodeLength->GetName(), m_propertyCodeLength->GetNodeValue());
 
 	return ibValueMetaObjectRecordDataMutableRef::WriteData(node);
 }
@@ -1230,6 +1302,12 @@ bool ibValueMetaObjectRecordDataHierarchyMutableRef::ReadData(const ibDataNode& 
 	// Absent from a configuration saved before it existed: the kind's own default stands (SetNodeValue
 	// leaves an empty value alone) - Description for a catalog, Code for a chart of accounts.
 	m_propertyDataPresentation->SetNodeValue(node.GetProperty(m_propertyDataPresentation->GetName()));
+
+	// The same absence rule. A file from before CodeLength existed has neither property, so the
+	// constructor's String(8) stands and the column is not rewritten.
+	m_propertyCodeType->SetNodeValue(node.GetProperty(m_propertyCodeType->GetName()));
+	m_propertyCodeLength->SetNodeValue(node.GetProperty(m_propertyCodeLength->GetName()));
+	ApplyCodeShape();
 
 	return ibValueMetaObjectRecordDataMutableRef::ReadData(node);
 }

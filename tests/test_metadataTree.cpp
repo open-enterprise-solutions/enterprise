@@ -14,6 +14,10 @@
 #include <iterator>
 #include "backend/metadataConfiguration.h"
 #include "backend/metaCollection/metaObject.h"   // ibValueMetaObject + g_meta*CLSID
+#include "backend/metaCollection/partial/commonObject.h"   // CodeLength / CodeType on a catalog or a chart
+#include "backend/propertyManager/propertyObject.h"        // the same door the designer and metadata_set use
+#include "backend/query/schemaSnapshot.h"
+#include "backend/backend_exception.h"
 
 TEST(MetadataTree, FreshConfigHasNoBusinessObjects) {
     ibMetaDataConfigurationFile cfg;
@@ -168,4 +172,112 @@ TEST(MetadataTree, CreatingEveryHostedKindTwiceKeepsBothAndNamesThemApart) {
 			<< "two " << candidate.name
 			<< " objects were created with the same name";
 	}
+}
+
+namespace {
+
+ibValueMetaObjectRecordDataHierarchyMutableRef* HierarchyOf(ibMetaDataConfigurationFile& cfg, ibClassID kind)
+{
+	return dynamic_cast<ibValueMetaObjectRecordDataHierarchyMutableRef*>(
+		cfg.CreateMetaObject(kind, cfg.GetCommonMetaObject(), false));
+}
+
+bool SetCodeLength(ibValueMetaObjectRecordDataHierarchyMutableRef* object, long length)
+{
+	return ibPropertyGate::SetValue(object, object->GetProperty(wxT("CodeLength")), wxVariant(length), nullptr);
+}
+
+bool SetCodeTypeNumber(ibValueMetaObjectRecordDataHierarchyMutableRef* object)
+{
+	ibProperty* property = object->GetProperty(wxT("CodeType"));
+	ibPropertyChoiceList choices;
+	property->GetValueList(choices);
+	for (unsigned int i = 0; i < choices.GetCount(); ++i)
+		if (choices.GetName(i).IsSameAs(wxT("Number"), false))
+			return ibPropertyGate::SetValue(object, property, choices.GetValue(i), nullptr);
+	return false;
+}
+
+} // namespace
+
+TEST(CodeLength, ANewCatalogIsString8AndNineCharactersAreNamed) {
+	ibMetaDataConfigurationFile cfg;
+	auto* catalog = HierarchyOf(cfg, g_metaCatalogCLSID);
+	ASSERT_NE(catalog, nullptr);
+	catalog->SetName(wxT("Operations"));
+	EXPECT_EQ(catalog->GetCodeType(), ibCodeType_String);
+	EXPECT_EQ(catalog->GetCodeLength(), 8u);
+	EXPECT_EQ(catalog->GetDataCode()->GetTypeDesc().GetLength(), 8u);
+
+	try {
+		catalog->AppendPredefinedValue(wxT("Commission"), wxT("000000001"), wxT("Commission"));
+		FAIL() << "a 9-character code was accepted into a String(8)";
+	}
+	catch (const ibBackendCoreException& error) {
+		const wxString text = error.GetErrorDescription();
+		EXPECT_TRUE(text.Contains(wxT("Commission"))) << text.ToStdString();
+		EXPECT_TRUE(text.Contains(wxT("Operations"))) << text.ToStdString();
+	}
+	EXPECT_TRUE(catalog->GetPredefinedValueArray().empty());
+
+	ASSERT_TRUE(SetCodeLength(catalog, 9));
+	EXPECT_EQ(catalog->GetDataCode()->GetTypeDesc().GetLength(), 9u);
+	EXPECT_NO_THROW(catalog->AppendPredefinedValue(wxT("Commission"), wxT("000000001"), wxT("Commission")));
+	ibSchemaSnapshot snapshot;
+	EXPECT_NO_THROW(cfg.GetCommonMetaObject()->ContributeTables(snapshot));
+
+	ASSERT_TRUE(SetCodeLength(catalog, 8));
+	try {
+		ibSchemaSnapshot again;
+		cfg.GetCommonMetaObject()->ContributeTables(again);
+		FAIL() << "the apply wrote a code the column cannot hold";
+	}
+	catch (const ibBackendCoreException& error) {
+		EXPECT_TRUE(error.GetErrorDescription().Contains(wxT("Commission")))
+			<< error.GetErrorDescription().ToStdString();
+	}
+
+	EXPECT_FALSE(SetCodeLength(catalog, 0));
+	EXPECT_FALSE(SetCodeLength(catalog, 51));
+}
+
+TEST(CodeLength, ANumberCodeCountsDigitsAndTheChoiceSurvives) {
+	ibMetaDataConfigurationFile cfg;
+	auto* chart = HierarchyOf(cfg, g_metaChartOfAccountsCLSID);
+	ASSERT_NE(chart, nullptr);
+	EXPECT_EQ(chart->GetCodeLength(), 8u);
+	ASSERT_TRUE(SetCodeLength(chart, 9));
+	ASSERT_TRUE(SetCodeTypeNumber(chart));
+	EXPECT_EQ(chart->GetDataCode()->GetTypeDesc().GetPrecision(), 9u);
+	EXPECT_TRUE(chart->GetDataCode()->GetTypeDesc().GetFirstClsid()
+		== ibValue::GetIDByVT(ibValueTypes::TYPE_NUMBER));
+	EXPECT_TRUE(chart->CodeRefusal(wxT("000000001"), wxT("Cash")).IsEmpty());
+	EXPECT_TRUE(chart->CodeRefusal(wxT("1234567890"), wxT("TooBig")).Contains(wxT("TooBig")));
+	EXPECT_TRUE(chart->CodeRefusal(wxT("12A"), wxT("Letters")).Contains(wxT("Letters")));
+	EXPECT_NO_THROW(chart->AppendPredefinedValue(wxT("Cash"), wxT("000000001"), wxT("Cash")));
+
+	ibDataNode saved;
+	ASSERT_TRUE(chart->SaveNode(saved));
+	auto* loaded = HierarchyOf(cfg, g_metaChartOfAccountsCLSID);
+	ASSERT_NE(loaded, nullptr);
+	ASSERT_TRUE(loaded->LoadNode(saved));
+	EXPECT_EQ(loaded->GetCodeLength(), 9u);
+	EXPECT_EQ(loaded->GetCodeType(), ibCodeType_Number);
+	EXPECT_EQ(loaded->GetDataCode()->GetTypeDesc().GetPrecision(), 9u);
+
+	ibDataNode older;
+	auto* plain = HierarchyOf(cfg, g_metaCatalogCLSID);
+	ASSERT_TRUE(plain->SaveNode(older));
+	ibDataNode stripped;
+	for (const auto& prop : older.Properties())
+		if (!prop.first.IsSameAs(wxT("CodeLength")) && !prop.first.IsSameAs(wxT("CodeType")))
+			stripped.SetProperty(prop.first, prop.second);
+	for (const auto& field : older.Fields())
+		stripped.SetField(field.first, field.second);
+	stripped.Children() = older.Children();
+	auto* legacy = HierarchyOf(cfg, g_metaCatalogCLSID);
+	ASSERT_TRUE(legacy->LoadNode(stripped));
+	EXPECT_EQ(legacy->GetCodeLength(), 8u);
+	EXPECT_EQ(legacy->GetCodeType(), ibCodeType_String);
+	EXPECT_EQ(legacy->GetDataCode()->GetTypeDesc().GetLength(), 8u);
 }

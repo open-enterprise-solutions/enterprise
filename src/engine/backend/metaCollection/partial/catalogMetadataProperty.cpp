@@ -9,7 +9,7 @@ void ibValueMetaObjectCatalog::OnPropertyCreated(ibProperty* property)
 
 bool ibValueMetaObjectCatalog::OnPropertyChanging(ibProperty* property, const wxVariant& newValue)
 {
-	return ibValueMetaObjectRecordDataMutableRef::OnPropertyChanging(property, newValue);
+	return ibValueMetaObjectRecordDataHierarchyMutableRef::OnPropertyChanging(property, newValue);
 }
 
 void ibValueMetaObjectCatalog::OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue)
@@ -30,5 +30,5 @@ void ibValueMetaObjectCatalog::OnPropertyChanged(ibProperty* property, const wxV
 	if ((*m_propertyAttributeOwner)->GetClsidCount() > 0) (*m_propertyAttributeOwner)->ClearFlag(metaDisableFlag);
 	else (*m_propertyAttributeOwner)->SetFlag(metaDisableFlag);
 	
-	ibValueMetaObjectRecordDataMutableRef::OnPropertyChanged(property, oldValue, newValue);
+	ibValueMetaObjectRecordDataHierarchyMutableRef::OnPropertyChanged(property, oldValue, newValue);
 }

@@ -9,10 +9,10 @@ void ibValueMetaObjectChartOfCharacteristicTypes::OnPropertyCreated(ibProperty* 
 
 bool ibValueMetaObjectChartOfCharacteristicTypes::OnPropertyChanging(ibProperty* property, const wxVariant& newValue)
 {
-	return ibValueMetaObjectRecordDataMutableRef::OnPropertyChanging(property, newValue);
+	return ibValueMetaObjectRecordDataHierarchyMutableRef::OnPropertyChanging(property, newValue);
 }
 
 void ibValueMetaObjectChartOfCharacteristicTypes::OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue)
 {
-	ibValueMetaObjectRecordDataMutableRef::OnPropertyChanged(property, oldValue, newValue);
+	ibValueMetaObjectRecordDataHierarchyMutableRef::OnPropertyChanged(property, oldValue, newValue);
 }

@@ -35,12 +35,12 @@ void ibValueMetaObjectChartOfAccounts::OnPropertyCreated(ibProperty* property)
 
 bool ibValueMetaObjectChartOfAccounts::OnPropertyChanging(ibProperty* property, const wxVariant& newValue)
 {
-	return ibValueMetaObjectRecordDataMutableRef::OnPropertyChanging(property, newValue);
+	return ibValueMetaObjectRecordDataHierarchyMutableRef::OnPropertyChanging(property, newValue);
 }
 
 void ibValueMetaObjectChartOfAccounts::OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue)
 {
-	ibValueMetaObjectRecordDataMutableRef::OnPropertyChanged(property, oldValue, newValue);
+	ibValueMetaObjectRecordDataHierarchyMutableRef::OnPropertyChanged(property, oldValue, newValue);
 
 	// The number of analytical slots, and which values they may hold, are both declared HERE and
 	// both build columns THERE. Waiting for the next configuration run would leave a register

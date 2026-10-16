@@ -13,6 +13,7 @@
 // commonObjectEnum.h carries ibHierarchyType — the shape a hierarchical metaobject declares
 // (parent is a FOLDER, as in a catalog, or parent is an ITEM, as in a chart of accounts).
 #include "backend/metaCollection/partial/commonObjectEnum.h"
+#include "backend/propertyManager/property/propertyNumber.h"   // CodeLength is an unsigned integer
 // ibConnectionScope is used by-reference in the Phase A Begin*/Commit*
 // scaffold helper signatures on ibValueRecordDataObjectRef +
 // ibValueRecordSetObject. Pulling the real header here avoids a
@@ -1446,6 +1447,18 @@ class BACKEND_API ibValueMetaObjectRecordDataHierarchyMutableRef :
 	// How a reference to an item reads - by its Description or by its Code (ibDataPresentation). Read by
 	// the presentation template below, which every road that shows a reference is built from.
 	ibDataPresentation GetReferencePresentation() const { return m_propertyDataPresentation->GetValueAsEnum(); }
+
+	// How long a code may be, and whether it is text or a number. The Code attribute's type follows
+	// these; a configuration saved before they existed keeps String(8), which is what the attribute
+	// was born as.
+	unsigned GetCodeLength() const { return m_propertyCodeLength->GetValueAsUInteger(); }
+	ibCodeType GetCodeType() const { return m_propertyCodeType->GetValueAsEnum(); }
+
+	// Empty when `code` fits. Otherwise a sentence that names `item` and this object, so a predefined
+	// item, a record write and the apply all refuse in the same words instead of an SQL truncation
+	// that names neither.
+	wxString CodeRefusal(const wxString& code, const wxString& item) const;
+	void EnsureCodeFits(const wxString& code, const wxString& item) const;
 	// …stated by a kind that is named by its code (a chart of accounts) at construction; a loaded
 	// configuration's own choice replaces it.
 	void SetReferencePresentation(ibDataPresentation presentation) { m_propertyDataPresentation->SetValue(presentation); }
@@ -1584,7 +1597,12 @@ class BACKEND_API ibValueMetaObjectRecordDataHierarchyMutableRef :
 
 protected:
 
+	virtual bool OnPropertyChanging(ibProperty* property, const wxVariant& newValue) override;
 	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue) override;
+
+	// The Code attribute's type is these two properties. Called when either changes and when a
+	// configuration is loaded (SetNodeValue does not announce a change).
+	void ApplyCodeShape();
 
 	// Declare the main table (via the base) + the predefined values as its SEED rows (cells keyed by
 	// column id; the builder diffs by uuid + cells).
@@ -1657,6 +1675,13 @@ protected:
 
 	// HOW AN ITEM READS wherever a reference to it is shown - see ibDataPresentation.
 	ibPropertyEnum<ibValueEnumDataPresentation>* m_propertyDataPresentation = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumDataPresentation>>(m_categoryPresentation, wxT("DataPresentation"), _("Data presentation"), _("How a reference to an item reads wherever it is shown - in a field, a list, a report: by its Description (the default for a catalog) or by its Code (the default for a chart of accounts, whose accounts are named by their numbers)."), ibDataPresentation_Description);
+
+	// THE CODE'S OWN SHAPE. A category of its own, beside the Code attribute it governs: the attribute
+	// stays a String(8) until these say otherwise, so a catalog saved before they existed does not
+	// change its column.
+	ibPropertyCategory* m_categoryCode = ibPropertyObject::CreatePropertyCategory(wxT("Numbering"), _("Numbering"));
+	ibPropertyEnum<ibValueEnumCodeType>* m_propertyCodeType = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumCodeType>>(m_categoryCode, wxT("CodeType"), _("Code type"), _("What a code is. String (the default): up to Code length characters. Number: a non-negative integer of at most that many digits."), ibCodeType_String);
+	ibPropertyUInteger* m_propertyCodeLength = ibPropertyObject::CreateProperty<ibPropertyUInteger>(m_categoryCode, wxT("CodeLength"), _("Code length"), _("How long a code may be: characters when the type is String, digits when it is Number. From 1 to 50. The default is 8, which is what a catalog created before this setting existed already stores."), 8u);
 
 	//create default attributes
 	ibPropertyContainer<>* m_propertyAttributePredefined = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateString(wxT("PredefinedName"), _("Predefined name"), _("The name of an item the configuration itself declares (a predefined item) - what code refers to it by, as Catalogs.<Name>.<PredefinedName>. Empty for items created by users; a predefined item cannot be deleted."), 150, ibItemMode::ibItemMode_Folder_Item));

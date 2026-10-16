@@ -342,6 +342,24 @@ bool ibValueRecordDataObjectRef::SaveData()
 		return false;
 	}
 
+	// A code longer than the column used to die in the database as "string right truncation",
+	// naming neither the item nor the object. The same sentence a predefined item gets.
+	if (const auto* hierarchy = dynamic_cast<const ibValueMetaObjectRecordDataHierarchyMutableRef*>(m_metaObject)) {
+		const ibValueMetaObjectAttributePredefined* codeAttr = hierarchy->GetDataCode();
+		if (codeAttr != nullptr) {
+			const auto it = m_listObjectValue.find(codeAttr->GetMetaID());
+			if (it != m_listObjectValue.end()) {
+				wxString item = GetSourceCaption();
+				if (const ibValueMetaObjectAttributePredefined* description = hierarchy->GetDataDescription()) {
+					const auto named = m_listObjectValue.find(description->GetMetaID());
+					if (named != m_listObjectValue.end() && !named->second.GetString().IsEmpty())
+						item = named->second.GetString().ToWxString();
+				}
+				hierarchy->EnsureCodeFits(it->second.GetString().ToWxString(), item);
+			}
+		}
+	}
+
 	m_objGuid = ibGuid(m_reference_impl->m_guid);
 
 	// WRITE the main row through the L3 door — BY COLUMN, no statement, no positions visible
