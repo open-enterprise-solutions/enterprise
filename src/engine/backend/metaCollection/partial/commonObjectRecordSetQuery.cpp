@@ -295,7 +295,7 @@ bool ibValueRecordSetObject::SaveData(bool replace, bool clearTable)
 			if (object->FillCheck()) {
 				if (node->IsEmptyValue(object->GetMetaID())) {
 					wxString fillError =
-						wxString::Format(_("The %s is required on line %i of the %s"), object->GetSynonym(), currLine, m_metaObject->GetSynonym());
+						wxString::Format(_("The %s is required on line %ld of the %s"), object->GetSynonym(), currLine, m_metaObject->GetSynonym());
 					ibValueSystemFunction::Message(fillError, ibStatusMessage::ibStatusMessage_Information);
 					if (!fillErrors.IsEmpty())
 						fillErrors += wxT("; ");
