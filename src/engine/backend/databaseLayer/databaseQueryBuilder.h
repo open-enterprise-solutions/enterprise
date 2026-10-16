@@ -98,8 +98,10 @@ enum class ibQueryExprKind
 
 enum class ibQueryBinOp
 {
-	// arithmetic
-	Add, Sub, Mul, Div, Mod,
+	// arithmetic. Concat is string addition: Firebird dialect 3 refuses '+' on VARCHAR,
+	// and PostgreSQL and SQLite spell that operation '||'. The lowering picks it when an
+	// operand is a string.
+	Add, Concat, Sub, Mul, Div, Mod,
 	// comparison
 	Eq, Ne, Lt, Le, Gt, Ge,
 	// pattern match (FindByCode / FindByDescription)
