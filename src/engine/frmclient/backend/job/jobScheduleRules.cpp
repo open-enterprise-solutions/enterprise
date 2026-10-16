@@ -231,9 +231,9 @@ wxString FormatMonthDays(std::uint32_t mask)
 
 wxString ibJobScheduleRules::Describe(const ibJobScheduleDescription& self)
 {
-	// A validity bound is a day: printed the way a script's Format(date, "DF=dd.mm.yyyy") prints one.
+	// A validity bound is a day: printed the way a script's Format(date, "DF=dd.MM.yyyy") prints one.
 	ibFormatString asDay;
-	asDay.m_date.m_pattern = wxT("dd.mm.yyyy");
+	asDay.m_date.m_pattern = wxT("dd.MM.yyyy");
 
 	wxString out = FormatInterval(self.m_intervalSeconds);
 
