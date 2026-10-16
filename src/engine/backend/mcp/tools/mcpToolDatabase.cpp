@@ -22,6 +22,8 @@
 #include "backend/mcp/mcpTool.h"
 
 #include "backend/metadataConfiguration.h"
+#include "backend/compiler/scriptCheck.h"   // a common module, compiled the way config_check asks
+#include "backend/metaCollection/metaModuleObject.h"
 #include "backend/restructureInfo.h"
 #include "backend/metaCollection/metaDiff.h"
 #include "backend/metaCollection/metaObject.h"
@@ -79,6 +81,63 @@ const ibArg& ArgConfirm()
 			  "describes exactly what would happen. REQUIRED - there is no default, because "
 			  "neither answer is safe to assume."), /*required*/ true);
 	return s_a;
+}
+
+// A common module that does not compile, and one that was never compiled. An
+// empty diagnostics list is a clean module only when the compile actually ran.
+void ReportCommonModules(ibMetaData* metaData, const ibMcpAudit::ibComplain& complain)
+{
+	if (metaData == nullptr || !metaData->IsConfigOpen())
+		return;
+
+	for (ibValueMetaObjectCommonModule* module :
+		metaData->GetAnyArrayObject<ibValueMetaObjectCommonModule>(true)) {
+
+		if (module == nullptr || module->IsDeleted())
+			continue;
+
+		const ibScriptCheckAnswer answer = ibCheckModule(module);
+		if (answer.IsClean())
+			continue;
+
+		std::shared_ptr<ibDataNode> extra = std::make_shared<ibDataNode>();
+		const bool checked = answer.m_outcome == ibScriptCheckOutcome::Checked;
+		extra->AddField(wxT("checked"), ibDataValue::Bool(checked));
+
+		std::vector<ibDataValue> diagnostics;
+		for (const ibDiagnostic& diagnostic : answer.m_diagnostics) {
+			std::shared_ptr<ibDataNode> line = std::make_shared<ibDataNode>();
+			line->AddField(wxT("line"), ibDataValue::Int(static_cast<s64>(diagnostic.m_line)));
+			line->SetValue(wxT("message"), diagnostic.m_message);
+			if (!diagnostic.m_codeLine.IsEmpty())
+				line->SetValue(wxT("codeLine"), diagnostic.m_codeLine);
+			diagnostics.push_back(ibDataValue::Child(line));
+		}
+		extra->AddField(wxT("diagnostics"), ibDataValue::Array(std::move(diagnostics)));
+
+		complain(module,
+			checked
+				? ibMcpText("does not compile")
+				: ibMcpText("nothing was compiled, so an empty diagnostics list is not a clean module"),
+			ibDataValue::Child(extra));
+	}
+}
+
+void TakeProblems(std::vector<ibDataValue>& problems, const ibValueMetaObject* about,
+	const wxString& says, const ibDataValue& extra)
+{
+	std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
+	ibMcpSayObject(about, *entry);
+	if (about != nullptr) {
+		if (const ibValueMetaObject* owner = about->GetParent())
+			entry->SetValue(wxT("in"), owner->GetName());
+	}
+	entry->SetValue(wxT("says"), says);
+	if (extra.Kind() == ibDataKind::Child && extra.AsChild()) {
+		for (const std::pair<wxString, ibDataValue>& field : extra.AsChild()->Fields())
+			entry->AddField(field.first, field.second);
+	}
+	problems.push_back(ibDataValue::Child(entry));
 }
 
 } // namespace
@@ -219,7 +278,9 @@ public:
 			"which is the only way to see the schema changes in advance, because the engine has "
 			"no rehearsal mode by design. Saving first costs nothing here - config_save stores the "
 			"configuration without touching the structure, so the ledger this hands back still "
-			"holds everything the base has not got.");
+			"holds everything the base has not got. The answer's problems are the common modules "
+			"that do not compile, on a rehearsal and on an apply. A module that was never "
+			"compiled is in that list too, with checked false.");
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override
@@ -317,6 +378,16 @@ public:
 		result.AddField(wxT("changes"), ibDataValue::Int((s64)ledger.size()));
 		result.AddField(wxT("ledger"), ibDataValue::Array(ledger));
 		result.AddField(wxT("applied"), ibDataValue::Bool(applied));
+
+		// The same problems config_check would report for common modules, on the
+		// rehearsal and on the apply. A module that was never compiled is in
+		// the list: an empty diagnostics array is not a clean module.
+		std::vector<ibDataValue> problems;
+		ReportCommonModules(config, ibMcpAudit::ibComplain(
+			[&problems](const ibValueMetaObject* about, const wxString& says, const ibDataValue& extra) {
+				TakeProblems(problems, about, says, extra);
+			}));
+		result.AddField(wxT("problems"), ibDataValue::Array(problems));
 
 		if (applied)
 			return true;
@@ -653,17 +724,10 @@ public:
 		// and a fault with no address is a fault nobody can find (measured the same day: a refused
 		// save said "MainComposer: variant 1 has no name" of a configuration holding three
 		// composers called MainComposer).
-		const auto complain = [&problems](const ibValueMetaObject* about, const wxString& says) {
-
-			std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
-			ibMcpSayObject(about, *entry);
-
-			if (const ibValueMetaObject* owner = about->GetParent())
-				entry->SetValue(wxT("in"), owner->GetName());
-
-			entry->SetValue(wxT("says"), says);
-			problems.push_back(ibDataValue::Child(entry));
-		};
+		const ibMcpAudit::ibComplain complain(
+			[&problems](const ibValueMetaObject* about, const wxString& says, const ibDataValue& extra) {
+				TakeProblems(problems, about, says, extra);
+			});
 
 		// EVERY CHECK THAT REGISTERED ITSELF, whichever DLL it came from. The backend's own are one
 		// of them (below); the form world adds its own from frontend.dll, and a host that links
@@ -821,3 +885,16 @@ public:
 };
 
 MCP_AUDIT_REGISTER(ibMcpAuditMetadata);
+
+// Compiling the common modules is one more question config_check asks, beside
+// the ones already registered. A module with no compile unit stays in the
+// answer: nothing was checked, which is not a pass.
+class ibMcpAuditCommonModules : public ibMcpAudit {
+public:
+	void Check(ibMetaData* metaData, const ibComplain& complain) const override
+	{
+		ReportCommonModules(metaData, complain);
+	}
+};
+
+MCP_AUDIT_REGISTER(ibMcpAuditCommonModules);

@@ -8,6 +8,7 @@
 #include "backend/compiler/compileModule.h"     // ibCompileModule — the contextual compile
 #include "backend/metaData.h"                   // ibCompileValueCache::FindCompileModule
 #include "backend/metaCollection/metaObject.h"  // ibValueMetaObject::GetMetaData
+#include "backend/metaCollection/metaModuleObject.h"  // common modules, the ones a session compiles
 #include "backend/moduleInfo.h"                 // ibRuntimeModuleDataObject::GetCompileModule
 #include "backend/moduleManager/moduleManager.h" // ibValueModuleManager — the context a snippet parents to
 #include "backend/session/session.h"            // ibSession::EditModuleManagerFor
